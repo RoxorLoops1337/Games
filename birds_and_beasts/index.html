@@ -28,7 +28,17 @@
     radial-gradient(760px 520px at 92% 112%, rgba(255,120,190,.075), transparent 70%),
     repeating-linear-gradient(92deg, rgba(255,255,255,.016) 0 2px, transparent 2px 84px),
     #0b120c; }
-  #app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+  /* A phone-shaped game. On a phone it fills the screen; on anything wider it is
+     letterboxed into the same 9:16 column, so both look identical. */
+  /* 9:16 is the DESIGN ratio, not a letterbox: on a phone it fills the screen
+     (real phones are taller than 9:16, so the column just gets a little room to
+     breathe); on a desktop it is a phone-shaped panel. */
+  body{ display:flex; align-items:center; justify-content:center; }
+  #app{ position:relative; width:min(100vw, calc(100dvh * 9 / 16)); height:100dvh; margin:0 auto;
+    container-type:inline-size; container-name:app;
+    display:flex; flex-direction:column; overflow:hidden; background:#0b120c;
+    box-shadow:0 0 0 1px #1c2a19, 0 30px 80px rgba(0,0,0,.75); }
+  @media (min-aspect-ratio: 10/16){ #app{ border-radius:18px; } }
   /* a night vignette so the screens read as rooms, not documents */
   #app::after{ content:''; position:fixed; inset:0; pointer-events:none; z-index:14;
     background:radial-gradient(ellipse 118% 88% at 50% 44%, transparent 54%, rgba(0,0,0,.5)); }
@@ -78,13 +88,22 @@
     transition:transform .08s ease, box-shadow .08s ease, filter .12s ease; }
   .btn:hover{ filter:brightness(1.07); }
   .btn:active{ transform:translateY(3px); box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 1px 0 #4e8020; }
-  .btn[disabled]{ filter:grayscale(.8) brightness(.6); cursor:not-allowed; box-shadow:0 4px 0 #2a2a2a; }
+  /* One button per screen may carry a bevel, and it must be the one you want
+     pressed. The escape hatch is never it. */
+  #wild .btn.alt, #cull .btn.alt, #over .btn.alt{ background:none; box-shadow:none;
+    border:1px solid #2c4028; color:var(--dim); font-weight:700; }
+  #wild .btn.alt:hover, #cull .btn.alt:hover, #over .btn.alt:hover{ color:#cfe0c2; border-color:#3f5c39; }
   .btn.busy{ filter:grayscale(.55) brightness(.78); }   /* mid-turn: tap = skip, not end */
   .btn.alt{ color:#f0ffe6; background:linear-gradient(180deg,#445c46,#26362a);
     box-shadow:inset 0 1px 0 rgba(190,255,150,.16), 0 4px 0 #16211a, 0 8px 16px rgba(0,0,0,.4); }
   .btn.pinky{ color:#2a0c1e; background:linear-gradient(180deg,#ffb0e0,#ff69c0);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 4px 0 #a03574, 0 8px 18px rgba(0,0,0,.45); }
   .btn.sm{ font-size:12px; padding:8px 13px; border-radius:9px; letter-spacing:1px; }
+  /* A disabled primary keeps its shape and loses only its fill: "not yet", never
+     "broken". Grayscaling the pink CTA produced the ugliest colour in the file. */
+  .btn[disabled]{ filter:none; cursor:not-allowed; background:transparent; color:#5f7455;
+    border:1px dashed #33492c; box-shadow:none; }
+  .btn[disabled]:hover{ filter:none; }
 
   /* ---------- title ---------- */
   .tcard{ width:min(620px,94vw); padding:24px 26px; border-radius:20px;
@@ -95,11 +114,41 @@
     text-shadow:0 0 22px rgba(150,255,90,.35), 0 3px 0 #33591a; }
   .tcard h1 em{ font-style:normal; color:var(--pink); text-shadow:0 0 22px rgba(255,130,200,.4), 0 3px 0 #7d2f5c; }
   .sub{ margin:8px 0 14px; font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--dim); font-weight:800; }
-  .rules{ text-align:left; max-width:460px; margin:0 auto 16px; font-size:var(--t-body); line-height:1.7; color:#cfe0c2; }
+  .rules{ text-align:left; max-width:460px; margin:0 auto 12px; font-size:var(--t-body); line-height:1.7; color:#cfe0c2; }
   .rules b{ color:var(--lime); } .rules i{ color:var(--pink); font-style:normal; }
+  .rules p{ margin:0 0 3px; }
+  .more{ max-width:460px; margin:0 auto 14px; text-align:left; }
+  .more > summary{ cursor:pointer; list-style:none; padding:6px 0; text-align:center;
+    border-top:1px solid rgba(166,255,94,.10); border-bottom:1px solid rgba(166,255,94,.10); }
+  .more > summary::-webkit-details-marker{ display:none; }
+  .more > summary:hover{ color:#cfe0c2; }
+  .more .body{ padding:9px 2px 2px; font-size:13px; line-height:1.65; color:#b3c6a8; }
+  .more .body b{ color:var(--lime); } .more .body i{ color:var(--pink); font-style:normal; }
   .hall{ margin:12px auto 14px; padding:10px 12px; border-radius:12px; max-width:460px;
     background:#0c140d; border:1px solid #24361f; box-shadow:inset 0 1px 0 rgba(190,255,150,.09);
     font-size:13px; color:#cfe0c2; }
+  /* never render a box to announce that there is nothing */
+  .hall:empty{ display:none; }
+
+  /* ---------- the title's demo reel: the generator, running, before a click --
+     Two parents pulse; the chick between them is bred out of their genes every
+     four seconds and given a name. It is the whole hook of the game, on the
+     first screen, with no explanation needed. */
+  .tshow{ display:flex; align-items:flex-end; justify-content:center; gap:clamp(10px,3.4vw,28px);
+    margin:14px auto 4px; }
+  .tshow .tb{ position:relative; text-align:center; flex:0 0 auto;
+    background:radial-gradient(ellipse 62% 16% at 50% 84%, rgba(166,255,94,.20), transparent 70%); }
+  .tshow canvas{ display:block; width:clamp(84px,22vw,120px); height:auto; }
+  .tshow .tb.mid{ transform:scale(1.12) translateY(-8px); z-index:1;
+    background:radial-gradient(ellipse 62% 16% at 50% 84%, rgba(255,138,212,.26), transparent 70%); }
+  .tshow .cap{ font-size:9px; letter-spacing:1.8px; text-transform:uppercase; font-weight:800;
+    color:#6d8a5e; margin-top:-2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:clamp(84px,22vw,120px); }
+  .tshow .tb.mid .cap{ color:var(--pink); }
+  .tshow .tb.swap canvas{ animation:pop .38s cubic-bezier(.2,1.3,.4,1) both; }
+  .tshow .tb.par canvas{ animation:tbreathe 3.4s ease-in-out infinite; }
+  .tshow .tb.par:nth-child(3) canvas{ animation-delay:-1.7s; }
+  @keyframes tbreathe{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-4px) } }
 
   /* ---------- top bar ---------- */
   .bar{ display:flex; align-items:center; gap:10px; flex:0 0 auto; padding:2px 44px 8px 2px; }
@@ -115,25 +164,45 @@
     border:1px solid #33492c; overflow:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,.6); }
   .hpbar i{ display:block; height:100%; background:linear-gradient(90deg,#ff5d5d,#ff9d6b); transition:width .3s ease; }
 
-  /* ---------- card: an object with thickness, not a div ---------- */
+  /* ---------- card: an object with thickness, not a div ----------
+     The card is the product of this game — bred, named, kept, culled. So it is
+     built like an object: a stacked edge (two hard plies + a cast shadow), a
+     specular pass across the top-left, and a frame that gets richer with the
+     generation. A G5 prize animal must be a visibly better object than a G1. */
   .card{ position:relative; width:118px; flex:0 0 auto; border-radius:13px; overflow:hidden;
     background:linear-gradient(180deg,#22331f 0%,#1a2818 42%,#0f180e 100%);
     border:1px solid #080f08;
     box-shadow: inset 0 1px 0 rgba(190,255,150,.18), inset 0 0 0 1px rgba(80,120,60,.30),
-                0 2px 0 var(--edge), 0 10px 18px -6px rgba(0,0,0,.72);
+                0 2px 0 var(--edge), 0 4px 0 #071007, 0 12px 20px -8px rgba(0,0,0,.8);
     cursor:pointer; user-select:none;
     transition:transform .16s cubic-bezier(.2,.9,.3,1.25), box-shadow .16s ease; }
+  /* the sheen: one soft diagonal wipe, so the face has a material */
+  .card::after{ content:''; position:absolute; inset:0; pointer-events:none; z-index:3;
+    border-radius:inherit;
+    background:linear-gradient(158deg, rgba(255,255,255,.075) 0 20%, transparent 44%); }
+  .card[data-tier="2"]{ box-shadow: inset 0 1px 0 rgba(255,232,160,.20), inset 0 0 0 1px rgba(255,211,77,.30),
+                0 2px 0 var(--edge), 0 4px 0 #071007, 0 12px 20px -8px rgba(0,0,0,.8); }
+  .card[data-tier="3"]{ box-shadow: inset 0 1px 0 rgba(255,242,190,.28), inset 0 0 0 1.5px rgba(255,211,77,.50),
+                0 2px 0 var(--edge), 0 4px 0 #071007, 0 12px 22px -8px rgba(0,0,0,.85),
+                0 0 20px -6px rgba(255,211,77,.42); }
+  .card[data-tier="3"]::after{ animation:foil 6s ease-in-out infinite; }
+  @keyframes foil{
+    0%,100%{ background:linear-gradient(158deg, rgba(255,238,180,.10) 0 20%, transparent 44%) }
+    50%{ background:linear-gradient(196deg, rgba(255,238,180,.17) 0 24%, transparent 50%) } }
   .card:hover{ transform:translateY(-9px) rotate(-.8deg) scale(1.025);
-    box-shadow: inset 0 1px 0 rgba(190,255,150,.22), 0 3px 0 var(--edge),
-                0 20px 28px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(166,255,94,.22); }
+    box-shadow: inset 0 1px 0 rgba(190,255,150,.22), 0 3px 0 var(--edge), 0 5px 0 #071007,
+                0 22px 30px -10px rgba(0,0,0,.85), 0 0 0 1px rgba(166,255,94,.22); }
   .card.sel{ transform:translateY(-10px) scale(1.03);
     box-shadow: 0 0 0 2px var(--pink), 0 0 24px -4px rgba(255,138,212,.55),
                 0 3px 0 var(--edge), 0 22px 30px -10px rgba(0,0,0,.8); }
   .card.dead{ opacity:.34; filter:grayscale(1); cursor:not-allowed; }
   .card.dead:hover{ transform:none; box-shadow:0 2px 0 var(--edge), 0 8px 14px -6px rgba(0,0,0,.7); }
   .card.big{ width:150px; }
+  /* the art well is lit from above, like the arena floor and the barn */
   .card .art{ position:relative; height:81px; display:block; width:100%;
-    background:radial-gradient(ellipse at 50% 78%, #17261b, #060c06 80%);
+    background:
+      radial-gradient(ellipse 120% 70% at 50% -8%, rgba(190,255,150,.10), transparent 60%),
+      radial-gradient(ellipse at 50% 78%, #17261b, #060c06 80%);
     box-shadow: inset 0 1px 3px rgba(0,0,0,.8), inset 0 -12px 16px -10px #000; }
   .card.big .art{ height:104px; }
   .card .cost{ position:absolute; top:5px; left:5px; width:23px; height:23px; border-radius:50%;
@@ -142,37 +211,61 @@
     box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 2px 5px rgba(0,0,0,.6); z-index:2; }
   .card .gen{ position:absolute; top:6px; right:6px; font-size:9px; letter-spacing:1.4px; z-index:2;
     font-weight:800; color:#9fb394; background:rgba(6,12,6,.72); padding:1px 5px; border-radius:6px; }
-  .card .nm{ font-size:13px; font-weight:700; letter-spacing:0; text-align:center; padding:5px 4px 2px;
+  .card .nm{ font-size:14px; font-weight:800; letter-spacing:0; text-align:center; padding:5px 4px 2px;
     line-height:1.15; color:#eaf6df; text-shadow:0 2px 0 rgba(0,0,0,.55);
     min-height:30px; display:flex; align-items:center; justify-content:center; }
   .card.big .nm{ font-size:15px; min-height:36px; }
   .card .st{ display:flex; justify-content:center; gap:10px; font-size:var(--t-num);
     font-weight:900; padding:0 0 5px; }
   .card .st .m{ color:var(--might); } .card .st .h{ color:var(--blue); }
-  .card .tr{ font-size:var(--t-label); letter-spacing:1.2px; text-transform:uppercase; text-align:center;
-    padding:4px 3px 5px; color:#0e1a0c; background:linear-gradient(180deg,#bcff6e,#86d243); font-weight:800;
+  /* The trait is a tab, not a floor. Ten lime slabs on the Cull screen read as a
+     barcode and out-shout the animal; a card with nothing to say now says
+     nothing at all. The filled slab is RESERVED for .card.big — Hatch and Wild,
+     where the trait is the live decision. */
+  .card .tr{ font-size:9px; letter-spacing:1.4px; text-transform:uppercase; text-align:center;
+    padding:5px 3px 6px; color:var(--lime); background:none; font-weight:800; box-shadow:none;
+    border-top:1px solid rgba(166,255,94,.22); text-shadow:0 0 10px rgba(166,255,94,.35); }
+  .card .tr.bad{ color:#ff9d9d; border-top-color:rgba(255,120,120,.28);
+    text-shadow:0 0 10px rgba(255,120,120,.35); }
+  .card .tr.no{ display:none; }
+  .card.big .tr{ font-size:var(--t-label); letter-spacing:1.2px; padding:4px 3px 5px; border-top:none;
+    color:#0e1a0c; background:linear-gradient(180deg,#bcff6e,#86d243); text-shadow:none;
     box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 -1px 0 rgba(0,0,0,.5); }
-  .card .tr.no{ background:linear-gradient(180deg,#1e2c1b,#162114); color:#6b7d63;
+  .card.big .tr.no{ display:block; background:linear-gradient(180deg,#1e2c1b,#162114); color:#6b7d63;
     box-shadow: inset 0 1px 0 rgba(190,255,150,.10), 0 -1px 0 rgba(0,0,0,.5); }
-  .card .tr.bad{ background:linear-gradient(180deg,#ff9d9d,#e05555); color:#2a0808; }
+  .card.big .tr.bad{ background:linear-gradient(180deg,#ff9d9d,#e05555); color:#2a0808; text-shadow:none; }
 
   /* ---------- nest ---------- */
   .panel{ background:linear-gradient(180deg,#152318,#0e1810); border:1px solid #0a120a;
     box-shadow:inset 0 1px 0 rgba(190,255,150,.12), inset 0 0 0 1px rgba(60,95,48,.5), 0 6px 16px rgba(0,0,0,.4);
     border-radius:14px; padding:10px 12px; }
-  /* the barn floor: the herd stands in a framed space, not on a black void */
-  .deckwrap{ flex:1 1 auto; overflow-y:auto; padding:16px 12px;
+  /* the barn floor: the herd stands in a framed space, not on a black void.
+     The frame shrink-wraps the herd — a 10-card barn must not sit in the middle
+     of a 660px box with 170px of empty barn above and below it. */
+  .deckwrap{ position:relative; flex:0 1 auto; min-height:0; max-height:100%;
+    overflow-y:auto; padding:16px 12px 50px;
     background:
       radial-gradient(120% 60% at 50% 0%, rgba(120,190,90,.10), transparent 62%),
       linear-gradient(180deg, rgba(26,44,28,.55), rgba(10,18,10,.10) 45%, rgba(5,9,5,.55));
     border:1px solid rgba(166,255,94,.08); border-radius:16px;
     box-shadow:inset 0 1px 0 rgba(190,255,150,.07), inset 0 -30px 50px -30px #000;
-    max-width:min(1040px,96vw); width:100%; margin-inline:auto; }
+    max-width:min(1040px,96vw); width:100%; margin-inline:auto;
+    scroll-snap-type:y proximity; }
+  /* the same floor the arena has, so the barn and the ring are one place */
+  .deckwrap::after{ content:''; position:absolute; left:8%; right:8%; bottom:0; height:46px;
+    pointer-events:none;
+    background:radial-gradient(ellipse 70% 200% at 50% 6%, #22371c, transparent 74%);
+    border-top:1px solid rgba(166,255,94,.13); }
+  .deckwrap .card{ scroll-snap-align:start; }
   .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr));
     gap:12px 10px; justify-items:center; align-content:start; }
-  .deckwrap > .grid{ min-height:100%; align-content:safe center; }
+  /* columns come from the COUNT, not from auto-fill, so ten cards go 5+5 and
+     thirteen go 5+4+4 — a two-card orphan row reads as a rendering fault */
+  .deckwrap > .grid{ align-content:start; justify-content:center;
+    grid-template-columns:repeat(var(--cols,6),118px); }
   .foeprev{ display:flex; align-items:center; gap:12px; }
-  .foeprev .fe{ font-size:38px; line-height:1; filter:drop-shadow(0 4px 6px rgba(0,0,0,.6)); }
+  .foeprev .fe{ display:block; width:62px; height:auto; flex:0 0 auto;
+    filter:drop-shadow(0 4px 6px rgba(0,0,0,.6)); }
   .foeprev h3{ font-size:18px; letter-spacing:.4px; }
   .footer{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding-top:10px;
     justify-content:center; flex-wrap:wrap; }
@@ -198,111 +291,88 @@
   .pickwrap{ position:relative; cursor:pointer; }
   .egg2{ font-size:52px; line-height:1; animation:wob 1.1s ease-in-out infinite; }
 
-  /* ---------- fight: a lit ring with a floor ---------- */
-  #fight .arena{ flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
-    justify-content:flex-end; gap:6px; min-height:min(34vh,264px); max-height:min(46vh,340px);
-    padding-bottom:14px; position:relative; }
-  /* dim ambient glow above… */
-  #fight .arena::before{ content:''; position:absolute; left:50%; bottom:40px; width:min(660px,96%);
-    height:min(300px,92%); transform:translateX(-50%); border-radius:50%; pointer-events:none;
-    background:radial-gradient(ellipse at 50% 60%, rgba(150,220,110,.055), transparent 70%); }
-  /* …and a real ground plane the foe stands on */
-  #fight .arena::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:124px;
-    pointer-events:none; z-index:0;
-    background:radial-gradient(ellipse 62% 210% at 50% 4%, #22371c 0%, #142310 46%, transparent 76%);
-    border-top:1px solid rgba(166,255,94,.13);
-    -webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);
-    mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent); }
-  .foe{ position:relative; text-align:center; z-index:2; }
-  /* contact shadow — the thing that makes it stand rather than float */
-  .foe::before{ content:''; position:absolute; left:50%; top:calc(clamp(72px,16vw,120px) - 8px);
-    transform:translateX(-50%); width:116px; height:22px; border-radius:50%;
-    background:radial-gradient(ellipse,rgba(0,0,0,.85),rgba(0,0,0,.45) 42%,transparent 74%); }
-  .foe > *{ position:relative; z-index:1; }
-  .foe .em{ font-size:clamp(72px,16vw,120px); line-height:1; display:inline-block;
-    filter:drop-shadow(0 10px 10px rgba(0,0,0,.55));
-    animation:breathe 3.2s ease-in-out infinite; }
-  @keyframes breathe{ 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-5px) scale(1.025)} }
-  .foe.hit .em{ animation:shake .3s ease; }
-  .foe.flash .em{ filter:brightness(2.2) saturate(.25) drop-shadow(0 0 12px #fff); }
-  @keyframes shake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-9px) rotate(-5deg)} 75%{transform:translateX(9px) rotate(5deg)} }
-  .foe h2{ font-size:19px; margin-top:2px; text-shadow:0 3px 0 rgba(0,0,0,.6); }
-  .fhp{ width:min(340px,80vw); height:15px; margin:6px auto 4px; border-radius:8px;
-    background:#160f0f; border:1px solid #33492c; overflow:hidden; position:relative;
-    box-shadow:inset 0 2px 5px rgba(0,0,0,.7); }
-  .fhp i{ position:absolute; left:0; top:0; display:block; height:100%;
-    background:linear-gradient(90deg,#e04a4a,#ff8f6b); transition:width .35s ease; }
-  .fhp i.ghost{ background:#ffb0b0; opacity:.6; transition:width .8s .28s ease; }
-  .fhp span{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    font-size:11px; font-weight:900; text-shadow:0 1px 3px #000; }
-  .intent{ font-size:13px; font-weight:800; color:var(--gold); letter-spacing:.3px; }
-  .badges{ display:flex; gap:6px; justify-content:center; margin-top:5px; flex-wrap:wrap; }
-  .bdg{ font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px; white-space:nowrap;
-    background:#1a2718; border:1px solid #33492c; color:#cfe0c2;
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.10); }
-  .bdg.psn{ color:#b6ff8a; border-color:#4f7a33; }
-  .bdg.blk{ color:var(--blue); border-color:#2f5b7a; }
-  .bdg.thn{ color:#ffb0e0; border-color:#7a3a63; }
-  .flyer{ position:fixed; font-size:34px; font-weight:900; pointer-events:none;
-    -webkit-text-stroke:1.5px rgba(10,18,10,.9); paint-order:stroke fill;
-    text-shadow:0 2px 8px #000; animation:fly 1s ease-out forwards; z-index:9; }
-  @keyframes fly{ 0%{opacity:1; transform:translateY(0) scale(.4)}
-    18%{transform:translateY(-16px) scale(1.5)} 30%{transform:translateY(-18px) scale(1.15)}
-    100%{opacity:0; transform:translateY(-72px) scale(1)} }
+  /* ================= THE FIELD (9:16 portrait) =================
+     Two lines facing each other down a phone-shaped screen. Everything is sized
+     off the frame rather than the viewport, so the desktop letterbox and a real
+     phone lay out identically. */
+  .field{ flex:1 1 auto; display:flex; flex-direction:column; justify-content:center;
+    gap:clamp(4px, 2.4vh, 22px); min-height:0; position:relative; padding:6px 0 2px; }
+  .field::before{ content:''; position:absolute; inset:5% 2%; pointer-events:none; border-radius:24px;
+    background:radial-gradient(ellipse at 50% 50%, rgba(150,220,110,.09), transparent 70%); }
+  .sideLbl{ flex:0 0 auto; text-align:center; font-size:10px; letter-spacing:2.2px;
+    text-transform:uppercase; color:#7d9270; padding:1px 0; }
+  .sideLbl b{ color:#e9f3df; letter-spacing:1px; }
+  .lineRow{ flex:0 0 auto; display:flex; gap:5px; justify-content:center; align-items:flex-end;
+    padding:2px 4px; min-height:100px; }
+  .lineRow.them{ align-items:flex-start; }
+  .midline{ flex:0 0 auto; position:relative; text-align:center; padding:3px 0;
+    font-size:10px; letter-spacing:3px; text-transform:uppercase; color:#5f7554; }
+  .midline::before{ content:''; position:absolute; left:6%; right:6%; top:50%; height:1px;
+    background:linear-gradient(90deg, transparent, #2f4a28 20%, #2f4a28 80%, transparent); }
+  .midline span{ position:relative; background:#0b120c; padding:0 10px; }
 
-  /* the pen — your beasts, alive on the field, standing on the arena floor */
-  .pen{ position:relative; flex:1 1 auto; display:flex; gap:10px; justify-content:center;
-    align-items:flex-end; padding:12px 4px 14px; min-height:142px; max-height:176px;
-    background:linear-gradient(180deg,transparent,rgba(24,44,18,.55));
-    border-top:1px solid rgba(166,255,94,.10); }
-  .penlbl{ position:absolute; left:10px; bottom:6px; font-size:var(--t-label); letter-spacing:3px;
-    font-weight:800; color:#6d8a5e; text-transform:uppercase; }
-  /* an empty stall, not a wireframe box */
-  .slot{ width:112px; height:118px; border-radius:12px; border:1px dashed rgba(120,170,95,.22);
-    background:linear-gradient(180deg,rgba(8,14,8,.15),rgba(8,14,8,.5));
-    box-shadow:inset 0 8px 18px -10px #000;
-    display:flex; align-items:center; justify-content:center; color:#33482c; font-size:22px; }
-  .pb{ position:relative; width:112px; border-radius:12px; overflow:hidden; cursor:help;
-    background:linear-gradient(180deg,#22331f,#101a10); border:2px solid #4a7a34;
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.18), 0 2px 0 #0a120a, 0 9px 16px -6px rgba(0,0,0,.7);
-    animation:pop .22s ease; }
-  .pb.fresh{ border-color:var(--lime); box-shadow:0 0 0 2px rgba(166,255,94,.28), 0 2px 0 #0a120a, 0 9px 16px -6px rgba(0,0,0,.7); }
-  .pb.bulw{ border-color:var(--blue); }
-  .pb.hurt{ animation:shake .3s ease; }
-  .pb canvas{ display:block; width:100%; height:74px;
-    background:radial-gradient(ellipse at 50% 82%, #17261b, #060c06 80%); }
-  .pb .pn{ font-size:11.5px; font-weight:800; text-align:center; padding:3px 3px 0; line-height:1.15;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .pb .pm{ font-size:13px; font-weight:900; color:var(--might); text-align:center; }
-  .pb .hh{ color:var(--blue); }
-  .pb .ph{ height:8px; margin:3px 5px 5px; border-radius:4px; background:#2a1414; overflow:hidden;
-    box-shadow:inset 0 1px 3px rgba(0,0,0,.7); }
-  .pb .ph i{ display:block; height:100%; background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .25s ease; }
-  .pb .tag{ position:absolute; top:3px; right:4px; font-size:8.5px; letter-spacing:.6px; font-weight:800;
-    padding:1px 5px; border-radius:5px; background:rgba(6,12,6,.8); color:var(--lime); text-transform:uppercase; }
-  .coach{ flex:0 0 auto; margin:8px auto 0; padding:8px 14px; border-radius:12px; cursor:pointer;
-    background:linear-gradient(180deg,#241a2a,#170f1c); border:1px solid #6b3355;
-    box-shadow:inset 0 1px 0 rgba(255,180,225,.18), 0 6px 16px rgba(0,0,0,.4);
-    color:#ffd0ee; font-size:13px; text-align:center; max-width:640px; animation:pop .3s ease; }
+  /* a unit standing on the field */
+  .ub{ position:relative; flex:1 1 0; min-width:0; max-width:94px; border-radius:11px; overflow:hidden;
+    background:linear-gradient(180deg,#1d2c1c,#101a10); border:2px solid #3f5f34;
+    box-shadow:0 5px 12px rgba(0,0,0,.45); }
+  .ub.them{ background:linear-gradient(180deg,#2b1a1a,#170e0e); border-color:#7a3b32; }
+  .ub.lead{ border-color:#ffd34d; box-shadow:0 0 0 1px rgba(255,211,77,.35), 0 5px 14px rgba(0,0,0,.5); }
+  .ub.bulw{ border-color:#7ec8ff; }
+  .ub.front::after{ content:''; position:absolute; left:0; right:0; height:3px;
+    background:linear-gradient(90deg,transparent,#a6ff5e,transparent); top:0; }
+  .ub.them.front::after{ top:auto; bottom:0; background:linear-gradient(90deg,transparent,#ff7b6b,transparent); }
+  .ub.gone{ opacity:.18; filter:grayscale(1); }
+  .ub canvas{ display:block; width:100%; height:52px; background:#0a120a; }
+  .ub .pn{ font-size:9.5px; font-weight:800; text-align:center; padding:2px 3px 0; line-height:1.1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#eaf6df; }
+  .ub .pm{ font-size:11px; font-weight:900; color:#ff8f6b; text-align:center; padding-bottom:1px; }
+  .ub .pm .hh{ color:#7ec8ff; }
+  .ub .ph{ height:5px; margin:0 4px 4px; border-radius:3px; background:#2a1414; overflow:hidden; }
+  .ub .ph i{ display:block; height:100%; background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .22s ease; }
+  .ub.them .ph i{ background:linear-gradient(90deg,#e04a4a,#ff9d6b); }
+  .ub .tag{ position:absolute; top:2px; right:3px; font-size:7.5px; letter-spacing:.4px; font-weight:800;
+    padding:1px 4px; border-radius:5px; background:rgba(6,12,6,.8); color:#a6ff5e; }
+  .ub.them .tag{ color:#ffb9a6; }
+  .ub .ord{ display:flex; gap:2px; padding:0 3px 3px; }
+  .ub .ord .ob{ flex:1; font-family:inherit; font-size:10px; line-height:1; padding:3px 0; cursor:pointer;
+    border:1px solid #33492c; border-radius:5px; background:#16241a; color:#cfe0c2; }
+  .ub .ord .ob.out{ color:#ff9d9d; border-color:#5a2f2f; }
+  .lineRow .slot{ flex:1 1 0; max-width:94px; min-height:92px; border-radius:11px; border:2px dashed #2b3f26;
+    display:flex; align-items:center; justify-content:center; }
+  .lineRow .slot span{ font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#3f5836; }
+  @keyframes lungeUp{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(-13px) scale(1.05)} }
+  @keyframes lungeDown{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(13px) scale(1.05)} }
+  @keyframes fall{ 0%{transform:translateY(0) rotate(0); opacity:1}
+    100%{transform:translateY(26px) rotate(9deg); opacity:.18} }
+  .ub.lungeUp{ animation:lungeUp .3s cubic-bezier(.3,1.5,.5,1); }
+  .ub.lungeDown{ animation:lungeDown .3s cubic-bezier(.3,1.5,.5,1); }
+  .ub.hurt{ animation:shake .3s ease; }
+  .ub.fall{ animation:fall .52s ease-in forwards; }
+  .benchwrap{ flex:0 0 auto; border-top:1px solid #1e2c1a; padding-top:4px; }
+  /* the bench: your barn, scrolling sideways under the field */
+  .handrow{ display:flex; gap:6px; padding:4px 6px 2px; overflow-x:auto; overflow-y:hidden;
+    scrollbar-width:none; scroll-snap-type:x proximity; }
+  .handrow::-webkit-scrollbar{ display:none; }
+  .handrow .card{ scroll-snap-align:center; width:76px; flex:0 0 76px; }
+  .handrow .card .art{ height:52px; }
+  .handrow .card .nm{ font-size:9.5px; min-height:22px; }
+  .handrow .card .st{ font-size:11px; }
+  .handrow .card .tr{ font-size:8px; padding:2px; }
+  .handrow .card .gen{ display:none; }
+  /* the bottom bar: budget, notes, and the one button that matters */
+  .fbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px;
+    padding:5px 8px calc(5px + env(safe-area-inset-bottom)); border-top:1px solid #1e2c1a; }
+  .feed{ display:flex; gap:3px; flex-wrap:wrap; max-width:104px; }
+  .feed i{ width:11px; height:11px; border-radius:50%; background:#22331f;
+    border:2px solid #3d5b32; display:block; }
+  .feed i.on{ background:#ffd34d; border-color:#fff0b0; box-shadow:0 0 7px rgba(255,211,77,.55); }
+  .pile{ font-size:10px; color:#8fa285; font-weight:800; line-height:1.2; }
+  .pile b{ color:#ffd34d; }
+  .coach{ flex:0 0 auto; margin:2px 8px; padding:6px 10px; border-radius:10px; cursor:pointer;
+    background:#1b1420; border:1px solid #6b3355; color:#ffd0ee; font-size:11px; text-align:center;
+    line-height:1.35; }
   .coach[hidden]{ display:none; }
-  .coach b{ color:var(--pink); }
-  .handrow{ flex:0 0 auto; display:flex; gap:9px; padding:10px 4px 2px;
-    overflow-x:auto; overflow-y:visible; justify-content:safe center; scrollbar-width:thin;
-    scroll-snap-type:x proximity;
-    -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 32px),transparent);
-    mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 32px),transparent); }
-  .handrow .card{ scroll-snap-align:start; }
-  /* the pen out-sizes the hand: the live animals are the point, not the queue */
-  #fight .handrow .card{ width:104px; }
-  #fight .handrow .card .art{ height:70px; }
-  #fight .handrow .card .nm{ font-size:11.5px; min-height:27px; }
-  #fight .handrow .card .st{ font-size:13px; }
-  .fbar{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding-top:8px; }
-  .feed{ display:flex; gap:4px; }
-  .feed i{ width:16px; height:16px; border-radius:50%; background:#22331f; border:2px solid #3d5b32; display:block; }
-  .feed i.on{ background:linear-gradient(180deg,#ffe793,#ffd34d); border-color:#fff0b0;
-    box-shadow:0 0 8px rgba(255,211,77,.6); }
-  .pile{ font-size:11px; color:var(--dim); font-weight:800; }
+  .coach b{ color:#ff8ad4; }
 
   /* ---------- hatch: the clutch is the climax ---------- */
   .hatchrow{ display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
@@ -365,10 +435,34 @@
   .tline{ font-size:10px; color:#5c7050; letter-spacing:2px; }
   .bktreewrap{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; }
 
-  /* ---------- over ---------- */
-  .logbox{ max-height:150px; overflow-y:auto; text-align:left; font-size:12.5px; line-height:1.6;
-    color:#a9bda0; background:#0a120a; border:1px solid #24361f; border-radius:10px; padding:9px 11px;
-    box-shadow:inset 0 2px 6px rgba(0,0,0,.5); }
+  /* ---------- over: the shareable frame ---------- */
+  /* the run's best animal gets a plinth, a ribbon and a pool of light. It is
+     what someone posts; it cannot be rendered like the runt you culled. */
+  .plinth{ position:relative; display:inline-block; padding:16px 22px 22px; margin:6px auto 4px; }
+  .plinth::after{ content:''; position:absolute; left:2%; right:2%; bottom:0; height:46px;
+    pointer-events:none; border-radius:50%;
+    background:radial-gradient(ellipse 70% 60% at 50% 40%, rgba(255,211,77,.16), transparent 72%); }
+  .plinth .card{ width:190px;
+    box-shadow:0 0 0 2px rgba(255,211,77,.55), 0 0 40px -8px rgba(255,211,77,.45),
+      0 18px 30px -10px rgba(0,0,0,.8); }
+  .plinth .card:hover{ transform:none; }
+  .plinth .ribbon{ position:absolute; top:-10px; left:50%; transform:translateX(-50%); z-index:5;
+    white-space:nowrap; }
+  #oBestLine{ font-size:16px; }
+  #oBestLine .pw{ font-weight:900; font-size:22px; color:var(--gold); }
+  /* the run's story is a ledger, not a console dump — and it never clips a line */
+  .logbox{ max-height:158px; overflow-y:auto; text-align:left; font-size:12px; line-height:1.75;
+    font-family:'Courier New',ui-monospace,monospace;
+    color:#a9bda0; background:#0a120a; border:1px solid #24361f; border-left:1px solid #24361f;
+    border-radius:10px; padding:9px 11px 14px;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
+    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 24px),transparent);
+    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 24px),transparent); }
+  .logbox > div{ position:relative; padding-left:14px; }
+  .logbox > div::before{ content:''; position:absolute; left:2px; top:.62em; width:5px; height:5px;
+    border-radius:50%; background:#344b2c; }
+  .logbox > div.loss{ color:#ff7b7b; }
+  .logbox > div.loss::before{ background:#8a3030; }
   .logbox b{ color:var(--ink); }
   #oSub{ text-transform:none; letter-spacing:.2px; font-size:var(--t-body); font-weight:500;
     color:#cfe0c2; max-width:44ch; margin-inline:auto; }
@@ -508,10 +602,18 @@
   .shell::before{ content:''; position:absolute; left:50%; top:44%; width:190px; height:190px;
     transform:translate(-50%,-50%); border-radius:50%; opacity:var(--glow,0);
     background:radial-gradient(circle, rgba(166,255,94,.55), transparent 66%); }
+  /* the shell is drawn, and sized to the card it hides — a 104px system egg
+     emoji overflowed a 150px mobile card in the one colour the barn cannot make */
   .shell .half{ position:absolute; top:44%; left:50%; transform:translate(-50%,-50%);
-    font-size:104px; line-height:1; filter:drop-shadow(0 10px 12px rgba(0,0,0,.6)); }
+    width:72%; aspect-ratio:.8; line-height:1;
+    border-radius:50% 50% 48% 48% / 62% 62% 38% 38%;
+    background:radial-gradient(ellipse 70% 60% at 34% 26%, #fdf6e0, #e8d9a8 48%, #ab9c6e 100%);
+    box-shadow:inset 0 -10px 18px -10px rgba(50,38,16,.7), 0 10px 12px -6px rgba(0,0,0,.6); }
   .shell .half.b{ clip-path:inset(50% 0 0 0); }
   .shell .half.a{ clip-path:inset(0 0 50% 0); }
+  /* shell → gap → chick: the payoff frame is never the portrait behind debris */
+  .pickwrap > .card{ transition:transform .16s cubic-bezier(.2,.9,.3,1.25), box-shadow .16s ease,
+    filter .06s linear, opacity .18s .12s ease-out; }
   .shell.wob{ animation:wob 1.1s ease-in-out infinite; }
   .pickwrap.jit .shell{ animation:jit .07s linear infinite; }
   @keyframes jit{ 0%{transform:translate(-2px,1px) rotate(-2deg)} 50%{transform:translate(2px,-1px) rotate(2deg)}
@@ -542,10 +644,16 @@
   .rline{ position:fixed; height:2px; transform-origin:0 50%; pointer-events:none; z-index:31;
     background:linear-gradient(90deg, rgba(255,138,212,0), var(--pink));
     box-shadow:0 0 10px rgba(255,138,212,.7); }
+  /* the label gets a plate, so the one moment the game explains its own
+     genetics is never drawn through the instruction line underneath it */
   .rlab{ position:fixed; z-index:31; pointer-events:none; font-size:10.5px; font-weight:800;
     letter-spacing:1.4px; text-transform:uppercase; color:var(--pink); white-space:nowrap;
-    text-shadow:0 2px 6px #000; animation:pop .26s ease both; }
-  .rlab.nw{ color:#fff; background:var(--pink); color:#2a0c1e; padding:1px 6px; border-radius:6px; }
+    background:rgba(6,12,6,.92); border:1px solid rgba(255,138,212,.45);
+    padding:2px 7px; border-radius:7px; box-shadow:0 4px 12px rgba(0,0,0,.7);
+    animation:pop .26s ease both; }
+  .rlab.nw{ background:var(--pink); border-color:#ffd0ee; color:#2a0c1e; }
+  #hSub{ position:relative; z-index:1; }
+  #hatch.revealing #hSub{ opacity:.25; transition:opacity .2s; }
 
   /* --- the pairing preview: the ghost of the chick you have not bred yet --- */
   .pairprev{ flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:14px;
@@ -578,11 +686,11 @@
     14%{ transform:translate(-50%,-50%) scale(1) rotate(-1.5deg); opacity:1 }
     76%{ opacity:1 } 100%{ transform:translate(-50%,-64%) scale(.98) rotate(-1.5deg); opacity:0 } }
 
-  @media (max-width:520px){
+  @container app (max-width:560px){
     /* the nest header was shredding into seven lines */
     .foeprev{ display:grid; grid-template-columns:auto 1fr;
       grid-template-areas:'em info' 'haz haz' 'btn btn'; gap:8px 12px; align-items:center; }
-    .foeprev .fe{ grid-area:em; font-size:40px; }
+    .foeprev .fe{ grid-area:em; width:56px; }
     .foeprev > .fp{ grid-area:info; min-width:0; }
     #nFoeHaz{ grid-area:haz; }
     #bHazard{ grid-area:btn; width:100%; }
@@ -600,9 +708,20 @@
     .pairprev .plus{ width:16px; height:16px; }
     .pairprev .plus::before{ width:16px; height:4px; }
     .pairprev .plus::after{ width:4px; height:16px; }
+    /* the ritual row truncated mid-word and clipped its own cost badge */
+    /* on a phone the herd still scrolls, so the last row must fade, not be sliced */
+    .deckwrap{ -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 28px),transparent);
+      mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 28px),transparent); }
+    .rit{ min-width:150px; }
+    .rit i{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .coach{ font-size:11px; line-height:1.35; }
+    .plinth .card{ width:168px; }
+    #oBestLine{ font-size:14px; }
+    #oBestLine .pw{ font-size:19px; }
   }
-  @media (max-width:420px){
+  @container app (max-width:430px){
     .grid{ grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:10px 8px; }
+    .deckwrap > .grid{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px 8px; }
     .card{ width:100px; }
     .card .art{ height:68px; }
     .card .nm{ font-size:11.5px; min-height:27px; }
@@ -614,13 +733,32 @@
     .fbar .pile{ font-size:10px; }
     .hpbar{ width:56px; }
     #nBest{ display:none; }   /* the bar is full; the pairing preview carries the run */
-    .pen{ gap:7px; min-height:132px; }
-    .pb,.slot{ width:96px; }
+    /* four slots plus gaps must FIT, or justify-content:center silently
+       left-aligns the row under a centred foe */
+    .pen{ gap:6px; min-height:140px; max-height:190px; }
+    .pb,.slot{ width:min(23vw,92px); }
     .slot{ height:108px; }
     .pb canvas{ height:64px; }
-    .litter .card.big{ width:150px; }
-    .litter .card.big .art{ height:103px; }
-    .deckwrap{ padding:10px 6px; }
+    .pb .pn{ white-space:normal; line-height:1.05; min-height:24px; }
+    #fight .handrow .card{ width:82px; }
+    #fight .handrow .card .art{ height:54px; }
+    #fight .handrow .card .nm{ font-size:10px; min-height:24px; }
+    #fight .handrow .card .st{ font-size:12px; gap:6px; }
+    #fight .handrow .card .cost{ width:19px; height:19px; font-size:11px; }
+    #fight .handrow .card .gen{ font-size:8px; }
+    /* the clutch is a choice between two animals: you must see both at once */
+    .litter{ flex-wrap:nowrap; gap:8px; justify-content:center; }
+    .litter .card.big{ width:min(46vw,168px); }
+    .litter .card.big .art{ height:min(30vw,112px); }
+    .litter.three .card.big{ width:min(31vw,120px); }
+    .litter.three .card.big .art{ height:min(22vw,84px); }
+    .litter.three .card.big .nm{ font-size:12px; min-height:30px; }
+    .litter.three .card.big .st{ font-size:13px; gap:6px; }
+    .tagline{ min-height:44px; }
+    .banner{ font-size:10px; padding:4px 8px; letter-spacing:1.6px; }
+    #hTitle{ font-size:19px; }
+    #hDeltas{ font-size:14px; }
+    .deckwrap{ padding:10px 6px 44px; }
   }
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{ animation-duration:.001s !important; animation-iteration-count:1 !important;
@@ -630,6 +768,16 @@
     #fxlayer{ display:none; }       /* particles carry no information */
     .grid.mourning > .card:not(.leaving){ transform:none; }
   }
+
+  /* ---------- the verdict: the emotional peak gets its own control ---------- */
+  #hDeltas{ font-size:15px; border-top:1px solid rgba(166,255,94,.10); padding-top:8px;
+    margin-top:6px; }
+  #hDeltas .up, #hDeltas .dn{ font-weight:900; font-size:18px; }
+  #bHatchNext{ font-size:17px; padding:14px 30px; letter-spacing:2px; }
+  #hTitle{ font-size:24px; }
+  #hatch .hatchrow{ min-height:210px; align-items:center; }
+  /* the Stud Book's BACK sat flush against the floating mute button */
+  #bBookBack{ margin-right:44px; }
 
   .delta .i{ margin:0 0 0 2px; }
   .keepsake .i{ margin:0; color:var(--gold); font-size:16px; }
@@ -680,20 +828,32 @@
   <div class="scr on" id="title">
     <div class="tcard">
       <h1>THE BIRDS<br>&amp; <em>THE BEASTS</em></h1>
+      <!-- the generator, running, before anyone has clicked anything -->
+      <div class="tshow" id="tShow">
+        <div class="tb par"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
+        <div class="tb mid"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
+        <div class="tb par"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
+      </div>
       <p class="sub">Two cards enter. Three cards leave.</p>
       <div class="rules">
-        You breed monsters for a living. Your barn is your deck.<br><br>
-        <b>Before each fight</b> you put <i>two</i> beasts in the Nest. They skip the
-        battle &mdash; so you fight short-handed &mdash; and afterwards they breed.<br>
-        <b>In the ring</b>, a beast you play <i>stays</i> in the pen. It strikes every
-        turn and it is what stands between the thing you are fighting and you.
-        <span class="dim">Might is what it hits for. Hide is how long it lasts.</span><br>
-        <b>Every clutch throws two chicks</b> (three from a Fertile parent) and you keep
-        <i>one</i>. The rest go to market for Slop, which buys you a thumb on the scale
-        next time.<br>
-        <b>The barn holds ten.</b> Someone has to go to the farm upstate.<br>
-        Breed two relatives and the gene pool gets&hellip; <i>interesting</i>.
+        <p><b>The Nest.</b> Two beasts sit out the fight &mdash; and breed after it.</p>
+        <p><b>The Ring.</b> A beast you play <i>stays</i> in the pen and strikes every turn.</p>
+        <p><b>The Cull.</b> The barn holds ten. Someone goes to the farm upstate.</p>
       </div>
+      <details class="more">
+        <summary class="tiny">How it works</summary>
+        <div class="body">
+          You breed monsters for a living; your barn is your deck. The two in the
+          Nest skip the battle, so you fight short-handed &mdash; that is the price
+          of a clutch. In the ring a played beast stays in the pen: <b>Might</b> is
+          what it hits for, <b>Hide</b> is how long it lasts, and blows land on it
+          before they land on you.<br>
+          Every clutch throws <i>two</i> chicks (three from a Fertile parent) and you
+          keep <i>one</i>. The rest go to market for Slop, which buys you a thumb on
+          the scale next time. Breed two relatives and the gene pool
+          gets&hellip; <i>interesting</i>.
+        </div>
+      </details>
       <div class="hall" id="hallBox"></div>
       <button class="btn" id="bStart">START THE HERD</button>
     </div>
@@ -711,7 +871,7 @@
       <div class="pip" id="nPips"></div>
     </div>
     <div class="panel foeprev" style="margin-bottom:8px">
-      <div class="fe" id="nFoeEm">&#128020;</div>
+      <canvas class="fe" id="nFoeEm" width="220" height="176"></canvas>
       <div class="fp" style="flex:1; min-width:0">
         <div class="tiny">Next in the ring</div>
         <h3 id="nFoeName">Feral Chicken</h3>
@@ -735,7 +895,7 @@
     </div>
   </div>
 
-  <!-- ================= FIGHT ================= -->
+  <!-- ================= FIELD (prep + battle) ================= -->
   <div class="scr" id="fight">
     <div class="bar">
       <div class="hpbox"><svg class="i"><use href="#i-hp"/></svg><span id="fHp">40</span>
@@ -744,24 +904,26 @@
       <div class="grow"></div>
       <div class="pip" id="fPips"></div>
     </div>
-    <div class="arena" id="arena">
-      <div class="foe" id="foeBox">
-        <div class="em" id="fEm">&#128020;</div>
-        <h2 id="fName">Feral Chicken</h2>
-        <div class="fhp"><i class="ghost" id="fHpGhost" style="width:100%"></i><i id="fHpFill" style="width:100%"></i><span id="fHpTxt">22 / 22</span></div>
-        <div class="intent" id="fIntent">Intends: Peck 6</div>
-        <div class="badges" id="fBadges"></div>
-      </div>
+
+    <div class="field" id="arena">
+      <div class="sideLbl" id="foeLbl">THE OPPOSITION</div>
+      <div class="lineRow them" id="foeLine"></div>
+      <div class="midline"><span id="fIntent">scouting</span></div>
+      <div class="lineRow us" id="pen"></div>
+      <div class="sideLbl" id="myLbl">YOUR LINE &mdash; the front takes the blows</div>
+      <!-- legacy nodes kept so older helpers still have something to talk to -->
+      <div id="foeBox" hidden><canvas id="fEm" width="8" height="8"></canvas><span id="fName"></span>
+        <i id="fHpGhost"></i><i id="fHpFill"></i><span id="fHpTxt"></span><span id="fBadges"></span></div>
     </div>
-    <div class="pen" id="pen"></div>
+
     <div class="coach" id="coach" hidden></div>
-    <div class="handrow" id="hand"></div>
+    <div class="benchwrap"><div class="handrow" id="hand"></div></div>
     <div class="fbar">
       <div class="feed" id="feed"></div>
-      <div class="pile" id="piles">Draw 4 &middot; Discard 0</div>
+      <div class="pile" id="piles"></div>
       <div class="grow"></div>
       <div class="pile" id="nestNote"></div>
-      <button class="btn alt sm" id="bEnd">END TURN</button>
+      <button class="btn sm" id="bEnd">SEND THEM IN</button>
     </div>
   </div>
 
@@ -769,13 +931,13 @@
   <div class="scr" id="hatch">
     <div class="tcard scrollcap" style="max-height:96vh; width:min(760px,96vw)">
       <div class="tiny">The Nest</div>
-      <h2 id="hTitle" style="font-size:24px; color:#ff8ad4">THE NEST STIRS</h2>
+      <h2 id="hTitle" style="color:#ff8ad4">THE NEST STIRS</h2>
       <div class="parents" id="hParents" style="margin:12px 0 6px"></div>
       <div class="instr" id="hSub">Keep <b class="pink">one</b>. The rest go to market.</div>
       <div class="hatchrow" id="hChild" style="margin:20px 0 6px"></div>
       <div id="hBanners" style="min-height:30px"></div>
-      <div id="hDeltas" class="instr" style="min-height:20px; font-size:13px"></div>
-      <div class="footer"><button class="btn" id="bHatchNext" disabled>KEEP IT</button></div>
+      <div id="hDeltas" class="instr" style="min-height:20px"></div>
+      <div class="footer"><button class="btn pinky" id="bHatchNext" disabled>KEEP IT</button></div>
     </div>
   </div>
 
@@ -835,7 +997,7 @@
       <p id="oSub" style="margin:10px auto 0">You made it to round 12</p>
       <div class="keepsake" id="oKeep" hidden></div>
       <div class="hatchrow" id="oBest" style="margin:14px 0 10px"></div>
-      <div class="instr" id="oBestLine" style="margin-bottom:12px; font-size:13px"></div>
+      <div class="instr" id="oBestLine" style="margin-bottom:12px"></div>
       <div class="logbox" id="oLog"></div>
       <div class="footer">
         <button class="btn" id="bAgain">BREED AGAIN</button>
@@ -1191,40 +1353,40 @@ function junkCard(){
 /* ---------------------------------------------------------------- foes --- */
 // v: attack value, n: hit count. Moves cycle; the next one is telegraphed.
 const FOES = [
-  { name: 'Feral Chicken', em: '🐓', hp: 24, moves: [
+  { name: 'Feral Chicken', em: '🐓', sil: 'bird', tint: .10, hp: 24, moves: [
     { t: 'atk', v: 7, s: 'Peck' }, { t: 'atkx', v: 4, n: 2, s: 'Flap' },
     { t: 'def', v: 4, s: 'Fluff up' } ] },
-  { name: 'Hedge Ogre', em: '👹', hp: 30, moves: [
+  { name: 'Hedge Ogre', em: '👹', sil: 'brute', tint: .34, hp: 30, moves: [
     { t: 'atk', v: 11, s: 'Club' }, { t: 'def', v: 4, s: 'Brace' },
     { t: 'atk', v: 14, s: 'Smash' } ] },
-  { name: 'Cousin Merle', em: '🤠', hp: 39, moves: [
+  { name: 'Cousin Merle', em: '🤠', sil: 'human', tint: .20, hp: 39, moves: [
     { t: 'atkx', v: 7, n: 3, s: 'Whip' }, { t: 'buff', v: 3, s: 'Boast' },
     { t: 'hit', v: 8, s: 'Spit at you' } ] },
-  { name: 'The Inspector', em: '📋', hp: 56, boss: 1, moves: [
+  { name: 'The Inspector', em: '📋', sil: 'human', tint: .62, hp: 56, boss: 1, moves: [
     { t: 'curse', s: 'File a form' }, { t: 'atk', v: 17, s: 'Fine you' },
     { t: 'sweep', v: 7, s: 'Audit the pen' }, { t: 'hit', v: 13, s: 'Condemn' } ] },
-  { name: 'Poacher Gang', em: '🏹', hp: 62, moves: [
+  { name: 'Poacher Gang', em: '🏹', sil: 'swarm', tint: .28, hp: 62, moves: [
     { t: 'atkx', v: 9, n: 3, s: 'Volley' }, { t: 'atk', v: 22, s: 'Snare' },
     { t: 'buff', v: 4, s: 'Regroup' } ] },
-  { name: 'Prize Bull \"Meatlocker\"', em: '🐂', hp: 79, moves: [
+  { name: 'Prize Bull \"Meatlocker\"', em: '🐂', sil: 'brute', tint: .05, hp: 79, moves: [
     { t: 'atk', v: 29, s: 'Charge' }, { t: 'def', v: 12, s: 'Snort' },
     { t: 'sweep', v: 11, s: 'Stampede' } ] },
-  { name: 'Barn Fire', em: '🔥', hp: 101, moves: [
+  { name: 'Barn Fire', em: '🔥', sil: 'fire', tint: .50, hp: 101, moves: [
     { t: 'sweep', v: 14, s: 'Spread' }, { t: 'atk', v: 30, s: 'Roar' },
     { t: 'buff', v: 5, s: 'Catch wind' } ] },
-  { name: 'The Vet', em: '💉', hp: 147, boss: 1, moves: [
+  { name: 'The Vet', em: '💉', sil: 'human', tint: .78, hp: 147, boss: 1, moves: [
     { t: 'atk', v: 35, s: 'Jab' }, { t: 'heal', v: 13, s: 'Self-medicate' },
     { t: 'hit', v: 24, s: 'Bill you' }, { t: 'sweep', v: 19, s: 'Sedate the pen' } ] },
-  { name: 'Rustlers', em: '🚚', hp: 162, moves: [
+  { name: 'Rustlers', em: '🚚', sil: 'swarm', tint: .55, hp: 162, moves: [
     { t: 'atkx', v: 18, n: 3, s: 'Round up' }, { t: 'atk', v: 53, s: 'Haul off' },
     { t: 'def', v: 23, s: 'Lock up' } ] },
-  { name: 'Grand Champion Sir Loin', em: '🏆', hp: 206, moves: [
+  { name: 'Grand Champion Sir Loin', em: '🏆', sil: 'brute', tint: .72, hp: 206, moves: [
     { t: 'buff', v: 6, s: 'Pose' }, { t: 'atk', v: 62, s: 'Trample' },
     { t: 'sweep', v: 26, s: 'Rosette rush' }, { t: 'def', v: 31, s: 'Preen' } ] },
-  { name: 'The Repo Man', em: '🏦', hp: 262, moves: [
+  { name: 'The Repo Man', em: '🏦', sil: 'human', tint: .92, hp: 262, moves: [
     { t: 'curse', s: 'Serve papers' }, { t: 'hit', v: 46, s: 'Repossess' },
     { t: 'atkx', v: 29, n: 3, s: 'Itemise' }, { t: 'atk', v: 81, s: 'Foreclose' } ] },
-  { name: 'THE UR-MOTHER', em: '🥚', hp: 383, boss: 1, moves: [
+  { name: 'THE UR-MOTHER', em: '🥚', sil: 'egg', tint: .40, hp: 383, boss: 1, moves: [
     { t: 'atk', v: 78, s: 'Birth a horror' }, { t: 'sweep', v: 43, s: 'Brood swarm' },
     { t: 'buff', v: 7, s: 'Swell' }, { t: 'heal', v: 31, s: 'Reabsorb' },
     { t: 'atk', v: 117, s: 'THE CLUTCH' } ] },
@@ -1232,8 +1394,11 @@ const FOES = [
 const RUN_LEN = FOES.length;
 const MAX_DECK = 10;
 const START_HP = 40;
-const FEED = 3;
+const FEED = 3;                 // kept for older references
 const HAND_SIZE = 5;
+// Feed is a DEPLOYMENT budget: what your whole line may cost this round.
+const LINE_BASE = 4;
+const LINE_GROW = 0.8;
 const WILD_AFTER = [0, 3, 6, 8]; // 0-based fight index; win it, get a fresh-bloodline offer
 
 /* The Slop economy. Rejected chicks go to market; that is what pays for the
@@ -1262,8 +1427,51 @@ const HAZARD_PAY = 3;
 function makeFoe(i, mods){
   const f = FOES[clamp(i, 0, FOES.length - 1)];
   const hp = Math.round(f.hp * ((mods && mods.hpMul) || 1));
-  return { name: f.name, em: f.em, hp, maxHp: hp, moves: f.moves, mi: 0,
+  return { name: f.name, em: f.em, sil: f.sil, tint: f.tint, hp, maxHp: hp, moves: f.moves, mi: 0,
     block: 0, poison: 0, bonus: ((mods && mods.foeMight) || 0), boss: !!f.boss };
+}
+
+/* ============================ THE OPPOSITION ==============================
+   The other side of the field is a TEAM, not a health bar: a named leader and
+   the animals it brought. They are ordinary beasts — same stats, same keywords,
+   drawn by the same painter from the same visual genes — so what you are
+   reading across the field is exactly what you read on your own cards.
+   ========================================================================== */
+const ENEMY_BASE = 6.8;       // leader stat power at round 1
+const ENEMY_GROWTH = 1.205;   // per round; fitted by simulation
+const GRUNT_FRAC = 0.56;      // a grunt is this much of its leader
+// Each roster entry lends its leader a keyword, so the flavour survives the
+// move list it used to have.
+const LEADER_TRAIT = ['none', 'bulwark', 'frenzy', 'venom', 'frenzy', 'bulwark',
+  'rally', 'leech', 'frenzy', 'rally', 'venom', 'frenzy'];
+function teamSize(i){ return clamp(2 + Math.floor(i / 3), 2, 4); }
+/** Split stat power into Might and Hide with a per-beast bias, so an enemy line
+ *  has shapes in it — a wall at the front, a glass cannon behind. */
+function enemyBeast(name, sp, trait, bias, sil, tint){
+  const might = Math.max(1, Math.round(sp * (0.42 + 0.30 * bias)));
+  const hide = Math.max(1, Math.round((sp - might) / 0.6));
+  const c = makeCard({ pre: name, suf: '', name, might, hide, trait, gen: 1 });
+  c.foe = 1;
+  if (sil) c.sil = sil;
+  if (tint != null) c.vis.hue = Math.round(tint * 360);
+  return c;
+}
+function makeEnemyTeam(i, mods){
+  const f = FOES[clamp(i, 0, FOES.length - 1)];
+  const mul = (mods && mods.hpMul) || 1;
+  const bump = (mods && mods.foeMight) || 0;
+  const n = teamSize(i);
+  const lead = ENEMY_BASE * Math.pow(ENEMY_GROWTH, i) * (f.boss ? 1.25 : 1) * mul;
+  const team = [];
+  team.push(enemyBeast(f.name, lead + bump, LEADER_TRAIT[i] || 'none', 0.5, f.sil, f.tint));
+  team[0].leader = 1;
+  const grunt = GRUNT_FRAC * lead;
+  for (let k = 1; k < n; k++){
+    // alternating shapes: the odd ones are walls, the even ones are teeth
+    team.push(enemyBeast(f.gname || (f.name.split(' ')[0] + ' ' + ['Hand', 'Kin', 'Runt', 'Whelp'][k % 4]),
+      grunt + bump, 'none', k % 2 ? 0.05 : 0.95, f.sil, f.tint));
+  }
+  return team;
 }
 /* ============================== RUN STATE ================================= */
 let R = null;   // the run
@@ -1279,6 +1487,7 @@ function newRun(seed){
     idx: 0,                 // which foe is next
     nest: [],               // ids of the two in the nest
     slop: 2, ritual: 'natural', hazard: null, litter: null,
+    line: [], regalBonus: 0, lastLost: false,
     log: [], born: 0, retired: 0, wins: 0, sold: 0,
     lastHatch: null, wildOffer: null, over: null,
     // cosmetic spine: fights won without losing a beast. Pays nothing — it is
@@ -1338,48 +1547,12 @@ function deckForFight(){ return R.deck.filter((c) => R.nest.indexOf(c.id) < 0); 
    to chew through before it can reach you. Might is what it hits for, Hide is
    how long it lasts. That is the whole reason breeding for both matters.
    ========================================================================== */
-const MAX_PEN = 4;
-/** Feed grows every 3 rounds, because bred stats (and so card costs) inflate. */
-function feedFor(idx){ return FEED + Math.floor(idx / 3); }
-function startFight(mods){
-  const cards = deckForFight().map((c) => Object.assign({}, c)); // fight copies, so
-  const fm = feedFor(R.idx) + ((mods && mods.feed) || 0);        // Paperwork never
-  F = {                                                          // sticks to the barn
-    foe: makeFoe(R.idx, mods),
-    draw: shuffle(cards), hand: [], disc: [], pen: [],
-    feed: fm, feedMax: fm,
-    turn: 1, over: null, hit: 0, log: [], uid: 1,
-    mods: mods || {},
-    events: [],            // presentation transcript, drained by doEnd()
-  };
-  drawCards(handSize());
-  return F;
-}
-/** The rules stay synchronous and authoritative; as they resolve they leave a
- *  breadcrumb trail here so the UI can replay the turn one beat at a time.
- *  Nothing reads F.events to decide anything — it is a transcript, not state. */
-function ev(k, o){
-  if (!F || !F.events) return;
-  if (F.events.length > 200) return;   // a runaway loop must not eat memory
-  F.events.push(Object.assign({ k }, o));
-}
-function handSize(){ return HAND_SIZE + ((F && F.mods && F.mods.hand) || 0); }
-function drawCards(n){
-  for (let i = 0; i < n; i++){
-    if (!F.draw.length){
-      if (!F.disc.length) return;
-      F.draw = shuffle(F.disc); F.disc = [];
-    }
-    if (F.hand.length >= 10){ F.disc.push(F.draw.pop()); continue; }
-    F.hand.push(F.draw.pop());
-  }
-}
-function fLog(s){ F.log.push(s); if (F.log.length > 60) F.log.shift(); }
-
-/* ------------------------------------------------------------ the beasts -- */
+/* --------------------------------------------------------- beast maths ---
+   Shared by the line-up screen and the battle, so the number you read on a
+   card is exactly the number that swings on the field. */
 /** A card's Hide as a pool of health. Never zero — everything can take a hit. */
 function cardHide(c){ return Math.max(1, c.hide + (c.trait === 'plump' ? 5 : 0)); }
-/** A card's own damage, before the pen's Rally bonuses. */
+/** A card's own damage, before its side's Rally bonuses. */
 function cardDamage(c){
   let d = c.might;
   if (c.trait === 'runt' || c.trait === 'hollow') d = Math.ceil(d / 2);
@@ -1387,171 +1560,231 @@ function cardDamage(c){
   if (F && F.mods && F.mods.might) d = Math.max(0, d + F.mods.might);
   return Math.max(0, d);
 }
-/** What a beast standing in the pen actually hits for, Rally included. */
-function beastMight(b){
-  let d = cardDamage(b.c);
-  if (d <= 0) return 0;
-  if (F && F.pen) for (const o of F.pen) if (o !== b && o.c.trait === 'rally') d += 2;
-  return d;
+/** The rules stay synchronous and authoritative; as they resolve they leave a
+ *  breadcrumb trail here so the UI can replay the battle one beat at a time.
+ *  Nothing reads F.events to decide anything — it is a transcript, not state. */
+function ev(k, o){
+  if (!F || !F.events) return;
+  if (F.events.length > 600) return;   // a runaway loop must not eat memory
+  F.events.push(Object.assign({ k }, o));
 }
-function penFull(){ return F.pen.length >= MAX_PEN; }
-function penHas(trait){ return F.pen.some((b) => b.c.trait === trait); }
+function fLog(t){ if (F && F.log){ F.log.push(t); if (F.log.length > 60) F.log.shift(); } }
 
-function damageFoe(v){
-  if (v <= 0) return 0;
-  const f = F.foe;
-  const soak = Math.min(f.block, v);
-  f.block -= soak;
-  const real = v - soak;
-  f.hp -= real;
-  F.hit = 1;
-  if (f.hp <= 0){ f.hp = 0; F.over = 'win'; }
-  return real;
+/* ============================== THE LINE-UP ===============================
+   Prep, then hands off. You choose which beasts go out and in what order, and
+   what you pay for them; after that the field settles it. Everything below is
+   synchronous and deterministic — the battle is fully resolved the moment it
+   starts, and the UI replays the transcript it leaves behind.
+   ========================================================================== */
+const LINE_SLOTS = 4;
+const MAX_PEN = LINE_SLOTS;                       // kept: older callers use it
+/** Feed is a deployment budget now, not a per-turn drip. */
+function lineBudget(){
+  return LINE_BASE + Math.floor(R.idx * LINE_GROW) + (R.regalBonus || 0) +
+    ((R.hazard && R.hazard.mods.feed) || 0);
 }
-function damagePlayer(v){
-  if (v <= 0) return 0;
-  R.hp -= v;
-  if (R.hp <= 0){ R.hp = 0; F.over = 'lose'; }
-  ev('you', { v, hp: R.hp });
-  return v;
+function feedFor(idx){ return LINE_BASE + Math.floor(idx * LINE_GROW); }
+function lineCost(ids){
+  return (ids || R.line).reduce((t, id) => { const c = cardById(id); return t + (c ? c.cost : 0); }, 0);
 }
-/** Hurt one beast in the pen. Returns how much of the blow it actually soaked —
- *  anything left over rolls on to whatever is standing behind it. */
-function hurtBeast(b, v){
-  const mult = b.c.trait === 'feral' ? 1.5 : 1;
-  const soaked = Math.min(v, Math.ceil(b.hp / mult));
-  b.hp -= Math.ceil(v * mult);
-  if (b.c.trait === 'thorns') damageFoe(3);
-  ev('hit', { uid: b.uid, v: Math.ceil(v * mult), hp: Math.max(0, b.hp), max: b.max,
-    thorns: b.c.trait === 'thorns', fhp: F ? F.foe.hp : 0 });
-  if (b.hp <= 0){
-    const i = F.pen.indexOf(b);
-    if (i >= 0) F.pen.splice(i, 1);
-    F.disc.push(b.c);
-    fLog(b.c.name + ' goes down');
-    F.lost = (F.lost || 0) + 1;
-    ev('die', { uid: b.uid, name: b.c.name, hue: (b.c.vis && b.c.vis.hue) || 90 });
-  }
-  return soaked;
+function lineIsLegal(ids){
+  if (!ids.length || ids.length > LINE_SLOTS) return false;
+  if (new Set(ids).size !== ids.length) return false;
+  if (!ids.every((id) => cardById(id) && R.nest.indexOf(id) < 0)) return false;
+  return lineCost(ids) <= lineBudget();
 }
-/** A blow lands on the front of the pen and carries through anything it kills —
- *  but a body in the way blunts it: overkill only carries at half. A line that
- *  is merely outmatched bends; one that is hopelessly outmatched breaks. */
-const SPILL = 0.5;
-function swingAt(v){
-  let left = v;
-  for (let guard = 0; left > 0 && guard < 8; guard++){
-    const t = foeTarget();
-    if (!t){ damagePlayer(left); return; }
-    const soaked = hurtBeast(t, left);
-    left = Math.floor((left - soaked) * SPILL);
-  }
-}
-/** Who eats the next blow: a Bulwark first, anything ordinary next, Elusive last. */
-function foeTarget(){
-  if (!F.pen.length) return null;
-  const bul = F.pen.filter((b) => b.c.trait === 'bulwark');
-  if (bul.length) return bul[0];
-  const plain = F.pen.filter((b) => b.c.trait !== 'elusive');
-  return plain.length ? plain[0] : F.pen[0];
-}
-/** One beast's attack for the turn. Frenzy swings twice, Venom leaves poison. */
-function strike(b){
-  const d = beastMight(b);
-  if (d <= 0) return 0;
-  const hits = b.c.trait === 'frenzy' ? 2 : 1;
-  let dealt = 0;
-  for (let k = 0; k < hits && !F.over; k++) dealt += damageFoe(d);
-  if (b.c.trait === 'venom') F.foe.poison += Math.max(1, Math.floor(b.c.might / 3));
-  let healed = 0;
-  if (b.c.trait === 'leech' && dealt > 0){
-    healed = Math.min(R.maxHp - R.hp, Math.floor(dealt / 2));
-    R.hp = Math.min(R.maxHp, R.hp + Math.floor(dealt / 2));
-  }
-  b.struck = 1;
-  ev('strike', { uid: b.uid, dmg: dealt, hits, per: d, healed,
-    venom: b.c.trait === 'venom', fhp: F.foe.hp, killed: F.over === 'win' });
-  return dealt;
-}
-function penStrike(){
-  let total = 0;
-  for (const b of F.pen.slice()){
-    if (F.over) break;
-    total += strike(b);
-  }
-  return total;
-}
-
-/** Play hand[i]: a beast walks into the pen, a dud just gets filed away. */
-function playCard(i){
-  if (!F || F.over) return false;
-  const c = F.hand[i];
-  if (!c || c.cost > F.feed) return false;
-  if (!c.dud && penFull()) return false;   // nowhere to put it
-  F.feed -= c.cost;
-  F.hand.splice(i, 1);
-  if (c.dud){ F.disc.push(c); fLog('Filed ' + c.name + ' away'); return true; }
-
-  if (c.trait === 'cursed'){ damagePlayer(2); if (F.over){ F.disc.push(c); return true; } }
-  const b = { c, hp: cardHide(c), max: cardHide(c), uid: F.uid++, fresh: 1 };
-  F.pen.push(b);
-  if (c.trait === 'brood' && F.hand.length < 10) F.hand.push(spawnCard());
-  if (c.trait === 'regal') F.feed += 1;                  // pays out the turn it lands too
-  if (c.trait === 'swift') strike(b);                    // straight into the fray
-  fLog(c.name + ' enters the pen');
+function setLine(ids){
+  if (!lineIsLegal(ids)) return false;
+  R.line = ids.slice();
   return true;
 }
-function nextMove(){ return F.foe.moves[F.foe.mi % F.foe.moves.length]; }
-/** Resolve the foe's telegraphed move against the pen (or you, if it is empty). */
-function foeAct(){
-  const f = F.foe;
-  const m = nextMove();
-  f.mi++;
-  f.block = 0;
-  const swing = (v) => { ev('swing', {}); swingAt(v + f.bonus); };
-  ev('foe', { s: m.s, t: m.t, v: m.v == null ? 0 : m.v + (m.t === 'atk' || m.t === 'atkx' || m.t === 'hit' ? f.bonus : 0) });
-  if (m.t === 'atk') swing(m.v);
-  else if (m.t === 'atkx'){ for (let k = 0; k < m.n && !F.over; k++) swing(m.v); }
-  else if (m.t === 'hit'){ ev('swing', {}); damagePlayer(m.v + f.bonus); }   // straight past the pen
-  else if (m.t === 'sweep'){ ev('swing', {}); for (const b of F.pen.slice()) hurtBeast(b, m.v); }
-  else if (m.t === 'def') f.block += m.v;
-  else if (m.t === 'buff') f.bonus += m.v;
-  else if (m.t === 'heal'){ f.hp = Math.min(f.maxHp, f.hp + m.v); ev('foeheal', { fhp: f.hp, v: m.v }); }
-  else if (m.t === 'curse') F.disc.push(junkCard());
-  fLog(f.name + ': ' + m.s);
+/** Can this beast still be added — a slot free, and the Feed to field it? */
+function canField(c){
+  if (!c || R.line.indexOf(c.id) >= 0) return false;
+  if (R.line.length >= LINE_SLOTS) return false;
+  return lineCost() + c.cost <= lineBudget();
 }
-function endTurn(){
-  if (!F || F.over) return;
-  F.events = [];                                  // one turn, one transcript
-  if (F.foe.poison > 0){                          // yesterday's venom bites first
-    const dealt = damageFoe(F.foe.poison);
-    F.foe.poison = Math.max(0, F.foe.poison - 1);
-    ev('poison', { v: dealt, fhp: F.foe.hp, killed: F.over === 'win' });
-    if (F.over) return;
+function toggleField(id){
+  const i = R.line.indexOf(id);
+  if (i >= 0){ R.line.splice(i, 1); return true; }
+  const c = cardById(id);
+  if (!canField(c)) return false;
+  R.line.push(id);
+  return true;
+}
+/** Shuffle a beast up or down the order. The front of the line eats first. */
+function moveInLine(id, dir){
+  const i = R.line.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= R.line.length) return false;
+  const t = R.line[i]; R.line[i] = R.line[j]; R.line[j] = t;
+  return true;
+}
+
+/* ------------------------------------------------------------- the field -- */
+function unitOf(c, side, uid){
+  return { c, side, uid, hp: cardHide(c), max: cardHide(c), pois: 0, alive: 1 };
+}
+/** Bulwark shoulders to the front, Elusive hangs back; otherwise your order stands. */
+function frontOf(line){
+  const live = line.filter((u) => u.alive);
+  if (!live.length) return null;
+  const bul = live.filter((u) => u.c.trait === 'bulwark');
+  if (bul.length) return bul[0];
+  const plain = live.filter((u) => u.c.trait !== 'elusive');
+  return plain.length ? plain[0] : live[0];
+}
+function livingOf(line){ return line.filter((u) => u.alive); }
+/** A unit's damage, with its own side's Rally counted in. */
+/** Older render code asks for a pen beast's damage by this name. */
+function beastMight(b){
+  if (!b || !b.c) return 0;
+  const line = (F && F.mine) ? F.mine : [];
+  return unitMight(b, line);
+}
+function unitMight(u, line){
+  let d = cardDamage(u.c);
+  if (d <= 0) return 0;
+  for (const o of line) if (o !== u && o.alive && o.c.trait === 'rally') d += 2;
+  return d;
+}
+function startBattle(mods){
+  const m = mods || {};
+  let uid = 1;
+  const mine = R.line.map((id) => unitOf(Object.assign({}, cardById(id)), 'us', uid++));
+  const theirs = makeEnemyTeam(R.idx, m).map((c) => unitOf(c, 'them', uid++));
+  F = {
+    mine, theirs, mods: m, over: null, round: 0, events: [], log: [],
+    trample: 0, uid,
+    pen: mine,                       // older render code reads F.pen
+    foe: { name: FOES[clamp(R.idx, 0, RUN_LEN - 1)].name, hp: 1, maxHp: 1, poison: 0, bonus: 0, block: 0 },
+  };
+  return F;
+}
+/* ------------------------------------------------------------- resolution - */
+function hitUnit(u, raw, from, line){
+  if (!u.alive) return 0;
+  const mult = u.c.trait === 'feral' ? 1.5 : 1;
+  const dmg = Math.ceil(raw * mult);
+  u.hp -= dmg;
+  ev('hurt', { uid: u.uid, side: u.side, dmg, hp: Math.max(0, u.hp) });
+  if (from && u.c.trait === 'thorns' && from.alive){
+    from.hp -= 3;
+    ev('hurt', { uid: from.uid, side: from.side, dmg: 3, hp: Math.max(0, from.hp), thorns: 1 });
+    if (from.hp <= 0){ from.alive = 0; ev('die', { uid: from.uid, side: from.side }); }
   }
-  penStrike();                                    // then the pen goes to work
-  if (F.over) return;
-  foeAct();
-  if (F.over) return;
-  F.turn++;
-  for (const b of F.pen){ b.fresh = 0; b.struck = 0; }
-  F.feed = F.feedMax + F.pen.filter((b) => b.c.trait === 'regal').length;
-  for (const c of F.hand) F.disc.push(c);
-  F.hand = [];
-  drawCards(handSize());
-  ev('draw', {});
+  if (u.hp <= 0){ u.alive = 0; ev('die', { uid: u.uid, side: u.side }); }
+  return dmg;
+}
+/** One beast's swing at the beast in front of it. */
+function swing(u, target, myLine){
+  if (!u.alive || !target || !target.alive) return 0;
+  const per = unitMight(u, myLine);
+  if (per <= 0) return 0;
+  const hits = u.c.trait === 'frenzy' ? 2 : 1;
+  let dealt = 0;
+  ev('strike', { uid: u.uid, side: u.side, per, hits, target: target.uid });
+  for (let k = 0; k < hits && target.alive; k++) dealt += hitUnit(target, per, u, myLine);
+  if (u.c.trait === 'venom' && target) target.pois += Math.max(1, Math.floor(u.c.might / 3));
+  if (u.c.trait === 'leech' && dealt > 0 && u.side === 'us'){
+    const heal = Math.min(R.maxHp - R.hp, Math.floor(dealt / 2));
+    R.hp += heal;
+    if (heal) ev('heal', { v: heal, hp: R.hp });
+  }
+  return dealt;
+}
+function tickPoison(line){
+  for (const u of line){
+    if (!u.alive || u.pois <= 0) continue;
+    u.hp -= u.pois;
+    ev('poison', { uid: u.uid, side: u.side, v: u.pois, hp: Math.max(0, u.hp) });
+    u.pois = Math.max(0, u.pois - 1);
+    if (u.hp <= 0){ u.alive = 0; ev('die', { uid: u.uid, side: u.side }); }
+  }
+}
+const MAX_EXCHANGES = 30;
+const TRAMPLE_CAP = 0.34;   // most of a losing blow, never all of you
+/**
+ * Fight the whole thing, right now. Both front-runners swing at the same
+ * instant, so a trade can take them both — no first-strike advantage to whoever
+ * the loop happens to touch first.
+ */
+function resolveBattle(){
+  if (!F || F.over) return F && F.over;
+  // Swift goes in before the bell.
+  for (const u of F.mine) if (u.c.trait === 'swift'){ const t = frontOf(F.theirs); if (t) swing(u, t, F.mine); }
+  for (const u of F.theirs) if (u.c.trait === 'swift'){ const t = frontOf(F.mine); if (t) swing(u, t, F.theirs); }
+
+  while (F.round < MAX_EXCHANGES){
+    const a = frontOf(F.mine), b = frontOf(F.theirs);
+    if (!a || !b) break;
+    F.round++;
+    ev('clash', { round: F.round, a: a.uid, b: b.uid });
+    const dA = unitMight(a, F.mine), dB = unitMight(b, F.theirs);
+    const hitsA = a.c.trait === 'frenzy' ? 2 : 1, hitsB = b.c.trait === 'frenzy' ? 2 : 1;
+    ev('strike', { uid: a.uid, side: 'us', per: dA, hits: hitsA, target: b.uid });
+    ev('strike', { uid: b.uid, side: 'them', per: dB, hits: hitsB, target: a.uid });
+    // simultaneous: both blows are struck before either body falls
+    const aWas = a.alive, bWas = b.alive;
+    for (let k = 0; k < hitsA && b.alive; k++) hitUnit(b, dA, a, F.mine);
+    if (aWas) for (let k = 0; k < hitsB && a.alive; k++) hitUnit(a, dB, b, F.theirs);
+    if (a.c.trait === 'venom' && bWas) b.pois += Math.max(1, Math.floor(a.c.might / 3));
+    if (b.c.trait === 'venom' && aWas) a.pois += Math.max(1, Math.floor(b.c.might / 3));
+    if (a.c.trait === 'leech' && a.alive){
+      const heal = Math.min(R.maxHp - R.hp, Math.floor(dA / 2));
+      R.hp += heal; if (heal) ev('heal', { v: heal, hp: R.hp });
+    }
+    tickPoison(F.mine); tickPoison(F.theirs);
+  }
+
+  const us = livingOf(F.mine).length, them = livingOf(F.theirs).length;
+  if (them === 0) F.over = 'win';
+  else if (us === 0) F.over = 'lose';
+  else {
+    // a stalemate goes to whoever is still standing in force
+    const spUs = livingOf(F.mine).reduce((t, u) => t + statPower(u.c.might, u.hp), 0);
+    const spThem = livingOf(F.theirs).reduce((t, u) => t + statPower(u.c.might, u.hp), 0);
+    F.over = spUs > spThem ? 'win' : 'lose';
+  }
+  if (F.over === 'lose'){
+    // whatever is left of them walks over you on the way out
+    // What they have left walks over you — but capped, so one bad match is a
+    // wound and not the end of a run you were otherwise winning.
+    const raw = livingOf(F.theirs).reduce((t, u) => t + unitMight(u, F.theirs), 0);
+    F.trample = Math.max(3, Math.min(raw, Math.ceil(R.maxHp * TRAMPLE_CAP)));
+    R.hp = Math.max(0, R.hp - F.trample);
+    F.lost = 1;
+    ev('trample', { v: F.trample, hp: R.hp });
+    if (R.hp <= 0) F.dead = 1;
+  }
+  ev('end', { won: F.over === 'win', trample: F.trample });
+  return F.over;
 }
 
 /* ============================ AFTER THE FIGHT ============================= */
 /** Win bookkeeping: heal a little, breed the nest, queue a wild offer. */
+/**
+ * End of the round, win or lose. Losing a match no longer ends the run — the
+ * enemy line tramples you for what it has left standing and you carry that
+ * wound forward. Your farm keeps going either way: the pair in the Nest sat the
+ * match out, so they breed regardless. The run ends when YOU run out of health.
+ */
 function winFight(){
-  R.wins++;
+  const lost = !!(F && F.lost);
+  R.wins += lost ? 0 : 1;
   R.streakBroke = 0;
-  if (F && F.lost){ R.streakBroke = R.streak; R.streak = 0; }
+  if (lost){ R.streakBroke = R.streak; R.streak = 0; }
   else { R.streak++; R.bestStreak = Math.max(R.bestStreak, R.streak); }
-  if (FOES[R.idx] && FOES[R.idx].boss) R.maxHp += 5; // bosses pay for themselves
-  R.maxHp += 2;
-  R.hp = Math.min(R.maxHp, R.hp + Math.ceil(R.maxHp * 0.30) + 4);
+  R.lastLost = lost;
+  if (!lost){
+    if (FOES[R.idx] && FOES[R.idx].boss) R.maxHp += 5; // bosses pay for themselves
+    R.maxHp += 2;
+    R.hp = Math.min(R.maxHp, R.hp + Math.ceil(R.maxHp * 0.30) + 4);
+  } else {
+    R.hp = Math.min(R.maxHp, R.hp + 3);               // a night's rest, no more
+  }
+  R.regalBonus = R.line.filter((id) => { const c = cardById(id); return c && c.trait === 'regal'; }).length;
+  R.line = [];
   const a = cardById(R.nest[0]), b = cardById(R.nest[1]);
   R.litter = breedLitter(a, b, R.ritual);
   R.lastHatch = { a, b, litter: R.litter };
@@ -1965,83 +2198,199 @@ const sfxWin = () => [0, 120, 240, 400].forEach((t, i) =>
   tone([440, 550, 660, 880][i], 0.18, { at: t / 1000, type: 'triangle', vol: 0.055 }));
 
 /* ---------------------------------------------------- creature portrait -- */
-/** Draws a beast from its visual genes. A chick's hue, build, horns and wings
- *  are blended from its parents, so family resemblance is visible at a glance. */
+/** Which silhouette a set of genes paints.
+ *
+ *  Nothing here is rolled and nothing is stored: build, limbs, crest and horn
+ *  length are READ OFF the genes the breeder already blends. `body` is a
+ *  continuous gene that lands between the parents, so a chick's build lands
+ *  between theirs; `eyes`, `tail` and `wings` are inherited whole from one
+ *  parent or the other; `hue2` blends round the wheel. So the silhouette is
+ *  every bit as heritable as the hue was — it is just finally VISIBLE.
+ *  4 builds x 3 limbs x 4 crests = 48 shapes before colour touches it. */
+function vform(v){
+  const q = (x, n) => Math.max(0, Math.min(n - 1, Math.floor(x * n)));
+  const h2 = ((v.hue2 % 360) + 360) % 360;
+  return {
+    build: q(v.body, 4),                            // pear / ellipse / lumpy / capsule
+    limb: (v.eyes + (v.tail ? 1 : 0)) % 3,          // stubs / long / none
+    crest: (Math.floor(h2 / 90) + v.wings) % 4,     // none / spines / comb / antennae
+    hornLen: 0.2 + 0.8 * clamp(v.spots, 0, 1),
+  };
+}
+/** Draws a beast from its visual genes. A chick's hue, build, limbs, crest,
+ *  horns and wings are blended from its parents, so family resemblance is
+ *  visible at a glance — and different families are visibly different animals. */
 function drawBeast(cv, c){
   const ctx = cv.getContext && cv.getContext('2d');
   if (!ctx || !ctx.beginPath) return;
   const v = c.vis, W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
-  // frame: the widest beast runs ~104 units across and ~82 tall with horns, and
-  // its legs hang 10 below the origin — so sit the origin high enough to keep both.
-  const S = Math.min(W / 100, H / 78);
+  const f = vform(v);
+  // frame: room for a long-legged, antennaed, big-horned animal without
+  // shrinking the ordinary ones into their own canvases
+  const S = Math.min(W / 96, H / 80);
   ctx.save();
-  ctx.translate(W / 2, H * 0.94);
+  ctx.translate(W / 2, H * 0.96);
   ctx.scale(S, -S); // y now points up
-  ctx.lineJoin = 'round';
+  if (f.limb === 2) ctx.scale(1.08, 0.9);   // legless: it sits ON the floor
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
   const main = 'hsl(' + v.hue + ',52%,52%)';
+  const top = 'hsl(' + v.hue + ',55%,68%)';
   const dark = 'hsl(' + v.hue + ',56%,26%)';
+  const ink = 'hsl(' + v.hue + ',60%,13%)';
   const belly = 'hsl(' + v.hue2 + ',58%,70%)';
+  const wingc = 'hsl(' + v.hue2 + ',50%,44%)';
   const sz = v.size;
   const rx = 25 * sz * (1.28 - 0.55 * v.body);
   const ry = 21 * sz * (0.72 + 0.68 * v.body);
-  const cy = ry + 7;
+  const legH = f.limb === 1 ? 18 : f.limb === 2 ? 0 : 10;
+  const cy = f.limb === 2 ? ry * 0.94 : ry + legH * 0.72;
+  // the body's true extents, whatever shape it turned out to be
+  const bw = f.build === 3 ? rx * 0.62 : f.build === 2 ? rx * 1.05 : rx;
+  const bh = f.build === 3 ? ry * 1.35 : ry;
+  const lobes = [[-rx * 0.42, cy - ry * 0.08, rx * 0.66, ry * 0.74],
+                 [rx * 0.40, cy + ry * 0.10, rx * 0.60, ry * 0.68],
+                 [0, cy + ry * 0.02, rx * 0.82, ry * 0.95]];
 
   const ell = (x, y, a, b, fill) => {
     ctx.beginPath(); ctx.ellipse(x, y, a, b, 0, 0, Math.PI * 2);
     ctx.fillStyle = fill; ctx.fill();
   };
+  const stroke = (col, w) => { ctx.lineWidth = w == null ? 2.5 : w; ctx.strokeStyle = col; ctx.stroke(); };
+  // one path for the whole body, whatever build it is — used to fill, to
+  // outline and to CLIP, so belly, light band and spots never leave the animal
+  const bodyPath = () => {
+    ctx.beginPath();
+    if (f.build === 0){                                  // pear: wide base, narrow top
+      ctx.moveTo(0, cy + ry);
+      ctx.bezierCurveTo(rx * 0.58, cy + ry, rx * 0.74, cy + ry * 0.24, rx, cy - ry * 0.42);
+      ctx.bezierCurveTo(rx * 1.06, cy - ry * 1.06, -rx * 1.06, cy - ry * 1.06, -rx, cy - ry * 0.42);
+      ctx.bezierCurveTo(-rx * 0.74, cy + ry * 0.24, -rx * 0.58, cy + ry, 0, cy + ry);
+    } else if (f.build === 1){
+      ctx.ellipse(0, cy, rx, ry, 0, 0, Math.PI * 2);
+    } else if (f.build === 2){                           // lumpy: three lobes
+      for (const L of lobes) ctx.ellipse(L[0], L[1], L[2], L[3], 0, 0, Math.PI * 2);
+    } else {                                             // vertical capsule
+      const cw = rx * 0.62, ch = ry * 1.35;
+      ctx.moveTo(-cw, cy - ch + cw);
+      ctx.lineTo(-cw, cy + ch - cw);
+      ctx.quadraticCurveTo(-cw, cy + ch, 0, cy + ch);
+      ctx.quadraticCurveTo(cw, cy + ch, cw, cy + ch - cw);
+      ctx.lineTo(cw, cy - ch + cw);
+      ctx.quadraticCurveTo(cw, cy - ch, 0, cy - ch);
+      ctx.quadraticCurveTo(-cw, cy - ch, -cw, cy - ch + cw);
+    }
+    ctx.closePath();
+  };
   // contact shadow — without it every beast floats in its own frame
   try {
-    const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rx * 1.1);
+    const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, bw * 1.1);
     gr.addColorStop(0, 'rgba(0,0,0,.55)');
     gr.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save(); ctx.translate(0, 1.5); ctx.scale(1, 0.34);
-    ctx.beginPath(); ctx.arc(0, 0, rx * 1.1, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(0, 0, bw * 1.1, 0, Math.PI * 2);
     ctx.fillStyle = gr; ctx.fill(); ctx.restore();
   } catch (e){}
-  // legs
-  ctx.fillStyle = dark;
-  ctx.fillRect(-rx * 0.5 - 3, 0, 6, 10);
-  ctx.fillRect(rx * 0.5 - 3, 0, 6, 10);
+  // legs: stubs, long thin stilts, or none at all
+  if (f.limb === 0){
+    for (const s of [-1, 1]){
+      ctx.beginPath(); ctx.rect(s * bw * 0.5 - 3, 0, 6, 10);
+      ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
+    }
+  } else if (f.limb === 1){
+    for (const s of [-1, 1]){
+      ctx.beginPath();
+      ctx.moveTo(s * bw * 0.44 - 2, 22); ctx.lineTo(s * bw * 0.62 - 2, 0);
+      ctx.lineTo(s * bw * 0.62 + 2, 0); ctx.lineTo(s * bw * 0.44 + 2, 22);
+      ctx.closePath(); ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
+      ctx.beginPath(); ctx.moveTo(s * bw * 0.62 - 5, 0); ctx.lineTo(s * bw * 0.62 + 5, 0);
+      stroke(ink, 3);
+    }
+  }
   // tail
   if (v.tail){
-    ctx.beginPath(); ctx.moveTo(-rx * 0.8, cy);
-    ctx.quadraticCurveTo(-rx - 16, cy + 10, -rx - 20, cy - 6);
-    ctx.lineWidth = 4; ctx.strokeStyle = dark; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-bw * 0.8, cy);
+    ctx.quadraticCurveTo(-bw - 16, cy + 10, -bw - 20, cy - 6);
+    stroke(dark, 4);
   }
   // wings
   for (let w = 0; w < v.wings; w++){
     const s = w === 0 ? -1 : 1;
-    ctx.save(); ctx.translate(s * rx * 0.85, cy + ry * 0.25); ctx.rotate(s * -0.5);
-    ell(0, 0, 15 * sz, 8 * sz, 'hsl(' + v.hue2 + ',50%,44%)');
+    ctx.save(); ctx.translate(s * bw * 0.85, cy + bh * 0.25); ctx.rotate(s * -0.5);
+    ctx.beginPath(); ctx.ellipse(0, 0, 15 * sz, 8 * sz, 0, 0, Math.PI * 2);
+    ctx.fillStyle = wingc; ctx.fill(); stroke(ink, 2.5);
     ctx.restore();
   }
   // body
-  ell(0, cy, rx, ry, main);
-  ctx.beginPath(); ctx.ellipse(0, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.lineWidth = 2.5; ctx.strokeStyle = dark; ctx.stroke();
-  ell(0, cy - ry * 0.36, rx * 0.62, ry * 0.5, belly);
-  // spots
+  if (f.build === 2){
+    // the union of three lobes: outline them all, then fill over the seams
+    for (const L of lobes){
+      ctx.beginPath(); ctx.ellipse(L[0], L[1], L[2], L[3], 0, 0, Math.PI * 2);
+      ctx.fillStyle = main; ctx.fill(); stroke(dark, 2.5);
+    }
+    for (const L of lobes){
+      ctx.beginPath(); ctx.ellipse(L[0], L[1], L[2], L[3], 0, 0, Math.PI * 2);
+      ctx.fillStyle = main; ctx.fill();
+    }
+  } else {
+    bodyPath(); ctx.fillStyle = main; ctx.fill();
+    bodyPath(); stroke(dark, 2.5);
+  }
+  // everything inside the animal, clipped to it
+  ctx.save();
+  bodyPath(); ctx.clip();
+  ell(0, cy + bh * 0.55, bw * 0.8, bh * 0.26, top);      // lit from above
+  ell(0, cy - bh * 0.36, bw * 0.62, bh * 0.5, belly);
   const ns = Math.round(v.spots * 6);
   for (let i = 0; i < ns; i++){
     const a = (i / ns) * Math.PI * 2 + v.hue;
-    ell(Math.cos(a) * rx * 0.5, cy + Math.sin(a) * ry * 0.45, 3.2 * sz, 3.2 * sz, dark);
+    ell(Math.cos(a) * bw * 0.5, cy + Math.sin(a) * bh * 0.45, 3.2 * sz, 3.2 * sz, dark);
   }
-  // horns
+  ctx.restore();
+  // crest: nothing / a row of spines / a floppy comb / two antennae
+  if (f.crest === 1){
+    for (let i = 0; i < 5; i++){
+      const a = (i / 4 - 0.5) * 1.5;
+      const px = Math.sin(a) * bw * 0.72, py = cy + Math.cos(a) * bh * 0.94;
+      ctx.beginPath();
+      ctx.moveTo(px - 4 * sz, py); ctx.lineTo(px + Math.sin(a) * 5, py + 8 * sz);
+      ctx.lineTo(px + 4 * sz, py); ctx.closePath();
+      ctx.fillStyle = belly; ctx.fill(); stroke(ink, 2);
+    }
+  } else if (f.crest === 2){
+    ctx.beginPath();
+    ctx.moveTo(bw * 0.30, cy + bh * 0.86);
+    ctx.quadraticCurveTo(bw * 1.15, cy + bh * 1.05, bw * 1.24, cy + bh * 0.34);
+    ctx.quadraticCurveTo(bw * 0.98, cy + bh * 0.60, bw * 0.62, cy + bh * 0.62);
+    ctx.closePath(); ctx.fillStyle = belly; ctx.fill(); stroke(ink, 2.5);
+  } else if (f.crest === 3){
+    for (const s of [-1, 1]){
+      const bx = s * bw * 0.34, by = cy + bh * 0.9;
+      const tx = s * bw * 0.72, ty = cy + bh + 13 * sz;
+      ctx.beginPath(); ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx + s * 3, ty - 4, tx, ty);
+      stroke(ink, 2.5);
+      ell(tx, ty, 3.4 * sz, 3.4 * sz, belly);
+      ctx.beginPath(); ctx.ellipse(tx, ty, 3.4 * sz, 3.4 * sz, 0, 0, Math.PI * 2);
+      stroke(ink, 2);
+    }
+  }
+  // horns — length is a gene now, not a constant
+  const hl = (8 + 14 * f.hornLen) * sz;
   for (let h = 0; h < v.horns; h++){
     const t = v.horns === 1 ? 0 : (h / (v.horns - 1) - 0.5) * 1.5;
-    const hx = t * rx * 0.7;
+    const hx = t * bw * 0.7;
     ctx.beginPath();
-    ctx.moveTo(hx - 4, cy + ry * 0.82); ctx.lineTo(hx, cy + ry + 12 * sz); ctx.lineTo(hx + 4, cy + ry * 0.82);
+    ctx.moveTo(hx - 4, cy + bh * 0.82); ctx.lineTo(hx, cy + bh + hl); ctx.lineTo(hx + 4, cy + bh * 0.82);
     ctx.closePath(); ctx.fillStyle = 'hsl(' + ((v.hue + 40) % 360) + ',35%,78%)'; ctx.fill();
+    stroke(ink, 2);
   }
   // eyes
   const ne = v.eyes;
   for (let i = 0; i < ne; i++){
     const t = ne === 1 ? 0 : (i / (ne - 1) - 0.5);
-    const ex = t * rx * 0.86, ey = cy + ry * 0.34;
+    const ex = t * bw * 0.86, ey = cy + bh * 0.34;
     ell(ex, ey, 5.2, 5.6, '#fdfff4');
     ell(ex + 0.8, ey - 0.6, 2.4, 2.8, '#101408');
   }
@@ -2049,17 +2398,214 @@ function drawBeast(cv, c){
   const mean = c.trait === 'feral' || c.trait === 'frenzy' || c.trait === 'venom' || c.might >= 14;
   ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.beginPath();
   if (mean){
-    ctx.moveTo(-8, cy - ry * 0.02); ctx.lineTo(8, cy - ry * 0.02); ctx.stroke();
+    ctx.moveTo(-8, cy - bh * 0.02); ctx.lineTo(8, cy - bh * 0.02); ctx.stroke();
     ctx.fillStyle = '#fdfff4';
     for (let i = -1; i <= 1; i++){
-      ctx.beginPath(); ctx.moveTo(i * 6 - 2.6, cy - ry * 0.02);
-      ctx.lineTo(i * 6, cy - ry * 0.02 - 4); ctx.lineTo(i * 6 + 2.6, cy - ry * 0.02);
+      ctx.beginPath(); ctx.moveTo(i * 6 - 2.6, cy - bh * 0.02);
+      ctx.lineTo(i * 6, cy - bh * 0.02 - 4); ctx.lineTo(i * 6 + 2.6, cy - bh * 0.02);
       ctx.closePath(); ctx.fill();
     }
   } else {
-    ctx.arc(0, cy + ry * 0.06, 6, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
+    ctx.arc(0, cy + bh * 0.06, 6, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
   }
   ctx.restore();
+}
+
+/* ------------------------------------------------------- the opposition --
+   Every foe is drawn on canvas from the same primitives the beasts use, and
+   palette-locked to rust, dried blood, cold brown and bone — never lime. The
+   enemy is never in the same colour family as your herd. Six silhouettes carry
+   twelve foes; `tint` slides each one along the rust ramp so no two rounds look
+   the same. */
+function drawFoe(cv, foe, frame){
+  const ctx = cv && cv.getContext && cv.getContext('2d');
+  if (!ctx || !ctx.beginPath) return;
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const t = foe && foe.tint != null ? foe.tint : 0.3;
+  const fr = frame || 0;
+  const hue = 4 + 16 * t;
+  const DK = '#2a1c14', BONE = '#e8d9a8', HOT = '#ff5d5d', PINK = '#ff8ad4';
+  const main = (d) => 'hsl(' + hue + ',55%,' + (44 - 14 * (d || 0)) + '%)';
+  const lite = (d) => 'hsl(' + hue + ',62%,' + (64 - 18 * (d || 0)) + '%)';
+  const deep = (d) => 'hsl(' + hue + ',52%,' + (26 - 8 * (d || 0)) + '%)';
+  const S = Math.min(W / 128, H / 120);
+  ctx.save();
+  ctx.translate(W / 2, H * 0.955);
+  ctx.scale(S, -S);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+  const out = (w) => { ctx.lineWidth = w == null ? 3 : w; ctx.strokeStyle = DK; ctx.stroke(); };
+  const ell = (x, y, a, b, f) => {
+    ctx.beginPath(); ctx.ellipse(x, y, a, b, 0, 0, Math.PI * 2); ctx.fillStyle = f; ctx.fill();
+  };
+  const oell = (x, y, a, b, f, w) => {
+    ctx.beginPath(); ctx.ellipse(x, y, a, b, 0, 0, Math.PI * 2);
+    ctx.fillStyle = f; ctx.fill(); out(w);
+  };
+  const poly = (pts, f, w) => {
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath(); ctx.fillStyle = f; ctx.fill(); if (w !== 0) out(w);
+  };
+  // the thing that makes it STAND rather than float
+  const shadow = (r) => {
+    try {
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, 'rgba(0,0,0,.72)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save(); ctx.translate(0, 1); ctx.scale(1, 0.30);
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill(); ctx.restore();
+    } catch (e){}
+  };
+  const eye = (x, y, r, sclera) => {
+    ell(x, y, r, r * 1.05, sclera || BONE);
+    ell(x + r * 0.18, y - r * 0.1, r * 0.44, r * 0.52, '#170c07');
+  };
+
+  /* --- brute: ogre, bull, champion. Shoulders, no neck, hands past the knee. */
+  const brute = (k, ox, d) => {
+    ctx.save(); ctx.translate(ox || 0, 0); ctx.scale(k, k);
+    shadow(38);
+    poly([[-25, 0], [-7, 0], [-9, 28], [-27, 28]], deep(d), 3);
+    poly([[7, 0], [25, 0], [27, 28], [9, 28]], deep(d), 3);
+    poly([[-34, 62], [-47, 58], [-40, 16], [-28, 20]], deep(d), 3);   // arms
+    poly([[34, 62], [47, 58], [40, 16], [28, 20]], deep(d), 3);
+    oell(0, 50, 35, 29, main(d), 3);
+    ell(0, 50 + 29 * 0.55, 35 * 0.78, 29 * 0.26, lite(d));            // top light
+    oell(0, 84, 16, 14, main(d), 3);
+    ell(0, 90, 11, 4.4, lite(d));
+    poly([[-15, 90], [-25, 110], [-7, 94]], BONE, 2.5);               // horns
+    poly([[15, 90], [25, 110], [7, 94]], BONE, 2.5);
+    eye(-7, 84, 4.2); eye(7, 84, 4.2);
+    poly([[-9, 74], [-6, 65], [-3, 74]], BONE, 2);                    // tusks
+    poly([[9, 74], [6, 65], [3, 74]], BONE, 2);
+    ctx.restore();
+  };
+
+  /* --- bird: the feral chicken. All tail and comb, spurs for feet. */
+  const bird = () => {
+    shadow(32);
+    ctx.strokeStyle = BONE; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(-7, 3); ctx.lineTo(-7, 26); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(9, 3); ctx.lineTo(9, 26); ctx.stroke();
+    poly([[-15, 2], [1, 2], [-7, 6]], BONE, 2);
+    poly([[1, 2], [17, 2], [9, 6]], BONE, 2);
+    for (let i = 0; i < 4; i++){                                       // tail fan
+      const a = -0.35 + i * 0.30;
+      ctx.save(); ctx.translate(-24, 52); ctx.rotate(a);
+      poly([[0, -6], [-40, 4], [-40, 14], [0, 8]], i % 2 ? deep(0) : main(0), 2.5);
+      ctx.restore();
+    }
+    oell(0, 46, 30, 25, main(0), 3);
+    ell(0, 46 + 25 * 0.55, 30 * 0.78, 25 * 0.26, lite(0));
+    ctx.save(); ctx.translate(-9, 42); ctx.rotate(-0.26);
+    oell(0, 0, 18, 11, main(0.62), 2.5);
+    ctx.beginPath(); ctx.moveTo(-12, -3); ctx.lineTo(10, 1); out(1.6);
+    ctx.restore();                                                     // folded wing
+    poly([[4, 62], [24, 62], [22, 84], [8, 84]], main(0), 3);          // neck
+    oell(15, 80, 14, 13, main(0), 3);                                  // head
+    ell(13, 86, 8, 4, lite(0));
+    for (let i = 0; i < 3; i++) oell(9 + i * 7, 93 - i * 1.5, 5.5, 6.5, HOT, 2.5);   // comb
+    poly([[27, 82], [42, 76], [27, 73]], BONE, 2.5);                   // beak
+    oell(24, 68, 4.5, 6, HOT, 2);                                      // wattle
+    eye(19, 83, 4.4);
+  };
+
+  /* --- human: Merle, the Inspector, the Vet, the Repo Man. A hunched coat, a
+     hat pulled down, and two lit eyes where the face should be. */
+  const human = () => {
+    shadow(30);
+    poly([[-16, 0], [-4, 0], [-5, 26], [-17, 26]], DK, 3);
+    poly([[4, 0], [16, 0], [17, 26], [5, 26]], DK, 3);
+    poly([[-26, 22], [26, 22], [21, 70], [-21, 70]], main(0), 3);      // coat
+    poly([[-21, 70], [0, 70], [0, 22], [-26, 22]], deep(0), 0);        // its shaded half
+    ctx.beginPath(); ctx.moveTo(-21, 70); ctx.lineTo(21, 70); ctx.lineTo(26, 22);
+    ctx.lineTo(-26, 22); ctx.closePath(); out(3);
+    ell(0, 66, 17, 4.5, lite(0));                                      // light on the shoulders
+    poly([[-21, 66], [-31, 62], [-27, 26], [-19, 30]], deep(0), 3);    // sleeves
+    poly([[21, 66], [31, 62], [27, 26], [19, 30]], deep(0), 3);
+    oell(0, 80, 12, 13, deep(0), 3);                                   // head, in shadow
+    poly([[-24, 88], [24, 88], [24, 93], [-24, 93]], DK, 2.5);         // hat brim
+    poly([[-15, 92], [15, 92], [12, 110], [-12, 110]], DK, 2.5);       // crown
+    ell(0, 96, 12, 2.4, lite(0));
+    ell(-5, 80, 3, 3.4, HOT); ell(5, 80, 3, 3.4, HOT);                 // two lit eyes
+  };
+
+  /* --- swarm: poachers, rustlers. Three of them, and the ones behind are dark. */
+  const swarm = () => {
+    brute(0.62, -30, 0.55);
+    brute(0.70, 27, 0.35);
+    brute(0.82, -2, 0);
+  };
+
+  /* --- fire: five tongues, hue cycled 12→38, swaying out of phase. */
+  const fire = () => {
+    shadow(34);
+    for (let i = 4; i >= 0; i--){
+      const h = 12 + 26 * (((i * 0.22 + fr * 0.05) % 1 + 1) % 1);
+      const w = 36 - i * 5.4, y0 = 2 + i * 15, hh = 46 - i * 3;
+      const sway = Math.sin(fr * 0.45 + i * 1.3) * 4;
+      ctx.beginPath();
+      ctx.moveTo(-w, y0);
+      ctx.quadraticCurveTo(-w * 0.95, y0 + hh * 0.62, sway, y0 + hh);
+      ctx.quadraticCurveTo(w * 0.95, y0 + hh * 0.62, w, y0);
+      ctx.quadraticCurveTo(0, y0 + hh * 0.16, -w, y0);
+      ctx.closePath();
+      ctx.fillStyle = 'hsl(' + h.toFixed(0) + ',86%,' + (40 + i * 6) + '%)';
+      ctx.fill(); out(i === 0 ? 3 : 2);
+    }
+    eye(-10, 40, 5.2, HOT); eye(10, 40, 5.2, HOT);
+  };
+
+  /* --- egg: THE UR-MOTHER. A cracked ovoid the size of the room, and a cluster
+     of pink eyes looking out of the split. */
+  const egg = () => {
+    shadow(46);
+    ctx.beginPath();
+    ctx.moveTo(0, 116);
+    ctx.bezierCurveTo(30, 112, 44, 76, 44, 52);
+    ctx.bezierCurveTo(44, 18, 25, 0, 0, 0);
+    ctx.bezierCurveTo(-25, 0, -44, 18, -44, 52);
+    ctx.bezierCurveTo(-44, 76, -30, 112, 0, 116);
+    ctx.closePath();
+    ctx.fillStyle = BONE; ctx.fill(); out(3.5);
+    ell(-12, 84, 20, 26, '#fdf6e0');                                   // top light
+    ctx.strokeStyle = DK; ctx.lineWidth = 3;                           // cracks
+    const crack = (pts) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); };
+    crack([[-42, 60], [-26, 54], [-32, 44], [-14, 36], [-20, 26], [-4, 20]]);
+    crack([[42, 74], [28, 66], [34, 56], [18, 48]]);
+    crack([[-6, 114], [-2, 100], [-12, 92], [-6, 80]]);
+    ell(0, 46, 26, 20, '#1b1109');                                     // the split
+    ctx.beginPath(); ctx.ellipse(0, 46, 26, 20, 0, 0, Math.PI * 2); out(3);
+    const cluster = [[-13, 50, 5.4], [0, 55, 6.4], [13, 49, 5.4], [-6, 40, 4.6], [7, 39, 4.6]];
+    for (const c of cluster) eye(c[0], c[1], c[2], PINK);
+    for (let i = -2; i <= 2; i++) poly([[i * 9 - 3, 30], [i * 9, 24], [i * 9 + 3, 30]], BONE, 1.6);
+  };
+
+  const kind = (foe && foe.sil) || 'brute';
+  if (kind === 'bird') bird();
+  else if (kind === 'human') human();
+  else if (kind === 'swarm') swarm();
+  else if (kind === 'fire') fire();
+  else if (kind === 'egg') egg();
+  else brute(1, 0, 0);
+  ctx.restore();
+}
+/** Barn Fire is the one foe that lives on a frame counter. ~11fps, one small
+ *  canvas, and the chain dies with the screen because `at()` is generational. */
+let foeAnimId = 0;
+function startFoeAnim(){
+  if (HEADLESS || RM()) return;
+  const mine = ++foeAnimId;
+  if (!F || !F.foe || F.foe.sil !== 'fire') return;
+  let n = 0;
+  const step = () => {
+    if (mine !== foeAnimId || cur !== 'fight' || !F || !F.foe || F.foe.sil !== 'fire') return;
+    drawFoe($('fEm'), F.foe, ++n);
+    at(90, step);
+  };
+  at(90, step);
 }
 
 /* ---------------------------------------------------------- card element - */
@@ -2068,6 +2614,9 @@ function cardEl(c, opts){
   const d = document.createElement('div');
   d.className = 'card' + (o.big ? ' big' : '');
   d.dataset.id = c.id;
+  // the frame gets richer with the bloodline: a G5 prize animal must be a
+  // visibly better OBJECT than the G1 founder standing next to it
+  d.dataset.tier = c.junk ? 1 : (c.gen >= 5 ? 3 : (c.gen >= 3 || c.founder) ? 2 : 1);
   const t = TRAITS[c.trait] || TRAITS.none;
   const bad = BAD_TRAITS.indexOf(c.trait) >= 0;
   d.innerHTML =
@@ -2082,6 +2631,20 @@ function cardEl(c, opts){
   if (cv) drawBeast(cv, c);
   d.title = c.name + ' — ' + t.desc + (c.parents ? '\nOut of ' + c.parents[0] + ' × ' + c.parents[1] : '');
   return d;
+}
+/** Columns from the COUNT, not from auto-fill: ten cards go 5+5 rather than
+ *  eight and an orphan row with half the barn empty beside it. */
+function gridCols(el, n){
+  if (!el || !el.style || !el.style.setProperty) return;
+  if (n < 1){ el.style.setProperty('--cols', 1); return; }
+  let w = 0;
+  try { w = (el.parentNode && el.parentNode.clientWidth) || 0; } catch (e){}
+  if (!w){ try { w = window.innerWidth * 0.92; } catch (e){ w = 900; } }
+  const per = w < 460 ? 108 : 128;
+  const fit = Math.floor((w - 18) / per);
+  const cap = Math.max(2, Math.min(fit, 6));
+  const rows = Math.ceil(n / cap);
+  el.style.setProperty('--cols', Math.min(cap, Math.ceil(n / rows)));
 }
 function pips(el, boss){
   el.innerHTML = '';
@@ -2102,16 +2665,73 @@ function hpBar(txtEl, barEl){
 function renderTitle(){
   const h = loadHall();
   const f = loadFounder();
+  // never render a box to announce that there is nothing: .hall:empty is hidden
   $('hallBox').innerHTML = h
     ? '<b class="pink">HALL OF FAME</b><br>' + h.name + ' &mdash; gen ' + h.gen +
       ', <span style="color:' + '#ff8f6b">' + ICO('might') + h.might + '</span>' +
       ' <span style="color:#7ec8ff">' + ICO('hide') + h.hide + '</span>' +
       (h.trait !== 'none' ? ' &middot; ' + TRAITS[h.trait].name : '') +
       '<br><span class="tiny">bred on round ' + h.round + '</span>'
-    : '<span class="tiny">No prize stock yet. Go make some.</span>';
-  if (f && f.pre) $('hallBox').innerHTML += '<br><span style="font-size:12.5px; color:#8fa285">In the barn: ' +
+    : '';
+  if (f && f.pre) $('hallBox').innerHTML += (h ? '<br>' : '') +
+    '<span style="font-size:12.5px; color:#8fa285">In the barn: ' +
     '<b class="gold">' + f.name + '</b> (<span style="color:#ff8f6b">' + ICO('might') + f.might +
     '</span> <span style="color:#7ec8ff">' + ICO('hide') + f.hide + '</span>) — your line continues.</span>';
+  titleShow();
+}
+/* --- the demo reel ---------------------------------------------------------
+   The whole hook of this game is "look at the thing you bred", and the front
+   door used to show zero creatures. So the generator RUNS on the title: two
+   parents, a chick bred out of their genes with a name of its own, and the
+   chick becomes a parent for the next round — a bloodline drifting, on loop,
+   before anyone has clicked anything. It uses the same breedVis/childName the
+   game does, and it is entirely inside `at()`, so it dies with the screen. */
+let tShowGen = 0;
+function titleShow(){
+  if (HEADLESS) return;
+  const wrap = $('tShow');
+  if (!wrap || !wrap.querySelectorAll) return;
+  const tbs = wrap.querySelectorAll('.tb');
+  if (!tbs || tbs.length < 3) return;
+  const cv = [], cap = [];
+  for (let i = 0; i < 3; i++){
+    cv.push(tbs[i].querySelector ? tbs[i].querySelector('canvas') : null);
+    cap.push(tbs[i].querySelector ? tbs[i].querySelector('.cap') : null);
+  }
+  if (!cv[0] || !cv[0].getContext) return;
+  const mine = ++tShowGen;
+  const live = () => mine === tShowGen && cur === 'title';
+  const mk = () => ({ pre: pick(SYL_A), suf: pick(SYL_B), vis: randVis(),
+    might: ri(3, 11), hide: ri(3, 11), trait: 'none' });
+  const paint = (i, c, label) => {
+    if (cv[i]) drawBeast(cv[i], c);
+    if (cap[i]) cap[i].textContent = label;
+    const t = tbs[i];
+    if (t && t.classList){ t.classList.remove('swap'); void t.offsetWidth; t.classList.add('swap'); }
+  };
+  let a = mk(), b = mk(), first = true;
+  const cycle = () => {
+    if (!live()) return;
+    paint(0, a, a.pre + a.suf);
+    paint(2, b, b.pre + b.suf);
+    const gap = first ? 0 : (RM() ? 40 : 620);   // never show an empty frame
+    first = false;
+    const breedNow = () => {
+      if (!live()) return;
+      const nm = childName(a, b, []);
+      const kid = { pre: nm.pre, suf: nm.suf, trait: 'none', vis: breedVis(a, b, 1),
+        might: Math.round((a.might + b.might) / 2), hide: Math.round((a.hide + b.hide) / 2) };
+      paint(1, kid, nm.name);
+      at(3400, () => {
+        if (!live()) return;
+        a = rng() < 0.55 ? kid : mk();      // the line continues, or fresh blood
+        b = mk();
+        cycle();
+      });
+    };
+    if (gap) at(gap, breedNow); else breedNow();
+  };
+  cycle();
 }
 
 /* -------------------------------------------------------------- nest ----- */
@@ -2184,7 +2804,7 @@ function renderPair(a, b){
 }
 function renderNest(){
   const foe = FOES[R.idx];
-  $('nFoeEm').innerHTML = foe.em;
+  drawFoe($('nFoeEm'), foe);
   $('nFoeName').textContent = foe.name;
   const hz = R.hazard;
   $('nFoeStats').innerHTML = Math.round(foe.hp * (hz && hz.mods.hpMul ? hz.mods.hpMul : 1)) + ' HP' +
@@ -2223,6 +2843,7 @@ function renderNest(){
   const g = $('nGrid');
   g.innerHTML = '';
   const sorted = R.deck.slice().sort((a, b) => power(b) - power(a));
+  gridCols(g, sorted.length);
   for (const c of sorted){
     const el = cardEl(c);
     if (R.nest.indexOf(c.id) >= 0) el.classList.add('sel');
@@ -2256,442 +2877,281 @@ function renderNest(){
   }
 }
 
-/* ------------------------------------------------------------- fight ----- */
-/** A number that belongs to the thing it happened to. Anchored to a target's
- *  rect, sized by magnitude, and flagged .crit when a single blow takes a
- *  quarter of what it hit. Lives in the fixed fx layer so a pen beast and the
- *  foe can both own one. */
+/* ================================ THE FIELD ===============================
+   One screen, two phases. With no battle running you are in PREP: tap beasts
+   out of the barn into your line, shuffle the order, spend your Feed. Tap SEND
+   THEM IN and the whole battle is resolved synchronously in one call — what you
+   then watch is a replay of a transcript, not a simulation being driven by the
+   animation. Skipping the replay can therefore never change the outcome.
+   ========================================================================== */
 function flyer(txt, color, target, opts){
-  if (HEADLESS) return;
-  const L = fxLayer(); if (!L || !L.appendChild) return;
+  if (HEADLESS || !txt) return;
+  const L = fxLayer(); if (!L) return;
   const o = opts || {};
+  const r = rectOf(target) || { left: innerWidth / 2 - 20, top: innerHeight * 0.4, width: 40, height: 20 };
   const e = document.createElement('div');
-  e.className = 'flyer' + (o.crit ? ' crit' : '');
+  e.className = 'flyer' + (o.cls ? ' ' + o.cls : '');
   e.textContent = txt;
-  e.style.color = color || '#ff9d6b';
-  if (o.dmg != null) e.style.fontSize = (18 + Math.min(26, o.dmg)) + 'px';
-  const r = rectOf(target || $('fEm'));
-  if (r){
-    e.style.left = (r.left + r.width * (0.32 + Math.random() * 0.36)) + 'px';
-    e.style.top = (r.top + r.height * 0.22) + 'px';
-  } else {
-    e.style.left = '46%'; e.style.top = '30%';
+  if (e.style){
+    e.style.color = color || '#ff9d6b';
+    e.style.left = (r.left + r.width / 2) + 'px';
+    e.style.top = (r.top + r.height * 0.3) + 'px';
+    if (o.size) e.style.fontSize = o.size + 'px';
   }
-  e.style.transform = 'translateX(-50%)';
   L.appendChild(e);
-  at(1000, () => e.remove && e.remove());
+  at(1000, () => { if (e.remove) e.remove(); });
 }
-/** Damage big enough to matter gets a white, oversized number. */
-function fly(txt, color, target, v, max){
-  flyer(txt, color, target, { dmg: v, crit: max ? v >= max * 0.25 : false });
-}
+/** Kept for the older callers that still ask what the enemy is about to do. */
 function intentText(){
-  const m = nextMove(), f = F.foe;
-  if (m.t === 'atk') return m.s + ' ' + (m.v + f.bonus);
-  if (m.t === 'atkx') return m.s + ' ' + (m.v + f.bonus) + '×' + m.n;
-  if (m.t === 'hit') return m.s + ' ' + (m.v + f.bonus) + ' \u2014 straight at you';
-  if (m.t === 'sweep') return m.s + ' ' + m.v + ' to the whole pen';
-  if (m.t === 'def') return m.s + ' (block ' + m.v + ')';
-  if (m.t === 'buff') return m.s + ' (+' + m.v + ' damage)';
-  if (m.t === 'heal') return m.s + ' (heal ' + m.v + ')';
-  if (m.t === 'curse') return m.s + ' (junk in your deck)';
-  return m.s;
+  if (!F) return 'scouting';
+  return F.over ? (F.over === 'win' ? 'the field is yours' : 'your line is broken')
+                : 'exchange ' + F.round;
 }
-/** The intent as a typed pill: red for a swing at the pen, PINK when the blow
- *  goes straight past it and lands on you, blue for block, gold for a buff —
- *  with the number as the biggest thing in it. */
-function intentHTML(){
-  const m = nextMove(), f = F.foe;
-  const big = (v) => '<span class="n">' + v + '</span>';
-  if (m.t === 'atk') return { cls: 'atk', v: m.v + f.bonus,
-    html: '<span>' + m.s + '</span>' + big(m.v + f.bonus) };
-  if (m.t === 'atkx') return { cls: 'atk', v: (m.v + f.bonus) * m.n,
-    html: '<span>' + m.s + '</span>' + big(m.v + f.bonus) + '<span class="x">&times;' + m.n + '</span>' };
-  if (m.t === 'hit') return { cls: 'rush', v: m.v + f.bonus, you: 1,
-    html: '<span>' + m.s + ' &mdash; past the pen</span>' + big(m.v + f.bonus) };
-  if (m.t === 'sweep') return { cls: 'atk', v: m.v, sweep: 1,
-    html: '<span>' + m.s + ' &mdash; whole pen</span>' + big(m.v) };
-  if (m.t === 'def') return { cls: 'def', v: 0, html: '<span>' + m.s + ' &mdash; block</span>' + big(m.v) };
-  if (m.t === 'buff') return { cls: 'buf', v: 0, html: '<span>' + m.s + '</span>' + big('+' + m.v) };
-  if (m.t === 'heal') return { cls: 'buf', v: 0, html: '<span>' + m.s + ' &mdash; heals</span>' + big(m.v) };
-  if (m.t === 'curse') return { cls: 'buf', v: 0, html: '<span>' + m.s + ' &mdash; junk in your deck</span>' };
-  return { cls: 'buf', v: 0, html: '<span>' + m.s + '</span>' };
-}
-function penNode(uid){
-  const p = $('pen');
-  if (!p || !p.querySelector) return null;
-  try { return p.querySelector('.pb[data-uid="' + uid + '"]'); } catch (e){ return null; }
-}
-function penEl(b){
+
+/* ------------------------------------------------------------- one unit -- */
+function unitEl(u, opts){
+  const o = opts || {};
   const d = document.createElement('div');
-  const t = TRAITS[b.c.trait] || TRAITS.none;
-  d.className = 'pb' + (b.fresh ? ' fresh' : '') + (b.c.trait === 'bulwark' ? ' bulw' : '');
-  d.dataset.uid = b.uid;
+  const t = TRAITS[u.c.trait] || TRAITS.none;
+  d.className = 'ub' + (u.side === 'them' ? ' them' : '') + (u.alive ? '' : ' gone') +
+    (u.c.trait === 'bulwark' ? ' bulw' : '') + (u.c.leader ? ' lead' : '') + (o.front ? ' front' : '');
+  if (d.dataset) d.dataset.uid = u.uid;
   d.innerHTML =
-    '<canvas width="216" height="148"></canvas>' +
-    (b.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
-    '<div class="pn">' + b.c.name + '</div>' +
-    '<div class="pm">' + ICO('might') + beastMight(b) +
-      ' <span class="hh">' + ICO('hide') + b.hp + '</span></div>' +
-    '<div class="ph"><i style="width:' + (100 * b.hp / b.max) + '%"></i></div>';
-  const cv = d.querySelector('canvas');
-  if (cv){
-    drawBeast(cv, b.c);
-    // desynced idle bob, so four animals never breathe in lockstep
-    if (cv.style) cv.style.animationDelay = (((b.uid || 1) * 0.37) % 2.4).toFixed(2) + 's';
-  }
-  d.title = b.c.name + ' — ' + b.hp + '/' + b.max + ' Hide, hits for ' + beastMight(b) +
-    (b.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
-  // No hover on a phone, so a tap explains the animal instead.
-  d.onclick = () => {
-    const co = $('coach');
-    co.hidden = false;
-    co.innerHTML = '<b>' + b.c.name + '</b> — ' + b.hp + '/' + b.max + ' Hide, hits for ' +
-      beastMight(b) + (b.c.trait === 'none' ? '' : '. <b>' + t.name + ':</b> ' + t.desc);
-  };
+    '<canvas width="180" height="132"></canvas>' +
+    (u.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
+    '<div class="pn">' + u.c.name + '</div>' +
+    '<div class="pm">' + ICO('might') + (F ? unitMight(u, u.side === 'us' ? F.mine : F.theirs) : cardDamage(u.c)) +
+      ' <span class="hh">' + ICO('hide') + Math.max(0, u.hp) + '</span></div>' +
+    '<div class="ph"><i style="width:' + Math.max(0, 100 * u.hp / u.max) + '%"></i></div>';
+  const cv = d.querySelector && d.querySelector('canvas');
+  if (cv) drawBeast(cv, u.c);
+  d.title = u.c.name + ' — ' + Math.max(0, u.hp) + '/' + u.max + ' Hide, hits for ' +
+    (F ? unitMight(u, u.side === 'us' ? F.mine : F.theirs) : cardDamage(u.c)) +
+    (u.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
   return d;
 }
-function renderPen(){
-  const p = $('pen');
-  p.innerHTML = '<div class="penlbl">the pen</div>';
-  for (const b of F.pen) p.appendChild(penEl(b));
-  for (let i = F.pen.length; i < MAX_PEN; i++){
+/** Prep-phase tile: same beast, but it can be re-ordered or sent back. */
+function slotEl(c, idx){
+  const u = { c, side: 'us', uid: -1 - idx, hp: cardHide(c), max: cardHide(c), alive: 1 };
+  const d = unitEl(u, { front: idx === 0 });
+  d.className += ' slot-live';
+  const bar = document.createElement('div');
+  bar.className = 'ord';
+  bar.innerHTML = '<button class="ob" data-d="-1">&#9664;</button>' +
+    '<button class="ob out">&#10005;</button>' +
+    '<button class="ob" data-d="1">&#9654;</button>';
+  const btns = bar.querySelectorAll ? bar.querySelectorAll('.ob') : [];
+  if (btns.length === 3){
+    btns[0].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
+      if (moveInLine(c.id, -1)){ sfxLift(); renderFight(); } };
+    btns[1].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
+      toggleField(c.id); sfxDeny(); renderFight(); };
+    btns[2].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
+      if (moveInLine(c.id, 1)){ sfxLift(); renderFight(); } };
+  }
+  d.appendChild(bar);
+  return d;
+}
+function renderLine(el, units, isPrep){
+  el.innerHTML = '';
+  const front = units.length ? frontOfList(units) : null;
+  units.forEach((u, i) => {
+    const node = isPrep ? slotEl(u, i) : unitEl(u, { front: u === front });
+    el.appendChild(node);
+  });
+  const slots = isPrep ? LINE_SLOTS - units.length : 0;
+  for (let i = 0; i < slots; i++){
     const e = document.createElement('div');
     e.className = 'slot';
-    e.innerHTML = '&#183;';
-    p.appendChild(e);
+    e.innerHTML = '<span>empty</span>';
+    el.appendChild(e);
   }
 }
-let penOut = -1;         // last drawn pen ⚔ total, so a rise can be flashed
+/** frontOf() works on live units; prep tiles are plain cards, so wrap it. */
+function frontOfList(units){
+  if (!units.length) return null;
+  if (units[0] && units[0].c) return frontOf(units);
+  return units[0];
+}
+function renderPen(){ if (F) renderLine($('pen'), F.mine, false); }
+
 function renderFight(){
-  const f = F.foe;
+  const prep = !F;
   hpBar($('fHp'), $('fHpBar'));
   pips($('fPips'));
-  $('fEm').innerHTML = f.em;
-  $('fName').textContent = f.name;
-  const box = $('foeBox');
-  if (box && box.classList) box.classList.remove('dying', 'windup', 'lunging');
-  setFoeHp(f.hp, true);
-  const it = intentHTML();
-  const ie = $('fIntent');
-  ie.className = 'intent ' + it.cls;
-  ie.innerHTML = it.html;
-  // if this would kill you, or clear the pen outright, say so in red and in time
-  const lethal = (it.you && it.v >= R.hp) || (!F.pen.length && it.v >= R.hp);
-  const wipes = it.sweep && F.pen.length && F.pen.every((b) => b.hp <= it.v);
-  if (ie.classList) ie.classList.toggle('danger', !!(lethal || wipes));
-  const hb = $('fHpBar') && $('fHpBar').parentNode;
-  if (hb && hb.classList) hb.classList.toggle('danger', !!lethal);
+  const foeName = FOES[clamp(R.idx, 0, RUN_LEN - 1)].name;
+  $('foeLbl').innerHTML = prep
+    ? 'SCOUTING &mdash; <b>' + foeName + '</b> brings ' + teamSize(R.idx) + ''
+    : '<b>' + foeName + '</b>';
+  $('myLbl').innerHTML = prep
+    ? 'YOUR LINE &mdash; the front takes the blows'
+    : (F.over ? '' : 'exchange ' + F.round);
+  $('fIntent').textContent = prep ? 'tap a beast to field it' : intentText();
 
-  const fb = $('fBadges'); fb.innerHTML = '';
-  if (f.block > 0) fb.innerHTML += '<span class="bdg blk">' + ICO('hide') + f.block + '</span>';
-  if (f.poison > 0) fb.innerHTML += '<span class="bdg psn">' + ICO('venom') + 'poison ' + f.poison + '</span>';
-  if (f.bonus > 0) fb.innerHTML += '<span class="bdg">' + ICO('might') + '+' + f.bonus + '</span>';
-  const pb = $('pBadges'); pb.innerHTML = '';
-  const out = F.pen.reduce((a, b) => a + beastMight(b) * (b.c.trait === 'frenzy' ? 2 : 1), 0);
-  if (out > 0) pb.innerHTML += '<span class="bdg" id="penOut">pen ' + ICO('might') + out + '</span>';
-  if (R.streak > 0) pb.innerHTML += '<span class="bdg psn">' + streakPips(R.streak) + '</span>';
-  if (F.mods && F.mods.label) pb.innerHTML += '<span class="bdg thn">' + F.mods.label + '</span>';
-  // the closest thing this game has to a combo counter — flash it when it grows
-  if (out > penOut && penOut >= 0) anim($('penOut'), 'lit', 400);
-  penOut = out;
+  // the opposition — scouted in prep, live in battle
+  if (prep){
+    if (!R.scout || R.scoutIdx !== R.idx){
+      const seed = _seed;                       // scouting must not disturb the run's rng
+      R.scout = makeEnemyTeam(R.idx, fightMods()).map((c, i) =>
+        ({ c, side: 'them', uid: -100 - i, hp: cardHide(c), max: cardHide(c), alive: 1 }));
+      R.scoutIdx = R.idx;
+      _seed = seed;
+    }
+    renderLine($('foeLine'), R.scout, false);
+    renderLine($('pen'), R.line.map((id) => cardById(id)).filter(Boolean), true);
+  } else {
+    renderLine($('foeLine'), F.theirs, false);
+    renderLine($('pen'), F.mine, false);
+  }
 
-  renderPen();
-  const co = $('coach');
-  if (R.idx === 0 && F.turn <= 2 && !taught() && !F.over){
-    co.hidden = false;
-    co.innerHTML = F.pen.length
-      ? 'It <b>stays there</b>. It strikes at the end of every turn, and blows land on it before they land on you. Keep it alive.'
-      : 'Play a beast: it walks into <b>the pen</b> and stays. Might is what it hits for, Hide is how long it lasts.';
-  } else if (!co.dataset.sticky){ co.hidden = true; }
-  const fd = $('feed'); fd.innerHTML = '';
-  const total = Math.max(F.feedMax, F.feed);
-  for (let i = 0; i < total; i++) fd.innerHTML += '<i class="' + (i < F.feed ? 'on' : '') + '"></i>';
-  $('piles').textContent = 'Draw ' + F.draw.length + ' · Discard ' + F.disc.length;
+  // budget
+  const fd = $('feed');
+  const spent = prep ? lineCost() : 0;
+  const budget = lineBudget();
+  fd.innerHTML = '';
+  for (let i = 0; i < budget; i++) fd.innerHTML += '<i class="' + (i < budget - spent ? 'on' : '') + '"></i>';
+  $('piles').innerHTML = prep
+    ? '<b>' + spent + '/' + budget + '</b> Feed'
+    : '';
   const na = cardById(R.nest[0]), nb = cardById(R.nest[1]);
   $('nestNote').innerHTML = na && nb ? ICO('egg') + ' ' + na.name + ' + ' + nb.name : '';
 
-  const h = $('hand'); h.innerHTML = '';
-  F.hand.forEach((c, i) => {
-    const el = cardEl(c);
-    const blocked = c.cost > F.feed || (!c.dud && penFull());
-    if (blocked) el.classList.add('dead');
-    else el.onclick = () => doPlay(i, el, c);
-    h.appendChild(el);
-  });
-}
-function streakPips(n){
-  let s = '<span class="streak">' + Math.min(n, 9) + ' clean <b>';
-  for (let i = 0; i < Math.min(n, 5); i++) s += '<i></i>';
-  return s + '</b></span>';
-}
-/** A hit reads as: white blowout, then the shake. Two classes, both cheap. */
-function foeHit(){
-  const box = $('foeBox');
-  if (!box || !box.classList) return;
-  box.classList.add('hit', 'flash');
-  at(100, () => box.classList.remove('flash'));
-  at(320, () => box.classList.remove('hit'));
+  const pb = $('pBadges'); pb.innerHTML = '';
+  if (R.hazard) pb.innerHTML += '<span class="bdg thn">' + R.hazard.name.toUpperCase() + '</span>';
+  if (R.streak > 1) pb.innerHTML += '<span class="bdg">' + R.streak + ' in a row</span>';
+
+  // the bench: everything not nested and not already fielded
+  const bench = $('hand');
+  bench.innerHTML = '';
+  if (prep){
+    const avail = R.deck.filter((c) => R.nest.indexOf(c.id) < 0 && R.line.indexOf(c.id) < 0);
+    for (const c of avail){
+      const el = cardEl(c);
+      if (!canField(c)) el.classList.add('dead');
+      else el.onclick = () => { if (toggleField(c.id)){ sfxLand(); renderFight(); } };
+      bench.appendChild(el);
+    }
+  }
+  const btn = $('bEnd');
+  if (prep){
+    const ok = R.line.length > 0;
+    btn.disabled = !ok;
+    btn.className = 'btn sm';
+    btn.textContent = ok ? 'SEND THEM IN' : 'FIELD A BEAST';
+  } else {
+    btn.disabled = false;
+    btn.className = 'btn alt sm';
+    btn.textContent = seq ? 'SKIP' : '...';
+  }
+  const co = $('coach');
+  if (prep && R.idx === 0 && !taught()){
+    co.hidden = false;
+    co.innerHTML = R.line.length
+      ? 'Order matters: the <b>front</b> of your line takes every blow. Put something that can survive there.'
+      : 'Tap beasts to field them. Then the match plays itself &mdash; all you control is <b>who</b> goes and <b>where</b>.';
+  } else co.hidden = true;
 }
 
-/* --------------------------------------------------- direct node pokes ----
-   During a turn drain we must NOT call renderFight() — it repaints nine
-   canvases. Everything below mutates the nodes that are already on screen. */
-function setFoeHp(hp, snap){
-  const f = F.foe;
-  const pct = (100 * Math.max(0, hp) / f.maxHp) + '%';
-  const fill = $('fHpFill'), gh = $('fHpGhost'), txt = $('fHpTxt');
-  if (fill && fill.style) fill.style.width = pct;
-  // the ghost carries the same number but its transition is delayed, so the
-  // pale strip left behind IS the chunk that strike just took off
-  if (gh && gh.style) gh.style.width = pct;
-  if (txt) countUp(txt, Math.max(0, hp), { fmt: (v) => v + ' / ' + f.maxHp, dur: snap ? 0 : 260 });
-}
-function setYouHp(){
-  const t = $('fHp'), b = $('fHpBar');
-  if (t) countUp(t, R.hp);
-  if (b && b.style) b.style.width = (100 * R.hp / R.maxHp) + '%';
-}
-function setBeastHp(uid, hp, max){
-  const n = penNode(uid); if (!n || !n.querySelector) return n;
-  const bar = n.querySelector('.ph i');
-  if (bar && bar.style) bar.style.width = (100 * Math.max(0, hp) / max) + '%';
-  const pm = n.querySelector('.pm .hh');
-  if (pm) pm.innerHTML = ICO('hide') + Math.max(0, hp);
-  return n;
-}
-function killPenNode(uid, hue){
-  const n = penNode(uid);
-  if (!n){ return; }
-  const r = rectOf(n);
-  if (n.classList) n.classList.add('dying');
-  if (r) burst(r.left + r.width / 2, r.top + r.height * 0.45, 6,
-    (i) => 'hsl(' + ((hue + i * 14) % 360) + ',60%,' + (40 + i * 5) + '%)',
-    { speed: 90, spread: Math.PI * 0.9, a0: -Math.PI * 0.95 });
-  at(RM() ? 20 : 470, () => { if (n.remove) n.remove(); });
-}
-function hurtSelf(){
-  const app = $('app');
-  if (app && app.classList) anim(app, 'hurt', 300);
-}
-
-/* ------------------------------------------------------- the turn drain ---
-   endTurn() has ALREADY resolved everything, synchronously. What follows only
-   replays its transcript so the player can see which blow did what. Tapping
-   anywhere flushes the rest instantly; leaving the screen kills it dead. */
-const BEAT = { poison: 200, strike: 230, foe: 380, swing: 190, hit: 170, die: 340,
-  you: 260, foeheal: 220, draw: 0 };
-const SEQ_BUDGET = 1150;      // hard ceiling: input is never blocked for longer
+/* --------------------------------------------------------- the replay ---- */
 let seq = null;
-function applyEv(e, quick){
-  if (!F) return;
-  const f = F.foe;
-  const sub = (ms, fn) => { if (quick || RM()) fn(); else at(ms, fn); };
-  if (e.k === 'poison'){
-    setFoeHp(e.fhp);
-    if (!quick){ foeHit(); sfxStrike(e.v); fly('-' + e.v, '#b6ff8a', $('fEm'), e.v, f.maxHp); }
-  } else if (e.k === 'strike'){
-    const n = penNode(e.uid);
-    if (!quick && n) anim(n, 'lunge', 260);
-    sub(quick ? 0 : 90, () => {
-      setFoeHp(e.fhp);
-      if (quick) return;
-      foeHit(); sfxStrike(e.per);
-      fly('-' + e.dmg, '#ff9d6b', $('fEm'), e.dmg, f.maxHp);
-      if (e.venom) fly('venom', '#b6ff8a', $('fBadges'), 8);
-    });
-    if (!quick && e.hits > 1) sub(220, () => { if (n) anim(n, 'lunge', 260); sfxStrike(e.per); foeHit(); });
-    if (e.healed){ sub(quick ? 0 : 150, () => { setYouHp(); if (!quick){ sfxHeal();
-      fly('+' + e.healed, '#a6ff5e', $('fHpBar'), e.healed); } }); }
-  } else if (e.k === 'foe'){
-    const box = $('foeBox');
-    if (!quick && box && box.classList){ box.classList.remove('lunging'); box.classList.add('windup'); }
-  } else if (e.k === 'swing'){
-    const box = $('foeBox');
-    if (!quick && box && box.classList){ box.classList.remove('windup'); anim(box, 'lunging', 320); }
-    if (!quick) anim($('arena'), 'shk', 400);
-  } else if (e.k === 'hit'){
-    const n = setBeastHp(e.uid, e.hp, e.max);
-    if (!quick && n){
+function nodeFor(uid){
+  const q = '[data-uid="' + uid + '"]';
+  const a = $('foeLine') && $('foeLine').querySelector && $('foeLine').querySelector(q);
+  if (a) return a;
+  return $('pen') && $('pen').querySelector ? $('pen').querySelector(q) : null;
+}
+function applyEv(e){
+  if (!e) return;
+  if (e.k === 'strike'){
+    const n = nodeFor(e.uid);
+    if (n) anim(n, e.side === 'us' ? 'lungeUp' : 'lungeDown', 300);
+    sfxStrike(e.per);
+  } else if (e.k === 'hurt'){
+    const n = nodeFor(e.uid);
+    if (n){
       anim(n, 'hurt', 320);
-      if (n.classList){ n.classList.add('flash'); at(120, () => n.classList.remove('flash')); }
-      fly('-' + e.v, '#ff7b7b', n, e.v, e.max);
-      sfxStrike(e.v);
-      if (e.thorns) fly('thorns', '#b6ff8a', $('fEm'), 6);
+      const bar = n.querySelector && n.querySelector('.ph i');
+      if (bar && bar.style) bar.style.width = Math.max(0, 100 * e.hp / (unitByUid(e.uid) || { max: 1 }).max) + '%';
+      flyer('-' + e.dmg, e.thorns ? '#ffb0e0' : '#ff9d6b', n, { size: 16 + Math.min(18, e.dmg) });
     }
   } else if (e.k === 'die'){
-    if (quick){ const n = penNode(e.uid); if (n && n.remove) n.remove(); }
-    else { killPenNode(e.uid, e.hue); sfxDie(); }
-  } else if (e.k === 'you'){
-    setYouHp();
-    if (!quick){
-      sfxHurt(); hurtSelf();
-      fly('-' + e.v + ' YOU', '#ff5d5d', $('fHpBar'), e.v, R.maxHp);
-      anim($('arena'), 'shk', 400);
+    const n = nodeFor(e.uid);
+    if (n){
+      anim(n, 'fall', 520);
+      const r = rectOf(n);
+      if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 7, '#c9b48a', { speed: 120, lift: 30 });
     }
-  } else if (e.k === 'foeheal'){
-    setFoeHp(e.fhp);
-    if (!quick){ sfxHeal(); fly('+' + e.v, '#a6ff5e', $('fEm'), e.v); }
+    sfxDie();
+  } else if (e.k === 'poison'){
+    const n = nodeFor(e.uid);
+    if (n) flyer('-' + e.v, '#b6ff8a', n, { size: 15 });
+  } else if (e.k === 'heal'){
+    flyer('+' + e.v, '#a6ff5e', $('fHp'), { size: 18 });
+    sfxHeal();
+    hpBar($('fHp'), $('fHpBar'));
+  } else if (e.k === 'trample'){
+    flyer('-' + e.v, '#ff5d5d', $('fHp'), { size: 26 });
+    sfxHurt();
+    const app = $('app');
+    if (app && app.classList) anim(app, 'hurt', 300);
+    hpBar($('fHp'), $('fHpBar'));
   }
 }
-function seqStep(){
-  if (!seq) return;
-  if (!F || F !== seq.F || cur !== 'fight'){ seq = null; return; }
-  if (seq.i >= seq.list.length){ finishSeq(); return; }
-  const e = seq.list[seq.i++];
-  applyEv(e, false);
-  at(Math.max(1, Math.round((BEAT[e.k] == null ? 120 : BEAT[e.k]) * seq.sc)), seqStep);
+function unitByUid(uid){
+  if (!F) return null;
+  return F.mine.concat(F.theirs).filter((u) => u.uid === uid)[0] || null;
+}
+const BEAT = { clash: 240, strike: 60, hurt: 130, die: 300, poison: 160, heal: 140, trample: 420, end: 260 };
+function playBattle(list){
+  if (HEADLESS){ finishBattle(); return; }
+  let t = 0;
+  seq = { alive: 1 };
+  const mine = seq;
+  for (const e of list){
+    const d = BEAT[e.k] || 100;
+    at(t, () => { if (seq === mine && cur === 'fight') applyEv(e); });
+    t += RM() ? Math.min(40, d) : d;
+    if (t > 9000) break;                      // never hold the player hostage
+  }
+  at(t + 240, () => { if (seq === mine) finishBattle(); });
+  renderFight();
 }
 function seqFlush(){
-  if (!seq) return true;
-  const s = seq; seq = null;
-  if (F && F === s.F && cur === 'fight'){
-    for (let i = s.i; i < s.list.length; i++) applyEv(s.list[i], true);
-  }
-  finishSeq();
-  return true;
-}
-function finishSeq(){
+  if (!seq) return;
   seq = null;
-  const bt = $('bEnd'); if (bt && bt.classList) bt.classList.remove('busy');
-  if (!F || cur !== 'fight') return;
+  finishBattle();
+}
+function finishBattle(){
+  seq = null;
+  if (!F) return;
   renderFight();
-  if (!F.over) pipRefill();
-  if (F.over) at(F.over === 'win' ? 380 : 320, resolveFight);
+  resolveFight();
 }
-function playSeq(list){
-  if (HEADLESS || !list || !list.length){ finishSeq(); return; }
-  let sum = 0;
-  for (const e of list) sum += (BEAT[e.k] == null ? 120 : BEAT[e.k]);
-  const sc = RM() ? 0.01 : Math.min(1, SEQ_BUDGET / Math.max(1, sum));
-  seq = { list, i: 0, F, sc };
-  const bt = $('bEnd'); if (bt && bt.classList) bt.classList.add('busy');
-  seqStep();
-}
-
-/* ------------------------------------------------------------ feed pips --- */
-function pipSpend(after, before){
-  const fd = $('feed'); if (!fd || !fd.children) return;
-  let d = 0;
-  for (let i = before - 1; i >= after; i--){
-    const p = fd.children[i];
-    if (!p || !p.style) continue;
-    p.style.animationDelay = (d * 90) + 'ms';
-    if (p.classList) p.classList.add('spend');
-    d++;
-  }
-}
-function pipRefill(){
-  const fd = $('feed'); if (!fd || !fd.children) return;
-  for (let i = 0; i < fd.children.length; i++){
-    const p = fd.children[i];
-    if (!p || !p.className || p.className.indexOf('on') < 0 || !p.style) continue;
-    p.style.animationDelay = (i * 60) + 'ms';
-    if (p.classList) p.classList.add('fill');
-  }
-}
-
-/* --------------------------------------------------------- playing a card - */
-/** Land the beast: reveal it, squash it, kick up dust, thump. */
-function landPen(uid){
-  const n = penNode(uid);
-  if (!n) return;
-  if (n.classList){ n.classList.remove('arriving'); anim(n, 'landing', 220); n.classList.add('fresh'); }
-  const r = rectOf(n);
-  if (r) dust(r.left + r.width / 2, r.top + r.height - 8);
+function beginBattle(){
+  if (F){ seqFlush(); return; }
+  if (!R.line.length) return;
+  if (!lineIsLegal(R.line)) return;
+  startBattle(fightMods());
+  resolveBattle();
+  const list = (F.events || []).slice();
+  F.events = [];
   sfxLand();
+  playBattle(list);
 }
-/** FLIP the card from the hand into its stall: read both rects, fly a clone,
- *  then hand over to the real pen node. */
-function flipInto(src, c, uid){
-  const pn = penNode(uid);
-  if (HEADLESS || RM() || !src || !pn){ landPen(uid); return; }
-  const L = fxLayer();
-  const dst = rectOf(pn);
-  if (!L || !L.appendChild || !dst){ landPen(uid); return; }
-  const g = cardEl(c);
-  g.className = 'card ghostcard';
-  g.style.left = src.left + 'px';
-  g.style.top = src.top + 'px';
-  g.style.width = src.width + 'px';
-  g.style.margin = '0';
-  L.appendChild(g);
-  if (pn.classList) pn.classList.add('arriving');
-  const sc = dst.width / Math.max(1, src.width);
-  const dx = (dst.left + dst.width / 2) - (src.left + src.width / 2);
-  const dy = (dst.top + dst.height / 2) - (src.top + src.height / 2);
-  if (g.animate) g.animate(
-    [{ transform: 'translate(0,0) scale(1) rotate(-6deg)' },
-     { transform: 'translate(' + dx.toFixed(0) + 'px,' + dy.toFixed(0) + 'px) scale(' + sc.toFixed(3) + ') rotate(0deg)' }],
-    { duration: 220, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
-  at(215, () => { if (g.remove) g.remove(); landPen(uid); });
-}
-function doPlay(i, node, card){
-  if (!F || F.over) return;
-  if (seq) seqFlush();                       // a tap mid-drain skips, never queues
-  const c = F.hand[i];
-  if (!c || (card && c !== card)) return;    // the hand moved under us; do nothing
-  const wasFull = penFull();
-  const feedBefore = F.feed;
-  const src = rectOf(node);
-  if (!playCard(i)){
-    sfxDeny();
-    if (node) anim(node, 'nope', 320);
-    if (wasFull && !c.dud) flyer('PEN IS FULL', '#ffd34d', $('pen'));
-    return;
-  }
-  sfxLift();
-  const b = F.pen.length ? F.pen[F.pen.length - 1] : null;
-  const uid = (b && b.c === c) ? b.uid : 0;
-  // playCard may already have resolved things — a Cursed card bites you the
-  // moment it lands, Swift swings on arrival. Replay those as their own beats.
-  const made = (F.events || []).slice();
-  if (F.events) F.events = [];
-  renderFight();
-  pipSpend(F.feed, feedBefore);
-  if (uid) flipInto(src, c, uid);
-  else if (c.dud) sfxDeny();
-  for (const e of made){
-    if (e.k === 'you'){ applyEv(e, false); continue; }
-    if (e.k !== 'strike') continue;
-    at(RM() ? 1 : 300, () => {
-      if (!F || cur !== 'fight') return;
-      applyEv(e, false);
-      at(320, () => { if (F && cur === 'fight') renderFight(); });
-    });
-  }
-  if (F.over) at(420, resolveFight);
-}
-function doEnd(){
-  if (seq){ seqFlush(); return; }            // first tap skips the last one
-  if (!F || F.over) return;
-  endTurn();                                 // authoritative, synchronous
-  const list = (F && F.events) ? F.events.slice() : [];
-  if (F && F.events) F.events = [];
-  playSeq(list);
-}
+/** Older name, kept: the button and the keyboard both come through here. */
+function doEnd(){ if (seq) { seqFlush(); return; } if (!F) beginBattle(); }
+function doPlay(){ /* no cards are played mid-match any more */ }
+
 function resolveFight(){
   if (!F) return;
   if (R.idx === 0) markTaught();
-  if (F.over === 'lose'){ F = null; goOver(false); return; }
-  // hold the corpse a beat before the screen changes
-  const box = $('foeBox');
-  if (box && box.classList) box.classList.add('dying');
-  const r = rectOf($('fEm'));
-  if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 8, '#ffd0a0', { speed: 130, lift: 40 });
-  sfxWin();
-  // a fight finished on fumes deserves to be felt
-  const close = R.hp / R.maxHp <= 0.15;
+  const won = F.over === 'win';
+  const dead = !!F.dead;
+  if (won) sfxWin(); else sfxToll();
   winFight();
-  const app = $('app');
-  if (close && app && app.classList){
-    anim(app, 'close', 700);
-    sfxHeart();
-    flyer('THAT WAS CLOSE', '#ff7b7b', $('fHpBar'));
-  }
-  if (HEADLESS) goHatch(); else at(close ? 780 : 380, goHatch);
+  if (dead){ goOver(false); return; }
+  goHatch();
 }
-
 /* ------------------------------------------------------------- hatch -----
    The clutch is what the whole loop exists to deliver, so it gets a drumroll:
    the eggs shudder faster and faster, then crack ONE AT A TIME, rarest last,
@@ -2726,6 +3186,8 @@ function goHatch(){
     : 'Keep <b class="pink">one</b>. The rest go to market for Slop.';
   pickedChick = -1;
   hatching = false;
+  $('bHatchNext').className = 'btn pinky';
+  $('bHatchNext').textContent = 'KEEP IT';
   $('bHatchNext').disabled = true;
   revealLitter();          // the cards exist immediately; the shells hide them
   startHatchSeq();
@@ -2852,7 +3314,8 @@ function revealLitter(){
   const h = R.lastHatch;
   if (HEADLESS) clutchTitle();
   const ch = $('hChild');
-  ch.className = 'litter';
+  // three chicks from a Fertile parent must still fit side by side on a phone
+  ch.className = 'litter' + (h.litter.length >= 3 ? ' three' : '');
   ch.innerHTML = '';
   h.litter.forEach((res, i) => {
     const wrap = document.createElement('div');
@@ -2891,7 +3354,10 @@ function revealLitter(){
       });
       showChickDetail(res);
       resemblance(wrap, res);
-      $('bHatchNext').disabled = false;
+      // the verdict names the animal: this is the moment you commit to it
+      const bn = $('bHatchNext');
+      bn.disabled = false;
+      bn.textContent = 'KEEP ' + res.child.name.toUpperCase();
       tone(560, 0.05, { type: 'triangle', vol: 0.04 });
     };
     ch.appendChild(wrap);
@@ -2927,8 +3393,9 @@ function rline(x1, y1, x2, y2, label, isNew, row){
   const lab = document.createElement('div');
   lab.className = 'rlab' + (isNew ? ' nw' : '');
   lab.textContent = label;
-  // fan the labels down the thread so six of them cannot pile on one line
-  const f = 0.42 + 0.11 * ((row || 0) % 4);
+  // cluster the labels at the CHICK end of the thread, over the art where the
+  // gene actually is — the middle of the thread runs across the body copy
+  const f = 0.80 + 0.05 * ((row || 0) % 3);
   // the generation chip lives at the card's top-right, so pull NEW away from it
   lab.style.left = (x1 + dx * f - (isNew ? 46 : 0)) + 'px';
   lab.style.top = (y1 + dy * f - 17 + ((row || 0) % 2 ? 15 : -4)) + 'px';
@@ -2950,6 +3417,12 @@ function resemblance(wrap, res){
   const cr = rectOf(cv);
   if (!cr || !pr[0] || !pr[1]) return;
   const keys = Object.keys(GENE_SPOTS).filter((k) => prov[k]);
+  // stand the instruction line down while the threads draw across it
+  const hs = $('hatch');
+  if (hs && hs.classList){
+    hs.classList.add('revealing');
+    at(260 + keys.length * 190 + 700, () => { if (hs.classList) hs.classList.remove('revealing'); });
+  }
   keys.forEach((k, i) => {
     const who = prov[k], sp = GENE_SPOTS[k];
     at(i * 190, () => {
@@ -3048,6 +3521,7 @@ function goCull(){
   const g = $('cGrid'); g.innerHTML = '';
   if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
+  gridCols(g, sorted.length);
   sorted.forEach((c) => {
     const el = cardEl(c);
     el.onclick = () => {
@@ -3129,11 +3603,20 @@ function goOver(won){
   $('oSub').textContent = won
     ? 'You beat all ' + RUN_LEN + ' rounds with ' + R.deck.length + ' beasts standing.'
     : 'Round ' + (R.idx + 1) + ' of ' + RUN_LEN + ' — ' + FOES[clamp(R.idx, 0, RUN_LEN - 1)].name + ' got you.';
+  // the champion gets a plinth, a ribbon and a pool of light: this frame is the
+  // one people screenshot, and it cannot look like the runt you culled in two
   const ob = $('oBest'); ob.innerHTML = '';
-  if (best) ob.appendChild(cardEl(best, { big: true }));
-  $('oBestLine').innerHTML = (best ? 'Best in show: <b>' + best.name + '</b> · gen ' + best.gen +
-    ' · power ' + power(best) : '') + '<br>' + R.born + ' kept, ' + R.sold + ' sold on, ' +
-    R.retired + ' retired' + (hall ? ' &nbsp;|&nbsp; record ' + hall.pow : '');
+  if (best){
+    const pl = document.createElement('div');
+    pl.className = 'plinth';
+    pl.innerHTML = '<span class="banner gold2 ribbon">BEST IN SHOW</span>';
+    pl.appendChild(cardEl(best, { big: true }));
+    ob.appendChild(pl);
+  }
+  $('oBestLine').innerHTML = (best ? '<b>' + best.name + '</b> &middot; gen ' + best.gen +
+    ' &middot; <span class="pw">' + power(best) + '</span> power' : '') +
+    '<br><span class="dim" style="font-size:13px">' + R.born + ' kept, ' + R.sold + ' sold on, ' +
+    R.retired + ' retired' + (hall ? ' &nbsp;|&nbsp; record ' + hall.pow : '') + '</span>';
   // the keepsake is prose, not a tracked-out uppercase paragraph — its own plate
   const keep = $('oKeep');
   if (fnd){
@@ -3141,8 +3624,10 @@ function goOver(won){
     keep.innerHTML = ICO('egg') + '<span><b>' + fnd.name +
       '</b> retires to stud &mdash; it opens your next herd.</span>';
   } else { keep.hidden = true; keep.innerHTML = ''; }
+  // a ledger, not a console dump: one marker per entry, losses in red
   $('oLog').innerHTML = R.log.length
-    ? R.log.slice().reverse().map((l) => '<div>' + l + '</div>').join('')
+    ? R.log.slice().reverse().map((l) => '<div' +
+        (/farm upstate|got you|lost|died/i.test(l) ? ' class="loss"' : '') + '>' + l + '</div>').join('')
     : '<div>Nothing much happened.</div>';
   beep(won ? 660 : 160, 0.3, won ? 'triangle' : 'sawtooth', 0.06);
 }
@@ -3219,6 +3704,7 @@ function renderBook(){
   const list = $('bkList');
   list.innerHTML = '';
   const ids = Object.keys(STUD).map(Number).sort((a, b) => (STUD[b].gen - STUD[a].gen) || (b - a));
+  gridCols(list, ids.length);
   for (const id of ids){
     const e = STUD[id];
     const live = cardById(id);
@@ -3249,7 +3735,9 @@ function bind(){
   $('bOverBook').onclick = () => goBook(bestBeast() ? bestBeast().id : 0, 'over');
   $('bFight').onclick = () => {
     if (R.nest.length !== 2) return;
-    startFight(fightMods());
+    coachPlays = 0;
+    R.line = [];              // the field opens in prep; nothing is committed yet
+    R.scout = null;
     show('fight');
     renderFight();
   };
@@ -3297,9 +3785,8 @@ function bind(){
     }, true);
   } catch (e){}
   window.addEventListener('keydown', (e) => {
-    if (cur !== 'fight' || !F || F.over) return;
-    if (e.key >= '1' && e.key <= '9'){ const i = +e.key - 1; if (i < F.hand.length) doPlay(i); }
-    else if (e.key === ' ' || e.key === 'Enter' || e.key.toLowerCase() === 'e'){ e.preventDefault(); doEnd(); }
+    if (cur !== 'fight') return;
+    if (e.key === ' ' || e.key === 'Enter' || e.key.toLowerCase() === 'e'){ e.preventDefault(); doEnd(); }
   });
 }
 function boot(){
@@ -3312,20 +3799,24 @@ if (!HEADLESS) boot();
 /* ------------------------------------------------------- test surface ---- */
 window.BB = {
   get R(){ return R; }, get F(){ return F; },
-  newRun, setNest, deckForFight, startFight, playCard, endTurn, drawCards,
+  newRun, setNest, deckForFight,
+  // the autobattler surface
+  setLine, lineIsLegal, lineCost, lineBudget, canField, toggleField, moveInLine,
+  makeEnemyTeam, teamSize, startBattle, resolveBattle, frontOf, livingOf, unitMight, TRAMPLE_CAP,
+  hitUnit, swing, tickPoison, unitOf, LINE_SLOTS, MAX_EXCHANGES,
   winFight, keepChick, breedLitter, takeWild, retire, mustCull, bestBeast, cardById, uniquifyName,
   rollHazard, toggleHazard, setRitual, ritualCost, vetVisit, fightMods, pedigree, studAdd,
   saveFounder, loadFounder, applyFounder,
   get STUD(){ return STUD; },
-  beastMight, cardHide, penFull, penHas, foeTarget, hurtBeast, swingAt, strike, penStrike, handSize, SPILL,
+  beastMight, cardHide, cardDamage, statPower,
   breed, shareBlood, geneRoll, blendHue, wildCard, makeCard, starterDeck,
-  spawnCard, junkCard, deriveCost, statPower, power, cardDamage, makeFoe, nextMove, feedFor,
+  spawnCard, junkCard, deriveCost, statPower, power, cardDamage, makeFoe, feedFor,
   srand, rng, shuffle,
   TRAITS, FOES, MUT_TRAITS, BAD_TRAITS, SYL_A, SYL_B, RITUALS, RITUAL_IDS, HAZARDS,
   C: { RUN_LEN, MAX_DECK, START_HP, FEED, HAND_SIZE, WILD_AFTER, MAX_PEN,
        SLOP_PER_WIN, SLOP_PER_CHICK, VET_COST, VET_HEAL, HAZARD_PAY },
-  ui: { drawBeast, cardEl, penEl, renderPen, show, renderNest, renderFight, goHatch, goWild,
-        goCull, goOver, renderTitle, boot, intentText, flyer, doPlay, doEnd, resolveFight,
+  ui: { drawBeast, drawFoe, vform, gridCols, cardEl, unitEl, slotEl, renderLine, renderPen, show, renderNest, renderFight, goHatch, goWild,
+        goCull, goOver, renderTitle, boot, intentText, flyer, doPlay, beginBattle, playBattle, applyEv, seqFlush, doEnd, resolveFight,
         taught, markTaught,
         revealLitter, chickBanners, showChickDetail, renderRituals, get picked(){ return pickedChick; },
         setPicked(i){ pickedChick = i; }, goBook, renderBook, treeNode,

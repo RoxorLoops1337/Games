@@ -17,7 +17,7 @@ mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const page = await browser.newPage(MOBILE
   ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
-  : { viewport: { width: 1100, height: 800 }, deviceScaleFactor: 1 });
+  : { viewport: { width: 1000, height: 900 }, deviceScaleFactor: 1 });
 
 const errs = [];
 page.on('pageerror', (e) => errs.push('' + e));
@@ -53,12 +53,18 @@ for (; steps < 2200; steps++) {
     await page.waitForTimeout(50);
     await click('#bFight');
   } else if (await on('fight')) {
-    const pen = (await page.$$('#pen .pb')).length;
-    if (!seen.f1 && pen === 1) { await shot('3fight-early'); seen.f1 = 1; }
-    if (!seen.f2 && pen >= 3) { await shot('4fight-mid'); seen.f2 = 1; }
-    const hand = await page.$$('#hand .card:not(.dead)');
-    if (hand.length) await hand[0].click().catch(() => {});
-    else await click('#bEnd');
+    const fielded = (await page.$$('#pen .ub')).length;
+    const bench = await page.$$('#hand .card:not(.dead)');
+    if (bench.length && fielded < 4) {
+      await bench[0].click().catch(() => {});
+      if (!seen.f1 && fielded >= 1) { await shot('3fight-prep'); seen.f1 = 1; }
+    } else {
+      if (!seen.f1) { await shot('3fight-prep'); seen.f1 = 1; }
+      await click('#bEnd');
+      await page.waitForTimeout(700);
+      if (!seen.f2) { await shot('4fight-battle'); seen.f2 = 1; }
+      await click('#bEnd');
+    }
   } else if (await on('hatch')) {
     await page.waitForTimeout(950);
     if (!seen.hatch) { await shot('5hatch'); seen.hatch = 1; }
