@@ -3028,7 +3028,9 @@ function updateBattle(dt) {
 // ---- full screens ------------------------------------------------------
 function openScreen(kind, opt = {}) {
   closeMenu();
-  G.screen = { kind, i: 0, sel: null, opt, prev: G.mode };
+  // When you must send someone out, start the cursor on someone who can go.
+  const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive)) : 0;
+  G.screen = { kind, i, sel: null, opt, prev: G.mode };
   G.mode = 'screen';
   renderScreen();
 }
