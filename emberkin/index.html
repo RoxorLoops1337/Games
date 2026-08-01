@@ -155,7 +155,7 @@
     <p>cute enough to want one · armed enough to respect one</p>
     <div class="btn panel" data-act="new">New journey</div>
     <div class="btn panel hidden" data-act="cont">Continue</div>
-    <p style="font-size:11px;letter-spacing:1px;text-transform:none">arrows / WASD to move · Z or Enter to talk · X to cancel</p>
+    <p style="font-size:11px;letter-spacing:1px;text-transform:none">arrows / WASD to move · Z or Enter to talk · X for the menu · M for sound</p>
   </div>
 </div>
 
@@ -2735,10 +2735,10 @@ function openMainMenu() {
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
     { label: 'Bag', fn: () => openScreen('bag') },
     { label: 'Box', sub: '' + G.box.length, fn: () => openScreen('box') },
-    { label: 'Shards', sub: '' + G.money, fn: () => setToast(`${G.money} shards`) },
+    { label: 'Sound', sub: muted ? 'off' : 'on', fn: () => { toggleMute(); openMainMenu(); } },
     { label: 'Save', fn: () => { setToast(saveGame() ? 'Journey saved.' : 'Could not save.'); } },
     { label: 'Close', fn: closeWorldMenu },
-  ], { cancel: closeWorldMenu, title: G.map.name });
+  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards` });
 }
 function closeWorldMenu() { closeMenu(); G.mode = 'world'; }
 
