@@ -59,6 +59,10 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.20.0', notes: [
+    'THE DEEP\u2019S BLADE GETS SHARPER, NOT JUST ITS HIDE \u{1F5E1}\u{FE0F} \u2014 foe damage never ramped per floor. It stepped only when the ACT did, so the same grunt hit for the same number on floor 1 and floor 5, and going deeper made the deep tougher only by taking longer to chew through. It climbs +5% a floor now: a floor-20 grunt swings for 14 where it used to swing for 7',
+    'and the hide thickens faster too \u{1F6E1}\u{FE0F} \u2014 foe HP per floor goes from +6% to +7.5%. BOSSES are deliberately left off the new blade ramp: their own curve is already the wall, and ramping both halves on top of it turns the floor-20 lair into a brick',
+  ] },
   { v: '1.19.0', notes: [
     'YOU SPIN THE WHEEL NOW \u{1F3A1} \u2014 paying no longer starts it. EVERY piece you paid falls down the slot one after another and stacks up on the rail where you can count them, the machine goes READY, and then it waits for your hand',
     'AND YOU THROW IT YOURSELF \u{1F4AA} \u2014 press SPIN and a needle runs the power meter, slow to fast and back. Press again to stop it where you like: a limp flick barely gets the wheel round, a full throw sends it whirling',
@@ -615,8 +619,14 @@ const C = {
   // v1.7.3, the owner's law: the deep grows TOUGH faster than it grows rich.
   // HP_RAMP compounds per floor ON TOP of the act ramp (hp only — blades
   // and purses stay on the old curve); GOLD_DROP_K thins every foe's drop
-  HP_RAMP: 0.06,                        // +6% foe HP per floor, on top of scaleMult
+  HP_RAMP: 0.075,                       // +7.5% foe HP per floor, on top of scaleMult
   BOSS_HP_RAMP: 0.09,                   // bosses fatten faster still
+  // ...and the BLADE ramps too now. It never did: attack only stepped when
+  // the ACT did, so a foe on floor 5 hit exactly as hard as the same foe on
+  // floor 1 and the deep got harder only by taking longer to chew through.
+  // Bosses are left off it on purpose — their own curve is already the wall,
+  // and ramping both halves of hp x atk on top of it breaks the audit.
+  ATK_RAMP: 0.05,                       // +5% foe damage per floor, no boss
   GOLD_DROP_K: 0.65,                    // every foe's gold drop, cut to 65%
   GEM_GOLD: 10,                         // a banked gem (was 15)
   BAG_GOLD: 6,                          // a banked gold bag (was 8)
@@ -3523,12 +3533,13 @@ function mkEnemy(type, eid) {
   const champ = CHAMPIONS.indexOf(base) >= 0;
   // the owner's ramp: health compounds per floor beyond the act curve
   const hpRamp = 1 + (type === 'boss' ? C.BOSS_HP_RAMP : C.HP_RAMP) * (S.run.floor - 1);
+  const atkRamp = type === 'boss' ? 1 : 1 + C.ATK_RAMP * (S.run.floor - 1);
   const hp = Math.round(base.hp * mult * eliteK * diffHpK() * hpRamp);
   return {
     id: base.id, icon: base.icon,
     name: champ ? '\u{1F451} ' + base.name : (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
-    atk: Math.max(1, Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1) * diffAtkK())) + (mutOn('swiftdoom') ? 2 : 0),
+    atk: Math.max(1, Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1) * diffAtkK() * atkRamp)) + (mutOn('swiftdoom') ? 2 : 0),
     trait: base.trait, def: base.def || null,
     gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1) * C.GOLD_DROP_K),
     boss: type === 'boss', elite: type === 'elite', champ: champ ? 1 : 0,
