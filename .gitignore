@@ -10,3 +10,6 @@ beatbox_story/beatbox-story.bundle.js.map
 # Polish-loop scratch: keep the screenshot rig, drop agents' throwaway probes
 .polish/*
 !.polish/shots.mjs
+
+# beastfont: generated woff + specimen, rebuilt by tools/beastfont/build.mjs
+tools/beastfont/out/
