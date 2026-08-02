@@ -2234,7 +2234,7 @@ function makeFoe(i, mods){
    drawn by the same painter from the same visual genes — so what you are
    reading across the field is exactly what you read on your own cards.
    ========================================================================== */
-const ENEMY_BASE = 7.5;       // leader stat power at round 1
+const ENEMY_BASE = 8.6;       // leader stat power at round 1
 // Deliberately FLAT. A steep curve made the run end at the same round however
 // well you bred, because the enemy outgrew every deck; a flat one that starts
 // hard lets a compounding herd actually pull ahead of it.
@@ -2447,13 +2447,21 @@ let _uid = 1;
 function spawnUnit(c, side, x, y){
   const hp = unitHide(c);
   const u = { id: _uid++, c, side, x, y, lane: y, hp, max: hp, alive: 1,
+    reach: BASE_RANGE + ((_uid * 5) % 7 - 3) * 0.55,   // its own standing distance
+    hold: ((_uid * 3) % 5 - 2) * 1.7,                  // and its own place in the line
     cd: 0.35, stun: 0, pois: 0, poisT: 0, dead: 0, hitT: 0, swingT: 0, born: F ? F.t : 0 };
   if (F){ F.units.push(u); ev('spawn', { id: u.id, side }); }
   return u;
 }
 /** Where in the depth of the pit a beast walks in. Spread wide and stepped, so
  *  three animals arriving together do not stack into one blob. */
-function laneY(i){ return (AH * 0.10) + (((i * 41) % 7) / 6) * (AH * 0.80); }
+function laneY(i){
+  // A 7-step cycle put every 7th arrival back on the same lane, and a wave of
+  // three routinely landed two of them within a hair of each other. Nine steps
+  // walked in a coprime stride spreads them properly.
+  const step = ((i * 4) % 9) / 8;
+  return (AH * 0.08) + step * (AH * 0.84);
+}
 
 /* ------------------------------------------------------------- the tick -- */
 function nearestFoe(u){
@@ -2577,13 +2585,14 @@ function arenaTick(dt){
       // Yours hold a line. Without this they chased every arrival right up to
       // the door, the fight happened in the last tenth of the pit, and the two
       // thirds in front of the nest were dead space.
-      const cap = u.side === 'us' && foe.x > HOLD_X;
-      if (cap && u.x >= HOLD_X - 0.2){
+      const myHold = HOLD_X + (u.hold || 0);
+      const cap = u.side === 'us' && foe.x > myHold;
+      if (cap && u.x >= myHold - 0.2){
         u.moving = 0;
-        u.x += (HOLD_X - u.x) * Math.min(1, dt * 4);
+        u.x += (myHold - u.x) * Math.min(1, dt * 4);
       } else if (dist > reach){
         const dir = dx > 0 ? 1 : -1;
-        u.x += Math.min(dir * unitSpeed(u) * dt, u.side === 'us' ? Math.max(0, HOLD_X - u.x) : 1e9);
+        u.x += Math.min(dir * unitSpeed(u) * dt, u.side === 'us' ? Math.max(0, myHold - u.x) : 1e9);
         if (u.side !== 'us') u.x = Math.min(u.x, DOOR_X);
         // They meet HALFWAY between their two lanes rather than one walking all
         // the way onto the other's. Without this every fight collapsed into a
@@ -2617,6 +2626,24 @@ function arenaTick(dt){
       else { u.moving = 0;
         const dy = u.lane - u.y;                 // drift back into its own lane
         if (Math.abs(dy) > 0.05) u.y += (dy > 0 ? 1 : -1) * Math.min(Math.abs(dy), unitSpeed(u) * 0.3 * dt);
+      }
+    }
+  }
+  // Give each other room. Everything targets the nearest foe, so without this
+  // a wave converges into a single stack and you cannot tell three animals from
+  // one. Separation only in depth — the x line is the fight and must not move.
+  for (let i = 0; i < F.units.length; i++){
+    const a2 = F.units[i];
+    if (!a2.alive) continue;
+    for (let j = i + 1; j < F.units.length; j++){
+      const b2 = F.units[j];
+      if (!b2.alive) continue;
+      if (Math.abs(b2.x - a2.x) > 5) continue;
+      const dy = b2.y - a2.y, near = 3.4;
+      if (Math.abs(dy) < near){
+        const push = (near - Math.abs(dy)) * 0.5 * (dy >= 0 ? 1 : -1) * Math.min(1, dt * 7);
+        a2.y = clamp(a2.y - push, 0, AH);
+        b2.y = clamp(b2.y + push, 0, AH);
       }
     }
   }
@@ -4030,6 +4057,10 @@ const THREAT_TAG = {
   leech: ['LCH', '#ff8ad4'], thorns: ['THRN', '#ffb0e0'], rally: ['RLY', '#c8b6ff'],
 };
 let pitFx = [];
+/* The dirt is stamped INTO the pit rather than blended over it: a DOM layer
+   with mix-blend-mode above a canvas that repaints at 60fps forces the canvas
+   into its own compositor layer and re-blends the union every frame. */
+let pitGrime = null, GRIME_CV = null;
 function pitAdd(o){ if (pitFx.length < 90) pitFx.push(o); }
 
 /* The pit is drawn back-to-front: sky, wall, sand, then everything standing on
@@ -4058,14 +4089,26 @@ function drawPit(){
   sky.addColorStop(0, '#101a2c'); sky.addColorStop(0.6, '#1d2438'); sky.addColorStop(1, '#33304a');
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
   // a fat cartoon moon, low and to the left, and a handful of stars
-  ctx.fillStyle = 'rgba(255,246,214,.16)';
-  ctx.beginPath(); ctx.arc(W * 0.20, horizon * 0.30, W * 0.085, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,246,214,.92)';
-  ctx.beginPath(); ctx.arc(W * 0.20, horizon * 0.30, W * 0.048, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.55)';
-  for (let i = 0; i < 22; i++){
-    const sx = ((i * 97) % 100) / 100 * W, sy = ((i * 53) % 100) / 100 * horizon * 0.8;
-    ctx.fillRect(sx, sy, 2, 2);
+  const mx = W * 0.20, my = horizon * 0.30, mr = W * 0.050;
+  const halo = ctx.createRadialGradient(mx, my, mr * 0.9, mx, my, mr * 3.4);
+  halo.addColorStop(0, 'rgba(214,226,255,.20)'); halo.addColorStop(1, 'transparent');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(mx, my, mr * 3.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f7f1dc';
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+  // a hard cool rim on the shadowed side, or the moon is a sticker
+  ctx.strokeStyle = 'rgba(150,170,215,.75)'; ctx.lineWidth = Math.max(1.5, W * 0.005);
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0.6, 3.5); ctx.stroke();
+  ctx.fillStyle = 'rgba(196,190,168,.5)';
+  ctx.beginPath(); ctx.arc(mx - mr * 0.28, my - mr * 0.2, mr * 0.2, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + mr * 0.3, my + mr * 0.28, mr * 0.14, 0, 7); ctx.fill();
+  // stars at three brightnesses so the field has depth instead of being a grid
+  for (let i = 0; i < 46; i++){
+    const sx = tnoise(i * 3.1) * W, sy = tnoise(i * 7.7) * horizon * 0.86;
+    const b = tnoise(i * 11.3);
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + b * 0.6).toFixed(2) + ')';
+    const r = b > 0.86 ? 2.2 : 1.2;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill();
   }
 
   // --- the fence they built round the pit ----------------------------------
@@ -4073,10 +4116,24 @@ function drawPit(){
   const wall = ctx.createLinearGradient(0, wallTop, 0, horizon);
   wall.addColorStop(0, '#3b2a1c'); wall.addColorStop(1, '#241a12');
   ctx.fillStyle = wall; ctx.fillRect(0, wallTop, W, horizon - wallTop);
-  ctx.strokeStyle = 'rgba(10,8,6,.55)'; ctx.lineWidth = Math.max(1, W * 0.004);
-  for (let x = 0; x <= W; x += W * 0.075){
-    ctx.beginPath(); ctx.moveTo(x, wallTop); ctx.lineTo(x, horizon); ctx.stroke();
+  // planks of unequal width, one of them leaning — an evenly spaced comb of
+  // black lines is a fence in a diagram, not a fence somebody built
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, wallTop, W, horizon - wallTop); ctx.clip();
+  let px2 = 0, k = 0;
+  while (px2 < W + W * 0.1){
+    const wq = W * (0.052 + tnoise(k * 5.7) * 0.048);
+    const lean = (tnoise(k * 9.1) > 0.86 ? (tnoise(k * 2.3) - 0.5) * W * 0.02 : 0);
+    ctx.fillStyle = 'rgba(255,232,190,' + (0.02 + tnoise(k * 3.3) * 0.05).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.moveTo(px2, horizon); ctx.lineTo(px2 + lean, wallTop);
+    ctx.lineTo(px2 + wq + lean, wallTop); ctx.lineTo(px2 + wq, horizon);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(8,6,4,.62)'; ctx.lineWidth = Math.max(1.4, W * 0.005);
+    ctx.beginPath(); ctx.moveTo(px2, horizon); ctx.lineTo(px2 + lean, wallTop); ctx.stroke();
+    px2 += wq; k++;
   }
+  ctx.restore();
   ctx.fillStyle = '#4a361f'; ctx.fillRect(0, wallTop, W, Math.max(2, H * 0.012));
   // torches along the top of the fence, breathing
   const flick = 0.72 + 0.28 * Math.sin((F ? F.t : 0) * 7);
@@ -4104,6 +4161,38 @@ function drawPit(){
     ctx.fillRect(rx, ry, W * 0.03 * (0.4 + (i % 5) / 5), Math.max(1, H * 0.004));
   }
   ctx.globalAlpha = 1;
+  // straw drifted up against the foot of the fence
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, horizon, W, (H - horizon) * 0.16); ctx.clip();
+  for (let i = 0; i < 90; i++){
+    const sx = tnoise(i * 4.7) * W, sy = horizon + tnoise(i * 8.3) * (H - horizon) * 0.14;
+    const len = W * (0.012 + tnoise(i * 2.9) * 0.026), ang = -0.35 + tnoise(i * 6.1) * 0.7;
+    ctx.strokeStyle = tnoise(i * 12.7) > 0.5 ? 'rgba(214,182,104,.34)' : 'rgba(70,48,14,.34)';
+    ctx.lineWidth = Math.max(1, W * 0.003);
+    ctx.beginPath(); ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + Math.cos(ang) * len, sy + Math.sin(ang) * len * 0.4); ctx.stroke();
+  }
+  ctx.restore();
+  // wet patches where they come in and where they die
+  for (const wp of [[0.10, 0.72, 0.16], [0.90, 0.62, 0.13], [0.52, 0.86, 0.20]]){
+    const g3 = ctx.createRadialGradient(W * wp[0], horizon + (H - horizon) * wp[1], 2,
+      W * wp[0], horizon + (H - horizon) * wp[1], W * wp[2]);
+    g3.addColorStop(0, 'rgba(30,20,8,.34)'); g3.addColorStop(1, 'transparent');
+    ctx.fillStyle = g3;
+    ctx.fillRect(0, horizon, W, H - horizon);
+  }
+  // the dirt itself
+  if (!pitGrime && typeof ctx.createPattern === 'function' && GRIME_CV)
+    pitGrime = ctx.createPattern(GRIME_CV, 'repeat');
+  if (pitGrime){
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, horizon, W, H - horizon); ctx.clip();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = pitGrime;
+    ctx.fillRect(0, horizon, W, H - horizon);
+    ctx.restore();
+  }
   // the lit ring the fight happens inside
   const lit = ctx.createRadialGradient(W * 0.5, horizon + (H - horizon) * 0.55, W * 0.05,
     W * 0.5, horizon + (H - horizon) * 0.55, W * 0.66);
@@ -4111,13 +4200,18 @@ function drawPit(){
   ctx.fillStyle = lit; ctx.fillRect(0, horizon, W, H - horizon);
 
   // --- the two ends: the nest you are holding, the door they come through --
-  const nestG = ctx.createLinearGradient(0, 0, W * 0.14, 0);
-  nestG.addColorStop(0, 'rgba(166,255,94,.30)'); nestG.addColorStop(1, 'transparent');
-  ctx.fillStyle = nestG; ctx.fillRect(0, horizon, W * 0.14, H - horizon);
-  const doorG = ctx.createLinearGradient(W, 0, W * 0.84, 0);
-  doorG.addColorStop(0, 'rgba(230,80,50,' + (0.26 + 0.12 * flick).toFixed(2) + ')');
+  // Warm, and bleeding a long way in. A hard saturated bar butted against the
+  // dirt read as a compositing bug rather than as light spilling out of a gate.
+  const nestG = ctx.createLinearGradient(0, 0, W * 0.30, 0);
+  nestG.addColorStop(0, 'rgba(196,255,130,.30)');
+  nestG.addColorStop(0.35, 'rgba(150,210,90,.10)');
+  nestG.addColorStop(1, 'transparent');
+  ctx.fillStyle = nestG; ctx.fillRect(0, horizon, W * 0.30, H - horizon);
+  const doorG = ctx.createLinearGradient(W, 0, W * 0.70, 0);
+  doorG.addColorStop(0, 'rgba(255,140,80,' + (0.26 + 0.12 * flick).toFixed(2) + ')');
+  doorG.addColorStop(0.35, 'rgba(210,90,50,.10)');
   doorG.addColorStop(1, 'transparent');
-  ctx.fillStyle = doorG; ctx.fillRect(W * 0.84, horizon, W * 0.16, H - horizon);
+  ctx.fillStyle = doorG; ctx.fillRect(W * 0.70, horizon, W * 0.30, H - horizon);
   // The thing you are defending has to BE somewhere. A straw nest with as many
   // eggs left in it as you have health, down at the near end of the sand.
   const ny = horizon + (H - horizon) * 0.84, nw = W * 0.20;
@@ -4189,14 +4283,28 @@ function drawPit(){
     // a little dust off the heels of anything running
     if (u.moving && ((u.id * 7 + Math.floor(F.t * 14)) % 5 === 0))
       pitAdd({ k: 'dust', x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
-    const top = y - h - SPR * 0.04;
-    // health, and only when it matters
-    if (u.hp < u.max){
-      const bw = SPR * 0.52 * sc, bh = Math.max(3, H * 0.008);
-      const bx = x - bw / 2, by = top;
-      ctx.fillStyle = 'rgba(8,12,6,.9)'; ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
-      ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e05a4a';
-      ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh);
+    const top = y - Math.min(h, SPR * 0.68) - SPR * 0.05;
+    // Health, ALWAYS. It used to appear only once something was hurt, which
+    // means the one moment you most want to compare two animals — before they
+    // reach each other — is the one moment neither has a bar.
+    const bw = SPR * 0.50 * sc, bh = Math.max(3, H * 0.0075);
+    const bx = x - bw / 2, by = top;
+    ctx.fillStyle = 'rgba(6,9,4,.92)';
+    ctx.fillRect(bx - 1.6, by - 1.6, bw + 3.2, bh + 3.2);
+    ctx.fillStyle = u.side === 'us' ? '#2a3a1a' : '#3a1a16';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e85a44';
+    ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh);
+    ctx.fillStyle = 'rgba(255,255,255,.3)';
+    ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh * 0.4);
+    // the leader gets a crown notch on its bar; nothing else needs a label,
+    // because the bar colour and the tinted pool under the feet already say
+    // whose it is and six word-tags stacked into an unreadable pile
+    if (u.c.leader){
+      ctx.fillStyle = '#ffd34d';
+      ctx.beginPath();
+      ctx.moveTo(x - bw * 0.16, by - 2); ctx.lineTo(x, by - bh * 1.9);
+      ctx.lineTo(x + bw * 0.16, by - 2); ctx.closePath(); ctx.fill();
     }
     // What this one DOES, in three letters. You cannot read a keyword off a
     // procedural animal, and finding out by being poisoned is too late.
@@ -5325,13 +5433,17 @@ function wrapDraw(g, size, at){
     g.save(); g.translate(ox * size, oy * size); at(); g.restore();
   }
 }
-function texTile(size, paint){
+function texCanvas(size, paint){
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const g = cv.getContext && cv.getContext('2d');
-  if (!g || !g.createImageData) return '';
-  try { paint(g, size); return cv.toDataURL ? cv.toDataURL('image/png') : ''; }
-  catch (e){ return ''; }
+  if (!g || !g.createImageData) return null;
+  try { paint(g, size); return cv; } catch (e){ return null; }
+}
+function texTile(size, paint){
+  const cv = texCanvas(size, paint);
+  if (!cv) return '';
+  try { return cv.toDataURL ? cv.toDataURL('image/png') : ''; } catch (e){ return ''; }
 }
 /** Deterministic value noise, so the grain is the same every load. */
 function tnoise(i){ const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -5370,6 +5482,15 @@ function bakeTextures(){
 
   // GRIME — fine speckle, the one overlay that goes on everything. Low alpha so
   // it reads as dirt in the surface rather than as static on top of it.
+  GRIME_CV = texCanvas(64, (g, n) => {
+    const img = g.createImageData(n, n), d = img.data;
+    for (let i = 0; i < n * n; i++){
+      const v = tnoise(i), w = tnoise(i + 9871);
+      d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v < 0.52 ? 0 : 255;
+      d[i * 4 + 3] = Math.round((w * w) * 118);
+    }
+    g.putImageData(img, 0, 0);
+  });
   set('--tex-grime', texTile(64, (g, n) => {
     const img = g.createImageData(n, n), d = img.data;
     for (let i = 0; i < n * n; i++){
