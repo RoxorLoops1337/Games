@@ -81,28 +81,67 @@
   .scrhead .count small{ font-size:15px; color:var(--dim); }
 
   /* ---------- buttons ---------- */
-  .btn{ font-family:inherit; font-weight:800; letter-spacing:1.2px; font-size:var(--t-body);
-    padding:11px 20px; border:none; border-radius:11px; cursor:pointer; color:#0e1a0c;
-    background:linear-gradient(180deg,#c8ff7d,#7cc93a);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 4px 0 #4e8020, 0 8px 18px rgba(0,0,0,.45);
-    transition:transform .08s ease, box-shadow .08s ease, filter .12s ease; }
-  .btn:hover{ filter:brightness(1.07); }
-  .btn:active{ transform:translateY(3px); box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 1px 0 #4e8020; }
-  /* One button per screen may carry a bevel, and it must be the one you want
-     pressed. The escape hatch is never it. */
-  #wild .btn.alt, #cull .btn.alt, #over .btn.alt{ background:none; box-shadow:none;
-    border:1px solid #2c4028; color:var(--dim); font-weight:700; }
-  #wild .btn.alt:hover, #cull .btn.alt:hover, #over .btn.alt:hover{ color:#cfe0c2; border-color:#3f5c39; }
+  /* ======================= BUTTONS =======================
+     One system, three weights. Everything is at least 46px tall, because a
+     thumb is about 9mm and this is a phone game. Primary carries a bevel and a
+     glow; secondary is a quiet slab; chips are for inline actions. A disabled
+     button stays a solid object — it dims, it never becomes a dashed ghost,
+     because a ghost reads as broken rather than as "not yet". */
+  .btn{ position:relative; font-family:inherit; font-weight:900; letter-spacing:1.6px;
+    font-size:15px; min-height:46px; padding:12px 22px; border:none; border-radius:13px;
+    cursor:pointer; color:#12210c; text-transform:uppercase; touch-action:manipulation;
+    -webkit-user-select:none; user-select:none; white-space:nowrap;
+    background:linear-gradient(180deg,#d4ff8c 0%,#a6ee55 45%,#79c634 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.65),
+      inset 0 -2px 0 rgba(40,80,20,.35),
+      0 4px 0 #4a7c1e,
+      0 8px 20px rgba(0,0,0,.5),
+      0 0 26px rgba(150,240,90,.20);
+    transition:transform .07s ease, box-shadow .07s ease, filter .12s ease; }
+  .btn::after{ content:''; position:absolute; inset:1px 1px 45%; border-radius:12px 12px 40% 40%;
+    background:linear-gradient(180deg, rgba(255,255,255,.28), transparent); pointer-events:none; }
+  .btn:hover{ filter:brightness(1.06); }
+  .btn:active{ transform:translateY(4px);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(40,80,20,.3), 0 0 0 #4a7c1e,
+      0 2px 8px rgba(0,0,0,.45); }
+  .btn[disabled]{ cursor:not-allowed; color:#5c6b54;
+    background:linear-gradient(180deg,#38452f,#26301f);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 3px 0 #1a2214, 0 5px 12px rgba(0,0,0,.4);
+    transform:none; }
+  .btn[disabled]::after{ opacity:.14; }
+
+  /* secondary: the same object, quieter material */
+  .btn.alt{ color:#e6f4dc;
+    background:linear-gradient(180deg,#3f5340 0%,#2c3c2c 45%,#1e2a1e 100%);
+    box-shadow:inset 0 1px 0 rgba(190,240,170,.18), inset 0 -2px 0 rgba(0,0,0,.3),
+      0 4px 0 #152014, 0 6px 14px rgba(0,0,0,.45); }
+  .btn.alt:active{ transform:translateY(4px);
+    box-shadow:inset 0 1px 0 rgba(190,240,170,.12), 0 0 0 #152014, 0 2px 6px rgba(0,0,0,.4); }
+
+  /* the breeding colour, for anything that costs you an animal */
+  .btn.pinky{ color:#2a0c1e;
+    background:linear-gradient(180deg,#ffc0e8 0%,#ff8ad4 45%,#e05bb0 100%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 0 rgba(120,20,80,.3),
+      0 4px 0 #9c2f6d, 0 8px 20px rgba(0,0,0,.5), 0 0 26px rgba(255,140,210,.22); }
+  .btn.pinky:active{ transform:translateY(4px);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 0 0 #9c2f6d, 0 2px 8px rgba(0,0,0,.45); }
+
+  /* chips: inline actions that are not the point of the screen */
+  .btn.sm{ font-size:12px; letter-spacing:1.2px; min-height:38px; padding:9px 14px;
+    border-radius:10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 #4a7c1e,
+      0 4px 10px rgba(0,0,0,.4); }
+  .btn.alt.sm{ box-shadow:inset 0 1px 0 rgba(190,240,170,.16), 0 3px 0 #152014,
+      0 4px 10px rgba(0,0,0,.4); }
+  .btn.sm::after{ inset:1px 1px 50%; }
+  .btn.sm:active{ transform:translateY(3px); }
+
+  /* the docked footer every screen ends on */
+  .footer{ flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    gap:8px; flex-wrap:wrap; padding:10px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .footer .btn{ flex:1 1 auto; max-width:100%; }
+  .footer .btn.sm{ flex:0 1 auto; }
   .btn.busy{ filter:grayscale(.55) brightness(.78); }   /* mid-turn: tap = skip, not end */
-  .btn.alt{ color:#f0ffe6; background:linear-gradient(180deg,#445c46,#26362a);
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.16), 0 4px 0 #16211a, 0 8px 16px rgba(0,0,0,.4); }
-  .btn.pinky{ color:#2a0c1e; background:linear-gradient(180deg,#ffb0e0,#ff69c0);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 4px 0 #a03574, 0 8px 18px rgba(0,0,0,.45); }
-  .btn.sm{ font-size:12px; padding:8px 13px; border-radius:9px; letter-spacing:1px; }
-  /* A disabled primary keeps its shape and loses only its fill: "not yet", never
-     "broken". Grayscaling the pink CTA produced the ugliest colour in the file. */
-  .btn[disabled]{ filter:none; cursor:not-allowed; background:transparent; color:#5f7455;
-    border:1px dashed #33492c; box-shadow:none; }
   .btn[disabled]:hover{ filter:none; }
 
   /* ---------- title ----------
@@ -310,11 +349,12 @@
     z-index:3; pointer-events:none; box-shadow:0 -16px 22px -9px rgba(0,0,0,.95);
     background:linear-gradient(90deg,transparent,rgba(166,255,94,.22),transparent); }
   .deckwrap > .grid{ position:relative; z-index:1; flex:1 1 auto; min-height:0;
-    overflow-y:auto; padding:16px 12px 24px; scroll-snap-type:y proximity; }
+    overflow-y:auto; padding:16px 12px 46px; scroll-snap-type:y proximity;
+    overscroll-behavior:contain; }
   /* the last row FADES rather than being sliced — at EVERY width */
   .deckwrap.more > .grid{
-    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 44px),transparent);
-    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 44px),transparent); }
+    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 30px),transparent);
+    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 30px),transparent); }
   .deckwrap .card{ scroll-snap-align:start; }
   .deckwrap > .grid > .card.orphan{ grid-column:1 / -1; justify-self:center; }
   .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr));
@@ -327,7 +367,8 @@
   .foeprev{ display:flex; align-items:center; gap:12px; }
   .foeprev .fe{ display:block; width:62px; height:auto; flex:0 0 auto;
     filter:drop-shadow(0 4px 6px rgba(0,0,0,.6)); }
-  .foeprev h3{ font-size:18px; letter-spacing:.4px; }
+  .foeprev h3{ font-size:18px; letter-spacing:.4px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
   .footer{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding-top:10px;
     justify-content:center; flex-wrap:wrap; }
 
@@ -371,8 +412,8 @@
 
   /* ================= THE TOWER (9:16 portrait) =================
      Three floors and a nest on top. They arrive at the door and climb. */
-  .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:3px; min-height:0;
-    position:relative; padding:4px 6px 2px; }
+  .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:4px; min-height:0;
+    position:relative; padding:5px 8px 0; }
   .nestbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:5px 10px;
     border-radius:12px 12px 4px 4px; background:linear-gradient(180deg,#2a2016,#18140e);
     border:2px solid #6b5324; box-shadow:0 4px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,140,.14); }
@@ -380,8 +421,8 @@
   .nestbar .neggs{ font-size:15px; line-height:1; letter-spacing:-2px; }
   .nestbar .nhp{ margin-left:auto; font-size:17px; font-weight:900; color:#ffd34d;
     font-variant-numeric:tabular-nums; }
-  .tower{ flex:1 1 auto; display:flex; flex-direction:column; gap:4px; min-height:0; }
-  .flr{ flex:1 1 0; min-height:66px; max-height:132px; position:relative; display:flex;
+  .tower{ flex:1 1 auto; display:flex; flex-direction:column; gap:5px; min-height:0; }
+  .flr{ flex:1 1 0; min-height:70px; max-height:none; position:relative; display:flex;
     align-items:center; gap:4px; padding:3px 4px 3px 22px; border-radius:8px;
     background:linear-gradient(180deg, rgba(30,46,26,.55), rgba(12,20,12,.75));
     border:1px solid #22331e; box-shadow:inset 0 1px 0 rgba(180,255,140,.05); }
@@ -391,7 +432,12 @@
     writing-mode:vertical-rl; font-size:8px; letter-spacing:2px; font-weight:800; color:#4f6644; }
   .flr.ground .flrno{ color:#8a5a44; }
   .half{ flex:1 1 0; min-width:0; display:flex; gap:3px; align-items:center; }
-  .half.them{ justify-content:flex-end; }
+  .half.them{ justify-content:flex-end; position:relative; border-radius:7px; }
+  /* their side is ground they want, not a gap: hatch it so it reads as reserved */
+  .half.them::before{ content:''; position:absolute; inset:2px; border-radius:7px; pointer-events:none;
+    opacity:.5;
+    background:repeating-linear-gradient(-45deg, rgba(140,60,40,.10) 0 5px, transparent 5px 11px); }
+  .flr.ground .half.them::before{ opacity:.9; }
   .half.us::after{ content:''; }
   .flr::before{ content:''; position:absolute; left:50%; top:6px; bottom:6px; width:1px;
     background:linear-gradient(180deg,transparent,#2c4326,transparent); }
@@ -423,9 +469,9 @@
   .hole.open{ border-color:rgba(166,255,94,.32); cursor:pointer;
     background:radial-gradient(circle at 50% 50%, rgba(166,255,94,.07), transparent 70%); }
   .hole.open span{ font-size:17px; color:#5f8a48; font-weight:700; }
-  .hole.quiet{ border-color:#2a1c18; opacity:.45; width:40px; }
-  .gate{ flex:0 0 auto; text-align:center; font-size:9.5px; letter-spacing:2px; font-weight:800;
-    text-transform:uppercase; color:#8a5a44; padding:2px 0 0; }
+  .hole.quiet{ border:none; opacity:1; width:auto; flex:1 1 auto; }
+  .gate{ flex:0 0 auto; text-align:center; font-size:10px; letter-spacing:2.4px; font-weight:800;
+    text-transform:uppercase; color:#a9714f; padding:4px 0 2px; }
   .gate b{ color:#ffb9a6; }
   @keyframes lungeUp{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(-8px) scale(1.06)} }
   @keyframes lungeDown{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(8px) scale(1.06)} }
@@ -448,7 +494,10 @@
   .verdict .vsub{ font-size:14px; font-weight:800; color:#cfe0c2; letter-spacing:.4px; }
   .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
-  .benchwrap{ flex:0 0 auto; border-top:1px solid #1e2c1a; padding-top:4px; }
+  .benchwrap{ position:relative; flex:0 0 auto; border-top:1px solid #22331e; padding-top:5px;
+    background:linear-gradient(180deg, rgba(20,32,18,.55), transparent 60%); }
+  .benchwrap::after{ content:''; position:absolute; right:0; top:0; bottom:0; width:26px;
+    pointer-events:none; background:linear-gradient(90deg, transparent, #0b120c 78%); }
   /* the bench: your barn, scrolling sideways under the field */
   .handrow{ display:flex; gap:6px; padding:4px 6px 2px; overflow-x:auto; overflow-y:hidden;
     scrollbar-width:none; scroll-snap-type:x proximity; }
@@ -592,7 +641,8 @@
     box-shadow:inset 0 1px 0 rgba(255,170,170,.16), inset 0 0 0 2px #4a2626,
       inset 0 0 60px rgba(255,90,90,.05), 0 26px 60px rgba(0,0,0,.6); }
 
-  #mute{ position:absolute; right:8px; top:8px; width:32px; height:32px; border-radius:9px;
+  #mute{ position:absolute; right:9px; top:calc(8px + env(safe-area-inset-top));
+    width:36px; height:36px; border-radius:11px;
     border:1px solid #2e4530; background:rgba(10,18,10,.7); color:var(--lime); font-size:14px;
     cursor:pointer; font-family:inherit; z-index:20; }
   .scrollcap{ overflow-y:auto; }
@@ -827,12 +877,14 @@
     /* the nest header was shredding into seven lines */
     /* the hazard is a chip that sits WITH the foe's stats, not a full-width
        slab that outweighs the screen's actual call to action */
-    .foeprev{ display:grid; grid-template-columns:auto 1fr auto;
-      grid-template-areas:'em info btn' 'haz haz haz'; gap:6px 10px; align-items:center; }
+    /* the chip shared a row with the foe's name and squeezed it to two lines;
+       it drops to its own row and stays a chip rather than becoming a slab */
+    .foeprev{ display:grid; grid-template-columns:auto 1fr;
+      grid-template-areas:'em info' 'haz haz' 'btn btn'; gap:6px 10px; align-items:center; }
     .foeprev .fe{ grid-area:em; width:56px; }
     .foeprev > .fp{ grid-area:info; min-width:0; }
     #nFoeHaz{ grid-area:haz; }
-    #bHazard{ grid-area:btn; width:auto; justify-self:end; }
+    #bHazard{ grid-area:btn; width:auto; justify-self:end; margin-top:2px; }
     #nFoeStats{ white-space:nowrap; }
     .scrhead h2{ font-size:19px; }
     .scrhead .count{ font-size:22px; }
@@ -950,14 +1002,14 @@
      On the Cull the loudest thing on screen was a DISABLED slab while the two
      live actions were grey outlines. Now emphasis follows what is pressable. */
   #cull .footer{ gap:8px; }
-  #bCull{ max-width:70%; }
-  #bCull[disabled]{ opacity:.55; font-size:12px; padding:9px 16px; }
+  #bCull{ flex:1 1 100%; }
+  #bCull[disabled]{ opacity:.8; }
   /* KEEP THEM ALL is the real CTA until a card is chosen, and steps back after */
-  #cull.armed #bCullSkip{ background:none; box-shadow:none; border:1px solid #2c4028;
-    color:var(--dim); font-weight:700; }
-  #cull:not(.armed) #bCullSkip{ color:#0e1a0c; border:none; font-weight:800;
-    background:linear-gradient(180deg,#c8ff7d,#7cc93a);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 4px 0 #4e8020, 0 8px 18px rgba(0,0,0,.45); }
+  /* KEEP THEM ALL leads until a card is chosen, then steps back and lets the
+     cull button lead — emphasis follows whichever action you are actually taking. */
+  #cull.armed #bCullSkip{ color:#e6f4dc;
+    background:linear-gradient(180deg,#3f5340 0%,#2c3c2c 45%,#1e2a1e 100%);
+    box-shadow:inset 0 1px 0 rgba(190,240,170,.18), 0 4px 0 #152014, 0 6px 14px rgba(0,0,0,.45); }
   /* the hazard is an optional side bet, not the biggest object on the Nest */
   #bHazard{ font-size:11px; padding:6px 11px; letter-spacing:.8px; line-height:1.25; }
   #nest .footer #bFight{ font-size:15px; padding:13px 24px; letter-spacing:1.6px; }
@@ -4390,9 +4442,11 @@ function resemblance(wrap, res){
         ? { left: cr.left + cr.width / 2 - 1, top: cr.top - 30, width: 2, height: 2 }
         : pr[who === 'a' ? 0 : 1];
       const nm = who === 'new' ? 'NEW' : shortName(who === 'a' ? h.a.name : h.b.name) + '’s ' + sp.lbl;
-      // the caption lives in the card's lower band, stacked upward, never on
-      // the eyes of the thing it is annotating
-      const lab0 = { x: kr.left + 4, y: kr.top + kr.height - 28 - i * 24 };
+      // The caption stacks DOWN the card's art, which is the one band with
+      // nothing to read on it. The lower band carries the name, the stats and
+      // the trait tab, and a label parked there covered all three.
+      const cvr = rectOf(wrap.querySelector && wrap.querySelector('canvas')) || kr;
+      const lab0 = { x: cvr.left + 5, y: cvr.top + 5 + i * 19 };
       rline(src.left + src.width / 2, src.top + src.height / 2,
         cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', lab0);
       tone(who === 'new' ? 980 : 620 + i * 60, 0.07, { type: 'sine', vol: 0.035 });
