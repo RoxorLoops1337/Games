@@ -67,7 +67,12 @@
   .instr b{ font-weight:800; }
 
   /* inline icon set — palette enforced by `color`, zero external assets */
-  .i{ width:1em; height:1em; fill:currentColor; vertical-align:-.12em; margin-right:2px; }
+  /* Icons are drawn in three tones off ONE colour, so a single `color` still
+     controls them but they read as objects with a lit side and a shadow side
+     rather than as flat silhouettes. */
+  .i{ width:1.05em; height:1.05em; vertical-align:-.16em; margin-right:2px;
+    fill:currentColor; overflow:visible; }
+  .i.big{ width:1.5em; height:1.5em; vertical-align:-.34em; }
   #isprite{ display:none; }
 
   /* ---------- shared screen header ---------- */
@@ -80,6 +85,129 @@
     color:#cfe0c2; align-self:center; }
   .scrhead .count small{ font-size:15px; color:var(--dim); }
 
+  /* ---- CARVED TYPE ----
+     There is no bundled display face, so the display voice is made instead of
+     chosen: every headline is STROKED FIRST and filled second (paint-order),
+     which renders as a mark cut out of a dark ground rather than as bold text
+     with a drop shadow, and the shadow underneath it is three plies deep so it
+     reads as an extruded object. */
+  .cut{ -webkit-text-stroke:3px #0d1607; paint-order:stroke fill; }
+  h1, h2, .vhead, .banner, .btn{ paint-order:stroke fill; }
+  h2, .vhead{ -webkit-text-stroke:2.5px #0d1607; }
+  .btn{ -webkit-text-stroke:2.5px rgba(10,16,6,.75); }
+  .btn.pinky{ -webkit-text-stroke:2.5px rgba(70,14,44,.6); }
+
+  /* ======================= MATERIALS =======================
+     Every surface in this game is made of something. The tiles behind these
+     classes are baked once into data URIs at boot (see bakeTextures) and used
+     as plain background-images, so nothing here costs a filter pass.
+
+     One rule holds the whole thing together: the pit is lit by TALLOW TORCHES,
+     so every rim light in the UI is warm and every underside is cool. It used
+     to be lime on top of everything, which read as backlit plastic. */
+  :root{
+    --rim-warm:rgba(255,222,164,.34);
+    --rim-cool:rgba(70,110,150,.16);
+    --cut:rgba(12,18,10,.9);          /* the dark line where a plank was cut */
+    --wood-hi:#5e6d3c; --wood-mid:#45532c; --wood-lo:#2b361b;
+    --iron-hi:#454f59; --iron-mid:#272d34; --iron-lo:#171b20;
+    --bone-hi:#f6eed6; --bone-mid:#ddceaa; --bone-lo:#a08c60; --bone-shade:#7d6b45;
+  }
+  /* GRIME — the one overlay that goes on everything. Offset per element so two
+     panels side by side never show the same speck in the same place. */
+  .gr{ position:relative; isolation:isolate; }
+  .gr::before{ content:''; position:absolute; inset:0; border-radius:inherit;
+    pointer-events:none; z-index:0; background-image:var(--tex-grime);
+    background-size:64px 64px; mix-blend-mode:multiply; opacity:var(--gr-a,.45); }
+  .gr > *{ position:relative; z-index:1; }
+  .gr:nth-of-type(2n)::before{ background-position:37px 21px; }
+  .gr:nth-of-type(3n)::before{ background-position:19px 43px; transform:scaleX(-1); }
+  .gr--soft{ --gr-a:.24; } .gr--hard{ --gr-a:.7; }
+
+  /* PAINTED WOOD — grain under paint, an arris lit from the torches, and real
+     thickness under it. This is what every big panel and button is made of. */
+  .wood{ position:relative; isolation:isolate;
+    background-color:var(--wood-mid);
+    background-image:
+      radial-gradient(ellipse 140% 90% at 30% 6%, rgba(255,240,200,.10), transparent 60%),
+      linear-gradient(180deg, var(--wood-hi) 0%, var(--wood-mid) 40%, var(--wood-lo) 100%);
+    box-shadow:
+      inset 0 1px 0 var(--rim-warm),
+      inset 0 -2px 0 rgba(0,0,0,.45),
+      inset 0 0 0 1px var(--cut),
+      0 3px 0 #1b1207, 0 10px 22px -8px rgba(0,0,0,.72); }
+  .wood::before{ content:''; position:absolute; inset:0; border-radius:inherit;
+    pointer-events:none; z-index:0;
+    background-image:var(--tex-wood), var(--tex-grime);
+    background-size:96px 96px, 64px 64px;
+    background-blend-mode:multiply;
+    mix-blend-mode:multiply; opacity:.55; }
+  .wood > *{ position:relative; z-index:1; }
+
+  /* HAMMERED IRON — a dark value carrying many small speculars. The dent tile
+     is a normal map lit from one lamp; overlay is what makes it metal. */
+  .iron{ position:relative; isolation:isolate;
+    background-color:var(--iron-mid);
+    background-image:linear-gradient(172deg, var(--iron-hi) 0%, var(--iron-mid) 42%, var(--iron-lo) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(214,230,242,.20),
+      inset 0 -2px 0 rgba(0,0,0,.7),
+      inset 0 0 0 1px #0b0e11,
+      0 3px 0 #0d1013, 0 8px 18px -6px rgba(0,0,0,.8); }
+  .iron::before{ content:''; position:absolute; inset:0; border-radius:inherit;
+    pointer-events:none; z-index:0; background-image:var(--tex-iron);
+    background-size:96px 96px; mix-blend-mode:overlay; opacity:.65; }
+  .iron > *{ position:relative; z-index:1; }
+  /* RIVETS in the corners: four background layers, no elements */
+  .riveted{ background-image:
+      radial-gradient(circle 4px at 9px 9px, #6e7a84 0 38%, #2b3138 55%, rgba(0,0,0,.75) 78%, transparent 82%),
+      radial-gradient(circle 4px at calc(100% - 9px) 9px, #6e7a84 0 38%, #2b3138 55%, rgba(0,0,0,.75) 78%, transparent 82%),
+      radial-gradient(circle 4px at 9px calc(100% - 9px), #6e7a84 0 38%, #2b3138 55%, rgba(0,0,0,.75) 78%, transparent 82%),
+      radial-gradient(circle 4px at calc(100% - 9px) calc(100% - 9px), #6e7a84 0 38%, #2b3138 55%, rgba(0,0,0,.75) 78%, transparent 82%);
+    background-repeat:no-repeat; }
+
+  /* BONE — the tell is that bone shadows are OCHRE, never grey, and the
+     specular is one hard narrow band along the top arris. */
+  .bone{ color:#3a2f16; background-color:var(--bone-mid);
+    background-image:
+      radial-gradient(ellipse 90% 55% at 34% 10%, rgba(255,255,255,.5), transparent 60%),
+      linear-gradient(178deg, var(--bone-hi) 0%, var(--bone-mid) 46%, var(--bone-lo) 100%);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,255,255,.7),
+      inset 0 -3px 5px -2px rgba(125,107,69,.85),
+      inset 0 0 0 1px rgba(90,74,44,.55),
+      0 2px 0 #6d5c3a, 0 5px 10px -3px rgba(0,0,0,.6);
+    text-shadow:0 1px 0 rgba(255,255,255,.45); }
+
+  /* STRAW — three combs at slightly different angles, because straw is a pile
+     of stalks that do not line up, plus the real fibre tile on top */
+  .straw{ position:relative; isolation:isolate;
+    background-color:#8a6c28;
+    background-image:
+      var(--tex-straw),
+      repeating-linear-gradient(83deg, rgba(217,187,102,.5) 0 1.5px, rgba(125,98,34,.5) 1.5px 4.5px, transparent 4.5px 7px),
+      repeating-linear-gradient(95deg, rgba(200,164,78,.4) 0 2px, transparent 2px 9px),
+      linear-gradient(180deg,#6d5420 0%,#4a3814 62%,#2e2210 100%);
+    background-size:72px 72px, auto, auto, auto;
+    box-shadow:
+      inset 0 1px 0 rgba(255,232,160,.30),
+      inset 0 -8px 14px -8px rgba(0,0,0,.72),
+      0 4px 14px rgba(0,0,0,.5); }
+
+  /* PARCHMENT / HIDE — big uneven staining first, fibre second */
+  .parch{ position:relative; isolation:isolate; color:#3a3222;
+    background-color:#d9c8a1;
+    background-image:
+      var(--tex-hide),
+      radial-gradient(ellipse 46% 34% at 12% 18%, rgba(138,111,60,.24), transparent 68%),
+      radial-gradient(ellipse 62% 28% at 44% 96%, rgba(96,74,36,.30), transparent 72%),
+      linear-gradient(174deg,#e7d9b6 0%,#d9c8a1 40%,#b39a68 100%);
+    background-size:110px 110px, auto, auto, auto;
+    box-shadow:
+      inset 0 0 0 1px rgba(90,70,38,.45),
+      inset 0 0 26px rgba(120,92,46,.35),
+      0 10px 26px -8px rgba(0,0,0,.7); }
+
   /* ---------- buttons ---------- */
   /* ======================= BUTTONS =======================
      One system, three weights. Everything is at least 46px tall, because a
@@ -87,54 +215,79 @@
      glow; secondary is a quiet slab; chips are for inline actions. A disabled
      button stays a solid object — it dims, it never becomes a dashed ghost,
      because a ghost reads as broken rather than as "not yet". */
-  .btn{ position:relative; font-family:inherit; font-weight:900; letter-spacing:1.6px;
-    font-size:15px; min-height:46px; padding:12px 22px; border:none; border-radius:13px;
-    cursor:pointer; color:#12210c; text-transform:uppercase; touch-action:manipulation;
+  .btn{ position:relative; isolation:isolate; font-family:inherit; font-weight:900;
+    letter-spacing:1.6px; font-size:15px; min-height:48px; padding:13px 22px; border:none;
+    border-radius:13px; cursor:pointer; text-transform:uppercase; touch-action:manipulation;
     -webkit-user-select:none; user-select:none; white-space:nowrap;
-    background:linear-gradient(180deg,#d4ff8c 0%,#a6ee55 45%,#79c634 100%);
+    color:#f6ffe6; text-shadow:0 -1px 0 rgba(0,0,0,.55), 0 1px 0 rgba(255,224,170,.16);
+    background-color:var(--btn-mid,#6a8436);
+    background-image:
+      radial-gradient(ellipse 150% 90% at 30% 4%, rgba(255,244,208,.18), transparent 62%),
+      linear-gradient(180deg, var(--btn-hi,#93b04c) 0%, var(--btn-mid,#6a8436) 42%, var(--btn-lo,#425520) 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.65),
-      inset 0 -2px 0 rgba(40,80,20,.35),
-      0 4px 0 #4a7c1e,
-      0 8px 20px rgba(0,0,0,.5),
-      0 0 26px rgba(150,240,90,.20);
+      inset 0 1.5px 0 rgba(255,236,190,.42),        /* the arris, tallow-lit */
+      inset 0 -3px 0 rgba(0,0,0,.42),               /* the plank has thickness */
+      inset 0 0 0 1.5px var(--btn-edge,#1d2a10),    /* the iron edge band */
+      0 5px 0 var(--btn-deep,#2b3a15),              /* what it stands on */
+      0 10px 20px -6px rgba(0,0,0,.62);
     transition:transform .07s ease, box-shadow .07s ease, filter .12s ease; }
-  .btn::after{ content:''; position:absolute; inset:1px 1px 45%; border-radius:12px 12px 40% 40%;
-    background:linear-gradient(180deg, rgba(255,255,255,.28), transparent); pointer-events:none; }
-  .btn:hover{ filter:brightness(1.06); }
-  .btn:active{ transform:translateY(4px);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -1px 0 rgba(40,80,20,.3), 0 0 0 #4a7c1e,
-      0 2px 8px rgba(0,0,0,.45); }
-  .btn[disabled]{ cursor:not-allowed; color:#5c6b54;
-    background:linear-gradient(180deg,#38452f,#26301f);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 3px 0 #1a2214, 0 5px 12px rgba(0,0,0,.4);
-    transform:none; }
-  .btn[disabled]::after{ opacity:.14; }
+  /* the grain and the dirt in the paint */
+  .btn::before{ content:''; position:absolute; inset:0; border-radius:inherit;
+    pointer-events:none; z-index:0;
+    background-image:var(--tex-plank), var(--tex-grime);
+    background-size:96px 96px, 64px 64px;
+    background-blend-mode:multiply; mix-blend-mode:multiply; opacity:.34; }
+  /* the wet top face of the paint, and the four iron rivets holding the plank */
+  .btn::after{ content:''; position:absolute; inset:0; border-radius:inherit;
+    pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.05) 44%, transparent 56%),
+      radial-gradient(circle 3.4px at 10px 10px, #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at calc(100% - 10px) 10px, #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at 10px calc(100% - 10px), #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at calc(100% - 10px) calc(100% - 10px), #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%);
+    background-repeat:no-repeat;
+    background-size:100% 56%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; }
+  .btn > *{ position:relative; z-index:1; }
+  .btn:hover{ filter:brightness(1.07) saturate(1.04); }
+  .btn:active{ transform:translateY(5px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,236,190,.24),
+      inset 0 0 0 1.5px var(--btn-edge,#1d2a10),
+      inset 0 3px 7px rgba(0,0,0,.45),
+      0 0 0 var(--btn-deep,#2b3a15), 0 2px 7px rgba(0,0,0,.5); }
+  /* disabled: the paint has gone grey and damp. Still a solid object. */
+  .btn[disabled]{ cursor:not-allowed; color:#7f8a76; text-shadow:0 -1px 0 rgba(0,0,0,.4);
+    --btn-hi:#3d4a34; --btn-mid:#2e3927; --btn-lo:#20291b;
+    --btn-edge:#151d10; --btn-deep:#151d10;
+    filter:saturate(.35); transform:none; }
+  .btn[disabled]::after{ opacity:.2; }
+  .btn[disabled]:hover{ filter:saturate(.35); }
 
-  /* secondary: the same object, quieter material */
-  .btn.alt{ color:#e6f4dc;
-    background:linear-gradient(180deg,#3f5340 0%,#2c3c2c 45%,#1e2a1e 100%);
-    box-shadow:inset 0 1px 0 rgba(190,240,170,.18), inset 0 -2px 0 rgba(0,0,0,.3),
-      0 4px 0 #152014, 0 6px 14px rgba(0,0,0,.45); }
-  .btn.alt:active{ transform:translateY(4px);
-    box-shadow:inset 0 1px 0 rgba(190,240,170,.12), 0 0 0 #152014, 0 2px 6px rgba(0,0,0,.4); }
+  /* secondary: the same plank, unpainted — bare wood */
+  .btn.alt{ color:#e8dcbe;
+    --btn-hi:#4a3a22; --btn-mid:#372b19; --btn-lo:#241b0f;
+    --btn-edge:#140f07; --btn-deep:#1a1309; }
+  .btn.alt::before{ opacity:.62; }
 
   /* the breeding colour, for anything that costs you an animal */
-  .btn.pinky{ color:#2a0c1e;
-    background:linear-gradient(180deg,#ffc0e8 0%,#ff8ad4 45%,#e05bb0 100%);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 0 rgba(120,20,80,.3),
-      0 4px 0 #9c2f6d, 0 8px 20px rgba(0,0,0,.5), 0 0 26px rgba(255,140,210,.22); }
-  .btn.pinky:active{ transform:translateY(4px);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 0 0 #9c2f6d, 0 2px 8px rgba(0,0,0,.45); }
+  .btn.pinky{ color:#2a0c1e; text-shadow:0 1px 0 rgba(255,220,240,.45);
+    --btn-hi:#ffc0e8; --btn-mid:#f083c9; --btn-lo:#c04d95;
+    --btn-edge:#5e1a3d; --btn-deep:#8f2c67; }
+  .btn.pinky::before{ opacity:.24; }
 
   /* chips: inline actions that are not the point of the screen */
-  .btn.sm{ font-size:12px; letter-spacing:1.2px; min-height:38px; padding:9px 14px;
-    border-radius:10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 #4a7c1e,
-      0 4px 10px rgba(0,0,0,.4); }
-  .btn.alt.sm{ box-shadow:inset 0 1px 0 rgba(190,240,170,.16), 0 3px 0 #152014,
-      0 4px 10px rgba(0,0,0,.4); }
-  .btn.sm::after{ inset:1px 1px 50%; }
-  .btn.sm:active{ transform:translateY(3px); }
+  .btn.sm{ font-size:12px; letter-spacing:1.2px; min-height:40px; padding:10px 15px;
+    border-radius:10px;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,236,190,.36),
+      inset 0 -2px 0 rgba(0,0,0,.4),
+      inset 0 0 0 1.2px var(--btn-edge,#1d2a10),
+      0 4px 0 var(--btn-deep,#2b3a15), 0 6px 12px -3px rgba(0,0,0,.5); }
+  .btn.sm::after{ background-size:100% 52%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; }
+  .btn.sm:active{ transform:translateY(4px);
+    box-shadow: inset 0 1px 0 rgba(255,236,190,.2), inset 0 0 0 1.2px var(--btn-edge,#1d2a10),
+      inset 0 3px 6px rgba(0,0,0,.45), 0 0 0 var(--btn-deep,#2b3a15), 0 2px 6px rgba(0,0,0,.45); }
 
   /* the docked footer every screen ends on */
   .footer{ flex:0 0 auto; display:flex; align-items:center; justify-content:center;
@@ -168,13 +321,40 @@
     linear-gradient(180deg, #0a0808 0%, #100a0a 55%, #160c0c 100%); }
   /* Every plate is sized off the FRAME (a CSS container), never the window: a
      vw here renders a 620px card inside a 505px phone and slices it both ends. */
-  .tcard{ width:100%; max-width:min(620px, calc(100cqw - 24px)); min-height:0;
-    max-height:100%; padding:22px 22px; border-radius:20px;
-    background:linear-gradient(180deg,#1a2b1e,#0e1810 70%); border:1px solid #0a120a;
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.20), inset 0 0 0 2px rgba(70,110,55,.45),
-      inset 0 0 70px rgba(140,255,110,.05), 0 26px 60px rgba(0,0,0,.65); }
+  /* A BOARD, not a dialog. Planked, grained, dirty, with iron in the corners
+     and a lit top arris from the torches. */
+  .tcard{ position:relative; isolation:isolate;
+    width:100%; max-width:min(620px, calc(100cqw - 24px)); min-height:0;
+    max-height:100%; padding:22px 22px; border-radius:14px 14px 6px 6px; border:none;
+    background-color:#24301c;
+    background-image:
+      radial-gradient(ellipse 130% 70% at 50% 118%, rgba(255,178,92,.10), transparent 62%),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.26) 0 1px, transparent 1px 62px),
+      linear-gradient(180deg,#2b3822 0%,#1d2716 46%,#121a0e 100%);
+    box-shadow:
+      inset 0 1.5px 0 var(--rim-warm),
+      inset 0 -2px 0 var(--rim-cool),
+      inset 0 0 0 1.5px rgba(10,16,8,.95),
+      inset 0 0 60px rgba(0,0,0,.4),
+      0 6px 0 #0b1108, 0 26px 60px rgba(0,0,0,.7); }
+  .tcard::before{ content:''; position:absolute; inset:0; border-radius:inherit; z-index:0;
+    pointer-events:none;
+    background-image:var(--tex-wood), var(--tex-grime);
+    background-size:96px 96px, 64px 64px; background-blend-mode:multiply;
+    mix-blend-mode:multiply; opacity:.42; }
+  /* four nail heads, holding the board to whatever is behind it */
+  .tcard::after{ content:''; position:absolute; inset:0; border-radius:inherit; z-index:0;
+    pointer-events:none; background-repeat:no-repeat;
+    background-image:
+      radial-gradient(circle 3.6px at 12px 12px, #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%),
+      radial-gradient(circle 3.6px at calc(100% - 12px) 12px, #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%),
+      radial-gradient(circle 3.6px at 12px calc(100% - 12px), #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%),
+      radial-gradient(circle 3.6px at calc(100% - 12px) calc(100% - 12px), #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%); }
+  .tcard > *{ position:relative; z-index:1; }
   .tcard h1{ font-size:clamp(26px,10cqw,44px); line-height:1.05; color:var(--lime); letter-spacing:-.5px;
-    text-shadow:0 0 22px rgba(150,255,90,.35), 0 3px 0 #33591a; }
+    -webkit-text-stroke:3px #0d1607; paint-order:stroke fill;
+    text-shadow:0 2px 0 #4a7c1e, 0 4px 0 #2b4a12, 0 7px 10px rgba(0,0,0,.7),
+      0 0 26px rgba(150,255,90,.30); }
   .tcard h1 em{ font-style:normal; color:var(--pink); text-shadow:0 0 22px rgba(255,130,200,.4), 0 3px 0 #7d2f5c; }
   .sub{ margin:8px 0 14px; font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--dim); font-weight:800; }
   .rules{ text-align:left; max-width:460px; margin:0 auto 12px; font-size:var(--t-body); line-height:1.7; color:#cfe0c2; }
@@ -222,16 +402,35 @@
   /* ---------- top bar ---------- */
   .bar{ display:flex; align-items:center; gap:10px; flex:0 0 auto; padding:2px 44px 8px 2px; }
   .bar .grow{ flex:1; }
-  .pip{ display:flex; gap:4px; align-items:center; }
-  .pip i{ width:12px; height:12px; border-radius:4px; background:#22331f; border:1px solid #33492c; display:block; }
-  .pip i.done{ background:#7cc93a; border-color:var(--lime); }
-  .pip i.now{ background:var(--pink); border-color:#ffd0ee; box-shadow:0 0 8px rgba(255,130,200,.7); }
-  .pip i.boss{ border-radius:50%; }
+  /* ---- ONE PIP LANGUAGE ----
+     There used to be four: 12px rounded squares for the run, 9x13 ones for
+     Feed, 8px ones in the verdict and 8px circles for the streak. Two of them
+     read as a battery. Now there are two marks and both are objects from the
+     world: an EGG is a round of the run, a KERNEL of grain is a point of Feed. */
+  .pip{ display:flex; gap:3px; align-items:center; }
+  .pip svg{ display:block; width:13px; height:13px; fill:currentColor; color:#3d4f33;
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.5)); transition:color .18s ease, transform .18s ease; }
+  .pip svg.done{ color:#8fce4a; }
+  .pip svg.now{ color:var(--pink); transform:scale(1.24);
+    filter:drop-shadow(0 0 7px rgba(255,130,200,.8)) drop-shadow(0 1px 0 rgba(0,0,0,.5)); }
   .hpbox{ display:flex; align-items:center; gap:7px; font-weight:900; font-size:var(--t-num); color:var(--hpred); }
   .hpbox span{ color:var(--ink); }
-  .hpbar{ width:120px; height:11px; border-radius:6px; background:#1b2a18;
-    border:1px solid #33492c; overflow:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,.6); }
-  .hpbar i{ display:block; height:100%; background:linear-gradient(90deg,#ff5d5d,#ff9d6b); transition:width .3s ease; }
+  /* a trough with straw in the bottom of it, and a level in the trough. The
+     fill has a torn top edge so it reads as something POURED, not as a value. */
+  .hpbar{ width:120px; height:13px; border-radius:4px; overflow:hidden; border:none;
+    background-color:#1a1610;
+    background-image:
+      repeating-linear-gradient(24deg, rgba(120,96,44,.34) 0 2px, transparent 2px 5px),
+      var(--tex-iron), linear-gradient(180deg,#100e08,#221d13);
+    background-size:auto, 96px 96px, auto;
+    background-blend-mode:normal, overlay, normal;
+    box-shadow:inset 0 3px 5px rgba(0,0,0,.9), inset 0 -1px 0 rgba(255,220,150,.12),
+      0 1px 0 rgba(255,220,150,.07); }
+  .hpbar i{ display:block; height:100%; transition:width .3s ease;
+    background:linear-gradient(90deg,#c9343c,#ff6b4d 60%,#ffa768);
+    -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 5px, rgba(0,0,0,.86) 5px 6px);
+            mask-image:repeating-linear-gradient(90deg,#000 0 5px, rgba(0,0,0,.86) 5px 6px);
+    box-shadow:inset 0 1px 0 rgba(255,220,180,.4), inset 0 -3px 5px -2px rgba(90,10,10,.8); }
   /* a trample is a WOUND: the bar drains over the same 700ms the number ticks */
   .hpbar i.drain{ transition:width .7s cubic-bezier(.25,.8,.3,1); }
 
@@ -277,12 +476,28 @@
       radial-gradient(ellipse at 50% 78%, #17261b, #060c06 80%);
     box-shadow: inset 0 1px 3px rgba(0,0,0,.8), inset 0 -12px 16px -10px #000; }
   .card.big .art{ height:104px; }
-  .card .cost{ position:absolute; top:5px; left:5px; width:23px; height:23px; border-radius:50%;
-    background:linear-gradient(180deg,#ffe793,#e8a91f); color:#2a1c00; font-weight:900; font-size:13px;
+  /* A STRUCK BONE TOKEN. It was a flat gold disc — the default coin every
+     idle game ships with. The rim is milled, the face is dished, the numeral
+     is stamped INTO it. */
+  .card .cost{ position:absolute; top:5px; left:5px; width:25px; height:25px; border-radius:50%;
+    color:#3a2f16; font-weight:900; font-size:13px; z-index:2;
     display:flex; align-items:center; justify-content:center;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 2px 5px rgba(0,0,0,.6); z-index:2; }
-  .card .gen{ position:absolute; top:6px; right:6px; font-size:9px; letter-spacing:1.4px; z-index:2;
-    font-weight:800; color:#9fb394; background:rgba(6,12,6,.72); padding:1px 5px; border-radius:6px; }
+    background-color:#ddceaa;
+    background-image:
+      repeating-conic-gradient(from 0deg, rgba(255,255,255,.55) 0 5deg, rgba(120,96,48,.5) 5deg 10deg),
+      radial-gradient(circle at 50% 50%, #e9dcbb 0 62%, transparent 63%),
+      radial-gradient(ellipse 80% 60% at 36% 24%, rgba(255,255,255,.7), transparent 62%),
+      linear-gradient(178deg,#f6eed6,#ddceaa 48%,#a08c60);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,255,255,.85),
+      inset 0 -2px 4px -1px rgba(125,107,69,.9),
+      inset 0 0 0 1px rgba(90,74,44,.6),
+      0 2px 0 #6d5c3a, 0 4px 8px -2px rgba(0,0,0,.7);
+    text-shadow:0 1px 0 rgba(255,255,255,.65), 0 -1px 0 rgba(90,74,44,.55); }
+  /* A BRAND, burned in. No pill, no background — a scorch mark and a glow. */
+  .card .gen{ position:absolute; top:5px; right:7px; font-size:9px; letter-spacing:1.6px; z-index:2;
+    font-weight:900; color:rgba(255,196,130,.72);
+    text-shadow:0 0 5px rgba(255,120,40,.55), 0 1px 0 rgba(0,0,0,.7); }
   .card .nm{ font-size:14px; font-weight:800; letter-spacing:0; text-align:center; padding:5px 4px 2px;
     line-height:1.15; color:#eaf6df; text-shadow:0 2px 0 rgba(0,0,0,.55);
     min-height:30px; display:flex; align-items:center; justify-content:center; }
@@ -415,9 +630,22 @@
      drawPit(); the CSS here only builds the box it lives in. */
   .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:5px; min-height:0;
     position:relative; padding:5px 8px 0; }
-  .nestbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:5px 10px;
-    border-radius:12px 12px 4px 4px; background:linear-gradient(180deg,#2a2016,#18140e);
-    border:2px solid #6b5324; box-shadow:0 4px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,140,.14); }
+  /* the nest is straw, packed into a plank box */
+  .nestbar{ position:relative; isolation:isolate;
+    flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:6px 10px; border:none;
+    border-radius:12px 12px 4px 4px;
+    background-color:#4a3814;
+    background-image:
+      var(--tex-straw),
+      repeating-linear-gradient(83deg, rgba(217,187,102,.34) 0 1.5px, rgba(125,98,34,.34) 1.5px 4.5px, transparent 4.5px 7px),
+      linear-gradient(180deg,#6d5420 0%,#432f10 62%,#241a0a 100%);
+    background-size:72px 72px, auto, auto;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,232,170,.4),
+      inset 0 -8px 14px -8px rgba(0,0,0,.75),
+      inset 0 0 0 1.5px rgba(20,14,4,.9),
+      0 4px 0 #1a1207, 0 10px 20px -6px rgba(0,0,0,.6); }
+  .nestbar > *{ position:relative; z-index:1; }
   .nestbar .nlbl{ font-size:10px; letter-spacing:2.4px; font-weight:800; color:#ffd34d; }
   .nestbar .neggs{ font-size:15px; line-height:1; letter-spacing:-2px; }
   .nestbar .nhp{ margin-left:auto; font-size:17px; font-weight:900; color:#ffd34d;
@@ -450,43 +678,69 @@
     45%{transform:translateX(5px)} 70%{transform:translateX(-3px)} }
   .nestbar.bitten{ animation:bitten .62s ease; }
   /* the Feed meter: the only thing standing between you and playing everything */
-  .feed{ display:flex; gap:3px; align-items:center; }
-  .feed i{ width:9px; height:13px; border-radius:3px; background:#22331e;
-    border:1px solid #33501f; box-shadow:inset 0 1px 0 rgba(255,255,255,.06); transition:.14s; }
-  .feed i.on{ background:linear-gradient(180deg,#c8ff8a,#6fb32c); border-color:#a6ff5e;
-    box-shadow:0 0 7px rgba(166,255,94,.5); }
-  .feedbar{ position:relative; width:34px; height:4px; border-radius:3px; overflow:hidden;
-    background:#22331e; margin-left:4px; }
-  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:3px;
-    background:linear-gradient(90deg,#4d7a24,#a6ff5e); }
+  .feed{ display:flex; gap:2px; align-items:center; padding:3px 5px; border-radius:7px;
+    background-color:#1a1409;
+    background-image:var(--tex-iron), linear-gradient(180deg,#0f1309,#1e1a10);
+    background-size:96px 96px, auto; background-blend-mode:overlay, normal;
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,220,150,.10); }
+  .feed svg{ display:block; width:8px; height:11px; fill:currentColor; color:#3a3420;
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.6)); transition:color .14s ease, transform .14s ease; }
+  .feed svg.on{ color:#e8c24a; filter:drop-shadow(0 0 5px rgba(255,200,80,.7)); }
+  /* the grain still filling: a sack tipping into the trough */
+  .feedbar{ position:relative; width:30px; height:7px; border-radius:4px; overflow:hidden;
+    margin-left:5px; background:#141009;
+    box-shadow:inset 0 2px 3px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,220,150,.10); }
+  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:4px;
+    background:linear-gradient(90deg,#7a5a18,#e8c24a); transition:width .12s linear; }
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
     background:radial-gradient(ellipse at 50% 45%, rgba(6,12,6,.92), rgba(3,6,3,.97)); }
-  /* the headline sits on its own slab, or the pit behind it reads through the
-     text and the payoff of the whole round looks like a rendering accident */
-  .verdict > div{ padding:16px 18px; border-radius:16px; max-width:94%;
-    background:linear-gradient(180deg, rgba(16,26,14,.94), rgba(8,14,8,.96));
-    border:1px solid #2c4326; box-shadow:0 14px 40px rgba(0,0,0,.6); }
-  .verdict.win > div{ border-color:#41682c; }
-  .verdict.lose > div{ border-color:#6b2a2a; }
+  /* The payoff of the whole round used to be delivered on a rounded dialog.
+     It is a hewn board now: planked, nailed, and just off axis so it reads as
+     something somebody put there rather than as a modal. */
+  .verdict > div{ position:relative; isolation:isolate;
+    padding:18px 22px 16px; border-radius:3px; max-width:94%; border:none;
+    transform:rotate(-.7deg);
+    background-color:#232f1b;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.3) 0 1px, transparent 1px 54px),
+      linear-gradient(180deg,#2c3922 0%,#1c2615 50%,#111809 100%);
+    box-shadow:
+      inset 0 1.5px 0 var(--rim-warm),
+      inset 0 -2px 0 var(--rim-cool),
+      inset 0 0 0 1.5px rgba(8,14,6,.95),
+      0 8px 0 #0a1006, 0 24px 50px rgba(0,0,0,.75); }
+  .verdict > div::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background-image:var(--tex-wood), var(--tex-grime);
+    background-size:96px 96px, 64px 64px; background-blend-mode:multiply;
+    mix-blend-mode:multiply; opacity:.46; }
+  .verdict > div::after{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background-repeat:no-repeat;
+    background-image:
+      radial-gradient(circle 3.4px at 11px 11px, #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at calc(100% - 11px) 11px, #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at 11px calc(100% - 11px), #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at calc(100% - 11px) calc(100% - 11px), #8c99a3 0 34%, #333b43 56%, rgba(0,0,0,.75) 76%, transparent 84%); }
+  .verdict > div > *{ position:relative; z-index:1; }
+  .verdict.lose > div{ background-color:#2d1d19;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.3) 0 1px, transparent 1px 54px),
+      linear-gradient(180deg,#38231d 0%,#25150f 50%,#150b07 100%); }
   .verdict[hidden]{ display:none !important; }
   .verdict > div{ display:flex; flex-direction:column; align-items:center; gap:9px; }
   .verdict .vhead{ font-size:clamp(17px,5.4cqw,26px); font-weight:900; letter-spacing:1.6px;
     line-height:1.1; max-width:100%;
-    color:var(--lime); text-shadow:0 0 26px rgba(150,255,90,.4), 0 4px 0 #33591a;
+    color:var(--lime);
+    text-shadow:0 2px 0 #4a7c1e, 0 4px 0 #2b4a12, 0 8px 12px rgba(0,0,0,.75), 0 0 26px rgba(150,255,90,.35);
     animation:vslam .34s cubic-bezier(.2,1.6,.4,1); }
-  .verdict.lose .vhead{ color:#ff7b7b; text-shadow:0 0 26px rgba(255,90,90,.4), 0 4px 0 #6b1f1f; }
+  .verdict.lose .vhead{ color:#ff7b7b; -webkit-text-stroke-color:#1a0808;
+    text-shadow:0 2px 0 #8f2b2b, 0 4px 0 #561717, 0 8px 12px rgba(0,0,0,.75), 0 0 26px rgba(255,90,90,.35); }
   .verdict .vsub{ font-size:13px; font-weight:800; color:#cfe0c2; letter-spacing:.4px; }
   .verdict .vsub .ok{ color:var(--lime); }
   .verdict .vsub b{ color:#ff9d6b; }
   .verdict .vrun{ display:flex; flex-direction:column; align-items:center; gap:7px; margin-top:2px; }
-  .verdict .vpips{ display:flex; gap:4px; }
-  .verdict .vpips i{ width:8px; height:8px; border-radius:3px; background:#22331e;
-    border:1px solid #33501f; display:block; }
-  .verdict .vpips i.done{ background:#6fb32c; border-color:#a6ff5e; }
-  .verdict .vpips i.now{ background:#ffd34d; border-color:#fff0b0; box-shadow:0 0 8px rgba(255,211,77,.6); }
-  .verdict .vpips i.boss{ border-radius:50%; }
+  .verdict .vpips svg{ width:11px; height:11px; }
   .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270;
     margin-top:4px; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
@@ -641,17 +895,29 @@
      verdict button must stay reachable without discovering that it scrolls. */
   #hatch .tcard .footer{ position:sticky; bottom:-2px; z-index:4; margin-top:2px;
     padding:10px 0 4px; background:linear-gradient(180deg, rgba(14,24,16,0) 0%, #0e1810 42%); }
-  #over.win #oTitle{ color:var(--lime); text-shadow:0 0 20px rgba(150,255,90,.35), 0 3px 0 #33591a; }
+  #over.win #oTitle{ color:var(--lime);
+    text-shadow:0 2px 0 #4a7c1e, 0 4px 0 #2b4a12, 0 7px 10px rgba(0,0,0,.7), 0 0 22px rgba(150,255,90,.3); }
   /* a loss must not be dressed as a win */
-  #over.lose #oTitle{ color:#ff7b7b; text-shadow:0 0 18px rgba(255,90,90,.35), 0 3px 0 #6b1f1f; }
+  #over.lose #oTitle{ color:#ff7b7b;
+    text-shadow:0 2px 0 #8f2b2b, 0 4px 0 #561717, 0 7px 10px rgba(0,0,0,.7), 0 0 22px rgba(255,90,90,.3); }
   #over.lose .tcard{ background:linear-gradient(180deg,#241616,#150d0d);
     box-shadow:inset 0 1px 0 rgba(255,170,170,.16), inset 0 0 0 2px #4a2626,
       inset 0 0 60px rgba(255,90,90,.05), 0 26px 60px rgba(0,0,0,.6); }
 
+  /* the sound toggle is a tallow candle in an iron sconce: lit, or smoking */
   #mute{ position:absolute; right:9px; top:calc(8px + env(safe-area-inset-top));
-    width:36px; height:36px; border-radius:11px;
-    border:1px solid #2e4530; background:rgba(10,18,10,.7); color:var(--lime); font-size:14px;
-    cursor:pointer; font-family:inherit; z-index:20; }
+    width:38px; height:40px; border-radius:9px 9px 11px 11px; border:none;
+    cursor:pointer; font-family:inherit; z-index:20; padding:0;
+    color:#e8d9ad; }
+  #mute svg{ display:block; width:100%; height:100%; overflow:visible; position:relative; z-index:1; }
+  #mute .fl{ color:#ffc457; transform-origin:50% 34%; }
+  #mute .sm{ display:none; color:#8d9a86; }
+  #mute .fl{ animation:candleflick 1.9s ease-in-out infinite; filter:drop-shadow(0 0 5px rgba(255,180,70,.85)); }
+  #mute.off .fl{ display:none; } #mute.off .sm{ display:block; }
+  #mute.off{ filter:saturate(.4) brightness(.8); }
+  @keyframes candleflick{ 0%,100%{ transform:scale(1,1) } 28%{ transform:scale(.9,1.1) translateX(.4px) }
+    54%{ transform:scale(1.05,.94) } 76%{ transform:scale(.94,1.05) translateX(-.3px) } }
+  @media (prefers-reduced-motion:reduce){ #mute .fl{ animation:none } }
   .scrollcap{ overflow-y:auto; }
 
   /* ==========================================================================
@@ -1031,37 +1297,149 @@
 <!-- Icon set. Drawn here so the palette is enforced by `color`, not by whatever
      emoji font the OS happens to hand us. No external assets. -->
 <svg id="isprite" aria-hidden="true" focusable="false">
+  <!-- Every icon is drawn in three passes off ONE colour: the body takes
+       currentColor, a white wash gives it a lit face, a black wash gives it a
+       shadow side. So `color` still drives the whole set, but nothing in it is
+       a flat silhouette. Class selectors cannot cross a <use> shadow boundary,
+       which is why all of this is inline attributes. -->
+  <!-- MIGHT: a curved tusk with a chipped tip. A hammer was clip-art; every
+       animal in this game has teeth. -->
   <symbol id="i-might" viewBox="0 0 16 16">
-    <path d="M8 .3 10.7 4.5v5.6H5.3V4.5z"/>
-    <path d="M1.7 10.1h12.6a1.1 1.1 0 0 1 0 2.2H1.7a1.1 1.1 0 0 1 0-2.2z"/>
-    <path d="M6.7 12.5h2.6v3.2H6.7z"/>
+    <path d="M3.9 1h8.2c.6 0 1 .5.9 1.1-.7 4.6-2.3 8.9-4.6 12.9-.2.4-.7.4-.9 0C5.2 11 3.7 6.7 3 2.1c-.1-.6.3-1.1.9-1.1z"/>
+    <path d="M4.6 2.4h2.5c-.2 3.7-.9 7.1-2.2 10.4-1.1-3.3-1.7-6.8-2-10.4z" transform="translate(.3)" fill="#fff" fill-opacity=".40"/>
+    <path d="M11 2.4h1.9c-.6 3.7-1.8 7.1-3.4 10.4.8-3.3 1.3-6.8 1.5-10.4z" fill="#000" fill-opacity=".34"/>
   </symbol>
+  <!-- HIDE: a stitched plate of thick hide, not a knight's shield -->
   <symbol id="i-hide" viewBox="0 0 16 16">
-    <path d="M8 .6 14.3 2.8v4.9c0 3.7-2.6 6.5-6.3 7.7-3.7-1.2-6.3-4-6.3-7.7V2.8z"/>
+    <path d="M2.4 1.6c0-.5.4-.9.9-.9h9.4c.5 0 .9.4.9.9v6.7c0 2-1 3.7-2.5 5.1l-2.6 2.3c-.3.3-.9.3-1.2 0
+             l-2.6-2.3C3.4 12 2.4 10.3 2.4 8.3z"/>
+    <path d="M3.7 2.1h3.6v11.6l-1.7-1.5C4.4 11 3.7 9.6 3.7 8z" fill="#fff" fill-opacity=".40"/>
+    <path d="M2.6 5.2c1 .8 2 .8 3 0 1 .8 2 .8 3 0 1 .8 2 .8 3 0 .6.5 1.2.7 1.8.6" 
+          fill="none" stroke="#0b1209" stroke-opacity=".55" stroke-width="1.1"/>
+    <path d="M2.6 8.6c1 .8 2 .8 3 0 1 .8 2 .8 3 0 1 .8 2 .8 3 0 .5.4 1 .6 1.5.6"
+          fill="none" stroke="#0b1209" stroke-opacity=".55" stroke-width="1.1"/>
   </symbol>
+  <!-- HEALTH: the eggs in the nest ARE your health, so the icon is an egg on
+       straw, not a heart borrowed from every other game -->
   <symbol id="i-hp" viewBox="0 0 16 16">
-    <path d="M8 14.9S.9 10.5.9 5.9A3.9 3.9 0 0 1 8 3.4a3.9 3.9 0 0 1 7.1 2.5c0 4.6-7.1 9-7.1 9z"/>
+    <path d="M8 .8c3 0 5.5 4 5.5 8 0 4-2.5 6.8-5.5 6.8S2.5 12.8 2.5 8.8C2.5 4.8 5 .8 8 .8z"/>
+    <ellipse cx="5.9" cy="5.4" rx="1.4" ry="2" transform="rotate(-18 5.9 5.4)" fill="#fff" fill-opacity=".40"/>
+    <circle cx="10" cy="7.8" r=".9" fill="#000" fill-opacity=".34"/><circle cx="6.7" cy="10.7" r=".75" fill="#000" fill-opacity=".34"/>
   </symbol>
+  <!-- SLOP: a dented pail with a rope handle and something moving in it -->
   <symbol id="i-slop" viewBox="0 0 16 16">
-    <rect x="1.1" y="1.5" width="13.8" height="2.7" rx="1"/>
-    <path d="M2.2 4.6h11.6l-1.3 9.6a1.5 1.5 0 0 1-1.5 1.3H5a1.5 1.5 0 0 1-1.5-1.3z"/>
+    <path d="M3.9 2.4C4.6.9 6.1.2 8 .2s3.4.7 4.1 2.2l-1.5.6C10.1 2.1 9.2 1.7 8 1.7s-2.1.4-2.6 1.3z"/>
+    <path d="M3.3 6.2h9.4l-1 7.6c-.1 1-.9 1.7-1.9 1.7H6.2c-1 0-1.8-.7-1.9-1.7z"/>
+    <path d="M4.2 7.9h7.6l-.3 2.2c-1.5.8-3 .5-4.5.1s-2.9-.5-4.4.3z" fill="#fff" fill-opacity=".40"/>
+    <path d="M10.6 7.9h2l-1 6.1c-.2 1-1 1.5-2 1.5H8.2c1 0 1.8-.7 1.9-1.7z" fill="#000" fill-opacity=".34"/>
+    <path d="M1.5 4.1h13c.6 0 1 .5 1 1.1s-.4 1.1-1 1.1h-13c-.6 0-1-.5-1-1.1s.4-1.1 1-1.1z"/>
   </symbol>
+  <!-- THE STUD BOOK: a fat leather ledger with a marker ribbon -->
   <symbol id="i-book" viewBox="0 0 16 16">
-    <path d="M1.4 1.6h4.4c1.2 0 1.9.5 1.9 1.3v11.2c0-.7-.7-1.1-1.9-1.1H1.4z"/>
-    <path d="M14.6 1.6h-4.4c-1.2 0-1.9.5-1.9 1.3v11.2c0-.7.7-1.1 1.9-1.1h4.4z"/>
+    <path d="M1.3 2.2c0-.6.5-1.1 1.1-1.1h4.3c1.1 0 1.7.5 1.7 1.3v11.3c0-.7-.6-1.1-1.7-1.1H2.4c-.6 0-1.1-.5-1.1-1.1z"/>
+    <path d="M14.7 2.2c0-.6-.5-1.1-1.1-1.1H9.3c-1.1 0-1.7.5-1.7 1.3v11.3c0-.7.6-1.1 1.7-1.1h4.3c.6 0 1.1-.5 1.1-1.1z"/>
+    <path d="M1.3 2.2c0-.6.5-1.1 1.1-1.1h4.3c1.1 0 1.7.5 1.7 1.3v1.1c0-.7-.6-1.2-1.7-1.2H2.4c-.6 0-1.1.4-1.1 1z" fill="#fff" fill-opacity=".32"/>
+    <path d="M3 4.2h3.2M3 6.2h3.2M9.8 4.2H13M9.8 6.2H13M3 8.2h3.2M9.8 8.2H13" fill="none" stroke="#0b1209" stroke-opacity=".40" stroke-width="1" stroke-linecap="round"/>
+    <path d="M10.6 1.1h1.9v5.4l-.95-1.1-.95 1.1z" fill="#000" fill-opacity=".30"/>
   </symbol>
+  <!-- THE VET: a bone-handled syringe. A medical cross belongs in a hospital. -->
   <symbol id="i-vet" viewBox="0 0 16 16">
-    <path d="M6.1 1h3.8v5.1H15v3.8H9.9V15H6.1V9.9H1V6.1h5.1z"/>
+    <path d="M9.4 1.1 14.9 6.6l-1.5 1.5-1.1-1.1-5.6 5.6-2.9 1c-.5.2-1-.3-.8-.8l1-2.9 5.6-5.6-1.1-1.1z"/>
+    <path d="m9.9 5.6 1.5 1.5-4.6 4.6-1.5-1.5z" fill="#fff" fill-opacity=".40"/>
+    <path d="M11.4 3.1 13 4.7M9.6 4.9l1.6 1.6M3.6 12.4l1.8-1.8"
+          fill="none" stroke="#0b1209" stroke-opacity=".45" stroke-width="1" stroke-linecap="round"/>
+    <circle cx="12.2" cy="3.8" r=".9" fill="#000" fill-opacity=".34"/>
   </symbol>
+  <!-- VENOM: a drop still hanging off the fang that made it -->
   <symbol id="i-venom" viewBox="0 0 16 16">
-    <path d="M8 .7s5.3 6.1 5.3 9.4A5.3 5.3 0 0 1 8 15.3 5.3 5.3 0 0 1 2.7 10C2.7 6.8 8 .7 8 .7z"/>
+    <path d="M4.4.9h4c.5 0 .8.4.7.9-.5 2.6-1.2 4.4-2.2 5.6-.3.4-.9.4-1.2 0C4.7 6.2 4 4.4 3.6 1.8c-.1-.5.3-.9.8-.9z"/>
+    <path d="M4.7 2.2h1.4c-.1 1.7-.4 3.2-.8 4.4-.4-1.3-.6-2.8-.6-4.4z" fill="#fff" fill-opacity=".32"/>
+    <path d="M10.4 6.5s3.5 4 3.5 6.1a3.5 3.5 0 0 1-3.5 2.5 3.5 3.5 0 0 1-3.5-2.5c0-2.1 3.5-6.1 3.5-6.1z"/>
+    <ellipse cx="9.1" cy="11.9" rx=".85" ry="1.2" transform="rotate(-20 9.1 11.9)" fill="#fff" fill-opacity=".32"/>
   </symbol>
+  <!-- EGG: speckled, because a blank ellipse is a shape and not an egg -->
   <symbol id="i-egg" viewBox="0 0 16 16">
-    <ellipse cx="8" cy="9.2" rx="5.1" ry="6.4"/>
+    <path d="M8 .7c3 0 5.4 3.9 5.4 7.9 0 3.9-2.4 6.6-5.4 6.6S2.6 12.5 2.6 8.6C2.6 4.6 5 .7 8 .7z"/>
+    <ellipse cx="6" cy="5.3" rx="1.3" ry="1.9" transform="rotate(-18 6 5.3)" fill="#fff" fill-opacity=".32"/>
+    <circle cx="10" cy="7.5" r=".85" fill="#000" fill-opacity=".30"/><circle cx="6.7" cy="10.4" r=".7" fill="#000" fill-opacity=".30"/>
+    <circle cx="9.4" cy="11.5" r=".55" fill="#000" fill-opacity=".30"/><circle cx="7.6" cy="7.9" r=".45" fill="#000" fill-opacity=".30"/>
+  </symbol>
+  <!-- FEED: a cinched grain sack. This is what the whole fight is spent on and
+       it never had an icon of its own. -->
+  <symbol id="i-feed" viewBox="0 0 16 16">
+    <path d="M5.3 4.4h5.4c1.9 1.7 3 4 3 6.5 0 2.6-2.5 4.5-5.7 4.5s-5.7-1.9-5.7-4.5c0-2.5 1.1-4.8 3-6.5z"/>
+    <path d="M5.7 6.5c-.9 1.3-1.4 2.8-1.4 4.4 0 1.6 1 2.8 2.5 3.5-2-.4-3.4-1.8-3.4-3.5 0-1.7.9-3.3 2.3-4.4z" fill="#fff" fill-opacity=".32"/>
+    <path d="M6.6 7.7c1 .7 2.2 1 3.4.8-.6 1.1-1.7 1.7-2.9 1.5z" fill="#000" fill-opacity=".30"/>
+    <path d="M4.6 2.1c1-.7 2.2-1.1 3.4-1.1s2.4.4 3.4 1.1l-.7 2.3H5.3z"/>
+    <path d="M5.9 2.7c1.4-.5 2.8-.5 4.2 0" fill="none" stroke="#0b1209" stroke-opacity=".40" stroke-width="1" stroke-linecap="round"/>
+  </symbol>
+  <!-- GENERATION: three links of a chain, which is what a bloodline is -->
+  <symbol id="i-gen" viewBox="0 0 16 16">
+    <circle cx="8" cy="3" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+    <circle cx="4.2" cy="9.4" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+    <circle cx="11.8" cy="9.4" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+    <path d="M6.5 4.8 5.4 7.1M9.5 4.8l1.1 2.3M6.4 9.4h3.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M7 2.1a2.2 2.2 0 0 1 1.9-.1" fill="none" stroke="#0b1209" stroke-opacity=".40" stroke-width="1" stroke-linecap="round"/>
+  </symbol>
+  <!-- THE CULL: a plain skull, small and unsentimental -->
+  <symbol id="i-cull" viewBox="0 0 16 16">
+    <path d="M8 1c3.3 0 5.7 2.4 5.7 5.6 0 1.9-.8 3.2-1.9 4v1.9c0 .8-.6 1.4-1.4 1.4H5.6c-.8 0-1.4-.6-1.4-1.4v-1.9
+             C3.1 9.8 2.3 8.5 2.3 6.6 2.3 3.4 4.7 1 8 1z"/>
+    <path d="M5.6 2.2c-1.4.9-2.2 2.4-2.2 4.4 0 1.4.4 2.5 1.1 3.3-1.5-.7-2.2-2-2.2-3.9 0-1.7.9-3.1 2.4-3.9z" fill="#fff" fill-opacity=".32"/>
+    <ellipse cx="5.7" cy="6.5" rx="1.55" ry="1.75" fill="#0b1209" fill-opacity=".72"/>
+    <ellipse cx="10.3" cy="6.5" rx="1.55" ry="1.75" fill="#0b1209" fill-opacity=".72"/>
+    <path d="M8 8.7 7 10.6h2z" fill="#0b1209" fill-opacity=".72"/>
+    <path d="M6.3 12.3v2.1M8 12.3v2.1M9.7 12.3v2.1" fill="none" stroke="#0b1209" stroke-opacity=".40" stroke-width="1" stroke-linecap="round"/>
+  </symbol>
+  <!-- A TALLOW CANDLE: the sound toggle. Lit means on, a wisp of smoke means
+       muted. It was a &#9835; dingbat sitting in the corner of every screen. -->
+  <symbol id="i-candle" viewBox="0 0 16 16">
+    <path d="M5 6.6h6v7.6c0 .7-.5 1.2-1.2 1.2H6.2c-.7 0-1.2-.5-1.2-1.2z"/>
+    <path d="M5.8 7.6h1.7v7.8H5.8z" fill="#fff" fill-opacity=".40"/>
+    <path d="M9.4 7.6H11v6.6c0 .7-.5 1.2-1.2 1.2H8.6c.5 0 .8-.4.8-.9z" fill="#000" fill-opacity=".34"/>
+    <ellipse cx="8" cy="6.6" rx="3" ry=".9"/>
+    <path d="M4.2 8.9c.7 1 .8 2.3.3 3.7-.9-1-1-2.3-.3-3.7z" fill="#fff" fill-opacity=".40"/>
+    <path d="M8 4.6V2.8" fill="none" stroke="#0b1209" stroke-opacity=".55" stroke-width="1" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-flame" viewBox="0 0 16 16">
+    <path d="M8 .4c.4 2.1 1.9 3 2.6 4.6.9 2-.3 4.3-2.6 4.3S4.5 7 5.4 5C6.1 3.4 7.6 2.5 8 .4z"/>
+    <path d="M8 3.6c.3 1.2 1 1.7 1.3 2.6.4 1.1-.2 2.3-1.3 2.3S6.3 7.3 6.7 6.2C7 5.3 7.7 4.8 8 3.6z"
+          fill="#fff" fill-opacity=".72"/>
+  </symbol>
+  <symbol id="i-smoke" viewBox="0 0 16 16">
+    <path d="M8 9.4c0-1.4 1.8-1.6 1.8-3S8.4 4.2 8.4 2.8s1.4-1.7 1.4-1.7" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-opacity=".7"/>
+  </symbol>
+  <!-- A KERNEL OF GRAIN — one point of Feed. The Feed row used to be nine
+       rounded rectangles, which is a battery indicator. -->
+  <symbol id="i-kernel" viewBox="0 0 10 14">
+    <path d="M5 .6c2 1.4 3.2 3.6 3.2 6.3S7 12.1 5 13.4C3 12.1 1.8 9.6 1.8 6.9S3 2 5 .6z"/>
+    <path d="M5 2.4c-.9 1.2-1.4 2.8-1.4 4.5s.5 3.3 1.4 4.5z" fill="#fff" fill-opacity=".42"/>
+    <path d="M5 1.4v11.2" fill="none" stroke="#000" stroke-opacity=".38" stroke-width=".9"/>
+  </symbol>
+  <!-- A CRACKED EGG — a boss round -->
+  <symbol id="i-crack" viewBox="0 0 16 16">
+    <path d="M8 .7c3 0 5.4 3.9 5.4 7.9 0 3.9-2.4 6.6-5.4 6.6S2.6 12.5 2.6 8.6C2.6 4.6 5 .7 8 .7z"/>
+    <path d="M4.4 6.6 6.9 8 5.1 9.6l3-.7-1.6 2.4 3.4-2.2-2.5-.9 2.9-1.7-3.3.5 1.4-2.2z"
+          fill="#0b1209" fill-opacity=".7"/>
+  </symbol>
+  <!-- WAVE: the door, and three of them coming through it on a stagger -->
+  <symbol id="i-wave" viewBox="0 0 16 16">
+    <path d="M13.2 1.4h1.2c.4 0 .7.3.7.7v11.8c0 .4-.3.7-.7.7h-1.2c-.4 0-.7-.3-.7-.7V2.1c0-.4.3-.7.7-.7z"/>
+    <path d="M10.4 4.6 7.6 8l2.8 3.4z"/>
+    <path d="M6.4 5.2 4.1 8l2.3 2.8z" fill="#000" fill-opacity=".30"/>
+    <path d="M2.9 5.8 1.1 8l1.8 2.2z" fill="#000" fill-opacity=".30"/>
+    <path d="M13.4 2.6v10.8" fill="none" stroke="#0b1209" stroke-opacity=".40" stroke-width="1" stroke-linecap="round"/>
   </symbol>
 </svg>
 <div id="app">
-  <button id="mute" title="Sound">&#9835;</button>
+  <button id="mute" title="Sound" class="iron">
+    <svg viewBox="0 0 16 20" aria-hidden="true">
+      <g class="fl"><use href="#i-flame" x="0" y="-3.6" width="16" height="16"/></g>
+      <g class="sm"><use href="#i-smoke" x="0" y="-3.2" width="16" height="16"/></g>
+      <use href="#i-candle" y="4" width="16" height="16"/>
+    </svg>
+  </button>
   <!-- particles, flying cards, resemblance lines. Never hit-tested. -->
   <div id="fxlayer"></div>
 
@@ -3188,16 +3566,17 @@ function deckFade(grid){
     if (last && last.classList) last.classList.add('orphan');
   }
 }
-function pips(el, boss){
-  el.innerHTML = '';
+/** The run, as a clutch of eggs: one per round, cracked ones are the bosses. */
+function pipHtml(){
+  let h = '';
   for (let i = 0; i < RUN_LEN; i++){
-    const b = document.createElement('i');
-    if (FOES[i].boss) b.className = 'boss';
-    if (i < R.idx) b.className += ' done';
-    else if (i === R.idx) b.className += ' now';
-    el.appendChild(b);
+    const cls = (i < R.idx ? 'done' : i === R.idx ? 'now' : '');
+    h += '<svg class="' + cls + '" viewBox="0 0 16 16"><use href="#i-' +
+      (FOES[i].boss ? 'crack' : 'egg') + '"/></svg>';
   }
+  return h;
 }
+function pips(el, boss){ el.innerHTML = pipHtml(); }
 function hpBar(txtEl, barEl){
   const hp = R.hp;
   countUp(txtEl, hp);
@@ -3819,7 +4198,8 @@ function drainArena(){
       tone(660, 0.16, { type: 'sine', vol: 0.04 });
     } else if (e.k === 'feed'){
       tone(760, 0.04, { type: 'sine', vol: 0.03 });
-      const pip = $('feed') && $('feed').children ? $('feed').children[F.feed - 1] : null;
+      const fdEl = $('feed');
+      const pip = fdEl && fdEl.children ? fdEl.children[F.feed - 1] : null;
       if (pip) anim(pip, 'fill', 300);
     }
   }
@@ -3884,8 +4264,10 @@ function renderHud(){
   const fsig = F.feed + '/' + F.feedMax;
   if (fsig !== F.feedSig){
     F.feedSig = fsig;
-    fd.innerHTML = '';
-    for (let i = 0; i < F.feedMax; i++) fd.innerHTML += '<i class="' + (i < F.feed ? 'on' : '') + '"></i>';
+    let h = '';
+    for (let i = 0; i < F.feedMax; i++)
+      h += '<svg class="' + (i < F.feed ? 'on' : '') + '" viewBox="0 0 10 14"><use href="#i-kernel"/></svg>';
+    fd.innerHTML = h;
   }
   const nx = F.feed < F.feedMax ? Math.round(100 * F.feedT / FEED_EVERY) : 100;
   const fb = $('feedFill'); if (fb && fb.style) fb.style.width = nx + '%';
@@ -4008,11 +4390,7 @@ function showVerdict(){
   box.hidden = false;
   // the round pip fills, then the streak lands — the run visibly compounds
   const st = won ? R.streak + 1 : 0;
-  let pipHtml = '';
-  for (let i = 0; i < RUN_LEN; i++){
-    pipHtml += '<i class="' + (FOES[i].boss ? 'boss ' : '') +
-      (i < R.idx ? 'done' : i === R.idx ? 'now' : '') + '"></i>';
-  }
+  const pipMarks = pipHtml();
   const streakHtml = won && st > 0
     ? '<span class="streak"><span class="slbl">' + st + ' held</span><b>' +
       '<i></i>'.repeat(Math.min(st, 5)) + '</b></span>'
@@ -4027,7 +4405,7 @@ function showVerdict(){
           : (alive ? '<span class="ok">' + alive + '</span> of yours still standing'
                    : 'they died holding the door'))
       : 'the eggs are gone') +
-    '</div><div class="vrun"><div class="vpips">' + pipHtml + '</div>' + streakHtml + '</div>' +
+    '</div><div class="vrun"><div class="pip vpips">' + pipMarks + '</div>' + streakHtml + '</div>' +
     '<div class="vtap">tap to carry on</div></div>';
   verdictOn = true;
   vSounded = true;
@@ -4777,8 +5155,7 @@ function bind(){
   $('bCullBook').onclick = () => goBook(cullPick > 0 ? cullPick : 0, 'cull');
   $('mute').onclick = () => {
     muted = !muted;
-    $('mute').innerHTML = muted ? '&#128263;' : '&#9835;';
-    $('mute').style.opacity = muted ? '.5' : '1';
+    if ($('mute').classList) $('mute').classList.toggle('off', muted);
   };
   // An iOS context suspends the moment you look away, so wake it on ANY touch,
   // not just on #bStart. The same tap flushes whatever sequence is playing —
@@ -4795,7 +5172,163 @@ function bind(){
     if (e.key === ' ' || e.key === 'Enter' || e.key.toLowerCase() === 'e'){ e.preventDefault(); doEnd(); }
   });
 }
+/* ========================== SURFACES =====================================
+   Every panel in this game is made of something. The textures are BAKED ONCE
+   into small tileable data URIs at boot and handed to CSS as custom properties,
+   rather than run as live SVG filters — a live feTurbulence over a dozen panels
+   costs a repaint on every frame the pit draws, which on a phone is all of them.
+   Baked, it is one canvas each at startup and then free forever.
+   ========================================================================= */
+/** Draw something nine times, once per neighbouring tile, so anything that runs
+ *  off an edge comes back on the other side. Without it every tiled surface has
+ *  a visible grid of seams where the strokes were clipped. */
+function wrapDraw(g, size, at){
+  for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++){
+    g.save(); g.translate(ox * size, oy * size); at(); g.restore();
+  }
+}
+function texTile(size, paint){
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext && cv.getContext('2d');
+  if (!g || !g.createImageData) return '';
+  try { paint(g, size); return cv.toDataURL ? cv.toDataURL('image/png') : ''; }
+  catch (e){ return ''; }
+}
+/** Deterministic value noise, so the grain is the same every load. */
+function tnoise(i){ const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+/**
+ * A smooth scalar field that WRAPS, so anything built from it tiles without a
+ * seam. `cx`/`cy` are lattice cells across the tile — making them different is
+ * the whole trick for fibre and grain: few cells one way, many the other.
+ */
+function nfield(size, cx, cy, oct, seed){
+  const out = new Float32Array(size * size);
+  const fade = (t) => t * t * (3 - 2 * t);
+  let amp = 1, norm = 0;
+  for (let o = 0; o < oct; o++){
+    const nx = cx << o, ny = cy << o;
+    const g = new Float32Array(nx * ny);
+    for (let i = 0; i < nx * ny; i++) g[i] = tnoise(seed * 977 + o * 131 + i * 3.7);
+    const at = (a, b) => g[(((b % ny) + ny) % ny) * nx + (((a % nx) + nx) % nx)];
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++){
+      const fx = x / size * nx, fy = y / size * ny;
+      const xi = Math.floor(fx), yi = Math.floor(fy);
+      const u = fade(fx - xi), v = fade(fy - yi);
+      out[y * size + x] += amp * (
+        (at(xi, yi) * (1 - u) + at(xi + 1, yi) * u) * (1 - v) +
+        (at(xi, yi + 1) * (1 - u) + at(xi + 1, yi + 1) * u) * v);
+    }
+    norm += amp; amp *= 0.5;
+  }
+  for (let i = 0; i < out.length; i++) out[i] /= norm;
+  return out;
+}
+function bakeTextures(){
+  if (HEADLESS) return;
+  const root = document.documentElement;
+  if (!root || !root.style || !root.style.setProperty) return;
+  const set = (k, v) => { if (v) root.style.setProperty(k, 'url("' + v + '")'); };
+
+  // GRIME — fine speckle, the one overlay that goes on everything. Low alpha so
+  // it reads as dirt in the surface rather than as static on top of it.
+  set('--tex-grime', texTile(64, (g, n) => {
+    const img = g.createImageData(n, n), d = img.data;
+    for (let i = 0; i < n * n; i++){
+      const v = tnoise(i), w = tnoise(i + 9871);
+      d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v < 0.52 ? 0 : 255;
+      d[i * 4 + 3] = Math.round((w * w) * 118);
+    }
+    g.putImageData(img, 0, 0);
+  }));
+
+  // WOOD — grain with a few knots. Baked twice: grain running the LONG way of
+  // a plank is the difference between a board and a piece of corduroy, and a
+  // wide button and a tall panel are planks in different directions.
+  const woodTile = (horiz) => texTile(96, (g, n) => {
+    const along = (u) => {
+      const band = tnoise(u * 3.1) * 0.6 + tnoise(u * 0.31) * 0.4;
+      g.fillStyle = 'rgba(' + (band > 0.55 ? '255,236,200' : '0,0,0') + ',' +
+        (Math.abs(band - 0.5) * 0.62).toFixed(3) + ')';
+      if (horiz) g.fillRect(0, u, n, 1); else g.fillRect(u, 0, 1, n);
+      for (let v = 0; v < n; v += 3){
+        const j = tnoise(u * 7 + v);
+        if (j > 0.80){
+          g.fillStyle = 'rgba(0,0,0,.26)';
+          const len = 2 + Math.round(j * 4);
+          if (horiz) g.fillRect(v, u, len, 1); else g.fillRect(u, v, 1, len);
+        }
+      }
+    };
+    for (let u = 0; u < n; u++) along(u);
+    for (let k = 0; k < 2; k++){
+      const cx = tnoise(k * 17) * n, cy = tnoise(k * 41) * n;
+      for (let r = 9; r > 1; r -= 2){
+        g.strokeStyle = 'rgba(0,0,0,' + (0.10 + r * 0.020).toFixed(3) + ')';
+        g.lineWidth = 1;
+        const rr = r;
+        wrapDraw(g, n, () => {
+          g.beginPath();
+          if (horiz) g.ellipse(cx, cy, rr * 0.55, rr, 0.4, 0, Math.PI * 2);
+          else g.ellipse(cx, cy, rr, rr * 0.55, 0.4, 0, Math.PI * 2);
+          g.stroke();
+        });
+      }
+    }
+  });
+  set('--tex-wood', woodTile(false));    // grain down: tall panels
+  set('--tex-plank', woodTile(true));    // grain across: buttons and bars
+
+  // STRAW — diagonal strands, for the nest bar
+  set('--tex-straw', texTile(72, (g, n) => {
+    for (let i = 0; i < 130; i++){
+      const x = tnoise(i * 5.3) * n, y = tnoise(i * 2.7) * n;
+      const len = 8 + tnoise(i * 11) * 16, ang = -0.5 + tnoise(i * 3.3) * 0.6;
+      g.strokeStyle = tnoise(i * 13) > 0.5
+        ? 'rgba(255,232,160,.46)' : 'rgba(48,30,6,.52)';
+      g.lineWidth = 1 + (tnoise(i * 19) > 0.7 ? 1 : 0);
+      wrapDraw(g, n, () => {
+        g.beginPath();
+        g.moveTo(x, y); g.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+        g.stroke();
+      });
+    }
+  }));
+
+  // HAMMERED IRON — a lit surface, not shaded circles: take a smooth wrapping
+  // noise field, read its slope with a central difference, and light that from
+  // one distant lamp. Mid-grey either side of 128, so it drops onto any colour
+  // with mix-blend-mode:overlay and carries only the SHAPE of the dents.
+  set('--tex-iron', texTile(96, (g, n) => {
+    const h = nfield(n, 6, 6, 2, 4);
+    const img = g.createImageData(n, n), d = img.data;
+    const at = (a, b) => h[(((b % n) + n) % n) * n + (((a % n) + n) % n)];
+    const LX = -0.62, LY = -0.62, LZ = 0.48, S = 26;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++){
+      const nx2 = (at(x - 1, y) - at(x + 1, y)) * S, ny2 = (at(x, y - 1) - at(x, y + 1)) * S;
+      const l = Math.sqrt(nx2 * nx2 + ny2 * ny2 + 1);
+      const k = (nx2 * LX + ny2 * LY + LZ) / l;
+      const v = Math.max(0, Math.min(255, 128 + k * 150)) | 0;
+      const i = (y * n + x) * 4;
+      d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 200;
+    }
+    g.putImageData(img, 0, 0);
+  }));
+
+  // HIDE / PARCHMENT — soft blotches, for the book and the rules panel
+  set('--tex-hide', texTile(110, (g, n) => {
+    for (let i = 0; i < 44; i++){
+      const x = tnoise(i * 6.7) * n, y = tnoise(i * 3.9) * n, r = 8 + tnoise(i * 5.1) * 22;
+      g.fillStyle = tnoise(i * 12.3) > 0.55 ? 'rgba(200,168,110,.20)' : 'rgba(30,20,8,.22)';
+      wrapDraw(g, n, () => {
+        g.beginPath(); g.ellipse(x, y, r, r * (0.5 + tnoise(i) * 0.6), tnoise(i * 2) * 3, 0, Math.PI * 2);
+        g.fill();
+      });
+    }
+  }));
+}
 function boot(){
+  bakeTextures();
   bind();
   renderTitle();
   show('title');
