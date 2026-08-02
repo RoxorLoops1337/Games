@@ -462,14 +462,33 @@
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
-    background:radial-gradient(ellipse at 50% 45%, rgba(6,12,6,.82), rgba(4,8,4,.94)); }
+    background:radial-gradient(ellipse at 50% 45%, rgba(6,12,6,.92), rgba(3,6,3,.97)); }
+  /* the headline sits on its own slab, or the pit behind it reads through the
+     text and the payoff of the whole round looks like a rendering accident */
+  .verdict > div{ padding:16px 18px; border-radius:16px; max-width:94%;
+    background:linear-gradient(180deg, rgba(16,26,14,.94), rgba(8,14,8,.96));
+    border:1px solid #2c4326; box-shadow:0 14px 40px rgba(0,0,0,.6); }
+  .verdict.win > div{ border-color:#41682c; }
+  .verdict.lose > div{ border-color:#6b2a2a; }
   .verdict[hidden]{ display:none !important; }
-  .verdict .vhead{ font-size:clamp(22px,7cqw,30px); font-weight:900; letter-spacing:2px;
+  .verdict > div{ display:flex; flex-direction:column; align-items:center; gap:9px; }
+  .verdict .vhead{ font-size:clamp(17px,5.4cqw,26px); font-weight:900; letter-spacing:1.6px;
+    line-height:1.1; max-width:100%;
     color:var(--lime); text-shadow:0 0 26px rgba(150,255,90,.4), 0 4px 0 #33591a;
     animation:vslam .34s cubic-bezier(.2,1.6,.4,1); }
   .verdict.lose .vhead{ color:#ff7b7b; text-shadow:0 0 26px rgba(255,90,90,.4), 0 4px 0 #6b1f1f; }
-  .verdict .vsub{ font-size:14px; font-weight:800; color:#cfe0c2; letter-spacing:.4px; }
-  .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270; }
+  .verdict .vsub{ font-size:13px; font-weight:800; color:#cfe0c2; letter-spacing:.4px; }
+  .verdict .vsub .ok{ color:var(--lime); }
+  .verdict .vsub b{ color:#ff9d6b; }
+  .verdict .vrun{ display:flex; flex-direction:column; align-items:center; gap:7px; margin-top:2px; }
+  .verdict .vpips{ display:flex; gap:4px; }
+  .verdict .vpips i{ width:8px; height:8px; border-radius:3px; background:#22331e;
+    border:1px solid #33501f; display:block; }
+  .verdict .vpips i.done{ background:#6fb32c; border-color:#a6ff5e; }
+  .verdict .vpips i.now{ background:#ffd34d; border-color:#fff0b0; box-shadow:0 0 8px rgba(255,211,77,.6); }
+  .verdict .vpips i.boss{ border-radius:50%; }
+  .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270;
+    margin-top:4px; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
   .benchwrap{ position:relative; flex:0 0 auto; display:flex; align-items:center;
     min-height:0; border-top:1px solid #22331e; padding-top:5px;
@@ -1703,8 +1722,11 @@ function makeFoe(i, mods){
    drawn by the same painter from the same visual genes — so what you are
    reading across the field is exactly what you read on your own cards.
    ========================================================================== */
-const ENEMY_BASE = 3.2;       // leader stat power at round 1
-const ENEMY_GROWTH = 1.22;   // per round; fitted by simulation
+const ENEMY_BASE = 7.5;       // leader stat power at round 1
+// Deliberately FLAT. A steep curve made the run end at the same round however
+// well you bred, because the enemy outgrew every deck; a flat one that starts
+// hard lets a compounding herd actually pull ahead of it.
+const ENEMY_GROWTH = 1.10;   // per round; fitted by simulation
 const GRUNT_FRAC = 0.60;      // a grunt is this much of its leader
 // Each roster entry lends its leader a keyword, so the flavour survives the
 // move list it used to have.
@@ -1738,7 +1760,10 @@ function makeEnemyTeam(i, mods, wave, waves){
   // Waves grow as they come, and the named foe walks in with the last one.
   const swell = 1 + 0.11 * (w - 1);
   const n = waveSize(i, w, ws);
-  const lead = ENEMY_BASE * Math.pow(ENEMY_GROWTH, i) * (f.boss ? 1.25 : 1) * mul * swell;
+  // The back half of the run is where a bred herd is supposed to pay off, so it
+  // ramps harder than the curve: a deck that only ever coasted stalls here.
+  const late = 1 + 0.10 * Math.max(0, i - 7);
+  const lead = ENEMY_BASE * Math.pow(ENEMY_GROWTH, i) * (f.boss ? 1.25 : 1) * mul * swell * late;
   const threat = FOE_THREAT[i % FOE_THREAT.length] || 'none';
   const team = [];
   if (last){
@@ -1876,12 +1901,13 @@ const FEED_START = 4;
 const FEED_EVERY = 1.45;        // seconds per point of Feed
 const HAND_SIZE_A = 4;          // cards ready to play
 const DRAW_DELAY = 1.1;         // seconds before the next card slides in
-const WAVE_GAP = 5.2;           // seconds between waves
+const WAVE_GAP = 4.6;           // seconds between waves
 const SPAWN_GAP = 0.75;         // seconds between the beasts WITHIN a wave
 const CORPSE_T = 1.1;           // how long a body lies there before it fades
 
 /* Abilities live on the beast, not on its price. Any of them can turn up on a
    free animal or a five-Feed one. */
+const HOLD_X = AW * 0.66;       // your lot advance this far and no further
 const AOE_R = 9;                // splash radius in world units
 const STUN_T = 0.9;             // seconds a stun holds
 const RECOVER = 5.0;            // seconds a downed beast of yours needs before
@@ -1961,6 +1987,10 @@ function swingAt2(u, target){
   const dmg = unitMightA(u);
   if (dmg <= 0) return;
   ev('swing', { id: u.id, side: u.side, x: u.x, y: u.y, tx: target.x, ty: target.y, dmg });
+  // a blow shoves. This is a DRAW offset, not a position: a rock-back that
+  // actually moved beasts would be a free stall and the player, who usually has
+  // the numbers, would win the fight with it.
+  target.kb = (u.side === 'us' ? 1 : -1) * Math.min(1.0, 0.3 + dmg * 0.035);
   hurtUnit(target, dmg, u);
   if (u.c.trait === 'cleave'){
     ev('boom', { x: target.x, y: target.y, r: AOE_R });
@@ -2009,7 +2039,7 @@ function arenaTick(dt){
   while (F.spawns.length && F.spawns[0].at <= F.t){
     const s = F.spawns.shift();
     const u = spawnUnit(s.c, 'them', DOOR_X, laneY(F.units.length));
-    ev('arrive', { id: u.id, wave: s.wave });
+    ev('arrive', { id: u.id, wave: s.wave, y: u.y, lead: !!s.c.leader });
     F.waveSeen = s.wave;
   }
 
@@ -2017,6 +2047,7 @@ function arenaTick(dt){
     if (!u.alive){ u.dead -= dt; continue; }
     if (u.hitT > 0) u.hitT -= dt;
     if (u.swingT > 0) u.swingT -= dt;
+    if (u.kb){ u.kb *= Math.max(0, 1 - dt * 8); if (Math.abs(u.kb) < 0.02) u.kb = 0; }
     if (u.poisT > 0){
       u.poisT -= dt;
       u.poisAcc = (u.poisAcc || 0) + dt;
@@ -2031,9 +2062,17 @@ function arenaTick(dt){
     if (foe){
       const dx = foe.x - u.x;
       const dist = Math.abs(dx) + Math.abs(foe.y - u.y) * 0.35;
-      if (dist > reach){
+      // Yours hold a line. Without this they chased every arrival right up to
+      // the door, the fight happened in the last tenth of the pit, and the two
+      // thirds in front of the nest were dead space.
+      const cap = u.side === 'us' && foe.x > HOLD_X;
+      if (cap && u.x >= HOLD_X - 0.2){
+        u.moving = 0;
+        u.x += (HOLD_X - u.x) * Math.min(1, dt * 4);
+      } else if (dist > reach){
         const dir = dx > 0 ? 1 : -1;
-        u.x += dir * unitSpeed(u) * dt;
+        u.x += Math.min(dir * unitSpeed(u) * dt, u.side === 'us' ? Math.max(0, HOLD_X - u.x) : 1e9);
+        if (u.side !== 'us') u.x = Math.min(u.x, DOOR_X);
         // They meet HALFWAY between their two lanes rather than one walking all
         // the way onto the other's. Without this every fight collapsed into a
         // single row across the middle of the pit and the depth went to waste.
@@ -2106,7 +2145,7 @@ function playCardA(i){
   if (c.trait === 'cursed') R.hp = Math.max(0, R.hp - 2);
   const u = spawnUnit(Object.assign({}, c), 'us', GATE_X, laneY(F.units.length + 3));
   u.src = c;                          // so it can limp home if it goes down
-  ev('sortie', { id: u.id, cost: c.cost });
+  ev('sortie', { id: u.id, cost: c.cost, y: u.y });
   return true;
 }
 function waveCount(idx){ return clamp(2 + Math.floor(idx / 4), 2, 4); }
@@ -3444,6 +3483,29 @@ function spriteFor(c){
   spriteCache[key] = cv;
   return cv;
 }
+/** A solid-white copy of a beast, for the frame it gets hit on. Painting the
+ *  flash straight onto the pit with source-atop tinted the SAND as well, which
+ *  put a grey slab over half the arena. */
+const flashCache = {};
+function flashFor(c){
+  const key = c.id + ':' + c.might + ':' + c.hide + ':' + c.trait;
+  if (flashCache[key]) return flashCache[key];
+  const src = spriteFor(c);
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 104;
+  const g = cv.getContext && cv.getContext('2d');
+  if (g && g.drawImage){
+    try {
+      g.drawImage(src, 0, 0);
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, 128, 104);
+      g.globalCompositeOperation = 'source-over';
+    } catch (e){}
+  }
+  flashCache[key] = cv;
+  return cv;
+}
 let pitFx = [];
 function pitAdd(o){ if (pitFx.length < 90) pitFx.push(o); }
 
@@ -3457,6 +3519,11 @@ function drawPit(){
   if (!ctx || !ctx.clearRect) return;
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  if (pitShake > 0){
+    const t = (F ? F.t : 0) * 90;
+    ctx.translate(Math.sin(t) * pitShake, Math.cos(t * 1.7) * pitShake * 0.6);
+  }
   // The sand is never deeper than it is wide, whatever shape the box ends up:
   // a tall phone gets more SKY, not a pit you could fall down.
   const horizon = Math.max(H * 0.16, H - Math.min(H * 0.80, W * 1.02));
@@ -3529,7 +3596,7 @@ function drawPit(){
   doorG.addColorStop(1, 'transparent');
   ctx.fillStyle = doorG; ctx.fillRect(W * 0.84, horizon, W * 0.16, H - horizon);
 
-  if (!F) return;
+  if (!F){ ctx.restore(); return; }
   const px = (x) => (x / AW) * W;
   const py = (y) => horizon + (H - horizon) * (0.22 + 0.72 * (y / AH));
   const scaleAt = (y) => 0.80 + 0.40 * (y / AH);
@@ -3560,6 +3627,7 @@ function drawPit(){
     if (u.alive){
       if (u.moving) bob = -Math.abs(Math.sin(F.t * 12 + u.id)) * h * 0.10;
       if (u.swingT > 0) lean = (u.side === 'us' ? 1 : -1) * u.swingT * w * 0.55;
+      if (u.kb) lean += u.kb * U * 1.6;                 // rocked back by the last blow
       if (u.hitT > 0) sq = 1 + u.hitT * 0.5;
     }
     ctx.translate(lean, bob);
@@ -3568,14 +3636,17 @@ function drawPit(){
     // the painter puts the animal's feet at 96% down its own tile
     ctx.drawImage(spr, -w / 2, -h + h * 0.04, w, h);
     if (u.hitT > 0 && u.alive){
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.8, u.hitT * 3) + ')';
-      ctx.fillRect(-w / 2, -h, w, h);
-      ctx.globalCompositeOperation = 'source-over';
+      const a0 = ctx.globalAlpha;
+      ctx.globalAlpha = Math.min(0.85, u.hitT * 3.4);
+      ctx.drawImage(flashFor(u.c), -w / 2, -h + h * 0.04, w, h);
+      ctx.globalAlpha = a0;
     }
     ctx.restore();
 
     if (!u.alive) continue;
+    // a little dust off the heels of anything running
+    if (u.moving && ((u.id * 7 + Math.floor(F.t * 14)) % 5 === 0))
+      pitAdd({ k: 'dust', x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
     const top = y - h - SPR * 0.04;
     // health, and only when it matters
     if (u.hp < u.max){
@@ -3595,65 +3666,126 @@ function drawPit(){
   // --- effects on top -----------------------------------------------------
   for (const f of pitFx){
     const x = px(f.x), y = py(f.y);
-    const k = 1 - f.t / f.life;
+    const k = 1 - f.t / f.life;              // 1 at birth, 0 at death
     ctx.globalAlpha = Math.max(0, k);
     if (f.k === 'boom'){
-      ctx.strokeStyle = '#ffd08a'; ctx.lineWidth = Math.max(2, W * 0.006);
+      ctx.strokeStyle = '#ffd08a'; ctx.lineWidth = Math.max(2, W * 0.007);
       ctx.beginPath(); ctx.arc(x, y - SPR * 0.25, AOE_R * U * (1 - k + 0.25), 0, Math.PI * 2); ctx.stroke();
+    } else if (f.k === 'ring'){
+      // the impact itself: a white flash ring that snaps outward
+      ctx.strokeStyle = 'rgba(255,255,255,.95)';
+      ctx.lineWidth = Math.max(2, W * 0.010) * k;
+      ctx.beginPath(); ctx.arc(x, y - SPR * 0.30, SPR * (0.10 + (1 - k) * 0.28), 0, Math.PI * 2); ctx.stroke();
+    } else if (f.k === 'slash'){
+      // who swung at whom, drawn as an arc across the gap
+      ctx.strokeStyle = 'rgba(255,246,214,.85)';
+      ctx.lineWidth = Math.max(2, W * 0.009) * k;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(x, y - SPR * 0.32, SPR * 0.34, f.dir > 0 ? -1.1 : 2.05, f.dir > 0 ? 1.1 : 4.25);
+      ctx.stroke();
     } else if (f.k === 'num'){
-      const fs = W * (0.036 + Math.min(0.030, f.v * 0.0022));
+      const fs = W * (0.038 + Math.min(0.034, f.v * 0.0024)) * (f.big ? 1.35 : 1);
       ctx.font = '900 ' + fs.toFixed(0) + 'px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.lineWidth = Math.max(3, W * 0.008); ctx.strokeStyle = 'rgba(0,0,0,.75)';
-      const ny = y - SPR * 0.6 - (1 - k) * SPR * 0.5;
+      ctx.lineWidth = Math.max(3, W * 0.009); ctx.strokeStyle = 'rgba(0,0,0,.8)';
+      // pops up fast, then floats
+      const rise = (1 - k) < 0.25 ? (1 - k) * 2.4 : 0.6 + (1 - k) * 0.5;
+      const ny = y - SPR * 0.55 - rise * SPR * 0.75;
       ctx.strokeText('-' + f.v, x, ny);
-      ctx.fillStyle = f.col || '#ffb27a';
+      ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffcf8a');
       ctx.fillText('-' + f.v, x, ny);
     } else if (f.k === 'spark'){
       ctx.fillStyle = f.col || '#ffd9a0';
       ctx.beginPath();
-      ctx.arc(x + f.dx * (1 - k) * SPR * 0.45, y - SPR * 0.3 + f.dy * (1 - k) * SPR * 0.45,
-        Math.max(1.5, W * 0.005) * k + 1, 0, 7);
+      ctx.arc(x + f.dx * (1 - k) * SPR * 0.5, y - SPR * 0.3 + f.dy * (1 - k) * SPR * 0.5,
+        Math.max(1.5, W * 0.006) * k + 1, 0, 7);
       ctx.fill();
+    } else if (f.k === 'dust' || f.k === 'puff'){
+      const big = f.k === 'puff';
+      ctx.fillStyle = big ? 'rgba(200,180,130,.5)' : 'rgba(190,170,120,.34)';
+      const r = SPR * (big ? 0.14 : 0.05) * (1 + (1 - k) * (big ? 2.4 : 1.6));
+      ctx.beginPath(); ctx.ellipse(x, y - r * 0.3, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (f.k === 'gate'){
+      // the door flares as something comes through it
+      const g2 = ctx.createRadialGradient(x, y - SPR * 0.3, 1, x, y - SPR * 0.3, SPR * 1.2 * (1.4 - k));
+      g2.addColorStop(0, f.side === 'us' ? 'rgba(166,255,94,.55)' : 'rgba(255,110,70,.6)');
+      g2.addColorStop(1, 'transparent');
+      ctx.fillStyle = g2;
+      ctx.beginPath(); ctx.arc(x, y - SPR * 0.3, SPR * 1.2 * (1.4 - k), 0, Math.PI * 2); ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
 }
 function stepFx(dt){
   for (const f of pitFx) f.t += dt;
   pitFx = pitFx.filter((f) => f.t < f.life);
+  pitShake *= Math.max(0, 1 - dt * 7);
+  if (pitShake < 0.2) pitShake = 0;
 }
-/** Turn the simulation's transcript into things to look at and listen to. */
+/** Turn the simulation's transcript into things to look at and listen to.
+ *  Nothing in here can change the fight — it reads the trail the tick left. */
 function drainArena(){
   if (!F || !F.events) return;
   for (const e of F.events){
-    if (e.k === 'hit'){
-      pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ff9d6b', t: 0, life: 0.75 });
-      for (let i = 0; i < 3; i++) pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 2, dy: -rng(), t: 0, life: 0.4 });
+    if (e.k === 'swing'){
+      // a slash across the gap, so you can see WHO hit WHOM
+      pitAdd({ k: 'slash', x: (e.x + e.tx) / 2, y: (e.y + e.ty) / 2,
+        dir: e.side === 'us' ? 1 : -1, t: 0, life: 0.20 });
+    } else if (e.k === 'hit'){
+      pitAdd({ k: 'ring', x: e.x, y: e.y, v: e.dmg, t: 0, life: 0.26 });
+      pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffcf8a',
+        big: e.dmg >= 9, t: 0, life: 0.8 });
+      for (let i = 0; i < (e.dmg >= 9 ? 6 : 3); i++)
+        pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 2.4, dy: -rng() * 1.2, t: 0, life: 0.42 });
       sfxStrike(e.dmg);
+      if (e.dmg >= 9) shakePit(Math.min(7, 2 + e.dmg * 0.18));
     } else if (e.k === 'boom'){
       pitAdd({ k: 'boom', x: e.x, y: e.y, t: 0, life: 0.42 });
       noise(0.12, { lp: 900, vol: 0.09 });
+      shakePit(4);
     } else if (e.k === 'die'){
-      for (let i = 0; i < 6; i++) pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 3, dy: -rng() * 1.4, col: '#c9b48a', t: 0, life: 0.6 });
+      for (let i = 0; i < 9; i++)
+        pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 3.4, dy: -rng() * 1.6,
+          col: e.side === 'us' ? '#9ae04a' : '#e0a05a', t: 0, life: 0.7 });
+      pitAdd({ k: 'puff', x: e.x, y: e.y, t: 0, life: 0.5 });
       sfxDie();
+      shakePit(3);
     } else if (e.k === 'arrive'){
-      tone(300, 0.07, { type: 'square', vol: 0.05 });
+      // the door flares and something walks out of it
+      pitAdd({ k: 'gate', x: DOOR_X, y: e.y, side: 'them', t: 0, life: 0.55 });
+      if (e.lead){ tone(140, 0.34, { type: 'sawtooth', vol: 0.07, glide: 60 }); duck(0.35, 300); }
+      else tone(300, 0.09, { type: 'square', vol: 0.05, glide: 240 });
     } else if (e.k === 'sortie'){
+      pitAdd({ k: 'gate', x: GATE_X, y: e.y, side: 'us', t: 0, life: 0.5 });
       sfxLand();
+    } else if (e.k === 'stun'){
+      tone(880, 0.12, { type: 'square', vol: 0.05, glide: 300 });
     } else if (e.k === 'breach'){
       sfxHurt();
       const nb = $('nestBar'); if (nb) anim(nb, 'bitten', 620);
-      if ($('nestHp')) $('nestHp').textContent = e.hp;
+      if ($('nestHp')) countUp($('nestHp'), e.hp, { dur: 300 });
       const eggs = Math.max(0, Math.round(3 * e.hp / R.maxHp));
       if ($('nestEggs')) $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
       const app = $('app'); if (app) anim(app, 'hurt', 320);
+      shakePit(9);
+      duck(0.5, 420);
+      if (R.hp > 0 && R.hp / R.maxHp < 0.3) startHeart();
+    } else if (e.k === 'heal'){
+      tone(660, 0.16, { type: 'sine', vol: 0.04 });
     } else if (e.k === 'feed'){
       tone(760, 0.04, { type: 'sine', vol: 0.03 });
+      const pip = $('feed') && $('feed').children ? $('feed').children[F.feed - 1] : null;
+      if (pip) anim(pip, 'fill', 300);
     }
   }
   F.events = [];
 }
+/* The pit itself kicks on a big blow. One number, decayed in stepFx, applied as
+   a translate in drawPit — no DOM animation to fight with the canvas. */
+let pitShake = 0;
+function shakePit(a){ if (!RM()) pitShake = Math.max(pitShake, a); }
 
 /* ------------------------------------------------------------- the loop -- */
 let rafId = 0, lastT = 0;
@@ -3777,7 +3909,8 @@ function renderFight(){
   drawPit();
   startLoop();
 }
-function spriteCacheReset(){ for (const k in spriteCache) delete spriteCache[k]; }
+function spriteCacheReset(){ for (const k in spriteCache) delete spriteCache[k];
+  for (const k in flashCache) delete flashCache[k]; }
 /** Match the canvas to its box so the pit is crisp on a phone. */
 function fitPit(){
   const cv = $('pit');
@@ -3898,6 +4031,7 @@ function doEnd(){
 function openDoors(){
   if (!F || F.started) return;
   F.started = 1;
+  const co = $('coach'); if (co) co.hidden = true;
   if (!HEADLESS){
     noise(0.12, { lp: 300, vol: 0.1 });
     tone(78, 0.32, { type: 'triangle', vol: 0.09, glide: 46 });
