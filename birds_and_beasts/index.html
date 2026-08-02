@@ -3506,6 +3506,13 @@ function flashFor(c){
   flashCache[key] = cv;
   return cv;
 }
+/** The keywords worth shouting about in the pit, and what colour they shout in.
+ *  Anything not in here is a plain animal and does not need a label. */
+const THREAT_TAG = {
+  cleave: ['AOE', '#ffd08a'], venom: ['PSN', '#b6ff8a'], stun: ['STN', '#ffd34d'],
+  frenzy: ['FAST', '#ff9d6b'], bulwark: ['WALL', '#7ec8ff'], swift: ['RUN', '#a6ff5e'],
+  leech: ['LCH', '#ff8ad4'], thorns: ['THRN', '#ffb0e0'], rally: ['RLY', '#c8b6ff'],
+};
 let pitFx = [];
 function pitAdd(o){ if (pitFx.length < 90) pitFx.push(o); }
 
@@ -3587,7 +3594,7 @@ function drawPit(){
   lit.addColorStop(0, 'rgba(255,226,160,.16)'); lit.addColorStop(1, 'transparent');
   ctx.fillStyle = lit; ctx.fillRect(0, horizon, W, H - horizon);
 
-  // --- the two ends: your gate, their door ---------------------------------
+  // --- the two ends: the nest you are holding, the door they come through --
   const nestG = ctx.createLinearGradient(0, 0, W * 0.14, 0);
   nestG.addColorStop(0, 'rgba(166,255,94,.30)'); nestG.addColorStop(1, 'transparent');
   ctx.fillStyle = nestG; ctx.fillRect(0, horizon, W * 0.14, H - horizon);
@@ -3595,6 +3602,25 @@ function drawPit(){
   doorG.addColorStop(0, 'rgba(230,80,50,' + (0.26 + 0.12 * flick).toFixed(2) + ')');
   doorG.addColorStop(1, 'transparent');
   ctx.fillStyle = doorG; ctx.fillRect(W * 0.84, horizon, W * 0.16, H - horizon);
+  // The thing you are defending has to BE somewhere. A straw nest with as many
+  // eggs left in it as you have health, down at the near end of the sand.
+  const ny = horizon + (H - horizon) * 0.84, nw = W * 0.20;
+  ctx.fillStyle = '#7a5c22';
+  ctx.beginPath(); ctx.ellipse(nw * 0.42, ny, nw * 0.52, nw * 0.20, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#5b4116';
+  ctx.beginPath(); ctx.ellipse(nw * 0.42, ny + nw * 0.05, nw * 0.52, nw * 0.15, 0, 0, Math.PI); ctx.fill();
+  const eggsLeft = R ? Math.max(0, Math.min(3, Math.ceil(3 * R.hp / R.maxHp))) : 3;
+  for (let i = 0; i < eggsLeft; i++){
+    ctx.fillStyle = '#f2dcae';
+    ctx.beginPath();
+    ctx.ellipse(nw * (0.20 + i * 0.22), ny - nw * 0.10, nw * 0.085, nw * 0.115, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // and the gate posts your lot come out of
+  ctx.fillStyle = '#4a6b28';
+  ctx.fillRect(0, horizon + (H - horizon) * 0.06, W * 0.022, (H - horizon) * 0.94);
+  ctx.fillStyle = '#6f9b3c';
+  ctx.fillRect(0, horizon + (H - horizon) * 0.06, W * 0.022, Math.max(2, H * 0.006));
 
   if (!F){ ctx.restore(); return; }
   const px = (x) => (x / AW) * W;
@@ -3656,11 +3682,28 @@ function drawPit(){
       ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e05a4a';
       ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh);
     }
+    // What this one DOES, in three letters. You cannot read a keyword off a
+    // procedural animal, and finding out by being poisoned is too late.
+    const kw = THREAT_TAG[u.c.trait];
+    if (kw){
+      const fs = Math.max(7, W * 0.020);
+      ctx.font = '900 ' + fs.toFixed(0) + 'px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      const tw = fs * 2.2, th2 = fs * 1.35, ty = top - fs * 1.5;
+      ctx.fillStyle = 'rgba(6,10,5,.85)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x - tw / 2, ty - th2 * 0.78, tw, th2, th2 * 0.4);
+      else ctx.rect(x - tw / 2, ty - th2 * 0.78, tw, th2);
+      ctx.fill();
+      ctx.fillStyle = kw[1];
+      ctx.fillText(kw[0], x, ty);
+    }
     // status pips
     const pr = Math.max(2.5, W * 0.007);
     let sx = x - pr * 2;
-    if (u.pois > 0){ ctx.fillStyle = '#b6ff8a'; ctx.beginPath(); ctx.arc(sx, top - pr * 3, pr, 0, 7); ctx.fill(); sx += pr * 3; }
-    if (u.stun > 0){ ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(sx, top - pr * 3, pr, 0, 7); ctx.fill(); }
+    const py2 = top - (kw ? Math.max(7, W * 0.020) * 2.9 : Math.max(2.5, W * 0.007) * 3);
+    if (u.pois > 0){ ctx.fillStyle = '#b6ff8a'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); sx += pr * 3; }
+    if (u.stun > 0){ ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); }
   }
 
   // --- effects on top -----------------------------------------------------
