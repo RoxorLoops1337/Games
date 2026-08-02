@@ -14,7 +14,7 @@
     --bg:#0b120c; --ink:#e9f3df; --dim:#8fa285;
     --lime:#a6ff5e; --pink:#ff8ad4; --gold:#ffd34d; --blue:#7ec8ff;
     --might:#ff8f6b; --hpred:#ff5d5d;
-    --t-display:clamp(24px,4.6vw,36px);
+    --t-display:clamp(24px,7cqw,36px);
     --t-h2:20px; --t-h3:15px; --t-body:14px; --t-label:10px; --t-num:15px;
     --edge:#0a120a;
   }
@@ -60,7 +60,7 @@
   .gold{ color:var(--lime); }
   .pink{ color:var(--pink); }
   .dim{ color:var(--dim); }
-  .tiny{ font-size:var(--t-label); letter-spacing:2.6px; text-transform:uppercase; color:var(--dim);
+  .tiny{ font-size:10.5px; letter-spacing:2.4px; text-transform:uppercase; color:#9db38f;
     font-weight:800; }
   /* the sentence that tells you what a screen is for — never .tiny */
   .instr{ font-size:var(--t-body); letter-spacing:.2px; color:#cfe0c2; }
@@ -105,12 +105,36 @@
     border:1px dashed #33492c; box-shadow:none; }
   .btn[disabled]:hover{ filter:none; }
 
-  /* ---------- title ---------- */
-  .tcard{ width:min(620px,94vw); padding:24px 26px; border-radius:20px;
+  /* ---------- title ----------
+     The plate sits in a ROOM, not on a void: a cold sky, the lit line of the
+     barn's far wall and a warm floor under it. */
+  #title{ background:
+    radial-gradient(120% 40% at 50% 88%, rgba(150,225,105,.13), transparent 70%),
+    linear-gradient(180deg, #0a1310 0%, #0b1610 46%, #111d0d 74%, #17260f 100%); }
+  #title::after{ content:''; position:absolute; left:0; right:0; top:52%; bottom:0;
+    pointer-events:none; opacity:.45;
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,.30) 0 3px, transparent 3px 28px);
+    -webkit-mask-image:linear-gradient(180deg, transparent, #000 70%);
+    mask-image:linear-gradient(180deg, transparent, #000 70%); }
+  #title > .tcard{ position:relative; z-index:1; }
+  /* every plate screen is a ROOM, not a plate on a void */
+  #hatch, #wild{ background:
+    radial-gradient(120% 40% at 50% 92%, rgba(150,225,105,.10), transparent 70%),
+    linear-gradient(180deg, #070f0c 0%, #0a140e 55%, #0f1a0b 100%); }
+  #over.win{ background:
+    radial-gradient(120% 40% at 50% 92%, rgba(150,225,105,.12), transparent 70%),
+    linear-gradient(180deg, #070f0c 0%, #0a140e 55%, #101c0b 100%); }
+  #over.lose{ background:
+    radial-gradient(120% 40% at 50% 92%, rgba(255,90,90,.09), transparent 70%),
+    linear-gradient(180deg, #0a0808 0%, #100a0a 55%, #160c0c 100%); }
+  /* Every plate is sized off the FRAME (a CSS container), never the window: a
+     vw here renders a 620px card inside a 505px phone and slices it both ends. */
+  .tcard{ width:100%; max-width:min(620px, calc(100cqw - 24px)); min-height:0;
+    max-height:100%; padding:22px 22px; border-radius:20px;
     background:linear-gradient(180deg,#1a2b1e,#0e1810 70%); border:1px solid #0a120a;
     box-shadow:inset 0 1px 0 rgba(190,255,150,.20), inset 0 0 0 2px rgba(70,110,55,.45),
       inset 0 0 70px rgba(140,255,110,.05), 0 26px 60px rgba(0,0,0,.65); }
-  .tcard h1{ font-size:clamp(26px,6.4vw,44px); line-height:1.05; color:var(--lime); letter-spacing:-.5px;
+  .tcard h1{ font-size:clamp(26px,10cqw,44px); line-height:1.05; color:var(--lime); letter-spacing:-.5px;
     text-shadow:0 0 22px rgba(150,255,90,.35), 0 3px 0 #33591a; }
   .tcard h1 em{ font-style:normal; color:var(--pink); text-shadow:0 0 22px rgba(255,130,200,.4), 0 3px 0 #7d2f5c; }
   .sub{ margin:8px 0 14px; font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--dim); font-weight:800; }
@@ -134,16 +158,22 @@
      Two parents pulse; the chick between them is bred out of their genes every
      four seconds and given a name. It is the whole hook of the game, on the
      first screen, with no explanation needed. */
-  .tshow{ display:flex; align-items:flex-end; justify-content:center; gap:clamp(10px,3.4vw,28px);
-    margin:14px auto 4px; }
+  .tshow{ position:relative; display:flex; align-items:flex-end; justify-content:center;
+    gap:clamp(6px,2.4cqw,18px); margin:10px auto 2px; padding-bottom:14px; }
+  /* they stand on a floor — the same barn floor the field has */
+  .tshow::after{ content:''; position:absolute; left:2%; right:2%; bottom:0; height:16px;
+    pointer-events:none; border-radius:50%;
+    background:
+      linear-gradient(180deg, rgba(120,190,90,.22), transparent 60%),
+      radial-gradient(ellipse 60% 120% at 50% 0%, rgba(34,55,28,.9), transparent 72%); }
   .tshow .tb{ position:relative; text-align:center; flex:0 0 auto;
     background:radial-gradient(ellipse 62% 16% at 50% 84%, rgba(166,255,94,.20), transparent 70%); }
-  .tshow canvas{ display:block; width:clamp(84px,22vw,120px); height:auto; }
-  .tshow .tb.mid{ transform:scale(1.12) translateY(-8px); z-index:1;
+  .tshow canvas{ display:block; width:clamp(88px,25cqw,126px); height:auto; }
+  .tshow .tb.mid{ transform:scale(1.1) translateY(-6px); z-index:1;
     background:radial-gradient(ellipse 62% 16% at 50% 84%, rgba(255,138,212,.26), transparent 70%); }
-  .tshow .cap{ font-size:9px; letter-spacing:1.8px; text-transform:uppercase; font-weight:800;
-    color:#6d8a5e; margin-top:-2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    max-width:clamp(84px,22vw,120px); }
+  .tshow .cap{ font-size:9px; letter-spacing:1.4px; text-transform:uppercase; font-weight:800;
+    color:#8aa87a; margin-top:-2px; white-space:nowrap; overflow:hidden;
+    max-width:clamp(88px,25cqw,126px); }
   .tshow .tb.mid .cap{ color:var(--pink); }
   .tshow .tb.swap canvas{ animation:pop .38s cubic-bezier(.2,1.3,.4,1) both; }
   .tshow .tb.par canvas{ animation:tbreathe 3.4s ease-in-out infinite; }
@@ -163,6 +193,8 @@
   .hpbar{ width:120px; height:11px; border-radius:6px; background:#1b2a18;
     border:1px solid #33492c; overflow:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,.6); }
   .hpbar i{ display:block; height:100%; background:linear-gradient(90deg,#ff5d5d,#ff9d6b); transition:width .3s ease; }
+  /* a trample is a WOUND: the bar drains over the same 700ms the number ticks */
+  .hpbar i.drain{ transition:width .7s cubic-bezier(.25,.8,.3,1); }
 
   /* ---------- card: an object with thickness, not a div ----------
      The card is the product of this game — bred, named, kept, culled. So it is
@@ -170,6 +202,7 @@
      specular pass across the top-left, and a frame that gets richer with the
      generation. A G5 prize animal must be a visibly better object than a G1. */
   .card{ position:relative; width:118px; flex:0 0 auto; border-radius:13px; overflow:hidden;
+    display:flex; flex-direction:column;
     background:linear-gradient(180deg,#22331f 0%,#1a2818 42%,#0f180e 100%);
     border:1px solid #080f08;
     box-shadow: inset 0 1px 0 rgba(190,255,150,.18), inset 0 0 0 1px rgba(80,120,60,.30),
@@ -199,7 +232,7 @@
   .card.dead:hover{ transform:none; box-shadow:0 2px 0 var(--edge), 0 8px 14px -6px rgba(0,0,0,.7); }
   .card.big{ width:150px; }
   /* the art well is lit from above, like the arena floor and the barn */
-  .card .art{ position:relative; height:81px; display:block; width:100%;
+  .card .art{ position:relative; height:81px; flex:0 0 auto; display:block; width:100%;
     background:
       radial-gradient(ellipse 120% 70% at 50% -8%, rgba(190,255,150,.10), transparent 60%),
       radial-gradient(ellipse at 50% 78%, #17261b, #060c06 80%);
@@ -221,19 +254,31 @@
   /* The trait is a tab, not a floor. Ten lime slabs on the Cull screen read as a
      barcode and out-shout the animal; a card with nothing to say now says
      nothing at all. The filled slab is RESERVED for .card.big — Hatch and Wild,
-     where the trait is the live decision. */
+     where the trait is the live decision.
+     A trait-less card KEEPS the tab's footprint (hidden, not display:none), so
+     every card in a row ends on the same line — ten cards with ragged bottoms
+     read as a broken layout and wreck the side-by-side the Cull exists for. */
   .card .tr{ font-size:9px; letter-spacing:1.4px; text-transform:uppercase; text-align:center;
     padding:5px 3px 6px; color:var(--lime); background:none; font-weight:800; box-shadow:none;
+    margin-top:auto;
     border-top:1px solid rgba(166,255,94,.22); text-shadow:0 0 10px rgba(166,255,94,.35); }
   .card .tr.bad{ color:#ff9d9d; border-top-color:rgba(255,120,120,.28);
     text-shadow:0 0 10px rgba(255,120,120,.35); }
-  .card .tr.no{ display:none; }
-  .card.big .tr{ font-size:var(--t-label); letter-spacing:1.2px; padding:4px 3px 5px; border-top:none;
-    color:#0e1a0c; background:linear-gradient(180deg,#bcff6e,#86d243); text-shadow:none;
+  .card .tr.no{ visibility:hidden; border-top-color:transparent; }
+  /* the big card's slab is turned down to match the small ones; a filled slab
+     is now reserved for the one trait that is NEW vs. both parents */
+  .card.big{ min-height:0; }
+  .card.big .tr{ font-size:var(--t-label); letter-spacing:1.4px; padding:6px 3px 7px;
+    color:var(--lime); background:none; text-shadow:0 0 10px rgba(166,255,94,.35);
+    border-top:1px solid rgba(166,255,94,.30); box-shadow:none; }
+  .card.big .tr.no{ display:none; }
+  .card.big .tr.bad{ color:#ff9d9d; border-top-color:rgba(255,120,120,.30); background:none;
+    text-shadow:0 0 10px rgba(255,120,120,.35); }
+  /* the exception: a trait the chick did NOT inherit gets the loud slab */
+  .card.big .tr.fresh{ color:#0e1a0c; background:linear-gradient(180deg,#bcff6e,#86d243);
+    text-shadow:none; border-top:none;
     box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 -1px 0 rgba(0,0,0,.5); }
-  .card.big .tr.no{ display:block; background:linear-gradient(180deg,#1e2c1b,#162114); color:#6b7d63;
-    box-shadow: inset 0 1px 0 rgba(190,255,150,.10), 0 -1px 0 rgba(0,0,0,.5); }
-  .card.big .tr.bad{ background:linear-gradient(180deg,#ff9d9d,#e05555); color:#2a0808; text-shadow:none; }
+  .card.big .tr.fresh.bad{ background:linear-gradient(180deg,#ff9d9d,#e05555); color:#2a0808; }
 
   /* ---------- nest ---------- */
   .panel{ background:linear-gradient(180deg,#152318,#0e1810); border:1px solid #0a120a;
@@ -241,27 +286,43 @@
     border-radius:14px; padding:10px 12px; }
   /* the barn floor: the herd stands in a framed space, not on a black void.
      The frame shrink-wraps the herd — a 10-card barn must not sit in the middle
-     of a 660px box with 170px of empty barn above and below it. */
+     of a 660px box with 170px of empty barn above and below it.
+     The barn is a FRAME that never scrolls; the herd scrolls inside it. That
+     way the floor glow and the "there is more" lip stay pinned to the frame
+     instead of being dragged into the middle of the last row of cards. */
   .deckwrap{ position:relative; flex:0 1 auto; min-height:0; max-height:100%;
-    overflow-y:auto; padding:16px 12px 50px;
+    display:flex; flex-direction:column; overflow:hidden;
     background:
       radial-gradient(120% 60% at 50% 0%, rgba(120,190,90,.10), transparent 62%),
       linear-gradient(180deg, rgba(26,44,28,.55), rgba(10,18,10,.10) 45%, rgba(5,9,5,.55));
     border:1px solid rgba(166,255,94,.08); border-radius:16px;
     box-shadow:inset 0 1px 0 rgba(190,255,150,.07), inset 0 -30px 50px -30px #000;
-    max-width:min(1040px,96vw); width:100%; margin-inline:auto;
-    scroll-snap-type:y proximity; }
-  /* the same floor the arena has, so the barn and the ring are one place */
-  .deckwrap::after{ content:''; position:absolute; left:8%; right:8%; bottom:0; height:46px;
-    pointer-events:none;
+    width:100%; margin-inline:auto; }
+  /* the same floor the arena has, so the barn and the ring are one place —
+     turned right down and kept behind the herd, because at full strength it
+     drew a lime band straight through the last card's trait tab */
+  .deckwrap::after{ content:''; position:absolute; left:8%; right:8%; bottom:0; height:38px;
+    pointer-events:none; z-index:0; opacity:.4;
     background:radial-gradient(ellipse 70% 200% at 50% 6%, #22371c, transparent 74%);
-    border-top:1px solid rgba(166,255,94,.13); }
+    border-top:1px solid rgba(166,255,94,.10); }
+  /* a hard lip, only when something is actually cut off below it */
+  .deckwrap.more::before{ content:''; position:absolute; left:0; right:0; bottom:0; height:1px;
+    z-index:3; pointer-events:none; box-shadow:0 -16px 22px -9px rgba(0,0,0,.95);
+    background:linear-gradient(90deg,transparent,rgba(166,255,94,.22),transparent); }
+  .deckwrap > .grid{ position:relative; z-index:1; flex:1 1 auto; min-height:0;
+    overflow-y:auto; padding:16px 12px 24px; scroll-snap-type:y proximity; }
+  /* the last row FADES rather than being sliced — at EVERY width */
+  .deckwrap.more > .grid{
+    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 44px),transparent);
+    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 44px),transparent); }
   .deckwrap .card{ scroll-snap-align:start; }
+  .deckwrap > .grid > .card.orphan{ grid-column:1 / -1; justify-self:center; }
   .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr));
-    gap:12px 10px; justify-items:center; align-content:start; }
+    gap:12px 10px; justify-items:center; align-content:start; align-items:stretch; }
   /* columns come from the COUNT, not from auto-fill, so ten cards go 5+5 and
      thirteen go 5+4+4 — a two-card orphan row reads as a rendering fault */
   .deckwrap > .grid{ align-content:start; justify-content:center;
+    grid-auto-rows:max-content;
     grid-template-columns:repeat(var(--cols,6),118px); }
   .foeprev{ display:flex; align-items:center; gap:12px; }
   .foeprev .fe{ display:block; width:62px; height:auto; flex:0 0 auto;
@@ -273,43 +334,196 @@
   .slopbox{ font-size:var(--t-num); font-weight:900; color:var(--gold); background:#17210f;
     border:1px solid #3d4d22; box-shadow:inset 0 1px 0 rgba(255,211,77,.18);
     border-radius:9px; padding:3px 10px; white-space:nowrap; }
-  .ritrow{ flex:0 0 auto; display:flex; gap:6px; overflow-x:auto; padding:2px 2px 4px; scrollbar-width:thin;
-    scroll-snap-type:x proximity;
-    -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 32px),transparent);
-    mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 32px),transparent); }
-  .rit{ flex:0 0 auto; min-width:118px; padding:7px 10px; border-radius:10px; cursor:pointer;
-    scroll-snap-align:start; background:linear-gradient(180deg,#162315,#101c10); border:1px solid #26361f;
+  /* Five breeding rituals in a phone-wide column. A sideways scroller cut them
+     off mid-word with two thirds of the choice off-screen, so they wrap. */
+  .ritrow{ flex:0 0 auto; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:5px; padding:2px 2px 4px; }
+  .ritrow .rit:first-child{ grid-column:1 / -1; }
+  .rit{ min-width:0; padding:6px 9px; border-radius:10px; cursor:pointer;
+    background:linear-gradient(180deg,#162315,#101c10); border:1px solid #26361f;
     box-shadow:inset 0 1px 0 rgba(190,255,150,.10); text-align:left; font-family:inherit; color:#cfe0c2; }
-  .rit b{ display:block; font-size:12.5px; color:#eaf6df; font-weight:800; }
-  .rit i{ display:block; font-size:10px; font-style:normal; color:var(--dim); line-height:1.3; margin-top:2px; }
+  .rit b{ display:block; font-size:11.5px; color:#eaf6df; font-weight:800; line-height:1.2; }
+  .rit i{ display:block; font-size:9.5px; font-style:normal; color:var(--dim); line-height:1.25; margin-top:2px; }
   .rit .c{ float:right; font-size:11px; font-weight:900; color:var(--gold); }
   .rit.on{ border-color:var(--pink); background:linear-gradient(180deg,#241a2a,#170f1c);
     box-shadow:inset 0 1px 0 rgba(255,180,225,.22), 0 0 0 1px rgba(255,130,200,.35), 0 0 18px -6px rgba(255,130,200,.6); }
   .rit.no{ opacity:.4; cursor:not-allowed; }
   .haz{ border-color:#a0552a !important; color:#ffc48a !important; }
-  .litter{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
-  .pickwrap{ position:relative; cursor:pointer; }
+  /* Comparing two animals is the WHOLE decision, so the two cards share one
+     baseline: the selection cue is a ring, never a lift. */
+  .litter{ display:flex; gap:14px; justify-content:center; flex-wrap:nowrap; align-items:stretch; }
+  .pickwrap{ position:relative; cursor:pointer; display:flex; flex-direction:column;
+    align-items:stretch; }
+  /* the two chicks line up stat row for stat row: the CARDS keep their natural
+     (identical) height and the taglines below them absorb the difference, so a
+     three-banner chick can never shunt its neighbour's stats out of line */
+  .litter .pickwrap > .card{ flex:0 0 auto; }
+  .litter .tagline{ flex:1 1 auto; }
+  /* on the clutch a trait-less chick keeps the tab's footprint but shows no
+     slab — the two cards must stay the same height to be comparable */
+  .litter .card.big .tr.no, #wGrid .card.big .tr.no{ display:block; visibility:hidden;
+    border-top-color:transparent; }
+  .litter .card.sel{ transform:none;
+    box-shadow:0 0 0 3px var(--pink), 0 0 28px -4px rgba(255,138,212,.6),
+      0 3px 0 var(--edge), 0 12px 22px -8px rgba(0,0,0,.8); }
+  .litter .card:hover{ transform:translateY(-3px); }
   .egg2{ font-size:52px; line-height:1; animation:wob 1.1s ease-in-out infinite; }
 
   /* ================= THE FIELD (9:16 portrait) =================
      Two lines facing each other down a phone-shaped screen. Everything is sized
      off the frame rather than the viewport, so the desktop letterbox and a real
      phone lay out identically. */
-  .field{ flex:1 1 auto; display:flex; flex-direction:column; justify-content:center;
-    gap:clamp(4px, 2.4vh, 22px); min-height:0; position:relative; padding:6px 0 2px; }
-  .field::before{ content:''; position:absolute; inset:5% 2%; pointer-events:none; border-radius:24px;
-    background:radial-gradient(ellipse at 50% 50%, rgba(150,220,110,.09), transparent 70%); }
-  .sideLbl{ flex:0 0 auto; text-align:center; font-size:10px; letter-spacing:2.2px;
-    text-transform:uppercase; color:#7d9270; padding:1px 0; }
+  /* THE STAGE. The field is a place: a cold far wall, a lit horizon at 46%, a
+     warm boarded floor coming toward you, and two lines standing on it — theirs
+     small and up the field, yours full size and near. The two rows sit in the
+     upper and lower thirds; the middle is the no-man's-land they meet in. */
+  .field{ flex:1 1 auto; display:flex; flex-direction:column; justify-content:space-evenly;
+    min-height:0; position:relative; padding:6px 0 4px; overflow:hidden;
+    border-radius:16px; isolation:isolate; }
+  .field::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(150% 44% at 50% 49%, rgba(150,225,105,.16), transparent 72%),
+      linear-gradient(180deg,
+        #08110d 0%, #0c160d 24%, #121e0d 42%,
+        #22381a 49%, #1a2c11 60%, #16250d 82%, #111d0a 100%); }
+  /* the boards of the floor, receding to the fence line at midfield */
+  .field::after{ content:''; position:absolute; inset:0; z-index:0;
+    pointer-events:none; opacity:.85;
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,.20) 0 3px, transparent 3px 26px);
+    -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.10) 0, rgba(0,0,0,.10) 44%, #000 62%);
+    mask-image:linear-gradient(180deg, rgba(0,0,0,.10) 0, rgba(0,0,0,.10) 44%, #000 62%); }
+  .side{ position:relative; z-index:1; flex:0 0 auto; display:flex; flex-direction:column; }
+  .side.them{ transform:scale(.88); transform-origin:50% 0%; }
+  .sideLbl{ flex:0 0 auto; text-align:center; font-size:11px; letter-spacing:2.2px;
+    text-transform:uppercase; color:#9db38f; padding:2px 0; text-shadow:0 1px 3px rgba(0,0,0,.9); }
   .sideLbl b{ color:#e9f3df; letter-spacing:1px; }
-  .lineRow{ flex:0 0 auto; display:flex; gap:5px; justify-content:center; align-items:flex-end;
-    padding:2px 4px; min-height:100px; }
-  .lineRow.them{ align-items:flex-start; }
-  .midline{ flex:0 0 auto; position:relative; text-align:center; padding:3px 0;
-    font-size:10px; letter-spacing:3px; text-transform:uppercase; color:#5f7554; }
+  .lineRow{ position:relative; flex:0 0 auto; display:flex; gap:5px; justify-content:center;
+    align-items:flex-end; padding:2px 4px 8px; min-height:100px; }
+  /* the ground each line stands on — without it they float in the dark */
+  .lineRow::after{ content:''; position:absolute; left:8%; right:8%; bottom:0; height:18px;
+    z-index:-1; pointer-events:none;
+    background:radial-gradient(ellipse 80% 100% at 50% 50%, rgba(0,0,0,.55), transparent 70%); }
+  .midband{ flex:0 0 auto; position:relative; z-index:2; }
+  .midline{ flex:0 0 auto; position:relative; z-index:1; text-align:center; padding:3px 0;
+    font-size:10px; letter-spacing:3px; text-transform:uppercase; color:#83997a; }
   .midline::before{ content:''; position:absolute; left:6%; right:6%; top:50%; height:1px;
-    background:linear-gradient(90deg, transparent, #2f4a28 20%, #2f4a28 80%, transparent); }
-  .midline span{ position:relative; background:#0b120c; padding:0 10px; }
+    background:linear-gradient(90deg, transparent, rgba(166,255,94,.28) 20%,
+      rgba(166,255,94,.28) 80%, transparent); }
+  .midline span{ position:relative; padding:1px 12px; border-radius:99px;
+    background:rgba(6,12,6,.82); box-shadow:0 0 0 1px rgba(166,255,94,.10); }
+
+  /* barn dust, drifting through the light. Eight nodes, pure CSS loops, no
+     per-frame JS — the arena reads as air rather than as a backdrop. */
+  .mote{ position:absolute; z-index:0; border-radius:50%; pointer-events:none;
+    background:rgba(205,240,175,.4); will-change:transform,opacity;
+    animation:mdrift linear infinite; }
+  @keyframes mdrift{ 0%{ transform:translate(0,0); opacity:0 }
+    18%{ opacity:.55 } 82%{ opacity:.4 }
+    100%{ transform:translate(24px,-64px); opacity:0 } }
+
+  /* the collision: the missing beat between the two lunges */
+  .lineRow.cls-up{ animation:clsup .24s cubic-bezier(.3,1.4,.5,1); }
+  .lineRow.cls-dn{ animation:clsdn .24s cubic-bezier(.3,1.4,.5,1); }
+  @keyframes clsup{ 0%,100%{transform:translateY(0)} 38%{transform:translateY(-7px)} }
+  @keyframes clsdn{ 0%,100%{transform:translateY(0)} 38%{transform:translateY(7px)} }
+
+  /* the killing blow: one absolutely-positioned div, opacity only */
+  .killflash{ position:absolute; z-index:7; pointer-events:none; width:340px; height:340px;
+    margin:-170px 0 0 -170px; border-radius:50%; opacity:0;
+    background:radial-gradient(circle, rgba(255,255,255,.92), rgba(255,240,190,.5) 34%, transparent 70%);
+    animation:killpop .28s ease-out forwards; }
+  @keyframes killpop{ 0%{ opacity:0; transform:scale(.3) } 22%{ opacity:1; transform:scale(.8) }
+    100%{ opacity:0; transform:scale(1.25) } }
+
+  /* ---------- the forecast: an autobattler is the READ ----------------------
+     Every number here is already pure and already computed by the rules
+     (cardHide, cardDamage, frontOf). Surfacing it is the difference between
+     ordering a line and guessing at one. Recomputed synchronously on every
+     field / unfield / reorder. */
+  .cast{ position:relative; z-index:2; padding:6px 14px 2px; }
+  .cast[hidden]{ display:none; }
+  .cbars{ position:relative; display:flex; align-items:center; height:9px;
+    border-radius:5px; overflow:hidden; background:rgba(6,12,6,.55);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.7), 0 0 0 1px rgba(166,255,94,.10); }
+  .cbars i{ display:block; height:100%; transition:width .22s cubic-bezier(.3,.9,.4,1); }
+  .cbars i.cu{ background:linear-gradient(90deg,#4e8020,#bcff6e); }
+  .cbars i.ct{ margin-left:auto; background:linear-gradient(270deg,#7a2b2b,#ff9d6b); }
+  .cnums{ display:flex; align-items:baseline; gap:6px; padding:3px 1px 0;
+    font-size:10px; letter-spacing:1.6px; text-transform:uppercase; font-weight:800; }
+  .cnums .cu{ color:#bcff6e; } .cnums .ct{ color:#ff9d6b; margin-left:auto; }
+  .cnums .cvs{ color:#5e7454; letter-spacing:2px; }
+  .cnums b{ font-size:12px; letter-spacing:0; }
+  .cread{ text-align:center; padding:3px 0 0; font-size:11px; color:#9db38f;
+    letter-spacing:.2px; text-shadow:0 1px 3px rgba(0,0,0,.9); }
+  .cread b{ color:#e9f3df; font-weight:800; }
+  .cbars i.pulse{ animation:cbump .3s ease-out; }
+  @keyframes cbump{ 0%{ filter:brightness(2) } 100%{ filter:none } }
+
+  /* the matchup that actually matters: your front against theirs, drawn */
+  .duel{ position:absolute; z-index:1; height:2px; transform-origin:0 50%;
+    pointer-events:none; border-radius:2px;
+    background:linear-gradient(90deg, rgba(255,138,212,.15), rgba(255,138,212,.95) 50%, rgba(255,138,212,.15));
+    animation:dpulse 1.1s ease-in-out infinite; }
+  .duellab{ position:absolute; z-index:4; pointer-events:none; transform:translate(-50%,-50%);
+    font-size:8.5px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;
+    white-space:nowrap; padding:1px 6px; border-radius:6px; color:#ffc9ea;
+    background:rgba(10,4,10,.9); border:1px solid rgba(255,138,212,.4); }
+  .duellab.mine{ color:#d9ffb0; border-color:rgba(166,255,94,.4); }
+
+  /* --- the commit: the hinge from "I am deciding" to "it is out of my hands" */
+  .benchwrap{ transition:transform .18s ease-in, opacity .16s ease-in,
+    max-height .2s ease-in, padding .2s ease-in; max-height:200px; }
+  #fight.committed .benchwrap{ transform:translateY(100%); opacity:0; max-height:0;
+    padding-top:0; border-top-color:transparent; overflow:hidden; }
+  #fight.committed .ub .ord{ opacity:0; transition:opacity .12s ease; }
+  /* the bench is gone, so the match takes the room it left: the animals are the
+     biggest thing on the screen for the one minute they are fighting */
+  #fight.committed .ub{ max-width:112px; transition:max-width .22s ease; }
+  #fight.committed .ub canvas{ height:66px; transition:height .22s ease; }
+  #fight.committed .ub .pn{ font-size:10.5px; }
+  #fight.committed .side.them{ transform:scale(.95); transition:transform .22s ease; }
+  #fight.committed .lineRow{ min-height:118px; }
+  #fight.committed .ub.front::after{ animation:frontheld 1.3s ease-in-out infinite; }
+  @keyframes frontheld{ 0%,100%{ opacity:.55; filter:none }
+    50%{ opacity:1; filter:brightness(1.6) drop-shadow(0 0 6px rgba(166,255,94,.8)) } }
+
+  /* ---------- the verdict: the payoff of the whole prep decision ---------- */
+  .verdict{ position:absolute; inset:0; z-index:8; display:grid; place-items:center;
+    text-align:center; padding:0 18px; pointer-events:none;
+    background:radial-gradient(ellipse 90% 60% at 50% 50%, rgba(6,12,6,.93), rgba(6,12,6,.985));
+    animation:vfade .3s ease both; }
+  .verdict[hidden]{ display:none; }
+  @keyframes vfade{ from{ opacity:0 } to{ opacity:1 } }
+  .verdict .vhead{ font-size:clamp(24px,8cqw,34px); font-weight:900; letter-spacing:2px;
+    line-height:1.05; color:var(--lime);
+    text-shadow:0 0 26px rgba(150,255,90,.4), 0 4px 0 #33591a;
+    animation:vslam .34s cubic-bezier(.2,1.4,.4,1) both; }
+  .verdict.lose .vhead{ color:#ff7b7b; text-shadow:0 0 26px rgba(255,90,90,.4), 0 4px 0 #6b1f1f; }
+  @keyframes vslam{ from{ transform:scale(1.6) translateY(-14px); opacity:0 }
+    60%{ transform:scale(.96); opacity:1 } to{ transform:none; opacity:1 } }
+  .verdict .vsub{ margin-top:12px; font-size:16px; font-weight:800; letter-spacing:.6px;
+    color:#cfe0c2; opacity:0; animation:vsubin .3s ease .22s both; }
+  .verdict .vsub b{ display:block; margin-top:7px; color:var(--hpred); font-size:26px;
+    font-weight:900; letter-spacing:1px; text-shadow:0 0 18px rgba(255,90,90,.45); }
+  .verdict .vsub .ok{ color:var(--lime); }
+  @keyframes vsubin{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+  .verdict .vtap{ margin-top:16px; font-size:10px; letter-spacing:2.6px; text-transform:uppercase;
+    color:#7d9270; opacity:0; animation:vsubin .3s ease .8s both; }
+  /* the round lands, then the streak lands — the only thing in the game that
+     compounds gets its own beat rather than a hidden number in the top bar */
+  .verdict .vrun{ margin-top:14px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .verdict .vpips{ display:flex; gap:4px; opacity:0; animation:vsubin .26s ease .31s both; }
+  .verdict .vpips i{ width:10px; height:10px; border-radius:3px; background:#22331f;
+    border:1px solid #33492c; display:block; }
+  .verdict .vpips i.boss{ border-radius:50%; }
+  .verdict .vpips i.done{ background:#7cc93a; border-color:var(--lime); }
+  .verdict .vpips i.now{ background:var(--lime); border-color:#e6ffcf;
+    box-shadow:0 0 12px rgba(166,255,94,.85); animation:pipfill .34s cubic-bezier(.2,1.5,.4,1) both; }
+  .verdict.lose .vpips i.now{ background:#8a3030; border-color:#ff7b7b; box-shadow:none; }
+  .verdict .streak{ opacity:0; animation:vsubin .26s ease .42s both; font-size:11px; }
+  /* the arena holds absolutely still for a beat around the blow that decides it */
+  #arena.froze .ub, #arena.froze .mote, #arena.froze .lineRow{
+    animation-play-state:paused !important; }
 
   /* a unit standing on the field */
   .ub{ position:relative; flex:1 1 0; min-width:0; max-width:94px; border-radius:11px; overflow:hidden;
@@ -327,25 +541,72 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#eaf6df; }
   .ub .pm{ font-size:11px; font-weight:900; color:#ff8f6b; text-align:center; padding-bottom:1px; }
   .ub .pm .hh{ color:#7ec8ff; }
-  .ub .ph{ height:5px; margin:0 4px 4px; border-radius:3px; background:#2a1414; overflow:hidden; }
-  .ub .ph i{ display:block; height:100%; background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .22s ease; }
+  /* The bar drops instantly; a GHOST behind it lags 180ms and then catches up,
+     so the white slab left behind is exactly the width of the blow. Without it
+     a 3-damage nibble and a 12-damage hammer look identical — and that bar is
+     the only readout of whether your prep decision was right. */
+  .ub .ph{ position:relative; height:6px; margin:0 4px 4px; border-radius:3px;
+    background:#2a1414; overflow:hidden; }
+  .ub .ph .gh{ position:absolute; left:0; top:0; bottom:0; display:block; width:100%;
+    background:#ffdede; border-radius:3px;
+    transition:width .45s .18s cubic-bezier(.3,.9,.4,1); }
+  .ub .ph i{ position:relative; display:block; height:100%; border-radius:3px;
+    background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .1s linear; }
   .ub.them .ph i{ background:linear-gradient(90deg,#e04a4a,#ff9d6b); }
   .ub .tag{ position:absolute; top:2px; right:3px; font-size:7.5px; letter-spacing:.4px; font-weight:800;
     padding:1px 4px; border-radius:5px; background:rgba(6,12,6,.8); color:#a6ff5e; }
   .ub.them .tag{ color:#ffb9a6; }
-  .ub .ord{ display:flex; gap:2px; padding:0 3px 3px; }
-  .ub .ord .ob{ flex:1; font-family:inherit; font-size:10px; line-height:1; padding:3px 0; cursor:pointer;
-    border:1px solid #33492c; border-radius:5px; background:#16241a; color:#cfe0c2; }
-  .ub .ord .ob.out{ color:#ff9d9d; border-color:#5a2f2f; }
-  .lineRow .slot{ flex:1 1 0; max-width:94px; min-height:92px; border-radius:11px; border:2px dashed #2b3f26;
+  /* Re-ordering IS the decision, so the TILE is the handle: drag it sideways
+     past half a tile and it swaps. The chevrons stay as a fallback and are now
+     a real target; the ✕ moved into the tile's corner. */
+  .ub.slot-live{ touch-action:none; cursor:grab; }
+  .ub.slot-live.drag{ cursor:grabbing; z-index:5; filter:brightness(1.15);
+    transform:scale(1.06) rotate(-2deg); box-shadow:0 14px 26px rgba(0,0,0,.7);
+    transition:none; }
+  .ub.slot-live.shove{ transition:transform .16s cubic-bezier(.2,.9,.3,1.2); }
+  .ub .ord{ display:flex; gap:4px; padding:0 4px 4px; }
+  .ub .ord .ob{ flex:1; font-family:inherit; font-size:12px; line-height:1; height:30px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    border:1px solid #33492c; border-radius:7px; color:#cfe0c2;
+    background:linear-gradient(180deg,#1d2f1c,#131f12);
+    box-shadow:inset 0 1px 0 rgba(190,255,150,.10); }
+  .ub .ord .ob:active{ background:linear-gradient(180deg,#2a4426,#1a2a18); }
+  .ub .ord .ob[disabled]{ opacity:.3; cursor:default; }
+  .ub .pull{ position:absolute; top:3px; left:3px; width:19px; height:19px; z-index:3;
+    border-radius:50%; border:1px solid #5a2f2f; background:rgba(20,8,8,.85); color:#ff9d9d;
+    font-family:inherit; font-size:10px; line-height:1; cursor:pointer; padding:0;
     display:flex; align-items:center; justify-content:center; }
+  .ub .pull:hover{ background:#3a1414; color:#fff; }
+  /* an empty slot is an INVITATION, not a hole where the UI failed */
+  .lineRow .slot{ position:relative; flex:1 1 0; max-width:94px; min-height:92px; border-radius:11px;
+    border:1px solid rgba(166,255,94,.14);
+    background:linear-gradient(180deg, rgba(30,48,26,.5), rgba(10,18,10,.5));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(190,255,150,.06); }
+  .lineRow .slot .plus{ width:22px; height:22px; opacity:.5; }
+  .lineRow .slot .plus::before,.lineRow .slot .plus::after{ background:var(--lime);
+    box-shadow:0 0 12px rgba(166,255,94,.5); }
+  .lineRow .slot .plus::before{ width:22px; height:5px; }
+  .lineRow .slot .plus::after{ width:5px; height:22px; }
   .lineRow .slot span{ font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#3f5836; }
+  .lineRow.wait .slot{ animation:slotwait 2.6s ease-in-out infinite; }
+  .lineRow.wait .slot:nth-child(3){ animation-delay:-.65s }
+  .lineRow.wait .slot:nth-child(4){ animation-delay:-1.3s }
+  @keyframes slotwait{ 0%,100%{ box-shadow:inset 0 1px 0 rgba(190,255,150,.06) }
+    50%{ box-shadow:inset 0 0 24px -8px rgba(166,255,94,.35), inset 0 1px 0 rgba(190,255,150,.06) } }
   @keyframes lungeUp{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(-13px) scale(1.05)} }
   @keyframes lungeDown{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(13px) scale(1.05)} }
   @keyframes fall{ 0%{transform:translateY(0) rotate(0); opacity:1}
     100%{transform:translateY(26px) rotate(9deg); opacity:.18} }
   .ub.lungeUp{ animation:lungeUp .3s cubic-bezier(.3,1.5,.5,1); }
   .ub.lungeDown{ animation:lungeDown .3s cubic-bezier(.3,1.5,.5,1); }
+  /* `shake` was referenced here and defined NOWHERE in the sheet, so taking a
+     blow moved nothing: the flinch is the cheapest impact cue there is. */
+  @keyframes shake{ 0%{ transform:translateX(0); filter:brightness(2.1) }
+    22%{ transform:translateX(-5px) rotate(-2deg); filter:none }
+    55%{ transform:translateX(5px) rotate(2deg) }
+    80%{ transform:translateX(-2px) }
+    100%{ transform:translateX(0); filter:none } }
   .ub.hurt{ animation:shake .3s ease; }
   .ub.fall{ animation:fall .52s ease-in forwards; }
   .benchwrap{ flex:0 0 auto; border-top:1px solid #1e2c1a; padding-top:4px; }
@@ -359,9 +620,13 @@
   .handrow .card .st{ font-size:11px; }
   .handrow .card .tr{ font-size:8px; padding:2px; }
   .handrow .card .gen{ display:none; }
-  /* the bottom bar: budget, notes, and the one button that matters */
-  .fbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px;
-    padding:5px 8px calc(5px + env(safe-area-inset-bottom)); border-top:1px solid #1e2c1a; }
+  /* the bottom bar: budget, notes, and the one button that matters. SEND THEM
+     IN is the only irreversible action in the game, so it is the loudest thing
+     on the screen and the budget row wraps ABOVE it rather than squeezing it. */
+  .fbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:6px 8px calc(7px + env(safe-area-inset-bottom)); border-top:1px solid #1e2c1a; }
+  #bEnd{ font-size:16px; padding:13px 26px; letter-spacing:2px; flex:0 0 auto; margin-left:auto; }
+  #bEnd.btn.alt.sm{ font-size:12px; padding:9px 16px; letter-spacing:1.4px; }
   .feed{ display:flex; gap:3px; flex-wrap:wrap; max-width:104px; }
   .feed i{ width:11px; height:11px; border-radius:50%; background:#22331f;
     border:2px solid #3d5b32; display:block; }
@@ -446,8 +711,12 @@
     box-shadow:0 0 0 2px rgba(255,211,77,.55), 0 0 40px -8px rgba(255,211,77,.45),
       0 18px 30px -10px rgba(0,0,0,.8); }
   .plinth .card:hover{ transform:none; }
+  /* the ribbon's centring lives on a wrapper, so `pop` (whose to{} keyframe
+     sets transform:scale(1)) can never clobber the translate and throw the
+     ribbon 125px to the right of the card it crowns */
   .plinth .ribbon{ position:absolute; top:-10px; left:50%; transform:translateX(-50%); z-index:5;
-    white-space:nowrap; }
+    white-space:nowrap; display:block; }
+  .plinth .ribbon .banner{ margin:0; }
   #oBestLine{ font-size:16px; }
   #oBestLine .pw{ font-weight:900; font-size:22px; color:var(--gold); }
   /* the run's story is a ledger, not a console dump — and it never clips a line */
@@ -472,7 +741,7 @@
     color:#cfe0c2; }
   .keepsake b{ color:var(--gold); }
   .keepsake[hidden]{ display:none; }
-  #oTitle{ font-size:clamp(24px,4.6vw,34px); letter-spacing:-.2px; }
+  #oTitle{ font-size:clamp(24px,7cqw,34px); letter-spacing:-.2px; }
   /* On the busiest clutch (three chicks, long banners) the card scrolls; the
      verdict button must stay reachable without discovering that it scrolls. */
   #hatch .tcard .footer{ position:sticky; bottom:-2px; z-index:4; margin-top:2px;
@@ -497,10 +766,15 @@
      ========================================================================== */
 
   /* a fixed layer for particles, flying cards and resemblance lines */
-  #fxlayer{ position:fixed; inset:0; pointer-events:none; z-index:30; overflow:hidden; }
-  .fxp{ position:fixed; width:7px; height:7px; border-radius:2px; will-change:transform,opacity; }
-  .fxdust{ position:fixed; border-radius:50%; background:rgba(190,220,160,.30); will-change:transform,opacity; }
-  .ghostcard{ position:fixed; z-index:32; pointer-events:none; transform-origin:50% 50%;
+  /* The fx layer lives INSIDE the frame and is positioned against it, not
+     against the window. It used to be position:fixed — which works right up
+     until #app.shk puts a transform on the frame, at which point a transformed
+     ancestor becomes the containing block and every particle and damage number
+     jumps the width of the letterbox, straight out of the phone. */
+  #fxlayer{ position:absolute; inset:0; pointer-events:none; z-index:30; overflow:hidden; }
+  .fxp{ position:absolute; width:7px; height:7px; border-radius:2px; will-change:transform,opacity; }
+  .fxdust{ position:absolute; border-radius:50%; background:rgba(190,220,160,.30); will-change:transform,opacity; }
+  .ghostcard{ position:absolute; z-index:32; pointer-events:none; transform-origin:50% 50%;
     will-change:transform; filter:drop-shadow(0 12px 18px rgba(0,0,0,.7)); }
 
   /* --- the hand card: press, travel, land --- */
@@ -529,6 +803,7 @@
     to{ transform:rotate(-14deg) translateY(26px) scale(.86); opacity:0; filter:grayscale(1) } }
   .pb.arriving{ opacity:0; }
   .pb.landing{ animation:land .18s ease-out; }
+  .ub.landing{ animation:land .22s ease-out; }
   @keyframes land{ 0%{transform:scaleY(.82) scaleX(1.08)} 55%{transform:scaleY(1.08) scaleX(.96)}
     100%{transform:none} }
   .slot.lit{ animation:slotlit .3s ease-out; }
@@ -552,7 +827,7 @@
   .intent{ display:inline-flex; align-items:center; gap:7px; padding:3px 12px; border-radius:999px;
     border:1px solid #4d6b3f; background:rgba(6,12,6,.55); color:#cfe0c2;
     font-size:11px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase;
-    max-width:92vw; }
+    max-width:min(92cqw, 420px); }
   .intent .n{ font-size:19px; font-weight:900; letter-spacing:0; line-height:1; }
   .intent .x{ font-size:11px; opacity:.8; letter-spacing:0; }
   .intent.atk{ border-color:#c9503f; color:#ffb9a6; background:rgba(48,14,10,.55); }
@@ -571,7 +846,20 @@
     50%{ box-shadow:inset 0 2px 4px rgba(0,0,0,.6), 0 0 0 3px rgba(255,60,60,.35) } }
   .hpbar i.heal{ transition:width .5s cubic-bezier(.2,.9,.3,1); }
 
-  /* --- numbers that move --- */
+  /* --- numbers that move ---
+     During a replay the damage numbers are the ONLY moment-to-moment feedback
+     there is. Unstyled they collapsed to the top-left of the WINDOW, outside
+     the phone frame entirely. They are positioned, they rise, they fade. */
+  .flyer{ position:absolute; z-index:31; pointer-events:none; transform:translate(-50%,-50%);
+    font-weight:900; font-size:20px; letter-spacing:-.5px; line-height:1;
+    text-shadow:0 2px 0 rgba(0,0,0,.75), 0 0 14px currentColor;
+    will-change:transform,opacity;
+    animation:flyup .95s cubic-bezier(.15,.9,.35,1) forwards; }
+  @keyframes flyup{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(.4) }
+    18%{ opacity:1; transform:translate(-50%,-60%) scale(1.25) }
+    32%{ transform:translate(-50%,-58%) scale(1) }
+    100%{ opacity:0; transform:translate(-50%,-190%) scale(.92) } }
   .flyer.crit{ color:#ffffff !important; -webkit-text-stroke:2px rgba(120,10,10,.9); }
   .bump{ animation:numbump .22s ease-out; display:inline-block; }
   @keyframes numbump{ 0%{transform:scale(1.25)} 100%{transform:scale(1)} }
@@ -619,13 +907,21 @@
   @keyframes jit{ 0%{transform:translate(-2px,1px) rotate(-2deg)} 50%{transform:translate(2px,-1px) rotate(2deg)}
     100%{transform:translate(-2px,0) rotate(-1deg)} }
   .pickwrap.crk .shell{ animation:none; }
+  /* the drumroll: the room goes down to a spotlight on the eggs, and lifts
+     again with every shell that opens */
+  #hatch.rolling::before{ content:''; position:absolute; inset:0; z-index:3; pointer-events:none;
+    opacity:var(--spot,1); transition:opacity .5s ease;
+    background:radial-gradient(ellipse 62% 34% at 50% 46%, transparent 30%, rgba(3,7,3,.72) 78%); }
+  /* dead silence before the last egg: everything holds absolutely still */
+  #hatch.held .shell, #hatch.held .pickwrap{ animation-play-state:paused !important; }
+  #hatch.held .shell{ animation:none !important; }
   .pickwrap.crk .half.a{ animation:shellA .44s cubic-bezier(.4,.1,.8,.6) forwards; }
   .pickwrap.crk .half.b{ animation:shellB .44s cubic-bezier(.4,.1,.8,.6) forwards; }
   @keyframes shellA{ to{ transform:translate(calc(-50% - 16px),-16px) rotate(-44deg); opacity:0 } }
   @keyframes shellB{ to{ transform:translate(calc(-50% + 16px),22px) rotate(44deg); opacity:0 } }
   /* the chicks you did not keep, on their way to market */
   .card.tomarket{ animation:tomarket .5s ease-in forwards; pointer-events:none; }
-  @keyframes tomarket{ to{ transform:translate(30vw,-40vh) scale(.4) rotate(12deg);
+  @keyframes tomarket{ to{ transform:translate(130px,-280px) scale(.4) rotate(12deg);
     opacity:0; filter:grayscale(.7) } }
   .banner.slam{ animation:slam .3s cubic-bezier(.2,1.7,.4,1) both; }
   @keyframes slam{ from{ transform:scale(2.2); opacity:0 } to{ transform:scale(1); opacity:1 } }
@@ -641,19 +937,21 @@
     100%{} }
 
   /* --- resemblance: the one thing this game has that nothing else has --- */
-  .rline{ position:fixed; height:2px; transform-origin:0 50%; pointer-events:none; z-index:31;
+  .rline{ position:absolute; height:2px; transform-origin:0 50%; pointer-events:none; z-index:31;
     background:linear-gradient(90deg, rgba(255,138,212,0), var(--pink));
     box-shadow:0 0 10px rgba(255,138,212,.7); }
   /* the label gets a plate, so the one moment the game explains its own
      genetics is never drawn through the instruction line underneath it */
-  .rlab{ position:fixed; z-index:31; pointer-events:none; font-size:10.5px; font-weight:800;
+  .rlab{ position:absolute; z-index:31; pointer-events:none; font-size:10.5px; font-weight:800;
     letter-spacing:1.4px; text-transform:uppercase; color:var(--pink); white-space:nowrap;
     background:rgba(6,12,6,.92); border:1px solid rgba(255,138,212,.45);
     padding:2px 7px; border-radius:7px; box-shadow:0 4px 12px rgba(0,0,0,.7);
     animation:pop .26s ease both; }
   .rlab.nw{ background:var(--pink); border-color:#ffd0ee; color:#2a0c1e; }
+  /* the label is anchored OFF the face — a caption in the card's lower band —
+     and the plate is opaque enough to sit over anything */
+  .rlab{ background:rgba(6,12,6,.96); }
   #hSub{ position:relative; z-index:1; }
-  #hatch.revealing #hSub{ opacity:.25; transition:opacity .2s; }
 
   /* --- the pairing preview: the ghost of the chick you have not bred yet --- */
   .pairprev{ flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:14px;
@@ -672,11 +970,11 @@
   .card.leaving{ animation:leaving .7s ease-in forwards; z-index:5; position:relative; }
   @keyframes leaving{ 0%{ transform:none; filter:none }
     22%{ transform:translateY(-40px) rotate(5deg); filter:grayscale(.5) }
-    100%{ transform:translateY(-70vh) rotate(7deg); opacity:0; filter:grayscale(1) } }
+    100%{ transform:translateY(-560px) rotate(7deg); opacity:0; filter:grayscale(1) } }
   .grid.mourning > .card:not(.leaving){ transform:translateY(4px); opacity:.42;
     transition:transform .3s ease, opacity .3s ease; }
-  .receipt{ position:fixed; left:50%; top:38%; transform:translate(-50%,-50%); z-index:33;
-    pointer-events:none; padding:12px 20px; border-radius:6px; max-width:86vw;
+  .receipt{ position:absolute; left:50%; top:38%; transform:translate(-50%,-50%); z-index:33;
+    pointer-events:none; padding:12px 20px; border-radius:6px; max-width:min(86cqw, 330px);
     background:linear-gradient(180deg,#efeade,#d9d2c2); color:#2b2a22;
     font-family:'Courier New',ui-monospace,monospace; font-size:13px; letter-spacing:.3px;
     box-shadow:0 18px 40px rgba(0,0,0,.7); animation:receipt 2s ease-out forwards; text-align:center; }
@@ -688,30 +986,46 @@
 
   @container app (max-width:560px){
     /* the nest header was shredding into seven lines */
-    .foeprev{ display:grid; grid-template-columns:auto 1fr;
-      grid-template-areas:'em info' 'haz haz' 'btn btn'; gap:8px 12px; align-items:center; }
+    /* the hazard is a chip that sits WITH the foe's stats, not a full-width
+       slab that outweighs the screen's actual call to action */
+    .foeprev{ display:grid; grid-template-columns:auto 1fr auto;
+      grid-template-areas:'em info btn' 'haz haz haz'; gap:6px 10px; align-items:center; }
     .foeprev .fe{ grid-area:em; width:56px; }
     .foeprev > .fp{ grid-area:info; min-width:0; }
     #nFoeHaz{ grid-area:haz; }
-    #bHazard{ grid-area:btn; width:100%; }
+    #bHazard{ grid-area:btn; width:auto; justify-self:end; }
     #nFoeStats{ white-space:nowrap; }
     .scrhead h2{ font-size:19px; }
     .scrhead .count{ font-size:22px; }
+    /* four cards must FIT, or gridCols can never balance ten head into 4+3+3 */
+    .card{ width:104px; }
+    .card .art{ height:72px; }
+    .card .nm{ font-size:12.5px; min-height:28px; }
+    .card .st{ font-size:14px; gap:8px; }
+    .deckwrap > .grid{ grid-template-columns:repeat(var(--cols,4), minmax(0,104px));
+      gap:10px 8px; padding:14px 8px 22px; }
     .penlbl{ display:none; }        /* no room for it once the pen fills the width */
     /* the top bar has no room for the record or the streak on a phone */
     #nBest{ white-space:nowrap; }
     #nBest .recpart{ display:none; }
-    #nStreak{ display:none; }
+    /* the streak used to be display:none here — and the frame measures ~506px,
+       so the ONLY compounding stat in the game never rendered anywhere. It
+       drops its word and keeps its pips instead. */
+    #nStreak .slbl{ display:none; }
+    /* …which means the bar has to make room for it: the round pips and the
+       health bar both give a little rather than pushing the pips under #mute */
+    .bar .pip{ flex:0 0 auto; }
+    .bar .streak{ flex:0 0 auto; }
+    .bar .pip i{ width:9px; height:9px; border-radius:3px; }
+    .bar .hpbar{ width:74px; }
     .pairprev{ gap:7px; padding:4px 6px 6px; }
     .pairprev canvas{ width:74px; height:56px; }
     .pairprev .lbl{ max-width:78px; font-size:8.5px; letter-spacing:1px; }
     .pairprev .plus{ width:16px; height:16px; }
     .pairprev .plus::before{ width:16px; height:4px; }
     .pairprev .plus::after{ width:4px; height:16px; }
-    /* the ritual row truncated mid-word and clipped its own cost badge */
-    /* on a phone the herd still scrolls, so the last row must fade, not be sliced */
-    .deckwrap{ -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 28px),transparent);
-      mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 28px),transparent); }
+    /* the ritual row truncated mid-word and clipped its own cost badge.
+       (the herd's fade mask is not here any more — it applies at every width) */
     .rit{ min-width:150px; }
     .rit i{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .coach{ font-size:11px; line-height:1.35; }
@@ -721,7 +1035,10 @@
   }
   @container app (max-width:430px){
     .grid{ grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:10px 8px; }
-    .deckwrap > .grid{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px 8px; }
+    /* stay on CSS Grid: switching to flex here silently discarded --cols, and
+       ten cards landed 3+3+3+1 with an orphan next to 2/3 of an empty row */
+    .deckwrap > .grid{ grid-template-columns:repeat(var(--cols,3), minmax(0,100px));
+      gap:10px 8px; padding:12px 8px 20px; }
     .card{ width:100px; }
     .card .art{ height:68px; }
     .card .nm{ font-size:11.5px; min-height:27px; }
@@ -736,7 +1053,7 @@
     /* four slots plus gaps must FIT, or justify-content:center silently
        left-aligns the row under a centred foe */
     .pen{ gap:6px; min-height:140px; max-height:190px; }
-    .pb,.slot{ width:min(23vw,92px); }
+    .pb,.slot{ width:min(23cqw,92px); }
     .slot{ height:108px; }
     .pb canvas{ height:64px; }
     .pb .pn{ white-space:normal; line-height:1.05; min-height:24px; }
@@ -748,24 +1065,29 @@
     #fight .handrow .card .gen{ font-size:8px; }
     /* the clutch is a choice between two animals: you must see both at once */
     .litter{ flex-wrap:nowrap; gap:8px; justify-content:center; }
-    .litter .card.big{ width:min(46vw,168px); }
-    .litter .card.big .art{ height:min(30vw,112px); }
-    .litter.three .card.big{ width:min(31vw,120px); }
-    .litter.three .card.big .art{ height:min(22vw,84px); }
+    .litter .card.big{ width:min(46cqw,168px); }
+    .litter .card.big .art{ height:min(30cqw,112px); }
+    .litter.three .card.big{ width:min(31cqw,120px); }
+    .litter.three .card.big .art{ height:min(22cqw,84px); }
     .litter.three .card.big .nm{ font-size:12px; min-height:30px; }
     .litter.three .card.big .st{ font-size:13px; gap:6px; }
     .tagline{ min-height:44px; }
     .banner{ font-size:10px; padding:4px 8px; letter-spacing:1.6px; }
     #hTitle{ font-size:19px; }
     #hDeltas{ font-size:14px; }
-    .deckwrap{ padding:10px 6px 44px; }
+    .deckwrap > .grid{ padding:12px 6px 20px; }
   }
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{ animation-duration:.001s !important; animation-iteration-count:1 !important;
       transition-duration:.001s !important; }
     .foe .em{ animation:none; }
     .pb canvas{ animation:none; }
-    #fxlayer{ display:none; }       /* particles carry no information */
+    /* Particles carry no information and are never spawned under reduced
+       motion — but damage numbers, resemblance threads and the cull receipt
+       are all INFORMATION, so they stay. They simply stop moving. */
+    .fxp, .fxdust, .ghostcard{ display:none; }
+    .flyer, .rline, .rlab, .receipt{ animation:none !important; opacity:1 !important; }
+    .flyer{ transform:translate(-50%,-140%); }
     .grid.mourning > .card:not(.leaving){ transform:none; }
   }
 
@@ -784,6 +1106,28 @@
   .scrhead h2 .pink{ color:var(--pink); }
   .bkinfo .bdg .i{ margin-right:4px; }
   .hpbox .i{ color:var(--hpred); margin-right:0; }
+
+  /* ---------- hierarchy: the lit button is the one you can press ----------
+     On the Cull the loudest thing on screen was a DISABLED slab while the two
+     live actions were grey outlines. Now emphasis follows what is pressable. */
+  #cull .footer{ gap:8px; }
+  #bCull{ max-width:70%; }
+  #bCull[disabled]{ opacity:.55; font-size:12px; padding:9px 16px; }
+  /* KEEP THEM ALL is the real CTA until a card is chosen, and steps back after */
+  #cull.armed #bCullSkip{ background:none; box-shadow:none; border:1px solid #2c4028;
+    color:var(--dim); font-weight:700; }
+  #cull:not(.armed) #bCullSkip{ color:#0e1a0c; border:none; font-weight:800;
+    background:linear-gradient(180deg,#c8ff7d,#7cc93a);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 4px 0 #4e8020, 0 8px 18px rgba(0,0,0,.45); }
+  /* the hazard is an optional side bet, not the biggest object on the Nest */
+  #bHazard{ font-size:11px; padding:6px 11px; letter-spacing:.8px; line-height:1.25; }
+  #nest .footer #bFight{ font-size:15px; padding:13px 24px; letter-spacing:1.6px; }
+
+  /* ---------- the stud book: three bands, none of them sliced ---------- */
+  #book .bkhead{ flex:0 0 auto; }
+  #book .deckwrap{ flex:1 1 0; min-height:0; }
+  /* the footer sits on the floor of the screen; the barn shrink-wraps the herd */
+  #nest .footer, #cull .footer{ margin-top:auto; }
 </style>
 </head>
 <body>
@@ -836,21 +1180,23 @@
       </div>
       <p class="sub">Two cards enter. Three cards leave.</p>
       <div class="rules">
-        <p><b>The Nest.</b> Two beasts sit out the fight &mdash; and breed after it.</p>
-        <p><b>The Ring.</b> A beast you play <i>stays</i> in the pen and strikes every turn.</p>
-        <p><b>The Cull.</b> The barn holds ten. Someone goes to the farm upstate.</p>
+        <p><b>The Nest.</b> Two beasts breed while the others fight.</p>
+        <p><b>The Field.</b> You set the line and the order, then <i>let go</i>.</p>
+        <p><b>The Cull.</b> The barn holds ten. Someone goes upstate.</p>
       </div>
       <details class="more">
         <summary class="tiny">How it works</summary>
         <div class="body">
-          You breed monsters for a living; your barn is your deck. The two in the
-          Nest skip the battle, so you fight short-handed &mdash; that is the price
-          of a clutch. In the ring a played beast stays in the pen: <b>Might</b> is
-          what it hits for, <b>Hide</b> is how long it lasts, and blows land on it
-          before they land on you.<br>
-          Every clutch throws <i>two</i> chicks (three from a Fertile parent) and you
-          keep <i>one</i>. The rest go to market for Slop, which buys you a thumb on
-          the scale next time. Breed two relatives and the gene pool
+          You breed monsters for a living; your barn is your herd. The two in the
+          Nest sit the match out, so you field a short line &mdash; that is the
+          price of a clutch. On the field you choose <b>who</b> goes out and in
+          <b>what order</b>, and pay Feed for them; then the match resolves itself
+          and you watch. The <b>front</b> of each line takes every blow: <b>Might</b>
+          is what it hits for, <b>Hide</b> is how long it stands there.<br>
+          Lose and their survivors trample you on the way out &mdash; the round
+          still ends, and the pair in the Nest still breeds. Every clutch throws
+          <i>two</i> chicks (three from a Fertile parent) and you keep <i>one</i>.
+          The rest go to market for Slop. Breed two relatives and the gene pool
           gets&hellip; <i>interesting</i>.
         </div>
       </details>
@@ -906,11 +1252,31 @@
     </div>
 
     <div class="field" id="arena">
-      <div class="sideLbl" id="foeLbl">THE OPPOSITION</div>
-      <div class="lineRow them" id="foeLine"></div>
-      <div class="midline"><span id="fIntent">scouting</span></div>
-      <div class="lineRow us" id="pen"></div>
-      <div class="sideLbl" id="myLbl">YOUR LINE &mdash; the front takes the blows</div>
+      <!-- their line, up the field and a little smaller: the cheap depth cue -->
+      <div class="side them">
+        <div class="sideLbl" id="foeLbl">THE OPPOSITION</div>
+        <div class="lineRow them" id="foeLine"></div>
+      </div>
+      <!-- no-man's-land: the fence line, and the read that makes ORDER legible -->
+      <div class="midband">
+        <div class="midline"><span id="fIntent">scouting</span></div>
+        <div class="cast" id="fCast" hidden>
+          <div class="cbars"><i class="cu" id="castU"></i><i class="ct" id="castT"></i></div>
+          <div class="cnums">
+            <span class="cu">YOURS <b id="castUn">0</b></span>
+            <span class="cvs">vs</span>
+            <span class="ct">THEIRS <b id="castTn">0</b></span>
+          </div>
+          <div class="cread" id="castRead"></div>
+        </div>
+      </div>
+      <!-- your line, near, full size -->
+      <div class="side us">
+        <div class="lineRow us" id="pen"></div>
+        <div class="sideLbl" id="myLbl">YOUR LINE &mdash; the front takes the blows</div>
+      </div>
+      <!-- the result of the whole prep decision, announced -->
+      <div class="verdict" id="fVerdict" hidden></div>
       <!-- legacy nodes kept so older helpers still have something to talk to -->
       <div id="foeBox" hidden><canvas id="fEm" width="8" height="8"></canvas><span id="fName"></span>
         <i id="fHpGhost"></i><i id="fHpFill"></i><span id="fHpTxt"></span><span id="fBadges"></span></div>
@@ -929,7 +1295,7 @@
 
   <!-- ================= HATCH ================= -->
   <div class="scr" id="hatch">
-    <div class="tcard scrollcap" style="max-height:96vh; width:min(760px,96vw)">
+    <div class="tcard scrollcap">
       <div class="tiny">The Nest</div>
       <h2 id="hTitle" style="color:#ff8ad4">THE NEST STIRS</h2>
       <div class="parents" id="hParents" style="margin:12px 0 6px"></div>
@@ -943,7 +1309,7 @@
 
   <!-- ================= WILD ================= -->
   <div class="scr" id="wild">
-    <div class="tcard scrollcap" style="max-height:96vh">
+    <div class="tcard scrollcap">
       <div class="tiny">A stranger at the fence</div>
       <h2 style="font-size:26px" class="pink">FRESH BLOODLINES</h2>
       <p class="instr" style="margin:8px 0 0">Take one into the barn &mdash; unrelated stock keeps the pool clean.</p>
@@ -981,18 +1347,18 @@
       </div>
       <button class="btn alt sm" id="bBookBack" style="margin-left:auto">BACK</button>
     </div>
-    <div class="scrollcap" style="flex:0 0 auto; max-height:52vh">
+    <div class="bkhead">
       <div class="booktop" id="bkTop"></div>
       <div class="tiny" style="text-align:center; padding:6px 0 4px">Ancestry</div>
       <div class="bktreewrap"><div class="tree" id="bkTree"></div></div>
     </div>
-    <div class="tiny" style="text-align:center; padding:12px 0 6px">The whole herd, living and retired</div>
+    <div class="tiny bkhead" style="text-align:center; padding:12px 0 6px">The whole herd, living and retired</div>
     <div class="deckwrap"><div class="grid" id="bkList"></div></div>
   </div>
 
   <!-- ================= OVER ================= -->
   <div class="scr" id="over">
-    <div class="tcard scrollcap" style="max-height:96vh">
+    <div class="tcard scrollcap">
       <h2 id="oTitle">THE HERD ENDURES</h2>
       <p id="oSub" style="margin:10px auto 0">You made it to round 12</p>
       <div class="keepsake" id="oKeep" hidden></div>
@@ -1653,7 +2019,15 @@ function startBattle(mods){
   let uid = 1;
   const mine = R.line.map((id) => unitOf(Object.assign({}, cardById(id)), 'us', uid++));
   const theirs = makeEnemyTeam(R.idx, m).map((c) => unitOf(c, 'them', uid++));
+  // A REPLAY has to start where the fight started. The rules resolve the whole
+  // battle synchronously the instant you commit, so u.hp is already the ENDING
+  // value by the time anything is drawn — these two purely cosmetic fields hold
+  // the state the screen is currently showing, and only applyEv() moves them.
+  // Nothing in the rules reads them.
+  for (const u of mine.concat(theirs)){ u.vhp = u.max; u.valive = 1; }
+  const vhp = R.hp;                // your own health, as the replay will show it
   F = {
+    vhp,
     mine, theirs, mods: m, over: null, round: 0, events: [], log: [],
     trample: 0, uid,
     pen: mine,                       // older render code reads F.pen
@@ -1955,6 +2329,15 @@ function anim(el, cls, ms){
   if (ms) at(ms, () => { if (el.classList) el.classList.remove(cls); });
 }
 function fxLayer(){ return $('fxlayer'); }
+/** Everything below measures the world with getBoundingClientRect (window
+ *  coordinates) and draws into #fxlayer (frame coordinates). This is the one
+ *  place that converts between them — and because the layer shakes with the
+ *  frame, the conversion stays correct mid-shake. */
+function fxOrigin(){
+  const L = fxLayer();
+  const r = L && L.getBoundingClientRect ? L.getBoundingClientRect() : null;
+  return r ? { x: r.left, y: r.top } : { x: 0, y: 0 };
+}
 function rectOf(el){
   if (!el || !el.getBoundingClientRect) return null;
   const r = el.getBoundingClientRect();
@@ -1965,6 +2348,7 @@ function rectOf(el){
 function burst(x, y, n, color, opts){
   if (HEADLESS || RM()) return;
   const L = fxLayer(); if (!L || !L.appendChild) return;
+  const or0 = fxOrigin(); x -= or0.x; y -= or0.y;
   const o = opts || {};
   for (let i = 0; i < n; i++){
     const p = document.createElement('div');
@@ -1993,6 +2377,7 @@ function burst(x, y, n, color, opts){
 function dust(x, y){
   if (HEADLESS || RM()) return;
   const L = fxLayer(); if (!L || !L.appendChild) return;
+  const or0 = fxOrigin(); x -= or0.x; y -= or0.y;
   for (let i = 0; i < 4; i++){
     const d = document.createElement('div');
     d.className = 'fxdust';
@@ -2041,8 +2426,9 @@ function flyGlyph(fromEl, toEl, html, ms){
   if (!L || !L.appendChild || !a || !b) return;
   const g = document.createElement('div');
   g.className = 'ghostcard';
-  g.style.left = (a.left + a.width / 2 - 10) + 'px';
-  g.style.top = (a.top + a.height / 2 - 10) + 'px';
+  const or0 = fxOrigin();
+  g.style.left = (a.left + a.width / 2 - 10 - or0.x) + 'px';
+  g.style.top = (a.top + a.height / 2 - 10 - or0.y) + 'px';
   g.style.font = '900 18px inherit';
   g.style.color = '#ffd34d';
   g.innerHTML = html;
@@ -2154,6 +2540,12 @@ const sfxLand   = () => { tone(110, 0.09, { type: 'triangle', vol: 0.075, glide:
                           noise(0.06, { lp: 420, vol: 0.06 }); };
 const sfxDeny   = () => { tone(150, 0.09, { type: 'square', vol: 0.045, glide: 110 });
                           noise(0.04, { hp: 900, vol: 0.03 }); };
+/** Pulling a beast back out of the line, on purpose. Not a refusal. */
+const sfxUnlatch = () => { tone(330, 0.09, { type: 'triangle', vol: 0.05, glide: 190 });
+                          noise(0.05, { lp: 700, vol: 0.035 }); };
+/** Re-ordering, pitched by DESTINATION: moving toward the front sounds like it. */
+const sfxOrder  = (idx) => tone(300 + Math.max(0, idx | 0) * 80, 0.05,
+                          { type: 'triangle', vol: 0.05 });
 /** Pitch falls with the size of the blow, so a nibble and a hammer differ. */
 const sfxStrike = (dmg) => {
   const d = Math.max(1, dmg | 0);
@@ -2206,14 +2598,27 @@ const sfxWin = () => [0, 120, 240, 400].forEach((t, i) =>
  *  between theirs; `eyes`, `tail` and `wings` are inherited whole from one
  *  parent or the other; `hue2` blends round the wheel. So the silhouette is
  *  every bit as heritable as the hue was — it is just finally VISIBLE.
- *  4 builds x 3 limbs x 4 crests = 48 shapes before colour touches it. */
+ *
+ *  Six axes now, not three: 4 builds x 3 necks x 5 limb plans x 4 crests x 3
+ *  snouts is ~720 silhouettes. That matters because the pitch of the game is
+ *  "a chick visibly resembles both parents", and two recoloured blobs read as
+ *  a rendering bug rather than as genetics. A neck alone splits the herd into
+ *  squat beasts and long-necked birds at a glance; a beak or four legs finishes
+ *  the job. Nothing here is rolled or stored — it is all read off genes the
+ *  breeder already blends, so it inherits exactly as the hue does. */
 function vform(v){
   const q = (x, n) => Math.max(0, Math.min(n - 1, Math.floor(x * n)));
   const h2 = ((v.hue2 % 360) + 360) % 360;
+  const limb = (v.eyes + (v.tail ? 1 : 0) + v.wings) % 5;
   return {
     build: q(v.body, 4),                            // pear / ellipse / lumpy / capsule
-    limb: (v.eyes + (v.tail ? 1 : 0)) % 3,          // stubs / long / none
+    // stubs / stilts / none / four stubby legs / serpent
+    limb: limb,
+    legless: limb === 2 || limb === 4,
     crest: (Math.floor(h2 / 90) + v.wings) % 4,     // none / spines / comb / antennae
+    neck: q(clamp(v.body * v.size, 0, 0.999), 3),   // none / short / long
+    snout: (v.horns + v.eyes) % 3,                  // flat / beak / trunk
+    slit: limb % 2 === 1,                           // slit-pupilled families
     hornLen: 0.2 + 0.8 * clamp(v.spots, 0, 1),
   };
 }
@@ -2226,14 +2631,6 @@ function drawBeast(cv, c){
   const v = c.vis, W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   const f = vform(v);
-  // frame: room for a long-legged, antennaed, big-horned animal without
-  // shrinking the ordinary ones into their own canvases
-  const S = Math.min(W / 96, H / 80);
-  ctx.save();
-  ctx.translate(W / 2, H * 0.96);
-  ctx.scale(S, -S); // y now points up
-  if (f.limb === 2) ctx.scale(1.08, 0.9);   // legless: it sits ON the floor
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
   const main = 'hsl(' + v.hue + ',52%,52%)';
   const top = 'hsl(' + v.hue + ',55%,68%)';
@@ -2241,17 +2638,39 @@ function drawBeast(cv, c){
   const ink = 'hsl(' + v.hue + ',60%,13%)';
   const belly = 'hsl(' + v.hue2 + ',58%,70%)';
   const wingc = 'hsl(' + v.hue2 + ',50%,44%)';
+  const bone = 'hsl(' + ((v.hue + 40) % 360) + ',35%,78%)';
   const sz = v.size;
   const rx = 25 * sz * (1.28 - 0.55 * v.body);
   const ry = 21 * sz * (0.72 + 0.68 * v.body);
-  const legH = f.limb === 1 ? 18 : f.limb === 2 ? 0 : 10;
-  const cy = f.limb === 2 ? ry * 0.94 : ry + legH * 0.72;
+  const legH = f.limb === 1 ? 18 : f.legless ? 0 : 10;
+  const cy = f.legless ? ry * 0.94 : ry + legH * 0.72;
   // the body's true extents, whatever shape it turned out to be
   const bw = f.build === 3 ? rx * 0.62 : f.build === 2 ? rx * 1.05 : rx;
   const bh = f.build === 3 ? ry * 1.35 : ry;
   const lobes = [[-rx * 0.42, cy - ry * 0.08, rx * 0.66, ry * 0.74],
                  [rx * 0.40, cy + ry * 0.10, rx * 0.60, ry * 0.68],
                  [0, cy + ry * 0.02, rx * 0.82, ry * 0.95]];
+  // THE NECK. With none, the body is the head, exactly as it always was; with
+  // one, the face moves onto a real head at the top of a tapered column — which
+  // by itself splits the herd into squat beasts and long-necked birds.
+  const neckH = f.neck === 0 ? 0 : (f.neck === 1 ? 11 : 25) * sz;
+  const neck = neckH > 0;
+  const hw = neck ? 12.5 * sz : bw;               // the face frame
+  const hh = neck ? 11.5 * sz : bh;
+  const hcy = neck ? cy + bh * 0.5 + neckH + hh * 0.55 : cy;
+  const hl = (8 + 14 * f.hornLen) * sz;           // horn length is a gene
+  const crestUp = f.crest === 3 ? 15 * sz : f.crest === 1 ? 9 * sz : 0;
+  // Fit the WHOLE animal in the frame. A long-necked, big-horned beast used to
+  // have its horns cropped off by the canvas; now the painter shrinks to fit
+  // and never grows past the old scale, so ordinary animals look unchanged.
+  const topY = hcy + hh + Math.max(hl, crestUp) + 3;
+  const halfW = Math.max(bw * 1.32, bw + (v.tail ? 22 : 6), bw * 0.85 + 16 * sz, 44);
+  const S = Math.min(W / 96, H / 80, W / (2 * halfW), H / topY);
+  ctx.save();
+  ctx.translate(W / 2, H * 0.96);
+  ctx.scale(S, -S); // y now points up
+  if (f.legless) ctx.scale(1.08, 0.9);   // legless: it sits ON the floor
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
   const ell = (x, y, a, b, fill) => {
     ctx.beginPath(); ctx.ellipse(x, y, a, b, 0, 0, Math.PI * 2);
@@ -2292,12 +2711,15 @@ function drawBeast(cv, c){
     ctx.beginPath(); ctx.arc(0, 0, bw * 1.1, 0, Math.PI * 2);
     ctx.fillStyle = gr; ctx.fill(); ctx.restore();
   } catch (e){}
-  // legs: stubs, long thin stilts, or none at all
+  // LIMBS: stubs / stilts / none / four stubby legs / a serpent's coil
+  const stub = (x) => {
+    ctx.beginPath(); ctx.rect(x - 3 * sz, 0, 6 * sz, 10);
+    ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
+  };
   if (f.limb === 0){
-    for (const s of [-1, 1]){
-      ctx.beginPath(); ctx.rect(s * bw * 0.5 - 3, 0, 6, 10);
-      ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
-    }
+    for (const s of [-1, 1]) stub(s * bw * 0.5);
+  } else if (f.limb === 3){
+    for (const s of [-1, 1]){ stub(s * bw * 0.55); stub(s * bw * 0.25); }
   } else if (f.limb === 1){
     for (const s of [-1, 1]){
       ctx.beginPath();
@@ -2307,9 +2729,22 @@ function drawBeast(cv, c){
       ctx.beginPath(); ctx.moveTo(s * bw * 0.62 - 5, 0); ctx.lineTo(s * bw * 0.62 + 5, 0);
       stroke(ink, 3);
     }
+  } else if (f.limb === 4){
+    // serpent: no legs, and a body that carries on as a coil behind it
+    const segs = 5, L = bw * 2.0, amp = ry * 0.34, y0 = cy * 0.55;
+    const coil = () => {
+      ctx.beginPath(); ctx.moveTo(-bw * 0.3, y0);
+      for (let i = 1; i <= segs; i++){
+        const t1 = i / segs, t0 = (i - 0.5) / segs;
+        ctx.quadraticCurveTo(-bw * 0.3 - L * t0, y0 + Math.sin(t0 * 5.0) * amp,
+                             -bw * 0.3 - L * t1, y0 + Math.sin(t1 * 5.0) * amp * (1 - t1 * 0.5));
+      }
+    };
+    coil(); stroke(ink, 9 * sz);
+    coil(); stroke(main, 6 * sz);
   }
   // tail
-  if (v.tail){
+  if (v.tail && f.limb !== 4){
     ctx.beginPath(); ctx.moveTo(-bw * 0.8, cy);
     ctx.quadraticCurveTo(-bw - 16, cy + 10, -bw - 20, cy - 6);
     stroke(dark, 4);
@@ -2321,6 +2756,18 @@ function drawBeast(cv, c){
     ctx.beginPath(); ctx.ellipse(0, 0, 15 * sz, 8 * sz, 0, 0, Math.PI * 2);
     ctx.fillStyle = wingc; ctx.fill(); stroke(ink, 2.5);
     ctx.restore();
+  }
+  // the neck goes on BEFORE the body, so the body covers where it joins
+  if (neck){
+    const nb = bw * 0.32, nt = hw * 0.60;
+    const y0 = cy + bh * 0.30, y1 = hcy - hh * 0.30;
+    ctx.beginPath();
+    ctx.moveTo(-nb, y0);
+    ctx.quadraticCurveTo(-nt * 1.30, (y0 + y1) * 0.5, -nt, y1);
+    ctx.lineTo(nt, y1);
+    ctx.quadraticCurveTo(nt * 1.30, (y0 + y1) * 0.5, nb, y0);
+    ctx.closePath();
+    ctx.fillStyle = main; ctx.fill(); stroke(dark, 2.5);
   }
   // body
   if (f.build === 2){
@@ -2348,11 +2795,21 @@ function drawBeast(cv, c){
     ell(Math.cos(a) * bw * 0.5, cy + Math.sin(a) * bh * 0.45, 3.2 * sz, 3.2 * sz, dark);
   }
   ctx.restore();
+  // the head, if there is a neck holding one up
+  if (neck){
+    ctx.beginPath(); ctx.ellipse(0, hcy, hw, hh, 0, 0, Math.PI * 2);
+    ctx.fillStyle = main; ctx.fill(); stroke(dark, 2.5);
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(0, hcy, hw, hh, 0, 0, Math.PI * 2); ctx.clip();
+    ell(0, hcy + hh * 0.52, hw * 0.78, hh * 0.30, top);
+    ell(0, hcy - hh * 0.50, hw * 0.60, hh * 0.34, belly);
+    ctx.restore();
+  }
   // crest: nothing / a row of spines / a floppy comb / two antennae
   if (f.crest === 1){
     for (let i = 0; i < 5; i++){
       const a = (i / 4 - 0.5) * 1.5;
-      const px = Math.sin(a) * bw * 0.72, py = cy + Math.cos(a) * bh * 0.94;
+      const px = Math.sin(a) * hw * 0.72, py = hcy + Math.cos(a) * hh * 0.94;
       ctx.beginPath();
       ctx.moveTo(px - 4 * sz, py); ctx.lineTo(px + Math.sin(a) * 5, py + 8 * sz);
       ctx.lineTo(px + 4 * sz, py); ctx.closePath();
@@ -2360,14 +2817,14 @@ function drawBeast(cv, c){
     }
   } else if (f.crest === 2){
     ctx.beginPath();
-    ctx.moveTo(bw * 0.30, cy + bh * 0.86);
-    ctx.quadraticCurveTo(bw * 1.15, cy + bh * 1.05, bw * 1.24, cy + bh * 0.34);
-    ctx.quadraticCurveTo(bw * 0.98, cy + bh * 0.60, bw * 0.62, cy + bh * 0.62);
+    ctx.moveTo(hw * 0.30, hcy + hh * 0.86);
+    ctx.quadraticCurveTo(hw * 1.15, hcy + hh * 1.05, hw * 1.24, hcy + hh * 0.34);
+    ctx.quadraticCurveTo(hw * 0.98, hcy + hh * 0.60, hw * 0.62, hcy + hh * 0.62);
     ctx.closePath(); ctx.fillStyle = belly; ctx.fill(); stroke(ink, 2.5);
   } else if (f.crest === 3){
     for (const s of [-1, 1]){
-      const bx = s * bw * 0.34, by = cy + bh * 0.9;
-      const tx = s * bw * 0.72, ty = cy + bh + 13 * sz;
+      const bx = s * hw * 0.34, by = hcy + hh * 0.9;
+      const tx = s * hw * 0.72, ty = hcy + hh + 13 * sz;
       ctx.beginPath(); ctx.moveTo(bx, by);
       ctx.quadraticCurveTo(bx + s * 3, ty - 4, tx, ty);
       stroke(ink, 2.5);
@@ -2376,37 +2833,68 @@ function drawBeast(cv, c){
       stroke(ink, 2);
     }
   }
-  // horns — length is a gene now, not a constant
-  const hl = (8 + 14 * f.hornLen) * sz;
+  // horns
   for (let h = 0; h < v.horns; h++){
     const t = v.horns === 1 ? 0 : (h / (v.horns - 1) - 0.5) * 1.5;
-    const hx = t * bw * 0.7;
+    const hx = t * hw * 0.7;
     ctx.beginPath();
-    ctx.moveTo(hx - 4, cy + bh * 0.82); ctx.lineTo(hx, cy + bh + hl); ctx.lineTo(hx + 4, cy + bh * 0.82);
-    ctx.closePath(); ctx.fillStyle = 'hsl(' + ((v.hue + 40) % 360) + ',35%,78%)'; ctx.fill();
+    ctx.moveTo(hx - 4, hcy + hh * 0.82); ctx.lineTo(hx, hcy + hh + hl); ctx.lineTo(hx + 4, hcy + hh * 0.82);
+    ctx.closePath(); ctx.fillStyle = bone; ctx.fill();
     stroke(ink, 2);
   }
-  // eyes
+  // SNOUT: flat, a beak, or a trunk. In a game called The Birds & The Beasts,
+  // some of them had better have beaks.
+  // sized off the FACE, not the body, so a beak on a big blob stays a beak
+  const ss = Math.min(hw, 14 * sz), sy = hcy + Math.min(hh, 14 * sz) * 0.16;
+  if (f.snout === 1){
+    const bx = hw * 0.70;
+    ctx.beginPath();
+    ctx.moveTo(bx, sy + ss * 0.30);
+    ctx.lineTo(bx + ss * 1.15, sy + ss * 0.02);
+    ctx.lineTo(bx, sy - ss * 0.30);
+    ctx.closePath(); ctx.fillStyle = bone; ctx.fill(); stroke(ink, 2);
+  } else if (f.snout === 2){
+    const trunk = () => {
+      ctx.beginPath();
+      ctx.moveTo(hw * 0.52, sy + ss * 0.18);
+      ctx.quadraticCurveTo(hw * 0.52 + ss * 1.25, sy, hw * 0.52 + ss * 0.95, sy - ss * 1.05);
+    };
+    trunk(); stroke(ink, 8 * sz);
+    trunk(); stroke(main, 5 * sz);
+  }
+  // eyes — sized off the animal, and slit-pupilled in the odd-limbed families
   const ne = v.eyes;
+  const er = (neck ? 4.0 : 5.2) * (0.68 + 0.42 * sz);
   for (let i = 0; i < ne; i++){
     const t = ne === 1 ? 0 : (i / (ne - 1) - 0.5);
-    const ex = t * bw * 0.86, ey = cy + bh * 0.34;
-    ell(ex, ey, 5.2, 5.6, '#fdfff4');
-    ell(ex + 0.8, ey - 0.6, 2.4, 2.8, '#101408');
-  }
-  // mouth — toothy for the mean ones
-  const mean = c.trait === 'feral' || c.trait === 'frenzy' || c.trait === 'venom' || c.might >= 14;
-  ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.beginPath();
-  if (mean){
-    ctx.moveTo(-8, cy - bh * 0.02); ctx.lineTo(8, cy - bh * 0.02); ctx.stroke();
-    ctx.fillStyle = '#fdfff4';
-    for (let i = -1; i <= 1; i++){
-      ctx.beginPath(); ctx.moveTo(i * 6 - 2.6, cy - bh * 0.02);
-      ctx.lineTo(i * 6, cy - bh * 0.02 - 4); ctx.lineTo(i * 6 + 2.6, cy - bh * 0.02);
-      ctx.closePath(); ctx.fill();
+    const ex = t * hw * (neck ? 1.0 : 0.86), ey = hcy + hh * 0.34;
+    ell(ex, ey, er, er * 1.08, '#fdfff4');
+    if (f.slit){
+      ctx.beginPath();
+      ctx.rect(ex + 0.2 - 0.6 * sz, ey - er * 0.78, 1.2 * sz, er * 1.56);
+      ctx.fillStyle = '#101408'; ctx.fill();
+    } else {
+      ell(ex + 0.8, ey - 0.6, er * 0.46, er * 0.52, '#101408');
     }
-  } else {
-    ctx.arc(0, cy + bh * 0.06, 6, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
+  }
+  // mouth — toothy for the mean ones, and skipped entirely behind a beak
+  const mean = c.trait === 'feral' || c.trait === 'frenzy' || c.trait === 'venom' || c.might >= 14;
+  const mw = neck ? hw * 0.52 : 8;
+  const my = hcy - hh * 0.02;
+  if (f.snout !== 1){
+    ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.beginPath();
+    if (mean){
+      ctx.moveTo(-mw, my); ctx.lineTo(mw, my); ctx.stroke();
+      ctx.fillStyle = '#fdfff4';
+      for (let i = -1; i <= 1; i++){
+        const tx = i * mw * 0.75;
+        ctx.beginPath(); ctx.moveTo(tx - mw * 0.32, my);
+        ctx.lineTo(tx, my - mw * 0.5); ctx.lineTo(tx + mw * 0.32, my);
+        ctx.closePath(); ctx.fill();
+      }
+    } else {
+      ctx.arc(0, hcy + hh * 0.06, mw * 0.75, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -2640,11 +3128,33 @@ function gridCols(el, n){
   let w = 0;
   try { w = (el.parentNode && el.parentNode.clientWidth) || 0; } catch (e){}
   if (!w){ try { w = window.innerWidth * 0.92; } catch (e){ w = 900; } }
-  const per = w < 460 ? 108 : 128;
+  const per = w < 300 ? 92 : w < 560 ? 112 : 128;
   const fit = Math.floor((w - 18) / per);
-  const cap = Math.max(2, Math.min(fit, 6));
+  // on a narrow frame cap at 4, so ten head go 4+3+3 rather than 3+3+3 and a
+  // lone orphan sitting next to two-thirds of an empty row
+  const cap = Math.max(2, Math.min(fit, w < 460 ? 4 : 6));
   const rows = Math.ceil(n / cap);
   el.style.setProperty('--cols', Math.min(cap, Math.ceil(n / rows)));
+}
+/** Does the herd overflow its barn? Toggles the fade + the lip, so a partly
+ *  visible last row reads as "this scrolls" instead of "this is broken". */
+function deckFade(grid){
+  if (HEADLESS || !grid) return;
+  const wrap = grid.parentNode;
+  if (wrap && wrap.classList){
+    const more = (grid.scrollHeight || 0) > (grid.clientHeight || 0) + 2;
+    wrap.classList.toggle('more', more);
+  }
+  // a lone card on the last row is centred under the row above it, rather than
+  // shoved into column one with two thirds of an empty row beside it
+  const kids = grid.children;
+  if (!kids || !kids.length || !grid.style || !grid.style.getPropertyValue) return;
+  const cols = parseInt(grid.style.getPropertyValue('--cols'), 10) || 0;
+  for (let i = 0; i < kids.length; i++) if (kids[i].classList) kids[i].classList.remove('orphan');
+  if (cols > 1 && kids.length > cols && kids.length % cols === 1){
+    const last = kids[kids.length - 1];
+    if (last && last.classList) last.classList.add('orphan');
+  }
 }
 function pips(el, boss){
   el.innerHTML = '';
@@ -2657,8 +3167,15 @@ function pips(el, boss){
   }
 }
 function hpBar(txtEl, barEl){
-  countUp(txtEl, R.hp);
-  barEl.style.width = (100 * R.hp / R.maxHp) + '%';
+  // During a replay this reads the DISPLAY health, not the resolved one: the
+  // trample is already subtracted from R.hp before the first blow is drawn, so
+  // reading R.hp here would print the loss on the bar before the fight starts.
+  const hp = (F && F.playing && F.vhp != null) ? F.vhp : R.hp;
+  countUp(txtEl, hp);
+  barEl.style.width = (100 * hp / R.maxHp) + '%';
+  // the bar itself says when you are one bad match from the end
+  const wrap = barEl.parentNode;
+  if (wrap && wrap.classList) wrap.classList.toggle('danger', hp / R.maxHp < 0.3);
 }
 
 /* ------------------------------------------------------------- title ----- */
@@ -2703,13 +3220,18 @@ function titleShow(){
   const live = () => mine === tShowGen && cur === 'title';
   const mk = () => ({ pre: pick(SYL_A), suf: pick(SYL_B), vis: randVis(),
     might: ri(3, 11), hide: ri(3, 11), trait: 'none' });
+  // two parents that share a syllable breed a chick with a parent's exact name
+  const mk2 = (o) => { let x = mk(); for (let k = 0; k < 8 && (x.pre === o.pre || x.suf === o.suf); k++) x = mk(); return x; };
+  // the very first thing a player sees must not look like a text-overflow bug:
+  // twelve characters, hard, and no ellipsis
+  const cut = (s0) => { const t0 = String(s0); return t0.length > 12 ? t0.slice(0, 12) : t0; };
   const paint = (i, c, label) => {
     if (cv[i]) drawBeast(cv[i], c);
-    if (cap[i]) cap[i].textContent = label;
+    if (cap[i]) cap[i].textContent = cut(label);
     const t = tbs[i];
     if (t && t.classList){ t.classList.remove('swap'); void t.offsetWidth; t.classList.add('swap'); }
   };
-  let a = mk(), b = mk(), first = true;
+  let a = mk(), b = mk2(a), first = true;
   const cycle = () => {
     if (!live()) return;
     paint(0, a, a.pre + a.suf);
@@ -2721,11 +3243,14 @@ function titleShow(){
       const nm = childName(a, b, []);
       const kid = { pre: nm.pre, suf: nm.suf, trait: 'none', vis: breedVis(a, b, 1),
         might: Math.round((a.might + b.might) / 2), hide: Math.round((a.hide + b.hide) / 2) };
-      paint(1, kid, nm.name);
+      // no honorific in the reel: "Clotgizzard" beside "Clotgizzard Esq." both
+      // truncate to the same string and read as a rendering fault
+      const short = nm.pre + nm.suf;
+      paint(1, kid, (short === a.pre + a.suf || short === b.pre + b.suf) ? nm.name : short);
       at(3400, () => {
         if (!live()) return;
         a = rng() < 0.55 ? kid : mk();      // the line continues, or fresh blood
-        b = mk();
+        b = mk2(a);
         cycle();
       });
     };
@@ -2815,8 +3340,10 @@ function renderNest(){
     : '<span class="dim"><b>' + R.hazardOffer.name + '</b> on offer &mdash; ' + hz0desc() + '</span>';
   const hb = $('bHazard');
   hb.className = 'btn sm ' + (hz ? 'pinky' : 'alt');
-  hb.innerHTML = hz ? 'CALL IT OFF' : 'TAKE ON ' + R.hazardOffer.name.toUpperCase() +
-    '<br><span style="color:#ffd34d">+' + HAZARD_PAY + ' ' + ICO('slop') + '</span>';
+  // the hazard is a side bet: a chip, not a headline. Its NAME is already on the
+  // line above, so the button only has to say what pressing it does.
+  hb.innerHTML = hz ? 'CALL IT OFF'
+    : 'TAKE IT ON <span style="color:#ffd34d">+' + HAZARD_PAY + ' ' + ICO('slop') + '</span>';
   setSlop(R.slop);
   hpBar($('nHp'), $('nHpBar'));
   pips($('nPips'));
@@ -2824,16 +3351,20 @@ function renderNest(){
   const bb0 = bestBeast();
   const hall = loadHall();
   $('nBest').innerHTML = bb0
-    ? 'BEST ' + ICO('might') + '<b style="color:#cfe0c2">' + power(bb0) + '</b>' +
-      (hall ? ' <span class="recpart" style="color:#5c7050">/ REC ' + hall.pow + '</span>' : '')
+    ? 'BEST ' + ICO('might') + '<b style="color:#cfe0c2">' + Math.round(power(bb0)) + '</b>' +
+      (hall ? ' <span class="recpart" style="color:#5c7050">/ REC ' + Math.round(hall.pow) + '</span>' : '')
     : '';
   const st = $('nStreak');
+  // the streak is the only compounding stat in the game, so it renders at every
+  // width: the word drops on a phone, the pips never do
   if (R.streakBroke > 0){
     st.className = 'streak brk';
-    st.innerHTML = 'STREAK BROKEN &mdash; ' + R.streakBroke + ' lost';
+    st.innerHTML = '<span class="slbl">STREAK BROKEN &mdash; ' + R.streakBroke + ' lost</span>' +
+      '<b>' + '<i></i>'.repeat(Math.min(R.streakBroke, 5)) + '</b>';
   } else if (R.streak > 0){
     st.className = 'streak';
-    st.innerHTML = R.streak + ' CLEAN <b>' + '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b>';
+    st.innerHTML = '<span class="slbl">' + R.streak + ' CLEAN</span><b>' +
+      '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b>';
   } else { st.className = 'streak'; st.innerHTML = ''; }
   renderRituals();
   const vet = $('bVet');
@@ -2857,6 +3388,7 @@ function renderNest(){
     };
     g.appendChild(el);
   }
+  deckFade(g);
   const ok = R.nest.length === 2;
   const bt = $('bFight');
   bt.disabled = !ok;
@@ -2894,9 +3426,14 @@ function flyer(txt, color, target, opts){
   e.textContent = txt;
   if (e.style){
     e.style.color = color || '#ff9d6b';
-    e.style.left = (r.left + r.width / 2) + 'px';
-    e.style.top = (r.top + r.height * 0.3) + 'px';
-    if (o.size) e.style.fontSize = o.size + 'px';
+    // a little horizontal jitter, or two simultaneous hits stack into one
+    // illegible blob — and both fronts swing at the same instant here
+    const or0 = fxOrigin();
+    e.style.left = (r.left + r.width / 2 + (Math.random() * 22 - 11) - or0.x) + 'px';
+    e.style.top = (r.top + r.height * 0.3 - or0.y) + 'px';
+    // a big blow is a bigger number: the crit variant reads 40% louder
+    const sz = (o.size || 20) * (o.cls === 'crit' ? 1.4 : 1);
+    e.style.fontSize = sz.toFixed(0) + 'px';
   }
   L.appendChild(e);
   at(1000, () => { if (e.remove) e.remove(); });
@@ -2908,49 +3445,124 @@ function intentText(){
                 : 'exchange ' + F.round;
 }
 
-/* ------------------------------------------------------------- one unit -- */
+/* ------------------------------------------------------------- one unit --
+   Everything below draws the DISPLAY state (vhp/valive), not the resolved
+   state, so the replay opens on the pre-battle line-up instead of announcing
+   the result in its first frame. Units that have no display state — prep
+   tiles, scouted enemies, the test harness — fall through to the real one. */
+function uHp(u){ return u.vhp == null ? u.hp : u.vhp; }
+function uAlive(u){ return u.valive == null ? u.alive : u.valive; }
+/** frontOf(), but on what the screen is currently showing. */
+function frontOfVis(line){
+  const live = line.filter(uAlive);
+  if (!live.length) return null;
+  const bul = live.filter((u) => u.c.trait === 'bulwark');
+  if (bul.length) return bul[0];
+  const plain = live.filter((u) => u.c.trait !== 'elusive');
+  return plain.length ? plain[0] : live[0];
+}
+/** unitMight(), but counting the rally-mates the screen still shows standing. */
+function unitMightVis(u, line){
+  let d = cardDamage(u.c);
+  if (d <= 0) return 0;
+  for (const o of line) if (o !== u && uAlive(o) && o.c.trait === 'rally') d += 2;
+  return d;
+}
 function unitEl(u, opts){
   const o = opts || {};
   const d = document.createElement('div');
   const t = TRAITS[u.c.trait] || TRAITS.none;
-  d.className = 'ub' + (u.side === 'them' ? ' them' : '') + (u.alive ? '' : ' gone') +
+  const hp = Math.max(0, uHp(u)), pct = Math.max(0, 100 * hp / (u.max || 1));
+  const might = F ? unitMightVis(u, u.side === 'us' ? F.mine : F.theirs) : cardDamage(u.c);
+  d.className = 'ub' + (u.side === 'them' ? ' them' : '') + (uAlive(u) ? '' : ' gone') +
     (u.c.trait === 'bulwark' ? ' bulw' : '') + (u.c.leader ? ' lead' : '') + (o.front ? ' front' : '');
   if (d.dataset) d.dataset.uid = u.uid;
   d.innerHTML =
     '<canvas width="180" height="132"></canvas>' +
     (u.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
     '<div class="pn">' + u.c.name + '</div>' +
-    '<div class="pm">' + ICO('might') + (F ? unitMight(u, u.side === 'us' ? F.mine : F.theirs) : cardDamage(u.c)) +
-      ' <span class="hh">' + ICO('hide') + Math.max(0, u.hp) + '</span></div>' +
-    '<div class="ph"><i style="width:' + Math.max(0, 100 * u.hp / u.max) + '%"></i></div>';
+    '<div class="pm">' + ICO('might') + might +
+      ' <span class="hh">' + ICO('hide') + '<span class="hn">' + hp + '</span></span></div>' +
+    '<div class="ph"><b class="gh" style="width:' + pct + '%"></b>' +
+      '<i style="width:' + pct + '%"></i></div>';
   const cv = d.querySelector && d.querySelector('canvas');
   if (cv) drawBeast(cv, u.c);
-  d.title = u.c.name + ' — ' + Math.max(0, u.hp) + '/' + u.max + ' Hide, hits for ' +
-    (F ? unitMight(u, u.side === 'us' ? F.mine : F.theirs) : cardDamage(u.c)) +
+  d.title = u.c.name + ' — ' + hp + '/' + u.max + ' Hide, hits for ' + might +
     (u.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
   return d;
 }
-/** Prep-phase tile: same beast, but it can be re-ordered or sent back. */
+/** Prep-phase tile: same beast, but it can be re-ordered or sent back.
+ *  Re-ordering IS the game's core decision, so the TILE is the handle — drag it
+ *  sideways past half a tile and it swaps with its neighbour. The chevrons stay
+ *  as a fallback (and are a real 30px target now); ✕ moved to the corner. */
 function slotEl(c, idx){
   const u = { c, side: 'us', uid: -1 - idx, hp: cardHide(c), max: cardHide(c), alive: 1 };
   const d = unitEl(u, { front: idx === 0 });
   d.className += ' slot-live';
+  if (d.dataset) d.dataset.cid = c.id;
+  const pull = document.createElement('button');
+  pull.className = 'pull';
+  pull.innerHTML = '&#10005;';
+  pull.title = 'Take ' + c.name + ' out of the line';
+  // taking a beast back out is a DECISION, not a refusal — sfxDeny must keep
+  // meaning "you can't do that", so this gets an unlatch of its own
+  pull.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
+    toggleField(c.id); sfxUnlatch(); renderFight(); };
+  d.appendChild(pull);
   const bar = document.createElement('div');
   bar.className = 'ord';
   bar.innerHTML = '<button class="ob" data-d="-1">&#9664;</button>' +
-    '<button class="ob out">&#10005;</button>' +
     '<button class="ob" data-d="1">&#9654;</button>';
   const btns = bar.querySelectorAll ? bar.querySelectorAll('.ob') : [];
-  if (btns.length === 3){
+  if (btns.length === 2){
+    btns[0].disabled = idx === 0;
+    btns[1].disabled = idx >= R.line.length - 1;
     btns[0].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
-      if (moveInLine(c.id, -1)){ sfxLift(); renderFight(); } };
+      if (moveInLine(c.id, -1)){ sfxOrder(idx - 1); renderFight(); } };
     btns[1].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
-      toggleField(c.id); sfxDeny(); renderFight(); };
-    btns[2].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
-      if (moveInLine(c.id, 1)){ sfxLift(); renderFight(); } };
+      if (moveInLine(c.id, 1)){ sfxOrder(idx + 1); renderFight(); } };
   }
   d.appendChild(bar);
+  dragOrder(d, c.id);
   return d;
+}
+/** Pointer-drag re-ordering. Presentation only: every commit goes through
+ *  moveInLine(), the same call the chevrons make. */
+function dragOrder(el, cid){
+  if (HEADLESS || !el.addEventListener) return;
+  let sx = 0, w = 0, on = false, moved = 0;
+  const down = (e) => {
+    if (F || !e.isPrimary) return;                 // prep only
+    if (e.target && e.target.closest && e.target.closest('.ob,.pull')) return;
+    on = true; moved = 0; sx = e.clientX;
+    const r = rectOf(el); w = (r ? r.width : 90) + 5;
+    if (el.setPointerCapture && e.pointerId != null){
+      try { el.setPointerCapture(e.pointerId); } catch (err){}
+    }
+    el.classList.add('drag');
+  };
+  const move = (e) => {
+    if (!on) return;
+    const dx = e.clientX - sx;
+    moved = Math.max(moved, Math.abs(dx));
+    if (el.style) el.style.transform = 'translateX(' + dx.toFixed(0) + 'px) scale(1.06) rotate(-2deg)';
+    if (Math.abs(dx) >= w * 0.5){
+      const dir = dx > 0 ? 1 : -1;
+      // the swap re-renders the row, so this node is gone: end the gesture
+      if (moveInLine(cid, dir)){ on = false; sfxOrder(R.line.indexOf(cid)); renderFight(); return; }
+      sx = e.clientX;
+    }
+  };
+  const up = () => {
+    if (!on) return;
+    on = false;
+    el.classList.remove('drag');
+    if (el.style) el.style.transform = '';
+  };
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
 }
 function renderLine(el, units, isPrep){
   el.innerHTML = '';
@@ -2960,33 +3572,51 @@ function renderLine(el, units, isPrep){
     el.appendChild(node);
   });
   const slots = isPrep ? LINE_SLOTS - units.length : 0;
+  // an empty slot is an invitation, not a hole where the UI failed: it breathes
+  // until the line is full, and it says PUT ONE HERE with a drawn plus
+  if (el.classList) el.classList.toggle('wait', isPrep && slots > 0);
   for (let i = 0; i < slots; i++){
     const e = document.createElement('div');
     e.className = 'slot';
-    e.innerHTML = '<span>empty</span>';
+    e.innerHTML = '<div class="plus"></div>';
+    e.title = 'Tap a beast in the bench below to put it here';
     el.appendChild(e);
   }
 }
 /** frontOf() works on live units; prep tiles are plain cards, so wrap it. */
 function frontOfList(units){
   if (!units.length) return null;
-  if (units[0] && units[0].c) return frontOf(units);
+  if (units[0] && units[0].c) return frontOfVis(units);
   return units[0];
 }
 function renderPen(){ if (F) renderLine($('pen'), F.mine, false); }
 
 function renderFight(){
   const prep = !F;
+  if (prep){
+    hideVerdict();
+    const ar0 = $('arena');
+    const stale = ar0 && ar0.querySelectorAll ? ar0.querySelectorAll('.killflash') : [];
+    for (let i = 0; i < stale.length; i++) if (stale[i].remove) stale[i].remove();
+  }
+  const scr = $('fight');
+  // the commit is a one-way hinge; prep puts the bench back
+  if (scr && scr.classList) scr.classList.toggle('committed', !prep);
+  motes();
   hpBar($('fHp'), $('fHpBar'));
   pips($('fPips'));
   const foeName = FOES[clamp(R.idx, 0, RUN_LEN - 1)].name;
   $('foeLbl').innerHTML = prep
     ? 'SCOUTING &mdash; <b>' + foeName + '</b> brings ' + teamSize(R.idx) + ''
     : '<b>' + foeName + '</b>';
+  // A replay must never print its own ending. While F.playing is set the two
+  // labels stay neutral and the CLASH events tick the exchange counter; only
+  // the end of the sequence is allowed to say how it went.
   $('myLbl').innerHTML = prep
     ? 'YOUR LINE &mdash; the front takes the blows'
-    : (F.over ? '' : 'exchange ' + F.round);
-  $('fIntent').textContent = prep ? 'tap a beast to field it' : intentText();
+    : (F.playing ? 'the lines meet' : '');
+  $('fIntent').textContent = prep ? 'tap a beast to field it'
+    : (F.playing ? 'they meet' : '');   // the verdict overlay speaks for the end
 
   // the opposition — scouted in prep, live in battle
   if (prep){
@@ -3018,30 +3648,35 @@ function renderFight(){
 
   const pb = $('pBadges'); pb.innerHTML = '';
   if (R.hazard) pb.innerHTML += '<span class="bdg thn">' + R.hazard.name.toUpperCase() + '</span>';
-  if (R.streak > 1) pb.innerHTML += '<span class="bdg">' + R.streak + ' in a row</span>';
+  // the streak lives HERE now, in pips, at every width
+  if (R.streak > 0) pb.innerHTML += '<span class="streak"><span class="slbl">' + R.streak +
+    ' CLEAN</span><b>' + '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b></span>';
 
   // the bench: everything not nested and not already fielded
+  // In battle the bench keeps its animals — greyed and untouchable — so the
+  // screen does not lurch when you commit, and the strip does not become a
+  // hundred pixels of nothing under a match that is still going on.
   const bench = $('hand');
   bench.innerHTML = '';
-  if (prep){
-    const avail = R.deck.filter((c) => R.nest.indexOf(c.id) < 0 && R.line.indexOf(c.id) < 0);
-    for (const c of avail){
-      const el = cardEl(c);
-      if (!canField(c)) el.classList.add('dead');
-      else el.onclick = () => { if (toggleField(c.id)){ sfxLand(); renderFight(); } };
-      bench.appendChild(el);
-    }
+  const fielded = prep ? R.line : (F.mine || []).map((u) => u.c.id);
+  const avail = R.deck.filter((c) => R.nest.indexOf(c.id) < 0 && fielded.indexOf(c.id) < 0);
+  for (const c of avail){
+    const el = cardEl(c);
+    if (!prep || !canField(c)) el.classList.add('dead');
+    else el.onclick = () => { if (toggleField(c.id)){ sfxLand(); renderFight(); } };
+    bench.appendChild(el);
   }
+  // the only irreversible action in the game is the loudest control on it
   const btn = $('bEnd');
   if (prep){
     const ok = R.line.length > 0;
     btn.disabled = !ok;
-    btn.className = 'btn sm';
+    btn.className = 'btn';
     btn.textContent = ok ? 'SEND THEM IN' : 'FIELD A BEAST';
   } else {
     btn.disabled = false;
     btn.className = 'btn alt sm';
-    btn.textContent = seq ? 'SKIP' : '...';
+    btn.textContent = F.playing ? 'SKIP' : '...';
   }
   const co = $('coach');
   if (prep && R.idx === 0 && !taught()){
@@ -3050,6 +3685,116 @@ function renderFight(){
       ? 'Order matters: the <b>front</b> of your line takes every blow. Put something that can survive there.'
       : 'Tap beasts to field them. Then the match plays itself &mdash; all you control is <b>who</b> goes and <b>where</b>.';
   } else co.hidden = true;
+  forecast(prep);
+}
+
+/* ------------------------------------------------------------ the read ---
+   An autobattler IS the read, and this screen had none: you set an order and
+   found out whether it was right after it was too late to change. Everything
+   here is derived from the same pure functions the rules use, recomputed
+   synchronously on every field / unfield / reorder. It costs nothing. */
+function frontOfCards(cards){
+  if (!cards.length) return null;
+  const bul = cards.filter((c) => c.trait === 'bulwark');
+  if (bul.length) return bul[0];
+  const plain = cards.filter((c) => c.trait !== 'elusive');
+  return plain.length ? plain[0] : cards[0];
+}
+function frontMight(cards){
+  const f = frontOfCards(cards);
+  if (!f) return 0;
+  let d = cardDamage(f);
+  for (const o of cards) if (o !== f && o.trait === 'rally') d += 2;
+  return d * (f.trait === 'frenzy' ? 2 : 1);
+}
+function forecast(prep){
+  const box = $('fCast');
+  if (!box) return;
+  const mine = prep ? R.line.map(cardById).filter(Boolean) : [];
+  const theirs = prep && R.scout ? R.scout.map((u) => u.c) : [];
+  if (!prep || !mine.length || !theirs.length){ box.hidden = true; clearDuel(); return; }
+  box.hidden = false;
+  const myPow = mine.reduce((t, c) => t + statPower(cardDamage(c), cardHide(c)), 0);
+  const thPow = theirs.reduce((t, c) => t + statPower(cardDamage(c), cardHide(c)), 0);
+  const tot = Math.max(1, myPow + thPow);
+  const setW = (el, w) => {
+    if (!el || !el.style) return;
+    const s = w.toFixed(1) + '%';
+    if (el.style.width !== s){ el.style.width = s; anim(el, 'pulse', 340); }
+  };
+  setW($('castU'), 88 * myPow / tot);
+  setW($('castT'), 88 * thPow / tot);
+  const un = $('castUn'), tn = $('castTn');
+  if (un) un.textContent = Math.round(myPow);
+  if (tn) tn.textContent = Math.round(thPow);
+  // the sentence that makes ORDER legible: how long your front stands there,
+  // and how long theirs does
+  const myFront = frontOfCards(mine), thFront = frontOfCards(theirs);
+  const thHit = Math.max(1, frontMight(theirs)), myHit = Math.max(1, frontMight(mine));
+  const iHold = myFront ? Math.ceil(cardHide(myFront) / thHit) : 0;
+  const theyHold = thFront ? Math.ceil(cardHide(thFront) / myHit) : 0;
+  const rd = $('castRead');
+  if (rd) rd.innerHTML = myFront
+    ? '<b>' + myFront.name + '</b> holds ~<b>' + iHold + '</b> exchange' + (iHold === 1 ? '' : 's')
+      + ' &middot; you need <b>' + theyHold + '</b> to drop theirs'
+    : '';
+  drawDuel(myHit, thHit, iHold, theyHold);
+}
+function clearDuel(){
+  const ar = $('arena');
+  if (!ar || !ar.querySelectorAll) return;
+  const old = ar.querySelectorAll('.duel,.duellab');
+  for (let i = 0; i < old.length; i++) if (old[i].remove) old[i].remove();
+}
+/** The matchup that actually matters, drawn: YOUR front against THEIR front,
+ *  across the midline. Re-order the line and the pink thread visibly re-aims —
+ *  that one element is what makes order readable. */
+function drawDuel(myHit, thHit, iHold, theyHold){
+  clearDuel();
+  if (HEADLESS) return;
+  const ar = $('arena'), pen = $('pen'), foe = $('foeLine');
+  if (!ar || !pen || !foe || !pen.querySelector) return;
+  const a = rectOf(pen.querySelector('.ub.front')), b = rectOf(foe.querySelector('.ub.front'));
+  const box = rectOf(ar);
+  if (!a || !b || !box) return;
+  const x1 = a.left + a.width / 2 - box.left, y1 = a.top - box.top + 6;
+  const x2 = b.left + b.width / 2 - box.left, y2 = b.bottom - box.top - 6;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const d = document.createElement('div');
+  d.className = 'duel';
+  d.style.left = x1 + 'px'; d.style.top = y1 + 'px'; d.style.width = len.toFixed(0) + 'px';
+  d.style.transform = 'rotate(' + (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2) + 'deg)';
+  ar.appendChild(d);
+  const lab = (x, y, txt, cls) => {
+    const e = document.createElement('div');
+    e.className = 'duellab' + (cls ? ' ' + cls : '');
+    e.textContent = txt;
+    // the label is centred on its point, so keep that point off the edges
+    e.style.left = Math.max(62, Math.min(box.width - 62, x)) + 'px';
+    e.style.top = y + 'px';
+    ar.appendChild(e);
+  };
+  // the labels hug their own tile, clear of the fence line in the middle
+  lab(x1 + dx * 0.08, y1 + dy * 0.08 - 9, 'hits ' + myHit + ' · holds ' + iHold, 'mine');
+  lab(x1 + dx * 0.92, y1 + dy * 0.92 + 9, 'hits ' + thHit + ' · holds ' + theyHold);
+}
+/** Barn dust in the arena air. Spawned once, then pure CSS forever. */
+function motes(){
+  const ar = $('arena');
+  if (HEADLESS || RM() || !ar || !ar.querySelector) return;
+  if (ar.querySelector('.mote')) return;
+  for (let i = 0; i < 8; i++){
+    const m = document.createElement('div');
+    m.className = 'mote';
+    const s = (2 + Math.random() * 3).toFixed(1) + 'px';
+    m.style.width = m.style.height = s;
+    m.style.left = (5 + Math.random() * 90).toFixed(0) + '%';
+    m.style.top = (18 + Math.random() * 64).toFixed(0) + '%';
+    m.style.animationDuration = (12 + Math.random() * 8).toFixed(1) + 's';
+    m.style.animationDelay = (-Math.random() * 20).toFixed(1) + 's';
+    ar.appendChild(m);
+  }
 }
 
 /* --------------------------------------------------------- the replay ---- */
@@ -3060,86 +3805,319 @@ function nodeFor(uid){
   if (a) return a;
   return $('pen') && $('pen').querySelector ? $('pen').querySelector(q) : null;
 }
-function applyEv(e){
+/** Move a tile's bar and Hide number to a new value. The bar snaps; the ghost
+ *  behind it lags and catches up, leaving a white slab exactly the width of the
+ *  blow — the only way to tell a 3 from a 12 while watching. */
+function setUnitHp(n, uid, hp){
+  const u = unitByUid(uid);
+  if (u) u.vhp = Math.max(0, hp);
+  if (!n || !n.querySelector) return;
+  const pct = Math.max(0, 100 * Math.max(0, hp) / ((u && u.max) || 1));
+  const bar = n.querySelector('.ph i'), gh = n.querySelector('.ph .gh');
+  if (bar && bar.style) bar.style.width = pct + '%';
+  if (gh && gh.style) gh.style.width = pct + '%';
+  // the Hide number TICKS DOWN — a number that just sits there is not feedback.
+  // (Only the digits: the icon beside them is markup and must not be retyped.)
+  const hh = n.querySelector('.pm .hh .hn');
+  if (hh) countUp(hh, Math.max(0, hp), { dur: 180 });
+}
+/** The front marker has to MOVE when the front dies, not at the end of the
+ *  match — otherwise the lime bar sits on a corpse for the rest of the replay. */
+function remarkFront(side){
+  const el = side === 'us' ? $('pen') : $('foeLine');
+  const line = !F ? null : (side === 'us' ? F.mine : F.theirs);
+  if (!el || !line || !el.querySelectorAll) return;
+  const front = frontOfVis(line);
+  const tiles = el.querySelectorAll('.ub');
+  for (let i = 0; i < tiles.length; i++){
+    const uid = tiles[i].dataset ? +tiles[i].dataset.uid : NaN;
+    if (tiles[i].classList) tiles[i].classList.toggle('front', !!front && front.uid === uid);
+  }
+}
+/** The frame the whole prep decision resolves into. Never fired for the kill
+ *  that LOSES you the match — that one gets the toll instead. */
+function killBlow(n){
+  const r = rectOf(n), ar = $('arena'), box = rectOf(ar);
+  if (r && ar && box && !RM() && !HEADLESS){
+    const f = document.createElement('div');
+    f.className = 'killflash';
+    f.style.left = (r.left + r.width / 2 - box.left) + 'px';
+    f.style.top = (r.top + r.height / 2 - box.top) + 'px';
+    ar.appendChild(f);
+    at(340, () => { if (f.remove) f.remove(); });
+  }
+  if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 20,
+    (i) => (i % 2 ? '#ffd34d' : '#fff3c4'), { speed: 200, lift: 46, dur: 640 });
+  const app = $('app');
+  if (app && app.classList) anim(app, 'shk', 420);
+  const ar2 = $('arena');
+  if (ar2 && ar2.classList){ anim(ar2, 'shk', 420); anim(ar2, 'froze', 300); }
+  noise(0.26, { lp: 520, vol: 0.13 });
+  tone(160, 0.5, { type: 'sawtooth', vol: 0.09, glide: 48 });
+  duck(0.55, 420);
+}
+function applyEv(e, final){
   if (!e) return;
-  if (e.k === 'strike'){
+  if (e.k === 'clash'){
+    // the exchange counter ticks, and the two lines actually collide
+    const my = $('myLbl');
+    if (my) my.innerHTML = 'exchange ' + e.round;
+    anim($('pen'), 'cls-up', 260);
+    anim($('foeLine'), 'cls-dn', 260);
+  } else if (e.k === 'strike'){
     const n = nodeFor(e.uid);
     if (n) anim(n, e.side === 'us' ? 'lungeUp' : 'lungeDown', 300);
     sfxStrike(e.per);
   } else if (e.k === 'hurt'){
     const n = nodeFor(e.uid);
+    setUnitHp(n, e.uid, e.hp);
     if (n){
       anim(n, 'hurt', 320);
-      const bar = n.querySelector && n.querySelector('.ph i');
-      if (bar && bar.style) bar.style.width = Math.max(0, 100 * e.hp / (unitByUid(e.uid) || { max: 1 }).max) + '%';
-      flyer('-' + e.dmg, e.thorns ? '#ffb0e0' : '#ff9d6b', n, { size: 16 + Math.min(18, e.dmg) });
+      flyer('-' + e.dmg, e.thorns ? '#ffb0e0' : '#ff9d6b', n,
+        { size: 16 + Math.min(18, e.dmg), cls: e.dmg >= 8 ? 'crit' : '' });
     }
   } else if (e.k === 'die'){
     const n = nodeFor(e.uid);
+    const u = unitByUid(e.uid);
+    if (u) u.valive = 0;
     if (n){
       anim(n, 'fall', 520);
-      const r = rectOf(n);
-      if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 7, '#c9b48a', { speed: 120, lift: 30 });
+      if (n.classList) at(520, () => { if (n.classList) n.classList.add('gone'); });
+      if (final) killBlow(n);
+      else {
+        const r = rectOf(n);
+        if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 7, '#c9b48a',
+          { speed: 120, lift: 30 });
+      }
     }
+    remarkFront(e.side);
     sfxDie();
   } else if (e.k === 'poison'){
     const n = nodeFor(e.uid);
+    setUnitHp(n, e.uid, e.hp);
     if (n) flyer('-' + e.v, '#b6ff8a', n, { size: 15 });
   } else if (e.k === 'heal'){
+    if (F) F.vhp = e.hp;
     flyer('+' + e.v, '#a6ff5e', $('fHp'), { size: 18 });
     sfxHeal();
     hpBar($('fHp'), $('fHpBar'));
   } else if (e.k === 'trample'){
-    flyer('-' + e.v, '#ff5d5d', $('fHp'), { size: 26 });
-    sfxHurt();
-    const app = $('app');
-    if (app && app.classList) anim(app, 'hurt', 300);
-    hpBar($('fHp'), $('fHpBar'));
+    trampleHit(e);
+  } else if (e.k === 'end'){
+    const my = $('myLbl');
+    if (my) my.innerHTML = '';
   }
+}
+/* --- the trample: a WOUND, not a number changing --------------------------
+   Losing up to a third of your ceiling used to read as less than culling a
+   beast. Now: the mix ducks, every survivor still standing walks over you on
+   a stagger (so you HEAR how many of them there were), the frame goes red,
+   and the bar drains in step with the number. */
+function trampleHit(e){
+  const app = $('app');
+  duck(0.6, 520);
+  const foe = $('foeLine');
+  const live = foe && foe.querySelectorAll ? foe.querySelectorAll('.ub:not(.gone)') : [];
+  const n = Math.min(4, live.length);
+  for (let i = 0; i < n; i++){
+    const tile = live[i];
+    at(i * 110, () => {
+      if (cur !== 'fight' || !F) return;
+      anim(tile, 'lungeDown', 360);
+      noise(0.1, { lp: 280, vol: 0.09 });
+    });
+  }
+  at(n * 110 + 90, () => {
+    if (cur !== 'fight' || !F) return;
+    F.vhp = R.hp;                          // the wound lands HERE, not before it
+    if (app && app.classList){ anim(app, 'close', 640); anim(app, 'hurt', 300); }
+    sfxHurt();
+    const bar = $('fHpBar');
+    if (bar && bar.classList){
+      bar.classList.add('drain');
+      at(820, () => { if (bar.classList) bar.classList.remove('drain'); });
+    }
+    if (bar && bar.style) bar.style.width = (100 * R.hp / R.maxHp) + '%';
+    countUp($('fHp'), R.hp, { dur: 700 });
+    const wrap = bar && bar.parentNode;
+    if (wrap && wrap.classList) wrap.classList.toggle('danger', R.hp / R.maxHp < 0.3);
+    flyer('-' + e.v, '#ff5d5d', $('fHp'), { size: 34, cls: 'crit' });
+    if (R.hp > 0 && R.hp / R.maxHp < 0.3) startHeart();
+  });
+}
+/* A heart you can hear when the run is nearly over. Self-terminating: it stops
+   the moment you are out of the red, and every beat is an at() timer, so
+   leaving the screen kills it too. */
+let heartGen = 0;
+function startHeart(){
+  if (HEADLESS || RM()) return;
+  const g = ++heartGen;
+  const beat = () => {
+    if (g !== heartGen || !R || R.hp <= 0 || R.hp / R.maxHp >= 0.3) return;
+    sfxHeart();
+    at(1400, beat);
+  };
+  at(500, beat);
 }
 function unitByUid(uid){
   if (!F) return null;
   return F.mine.concat(F.theirs).filter((u) => u.uid === uid)[0] || null;
 }
-const BEAT = { clash: 240, strike: 60, hurt: 130, die: 300, poison: 160, heal: 140, trample: 420, end: 260 };
+const BEAT = { clash: 240, strike: 60, hurt: 130, die: 300, poison: 160, heal: 140, trample: 760, end: 260 };
+/** The anticipation beat: the line is committed, and then nothing happens for a
+ *  third of a second. That silence is what makes the first blow land. */
+const LEADIN = 320;
 function playBattle(list){
   if (HEADLESS){ finishBattle(); return; }
-  let t = 0;
+  let t = RM() ? 0 : LEADIN;
   seq = { alive: 1 };
   const mine = seq;
-  for (const e of list){
+  // the killing blow gets a beat of its own — but only the one that WINS it.
+  // The kill that loses you the match is not a triumph; it gets the toll.
+  let won = false;
+  for (const e of list) if (e.k === 'end') won = !!e.won;
+  let lastDie = -1;
+  for (let i = 0; i < list.length; i++) if (list[i].k === 'die') lastDie = i;
+  const finalIdx = won ? lastDie : -1;
+  for (let i = 0; i < list.length; i++){
+    const e = list[i];
     const d = BEAT[e.k] || 100;
-    at(t, () => { if (seq === mine && cur === 'fight') applyEv(e); });
-    t += RM() ? Math.min(40, d) : d;
+    const final = i === finalIdx;
+    at(t, () => { if (seq === mine && cur === 'fight') applyEv(e, final); });
+    // the frame dilates around the blow that decides it
+    t += RM() ? Math.min(40, d) : (final ? Math.round(d * 2.2) + 340 : d);
     if (t > 9000) break;                      // never hold the player hostage
   }
   at(t + 240, () => { if (seq === mine) finishBattle(); });
-  renderFight();
 }
 function seqFlush(){
+  if (verdictOn){ dismissVerdict(); return; }
   if (!seq) return;
   seq = null;
   finishBattle();
 }
+/* --- THE VERDICT -----------------------------------------------------------
+   The match used to just stop: the mid-line label swapped to "the field is
+   yours" in 10px grey and the screen moved on. This is the payoff of the whole
+   prep decision and the moment the run's health is decided, so it gets the
+   frame — headline, then a beat, then the consequence. */
+let verdictOn = false, verdictAt = 0, vSounded = false;
+/** The slab drops on a kick and a stacked fifth; the streak note climbs one
+ *  semitone per consecutive win, so a run you are winning audibly rises. */
+function verdictSound(won, streak){
+  if (HEADLESS) return;
+  duck(won ? 0.4 : 0.5, won ? 300 : 460);
+  noise(0.3, { lp: 400, vol: 0.1 });
+  if (won){
+    chord([196, 294, 392], 0.5, { type: 'triangle', vol: 0.06 });
+    const k = Math.min(12, Math.max(0, streak - 1));
+    tone(523.25 * Math.pow(2, k / 12), 0.34, { at: 0.34, type: 'triangle', vol: 0.055 });
+  } else {
+    sfxToll();
+  }
+}
+function showVerdict(){
+  const box = $('fVerdict');
+  if (!box || !F) return false;
+  const won = F.over === 'win';
+  const alive = livingOf(F.mine).length;
+  const trample = F.trample || 0;
+  box.className = 'verdict' + (won ? ' win' : ' lose');
+  box.hidden = false;
+  // the round pip fills, then the streak lands — the run visibly compounds
+  const st = won ? R.streak + 1 : 0;
+  let pipHtml = '';
+  for (let i = 0; i < RUN_LEN; i++){
+    pipHtml += '<i class="' + (FOES[i].boss ? 'boss ' : '') +
+      (i < R.idx ? 'done' : i === R.idx ? 'now' : '') + '"></i>';
+  }
+  const streakHtml = won && st > 0
+    ? '<span class="streak"><span class="slbl">' + st + ' clean</span><b>' +
+      '<i></i>'.repeat(Math.min(st, 5)) + '</b></span>'
+    : (!won && R.streak > 0
+      ? '<span class="streak brk"><span class="slbl">streak broken</span><b>' +
+        '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b></span>' : '');
+  box.innerHTML = '<div><div class="vhead">' +
+    (won ? 'THE FIELD IS YOURS' : 'YOUR LINE IS BROKEN') + '</div>' +
+    '<div class="vsub">' + (won
+      ? (alive ? '<span class="ok">' + alive + '</span> still standing'
+               : 'not one of them walked off it')
+      : 'they trample you on the way out<b id="vTrample">0</b>') +
+    '</div><div class="vrun"><div class="vpips">' + pipHtml + '</div>' + streakHtml + '</div>' +
+    '<div class="vtap">tap to carry on</div></div>';
+  verdictOn = true;
+  vSounded = true;
+  verdictSound(won, st);
+  // the tap that SKIPS the replay must not also dismiss the verdict it just
+  // brought up — give the frame a moment to be looked at
+  verdictAt = now();
+  const bt = $('bEnd');
+  if (bt){ bt.disabled = false; bt.className = 'btn'; bt.textContent = 'CARRY ON'; }
+  if (!won && trample){
+    const n = box.querySelector && box.querySelector('#vTrample');
+    at(300, () => { if (n) countUp(n, trample, { from: 0, fmt: (v) => '−' + Math.round(v) + ' HEALTH' }); });
+  }
+  at(2800, () => { if (verdictOn) dismissVerdict(); });
+  return true;
+}
+function hideVerdict(){
+  verdictOn = false;
+  const box = $('fVerdict');
+  if (box){ box.hidden = true; box.innerHTML = ''; }
+}
+function dismissVerdict(){
+  if (!verdictOn || now() - verdictAt < 500) return;
+  hideVerdict();
+  resolveFight();
+}
 function finishBattle(){
   seq = null;
   if (!F) return;
+  // whether it played out or was skipped, the board now shows the real ending
+  for (const u of F.mine.concat(F.theirs)){ u.vhp = u.hp; u.valive = u.alive; }
+  F.vhp = R.hp;
+  F.playing = 0;
+  const ar = $('arena');
+  if (ar && ar.classList) ar.classList.remove('froze');
   renderFight();
-  resolveFight();
+  // The verdict is INFORMATION, not motion — a reduced-motion player gets it
+  // too; the sheet above has already flattened everything that moves in it.
+  if (HEADLESS || !showVerdict()){ resolveFight(); return; }
+}
+/** The commit. The bench slides out of frame, the reorder bars go, the fielded
+ *  tiles pull into a tighter row and latch — then 320ms of silence before the
+ *  first blow. This is the hinge the whole game turns on and it used to make
+ *  the same noise as tapping a card. */
+function latchLine(){
+  if (HEADLESS) return;
+  noise(0.1, { lp: 300, vol: 0.1 });
+  tone(78, 0.3, { type: 'triangle', vol: 0.09, glide: 46 });
+  tone(220, 0.44, { at: 0.05, type: 'sine', vol: 0.05, glide: 440 });   // resolves on the first clash
+  if (RM()) return;
+  const pen = $('pen');
+  const tiles = pen && pen.querySelectorAll ? pen.querySelectorAll('.ub') : [];
+  for (let i = 0; i < tiles.length; i++){
+    const tile = tiles[i];
+    at(i * 70, () => { if (cur === 'fight') anim(tile, 'landing', 220); });
+  }
 }
 function beginBattle(){
   if (F){ seqFlush(); return; }
   if (!R.line.length) return;
   if (!lineIsLegal(R.line)) return;
+  vSounded = false;
   startBattle(fightMods());
   resolveBattle();
   const list = (F.events || []).slice();
   F.events = [];
-  sfxLand();
+  F.playing = 1;
+  renderFight();          // rebuilds both lines at the START of the battle
+  latchLine();
   playBattle(list);
 }
 /** Older name, kept: the button and the keyboard both come through here. */
-function doEnd(){ if (seq) { seqFlush(); return; } if (!F) beginBattle(); }
+function doEnd(){ if (verdictOn){ dismissVerdict(); return; }
+  if (seq) { seqFlush(); return; } if (!F) beginBattle(); }
 function doPlay(){ /* no cards are played mid-match any more */ }
 
 function resolveFight(){
@@ -3147,7 +4125,9 @@ function resolveFight(){
   if (R.idx === 0) markTaught();
   const won = F.over === 'win';
   const dead = !!F.dead;
-  if (won) sfxWin(); else sfxToll();
+  // the verdict beat already owned the room; do not toll over its own fanfare
+  if (!vSounded){ if (won) sfxWin(); else sfxToll(); }
+  vSounded = false;
   winFight();
   if (dead){ goOver(false); return; }
   goHatch();
@@ -3209,20 +4189,54 @@ function startHatchSeq(){
     if (s) shells.push(s);
   }
   if (RM()){ hatchFlush(); return; }
-  // tension: the wobble tightens into a shudder and a lime glow comes up
-  const steps = 6, span = 680;
-  for (let k = 1; k <= steps; k++){
-    at((span / steps) * k, () => {
-      const d = 1.1 - (1.1 - 0.28) * (k / steps);
+  // A DRUMROLL, not a menu blip: an accelerating snare (190ms → 55ms) over a
+  // rising pedal tone, with the panel dimmed to a spotlight on the eggs.
+  const span = 680;
+  const scr = $('hatch');
+  if (scr && scr.classList){ scr.classList.add('rolling'); scr.style.setProperty('--spot', '1'); }
+  tone(90, 0.72, { type: 'triangle', vol: 0.05, glide: 150 });
+  let tk = 0, gap = 190;
+  while (tk < span){
+    const k = Math.min(1, tk / span);
+    at(tk, () => {
+      if (cur !== 'hatch' || !hatchSeq) return;
+      noise(0.018, { bp: 1, hp: 1600, vol: 0.06 });
       for (const s of shells){
         if (!s.style) continue;
-        s.style.animationDuration = d.toFixed(2) + 's';
-        s.style.setProperty('--glow', ((k / steps) * 0.55).toFixed(2));
+        s.style.animationDuration = (1.1 - (1.1 - 0.28) * k).toFixed(2) + 's';
+        s.style.setProperty('--glow', (k * 0.55).toFixed(2));
       }
-      tone(180 + k * 55, 0.13, { type: 'triangle', vol: 0.028 });
     });
+    tk += gap;
+    gap = Math.max(55, gap - 24);
   }
-  order.forEach((idx, n) => at(span + 110 + n * 360, () => crackEgg(idx)));
+  // The rarest chick cracks LAST, and it gets the one thing the sequence never
+  // had: dead silence first. Everything stops moving, then the shell breaks.
+  const HOLD = 650;
+  let t = span + 110;
+  order.forEach((idx, n) => {
+    const last = n === order.length - 1;
+    if (last && order.length > 1){
+      const at0 = t;
+      at(at0, () => {
+        if (cur !== 'hatch' || !hatchSeq) return;
+        const s2 = $('hatch');
+        if (s2 && s2.classList) s2.classList.add('held');
+      });
+      t += HOLD;
+    }
+    const when = t;
+    at(when, () => {
+      const s2 = $('hatch');
+      if (s2 && s2.classList) s2.classList.remove('held');
+      crackEgg(idx);
+    });
+    t += 360;
+  });
+  at(t + 200, () => {
+    const s2 = $('hatch');
+    if (s2 && s2.classList) s2.classList.remove('rolling', 'held');
+  });
 }
 /** One egg: 140ms of hard jitter, a crack, two shell halves falling away, and
  *  the chick popping up out of it. Its banner lands 260ms later, on its own. */
@@ -3239,6 +4253,15 @@ function crackEgg(idx){
     w.classList.add('crk');
     clutchTitle();
     sfxCrack();
+    duck(0.35, 260);
+    // the spotlight lifts a little with every shell that opens
+    const scr = $('hatch');
+    if (scr && scr.style){
+      const left = parseFloat(scr.style.getPropertyValue('--spot')) || 1;
+      const next = Math.max(0, left - 1 / Math.max(1, (R.lastHatch ? R.lastHatch.litter.length : 2)));
+      scr.style.setProperty('--spot', next.toFixed(2));
+      if (next <= 0.01 && scr.classList) scr.classList.remove('rolling');
+    }
     const sh = w.querySelector && w.querySelector('.shell');
     const r = rectOf(sh || w);
     if (r) burst(r.left + r.width / 2, r.top + r.height * 0.38, 6, '#f3ecd8',
@@ -3269,6 +4292,8 @@ function hatchFlush(){
   clutchTitle();
   const ch = $('hChild');
   if (!ch || !ch.children) return;
+  const scr = $('hatch');
+  if (scr && scr.classList) scr.classList.remove('rolling', 'held');
   for (let i = 0; i < ch.children.length; i++){
     const w = ch.children[i];
     if (!w.classList) continue;
@@ -3321,6 +4346,11 @@ function revealLitter(){
     const wrap = document.createElement('div');
     wrap.className = 'pickwrap' + (HEADLESS ? '' : ' sealed');
     const card = cardEl(res.child, { big: true });
+    // the loud slab is reserved for the ONE trait this chick did not get from
+    // either parent — everything else is a quiet tab that lets the animal talk
+    const tr = card.querySelector && card.querySelector('.tr');
+    if (tr && tr.classList && res.child.trait !== 'none' &&
+        res.child.trait !== h.a.trait && res.child.trait !== h.b.trait) tr.classList.add('fresh');
     wrap.appendChild(card);
     const tagline = document.createElement('div');
     // reserved height, so a lone PRODIGY tag can never shunt its column out of line
@@ -3376,10 +4406,16 @@ const GENE_SPOTS = {
   tail:  { x: 0.15, y: 0.66, lbl: 'tail' },
   body:  { x: 0.72, y: 0.60, lbl: 'build' },
 };
-function rline(x1, y1, x2, y2, label, isNew, row){
+/** One thread from a parent to the gene it gave, plus a caption. The thread
+ *  stops 12px SHORT of the label and the label is anchored in the card's lower
+ *  band, so it points at the feature rather than covering the chick's face. */
+function rline(x1, y1, x2, y2, label, isNew, lab0){
   const L = fxLayer(); if (!L || !L.appendChild) return;
+  const or0 = fxOrigin();
+  x1 -= or0.x; y1 -= or0.y; x2 -= or0.x; y2 -= or0.y;
+  if (lab0) lab0 = { x: lab0.x - or0.x, y: lab0.y - or0.y };
   const dx = x2 - x1, dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
+  const len = Math.max(0, Math.sqrt(dx * dx + dy * dy) - 12);
   const a = Math.atan2(dy, dx) * 180 / Math.PI;
   const d = document.createElement('div');
   d.className = 'rline';
@@ -3393,12 +4429,8 @@ function rline(x1, y1, x2, y2, label, isNew, row){
   const lab = document.createElement('div');
   lab.className = 'rlab' + (isNew ? ' nw' : '');
   lab.textContent = label;
-  // cluster the labels at the CHICK end of the thread, over the art where the
-  // gene actually is — the middle of the thread runs across the body copy
-  const f = 0.80 + 0.05 * ((row || 0) % 3);
-  // the generation chip lives at the card's top-right, so pull NEW away from it
-  lab.style.left = (x1 + dx * f - (isNew ? 46 : 0)) + 'px';
-  lab.style.top = (y1 + dy * f - 17 + ((row || 0) % 2 ? 15 : -4)) + 'px';
+  lab.style.left = (lab0 ? lab0.x : x2) + 'px';
+  lab.style.top = (lab0 ? lab0.y : y2) + 'px';
   L.appendChild(lab);
   at(2000, () => { if (d.remove) d.remove(); if (lab.remove) lab.remove(); });
 }
@@ -3414,15 +4446,12 @@ function resemblance(wrap, res){
   if (!cards || cards.length < 2) return;
   const pr = [rectOf(cards[0]), rectOf(cards[1])];
   const cv = wrap.querySelector && wrap.querySelector('canvas');
+  const card = wrap.querySelector && wrap.querySelector('.card');
   const cr = rectOf(cv);
+  const kr = rectOf(card) || cr;
   if (!cr || !pr[0] || !pr[1]) return;
-  const keys = Object.keys(GENE_SPOTS).filter((k) => prov[k]);
-  // stand the instruction line down while the threads draw across it
-  const hs = $('hatch');
-  if (hs && hs.classList){
-    hs.classList.add('revealing');
-    at(260 + keys.length * 190 + 700, () => { if (hs.classList) hs.classList.remove('revealing'); });
-  }
+  // four at most: six captions stacked up the card climb back over the face
+  const keys = Object.keys(GENE_SPOTS).filter((k) => prov[k]).slice(0, 4);
   keys.forEach((k, i) => {
     const who = prov[k], sp = GENE_SPOTS[k];
     at(i * 190, () => {
@@ -3431,8 +4460,11 @@ function resemblance(wrap, res){
         ? { left: cr.left + cr.width / 2 - 1, top: cr.top - 30, width: 2, height: 2 }
         : pr[who === 'a' ? 0 : 1];
       const nm = who === 'new' ? 'NEW' : shortName(who === 'a' ? h.a.name : h.b.name) + '’s ' + sp.lbl;
+      // the caption lives in the card's lower band, stacked upward, never on
+      // the eyes of the thing it is annotating
+      const lab0 = { x: kr.left + 4, y: kr.top + kr.height - 28 - i * 24 };
       rline(src.left + src.width / 2, src.top + src.height / 2,
-        cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', i);
+        cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', lab0);
       tone(who === 'new' ? 980 : 620 + i * 60, 0.07, { type: 'sine', vol: 0.035 });
     });
   });
@@ -3518,6 +4550,9 @@ function goCull(){
   $('bCullSkip').style.display = need > 0 ? 'none' : '';
   $('bCull').disabled = true;
   if ($('bCull').classList) $('bCull').classList.remove('busy');
+  // until a card is picked the lit button is KEEP THEM ALL, because that is
+  // the only thing you can actually press
+  if ($('cull').classList) $('cull').classList.remove('armed');
   const g = $('cGrid'); g.innerHTML = '';
   if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
@@ -3528,9 +4563,11 @@ function goCull(){
       cullPick = c.id;
       [...g.children].forEach((x) => x.classList.toggle('sel', +x.dataset.id === c.id));
       $('bCull').disabled = false;
+      if ($('cull').classList) $('cull').classList.add('armed');
     };
     g.appendChild(el);
   });
+  deckFade(g);
 }
 /** How many animals still in the barn came out of this one? Walks the stud
  *  book, so a great-grandchild counts even after `blood` has been trimmed. */
@@ -3609,14 +4646,15 @@ function goOver(won){
   if (best){
     const pl = document.createElement('div');
     pl.className = 'plinth';
-    pl.innerHTML = '<span class="banner gold2 ribbon">BEST IN SHOW</span>';
+    // the wrapper carries the centring; the banner carries the animation
+    pl.innerHTML = '<span class="ribbon"><span class="banner gold2">BEST IN SHOW</span></span>';
     pl.appendChild(cardEl(best, { big: true }));
     ob.appendChild(pl);
   }
   $('oBestLine').innerHTML = (best ? '<b>' + best.name + '</b> &middot; gen ' + best.gen +
-    ' &middot; <span class="pw">' + power(best) + '</span> power' : '') +
+    ' &middot; <span class="pw">' + Math.round(power(best)) + '</span> power' : '') +
     '<br><span class="dim" style="font-size:13px">' + R.born + ' kept, ' + R.sold + ' sold on, ' +
-    R.retired + ' retired' + (hall ? ' &nbsp;|&nbsp; record ' + hall.pow : '') + '</span>';
+    R.retired + ' retired' + (hall ? ' &nbsp;|&nbsp; record ' + Math.round(hall.pow) : '') + '</span>';
   // the keepsake is prose, not a tracked-out uppercase paragraph — its own plate
   const keep = $('oKeep');
   if (fnd){
@@ -3715,6 +4753,7 @@ function renderBook(){
     el.onclick = () => { bookId = id; renderBook(); };
     list.appendChild(el);
   }
+  deckFade(list);
 }
 function goBook(id, from){
   bookFrom = from || 'nest';
@@ -3781,6 +4820,7 @@ function bind(){
     document.addEventListener('pointerdown', () => {
       ac();
       if (seq) seqFlush();
+      else if (verdictOn) dismissVerdict();   // the overlay says "tap to carry on"
       else if (cur === 'hatch' && hatchSeq) hatchFlush();
     }, true);
   } catch (e){}

@@ -64,6 +64,17 @@ for (; steps < 2200; steps++) {
       await page.waitForTimeout(700);
       if (!seen.f2) { await shot('4fight-battle'); seen.f2 = 1; }
       await click('#bEnd');
+      // the frame the match ENDS on: the verdict overlay, if it is up
+      if (!seen.f3) {
+        for (let k = 0; k < 30; k++) {
+          await page.waitForTimeout(60);
+          if (await page.$eval('#fVerdict', (e) => !e.hidden).catch(() => false)) break;
+        }
+        if (await page.$eval('#fVerdict', (e) => !e.hidden).catch(() => false)) {
+          await page.waitForTimeout(500);
+          await shot('4fight-verdict'); seen.f3 = 1;
+        }
+      }
     }
   } else if (await on('hatch')) {
     await page.waitForTimeout(950);
