@@ -35,8 +35,9 @@
     "test:dpfont": "node tests/dungeon_font.test.mjs",
     "test:ibrelay": "node tests/ironbridge_relay.test.mjs",
     "test:beasts": "node tests/birds_and_beasts.test.mjs",
+    "test:bbfont": "node tests/birds_and_beasts_font.test.mjs",
     "test:emberkin": "node tests/emberkin.test.mjs && node tests/emberkin_render.test.mjs && node tests/emberkin_story.test.mjs && node tests/emberkin_art.test.mjs && node tools/spritegrid/embed.mjs --check",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard && npm run test:collection && npm run test:ballistic && npm run test:pusher && npm run test:pusherrender && npm run test:dungeon && npm run test:dpboard && npm run test:dpsave && npm run test:cells && npm run test:grimhold && npm run test:leviathan && npm run test:ironbridge && npm run test:ibrelay && npm run test:blacksite && npm run test:flipper && npm run test:dpinball && npm run test:dpfont && npm run test:ducks && npm run test:emberkin && npm run test:beasts",
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard && npm run test:collection && npm run test:ballistic && npm run test:pusher && npm run test:pusherrender && npm run test:dungeon && npm run test:dpboard && npm run test:dpsave && npm run test:cells && npm run test:grimhold && npm run test:leviathan && npm run test:ironbridge && npm run test:ibrelay && npm run test:blacksite && npm run test:flipper && npm run test:dpinball && npm run test:dpfont && npm run test:ducks && npm run test:emberkin && npm run test:beasts && npm run test:bbfont",
     "test:blacksite": "node tests/blacksite.test.mjs && node tests/blacksite_render.test.mjs",
     "test:pusherrender": "node tests/coin_pusher_render.test.mjs"
   },
