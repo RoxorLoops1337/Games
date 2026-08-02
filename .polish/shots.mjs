@@ -5,7 +5,7 @@
 //
 //   node .polish/shots.mjs <outDir> [desktop|mobile]
 //
-// Writes: 1title 2nest 3fight-early 4fight-mid 5hatch 6cull 7book 8over (.png)
+// Writes: 1title 2nest 3fight-prep 4fight-wave/clash/verdict 5hatch 6cull 7book 8over (.png)
 // Prints any console/page errors it saw. Exits non-zero if the run got stuck.
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -34,7 +34,7 @@ await click('#bStart');
 
 const seen = {};
 let steps = 0;
-for (; steps < 2200; steps++) {
+for (; steps < 5000; steps++) {
   await page.waitForTimeout(25);
   if (await on('nest')) {
     if (!seen.nest) {
@@ -53,18 +53,29 @@ for (; steps < 2200; steps++) {
     await page.waitForTimeout(50);
     await click('#bFight');
   } else if (await on('fight')) {
-    const bench = await page.$$('#hand .card:not(.dead)');
-    const btn = await page.$eval('#bEnd', (e) => e.textContent + '|' + e.disabled).catch(() => '');
-    if (bench.length && btn.indexOf('true') >= 0) {
-      await bench[0].click().catch(() => {});
-    } else {
+    // the arena: set a line, open the gates, then keep feeding beasts in
+    const started = await page.evaluate(() => !!(window.BB.F && window.BB.F.started));
+    if (!started) {
+      const hand = await page.$$('#hand .card:not(.dead):not(.ghost)');
+      if (hand[0]) await hand[0].click().catch(() => {});
       if (!seen.f1) { await shot('3fight-prep'); seen.f1 = 1; }
       await click('#bEnd');
-      await page.waitForTimeout(900);
+      await page.waitForTimeout(1400);
       if (!seen.f2) { await shot('4fight-wave'); seen.f2 = 1; }
+    } else {
+      const hand = await page.$$('#hand .card:not(.dead):not(.ghost)');
+      if (hand[0]) await hand[0].click().catch(() => {});
+      await page.waitForTimeout(180);
+      const st = await page.evaluate(() => window.BB.F
+        ? { over: window.BB.F.over, us: window.BB.F.units.filter((u) => u.alive && u.side === 'us').length,
+            them: window.BB.F.units.filter((u) => u.alive && u.side === 'them').length }
+        : { over: 'gone', us: 0, them: 0 });
+      if (!seen.f4 && st.us && st.them) { await shot('4fight-clash'); seen.f4 = 1; }
       const v = await page.$eval('#fVerdict', (e) => !e.hidden).catch(() => false);
-      if (v && !seen.f3) { await shot('4fight-verdict'); seen.f3 = 1; }
-      await click('#bEnd');
+      if (v) {
+        if (!seen.f3) { await shot('4fight-verdict'); seen.f3 = 1; }
+        await click('#bEnd');
+      }
     }
   } else if (await on('hatch')) {
     await page.waitForTimeout(950);
@@ -96,4 +107,4 @@ console.log(`${MOBILE ? 'mobile' : 'desktop'}: wrote screens to ${OUT} (${steps}
 console.log('screens captured:', Object.keys(seen).join(', ') || 'none');
 console.log('console/page errors:', errs.length ? errs.slice(0, 8) : 'none');
 await browser.close();
-if (steps >= 2200) { console.error('WARNING: run never reached game over'); process.exit(1); }
+if (steps >= 5000) { console.error('WARNING: run never reached game over'); process.exit(1); }

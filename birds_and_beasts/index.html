@@ -410,9 +410,10 @@
   .litter .card:hover{ transform:translateY(-3px); }
   .egg2{ font-size:52px; line-height:1; animation:wob 1.1s ease-in-out infinite; }
 
-  /* ================= THE TOWER (9:16 portrait) =================
-     Three floors and a nest on top. They arrive at the door and climb. */
-  .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:4px; min-height:0;
+  /* ================= THE ARENA (9:16 portrait) =================
+     One canvas pit with a nest above it. Everything that moves is drawn in
+     drawPit(); the CSS here only builds the box it lives in. */
+  .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:5px; min-height:0;
     position:relative; padding:5px 8px 0; }
   .nestbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:5px 10px;
     border-radius:12px 12px 4px 4px; background:linear-gradient(180deg,#2a2016,#18140e);
@@ -421,86 +422,43 @@
   .nestbar .neggs{ font-size:15px; line-height:1; letter-spacing:-2px; }
   .nestbar .nhp{ margin-left:auto; font-size:17px; font-weight:900; color:#ffd34d;
     font-variant-numeric:tabular-nums; }
-  .tower{ flex:1 1 auto; display:flex; flex-direction:column; gap:5px; min-height:0; }
-  .flr{ flex:1 1 0; min-height:70px; max-height:none; position:relative; display:flex;
-    align-items:center; gap:4px; padding:3px 4px 3px 22px; border-radius:8px;
-    background:linear-gradient(180deg, rgba(30,46,26,.55), rgba(12,20,12,.75));
-    border:1px solid #22331e; box-shadow:inset 0 1px 0 rgba(180,255,140,.05); }
-  .flr.ground{ border-color:#4a2f22; background:linear-gradient(180deg, rgba(46,30,24,.5), rgba(18,12,10,.8)); }
-  .flr.top{ border-color:#5a4a20; }
-  .flr .flrno{ position:absolute; left:4px; top:50%; transform:translateY(-50%) rotate(180deg);
-    writing-mode:vertical-rl; font-size:8px; letter-spacing:2px; font-weight:800; color:#4f6644; }
-  .flr.ground .flrno{ color:#8a5a44; }
-  .half{ flex:1 1 0; min-width:0; display:flex; gap:3px; align-items:center; }
-  .half.them{ justify-content:flex-end; position:relative; border-radius:7px; }
-  /* their side is ground they want, not a gap: hatch it so it reads as reserved */
-  .half.them::before{ content:''; position:absolute; inset:2px; border-radius:7px; pointer-events:none;
-    opacity:.5;
-    background:repeating-linear-gradient(-45deg, rgba(140,60,40,.10) 0 5px, transparent 5px 11px); }
-  .flr.ground .half.them::before{ opacity:.9; }
-  .half.us::after{ content:''; }
-  .flr::before{ content:''; position:absolute; left:50%; top:6px; bottom:6px; width:1px;
-    background:linear-gradient(180deg,transparent,#2c4326,transparent); }
-  /* a unit standing on a floor */
-  .ub{ position:relative; flex:0 1 auto; width:70px; min-width:0; border-radius:8px; overflow:hidden;
-    background:linear-gradient(180deg,#1d2c1c,#101a10); border:1.5px solid #3f5f34;
-    box-shadow:0 3px 8px rgba(0,0,0,.45); }
-  .ub.them{ background:linear-gradient(180deg,#2b1a1a,#170e0e); border-color:#7a3b32; }
-  .ub.lead{ border-color:#ffd34d; box-shadow:0 0 0 1px rgba(255,211,77,.35), 0 3px 10px rgba(0,0,0,.5); }
-  .ub.bulw{ border-color:#7ec8ff; }
-  .ub.front::after{ content:''; position:absolute; left:0; right:0; height:2px; top:0;
-    background:linear-gradient(90deg,transparent,#a6ff5e,transparent); }
-  .ub.them.front::after{ background:linear-gradient(90deg,transparent,#ff7b6b,transparent); }
-  .ub.gone{ opacity:.15; filter:grayscale(1); }
-  .ub canvas{ display:block; width:100%; height:40px; background:#0a120a; }
-  .ub .pn{ font-size:8px; font-weight:800; text-align:center; padding:1px 2px 0; line-height:1.05;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#eaf6df; }
-  .ub .pm{ font-size:9.5px; font-weight:900; color:#ff8f6b; text-align:center; }
-  .ub .pm .hh{ color:#7ec8ff; }
-  .ub .ph{ height:4px; margin:1px 3px 3px; border-radius:2px; background:#2a1414; overflow:hidden; position:relative; }
-  .ub .ph i{ position:relative; z-index:2; display:block; height:100%;
-    background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .1s ease; }
-  /* the ghost lags the bar, leaving a pale slab exactly the width of the blow */
-  .ub .ph .gh{ position:absolute; left:0; top:0; bottom:0; z-index:1; display:block;
-    background:rgba(255,255,255,.62); transition:width .45s cubic-bezier(.3,0,.2,1) .2s; }
-  .ub.them .ph i{ background:linear-gradient(90deg,#e04a4a,#ff9d6b); }
-  .ub .tag{ position:absolute; top:1px; right:2px; font-size:6.5px; letter-spacing:.3px; font-weight:800;
-    padding:0 3px; border-radius:4px; background:rgba(6,12,6,.82); color:#a6ff5e; }
-  .ub.them .tag{ color:#ffb9a6; }
-  .ub .ord{ display:none; }
-  .hole{ flex:0 0 auto; width:70px; height:76px; border-radius:8px;
-    border:1.5px dashed #2b3f26; display:flex; align-items:center; justify-content:center; }
-  .hole.open{ border-color:rgba(166,255,94,.32); cursor:pointer;
-    background:radial-gradient(circle at 50% 50%, rgba(166,255,94,.07), transparent 70%); }
-  .hole.open span{ font-size:17px; color:#5f8a48; font-weight:700; }
-  .hole.quiet{ border:none; opacity:1; width:auto; flex:1 1 auto; }
-  .gate{ flex:0 0 auto; text-align:center; font-size:10px; letter-spacing:2.4px; font-weight:800;
-    text-transform:uppercase; color:#a9714f; padding:4px 0 2px; }
-  .gate b{ color:#ffb9a6; }
-  @keyframes lungeUp{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(-8px) scale(1.06)} }
-  @keyframes lungeDown{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(8px) scale(1.06)} }
-  @keyframes fall{ 0%{transform:translateY(0) rotate(0); opacity:1}
-    100%{transform:translateY(18px) rotate(9deg); opacity:.15} }
-  @keyframes climb{ 0%{transform:translateY(22px); opacity:.3} 100%{transform:translateY(0); opacity:1} }
-  .ub.lungeUp{ animation:lungeUp .3s cubic-bezier(.3,1.5,.5,1); }
-  .ub.lungeDown{ animation:lungeDown .3s cubic-bezier(.3,1.5,.5,1); }
-  .ub.fall{ animation:fall .5s ease-in forwards; }
-  .ub.climbing{ animation:climb .42s cubic-bezier(.2,.9,.3,1); }
-  /* a floor leaning into its own exchange */
-  @keyframes clsR{ 0%,100%{transform:translateX(0)} 45%{transform:translateX(7px)} }
-  @keyframes clsL{ 0%,100%{transform:translateX(0)} 45%{transform:translateX(-7px)} }
-  @keyframes clashlit{ 0%,100%{box-shadow:inset 0 1px 0 rgba(180,255,140,.05)}
-    40%{box-shadow:inset 0 0 26px rgba(255,190,90,.20), inset 0 1px 0 rgba(255,220,150,.18)} }
-  @keyframes breached{ 0%,100%{background-color:transparent} 40%{background-color:rgba(180,60,40,.22)} }
-  @keyframes wavein{ 0%{transform:translateY(7px); opacity:.2} 100%{transform:translateY(0); opacity:1} }
+  /* the pit: a sunken box with a lip, so the animals read as being DOWN there */
+  .pit{ flex:1 1 auto; position:relative; min-height:0; border-radius:10px; overflow:hidden;
+    border:2px solid #2b3f26; background:#0d160c;
+    box-shadow:inset 0 8px 22px rgba(0,0,0,.6), inset 0 -3px 0 rgba(255,220,150,.05),
+      0 6px 18px rgba(0,0,0,.45); }
+  .pit canvas{ display:block; width:100%; height:100%; }
+  /* the gate you come out of, and the door they come in by */
+  .pit::before, .pit::after{ content:''; position:absolute; top:0; bottom:0; width:12px;
+    pointer-events:none; z-index:2; }
+  .pit::before{ left:0; background:linear-gradient(90deg, rgba(166,255,94,.22), transparent);
+    border-left:3px solid rgba(166,255,94,.35); }
+  .pit::after{ right:0; background:linear-gradient(270deg, rgba(255,110,80,.26), transparent);
+    border-right:3px solid rgba(255,110,80,.45); animation:doorpulse 2.2s ease-in-out infinite; }
+  @keyframes doorpulse{ 0%,100%{ opacity:.55 } 50%{ opacity:1 } }
+  .wavelbl{ position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:3;
+    font-size:9.5px; letter-spacing:1.6px; font-weight:800; text-transform:uppercase;
+    white-space:nowrap; padding:3px 11px; border-radius:20px; color:#ffc9a6; pointer-events:none;
+    background:rgba(8,14,8,.72); border:1px solid rgba(255,140,100,.3); }
+  .wavelbl b{ color:#fff2d0; }
+  .wavelbl .nxt{ color:#8fa285; letter-spacing:1px; font-weight:700; text-transform:none; }
+  .pile .mend{ color:#ffb9a6; }
+  .wavelbl.wavein{ animation:wavein .5s cubic-bezier(.2,1.5,.4,1); }
+  @keyframes wavein{ 0%{ transform:translateX(-50%) scale(1.6); opacity:0 }
+    100%{ transform:translateX(-50%) scale(1); opacity:1 } }
   @keyframes bitten{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
     45%{transform:translateX(5px)} 70%{transform:translateX(-3px)} }
-  .half.cls-r{ animation:clsR .26s ease; }
-  .half.cls-l{ animation:clsL .26s ease; }
-  .flr.clashlit{ animation:clashlit .3s ease; }
-  .flr.breached{ animation:breached .42s ease; }
-  .gate.wavein{ animation:wavein .42s cubic-bezier(.2,1.4,.4,1); }
   .nestbar.bitten{ animation:bitten .62s ease; }
+  /* the Feed meter: the only thing standing between you and playing everything */
+  .feed{ display:flex; gap:3px; align-items:center; }
+  .feed i{ width:9px; height:13px; border-radius:3px; background:#22331e;
+    border:1px solid #33501f; box-shadow:inset 0 1px 0 rgba(255,255,255,.06); transition:.14s; }
+  .feed i.on{ background:linear-gradient(180deg,#c8ff8a,#6fb32c); border-color:#a6ff5e;
+    box-shadow:0 0 7px rgba(166,255,94,.5); }
+  .feedbar{ position:relative; width:34px; height:4px; border-radius:3px; overflow:hidden;
+    background:#22331e; margin-left:4px; }
+  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:3px;
+    background:linear-gradient(90deg,#4d7a24,#a6ff5e); }
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
@@ -513,18 +471,33 @@
   .verdict .vsub{ font-size:14px; font-weight:800; color:#cfe0c2; letter-spacing:.4px; }
   .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
-  .benchwrap{ position:relative; flex:0 0 auto; border-top:1px solid #22331e; padding-top:5px;
+  .benchwrap{ position:relative; flex:0 0 auto; display:flex; align-items:center;
+    min-height:0; border-top:1px solid #22331e; padding-top:5px;
     background:linear-gradient(180deg, rgba(20,32,18,.55), transparent 60%); }
   .benchwrap::after{ content:''; position:absolute; right:0; top:0; bottom:0; width:26px;
     pointer-events:none; background:linear-gradient(90deg, transparent, #0b120c 78%); }
   /* the bench: your barn, scrolling sideways under the field */
-  .handrow{ display:flex; gap:6px; padding:4px 6px 2px; overflow-x:auto; overflow-y:hidden;
-    scrollbar-width:none; scroll-snap-type:x proximity; }
+  .handrow{ display:flex; gap:6px; padding:4px 6px 2px; width:100%; justify-content:center;
+    overflow-x:auto; overflow-y:hidden; scrollbar-width:none; scroll-snap-type:x proximity; }
   .handrow::-webkit-scrollbar{ display:none; }
-  .handrow .card{ scroll-snap-align:center; width:76px; flex:0 0 76px; }
-  .handrow .card .art{ height:52px; }
-  .handrow .card .nm{ font-size:9.5px; min-height:22px; }
-  .handrow .card .st{ font-size:11px; }
+  .handrow .card{ position:relative; scroll-snap-align:center; width:22.5cqw; max-width:120px; flex:0 1 22.5cqw;
+    transition:transform .12s cubic-bezier(.2,1.5,.4,1), box-shadow .12s; }
+  .handrow .card:not(.dead){ cursor:pointer; }
+  .handrow .card:not(.dead):hover{ transform:translateY(-6px); box-shadow:0 10px 22px rgba(0,0,0,.55); }
+  .handrow .card:not(.dead):active{ transform:translateY(-2px) scale(.97); }
+  /* an affordable card is LIT: the one thing you scan for under a clock */
+  .handrow .card:not(.dead)::after{ content:''; position:absolute; inset:-3px; border-radius:12px;
+    pointer-events:none; box-shadow:0 0 0 2.5px rgba(166,255,94,.75), 0 0 20px rgba(166,255,94,.35);
+    animation:readypulse 1.8s ease-in-out infinite; }
+  @keyframes readypulse{ 0%,100%{ opacity:.65 } 50%{ opacity:1 } }
+  .handrow .card.dead{ filter:grayscale(.7) brightness(.55); }
+  /* an empty slot holds its place, so the row never collapses mid-fight */
+  .handrow .card.ghost{ background:none; border:1.5px dashed #23331d; box-shadow:none;
+    opacity:.55; order:9; }
+  .handrow .card.ghost::after{ display:none; }
+  .handrow .card .art{ height:15cqw; max-height:86px; }
+  .handrow .card .nm{ font-size:10.5px; min-height:24px; }
+  .handrow .card .st{ font-size:12.5px; }
   .handrow .card .tr{ font-size:8px; padding:2px; }
   .handrow .card .gen{ display:none; }
   /* the bottom bar: budget, notes, and the one button that matters. SEND THEM
@@ -534,10 +507,6 @@
     padding:6px 8px calc(7px + env(safe-area-inset-bottom)); border-top:1px solid #1e2c1a; }
   #bEnd{ font-size:16px; padding:13px 26px; letter-spacing:2px; flex:0 0 auto; margin-left:auto; }
   #bEnd.btn.alt.sm{ font-size:12px; padding:9px 16px; letter-spacing:1.4px; }
-  .feed{ display:flex; gap:3px; flex-wrap:wrap; max-width:104px; }
-  .feed i{ width:11px; height:11px; border-radius:50%; background:#22331f;
-    border:2px solid #3d5b32; display:block; }
-  .feed i.on{ background:#ffd34d; border-color:#fff0b0; box-shadow:0 0 7px rgba(255,211,77,.55); }
   .pile{ font-size:10px; color:#8fa285; font-weight:800; line-height:1.2; }
   .pile b{ color:#ffd34d; }
   .coach{ flex:0 0 auto; margin:2px 8px; padding:6px 10px; border-radius:10px; cursor:pointer;
@@ -956,7 +925,6 @@
     .pip i{ width:7px; height:7px; border-radius:3px; }
     .pip{ gap:2px; flex:0 0 auto; }
     .bar{ gap:7px; }
-    #nestNote{ display:none; }        /* the nest pair is on the previous screen anyway */
     .fbar .pile{ font-size:10px; }
     .hpbar{ width:56px; }
     #nBest{ display:none; }   /* the bar is full; the pairing preview carries the run */
@@ -1091,20 +1059,23 @@
       <p class="sub">Two cards enter. Three cards leave.</p>
       <div class="rules">
         <p><b>The Nest.</b> Two beasts breed while the others fight.</p>
-        <p><b>The Field.</b> You set the line and the order, then <i>let go</i>.</p>
+        <p><b>The Pit.</b> Send them out as the Feed comes back. They fight it out.</p>
         <p><b>The Cull.</b> The barn holds ten. Someone goes upstate.</p>
       </div>
       <details class="more">
         <summary class="tiny">How it works</summary>
         <div class="body">
           You breed monsters for a living; your barn is your herd. The two in the
-          Nest sit the match out, so you field a short line &mdash; that is the
-          price of a clutch. On the field you choose <b>who</b> goes out and in
-          <b>what order</b>, and pay Feed for them; then the match resolves itself
-          and you watch. The <b>front</b> of each line takes every blow: <b>Might</b>
-          is what it hits for, <b>Hide</b> is how long it stands there.<br>
-          What gets past the top floor eats an egg &mdash; the round
-          still ends, and the pair in the Nest still breeds. Every clutch throws
+          Nest sit the match out, so you go into the pit a pair short &mdash; that
+          is the price of a clutch. Then the gates open. They come in from the
+          right in <b>waves</b>, a beast at a time, and you send yours out to meet
+          them by tapping a card &mdash; whenever you can feed it. <b>Feed</b>
+          comes back on its own clock, so the whole fight is a question of what to
+          spend it on and when. <b>Might</b> is what a beast hits for, <b>Hide</b>
+          is how long it stands there. Beasts of yours that go down limp back to
+          the barn and can be sent out again.<br>
+          Anything that reaches the nest takes a bite out of your eggs &mdash; the
+          round still ends, and the pair in the Nest still breeds. Every clutch throws
           <i>two</i> chicks (three from a Fertile parent) and you keep <i>one</i>.
           The rest go to market for Slop. Breed two relatives and the gene pool
           gets&hellip; <i>interesting</i>.
@@ -1167,23 +1138,19 @@
         <span class="neggs" id="nestEggs">&#129370;&#129370;&#129370;</span>
         <span class="nhp" id="nestHp">40</span>
       </div>
-      <div class="tower" id="tower"></div>
-      <div class="gate" id="gateLbl">THE DOOR &mdash; they come in here</div>
-      <div class="verdict" id="fVerdict" hidden></div>
-      <div id="foeBox" hidden><canvas id="fEm" width="8" height="8"></canvas><span id="fName"></span>
-        <i id="fHpGhost"></i><i id="fHpFill"></i><span id="fHpTxt"></span><span id="fBadges"></span></div>
-      <div id="pen" hidden></div><div id="foeLine" hidden></div>
-      <div id="fCast" hidden></div><div id="fIntent" hidden></div>
-      <div id="foeLbl" hidden></div><div id="myLbl" hidden></div>
+      <div class="pit"><canvas id="pit" width="780" height="620"></canvas>
+        <div class="wavelbl" id="gateLbl">WAVE 1 OF 2</div>
+        <div class="verdict" id="fVerdict" hidden></div>
+      </div>
     </div>
     <div class="coach" id="coach" hidden></div>
     <div class="benchwrap"><div class="handrow" id="hand"></div></div>
     <div class="fbar">
       <div class="feed" id="feed"></div>
+      <div class="feedbar"><i id="feedFill" style="width:0%"></i></div>
       <div class="pile" id="piles"></div>
       <div class="grow"></div>
-      <div class="pile" id="nestNote"></div>
-      <button class="btn sm" id="bEnd">SEND THEM IN</button>
+      <button class="btn sm" id="bEnd">OPEN THE GATES</button>
     </div>
   </div>
 
@@ -1304,28 +1271,29 @@ function shuffle(a){
 /* -------------------------------------------------------------- traits --- */
 // cost: added to the derived Feed cost, so a strong keyword is paid for.
 const TRAITS = {
-  none:    { name: '\u2014',   cost: 0,  desc: 'A perfectly ordinary animal.' },
-  frenzy:  { name: 'Frenzy',  cost: 2,  desc: 'Strikes twice every turn.' },
-  thorns:  { name: 'Thorns',  cost: 1,  desc: 'Whatever hits it takes 3 back.' },
-  leech:   { name: 'Leech',   cost: 1,  desc: 'Heals you for half of its damage.' },
-  swift:   { name: 'Swift',   cost: 1,  desc: 'Strikes the moment it enters the pen.' },
-  venom:   { name: 'Venom',   cost: 1,  desc: 'Its bite leaves poison behind.' },
-  runt:    { name: 'Runt',    cost: 0,  desc: 'Free to field. Might halved.' },
-  feral:   { name: 'Feral',   cost: 1,  desc: '+50% Might, but takes +50% damage.' },
-  fertile: { name: 'Fertile', cost: 0,  desc: 'Its young mutate wildly.' },
-  brood:   { name: 'Brood',   cost: 1,  desc: 'Puts a Spawn in your hand.' },
-  plump:   { name: 'Plump',   cost: 1,  desc: '+5 Hide.' },
-  regal:   { name: 'Regal',   cost: 1,  desc: '+1 Feed every turn it lives.' },
-  bulwark: { name: 'Bulwark', cost: 1,  desc: 'Blows land on it before anything else.' },
-  elusive: { name: 'Elusive', cost: 1,  desc: 'Hit only when nothing else is left.' },
-  rally:   { name: 'Rally',   cost: 2,  desc: '+2 Might to every other beast in the pen.' },
-  cursed:  { name: 'Cursed',  cost: -1, desc: 'Costs you 2 health to field.' },
-  hollow:  { name: 'Hollow',  cost: -1, desc: 'Might halved. Bad blood.' },
+  none:    { name: '\u2014',   cost: 0, desc: 'No trick, just teeth.' },
+  cleave:  { name: 'Cleave',  cost: 0, desc: 'Every swing splashes everything near it.' },
+  venom:   { name: 'Venom',   cost: 0, desc: 'Its bite festers for seconds after.' },
+  stun:    { name: 'Stun',    cost: 0, desc: 'A hit leaves them reeling, unable to swing.' },
+  frenzy:  { name: 'Frenzy',  cost: 0, desc: 'Swings twice as often as anything else.' },
+  bulwark: { name: 'Bulwark', cost: 0, desc: 'Slower, but takes a third less from every blow.' },
+  swift:   { name: 'Swift',   cost: 0, desc: 'Crosses the pit at half again the pace.' },
+  rally:   { name: 'Rally',   cost: 0, desc: '+2 Might to everything of yours on the sand.' },
+  leech:   { name: 'Leech',   cost: 0, desc: 'Feeds the nest a little with every blow.' },
+  thorns:  { name: 'Thorns',  cost: 0, desc: 'Whatever hits it takes 3 back.' },
+  brood:   { name: 'Brood',   cost: 0, desc: 'Leaves a Spawn standing where it fell.' },
+  plump:   { name: 'Plump',   cost: 0, desc: '+5 Hide, and a little slower for it.' },
+  feral:   { name: 'Feral',   cost: 0, desc: '+50% Might, and takes every blow harder.' },
+  runt:    { name: 'Runt',    cost: 0, desc: 'Half the Might of what it looks like.' },
+  hollow:  { name: 'Hollow',  cost: 0, desc: 'Half the Might. Bad blood.' },
+  cursed:  { name: 'Cursed',  cost: 0, desc: 'Costs the nest 2 health to send out.' },
+  fertile: { name: 'Fertile', cost: 0, desc: 'Its young mutate wildly.' },
 };
 const BAD_TRAITS = ['cursed', 'hollow', 'runt'];
 // Traits a random mutation may roll. The bad ones only come from inbreeding.
-const MUT_TRAITS = ['frenzy', 'thorns', 'leech', 'swift', 'venom', 'feral', 'fertile', 'brood',
-  'plump', 'regal', 'bulwark', 'elusive', 'rally', 'runt'];
+// Any of these can land on a beast of any price — that is the point.
+const MUT_TRAITS = ['cleave', 'venom', 'stun', 'frenzy', 'bulwark', 'swift', 'rally',
+  'leech', 'thorns', 'brood', 'plump', 'feral', 'fertile', 'runt'];
 
 /* --------------------------------------------------------------- names --- */
 const SYL_A = ['Bog', 'Cinder', 'Grunt', 'Mud', 'Sky', 'Gloom', 'Thistle', 'Rot', 'Bram', 'Snot',
@@ -1361,27 +1329,51 @@ function pedigree(id, depth){
   return node;
 }
 /**
- * Feed cost from a beast's own genes.
+ * What a beast costs to send out.
  *
- * This curve is CONCAVE on purpose, and that is the whole point of it. Cost used
- * to be linear in stat power — (might + 0.6*hide - 2) / 5 — which put a price
- * boundary every 5 points. A chick gains ~12% on its parents, so crossing two
- * cost-1 beasts produced a cost-2 chick 62% of the time: double the Feed for a
- * tenth more animal. Measured, 96% of chicks came out WORSE per Feed than their
- * parents, which means breeding — the entire game — made your deck worse.
- *
- * With sqrt, the bands widen as they climb (1 up to ~13 stat power, 2 to ~30,
- * 3 to ~55, 4 to ~89), so a herd grows a long way inside one price bracket and
- * a bigger beast is always better VALUE, not just bigger. It also stops the old
- * curve saturating: everything past 25 stat power used to cost 5, which flattened
- * the entire late game into one-beast-per-turn.
+ * For founder and wild stock this still reads off its genes, on a concave curve
+ * so a bigger animal is better value rather than merely dearer. BRED stock does
+ * not use this at all — see inheritCost(). Keywords add nothing: a free animal
+ * is as likely to cleave as a five-Feed one, which is the whole point.
  */
 function statPower(might, hide){ return might + hide * 0.6; }
 function deriveCost(might, hide, trait){
   if (trait === 'runt') return 0;
-  const raw = Math.sqrt(Math.max(0, statPower(might, hide) - 4)) / 2.05
-    + (TRAITS[trait] ? TRAITS[trait].cost : 0);
+  const raw = Math.sqrt(Math.max(0, statPower(might, hide) - 4)) / 2.05;
   return clamp(Math.round(raw), 0, 5);
+}
+/**
+ * A chick's price comes from its PARENTS, not from its stats: take one parent's
+ * cost and shift it by one either way. Cross a 1 with a 2 and you will usually
+ * get a 1 or a 2, sometimes a 0, sometimes a 3.
+ *
+ * The shift leans on how the chick actually came out — a prodigy eats more, a
+ * runt eats less — so a lineage cannot quietly drift to free while its stats
+ * climb, without the price ever being a flat function of power.
+ */
+function inheritCost(pa, pb, ratio){
+  const base = rng() < 0.5 ? pa : pb;
+  const lean = clamp((ratio - 1) * 1.6, -0.34, 0.34);   // prodigy up, runt down
+  const r = rng();
+  let shift = 0;
+  if (r < 0.22 - lean) shift = -1;
+  else if (r > 0.78 - lean) shift = 1;
+  return clamp(base + shift, 0, 5);
+}
+/** What a beast is really priced at. A cost-0 animal is not free — it still
+ *  takes a card and a moment — so it weighs a little under one Feed. */
+function feedWeight(c){ return Math.max(0.7, c); }
+/**
+ * How much bigger a chick is for the appetite it landed on. Its stats scale
+ * with the price it inherited, so a chick that came out one Feed dearer is
+ * genuinely a bigger animal instead of the same animal with a worse price.
+ *
+ * The exponent is deliberately under 1: a dear chick is stronger in absolute
+ * terms but slightly worse per Feed, and a cheap one slightly better. That is
+ * what makes "many small" and "few large" both real ways to build a barn.
+ */
+function appetite(cost, parentAvg){
+  return Math.pow(feedWeight(cost) / feedWeight(parentAvg), 0.85);
 }
 function power(c){ // one number for "how good is this beast", used for sorting + the hall
   const t = TRAITS[c.trait] ? TRAITS[c.trait].cost : 0;
@@ -1515,7 +1507,7 @@ function breed(a, b, opts){
 
   const avgM = (a.might + b.might) / 2, avgH = (a.hide + b.hide) / 2;
   const tags = [];
-  const ratio = (might + hide + 1) / (avgM + avgH + 1);
+  let ratio = (might + hide + 1) / (avgM + avgH + 1);
   // 1.20 crowned the top quarter of completely ordinary rolls (the middle band
   // alone tops out at 1.23), so PRODIGY fired about half the time and meant
   // nothing. 1.32 needs the roll to have actually gone to the good tail, and
@@ -1528,12 +1520,26 @@ function breed(a, b, opts){
   if (curse) tags.push('cursed');
   if (trait !== a.trait && trait !== b.trait && trait !== 'none') tags.push('mutation');
 
+  // The price comes off the parents (see inheritCost) — and then the ANIMAL
+  // grows into the price it landed on. A chick that came out one Feed dearer
+  // than its parents is a bigger animal; one that came out cheaper is a smaller
+  // one. Without this the two halves drift apart and a lineage ends up with
+  // cost-4 beasts carrying cost-1 stats, which is the only way to make bred
+  // stock strictly worse than the wild.
+  const cost = inheritCost(a.cost, b.cost, ratio);
+  const grew = appetite(cost, (a.cost + b.cost) / 2);
+  const fM = Math.max(1, Math.round(might * grew)), fH = Math.max(1, Math.round(hide * grew));
+  if (grew > 1) tags.push('hungry');
+  else if (grew < 1) tags.push('thrifty');
+  ratio = (fM + fH + 1) / (avgM + avgH + 1);
+
   const nm = childName(a, b, tags);
   const child = makeCard({
     pre: nm.pre, suf: nm.suf, name: nm.name,
-    might: Math.max(1, Math.round(might)),
-    hide: Math.round(hide),
+    might: fM,
+    hide: fH,
     trait,
+    cost,
     gen: Math.max(a.gen, b.gen) + 1,
     blood: [a.id, b.id].concat(a.blood, b.blood),
     parentIds: [a.id, b.id],
@@ -1697,14 +1703,21 @@ function makeFoe(i, mods){
    drawn by the same painter from the same visual genes — so what you are
    reading across the field is exactly what you read on your own cards.
    ========================================================================== */
-const ENEMY_BASE = 2.9;       // leader stat power at round 1
-const ENEMY_GROWTH = 1.205;   // per round; fitted by simulation
-const GRUNT_FRAC = 0.56;      // a grunt is this much of its leader
+const ENEMY_BASE = 3.2;       // leader stat power at round 1
+const ENEMY_GROWTH = 1.22;   // per round; fitted by simulation
+const GRUNT_FRAC = 0.60;      // a grunt is this much of its leader
 // Each roster entry lends its leader a keyword, so the flavour survives the
 // move list it used to have.
 const LEADER_TRAIT = ['none', 'bulwark', 'frenzy', 'venom', 'frenzy', 'bulwark',
   'rally', 'leech', 'frenzy', 'rally', 'venom', 'frenzy'];
 function teamSize(i){ return clamp(2 + Math.floor(i / 3), 2, 4); }
+/** How many walk in on wave w. They arrive one at a time on SPAWN_GAP, so this
+ *  is also how long the wave takes to finish showing up. */
+function waveSize(i, w, ws){ return clamp(2 + Math.floor(i / 4) + (w >= ws ? 1 : 0), 2, 5); }
+/** Each roster entry brings ONE threat keyword, carried by half its grunts, so a
+ *  round has a shape you can learn: the Bog lot poison, the Kiln lot cleave. */
+const FOE_THREAT = ['none', 'none', 'venom', 'cleave', 'stun', 'venom',
+  'cleave', 'stun', 'swift', 'venom', 'cleave', 'stun'];
 /** Split stat power into Might and Hide with a per-beast bias, so an enemy line
  *  has shapes in it — a wall at the front, a glass cannon behind. */
 function enemyBeast(name, sp, trait, bias, sil, tint){
@@ -1723,9 +1736,10 @@ function makeEnemyTeam(i, mods, wave, waves){
   const w = wave || 1, ws = waves || 1;
   const last = w >= ws;
   // Waves grow as they come, and the named foe walks in with the last one.
-  const swell = 1 + 0.14 * (w - 1);
-  const n = clamp(1 + Math.floor((teamSize(i) - 1) * w / ws), 1, FLOOR_CAP + 1);
+  const swell = 1 + 0.11 * (w - 1);
+  const n = waveSize(i, w, ws);
   const lead = ENEMY_BASE * Math.pow(ENEMY_GROWTH, i) * (f.boss ? 1.25 : 1) * mul * swell;
+  const threat = FOE_THREAT[i % FOE_THREAT.length] || 'none';
   const team = [];
   if (last){
     team.push(enemyBeast(f.name, lead + bump, LEADER_TRAIT[i] || 'none', 0.5, f.sil, f.tint));
@@ -1734,8 +1748,9 @@ function makeEnemyTeam(i, mods, wave, waves){
   const grunt = GRUNT_FRAC * lead;
   const need = last ? n - 1 : n;
   for (let k = 0; k < need; k++){
+    // every other one carries the round's threat; the rest are plain muscle
     team.push(enemyBeast(f.gname || (f.name.split(' ')[0] + ' ' + ['Hand', 'Kin', 'Runt', 'Whelp'][k % 4]),
-      grunt + bump, 'none', k % 2 ? 0.05 : 0.95, f.sil, f.tint));
+      grunt + bump, k % 2 ? threat : 'none', k % 2 ? 0.05 : 0.95, f.sil, f.tint));
   }
   return team.length ? team : [enemyBeast(f.name.split(' ')[0] + ' Runt', grunt + bump, 'none', 0.5, f.sil, f.tint)];
 }
@@ -1755,7 +1770,7 @@ function newRun(seed){
     idx: 0,                 // which foe is next
     nest: [],               // ids of the two in the nest
     slop: 2, ritual: 'natural', hazard: null, litter: null,
-    line: [], plan: emptyPlan(), regalBonus: 0, lastLost: false,
+    line: [], regalBonus: 0, lastLost: false,
     log: [], born: 0, retired: 0, wins: 0, sold: 0,
     lastHatch: null, wildOffer: null, over: null,
     // cosmetic spine: fights won without losing a beast. Pays nothing — it is
@@ -1829,8 +1844,9 @@ function cardDamage(c){
   return Math.max(0, d);
 }
 /** The rules stay synchronous and authoritative; as they resolve they leave a
- *  breadcrumb trail here so the UI can replay the battle one beat at a time.
- *  Nothing reads F.events to decide anything — it is a transcript, not state. */
+ *  breadcrumb trail here so the renderer can turn what just happened into
+ *  numbers, sparks and noise. Nothing reads F.events to decide anything — it is
+ *  a transcript the presentation drains every frame, not state. */
 function ev(k, o){
   if (!F || !F.events) return;
   if (F.events.length > 600) return;   // a runaway loop must not eat memory
@@ -1838,378 +1854,297 @@ function ev(k, o){
 }
 function fLog(t){ if (F && F.log){ F.log.push(t); if (F.log.length > 60) F.log.shift(); } }
 
-/* ============================== THE LINE-UP ===============================
-   Prep, then hands off. You choose which beasts go out and in what order, and
-   what you pay for them; after that the field settles it. Everything below is
-   synchronous and deterministic — the battle is fully resolved the moment it
-   starts, and the UI replays the transcript it leaves behind.
+/* ================================ THE ARENA ===============================
+   A real-time pit. Your beasts come out of the gate on the left, theirs walk in
+   from the right on a stagger, and everything runs at whatever it walks and
+   swings on its own clock. Nothing here is turn-based.
+
+   The simulation is a pure function of (state, dt): arenaTick() never touches
+   the DOM, so the headless suite can run a whole battle by calling it in a loop
+   and the renderer is free to draw whatever the last tick left behind.
    ========================================================================== */
-/* ================================ THE TOWER ===============================
-   The barn is three floors and a nest on top. They come in WAVES, arriving on
-   the ground floor, and every wave they climb one floor higher unless something
-   of yours is standing in the way. Whatever reaches the top gets at the eggs —
-   and the eggs are your health.
+const AW = 100;                 // arena width in world units (left 0 .. right 100)
+const AH = 26;                  // depth of the pit, for lane spread
+const GATE_X = 6;               // where your beasts walk out
+const DOOR_X = 97;              // where theirs walk in
+const NEST_X = 1;               // past this and they are at the eggs
+const BASE_SPEED = 7.5;         // world units per second
+const BASE_RANGE = 5.2;         // how close a beast has to be to swing
+const BASE_SWING = 1.05;        // seconds between swings
+const FEED_MAX = 8;
+const FEED_START = 4;
+const FEED_EVERY = 1.45;        // seconds per point of Feed
+const HAND_SIZE_A = 4;          // cards ready to play
+const DRAW_DELAY = 1.1;         // seconds before the next card slides in
+const WAVE_GAP = 5.2;           // seconds between waves
+const SPAWN_GAP = 0.75;         // seconds between the beasts WITHIN a wave
+const CORPSE_T = 1.1;           // how long a body lies there before it fades
 
-   You never fight during a wave. Between waves you place beasts on floors and
-   spend Feed; committing resolves the whole wave synchronously, and what you
-   watch afterwards is a replay of the transcript.
-   ========================================================================== */
-const FLOORS = 3;                 // 0 = ground, they arrive here; FLOORS-1 = top
-const FLOOR_CAP = 2;              // how many of yours may hold one floor
-const EXCHANGES_PER_WAVE = 3;     // blows traded on a floor before they climb
-const LINE_SLOTS = FLOORS * FLOOR_CAP;
-const MAX_PEN = LINE_SLOTS;                       // kept: older callers use it
-/** How many waves this round throws at you. */
-function waveCount(idx){ return clamp(2 + Math.floor(idx / 4), 2, 4); }
+/* Abilities live on the beast, not on its price. Any of them can turn up on a
+   free animal or a five-Feed one. */
+const AOE_R = 9;                // splash radius in world units
+const STUN_T = 0.9;             // seconds a stun holds
+const RECOVER = 5.0;            // seconds a downed beast of yours needs before
+                                // its card is back in the barn
 
-/** Feed is a placement budget, refreshed every wave. */
-function lineBudget(){
-  return LINE_BASE + Math.floor(R.idx * LINE_GROW) + (R.regalBonus || 0) +
-    ((R.hazard && R.hazard.mods.feed) || 0);
+function unitSpeed(u){
+  let sp = BASE_SPEED;
+  if (u.c.trait === 'swift') sp *= 1.5;
+  if (u.c.trait === 'bulwark') sp *= 0.72;
+  if (u.c.trait === 'plump') sp *= 0.88;
+  return sp * (u.side === 'them' ? 0.92 : 1);
 }
-function feedFor(idx){ return LINE_BASE + Math.floor(idx * LINE_GROW); }
+function unitSwing(u){ return BASE_SWING / (u.c.trait === 'frenzy' ? 2 : 1); }
+function unitMightA(u){
+  let d = u.c.might;
+  if (u.c.trait === 'runt' || u.c.trait === 'hollow') d = Math.ceil(d / 2);
+  if (F && F.mods && F.mods.might) d = Math.max(0, d + F.mods.might);
+  let rally = 0;
+  if (F) for (const o of F.units) if (o !== u && o.alive && o.side === u.side && o.c.trait === 'rally') rally += 2;
+  return Math.max(0, d + rally);
+}
+function unitHide(c){ return Math.max(1, c.hide + (c.trait === 'plump' ? 5 : 0)); }
 
-/* ---------------------------------------------------------- placement ---- */
-function emptyPlan(){ const p = []; for (let i = 0; i < FLOORS; i++) p.push([]); return p; }
-function planFlat(plan){ return (plan || R.plan).reduce((a, f) => a.concat(f), []); }
-function floorOf(id, plan){
-  const p = plan || R.plan;
-  for (let i = 0; i < p.length; i++) if (p[i].indexOf(id) >= 0) return i;
-  return -1;
+let _uid = 1;
+function spawnUnit(c, side, x, y){
+  const hp = unitHide(c);
+  const u = { id: _uid++, c, side, x, y, lane: y, hp, max: hp, alive: 1,
+    cd: 0.35, stun: 0, pois: 0, poisT: 0, dead: 0, hitT: 0, swingT: 0, born: F ? F.t : 0 };
+  if (F){ F.units.push(u); ev('spawn', { id: u.id, side }); }
+  return u;
 }
-/** What the beasts you are ADDING this wave cost. Anything already on a floor
- *  and still breathing is paid for; you are not charged rent. */
-function lineCost(){
-  return planFlat().reduce((t, id) => {
-    if (F && F.paid && F.paid[id]) return t;
-    const c = cardById(id);
-    return t + (c ? c.cost : 0);
-  }, 0);
-}
-function canPlace(c, floor){
-  if (!c || floorOf(c.id) >= 0) return false;
-  if (R.nest.indexOf(c.id) >= 0) return false;
-  if (floor < 0 || floor >= FLOORS) return false;
-  if (R.plan[floor].length >= FLOOR_CAP) return false;
-  return lineCost() + c.cost <= lineBudget();
-}
-/** Any floor with room that you can afford — used by a plain tap. */
-function firstFreeFloor(c){
-  for (let i = 0; i < FLOORS; i++) if (canPlace(c, i)) return i;
-  return -1;
-}
-function placeBeast(id, floor){
-  const c = cardById(id);
-  if (!canPlace(c, floor)) return false;
-  R.plan[floor].push(id);
-  return true;
-}
-function unplace(id){
-  const f = floorOf(id);
-  if (f < 0) return false;
-  if (F && F.paid && F.paid[id]) return false;   // it is already on the field
-  R.plan[f].splice(R.plan[f].indexOf(id), 1);
-  return true;
-}
-function toggleField(id, floor){
-  if (floorOf(id) >= 0) return unplace(id);
-  const c = cardById(id);
-  const f = (floor == null) ? firstFreeFloor(c) : floor;
-  if (f < 0) return false;
-  return placeBeast(id, f);
-}
-/** Move a beast between floors, or within one. dir -1 is up the tower. */
-function moveInLine(id, dir){
-  const f = floorOf(id);
-  if (f < 0) return false;
-  if (F && F.paid && F.paid[id]) return false;
-  const to = f - dir;                       // -1 means "toward the nest"
-  if (to < 0 || to >= FLOORS) return false;
-  if (R.plan[to].length >= FLOOR_CAP) return false;
-  R.plan[f].splice(R.plan[f].indexOf(id), 1);
-  R.plan[to].push(id);
-  return true;
-}
-function planIsLegal(){
-  const flat = planFlat();
-  if (new Set(flat).size !== flat.length) return false;
-  if (R.plan.some((f) => f.length > FLOOR_CAP)) return false;
-  if (!flat.every((id) => cardById(id) && R.nest.indexOf(id) < 0)) return false;
-  return lineCost() <= lineBudget();
-}
-/** Older name, kept for the tests and the sim: set a flat line, filling floors
- *  from the top down so index 0 is your last line of defence. */
-function setLine(ids){
-  const plan = emptyPlan();
-  let f = 0;
-  for (const id of ids){
-    while (f < FLOORS && plan[f].length >= FLOOR_CAP) f++;
-    if (f >= FLOORS) return false;
-    plan[f].push(id);
+/** Where in the depth of the pit a beast walks in. Spread wide and stepped, so
+ *  three animals arriving together do not stack into one blob. */
+function laneY(i){ return (AH * 0.10) + (((i * 41) % 7) / 6) * (AH * 0.80); }
+
+/* ------------------------------------------------------------- the tick -- */
+function nearestFoe(u){
+  let best = null, bd = 1e9;
+  for (const o of F.units){
+    if (!o.alive || o.side === u.side) continue;
+    const d = Math.abs(o.x - u.x) + Math.abs(o.y - u.y) * 0.35;
+    if (d < bd){ bd = d; best = o; }
   }
-  const keep = R.plan;
-  R.plan = plan;
-  if (!planIsLegal()){ R.plan = keep; return false; }
-  R.line = planFlat();
-  return true;
+  return best;
 }
-function lineIsLegal(ids){
-  if (!ids || !ids.length || ids.length > LINE_SLOTS) return false;
-  if (new Set(ids).size !== ids.length) return false;
-  return ids.every((id) => cardById(id) && R.nest.indexOf(id) < 0);
-}
-function canField(c){ return firstFreeFloor(c) >= 0; }
-
-/* ------------------------------------------------------------- the field -- */
-function unitOf(c, side, uid){
-  const hp = cardHide(c);
-  // hp/alive are the truth; vhp/valive are what the replay has shown so far.
-  return { c, side, uid, hp, max: hp, pois: 0, alive: 1, vhp: hp, valive: 1 };
-}
-/** Bulwark shoulders to the front, Elusive hangs back; otherwise your order stands. */
-function frontOf(line){
-  const live = line.filter((u) => u.alive);
-  if (!live.length) return null;
-  const bul = live.filter((u) => u.c.trait === 'bulwark');
-  if (bul.length) return bul[0];
-  const plain = live.filter((u) => u.c.trait !== 'elusive');
-  return plain.length ? plain[0] : live[0];
-}
-function livingOf(line){ return line.filter((u) => u.alive); }
-/** Older render code asks for a beast's damage by this name. */
-function beastMight(b){
-  if (!b || !b.c) return 0;
-  const line = (F && F.floors) ? floorMates(b) : [];
-  return unitMight(b, line);
-}
-/** Everyone standing on the same floor, same side — Rally only reaches them. */
-function floorMates(u){
-  if (!F || !F.floors) return [u];
-  for (const fl of F.floors){
-    if (fl.us.indexOf(u) >= 0) return fl.us;
-    if (fl.them.indexOf(u) >= 0) return fl.them;
-  }
-  return [u];
-}
-function unitMight(u, line){
-  let d = cardDamage(u.c);
-  if (d <= 0) return 0;
-  for (const o of (line || [])) if (o !== u && o.alive && o.c.trait === 'rally') d += 2;
-  return d;
-}
-
-function startBattle(mods){
-  const m = mods || {};
-  F = {
-    floors: [], wave: 0, waves: waveCount(R.idx), phase: 'prep',
-    mods: m, over: null, events: [], log: [], uid: 1, paid: {}, breached: 0,
-    mine: [], theirs: [],                 // flat views, rebuilt after every change
-  };
-  for (let i = 0; i < FLOORS; i++) F.floors.push({ us: [], them: [] });
-  deployPlan();
-  return F;
-}
-/** Walk the placement plan onto the floors, charging Feed once per beast. */
-function deployPlan(){
-  if (!F) return 0;
-  let n = 0;
-  for (let i = 0; i < FLOORS; i++){
-    for (const id of R.plan[i]){
-      if (F.paid[id]) continue;
-      const c = cardById(id);
-      if (!c) continue;
-      const u = unitOf(Object.assign({}, c), 'us', F.uid++);
-      u.floor = i;
-      F.floors[i].us.push(u);
-      F.paid[id] = 1;
-      n++;
-      if (c.trait === 'cursed') R.hp = Math.max(0, R.hp - 2);
-      ev('deploy', { uid: u.uid, floor: i });
-    }
-  }
-  reflow();
-  return n;
-}
-/** Rebuild the flat views the renderer and the older helpers read. */
-function reflow(){
-  if (!F) return;
-  F.mine = F.floors.reduce((a, fl) => a.concat(fl.us), []);
-  F.theirs = F.floors.reduce((a, fl) => a.concat(fl.them), []);
-}
-/** The next wave walks in on the ground floor. */
-function spawnWave(){
-  if (!F || F.wave >= F.waves) return false;
-  F.wave++;
-  const team = makeEnemyTeam(R.idx, F.mods, F.wave, F.waves);
-  for (const c of team){
-    const u = unitOf(c, 'them', F.uid++);
-    u.floor = 0;
-    F.floors[0].them.push(u);
-    ev('arrive', { uid: u.uid });
-  }
-  reflow();
-  return true;
-}
-/* --------------------------------------------------------- resolution ---- */
-function hitUnit(u, raw, from, line){
+function hurtUnit(u, dmg, from){
   if (!u.alive) return 0;
-  const mult = u.c.trait === 'feral' ? 1.5 : 1;
-  const dmg = Math.ceil(raw * mult);
-  u.hp -= dmg;
-  ev('hurt', { uid: u.uid, side: u.side, dmg, hp: Math.max(0, u.hp) });
+  let d = dmg;
+  if (u.c.trait === 'bulwark') d = Math.max(1, Math.round(d * 0.66));
+  u.hp -= d;
+  u.hitT = 0.22;
+  ev('hit', { id: u.id, dmg: d, hp: Math.max(0, u.hp), x: u.x, y: u.y });
   if (from && u.c.trait === 'thorns' && from.alive){
     from.hp -= 3;
-    ev('hurt', { uid: from.uid, side: from.side, dmg: 3, hp: Math.max(0, from.hp), thorns: 1 });
-    if (from.hp <= 0){ from.alive = 0; ev('die', { uid: from.uid, side: from.side }); }
+    ev('hit', { id: from.id, dmg: 3, hp: Math.max(0, from.hp), x: from.x, y: from.y, thorns: 1 });
+    if (from.hp <= 0) killUnit(from);
   }
-  if (u.hp <= 0){ u.alive = 0; ev('die', { uid: u.uid, side: u.side }); }
-  return dmg;
+  if (u.hp <= 0) killUnit(u);
+  return d;
 }
-function swing(u, target, myLine){
-  if (!u.alive || !target || !target.alive) return 0;
-  const per = unitMight(u, myLine);
-  if (per <= 0) return 0;
-  const hits = u.c.trait === 'frenzy' ? 2 : 1;
-  let dealt = 0;
-  ev('strike', { uid: u.uid, side: u.side, per, hits, target: target.uid });
-  for (let k = 0; k < hits && target.alive; k++) dealt += hitUnit(target, per, u, myLine);
-  if (u.c.trait === 'venom' && target) target.pois += Math.max(1, Math.floor(u.c.might / 3));
-  if (u.c.trait === 'leech' && dealt > 0 && u.side === 'us'){
-    const heal = Math.min(R.maxHp - R.hp, Math.floor(dealt / 2));
-    R.hp += heal;
-    if (heal) ev('heal', { v: heal, hp: R.hp });
-  }
-  return dealt;
-}
-function tickPoison(line){
-  for (const u of line){
-    if (!u.alive || u.pois <= 0) continue;
-    u.hp -= u.pois;
-    ev('poison', { uid: u.uid, side: u.side, v: u.pois, hp: Math.max(0, u.hp) });
-    u.pois = Math.max(0, u.pois - 1);
-    if (u.hp <= 0){ u.alive = 0; ev('die', { uid: u.uid, side: u.side }); }
+function killUnit(u){
+  if (!u.alive) return;
+  u.alive = 0; u.dead = CORPSE_T;
+  ev('die', { id: u.id, side: u.side, x: u.x, y: u.y });
+  // Yours are knocked out, not killed: the card limps back to the barn and can
+  // be sent out again once it has caught its breath. That is what keeps you in
+  // a fight you are losing on numbers — and why losing a beast costs TEMPO
+  // rather than the beast.
+  if (u.side === 'us' && u.src) F.hurt.push({ c: u.src, at: F.t + RECOVER });
+  if (u.c.trait === 'brood' && F.units.length < 60){
+    const sp = spawnCard();
+    spawnUnit(sp, u.side, u.x, u.y);
   }
 }
-/** One floor, one round of blows. Both fronts swing at the same instant. */
-function fightFloor(fl, idx){
-  for (let k = 0; k < EXCHANGES_PER_WAVE; k++){
-    const a = frontOf(fl.us), b = frontOf(fl.them);
-    if (!a || !b) break;
-    ev('clash', { floor: idx, a: a.uid, b: b.uid });
-    const dA = unitMight(a, fl.us), dB = unitMight(b, fl.them);
-    const hitsA = a.c.trait === 'frenzy' ? 2 : 1, hitsB = b.c.trait === 'frenzy' ? 2 : 1;
-    ev('strike', { uid: a.uid, side: 'us', per: dA, hits: hitsA, target: b.uid });
-    ev('strike', { uid: b.uid, side: 'them', per: dB, hits: hitsB, target: a.uid });
-    const aWas = a.alive, bWas = b.alive;
-    for (let h = 0; h < hitsA && b.alive; h++) hitUnit(b, dA, a, fl.us);
-    if (aWas) for (let h = 0; h < hitsB && a.alive; h++) hitUnit(a, dB, b, fl.them);
-    if (a.c.trait === 'venom' && bWas) b.pois += Math.max(1, Math.floor(a.c.might / 3));
-    if (b.c.trait === 'venom' && aWas) a.pois += Math.max(1, Math.floor(b.c.might / 3));
-    if (a.c.trait === 'leech' && a.alive){
-      const heal = Math.min(R.maxHp - R.hp, Math.floor(dA / 2));
-      R.hp += heal; if (heal) ev('heal', { v: heal, hp: R.hp });
+/** One swing: the target, plus everything near it if the beast cleaves. */
+function swingAt2(u, target){
+  const dmg = unitMightA(u);
+  if (dmg <= 0) return;
+  ev('swing', { id: u.id, side: u.side, x: u.x, y: u.y, tx: target.x, ty: target.y, dmg });
+  hurtUnit(target, dmg, u);
+  if (u.c.trait === 'cleave'){
+    ev('boom', { x: target.x, y: target.y, r: AOE_R });
+    for (const o of F.units){
+      if (!o.alive || o.side === u.side || o === target) continue;
+      const dx = o.x - target.x, dy = (o.y - target.y) * 0.6;
+      if (dx * dx + dy * dy <= AOE_R * AOE_R) hurtUnit(o, Math.ceil(dmg * 0.6), u);
     }
   }
-  tickPoison(fl.us); tickPoison(fl.them);
-}
-/** The dead STAY on their floor through the replay — you have to see them fall.
- *  They are swept up when the next wave is being prepared. */
-function clearDead(){ reflow(); }
-function purgeDead(){
-  if (!F) return;
-  for (const fl of F.floors){
-    fl.us = fl.us.filter((u) => u.alive);
-    fl.them = fl.them.filter((u) => u.alive);
+  if (u.c.trait === 'venom' && target.alive){
+    target.pois = Math.max(target.pois, Math.max(1, Math.round(u.c.might / 4)));
+    target.poisT = 4;
   }
-  reflow();
+  if (u.c.trait === 'stun' && target.alive){
+    target.stun = Math.max(target.stun, STUN_T);
+    ev('stun', { id: target.id });
+  }
+  if (u.c.trait === 'leech'){
+    const heal = Math.min(R.maxHp - R.hp, Math.max(1, Math.round(dmg / 3)));
+    if (heal > 0){ R.hp += heal; ev('heal', { v: heal }); }
+  }
 }
 /**
- * Resolve one wave: every floor trades blows, then anything of theirs standing
- * on an undefended floor climbs. What climbs off the top reaches the nest.
+ * Advance the whole pit by dt seconds. Pure: no DOM, no timers, no rng beyond
+ * the seeded one — so a test can run a battle by calling this in a loop.
  */
-function resolveWave(){
+function arenaTick(dt){
   if (!F || F.over) return F && F.over;
-  F.events = [];
-  ev('wave', { n: F.wave, of: F.waves });
+  F.t += dt;
 
-  for (let i = 0; i < FLOORS; i++) fightFloor(F.floors[i], i);
-  clearDead();
+  // Feed comes back on its own clock; that is the only thing gating your hand.
+  F.feedT += dt;
+  while (F.feedT >= FEED_EVERY && F.feed < F.feedMax){ F.feedT -= FEED_EVERY; F.feed++; ev('feed', {}); }
+  if (F.feed >= F.feedMax) F.feedT = 0;
+  // and a played card is replaced after a beat
+  if (F.drawT > 0){ F.drawT -= dt; if (F.drawT <= 0) drawInto(); }
+  // whoever went down earlier picks themselves up and rejoins the barn
+  while (F.hurt.length && F.hurt[0].at <= F.t){
+    const h = F.hurt.shift();
+    F.pile.unshift(h.c);
+    ev('mend', { });
+    if (F.drawT <= 0 && F.hand.length < handCap()) F.drawT = 0.3;
+  }
 
-  // the climb, top floor first so they do not leapfrog in one pass
-  for (let i = FLOORS - 1; i >= 0; i--){
-    const fl = F.floors[i];
-    const live = livingOf(fl.them);
-    if (!live.length) continue;
-    if (livingOf(fl.us).length) continue;          // held
-    const movers = live;
-    fl.them = fl.them.filter((u) => !u.alive);     // corpses stay where they fell
-    if (i === FLOORS - 1){
-      // through the top: they get at the eggs
-      for (const u of movers){
-        const bite = Math.max(1, unitMight(u, movers));
+  // their arrivals, staggered
+  while (F.spawns.length && F.spawns[0].at <= F.t){
+    const s = F.spawns.shift();
+    const u = spawnUnit(s.c, 'them', DOOR_X, laneY(F.units.length));
+    ev('arrive', { id: u.id, wave: s.wave });
+    F.waveSeen = s.wave;
+  }
+
+  for (const u of F.units){
+    if (!u.alive){ u.dead -= dt; continue; }
+    if (u.hitT > 0) u.hitT -= dt;
+    if (u.swingT > 0) u.swingT -= dt;
+    if (u.poisT > 0){
+      u.poisT -= dt;
+      u.poisAcc = (u.poisAcc || 0) + dt;
+      while (u.poisAcc >= 1){ u.poisAcc -= 1; hurtUnit(u, u.pois, null); ev('pois', { id: u.id }); }
+      if (u.poisT <= 0) u.pois = 0;
+    }
+    if (!u.alive) continue;
+    if (u.stun > 0){ u.stun -= dt; continue; }
+
+    const foe = nearestFoe(u);
+    const reach = BASE_RANGE;
+    if (foe){
+      const dx = foe.x - u.x;
+      const dist = Math.abs(dx) + Math.abs(foe.y - u.y) * 0.35;
+      if (dist > reach){
+        const dir = dx > 0 ? 1 : -1;
+        u.x += dir * unitSpeed(u) * dt;
+        // They meet HALFWAY between their two lanes rather than one walking all
+        // the way onto the other's. Without this every fight collapsed into a
+        // single row across the middle of the pit and the depth went to waste.
+        const want = u.lane * 0.72 + foe.y * 0.28;
+        const dy = want - u.y;
+        if (Math.abs(dy) > 0.05) u.y += (dy > 0 ? 1 : -1) * Math.min(Math.abs(dy), unitSpeed(u) * 0.5 * dt);
+        u.moving = 1;
+      } else {
+        u.moving = 0;
+        u.cd -= dt;
+        if (u.cd <= 0){ u.cd = unitSwing(u); u.swingT = 0.26; swingAt2(u, foe); }
+      }
+    } else if (u.side === 'them'){
+      // nothing in the way: straight for the nest
+      u.x -= unitSpeed(u) * dt;
+      u.moving = 1;
+      if (u.x <= NEST_X){
+        // A leak is a WOUND, not the end: it takes a bite and leaves. Uncapped,
+        // one bad wave emptied the whole nest and the round was unrecoverable.
+        const bite = clamp(Math.ceil(unitMightA(u) * 0.5), 1, 9);
         R.hp = Math.max(0, R.hp - bite);
-        F.breached += bite;
-        ev('breach', { uid: u.uid, v: bite, hp: R.hp });
+        F.breach += bite;
+        ev('breach', { id: u.id, v: bite, hp: R.hp });
+        u.alive = 0; u.dead = 0.2;
+        if (R.hp <= 0){ F.over = 'lose'; F.dead = 1; F.lost = 1; ev('end', { won: false }); return F.over; }
       }
     } else {
-      for (const u of movers){
-        u.floor = i + 1;
-        F.floors[i + 1].them.push(u);
-        ev('climb', { uid: u.uid, to: i + 1 });
+      // yours hold the middle of the pit rather than wandering off the edge
+      if (u.x < AW * 0.42){ u.x += unitSpeed(u) * dt * 0.7; u.moving = 1; }
+      else { u.moving = 0;
+        const dy = u.lane - u.y;                 // drift back into its own lane
+        if (Math.abs(dy) > 0.05) u.y += (dy > 0 ? 1 : -1) * Math.min(Math.abs(dy), unitSpeed(u) * 0.3 * dt);
       }
     }
   }
-  reflow();
+  F.units = F.units.filter((u) => u.alive || u.dead > 0);
 
-  if (R.hp <= 0){ F.over = 'lose'; F.dead = 1; F.lost = 1; ev('end', { won: false }); return F.over; }
-  if (F.wave >= F.waves && !livingOf(F.theirs).length){ F.over = 'win'; ev('end', { won: true }); return F.over; }
-  if (F.wave >= F.waves && livingOf(F.theirs).length){
-    // no reinforcements left to arrive: fight it out where it stands
-    let guard = 0;
-    while (livingOf(F.theirs).length && guard++ < 12 && R.hp > 0){
-      for (let i = 0; i < FLOORS; i++) fightFloor(F.floors[i], i);
-      clearDead();
-      for (let i = FLOORS - 1; i >= 0; i--){
-        const fl = F.floors[i];
-        const live2 = livingOf(fl.them);
-        if (!live2.length || livingOf(fl.us).length) continue;
-        const movers = live2;
-        fl.them = fl.them.filter((u) => !u.alive);
-        if (i === FLOORS - 1){
-          for (const u of movers){
-            const bite = Math.max(1, unitMight(u, movers));
-            R.hp = Math.max(0, R.hp - bite);
-            F.breached += bite;
-            ev('breach', { uid: u.uid, v: bite, hp: R.hp });
-          }
-        } else for (const u of movers){ u.floor = i + 1; F.floors[i + 1].them.push(u); ev('climb', { uid: u.uid, to: i + 1 }); }
-      }
-      reflow();
-    }
-    if (R.hp <= 0){ F.over = 'lose'; F.dead = 1; F.lost = 1; ev('end', { won: false }); return F.over; }
+  const theirsLeft = F.units.some((u) => u.alive && u.side === 'them');
+  if (!theirsLeft && !F.spawns.length){
     F.over = 'win';
-    F.lost = F.breached > 0 ? 1 : 0;
-    ev('end', { won: true, breached: F.breached });
-    return F.over;
+    F.lost = F.breach > 0 ? 1 : 0;
+    ev('end', { won: true, breach: F.breach });
   }
-  return null;                                    // more waves to come
+  return F.over;
 }
-/** Older name: run the whole round to its conclusion in one call. */
-function resolveBattle(){
-  if (!F) return null;
-  let guard = 0;
-  while (!F.over && guard++ < 40){
-    if (F.wave < F.waves && !livingOf(F.theirs).length) spawnWave();
-    else if (F.wave === 0) spawnWave();
-    resolveWave();
-    if (!F.over && F.wave < F.waves) spawnWave();
+
+/* --------------------------------------------------------- your side ----- */
+function handCap(){ return HAND_SIZE_A + ((F && F.mods && F.mods.hand) || 0); }
+/** Draw one, if there is one left. Your pile is your BARN — nothing shuffles
+ *  back in. Everything you own is on the field or still to come, which is what
+ *  makes holding one back for the last wave a real decision. */
+function drawInto(){
+  if (!F) return false;
+  if (F.hand.length >= handCap()) return false;
+  if (!F.pile.length) return false;
+  F.hand.push(F.pile.pop());
+  ev('draw', {});
+  return true;
+}
+/** Send the beast on card i into the pit. Costs Feed; the card goes to the
+ *  bottom of your pile and another slides in after a beat. */
+function playCardA(i){
+  if (!F || F.over) return false;
+  const c = F.hand[i];
+  if (!c || c.cost > F.feed) return false;
+  F.feed -= c.cost;
+  F.hand.splice(i, 1);
+  F.spent.push(c);
+  if (F.drawT <= 0) F.drawT = DRAW_DELAY;
+  if (c.trait === 'cursed') R.hp = Math.max(0, R.hp - 2);
+  const u = spawnUnit(Object.assign({}, c), 'us', GATE_X, laneY(F.units.length + 3));
+  u.src = c;                          // so it can limp home if it goes down
+  ev('sortie', { id: u.id, cost: c.cost });
+  return true;
+}
+function waveCount(idx){ return clamp(2 + Math.floor(idx / 4), 2, 4); }
+/** Build the whole arrival schedule up front: wave by wave, beast by beast. */
+function buildSpawns(mods){
+  const waves = waveCount(R.idx);
+  const list = [];
+  let t = 1.2;
+  for (let w = 1; w <= waves; w++){
+    const team = makeEnemyTeam(R.idx, mods, w, waves);
+    for (const c of team){ list.push({ at: t, c, wave: w }); t += SPAWN_GAP; }
+    t += WAVE_GAP;
   }
+  return list;
+}
+function startBattle(mods){
+  const m = mods || {};
+  _uid = 1;
+  const roster = R.deck.filter((c) => R.nest.indexOf(c.id) < 0).map((c) => Object.assign({}, c));
+  F = {
+    t: 0, units: [], spawns: buildSpawns(m),
+    pile: shuffle(roster), hand: [], spent: [], hurt: [],
+    feed: FEED_START + ((m.feed) || 0), feedMax: FEED_MAX, feedT: 0, drawT: 0,
+    over: null, breach: 0, mods: m, events: [], log: [],
+    waves: waveCount(R.idx), waveSeen: 0, started: 0,
+  };
+  for (let i = 0; i < handCap(); i++) drawInto();
+  return F;
+}
+/** Run the battle to its conclusion without drawing anything (tests, sim). */
+function runBattle(step){
+  const dt = step || 1 / 30;
+  F.started = 1;
+  let guard = 0;
+  while (!F.over && guard++ < 20000) arenaTick(dt);
   if (!F.over) F.over = R.hp > 0 ? 'win' : 'lose';
   return F.over;
 }
-const MAX_EXCHANGES = EXCHANGES_PER_WAVE * 12;
-const TRAMPLE_CAP = 0.34;   // kept: the breach is per-beast now
-
 /* ============================ AFTER THE FIGHT ============================= */
 /** Win bookkeeping: heal a little, breed the nest, queue a wild offer. */
 /**
@@ -2232,9 +2167,7 @@ function winFight(){
   } else {
     R.hp = Math.min(R.maxHp, R.hp + 3);               // a night's rest, no more
   }
-  R.regalBonus = planFlat().filter((id) => { const c = cardById(id); return c && c.trait === 'regal'; }).length;
   R.line = [];
-  R.plan = emptyPlan();
   const a = cardById(R.nest[0]), b = cardById(R.nest[1]);
   R.litter = breedLitter(a, b, R.ritual);
   R.lastHatch = { a, b, litter: R.litter };
@@ -3156,22 +3089,6 @@ function drawFoe(cv, foe, frame){
   else brute(1, 0, 0);
   ctx.restore();
 }
-/** Barn Fire is the one foe that lives on a frame counter. ~11fps, one small
- *  canvas, and the chain dies with the screen because `at()` is generational. */
-let foeAnimId = 0;
-function startFoeAnim(){
-  if (HEADLESS || RM()) return;
-  const mine = ++foeAnimId;
-  if (!F || !F.foe || F.foe.sil !== 'fire') return;
-  let n = 0;
-  const step = () => {
-    if (mine !== foeAnimId || cur !== 'fight' || !F || !F.foe || F.foe.sil !== 'fire') return;
-    drawFoe($('fEm'), F.foe, ++n);
-    at(90, step);
-  };
-  at(90, step);
-}
-
 /* ---------------------------------------------------------- card element - */
 function cardEl(c, opts){
   const o = opts || {};
@@ -3243,10 +3160,7 @@ function pips(el, boss){
   }
 }
 function hpBar(txtEl, barEl){
-  // During a replay this reads the DISPLAY health, not the resolved one: the
-  // trample is already subtracted from R.hp before the first blow is drawn, so
-  // reading R.hp here would print the loss on the bar before the fight starts.
-  const hp = (F && F.playing && F.vhp != null) ? F.vhp : R.hp;
+  const hp = R.hp;
   countUp(txtEl, hp);
   barEl.style.width = (100 * hp / R.maxHp) + '%';
   // the bar itself says when you are one bad match from the end
@@ -3514,482 +3428,366 @@ function flyer(txt, color, target, opts){
   L.appendChild(e);
   at(1000, () => { if (e.remove) e.remove(); });
 }
-/** Kept for the older callers that still ask what the enemy is about to do. */
-function intentText(){
-  if (!F) return 'scouting';
-  return F.over ? (F.over === 'win' ? 'the field is yours' : 'your line is broken')
-                : 'exchange ' + F.round;
-}
 
-/* ------------------------------------------------------------- one unit --
-   Everything below draws the DISPLAY state (vhp/valive), not the resolved
-   state, so the replay opens on the pre-battle line-up instead of announcing
-   the result in its first frame. Units that have no display state — prep
-   tiles, scouted enemies, the test harness — fall through to the real one. */
-function uHp(u){ return u.vhp == null ? u.hp : u.vhp; }
-function uAlive(u){ return u.valive == null ? u.alive : u.valive; }
-/** frontOf(), but on what the screen is currently showing. */
-function frontOfVis(line){
-  const live = line.filter(uAlive);
-  if (!live.length) return null;
-  const bul = live.filter((u) => u.c.trait === 'bulwark');
-  if (bul.length) return bul[0];
-  const plain = live.filter((u) => u.c.trait !== 'elusive');
-  return plain.length ? plain[0] : live[0];
+/* ============================ DRAWING THE PIT =============================
+   One canvas. Every beast is pre-rendered once from its genes into an offscreen
+   tile and then blitted where the simulation says it stands, so a pit full of
+   animals costs a few dozen drawImage calls a frame.
+   ========================================================================== */
+const spriteCache = {};
+function spriteFor(c){
+  const key = c.id + ':' + c.might + ':' + c.hide + ':' + c.trait;
+  if (spriteCache[key]) return spriteCache[key];
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 104;
+  try { drawBeast(cv, c); } catch (e){}
+  spriteCache[key] = cv;
+  return cv;
 }
-/** unitMight(), but counting the rally-mates the screen still shows standing. */
-function unitMightVis(u, line){
-  let d = cardDamage(u.c);
-  if (d <= 0) return 0;
-  for (const o of line) if (o !== u && uAlive(o) && o.c.trait === 'rally') d += 2;
-  return d;
-}
-function unitEl(u, opts){
-  const o = opts || {};
-  const d = document.createElement('div');
-  const t = TRAITS[u.c.trait] || TRAITS.none;
-  // While a wave is being replayed we draw the state the REPLAY has reached,
-  // not the resolved truth — otherwise every beast is already dead on frame one
-  // and there is nothing left to watch.
-  const playing = !!(F && F.playing);
-  const hp = playing ? (u.vhp == null ? u.hp : u.vhp) : u.hp;
-  const alive = playing ? (u.valive == null ? u.alive : u.valive) : u.alive;
-  d.className = 'ub' + (u.side === 'them' ? ' them' : ' us') + (alive ? '' : ' gone') +
-    (u.c.trait === 'bulwark' ? ' bulw' : '') + (u.c.leader ? ' lead' : '') + (o.front ? ' front' : '');
-  if (d.dataset) d.dataset.uid = u.uid;
-  const might = F ? unitMight(u, floorMates(u)) : cardDamage(u.c);
-  d.innerHTML =
-    '<canvas width="180" height="132"></canvas>' +
-    (u.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
-    '<div class="pn">' + u.c.name + '</div>' +
-    '<div class="pm">' + ICO('might') + might +
-      ' <span class="hh">' + ICO('hide') + '<span class="hn">' + Math.max(0, hp) + '</span></span></div>' +
-    '<div class="ph"><b class="gh" style="width:' + Math.max(0, 100 * hp / u.max) + '%"></b>' +
-      '<i style="width:' + Math.max(0, 100 * hp / u.max) + '%"></i></div>';
-  const cv = d.querySelector && d.querySelector('canvas');
-  if (cv) drawBeast(cv, u.c);
-  d.title = u.c.name + ' — ' + Math.max(0, hp) + '/' + u.max + ' Hide, hits for ' + might +
-    (u.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
-  return d;
-}
+let pitFx = [];
+function pitAdd(o){ if (pitFx.length < 90) pitFx.push(o); }
 
-/** Prep-phase tile: same beast, but it can be re-ordered or sent back.
- *  Re-ordering IS the game's core decision, so the TILE is the handle — drag it
- *  sideways past half a tile and it swaps with its neighbour. The chevrons stay
- *  as a fallback (and are a real 30px target now); ✕ moved to the corner. */
-function slotEl(c, idx){
-  const u = { c, side: 'us', uid: -1 - idx, hp: cardHide(c), max: cardHide(c), alive: 1 };
-  const d = unitEl(u, { front: idx === 0 });
-  d.className += ' slot-live';
-  if (d.dataset) d.dataset.cid = c.id;
-  const pull = document.createElement('button');
-  pull.className = 'pull';
-  pull.innerHTML = '&#10005;';
-  pull.title = 'Take ' + c.name + ' out of the line';
-  // taking a beast back out is a DECISION, not a refusal — sfxDeny must keep
-  // meaning "you can't do that", so this gets an unlatch of its own
-  pull.onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
-    toggleField(c.id); sfxUnlatch(); renderFight(); };
-  d.appendChild(pull);
-  const bar = document.createElement('div');
-  bar.className = 'ord';
-  bar.innerHTML = '<button class="ob" data-d="-1">&#9664;</button>' +
-    '<button class="ob" data-d="1">&#9654;</button>';
-  const btns = bar.querySelectorAll ? bar.querySelectorAll('.ob') : [];
-  if (btns.length === 2){
-    btns[0].disabled = idx === 0;
-    btns[1].disabled = idx >= R.line.length - 1;
-    btns[0].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
-      if (moveInLine(c.id, -1)){ sfxOrder(idx - 1); renderFight(); } };
-    btns[1].onclick = (e) => { if (e && e.stopPropagation) e.stopPropagation();
-      if (moveInLine(c.id, 1)){ sfxOrder(idx + 1); renderFight(); } };
+/* The pit is drawn back-to-front: sky, wall, sand, then everything standing on
+   it sorted by depth. Every measurement comes off the canvas width, so the same
+   code fills a phone and a desktop window without a single breakpoint. */
+function drawPit(){
+  const cv = $('pit');
+  if (!cv || !cv.getContext) return;
+  const ctx = cv.getContext('2d');
+  if (!ctx || !ctx.clearRect) return;
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  // The sand is never deeper than it is wide, whatever shape the box ends up:
+  // a tall phone gets more SKY, not a pit you could fall down.
+  const horizon = Math.max(H * 0.16, H - Math.min(H * 0.80, W * 1.02));
+  const U = W / AW;                      // screen pixels per world unit
+  const SPR = W * 0.28;                  // how wide a beast is drawn, before depth
+
+  // --- night over the barn -------------------------------------------------
+  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, '#101a2c'); sky.addColorStop(0.6, '#1d2438'); sky.addColorStop(1, '#33304a');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
+  // a fat cartoon moon, low and to the left, and a handful of stars
+  ctx.fillStyle = 'rgba(255,246,214,.16)';
+  ctx.beginPath(); ctx.arc(W * 0.20, horizon * 0.30, W * 0.085, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,246,214,.92)';
+  ctx.beginPath(); ctx.arc(W * 0.20, horizon * 0.30, W * 0.048, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  for (let i = 0; i < 22; i++){
+    const sx = ((i * 97) % 100) / 100 * W, sy = ((i * 53) % 100) / 100 * horizon * 0.8;
+    ctx.fillRect(sx, sy, 2, 2);
   }
-  d.appendChild(bar);
-  dragOrder(d, c.id);
-  return d;
-}
-/** Pointer-drag re-ordering. Presentation only: every commit goes through
- *  moveInLine(), the same call the chevrons make. */
-function dragOrder(el, cid){
-  if (HEADLESS || !el.addEventListener) return;
-  let sx = 0, w = 0, on = false, moved = 0;
-  const down = (e) => {
-    if (F || !e.isPrimary) return;                 // prep only
-    if (e.target && e.target.closest && e.target.closest('.ob,.pull')) return;
-    on = true; moved = 0; sx = e.clientX;
-    const r = rectOf(el); w = (r ? r.width : 90) + 5;
-    if (el.setPointerCapture && e.pointerId != null){
-      try { el.setPointerCapture(e.pointerId); } catch (err){}
+
+  // --- the fence they built round the pit ----------------------------------
+  const wallTop = horizon - H * 0.10;
+  const wall = ctx.createLinearGradient(0, wallTop, 0, horizon);
+  wall.addColorStop(0, '#3b2a1c'); wall.addColorStop(1, '#241a12');
+  ctx.fillStyle = wall; ctx.fillRect(0, wallTop, W, horizon - wallTop);
+  ctx.strokeStyle = 'rgba(10,8,6,.55)'; ctx.lineWidth = Math.max(1, W * 0.004);
+  for (let x = 0; x <= W; x += W * 0.075){
+    ctx.beginPath(); ctx.moveTo(x, wallTop); ctx.lineTo(x, horizon); ctx.stroke();
+  }
+  ctx.fillStyle = '#4a361f'; ctx.fillRect(0, wallTop, W, Math.max(2, H * 0.012));
+  // torches along the top of the fence, breathing
+  const flick = 0.72 + 0.28 * Math.sin((F ? F.t : 0) * 7);
+  for (let i = 1; i <= 3; i++){
+    const tx = W * (i / 4);
+    ctx.fillStyle = '#2b1d12'; ctx.fillRect(tx - W * 0.008, wallTop - H * 0.04, W * 0.016, H * 0.04);
+    const g = ctx.createRadialGradient(tx, wallTop - H * 0.04, 1, tx, wallTop - H * 0.04, W * 0.09);
+    g.addColorStop(0, 'rgba(255,200,110,' + (0.55 * flick).toFixed(2) + ')');
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(tx, wallTop - H * 0.04, W * 0.09, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd07a';
+    ctx.beginPath(); ctx.ellipse(tx, wallTop - H * 0.046, W * 0.011, H * 0.016 * flick, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // --- the sand ------------------------------------------------------------
+  const sand = ctx.createLinearGradient(0, horizon, 0, H);
+  sand.addColorStop(0, '#6b5730'); sand.addColorStop(0.35, '#8a7040'); sand.addColorStop(1, '#4c3d21');
+  ctx.fillStyle = sand; ctx.fillRect(0, horizon, W, H - horizon);
+  ctx.fillStyle = 'rgba(20,14,8,.5)'; ctx.fillRect(0, horizon, W, Math.max(2, H * 0.009));
+  // scuff marks: deterministic, so the ground does not crawl between frames
+  ctx.globalAlpha = 0.13; ctx.fillStyle = '#2a2010';
+  for (let i = 0; i < 60; i++){
+    const rx = ((i * 733) % 1000) / 1000 * W;
+    const ry = horizon + ((i * 271) % 1000) / 1000 * (H - horizon);
+    ctx.fillRect(rx, ry, W * 0.03 * (0.4 + (i % 5) / 5), Math.max(1, H * 0.004));
+  }
+  ctx.globalAlpha = 1;
+  // the lit ring the fight happens inside
+  const lit = ctx.createRadialGradient(W * 0.5, horizon + (H - horizon) * 0.55, W * 0.05,
+    W * 0.5, horizon + (H - horizon) * 0.55, W * 0.66);
+  lit.addColorStop(0, 'rgba(255,226,160,.16)'); lit.addColorStop(1, 'transparent');
+  ctx.fillStyle = lit; ctx.fillRect(0, horizon, W, H - horizon);
+
+  // --- the two ends: your gate, their door ---------------------------------
+  const nestG = ctx.createLinearGradient(0, 0, W * 0.14, 0);
+  nestG.addColorStop(0, 'rgba(166,255,94,.30)'); nestG.addColorStop(1, 'transparent');
+  ctx.fillStyle = nestG; ctx.fillRect(0, horizon, W * 0.14, H - horizon);
+  const doorG = ctx.createLinearGradient(W, 0, W * 0.84, 0);
+  doorG.addColorStop(0, 'rgba(230,80,50,' + (0.26 + 0.12 * flick).toFixed(2) + ')');
+  doorG.addColorStop(1, 'transparent');
+  ctx.fillStyle = doorG; ctx.fillRect(W * 0.84, horizon, W * 0.16, H - horizon);
+
+  if (!F) return;
+  const px = (x) => (x / AW) * W;
+  const py = (y) => horizon + (H - horizon) * (0.22 + 0.72 * (y / AH));
+  const scaleAt = (y) => 0.80 + 0.40 * (y / AH);
+
+  const order = F.units.slice().sort((a2, b2) => a2.y - b2.y);
+  // --- shadows first, so nothing floats -----------------------------------
+  for (const u of order){
+    const sc = scaleAt(u.y), x = px(u.x), y = py(u.y);
+    ctx.globalAlpha = u.alive ? 0.36 : 0.10;
+    // a tinted pool, not a grey one: in a crowded pit the colour under the feet
+    // is how you tell your lot from theirs at a glance
+    ctx.fillStyle = u.side === 'us' ? '#1f3d0c' : '#3d1408';
+    ctx.beginPath(); ctx.ellipse(x, y, SPR * 0.26 * sc, SPR * 0.075 * sc, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // --- the beasts ----------------------------------------------------------
+  for (const u of order){
+    const sc = scaleAt(u.y);
+    const x = px(u.x), y = py(u.y);
+    const spr = spriteFor(u.c);
+    const w = SPR * sc, h = SPR * sc * (104 / 128);
+    ctx.save();
+    ctx.translate(x, y);
+    if (!u.alive){ ctx.globalAlpha = Math.max(0, u.dead / CORPSE_T) * 0.85; ctx.rotate(0.75); }
+    // a hop while it runs, a lunge while it swings, a squash when it is hit
+    let bob = 0, lean = 0, sq = 1;
+    if (u.alive){
+      if (u.moving) bob = -Math.abs(Math.sin(F.t * 12 + u.id)) * h * 0.10;
+      if (u.swingT > 0) lean = (u.side === 'us' ? 1 : -1) * u.swingT * w * 0.55;
+      if (u.hitT > 0) sq = 1 + u.hitT * 0.5;
     }
-    el.classList.add('drag');
-  };
-  const move = (e) => {
-    if (!on) return;
-    const dx = e.clientX - sx;
-    moved = Math.max(moved, Math.abs(dx));
-    if (el.style) el.style.transform = 'translateX(' + dx.toFixed(0) + 'px) scale(1.06) rotate(-2deg)';
-    if (Math.abs(dx) >= w * 0.5){
-      const dir = dx > 0 ? 1 : -1;
-      // the swap re-renders the row, so this node is gone: end the gesture
-      if (moveInLine(cid, dir)){ on = false; sfxOrder(R.line.indexOf(cid)); renderFight(); return; }
-      sx = e.clientX;
+    ctx.translate(lean, bob);
+    if (u.side === 'them') ctx.scale(-1, 1);
+    ctx.scale(sq, 2 - sq);
+    // the painter puts the animal's feet at 96% down its own tile
+    ctx.drawImage(spr, -w / 2, -h + h * 0.04, w, h);
+    if (u.hitT > 0 && u.alive){
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.8, u.hitT * 3) + ')';
+      ctx.fillRect(-w / 2, -h, w, h);
+      ctx.globalCompositeOperation = 'source-over';
     }
-  };
-  const up = () => {
-    if (!on) return;
-    on = false;
-    el.classList.remove('drag');
-    if (el.style) el.style.transform = '';
-  };
-  el.addEventListener('pointerdown', down);
-  el.addEventListener('pointermove', move);
-  el.addEventListener('pointerup', up);
-  el.addEventListener('pointercancel', up);
-}
-function renderLine(el, units, isPrep){
-  el.innerHTML = '';
-  const front = units.length ? frontOfList(units) : null;
-  units.forEach((u, i) => {
-    const node = isPrep ? slotEl(u, i) : unitEl(u, { front: u === front });
-    el.appendChild(node);
-  });
-  const slots = isPrep ? LINE_SLOTS - units.length : 0;
-  // an empty slot is an invitation, not a hole where the UI failed: it breathes
-  // until the line is full, and it says PUT ONE HERE with a drawn plus
-  if (el.classList) el.classList.toggle('wait', isPrep && slots > 0);
-  for (let i = 0; i < slots; i++){
-    const e = document.createElement('div');
-    e.className = 'slot';
-    e.innerHTML = '<div class="plus"></div>';
-    e.title = 'Tap a beast in the bench below to put it here';
-    el.appendChild(e);
-  }
-}
-/** frontOf() works on live units; prep tiles are plain cards, so wrap it. */
-function frontOfList(units){
-  if (!units.length) return null;
-  if (units[0] && units[0].c) return frontOfVis(units);
-  return units[0];
-}
-function renderPen(){ if (F) renderLine($('pen'), F.mine, false); }
+    ctx.restore();
 
-/** One floor of the barn: your side on the left, theirs on the right. */
-function floorEl(idx){
-  const fl = F ? F.floors[idx] : null;
-  const d = document.createElement('div');
-  const top = idx === FLOORS - 1;
-  d.className = 'flr' + (top ? ' top' : '') + (idx === 0 ? ' ground' : '');
-  if (d.dataset) d.dataset.floor = idx;
-
-  const mine = document.createElement('div');
-  mine.className = 'half us';
-  const placed = R.plan[idx].map((id) => cardById(id)).filter(Boolean);
-  const live = fl ? fl.us : [];
-  const shown = F ? live : placed.map((c, i) => {
-    const hp = cardHide(c);
-    return { c, side: 'us', uid: -1 - (idx * 10 + i), hp, max: hp, alive: 1, vhp: hp, valive: 1 };
-  });
-  for (const u of shown) mine.appendChild(unitEl(u, { front: u === frontOf(shown), tiny: 1 }));
-  for (let i = shown.length; i < FLOOR_CAP; i++){
-    const e = document.createElement('div');
-    e.className = 'hole' + (!F ? ' open' : '');
-    e.innerHTML = F ? '' : '<span>+</span>';
-    if (!F) e.onclick = () => { if (dropHere(idx)) renderFight(); };
-    mine.appendChild(e);
+    if (!u.alive) continue;
+    const top = y - h - SPR * 0.04;
+    // health, and only when it matters
+    if (u.hp < u.max){
+      const bw = SPR * 0.52 * sc, bh = Math.max(3, H * 0.008);
+      const bx = x - bw / 2, by = top;
+      ctx.fillStyle = 'rgba(8,12,6,.9)'; ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, bh + 3);
+      ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e05a4a';
+      ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh);
+    }
+    // status pips
+    const pr = Math.max(2.5, W * 0.007);
+    let sx = x - pr * 2;
+    if (u.pois > 0){ ctx.fillStyle = '#b6ff8a'; ctx.beginPath(); ctx.arc(sx, top - pr * 3, pr, 0, 7); ctx.fill(); sx += pr * 3; }
+    if (u.stun > 0){ ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(sx, top - pr * 3, pr, 0, 7); ctx.fill(); }
   }
 
-  const theirs = document.createElement('div');
-  theirs.className = 'half them';
-  const inv = fl ? fl.them : [];
-  for (const u of inv) theirs.appendChild(unitEl(u, { front: u === frontOf(inv), tiny: 1 }));
-  if (!inv.length){
-    const e = document.createElement('div');
-    e.className = 'hole quiet';
-    theirs.appendChild(e);
+  // --- effects on top -----------------------------------------------------
+  for (const f of pitFx){
+    const x = px(f.x), y = py(f.y);
+    const k = 1 - f.t / f.life;
+    ctx.globalAlpha = Math.max(0, k);
+    if (f.k === 'boom'){
+      ctx.strokeStyle = '#ffd08a'; ctx.lineWidth = Math.max(2, W * 0.006);
+      ctx.beginPath(); ctx.arc(x, y - SPR * 0.25, AOE_R * U * (1 - k + 0.25), 0, Math.PI * 2); ctx.stroke();
+    } else if (f.k === 'num'){
+      const fs = W * (0.036 + Math.min(0.030, f.v * 0.0022));
+      ctx.font = '900 ' + fs.toFixed(0) + 'px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = Math.max(3, W * 0.008); ctx.strokeStyle = 'rgba(0,0,0,.75)';
+      const ny = y - SPR * 0.6 - (1 - k) * SPR * 0.5;
+      ctx.strokeText('-' + f.v, x, ny);
+      ctx.fillStyle = f.col || '#ffb27a';
+      ctx.fillText('-' + f.v, x, ny);
+    } else if (f.k === 'spark'){
+      ctx.fillStyle = f.col || '#ffd9a0';
+      ctx.beginPath();
+      ctx.arc(x + f.dx * (1 - k) * SPR * 0.45, y - SPR * 0.3 + f.dy * (1 - k) * SPR * 0.45,
+        Math.max(1.5, W * 0.005) * k + 1, 0, 7);
+      ctx.fill();
+    }
   }
+  ctx.globalAlpha = 1;
+}
+function stepFx(dt){
+  for (const f of pitFx) f.t += dt;
+  pitFx = pitFx.filter((f) => f.t < f.life);
+}
+/** Turn the simulation's transcript into things to look at and listen to. */
+function drainArena(){
+  if (!F || !F.events) return;
+  for (const e of F.events){
+    if (e.k === 'hit'){
+      pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ff9d6b', t: 0, life: 0.75 });
+      for (let i = 0; i < 3; i++) pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 2, dy: -rng(), t: 0, life: 0.4 });
+      sfxStrike(e.dmg);
+    } else if (e.k === 'boom'){
+      pitAdd({ k: 'boom', x: e.x, y: e.y, t: 0, life: 0.42 });
+      noise(0.12, { lp: 900, vol: 0.09 });
+    } else if (e.k === 'die'){
+      for (let i = 0; i < 6; i++) pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 3, dy: -rng() * 1.4, col: '#c9b48a', t: 0, life: 0.6 });
+      sfxDie();
+    } else if (e.k === 'arrive'){
+      tone(300, 0.07, { type: 'square', vol: 0.05 });
+    } else if (e.k === 'sortie'){
+      sfxLand();
+    } else if (e.k === 'breach'){
+      sfxHurt();
+      const nb = $('nestBar'); if (nb) anim(nb, 'bitten', 620);
+      if ($('nestHp')) $('nestHp').textContent = e.hp;
+      const eggs = Math.max(0, Math.round(3 * e.hp / R.maxHp));
+      if ($('nestEggs')) $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
+      const app = $('app'); if (app) anim(app, 'hurt', 320);
+    } else if (e.k === 'feed'){
+      tone(760, 0.04, { type: 'sine', vol: 0.03 });
+    }
+  }
+  F.events = [];
+}
 
-  const lbl = document.createElement('div');
-  lbl.className = 'flrno';
-  lbl.textContent = top ? 'TOP' : (idx === 0 ? 'DOOR' : 'MID');
-  d.appendChild(lbl);
-  d.appendChild(mine);
-  d.appendChild(theirs);
-  return d;
+/* ------------------------------------------------------------- the loop -- */
+let rafId = 0, lastT = 0;
+function arenaLoop(ts){
+  if (!F || cur !== 'fight'){ rafId = 0; return; }
+  const now = ts || 0;
+  let dt = lastT ? (now - lastT) / 1000 : 1 / 60;
+  lastT = now;
+  if (dt > 0.1) dt = 0.1;                    // a backgrounded tab must not fast-forward
+  // Nothing moves until you open the gates: the opening Feed buys you a line
+  // BEFORE the first of them walks in, which is the one moment in the round you
+  // get to think without a clock on you.
+  if (!F.over && F.started){
+    arenaTick(dt);
+    drainArena();
+  }
+  stepFx(dt);
+  drawPit();
+  renderHud();
+  if (F.over){ rafId = 0; at(700, endArena); return; }
+  rafId = requestAnimationFrame(arenaLoop);
 }
-/** A tap on an empty slot fields the beast you have selected on the bench. */
-let benchPick = 0;
-function dropHere(floor){
-  if (!benchPick) return false;
-  const c = cardById(benchPick);
-  if (!c || !canPlace(c, floor)) { sfxDeny && sfxDeny(); return false; }
-  placeBeast(benchPick, floor);
-  benchPick = 0;
-  sfxLand && sfxLand();
-  return true;
+function startLoop(){
+  if (rafId || HEADLESS) return;
+  lastT = 0;
+  rafId = requestAnimationFrame(arenaLoop);
 }
-function renderTower(){
-  const t = $('tower');
-  t.innerHTML = '';
-  for (let i = FLOORS - 1; i >= 0; i--) t.appendChild(floorEl(i));
+function endArena(){
+  if (!F || F.shown) return;
+  F.shown = 1;
+  if (HEADLESS || !showVerdict()){ resolveFight(); return; }
 }
-function renderFight(){
-  const prep = !F || F.phase === 'prep';
-  hpBar($('fHp'), $('fHpBar'));
-  pips($('fPips'));
+
+/* --------------------------------------------------------------- HUD ---- */
+function renderHud(){
+  if (!F) return;
   $('nestHp').textContent = R.hp;
-  const eggs = Math.max(1, Math.round(3 * R.hp / R.maxHp));
-  $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
-  const waves = F ? F.waves : waveCount(R.idx);
-  const wave = F ? F.wave : 0;
-  $('gateLbl').innerHTML = 'THE DOOR &mdash; wave <b>' + Math.max(1, wave) + '</b> of <b>' + waves + '</b>' +
-    (F && F.wave >= F.waves ? ' &middot; last one' : '');
-
-  renderTower();
-
+  hpBar($('fHp'), $('fHpBar'));
+  // The wave counter is a countdown you can plan against: it says which wave is
+  // on the sand AND how long until the next lot walk through the door.
+  const w = Math.max(1, F.waveSeen || 1);
+  const nextW = F.spawns.length ? F.spawns[0] : null;
+  const soon = nextW && nextW.wave > F.waveSeen ? Math.max(0, nextW.at - F.t) : -1;
+  const lbl = $('gateLbl');
+  const html = 'WAVE <b>' + w + '</b>/<b>' + F.waves + '</b>' +
+    (soon >= 0 ? ' <span class="nxt">&middot; next ' + soon.toFixed(0) + 's</span>' : '');
+  if (html !== F.lblSig){
+    F.lblSig = html;
+    lbl.innerHTML = html;
+    if (w !== F.lblWave){ F.lblWave = w; anim(lbl, 'wavein', 500); }
+  }
   const fd = $('feed');
-  const budget = lineBudget();
-  const spent = lineCost();
-  fd.innerHTML = '';
-  for (let i = 0; i < budget; i++) fd.innerHTML += '<i class="' + (i < budget - spent ? 'on' : '') + '"></i>';
-  $('piles').innerHTML = '<b>' + spent + '/' + budget + '</b> Feed';
-  const na = cardById(R.nest[0]), nb = cardById(R.nest[1]);
-  $('nestNote').innerHTML = na && nb ? ICO('egg') + ' ' + na.name + ' + ' + nb.name : '';
-
-  const pb = $('pBadges'); pb.innerHTML = '';
-  if (R.hazard) pb.innerHTML += '<span class="bdg thn">' + R.hazard.name.toUpperCase() + '</span>';
-  if (F && F.breached) pb.innerHTML += '<span class="bdg" style="color:#ff9d9d">' + F.breached + ' got through</span>';
-
-  // the bench
-  const bench = $('hand');
-  bench.innerHTML = '';
-  const avail = R.deck.filter((c) => R.nest.indexOf(c.id) < 0 && floorOf(c.id) < 0);
-  for (const c of avail){
-    const el = cardEl(c);
-    const ok = canField(c);
-    if (!ok) el.classList.add('dead');
-    if (benchPick === c.id) el.classList.add('sel');
-    if (ok) el.onclick = () => {
-      if (benchPick === c.id){ benchPick = 0; renderFight(); return; }
-      benchPick = c.id;
-      const f = firstFreeFloor(c);
-      if (f >= 0 && !F){ placeBeast(c.id, f); benchPick = 0; sfxLand && sfxLand(); }
-      renderFight();
-    };
-    bench.appendChild(el);
+  const fsig = F.feed + '/' + F.feedMax;
+  if (fsig !== F.feedSig){
+    F.feedSig = fsig;
+    fd.innerHTML = '';
+    for (let i = 0; i < F.feedMax; i++) fd.innerHTML += '<i class="' + (i < F.feed ? 'on' : '') + '"></i>';
   }
-
-  const btn = $('bEnd');
-  if (prep){
-    const anyOut = F ? livingOf(F.mine).length : planFlat().length;
-    // Once the door is open the waves come whether you are ready or not. Only
-    // the FIRST commit needs a beast on a floor — otherwise a wipe with an
-    // empty barn left the button dead and the run with nowhere to go.
-    btn.disabled = !F && !anyOut;
-    btn.className = 'btn sm';
-    btn.textContent = F ? 'NEXT WAVE' : (anyOut ? 'OPEN THE DOOR' : 'PLACE A BEAST');
-  } else {
-    btn.disabled = false;
-    btn.className = 'btn alt sm';
-    btn.textContent = F && F.playing ? 'SKIP' : '...';
+  const nx = F.feed < F.feedMax ? Math.round(100 * F.feedT / FEED_EVERY) : 100;
+  const fb = $('feedFill'); if (fb && fb.style) fb.style.width = nx + '%';
+  // what is left in the barn, and who is limping back
+  const pl = $('piles');
+  const psig = F.pile.length + '|' + F.hurt.length;
+  if (psig !== F.pileSig){
+    F.pileSig = psig;
+    pl.innerHTML = '<b>' + F.pile.length + '</b> in the barn' +
+      (F.hurt.length ? ' &middot; <span class="mend">' + F.hurt.length + ' limping back</span>' : '');
   }
-  const co = $('coach');
-  if (!F && R.idx === 0 && !taught()){
-    co.hidden = false;
-    co.innerHTML = planFlat().length
-      ? 'They climb toward <b>the nest</b>. A floor with nothing of yours on it does not stop them.'
-      : 'Tap a beast to post it on a floor. They arrive at <b>the door</b> and climb.';
-  } else co.hidden = true;
-}
-
-/* --------------------------------------------------------- the replay ---- */
-let seq = null;
-/** Every fighter lives in the tower now. Looking anywhere else finds nothing,
- *  which is exactly why the whole replay used to happen off-screen. */
-function nodeFor(uid){
-  const t = $('tower');
-  if (!t || !t.querySelector) return null;
-  return t.querySelector('[data-uid="' + uid + '"]');
-}
-/** The floor element a unit is standing on, for floor-wide beats. */
-function floorNodeOf(uid){
-  const n = nodeFor(uid);
-  return n && n.closest ? n.closest('.flr') : null;
-}
-/** Move a tile's bar and Hide number to a new value. The bar snaps; the ghost
- *  behind it lags and catches up, leaving a white slab exactly the width of the
- *  blow — the only way to tell a 3 from a 12 while watching. */
-function setUnitHp(n, uid, hp){
-  const u = unitByUid(uid);
-  if (u) u.vhp = Math.max(0, hp);
-  if (!n || !n.querySelector) return;
-  const pct = Math.max(0, 100 * Math.max(0, hp) / ((u && u.max) || 1));
-  const bar = n.querySelector('.ph i'), gh = n.querySelector('.ph .gh');
-  if (bar && bar.style) bar.style.width = pct + '%';
-  if (gh && gh.style) gh.style.width = pct + '%';
-  // the Hide number TICKS DOWN — a number that just sits there is not feedback.
-  // (Only the digits: the icon beside them is markup and must not be retyped.)
-  const hh = n.querySelector('.pm .hh .hn');
-  if (hh) countUp(hh, Math.max(0, hp), { dur: 180 });
-}
-/** The front marker has to MOVE when the front dies, not at the end of the
- *  match — otherwise the lime bar sits on a corpse for the rest of the replay. */
-function remarkFront(){
-  if (!F || !F.floors) return;
-  const t = $('tower');
-  if (!t || !t.querySelectorAll) return;
-  const live = {};
-  for (const fl of F.floors){
-    const a = frontOfVis(fl.us), b = frontOfVis(fl.them);
-    if (a) live[a.uid] = 1;
-    if (b) live[b.uid] = 1;
-  }
-  const tiles = t.querySelectorAll('.ub');
-  for (let i = 0; i < tiles.length; i++){
-    const uid = tiles[i].dataset ? +tiles[i].dataset.uid : NaN;
-    if (tiles[i].classList) tiles[i].classList.toggle('front', !!live[uid]);
-  }
-}
-
-/** The frame the whole prep decision resolves into. Never fired for the kill
- *  that LOSES you the match — that one gets the toll instead. */
-function killBlow(n){
-  const r = rectOf(n), ar = $('arena'), box = rectOf(ar);
-  if (r && ar && box && !RM() && !HEADLESS){
-    const f = document.createElement('div');
-    f.className = 'killflash';
-    f.style.left = (r.left + r.width / 2 - box.left) + 'px';
-    f.style.top = (r.top + r.height / 2 - box.top) + 'px';
-    ar.appendChild(f);
-    at(340, () => { if (f.remove) f.remove(); });
-  }
-  if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 20,
-    (i) => (i % 2 ? '#ffd34d' : '#fff3c4'), { speed: 200, lift: 46, dur: 640 });
-  const app = $('app');
-  if (app && app.classList) anim(app, 'shk', 420);
-  const ar2 = $('arena');
-  if (ar2 && ar2.classList){ anim(ar2, 'shk', 420); anim(ar2, 'froze', 300); }
-  noise(0.26, { lp: 520, vol: 0.13 });
-  tone(160, 0.5, { type: 'sawtooth', vol: 0.09, glide: 48 });
-  duck(0.55, 420);
-}
-function applyEv(e, final){
-  if (!e) return;
-  if (e.k === 'clash'){
-    // the two halves of THAT floor lean into each other
-    const fn = floorNodeOf(e.a) || floorNodeOf(e.b);
-    if (fn && fn.querySelector){
-      anim(fn.querySelector('.half.us'), 'cls-r', 260);
-      anim(fn.querySelector('.half.them'), 'cls-l', 260);
-      anim(fn, 'clashlit', 300);
+  // the hand, redrawn only when it actually changes
+  const sig = F.hand.map((c) => c.id).join(',') + '|' + F.feed + '|' + (F.started ? 1 : 0);
+  if (sig !== F.handSig){
+    F.handSig = sig;
+    const h = $('hand');
+    h.innerHTML = '';
+    for (let k = F.hand.length; k < handCap(); k++){
+      const e = document.createElement('div');
+      e.className = 'card ghost';
+      e.innerHTML = '<div class="art"></div><div class="nm">&nbsp;</div>';
+      h.appendChild(e);
     }
-  } else if (e.k === 'wave'){
-    const g = $('gateLbl');
-    if (g) anim(g, 'wavein', 420);
-    sfxLand();
-  } else if (e.k === 'arrive'){
-    const n = nodeFor(e.uid);
-    if (n) anim(n, 'climbing', 420);
-  } else if (e.k === 'climb'){
-    // they move UP the tower: re-seat the tile on its new floor and land it
-    renderTower();
-    remarkFront();
-    const n = nodeFor(e.uid);
-    if (n) anim(n, 'climbing', 420);
-    const fn = floorNodeOf(e.uid);
-    if (fn) anim(fn, 'breached', 420);
-    tone(180 + e.to * 60, 0.09, { type: 'square', vol: 0.05 });
-  } else if (e.k === 'breach'){
-    // off the top and into the eggs
-    const nb = $('nestBar');
-    if (nb) anim(nb, 'bitten', 620);
-    flyer('-' + e.v, '#ff5d5d', $('nestEggs'), { size: 26, cls: 'crit' });
-    if ($('nestHp')) countUp($('nestHp'), e.hp, { dur: 420 });
-    const eggs = Math.max(0, Math.round(3 * e.hp / R.maxHp));
-    if ($('nestEggs')) $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
-    sfxHurt();
-    const app = $('app');
-    if (app) anim(app, 'hurt', 320);
-  } else if (e.k === 'strike'){
-    const n = nodeFor(e.uid);
-    if (n) anim(n, e.side === 'us' ? 'lungeUp' : 'lungeDown', 300);
-    sfxStrike(e.per);
-  } else if (e.k === 'hurt'){
-    const n = nodeFor(e.uid);
-    setUnitHp(n, e.uid, e.hp);
-    if (n){
-      anim(n, 'hurt', 320);
-      flyer('-' + e.dmg, e.thorns ? '#ffb0e0' : '#ff9d6b', n,
-        { size: 16 + Math.min(18, e.dmg), cls: e.dmg >= 8 ? 'crit' : '' });
-    }
-  } else if (e.k === 'die'){
-    const n = nodeFor(e.uid);
-    const u = unitByUid(e.uid);
-    if (u) u.valive = 0;
-    if (n){
-      anim(n, 'fall', 520);
-      if (n.classList) at(520, () => { if (n.classList) n.classList.add('gone'); });
-      if (final) killBlow(n);
-      else {
-        const r = rectOf(n);
-        if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 7, '#c9b48a',
-          { speed: 120, lift: 30 });
-      }
-    }
-    remarkFront(e.side);
-    sfxDie();
-  } else if (e.k === 'poison'){
-    const n = nodeFor(e.uid);
-    setUnitHp(n, e.uid, e.hp);
-    if (n) flyer('-' + e.v, '#b6ff8a', n, { size: 15 });
-  } else if (e.k === 'heal'){
-    if (F) F.vhp = e.hp;
-    flyer('+' + e.v, '#a6ff5e', $('fHp'), { size: 18 });
-    sfxHeal();
-    hpBar($('fHp'), $('fHpBar'));
-  } else if (e.k === 'trample'){
-    trampleHit(e);
-  } else if (e.k === 'end'){
-    const my = $('myLbl');
-    if (my) my.innerHTML = '';
-  }
-}
-/* --- the trample: a WOUND, not a number changing --------------------------
-   Losing up to a third of your ceiling used to read as less than culling a
-   beast. Now: the mix ducks, every survivor still standing walks over you on
-   a stagger (so you HEAR how many of them there were), the frame goes red,
-   and the bar drains in step with the number. */
-function trampleHit(e){
-  const app = $('app');
-  duck(0.6, 520);
-  const foe = $('foeLine');
-  const live = foe && foe.querySelectorAll ? foe.querySelectorAll('.ub:not(.gone)') : [];
-  const n = Math.min(4, live.length);
-  for (let i = 0; i < n; i++){
-    const tile = live[i];
-    at(i * 110, () => {
-      if (cur !== 'fight' || !F) return;
-      anim(tile, 'lungeDown', 360);
-      noise(0.1, { lp: 280, vol: 0.09 });
+    F.hand.forEach((c, i) => {
+      const el = cardEl(c);
+      if (c.cost > F.feed) el.classList.add('dead');
+      else el.onclick = () => {
+        if (playCardA(i)){ sfxLift(); drainArena(); F.handSig = ''; renderHud(); }
+        else sfxDeny();
+      };
+      h.appendChild(el);
     });
   }
-  at(n * 110 + 90, () => {
-    if (cur !== 'fight' || !F) return;
-    F.vhp = R.hp;                          // the wound lands HERE, not before it
-    if (app && app.classList){ anim(app, 'close', 640); anim(app, 'hurt', 300); }
-    sfxHurt();
-    const bar = $('fHpBar');
-    if (bar && bar.classList){
-      bar.classList.add('drain');
-      at(820, () => { if (bar.classList) bar.classList.remove('drain'); });
-    }
-    if (bar && bar.style) bar.style.width = (100 * R.hp / R.maxHp) + '%';
-    countUp($('fHp'), R.hp, { dur: 700 });
-    const wrap = bar && bar.parentNode;
-    if (wrap && wrap.classList) wrap.classList.toggle('danger', R.hp / R.maxHp < 0.3);
-    flyer('-' + e.v, '#ff5d5d', $('fHp'), { size: 34, cls: 'crit' });
-    if (R.hp > 0 && R.hp / R.maxHp < 0.3) startHeart();
-  });
+  const bt = $('bEnd');
+  if (bt){
+    const want = !F.started ? 'OPEN THE GATES' : (F.over ? 'CARRY ON' : 'HOLD THE NEST');
+    if (bt.textContent !== want){ bt.textContent = want; }
+    bt.disabled = !!(F.started && !F.over);
+    bt.className = 'btn sm' + (F.started && !F.over ? ' alt' : '');
+  }
 }
+function renderFight(){
+  if (!F){ startBattle(fightMods()); }
+  pitFx = [];
+  F.lblSig = F.feedSig = F.pileSig = '';
+  spriteCacheReset();
+  $('nestHp').textContent = R.hp;
+  const eggs = Math.max(0, Math.round(3 * R.hp / R.maxHp));
+  $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
+  pips($('fPips'));
+  const pb = $('pBadges'); pb.innerHTML = '';
+  if (R.hazard) pb.innerHTML += '<span class="bdg thn">' + R.hazard.name.toUpperCase() + '</span>';
+  F.handSig = '';
+  // one line of coaching, once, on the first pit you ever stand at
+  const co = $('coach');
+  if (co){
+    const first = !taught() && R.idx === 0;
+    co.hidden = !first;
+    if (first) co.innerHTML = 'Tap a card to send that beast <b>into the pit</b>. ' +
+      'Feed comes back on its own &mdash; spend it as it does.';
+  }
+  fitPit();
+  renderHud();
+  drawPit();
+  startLoop();
+}
+function spriteCacheReset(){ for (const k in spriteCache) delete spriteCache[k]; }
+/** Match the canvas to its box so the pit is crisp on a phone. */
+function fitPit(){
+  const cv = $('pit');
+  if (!cv || !cv.getBoundingClientRect) return;
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(80, Math.round(r.width * dpr)), h = Math.max(80, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+}
+
 /* A heart you can hear when the run is nearly over. Self-terminating: it stops
    the moment you are out of the red, and every beat is an at() timer, so
    leaving the screen kills it too. */
@@ -4003,51 +3801,6 @@ function startHeart(){
     at(1400, beat);
   };
   at(500, beat);
-}
-function unitByUid(uid){
-  if (!F) return null;
-  return F.mine.concat(F.theirs).filter((u) => u.uid === uid)[0] || null;
-}
-// Beats sized so a wave reads as an event: it arrives, floors trade, the dead
-// fall, whatever is left climbs. A whole wave lands in roughly 2-3 seconds.
-const BEAT = { wave: 420, arrive: 200, clash: 260, strike: 70, hurt: 150, die: 340,
-  poison: 170, heal: 150, climb: 380, breach: 560, trample: 760, end: 300 };
-/** The anticipation beat: the line is committed, and then nothing happens for a
- *  third of a second. That silence is what makes the first blow land. */
-const LEADIN = 320;
-function playBattle(list, out){
-  if (HEADLESS){ finishBattle(); return; }
-  let t = RM() ? 0 : LEADIN;
-  seq = { alive: 1 };
-  if (F) F.playing = 1;
-  // Paint the opening frame BEFORE the first beat: the wave that just walked in
-  // is on the board, and everyone is still standing, because vhp/valive have
-  // not been touched yet. Without this the tower kept showing the prep state.
-  renderFight();
-  const mine = seq;
-  // the killing blow gets a beat of its own — but only the one that WINS it.
-  // The kill that loses you the match is not a triumph; it gets the toll.
-  let won = false;
-  for (const e of list) if (e.k === 'end') won = !!e.won;
-  let lastDie = -1;
-  for (let i = 0; i < list.length; i++) if (list[i].k === 'die') lastDie = i;
-  const finalIdx = won ? lastDie : -1;
-  for (let i = 0; i < list.length; i++){
-    const e = list[i];
-    const d = BEAT[e.k] || 100;
-    const final = i === finalIdx;
-    at(t, () => { if (seq === mine && cur === 'fight') applyEv(e, final); });
-    // the frame dilates around the blow that decides it
-    t += RM() ? Math.min(40, d) : (final ? Math.round(d * 2.2) + 340 : d);
-    if (t > 9000) break;                      // never hold the player hostage
-  }
-  at(t + 240, () => { if (seq === mine) finishBattle(out); });
-}
-function seqFlush(){
-  if (verdictOn){ dismissVerdict(); return; }
-  if (!seq) return;
-  seq = null;
-  finishBattle();
 }
 /* --- THE VERDICT -----------------------------------------------------------
    The match used to just stop: the mid-line label swapped to "the field is
@@ -4073,8 +3826,8 @@ function showVerdict(){
   const box = $('fVerdict');
   if (!box || !F) return false;
   const won = F.over === 'win';
-  const alive = livingOf(F.mine).length;
-  const breached = F.breached || 0;   // what got past the top and at the eggs
+  const alive = F.units.filter((u) => u.alive && u.side === 'us').length;
+  const breached = F.breach || 0;     // eggs eaten by whatever got to the nest
   box.className = 'verdict' + (won ? ' win' : ' lose');
   box.hidden = false;
   // the round pip fills, then the streak lands — the run visibly compounds
@@ -4094,7 +3847,7 @@ function showVerdict(){
     (won ? (breached ? 'THE NEST HOLDS' : 'NOT ONE GOT THROUGH') : 'THEY TOOK THE NEST') + '</div>' +
     '<div class="vsub">' + (won
       ? (breached
-          ? '<b id="vTrample">0</b> &middot; ' + (alive ? alive + ' of yours still standing' : 'the barn is empty')
+          ? '<b id="vTrample">0</b> &middot; ' + (alive ? alive + ' of yours still standing' : 'the pit is empty')
           : (alive ? '<span class="ok">' + alive + '</span> of yours still standing'
                    : 'they died holding the door'))
       : 'the eggs are gone') +
@@ -4125,72 +3878,35 @@ function dismissVerdict(){
   hideVerdict();
   resolveFight();
 }
+/** The battle is a live simulation now, so there is nothing to "finish" — the
+ *  rAF loop calls endArena() the moment arenaTick() sets F.over. This is kept
+ *  as the single door into the verdict so every caller lands in one place. */
 function finishBattle(){
-  seq = null;
   if (!F) return;
-  // whether it played out or was skipped, the board now shows the real ending
-  for (const u of F.mine.concat(F.theirs)){ u.vhp = u.hp; u.valive = u.alive; }
-  F.vhp = R.hp;
-  F.playing = 0;
-  const ar = $('arena');
-  if (ar && ar.classList) ar.classList.remove('froze');
-  // A round is several waves. Only the LAST one gets a verdict; between waves
-  // you get the tower back, with whatever is coming already at the door.
-  if (!F.over){ betweenWaves(); return; }
-  renderFight();
-  // The verdict is INFORMATION, not motion — a reduced-motion player gets it
-  // too; the sheet above has already flattened everything that moves in it.
-  if (HEADLESS || !showVerdict()){ resolveFight(); return; }
+  if (!F.over){ startLoop(); return; }
+  endArena();
 }
-/** The commit. The bench slides out of frame, the reorder bars go, the fielded
- *  tiles pull into a tighter row and latch — then 320ms of silence before the
- *  first blow. This is the hinge the whole game turns on and it used to make
- *  the same noise as tapping a card. */
-function latchLine(){
-  if (HEADLESS) return;
-  noise(0.1, { lp: 300, vol: 0.1 });
-  tone(78, 0.3, { type: 'triangle', vol: 0.09, glide: 46 });
-  tone(220, 0.44, { at: 0.05, type: 'sine', vol: 0.05, glide: 440 });   // resolves on the first clash
-  if (RM()) return;
-  const pen = $('pen');
-  const tiles = pen && pen.querySelectorAll ? pen.querySelectorAll('.ub') : [];
-  for (let i = 0; i < tiles.length; i++){
-    const tile = tiles[i];
-    at(i * 70, () => { if (cur === 'fight') anim(tile, 'landing', 220); });
-  }
-}
-function beginBattle(){
-  if (F && F.playing){ seqFlush(); return; }
-  if (!F){
-    if (!planFlat().length || !planIsLegal()) return;   // the first commit needs someone
-    startBattle(fightMods());
-    R.line = planFlat();
-  } else {
-    deployPlan();                       // reinforcements walk in
-  }
-  F.phase = 'battle';
-  if (!livingOf(F.theirs).length || F.wave === 0) spawnWave();
-  const out = resolveWave();
-  const list = (F.events || []).slice();
-  F.events = [];
-  sfxLand && sfxLand();
-  playBattle(list, out);
-}
-/** Between waves you get the tower back for a moment. */
-function betweenWaves(){
-  if (!F || F.over) return;
-  F.phase = 'prep';
-  F.playing = 0;
-  purgeDead();                          // the bodies are cleared between waves
-  if (F.wave < F.waves) spawnWave();    // you can SEE what is coming before you spend
-  renderFight();
-}
-/** The one button: commit the placement, or skip the replay. */
+/** The one button. Before the doors open it says LET THEM IN; while the pit is
+ *  live it is the only way to hurry the verdict along. */
 function doEnd(){
-  if (seq){ seqFlush(); return; }
-  if (!F || F.phase === 'prep') beginBattle();
+  if (verdictOn){ dismissVerdict(); return; }
+  if (!F){ renderFight(); return; }
+  if (F.over){ endArena(); return; }
+  if (!F.started) openDoors();
 }
-function doPlay(){ /* nothing is played mid-wave */ }
+/** The gates open: the clock starts, Feed starts filling, they start arriving. */
+function openDoors(){
+  if (!F || F.started) return;
+  F.started = 1;
+  if (!HEADLESS){
+    noise(0.12, { lp: 300, vol: 0.1 });
+    tone(78, 0.32, { type: 'triangle', vol: 0.09, glide: 46 });
+    tone(220, 0.44, { at: 0.05, type: 'sine', vol: 0.05, glide: 440 });
+  }
+  startLoop();
+  renderHud();
+}
+function doPlay(){ /* cards are tapped in the hand; there is no separate play */ }
 
 function resolveFight(){
   if (!F) return;
@@ -4893,8 +4609,7 @@ function bind(){
   try {
     document.addEventListener('pointerdown', () => {
       ac();
-      if (seq) seqFlush();
-      else if (verdictOn) dismissVerdict();   // the overlay says "tap to carry on"
+      if (verdictOn) dismissVerdict();        // the overlay says "tap to carry on"
       else if (cur === 'hatch' && hatchSeq) hatchFlush();
     }, true);
   } catch (e){}
@@ -4914,27 +4629,27 @@ if (!HEADLESS) boot();
 window.BB = {
   get R(){ return R; }, get F(){ return F; },
   newRun, setNest, deckForFight,
+  // the arena
+  startBattle, arenaTick, runBattle, playCardA, drawInto, spawnUnit, hurtUnit, killUnit,
+  swingAt2, nearestFoe, unitMightA, unitHide, unitSpeed, unitSwing, buildSpawns, waveCount,
+  makeEnemyTeam, teamSize, waveSize, inheritCost, appetite, feedWeight, statPower, cardHide, cardDamage,
+  C2: { AW, AH, GATE_X, DOOR_X, NEST_X, BASE_SPEED, BASE_RANGE, BASE_SWING,
+        FEED_MAX, FEED_START, FEED_EVERY, HAND_SIZE_A, DRAW_DELAY, SPAWN_GAP, WAVE_GAP,
+        AOE_R, STUN_T, RECOVER, CORPSE_T },
   // the autobattler surface
-  setLine, lineIsLegal, lineCost, lineBudget, canField, toggleField, moveInLine,
-  // the tower
-  FLOORS, FLOOR_CAP, EXCHANGES_PER_WAVE, waveCount, emptyPlan, planFlat, floorOf,
-  canPlace, firstFreeFloor, placeBeast, unplace, planIsLegal, deployPlan, reflow,
-  spawnWave, resolveWave, fightFloor, clearDead, floorMates,
-  makeEnemyTeam, teamSize, startBattle, resolveBattle, frontOf, livingOf, unitMight, TRAMPLE_CAP,
-  hitUnit, swing, tickPoison, unitOf, LINE_SLOTS, MAX_EXCHANGES,
   winFight, keepChick, breedLitter, takeWild, retire, mustCull, bestBeast, cardById, uniquifyName,
   rollHazard, toggleHazard, setRitual, ritualCost, vetVisit, fightMods, pedigree, studAdd,
   saveFounder, loadFounder, applyFounder,
   get STUD(){ return STUD; },
-  beastMight, cardHide, cardDamage, statPower,
   breed, shareBlood, geneRoll, blendHue, wildCard, makeCard, starterDeck,
-  spawnCard, junkCard, deriveCost, statPower, power, cardDamage, makeFoe, feedFor,
+  spawnCard, junkCard, deriveCost, power, makeFoe,
   srand, rng, shuffle,
   TRAITS, FOES, MUT_TRAITS, BAD_TRAITS, SYL_A, SYL_B, RITUALS, RITUAL_IDS, HAZARDS,
-  C: { RUN_LEN, MAX_DECK, START_HP, FEED, HAND_SIZE, WILD_AFTER, MAX_PEN,
+  C: { RUN_LEN, MAX_DECK, START_HP, FEED, HAND_SIZE, WILD_AFTER,
        SLOP_PER_WIN, SLOP_PER_CHICK, VET_COST, VET_HEAL, HAZARD_PAY },
-  ui: { drawBeast, drawFoe, vform, gridCols, cardEl, unitEl, slotEl, renderLine, renderPen, show, renderNest, renderFight, goHatch, goWild,
-        goCull, goOver, renderTitle, boot, intentText, flyer, doPlay, beginBattle, playBattle, applyEv, seqFlush, doEnd, resolveFight,
+  ui: { drawBeast, drawFoe, vform, gridCols, cardEl, show, renderNest, renderFight, goHatch, goWild,
+        goCull, goOver, renderTitle, boot, flyer, doPlay, doEnd, openDoors, finishBattle, resolveFight,
+        drawPit, renderHud, spriteFor, endArena, showVerdict, dismissVerdict,
         taught, markTaught,
         revealLitter, chickBanners, showChickDetail, renderRituals, get picked(){ return pickedChick; },
         setPicked(i){ pickedChick = i; }, goBook, renderBook, treeNode,

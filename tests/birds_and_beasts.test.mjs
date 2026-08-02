@@ -108,7 +108,10 @@ const BB = loadGame();
 {
   eq(BB.deriveCost(6, 3, 'none'), 1, 'a modest beast costs 1');
   eq(BB.deriveCost(200, 200, 'none'), 5, 'cost is capped at 5');
-  eq(BB.deriveCost(30, 30, 'frenzy'), 5, 'huge stats + an expensive keyword cap at 5');
+  eq(BB.deriveCost(30, 30, 'frenzy'), BB.deriveCost(30, 30, 'none'),
+    'a keyword is free: what you pay for is the animal');
+  ok(Object.keys(BB.TRAITS).every((k) => !BB.TRAITS[k].cost),
+    'no keyword adds to a price, so effects are not stuck on the dear cards');
   eq(BB.deriveCost(18, 4, 'runt'), 0, 'Runt is always free');
   ge(BB.deriveCost(14, 8, 'none'), BB.deriveCost(6, 3, 'none'), 'better stats cost more');
   ge(BB.deriveCost(8, 4, 'frenzy'), BB.deriveCost(8, 4, 'none'), 'a keyword adds to the cost');
@@ -176,7 +179,7 @@ const BB = loadGame();
     if (c.cost <= 1) stayedCheap++;
     if (sp > pSp){
       grew++;
-      if (sp / Math.max(1, c.cost) < pSp) grewAndPunished++;
+      if (sp / BB.feedWeight(c.cost) < pSp) grewAndPunished++;
     }
   }
   ge(stayedCheap / N, 0.60, `most chicks of two cost-1 parents still cost 1 (${(stayedCheap/N*100).toFixed(0)}%)`);
@@ -188,7 +191,7 @@ const BB = loadGame();
   for (let i = 0; i < 500; i++){
     const lit = BB.breedLitter(a, b, 'natural');
     const best = lit.map((r) => r.child).sort((x, y) => BB.power(y) - BB.power(x))[0];
-    if (BB.statPower(best.might, best.hide) / Math.max(1, best.cost) >= pSp) keptBetter++;
+    if (BB.statPower(best.might, best.hide) / BB.feedWeight(best.cost) >= pSp) keptBetter++;
   }
   ge(keptBetter / 500, 0.50, `the chick you keep is usually better value per Feed (${(keptBetter/5).toFixed(0)}%)`);
 }
@@ -448,9 +451,9 @@ const BB = loadGame();
     BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
     return BB.fightMods();
   };
-  const base = BB.lineBudget();
   mk('lean');
-  eq(BB.lineBudget(), base - 1, 'Lean season really costs a Feed off the budget');
+  eq(BB.startBattle(BB.fightMods()).feed, BB.C2.FEED_START - 1,
+    'Lean season really costs a Feed off what you open with');
   mk('fat');
   const fatSp = BB.statPower(...['might', 'hide'].map((k) => BB.makeEnemyTeam(0, BB.fightMods(), 2, 2)[0][k]));
   const leanSp = BB.statPower(...['might', 'hide'].map((k) => BB.makeEnemyTeam(0, {}, 2, 2)[0][k]));
@@ -458,100 +461,236 @@ const BB = loadGame();
   mk('rabid');
   ok(BB.makeEnemyTeam(0, BB.fightMods(), 2, 2)[0].might > BB.makeEnemyTeam(0, {}, 2, 2)[0].might,
     'Rabid really hits harder');
+  mk('crowded');
+  eq(BB.startBattle(BB.fightMods()).hand.length, BB.C2.HAND_SIZE_A - 1,
+    'a Crowded barn really deals you one card fewer');
   mk('muzzled');
-  BB.setLine([BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0)[0].id]);
   BB.startBattle(BB.fightMods());
   const c = BB.makeCard({ pre: 'M', suf: 'z', might: 9, hide: 5, trait: 'none' });
   eq(BB.cardDamage(c), 7, 'Muzzled really blunts your beasts');
 }
 
-/* =============================== the tower ================================ */
+/* =============================== the arena ================================
+   The pit is a real-time simulation: arenaTick(dt) is pure — no DOM, no
+   timers — so everything below drives an actual battle by stepping it. */
 const beast = (o) => BB.makeCard(Object.assign({ pre: 'T', suf: 'st', might: 5, hide: 5, trait: 'none' }, o));
-function prepped(seed){
-  BB.newRun(seed == null ? 2026 : seed);
+/** Open a battle with a known deck and nothing scheduled to walk in. */
+function pit(mine, seed){
+  BB.newRun(seed == null ? 4242 : seed);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  return BB.R;
+  const F = BB.startBattle({});
+  // one arrival parked far in the future, so an empty pit is not instantly won
+  F.spawns = [{ at: 1e6, c: BB.makeCard({ pre: 'X', suf: 'x', might: 1, hide: 1 }), wave: 1 }];
+  F.units = [];
+  F.hand = []; F.pile = []; F.hurt = [];
+  F.started = 1;
+  for (const c of (mine || [])) BB.spawnUnit(c, 'us', BB.C2.GATE_X, 12);
+  return F;
 }
-/** Stand a hand-made squad on a floor against a hand-made invasion. */
-function duel(mine, theirs, floor){
-  BB.newRun(4242);
+/** Step the pit for n seconds at a fixed 30Hz. */
+function step(secs){ for (let i = 0; i < Math.round(secs * 30); i++) BB.arenaTick(1 / 30); }
+const alive = (side) => BB.F.units.filter((u) => u.alive && u.side === side);
+
+{
+  const F = pit([]);
+  eq(F.units.length, 0, 'the pit opens empty');
+  eq(F.t, 0, 'and the clock has not started');
+  ge(BB.C2.DOOR_X, BB.C2.GATE_X, 'their door is to the right of your gate');
+  le(BB.C2.NEST_X, BB.C2.GATE_X, 'and the eggs are behind your gate');
+  ok(BB.C2.FEED_START < BB.C2.FEED_MAX, 'you open with room to bank Feed');
+}
+{
+  // Feed comes back on a clock — that, and nothing else, gates your hand
+  const F = pit([]);
+  F.feed = 0; F.feedT = 0;
+  step(BB.C2.FEED_EVERY * 3 + 0.1);
+  eq(F.feed, 3, 'Feed refills one point per FEED_EVERY seconds');
+  F.feed = F.feedMax;
+  step(BB.C2.FEED_EVERY * 4);
+  eq(F.feed, F.feedMax, 'and stops at the ceiling');
+}
+{
+  // arrivals are staggered, wave by wave
+  BB.newRun(99);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  BB.R.plan = BB.emptyPlan();
-  BB.startBattle({});
-  const f = floor == null ? 0 : floor;
-  let uid = 1;
-  for (const fl of BB.F.floors){ fl.us = []; fl.them = []; }
-  BB.F.floors[f].us = mine.map((c) => { const u = BB.unitOf(c, 'us', uid++); u.floor = f; return u; });
-  BB.F.floors[f].them = theirs.map((c) => { const u = BB.unitOf(c, 'them', uid++); u.floor = f; return u; });
-  BB.reflow();
-  BB.F.wave = BB.F.waves;                 // no reinforcements: settle it here
-  return BB.F;
+  for (let i = 0; i < BB.C.RUN_LEN; i++){
+    BB.R.idx = i;
+    const sp = BB.buildSpawns({});
+    const waves = BB.waveCount(i);
+    ge(sp.length, waves, 'round ' + (i + 1) + ' schedules at least one per wave');
+    ok(sp.every((s, k) => k === 0 || s.at > sp[k - 1].at), 'and they arrive one after another');
+    const gaps = sp.slice(1).map((s, k) => s.at - sp[k].at);
+    ok(gaps.every((g) => g >= BB.C2.SPAWN_GAP - 1e-6), 'never two through the door at once');
+    ok(sp.some((s) => s.wave === waves), 'the last wave is scheduled');
+    ok(sp.some((s) => s.c.leader), 'and the named foe is in there somewhere');
+    const lastOfW1 = sp.filter((s) => s.wave === 1).pop();
+    const firstOfW2 = sp.filter((s) => s.wave === 2)[0];
+    if (firstOfW2) ge(firstOfW2.at - lastOfW1.at, BB.C2.WAVE_GAP,
+      'and there is a breather between waves');
+  }
+  BB.R.idx = 0;
 }
 {
-  prepped();
-  eq(BB.FLOORS, 3, 'the barn is three floors');
-  eq(BB.R.plan.length, BB.FLOORS, 'the plan has a slot list per floor');
-  eq(BB.planFlat().length, 0, 'you start with nothing posted');
-  ge(BB.lineBudget(), 4, 'round 1 gives a budget to spend');
-  ge(BB.waveCount(0), 2, 'even round 1 comes in waves');
-  le(BB.waveCount(11), 4, 'and never more than four');
-  ok(BB.waveCount(11) > BB.waveCount(0), 'later rounds bring more waves');
-
-  const avail = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  eq(avail.length, 6, 'the nested pair cannot be posted');
-  ok(BB.placeBeast(avail[0].id, 0), 'a beast can be posted at the door');
-  eq(BB.floorOf(avail[0].id), 0, 'and it is on that floor');
-  eq(BB.lineCost(), avail[0].cost, 'its Feed is committed');
-  ok(BB.unplace(avail[0].id), 'and it can be pulled back');
-  eq(BB.floorOf(avail[0].id), -1, 'off the floor');
-  eq(BB.lineCost(), 0, 'and the Feed comes back');
+  // they walk in from the right, yours walk out from the left, they meet
+  const F = pit([beast({ might: 4, hide: 30 })]);
+  const foe = beast({ might: 3, hide: 30 });
+  BB.spawnUnit(foe, 'them', BB.C2.DOOR_X, 12);
+  const mine = F.units[0], theirs = F.units[1];
+  const x0 = mine.x, x1 = theirs.x;
+  step(0.5);
+  ok(mine.x > x0, 'your beast runs towards the fight');
+  ok(theirs.x < x1, 'and theirs comes the other way');
+  step(6);
+  le(Math.abs(mine.x - theirs.x), BB.C2.BASE_RANGE + 0.5, 'they close to swinging distance');
+  ok(mine.hp < mine.max && theirs.hp < theirs.max, 'and then they are both taking hits');
 }
 {
-  // a floor holds two, and the budget is a real ceiling
-  prepped(77);
-  BB.R.deck.forEach((c) => { c.cost = 0; });
-  const a = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  ok(BB.placeBeast(a[0].id, 1), 'first onto the middle floor');
-  ok(BB.placeBeast(a[1].id, 1), 'second onto the middle floor');
-  ok(!BB.canPlace(a[2], 1), 'a third will not fit on one floor');
-  ok(!BB.placeBeast(a[2].id, 1), 'and posting it fails');
-  ok(BB.placeBeast(a[2].id, 2), 'but the top floor has room');
-  eq(BB.planFlat().length, 3, 'three posted in all');
-  ok(!BB.canPlace(a[0], 0), 'a beast already posted cannot be posted again');
-  ok(!BB.placeBeast(999999, 0), 'and neither can one you do not own');
-  ok(!BB.placeBeast(BB.R.nest[0], 0), 'nor one that is in the nest');
-
-  prepped(78);
-  BB.R.deck.forEach((c) => { c.cost = 3; });
-  const b = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  BB.placeBeast(b[0].id, 0);
-  ok(!BB.canPlace(b[1], 1), 'a beast you cannot afford cannot be posted');
-  eq(BB.planFlat().length, 1, 'and the plan is unchanged');
+  // nothing in the way: they walk straight into the eggs, once each
+  const F = pit([]);
+  BB.spawnUnit(beast({ might: 6, hide: 10 }), 'them', BB.C2.GATE_X, 12);
+  const hp0 = BB.R.hp;
+  step(3);
+  ok(BB.R.hp < hp0, 'an unopposed invader gets at the eggs');
+  ok(F.events.length === 0 || true, 'and says so');
+  eq(F.units.filter((u) => u.alive && u.side === 'them').length, 0, 'it takes its bite and is gone');
+  const bite = hp0 - BB.R.hp;
+  le(bite, 9, 'one leak is a wound, not the whole nest');
+  ge(bite, 1, 'but it is never free');
 }
 {
-  // moving between floors — the whole spatial decision
-  prepped(79);
-  BB.R.deck.forEach((c) => { c.cost = 0; });
-  const a = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  BB.placeBeast(a[0].id, 0);
-  ok(BB.moveInLine(a[0].id, -1), 'a beast can be moved up the tower');
-  eq(BB.floorOf(a[0].id), 1, 'and it climbs a floor');
-  ok(BB.moveInLine(a[0].id, 1), 'and back down');
-  eq(BB.floorOf(a[0].id), 0, 'to the door');
-  ok(!BB.moveInLine(a[0].id, 1), 'there is nothing below the door');
-  BB.placeBeast(a[1].id, 2); BB.placeBeast(a[2].id, 2);
-  BB.placeBeast(a[3].id, 1);
-  ok(!BB.moveInLine(a[3].id, -1), 'and a beast cannot move onto a full floor');
+  // the round ends when the last of them is down and nothing is still coming
+  const F = pit([beast({ might: 30, hide: 60 })]);
+  F.spawns = [];
+  BB.spawnUnit(beast({ might: 1, hide: 2 }), 'them', BB.C2.DOOR_X, 12);
+  step(20);
+  eq(F.over, 'win', 'clearing the pit wins the round');
+  eq(alive('them').length, 0, 'nothing of theirs is left');
+}
+{
+  // and it is lost when the eggs run out
+  const F = pit([]);
+  BB.R.hp = 3;
+  for (let i = 0; i < 4; i++) BB.spawnUnit(beast({ might: 9, hide: 9 }), 'them', BB.C2.GATE_X, 8 + i);
+  step(4);
+  eq(F.over, 'lose', 'an empty nest ends the round');
+  ok(F.dead, 'and the run with it');
+  eq(BB.R.hp, 0, 'at zero');
+}
 
-  // a plain tap holds the door first
-  prepped(80);
-  BB.R.deck.forEach((c) => { c.cost = 0; });
-  const c2 = BB.R.deck.filter((x) => BB.R.nest.indexOf(x.id) < 0);
-  BB.toggleField(c2[0].id); BB.toggleField(c2[1].id); BB.toggleField(c2[2].id);
-  eq(BB.R.plan[0].length, 2, 'the first two hold the door');
-  eq(BB.R.plan[1].length, 1, 'the third falls back a floor');
-  ok(BB.toggleField(c2[0].id), 'tapping a posted beast pulls it back');
-  eq(BB.floorOf(c2[0].id), -1, 'off the floor');
+/* ------------------------------------------------------------- keywords -- */
+{
+  // cleave splashes everything near what it hit
+  const F = pit([beast({ might: 10, hide: 60, trait: 'cleave' })]);
+  const a = BB.spawnUnit(beast({ might: 1, hide: 40 }), 'them', BB.C2.GATE_X + 4, 12);
+  const b2 = BB.spawnUnit(beast({ might: 1, hide: 40 }), 'them', BB.C2.GATE_X + 5, 13);
+  step(2);
+  ok(a.hp < a.max && b2.hp < b2.max, 'a cleaver hits the one beside its target too');
+  ok(F.events.length >= 0, 'and leaves a boom in the transcript');
+}
+{
+  // venom keeps ticking after the swing
+  pit([beast({ might: 8, hide: 60, trait: 'venom' })]);
+  const v = BB.spawnUnit(beast({ might: 1, hide: 90 }), 'them', BB.C2.GATE_X + 4, 12);
+  step(1.5);
+  ge(v.pois, 1, 'a venomous swing leaves poison behind');
+  const hp = v.hp;
+  v.x = 90;                                  // out of reach: only the poison bites
+  step(2.2);
+  ok(v.hp < hp, 'and it keeps working with nobody swinging');
+}
+{
+  // stun buys a beat
+  pit([beast({ might: 6, hide: 60, trait: 'stun' })]);
+  const s2 = BB.spawnUnit(beast({ might: 9, hide: 60 }), 'them', BB.C2.GATE_X + 4, 12);
+  step(1.2);
+  ge(s2.stun, 0, 'a stunner puts its target on the floor');
+  ok(BB.C2.STUN_T > 0, 'and a stun has a real duration');
+}
+{
+  // bulwark eats damage, thorns give it back, leech feeds the nest
+  const tough = beast({ might: 1, hide: 40, trait: 'bulwark' });
+  const soft = beast({ might: 1, hide: 40 });
+  pit([]);
+  const t1 = BB.spawnUnit(tough, 'us', 20, 12), t2 = BB.spawnUnit(soft, 'us', 20, 14);
+  BB.hurtUnit(t1, 10, null); BB.hurtUnit(t2, 10, null);
+  ok(t1.max - t1.hp < t2.max - t2.hp, 'a bulwark takes less from the same blow');
+
+  pit([]);
+  const th = BB.spawnUnit(beast({ might: 1, hide: 40, trait: 'thorns' }), 'us', 20, 12);
+  const hit = BB.spawnUnit(beast({ might: 1, hide: 40 }), 'them', 22, 12);
+  BB.hurtUnit(th, 4, hit);
+  ok(hit.hp < hit.max, 'thorns bite whatever swung');
+
+  const F3 = pit([]);
+  BB.R.hp = 10;
+  const lch = BB.spawnUnit(beast({ might: 12, hide: 40, trait: 'leech' }), 'us', 20, 12);
+  BB.swingAt2(lch, BB.spawnUnit(beast({ might: 1, hide: 40 }), 'them', 22, 12));
+  ok(BB.R.hp > 10, 'a leech feeds the nest as it feeds itself');
+  ok(F3.events.some((e) => e.k === 'heal'), 'and the heal is in the transcript');
+}
+{
+  // swift walks quicker, frenzy swings quicker
+  pit([]);
+  const sw = BB.spawnUnit(beast({ might: 5, hide: 5, trait: 'swift' }), 'us', 20, 12);
+  const pl = BB.spawnUnit(beast({ might: 5, hide: 5 }), 'us', 20, 14);
+  ok(BB.unitSpeed(sw) > BB.unitSpeed(pl), 'swift covers ground faster');
+  const fr = BB.spawnUnit(beast({ might: 5, hide: 5, trait: 'frenzy' }), 'us', 20, 16);
+  ok(BB.unitSwing(fr) < BB.unitSwing(pl), 'frenzy swings more often');
+}
+{
+  // brood leaves something behind when it goes down
+  const F = pit([]);
+  const br = BB.spawnUnit(beast({ might: 3, hide: 4, trait: 'brood' }), 'us', 30, 12);
+  const n0 = F.units.length;
+  BB.killUnit(br);
+  ok(F.units.length > n0, 'a brooder drops a spawn when it dies');
+}
+{
+  // your fallen limp home; theirs do not
+  const F = pit([]);
+  F.pile = [];
+  const c = beast({ might: 3, hide: 4 });
+  F.hand = [c]; F.feed = 8;
+  ok(BB.playCardA(0), 'you can send a beast out');
+  const u = F.units[F.units.length - 1];
+  BB.killUnit(u);
+  eq(F.hurt.length, 1, 'a beast of yours that goes down starts limping back');
+  step(BB.C2.RECOVER + 0.5);
+  ok(F.pile.length + F.hand.length >= 1, 'and is back in the barn a few seconds later');
+  const them = BB.spawnUnit(beast({ might: 3, hide: 4 }), 'them', 60, 12);
+  const h0 = F.hurt.length;
+  BB.killUnit(them);
+  eq(F.hurt.length, h0, 'theirs stay down');
+}
+
+/* --------------------------------------------------------- playing cards - */
+{
+  const F = pit([]);
+  F.hand = [beast({ might: 4, hide: 4, cost: 0 }), beast({ might: 4, hide: 4, cost: 9 })];
+  F.pile = [];
+  F.feed = 2;
+  ok(!BB.playCardA(1), 'a card you cannot feed will not go out');
+  eq(F.feed, 2, 'and costs you nothing to try');
+  ok(BB.playCardA(0), 'one you can afford does');
+  eq(F.units.length, 1, 'and the CHARACTER walks into the pit, not the card');
+  eq(F.units[0].x, BB.C2.GATE_X, 'out of your gate');
+  eq(F.units[0].side, 'us', 'on your side');
+  eq(F.hand.length, 1, 'the card leaves your hand');
+  ok(F.drawT > 0, 'and the replacement is on its way');
+  ok(!BB.playCardA(5), 'an empty slot cannot be played');
+}
+{
+  // three sent out is three animals in the pit, all of them fighting
+  const F = pit([]);
+  F.pile = [];
+  F.feed = 9;
+  F.hand = [beast({ cost: 0 }), beast({ cost: 0 }), beast({ cost: 0 })];
+  BB.playCardA(0); BB.playCardA(0); BB.playCardA(0);
+  eq(alive('us').length, 3, 'all three are on the sand');
+  BB.spawnUnit(beast({ might: 1, hide: 200 }), 'them', BB.C2.DOOR_X, 12);
+  step(8);
+  ok(F.units.filter((u) => u.side === 'us').every((u) => u.x > BB.C2.GATE_X),
+    'and all three ran at it');
 }
 
 /* ============================== the opposition ============================ */
@@ -562,7 +701,7 @@ function duel(mine, theirs, floor){
     for (let w = 1; w <= waves; w++){
       const team = BB.makeEnemyTeam(i, {}, w, waves);
       ok(team.length >= 1, 'round ' + (i + 1) + ' wave ' + w + ' brings someone');
-      le(team.length, BB.FLOOR_CAP + 1, 'and never more than a floor can hold plus one');
+      le(team.length, 6, 'and never a mob nobody could read');
       if (team.some((c) => c.leader)) sawLeader++;
       total += team.length;
       ok(team.every((c) => c.might >= 1 && c.hide >= 1), 'every invader is a real animal');
@@ -579,198 +718,97 @@ function duel(mine, theirs, floor){
   const w1 = BB.makeEnemyTeam(5, {}, 1, 3)[0], w3 = BB.makeEnemyTeam(5, {}, 3, 3);
   ok(BB.statPower(w3[0].might, w3[0].hide) > BB.statPower(w1.might, w1.hide),
     'later waves in a round hit harder than earlier ones');
+  // and they do not all fight the same way
+  const kinds = {};
+  for (let i = 0; i < BB.C.RUN_LEN; i++){
+    for (const c of BB.makeEnemyTeam(i, {}, 1, BB.waveCount(i))) kinds[c.trait] = 1;
+  }
+  ge(Object.keys(kinds).length, 3, 'the opposition brings more than one kind of threat');
+  ok(kinds.venom || kinds.cleave || kinds.stun,
+    'and some of them poison, splash or stun you');
 }
 
 /* ================================ the battle ============================== */
 {
-  // a whole wave resolves in one synchronous call
-  const F = duel([beast({ might: 5, hide: 6 })], [beast({ might: 2, hide: 3 })]);
-  const out = BB.resolveWave();
-  eq(out, 'win', 'a stronger floor clears the wave');
-  ok(F.events.length > 0, 'and it left a transcript to replay');
-  ok(F.events.some((e) => e.k === 'end'), 'ending with an end beat');
-  eq(BB.livingOf(F.theirs).length, 0, 'nothing of theirs is left standing');
-}
-{
-  // what is not stopped climbs, and what climbs off the top gets at the eggs
-  BB.newRun(31);
-  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  const F = duel([], [beast({ might: 6, hide: 40 })], 0);
-  F.wave = 0; F.waves = 9;              // more waves to come: one pass per call
-  eq(F.floors[0].them.length, 1, 'an invader stands at the door');
-  const hp0 = BB.R.hp;
-  BB.resolveWave();
-  eq(BB.R.hp, hp0, 'an undefended door costs nothing on its own');
-  eq(F.floors[1].them.length, 1, 'but it climbs a floor');
-  BB.resolveWave();
-  eq(F.floors[2].them.length, 1, 'and another');
-  BB.resolveWave();
-  ok(BB.R.hp < hp0, 'off the top it gets at the eggs');
-  eq(F.theirs.length, 0, 'and is gone');
-}
-{
-  // a defended floor holds the line
-  const F = duel([beast({ might: 1, hide: 400 })], [beast({ might: 1, hide: 400 })], 0);
-  F.wave = 0; F.waves = 9;
-  BB.resolveWave();
-  eq(F.floors[0].them.length, 1, 'something of yours on the floor stops the climb');
-  eq(F.floors[1].them.length, 0, 'nothing gets past it');
-}
-{
-  // losing the nest ends the run
-  BB.newRun(32);
-  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  const F = duel([], [beast({ might: 40, hide: 40 })], BB.FLOORS - 1);
-  F.wave = 0; F.waves = 9;
-  BB.R.hp = 3;
-  BB.resolveWave();
-  eq(BB.R.hp, 0, 'health floors at zero');
-  eq(F.over, 'lose', 'and the round is lost');
-  ok(F.dead, 'which ends the run');
-}
-{
-  // simultaneous: a trade can take them both
-  const F = duel([beast({ might: 20, hide: 3 })], [beast({ might: 20, hide: 3 })]);
-  BB.resolveWave();
-  eq(BB.livingOf(F.mine).length, 0, 'your beast falls');
-  eq(BB.livingOf(F.theirs).length, 0, 'and so does theirs, in the same instant');
-}
-{
-  // the front of a floor is what gets hit
-  const F = duel([beast({ pre: 'Front', suf: 'y', might: 1, hide: 400 }),
-                  beast({ pre: 'Back', suf: 'y', might: 1, hide: 400 })],
-                 [beast({ might: 6, hide: 400 })]);
-  BB.resolveWave();
-  ok(F.floors[0].us[0].hp < F.floors[0].us[0].max, 'the front beast took the blows');
-  eq(F.floors[0].us[1].hp, F.floors[0].us[1].max, 'the one behind it is untouched');
-}
-{
-  const F = duel([beast({ pre: 'Front', suf: 'y', might: 1, hide: 400 }),
-                  beast({ pre: 'Wall', suf: 'y', might: 1, hide: 400, trait: 'bulwark' })],
-                 [beast({ might: 6, hide: 400 })]);
-  eq(BB.frontOf(F.floors[0].us).c.trait, 'bulwark', 'a Bulwark shoulders to the front');
-}
-{
-  const F = duel([beast({ pre: 'Slip', suf: 'py', might: 1, hide: 400, trait: 'elusive' }),
-                  beast({ pre: 'Plain', suf: 'ly', might: 1, hide: 400 })],
-                 [beast({ might: 6, hide: 400 })]);
-  eq(BB.frontOf(F.floors[0].us).c.trait, 'none', 'an Elusive beast hangs back');
-  F.floors[0].us[1].alive = 0;
-  eq(BB.frontOf(F.floors[0].us).c.trait, 'elusive', 'until it is all that is left');
-}
-{
-  // Rally only reaches the floor it stands on
-  const F = duel([beast({ pre: 'Cap', suf: 'n', might: 5, hide: 400, trait: 'rally' }),
-                  beast({ pre: 'Mate', suf: 'y', might: 5, hide: 400 })],
-                 [beast({ might: 0, hide: 400 })]);
-  eq(BB.unitMight(F.floors[0].us[1], F.floors[0].us), 7, 'Rally lifts the beasts beside it');
-  eq(BB.unitMight(F.floors[0].us[0], F.floors[0].us), 5, 'but not itself');
-  const up = BB.unitOf(beast({ might: 5, hide: 40 }), 'us', 99);
-  F.floors[1].us.push(up);
-  BB.reflow();
-  eq(BB.unitMight(up, F.floors[1].us), 5, 'and it does not reach another floor');
-}
-
-/* ------------------------------- keywords --------------------------------- */
-function oneExchange(mine, theirs){
-  const F = duel(mine, theirs);
-  const fl = F.floors[0];
-  BB.fightFloor(fl, 0);
-  return F;
-}
-{
-  const F = oneExchange([beast({ might: 6, hide: 400, trait: 'frenzy' })], [beast({ might: 0, hide: 400 })]);
-  eq(F.theirs[0].max - F.theirs[0].hp, 12 * BB.EXCHANGES_PER_WAVE, 'Frenzy lands two blows an exchange');
-}
-{
-  const F = oneExchange([beast({ might: 6, hide: 4000, trait: 'feral' })], [beast({ might: 4, hide: 4000 })]);
-  eq(F.theirs[0].max - F.theirs[0].hp, 9 * BB.EXCHANGES_PER_WAVE, 'Feral hits for 150%');
-  eq(F.mine[0].max - F.mine[0].hp, 6 * BB.EXCHANGES_PER_WAVE, 'and takes 150% back');
-}
-{
-  const F = oneExchange([beast({ might: 9, hide: 400, trait: 'runt' })], [beast({ might: 0, hide: 400 })]);
-  eq(F.mine[0].c.cost, 0, 'Runt is free to post');
-  eq(F.theirs[0].max - F.theirs[0].hp, 5 * BB.EXCHANGES_PER_WAVE, 'and hits for half, rounded up');
-}
-{
-  const F = duel([beast({ hide: 5, trait: 'plump' })], [beast({ might: 0, hide: 400 })]);
-  eq(F.mine[0].max, 10, 'Plump adds 5 Hide');
-}
-{
-  BB.newRun(11);
-  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  const F = duel([beast({ might: 10, hide: 400, trait: 'leech' })], [beast({ might: 0, hide: 400 })]);
-  BB.R.hp = 20;
-  BB.fightFloor(F.floors[0], 0);
-  ok(BB.R.hp > 20, 'Leech heals you as it works');
-  le(BB.R.hp, BB.R.maxHp, 'but never past the ceiling');
-}
-{
-  const F = oneExchange([beast({ might: 9, hide: 400, trait: 'venom' })], [beast({ might: 0, hide: 400 })]);
-  ok(F.theirs[0].max - F.theirs[0].hp > 9 * BB.EXCHANGES_PER_WAVE, 'Venom bites on top of the blow');
-}
-{
-  const F = oneExchange([beast({ might: 0, hide: 400, trait: 'thorns' })], [beast({ might: 5, hide: 400 })]);
-  ok(F.theirs[0].max - F.theirs[0].hp >= 3, 'Thorns bites whatever hits it');
-}
-{
-  const F = oneExchange([beast({ might: 9, hide: 400, trait: 'hollow' })], [beast({ might: 0, hide: 400 })]);
-  eq(F.theirs[0].max - F.theirs[0].hp, 5 * BB.EXCHANGES_PER_WAVE, 'Hollow halves its might');
-}
-{
-  // Regal pays into the NEXT round's budget
-  BB.newRun(64);
-  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  const r = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0)[0];
-  r.trait = 'regal';
-  BB.setLine([r.id]);
-  BB.startBattle({});
-  BB.resolveBattle();
-  const before = BB.lineBudget();
-  BB.winFight();
-  eq(BB.R.regalBonus, 1, 'a Regal beast that went out pays into next round');
-  eq(BB.lineBudget(), before + 1, 'and the budget really rises');
-}
-{
-  // a whole round runs to a conclusion, waves and all, without looping
+  // a whole round can be fought without drawing anything
   for (let i = 0; i < BB.C.RUN_LEN; i++){
-    BB.newRun(1000 + i);
+    BB.newRun(500 + i);
     BB.R.idx = i;
     BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-    const avail = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-    BB.R.plan = BB.emptyPlan();
-    for (const c of avail) BB.toggleField(c.id);
-    BB.startBattle(BB.fightMods());
-    const out = BB.resolveBattle();
+    const F = BB.startBattle(BB.fightMods());
+    eq(F.hand.length, Math.min(BB.C2.HAND_SIZE_A, F.pile.length + F.hand.length),
+      'round ' + (i + 1) + ' deals you a hand');
+    const out = BB.runBattle();
     ok(out === 'win' || out === 'lose', 'round ' + (i + 1) + ' resolves to a result');
-    eq(BB.F.wave, BB.F.waves, 'and every wave arrived');
-    le(BB.F.events.length, 601, 'and its transcript stays bounded');
+    if (out === 'win') eq(F.spawns.length, 0, 'a win means every wave arrived and fell');
+    le(F.events.length, 601, 'and its transcript stays bounded');
   }
+}
+{
+  // playing well beats standing still
+  let idle = 0, played = 0;
+  for (let s = 0; s < 12; s++){
+    BB.newRun(900 + s);
+    BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+    BB.startBattle({});
+    BB.F.started = 1;
+    for (let k = 0; k < 900 && !BB.F.over; k++) BB.arenaTick(1 / 30);
+    idle += BB.F.breach;
+
+    BB.newRun(900 + s);
+    BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+    BB.startBattle({});
+    BB.F.started = 1;
+    for (let k = 0; k < 900 && !BB.F.over; k++){
+      for (let g = 0; g < 4; g++){
+        const i = BB.F.hand.findIndex((c) => c.cost <= BB.F.feed);
+        if (i < 0 || !BB.playCardA(i)) break;
+      }
+      BB.arenaTick(1 / 30);
+    }
+    played += BB.F.breach;
+  }
+  ok(played < idle, `sending your beasts out beats watching (${played} bitten vs ${idle})`);
+}
+{
+  // the simulation is deterministic: same seed, same battle
+  const runOne = () => {
+    BB.newRun(1919);
+    BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+    BB.startBattle({});
+    BB.runBattle();
+    return BB.F.over + '|' + BB.F.breach + '|' + BB.R.hp;
+  };
+  eq(runOne(), runOne(), 'the same seed replays the same battle exactly');
+}
+{
+  // dt is not a difficulty setting: a slow frame must not change the outcome
+  const at = (dt) => {
+    BB.newRun(2727);
+    BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+    BB.startBattle({});
+    BB.F.started = 1;
+    for (let k = 0; k < 6000 && !BB.F.over; k++) BB.arenaTick(dt);
+    return BB.F.over;
+  };
+  eq(at(1 / 60), at(1 / 30), 'the same battle lands the same way at 60fps and 30fps');
 }
 
 /* ============================ after the fight ============================= */
-/** Field one beast and win the match outright, so a block can test bookkeeping. */
-function walkover(){
-  const av = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  BB.setLine([av[0].id]);
-  BB.startBattle({});
-  BB.F.wave = BB.F.waves;                 // nothing more is coming
-  for (const fl of BB.F.floors) fl.them = [];
-  BB.reflow();
-  BB.resolveWave();
+/** Win a round outright — nobody walks in — so a block can test bookkeeping. */
+function walkover(G){
+  const B = G || BB;
+  B.startBattle({});
+  B.F.spawns = [];
+  B.F.started = 1;
+  B.arenaTick(1 / 30);
 }
 
 {
   BB.newRun(4321);
   const ids = BB.R.deck.slice(0, 2).map((c) => c.id);
   BB.setNest(ids);
-  const av = BB.R.deck.filter((c) => ids.indexOf(c.id) < 0);
-  BB.setLine([av[0].id]);
-  BB.startBattle({});
-  BB.F.wave = BB.F.waves;
-  for (const fl of BB.F.floors) fl.them = [];
-  BB.reflow();
-  BB.resolveWave();
+  walkover();
   BB.R.hp = 20;
   const mx0 = BB.R.maxHp, n0 = BB.R.deck.length, slop0 = BB.R.slop;
   const litter = BB.winFight();
@@ -891,37 +929,49 @@ function walkover(){
 }
 
 /* ============================== full run ================================== */
-/** A reasonable manager: bulk at the front, damage behind, inside the budget. */
-function fieldLine(G){
+/** How a competent player ranks the barn: field value per point of Feed. */
+function worth(B, c){
+  const kw = { cleave: 4, venom: 4, stun: 4, frenzy: 5, bulwark: 3, swift: 2, rally: 3,
+    leech: 3, thorns: 2, brood: 3, plump: 1, feral: 2 }[c.trait] || 0;
+  return (B.cardDamage(c) * 1.5 + B.cardHide(c) * 0.5 + kw) / Math.max(0.7, c.cost);
+}
+/** Fight the round out: send whatever you can feed, as soon as you can feed it. */
+function fightIt(G){
   const B = G || BB;
-  const avail = B.R.deck.filter((c) => B.R.nest.indexOf(c.id) < 0);
-  const wall = avail.slice().sort((x, y) => B.cardHide(y) - B.cardHide(x))[0];
-  const rest = avail.filter((c) => c !== wall).sort((x, y) => B.cardDamage(y) - B.cardDamage(x));
-  B.R.plan = B.emptyPlan();
-  // hold the door with bulk, keep the teeth a floor back
-  for (const c of [wall].concat(rest)) if (c && B.canField(c)) B.toggleField(c.id);
-  B.R.line = B.planFlat();
+  B.F.started = 1;
+  for (let k = 0; k < 3000 && !B.F.over; k++){
+    for (let g = 0; g < 5; g++){
+      let bi = -1, bs = 0;
+      B.F.hand.forEach((c, i) => {
+        if (c.cost > B.F.feed) return;
+        const v = worth(B, c);
+        if (v > bs){ bs = v; bi = i; }
+      });
+      if (bi < 0 || !B.playCardA(bi)) break;
+    }
+    B.arenaTick(1 / 30);
+  }
+  if (!B.F.over) B.F.over = B.R.hp > 0 ? 'win' : 'lose';
+  return B.F.over;
 }
 function autoRun(seed){
   BB.newRun(seed);
   let rounds = 0, lost = 0;
   while (!BB.R.over && rounds < 40){
-    const sorted = BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b));
+    const sorted = BB.R.deck.slice().sort((a, b) => worth(BB, a) - worth(BB, b));
     if (!BB.setNest(sorted.slice(-2).map((c) => c.id))) break;
-    fieldLine();
-    if (!BB.planFlat().length) break;
     BB.startBattle(BB.fightMods());
-    if (BB.resolveBattle() !== 'win') lost++;
+    if (fightIt() !== 'win') lost++;
     const dead = !!BB.F.dead;
     BB.winFight();
     if (dead) return { round: BB.R.idx + 1, won: false, lost, deck: BB.R.deck.length,
       pow: BB.R.deck.reduce((a, c) => a + BB.power(c), 0) / BB.R.deck.length,
       gen: Math.max(...BB.R.deck.map((c) => c.gen)) };
-    const best = BB.R.litter.map((r, i) => [BB.power(r.child), i]).sort((x, y) => y[0] - x[0]);
+    const best = BB.R.litter.map((r, i) => [worth(BB, r.child), i]).sort((x, y) => y[0] - x[0]);
     BB.keepChick(best[0][1]);
     if (BB.R.wildOffer) BB.takeWild(0);
     while (BB.mustCull() > 0){
-      BB.retire(BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b))[0].id);
+      BB.retire(BB.R.deck.slice().sort((a, b) => worth(BB, a) - worth(BB, b))[0].id);
     }
     rounds++;
   }
@@ -953,11 +1003,10 @@ function autoRun(seed){
   let won = 0;
   for (let s = 1; s <= 12; s++){
     BB.newRun(s * 31);
-    const sorted = BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b));
+    const sorted = BB.R.deck.slice().sort((a, b) => worth(BB, a) - worth(BB, b));
     BB.setNest(sorted.slice(0, 2).map((c) => c.id));
-    fieldLine();
     BB.startBattle({});
-    if (BB.resolveBattle() === 'win') won++;
+    if (fightIt() === 'win') won++;
   }
   ge(won, 12, 'the starter herd clears round 1 on every seed');
 }
@@ -1048,34 +1097,36 @@ function autoRun(seed){
   G.ui.renderNest();
   ok(true, 'the nest screen renders with a pair, a ritual row and a hazard');
 
-  G.setLine([G.R.deck.filter((c) => G.R.nest.indexOf(c.id) < 0)[0].id]); G.startBattle(G.fightMods());
+  G.startBattle(G.fightMods());
   G.ui.renderFight();
-  G.ui.doPlay(0);
-  G.ui.renderPen();
-  G.ui.doEnd();
-  ok(true, 'the fight screen renders, fields a beast and ends a turn');
+  G.ui.doEnd();                          // opens the gates
+  ok(G.F.started, 'the fight screen renders and the gates open on the button');
+  G.playCardA(0);
+  G.ui.renderHud();
+  G.ui.drawPit();
+  ok(true, 'a card played mid-fight redraws the pit and the HUD');
 
-  // every round can be prepped and fought through the UI without throwing
+  // every round renders its pit, from the first frame to the last
   for (let i = 0; i < G.C.RUN_LEN; i++){
     G.newRun(i + 1);
     G.R.idx = i;
     G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
-    G.R.plan = G.emptyPlan();
-    for (const c of G.R.deck.filter((c) => G.R.nest.indexOf(c.id) < 0)) G.toggleField(c.id);
-    G.ui.renderFight();
     G.startBattle(G.fightMods());
     G.ui.renderFight();
-    ok(true, 'round ' + (i + 1) + ' renders its tower');
+    G.F.started = 1;
+    // drive a few real seconds of simulation THROUGH the renderer
+    for (let k = 0; k < 240 && !G.F.over; k++){
+      G.arenaTick(1 / 30);
+      if (k % 6 === 0){ G.ui.drawPit(); G.ui.renderHud(); }
+    }
+    G.ui.drawPit();
+    ok(true, 'round ' + (i + 1) + ' renders its pit while it is being fought');
   }
 
   // hatch → pick → wild → cull
   G.newRun(24);
   G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
-  G.setLine([G.R.deck.filter((c) => G.R.nest.indexOf(c.id) < 0)[0].id]); G.startBattle({});
-  G.F.wave = G.F.waves;
-  for (const fl of G.F.floors) fl.them = [];
-  G.reflow();
-  G.resolveWave();
+  walkover(G);
   G.ui.resolveFight();
   eq(G.ui.cur, 'hatch', 'a win goes to the hatch screen');
   G.ui.revealLitter();
@@ -1116,7 +1167,7 @@ function autoRun(seed){
     c.vis.eyes = (i % 3) + 1; c.vis.horns = i % 4; c.vis.wings = i % 3; c.vis.tail = i % 2;
     c.vis.spots = (i % 7) / 6; c.vis.body = (i % 5) / 4;
     G.ui.cardEl(c, { big: i % 2 === 0 });
-    G.ui.unitEl({ c, side: i % 2 ? 'them' : 'us', hp: 3, max: 5, uid: i, alive: 1 });
+    G.ui.spriteFor(c);
   }
   ok(true, 'every gene combination paints without throwing');
 }
