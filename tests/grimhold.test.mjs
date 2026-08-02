@@ -3143,6 +3143,7 @@ t.test('chests: the room only asks the question when there is a chest to ask it 
 t.test('chests: searching a room with a chest in it goes through the chest', () => {
   runAt(3);
   const rid = 4;
+  HQ.G.q.rtrait.fill(null);        // a hoarded room doubles gold; these are chest tests
   HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
   const c = chestAt(rid);
   emptyRoom(rid);
@@ -3179,6 +3180,7 @@ t.test('chests: forcing one pays twice, and turns anything else into coin', () =
 t.test('chests: easing one open is the search you have always had', () => {
   runAt(3);
   const rid = 4;
+  HQ.G.q.rtrait.fill(null);        // a hoarded room doubles gold; these are chest tests
   HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
   const c = chestAt(rid);
   const h = HQ.runAlive()[0];
@@ -3227,6 +3229,7 @@ t.test('chests: forcing one either pays double or goes badly, and the odds are t
 t.test('chests: from the second floor down, the chest may not be a chest', () => {
   runAt(4);
   const rid = 4;
+  HQ.G.q.rtrait.fill(null);        // a hoarded room doubles gold; these are chest tests
   HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
   const c = chestAt(rid);
   const h = HQ.runAlive()[0];
@@ -6408,6 +6411,145 @@ t.test('carry: a hero with somebody on their shoulder shows it', () => {
   t.ok(painted(held, '#7a6a58'), 'the shape goes on the shoulder');
   t.ok(painted(held, 'rgba(20,18,16,.5)'), 'over a dark backing, so it reads on a lit floor');
   t.ok(painted(held, 'rgba(232,186,96,.9)'), 'and an amber rim, like every other cost on this board');
+});
+
+/* ---------------------------------------------------------- room traits */
+
+// A floor with a chosen trait on a chosen room, and nothing else in the way.
+function traitRoom(rid, id, depth){
+  themedRun(null, depth || 5);
+  HQ.G.q.rtrait.fill(null);
+  HQ.G.q.rtrait[rid] = id;
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  return HQ.ROOMS[rid];
+}
+
+t.test('traits: the table says what each one is, and some tempt while some warn', () => {
+  t.ok(HQ.ROOM_TRAITS.length >= 4, 'there are traits to draw from');
+  for (const tr of HQ.ROOM_TRAITS){
+    t.ok(tr.id && tr.ic && tr.name && tr.desc, `${tr.id} says what it is`);
+    t.eq(typeof tr.good, 'boolean', `${tr.id} knows whether it tempts or warns`);
+  }
+  t.ok(HQ.ROOM_TRAITS.some(x => x.good), 'some are worth walking into');
+  t.ok(HQ.ROOM_TRAITS.some(x => !x.good), 'and some are not — a trait you always want is not a decision');
+  t.ok(!HQ.THEMES.some(th => HQ.ROOM_TRAITS.some(x => x.id === th.id)), 'no trait is also a whole-floor theme');
+});
+
+t.test('traits: they land on rooms, but never where there is no choice to make', () => {
+  let withTrait = 0, rooms = 0, bad = 0;
+  for (let i = 0; i < 8; i++){
+    themedRun(null, 6);
+    const start = HQ.roomAt(HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+    const goal = HQ.G.q.def.objective && HQ.G.q.def.objective.room;
+    for (const r of HQ.ROOMS){
+      rooms++;
+      const id = HQ.roomTraitOf(r.id);
+      if (!id) continue;
+      withTrait++;
+      if (!HQ.RTRAIT(id)) bad++;
+      if (r.id === start || r.id === goal) bad++;
+    }
+  }
+  t.ok(withTrait > 0, 'traits turn up');
+  t.ok(withTrait < rooms, 'but not on every room');
+  t.eq(bad, 0, 'never the room you start beside, never the objective room');
+});
+
+t.test('traits: HALLOWED is worth retreating into', () => {
+  const rid = 4, r = traitRoom(rid, 'hallowed');
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  t.ok(HQ.roomAt(12,9) !== rid, 'standing outside it');
+  const out = HQ.defendDice(h);
+  put(h, r.x, r.y);
+  t.eq(HQ.roomAt(r.x,r.y), rid, 'and now inside it');
+  t.eq(HQ.defendDice(h), out + 1, 'HALLOWED is worth one more defend die');
+  t.ok(HQ.inTrait(h, 'hallowed'), 'and the hero knows where they are standing');
+  t.ok(!HQ.inTrait(h, 'choked'), 'and what they are not standing in');
+});
+
+t.test('traits: CHOKED is worth pulling them out of', () => {
+  const rid = 4, r = traitRoom(rid, 'choked');
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  const out = HQ.attackDice(h, null);
+  put(h, r.x, r.y);
+  t.eq(HQ.attackDice(h, null), out - 1, 'CHOKED costs an attack die');
+  // never down to nothing — a hero with one die still throws it
+  h.weapon = 'dagger';
+  t.ok(HQ.attackDice(h, null) >= 1, 'but never below one die');
+});
+
+t.test('traits: HOARDED pays a search twice, and only gold', () => {
+  const rid = 4;
+  traitRoom(rid, null);
+  HQ.G.q.vault = -1;               // a vault room deals its own fixed card, not the deck's
+  const plain = HQ.drawCard(rid, HQ.runAlive()[0]);
+  traitRoom(rid, 'hoarded');
+  HQ.G.q.vault = -1;
+  HQ.G.q.deckAt = 0;
+  let sawGold = false, doubled = 0, tries = 0;
+  // walk the deck: every gold card in a hoarded room pays double its face
+  for (let i = 0; i < HQ.TREASURE_DECK.length; i++){
+    HQ.G.q.rtrait[rid] = null; HQ.G.q.deckAt = i;
+    const a = HQ.drawCard(rid, HQ.runAlive()[0]);
+    HQ.G.q.rtrait[rid] = 'hoarded'; HQ.G.q.deckAt = i;
+    const b = HQ.drawCard(rid, HQ.runAlive()[0]);
+    tries++;
+    if (a.k === 'gold'){ sawGold = true; if (b.n === a.n*2) doubled++; else doubled = -99; }
+    else if (b.k !== a.k || b.n !== a.n) doubled = -99;   // nothing else may change
+  }
+  t.ok(tries > 0, 'the deck has cards in it');
+  t.ok(sawGold, 'and gold among them');
+  t.ok(doubled > 0, 'every gold card pays double in a hoarded room, and nothing else changes');
+  t.ok(plain, 'a plain room still deals normally');
+});
+
+t.test('traits: WATCHED makes everything you do twice as loud', () => {
+  // one floor, one room, searched twice — regenerating between the two halves
+  // gives them different decks and different rooms, and then the two numbers
+  // are not measuring the same thing
+  const rid = 4, r = traitRoom(rid, null);
+  HQ.G.q.vault = -1;
+  HQ.G.q.deck = [0];
+  for (const m of HQ.monstersOf()) if (HQ.roomAt(m.x,m.y) === rid) m.alive = false;
+  const h = HQ.runAlive()[0];
+
+  const searchOnce = () => {
+    put(h, r.x, r.y); use(h);
+    HQ.G.q.searched[rid] = 0; HQ.G.q.deckAt = 0;
+    const w0 = HQ.G.q.wrath;
+    HQ.searchTreasure();
+    return HQ.G.q.wrath - w0;
+  };
+
+  HQ.G.q.rtrait[rid] = null;
+  const quiet = searchOnce();
+  t.ok(quiet > 0, 'rummaging always stirs him a little');
+
+  HQ.G.q.rtrait[rid] = 'watched';
+  t.eq(searchOnce(), quiet + 3, 'and three more of him in a watched room — the rummaging counts double');
+
+  // and back off again when you leave
+  HQ.G.q.rtrait[rid] = null;
+  t.eq(searchOnce(), quiet, 'a plain room is quiet again');
+});
+
+t.test('traits: a room you have opened wears its trait on the floor', () => {
+  const rid = 4;
+  traitRoom(rid, null);
+  HQ.G.q.roomSeen.fill(1); HQ.G.q.seen.fill(1);
+  const clean = paintOf(() => HQ.draw());
+  t.ok(!paintedLike(clean, /^rgba\(110,200,130,[\d.]+\)$/), 'a plain room paints no trait');
+
+  HQ.G.q.rtrait[rid] = 'hallowed';
+  t.ok(paintedLike(paintOf(() => HQ.draw()), /^rgba\(110,200,130,[\d.]+\)$/), 'one that tempts is painted green');
+  HQ.G.q.rtrait[rid] = 'choked';
+  t.ok(paintedLike(paintOf(() => HQ.draw()), /^rgba\(200,110,90,[\d.]+\)$/), 'one that warns is painted hot');
+
+  // and a room nobody has opened keeps it to itself
+  HQ.G.q.roomSeen.fill(0);
+  t.ok(!paintedLike(paintOf(() => HQ.draw()), /^rgba\(200,110,90,[\d.]+\)$/), 'an unopened room shows nothing');
 });
 
 t.run();
