@@ -1,0 +1,901 @@
+// Twin Fists — headless combat + progression suite.
+//
+// twin_fists/index.html is one self-contained file made of several inline
+// <script> blocks that share a scope. This harness concatenates them, stubs a
+// no-op DOM plus a 2d context, injects a test-only expose hook (never shipped)
+// and evals the result — then drives the real combat resolution, grabs,
+// weapons, AI, waves, stage flow and lives through the actual game code.
+// draw() is exercised on every stage and every fighter state, so render-time
+// errors fail here rather than on somebody's phone.
+// Run: node tests/twin_fists.test.mjs
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const HTML = path.join(__dirname, '..', 'twin_fists', 'index.html');
+
+let passed = 0, failed = 0;
+function test(name, fn){ try { fn(); passed++; } catch (e){ failed++; console.error(`FAIL ${name}: ${e.message}`); } }
+function assert(cond, msg){ if (!cond) throw new Error(msg || 'assertion failed'); }
+function near(a, b, eps, msg){ if (Math.abs(a - b) > eps) throw new Error(`${msg || 'not near'}: ${a} vs ${b}`); }
+
+const BOOT_TAIL = `loadMeta();
+bindInput();
+bindUI();
+fit();
+syncUI();
+toTitle();
+requestAnimationFrame(loop);`;
+
+const EXPOSE = `__out.api = {
+  G, cam, W, INPUT, KEYS, STAGES, ATK, ENEMY, DIFF, WEAPON, SKINS, A, FONT, MUSIC, snd, SFX,
+  VW, VH, FLOOR_TOP, FLOOR_BOT, FLOOR_MID, GRAV, STEP, BODY_H, HIT_DEPTH, SAVE_KEY,
+  get fighters(){ return fighters; }, set fighters(v){ fighters = v; },
+  get items(){ return items; }, set items(v){ items = v; },
+  get fx(){ return fx; }, get players(){ return players; },
+  getT: () => T, setT: (v) => { T = v; },
+  reseed, rng, clamp, lerp, sign,
+  mkFighter, spawnPlayer, spawnEnemy, mkItem, pickUp, throwItem, breakItem, itemUnderfoot,
+  startAttack, attackTick, applyHit, knockDown, knockOut, tryGrab, throwHeld, releaseHold, breakFree,
+  updateFighter, playerControl, aiControl, separate, updateItems, updateFx, updateWaves,
+  updateDeaths, updateCamera, respawnPlayer, doContinue, tokensOut, tokenCap, foeBehind, nearestFoe,
+  liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep,
+  startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
+  togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
+  pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen,
+  _ctxCounts: null,
+};
+`;
+
+function makeSandbox(opts){
+  opts = opts || {};
+  const counts = {};
+  const gradient = { addColorStop(){} };
+  const ctxStub = new Proxy({}, {
+    get(t, p){
+      if (p === 'measureText') return () => ({ width: 30 });
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => gradient;
+      if (p === 'canvas') return { width: 384, height: 224 };
+      if (typeof p === 'string' && p !== 'then' && !(p in t))
+        return (...args) => { counts[p] = (counts[p] || 0) + 1; };
+      return t[p];
+    },
+    set(t, p, v){ t[p] = v; return true; },
+  });
+  const el = () => ({
+    style: {}, textContent: '', innerHTML: '', width: 0, height: 0, className: '',
+    getContext: () => ctxStub,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 384, height: 224 }),
+    addEventListener(){}, removeEventListener(){}, removeAttribute(){}, setAttribute(){},
+    querySelectorAll: () => [], querySelector: () => null,
+    classList: { add(){}, remove(){}, toggle(){}, contains: () => false },
+  });
+  const canvas = el();
+  const nodes = {};
+  const store = Object.assign({}, opts.store || {});
+  const sandbox = {
+    document: {
+      getElementById: (id) => (id === 'c' ? canvas : (nodes[id] || (nodes[id] = el()))),
+      createElement: () => el(),
+    },
+    window: { innerWidth: 960, innerHeight: 560, devicePixelRatio: 1, addEventListener(){} },
+    localStorage: {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+      removeItem: (k) => { delete store[k]; },
+    },
+    requestAnimationFrame: () => {},
+    __out: {},
+  };
+  return { sandbox, store, counts, nodes, canvas };
+}
+
+let SRC = null;
+function source(){
+  if (SRC) return SRC;
+  const html = fs.readFileSync(HTML, 'utf8');
+  const blocks = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  if (blocks.length < 5) throw new Error('expected the game to be split across several inline scripts');
+  const src = blocks.join('\n');
+  if (!src.includes(BOOT_TAIL)) throw new Error('boot tail anchor missing from game script');
+  SRC = src.replace(BOOT_TAIL, EXPOSE + BOOT_TAIL);
+  return SRC;
+}
+
+function boot(opts){
+  const { sandbox, store, counts } = makeSandbox(opts);
+  new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', source())(
+    sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
+  const api = sandbox.__out.api;
+  api._store = store;
+  api._counts = counts;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; };
+  api.reseed(4242);
+  return api;
+}
+
+const step = (api, secs, dt) => { dt = dt || api.STEP; const n = Math.round(secs / dt); for (let i = 0; i < n; i++) api.update(dt); };
+
+/* Runs a fighter's own update loop in isolation (no waves, no camera). */
+function stepFighter(api, f, secs){
+  const n = Math.round(secs / api.STEP);
+  for (let i = 0; i < n; i++) api.updateFighter(f, api.STEP);
+}
+
+/* Puts the game into a live stage with the intro card skipped. */
+function play(api, opts){
+  opts = opts || {};
+  api.G.players = opts.players || 1;
+  api.G.diff = opts.diff == null ? 1 : opts.diff;
+  api.G.stage = opts.stage || 0;
+  api.G.score = [0, 0];
+  api.G.lives = [3, 3];
+  api.G.contT = 0;
+  api.startStage();
+  api.G.phase = 'play';
+  api.G.cardT = 0;
+  return api.players[0];
+}
+
+/* Strips the street back to just the players so a test owns the field. */
+function clearField(api){
+  api.fighters = api.fighters.filter(f => f.team === 'p');
+  api.items = [];
+  api.W.queue = [];
+  api.W.active = false;
+  api.W.gi = api.STAGES[api.G.stage].gates.length;
+  api.cam.lock = -1;
+}
+
+/* ------------------------------------------------------------------ boot */
+test('boots to the title screen without throwing', () => {
+  const api = boot();
+  assert(api.G.phase === 'title', 'phase should be title, got ' + api.G.phase);
+  assert(api.STAGES.length === 5, 'five stages');
+  assert(api.players.length === 0 || api.players.every(p => !p), 'no players before start');
+});
+
+test('font covers every glyph the game prints', () => {
+  const api = boot();
+  const used = new Set(' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:!?-\'/.,'.split(''));
+  for (const ch of used) assert(api.FONT[ch], 'missing glyph: ' + JSON.stringify(ch));
+  for (const s of api.STAGES){
+    for (const ch of (s.name + s.sub).toUpperCase()) assert(api.FONT[ch], 'stage text needs glyph ' + ch);
+  }
+  for (const k in api.ENEMY) for (const ch of api.ENEMY[k].name) assert(api.FONT[ch], 'enemy name needs glyph ' + ch);
+  assert(api.textW('ABC', 1) === 17, 'text width math');
+});
+
+test('every attack table entry is internally consistent', () => {
+  const api = boot();
+  for (const k in api.ATK){
+    const a = api.ATK[k];
+    assert(a.seq && a.seq.length, k + ' needs a frame sequence');
+    const end = a.seq[a.seq.length - 1][1];
+    assert(a.hit[0] < a.hit[1], k + ' hit window must be forward');
+    assert(a.hit[1] <= end + 1e-9, k + ' hit window must end inside the move');
+    assert(a.dmg > 0 && a.reach > 0, k + ' needs damage and reach');
+    assert(api.A[a.anim], k + ' references a missing animation: ' + a.anim);
+  }
+  for (const k in api.ENEMY){
+    const e = api.ENEMY[k];
+    assert(api.SKINS[e.skin], k + ' references a missing skin');
+    for (const atk of e.atks) assert(api.ATK[atk], k + ' references a missing attack ' + atk);
+  }
+});
+
+/* --------------------------------------------------------------- combat */
+test('a jab lands once, damages, and does not knock down', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 115, api.FLOOR_MID, -1);
+  const hp0 = e.hp;
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.3);
+  assert(e.hp < hp0, 'jab should damage: ' + hp0 + ' -> ' + e.hp);
+  assert(e.hp === hp0 - api.ATK.jab.dmg, 'jab damage should be exactly the table value');
+  assert(!api.isDown(e), 'a jab alone should not knock down');
+  assert(p.state !== 'attack', 'the swing should have finished');
+});
+
+test('the third punch of the combo is the one that puts them down', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.face = 1; p.y = api.FLOOR_MID;
+  const e = api.spawnEnemy('bruiser', 116, api.FLOOR_MID, -1);
+  e.armorLeft = 0; e.hp = 200; e.hpMax = 200;
+  const keys = ['jab', 'cross', 'hook'];
+  const downs = [];
+  for (const k of keys){
+    e.state = 'idle'; e.stun = 0; e.chain = 0;
+    api.startAttack(p, k);
+    stepFighter(api, p, api.ATK[k].seq[api.ATK[k].seq.length - 1][1] + 0.05);
+    downs.push(api.isDown(e));
+  }
+  assert(downs[0] === false && downs[1] === false, 'the first two punches only stagger');
+  assert(downs[2] === true, 'the hook knocks down');
+});
+
+test('an attack cannot hit the same target twice in one swing', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.face = 1;
+  const e = api.spawnEnemy('punk', 114, api.FLOOR_MID, -1);
+  e.hp = 500; e.hpMax = 500;
+  const hp0 = e.hp;
+  api.startAttack(p, 'kick');
+  stepFighter(api, p, 0.5);
+  assert(hp0 - e.hp === api.ATK.kick.dmg, 'kick should land exactly once, lost ' + (hp0 - e.hp));
+});
+
+test('a punch misses when the target stands in a different depth lane', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_TOP + 2; p.face = 1;
+  const e = api.spawnEnemy('punk', 114, api.FLOOR_BOT - 2, -1);
+  const hp0 = e.hp;
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.3);
+  assert(e.hp === hp0, 'depth separation should make the punch whiff');
+});
+
+test('an attack behind you whiffs, but the elbow is picked for it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.face = 1; p.y = api.FLOOR_MID;
+  const e = api.spawnEnemy('punk', 86, api.FLOOR_MID, 1);
+  assert(api.foeBehind(p) === e, 'the enemy is behind the player');
+  const hp0 = e.hp;
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.3);
+  assert(e.hp === hp0, 'a forward jab should not reach behind');
+  api.startAttack(p, 'elbow');
+  stepFighter(api, p, 0.4);
+  assert(e.hp < hp0, 'the elbow hits backwards');
+});
+
+test('a body on the floor can be stomped, and only ground moves reach it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 112, api.FLOOR_MID, -1);
+  e.hp = 300; e.hpMax = 300;
+  api.knockDown(e, 1, 0, 0);
+  for (let i = 0; i < 30; i++) api.updateFighter(e, api.STEP);
+  assert(e.state === 'lie', 'the enemy is on the floor, got ' + e.state);
+  const hp0 = e.hp;
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.3);
+  assert(e.hp === hp0, 'a standing jab passes over a body on the floor');
+  assert(api.INPUT[0] && true, 'input exists');
+  api.startAttack(p, 'stomp');
+  stepFighter(api, p, 0.45);
+  assert(e.hp < hp0, 'the stomp connects');
+  clearField(api);
+  const up = api.spawnEnemy('punk', 112, api.FLOOR_MID, -1);
+  const uhp = up.hp;
+  api.startAttack(p, 'stomp');
+  stepFighter(api, p, 0.45);
+  assert(up.hp === uhp, 'and a stomp does not hit somebody standing');
+});
+
+test('the punch button picks the stomp when you stand over a body', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 110, api.FLOOR_MID, -1);
+  api.knockDown(e, 1, 0, 0);
+  for (let i = 0; i < 30; i++) api.updateFighter(e, api.STEP);
+  const inp = api.INPUT[0];
+  inp.pa = 1; inp.a = 1;
+  api.playerControl(p, inp, api.STEP);
+  inp.pa = 0; inp.a = 0;
+  assert(p.atkKey === 'stomp', 'punch became a stomp, got ' + p.atkKey);
+});
+
+test('the whirl hits both sides and costs the player health', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.face = 1; p.y = api.FLOOR_MID; p.hp = 100;
+  const left = api.spawnEnemy('punk', 132, api.FLOOR_MID, 1);
+  const right = api.spawnEnemy('punk', 168, api.FLOOR_MID, -1);
+  api.startAttack(p, 'whirl');
+  assert(p.hp === 100 - api.ATK.whirl.cost, 'whirl costs health up front');
+  stepFighter(api, p, 0.7);
+  assert(left.hp < left.hpMax && right.hp < right.hpMax, 'whirl hits on both sides');
+  assert(api.isDown(left) && api.isDown(right), 'whirl knocks down');
+});
+
+test('a jump kick knocks down and the jump lands cleanly', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.face = 1; p.state = 'jump'; p.z = 20; p.vz = 120;
+  const e = api.spawnEnemy('punk', 118, api.FLOOR_MID, -1);
+  p.y = e.y;
+  api.startAttack(p, 'jumpkick');
+  stepFighter(api, p, 1.2);
+  assert(api.isDown(e) || e.dead, 'jump kick knocks down');
+  near(p.z, 0, 0.001, 'player returns to the floor');
+  assert(p.state === 'idle' || p.state === 'walk', 'player recovers after landing, got ' + p.state);
+});
+
+test('armour eats a light hit but never a heavy one', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.face = 1; p.y = api.FLOOR_MID;
+  const e = api.spawnEnemy('bruiser', 116, api.FLOOR_MID, -1);
+  const armor0 = e.armorLeft;
+  assert(armor0 >= 1, 'bruisers carry armour');
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.3);
+  assert(e.armorLeft === armor0 - 1, 'the light hit burns a point of armour');
+  assert(!api.isDown(e) && e.state !== 'hurt', 'armour means no flinch');
+  const hp1 = e.hp;
+  api.startAttack(p, 'hook');
+  stepFighter(api, p, 0.5);
+  assert(e.hp < hp1 && api.isDown(e), 'a heavy hit goes through armour');
+});
+
+test('blocking cuts the damage down', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.face = 1; p.y = api.FLOOR_MID;
+  const open = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+  api.startAttack(p, 'jab'); stepFighter(api, p, 0.3);
+  const openLoss = open.hpMax - open.hp;
+  clearField(api);
+  const guard = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+  guard.state = 'block'; guard.blockT = 1;
+  api.startAttack(p, 'jab'); stepFighter(api, p, 0.3);
+  const guardLoss = guard.hpMax - guard.hp;
+  assert(guardLoss < openLoss, `block should reduce damage: ${guardLoss} vs ${openLoss}`);
+});
+
+test('difficulty scales enemy damage against the player, not the other way', () => {
+  const api = boot();
+  const loss = [];
+  for (const d of [0, 2]){
+    play(api, { diff: d }); clearField(api);
+    const p = api.players[0];
+    p.x = 120; p.y = api.FLOOR_MID; p.invuln = 0;
+    const e = api.spawnEnemy('punk', 106, api.FLOOR_MID, 1);
+    e.face = 1;
+    api.startAttack(e, 'swipe');
+    stepFighter(api, e, 0.4);
+    loss.push(p.hpMax - p.hp);
+  }
+  assert(loss[1] > loss[0], `hard should hurt more: ${loss[1]} vs ${loss[0]}`);
+});
+
+/* ---------------------------------------------------------------- grabs */
+test('walking into an enemy grabs them, knees hold them, kick throws them', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 110, api.FLOOR_MID, -1);
+  assert(api.tryGrab(p, e), 'grab should take');
+  assert(p.state === 'hold' && e.state === 'held' && e.holder === p, 'both sides enter the hold');
+  const hp0 = e.hp;
+  api.INPUT[0].pa = 1; api.INPUT[0].a = 1;
+  api.playerControl(p, api.INPUT[0], api.STEP);
+  api.INPUT[0].pa = 0; api.INPUT[0].a = 0;     // edges fire once, like pollInput gives them
+  stepFighter(api, p, 0.4);
+  assert(e.hp < hp0, 'the knee damages');
+  assert(p.holding === e && e.state === 'held', 'the knee keeps them in your hands');
+  api.INPUT[0].pa = 0; api.INPUT[0].a = 0;
+  api.INPUT[0].pb = 1; api.INPUT[0].b = 1;
+  api.playerControl(p, api.INPUT[0], api.STEP);
+  assert(p.holding === null && e.holder === null, 'the throw lets go');
+  assert(e.thrown && e.vx > 0, 'the body flies off in the direction you faced');
+});
+
+test('a thrown body knocks over whoever it lands on', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const held = api.spawnEnemy('punk', 110, api.FLOOR_MID, -1);
+  const bystander = api.spawnEnemy('punk', 150, api.FLOOR_MID, -1);
+  bystander.ai.mode = 'orbit';
+  api.tryGrab(p, held);
+  api.throwHeld(p);
+  const score0 = api.G.score[0];
+  for (let i = 0; i < 60; i++){ api.updateFighter(held, api.STEP); }
+  assert(api.isDown(bystander) || bystander.dead, 'the bystander goes down too');
+  assert(api.G.score[0] > score0, 'the collision scores');
+});
+
+test('being hit while held breaks the hold', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1; p.invuln = 0;
+  const grabbed = api.spawnEnemy('punk', 110, api.FLOOR_MID, -1);
+  api.tryGrab(p, grabbed);
+  assert(p.holding === grabbed, 'holding');
+  const attacker = api.spawnEnemy('punk', 86, api.FLOOR_MID, 1);
+  attacker.face = 1;
+  api.startAttack(attacker, 'swipe');
+  stepFighter(api, attacker, 0.4);
+  assert(p.holding === null, 'taking a hit spills them out of your hands');
+});
+
+test('a held enemy escapes if you sit on them too long', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 110, api.FLOOR_MID, -1);
+  api.tryGrab(p, e);
+  for (let i = 0; i < 60 * 4; i++){ api.updateFighter(p, api.STEP); api.updateFighter(e, api.STEP); }
+  assert(p.holding === null && e.holder === null, 'the hold does not last forever');
+});
+
+test('bosses cannot be grabbed', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const boss = api.spawnEnemy('hammer', 110, api.FLOOR_MID, -1);
+  assert(!api.tryGrab(p, boss), 'a boss shrugs off the grab');
+  assert(p.holding === null, 'no hold state left behind');
+});
+
+/* -------------------------------------------------------------- weapons */
+test('picking up a bat hits harder than a fist and wears out', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const bat = api.mkItem('bat', 104, api.FLOOR_MID, 0);
+  assert(api.itemUnderfoot(p) === bat, 'the bat is underfoot');
+  assert(api.pickUp(p, bat), 'pick it up');
+  assert(p.weapon === 'bat' && p.wUses === api.WEAPON.bat.uses, 'weapon in hand with a full charge');
+  const e = api.spawnEnemy('punk', 118, api.FLOOR_MID, -1);
+  e.hp = 400; e.hpMax = 400;
+  api.startAttack(p, 'bat'); api.useWeapon(p);
+  stepFighter(api, p, 0.5);
+  assert(400 - e.hp === api.ATK.bat.dmg, 'the bat does bat damage');
+  assert(api.ATK.bat.dmg > api.ATK.jab.dmg, 'which is more than a fist');
+  assert(p.wUses === api.WEAPON.bat.uses - 1, 'a swing costs a use');
+  p.wUses = 1; api.useWeapon(p);
+  assert(p.weapon === null, 'the bat breaks when it is spent');
+});
+
+test('getting knocked down makes you drop the weapon', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID;
+  api.pickUp(p, api.mkItem('pipe', 100, api.FLOOR_MID, 0));
+  assert(p.weapon === 'pipe', 'holding the pipe');
+  api.knockDown(p, 1, 140, 100);
+  assert(p.weapon === null, 'the pipe is on the floor now');
+  assert(api.items.some(i => i.kind === 'pipe' && !i.gone), 'and it is a real item again');
+});
+
+test('a thrown crate breaks and knocks its target down', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  api.pickUp(p, api.mkItem('crate', 100, api.FLOOR_MID, 0));
+  assert(p.weapon === 'crate', 'carrying the crate');
+  const e = api.spawnEnemy('punk', 150, api.FLOOR_MID, -1);
+  e.ai.mode = 'orbit';
+  api.throwItem(p);
+  assert(p.weapon === null, 'thrown');
+  for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
+  assert(api.isDown(e) || e.dead, 'the crate puts them down');
+});
+
+test('a weapon left on the floor can be smashed for a pickup', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const barrel = api.mkItem('barrel', 120, api.FLOOR_MID, 0);
+  api.startAttack(p, 'kick');
+  stepFighter(api, p, 0.5);
+  assert(barrel.broken, 'the barrel breaks when you kick it');
+});
+
+test('food heals and cash scores', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.hp = 40;
+  api.pickUp(p, api.mkItem('meat', p.x, p.y, 0));
+  assert(p.hp > 40 && p.hp <= p.hpMax, 'food heals but never past the cap');
+  const s0 = api.G.score[0];
+  api.pickUp(p, api.mkItem('cash', p.x, p.y, 0));
+  assert(api.G.score[0] === s0 + 500, 'cash pays 500');
+});
+
+test("the warden's shot travels flat and hurts", () => {
+  const api = boot();
+  play(api, { stage: 4 }); clearField(api);
+  const p = api.players[0];
+  p.x = 220; p.y = api.FLOOR_MID; p.invuln = 0;
+  const boss = api.spawnEnemy('warden', 120, api.FLOOR_MID, 1);
+  api.fireSlug(boss);
+  const slug = api.items.find(i => i.kind === 'slug');
+  assert(slug && slug.flat, 'the slug is a flat projectile');
+  const z0 = slug.z, hp0 = p.hp;
+  for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
+  assert(p.hp < hp0, 'the slug connects');
+  assert(slug.gone || Math.abs(slug.z - z0) < 1, 'a bullet does not arc');
+});
+
+/* ------------------------------------------------------------------- AI */
+test('only a couple of enemies are allowed to swing at once', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.invuln = 0;
+  for (let i = 0; i < 6; i++) api.spawnEnemy('punk', 200 + (i % 2 ? 30 + i : -30 - i), api.FLOOR_MID, 1);
+  let worst = 0;
+  for (let i = 0; i < 60 * 8; i++){
+    for (const f of api.fighters) if (f.team === 'e') api.aiControl(f, api.STEP);
+    worst = Math.max(worst, api.tokensOut());
+  }
+  assert(worst <= api.tokenCap(), `token cap broken: ${worst} > ${api.tokenCap()}`);
+  assert(api.tokenCap() === api.DIFF[api.G.diff].tokens + api.G.players - 1, 'cap tracks difficulty and player count');
+});
+
+test('enemies close the distance and eventually land something', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.invuln = 0; p.hp = 100;
+  const e = api.spawnEnemy('punk', 320, api.FLOOR_MID, -1);
+  const d0 = Math.abs(e.x - p.x);
+  let landed = false;
+  for (let i = 0; i < 60 * 14; i++){
+    api.updateFighter(e, api.STEP);
+    if (p.hp < 100) { landed = true; break; }
+  }
+  assert(Math.abs(e.x - p.x) < d0, 'the enemy walked in');
+  assert(landed, 'and threw a punch that connected');
+});
+
+test('a downed enemy gets back up on its own', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const e = api.spawnEnemy('punk', 150, api.FLOOR_MID, -1);
+  api.knockDown(e, 1, 140, 110);
+  assert(e.state === 'down', 'knocked into the air');
+  stepFighter(api, e, 4);
+  assert(!api.isDown(e) && !e.dead, 'back on their feet, got ' + e.state);
+  near(e.z, 0, 0.001, 'and back on the floor');
+});
+
+test('a dead enemy leaves the field and can pay out an item', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  let dropped = 0;
+  for (let n = 0; n < 40; n++){
+    const e = api.spawnEnemy('punk', 150, api.FLOOR_MID, -1);
+    api.knockOut(e, p, api.ATK.hook);
+    stepFighter(api, e, 4);
+    assert(e.gone, 'the body clears out');
+    dropped += api.items.filter(i => i.kind === 'meat' || i.kind === 'cash').length;
+    api.items = [];
+  }
+  assert(dropped > 0, 'over forty knockouts at least one should drop something');
+});
+
+/* ---------------------------------------------------------------- waves */
+test('a gate locks the camera until the street is clear', () => {
+  const api = boot();
+  play(api);
+  step(api, 0.6);
+  assert(api.W.active, 'the first gate fires immediately');
+  assert(api.cam.lock >= 0, 'the camera is pinned');
+  const lock = api.cam.lock;
+  const p = api.players[0];
+  for (let i = 0; i < 60 * 6; i++){ p.x += 8; api.update(api.STEP); }
+  assert(api.cam.x <= lock + 0.5, 'the camera cannot pass the lock while enemies live');
+  // clear the street
+  for (const f of api.fighters) if (f.team === 'e') f.gone = true;
+  api.W.queue = [];
+  step(api, 0.3);
+  assert(!api.W.active && api.cam.lock < 0, 'clearing the wave releases the camera');
+  assert(api.W.goT > 0, 'and the GO prompt lights up');
+  const nextGate = api.STAGES[0].gates[api.W.gi].x;
+  for (let i = 0; i < 60 * 12; i++){ p.x += 6; api.update(api.STEP); }
+  assert(api.cam.x > lock, 'the camera moves on');
+  assert(api.W.active && api.cam.lock === nextGate, 'and the next gate fires and pins it again');
+});
+
+test('spawns trickle in and never exceed the on-screen cap', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  let worst = 0;
+  for (let i = 0; i < 60 * 20; i++){
+    api.update(api.STEP);
+    worst = Math.max(worst, api.liveEnemies().length);
+    for (const p of api.players) p.x += 0.6;
+  }
+  assert(worst > 0, 'enemies did show up');
+  assert(worst <= 4 + api.G.players + 1, 'the street never floods: ' + worst);
+});
+
+test('the boss gate raises a boss bar and clearing it clears the stage', () => {
+  const api = boot();
+  play(api);
+  const s = api.STAGES[0];
+  api.W.gi = s.gates.length - 1;
+  api.cam.x = s.gates[s.gates.length - 1].x;
+  api.cam.targetX = api.cam.x;
+  step(api, 3);
+  const boss = api.fighters.find(f => f.boss);
+  assert(boss, 'the boss walked on');
+  assert(api.G.bossHp > 0 && api.G.bossName === 'ROOK', 'the boss bar is up: ' + api.G.bossName);
+  for (const f of api.fighters) if (f.team === 'e') f.gone = true;
+  api.W.queue = [];
+  step(api, 0.3);
+  assert(api.G.phase === 'clear', 'the stage ends with the boss, got ' + api.G.phase);
+  assert(api.G.lastBonus > 0, 'a clear bonus is paid');
+});
+
+test('stages run one into the next and the last one wins the game', () => {
+  const api = boot();
+  play(api);
+  for (let s = 0; s < 4; s++){
+    const before = api.G.stage;
+    api.nextStage();
+    assert(api.G.stage === before + 1, 'advanced to stage ' + (before + 2));
+    assert(api.players[0] && api.players[0].hp > 0, 'players come back for the next stage');
+    assert(api.G.phase === 'card', 'each stage opens on its card');
+  }
+  api.G.stage = api.STAGES.length - 1;
+  api.nextStage();
+  assert(api.G.phase === 'over' && api.G.cleared, 'finishing the last stage wins');
+});
+
+test('the stage card gets out of the way on its own', () => {
+  const api = boot();
+  api.G.players = 1; api.G.stage = 0;
+  api.startStage();
+  assert(api.G.phase === 'card', 'opens on the card');
+  step(api, 3);
+  assert(api.G.phase === 'play', 'and hands control over');
+});
+
+/* ------------------------------------------------------- lives & credits */
+test('dying costs a life and drops you back in', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  api.G.lives[0] = 2;
+  api.knockOut(p, null, api.ATK.hook);
+  for (let i = 0; i < 60 * 3; i++) api.update(api.STEP);
+  assert(api.G.lives[0] === 1, 'a life is gone, lives=' + api.G.lives[0]);
+  assert(api.players[0].hp === api.players[0].hpMax, 'you come back whole');
+  assert(api.players[0].invuln > 0, 'with a moment of mercy');
+});
+
+test('running out of lives starts the continue countdown, and it can be taken', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  api.G.lives[0] = 0;
+  api.knockOut(p, null, api.ATK.hook);
+  for (let i = 0; i < 60 * 4; i++) api.update(api.STEP);
+  assert(api.G.contT > 0, 'the countdown is running');
+  assert(api.doContinue(), 'the continue is taken');
+  assert(api.G.contT === 0 && api.G.lives[0] === 2, 'fresh lives handed out');
+  assert(api.players[0].hp === api.players[0].hpMax, 'and a fresh fighter');
+});
+
+test('letting the countdown run out ends the game', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  api.G.lives[0] = 0;
+  api.knockOut(p, null, api.ATK.hook);
+  for (let i = 0; i < 60 * 20; i++) api.update(api.STEP);
+  assert(api.G.phase === 'over', 'game over, got ' + api.G.phase);
+  assert(!api.G.cleared, 'and it is not a win');
+});
+
+test('two players both get their own lives, score and fighter', () => {
+  const api = boot();
+  play(api, { players: 2 }); clearField(api);
+  assert(api.players.length === 2 && api.players[1], 'player two is on the field');
+  assert(api.players[0].skin !== api.players[1].skin, 'and looks different');
+  api.addScore(1, 300);
+  assert(api.G.score[1] === 300 && api.G.score[0] === 0, 'scores are separate');
+  api.G.lives[0] = 0;
+  api.knockOut(api.players[0], null, api.ATK.hook);
+  for (let i = 0; i < 60 * 4; i++) api.update(api.STEP);
+  assert(api.G.contT === 0, 'one player down is not a game over while the other stands');
+});
+
+test('twenty thousand points buys a life', () => {
+  const api = boot();
+  play(api);
+  api.G.lives[0] = 3; api.G.score[0] = 0;
+  api.addScore(0, 19999);
+  assert(api.G.lives[0] === 3, 'not yet');
+  api.addScore(0, 2);
+  assert(api.G.lives[0] === 4, 'the extra life lands at 20000');
+});
+
+/* --------------------------------------------------------------- camera */
+test('the camera follows, clamps to the street, and never runs off the end', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  const len = api.STAGES[0].len;
+  p.x = len - 20;
+  for (let i = 0; i < 60 * 8; i++) api.updateCamera(api.STEP);
+  assert(api.cam.x <= len - api.VW + 0.01, 'clamped at the far end');
+  p.x = 5;
+  for (let i = 0; i < 60 * 8; i++) api.updateCamera(api.STEP);
+  assert(api.cam.x >= -0.01 && api.cam.x < 20, 'and at the near end');
+});
+
+test('players are kept inside the visible screen', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = api.cam.x - 200;
+  api.updateFighter(p, api.STEP);
+  assert(p.x >= api.cam.x, 'nobody walks off the left edge');
+  p.y = 999;
+  api.updateFighter(p, api.STEP);
+  assert(p.y <= api.FLOOR_BOT, 'nor out of the floor band');
+});
+
+/* ----------------------------------------------------------------- save */
+test('best score survives a reboot; a worse run does not overwrite it', () => {
+  const api = boot();
+  play(api);
+  api.G.score[0] = 12345;
+  api.finishGame(false);
+  assert(api.G.best === 12345, 'best recorded');
+  const store = api._store;
+  const api2 = boot({ store });
+  assert(api2.G.best === 12345, 'best came back, got ' + api2.G.best);
+  play(api2);
+  api2.G.score[0] = 10;
+  api2.finishGame(false);
+  assert(api2.G.best === 12345, 'a worse run leaves the record alone');
+});
+
+test('sound and scanline settings round-trip', () => {
+  const api = boot();
+  api.snd.on = false; api.G.scan = false; api.G.diff = 2;
+  api.saveMeta();
+  const api2 = boot({ store: api._store });
+  assert(api2.snd.on === false, 'sound preference stuck');
+  assert(api2.G.scan === false, 'scanline preference stuck');
+  assert(api2.G.diff === 2, 'difficulty preference stuck');
+});
+
+test('a corrupt save does not stop the game booting', () => {
+  const api = boot({ store: { twin_fists_v1: '{{{not json' } });
+  assert(api.G.phase === 'title', 'still boots');
+  assert(api.G.best === 0, 'and starts clean');
+});
+
+/* --------------------------------------------------------------- render */
+test('the title screen draws', () => {
+  const api = boot();
+  api.draw();
+  assert(api._counts.fillRect > 50, 'the attract screen actually paints something');
+});
+
+test('every stage draws, with fighters in every state', () => {
+  const api = boot();
+  const STATES = ['idle', 'walk', 'run', 'jump', 'attack', 'hurt', 'down', 'lie', 'getup', 'held', 'hold', 'block'];
+  for (let s = 0; s < api.STAGES.length; s++){
+    play(api, { stage: s, players: 2 });
+    for (const type of Object.keys(api.ENEMY)){
+      const e = api.spawnEnemy(type, api.cam.x + 60 + (api.fighters.length * 7) % 240, api.FLOOR_MID, -1);
+      e.state = STATES[api.fighters.length % STATES.length];
+      e.anim = e.state === 'attack' ? 'hook' : e.state === 'down' ? 'air' : e.state;
+      if (!api.A[e.anim]) e.anim = 'idle';
+      e.weapon = api.fighters.length % 3 === 0 ? 'bat' : null;
+      e.z = e.state === 'jump' ? 20 : 0;
+      e.hitFlash = 0.1;
+    }
+    for (const kind of ['bat', 'pipe', 'knife', 'crate', 'barrel', 'meat', 'cash', 'slug'])
+      api.mkItem(kind, api.cam.x + 40 + Math.random() * 200, api.FLOOR_MID, 0);
+    api.spawnFx('impact', api.cam.x + 100, api.FLOOR_MID, 20, '#fff');
+    api.spawnFx('score', api.cam.x + 120, api.FLOOR_MID, 20, '#fff', 500);
+    api.spawnFx('chip', api.cam.x + 130, api.FLOOR_MID, 20, '#fff');
+    api.spawnFx('dust', api.cam.x + 140, api.FLOOR_MID, 2, '#fff');
+    api.spawnFx('spark', api.cam.x + 150, api.FLOOR_MID, 20, '#fff');
+    api.G.bossHp = 40; api.G.bossMax = 100; api.G.bossName = 'KANE';
+    api.W.goT = 1;
+    api.draw();                       // play
+    api.G.phase = 'card'; api.draw();
+    api.G.phase = 'clear'; api.G.lastBonus = 1200; api.draw();
+    api.G.phase = 'play'; api.G.contT = 5; api.draw();
+    api.G.contT = 0;
+  }
+});
+
+test('a busy frame stays inside a sane draw budget', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  for (let i = 0; i < 8; i++) api.spawnEnemy('punk', api.cam.x + 30 + i * 40, api.FLOOR_MID + (i % 3) * 8, -1);
+  for (let i = 0; i < 10; i++) api.mkItem('crate', api.cam.x + i * 30, api.FLOOR_MID, 0);
+  for (let i = 0; i < 30; i++) api.spawnFx('chip', api.cam.x + i * 8, api.FLOOR_MID, 10, '#fff');
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(fills > 200, 'it drew a real frame');
+  assert(fills < 9000, 'frame is too expensive: ' + fills + ' fillRects');
+});
+
+/* ------------------------------------------------------------ long soak */
+test('a full minute of real play never throws and keeps the state sane', () => {
+  const api = boot();
+  play(api, { players: 2, diff: 2 });
+  const keys = api.KEYS;
+  const cycle = ['KeyD', 'KeyJ', 'KeyD', 'KeyK', 'KeyL', 'KeyJ', 'KeyA', 'KeyW', 'KeyS', 'KeyJ'];
+  for (let i = 0; i < 60 * 60; i++){
+    for (const k of cycle) keys[k] = 0;
+    keys[cycle[(i / 7 | 0) % cycle.length]] = 1;
+    keys.ArrowRight = (i % 40) < 25 ? 1 : 0;
+    keys.Comma = (i % 23) < 4 ? 1 : 0;
+    api.update(api.STEP);
+    if (i % 120 === 0) api.draw();
+    for (const f of api.fighters){
+      assert(isFinite(f.x) && isFinite(f.y) && isFinite(f.z), 'a fighter went non-finite');
+      assert(f.y >= api.FLOOR_TOP - 1 && f.y <= api.FLOOR_BOT + 1, 'a fighter left the floor band: ' + f.y);
+      assert(f.hp <= f.hpMax + 0.001, 'health went over the cap');
+    }
+    assert(api.fighters.length < 60, 'fighter list is leaking: ' + api.fighters.length);
+    assert(api.items.length < 120, 'item list is leaking: ' + api.items.length);
+    assert(api.fx.length < 400, 'fx list is leaking: ' + api.fx.length);
+  }
+  assert(api.G.score[0] > 0, 'a minute of mashing scores something');
+});
+
+test('the whole first stage can be beaten and it ends in a clear', () => {
+  const api = boot();
+  play(api, { diff: 0 });
+  const p = api.players[0];
+  p.hpMax = 9999; p.hp = 9999;
+  let cleared = false;
+  for (let i = 0; i < 60 * 400; i++){
+    p.hp = p.hpMax;                       // an invincible tester, so this measures progression
+    api.G.lives[0] = 9;
+    const foe = api.nearestFoe(p, 400);
+    if (foe){
+      p.x += Math.sign(foe.x - p.x) * 1.6;
+      p.y += Math.sign(foe.y - p.y) * 0.9;
+      p.face = foe.x >= p.x ? 1 : -1;
+      if (Math.abs(foe.x - p.x) < 20 && Math.abs(foe.y - p.y) < 8 && api.canAct(p) && p.state !== 'attack')
+        api.startAttack(p, 'hook');
+    } else p.x += 2.2;
+    api.update(api.STEP);
+    if (api.G.phase === 'clear'){ cleared = true; break; }
+  }
+  assert(cleared, 'stage one is beatable');
+  assert(api.G.score[0] > 1000, 'and it scored on the way');
+});
+
+console.log(`\ntwin_fists: ${passed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);
