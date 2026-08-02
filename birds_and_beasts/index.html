@@ -369,246 +369,85 @@
   .litter .card:hover{ transform:translateY(-3px); }
   .egg2{ font-size:52px; line-height:1; animation:wob 1.1s ease-in-out infinite; }
 
-  /* ================= THE FIELD (9:16 portrait) =================
-     Two lines facing each other down a phone-shaped screen. Everything is sized
-     off the frame rather than the viewport, so the desktop letterbox and a real
-     phone lay out identically. */
-  /* THE STAGE. The field is a place: a cold far wall, a lit horizon at 46%, a
-     warm boarded floor coming toward you, and two lines standing on it — theirs
-     small and up the field, yours full size and near. The two rows sit in the
-     upper and lower thirds; the middle is the no-man's-land they meet in. */
-  .field{ flex:1 1 auto; display:flex; flex-direction:column; justify-content:space-evenly;
-    min-height:0; position:relative; padding:6px 0 4px; overflow:hidden;
-    border-radius:16px; isolation:isolate; }
-  .field::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
-    background:
-      radial-gradient(150% 44% at 50% 49%, rgba(150,225,105,.16), transparent 72%),
-      linear-gradient(180deg,
-        #08110d 0%, #0c160d 24%, #121e0d 42%,
-        #22381a 49%, #1a2c11 60%, #16250d 82%, #111d0a 100%); }
-  /* the boards of the floor, receding to the fence line at midfield */
-  .field::after{ content:''; position:absolute; inset:0; z-index:0;
-    pointer-events:none; opacity:.85;
-    background:repeating-linear-gradient(90deg, rgba(0,0,0,.20) 0 3px, transparent 3px 26px);
-    -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.10) 0, rgba(0,0,0,.10) 44%, #000 62%);
-    mask-image:linear-gradient(180deg, rgba(0,0,0,.10) 0, rgba(0,0,0,.10) 44%, #000 62%); }
-  .side{ position:relative; z-index:1; flex:0 0 auto; display:flex; flex-direction:column; }
-  .side.them{ transform:scale(.88); transform-origin:50% 0%; }
-  .sideLbl{ flex:0 0 auto; text-align:center; font-size:11px; letter-spacing:2.2px;
-    text-transform:uppercase; color:#9db38f; padding:2px 0; text-shadow:0 1px 3px rgba(0,0,0,.9); }
-  .sideLbl b{ color:#e9f3df; letter-spacing:1px; }
-  .lineRow{ position:relative; flex:0 0 auto; display:flex; gap:5px; justify-content:center;
-    align-items:flex-end; padding:2px 4px 8px; min-height:100px; }
-  /* the ground each line stands on — without it they float in the dark */
-  .lineRow::after{ content:''; position:absolute; left:8%; right:8%; bottom:0; height:18px;
-    z-index:-1; pointer-events:none;
-    background:radial-gradient(ellipse 80% 100% at 50% 50%, rgba(0,0,0,.55), transparent 70%); }
-  .midband{ flex:0 0 auto; position:relative; z-index:2; }
-  .midline{ flex:0 0 auto; position:relative; z-index:1; text-align:center; padding:3px 0;
-    font-size:10px; letter-spacing:3px; text-transform:uppercase; color:#83997a; }
-  .midline::before{ content:''; position:absolute; left:6%; right:6%; top:50%; height:1px;
-    background:linear-gradient(90deg, transparent, rgba(166,255,94,.28) 20%,
-      rgba(166,255,94,.28) 80%, transparent); }
-  .midline span{ position:relative; padding:1px 12px; border-radius:99px;
-    background:rgba(6,12,6,.82); box-shadow:0 0 0 1px rgba(166,255,94,.10); }
-
-  /* barn dust, drifting through the light. Eight nodes, pure CSS loops, no
-     per-frame JS — the arena reads as air rather than as a backdrop. */
-  .mote{ position:absolute; z-index:0; border-radius:50%; pointer-events:none;
-    background:rgba(205,240,175,.4); will-change:transform,opacity;
-    animation:mdrift linear infinite; }
-  @keyframes mdrift{ 0%{ transform:translate(0,0); opacity:0 }
-    18%{ opacity:.55 } 82%{ opacity:.4 }
-    100%{ transform:translate(24px,-64px); opacity:0 } }
-
-  /* the collision: the missing beat between the two lunges */
-  .lineRow.cls-up{ animation:clsup .24s cubic-bezier(.3,1.4,.5,1); }
-  .lineRow.cls-dn{ animation:clsdn .24s cubic-bezier(.3,1.4,.5,1); }
-  @keyframes clsup{ 0%,100%{transform:translateY(0)} 38%{transform:translateY(-7px)} }
-  @keyframes clsdn{ 0%,100%{transform:translateY(0)} 38%{transform:translateY(7px)} }
-
-  /* the killing blow: one absolutely-positioned div, opacity only */
-  .killflash{ position:absolute; z-index:7; pointer-events:none; width:340px; height:340px;
-    margin:-170px 0 0 -170px; border-radius:50%; opacity:0;
-    background:radial-gradient(circle, rgba(255,255,255,.92), rgba(255,240,190,.5) 34%, transparent 70%);
-    animation:killpop .28s ease-out forwards; }
-  @keyframes killpop{ 0%{ opacity:0; transform:scale(.3) } 22%{ opacity:1; transform:scale(.8) }
-    100%{ opacity:0; transform:scale(1.25) } }
-
-  /* ---------- the forecast: an autobattler is the READ ----------------------
-     Every number here is already pure and already computed by the rules
-     (cardHide, cardDamage, frontOf). Surfacing it is the difference between
-     ordering a line and guessing at one. Recomputed synchronously on every
-     field / unfield / reorder. */
-  .cast{ position:relative; z-index:2; padding:6px 14px 2px; }
-  .cast[hidden]{ display:none; }
-  .cbars{ position:relative; display:flex; align-items:center; height:9px;
-    border-radius:5px; overflow:hidden; background:rgba(6,12,6,.55);
-    box-shadow:inset 0 1px 3px rgba(0,0,0,.7), 0 0 0 1px rgba(166,255,94,.10); }
-  .cbars i{ display:block; height:100%; transition:width .22s cubic-bezier(.3,.9,.4,1); }
-  .cbars i.cu{ background:linear-gradient(90deg,#4e8020,#bcff6e); }
-  .cbars i.ct{ margin-left:auto; background:linear-gradient(270deg,#7a2b2b,#ff9d6b); }
-  .cnums{ display:flex; align-items:baseline; gap:6px; padding:3px 1px 0;
-    font-size:10px; letter-spacing:1.6px; text-transform:uppercase; font-weight:800; }
-  .cnums .cu{ color:#bcff6e; } .cnums .ct{ color:#ff9d6b; margin-left:auto; }
-  .cnums .cvs{ color:#5e7454; letter-spacing:2px; }
-  .cnums b{ font-size:12px; letter-spacing:0; }
-  .cread{ text-align:center; padding:3px 0 0; font-size:11px; color:#9db38f;
-    letter-spacing:.2px; text-shadow:0 1px 3px rgba(0,0,0,.9); }
-  .cread b{ color:#e9f3df; font-weight:800; }
-  .cbars i.pulse{ animation:cbump .3s ease-out; }
-  @keyframes cbump{ 0%{ filter:brightness(2) } 100%{ filter:none } }
-
-  /* the matchup that actually matters: your front against theirs, drawn */
-  .duel{ position:absolute; z-index:1; height:2px; transform-origin:0 50%;
-    pointer-events:none; border-radius:2px;
-    background:linear-gradient(90deg, rgba(255,138,212,.15), rgba(255,138,212,.95) 50%, rgba(255,138,212,.15));
-    animation:dpulse 1.1s ease-in-out infinite; }
-  .duellab{ position:absolute; z-index:4; pointer-events:none; transform:translate(-50%,-50%);
-    font-size:8.5px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase;
-    white-space:nowrap; padding:1px 6px; border-radius:6px; color:#ffc9ea;
-    background:rgba(10,4,10,.9); border:1px solid rgba(255,138,212,.4); }
-  .duellab.mine{ color:#d9ffb0; border-color:rgba(166,255,94,.4); }
-
-  /* --- the commit: the hinge from "I am deciding" to "it is out of my hands" */
-  .benchwrap{ transition:transform .18s ease-in, opacity .16s ease-in,
-    max-height .2s ease-in, padding .2s ease-in; max-height:200px; }
-  #fight.committed .benchwrap{ transform:translateY(100%); opacity:0; max-height:0;
-    padding-top:0; border-top-color:transparent; overflow:hidden; }
-  #fight.committed .ub .ord{ opacity:0; transition:opacity .12s ease; }
-  /* the bench is gone, so the match takes the room it left: the animals are the
-     biggest thing on the screen for the one minute they are fighting */
-  #fight.committed .ub{ max-width:112px; transition:max-width .22s ease; }
-  #fight.committed .ub canvas{ height:66px; transition:height .22s ease; }
-  #fight.committed .ub .pn{ font-size:10.5px; }
-  #fight.committed .side.them{ transform:scale(.95); transition:transform .22s ease; }
-  #fight.committed .lineRow{ min-height:118px; }
-  #fight.committed .ub.front::after{ animation:frontheld 1.3s ease-in-out infinite; }
-  @keyframes frontheld{ 0%,100%{ opacity:.55; filter:none }
-    50%{ opacity:1; filter:brightness(1.6) drop-shadow(0 0 6px rgba(166,255,94,.8)) } }
-
-  /* ---------- the verdict: the payoff of the whole prep decision ---------- */
-  .verdict{ position:absolute; inset:0; z-index:8; display:grid; place-items:center;
-    text-align:center; padding:0 18px; pointer-events:none;
-    background:radial-gradient(ellipse 90% 60% at 50% 50%, rgba(6,12,6,.93), rgba(6,12,6,.985));
-    animation:vfade .3s ease both; }
-  .verdict[hidden]{ display:none; }
-  @keyframes vfade{ from{ opacity:0 } to{ opacity:1 } }
-  .verdict .vhead{ font-size:clamp(24px,8cqw,34px); font-weight:900; letter-spacing:2px;
-    line-height:1.05; color:var(--lime);
-    text-shadow:0 0 26px rgba(150,255,90,.4), 0 4px 0 #33591a;
-    animation:vslam .34s cubic-bezier(.2,1.4,.4,1) both; }
-  .verdict.lose .vhead{ color:#ff7b7b; text-shadow:0 0 26px rgba(255,90,90,.4), 0 4px 0 #6b1f1f; }
-  @keyframes vslam{ from{ transform:scale(1.6) translateY(-14px); opacity:0 }
-    60%{ transform:scale(.96); opacity:1 } to{ transform:none; opacity:1 } }
-  .verdict .vsub{ margin-top:12px; font-size:16px; font-weight:800; letter-spacing:.6px;
-    color:#cfe0c2; opacity:0; animation:vsubin .3s ease .22s both; }
-  .verdict .vsub b{ display:block; margin-top:7px; color:var(--hpred); font-size:26px;
-    font-weight:900; letter-spacing:1px; text-shadow:0 0 18px rgba(255,90,90,.45); }
-  .verdict .vsub .ok{ color:var(--lime); }
-  @keyframes vsubin{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
-  .verdict .vtap{ margin-top:16px; font-size:10px; letter-spacing:2.6px; text-transform:uppercase;
-    color:#7d9270; opacity:0; animation:vsubin .3s ease .8s both; }
-  /* the round lands, then the streak lands — the only thing in the game that
-     compounds gets its own beat rather than a hidden number in the top bar */
-  .verdict .vrun{ margin-top:14px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-  .verdict .vpips{ display:flex; gap:4px; opacity:0; animation:vsubin .26s ease .31s both; }
-  .verdict .vpips i{ width:10px; height:10px; border-radius:3px; background:#22331f;
-    border:1px solid #33492c; display:block; }
-  .verdict .vpips i.boss{ border-radius:50%; }
-  .verdict .vpips i.done{ background:#7cc93a; border-color:var(--lime); }
-  .verdict .vpips i.now{ background:var(--lime); border-color:#e6ffcf;
-    box-shadow:0 0 12px rgba(166,255,94,.85); animation:pipfill .34s cubic-bezier(.2,1.5,.4,1) both; }
-  .verdict.lose .vpips i.now{ background:#8a3030; border-color:#ff7b7b; box-shadow:none; }
-  .verdict .streak{ opacity:0; animation:vsubin .26s ease .42s both; font-size:11px; }
-  /* the arena holds absolutely still for a beat around the blow that decides it */
-  #arena.froze .ub, #arena.froze .mote, #arena.froze .lineRow{
-    animation-play-state:paused !important; }
-
-  /* a unit standing on the field */
-  .ub{ position:relative; flex:1 1 0; min-width:0; max-width:94px; border-radius:11px; overflow:hidden;
-    background:linear-gradient(180deg,#1d2c1c,#101a10); border:2px solid #3f5f34;
-    box-shadow:0 5px 12px rgba(0,0,0,.45); }
+  /* ================= THE TOWER (9:16 portrait) =================
+     Three floors and a nest on top. They arrive at the door and climb. */
+  .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:3px; min-height:0;
+    position:relative; padding:4px 6px 2px; }
+  .nestbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:5px 10px;
+    border-radius:12px 12px 4px 4px; background:linear-gradient(180deg,#2a2016,#18140e);
+    border:2px solid #6b5324; box-shadow:0 4px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,140,.14); }
+  .nestbar .nlbl{ font-size:10px; letter-spacing:2.4px; font-weight:800; color:#ffd34d; }
+  .nestbar .neggs{ font-size:15px; line-height:1; letter-spacing:-2px; }
+  .nestbar .nhp{ margin-left:auto; font-size:17px; font-weight:900; color:#ffd34d;
+    font-variant-numeric:tabular-nums; }
+  .tower{ flex:1 1 auto; display:flex; flex-direction:column; gap:4px; min-height:0; }
+  .flr{ flex:1 1 0; min-height:66px; max-height:132px; position:relative; display:flex;
+    align-items:center; gap:4px; padding:3px 4px 3px 22px; border-radius:8px;
+    background:linear-gradient(180deg, rgba(30,46,26,.55), rgba(12,20,12,.75));
+    border:1px solid #22331e; box-shadow:inset 0 1px 0 rgba(180,255,140,.05); }
+  .flr.ground{ border-color:#4a2f22; background:linear-gradient(180deg, rgba(46,30,24,.5), rgba(18,12,10,.8)); }
+  .flr.top{ border-color:#5a4a20; }
+  .flr .flrno{ position:absolute; left:4px; top:50%; transform:translateY(-50%) rotate(180deg);
+    writing-mode:vertical-rl; font-size:8px; letter-spacing:2px; font-weight:800; color:#4f6644; }
+  .flr.ground .flrno{ color:#8a5a44; }
+  .half{ flex:1 1 0; min-width:0; display:flex; gap:3px; align-items:center; }
+  .half.them{ justify-content:flex-end; }
+  .half.us::after{ content:''; }
+  .flr::before{ content:''; position:absolute; left:50%; top:6px; bottom:6px; width:1px;
+    background:linear-gradient(180deg,transparent,#2c4326,transparent); }
+  /* a unit standing on a floor */
+  .ub{ position:relative; flex:0 1 auto; width:70px; min-width:0; border-radius:8px; overflow:hidden;
+    background:linear-gradient(180deg,#1d2c1c,#101a10); border:1.5px solid #3f5f34;
+    box-shadow:0 3px 8px rgba(0,0,0,.45); }
   .ub.them{ background:linear-gradient(180deg,#2b1a1a,#170e0e); border-color:#7a3b32; }
-  .ub.lead{ border-color:#ffd34d; box-shadow:0 0 0 1px rgba(255,211,77,.35), 0 5px 14px rgba(0,0,0,.5); }
+  .ub.lead{ border-color:#ffd34d; box-shadow:0 0 0 1px rgba(255,211,77,.35), 0 3px 10px rgba(0,0,0,.5); }
   .ub.bulw{ border-color:#7ec8ff; }
-  .ub.front::after{ content:''; position:absolute; left:0; right:0; height:3px;
-    background:linear-gradient(90deg,transparent,#a6ff5e,transparent); top:0; }
-  .ub.them.front::after{ top:auto; bottom:0; background:linear-gradient(90deg,transparent,#ff7b6b,transparent); }
-  .ub.gone{ opacity:.18; filter:grayscale(1); }
-  .ub canvas{ display:block; width:100%; height:52px; background:#0a120a; }
-  .ub .pn{ font-size:9.5px; font-weight:800; text-align:center; padding:2px 3px 0; line-height:1.1;
+  .ub.front::after{ content:''; position:absolute; left:0; right:0; height:2px; top:0;
+    background:linear-gradient(90deg,transparent,#a6ff5e,transparent); }
+  .ub.them.front::after{ background:linear-gradient(90deg,transparent,#ff7b6b,transparent); }
+  .ub.gone{ opacity:.15; filter:grayscale(1); }
+  .ub canvas{ display:block; width:100%; height:40px; background:#0a120a; }
+  .ub .pn{ font-size:8px; font-weight:800; text-align:center; padding:1px 2px 0; line-height:1.05;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#eaf6df; }
-  .ub .pm{ font-size:11px; font-weight:900; color:#ff8f6b; text-align:center; padding-bottom:1px; }
+  .ub .pm{ font-size:9.5px; font-weight:900; color:#ff8f6b; text-align:center; }
   .ub .pm .hh{ color:#7ec8ff; }
-  /* The bar drops instantly; a GHOST behind it lags 180ms and then catches up,
-     so the white slab left behind is exactly the width of the blow. Without it
-     a 3-damage nibble and a 12-damage hammer look identical — and that bar is
-     the only readout of whether your prep decision was right. */
-  .ub .ph{ position:relative; height:6px; margin:0 4px 4px; border-radius:3px;
-    background:#2a1414; overflow:hidden; }
-  .ub .ph .gh{ position:absolute; left:0; top:0; bottom:0; display:block; width:100%;
-    background:#ffdede; border-radius:3px;
-    transition:width .45s .18s cubic-bezier(.3,.9,.4,1); }
-  .ub .ph i{ position:relative; display:block; height:100%; border-radius:3px;
-    background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .1s linear; }
+  .ub .ph{ height:4px; margin:1px 3px 3px; border-radius:2px; background:#2a1414; overflow:hidden; position:relative; }
+  .ub .ph i{ display:block; height:100%; background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .22s ease; }
   .ub.them .ph i{ background:linear-gradient(90deg,#e04a4a,#ff9d6b); }
-  .ub .tag{ position:absolute; top:2px; right:3px; font-size:7.5px; letter-spacing:.4px; font-weight:800;
-    padding:1px 4px; border-radius:5px; background:rgba(6,12,6,.8); color:#a6ff5e; }
+  .ub .tag{ position:absolute; top:1px; right:2px; font-size:6.5px; letter-spacing:.3px; font-weight:800;
+    padding:0 3px; border-radius:4px; background:rgba(6,12,6,.82); color:#a6ff5e; }
   .ub.them .tag{ color:#ffb9a6; }
-  /* Re-ordering IS the decision, so the TILE is the handle: drag it sideways
-     past half a tile and it swaps. The chevrons stay as a fallback and are now
-     a real target; the ✕ moved into the tile's corner. */
-  .ub.slot-live{ touch-action:none; cursor:grab; }
-  .ub.slot-live.drag{ cursor:grabbing; z-index:5; filter:brightness(1.15);
-    transform:scale(1.06) rotate(-2deg); box-shadow:0 14px 26px rgba(0,0,0,.7);
-    transition:none; }
-  .ub.slot-live.shove{ transition:transform .16s cubic-bezier(.2,.9,.3,1.2); }
-  .ub .ord{ display:flex; gap:4px; padding:0 4px 4px; }
-  .ub .ord .ob{ flex:1; font-family:inherit; font-size:12px; line-height:1; height:30px;
-    cursor:pointer; display:flex; align-items:center; justify-content:center;
-    border:1px solid #33492c; border-radius:7px; color:#cfe0c2;
-    background:linear-gradient(180deg,#1d2f1c,#131f12);
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.10); }
-  .ub .ord .ob:active{ background:linear-gradient(180deg,#2a4426,#1a2a18); }
-  .ub .ord .ob[disabled]{ opacity:.3; cursor:default; }
-  .ub .pull{ position:absolute; top:3px; left:3px; width:19px; height:19px; z-index:3;
-    border-radius:50%; border:1px solid #5a2f2f; background:rgba(20,8,8,.85); color:#ff9d9d;
-    font-family:inherit; font-size:10px; line-height:1; cursor:pointer; padding:0;
-    display:flex; align-items:center; justify-content:center; }
-  .ub .pull:hover{ background:#3a1414; color:#fff; }
-  /* an empty slot is an INVITATION, not a hole where the UI failed */
-  .lineRow .slot{ position:relative; flex:1 1 0; max-width:94px; min-height:92px; border-radius:11px;
-    border:1px solid rgba(166,255,94,.14);
-    background:linear-gradient(180deg, rgba(30,48,26,.5), rgba(10,18,10,.5));
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.06); }
-  .lineRow .slot .plus{ width:22px; height:22px; opacity:.5; }
-  .lineRow .slot .plus::before,.lineRow .slot .plus::after{ background:var(--lime);
-    box-shadow:0 0 12px rgba(166,255,94,.5); }
-  .lineRow .slot .plus::before{ width:22px; height:5px; }
-  .lineRow .slot .plus::after{ width:5px; height:22px; }
-  .lineRow .slot span{ font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#3f5836; }
-  .lineRow.wait .slot{ animation:slotwait 2.6s ease-in-out infinite; }
-  .lineRow.wait .slot:nth-child(3){ animation-delay:-.65s }
-  .lineRow.wait .slot:nth-child(4){ animation-delay:-1.3s }
-  @keyframes slotwait{ 0%,100%{ box-shadow:inset 0 1px 0 rgba(190,255,150,.06) }
-    50%{ box-shadow:inset 0 0 24px -8px rgba(166,255,94,.35), inset 0 1px 0 rgba(190,255,150,.06) } }
-  @keyframes lungeUp{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(-13px) scale(1.05)} }
-  @keyframes lungeDown{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(13px) scale(1.05)} }
+  .ub .ord{ display:none; }
+  .hole{ flex:0 0 auto; width:70px; height:76px; border-radius:8px;
+    border:1.5px dashed #2b3f26; display:flex; align-items:center; justify-content:center; }
+  .hole.open{ border-color:rgba(166,255,94,.32); cursor:pointer;
+    background:radial-gradient(circle at 50% 50%, rgba(166,255,94,.07), transparent 70%); }
+  .hole.open span{ font-size:17px; color:#5f8a48; font-weight:700; }
+  .hole.quiet{ border-color:#2a1c18; opacity:.45; width:40px; }
+  .gate{ flex:0 0 auto; text-align:center; font-size:9.5px; letter-spacing:2px; font-weight:800;
+    text-transform:uppercase; color:#8a5a44; padding:2px 0 0; }
+  .gate b{ color:#ffb9a6; }
+  @keyframes lungeUp{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(-8px) scale(1.06)} }
+  @keyframes lungeDown{ 0%,100%{transform:translateY(0)} 40%{transform:translateY(8px) scale(1.06)} }
   @keyframes fall{ 0%{transform:translateY(0) rotate(0); opacity:1}
-    100%{transform:translateY(26px) rotate(9deg); opacity:.18} }
+    100%{transform:translateY(18px) rotate(9deg); opacity:.15} }
+  @keyframes climb{ 0%{transform:translateY(22px); opacity:.3} 100%{transform:translateY(0); opacity:1} }
   .ub.lungeUp{ animation:lungeUp .3s cubic-bezier(.3,1.5,.5,1); }
   .ub.lungeDown{ animation:lungeDown .3s cubic-bezier(.3,1.5,.5,1); }
-  /* `shake` was referenced here and defined NOWHERE in the sheet, so taking a
-     blow moved nothing: the flinch is the cheapest impact cue there is. */
-  @keyframes shake{ 0%{ transform:translateX(0); filter:brightness(2.1) }
-    22%{ transform:translateX(-5px) rotate(-2deg); filter:none }
-    55%{ transform:translateX(5px) rotate(2deg) }
-    80%{ transform:translateX(-2px) }
-    100%{ transform:translateX(0); filter:none } }
-  .ub.hurt{ animation:shake .3s ease; }
-  .ub.fall{ animation:fall .52s ease-in forwards; }
+  .ub.fall{ animation:fall .5s ease-in forwards; }
+  .ub.climbing{ animation:climb .4s cubic-bezier(.2,.9,.3,1); }
+  /* ---------- the verdict: the payoff of the whole prep decision ---------- */
+  .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
+    background:radial-gradient(ellipse at 50% 45%, rgba(6,12,6,.82), rgba(4,8,4,.94)); }
+  .verdict[hidden]{ display:none !important; }
+  .verdict .vhead{ font-size:clamp(22px,7cqw,30px); font-weight:900; letter-spacing:2px;
+    color:var(--lime); text-shadow:0 0 26px rgba(150,255,90,.4), 0 4px 0 #33591a;
+    animation:vslam .34s cubic-bezier(.2,1.6,.4,1); }
+  .verdict.lose .vhead{ color:#ff7b7b; text-shadow:0 0 26px rgba(255,90,90,.4), 0 4px 0 #6b1f1f; }
+  .verdict .vsub{ font-size:14px; font-weight:800; color:#cfe0c2; letter-spacing:.4px; }
+  .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270; }
+  @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
   .benchwrap{ flex:0 0 auto; border-top:1px solid #1e2c1a; padding-top:4px; }
   /* the bench: your barn, scrolling sideways under the field */
   .handrow{ display:flex; gap:6px; padding:4px 6px 2px; overflow-x:auto; overflow-y:hidden;
@@ -1193,7 +1032,7 @@
           <b>what order</b>, and pay Feed for them; then the match resolves itself
           and you watch. The <b>front</b> of each line takes every blow: <b>Might</b>
           is what it hits for, <b>Hide</b> is how long it stands there.<br>
-          Lose and their survivors trample you on the way out &mdash; the round
+          What gets past the top floor eats an egg &mdash; the round
           still ends, and the pair in the Nest still breeds. Every clutch throws
           <i>two</i> chicks (three from a Fertile parent) and you keep <i>one</i>.
           The rest go to market for Slop. Breed two relatives and the gene pool
@@ -1252,36 +1091,20 @@
     </div>
 
     <div class="field" id="arena">
-      <!-- their line, up the field and a little smaller: the cheap depth cue -->
-      <div class="side them">
-        <div class="sideLbl" id="foeLbl">THE OPPOSITION</div>
-        <div class="lineRow them" id="foeLine"></div>
+      <div class="nestbar" id="nestBar">
+        <span class="nlbl">THE NEST</span>
+        <span class="neggs" id="nestEggs">&#129370;&#129370;&#129370;</span>
+        <span class="nhp" id="nestHp">40</span>
       </div>
-      <!-- no-man's-land: the fence line, and the read that makes ORDER legible -->
-      <div class="midband">
-        <div class="midline"><span id="fIntent">scouting</span></div>
-        <div class="cast" id="fCast" hidden>
-          <div class="cbars"><i class="cu" id="castU"></i><i class="ct" id="castT"></i></div>
-          <div class="cnums">
-            <span class="cu">YOURS <b id="castUn">0</b></span>
-            <span class="cvs">vs</span>
-            <span class="ct">THEIRS <b id="castTn">0</b></span>
-          </div>
-          <div class="cread" id="castRead"></div>
-        </div>
-      </div>
-      <!-- your line, near, full size -->
-      <div class="side us">
-        <div class="lineRow us" id="pen"></div>
-        <div class="sideLbl" id="myLbl">YOUR LINE &mdash; the front takes the blows</div>
-      </div>
-      <!-- the result of the whole prep decision, announced -->
+      <div class="tower" id="tower"></div>
+      <div class="gate" id="gateLbl">THE DOOR &mdash; they come in here</div>
       <div class="verdict" id="fVerdict" hidden></div>
-      <!-- legacy nodes kept so older helpers still have something to talk to -->
       <div id="foeBox" hidden><canvas id="fEm" width="8" height="8"></canvas><span id="fName"></span>
         <i id="fHpGhost"></i><i id="fHpFill"></i><span id="fHpTxt"></span><span id="fBadges"></span></div>
+      <div id="pen" hidden></div><div id="foeLine" hidden></div>
+      <div id="fCast" hidden></div><div id="fIntent" hidden></div>
+      <div id="foeLbl" hidden></div><div id="myLbl" hidden></div>
     </div>
-
     <div class="coach" id="coach" hidden></div>
     <div class="benchwrap"><div class="handrow" id="hand"></div></div>
     <div class="fbar">
@@ -1803,7 +1626,7 @@ function makeFoe(i, mods){
    drawn by the same painter from the same visual genes — so what you are
    reading across the field is exactly what you read on your own cards.
    ========================================================================== */
-const ENEMY_BASE = 6.8;       // leader stat power at round 1
+const ENEMY_BASE = 2.9;       // leader stat power at round 1
 const ENEMY_GROWTH = 1.205;   // per round; fitted by simulation
 const GRUNT_FRAC = 0.56;      // a grunt is this much of its leader
 // Each roster entry lends its leader a keyword, so the flavour survives the
@@ -1822,23 +1645,30 @@ function enemyBeast(name, sp, trait, bias, sil, tint){
   if (tint != null) c.vis.hue = Math.round(tint * 360);
   return c;
 }
-function makeEnemyTeam(i, mods){
+function makeEnemyTeam(i, mods, wave, waves){
   const f = FOES[clamp(i, 0, FOES.length - 1)];
   const mul = (mods && mods.hpMul) || 1;
   const bump = (mods && mods.foeMight) || 0;
-  const n = teamSize(i);
-  const lead = ENEMY_BASE * Math.pow(ENEMY_GROWTH, i) * (f.boss ? 1.25 : 1) * mul;
+  const w = wave || 1, ws = waves || 1;
+  const last = w >= ws;
+  // Waves grow as they come, and the named foe walks in with the last one.
+  const swell = 1 + 0.14 * (w - 1);
+  const n = clamp(1 + Math.floor((teamSize(i) - 1) * w / ws), 1, FLOOR_CAP + 1);
+  const lead = ENEMY_BASE * Math.pow(ENEMY_GROWTH, i) * (f.boss ? 1.25 : 1) * mul * swell;
   const team = [];
-  team.push(enemyBeast(f.name, lead + bump, LEADER_TRAIT[i] || 'none', 0.5, f.sil, f.tint));
-  team[0].leader = 1;
+  if (last){
+    team.push(enemyBeast(f.name, lead + bump, LEADER_TRAIT[i] || 'none', 0.5, f.sil, f.tint));
+    team[0].leader = 1;
+  }
   const grunt = GRUNT_FRAC * lead;
-  for (let k = 1; k < n; k++){
-    // alternating shapes: the odd ones are walls, the even ones are teeth
+  const need = last ? n - 1 : n;
+  for (let k = 0; k < need; k++){
     team.push(enemyBeast(f.gname || (f.name.split(' ')[0] + ' ' + ['Hand', 'Kin', 'Runt', 'Whelp'][k % 4]),
       grunt + bump, 'none', k % 2 ? 0.05 : 0.95, f.sil, f.tint));
   }
-  return team;
+  return team.length ? team : [enemyBeast(f.name.split(' ')[0] + ' Runt', grunt + bump, 'none', 0.5, f.sil, f.tint)];
 }
+
 /* ============================== RUN STATE ================================= */
 let R = null;   // the run
 let F = null;   // the current fight (null outside combat)
@@ -1846,6 +1676,7 @@ let F = null;   // the current fight (null outside combat)
 function newRun(seed){
   srand(seed == null ? (Date.now() % 1e9) : seed);
   _nid = 1;
+  F = null;              // ids restart at 1, so a stale battle would claim them
   STUD = {};
   R = {
     hp: START_HP, maxHp: START_HP,
@@ -1853,7 +1684,7 @@ function newRun(seed){
     idx: 0,                 // which foe is next
     nest: [],               // ids of the two in the nest
     slop: 2, ritual: 'natural', hazard: null, litter: null,
-    line: [], regalBonus: 0, lastLost: false,
+    line: [], plan: emptyPlan(), regalBonus: 0, lastLost: false,
     log: [], born: 0, retired: 0, wins: 0, sold: 0,
     lastHatch: null, wildOffer: null, over: null,
     // cosmetic spine: fights won without losing a beast. Pays nothing — it is
@@ -1942,50 +1773,121 @@ function fLog(t){ if (F && F.log){ F.log.push(t); if (F.log.length > 60) F.log.s
    synchronous and deterministic — the battle is fully resolved the moment it
    starts, and the UI replays the transcript it leaves behind.
    ========================================================================== */
-const LINE_SLOTS = 4;
+/* ================================ THE TOWER ===============================
+   The barn is three floors and a nest on top. They come in WAVES, arriving on
+   the ground floor, and every wave they climb one floor higher unless something
+   of yours is standing in the way. Whatever reaches the top gets at the eggs —
+   and the eggs are your health.
+
+   You never fight during a wave. Between waves you place beasts on floors and
+   spend Feed; committing resolves the whole wave synchronously, and what you
+   watch afterwards is a replay of the transcript.
+   ========================================================================== */
+const FLOORS = 3;                 // 0 = ground, they arrive here; FLOORS-1 = top
+const FLOOR_CAP = 2;              // how many of yours may hold one floor
+const EXCHANGES_PER_WAVE = 3;     // blows traded on a floor before they climb
+const LINE_SLOTS = FLOORS * FLOOR_CAP;
 const MAX_PEN = LINE_SLOTS;                       // kept: older callers use it
-/** Feed is a deployment budget now, not a per-turn drip. */
+/** How many waves this round throws at you. */
+function waveCount(idx){ return clamp(2 + Math.floor(idx / 4), 2, 4); }
+
+/** Feed is a placement budget, refreshed every wave. */
 function lineBudget(){
   return LINE_BASE + Math.floor(R.idx * LINE_GROW) + (R.regalBonus || 0) +
     ((R.hazard && R.hazard.mods.feed) || 0);
 }
 function feedFor(idx){ return LINE_BASE + Math.floor(idx * LINE_GROW); }
-function lineCost(ids){
-  return (ids || R.line).reduce((t, id) => { const c = cardById(id); return t + (c ? c.cost : 0); }, 0);
+
+/* ---------------------------------------------------------- placement ---- */
+function emptyPlan(){ const p = []; for (let i = 0; i < FLOORS; i++) p.push([]); return p; }
+function planFlat(plan){ return (plan || R.plan).reduce((a, f) => a.concat(f), []); }
+function floorOf(id, plan){
+  const p = plan || R.plan;
+  for (let i = 0; i < p.length; i++) if (p[i].indexOf(id) >= 0) return i;
+  return -1;
 }
-function lineIsLegal(ids){
-  if (!ids.length || ids.length > LINE_SLOTS) return false;
-  if (new Set(ids).size !== ids.length) return false;
-  if (!ids.every((id) => cardById(id) && R.nest.indexOf(id) < 0)) return false;
-  return lineCost(ids) <= lineBudget();
+/** What the beasts you are ADDING this wave cost. Anything already on a floor
+ *  and still breathing is paid for; you are not charged rent. */
+function lineCost(){
+  return planFlat().reduce((t, id) => {
+    if (F && F.paid && F.paid[id]) return t;
+    const c = cardById(id);
+    return t + (c ? c.cost : 0);
+  }, 0);
 }
-function setLine(ids){
-  if (!lineIsLegal(ids)) return false;
-  R.line = ids.slice();
-  return true;
-}
-/** Can this beast still be added — a slot free, and the Feed to field it? */
-function canField(c){
-  if (!c || R.line.indexOf(c.id) >= 0) return false;
-  if (R.line.length >= LINE_SLOTS) return false;
+function canPlace(c, floor){
+  if (!c || floorOf(c.id) >= 0) return false;
+  if (R.nest.indexOf(c.id) >= 0) return false;
+  if (floor < 0 || floor >= FLOORS) return false;
+  if (R.plan[floor].length >= FLOOR_CAP) return false;
   return lineCost() + c.cost <= lineBudget();
 }
-function toggleField(id){
-  const i = R.line.indexOf(id);
-  if (i >= 0){ R.line.splice(i, 1); return true; }
+/** Any floor with room that you can afford — used by a plain tap. */
+function firstFreeFloor(c){
+  for (let i = 0; i < FLOORS; i++) if (canPlace(c, i)) return i;
+  return -1;
+}
+function placeBeast(id, floor){
   const c = cardById(id);
-  if (!canField(c)) return false;
-  R.line.push(id);
+  if (!canPlace(c, floor)) return false;
+  R.plan[floor].push(id);
   return true;
 }
-/** Shuffle a beast up or down the order. The front of the line eats first. */
+function unplace(id){
+  const f = floorOf(id);
+  if (f < 0) return false;
+  if (F && F.paid && F.paid[id]) return false;   // it is already on the field
+  R.plan[f].splice(R.plan[f].indexOf(id), 1);
+  return true;
+}
+function toggleField(id, floor){
+  if (floorOf(id) >= 0) return unplace(id);
+  const c = cardById(id);
+  const f = (floor == null) ? firstFreeFloor(c) : floor;
+  if (f < 0) return false;
+  return placeBeast(id, f);
+}
+/** Move a beast between floors, or within one. dir -1 is up the tower. */
 function moveInLine(id, dir){
-  const i = R.line.indexOf(id);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= R.line.length) return false;
-  const t = R.line[i]; R.line[i] = R.line[j]; R.line[j] = t;
+  const f = floorOf(id);
+  if (f < 0) return false;
+  if (F && F.paid && F.paid[id]) return false;
+  const to = f - dir;                       // -1 means "toward the nest"
+  if (to < 0 || to >= FLOORS) return false;
+  if (R.plan[to].length >= FLOOR_CAP) return false;
+  R.plan[f].splice(R.plan[f].indexOf(id), 1);
+  R.plan[to].push(id);
   return true;
 }
+function planIsLegal(){
+  const flat = planFlat();
+  if (new Set(flat).size !== flat.length) return false;
+  if (R.plan.some((f) => f.length > FLOOR_CAP)) return false;
+  if (!flat.every((id) => cardById(id) && R.nest.indexOf(id) < 0)) return false;
+  return lineCost() <= lineBudget();
+}
+/** Older name, kept for the tests and the sim: set a flat line, filling floors
+ *  from the top down so index 0 is your last line of defence. */
+function setLine(ids){
+  const plan = emptyPlan();
+  let f = 0;
+  for (const id of ids){
+    while (f < FLOORS && plan[f].length >= FLOOR_CAP) f++;
+    if (f >= FLOORS) return false;
+    plan[f].push(id);
+  }
+  const keep = R.plan;
+  R.plan = plan;
+  if (!planIsLegal()){ R.plan = keep; return false; }
+  R.line = planFlat();
+  return true;
+}
+function lineIsLegal(ids){
+  if (!ids || !ids.length || ids.length > LINE_SLOTS) return false;
+  if (new Set(ids).size !== ids.length) return false;
+  return ids.every((id) => cardById(id) && R.nest.indexOf(id) < 0);
+}
+function canField(c){ return firstFreeFloor(c) >= 0; }
 
 /* ------------------------------------------------------------- the field -- */
 function unitOf(c, side, uid){
@@ -2001,41 +1903,81 @@ function frontOf(line){
   return plain.length ? plain[0] : live[0];
 }
 function livingOf(line){ return line.filter((u) => u.alive); }
-/** A unit's damage, with its own side's Rally counted in. */
-/** Older render code asks for a pen beast's damage by this name. */
+/** Older render code asks for a beast's damage by this name. */
 function beastMight(b){
   if (!b || !b.c) return 0;
-  const line = (F && F.mine) ? F.mine : [];
+  const line = (F && F.floors) ? floorMates(b) : [];
   return unitMight(b, line);
+}
+/** Everyone standing on the same floor, same side — Rally only reaches them. */
+function floorMates(u){
+  if (!F || !F.floors) return [u];
+  for (const fl of F.floors){
+    if (fl.us.indexOf(u) >= 0) return fl.us;
+    if (fl.them.indexOf(u) >= 0) return fl.them;
+  }
+  return [u];
 }
 function unitMight(u, line){
   let d = cardDamage(u.c);
   if (d <= 0) return 0;
-  for (const o of line) if (o !== u && o.alive && o.c.trait === 'rally') d += 2;
+  for (const o of (line || [])) if (o !== u && o.alive && o.c.trait === 'rally') d += 2;
   return d;
 }
+
 function startBattle(mods){
   const m = mods || {};
-  let uid = 1;
-  const mine = R.line.map((id) => unitOf(Object.assign({}, cardById(id)), 'us', uid++));
-  const theirs = makeEnemyTeam(R.idx, m).map((c) => unitOf(c, 'them', uid++));
-  // A REPLAY has to start where the fight started. The rules resolve the whole
-  // battle synchronously the instant you commit, so u.hp is already the ENDING
-  // value by the time anything is drawn — these two purely cosmetic fields hold
-  // the state the screen is currently showing, and only applyEv() moves them.
-  // Nothing in the rules reads them.
-  for (const u of mine.concat(theirs)){ u.vhp = u.max; u.valive = 1; }
-  const vhp = R.hp;                // your own health, as the replay will show it
   F = {
-    vhp,
-    mine, theirs, mods: m, over: null, round: 0, events: [], log: [],
-    trample: 0, uid,
-    pen: mine,                       // older render code reads F.pen
-    foe: { name: FOES[clamp(R.idx, 0, RUN_LEN - 1)].name, hp: 1, maxHp: 1, poison: 0, bonus: 0, block: 0 },
+    floors: [], wave: 0, waves: waveCount(R.idx), phase: 'prep',
+    mods: m, over: null, events: [], log: [], uid: 1, paid: {}, breached: 0,
+    mine: [], theirs: [],                 // flat views, rebuilt after every change
   };
+  for (let i = 0; i < FLOORS; i++) F.floors.push({ us: [], them: [] });
+  deployPlan();
   return F;
 }
-/* ------------------------------------------------------------- resolution - */
+/** Walk the placement plan onto the floors, charging Feed once per beast. */
+function deployPlan(){
+  if (!F) return 0;
+  let n = 0;
+  for (let i = 0; i < FLOORS; i++){
+    for (const id of R.plan[i]){
+      if (F.paid[id]) continue;
+      const c = cardById(id);
+      if (!c) continue;
+      const u = unitOf(Object.assign({}, c), 'us', F.uid++);
+      u.floor = i;
+      F.floors[i].us.push(u);
+      F.paid[id] = 1;
+      n++;
+      if (c.trait === 'cursed') R.hp = Math.max(0, R.hp - 2);
+      ev('deploy', { uid: u.uid, floor: i });
+    }
+  }
+  reflow();
+  return n;
+}
+/** Rebuild the flat views the renderer and the older helpers read. */
+function reflow(){
+  if (!F) return;
+  F.mine = F.floors.reduce((a, fl) => a.concat(fl.us), []);
+  F.theirs = F.floors.reduce((a, fl) => a.concat(fl.them), []);
+}
+/** The next wave walks in on the ground floor. */
+function spawnWave(){
+  if (!F || F.wave >= F.waves) return false;
+  F.wave++;
+  const team = makeEnemyTeam(R.idx, F.mods, F.wave, F.waves);
+  for (const c of team){
+    const u = unitOf(c, 'them', F.uid++);
+    u.floor = 0;
+    F.floors[0].them.push(u);
+    ev('arrive', { uid: u.uid });
+  }
+  reflow();
+  return true;
+}
+/* --------------------------------------------------------- resolution ---- */
 function hitUnit(u, raw, from, line){
   if (!u.alive) return 0;
   const mult = u.c.trait === 'feral' ? 1.5 : 1;
@@ -2050,7 +1992,6 @@ function hitUnit(u, raw, from, line){
   if (u.hp <= 0){ u.alive = 0; ev('die', { uid: u.uid, side: u.side }); }
   return dmg;
 }
-/** One beast's swing at the beast in front of it. */
 function swing(u, target, myLine){
   if (!u.alive || !target || !target.alive) return 0;
   const per = unitMight(u, myLine);
@@ -2076,64 +2017,119 @@ function tickPoison(line){
     if (u.hp <= 0){ u.alive = 0; ev('die', { uid: u.uid, side: u.side }); }
   }
 }
-const MAX_EXCHANGES = 30;
-const TRAMPLE_CAP = 0.34;   // most of a losing blow, never all of you
-/**
- * Fight the whole thing, right now. Both front-runners swing at the same
- * instant, so a trade can take them both — no first-strike advantage to whoever
- * the loop happens to touch first.
- */
-function resolveBattle(){
-  if (!F || F.over) return F && F.over;
-  // Swift goes in before the bell.
-  for (const u of F.mine) if (u.c.trait === 'swift'){ const t = frontOf(F.theirs); if (t) swing(u, t, F.mine); }
-  for (const u of F.theirs) if (u.c.trait === 'swift'){ const t = frontOf(F.mine); if (t) swing(u, t, F.theirs); }
-
-  while (F.round < MAX_EXCHANGES){
-    const a = frontOf(F.mine), b = frontOf(F.theirs);
+/** One floor, one round of blows. Both fronts swing at the same instant. */
+function fightFloor(fl, idx){
+  for (let k = 0; k < EXCHANGES_PER_WAVE; k++){
+    const a = frontOf(fl.us), b = frontOf(fl.them);
     if (!a || !b) break;
-    F.round++;
-    ev('clash', { round: F.round, a: a.uid, b: b.uid });
-    const dA = unitMight(a, F.mine), dB = unitMight(b, F.theirs);
+    ev('clash', { floor: idx, a: a.uid, b: b.uid });
+    const dA = unitMight(a, fl.us), dB = unitMight(b, fl.them);
     const hitsA = a.c.trait === 'frenzy' ? 2 : 1, hitsB = b.c.trait === 'frenzy' ? 2 : 1;
     ev('strike', { uid: a.uid, side: 'us', per: dA, hits: hitsA, target: b.uid });
     ev('strike', { uid: b.uid, side: 'them', per: dB, hits: hitsB, target: a.uid });
-    // simultaneous: both blows are struck before either body falls
     const aWas = a.alive, bWas = b.alive;
-    for (let k = 0; k < hitsA && b.alive; k++) hitUnit(b, dA, a, F.mine);
-    if (aWas) for (let k = 0; k < hitsB && a.alive; k++) hitUnit(a, dB, b, F.theirs);
+    for (let h = 0; h < hitsA && b.alive; h++) hitUnit(b, dA, a, fl.us);
+    if (aWas) for (let h = 0; h < hitsB && a.alive; h++) hitUnit(a, dB, b, fl.them);
     if (a.c.trait === 'venom' && bWas) b.pois += Math.max(1, Math.floor(a.c.might / 3));
     if (b.c.trait === 'venom' && aWas) a.pois += Math.max(1, Math.floor(b.c.might / 3));
     if (a.c.trait === 'leech' && a.alive){
       const heal = Math.min(R.maxHp - R.hp, Math.floor(dA / 2));
       R.hp += heal; if (heal) ev('heal', { v: heal, hp: R.hp });
     }
-    tickPoison(F.mine); tickPoison(F.theirs);
   }
+  tickPoison(fl.us); tickPoison(fl.them);
+}
+function clearDead(){
+  for (const fl of F.floors){
+    fl.us = fl.us.filter((u) => u.alive);
+    fl.them = fl.them.filter((u) => u.alive);
+  }
+  reflow();
+}
+/**
+ * Resolve one wave: every floor trades blows, then anything of theirs standing
+ * on an undefended floor climbs. What climbs off the top reaches the nest.
+ */
+function resolveWave(){
+  if (!F || F.over) return F && F.over;
+  F.events = [];
+  ev('wave', { n: F.wave, of: F.waves });
 
-  const us = livingOf(F.mine).length, them = livingOf(F.theirs).length;
-  if (them === 0) F.over = 'win';
-  else if (us === 0) F.over = 'lose';
-  else {
-    // a stalemate goes to whoever is still standing in force
-    const spUs = livingOf(F.mine).reduce((t, u) => t + statPower(u.c.might, u.hp), 0);
-    const spThem = livingOf(F.theirs).reduce((t, u) => t + statPower(u.c.might, u.hp), 0);
-    F.over = spUs > spThem ? 'win' : 'lose';
+  for (let i = 0; i < FLOORS; i++) fightFloor(F.floors[i], i);
+  clearDead();
+
+  // the climb, top floor first so they do not leapfrog in one pass
+  for (let i = FLOORS - 1; i >= 0; i--){
+    const fl = F.floors[i];
+    if (!fl.them.length) continue;
+    if (livingOf(fl.us).length) continue;          // held
+    const movers = fl.them.slice();
+    fl.them = [];
+    if (i === FLOORS - 1){
+      // through the top: they get at the eggs
+      for (const u of movers){
+        const bite = Math.max(1, unitMight(u, movers));
+        R.hp = Math.max(0, R.hp - bite);
+        F.breached += bite;
+        ev('breach', { uid: u.uid, v: bite, hp: R.hp });
+      }
+    } else {
+      for (const u of movers){
+        u.floor = i + 1;
+        F.floors[i + 1].them.push(u);
+        ev('climb', { uid: u.uid, to: i + 1 });
+      }
+    }
   }
-  if (F.over === 'lose'){
-    // whatever is left of them walks over you on the way out
-    // What they have left walks over you — but capped, so one bad match is a
-    // wound and not the end of a run you were otherwise winning.
-    const raw = livingOf(F.theirs).reduce((t, u) => t + unitMight(u, F.theirs), 0);
-    F.trample = Math.max(3, Math.min(raw, Math.ceil(R.maxHp * TRAMPLE_CAP)));
-    R.hp = Math.max(0, R.hp - F.trample);
-    F.lost = 1;
-    ev('trample', { v: F.trample, hp: R.hp });
-    if (R.hp <= 0) F.dead = 1;
+  reflow();
+
+  if (R.hp <= 0){ F.over = 'lose'; F.dead = 1; F.lost = 1; ev('end', { won: false }); return F.over; }
+  if (F.wave >= F.waves && !F.theirs.length){ F.over = 'win'; ev('end', { won: true }); return F.over; }
+  if (F.wave >= F.waves && F.theirs.length){
+    // no reinforcements left to arrive: fight it out where it stands
+    let guard = 0;
+    while (F.theirs.length && guard++ < 12 && R.hp > 0){
+      for (let i = 0; i < FLOORS; i++) fightFloor(F.floors[i], i);
+      clearDead();
+      for (let i = FLOORS - 1; i >= 0; i--){
+        const fl = F.floors[i];
+        if (!fl.them.length || livingOf(fl.us).length) continue;
+        const movers = fl.them.slice();
+        fl.them = [];
+        if (i === FLOORS - 1){
+          for (const u of movers){
+            const bite = Math.max(1, unitMight(u, movers));
+            R.hp = Math.max(0, R.hp - bite);
+            F.breached += bite;
+            ev('breach', { uid: u.uid, v: bite, hp: R.hp });
+          }
+        } else for (const u of movers){ u.floor = i + 1; F.floors[i + 1].them.push(u); ev('climb', { uid: u.uid, to: i + 1 }); }
+      }
+      reflow();
+    }
+    if (R.hp <= 0){ F.over = 'lose'; F.dead = 1; F.lost = 1; ev('end', { won: false }); return F.over; }
+    F.over = 'win';
+    F.lost = F.breached > 0 ? 1 : 0;
+    ev('end', { won: true, breached: F.breached });
+    return F.over;
   }
-  ev('end', { won: F.over === 'win', trample: F.trample });
+  return null;                                    // more waves to come
+}
+/** Older name: run the whole round to its conclusion in one call. */
+function resolveBattle(){
+  if (!F) return null;
+  let guard = 0;
+  while (!F.over && guard++ < 40){
+    if (F.wave < F.waves && !F.theirs.length) spawnWave();
+    else if (F.wave === 0) spawnWave();
+    resolveWave();
+    if (!F.over && F.wave < F.waves) spawnWave();
+  }
+  if (!F.over) F.over = R.hp > 0 ? 'win' : 'lose';
   return F.over;
 }
+const MAX_EXCHANGES = EXCHANGES_PER_WAVE * 12;
+const TRAMPLE_CAP = 0.34;   // kept: the breach is per-beast now
 
 /* ============================ AFTER THE FIGHT ============================= */
 /** Win bookkeeping: heal a little, breed the nest, queue a wild offer. */
@@ -2144,7 +2140,7 @@ function resolveBattle(){
  * match out, so they breed regardless. The run ends when YOU run out of health.
  */
 function winFight(){
-  const lost = !!(F && F.lost);
+  const lost = !!(F && F.lost);   // a breach: something got at the eggs
   R.wins += lost ? 0 : 1;
   R.streakBroke = 0;
   if (lost){ R.streakBroke = R.streak; R.streak = 0; }
@@ -2157,8 +2153,9 @@ function winFight(){
   } else {
     R.hp = Math.min(R.maxHp, R.hp + 3);               // a night's rest, no more
   }
-  R.regalBonus = R.line.filter((id) => { const c = cardById(id); return c && c.trait === 'regal'; }).length;
+  R.regalBonus = planFlat().filter((id) => { const c = cardById(id); return c && c.trait === 'regal'; }).length;
   R.line = [];
+  R.plan = emptyPlan();
   const a = cardById(R.nest[0]), b = cardById(R.nest[1]);
   R.litter = breedLitter(a, b, R.ritual);
   R.lastHatch = { a, b, litter: R.litter };
@@ -3591,210 +3588,127 @@ function frontOfList(units){
 }
 function renderPen(){ if (F) renderLine($('pen'), F.mine, false); }
 
-function renderFight(){
-  const prep = !F;
-  if (prep){
-    hideVerdict();
-    const ar0 = $('arena');
-    const stale = ar0 && ar0.querySelectorAll ? ar0.querySelectorAll('.killflash') : [];
-    for (let i = 0; i < stale.length; i++) if (stale[i].remove) stale[i].remove();
+/** One floor of the barn: your side on the left, theirs on the right. */
+function floorEl(idx){
+  const fl = F ? F.floors[idx] : null;
+  const d = document.createElement('div');
+  const top = idx === FLOORS - 1;
+  d.className = 'flr' + (top ? ' top' : '') + (idx === 0 ? ' ground' : '');
+  if (d.dataset) d.dataset.floor = idx;
+
+  const mine = document.createElement('div');
+  mine.className = 'half us';
+  const placed = R.plan[idx].map((id) => cardById(id)).filter(Boolean);
+  const live = fl ? fl.us : [];
+  const shown = F ? live : placed.map((c, i) =>
+    ({ c, side: 'us', uid: -1 - (idx * 10 + i), hp: cardHide(c), max: cardHide(c), alive: 1 }));
+  for (const u of shown) mine.appendChild(unitEl(u, { front: u === frontOf(shown), tiny: 1 }));
+  for (let i = shown.length; i < FLOOR_CAP; i++){
+    const e = document.createElement('div');
+    e.className = 'hole' + (!F ? ' open' : '');
+    e.innerHTML = F ? '' : '<span>+</span>';
+    if (!F) e.onclick = () => { if (dropHere(idx)) renderFight(); };
+    mine.appendChild(e);
   }
-  const scr = $('fight');
-  // the commit is a one-way hinge; prep puts the bench back
-  if (scr && scr.classList) scr.classList.toggle('committed', !prep);
-  motes();
+
+  const theirs = document.createElement('div');
+  theirs.className = 'half them';
+  const inv = fl ? fl.them : [];
+  for (const u of inv) theirs.appendChild(unitEl(u, { front: u === frontOf(inv), tiny: 1 }));
+  if (!inv.length){
+    const e = document.createElement('div');
+    e.className = 'hole quiet';
+    theirs.appendChild(e);
+  }
+
+  const lbl = document.createElement('div');
+  lbl.className = 'flrno';
+  lbl.textContent = top ? 'TOP' : (idx === 0 ? 'DOOR' : 'MID');
+  d.appendChild(lbl);
+  d.appendChild(mine);
+  d.appendChild(theirs);
+  return d;
+}
+/** A tap on an empty slot fields the beast you have selected on the bench. */
+let benchPick = 0;
+function dropHere(floor){
+  if (!benchPick) return false;
+  const c = cardById(benchPick);
+  if (!c || !canPlace(c, floor)) { sfxDeny && sfxDeny(); return false; }
+  placeBeast(benchPick, floor);
+  benchPick = 0;
+  sfxLand && sfxLand();
+  return true;
+}
+function renderTower(){
+  const t = $('tower');
+  t.innerHTML = '';
+  for (let i = FLOORS - 1; i >= 0; i--) t.appendChild(floorEl(i));
+}
+function renderFight(){
+  const prep = !F || F.phase === 'prep';
   hpBar($('fHp'), $('fHpBar'));
   pips($('fPips'));
-  const foeName = FOES[clamp(R.idx, 0, RUN_LEN - 1)].name;
-  $('foeLbl').innerHTML = prep
-    ? 'SCOUTING &mdash; <b>' + foeName + '</b> brings ' + teamSize(R.idx) + ''
-    : '<b>' + foeName + '</b>';
-  // A replay must never print its own ending. While F.playing is set the two
-  // labels stay neutral and the CLASH events tick the exchange counter; only
-  // the end of the sequence is allowed to say how it went.
-  $('myLbl').innerHTML = prep
-    ? 'YOUR LINE &mdash; the front takes the blows'
-    : (F.playing ? 'the lines meet' : '');
-  $('fIntent').textContent = prep ? 'tap a beast to field it'
-    : (F.playing ? 'they meet' : '');   // the verdict overlay speaks for the end
+  $('nestHp').textContent = R.hp;
+  const eggs = Math.max(1, Math.round(3 * R.hp / R.maxHp));
+  $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
+  const waves = F ? F.waves : waveCount(R.idx);
+  const wave = F ? F.wave : 0;
+  $('gateLbl').innerHTML = 'THE DOOR &mdash; wave <b>' + Math.max(1, wave) + '</b> of <b>' + waves + '</b>' +
+    (F && F.wave >= F.waves ? ' &middot; last one' : '');
 
-  // the opposition — scouted in prep, live in battle
-  if (prep){
-    if (!R.scout || R.scoutIdx !== R.idx){
-      const seed = _seed;                       // scouting must not disturb the run's rng
-      R.scout = makeEnemyTeam(R.idx, fightMods()).map((c, i) =>
-        ({ c, side: 'them', uid: -100 - i, hp: cardHide(c), max: cardHide(c), alive: 1 }));
-      R.scoutIdx = R.idx;
-      _seed = seed;
-    }
-    renderLine($('foeLine'), R.scout, false);
-    renderLine($('pen'), R.line.map((id) => cardById(id)).filter(Boolean), true);
-  } else {
-    renderLine($('foeLine'), F.theirs, false);
-    renderLine($('pen'), F.mine, false);
-  }
+  renderTower();
 
-  // budget
   const fd = $('feed');
-  const spent = prep ? lineCost() : 0;
   const budget = lineBudget();
+  const spent = lineCost();
   fd.innerHTML = '';
   for (let i = 0; i < budget; i++) fd.innerHTML += '<i class="' + (i < budget - spent ? 'on' : '') + '"></i>';
-  $('piles').innerHTML = prep
-    ? '<b>' + spent + '/' + budget + '</b> Feed'
-    : '';
+  $('piles').innerHTML = '<b>' + spent + '/' + budget + '</b> Feed';
   const na = cardById(R.nest[0]), nb = cardById(R.nest[1]);
   $('nestNote').innerHTML = na && nb ? ICO('egg') + ' ' + na.name + ' + ' + nb.name : '';
 
   const pb = $('pBadges'); pb.innerHTML = '';
   if (R.hazard) pb.innerHTML += '<span class="bdg thn">' + R.hazard.name.toUpperCase() + '</span>';
-  // the streak lives HERE now, in pips, at every width
-  if (R.streak > 0) pb.innerHTML += '<span class="streak"><span class="slbl">' + R.streak +
-    ' CLEAN</span><b>' + '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b></span>';
+  if (F && F.breached) pb.innerHTML += '<span class="bdg" style="color:#ff9d9d">' + F.breached + ' got through</span>';
 
-  // the bench: everything not nested and not already fielded
-  // In battle the bench keeps its animals — greyed and untouchable — so the
-  // screen does not lurch when you commit, and the strip does not become a
-  // hundred pixels of nothing under a match that is still going on.
+  // the bench
   const bench = $('hand');
   bench.innerHTML = '';
-  const fielded = prep ? R.line : (F.mine || []).map((u) => u.c.id);
-  const avail = R.deck.filter((c) => R.nest.indexOf(c.id) < 0 && fielded.indexOf(c.id) < 0);
+  const avail = R.deck.filter((c) => R.nest.indexOf(c.id) < 0 && floorOf(c.id) < 0);
   for (const c of avail){
     const el = cardEl(c);
-    if (!prep || !canField(c)) el.classList.add('dead');
-    else el.onclick = () => { if (toggleField(c.id)){ sfxLand(); renderFight(); } };
+    const ok = canField(c);
+    if (!ok) el.classList.add('dead');
+    if (benchPick === c.id) el.classList.add('sel');
+    if (ok) el.onclick = () => {
+      if (benchPick === c.id){ benchPick = 0; renderFight(); return; }
+      benchPick = c.id;
+      const f = firstFreeFloor(c);
+      if (f >= 0 && !F){ placeBeast(c.id, f); benchPick = 0; sfxLand && sfxLand(); }
+      renderFight();
+    };
     bench.appendChild(el);
   }
-  // the only irreversible action in the game is the loudest control on it
+
   const btn = $('bEnd');
   if (prep){
-    const ok = R.line.length > 0;
-    btn.disabled = !ok;
-    btn.className = 'btn';
-    btn.textContent = ok ? 'SEND THEM IN' : 'FIELD A BEAST';
+    const anyOut = F ? F.mine.length : planFlat().length;
+    btn.disabled = !anyOut;
+    btn.className = 'btn sm';
+    btn.textContent = anyOut ? (F ? 'NEXT WAVE' : 'OPEN THE DOOR') : 'PLACE A BEAST';
   } else {
     btn.disabled = false;
     btn.className = 'btn alt sm';
-    btn.textContent = F.playing ? 'SKIP' : '...';
+    btn.textContent = F && F.playing ? 'SKIP' : '...';
   }
   const co = $('coach');
-  if (prep && R.idx === 0 && !taught()){
+  if (!F && R.idx === 0 && !taught()){
     co.hidden = false;
-    co.innerHTML = R.line.length
-      ? 'Order matters: the <b>front</b> of your line takes every blow. Put something that can survive there.'
-      : 'Tap beasts to field them. Then the match plays itself &mdash; all you control is <b>who</b> goes and <b>where</b>.';
+    co.innerHTML = planFlat().length
+      ? 'They climb toward <b>the nest</b>. A floor with nothing of yours on it does not stop them.'
+      : 'Tap a beast to post it on a floor. They arrive at <b>the door</b> and climb.';
   } else co.hidden = true;
-  forecast(prep);
-}
-
-/* ------------------------------------------------------------ the read ---
-   An autobattler IS the read, and this screen had none: you set an order and
-   found out whether it was right after it was too late to change. Everything
-   here is derived from the same pure functions the rules use, recomputed
-   synchronously on every field / unfield / reorder. It costs nothing. */
-function frontOfCards(cards){
-  if (!cards.length) return null;
-  const bul = cards.filter((c) => c.trait === 'bulwark');
-  if (bul.length) return bul[0];
-  const plain = cards.filter((c) => c.trait !== 'elusive');
-  return plain.length ? plain[0] : cards[0];
-}
-function frontMight(cards){
-  const f = frontOfCards(cards);
-  if (!f) return 0;
-  let d = cardDamage(f);
-  for (const o of cards) if (o !== f && o.trait === 'rally') d += 2;
-  return d * (f.trait === 'frenzy' ? 2 : 1);
-}
-function forecast(prep){
-  const box = $('fCast');
-  if (!box) return;
-  const mine = prep ? R.line.map(cardById).filter(Boolean) : [];
-  const theirs = prep && R.scout ? R.scout.map((u) => u.c) : [];
-  if (!prep || !mine.length || !theirs.length){ box.hidden = true; clearDuel(); return; }
-  box.hidden = false;
-  const myPow = mine.reduce((t, c) => t + statPower(cardDamage(c), cardHide(c)), 0);
-  const thPow = theirs.reduce((t, c) => t + statPower(cardDamage(c), cardHide(c)), 0);
-  const tot = Math.max(1, myPow + thPow);
-  const setW = (el, w) => {
-    if (!el || !el.style) return;
-    const s = w.toFixed(1) + '%';
-    if (el.style.width !== s){ el.style.width = s; anim(el, 'pulse', 340); }
-  };
-  setW($('castU'), 88 * myPow / tot);
-  setW($('castT'), 88 * thPow / tot);
-  const un = $('castUn'), tn = $('castTn');
-  if (un) un.textContent = Math.round(myPow);
-  if (tn) tn.textContent = Math.round(thPow);
-  // the sentence that makes ORDER legible: how long your front stands there,
-  // and how long theirs does
-  const myFront = frontOfCards(mine), thFront = frontOfCards(theirs);
-  const thHit = Math.max(1, frontMight(theirs)), myHit = Math.max(1, frontMight(mine));
-  const iHold = myFront ? Math.ceil(cardHide(myFront) / thHit) : 0;
-  const theyHold = thFront ? Math.ceil(cardHide(thFront) / myHit) : 0;
-  const rd = $('castRead');
-  if (rd) rd.innerHTML = myFront
-    ? '<b>' + myFront.name + '</b> holds ~<b>' + iHold + '</b> exchange' + (iHold === 1 ? '' : 's')
-      + ' &middot; you need <b>' + theyHold + '</b> to drop theirs'
-    : '';
-  drawDuel(myHit, thHit, iHold, theyHold);
-}
-function clearDuel(){
-  const ar = $('arena');
-  if (!ar || !ar.querySelectorAll) return;
-  const old = ar.querySelectorAll('.duel,.duellab');
-  for (let i = 0; i < old.length; i++) if (old[i].remove) old[i].remove();
-}
-/** The matchup that actually matters, drawn: YOUR front against THEIR front,
- *  across the midline. Re-order the line and the pink thread visibly re-aims —
- *  that one element is what makes order readable. */
-function drawDuel(myHit, thHit, iHold, theyHold){
-  clearDuel();
-  if (HEADLESS) return;
-  const ar = $('arena'), pen = $('pen'), foe = $('foeLine');
-  if (!ar || !pen || !foe || !pen.querySelector) return;
-  const a = rectOf(pen.querySelector('.ub.front')), b = rectOf(foe.querySelector('.ub.front'));
-  const box = rectOf(ar);
-  if (!a || !b || !box) return;
-  const x1 = a.left + a.width / 2 - box.left, y1 = a.top - box.top + 6;
-  const x2 = b.left + b.width / 2 - box.left, y2 = b.bottom - box.top - 6;
-  const dx = x2 - x1, dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const d = document.createElement('div');
-  d.className = 'duel';
-  d.style.left = x1 + 'px'; d.style.top = y1 + 'px'; d.style.width = len.toFixed(0) + 'px';
-  d.style.transform = 'rotate(' + (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2) + 'deg)';
-  ar.appendChild(d);
-  const lab = (x, y, txt, cls) => {
-    const e = document.createElement('div');
-    e.className = 'duellab' + (cls ? ' ' + cls : '');
-    e.textContent = txt;
-    // the label is centred on its point, so keep that point off the edges
-    e.style.left = Math.max(62, Math.min(box.width - 62, x)) + 'px';
-    e.style.top = y + 'px';
-    ar.appendChild(e);
-  };
-  // the labels hug their own tile, clear of the fence line in the middle
-  lab(x1 + dx * 0.08, y1 + dy * 0.08 - 9, 'hits ' + myHit + ' · holds ' + iHold, 'mine');
-  lab(x1 + dx * 0.92, y1 + dy * 0.92 + 9, 'hits ' + thHit + ' · holds ' + theyHold);
-}
-/** Barn dust in the arena air. Spawned once, then pure CSS forever. */
-function motes(){
-  const ar = $('arena');
-  if (HEADLESS || RM() || !ar || !ar.querySelector) return;
-  if (ar.querySelector('.mote')) return;
-  for (let i = 0; i < 8; i++){
-    const m = document.createElement('div');
-    m.className = 'mote';
-    const s = (2 + Math.random() * 3).toFixed(1) + 'px';
-    m.style.width = m.style.height = s;
-    m.style.left = (5 + Math.random() * 90).toFixed(0) + '%';
-    m.style.top = (18 + Math.random() * 64).toFixed(0) + '%';
-    m.style.animationDuration = (12 + Math.random() * 8).toFixed(1) + 's';
-    m.style.animationDelay = (-Math.random() * 20).toFixed(1) + 's';
-    ar.appendChild(m);
-  }
 }
 
 /* --------------------------------------------------------- the replay ---- */
@@ -3967,10 +3881,11 @@ const BEAT = { clash: 240, strike: 60, hurt: 130, die: 300, poison: 160, heal: 1
 /** The anticipation beat: the line is committed, and then nothing happens for a
  *  third of a second. That silence is what makes the first blow land. */
 const LEADIN = 320;
-function playBattle(list){
+function playBattle(list, out){
   if (HEADLESS){ finishBattle(); return; }
   let t = RM() ? 0 : LEADIN;
   seq = { alive: 1 };
+  if (F) F.playing = 1;
   const mine = seq;
   // the killing blow gets a beat of its own — but only the one that WINS it.
   // The kill that loses you the match is not a triumph; it gets the toll.
@@ -3988,7 +3903,7 @@ function playBattle(list){
     t += RM() ? Math.min(40, d) : (final ? Math.round(d * 2.2) + 340 : d);
     if (t > 9000) break;                      // never hold the player hostage
   }
-  at(t + 240, () => { if (seq === mine) finishBattle(); });
+  at(t + 240, () => { if (seq === mine) finishBattle(out); });
 }
 function seqFlush(){
   if (verdictOn){ dismissVerdict(); return; }
@@ -4021,7 +3936,7 @@ function showVerdict(){
   if (!box || !F) return false;
   const won = F.over === 'win';
   const alive = livingOf(F.mine).length;
-  const trample = F.trample || 0;
+  const breached = F.breached || 0;   // what got past the top and at the eggs
   box.className = 'verdict' + (won ? ' win' : ' lose');
   box.hidden = false;
   // the round pip fills, then the streak lands — the run visibly compounds
@@ -4032,17 +3947,19 @@ function showVerdict(){
       (i < R.idx ? 'done' : i === R.idx ? 'now' : '') + '"></i>';
   }
   const streakHtml = won && st > 0
-    ? '<span class="streak"><span class="slbl">' + st + ' clean</span><b>' +
+    ? '<span class="streak"><span class="slbl">' + st + ' held</span><b>' +
       '<i></i>'.repeat(Math.min(st, 5)) + '</b></span>'
     : (!won && R.streak > 0
       ? '<span class="streak brk"><span class="slbl">streak broken</span><b>' +
         '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b></span>' : '');
   box.innerHTML = '<div><div class="vhead">' +
-    (won ? 'THE FIELD IS YOURS' : 'YOUR LINE IS BROKEN') + '</div>' +
+    (won ? (breached ? 'THE NEST HOLDS' : 'NOT ONE GOT THROUGH') : 'THEY TOOK THE NEST') + '</div>' +
     '<div class="vsub">' + (won
-      ? (alive ? '<span class="ok">' + alive + '</span> still standing'
-               : 'not one of them walked off it')
-      : 'they trample you on the way out<b id="vTrample">0</b>') +
+      ? (breached
+          ? '<b id="vTrample">0</b> &middot; ' + (alive ? alive + ' of yours still standing' : 'the barn is empty')
+          : (alive ? '<span class="ok">' + alive + '</span> of yours still standing'
+                   : 'they died holding the door'))
+      : 'the eggs are gone') +
     '</div><div class="vrun"><div class="vpips">' + pipHtml + '</div>' + streakHtml + '</div>' +
     '<div class="vtap">tap to carry on</div></div>';
   verdictOn = true;
@@ -4053,9 +3970,9 @@ function showVerdict(){
   verdictAt = now();
   const bt = $('bEnd');
   if (bt){ bt.disabled = false; bt.className = 'btn'; bt.textContent = 'CARRY ON'; }
-  if (!won && trample){
+  if (won && breached){
     const n = box.querySelector && box.querySelector('#vTrample');
-    at(300, () => { if (n) countUp(n, trample, { from: 0, fmt: (v) => '−' + Math.round(v) + ' HEALTH' }); });
+    at(300, () => { if (n) countUp(n, breached, { from: 0, fmt: (v) => '−' + Math.round(v) + ' EGGS' }); });
   }
   at(2800, () => { if (verdictOn) dismissVerdict(); });
   return true;
@@ -4102,23 +4019,36 @@ function latchLine(){
   }
 }
 function beginBattle(){
-  if (F){ seqFlush(); return; }
-  if (!R.line.length) return;
-  if (!lineIsLegal(R.line)) return;
-  vSounded = false;
-  startBattle(fightMods());
-  resolveBattle();
+  if (F && F.playing){ seqFlush(); return; }
+  if (!F){
+    if (!planFlat().length || !planIsLegal()) return;
+    startBattle(fightMods());
+    R.line = planFlat();
+  } else {
+    deployPlan();                       // reinforcements walk in
+  }
+  F.phase = 'battle';
+  if (!F.theirs.length || F.wave === 0) spawnWave();
+  const out = resolveWave();
   const list = (F.events || []).slice();
   F.events = [];
-  F.playing = 1;
-  renderFight();          // rebuilds both lines at the START of the battle
-  latchLine();
-  playBattle(list);
+  sfxLand && sfxLand();
+  playBattle(list, out);
 }
-/** Older name, kept: the button and the keyboard both come through here. */
-function doEnd(){ if (verdictOn){ dismissVerdict(); return; }
-  if (seq) { seqFlush(); return; } if (!F) beginBattle(); }
-function doPlay(){ /* no cards are played mid-match any more */ }
+/** Between waves you get the tower back for a moment. */
+function betweenWaves(){
+  if (!F || F.over) return;
+  F.phase = 'prep';
+  F.playing = 0;
+  if (F.wave < F.waves) spawnWave();    // you can SEE what is coming before you spend
+  renderFight();
+}
+/** The one button: commit the placement, or skip the replay. */
+function doEnd(){
+  if (seq){ seqFlush(); return; }
+  if (!F || F.phase === 'prep') beginBattle();
+}
+function doPlay(){ /* nothing is played mid-wave */ }
 
 function resolveFight(){
   if (!F) return;
@@ -4842,6 +4772,10 @@ window.BB = {
   newRun, setNest, deckForFight,
   // the autobattler surface
   setLine, lineIsLegal, lineCost, lineBudget, canField, toggleField, moveInLine,
+  // the tower
+  FLOORS, FLOOR_CAP, EXCHANGES_PER_WAVE, waveCount, emptyPlan, planFlat, floorOf,
+  canPlace, firstFreeFloor, placeBeast, unplace, planIsLegal, deployPlan, reflow,
+  spawnWave, resolveWave, fightFloor, clearDead, floorMates,
   makeEnemyTeam, teamSize, startBattle, resolveBattle, frontOf, livingOf, unitMight, TRAMPLE_CAP,
   hitUnit, swing, tickPoison, unitOf, LINE_SLOTS, MAX_EXCHANGES,
   winFight, keepChick, breedLitter, takeWild, retire, mustCull, bestBeast, cardById, uniquifyName,

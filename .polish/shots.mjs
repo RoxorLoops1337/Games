@@ -53,28 +53,18 @@ for (; steps < 2200; steps++) {
     await page.waitForTimeout(50);
     await click('#bFight');
   } else if (await on('fight')) {
-    const fielded = (await page.$$('#pen .ub')).length;
     const bench = await page.$$('#hand .card:not(.dead)');
-    if (bench.length && fielded < 4) {
+    const btn = await page.$eval('#bEnd', (e) => e.textContent + '|' + e.disabled).catch(() => '');
+    if (bench.length && btn.indexOf('true') >= 0) {
       await bench[0].click().catch(() => {});
-      if (!seen.f1 && fielded >= 1) { await shot('3fight-prep'); seen.f1 = 1; }
     } else {
       if (!seen.f1) { await shot('3fight-prep'); seen.f1 = 1; }
       await click('#bEnd');
-      await page.waitForTimeout(700);
-      if (!seen.f2) { await shot('4fight-battle'); seen.f2 = 1; }
+      await page.waitForTimeout(900);
+      if (!seen.f2) { await shot('4fight-wave'); seen.f2 = 1; }
+      const v = await page.$eval('#fVerdict', (e) => !e.hidden).catch(() => false);
+      if (v && !seen.f3) { await shot('4fight-verdict'); seen.f3 = 1; }
       await click('#bEnd');
-      // the frame the match ENDS on: the verdict overlay, if it is up
-      if (!seen.f3) {
-        for (let k = 0; k < 30; k++) {
-          await page.waitForTimeout(60);
-          if (await page.$eval('#fVerdict', (e) => !e.hidden).catch(() => false)) break;
-        }
-        if (await page.$eval('#fVerdict', (e) => !e.hidden).catch(() => false)) {
-          await page.waitForTimeout(500);
-          await shot('4fight-verdict'); seen.f3 = 1;
-        }
-      }
     }
   } else if (await on('hatch')) {
     await page.waitForTimeout(950);

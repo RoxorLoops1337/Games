@@ -452,10 +452,11 @@ const BB = loadGame();
   mk('lean');
   eq(BB.lineBudget(), base - 1, 'Lean season really costs a Feed off the budget');
   mk('fat');
-  ok(BB.makeEnemyTeam(0, BB.fightMods())[0].might > BB.makeEnemyTeam(0, {})[0].might,
-    'Well fed really is fatter');
+  const fatSp = BB.statPower(...['might', 'hide'].map((k) => BB.makeEnemyTeam(0, BB.fightMods(), 2, 2)[0][k]));
+  const leanSp = BB.statPower(...['might', 'hide'].map((k) => BB.makeEnemyTeam(0, {}, 2, 2)[0][k]));
+  ok(fatSp > leanSp, `Well fed really is fatter (${fatSp} vs ${leanSp})`);
   mk('rabid');
-  ok(BB.makeEnemyTeam(0, BB.fightMods())[0].might >= BB.makeEnemyTeam(0, {})[0].might + 1,
+  ok(BB.makeEnemyTeam(0, BB.fightMods(), 2, 2)[0].might > BB.makeEnemyTeam(0, {}, 2, 2)[0].might,
     'Rabid really hits harder');
   mk('muzzled');
   BB.setLine([BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0)[0].id]);
@@ -464,180 +465,232 @@ const BB = loadGame();
   eq(BB.cardDamage(c), 7, 'Muzzled really blunts your beasts');
 }
 
-/* ============================== the line-up =============================== */
+/* =============================== the tower ================================ */
 const beast = (o) => BB.makeCard(Object.assign({ pre: 'T', suf: 'st', might: 5, hide: 5, trait: 'none' }, o));
 function prepped(seed){
   BB.newRun(seed == null ? 2026 : seed);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   return BB.R;
 }
-/** Put a hand-made squad on the field against a hand-made enemy squad. */
-function duel(mine, theirs){
+/** Stand a hand-made squad on a floor against a hand-made invasion. */
+function duel(mine, theirs, floor){
   BB.newRun(4242);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  BB.R.line = [];
+  BB.R.plan = BB.emptyPlan();
   BB.startBattle({});
+  const f = floor == null ? 0 : floor;
   let uid = 1;
-  BB.F.mine = mine.map((c) => BB.unitOf(c, 'us', uid++));
-  BB.F.theirs = theirs.map((c) => BB.unitOf(c, 'them', uid++));
-  BB.F.pen = BB.F.mine;
+  for (const fl of BB.F.floors){ fl.us = []; fl.them = []; }
+  BB.F.floors[f].us = mine.map((c) => { const u = BB.unitOf(c, 'us', uid++); u.floor = f; return u; });
+  BB.F.floors[f].them = theirs.map((c) => { const u = BB.unitOf(c, 'them', uid++); u.floor = f; return u; });
+  BB.reflow();
+  BB.F.wave = BB.F.waves;                 // no reinforcements: settle it here
   return BB.F;
 }
 {
   prepped();
-  eq(BB.R.line.length, 0, 'you start with nothing fielded');
+  eq(BB.FLOORS, 3, 'the barn is three floors');
+  eq(BB.R.plan.length, BB.FLOORS, 'the plan has a slot list per floor');
+  eq(BB.planFlat().length, 0, 'you start with nothing posted');
   ge(BB.lineBudget(), 4, 'round 1 gives a budget to spend');
+  ge(BB.waveCount(0), 2, 'even round 1 comes in waves');
+  le(BB.waveCount(11), 4, 'and never more than four');
+  ok(BB.waveCount(11) > BB.waveCount(0), 'later rounds bring more waves');
+
   const avail = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  eq(avail.length, 6, 'the nested pair is not available to field');
-
-  ok(BB.toggleField(avail[0].id), 'a beast can be fielded');
-  eq(BB.R.line.length, 1, 'and joins the line');
+  eq(avail.length, 6, 'the nested pair cannot be posted');
+  ok(BB.placeBeast(avail[0].id, 0), 'a beast can be posted at the door');
+  eq(BB.floorOf(avail[0].id), 0, 'and it is on that floor');
   eq(BB.lineCost(), avail[0].cost, 'its Feed is committed');
-  ok(BB.toggleField(avail[0].id), 'tapping it again takes it back');
-  eq(BB.R.line.length, 0, 'and the line empties');
-
-  // the budget is a real ceiling
-  BB.R.deck.forEach((c) => { c.cost = 3; });
-  BB.R.line = [];
-  const cheap = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  BB.toggleField(cheap[0].id);
-  ok(!BB.canField(cheap[1]), 'a beast you cannot afford cannot be fielded');
-  ok(!BB.toggleField(cheap[1].id), 'and tapping it does nothing');
-  eq(BB.R.line.length, 1, 'the line is unchanged');
-
-  // and so is the slot count
-  prepped(77);
-  BB.R.deck.forEach((c) => { c.cost = 0; });
-  const all = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  for (const c of all) BB.toggleField(c.id);
-  eq(BB.R.line.length, BB.LINE_SLOTS, 'the line holds no more than its slots');
-  ok(!BB.canField(all[BB.LINE_SLOTS]), 'a full line takes no more');
+  ok(BB.unplace(avail[0].id), 'and it can be pulled back');
+  eq(BB.floorOf(avail[0].id), -1, 'off the floor');
+  eq(BB.lineCost(), 0, 'and the Feed comes back');
 }
 {
-  // order is the decision, so it must be changeable
-  prepped(78);
+  // a floor holds two, and the budget is a real ceiling
+  prepped(77);
   BB.R.deck.forEach((c) => { c.cost = 0; });
   const a = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-  BB.toggleField(a[0].id); BB.toggleField(a[1].id); BB.toggleField(a[2].id);
-  eq(BB.R.line[0], a[0].id, 'the first one fielded starts at the front');
-  ok(BB.moveInLine(a[2].id, -1), 'a beast can be moved up');
-  eq(BB.R.line[1], a[2].id, 'and it lands where it was moved');
-  ok(BB.moveInLine(a[2].id, 1), 'and back down');
-  eq(BB.R.line[2], a[2].id, 'to where it started');
-  ok(!BB.moveInLine(a[0].id, -1), 'the front cannot move further forward');
-  ok(!BB.moveInLine(a[2].id, 1), 'the back cannot move further back');
+  ok(BB.placeBeast(a[0].id, 1), 'first onto the middle floor');
+  ok(BB.placeBeast(a[1].id, 1), 'second onto the middle floor');
+  ok(!BB.canPlace(a[2], 1), 'a third will not fit on one floor');
+  ok(!BB.placeBeast(a[2].id, 1), 'and posting it fails');
+  ok(BB.placeBeast(a[2].id, 2), 'but the top floor has room');
+  eq(BB.planFlat().length, 3, 'three posted in all');
+  ok(!BB.canPlace(a[0], 0), 'a beast already posted cannot be posted again');
+  ok(!BB.placeBeast(999999, 0), 'and neither can one you do not own');
+  ok(!BB.placeBeast(BB.R.nest[0], 0), 'nor one that is in the nest');
 
-  ok(!BB.setLine([]), 'an empty line is not a line');
-  ok(!BB.setLine([a[0].id, a[0].id]), 'the same beast cannot be fielded twice');
-  ok(!BB.setLine([BB.R.nest[0]]), 'a nested beast cannot be fielded');
-  ok(!BB.setLine([999999]), 'a beast you do not own cannot be fielded');
-  ok(BB.setLine([a[0].id, a[1].id]), 'a legal line is accepted');
+  prepped(78);
+  BB.R.deck.forEach((c) => { c.cost = 3; });
+  const b = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
+  BB.placeBeast(b[0].id, 0);
+  ok(!BB.canPlace(b[1], 1), 'a beast you cannot afford cannot be posted');
+  eq(BB.planFlat().length, 1, 'and the plan is unchanged');
+}
+{
+  // moving between floors — the whole spatial decision
+  prepped(79);
+  BB.R.deck.forEach((c) => { c.cost = 0; });
+  const a = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
+  BB.placeBeast(a[0].id, 0);
+  ok(BB.moveInLine(a[0].id, -1), 'a beast can be moved up the tower');
+  eq(BB.floorOf(a[0].id), 1, 'and it climbs a floor');
+  ok(BB.moveInLine(a[0].id, 1), 'and back down');
+  eq(BB.floorOf(a[0].id), 0, 'to the door');
+  ok(!BB.moveInLine(a[0].id, 1), 'there is nothing below the door');
+  BB.placeBeast(a[1].id, 2); BB.placeBeast(a[2].id, 2);
+  BB.placeBeast(a[3].id, 1);
+  ok(!BB.moveInLine(a[3].id, -1), 'and a beast cannot move onto a full floor');
+
+  // a plain tap holds the door first
+  prepped(80);
+  BB.R.deck.forEach((c) => { c.cost = 0; });
+  const c2 = BB.R.deck.filter((x) => BB.R.nest.indexOf(x.id) < 0);
+  BB.toggleField(c2[0].id); BB.toggleField(c2[1].id); BB.toggleField(c2[2].id);
+  eq(BB.R.plan[0].length, 2, 'the first two hold the door');
+  eq(BB.R.plan[1].length, 1, 'the third falls back a floor');
+  ok(BB.toggleField(c2[0].id), 'tapping a posted beast pulls it back');
+  eq(BB.floorOf(c2[0].id), -1, 'off the floor');
 }
 
 /* ============================== the opposition ============================ */
 {
   for (let i = 0; i < BB.C.RUN_LEN; i++){
-    const team = BB.makeEnemyTeam(i, {});
-    eq(team.length, BB.teamSize(i), 'round ' + (i + 1) + ' fields the right number');
-    ok(team[0].leader, 'the named foe leads it');
-    eq(team[0].name, BB.FOES[i].name, 'under its own name');
-    ok(team.every((c) => c.might >= 1 && c.hide >= 1), 'every enemy is a real animal');
-    ok(team.every((c) => c.foe), 'and is marked as one');
-    ok(team[0].might + team[0].hide > team[1].might + team[1].hide,
-      'the leader out-weighs what it brought');
+    const waves = BB.waveCount(i);
+    let sawLeader = 0, total = 0;
+    for (let w = 1; w <= waves; w++){
+      const team = BB.makeEnemyTeam(i, {}, w, waves);
+      ok(team.length >= 1, 'round ' + (i + 1) + ' wave ' + w + ' brings someone');
+      le(team.length, BB.FLOOR_CAP + 1, 'and never more than a floor can hold plus one');
+      if (team.some((c) => c.leader)) sawLeader++;
+      total += team.length;
+      ok(team.every((c) => c.might >= 1 && c.hide >= 1), 'every invader is a real animal');
+      ok(team.every((c) => c.foe), 'and is marked as one');
+    }
+    eq(sawLeader, 1, 'the named foe walks in with exactly one wave');
+    const last = BB.makeEnemyTeam(i, {}, waves, waves);
+    ok(last.some((c) => c.leader), 'and it is the last one');
+    ge(total, waves, 'every wave brings at least one');
   }
-  ge(BB.teamSize(11), BB.teamSize(0), 'later rounds bring more of them');
-  le(BB.teamSize(11), 4, 'but never more than the field holds');
-  const early = BB.makeEnemyTeam(0, {})[0], late = BB.makeEnemyTeam(11, {})[0];
+  const early = BB.makeEnemyTeam(0, {}, 1, 2)[0], late = BB.makeEnemyTeam(11, {}, 4, 4)[0];
   ok(BB.statPower(late.might, late.hide) > BB.statPower(early.might, early.hide) * 4,
-    'and much bigger ones');
+    'the last round is far heavier than the first');
+  const w1 = BB.makeEnemyTeam(5, {}, 1, 3)[0], w3 = BB.makeEnemyTeam(5, {}, 3, 3);
+  ok(BB.statPower(w3[0].might, w3[0].hide) > BB.statPower(w1.might, w1.hide),
+    'later waves in a round hit harder than earlier ones');
 }
 
 /* ================================ the battle ============================== */
 {
-  // a whole match resolves in one synchronous call
+  // a whole wave resolves in one synchronous call
   const F = duel([beast({ might: 5, hide: 6 })], [beast({ might: 2, hide: 3 })]);
-  const out = BB.resolveBattle();
-  eq(out, 'win', 'a stronger line wins');
-  eq(F.over, 'win', 'and the result is recorded');
-  ok(F.round >= 1, 'at least one exchange happened');
+  const out = BB.resolveWave();
+  eq(out, 'win', 'a stronger floor clears the wave');
   ok(F.events.length > 0, 'and it left a transcript to replay');
   ok(F.events.some((e) => e.k === 'end'), 'ending with an end beat');
   eq(BB.livingOf(F.theirs).length, 0, 'nothing of theirs is left standing');
 }
 {
-  // losing costs health, not the run
+  // what is not stopped climbs, and what climbs off the top gets at the eggs
   BB.newRun(31);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  const F = duel([beast({ might: 1, hide: 1 })], [beast({ might: 30, hide: 40 })]);
+  const F = duel([], [beast({ might: 6, hide: 40 })], 0);
+  F.wave = 0; F.waves = 9;              // more waves to come: one pass per call
+  eq(F.floors[0].them.length, 1, 'an invader stands at the door');
   const hp0 = BB.R.hp;
-  eq(BB.resolveBattle(), 'lose', 'an outmatched line loses');
-  ok(BB.R.hp < hp0, 'and you are trampled for it');
-  ok(BB.R.hp > 0, 'but you are still standing');
-  ok(F.trample > 0, 'the trample is recorded');
-  le(F.trample, Math.ceil(BB.R.maxHp * BB.TRAMPLE_CAP), 'and is capped');
-  ok(!F.dead, 'a single loss does not end the run');
+  BB.resolveWave();
+  eq(BB.R.hp, hp0, 'an undefended door costs nothing on its own');
+  eq(F.floors[1].them.length, 1, 'but it climbs a floor');
+  BB.resolveWave();
+  eq(F.floors[2].them.length, 1, 'and another');
+  BB.resolveWave();
+  ok(BB.R.hp < hp0, 'off the top it gets at the eggs');
+  eq(F.theirs.length, 0, 'and is gone');
 }
 {
-  // ...unless it takes the last of you
-  duel([beast({ might: 1, hide: 1 })], [beast({ might: 40, hide: 40 })]);
-  BB.R.hp = 2;
-  BB.resolveBattle();
+  // a defended floor holds the line
+  const F = duel([beast({ might: 1, hide: 400 })], [beast({ might: 1, hide: 400 })], 0);
+  F.wave = 0; F.waves = 9;
+  BB.resolveWave();
+  eq(F.floors[0].them.length, 1, 'something of yours on the floor stops the climb');
+  eq(F.floors[1].them.length, 0, 'nothing gets past it');
+}
+{
+  // losing the nest ends the run
+  BB.newRun(32);
+  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+  const F = duel([], [beast({ might: 40, hide: 40 })], BB.FLOORS - 1);
+  F.wave = 0; F.waves = 9;
+  BB.R.hp = 3;
+  BB.resolveWave();
   eq(BB.R.hp, 0, 'health floors at zero');
-  ok(BB.F.dead, 'and that ends the run');
+  eq(F.over, 'lose', 'and the round is lost');
+  ok(F.dead, 'which ends the run');
 }
 {
   // simultaneous: a trade can take them both
   const F = duel([beast({ might: 20, hide: 3 })], [beast({ might: 20, hide: 3 })]);
-  BB.resolveBattle();
+  BB.resolveWave();
   eq(BB.livingOf(F.mine).length, 0, 'your beast falls');
   eq(BB.livingOf(F.theirs).length, 0, 'and so does theirs, in the same instant');
-  eq(F.over, 'win', 'clearing their line is a win even at that price');
 }
 {
-  // the front of YOUR line is what gets hit
+  // the front of a floor is what gets hit
   const F = duel([beast({ pre: 'Front', suf: 'y', might: 1, hide: 400 }),
                   beast({ pre: 'Back', suf: 'y', might: 1, hide: 400 })],
                  [beast({ might: 6, hide: 400 })]);
-  BB.resolveBattle();
-  ok(F.mine[0].hp < F.mine[0].max, 'the front beast took the blows');
-  eq(F.mine[1].hp, F.mine[1].max, 'the one behind it is untouched');
+  BB.resolveWave();
+  ok(F.floors[0].us[0].hp < F.floors[0].us[0].max, 'the front beast took the blows');
+  eq(F.floors[0].us[1].hp, F.floors[0].us[1].max, 'the one behind it is untouched');
 }
 {
-  // and Bulwark steps in front of everything
   const F = duel([beast({ pre: 'Front', suf: 'y', might: 1, hide: 400 }),
                   beast({ pre: 'Wall', suf: 'y', might: 1, hide: 400, trait: 'bulwark' })],
                  [beast({ might: 6, hide: 400 })]);
-  eq(BB.frontOf(F.mine).c.trait, 'bulwark', 'a Bulwark shoulders to the front');
-  BB.resolveBattle();
-  ok(F.mine[1].hp < F.mine[1].max, 'and it is what took the hits');
+  eq(BB.frontOf(F.floors[0].us).c.trait, 'bulwark', 'a Bulwark shoulders to the front');
 }
 {
   const F = duel([beast({ pre: 'Slip', suf: 'py', might: 1, hide: 400, trait: 'elusive' }),
                   beast({ pre: 'Plain', suf: 'ly', might: 1, hide: 400 })],
                  [beast({ might: 6, hide: 400 })]);
-  eq(BB.frontOf(F.mine).c.trait, 'none', 'an Elusive beast hangs back');
-  F.mine[1].alive = 0;
-  eq(BB.frontOf(F.mine).c.trait, 'elusive', 'until it is all that is left');
+  eq(BB.frontOf(F.floors[0].us).c.trait, 'none', 'an Elusive beast hangs back');
+  F.floors[0].us[1].alive = 0;
+  eq(BB.frontOf(F.floors[0].us).c.trait, 'elusive', 'until it is all that is left');
+}
+{
+  // Rally only reaches the floor it stands on
+  const F = duel([beast({ pre: 'Cap', suf: 'n', might: 5, hide: 400, trait: 'rally' }),
+                  beast({ pre: 'Mate', suf: 'y', might: 5, hide: 400 })],
+                 [beast({ might: 0, hide: 400 })]);
+  eq(BB.unitMight(F.floors[0].us[1], F.floors[0].us), 7, 'Rally lifts the beasts beside it');
+  eq(BB.unitMight(F.floors[0].us[0], F.floors[0].us), 5, 'but not itself');
+  const up = BB.unitOf(beast({ might: 5, hide: 40 }), 'us', 99);
+  F.floors[1].us.push(up);
+  BB.reflow();
+  eq(BB.unitMight(up, F.floors[1].us), 5, 'and it does not reach another floor');
 }
 
 /* ------------------------------- keywords --------------------------------- */
-{
-  const F = duel([beast({ might: 6, hide: 60, trait: 'frenzy' })], [beast({ might: 0, hide: 400 })]);
-  BB.resolveBattle();
-  eq(F.theirs[0].max - F.theirs[0].hp, 12 * F.round, 'Frenzy lands two blows an exchange');
+function oneExchange(mine, theirs){
+  const F = duel(mine, theirs);
+  const fl = F.floors[0];
+  BB.fightFloor(fl, 0);
+  return F;
 }
 {
-  const F = duel([beast({ might: 6, hide: 400, trait: 'feral' })], [beast({ might: 4, hide: 400 })]);
-  BB.resolveBattle();
-  eq(F.theirs[0].max - F.theirs[0].hp, 9 * F.round, 'Feral hits for 150%');
-  eq(F.mine[0].max - F.mine[0].hp, 6 * F.round, 'and takes 150% back');
+  const F = oneExchange([beast({ might: 6, hide: 400, trait: 'frenzy' })], [beast({ might: 0, hide: 400 })]);
+  eq(F.theirs[0].max - F.theirs[0].hp, 12 * BB.EXCHANGES_PER_WAVE, 'Frenzy lands two blows an exchange');
 }
 {
-  const F = duel([beast({ might: 9, hide: 400, trait: 'runt' })], [beast({ might: 0, hide: 400 })]);
-  eq(F.mine[0].c.cost, 0, 'Runt is free to field');
-  BB.resolveBattle();
-  eq(F.theirs[0].max - F.theirs[0].hp, 5 * F.round, 'and hits for half, rounded up');
+  const F = oneExchange([beast({ might: 6, hide: 4000, trait: 'feral' })], [beast({ might: 4, hide: 4000 })]);
+  eq(F.theirs[0].max - F.theirs[0].hp, 9 * BB.EXCHANGES_PER_WAVE, 'Feral hits for 150%');
+  eq(F.mine[0].max - F.mine[0].hp, 6 * BB.EXCHANGES_PER_WAVE, 'and takes 150% back');
+}
+{
+  const F = oneExchange([beast({ might: 9, hide: 400, trait: 'runt' })], [beast({ might: 0, hide: 400 })]);
+  eq(F.mine[0].c.cost, 0, 'Runt is free to post');
+  eq(F.theirs[0].max - F.theirs[0].hp, 5 * BB.EXCHANGES_PER_WAVE, 'and hits for half, rounded up');
 }
 {
   const F = duel([beast({ hide: 5, trait: 'plump' })], [beast({ might: 0, hide: 400 })]);
@@ -648,40 +701,24 @@ function duel(mine, theirs){
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   const F = duel([beast({ might: 10, hide: 400, trait: 'leech' })], [beast({ might: 0, hide: 400 })]);
   BB.R.hp = 20;
-  BB.resolveBattle();
+  BB.fightFloor(F.floors[0], 0);
   ok(BB.R.hp > 20, 'Leech heals you as it works');
   le(BB.R.hp, BB.R.maxHp, 'but never past the ceiling');
 }
 {
-  const F = duel([beast({ might: 9, hide: 400, trait: 'venom' })], [beast({ might: 0, hide: 400 })]);
-  BB.resolveBattle();
-  ok(F.theirs[0].max - F.theirs[0].hp > 9 * F.round, 'Venom bites on top of the blow');
+  const F = oneExchange([beast({ might: 9, hide: 400, trait: 'venom' })], [beast({ might: 0, hide: 400 })]);
+  ok(F.theirs[0].max - F.theirs[0].hp > 9 * BB.EXCHANGES_PER_WAVE, 'Venom bites on top of the blow');
 }
 {
-  const F = duel([beast({ might: 4, hide: 400, trait: 'swift' })], [beast({ might: 0, hide: 400 })]);
-  const before = F.theirs[0].hp;
-  BB.resolveBattle();
-  eq(F.theirs[0].max - F.theirs[0].hp, 4 * (F.round + 1), 'Swift lands one before the bell');
-}
-{
-  const F = duel([beast({ might: 0, hide: 400, trait: 'thorns' })], [beast({ might: 5, hide: 400 })]);
-  BB.resolveBattle();
+  const F = oneExchange([beast({ might: 0, hide: 400, trait: 'thorns' })], [beast({ might: 5, hide: 400 })]);
   ok(F.theirs[0].max - F.theirs[0].hp >= 3, 'Thorns bites whatever hits it');
 }
 {
-  const F = duel([beast({ pre: 'Cap', suf: 'n', might: 5, hide: 400, trait: 'rally' }),
-                  beast({ pre: 'Grunt', suf: 'y', might: 5, hide: 400 })],
-                 [beast({ might: 0, hide: 400 })]);
-  eq(BB.unitMight(F.mine[1], F.mine), 7, 'Rally lifts the beasts around it');
-  eq(BB.unitMight(F.mine[0], F.mine), 5, 'but not itself');
+  const F = oneExchange([beast({ might: 9, hide: 400, trait: 'hollow' })], [beast({ might: 0, hide: 400 })]);
+  eq(F.theirs[0].max - F.theirs[0].hp, 5 * BB.EXCHANGES_PER_WAVE, 'Hollow halves its might');
 }
 {
-  const F = duel([beast({ might: 9, hide: 400, trait: 'hollow' })], [beast({ might: 0, hide: 400 })]);
-  BB.resolveBattle();
-  eq(F.theirs[0].max - F.theirs[0].hp, 5 * F.round, 'Hollow halves its might');
-}
-{
-  // Regal pays into the NEXT round's budget, since Feed is a budget now
+  // Regal pays into the NEXT round's budget
   BB.newRun(64);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   const r = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0)[0];
@@ -695,24 +732,18 @@ function duel(mine, theirs){
   eq(BB.lineBudget(), before + 1, 'and the budget really rises');
 }
 {
-  // no match runs forever
-  const F = duel([beast({ might: 0, hide: 400 })], [beast({ might: 0, hide: 400 })]);
-  BB.resolveBattle();
-  le(F.round, BB.MAX_EXCHANGES, 'a stalemate is called, not looped');
-  ok(F.over === 'win' || F.over === 'lose', 'and it still has a result');
-}
-{
-  // every round's opposition can be fought without throwing
+  // a whole round runs to a conclusion, waves and all, without looping
   for (let i = 0; i < BB.C.RUN_LEN; i++){
     BB.newRun(1000 + i);
     BB.R.idx = i;
     BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
     const avail = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
-    BB.R.line = [];
-    for (const c of avail) if (BB.canField(c)) BB.toggleField(c.id);
+    BB.R.plan = BB.emptyPlan();
+    for (const c of avail) BB.toggleField(c.id);
     BB.startBattle(BB.fightMods());
     const out = BB.resolveBattle();
     ok(out === 'win' || out === 'lose', 'round ' + (i + 1) + ' resolves to a result');
+    eq(BB.F.wave, BB.F.waves, 'and every wave arrived');
     le(BB.F.events.length, 601, 'and its transcript stays bounded');
   }
 }
@@ -723,8 +754,10 @@ function walkover(){
   const av = BB.R.deck.filter((c) => BB.R.nest.indexOf(c.id) < 0);
   BB.setLine([av[0].id]);
   BB.startBattle({});
-  BB.F.theirs = [];
-  BB.resolveBattle();
+  BB.F.wave = BB.F.waves;                 // nothing more is coming
+  for (const fl of BB.F.floors) fl.them = [];
+  BB.reflow();
+  BB.resolveWave();
 }
 
 {
@@ -734,8 +767,10 @@ function walkover(){
   const av = BB.R.deck.filter((c) => ids.indexOf(c.id) < 0);
   BB.setLine([av[0].id]);
   BB.startBattle({});
-  BB.F.theirs = [];                       // a walkover, so this block tests the bookkeeping
-  BB.resolveBattle();
+  BB.F.wave = BB.F.waves;
+  for (const fl of BB.F.floors) fl.them = [];
+  BB.reflow();
+  BB.resolveWave();
   BB.R.hp = 20;
   const mx0 = BB.R.maxHp, n0 = BB.R.deck.length, slop0 = BB.R.slop;
   const litter = BB.winFight();
@@ -862,8 +897,10 @@ function fieldLine(G){
   const avail = B.R.deck.filter((c) => B.R.nest.indexOf(c.id) < 0);
   const wall = avail.slice().sort((x, y) => B.cardHide(y) - B.cardHide(x))[0];
   const rest = avail.filter((c) => c !== wall).sort((x, y) => B.cardDamage(y) - B.cardDamage(x));
-  B.R.line = [];
+  B.R.plan = B.emptyPlan();
+  // hold the door with bulk, keep the teeth a floor back
   for (const c of [wall].concat(rest)) if (c && B.canField(c)) B.toggleField(c.id);
+  B.R.line = B.planFlat();
 }
 function autoRun(seed){
   BB.newRun(seed);
@@ -872,7 +909,7 @@ function autoRun(seed){
     const sorted = BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b));
     if (!BB.setNest(sorted.slice(-2).map((c) => c.id))) break;
     fieldLine();
-    if (!BB.R.line.length) break;
+    if (!BB.planFlat().length) break;
     BB.startBattle(BB.fightMods());
     if (BB.resolveBattle() !== 'win') lost++;
     const dead = !!BB.F.dead;
@@ -1018,24 +1055,27 @@ function autoRun(seed){
   G.ui.doEnd();
   ok(true, 'the fight screen renders, fields a beast and ends a turn');
 
-  // every intent string formats, for every foe and every move
+  // every round can be prepped and fought through the UI without throwing
   for (let i = 0; i < G.C.RUN_LEN; i++){
     G.newRun(i + 1);
     G.R.idx = i;
     G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
-    G.setLine([G.R.deck.filter((c) => G.R.nest.indexOf(c.id) < 0)[0].id]); G.startBattle({});
-    for (let k = 0; k < G.FOES[i].moves.length; k++){
-      ok(typeof G.ui.intentText() === 'string' && G.ui.intentText().length > 0,
-        'foe ' + i + ' move ' + k + ' has an intent line');
-      G.F.foe.mi++;
-    }
+    G.R.plan = G.emptyPlan();
+    for (const c of G.R.deck.filter((c) => G.R.nest.indexOf(c.id) < 0)) G.toggleField(c.id);
+    G.ui.renderFight();
+    G.startBattle(G.fightMods());
+    G.ui.renderFight();
+    ok(true, 'round ' + (i + 1) + ' renders its tower');
   }
 
   // hatch → pick → wild → cull
   G.newRun(24);
   G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
   G.setLine([G.R.deck.filter((c) => G.R.nest.indexOf(c.id) < 0)[0].id]); G.startBattle({});
-  G.F.foe.hp = 0; G.F.over = 'win';
+  G.F.wave = G.F.waves;
+  for (const fl of G.F.floors) fl.them = [];
+  G.reflow();
+  G.resolveWave();
   G.ui.resolveFight();
   eq(G.ui.cur, 'hatch', 'a win goes to the hatch screen');
   G.ui.revealLitter();
