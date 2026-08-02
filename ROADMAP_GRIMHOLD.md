@@ -193,6 +193,12 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   have them. Reach the stair and the pedlar's long table will wake them, for
   500. *(batch 21)*
 
+- **Room traits** — a theme is the whole floor; a trait is one room of it. Rooms
+  were the last interchangeable thing on the board. HALLOWED (+1 defend die),
+  HOARDED (a search pays twice), CHOKED (-1 attack die), WATCHED (everything you
+  do stirs him twice as hard) land on ~a quarter of a Descent floor's rooms and
+  are announced on the door and painted on the floor. *(batch 22)*
+
 - **The collapse could still seal a pocket off** — `stillWhole` tested one
   candidate at a time, so two squares that were each safe alone cut the board in
   half once both fell. A pending crack now counts as already gone. It stranded
@@ -288,6 +294,19 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   passed a bearer that ran *and* a bearer that stood and swung, so deleting the
   fleeing entirely left them green. If a mechanic has two legal outcomes, build
   the scene that forces one of them and assert that one.
+- **Three batches running, art was drawn where nothing could see it.** The
+  webbing sat in the monster branch, the wading ripple under the movement field,
+  and now the room-trait wash under the fog. Every time the suite passed and the
+  browser caught it. Anything painted inside the camera transform competes with
+  `drawFog` — either lay it on thick enough to survive, or draw it after.
+- **A new global property leaks into old tests.** Room traits made a chest test
+  fail by doubling gold it asserted was not doubled — same shape as batch 20's
+  `runner` leaking into the spider tests. Anything that silently modifies a
+  shared payout wants a sweep of the tests that assert on that payout.
+- **Two halves of a comparison must come from one floor.** The WATCHED test
+  regenerated between measurements, so the two searches drew from different
+  decks in different rooms and the numbers were not comparable. Measure a delta
+  on one board, not two totals on two.
 - **The flooded floor is quiet, and the game has other quiet.** Wading, the
   Elf's step, an unopened room — nothing yet says how they combine. Whatever
   goes in next that muffles you should check what is already muffling you.
