@@ -458,7 +458,11 @@
   .ub .pm{ font-size:9.5px; font-weight:900; color:#ff8f6b; text-align:center; }
   .ub .pm .hh{ color:#7ec8ff; }
   .ub .ph{ height:4px; margin:1px 3px 3px; border-radius:2px; background:#2a1414; overflow:hidden; position:relative; }
-  .ub .ph i{ display:block; height:100%; background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .22s ease; }
+  .ub .ph i{ position:relative; z-index:2; display:block; height:100%;
+    background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .1s ease; }
+  /* the ghost lags the bar, leaving a pale slab exactly the width of the blow */
+  .ub .ph .gh{ position:absolute; left:0; top:0; bottom:0; z-index:1; display:block;
+    background:rgba(255,255,255,.62); transition:width .45s cubic-bezier(.3,0,.2,1) .2s; }
   .ub.them .ph i{ background:linear-gradient(90deg,#e04a4a,#ff9d6b); }
   .ub .tag{ position:absolute; top:1px; right:2px; font-size:6.5px; letter-spacing:.3px; font-weight:800;
     padding:0 3px; border-radius:4px; background:rgba(6,12,6,.82); color:#a6ff5e; }
@@ -481,7 +485,22 @@
   .ub.lungeUp{ animation:lungeUp .3s cubic-bezier(.3,1.5,.5,1); }
   .ub.lungeDown{ animation:lungeDown .3s cubic-bezier(.3,1.5,.5,1); }
   .ub.fall{ animation:fall .5s ease-in forwards; }
-  .ub.climbing{ animation:climb .4s cubic-bezier(.2,.9,.3,1); }
+  .ub.climbing{ animation:climb .42s cubic-bezier(.2,.9,.3,1); }
+  /* a floor leaning into its own exchange */
+  @keyframes clsR{ 0%,100%{transform:translateX(0)} 45%{transform:translateX(7px)} }
+  @keyframes clsL{ 0%,100%{transform:translateX(0)} 45%{transform:translateX(-7px)} }
+  @keyframes clashlit{ 0%,100%{box-shadow:inset 0 1px 0 rgba(180,255,140,.05)}
+    40%{box-shadow:inset 0 0 26px rgba(255,190,90,.20), inset 0 1px 0 rgba(255,220,150,.18)} }
+  @keyframes breached{ 0%,100%{background-color:transparent} 40%{background-color:rgba(180,60,40,.22)} }
+  @keyframes wavein{ 0%{transform:translateY(7px); opacity:.2} 100%{transform:translateY(0); opacity:1} }
+  @keyframes bitten{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
+    45%{transform:translateX(5px)} 70%{transform:translateX(-3px)} }
+  .half.cls-r{ animation:clsR .26s ease; }
+  .half.cls-l{ animation:clsL .26s ease; }
+  .flr.clashlit{ animation:clashlit .3s ease; }
+  .flr.breached{ animation:breached .42s ease; }
+  .gate.wavein{ animation:wavein .42s cubic-bezier(.2,1.4,.4,1); }
+  .nestbar.bitten{ animation:bitten .62s ease; }
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
@@ -1943,7 +1962,9 @@ function canField(c){ return firstFreeFloor(c) >= 0; }
 
 /* ------------------------------------------------------------- the field -- */
 function unitOf(c, side, uid){
-  return { c, side, uid, hp: cardHide(c), max: cardHide(c), pois: 0, alive: 1 };
+  const hp = cardHide(c);
+  // hp/alive are the truth; vhp/valive are what the replay has shown so far.
+  return { c, side, uid, hp, max: hp, pois: 0, alive: 1, vhp: hp, valive: 1 };
 }
 /** Bulwark shoulders to the front, Elusive hangs back; otherwise your order stands. */
 function frontOf(line){
@@ -2091,7 +2112,11 @@ function fightFloor(fl, idx){
   }
   tickPoison(fl.us); tickPoison(fl.them);
 }
-function clearDead(){
+/** The dead STAY on their floor through the replay — you have to see them fall.
+ *  They are swept up when the next wave is being prepared. */
+function clearDead(){ reflow(); }
+function purgeDead(){
+  if (!F) return;
   for (const fl of F.floors){
     fl.us = fl.us.filter((u) => u.alive);
     fl.them = fl.them.filter((u) => u.alive);
@@ -2113,10 +2138,11 @@ function resolveWave(){
   // the climb, top floor first so they do not leapfrog in one pass
   for (let i = FLOORS - 1; i >= 0; i--){
     const fl = F.floors[i];
-    if (!fl.them.length) continue;
+    const live = livingOf(fl.them);
+    if (!live.length) continue;
     if (livingOf(fl.us).length) continue;          // held
-    const movers = fl.them.slice();
-    fl.them = [];
+    const movers = live;
+    fl.them = fl.them.filter((u) => !u.alive);     // corpses stay where they fell
     if (i === FLOORS - 1){
       // through the top: they get at the eggs
       for (const u of movers){
@@ -2136,18 +2162,19 @@ function resolveWave(){
   reflow();
 
   if (R.hp <= 0){ F.over = 'lose'; F.dead = 1; F.lost = 1; ev('end', { won: false }); return F.over; }
-  if (F.wave >= F.waves && !F.theirs.length){ F.over = 'win'; ev('end', { won: true }); return F.over; }
-  if (F.wave >= F.waves && F.theirs.length){
+  if (F.wave >= F.waves && !livingOf(F.theirs).length){ F.over = 'win'; ev('end', { won: true }); return F.over; }
+  if (F.wave >= F.waves && livingOf(F.theirs).length){
     // no reinforcements left to arrive: fight it out where it stands
     let guard = 0;
-    while (F.theirs.length && guard++ < 12 && R.hp > 0){
+    while (livingOf(F.theirs).length && guard++ < 12 && R.hp > 0){
       for (let i = 0; i < FLOORS; i++) fightFloor(F.floors[i], i);
       clearDead();
       for (let i = FLOORS - 1; i >= 0; i--){
         const fl = F.floors[i];
-        if (!fl.them.length || livingOf(fl.us).length) continue;
-        const movers = fl.them.slice();
-        fl.them = [];
+        const live2 = livingOf(fl.them);
+        if (!live2.length || livingOf(fl.us).length) continue;
+        const movers = live2;
+        fl.them = fl.them.filter((u) => !u.alive);
         if (i === FLOORS - 1){
           for (const u of movers){
             const bite = Math.max(1, unitMight(u, movers));
@@ -2172,7 +2199,7 @@ function resolveBattle(){
   if (!F) return null;
   let guard = 0;
   while (!F.over && guard++ < 40){
-    if (F.wave < F.waves && !F.theirs.length) spawnWave();
+    if (F.wave < F.waves && !livingOf(F.theirs).length) spawnWave();
     else if (F.wave === 0) spawnWave();
     resolveWave();
     if (!F.over && F.wave < F.waves) spawnWave();
@@ -3521,25 +3548,31 @@ function unitEl(u, opts){
   const o = opts || {};
   const d = document.createElement('div');
   const t = TRAITS[u.c.trait] || TRAITS.none;
-  const hp = Math.max(0, uHp(u)), pct = Math.max(0, 100 * hp / (u.max || 1));
-  const might = F ? unitMightVis(u, u.side === 'us' ? F.mine : F.theirs) : cardDamage(u.c);
-  d.className = 'ub' + (u.side === 'them' ? ' them' : '') + (uAlive(u) ? '' : ' gone') +
+  // While a wave is being replayed we draw the state the REPLAY has reached,
+  // not the resolved truth — otherwise every beast is already dead on frame one
+  // and there is nothing left to watch.
+  const playing = !!(F && F.playing);
+  const hp = playing ? (u.vhp == null ? u.hp : u.vhp) : u.hp;
+  const alive = playing ? (u.valive == null ? u.alive : u.valive) : u.alive;
+  d.className = 'ub' + (u.side === 'them' ? ' them' : ' us') + (alive ? '' : ' gone') +
     (u.c.trait === 'bulwark' ? ' bulw' : '') + (u.c.leader ? ' lead' : '') + (o.front ? ' front' : '');
   if (d.dataset) d.dataset.uid = u.uid;
+  const might = F ? unitMight(u, floorMates(u)) : cardDamage(u.c);
   d.innerHTML =
     '<canvas width="180" height="132"></canvas>' +
     (u.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
     '<div class="pn">' + u.c.name + '</div>' +
     '<div class="pm">' + ICO('might') + might +
-      ' <span class="hh">' + ICO('hide') + '<span class="hn">' + hp + '</span></span></div>' +
-    '<div class="ph"><b class="gh" style="width:' + pct + '%"></b>' +
-      '<i style="width:' + pct + '%"></i></div>';
+      ' <span class="hh">' + ICO('hide') + '<span class="hn">' + Math.max(0, hp) + '</span></span></div>' +
+    '<div class="ph"><b class="gh" style="width:' + Math.max(0, 100 * hp / u.max) + '%"></b>' +
+      '<i style="width:' + Math.max(0, 100 * hp / u.max) + '%"></i></div>';
   const cv = d.querySelector && d.querySelector('canvas');
   if (cv) drawBeast(cv, u.c);
-  d.title = u.c.name + ' — ' + hp + '/' + u.max + ' Hide, hits for ' + might +
+  d.title = u.c.name + ' — ' + Math.max(0, hp) + '/' + u.max + ' Hide, hits for ' + might +
     (u.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
   return d;
 }
+
 /** Prep-phase tile: same beast, but it can be re-ordered or sent back.
  *  Re-ordering IS the game's core decision, so the TILE is the handle — drag it
  *  sideways past half a tile and it swaps with its neighbour. The chevrons stay
@@ -3652,8 +3685,10 @@ function floorEl(idx){
   mine.className = 'half us';
   const placed = R.plan[idx].map((id) => cardById(id)).filter(Boolean);
   const live = fl ? fl.us : [];
-  const shown = F ? live : placed.map((c, i) =>
-    ({ c, side: 'us', uid: -1 - (idx * 10 + i), hp: cardHide(c), max: cardHide(c), alive: 1 }));
+  const shown = F ? live : placed.map((c, i) => {
+    const hp = cardHide(c);
+    return { c, side: 'us', uid: -1 - (idx * 10 + i), hp, max: hp, alive: 1, vhp: hp, valive: 1 };
+  });
   for (const u of shown) mine.appendChild(unitEl(u, { front: u === frontOf(shown), tiny: 1 }));
   for (let i = shown.length; i < FLOOR_CAP; i++){
     const e = document.createElement('div');
@@ -3745,10 +3780,13 @@ function renderFight(){
 
   const btn = $('bEnd');
   if (prep){
-    const anyOut = F ? F.mine.length : planFlat().length;
-    btn.disabled = !anyOut;
+    const anyOut = F ? livingOf(F.mine).length : planFlat().length;
+    // Once the door is open the waves come whether you are ready or not. Only
+    // the FIRST commit needs a beast on a floor — otherwise a wipe with an
+    // empty barn left the button dead and the run with nowhere to go.
+    btn.disabled = !F && !anyOut;
     btn.className = 'btn sm';
-    btn.textContent = anyOut ? (F ? 'NEXT WAVE' : 'OPEN THE DOOR') : 'PLACE A BEAST';
+    btn.textContent = F ? 'NEXT WAVE' : (anyOut ? 'OPEN THE DOOR' : 'PLACE A BEAST');
   } else {
     btn.disabled = false;
     btn.className = 'btn alt sm';
@@ -3765,11 +3803,17 @@ function renderFight(){
 
 /* --------------------------------------------------------- the replay ---- */
 let seq = null;
+/** Every fighter lives in the tower now. Looking anywhere else finds nothing,
+ *  which is exactly why the whole replay used to happen off-screen. */
 function nodeFor(uid){
-  const q = '[data-uid="' + uid + '"]';
-  const a = $('foeLine') && $('foeLine').querySelector && $('foeLine').querySelector(q);
-  if (a) return a;
-  return $('pen') && $('pen').querySelector ? $('pen').querySelector(q) : null;
+  const t = $('tower');
+  if (!t || !t.querySelector) return null;
+  return t.querySelector('[data-uid="' + uid + '"]');
+}
+/** The floor element a unit is standing on, for floor-wide beats. */
+function floorNodeOf(uid){
+  const n = nodeFor(uid);
+  return n && n.closest ? n.closest('.flr') : null;
 }
 /** Move a tile's bar and Hide number to a new value. The bar snaps; the ghost
  *  behind it lags and catches up, leaving a white slab exactly the width of the
@@ -3789,17 +3833,23 @@ function setUnitHp(n, uid, hp){
 }
 /** The front marker has to MOVE when the front dies, not at the end of the
  *  match — otherwise the lime bar sits on a corpse for the rest of the replay. */
-function remarkFront(side){
-  const el = side === 'us' ? $('pen') : $('foeLine');
-  const line = !F ? null : (side === 'us' ? F.mine : F.theirs);
-  if (!el || !line || !el.querySelectorAll) return;
-  const front = frontOfVis(line);
-  const tiles = el.querySelectorAll('.ub');
+function remarkFront(){
+  if (!F || !F.floors) return;
+  const t = $('tower');
+  if (!t || !t.querySelectorAll) return;
+  const live = {};
+  for (const fl of F.floors){
+    const a = frontOfVis(fl.us), b = frontOfVis(fl.them);
+    if (a) live[a.uid] = 1;
+    if (b) live[b.uid] = 1;
+  }
+  const tiles = t.querySelectorAll('.ub');
   for (let i = 0; i < tiles.length; i++){
     const uid = tiles[i].dataset ? +tiles[i].dataset.uid : NaN;
-    if (tiles[i].classList) tiles[i].classList.toggle('front', !!front && front.uid === uid);
+    if (tiles[i].classList) tiles[i].classList.toggle('front', !!live[uid]);
   }
 }
+
 /** The frame the whole prep decision resolves into. Never fired for the kill
  *  that LOSES you the match — that one gets the toll instead. */
 function killBlow(n){
@@ -3825,11 +3875,40 @@ function killBlow(n){
 function applyEv(e, final){
   if (!e) return;
   if (e.k === 'clash'){
-    // the exchange counter ticks, and the two lines actually collide
-    const my = $('myLbl');
-    if (my) my.innerHTML = 'exchange ' + e.round;
-    anim($('pen'), 'cls-up', 260);
-    anim($('foeLine'), 'cls-dn', 260);
+    // the two halves of THAT floor lean into each other
+    const fn = floorNodeOf(e.a) || floorNodeOf(e.b);
+    if (fn && fn.querySelector){
+      anim(fn.querySelector('.half.us'), 'cls-r', 260);
+      anim(fn.querySelector('.half.them'), 'cls-l', 260);
+      anim(fn, 'clashlit', 300);
+    }
+  } else if (e.k === 'wave'){
+    const g = $('gateLbl');
+    if (g) anim(g, 'wavein', 420);
+    sfxLand();
+  } else if (e.k === 'arrive'){
+    const n = nodeFor(e.uid);
+    if (n) anim(n, 'climbing', 420);
+  } else if (e.k === 'climb'){
+    // they move UP the tower: re-seat the tile on its new floor and land it
+    renderTower();
+    remarkFront();
+    const n = nodeFor(e.uid);
+    if (n) anim(n, 'climbing', 420);
+    const fn = floorNodeOf(e.uid);
+    if (fn) anim(fn, 'breached', 420);
+    tone(180 + e.to * 60, 0.09, { type: 'square', vol: 0.05 });
+  } else if (e.k === 'breach'){
+    // off the top and into the eggs
+    const nb = $('nestBar');
+    if (nb) anim(nb, 'bitten', 620);
+    flyer('-' + e.v, '#ff5d5d', $('nestEggs'), { size: 26, cls: 'crit' });
+    if ($('nestHp')) countUp($('nestHp'), e.hp, { dur: 420 });
+    const eggs = Math.max(0, Math.round(3 * e.hp / R.maxHp));
+    if ($('nestEggs')) $('nestEggs').innerHTML = new Array(eggs + 1).join('&#129370;');
+    sfxHurt();
+    const app = $('app');
+    if (app) anim(app, 'hurt', 320);
   } else if (e.k === 'strike'){
     const n = nodeFor(e.uid);
     if (n) anim(n, e.side === 'us' ? 'lungeUp' : 'lungeDown', 300);
@@ -3929,7 +4008,10 @@ function unitByUid(uid){
   if (!F) return null;
   return F.mine.concat(F.theirs).filter((u) => u.uid === uid)[0] || null;
 }
-const BEAT = { clash: 240, strike: 60, hurt: 130, die: 300, poison: 160, heal: 140, trample: 760, end: 260 };
+// Beats sized so a wave reads as an event: it arrives, floors trade, the dead
+// fall, whatever is left climbs. A whole wave lands in roughly 2-3 seconds.
+const BEAT = { wave: 420, arrive: 200, clash: 260, strike: 70, hurt: 150, die: 340,
+  poison: 170, heal: 150, climb: 380, breach: 560, trample: 760, end: 300 };
 /** The anticipation beat: the line is committed, and then nothing happens for a
  *  third of a second. That silence is what makes the first blow land. */
 const LEADIN = 320;
@@ -3938,6 +4020,10 @@ function playBattle(list, out){
   let t = RM() ? 0 : LEADIN;
   seq = { alive: 1 };
   if (F) F.playing = 1;
+  // Paint the opening frame BEFORE the first beat: the wave that just walked in
+  // is on the board, and everyone is still standing, because vhp/valive have
+  // not been touched yet. Without this the tower kept showing the prep state.
+  renderFight();
   const mine = seq;
   // the killing blow gets a beat of its own — but only the one that WINS it.
   // The kill that loses you the match is not a triumph; it gets the toll.
@@ -4048,6 +4134,9 @@ function finishBattle(){
   F.playing = 0;
   const ar = $('arena');
   if (ar && ar.classList) ar.classList.remove('froze');
+  // A round is several waves. Only the LAST one gets a verdict; between waves
+  // you get the tower back, with whatever is coming already at the door.
+  if (!F.over){ betweenWaves(); return; }
   renderFight();
   // The verdict is INFORMATION, not motion — a reduced-motion player gets it
   // too; the sheet above has already flattened everything that moves in it.
@@ -4073,14 +4162,14 @@ function latchLine(){
 function beginBattle(){
   if (F && F.playing){ seqFlush(); return; }
   if (!F){
-    if (!planFlat().length || !planIsLegal()) return;
+    if (!planFlat().length || !planIsLegal()) return;   // the first commit needs someone
     startBattle(fightMods());
     R.line = planFlat();
   } else {
     deployPlan();                       // reinforcements walk in
   }
   F.phase = 'battle';
-  if (!F.theirs.length || F.wave === 0) spawnWave();
+  if (!livingOf(F.theirs).length || F.wave === 0) spawnWave();
   const out = resolveWave();
   const list = (F.events || []).slice();
   F.events = [];
@@ -4092,6 +4181,7 @@ function betweenWaves(){
   if (!F || F.over) return;
   F.phase = 'prep';
   F.playing = 0;
+  purgeDead();                          // the bodies are cleared between waves
   if (F.wave < F.waves) spawnWave();    // you can SEE what is coming before you spend
   renderFight();
 }
