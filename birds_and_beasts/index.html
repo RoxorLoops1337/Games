@@ -491,23 +491,32 @@
      built like an object: a stacked edge (two hard plies + a cast shadow), a
      specular pass across the top-left, and a frame that gets richer with the
      generation. A G5 prize animal must be a visibly better object than a G1. */
-  .card{ position:relative; width:118px; flex:0 0 auto; border-radius:13px; overflow:hidden;
+  /* ---- THE CARD FRAME IS DRAWN ----
+     It used to be `border:1px solid` plus two inset hairlines, and a hairline is
+     not a frame, it is the absence of one. Each tier is one 48x48 SVG, nine-
+     sliced through border-image: G1 is a board with rope wraps, G2 gets iron
+     corner brackets and nail heads, G3 is bone. All three are data URIs — no
+     request, no filter, one declaration. */
+  :root{
+    --frame-1:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%231b2714' stroke='%233c5228' stroke-width='2'/%3E%3Cpath d='M1 1h15v3H4v12H1z M47 1H32v3h11v12h4z M1 47h15v-3H4V32H1z M47 47H32v-3h11V32h4z' fill='%235c4526'/%3E%3Cpath d='M4.5 4.5h7v1.6h-7z M36.5 4.5h7v1.6h-7z M4.5 41.9h7v1.6h-7z M36.5 41.9h7v1.6h-7z' fill='%238a6a38'/%3E%3Cpath d='M1 1 5 1 1 5z M47 1 43 1 47 5z M1 47 5 47 1 43z M47 47 43 47 47 43z' fill='%23090f06'/%3E%3C/svg%3E");
+    --frame-2:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%231e2a15' stroke='%234a5a30' stroke-width='2'/%3E%3Cpath d='M1 1h14v4H5v10H1z M47 1H33v4h10v10h4z M1 47h14v-4H5V33H1z M47 47H33v-4h10V33h4z' fill='%23394450'/%3E%3Ccircle cx='6.5' cy='6.5' r='2.1' fill='%238c99a3'/%3E%3Ccircle cx='41.5' cy='6.5' r='2.1' fill='%238c99a3'/%3E%3Ccircle cx='6.5' cy='41.5' r='2.1' fill='%238c99a3'/%3E%3Ccircle cx='41.5' cy='41.5' r='2.1' fill='%238c99a3'/%3E%3C/svg%3E");
+    --frame-3:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%23241f10' stroke='%23c9b184' stroke-width='2.5'/%3E%3Cpath d='M2 8a4 4 0 0 1 6-6 4 4 0 0 1 6 6 4 4 0 0 1-6 6 4 4 0 0 1-6-6z' fill='%23ddceaa'/%3E%3Cpath d='M46 8a4 4 0 0 0-6-6 4 4 0 0 0-6 6 4 4 0 0 0 6 6 4 4 0 0 0 6-6z' fill='%23ddceaa'/%3E%3Cpath d='M2 40a4 4 0 0 0 6 6 4 4 0 0 0 6-6 4 4 0 0 0-6-6 4 4 0 0 0-6 6z' fill='%23ddceaa'/%3E%3Cpath d='M46 40a4 4 0 0 1-6 6 4 4 0 0 1-6-6 4 4 0 0 1 6-6 4 4 0 0 1 6 6z' fill='%23ddceaa'/%3E%3Ccircle cx='8' cy='8' r='1.7' fill='%23f6eed6'/%3E%3Ccircle cx='40' cy='8' r='1.7' fill='%23f6eed6'/%3E%3Ccircle cx='8' cy='40' r='1.7' fill='%23f6eed6'/%3E%3Ccircle cx='40' cy='40' r='1.7' fill='%23f6eed6'/%3E%3C/svg%3E"); }
+  .card{ position:relative; width:118px; flex:0 0 auto; border-radius:0;
     display:flex; flex-direction:column;
     background:linear-gradient(180deg,#22331f 0%,#1a2818 42%,#0f180e 100%);
-    border:1px solid #080f08;
-    box-shadow: inset 0 1px 0 rgba(190,255,150,.18), inset 0 0 0 1px rgba(80,120,60,.30),
-                0 2px 0 var(--edge), 0 4px 0 #071007, 0 12px 20px -8px rgba(0,0,0,.8);
+    border:9px solid transparent;
+    border-image:var(--frame-1) 12 fill / 9px / 0 stretch;
+    box-shadow: 0 3px 0 #071007, 0 12px 20px -8px rgba(0,0,0,.8);
     cursor:pointer; user-select:none;
-    transition:transform .16s cubic-bezier(.2,.9,.3,1.25), box-shadow .16s ease; }
+    transition:transform .16s cubic-bezier(.2,.9,.3,1.25), filter .16s ease; }
   /* the sheen: one soft diagonal wipe, so the face has a material */
   .card::after{ content:''; position:absolute; inset:0; pointer-events:none; z-index:3;
     border-radius:inherit;
     background:linear-gradient(158deg, rgba(255,255,255,.075) 0 20%, transparent 44%); }
-  .card[data-tier="2"]{ box-shadow: inset 0 1px 0 rgba(255,232,160,.20), inset 0 0 0 1px rgba(255,211,77,.30),
-                0 2px 0 var(--edge), 0 4px 0 #071007, 0 12px 20px -8px rgba(0,0,0,.8); }
-  .card[data-tier="3"]{ box-shadow: inset 0 1px 0 rgba(255,242,190,.28), inset 0 0 0 1.5px rgba(255,211,77,.50),
-                0 2px 0 var(--edge), 0 4px 0 #071007, 0 12px 22px -8px rgba(0,0,0,.85),
-                0 0 20px -6px rgba(255,211,77,.42); }
+  .card[data-tier="2"]{ border-image:var(--frame-2) 12 fill / 9px / 0 stretch; }
+  .card[data-tier="3"]{ border-image:var(--frame-3) 12 fill / 9px / 0 stretch;
+    box-shadow: 0 3px 0 #071007, 0 12px 22px -8px rgba(0,0,0,.85),
+      0 0 22px -6px rgba(255,211,77,.45); }
   .card[data-tier="3"]::after{ animation:foil 6s ease-in-out infinite; }
   @keyframes foil{
     0%,100%{ background:linear-gradient(158deg, rgba(255,238,180,.10) 0 20%, transparent 44%) }
@@ -531,21 +540,22 @@
   /* A STRUCK BONE TOKEN. It was a flat gold disc — the default coin every
      idle game ships with. The rim is milled, the face is dished, the numeral
      is stamped INTO it. */
-  .card .cost{ position:absolute; top:5px; left:5px; width:25px; height:25px; border-radius:50%;
+  .card .cost{ position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
     color:#3a2f16; font-weight:900; font-size:13px; z-index:2;
     display:flex; align-items:center; justify-content:center;
     background-color:#ddceaa;
     background-image:
-      repeating-conic-gradient(from 0deg, rgba(255,255,255,.55) 0 5deg, rgba(120,96,48,.5) 5deg 10deg),
-      radial-gradient(circle at 50% 50%, #e9dcbb 0 62%, transparent 63%),
-      radial-gradient(ellipse 80% 60% at 36% 24%, rgba(255,255,255,.7), transparent 62%),
-      linear-gradient(178deg,#f6eed6,#ddceaa 48%,#a08c60);
+      /* the milled rim: coarse enough to read as knurling at 22px */
+      repeating-conic-gradient(from 4deg, rgba(255,248,224,.85) 0 9deg, rgba(104,82,40,.85) 9deg 18deg),
+      radial-gradient(circle at 50% 50%, #d8c69c 0 63%, transparent 64%),
+      radial-gradient(ellipse 80% 60% at 34% 22%, rgba(255,255,255,.55), transparent 60%),
+      linear-gradient(178deg,#e8dcbb,#c6b489 48%,#8f7b50);
     box-shadow:
       inset 0 1.5px 0 rgba(255,255,255,.85),
       inset 0 -2px 4px -1px rgba(125,107,69,.9),
       inset 0 0 0 1px rgba(90,74,44,.6),
       0 2px 0 #6d5c3a, 0 4px 8px -2px rgba(0,0,0,.7);
-    text-shadow:0 1px 0 rgba(255,255,255,.65), 0 -1px 0 rgba(90,74,44,.55); }
+    text-shadow:0 1px 0 rgba(255,255,255,.7), 0 -1px 0 rgba(74,58,30,.85); }
   /* A BRAND, burned in. No pill, no background — a scorch mark and a glow. */
   .card .gen{ position:absolute; top:5px; right:7px; font-size:9px; letter-spacing:1.6px; z-index:2;
     font-weight:900; color:rgba(255,196,130,.72);
@@ -647,16 +657,46 @@
   .ritrow{ flex:0 0 auto; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
     gap:5px; padding:2px 2px 4px; }
   .ritrow .rit:first-child{ grid-column:1 / -1; }
-  .rit{ min-width:0; padding:6px 9px; border-radius:10px; cursor:pointer;
-    background:linear-gradient(180deg,#162315,#101c10); border:1px solid #26361f;
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.10); text-align:left; font-family:inherit; color:#cfe0c2; }
-  .rit b{ display:block; font-size:11.5px; color:#eaf6df; font-weight:800; line-height:1.2; }
-  .rit i{ display:block; font-size:9.5px; font-style:normal; color:var(--dim); line-height:1.25; margin-top:2px; }
-  .rit .c{ float:right; font-size:11px; font-weight:900; color:var(--gold); }
-  .rit.on{ border-color:var(--pink); background:linear-gradient(180deg,#241a2a,#170f1c);
-    box-shadow:inset 0 1px 0 rgba(255,180,225,.22), 0 0 0 1px rgba(255,130,200,.35), 0 0 18px -6px rgba(255,130,200,.6); }
-  .rit.no{ opacity:.4; cursor:not-allowed; }
-  .haz{ border-color:#a0552a !important; color:#ffc48a !important; }
+  /* The rituals are the most interesting decision on the Nest screen and they
+     were generic list items whose only selected state was a border colour.
+     They are ENTRIES IN A LEDGER now: stained paper, a ruled line under each,
+     a price in the margin, and a hand-inked cross when one is taken. */
+  .rit{ position:relative; isolation:isolate; min-width:0; padding:7px 10px 8px;
+    border-radius:2px 3px 2px 3px; cursor:pointer; text-align:left; border:none;
+    font-family:var(--f-text); color:#3d3520;
+    background-color:#cdb98d;
+    background-image:
+      repeating-linear-gradient(180deg, transparent 0 15px, rgba(70,56,28,.16) 15px 16px),
+      radial-gradient(ellipse 50% 40% at 88% 8%, rgba(110,86,42,.22), transparent 70%),
+      radial-gradient(ellipse 42% 50% at 8% 92%, rgba(96,74,36,.20), transparent 72%),
+      linear-gradient(176deg,#ddcaa0 0%,#c8b487 52%,#a89468 100%);
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.5), inset 0 0 18px rgba(120,92,46,.32),
+      0 2px 0 rgba(0,0,0,.5), 0 6px 12px -5px rgba(0,0,0,.6); }
+  /* the paper's own fibre, at a weight you feel rather than see */
+  .rit::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    border-radius:inherit; background-image:var(--tex-grime); background-size:64px 64px;
+    mix-blend-mode:multiply; opacity:.30; }
+  .rit > *, .rit .c{ position:relative; z-index:1; }
+  .rit b{ display:block; font-family:var(--f-display); font-size:12px; color:#2e2716;
+    font-weight:900; line-height:1.2; letter-spacing:.2px; }
+  .rit i{ display:block; font-size:9.5px; font-style:normal; color:#6b5c39; line-height:1.3; margin-top:2px; }
+  .rit .c{ float:right; font-family:var(--f-display); font-size:11.5px; font-weight:900; color:#7a4a12; }
+  /* taken: the entry is inked over and crossed through */
+  .rit.on{ color:#3a1830; }
+  .rit.on b{ color:#5c1140; }
+  .rit.on{ box-shadow:inset 0 0 0 2px rgba(150,20,100,.6), inset 0 0 18px rgba(150,20,100,.16),
+    0 2px 0 rgba(0,0,0,.5), 0 8px 16px -5px rgba(0,0,0,.6); }
+  /* a hand-inked cross in the corner: taken, not cancelled */
+  .rit.on::after{ content:''; position:absolute; right:5px; bottom:4px; width:15px; height:15px;
+    z-index:2; pointer-events:none; opacity:.9;
+    background:no-repeat center/contain
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.4 8.6 6.2 12.4 13.6 3.1' fill='none' stroke='%2396146a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+  .rit.no{ filter:grayscale(.5) brightness(.72); cursor:not-allowed; }
+  .rit.no b, .rit.no i, .rit.no .c{ color:#5c5540; }
+  /* the hazard entry is written in a different hand, in red ink */
+  .haz{ color:#5a2410 !important; }
+  .haz b{ color:#7a2c0c !important; }
+  .haz .c{ color:#9c3a08 !important; }
   /* Comparing two animals is the WHOLE decision, so the two cards share one
      baseline: the selection cue is a ring, never a lift. */
   .litter{ display:flex; gap:14px; justify-content:center; flex-wrap:nowrap; align-items:stretch; }
@@ -811,9 +851,14 @@
   .handrow .card:not(.dead):hover{ transform:translateY(-6px); box-shadow:0 10px 22px rgba(0,0,0,.55); }
   .handrow .card:not(.dead):active{ transform:translateY(-2px) scale(.97); }
   /* an affordable card is LIT: the one thing you scan for under a clock */
-  .handrow .card:not(.dead)::after{ content:''; position:absolute; inset:-3px; border-radius:12px;
-    pointer-events:none; box-shadow:0 0 0 2.5px rgba(166,255,94,.75), 0 0 20px rgba(166,255,94,.35);
+  /* Affordable used to be a hard lime ring, which fought the drawn frame it
+     sat on top of. It is a warm bloom UNDER the card now — the thing is lit,
+     not outlined. */
+  .handrow .card:not(.dead)::after{ content:''; position:absolute; inset:-6px; z-index:-1;
+    pointer-events:none; border-radius:14px;
+    background:radial-gradient(ellipse 76% 66% at 50% 56%, rgba(200,255,130,.34), transparent 72%);
     animation:readypulse 1.8s ease-in-out infinite; }
+  .handrow .card:not(.dead){ filter:drop-shadow(0 0 5px rgba(166,255,94,.30)); }
   @keyframes readypulse{ 0%,100%{ opacity:.65 } 50%{ opacity:1 } }
   .handrow .card.dead{ filter:grayscale(.7) brightness(.55); }
   /* an empty slot holds its place, so the row never collapses mid-fight */
