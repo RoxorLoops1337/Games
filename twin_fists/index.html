@@ -2121,31 +2121,85 @@ function bgStreet(c){
 
 /* ---------------------------------------------------------------- 2 */
 function bgJunk(c){
-  band(0, 54, '#1a1220'); band(54, 46, '#2a1c22'); band(100, 50, '#3a2a26');
-  for (let i = -1; i < 12; i++){                    // scrap heaps
-    const gx = Math.floor(c * 0.35 / 70) + i, x = gx * 70 - c * 0.35;
-    const h = 40 + hash(gx) * 34;
-    for (let k = 0; k < 12; k++){
-      const kx = x + hash(gx * 13 + k) * 62, ky = 150 - hash(gx * 7 + k) * h;
-      px(kx, ky, 10 + hash(k) * 12, 7, k % 3 ? '#4a3c38' : '#5a4238');
-    }
-    px(x + 10, 150 - h, 40, 6, '#3a2f2c');
+  band(0, 38, '#140e1c'); band(38, 30, '#1e1220'); band(68, 32, '#2c1a20'); band(100, 50, '#3a2422');
+  for (let i = 0; i < 26; i++){
+    const x = ((hash(i) * 1400 - c * 0.08) % VW + VW) % VW;
+    px(x, 3 + hash(i + 41) * 34, 1, 1, '#8a7f9a');
   }
-  // crane arm
-  const cx = 280 - c * 0.35 % 900;
-  px(cx, 40, 4, 110, '#4a4238'); px(cx - 40, 40, 84, 4, '#5a5044');
-  px(cx + 36, 44, 2, 22, '#6a6054'); px(cx + 30, 66, 14, 10, '#7a3a2a');
-  // fence
+  ellipse(((300 - c * 0.08) % 1200 + 1200) % 1200 - 60, 34, 11, 11, '#c8b8a0');
+
+  // far wall of crushed cars, stacked flat like they came off the press
+  for (let i = -1; i < 10; i++){
+    const gx = Math.floor(c * 0.28 / 64) + i, x = gx * 64 - c * 0.28;
+    const layers = 2 + Math.floor(hash(gx) * 3);
+    for (let k = 0; k < layers; k++){
+      const y = 150 - (k + 1) * 13 - 22;
+      const w = 52 - k * 4, off = hash(gx * 9 + k) * 8;
+      px(x + off, y, w, 11, k % 2 ? '#3d2f2c' : '#463634');
+      px(x + off, y, w, 2, '#54423e');
+      px(x + off + 6, y + 3, 9, 4, '#2a2224');          // window hole
+      px(x + off + w - 16, y + 3, 9, 4, '#2a2224');
+    }
+  }
+
+  // the crane: lattice mast, boom, cable, magnet
+  for (let i = -1; i < 4; i++){
+    const gx = Math.floor(c * 0.35 / 300) + i, x = gx * 300 - c * 0.35 + 90;
+    px(x, 34, 6, 116, '#4a4238');
+    for (let y = 38; y < 148; y += 9) px(x - 1, y, 8, 1, '#5e5546');   // lattice rungs
+    limb(x + 3, 36, x + 74, 58, 3, '#5a5044');                          // boom
+    limb(x + 3, 44, x + 66, 58, 2, '#463f36');                          // stay
+    px(x + 70, 58, 2, 26, '#6a6054');                                   // cable
+    ellipse(x + 71, 88, 9, 5, '#7a3a2a');
+    px(x + 64, 84, 15, 3, '#8e4630');
+    px(x - 10, 118, 26, 32, '#3a332c');                                 // cab
+    px(x - 7, 122, 18, 12, '#5a6a60');
+  }
+
+  // fence with a wire top
   for (let i = -1; i < 14; i++){
     const gx = Math.floor(c * 0.62 / 40) + i, x = gx * 40 - c * 0.62;
-    px(x, 118, 3, 34, '#3b332e');
-    for (let y = 120; y < 150; y += 5) px(x + 3, y, 37, 1, 'rgba(120,110,100,0.35)');
+    px(x, 116, 3, 36, '#3b332e');
+    for (let y = 122; y < 150; y += 5) px(x + 3, y, 37, 1, 'rgba(126,116,104,0.32)');
+    px(x + 3, 116, 37, 1, '#4e453c');
+    px(x, 112, 3, 5, '#3b332e');
+    for (let k = 0; k < 4; k++) px(x + 4 + k * 10, 112, 6, 1, '#544a40');
   }
+
+  // heaps, tyres and a burning barrel on the near side
+  for (let i = -1; i < 8; i++){
+    const gx = Math.floor(c * 0.82 / 96) + i, x = gx * 96 - c * 0.82;
+    const kind = Math.floor(hash(gx * 3) * 3);
+    if (kind === 0){                                   // scrap heap
+      const h = 16 + hash(gx) * 16;
+      for (let r = 0; r < h; r += 3){
+        const w = (h - r) * 1.7 * (0.7 + hash(gx * 17 + r) * 0.6);   // jagged, not a pyramid
+        const off = (hash(gx * 5 + r) - 0.5) * 10;
+        px(x - w / 2 + off, 150 - r - 3, w, 3, r % 6 ? '#4a3c34' : '#57443a');
+      }
+    } else if (kind === 1){                            // tyre stack
+      for (let k = 0; k < 3; k++){
+        ellipse(x, 146 - k * 7, 10, 4, '#26221f');
+        ellipse(x, 146 - k * 7, 4, 2, '#3a352f');
+      }
+    } else {                                           // burn barrel
+      px(x - 6, 126, 12, 24, '#4a3a2a');
+      px(x - 6, 130, 12, 2, '#6a5030'); px(x - 6, 142, 12, 2, '#6a5030');
+      const fl = 0.5 + Math.sin(T * 9 + gx) * 0.28;
+      ctx.fillStyle = 'rgba(255,140,40,' + fl.toFixed(2) + ')';
+      ctx.fillRect(x - 5, 118, 10, 9);
+      px(x - 2, 114, 4, 5, '#ffd06a');
+      ctx.fillStyle = 'rgba(255,120,30,0.07)';
+      ctx.fillRect(x - 22, 110, 44, 44);
+    }
+  }
+
   band(150, 6, '#5a4a3a'); band(156, VH - 156, '#453a2e');
   for (let i = -1; i < 26; i++){
     const gx = Math.floor(c / 34) + i, x = gx * 34 - c;
-    px(x + hash(gx) * 20, 164 + hash(gx + 5) * 40, 7, 3, '#392f26');
-    if (hash(gx + 9) > 0.72) px(x + 4, 190 + hash(gx) * 12, 12, 5, '#2e2620');
+    px(x + hash(gx) * 20, 164 + hash(gx + 5) * 38, 7, 3, '#392f26');
+    if (hash(gx + 9) > 0.72) ellipse(x + 8, 190 + hash(gx) * 12, 9, 3, '#37302a');
+    if (hash(gx + 15) > 0.8) px(x + 3, 176 + hash(gx + 2) * 24, 13, 1, '#4e4234');
   }
   band(208, VH - 208, '#33291f');
 }
