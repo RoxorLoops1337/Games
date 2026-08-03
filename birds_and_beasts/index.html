@@ -783,9 +783,13 @@
   .deckwrap > .grid > .card{ scroll-snap-align:end; }
   /* a 30px fade on a 200px card still guillotined it through the midriff — the
      last row has to READ as continuing, so it goes out over a third of a card */
-  .deckwrap.more > .grid{ padding-bottom:34px;
-    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 74px),rgba(0,0,0,.35) calc(100% - 22px),transparent);
-    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 74px),rgba(0,0,0,.35) calc(100% - 22px),transparent); }
+  /* 74px of fade in a box only 165px tall dissolved the whole bottom frame rail
+     of every card in the last row, leaving two gold side rails tapering into
+     nothing — the "orphan rails". The floor rail below already says "there is
+     more behind this"; the fade only has to soften the last few pixels. */
+  .deckwrap.more > .grid{ padding-bottom:30px;
+    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 26px),rgba(0,0,0,.45) calc(100% - 10px),transparent);
+    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 26px),rgba(0,0,0,.45) calc(100% - 10px),transparent); }
   /* the barn has a floor: a rail across the bottom, so a card disappearing
      behind it reads as a card behind a rail rather than as a sliced card */
   .deckwrap.more::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:12px;
@@ -888,7 +892,13 @@
   /* ================= THE ARENA (9:16 portrait) =================
      One canvas pit with a nest above it. Everything that moves is drawn in
      drawPit(); the CSS here only builds the box it lives in. */
-  .field{ flex:1 1 auto; display:flex; flex-direction:column; gap:5px; min-height:0;
+  /* THE PIT IS A FIXED SHAPE. It used to be `flex:1 1 auto` and swallow whatever
+     the rest of the screen did not want — so the moment the hand emptied, the
+     arena grew and every animal in it jumped size and position mid-fight. A
+     battlefield that resizes while you are watching it is unreadable. The pit
+     holds one ratio for the whole run and the slack lives below it, where the
+     bench can use it or not without moving anything. */
+  .field{ flex:0 0 auto; display:flex; flex-direction:column; gap:5px; min-height:0;
     position:relative; padding:5px 8px 0; }
   /* the nest is straw, packed into a plank box */
   .nestbar{ position:relative; isolation:isolate;
@@ -917,7 +927,11 @@
   .nestbar .nhp{ margin-left:auto; font-size:17px; font-weight:900; color:#ffd34d;
     font-variant-numeric:tabular-nums; }
   /* the pit: a sunken box with a lip, so the animals read as being DOWN there */
-  .pit{ flex:1 1 auto; position:relative; min-height:0; border-radius:10px; overflow:hidden;
+  /* A FIXED RATIO, and a portrait one, because that is the shape this slot
+     actually is. At 4/3 the pit was stable but left a third of the phone empty
+     below it and crushed eight animals into a strip. */
+  .pit{ flex:0 0 auto; position:relative; width:100%; aspect-ratio:3 / 4;
+    border-radius:10px; overflow:hidden;
     border:2px solid #2b3f26; background:#0d160c;
     box-shadow:inset 0 8px 22px rgba(0,0,0,.6), inset 0 -3px 0 rgba(255,220,150,.05),
       0 6px 18px rgba(0,0,0,.45); }
@@ -1036,8 +1050,11 @@
      worth of empty screen. Four ghost boxes used to hold a quarter of a 9:16
      phone for the whole back half of a fight; reserving the height without the
      boxes just made it a void instead. */
-  .handrow:empty{ min-height:0; padding:0; }
-  .handrow:empty::before{ content:'THE BARN IS EMPTY \2014 THEY ARE ALL OUT THERE';
+  /* it keeps its height when empty. Collapsing it was what let the pit grow. */
+  .handrow:empty{ padding:4px 6px 2px; align-items:center; }
+  /* `\2014 THEY` — CSS consumes the space after a 4-hex escape as the escape's
+     terminator, so the dash printed glued to the next word. `\20` is the space. */
+  .handrow:empty::before{ content:'THE BARN IS EMPTY \2014\20THEY ARE ALL OUT THERE';
     display:block; width:100%; text-align:center;
     font-family:var(--f-display); font-size:9.5px; letter-spacing:2.4px; color:#6d7a5f;
     padding:7px 0 8px; border-radius:3px;
@@ -1131,10 +1148,22 @@
     display:inline-block; margin:3px 3px; box-shadow:none;
     transform:rotate(-1.4deg); animation:pop .35s ease;
     clip-path:polygon(0 0, 100% 0, calc(100% - 7px) 50%, 100% 100%, 0 100%, 5px 50%);
-    background:
-      linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 46%),
-      linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.62));
+    /* A SCRIM IS NOT CLOTH. Two black alphas over whatever is behind measured
+       1.10:1 against the board — the notch, the fold and the shadow were all
+       correct and all spent on a shape you could not see. Each variant gets an
+       opaque bolt of its own. */
+    background-color:#2a3018;
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 46%),
+      linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.34));
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.7);
     filter:drop-shadow(0 1px 0 rgba(0,0,0,.6)) drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  .banner.good{ background-color:#2b3a12; }
+  .banner.bad{ background-color:#3d1414; }
+  .banner.wild{ background-color:#3a1230; }
+  .banner.warn{ background-color:#3a2d08; }
+  .banner.mourn{ background-color:#0a0c08; }
+  .banner.gold2{ background-color:#3c2c06; }
   /* the fold: a darker wedge at the notch end, so it reads as cloth with a
      thickness rather than as a shape with a bite taken out of it */
   .banner::before{ content:''; position:absolute; inset:0; pointer-events:none;
@@ -1338,9 +1367,6 @@
   /* the run's story is a ledger, not a console dump — and it never clips a line */
   .logbox{ position:relative; isolation:isolate;
     max-height:158px; overflow-y:auto; text-align:left; font-size:12.5px; line-height:1.7;
-    /* the tracking was wide enough to close the space after an em dash, so the
-       ledger printed "EMPTY \2014THEY" as one word */
-    letter-spacing:0; word-spacing:.06em;
     /* The run's whole story, in the browser's default typewriter — the only
        system font anywhere in the build, on the screen people screenshot. */
     font-family:var(--f-text), ui-monospace, monospace;
@@ -2131,6 +2157,7 @@
       </div>
     </div>
     <div class="coach" id="coach" hidden></div>
+    <div class="grow"></div>
     <div class="benchwrap"><div class="handrow" id="hand"></div></div>
     <div class="fbar">
       <div class="feed" id="feed"></div>
@@ -2690,11 +2717,11 @@ function makeFoe(i, mods){
    drawn by the same painter from the same visual genes — so what you are
    reading across the field is exactly what you read on your own cards.
    ========================================================================== */
-const ENEMY_BASE = 9.0;       // leader stat power at round 1
+const ENEMY_BASE = 8.0;       // leader stat power at round 1
 // Deliberately FLAT. A steep curve made the run end at the same round however
 // well you bred, because the enemy outgrew every deck; a flat one that starts
 // hard lets a compounding herd actually pull ahead of it.
-const ENEMY_GROWTH = 1.10;   // per round; fitted by simulation
+const ENEMY_GROWTH = 1.114;  // per round; fitted by simulation
 const GRUNT_FRAC = 0.60;      // a grunt is this much of its leader
 // Each roster entry lends its leader a keyword, so the flavour survives the
 // move list it used to have.
@@ -2929,6 +2956,51 @@ function nearestFoe(u){
   }
   return best;
 }
+/* ---- WHO TO HIT ------------------------------------------------------------
+   Everything used to walk at whatever was nearest and swing at it. Eight
+   animals each solving that independently is a mob, not a fight: nobody ever
+   finished a wounded enemy, five of them would keep hitting a corpse-to-be
+   while a fresh one walked past, a venom beast would re-poison a target that
+   was already dripping, and no two animals ever agreed on anything.
+
+   The score below is the whole brain. It stays cheap — one pass over the
+   units — and every term is something a player can SEE happening. */
+function threatOf(o){
+  const t = o.c.trait;
+  return t === 'venom' || t === 'stun' ? 2.2 : t === 'cleave' ? 1.7 : t === 'leech' ? 1.3 : 1;
+}
+function pickTarget(u){
+  const my = unitMightA(u);
+  let best = null, bs = -1e9;
+  for (const o of F.units){
+    if (!o.alive || o.side === u.side) continue;
+    const d = Math.abs(o.x - u.x) + Math.abs(o.y - u.y) * 0.35;
+    let sc = 130 - d * 3.4;                       // near still dominates
+    // FINISH IT. One swing that removes an attacker is worth more than two that
+    // leave it standing, and a kill is the most legible smart thing in the pit.
+    if (o.hp <= my) sc += 48;
+    else sc += (1 - o.hp / Math.max(1, o.max)) * 28;   // otherwise lean on the hurt
+    sc += (threatOf(o) - 1) * 20;                 // the dangerous one first
+    // and DON'T ALL PILE ON. Damage already promised to this target by allies
+    // that picked before you is wasted; go and hit something still standing.
+    sc -= Math.max(0, (o.inc || 0) - o.hp) * 1.1;
+    // never spend a status on someone who is already wearing it
+    if (u.c.trait === 'venom' && o.pois > 0) sc -= 24;
+    if (u.c.trait === 'stun' && o.stun > 0) sc -= 32;
+    if (o === u.tgt) sc += 15;                    // stickiness, or they twitch
+    if (sc > bs){ bs = sc; best = o; }
+  }
+  return best;
+}
+/* Where in the pit this animal wants to stand. A thick-hided beast steps up and
+   a glass cannon hangs back, so a wave forms a LINE with a front and a back
+   instead of a single row of everything at once. */
+function lineOf(u){
+  const bulk = (u.c.hide || 0) + (u.c.trait === 'bulwark' ? 7 : 0) +
+    (u.c.trait === 'plump' ? 3 : 0);
+  const hit = (u.c.might || 0) + (u.c.trait === 'venom' || u.c.trait === 'stun' ? 4 : 0);
+  return clamp((bulk - hit) * 0.5, -6.5, 6.5);
+}
 function hurtUnit(u, dmg, from){
   if (!u.alive) return 0;
   let d = dmg;
@@ -3024,6 +3096,9 @@ function arenaTick(dt){
     F.waveSeen = s.wave;
   }
 
+  // damage promised this tick, so nobody queues up behind a kill that is
+  // already paid for
+  for (const o of F.units) o.inc = 0;
   for (const u of F.units){
     if (!u.alive){ u.dead -= dt; continue; }
     if (u.hitT > 0) u.hitT -= dt;
@@ -3038,7 +3113,9 @@ function arenaTick(dt){
     if (!u.alive) continue;
     if (u.stun > 0){ u.stun -= dt; continue; }
 
-    const foe = nearestFoe(u);
+    const foe = pickTarget(u);
+    u.tgt = foe;
+    if (foe) foe.inc = (foe.inc || 0) + unitMightA(u);
     const reach = BASE_RANGE;
     if (foe){
       const dx = foe.x - u.x;
@@ -3046,7 +3123,7 @@ function arenaTick(dt){
       // Yours hold a line. Without this they chased every arrival right up to
       // the door, the fight happened in the last tenth of the pit, and the two
       // thirds in front of the nest were dead space.
-      const myHold = HOLD_X + (u.hold || 0);
+      const myHold = HOLD_X + (u.hold || 0) + lineOf(u);
       const cap = u.side === 'us' && foe.x > myHold;
       if (cap && u.x >= myHold - 0.2){
         u.moving = 0;
@@ -3982,12 +4059,20 @@ function drawBeast(cv, c){
   const ne = v.eyes;
   const er = (neck ? 4.0 : 5.2) * (0.68 + 0.42 * sz);
   for (let i = 0; i < ne; i++){
-    const t = ne === 1 ? 0 : (i / (ne - 1) - 0.5);
-    // and the far eye is the SMALL one: a head turned three-quarters on
-    const lead = 0.84 + 0.20 * (t + 0.5);
+    // Evenly spaced, evenly sized eyes read as a metronome. A dominant eye and
+    // an off-beat third break the rhythm into a face.
+    const SPACE3 = [-0.62, 0.06, 0.52];
+    const t = ne === 1 ? 0 : (ne === 3 ? SPACE3[i] : (i / (ne - 1) - 0.5));
+    // and the far eye is the SMALL one: a head turned three-quarters on. At the
+    // old 24% spread that was sub-pixel at fight scale and said nothing.
+    const lead = 0.62 + 0.50 * (t + 0.5);
     const ex = t * hw * (neck ? 0.94 : 0.80) + FACE, ey = hcy + hh * 0.34;
     const R2 = er * lead;
     ell(ex, ey, R2, R2, '#fdfff4');
+    // An un-outlined white circle on a pale animal is 1.89:1 — on a third of the
+    // roster the "one eye idiom" delivered exactly the bare dot it replaced.
+    ctx.beginPath(); ctx.ellipse(ex, ey, R2, R2, 0, 0, Math.PI * 2);
+    stroke(ink, Math.max(1.2, 1.5 * sz));
     const pr2 = f.slit ? R2 * 0.30 : R2 * 0.46;
     ell(ex + R2 * 0.34, ey - R2 * 0.04, pr2, f.slit ? R2 * 0.78 : pr2, '#101408');
     ell(ex + R2 * 0.10, ey + R2 * 0.34, R2 * 0.20, R2 * 0.20, 'rgba(255,255,255,.85)');
@@ -4899,10 +4984,14 @@ function drawPit(){
     W * 0.5, sandTop + (H - sandTop) * 0.55, W * 0.78);
   vig.addColorStop(0, 'transparent'); vig.addColorStop(1, 'rgba(14,9,3,.42)');
   ctx.fillStyle = vig; ctx.fillRect(0, sandTop, W, H - sandTop);
-  // the lit ring the fight happens inside
-  const lit = ctx.createRadialGradient(W * 0.5, horizon + (H - horizon) * 0.55, W * 0.05,
-    W * 0.5, horizon + (H - horizon) * 0.55, W * 0.66);
-  lit.addColorStop(0, 'rgba(255,226,160,.16)'); lit.addColorStop(1, 'transparent');
+  // The lit ring is centred on exactly the same spot as the trodden lane and was
+  // painted after it, at a radius wide enough to wash the whole sand — so it
+  // cancelled the lane down to 1.08:1, under the sand's own speckle. The lane
+  // was built and then painted over. Tighter, and it lights the middle instead
+  // of erasing what is drawn there.
+  const lit = ctx.createRadialGradient(W * 0.5, horizon + (H - horizon) * 0.55, W * 0.04,
+    W * 0.5, horizon + (H - horizon) * 0.55, W * 0.34);
+  lit.addColorStop(0, 'rgba(255,226,160,.13)'); lit.addColorStop(1, 'transparent');
   ctx.fillStyle = lit; ctx.fillRect(0, horizon, W, H - horizon);
 
   // --- the two ends are OBJECTS, not colour washes ------------------------
