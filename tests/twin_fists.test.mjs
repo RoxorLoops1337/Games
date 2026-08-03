@@ -44,6 +44,7 @@ const EXPOSE = `__out.api = {
   liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep,
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
+  rushTier, TOKENS_PER_TIER, RUSH_NAMES,
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
@@ -675,6 +676,110 @@ test('the special button fires the rush through the real input path', () => {
   api.playerControl(p, inp, api.STEP);
   inp.ps = 0; inp.s = 0;
   assert(p.state === 'super', 'the button did it, got ' + p.state);
+});
+
+test('a finisher hits harder than a normal knockdown, in feel as well as damage', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const stops = {};
+  for (const key of ['jab', 'hook']){
+    clearField(api);
+    const e = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+    e.hp = 900; e.hpMax = 900;
+    api.G.hitStop = 0; api.G.shake = 0; api.G.shakeT = 0;
+    api.startAttack(p, key);
+    stepFighter(api, p, 0.3);
+    stops[key] = api.G.hitStop;
+  }
+  assert(stops.hook > stops.jab, `the hook should freeze the frame longer: ${stops.hook} vs ${stops.jab}`);
+  assert(api.ATK.hook.heavy && api.ATK.highkick.heavy && api.ATK.bat.heavy, 'the finishers are flagged heavy');
+});
+
+test('a launched body knocks over whoever it lands in', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const target = api.spawnEnemy('punk', 118, api.FLOOR_MID, -1);
+  const bystander = api.spawnEnemy('punk', 168, api.FLOOR_MID, -1);
+  bystander.ai.mode = 'orbit'; bystander.hp = 300; bystander.hpMax = 300;
+  api.startAttack(p, 'highkick');
+  stepFighter(api, p, 0.6);
+  assert(target.thrown || target.launched || api.isDown(target), 'the head kick launched him');
+  for (let i = 0; i < 70; i++) api.updateFighter(target, api.STEP);
+  assert(bystander.hp < 300 || api.isDown(bystander), 'and he took his friend with him');
+});
+
+test('an enemy launching a player does not turn him into a weapon against co-op', () => {
+  const api = boot();
+  play(api, { players: 2 }); clearField(api);
+  const p1 = api.players[0], p2 = api.players[1];
+  p1.x = 150; p1.y = api.FLOOR_MID; p1.invuln = 0;
+  p2.x = 190; p2.y = api.FLOOR_MID; p2.invuln = 0;
+  const hp0 = p2.hp;
+  const e = api.spawnEnemy('bruiser', 136, api.FLOOR_MID, 1);
+  e.face = 1;
+  api.startAttack(e, 'haymaker');
+  stepFighter(api, e, 0.8);
+  for (let i = 0; i < 70; i++) api.updateFighter(p1, api.STEP);
+  assert(!p1.launched, 'an enemy launch does not arm the body');
+  assert(p2.hp === hp0, 'so player two does not get hit by player one');
+});
+
+/* ----------------------------------------------------------- rush tiers */
+test('three tokens level the rush up, and the tier survives the stage', () => {
+  const api = boot();
+  api.startGame();
+  const p = api.players[0];
+  assert(api.rushTier(p) === 1, 'you start on tier one');
+  for (let i = 0; i < api.TOKENS_PER_TIER; i++) api.pickUp(p, api.mkItem('token', p.x, p.y, 0));
+  assert(api.rushTier(p) === 2, 'three tokens is tier two, got ' + api.rushTier(p));
+  for (let i = 0; i < api.TOKENS_PER_TIER * 3; i++) api.pickUp(p, api.mkItem('token', p.x, p.y, 0));
+  assert(api.rushTier(p) === api.SUPER.tiers.length, 'and it caps at the last tier');
+  api.nextStage();
+  assert(api.rushTier(api.players[0]) === api.SUPER.tiers.length, 'the tier carries to the next street');
+});
+
+test('each tier is longer and hits for more than the one below it', () => {
+  const api = boot();
+  const sum = (t) => t.strikes.reduce((n, st) => n + st.dmg, 0);
+  for (let i = 1; i < api.SUPER.tiers.length; i++){
+    const lo = api.SUPER.tiers[i - 1], hi = api.SUPER.tiers[i];
+    assert(hi.strikes.length > lo.strikes.length, `tier ${i + 1} needs more strikes`);
+    assert(sum(hi) > sum(lo), `tier ${i + 1} needs more damage`);
+    assert(hi.dur > lo.dur, `tier ${i + 1} needs to last longer`);
+  }
+  for (const t of api.SUPER.tiers){
+    assert(t.strikes.filter(x => x.finisher).length === 1, 'every tier ends on exactly one finisher');
+    const last = t.strikes[t.strikes.length - 1];
+    assert(last.finisher, 'and the finisher is last');
+    assert(last.t < t.dur, 'with time to land before the move ends');
+    let prev = -1;
+    for (const st of t.strikes){ assert(st.t > prev, 'strikes must be in time order'); prev = st.t; }
+    for (const st of t.strikes) assert(api.A[st.anim], 'strike references a missing animation: ' + st.anim);
+  }
+});
+
+test('a tier three rush does more to a crowd than a tier one rush', () => {
+  const api = boot();
+  const damageDone = (tokens) => {
+    play(api); clearField(api);
+    const p = api.players[0];
+    p.x = 150; p.y = api.FLOOR_MID; p.face = 1; p.stocks = 1; p.tokens = tokens;
+    const crowd = [];
+    for (let i = 0; i < 3; i++){
+      const e = api.spawnEnemy('bruiser', 132 + i * 20, api.FLOOR_MID, -1);
+      e.hp = 4000; e.hpMax = 4000; e.armorLeft = 0;
+      crowd.push(e);
+    }
+    api.startSuper(p);
+    stepFighter(api, p, p.tier.dur + 0.2);
+    return crowd.reduce((n, e) => n + (e.hpMax - e.hp), 0);
+  };
+  const t1 = damageDone(0), t3 = damageDone(api.TOKENS_PER_TIER * 2);
+  assert(t3 > t1 * 1.2, `tier three should clearly out-hit tier one: ${t3} vs ${t1}`);
 });
 
 /* ---------------------------------------------------------------- grabs */

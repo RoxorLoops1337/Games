@@ -342,6 +342,7 @@ const SFX = {
   clear(){ [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, 'square', 0.18, null, i * 0.11)); },
   dead(){ [400, 330, 262, 196].forEach((f, i) => tone(f, 0.28, 'sawtooth', 0.2, null, i * 0.16)); },
   select(){ tone(600, 0.05, 'square', 0.14); },
+  crunch(){ noise(0.22, 0.6, 260, 70); tone(88, 0.2, 'sawtooth', 0.26, 44); },
   ready(){ [784, 988, 1319].forEach((f, i) => tone(f, 0.12, 'square', 0.15, null, i * 0.055)); },
   superGo(){
     [330, 440, 587, 784].forEach((f, i) => tone(f, 0.16, 'sawtooth', 0.2, null, i * 0.05));
@@ -801,7 +802,7 @@ const ATK = {
   jumppunch:{ anim: 'jumppunch', dur: 0.4, hit: [0.04, 0.3], dmg: 9, reach: 22, kb: 70,  lift: 20,  down: false, sfx: 'hit',   air: true, seq: [[0, 0.4]] },
   whirl:    { anim: 'whirl',  dur: 0.58, hit: [0.12, 0.42], dmg: 10, reach: 27, kb: 150, lift: 110, down: true,  sfx: 'heavy', all: true, cost: 4, swoosh: 'spin', seq: [[0, 0.16], [1, 0.3], [2, 0.58]] },
   elbow:    { anim: 'elbow',  dur: 0.32, hit: [0.10, 0.19], dmg: 10, reach: 22, kb: 120, lift: 40,  down: false, sfx: 'heavy', back: true, seq: [[0, 0.1], [1, 0.32]] },
-  charge:   { anim: 'run',    dur: 0.46, hit: [0.04, 0.34], dmg: 13, reach: 20, kb: 175, lift: 95,  down: true,  sfx: 'heavy', dash: true, seq: [[0, 0.12], [1, 0.24], [2, 0.36], [3, 0.46]] },
+  charge:   { anim: 'charge', dur: 0.46, hit: [0.04, 0.34], dmg: 13, reach: 20, kb: 175, lift: 95,  down: true,  sfx: 'heavy', dash: true, seq: [[0, 0.12], [1, 0.24], [2, 0.36], [3, 0.46]] },
   stomp:    { anim: 'kick',   dur: 0.38, hit: [0.12, 0.22], dmg: 9,  reach: 18, kb: 40,  lift: 40,  down: true,  sfx: 'heavy', ground: true, seq: [[0, 0.1], [1, 0.24], [2, 0.38]] },
   knee:     { anim: 'knee',   dur: 0.30, hit: [0.08, 0.16], dmg: 9,  reach: 16, kb: 0,   lift: 0,   down: false, sfx: 'hit',   hold: true, seq: [[0, 0.14], [1, 0.3]] },
   bat:      { anim: 'swing',  dur: 0.46, hit: [0.17, 0.30], dmg: 17, reach: 33, kb: 185, lift: 125, down: true,  sfx: 'heavy', swoosh: 'weapon', heavy: true, arc: [168, -34], seq: [[0, 0.1], [1, 0.17], [2, 0.24], [3, 0.34], [4, 0.46]] },
@@ -856,10 +857,10 @@ function mkFighter(o){
     atk: null, atkT: 0, atkKey: '', hitList: [],
     stun: 0, hitFlash: 0, invuln: 0, dazed: 0, hitChain: 0,
     combo: 0, comboT: 0, hits: 0, hitsT: 0,
-    meter: 0, stocks: 0, superT: 0, superI: 0,
+    meter: 0, stocks: 0, superT: 0, superI: 0, tokens: 0, tier: null,
     weapon: o.weapon || null, wUses: 0,
     holder: null, holding: null, holdT: 0, mash: 0, grabCd: 0,
-    thrown: false, thrownBy: null, dead: false, deadT: 0, gone: false,
+    thrown: false, thrownBy: null, launched: false, dead: false, deadT: 0, gone: false,
     ai: null, pi: o.pi == null ? -1 : o.pi,
     dashT: 0, dashDir: 0, tapT: 0, tapDir: 0, jumpLock: false,
     armor: o.armor || 0, armorLeft: o.armor || 0,
@@ -1018,9 +1019,14 @@ function applyHit(atk, def, a){
   def.dazed = 1.2;
   def.holdT = 0;
   if (def.holding) releaseHold(def, false);
-  G.hitStop = Math.max(G.hitStop, a.down ? 0.07 : 0.045);
-  shakeScreen(a.down ? 3.4 : 1.6, a.down ? 0.2 : 0.1);
+  G.hitStop = Math.max(G.hitStop, a.heavy ? 0.11 : a.down ? 0.07 : 0.045);
+  shakeScreen(a.heavy ? 5 : a.down ? 3.4 : 1.6, a.heavy ? 0.26 : a.down ? 0.2 : 0.1);
   spawnFx('impact', (def.x + atk.x) / 2 + atk.face * 5, def.y, def.z + 24 * def.sc, a.down ? '#fff0a0' : '#ffffff');
+  if (a.heavy){
+    spawnFx('ring', (def.x + atk.x) / 2, def.y, def.z + 22 * def.sc, '#fff0b0');
+    for (let i = 0; i < 5; i++) spawnFx('chip', def.x, def.y, def.z + 20 + rr(0, 16), '#ffd88a');
+    SFX.crunch();
+  }
   if (SFX[a.sfx]) SFX[a.sfx]();
 
   if (atk.team === 'p'){
@@ -1036,7 +1042,7 @@ function applyHit(atk, def, a){
     return;
   }
   if (knock){
-    knockDown(def, atk.face, a.kb, a.lift || 100);
+    knockDown(def, atk.face, a.kb, a.lift || 100, atk);
   } else {
     def.state = 'hurt'; def.st = 0;
     def.stun = 0.22 + (a.dmg > 9 ? 0.1 : 0);
@@ -1047,7 +1053,7 @@ function applyHit(atk, def, a){
   }
 }
 
-function knockDown(f, dir, kb, lift){
+function knockDown(f, dir, kb, lift, by){
   if (f.holder) breakFree(f);
   if (f.holding) releaseHold(f, false);
   f.state = 'down'; f.st = 0;
@@ -1059,13 +1065,17 @@ function knockDown(f, dir, kb, lift){
   f.hitChain = 0;
   f.atk = null;
   setAnim(f, 'air', 0);
+  // a real launch turns the body into a projectile aimed at his own friends
+  if (by && by.team === 'p' && (kb || 0) >= 150 && !f.thrown){
+    f.thrown = true; f.thrownBy = by; f.launched = true;
+  }
   if (f.weapon && f.team === 'p'){ dropWeapon(f); }
 }
 
 function knockOut(f, killer, a){
   f.hp = 0;
   f.dead = true;
-  knockDown(f, killer ? killer.face : 1, (a && a.kb) || 150, (a && a.lift) || 120);
+  knockDown(f, killer ? killer.face : 1, (a && a.kb) || 150, (a && a.lift) || 120, killer);
   f.deadT = 0;
   SFX.ko();
   if (f.team === 'e'){
@@ -1141,6 +1151,9 @@ const METER_MAX = 100;
 const STOCK_MAX = 5;
 const START_STOCKS = 3;
 
+const TOKENS_PER_TIER = 3;                 // three tokens and the rush levels up
+const RUSH_NAMES = ['', 'RUSH I', 'RUSH II', 'RUSH III'];
+
 const SUPER = {
   dur: 2.05,
   name: 'TWIN FIST RUSH',
@@ -1156,6 +1169,46 @@ const SUPER = {
     { t: 1.72, anim: 'rise', frame: 0, dmg: 18, reach: 34, kb: 235, lift: 185, down: true, all: true, finisher: true },
   ],
 };
+
+/* Tier two lengthens the flurry; tier three ends it with the floor coming
+   up.  Every strike list is written out in full rather than spliced, so
+   what a tier does is something you can read. */
+SUPER.tiers = [
+  { dur: 2.05, strikes: SUPER.strikes },
+  { dur: 2.45, strikes: [
+    { t: 0.32, anim: 'punchA', frame: 1, dmg: 5, reach: 26, kb: 14 },
+    { t: 0.43, anim: 'punchB', frame: 1, dmg: 5, reach: 26, kb: 14 },
+    { t: 0.54, anim: 'punchA', frame: 1, dmg: 5, reach: 26, kb: 14 },
+    { t: 0.65, anim: 'punchB', frame: 1, dmg: 5, reach: 26, kb: 14 },
+    { t: 0.76, anim: 'punchA', frame: 1, dmg: 6, reach: 26, kb: 14 },
+    { t: 0.87, anim: 'punchB', frame: 1, dmg: 6, reach: 26, kb: 14 },
+    { t: 1.02, anim: 'lowkick', frame: 1, dmg: 7, reach: 29, kb: 20 },
+    { t: 1.18, anim: 'midkick', frame: 1, dmg: 9, reach: 30, kb: 30 },
+    { t: 1.40, anim: 'whirl', frame: 1, dmg: 10, reach: 34, kb: 40, all: true },
+    { t: 1.60, anim: 'whirl', frame: 2, dmg: 10, reach: 34, kb: 40, all: true },
+    { t: 1.80, anim: 'whirl', frame: 1, dmg: 10, reach: 34, kb: 40, all: true },
+    { t: 2.10, anim: 'rise', frame: 0, dmg: 22, reach: 36, kb: 250, lift: 200, down: true, all: true, finisher: true },
+  ] },
+  { dur: 2.9, strikes: [
+    { t: 0.30, anim: 'punchA', frame: 1, dmg: 6, reach: 27, kb: 14 },
+    { t: 0.40, anim: 'punchB', frame: 1, dmg: 6, reach: 27, kb: 14 },
+    { t: 0.50, anim: 'punchA', frame: 1, dmg: 6, reach: 27, kb: 14 },
+    { t: 0.60, anim: 'punchB', frame: 1, dmg: 6, reach: 27, kb: 14 },
+    { t: 0.70, anim: 'punchA', frame: 1, dmg: 6, reach: 27, kb: 14 },
+    { t: 0.80, anim: 'punchB', frame: 1, dmg: 6, reach: 27, kb: 14 },
+    { t: 0.90, anim: 'elbow', frame: 1, dmg: 8, reach: 27, kb: 20 },
+    { t: 1.05, anim: 'lowkick', frame: 1, dmg: 8, reach: 30, kb: 20 },
+    { t: 1.22, anim: 'midkick', frame: 1, dmg: 10, reach: 31, kb: 30 },
+    { t: 1.40, anim: 'highkick', frame: 1, dmg: 12, reach: 32, kb: 40 },
+    { t: 1.62, anim: 'whirl', frame: 1, dmg: 11, reach: 36, kb: 40, all: true },
+    { t: 1.82, anim: 'whirl', frame: 2, dmg: 11, reach: 36, kb: 40, all: true },
+    { t: 2.02, anim: 'whirl', frame: 1, dmg: 11, reach: 36, kb: 40, all: true },
+    { t: 2.22, anim: 'whirl', frame: 2, dmg: 11, reach: 36, kb: 40, all: true },
+    { t: 2.52, anim: 'rise', frame: 0, dmg: 26, reach: 120, kb: 265, lift: 215, down: true, all: true,
+      finisher: true, quake: true },
+  ] },
+];
+const rushTier = (f) => clamp(1 + Math.floor((f.tokens || 0) / TOKENS_PER_TIER), 1, SUPER.tiers.length);
 
 function gainMeter(f, n){
   if (!f || f.team !== 'p') return;
@@ -1173,8 +1226,9 @@ function gainMeter(f, n){
 function startSuper(f){
   if (!f || f.stocks <= 0) return false;
   f.stocks--;
+  f.tier = SUPER.tiers[rushTier(f) - 1];
   f.state = 'super'; f.superT = 0; f.superI = 0;
-  f.invuln = Math.max(f.invuln, SUPER.dur + 0.3);
+  f.invuln = Math.max(f.invuln, f.tier.dur + 0.3);
   f.atk = null; f.vx = 0; f.vy = 0; f.vz = 0; f.z = 0;
   if (f.holding) releaseHold(f, true);
   const foe = nearestFoe(f, 220);
@@ -1183,23 +1237,25 @@ function startSuper(f){
   G.flash = 0.5;
   shakeScreen(4, 0.26);
   SFX.superGo();
-  spawnFx('score', f.x, f.y, f.z + 56, '#ffe27a', SUPER.name);
+  spawnFx('score', f.x, f.y, f.z + 56, '#ffe27a', RUSH_NAMES[rushTier(f)]);
   return true;
 }
 
 function superTick(f, dt){
+  const tier = f.tier || SUPER.tiers[0];
+  const list = tier.strikes;
   f.superT += dt;
   let seg = null;
-  for (let i = 0; i < SUPER.strikes.length; i++)
-    if (f.superT >= SUPER.strikes[i].t - 0.1) seg = SUPER.strikes[i];
+  for (let i = 0; i < list.length; i++)
+    if (f.superT >= list[i].t - 0.1) seg = list[i];
   if (seg){ f.anim = seg.anim; f.frame = seg.frame == null ? 1 : seg.frame; }
   else setAnim(f, 'rise', 0);
-  while (f.superI < SUPER.strikes.length && f.superT >= SUPER.strikes[f.superI].t){
-    superStrike(f, SUPER.strikes[f.superI]);
+  while (f.superI < list.length && f.superT >= list[f.superI].t){
+    superStrike(f, list[f.superI]);
     f.superI++;
   }
-  f.vx = f.face * (f.superT < 1.05 ? 19 : 0);
-  if (f.superT >= SUPER.dur){
+  f.vx = f.face * (f.superT < tier.dur * 0.5 ? 19 : 0);
+  if (f.superT >= tier.dur){
     f.state = 'idle'; setAnim(f, 'idle', 0);
     f.vx = 0;
     f.invuln = Math.max(f.invuln, 0.4);
@@ -1222,7 +1278,11 @@ function superStrike(f, st){
   spawnFx('impact', f.x + f.face * 16, f.y, f.z + 26, st.finisher ? '#ffffff' : '#ffe27a');
   G.hitStop = Math.max(G.hitStop, st.finisher ? 0.15 : 0.035);
   shakeScreen(st.finisher ? 6 : 1.8, st.finisher ? 0.3 : 0.09);
-  if (st.finisher){ G.flash = 0.55; SFX.superHit(); }
+  if (st.finisher){
+    G.flash = 0.55; SFX.superHit();
+    spawnFx(st.quake ? 'quake' : 'ring', f.x, f.y, st.quake ? 2 : f.z + 24, '#fff0b0');
+    if (st.quake) shakeScreen(9, 0.5);
+  }
 }
 
 /* ================================================================ items
@@ -1263,10 +1323,20 @@ function pickUp(f, it){
     it.gone = true; return true;
   }
   if (it.kind === 'token'){
-    if (f.stocks < STOCK_MAX){ f.stocks++; f.meter = Math.max(f.meter, 0); }
+    const before = rushTier(f);
+    f.tokens = (f.tokens || 0) + 1;
+    if (f.stocks < STOCK_MAX) f.stocks++;
     else gainMeter(f, METER_MAX);
     SFX.ready();
-    spawnFx('score', f.x, f.y, f.z + 46, '#ffe27a', 'SPECIAL +1');
+    const after = rushTier(f);
+    if (after > before){
+      spawnFx('score', f.x, f.y, f.z + 52, '#ffffff', RUSH_NAMES[after] + '!');
+      spawnFx('ring', f.x, f.y, f.z + 22, '#ffe27a');
+      G.flash = 0.35;
+      SFX.superGo();
+    } else {
+      spawnFx('score', f.x, f.y, f.z + 46, '#ffe27a', 'SPECIAL +1');
+    }
     it.gone = true; return true;
   }
   if (f.weapon) return false;
@@ -1472,7 +1542,8 @@ function drawAttackSwoosh(f, X, Y, pose, sc){
 
 /* ------------------------------------------------------------------ fx */
 function spawnFx(kind, x, y, z, col, val){
-  fx.push({ kind, x, y, z, col, val, t: 0, life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : 0.5,
+  fx.push({ kind, x, y, z, col, val, t: 0,
+    life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : kind === 'ring' ? 0.34 : kind === 'quake' ? 0.5 : 0.5,
     vx: kind === 'chip' ? rr(-70, 70) : 0, vz: kind === 'chip' ? rr(40, 130) : 0, r: 0 });
 }
 function updateFx(dt){
@@ -1501,6 +1572,21 @@ function drawFx(p){
     px(sx, sy, 2, 2, p.col);
   } else if (p.kind === 'dust'){
     ellipse(sx, sy, 3 + k * 5, 1 + k * 2, 'rgba(160,150,130,' + (0.45 * (1 - k)).toFixed(2) + ')');
+  } else if (p.kind === 'ring'){
+    const r = 4 + k * 26;
+    const n = 14;
+    for (let i = 0; i < n; i++){
+      const a2 = i * TAU / n;
+      px(sx + Math.cos(a2) * r, sy + Math.sin(a2) * r * 0.42, 2, 2,
+        k < 0.5 ? p.col : 'rgba(255,240,180,' + (1 - k).toFixed(2) + ')');
+    }
+  } else if (p.kind === 'quake'){
+    const r = 10 + k * 150;
+    for (let i = 0; i < 22; i++){
+      const a2 = i * TAU / 22;
+      px(sx + Math.cos(a2) * r, sy + Math.sin(a2) * r * 0.3, 3, 2,
+        'rgba(255,' + Math.round(200 - k * 120) + ',80,' + (1 - k).toFixed(2) + ')');
+    }
   } else if (p.kind === 'score'){
     text(String(p.val), sx - textW(String(p.val), 1) / 2, sy - 8, p.col, 1, '#20101a');
   }
@@ -1552,7 +1638,7 @@ function updateFighter(f, dt){
           f.vz = -f.vz * 0.32; f.vx *= 0.4;
           SFX.land();
         } else {
-          f.vz = 0; f.vx *= 0.2; f.thrown = false;
+          f.vz = 0; f.vx *= 0.2; f.thrown = false; f.launched = false;
           f.state = 'lie'; f.st = 0; setAnim(f, 'lie', 0);
           shakeScreen(2, 0.1);
           for (let i = 0; i < 4; i++) spawnFx('dust', f.x + rr(-8, 8), f.y, 2, '#a0958a');
@@ -1654,7 +1740,7 @@ function thrownSweep(f){
   for (const o of pool){
     if (!o || o === f || o.gone || o.dead || isDown(o) || o.invuln > 0) continue;
     if (Math.abs(o.x - f.x) < 14 && Math.abs(o.y - f.y) < 12 && Math.abs(o.z - f.z) < 26){
-      o.hp -= 12 * (f.thrownBy && f.thrownBy.team === 'p' ? 1 : DIFF[G.diff].dmg);
+      o.hp -= (f.launched ? 8 : 12) * (f.thrownBy && f.thrownBy.team === 'p' ? 1 : DIFF[G.diff].dmg);
       spawnFx('impact', o.x, o.y, o.z + 22, '#ffe080');
       SFX.heavy();
       shakeScreen(3, 0.16);
@@ -2077,6 +2163,7 @@ function resetStage(){
     if (old){                                   // specials carry between streets
       p.stocks = clamp(old.stocks, 1, STOCK_MAX);
       p.meter = clamp(old.meter, 0, METER_MAX);
+      p.tokens = old.tokens || 0;               // and so does the rush you built
     }
     players[i] = p;
     fighters.push(p);
@@ -2665,6 +2752,16 @@ function drawHUD(){
       const blink = lit && stocks > 0 && Math.floor(T * 4) % 2 === 0;
       px(sx2, 22, 5, 5, lit ? (blink ? '#fff4c0' : '#ffd23d') : '#2a2233');
       if (lit) px(sx2 + 1, 23, 3, 3, '#c86a18');
+    }
+    // what tier your rush is, and what is left of the thing in your hands
+    if (p){
+      const tier = rushTier(p);
+      if (tier > 1) text('R' + tier, x + 103, 22, '#ffe27a', 1, '#20101a');
+      if (p.weapon){
+        const wf = clamp(p.wUses / ((WEAPON[p.weapon] || { uses: 8 }).uses || 8), 0, 1);
+        px(x + 120, 22, 22, 5, '#241c2c');
+        px(x + 121, 23, Math.round(20 * wf), 3, wf > 0.3 ? '#9aa4b0' : '#e05a3a');
+      }
     }
   }
   // stage plate
