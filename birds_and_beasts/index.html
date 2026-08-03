@@ -1338,6 +1338,9 @@
   /* the run's story is a ledger, not a console dump — and it never clips a line */
   .logbox{ position:relative; isolation:isolate;
     max-height:158px; overflow-y:auto; text-align:left; font-size:12.5px; line-height:1.7;
+    /* the tracking was wide enough to close the space after an em dash, so the
+       ledger printed "EMPTY \2014THEY" as one word */
+    letter-spacing:0; word-spacing:.06em;
     /* The run's whole story, in the browser's default typewriter — the only
        system font anywhere in the build, on the screen people screenshot. */
     font-family:var(--f-text), ui-monospace, monospace;
@@ -2934,12 +2937,12 @@ function hurtUnit(u, dmg, from){
   u.hitT = 0.22;
   // `fx` is which way the blow came from, so the number can lean that way
   // instead of every number in the tick landing on the same pixel column
-  ev('hit', { id: u.id, dmg: d, hp: Math.max(0, u.hp), x: u.x, y: u.y,
+  ev('hit', { id: u.id, dmg: d, hp: Math.max(0, u.hp), x: u.x, y: u.y, side: u.side,
     fx: from ? (from.x > u.x ? 1 : -1) : 0 });
   if (from && u.c.trait === 'thorns' && from.alive){
     from.hp -= 3;
     ev('hit', { id: from.id, dmg: 3, hp: Math.max(0, from.hp), x: from.x, y: from.y,
-      thorns: 1, fx: u.x > from.x ? 1 : -1 });
+      side: from.side, thorns: 1, fx: u.x > from.x ? 1 : -1 });
     if (from.hp <= 0) killUnit(from);
   }
   if (u.hp <= 0) killUnit(u);
@@ -3693,6 +3696,12 @@ function drawBeast(cv, c){
   const dark = 'hsl(' + v.hue + ',56%,26%)';
   const ink = 'hsl(' + v.hue + ',60%,13%)';
   const belly = 'hsl(' + v.hue2 + ',58%,70%)';
+  // THE NECK AND HEAD ARE A DIFFERENT PLANE. Drawn in the torso's exact value,
+  // a long-necked bird read as "the bulb, squeezed on x" — the neck genes were
+  // all there and none of them changed what animal you were looking at. A head
+  // held up on a neck catches more light than a body sitting on the ground.
+  const neckc = 'hsl(' + v.hue + ',46%,44%)';
+  const headc = 'hsl(' + v.hue + ',54%,61%)';
   const wingc = 'hsl(' + v.hue2 + ',50%,44%)';
   const bone = 'hsl(' + ((v.hue + 40) % 360) + ',35%,78%)';
   const sz = v.size;
@@ -3701,11 +3710,15 @@ function drawBeast(cv, c){
   const legH = f.limb === 1 ? 18 : f.legless ? 0 : 10;
   const cy = f.legless ? ry * 0.94 : ry + legH * 0.72;
   // the body's true extents, whatever shape it turned out to be
-  const bw = f.build === 3 ? rx * 0.62 : f.build === 2 ? rx * 1.05 : rx;
-  const bh = f.build === 3 ? ry * 1.35 : ry;
-  const lobes = [[-rx * 0.42, cy - ry * 0.08, rx * 0.66, ry * 0.74],
-                 [rx * 0.40, cy + ry * 0.10, rx * 0.60, ry * 0.68],
-                 [0, cy + ry * 0.02, rx * 0.82, ry * 0.95]];
+  // Four builds that were four widths of the same egg. A capsule is now a real
+  // column and a lumpy one is genuinely broad, so the OUTLINE says which animal
+  // this is before any colour does.
+  const bw = f.build === 3 ? rx * 0.50 : f.build === 2 ? rx * 1.20 : rx;
+  const bh = f.build === 3 ? ry * 1.62 : f.build === 2 ? ry * 0.86 : ry;
+  // wider and flatter, so "lumpy" is a low-slung animal rather than a bumpy egg
+  const lobes = [[-rx * 0.58, cy - ry * 0.02, rx * 0.70, ry * 0.62],
+                 [rx * 0.56, cy + ry * 0.12, rx * 0.64, ry * 0.56],
+                 [0, cy + ry * 0.04, rx * 0.92, ry * 0.80]];
   // THE NECK. With none, the body is the head, exactly as it always was; with
   // one, the face moves onto a real head at the top of a tapered column — which
   // by itself splits the herd into squat beasts and long-necked birds.
@@ -3759,7 +3772,7 @@ function drawBeast(cv, c){
     } else if (f.build === 2){                           // lumpy: three lobes
       for (const L of lobes) ctx.ellipse(L[0], L[1], L[2], L[3], 0, 0, Math.PI * 2);
     } else {                                             // vertical capsule
-      const cw = rx * 0.62, ch = ry * 1.35;
+      const cw = rx * 0.50, ch = ry * 1.62;
       ctx.moveTo(-cw, cy - ch + cw);
       ctx.lineTo(-cw, cy + ch - cw);
       ctx.quadraticCurveTo(-cw, cy + ch, 0, cy + ch);
@@ -3798,12 +3811,19 @@ function drawBeast(cv, c){
   } else if (f.limb === 3){
     for (const s of [-1, 1]){ stub(s * bw * 0.55); stub(s * bw * 0.25); }
   } else if (f.limb === 1){
+    // It was a four-point parallelogram terminating in a hard 90-degree black
+    // corner — the ugliest object in the arena, and it read as set dressing
+    // that had fallen over. A stilt has a knee and a taper.
     for (const s of [-1, 1]){
+      const hipX = s * bw * 0.44, kneeX = s * bw * 0.58, ankX = s * bw * 0.62;
+      const wTop = 2.6 * sz, wBot = 1.7 * sz;
       ctx.beginPath();
-      ctx.moveTo(s * bw * 0.44 - 2, 22); ctx.lineTo(s * bw * 0.62 - 2, 0);
-      ctx.lineTo(s * bw * 0.62 + 2, 0); ctx.lineTo(s * bw * 0.44 + 2, 22);
+      ctx.moveTo(hipX - wTop, 22);
+      ctx.quadraticCurveTo(kneeX - wTop * 0.9, 12, ankX - wBot, 1.5);
+      ctx.lineTo(ankX + wBot, 1.5);
+      ctx.quadraticCurveTo(kneeX + wTop * 0.9, 12, hipX + wTop, 22);
       ctx.closePath(); ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
-      foot(s * bw * 0.62);
+      foot(ankX);
     }
   } else if (f.limb === 4){
     // serpent: no legs, and a body that carries on as a coil behind it
@@ -3843,7 +3863,13 @@ function drawBeast(cv, c){
     ctx.lineTo(nt, y1);
     ctx.quadraticCurveTo(nt * 1.30, (y0 + y1) * 0.5, nb, y0);
     ctx.closePath();
-    ctx.fillStyle = main; ctx.fill(); stroke(dark, 2.5);
+    ctx.fillStyle = neckc; ctx.fill(); stroke(dark, 2.5);
+    // a lit edge down the front of the throat, so it is a column and not a slot
+    ctx.beginPath();
+    ctx.moveTo(nb * 0.42, y0);
+    ctx.quadraticCurveTo(nt * 0.62, (y0 + y1) * 0.5, nt * 0.46, y1);
+    ctx.strokeStyle = headc; ctx.lineWidth = Math.max(1.5, 2.2 * sz);
+    ctx.stroke();
   }
   // body
   if (f.build === 2){
@@ -3874,7 +3900,7 @@ function drawBeast(cv, c){
   // the head, if there is a neck holding one up
   if (neck){
     ctx.beginPath(); ctx.ellipse(0, hcy, hw, hh, 0, 0, Math.PI * 2);
-    ctx.fillStyle = main; ctx.fill(); stroke(dark, 2.5);
+    ctx.fillStyle = headc; ctx.fill(); stroke(dark, 2.5);
     ctx.save();
     ctx.beginPath(); ctx.ellipse(0, hcy, hw, hh, 0, 0, Math.PI * 2); ctx.clip();
     ell(0, hcy + hh * 0.52, hw * 0.78, hh * 0.30, top);
@@ -5383,7 +5409,11 @@ function drainArena(){
       // actually is.
       const near = pitFx.filter((q) => q.k === 'num' &&
         Math.abs(q.x - e.x) < 1.6 && Math.abs(q.y - e.y) < 1.6).length;
-      pitAdd({ k: 'num', uid: e.id, x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffffff',
+      // Damage taken by YOUR animal and damage taken by THEIRS were both white,
+      // so the loudest per-frame element in the game said nothing about who was
+      // winning. Bad news is warm, good news is cold.
+      pitAdd({ k: 'num', uid: e.id, x: e.x, y: e.y, v: e.dmg,
+        col: e.thorns ? '#ffb0e0' : (e.side === 'us' ? '#ff9d86' : '#dff3c4'),
         big: e.dmg >= 9, dir: ((e.id || 1) % 2) ? 1 : -1, t: 0, life: 0.8,
         jx: (e.fx || (((e.id || 1) % 2) ? 1 : -1)) * (1.05 + (near % 3) * 0.36),
         jy: (near % 3) * 0.17 });
