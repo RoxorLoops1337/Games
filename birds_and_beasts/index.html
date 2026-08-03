@@ -1755,8 +1755,12 @@
   .pairprev.half canvas{ width:52px; height:38px; }
   .pairprev.half .lbl{ font-size:8px; letter-spacing:1.1px; max-width:64px; }
   .pairprev.half .plus{ transform:scale(.62); }
-  /* and the odds panel can never crush the herd below one card row */
-  .ritwrap[open] .ritrow{ max-height:132px; overflow-y:auto; }
+  /* This capped the panel at 132px against a 172px content height, so two of
+     the five rituals — including the only one that guarantees a mutation — were
+     sliced through their titles behind an unmarked fold with no fade and no
+     lip. It read as a rendering fault, and it bought nothing: the herd grid
+     still showed 3 of 8 with 130px of empty screen under it. The panel is a
+     panel; it opens to its own size and the herd scrolls, as it always did. */
   .pairprev .pp{ text-align:center; }
   /* The tile background used to live ON the canvas, so the mask that ghosted
      the expected chick ate the tile with it and the middle of the row was a
@@ -4944,10 +4948,28 @@ function drawPit(){
 
   // --- night over the barn -------------------------------------------------
   const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, '#101a2c'); sky.addColorStop(0.6, '#1d2438'); sky.addColorStop(1, '#33304a');
+  // TWELVE ROUNDS SHOULD NOT ALL BE THE SAME HOUR. A per-round palette swap was
+  // considered and rejected as decoration; this is the honest cheap version —
+  // the same pit, running dusk to deep night to the first grey of morning, so
+  // the frame tells you how far into the run you are without a single label.
+  const hr = clamp((R && R.idx ? R.idx : 0) / Math.max(1, RUN_LEN - 1), 0, 1);
+  const lerp3 = (a1, b1, t) => 'rgb(' +
+    Math.round(a1[0] + (b1[0] - a1[0]) * t) + ',' +
+    Math.round(a1[1] + (b1[1] - a1[1]) * t) + ',' +
+    Math.round(a1[2] + (b1[2] - a1[2]) * t) + ')';
+  const dusk = [[26, 32, 58], [46, 40, 70], [86, 58, 74]];
+  const late = [[6, 9, 20], [12, 16, 32], [30, 30, 48]];
+  const nite = hr < 0.5 ? hr / 0.5 : 1;
+  sky.addColorStop(0, lerp3(dusk[0], late[0], nite));
+  sky.addColorStop(0.6, lerp3(dusk[1], late[1], nite));
+  sky.addColorStop(1, lerp3(dusk[2], late[2], hr < 0.5 ? nite : 1 - (hr - 0.5) * 0.7));
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
   // a fat cartoon moon, low and to the left, and a handful of stars
-  const mx = W * 0.20, my = horizon * 0.30, mr = W * 0.050;
+  // and the moon crosses: low in the east on round one, overhead by the middle,
+  // setting in the west by THE UR-MOTHER
+  const mx = W * (0.13 + 0.62 * hr);
+  const my = horizon * (0.44 - 0.26 * Math.sin(hr * Math.PI));
+  const mr = W * 0.050;
   // It was the highest-contrast object anywhere in the pit at 11.2:1 — brighter
   // than every beast, brighter than the torches — and nothing in the scene was
   // lit by it. It sits back in the sky now: cooler, dimmer, no bloom.
@@ -5361,33 +5383,41 @@ function drawPit(){
   // --- shadows first, so nothing floats -----------------------------------
   for (const u of order){
     const sc = scaleAt(u.y), x = px(u.x) + (u._fx || 0), y = py(u.y) + (u._fy || 0);
-    // WHICH ONES ARE MINE. Friend and foe were separated by a 4px bar tint and a
-    // horizontal mirror that most sprites barely show — in a pile of seven you
-    // could not find the animal you had just paid for. The ground says it now:
-    // a cool green stand for yours, a hot red one for theirs, wide enough to
-    // read under a crowd and low enough not to become the picture.
-    ctx.globalAlpha = u.alive ? 0.30 : 0.09;
-    // 0.30 against a sprite half-width of 0.50 meant the stand was 60% as wide
-    // as the body on top of it, so its whole width sat inside the silhouette:
-    // sampling the rim returned the beast's own hide on 5 of 6 units. Wider
-    // than the animal, and fainter, so it is a floor and not the picture.
-    const rr0 = SPR * 0.62 * sc, rr1 = SPR * 0.15 * sc;
-    const gp = ctx.createRadialGradient(x, y, 1, x, y, rr0);
-    if (u.side === 'us'){
-      gp.addColorStop(0, 'rgba(126,196,72,.62)'); gp.addColorStop(0.55, 'rgba(58,96,26,.34)');
-    } else {
-      gp.addColorStop(0, 'rgba(214,86,50,.62)'); gp.addColorStop(0.55, 'rgba(104,32,14,.34)');
-    }
-    gp.addColorStop(1, 'transparent');
-    ctx.fillStyle = gp;
-    ctx.beginPath(); ctx.ellipse(x, y, rr0, rr1, 0, 0, Math.PI * 2); ctx.fill();
-    // and a hard rim on the stand, so a body standing on top of another body
-    // still has a visible floor of its own
+    // WHICH ONES ARE MINE — in three layers, because the last two attempts each
+    // fixed one thing and broke another.
+    // A DARK CONTACT POOL FIRST. Widening the coloured stand and dropping its
+    // alpha replaced the shadow with a wash: the darkest contact pixel lost 28%
+    // and every beast started floating inside a hula hoop. The shadow is its
+    // own layer again, tight under the feet, and nothing else touches it.
+    const rr0 = SPR * 0.44 * sc, rr1 = SPR * 0.115 * sc;
+    ctx.globalAlpha = u.alive ? 0.40 : 0.12;
+    const sh = ctx.createRadialGradient(x, y, 1, x, y, SPR * 0.34 * sc);
+    sh.addColorStop(0, 'rgba(0,0,0,.62)'); sh.addColorStop(1, 'transparent');
+    ctx.fillStyle = sh;
+    ctx.beginPath(); ctx.ellipse(x, y, SPR * 0.34 * sc, SPR * 0.10 * sc, 0, 0, Math.PI * 2); ctx.fill();
+    // THEN THE TEAM COLOUR, and it has to survive warm sand. Measured, the red
+    // side came out at a 2-unit green-minus-red delta against a floor that is
+    // already brown — a red wash on brown is invisible by construction. Theirs
+    // goes COLD-EDGED violet-red and both sides carry their colour out to the
+    // full radius instead of fading at 0.55, where the only visible band was
+    // sitting at an effective alpha of 0.045.
     if (u.alive){
-      ctx.globalAlpha = 0.5;
-      ctx.strokeStyle = u.side === 'us' ? 'rgba(150,220,90,.55)' : 'rgba(255,120,80,.55)';
-      ctx.lineWidth = Math.max(1, W * 0.0035);
-      ctx.beginPath(); ctx.ellipse(x, y, rr0 * 0.72, rr1 * 0.72, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.30;
+      const gp = ctx.createRadialGradient(x, y, SPR * 0.12 * sc, x, y, rr0);
+      if (u.side === 'us'){
+        gp.addColorStop(0, 'rgba(150,235,80,.34)'); gp.addColorStop(0.80, 'rgba(122,205,60,.40)');
+      } else {
+        gp.addColorStop(0, 'rgba(255,70,120,.34)'); gp.addColorStop(0.80, 'rgba(236,52,96,.42)');
+      }
+      gp.addColorStop(1, 'transparent');
+      ctx.fillStyle = gp;
+      ctx.beginPath(); ctx.ellipse(x, y, rr0, rr1, 0, 0, Math.PI * 2); ctx.fill();
+      // a THIN edge, not a hoop. At 0.85 alpha and full width these read as the
+      // picture rather than as ground — the beasts stood inside neon rings.
+      ctx.globalAlpha = 0.34;
+      ctx.strokeStyle = u.side === 'us' ? 'rgba(176,255,104,.7)' : 'rgba(255,96,140,.7)';
+      ctx.lineWidth = Math.max(1, W * 0.0028);
+      ctx.beginPath(); ctx.ellipse(x, y, rr0 * 0.94, rr1 * 0.94, 0, 0, Math.PI * 2); ctx.stroke();
     }
   }
   ctx.globalAlpha = 1;
@@ -6493,14 +6523,25 @@ function goCullOrNext(){
 /** The one sentence that argues for culling this animal, in priority order.
  *  Everything here is already in the save — it has simply never been shown at
  *  the moment it would change a decision. */
-function cullReason(c){
+function cullReason(c, rank, n, avg){
+  // TWO OF THESE ARGUED THE WRONG WAY.
+  // "went down last fight" was the most-printed string in the list and it costs
+  // nothing: a downed beast limps home at full stats, so it is not evidence
+  // against anything. Gone.
+  // "never sent out" fired on the two animals in the NEST — `startBattle`
+  // excludes them from the roster by design, so the game was arguing against
+  // the pair you had just deliberately reserved. It only speaks for animals
+  // that were actually available to send.
   if (BAD_TRAITS.indexOf(c.trait) >= 0) return 'bad blood';
-  if (c.downedAt === R.idx - 1) return 'went down last fight';
   const kin = descendantsOf(c.id);
   if (kin > 0) return kin + (kin === 1 ? ' descendant here' : ' descendants here');
-  // only worth saying once the barn has HAD a chance to send it
-  if (!c.sent && R.idx > 0) return 'never sent out';
-  if (c.sent > 2) return 'out ' + c.sent + ' times';
+  // and the sentence now says the same thing the RANK says, because a chip and
+  // a caption 40px apart answering different questions is worse than either
+  const p = power(c);
+  if (rank === 0) return 'weakest in the barn';
+  if (avg > 0 && p < avg * 0.62) return 'half the herd average';
+  if (R.nest.indexOf(c.id) < 0 && !c.sent && R.idx > 0) return 'never sent out';
+  if (avg > 0 && p > avg * 1.35) return 'your best blood';
   if (!c.parents) return 'founder stock';
   return 'the line ends here';
 }
@@ -6522,6 +6563,7 @@ function goCull(){
   const g = $('cGrid'); g.innerHTML = '';
   if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
+  const avgPow = sorted.reduce((t, c) => t + power(c), 0) / Math.max(1, sorted.length);
   gridCols(g, sorted.length, true);
   sorted.forEach((c, i) => {
     const el = cardEl(c);
@@ -6532,7 +6574,7 @@ function goCull(){
     if (el.appendChild){
       const why = document.createElement('div');
       why.className = 'why' + (i < 3 ? ' bad' : '');
-      why.textContent = cullReason(c);
+      why.textContent = cullReason(c, i, sorted.length, avgPow);
       el.appendChild(why);
       if (i < 3){
         const rk = document.createElement('span');
