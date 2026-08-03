@@ -705,7 +705,10 @@
   .card .nm{ font-size:14px; font-weight:800; letter-spacing:0; text-align:center; padding:5px 4px 2px;
     line-height:1.15; color:#eaf6df; text-shadow:0 2px 0 rgba(0,0,0,.55);
     min-height:30px; display:flex; align-items:center; justify-content:center; }
-  .card.big .nm{ font-size:15px; min-height:36px; }
+  /* 36px reserves 1.7 lines at 15px, so a two-word name took two and the two
+     chicks' stat rows sat 5-8px out of line in 15 of 60 clutches — on the one
+     screen whose entire purpose is comparing two stat rows. */
+  .card.big .nm{ font-size:15px; min-height:42px; }
   .card .st{ display:flex; justify-content:center; gap:10px; font-size:var(--t-num);
     font-weight:900; padding:0 0 5px; }
   .card .st .m{ color:var(--might); } .card .st .h{ color:var(--blue); }
@@ -876,6 +879,24 @@
   /* Unaffordable is not removed. The strikethrough said "this option is gone"
      about an option that is still on the board and will be affordable in one
      more round — the price is what is wrong, so the price is what is marked. */
+  /* the ledger, folded shut until you want it */
+  .ritwrap{ flex:0 0 auto; margin-bottom:6px; }
+  .ritsum{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px;
+    padding:7px 12px; border-radius:8px;
+    font-family:var(--f-text); font-size:11.5px; font-weight:800; letter-spacing:.4px;
+    color:var(--paper-ink);
+    background-image:
+      radial-gradient(ellipse 60% 40% at 12% 10%, rgba(110,86,42,.16), transparent 70%),
+      linear-gradient(176deg,#ddcaa0 0%,#c6b285 60%,#a68f61 100%);
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.5), 0 2px 0 rgba(0,0,0,.35),
+      0 5px 10px -5px rgba(0,0,0,.55); }
+  .ritsum::-webkit-details-marker{ display:none; }
+  .ritsum em{ margin-left:auto; font-style:normal; font-size:10px; letter-spacing:1.4px;
+    text-transform:uppercase; color:#6b5c39; }
+  .ritsum::after{ content:'\25BE'; color:#6b5c39; font-size:11px; transition:transform .16s ease; }
+  .ritwrap[open] .ritsum::after{ transform:rotate(180deg); }
+  .ritwrap[open] .ritsum{ border-radius:8px 8px 0 0; }
+  .ritwrap[open] .ritrow{ margin-top:4px; }
   .rit.no{ cursor:not-allowed; opacity:.86; }
   .rit.no b{ color:#4a3f28; }
   .rit.no i{ color:#4e4229; }
@@ -1050,9 +1071,14 @@
      emptied. Collapsing it instead would give the height to the pit and bring
      back the mid-fight resize that the fixed ratio exists to prevent, so the
      bench is simply the size of the cards it holds and the pit takes the rest
-     of the budget as a taller fixed ratio. */
-  .benchwrap{ position:relative; flex:0 0 auto; display:flex; align-items:center;
-    min-height:0; padding-top:7px;
+     of the budget as a taller fixed ratio.
+     `margin-top:auto` is the other half of that: with every child of #fight at
+     `flex:0 0 auto` nothing absorbed the leftover, so it pooled at the BOTTOM
+     and the primary button climbed 115px up the screen over a round — 84px of
+     void the instant the gates opened, 114px by the time the barn emptied, at
+     the loudest moment in the game. The slack sits above the bench now. */
+  .benchwrap{ position:relative; flex:0 0 auto; margin-top:auto; display:flex;
+    align-items:center; min-height:0; padding-top:7px;
     border-top:6px solid transparent;
     border-image:var(--rule-rope) 6 0 0 0 / 6px 0 0 0 / 0 repeat;
     background:linear-gradient(180deg, rgba(20,32,18,.55), transparent 60%); }
@@ -1735,6 +1761,13 @@
     font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     max-width:104px; }
   .pairprev .pp.gh .lbl{ color:var(--pink); }
+  /* the stall the second parent has not walked into yet */
+  .pairprev .pp.empty .cvw{ background:rgba(6,12,6,.55);
+    box-shadow:inset 0 0 0 1px rgba(140,190,110,.20), inset 0 6px 16px rgba(0,0,0,.5); }
+  .pairprev .pp.empty .cvw::after{ content:'?'; position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--f-display); font-size:26px; color:rgba(160,200,130,.30); }
+  .pairprev .pp.empty .lbl{ color:#6d8a5e; font-style:normal; }
   .pairprev[hidden]{ display:none; }
 
   /* --- the cull: a ceremony, not a re-render --- */
@@ -2145,7 +2178,15 @@
       <div class="tiny" id="nFoeHaz" style="letter-spacing:.2px; text-transform:none; font-weight:600"></div>
       <button class="btn alt sm" id="bHazard">TAKE IT ON</button>
     </div>
-    <div class="ritrow" id="nRituals"></div>
+    <!-- A PRICE LIST IS NOT AN OPENING MOVE. Five parchment tiles were the
+         second thing a new player read — before they owned a chick, knew what a
+         clutch was, or had any Slop history — and they took 171px of the 844
+         above the herd, which got 261. It is a summary that opens. -->
+    <details class="ritwrap" id="nRitWrap">
+      <summary class="ritsum"><span id="nRitNow">Let nature have it</span>
+        <em>change the odds</em></summary>
+      <div class="ritrow" id="nRituals"></div>
+    </details>
     <div class="instr" style="text-align:center; padding:8px 0 8px" id="nHint">
       Pick <b class="pink">two</b> beasts for the Nest &mdash; they skip this fight and breed after it.
     </div>
@@ -4545,6 +4586,8 @@ function renderRituals(){
     };
     row.appendChild(el);
   }
+  const now = $('nRitNow');
+  if (now) now.textContent = RITUALS[R.ritual || 'natural'].name;
 }
 function hz0desc(){ return R.hazardOffer ? R.hazardOffer.desc : ''; }
 /** Slop is a discrete resource in a pill. Count it, flash it, chime it. */
@@ -4565,9 +4608,26 @@ function setSlop(v){
 function renderPair(a, b){
   const w = $('nPair');
   if (!w) return;
-  if (!a || !b){ w.hidden = true; w.innerHTML = ''; return; }
+  if (!a){ w.hidden = true; w.innerHTML = ''; return; }
   w.hidden = false;
   w.innerHTML = '';
+  // HALF A PAIRING. With one parent chosen the row stands with an empty stall
+  // where the other goes, so the first tap has somewhere to land.
+  if (!b){
+    const d0 = document.createElement('div');
+    d0.className = 'pp';
+    d0.innerHTML = '<div class="cvw"><canvas width="240" height="176"></canvas></div>' +
+      '<div class="lbl">' + a.name + '</div>';
+    const cv0 = d0.querySelector('canvas');
+    if (cv0) drawBeast(cv0, a);
+    w.appendChild(d0);
+    const p0 = document.createElement('div'); p0.className = 'plus'; w.appendChild(p0);
+    const d1 = document.createElement('div');
+    d1.className = 'pp empty';
+    d1.innerHTML = '<div class="cvw"></div><div class="lbl">pick one</div>';
+    w.appendChild(d1);
+    return;
+  }
   const one = (card, cls, label) => {
     const d = document.createElement('div');
     d.className = 'pp' + (cls ? ' ' + cls : '');
@@ -4669,6 +4729,16 @@ function renderNest(){
       ? '<b class="pink">' + a.name + '</b> and <b class="pink">' + bb.name + '</b> are <b>related</b> — this will get weird. '
       : '<b class="pink">' + a.name + '</b> × <b class="pink">' + bb.name + '</b>. ') +
       'Expect <b>' + n + '</b> chicks; you keep one.';
+  } else if (R.nest.length === 1){
+    // THE FIRST TAP SAID NOTHING. Hint, button label and the pairing preview
+    // were all byte-identical before and after selecting the first parent — on
+    // the first interaction of the game's core decision. Half a pairing now
+    // appears the moment you pick one, with the other stall standing empty.
+    const a1 = cardById(R.nest[0]);
+    bt.textContent = 'PICK 1 MORE';
+    renderPair(a1, null);
+    $('nHint').innerHTML = '<b class="pink">' + a1.name + '</b> is in the nest. ' +
+      'Who do they breed with?';
   } else {
     bt.textContent = 'SEND 2 TO THE NEST';
     renderPair(null, null);
@@ -5250,11 +5320,30 @@ function drawPit(){
   // --- shadows first, so nothing floats -----------------------------------
   for (const u of order){
     const sc = scaleAt(u.y), x = px(u.x) + (u._fx || 0), y = py(u.y) + (u._fy || 0);
-    ctx.globalAlpha = u.alive ? 0.36 : 0.10;
-    // a tinted pool, not a grey one: in a crowded pit the colour under the feet
-    // is how you tell your lot from theirs at a glance
-    ctx.fillStyle = u.side === 'us' ? '#241d0a' : '#2a1408';
-    ctx.beginPath(); ctx.ellipse(x, y, SPR * 0.26 * sc, SPR * 0.075 * sc, 0, 0, Math.PI * 2); ctx.fill();
+    // WHICH ONES ARE MINE. Friend and foe were separated by a 4px bar tint and a
+    // horizontal mirror that most sprites barely show — in a pile of seven you
+    // could not find the animal you had just paid for. The ground says it now:
+    // a cool green stand for yours, a hot red one for theirs, wide enough to
+    // read under a crowd and low enough not to become the picture.
+    ctx.globalAlpha = u.alive ? 0.42 : 0.10;
+    const rr0 = SPR * 0.30 * sc, rr1 = SPR * 0.088 * sc;
+    const gp = ctx.createRadialGradient(x, y, 1, x, y, rr0);
+    if (u.side === 'us'){
+      gp.addColorStop(0, 'rgba(126,196,72,.62)'); gp.addColorStop(0.55, 'rgba(58,96,26,.34)');
+    } else {
+      gp.addColorStop(0, 'rgba(214,86,50,.62)'); gp.addColorStop(0.55, 'rgba(104,32,14,.34)');
+    }
+    gp.addColorStop(1, 'transparent');
+    ctx.fillStyle = gp;
+    ctx.beginPath(); ctx.ellipse(x, y, rr0, rr1, 0, 0, Math.PI * 2); ctx.fill();
+    // and a hard rim on the stand, so a body standing on top of another body
+    // still has a visible floor of its own
+    if (u.alive){
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = u.side === 'us' ? 'rgba(150,220,90,.55)' : 'rgba(255,120,80,.55)';
+      ctx.lineWidth = Math.max(1, W * 0.0035);
+      ctx.beginPath(); ctx.ellipse(x, y, rr0 * 0.72, rr1 * 0.72, 0, 0, Math.PI * 2); ctx.stroke();
+    }
   }
   ctx.globalAlpha = 1;
 
