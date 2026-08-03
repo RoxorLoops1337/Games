@@ -897,6 +897,17 @@
   .ritwrap[open] .ritsum::after{ transform:rotate(180deg); }
   .ritwrap[open] .ritsum{ border-radius:8px 8px 0 0; }
   .ritwrap[open] .ritrow{ margin-top:4px; }
+  /* the cull's verdict line, and a rank on the three the game would shoot */
+  .why{ font-family:var(--f-text); font-size:8px; font-weight:800; letter-spacing:.4px;
+    text-align:center; padding:2px 3px 3px; color:#7d8f72; line-height:1.25;
+    min-height:20px; }
+  .why.bad{ color:#ffb0a0; }
+  .rank{ position:absolute; top:-7px; right:-6px; z-index:6; width:17px; height:17px;
+    display:flex; align-items:center; justify-content:center; border-radius:50%;
+    font-family:var(--f-display); font-size:10px; font-weight:900; color:#241d0a;
+    background:linear-gradient(180deg,#e6dcc0,#b4a583);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 2px 3px rgba(0,0,0,.7); }
+  .rank.worst{ color:#3a0c14; background:linear-gradient(180deg,#ffb3d8,#e0679f); }
   .rit.no{ cursor:not-allowed; opacity:.86; }
   .rit.no b{ color:#4a3f28; }
   .rit.no i{ color:#4e4229; }
@@ -1148,7 +1159,13 @@
   /* the bottom bar: budget, notes, and the one button that matters. SEND THEM
      IN is the only irreversible action in the game, so it is the loudest thing
      on the screen and the budget row wraps ABOVE it rather than squeezing it. */
+  /* Its HEIGHT was a function of the button's own class: `btn sm` wrapped the
+     row to two lines in prep (91px) and `btn sm alt` fitted one (61px), so at
+     the tap of OPEN THE GATES the bar shrank 30px, every card in the bench slid
+     down 19px, and the primary button jumped 65px right and lost a third of its
+     width — mid-tap, at the loudest moment in the game. The box is frozen. */
   .fbar{ flex:0 0 auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    min-height:92px; align-content:center;
     padding:8px 8px calc(7px + env(safe-area-inset-bottom));
     border-top:6px solid transparent;
     border-image:var(--rule-rope) 6 0 0 0 / 6px 0 0 0 / 0 repeat; }
@@ -1727,8 +1744,19 @@
   #hSub{ position:relative; z-index:1; }
 
   /* --- the pairing preview: the ghost of the chick you have not bred yet --- */
+  /* It cost 95px out of the herd grid, so the screen asked "who do they breed
+     with?" and answered by hiding a third of the candidates. With only one
+     parent picked it is a strip; it earns the full portraits once the pairing
+     is real and the question has been answered. */
   .pairprev{ flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:14px;
     padding:6px 10px 8px; }
+  .pairprev.half{ gap:10px; padding:2px 10px 4px; }
+  .pairprev.half .cvw{ width:52px; height:38px; }
+  .pairprev.half canvas{ width:52px; height:38px; }
+  .pairprev.half .lbl{ font-size:8px; letter-spacing:1.1px; max-width:64px; }
+  .pairprev.half .plus{ transform:scale(.62); }
+  /* and the odds panel can never crush the herd below one card row */
+  .ritwrap[open] .ritrow{ max-height:132px; overflow-y:auto; }
   .pairprev .pp{ text-align:center; }
   /* The tile background used to live ON the canvas, so the mask that ghosted
      the expected chick ate the tile with it and the middle of the row was a
@@ -2228,7 +2256,7 @@
       <div class="feed" id="feed"></div>
       <div class="pile" id="piles"></div>
       <div class="grow"></div>
-      <button class="btn sm" id="bEnd">OPEN THE GATES</button>
+      <button class="btn sm" id="bEnd" style="min-width:196px">OPEN THE GATES</button>
     </div>
   </div>
 
@@ -3098,7 +3126,13 @@ function killUnit(u){
   // be sent out again once it has caught its breath. That is what keeps you in
   // a fight you are losing on numbers — and why losing a beast costs TEMPO
   // rather than the beast.
-  if (u.side === 'us' && u.src) F.hurt.push({ c: u.src, at: F.t + RECOVER });
+  if (u.side === 'us' && u.src){
+    F.hurt.push({ c: u.src, at: F.t + RECOVER });
+    u.src.downed = (u.src.downed || 0) + 1;
+    u.src.downedAt = R.idx;
+    const bk = cardById(u.src.id);
+    if (bk){ bk.downed = (bk.downed || 0) + 1; bk.downedAt = R.idx; }
+  }
   if (u.c.trait === 'brood' && F.units.length < 60){
     const sp = spawnCard();
     spawnUnit(sp, u.side, u.x, u.y);
@@ -3301,6 +3335,13 @@ function playCardA(i){
   if (c.trait === 'cursed') R.hp = Math.max(0, R.hp - 2);
   const u = spawnUnit(Object.assign({}, c), 'us', GATE_X, laneY(F.units.length + 3));
   u.src = c;                          // so it can limp home if it goes down
+  // A RECORD OF ANIMALS, not a list of stats. Two counters the barn has never
+  // kept, and everything downstream — the cull, the stud book, the run-end log
+  // — can stop describing a beast purely by its numbers.
+  // The fight roster is `R.deck.map(c => Object.assign({}, c))`, so this has to
+  // be written back to the animal in the barn or it dies with the copy.
+  c.sent = (c.sent || 0) + 1;
+  const own = cardById(c.id); if (own) own.sent = (own.sent || 0) + 1;
   ev('sortie', { id: u.id, cost: c.cost, y: u.y });
   return true;
 }
@@ -4613,6 +4654,7 @@ function renderPair(a, b){
   w.innerHTML = '';
   // HALF A PAIRING. With one parent chosen the row stands with an empty stall
   // where the other goes, so the first tap has somewhere to land.
+  if (w.classList) w.classList.toggle('half', !b);
   if (!b){
     const d0 = document.createElement('div');
     d0.className = 'pp';
@@ -4737,8 +4779,7 @@ function renderNest(){
     const a1 = cardById(R.nest[0]);
     bt.textContent = 'PICK 1 MORE';
     renderPair(a1, null);
-    $('nHint').innerHTML = '<b class="pink">' + a1.name + '</b> is in the nest. ' +
-      'Who do they breed with?';
+    $('nHint').innerHTML = '<b class="pink">' + a1.name + '</b> &mdash; and who else?';
   } else {
     bt.textContent = 'SEND 2 TO THE NEST';
     renderPair(null, null);
@@ -5325,8 +5366,12 @@ function drawPit(){
     // could not find the animal you had just paid for. The ground says it now:
     // a cool green stand for yours, a hot red one for theirs, wide enough to
     // read under a crowd and low enough not to become the picture.
-    ctx.globalAlpha = u.alive ? 0.42 : 0.10;
-    const rr0 = SPR * 0.30 * sc, rr1 = SPR * 0.088 * sc;
+    ctx.globalAlpha = u.alive ? 0.30 : 0.09;
+    // 0.30 against a sprite half-width of 0.50 meant the stand was 60% as wide
+    // as the body on top of it, so its whole width sat inside the silhouette:
+    // sampling the rim returned the beast's own hide on 5 of 6 units. Wider
+    // than the animal, and fainter, so it is a floor and not the picture.
+    const rr0 = SPR * 0.62 * sc, rr1 = SPR * 0.15 * sc;
     const gp = ctx.createRadialGradient(x, y, 1, x, y, rr0);
     if (u.side === 'us'){
       gp.addColorStop(0, 'rgba(126,196,72,.62)'); gp.addColorStop(0.55, 'rgba(58,96,26,.34)');
@@ -6438,8 +6483,26 @@ function goWild(){
 /* -------------------------------------------------------------- cull ----- */
 let cullPick = -1, culling = false;
 function goCullOrNext(){
-  if (mustCull() > 0 || R.deck.length > 4){ goCull(); return; }
+  // THE OPTIONAL CULL IS NOT A DECISION. At exactly 10/10 the barn is full,
+  // retiring pays nothing, and culling costs you a fighter for no gain — so the
+  // right answer is always KEEP THEM ALL. Serving a screen whose answer is
+  // always "no" is what teaches a player to skim the one that matters.
+  if (mustCull() > 0){ goCull(); return; }
   nextRound();
+}
+/** The one sentence that argues for culling this animal, in priority order.
+ *  Everything here is already in the save — it has simply never been shown at
+ *  the moment it would change a decision. */
+function cullReason(c){
+  if (BAD_TRAITS.indexOf(c.trait) >= 0) return 'bad blood';
+  if (c.downedAt === R.idx - 1) return 'went down last fight';
+  const kin = descendantsOf(c.id);
+  if (kin > 0) return kin + (kin === 1 ? ' descendant here' : ' descendants here');
+  // only worth saying once the barn has HAD a chance to send it
+  if (!c.sent && R.idx > 0) return 'never sent out';
+  if (c.sent > 2) return 'out ' + c.sent + ' times';
+  if (!c.parents) return 'founder stock';
+  return 'the line ends here';
 }
 function goCull(){
   show('cull');
@@ -6460,8 +6523,24 @@ function goCull(){
   if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
   gridCols(g, sorted.length, true);
-  sorted.forEach((c) => {
+  sorted.forEach((c, i) => {
     const el = cardEl(c);
+    // TEN CARDS OF EQUAL WEIGHT IS NOT A DECISION. The grid was already sorted
+    // by `power` and never said so, and the game knows things about every one
+    // of these animals it has never told you. The three worst are numbered, and
+    // each card gets the one sentence that argues for shooting it.
+    if (el.appendChild){
+      const why = document.createElement('div');
+      why.className = 'why' + (i < 3 ? ' bad' : '');
+      why.textContent = cullReason(c);
+      el.appendChild(why);
+      if (i < 3){
+        const rk = document.createElement('span');
+        rk.className = 'rank' + (i === 0 ? ' worst' : '');
+        rk.textContent = String(i + 1);
+        el.appendChild(rk);
+      }
+    }
     el.onclick = () => {
       cullPick = c.id;
       [...g.children].forEach((x) => x.classList.toggle('sel', +x.dataset.id === c.id));
