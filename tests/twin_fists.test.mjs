@@ -42,9 +42,11 @@ const EXPOSE = `__out.api = {
   updateFighter, playerControl, aiControl, separate, updateItems, updateFx, updateWaves,
   updateDeaths, updateCamera, respawnPlayer, doContinue, tokensOut, tokenCap, foeBehind, nearestFoe,
   liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep,
+  chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
+  SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
-  pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen,
+  pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
   _ctxCounts: null,
 };
 `;
@@ -379,6 +381,300 @@ test('difficulty scales enemy damage against the player, not the other way', () 
     loss.push(p.hpMax - p.hp);
   }
   assert(loss[1] > loss[0], `hard should hurt more: ${loss[1]} vs ${loss[0]}`);
+});
+
+/* --------------------------------------------------------------- chains */
+test('the punch chain walks jab, cross, hook and then starts over', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const seen = [];
+  for (let n = 0; n < 4; n++){
+    api.chainAttack(p, api.PUNCH_CHAIN);
+    seen.push(p.atkKey);
+    p.state = 'idle'; p.atk = null;                 // pretend the swing finished
+  }
+  assert(seen.join(',') === 'jab,cross,hook,jab', 'chain order wrong: ' + seen.join(','));
+});
+
+test('the kick chain is shin, body, head, and the head kick launches', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const seen = [];
+  for (let n = 0; n < 3; n++){
+    api.chainAttack(p, api.KICK_CHAIN);
+    seen.push(p.atkKey);
+    p.state = 'idle'; p.atk = null;
+  }
+  assert(seen.join(',') === 'lowkick,midkick,highkick', 'kick chain wrong: ' + seen.join(','));
+  assert(api.ATK.highkick.down && api.ATK.highkick.lift > api.ATK.midkick.lift, 'the head kick launches');
+  assert(api.ATK.lowkick.dur < api.ATK.midkick.dur && api.ATK.midkick.dur < api.ATK.highkick.dur,
+    'each step of the chain is slower than the last');
+  assert(api.ATK.lowkick.dmg < api.ATK.midkick.dmg && api.ATK.midkick.dmg < api.ATK.highkick.dmg,
+    'and hits harder');
+});
+
+test('the chain is shared, so punch-punch-kick ends on the head kick', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  api.chainAttack(p, api.PUNCH_CHAIN); p.state = 'idle'; p.atk = null;
+  api.chainAttack(p, api.PUNCH_CHAIN); p.state = 'idle'; p.atk = null;
+  api.chainAttack(p, api.KICK_CHAIN);
+  assert(p.atkKey === 'highkick', 'expected the kick finisher, got ' + p.atkKey);
+});
+
+test('letting the window lapse drops you back to the first hit', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  api.chainAttack(p, api.PUNCH_CHAIN);
+  p.state = 'idle'; p.atk = null;
+  assert(p.comboT > 0, 'the window opened');
+  stepFighter(api, p, 1.2);                          // wait it out
+  api.chainAttack(p, api.PUNCH_CHAIN);
+  assert(p.atkKey === 'jab', 'a late punch is a fresh jab, got ' + p.atkKey);
+});
+
+test('the finisher of each chain knocks down, the openers do not', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  for (const [opener, finisher] of [['jab', 'hook'], ['lowkick', 'highkick']]){
+    for (const key of [opener, finisher]){
+      clearField(api);
+      const e = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+      e.hp = 400; e.hpMax = 400; e.hitChain = 0;
+      api.startAttack(p, key);
+      stepFighter(api, p, 0.7);
+      const down = api.isDown(e);
+      assert(key === finisher ? down : !down, key + ' knockdown expectation failed');
+    }
+  }
+});
+
+test('the hit counter counts hits, not chain position', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('bruiser', 116, api.FLOOR_MID, -1);
+  e.hp = 900; e.hpMax = 900; e.armorLeft = 0;
+  for (const key of ['jab', 'cross']){
+    e.armorLeft = 0;
+    api.startAttack(p, key);
+    stepFighter(api, p, 0.5);
+  }
+  assert(p.hits >= 2, 'two landed hits should read as two, got ' + p.hits);
+  stepFighter(api, p, 2.2);
+  assert(p.hits === 0, 'and the counter lapses');
+});
+
+/* ---------------------------------------------------------- swing arcs */
+test('a bat swings through an arc instead of teleporting', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  api.pickUp(p, api.mkItem('bat', 100, api.FLOOR_MID, 0));
+  const rest = api.weaponAngle(p, 0);
+  api.startAttack(p, 'bat');
+  const seen = [];
+  for (let i = 0; i < 28; i++){ seen.push(api.weaponAngle(p, 0)); api.updateFighter(p, api.STEP); }
+  const windup = Math.max.apply(null, seen), follow = Math.min.apply(null, seen);
+  assert(windup > rest + 40, 'the bat winds up behind the head: ' + windup + ' vs rest ' + rest);
+  assert(follow < 0, 'and follows through past horizontal: ' + follow);
+  const hitFrom = Math.round(api.ATK.bat.hit[0] * 60), hitTo = Math.round(api.ATK.bat.hit[1] * 60);
+  let monotonic = true;
+  for (let i = hitFrom; i < hitTo; i++) if (seen[i + 1] > seen[i] + 1) monotonic = false;
+  assert(monotonic, 'through the hit window the swing only travels forward');
+  assert(seen[hitFrom] > seen[hitTo], 'and it is genuinely mid-sweep when it connects');
+  assert(api.ATK.bat.seq.length === 5, 'a swing that reads needs more than three frames');
+});
+
+test('every swoosh a move asks for actually exists', () => {
+  const api = boot();
+  for (const k in api.ATK){
+    const a = api.ATK[k];
+    if (a.swoosh) assert(api.SWOOSH[a.swoosh], k + ' asks for a missing swoosh: ' + a.swoosh);
+    if (a.arc) assert(a.arc.length === 2 && a.arc[0] > a.arc[1], k + ' needs a forward arc');
+  }
+  assert(api.ATK.bat.swoosh === 'weapon' && api.ATK.hook.swoosh === 'hook', 'the heavies leave a trail');
+});
+
+/* ------------------------------------------------------------- specials */
+test('you start a run with three stocks and they carry between streets', () => {
+  const api = boot();
+  api.startGame();
+  const p = api.players[0];
+  assert(p.stocks === api.START_STOCKS, 'started with ' + p.stocks);
+  p.stocks = 2; p.meter = 40;
+  api.nextStage();
+  assert(api.players[0].stocks === 2, 'stocks carried, got ' + api.players[0].stocks);
+  assert(api.players[0].meter === 40, 'and so did the part-filled bar');
+});
+
+test('landing hits fills the bar, and a full bar becomes a stock', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.stocks = 0; p.meter = 0;
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+  e.hp = 5000; e.hpMax = 5000;
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.4);
+  assert(p.meter > 0, 'a landed hit charges the bar');
+  const m1 = p.meter;
+  const armored = api.spawnEnemy('bruiser', 116, api.FLOOR_MID, -1);
+  api.startAttack(p, 'jab');
+  stepFighter(api, p, 0.4);
+  assert(p.meter > m1, 'a hit eaten by armour still charges it');
+  api.gainMeter(p, api.METER_MAX);
+  assert(p.stocks === 1, 'a full bar banks a stock, got ' + p.stocks);
+  p.stocks = api.STOCK_MAX;
+  api.gainMeter(p, api.METER_MAX * 3);
+  assert(p.stocks === api.STOCK_MAX && p.meter === api.METER_MAX, 'stocks cap out');
+});
+
+test('taking a hit also charges the bar, but less', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.stocks = 0; p.meter = 0; p.invuln = 0;
+  p.x = 120; p.y = api.FLOOR_MID;
+  const e = api.spawnEnemy('punk', 106, api.FLOOR_MID, 1);
+  e.face = 1;
+  api.startAttack(e, 'swipe');
+  stepFighter(api, e, 0.5);
+  assert(p.meter > 0, 'eating one charges you too');
+});
+
+test('a gold token is worth a stock', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.stocks = 1; p.meter = 0;
+  api.pickUp(p, api.mkItem('token', p.x, p.y, 0));
+  assert(p.stocks === 2, 'the token banked a stock, got ' + p.stocks);
+  p.stocks = api.STOCK_MAX; p.meter = 0;
+  api.pickUp(p, api.mkItem('token', p.x, p.y, 0));
+  assert(p.stocks === api.STOCK_MAX, 'a token at cap does not overflow the stocks');
+});
+
+test('the special spends a stock, and does nothing without one', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.stocks = 0;
+  assert(!api.startSuper(p), 'no stock, no rush');
+  assert(p.state !== 'super', 'and no state change');
+  p.stocks = 2;
+  assert(api.startSuper(p), 'with a stock it fires');
+  assert(p.stocks === 1, 'and costs exactly one');
+  assert(p.state === 'super', 'state is the rush');
+});
+
+test('nothing can touch you during the rush, and it ends by itself', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 140; p.y = api.FLOOR_MID; p.stocks = 1; p.hp = 60;
+  api.startSuper(p);
+  assert(p.invuln >= api.SUPER.dur, 'invulnerable for the whole thing');
+  const attacker = api.spawnEnemy('bruiser', 122, api.FLOOR_MID, 1);
+  attacker.face = 1;
+  api.startAttack(attacker, 'haymaker');
+  const hp0 = p.hp;
+  for (let i = 0; i < 40; i++){ api.updateFighter(attacker, api.STEP); api.updateFighter(p, api.STEP); }
+  assert(p.hp === hp0, 'the rush cannot be interrupted');
+  stepFighter(api, p, api.SUPER.dur + 0.2);
+  assert(p.state !== 'super', 'and it hands control back, got ' + p.state);
+});
+
+test('the rush clears the space around you and the finisher launches', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.y = api.FLOOR_MID; p.face = 1; p.stocks = 1;
+  const front = api.spawnEnemy('punk', 168, api.FLOOR_MID, -1);
+  const behind = api.spawnEnemy('punk', 132, api.FLOOR_MID, 1);
+  front.hp = 200; front.hpMax = 200; behind.hp = 200; behind.hpMax = 200;
+  api.startSuper(p);
+  stepFighter(api, p, api.SUPER.dur + 0.1);
+  assert(front.hpMax - front.hp > 50, 'the man in front eats the whole thing: ' + (front.hpMax - front.hp));
+  assert(behind.hpMax - behind.hp > 0, 'the spin reaches the one behind you');
+  assert(api.isDown(front) || front.dead, 'and the finisher puts him in the air');
+  assert(api.SUPER.strikes.filter(x => x.finisher).length === 1, 'exactly one finisher');
+});
+
+test('the rush is visible for every frame of it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.y = api.FLOOR_MID; p.stocks = 1;
+  api.startSuper(p);
+  let missing = 0;
+  for (let i = 0; i < Math.round(api.SUPER.dur * 60); i++){
+    api.updateFighter(p, api.STEP);
+    api.setT(api.getT() + api.STEP);
+    if (!api.visibleList().some(e => e.f === p)) missing++;
+  }
+  assert(missing === 0, 'the player blinked out of the rush on ' + missing + ' frames');
+});
+
+test('a respawn still blinks, so you can see the mercy running out', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  api.respawnPlayer(0);
+  let shown = 0, hidden = 0;
+  for (let i = 0; i < 60; i++){
+    api.updateFighter(p, api.STEP);
+    p.state = 'idle';                       // land it so the jump exemption is out of the way
+    if (api.visibleList().some(e => e.f === p)) shown++; else hidden++;
+  }
+  assert(shown > 0 && hidden > 0, `a respawn should flicker: ${shown} shown, ${hidden} hidden`);
+});
+
+test('a rush cannot be grabbed out of', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.y = api.FLOOR_MID; p.stocks = 1;
+  api.startSuper(p);
+  const bruiser = api.spawnEnemy('bruiser', 158, api.FLOOR_MID, -1);
+  assert(!api.tryGrab(bruiser, p), 'the grab is refused');
+  assert(p.state === 'super', 'and the rush carries on');
+});
+
+test('a respawn always hands you at least one stock back', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.stocks = 0;
+  api.G.lives[0] = 2;
+  api.knockOut(p, null, api.ATK.hook);
+  for (let i = 0; i < 60 * 3; i++) api.update(api.STEP);
+  assert(api.players[0].stocks >= 1, 'you come back with something to spend');
+});
+
+test('the special button fires the rush through the real input path', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.stocks = 1;
+  const inp = api.INPUT[0];
+  inp.ps = 1; inp.s = 1;
+  api.playerControl(p, inp, api.STEP);
+  inp.ps = 0; inp.s = 0;
+  assert(p.state === 'super', 'the button did it, got ' + p.state);
 });
 
 /* ---------------------------------------------------------------- grabs */
