@@ -374,7 +374,17 @@
   .btn[disabled], .btn.pinky[disabled], .btn.alt[disabled], .btn.danger[disabled]{
     color:#ddd8cc; text-shadow:0 1px 0 rgba(0,0,0,.75); -webkit-text-stroke-width:0;
     --btn-hi:#4a5340; --btn-mid:#39412f; --btn-lo:#272e20;
-    --btn-edge:#161c11; --btn-deep:#1c2316; }
+    --btn-edge:#161c11; --btn-deep:#1c2316;
+    /* RECESSED, not raised. On the cull, the wild offer and the clutch, the
+       biggest button on the screen is disabled the moment you arrive — and a
+       raised plank that does nothing when you press it is the shape of a broken
+       control. A slot cut into the board is the shape of something waiting for
+       you to fill it, which is exactly what is true. */
+    box-shadow:
+      inset 0 2px 5px rgba(0,0,0,.5),
+      inset 0 0 0 1.5px rgba(0,0,0,.55),
+      inset 0 -1px 0 rgba(255,236,190,.10),
+      0 1px 0 rgba(255,236,190,.06); }
   .btn.pinky[disabled]::before, .btn.alt[disabled]::before, .btn.danger[disabled]::before{
     filter:saturate(.3) brightness(.62); opacity:.6; }
   .btn.pinky[disabled]::after, .btn.danger[disabled]::after{ opacity:.16; }
@@ -1217,6 +1227,13 @@
   .logbox{ -webkit-mask-image:none !important; mask-image:none !important; }
   #book .bkhead .tn .plate, #book .bkhead .tn b, #book .bkhead .tn .st2{ color:#3d3520; }
   #book .bkhead .tn .st2{ opacity:.8; }
+  /* The icons inherit `color`, so forcing the ancestry chip to paper ink made
+     might and hide two identical 12px grey blobs — the one place in the game
+     where the two stats are indistinguishable. They keep their own hues, dark
+     enough to sit on parchment. */
+  #book .bkhead .tn .st2 .i{ opacity:1; }
+  #book .bkhead .tn .st2 .i:nth-of-type(1){ color:#8a3a26; }
+  #book .bkhead .tn .st2 .i:nth-of-type(2){ color:#2c5a86; }
   /* the tree's connector lines were drawn to show on black */
   #book .bkhead .tlvl::before, #book .bkhead .tline{ background:rgba(90,70,38,.45) !important; }
   .bkinfo .row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
@@ -1235,9 +1252,9 @@
     background-image:linear-gradient(176deg, rgba(255,246,222,.5), rgba(120,96,50,.16));
     box-shadow:inset 0 0 0 1px rgba(90,70,38,.42), 0 1px 0 rgba(255,246,222,.3),
       0 2px 4px -1px rgba(60,44,20,.45); }
-  .tn::after{ content:''; position:absolute; top:2px; right:2px; width:5px; height:5px;
-    border-radius:50%; background:radial-gradient(circle at 34% 30%, #b9c4cc, #3d444b 62%, #14181c);
-    box-shadow:0 1px 1px rgba(0,0,0,.6); }
+  /* A 5px steel sphere in the corner of a pedigree chip is a nail holding up
+     nothing. The nail is reserved for the two objects that actually hang — the
+     coach plank and the keepsake plaque. */
   .tn canvas{ width:36px; height:31px; border-radius:5px; background:#0a120a; display:block; }
   .tn b{ color:#eaf6df; font-size:11.5px; }
   .tn.root{ border-color:var(--lime); box-shadow:inset 0 1px 0 rgba(190,255,150,.18), 0 0 14px -4px rgba(166,255,94,.5); }
@@ -1267,6 +1284,14 @@
   .plinth .ribbon{ position:absolute; top:-10px; left:50%; transform:translateX(-50%); z-index:5;
     white-space:nowrap; display:block; }
   .plinth .ribbon .banner{ margin:0; }
+  /* the win arrives instead of being already there */
+  .plinth.crowned{ animation:crowned .62s cubic-bezier(.18,1.5,.36,1) both; }
+  @keyframes crowned{ 0%{ transform:scale(.82) translateY(14px); opacity:.2 }
+    58%{ transform:scale(1.05) translateY(-4px); opacity:1 }
+    100%{ transform:none; opacity:1 } }
+  .plinth.crowned .ribbon{ animation:crownrib .5s .16s cubic-bezier(.2,1.8,.4,1) both; }
+  @keyframes crownrib{ 0%{ transform:translateX(-50%) scale(2.1) rotate(-5deg); opacity:0 }
+    100%{ transform:translateX(-50%) scale(1); opacity:1 } }
   /* the loss keeps the layout and loses the ceremony: no pool of light, no gold
      rim, no colour left in the animal — a black band instead of a rosette */
   .banner.mourn{ color:#d8d2c6; text-shadow:0 1px 0 #000; background:#0a0c08;
@@ -1823,12 +1848,21 @@
        shadow side. So `color` still drives the whole set, but nothing in it is
        a flat silhouette. Class selectors cannot cross a <use> shadow boundary,
        which is why all of this is inline attributes. -->
-  <!-- MIGHT: a curved tusk with a chipped tip. A hammer was clip-art; every
-       animal in this game has teeth. -->
+  <!-- MIGHT: a fang, hooked UP and to the right, rooted bottom-left.
+       The previous draw was flat across the top and tapered to a point at the
+       bottom — symmetric, no curve, and sitting next to the word "Might" it was
+       the universal glyph for DECREASE. It appeared beside "+2.5" meaning
+       better and beside a red delta meaning worse, in one sentence.
+       A weapon has to point where it strikes. -->
   <symbol id="i-might" viewBox="0 0 16 16">
-    <path d="M3.9 1h8.2c.6 0 1 .5.9 1.1-.7 4.6-2.3 8.9-4.6 12.9-.2.4-.7.4-.9 0C5.2 11 3.7 6.7 3 2.1c-.1-.6.3-1.1.9-1.1z"/>
-    <path d="M4.6 2.4h2.5c-.2 3.7-.9 7.1-2.2 10.4-1.1-3.3-1.7-6.8-2-10.4z" transform="translate(.3)" fill="#fff" fill-opacity=".40"/>
-    <path d="M11 2.4h1.9c-.6 3.7-1.8 7.1-3.4 10.4.8-3.3 1.3-6.8 1.5-10.4z" fill="#000" fill-opacity=".34"/>
+    <path d="M14.6 1.1c.4-.2.8.2.7.6-.5 2.4-1.6 4.7-3.2 6.8-1.9 2.5-4.4 4.5-7.4 6-.5.2-1 .3-1.5.2
+             l-1.6-.3c-.5-.1-.7-.7-.3-1l1.2-1c.4-.3.7-.7.9-1.2C4.6 8 6.3 5.7 8.6 4
+             c1.8-1.3 3.8-2.3 6-2.9z"/>
+    <path d="M13.6 2.5c-1.7.6-3.3 1.4-4.7 2.5C7 6.4 5.6 8.3 4.7 10.6c-.2.5-.5 1-.9 1.4
+             1.4-.7 2.7-1.6 3.9-2.6 2.5-2.1 4.4-4.6 5.9-6.9z" fill="#fff" fill-opacity=".22"/>
+    <path d="M14.6 1.1c-1 2.9-2.5 5.5-4.5 7.8-1.6 1.9-3.6 3.5-5.8 4.9.6 0 1.1-.1 1.6-.4
+             3-1.5 5.5-3.5 7.4-6 1.1-1.5 2-3.1 2.5-4.8z" fill="#000" fill-opacity=".30"
+          transform="translate(-1.1 .2)"/>
   </symbol>
   <!-- HIDE: a stitched plate of thick hide, not a knight's shield -->
   <symbol id="i-hide" viewBox="0 0 16 16">
@@ -2904,7 +2938,7 @@ function swingAt2(u, target){
   target.kb = (u.side === 'us' ? 1 : -1) * Math.min(1.0, 0.3 + dmg * 0.035);
   hurtUnit(target, dmg, u);
   if (u.c.trait === 'cleave'){
-    ev('boom', { x: target.x, y: target.y, r: AOE_R });
+    ev('boom', { id: target.id, x: target.x, y: target.y, r: AOE_R });
     for (const o of F.units){
       if (!o.alive || o.side === u.side || o === target) continue;
       const dx = o.x - target.x, dy = (o.y - target.y) * 0.6;
@@ -3346,7 +3380,12 @@ function burst(x, y, n, color, opts){
     const sp = (o.speed || 60) * (0.6 + Math.random() * 0.9);
     const dx = Math.cos(a) * sp, dy = Math.sin(a) * sp - (o.lift || 26);
     p.animate
+      // Opacity used to ramp from 1 to 0 across the whole flight, so a particle
+      // spent most of its life at a quarter alpha — a dim rotated square drifting
+      // over a card, which reads as a rendering fault rather than as eggshell.
+      // It stays solid while it travels and then goes.
       ? p.animate([{ transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+                   { opacity: 1, offset: 0.52 },
                    { transform: 'translate(' + dx.toFixed(0) + 'px,' + (dy + 44).toFixed(0) + 'px) rotate(' +
                      ((Math.random() - .5) * 320).toFixed(0) + 'deg)', opacity: 0 }],
                   { duration: o.dur || 520, easing: 'cubic-bezier(.2,.7,.5,1)', fill: 'forwards' })
@@ -4895,6 +4934,10 @@ function drawPit(){
     if (i < 0) return 0;
     return ((i % 2) ? 1 : -1) * Math.ceil(i / 2) * SPR * 0.20;
   };
+  // Remember each unit's fan on itself. A unit drops out of `ranks` the instant
+  // it dies, so its death sparks and dust puff would otherwise snap back to the
+  // un-fanned column at the exact moment you are looking at them.
+  for (const u2 of order) if (u2.alive){ u2._fx = fanOf(u2); u2._fy = fanY(u2); }
   // re-sort on the depth actually drawn, so a nearer sprite never paints over
   // the bar of one that is genuinely behind it
   order = order.sort((a2, b2) => (a2.y + fanY(a2) / Math.max(1, SPR) * AH) -
@@ -4982,13 +5025,17 @@ function drawPit(){
     let by = paintTop - bh - SPR * 0.10;
     const kw0 = THREAT_TAG[u.c.trait];
     const fs0 = Math.max(7, W * 0.021), pr0 = Math.max(2.5, W * 0.007);
+    const hfs0 = Math.max(8, W * 0.0225);          // the HP numeral, under the bar
     const pips = (u.pois > 0 || u.stun > 0);
     // measure the whole stack once, then dodge anything already standing there
     ctx.font = '900 ' + fs0.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
     const tagW = kw0 ? (ctx.measureText ? ctx.measureText(kw0[0]).width : fs0 * 2.2) + fs0 * 0.9 : 0;
     const sw = Math.max(bw, tagW) + 4;
     const above = (kw0 ? fs0 * 2.4 : 0) + (pips ? pr0 * 2.6 : 0) + 2;
-    const rectAt = (b) => ({ x0: x - sw / 2, x1: x + sw / 2, y0: b - above, y1: b + bh + 2 });
+    // the numeral hangs BELOW the bar, so it is part of the footprint that has
+    // to dodge — otherwise a lifted stack drops its HP onto the one underneath
+    const below = bh + hfs0 * 1.15 + 2;
+    const rectAt = (b) => ({ x0: x - sw / 2, x1: x + sw / 2, y0: b - above, y1: b + below });
     for (let guard = 0; guard < 14; guard++){
       const r = rectAt(by);
       let hit = null;
@@ -5021,8 +5068,9 @@ function drawPit(){
       ctx.save(); pill(bx, by, bw, bh, cap); ctx.clip();
       // the enemy fill used to sit at 4.5:1 on its own track against the
       // player's 8.8:1 — the bar you actually make decisions on was the harder
-      // one to read
-      ctx.fillStyle = u.side === 'us' ? '#8fd344' : '#ff7a5c';
+      // one to read. Against the SAND, which is what it actually sits on, it
+      // was still only 3.72:1 to the player's 5.26:1.
+      ctx.fillStyle = u.side === 'us' ? '#8fd344' : '#ffa07a';
       ctx.fillRect(bx, by, bw * frac, bh);
       ctx.fillStyle = u.side === 'us' ? 'rgba(60,92,20,.75)' : 'rgba(140,44,26,.72)';
       ctx.fillRect(bx, by + bh * 0.62, bw * frac, bh * 0.38);
@@ -5030,6 +5078,21 @@ function drawPit(){
     }
     ctx.strokeStyle = 'rgba(50,38,18,.85)'; ctx.lineWidth = 1;
     pill(bx, by, bw, bh, cap); ctx.stroke();
+    // THE NUMBER. A 3.5px capsule cannot tell you 3hp from 8hp, and an autobattler
+    // is nothing but that question — worse, a full enemy bar is solid red, which
+    // in every other game in this genre means "about to die". It goes UNDER the
+    // bar, because the bar is too thin to hold type.
+    {
+      const hfs = hfs0;
+      ctx.font = '900 ' + hfs.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = Math.max(1.6, W * 0.0045);
+      ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.lineJoin = 'round';
+      const hy = by + bh + hfs * 0.94;
+      ctx.strokeText(String(Math.max(0, Math.ceil(u.hp))), x, hy);
+      ctx.fillStyle = frac <= 0.34 ? '#ffc0a8' : '#f2ead6';
+      ctx.fillText(String(Math.max(0, Math.ceil(u.hp))), x, hy);
+    }
     if (u.c.leader){
       ctx.fillStyle = '#ffd34d';
       ctx.beginPath();
@@ -5060,32 +5123,42 @@ function drawPit(){
   }
 
   // --- effects on top -----------------------------------------------------
+  // THE FAN IS PART OF WHERE A UNIT IS. Sprites, shadows and bars were all
+  // drawn at `px(u.x) + fanOf(u)` while every effect was drawn at the raw
+  // simulation x — up to 180px away on this canvas. So rings lassoed the wrong
+  // animal's face, slashes trailed off into bare dirt, and damage numbers
+  // floated in the sand with no beast within 200px of them. Anything owned by a
+  // unit is now placed exactly where that unit was painted.
+  const fxUnit = (f) => {
+    if (!f.uid || !F || !F.units) return null;
+    for (const u of F.units) if (u.id === f.uid) return u;
+    return null;
+  };
   for (const f of pitFx){
-    const x = px(f.x), y = py(f.y);
+    const own = fxUnit(f);
+    const x = px(f.x) + (own ? (own._fx || 0) : 0), y = py(f.y) + (own ? (own._fy || 0) : 0);
     const k = 1 - f.t / f.life;              // 1 at birth, 0 at death
     ctx.globalAlpha = Math.max(0, k);
-    if (f.k === 'boom'){
-      // same two-arc language as a hit, one size up: an ember bloom with a hot
-      // core, never a thin perfect circle floating over the melee
-      const br = AOE_R * U * (1 - k + 0.25), bcy = y - SPR * 0.25;
-      ctx.lineWidth = Math.max(2, W * 0.007) * 2.6;
-      ctx.strokeStyle = 'rgba(255,124,48,.30)';
-      ctx.beginPath(); ctx.arc(x, bcy, br * 1.05, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = Math.max(2, W * 0.007);
-      ctx.strokeStyle = 'rgba(255,214,150,.92)';
-      ctx.beginPath(); ctx.arc(x, bcy, br, 0, Math.PI * 2); ctx.stroke();
-    } else if (f.k === 'ring'){
-      // A flat cool-grey vector stroke floating over a pit of warm lit objects
-      // read as a soap bubble. Two arcs now: a hot core and a wide ember bloom,
-      // both in the arena's own firelight, both tapering as it opens.
-      const rr = SPR * (0.10 + (1 - k) * 0.28), cy = y - SPR * 0.30;
-      const lw = Math.max(1.5, W * 0.008) * k;
-      ctx.lineWidth = lw * 2.4;
-      ctx.strokeStyle = 'rgba(255,140,60,.34)';
-      ctx.beginPath(); ctx.arc(x, cy, rr * 1.06, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = lw;
-      ctx.strokeStyle = 'rgba(255,236,190,.9)';
-      ctx.beginPath(); ctx.arc(x, cy, rr, 0, Math.PI * 2); ctx.stroke();
+    if (f.k === 'boom' || f.k === 'ring'){
+      // A hoop is a hoop however many strokes you draw it with — two full
+      // circles read as wireframe, which is what the last pass shipped while
+      // its own comment claimed a bloom. A real impact is a soft heat wash with
+      // two CRESCENTS in it, brightest across the axis of the blow and open at
+      // the top and bottom, so it never closes into a shape the eye can trace.
+      const big = f.k === 'boom';
+      const rr = big ? AOE_R * U * (1 - k + 0.25) : SPR * (0.10 + (1 - k) * 0.28);
+      const cy = y - SPR * (big ? 0.25 : 0.30);
+      const g3 = ctx.createRadialGradient(x, cy, rr * 0.2, x, cy, rr * 1.3);
+      g3.addColorStop(0, big ? 'rgba(255,196,110,.34)' : 'rgba(255,180,90,.30)');
+      g3.addColorStop(0.72, big ? 'rgba(255,124,48,.22)' : 'rgba(255,140,60,.18)');
+      g3.addColorStop(1, 'transparent');
+      ctx.fillStyle = g3;
+      ctx.beginPath(); ctx.arc(x, cy, rr * 1.3, 0, Math.PI * 2); ctx.fill();
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(1.5, W * (big ? 0.009 : 0.008)) * (0.35 + k);
+      ctx.strokeStyle = big ? 'rgba(255,226,160,.85)' : 'rgba(255,236,190,.9)';
+      ctx.beginPath(); ctx.arc(x, cy, rr, -0.9, 0.9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, cy, rr, 2.25, 4.05); ctx.stroke();
     } else if (f.k === 'slash'){
       // who swung at whom, drawn as an arc across the gap
       ctx.strokeStyle = 'rgba(255,246,214,.85)';
@@ -5109,7 +5182,11 @@ function drawPit(){
       // pops up fast, then floats
       const rise = (1 - k) < 0.25 ? (1 - k) * 2.4 : 0.6 + (1 - k) * 0.5;
       const nx = x + (f.jx || 0) * SPR * 0.30;
-      const ny = y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR;
+      // and it stays IN THE PIT. A hit on a unit at the back of the sand rose
+      // 1.4 sprite-heights and printed the damage halfway up the fence, with no
+      // animal within 200px of it — a number in the sky belongs to nothing.
+      const ny = Math.max(horizon + SPR * 0.34,
+        y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR);
       ctx.strokeText('-' + f.v, nx, ny);
       ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffffff');
       ctx.fillText('-' + f.v, nx, ny);
@@ -5146,36 +5223,39 @@ function stepFx(dt){
  *  Nothing in here can change the fight — it reads the trail the tick left. */
 function drainArena(){
   if (!F || !F.events) return;
-  let numSlot = 0;                 // how many numbers this tick already spawned
   for (const e of F.events){
     if (e.k === 'swing'){
       // a slash across the gap, so you can see WHO hit WHOM
-      pitAdd({ k: 'slash', x: (e.x + e.tx) / 2, y: (e.y + e.ty) / 2,
+      pitAdd({ k: 'slash', uid: e.id, x: (e.x + e.tx) / 2, y: (e.y + e.ty) / 2,
         dir: e.side === 'us' ? 1 : -1, t: 0, life: 0.20 });
     } else if (e.k === 'hit'){
-      pitAdd({ k: 'ring', x: e.x, y: e.y, v: e.dmg, t: 0, life: 0.26 });
-      // Two hits in one tick were spawned at the target's x with textAlign
-      // centre and no offset, so they printed on top of each other and the
-      // pair read as one corrupted glyph. They fan now — sideways toward
-      // whoever swung, and downward by slot so a triple stacks legibly.
-      pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffffff',
+      pitAdd({ k: 'ring', uid: e.id, x: e.x, y: e.y, v: e.dmg, t: 0, life: 0.26 });
+      // Numbers used to spawn at the target's x with textAlign centre and no
+      // offset, so two hits printed on the same pixel and read as one corrupted
+      // glyph. Fanning by a per-TICK counter only fixed the pair that arrived in
+      // the same frame — a number lives 0.8s, so the next frame's hit reset the
+      // counter to zero and landed straight back on top of it. The slot counts
+      // numbers ALREADY IN THE AIR near this spot, which is what the collision
+      // actually is.
+      const near = pitFx.filter((q) => q.k === 'num' &&
+        Math.abs(q.x - e.x) < 1.6 && Math.abs(q.y - e.y) < 1.6).length;
+      pitAdd({ k: 'num', uid: e.id, x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffffff',
         big: e.dmg >= 9, dir: ((e.id || 1) % 2) ? 1 : -1, t: 0, life: 0.8,
-        jx: (e.fx || (((e.id || 1) % 2) ? 1 : -1)) * (1.05 + (numSlot % 3) * 0.36),
-        jy: (numSlot % 3) * 0.17 });
-      numSlot++;
+        jx: (e.fx || (((e.id || 1) % 2) ? 1 : -1)) * (1.05 + (near % 3) * 0.36),
+        jy: (near % 3) * 0.17 });
       for (let i = 0; i < (e.dmg >= 9 ? 6 : 3); i++)
-        pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 2.4, dy: -rng() * 1.2, t: 0, life: 0.42 });
+        pitAdd({ k: 'spark', uid: e.id, x: e.x, y: e.y, dx: (rng() - .5) * 2.4, dy: -rng() * 1.2, t: 0, life: 0.42 });
       sfxStrike(e.dmg);
       if (e.dmg >= 9) shakePit(Math.min(7, 2 + e.dmg * 0.18));
     } else if (e.k === 'boom'){
-      pitAdd({ k: 'boom', x: e.x, y: e.y, t: 0, life: 0.42 });
+      pitAdd({ k: 'boom', uid: e.id, x: e.x, y: e.y, t: 0, life: 0.42 });
       noise(0.12, { lp: 900, vol: 0.09 });
       shakePit(4);
     } else if (e.k === 'die'){
       for (let i = 0; i < 9; i++)
-        pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 3.4, dy: -rng() * 1.6,
+        pitAdd({ k: 'spark', uid: e.id, x: e.x, y: e.y, dx: (rng() - .5) * 3.4, dy: -rng() * 1.6,
           col: e.side === 'us' ? '#9ae04a' : '#e0a05a', t: 0, life: 0.7 });
-      pitAdd({ k: 'puff', x: e.x, y: e.y, t: 0, life: 0.5 });
+      pitAdd({ k: 'puff', uid: e.id, x: e.x, y: e.y, t: 0, life: 0.5 });
       sfxDie();
       shakePit(3);
     } else if (e.k === 'arrive'){
@@ -6027,7 +6107,27 @@ function goOver(won){
     ? R.log.slice().reverse().map((l) => '<div' +
         (/farm upstate|got you|lost|died/i.test(l) ? ' class="loss"' : '') + '>' + l + '</div>').join('')
     : '<div>Nothing much happened.</div>';
-  beep(won ? 660 : 160, 0.3, won ? 'triangle' : 'sawtooth', 0.06);
+  if (!won){ beep(160, 0.3, 'sawtooth', 0.06); return; }
+  // TWELVE ROUNDS. It used to land on one 660Hz beep and a static page — the
+  // loss got a full maroon reskin, a black band and a greyed champion, so the
+  // failure was the more designed of the two screens and the payoff arrived at
+  // the volume of a shrug. `burst` and `anim` were both already built and both
+  // sitting unused. The plinth swells, the ribbon lands, and gold comes off it
+  // three times from three places.
+  chord([523, 659, 784], 0.5, { type: 'triangle', vol: 0.06 });
+  if (HEADLESS || RM()) return;
+  const pl = $('oBest') && $('oBest').firstChild;
+  if (pl) anim(pl, 'crowned', 620);
+  const spray = (dx, dy, n, at2) => at(at2, () => {
+    const r = rectOf($('oBest'));
+    if (!r) return;
+    burst(r.left + r.width * dx, r.top + r.height * dy, n, (i) =>
+      (i % 3 ? '#ffd34d' : '#fff0b0'), { spread: 2.4, size: 8 });
+  });
+  spray(0.50, 0.16, 20, 140);
+  spray(0.16, 0.42, 12, 330);
+  spray(0.84, 0.42, 12, 470);
+  chord([784, 988, 1175], 0.42, { type: 'triangle', vol: 0.045, at: 0.26 });
 }
 
 /* --------------------------------------------------------- stud book ----- */
