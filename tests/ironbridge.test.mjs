@@ -13236,24 +13236,46 @@ t.ok(true, 'a final draw on a live match is clean');
   // The dock takes the height a screen has spare, with a floor that is the
   // laptop it was tuned on and a ceiling so a huge monitor does not hand half
   // itself to a control panel.
-  const dockCss = SRC.slice(SRC.indexOf('#dock{'), SRC.indexOf('#dock{') + 1400);
+  // To the END of the rule, not a fixed window into the file. The last count
+  // was 1400 characters, and a comment added inside the block pushed the
+  // property being asserted out the far side of it — the assertion then failed
+  // on a slice that no longer contained its own subject.
+  const dockAt = SRC.indexOf('#dock{');
+  const dockCss = SRC.slice(dockAt, SRC.indexOf('}', dockAt));
   const cl = dockCss.match(/height:clamp\(\s*(\d+)px\s*,\s*([\d.]+)vh\s*,\s*(\d+)px\s*\)/);
   t.ok(!!cl, 'the dock is sized against the screen rather than pinned to one number');
   if (cl){
     const lo = +cl[1], vh = +cl[2], hi = +cl[3];
     t.ok(lo >= 88, 'with a floor that fits its tallest column (' + lo + 'px)');
     t.ok(hi > lo * 1.4, 'and a ceiling well above it, or the clamp does nothing (' + lo + '..' + hi + ')');
-    t.ok(hi < 260, 'but not so tall it becomes the game (' + hi + 'px)');
-    // The band has to actually move across the screens people use.
+    /* The bound that matters is the SHARE, not the pixels. A ceiling in pixels
+       is a share that shrinks as the screen grows, which is backwards — and it
+       is exactly what went wrong: 196px made the dock eight per cent of a
+       1280x2443 portrait screen, with the forge column carrying 188px of
+       buttons below its own fold while the world had 2199px to draw a hillside
+       in. Reported as "the UI can easily take more space", and correctly. */
+    t.ok(vh <= 25, 'the dock never takes more than a quarter of the screen (' + vh + 'vh)');
+    t.ok(hi >= 400, 'and a tall screen is allowed to give it a real panel (' + hi + 'px ceiling)');
+    // The band has to actually move across the screens people use — including
+    // the tall ones, which the old ceiling flattened out entirely.
     const at = (h) => Math.min(hi, Math.max(lo, h * vh / 100));
     t.ok(at(1440) > at(720) + 30,
       'a tall screen really does get more of it than a short one (' +
       at(720).toFixed(0) + 'px at 720, ' + at(1440).toFixed(0) + 'px at 1440)');
+    t.ok(at(2443) > at(900) * 2,
+      'and a very tall one is not pinned to the laptop number (' +
+      at(900).toFixed(0) + 'px at 900, ' + at(2443).toFixed(0) + 'px at 2443)');
   }
 
   // A safety zone: nothing sits flush against an edge it can be cut on, and a
   // column that does overflow can be scrolled rather than silently truncated.
-  const secCss = SRC.slice(SRC.indexOf('.dsec{'), SRC.indexOf('.dsec{') + 320);
+  // Anchored to the START of the rule and cut at its end. `indexOf('.dsec{')`
+  // finds it inside `#dock .dsec{ min-width:0 }` in the grid media query — a
+  // real rule, and not the one being asked about. Same trap as the dock's own
+  // clamp, two rules up; a fixed window into a stylesheet is a test that breaks
+  // whenever anything is written above its subject.
+  const secAt = /\n\s*\.dsec\{/.exec(SRC).index;
+  const secCss = SRC.slice(secAt, SRC.indexOf('}', secAt));
   t.ok(/padding:0 \d+px \d+px/.test(secCss),
     'and every column carries bottom padding, so its last row is not on the cut line');
   t.ok(/overflow-y:auto/.test(secCss),
@@ -13299,6 +13321,51 @@ t.ok(true, 'a final draw on a live match is clean');
     // The two that cannot be starved, because what is in them has a hard width
     // or is a sentence. Left to the proportional shrink they lost every time:
     // the greedy column is the one with the most to give up and so keeps most.
+    /* ---- and where one row of six CANNOT fit, the rack becomes a grid.
+       The floors add up to less than 1280, which is what the sum above checks —
+       and 1280 is a desktop. Measured on the screens people actually hold, the
+       last column was off the edge again: 246px cut at 820 wide, 154px at 912.
+       There is no arrangement of one row that fits six columns across a tablet
+       held upright, so below that it stops being one row.
+
+       A GRID rather than a wrapped flex row, and the difference is not
+       cosmetic. A flex line takes the height of its tallest item and
+       `align-content` can only share out space that is left OVER — so wrapping
+       put 388px of line inside a 198px dock on a laptop and hung it out the
+       bottom, and on a tablet the train column's four buttons took the first
+       row and starved the second into clipping the forge. `grid-auto-rows:1fr`
+       divides the dock between however many rows there turn out to be, exactly.
+       Nothing can overflow in either direction by construction — which is the
+       property three rounds of floors and shrink rules were reaching for. */
+    const wrapCss = SRC.slice(SRC.indexOf('@media (max-aspect-ratio:3/4)'),
+                              SRC.indexOf('@media (max-aspect-ratio:3/4)') + 900);
+    t.ok(/#dock\{[^}]*display:grid/.test(wrapCss),
+      'a screen that cannot fit one row lays the rack out as a grid');
+    t.ok(/grid-auto-rows:1fr/.test(wrapCss),
+      'whose rows divide the dock exactly, so no row can starve another or hang out of it');
+    t.ok(/repeat\(auto-fit,minmax\((\d+)px,1fr\)\)/.test(wrapCss),
+      'and whose tracks have a floor, so it packs as many as fit and no more');
+    const track = +(/minmax\((\d+)px,1fr\)/.exec(wrapCss) || [0, 0])[1];
+    // Every column has to fit its own contents in one track — except WORKERS,
+    // which is the one column that is a readout rather than a list (four jobs,
+    // two across and two down, all of them visible), and gets two.
+    t.ok(track >= 170, 'a track holds the narrowest column’s contents (' + track + 'px)');
+    t.ok(/\.dsec\[data-col="jobs"\]\{ grid-column:span 2/.test(wrapCss),
+      'and the jobs readout gets two of them, so its two-by-two survives');
+    t.ok(/#dock \.dsec\{ min-width:0/.test(wrapCss),
+      'with the flex floors stood down, or a column wider than its track overflows the grid');
+    // Two triggers, because there are two ways to be too narrow for six.
+    t.ok(/max-aspect-ratio:3\/4/.test(wrapCss) && /max-width:1200px/.test(wrapCss),
+      'triggered by being held upright OR by a window narrower than the floors add up to');
+    // ...and NOT above that, where one row demonstrably fits. A laptop keeps
+    // exactly the layout the round before this one measured.
+    t.ok(/#dock\{[^}]*flex-wrap:nowrap/.test(SRC),
+      'while a wide landscape window keeps the single row it already fits');
+    // The phone is neither: one tab in a tall panel, and it has to say so
+    // explicitly now that the default display is up for grabs.
+    t.ok(/body\.narrow #dock\{ display:flex; flex-direction:column; flex-wrap:nowrap/.test(SRC),
+      'and the phone declares its own box rather than inheriting whichever the width picked');
+
     t.ok(floorOf('heroes') >= 160,
       'the hero column holds a whole 148px card (' + floorOf('heroes') + 'px)');
     t.ok(floorOf('sel') >= 150,

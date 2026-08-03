@@ -232,11 +232,29 @@
      nothing to the dock's own colour over the 40px ABOVE it, so the world
      dissolves into the panel instead of stopping at it. The band overhangs
      upward out of the dock's box, which costs the layout nothing. */
-  #dock{ flex:0 0 auto; display:flex; gap:0; align-items:stretch; padding:6px 12px;
+  /* The rack WRAPS. Six columns do not fit across a portrait tablet — measured,
+     820px wide cut 246px off the last one and 912px cut 154 — and the answer
+     the desktop got (yield until you fit) has a floor it cannot go under.
+     Below that width there is no arrangement of one row that works, so it stops
+     being one row. Four across and two down is a better shape for a tall screen
+     than six across and one off the edge, and it is the shape the extra height
+     above was freed up to hold.
+
+     The rows SHARE the height rather than taking it in order. Left to pack from
+     the top, the first row took whatever its tallest column wanted — the train
+     list, four buttons deep — and the second got the remainder, which was not
+     enough for the forge and clipped it. Half each, and a column with more in it
+     than its half scrolls, which is what a column has always done.
+
+     Which also turns the overflow the right way round. A rack that wraps has no
+     sideways overflow left to have, so the axis that scrolls is the one a
+     player will actually think to try. */
+  #dock{ flex:0 0 auto; display:flex; flex-wrap:nowrap;
+    gap:0; align-items:stretch; padding:6px 12px;
     position:relative; z-index:5;
     background:var(--grain),linear-gradient(180deg,#241f16 0,#171309 36%,#0b0906 100%);
     box-shadow:inset 0 14px 24px -16px rgba(0,0,0,.6);
-    overflow-x:auto; overflow-y:hidden;
+    overflow-x:hidden; overflow-y:auto; scrollbar-width:none;
     /* 76px was chosen against a laptop and then applied to every screen. On a
        1440p monitor it hands eleven hundred pixels of spare height to the
        world and squeezes the panel that carries the game's controls into
@@ -249,8 +267,47 @@
        every column scrolled DOWN instead — which is the old complaint turned
        through ninety degrees. Two rows of 26px controls plus a title is 81px of
        content, so the floor is what two rows actually need; the world gives up
-       another thirty pixels of a seven-hundred-pixel picture for it. */
-    height:clamp(134px, 16vh, 196px); }
+       another thirty pixels of a seven-hundred-pixel picture for it.
+
+       And then the CEILING was the thing pinning it shut. 196px was picked
+       against a laptop, and on a tall portrait screen — reported, and measured
+       at 1280x2443 — it made the panel eight per cent of the display while the
+       forge column carried 188px of buttons below its own fold and the world
+       got 2199px to draw a hillside in. A ceiling in pixels is a share that
+       shrinks as the screen grows, which is backwards: a bigger screen should
+       hand the controls MORE room, not proportionally less. So the share is the
+       rule and the pixels are only its limits. */
+    height:clamp(134px, 22vh, 460px); }
+  /* A screen held UPRIGHT wraps the rack, and two rows want roughly twice the
+     height of one. 22vh of a portrait tablet is enough for a single row and
+     leaves the second below the panel's own fold — the horizontal cut-off
+     turned through ninety degrees, which is not progress. A taller share only
+     where the wrap actually happens: the world still gets three quarters of a
+     screen that has plenty to spare, and nothing has to be scrolled to. */
+  /* ...and on a screen where one row of six CANNOT fit, the rack becomes a
+     grid. Two cases: held upright, or a landscape window narrower than the
+     floors add up to.
+
+     A grid rather than a wrapped flex row, because a flex LINE takes the height
+     of its tallest item and `align-content` can only share out space that is
+     left over — so on a 1440x900 laptop the single line came to 388px inside a
+     198px dock and simply hung out the bottom, and on a portrait tablet the
+     train column's four buttons took the first row and starved the second.
+     `grid-auto-rows:1fr` divides the dock between however many rows there turn
+     out to be, exactly, and a column with more in it than its share scrolls —
+     which is what a column has always done. Nothing can overflow in either
+     direction by construction, which is the property three rounds of floors and
+     shrink rules were reaching for.
+
+     WORKERS spans two tracks because it is the one column that is a readout
+     rather than a list: four jobs, two across and two down, all visible. */
+  @media (max-aspect-ratio:3/4), (max-width:1200px){
+    #dock{ display:grid; grid-auto-rows:1fr; align-content:stretch;
+      grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+      height:clamp(200px, 32vh, 560px); }
+    #dock .dsec{ min-width:0; min-height:0; }
+    #dock .dsec[data-col="jobs"]{ grid-column:span 2; }
+  }
   /* The band itself has to hang in the STAGE, not in the dock: the dock is a
      scroll container (overflow-y:hidden) and would have clipped its own
      overhang off at the pixel the ramp exists to soften. */
@@ -278,6 +335,7 @@
     background:linear-gradient(180deg,rgba(255,224,168,.035),rgba(255,224,168,0)); }
   .dsec:last-child{ border-right:none; }
   .dsec::-webkit-scrollbar{ display:none; }
+  #dock::-webkit-scrollbar{ display:none; }
   /* the divider is a hairline that fades out at both ends instead of a hard
      rule butting into the padding */
   .dsec + .dsec::before{ content:''; position:absolute; left:0; top:4px; bottom:4px; width:1px;
@@ -811,7 +869,12 @@
   /* The phone keeps its own shape: one tab at a time in a tall panel is the
      right answer on a 390px screen and the wrong one on a laptop, so the
      desktop's fixed 76px row is undone here rather than inherited. */
-  body.narrow #dock{ flex-direction:column; gap:6px; overflow-x:hidden; overflow-y:hidden;
+  /* The phone is one tab in a tall panel, not a rack, so it does not wrap:
+     `flex-wrap:wrap` in a COLUMN direction wraps into extra columns, which
+     turned the tab panel into two half-width halves and put 10px of it off the
+     right-hand edge. The rack's rule is the rack's. */
+  body.narrow #dock{ display:flex; flex-direction:column; flex-wrap:nowrap; gap:6px;
+    overflow-x:hidden; overflow-y:hidden;
     height:200px; max-height:44vh; padding:8px 10px 10px; }
   /* the panel scrolls inside the dock; the dock itself does not grow past it */
   body.narrow #dock .dsec{ flex:1 1 0; min-height:0; overflow-y:auto; overflow-x:hidden; }
