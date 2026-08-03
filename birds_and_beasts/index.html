@@ -3380,7 +3380,12 @@ function burst(x, y, n, color, opts){
     const sp = (o.speed || 60) * (0.6 + Math.random() * 0.9);
     const dx = Math.cos(a) * sp, dy = Math.sin(a) * sp - (o.lift || 26);
     p.animate
+      // Opacity used to ramp from 1 to 0 across the whole flight, so a particle
+      // spent most of its life at a quarter alpha — a dim rotated square drifting
+      // over a card, which reads as a rendering fault rather than as eggshell.
+      // It stays solid while it travels and then goes.
       ? p.animate([{ transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+                   { opacity: 1, offset: 0.52 },
                    { transform: 'translate(' + dx.toFixed(0) + 'px,' + (dy + 44).toFixed(0) + 'px) rotate(' +
                      ((Math.random() - .5) * 320).toFixed(0) + 'deg)', opacity: 0 }],
                   { duration: o.dur || 520, easing: 'cubic-bezier(.2,.7,.5,1)', fill: 'forwards' })
@@ -5177,7 +5182,11 @@ function drawPit(){
       // pops up fast, then floats
       const rise = (1 - k) < 0.25 ? (1 - k) * 2.4 : 0.6 + (1 - k) * 0.5;
       const nx = x + (f.jx || 0) * SPR * 0.30;
-      const ny = y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR;
+      // and it stays IN THE PIT. A hit on a unit at the back of the sand rose
+      // 1.4 sprite-heights and printed the damage halfway up the fence, with no
+      // animal within 200px of it — a number in the sky belongs to nothing.
+      const ny = Math.max(horizon + SPR * 0.34,
+        y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR);
       ctx.strokeText('-' + f.v, nx, ny);
       ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffffff');
       ctx.fillText('-' + f.v, nx, ny);
