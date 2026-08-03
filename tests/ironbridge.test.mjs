@@ -3612,6 +3612,57 @@ t.ok(true, 'drawing an empty bridge is harmless');
         dead.codePointAt(0).toString(16) + ')');
   }
 
+  /* ---- THE FRAMES. Two of them, and which technique goes where is the whole
+     decision rather than a detail.
+
+     A DECKLE — the soft ragged edge torn paper has — cannot be expressed as a
+     border, a radius or a shadow. It is a shape, so it needs a nine-slice, and
+     that is the one place a nine-slice earns its keep here.
+
+     A STITCH can: a dashed outline at a negative offset follows the corner
+     radius on its own, costs no border width, needs no source image and scales
+     to any size. Done as a nine-slice it would be a worse stitch AND a thicker
+     button, so it is not one. */
+  {
+    const deckle = (/--deckle:url\("data:image\/svg\+xml,([^"]+)"\)/.exec(css) || [])[1] || '';
+    t.ok(deckle.length > 100, 'the torn edge is a real shape, carried inline');
+    // Nothing to FETCH. The xmlns is a namespace rather than an address and is
+    // never requested, so it is stripped before asking — a check that trips on
+    // it is a check that can only be satisfied by an invalid SVG.
+    const body = deckle.replace(/xmlns='[^']*'/, '');
+    t.ok(!/http|href=|url\(|\.svg|\.png/.test(body), 'with nothing to fetch to draw it');
+
+    /* It has to TILE, and that is provable from the artwork rather than from a
+       comment. The source is 48 across, cut at 12, and the deckle is a run of
+       equal bumps: if the bump period divides both the corner and the edge
+       span, every repeat meets itself exactly and there is no seam at any
+       width. If it does not, the seams show up at one size in ten and nobody
+       finds out until a screenshot. */
+    const qs = deckle.match(/q/g) || [];
+    t.ok(qs.length === 32, 'four sides of eight bumps (' + qs.length + ' in all)');
+    const per = +(/q([\d.]+)%20-/.exec(deckle) || [])[1] * 2;
+    t.ok(per > 0, 'the bump period is readable off the path (' + per + 'px)');
+    t.ok(48 % per === 0, 'and it divides the source box, so the run closes (' + (48 / per) + ' bumps)');
+    t.ok(12 % per === 0, 'divides the corner slice, so a corner holds whole bumps');
+    t.ok((48 - 24) % per === 0, 'and divides the edge span, so an edge tile does too');
+
+    const sheet = (() => { const i = css.indexOf('\n  .sheet{'); return css.slice(i, css.indexOf('}', i)); })();
+    t.ok(/border-image:var\(--deckle\) 12 \/ 12px/.test(sheet),
+      'the slice and the border width are the same number, or the tear is drawn at the wrong scale');
+    t.ok(/round;/.test(sheet), 'and repeated with `round`, which keeps a bump a bump — `stretch` smears them');
+    t.ok(/border-radius:0/.test(sheet),
+      'with the radius dropped, because a nine-slice draws its own corner and a rounded one clips the tear');
+
+    // The stitch, and the one thing that can be wrong about it: a POSITIVE
+    // offset puts the seam outside the card, sewn to nothing.
+    const st = (() => { const i = css.indexOf('outline:1.4px dashed'); return css.slice(i - 400, i + 200); })();
+    t.ok(/outline-offset:-\d/.test(st), 'the seam is set IN from the edge of the card, not floating outside it');
+    for (const sel of ['.abtn', '.pick', '.hcard', '.hnew'])
+      t.ok(st.includes(sel), sel + ' is a piece of card, so it is sewn');
+    t.ok(!/\.dsec[,{]/.test(st),
+      'and the felt is not — a thread across the board would read as a scratch rather than a seam');
+  }
+
   // ---- decoration that can be switched off. The badge pulses and the wave
   // plate breathes; both sit on top of information that is also written down,
   // so somebody who has asked for less motion can have it.
