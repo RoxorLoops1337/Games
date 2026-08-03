@@ -963,25 +963,75 @@
   #wGrid{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
 
   /* ---------- stud book ---------- */
+  /* The screen is named after a book and was a dark page with a dashed box and
+     an <hr> on it. It is a spread now: stained paper, a ruled column, a stitched
+     spine down the gutter, and the whole thing tipped a degree off square. */
+  .bkhead{ position:relative; isolation:isolate; padding:12px 14px 14px;
+    border-radius:3px 5px 4px 3px; transform:rotate(-.35deg);
+    background-color:#cbb78c;
+    background-image:
+      repeating-linear-gradient(180deg, transparent 0 21px, rgba(70,56,28,.13) 21px 22px),
+      radial-gradient(ellipse 44% 34% at 6% 12%, rgba(110,86,42,.24), transparent 70%),
+      radial-gradient(ellipse 40% 46% at 95% 82%, rgba(96,74,36,.26), transparent 72%),
+      linear-gradient(176deg,#ddcaa0 0%,#c6b285 54%,#a08c60 100%);
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.5), inset 0 0 34px rgba(110,84,40,.36),
+      0 4px 0 rgba(0,0,0,.45), 0 16px 34px -10px rgba(0,0,0,.7); }
+  .bkhead::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+    border-radius:inherit; background-image:var(--tex-grime); background-size:64px 64px;
+    mix-blend-mode:multiply; opacity:.30; }
+  /* the gutter: a shadow and a run of stitches, straight down the middle */
+  .bkhead::after{ content:''; position:absolute; left:50%; top:6px; bottom:6px; width:22px;
+    z-index:0; pointer-events:none; transform:translateX(-50%);
+    background:
+      repeating-linear-gradient(180deg, rgba(60,44,20,.55) 0 5px, transparent 5px 11px)
+        center/2.2px 100% no-repeat,
+      linear-gradient(90deg, transparent, rgba(60,44,20,.26) 42%, rgba(60,44,20,.26) 58%, transparent); }
+  .bkhead > *{ position:relative; z-index:1; }
   .booktop{ display:flex; gap:16px; align-items:center; justify-content:center; flex-wrap:wrap;
     padding:6px 0 10px; }
-  .bkinfo{ max-width:330px; text-align:left; font-size:13px; color:#cfe0c2; line-height:1.6; }
-  .bkinfo h2{ font-size:var(--t-h2); color:var(--lime); margin-bottom:3px; }
+  .bkinfo{ max-width:330px; text-align:left; font-size:13px; color:#4a3f24; line-height:1.6; }
+  .bkinfo h2{ font-family:var(--f-display); font-size:var(--t-h2); color:#2e2716; margin-bottom:3px; }
+  /* Anything printed ON the page is ink. Every one of these was coloured for a
+     dark screen and went invisible the moment the page turned to paper. */
+  #book .bkhead, #book .bkhead .tiny, #book .bkhead .bkinfo,
+  #book .bkhead .cap, #book .bkhead .plate{ color:#5c4e2e; }
+  #book .bkhead .bkrule{ color:#6b5c39; }
+  #book .bkhead .bdg{ background:rgba(80,62,30,.13) !important;
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.4); }
+  #book .bkhead .tn .plate, #book .bkhead .tn b, #book .bkhead .tn .st2{ color:#3d3520; }
+  #book .bkhead .tn .st2{ opacity:.8; }
+  /* the tree's connector lines were drawn to show on black */
+  #book .bkhead .tlvl::before, #book .bkhead .tline{ background:rgba(90,70,38,.45) !important; }
   .bkinfo .row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
   .tree{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:0 0 auto; }
-  .tree.orphan{ padding:16px 18px; border:1px dashed #26361f; border-radius:12px; color:#6d8a5e;
-    align-self:center; gap:9px; }
+  /* no papers: an empty ruled box stamped into the page, not a dashed div */
+  .tree.orphan{ padding:15px 18px; border:none; border-radius:2px; color:#6b5c39;
+    align-self:center; gap:9px;
+    box-shadow:inset 0 0 0 1.5px rgba(90,70,38,.45), inset 0 0 0 4px rgba(203,183,140,.9),
+      inset 0 0 0 5.5px rgba(90,70,38,.28); }
   .tree.orphan .plate{ font-size:12px; letter-spacing:.2px; }
   .tlvl{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
-  .tn{ display:flex; align-items:center; gap:6px; padding:4px 9px 4px 4px; border-radius:9px;
-    background:linear-gradient(180deg,#162315,#101c10); border:1px solid #26361f;
-    box-shadow:inset 0 1px 0 rgba(190,255,150,.10); font-size:10.5px; color:#cfe0c2; cursor:pointer; }
+  /* an ancestor is an ENTRY on the page: a ruled slip with a pinned corner */
+  .tn{ position:relative; display:flex; align-items:center; gap:6px; padding:4px 9px 4px 4px;
+    border-radius:2px; border:none; font-size:10.5px; color:#3d3520; cursor:pointer;
+    font-family:var(--f-text);
+    background-image:linear-gradient(176deg, rgba(255,246,222,.5), rgba(120,96,50,.16));
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.42), 0 1px 0 rgba(255,246,222,.3),
+      0 2px 4px -1px rgba(60,44,20,.45); }
+  .tn::after{ content:''; position:absolute; top:2px; right:2px; width:5px; height:5px;
+    border-radius:50%; background:radial-gradient(circle at 34% 30%, #b9c4cc, #3d444b 62%, #14181c);
+    box-shadow:0 1px 1px rgba(0,0,0,.6); }
   .tn canvas{ width:36px; height:31px; border-radius:5px; background:#0a120a; display:block; }
   .tn b{ color:#eaf6df; font-size:11.5px; }
   .tn.root{ border-color:var(--lime); box-shadow:inset 0 1px 0 rgba(190,255,150,.18), 0 0 14px -4px rgba(166,255,94,.5); }
   .tn .st2{ color:var(--dim); }
   .tline{ font-size:10px; color:#5c7050; letter-spacing:2px; }
   .bktreewrap{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; }
+  /* the section head is ruled off the way a ledger rules a column */
+  .bkrule{ position:relative; letter-spacing:3px; }
+  .bkrule::before, .bkrule::after{ content:''; position:absolute; top:50%; width:26%; height:1px;
+    background:linear-gradient(90deg, transparent, rgba(90,70,38,.55), transparent); }
+  .bkrule::before{ left:6%; } .bkrule::after{ right:6%; }
 
   /* ---------- over: the shareable frame ---------- */
   /* the run's best animal gets a plinth, a ribbon and a pool of light. It is
@@ -1191,10 +1241,26 @@
   .shell .half{ position:absolute; top:44%; left:50%; transform:translate(-50%,-50%);
     width:72%; aspect-ratio:.8; line-height:1;
     border-radius:50% 50% 48% 48% / 62% 62% 38% 38%;
-    background:radial-gradient(ellipse 70% 60% at 34% 26%, #fdf6e0, #e8d9a8 48%, #ab9c6e 100%);
-    box-shadow:inset 0 -10px 18px -10px rgba(50,38,16,.7), 0 10px 12px -6px rgba(0,0,0,.6); }
-  .shell .half.b{ clip-path:inset(50% 0 0 0); }
-  .shell .half.a{ clip-path:inset(0 0 50% 0); }
+    background-color:#e8d9a8;
+    background-image:
+      /* speckling, biggest at the fat end — an unspeckled ellipse is a shape */
+      radial-gradient(circle 5px at 32% 68%, rgba(126,96,44,.34) 0 60%, transparent 62%),
+      radial-gradient(circle 4px at 63% 78%, rgba(126,96,44,.30) 0 60%, transparent 62%),
+      radial-gradient(circle 3px at 48% 58%, rgba(126,96,44,.26) 0 60%, transparent 62%),
+      radial-gradient(circle 3.5px at 70% 52%, rgba(126,96,44,.22) 0 60%, transparent 62%),
+      radial-gradient(circle 2.5px at 26% 44%, rgba(126,96,44,.20) 0 60%, transparent 62%),
+      radial-gradient(circle 4px at 55% 88%, rgba(110,84,38,.26) 0 60%, transparent 62%),
+      /* the cool bounce off the straw under it, and the warm key from the side */
+      radial-gradient(ellipse 55% 40% at 62% 92%, rgba(120,150,190,.22), transparent 70%),
+      radial-gradient(ellipse 66% 56% at 34% 24%, #fffaea, #e8d9a8 52%, #a4915f 100%);
+    box-shadow:inset 0 -14px 22px -12px rgba(50,38,16,.75),
+      inset 0 3px 0 rgba(255,255,255,.35),
+      0 12px 16px -8px rgba(0,0,0,.7); }
+  /* the halves part along a JAGGED line, the way a shell actually breaks */
+  .shell .half.b{ clip-path:polygon(0 52%, 12% 47%, 24% 53%, 37% 46%, 50% 52%, 63% 46%,
+    76% 53%, 88% 47%, 100% 52%, 100% 100%, 0 100%); }
+  .shell .half.a{ clip-path:polygon(0 0, 100% 0, 100% 52%, 88% 47%, 76% 53%, 63% 46%,
+    50% 52%, 37% 46%, 24% 53%, 12% 47%, 0 52%); }
   /* shell → gap → chick: the payoff frame is never the portrait behind debris */
   .pickwrap > .card{ transition:transform .16s cubic-bezier(.2,.9,.3,1.25), box-shadow .16s ease,
     filter .06s linear, opacity .18s .12s ease-out; }
@@ -1741,10 +1807,10 @@
     </div>
     <div class="bkhead">
       <div class="booktop" id="bkTop"></div>
-      <div class="tiny" style="text-align:center; padding:6px 0 4px">Ancestry</div>
+      <div class="tiny bkrule" style="text-align:center; padding:8px 0 6px">Ancestry</div>
       <div class="bktreewrap"><div class="tree" id="bkTree"></div></div>
     </div>
-    <div class="tiny bkhead" style="text-align:center; padding:12px 0 6px">The whole herd, living and retired</div>
+    <div class="tiny bkrule" style="text-align:center; padding:14px 0 6px">The whole herd, living and retired</div>
     <div class="deckwrap"><div class="grid" id="bkList"></div></div>
   </div>
 
@@ -5053,7 +5119,10 @@ function resemblance(wrap, res){
       // nothing to read on it. The lower band carries the name, the stats and
       // the trait tab, and a label parked there covered all three.
       const cvr = rectOf(wrap.querySelector && wrap.querySelector('canvas')) || kr;
-      const lab0 = { x: cvr.left + 5, y: cvr.top + 5 + i * 19 };
+      // Up from the FOOT of the art well: the cost token owns the top-left
+      // corner and the chick owns the middle, so the only clear band is the
+      // bottom of the portrait.
+      const lab0 = { x: cvr.left + 6, y: cvr.top + cvr.height - 22 - (keys.length - 1 - i) * 19 };
       rline(src.left + src.width / 2, src.top + src.height / 2,
         cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', lab0);
       tone(who === 'new' ? 980 : 620 + i * 60, 0.07, { type: 'sine', vol: 0.035 });
@@ -5291,12 +5360,14 @@ function renderBook(){
       : 'Founder stock — no papers on file.';
     info.innerHTML = '<h2>' + node.name + '</h2>' +
       '<div class="tiny">generation ' + node.gen + (live ? '' : ' &middot; no longer in the barn') + '</div>' +
-      '<div class="row"><span class="bdg" style="color:#ff8f6b">' + ICO('might') + 'Might ' + node.might + '</span>' +
-      '<span class="bdg" style="color:#7ec8ff">' + ICO('hide') + 'Hide ' + node.hide + '</span>' +
-      '<span class="bdg" style="color:#ffd34d">' + ICO('slop') + 'Feed ' +
+      '<div class="row"><span class="bdg" style="color:#8a3418">' + ICO('might') + 'Might ' + node.might + '</span>' +
+      '<span class="bdg" style="color:#1d4a72">' + ICO('hide') + 'Hide ' + node.hide + '</span>' +
+      '<span class="bdg" style="color:#6b4a0a">' + ICO('slop') + 'Feed ' +
         deriveCost(node.might, node.hide, node.trait) + '</span></div>' +
-      '<div style="margin-top:6px"><b class="gold">' + t.name + '</b> — ' + t.desc + '</div>' +
-      '<div style="margin-top:6px" class="dim">' + up + '</div>';
+      '<div style="margin-top:6px;color:#3d3520">' + (node.trait === 'none'
+        ? '<b style="color:#5c1140">No trick</b> — just teeth.'
+        : '<b style="color:#5c1140">' + t.name + '</b> — ' + t.desc) + '</div>' +
+      '<div style="margin-top:6px;color:#6b5c39;font-style:italic">' + up + '</div>';
     top.appendChild(info);
   }
   const tree = $('bkTree');
