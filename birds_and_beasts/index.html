@@ -1121,13 +1121,25 @@
   @keyframes wob{ 0%,100%{transform:rotate(-7deg)} 50%{transform:rotate(7deg)} }
   /* A STAMP, pressed into the page at a slight angle — not a gradient pill.
      Ink on the inside of the rule, nothing filled solid. */
+  /* A PENNANT, not another hairline rounded rect. This one form was doing six
+     unrelated jobs — PRODIGY, CAME OUT SMALL, BAD BLOOD, the hazard chip, BEST
+     IN SHOW and LAST OF THE LINE — in exactly the outline the wave counter, the
+     Slop chip, the stud-book stat chips and the EXPECTED tile also wear. It is
+     a notched slip cut out of the board, the way `.card .tr` already proves. */
   .banner{ position:relative; font-family:var(--f-display); font-size:11px; font-weight:900;
-    letter-spacing:2.2px; text-transform:uppercase; padding:4px 11px; border-radius:2px;
+    letter-spacing:2.2px; text-transform:uppercase; padding:4px 15px 4px 13px; border-radius:0;
     display:inline-block; margin:3px 3px; box-shadow:none;
     transform:rotate(-1.4deg); animation:pop .35s ease;
-    background:rgba(0,0,0,.22); }
-  .banner::before{ content:''; position:absolute; inset:0; border-radius:2px; pointer-events:none;
-    box-shadow:inset 0 0 0 2px currentColor; opacity:.75; }
+    clip-path:polygon(0 0, 100% 0, calc(100% - 7px) 50%, 100% 100%, 0 100%, 5px 50%);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 46%),
+      linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.62));
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.6)) drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  /* the fold: a darker wedge at the notch end, so it reads as cloth with a
+     thickness rather than as a shape with a bite taken out of it */
+  .banner::before{ content:''; position:absolute; inset:0; pointer-events:none;
+    clip-path:inherit; background:linear-gradient(90deg, transparent 78%, rgba(0,0,0,.34));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(0,0,0,.5); }
   @keyframes pop{ from{transform:scale(.5) rotate(-1.4deg); opacity:0}
     to{transform:scale(1) rotate(-1.4deg); opacity:1} }
   .banner.good{ color:#a6ff5e; text-shadow:0 0 9px rgba(166,255,94,.45); }
@@ -1207,8 +1219,13 @@
   #book .bkhead, #book .bkhead .tiny, #book .bkhead .bkinfo,
   #book .bkhead .cap, #book .bkhead .plate{ color:#5c4e2e; }
   #book .bkhead .bkrule{ color:#6b5c39; }
-  #book .bkhead .bdg{ background:rgba(80,62,30,.13) !important;
-    box-shadow:inset 0 0 0 1px rgba(90,70,38,.4); }
+  /* stamped into the page, not boxed on it: the 1px #917c56 hairline measured
+     1.83:1 against the paper — a 1997 table cell */
+  #book .bkhead .bdg{ border-radius:2px;
+    background:
+      linear-gradient(180deg, rgba(255,246,222,.55), rgba(120,96,50,.10)) !important;
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.55), inset 0 1px 0 rgba(255,250,235,.6),
+      0 1px 0 rgba(255,246,222,.35), 0 2px 3px -1px rgba(60,44,20,.4) !important; }
   /* ---- PAPER INK ----
      Four separate measured contrast failures on paper — 2.45, 2.80, 3.28 and
      3.00 to 1 — were all the same mistake: text keeping a colour picked for a
