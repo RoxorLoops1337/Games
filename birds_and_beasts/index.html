@@ -679,19 +679,25 @@
      you could not read the numeral on, and on the cull screen ten of them were
      the loudest thing in the layout. A lozenge, dimmer than the art, with the
      numeral punched INTO the face. */
-  .card .cost{ position:absolute; top:4px; left:4px; min-width:23px; height:18px; padding:0 4px;
-    border-radius:6px / 7px; color:#332a12; font-family:var(--f-display);
-    font-weight:900; font-size:12.5px; z-index:2;
+  /* THE LAST DEFAULT BADGE. A beige rounded-square lozenge — the one object on
+     the card with no bracket, no notch, no rivet, while the card has corner
+     brackets and the trait tag has a pennant. Worse, its numeral measured
+     2.65:1 against its own fill: the lowest-contrast glyph on the card, and the
+     number it holds is what the animal COSTS you. It is a stamped brass token
+     hung on the frame now, with the numeral cut into it. */
+  .card .cost{ position:absolute; top:4px; left:4px; min-width:24px; height:20px; padding:0 4px;
+    border-radius:2px; color:#241d0a; font-family:var(--f-display);
+    font-weight:900; font-size:13px; z-index:2;
     display:flex; align-items:center; justify-content:center;
+    clip-path:polygon(0 0, 100% 0, 100% 66%, 50% 100%, 0 66%);
     background-image:
-      radial-gradient(ellipse 78% 56% at 34% 22%, rgba(255,255,255,.15), transparent 62%),
-      linear-gradient(178deg,#a8977a,#8b7a55 48%,#5f5136);
+      radial-gradient(ellipse 90% 60% at 32% 16%, rgba(255,255,255,.30), transparent 66%),
+      linear-gradient(178deg,#e0c98e,#c2a866 44%,#8d7538);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.28),
-      inset 0 -2px 3px -1px rgba(60,48,24,.9),
-      inset 0 0 0 1px rgba(50,40,20,.7),
-      0 2px 0 #3f3521, 0 3px 6px -2px rgba(0,0,0,.7);
-    text-shadow:0 -1px 0 rgba(255,255,255,.35), 0 1px 1px rgba(30,24,10,.9); }
+      inset 0 1px 0 rgba(255,248,220,.55),
+      inset 0 0 0 1px rgba(60,44,14,.75),
+      0 2px 4px -1px rgba(0,0,0,.75);
+    text-shadow:0 1px 0 rgba(255,246,214,.45); }
   /* A BRAND, burned in. No pill, no background — a scorch mark and a glow. */
   .card .gen{ position:absolute; top:5px; right:7px; font-size:9px; letter-spacing:1.6px; z-index:2;
     font-weight:900; color:rgba(255,196,130,.72);
@@ -805,6 +811,18 @@
   .deckwrap > .grid{ align-content:start; justify-content:center;
     grid-auto-rows:max-content;
     grid-template-columns:repeat(var(--cols,6),118px); }
+  /* THE BARN HOLDS TEN, and the screen could not show ten: at three columns the
+     tenth card was 47.6% visible behind a fade, on the one screen whose entire
+     job is comparing the herd against itself. The column count comes from
+     `gridCols(..., true)` so the orphan-row logic agrees with it. */
+  #cull .deckwrap > .grid{ grid-template-columns:repeat(var(--cols,4),minmax(0,86px)); }
+  #cull .deckwrap .card{ width:100%; max-width:86px; }
+  #cull .deckwrap .card .art{ height:62px; }
+  #cull .deckwrap .card .nm{ font-size:9.5px; min-height:22px; }
+  #cull .deckwrap .card .st{ font-size:11px; gap:4px; }
+  #cull .deckwrap .card .tr{ font-size:7.5px; letter-spacing:.6px; }
+  #cull .deckwrap .card .cost{ width:17px; height:17px; font-size:10px; }
+  #cull .deckwrap .card .gen{ font-size:7.5px; }
   .foeprev{ display:flex; align-items:center; gap:12px; }
   .foeprev .fe{ display:block; width:62px; height:auto; flex:0 0 auto;
     filter:drop-shadow(0 4px 6px rgba(0,0,0,.6)); }
@@ -931,7 +949,7 @@
      3/4 was too tall: the pit ate the screen and the fight happened in a column.
      Square. 4/3 was tried too and left a third of the phone empty below a strip
      of crushed animals. */
-  .pit{ flex:0 0 auto; position:relative; width:100%; aspect-ratio:1 / 1;
+  .pit{ flex:0 0 auto; position:relative; width:100%; aspect-ratio:4 / 5;
     border-radius:10px; overflow:hidden;
     border:2px solid #2b3f26; background:#0d160c;
     box-shadow:inset 0 8px 22px rgba(0,0,0,.6), inset 0 -3px 0 rgba(255,220,150,.05),
@@ -1027,9 +1045,13 @@
   .verdict .vpips svg{ width:12px; height:12px; }
   .verdict .vpips{ max-width:none; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
-  /* takes whatever the fixed-height pit leaves, and centres the cards in it —
-     so a shorter arena becomes a roomier bench rather than a dead gap */
-  .benchwrap{ position:relative; flex:1 1 auto; display:flex; align-items:stretch;
+  /* A FIXED band. Letting it take the slack made it 282 CSS px — a third of the
+     phone — holding one sentence, and it GREW by 24% the moment the hand
+     emptied. Collapsing it instead would give the height to the pit and bring
+     back the mid-fight resize that the fixed ratio exists to prevent, so the
+     bench is simply the size of the cards it holds and the pit takes the rest
+     of the budget as a taller fixed ratio. */
+  .benchwrap{ position:relative; flex:0 0 auto; display:flex; align-items:center;
     min-height:0; padding-top:7px;
     border-top:6px solid transparent;
     border-image:var(--rule-rope) 6 0 0 0 / 6px 0 0 0 / 0 repeat;
@@ -1048,7 +1070,7 @@
   /* It keeps its height when empty — collapsing it was what let the pit grow.
      And it FILLS the band the shorter pit leaves, so an empty barn is an empty
      barn you can see rather than a caption floating in a hole. */
-  .handrow:empty{ padding:6px; align-items:stretch; }
+  .handrow:empty{ padding:6px; align-items:center; }
   /* `\2014 THEY` — CSS consumes the space after a 4-hex escape as the escape's
      terminator, so the dash printed glued to the next word. `\20` is the space. */
   .handrow:empty::before{ content:'THE BARN IS EMPTY \2014\20THEY ARE ALL OUT THERE';
@@ -1674,7 +1696,7 @@
   .card.big .resem{ min-height:34px; }
   .rsm{ font-family:var(--f-text); font-size:8.5px; letter-spacing:.2px; font-weight:800;
     padding:1px 5px; border-radius:3px; color:#cfe0c2;
-    background:rgba(0,0,0,.34); box-shadow:inset 0 0 0 1px rgba(140,190,110,.28); }
+    background:rgba(0,0,0,.42); box-shadow:inset 0 0 0 1px rgba(150,205,115,.55); }
   .rsm.nw{ color:#ffc9ea; box-shadow:inset 0 0 0 1px rgba(255,138,212,.55); }
   #hSub{ position:relative; z-index:1; }
 
@@ -3892,10 +3914,18 @@ function drawBeast(cv, c){
   // Every leg used to end in a butt-capped rectangle with two hard 90-degree
   // corners — no taper, no foot, no toe. At fight scale it read as a clipping
   // bug. Each one lands on a pad, and the pad points the way the animal faces.
+  // `stub()` and `foot()` both filled `dark` and stroked `ink` — identical, so
+  // leg and pad were one silhouette with a bulge. And the pad's aspect and size
+  // matched the floor litter's droppings exactly, so at fight scale a foot and
+  // a piece of dung were the same object. Lighter value, narrower, with a toe.
   const foot = (x) => {
     ctx.beginPath();
-    ctx.ellipse(x + 1.7 * sz, 1.4, 4.8 * sz, 2.7 * sz, 0, 0, Math.PI * 2);
-    ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
+    ctx.ellipse(x + 1.5 * sz, 1.3, 3.7 * sz, 2.0 * sz, 0, 0, Math.PI * 2);
+    ctx.fillStyle = top; ctx.fill(); stroke(ink, 1.8);
+    ctx.beginPath();
+    ctx.moveTo(x + 3.4 * sz, 0.4); ctx.lineTo(x + 5.6 * sz, -0.5);
+    ctx.lineTo(x + 3.6 * sz, 2.2); ctx.closePath();
+    ctx.fillStyle = top; ctx.fill(); stroke(ink, 1.5);
   };
   const stub = (x) => {
     ctx.beginPath(); ctx.rect(x - 3 * sz, 0, 6 * sz, 10);
@@ -4345,13 +4375,16 @@ function cardEl(c, opts){
 }
 /** Columns from the COUNT, not from auto-fill: ten cards go 5+5 rather than
  *  eight and an orphan row with half the barn empty beside it. */
-function gridCols(el, n){
+function gridCols(el, n, narrow){
   if (!el || !el.style || !el.style.setProperty) return;
   if (n < 1){ el.style.setProperty('--cols', 1); return; }
   let w = 0;
   try { w = (el.parentNode && el.parentNode.clientWidth) || 0; } catch (e){}
   if (!w){ try { w = window.innerWidth * 0.92; } catch (e){ w = 900; } }
-  const per = w < 300 ? 92 : w < 560 ? 112 : 128;
+  // `narrow` is the cull screen, whose cards are deliberately smaller so that
+  // THE BARN HOLDS TEN can actually show ten
+  const per = narrow ? (w < 300 ? 72 : 86)
+    : (w < 300 ? 92 : w < 560 ? 112 : 128);
   const fit = Math.floor((w - 18) / per);
   // on a narrow frame cap at 4, so ten head go 4+3+3 rather than 3+3+3 and a
   // lone orphan sitting next to two-thirds of an empty row
@@ -5031,8 +5064,14 @@ function drawPit(){
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(px2 + w2 - 1.5, top2, 1.5, hgt);
   };
   // YOUR GATE: two posts and two crossbars, standing open on the near sand
+  // Same bug the enemy arch had, at your end: the posts were hardcoded off the
+  // canvas edge while your beasts walk out at px(GATE_X), 48.7 CSS px to the
+  // right of them — so your animal entered from open sand, in the moment you
+  // are watching for it. The gate comes off the world too.
   const gw = W * 0.042, gTop = sandTop + sandH * 0.06, gH = sandH * 0.90;
-  const gx0 = W * 0.004, gx1 = W * 0.098, gRight = gx1 + gw;
+  const _gpad = SPR * 0.62;
+  const gcx = _gpad + (GATE_X / AW) * (W - _gpad * 2);
+  const gx0 = Math.max(0, gcx - gw * 1.9), gx1 = gcx + gw * 0.9, gRight = gx1 + gw;
   // the head-beam across the top: without it the posts are just two sticks
   ctx.fillStyle = '#6b5324';
   ctx.fillRect(gx0, gTop - Math.max(5, H * 0.012), gRight - gx0, Math.max(6, H * 0.014));
@@ -6101,6 +6140,7 @@ function revealLitter(){
       const rs = document.createElement('div');
       rs.className = 'resem';
       card.appendChild(rs);
+      provChips(card, res);          // both chicks, before you choose
     }
     wrap.appendChild(card);
     const tagline = document.createElement('div');
@@ -6205,6 +6245,33 @@ function resemblance(wrap, res){
     });
   });
 }
+/** The same provenance chips, printed straight in with no threads and no
+ *  sound — for EVERY chick, the moment the clutch is revealed.
+ *  `resemblance()` only ever ran from the pick handler, so the game told you
+ *  which parent each gene came from AFTER you had already committed to one.
+ *  That is the headline mechanic of the whole game arriving as a receipt. It is
+ *  a decision aid now; the animated version still plays on the one you pick. */
+function provChips(card, res){
+  const h = R.lastHatch; if (!h || !card || !card.querySelector) return;
+  const prov = res.child.vis && res.child.vis.prov;
+  if (!prov) return;
+  const strip = card.querySelector('.resem');
+  if (!strip || !strip.appendChild) return;
+  strip.innerHTML = '';
+  const seen = {};
+  Object.keys(GENE_SPOTS).filter((k) => {
+    if (!prov[k]) return false;
+    if (seen[prov[k]]) return false;
+    seen[prov[k]] = 1; return true;
+  }).slice(0, 2).forEach((k) => {
+    const who = prov[k], sp = GENE_SPOTS[k];
+    const row = document.createElement('span');
+    row.className = 'rsm' + (who === 'new' ? ' nw' : '');
+    row.textContent = who === 'new' ? sp.lbl + ' — new'
+      : sp.lbl + ' — ' + shortName(who === 'a' ? h.a.name : h.b.name);
+    strip.appendChild(row);
+  });
+}
 function shortName(s){ return String(s).split(' ')[0]; }
 function chickBanners(res){
   const t = res.tags;
@@ -6303,7 +6370,7 @@ function goCull(){
   const g = $('cGrid'); g.innerHTML = '';
   if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
-  gridCols(g, sorted.length);
+  gridCols(g, sorted.length, true);
   sorted.forEach((c) => {
     const el = cardEl(c);
     el.onclick = () => {
