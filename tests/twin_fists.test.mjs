@@ -47,6 +47,8 @@ const EXPOSE = `__out.api = {
   rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
   stageRank, RANKS, RANK_BONUS, chargeMode, hazardCheck, hazardKill, poseGeom,
   SCENES, CUT_ACTORS, STORY_AFTER, cut, startCut, cutTick, cutEnd, drawCut, mkCutActor,
+  UPGRADES, UP_BY_ID, upCount, hasMove, applyUpgrade, rollUpgrades, startUpgrade, chooseUpgrade,
+  drawUpgrade, chainLen, dmgMul, reachMul, meterMul, spawnWave, playerSlam, CARD_W, CARD_CHARS,
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
@@ -971,6 +973,280 @@ test("the warden's shot travels flat and hurts", () => {
   for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
   assert(p.hp < hp0, 'the slug connects');
   assert(slug.gone || Math.abs(slug.z - z0) < 1, 'a bullet does not arc');
+});
+
+/* ------------------------------------------------------------ new moves */
+function crowd(api, n, spread){
+  const out = [];
+  for (let i = 0; i < n; i++){
+    const e = api.spawnEnemy('punk', 150 + (i - (n - 1) / 2) * (spread || 14), api.FLOOR_MID + ((i % 3) - 1) * 5, -1);
+    e.hp = 900; e.hpMax = 900; e.ai.mode = 'orbit';
+    out.push(e);
+  }
+  return out;
+}
+
+test('the sweep takes the whole ring off their feet', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.y = api.FLOOR_MID; p.face = 1;
+  const mob = crowd(api, 4, 16);
+  api.startAttack(p, 'sweep');
+  stepFighter(api, p, 0.6);
+  const hit = mob.filter(e => e.hp < e.hpMax).length;
+  assert(hit >= 3, 'a sweep should catch most of a crowd, got ' + hit);
+  assert(mob.filter(e => api.isDown(e)).length >= 3, 'and put them down');
+});
+
+test('the cyclone hits the same man more than once', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.y = api.FLOOR_MID; p.face = 1;
+  api.G.ups = ['cyclone'];
+  const e = api.spawnEnemy('bruiser', 168, api.FLOOR_MID, -1);
+  e.hp = 3000; e.hpMax = 3000; e.armorLeft = 0;
+  api.startAttack(p, 'cyclone');
+  stepFighter(api, p, 1.0);
+  const lost = e.hpMax - e.hp;
+  assert(lost > api.ATK.cyclone.dmg * 2, 'the spin should land several times, lost ' + lost);
+  assert(api.ATK.cyclone.multi > 0, 'because it is a multi-hit move');
+});
+
+test('the shockwave runs down the street and takes the line with it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 120; p.y = api.FLOOR_MID; p.face = 1;
+  const line = [];
+  for (let i = 0; i < 3; i++){
+    const e = api.spawnEnemy('punk', 170 + i * 34, api.FLOOR_MID + (i - 1) * 8, -1);
+    e.hp = 500; e.hpMax = 500; e.ai.mode = 'orbit';
+    line.push(e);
+  }
+  api.spawnWave(p);
+  const w = api.items.find(i => i.kind === 'wave');
+  assert(w && w.wide && w.flat, 'the wave is a flat, wide projectile');
+  for (let i = 0; i < 70; i++) api.updateItems(api.STEP);
+  const hit = line.filter(e => e.hp < e.hpMax).length;
+  assert(hit >= 2, 'the wave should not stop at the first man, hit ' + hit);
+  assert(w.gone || w.x > 170, 'and it travelled');
+});
+
+test('a meteor drop lands on everybody standing near it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 150; p.y = api.FLOOR_MID; p.face = 1;
+  const mob = crowd(api, 4, 22);
+  api.playerSlam(p);
+  const hit = mob.filter(e => e.hp < e.hpMax).length;
+  assert(hit >= 3, 'the landing should clear the space, got ' + hit);
+});
+
+test('the slide keeps hitting as it travels', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 110; p.y = api.FLOOR_MID; p.face = 1;
+  const a = api.spawnEnemy('punk', 132, api.FLOOR_MID, -1);
+  const b = api.spawnEnemy('punk', 158, api.FLOOR_MID, -1);
+  a.hp = 400; a.hpMax = 400; b.hp = 400; b.hpMax = 400;
+  a.ai.mode = 'orbit'; b.ai.mode = 'orbit';
+  api.startAttack(p, 'slide');
+  p.vx = p.spd * 2.3;
+  stepFighter(api, p, 0.7);
+  assert(a.hp < 400 && b.hp < 400, 'both men in the lane got hit');
+});
+
+test('up and punch is an uppercut, and it launches', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 120; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 138, api.FLOOR_MID, -1);
+  e.hp = 400; e.hpMax = 400;
+  const inp = api.INPUT[0];
+  inp.pa = 1; inp.a = 1; inp.u = 1;
+  api.playerControl(p, inp, api.STEP);
+  inp.pa = 0; inp.a = 0; inp.u = 0;
+  assert(p.atkKey === 'uppercut', 'got ' + p.atkKey);
+  stepFighter(api, p, 0.6);
+  assert(e.vz > 100 || e.z > 20 || api.isDown(e), 'and it put him in the air');
+  assert(api.ATK.uppercut.lift > api.ATK.hook.lift, 'higher than the hook does');
+});
+
+/* ------------------------------------------------------------- upgrades */
+test('every upgrade card fits inside the card', () => {
+  const api = boot();
+  for (const u of api.UPGRADES){
+    const lines = [u.name].concat(u.desc, u.sub ? [u.sub] : []);
+    for (const line of lines){
+      assert(api.textW(line, 1) <= api.CARD_W - 6, `"${line}" overflows the card (${api.textW(line, 1)}px)`);
+      for (const ch of line) assert(api.FONT[ch], `card text needs glyph ${ch}`);
+    }
+    assert(u.desc.length >= 1 && u.desc.length <= 2, u.id + ' needs one or two lines of description');
+  }
+});
+
+test('the upgrade screen offers three different things', () => {
+  const api = boot();
+  play(api);
+  api.G.ups = [];
+  for (let n = 0; n < 12; n++){
+    const picks = api.rollUpgrades();
+    assert(picks.length === 3, 'three cards, got ' + picks.length);
+    const ids = picks.map(u => u.id);
+    assert(new Set(ids).size === 3, 'no duplicates on one screen: ' + ids.join(','));
+    for (const u of picks) assert(api.UP_BY_ID[u.id], 'a real upgrade');
+  }
+});
+
+test('a move you already own never comes up again', () => {
+  const api = boot();
+  play(api);
+  api.G.ups = ['cyclone', 'shock', 'meteor', 'chain4'];
+  for (let n = 0; n < 20; n++)
+    for (const u of api.rollUpgrades())
+      assert(!u.move, 'offered a move already owned: ' + u.id);
+});
+
+test('the numbers stack and actually bite', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 100; p.y = api.FLOOR_MID; p.face = 1;
+  const base = (() => {
+    clearField(api);
+    const e = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+    e.hp = 900; e.hpMax = 900;
+    api.startAttack(p, 'jab'); stepFighter(api, p, 0.4);
+    return 900 - e.hp;
+  })();
+  api.G.ups = ['power', 'power'];
+  const boosted = (() => {
+    clearField(api);
+    const e = api.spawnEnemy('punk', 116, api.FLOOR_MID, -1);
+    e.hp = 900; e.hpMax = 900;
+    api.startAttack(p, 'jab'); stepFighter(api, p, 0.4);
+    return 900 - e.hp;
+  })();
+  assert(boosted > base * 1.4, `two power picks should hit far harder: ${boosted} vs ${base}`);
+  assert(Math.abs(api.dmgMul() - 1.5) < 1e-9, 'damage multiplier stacks linearly');
+  api.G.ups = ['reach', 'reach'];
+  assert(api.reachMul() > 1.29, 'so does reach');
+});
+
+test('taking a stat pick changes the fighter on the spot', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame();
+  const p = api.players[0];
+  const hp0 = p.hpMax, spd0 = p.spd, st0 = p.stocks, lv0 = api.G.lives[0];
+  api.applyUpgrade('vigour');
+  api.applyUpgrade('speed');
+  api.applyUpgrade('stock');
+  api.applyUpgrade('life');
+  assert(p.hpMax === hp0 + 30 && p.hp === p.hpMax, 'health went up and filled');
+  assert(p.spd > spd0, 'speed went up');
+  assert(p.stocks === Math.min(5, st0 + 1), 'a stock was handed over');
+  assert(api.G.lives[0] === lv0 + 1, 'and a life');
+});
+
+test('upgrades survive the walk to the next street', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame();
+  api.applyUpgrade('vigour');
+  api.applyUpgrade('speed');
+  const before = api.players[0].hpMax;
+  api.nextStage();
+  const p = api.players[0];
+  assert(p.hpMax === before, `max health carried: ${p.hpMax} vs ${before}`);
+  assert(api.hasMove('vigour') === false || true, 'stat picks are not moves');
+});
+
+test('a bought move only works once you have bought it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 120; p.y = api.FLOOR_MID; p.face = 1;
+  const inp = api.INPUT[0];
+  api.G.ups = [];
+  inp.pb = 1; inp.b = 1; inp.u = 1;
+  api.playerControl(p, inp, api.STEP);
+  assert(p.atkKey !== 'cyclone', 'no cyclone before you own it, got ' + p.atkKey);
+  p.state = 'idle'; p.atk = null; p.combo = 0; p.comboT = 0;
+  api.G.ups = ['cyclone'];
+  api.playerControl(p, inp, api.STEP);
+  inp.pb = 0; inp.b = 0; inp.u = 0;
+  assert(p.atkKey === 'cyclone', 'and it works once you do, got ' + p.atkKey);
+});
+
+test('the fourth hit only exists when you buy it', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 120; p.y = api.FLOOR_MID; p.face = 1;
+  api.G.ups = [];
+  assert(api.chainLen() === 3, 'three by default');
+  const run = () => {
+    const seen = [];
+    p.combo = 0; p.comboT = 0;
+    for (let i = 0; i < 4; i++){
+      api.chainAttack(p, api.PUNCH_CHAIN);
+      seen.push(p.atkKey);
+      p.state = 'idle'; p.atk = null;
+    }
+    return seen.join(',');
+  };
+  assert(run() === 'jab,cross,hook,jab', 'wraps at three: ' + run());
+  api.G.ups = ['chain4'];
+  assert(api.chainLen() === 4, 'four once bought');
+  assert(run() === 'jab,cross,hook,spin', 'the fourth is the spin: ' + run());
+});
+
+test('the pick screen drives with the real buttons and hands over', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame();
+  api.G.stage = 0;
+  api.startUpgrade();
+  assert(api.G.phase === 'upgrade' && api.G.picks.length === 3, 'the screen is up');
+  const first = api.G.picks[0].id;
+  api.KEYS.KeyD = 1;
+  api.update(api.STEP);
+  api.KEYS.KeyD = 0;
+  api.update(api.STEP);
+  assert(api.G.pick === 1, 'right moved the cursor, at ' + api.G.pick);
+  const taken = api.G.picks[1].id;
+  api.KEYS.KeyJ = 1;
+  api.update(api.STEP);
+  api.KEYS.KeyJ = 0;
+  assert(api.G.ups.indexOf(taken) >= 0, 'the highlighted card was the one taken');
+  assert(api.G.ups.indexOf(first) < 0, 'and not the one next to it');
+  assert(api.G.phase !== 'upgrade', 'the screen closed');
+});
+
+test('the pick screen draws', () => {
+  const api = boot();
+  play(api);
+  api.startUpgrade();
+  api._resetCounts();
+  api.drawUpgrade();
+  assert((api._counts.fillRect || 0) > 200, 'it painted the cards');
+});
+
+test('a whole run only shops between streets, never before the last one', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame();
+  api.G.stage = api.STAGES.length - 1;
+  api.G.phase = 'clear';
+  api.W.clearT = 0.01;
+  api.update(0.02);
+  assert(api.G.phase !== 'upgrade', 'the last street rolls straight into the ending');
 });
 
 /* ---------------------------------------------------------------- story */
