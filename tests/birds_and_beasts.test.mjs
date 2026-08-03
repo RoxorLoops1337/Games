@@ -44,11 +44,24 @@ function loadGame(store = {}){
   if (!m) throw new Error('no inline <script> found in birds_and_beasts/index.html');
 
   const ctx = mkCtx();
+  // classList used to be four no-ops, which meant every "this card is marked"
+  // assertion silently passed on a stub that had thrown the mark away. It is a
+  // real set now, kept in sync with .className in both directions.
   const mkEl = () => {
+    const cls = new Set();
     const el = {
-      style: {}, dataset: {}, children: [], className: '', innerHTML: '', textContent: '',
+      style: {}, dataset: {}, children: [], textContent: '',
       title: '', width: 236, height: 164, disabled: false, onclick: null,
-      classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+      classList: {
+        add(){ for (const c of arguments) if (c) cls.add(c); },
+        remove(){ for (const c of arguments) cls.delete(c); },
+        toggle(c, on){
+          const want = on === undefined ? !cls.has(c) : !!on;
+          if (want) cls.add(c); else cls.delete(c);
+          return want;
+        },
+        contains: (c) => cls.has(c),
+      },
       addEventListener: noop, removeEventListener: noop,
       appendChild(c){ this.children.push(c); return c; },
       remove: noop, setAttribute: noop, removeAttribute: noop,
@@ -56,6 +69,20 @@ function loadGame(store = {}){
       querySelector: () => mkEl(), querySelectorAll: () => [],
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
     };
+    // `g.innerHTML = ''` is how every grid in the game clears itself before it
+    // repopulates. On the old stub that was a no-op, so children accumulated
+    // across renders and any count taken from them was fiction.
+    let html = '';
+    Object.defineProperty(el, 'innerHTML', {
+      get(){ return html; },
+      set(v){ html = '' + v; el.children.length = 0; },
+      enumerable: true, configurable: true,
+    });
+    Object.defineProperty(el, 'className', {
+      get(){ return Array.from(cls).join(' '); },
+      set(v){ cls.clear(); for (const c of String(v).split(/\s+/)) if (c) cls.add(c); },
+      enumerable: true, configurable: true,
+    });
     return el;
   };
   const els = {};
@@ -1079,6 +1106,49 @@ function autoRun(seed){
   eq(G4.loadFounder(), null, 'a corrupt founder save degrades to none');
   G4.newRun(1);
   eq(G4.R.deck.length, 8, 'and the run starts normally anyway');
+}
+
+/* ============================== kin marks ================================= */
+// Sharing blood is the biggest single swing in the game (wild x1.85 plus a 30%
+// curse roll) and it used to be announced only after both parents were locked
+// in. The marks have to be on the grid after the FIRST tap or they are useless.
+{
+  const G = loadGame({});
+  G.ui.boot();
+  G.ui.startRun();
+  G.newRun(7);                           // fixed seed: the same barn every run
+  const d = G.R.deck;
+  d[1].blood = d[1].blood.concat([d[0].id]);
+  d[2].blood = d[2].blood.concat([d[0].id]);
+
+  eq(G.kinIn([]).length, 0, 'nothing is marked before a parent is picked');
+  const k = G.kinIn([d[0].id]);
+  eq(k.length, 2, 'both relatives of the picked beast are kin');
+  ok(k.indexOf(d[0].id) < 0, 'the picked beast is never its own kin');
+  ok(k.indexOf(d[1].id) >= 0 && k.indexOf(d[2].id) >= 0, 'and they are the right two');
+  eq(G.kinIn([d[0].id, d[1].id]).length, 1, 'picking a relative leaves the third marked');
+  eq(G.kinIn([d[3].id]).length, 0, 'an unrelated beast lights nothing up');
+
+  G.R.nest = [d[0].id];
+  G.ui.renderNest();
+  const grid = global.document.getElementById('nGrid');
+  eq(grid.children.length, d.length, 'the barn draws every beast');
+  const marked = grid.children.filter((el) => el.classList.contains('kin'));
+  eq(marked.length, 2, 'one tap marks both relatives in the barn');
+  const sel = grid.children.filter((el) => el.classList.contains('sel'));
+  eq(sel.length, 1, 'and the picked beast still reads as picked, not as kin');
+  ok(!sel[0].classList.contains('kin'), 'a card is never both at once');
+  const hint = global.document.getElementById('nHint').innerHTML;
+  ok(/share/.test(hint), 'the hint says how many share blood');
+  ok(/cursed/.test(hint), 'and names the risk before the second pick, not after');
+
+  G.R.nest = [d[3].id];
+  G.ui.renderNest();
+  eq(global.document.getElementById('nGrid').children.filter(
+    (el) => el.classList.contains('kin')).length, 0,
+    'picking an unrelated beast clears the marks');
+  ok(!/cursed/.test(global.document.getElementById('nHint').innerHTML),
+    'and drops the warning with them');
 }
 
 /* =============================== the UI =================================== */
