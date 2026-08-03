@@ -177,6 +177,33 @@
     text-shadow:0 1px 0 rgba(0,0,0,.6); }
   .res .rate{ color:#586479; font-size:var(--t1); font-weight:600; letter-spacing:.2px; }
   .res .rate:empty{ display:none; }
+  /* A counter that is still catching up leans very slightly bright — enough to
+     say "this is moving" without being a second animation to look at. */
+  .res.rolling b{ filter:brightness(1.14); }
+  .res{ position:relative; }
+  /* The chip a spend throws off. Absolute, so it cannot move the bar it leaves;
+     pointer-events off, so it cannot eat a click on the way past. */
+  /* Downward, not up. The counters are the topmost thing on the screen, so a
+     chip that rises leaves the window and is clipped by it — it read as a
+     flicker at the very top of the bar. Falling, it crosses the world, where
+     there is nothing but sky to compete with. */
+  .rfloat{ position:absolute; left:50%; top:100%; transform:translateX(-50%);
+    font-size:12.5px; font-weight:800; color:#ffd66b; pointer-events:none; z-index:9;
+    text-shadow:0 1px 3px rgba(0,0,0,.85); white-space:nowrap;
+    animation:rfl .95s cubic-bezier(.2,.7,.3,1) forwards; }
+  .rfloat.down{ color:#ff9d94; }
+  @keyframes rfl{
+    0%{ opacity:0; transform:translate(-50%,-6px) scale(.8); }
+    16%{ opacity:1; transform:translate(-50%,2px) scale(1.1); }
+    100%{ opacity:0; transform:translate(-50%,30px) scale(1); }
+  }
+  /* The sheet arrives rather than appearing. A short overshoot reads as
+     something being put down on the table. */
+  #modal.on .sheet{ animation:sheetin .34s cubic-bezier(.2,.9,.3,1.08); }
+  @keyframes sheetin{
+    from{ opacity:0; transform:translateY(16px) scale(.965); }
+    to{ opacity:1; transform:none; }
+  }
   #rGold b{ color:var(--gold); text-shadow:0 0 12px rgba(255,207,77,.22); }
   #rIron b{ color:var(--iron); } #rWood b{ color:var(--wood); }
   #rFood b{ color:#e8d36a; }
@@ -13591,12 +13618,59 @@ function gatherRate(s, k){
 }
 const laneArmy = (side) => G.units.filter(u => !u.dead && !u.isHero && u.side === side).length;
 
+/* ------------------------------------------------------------- the counters
+   A number that snaps tells you it changed and nothing else. A number that
+   ROLLS tells you it changed, roughly how far, and in which direction, out of
+   the corner of your eye — which is where a resource counter is read from,
+   always, because you are looking at the bridge.
+
+   All of this is display. `hudShow` is what is printed; `me().res` is what the
+   game spends, and nothing here writes to it or is read by anything that does.
+   A resync or a new match jumps by thousands, so a gap that big is snapped
+   rather than counted through — an odometer spinning for four seconds after a
+   rejoin is not juice, it is a fault. */
+const hudShow = {}, hudLast = {};
+const HUD_EASE = 6.5;          // how fast the roll closes, per second
+const HUD_SNAP = 4000;         // a gap bigger than this is a resync, not a gain
+function hudRoll(dt){
+  const s = me();
+  if (!s) return;
+  for (const k of ['gold', 'iron', 'wood', 'food']){
+    const now = s.res[k];
+    if (hudShow[k] === undefined || Math.abs(now - hudShow[k]) > HUD_SNAP){ hudShow[k] = now; continue; }
+    hudShow[k] += (now - hudShow[k]) * Math.min(1, dt * HUD_EASE);
+    if (Math.abs(now - hudShow[k]) < .5) hudShow[k] = now;
+  }
+}
+/* What a purchase LOOKS like. The cost is on the button you pressed and the
+   counter is at the other end of the screen, so a spend used to be a number
+   quietly becoming a smaller number somewhere you were not looking. A chip
+   floating off the counter it came out of says which pot paid, and how much,
+   at the place the answer lives. */
+function hudFloat(el, txt, cls){
+  if (HEADLESS || !el) return;
+  const f = document.createElement('span');
+  f.className = 'rfloat' + (cls ? ' ' + cls : '');
+  f.textContent = txt;
+  el.appendChild(f);
+  setTimeout(() => f.remove(), 900);
+}
+
 function syncHud(){
   const s = me();
   for (const k of ['gold','iron','wood','food']){
     const el = $('r' + k[0].toUpperCase() + k.slice(1));
     if (!el) continue;
-    el.querySelector('b').textContent = fmt(s.res[k]);
+    // A spend is a fall the gather rate cannot explain, so it is worth saying
+    // out loud; the drip upward is not, or every counter would be confetti.
+    const now = s.res[k];
+    const was = hudLast[k];
+    if (was !== undefined && now < was - .5 && was - now < HUD_SNAP)
+      hudFloat(el, '-' + Math.round(was - now), 'down');
+    hudLast[k] = now;
+    if (hudShow[k] === undefined) hudShow[k] = now;
+    el.querySelector('b').textContent = fmt(hudShow[k]);
+    el.classList.toggle('rolling', Math.abs(now - hudShow[k]) > .5);
     const rate = gatherRate(s, k);
     el.querySelector('.rate').textContent = rate > 0 ? '+' + rate.toFixed(1) : '';
   }
@@ -14096,6 +14170,13 @@ let uiDown = false, uiWaited = 0;
 const UI_WAIT_CAP = .66;
 
 function uiTick(dt){
+  // The counters are repainted every frame rather than on the dock's own
+  // fifth-of-a-second clock: a roll drawn five times a second is not a roll, it
+  // is five numbers. syncHud writes five strings and toggles two classes — it
+  // is the cheap half of syncUI, and the expensive half (rebuilding the dock's
+  // innerHTML) stays on its slow clock where it belongs.
+  hudRoll(dt);
+  if (!HEADLESS && G.sides.length) syncHud();
   toastStep(dt * toastRate());
   uiT -= dt;
   if (uiT <= 0){
@@ -15028,7 +15109,29 @@ function doAction(a){
   if (a === 'close'){ if (G.paused) setPaused(false); else if (G.state === 'play' && !HEADLESS) closeModal(); return; }
 }
 
+/* Every control makes a noise, from one place. Thirteen call sites had a
+   `sfx('click')` on them and everything else was silent, which is not a design
+   — it is thirteen people remembering. A control is a control: if it is one of
+   the shapes this interface presses, it clicks, and a new button added next
+   month clicks without anybody thinking about it.
+
+   On pointerdown rather than click, because the sound is feedback for the
+   PRESS. A click fires on release and can be several hundred milliseconds
+   later, by which time the noise is a comment on something you already did.
+   Disabled controls stay quiet: a dead button that clicks is a lie. */
+const PRESSABLE = '.abtn,.sq,.tbtn,.vbtn,.pick,.big,.hnew,.dtab,.hcard,.qm,.job';
+function wirePress(){
+  if (HEADLESS || typeof document === 'undefined') return;
+  document.addEventListener('pointerdown', (e) => {
+    const el = e.target && e.target.closest && e.target.closest(PRESSABLE);
+    if (!el || el.disabled) return;
+    audioStart();
+    sfx('click');
+  }, { passive:true });
+}
+
 function wire(){
+  wirePress();
   const s0 = () => me();
   // Held while a press is in flight anywhere in the dock, so the refresh above
   // does not delete the button between press and release. Release and cancel
@@ -16038,7 +16141,7 @@ window.IB = {
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, RAIL_SH, deckFarY, railShadowOff, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   BAR, barState, dmgAge, chromaDown, tintTo, hexRGB, hexOf, STRUCT_KEEPS, LABEL_HOT,
   FLOAT_TIER, FLOAT_GRAZE, floatW, floatTier, FLOAT_JIT, FLOAT_JIT_MIN, jitter,
-  RES_ICON, UI_ICON, ico, cico,
+  RES_ICON, UI_ICON, ico, cico, hudShow, hudRoll, HUD_EASE, HUD_SNAP, PRESSABLE, hudFloat,
   LANE_PX, FRAME, laneFitZoom, LABEL_QUIET, LABEL_MARK, labelMark, DOCK_TUTOR, dockHelp,
   get dockHelpOn(){ return dockHelpOn; }, set dockHelpOn(v){ dockHelpOn = v; },
   floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, throwOff, smear, softShadow, shadowParts, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
