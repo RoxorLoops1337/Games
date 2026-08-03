@@ -1710,6 +1710,13 @@ function makeSide(i, ai){
     troopPend:[],
     structs:[], superT:0, aiT:0, aiBuild:0, waveKind:'levy',
     kills:0, structsKilled:0, gathered:0, spent:0, heroKills:0,
+    // The two commander spells, and their cooldowns. They belong to the HOLD:
+    // a hold with no heroes still gets both, a hold with three does not get
+    // six. bombT/bombX/bombN are the shells one of them leaves walking along
+    // the lane — primitive countdowns on this object rather than a G.zones
+    // entry, because a resync drops the zone list wholesale.
+    spells:[null, null], spellCd:[0, 0],
+    bombT:0, bombX:0, bombN:0,
   };
   // Every hold opens with a pit and a farm already standing.
   s.plot[5] = { type:'pit', lvl:1, tile:5 };
@@ -1724,6 +1731,7 @@ function makeSide(i, ai){
       struct:true, side:i, key:d.key, n:d.n, ord:0, x, y:yo,
       hp:d.hp, base:d, mhp:d.hp, ad:d.ad, as:d.as, rng:d.rng, armor:d.armor, mr:d.mr, r:d.r,
       cd:0, dead:false, downT:0, target:null, hitT:0, id:G.uid++, chipHp:d.hp,
+      repT:0, wardT:0,                          // Rampart: masons, and a warded face
     });
   }
   // Attack order runs from the bridge inward: outer turret first, gates last.
@@ -2113,6 +2121,24 @@ function ecoStep(s, dt){
   }
   for (const b of s.plot) if (b && b.raise > 0) b.raise = Math.max(0, b.raise - dt * 1.6);
   if (s.superT > 0) s.superT = Math.max(0, s.superT - dt);
+  // The two commander spells recover here, and the shells one of them left
+  // walking along the lane land here. Both are plain countdowns on the side
+  // object: no ground zone to be dropped by a resync, no live reference to
+  // re-link, nothing that has to be told the difference between a machine
+  // drawing the board and one that is not.
+  for (let i = 0; i < SPELL_SLOTS; i++)
+    if (s.spellCd[i] > 0) s.spellCd[i] = Math.max(0, s.spellCd[i] - dt);
+  if (s.bombN > 0){
+    s.bombT -= dt;
+    while (s.bombN > 0 && s.bombT <= 0){
+      s.bombT += BOMB.gap;
+      // Three impacts, at the point and three units either side of it. The
+      // first lands on the tick the order is given, so the walk reads outward
+      // from where it was aimed.
+      bombardHit(s, s.bombX + (BOMB.n - s.bombN - 1) * BOMB.spread);
+      s.bombN--;
+    }
+  }
 }
 
 /* =====================================================================
@@ -2125,6 +2151,15 @@ const gateX = (side) => side === 0 ? STRUCTS[0].x : C.LANE_LEN - STRUCTS[0].x;
 function spawnUnit(side, kind, o){
   o = o || {};
   const d = UNITS[kind], s = G.sides[side];
+  // The draws come FIRST, before the population cap can refuse the body. A call
+  // that is turned away at C.MAX_UNITS now consumes exactly the same numbers off
+  // the simulation's stream as one that succeeds, so how far the stream has
+  // advanced depends only on how many bodies were ASKED for — never on how many
+  // happened to fit. It is the same rule that keeps the cosmetic stream out of
+  // the simulation, applied to a limit instead of to a guard.
+  const py = o.y !== undefined ? o.y : rr(-2.6, 2.6);
+  const pcd = rr(0, .5);
+  const pph = rnd() * 6.28;
   if (G.units.length >= C.MAX_UNITS) return null;
   const waveScale = 1 + .055 * G.wave;
   let heroHp = 0;
@@ -2141,15 +2176,20 @@ function spawnUnit(side, kind, o){
   const u = {
     id:G.uid++, side, kind, isHero:false, struct:false, paid:!!o.paid,
     x:o.x !== undefined ? o.x : gateX(side) + dirOf(side) * 2.5,
-    y:o.y !== undefined ? o.y : rr(-2.6, 2.6),
+    y:py,
     mhp:Math.round(d.hp * waveScale * hpUp * (1 + bk('hp')) * (o.hpM || 1)), hp:0,
     ad:d.ad * waveScale * adUp * (1 + bk('ad')) * (o.adM || 1),
     armor:d.armor + armUp + bk('armor'), mr:d.mr + armUp + bk('mr'),
     as:d.as * (1 + bk('as')), rng:d.rng + bk('rng'), spd:d.spd * (1 + bk('spd')),
     r:d.r, tdmg:d.tdmg * (1 + bk('tdmg')), magic:!!d.magic, bounty:d.bounty,
-    cd:rr(0, .5), target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
-    burn:null, hitT:0, hitT0:0, hitW:0, swing:0, swing0:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
+    cd:pcd, target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
+    burn:null, hitT:0, hitT0:0, hitW:0, swing:0, swing0:0, life:o.life || 0, ph:pph, dmgTaken:0, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
+    // What a commander spell can leave on a body. Declared here rather than
+    // added on demand so packBody, which walks the object, always sees them —
+    // and so pyreSrc is present as a key, which is what makes NET_REFS pack it
+    // as a body index instead of dropping it as a null.
+    fallT:0, hobT:0, freeT:0, pyreT:0, pyreDps:0, pyreSrc:null,
   };
   u.hp = u.mhp;
   G.units.push(u);
@@ -2215,6 +2255,244 @@ function waveKindFor(s){
   const roll = arnd(s);
   if (roll < .45 || pool.length === 1) return WAVE_KINDS[0];
   return pool[1 + Math.floor(arnd(s) * (pool.length - 1))] || WAVE_KINDS[0];
+}
+
+/* =====================================================================
+   COMMANDER SPELLS
+
+   Two of them, and they belong to the HOLD rather than to a hero. A hold with
+   no heroes still gets both; a hold with three heroes does not get six. They
+   are chosen before the first wave marches and then they are the two levers a
+   commander has that are not economy.
+
+   Everything in here runs inside the simulation, on both machines, so:
+     · no Math.random, Date.now, performance.now or fxRnd, no cam, no sel, no
+       MY, no DOM. Sound and sparks go behind !HEADLESS and draw from fxRnd,
+       which is the cosmetic stream and cannot reach the sim.
+     · Second Muster is the ONLY spell that touches the simulation's own random
+       stream, because it puts bodies on the bridge and spawnUnit draws for a
+       position and a swing phase. Nothing else here draws at all.
+     · nothing pushes a G.zones entry. A zone carries a live source reference
+       and a resync drops the whole list, so a spell built on one would exist on
+       one board and not the other for as long as it burned. Bombard's three
+       impacts are plain countdowns on the side object, ticked in ecoStep.
+   ===================================================================== */
+const SPELL_SLOTS = 2;
+
+// Three shells walk along the lane, 3 units apart and 0.40s apart. Radius 3.6
+// is a little under the width of the deck, so a shot placed on the centre line
+// covers it. Bodies only — see bombardHit.
+const BOMB = { n:3, gap:.40, spread:3.0, r:3.6, dmg:140, slow:.30, slowT:1.5 };
+// Everything of yours that is not a hero, within fourteen of the point, walks
+// home for four seconds — faster than it came, and harder to finish off on the
+// way. Heroes are exempt: they have their own retreat state machine, with its
+// own thresholds, and a second one laid over it would fight it.
+const WITHDRAW = { rad:14, dur:4, spd:1.35, res:.25 };
+// One more wave of the shape already on its way, at 85%. It does NOT advance
+// G.wave and it does not touch G.waveT: the wave clock is the one thing both
+// players read to know what is coming, and a spell that moved it would make
+// the board lie to the person who did not cast it.
+const MUSTER_HP = .85;
+// Three seconds of standing still, then the hero is at its own front structure.
+// Refused within five seconds of taking a blow, and a blow during the channel
+// puts it out — so it is a way home, never a way out of a fight.
+const WARP = { chan:3, calm:5, gap:2 };
+// The enemy's hero, made worse at everything for four and a half seconds. The
+// movement cut is folded in AFTER the 75% slow clamp in speedOf, so a hobble
+// and a freeze cannot multiply into a body that cannot move at all.
+const HOB = { dur:4.5, dmg:.40, as:.30, ms:.40 };
+// Everything on your hero comes off, and for five seconds what lands next
+// barely sticks. The floor stops a very tenacious hero from becoming immune.
+const UNBIND = { dur:5, mul:.30, floor:.15 };
+// Six seconds of pure fire that also shuts the mending down. Deliberately NOT
+// a burn: applyBurn keeps one burn per body and takes the max of the two dps
+// and the two durations, so a hero already carrying an ember proc would either
+// swallow the brand or be swallowed by it, silently, depending on which was
+// bigger. Its own clock, its own branch in statusTick.
+const PYRE = { dur:6, base:22, perWave:2.4, heal:.60 };
+// Masons for five seconds and a warded face for eight.
+const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
+
+const SPELLS = [
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },
+    d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
+  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},
+    d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
+  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 },
+    d:'One more wave of the shape already marching, at 85% health. The wave clock does not move.' },
+  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},
+    d:'Three seconds of raising it, then your hero is back at its own front structure. Broken by a blow.' },
+  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},
+    d:'Their hero hits 40% softer, swings 30% slower and walks 40% slower for four and a half seconds.' },
+  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},
+    d:'Everything on your hero comes off, and for five seconds what lands next barely sticks.' },
+  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},
+    d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
+  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 },
+    d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
+];
+const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
+
+const spellOf = (s, slot) => SPELL[s.spells[slot | 0]] || null;
+const spellReady = (s, slot) => {
+  const d = spellOf(s, slot);
+  return !!d && !(s.spellCd[slot | 0] > 0) && canPay(s, d.cost);
+};
+
+/* A point on the lane. Quantised on the way IN as well as on the way out —
+   the sender rounds to 1/16 before it publishes, and rounding again here means
+   a command that arrived by any other route cannot put one machine's impact a
+   millionth of a unit from the other's. */
+const lanePoint = (v) => clamp(Math.round((+v || 0) * 16) / 16, 0, C.LANE_LEN);
+
+// Resolved exactly the way the `pick` command resolves a hero: by id, off the
+// side's own roster, never by index into a list whose order can differ.
+const ownHero = (s, c) => s.heroes.find(x => x.id === c.hero) || null;
+const foeHero = (s, c) => G.sides[enemyOf(s.i)].heroes.find(x => x.id === c.hero) || null;
+function pyreTarget(s, c){
+  const fs = enemyOf(s.i);
+  for (const u of G.units)
+    if (u.id === c.hero && u.side === fs && !u.dead && (u.isHero || u.kind === 'super')) return u;
+  return null;
+}
+
+/* Choosing what the hold will carry. An ordinary command, refused once the
+   first wave has marched — not a lobby handshake. A command on an early tick
+   inherits the ordering guarantees lockstep already proves, and can be driven
+   headlessly; a handshake would need its own protocol and its own way of going
+   wrong. */
+function chooseSpell(s, slot, id){
+  slot = slot | 0;
+  if (slot < 0 || slot >= SPELL_SLOTS) return 'there are only two slots';
+  if (!SPELL[id]) return 'no such spell';
+  if (G.wave >= 1) return 'the first wave has marched — the orders are set';
+  for (let i = 0; i < SPELL_SLOTS; i++)
+    if (i !== slot && s.spells[i] === id) return 'already in the other slot';
+  s.spells[slot] = id;
+  s.spellCd[slot] = 0;
+  return null;
+}
+
+/* Casting. The target travels with the command, so the effect never reads the
+   caster's screen — a point comes in as `x`, a body as `hero`, a structure as
+   `key`. Refusals happen before anything is paid or started. */
+function castSpell(s, c){
+  const slot = c.slot | 0;
+  if (slot < 0 || slot >= SPELL_SLOTS) return 'there are only two slots';
+  const d = spellOf(s, slot);
+  if (!d) return 'nothing in that slot';
+  if (s.spellCd[slot] > 0) return 'still recovering';
+  if (!canPay(s, d.cost)) return 'not enough resources';
+  const err = SPELL_CAST[d.id](s, c);
+  if (err) return err;
+  pay(s, d.cost);
+  s.spellCd[slot] = d.cd;
+  if (!HEADLESS && forMe(s.i)) sfx('cast');
+  return null;
+}
+
+const SPELL_CAST = {
+  bombard(s, c){
+    s.bombX = lanePoint(c.x); s.bombN = BOMB.n; s.bombT = 0;
+    return null;
+  },
+  withdraw(s, c){
+    const px = lanePoint(c.x);
+    // Heroes are exempt on purpose: they already have a retreat state machine
+    // with its own two thresholds, and a second one laid over it would fight it.
+    nearby(px, WITHDRAW.rad, (u) => {
+      if (u.dead || u.side !== s.i || u.isHero) return;
+      u.fallT = WITHDRAW.dur; u.target = null;
+    });
+    return null;
+  },
+  muster(s){ musterWave(s); return null; },
+  warp(s, c){
+    const h = ownHero(s, c);
+    if (!h) return 'no such hero';
+    if (h.dead || !h.inLane) return 'that hero is not on the bridge';
+    if (h.warpT > 0) return 'the banner is already going up';
+    if (!(G.t - h.dmgTaken > WARP.calm)) return 'not while it is being fought';
+    h.warpT = WARP.chan; h.target = null;
+    return null;
+  },
+  hobble(s, c){
+    const h = foeHero(s, c);
+    if (!h) return 'no such hero';
+    if (h.dead || !h.inLane) return 'that hero is not on the bridge';
+    h.hobT = Math.max(h.hobT || 0, ccDur(h, HOB.dur));
+    return null;
+  },
+  unbind(s, c){
+    const h = ownHero(s, c);
+    if (!h) return 'no such hero';
+    if (h.dead) return 'that hero is down';
+    h.stunT = 0; h.slowT = 0; h.slowP = 0; h.taunt = 0;
+    // pullBy is in NET_REFS, which means a snapshot stores it as an INDEX into
+    // the body table and re-links it on the way back. Clearing the timer and
+    // leaving the reference behind leaves a pointer at a body nothing is
+    // reading — until the next snapshot re-links it to whatever now sits at
+    // that index. The two go together.
+    h.pullT = 0; h.pullBy = null;
+    h.burn = null;
+    h.freeT = UNBIND.dur;
+    return null;
+  },
+  pyre(s, c){
+    const t = pyreTarget(s, c);
+    if (!t) return 'nothing of theirs to brand there';
+    t.pyreT = PYRE.dur;
+    t.pyreDps = PYRE.base + PYRE.perWave * G.wave;
+    // No caster body exists — a spell belongs to the hold, not to anything
+    // standing on the bridge — so the brand has no source. The field is still a
+    // body REFERENCE by construction (statusTick hands it to dealDmg exactly as
+    // burn hands over burn.src), which is why it is in NET_REFS: packed as an
+    // index and re-linked, never copied as a number that means something else.
+    t.pyreSrc = null;
+    return null;
+  },
+  rampart(s, c){
+    const st = s.structs.find(x => x.key === c.key) || null;
+    if (!st) return 'no such structure';
+    if (st.dead) return 'that one is already down';
+    st.repT = RAMPART.dur; st.wardT = RAMPART.ward;
+    return null;
+  },
+};
+
+/* One impact. Deliberately NOT areaHit, which folds `frontStruct(foe)` into
+   every blast: a bombardment is against bodies, and a spell that could also
+   knock a turret down would make the siege it is meant to support redundant. */
+function bombardHit(s, x){
+  const fs = enemyOf(s.i);
+  const hits = [];
+  nearby(x, BOMB.r + 2, (u) => {
+    if (u.dead || u.side !== fs) return;
+    if (hyp(u.x - x, u.y) <= BOMB.r + u.r) hits.push(u);
+  });
+  for (const u of hits){
+    dealDmg(null, u, BOMB.dmg, { magic:true, ability:true });
+    if (!u.dead) applySlow(u, BOMB.slow, BOMB.slowT);
+  }
+  if (!HEADLESS){ ringFx(x, 0, BOMB.r, '#ffbe6a'); shake(2.2, x); sfx('stone', x); }
+  return hits.length;
+}
+
+/* One more wave of the shape already marching. spawnWave's body, at 85%, for
+   one side only — and without touching G.wave or G.waveT, so the wave clock
+   both players read still means what it says. */
+function musterWave(s){
+  const k = WAVE_KINDS.find(w => w.id === s.waveKind) || WAVE_KINDS[0];
+  const M = MUSTER_HP;
+  const n = Math.max(1, 3 + (G.wave >= 8 ? 1 : 0) + k.grunt);
+  for (let i = 0; i < n; i++)
+    spawnUnit(s.i, 'grunt', { y:lerp(-2.4, 2.4, i / Math.max(1, n - 1)), hpM:k.hpM * M });
+  for (let i = 0; i < (k.melee || 0); i++) spawnUnit(s.i, 'melee', { y:i ? 1.2 : -1.2, hpM:M });
+  for (let i = 0; i < k.caster; i++) spawnUnit(s.i, 'caster', { y:i ? 1.8 : -1.8, hpM:M });
+  for (let i = 0; i < k.sup; i++) spawnUnit(s.i, 'super', { y:0, hpM:M });
+  const every = G.wave >= 20 ? 1 : G.wave >= 12 ? 2 : 3;
+  const cannons = (G.wave % every === 0 ? 1 : 0) + k.cannon;
+  for (let i = 0; i < cannons; i++) spawnUnit(s.i, 'cannon', { y:i ? 1.4 : 0, hpM:M });
 }
 
 /* ------------------------------------------------------------------ lookup grid */
@@ -2288,6 +2566,9 @@ function effArmor(u, magic){
   }
   // Armour Plating: bought, priced, described — and read by nothing until now.
   if (u.struct && G.sides[u.side]) r += UP_EFFECT.armor * G.sides[u.side].towerUp.armor;
+  // Rampart's ward. Read here, per hit, exactly like everything else in this
+  // function — baking it into st.armor would leave it on when it ran out.
+  if (u.struct && u.wardT > 0) r += RAMPART.armor;
   if (!u.isHero && !u.struct && u.side !== undefined){
     for (const h of G.sides[u.side].heroes)
       if (!h.dead && h.inLane && Math.abs(h.x - u.x) < 8) r += passVal(h, 'auraArm');
@@ -2343,6 +2624,12 @@ function dealDmg(src, tgt, amt, o){
     if (passVal(tgt, 'pack') && alliesNear(tgt, 7) > 0) t -= passVal(tgt, 'pack');
     amt *= Math.max(.15, t);
   }
+  // A hobbled body hits softer, whatever it is hitting; a body walking home
+  // under Withdraw is harder to finish off on the way. Both read off the target
+  // and the source rather than off any per-hit flag, so every path into this
+  // function — a swing, an ability, a burn, a turret — gets them.
+  if (src && src.hobT > 0) amt *= 1 - HOB.dmg;
+  if (tgt.fallT > 0) amt *= 1 - WITHDRAW.res;
   let dmg = o.pure ? amt : mitigate(amt, tgt, magic);
   if (tgt.shield > 0){
     const ab = Math.min(tgt.shield, dmg);
@@ -2350,6 +2637,9 @@ function dealDmg(src, tgt, amt, o){
   }
   tgt.hitW = hitWeight(dmg, tgt.mhp);
   tgt.hp -= dmg; tgt.hitT = tgt.hitT0 = hitTime(tgt.hitW); tgt.dmgTaken = G.t;
+  // Raising a banner is a channel and a channel breaks. Anything at all that
+  // lands puts it out — which is what stops Warp Banner from being an escape.
+  if (dmg > 0 && tgt.warpT > 0) tgt.warpT = 0;
   if (dmg > 0) hitBurst(tgt, src, magic);
   // Outside the particle budget on purpose. fxRoom is about how many sparks
   // the frame can hold; the camera is not a spark, and shake() already guards
@@ -2420,6 +2710,11 @@ const healSfx = (w) => w >= HEAL.loud ? 'mendBig' : 'mend';
 
 function healUnit(u, amt){
   if (!u || u.dead || amt <= 0) return;
+  // Pyre Brand cuts the mending, not only the health. It goes HERE, for exactly
+  // the reason the sparks do: eleven separate paths put health back on a body
+  // and a reduction applied at the call sites would have missed eight of them.
+  if (u.pyreT > 0) amt *= 1 - PYRE.heal;
+  if (amt <= 0) return;
   const room = u.mhp - u.hp;
   u.hp = Math.min(u.mhp, u.hp + amt);
   // Banked, not spent: what actually went into the body, so overhealing a full
@@ -2608,6 +2903,7 @@ function attackSpeedOf(u){
   // always had the channel and nothing ever read it, so Zeal — the drill that
   // is entirely "+12% attack speed after a kill" — did nothing at all.
   if (u.mb && u.mb.t > 0 && u.mb.as) as *= 1 + u.mb.as;
+  if (u.hobT > 0) as *= 1 - HOB.as;
   return Math.max(.15, as);
 }
 
@@ -2805,16 +3101,24 @@ function chainHit(src, first, amt, jumps){
   }
 }
 
+/* How long a piece of crowd control actually lasts on this body: tenacity
+   first, then whatever Unbind's five seconds of freedom is worth. The two are
+   floored together rather than multiplied without limit, so a very tenacious
+   hero under Unbind is very hard to hold and never outright immune. */
+const ccMul = (t, ten) => t.freeT > 0 ? Math.max(UNBIND.mul * (1 - ten), UNBIND.floor) : 1;
+function ccDur(t, dur){
+  const ten = t.isHero ? passVal(t, 'tenacity') : 0;
+  return dur * (1 - ten) * ccMul(t, ten);
+}
+
 function applySlow(t, pct, dur){
   if (t.struct) return;
-  const ten = t.isHero ? passVal(t, 'tenacity') : 0;
-  dur *= (1 - ten);
+  dur = ccDur(t, dur);
   if (pct >= t.slowP || t.slowT < dur){ t.slowP = Math.max(t.slowP, pct); t.slowT = Math.max(t.slowT, dur); }
 }
 function applyStun(t, dur){
   if (t.struct) return;
-  const ten = t.isHero ? passVal(t, 'tenacity') : 0;
-  t.stunT = Math.max(t.stunT, dur * (1 - ten));
+  t.stunT = Math.max(t.stunT, ccDur(t, dur));
 }
 // A hook has landed and this body is on the end of the chain. The destination
 // was fixed the moment the chain bit, so a pull is a straight line at a fixed
@@ -2823,7 +3127,11 @@ function applyStun(t, dur){
 function applyPull(t, x, y, dur, by){
   if (t.struct) return;
   const ten = t.isHero ? passVal(t, 'tenacity') : 0;
-  const grab = 1 - ten * .5;                       // a braced hero travels less of the way
+  // A braced hero travels less of the way — and so does one that has just been
+  // unbound. Shortening the DURATION here would do nothing at all: pullSp is
+  // distance over duration, so the body would simply arrive sooner at the same
+  // tile. Cutting the distance is what "less of this lands" means for a drag.
+  const grab = (1 - ten * .5) * ccMul(t, ten);
   t.pullX = t.x + (x - t.x) * grab;
   t.pullY = t.y + (y - t.y) * grab;
   t.pullT = dur;
@@ -2858,6 +3166,10 @@ function speedOf(u){
     for (const h of s.heroes) if (!h.dead && h.inLane && Math.abs(h.x - u.x) < 9) sp *= 1 + passVal(h, 'auraMs');
     if (u.mb && u.mb.t > 0) sp *= 1 + u.mb.ms;
   }
+  // Hobble's movement cut goes on AFTER the 75% clamp above, on purpose: inside
+  // it, a hobble and a heavy slow would stack into a body that does not move at
+  // all, and the clamp exists precisely so that cannot happen.
+  if (u.hobT > 0) sp *= 1 - HOB.ms;
   return sp;
 }
 
@@ -2874,6 +3186,20 @@ function statusTick(u, dt){
     u.burn.t -= dt;
     dealDmg(u.burn.src, u, u.burn.dps * dt, { magic:true, pure:true, noHooks:true });
     if (u.burn.t <= 0) u.burn = null;
+  }
+  // Commander spells. Three plain countdowns and one that does damage.
+  if (u.fallT > 0) u.fallT -= dt;
+  if (u.hobT > 0) u.hobT -= dt;
+  if (u.freeT > 0) u.freeT -= dt;
+  // Pyre Brand keeps its own clock rather than going through applyBurn, which
+  // holds ONE burn per body and takes the max of the two dps and the two
+  // durations — so a hero also carrying an ember proc would have silently
+  // swallowed the brand, or been swallowed by it, depending on which number
+  // happened to be larger.
+  if (u.pyreT > 0){
+    u.pyreT -= dt;
+    dealDmg(u.pyreSrc || null, u, u.pyreDps * dt, { magic:true, pure:true, noHooks:true });
+    if (u.pyreT <= 0){ u.pyreT = 0; u.pyreDps = 0; u.pyreSrc = null; }
   }
 }
 
@@ -2899,6 +3225,18 @@ function unitStep(u, dt){
   }
   if (pullStep(u, dt)) return;                    // being dragged beats every other plan
   if (u.stunT > 0) return;
+  // Withdrawn. Walk home, faster than it came, and do not look for anything on
+  // the way — the whole point is that the line breaks off rather than trading.
+  if (u.fallT > 0){
+    u.target = null;
+    const gx = gateX(u.side) - dirOf(u.side) * 2;
+    const dx = gx - u.x, dy = -u.y, d = hyp(dx, dy) || .001;
+    const sp = speedOf(u) * WITHDRAW.spd * dt;
+    u.x += dx / d * sp; u.y += dy / d * sp;
+    u.y = clamp(u.y, -C.LANE_W / 2 + u.r, C.LANE_W / 2 - u.r);
+    u.x = clamp(u.x, -2, C.LANE_LEN + 2);
+    return;
+  }
   const tgt = u.target = acquire(u);
   const dir = dirOf(u.side);
   let mx = dir, my = 0, moving = true;
@@ -2955,6 +3293,15 @@ function structStep(st, dt){
   chipTick(st, dt);
   const s = G.sides[st.side];
   st.mhp = structMaxHp(s, st);
+  // Rampart. Before the `if (!st.ad) return` below, so the gates and the
+  // inhibitor — which have no attack and would otherwise never reach this —
+  // can be mended and warded like everything else.
+  if (st.repT > 0){
+    const d = Math.min(dt, st.repT);
+    st.repT = Math.max(0, st.repT - dt);
+    st.hp = Math.min(st.mhp, st.hp + st.mhp * (RAMPART.heal / RAMPART.dur) * d);
+  }
+  if (st.wardT > 0) st.wardT = Math.max(0, st.wardT - dt);
   const reg = UP_EFFECT.regen * s.towerUp.regen;
   if (reg > 0 && G.t - st.dmgTaken > 5) st.hp = Math.min(st.mhp, st.hp + reg * dt);
   if (!st.ad) return;
@@ -3070,6 +3417,9 @@ function makeHero(side, cls, name){
     hitT:0, hitT0:0, hitW:0, castT:0, castT0:0, swing:0, swing0:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
     lastKiller:null, dmgDealt:0, magic:false, tdmg:1, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
+    // Commander spells. warpT is a hero-only channel; the rest are the same
+    // fields a minion carries, so one branch in statusTick serves both.
+    warpT:0, fallT:0, hobT:0, freeT:0, pyreT:0, pyreDps:0, pyreSrc:null,
   };
   recalcHero(h, true);
   h.hp = h.mhp; h.mana = h.mmana;
@@ -3442,6 +3792,11 @@ function enterLane(h){
   h.pullT = 0; h.pullBy = null;
   h.markT = 0; h.markBy = undefined; h.markAmp = 0;
   h.burn = null; h.shield = 0; h.shT = 0; h.target = null;
+  // Same reason as the line above: these are frozen, not spent, while a hero is
+  // down. A hero that died mid-channel would otherwise walk back out and finish
+  // raising its banner, and a branded one would come back still burning.
+  h.warpT = 0; h.fallT = 0; h.hobT = 0; h.freeT = 0;
+  h.pyreT = 0; h.pyreDps = 0; h.pyreSrc = null;
   const sh = passVal(h, 'spawnShield');
   if (sh){ h.shield = sh; h.shT = 20; }
   G.units.push(h);
@@ -3560,6 +3915,20 @@ function heroStep(h, dt){
     return;
   }
   statusTick(h, dt);
+  // Warp Banner: three seconds of standing still and then the hero is at its
+  // own front structure, two units in front of it. Nothing else happens in
+  // between — no walking, no swinging, no casting — and a blow puts it out
+  // (dealDmg). A hero exempt from Withdraw gets this instead.
+  if (h.warpT > 0){
+    h.warpT -= dt;
+    h.target = null;
+    if (h.warpT <= 0){
+      h.warpT = 0;
+      const st = frontStruct(h.side);
+      if (st){ h.x = st.x + dirOf(h.side) * WARP.gap; h.y = 0; }
+    }
+    return;
+  }
   const homeX = gateX(h.side), dir = dirOf(h.side);
   const atHome = Math.abs(h.x - homeX) < 7;
   // Out of combat a hero mends where it stands. Without this they spend a
@@ -4040,6 +4409,88 @@ function aiStep(s, dt){
     createHero(s, cls);
   }
   for (const h of s.heroes) if (h.pend.length) autoPick(h);
+  aiSpells(s);
+}
+
+/* ------------------------------------------------------- the Host's spells
+   The Ember Host gets the same two powers a player gets. Every PvE difficulty
+   number in this game was tuned against a Host with no spells at all, so
+   handing the player two free levers and not the computer would quietly
+   invalidate the lot of them.
+
+   Everything in here rolls off arnd(s) — the hold's OWN stream — and never
+   rnd(). A hold's decisions are not allowed to move the stream the battlefield
+   runs on, or which hold happened to think first that tick would change where
+   the next wave stands. */
+function aiSpells(s){
+  // Chosen once, before the first wave marches — the same window a player gets
+  // and the same command they would send.
+  if (!s.spells[0] && !s.spells[1] && G.wave < 1){
+    const pool = SPELLS.map(p => p.id);
+    for (let i = 0; i < SPELL_SLOTS && pool.length; i++)
+      chooseSpell(s, i, pool.splice(Math.floor(arnd(s) * pool.length), 1)[0]);
+    return;
+  }
+  const fs = enemyOf(s.i);
+  for (let i = 0; i < SPELL_SLOTS; i++){
+    const d = spellOf(s, i);
+    if (!d || s.spellCd[i] > 0 || !canPay(s, d.cost)) continue;
+    // It does not fire the instant it can. The draw is taken before the target
+    // is looked for, so how many numbers this consumes depends only on what the
+    // hold owns, what it has spent and what it can pay for — all of which both
+    // machines already agree about.
+    if (arnd(s) < .35) continue;
+    const at = aiSpellTarget(s, d, fs);
+    if (!at) continue;
+    castSpell(s, Object.assign({ slot:i }, at));
+  }
+}
+
+// What the Host would aim each one at, or null for "not worth it yet". Reads
+// the board and nothing else — no camera, no selection, no seat.
+function aiSpellTarget(s, d, fs){
+  if (d.id === 'bombard'){
+    const at = frontlineX(fs);
+    let n = 0;
+    nearby(at, BOMB.r, (u) => { if (!u.dead && u.side === fs && !u.isHero) n++; });
+    return n >= 3 ? { x:Math.round(at * 16) / 16 } : null;
+  }
+  if (d.id === 'withdraw'){
+    const at = frontlineX(s.i);
+    let mine = 0, theirs = 0;
+    nearby(at, WITHDRAW.rad, (u) => {
+      if (u.dead || u.isHero) return;
+      if (u.side === s.i) mine++; else theirs++;
+    });
+    // Only when the line there is actually losing the exchange.
+    return (mine >= 3 && theirs >= mine + 2) ? { x:Math.round(at * 16) / 16 } : null;
+  }
+  if (d.id === 'muster') return {};
+  if (d.id === 'rampart'){
+    const st = frontStruct(s.i);
+    return (st && st.hp / st.mhp < .72) ? { key:st.key } : null;
+  }
+  if (d.id === 'warp'){
+    const h = s.heroes.find(x => !x.dead && x.inLane && x.warpT <= 0 &&
+      G.t - x.dmgTaken > WARP.calm && Math.abs(x.x - gateX(s.i)) < 14);
+    return h ? { hero:h.id } : null;
+  }
+  if (d.id === 'unbind'){
+    const h = s.heroes.find(x => !x.dead && x.inLane &&
+      (x.stunT > 0 || x.slowT > 0 || x.pullT > 0 || x.burn || x.pyreT > 0));
+    return h ? { hero:h.id } : null;
+  }
+  if (d.id === 'hobble'){
+    const h = G.sides[fs].heroes.find(x => !x.dead && x.inLane && !(x.hobT > 0));
+    return h ? { hero:h.id } : null;
+  }
+  if (d.id === 'pyre'){
+    for (const u of G.units)
+      if (!u.dead && u.side === fs && !(u.pyreT > 0) && (u.isHero || u.kind === 'super'))
+        return { hero:u.id };
+    return null;
+  }
+  return null;
 }
 
 /* =====================================================================
@@ -14842,10 +15293,17 @@ const packHero = (h) => ({
   // and walked back into whatever it was leaving. That was rare while the
   // uncovered-under-a-turret branch above could never fire; it is not rare now.
   retreat:!!h.retreat,
+  // Whatever a commander spell left on it. pyreSrc is not here: a hold spell
+  // has no caster body, and a save file has no body table to re-link one
+  // against — it is restored as null, which is what it always is.
+  warpT:h.warpT || 0, fallT:h.fallT || 0, hobT:h.hobT || 0, freeT:h.freeT || 0,
+  pyreT:h.pyreT || 0, pyreDps:h.pyreDps || 0,
 });
 const packUnit = (u) => ({
   kind:u.kind, side:u.side, x:u.x, y:u.y, hp:u.hp, mhp:u.mhp, ad:u.ad, armor:u.armor, mr:u.mr,
   paid:!!u.paid, life:u.life, cd:u.cd,
+  fallT:u.fallT || 0, hobT:u.hobT || 0, freeT:u.freeT || 0,
+  pyreT:u.pyreT || 0, pyreDps:u.pyreDps || 0,
 });
 const packSide = (s) => ({
   res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
@@ -14855,6 +15313,8 @@ const packSide = (s) => ({
           cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
   troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
+  spells:s.spells.slice(), spellCd:s.spellCd.slice(),
+  bombT:s.bombT, bombX:s.bombX, bombN:s.bombN,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
   trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -14866,7 +15326,8 @@ const packSide = (s) => ({
   // a turret at the instant the snapshot was taken.
   structs:s.structs.map(st => ({ key:st.key, hp:st.hp, dead:st.dead, downT:st.downT,
     cd:st.cd, dmgTaken:st.dmgTaken, chipHp:st.chipHp,
-    hitT:st.hitT, hitT0:st.hitT0, hitW:st.hitW })),
+    hitT:st.hitT, hitT0:st.hitT0, hitW:st.hitW,
+    repT:st.repT, wardT:st.wardT })),
   heroes:s.heroes.map(packHero),
 });
 
@@ -14905,6 +15366,9 @@ function loadMatch(pack){
     }
     if (ps.troopPend) s.troopPend = ps.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl }));
     s.superT = ps.superT; s.aiT = ps.aiT; s.rs = ps.rs;
+    if (ps.spells) s.spells = ps.spells.slice();
+    if (ps.spellCd) s.spellCd = ps.spellCd.slice();
+    s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     // Without this a resumed match reported the quiet wave for up to a full
     // 22-second period, however heavy the wave actually on the bridge was —
     // the briefing reads sides[1].waveKind and it was falling back to the
@@ -14923,6 +15387,7 @@ function loadMatch(pack){
       if (p.dmgTaken !== undefined) st.dmgTaken = p.dmgTaken;
       if (p.chipHp !== undefined) st.chipHp = p.chipHp;
       if (p.hitT !== undefined){ st.hitT = p.hitT; st.hitT0 = p.hitT0; st.hitW = p.hitW; }
+      st.repT = p.repT || 0; st.wardT = p.wardT || 0;
     }
     s.heroes = ps.heroes.map(ph => {
       const h = makeHero(i, ph.cls, ph.name);
@@ -14934,6 +15399,9 @@ function loadMatch(pack){
       recalcHero(h, true);
       h.x = ph.x; h.y = ph.y; h.hp = Math.min(ph.hp, h.mhp); h.mana = Math.min(ph.mana, h.mmana);
       h.dead = ph.dead; h.respawnT = ph.respawnT; h.inLane = false; h.retreat = !!ph.retreat;
+      h.warpT = ph.warpT || 0; h.fallT = ph.fallT || 0; h.hobT = ph.hobT || 0;
+      h.freeT = ph.freeT || 0; h.pyreT = ph.pyreT || 0; h.pyreDps = ph.pyreDps || 0;
+      h.pyreSrc = null;
       if (!ph.dead){ h.inLane = true; G.units.push(h); }
       return h;
     });
@@ -14943,6 +15411,8 @@ function loadMatch(pack){
     if (!u) continue;
     u.mhp = pu.mhp; u.hp = Math.min(pu.hp, u.mhp); u.ad = pu.ad;
     u.armor = pu.armor; u.mr = pu.mr; u.cd = pu.cd;
+    u.fallT = pu.fallT || 0; u.hobT = pu.hobT || 0; u.freeT = pu.freeT || 0;
+    u.pyreT = pu.pyreT || 0; u.pyreDps = pu.pyreDps || 0; u.pyreSrc = null;
   }
   scatterCache[0] = scatterCache[1] = null;
   grassCache[0] = grassCache[1] = null;
@@ -15425,6 +15895,15 @@ const CMD = {
   nodeup:  (s, c) => upgradeNode(s, c.node),
   hero:    (s, c) => createHero(s, c.cls, c.name),
   pick:    (s, c) => { const h = s.heroes.find(x => x.id === c.hero); return h ? pickOption(h, c.opt) : ''; },
+  // Which two commander spells this hold carries. An ordinary command, refused
+  // once the first wave has marched — deliberately NOT a pre-match handshake:
+  // a command on an early tick inherits the ordering guarantees lockstep
+  // already proves, and can be driven headlessly.
+  spell:   (s, c) => chooseSpell(s, c.slot, c.id),
+  // ...and casting one. The target travels with the command — `x` for a point
+  // on the lane, quantised to 1/16 before it is sent; `hero` for a body, looked
+  // up by id exactly as `pick` does; `key` for one of your own structures.
+  cast:    (s, c) => castSpell(s, c),
 };
 
 // The single door every player action goes through. In one-player it runs the
@@ -15504,13 +15983,46 @@ const netReady = (tick) => { const s = NET.box.get(tick); return !!(s && s[0] &&
 // that halts a match is not the place to discover otherwise, and drift in a
 // simulation like this one grows quickly enough that the resolution costs
 // nothing in practice.
+//
+// THE CLOCKS ARE IN HERE TOO, and they were not. This hashed a hero's health,
+// mana, level and the IDS of its skills — and not one timer: not `sk.cdT`, not
+// `buffs`, not `shield`, not `stunT` or `slowT`, and on a structure nothing at
+// all but `hp`. Two machines could therefore disagree about a cooldown, a stun,
+// a shield or a turret's firing beat and the detector would say nothing, right
+// up until the difference worked its way out into a position — which is a
+// symptom arriving seconds to minutes after its cause, in a completely
+// different part of the board. Every timer that can change what the next tick
+// does is hashed, at 1/30 (one tick) or 1/64, so ordinary float noise cannot
+// fabricate a desync while a real one-tick difference still shows.
+// Every timed thing carried on a body, hashed to the tick. Shared by the unit
+// walk and the hero walk so a hero — which is in both lists while it is in the
+// lane — cannot be hashed two different ways depending on which loop reached
+// it. `|| 0` throughout because these fields are added lazily by whatever puts
+// them there, and an undefined is not a zero to Math.round.
+const q30 = (v) => Math.round((v || 0) * 30);
+const q64 = (v) => Math.round((v || 0) * 64);
+function mixTimers(mix, u){
+  mix(q30(u.stunT)); mix(q30(u.slowT)); mix(q64(u.slowP));
+  mix(q30(u.taunt)); mix(q30(u.markT)); mix(q30(u.pullT));
+  mix(q64(u.shield)); mix(q30(u.shT)); mix(q30(u.cd));
+  mix(u.burn ? q30(u.burn.t) : 0); mix(u.burn ? q64(u.burn.dps) : 0);
+  // What a commander spell left on it. A brand that has run out on one machine
+  // and not the other is a body that survives on one board and not the other,
+  // which is exactly the class of difference this hash exists to catch.
+  mix(q30(u.warpT)); mix(q30(u.fallT)); mix(q30(u.hobT)); mix(q30(u.freeT));
+  mix(q30(u.pyreT)); mix(q64(u.pyreDps));
+}
+
 function netHash(){
   let a = 2166136261 >>> 0;
   const mix = (n) => { a ^= n | 0; a = Math.imul(a, 16777619) >>> 0; };
   const mixs = (v) => { const t = '' + (v == null ? '' : v); for (let i = 0; i < t.length; i++) mix(t.charCodeAt(i)); mix(0); };
   mix(seedNow());
   mix(G.wave); mix(Math.round(G.t * 30)); mix(Math.round(G.waveT * 30));
-  for (const u of G.units){ mix(u.side); mix(Math.round(u.x * 4096)); mix(Math.round(u.y * 4096)); mix(Math.round(u.hp * 64)); }
+  for (const u of G.units){
+    mix(u.side); mix(Math.round(u.x * 4096)); mix(Math.round(u.y * 4096)); mix(Math.round(u.hp * 64));
+    mixTimers(mix, u);
+  }
   for (const s of G.sides){
     mix(s.rs);                                   // this hold's own decision stream
     mix(Math.round(s.res.gold * 64)); mix(Math.round(s.res.iron * 64));
@@ -15531,14 +16043,32 @@ function netHash(){
     for (const b of s.plot){ if (!b){ mix(0); continue; } mixs(b.type); mix(b.lvl); }
     mix(s.trainQ.length);
     for (const q of s.trainQ){ mixs(q.type); mix(Math.round(q.t * 30)); }
-    for (const st of s.structs) mix(Math.round(st.hp * 64));
+    // A structure used to be one number — its health — so a turret that was
+    // dead on one machine and standing on the other, or halfway through a
+    // different firing beat, was invisible here.
+    for (const st of s.structs){
+      mix(Math.round(st.hp * 64)); mix(st.dead ? 1 : 0);
+      mix(q30(st.downT)); mix(q30(st.cd)); mix(q30(st.dmgTaken));
+      mix(q30(st.repT)); mix(q30(st.wardT));      // Rampart
+    }
+    // The commander spells: which two, how long until each is back, and where
+    // a bombardment has got to.
+    for (let i = 0; i < SPELL_SLOTS; i++){ mixs(s.spells[i]); mix(q30(s.spellCd[i])); }
+    mix(s.bombN); mix(q30(s.bombT)); mix(Math.round(s.bombX * 16));
     mix(s.heroes.length);
     for (const h of s.heroes){
       mixs(h.cls); mixs(h.passive); mix(h.lvl); mix(Math.round(h.xp)); mix(h.passRank);
       mix(Math.round(h.hp * 64)); mix(Math.round(h.mana * 64));
       mix(h.dead ? 1 : 0); mix(Math.round(h.respawnT * 30));
+      mixTimers(mix, h);
+      mix(q30(h.castLock)); mix(q64(h.rage));
       mix(h.skills.length);
-      for (const sk of h.skills){ mixs(sk.id); mix(sk.rank); }
+      // The cooldown, not only the identity. Two machines that disagree about
+      // whether an ultimate is up are about to play two different fights.
+      for (const sk of h.skills){ mixs(sk.id); mix(sk.rank); mix(q30(sk.cdT)); }
+      const bl = h.buffs || [];
+      mix(bl.length);
+      for (const b of bl){ mixs(b.tag); mix(q30(b.t)); mix(b.stacks || 1); }
       mix(h.pend.length);
       for (const p of h.pend) for (const o of p.opts) mixs(o);
     }
@@ -15587,7 +16117,7 @@ function netCheckHash(tick){
    again immediately. Everything primitive is copied; the handful of values that
    are references to other bodies are stored as indices into one table and
    re-linked on the way back in. */
-const NET_REFS = { target:1, markBy:1, lastKiller:1, pullBy:1 };
+const NET_REFS = { target:1, markBy:1, lastKiller:1, pullBy:1, pyreSrc:1 };
 
 // One table of every body on the board. Heroes live in BOTH sides[].heroes and
 // G.units while they are in the lane, and they are the same object — so the
@@ -15634,8 +16164,12 @@ function netSnap(){
     seed: seedNow(), t:G.t, wave:G.wave, waveT:G.waveT, frame:G.frame || 0, uid:G.uid,
     state:G.state, winner:G.winner,
     // In-flight arrows carry a callback and ground zones carry live references;
-    // both last under a second and neither is worth re-linking. They are
-    // dropped on BOTH machines so the two still match exactly.
+    // both last under a second and neither is worth re-linking, so a snapshot
+    // does not carry them and the machine adopting one drops its own (netLoad).
+    // The machine that SENT it has to drop its own too, at the same instant, or
+    // the two boards disagree about a patch of burning ground for as long as it
+    // lasts — see netSendSnap, which is where that happens. This comment used
+    // to claim both machines dropped them and only one of them did.
     bodies: bodies.map(packBody),
     heroesOf: G.sides.map(s => s.heroes.map(h => at.get(h) || 0)),
     unitsOf: G.units.map(u => at.get(u) || 0),
@@ -15648,6 +16182,12 @@ function netSnap(){
               cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
       troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
       rs:s.rs, superT:s.superT, aiT:s.aiT, aiBuild:s.aiBuild, waveKind:s.waveKind,
+      // The commander spells, their cooldowns, and the shells still walking.
+      // This list is hand-written, which means it silently drops any field
+      // nobody remembered to add — and a field missing from a resync is a
+      // resync that desyncs again immediately.
+      spells:s.spells.slice(), spellCd:s.spellCd.slice(),
+      bombT:s.bombT, bombX:s.bombX, bombN:s.bombN,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
       trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -15659,7 +16199,8 @@ function netSnap(){
           // to be hitting a turret at the instant a snapshot was taken.
           structs:s.structs.map(st => ({ key:st.key, hp:st.hp, mhp:st.mhp, dead:st.dead, downT:st.downT,
             cd:st.cd, dmgTaken:st.dmgTaken, chipHp:st.chipHp,
-            hitT:st.hitT, hitT0:st.hitT0, hitW:st.hitW })),
+            hitT:st.hitT, hitT0:st.hitT0, hitW:st.hitW,
+            repT:st.repT, wardT:st.wardT })),          // Rampart: masons, and the ward
     })),
     timeline: G.timeline.map(e => ({ t:e.t, side:e.side, key:e.key, n:e.n })),
   };
@@ -15692,6 +16233,9 @@ function netLoad(p){
     }
     if (ps.troopPend) s.troopPend = ps.troopPend.map(q => ({ kind:q.kind, opts:q.opts.slice(), lvl:q.lvl }));
     s.rs = ps.rs; s.superT = ps.superT; s.aiT = ps.aiT; s.aiBuild = ps.aiBuild;
+    if (ps.spells) s.spells = ps.spells.slice();
+    if (ps.spellCd) s.spellCd = ps.spellCd.slice();
+    s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
     s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
     s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
@@ -15703,6 +16247,7 @@ function netLoad(p){
       if (st.dmgTaken !== undefined) live.dmgTaken = st.dmgTaken;
       if (st.chipHp !== undefined) live.chipHp = st.chipHp;
       if (st.hitT !== undefined){ live.hitT = st.hitT; live.hitT0 = st.hitT0; live.hitW = st.hitW; }
+      live.repT = st.repT || 0; live.wardT = st.wardT || 0;
     });
   });
   // Re-link after every body exists, or a target could point at nothing.
@@ -15829,6 +16374,13 @@ function netSendSnap(force){
   }
   const at = NET.tick;
   const body = JSON.stringify(netSnap());
+  // A snapshot carries no arrows and no ground zones, and netLoad clears them
+  // on the machine that adopts it — so this machine has to clear its own here,
+  // in the same instant the snapshot was taken, or a resync taken while a
+  // zone-pushing ultimate is burning leaves that zone damaging bodies on one
+  // board and not the other. The two would then drift apart from a cause that
+  // is invisible to the very mechanism meant to be putting them back together.
+  G.projs.length = 0; G.zones.length = 0;
   const id = (NET.syncId = (NET.syncId || 0) + 1);
   const n = Math.ceil(body.length / SYNC_CHUNK) || 1;
   netDiary('sync out', body.length + ' bytes in ' + n + ' piece(s) at tick ' + at + ' (resync ' + NET.resyncs + ')');
@@ -16174,6 +16726,10 @@ window.IB = {
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
+  SPELLS, SPELL, SPELL_SLOTS, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
+  bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
+  speedOf, areaHit, statusTick, NET_REFS,
+  BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,

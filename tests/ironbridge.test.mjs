@@ -8629,7 +8629,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
       peakProj = Math.max(peakProj, G.projs.length);
     }
   }
-  t.ok(G.wave > 20, 'the fight ran deep into the match (wave ' + G.wave + ')');
+  // This asked for wave 20 and got 28 on this seed. Both holds carry two
+  // commander spells now — a bombardment, a second muster, a hero pulled back
+  // to its own wall — and a match with those in it is decided sooner: measured
+  // over six seeds, the mean fell from about wave 25 to about wave 22, and this
+  // one from 28 to 16. What the bar is for is that the peaks below were taken
+  // during a real, long fight rather than an opening skirmish, and wave 14 is
+  // five minutes of one.
+  t.ok(G.wave > 14, 'the fight ran deep into the match (wave ' + G.wave + ')');
   t.ok(peakFx <= 300, 'the particle pool stays bounded in a real fight (peak ' + peakFx + ')');
   t.ok(peakFloat <= 100, 'so does the damage-number pool (peak ' + peakFloat + ')');
   t.ok(peakProj < 200, 'and projectiles do not pile up (peak ' + peakProj + ')');
@@ -12392,6 +12399,77 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.fxForce = false;
 }
 
+/* ============================ what the desync detector can actually see
+   The hash is the only thing standing between two machines that have quietly
+   drifted and two players spending ten minutes on different matches. It used
+   to hash health, mana, level and the IDS of a hero's skills — and not one
+   clock. Not a skill cooldown, not a buff, not a shield, not a stun or a slow,
+   and on a structure nothing at all but health. Every one of those differences
+   was invisible until it worked its way out into a POSITION, which is a symptom
+   arriving long after its cause and somewhere else on the board.              */
+{
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:7311 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'mage');
+  const h = G.sides[0].heroes[0];
+  h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h);
+  IB.offer(h, 'skill'); IB.autoPick(h);
+  step(40);
+  const u = G.units.find(x => !x.isHero && !x.dead);
+  const st = IB.frontStruct(1);
+  t.ok(!!u && !!st && h.skills.length > 0,
+    'a board with a body, a turret and a hero carrying skills to time');
+
+  const moves = (fn, what) => {
+    const h0 = IB.netHash(); fn();
+    t.ok(IB.netHash() !== h0, 'the hash sees ' + what);
+  };
+  moves(() => { h.skills[0].cdT += 2; }, 'a skill cooldown');
+  moves(() => { IB.addBuff(h, { t:6, bad:12, tag:'probe' }); }, 'a buff a hero is carrying');
+  moves(() => { h.buffs[h.buffs.length - 1].t -= 1; }, 'and how long that buff has left');
+  moves(() => { h.shield += 60; h.shT = 5; }, 'a shield');
+  moves(() => { h.stunT = 1.25; }, 'a stunned hero');
+  moves(() => { u.stunT = 1.5; }, 'a stunned body');
+  moves(() => { u.slowT = 2; u.slowP = .4; }, 'a slowed one');
+  moves(() => { u.burn = { dps:20, t:3, src:null }; }, 'a burn');
+  moves(() => { st.cd += .3; }, 'where a turret is in its firing beat');
+  moves(() => { st.downT += 4; }, 'and how long a downed structure has left');
+
+  // Quantised, so ordinary float noise cannot fabricate a drift that is not
+  // there: a difference far below one tick is not a difference.
+  const q0 = IB.netHash();
+  h.skills[0].cdT += 1e-9; u.slowT += 1e-9; st.cd += 1e-9;
+  t.ok(IB.netHash() === q0, 'but a difference far below one tick is not reported as a drift');
+}
+
+/* ==================== a resync drops the ground zones on BOTH machines
+   netLoad clears G.zones on the machine ADOPTING a snapshot, and netSnap's
+   comment claimed both machines dropped them. Only one of them did: the host
+   packed its board, shipped it and kept its own zones burning. A resync taken
+   while a zone-pushing ultimate was on the ground therefore left that zone
+   damaging bodies on one board and not the other — the resync creating the
+   very drift it was there to repair.                                        */
+{
+  IB.netEnd();
+  IB.netStart({ me:0, seed:7312, diff:'veteran' });
+  IB.NET.send = () => {};
+  const zone = { x:64, y:0, r:4, dps:30, t:4, tick:.5, side:0, src:null, magic:true, slow:0 };
+  G.zones.push(zone);
+  G.projs.push({ x:10, y:0, z:1, sp:20, tgt:null, onHit:() => {}, tr:[], kind:'arrow' });
+  const snap = JSON.parse(JSON.stringify(IB.netSnap()));
+  t.ok(G.zones.length === 1, 'the host has a zone on the ground when it ships the board');
+  IB.netSendSnap();
+  t.ok(G.zones.length === 0, 'and drops it, because the snapshot does not carry it');
+  t.ok(G.projs.length === 0, 'along with the arrows in flight, for the same reason');
+  // The other half of the pair: the machine adopting one clears the same two
+  // lists, so the two boards genuinely agree rather than nearly agreeing.
+  G.zones.push(zone);
+  IB.netLoad(snap);
+  t.ok(G.zones.length === 0, 'and the machine adopting a snapshot clears them too');
+  IB.netEnd();
+}
+
 /* ==================================== a drifted match puts itself back together
    A desync used to end the match. It is recoverable: the host packs its board,
    the joiner adopts it, and both restart their order pipeline from the same
@@ -12498,6 +12576,598 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(H.NET.resyncs <= IB.SYNC_MAX + 1,
       'a match that keeps drifting gives up rather than resyncing forever (' + H.NET.resyncs + ')');
   }
+}
+
+/* ========================================================= commander spells
+   Two powers per HOLD, chosen before the first wave marches and cast with a
+   target that travels inside the command. Everything below is the same shape
+   of proof, once per spell: the effect actually lands, and the board it leaves
+   behind survives a snapshot bit-identically. Both halves are needed — a spell
+   that does nothing at all also round-trips perfectly.                       */
+{
+  // A board with two heroes, bodies on the bridge and both holds solvent. The
+  // Host's own AI is switched off so nothing casts underneath the measurement;
+  // the waves still march, because spawnWave sends them for both sides.
+  const board = (seed, a, b) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    for (const sd of G.sides){ rich(sd); sd.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    if (a) IB.chooseSpell(G.sides[0], 0, a);
+    if (b) IB.chooseSpell(G.sides[0], 1, b);
+    IB.createHero(G.sides[0], 'fighter'); IB.createHero(G.sides[1], 'tank');
+    for (const sd of G.sides) for (const h of sd.heroes){ h.lvl = 9; IB.recalcHero(h, true); IB.autoPick(h); }
+    step(35);
+    // Whoever fell during those thirty-five seconds comes back, so a spell that
+    // needs a hero to aim at always has one and the block is not seed-flaky.
+    for (const sd of G.sides) for (const h of sd.heroes){
+      h.dead = false; h.respawnT = 0; if (!h.inLane) IB.enterLane(h); h.dmgTaken = -99;
+    }
+    IB.rebuildGrid();
+    for (const sd of G.sides) rich(sd);
+    return G.sides[0];
+  };
+
+  // Pack the board, run it on, put the snapshot back, and require the hash to
+  // be exactly what it was. Four hand-written pack lists stand between a new
+  // field and a resync that desyncs again immediately, and this is what notices
+  // when one of them was not updated.
+  const roundTrips = (what) => {
+    G.projs.length = 0; G.zones.length = 0;
+    const at = IB.netHash();
+    const json = JSON.stringify(IB.netSnap());
+    step(4);
+    t.ok(IB.netHash() !== at, 'the board moves on from ' + what);
+    t.ok(IB.netLoad(JSON.parse(json)), what + ' packs into a snapshot');
+    t.ok(IB.netHash() === at, 'and comes back bit-identical — ' + what);
+  };
+
+  /* ---------------------------------------------------------- choosing them */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:8100 });
+    G.sides[1].ai = false;
+    const s = G.sides[0];
+    t.ok(s.spells.length === 2 && s.spellCd.length === 2,
+      'a hold gets two spell slots and two cooldowns');
+    t.ok(IB.chooseSpell(s, 0, 'bombard') === null, 'a spell goes into a slot');
+    t.ok(IB.chooseSpell(s, 1, 'rampart') === null, 'and another into the other');
+    t.ok(s.spells[0] === 'bombard' && s.spells[1] === 'rampart', 'and they stay where they were put');
+    t.ok(typeof IB.chooseSpell(s, 1, 'bombard') === 'string', 'the same spell cannot fill both slots');
+    t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
+    t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
+    t.ok(IB.SPELLS.length === 8 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are eight of them, each named and each with a cooldown');
+
+    // They belong to the HOLD. Three heroes is still two spells; no heroes at
+    // all is still two spells.
+    rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 };
+    IB.createHero(s, 'fighter'); IB.createHero(s, 'mage'); IB.createHero(s, 'tank');
+    t.ok(s.heroes.length >= 2, 'the hold has more than one hero (' + s.heroes.length + ')');
+    t.ok(s.spells.length === 2 && s.spellCd.length === 2,
+      'and still exactly two spells, because they belong to the hold and not to a hero');
+    t.ok(G.sides[1].heroes.length === 0 && G.sides[1].spells.length === 2,
+      'a hold with no heroes at all gets both of its own');
+
+    // It is an ordinary command, through the same door as everything else —
+    // deliberately not a pre-match handshake with a protocol of its own.
+    t.ok(typeof IB.CMD.spell === 'function' && typeof IB.CMD.cast === 'function',
+      'choosing and casting are both commands');
+    IB.MY = 0;
+    t.ok(IB.sendCmd('spell', { slot:0, id:'pyre' }) === '', 'and can be sent like any other order');
+    t.ok(s.spells[0] === 'pyre', 'which changes the slot');
+
+    // ...until the first wave has marched.
+    step(23);
+    t.ok(G.wave >= 1, 'the first wave goes out (wave ' + G.wave + ')');
+    t.ok(typeof IB.chooseSpell(s, 0, 'hobble') === 'string',
+      'after which the orders are set and a change is refused');
+    t.ok(s.spells[0] === 'pyre', 'and the slot does not move');
+  }
+
+  /* ------------------------------- every one of them, cast and round-tripped */
+  {
+    // Where each spell is aimed. A point on the lane goes as `x`, quantised to
+    // 1/16 on the way out; a body goes as `hero` and is resolved by id exactly
+    // the way the `pick` command resolves one; a structure goes as `key`.
+    const aim = (id, s) => {
+      const fs = s.i === 0 ? 1 : 0;
+      if (id === 'bombard' || id === 'withdraw') return { x:Math.round(64 * 16) / 16 };
+      if (id === 'muster') return {};
+      if (id === 'rampart') return { key:IB.frontStruct(s.i).key };
+      if (id === 'hobble' || id === 'pyre') return { hero:G.sides[fs].heroes[0].id };
+      return { hero:s.heroes[0].id };
+    };
+    for (let i = 0; i < IB.SPELLS.length; i++){
+      const d = IB.SPELLS[i];
+      const s = board(8200 + i, d.id);
+      const z0 = G.zones.length;
+      const seed0 = IB.seedNow();
+      const err = IB.castSpell(s, Object.assign({ slot:0 }, aim(d.id, s)));
+      t.ok(err === null, d.n + ' casts (' + err + ')');
+      t.ok(s.spellCd[0] === d.cd, 'and goes on its ' + d.cd + 's cooldown');
+      // Second Muster is the ONLY spell allowed to move the simulation's random
+      // stream, and it has to, because it puts bodies on the bridge and
+      // spawnUnit draws for every one of them.
+      t.ok(d.id === 'muster' ? IB.seedNow() !== seed0 : IB.seedNow() === seed0,
+        d.id === 'muster'
+          ? 'Second Muster is the one spell that draws from the simulation’s stream'
+          : d.n + ' leaves the simulation’s stream exactly where it found it');
+      t.ok(G.zones.length === z0,
+        d.n + ' pushes no ground zone, which a resync drops on both machines');
+      roundTrips(d.n);
+    }
+  }
+
+  /* ----------------------------------------------------------------- Bombard */
+  {
+    const s = board(8210, 'bombard');
+    const foes = G.units.filter(u => u.side === 1 && !u.dead && !u.isHero);
+    t.ok(foes.length >= 2, 'the Host has bodies on the bridge (' + foes.length + ')');
+    const px = Math.round(foes[0].x * 16) / 16;
+    const near = G.units.filter(u => u.side === 1 && !u.dead && Math.abs(u.x - px) <= 3);
+    const hp0 = new Map(near.map(u => [u.id, u.hp]));
+    const iron0 = s.res.iron;
+    t.ok(IB.castSpell(s, { slot:0, x:px }) === null, 'Bombard is called on a point on the lane');
+    t.ok(iron0 - s.res.iron === 40, 'and costs its forty iron (' + (iron0 - s.res.iron) + ')');
+    t.ok(s.bombN === IB.BOMB.n, 'with three shells still to fall');
+    step(1.6);
+    t.ok(s.bombN === 0, 'all three of which land, four tenths of a second apart');
+    const hurt = near.filter(u => u.dead || u.hp < hp0.get(u.id));
+    t.ok(hurt.length > 0, 'and what stood under them is hurt (' + hurt.length + ' of ' + near.length + ')');
+    t.ok(near.some(u => u.dead || u.slowT > 0), 'and what survived is slowed');
+
+    // The bound this spell exists inside: it is against BODIES. Reusing areaHit
+    // would have folded frontStruct(foe) into every blast, and a commander
+    // spell that knocks turrets down makes the siege it is meant to support
+    // redundant.
+    const s2 = board(8211, 'bombard');
+    G.units.length = 0;
+    for (const sd of G.sides) sd.heroes.length = 0;
+    IB.rebuildGrid();
+    const st = IB.frontStruct(1);
+    const shp = st.hp;
+    t.ok(IB.castSpell(s2, { slot:0, x:Math.round(st.x * 16) / 16 }) === null,
+      'a second bombardment is aimed squarely at the Host’s outer turret');
+    step(2);
+    t.ok(s2.bombN === 0, 'and all three shells fall on it (' + s2.bombN + ' left)');
+    t.ok(st.hp === shp,
+      'without costing it a single point (' + shp + ' -> ' + st.hp + ')');
+    // ...and it would have, through the shared area hit — so the difference is
+    // the choice, not the geometry.
+    IB.areaHit({ side:0, isHero:false, struct:false, x:st.x, y:st.y }, st.x, 0, IB.BOMB.r, IB.BOMB.dmg, { magic:true });
+    t.ok(st.hp < shp, 'the shared area hit really does reach it, which is why Bombard does not use it');
+  }
+
+  /* ---------------------------------------------------------------- Withdraw */
+  {
+    const s = board(8220, 'withdraw');
+    const mine = G.units.filter(u => u.side === 0 && !u.isHero && !u.dead);
+    t.ok(mine.length >= 2, 'the hold has bodies out (' + mine.length + ')');
+    const px = Math.round(mine[0].x * 16) / 16;
+    const h = s.heroes[0];
+    h.x = px;
+    const x0 = new Map(mine.map(u => [u.id, u.x]));
+    t.ok(IB.castSpell(s, { slot:0, x:px }) === null, 'Withdraw is called on a point');
+    const called = mine.filter(u => u.fallT > 0);
+    t.ok(called.length > 0, 'and the bodies near it break off (' + called.length + ' of ' + mine.length + ')');
+    t.ok(called.every(u => Math.abs(u.x - px) <= IB.WITHDRAW.rad + 1e-9),
+      'only the ones within fourteen of it');
+    t.ok(called.every(u => u.fallT === IB.WITHDRAW.dur), 'for four seconds each');
+    t.ok(!(h.fallT > 0),
+      'and never the hero — it has a retreat state machine of its own, and a second one laid over it would fight it');
+    step(1);
+    const live = called.filter(u => !u.dead);
+    t.ok(live.length > 0 && live.every(u => u.x <= x0.get(u.id) + 1e-6),
+      'they walk back the way they came (' + live.length + ' of them)');
+    t.ok(live.every(u => !u.target), 'and stop looking for anything to fight');
+
+    // A quarter less on the way out, measured on one body, twice.
+    const b = live[0];
+    b.mhp = 1e6; b.hp = b.mhp;
+    b.fallT = 0; const full = IB.dealDmg(null, b, 1000, { pure:true, noHooks:true });
+    b.hp = b.mhp;
+    b.fallT = 4; const cut = IB.dealDmg(null, b, 1000, { pure:true, noHooks:true });
+    t.ok(full > 0 && Math.abs(cut / full - (1 - IB.WITHDRAW.res)) < 1e-9,
+      'and take a quarter less while they are doing it (' + (cut / full).toFixed(3) + ')');
+
+    // ...and move a third again as fast. Measured against the same body's own
+    // walking speed rather than against a second body, which separation would
+    // have shoved.
+    IB.newMatch({ diff:'veteran', seed:8221 });
+    G.sides[0].ai = false; G.sides[1].ai = false;
+    G.units.length = 0;
+    const w = IB.spawnUnit(0, 'grunt', { x:40, y:0 });
+    w.fallT = 99;
+    const wx = w.x;
+    for (let i = 0; i < 30; i++) IB.update(1 / 30);
+    const moved = Math.abs(w.x - wx);
+    t.ok(Math.abs(moved - w.spd * IB.WITHDRAW.spd) < .03,
+      'a body pulling back covers ' + IB.WITHDRAW.spd + '× its walk in a second (' +
+      moved.toFixed(3) + ' against ' + (w.spd * IB.WITHDRAW.spd).toFixed(3) + ')');
+    t.ok(w.x < wx, 'and it is going the other way');
+  }
+
+  /* ----------------------------------------------------------- Second Muster */
+  {
+    const s = board(8230, 'muster');
+    const n0 = G.units.filter(u => u.side === 0 && !u.dead).length;
+    const e0 = G.units.filter(u => u.side === 1 && !u.dead).length;
+    const wave0 = G.wave, waveT0 = G.waveT;
+    const food0 = s.res.food, iron0 = s.res.iron, wood0 = s.res.wood;
+    t.ok(IB.castSpell(s, { slot:0 }) === null, 'Second Muster is called');
+    const n1 = G.units.filter(u => u.side === 0 && !u.dead).length;
+    t.ok(n1 > n0, 'and another wave is on the bridge (' + n0 + ' -> ' + n1 + ')');
+    t.ok(G.units.filter(u => u.side === 1 && !u.dead).length === e0,
+      'for the hold that called it and nobody else');
+    t.ok(food0 - s.res.food === 60 && iron0 - s.res.iron === 40 && wood0 - s.res.wood === 30,
+      'at 60 food, 40 iron and 30 wood');
+    // The bound: the wave clock is the one thing both players read to know what
+    // is coming, and a spell that moved it would make the board lie to whoever
+    // did not cast it.
+    t.ok(G.wave === wave0, 'the wave count does not move (' + G.wave + ')');
+    t.ok(G.waveT === waveT0, 'and the wave is not rescheduled (' + G.waveT.toFixed(3) + ')');
+
+    // ...and it comes out at 85% of the shape already marching.
+    IB.newMatch({ diff:'veteran', seed:8231 });
+    G.sides[0].ai = false; G.sides[1].ai = false;
+    G.units.length = 0;
+    const norm = IB.spawnUnit(0, 'grunt', { y:0 });
+    G.units.length = 0;
+    IB.musterWave(G.sides[0]);
+    const mus = G.units.find(u => u.side === 0 && u.kind === 'grunt');
+    t.ok(!!mus, 'a muster puts grunts out');
+    t.ok(Math.abs(mus.mhp / norm.mhp - IB.MUSTER_HP) < .01,
+      'at 85% of a wave body’s health (' + mus.mhp + ' against ' + norm.mhp + ')');
+    t.ok(G.units.filter(u => u.kind === 'melee').length > 0,
+      'and in the shape the hold is currently sending, not a fixed one');
+  }
+
+  /* ------------------------------------------------------------- Warp Banner */
+  {
+    const s = board(8240, 'warp');
+    const h = s.heroes[0];
+    // An empty bridge, so nothing shoves the hero and nothing puts the banner
+    // out while the channel is being measured.
+    G.units.length = 0;
+    G.sides[1].heroes.length = 0;
+    G.units.push(h);
+    h.x = 58; h.y = 0; h.dmgTaken = -99;
+    IB.rebuildGrid();
+    t.ok(IB.castSpell(s, { slot:0, hero:h.id }) === null, 'Warp Banner goes up');
+    t.ok(h.warpT === IB.WARP.chan, 'as a three-second channel (' + h.warpT + ')');
+    const x0 = h.x;
+    step(1);
+    t.ok(h.x === x0 && h.warpT > 0, 'during which the hero does not move (' + h.x + ')');
+    step(2.1);
+    t.ok(h.warpT === 0, 'and then the banner is up');
+    const st = IB.frontStruct(0);
+    t.ok(Math.abs(h.x - (st.x + IB.WARP.gap)) < 1.5,
+      'with the hero back at its own front structure (' + h.x.toFixed(2) + ' against ' + (st.x + IB.WARP.gap) + ')');
+    // The bound: it is a way home, never a way forward.
+    t.ok(h.x < C.LANE_LEN / 2, 'never past the midline (' + h.x.toFixed(2) + ' of ' + C.LANE_LEN + ')');
+    for (const side of [0, 1]){
+      const f = IB.frontStruct(side);
+      const land = f.x + (side === 0 ? 1 : -1) * IB.WARP.gap;
+      t.ok(side === 0 ? land < C.LANE_LEN / 2 : land > C.LANE_LEN / 2,
+        'and it lands on the caster’s own half whichever seat casts it (side ' + side + ' at ' + land + ')');
+    }
+
+    // ...and it is not an escape: refused in combat, and broken by a blow.
+    s.spellCd[0] = 0; h.dmgTaken = G.t;
+    t.ok(typeof IB.castSpell(s, { slot:0, hero:h.id }) === 'string',
+      'refused while the hero is being fought');
+    t.ok(s.spellCd[0] === 0 && h.warpT === 0, 'and a refusal costs neither the cooldown nor a channel');
+    h.dmgTaken = -99;
+    t.ok(IB.castSpell(s, { slot:0, hero:h.id }) === null, 'out of combat it goes up again');
+    IB.dealDmg(null, h, 40, { pure:true, noHooks:true });
+    t.ok(h.warpT === 0, 'and one blow puts it out');
+  }
+
+  /* ------------------------------------------------------------------ Hobble */
+  {
+    const s = board(8250, 'hobble');
+    const e = G.sides[1].heroes[0];
+    const ten = IB.passVal(e, 'tenacity');
+    const as0 = IB.attackSpeedOf(e), sp0 = IB.speedOf(e);
+    t.ok(IB.castSpell(s, { slot:0, hero:e.id }) === null, 'Hobble lands on their hero');
+    t.ok(Math.abs(e.hobT - IB.HOB.dur * (1 - ten)) < 1e-9,
+      'for four and a half seconds less their tenacity (' + e.hobT.toFixed(3) + ')');
+    t.ok(Math.abs(IB.attackSpeedOf(e) / as0 - (1 - IB.HOB.as)) < 1e-9,
+      'they swing 30% slower');
+    t.ok(Math.abs(IB.speedOf(e) / sp0 - (1 - IB.HOB.ms)) < 1e-9,
+      'and walk 40% slower');
+
+    // Damage dealt, measured on the same hero against the same body, twice.
+    const tgt = G.units.find(u => u.side === 0 && !u.isHero && !u.dead);
+    tgt.mhp = 1e7; tgt.hp = tgt.mhp;
+    e.hp = e.mhp; e.hobT = 0;
+    const full = IB.dealDmg(e, tgt, 1000, { pure:true, noHooks:true });
+    tgt.hp = tgt.mhp; e.hp = e.mhp; e.hobT = 4;
+    const cut = IB.dealDmg(e, tgt, 1000, { pure:true, noHooks:true });
+    t.ok(full > 0 && Math.abs(cut / full - (1 - IB.HOB.dmg)) < 1e-9,
+      'and hit 40% softer (' + (cut / full).toFixed(3) + ')');
+
+    // The bound: the movement cut is folded in AFTER the 75% slow clamp, so a
+    // hobble and a heavy slow cannot multiply into a body that cannot move.
+    e.hobT = 0; e.slowT = 9; e.slowP = .95;
+    const slowOnly = IB.speedOf(e);
+    e.hobT = 4;
+    const both = IB.speedOf(e);
+    t.ok(Math.abs(both / slowOnly - (1 - IB.HOB.ms)) < 1e-9,
+      'stacked on a 95% slow it still takes exactly its own 40%, off the clamped speed');
+    t.ok(both > sp0 * .1,
+      'so the two together are a crawl and not a stop (' + both.toFixed(3) + ' of ' + sp0.toFixed(3) + ')');
+  }
+
+  /* ------------------------------------------------------------------ Unbind */
+  {
+    const s = board(8260, 'unbind');
+    const h = s.heroes[0];
+    const other = G.sides[1].heroes[0];
+    h.stunT = 3; h.slowT = 3; h.slowP = .5; h.taunt = 2;
+    h.pullT = 1; h.pullBy = other;
+    h.burn = { dps:20, t:5, src:null };
+    t.ok(IB.castSpell(s, { slot:0, hero:h.id }) === null, 'Unbind is called on your own hero');
+    t.ok(h.stunT === 0 && h.slowT === 0 && h.slowP === 0 && h.taunt === 0 && h.pullT === 0 && !h.burn,
+      'and everything on it comes off');
+    // pullBy is in NET_REFS — a snapshot stores it as an index into the body
+    // table and re-links it on the way back, so a reference left behind after
+    // its timer is cleared gets re-pointed at whatever now sits at that index.
+    t.ok(h.pullBy === null, 'including the reference the pull left behind, which is packed as an index');
+    t.ok(h.freeT === IB.UNBIND.dur, 'and five seconds of freedom follow');
+
+    const ten = IB.passVal(h, 'tenacity');
+    const want = Math.max(IB.UNBIND.mul * (1 - ten), IB.UNBIND.floor);
+    IB.applyStun(h, 4);
+    t.ok(Math.abs(h.stunT - 4 * (1 - ten) * want) < 1e-9,
+      'what lands next barely sticks (' + h.stunT.toFixed(3) + 's of a four-second stun)');
+    t.ok(h.stunT > 0, 'though it is a reduction and not an immunity');
+    h.stunT = 0;
+    h.freeT = 0;
+    IB.applyStun(h, 4);
+    const plain = h.stunT;
+    t.ok(plain > 4 * (1 - ten) * want + 1e-9,
+      'and the same stun on the same hero without it is much longer (' + plain.toFixed(3) + 's)');
+    t.ok(IB.ccDur(h, 10) === 10 * (1 - ten),
+      'with the reduction gone once the five seconds are up');
+  }
+
+  /* -------------------------------------------------------------- Pyre Brand */
+  {
+    const s = board(8270, 'pyre');
+    const e = G.sides[1].heroes[0];
+    e.hp = e.mhp * .5;
+    e.burn = { dps:99, t:9, src:null };            // an ember it was already carrying
+    t.ok(IB.castSpell(s, { slot:0, hero:e.id }) === null, 'Pyre Brand is put on their hero');
+    t.ok(e.pyreT === IB.PYRE.dur, 'for six seconds');
+    t.ok(Math.abs(e.pyreDps - (IB.PYRE.base + IB.PYRE.perWave * G.wave)) < 1e-9,
+      'at a rate that grows with the match (' + e.pyreDps.toFixed(1) + ' at wave ' + G.wave + ')');
+    // The whole reason it is not a burn: applyBurn keeps ONE burn per body and
+    // takes the max of the two dps and the two durations, so a hero carrying an
+    // ember proc would silently have swallowed the brand or been swallowed.
+    t.ok(e.burn && e.burn.dps === 99 && e.burn.t === 9,
+      'and the burn it was already carrying is untouched');
+    IB.applyBurn(e, 5, 2, null);
+    t.ok(e.burn.dps === 99 && e.pyreT === IB.PYRE.dur,
+      'a fresh burn still merges into the burn and leaves the brand alone');
+
+    e.hp = e.mhp * .2;
+    const hp0 = e.hp;
+    IB.healUnit(e, 200);
+    t.ok(Math.abs((e.hp - hp0) - 200 * (1 - IB.PYRE.heal)) < 1e-6,
+      'mending a branded body is cut by 60% (' + (e.hp - hp0).toFixed(1) + ' of 200)');
+    e.pyreT = 0;
+    e.hp = e.mhp * .2;
+    const hp1 = e.hp;
+    IB.healUnit(e, 200);
+    t.ok(Math.abs((e.hp - hp1) - 200) < 1e-6,
+      'and is not cut once the brand is off (' + (e.hp - hp1).toFixed(1) + ' of 200)');
+
+    // It burns, and an ogre can carry it too. Measured on an empty lane, out of
+    // every turret's reach, so the only thing touching it is the brand.
+    IB.newMatch({ diff:'veteran', seed:8271 });
+    G.sides[0].ai = false; G.sides[1].ai = false;
+    G.units.length = 0;
+    IB.chooseSpell(G.sides[0], 0, 'pyre');
+    const u = IB.spawnUnit(1, 'super', { x:74, y:0 });
+    u.hp = u.mhp;
+    t.ok(IB.castSpell(G.sides[0], { slot:0, hero:u.id }) === null, 'an ogre can be branded as well as a hero');
+    const before = u.hp;
+    for (let i = 0; i < 30; i++) IB.update(1 / 30);
+    const lost = before - u.hp;
+    t.ok(Math.abs(lost - u.pyreDps) < u.pyreDps * .15,
+      'and loses about a second of it in the first second (' + lost.toFixed(1) +
+      ' against ' + u.pyreDps.toFixed(1) + ')');
+    t.ok(u.pyreT > 0 && u.pyreT < IB.PYRE.dur, 'with the clock running down (' + u.pyreT.toFixed(2) + ')');
+
+    // The brand's source is a body reference, so it is packed as an index and
+    // re-linked — never copied as a number that would mean a different body.
+    t.ok(IB.NET_REFS.pyreSrc === 1, 'and its source is registered as a body reference');
+    const packed = IB.netSnap().bodies.find(b => b.pyreT > 0);
+    t.ok(!!packed && 'pyreSrc' in packed && typeof packed.pyreSrc === 'number',
+      'which is what a snapshot carries');
+  }
+
+  /* ----------------------------------------------------------------- Rampart */
+  {
+    const s = board(8280, 'rampart');
+    // An empty bridge, so the only thing moving the wall's health is the spell.
+    G.units.length = 0;
+    for (const sd of G.sides) sd.heroes.length = 0;
+    IB.rebuildGrid();
+    const st = IB.frontStruct(0);
+    st.hp = Math.round(st.mhp * .5);
+    const hp0 = st.hp;
+    const wood0 = s.res.wood, iron0 = s.res.iron;
+    st.wardT = 0;
+    const arm0 = IB.effArmor(st, false), mr0 = IB.effArmor(st, true);
+    t.ok(IB.castSpell(s, { slot:0, key:st.key }) === null, 'Rampart is called on your own wall');
+    t.ok(st.repT === IB.RAMPART.dur && st.wardT === IB.RAMPART.ward,
+      'masons for five seconds and a ward for eight');
+    t.ok(wood0 - s.res.wood === 50 && iron0 - s.res.iron === 30, 'at 50 wood and 30 iron');
+    t.ok(IB.effArmor(st, false) - arm0 === IB.RAMPART.armor, 'the ward is +40 armour');
+    t.ok(IB.effArmor(st, true) - mr0 === IB.RAMPART.armor, 'and +40 magic resist');
+    step(5.2);
+    const back = st.hp - hp0;
+    t.ok(Math.abs(back - st.mhp * IB.RAMPART.heal) < st.mhp * .02,
+      '22% of its health goes back on over the five seconds (' + Math.round(back) +
+      ' of ' + Math.round(st.mhp * IB.RAMPART.heal) + ')');
+    t.ok(st.repT === 0, 'and then the masons are done');
+    t.ok(st.wardT > 0, 'while the ward is still up');
+    step(3.2);
+    t.ok(st.wardT === 0 && IB.effArmor(st, false) === arm0,
+      'until it too runs out, and the stone goes back to what it was');
+    // A structure that is already down cannot be mended into standing again.
+    st.dead = true; s.spellCd[0] = 0; rich(s);
+    t.ok(typeof IB.castSpell(s, { slot:0, key:st.key }) === 'string', 'a fallen structure is refused');
+    t.ok(typeof IB.castSpell(s, { slot:0, key:'nowhere' }) === 'string', 'and so is one that does not exist');
+  }
+
+  /* ------------------------------------------- refusals cost nothing at all */
+  {
+    const s = board(8290, 'bombard', 'pyre');
+    s.res.iron = 0;
+    const cd0 = s.spellCd.slice();
+    t.ok(typeof IB.castSpell(s, { slot:0, x:64 }) === 'string', 'a spell it cannot pay for is refused');
+    t.ok(s.spellCd[0] === cd0[0] && s.bombN === 0, 'and nothing starts');
+    rich(s);
+    t.ok(IB.castSpell(s, { slot:0, x:64 }) === null, 'paid for, it fires');
+    t.ok(typeof IB.castSpell(s, { slot:0, x:64 }) === 'string', 'and will not fire again while it is recovering');
+    t.ok(typeof IB.castSpell(s, { slot:1, hero:-1 }) === 'string', 'a target that is not there is refused');
+    t.ok(s.spellCd[1] === 0, 'without spending the cooldown');
+    // It recovers on the clock, in ecoStep, like everything else the hold owns.
+    const cd = s.spellCd[0];
+    step(10);
+    t.ok(Math.abs((cd - s.spellCd[0]) - 10) < .2,
+      'and a cooldown counts down in real seconds (' + (cd - s.spellCd[0]).toFixed(2) + ' in 10)');
+  }
+
+  /* --------------------------------- a body refused at the cap costs the same
+     spawnUnit is turned away at C.MAX_UNITS, and a refusal has to consume
+     exactly the numbers a body that fitted would have — or Second Muster could
+     move the simulation's stream by asking for one body too many, and the two
+     machines would part company over a population limit.                     */
+  {
+    IB.newMatch({ diff:'veteran', seed:8295 });
+    G.units.length = 0;
+    IB.reseed(4242);
+    IB.spawnUnit(0, 'grunt', {});
+    const after = IB.seedNow();
+    G.units.length = 0;
+    while (G.units.length < C.MAX_UNITS)
+      G.units.push({ id:-1, dead:false, side:0, x:0, y:0, r:.4, isHero:false, struct:false });
+    IB.reseed(4242);
+    t.ok(IB.spawnUnit(0, 'grunt', {}) === null, 'at the cap a body is refused');
+    t.ok(IB.seedNow() === after,
+      'and the refusal costs the simulation exactly the draws a body that fitted would have');
+    G.units.length = 0;
+    IB.rebuildGrid();
+  }
+
+  /* -------------------------------------------------- the Host casts them too
+     Every PvE difficulty number was tuned against a Host with no spells at all.
+     Handing the player two free levers and not the computer would quietly
+     invalidate the lot of them — so the Host chooses two before the first wave
+     and casts them off its OWN stream, never the simulation's.               */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:8300 });
+    const host = G.sides[1];
+    step(2);
+    t.ok(!!host.spells[0] && !!host.spells[1],
+      'the Host has chosen two before the first wave (' + host.spells.join(', ') + ')');
+    t.ok(host.spells[0] !== host.spells[1], 'and two different ones');
+    t.ok(IB.SPELL[host.spells[0]] && IB.SPELL[host.spells[1]], 'both of which are real spells');
+    t.ok(G.sides[0].spells[0] === null,
+      'while the hold the player is sitting in chooses for itself');
+
+    // Its choices come off its own stream, so two Hosts on two seeds differ and
+    // neither one moved the battlefield's numbers.
+    const seen = new Set();
+    for (const sd of [8301, 8302, 8303, 8304, 8305, 8306]){
+      IB.newMatch({ diff:'veteran', seed:sd });
+      step(2);
+      seen.add(G.sides[1].spells.join(','));
+    }
+    t.ok(seen.size > 1, 'and are not the same two every match (' + seen.size + ' of 6 seeds differ)');
+
+    // And it actually uses them.
+    let cast = 0;
+    IB.newMatch({ diff:'veteran', seed:8307 });
+    G.sides[0].ai = true;
+    for (let i = 0; i < 30 * 240 && G.state === 'play'; i++){
+      IB.update(1 / 30);
+      if (i % 15 === 0) for (const sd of G.sides) for (let k = 0; k < 2; k++) if (sd.spellCd[k] > 0) cast++;
+    }
+    t.ok(cast > 0, 'and it does cast them in a real match (' + cast + ' samples with a spell recovering)');
+  }
+
+  /* ------------------------------------- two machines, one match, with spells
+     The proof that matters: two independent simulations that can see nothing of
+     each other but command batches, both holds casting, staying bit-identical.
+  */
+  {
+    const A = loadGame({}), B = loadGame({});
+    global.localStorage = {
+      getItem: k => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = '' + v; },
+      removeItem: k => { delete store[k]; },
+    };
+    const wire = [];
+    A.NET.send = (o) => wire.push(['B', o]);
+    B.NET.send = (o) => wire.push(['A', o]);
+    A.netStart({ me:0, seed:8400, diff:'veteran' });
+    B.netStart({ me:1, seed:8400, diff:'veteran' });
+    const pump = (n) => {
+      for (let i = 0; i < n; i++){
+        while (wire.length){ const [to, o] = wire.shift(); (to === 'A' ? A : B).netRecv(JSON.parse(JSON.stringify(o))); }
+        A.netStep(); B.netStep();
+      }
+    };
+    // Both holds pick, on early ticks, exactly the way a player would.
+    A.sendCmd('spell', { slot:0, id:'bombard' });
+    A.sendCmd('spell', { slot:1, id:'muster' });
+    B.sendCmd('spell', { slot:0, id:'rampart' });
+    B.sendCmd('spell', { slot:1, id:'withdraw' });
+    pump(60);
+    t.ok(A.G.sides[0].spells.join() === 'bombard,muster' && A.G.sides[1].spells.join() === 'rampart,withdraw',
+      'the host machine learned both holds’ choices (' + A.G.sides.map(s => s.spells.join('/')).join(' | ') + ')');
+    t.ok(B.G.sides[0].spells.join() === A.G.sides[0].spells.join() &&
+         B.G.sides[1].spells.join() === A.G.sides[1].spells.join(),
+      'and so did the joiner');
+    t.ok(A.netHash() === B.netHash(), 'and the two boards agree about it');
+
+    // Solvent, identically on both machines — an asymmetry here would prove
+    // nothing about the spells.
+    for (const sim of [A, B]) for (const s of sim.G.sides){
+      s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+    }
+    pump(400);
+    t.ok(A.netHash() === B.netHash(), 'still agreeing once the waves are out');
+    A.sendCmd('cast', { slot:0, x:Math.round(64 * 16) / 16 });   // bombard the middle
+    A.sendCmd('cast', { slot:1 });                                // second muster
+    B.sendCmd('cast', { slot:0, key:'t1' });                      // rampart the outer turret
+    B.sendCmd('cast', { slot:1, x:Math.round(90 * 16) / 16 });    // withdraw
+    pump(120);
+    t.ok(A.G.sides[0].spellCd[0] > 0 && A.G.sides[0].spellCd[1] > 0 && A.G.sides[1].spellCd[0] > 0,
+      'every one of them actually fired (' +
+      A.G.sides.map(s => s.spellCd.map(v => Math.round(v)).join('/')).join(' | ') + ')');
+    t.ok(A.netHash() === B.netHash(), 'and the two machines still agree afterwards');
+    pump(900);
+    t.ok(A.netHash() === B.netHash(), 'and thirty seconds later (' + A.netHash() + ' / ' + B.netHash() + ')');
+    t.ok(A.NET.desyncAt < 0 && B.NET.desyncAt < 0,
+      'with the running hash exchange never once disagreeing');
+    t.ok(A.NET.tick > 1400 && A.G.wave >= 2,
+      'over a match that really ran (' + A.NET.tick + ' ticks, wave ' + A.G.wave + ')');
+    A.netEnd(); B.netEnd();
+  }
+  IB.netEnd();
+  global.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = '' + v; },
+    removeItem: k => { delete store[k]; },
+  };
 }
 
 /* ============================================== and it says what happened
