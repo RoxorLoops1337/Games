@@ -3473,10 +3473,13 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const root = css.slice(0, css.indexOf('}'));
 
   // ---- there is a material, and it is named
-  for (const v of ['--brass', '--brass-lo', '--brass-hi', '--brass-dk'])
-    t.ok(new RegExp(v + ':#').test(root), 'the metal has a value: ' + v);
-  t.ok(/--shelf:/.test(root) && /--grain:/.test(root) && /--rivets:/.test(root),
-    'and so do the three things that make a surface out of a rectangle — thickness, grain, rivets');
+  for (const v of ['--kraft', '--kraft-lo', '--kraft-hi', '--kraft-dk',
+                   '--felt', '--cream', '--cream-ink', '--thread'])
+    t.ok(new RegExp(v + ':').test(root), 'the material has a value: ' + v);
+  t.ok(/--shelf:/.test(root) && /--grain:/.test(root) && /--flutes:/.test(root) &&
+       /--corrugate:/.test(root),
+    'and so do the four things that make a surface out of a rectangle — thickness, ' +
+    'nap, flutes, and the torn edge that shows them');
 
   /* ---- a thing you can press has thickness, and the press takes it away.
      A shelf without travel is a sticker; travel without a shelf is a rectangle
@@ -3508,7 +3511,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // face that has to be downloaded is a game face that is missing for the first
   // second of every session, on the screen that makes the first impression.
   t.ok(/--display:'[^']+',/.test(root), 'the display face is declared as a stack, not a single family');
-  t.ok(/serif;/.test(root.slice(root.indexOf('--display'))),
+  t.ok(/sans-serif;/.test(root.slice(root.indexOf('--display'))),
     'ending in a generic, so there is always something to fall back to');
   t.ok(!/@font-face/.test(SRC) && !/fonts\.googleapis/.test(SRC),
     'and nothing is downloaded to get it');
@@ -3517,20 +3520,49 @@ t.ok(true, 'drawing an empty bridge is harmless');
   for (const sel of ['.ptitle', '.sheet h2', '.big', '.vbtn'])
     t.ok(/var\(--display\)/.test(block(sel)), sel + ' is set in the display face');
 
-  // ---- the chassis is one object: the beam at the top and the rack at the
-  // bottom are the same made thing seen from two sides, so they carry the same
-  // rail and the same rivets.
+  /* ---- the chassis is one object: the beam at the top and the rack at the
+     bottom are the same made thing seen from two sides, so they carry the same
+     torn edge and the same seam. Corrugation seen END ON is the one detail that
+     says cardboard and cannot be read as wood or leather; a dashed line is a
+     running stitch for free. */
   for (const sel of ['#top::after', '#dock::before'])
-    t.ok(/var\(--brass-hi\)/.test(block(sel)) && /var\(--brass-lo\)/.test(block(sel)),
-      sel + ' is a brass rail with a lit edge and a dark one');
+    t.ok(/var\(--corrugate\)/.test(block(sel)),
+      sel + ' is the torn edge of the box, with its flutes showing');
   for (const sel of ['#top::before', '#dock::after'])
-    t.ok(/var\(--rivets\)/.test(block(sel)), sel + ' is the row of rivets holding it on');
+    t.ok(/dashed var\(--thread\)/.test(block(sel)), sel + ' is the stitch along the seam');
 
-  // ---- the old furniture does not creep back. These are the exact values the
-  // flat blue-grey panel was made of; one rule at a time is how a reskin gets
-  // undone, and a grep is the only thing that notices.
+  /* ---- THE INK SWAP, which is the one thing about this palette that can fail
+     silently. --gold, --iron, --wood and --red are tuned to be read on a dark
+     panel, and half the markup names them INLINE — the forge's "0/4", every
+     cost chip, the pick cards. Laid on cream they wash straight out, and
+     nothing about the rule that put them there is wrong, so nothing catches it.
+
+     Rebinding the variables inside anything made of card is the fix: an inline
+     `var(--gold)` resolves against wherever it lands, so one piece of markup
+     reads correctly on felt AND on card without any call site knowing which it
+     is on. Every card-faced component has to be in that list or it is the one
+     that goes blank. */
+  {
+    const swap = css.slice(css.indexOf('--gold:#8a6410'));
+    const rule = css.slice(css.lastIndexOf('{', css.indexOf('--gold:#8a6410')) -
+                           240, css.indexOf('--gold:#8a6410'));
+    for (const sel of ['.abtn', '.pick', '.hcard', '.tst', '.hnew', '.sq', '.dtab'])
+      t.ok(rule.includes(sel), sel + ' is made of card, so it rebinds the inks it prints on itself');
+    for (const v of ['--gold', '--iron', '--wood', '--red'])
+      t.ok(new RegExp(v + ':#').test(swap.slice(0, 200)),
+        v + ' has a version dark enough to read on cream');
+    // ...and the dark-panel originals are still the dark-panel originals.
+    t.ok(/--gold:#ffc73d/.test(root), 'while the panel keeps the bright one it was tuned for');
+  }
+
+  // ---- neither of the old furnitures creeps back. These are the exact values
+  // the flat blue-grey panel and then the blackened-iron one were made of; one
+  // rule at a time is how a reskin gets undone, and a grep is the only thing
+  // that notices.
   for (const dead of ['#141a26', '#1b2333', '#2a3446', '#2d3850', '#44557a'])
     t.ok(!css.includes(dead), 'the old slate panel value ' + dead + ' is gone from the interface');
+  for (const dead of ['#c9a355', '#3d2f14', '#312b20', '#241f16'])
+    t.ok(!css.includes(dead), 'and the blackened-iron value ' + dead + ' with it');
 
   // ---- decoration that can be switched off. The badge pulses and the wave
   // plate breathes; both sit on top of information that is also written down,
