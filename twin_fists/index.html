@@ -342,6 +342,8 @@ const SFX = {
   clear(){ [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, 'square', 0.18, null, i * 0.11)); },
   dead(){ [400, 330, 262, 196].forEach((f, i) => tone(f, 0.28, 'sawtooth', 0.2, null, i * 0.16)); },
   select(){ tone(600, 0.05, 'square', 0.14); },
+  splash(){ noise(0.34, 0.4, 900, 260); tone(300, 0.16, 'sine', 0.14, 120); },
+  burn(){ noise(0.5, 0.45, 500, 120); tone(140, 0.4, 'sawtooth', 0.2, 60); },
   crunch(){ noise(0.22, 0.6, 260, 70); tone(88, 0.2, 'sawtooth', 0.26, 44); },
   ready(){ [784, 988, 1319].forEach((f, i) => tone(f, 0.12, 'square', 0.15, null, i * 0.055)); },
   superGo(){
@@ -1143,6 +1145,7 @@ function throwHeld(f){
   o.state = 'down'; o.st = 0;
   o.thrown = true; o.thrownBy = f;
   o.vx = f.face * 215; o.vz = 150; o.z = Math.max(o.z, 10);
+  o.vy = (f.throwAim || 0) * 150;              // up or down aims them at the edges
   o.face = -f.face;
   o.hp -= 8 * (f.team === 'p' ? 1 : DIFF[G.diff].dmg);
   setAnim(o, 'air', 0);
@@ -1733,7 +1736,9 @@ function updateFighter(f, dt){
   f.y += f.vy * dt;
   if (f.state !== 'walk' && f.state !== 'run') f.vx = approach(f.vx, 0, drag * 60 * dt);
   if (f.state !== 'walk' && f.state !== 'run') f.vy = approach(f.vy, 0, drag * 60 * dt);
-  f.y = clamp(f.y, FLOOR_TOP, FLOOR_BOT);
+  if (f.thrown && f.team === 'e') f.y = clamp(f.y, FLOOR_TOP - 26, FLOOR_BOT + 26);
+  else f.y = clamp(f.y, FLOOR_TOP, FLOOR_BOT);
+  hazardCheck(f);
   const minX = cam.x + 8, maxX = cam.x + VW - 8;
   if (f.team === 'p') f.x = clamp(f.x, minX, Math.min(maxX, stage().len - 8));
   else if (W.active && f.ai && f.ai.mode !== 'enter'){
@@ -1779,6 +1784,41 @@ function thrownSweep(f){
   }
 }
 
+/* The edges of some streets are not walls.  A body thrown past the band on a
+   stage with a hazard does not come back — enemies only, because dying to
+   your own knockback is not a thing anybody enjoys. */
+function hazardCheck(f){
+  if (!f.thrown || f.team !== 'e' || f.dead || f.gone) return;
+  const h = stage().hazard;
+  if (!h) return;
+  const over = h.edge === 'back' ? f.y <= h.line : f.y >= h.line;
+  if (!over) return;
+  hazardKill(f, h);
+}
+
+function hazardKill(f, h){
+  f.dead = true; f.hp = 0; f.gone = true; f.thrown = false;
+  const by = f.thrownBy;
+  if (by && by.team === 'p'){
+    addScore(by.pi, f.score + 300);
+    spawnFx('score', f.x, f.y, f.z + 40, '#ffd23d', f.score + 300);
+  }
+  shakeScreen(3, 0.2);
+  if (h.kind === 'water'){
+    SFX.splash();
+    for (let i = 0; i < 12; i++) spawnFx('chip', f.x + rr(-8, 8), f.y, f.z + 6, '#8fd8f0');
+    spawnFx('ring', f.x, f.y, 0, '#bfe8ff');
+  } else if (h.kind === 'molten'){
+    SFX.burn();
+    for (let i = 0; i < 14; i++) spawnFx('chip', f.x + rr(-9, 9), f.y, f.z + 4, i % 2 ? '#ffd06a' : '#ff7a2a');
+    spawnFx('ring', f.x, f.y, 0, '#ffb060');
+    G.flash = 0.25;
+  } else {
+    SFX.ko();
+    for (let i = 0; i < 6; i++) spawnFx('chip', f.x + rr(-6, 6), f.y, f.z + 10, '#6a5a66');
+  }
+}
+
 /* Soft separation so a crowd never stacks into one pixel column. */
 function separate(){
   for (let i = 0; i < fighters.length; i++){
@@ -1821,7 +1861,7 @@ function playerControl(f, inp, dt){
       if (f.holding) f.holding.mash += 0.5;
       return;
     }
-    if (inp.pb){ throwHeld(f); return; }
+    if (inp.pb){ f.throwAim = inp.u ? -1 : inp.d ? 1 : 0; throwHeld(f); return; }
     if (inp.pc){ releaseHold(f, true); return; }
     // shuffle around slowly while holding
     const sp = f.spd * 0.42;
@@ -2269,6 +2309,7 @@ const STAGES = [
   },
   {
     name: 'CARGO DOCKS', sub: 'PIER SEVEN - 3AM', bg: 'docks', len: 2000, music: 2,
+    hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
       { x: 440,  spawn: [['runner', 2], ['chain', 1]], items: [['crate', 110], ['bat', 190]] },
@@ -2279,6 +2320,7 @@ const STAGES = [
   },
   {
     name: 'THE FOUNDRY', sub: 'NIGHT SHIFT - 4AM', bg: 'foundry', len: 2100, music: 3,
+    hazard: { edge: 'front', kind: 'molten', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['punk', 2], ['bruiser', 1]] },
       { x: 430,  spawn: [['blade', 1], ['chain', 2]], items: [['pipe', 80], ['crate', 160]] },
@@ -2290,6 +2332,7 @@ const STAGES = [
   },
   {
     name: "THE WARDEN'S KEEP", sub: 'TOP FLOOR - DAWN', bg: 'keep', len: 2200, music: 4,
+    hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['blade', 2], ['punk', 2]] },
       { x: 430,  spawn: [['bruiser', 2], ['chain', 1]], items: [['pipe', 90]] },
@@ -2759,7 +2802,7 @@ function bgDocks(c){
     const gx = Math.floor(c * 0.62 / 62) + i, x = gx * 62 - c * 0.62;
     const stackH = 1 + Math.floor(hash(gx) * 3);
     for (let s = 0; s < stackH; s++){
-      const y = 150 - (s + 1) * 22;
+      const y = 141 - (s + 1) * 22;
       const col = COL[Math.floor(hash(gx * 5 + s) * COL.length) % COL.length];
       px(x, y, 58, 21, col);
       px(x, y, 58, 2, shade(col, 26));
@@ -2767,6 +2810,12 @@ function bgDocks(c){
       for (let r = 4; r < 56; r += 6) px(x + r, y + 3, 2, 15, shade(col, -18));
     }
   }
+  band(141, 9, '#12405c');                       // open water at the pier's back edge
+  for (let i = 0; i < 22; i++){
+    const x = ((hash(i + 60) * 1400 - c * 0.5) % (VW + 30) + VW + 30) % (VW + 30) - 15;
+    px(x, 142 + (i % 4) * 2, 7 + hash(i) * 8, 1, Math.sin(T * 3 + i) > 0 ? '#2f7ea0' : '#1d5c7e');
+  }
+  px(0, 148, VW, 2, '#0d2f45');
   band(150, 5, '#6a5238'); band(155, VH - 155, '#55432c');
   for (let i = -1; i < 20; i++){                      // planks
     const gx = Math.floor(c / 26) + i, x = gx * 26 - c;
@@ -2802,12 +2851,16 @@ function bgFoundry(c){
     px(x + 28, 96, 10, 5, '#584a60');
   }
   band(150, 6, '#3f3a44'); band(156, VH - 156, '#332e38');
-  // molten channel at the very front
-  band(198, 10, '#1d161f');
-  const g2 = 0.5 + Math.sin(T * 4) * 0.2;
+  // molten channel, in front of the floor where a body can be thrown into it
+  band(FLOOR_BOT + 1, 3, '#1d161f');
+  const g2 = 0.55 + Math.sin(T * 4) * 0.22;
   ctx.fillStyle = 'rgba(255,110,20,' + g2.toFixed(2) + ')';
-  ctx.fillRect(0, 200, VW, 6);
-  band(208, VH - 208, '#241d28');
+  ctx.fillRect(0, FLOOR_BOT + 4, VW, VH - FLOOR_BOT - 6);
+  for (let i = 0; i < 10; i++){                     // bright veins drifting along it
+    const x = ((i * 47 + T * 26) % (VW + 40)) - 20;
+    px(x, FLOOR_BOT + 5 + (i % 3), 14, 2, '#ffd06a');
+  }
+  px(0, VH - 2, VW, 2, '#3a1e12');
   for (let i = -1; i < 14; i++){
     const gx = Math.floor(c / 40) + i, x = gx * 40 - c;
     px(x, 168, 22, 2, '#413a48');
@@ -2846,7 +2899,12 @@ function bgKeep(c){
     const gx = Math.floor(c / 22) + i, x = gx * 22 - c;
     px(x + hash(gx) * 14, 162 + hash(gx + 4) * 46, 2, 2, '#4a4048');
   }
-  band(210, VH - 210, '#2b242a');
+  band(FLOOR_BOT + 1, 2, '#211b21');
+  band(FLOOR_BOT + 3, VH - FLOOR_BOT - 3, '#0a0710');     // the drop off the roof
+  for (let i = -1; i < 20; i++){
+    const gx = Math.floor(c / 24) + i, x = gx * 24 - c;
+    px(x, FLOOR_BOT + 3, 12, 1, '#4a3a44');
+  }
 }
 
 /* ================================================================ draw */
@@ -2967,6 +3025,15 @@ function drawHUD(){
     ];
     const i = Math.floor(G.time / 5.5) % HINTS.length;
     if (G.time % 5.5 < 4.4) textC(HINTS[i], VW / 2, VH - 14, '#c8b090', 1, '#100c18');
+  }
+
+  // the street tells you when its edges are a weapon
+  const hz = stage().hazard;
+  if (hz && G.time < 15 && G.phase === 'play' && Math.floor(T * 2) % 2 === 0){
+    const line = hz.kind === 'water' ? 'GRAB THEM, HOLD UP, KICK - INTO THE HARBOUR'
+      : hz.kind === 'molten' ? 'GRAB THEM, HOLD DOWN, KICK - INTO THE CHANNEL'
+      : 'GRAB THEM, HOLD DOWN, KICK - OFF THE ROOF';
+    textC(line, VW / 2, VH - 14, '#ffb070', 1, '#100c18');
   }
 
   // combo meter
