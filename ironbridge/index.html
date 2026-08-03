@@ -149,7 +149,16 @@
   .res + .res{ border-left:1px solid var(--hair); }
   #rGold{ border-left:1px solid rgba(0,0,0,.35); border-radius:var(--r3) 0 0 var(--r3); padding-left:11px; }
   #rPop{ border-radius:0 var(--r3) var(--r3) 0; padding-right:13px; }
-  .res .ic{ font-size:13px; opacity:.95; filter:drop-shadow(0 1px 1px rgba(0,0,0,.7)); }
+  .res .ic{ font-size:13px; opacity:.95; display:inline-flex; }
+  /* One rule for every icon in the interface. `em` rather than px so an icon is
+     the size of the text it sits with, wherever that is — a cost chip, a job
+     row, the top bar — and one baseline nudge so it sits ON the line rather
+     than under it. */
+  .ico{ width:1.15em; height:1.15em; vertical-align:-.22em; flex:0 0 auto;
+    filter:drop-shadow(0 1px 1px rgba(20,12,4,.35)); }
+  .res .ico{ width:17px; height:17px; vertical-align:-.28em; }
+  .tbtn .ico, .vbtn .ico{ width:17px; height:17px; vertical-align:-.24em; filter:none; }
+  .cost .ico{ margin-right:1px; }
   .res b{ font-weight:800; font-size:16px; letter-spacing:.2px; line-height:1;
     text-shadow:0 1px 0 rgba(0,0,0,.6); }
   .res .rate{ color:#586479; font-size:var(--t1); font-weight:600; letter-spacing:.2px; }
@@ -537,7 +546,7 @@
      inline `var(--gold)` resolves against wherever it lands, so the same markup
      reads correctly on felt and on card without one call site knowing which it
      is on. The alternative was a second class on every span. */
-  .abtn, .pick, .hcard, .tst, .hnew, .sq, .qm, .big.ghost, .dtab{
+  .abtn, .pick, .hcard, .tst, .hnew, .sq, .qm, .big.ghost, .dtab, .ib{
     --gold:#8a6410; --iron:#41556c; --wood:#7a4e20; --red:#b3241c; --pop:#2e7a3c;
     --dim:#7d6647; --dim2:#9a8663; --ink:var(--cream-ink); }
   .abtn{ color:var(--cream-ink); }
@@ -647,15 +656,15 @@
      the top of it, rather than a rounded rectangle with a heading in it. */
   .sheet{ width:min(860px,100%); max-height:92vh; overflow-y:auto; padding:20px 22px 18px;
     position:relative;
-    background:var(--grain),linear-gradient(180deg,#282217,#16130d 44%,#0f0c08 100%);
+    background:var(--grain),linear-gradient(180deg,#2b3b4d,#1e2a38 44%,#18222d 100%);
     border:1px solid var(--kraft-lo); border-radius:var(--r4);
-    box-shadow:inset 0 1px 0 rgba(255,236,190,.16), 0 0 0 1px rgba(0,0,0,.6), var(--d3); }
-  .sheet::before{ content:''; position:absolute; left:0; right:0; top:0; height:3px;
-    border-radius:var(--r4) var(--r4) 0 0;
-    background:linear-gradient(90deg,var(--kraft-lo),var(--kraft-hi) 50%,var(--kraft-lo)); }
-  .sheet h2{ margin:0 0 5px; font-size:26px; letter-spacing:1px; font-weight:700;
-    font-family:var(--display); font-variant-caps:small-caps; color:#ffe8b8;
-    text-shadow:0 1px 0 rgba(0,0,0,.6), 0 0 24px rgba(255,200,90,.18); }
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.09), 0 0 0 1px rgba(0,0,0,.5), var(--d3); }
+  /* The lid of the box, flutes showing, the same torn edge the chassis has. */
+  .sheet::before{ content:''; position:absolute; left:0; right:0; top:0; height:6px;
+    border-radius:var(--r4) var(--r4) 0 0; background:var(--corrugate); }
+  .sheet h2{ margin:0 0 5px; font-size:27px; letter-spacing:.6px; font-weight:700;
+    font-family:var(--display); font-variant-caps:small-caps; color:#ffe6ae;
+    text-shadow:0 2px 0 rgba(0,0,0,.35); }
   .sheet .sub{ margin:0 0 16px; color:var(--dim); font-size:var(--t4); line-height:1.45; }
   .picks{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
   .pick{ padding:12px 13px; background:var(--raise); border:1px solid var(--rim); border-radius:var(--r3);
@@ -665,7 +674,7 @@
     box-shadow:inset 0 1px 0 rgba(255,236,190,.14), 0 10px 26px rgba(0,0,0,.55), 0 0 0 1px rgba(201,163,85,.3); }
   .pick:active{ transform:translateY(0); box-shadow:inset 0 2px 6px rgba(0,0,0,.5); }
   .pick .pt{ font-size:17px; font-weight:700; margin-bottom:3px; letter-spacing:.4px;
-    font-family:var(--display); font-variant-caps:small-caps; color:#f6e8cb; }
+    font-family:var(--display); font-variant-caps:small-caps; color:var(--cream-ink); }
   .pick .pk{ font-size:var(--t1); letter-spacing:1.8px; text-transform:uppercase; color:var(--gold);
     font-weight:700; margin-bottom:6px; }
   .pick .pd{ font-size:var(--t3); color:var(--dim); line-height:1.5; }
@@ -797,7 +806,8 @@
   .ib{ display:flex; gap:12px; align-items:flex-start; padding:11px 13px; background:var(--raise);
     border:1px solid var(--rim); border-radius:var(--r3); font-size:var(--t4); line-height:1.55; color:var(--dim);
     box-shadow:var(--lip), var(--d1); }
-  .ib .ic{ font-size:20px; line-height:1.2; flex:0 0 auto; }
+  .ib .ic{ font-size:20px; line-height:1.2; flex:0 0 auto; display:inline-flex; }
+  .ib .ico{ width:24px; height:24px; vertical-align:0; }
   .ib b{ color:var(--ink); }
 
   /* ---------------- toast / narrator ---------------- */
@@ -953,28 +963,28 @@
 <body>
 <div id="app">
   <div id="top">
-    <div class="res" id="rGold"><span class="ic">🪙</span><b>0</b><span class="rate"></span></div>
-    <div class="res" id="rIron"><span class="ic">⛏️</span><b>0</b><span class="rate"></span></div>
-    <div class="res" id="rWood"><span class="ic">🪵</span><b>0</b><span class="rate"></span></div>
-    <div class="res" id="rFood"><span class="ic">🌾</span><b>0</b><span class="rate"></span></div>
-    <div class="res" id="rPop"><span class="ic">👥</span><b>0</b></div>
+    <div class="res" id="rGold"><span class="ic" id="icGold"></span><b>0</b><span class="rate"></span></div>
+    <div class="res" id="rIron"><span class="ic" id="icIron"></span><b>0</b><span class="rate"></span></div>
+    <div class="res" id="rWood"><span class="ic" id="icWood"></span><b>0</b><span class="rate"></span></div>
+    <div class="res" id="rFood"><span class="ic" id="icFood"></span><b>0</b><span class="rate"></span></div>
+    <div class="res" id="rPop"><span class="ic" id="icPop"></span><b>0</b></div>
     <div id="clock">
       <div id="waveBox">Wave <b>0</b> · <span id="waveT">0:00</span></div>
-      <button class="tbtn" id="btnSound">🔊</button>
+      <button class="tbtn" id="btnSound" aria-label="Sound"></button>
       <button class="tbtn" id="btnSpeed">1×</button>
-      <button class="tbtn" id="btnPause">❚❚</button>
-      <button class="tbtn" id="btnMenu">☰</button>
+      <button class="tbtn" id="btnPause" aria-label="Pause"></button>
+      <button class="tbtn" id="btnMenu" aria-label="Menu"></button>
     </div>
   </div>
 
   <div id="stage">
     <canvas id="wcv"></canvas>
     <div id="viewbtns">
-      <button class="vbtn" id="camHold" data-long="HOLD" data-short="🏠">HOLD</button>
-      <button class="vbtn" id="camGate" data-long="GATES" data-short="🚪">GATES</button>
-      <button class="vbtn" id="camMid" data-long="MID" data-short="⚔">MID</button>
-      <button class="vbtn" id="camFoe" data-long="FOE" data-short="💀">FOE</button>
-      <button class="vbtn" id="camFollow" data-long="FOLLOW" data-short="👁">FOLLOW</button>
+      <button class="vbtn" id="camHold" data-long="HOLD" data-short="hold">HOLD</button>
+      <button class="vbtn" id="camGate" data-long="GATES" data-short="gates">GATES</button>
+      <button class="vbtn" id="camMid" data-long="MID" data-short="mid">MID</button>
+      <button class="vbtn" id="camFoe" data-long="FOE" data-short="foe">FOE</button>
+      <button class="vbtn" id="camFollow" data-long="FOLLOW" data-short="follow">FOLLOW</button>
       <button class="vbtn" id="camOut" data-long="−" data-short="−">−</button>
       <button class="vbtn" id="camIn" data-long="＋" data-short="＋">＋</button>
       <button class="vbtn" id="btnHelpBase" data-long="?" data-short="?">?</button>
@@ -5081,8 +5091,14 @@ function resize(){
   const wasNarrow = document.body.classList.contains('narrow');
   const narrow = window.innerWidth < 760;
   document.body.classList.toggle('narrow', narrow);
-  for (const el of document.querySelectorAll('#viewbtns [data-long]'))
-    el.textContent = narrow ? el.dataset.short : el.dataset.long;
+  // On a phone these become pictures. `data-short` names an icon rather than
+  // carrying a glyph, so the button is drawn in the same hand as everything
+  // else instead of borrowing whatever the operating system draws for a door.
+  for (const el of document.querySelectorAll('#viewbtns [data-long]')){
+    const k = el.dataset.short;
+    if (narrow && UI_ICON[k]) el.innerHTML = UI_ICON[k];
+    else el.textContent = narrow ? k : el.dataset.long;
+  }
   if (wasNarrow !== narrow) syncUI();
 }
 
@@ -13450,7 +13466,81 @@ function draw(){
    ===================================================================== */
 const $ = (id) => document.getElementById(id);
 const RES_CLASS = { gold:'g', iron:'i', wood:'w', food:'f' };
-const RES_ICON = { gold:'🪙', iron:'⛏️', wood:'🪵', food:'🌾' };
+/* ------------------------------------------------------------- the icons
+   These were emoji, which is the right first answer and the wrong last one.
+   An emoji is somebody else's artwork: it changes shape between Windows,
+   Android and iOS, it cannot be recoloured, it renders at whatever weight the
+   system font feels like, and a coin beside a log beside an ear of wheat is three different
+   illustrators. On a panel made of cut paper they were the only things in the
+   interface not made of cut paper.
+
+   So they are drawn here, inline, in the same language as everything else: a
+   flat shape, a darker copy of it offset a pixel to be the layer underneath,
+   and a cream cut-edge round the outside. No file, no request, no font — a few
+   hundred bytes of markup that scales to any size and takes a colour.
+
+   Each carries its own fills rather than currentColor, because a resource
+   count appears both on the dark felt of the top bar and on the cream of a
+   cost chip, and one icon has to read on both. The CONTROLS below do use
+   currentColor: they only ever sit on card.                                  */
+const ICO_EDGE = 'stroke="#3d2d1a" stroke-width="1.6" stroke-linejoin="round"';
+const ico = (body) => '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>';
+
+const RES_ICON = {
+  // a coin, on edge behind itself
+  gold: ico('<circle cx="12" cy="13.4" r="8.4" fill="#a9741a"/>' +
+            '<circle cx="12" cy="11.4" r="8.4" fill="#f7c53f" ' + ICO_EDGE + '/>' +
+            '<circle cx="12" cy="11.4" r="4.3" fill="none" stroke="#a9741a" stroke-width="1.5"/>'),
+  // an ingot: a slab seen from just above, with the block under it
+  iron: ico('<path d="M2.6 12.6h18.8v6.6a1.6 1.6 0 0 1-1.6 1.6H4.2a1.6 1.6 0 0 1-1.6-1.6Z" fill="#5e6f85"/>' +
+            '<path d="M6.4 4.4h11.2l3.8 8.2H2.6Z" fill="#c3d1e2" ' + ICO_EDGE + '/>' +
+            '<path d="M8.4 8.4h7.2" stroke="#5e6f85" stroke-width="1.6" stroke-linecap="round"/>'),
+  // a log, sawn end toward you, rings showing
+  wood: ico('<rect x="6.5" y="9" width="15" height="11" rx="5.5" fill="#6d4620"/>' +
+            '<rect x="6.5" y="6" width="15" height="11" rx="5.5" fill="#b1783c" ' + ICO_EDGE + '/>' +
+            '<ellipse cx="7.4" cy="11.5" rx="4.8" ry="5.5" fill="#d09a58" ' + ICO_EDGE + '/>' +
+            '<ellipse cx="7.4" cy="11.5" rx="2" ry="2.4" fill="none" stroke="#6d4620" stroke-width="1.5"/>'),
+  // an ear of wheat: a stem and three pairs of grains, each one big enough to
+  // survive being 13px tall — which is the only size any of these is ever seen
+  food: ico('<path d="M12 21.5V8" stroke="#8a6a18" stroke-width="2.4" stroke-linecap="round"/>' +
+            '<ellipse cx="8.6" cy="15.6" rx="2.6" ry="4" fill="#e0b93a" ' + ICO_EDGE +
+              ' transform="rotate(28 8.6 15.6)"/>' +
+            '<ellipse cx="15.4" cy="15.6" rx="2.6" ry="4" fill="#e0b93a" ' + ICO_EDGE +
+              ' transform="rotate(-28 15.4 15.6)"/>' +
+            '<ellipse cx="8.8" cy="9.6" rx="2.5" ry="3.8" fill="#f0cb45" ' + ICO_EDGE +
+              ' transform="rotate(24 8.8 9.6)"/>' +
+            '<ellipse cx="15.2" cy="9.6" rx="2.5" ry="3.8" fill="#f0cb45" ' + ICO_EDGE +
+              ' transform="rotate(-24 15.2 9.6)"/>' +
+            '<ellipse cx="12" cy="5.6" rx="2.5" ry="3.6" fill="#f7d95e" ' + ICO_EDGE + '/>'),
+  // two of you
+  pop:  ico('<circle cx="15.6" cy="9" r="3.5" fill="#3f8f4c"/>' +
+            '<path d="M10.4 20c0-3 2.3-5.2 5.2-5.2s5.2 2.2 5.2 5.2Z" fill="#3f8f4c"/>' +
+            '<circle cx="8.8" cy="8.2" r="4.1" fill="#8ce69a" ' + ICO_EDGE + '/>' +
+            '<path d="M2.6 20c0-3.4 2.8-6.1 6.2-6.1s6.2 2.7 6.2 6.1Z" fill="#8ce69a" ' + ICO_EDGE + '/>'),
+};
+
+/* The controls. One colour, taken from whatever they are printed on, because
+   unlike a resource these only ever sit on card. */
+const cico = (body, cls) => '<svg class="ico' + (cls ? ' ' + cls : '') +
+  '" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>';
+const UI_ICON = {
+  sound:  cico('<path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" fill="currentColor" stroke-width="1.8"/>' +
+               '<path d="M15.5 9.2a4 4 0 0 1 0 5.6M18.4 6.6a8 8 0 0 1 0 10.8"/>'),
+  mute:   cico('<path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" fill="currentColor" stroke-width="1.8"/>' +
+               '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
+  pause:  cico('<path d="M9 5v14M15 5v14" stroke-width="3.4"/>'),
+  play:   cico('<path d="M7 4.6 19.5 12 7 19.4Z" fill="currentColor" stroke-width="2"/>'),
+  menu:   cico('<path d="M4 7h16M4 12h16M4 17h16" stroke-width="2.6"/>'),
+  hold:   cico('<path d="M3.6 11 12 4l8.4 7"/><path d="M6 10.4V20h12v-9.6"/><path d="M10 20v-5h4v5"/>'),
+  gates:  cico('<path d="M5 20V7.5C5 5.6 8.1 4 12 4s7 1.6 7 3.5V20"/><path d="M5 20h14"/>' +
+               '<path d="M12 4v16"/><path d="M8.4 12.4h.02M15.6 12.4h.02" stroke-width="3"/>'),
+  mid:    cico('<path d="M4.5 4.5 16 16M19.5 4.5 8 16"/><path d="M5.5 19.5 9 16M18.5 19.5 15 16"/>'),
+  foe:    cico('<path d="M12 3.5c4.4 0 7.5 3 7.5 7 0 2.6-1.3 4-2.7 4.9V19H7.2v-3.6C5.8 14.5 4.5 13.1 4.5 10.5c0-4 3.1-7 7.5-7Z"/>' +
+               '<path d="M9.3 10.6h.02M14.7 10.6h.02" stroke-width="3.6"/>'),
+  follow: cico('<path d="M2.5 12S6.4 5.5 12 5.5 21.5 12 21.5 12 17.6 18.5 12 18.5 2.5 12 2.5 12Z"/>' +
+               '<circle cx="12" cy="12" r="2.9"/>'),
+};
 
 function costHtml(cost){
   const s = me();
@@ -14002,7 +14092,7 @@ function openModal(html, blocking){
 function paintHeld(){
   if (HEADLESS) return;
   const stopped = G.paused || G.held;
-  $('btnPause').textContent = stopped ? '▶' : '❚❚';
+  $('btnPause').innerHTML = stopped ? UI_ICON.play : UI_ICON.pause;
   $('btnPause').classList.toggle('on', stopped);
 }
 
@@ -14557,16 +14647,16 @@ function showIntro(diff){
   openModal('<h2>How Ironbridge works</h2>' +
     '<p class="sub">Thirty seconds, then you can play.</p>' +
     '<div class="intro">' +
-    '<div class="ib"><span class="ic">🏰</span><div><b>One world, one camera.</b> Your hold is at the near end, the ' +
+    '<div class="ib"><span class="ic">' + UI_ICON.hold + '</span><div><b>One world, one camera.</b> Your hold is at the near end, the ' +
     foeName() + ' at the far end, the bridge between. Drag to look along it, pinch or scroll to zoom, ' +
     'or use HOLD · GATES · MID · FOE.</div></div>' +
-    '<div class="ib"><span class="ic">⛏️</span><div><b>Your hold pays for the war.</b> Workers gather gold, iron, wood ' +
+    '<div class="ib"><span class="ic">' + RES_ICON.iron + '</span><div><b>Your hold pays for the war.</b> Workers gather gold, iron, wood ' +
     'and food. Farms raise your population. A Barracks turns an idle worker into a fighter, and everything ' +
     'you arm marches out with the next wave.</div></div>' +
-    '<div class="ib"><span class="ic">🚪</span><div><b>Break their gates to win.</b> Outer turret, mid, inner, ' +
+    '<div class="ib"><span class="ic">' + UI_ICON.gates + '</span><div><b>Break their gates to win.</b> Outer turret, mid, inner, ' +
     'inhibitor, then the gates — in that order, and the same for them. Take an inhibitor and Siege Ogres ' +
     'march for you for ' + C.SUPER_DUR + ' seconds.</div></div>' +
-    '<div class="ib"><span class="ic">⚔️</span><div><b>Heroes fight on their own.</b> You choose the build: a class, ' +
+    '<div class="ib"><span class="ic">' + UI_ICON.mid + '</span><div><b>Heroes fight on their own.</b> You choose the build: a class, ' +
     'then one passive out of a hundred, a skill at levels 3, 6 and 9, an ultimate at 12. Tap a hero card ' +
     'to choose.</div></div>' +
     '</div>' +
@@ -15003,7 +15093,7 @@ function wire(){
     const t = $('advice').dataset.tab;
     if (t){ dockTab = t; syncUI(); }
   });
-  const paintSound = () => { $('btnSound').textContent = AU.muted ? '🔇' : '🔊'; $('btnSound').classList.toggle('on', !AU.muted); };
+  const paintSound = () => { $('btnSound').innerHTML = AU.muted ? UI_ICON.mute : UI_ICON.sound; $('btnSound').classList.toggle('on', !AU.muted); };
   $('btnSound').addEventListener('click', () => { audioStart(); setMuted(!AU.muted); paintSound(); sfx('click'); });
   paintSound();
   // browsers will not make a sound until the player has touched the page
@@ -15857,6 +15947,11 @@ function boot(){
   // ?perf on the URL. Deliberately a URL flag rather than a key or a gesture:
   // the machine that needs this is a phone, and a phone has no keyboard and
   // should not have a hidden gesture that a player can trip over.
+  // The icons that never change are painted once rather than living in the
+  // markup, so the whole set has exactly one definition to go wrong.
+  for (const k of ['gold', 'iron', 'wood', 'food', 'pop'])
+    $('ic' + k[0].toUpperCase() + k.slice(1)).innerHTML = RES_ICON[k];
+  $('btnMenu').innerHTML = UI_ICON.menu;
   try { if (/[?&]perf\b/.test(location.search)) setTimeout(perfStart, 1200); } catch (e) {}
   // ?labels does the same for the label pass. It records rather than ablates,
   // so it costs one map lookup per name per frame and can be left running while
@@ -15909,6 +16004,7 @@ window.IB = {
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, RAIL_SH, deckFarY, railShadowOff, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   BAR, barState, dmgAge, chromaDown, tintTo, hexRGB, hexOf, STRUCT_KEEPS, LABEL_HOT,
   FLOAT_TIER, FLOAT_GRAZE, floatW, floatTier, FLOAT_JIT, FLOAT_JIT_MIN, jitter,
+  RES_ICON, UI_ICON, ico, cico,
   LANE_PX, FRAME, laneFitZoom, LABEL_QUIET, LABEL_MARK, labelMark, DOCK_TUTOR, dockHelp,
   get dockHelpOn(){ return dockHelpOn; }, set dockHelpOn(v){ dockHelpOn = v; },
   floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, throwOff, smear, softShadow, shadowParts, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
