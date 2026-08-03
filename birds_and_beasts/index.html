@@ -803,7 +803,7 @@
     justify-content:center; flex-wrap:wrap; }
 
   .slopbox{ font-size:var(--t-num); font-weight:900; color:var(--gold); background:#17210f;
-    border:1px solid #3d4d22; box-shadow:inset 0 1px 0 rgba(255,211,77,.18);
+    border:1px solid #5d7434; box-shadow:inset 0 1px 0 rgba(255,211,77,.18);
     border-radius:9px; padding:3px 10px; white-space:nowrap; }
   /* Five breeding rituals in a phone-wide column. A sideways scroller cut them
      off mid-word with two thirds of the choice off-screen, so they wrap. */
@@ -928,7 +928,7 @@
   .wavelbl{ position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:3;
     font-size:9.5px; letter-spacing:1.6px; font-weight:800; text-transform:uppercase;
     white-space:nowrap; padding:3px 11px; border-radius:20px; color:#ffc9a6; pointer-events:none;
-    background:rgba(8,14,8,.72); border:1px solid rgba(255,140,100,.3); }
+    background:rgba(8,14,8,.72); border:1px solid rgba(255,168,120,.55); }
   .wavelbl b{ color:#fff2d0; }
   .wavelbl .nxt{ color:#8fa285; letter-spacing:1px; font-weight:700; text-transform:none; }
   .pile .mend{ color:#ffb9a6; }
@@ -1224,7 +1224,9 @@
     text-decoration-thickness:1.5px; }
   /* and the log has a bottom EDGE — it used to dissolve into nothing, so a
      one-line log looked like a rendering failure */
-  .logbox{ -webkit-mask-image:none !important; mask-image:none !important; }
+  /* the log gets a bottom LIP inside the book, where it is short and framed —
+     but the run-end ledger keeps its fade, and this used to kill both */
+  #book .logbox{ -webkit-mask-image:none !important; mask-image:none !important; }
   #book .bkhead .tn .plate, #book .bkhead .tn b, #book .bkhead .tn .st2{ color:#3d3520; }
   #book .bkhead .tn .st2{ opacity:.8; }
   /* The icons inherit `color`, so forcing the ancestry chip to paper ink made
@@ -1307,8 +1309,10 @@
   #over.lose #oBestLine .pw{ color:#c9c1b2; }
   /* the run's story is a ledger, not a console dump — and it never clips a line */
   .logbox{ position:relative; isolation:isolate;
-    max-height:158px; overflow-y:auto; text-align:left; font-size:12px; line-height:1.75;
-    font-family:'Courier New',ui-monospace,monospace;
+    max-height:158px; overflow-y:auto; text-align:left; font-size:12.5px; line-height:1.7;
+    /* The run's whole story, in the browser's default typewriter — the only
+       system font anywhere in the build, on the screen people screenshot. */
+    font-family:var(--f-text), ui-monospace, monospace;
     color:#463c22; border:none; border-radius:2px 3px 2px 3px; padding:10px 12px 15px;
     background-color:#cbb78c;
     background-image:
@@ -2931,7 +2935,8 @@ function killUnit(u){
 function swingAt2(u, target){
   const dmg = unitMightA(u);
   if (dmg <= 0) return;
-  ev('swing', { id: u.id, side: u.side, x: u.x, y: u.y, tx: target.x, ty: target.y, dmg });
+  ev('swing', { id: u.id, side: u.side, x: u.x, y: u.y,
+    tid: target.id, tx: target.x, ty: target.y, dmg });
   // a blow shoves. This is a DRAW offset, not a position: a rock-back that
   // actually moved beasts would be a free stall and the player, who usually has
   // the numbers, would win the fight with it.
@@ -3747,9 +3752,18 @@ function drawBeast(cv, c){
     ctx.fillStyle = gr; ctx.fill(); ctx.restore();
   } catch (e){}
   // LIMBS: stubs / stilts / none / four stubby legs / a serpent's coil
+  // Every leg used to end in a butt-capped rectangle with two hard 90-degree
+  // corners — no taper, no foot, no toe. At fight scale it read as a clipping
+  // bug. Each one lands on a pad, and the pad points the way the animal faces.
+  const foot = (x) => {
+    ctx.beginPath();
+    ctx.ellipse(x + 1.7 * sz, 1.4, 4.8 * sz, 2.7 * sz, 0, 0, Math.PI * 2);
+    ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
+  };
   const stub = (x) => {
     ctx.beginPath(); ctx.rect(x - 3 * sz, 0, 6 * sz, 10);
     ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
+    foot(x);
   };
   if (f.limb === 0){
     for (const s of [-1, 1]) stub(s * bw * 0.5);
@@ -3761,8 +3775,7 @@ function drawBeast(cv, c){
       ctx.moveTo(s * bw * 0.44 - 2, 22); ctx.lineTo(s * bw * 0.62 - 2, 0);
       ctx.lineTo(s * bw * 0.62 + 2, 0); ctx.lineTo(s * bw * 0.44 + 2, 22);
       ctx.closePath(); ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2);
-      ctx.beginPath(); ctx.moveTo(s * bw * 0.62 - 5, 0); ctx.lineTo(s * bw * 0.62 + 5, 0);
-      stroke(ink, 3);
+      foot(s * bw * 0.62);
     }
   } else if (f.limb === 4){
     // serpent: no legs, and a body that carries on as a coil behind it
@@ -3900,39 +3913,63 @@ function drawBeast(cv, c){
     trunk(); stroke(ink, 8 * sz);
     trunk(); stroke(main, 5 * sz);
   }
-  // eyes — sized off the animal, and slit-pupilled in the odd-limbed families
+  // THE FACE POINTS FORWARD. `drawPit` mirrors every enemy with ctx.scale(-1,1)
+  // and it rendered no difference, because the eyes were placed symmetrically
+  // about x=0 and the mouth was centred — twelve animals in a melee, all of them
+  // staring at the camera. Everything on the face now sits toward +x, which is
+  // the direction the unmirrored sprite (your side) walks and swings. One flip
+  // and an enemy is looking at the animal it is fighting.
+  const FACE = hw * 0.20;
   const ne = v.eyes;
   const er = (neck ? 4.0 : 5.2) * (0.68 + 0.42 * sz);
   for (let i = 0; i < ne; i++){
     const t = ne === 1 ? 0 : (i / (ne - 1) - 0.5);
-    const ex = t * hw * (neck ? 1.0 : 0.86), ey = hcy + hh * 0.34;
-    ell(ex, ey, er, er * 1.08, '#fdfff4');
+    // and the far eye is the SMALL one: a head turned three-quarters on
+    const lead = 0.84 + 0.20 * (t + 0.5);
+    const ex = t * hw * (neck ? 0.94 : 0.80) + FACE, ey = hcy + hh * 0.34;
+    ell(ex, ey, er * lead, er * 1.08 * lead, '#fdfff4');
     if (f.slit){
       ctx.beginPath();
-      ctx.rect(ex + 0.2 - 0.6 * sz, ey - er * 0.78, 1.2 * sz, er * 1.56);
+      ctx.rect(ex + 0.2 - 0.6 * sz, ey - er * 0.78 * lead, 1.2 * sz, er * 1.56 * lead);
       ctx.fillStyle = '#101408'; ctx.fill();
     } else {
-      ell(ex + 0.8, ey - 0.6, er * 0.46, er * 0.52, '#101408');
+      // the pupil leads too, so even a one-eyed animal has a gaze
+      ell(ex + er * 0.30, ey - 0.6, er * 0.46 * lead, er * 0.52 * lead, '#101408');
     }
   }
   // mouth — toothy for the mean ones, and skipped entirely behind a beak
   const mean = c.trait === 'feral' || c.trait === 'frenzy' || c.trait === 'venom' || c.might >= 14;
   const mw = neck ? hw * 0.52 : 8;
   const my = hcy - hh * 0.02;
+  const mx = FACE * 1.05;                  // the mouth leads with the eyes
   if (f.snout !== 1){
     ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.beginPath();
     if (mean){
-      ctx.moveTo(-mw, my); ctx.lineTo(mw, my); ctx.stroke();
+      ctx.moveTo(mx - mw, my); ctx.lineTo(mx + mw, my); ctx.stroke();
       ctx.fillStyle = '#fdfff4';
       for (let i = -1; i <= 1; i++){
-        const tx = i * mw * 0.75;
+        const tx = mx + i * mw * 0.75;
         ctx.beginPath(); ctx.moveTo(tx - mw * 0.32, my);
         ctx.lineTo(tx, my - mw * 0.5); ctx.lineTo(tx + mw * 0.32, my);
         ctx.closePath(); ctx.fill();
       }
     } else {
-      ctx.arc(0, hcy + hh * 0.06, mw * 0.75, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
+      ctx.arc(mx, hcy + hh * 0.06, mw * 0.75, Math.PI * 1.15, Math.PI * 1.85, true); ctx.stroke();
     }
+  }
+  // AND A TRAILING EAR, on the back of the head only. The outline was the last
+  // symmetric thing left: with the face turned but the silhouette still a
+  // mirror, the animal read as facing forward with its features slid sideways.
+  // This is the one shape that says which way it is pointing from across the
+  // pit, at fight scale, with no colour information at all.
+  if (f.snout !== 2){
+    const ew = (neck ? 5.5 : 7.5) * sz, eh = (neck ? 7 : 10) * sz;
+    ctx.save();
+    ctx.translate(-hw * 0.86, hcy + hh * 0.30);
+    ctx.rotate(-0.42);
+    ctx.beginPath(); ctx.ellipse(0, 0, ew, eh, 0, 0, Math.PI * 2);
+    ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2.2);
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -4922,11 +4959,18 @@ function drawPit(){
   // A rank has DEPTH as well as width. Fanning on x alone left five same-wave
   // enemies in one horizontal band in a corner with half the sand empty, and
   // put every bar on the same row.
+  // PAD insets the world so half a sprite always fits — and then the fan added
+  // up to 0.93 sprite-widths OUTSIDE that inset, so a beast on the end of a big
+  // rank was cut clean in half by the canvas edge with its bar and HP numeral
+  // truncated along with it. The fan is a draw offset; it lives inside the pad
+  // like everything else.
   const fanOf = (u2) => {
     const list = ranks[u2.side];
     const i = list.indexOf(u2);
     if (i < 0) return 0;
-    return (i - (list.length - 1) / 2) * SPR * 0.62;
+    const raw = (i - (list.length - 1) / 2) * SPR * 0.62;
+    const at = PAD + (u2.x / AW) * (W - PAD * 2);
+    return Math.max(PAD - at, Math.min(W - PAD - at, raw));
   };
   const fanY = (u2) => {
     const list = ranks[u2.side];
@@ -4993,7 +5037,7 @@ function drawPit(){
     if (!u.alive) continue;
     // a little dust off the heels of anything running
     if (u.moving && ((u.id * 7 + Math.floor(F.t * 14)) % 5 === 0))
-      pitAdd({ k: 'dust', x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
+      pitAdd({ k: 'dust', uid: u.id, x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
   }
 
   // --- SECOND PASS: everything that has to be readable ---------------------
@@ -5136,7 +5180,12 @@ function drawPit(){
   };
   for (const f of pitFx){
     const own = fxUnit(f);
-    const x = px(f.x) + (own ? (own._fx || 0) : 0), y = py(f.y) + (own ? (own._fy || 0) : 0);
+    let x = px(f.x) + (own ? (own._fx || 0) : 0), y = py(f.y) + (own ? (own._fy || 0) : 0);
+    if (f.tx != null){                      // a mark drawn BETWEEN two animals
+      const tg = f.tid ? fxUnit({ uid: f.tid }) : null;
+      x = (x + px(f.tx) + (tg ? (tg._fx || 0) : 0)) / 2;
+      y = (y + py(f.ty) + (tg ? (tg._fy || 0) : 0)) / 2;
+    }
     const k = 1 - f.t / f.life;              // 1 at birth, 0 at death
     ctx.globalAlpha = Math.max(0, k);
     if (f.k === 'boom' || f.k === 'ring'){
@@ -5185,8 +5234,22 @@ function drawPit(){
       // and it stays IN THE PIT. A hit on a unit at the back of the sand rose
       // 1.4 sprite-heights and printed the damage halfway up the fence, with no
       // animal within 200px of it — a number in the sky belongs to nothing.
-      const ny = Math.max(horizon + SPR * 0.34,
+      let ny = Math.max(horizon + SPR * 0.34,
         y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR);
+      // AND IT DODGES THE BARS. The overhead pass reserves a footprint for each
+      // animal's bar, tag and HP numeral — and the number, drawn in a later
+      // loop, parked straight through it. So the salmon bar was printed across
+      // the stem of a "-3" and an HP numeral sat under it at 2.6:1. The number
+      // is the transient one, so the number is the one that moves.
+      const nw2 = (ctx.measureText ? ctx.measureText('-' + f.v).width : fs * 1.6) * 0.5 + 3;
+      for (let guard = 0; guard < 10; guard++){
+        const r = { x0: nx - nw2, x1: nx + nw2, y0: ny - fs * 0.82, y1: ny + fs * 0.24 };
+        let hit = null;
+        for (const q of placedBars)
+          if (r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0){ hit = q; break; }
+        if (!hit || ny - (r.y1 - hit.y0) < horizon + SPR * 0.34) break;
+        ny -= (r.y1 - hit.y0) + 2;
+      }
       ctx.strokeText('-' + f.v, nx, ny);
       ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffffff');
       ctx.fillText('-' + f.v, nx, ny);
@@ -5226,7 +5289,11 @@ function drainArena(){
   for (const e of F.events){
     if (e.k === 'swing'){
       // a slash across the gap, so you can see WHO hit WHOM
-      pitAdd({ k: 'slash', uid: e.id, x: (e.x + e.tx) / 2, y: (e.y + e.ty) / 2,
+      // Both ENDS, not the simulation midpoint. A midpoint tagged to the
+      // attacker got the attacker's fan added to it, so when the two were
+      // fanned opposite ways the arc landed a full sprite-width off both of
+      // them — a crescent sweeping through empty sand.
+      pitAdd({ k: 'slash', uid: e.id, tid: e.tid, x: e.x, y: e.y, tx: e.tx, ty: e.ty,
         dir: e.side === 'us' ? 1 : -1, t: 0, life: 0.20 });
     } else if (e.k === 'hit'){
       pitAdd({ k: 'ring', uid: e.id, x: e.x, y: e.y, v: e.dmg, t: 0, life: 0.26 });
