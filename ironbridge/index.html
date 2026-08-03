@@ -13912,8 +13912,14 @@ function lobbyConnect(code){
   // code that had ever been played on could never start a second match. So we
   // say. A live match reports the tick it is on, because if BOTH sides still
   // have one, the further along is the better board to keep.
+  //
+  // ...and WHICH SEAT we had, for the same reason. The room used to keep that
+  // in a stored flag, which is a fact it can read off its own sockets and so is
+  // a fact it can be wrong about — and was, permanently, whenever a socket died
+  // without saying so. It knows who is connected; only we know who we were.
   const q = NET.on && !NET.awaitSync ? '?have=1&tick=' + (NET.tick | 0) : '?have=0';
-  try { sock = new WebSocket('wss://' + relayHost() + '/room/' + code + q); }
+  const seat = NET.on && (NET.me === 0 || NET.me === 1) ? '&side=' + NET.me : '';
+  try { sock = new WebSocket('wss://' + relayHost() + '/room/' + code + q + seat); }
   catch (e){ return lobbySet('error', 'Could not open a connection.'); }
   LOBBY.sock = sock;
   sock.onerror = () => lobbySet('error', RELAY_UNSET()
@@ -13937,7 +13943,16 @@ function lobbyConnect(code){
     // something went wrong afterwards, or had never arrived. It is one line and
     // it splits the two halves of every report about this screen.
     if (m.k === 'peers'){
+      const was = LOBBY.peers | 0;
       LOBBY.peers = m.n | 0;
+      // ...and into the diary as well, because "did anybody actually reach the
+      // room" is the question a report about a failed rejoin turns on and there
+      // was no way to answer it. The one that prompted this had five PEER GONEs
+      // and not a single line saying somebody had arrived — which is the whole
+      // finding, and it was only readable as an absence.
+      if (NET.on && LOBBY.peers !== was)
+        netDiary('peers ' + LOBBY.peers, LOBBY.peers > was
+          ? 'the other player reached the room' : 'the room is down to us');
       if (LOBBY.state === 'hosting' || LOBBY.state === 'connecting') showLobby();
       return;
     }
@@ -14908,6 +14923,7 @@ const NET = {
   pending:[],         // commands issued since the last publish
   send:null,          // transport, injected by the lobby
   stallT:0,           // seconds spent waiting on the peer
+  pingAt:0, pongAt:0, // ...and when, in that stall, we last asked and were answered
   syncWait:0,         // seconds spent waiting on a board that was promised
   syncGaveUp:false,   // ...long enough that saying nothing became the bug
   hashes:new Map(),   // tick -> my own state hash, for desync detection
@@ -15297,7 +15313,9 @@ function showNetReport(){
 // the seat, so reconnecting to the same code lands in the same match — and the
 // relay then tells both machines who is returning and who stayed.
 const RETRY_MAX = 6;
-const STALL_DEAD = 4;            // seconds of stall before a non-open socket counts as gone
+const STALL_DEAD = 4;            // seconds of stall before a socket is suspected
+const PING_EVERY = 2;            // ...and how often it is asked to prove otherwise
+const STALL_MUTE = 8;            // seconds of stall with no reply at all before it is gone
 function netRetry(){
   if (!NET.on || !NET.linkLost) return;
   if (NET.retry >= RETRY_MAX){ netDiary('gave up reconnecting', 'after ' + NET.retry + ' tries'); return; }
@@ -15416,7 +15434,7 @@ function netStart(opt){
   netLast = 0; acc = 0;
   netClockStart();                                   // a clock that survives being in the background
   NET.box.clear(); NET.pending.length = 0; NET.hashes.clear(); NET.peerHashes.clear();
-  NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
+  NET.desyncAt = -1; NET.stallT = 0; NET.pingAt = 0; NET.pongAt = 0; NET.resyncs = 0; NET.rx = null;
   NET.awaitSync = false; NET.syncWait = 0; NET.syncGaveUp = false; NET.linkLost = false; NET.retry = 0;
   newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
   G.sides[0].ai = false; G.sides[1].ai = false;      // both holds are people now
@@ -15437,7 +15455,7 @@ function netEnd(){
   NET.on = false; NET.peerLost = false;
   MY = 0;                                            // back to the left-hand hold
   netClockStop();
-  NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
+  NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0; NET.pingAt = 0; NET.pongAt = 0; NET.resyncs = 0; NET.rx = null;
   NET.awaitSync = false; NET.syncWait = 0; NET.syncGaveUp = false; NET.linkLost = false; NET.retry = 0;
   NET.box.clear(); NET.peerHashes.clear(); NET.hashes.clear(); NET.pending.length = 0;
   acc = 0;
@@ -15458,6 +15476,12 @@ function netRecv(m){
     netCheckHash(m.tick);
   }
   else if (m.k === 'sync' && typeof m.tick === 'number' && typeof m.part === 'string') netTakeSnap(m);
+  // The relay answering. It carries nothing, and that is the point: it is the
+  // only proof this socket is still a socket rather than an object that says
+  // OPEN. Timestamped against the stall clock so a stall can tell "my peer is
+  // thinking" from "my connection is gone" — which is what the pong was added
+  // for and what nothing had ever read.
+  else if (m.k === 'pong') NET.pongAt = NET.stallT;
   else if (m.k === 'peerGone'){
     NET.peerLost = true;
     netDiary('PEER GONE', 'the relay says the other player’s socket closed');
@@ -15520,16 +15544,35 @@ function netPump(){
   // thousand ticks and is not going to pay them.
   if (acc > NET_ARREARS) acc = NET_ARREARS;
   if (blocked && NET.stallT === 0) netDiary('stalled', 'waiting on the other player at tick ' + NET.tick);
-  // A socket does not always announce its own death: the close event can be
-  // slow or never arrive at all, and the match then waits on a peer it can no
-  // longer reach. A long stall with a socket that is not OPEN is that, and it
-  // is treated as a dropped link rather than as patience.
-  if (blocked && NET.stallT > STALL_DEAD && !NET.linkLost && LOBBY.sock && LOBBY.sock.readyState !== 1){
-    netDiary('link looks dead', 'stalled ' + NET.stallT.toFixed(1) + 's with the socket in state ' + LOBBY.sock.readyState);
+  /* A socket does not announce its own death. `readyState` says OPEN until a
+     TCP timeout expires somewhere below the browser, and a report of a match
+     that could not be recovered timed that at twenty-three seconds: the peer
+     stopped sending at 228.6s and the close event did not land until 252.1s.
+     For all of that time this test — is the socket not OPEN? — answered no, so
+     a machine with a dead link sat waiting on a peer it could not reach and
+     never once tried to reconnect.
+
+     There is a live answer available and it was being thrown away. The relay
+     replies `pong` to `"ping"`, and has since the first version; nothing here
+     listened for it. So while a stall is running, ping, and take silence for an
+     answer: a stall with no pong coming back is a link that is gone whatever
+     `readyState` claims, and it is treated as a dropped link rather than as
+     patience.                                                               */
+  if (blocked && LOBBY.sock && LOBBY.sock.readyState === 1 && NET.stallT > PING_EVERY &&
+      NET.stallT - (NET.pingAt || 0) > PING_EVERY){
+    NET.pingAt = NET.stallT;
+    try { LOBBY.sock.send('"ping"'); } catch (e) {}
+  }
+  const mute = NET.stallT - (NET.pongAt || 0);
+  if (blocked && NET.stallT > STALL_DEAD && !NET.linkLost && LOBBY.sock &&
+      (LOBBY.sock.readyState !== 1 || mute > STALL_MUTE)){
+    netDiary('link looks dead', 'stalled ' + NET.stallT.toFixed(1) + 's, socket state ' +
+      LOBBY.sock.readyState + ', ' + mute.toFixed(1) + 's since the relay last answered');
     NET.linkLost = true;
     netRetry();
   }
   else if (!blocked && NET.stallT > 1) netDiary('resumed', 'after ' + NET.stallT.toFixed(1) + 's of waiting');
+  if (!blocked){ NET.pingAt = 0; NET.pongAt = 0; }
   NET.stallT = blocked ? NET.stallT + raw : 0;
 }
 
@@ -15661,7 +15704,7 @@ window.IB = {
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX, SYNC_WAIT, lobbyWho, HAVE_EVERY,
   dockScroll, dockScrollTo,
-  netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
+  netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD, PING_EVERY, STALL_MUTE,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
   get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },
   get acc(){ return acc; }, set acc(v){ acc = v; },

@@ -22,6 +22,11 @@ const TOML = readFileSync(join(here, '..', 'ironbridge-relay', 'wrangler.toml'),
 class FakeWS {
   constructor(tag){ this.tag = tag; this.sent = []; this.attach = null; this.closed = false; }
   send(s){ if (this.closed) throw new Error('closed'); this.sent.push(s); }
+  // The real thing has this and the stand-in did not, so a worker that closed a
+  // socket was throwing into a catch and the test read the miss as the worker
+  // declining to act. A stub missing a method the code under test calls is not
+  // a smaller stub, it is a silently different one.
+  close(){ this.closed = true; this.readyState = 3; }
   serializeAttachment(a){ this.attach = a; }
   deserializeAttachment(){ return this.attach; }
   msgs(){ return this.sent.map(x => JSON.parse(x)); }
@@ -321,6 +326,107 @@ const t = harness('ironbridge relay');
     const back = st5.__socks[st5.__socks.length - 1];
     t.ok(back.last('hello').side === 0, 'and the seat it hands back is the dead one’s, not the live one’s');
     t.ok(y.readyState !== 3, 'the socket that is actually alive is left alone');
+  }
+
+  /* ------------------------------------------- the seat that never came free
+     From a real report, with the log to prove it. A player dropped seven
+     minutes into a match and could not get back in. On the machine that
+     stayed:
+
+       t 6258 .. 6815   stalled, waiting on the other player   (18 seconds)
+       t 6826           PEER GONE — the relay says their socket closed
+       t 6826           PEER GONE  (x4 more, over the next two minutes)
+
+     and not one `rejoin` line anywhere. The player who stayed was never told
+     anybody arrived, because nobody ever did.
+
+     TWO THINGS held that seat, and they are the same thing twice.
+
+     A dead socket is still an OPEN socket: nothing tells a server the machine
+     at the other end has gone until a TCP timeout expires, which that log times
+     at twenty-three seconds — the peer stopped sending at 228.6s and the close
+     did not land until 252.1s. And the seat itself was RECORDED rather than
+     observed, in a flag cleared by an event that is not guaranteed to run at
+     all, so a close that never fires locks a room forever. The room is named by
+     its code, so the code is dead forever, and the only thing anybody sees is
+     "room full" for a room with one player in it.                           */
+  {
+    const st7 = mkState();
+    const room7 = new Room(st7, {});
+    await joinRoom(room7); await joinRoom(room7);
+    const [host, gone] = st7.__socks;
+    await beats(room7, host, 6200); await beats(room7, gone, 6200);
+    // Their machine vanishes. No close event, no readyState change — the socket
+    // is OPEN and will stay OPEN until a timeout nobody can wait for. This is
+    // the state the report was taken in.
+    room7._seen[1] = Date.now() - 30000;
+    const before = host.msgs().filter(m => m.k === 'peerGone').length;
+
+    const blind = await joinRoom(room7);        // no claim: an actual third player
+    t.ok(blind.status === 409,
+      'somebody with no claim on a seat is still refused while two are held (' + blind.status + ')');
+
+    const back = await room7.fetch(new Request('https://x/room/ABCD?have=0&side=1',
+      { headers:{ Upgrade:'websocket' } }));
+    t.ok(back.status === 101,
+      'but the player whose seat it is gets back in, over a socket that has stopped answering (' +
+      back.status + ')');
+    const b2 = st7.__socks[st7.__socks.length - 1];
+    t.ok(b2.last('hello').side === 1, 'and gets their OWN seat, not their opponent’s hold');
+    t.ok(gone.closed === true || gone.readyState === 3,
+      'the socket that had stopped answering is closed rather than left holding it');
+    t.ok(!!b2.last('rejoin') && !!host.last('rejoin'),
+      'both machines are told this is a rejoin rather than a fresh start');
+    t.ok(host.last('rejoin').role === 'staying' && b2.last('rejoin').role === 'returning',
+      'with the one that never left named as the keeper of the board');
+    // The eviction must not read as a departure. "They are gone" arriving a
+    // beat after "they are back" is a race that looks exactly like the rejoin
+    // having failed, which is the thing being fixed.
+    await room7.webSocketClose(gone);
+    t.ok(host.msgs().filter(m => m.k === 'peerGone').length === before,
+      'and the replaced socket closing does NOT tell the other machine its peer left');
+  }
+
+  // The other side of that rule: a seat that is answering is not up for grabs.
+  // A player who is really playing publishes a batch every tick, so silence is
+  // the only thing this can ever take a seat from.
+  {
+    const st8 = mkState();
+    const room8 = new Room(st8, {});
+    await joinRoom(room8); await joinRoom(room8);
+    const [, live] = st8.__socks;
+    await beats(room8, live, 4000);                    // heard from just now
+    const r = await room8.fetch(new Request('https://x/room/ABCD?have=0&side=1',
+      { headers:{ Upgrade:'websocket' } }));
+    t.ok(r.status === 409,
+      'a second tab claiming a seat somebody is actively playing is refused (' + r.status + ')');
+    t.ok(!live.closed, 'and the player in it is left alone');
+    t.ok(Room.STALE_MS >= 5000 && Room.STALE_MS <= 60000,
+      'the silence a seat has to keep before it can be taken is longer than any hitch and ' +
+      'shorter than any patience (' + Room.STALE_MS + 'ms)');
+  }
+
+  // Occupancy is DERIVED, every time it is asked. The bug above was a stored
+  // copy of a fact the room can read off its own sockets, defended against a
+  // reality it disagreed with — the same shape as the `started` flag two blocks
+  // up. There is no copy to disagree now, and there must not be one again.
+  {
+    const st9 = mkState();
+    const room9 = new Room(st9, {});
+    await joinRoom(room9); await joinRoom(room9);
+    const stored = st9.__store.get('meta') || {};
+    t.ok(stored.taken === undefined,
+      'the room stores no record of who is sitting where');
+    t.ok(typeof room9.seats === 'function' && room9.seats(st9.__socks).every(w => !!w),
+      'it reads the seats off the live sockets instead');
+    t.ok(!/meta\.taken/.test(SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')),
+      'and nothing outside the comments explaining why touches a stored seat again');
+    // Rebuilt after eviction, with no sockets: both seats read as free, which
+    // is the right answer rather than a lost one — an object that was evicted
+    // has heard nothing recently by definition.
+    const cold9 = new Room({ ...st9, getWebSockets:() => [] }, {});
+    t.ok(cold9.seatFor([], -1).side === 0 && cold9.seatFor([], 1).side === 1,
+      'a rebuilt room hands out seats rather than defending ones nobody is in');
   }
 
   // The claim beat is housekeeping, not a move. Relaying it would be harmless

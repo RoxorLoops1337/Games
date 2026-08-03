@@ -11601,6 +11601,88 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(!/ran < 8/.test(SRC), 'the old eight-ticks-per-frame cap is gone');
   t.ok(!/acc \+= Math\.min\(\.25, raw\)/.test(SRC), 'and so is the quarter-second accumulator clamp');
 
+  /* ------------------------------------ an open socket is not a live socket
+     From a real report. A player dropped seven minutes into a match; the
+     machine that stayed logged eighteen unbroken seconds of
+
+       stalled  waiting on the other player at tick 6258 .. 6815
+
+     before the relay finally said the peer's socket had closed at 252.1s — the
+     peer had stopped sending at 228.6s. Twenty-three seconds during which
+     `readyState` said OPEN about a socket with nothing at the other end.
+
+     The test for a dead link was "is the socket not OPEN?", so for all of that
+     time it answered no and nothing was tried. There is a live answer available
+     and it was being thrown away: the relay has replied `pong` to `"ping"`
+     since the first version, and nothing in here ever listened for one.      */
+  {
+    IB.netEnd();
+    IB.netStart({ me:0, seed:7711 });
+    const sent = [];
+    IB.LOBBY.sock = { readyState:1, send:(x) => sent.push(x) };
+    // Blocked: the peer's batches are not there, which is what a stall IS.
+    IB.NET.box.clear();
+    IB.acc = 0; IB.netLast = 0;
+    IB.netPump();
+    const step = (secs) => { IB.netLast -= secs * 1000; IB.netPump(); };
+
+    t.ok(IB.PING_EVERY > 0 && IB.PING_EVERY < IB.STALL_MUTE,
+      'a stall asks more often than it gives up (' + IB.PING_EVERY + 's vs ' + IB.STALL_MUTE + 's)');
+    t.ok(IB.STALL_MUTE > IB.STALL_DEAD,
+      'and silence has to outlast the suspicion before it is acted on (' +
+      IB.STALL_MUTE + 's > ' + IB.STALL_DEAD + 's)');
+
+    for (let i = 0; i < 3; i++) step(2);
+    t.ok(sent.filter(x => x === '"ping"').length > 0,
+      'a stalling machine asks the relay whether it is still there (' + sent.length + ' sent)');
+    t.ok(!IB.NET.linkLost, 'and does not give up on the strength of one unanswered question');
+
+    // Answered: this is a peer that is thinking, not a link that is gone. It
+    // must wait, however long the stall runs.
+    for (let i = 0; i < 8; i++){ IB.netRecv({ k:'pong' }); step(2); }
+    t.ok(!IB.NET.linkLost,
+      'a relay that keeps answering means the stall is the other PLAYER, and it keeps waiting (' +
+      IB.NET.stallT.toFixed(1) + 's in)');
+
+    // Unanswered, with the socket still insisting it is OPEN — the exact state
+    // the report was taken in, and the one that used to be waited out forever.
+    const before = IB.NET.stallT;
+    for (let i = 0; i < 8; i++) step(2);
+    t.ok(IB.NET.linkLost,
+      'but a relay that has stopped answering is a dead link however OPEN the socket claims to be');
+    t.ok(IB.NET.stallT - before < 30,
+      'and it is noticed in seconds rather than in the twenty-three the report measured (' +
+      (IB.NET.stallT - before).toFixed(1) + 's)');
+    t.ok(IB.NET.retry > 0, 'which starts trying to get back in rather than waiting');
+    t.ok(IB.NET.diary.some(d => /link looks dead/.test(d.what || d.k || JSON.stringify(d))),
+      'and says so in the diary, with both halves of the reason');
+
+    // Nothing of this survives the stall ending: a resumed match must not carry
+    // a stale "last answered" into the next one and give up early.
+    IB.netEnd();
+    IB.netStart({ me:0, seed:7712 });
+    t.ok(IB.NET.pingAt === 0 && IB.NET.pongAt === 0,
+      'a new match starts with a clean liveness clock');
+    IB.LOBBY.sock = null;
+  }
+
+  /* The other half of the same fix, on the wire. The room used to keep who was
+     sitting where in a stored flag — a fact it can read off its own sockets,
+     and therefore a fact it can be WRONG about, permanently, whenever a socket
+     died without saying so. It knows who is connected; only the client knows
+     who it was. So the client says, the same way it already says whether it is
+     bringing a board. */
+  {
+    const conn = SRC.slice(SRC.indexOf('function lobbyConnect'),
+                           SRC.indexOf('function lobbyConnect') + 2600);
+    t.ok(/\?have=1&tick=/.test(conn), 'a live match still says it is bringing a board');
+    t.ok(/'&side=' \+ NET\.me/.test(conn),
+      'and which seat it had, so a returning player cannot be handed their opponent’s hold');
+    t.ok(/\+ q \+ seat/.test(conn), 'with both actually on the URL it opens');
+    t.ok(/NET\.me === 0 \|\| NET\.me === 1/.test(conn),
+      'and nothing is claimed when there is no match to have had a seat in');
+  }
+
   // Starting and stopping is tied to the match, not left running forever.
   const start = SRC.slice(SRC.indexOf('function netStart(opt)'), SRC.indexOf('function netStart(opt)') + 600);
   t.ok(/netClockStart\(\)/.test(start), 'a network match starts the clock');
