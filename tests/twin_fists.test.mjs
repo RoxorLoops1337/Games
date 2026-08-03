@@ -44,7 +44,8 @@ const EXPOSE = `__out.api = {
   liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep,
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
-  rushTier, TOKENS_PER_TIER, RUSH_NAMES,
+  rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
+  stageRank, RANKS, RANK_BONUS, chargeMode,
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
@@ -941,6 +942,158 @@ test("the warden's shot travels flat and hurts", () => {
   for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
   assert(p.hp < hp0, 'the slug connects');
   assert(slug.gone || Math.abs(slug.z - z0) < 1, 'a bullet does not arc');
+});
+
+/* ---------------------------------------------------------------- bosses */
+/* Runs a boss against a stationary player and reports what it did. */
+function bossRun(api, kind, opts){
+  opts = opts || {};
+  const px = opts.px == null ? 200 : opts.px;
+  play(api, { stage: opts.stage || 0 }); clearField(api);
+  const p = api.players[0];
+  p.x = px;
+  p.y = api.FLOOR_MID; p.invuln = 0; p.hp = p.hpMax;
+  const boss = api.spawnEnemy(kind, opts.bx == null ? 260 : opts.bx, api.FLOOR_MID, -1);
+  boss.ai.mode = 'approach';
+  const log = { keys: {}, tells: 0, maxTell: 0, jumped: false };
+  for (let i = 0; i < 60 * (opts.secs || 12); i++){
+    p.hp = p.hpMax;                       // the boss is the subject, not the fight
+    if (opts.freeze) { p.x = px; p.y = api.FLOOR_MID; }
+    const before = boss.atkKey;
+    api.updateFighter(boss, api.STEP);
+    if (boss.atkKey && boss.atkKey !== before && boss.atk) log.keys[boss.atkKey] = (log.keys[boss.atkKey] || 0) + 1;
+    if (boss.tell > 0){ log.tells++; log.maxTell = Math.max(log.maxTell, boss.tell); }
+    if (boss.z > 4) log.jumped = true;
+  }
+  return { boss, log, p };
+}
+
+test('every boss has a signature move it actually reaches for', () => {
+  const api = boot();
+  const wants = {
+    rook: 'batcharge', vex: 'dashslash', hammer: 'slam', nyx: 'flyknee', warden: 'shoulder',
+  };
+  for (const kind in wants){
+    api.reseed(99);
+    const { log } = bossRun(api, kind, { secs: 22, freeze: true, px: 200, bx: 262 });
+    assert(log.keys[wants[kind]] > 0,
+      `${kind} never used ${wants[kind]} (saw ${JSON.stringify(log.keys)})`);
+  }
+});
+
+test('the five bosses do not all fight the same way', () => {
+  const api = boot();
+  const sets = {};
+  for (const kind of ['rook', 'vex', 'hammer', 'nyx', 'warden']){
+    api.reseed(7);
+    const { log } = bossRun(api, kind, { secs: 20, freeze: true });
+    sets[kind] = Object.keys(log.keys).sort().join('+');
+  }
+  const distinct = new Set(Object.values(sets));
+  assert(distinct.size >= 4, 'boss movesets overlap too much: ' + JSON.stringify(sets));
+});
+
+test('a boss turns angry once at half health, and only once', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID;
+  const boss = api.spawnEnemy('rook', 240, api.FLOOR_MID, -1);
+  const spd0 = boss.spd;
+  assert(!boss.rage, 'not angry yet');
+  stepFighter(api, boss, 0.5);
+  assert(boss.spd === spd0, 'and no free speed while healthy');
+  boss.hp = boss.hpMax * 0.4;
+  stepFighter(api, boss, 0.2);
+  assert(boss.rage, 'half health flips him');
+  const spd1 = boss.spd;
+  assert(spd1 > spd0, 'and he speeds up');
+  stepFighter(api, boss, 2);
+  assert(boss.spd === spd1, 'the buff is not applied twice');
+});
+
+test("hammer's slam carries along the floor, and jumping clears it", () => {
+  const api = boot();
+  play(api); clearField(api);
+  const grounded = api.players[0];
+  grounded.x = 240; grounded.y = api.FLOOR_MID; grounded.invuln = 0;
+  const boss = api.spawnEnemy('hammer', 200, api.FLOOR_MID, 1);
+  const hp0 = grounded.hp;
+  api.slamShock(boss);
+  assert(grounded.hp < hp0, 'the shock reaches past his arms');
+  grounded.hp = hp0; grounded.invuln = 0; grounded.state = 'idle';
+  grounded.z = 30;
+  api.slamShock(boss);
+  assert(grounded.hp === hp0, 'and you can jump it');
+  assert(api.ATK.slam.quake, 'the slam is flagged to shake the floor');
+});
+
+test('a heavy attack is telegraphed before it lands', () => {
+  const api = boot();
+  api.reseed(4);
+  const { log } = bossRun(api, 'hammer', { secs: 16, freeze: true });
+  assert(log.tells > 0, 'the boss showed a tell');
+  assert(log.maxTell > 0.2, 'and it lasted long enough to read: ' + log.maxTell);
+});
+
+test('the tell is cleared the moment the move comes out', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const e = api.spawnEnemy('bruiser', 150, api.FLOOR_MID, -1);
+  e.tell = 0.5;
+  api.launchAttack(e, 'haymaker');
+  assert(e.tell === 0, 'no tell left once it is in flight');
+  assert(e.state === 'attack', 'and the swing started');
+});
+
+test('a committed wind-up throws the move it advertised', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.invuln = 0;
+  const e = api.spawnEnemy('punk', 218, api.FLOOR_MID, -1);
+  e.ai.mode = 'approach';
+  let advertised = null, thrown = null;
+  for (let i = 0; i < 60 * 8 && !thrown; i++){
+    api.updateFighter(e, api.STEP);
+    if (e.ai.mode === 'wind' && e.ai.key) advertised = e.ai.key;
+    if (e.atk && advertised) thrown = e.atkKey;
+  }
+  assert(advertised, 'it wound up at all');
+  assert(thrown === advertised, `advertised ${advertised} but threw ${thrown}`);
+});
+
+/* ----------------------------------------------------------------- rank */
+test('the clear rank reflects what the street cost you', () => {
+  const api = boot();
+  assert(api.stageRank(0, 60) === 'S', 'clean and quick is an S');
+  assert(api.stageRank(60, 60) === 'A', 'a bit of damage is an A');
+  assert(api.stageRank(150, 120) === 'B', 'a rough one is a B');
+  assert(api.stageRank(400, 300) === 'C', 'a mess is a C');
+  assert(api.stageRank(0, 999) === 'C', 'taking all day caps you out');
+  const order = ['S', 'A', 'B', 'C'];
+  for (let i = 1; i < order.length; i++)
+    assert(api.RANK_BONUS[order[i - 1]] > api.RANK_BONUS[order[i]], 'better ranks pay better');
+});
+
+test('damage taken is tracked per stage and paid out on the clear', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.invuln = 0;
+  assert(api.G.dmgTaken === 0, 'a fresh street starts clean');
+  const e = api.spawnEnemy('punk', 186, api.FLOOR_MID, 1);
+  e.face = 1;
+  api.startAttack(e, 'swipe');
+  stepFighter(api, e, 0.5);
+  assert(api.G.dmgTaken > 0, 'it counted the hit');
+  api.G.time = 40;
+  const score0 = api.G.score[0];
+  api.stageClear();
+  assert(api.G.rank, 'a rank was awarded: ' + api.G.rank);
+  assert(api.G.score[0] > score0, 'and the bonus paid');
+  api.startStage();
+  assert(api.G.dmgTaken === 0, 'the next street starts clean again');
 });
 
 /* ------------------------------------------------------------------- AI */
