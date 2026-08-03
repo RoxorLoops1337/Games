@@ -93,6 +93,20 @@
        matte nap; one reads as corduroy. */
     --grain:repeating-linear-gradient(58deg,rgba(255,255,255,.022) 0 1px,rgba(0,0,0,.028) 1px 2px,rgba(0,0,0,0) 2px 5px),
             repeating-linear-gradient(-49deg,rgba(255,255,255,.018) 0 1px,rgba(0,0,0,0) 1px 4px);
+    /* A DECKLE EDGE — the soft ragged edge torn paper has — as a nine-slice, so
+       it is a real shape rather than a filter over a rectangle. Built to TILE:
+       the 48px source is cut at 12, which puts two bumps in every corner and
+       four in every edge tile, so a repeated edge meets itself exactly and
+       there is no seam at any width. Measured at 96px square, 420px wide and
+       120x26 — all clean.
+
+       This is the one place a nine-slice earns its keep. A STITCH does not: a
+       dashed outline at a negative offset follows the corner radius for free,
+       costs no border width, and scales without a source image, so that is what
+       the controls get. Using a nine-slice for it would be a worse stitch and a
+       thicker button. */
+    --deckle:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='48'%20height='48'%20viewBox='0%200%2048%2048'%3E%3Cpath%20d='M4.0%204.0q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6Z'%20fill='%23f2e4c6'%20stroke='%23cdb68c'%20stroke-width='1.2'/%3E%3C/svg%3E");
+    --deckle-kraft:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='48'%20height='48'%20viewBox='0%200%2048%2048'%3E%3Cpath%20d='M4.0%204.0q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.0%20-3.4%206%200q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q3.4%203.0%200%206q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.0%203.4%20-6%200q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6q-3.4%20-3.0%200%20-6Z'%20fill='%23c68d52'%20stroke='%238a5c31'%20stroke-width='1.2'/%3E%3C/svg%3E");
     /* CORRUGATION: the flutes of a cardboard box, seen through its face. */
     --flutes:repeating-linear-gradient(90deg,rgba(92,60,31,.22) 0 1px,rgba(255,228,186,.14) 1px 2px,rgba(0,0,0,0) 2px 9px);
     /* ...and seen END ON, at a torn edge, which is the one detail that says
@@ -550,6 +564,19 @@
     --gold:#8a6410; --iron:#41556c; --wood:#7a4e20; --red:#b3241c; --pop:#2e7a3c;
     --dim:#7d6647; --dim2:#9a8663; --ink:var(--cream-ink); }
   .abtn{ color:var(--cream-ink); }
+  /* THE STITCH. A running seam set in from the edge of every piece of card, and
+     a dashed `outline` at a negative offset is exactly that: it follows the
+     corner radius on its own, costs no border width, needs no source image and
+     scales to any size. A nine-slice would be a worse stitch and a thicker
+     button — see the note by --deckle for where a nine-slice does earn it. */
+  .abtn, .pick, .hcard, .hnew, .qchip, .mchip, .ib, .job{
+    outline:1.4px dashed rgba(122,90,44,.34); outline-offset:-5px; }
+  .qchip, .mchip{ outline-offset:-4px; }
+  /* ...but not on the felt-faced ones, where the thread would read as a scratch
+     rather than a seam. */
+  .job{ outline-color:rgba(214,190,140,.20); }
+  .abtn:disabled{ outline-color:rgba(122,90,44,.18); }
+  .abtn.hot{ outline-color:rgba(96,66,10,.42); }
   .abtn .t{ font-size:var(--t3); font-weight:700; white-space:nowrap; letter-spacing:.1px;
     text-shadow:0 1px 0 rgba(255,255,255,.5); }
   .abtn .c{ font-size:var(--t1); color:#7d6647; white-space:nowrap; letter-spacing:.2px; }
@@ -657,11 +684,17 @@
   .sheet{ width:min(860px,100%); max-height:92vh; overflow-y:auto; padding:20px 22px 18px;
     position:relative;
     background:var(--grain),linear-gradient(180deg,#2b3b4d,#1e2a38 44%,#18222d 100%);
-    border:1px solid var(--kraft-lo); border-radius:var(--r4);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.09), 0 0 0 1px rgba(0,0,0,.5), var(--d3); }
-  /* The lid of the box, flutes showing, the same torn edge the chassis has. */
+    /* Mounted on torn card: twelve pixels of deckle all the way round, and the
+       felt showing through the middle. `border-radius` is dropped because a
+       nine-slice draws its own corner and a rounded one would clip the tear. */
+    border:12px solid transparent; border-radius:0;
+    border-image:var(--deckle) 12 / 12px / 0 round;
+    background-clip:padding-box;
+    box-shadow:var(--d3); }
+  /* The lid of the box, flutes showing, the same torn edge the chassis has —
+     inside the mount now, because the mount owns the outer edge. */
   .sheet::before{ content:''; position:absolute; left:0; right:0; top:0; height:6px;
-    border-radius:var(--r4) var(--r4) 0 0; background:var(--corrugate); }
+    background:var(--corrugate); }
   .sheet h2{ margin:0 0 5px; font-size:27px; letter-spacing:.6px; font-weight:700;
     font-family:var(--display); font-variant-caps:small-caps; color:#ffe6ae;
     text-shadow:0 2px 0 rgba(0,0,0,.35); }
@@ -819,6 +852,7 @@
     border:1px solid var(--cream-lo); animation:tin .28s ease;
     color:var(--cream-ink);
     box-shadow:inset 4px 0 0 var(--kraft), inset 0 1px 0 rgba(255,255,255,.6), 0 3px 0 var(--cream-lo), 0 5px 9px rgba(20,12,4,.26);
+    outline:1.4px dashed rgba(122,90,44,.4); outline-offset:-5px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
   @keyframes tin{ from{ opacity:0; transform:translateX(-10px); } }
   .tst.good{ color:#245c2c; border-color:#a9c9a5;
