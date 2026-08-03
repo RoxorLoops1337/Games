@@ -713,12 +713,18 @@
     z-index:3; pointer-events:none; box-shadow:0 -16px 22px -9px rgba(0,0,0,.95);
     background:linear-gradient(90deg,transparent,rgba(166,255,94,.22),transparent); }
   .deckwrap > .grid{ position:relative; z-index:1; flex:1 1 auto; min-height:0;
-    overflow-y:auto; padding:16px 12px 46px; scroll-snap-type:y proximity;
+    overflow-y:auto; padding:16px 12px 26px; scroll-snap-type:y proximity;
     overscroll-behavior:contain; }
-  /* the last row FADES rather than being sliced — at EVERY width */
+  .deckwrap > .grid > .card{ scroll-snap-align:end; }
   .deckwrap.more > .grid{
-    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 30px),transparent);
-    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 30px),transparent); }
+    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 16px),transparent);
+    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 16px),transparent); }
+  /* the barn has a floor: a rail across the bottom, so a card disappearing
+     behind it reads as a card behind a rail rather than as a sliced card */
+  .deckwrap.more::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:12px;
+    z-index:3; pointer-events:none; border-radius:0 0 15px 15px;
+    background:linear-gradient(180deg, rgba(74,58,34,0) 0%, #4a3a22 42%, #241a0f 100%);
+    box-shadow:0 -1px 0 rgba(255,220,150,.14), inset 0 2px 4px rgba(0,0,0,.5); }
   .deckwrap .card{ scroll-snap-align:start; }
   .deckwrap > .grid > .card.orphan{ grid-column:1 / -1; justify-self:center; }
   .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr));
@@ -780,10 +786,13 @@
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.4 8.6 6.2 12.4 13.6 3.1' fill='none' stroke='%2396146a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
   /* unaffordable: the entry is scored out, not just dimmed — at .72 brightness
      it was indistinguishable from the ones you could actually take */
-  .rit.no{ filter:grayscale(.6) brightness(.66); cursor:not-allowed; }
-  .rit.no b{ color:#4a4432; text-decoration:line-through;
-    text-decoration-color:rgba(120,30,20,.55); text-decoration-thickness:1.5px; }
-  .rit.no i, .rit.no .c{ color:#4a4432; }
+  /* unaffordable: STRUCK, not greyed. Desaturating tan paper turns it into
+     cool plastic sitting next to the paper tiles it is meant to match, and it
+     dropped the struck title to 3.58:1 and its body to 3.02:1. */
+  .rit.no{ cursor:not-allowed; opacity:.86; }
+  .rit.no b{ color:#3d3524; text-decoration:line-through;
+    text-decoration-color:rgba(140,32,20,.8); text-decoration-thickness:2px; }
+  .rit.no i, .rit.no .c{ color:#4e4229; }
   /* the hazard entry is written in a different hand, in red ink */
   .haz{ color:#5a2410 !important; }
   .haz b{ color:#7a2c0c !important; }
@@ -1104,16 +1113,20 @@
   #book .bkhead .bkrule{ color:#6b5c39; }
   #book .bkhead .bdg{ background:rgba(80,62,30,.13) !important;
     box-shadow:inset 0 0 0 1px rgba(90,70,38,.4); }
-  /* ---- ONE INK TOKEN ----
+  /* ---- PAPER INK ----
      Four separate measured contrast failures on paper — 2.45, 2.80, 3.28 and
      3.00 to 1 — were all the same mistake: text keeping a colour picked for a
-     black screen. Paper takes ink. */
-  :root{ --ink:#3a3122; --ink-soft:#5c4e2e; }
+     black screen. Paper takes ink.
+
+     NAMESPACED, because `--ink` is already the game's LIGHT body colour and
+     redefining it here quietly turned every heading in the game dark-on-dark:
+     THE STUD BOOK went to 1.48:1, the foe name to 1.32:1. */
+  :root{ --paper-ink:#332c1c; --paper-ink-soft:#4e4229; }
   #book .bkhead, #book .bkhead .bkinfo, #book .bkhead .cap,
-  #book .bkhead .plate, #book .bkhead .tn .plate, #book .bkhead .tn b{ color:var(--ink); }
-  #book .bkhead .tiny, #book .bkhead .bkrule{ color:var(--ink-soft); }
-  .logbox, .logbox > div{ color:var(--ink); }
-  .coach, .keepsake{ color:var(--ink); }
+  #book .bkhead .plate, #book .bkhead .tn .plate, #book .bkhead .tn b{ color:var(--paper-ink); }
+  #book .bkhead .tiny, #book .bkhead .bkrule{ color:#463a22; }
+  .logbox, .logbox > div{ color:var(--paper-ink); }
+  .coach, .keepsake{ color:var(--paper-ink); }
   .bkhead .booktop, .bkhead .bkinfo, .bkhead .bkrule,
   .bkhead .bktreewrap, .bkhead .tree, .bkhead .tn{ position:relative; z-index:2; }
   /* neon does not belong on paper */
@@ -1121,7 +1134,7 @@
     0 1px 0 rgba(255,246,222,.3), 0 2px 4px -1px rgba(60,44,20,.45) !important; }
   /* a retired entry is struck through in the same ink, not printed in pink at
      1.35:1 against the paper */
-  .logbox .gone, .logbox .out{ color:var(--ink); opacity:.6;
+  .logbox .gone, .logbox .out{ color:var(--paper-ink); opacity:.6;
     text-decoration:line-through; text-decoration-color:rgba(120,30,20,.7);
     text-decoration-thickness:1.5px; }
   /* and the log has a bottom EDGE — it used to dissolve into nothing, so a
@@ -1200,7 +1213,7 @@
     border-radius:50%; background:#344b2c; }
   .logbox > div.loss{ color:#ff7b7b; }
   .logbox > div.loss::before{ background:#8a3030; }
-  .logbox b{ color:var(--ink); }
+  .logbox b{ color:var(--paper-ink); }
   #oSub{ text-transform:none; letter-spacing:.2px; font-size:var(--t-body); font-weight:500;
     color:#cfe0c2; max-width:44ch; margin-inline:auto; }
   /* The one animal you carry into the next run: a note pinned up, not a green
@@ -1242,10 +1255,29 @@
       inset 0 0 60px rgba(255,90,90,.05), 0 26px 60px rgba(0,0,0,.6); }
 
   /* the sound toggle is a tallow candle in an iron sconce: lit, or smoking */
-  #mute{ position:absolute; right:9px; top:calc(8px + env(safe-area-inset-top));
-    width:38px; height:40px; border-radius:9px 9px 11px 11px; border:none;
-    cursor:pointer; font-family:inherit; z-index:20; padding:0;
-    color:#e8d9ad; }
+  /* A SCONCE ON THE WALL. It was frosted cool-grey glass — the only cool
+     surface in the build — floating outside every panel on every screen, with
+     its flame breaking its own top edge and landing on the last egg pip. */
+  #mute{ position:absolute; right:8px; top:calc(6px + env(safe-area-inset-top));
+    width:34px; height:42px; border-radius:4px 4px 8px 8px; border:none;
+    cursor:pointer; font-family:inherit; z-index:20; padding:3px 0 0;
+    color:#e8d9ad; isolation:isolate;
+    background-color:#3a2b17;
+    background-image:
+      var(--tex-plank),
+      linear-gradient(180deg,#4c3a1d 0%,#33260f 52%,#1e1509 100%);
+    background-size:96px 96px, auto; background-blend-mode:multiply, normal;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,226,164,.34),
+      inset 0 -2px 0 rgba(0,0,0,.5),
+      inset 0 0 0 1.5px rgba(14,10,4,.9),
+      0 3px 0 #150f06, 0 7px 14px -4px rgba(0,0,0,.7); }
+  /* the two nails holding it to the wall */
+  #mute::after{ content:''; position:absolute; inset:0; pointer-events:none; z-index:2;
+    background-repeat:no-repeat;
+    background-image:
+      radial-gradient(circle 2.6px at 6px 6px, #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 78%, transparent 86%),
+      radial-gradient(circle 2.6px at calc(100% - 6px) 6px, #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 78%, transparent 86%); }
   #mute svg{ display:block; width:100%; height:100%; overflow:visible; position:relative; z-index:1; }
   #mute .fl{ color:#ffc457; transform-origin:50% 34%; }
   #mute .sm{ display:none; color:#8d9a86; }
@@ -2463,7 +2495,7 @@ function makeFoe(i, mods){
    drawn by the same painter from the same visual genes — so what you are
    reading across the field is exactly what you read on your own cards.
    ========================================================================== */
-const ENEMY_BASE = 8.6;       // leader stat power at round 1
+const ENEMY_BASE = 9.0;       // leader stat power at round 1
 // Deliberately FLAT. A steep curve made the run end at the same round however
 // well you bred, because the enemy outgrew every deck; a flat one that starts
 // hard lets a compounding herd actually pull ahead of it.
@@ -2868,7 +2900,7 @@ function arenaTick(dt){
       const b2 = F.units[j];
       if (!b2.alive) continue;
       if (Math.abs(b2.x - a2.x) > 5) continue;
-      const dy = b2.y - a2.y, near = 3.4;
+      const dy = b2.y - a2.y, near = 4.6;
       if (Math.abs(dy) < near){
         const push = (near - Math.abs(dy)) * 0.5 * (dy >= 0 ? 1 : -1) * Math.min(1, dt * 7);
         a2.y = clamp(a2.y - push, 0, AH);
@@ -4398,6 +4430,7 @@ function drawPit(){
   }
 
   // --- the sand ------------------------------------------------------------
+  const sandTop = horizon, sandH = H - horizon;
   const sand = ctx.createLinearGradient(0, horizon, 0, H);
   sand.addColorStop(0, '#6b5730'); sand.addColorStop(0.35, '#8a7040'); sand.addColorStop(1, '#4c3d21');
   ctx.fillStyle = sand; ctx.fillRect(0, horizon, W, H - horizon);
@@ -4442,6 +4475,41 @@ function drawPit(){
     ctx.fillRect(0, horizon, W, H - horizon);
     ctx.restore();
   }
+  // A TRODDEN LANE down the middle, where everything has walked for twelve
+  // rounds, and a darker rim where nothing goes.
+  const laneG = ctx.createLinearGradient(0, sandTop, 0, H);
+  laneG.addColorStop(0, 'transparent');
+  laneG.addColorStop(0.42, 'rgba(46,32,14,.30)');
+  laneG.addColorStop(0.78, 'rgba(46,32,14,.30)');
+  laneG.addColorStop(1, 'transparent');
+  ctx.fillStyle = laneG; ctx.fillRect(0, sandTop, W, H - sandTop);
+  // seeded litter: straw slivers, droppings, a dropped feather. Fixed per run,
+  // so the floor is a place rather than a beige rectangle with noise on it.
+  for (let i = 0; i < 16; i++){
+    const lx = tnoise(i * 9.7 + 3) * W;
+    const ly = sandTop + (0.18 + tnoise(i * 4.3) * 0.78) * (H - sandTop);
+    const kind = Math.floor(tnoise(i * 2.1) * 3);
+    const sz2 = W * (0.006 + tnoise(i * 6.7) * 0.012);
+    ctx.save(); ctx.translate(lx, ly); ctx.rotate((tnoise(i * 13.1) - 0.5) * 2.4);
+    if (kind === 0){                      // a dropping
+      ctx.fillStyle = 'rgba(46,32,12,.42)';
+      ctx.beginPath(); ctx.ellipse(0, 0, sz2, sz2 * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (kind === 1){                // straw
+      ctx.strokeStyle = 'rgba(206,176,98,.34)'; ctx.lineWidth = Math.max(1, W * 0.003);
+      ctx.beginPath(); ctx.moveTo(-sz2 * 1.6, 0); ctx.lineTo(sz2 * 1.6, sz2 * 0.3); ctx.stroke();
+    } else {                               // a feather
+      ctx.fillStyle = 'rgba(226,206,166,.26)';
+      ctx.beginPath(); ctx.ellipse(0, 0, sz2 * 1.5, sz2 * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(120,96,50,.34)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-sz2 * 1.5, 0); ctx.lineTo(sz2 * 1.5, 0); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // the corners go dark: nothing happens out there
+  const vig = ctx.createRadialGradient(W * 0.5, sandTop + (H - sandTop) * 0.55, W * 0.24,
+    W * 0.5, sandTop + (H - sandTop) * 0.55, W * 0.78);
+  vig.addColorStop(0, 'transparent'); vig.addColorStop(1, 'rgba(14,9,3,.42)');
+  ctx.fillStyle = vig; ctx.fillRect(0, sandTop, W, H - sandTop);
   // the lit ring the fight happens inside
   const lit = ctx.createRadialGradient(W * 0.5, horizon + (H - horizon) * 0.55, W * 0.05,
     W * 0.5, horizon + (H - horizon) * 0.55, W * 0.66);
@@ -4452,7 +4520,6 @@ function drawPit(){
   // A solid bar down the left edge and a 30%-wide tint over each end read as a
   // different SURFACE rather than as light. Both ends are built things now,
   // each throwing a pool onto the ground in front of it.
-  const sandTop = horizon, sandH = H - horizon;
   const post = (px2, w2, top2, hgt, lit) => {
     const g4 = ctx.createLinearGradient(px2, 0, px2 + w2, 0);
     g4.addColorStop(0, lit ? '#6f5a2c' : '#4a2f22');
@@ -4462,12 +4529,24 @@ function drawPit(){
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(px2 + w2 - 1.5, top2, 1.5, hgt);
   };
   // YOUR GATE: two posts and two crossbars, standing open on the near sand
-  const gw = W * 0.030, gTop = sandTop + sandH * 0.10, gH = sandH * 0.86;
-  post(W * 0.006, gw, gTop, gH, true);
-  post(W * 0.088, gw, gTop + sandH * 0.05, gH * 0.9, true);
-  ctx.fillStyle = '#54401d';
-  ctx.fillRect(W * 0.006, gTop + gH * 0.22, W * 0.112, Math.max(3, H * 0.008));
-  ctx.fillRect(W * 0.006, gTop + gH * 0.62, W * 0.112, Math.max(3, H * 0.008));
+  const gw = W * 0.042, gTop = sandTop + sandH * 0.06, gH = sandH * 0.90;
+  const gx0 = W * 0.004, gx1 = W * 0.098, gRight = gx1 + gw;
+  // the head-beam across the top: without it the posts are just two sticks
+  ctx.fillStyle = '#6b5324';
+  ctx.fillRect(gx0, gTop - Math.max(5, H * 0.012), gRight - gx0, Math.max(6, H * 0.014));
+  ctx.fillStyle = 'rgba(255,226,164,.22)';
+  ctx.fillRect(gx0, gTop - Math.max(5, H * 0.012), gRight - gx0, Math.max(2, H * 0.004));
+  post(gx0, gw, gTop, gH, true);
+  post(gx1, gw, gTop + sandH * 0.04, gH * 0.92, true);
+  const rail = Math.max(4, H * 0.010);
+  for (const f2 of [0.20, 0.44, 0.68]){
+    ctx.fillStyle = '#54401d';
+    ctx.fillRect(gx0, gTop + gH * f2, gRight - gx0, rail);
+    ctx.fillStyle = 'rgba(255,226,164,.16)';
+    ctx.fillRect(gx0, gTop + gH * f2, gRight - gx0, rail * 0.35);
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.fillRect(gx0, gTop + gH * f2 + rail * 0.72, gRight - gx0, rail * 0.28);
+  }
   // and the pool it throws
   const gp = ctx.createRadialGradient(W * 0.05, sandTop + sandH * 0.76, 2,
     W * 0.05, sandTop + sandH * 0.76, W * 0.30);
@@ -4563,16 +4642,26 @@ function drawPit(){
     // a little dust off the heels of anything running
     if (u.moving && ((u.id * 7 + Math.floor(F.t * 14)) % 5 === 0))
       pitAdd({ k: 'dust', x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
-    // the sprite's own painted top, plus a fixed gap
+    // the sprite's own painted top, plus a real gap
     const paintTop = y - h + h * 0.04 + ((spr._top || 0) / 104) * h;
-    const top = paintTop - SPR * 0.055;
+    let top = paintTop - SPR * 0.14;
     // Health, ALWAYS. It used to appear only once something was hurt, which
     // means the one moment you most want to compare two animals — before they
     // reach each other — is the one moment neither has a bar.
-    // A LOZENGE IN A WELL, in the same vocabulary as the bone cost token —
-    // it was the last flat-UI rectangle in the game, sitting on the one screen
-    // you look at most.
-    const bw = SPR * 0.40 * sc, bh = Math.max(3.5, H * 0.0085);
+    // A LOZENGE IN A WELL, in the same vocabulary as the bone cost token.
+    // Its LENGTH is how much health the animal has in total, so you can
+    // compare a tank against a runt before either of them takes a hit — a
+    // fixed-width bar made every beast look the same size, which is the one
+    // thing the bar exists to stop.
+    const bulk = Math.max(0, Math.min(1, u.max / 60));
+    const bw = SPR * (0.20 + 0.28 * bulk) * sc, bh = Math.max(3.5, H * 0.0085);
+    // and two beasts stacked in depth must not hang their bars on each other
+    for (const o of order){
+      if (o === u || !o.alive) continue;
+      if (Math.abs(px(o.x) - x) > SPR * 0.6) continue;
+      const oTop = py(o.y) - Math.min(SPR * scaleAt(o.y), SPR * 0.7);
+      if (Math.abs(oTop - top) < bh * 3.2 && o.y < u.y) top += bh * 3.2;
+    }
     const bx = x - bw / 2, by = top - bh;
     const cap = bh / 2;
     const pill = (px2, py2, pw, ph, r) => {
@@ -4582,17 +4671,21 @@ function drawPit(){
     };
     ctx.fillStyle = 'rgba(6,9,4,.9)';
     pill(bx - 1.8, by - 1.8, bw + 3.6, bh + 3.6, cap + 1.8); ctx.fill();
-    ctx.fillStyle = u.side === 'us' ? '#1e2a12' : '#2c130f';
+    // the empty part is BONE, not black — the well shows what it has lost
+    ctx.fillStyle = '#8b7a55';
     pill(bx, by, bw, bh, cap); ctx.fill();
     const frac = Math.max(0, Math.min(1, u.hp / u.max));
     if (frac > 0){
       ctx.save(); pill(bx, by, bw, bh, cap); ctx.clip();
-      ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e85a44';
+      ctx.fillStyle = u.side === 'us' ? '#8fd344' : '#e05540';
       ctx.fillRect(bx, by, bw * frac, bh);
-      ctx.fillStyle = 'rgba(255,255,255,.28)';
-      ctx.fillRect(bx, by, bw * frac, bh * 0.42);
+      // an ochre bottom edge instead of a white gloss on the top half
+      ctx.fillStyle = u.side === 'us' ? 'rgba(60,92,20,.75)' : 'rgba(112,26,16,.75)';
+      ctx.fillRect(bx, by + bh * 0.62, bw * frac, bh * 0.38);
       ctx.restore();
     }
+    ctx.strokeStyle = 'rgba(50,38,18,.85)'; ctx.lineWidth = 1;
+    pill(bx, by, bw, bh, cap); ctx.stroke();
     // the leader gets a crown notch on its bar; nothing else needs a label,
     // because the bar colour and the tinted pool under the feet already say
     // whose it is and six word-tags stacked into an unreadable pile
@@ -5602,7 +5695,7 @@ function renderBook(){
       '<div style="margin-top:6px;color:#3d3520">' + (node.trait === 'none'
         ? '<b style="color:#5c1140">No trick</b> — just teeth.'
         : '<b style="color:#5c1140">' + t.name + '</b> — ' + t.desc) + '</div>' +
-      '<div style="margin-top:6px;color:#6b5c39;font-style:italic">' + up + '</div>';
+      '<div style="margin-top:6px;color:#4e4229;font-style:italic">' + up + '</div>';
     top.appendChild(info);
   }
   const tree = $('bkTree');
