@@ -3663,6 +3663,75 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and the felt is not — a thread across the board would read as a scratch rather than a seam');
   }
 
+  /* ---- THE JUICE. A number that snaps tells you it changed and nothing else.
+     A number that ROLLS tells you it changed, roughly how far, and in which
+     direction, out of the corner of your eye — which is where a resource
+     counter is read from, always, because you are looking at the bridge.
+
+     The whole of it is DISPLAY, and that is the property worth holding: the
+     game spends `me().res`, the bar prints `hudShow`, and nothing that spends
+     ever reads the second one. A rolling counter that anything decided against
+     would be a purchase that depended on how recently you looked at it. */
+  {
+    IB.newMatch({ diff:'veteran', seed:6120 });
+    IB.MY = 0;
+    const s = G.sides[0];
+    s.res.gold = 800;
+    IB.hudShow.gold = 800;
+
+    // A spend is exact in the game the instant it happens...
+    s.res.gold -= 250;
+    t.ok(s.res.gold === 550, 'the game has spent the whole cost immediately (' + s.res.gold + ')');
+    // ...and the DISPLAY is still on its way there.
+    IB.hudRoll(1 / 60);
+    t.ok(IB.hudShow.gold > 550 && IB.hudShow.gold < 800,
+      'while the counter is still rolling through it (' + IB.hudShow.gold.toFixed(1) + ')');
+    // It has to ARRIVE. A roll that asymptotes forever leaves a counter reading
+    // 551 next to a wallet holding 550, and nothing ever says which is right.
+    for (let i = 0; i < 300; i++) IB.hudRoll(1 / 60);
+    t.ok(IB.hudShow.gold === 550,
+      'and it lands exactly on the number, not near it (' + IB.hudShow.gold + ')');
+
+    // A resync or a new match moves thousands. An odometer spinning for four
+    // seconds after a rejoin is not juice, it is a fault.
+    s.res.gold = 550 + IB.HUD_SNAP + 1000;
+    IB.hudRoll(1 / 60);
+    t.ok(IB.hudShow.gold === s.res.gold,
+      'a jump too big to be a gain is snapped rather than counted through');
+    t.ok(IB.HUD_SNAP > 500, 'and the line between the two is well clear of any real purchase (' +
+      IB.HUD_SNAP + ')');
+    // The roll takes a fraction of a second, not a beat of the clock.
+    t.ok(IB.HUD_EASE >= 3, 'the roll closes fast enough to be a roll and not a lag (' +
+      IB.HUD_EASE + '/s)');
+
+    // Painted every frame, not on the dock's fifth-of-a-second clock — a roll
+    // drawn five times a second is not a roll, it is five numbers.
+    const tick = SRC.slice(SRC.indexOf('function uiTick(dt)'), SRC.indexOf('function uiTick(dt)') + 700);
+    t.ok(/hudRoll\(dt\)/.test(tick) && /syncHud\(\)/.test(tick),
+      'the counters are rolled and repainted on the frame clock');
+
+    /* ---- press feedback from ONE place. Thirteen call sites had a click on
+       them and everything else was silent, which is not a design — it is
+       thirteen people remembering. */
+    t.ok(/\.abtn/.test(IB.PRESSABLE) && /\.sq/.test(IB.PRESSABLE) && /\.vbtn/.test(IB.PRESSABLE) &&
+         /\.pick/.test(IB.PRESSABLE) && /\.big/.test(IB.PRESSABLE),
+      'every shape this interface presses is in one list (' + IB.PRESSABLE + ')');
+    const press = SRC.slice(SRC.indexOf('function wirePress()'), SRC.indexOf('function wirePress()') + 600);
+    t.ok(/'pointerdown'/.test(press),
+      'and it answers the PRESS — a click fires on release, by which time the noise ' +
+      'is a comment on something you already did');
+    t.ok(/el\.disabled/.test(press), 'a dead button stays quiet, because one that clicks is a lie');
+    t.ok(/closest\(/.test(press),
+      'listened for once on the document rather than bound per button, so a button added ' +
+      'next month clicks without anybody thinking about it');
+
+    // The chip a spend throws off must not be able to move or block the bar it
+    // leaves — it is decoration on top of the one row the player reads.
+    t.ok(/\.rfloat\{[^}]*position:absolute/.test(css), 'the spend chip cannot move the bar it comes from');
+    t.ok(/\.rfloat\{[^}]*pointer-events:none/.test(css), 'nor eat a press on its way past');
+    IB.newMatch({ diff:'veteran', seed:6121 });
+  }
+
   // ---- decoration that can be switched off. The badge pulses and the wave
   // plate breathes; both sit on top of information that is also written down,
   // so somebody who has asked for less motion can have it.
