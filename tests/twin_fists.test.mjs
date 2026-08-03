@@ -45,7 +45,8 @@ const EXPOSE = `__out.api = {
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
   rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
-  stageRank, RANKS, RANK_BONUS, chargeMode, hazardCheck, hazardKill,
+  stageRank, RANKS, RANK_BONUS, chargeMode, hazardCheck, hazardKill, poseGeom,
+  SCENES, CUT_ACTORS, STORY_AFTER, cut, startCut, cutTick, cutEnd, drawCut, mkCutActor,
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
@@ -170,6 +171,32 @@ test('font covers every glyph the game prints', () => {
   }
   for (const k in api.ENEMY) for (const ch of api.ENEMY[k].name) assert(api.FONT[ch], 'enemy name needs glyph ' + ch);
   assert(api.textW('ABC', 1) === 17, 'text width math');
+});
+
+test('no pose anywhere leaves the head off the body', () => {
+  const api = boot();
+  let worst = 0, worstAt = '';
+  for (const name in api.A){
+    api.A[name].forEach((pose, i) => {
+      const g = api.poseGeom(pose);
+      const d = Math.hypot(g.head[0] - g.sh[0], g.head[1] - g.sh[1]);
+      if (d > worst){ worst = d; worstAt = name + '[' + i + ']'; }
+      assert(d <= 9, `${name}[${i}] head is ${d.toFixed(1)} from the shoulder`);
+      assert(g.head[1] > 2, `${name}[${i}] head is in the floor at ${g.head[1]}`);
+      assert(g.head[1] > g.hip[1] - 4, `${name}[${i}] head is below the hip`);
+    });
+  }
+  assert(worst > 0, 'the check actually measured something (worst ' + worstAt + ')');
+});
+
+test('a body on the floor lies down instead of standing up in place', () => {
+  const api = boot();
+  const lie = api.poseGeom(api.A.lie[0]);
+  assert(Math.abs(lie.sh[1] - lie.hip[1]) < 4, 'the torso is roughly level with the ground');
+  assert(lie.head[1] < 9, 'and the head is low, not up in the air: ' + lie.head[1]);
+  assert(Math.abs(lie.head[0] - lie.hip[0]) > 12, 'with the head well away from the hip along the ground');
+  const stand = api.poseGeom(api.A.idle[0]);
+  assert(stand.sh[1] - stand.hip[1] > 6, 'a standing pose still stands');
 });
 
 test('every attack table entry is internally consistent', () => {
@@ -513,6 +540,7 @@ test('every swoosh a move asks for actually exists', () => {
 /* ------------------------------------------------------------- specials */
 test('you start a run with three stocks and they carry between streets', () => {
   const api = boot();
+  api.G.story = false;
   api.startGame();
   const p = api.players[0];
   assert(p.stocks === api.START_STOCKS, 'started with ' + p.stocks);
@@ -732,6 +760,7 @@ test('an enemy launching a player does not turn him into a weapon against co-op'
 /* ----------------------------------------------------------- rush tiers */
 test('three tokens level the rush up, and the tier survives the stage', () => {
   const api = boot();
+  api.G.story = false;
   api.startGame();
   const p = api.players[0];
   assert(api.rushTier(p) === 1, 'you start on tier one');
@@ -942,6 +971,133 @@ test("the warden's shot travels flat and hurts", () => {
   for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
   assert(p.hp < hp0, 'the slug connects');
   assert(slug.gone || Math.abs(slug.z - z0) < 1, 'a bullet does not arc');
+});
+
+/* ---------------------------------------------------------------- story */
+const cutLen = (api, id) => api.SCENES[id].beats.reduce((n, b) => n + b.d, 0);
+
+test('every scene is built out of things that exist', () => {
+  const api = boot();
+  const ids = Object.keys(api.SCENES);
+  assert(ids.length >= 6, 'a story needs more than a couple of scenes');
+  for (const id of ids){
+    const sc = api.SCENES[id];
+    assert(sc.beats && sc.beats.length, id + ' has no beats');
+    for (let i = 0; i < sc.beats.length; i++){
+      const b = sc.beats[i];
+      assert(b.d > 0.5, `${id}[${i}] needs a readable duration`);
+      for (const line of (b.cap || [])){
+        for (const ch of line) assert(api.FONT[ch.toUpperCase()], `${id}[${i}] caption needs glyph ${ch}`);
+        assert(api.textW(line, 1) < api.VW - 8, `${id}[${i}] caption is too wide to fit: ${line}`);
+      }
+      for (const key in b.act){
+        assert(api.CUT_ACTORS[key], `${id}[${i}] uses an unknown actor: ${key}`);
+        assert(api.SKINS[api.CUT_ACTORS[key].skin], `actor ${key} has no skin`);
+        const a = b.act[key];
+        assert(api.A[a.anim || 'idle'], `${id}[${i}] ${key} uses a missing animation: ${a.anim}`);
+        assert(a.y >= api.FLOOR_TOP - 12 && a.y <= api.FLOOR_BOT + 12, `${id}[${i}] ${key} is off the floor`);
+      }
+    }
+  }
+});
+
+test('a scene plays through its beats and then hands over', () => {
+  const api = boot();
+  let handedOver = false;
+  api.G.story = true;
+  api.startCut('intro', () => { handedOver = true; });
+  assert(api.G.phase === 'cut', 'the cut took over');
+  assert(Object.keys(api.cut.actors).length > 0, 'with somebody on screen');
+  const len = cutLen(api, 'intro');
+  for (let i = 0; i < Math.ceil(len * 60) + 30 && !handedOver; i++) api.cutTick(api.STEP);
+  assert(handedOver, 'the scene ended and handed over');
+});
+
+test('actors walk between beats rather than teleporting', () => {
+  const api = boot();
+  api.G.story = true;
+  api.startCut('intro', () => {});
+  const first = api.SCENES.intro.beats[0].act.cole.x;
+  const moved = [];
+  for (let i = 0; i < 60 * 9; i++){
+    api.cutTick(api.STEP);
+    const c = api.cut.actors.cole;
+    if (c) moved.push(c.x);
+  }
+  const spread = Math.max.apply(null, moved) - Math.min.apply(null, moved);
+  assert(spread > 10, 'cole should cross the room, moved ' + spread.toFixed(1));
+  const jumps = moved.filter((x, i) => i > 0 && Math.abs(x - moved[i - 1]) > 6).length;
+  assert(jumps === 0, 'and get there by walking, not by cutting: ' + jumps + ' jumps');
+  assert(first === api.SCENES.intro.beats[0].act.cole.x, 'the scene data is not mutated by playing it');
+});
+
+test('any button skips the scene', () => {
+  const api = boot();
+  let done = false;
+  api.G.story = true;
+  api.G.players = 1;
+  api.startCut('intro', () => { done = true; });
+  api.cutTick(api.STEP);
+  api.KEYS.KeyJ = 1;
+  api.update(api.STEP);
+  api.KEYS.KeyJ = 0;
+  assert(done, 'punch ended it early');
+});
+
+test('the story runs between the streets, and the ending is the last thing', () => {
+  const api = boot();
+  api.G.story = true;
+  api.G.players = 1;
+  api.startGame();
+  assert(api.G.phase === 'cut' && api.cut.id === 'intro', 'a new run opens on the intro');
+  api.cutEnd();
+  assert(api.G.phase === 'card' && api.G.stage === 0, 'then street one');
+  for (let s = 0; s < 4; s++){
+    api.nextStage();
+    assert(api.G.phase === 'cut', `a scene plays after street ${s + 1}`);
+    assert(api.cut.id === api.STORY_AFTER[s], `expected ${api.STORY_AFTER[s]}, got ${api.cut.id}`);
+    api.cutEnd();
+    assert(api.G.stage === s + 1, 'and then the next street starts');
+  }
+  api.nextStage();
+  assert(api.cut.id === 'ending', 'the last street rolls the ending');
+  api.cutEnd();
+  assert(api.G.phase === 'over' && api.G.cleared, 'and the game is won');
+});
+
+test('turning the story off skips straight to the fighting', () => {
+  const api = boot();
+  api.G.story = false;
+  api.G.players = 1;
+  api.startGame();
+  assert(api.G.phase === 'card', 'no intro, got ' + api.G.phase);
+  assert(api.players[0], 'and a fighter on the street');
+  api.G.stage = 0;
+  api.nextStage();
+  assert(api.G.phase === 'card' && api.G.stage === 1, 'stages run straight on');
+});
+
+test('the story preference is remembered', () => {
+  const api = boot();
+  api.G.story = false;
+  api.saveMeta();
+  const api2 = boot({ store: api._store });
+  assert(api2.G.story === false, 'it stuck');
+});
+
+test('every scene draws', () => {
+  const api = boot();
+  for (const id in api.SCENES){
+    api.startCut(id, () => {});
+    const beats = api.SCENES[id].beats.length;
+    for (let b = 0; b < beats; b++){
+      api.draw();
+      for (let i = 0; i < 30; i++) api.cutTick(api.STEP);
+      api.draw();
+      api.cut.bi = Math.min(b, beats - 1);
+    }
+  }
+  assert(api._counts.fillRect > 100, 'the scenes actually painted');
 });
 
 /* -------------------------------------------------------------- hazards */
@@ -1293,6 +1449,7 @@ test('the boss gate raises a boss bar and clearing it clears the stage', () => {
 
 test('stages run one into the next and the last one wins the game', () => {
   const api = boot();
+  api.G.story = false;
   play(api);
   for (let s = 0; s < 4; s++){
     const before = api.G.stage;

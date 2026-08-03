@@ -113,6 +113,10 @@
         <button data-v="1" class="on">1 PLAYER</button>
         <button data-v="2">2 PLAYERS</button>
       </div>
+      <div class="seg" id="segStory">
+        <button data-v="1" class="on">STORY ON</button>
+        <button data-v="0">SKIP STORY</button>
+      </div>
       <div class="seg" id="segDiff">
         <button data-v="0">EASY</button>
         <button data-v="1" class="on">NORMAL</button>
@@ -256,7 +260,7 @@ const G = {
   contP: -1,
   bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '',
   time: 0,                          // seconds spent in the current stage
-  sound: true, scan: true,
+  sound: true, scan: true, story: true,
 };
 
 const cam = { x: 0, lock: -1, targetX: 0, shakeX: 0, shakeY: 0 };
@@ -558,11 +562,20 @@ function textC(s, cx, y, col, sc, shadow){ text(s, Math.round(cx - textW(s, sc) 
    frames — no interpolation — which is what gives arcade animation its
    snap.  Local space: +x is the direction the fighter faces, y counts up
    from the feet. */
+/* Where the three trunk joints actually are, in local units.  The head hangs
+   off the SHOULDER, not off the hip — anchor it to the hip and any pose that
+   lays the torso down leaves the head floating behind it. */
+function poseGeom(p){
+  const shx = p.hipX + p.lean, shy = p.hipY + p.sh;
+  return { hip: [p.hipX, p.hipY], sh: [shx, shy], head: [shx + p.headX, shy + 3.5 + p.headY] };
+}
+
 function P(o){
   return {
     hipY: o.hipY == null ? 19 : o.hipY,
     hipX: o.hipX || 0,
     lean: o.lean || 0,          // torso top offset in x
+    sh: o.sh == null ? 9 : o.sh,  // how far the shoulder sits above the hip
     headX: o.headX || 0, headY: o.headY || 0,
     aF: o.aF || [5, 26, 8, 20],   // front arm: elbow x,y then hand x,y
     aB: o.aB || [-5, 26, -7, 20], // back arm
@@ -633,10 +646,11 @@ const A = {                                   // animation frame tables
   ],
   hurt: [P({ hipY: 18, lean: -4, headX: -3, aF: [2, 27, -2, 30], aB: [-8, 26, -12, 28], lF: [2, 10, 2, 0], lB: [-6, 10, -9, 0] })],
   air: [P({ hipY: 17, lean: -6, headX: -4, aF: [-2, 28, -8, 32], aB: [-9, 27, -15, 30], lF: [8, 12, 14, 8], lB: [-2, 11, -3, 4] })],
-  lie: [P({ hipY: 5, lean: -14, headX: -12, headY: -13, aF: [-8, 7, -14, 5], aB: [-6, 6, -12, 3], lF: [8, 4, 15, 3], lB: [6, 3, 13, 1] })],
+  lie: [P({ hipY: 4, sh: 0, lean: -13, headX: -7, headY: -1,
+    aF: [-13, 1, -7, 0], aB: [-9, 7, -3, 9], lF: [8, 5, 15, 2], lB: [6, 2, 13, 1] })],
   getup: [
-    P({ hipY: 10, lean: -6, headX: -5, headY: -6, aF: [2, 12, 5, 4], aB: [-6, 12, -8, 4], lF: [6, 7, 9, 0], lB: [-4, 6, -7, 0] }),
-    P({ hipY: 16, lean: -2, aF: [4, 22, 7, 16], aB: [-6, 22, -8, 16], lF: [5, 9, 7, 0], lB: [-4, 9, -6, 0] }),
+    P({ hipY: 9, sh: 6, lean: -5, headX: -2, headY: -1, aF: [2, 12, 5, 4], aB: [-6, 11, -8, 3], lF: [7, 7, 11, 0], lB: [-4, 5, -8, 0] }),
+    P({ hipY: 15, sh: 8, lean: -2, aF: [4, 22, 7, 16], aB: [-6, 22, -8, 16], lF: [5, 9, 7, 0], lB: [-4, 9, -6, 0] }),
   ],
   held: [P({ hipY: 19, lean: -2, headX: -1, aF: [4, 29, 6, 33], aB: [-6, 29, -8, 33], lF: [3, 10, 4, 0], lB: [-3, 10, -5, 0] })],
   hold: [P({ hipY: 19, lean: 1, aF: [8, 27, 15, 27], aB: [6, 27, 13, 25], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] })],
@@ -672,6 +686,7 @@ const A = {                                   // animation frame tables
 const SKINS = {
   ryn:    { skin: '#e8b07a', skin2: '#b8794a', shirt: '#3f6ecf', shirt2: '#2a4a94', pants: '#22285a', hair: '#221a20', trim: '#f0e2c4', name: 'RYN', bulk: 1.05 },
   cole:   { skin: '#f0c08c', skin2: '#c08a52', shirt: '#c8402f', shirt2: '#8c2318', pants: '#3a2038', hair: '#e0c060', trim: '#f6ead0', name: 'COLE', bulk: 1.05 },
+  mira:   { skin: '#e6bb8e', skin2: '#b4835a', shirt: '#2f8f6a', shirt2: '#1d6248', pants: '#2a2438', hair: '#33221c', trim: '#ffd8a0', name: 'MIRA', bulk: 0.85 },
   punk:   { skin: '#d0a070', skin2: '#a06f45', shirt: '#7a4bb0', shirt2: '#4e2c78', pants: '#2b2b3a', hair: '#4ec06a', trim: '#d6d0e0', name: 'PUNK' },
   runner: { skin: '#c8956a', skin2: '#986440', shirt: '#e8b024', shirt2: '#a87610', pants: '#3b3020', hair: '#8a2b2b', trim: '#f0e0b0', name: 'JITTER' },
   bruiser:{ skin: '#c08a62', skin2: '#8f5f3d', shirt: '#8b8f96', shirt2: '#5c6068', pants: '#43331f', hair: '#2a2420', trim: '#c9ccd2', name: 'BRUISER', bulk: 1.3, deco: 'pads' },
@@ -700,9 +715,10 @@ function drawFighter(f){
 
   const X = (lx) => sx + dir * lx * sc;
   const Y = (ly) => sy - ly * sc;
-  const hipX = X(pose.hipX), hipY = Y(pose.hipY);
-  const shX = X(pose.hipX + pose.lean), shY = Y(pose.hipY + 9);
-  const headX = X(pose.hipX + pose.lean + pose.headX), headY = Y(pose.hipY + 12.5 + pose.headY);
+  const jt = poseGeom(pose);
+  const hipX = X(jt.hip[0]), hipY = Y(jt.hip[1]);
+  const shX = X(jt.sh[0]), shY = Y(jt.sh[1]);
+  const headX = X(jt.head[0]), headY = Y(jt.head[1]);
 
   if (f.state === 'super'){
     const k = 0.55 + Math.sin(T * 26) * 0.25;
@@ -744,8 +760,8 @@ function drawFighter(f){
   }
   if (s.deco === 'vest') px(Math.min(hipX, shX) - th / 2, hipY + 2 * sc, th, 7 * sc, cShirt2);
 
-  // neck, then head
-  px(shX - Math.max(1, 1.5 * sc), shY - 2 * sc, Math.max(2, 3 * sc), Math.max(2, 3 * sc), s.skin2);
+  // neck, then head — a segment, so it stretches to whatever pose asks for
+  limb(shX, shY, headX, headY, Math.max(2, 3.4 * sc), s.skin2);
   const hr = Math.max(4, Math.round(4.7 * sc));
   ellipse(headX, headY, hr, hr + (sc > 1 ? 1 : 0), cSkin);
   px(headX - hr, headY - hr - 1, hr * 2, Math.max(2, Math.round(2.6 * sc)), cHair);
@@ -2475,10 +2491,20 @@ function stageClear(){
 }
 
 function nextStage(){
-  G.stage++;
-  if (G.stage >= STAGES.length){ finishGame(true); return; }
-  startStage();
+  const scene = STORY_AFTER[G.stage];
+  const last = G.stage >= STAGES.length - 1;
+  const go = () => {
+    G.stage++;
+    if (G.stage >= STAGES.length){ finishGame(true); return; }
+    startStage();
+  };
+  if (last){ startCut('ending', () => finishGame(true)); return; }
+  if (scene && G.story){ startCut(scene, go); return; }
+  go();
 }
+
+/* Which scene, if any, plays after each street is cleared. */
+const STORY_AFTER = ['after1', 'after2', 'after3', 'after4', null];
 
 function startStage(){
   reseed(9000 + G.stage * 77 + G.diff);
@@ -2611,12 +2637,13 @@ function loadMeta(){
     if (d.sound != null) snd.on = !!d.sound;
     if (d.scan != null) G.scan = !!d.scan;
     if (d.diff != null) G.diff = clamp(d.diff | 0, 0, 2);
+    if (d.story != null) G.story = !!d.story;
   } catch (e){ /* first run */ }
 }
 function saveMeta(){
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, diff: G.diff,
+      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, diff: G.diff, story: G.story,
     }));
   } catch (e){ /* private mode */ }
 }
@@ -2907,11 +2934,249 @@ function bgKeep(c){
   }
 }
 
+/* ============================================================== the story
+   Cutscenes are the same fighters, posed by hand on a timeline.  A beat
+   declares where everybody should BE by the end of it; the players walk
+   there on their own.  Every scene is skippable, and the whole thing can be
+   switched off from the title. */
+const CUT_ACTORS = {
+  ryn:   { skin: 'ryn',    sc: 1,    hairTail: true },
+  cole:  { skin: 'cole',   sc: 1,    band: true },
+  mira:  { skin: 'mira',   sc: 0.94, hairTail: true },
+  g1:    { skin: 'punk',   sc: 1 },
+  g2:    { skin: 'blade',  sc: 1,    band: true },
+  g3:    { skin: 'bruiser', sc: 1.22 },
+  kane:  { skin: 'warden', sc: 1.3 },
+};
+
+const SCENES = {
+  intro: { bg: 'street', cam: 60, music: 0, beats: [
+    { d: 3.0, cap: ['TWIN FISTS GYM.', 'CLOSING TIME ON THE EAST BRIDGE.'],
+      act: { cole: { x: 130, y: 190, anim: 'idle', face: 1 },
+             ryn: { x: 160, y: 178, anim: 'idle', face: -1 },
+             mira: { x: 196, y: 184, anim: 'idle', face: -1 } } },
+    { d: 2.6, cap: ['THE IRON WARDENS DO NOT KNOCK.'],
+      act: { cole: { x: 130, y: 190, anim: 'idle', face: 1 },
+             ryn: { x: 160, y: 178, anim: 'idle', face: 1 },
+             mira: { x: 196, y: 184, anim: 'idle', face: 1 },
+             g1: { x: 300, y: 186, anim: 'walk', face: -1 },
+             g2: { x: 330, y: 172, anim: 'walk', face: -1 } } },
+    { d: 2.2, cap: ['COLE GOES FIRST. HE ALWAYS DOES.'],
+      act: { cole: { x: 200, y: 188, anim: 'walk', face: 1 },
+             ryn: { x: 160, y: 178, anim: 'idle', face: 1 },
+             mira: { x: 190, y: 184, anim: 'idle', face: 1 },
+             g1: { x: 240, y: 186, anim: 'swing', frame: 1, face: -1, weapon: 'bat' },
+             g2: { x: 268, y: 174, anim: 'idle', face: -1 } } },
+    { d: 1.6, cap: [],
+      act: { cole: { x: 150, y: 188, z: 16, anim: 'air', face: 1 },
+             ryn: { x: 160, y: 178, anim: 'hurt', face: 1 },
+             mira: { x: 190, y: 184, anim: 'idle', face: 1 },
+             g1: { x: 230, y: 186, anim: 'swing', frame: 3, face: -1, weapon: 'bat' },
+             g2: { x: 250, y: 176, anim: 'walk', face: -1 } },
+      shake: 4 },
+    { d: 2.8, cap: ['THEY TAKE HER OUT THE BACK.'],
+      act: { cole: { x: 138, y: 192, anim: 'lie', face: 1 },
+             ryn: { x: 182, y: 174, anim: 'lie', face: 1 },
+             mira: { x: 300, y: 178, anim: 'held', face: -1 },
+             g2: { x: 315, y: 178, anim: 'hold', face: -1 },
+             g1: { x: 340, y: 186, anim: 'walk', face: -1, weapon: 'bat' } } },
+    { d: 3.2, cap: ['THEY WENT EAST.', 'NOBODY IS COMING.'],
+      act: { cole: { x: 138, y: 192, anim: 'lie', face: 1 },
+             ryn: { x: 186, y: 176, anim: 'getup', frame: 1, face: 1 } } },
+  ] },
+
+  after1: { bg: 'street', cam: 900, music: 0, beats: [
+    { d: 2.8, cap: ['THE BRIDGE CREW TALKED.', 'THEY TALK WHEN YOU ASK RIGHT.'],
+      act: { ryn: { x: 960, y: 184, anim: 'idle', face: 1 },
+             g1: { x: 990, y: 190, anim: 'lie', face: -1 } } },
+    { d: 3.0, cap: ['A GREY VAN. NO PLATES.', 'IT WENT TO THE JUNKYARD.'],
+      act: { ryn: { x: 970, y: 184, anim: 'walk', face: 1 },
+             g1: { x: 990, y: 190, anim: 'lie', face: -1 } },
+      prop: { van: { x: 1150, y: 168 }, vanTo: 1290 } },
+  ] },
+
+  after2: { bg: 'junk', cam: 700, music: 1, beats: [
+    { d: 3.0, cap: ['THE VAN IS HERE.', 'SHE IS NOT.'],
+      act: { ryn: { x: 790, y: 186, anim: 'idle', face: 1 },
+             g3: { x: 830, y: 192, anim: 'lie', face: -1 } },
+      prop: { van: { x: 880, y: 166 } } },
+    { d: 3.0, cap: ['A TRUCK TOOK HER TO PIER SEVEN.', 'HIGH TIDE, THEY SAID.'],
+      act: { ryn: { x: 860, y: 186, anim: 'walk', face: 1 },
+             g3: { x: 830, y: 192, anim: 'lie', face: -1 } },
+      prop: { van: { x: 880, y: 166 } } },
+  ] },
+
+  after3: { bg: 'docks', cam: 800, music: 2, beats: [
+    { d: 3.0, cap: ['PIER SEVEN. AN HOUR LATE.'],
+      act: { mira: { x: 900, y: 172, anim: 'held', face: -1 },
+             g2: { x: 916, y: 172, anim: 'hold', face: -1 },
+             g1: { x: 940, y: 182, anim: 'walk', face: -1 } } },
+    { d: 3.2, cap: ['SHE GOES ON THE FOUNDRY TRUCK.', 'SHE IS STILL FIGHTING THEM.'],
+      act: { mira: { x: 1010, y: 172, anim: 'hurt', face: -1 },
+             g2: { x: 1026, y: 172, anim: 'walk', face: -1 },
+             g1: { x: 1050, y: 182, anim: 'walk', face: -1 } },
+      prop: { van: { x: 1080, y: 156 }, vanTo: 1180 } },
+  ] },
+
+  after4: { bg: 'foundry', cam: 900, music: 3, beats: [
+    { d: 3.0, cap: ['THE FOREMAN TALKS TOO.', 'EVERYBODY DOES, EVENTUALLY.'],
+      act: { ryn: { x: 980, y: 184, anim: 'idle', face: 1 },
+             g3: { x: 1012, y: 190, anim: 'lie', face: -1 } } },
+    { d: 3.2, cap: ['KANE HAS HER ON THE ROOF.', 'HIS OWN ROOF. HE IS NOT HIDING.'],
+      act: { ryn: { x: 1040, y: 184, anim: 'run', face: 1 },
+             g3: { x: 1012, y: 190, anim: 'lie', face: -1 } } },
+  ] },
+
+  ending: { bg: 'keep', cam: 1400, music: 4, beats: [
+    { d: 3.0, cap: ['KANE GOES DOWN ON HIS OWN ROOF.'],
+      act: { kane: { x: 1500, y: 190, anim: 'lie', face: -1 },
+             ryn: { x: 1460, y: 182, anim: 'idle', face: 1 },
+             mira: { x: 1560, y: 174, anim: 'idle', face: -1 } } },
+    { d: 3.0, cap: ['MIRA TAKES THE STAIRS', 'ON HER OWN TWO FEET.'],
+      act: { kane: { x: 1500, y: 190, anim: 'lie', face: -1 },
+             ryn: { x: 1470, y: 178, anim: 'idle', face: 1 },
+             mira: { x: 1512, y: 184, anim: 'walk', face: -1 },
+             cole: { x: 1436, y: 190, anim: 'idle', face: 1 } } },
+    { d: 3.4, cap: ['THE SUN COMES UP OVER THE EAST BRIDGE.', 'YOU WALK HOME.'],
+      act: { kane: { x: 1500, y: 190, anim: 'lie', face: -1 },
+             ryn: { x: 1416, y: 178, anim: 'walk', face: -1 },
+             mira: { x: 1452, y: 186, anim: 'walk', face: -1 },
+             cole: { x: 1380, y: 192, anim: 'walk', face: -1 } } },
+  ] },
+};
+
+const cut = { id: '', bi: 0, beatT: 0, actors: {}, then: null, prop: null, propFrom: 0, propTo: 0 };
+
+function mkCutActor(key, decl){
+  const d = CUT_ACTORS[key] || CUT_ACTORS.g1;
+  const f = mkFighter({ team: 'e', kind: key, skin: d.skin, sc: d.sc, x: decl.x, y: decl.y, face: decl.face || 1 });
+  f.hairTail = !!d.hairTail; f.band = !!d.band;
+  f.state = 'block'; f.blockT = 999;          // parked: nothing else moves it
+  f.anim = decl.anim || 'idle'; f.frame = decl.frame || 0;
+  f.z = decl.z || 0;
+  f.weapon = decl.weapon || null;
+  f.fx = decl.x; f.fy = decl.y; f.fz = f.z;
+  return f;
+}
+
+function startCut(id, then){
+  const sc = SCENES[id];
+  cut.then = then || null;
+  if (!sc || !G.story){ cutEnd(); return false; }
+  cut.id = id; cut.bi = 0; cut.beatT = 0; cut.actors = {};
+  cut.prop = null;
+  const b0 = sc.beats[0];
+  for (const k in b0.act) cut.actors[k] = mkCutActor(k, b0.act[k]);
+  applyBeatTargets(sc.beats[0]);
+  cam.x = sc.cam || 0; cam.shakeX = 0; cam.shakeY = 0;
+  G.phase = 'cut';
+  musicStart(sc.music == null ? 0 : sc.music);
+  return true;
+}
+
+function applyBeatTargets(beat){
+  for (const k in beat.act){
+    const decl = beat.act[k];
+    let a = cut.actors[k];
+    if (!a){ a = cut.actors[k] = mkCutActor(k, decl); }
+    a.fx = a.x; a.fy = a.y; a.fz = a.z;         // walk from wherever they are
+    a.tx = decl.x; a.ty = decl.y; a.tz = decl.z || 0;
+    a.anim = decl.anim || 'idle';
+    a.frame = decl.frame || 0;
+    a.face = decl.face || a.face;
+    a.weapon = decl.weapon || null;
+  }
+  for (const k in cut.actors) cut.actors[k].inBeat = !!beat.act[k];
+  if (beat.prop && beat.prop.van){
+    cut.prop = { kind: 'van', x: beat.prop.van.x, y: beat.prop.van.y,
+      from: beat.prop.van.x, to: beat.prop.vanTo == null ? beat.prop.van.x : beat.prop.vanTo };
+  } else cut.prop = null;
+  if (beat.shake) shakeScreen(beat.shake, 0.3);
+}
+
+function cutTick(dt){
+  const sc = SCENES[cut.id];
+  if (!sc){ cutEnd(); return; }
+  const beat = sc.beats[cut.bi];
+  cut.beatT += dt;
+  const k = clamp(cut.beatT / beat.d, 0, 1);
+  const ease = k * k * (3 - 2 * k);
+  for (const key in cut.actors){
+    const a = cut.actors[key];
+    if (!a.inBeat) continue;
+    a.x = lerp(a.fx, a.tx, ease);
+    a.y = lerp(a.fy, a.ty, ease);
+    a.z = lerp(a.fz, a.tz, ease);
+    if (a.anim === 'walk' || a.anim === 'run') a.frame = Math.floor(cut.beatT * 8) % 4;
+  }
+  if (cut.prop) cut.prop.x = lerp(cut.prop.from, cut.prop.to, ease);
+  if (cut.beatT >= beat.d){
+    cut.bi++; cut.beatT = 0;
+    if (cut.bi >= sc.beats.length){ cutEnd(); return; }
+    applyBeatTargets(sc.beats[cut.bi]);
+  }
+}
+
+function cutEnd(){
+  const then = cut.then;
+  cut.then = null; cut.id = '';
+  if (then) then(); else G.phase = 'play';
+}
+
+function drawVan(x, y){
+  const sx = Math.round(x - cam.x), sy = Math.round(y);
+  px(sx - 26, sy - 22, 52, 22, '#5a6068');
+  px(sx - 26, sy - 22, 52, 3, '#767d86');
+  px(sx + 12, sy - 18, 13, 10, '#243040');       // windscreen
+  px(sx - 22, sy - 16, 26, 12, '#4a5058');
+  px(sx - 26, sy, 52, 2, '#2b3038');
+  ellipse(sx - 15, sy, 6, 5, '#1b1d22'); ellipse(sx + 15, sy, 6, 5, '#1b1d22');
+  ellipse(sx - 15, sy, 2, 2, '#4a4f58'); ellipse(sx + 15, sy, 2, 2, '#4a4f58');
+  px(sx + 26, sy - 14, 3, 4, '#ffd06a');
+}
+
+function drawCut(){
+  const sc = SCENES[cut.id];
+  if (!sc){ ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, VH); return; }
+  const keep = stage;
+  drawSceneBg(sc.bg);
+  const list = [];
+  if (cut.prop) list.push({ y: cut.prop.y + 22, d: () => drawVan(cut.prop.x, cut.prop.y + 22) });
+  for (const key in cut.actors){
+    const a = cut.actors[key];
+    if (!a.inBeat) continue;
+    list.push({ y: a.y, d: () => drawFighter(a) });
+  }
+  list.sort((a, b) => a.y - b.y);
+  for (const e of list) e.d();
+
+  // letterbox and caption
+  px(0, 0, VW, 22, '#000');
+  px(0, VH - 34, VW, 34, '#000');
+  px(0, 22, VW, 1, '#2a2233'); px(0, VH - 35, VW, 1, '#2a2233');
+  const beat = sc.beats[cut.bi];
+  const caps = (beat && beat.cap) || [];
+  for (let i = 0; i < caps.length; i++)
+    textC(caps[i], VW / 2, VH - 29 + i * 11, i === 0 ? '#ffe9b8' : '#c08a6e', 1, '#100c18');
+  if (Math.floor(T * 2) % 2 === 0) text('PUNCH TO SKIP', VW - 84, 8, '#6a5a66', 1);
+}
+
+/* Cutscenes borrow the stage painters without disturbing the live stage. */
+function drawSceneBg(bg){
+  const c = cam.x;
+  if (bg === 'junk') bgJunk(c);
+  else if (bg === 'docks') bgDocks(c);
+  else if (bg === 'foundry') bgFoundry(c);
+  else if (bg === 'keep') bgKeep(c);
+  else bgStreet(c);
+}
+
 /* ================================================================ draw */
 function draw(){
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, VW, VH);
   if (G.phase === 'title' || G.phase === 'howto'){ drawAttract(); return; }
+  if (G.phase === 'cut'){ drawCut(); return; }
 
   drawBackground();
 
@@ -3264,6 +3529,7 @@ function syncSpecialBtn(){
 function syncUI(){
   segSet('segPlayers', G.players);
   segSet('segDiff', G.diff);
+  segSet('segStory', G.story ? 1 : 0);
   segSet('segSound', snd.on ? 1 : 0);
   segSet('segScan', G.scan ? 1 : 0);
   const sc = $('scan'); if (sc) sc.className = G.scan ? '' : 'off';
@@ -3304,18 +3570,19 @@ function startGame(){
   G.cleared = false;
   players.length = 0;                            // a new run starts fresh
   show('title', false); show('how', false); show('over', false); show('pause', false);
-  startStage();
+  if (G.story) startCut('intro', startStage);
+  else startStage();
 }
 
 function togglePause(){
-  if (G.phase === 'play' || G.phase === 'card' || G.phase === 'clear'){
+  if (G.phase === 'play' || G.phase === 'card' || G.phase === 'clear' || G.phase === 'cut'){
     G._prev = G.phase; G.phase = 'pause';
     show('pause', true);
     musicStop();
   } else if (G.phase === 'pause'){
     G.phase = G._prev || 'play';
     show('pause', false);
-    musicStart(stage().music);
+    musicStart(G.phase === 'cut' && SCENES[cut.id] ? SCENES[cut.id].music : stage().music);
   }
 }
 
@@ -3341,6 +3608,7 @@ function bindUI(){
   $('bMenu').addEventListener('click', () => { SFX.select(); show('over', false); toTitle(); });
   segBind('segPlayers', (v) => { G.players = clamp(v, 1, 2); });
   segBind('segDiff', (v) => { G.diff = clamp(v, 0, 2); });
+  segBind('segStory', (v) => { G.story = !!v; });
   segBind('segSound', (v) => { snd.on = !!v; if (!v) musicStop(); else if (G.phase === 'play') musicStart(stage().music); });
   segBind('segScan', (v) => { G.scan = !!v; });
 }
@@ -3355,6 +3623,17 @@ function update(dt){
     G.cardT -= dt;
     updateCamera(dt);
     if (G.cardT <= 0) G.phase = 'play';
+    return;
+  }
+  if (G.phase === 'cut'){
+    pollInput();
+    for (let i = 0; i < 2; i++){
+      const inp = INPUT[i];
+      if (inp && (inp.pa || inp.pb || inp.pc || inp.ps)){ cutEnd(); return; }
+    }
+    cutTick(dt);
+    updateFx(dt);
+    if (G.shakeT > 0) updateCamera(dt);
     return;
   }
   if (G.phase === 'clear'){
