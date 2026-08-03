@@ -3564,6 +3564,54 @@ t.ok(true, 'drawing an empty bridge is harmless');
   for (const dead of ['#c9a355', '#3d2f14', '#312b20', '#241f16'])
     t.ok(!css.includes(dead), 'and the blackened-iron value ' + dead + ' with it');
 
+  /* ---- THE ICONS. These were emoji, which is the right first answer and the
+     wrong last one. An emoji is somebody else's artwork: it changes shape
+     between Windows, Android and iOS, it cannot be recoloured, it renders at
+     whatever weight the system font feels like, and a coin next to a log next
+     to an ear of wheat is three different illustrators. On a panel made of cut
+     paper they were the only things in the interface not made of cut paper. */
+  {
+    for (const k of ['gold', 'iron', 'wood', 'food', 'pop'])
+      t.ok(/^<svg /.test(IB.RES_ICON[k] || ''), 'the ' + k + ' icon is drawn here, not borrowed');
+    for (const k of ['sound', 'mute', 'pause', 'play', 'menu', 'hold', 'gates', 'mid', 'foe', 'follow'])
+      t.ok(/^<svg /.test(IB.UI_ICON[k] || ''), 'and so is the ' + k + ' control');
+    const all = [...Object.values(IB.RES_ICON), ...Object.values(IB.UI_ICON)];
+    // Inline, so there is nothing to fetch and nothing to be missing for the
+    // first second of a session.
+    t.ok(all.every(v => !/url\(|href=|@font-face/.test(v)),
+      'every one of them is inline — no request, no font, no file');
+    t.ok(all.every(v => /viewBox="0 0 24 24"/.test(v)),
+      'all on one grid, so they are the same size as each other by construction');
+
+    /* The split that matters. A RESOURCE count appears on the dark felt of the
+       top bar AND on the cream of a cost chip, so it has to carry its own
+       colours or it goes blank on one of them. A CONTROL only ever sits on
+       card, so it takes the ink of whatever card it is on — which is what makes
+       a disabled button's icon grey out with its label instead of staying
+       bright over dead text. */
+    for (const k of ['gold', 'iron', 'wood', 'food', 'pop'])
+      t.ok(/fill="#/.test(IB.RES_ICON[k]) && !/currentColor/.test(IB.RES_ICON[k]),
+        'the ' + k + ' icon brings its own colours, because it is read on felt and on cream');
+    for (const k of ['sound', 'pause', 'menu', 'foe'])
+      t.ok(/currentColor/.test(IB.UI_ICON[k]),
+        'the ' + k + ' control takes the ink of the card it is printed on');
+
+    // Sized in em, so an icon is the size of the text beside it wherever that
+    // is — a cost chip, a job row, the top bar — rather than a fixed px that is
+    // right in one place and wrong in the other two.
+    t.ok(/\.ico\{[^}]*width:[\d.]+em/.test(css), 'an icon is the size of the type it sits with');
+    t.ok(/\.ico\{[^}]*vertical-align:/.test(css), 'and sits ON the line rather than under it');
+
+    // ...and the emoji they replaced are gone from the interface. The hero
+    // sheet's class glyphs are deliberately still emoji — they are 52px
+    // portraits, not 13px furniture, and that is the size emoji are good at.
+    const shell = SRC.slice(SRC.indexOf('<body'), SRC.indexOf('</body>'));
+    for (const dead of ['\u{1FA99}', '\u{26CF}', '\u{1FAB5}', '\u{1F33E}', '\u{1F465}',
+                        '\u{1F3E0}', '\u{1F6AA}', '\u{1F480}', '\u{1F441}', '\u{1F50A}', '\u2630'])
+      t.ok(!shell.includes(dead), 'no emoji left in the interface markup (' +
+        dead.codePointAt(0).toString(16) + ')');
+  }
+
   // ---- decoration that can be switched off. The badge pulses and the wave
   // plate breathes; both sit on top of information that is also written down,
   // so somebody who has asked for less motion can have it.
