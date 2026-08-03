@@ -589,17 +589,24 @@
   .hpbar{ width:120px; height:13px; border-radius:4px; overflow:hidden; border:none;
     background-color:#7d6b45;
     background-image:
-      repeating-linear-gradient(90deg, rgba(40,30,14,.55) 0 11px, rgba(40,30,14,0) 11px 12px),
+      repeating-linear-gradient(90deg, rgba(40,30,14,.55) 0 9.1667%, rgba(40,30,14,0) 9.1667% 10%),
       linear-gradient(180deg,#8b7a55,#5f5133);
     background-size:auto, auto;
     box-shadow:inset 0 3px 5px rgba(0,0,0,.9), inset 0 -1px 0 rgba(255,220,150,.12),
       0 1px 0 rgba(255,220,150,.07); }
-  .hpbar i{ display:block; height:100%; transition:width .3s ease;
-    background:#c9463a;
+  /* Solid red at 40/40 — the genre convention for "about to die", worn by a
+     nest that has not been touched. The colour is the STATE now. */
+  .hpbar i{ display:block; height:100%; transition:width .3s ease, background-color .3s ease;
+    background:#8fd14a;
     box-shadow:inset 0 -3px 0 rgba(112,26,16,.85), inset 0 1px 0 rgba(255,180,150,.22);
-    -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 11px, transparent 11px 12px);
-            mask-image:repeating-linear-gradient(90deg,#000 0 11px, transparent 11px 12px);
+    /* A FIXED 12px pitch cannot divide an arbitrary track, so the last notch
+       came out a 3px runt at whatever width the breakpoint happened to give it.
+       Ten notches, expressed as tenths, divide any width exactly. */
+    -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 9.1667%, transparent 9.1667% 10%);
+            mask-image:repeating-linear-gradient(90deg,#000 0 9.1667%, transparent 9.1667% 10%);
     box-shadow:inset 0 1px 0 rgba(255,220,180,.4), inset 0 -3px 5px -2px rgba(90,10,10,.8); }
+  .hpbar i.hurt{ background:#e0b45c; }
+  .hpbar i.low{ background:#c9463a; }
   /* a trample is a WOUND: the bar drains over the same 700ms the number ticks */
   .hpbar i.drain{ transition:width .7s cubic-bezier(.25,.8,.3,1); }
 
@@ -947,13 +954,17 @@
   .feed svg{ display:block; width:8px; height:11px; fill:currentColor; color:#3a3420;
     filter:drop-shadow(0 1px 0 rgba(0,0,0,.6)); transition:color .14s ease, transform .14s ease; }
   .feed svg.on{ color:#e8c24a; filter:drop-shadow(0 0 5px rgba(255,200,80,.7)); }
-  /* the grain still filling — INSIDE the trough it belongs to, not orphaned
-     between the kernels and the barn count where it read as a meter arguing
-     with its own label */
-  .feedbar{ position:absolute; left:5px; right:5px; bottom:2px; height:3px;
-    border-radius:2px; overflow:hidden; background:rgba(0,0,0,.55); }
-  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:2px;
-    background:#e8c24a; transition:width .12s linear; }
+  /* It was `position:absolute` with no positioned ancestor — `.fbar` has no
+     `position`, so it escaped the whole row and anchored to the SCREEN, landing
+     as a 6px gold rule welded across the bottom edge of the viewport with no
+     label and no trough (the trough is rgba(0,0,0,.55), invisible on black, so
+     only the fill ever showed). It is a rail in the flow now, with walls. */
+  .feedbar{ position:relative; flex:0 1 96px; min-width:44px; height:6px; align-self:center;
+    border-radius:3px; overflow:hidden; background:#0a0d06;
+    box-shadow:inset 0 0 0 1px rgba(255,220,150,.22), inset 0 1px 2px rgba(0,0,0,.8); }
+  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:3px;
+    background:linear-gradient(180deg,#ffdb6a,#e8c24a 60%,#a8842a);
+    transition:width .12s linear; }
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
@@ -3920,6 +3931,11 @@ function drawBeast(cv, c){
   // the direction the unmirrored sprite (your side) walks and swings. One flip
   // and an enemy is looking at the animal it is fighting.
   const FACE = hw * 0.20;
+  // ONE EYE IDIOM. A white capsule with a thin vertical bar in it, sitting
+  // directly above three white fangs, read as an eight-tooth grin where the
+  // face should be — and the build carried three incompatible eyes at once
+  // (round sclera + pupil, white capsule + bar, and a bare dark dot). Round
+  // sclera, round pupil offset forward, one highlight. Everywhere.
   const ne = v.eyes;
   const er = (neck ? 4.0 : 5.2) * (0.68 + 0.42 * sz);
   for (let i = 0; i < ne; i++){
@@ -3927,15 +3943,11 @@ function drawBeast(cv, c){
     // and the far eye is the SMALL one: a head turned three-quarters on
     const lead = 0.84 + 0.20 * (t + 0.5);
     const ex = t * hw * (neck ? 0.94 : 0.80) + FACE, ey = hcy + hh * 0.34;
-    ell(ex, ey, er * lead, er * 1.08 * lead, '#fdfff4');
-    if (f.slit){
-      ctx.beginPath();
-      ctx.rect(ex + 0.2 - 0.6 * sz, ey - er * 0.78 * lead, 1.2 * sz, er * 1.56 * lead);
-      ctx.fillStyle = '#101408'; ctx.fill();
-    } else {
-      // the pupil leads too, so even a one-eyed animal has a gaze
-      ell(ex + er * 0.30, ey - 0.6, er * 0.46 * lead, er * 0.52 * lead, '#101408');
-    }
+    const R2 = er * lead;
+    ell(ex, ey, R2, R2, '#fdfff4');
+    const pr2 = f.slit ? R2 * 0.30 : R2 * 0.46;
+    ell(ex + R2 * 0.34, ey - R2 * 0.04, pr2, f.slit ? R2 * 0.78 : pr2, '#101408');
+    ell(ex + R2 * 0.10, ey + R2 * 0.34, R2 * 0.20, R2 * 0.20, 'rgba(255,255,255,.85)');
   }
   // mouth — toothy for the mean ones, and skipped entirely behind a beak
   const mean = c.trait === 'feral' || c.trait === 'frenzy' || c.trait === 'venom' || c.might >= 14;
@@ -3963,12 +3975,17 @@ function drawBeast(cv, c){
   // This is the one shape that says which way it is pointing from across the
   // pit, at fight scale, with no colour information at all.
   if (f.snout !== 2){
-    const ew = (neck ? 5.5 : 7.5) * sz, eh = (neck ? 7 : 10) * sz;
+    // Smaller, further back, and with an inner ear — at the old size it
+    // occluded the far eye (3.19:1 of eye against ear) and read as a bruise on
+    // the side of the head rather than as an ear.
+    const ew = (neck ? 3.6 : 4.6) * sz, eh = (neck ? 5.0 : 6.6) * sz;
     ctx.save();
-    ctx.translate(-hw * 0.86, hcy + hh * 0.30);
-    ctx.rotate(-0.42);
+    ctx.translate(-hw * 1.02, hcy + hh * 0.24);
+    ctx.rotate(-0.5);
     ctx.beginPath(); ctx.ellipse(0, 0, ew, eh, 0, 0, Math.PI * 2);
     ctx.fillStyle = dark; ctx.fill(); stroke(ink, 2.2);
+    ctx.beginPath(); ctx.ellipse(0, eh * 0.10, ew * 0.46, eh * 0.52, 0, 0, Math.PI * 2);
+    ctx.fillStyle = belly; ctx.fill();
     ctx.restore();
   }
   ctx.restore();
@@ -4229,10 +4246,15 @@ function pips(el, boss){ el.innerHTML = pipHtml(); }
 function hpBar(txtEl, barEl){
   const hp = R.hp;
   countUp(txtEl, hp);
-  barEl.style.width = (100 * hp / R.maxHp) + '%';
+  const frac = R.maxHp ? hp / R.maxHp : 0;
+  barEl.style.width = (100 * frac) + '%';
+  if (barEl.classList){
+    barEl.classList.toggle('hurt', frac <= 0.6 && frac > 0.3);
+    barEl.classList.toggle('low', frac <= 0.3);
+  }
   // the bar itself says when you are one bad match from the end
   const wrap = barEl.parentNode;
-  if (wrap && wrap.classList) wrap.classList.toggle('danger', hp / R.maxHp < 0.3);
+  if (wrap && wrap.classList) wrap.classList.toggle('danger', frac < 0.3);
 }
 
 /* ------------------------------------------------------------- title ----- */
@@ -4733,12 +4755,20 @@ function drawPit(){
   sand.addColorStop(0, '#6b5730'); sand.addColorStop(0.35, '#8a7040'); sand.addColorStop(1, '#4c3d21');
   ctx.fillStyle = sand; ctx.fillRect(0, horizon, W, H - horizon);
   ctx.fillStyle = 'rgba(20,14,8,.5)'; ctx.fillRect(0, horizon, W, Math.max(2, H * 0.009));
+  // THE GROUND HAS TO AGREE WITH THE ANIMALS ON IT. Every mark on this floor was
+  // the same size at every depth while the beasts scale 0.80 to 1.20 front to
+  // back — so they read as stickers on wallpaper. One depth factor, the same
+  // curve `scaleAt` uses, applied to every mark from here down.
+  const dS = (yy) => 0.52 + 0.86 * Math.max(0, Math.min(1, (yy - horizon) / (H - horizon)));
   // scuff marks: deterministic, so the ground does not crawl between frames
   ctx.globalAlpha = 0.13; ctx.fillStyle = '#2a2010';
   for (let i = 0; i < 60; i++){
     const rx = ((i * 733) % 1000) / 1000 * W;
-    const ry = horizon + ((i * 271) % 1000) / 1000 * (H - horizon);
-    ctx.fillRect(rx, ry, W * 0.03 * (0.4 + (i % 5) / 5), Math.max(1, H * 0.004));
+    // biased toward the back, because that is where more ground is visible
+    const tt = ((i * 271) % 1000) / 1000;
+    const ry = horizon + tt * tt * (H - horizon);
+    const d2 = dS(ry);
+    ctx.fillRect(rx, ry, W * 0.03 * (0.4 + (i % 5) / 5) * d2, Math.max(1, H * 0.004 * d2));
   }
   ctx.globalAlpha = 1;
   // straw drifted up against the foot of the fence
@@ -4775,19 +4805,29 @@ function drawPit(){
   }
   // A TRODDEN LANE down the middle, where everything has walked for twelve
   // rounds, and a darker rim where nothing goes.
+  // It was a FULL-WIDTH horizontal band — a lane that is as wide at the far
+  // fence as it is at your feet is not a lane, it is a stripe. It opens toward
+  // the camera like everything else standing on this floor.
   const laneG = ctx.createLinearGradient(0, sandTop, 0, H);
   laneG.addColorStop(0, 'transparent');
-  laneG.addColorStop(0.42, 'rgba(46,32,14,.30)');
-  laneG.addColorStop(0.78, 'rgba(46,32,14,.30)');
-  laneG.addColorStop(1, 'transparent');
+  laneG.addColorStop(0.30, 'rgba(46,32,14,.26)');
+  laneG.addColorStop(0.72, 'rgba(46,32,14,.34)');
+  laneG.addColorStop(1, 'rgba(46,32,14,.10)');
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(W * 0.32, sandTop); ctx.lineTo(W * 0.70, sandTop);
+  ctx.lineTo(W * 1.02, H); ctx.lineTo(W * -0.02, H);
+  ctx.closePath(); ctx.clip();
   ctx.fillStyle = laneG; ctx.fillRect(0, sandTop, W, H - sandTop);
+  ctx.restore();
   // seeded litter: straw slivers, droppings, a dropped feather. Fixed per run,
   // so the floor is a place rather than a beige rectangle with noise on it.
   for (let i = 0; i < 16; i++){
     const lx = tnoise(i * 9.7 + 3) * W;
-    const ly = sandTop + (0.18 + tnoise(i * 4.3) * 0.78) * (H - sandTop);
+    const lt = 0.18 + tnoise(i * 4.3) * 0.78;
+    const ly = sandTop + lt * lt * (H - sandTop);
     const kind = Math.floor(tnoise(i * 2.1) * 3);
-    const sz2 = W * (0.006 + tnoise(i * 6.7) * 0.012);
+    const sz2 = W * (0.006 + tnoise(i * 6.7) * 0.012) * dS(ly);
     ctx.save(); ctx.translate(lx, ly); ctx.rotate((tnoise(i * 13.1) - 0.5) * 2.4);
     if (kind === 0){                      // a dropping
       ctx.fillStyle = 'rgba(46,32,12,.42)';
