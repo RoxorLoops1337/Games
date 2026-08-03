@@ -1635,10 +1635,23 @@ test('a busy frame stays inside a sane draw budget', () => {
   for (let i = 0; i < 10; i++) api.mkItem('crate', api.cam.x + i * 30, api.FLOOR_MID, 0);
   for (let i = 0; i < 30; i++) api.spawnFx('chip', api.cam.x + i * 8, api.FLOOR_MID, 10, '#fff');
   api._resetCounts();
+  api.draw();                                   // first frame pays to bake the sky
+  const firstFrame = api._counts.fillRect || 0;
+  api._resetCounts();
   api.draw();
   const fills = api._counts.fillRect || 0;
   assert(fills > 200, 'it drew a real frame');
   assert(fills < 9000, 'frame is too expensive: ' + fills + ' fillRects');
+  assert(firstFrame > fills * 2, 'the dithered sky should be baked once, not every frame');
+  // and every other stage should be just as cheap on a warm cache
+  for (let st = 1; st < api.STAGES.length; st++){
+    play(api, { stage: st });
+    api.draw();
+    api._resetCounts();
+    api.draw();
+    const n = api._counts.fillRect || 0;
+    assert(n < 9000, `stage ${st + 1} frame is too expensive: ${n} fillRects`);
+  }
 });
 
 /* ------------------------------------------------------------ long soak */
