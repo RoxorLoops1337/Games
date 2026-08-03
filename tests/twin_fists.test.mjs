@@ -45,7 +45,7 @@ const EXPOSE = `__out.api = {
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
   rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
-  stageRank, RANKS, RANK_BONUS, chargeMode,
+  stageRank, RANKS, RANK_BONUS, chargeMode, hazardCheck, hazardKill,
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
@@ -942,6 +942,88 @@ test("the warden's shot travels flat and hurts", () => {
   for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
   assert(p.hp < hp0, 'the slug connects');
   assert(slug.gone || Math.abs(slug.z - z0) < 1, 'a bullet does not arc');
+});
+
+/* -------------------------------------------------------------- hazards */
+test('a body thrown past the edge of the docks goes in the water', () => {
+  const api = boot();
+  play(api, { stage: 2 }); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 210, api.FLOOR_MID, -1);
+  const score0 = api.G.score[0];
+  api.tryGrab(p, e);
+  p.throwAim = -1;                                  // holding up
+  api.throwHeld(p);
+  assert(e.vy < 0, 'the throw aimed him at the back edge');
+  for (let i = 0; i < 90 && !e.gone; i++) api.updateFighter(e, api.STEP);
+  assert(e.gone && e.dead, 'he went in, got gone=' + e.gone);
+  assert(api.G.score[0] > score0 + e.score, 'and the edge paid a bonus');
+});
+
+test('the foundry channel and the roof edge work the same way, at the front', () => {
+  const api = boot();
+  for (const stageIdx of [3, 4]){
+    play(api, { stage: stageIdx }); clearField(api);
+    const p = api.players[0];
+    p.x = 200; p.y = api.FLOOR_MID; p.face = 1;
+    const e = api.spawnEnemy('punk', 210, api.FLOOR_MID, -1);
+    api.tryGrab(p, e);
+    p.throwAim = 1;                                 // holding down
+    api.throwHeld(p);
+    for (let i = 0; i < 90 && !e.gone; i++) api.updateFighter(e, api.STEP);
+    assert(e.gone, `stage ${stageIdx + 1} should have swallowed him`);
+  }
+});
+
+test('a street without a hazard just puts them on the floor', () => {
+  const api = boot();
+  play(api, { stage: 0 }); clearField(api);
+  assert(!api.STAGES[0].hazard, 'stage one has no edge to use');
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.face = 1;
+  const e = api.spawnEnemy('punk', 210, api.FLOOR_MID, -1);
+  e.hp = 200; e.hpMax = 200;
+  api.tryGrab(p, e);
+  p.throwAim = -1;
+  api.throwHeld(p);
+  for (let i = 0; i < 90; i++) api.updateFighter(e, api.STEP);
+  assert(!e.gone && !e.dead, 'he lands and gets up like anywhere else');
+});
+
+test('a player can never be eaten by an edge', () => {
+  const api = boot();
+  play(api, { stage: 3 }); clearField(api);
+  const p = api.players[0];
+  p.y = api.FLOOR_BOT; p.thrown = true; p.thrownBy = api.spawnEnemy('bruiser', 150, api.FLOOR_MID, 1);
+  p.vy = 400; p.state = 'down';
+  for (let i = 0; i < 60; i++) api.updateFighter(p, api.STEP);
+  assert(!p.gone && !p.dead, 'the hazard is for enemies only');
+  assert(p.y <= api.FLOOR_BOT + 0.01, 'and a player stays inside the floor band');
+});
+
+test('every hazard line sits outside the walkable band', () => {
+  const api = boot();
+  for (const s of api.STAGES){
+    if (!s.hazard) continue;
+    const h = s.hazard;
+    assert(h.kind && h.edge, s.name + ' hazard needs a kind and an edge');
+    if (h.edge === 'back') assert(h.line < api.FLOOR_TOP, s.name + ' back hazard is inside the floor');
+    else assert(h.line > api.FLOOR_BOT, s.name + ' front hazard is inside the floor');
+  }
+});
+
+test('walking about on a hazard stage never kills anybody', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  for (let i = 0; i < 60 * 25; i++){
+    api.update(api.STEP);
+    for (const f of api.fighters){
+      if (f.team === 'e' && f.gone && !f.dead) throw new Error('an enemy vanished without dying');
+    }
+    api.players[0].x += 0.7;
+  }
+  assert(api.players[0].hp > 0 || api.G.lives[0] >= 0, 'the stage ran');
 });
 
 /* ---------------------------------------------------------------- bosses */
