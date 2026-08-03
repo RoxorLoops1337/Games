@@ -15504,13 +15504,41 @@ const netReady = (tick) => { const s = NET.box.get(tick); return !!(s && s[0] &&
 // that halts a match is not the place to discover otherwise, and drift in a
 // simulation like this one grows quickly enough that the resolution costs
 // nothing in practice.
+//
+// THE CLOCKS ARE IN HERE TOO, and they were not. This hashed a hero's health,
+// mana, level and the IDS of its skills — and not one timer: not `sk.cdT`, not
+// `buffs`, not `shield`, not `stunT` or `slowT`, and on a structure nothing at
+// all but `hp`. Two machines could therefore disagree about a cooldown, a stun,
+// a shield or a turret's firing beat and the detector would say nothing, right
+// up until the difference worked its way out into a position — which is a
+// symptom arriving seconds to minutes after its cause, in a completely
+// different part of the board. Every timer that can change what the next tick
+// does is hashed, at 1/30 (one tick) or 1/64, so ordinary float noise cannot
+// fabricate a desync while a real one-tick difference still shows.
+// Every timed thing carried on a body, hashed to the tick. Shared by the unit
+// walk and the hero walk so a hero — which is in both lists while it is in the
+// lane — cannot be hashed two different ways depending on which loop reached
+// it. `|| 0` throughout because these fields are added lazily by whatever puts
+// them there, and an undefined is not a zero to Math.round.
+const q30 = (v) => Math.round((v || 0) * 30);
+const q64 = (v) => Math.round((v || 0) * 64);
+function mixTimers(mix, u){
+  mix(q30(u.stunT)); mix(q30(u.slowT)); mix(q64(u.slowP));
+  mix(q30(u.taunt)); mix(q30(u.markT)); mix(q30(u.pullT));
+  mix(q64(u.shield)); mix(q30(u.shT)); mix(q30(u.cd));
+  mix(u.burn ? q30(u.burn.t) : 0); mix(u.burn ? q64(u.burn.dps) : 0);
+}
+
 function netHash(){
   let a = 2166136261 >>> 0;
   const mix = (n) => { a ^= n | 0; a = Math.imul(a, 16777619) >>> 0; };
   const mixs = (v) => { const t = '' + (v == null ? '' : v); for (let i = 0; i < t.length; i++) mix(t.charCodeAt(i)); mix(0); };
   mix(seedNow());
   mix(G.wave); mix(Math.round(G.t * 30)); mix(Math.round(G.waveT * 30));
-  for (const u of G.units){ mix(u.side); mix(Math.round(u.x * 4096)); mix(Math.round(u.y * 4096)); mix(Math.round(u.hp * 64)); }
+  for (const u of G.units){
+    mix(u.side); mix(Math.round(u.x * 4096)); mix(Math.round(u.y * 4096)); mix(Math.round(u.hp * 64));
+    mixTimers(mix, u);
+  }
   for (const s of G.sides){
     mix(s.rs);                                   // this hold's own decision stream
     mix(Math.round(s.res.gold * 64)); mix(Math.round(s.res.iron * 64));
@@ -15531,14 +15559,27 @@ function netHash(){
     for (const b of s.plot){ if (!b){ mix(0); continue; } mixs(b.type); mix(b.lvl); }
     mix(s.trainQ.length);
     for (const q of s.trainQ){ mixs(q.type); mix(Math.round(q.t * 30)); }
-    for (const st of s.structs) mix(Math.round(st.hp * 64));
+    // A structure used to be one number — its health — so a turret that was
+    // dead on one machine and standing on the other, or halfway through a
+    // different firing beat, was invisible here.
+    for (const st of s.structs){
+      mix(Math.round(st.hp * 64)); mix(st.dead ? 1 : 0);
+      mix(q30(st.downT)); mix(q30(st.cd)); mix(q30(st.dmgTaken));
+    }
     mix(s.heroes.length);
     for (const h of s.heroes){
       mixs(h.cls); mixs(h.passive); mix(h.lvl); mix(Math.round(h.xp)); mix(h.passRank);
       mix(Math.round(h.hp * 64)); mix(Math.round(h.mana * 64));
       mix(h.dead ? 1 : 0); mix(Math.round(h.respawnT * 30));
+      mixTimers(mix, h);
+      mix(q30(h.castLock)); mix(q64(h.rage));
       mix(h.skills.length);
-      for (const sk of h.skills){ mixs(sk.id); mix(sk.rank); }
+      // The cooldown, not only the identity. Two machines that disagree about
+      // whether an ultimate is up are about to play two different fights.
+      for (const sk of h.skills){ mixs(sk.id); mix(sk.rank); mix(q30(sk.cdT)); }
+      const bl = h.buffs || [];
+      mix(bl.length);
+      for (const b of bl){ mixs(b.tag); mix(q30(b.t)); mix(b.stacks || 1); }
       mix(h.pend.length);
       for (const p of h.pend) for (const o of p.opts) mixs(o);
     }
@@ -15634,8 +15675,12 @@ function netSnap(){
     seed: seedNow(), t:G.t, wave:G.wave, waveT:G.waveT, frame:G.frame || 0, uid:G.uid,
     state:G.state, winner:G.winner,
     // In-flight arrows carry a callback and ground zones carry live references;
-    // both last under a second and neither is worth re-linking. They are
-    // dropped on BOTH machines so the two still match exactly.
+    // both last under a second and neither is worth re-linking, so a snapshot
+    // does not carry them and the machine adopting one drops its own (netLoad).
+    // The machine that SENT it has to drop its own too, at the same instant, or
+    // the two boards disagree about a patch of burning ground for as long as it
+    // lasts — see netSendSnap, which is where that happens. This comment used
+    // to claim both machines dropped them and only one of them did.
     bodies: bodies.map(packBody),
     heroesOf: G.sides.map(s => s.heroes.map(h => at.get(h) || 0)),
     unitsOf: G.units.map(u => at.get(u) || 0),
@@ -15829,6 +15874,13 @@ function netSendSnap(force){
   }
   const at = NET.tick;
   const body = JSON.stringify(netSnap());
+  // A snapshot carries no arrows and no ground zones, and netLoad clears them
+  // on the machine that adopts it — so this machine has to clear its own here,
+  // in the same instant the snapshot was taken, or a resync taken while a
+  // zone-pushing ultimate is burning leaves that zone damaging bodies on one
+  // board and not the other. The two would then drift apart from a cause that
+  // is invisible to the very mechanism meant to be putting them back together.
+  G.projs.length = 0; G.zones.length = 0;
   const id = (NET.syncId = (NET.syncId || 0) + 1);
   const n = Math.ceil(body.length / SYNC_CHUNK) || 1;
   netDiary('sync out', body.length + ' bytes in ' + n + ' piece(s) at tick ' + at + ' (resync ' + NET.resyncs + ')');

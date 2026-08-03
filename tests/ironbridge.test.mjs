@@ -12392,6 +12392,77 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.fxForce = false;
 }
 
+/* ============================ what the desync detector can actually see
+   The hash is the only thing standing between two machines that have quietly
+   drifted and two players spending ten minutes on different matches. It used
+   to hash health, mana, level and the IDS of a hero's skills — and not one
+   clock. Not a skill cooldown, not a buff, not a shield, not a stun or a slow,
+   and on a structure nothing at all but health. Every one of those differences
+   was invisible until it worked its way out into a POSITION, which is a symptom
+   arriving long after its cause and somewhere else on the board.              */
+{
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:7311 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'mage');
+  const h = G.sides[0].heroes[0];
+  h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h);
+  IB.offer(h, 'skill'); IB.autoPick(h);
+  step(40);
+  const u = G.units.find(x => !x.isHero && !x.dead);
+  const st = IB.frontStruct(1);
+  t.ok(!!u && !!st && h.skills.length > 0,
+    'a board with a body, a turret and a hero carrying skills to time');
+
+  const moves = (fn, what) => {
+    const h0 = IB.netHash(); fn();
+    t.ok(IB.netHash() !== h0, 'the hash sees ' + what);
+  };
+  moves(() => { h.skills[0].cdT += 2; }, 'a skill cooldown');
+  moves(() => { IB.addBuff(h, { t:6, bad:12, tag:'probe' }); }, 'a buff a hero is carrying');
+  moves(() => { h.buffs[h.buffs.length - 1].t -= 1; }, 'and how long that buff has left');
+  moves(() => { h.shield += 60; h.shT = 5; }, 'a shield');
+  moves(() => { h.stunT = 1.25; }, 'a stunned hero');
+  moves(() => { u.stunT = 1.5; }, 'a stunned body');
+  moves(() => { u.slowT = 2; u.slowP = .4; }, 'a slowed one');
+  moves(() => { u.burn = { dps:20, t:3, src:null }; }, 'a burn');
+  moves(() => { st.cd += .3; }, 'where a turret is in its firing beat');
+  moves(() => { st.downT += 4; }, 'and how long a downed structure has left');
+
+  // Quantised, so ordinary float noise cannot fabricate a drift that is not
+  // there: a difference far below one tick is not a difference.
+  const q0 = IB.netHash();
+  h.skills[0].cdT += 1e-9; u.slowT += 1e-9; st.cd += 1e-9;
+  t.ok(IB.netHash() === q0, 'but a difference far below one tick is not reported as a drift');
+}
+
+/* ==================== a resync drops the ground zones on BOTH machines
+   netLoad clears G.zones on the machine ADOPTING a snapshot, and netSnap's
+   comment claimed both machines dropped them. Only one of them did: the host
+   packed its board, shipped it and kept its own zones burning. A resync taken
+   while a zone-pushing ultimate was on the ground therefore left that zone
+   damaging bodies on one board and not the other — the resync creating the
+   very drift it was there to repair.                                        */
+{
+  IB.netEnd();
+  IB.netStart({ me:0, seed:7312, diff:'veteran' });
+  IB.NET.send = () => {};
+  const zone = { x:64, y:0, r:4, dps:30, t:4, tick:.5, side:0, src:null, magic:true, slow:0 };
+  G.zones.push(zone);
+  G.projs.push({ x:10, y:0, z:1, sp:20, tgt:null, onHit:() => {}, tr:[], kind:'arrow' });
+  const snap = JSON.parse(JSON.stringify(IB.netSnap()));
+  t.ok(G.zones.length === 1, 'the host has a zone on the ground when it ships the board');
+  IB.netSendSnap();
+  t.ok(G.zones.length === 0, 'and drops it, because the snapshot does not carry it');
+  t.ok(G.projs.length === 0, 'along with the arrows in flight, for the same reason');
+  // The other half of the pair: the machine adopting one clears the same two
+  // lists, so the two boards genuinely agree rather than nearly agreeing.
+  G.zones.push(zone);
+  IB.netLoad(snap);
+  t.ok(G.zones.length === 0, 'and the machine adopting a snapshot clears them too');
+  IB.netEnd();
+}
+
 /* ==================================== a drifted match puts itself back together
    A desync used to end the match. It is recoverable: the host packs its board,
    the joiner adopts it, and both restart their order pipeline from the same
