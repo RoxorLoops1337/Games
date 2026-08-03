@@ -497,7 +497,7 @@
      four seconds and given a name. It is the whole hook of the game, on the
      first screen, with no explanation needed. */
   .tshow{ position:relative; display:flex; align-items:flex-end; justify-content:center;
-    gap:clamp(6px,2.4cqw,18px); margin:10px auto 2px; padding-bottom:14px; }
+    gap:clamp(6px,2.4cqw,18px); margin:10px auto 2px; padding-bottom:30px; }
   /* they stand on a floor — the same barn floor the field has */
   .tshow::after{ content:''; position:absolute; left:2%; right:2%; bottom:0; height:16px;
     pointer-events:none; border-radius:50%;
@@ -648,7 +648,8 @@
   /* A TAG HUNG OFF THE CARD — a notched slip with a punched hole and a bit of
      string through it. It was a border-top and some glow text, which is a rule,
      not a tab, and the keyword decides the fight. */
-  .card .tr{ position:relative; align-self:center; margin:4px auto 5px; padding:3px 10px 3px 16px;
+  .card .tr{ position:relative; align-self:center; margin:4px auto 5px; padding:3px 10px 3px 14px;
+    max-width:100%; overflow:hidden;
     font-family:var(--f-display); font-size:8.5px; letter-spacing:1.4px; text-transform:uppercase;
     text-align:center; font-weight:900; border:none; box-shadow:none; margin-top:auto;
     color:#2c2a14;
@@ -657,28 +658,30 @@
     filter:drop-shadow(0 1px 0 rgba(0,0,0,.55)) drop-shadow(0 2px 3px rgba(0,0,0,.5));
     text-shadow:0 1px 0 rgba(255,246,214,.4); }
   /* the hole the string goes through */
-  .card .tr::before{ content:''; position:absolute; left:6.5px; top:50%; width:3.5px; height:3.5px;
+  .card .tr::before{ content:''; position:absolute; left:3.5px; top:50%; width:3.5px; height:3.5px;
     transform:translateY(-50%); border-radius:50%; background:#0d1207;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.25); }
   .card .tr.bad{ color:#3a1010;
     background-image:linear-gradient(176deg,#e0a89c,#bd7566 58%,#8e4a3c);
     text-shadow:0 1px 0 rgba(255,222,214,.35); }
   .card .tr.no{ visibility:hidden; }
-  .handrow .card .tr{ font-size:8px; padding:2px 8px 2px 15px; letter-spacing:1px; }
+  .handrow .card .tr{ font-size:8px; padding:2px 7px 2px 13px; letter-spacing:.8px; }
   /* the big card's slab is turned down to match the small ones; a filled slab
      is now reserved for the one trait that is NEW vs. both parents */
   .card.big{ min-height:0; }
-  .card.big .tr{ font-size:var(--t-label); letter-spacing:1.4px; padding:6px 3px 7px;
-    color:var(--lime); background:none; text-shadow:0 0 10px rgba(166,255,94,.35);
-    border-top:1px solid rgba(166,255,94,.30); box-shadow:none; }
+  /* a bigger card carries a bigger tag, not a different object */
+  .card.big .tr{ font-size:var(--t-label); letter-spacing:1.6px; padding:4px 12px 4px 17px;
+    border-top:none; }
+  .card.big .tr::before{ left:4.5px; width:4.5px; height:4.5px; }
   .card.big .tr.no{ display:none; }
-  .card.big .tr.bad{ color:#ff9d9d; border-top-color:rgba(255,120,120,.30); background:none;
-    text-shadow:0 0 10px rgba(255,120,120,.35); }
-  /* the exception: a trait the chick did NOT inherit gets the loud slab */
-  .card.big .tr.fresh{ color:#0e1a0c; background:linear-gradient(180deg,#bcff6e,#86d243);
-    text-shadow:none; border-top:none;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 -1px 0 rgba(0,0,0,.5); }
-  .card.big .tr.fresh.bad{ background:linear-gradient(180deg,#ff9d9d,#e05555); color:#2a0808; }
+  /* a trait the chick did NOT inherit is BRANDED, not slabbed: the same tag,
+     scorched gold, with a glow on the string hole */
+  .card.big .tr.fresh{ color:#2a1c00; text-shadow:0 1px 0 rgba(255,244,200,.5);
+    background-image:linear-gradient(176deg,#ffe9a8,#e8bf5c 58%,#b8892a);
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.55)) drop-shadow(0 0 10px rgba(255,200,80,.55)); }
+  .card.big .tr.fresh.bad{ color:#330d0d;
+    background-image:linear-gradient(176deg,#ffc0b6,#e08a78 58%,#a8543f);
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.55)) drop-shadow(0 0 10px rgba(255,120,110,.5)); }
 
   /* ---------- nest ---------- */
   .panel{ background:linear-gradient(180deg,#152318,#0e1810); border:1px solid #0a120a;
@@ -763,7 +766,7 @@
   .rit > *, .rit .c{ position:relative; z-index:1; }
   .rit b{ display:block; font-family:var(--f-display); font-size:12px; color:#2e2716;
     font-weight:900; line-height:1.2; letter-spacing:.2px; }
-  .rit i{ display:block; font-size:9.5px; font-style:normal; color:#6b5c39; line-height:1.3; margin-top:2px; }
+  .rit i{ display:block; font-size:9.5px; font-style:normal; color:#4d4128; line-height:1.3; margin-top:2px; }
   .rit .c{ float:right; font-family:var(--f-display); font-size:11.5px; font-weight:900; color:#7a4a12; }
   /* taken: the entry is inked over and crossed through */
   .rit.on{ color:#3a1830; }
@@ -775,8 +778,12 @@
     z-index:2; pointer-events:none; opacity:.9;
     background:no-repeat center/contain
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.4 8.6 6.2 12.4 13.6 3.1' fill='none' stroke='%2396146a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
-  .rit.no{ filter:grayscale(.5) brightness(.72); cursor:not-allowed; }
-  .rit.no b, .rit.no i, .rit.no .c{ color:#5c5540; }
+  /* unaffordable: the entry is scored out, not just dimmed — at .72 brightness
+     it was indistinguishable from the ones you could actually take */
+  .rit.no{ filter:grayscale(.6) brightness(.66); cursor:not-allowed; }
+  .rit.no b{ color:#4a4432; text-decoration:line-through;
+    text-decoration-color:rgba(120,30,20,.55); text-decoration-thickness:1.5px; }
+  .rit.no i, .rit.no .c{ color:#4a4432; }
   /* the hazard entry is written in a different hand, in red ink */
   .haz{ color:#5a2410 !important; }
   .haz b{ color:#7a2c0c !important; }
@@ -839,13 +846,15 @@
       0 6px 18px rgba(0,0,0,.45); }
   .pit canvas{ display:block; width:100%; height:100%; }
   /* the gate you come out of, and the door they come in by */
-  .pit::before, .pit::after{ content:''; position:absolute; top:0; bottom:0; width:12px;
-    pointer-events:none; z-index:2; }
-  .pit::before{ left:0; background:linear-gradient(90deg, rgba(166,255,94,.22), transparent);
-    border-left:3px solid rgba(166,255,94,.35); }
-  .pit::after{ right:0; background:linear-gradient(270deg, rgba(255,110,80,.26), transparent);
-    border-right:3px solid rgba(255,110,80,.45); animation:doorpulse 2.2s ease-in-out infinite; }
-  @keyframes doorpulse{ 0%,100%{ opacity:.55 } 50%{ opacity:1 } }
+  /* The DOOR breathes — but only the door, and only as light. The gate glows
+     themselves are painted on the canvas, bleeding a third of the pit inward;
+     these used to duplicate them as a hard 3px stripe over the top. */
+  .pit::after{ content:''; position:absolute; top:0; bottom:0; right:0; width:26%;
+    pointer-events:none; z-index:2;
+    background:linear-gradient(270deg, rgba(255,120,70,.16), transparent 70%);
+    animation:doorpulse 2.6s ease-in-out infinite; }
+  @keyframes doorpulse{ 0%,100%{ opacity:.35 } 50%{ opacity:1 } }
+  @media (prefers-reduced-motion:reduce){ .pit::after{ animation:none; opacity:.6 } }
   .wavelbl{ position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:3;
     font-size:9.5px; letter-spacing:1.6px; font-weight:800; text-transform:uppercase;
     white-space:nowrap; padding:3px 11px; border-radius:20px; color:#ffc9a6; pointer-events:none;
@@ -972,7 +981,7 @@
   .handrow .card .art{ height:15cqw; max-height:86px; }
   .handrow .card .nm{ font-size:10.5px; min-height:24px; }
   .handrow .card .st{ font-size:12.5px; }
-  .handrow .card .tr{ font-size:8px; padding:2px; }
+  /* (the hand's tag sizing lives with the tag itself, above) */
   .handrow .card .gen{ display:none; }
   /* the bottom bar: budget, notes, and the one button that matters. SEND THEM
      IN is the only irreversible action in the game, so it is the loudest thing
@@ -1067,22 +1076,22 @@
     border-radius:3px 5px 4px 3px; transform:rotate(-.35deg);
     background-color:#cbb78c;
     background-image:
+      /* the stitched gutter, IN the paper */
+      repeating-linear-gradient(180deg, rgba(60,44,20,.5) 0 5px, transparent 5px 11px),
+      linear-gradient(90deg, transparent calc(50% - 11px), rgba(60,44,20,.22) calc(50% - 11px),
+        rgba(60,44,20,.22) calc(50% + 11px), transparent calc(50% + 11px)),
       repeating-linear-gradient(180deg, transparent 0 21px, rgba(70,56,28,.13) 21px 22px),
       radial-gradient(ellipse 44% 34% at 6% 12%, rgba(110,86,42,.24), transparent 70%),
       radial-gradient(ellipse 40% 46% at 95% 82%, rgba(96,74,36,.26), transparent 72%),
       linear-gradient(176deg,#ddcaa0 0%,#c6b285 54%,#a08c60 100%);
+    background-size:2.2px 100%, auto, auto, auto, auto, auto;
+    background-position:center top, 0 0, 0 0, 0 0, 0 0, 0 0;
+    background-repeat:no-repeat, repeat, repeat, repeat, repeat, repeat;
     box-shadow:inset 0 0 0 1px rgba(90,70,38,.5), inset 0 0 34px rgba(110,84,40,.36),
       0 4px 0 rgba(0,0,0,.45), 0 16px 34px -10px rgba(0,0,0,.7); }
   .bkhead::before{ content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
     border-radius:inherit; background-image:var(--tex-grime); background-size:64px 64px;
     mix-blend-mode:multiply; opacity:.30; }
-  /* the gutter: a shadow and a run of stitches, straight down the middle */
-  .bkhead::after{ content:''; position:absolute; left:50%; top:6px; bottom:6px; width:22px;
-    z-index:0; pointer-events:none; transform:translateX(-50%);
-    background:
-      repeating-linear-gradient(180deg, rgba(60,44,20,.55) 0 5px, transparent 5px 11px)
-        center/2.2px 100% no-repeat,
-      linear-gradient(90deg, transparent, rgba(60,44,20,.26) 42%, rgba(60,44,20,.26) 58%, transparent); }
   .bkhead > *{ position:relative; z-index:1; }
   .booktop{ display:flex; gap:16px; align-items:center; justify-content:center; flex-wrap:wrap;
     padding:6px 0 10px; }
@@ -1095,6 +1104,29 @@
   #book .bkhead .bkrule{ color:#6b5c39; }
   #book .bkhead .bdg{ background:rgba(80,62,30,.13) !important;
     box-shadow:inset 0 0 0 1px rgba(90,70,38,.4); }
+  /* ---- ONE INK TOKEN ----
+     Four separate measured contrast failures on paper — 2.45, 2.80, 3.28 and
+     3.00 to 1 — were all the same mistake: text keeping a colour picked for a
+     black screen. Paper takes ink. */
+  :root{ --ink:#3a3122; --ink-soft:#5c4e2e; }
+  #book .bkhead, #book .bkhead .bkinfo, #book .bkhead .cap,
+  #book .bkhead .plate, #book .bkhead .tn .plate, #book .bkhead .tn b{ color:var(--ink); }
+  #book .bkhead .tiny, #book .bkhead .bkrule{ color:var(--ink-soft); }
+  .logbox, .logbox > div{ color:var(--ink); }
+  .coach, .keepsake{ color:var(--ink); }
+  .bkhead .booktop, .bkhead .bkinfo, .bkhead .bkrule,
+  .bkhead .bktreewrap, .bkhead .tree, .bkhead .tn{ position:relative; z-index:2; }
+  /* neon does not belong on paper */
+  #book .bkhead .tn.root{ box-shadow:inset 0 0 0 1px rgba(90,70,38,.42),
+    0 1px 0 rgba(255,246,222,.3), 0 2px 4px -1px rgba(60,44,20,.45) !important; }
+  /* a retired entry is struck through in the same ink, not printed in pink at
+     1.35:1 against the paper */
+  .logbox .gone, .logbox .out{ color:var(--ink); opacity:.6;
+    text-decoration:line-through; text-decoration-color:rgba(120,30,20,.7);
+    text-decoration-thickness:1.5px; }
+  /* and the log has a bottom EDGE — it used to dissolve into nothing, so a
+     one-line log looked like a rendering failure */
+  .logbox{ -webkit-mask-image:none !important; mask-image:none !important; }
   #book .bkhead .tn .plate, #book .bkhead .tn b, #book .bkhead .tn .st2{ color:#3d3520; }
   #book .bkhead .tn .st2{ opacity:.8; }
   /* the tree's connector lines were drawn to show on black */
@@ -1199,6 +1231,10 @@
   #over.win #oTitle{ color:var(--lime);
     text-shadow:0 2px 0 #4a7c1e, 0 4px 0 #2b4a12, 0 7px 10px rgba(0,0,0,.7), 0 0 22px rgba(150,255,90,.3); }
   /* a loss must not be dressed as a win */
+  /* on the loss board — which goes blood red — a lime plank is the same
+     collision the keepsake had; the CTA takes the board's own colour */
+  #over.lose #bAgain{ --btn-hi:#a8552c; --btn-mid:#7e3a1c; --btn-lo:#4d200d;
+    --btn-edge:#210c04; --btn-deep:#331306; color:#ffe0cc; }
   #over.lose #oTitle{ color:#ff7b7b;
     text-shadow:0 2px 0 #8f2b2b, 0 4px 0 #561717, 0 7px 10px rgba(0,0,0,.7), 0 0 22px rgba(255,90,90,.3); }
   #over.lose .tcard{ background:linear-gradient(180deg,#241616,#150d0d);
@@ -1437,7 +1473,18 @@
   .pairprev .pp{ text-align:center; }
   .pairprev canvas{ display:block; width:96px; height:70px; border-radius:10px;
     background:radial-gradient(ellipse at 50% 80%, #17261b, #060c06 80%); }
-  .pairprev .pp.gh canvas{ opacity:.5; filter:blur(.4px); border:1px dashed rgba(255,138,212,.4); }
+  .pairprev .pp.gh{ position:relative; }
+  .pairprev .pp.gh canvas{ opacity:.55; filter:blur(.4px); border:none;
+    -webkit-mask-image:radial-gradient(ellipse 74% 82% at 50% 42%, #000 55%, transparent 88%);
+            mask-image:radial-gradient(ellipse 74% 82% at 50% 42%, #000 55%, transparent 88%); }
+  /* it sits in an empty nest, waiting: straw, and a rim of light where the egg
+     will be */
+  .pairprev .pp.gh::before{ content:''; position:absolute; left:50%; bottom:16px;
+    width:78px; height:20px; transform:translateX(-50%); border-radius:50%; z-index:-1;
+    background:
+      radial-gradient(ellipse 60% 90% at 50% 30%, rgba(255,138,212,.22), transparent 72%),
+      linear-gradient(180deg,#6b5324,#3d2c11);
+    box-shadow:inset 0 2px 0 rgba(255,232,170,.28), 0 3px 8px rgba(0,0,0,.55); }
   .pairprev .lbl{ font-size:9.5px; letter-spacing:1.6px; text-transform:uppercase; color:#6d8a5e;
     font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     max-width:104px; }
@@ -3437,10 +3484,17 @@ function drawBeast(cv, c){
   // and never grows past the old scale, so ordinary animals look unchanged.
   const topY = hcy + hh + Math.max(hl, crestUp) + 3;
   const halfW = Math.max(bw * 1.32, bw + (v.tail ? 22 : 6), bw * 0.85 + 16 * sz, 44);
-  const S = Math.min(W / 96, H / 80, W / (2 * halfW), H / topY);
+  // EVERY ANIMAL FILLS THE SAME VERTICAL ENVELOPE. Fitting on extents meant a
+  // narrow capsule scaled to a third of the tile while a wide quadruped filled
+  // it — so in the pit two beasts of the same power were three times apart in
+  // size, and the roster and the army looked like assets from two games. Height
+  // sets the scale; width only ever SQUEEZES, and only if it would overflow.
+  const S = Math.min(H / 80, H / topY);
+  const fitX = Math.min(W / 96, W / (2 * halfW));
+  const squeeze = Math.min(1, fitX / S);
   ctx.save();
   ctx.translate(W / 2, H * 0.96);
-  ctx.scale(S, -S); // y now points up
+  ctx.scale(S * squeeze, -S); // y now points up
   if (f.legless) ctx.scale(1.08, 0.9);   // legless: it sits ON the floor
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
 
@@ -4205,6 +4259,19 @@ function spriteFor(c){
   const cv = document.createElement('canvas');
   cv.width = 128; cv.height = 104;
   try { drawBeast(cv, c); } catch (e){}
+  // Scan once for the topmost painted row. Anchoring the health bar to the
+  // TILE top put it below the horns on tall animals and straight through the
+  // ears and eyes of short ones.
+  cv._top = 0;
+  try {
+    const g = cv.getContext && cv.getContext('2d');
+    if (g && g.getImageData){
+      const d = g.getImageData(0, 0, 128, 104).data;
+      outer: for (let yy = 0; yy < 104; yy++){
+        for (let xx = 0; xx < 128; xx++){ if (d[(yy * 128 + xx) * 4 + 3] > 12){ cv._top = yy; break outer; } }
+      }
+    }
+  } catch (e){}
   spriteCache[key] = cv;
   return cv;
 }
@@ -4381,41 +4448,72 @@ function drawPit(){
   lit.addColorStop(0, 'rgba(255,226,160,.16)'); lit.addColorStop(1, 'transparent');
   ctx.fillStyle = lit; ctx.fillRect(0, horizon, W, H - horizon);
 
-  // --- the two ends: the nest you are holding, the door they come through --
-  // Warm, and bleeding a long way in. A hard saturated bar butted against the
-  // dirt read as a compositing bug rather than as light spilling out of a gate.
-  const nestG = ctx.createLinearGradient(0, 0, W * 0.30, 0);
-  nestG.addColorStop(0, 'rgba(196,255,130,.30)');
-  nestG.addColorStop(0.35, 'rgba(150,210,90,.10)');
-  nestG.addColorStop(1, 'transparent');
-  ctx.fillStyle = nestG; ctx.fillRect(0, horizon, W * 0.30, H - horizon);
-  const doorG = ctx.createLinearGradient(W, 0, W * 0.70, 0);
-  doorG.addColorStop(0, 'rgba(255,140,80,' + (0.26 + 0.12 * flick).toFixed(2) + ')');
-  doorG.addColorStop(0.35, 'rgba(210,90,50,.10)');
-  doorG.addColorStop(1, 'transparent');
-  ctx.fillStyle = doorG; ctx.fillRect(W * 0.70, horizon, W * 0.30, H - horizon);
-  // The thing you are defending has to BE somewhere. A straw nest with as many
-  // eggs left in it as you have health, down at the near end of the sand.
-  const ny = horizon + (H - horizon) * 0.84, nw = W * 0.20;
+  // --- the two ends are OBJECTS, not colour washes ------------------------
+  // A solid bar down the left edge and a 30%-wide tint over each end read as a
+  // different SURFACE rather than as light. Both ends are built things now,
+  // each throwing a pool onto the ground in front of it.
+  const sandTop = horizon, sandH = H - horizon;
+  const post = (px2, w2, top2, hgt, lit) => {
+    const g4 = ctx.createLinearGradient(px2, 0, px2 + w2, 0);
+    g4.addColorStop(0, lit ? '#6f5a2c' : '#4a2f22');
+    g4.addColorStop(0.45, lit ? '#4a3a19' : '#2e1c14');
+    g4.addColorStop(1, lit ? '#2c220f' : '#1a0f0a');
+    ctx.fillStyle = g4; ctx.fillRect(px2, top2, w2, hgt);
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(px2 + w2 - 1.5, top2, 1.5, hgt);
+  };
+  // YOUR GATE: two posts and two crossbars, standing open on the near sand
+  const gw = W * 0.030, gTop = sandTop + sandH * 0.10, gH = sandH * 0.86;
+  post(W * 0.006, gw, gTop, gH, true);
+  post(W * 0.088, gw, gTop + sandH * 0.05, gH * 0.9, true);
+  ctx.fillStyle = '#54401d';
+  ctx.fillRect(W * 0.006, gTop + gH * 0.22, W * 0.112, Math.max(3, H * 0.008));
+  ctx.fillRect(W * 0.006, gTop + gH * 0.62, W * 0.112, Math.max(3, H * 0.008));
+  // and the pool it throws
+  const gp = ctx.createRadialGradient(W * 0.05, sandTop + sandH * 0.76, 2,
+    W * 0.05, sandTop + sandH * 0.76, W * 0.30);
+  gp.addColorStop(0, 'rgba(190,255,130,.20)'); gp.addColorStop(1, 'transparent');
+  ctx.fillStyle = gp; ctx.fillRect(0, sandTop, W * 0.40, sandH);
+
+  // THEIR DOOR: a dark arch cut into the far end, breathing
+  const dw = W * 0.115, dx = W - dw - W * 0.012;
+  const dTop = sandTop + sandH * 0.06, dH = sandH * 0.66;
+  ctx.fillStyle = '#140b07';
+  ctx.beginPath();
+  ctx.moveTo(dx, dTop + dH);
+  ctx.lineTo(dx, dTop + dw * 0.5);
+  ctx.arc(dx + dw / 2, dTop + dw * 0.5, dw / 2, Math.PI, 0);
+  ctx.lineTo(dx + dw, dTop + dH);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#43281c'; ctx.lineWidth = Math.max(2, W * 0.007); ctx.stroke();
+  const dp = ctx.createRadialGradient(dx + dw / 2, dTop + dH, 2, dx + dw / 2, dTop + dH, W * 0.34);
+  dp.addColorStop(0, 'rgba(255,130,70,' + (0.22 + 0.14 * flick).toFixed(2) + ')');
+  dp.addColorStop(1, 'transparent');
+  ctx.fillStyle = dp; ctx.fillRect(W * 0.55, sandTop, W * 0.45, sandH);
+
+  // THE NEST ITSELF, in front of the gate: the thing you are defending has to
+  // BE somewhere, and it holds as many eggs as you have health left.
+  const ny = sandTop + sandH * 0.90, nw = W * 0.20;
   ctx.fillStyle = '#7a5c22';
-  ctx.beginPath(); ctx.ellipse(nw * 0.42, ny, nw * 0.52, nw * 0.20, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(nw * 0.46, ny, nw * 0.54, nw * 0.20, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#5b4116';
-  ctx.beginPath(); ctx.ellipse(nw * 0.42, ny + nw * 0.05, nw * 0.52, nw * 0.15, 0, 0, Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(nw * 0.46, ny + nw * 0.05, nw * 0.54, nw * 0.15, 0, 0, Math.PI); ctx.fill();
   const eggsLeft = R ? Math.max(0, Math.min(3, Math.ceil(3 * R.hp / R.maxHp))) : 3;
   for (let i = 0; i < eggsLeft; i++){
     ctx.fillStyle = '#f2dcae';
     ctx.beginPath();
-    ctx.ellipse(nw * (0.20 + i * 0.22), ny - nw * 0.10, nw * 0.085, nw * 0.115, 0, 0, Math.PI * 2);
+    ctx.ellipse(nw * (0.22 + i * 0.24), ny - nw * 0.10, nw * 0.085, nw * 0.115, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(120,92,44,.30)';
+    ctx.beginPath();
+    ctx.ellipse(nw * (0.24 + i * 0.24), ny - nw * 0.07, nw * 0.035, nw * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  // and the gate posts your lot come out of
-  ctx.fillStyle = '#4a6b28';
-  ctx.fillRect(0, horizon + (H - horizon) * 0.06, W * 0.022, (H - horizon) * 0.94);
-  ctx.fillStyle = '#6f9b3c';
-  ctx.fillRect(0, horizon + (H - horizon) * 0.06, W * 0.022, Math.max(2, H * 0.006));
 
   if (!F){ ctx.restore(); return; }
-  const px = (x) => (x / AW) * W;
+  // inset the world so half a sprite always fits: a beast used to be cut clean
+  // in half by the canvas edge every time a wave walked in
+  const PAD = SPR * 0.42;
+  const px = (x) => PAD + (x / AW) * (W - PAD * 2);
   const py = (y) => horizon + (H - horizon) * (0.22 + 0.72 * (y / AH));
   const scaleAt = (y) => 0.80 + 0.40 * (y / AH);
 
@@ -4465,41 +4563,60 @@ function drawPit(){
     // a little dust off the heels of anything running
     if (u.moving && ((u.id * 7 + Math.floor(F.t * 14)) % 5 === 0))
       pitAdd({ k: 'dust', x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
-    const top = y - Math.min(h, SPR * 0.68) - SPR * 0.05;
+    // the sprite's own painted top, plus a fixed gap
+    const paintTop = y - h + h * 0.04 + ((spr._top || 0) / 104) * h;
+    const top = paintTop - SPR * 0.055;
     // Health, ALWAYS. It used to appear only once something was hurt, which
     // means the one moment you most want to compare two animals — before they
     // reach each other — is the one moment neither has a bar.
-    const bw = SPR * 0.50 * sc, bh = Math.max(3, H * 0.0075);
-    const bx = x - bw / 2, by = top;
-    ctx.fillStyle = 'rgba(6,9,4,.92)';
-    ctx.fillRect(bx - 1.6, by - 1.6, bw + 3.2, bh + 3.2);
-    ctx.fillStyle = u.side === 'us' ? '#2a3a1a' : '#3a1a16';
-    ctx.fillRect(bx, by, bw, bh);
-    ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e85a44';
-    ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh);
-    ctx.fillStyle = 'rgba(255,255,255,.3)';
-    ctx.fillRect(bx, by, bw * Math.max(0, u.hp / u.max), bh * 0.4);
+    // A LOZENGE IN A WELL, in the same vocabulary as the bone cost token —
+    // it was the last flat-UI rectangle in the game, sitting on the one screen
+    // you look at most.
+    const bw = SPR * 0.40 * sc, bh = Math.max(3.5, H * 0.0085);
+    const bx = x - bw / 2, by = top - bh;
+    const cap = bh / 2;
+    const pill = (px2, py2, pw, ph, r) => {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(px2, py2, Math.max(pw, r * 2), ph, r);
+      else ctx.rect(px2, py2, pw, ph);
+    };
+    ctx.fillStyle = 'rgba(6,9,4,.9)';
+    pill(bx - 1.8, by - 1.8, bw + 3.6, bh + 3.6, cap + 1.8); ctx.fill();
+    ctx.fillStyle = u.side === 'us' ? '#1e2a12' : '#2c130f';
+    pill(bx, by, bw, bh, cap); ctx.fill();
+    const frac = Math.max(0, Math.min(1, u.hp / u.max));
+    if (frac > 0){
+      ctx.save(); pill(bx, by, bw, bh, cap); ctx.clip();
+      ctx.fillStyle = u.side === 'us' ? '#9ae04a' : '#e85a44';
+      ctx.fillRect(bx, by, bw * frac, bh);
+      ctx.fillStyle = 'rgba(255,255,255,.28)';
+      ctx.fillRect(bx, by, bw * frac, bh * 0.42);
+      ctx.restore();
+    }
     // the leader gets a crown notch on its bar; nothing else needs a label,
     // because the bar colour and the tinted pool under the feet already say
     // whose it is and six word-tags stacked into an unreadable pile
     if (u.c.leader){
       ctx.fillStyle = '#ffd34d';
       ctx.beginPath();
-      ctx.moveTo(x - bw * 0.16, by - 2); ctx.lineTo(x, by - bh * 1.9);
-      ctx.lineTo(x + bw * 0.16, by - 2); ctx.closePath(); ctx.fill();
+      ctx.moveTo(x - bw * 0.16, by - 1); ctx.lineTo(x, by - bh * 2.1);
+      ctx.lineTo(x + bw * 0.16, by - 1); ctx.closePath(); ctx.fill();
     }
     // What this one DOES, in three letters. You cannot read a keyword off a
     // procedural animal, and finding out by being poisoned is too late.
     const kw = THREAT_TAG[u.c.trait];
     if (kw){
-      const fs = Math.max(7, W * 0.020);
-      ctx.font = '900 ' + fs.toFixed(0) + 'px system-ui, sans-serif';
+      // the game has two embedded faces; the pit used to use neither, and the
+      // plate was a fixed width so the last letter was clipped
+      const fs = Math.max(7, W * 0.021);
+      ctx.font = '900 ' + fs.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      const tw = fs * 2.2, th2 = fs * 1.35, ty = top - fs * 1.5;
-      ctx.fillStyle = 'rgba(6,10,5,.85)';
+      const tw = (ctx.measureText ? ctx.measureText(kw[0]).width : fs * 2.2) + fs * 0.9;
+      const th2 = fs * 1.4, ty = by - fs * 0.9;
+      ctx.fillStyle = 'rgba(6,10,5,.86)';
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x - tw / 2, ty - th2 * 0.78, tw, th2, th2 * 0.4);
-      else ctx.rect(x - tw / 2, ty - th2 * 0.78, tw, th2);
+      if (ctx.roundRect) ctx.roundRect(x - tw / 2, ty - th2 * 0.76, tw, th2, th2 * 0.35);
+      else ctx.rect(x - tw / 2, ty - th2 * 0.76, tw, th2);
       ctx.fill();
       ctx.fillStyle = kw[1];
       ctx.fillText(kw[0], x, ty);
@@ -4507,7 +4624,7 @@ function drawPit(){
     // status pips
     const pr = Math.max(2.5, W * 0.007);
     let sx = x - pr * 2;
-    const py2 = top - (kw ? Math.max(7, W * 0.020) * 2.9 : Math.max(2.5, W * 0.007) * 3);
+    const py2 = by - (kw ? Math.max(7, W * 0.021) * 2.6 : Math.max(2.5, W * 0.007) * 3);
     if (u.pois > 0){ ctx.fillStyle = '#b6ff8a'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); sx += pr * 3; }
     if (u.stun > 0){ ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); }
   }
@@ -5234,11 +5351,10 @@ function resemblance(wrap, res){
       // The caption stacks DOWN the card's art, which is the one band with
       // nothing to read on it. The lower band carries the name, the stats and
       // the trait tab, and a label parked there covered all three.
-      const cvr = rectOf(wrap.querySelector && wrap.querySelector('canvas')) || kr;
-      // Up from the FOOT of the art well: the cost token owns the top-left
-      // corner and the chick owns the middle, so the only clear band is the
-      // bottom of the portrait.
-      const lab0 = { x: cvr.left + 6, y: cvr.top + cvr.height - 22 - (keys.length - 1 - i) * 19 };
+      // Up from the FOOT OF THE ART WELL — not the canvas, which is shorter and
+      // put "the bottom of the portrait" straight across the chick's face.
+      const well = rectOf(wrap.querySelector && wrap.querySelector('.art')) || cr;
+      const lab0 = { x: well.left + 6, y: well.top + well.height - 20 - (keys.length - 1 - i) * 18 };
       rline(src.left + src.width / 2, src.top + src.height / 2,
         cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', lab0);
       tone(who === 'new' ? 980 : 620 + i * 60, 0.07, { type: 'sine', vol: 0.035 });
@@ -5255,7 +5371,8 @@ function chickBanners(res){
   // the card's own tag already says RUNT when runt is the KEYWORD; this banner
   // is about how the roll came out, so it has to say a different thing
   if (t.indexOf('runt') >= 0) out += b('CAME OUT SMALL', 'bad');
-  if (t.indexOf('mutation') >= 0) out += b(TRAITS[res.child.trait].name.toUpperCase(), 'wild');
+  // (a mutation is carried by the gold brand on the card's own tag; printing
+  //  it again here put the same word on screen twice in two treatments)
   if (t.indexOf('cursed') >= 0) out += b('BAD BLOOD', 'bad');
   return out;
 }
