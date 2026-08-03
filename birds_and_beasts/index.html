@@ -344,11 +344,13 @@
   .btn.danger::before{ background-image:var(--tex-iron), var(--tex-grime);
     background-size:96px 96px, 64px 64px; mix-blend-mode:overlay; opacity:.26; }
 
-  /* the breeding colour, for anything that MAKES an animal */
-  .btn.pinky{ color:#2a0c1e; text-shadow:0 1px 0 rgba(255,220,240,.45);
-    --btn-hi:#ffc0e8; --btn-mid:#f083c9; --btn-lo:#c04d95;
-    --btn-edge:#5e1a3d; --btn-deep:#8f2c67; }
-  .btn.pinky::before{ opacity:.24; }
+  /* The breeding colour, for anything that MAKES an animal. It is PAINT on the
+     same plank as everything else, not a fifth material — it used to be a
+     glossy pink slab that appeared nowhere else in the game. */
+  .btn.pinky{ color:#2a0c1e; text-shadow:0 1px 0 rgba(255,220,240,.4);
+    --btn-hi:#e79cc8; --btn-mid:#c66ba5; --btn-lo:#8a3f6c;
+    --btn-edge:#3d1128; --btn-deep:#5e1f45; }
+  .btn.pinky::before{ opacity:.4; }
 
   /* chips: inline actions that are not the point of the screen */
   .btn.sm{ font-size:12px; letter-spacing:1.2px; min-height:40px; padding:10px 15px;
@@ -538,19 +540,20 @@
   .hpbox span{ color:var(--ink); }
   /* a trough with straw in the bottom of it, and a level in the trough. The
      fill has a torn top edge so it reads as something POURED, not as a value. */
+  /* a bone track with hard notches every ten, so the LENGTH carries the number */
   .hpbar{ width:120px; height:13px; border-radius:4px; overflow:hidden; border:none;
-    background-color:#1a1610;
+    background-color:#7d6b45;
     background-image:
-      repeating-linear-gradient(24deg, rgba(120,96,44,.34) 0 2px, transparent 2px 5px),
-      var(--tex-iron), linear-gradient(180deg,#100e08,#221d13);
-    background-size:auto, 96px 96px, auto;
-    background-blend-mode:normal, overlay, normal;
+      repeating-linear-gradient(90deg, rgba(40,30,14,.55) 0 11px, rgba(40,30,14,0) 11px 12px),
+      linear-gradient(180deg,#8b7a55,#5f5133);
+    background-size:auto, auto;
     box-shadow:inset 0 3px 5px rgba(0,0,0,.9), inset 0 -1px 0 rgba(255,220,150,.12),
       0 1px 0 rgba(255,220,150,.07); }
   .hpbar i{ display:block; height:100%; transition:width .3s ease;
-    background:linear-gradient(90deg,#c9343c,#ff6b4d 60%,#ffa768);
-    -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 5px, rgba(0,0,0,.86) 5px 6px);
-            mask-image:repeating-linear-gradient(90deg,#000 0 5px, rgba(0,0,0,.86) 5px 6px);
+    background:#c9463a;
+    box-shadow:inset 0 -3px 0 rgba(112,26,16,.85), inset 0 1px 0 rgba(255,180,150,.22);
+    -webkit-mask-image:repeating-linear-gradient(90deg,#000 0 11px, transparent 11px 12px);
+            mask-image:repeating-linear-gradient(90deg,#000 0 11px, transparent 11px 12px);
     box-shadow:inset 0 1px 0 rgba(255,220,180,.4), inset 0 -3px 5px -2px rgba(90,10,10,.8); }
   /* a trample is a WOUND: the bar drains over the same 700ms the number ticks */
   .hpbar i.drain{ transition:width .7s cubic-bezier(.25,.8,.3,1); }
@@ -569,6 +572,7 @@
   :root{
     --frame-1:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%231b2714' stroke='%237a6a3e' stroke-width='3'/%3E%3Cpath d='M1 1h15v3H4v12H1z M47 1H32v3h11v12h4z M1 47h15v-3H4V32H1z M47 47H32v-3h11V32h4z' fill='%235c4526'/%3E%3Cpath d='M4.5 4.5h7v1.6h-7z M36.5 4.5h7v1.6h-7z M4.5 41.9h7v1.6h-7z M36.5 41.9h7v1.6h-7z' fill='%238a6a38'/%3E%3Cpath d='M1 1 5 1 1 5z M47 1 43 1 47 5z M1 47 5 47 1 43z M47 47 43 47 47 43z' fill='%23090f06'/%3E%3C/svg%3E");
     --frame-2:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%231e2a15' stroke='%238a7c52' stroke-width='3'/%3E%3Cpath d='M1 1h14v4H5v10H1z M47 1H33v4h10v10h4z M1 47h14v-4H5V33H1z M47 47H33v-4h10V33h4z' fill='%23394450'/%3E%3Ccircle cx='6.5' cy='6.5' r='2.1' fill='%238c99a3'/%3E%3Ccircle cx='41.5' cy='6.5' r='2.1' fill='%238c99a3'/%3E%3Ccircle cx='6.5' cy='41.5' r='2.1' fill='%238c99a3'/%3E%3Ccircle cx='41.5' cy='41.5' r='2.1' fill='%238c99a3'/%3E%3C/svg%3E");
+    --frame-sel:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%23241c0d' stroke='%23e0b45c' stroke-width='3'/%3E%3Cpath d='M1 1h14v4H5v10H1z M47 1H33v4h10v10h4z M1 47h14v-4H5V33H1z M47 47H33v-4h10V33h4z' fill='%23c99a3a'/%3E%3Ccircle cx='6.5' cy='6.5' r='2.1' fill='%23ffe8b4'/%3E%3Ccircle cx='41.5' cy='6.5' r='2.1' fill='%23ffe8b4'/%3E%3Ccircle cx='6.5' cy='41.5' r='2.1' fill='%23ffe8b4'/%3E%3Ccircle cx='41.5' cy='41.5' r='2.1' fill='%23ffe8b4'/%3E%3C/svg%3E");
     --frame-3:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='1' y='1' width='46' height='46' rx='2' fill='%23241f10' stroke='%23c9b184' stroke-width='2.5'/%3E%3Cpath d='M2 8a4 4 0 0 1 6-6 4 4 0 0 1 6 6 4 4 0 0 1-6 6 4 4 0 0 1-6-6z' fill='%23ddceaa'/%3E%3Cpath d='M46 8a4 4 0 0 0-6-6 4 4 0 0 0-6 6 4 4 0 0 0 6 6 4 4 0 0 0 6-6z' fill='%23ddceaa'/%3E%3Cpath d='M2 40a4 4 0 0 0 6 6 4 4 0 0 0 6-6 4 4 0 0 0-6-6 4 4 0 0 0-6 6z' fill='%23ddceaa'/%3E%3Cpath d='M46 40a4 4 0 0 1-6 6 4 4 0 0 1-6-6 4 4 0 0 1 6-6 4 4 0 0 1 6 6z' fill='%23ddceaa'/%3E%3Ccircle cx='8' cy='8' r='1.7' fill='%23f6eed6'/%3E%3Ccircle cx='40' cy='8' r='1.7' fill='%23f6eed6'/%3E%3Ccircle cx='8' cy='40' r='1.7' fill='%23f6eed6'/%3E%3Ccircle cx='40' cy='40' r='1.7' fill='%23f6eed6'/%3E%3C/svg%3E"); }
   .card{ position:relative; width:118px; flex:0 0 auto; border-radius:0;
     display:flex; flex-direction:column;
@@ -593,9 +597,19 @@
   .card:hover{ transform:translateY(-9px) rotate(-.8deg) scale(1.025);
     box-shadow: inset 0 1px 0 rgba(190,255,150,.22), 0 3px 0 var(--edge), 0 5px 0 #071007,
                 0 22px 30px -10px rgba(0,0,0,.85), 0 0 0 1px rgba(166,255,94,.22); }
+  /* ---- ONE SELECTION LANGUAGE ----
+     There were four: a pink ring here, a 3px hot-pink rectangle on the clutch,
+     a gold frame in the book and a magenta outline on a ritual. A chosen card
+     is PICKED UP AND PINNED — it lifts, its frame goes brass, and a nail head
+     is driven through the top of it. One signal, every screen. */
   .card.sel{ transform:translateY(-10px) scale(1.03);
-    box-shadow: 0 0 0 2px var(--pink), 0 0 24px -4px rgba(255,138,212,.55),
+    border-image:var(--frame-sel) 14 fill / 12px / 0 stretch;
+    box-shadow: 0 0 22px -4px rgba(255,196,110,.5),
                 0 3px 0 var(--edge), 0 22px 30px -10px rgba(0,0,0,.8); }
+  .card.sel::before{ content:''; position:absolute; top:-8px; left:50%; width:14px; height:14px;
+    transform:translateX(-50%); border-radius:50%; z-index:6; pointer-events:none;
+    background:radial-gradient(circle at 34% 28%, #d8e2ea, #57626c 52%, #171c21);
+    box-shadow:0 2px 4px rgba(0,0,0,.75), inset 0 -1px 1px rgba(0,0,0,.5); }
   .card.dead{ opacity:.34; filter:grayscale(1); cursor:not-allowed; }
   .card.dead:hover{ transform:none; box-shadow:0 2px 0 var(--edge), 0 8px 14px -6px rgba(0,0,0,.7); }
   .card.big{ width:150px; }
@@ -812,7 +826,7 @@
   .litter .card.big .tr.no, #wGrid .card.big .tr.no{ display:block; visibility:hidden;
     border-top-color:transparent; }
   .litter .card.sel{ transform:none;
-    box-shadow:0 0 0 3px var(--pink), 0 0 28px -4px rgba(255,138,212,.6),
+    box-shadow:0 0 26px -4px rgba(255,196,110,.55),
       0 3px 0 var(--edge), 0 12px 22px -8px rgba(0,0,0,.8); }
   .litter .card:hover{ transform:translateY(-3px); }
   .egg2{ font-size:52px; line-height:1; animation:wob 1.1s ease-in-out infinite; }
@@ -878,7 +892,7 @@
     45%{transform:translateX(5px)} 70%{transform:translateX(-3px)} }
   .nestbar.bitten{ animation:bitten .62s ease; }
   /* the Feed meter: the only thing standing between you and playing everything */
-  .feed{ display:flex; gap:2px; align-items:center; padding:3px 5px; border-radius:7px;
+  .feed{ position:relative; display:flex; gap:2px; align-items:center; padding:3px 5px 5px; border-radius:7px;
     background-color:#1a1409;
     background-image:var(--tex-iron), linear-gradient(180deg,#0f1309,#1e1a10);
     background-size:96px 96px, auto; background-blend-mode:overlay, normal;
@@ -886,12 +900,13 @@
   .feed svg{ display:block; width:8px; height:11px; fill:currentColor; color:#3a3420;
     filter:drop-shadow(0 1px 0 rgba(0,0,0,.6)); transition:color .14s ease, transform .14s ease; }
   .feed svg.on{ color:#e8c24a; filter:drop-shadow(0 0 5px rgba(255,200,80,.7)); }
-  /* the grain still filling: a sack tipping into the trough */
-  .feedbar{ position:relative; width:30px; height:7px; border-radius:4px; overflow:hidden;
-    margin-left:5px; background:#141009;
-    box-shadow:inset 0 2px 3px rgba(0,0,0,.85), inset 0 -1px 0 rgba(255,220,150,.10); }
-  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:4px;
-    background:linear-gradient(90deg,#7a5a18,#e8c24a); transition:width .12s linear; }
+  /* the grain still filling — INSIDE the trough it belongs to, not orphaned
+     between the kernels and the barn count where it read as a meter arguing
+     with its own label */
+  .feedbar{ position:absolute; left:5px; right:5px; bottom:2px; height:3px;
+    border-radius:2px; overflow:hidden; background:rgba(0,0,0,.55); }
+  .feedbar i{ position:absolute; left:0; top:0; bottom:0; display:block; border-radius:2px;
+    background:#e8c24a; transition:width .12s linear; }
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
@@ -1073,6 +1088,13 @@
     background:var(--pink); border-radius:2px; box-shadow:0 0 14px rgba(255,138,212,.65); }
   .plus::before{ width:26px; height:6px; }
   .plus::after{ width:6px; height:26px; }
+  /* and the arrow the pair points at */
+  .arrw{ position:relative; width:22px; height:20px; flex:0 0 auto; align-self:center; }
+  .arrw::before{ content:''; position:absolute; left:0; top:50%; width:13px; height:4px;
+    transform:translateY(-50%); border-radius:2px; background:#7fa06a; }
+  .arrw::after{ content:''; position:absolute; right:1px; top:50%; width:0; height:0;
+    transform:translateY(-50%);
+    border-left:9px solid #7fa06a; border-top:7px solid transparent; border-bottom:7px solid transparent; }
 
   /* ---------- wild ---------- */
   #wGrid{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
@@ -4155,8 +4177,10 @@ function renderPair(a, b){
   one(a, '', a.name);
   const p1 = document.createElement('div'); p1.className = 'plus'; w.appendChild(p1);
   one(b, '', b.name);
+  // a drawn arrow, not a typed one: the glyph came from whatever font the OS
+  // handed us and sat in a label beside two hand-made marks
   const eq = document.createElement('div');
-  eq.className = 'lbl'; eq.style.color = '#6d8a5e'; eq.textContent = '→';
+  eq.className = 'arrw';
   w.appendChild(eq);
   const mid = {
     hue: Math.round(blendHue(a.vis.hue, b.vis.hue, 0.5)),
@@ -4305,6 +4329,29 @@ function spriteFor(c){
     }
   } catch (e){}
   spriteCache[key] = cv;
+  return cv;
+}
+/** A silhouette of a beast in a dark version of its own body colour. Every
+ *  unit shared one brown outline, so where two tan animals overlapped there
+ *  was no boundary at all — six of them read as a single shape. */
+const rimCache = {};
+function rimFor(c){
+  const key = c.id + ':' + c.might + ':' + c.hide + ':' + c.trait;
+  if (rimCache[key]) return rimCache[key];
+  const src = spriteFor(c);
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 104;
+  const g = cv.getContext && cv.getContext('2d');
+  if (g && g.drawImage){
+    try {
+      g.drawImage(src, 0, 0);
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = 'hsl(' + ((c.vis && c.vis.hue) || 0) + ',65%,9%)';
+      g.fillRect(0, 0, 128, 104);
+      g.globalCompositeOperation = 'source-over';
+    } catch (e){}
+  }
+  rimCache[key] = cv;
   return cv;
 }
 /** A solid-white copy of a beast, for the frame it gets hit on. Painting the
@@ -4599,7 +4646,7 @@ function drawPit(){
   const order = F.units.slice().sort((a2, b2) => a2.y - b2.y);
   // --- shadows first, so nothing floats -----------------------------------
   for (const u of order){
-    const sc = scaleAt(u.y), x = px(u.x), y = py(u.y);
+    const sc = scaleAt(u.y), x = px(u.x) + ((u.id * 37) % 5 - 2) * SPR * 0.13, y = py(u.y);
     ctx.globalAlpha = u.alive ? 0.36 : 0.10;
     // a tinted pool, not a grey one: in a crowded pit the colour under the feet
     // is how you tell your lot from theirs at a glance
@@ -4611,7 +4658,11 @@ function drawPit(){
   // --- the beasts ----------------------------------------------------------
   for (const u of order){
     const sc = scaleAt(u.y);
-    const x = px(u.x), y = py(u.y);
+    // Everything converges on the nearest foe, so six units end up in one
+    // vertical column with no lateral offset at all. Fan them by id — a draw
+    // offset only; the fight itself is untouched.
+    const fan = ((u.id * 37) % 5 - 2) * SPR * 0.13;
+    const x = px(u.x) + fan, y = py(u.y);
     const spr = spriteFor(u.c);
     const w = SPR * sc, h = SPR * sc * (104 / 128);
     ctx.save();
@@ -4628,6 +4679,13 @@ function drawPit(){
     ctx.translate(lean, bob);
     if (u.side === 'them') ctx.scale(-1, 1);
     ctx.scale(sq, 2 - sq);
+    // a halo first, in this animal's own colour, so it separates from whatever
+    // it is standing on top of
+    if (u.alive){
+      const rim = rimFor(u.c), r2 = Math.max(1.5, w * 0.028);
+      for (const o2 of [[-r2, 0], [r2, 0], [0, -r2], [0, r2], [-r2, -r2], [r2, -r2], [-r2, r2], [r2, r2]])
+        ctx.drawImage(rim, -w / 2 + o2[0], -h + h * 0.04 + o2[1], w, h);
+    }
     // the painter puts the animal's feet at 96% down its own tile
     ctx.drawImage(spr, -w / 2, -h + h * 0.04, w, h);
     if (u.hitT > 0 && u.alive){
@@ -4655,13 +4713,17 @@ function drawPit(){
     // thing the bar exists to stop.
     const bulk = Math.max(0, Math.min(1, u.max / 60));
     const bw = SPR * (0.20 + 0.28 * bulk) * sc, bh = Math.max(3.5, H * 0.0085);
-    // and two beasts stacked in depth must not hang their bars on each other
+    // Bars step UPWARD in x-buckets. Pairwise de-collision did not survive six
+    // units in one column; a deterministic stack index does.
+    // capped at two steps: a bar lifted five deep floats off its own animal,
+    // which is worse than two bars touching
+    let stack = 0;
     for (const o of order){
       if (o === u || !o.alive) continue;
-      if (Math.abs(px(o.x) - x) > SPR * 0.6) continue;
-      const oTop = py(o.y) - Math.min(SPR * scaleAt(o.y), SPR * 0.7);
-      if (Math.abs(oTop - top) < bh * 3.2 && o.y < u.y) top += bh * 3.2;
+      if (Math.abs(px(o.x) - px(u.x)) > SPR * 0.5) continue;
+      if (o.y < u.y) stack++;
     }
+    top -= Math.min(2, stack) * bh * 2.4;
     const bx = x - bw / 2, by = top - bh;
     const cap = bh / 2;
     const pill = (px2, py2, pw, ph, r) => {
@@ -4747,12 +4809,12 @@ function drawPit(){
       const fs = W * (0.038 + Math.min(0.034, f.v * 0.0024)) * (f.big ? 1.35 : 1);
       ctx.font = '900 ' + fs.toFixed(0) + 'px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.lineWidth = Math.max(3, W * 0.009); ctx.strokeStyle = 'rgba(0,0,0,.8)';
+      ctx.lineWidth = Math.max(4, W * 0.012); ctx.strokeStyle = 'rgba(0,0,0,.92)';
       // pops up fast, then floats
       const rise = (1 - k) < 0.25 ? (1 - k) * 2.4 : 0.6 + (1 - k) * 0.5;
       const ny = y - SPR * 0.55 - rise * SPR * 0.75;
       ctx.strokeText('-' + f.v, x, ny);
-      ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffcf8a');
+      ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffffff');
       ctx.fillText('-' + f.v, x, ny);
     } else if (f.k === 'spark'){
       ctx.fillStyle = f.col || '#ffd9a0';
@@ -4972,7 +5034,8 @@ function renderFight(){
   startLoop();
 }
 function spriteCacheReset(){ for (const k in spriteCache) delete spriteCache[k];
-  for (const k in flashCache) delete flashCache[k]; }
+  for (const k in flashCache) delete flashCache[k];
+  for (const k in rimCache) delete rimCache[k]; }
 /** Match the canvas to its box so the pit is crisp on a phone. */
 function fitPit(){
   const cv = $('pit');
