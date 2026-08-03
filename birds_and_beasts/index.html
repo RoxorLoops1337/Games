@@ -1062,7 +1062,7 @@
   .handrow:empty::before{ content:'THE BARN IS EMPTY \2014\20THEY ARE ALL OUT THERE';
     display:flex; align-items:center; justify-content:center; width:100%;
     text-align:center;
-    font-family:var(--f-display); font-size:9.5px; letter-spacing:2.4px; color:#6d7a5f;
+    font-family:var(--f-display); font-size:10px; letter-spacing:2.2px; color:#8c9a7c;
     padding:7px 10px 8px; border-radius:6px;
     background:
       repeating-linear-gradient(90deg, transparent 0 26px, rgba(0,0,0,.22) 26px 28px),
@@ -1349,7 +1349,7 @@
   /* the ribbon's centring lives on a wrapper, so `pop` (whose to{} keyframe
      sets transform:scale(1)) can never clobber the translate and throw the
      ribbon 125px to the right of the card it crowns */
-  .plinth .ribbon{ position:absolute; top:-10px; left:50%; transform:translateX(-50%); z-index:5;
+  .plinth .ribbon{ position:absolute; top:-16px; left:50%; transform:translateX(-50%); z-index:5;
     white-space:nowrap; display:block; }
   .plinth .ribbon .banner{ margin:0; }
   /* the win arrives instead of being already there */
@@ -2729,7 +2729,7 @@ const ENEMY_BASE = 8.0;       // leader stat power at round 1
 // Deliberately FLAT. A steep curve made the run end at the same round however
 // well you bred, because the enemy outgrew every deck; a flat one that starts
 // hard lets a compounding herd actually pull ahead of it.
-const ENEMY_GROWTH = 1.114;  // per round; fitted by simulation
+const ENEMY_GROWTH = 1.121;  // per round; fitted by simulation
 const GRUNT_FRAC = 0.60;      // a grunt is this much of its leader
 // Each roster entry lends its leader a keyword, so the flavour survives the
 // move list it used to have.
@@ -3007,7 +3007,9 @@ function lineOf(u){
   const bulk = (u.c.hide || 0) + (u.c.trait === 'bulwark' ? 7 : 0) +
     (u.c.trait === 'plump' ? 3 : 0);
   const hit = (u.c.might || 0) + (u.c.trait === 'venom' || u.c.trait === 'stun' ? 4 : 0);
-  return clamp((bulk - hit) * 0.5, -6.5, 6.5);
+  // At *0.5 this lived inside +-3 world units on a 100-unit arena — 6.8 drawn
+  // pixels, against a 60px fan step. A stance you cannot see is not a stance.
+  return clamp((bulk - hit) * 1.5, -15, 15);
 }
 function hurtUnit(u, dmg, from){
   if (!u.alive) return 0;
@@ -3106,7 +3108,10 @@ function arenaTick(dt){
 
   // damage promised this tick, so nobody queues up behind a kill that is
   // already paid for
-  for (const o of F.units) o.inc = 0;
+  // Zeroing at the top of the same loop that fills it made the unit at index 0
+  // blind to every promise — the guard only reclaimed 1.7 points of a 26.6%
+  // overkill rate. It decays instead, so last tick's commitments still count.
+  for (const o of F.units) o.inc = (o.inc || 0) * 0.5;
   for (const u of F.units){
     if (!u.alive){ u.dead -= dt; continue; }
     if (u.hitT > 0) u.hitT -= dt;
@@ -3124,6 +3129,10 @@ function arenaTick(dt){
     const foe = pickTarget(u);
     u.tgt = foe;
     if (foe) foe.inc = (foe.inc || 0) + unitMightA(u);
+    // Carrying the formation in REACH was tried and reverted: `dist` weights
+    // depth as well as x, so shrinking a tank's reach stranded two of them
+    // diagonally apart and outside their own swinging distance. The stance
+    // lives on the approach line only, which is where it is legible anyway.
     const reach = BASE_RANGE;
     if (foe){
       const dx = foe.x - u.x;
@@ -3798,8 +3807,11 @@ function drawBeast(cv, c){
   // Four builds that were four widths of the same egg. A capsule is now a real
   // column and a lumpy one is genuinely broad, so the OUTLINE says which animal
   // this is before any colour does.
-  const bw = f.build === 3 ? rx * 0.50 : f.build === 2 ? rx * 1.20 : rx;
-  const bh = f.build === 3 ? ry * 1.62 : f.build === 2 ? ry * 0.86 : ry;
+  // 0.50 x 1.62 is 4.5:1 — a peach bar with two dots, not an animal. And
+  // builds 0 and 1 were never touched at all, which is where half the roster
+  // lives and where "nine recolours of one animal" was still true.
+  const bw = f.build === 3 ? rx * 0.58 : f.build === 2 ? rx * 1.14 : f.build === 1 ? rx * 0.88 : rx;
+  const bh = f.build === 3 ? ry * 1.44 : f.build === 2 ? ry * 0.90 : f.build === 1 ? ry * 1.10 : ry;
   // wider and flatter, so "lumpy" is a low-slung animal rather than a bumpy egg
   const lobes = [[-rx * 0.58, cy - ry * 0.02, rx * 0.70, ry * 0.62],
                  [rx * 0.56, cy + ry * 0.12, rx * 0.64, ry * 0.56],
@@ -3857,7 +3869,7 @@ function drawBeast(cv, c){
     } else if (f.build === 2){                           // lumpy: three lobes
       for (const L of lobes) ctx.ellipse(L[0], L[1], L[2], L[3], 0, 0, Math.PI * 2);
     } else {                                             // vertical capsule
-      const cw = rx * 0.50, ch = ry * 1.62;
+      const cw = rx * 0.58, ch = ry * 1.44;
       ctx.moveTo(-cw, cy - ch + cw);
       ctx.lineTo(-cw, cy + ch - cw);
       ctx.quadraticCurveTo(-cw, cy + ch, 0, cy + ch);
@@ -5123,7 +5135,10 @@ function drawPit(){
   if (!F){ ctx.restore(); return; }
   // inset the world so half a sprite always fits: a beast used to be cut clean
   // in half by the canvas edge every time a wave walked in
-  const PAD = SPR * 0.42;
+  // The comment said "half a sprite always fits" and the arithmetic said
+  // otherwise: a near-lane sprite's half-width is 0.50*SPR*1.20 = 0.60*SPR, so
+  // 0.42 clipped 17,548 unit-frames against the wall.
+  const PAD = SPR * 0.62;
   const px = (x) => PAD + (x / AW) * (W - PAD * 2);
   const py = (y) => horizon + (H - horizon) * (0.22 + 0.72 * (y / AH));
   const scaleAt = (y) => 0.80 + 0.40 * (y / AH);
@@ -5148,7 +5163,13 @@ function drawPit(){
     const list = ranks[u2.side];
     const i = list.indexOf(u2);
     if (i < 0) return 0;
-    const raw = (i - (list.length - 1) / 2) * SPR * 0.62;
+    // THE RENDERER WAS OVERWRITING THE AI. This fan displaced a unit by up to
+    // 210 CSS px — 61% of the pit — keyed to depth order, which has nothing to
+    // do with the formation the simulation computes. It was 8.8x larger than
+    // `lineOf` and it inverted the sign of the front line, so a fight that had
+    // become genuinely smarter still looked like a bus queue. Separation is
+    // already done properly in y by the push loop; x belongs to the fight.
+    const raw = (i - (list.length - 1) / 2) * SPR * 0.34;
     const at = PAD + (u2.x / AW) * (W - PAD * 2);
     return Math.max(PAD - at, Math.min(W - PAD - at, raw));
   };
@@ -5161,14 +5182,23 @@ function drawPit(){
   // Remember each unit's fan on itself. A unit drops out of `ranks` the instant
   // it dies, so its death sparks and dust puff would otherwise snap back to the
   // un-fanned column at the exact moment you are looking at them.
-  for (const u2 of order) if (u2.alive){ u2._fx = fanOf(u2); u2._fy = fanY(u2); }
+  // Rank order churns as the separation loop shuffles depth — 5.3 swaps a
+  // second, each one a 47px sideways teleport. The drawn offset CHASES the rank
+  // instead of snapping to it, and a dead unit simply keeps its last one, which
+  // is what stops 83% of deaths flinging the corpse away from its own sparks.
+  for (const u2 of order){
+    if (!u2.alive) continue;
+    const fx2 = fanOf(u2), fy2 = fanY(u2), k2 = Math.min(1, (F.dtDraw || 0.016) * 6);
+    u2._fx = u2._fx == null ? fx2 : u2._fx + (fx2 - u2._fx) * k2;
+    u2._fy = u2._fy == null ? fy2 : u2._fy + (fy2 - u2._fy) * k2;
+  }
   // re-sort on the depth actually drawn, so a nearer sprite never paints over
   // the bar of one that is genuinely behind it
   order = order.sort((a2, b2) => (a2.y + fanY(a2) / Math.max(1, SPR) * AH) -
                                  (b2.y + fanY(b2) / Math.max(1, SPR) * AH));
   // --- shadows first, so nothing floats -----------------------------------
   for (const u of order){
-    const sc = scaleAt(u.y), x = px(u.x) + fanOf(u), y = py(u.y) + fanY(u);
+    const sc = scaleAt(u.y), x = px(u.x) + (u._fx || 0), y = py(u.y) + (u._fy || 0);
     ctx.globalAlpha = u.alive ? 0.36 : 0.10;
     // a tinted pool, not a grey one: in a crowded pit the colour under the feet
     // is how you tell your lot from theirs at a glance
@@ -5180,7 +5210,7 @@ function drawPit(){
   // --- the beasts ----------------------------------------------------------
   for (const u of order){
     const sc = scaleAt(u.y);
-    const x = px(u.x) + fanOf(u), y = py(u.y) + fanY(u);
+    const x = px(u.x) + (u._fx || 0), y = py(u.y) + (u._fy || 0);
     const spr = spriteFor(u.c);
     const w = SPR * sc, h = SPR * sc * (104 / 128);
     ctx.save();
@@ -5234,7 +5264,7 @@ function drawPit(){
     const u = order[oi];
     if (!u.alive) continue;
     const sc = scaleAt(u.y);
-    const x = px(u.x) + fanOf(u), y = py(u.y) + fanY(u);
+    const x = px(u.x) + (u._fx || 0), y = py(u.y) + (u._fy || 0);
     const spr = spriteFor(u.c);
     const h = SPR * sc * (104 / 128);
     // The scan is a hint, not a contract. Clamped so the bar can never rise off
