@@ -101,7 +101,7 @@
   h1, h2, h3,
   .btn, .tiny, .sub, .banner, .streak, .tline,
   .scrhead .kicker, .scrhead .count,
-  .verdict .vhead, .verdict .vtap,
+  .verdict .vhead,
   .card .st, .card .tr, .card .gen,
   .hpbox, .nestbar .nlbl, .nestbar .nhp, .slopbox,
   .wavelbl, .intent .n, .pairprev .lbl, .tshow .cap,
@@ -364,6 +364,21 @@
       radial-gradient(circle 3.4px at 10px calc(100% - 10px), #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
       radial-gradient(circle 3.4px at calc(100% - 10px) calc(100% - 10px), #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%); }
 
+  /* ONE disabled state, whatever paint the button wears underneath.
+     `.btn[disabled]` and `.btn.pinky` carry the same specificity, and the paint
+     variants are declared after it — so the last one won and the hatch screen's
+     primary CTA kept its pink label on a dimmed pink plank at 3.7:1 while the
+     wooden ones sat at 5.9:1. Three buttons doing one job, a 1.6x spread. These
+     compound selectors outrank every variant, so a disabled button is the same
+     dead plank and the same label everywhere. */
+  .btn[disabled], .btn.pinky[disabled], .btn.alt[disabled], .btn.danger[disabled]{
+    color:#ddd8cc; text-shadow:0 1px 0 rgba(0,0,0,.75); -webkit-text-stroke-width:0;
+    --btn-hi:#4a5340; --btn-mid:#39412f; --btn-lo:#272e20;
+    --btn-edge:#161c11; --btn-deep:#1c2316; }
+  .btn.pinky[disabled]::before, .btn.alt[disabled]::before, .btn.danger[disabled]::before{
+    filter:saturate(.3) brightness(.62); opacity:.6; }
+  .btn.pinky[disabled]::after, .btn.danger[disabled]::after{ opacity:.16; }
+
   /* chips: inline actions that are not the point of the screen */
   .btn.sm{ font-size:12px; letter-spacing:1.2px; min-height:40px; padding:10px 15px;
     border-radius:10px;
@@ -418,9 +433,17 @@
     padding:clamp(14px,4cqw,26px) clamp(14px,4cqw,24px) clamp(12px,3cqw,20px); }
   #title h1{ margin-bottom:2px; }
   /* the tagline is a stamped strip under the mark, not another line of copy */
-  #title .sub{ display:inline-block; margin:8px auto 0; padding:4px 12px;
-    border-radius:2px; background:rgba(0,0,0,.28); color:#c8dcb8;
-    box-shadow:inset 0 0 0 1.5px rgba(166,255,94,.32); transform:rotate(-.8deg); }
+  /* This is a TAGLINE, not a chip. It wore the same 1px light rounded outline
+     as the wave counter, the trait pills, the book's stat badges and the WALL
+     tag in the pit — one form doing seven unrelated jobs. A tagline is carved
+     into the board and ruled off, like the game's other display type. */
+  #title .sub{ display:block; margin:10px auto 0; padding:7px 2px 0;
+    background:none; box-shadow:none; color:#cfe4bd; border-radius:0;
+    border-top:1px solid rgba(166,255,94,.16);
+    /* it has to hold ONE line — tracked out to 3px it wrapped and left the
+       word LEAVE alone on the second row of the game's own tagline */
+    max-width:100%; letter-spacing:1.7px; white-space:nowrap; font-size:clamp(9px,2.9cqw,11px);
+    text-shadow:0 -1px 0 rgba(0,0,0,.75), 0 1px 0 rgba(190,255,150,.14); }
   #title .tshow{ margin:clamp(12px,4cqw,28px) auto clamp(4px,1.5cqw,10px);
     transform:scale(1.12); transform-origin:50% 100%; }
   /* the rules step back: smaller, quieter, and clearly the small print */
@@ -618,10 +641,9 @@
     border-image:var(--frame-sel) 14 fill / 12px / 0 stretch;
     box-shadow: 0 0 22px -4px rgba(255,196,110,.5),
                 0 3px 0 var(--edge), 0 22px 30px -10px rgba(0,0,0,.8); }
-  .card.sel::before{ content:''; position:absolute; top:-8px; left:50%; width:14px; height:14px;
-    transform:translateX(-50%); border-radius:50%; z-index:6; pointer-events:none;
-    background:radial-gradient(circle at 34% 28%, #d8e2ea, #57626c 52%, #171c21);
-    box-shadow:0 2px 4px rgba(0,0,0,.75), inset 0 -1px 1px rgba(0,0,0,.5); }
+  /* The steel nail belongs to things that HANG — the coach plank, the keepsake
+     plaque. A card you picked up is not nailed to anything, and the sphere was
+     landing on top of the beast's own head. Selection is the lit frame. */
   .card.dead{ opacity:.34; filter:grayscale(1); cursor:not-allowed; }
   .card.dead:hover{ transform:none; box-shadow:0 2px 0 var(--edge), 0 8px 14px -6px rgba(0,0,0,.7); }
   .card.big{ width:150px; }
@@ -742,9 +764,11 @@
     overflow-y:auto; padding:16px 12px 26px; scroll-snap-type:y proximity;
     overscroll-behavior:contain; }
   .deckwrap > .grid > .card{ scroll-snap-align:end; }
+  /* a 30px fade on a 200px card still guillotined it through the midriff — the
+     last row has to READ as continuing, so it goes out over a third of a card */
   .deckwrap.more > .grid{ padding-bottom:34px;
-    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 30px),transparent);
-    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 30px),transparent); }
+    -webkit-mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 74px),rgba(0,0,0,.35) calc(100% - 22px),transparent);
+    mask-image:linear-gradient(180deg,#000 0,#000 calc(100% - 74px),rgba(0,0,0,.35) calc(100% - 22px),transparent); }
   /* the barn has a floor: a rail across the bottom, so a card disappearing
      behind it reads as a card behind a rail rather than as a sliced card */
   .deckwrap.more::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:12px;
@@ -810,15 +834,16 @@
     z-index:2; pointer-events:none; opacity:.9;
     background:no-repeat center/contain
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.4 8.6 6.2 12.4 13.6 3.1' fill='none' stroke='%2396146a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
-  /* unaffordable: the entry is scored out, not just dimmed — at .72 brightness
-     it was indistinguishable from the ones you could actually take */
-  /* unaffordable: STRUCK, not greyed. Desaturating tan paper turns it into
-     cool plastic sitting next to the paper tiles it is meant to match, and it
-     dropped the struck title to 3.58:1 and its body to 3.02:1. */
+  /* Unaffordable is not removed. The strikethrough said "this option is gone"
+     about an option that is still on the board and will be affordable in one
+     more round — the price is what is wrong, so the price is what is marked. */
   .rit.no{ cursor:not-allowed; opacity:.86; }
-  .rit.no b{ color:#3d3524; text-decoration:line-through;
-    text-decoration-color:rgba(140,32,20,.8); text-decoration-thickness:2px; }
-  .rit.no i, .rit.no .c{ color:#4e4229; }
+  .rit.no b{ color:#4a3f28; }
+  .rit.no i{ color:#4e4229; }
+  .rit.no .c{ color:#8c2f10; }
+  .rit .c em{ display:block; font-style:normal; font-size:8.5px; font-weight:800;
+    letter-spacing:.9px; text-transform:uppercase; color:#8c2f10; opacity:.85;
+    margin-top:1px; white-space:nowrap; }
   /* the hazard entry is written in a different hand, in red ink */
   .haz{ color:#5a2410 !important; }
   .haz b{ color:#7a2c0c !important; }
@@ -922,7 +947,11 @@
   /* ---------- the verdict: the payoff of the whole prep decision ---------- */
   .verdict{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; text-align:center; padding:16px;
-    background:radial-gradient(ellipse at 50% 45%, rgba(6,12,6,.92), rgba(3,6,3,.97)); }
+    /* A SCRIM, not a blackout. At .92/.97 the pit behind read as an asset that
+       had failed to load — you could not tell the fight had happened in the
+       place you were looking at. The sand, the fence and the nest stay visible
+       under it, just pushed back. */
+    background:radial-gradient(ellipse at 50% 45%, rgba(6,12,6,.58), rgba(3,6,3,.82)); }
   /* The payoff of the whole round used to be delivered on a rounded dialog.
      It is a hewn board now: planked, nailed, and just off axis so it reads as
      something somebody put there rather than as a modal. */
@@ -969,8 +998,6 @@
   .verdict .vrun{ display:flex; flex-direction:column; align-items:center; gap:7px; margin-top:2px; }
   .verdict .vpips svg{ width:12px; height:12px; }
   .verdict .vpips{ max-width:none; }
-  .verdict .vtap{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#7d9270;
-    margin-top:4px; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
   .benchwrap{ position:relative; flex:0 0 auto; display:flex; align-items:center;
     min-height:0; padding-top:7px;
@@ -1240,8 +1267,19 @@
   .plinth .ribbon{ position:absolute; top:-10px; left:50%; transform:translateX(-50%); z-index:5;
     white-space:nowrap; display:block; }
   .plinth .ribbon .banner{ margin:0; }
+  /* the loss keeps the layout and loses the ceremony: no pool of light, no gold
+     rim, no colour left in the animal — a black band instead of a rosette */
+  .banner.mourn{ color:#d8d2c6; text-shadow:0 1px 0 #000; background:#0a0c08;
+    box-shadow:inset 0 0 0 1px rgba(216,210,198,.22); transform:rotate(.5deg); }
+  .plinth.mourned{ padding-bottom:12px; }
+  .plinth.mourned::after{ background:radial-gradient(ellipse 70% 60% at 50% 40%,
+    rgba(0,0,0,.45), transparent 70%); }
+  .plinth.mourned .card{ filter:grayscale(1) brightness(.62);
+    box-shadow:0 0 0 1px rgba(140,146,132,.35), 0 14px 26px -12px rgba(0,0,0,.85); }
   #oBestLine{ font-size:16px; }
   #oBestLine .pw{ font-weight:900; font-size:22px; color:var(--gold); }
+  /* nothing on a loss is written in prize gold */
+  #over.lose #oBestLine .pw{ color:#c9c1b2; }
   /* the run's story is a ledger, not a console dump — and it never clips a line */
   .logbox{ position:relative; isolation:isolate;
     max-height:158px; overflow-y:auto; text-align:left; font-size:12px; line-height:1.75;
@@ -1512,8 +1550,16 @@
   #hatch.held .shell{ animation:none !important; }
   .pickwrap.crk .half.a{ animation:shellA .44s cubic-bezier(.4,.1,.8,.6) forwards; }
   .pickwrap.crk .half.b{ animation:shellB .44s cubic-bezier(.4,.1,.8,.6) forwards; }
-  @keyframes shellA{ to{ transform:translate(calc(-50% - 16px),-16px) rotate(-44deg); opacity:0 } }
-  @keyframes shellB{ to{ transform:translate(calc(-50% + 16px),22px) rotate(44deg); opacity:0 } }
+  /* The halves used to drift 16px and fade over the full 0.44s, so for a third
+     of a second the chick's name, art and stat row sat under a 40%-alpha egg —
+     the payoff frame was a card behind a wash. They are THROWN clear now, and
+     they are gone before the card finishes fading in. */
+  @keyframes shellA{ 0%{ opacity:1 }
+    72%{ opacity:0 }
+    to{ transform:translate(calc(-50% - 86px),-92px) rotate(-76deg); opacity:0 } }
+  @keyframes shellB{ 0%{ opacity:1 }
+    72%{ opacity:0 }
+    to{ transform:translate(calc(-50% + 86px),104px) rotate(78deg); opacity:0 } }
   /* the chicks you did not keep, on their way to market */
   .card.tomarket{ animation:tomarket .5s ease-in forwards; pointer-events:none; }
   @keyframes tomarket{ to{ transform:translate(130px,-280px) scale(.4) rotate(12deg);
@@ -1547,16 +1593,29 @@
   .pairprev{ flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:14px;
     padding:6px 10px 8px; }
   .pairprev .pp{ text-align:center; }
-  .pairprev canvas{ display:block; width:96px; height:70px; border-radius:10px;
-    background:radial-gradient(ellipse at 50% 80%, #17261b, #060c06 80%); }
+  /* The tile background used to live ON the canvas, so the mask that ghosted
+     the expected chick ate the tile with it and the middle of the row was a
+     frameless smear between two framed parents. The tile is its own box now
+     and the mask only ever touches drawn pixels. */
+  .pairprev .cvw{ position:relative; width:96px; height:70px; border-radius:10px;
+    overflow:hidden; background:radial-gradient(ellipse at 50% 80%, #17261b, #060c06 80%);
+    box-shadow:inset 0 0 0 1px rgba(90,70,38,.5); }
+  .pairprev canvas{ display:block; width:96px; height:70px; position:relative; z-index:1; }
   .pairprev .pp.gh{ position:relative; }
-  .pairprev .pp.gh canvas{ opacity:.55; filter:blur(.4px); border:none;
-    -webkit-mask-image:radial-gradient(ellipse 74% 82% at 50% 42%, #000 55%, transparent 88%);
-            mask-image:radial-gradient(ellipse 74% 82% at 50% 42%, #000 55%, transparent 88%); }
+  /* No blur. Blur destroys the silhouette, which is the only thing a
+     resemblance preview exists to show — and a blurred beast reads as an image
+     that failed to load, not as a prediction. The chick is drawn plainly; the
+     pink frame, the label and the ? are what say "not born yet". */
+  .pairprev .pp.gh canvas{ opacity:.86; border:none;
+    filter:saturate(.82) brightness(.9); }
+  .pairprev .pp.gh .cvw{ box-shadow:inset 0 0 0 1px rgba(255,138,212,.34); }
+  /* uncertainty said once, as a mark, instead of smeared over the whole tile */
+  .pairprev .pp.gh .cvw::after{ content:'?'; position:absolute; right:5px; top:2px; z-index:2;
+    font-family:var(--f-display); font-size:15px; line-height:1; color:rgba(255,138,212,.75); }
   /* it sits in an empty nest, waiting: straw, and a rim of light where the egg
      will be */
-  .pairprev .pp.gh::before{ content:''; position:absolute; left:50%; bottom:16px;
-    width:78px; height:20px; transform:translateX(-50%); border-radius:50%; z-index:-1;
+  .pairprev .pp.gh .cvw::before{ content:''; position:absolute; left:50%; bottom:2px;
+    width:78px; height:20px; transform:translateX(-50%); border-radius:50%; z-index:0;
     background:
       radial-gradient(ellipse 60% 90% at 50% 30%, rgba(255,138,212,.22), transparent 72%),
       linear-gradient(180deg,#6b5324,#3d2c11);
@@ -1696,7 +1755,30 @@
   /* ---------- the verdict: the emotional peak gets its own control ---------- */
   #hDeltas{ font-size:15px; border-top:1px solid rgba(166,255,94,.10); padding-top:8px;
     margin-top:6px; }
-  #hDeltas .up, #hDeltas .dn{ font-weight:900; font-size:18px; }
+  #hDeltas .vname{ font-family:var(--f-display); font-size:15px; letter-spacing:.6px;
+    color:#e9f3df; }
+  #hDeltas .vname span{ font-family:var(--f-text); font-size:11.5px; letter-spacing:.4px;
+    font-weight:700; color:#8fa383; display:block; margin-top:1px; }
+  /* Each label+value is one nowrap unit, so the pair can never be split across
+     a line — which is the whole reason this stopped being a sentence. Both
+     pairs ride one row: stacked, the verdict ran under the sticky footer on a
+     phone and the trait line never made it onto the screen at all. */
+  #hDeltas .vgrid{ display:flex; flex-wrap:wrap; gap:4px 20px;
+    justify-content:center; align-items:baseline; margin:6px 0 4px; }
+  #hDeltas .vpair{ display:inline-flex; align-items:baseline; gap:6px; white-space:nowrap; }
+  #hDeltas .vlbl{ font-family:var(--f-text); font-size:12px; font-weight:800;
+    letter-spacing:1.4px; text-transform:uppercase; color:#8fa383; text-align:right;
+    white-space:nowrap; }
+  #hDeltas .vval{ font-family:var(--f-display); font-size:19px; font-weight:900;
+    letter-spacing:.5px; text-align:left; white-space:nowrap;
+    font-variant-numeric:tabular-nums; }
+  /* the SAME up/down pair the per-card captions already use — the verdict was
+     inventing a third colour language for the third encoding of one number */
+  #hDeltas .vval.up{ color:var(--lime); }
+  #hDeltas .vval.dn{ color:#ff7b7b; }
+  #hDeltas .vval.lv{ color:#8fa383; }
+  #hDeltas .vtrait{ font-family:var(--f-text); font-size:11.5px; font-weight:700;
+    letter-spacing:.3px; color:#7d8f72; text-transform:none; }
   #bHatchNext{ font-size:17px; padding:14px 30px; letter-spacing:2px; }
   #hTitle{ font-size:24px; }
   #hatch .hatchrow{ min-height:210px; align-items:center; }
@@ -2784,10 +2866,14 @@ function hurtUnit(u, dmg, from){
   if (u.c.trait === 'bulwark') d = Math.max(1, Math.round(d * 0.66));
   u.hp -= d;
   u.hitT = 0.22;
-  ev('hit', { id: u.id, dmg: d, hp: Math.max(0, u.hp), x: u.x, y: u.y });
+  // `fx` is which way the blow came from, so the number can lean that way
+  // instead of every number in the tick landing on the same pixel column
+  ev('hit', { id: u.id, dmg: d, hp: Math.max(0, u.hp), x: u.x, y: u.y,
+    fx: from ? (from.x > u.x ? 1 : -1) : 0 });
   if (from && u.c.trait === 'thorns' && from.alive){
     from.hp -= 3;
-    ev('hit', { id: from.id, dmg: 3, hp: Math.max(0, from.hp), x: from.x, y: from.y, thorns: 1 });
+    ev('hit', { id: from.id, dmg: 3, hp: Math.max(0, from.hp), x: from.x, y: from.y,
+      thorns: 1, fx: u.x > from.x ? 1 : -1 });
     if (from.hp <= 0) killUnit(from);
   }
   if (u.hp <= 0) killUnit(u);
@@ -4164,7 +4250,12 @@ function renderRituals(){
     const afford = r.cost <= R.slop + ritualCost(R.ritual || 'natural');
     const el = document.createElement('button');
     el.className = 'rit' + (on ? ' on' : '') + (afford ? '' : ' no');
-    el.innerHTML = '<span class="c">' + (r.cost ? r.cost + ' ' + ICO('slop') : 'free') + '</span>' +
+    // Unaffordable is NOT unavailable. It used to strike the title out, which
+    // is the removal semantic — the ritual is still on the board, you are just
+    // short, so the price says by how much and the title is left alone.
+    const short = r.cost - (R.slop + ritualCost(R.ritual || 'natural'));
+    el.innerHTML = '<span class="c">' + (r.cost ? r.cost + ' ' + ICO('slop') : 'free') +
+      (afford ? '' : '<em>' + Math.max(1, Math.ceil(short)) + ' short</em>') + '</span>' +
       '<b>' + r.name + '</b><i>' + r.desc + '</i>';
     if (afford) el.onclick = () => {
       const before = R.slop;
@@ -4202,7 +4293,8 @@ function renderPair(a, b){
   const one = (card, cls, label) => {
     const d = document.createElement('div');
     d.className = 'pp' + (cls ? ' ' + cls : '');
-    d.innerHTML = '<canvas width="240" height="176"></canvas><div class="lbl">' + label + '</div>';
+    d.innerHTML = '<div class="cvw"><canvas width="240" height="176"></canvas></div>' +
+      '<div class="lbl">' + label + '</div>';
     const cv = d.querySelector('canvas');
     if (cv) drawBeast(cv, card);
     w.appendChild(d);
@@ -4351,14 +4443,25 @@ function spriteFor(c){
   // Scan once for the topmost painted row. Anchoring the health bar to the
   // TILE top put it below the horns on tall animals and straight through the
   // ears and eyes of short ones.
+  // A row counts only if it carries REAL MASS. The first-opaque-pixel version
+  // handed the whole anchor to a single antenna tip or one antialiased horn
+  // pixel, which floated that animal's bar a fifth of the pit into the sky.
   cv._top = 0;
   try {
     const g = cv.getContext && cv.getContext('2d');
     if (g && g.getImageData){
       const d = g.getImageData(0, 0, 128, 104).data;
+      let first = -1;
       outer: for (let yy = 0; yy < 104; yy++){
-        for (let xx = 0; xx < 128; xx++){ if (d[(yy * 128 + xx) * 4 + 3] > 12){ cv._top = yy; break outer; } }
+        let n = 0;
+        for (let xx = 0; xx < 128; xx++){
+          if (d[(yy * 128 + xx) * 4 + 3] > 12){
+            if (first < 0) first = yy;
+            if (++n >= 8){ cv._top = yy; break outer; }
+          }
+        }
       }
+      if (!cv._top && first > 0) cv._top = first;   // a genuinely thin animal
     }
   } catch (e){}
   spriteCache[key] = cv;
@@ -4451,16 +4554,19 @@ function drawPit(){
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
   // a fat cartoon moon, low and to the left, and a handful of stars
   const mx = W * 0.20, my = horizon * 0.30, mr = W * 0.050;
+  // It was the highest-contrast object anywhere in the pit at 11.2:1 — brighter
+  // than every beast, brighter than the torches — and nothing in the scene was
+  // lit by it. It sits back in the sky now: cooler, dimmer, no bloom.
   const halo = ctx.createRadialGradient(mx, my, mr * 0.9, mx, my, mr * 3.4);
-  halo.addColorStop(0, 'rgba(214,226,255,.20)'); halo.addColorStop(1, 'transparent');
+  halo.addColorStop(0, 'rgba(198,214,246,.10)'); halo.addColorStop(1, 'transparent');
   ctx.fillStyle = halo;
   ctx.beginPath(); ctx.arc(mx, my, mr * 3.4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#f7f1dc';
+  ctx.fillStyle = '#cfd6e8';
   ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
   // a hard cool rim on the shadowed side, or the moon is a sticker
-  ctx.strokeStyle = 'rgba(150,170,215,.75)'; ctx.lineWidth = Math.max(1.5, W * 0.005);
+  ctx.strokeStyle = 'rgba(132,152,196,.6)'; ctx.lineWidth = Math.max(1.5, W * 0.005);
   ctx.beginPath(); ctx.arc(mx, my, mr, 0.6, 3.5); ctx.stroke();
-  ctx.fillStyle = 'rgba(196,190,168,.5)';
+  ctx.fillStyle = 'rgba(150,160,182,.55)';
   ctx.beginPath(); ctx.arc(mx - mr * 0.28, my - mr * 0.2, mr * 0.2, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.arc(mx + mr * 0.3, my + mr * 0.28, mr * 0.14, 0, 7); ctx.fill();
   // stars at three brightnesses so the field has depth instead of being a grid
@@ -4695,22 +4801,68 @@ function drawPit(){
 
   // THE NEST ITSELF, in front of the gate: the thing you are defending has to
   // BE somewhere, and it holds as many eggs as you have health left.
-  const ny = sandTop + sandH * 0.90, nw = W * 0.20;
-  ctx.fillStyle = '#7a5c22';
-  ctx.beginPath(); ctx.ellipse(nw * 0.46, ny, nw * 0.54, nw * 0.20, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#5b4116';
-  ctx.beginPath(); ctx.ellipse(nw * 0.46, ny + nw * 0.05, nw * 0.54, nw * 0.15, 0, 0, Math.PI); ctx.fill();
+  // It was three pebbles on a mustard puddle, unlit and unframed, smaller than
+  // a damage number — the object the entire game is about, rendered with less
+  // care than a dust mote. It is woven, it is lit from inside, and a lost egg
+  // leaves a broken shell behind so you can see what the last wave cost you.
+  const ny = sandTop + sandH * 0.885, nw = W * 0.27;
+  const ncx = nw * 0.44;
+  ctx.save();
+  // it sits IN the sand
+  ctx.fillStyle = 'rgba(0,0,0,.34)';
+  ctx.beginPath(); ctx.ellipse(ncx, ny + nw * 0.10, nw * 0.56, nw * 0.15, 0, 0, Math.PI * 2); ctx.fill();
   const eggsLeft = R ? Math.max(0, Math.min(3, Math.ceil(3 * R.hp / R.maxHp))) : 3;
-  for (let i = 0; i < eggsLeft; i++){
-    ctx.fillStyle = '#f2dcae';
-    ctx.beginPath();
-    ctx.ellipse(nw * (0.22 + i * 0.24), ny - nw * 0.10, nw * 0.085, nw * 0.115, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(120,92,44,.30)';
-    ctx.beginPath();
-    ctx.ellipse(nw * (0.24 + i * 0.24), ny - nw * 0.07, nw * 0.035, nw * 0.045, 0, 0, Math.PI * 2);
-    ctx.fill();
+  // the clutch glows: this is the one warm thing on your side of the pit
+  if (eggsLeft > 0){
+    const ng = ctx.createRadialGradient(ncx, ny - nw * 0.12, 2, ncx, ny - nw * 0.12, nw * 0.95);
+    ng.addColorStop(0, 'rgba(255,214,140,' + (0.16 + 0.05 * flick + 0.03 * eggsLeft).toFixed(3) + ')');
+    ng.addColorStop(1, 'transparent');
+    ctx.fillStyle = ng;
+    ctx.beginPath(); ctx.arc(ncx, ny - nw * 0.12, nw * 0.95, 0, Math.PI * 2); ctx.fill();
   }
+  // the bowl, back half first so the eggs sit down inside it
+  ctx.fillStyle = '#4a340f';
+  ctx.beginPath(); ctx.ellipse(ncx, ny - nw * 0.02, nw * 0.52, nw * 0.19, 0, Math.PI, 0); ctx.fill();
+  const eggY = ny - nw * 0.11, er = nw * 0.10;
+  for (let i = 0; i < 3; i++){
+    const ex = ncx + (i - 1) * nw * 0.25;
+    if (i < eggsLeft){
+      const eg = ctx.createRadialGradient(ex - er * 0.4, eggY - er * 0.6, er * 0.15, ex, eggY, er * 1.7);
+      eg.addColorStop(0, '#fff6e0'); eg.addColorStop(0.55, '#eedaad');
+      eg.addColorStop(1, '#9d8449');
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.ellipse(ex, eggY, er * 0.86, er * 1.16, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(120,92,44,.26)';
+      ctx.beginPath(); ctx.ellipse(ex + er * 0.24, eggY + er * 0.3, er * 0.2, er * 0.26, 0, 0, 7); ctx.fill();
+    } else {
+      // a broken one: the damage the herd already took, left where it happened
+      ctx.fillStyle = '#6b5c38';
+      ctx.beginPath();
+      ctx.moveTo(ex - er * 0.8, eggY + er * 0.9);
+      ctx.lineTo(ex - er * 0.5, eggY + er * 0.05); ctx.lineTo(ex - er * 0.16, eggY + er * 0.6);
+      ctx.lineTo(ex + er * 0.2, eggY - er * 0.05); ctx.lineTo(ex + er * 0.55, eggY + er * 0.55);
+      ctx.lineTo(ex + er * 0.8, eggY + er * 0.9);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  // the front rim, woven: two tones of straw crossing the lip
+  ctx.fillStyle = '#7a5c22';
+  ctx.beginPath(); ctx.ellipse(ncx, ny, nw * 0.55, nw * 0.20, 0, 0, Math.PI); ctx.fill();
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 11; i++){
+    const t = i / 10, sxr = ncx + (t - 0.5) * nw * 1.02;
+    const dip = Math.sin(t * Math.PI) * nw * 0.155;
+    ctx.strokeStyle = (i % 2) ? 'rgba(196,158,78,.55)' : 'rgba(58,40,12,.5)';
+    ctx.lineWidth = Math.max(1, nw * 0.022);
+    ctx.beginPath();
+    ctx.moveTo(sxr - nw * 0.07, ny + dip * 0.30);
+    ctx.quadraticCurveTo(sxr, ny + dip * 0.92, sxr + nw * 0.07, ny + dip * 0.30);
+    ctx.stroke();
+  }
+  // a lit top edge so the rim is a woven object and not a filled ellipse
+  ctx.strokeStyle = 'rgba(255,222,150,.30)'; ctx.lineWidth = Math.max(1, nw * 0.016);
+  ctx.beginPath(); ctx.ellipse(ncx, ny, nw * 0.55, nw * 0.20, 0, Math.PI * 1.04, Math.PI * 1.96); ctx.stroke();
+  ctx.restore();
 
   if (!F){ ctx.restore(); return; }
   // inset the world so half a sprite always fits: a beast used to be cut clean
@@ -4807,17 +4959,51 @@ function drawPit(){
   // x-buckets to dodge that left them floating with bare sand underneath, which
   // is worse — a bar you cannot assign to a unit tells you nothing. They all go
   // on top now, each pinned the same distance above its own animal.
-  for (const u of order){
+  // Placement runs FRONT to BACK: the nearest animal keeps the spot right over
+  // its own head and anything behind it stacks upward, which is the direction
+  // depth already reads on this screen.
+  const placedBars = [];
+  for (let oi = order.length - 1; oi >= 0; oi--){
+    const u = order[oi];
     if (!u.alive) continue;
     const sc = scaleAt(u.y);
     const x = px(u.x) + fanOf(u), y = py(u.y) + fanY(u);
     const spr = spriteFor(u.c);
     const h = SPR * sc * (104 / 128);
-    const paintTop = y - h + h * 0.04 + ((spr._top || 0) / 104) * h;
+    // The scan is a hint, not a contract. Clamped so the bar can never rise off
+    // the animal's own tile and can never sink to the belly of a tall one —
+    // "WALL" printed across a midriff with the head 250px higher was the single
+    // worst read in the pit.
+    const paintTop = Math.max(Math.min(
+      y - h + h * 0.04 + ((spr._top || 0) / 104) * h, y - h * 0.55), y - h * 1.02);
 
     const bulk = Math.max(0, Math.min(1, u.max / 60));
     const bw = SPR * (0.20 + 0.28 * bulk) * sc, bh = Math.max(3.5, H * 0.0085);
-    const by = paintTop - bh - SPR * 0.10;
+    let by = paintTop - bh - SPR * 0.10;
+    const kw0 = THREAT_TAG[u.c.trait];
+    const fs0 = Math.max(7, W * 0.021), pr0 = Math.max(2.5, W * 0.007);
+    const pips = (u.pois > 0 || u.stun > 0);
+    // measure the whole stack once, then dodge anything already standing there
+    ctx.font = '900 ' + fs0.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
+    const tagW = kw0 ? (ctx.measureText ? ctx.measureText(kw0[0]).width : fs0 * 2.2) + fs0 * 0.9 : 0;
+    const sw = Math.max(bw, tagW) + 4;
+    const above = (kw0 ? fs0 * 2.4 : 0) + (pips ? pr0 * 2.6 : 0) + 2;
+    const rectAt = (b) => ({ x0: x - sw / 2, x1: x + sw / 2, y0: b - above, y1: b + bh + 2 });
+    for (let guard = 0; guard < 14; guard++){
+      const r = rectAt(by);
+      let hit = null;
+      for (const q of placedBars)
+        if (r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0){ hit = q; break; }
+      if (!hit) break;
+      by -= (r.y1 - hit.y0) + 3;
+    }
+    placedBars.push(rectAt(by));
+    // if it had to climb, it stays assignable: a hairline back down to its owner
+    if (paintTop - bh - SPR * 0.10 - by > 2){
+      ctx.strokeStyle = u.side === 'us' ? 'rgba(160,224,110,.42)' : 'rgba(255,150,120,.42)';
+      ctx.lineWidth = Math.max(1, W * 0.0035);
+      ctx.beginPath(); ctx.moveTo(x, by + bh + 1); ctx.lineTo(x, paintTop - SPR * 0.02); ctx.stroke();
+    }
     const bx = x - bw / 2, cap = bh / 2;
     const pill = (px2, py2, pw, ph, r) => {
       ctx.beginPath();
@@ -4833,9 +5019,12 @@ function drawPit(){
     const frac = Math.max(0, Math.min(1, u.hp / u.max));
     if (frac > 0){
       ctx.save(); pill(bx, by, bw, bh, cap); ctx.clip();
-      ctx.fillStyle = u.side === 'us' ? '#8fd344' : '#e05540';
+      // the enemy fill used to sit at 4.5:1 on its own track against the
+      // player's 8.8:1 — the bar you actually make decisions on was the harder
+      // one to read
+      ctx.fillStyle = u.side === 'us' ? '#8fd344' : '#ff7a5c';
       ctx.fillRect(bx, by, bw * frac, bh);
-      ctx.fillStyle = u.side === 'us' ? 'rgba(60,92,20,.75)' : 'rgba(112,26,16,.75)';
+      ctx.fillStyle = u.side === 'us' ? 'rgba(60,92,20,.75)' : 'rgba(140,44,26,.72)';
       ctx.fillRect(bx, by + bh * 0.62, bw * frac, bh * 0.38);
       ctx.restore();
     }
@@ -4848,12 +5037,12 @@ function drawPit(){
       ctx.lineTo(x + bw * 0.16, by - 1); ctx.closePath(); ctx.fill();
     }
 
-    const kw = THREAT_TAG[u.c.trait];
+    const kw = kw0;
     if (kw){
-      const fs = Math.max(7, W * 0.021);
+      const fs = fs0;
       ctx.font = '900 ' + fs.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      const tw = (ctx.measureText ? ctx.measureText(kw[0]).width : fs * 2.2) + fs * 0.9;
+      const tw = tagW;
       const th2 = fs * 1.4, ty = by - fs * 0.9;
       ctx.fillStyle = 'rgba(6,10,5,.86)';
       ctx.beginPath();
@@ -4863,9 +5052,9 @@ function drawPit(){
       ctx.fillStyle = kw[1];
       ctx.fillText(kw[0], x, ty);
     }
-    const pr = Math.max(2.5, W * 0.007);
+    const pr = pr0;
     let sx = x - pr * 2;
-    const py2 = by - (kw ? Math.max(7, W * 0.021) * 2.6 : pr * 3);
+    const py2 = by - (kw ? fs0 * 2.4 : pr * 3);
     if (u.pois > 0){ ctx.fillStyle = '#b6ff8a'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); sx += pr * 3; }
     if (u.stun > 0){ ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); }
   }
@@ -4876,13 +5065,27 @@ function drawPit(){
     const k = 1 - f.t / f.life;              // 1 at birth, 0 at death
     ctx.globalAlpha = Math.max(0, k);
     if (f.k === 'boom'){
-      ctx.strokeStyle = '#ffd08a'; ctx.lineWidth = Math.max(2, W * 0.007);
-      ctx.beginPath(); ctx.arc(x, y - SPR * 0.25, AOE_R * U * (1 - k + 0.25), 0, Math.PI * 2); ctx.stroke();
+      // same two-arc language as a hit, one size up: an ember bloom with a hot
+      // core, never a thin perfect circle floating over the melee
+      const br = AOE_R * U * (1 - k + 0.25), bcy = y - SPR * 0.25;
+      ctx.lineWidth = Math.max(2, W * 0.007) * 2.6;
+      ctx.strokeStyle = 'rgba(255,124,48,.30)';
+      ctx.beginPath(); ctx.arc(x, bcy, br * 1.05, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = Math.max(2, W * 0.007);
+      ctx.strokeStyle = 'rgba(255,214,150,.92)';
+      ctx.beginPath(); ctx.arc(x, bcy, br, 0, Math.PI * 2); ctx.stroke();
     } else if (f.k === 'ring'){
-      // the impact itself: a white flash ring that snaps outward
-      ctx.strokeStyle = 'rgba(255,255,255,.95)';
-      ctx.lineWidth = Math.max(2, W * 0.010) * k;
-      ctx.beginPath(); ctx.arc(x, y - SPR * 0.30, SPR * (0.10 + (1 - k) * 0.28), 0, Math.PI * 2); ctx.stroke();
+      // A flat cool-grey vector stroke floating over a pit of warm lit objects
+      // read as a soap bubble. Two arcs now: a hot core and a wide ember bloom,
+      // both in the arena's own firelight, both tapering as it opens.
+      const rr = SPR * (0.10 + (1 - k) * 0.28), cy = y - SPR * 0.30;
+      const lw = Math.max(1.5, W * 0.008) * k;
+      ctx.lineWidth = lw * 2.4;
+      ctx.strokeStyle = 'rgba(255,140,60,.34)';
+      ctx.beginPath(); ctx.arc(x, cy, rr * 1.06, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = 'rgba(255,236,190,.9)';
+      ctx.beginPath(); ctx.arc(x, cy, rr, 0, Math.PI * 2); ctx.stroke();
     } else if (f.k === 'slash'){
       // who swung at whom, drawn as an arc across the gap
       ctx.strokeStyle = 'rgba(255,246,214,.85)';
@@ -4898,13 +5101,18 @@ function drawPit(){
       const fs = W * (0.038 + Math.min(0.034, f.v * 0.0024)) * (f.big ? 1.35 : 1);
       ctx.font = '900 ' + fs.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.lineWidth = Math.max(4, W * 0.012); ctx.strokeStyle = 'rgba(0,0,0,.92)';
+      // a 9px pure-black stroke on a 32px glyph turned every number into a
+      // black wedge with a white scar in it — the outline is a contrast floor,
+      // not a second typeface
+      ctx.lineWidth = Math.max(1.5, W * 0.006); ctx.strokeStyle = 'rgba(0,0,0,.92)';
+      ctx.lineJoin = 'round';
       // pops up fast, then floats
       const rise = (1 - k) < 0.25 ? (1 - k) * 2.4 : 0.6 + (1 - k) * 0.5;
-      const ny = y - SPR * 0.55 - rise * SPR * 0.75;
-      ctx.strokeText('-' + f.v, x, ny);
+      const nx = x + (f.jx || 0) * SPR * 0.30;
+      const ny = y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR;
+      ctx.strokeText('-' + f.v, nx, ny);
       ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffffff');
-      ctx.fillText('-' + f.v, x, ny);
+      ctx.fillText('-' + f.v, nx, ny);
     } else if (f.k === 'spark'){
       ctx.fillStyle = f.col || '#ffd9a0';
       ctx.beginPath();
@@ -4938,6 +5146,7 @@ function stepFx(dt){
  *  Nothing in here can change the fight — it reads the trail the tick left. */
 function drainArena(){
   if (!F || !F.events) return;
+  let numSlot = 0;                 // how many numbers this tick already spawned
   for (const e of F.events){
     if (e.k === 'swing'){
       // a slash across the gap, so you can see WHO hit WHOM
@@ -4945,8 +5154,15 @@ function drainArena(){
         dir: e.side === 'us' ? 1 : -1, t: 0, life: 0.20 });
     } else if (e.k === 'hit'){
       pitAdd({ k: 'ring', x: e.x, y: e.y, v: e.dmg, t: 0, life: 0.26 });
+      // Two hits in one tick were spawned at the target's x with textAlign
+      // centre and no offset, so they printed on top of each other and the
+      // pair read as one corrupted glyph. They fan now — sideways toward
+      // whoever swung, and downward by slot so a triple stacks legibly.
       pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffffff',
-        big: e.dmg >= 9, dir: ((e.id || 1) % 2) ? 1 : -1, t: 0, life: 0.8 });
+        big: e.dmg >= 9, dir: ((e.id || 1) % 2) ? 1 : -1, t: 0, life: 0.8,
+        jx: (e.fx || (((e.id || 1) % 2) ? 1 : -1)) * (1.05 + (numSlot % 3) * 0.36),
+        jy: (numSlot % 3) * 0.17 });
+      numSlot++;
       for (let i = 0; i < (e.dmg >= 9 ? 6 : 3); i++)
         pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 2.4, dy: -rng() * 1.2, t: 0, life: 0.42 });
       sfxStrike(e.dmg);
@@ -5192,8 +5408,11 @@ function showVerdict(){
           : (alive ? '<span class="ok">' + alive + '</span> of yours still standing'
                    : 'they died holding the door'))
       : 'the eggs are gone') +
+    // The board used to end with "TAP TO CARRY ON" while a lit CARRY ON button
+    // sat 12mm below it — one action, two calls to action, and the quieter one
+    // came first. The button is the instruction.
     '</div><div class="vrun"><div class="pip vpips">' + pipMarks + '</div>' + streakHtml + '</div>' +
-    '<div class="vtap">tap to carry on</div></div>';
+    '</div>';
   verdictOn = true;
   vSounded = true;
   verdictSound(won, st);
@@ -5481,6 +5700,15 @@ function revealLitter(){
     const tr = card.querySelector && card.querySelector('.tr');
     if (tr && tr.classList && res.child.trait !== 'none' &&
         res.child.trait !== h.a.trait && res.child.trait !== h.b.trait) tr.classList.add('fresh');
+    // The resemblance strip used to be created on demand, on the picked card
+    // only — so the two cards on a screen whose entire job is COMPARISON stood
+    // 70px different in height and their delta rows never shared a baseline.
+    // Every chick reserves it, filled or not.
+    if (card.appendChild){
+      const rs = document.createElement('div');
+      rs.className = 'resem';
+      card.appendChild(rs);
+    }
     wrap.appendChild(card);
     const tagline = document.createElement('div');
     // reserved height, so a lone PRODIGY tag can never shunt its column out of line
@@ -5599,15 +5827,23 @@ function chickBanners(res){
   if (t.indexOf('cursed') >= 0) out += b('BAD BLOOD', 'bad');
   return out;
 }
+/** The verdict used to be one sentence carrying five inline treatments, joined
+ *  by &nbsp; and left to wrap wherever it landed \u2014 which broke "+2.5" away from
+ *  "Might" so the second line read "Might +0 Hide" and the layout stated a
+ *  number the chick does not have. It is a table now: one label column, one
+ *  value column, one weight, one size, colour on the numeral alone. */
 function showChickDetail(res){
   const c = res.child;
-  const fmt = (v, lbl) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
-    (v >= 0 ? '+' : '\u2212') + Math.abs(Math.round(v * 10) / 10) + ' ' + lbl + '</span>';
+  const row = (v, lbl) => '<span class="vpair"><b class="vlbl">' + lbl + '</b><b class="vval ' +
+    (v > 0 ? 'up' : v < 0 ? 'dn' : 'lv') + '">' +
+    (v > 0 ? '+' : v < 0 ? '\u2212' : '\u00b1') +
+    Math.abs(Math.round(v * 10) / 10) + '</b></span>';
   $('hBanners').innerHTML = res.tags.indexOf('inbred') >= 0
     ? '<span class="banner warn">THAT WAS ITS COUSIN</span>' : '';
-  $('hDeltas').innerHTML = '<b>' + c.name + '</b> vs. the average parent: ' +
-    fmt(res.dM, 'Might') + ' &nbsp; ' + fmt(res.dH, 'Hide') +
-    ' &nbsp; <span class="dim">' + TRAITS[c.trait].desc + '</span>';
+  $('hDeltas').innerHTML =
+    '<div class="vname">' + c.name + '<span> vs. the average parent</span></div>' +
+    '<div class="vgrid">' + row(res.dM, 'Might') + row(res.dH, 'Hide') + '</div>' +
+    '<div class="vtrait">' + TRAITS[c.trait].desc + '</div>';
 }
 function afterHatch(){
   if (pickedChick < 0 || !R.litter || hatching) return;   // one clutch, one keep
@@ -5760,12 +5996,18 @@ function goOver(won){
     : 'Round ' + (R.idx + 1) + ' of ' + RUN_LEN + ' — ' + FOES[clamp(R.idx, 0, RUN_LEN - 1)].name + ' got you.';
   // the champion gets a plinth, a ribbon and a pool of light: this frame is the
   // one people screenshot, and it cannot look like the runt you culled in two
+  // ...and a loss gets NEITHER. The screen used to award a rosette for dying:
+  // identical plinth, identical BEST IN SHOW ribbon, identical pool of light,
+  // separated from the win only by a hue. The last animal standing when the
+  // herd went under is not a prizewinner, it is the end of a line.
   const ob = $('oBest'); ob.innerHTML = '';
   if (best){
     const pl = document.createElement('div');
-    pl.className = 'plinth';
+    pl.className = won ? 'plinth' : 'plinth mourned';
     // the wrapper carries the centring; the banner carries the animation
-    pl.innerHTML = '<span class="ribbon"><span class="banner gold2">BEST IN SHOW</span></span>';
+    pl.innerHTML = won
+      ? '<span class="ribbon"><span class="banner gold2">BEST IN SHOW</span></span>'
+      : '<span class="ribbon"><span class="banner mourn">LAST OF THE LINE</span></span>';
     pl.appendChild(cardEl(best, { big: true }));
     ob.appendChild(pl);
   }
@@ -5814,8 +6056,9 @@ function renderBook(){
     const t = TRAITS[node.trait] || TRAITS.none;
     const info = document.createElement('div');
     info.className = 'bkinfo';
-    const up = node.up.length ? 'Out of ' + node.up.map((x) => x.name).join(' &times; ')
-      : 'Founder stock — no papers on file.';
+    // The ANCESTRY plate 150px lower already says this, in a second phrasing.
+    // A founder's papers line is left empty here so the book says it once.
+    const up = node.up.length ? 'Out of ' + node.up.map((x) => x.name).join(' &times; ') : '';
     info.innerHTML = '<h2>' + node.name + '</h2>' +
       '<div class="tiny">generation ' + node.gen + (live ? '' : ' &middot; no longer in the barn') + '</div>' +
       '<div class="row"><span class="bdg" style="color:#8a3418">' + ICO('might') + 'Might ' + node.might + '</span>' +
@@ -5825,7 +6068,7 @@ function renderBook(){
       '<div style="margin-top:6px;color:#3d3520">' + (node.trait === 'none'
         ? '<b style="color:#5c1140">No trick</b> — just teeth.'
         : '<b style="color:#5c1140">' + t.name + '</b> — ' + t.desc) + '</div>' +
-      '<div style="margin-top:6px;color:#4e4229;font-style:italic">' + up + '</div>';
+      (up ? '<div style="margin-top:6px;color:#4e4229;font-style:italic">' + up + '</div>' : '');
     top.appendChild(info);
   }
   const tree = $('bkTree');
@@ -5836,7 +6079,7 @@ function renderBook(){
     tree.className = 'tree orphan';
     const cap = document.createElement('div');
     cap.className = 'plate';
-    cap.innerHTML = 'Founder stock. No papers on file &mdash; the line starts here.';
+    cap.innerHTML = 'Founder stock &mdash; no papers on file. The line starts here.';
     tree.appendChild(cap);
     tree.appendChild(treeNode(node, true));
   } else if (node){
