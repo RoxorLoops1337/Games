@@ -3271,14 +3271,18 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.sel.tile = -1; IB.sel.node = null;
     IB.cam.follow = false; IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1.4;
     const st2 = CTX.__stats;
-    // The plate is a fillRect in one of the three label-plate colours; the
-    // label still exists either way, so counting labels would measure nothing.
-    const PLATE = new Set(['rgba(9,13,20,.55)', 'rgba(9,13,20,.72)', 'rgba(30,66,110,.88)']);
+    /* The plate is a card now rather than a black slab, so it is a filled PATH
+       in one of the two card colours rather than a fillRect in one of three
+       near-blacks. Counting rects here would count nothing and pass — the
+       assertion below would then be measuring the absence of a shape that no
+       longer exists in that form, which is worse than no assertion at all. */
+    const PLATE = new Set([IB.LABEL_CARD.face, '#fff3d6']);
     const holdPlates = () => {
-      st2.rects = []; st2.texts = []; st2.rectsDropped = 0;
+      st2.rects = []; st2.texts = []; st2.fills = []; st2.rectsDropped = 0; st2.fillsDropped = 0;
       IB.drawHold(CTX, 0); IB.flushLabels(CTX);
-      return { plates:st2.rects.filter(r => PLATE.has(r.col)).length,
-               names:IB.labelPlaced.length, wrote:st2.texts.length, lost:st2.rectsDropped };
+      return { plates:st2.fills.filter(f => PLATE.has(f)).length,
+               names:IB.labelPlaced.length, wrote:st2.texts.length,
+               lost:st2.rectsDropped + st2.fillsDropped };
     };
     const idle = holdPlates();
     t.ok(idle.lost === 0, 'the capture held the whole hold');
@@ -3730,6 +3734,41 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(/\.rfloat\{[^}]*position:absolute/.test(css), 'the spend chip cannot move the bar it comes from');
     t.ok(/\.rfloat\{[^}]*pointer-events:none/.test(css), 'nor eat a press on its way past');
     IB.newMatch({ diff:'veteran', seed:6121 });
+  }
+
+  /* ---- the WORLD's labels, in the same hand as the panel. These were the last
+     thing on screen still made of the old interface: pale type with a
+     near-black halo, and a black slab under the ones that got a plate. Against
+     a hold made of cut paper they read as a different game's HUD floating over
+     it. Ink on paper now, both tiers.
+
+     The one thing a label must never stop saying is WHOSE it is, so `L.col` is
+     tinted toward ink rather than replaced — a blue hold's name is dark blue on
+     cream and a red hold's is dark red. A flat ink colour would read better and
+     be wrong. */
+  {
+    t.ok(IB.LABEL_CARD.face !== IB.LABEL_CARD.ink, 'a named label is ink on a card, not ink on ink');
+    t.ok(IB.LABEL_CARD.drop >= 1,
+      'with a hard offset under it, which is what one piece of card on another looks like');
+    t.ok(IB.LABEL_CARD.k > 0 && IB.LABEL_CARD.k < 1,
+      'the ink is the label’s OWN colour taken toward dark, not replaced by it (' +
+      IB.LABEL_CARD.k + ')');
+    // Proved rather than asserted: two sides, two inks, both dark.
+    const lum = (h) => { const n = parseInt(h.slice(1), 16);
+      return (((n >> 16) & 255) * .3 + ((n >> 8) & 255) * .6 + (n & 255) * .1) / 255; };
+    const blue = IB.tintTo('#bfe0ff', IB.LABEL_CARD.ink, IB.LABEL_CARD.k);
+    const red = IB.tintTo('#ffc4bd', IB.LABEL_CARD.ink, IB.LABEL_CARD.k);
+    t.ok(blue !== red, 'the two holds still print in different ink (' + blue + ' vs ' + red + ')');
+    t.ok(lum(blue) < .45 && lum(red) < .45,
+      'and both are dark enough to read on cream (' + lum(blue).toFixed(2) + ', ' + lum(red).toFixed(2) + ')');
+    // The quiet tier keeps its promise of no slab — that tier exists to stop six
+    // black pills stacking over one hold — and simply inverts.
+    t.ok(lum(IB.LABEL_QUIET.rim.replace(/rgba\((\d+),(\d+),(\d+).*/, (m, r, g, b2) =>
+      '#' + [r, g, b2].map(v => (+v).toString(16).padStart(2, '0')).join(''))) > .6,
+      'the quiet tier’s halo is PALE — it is a word cut out of paper, not a word on a shadow');
+    t.ok(IB.LABEL_QUIET.k > .5,
+      'and its ink is taken most of the way to dark, or pale-on-pale is unreadable (' +
+      IB.LABEL_QUIET.k + ')');
   }
 
   // ---- decoration that can be switched off. The badge pulses and the wave

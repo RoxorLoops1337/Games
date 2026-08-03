@@ -11312,8 +11312,23 @@ const blockLabel = (x, cy, w, h) => { labelBlock.push({ x, y:cy, w, h }); };
    the padding the dodge works in, and letting fourteen of them shove the names
    about would put back exactly the crowding the tier exists to cut. QUIET is
    still a box of text and still has to keep out of everything else's way.  */
-const LABEL_QUIET = { lw:2.6, rim:'rgba(6,10,17,.78)', into:'#0d1320', k:.30 };
-const LABEL_MARK = { r:3, a:.82, rim:'rgba(8,10,14,.62)' };
+/* The world's own labels, in the same hand as the panel. These were the last
+   thing on screen still made of the old interface: pale type with a near-black
+   halo, and a black slab under the ones that got a plate. Against a hold made
+   of cut paper they read as a different game's HUD floating over it.
+
+   Ink on paper instead, both tiers. A NAME gets a little card — cream, a kraft
+   cut edge, and a hard unblurred offset under it, which is the same "one piece
+   of card on another" the whole panel is lit by. A QUIET one keeps its promise
+   of no slab and inverts instead: dark ink with a cream halo, which is what a
+   word written on paper and cut out actually looks like.
+
+   `L.col` still carries whose it is — it is tinted toward ink rather than
+   replaced, so a blue hold's name is dark BLUE on cream and a red hold's is
+   dark red. The one thing a label must never stop saying is whose it is. */
+const LABEL_QUIET = { lw:3, rim:'rgba(246,232,203,.86)', into:'#241a0c', k:.66 };
+const LABEL_CARD = { face:'#f2e4c6', edge:'#b8935e', ink:'#3d2d1a', k:.72, drop:2, r:3 };
+const LABEL_MARK = { r:3, a:.9, rim:'rgba(246,232,203,.8)' };
 function labelMark(c, L){
   const r = LABEL_MARK.r;
   c.globalAlpha = LABEL_MARK.a;
@@ -11321,7 +11336,7 @@ function labelMark(c, L){
   c.moveTo(L.x, L.y - r); c.lineTo(L.x + r, L.y); c.lineTo(L.x, L.y + r); c.lineTo(L.x - r, L.y);
   c.closePath();
   c.fillStyle = L.col; c.fill();
-  c.strokeStyle = LABEL_MARK.rim; c.lineWidth = 1; c.stroke();
+  c.strokeStyle = LABEL_MARK.rim; c.lineWidth = 1.4; c.stroke();
   c.globalAlpha = 1;
 }
 
@@ -11610,15 +11625,26 @@ function flushLabels(c){
       // No plate. The outline is what a plate was FOR — keeping type legible
       // over grass, stone and sky at once — and it costs a shape the size of
       // the word rather than a shape the size of the box round it.
+      // Still no slab — that tier exists to stop six black pills stacking over
+      // one hold. Inverted, though: a cream halo and dark ink is a word cut out
+      // of paper, and it is legible over grass, stone and sky for the same
+      // reason the dark halo was.
       c.lineWidth = LABEL_QUIET.lw; c.strokeStyle = LABEL_QUIET.rim;
+      c.lineJoin = 'round';
       c.strokeText(L.txt, lx, dcy);
       c.fillStyle = tintTo(L.col, LABEL_QUIET.into, LABEL_QUIET.k);
       c.fillText(L.txt, lx, dcy);
     } else {
-      c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
-      c.fillRect(lx - w / 2, y, w, h);
-      if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(lx - w / 2 + .5, y + .5, w - 1, h - 1); }
-      c.fillStyle = L.col; c.fillText(L.txt, lx, dcy);
+      // A little card, laid on the world: the drop goes down first so the face
+      // sits ON it rather than the two being one shape with a soft edge.
+      const cx0 = lx - w / 2, D = LABEL_CARD.drop;
+      mmRound(c, cx0 + D, y + D, w, h, LABEL_CARD.r);
+      c.fillStyle = 'rgba(28,20,10,.34)'; c.fill();
+      mmRound(c, cx0, y, w, h, LABEL_CARD.r);
+      c.fillStyle = L.hot ? '#fff3d6' : LABEL_CARD.face; c.fill();
+      c.strokeStyle = L.hot ? '#4ea3ff' : LABEL_CARD.edge; c.lineWidth = L.hot ? 1.6 : 1; c.stroke();
+      c.fillStyle = tintTo(L.col, LABEL_CARD.ink, LABEL_CARD.k);
+      c.fillText(L.txt, lx, dcy);
     }
     c.globalAlpha = 1;
   }
@@ -16142,7 +16168,7 @@ window.IB = {
   BAR, barState, dmgAge, chromaDown, tintTo, hexRGB, hexOf, STRUCT_KEEPS, LABEL_HOT,
   FLOAT_TIER, FLOAT_GRAZE, floatW, floatTier, FLOAT_JIT, FLOAT_JIT_MIN, jitter,
   RES_ICON, UI_ICON, ico, cico, hudShow, hudRoll, HUD_EASE, HUD_SNAP, PRESSABLE, hudFloat,
-  LANE_PX, FRAME, laneFitZoom, LABEL_QUIET, LABEL_MARK, labelMark, DOCK_TUTOR, dockHelp,
+  LANE_PX, FRAME, laneFitZoom, LABEL_QUIET, LABEL_CARD, LABEL_MARK, labelMark, DOCK_TUTOR, dockHelp,
   get dockHelpOn(){ return dockHelpOn; }, set dockHelpOn(v){ dockHelpOn = v; },
   floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, throwOff, smear, softShadow, shadowParts, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
