@@ -99,7 +99,7 @@
      Everything else — sentences, creature names, tooltips, the log — stays in
      BEAKWORK, because a display face at 11px is a wall, not a word. */
   h1, h2, h3,
-  .btn, .tiny, .sub, .banner, .streak, .tline, .rlab,
+  .btn, .tiny, .sub, .banner, .streak, .tline,
   .scrhead .kicker, .scrhead .count,
   .verdict .vhead, .verdict .vtap,
   .card .st, .card .tr, .card .gen,
@@ -322,12 +322,10 @@
       inset 0 3px 7px rgba(0,0,0,.45),
       0 0 0 var(--btn-deep,#2b3a15), 0 2px 7px rgba(0,0,0,.5); }
   /* disabled: the paint has gone grey and damp. Still a solid object. */
-  .btn[disabled]{ cursor:not-allowed; color:#7f8a76; text-shadow:0 -1px 0 rgba(0,0,0,.4);
-    --btn-hi:#3d4a34; --btn-mid:#2e3927; --btn-lo:#20291b;
-    --btn-edge:#151d10; --btn-deep:#151d10;
-    filter:saturate(.35); transform:none; }
-  .btn[disabled]::after{ opacity:.2; }
-  .btn[disabled]:hover{ filter:saturate(.35); }
+  .btn[disabled]{ cursor:not-allowed; transform:none;
+    filter:brightness(.52); opacity:.86; }
+  .btn[disabled]::after{ opacity:.22; }
+  .btn[disabled]:hover{ filter:brightness(.52); }
 
   /* secondary: the same plank, unpainted — bare wood */
   .btn.alt{ color:#e8dcbe;
@@ -347,10 +345,18 @@
   /* The breeding colour, for anything that MAKES an animal. It is PAINT on the
      same plank as everything else, not a fifth material — it used to be a
      glossy pink slab that appeared nowhere else in the game. */
-  .btn.pinky{ color:#2a0c1e; text-shadow:0 1px 0 rgba(255,220,240,.4);
-    --btn-hi:#e79cc8; --btn-mid:#c66ba5; --btn-lo:#8a3f6c;
-    --btn-edge:#3d1128; --btn-deep:#5e1f45; }
-  .btn.pinky::before{ opacity:.4; }
+  /* Dark ink on pale pink measured 2.05:1 on the button that ends every
+     clutch. Same paint, same plank, light label. */
+  .btn.pinky{ color:#fff2fb; text-shadow:0 -1px 0 rgba(40,6,26,.7), 0 1px 0 rgba(255,190,225,.18);
+    --btn-hi:#c06a9a; --btn-mid:#8e3f6e; --btn-lo:#5a2144;
+    --btn-edge:#2c0a1d; --btn-deep:#431632; }
+  .btn.pinky::before{ opacity:.5; }
+  .btn.pinky::after{ background-image:
+      linear-gradient(180deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.02) 44%, transparent 56%),
+      radial-gradient(circle 3.4px at 10px 10px, #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at calc(100% - 10px) 10px, #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at 10px calc(100% - 10px), #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%),
+      radial-gradient(circle 3.4px at calc(100% - 10px) calc(100% - 10px), #97a6b0 0 34%, #39424b 56%, rgba(0,0,0,.8) 76%, transparent 84%); }
 
   /* chips: inline actions that are not the point of the screen */
   .btn.sm{ font-size:12px; letter-spacing:1.2px; min-height:40px; padding:10px 15px;
@@ -416,7 +422,7 @@
     max-width:400px; margin:clamp(6px,2cqw,12px) auto clamp(6px,2cqw,10px); }
   #title .rules b{ font-family:var(--f-display); letter-spacing:.6px; }
   #title .more{ margin-bottom:clamp(6px,2cqw,12px); }
-  #title .more > summary{ font-size:10px; letter-spacing:2.6px; color:#7d9270;
+  #title .more > summary{ font-size:10.5px; letter-spacing:2.6px; color:#c2d8b4;
     border-top:none; border-bottom:none; position:relative; }
   /* ruled off like everything else in this game */
   #title .more > summary::before, #title .more > summary::after{
@@ -1504,21 +1510,17 @@
   @keyframes closeflash{ 0%{ background:radial-gradient(ellipse 118% 88% at 50% 44%, transparent 20%, rgba(90,0,0,.7)) }
     100%{} }
 
-  /* --- resemblance: the one thing this game has that nothing else has --- */
-  .rline{ position:absolute; height:2px; transform-origin:0 50%; pointer-events:none; z-index:31;
-    background:linear-gradient(90deg, rgba(255,138,212,0), var(--pink));
-    box-shadow:0 0 10px rgba(255,138,212,.7); }
-  /* the label gets a plate, so the one moment the game explains its own
-     genetics is never drawn through the instruction line underneath it */
-  .rlab{ position:absolute; z-index:31; pointer-events:none; font-size:10.5px; font-weight:800;
-    letter-spacing:1.4px; text-transform:uppercase; color:var(--pink); white-space:nowrap;
-    background:rgba(6,12,6,.92); border:1px solid rgba(255,138,212,.45);
-    padding:2px 7px; border-radius:7px; box-shadow:0 4px 12px rgba(0,0,0,.7);
-    animation:pop .26s ease both; }
-  .rlab.nw{ background:var(--pink); border-color:#ffd0ee; color:#2a0c1e; }
-  /* the label is anchored OFF the face — a caption in the card's lower band —
-     and the plate is opaque enough to sit over anything */
-  .rlab{ background:rgba(6,12,6,.96); }
+  /* --- resemblance: the one thing this game has that nothing else has ---
+     Said in words UNDER the portrait, not drawn as a thread across it. */
+  /* fixed height, so a card with captions and a card without stay on one
+     baseline — they are compared side by side and that is the whole screen */
+  .resem{ display:flex; flex-wrap:wrap; gap:2px 4px; justify-content:center;
+    padding:2px 4px 4px; min-height:32px; align-content:flex-start; }
+  .card.big .resem{ min-height:34px; }
+  .rsm{ font-family:var(--f-text); font-size:8.5px; letter-spacing:.2px; font-weight:800;
+    padding:1px 5px; border-radius:3px; color:#cfe0c2;
+    background:rgba(0,0,0,.34); box-shadow:inset 0 0 0 1px rgba(140,190,110,.28); }
+  .rsm.nw{ color:#ffc9ea; box-shadow:inset 0 0 0 1px rgba(255,138,212,.55); }
   #hSub{ position:relative; z-index:1; }
 
   /* --- the pairing preview: the ghost of the chick you have not bred yet --- */
@@ -1666,7 +1668,7 @@
        motion — but damage numbers, resemblance threads and the cull receipt
        are all INFORMATION, so they stay. They simply stop moving. */
     .fxp, .fxdust, .ghostcard{ display:none; }
-    .flyer, .rline, .rlab, .receipt{ animation:none !important; opacity:1 !important; }
+    .flyer, .receipt{ animation:none !important; opacity:1 !important; }
     .flyer{ transform:translate(-50%,-140%); }
     .grid.mourning > .card:not(.leaving){ transform:none; }
   }
@@ -3489,6 +3491,9 @@ function vform(v){
     limb: limb,
     legless: limb === 2 || limb === 4,
     crest: (Math.floor(h2 / 90) + v.wings) % 4,     // none / spines / comb / antennae
+    // how MANY spikes/teeth the crest has — three on every animal was a big
+    // part of why a grid of nine read as one asset in nine colours
+    crestN: 2 + ((v.eyes + v.horns + (v.tail ? 1 : 0)) % 4),
     neck: q(clamp(v.body * v.size, 0, 0.999), 3),   // none / short / long
     snout: (v.horns + v.eyes) % 3,                  // flat / beak / trunk
     slit: limb % 2 === 1,                           // slit-pupilled families
@@ -3543,8 +3548,13 @@ function drawBeast(cv, c){
   // it — so in the pit two beasts of the same power were three times apart in
   // size, and the roster and the army looked like assets from two games. Height
   // sets the scale; width only ever SQUEEZES, and only if it would overflow.
-  const S = Math.min(H / 80, H / topY);
+  // Fitting purely on height made every narrow build fill the tile, which
+  // turned half the roster into near-identical vertical capsules on a hue
+  // slider. Blend the two fits: mostly height, so card and pit still agree,
+  // with enough of the extents fit left in that a narrow animal stays narrow.
+  const fitH = Math.min(H / 80, H / topY);
   const fitX = Math.min(W / 96, W / (2 * halfW));
+  const S = fitH * 0.72 + Math.min(fitH, fitX) * 0.28;
   const squeeze = Math.min(1, fitX / S);
   ctx.save();
   ctx.translate(W / 2, H * 0.96);
@@ -3687,11 +3697,14 @@ function drawBeast(cv, c){
   }
   // crest: nothing / a row of spines / a floppy comb / two antennae
   if (f.crest === 1){
-    for (let i = 0; i < 5; i++){
-      const a = (i / 4 - 0.5) * 1.5;
+    // the COUNT is a gene: two spines is a different animal from five
+    const n = f.crestN, spread = 0.6 + n * 0.22;
+    for (let i = 0; i < n; i++){
+      const a = n === 1 ? 0 : (i / (n - 1) - 0.5) * spread;
       const px = Math.sin(a) * hw * 0.72, py = hcy + Math.cos(a) * hh * 0.94;
+      const tall = (6 + (n <= 3 ? 5 : 0)) * sz;
       ctx.beginPath();
-      ctx.moveTo(px - 4 * sz, py); ctx.lineTo(px + Math.sin(a) * 5, py + 8 * sz);
+      ctx.moveTo(px - 4 * sz, py); ctx.lineTo(px + Math.sin(a) * 5, py + tall);
       ctx.lineTo(px + 4 * sz, py); ctx.closePath();
       ctx.fillStyle = belly; ctx.fill(); stroke(ink, 2);
     }
@@ -4434,8 +4447,13 @@ function drawPit(){
   for (let i = 0; i < 46; i++){
     const sx = tnoise(i * 3.1) * W, sy = tnoise(i * 7.7) * horizon * 0.86;
     const b = tnoise(i * 11.3);
-    ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + b * 0.6).toFixed(2) + ')';
-    const r = b > 0.86 ? 2.2 : 1.2;
+    // a few big and warm, most small and cold — a uniform dot field reads as
+    // a texture swatch rather than as a sky
+    const warm = tnoise(i * 5.9) > 0.7;
+    ctx.fillStyle = warm
+      ? 'rgba(255,238,206,' + (0.20 + b * 0.62).toFixed(2) + ')'
+      : 'rgba(206,222,255,' + (0.12 + b * 0.5).toFixed(2) + ')';
+    const r = b > 0.9 ? 2.4 : b > 0.68 ? 1.5 : 0.9;
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill();
   }
 
@@ -4444,36 +4462,63 @@ function drawPit(){
   const wall = ctx.createLinearGradient(0, wallTop, 0, horizon);
   wall.addColorStop(0, '#3b2a1c'); wall.addColorStop(1, '#241a12');
   ctx.fillStyle = wall; ctx.fillRect(0, wallTop, W, horizon - wallTop);
-  // planks of unequal width, one of them leaning — an evenly spaced comb of
-  // black lines is a fence in a diagram, not a fence somebody built
+  // PLANKS, with gaps between them. It was one flat rectangle with fourteen
+  // evenly pitched strokes drawn on it — the luminance profile quantised to
+  // three levels at a fixed pitch, which is a barcode, not a fence.
   ctx.save();
-  ctx.beginPath(); ctx.rect(0, wallTop, W, horizon - wallTop); ctx.clip();
-  let px2 = 0, k = 0;
+  ctx.beginPath(); ctx.rect(0, wallTop - H * 0.02, W, horizon - wallTop + H * 0.02); ctx.clip();
+  let px2 = -W * 0.02, k = 0;
   while (px2 < W + W * 0.1){
-    const wq = W * (0.052 + tnoise(k * 5.7) * 0.048);
-    const lean = (tnoise(k * 9.1) > 0.86 ? (tnoise(k * 2.3) - 0.5) * W * 0.02 : 0);
-    ctx.fillStyle = 'rgba(255,232,190,' + (0.02 + tnoise(k * 3.3) * 0.05).toFixed(3) + ')';
+    const wq = W * (0.040 + tnoise(k * 5.7) * 0.038);
+    const gap = W * (0.003 + tnoise(k * 11.3) * 0.005);
+    const lean = (tnoise(k * 9.1) > 0.78 ? (tnoise(k * 2.3) - 0.5) * W * 0.024 : 0);
+    // each plank is its own board: its own tone, and its own height
+    const tone = 0.62 + tnoise(k * 3.3) * 0.55;
+    const topJag = wallTop + (tnoise(k * 7.9) - 0.5) * H * 0.014;
+    const r2 = Math.round(58 * tone), g2 = Math.round(42 * tone), b2 = Math.round(27 * tone);
+    ctx.fillStyle = 'rgb(' + r2 + ',' + g2 + ',' + b2 + ')';
     ctx.beginPath();
-    ctx.moveTo(px2, horizon); ctx.lineTo(px2 + lean, wallTop);
-    ctx.lineTo(px2 + wq + lean, wallTop); ctx.lineTo(px2 + wq, horizon);
+    ctx.moveTo(px2, horizon); ctx.lineTo(px2 + lean, topJag);
+    ctx.lineTo(px2 + wq + lean, topJag + (tnoise(k * 4.1) - 0.5) * H * 0.008);
+    ctx.lineTo(px2 + wq, horizon);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(8,6,4,.62)'; ctx.lineWidth = Math.max(1.4, W * 0.005);
-    ctx.beginPath(); ctx.moveTo(px2, horizon); ctx.lineTo(px2 + lean, wallTop); ctx.stroke();
-    px2 += wq; k++;
+    // a lit arris down the left of each board, and the dark of the gap
+    ctx.fillStyle = 'rgba(255,232,190,.09)';
+    ctx.fillRect(px2 + lean * 0.5, topJag, Math.max(1, W * 0.003), horizon - topJag);
+    ctx.fillStyle = 'rgba(6,4,2,.85)';
+    ctx.fillRect(px2 + wq, topJag, gap, horizon - topJag);
+    px2 += wq + gap; k++;
   }
   ctx.restore();
+  // the rail across the top of them
   ctx.fillStyle = '#4a361f'; ctx.fillRect(0, wallTop, W, Math.max(2, H * 0.012));
-  // torches along the top of the fence, breathing
+  ctx.fillStyle = 'rgba(255,226,170,.14)'; ctx.fillRect(0, wallTop, W, Math.max(1, H * 0.004));
+
+  // CANDLES. Three lamps used to hang over the fence contributing nothing to
+  // it — the boards measured DARKER under a flame than beside one, because the
+  // glow was a small disc that terminated in the sky. Each one now throws a
+  // wash across the boards behind it, and a pool onto the floor below.
   const flick = 0.72 + 0.28 * Math.sin((F ? F.t : 0) * 7);
+  const candleX = [];
   for (let i = 1; i <= 3; i++){
     const tx = W * (i / 4);
-    ctx.fillStyle = '#2b1d12'; ctx.fillRect(tx - W * 0.008, wallTop - H * 0.04, W * 0.016, H * 0.04);
-    const g = ctx.createRadialGradient(tx, wallTop - H * 0.04, 1, tx, wallTop - H * 0.04, W * 0.09);
-    g.addColorStop(0, 'rgba(255,200,110,' + (0.55 * flick).toFixed(2) + ')');
+    candleX.push(tx);
+    const cy2 = wallTop - H * 0.04;
+    // the wash on the boards
+    const wash = ctx.createRadialGradient(tx, wallTop + H * 0.02, 2, tx, wallTop + H * 0.02, W * 0.20);
+    wash.addColorStop(0, 'rgba(255,196,112,' + (0.26 * flick).toFixed(3) + ')');
+    wash.addColorStop(1, 'transparent');
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, wallTop - H * 0.01, W, horizon - wallTop + H * 0.01);
+    ctx.fillStyle = '#2b1d12'; ctx.fillRect(tx - W * 0.008, cy2, W * 0.016, H * 0.04);
+    const g = ctx.createRadialGradient(tx, cy2, 1, tx, cy2, W * 0.11);
+    g.addColorStop(0, 'rgba(255,200,110,' + (0.6 * flick).toFixed(2) + ')');
     g.addColorStop(1, 'transparent');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(tx, wallTop - H * 0.04, W * 0.09, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(tx, cy2, W * 0.11, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ffd07a';
-    ctx.beginPath(); ctx.ellipse(tx, wallTop - H * 0.046, W * 0.011, H * 0.016 * flick, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(tx, cy2 - H * 0.006, W * 0.011, H * 0.016 * flick, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff3d0';
+    ctx.beginPath(); ctx.ellipse(tx, cy2 - H * 0.004, W * 0.005, H * 0.008 * flick, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   // --- the sand ------------------------------------------------------------
@@ -4551,6 +4596,14 @@ function drawPit(){
       ctx.beginPath(); ctx.moveTo(-sz2 * 1.5, 0); ctx.lineTo(sz2 * 1.5, 0); ctx.stroke();
     }
     ctx.restore();
+  }
+  // the pool each candle throws down onto the sand
+  for (const tx of candleX){
+    const pool = ctx.createRadialGradient(tx, sandTop + sandH * 0.10, 2,
+      tx, sandTop + sandH * 0.10, W * 0.30);
+    pool.addColorStop(0, 'rgba(255,190,104,' + (0.16 * flick).toFixed(3) + ')');
+    pool.addColorStop(1, 'transparent');
+    ctx.fillStyle = pool; ctx.fillRect(0, sandTop, W, sandH * 0.6);
   }
   // the corners go dark: nothing happens out there
   const vig = ctx.createRadialGradient(W * 0.5, sandTop + (H - sandTop) * 0.55, W * 0.24,
@@ -4644,13 +4697,26 @@ function drawPit(){
   const scaleAt = (y) => 0.80 + 0.40 * (y / AH);
 
   const order = F.units.slice().sort((a2, b2) => a2.y - b2.y);
+  // RANK, don't jitter. A per-id nudge of +-0.26 SPR is an order of magnitude
+  // too small to break a stack, so six units still stood in one 180px column
+  // with 60% of the pit empty. Each side's living units take a numbered slot,
+  // and the slot fans them across the sand. Draw offset only — the fight is
+  // untouched.
+  const ranks = { us: [], them: [] };
+  for (const u2 of order) if (u2.alive) ranks[u2.side].push(u2);
+  const fanOf = (u2) => {
+    const list = ranks[u2.side];
+    const i = list.indexOf(u2);
+    if (i < 0) return 0;
+    return (i - (list.length - 1) / 2) * SPR * 0.62;
+  };
   // --- shadows first, so nothing floats -----------------------------------
   for (const u of order){
-    const sc = scaleAt(u.y), x = px(u.x) + ((u.id * 37) % 5 - 2) * SPR * 0.13, y = py(u.y);
+    const sc = scaleAt(u.y), x = px(u.x) + fanOf(u), y = py(u.y);
     ctx.globalAlpha = u.alive ? 0.36 : 0.10;
     // a tinted pool, not a grey one: in a crowded pit the colour under the feet
     // is how you tell your lot from theirs at a glance
-    ctx.fillStyle = u.side === 'us' ? '#1f3d0c' : '#3d1408';
+    ctx.fillStyle = u.side === 'us' ? '#241d0a' : '#2a1408';
     ctx.beginPath(); ctx.ellipse(x, y, SPR * 0.26 * sc, SPR * 0.075 * sc, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1;
@@ -4658,11 +4724,7 @@ function drawPit(){
   // --- the beasts ----------------------------------------------------------
   for (const u of order){
     const sc = scaleAt(u.y);
-    // Everything converges on the nearest foe, so six units end up in one
-    // vertical column with no lateral offset at all. Fan them by id — a draw
-    // offset only; the fight itself is untouched.
-    const fan = ((u.id * 37) % 5 - 2) * SPR * 0.13;
-    const x = px(u.x) + fan, y = py(u.y);
+    const x = px(u.x) + fanOf(u), y = py(u.y);
     const spr = spriteFor(u.c);
     const w = SPR * sc, h = SPR * sc * (104 / 128);
     ctx.save();
@@ -4700,32 +4762,26 @@ function drawPit(){
     // a little dust off the heels of anything running
     if (u.moving && ((u.id * 7 + Math.floor(F.t * 14)) % 5 === 0))
       pitAdd({ k: 'dust', x: u.x - (u.side === 'us' ? 1.4 : -1.4), y: u.y, t: 0, life: 0.4 });
-    // the sprite's own painted top, plus a real gap
+  }
+
+  // --- SECOND PASS: everything that has to be readable ---------------------
+  // Bars, tags and pips used to be drawn INSIDE the depth-sorted sprite loop,
+  // so every nearer animal painted over the previous one's bar. Lifting bars in
+  // x-buckets to dodge that left them floating with bare sand underneath, which
+  // is worse — a bar you cannot assign to a unit tells you nothing. They all go
+  // on top now, each pinned the same distance above its own animal.
+  for (const u of order){
+    if (!u.alive) continue;
+    const sc = scaleAt(u.y);
+    const x = px(u.x) + fanOf(u), y = py(u.y);
+    const spr = spriteFor(u.c);
+    const h = SPR * sc * (104 / 128);
     const paintTop = y - h + h * 0.04 + ((spr._top || 0) / 104) * h;
-    let top = paintTop - SPR * 0.14;
-    // Health, ALWAYS. It used to appear only once something was hurt, which
-    // means the one moment you most want to compare two animals — before they
-    // reach each other — is the one moment neither has a bar.
-    // A LOZENGE IN A WELL, in the same vocabulary as the bone cost token.
-    // Its LENGTH is how much health the animal has in total, so you can
-    // compare a tank against a runt before either of them takes a hit — a
-    // fixed-width bar made every beast look the same size, which is the one
-    // thing the bar exists to stop.
+
     const bulk = Math.max(0, Math.min(1, u.max / 60));
     const bw = SPR * (0.20 + 0.28 * bulk) * sc, bh = Math.max(3.5, H * 0.0085);
-    // Bars step UPWARD in x-buckets. Pairwise de-collision did not survive six
-    // units in one column; a deterministic stack index does.
-    // capped at two steps: a bar lifted five deep floats off its own animal,
-    // which is worse than two bars touching
-    let stack = 0;
-    for (const o of order){
-      if (o === u || !o.alive) continue;
-      if (Math.abs(px(o.x) - px(u.x)) > SPR * 0.5) continue;
-      if (o.y < u.y) stack++;
-    }
-    top -= Math.min(2, stack) * bh * 2.4;
-    const bx = x - bw / 2, by = top - bh;
-    const cap = bh / 2;
+    const by = paintTop - bh - SPR * 0.10;
+    const bx = x - bw / 2, cap = bh / 2;
     const pill = (px2, py2, pw, ph, r) => {
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(px2, py2, Math.max(pw, r * 2), ph, r);
@@ -4733,36 +4789,30 @@ function drawPit(){
     };
     ctx.fillStyle = 'rgba(6,9,4,.9)';
     pill(bx - 1.8, by - 1.8, bw + 3.6, bh + 3.6, cap + 1.8); ctx.fill();
-    // the empty part is BONE, not black — the well shows what it has lost
-    ctx.fillStyle = '#8b7a55';
+    // the empty part is DARK. Bone was brighter than the sand, so an animal at
+    // one tenth health still read as a full bright bar.
+    ctx.fillStyle = '#241d10';
     pill(bx, by, bw, bh, cap); ctx.fill();
     const frac = Math.max(0, Math.min(1, u.hp / u.max));
     if (frac > 0){
       ctx.save(); pill(bx, by, bw, bh, cap); ctx.clip();
       ctx.fillStyle = u.side === 'us' ? '#8fd344' : '#e05540';
       ctx.fillRect(bx, by, bw * frac, bh);
-      // an ochre bottom edge instead of a white gloss on the top half
       ctx.fillStyle = u.side === 'us' ? 'rgba(60,92,20,.75)' : 'rgba(112,26,16,.75)';
       ctx.fillRect(bx, by + bh * 0.62, bw * frac, bh * 0.38);
       ctx.restore();
     }
     ctx.strokeStyle = 'rgba(50,38,18,.85)'; ctx.lineWidth = 1;
     pill(bx, by, bw, bh, cap); ctx.stroke();
-    // the leader gets a crown notch on its bar; nothing else needs a label,
-    // because the bar colour and the tinted pool under the feet already say
-    // whose it is and six word-tags stacked into an unreadable pile
     if (u.c.leader){
       ctx.fillStyle = '#ffd34d';
       ctx.beginPath();
       ctx.moveTo(x - bw * 0.16, by - 1); ctx.lineTo(x, by - bh * 2.1);
       ctx.lineTo(x + bw * 0.16, by - 1); ctx.closePath(); ctx.fill();
     }
-    // What this one DOES, in three letters. You cannot read a keyword off a
-    // procedural animal, and finding out by being poisoned is too late.
+
     const kw = THREAT_TAG[u.c.trait];
     if (kw){
-      // the game has two embedded faces; the pit used to use neither, and the
-      // plate was a fixed width so the last letter was clipped
       const fs = Math.max(7, W * 0.021);
       ctx.font = '900 ' + fs.toFixed(0) + 'px Beastcut, system-ui, sans-serif';
       ctx.textAlign = 'center';
@@ -4776,10 +4826,9 @@ function drawPit(){
       ctx.fillStyle = kw[1];
       ctx.fillText(kw[0], x, ty);
     }
-    // status pips
     const pr = Math.max(2.5, W * 0.007);
     let sx = x - pr * 2;
-    const py2 = by - (kw ? Math.max(7, W * 0.021) * 2.6 : Math.max(2.5, W * 0.007) * 3);
+    const py2 = by - (kw ? Math.max(7, W * 0.021) * 2.6 : pr * 3);
     if (u.pois > 0){ ctx.fillStyle = '#b6ff8a'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); sx += pr * 3; }
     if (u.stun > 0){ ctx.fillStyle = '#ffd34d'; ctx.beginPath(); ctx.arc(sx, py2, pr, 0, 7); ctx.fill(); }
   }
@@ -4856,8 +4905,8 @@ function drainArena(){
         dir: e.side === 'us' ? 1 : -1, t: 0, life: 0.20 });
     } else if (e.k === 'hit'){
       pitAdd({ k: 'ring', x: e.x, y: e.y, v: e.dmg, t: 0, life: 0.26 });
-      pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffcf8a',
-        big: e.dmg >= 9, t: 0, life: 0.8 });
+      pitAdd({ k: 'num', x: e.x, y: e.y, v: e.dmg, col: e.thorns ? '#ffb0e0' : '#ffffff',
+        big: e.dmg >= 9, dir: ((e.id || 1) % 2) ? 1 : -1, t: 0, life: 0.8 });
       for (let i = 0; i < (e.dmg >= 9 ? 6 : 3); i++)
         pitAdd({ k: 'spark', x: e.x, y: e.y, dx: (rng() - .5) * 2.4, dy: -rng() * 1.2, t: 0, life: 0.42 });
       sfxStrike(e.dmg);
@@ -5400,7 +5449,7 @@ function revealLitter(){
     tagline.className = 'tagline';
     if (!HEADLESS && tagline.style) tagline.style.visibility = 'hidden';
     const d = (v, l) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
-      (v >= 0 ? '▲' : '▼') + Math.abs(Math.round(v * 10) / 10) + ICO(l) + '</span>';
+      (v >= 0 ? '+' : '\u2212') + Math.abs(Math.round(v * 10) / 10) + ICO(l) + '</span>';
     // A bigger chick can land in a higher Feed bracket. That is a real price and
     // the player is choosing RIGHT NOW, so say it here rather than let them find
     // out in the next fight.
@@ -5450,69 +5499,49 @@ const GENE_SPOTS = {
   tail:  { x: 0.15, y: 0.66, lbl: 'tail' },
   body:  { x: 0.72, y: 0.60, lbl: 'build' },
 };
-/** One thread from a parent to the gene it gave, plus a caption. The thread
- *  stops 12px SHORT of the label and the label is anchored in the card's lower
- *  band, so it points at the feature rather than covering the chick's face. */
-function rline(x1, y1, x2, y2, label, isNew, lab0){
-  const L = fxLayer(); if (!L || !L.appendChild) return;
-  const or0 = fxOrigin();
-  x1 -= or0.x; y1 -= or0.y; x2 -= or0.x; y2 -= or0.y;
-  if (lab0) lab0 = { x: lab0.x - or0.x, y: lab0.y - or0.y };
-  const dx = x2 - x1, dy = y2 - y1;
-  const len = Math.max(0, Math.sqrt(dx * dx + dy * dy) - 12);
-  const a = Math.atan2(dy, dx) * 180 / Math.PI;
-  const d = document.createElement('div');
-  d.className = 'rline';
-  d.style.left = x1 + 'px'; d.style.top = y1 + 'px';
-  d.style.transform = 'rotate(' + a.toFixed(1) + 'deg)';
-  d.style.width = '0px';
-  L.appendChild(d);
-  if (d.animate) d.animate([{ width: '0px' }, { width: len.toFixed(0) + 'px' }],
-    { duration: 260, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
-  else d.style.width = len.toFixed(0) + 'px';
-  const lab = document.createElement('div');
-  lab.className = 'rlab' + (isNew ? ' nw' : '');
-  lab.textContent = label;
-  lab.style.left = (lab0 ? lab0.x : x2) + 'px';
-  lab.style.top = (lab0 ? lab0.y : y2) + 'px';
-  L.appendChild(lab);
-  at(2000, () => { if (d.remove) d.remove(); if (lab.remove) lab.remove(); });
-}
-/** 900ms of "here is where this animal came from". */
+/** Which parent gave which feature, said in words on the card.
+ *
+ *  This used to be a drawn thread from the parent card to a point on the chick
+ *  with a caption pill at the end of it. Three critic passes running, the
+ *  thread scratched across the parent's art and stat row and ended anchored to
+ *  nothing, and the pill sat over the chick's eyes and crest — the only pixels
+ *  that would let you read the inherited feature. A line that points at the
+ *  thing it is hiding is worse than no line.
+ */
 function resemblance(wrap, res){
   if (HEADLESS || RM()) return;
   const L = fxLayer(); if (L) L.innerHTML = '';
   const h = R.lastHatch; if (!h) return;
   const prov = res.child.vis && res.child.vis.prov;
   if (!prov) return;
-  const cards = $('hParents') && $('hParents').querySelectorAll
-    ? $('hParents').querySelectorAll('.card') : null;
-  if (!cards || cards.length < 2) return;
-  const pr = [rectOf(cards[0]), rectOf(cards[1])];
-  const cv = wrap.querySelector && wrap.querySelector('canvas');
   const card = wrap.querySelector && wrap.querySelector('.card');
-  const cr = rectOf(cv);
-  const kr = rectOf(card) || cr;
-  if (!cr || !pr[0] || !pr[1]) return;
-  // four at most: six captions stacked up the card climb back over the face
-  const keys = Object.keys(GENE_SPOTS).filter((k) => prov[k]).slice(0, 4);
+  if (!card) return;
+  let strip = card.querySelector && card.querySelector('.resem');
+  if (!strip){
+    strip = document.createElement('div');
+    strip.className = 'resem';
+    card.appendChild(strip);
+  }
+  strip.innerHTML = '';
+  // Two at most, and never the same parent twice: it printed "hue — Grunthide
+  // / horns — Grunthide / wings — Grunthide" as a stacked outlined list, which
+  // reads as form validation and grew the card off its neighbour's baseline.
+  const seen = {};
+  const keys = Object.keys(GENE_SPOTS).filter((k) => {
+    if (!prov[k]) return false;
+    if (seen[prov[k]]) return false;
+    seen[prov[k]] = 1; return true;
+  }).slice(0, 2);
   keys.forEach((k, i) => {
     const who = prov[k], sp = GENE_SPOTS[k];
     at(i * 190, () => {
-      if (cur !== 'hatch') return;
-      const src = who === 'new'
-        ? { left: cr.left + cr.width / 2 - 1, top: cr.top - 30, width: 2, height: 2 }
-        : pr[who === 'a' ? 0 : 1];
-      const nm = who === 'new' ? 'NEW' : shortName(who === 'a' ? h.a.name : h.b.name) + '’s ' + sp.lbl;
-      // The caption stacks DOWN the card's art, which is the one band with
-      // nothing to read on it. The lower band carries the name, the stats and
-      // the trait tab, and a label parked there covered all three.
-      // Up from the FOOT OF THE ART WELL — not the canvas, which is shorter and
-      // put "the bottom of the portrait" straight across the chick's face.
-      const well = rectOf(wrap.querySelector && wrap.querySelector('.art')) || cr;
-      const lab0 = { x: well.left + 6, y: well.top + well.height - 20 - (keys.length - 1 - i) * 18 };
-      rline(src.left + src.width / 2, src.top + src.height / 2,
-        cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', lab0);
+      if (cur !== 'hatch' || !strip.appendChild) return;
+      const row = document.createElement('span');
+      row.className = 'rsm' + (who === 'new' ? ' nw' : '');
+      row.textContent = who === 'new' ? sp.lbl + ' — new'
+        : sp.lbl + ' — ' + shortName(who === 'a' ? h.a.name : h.b.name);
+      strip.appendChild(row);
+      anim(row, 'pop', 340);
       tone(who === 'new' ? 980 : 620 + i * 60, 0.07, { type: 'sine', vol: 0.035 });
     });
   });
@@ -5535,7 +5564,7 @@ function chickBanners(res){
 function showChickDetail(res){
   const c = res.child;
   const fmt = (v, lbl) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
-    (v >= 0 ? '▲' : '▼') + Math.abs(Math.round(v * 10) / 10) + ' ' + lbl + '</span>';
+    (v >= 0 ? '+' : '\u2212') + Math.abs(Math.round(v * 10) / 10) + ' ' + lbl + '</span>';
   $('hBanners').innerHTML = res.tags.indexOf('inbred') >= 0
     ? '<span class="banner warn">THAT WAS ITS COUSIN</span>' : '';
   $('hDeltas').innerHTML = '<b>' + c.name + '</b> vs. the average parent: ' +
