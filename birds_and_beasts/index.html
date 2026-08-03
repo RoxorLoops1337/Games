@@ -5178,6 +5178,7 @@ function drawPit(){
     for (const u of F.units) if (u.id === f.uid) return u;
     return null;
   };
+  const placedNums = [];
   for (const f of pitFx){
     const own = fxUnit(f);
     let x = px(f.x) + (own ? (own._fx || 0) : 0), y = py(f.y) + (own ? (own._fy || 0) : 0);
@@ -5228,14 +5229,16 @@ function drawPit(){
       // not a second typeface
       ctx.lineWidth = Math.max(1.5, W * 0.006); ctx.strokeStyle = 'rgba(0,0,0,.92)';
       ctx.lineJoin = 'round';
-      // pops up fast, then floats
-      const rise = (1 - k) < 0.25 ? (1 - k) * 2.4 : 0.6 + (1 - k) * 0.5;
-      const nx = x + (f.jx || 0) * SPR * 0.30;
+      // pops up fast, then floats — but NOT far. At 1.1 the total offset reached
+      // 1.38 sprite-heights, which put the number ~270px above the animal that
+      // took the hit: still legible, still the right number, attached to nothing.
+      const rise = (1 - k) < 0.25 ? (1 - k) * 1.5 : 0.375 + (1 - k) * 0.28;
+      let nx = x + (f.jx || 0) * SPR * 0.30;
       // and it stays IN THE PIT. A hit on a unit at the back of the sand rose
       // 1.4 sprite-heights and printed the damage halfway up the fence, with no
       // animal within 200px of it — a number in the sky belongs to nothing.
-      let ny = Math.max(horizon + SPR * 0.34,
-        y - SPR * 0.55 - rise * SPR * 0.75 + (f.jy || 0) * SPR);
+      const ny0 = y - SPR * 0.42 - rise * SPR * 0.75 + (f.jy || 0) * SPR;
+      let ny = Math.max(horizon + SPR * 0.34, ny0);
       // AND IT DODGES THE BARS. The overhead pass reserves a footprint for each
       // animal's bar, tag and HP numeral — and the number, drawn in a later
       // loop, parked straight through it. So the salmon bar was printed across
@@ -5247,9 +5250,26 @@ function drawPit(){
         let hit = null;
         for (const q of placedBars)
           if (r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0){ hit = q; break; }
-        if (!hit || ny - (r.y1 - hit.y0) < horizon + SPR * 0.34) break;
-        ny -= (r.y1 - hit.y0) + 2;
+        if (!hit) break;
+        // and the dodge is capped: climbing past half a sprite to clear a bar
+        // trades one bad read for another
+        const step = (r.y1 - hit.y0) + 2;
+        if (ny - step < horizon + SPR * 0.34 || ny0 - ny > SPR * 0.5) break;
+        ny -= step;
       }
+      // AND THEY DODGE EACH OTHER. The floor clamp lands every number that
+      // would have risen off the top of the pit on the SAME row, so two hits on
+      // two different animals printed one on top of the other and a -4 beside a
+      // -2 read as "-42". Up is already spent by then, so they part sideways.
+      for (let g2 = 0; g2 < 8; g2++){
+        const r2 = { x0: nx - nw2, x1: nx + nw2, y0: ny - fs * 0.82, y1: ny + fs * 0.24 };
+        let h2 = null;
+        for (const q of placedNums)
+          if (r2.x0 < q.x1 && r2.x1 > q.x0 && r2.y0 < q.y1 && r2.y1 > q.y0){ h2 = q; break; }
+        if (!h2) break;
+        nx += (nx >= (h2.x0 + h2.x1) / 2 ? 1 : -1) * (nw2 + (h2.x1 - h2.x0) * 0.5 + 3);
+      }
+      placedNums.push({ x0: nx - nw2, x1: nx + nw2, y0: ny - fs * 0.82, y1: ny + fs * 0.24 });
       ctx.strokeText('-' + f.v, nx, ny);
       ctx.fillStyle = f.big ? '#fff0b0' : (f.col || '#ffffff');
       ctx.fillText('-' + f.v, nx, ny);
