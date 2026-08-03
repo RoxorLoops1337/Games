@@ -3457,6 +3457,103 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* =========================================== the furniture is made of something
+   "Make it feel like a game and less like an app." The panel was the same
+   blue-grey slab as the world behind it, in the same system font, with 1px
+   hairlines round everything and flat rectangles for buttons — which is a very
+   good admin dashboard, and read as one bolted under a picture.
+
+   What is asserted here is the SYSTEM, not the taste: that there is a material
+   and it is used consistently, that a thing you can press has thickness and
+   loses it when pressed, that the display face costs no download, and that the
+   old flat-slab values do not creep back one rule at a time. A screenshot
+   cannot be a test; these properties can.                                   */
+{
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const root = css.slice(0, css.indexOf('}'));
+
+  // ---- there is a material, and it is named
+  for (const v of ['--brass', '--brass-lo', '--brass-hi', '--brass-dk'])
+    t.ok(new RegExp(v + ':#').test(root), 'the metal has a value: ' + v);
+  t.ok(/--shelf:/.test(root) && /--grain:/.test(root) && /--rivets:/.test(root),
+    'and so do the three things that make a surface out of a rectangle — thickness, grain, rivets');
+
+  /* ---- a thing you can press has thickness, and the press takes it away.
+     A shelf without travel is a sticker; travel without a shelf is a rectangle
+     sliding about. They only mean anything as a pair, so both are checked, on
+     every control that takes a click. */
+  // At the START of a rule, not anywhere the characters happen to appear.
+  // `css.indexOf('.abtn{')` finds it inside `.pgrid > .abtn{ min-width:166px }`
+  // — a real rule, three properties short of the one being asked about, and
+  // the assertion fails on a block that was never the subject.
+  const block = (sel) => {
+    const m = new RegExp('(?:^|\\n)\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{')
+      .exec(css);
+    if (!m) return '';
+    const i = m.index + m[0].length;
+    return css.slice(i, css.indexOf('}', i));
+  };
+  for (const sel of ['.abtn', '.sq', '.tbtn', '.hnew', '.big']){
+    const face = block(sel), press = block(sel + ':active') || block(sel + ':active:not(:disabled)');
+    t.ok(/var\(--shelf|0 \d+px 0 /.test(face),
+      sel + ' has a shelf under it, so it reads as a thing with thickness');
+    t.ok(/translateY\(\s*[2-9]/.test(press),
+      sel + ' travels far enough on a press to be felt, not just tinted (' +
+      ((press.match(/translateY\([^)]*\)/) || ['none'])[0]) + ')');
+    t.ok(/inset 0 \d+px/.test(press),
+      sel + ' goes INTO the panel when pressed rather than only moving down');
+  }
+
+  // ---- the display face is a stack of things already on the machine. A game
+  // face that has to be downloaded is a game face that is missing for the first
+  // second of every session, on the screen that makes the first impression.
+  t.ok(/--display:'[^']+',/.test(root), 'the display face is declared as a stack, not a single family');
+  t.ok(/serif;/.test(root.slice(root.indexOf('--display'))),
+    'ending in a generic, so there is always something to fall back to');
+  t.ok(!/@font-face/.test(SRC) && !/fonts\.googleapis/.test(SRC),
+    'and nothing is downloaded to get it');
+  // It has to actually be used on the things that NAME something, or it is a
+  // variable nobody reads.
+  for (const sel of ['.ptitle', '.sheet h2', '.big', '.vbtn'])
+    t.ok(/var\(--display\)/.test(block(sel)), sel + ' is set in the display face');
+
+  // ---- the chassis is one object: the beam at the top and the rack at the
+  // bottom are the same made thing seen from two sides, so they carry the same
+  // rail and the same rivets.
+  for (const sel of ['#top::after', '#dock::before'])
+    t.ok(/var\(--brass-hi\)/.test(block(sel)) && /var\(--brass-lo\)/.test(block(sel)),
+      sel + ' is a brass rail with a lit edge and a dark one');
+  for (const sel of ['#top::before', '#dock::after'])
+    t.ok(/var\(--rivets\)/.test(block(sel)), sel + ' is the row of rivets holding it on');
+
+  // ---- the old furniture does not creep back. These are the exact values the
+  // flat blue-grey panel was made of; one rule at a time is how a reskin gets
+  // undone, and a grep is the only thing that notices.
+  for (const dead of ['#141a26', '#1b2333', '#2a3446', '#2d3850', '#44557a'])
+    t.ok(!css.includes(dead), 'the old slate panel value ' + dead + ' is gone from the interface');
+
+  // ---- decoration that can be switched off. The badge pulses and the wave
+  // plate breathes; both sit on top of information that is also written down,
+  // so somebody who has asked for less motion can have it.
+  t.ok(/@media \(prefers-reduced-motion:reduce\)/.test(css),
+    'a player who asked for less motion gets it');
+  const rm = css.slice(css.indexOf('prefers-reduced-motion'));
+  t.ok(/animation-iteration-count:1 !important/.test(rm.slice(0, 400)),
+    'and the loops actually stop rather than merely speeding up');
+
+  // ---- and a keyboard can still see where it is. Every control is a bespoke
+  // shape now, which is exactly when the browser's own ring stops working.
+  t.ok(/:focus-visible\{[^}]*outline:/.test(css.replace(/\s+/g, ' ')) || /:focus-visible\{/.test(css),
+    'there is a focus ring for a keyboard, in the accent that already means "this one"');
+
+  // ---- the layout the last two rounds measured is untouched by the skin.
+  // A reskin that quietly moves a floor is a reskin that brings back the
+  // cut-off columns.
+  t.ok(/\.pgrid\{[^}]*flex-wrap:wrap/.test(css), 'the dock rows still wrap');
+  t.ok(/\.dsec\{[^}]*flex:0 1 auto/.test(css), 'and its columns still yield');
+  t.ok(/\.dsec\[data-col="jobs"\]\{ min-width:288px/.test(css), 'and the floors are where they were');
+}
+
 /* ----------------------------------------------- tiering the damage numbers */
 {
   IB.newMatch({ diff:'veteran', seed:5523 });
