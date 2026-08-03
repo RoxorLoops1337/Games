@@ -927,10 +927,11 @@
   .nestbar .nhp{ margin-left:auto; font-size:17px; font-weight:900; color:#ffd34d;
     font-variant-numeric:tabular-nums; }
   /* the pit: a sunken box with a lip, so the animals read as being DOWN there */
-  /* A FIXED RATIO, and a portrait one, because that is the shape this slot
-     actually is. At 4/3 the pit was stable but left a third of the phone empty
-     below it and crushed eight animals into a strip. */
-  .pit{ flex:0 0 auto; position:relative; width:100%; aspect-ratio:3 / 4;
+  /* A FIXED RATIO — the point is that it never changes, not what the number is.
+     3/4 was too tall: the pit ate the screen and the fight happened in a column.
+     Square. 4/3 was tried too and left a third of the phone empty below a strip
+     of crushed animals. */
+  .pit{ flex:0 0 auto; position:relative; width:100%; aspect-ratio:1 / 1;
     border-radius:10px; overflow:hidden;
     border:2px solid #2b3f26; background:#0d160c;
     box-shadow:inset 0 8px 22px rgba(0,0,0,.6), inset 0 -3px 0 rgba(255,220,150,.05),
@@ -1034,7 +1035,9 @@
   .verdict .vpips svg{ width:12px; height:12px; }
   .verdict .vpips{ max-width:none; }
   @keyframes vslam{ from{ transform:scale(1.5); opacity:0 } to{ transform:scale(1); opacity:1 } }
-  .benchwrap{ position:relative; flex:0 0 auto; display:flex; align-items:center;
+  /* takes whatever the fixed-height pit leaves, and centres the cards in it —
+     so a shorter arena becomes a roomier bench rather than a dead gap */
+  .benchwrap{ position:relative; flex:1 1 auto; display:flex; align-items:stretch;
     min-height:0; padding-top:7px;
     border-top:6px solid transparent;
     border-image:var(--rule-rope) 6 0 0 0 / 6px 0 0 0 / 0 repeat;
@@ -1043,23 +1046,29 @@
     pointer-events:none; background:linear-gradient(90deg, transparent, #0b120c 78%); }
   /* the bench: your barn, scrolling sideways under the field */
   .handrow{ display:flex; gap:6px; padding:4px 6px 2px; width:100%; justify-content:center;
-    min-height:31cqw; align-items:flex-end;
+    min-height:31cqw; align-items:center;
     overflow-x:auto; overflow-y:hidden; scrollbar-width:none; scroll-snap-type:x proximity; }
   .handrow::-webkit-scrollbar{ display:none; }
   /* Nothing left to send: collapse to a rail rather than reserving a card's
      worth of empty screen. Four ghost boxes used to hold a quarter of a 9:16
      phone for the whole back half of a fight; reserving the height without the
      boxes just made it a void instead. */
-  /* it keeps its height when empty. Collapsing it was what let the pit grow. */
-  .handrow:empty{ padding:4px 6px 2px; align-items:center; }
+  /* It keeps its height when empty — collapsing it was what let the pit grow.
+     And it FILLS the band the shorter pit leaves, so an empty barn is an empty
+     barn you can see rather than a caption floating in a hole. */
+  .handrow:empty{ padding:6px; align-items:stretch; }
   /* `\2014 THEY` — CSS consumes the space after a 4-hex escape as the escape's
      terminator, so the dash printed glued to the next word. `\20` is the space. */
   .handrow:empty::before{ content:'THE BARN IS EMPTY \2014\20THEY ARE ALL OUT THERE';
-    display:block; width:100%; text-align:center;
+    display:flex; align-items:center; justify-content:center; width:100%;
+    text-align:center;
     font-family:var(--f-display); font-size:9.5px; letter-spacing:2.4px; color:#6d7a5f;
-    padding:7px 0 8px; border-radius:3px;
-    background:linear-gradient(180deg, rgba(74,58,34,.34), rgba(20,26,16,.5));
-    box-shadow:inset 0 1px 0 rgba(255,220,150,.09), inset 0 -1px 0 rgba(0,0,0,.5); }
+    padding:7px 10px 8px; border-radius:6px;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 26px, rgba(0,0,0,.22) 26px 28px),
+      linear-gradient(180deg, rgba(74,58,34,.30), rgba(20,26,16,.55));
+    box-shadow:inset 0 1px 0 rgba(255,220,150,.09), inset 0 -1px 0 rgba(0,0,0,.5),
+      inset 0 0 0 1px rgba(120,150,90,.10); }
   .handrow .card{ position:relative; scroll-snap-align:center; width:22.5cqw; max-width:120px; flex:0 1 22.5cqw;
     transition:transform .12s cubic-bezier(.2,1.5,.4,1), box-shadow .12s; }
   .handrow .card:not(.dead){ cursor:pointer; }
@@ -2157,7 +2166,6 @@
       </div>
     </div>
     <div class="coach" id="coach" hidden></div>
-    <div class="grow"></div>
     <div class="benchwrap"><div class="handrow" id="hand"></div></div>
     <div class="fbar">
       <div class="feed" id="feed"></div>
