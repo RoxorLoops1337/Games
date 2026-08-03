@@ -254,7 +254,7 @@ const G = {
   flash: 0,
   contT: 0,                         // continue countdown
   contP: -1,
-  bossHp: 0, bossMax: 0, bossName: '',
+  bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '',
   time: 0,                          // seconds spent in the current stage
   sound: true, scan: true,
 };
@@ -767,6 +767,12 @@ function drawFighter(f){
   // belt / sash detail
   px(Math.min(hipX, shX) - th / 2, hipY - Math.round(2 * sc), th, Math.max(1, sc), s.trim);
 
+  if (f.tell > 0 && Math.floor(T * 14) % 2 === 0){        // he is about to do something
+    const ty = Y(pose.hipY + 30);
+    px(headX - 1, ty - 7, 3, 6, '#ff5a4a');
+    px(headX - 1, ty, 3, 2, '#ff5a4a');
+    px(headX - 3, ty - 9, 7, 1, '#ffb0a0');
+  }
   if (f.atk && f.atk.swoosh) drawAttackSwoosh(f, X, Y, pose, sc);
   if (f.weapon) drawHeldWeapon(f, X, Y, pose, sc);
 }
@@ -815,6 +821,9 @@ const ATK = {
   lunge:    { anim: 'stab',   dur: 0.36, hit: [0.12, 0.24], dmg: 12, reach: 26, kb: 60,  lift: 0,   down: false, sfx: 'blade', dash: true, seq: [[0, 0.12], [1, 0.36]] },
   lash:     { anim: 'swing',  dur: 0.55, hit: [0.22, 0.34], dmg: 9,  reach: 44, kb: 95,  lift: 20,  down: false, sfx: 'whiff', seq: [[0, 0.2], [1, 0.3], [2, 0.55]] },
   slam:     { anim: 'hook',   dur: 0.78, hit: [0.34, 0.48], dmg: 18, reach: 30, kb: 190, lift: 150, down: true,  sfx: 'heavy', quake: true, seq: [[0, 0.28], [1, 0.4], [2, 0.78]] },
+  batcharge:{ anim: 'swing',  dur: 0.62, hit: [0.20, 0.44], dmg: 19, reach: 34, kb: 200, lift: 140, down: true,  sfx: 'heavy', heavy: true, swoosh: 'weapon', arc: [150, -30], dash: true, seq: [[0, 0.14], [1, 0.2], [2, 0.3], [3, 0.44], [4, 0.62]] },
+  dashslash:{ anim: 'stab',   dur: 0.32, hit: [0.09, 0.19], dmg: 11, reach: 27, kb: 55,  lift: 0,   down: false, sfx: 'blade', dash: true, seq: [[0, 0.09], [1, 0.32]] },
+  shoulder: { anim: 'charge', dur: 0.52, hit: [0.08, 0.34], dmg: 15, reach: 22, kb: 190, lift: 110, down: true,  sfx: 'heavy', heavy: true, dash: true, seq: [[0, 0.16], [1, 0.34], [1, 0.52]] },
   flyknee:  { anim: 'jumpkick', dur: 0.6, hit: [0.06, 0.5], dmg: 14, reach: 26, kb: 160, lift: 110, down: true, sfx: 'heavy', air: true, seq: [[0, 0.6]] },
 };
 
@@ -855,7 +864,7 @@ function mkFighter(o){
     hp: o.hp || 30, hpMax: o.hp || 30, spd: o.spd || 46,
     state: 'idle', st: 0, anim: 'idle', frame: 0, animT: 0,
     atk: null, atkT: 0, atkKey: '', hitList: [],
-    stun: 0, hitFlash: 0, invuln: 0, dazed: 0, hitChain: 0,
+    stun: 0, hitFlash: 0, invuln: 0, dazed: 0, hitChain: 0, tell: 0, rage: false,
     combo: 0, comboT: 0, hits: 0, hitsT: 0,
     meter: 0, stocks: 0, superT: 0, superI: 0, tokens: 0, tier: null,
     weapon: o.weapon || null, wUses: 0,
@@ -980,6 +989,7 @@ function attackTick(f, dt){
       }
     }
   }
+  if (a.quake && t0 < a.hit[1] && f.atkT >= a.hit[1]) slamShock(f);
   if (f.atkT >= SEQ_END(a)){
     f.atk = null; f.atkCd = 0.05;
     f.state = f.holding ? 'hold' : 'idle';    // a knee returns you to the hold
@@ -1034,7 +1044,7 @@ function applyHit(atk, def, a){
     atk.hits = (atk.hits || 0) + 1; atk.hitsT = 1.7;
     gainMeter(atk, dmg * 0.95);
   }
-  if (def.team === 'p') gainMeter(def, dmg * 0.5);
+  if (def.team === 'p'){ gainMeter(def, dmg * 0.5); G.dmgTaken += dmg; }
   const knock = a.down || def.z > 2 || def.hp <= 0 || (!a.nochain && def.hitChain >= 6);
   if (def.hp <= 0){ knockOut(def, atk, a); return; }
   if (a.hold && def.holder === atk){        // a knee does not spill them out of your hands
@@ -1259,6 +1269,22 @@ function superTick(f, dt){
     f.state = 'idle'; setAnim(f, 'idle', 0);
     f.vx = 0;
     f.invuln = Math.max(f.invuln, 0.4);
+  }
+}
+
+/* Hammer's slam lands on the floor, not on you — the shock carries. */
+function slamShock(f){
+  spawnFx('quake', f.x + f.face * 14, f.y, 2, '#ffb060');
+  shakeScreen(7, 0.4);
+  SFX.crunch();
+  for (const o of players){
+    if (!o || o.gone || o.dead || o.state === 'out' || o.invuln > 0 || isDown(o)) continue;
+    if (o.z > 12) continue;                       // jump the shockwave
+    const d = Math.abs(o.x - f.x);
+    if (d < 78 && Math.abs(o.y - f.y) < 34){
+      applyHit(f, o, { dmg: 9, reach: 78, kb: 120, lift: 60, down: true, sfx: 'heavy',
+        hit: [0, 1], seq: [[0, 1]], all: true });
+    }
   }
 }
 
@@ -1606,6 +1632,7 @@ function updateFighter(f, dt){
   f.atkCd = Math.max(0, f.atkCd - dt);
   f.blockT = Math.max(0, f.blockT - dt);
   f.dashT = Math.max(0, f.dashT - dt);
+  f.tell = Math.max(0, f.tell - dt);
   if (f.comboT > 0){ f.comboT -= dt; if (f.comboT <= 0) f.combo = 0; }
   if (f.hitsT > 0){ f.hitsT -= dt; if (f.hitsT <= 0) f.hits = 0; }
   if (f.dazed <= 0) f.hitChain = 0;
@@ -1978,8 +2005,12 @@ function aiControl(f, dt){
     f.state = 'idle';
   }
 
+  /* bosses drive themselves first */
+  if (f.boss && ai.mode !== 'enter' && ai.mode !== 'charge' && bossTick(f, dt, tgt, adx, ady)) return;
+  if (ai.mode === 'charge'){ chargeMode(f, ai, adx); return; }
+
   /* the gunner keeps his distance and fires */
-  if (f.gun){
+  if (f.gun && !f.boss){
     f.gunCd -= dt;
     if (adx > 76 && adx < 210 && ady < 20 && f.gunCd <= 0){
       f.gunCd = 2.4 - G.diff * 0.4;
@@ -2025,7 +2056,10 @@ function aiControl(f, dt){
         if ((f.token || tokensOut() < tokenCap()) && f.atkCd <= 0){
           f.token = true;
           ai.mode = 'wind'; ai.t = 0;
-          ai.want = 0.12 + rng() * 0.25 / Math.max(0.4, dm.aggro);
+          ai.want = (0.12 + rng() * 0.25) / Math.max(0.4, dm.aggro);
+          ai.key = pickAttack(f);                    // commit now, so the tell is honest
+          const a = ATK[ai.key];
+          if (a && (a.heavy || a.dmg >= 12)) f.tell = ai.want + 0.05;
         } else { ai.mode = 'orbit'; ai.t = 0; ai.orbit = rng() < 0.5 ? 1 : -1; }
       } else if (adx > 150){ ai.mode = 'orbit'; ai.t = 0; }
       break;
@@ -2033,23 +2067,30 @@ function aiControl(f, dt){
     case 'wind': {
       f.vx = 0; f.vy = 0; f.state = 'idle'; setAnim(f, 'idle');
       if (ai.t >= ai.want){
-        const d = ENEMY[f.kind] || ENEMY.punk;
-        let key = pick(d.atks);
-        if (f.weapon && WEAPON[f.weapon] && WEAPON[f.weapon].atk && rng() < 0.75) key = WEAPON[f.weapon].atk;
+        const key = ai.key || pickAttack(f);
         const a = ATK[key];
         if (a && (a.reach + 10) < adx){       // they drifted out of range: close again
-          f.token = false; ai.mode = 'approach'; ai.t = 0;
+          f.token = false; ai.mode = 'approach'; ai.t = 0; f.tell = 0;
           break;
         }
         if (a){
-          if (a.air){ f.state = 'jump'; f.vz = 230; f.z = 0.1; f.vx = f.face * f.spd * 1.4; f.jumpLock = true; }
-          if (a.dash) f.vx = f.face * f.spd * 2.1;
-          startAttack(f, key);
-          if (f.weapon) useWeapon(f);
+          launchAttack(f, key);
           ai.lastAtk = T;
         }
-        ai.mode = 'back'; ai.t = 0;
-        f.atkCd = 0.25 + rng() * 0.5 / Math.max(0.5, dm.aggro);
+        ai.mode = ai.follow > 0 ? 'string' : 'back';
+        ai.t = 0;
+        f.atkCd = (0.25 + rng() * 0.5) / Math.max(0.5, dm.aggro);
+      }
+      break;
+    }
+    case 'string': {                          // a boss finishing what it started
+      f.vx = 0; f.vy = 0;
+      if (ai.t > 0.16 && !f.atk){
+        ai.follow--;
+        if (ai.follow >= 0 && adx < 40 && ady < 12){
+          launchAttack(f, ai.key2 || ai.key || pickAttack(f));
+          ai.t = 0;
+        } else { ai.mode = 'back'; ai.t = 0; }
       }
       break;
     }
@@ -2076,6 +2117,120 @@ function aiControl(f, dt){
       break;
     }
   }
+}
+
+/* What this enemy would throw right now, weapon included. */
+/* Bosses get their own hand on the wheel.  Each one returns true when it has
+   taken the frame; otherwise the shared brain carries on underneath.  Below
+   half health they all turn the wick up, and the signature move is the thing
+   you learn to read. */
+function bossTick(f, dt, tgt, adx, ady){
+  const ai = f.ai;
+  if (!f.rage && f.hp < f.hpMax * 0.5){        // the turn
+    f.rage = true;
+    f.spd *= 1.18;
+    f.tell = 0.5;
+    G.flash = 0.3;
+    shakeScreen(4, 0.3);
+    SFX.siren();
+    spawnFx('score', f.x, f.y, f.z + 56, '#ff7a5a', 'ANGRY');
+    spawnFx('ring', f.x, f.y, f.z + 22, '#ff7a5a');
+  }
+  ai.sig = (ai.sig || 0) - dt;
+  const ready = ai.sig <= 0 && f.state !== 'attack' && f.z <= 0 && !f.holding;
+  const rageK = f.rage ? 0.66 : 1;
+
+  switch (f.kind){
+    case 'rook':                                  // runs at you with the bat
+      if (ready && adx > 46 && adx < 190 && ady < 14){
+        ai.sig = (4.2 + rng() * 2) * rageK;
+        f.tell = 0.42;
+        ai.mode = 'charge'; ai.t = 0; ai.key = 'batcharge';
+        return true;
+      }
+      break;
+    case 'vex':                                   // in, three cuts, out
+      if (ready && adx < 74 && ady < 14){
+        ai.sig = (3.0 + rng() * 1.6) * rageK;
+        ai.follow = f.rage ? 2 : 1;
+        ai.key = 'dashslash'; ai.key2 = 'knife';
+        ai.mode = 'wind'; ai.t = 0; ai.want = 0.1;
+        f.token = true;
+        return true;
+      }
+      break;
+    case 'hammer':                                // the floor is the attack
+      if (ready && adx < 62 && ady < 16){
+        ai.sig = (3.6 + rng() * 1.8) * rageK;
+        f.tell = 0.55;
+        ai.mode = 'wind'; ai.t = 0; ai.want = 0.5; ai.key = 'slam'; ai.follow = 0;
+        f.token = true;
+        return true;
+      }
+      break;
+    case 'nyx':                                   // never on the ground for long
+      if (ready && adx > 34 && adx < 130 && ady < 16){
+        ai.sig = (2.6 + rng() * 1.4) * rageK;
+        ai.follow = f.rage ? 1 : 0;
+        ai.key = 'flyknee'; ai.key2 = 'boot';
+        ai.mode = 'wind'; ai.t = 0; ai.want = 0.16;
+        f.token = true;
+        return true;
+      }
+      break;
+    case 'warden':                                // shoots, then runs you down
+      if (ready && adx > 60 && adx < 200 && ady < 18 && f.gunCd <= 0){
+        ai.sig = (2.8 + rng() * 1.4) * rageK;
+        f.gunCd = (2.2 - G.diff * 0.4) * rageK;
+        ai.burst = f.rage ? 2 : 1;
+        setAnim(f, 'aim', 0); f.state = 'attack'; f.atk = null; f.st = 0; f.vx = 0; f.vy = 0;
+        f.tell = 0.2;
+        fireSlug(f);
+        return true;
+      }
+      if (ready && adx > 30 && adx < 90 && ady < 12 && rng() < 0.5){
+        ai.sig = (3.4 + rng() * 1.6) * rageK;
+        f.tell = 0.34;
+        ai.mode = 'charge'; ai.t = 0; ai.key = 'shoulder';
+        return true;
+      }
+      break;
+  }
+  if (ai.burst > 0 && f.state !== 'attack' && ai.sig < 1.9){
+    ai.burst--;
+    fireSlug(f);
+    setAnim(f, 'aim', 0); f.state = 'attack'; f.atk = null; f.st = 0;
+    return true;
+  }
+  return false;
+}
+
+/* The wind-up for a signature move: stand still, flash, then commit. */
+function chargeMode(f, ai, adx){
+  f.vx = 0; f.vy = 0;
+  f.state = 'idle'; setAnim(f, 'idle');
+  if (ai.t > 0.42){
+    launchAttack(f, ai.key || 'shoulder');
+    ai.mode = 'back'; ai.t = 0;
+  }
+}
+
+function pickAttack(f){
+  const d = ENEMY[f.kind] || ENEMY.punk;
+  let key = pick(d.atks);
+  if (f.weapon && WEAPON[f.weapon] && WEAPON[f.weapon].atk && rng() < 0.75) key = WEAPON[f.weapon].atk;
+  return key;
+}
+
+/* Start an enemy attack with whatever movement it implies. */
+function launchAttack(f, key){
+  const a = ATK[key]; if (!a) return false;
+  if (a.air){ f.state = 'jump'; f.vz = 230; f.z = 0.1; f.vx = f.face * f.spd * 1.4; f.jumpLock = true; }
+  if (a.dash) f.vx = f.face * f.spd * (key === 'batcharge' || key === 'shoulder' ? 2.6 : 2.1);
+  startAttack(f, key);
+  if (f.weapon && WEAPON[f.weapon] && WEAPON[f.weapon].atk === key) useWeapon(f);
+  f.tell = 0;
+  return true;
 }
 
 function fireSlug(f){
@@ -2157,6 +2312,7 @@ function resetStage(){
   cam.x = 0; cam.targetX = 0; cam.lock = -1; cam.shakeX = 0; cam.shakeY = 0;
   G.bossHp = 0; G.bossMax = 0; G.bossName = '';
   G.time = 0;
+  G.dmgTaken = 0;
   for (let i = 0; i < G.players; i++){
     const old = players[i];
     const p = spawnPlayer(i, 40 + i * 26, FLOOR_MID + (i ? 12 : -6));
@@ -2251,10 +2407,24 @@ function onBossDown(f){
   for (let i = 0; i < 14; i++) spawnFx('chip', f.x + rr(-14, 14), f.y, 20 + rr(0, 30), '#ffd070');
 }
 
+/* A letter for how the street went: what it cost you, and how long it took. */
+const RANKS = [
+  { r: 'S', dmg: 30,  time: 105 },
+  { r: 'A', dmg: 90,  time: 150 },
+  { r: 'B', dmg: 180, time: 210 },
+  { r: 'C', dmg: 1e9, time: 1e9 },
+];
+function stageRank(dmg, time){
+  for (const g of RANKS) if (dmg <= g.dmg && time <= g.time) return g.r;
+  return 'D';
+}
+const RANK_BONUS = { S: 5000, A: 3000, B: 1500, C: 500, D: 0 };
+
 function stageClear(){
   W.clearT = 3.4;
   G.phase = 'clear';
-  const bonus = 1000 * (G.stage + 1) + Math.max(0, 4000 - Math.round(G.time * 20));
+  G.rank = stageRank(G.dmgTaken, G.time);
+  const bonus = 1000 * (G.stage + 1) + Math.max(0, 4000 - Math.round(G.time * 20)) + RANK_BONUS[G.rank];
   for (let i = 0; i < G.players; i++) if (players[i] && players[i].state !== 'out') addScore(i, bonus);
   G.lastBonus = bonus;
   SFX.clear();
@@ -2820,10 +2990,14 @@ function drawCard(){
 function drawClear(){
   px(0, 70, VW, 82, 'rgba(8,6,12,0.88)');
   px(0, 70, VW, 1, '#6a4a3a'); px(0, 151, VW, 1, '#6a4a3a');
-  textC('STAGE CLEAR', VW / 2, 78, '#ffd23d', 2, '#3a1408');
-  textC('BONUS  ' + (G.lastBonus || 0), VW / 2, 104, '#ffe9b8', 1, '#20101a');
-  textC('TIME  ' + fmtTime(G.time), VW / 2, 118, '#c08a6e', 1, '#20101a');
-  textC('SCORE  ' + (G.score[0] + (G.players > 1 ? G.score[1] : 0)), VW / 2, 132, '#c08a6e', 1, '#20101a');
+  textC('STAGE CLEAR', VW / 2, 76, '#ffd23d', 2, '#3a1408');
+  const rk = G.rank || 'C';
+  const rcol = rk === 'S' ? '#7fe0ff' : rk === 'A' ? '#7fe07f' : rk === 'B' ? '#ffd23d' : '#e0a06a';
+  textC('RANK', VW / 2 - 20, 100, '#c08a6e', 1, '#20101a');
+  text(rk, Math.round(VW / 2 + 6), 96, rcol, 2, '#20101a');
+  textC('BONUS  ' + (G.lastBonus || 0), VW / 2, 116, '#ffe9b8', 1, '#20101a');
+  textC('TIME  ' + fmtTime(G.time) + '   HURT  ' + Math.round(G.dmgTaken), VW / 2, 128, '#c08a6e', 1, '#20101a');
+  textC('SCORE  ' + (G.score[0] + (G.players > 1 ? G.score[1] : 0)), VW / 2, 140, '#c08a6e', 1, '#20101a');
 }
 
 function drawContinue(){
