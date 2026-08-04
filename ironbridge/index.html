@@ -2952,7 +2952,26 @@ function orderTallyForget(){
    left it there. A new match, and a save from before the fog existed, both
    started out remembering an order from the match before. */
 const foeSeen = new Array(SPELL_SLOTS).fill(null);
-const foeForget = () => { for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = null; };
+const foeForget = () => { for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = null; foeUlts.length = 0; };
+/* ...and the same discipline for their HEROES. The dock told you what wave was
+   coming and which of their orders you had seen, and said nothing at all about
+   the biggest thing on the bridge: a body that fights on its own, levels up,
+   and eventually casts something that decides a fight. Their class and level
+   are already drawn over their head in the world, so putting them in the dock
+   is convenience; their ULTIMATE is not, and it is earned the way an order is
+   — by watching it land, once, and then remembered.
+
+   Per SEAT, like foeSeen: written from simulation code, read only by the dock,
+   in no hash, and in the save for the same reason the orders are — a reload
+   that forgets what you learned is a save that lies about the fog. Kept as the
+   ids seen rather than keyed by hero, because a hero id is not stable across a
+   reload and "you have seen Cataclysm" is the fact worth keeping. */
+const foeUlts = [];
+function foeUltSeen(h, sk){
+  if (!sk || !sk.ult || forMe(h.side)) return;
+  const id = sk.id;
+  if (foeUlts.indexOf(id) < 0) foeUlts.push(id);
+}
 function castTell(s, name, n, verb, gold){
   // No HEADLESS guard: fxToast is already safe there (paintToasts returns
   // early) and every other notice from simulation code goes out the same way.
@@ -4800,6 +4819,9 @@ const needsTarget = (d) => !!(d && SKILL_NEEDS_TARGET[d.k]);
    recovery or the cast lock to be forgotten. */
 function fireSkill(h, sk, tgt){
   const d = SKILL[sk.id];
+  // Every ultimate in the game goes through here — the hero's own beat and the
+  // player's release both — so this is the one place that cannot miss one.
+  foeUltSeen(h, sk);
   castSkill(h, sk, tgt);
   h.mana -= d.mana;
   sk.cdT = d.cd * (1 - h.cdr - bsum(h, 'bcdr'));
@@ -15640,7 +15662,7 @@ function dockHtml(){
   // gets one of each. It is its own thing, so it is its own column.
   sec.bridge = '<div class="ptitle">On the bridge' +
     (pend0 || s.superT <= 0 ? '' : ' · ogres in ' + Math.ceil(s.superT) + 's') +
-    '</div><div class="insp note">' + foeWarning() + '</div>' + foeOrdersHtml();
+    '</div><div class="insp note">' + foeWarning() + '</div>' + foeHeroHtml() + foeOrdersHtml();
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -16099,6 +16121,29 @@ function spellTake(id){
    as slots rather than hidden, because "they have one more you have not seen"
    is itself worth knowing — it is the difference between a commander who has
    shown their hand and one who is holding something back. */
+/* Their hero, as far as this seat has been shown it. Two halves, deliberately:
+   what is already drawn over its head in the world (name, class, level) is
+   simply repeated here, and what is not — the one ability big enough to decide
+   the fight — is a question mark until it has been watched. */
+function foeHeroHtml(){
+  if (!G.sides.length || G.state !== 'play') return '';
+  const f = G.sides[enemyOf(MY)];
+  const live = f.heroes.filter(x => !x.dead || x.lvl > 1);
+  let h = '<div class="foeord"><span class="fol">Their hero</span><span class="fchips">';
+  if (!live.length)
+    return h + '<span class="fchip un" title="They have not forged one yet">none yet</span></span></div>';
+  for (const x of live)
+    h += '<span class="fchip" title="' + esc(x.name + ' — ' + CLS[x.cls].name + ', level ' + x.lvl) + '">' +
+      '<b>' + esc(x.name) + '</b> ' + CLS[x.cls].name + ' ' + x.lvl + '</span>';
+  for (const id of foeUlts){
+    const d = SKILL[id];
+    if (d) h += '<span class="fchip" title="' + esc(d.n + ' — ' + skNums(d, 1)) + '">' + d.n + '</span>';
+  }
+  if (!foeUlts.length)
+    h += '<span class="fchip un" title="You have not seen their ultimate yet">?</span>';
+  return h + '</span></div>';
+}
+
 function foeOrdersHtml(){
   if (!G.sides.length || G.state !== 'play') return '';
   let h = '<div class="foeord"><span class="fol">Their orders</span><span class="fchips">';
@@ -17535,6 +17580,9 @@ function saveMatch(){
       // watched land. A save that restores the board and forgets what you
       // learned from it is a save that lies about the fog.
       foe:foeSeen.slice(),
+      // ...and what this seat has watched their heroes cast, for the same
+      // reason: a reload that forgets it is a save that lies about the fog.
+      foeU:foeUlts.slice(),
     }));
     return true;
   } catch (e){ return false; }
@@ -17556,6 +17604,7 @@ function loadMatch(pack){
   // already been shown. An older save simply has nothing to say, and two
   // question marks is the right answer to that.
   if (pack.foe) for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = SPELL[pack.foe[i]] ? pack.foe[i] : null;
+  if (pack.foeU) for (const id of pack.foeU) if (SKILL[id] && foeUlts.indexOf(id) < 0) foeUlts.push(id);
   G.t = pack.t; G.wave = pack.wave; G.waveT = pack.waveT;
   pack.sides.forEach((ps, i) => {
     const s = G.sides[i];
@@ -19089,6 +19138,7 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
+  foeHeroHtml, foeUlts, foeUltSeen, fireSkill,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
