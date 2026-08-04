@@ -13170,6 +13170,412 @@ t.ok(true, 'drawing an empty bridge is harmless');
   };
 }
 
+/* ================================= choosing the two orders, from the outside
+   Everything above proves the simulation. This is the half a thumb touches,
+   and the rule it is all built on:
+
+     a first press EXPLAINS an order and chooses nothing;
+     a press on the order already open TAKES it;
+     so does Accept.
+
+   Which is what lets a phone find out what Pyre Brand does without spending
+   one of its two permanent slots to read the label, and what makes one click
+   enough on a desktop — where the hover already did the explaining.
+
+   Every assertion below is about behaviour rather than taste: what a press
+   does, what it does not do, and when the window shuts.                     */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  // A hold with everything it needs, before the first wave, with the Host's own
+  // AI off so nothing chooses or casts underneath the measurement.
+  const fresh = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    rich(G.sides[0]);
+    return G.sides[0];
+  };
+  // The sheet holds the board while it is open, exactly as a hero's choice
+  // does. A test that then wants time to pass has to let it.
+  const release = () => { G.held = false; };
+
+  /* ------------------------------------------ eight icons, and eight names */
+  {
+    fresh(8500);
+    t.ok(Object.keys(IB.SPELL_ICON).length === IB.SPELLS.length,
+      'every order has an icon of its own (' + Object.keys(IB.SPELL_ICON).length + ')');
+    for (const d of IB.SPELLS){
+      const ic = IB.SPELL_ICON[d.id];
+      t.ok(typeof ic === 'string' && /^<svg /.test(ic) && /viewBox="0 0 24 24"/.test(ic),
+        d.n + '’s icon is inline SVG on the same 24 grid as the rest');
+      t.ok(!/<img|url\(|\p{Extended_Pictographic}/u.test(ic),
+        d.n + '’s icon fetches nothing and is not an emoji');
+    }
+    IB.showSpells(0);
+    const h = G.sheet;
+    for (const d of IB.SPELLS){
+      t.ok(h.includes('data-spell="' + d.id + '"'), 'the chooser offers ' + d.n);
+      t.ok(h.includes('>' + d.n + '</span>'), 'with its name printed under the icon — ' + d.n);
+      t.ok(h.includes(IB.SPELL_ICON[d.id]), 'and the icon itself — ' + d.n);
+    }
+    t.ok((h.match(/class="sptile/g) || []).length === IB.SPELLS.length,
+      'eight cards, no more and no fewer');
+    release();
+  }
+
+  /* ---------------------- a first press explains, and chooses nothing at all */
+  {
+    const s = fresh(8501);
+    IB.showSpells(0);
+    t.ok(IB.spellUI.at === null, 'the chooser opens with no order open');
+    t.ok(!/class="sptile at/.test(G.sheet), 'and no card lit');
+    t.ok(IB.spellPress('bombard') === false, 'a first press does not take');
+    t.ok(IB.spellUI.at === 'bombard', 'it opens that order instead');
+    t.ok(s.spells[0] === null && s.spells[1] === null, 'and neither slot was filled');
+    // What it opened is a real explanation, not the name again.
+    const why = IB.spellWhyHtml();
+    t.ok(why.includes(IB.SPELL.bombard.d), 'the panel prints what the order actually does');
+    t.ok(why.includes(IB.SPELL.bombard.cd + 's'), 'and how long it takes to recover');
+    t.ok(/40/.test(why), 'and what it costs');
+    // Only then does a press take it.
+    t.ok(IB.spellPress('bombard') === true, 'a second press on the SAME order takes it');
+    t.ok(s.spells[0] === 'bombard', 'into the slot that was lit');
+    release();
+  }
+
+  /* ------------- moving to a different card explains that one, and takes none */
+  {
+    const s = fresh(8502);
+    IB.showSpells(0);
+    IB.spellPress('bombard');
+    t.ok(IB.spellPress('pyre') === false, 'pressing a DIFFERENT order explains that one instead');
+    t.ok(IB.spellUI.at === 'pyre', 'and it is the one now open');
+    t.ok(s.spells[0] === null, 'with still nothing chosen');
+    t.ok(IB.spellPress('pyre') === true, 'and the second press on it takes it');
+    t.ok(s.spells[0] === 'pyre', 'so a press only ever takes what was already open');
+    release();
+  }
+
+  /* ------------------------------- a hover is the desktop's first press, and
+     nothing else. This is the whole reason a mouse needs one click and a thumb
+     needs two, from one rule rather than two code paths.                     */
+  {
+    const s = fresh(8503);
+    IB.showSpells(0);
+    t.ok(IB.spellLook('warp') === true, 'a hover opens an order');
+    t.ok(IB.spellUI.at === 'warp', 'so the panel explains it');
+    t.ok(s.spells[0] === null && s.spells[1] === null, 'and chooses nothing');
+    t.ok(IB.spellPress('warp') === true, 'the click after the hover takes it');
+    t.ok(s.spells[0] === 'warp', 'in one click, because reading it was the other press');
+    // ...and the listener has to refuse a touch, or a first TAP would hover
+    // itself open and take in the same gesture.
+    const wiring = SRC.slice(SRC.indexOf('function wire()'));
+    const over = wiring.slice(wiring.indexOf("addEventListener('pointerover'"),
+                              wiring.indexOf("addEventListener('pointerover'") + 400);
+    t.ok(/data-spell/.test(over), 'the hover listener is the one that opens an order');
+    t.ok(/pointerType/.test(over),
+      'and it is refused for anything that is not a mouse, because touch fires pointerover before a tap');
+    release();
+  }
+
+  /* --------------------------------------------- Accept does the same job */
+  {
+    const s = fresh(8504);
+    IB.showSpells(0);
+    t.ok(IB.spellAccept() === false, 'Accept with nothing open does nothing');
+    t.ok(s.spells[0] === null, 'and takes nothing');
+    t.ok(/id="spAccept"[^>]*disabled/.test(G.sheet), 'and the button itself says so');
+    IB.spellLook('rampart');
+    t.ok(/Accept Rampart/.test(IB.spellSheetHtml()), 'once an order is open the button names it');
+    t.ok(IB.spellAccept() === true, 'and Accept takes it');
+    t.ok(s.spells[0] === 'rampart', 'into the lit slot');
+    release();
+  }
+
+  /* --------------- which slot is being filled, and that it moves on by itself */
+  {
+    const s = fresh(8505);
+    IB.showSpells(0);
+    t.ok(IB.spellUI.slot === 0, 'the chooser opens on the first slot');
+    t.ok(/class="spslot on" data-act="spslot" data-slot="0"/.test(G.sheet),
+      'and the sheet says which one that is');
+    IB.spellPress('hobble'); IB.spellPress('hobble');
+    t.ok(s.spells[0] === 'hobble', 'the first order goes in');
+    t.ok(IB.spellUI.slot === 1, 'and the still-empty slot becomes the one being filled');
+    t.ok(/class="spslot on" data-act="spslot" data-slot="1"/.test(G.sheet), 'which the sheet now says');
+    IB.spellPress('unbind'); IB.spellPress('unbind');
+    t.ok(s.spells.join() === 'hobble,unbind', 'and the second goes in beside it');
+    t.ok(/data-spell="hobble"[^>]*>\s*<span class="spin">slot 1</.test(IB.spellGridHtml()),
+      'a card already in a slot is marked with which one, rather than looking free');
+    t.ok(IB.spellSlotsHtml().includes('>Hobble<') && IB.spellSlotsHtml().includes('>Unbind<'),
+      'and both slots name what is in them');
+    // The one dead end the simulation has: an order cannot fill both slots. The
+    // panel has to say so BEFORE the press, or a player walks into a refusal
+    // the interface had already promised would work.
+    IB.spellUI.slot = 1;
+    IB.spellLook('hobble');
+    t.ok(IB.spellClash() === 0, 'an order already in the other slot is a clash');
+    t.ok(/already your first order/.test(IB.spellWhyHtml()),
+      'which the panel says out loud (' + (IB.spellWhyHtml().match(/wk">([^<]*)/) || [])[1] + ')');
+    t.ok(IB.spellAcceptLabel().on === false, 'and Accept goes dead rather than promising it');
+    t.ok(IB.spellAccept() === false && s.spells.join() === 'hobble,unbind',
+      'pressing it anyway changes nothing');
+    // ...and the same order back in its OWN slot is not a clash at all.
+    IB.spellUI.slot = 0;
+    t.ok(IB.spellClash() === -1 && IB.spellAcceptLabel().on === true,
+      'the order already in the slot being filled is not a clash with itself');
+    release();
+  }
+
+  /* ------------------------ a choice can be changed, right up until it cannot */
+  {
+    const s = fresh(8506);
+    IB.showSpells(0);
+    IB.spellPress('bombard'); IB.spellPress('bombard');
+    IB.spellPress('muster');  IB.spellPress('muster');
+    t.ok(s.spells.join() === 'bombard,muster', 'both slots are full');
+    t.ok(G.wave < 1, 'and the first wave has not marched');
+    IB.spellUI.slot = 0;
+    IB.spellPress('pyre'); IB.spellPress('pyre');
+    t.ok(s.spells.join() === 'pyre,muster', 'a FULL slot can still be changed');
+    // The tile in the bar is the way back in while the window is open, which is
+    // why it does not cast in that window.
+    t.ok(/press to change it/.test(IB.ordersHtml()), 'and the order in the bar says so');
+    t.ok(IB.castPress(0) === 'still choosing', 'pressing it opens the chooser rather than casting');
+    t.ok(/Commander orders/.test(G.sheet), 'which is the sheet that comes up');
+    t.ok(s.spellCd[0] === 0, 'and nothing was cast on the way');
+
+    // ...and then the window shuts, for good.
+    release();
+    step(23);
+    t.ok(G.wave >= 1, 'the first wave marches (wave ' + G.wave + ')');
+    const was = s.spells.join();
+    IB.showSpells(0);
+    t.ok(IB.spellPress('withdraw') === false, 'a first press still only explains');
+    t.ok(IB.spellPress('withdraw') === false, 'and the second one is refused now');
+    t.ok(s.spells.join() === was, 'the orders are exactly what they were (' + s.spells.join() + ')');
+    t.ok(IB.spellAccept() === false, 'Accept cannot get round it either');
+    t.ok(s.spells.join() === was, 'and the slot still does not move');
+    release();
+  }
+
+  /* ------------------------------------- a recovering order will not go again */
+  {
+    const s = fresh(8507);
+    IB.chooseSpell(s, 0, 'muster');            // needs no target: the simplest cast
+    IB.chooseSpell(s, 1, 'bombard');
+    step(23);
+    t.ok(G.wave >= 1, 'the match is under way');
+    rich(s);
+    t.ok(IB.castPress(0) === null, 'Second Muster needs no target and goes straight out');
+    t.ok(s.spellCd[0] > 0, 'and it is recovering (' + Math.round(s.spellCd[0]) + 's)');
+    const cd = s.spellCd[0], n = G.units.length;
+    t.ok(IB.castPress(0) === 'still recovering', 'pressing it again while it recovers is refused');
+    t.ok(s.spellCd[0] === cd, 'the recovery is not restarted');
+    t.ok(G.units.length === n, 'and no second muster marched');
+    t.ok(!IB.spellUI.aim, 'nothing was armed by the refusal either');
+    t.ok(IB.spellReady(s, 0) === false, 'the order reads as not ready...');
+    t.ok(/b\.disabled = !spellReady\(s, i\)/.test(SRC),
+      '...and the tile in the bar is disabled from that same fact rather than a second one');
+    // The other half of "not ready": an order it cannot pay for.
+    s.spellCd[0] = 0;
+    s.res.food = 0; s.res.iron = 0; s.res.wood = 0;
+    t.ok(IB.spellReady(s, 0) === false, 'an order it cannot pay for is not ready');
+    t.ok(IB.castPress(0) === 'not enough resources', 'and pressing it is refused');
+    t.ok(s.spellCd[0] === 0, 'without starting a recovery it never earned');
+  }
+
+  /* ----------------- a point-targeted order cannot fire without a point on the
+     lane. The simulation will happily read a missing `x` as zero — that is what
+     lanePoint's clamp does — so the thing that must never send one is this. */
+  {
+    const s = fresh(8508);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'muster');
+    step(23);
+    rich(s);
+    const cd = s.spellCd[0], iron = s.res.iron;
+    t.ok(IB.castPress(0) === null, 'pressing Bombard is accepted');
+    t.ok(!!IB.spellUI.aim && IB.spellUI.aim.slot === 0,
+      'but what it does is ARM it (' + JSON.stringify(IB.spellUI.aim) + ')');
+    t.ok(s.spellCd[0] === cd, 'no recovery started');
+    t.ok(s.res.iron === iron, 'nothing was paid');
+    t.ok(s.bombN === 0, 'and no shell is walking the lane');
+    // A click that lands on nothing is a miss, not a cancel.
+    t.ok(IB.spellAimSend(null) === 'no target', 'a click on nothing does not fire it');
+    t.ok(!!IB.spellUI.aim, 'and the order stays armed through the miss');
+    t.ok(s.bombN === 0 && s.spellCd[0] === cd, 'still nothing in the air and nothing spent');
+    // A point is the only thing that makes it fire.
+    t.ok(IB.spellAimSend({ x:IB.lanePoint(64) }) === null, 'a point on the lane fires it');
+    t.ok(s.bombN === IB.BOMB.n, 'the shells are walking (' + s.bombN + ')');
+    t.ok(s.spellCd[0] > 0, 'and it is recovering');
+    t.ok(!IB.spellUI.aim, 'and no longer armed');
+  }
+
+  /* ---------------------------------------- and it can always be called off */
+  {
+    const s = fresh(8509);
+    IB.chooseSpell(s, 0, 'withdraw');
+    step(23);
+    rich(s);
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'Withdraw is armed');
+    t.ok(IB.castPress(0) === 'called off', 'a second press on the same order calls it off');
+    t.ok(!IB.spellUI.aim, 'and nothing is armed');
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'armed again');
+    IB.doAction('close');
+    t.ok(!IB.spellUI.aim, 'and Escape calls it off');
+    t.ok(!G.paused, 'without also doing the next thing Escape does');
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'armed once more');
+    IB.newMatch({ diff:'veteran', seed:8510 });
+    t.ok(!IB.spellUI.aim, 'and a new match starts with nothing armed');
+    t.ok(IB.spellUI.at === null && IB.spellUI.slot === 0, 'and the chooser back at its first slot');
+  }
+
+  /* --------------------------- what the click under the finger is aimed AT.
+     Its own resolver, because resolvePick's list is built for selection and
+     carries only your own heroes — and half of these orders have to be able to
+     name theirs.                                                            */
+  {
+    const s = fresh(8511);
+    IB.chooseSpell(s, 0, 'rampart');
+    IB.chooseSpell(s, 1, 'bombard');
+    step(23);
+    rich(s);
+    // a point on the lane
+    IB.castPress(1);
+    const p = IB.lp(64, 0);
+    const t1 = IB.spellAimTarget(p[0], p[1]);
+    t.ok(t1 && Math.abs(t1.x - 64) < 2,
+      'a click on the lane comes back as a point on it (' + (t1 && t1.x) + ')');
+    t.ok(t1 && t1.x === IB.lanePoint(t1.x), 'already quantised through lanePoint before it is sent');
+    IB.spellAimOff();
+    // one of your own structures
+    IB.castPress(0);
+    const st = IB.frontStruct(0);
+    const q = IB.lp(st.x, st.y);
+    const t2 = IB.spellAimTarget(q[0], q[1] - 22 * IB.cam.z);
+    t.ok(t2 && t2.key === st.key,
+      'a click on your own wall comes back as that wall (' + JSON.stringify(t2) + ')');
+    t.ok(IB.spellAimTarget(q[0] + 900, q[1]) === null,
+      'and a click nowhere near one comes back as nothing at all');
+    t.ok(IB.spellAimSend({ key:st.key }) === null, 'which is what makes the masons turn out');
+    t.ok(st.repT > 0, 'and they did (' + st.repT.toFixed(1) + 's of mending)');
+  }
+
+  /* ------------------------------------- your own hero, and only your own */
+  {
+    const s = fresh(8514);
+    s.plot[2] = { type:'tavern', lvl:3, tile:2 };
+    IB.chooseSpell(s, 0, 'warp');
+    IB.chooseSpell(s, 1, 'muster');
+    IB.createHero(s, 'fighter'); IB.autoPick(s.heroes[0]);
+    step(23);
+    rich(s);
+    const h = s.heroes[0];
+    h.dead = false; h.respawnT = 0; if (!h.inLane) IB.enterLane(h); h.dmgTaken = -99;
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'Warp Banner is armed and waiting for a body');
+    const hp = IB.lp(h.x, h.y);
+    const t3 = IB.spellAimTarget(hp[0], hp[1] - 18 * IB.cam.z);
+    t.ok(t3 && t3.hero === h.id, 'a click on your own hero comes back as that hero');
+    t.ok(IB.spellAimTarget(hp[0] + 900, hp[1]) === null, 'and one on empty ground comes back as nothing');
+    t.ok(IB.spellAimSend(t3) === null, 'so the banner goes up');
+    t.ok(h.warpT > 0, 'and it is going up (' + h.warpT.toFixed(1) + 's)');
+    // What each order asks for is written down where the player can read it.
+    for (const d of IB.SPELLS)
+      t.ok(d.target === 'self' || typeof IB.AIM_ASK[d.target] === 'string',
+        d.n + ' has a sentence asking for its target');
+  }
+
+  /* ------------------------------ the pair, where a thumb can reach them
+     They live in the bar rather than in a dock column: the dock is one tab at a
+     time on a phone, and an order is exactly the control you reach for in the
+     middle of doing something else.                                         */
+  {
+    const s = fresh(8512);
+    t.ok((IB.ordersHtml().match(/class="ord pickme"/g) || []).length === IB.SPELL_SLOTS,
+      'two empty slots in the bar, both asking to be filled');
+    IB.chooseSpell(s, 0, 'pyre'); IB.chooseSpell(s, 1, 'rampart');
+    const open = IB.ordersHtml();
+    t.ok(open.includes(IB.SPELL_ICON.pyre), 'a filled slot carries the order’s own icon');
+    t.ok(open.includes('>Pyre Brand</span>'), 'and its name beside it');
+    t.ok((open.match(/class="ocd"/g) || []).length === IB.SPELL_SLOTS,
+      'and each one has a shutter for the recovery to fill');
+    t.ok((open.match(/data-slot="/g) || []).length === IB.SPELL_SLOTS, 'two of them, and only two');
+    // Left empty when the wave marches, a slot stops being a control at all.
+    const s2 = fresh(8513);
+    step(23);
+    t.ok(G.wave >= 1 && !s2.spells[0] && !s2.spells[1], 'a hold that chose nothing, once the wave is out');
+    const shut = IB.ordersHtml();
+    t.ok((shut.match(/class="ord locked"/g) || []).length === IB.SPELL_SLOTS,
+      'both slots are dead plates rather than buttons');
+    t.ok(!/data-slot=/.test(shut), 'with nothing on them to press');
+    t.ok(IB.castPress(0) === 'nothing in that slot', 'and pressing where one was does nothing');
+  }
+
+  /* ------------------------------------ and all of it is made of the same card */
+  {
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    const block = (sel) => {
+      const m = new RegExp('(?:^|\\n)\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{').exec(css);
+      if (!m) return '';
+      const i = m.index + m[0].length;
+      return css.slice(i, css.indexOf('}', i));
+    };
+    for (const [face, press] of [['.ord', '.ord:active:not(:disabled)'], ['.spslot', '.spslot:active']]){
+      t.ok(/var\(--shelf/.test(block(face)), face + ' has a shelf under it, so it reads as a thing');
+      t.ok(/translateY\(\s*[2-9]/.test(block(press)), face + ' travels far enough on a press to be felt');
+      t.ok(/inset 0 \d+px/.test(block(press)), face + ' goes INTO the panel rather than only down');
+    }
+    t.ok(/var\(--shelf/.test(block('.sptile')), 'a card in the chooser has thickness too');
+    t.ok(/inset 0 \d+px/.test(block('.sptile:active')), 'and goes into the sheet when pressed');
+    // The ink swap. Without it every cost printed on one of these washes out.
+    const ink = css.slice(0, css.indexOf('--gold:#8a6410'));
+    const inkSel = ink.slice(ink.lastIndexOf('}') + 1);
+    for (const sel of ['.ord', '.sptile', '.spslot'])
+      t.ok(inkSel.includes(sel), sel + ' rebinds the dark-on-cream ink, so a cost on it stays readable');
+    // The running stitch, which is what says the thing is made of card.
+    const st = css.slice(0, css.indexOf('outline:1.4px dashed rgba(122,90,44,.34)'));
+    const stSel = st.slice(st.lastIndexOf('}') + 1);
+    for (const sel of ['.sptile', '.spslot'])
+      t.ok(stSel.includes(sel), sel + ' carries the running stitch');
+    // Its own rule rather than the shared one: the tile is 32px tall, and a
+    // seam set in five would be a line through the icon instead of a hem.
+    t.ok(/\.ord\{\s*outline:1\.4px dashed/.test(css),
+      'and so does the tile in the bar, at an inset that suits its height');
+    // Names are set in the display face, in small caps, like every other name.
+    for (const sel of ['.ord', '.sptile .spn', '.spslot .sv']){
+      t.ok(/var\(--display\)/.test(block(sel)), sel + ' is set in the display face');
+      t.ok(/small-caps/.test(block(sel)), 'and in small caps — ' + sel);
+    }
+  }
+
+  /* --------------------------- and none of it can decide anything on its own */
+  {
+    const at = SRC.indexOf('COMMANDER ORDERS — the interface half');
+    const end = SRC.indexOf('function adviceFor(s)');
+    t.ok(at > 0 && end > at, 'the interface half is one block that can be read on its own');
+    const mine = SRC.slice(at, end).replace(/^\s*\/\/.*$/gm, '');
+    for (const bad of ['Math.random', 'Date.now', 'fxRnd', 'performance.now'])
+      t.ok(!mine.includes(bad), 'nothing in the chooser reaches for ' + bad);
+    // It talks to the simulation through commands and through the four
+    // functions that were exported to be the seam, and through nothing else.
+    t.ok(/sendCmd\('spell'/.test(mine) && /sendCmd\('cast'/.test(mine),
+      'it changes the world only by sending the two commands');
+    t.ok(!/\bchooseSpell\s*\(/.test(mine) && !/\bcastSpell\s*\(/.test(mine),
+      'and never by calling the simulation directly');
+  }
+
+  IB.MY = seat0;
+  IB.newMatch({ diff:'veteran', seed:8599 });
+}
+
 /* ============================================== and it says what happened
    A desync or a dead socket used to leave one sentence in the advice bar and
    nothing to work from. */
