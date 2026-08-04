@@ -17047,13 +17047,32 @@ function drawAim(c){
    hold were left, which ranged from 0.00 to 5.97 across sixteen veteran
    matches — a six-fold swing decided by nothing but when you press. Measured
    over 2,838 sampled moments with a hold running: 38.3% of them had under a
-   second left, and 53.9% under two. So a player pressing Unbind because a hero
-   looks hobbled is throwing the order away more than a third of the time.
+   second left, and 53.9% under two.
 
-   The Host does not, because it reads the field: only 13.1% of its strips
-   caught a hold with under a second on it, at a mean of 3.07s against the
-   1.67s median of a random moment. The whole gap between the two is a number
-   on screen for one of them.
+   That was first written up here as "a player pressing Unbind because a hero
+   looks hobbled is throwing the order away more than a third of the time",
+   which overstates it, and the next round's measurement is the correction.
+   Sweeping a "only strip if the top hold has at least N seconds left" gate
+   through the Host over twelve matches:
+
+     gate    strips/match   sec/strip   SEC/MATCH   under 1s
+     any         7.2          2.99        21.44       15.1%
+     >=1.5s      6.3          3.59        22.74        1.3%
+     >=3s        5.9          3.72        22.00        1.4%
+
+   Per-strip quality rises 24% and the wasted presses nearly vanish, and the
+   TOTAL barely moves — 21.4 to 22.7 seconds a match, about 6%, inside the
+   noise of twelve matches. The reason is that the strip is COOLDOWN-BOUND: at
+   roughly seven casts a match against a ninety-second cooldown in a match that
+   runs a median 590s, the order goes out very nearly every time it comes back,
+   so a press spent early mostly just means the next one arrives sooner.
+
+   Which is worth being straight about, because it prices this label honestly.
+   It is not worth double. It tells you whether THIS press is a good one — the
+   difference between 0.4s and 4.4s is real and was invisible — and over a
+   match that is worth a few percent rather than a transformation. The number
+   is still true and still nowhere else on screen; the claim about what it buys
+   is the part that needed correcting.
 
    The status icons already fade with the timer — statusFade — but an alpha
    ramp is a mood, not a quantity, and "0.4s" and "4.4s" are the same decision
