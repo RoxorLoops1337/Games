@@ -2903,14 +2903,22 @@ const NUM_WORD = (n) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', '
    as likely to teach you to take Warp Banner beside Unbind.
 
    Ordered by how universal they are: everybody has a lane, most matches have
-   an enemy hero, every hold has walls, and a hero of your own is the one
-   thing you might never get round to building. */
+   an enemy hero, every hold has walls, and a hero of your own is the one that
+   arrives last — measured at a median of 271 seconds, over half a match after
+   these are chosen. */
 const SPELL_GROUPS = [
   { k:'lane',   n:'The lane',      d:'a stretch of bridge, and whatever is standing on it' },
   { k:'theirs', n:'Their hero',    d:'one body of theirs, made worse at what it does' },
   { k:'foehold', n:'Their commander', d:'the orders in the other signal room, and how soon they come back' },
   { k:'hold',   n:'Your hold',     d:'your own walls and your own wave' },
-  { k:'mine',   n:'Your hero',     d:'nothing at all until you have one on the bridge' },
+  /* The timing is the whole decision here, and the warning alone did not carry
+     it. These two are chosen in the opening twenty-two seconds and do nothing
+     until a hero exists — and a hero arrives late: measured over 28 holds,
+     every one of them forged a hero eventually, at a MEDIAN of 271 seconds
+     into a match that runs about 480. So a slot spent here is a slot that
+     spends more than half the match asleep, which is a thing to know while
+     choosing rather than a thing to find out. */
+  { k:'mine',   n:'Your hero',     d:'nothing until you have one, and most holds do not by the fourth minute' },
 ];
 
 /* ------------------------------------------------- what the cast actually did
