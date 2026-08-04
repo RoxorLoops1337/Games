@@ -1189,7 +1189,10 @@ function autoRun(seed){
   // copy: measured 26 characters as the longest that fits once the buyer's
   // article was dropped from the label.
   for (const o of G.ORDERS){
-    ok(o.want.length <= 28, o.id + ' fits the order strip (' + o.want.length + ' chars)');
+    // 28 was the budget when the pay chip read "+5"; it reads "PAYS 5" now and
+    // the longest want went back over the line at 360px, so the budget moved
+    // with the chip rather than being left to rot at a number that used to hold
+    ok(o.want.length <= 26, o.id + ' fits the order strip (' + o.want.length + ' chars)');
     ok(!/^The /.test(o.want), o.id + ' does not repeat the article the label drops');
   }
 
