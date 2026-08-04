@@ -17588,4 +17588,138 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ------------------------------- what the seventh review pass measured
+   Five defects, and the worst was a regression: the round that added THEIR
+   HERO to the dock pushed the older THEIR ORDERS row off the bottom of a
+   column that had no scrollbar and no way to say so.                      */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+
+  /* ---------------------------------- one slot per hero, not one chip per fact
+     Three of theirs is ordinary — heroCap is three — and a name chip each plus
+     an ultimate chip each grew the row past the bottom of the column. The
+     bodies are one line of text now, and the ultimates keep the SLOT rule the
+     orders row has always had: "you have seen one of three" is the fact worth
+     having, and a single chip and nothing else said the opposite. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4600 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    for (let k = 0; k < 3; k++){
+      rich(f);
+      if (IB.bList(f, 'tavern').length < 3) IB.build(f, f.plot.indexOf(null), 'tavern');
+    }
+    for (let k = 0; k < 3; k++){ rich(f); IB.createHero(f, ['mage', 'tank', 'marksman'][k]); }
+    for (const h of f.heroes){ IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true); }
+    t.ok(f.heroes.length === 3, 'they have three heroes, which the cap allows (' + f.heroes.length + ')');
+
+    IB.foeForget();
+    let html = IB.foeHeroHtml();
+    t.ok((html.match(/class="fchip un"/g) || []).length === 3,
+      'unseen, that is three question marks rather than one');
+    t.ok((html.match(/class="fchip"/g) || []).length === 0,
+      'and no name chips at all — the bodies are one line of text');
+    t.ok(/class="fname"/.test(html), 'which is what carries them (' +
+      (html.match(/class="fname"[^>]*>([^<]*)/) || [])[1] + ')');
+
+    IB.foeUlts.push('cataclysm');
+    html = IB.foeHeroHtml();
+    t.ok(html.indexOf('Cataclysm') > 0, 'one seen is named');
+    t.ok((html.match(/class="fchip un"/g) || []).length === 2,
+      'and the two you have not seen are still slots, not a gap');
+    t.ok(/fchip ult/.test(html),
+      'the ability chip is marked apart from anything else in the row');
+  }
+
+  {
+    // The column admits it scrolls. It could not always fit two rows — 169px of
+    // content in 117px at 1024x768 — and hid the older one behind no affordance.
+    const d = rule('.dsec{');
+    t.ok(!/scrollbar-width:none/.test(d), 'the dock column no longer hides its rail');
+    t.ok(/\.dsec\{[^}]*scrollbar-gutter:stable/s.test(css), 'and keeps room for it');
+    t.ok(!/scrollbar-width:thin/.test(d),
+      'and does NOT ask for a thin one, which switches Chromium to an overlay and ignores the rest');
+    t.ok(/\.dsec::-webkit-scrollbar\{ width:8px; \}/.test(SRC), 'with a rail of a real width');
+  }
+
+  /* --------------------------------------------- Brace says it is running,
+     and refuses to be spent on top of itself. The Host has always been
+     forbidden the second cast; the player was given neither the state nor the
+     refusal, and the only sign of an eight-second ward was a toast that
+     toastLife gives 3.5s and TOAST.cap can evict sooner. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4601 });
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    G.wave = 3; s.slots = 3; s.spells = ['brace', 'withdraw', 'counter']; s.spellCd = [0, 0, 0];
+    t.ok(IB.castSpell(s, { slot:0 }) === null, 'the first brace goes out');
+    t.ok(s.braceT === IB.BRACE.dur, 'for its whole duration');
+    s.spellCd[0] = 0;
+    const again = IB.castSpell(s, { slot:0 });
+    t.ok(typeof again === 'string' && /^[A-Z]/.test(again) && /\.$/.test(again),
+      'a second one on top of it is refused in a sentence (' + again + ')');
+    t.ok(s.braceT === IB.BRACE.dur && s.spellCd[0] === 0,
+      'and costs neither the brace nor the recovery');
+    t.ok(IB.aiSpellTarget(s, IB.SPELL.brace, 1) === null,
+      'which is the rule the Host was already keeping');
+    t.ok(/classList\.toggle\('up', up\)/.test(SRC),
+      'and the tile is lit for as long as it is running');
+    t.ok(/braced, ' \+ Math\.ceil\(s\.braceT\)/.test(SRC), 'with the seconds left on it');
+  }
+
+  /* ------------------------------ an attack rider is not an ability
+     Of the four things a hero's basic attack can bolt on, two travelled with
+     ability:true and were cut 40% while the pure and burn riders beside them
+     were not — split by which flag the call site happened to type, under a
+     card that promises "their heroes' abilities". */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4602 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+    fh.inLane = true; fh.dead = false; fh.x = 40; fh.y = 0;
+    const u = IB.spawnUnit(0, 'grunt', { x:41, y:0 });
+    u.hp = u.mhp = 100000;
+    step(2 / 30);
+    G.sides[0].braceT = IB.BRACE.dur;
+    let hp = u.hp; IB.dealDmg(fh, u, 1000, { ability:true, rider:true });
+    const rider = hp - u.hp;
+    hp = u.hp; IB.dealDmg(fh, u, 1000, { ability:true });
+    const cast = hp - u.hp;
+    t.ok(cast < rider * .8,
+      'a cast ability is blunted (' + cast.toFixed(1) + ')');
+    t.ok(rider > cast,
+      'and a blow bolted onto a basic attack is not (' + rider.toFixed(1) + ')');
+    t.ok(/if \(o\.ability && !o\.rider/.test(SRC), 'because the brace asks which it is');
+    t.ok(/chainHit\(u, tgt, ch, 2, true\)/.test(SRC),
+      'Stormcaller marks itself a rider');
+    t.ok(/ability:true, rider:true \}\);/.test(SRC), 'and so does Earthshaker');
+    t.ok(!/chainHit\(h, tgt, [^)]*, true\)/.test(SRC),
+      'while Arcane Torrent, which is an ultimate, does not');
+  }
+
+  {
+    // ...and the icon stops being the medic glyph on the order that does not heal.
+    const br = SRC.slice(SRC.indexOf('  brace: ico('), SRC.indexOf('  counter: ico('));
+    t.ok(!/M12 10\.4h7\.2/.test(br), 'Brace no longer wears a cross');
+    t.ok(/circle/.test(br), 'but rivets on a seam');
+    t.ok(SRC.indexOf('What the eleven are FOR') > 0, 'and the group prose counts the set it has');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();
