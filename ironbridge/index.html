@@ -8903,6 +8903,59 @@ function ogreWindow(c, x, y, st){
   endText(c);
 }
 
+/* How big a structure IS, for anything that has to draw round one. Three
+   numbers that were written out twice — once here and once in the list the
+   aim preview rings — which is exactly the arrangement where a gate quietly
+   grows and one of the two forgets. */
+const structTall = (st) => st.key === 'gate' ? 60 : st.key === 'inhib' ? 34 : 44;
+const structWide = (st) => st.key === 'gate' ? 56 : 22;
+
+/* The third half of Rampart, and the one that was missing: masons for five
+   seconds and a warded face for eight, and neither of them showed. A
+   structure under forty extra armour looked exactly like a bare one, so the
+   order's whole second effect — the half that decides whether a push is worth
+   making — was invisible to the player paying for it AND to the one walking
+   into it. */
+function drawStructMarks(c, st, X, Y, u){
+  if (st.wardT > 0){
+    // A shield standing in front of the face, in the shape the order's own
+    // icon is drawn in. It hardens as it lands and thins as it runs out.
+    const wf = statusFade(st.wardT, 2.5);
+    const w = structWide(st) * u, h = structTall(st) * u;
+    const cy = Y - h * .55;
+    // Blue rather than the icon's steel: the shield stands on a grey stone
+    // tower, and steel on stone at a third of an alpha was a shape you had to
+    // already know was there to find.
+    c.globalAlpha = (.52 + .2 * Math.sin(G.t * 3)) * wf;
+    c.strokeStyle = '#9ad8ff'; c.lineWidth = Math.max(1.6, 2.6 * cam.z);
+    c.beginPath();
+    c.moveTo(X, cy - h * .62);
+    c.lineTo(X + w * .92, cy - h * .34);
+    c.lineTo(X + w * .92, cy + h * .12);
+    c.lineTo(X, cy + h * .66);
+    c.lineTo(X - w * .92, cy + h * .12);
+    c.lineTo(X - w * .92, cy - h * .34);
+    c.closePath();
+    c.stroke();
+    c.globalAlpha = .14 * wf;
+    c.fillStyle = '#9ad8ff'; c.fill();
+    c.globalAlpha = 1;
+  }
+  if (st.repT > 0){
+    // Masons: chips of stone going UP the face, because the thing being
+    // watched is a wall getting taller rather than a body getting better.
+    const rf = statusFade(st.repT);
+    const w = structWide(st) * u, h = structTall(st) * u;
+    for (let i = 0; i < 5; i++){
+      const t = ((G.t * .8 + i * .2) % 1);
+      c.globalAlpha = (1 - t) * .8 * rf;
+      const mx = X + (i / 4 - .5) * w * 1.4;
+      ell(c, mx, Y - t * h, 2.2 * u, 2.2 * u, i & 1 ? '#ffeec6' : '#e0b871');
+    }
+    c.globalAlpha = 1;
+  }
+}
+
 function drawStructure(c, st){
   const p = lp(st.x, st.y);
   const u = cam.z, col = SIDE_COL[st.side], dead = st.dead;
@@ -9185,6 +9238,7 @@ function drawStructure(c, st){
       pennant(c, X + dir * 14 * u, Y - 78 * u, u, col, dir);
     }
   }
+  if (!dead) drawStructMarks(c, st, X, Y, u);
   if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
   else {
     if (st.downT > 0){
@@ -10229,6 +10283,114 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     c.moveTo(bx, my - r * 1.8); c.lineTo(bx, my - r * .6);
     c.moveTo(bx, my + r * .6); c.lineTo(bx, my + r * 1.8);
     c.stroke();
+    c.globalAlpha = 1;
+  }
+  /* ------------------------------------------ what a commander order left on you
+
+     Five of the eight orders land on a BODY, and until now not one of them
+     touched the picture. hobT, freeT, fallT, pyreT and warpT appeared in no
+     drawing function in the file — so a hero under Pyre Brand, losing a fifth
+     of itself a second with its mending shut off, was drawn exactly like one
+     standing in the sun, and the only way to know a Hobble had landed was to
+     watch the health bar and infer it.
+
+     They join the marks above rather than sitting beside them: same statusFade
+     off their own clock, same alpha discipline, same idiom. Each one is drawn
+     in the colour its ICON is drawn in, so the thing on the body and the thing
+     on the card are recognisably the same order. */
+  if (u.pyreT > 0){
+    /* Pure fire, and the mending shut down. Deliberately NOT the burn mark
+       above: a burn is orange licks off the shoulders, this is a white-hot
+       column standing on a scorch — because they are different things and the
+       simulation keeps them in different fields for exactly that reason. */
+    const pf = statusFade(u.pyreT);
+    c.globalAlpha = .30 * pf;
+    ell(c, bx, p[1], 8 * sc, 3.4 * sc, '#5c1b06');
+    for (let i = 0; i < 4; i++){
+      const a = G.t * 11 + i * 1.6, lift = Math.sin(a) * .5 + .5;
+      c.globalAlpha = (.62 - lift * .32) * pf;
+      ell(c, bx + Math.cos(a * .5 + i) * 2.4 * sc, by - (8 + lift * 13) * sc,
+        2.1 * sc, 3.6 * sc, i & 1 ? '#fff0c4' : '#ff7a1f');
+    }
+    // The half a player has to be told, because no amount of fire says it: the
+    // mending is off. A cross, struck through.
+    const my = by - 28 * sc, r = 3.4 * sc;
+    c.globalAlpha = (.72 + .24 * Math.sin(G.t * 7)) * pf;
+    c.lineWidth = Math.max(1.2, 1.9 * cam.z);
+    c.strokeStyle = '#8ce39a';
+    c.beginPath();
+    c.moveTo(bx - r, my); c.lineTo(bx + r, my);
+    c.moveTo(bx, my - r); c.lineTo(bx, my + r);
+    c.stroke();
+    c.strokeStyle = '#ff5a52';
+    c.beginPath(); c.moveTo(bx - r * 1.3, my + r * 1.3); c.lineTo(bx + r * 1.3, my - r * 1.3); c.stroke();
+    c.globalAlpha = 1;
+  }
+  if (u.hobT > 0){
+    // A shackle round the ankles, and the links dragging behind it. Down at
+    // the feet on purpose: it is the walk it takes away.
+    const hf = statusFade(u.hobT);
+    c.globalAlpha = .8 * hf;
+    c.strokeStyle = ICO_STEEL; c.lineWidth = Math.max(1.2, 2 * cam.z);
+    c.beginPath(); c.ellipse(bx, p[1] - 1.5 * sc, 5.2 * sc, 2.3 * sc, 0, 0, 6.2832); c.stroke();
+    const back = -dirOf(u.side);
+    for (let i = 0; i < 2; i++){
+      const drag = (Math.sin(G.t * 3 + i) * .5 + .5) * 1.6;
+      c.globalAlpha = (.7 - i * .2) * hf;
+      ell(c, bx + back * (7 + i * 3.4 + drag) * sc, p[1] + .6 * sc, 1.5 * sc, 1.1 * sc, ICO_STEEL);
+    }
+    c.globalAlpha = 1;
+  }
+  if (u.freeT > 0){
+    // Everything came off, and for five seconds what lands next barely sticks.
+    // Rings sliding UP the body and off it — the shape of a thing failing to
+    // hold on, run on the order's own clock rather than the wall's.
+    const uf = statusFade(u.freeT);
+    c.strokeStyle = '#ffe08a'; c.lineWidth = Math.max(1, 1.4 * cam.z);
+    for (let i = 0; i < 2; i++){
+      const t = ((G.t * .9 + i * .5) % 1);
+      c.globalAlpha = (1 - t) * .7 * uf;
+      c.beginPath();
+      c.ellipse(bx, p[1] - t * 22 * sc, (7 - t * 2.5) * sc, (3 - t * 1) * sc, 0, 0, 6.2832);
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+  }
+  if (u.fallT > 0){
+    // Breaking off and walking home, harder to finish off on the way. Chevrons
+    // BEHIND it pointing the way it is going, so a line of bodies turning round
+    // reads as one movement rather than as a rout.
+    const wf = statusFade(u.fallT);
+    const home = -dirOf(u.side);
+    c.strokeStyle = '#9ad8ff'; c.lineWidth = Math.max(1.2, 1.8 * cam.z);
+    for (let i = 0; i < 2; i++){
+      const slide = ((G.t * 2.2 + i * .5) % 1);
+      const cx = bx - home * (4 + slide * 9 + i * 5) * sc, cy = by - 9 * sc;
+      c.globalAlpha = (1 - slide) * .75 * wf;
+      c.beginPath();
+      c.moveTo(cx - home * 3 * sc, cy - 3.4 * sc);
+      c.lineTo(cx + home * 2.4 * sc, cy);
+      c.lineTo(cx - home * 3 * sc, cy + 3.4 * sc);
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+  }
+  if (u.warpT > 0){
+    /* The banner going up. Three seconds of channel, and ANY blow ends it —
+       which makes the progress the whole point of the mark: both players are
+       watching the same pole to decide whether to swing. Its height is the
+       channel, so it is a progress bar that happens to look like a banner. */
+    const f = clamp(1 - u.warpT / WARP.chan, 0, 1);
+    const col = SIDE_COL[u.side];
+    const top = by - (14 + 22 * f) * sc;
+    c.globalAlpha = .9;
+    c.strokeStyle = '#c9a35a'; c.lineWidth = Math.max(1.2, 2 * cam.z);
+    c.beginPath(); c.moveTo(bx, by - 12 * sc); c.lineTo(bx, top); c.stroke();
+    const w = 9 * sc * f;
+    if (w > .4){
+      c.globalAlpha = .55 + .35 * f;
+      poly(c, [[bx, top], [bx + w, top + 2.4 * sc], [bx, top + 6.4 * sc]], col);
+    }
     c.globalAlpha = 1;
   }
   if (u.stunT > 0){
@@ -15145,8 +15307,8 @@ function spellAimCandidates(){
     for (const st of s.structs){
       if (st.dead) continue;
       const p = lp(st.x, st.y);
-      const tall = st.key === 'gate' ? 60 : st.key === 'inhib' ? 34 : 44;
-      out.push({ cx:p[0], cy:p[1] - tall * .5 * cam.z, rx:(st.key === 'gate' ? 56 : 22) * cam.z,
+      const tall = structTall(st);
+      out.push({ cx:p[0], cy:p[1] - tall * .5 * cam.z, rx:structWide(st) * cam.z,
         ry:tall * .6 * cam.z, hit:{ key:st.key } });
     }
     return out;
@@ -17602,6 +17764,7 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   ordersHtml, syncOrders, castPress, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
+  drawStructMarks, structTall, structWide,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
   BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART,

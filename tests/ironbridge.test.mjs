@@ -3056,9 +3056,96 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'the shield still varies with its own clock, as it always did (' + spread(shields) + ' of ' + shields.length + ')');
   t.ok(/clamp\(u\.shT \/ 2/.test(SRC), 'off the line it has used since it was written');
 
+  /* ---- and the five a COMMANDER ORDER leaves on a body.
+
+     hobT, freeT, fallT, pyreT and warpT appeared in no drawing function in the
+     file. A hero under Pyre Brand — losing a fifth of itself a second with its
+     mending shut off — was drawn exactly like one standing in the sun, and the
+     only way to know a Hobble had landed was to watch a health bar and infer
+     it. Each is checked for the two things that make a status mark a mark
+     rather than a decoration: it appears at all, and it carries its own clock.
+
+     `bare` is the same body with none of them set, so every count below is the
+     mark itself and not the body underneath it. */
+  const bare = mark(() => {});
+  const ORDERS = [
+    { k:'pyreT',  n:'Pyre Brand',  set:(u, t2) => { u.pyreT = t2; u.pyreDps = 30; }, full:6 },
+    { k:'hobT',   n:'Hobble',      set:(u, t2) => { u.hobT = t2; },                 full:4.5 },
+    { k:'freeT',  n:'Unbind',      set:(u, t2) => { u.freeT = t2; },                full:5 },
+    { k:'fallT',  n:'Withdraw',    set:(u, t2) => { u.fallT = t2; },                full:4 },
+  ];
+  for (const o of ORDERS){
+    const on = mark((u) => o.set(u, o.full));
+    t.ok(on.ops > bare.ops, o.n + ' leaves a mark on the body it lands on (' +
+      (on.ops - bare.ops) + ' operations)');
+    const going = mark((u) => o.set(u, .15));
+    t.ok(going.ops > bare.ops, '...which is still there in its last tenth — ' + o.n);
+    t.ok(on.pic !== going.pic,
+      '...and does not look the same then as when it landed — ' + o.n);
+  }
+  /* Warp Banner is the one whose mark is the POINT rather than a label on it:
+     three seconds of channel that any blow ends, so both players are watching
+     the same pole to decide whether to swing. Its height has to be the
+     progress, or it is telling nobody anything they can act on. */
+  const heroWarp = (t2) => mark((h) => { h.warpT = t2; }, heroMk);
+  const warpTop = (r) => Math.min(...r.pic.split('|').map(x => +x.split(',')[1]));
+  const early = heroWarp(IB.WARP.chan * .95), late = heroWarp(IB.WARP.chan * .1);
+  t.ok(early.ops > bare.ops && late.ops > bare.ops, 'a hero raising the banner is drawn raising it');
+  t.ok(warpTop(late) < warpTop(early),
+    'and the pole is taller the closer it is to going up (' +
+    warpTop(early).toFixed(1) + ' → ' + warpTop(late).toFixed(1) + ')');
+
+  /* ---- the two Rampart leaves on a STRUCTURE. Forty extra armour and a wall
+     mending itself, and a warded gate was drawn exactly like a bare one — so
+     the half of the order that decides whether a push is worth making was
+     invisible to the player who paid for it and to the one walking into it. */
+  {
+    IB.newMatch({ diff:'veteran', seed:9301 });
+    const target = IB.frontStruct(0);
+    const shotSt = (set) => {
+      target.repT = 0; target.wardT = 0;
+      set();
+      G.t = 4;
+      st.ellipses = []; st.lines = []; st.ops = 0;
+      const q = IB.lp(target.x, target.y);
+      IB.drawStructMarks(CTX, target, q[0], q[1], IB.cam.z);
+      return { ops:st.ops, n:st.ellipses.length + st.lines.length };
+    };
+    // ...and it is actually reached. A painter nothing calls is a painter that
+    // passes every test in this block and draws nothing in the game.
+    const sBody = SRC.slice(SRC.indexOf('function drawStructure(c, st){'), SRC.indexOf('function drawUnitMarks'));
+    t.ok(/if \(!dead\) drawStructMarks\(c, st, X, Y, u\);/.test(sBody),
+      'and drawStructure calls it, on a structure still standing');
+    t.ok(shotSt(() => {}).ops === 0, 'a structure nothing has been cast on is left alone');
+    t.ok(shotSt(() => { target.wardT = IB.RAMPART.ward; }).ops > 0, 'a warded face is drawn warded');
+    t.ok(shotSt(() => { target.repT = IB.RAMPART.dur; }).ops > 0, 'and masons on a wall are drawn on it');
+    const both = shotSt(() => { target.wardT = IB.RAMPART.ward; target.repT = IB.RAMPART.dur; });
+    t.ok(both.ops > shotSt(() => { target.wardT = IB.RAMPART.ward; }).ops,
+      'the two are separate marks rather than one');
+    // Drawn round the structure's real size, off the same two functions the
+    // aim preview measures its rings with — the three numbers were written out
+    // twice, which is exactly the arrangement where a gate grows and one of
+    // them forgets.
+    t.ok(IB.structTall(IB.frontStruct(0)) > 0 && IB.structWide(G.sides[0].structs[4]) > IB.structWide(IB.frontStruct(0)),
+      'a gate is wider than a turret, and both of them say so in one place');
+    const gate = G.sides[0].structs.find(x => x.key === 'gate');
+    const cands = (() => {
+      IB.spellUI.aim = { slot:0, id:'rampart' };
+      const list = IB.spellAimCandidates();
+      IB.spellUI.aim = null;
+      return list;
+    })();
+    const ring = cands.find(k => k.hit.key === 'gate');
+    t.ok(ring && Math.abs(ring.rx - IB.structWide(gate) * IB.cam.z) < 1e-9,
+      'and the ring the preview draws round it is that same width');
+    target.repT = 0; target.wardT = 0;
+  }
+
   // ---- drawing must not touch the simulation. None of this added a field.
-  const probe = mark((u) => { u.stunT = 1.2; u.slowP = .5; u.slowT = 2; u.burn = { dps:20, t:3, dur:4 }; u.markT = 2; u.shield = 50; u.shT = 5; });
-  const keep = ['hp', 'stunT', 'slowT', 'slowP', 'markT', 'shield', 'shT', 'x', 'y'];
+  const probe = mark((u) => { u.stunT = 1.2; u.slowP = .5; u.slowT = 2; u.burn = { dps:20, t:3, dur:4 }; u.markT = 2; u.shield = 50; u.shT = 5;
+    u.pyreT = 3; u.pyreDps = 30; u.hobT = 2; u.freeT = 2; u.fallT = 2; });
+  const keep = ['hp', 'stunT', 'slowT', 'slowP', 'markT', 'shield', 'shT', 'x', 'y',
+    'pyreT', 'pyreDps', 'hobT', 'freeT', 'fallT', 'warpT'];
   const before = keep.map(k => probe.u[k]).join(',');
   const h0 = IB.netHash();
   const p2 = IB.lp(probe.u.x, probe.u.y);
