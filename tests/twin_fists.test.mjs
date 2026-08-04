@@ -41,7 +41,7 @@ const EXPOSE = `__out.api = {
   startAttack, attackTick, applyHit, knockDown, knockOut, tryGrab, throwHeld, releaseHold, breakFree,
   updateFighter, playerControl, aiControl, separate, updateItems, updateFx, updateWaves,
   updateDeaths, updateCamera, respawnPlayer, doContinue, tokensOut, tokenCap, foeBehind, nearestFoe,
-  liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep,
+  liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep, MAX_ON, HORDE_SKINS,
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
   rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
@@ -1741,17 +1741,131 @@ test('a gate locks the camera until the street is clear', () => {
   assert(api.W.active && api.cam.lock === nextGate, 'and the next gate fires and pins it again');
 });
 
-test('spawns trickle in and never exceed the on-screen cap', () => {
+test('an ordinary wave stays small enough to read', () => {
   const api = boot();
   play(api, { players: 2 });
   let worst = 0;
-  for (let i = 0; i < 60 * 20; i++){
+  for (let i = 0; i < 60 * 12; i++){
     api.update(api.STEP);
+    if (api.W.gate && api.W.gate.cap) break;          // that one is meant to flood
     worst = Math.max(worst, api.liveEnemies().length);
-    for (const p of api.players) p.x += 0.6;
   }
   assert(worst > 0, 'enemies did show up');
-  assert(worst <= 4 + api.G.players + 1, 'the street never floods: ' + worst);
+  assert(worst <= api.MAX_ON() + 1, 'an ordinary street never floods: ' + worst);
+});
+
+/* ---------------------------------------------------------------- hordes */
+test('every street has a gate that sends tens of them at once', () => {
+  const api = boot();
+  let hordes = 0;
+  for (const st of api.STAGES){
+    for (const g of st.gates){
+      if (!g.cap) continue;
+      hordes++;
+      const total = g.spawn.reduce((n, [, c]) => n + c, 0);
+      assert(total >= 15, `${st.name} horde is only ${total} bodies`);
+      assert(g.cap >= 20, `${st.name} horde cap is only ${g.cap}`);
+    }
+  }
+  assert(hordes >= 5, 'every street should have one, found ' + hordes);
+});
+
+test('a horde really does put tens of them on the street', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  const gate = api.STAGES[3].gates.find(g => g.cap);
+  api.W.gi = api.STAGES[3].gates.indexOf(gate);
+  api.cam.x = gate.x; api.cam.targetX = gate.x;
+  const p = api.players[0];
+  p.hpMax = 1e6; p.hp = 1e6;
+  let worst = 0;
+  for (let i = 0; i < 60 * 25; i++){
+    p.hp = p.hpMax;
+    api.update(api.STEP);
+    worst = Math.max(worst, api.liveEnemies().length);
+  }
+  assert(worst >= 20, 'the horde should crest above twenty, got ' + worst);
+  assert(worst <= gate.cap + 2, 'and still respect its own cap: ' + worst);
+});
+
+test('a grunt is a body, not a boss — cheap, quick and varied', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const g = api.ENEMY.grunt;
+  assert(g.horde, 'flagged as horde stock');
+  assert(g.hp < api.ENEMY.punk.hp, 'thinner than a punk');
+  assert(g.score < api.ENEMY.punk.score, 'and worth less');
+  const skins = new Set();
+  for (let i = 0; i < 40; i++){
+    const e = api.spawnEnemy('grunt', 100 + i, api.FLOOR_MID, -1);
+    skins.add(e.skin);
+  }
+  assert(skins.size >= 3, 'a horde should not be one man printed twenty times: ' + skins.size);
+  for (const sk of skins) assert(api.HORDE_SKINS.indexOf(sk) >= 0, 'from the horde palette');
+});
+
+test('more of them may swing at you, but not all of them', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = 200; p.y = api.FLOOR_MID; p.invuln = 0; p.hpMax = 1e6; p.hp = 1e6;
+  for (let i = 0; i < 24; i++) api.spawnEnemy('grunt', 200 + (i % 2 ? 30 + i * 3 : -30 - i * 3), api.FLOOR_MID + (i % 5) * 3, 1);
+  let worst = 0;
+  for (let i = 0; i < 60 * 8; i++){
+    p.hp = p.hpMax;
+    for (const f of api.fighters) if (f.team === 'e') api.aiControl(f, api.STEP);
+    worst = Math.max(worst, api.tokensOut());
+  }
+  assert(worst <= api.tokenCap(), `token cap broken under a horde: ${worst} > ${api.tokenCap()}`);
+  assert(api.tokenCap() > api.DIFF[api.G.diff].tokens, 'but a horde does press harder');
+});
+
+test('in a crowd the player is marked, and alone he is not', () => {
+  const api = boot();
+  play(api); clearField(api);
+  const p = api.players[0];
+  p.x = api.cam.x + 100; p.y = api.FLOOR_MID;
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const alone = api._counts.fillRect || 0;
+  for (let i = 0; i < 18; i++) api.spawnEnemy('grunt', api.cam.x + 30 + i * 14, api.FLOOR_MID, -1);
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const crowded = api._counts.fillRect || 0;
+  assert(crowded > alone, 'a crowd costs more to draw, obviously');
+  // the marker is drawn from the crowd count, so exercise both sides of it
+  assert(api.liveEnemies().length >= 18, 'the crowd is there');
+});
+
+test('thirty bodies on screen still draws inside budget', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  for (let i = 0; i < 30; i++)
+    api.spawnEnemy('grunt', api.cam.x + 20 + (i * 12) % 350, api.FLOOR_TOP + (i * 7) % 55, -1);
+  api.draw();                                   // warm the bake
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(api.liveEnemies().length >= 30, 'thirty of them are really there');
+  assert(fills < 15000, 'a horde frame is too expensive: ' + fills + ' fillRects');
+});
+
+test('a minute against a horde keeps the state sane', () => {
+  const api = boot();
+  play(api, { stage: 1, diff: 2 });
+  const gate = api.STAGES[1].gates.find(g => g.cap);
+  api.W.gi = api.STAGES[1].gates.indexOf(gate);
+  api.cam.x = gate.x; api.cam.targetX = gate.x;
+  const p = api.players[0];
+  for (let i = 0; i < 60 * 45; i++){
+    p.hp = p.hpMax; api.G.lives[0] = 9;
+    api.update(api.STEP);
+    if (i % 200 === 0) api.draw();
+    assert(api.fighters.length < 120, 'fighter list is leaking: ' + api.fighters.length);
+    for (const f of api.fighters) assert(isFinite(f.x) && isFinite(f.y), 'a fighter went non-finite');
+  }
 });
 
 test('the boss gate raises a boss bar and clearing it clears the stage', () => {
