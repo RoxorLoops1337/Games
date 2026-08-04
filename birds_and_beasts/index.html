@@ -461,8 +461,17 @@
     max-width:400px; margin:clamp(6px,2cqw,12px) auto clamp(6px,2cqw,10px); }
   #title .rules b{ font-family:var(--f-display); letter-spacing:.6px; }
   #title .more{ margin-bottom:clamp(6px,2cqw,12px); }
+  /* It was ruled off on both sides with no marker — a section HEADING, not a
+     control, on the one screen where a new player is looking for something to
+     press. The nest's panel already solved this: a chevron that turns. */
   #title .more > summary{ font-size:10.5px; letter-spacing:2.6px; color:#c2d8b4;
-    border-top:none; border-bottom:none; position:relative; }
+    border-top:none; border-bottom:none; position:relative;
+    display:flex; align-items:center; justify-content:center; gap:7px; }
+  #title .more > summary::marker{ content:''; }
+  #title .more > summary em{ font-style:normal; }
+  #title .more > summary i{ font-style:normal; display:inline-block; font-size:11px;
+    color:#8fb47c; transition:transform .16s ease; }
+  #title .more[open] > summary i{ transform:rotate(180deg); }
   /* ruled off like everything else in this game */
   #title .more > summary::before, #title .more > summary::after{
     content:''; position:absolute; top:50%; width:24%; height:1px;
@@ -553,12 +562,16 @@
       radial-gradient(ellipse 60% 120% at 50% 0%, rgba(34,55,28,.9), transparent 72%); }
   .tshow .tb{ position:relative; text-align:center; flex:0 0 auto;
     background:radial-gradient(ellipse 62% 16% at 50% 84%, rgba(166,255,94,.20), transparent 70%); }
-  .tshow canvas{ display:block; width:clamp(88px,25cqw,126px); height:auto; }
+  /* two operators cost about 70px of row, so the beasts give it back rather
+     than the row overflowing its plaque on a phone */
+  .tshow canvas{ display:block; width:clamp(70px,21cqw,112px); height:auto; }
+  .tshow .plus{ transform:scale(.5); margin:0 -7px; align-self:center; }
+  .tshow .arrw{ transform:scale(.8); margin:0 -3px; }
   .tshow .tb.mid{ transform:scale(1.1) translateY(-6px); z-index:1;
     background:radial-gradient(ellipse 62% 16% at 50% 84%, rgba(255,138,212,.26), transparent 70%); }
   .tshow .cap{ font-size:9px; letter-spacing:1.4px; text-transform:uppercase; font-weight:800;
     color:#8aa87a; margin-top:-2px; white-space:nowrap; overflow:hidden;
-    max-width:clamp(88px,25cqw,126px); }
+    max-width:clamp(70px,21cqw,112px); }
   .tshow .tb.mid .cap{ color:var(--pink); }
   .tshow .tb.swap canvas{ animation:pop .38s cubic-bezier(.2,1.3,.4,1) both; }
   .tshow .tb.par canvas{ animation:tbreathe 3.4s ease-in-out infinite; }
@@ -2000,12 +2013,9 @@
   #cull .footer{ gap:8px; }
   #bCull{ flex:1 1 100%; }
   #bCull[disabled]{ opacity:.8; }
-  /* KEEP THEM ALL is the real CTA until a card is chosen, and steps back after */
-  /* KEEP THEM ALL leads until a card is chosen, then steps back and lets the
-     cull button lead — emphasis follows whichever action you are actually taking. */
-  #cull.armed #bCullSkip{ color:#e6f4dc;
-    background:linear-gradient(180deg,#3f5340 0%,#2c3c2c 45%,#1e2a1e 100%);
-    box-shadow:inset 0 1px 0 rgba(190,240,170,.18), 0 4px 0 #152014, 0 6px 14px rgba(0,0,0,.45); }
+  /* (KEEP THEM ALL and its `armed` emphasis swap died with the optional cull:
+     `goCullOrNext` only opens this screen when the barn is over capacity, so
+     the button was hidden on every path that can reach it.) */
   /* the hazard is an optional side bet, not the biggest object on the Nest */
   #bHazard{ font-size:11px; padding:6px 11px; letter-spacing:.8px; line-height:1.25; }
   #nest .footer #bFight{ font-size:15px; padding:13px 24px; letter-spacing:1.6px; }
@@ -2181,10 +2191,15 @@
     <div class="tcard">
       <h1>THE BIRDS<br>&amp; <em>THE BEASTS</em></h1>
       <!-- the generator, running, before anyone has clicked anything -->
+      <!-- parent + parent -> chick. The reel used to stand the chick BETWEEN its
+           parents with no marks at all: the only pairing in the game without the
+           operator glyphs the rest of the interface invented for exactly this. -->
       <div class="tshow" id="tShow">
         <div class="tb par"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
-        <div class="tb mid"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
+        <div class="plus"></div>
         <div class="tb par"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
+        <div class="arrw"></div>
+        <div class="tb mid"><canvas width="188" height="158"></canvas><div class="cap"></div></div>
       </div>
       <p class="sub">Two cards enter. Three cards leave.</p>
       <div class="rules">
@@ -2193,7 +2208,7 @@
         <p><b>The Cull.</b> The barn holds ten. Someone goes upstate.</p>
       </div>
       <details class="more">
-        <summary class="tiny">How it works</summary>
+        <summary class="tiny"><em>How it works</em><i>&#9662;</i></summary>
         <div class="body">
           You breed monsters for a living; your barn is your herd. The two in the
           Nest sit the match out, so you go into the pit a pair short &mdash; that
@@ -2335,7 +2350,6 @@
     <div class="deckwrap"><div class="grid" id="cGrid"></div></div>
     <div class="footer">
       <button class="btn danger" id="bCull" disabled>SEND TO THE FARM UPSTATE</button>
-      <button class="btn alt" id="bCullSkip">KEEP THEM ALL</button>
       <button class="btn alt sm" id="bCullBook"><svg class="i"><use href="#i-book"/></svg> STUD BOOK</button>
     </div>
   </div>
@@ -4669,7 +4683,7 @@ function titleShow(){
   const cycle = () => {
     if (!live()) return;
     paint(0, a, a.pre + a.suf);
-    paint(2, b, b.pre + b.suf);
+    paint(1, b, b.pre + b.suf);
     const gap = first ? 0 : (RM() ? 40 : 620);   // never show an empty frame
     first = false;
     const breedNow = () => {
@@ -4680,7 +4694,7 @@ function titleShow(){
       // no honorific in the reel: "Clotgizzard" beside "Clotgizzard Esq." both
       // truncate to the same string and read as a rendering fault
       const short = nm.pre + nm.suf;
-      paint(1, kid, (short === a.pre + a.suf || short === b.pre + b.suf) ? nm.name : short);
+      paint(2, kid, (short === a.pre + a.suf || short === b.pre + b.suf) ? nm.name : short);
       at(3400, () => {
         if (!live()) return;
         a = rng() < 0.55 ? kid : mk();      // the line continues, or fresh blood
@@ -6658,17 +6672,12 @@ function goCull(){
   show('cull');
   cullPick = -1;
   culling = false;
+  // this screen is only ever reached over capacity, so the count is never zero
   const need = mustCull();
-  $('cHint').innerHTML = need > 0
-    ? '<span class="pink">' + need + ' MUST GO</span>'
-    : 'THIN THE HERD IF YOU LIKE';
+  $('cHint').innerHTML = '<span class="pink">' + need + ' MUST GO</span>';
   $('cCount').innerHTML = R.deck.length + '<small>/' + MAX_DECK + '</small>';
-  $('bCullSkip').style.display = need > 0 ? 'none' : '';
   $('bCull').disabled = true;
   if ($('bCull').classList) $('bCull').classList.remove('busy');
-  // until a card is picked the lit button is KEEP THEM ALL, because that is
-  // the only thing you can actually press
-  if ($('cull').classList) $('cull').classList.remove('armed');
   const g = $('cGrid'); g.innerHTML = '';
   if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
@@ -6696,7 +6705,6 @@ function goCull(){
       cullPick = c.id;
       [...g.children].forEach((x) => x.classList.toggle('sel', +x.dataset.id === c.id));
       $('bCull').disabled = false;
-      if ($('cull').classList) $('cull').classList.add('armed');
     };
     g.appendChild(el);
   });
@@ -6968,7 +6976,6 @@ function bind(){
   $('bBook').onclick = () => goBook(R.nest.length ? R.nest[0] : 0, 'nest');
   $('bBookBack').onclick = () => { show(bookFrom); if (bookFrom === 'nest') renderNest(); else if (bookFrom === 'cull') goCull(); };
   $('bCull').onclick = doCull;
-  $('bCullSkip').onclick = nextRound;
   $('bCullBook').onclick = () => goBook(cullPick > 0 ? cullPick : 0, 'cull');
   $('mute').onclick = () => {
     muted = !muted;
@@ -7160,8 +7167,13 @@ function bakeTextures(){
 function boot(){
   bakeTextures();
   bind();
-  renderTitle();
+  // show() BEFORE render, the same order every other screen uses. Reversed, the
+  // reel armed its next generation with `at()` and then `show('title')` called
+  // clearTimers() one line later and killed it — so the front door has been
+  // showing one frozen trio since the reel was written, when the whole point of
+  // it is a bloodline drifting on loop.
   show('title');
+  renderTitle();
 }
 if (!HEADLESS) boot();
 
