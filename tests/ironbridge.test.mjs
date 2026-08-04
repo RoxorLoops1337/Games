@@ -18027,4 +18027,82 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ------------------------------------ the dock column that fog outgrew
+   Three rounds running added height to "On the bridge": the hero row, a slot
+   per hero, then the NO BRACE mark. Measured across every viewport, with the
+   worst case of three enemy heroes and three learned ultimates:
+
+     size          column   content   over
+     1024x768        117      219      102
+     1280x800        164      219       55
+     1440x900        186      219       33
+     1440x1080       226      226        0
+     390x844         140      159       19
+
+   Broken down: 20px of section title, 29px of wave note, ~101px of hero row
+   and 37px of orders row. The hero row is the elephant and its cost is the
+   CHIPS wrapping in a 192px column, not the text.
+
+   The obvious fix was wrong. Putting the row label inline with the chips —
+   which saves a line — measured 158px against the current 127 at that width,
+   because the label takes horizontal room the chips then wrap for. Only
+   tightening the label helped, and only by 8px. The width had to be measured;
+   reasoning about it gave the wrong answer.
+
+   And the honest conclusion, which no trimming reaches: at a 768-tall viewport
+   the column is 117px while the fog needs 84px at ONE enemy hero plus 49px of
+   chrome. It cannot fit there and never could. The rail added earlier is the
+   answer, and this block exists so the next thing added to this column has to
+   argue with the budget rather than discover it.                            */
+{
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+
+  const fol = rule('.foeord .fol{');
+  t.ok(/font-size:9px/.test(fol) && /letter-spacing:\.6px/.test(fol),
+    'the fog row label is the tight one the measurement chose');
+  t.ok(/display:block/.test(fol),
+    'and still a block — inline measured 31px WORSE at the width this column really is');
+
+  // The rail is what makes the overflow honest, and it is load-bearing now
+  // rather than a nicety. Same three properties the round that added it pinned.
+  const d = rule('.dsec{');
+  t.ok(!/scrollbar-width:none/.test(d), 'the column still shows its rail');
+  t.ok(/\.dsec\{[^}]*scrollbar-gutter:stable/s.test(css), 'and keeps room for it');
+  t.ok(!/scrollbar-width:thin/.test(d),
+    'and does not ask for a thin one, which would switch Chromium to an overlay');
+  t.ok(/\.dsec::-webkit-scrollbar\{ width:8px; \}/.test(SRC), 'at a real width');
+
+  /* The fog's own content, measured through the same builders the dock uses,
+     so the budget above is checkable rather than remembered. */
+  {
+    const seat0 = IB.MY;
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:7800 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    for (let k = 0; k < 3; k++){
+      rich(f);
+      if (IB.bList(f, 'tavern').length < 3) IB.build(f, f.plot.indexOf(null), 'tavern');
+    }
+    for (let k = 0; k < 3; k++){ rich(f); IB.createHero(f, ['fighter', 'mage', 'marksman'][k]); }
+    for (const h of f.heroes){ IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true); }
+    t.ok(f.heroes.length === 3, 'three of theirs, which the cap allows');
+
+    IB.foeForget();
+    const none = IB.foeHeroHtml();
+    t.ok((none.match(/class="fchip un"/g) || []).length === 3,
+      'unseen, that is a slot each rather than one gap');
+    for (const h of f.heroes){
+      const u = h.skills.find(sk => sk.ult);
+      if (u && IB.foeUlts.indexOf(u.id) < 0) IB.foeUlts.push(u.id);
+    }
+    const full = IB.foeHeroHtml();
+    t.ok((full.match(/class="fchip un"/g) || []).length === 0, 'all seen, no slots left');
+    t.ok(full.length > none.length, 'and the row is bigger for it, which is the cost being measured');
+    IB.MY = seat0;
+    IB.netEnd();
+  }
+}
+
 t.done();

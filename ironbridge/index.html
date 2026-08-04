@@ -1047,8 +1047,14 @@
      unknown "?" stayed glued to the heading, so it read as "THEIR ORDERS ?"
      with the answer orphaned underneath. */
   .foeord{ margin-top:7px; }
-  .foeord .fol{ display:block; margin-bottom:4px;
-    font-size:var(--t1); letter-spacing:1.4px; text-transform:uppercase;
+  /* Tighter than it was, by 8px a row at the width this column really is.
+     Measured three ways at 192px, which is the live column: leaving it as a
+     block costs 127px for the two fog rows; putting the label INLINE with the
+     chips costs 158, because the label eats the horizontal room the chips need
+     and they wrap more than the line it saved; tightening the block costs 119.
+     The obvious change was the wrong one, and only the width told me. */
+  .foeord .fol{ display:block; margin-bottom:1px;
+    font-size:9px; letter-spacing:.6px; text-transform:uppercase;
     color:var(--dim2); font-weight:700; }
   .foeord .fchips{ display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
   .fchip{ display:inline-flex; align-items:center; gap:5px; padding:2px 7px 2px 5px;
