@@ -17722,4 +17722,102 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ------------------------------------- the save did not know which seat wrote it
+   Everything else in a save is the BOARD, which both machines agree about. The
+   two fog records are not: they are what one seat has been shown, and they mean
+   nothing to the other one. A match saved from the right-hand hold resumes as
+   the left — the peer is gone and netEnd puts you back in seat 0 — so what you
+   had learned about side 0 came back labelled as what you know about side 1,
+   which by then is your own hold. Measured before the fix: the dock read
+   "Thorne Tank 24 · Cataclysm", giving side 0's ultimate to side 1's tank.
+
+   foeSeen has carried the identical exposure since the day it shipped; the hero
+   row simply added a second and more obvious symptom to it.                  */
+{
+  const seat0 = IB.MY;
+  const heroFor = (side, cls) => {
+    const s = G.sides[side];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls);
+    const h = s.heroes[s.heroes.length - 1];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40 + side; h.y = 0; h.mana = h.mmana;
+    return h;
+  };
+
+  {
+    // Sit in the RIGHT-hand seat and learn about the left hold.
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4800 });
+    IB.MY = 1;
+    const h0 = heroFor(0, 'mage');
+    heroFor(1, 'tank');
+    for (let i = 0; i < 6; i++) IB.spawnUnit(1, 'grunt', { x:41, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    const u0 = h0.skills.find(sk => sk.ult);
+    u0.cdT = 0; h0.mana = h0.mmana;
+    IB.fireSkill(h0, u0, IB.heroTarget(h0));
+    IB.foeSeen[0] = 'bombard';
+    t.ok(IB.foeUlts.join() === u0.id,
+      'seat one learns the LEFT hold’s ultimate (' + IB.foeUlts.join() + ')');
+
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok(pack.seat === 1, 'and the save records which seat wrote it (' + pack.seat + ')');
+
+    // Resume the way the game really does: the session ends, which puts you
+    // back in the left-hand hold, and then the save is loaded.
+    IB.netEnd();
+    t.ok(IB.MY === 0, 'ending the session puts you back in the left-hand hold');
+    IB.loadMatch(pack);
+    t.ok(IB.foeUlts.length === 0,
+      'so the ultimate learned from the other seat is dropped rather than re-aimed');
+    t.ok(IB.foeSeen[0] === null, 'and so is the order');
+    const dock = IB.foeHeroHtml();
+    t.ok(/class="fchip un"/.test(dock),
+      'the dock says it has been shown nothing, which is true (' +
+        dock.replace(/<[^>]+>/g, ' ').trim().slice(0, 48) + ')');
+    t.ok(dock.indexOf(IB.SKILL[u0.id] ? IB.SKILL[u0.id].n : u0.id) < 0,
+      'and never names the ability it was shown from the other one');
+    IB.clearSave();
+  }
+
+  {
+    // ...while a save written in the SAME seat keeps everything it learned.
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4801 });
+    IB.MY = 0;
+    const h1 = heroFor(1, 'mage');
+    for (let i = 0; i < 6; i++) IB.spawnUnit(0, 'grunt', { x:41, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    const u1 = h1.skills.find(sk => sk.ult);
+    u1.cdT = 0; h1.mana = h1.mmana;
+    IB.fireSkill(h1, u1, IB.heroTarget(h1));
+    IB.foeSeen[0] = 'pyre';
+    IB.saveMatch();
+    const pack = IB.savedMatch();
+    t.ok(pack.seat === 0, 'a left-hand save says so');
+    IB.loadMatch(pack);
+    t.ok(IB.foeUlts.join() === u1.id, 'and comes back knowing what it knew (' + IB.foeUlts.join() + ')');
+    t.ok(IB.foeSeen[0] === 'pyre', 'orders included');
+
+    /* A save from BEFORE this existed has no seat at all. It was written by a
+       single-player match, which is always the left-hand hold, so every real
+       save already on disk keeps its fog rather than being punished for the
+       field being new. */
+    const old = Object.assign({}, pack);
+    delete old.seat;
+    IB.foeForget();
+    IB.loadMatch(old);
+    t.ok(IB.foeUlts.join() === u1.id && IB.foeSeen[0] === 'pyre',
+      'and an older save, which can only have been seat zero, keeps its fog too');
+    IB.clearSave();
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();

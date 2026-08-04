@@ -17682,6 +17682,16 @@ function saveMatch(){
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v:SAVE_VER, at:Date.now(), diff:G.diff.id, t:G.t, wave:G.wave, waveT:G.waveT,
       seed:_seed, sides:G.sides.map(packSide),
+      /* WHICH SEAT wrote this. Everything else in here is the board, which
+         both machines agree about; the two fog records below are not — they are
+         what one seat has been shown, and they only mean anything to that seat.
+         A match saved from the right-hand hold resumes as the left one (the
+         peer is gone, and netEnd puts you back in seat 0), so without this the
+         orders and ultimates you had learned about side 0 came back labelled as
+         what you know about side 1 — which is now your own hold. Measured: the
+         dock read "Thorne Tank 24 · Cataclysm", attributing side 0's ultimate
+         to side 1's tank. */
+      seat:MY,
       units:G.units.filter(u => !u.isHero).map(packUnit),
       // What this seat had SEEN of their orders. Not part of the board — the
       // two machines in a live match are supposed to disagree about it, and
@@ -17714,8 +17724,16 @@ function loadMatch(pack){
   // AFTER newMatch, which clears it: a resumed match knows what this seat had
   // already been shown. An older save simply has nothing to say, and two
   // question marks is the right answer to that.
-  if (pack.foe) for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = SPELL[pack.foe[i]] ? pack.foe[i] : null;
-  if (pack.foeU) for (const id of pack.foeU) if (SKILL[id] && foeUlts.indexOf(id) < 0) foeUlts.push(id);
+  /* ...and only if this is the same seat that learned it. Dropped rather than
+     mislabelled: knowing nothing is true, and the alternative was the dock
+     naming your own hero's ultimate as theirs. A save from before this existed
+     has no seat and was written by a single-player match, which is always the
+     left-hand hold — so every real save already out there keeps its fog. */
+  const learnedHere = (pack.seat === undefined ? 0 : pack.seat) === MY;
+  if (learnedHere && pack.foe)
+    for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = SPELL[pack.foe[i]] ? pack.foe[i] : null;
+  if (learnedHere && pack.foeU)
+    for (const id of pack.foeU) if (SKILL[id] && foeUlts.indexOf(id) < 0) foeUlts.push(id);
   G.t = pack.t; G.wave = pack.wave; G.waveT = pack.waveT;
   pack.sides.forEach((ps, i) => {
     const s = G.sides[i];
