@@ -1,20 +1,20 @@
-// Twin Fists — headless combat + progression suite.
+// Joske de Flosser — headless combat + progression suite.
 //
-// twin_fists/index.html is one self-contained file made of several inline
+// joske_de_flosser/index.html is one self-contained file made of several inline
 // <script> blocks that share a scope. This harness concatenates them, stubs a
 // no-op DOM plus a 2d context, injects a test-only expose hook (never shipped)
 // and evals the result — then drives the real combat resolution, grabs,
 // weapons, AI, waves, stage flow and lives through the actual game code.
 // draw() is exercised on every stage and every fighter state, so render-time
 // errors fail here rather than on somebody's phone.
-// Run: node tests/twin_fists.test.mjs
+// Run: node tests/joske_de_flosser.test.mjs
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const HTML = path.join(__dirname, '..', 'twin_fists', 'index.html');
+const HTML = path.join(__dirname, '..', 'joske_de_flosser', 'index.html');
 
 let passed = 0, failed = 0;
 function test(name, fn){ try { fn(); passed++; } catch (e){ failed++; console.error(`FAIL ${name}: ${e.message}`); } }
@@ -162,7 +162,7 @@ function clearField(api){
 test('boots to the title screen without throwing', () => {
   const api = boot();
   assert(api.G.phase === 'title', 'phase should be title, got ' + api.G.phase);
-  assert(api.STAGES.length === 5, 'five stages');
+  assert(api.STAGES.length === 7, 'seven scopes, street to world');
   assert(api.players.length === 0 || api.players.every(p => !p), 'no players before start');
 });
 
@@ -1343,18 +1343,18 @@ test('actors walk between beats rather than teleporting', () => {
   const api = boot();
   api.G.story = true;
   api.startCut('intro', () => {});
-  const first = api.SCENES.intro.beats[0].act.cole.x;
+  const first = api.SCENES.intro.beats[0].act.mokske.x;
   const moved = [];
-  for (let i = 0; i < 60 * 9; i++){
+  for (let i = 0; i < 60 * 12; i++){
     api.cutTick(api.STEP);
-    const c = api.cut.actors.cole;
+    const c = api.cut.actors.mokske;
     if (c) moved.push(c.x);
   }
   const spread = Math.max.apply(null, moved) - Math.min.apply(null, moved);
-  assert(spread > 10, 'cole should cross the room, moved ' + spread.toFixed(1));
+  assert(spread > 10, 'mokske should be carried off, moved ' + spread.toFixed(1));
   const jumps = moved.filter((x, i) => i > 0 && Math.abs(x - moved[i - 1]) > 6).length;
   assert(jumps === 0, 'and get there by walking, not by cutting: ' + jumps + ' jumps');
-  assert(first === api.SCENES.intro.beats[0].act.cole.x, 'the scene data is not mutated by playing it');
+  assert(first === api.SCENES.intro.beats[0].act.mokske.x, 'the scene data is not mutated by playing it');
 });
 
 test('any button skips the scene', () => {
@@ -1378,7 +1378,7 @@ test('the story runs between the streets, and the ending is the last thing', () 
   assert(api.G.phase === 'cut' && api.cut.id === 'intro', 'a new run opens on the intro');
   api.cutEnd();
   assert(api.G.phase === 'card' && api.G.stage === 0, 'then street one');
-  for (let s = 0; s < 4; s++){
+  for (let s = 0; s < api.STAGES.length - 1; s++){
     api.nextStage();
     assert(api.G.phase === 'cut', `a scene plays after street ${s + 1}`);
     assert(api.cut.id === api.STORY_AFTER[s], `expected ${api.STORY_AFTER[s]}, got ${api.cut.id}`);
@@ -2042,7 +2042,7 @@ test('the boss gate raises a boss bar and clearing it clears the stage', () => {
   step(api, 3);
   const boss = api.fighters.find(f => f.boss);
   assert(boss, 'the boss walked on');
-  assert(api.G.bossHp > 0 && api.G.bossName === 'ROOK', 'the boss bar is up: ' + api.G.bossName);
+  assert(api.G.bossHp > 0 && api.G.bossName === 'BREAKER BRAM', 'the boss bar is up: ' + api.G.bossName);
   for (const f of api.fighters) if (f.team === 'e') f.gone = true;
   api.W.queue = [];
   step(api, 0.3);
@@ -2306,5 +2306,5 @@ test('the whole first stage can be beaten and it ends in a clear', () => {
   assert(api.G.score[0] > 1000, 'and it scored on the way');
 });
 
-console.log(`\ntwin_fists: ${passed} passed, ${failed} failed`);
+console.log(`\njoske: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
