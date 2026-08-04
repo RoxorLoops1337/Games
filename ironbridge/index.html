@@ -3083,6 +3083,42 @@ function castTell(s, name, n, verb, gold){
     n > 0 ? 'good' : 'bad', TOAST_W.cast);
 }
 
+/* What a strip took, said out loud. Same seat gate and same toast lane as
+   castTell next door — the other side is watching its own hero shrug something
+   off and does not need a scoreboard for it — but a different sentence,
+   because a strip's report is WHICH holds came off rather than how many things
+   it caught. Both endings are honest: the window is what a cast on a clean
+   hero actually buys, so it is what a cast on a clean hero says. */
+/* What to call the body a strip landed on. Reading .name off a minion produced
+   "Unfetter → undefined — a slow off." in 2 of the first 97 notices measured —
+   a cleanse sent to a friend in the line, which is a quarter of where this one
+   goes.
+
+   The obvious fix was to stop naming minions at all and call them "the line",
+   and measuring it says no — the same answer the dock's fog column gave when
+   the obvious fix there was to inline a label. Four of the six kinds are
+   SHORTER than "the line" (Levy 4, Shade 5, Caster 6, Cannon 6 against 8), so
+   the simplification lengthens the case that actually happens in order to
+   shorten the one that does not. Only Siege Ogre is long, and a cleanse goes
+   to one of those about never.
+
+   So: whatever the game already calls that body. Hero names are bounded — the
+   pool is thirty and the longest is Garrick at seven — which is what makes the
+   budget below hold. */
+const strippedName = (u) => u.isHero ? u.name : ((UNITS[u.kind] || {}).n || 'the line');
+/* Both endings measured against that same 338px. The empty one used to read
+   "nothing was on it; 5s of slack either way" at 51 characters and 386px, so
+   the one sentence a player sees when they have just wasted a ninety-second
+   order was the one sentence they could not finish reading. */
+function stripTell(side, name, took, slack){
+  if (!forMe(side)) return;
+  const what = tookPhrase(took);
+  fxToast(what ? name + ' — ' + what + ' off.'
+                : name + ' — nothing on it; ' + slack + 's of slack.',
+    what ? 'good' : 'bad', TOAST_W.cast);
+}
+const unbindTell = (s, h) => stripTell(s.i, 'Unbind', stripTook.slice(), UNBIND.dur);
+
 const spellOf = (s, slot) => SPELL[s.spells[slot | 0]] || null;
 const spellReady = (s, slot) => {
   const d = spellOf(s, slot);
@@ -3256,6 +3292,20 @@ const SPELL_CAST = {
     // reason a hobble now comes off with the rest of it.
     stripStatus(h);
     h.freeT = UNBIND.dur;
+    /* Bombard has said what it caught since the round that measured it; the
+       strip is the order that needed it most and had none. Its whole effect is
+       a status icon ceasing to be drawn, on a hero the player was probably not
+       watching, and the amount at stake is real: 3.10 seconds of hold per
+       strip, measured over 24 veteran matches.
+
+       Deliberately NOT a refusal when there is nothing to take. Countermand
+       refuses because Countermand with nothing recovering does LITERALLY
+       nothing; this one still leaves the window, and the window is not
+       decoration — 30% of every piece of crowd control that lands on a hero
+       lands inside one, and it cancels 123.8s of it across those same matches.
+       So a clean hero is a legitimate pre-emptive cast, and what the player is
+       owed is an honest sentence rather than a veto. */
+    unbindTell(s, h);
     return null;
   },
   pyre(s, c){
@@ -4059,17 +4109,37 @@ function applyBurn(t, dps, dur, src){
    Returns how many distinct statuses actually came off. Nothing in the sim
    branches on the number, but the AI gates and the readout do, and a cleanse
    that reports what it caught is the same courtesy Bombard already pays. */
+/* What the last strip actually took, by name. COSMETIC, on exactly the path
+   bombSeen and orderGold already take: written from simulation code, read by
+   nothing but the notice, in no snapshot, no save and no hash. Cleared at the
+   top of every strip, so it only ever describes the one that just happened.
+
+   A count would not have done. Measured over 24 veteran matches with both
+   holds playing, a strip takes 1.05 holds off and 3.10 seconds of hold with
+   them — so "2 taken off" is almost never the sentence, and "the hobble and a
+   burn" is the one that says whether ninety seconds were worth spending. */
+const stripTook = [];
 function stripStatus(t){
+  stripTook.length = 0;
   let n = 0;
-  if (t.stunT > 0){ t.stunT = 0; n++; }
-  if (t.slowT > 0){ t.slowT = 0; t.slowP = 0; n++; }
-  if (t.taunt > 0){ t.taunt = 0; n++; }
-  if (t.pullT > 0){ t.pullT = 0; t.pullBy = null; n++; }
-  if (t.burn){ t.burn = null; n++; }
-  if (t.hobT > 0){ t.hobT = 0; n++; }
-  if (t.markT > 0){ t.markT = 0; t.markBy = -1; t.markAmp = 0; n++; }
-  if (t.pyreT > 0){ t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; n++; }
+  if (t.stunT > 0){ t.stunT = 0; stripTook.push('a stun'); n++; }
+  if (t.slowT > 0){ t.slowT = 0; t.slowP = 0; stripTook.push('a slow'); n++; }
+  if (t.taunt > 0){ t.taunt = 0; stripTook.push('a taunt'); n++; }
+  if (t.pullT > 0){ t.pullT = 0; t.pullBy = null; stripTook.push('a chain'); n++; }
+  if (t.burn){ t.burn = null; stripTook.push('a burn'); n++; }
+  if (t.hobT > 0){ t.hobT = 0; stripTook.push('the hobble'); n++; }
+  if (t.markT > 0){ t.markT = 0; t.markBy = -1; t.markAmp = 0; stripTook.push('a mark'); n++; }
+  if (t.pyreT > 0){ t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; stripTook.push('the brand'); n++; }
   return n;
+}
+/* "a slow", "the hobble and a burn", "a stun, a chain and the brand". Built
+   from whatever the strip just recorded rather than from a count, and it is
+   the whole reason stripTook exists. */
+function tookPhrase(list){
+  const a = list || stripTook;
+  if (!a.length) return '';
+  if (a.length === 1) return a[0];
+  return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
 }
 // The same list, asked rather than acted on: how many of them a body is
 // carrying right now. Every gate that means "is there anything to take off"
@@ -5186,8 +5256,14 @@ function castSkill(h, sk, tgt){
     case 'cleanse': {
       const t = heldBy(h) > 0 ? h : (heldAlly(h, s.rng || 6) || h);
       stripStatus(t);
+      const took = stripTook.slice();
       t.freeT = Math.max(t.freeT, s.free || 0);
       if (t !== h && !HEADLESS) linkFx(h.x, h.y, t.x, t.y, '#8ce39a');
+      // Per SEAT, not per side: the notice belongs to whoever is playing this
+      // hero's hold. Named for the body it landed on rather than the caster,
+      // because "Unfetter — the hobble off" is a different fact depending on
+      // whether it went out to a friend.
+      stripTell(h.side, s.n + (t === h ? '' : ' → ' + strippedName(t)), took, s.free || 0);
       break;
     }
     case 'shield': {
@@ -19513,6 +19589,7 @@ window.IB = {
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
+  stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
