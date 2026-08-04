@@ -12805,8 +12805,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
     t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
     const SPELLS_IN = (k) => IB.SPELLS.filter(d => d.grp === k);
-    t.ok(IB.SPELLS.length === 10 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
-      'there are ten of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
+    t.ok(IB.SPELLS.length === 11 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are eleven of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
     // Every one has a target kind the banner knows how to ask for. A tenth
     // order with a new kind fails HERE rather than arming a state whose banner
     // cannot say what would satisfy it.
@@ -16775,7 +16775,7 @@ t.ok(true, 'a final draw on a live match is clean');
      it opens held ten. Counted rather than written out, so the next order to
      be added cannot leave it lying. */
   {
-    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'ten',
+    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'eleven',
       'the set has a word for its size (' + IB.NUM_WORD(IB.SPELLS.length) + ')');
     IB.newMatch({ diff:'veteran', seed:9606 });
     IB.showIntro('veteran');
@@ -17466,6 +17466,432 @@ t.ok(true, 'a final draw on a live match is clean');
 
   IB.MY = seat0;
   IB.netEnd();
+}
+
+/* ------------------------------------------ the move the fog was missing
+   The strip names their orders and, since last round, their hero's ultimate —
+   and none of it bought anything: Countermand acts on cooldowns rather than on
+   anything you read there. Brace is what the knowledge is for. It does not
+   stop an ability; it makes the one you can see coming cost them.          */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const board = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+    fh.inLane = true; fh.dead = false; fh.x = 40; fh.y = 0; fh.mana = fh.mmana;
+    const u = IB.spawnUnit(0, 'grunt', { x:41, y:0 });
+    u.hp = u.mhp = 100000;                     // a body that cannot die mid-measurement
+    step(2 / 30);
+    rich(G.sides[0]);
+    return { f, fh, u, me:G.sides[0] };
+  };
+  const took = (fn) => { const b = board(4400); const hp = b.u.hp; fn(b); return hp - b.u.hp; };
+
+  {
+    const plain = took(b => IB.dealDmg(b.fh, b.u, 1000, { ability:true, magic:true }));
+    const braced = took(b => { b.me.braceT = IB.BRACE.dur;
+      IB.dealDmg(b.fh, b.u, 1000, { ability:true, magic:true }); });
+    t.ok(plain > 0, 'their hero’s ability lands for something (' + plain.toFixed(1) + ')');
+    t.ok(Math.abs((1 - braced / plain) - IB.BRACE.cut) < .01,
+      'and a braced hold takes ' + Math.round(IB.BRACE.cut * 100) + '% less of it (' +
+        (100 * (1 - braced / plain)).toFixed(1) + '%)');
+  }
+
+  {
+    /* Only what a HERO does with an ABILITY. Their sword, their turrets and
+       their own commander orders go through untouched, so this answers exactly
+       the class of thing the fog strip names and nothing wider. */
+    const swing = took(b => IB.dealDmg(b.fh, b.u, 1000, {}));
+    const swingBraced = took(b => { b.me.braceT = IB.BRACE.dur; IB.dealDmg(b.fh, b.u, 1000, {}); });
+    t.ok(Math.abs(swing - swingBraced) < .01,
+      'a plain blow from the same hero is not blunted (' + swing.toFixed(1) + ' vs ' + swingBraced.toFixed(1) + ')');
+    const order = took(b => { b.me.braceT = IB.BRACE.dur;
+      IB.dealDmg(null, b.u, 1000, { ability:true, magic:true, by:1 }); });
+    t.ok(order > 1000 * (1 - IB.BRACE.cut) + 1,
+      'and their commander’s own orders come through it (' + order.toFixed(1) + ')');
+  }
+
+  {
+    const b = board(4401);
+    b.me.spells[0] = 'brace'; b.me.spellCd[0] = 0;
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(b.me, { slot:0 }) === null, 'it goes out with nothing to aim');
+    t.ok(b.me.braceT === IB.BRACE.dur, 'and braces for its whole duration (' + b.me.braceT + 's)');
+    t.ok(/Braced/.test(G.toasts.map(x => x.msg).join(' | ')), 'saying so');
+    step(IB.BRACE.dur + 1);
+    t.ok(b.me.braceT === 0, 'and runs out on its own');
+    t.ok(G.sides[1].braceT === 0, 'while bracing nothing of theirs at any point');
+  }
+
+  {
+    // Both machines agree about it, and so does a reload — it decides what the
+    // biggest ability in the game does.
+    const b = board(4402);
+    b.me.braceT = 5;
+    const at = IB.netHash();
+    b.me.braceT = 1;
+    t.ok(IB.netHash() !== at, 'the brace is part of what the two machines check');
+    b.me.braceT = 5;
+    const snap = IB.netSnap();
+    b.me.braceT = 0;
+    IB.netLoad(snap);
+    t.ok(G.sides[0].braceT === 5 && IB.netHash() === at, 'and a resync lands on the board it left');
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok(pack.sides[0].braceT === 5, 'carrying it (' + pack.sides[0].braceT + ')');
+    G.sides[0].braceT = 0;
+    IB.loadMatch(pack);
+    t.ok(G.sides[0].braceT === 5, 'and a reload is still braced');
+    IB.clearSave();
+  }
+
+  {
+    /* The Host gives it when there is something to brace AGAINST — a hero of
+       theirs on the bridge with its ultimate off recovery. Bracing an empty
+       lane is eight seconds of nothing, which is the mistake this most invites. */
+    const b = board(4403);
+    const d = IB.SPELL.brace;
+    b.fh.inLane = false;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'not into an empty bridge');
+    b.fh.inLane = true; b.fh.x = IB.frontlineX(0);
+    /* It used to ALSO require their ultimate to be off recovery, and that
+       clause was the order. Measured over 26,362 samples of live matches: an
+       enemy hero exists 46% of the time, is in the lane 41%, and has its
+       ultimate loaded 2.5% — a hero spends it the moment its own brain
+       approves, so the loaded state barely exists. The whole gate held 1.3% of
+       a match and Brace came out at 0.43 casts per draft, against 1 to 5.6 for
+       every other order in the set. Without the clause the window is 25.2%,
+       and it is the right window: Brace blunts ABILITIES, which a hero throws
+       constantly, not the ultimate, which it throws once a minute. */
+    const u = b.fh.skills.find(x => x.ult);
+    u.cdT = 40;
+    t.ok(!!IB.aiSpellTarget(b.me, d, 1),
+      'a hero of theirs fighting close is reason enough, loaded or not');
+    u.cdT = 0;
+    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'and still so when it is loaded');
+    b.fh.x = IB.frontlineX(0) + 40;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'but not for one fighting far away');
+    b.fh.x = IB.frontlineX(0);
+    b.me.braceT = 3;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'and never on top of a brace already running');
+  }
+
+  {
+    // It is filed with the rest of the hold's own answers, and says where it
+    // goes in its own words rather than letting the panel guess.
+    const d = IB.SPELL.brace;
+    t.ok(!!d && d.grp === 'hold', 'Brace is filed under your own hold');
+    t.ok(d.target === 'self' && /braces everything you have/.test(d.say || ''),
+      'and takes no aim, saying so itself');
+    t.ok(IB.SPELL_ICON.brace && IB.SPELL_ICON.brace !== IB.SPELL_ICON.rampart,
+      'with an icon of its own rather than Rampart’s shield');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------- what the seventh review pass measured
+   Five defects, and the worst was a regression: the round that added THEIR
+   HERO to the dock pushed the older THEIR ORDERS row off the bottom of a
+   column that had no scrollbar and no way to say so.                      */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+
+  /* ---------------------------------- one slot per hero, not one chip per fact
+     Three of theirs is ordinary — heroCap is three — and a name chip each plus
+     an ultimate chip each grew the row past the bottom of the column. The
+     bodies are one line of text now, and the ultimates keep the SLOT rule the
+     orders row has always had: "you have seen one of three" is the fact worth
+     having, and a single chip and nothing else said the opposite. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4600 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    for (let k = 0; k < 3; k++){
+      rich(f);
+      if (IB.bList(f, 'tavern').length < 3) IB.build(f, f.plot.indexOf(null), 'tavern');
+    }
+    for (let k = 0; k < 3; k++){ rich(f); IB.createHero(f, ['mage', 'tank', 'marksman'][k]); }
+    for (const h of f.heroes){ IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true); }
+    t.ok(f.heroes.length === 3, 'they have three heroes, which the cap allows (' + f.heroes.length + ')');
+
+    IB.foeForget();
+    let html = IB.foeHeroHtml();
+    t.ok((html.match(/class="fchip un"/g) || []).length === 3,
+      'unseen, that is three question marks rather than one');
+    t.ok((html.match(/class="fchip"/g) || []).length === 0,
+      'and no name chips at all — the bodies are one line of text');
+    t.ok(/class="fname"/.test(html), 'which is what carries them (' +
+      (html.match(/class="fname"[^>]*>([^<]*)/) || [])[1] + ')');
+
+    IB.foeUlts.push('cataclysm');
+    html = IB.foeHeroHtml();
+    t.ok(html.indexOf('Cataclysm') > 0, 'one seen is named');
+    t.ok((html.match(/class="fchip un"/g) || []).length === 2,
+      'and the two you have not seen are still slots, not a gap');
+    t.ok(/fchip ult/.test(html),
+      'the ability chip is marked apart from anything else in the row');
+  }
+
+  {
+    // The column admits it scrolls. It could not always fit two rows — 169px of
+    // content in 117px at 1024x768 — and hid the older one behind no affordance.
+    const d = rule('.dsec{');
+    t.ok(!/scrollbar-width:none/.test(d), 'the dock column no longer hides its rail');
+    t.ok(/\.dsec\{[^}]*scrollbar-gutter:stable/s.test(css), 'and keeps room for it');
+    t.ok(!/scrollbar-width:thin/.test(d),
+      'and does NOT ask for a thin one, which switches Chromium to an overlay and ignores the rest');
+    t.ok(/\.dsec::-webkit-scrollbar\{ width:8px; \}/.test(SRC), 'with a rail of a real width');
+  }
+
+  /* --------------------------------------------- Brace says it is running,
+     and refuses to be spent on top of itself. The Host has always been
+     forbidden the second cast; the player was given neither the state nor the
+     refusal, and the only sign of an eight-second ward was a toast that
+     toastLife gives 3.5s and TOAST.cap can evict sooner. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4601 });
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    G.wave = 3; s.slots = 3; s.spells = ['brace', 'withdraw', 'counter']; s.spellCd = [0, 0, 0];
+    t.ok(IB.castSpell(s, { slot:0 }) === null, 'the first brace goes out');
+    t.ok(s.braceT === IB.BRACE.dur, 'for its whole duration');
+    s.spellCd[0] = 0;
+    const again = IB.castSpell(s, { slot:0 });
+    t.ok(typeof again === 'string' && /^[A-Z]/.test(again) && /\.$/.test(again),
+      'a second one on top of it is refused in a sentence (' + again + ')');
+    t.ok(s.braceT === IB.BRACE.dur && s.spellCd[0] === 0,
+      'and costs neither the brace nor the recovery');
+    t.ok(IB.aiSpellTarget(s, IB.SPELL.brace, 1) === null,
+      'which is the rule the Host was already keeping');
+    t.ok(/classList\.toggle\('up', up\)/.test(SRC),
+      'and the tile is lit for as long as it is running');
+    t.ok(/braced, ' \+ Math\.ceil\(s\.braceT\)/.test(SRC), 'with the seconds left on it');
+  }
+
+  /* ------------------------------ an attack rider is not an ability
+     Of the four things a hero's basic attack can bolt on, two travelled with
+     ability:true and were cut 40% while the pure and burn riders beside them
+     were not — split by which flag the call site happened to type, under a
+     card that promises "their heroes' abilities". */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4602 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+    fh.inLane = true; fh.dead = false; fh.x = 40; fh.y = 0;
+    const u = IB.spawnUnit(0, 'grunt', { x:41, y:0 });
+    u.hp = u.mhp = 100000;
+    step(2 / 30);
+    G.sides[0].braceT = IB.BRACE.dur;
+    let hp = u.hp; IB.dealDmg(fh, u, 1000, { ability:true, rider:true });
+    const rider = hp - u.hp;
+    hp = u.hp; IB.dealDmg(fh, u, 1000, { ability:true });
+    const cast = hp - u.hp;
+    t.ok(cast < rider * .8,
+      'a cast ability is blunted (' + cast.toFixed(1) + ')');
+    t.ok(rider > cast,
+      'and a blow bolted onto a basic attack is not (' + rider.toFixed(1) + ')');
+    t.ok(/if \(o\.ability && !o\.rider/.test(SRC), 'because the brace asks which it is');
+    t.ok(/chainHit\(u, tgt, ch, 2, true\)/.test(SRC),
+      'Stormcaller marks itself a rider');
+    t.ok(/ability:true, rider:true \}\);/.test(SRC), 'and so does Earthshaker');
+    t.ok(!/chainHit\(h, tgt, [^)]*, true\)/.test(SRC),
+      'while Arcane Torrent, which is an ultimate, does not');
+  }
+
+  {
+    // ...and the icon stops being the medic glyph on the order that does not heal.
+    const br = SRC.slice(SRC.indexOf('  brace: ico('), SRC.indexOf('  counter: ico('));
+    t.ok(!/M12 10\.4h7\.2/.test(br), 'Brace no longer wears a cross');
+    t.ok(/circle/.test(br), 'but rivets on a seam');
+    t.ok(SRC.indexOf('What the eleven are FOR') > 0, 'and the group prose counts the set it has');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------- the save did not know which seat wrote it
+   Everything else in a save is the BOARD, which both machines agree about. The
+   two fog records are not: they are what one seat has been shown, and they mean
+   nothing to the other one. A match saved from the right-hand hold resumes as
+   the left — the peer is gone and netEnd puts you back in seat 0 — so what you
+   had learned about side 0 came back labelled as what you know about side 1,
+   which by then is your own hold. Measured before the fix: the dock read
+   "Thorne Tank 24 · Cataclysm", giving side 0's ultimate to side 1's tank.
+
+   foeSeen has carried the identical exposure since the day it shipped; the hero
+   row simply added a second and more obvious symptom to it.                  */
+{
+  const seat0 = IB.MY;
+  const heroFor = (side, cls) => {
+    const s = G.sides[side];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls);
+    const h = s.heroes[s.heroes.length - 1];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40 + side; h.y = 0; h.mana = h.mmana;
+    return h;
+  };
+
+  {
+    // Sit in the RIGHT-hand seat and learn about the left hold.
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4800 });
+    IB.MY = 1;
+    const h0 = heroFor(0, 'mage');
+    heroFor(1, 'tank');
+    for (let i = 0; i < 6; i++) IB.spawnUnit(1, 'grunt', { x:41, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    const u0 = h0.skills.find(sk => sk.ult);
+    u0.cdT = 0; h0.mana = h0.mmana;
+    IB.fireSkill(h0, u0, IB.heroTarget(h0));
+    IB.foeSeen[0] = 'bombard';
+    t.ok(IB.foeUlts.join() === u0.id,
+      'seat one learns the LEFT hold’s ultimate (' + IB.foeUlts.join() + ')');
+
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok(pack.seat === 1, 'and the save records which seat wrote it (' + pack.seat + ')');
+
+    // Resume the way the game really does: the session ends, which puts you
+    // back in the left-hand hold, and then the save is loaded.
+    IB.netEnd();
+    t.ok(IB.MY === 0, 'ending the session puts you back in the left-hand hold');
+    IB.loadMatch(pack);
+    t.ok(IB.foeUlts.length === 0,
+      'so the ultimate learned from the other seat is dropped rather than re-aimed');
+    t.ok(IB.foeSeen[0] === null, 'and so is the order');
+    const dock = IB.foeHeroHtml();
+    t.ok(/class="fchip un"/.test(dock),
+      'the dock says it has been shown nothing, which is true (' +
+        dock.replace(/<[^>]+>/g, ' ').trim().slice(0, 48) + ')');
+    t.ok(dock.indexOf(IB.SKILL[u0.id] ? IB.SKILL[u0.id].n : u0.id) < 0,
+      'and never names the ability it was shown from the other one');
+    IB.clearSave();
+  }
+
+  {
+    // ...while a save written in the SAME seat keeps everything it learned.
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4801 });
+    IB.MY = 0;
+    const h1 = heroFor(1, 'mage');
+    for (let i = 0; i < 6; i++) IB.spawnUnit(0, 'grunt', { x:41, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    const u1 = h1.skills.find(sk => sk.ult);
+    u1.cdT = 0; h1.mana = h1.mmana;
+    IB.fireSkill(h1, u1, IB.heroTarget(h1));
+    IB.foeSeen[0] = 'pyre';
+    IB.saveMatch();
+    const pack = IB.savedMatch();
+    t.ok(pack.seat === 0, 'a left-hand save says so');
+    IB.loadMatch(pack);
+    t.ok(IB.foeUlts.join() === u1.id, 'and comes back knowing what it knew (' + IB.foeUlts.join() + ')');
+    t.ok(IB.foeSeen[0] === 'pyre', 'orders included');
+
+    /* A save from BEFORE this existed has no seat at all. It was written by a
+       single-player match, which is always the left-hand hold, so every real
+       save already on disk keeps its fog rather than being punished for the
+       field being new. */
+    const old = Object.assign({}, pack);
+    delete old.seat;
+    IB.foeForget();
+    IB.loadMatch(old);
+    t.ok(IB.foeUlts.join() === u1.id && IB.foeSeen[0] === 'pyre',
+      'and an older save, which can only have been seat zero, keeps its fog too');
+    IB.clearSave();
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------ the two hero orders, and why they stay rare
+   The usage sweep that caught Brace also showed Unbind drafted two or three
+   times in twenty matches and Warp Banner four, against eight to twelve for
+   everything else — because both carry ai.w:1 and SPELL_OWN_HERO allows at
+   most one of them in a hand. That looked like the same shape of defect, so it
+   was measured the same way, and the measurement came back the other way: the
+   design is right and this block is here so nobody re-litigates it blind.
+
+     every hold forges a hero eventually        100% of 28
+     median arrival                             271s, in a match of about 480
+     a side HAS a hero                          42% of sampled ticks
+     ...with one in the lane                    37.4%
+     Warp Banner's moment holds                 3.6%
+     Unbind's moment holds                      0.4%
+
+   Orders are chosen in the opening twenty-two seconds. A hero turns up after
+   the halfway mark, so a slot spent on one of these sleeps through most of the
+   match — which is exactly what a weight of 1 is for. And Unbind's 0.4% is not
+   Brace's 1.3%: Brace wanted a state that barely existed for a reason
+   unrelated to what it did, while Unbind is a CLEANSE and a rare gate is its
+   whole purpose. Drafted, it still fires about once a draft.                */
+{
+  const own = IB.SPELLS.filter(d => IB.SPELL_OWN_HERO[d.id]);
+  t.ok(own.length === 2, 'two of the orders need a hero of your own (' +
+    own.map(d => d.n).join(', ') + ')');
+  t.ok(own.every(d => d.ai.w === 1),
+    'and both are drafted at the lowest weight in the set');
+  const rest = IB.SPELLS.filter(d => !IB.SPELL_OWN_HERO[d.id]);
+  t.ok(rest.every(d => d.ai.w > 1),
+    'which nothing else is — everything else works the moment it is given');
+  t.ok(own.every(d => d.grp === 'mine'),
+    'they are the whole of one chooser group, so the sheet can warn about them together');
+
+  // ...and the warning carries the timing now, because the timing IS the
+  // decision: "nothing until you have one" is true and says nothing about when.
+  const g = IB.SPELL_GROUPS.find(x => x.k === 'mine');
+  t.ok(/fourth minute/.test(g.d),
+    'and the group says when a hero actually turns up (' + g.d + ')');
+
+  /* The cap holds too: a commander cannot walk into a match carrying BOTH of
+     them, which would be a hand that does nothing until the fourth minute. */
+  {
+    const seat0 = IB.MY;
+    let bothAtOnce = 0, rounds = 0;
+    for (let seed = 6000; seed < 6040; seed++){
+      IB.netEnd();
+      IB.newMatch({ diff:'veteran', seed });
+      for (const s of G.sides){
+        rounds++;
+        const held = s.spells.filter(Boolean);
+        if (held.filter(id => IB.SPELL_OWN_HERO[id]).length > 1) bothAtOnce++;
+      }
+    }
+    t.ok(rounds > 40, 'a lot of drafted hands to look at (' + rounds + ')');
+    t.ok(bothAtOnce === 0,
+      'and not one of them carries both hero orders (' + bothAtOnce + ' of ' + rounds + ')');
+    IB.MY = seat0;
+    IB.netEnd();
+  }
 }
 
 t.done();

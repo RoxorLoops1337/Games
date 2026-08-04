@@ -2791,21 +2791,8 @@ function nextHordeWave(){
   HORDE.lastSize = spawns.reduce((n, [, c]) => n + c, 0);
   W.cap = hordeCap(HORDE.wave);
   W.active = true;
-  W.queue = [];
-  let side = 1, first = true;
-  for (const [type, count] of spawns){
-    for (let i = 0; i < count; i++){
-      const fromRight = side > 0;
-      W.queue.push({
-        type, t: first ? 0.4 : ((ENEMY[type] || {}).horde ? 0.07 : 0.3),
-        x: fromRight ? cam.x + VW + 24 + i * 10 : cam.x - 24 - i * 10,
-        y: rr(FLOOR_TOP + 6, FLOOR_BOT - 4),
-        face: fromRight ? -1 : 1,
-      });
-      first = false;
-      side *= -1;
-    }
-  }
+  W.queue = buildQueue(spawns, cam.x, HORDE.wave % 2 ? 1 : -1, W.cap);
+  W.side = W.queue.length ? W.queue[0].side : 1;
   G.flash = 0.2;
   SFX.siren();
 }
@@ -2815,6 +2802,7 @@ function updateHorde(dt){
     const on = liveEnemies().length;
     if (on < MAX_ON() && (W.queue[0].t -= dt) <= 0){
       const q = W.queue.shift();
+      W.side = q.side || W.side;
       const e = spawnEnemy(q.type, q.x, q.y, q.face);
       if (ENEMY[q.type] && ENEMY[q.type].boss){
         G.bossHp = e.hp; G.bossMax = e.hpMax; G.bossName = e.name;
@@ -2842,7 +2830,7 @@ function updateHorde(dt){
 }
 
 /* wave bookkeeping */
-const W = { gi: 0, active: false, queue: [], goT: 0, clearT: 0, gate: null, spawnedBoss: false, cap: 0 };
+const W = { gi: 0, active: false, queue: [], goT: 0, clearT: 0, gate: null, spawnedBoss: false, cap: 0, side: 1 };
 /* How many bodies the street may hold at once. Ordinary waves stay at half
    a dozen so you can read them; a gate marked `cap` opens the taps. */
 const MAX_ON = () => (W.cap || 4 + G.players);
@@ -2890,6 +2878,7 @@ function updateWaves(dt){
     const on = liveEnemies().length;
     if (on < MAX_ON() && (W.queue[0].t -= dt) <= 0){
       const q = W.queue.shift();
+      W.side = q.side || W.side;
       const e = spawnEnemy(q.type, q.x, q.y, q.face);
       if (q.boss){
         e.ai.mode = 'enter';
@@ -2923,33 +2912,54 @@ function updateWaves(dt){
   else if (!W.queue.some(q => q.boss)) G.bossHp = 0;
 }
 
+/* How many bodies come through one side before the next lot swing round to
+   the other.  Sized off the street's own cap: a surge has to be big enough
+   to fill it, or grouping them by side would quietly undo the crowding. */
+const SURGE_GAP = 0.7;
+const surgeSize = (cap) => Math.max(6, Math.round((cap || 8) * 0.65));
+
+/* Build a spawn queue that arrives in surges: a run of them from the right,
+   a beat, then a run from the left.  Only the head of the queue counts down,
+   so each entry holds the GAP after the one before it — a running total
+   would make the twentieth man wait twenty gaps instead of one. */
+function buildQueue(spawns, baseX, startSide, cap){
+  const list = [];
+  const size = surgeSize(cap);
+  let side = startSide || 1;
+  let inSurge = 0, first = true;
+  const flat = [];
+  for (const [type, count] of (spawns || []))
+    for (let i = 0; i < count; i++) flat.push(type);
+  for (let n = 0; n < flat.length; n++){
+    const type = flat[n];
+    const quick = (ENEMY[type] || {}).horde;
+    const newSurge = inSurge >= size;
+    if (newSurge){ side *= -1; inSurge = 0; }
+    const fromRight = side > 0;
+    list.push({
+      type,
+      t: first ? 0.25 : newSurge ? SURGE_GAP : (quick ? 0.07 : 0.28),
+      x: fromRight ? baseX + VW + 26 + inSurge * 12 : baseX - 26 - inSurge * 12,
+      y: rr(FLOOR_TOP + 6, FLOOR_BOT - 4),
+      face: fromRight ? -1 : 1,
+      side,
+    });
+    first = false;
+    inSurge++;
+  }
+  return list;
+}
+
 function startWave(g){
   W.active = true; W.gate = g;
   W.cap = (g.cap || 4 + G.players) + (G.players - 1) * 4;
   cam.lock = g.x;
-  const list = [];
-  // Only the head of the queue counts down, so each entry holds the GAP after
-  // the one before it — a running total would make the twentieth man wait
-  // twenty gaps instead of one.
-  let side = 1, first = true;
-  for (const [type, count] of (g.spawn || [])){
-    for (let i = 0; i < count; i++){
-      const fromRight = side > 0;
-      const quick = (ENEMY[type] || {}).horde;
-      list.push({
-        type, t: first ? 0.25 : (quick ? 0.07 : 0.28),
-        x: fromRight ? g.x + VW + 26 + i * 12 : g.x - 26 - i * 12,
-        y: rr(FLOOR_TOP + 6, FLOOR_BOT - 4),
-        face: fromRight ? -1 : 1,
-      });
-      first = false;
-      side *= -1;
-    }
-  }
+  const list = buildQueue(g.spawn, g.x, rng() < 0.5 ? -1 : 1, W.cap);
   if (g.boss){
-    list.push({ type: g.boss, t: 0.8, x: g.x + VW + 34, y: FLOOR_MID, face: -1, boss: true });
+    list.push({ type: g.boss, t: 0.8, x: g.x + VW + 34, y: FLOOR_MID, face: -1, boss: true, side: 1 });
   }
   W.queue = list;
+  W.side = list.length ? list[0].side : 1;
   for (const [kind, dx] of (g.items || [])) mkItem(kind, g.x + dx, rr(FLOOR_TOP + 8, FLOOR_BOT - 6), 0);
 }
 
@@ -4047,6 +4057,14 @@ function drawHUD(){
     px(x, 40, Math.round(w * clamp(G.bossHp / G.bossMax, 0, 1)), 6, '#e0402a');
     px(x, 40, Math.round(w * clamp(G.bossHp / G.bossMax, 0, 1)), 2, '#ff7a5a');
     textC(G.bossName, VW / 2, 49, '#ff8a6a', 1, '#100c18');
+  }
+
+  // which side the next lot are coming through
+  if (W.active && W.queue.length && Math.floor(T * 4) % 2 === 0){
+    const right = (W.queue[0].side || W.side) > 0;
+    const ax = right ? VW - 12 : 4;
+    for (let i = 0; i < 5; i++)
+      px(right ? ax + i : ax + 7 - i, 108 - i, 5, 1 + i * 2, i > 2 ? '#ff9a4c' : '#ffd23d');
   }
 
   // GO arrow
