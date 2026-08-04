@@ -14010,6 +14010,63 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and lifting fires at where it ended, moved or not');
   }
 
+  /* --------------------------------- what the other commander is carrying
+     Both holds draft two out of the same nine, and the only trace of theirs
+     was an effect on a body that never named its source: a minion slowing
+     down could be a Hobble, a Pitch Fire, a Frost tower or a Cannon, and there
+     was no way to tell and no way to learn. A player who cannot name what hit
+     them cannot plan around it the second time. */
+  {
+    const s = fresh(8570);
+    const host = G.sides[1];
+    IB.foeForget();
+    t.ok(IB.foeSeen[0] === null && IB.foeSeen[1] === null, 'a new match has shown this seat nothing');
+    const strip = () => IB.foeOrdersHtml();
+    t.ok((strip().match(/class="fchip un"/g) || []).length === IB.SPELL_SLOTS,
+      'both of their slots start unknown');
+    // A slot drawn rather than hidden: "they have one more you have not seen"
+    // is itself worth knowing.
+    t.ok(/Their orders/.test(strip()), 'and the strip says whose they are');
+
+    // Two that always cast, so the reveal is what is being measured rather
+    // than whether a target happened to be standing there.
+    IB.chooseSpell(host, 0, 'muster');
+    IB.chooseSpell(host, 1, 'pitch');
+    t.ok(strip().indexOf('Second Muster') < 0,
+      'choosing one does not reveal it — a slot is learned by being SPENT');
+
+    step(23);
+    rich(host);
+    t.ok(IB.castSpell(host, { slot:0 }) === null, 'they spend the first');
+    t.ok(IB.foeSeen[0] === 'muster', 'spending one reveals it');
+    t.ok(/Second Muster/.test(strip()) && (strip().match(/class="fchip un"/g) || []).length === 1,
+      'and the strip fills one slot and leaves the other open');
+    t.ok(strip().includes(IB.SPELL_ICON.muster), 'with the order’s own icon on it');
+    host.spellCd[1] = 0;
+    t.ok(IB.castSpell(host, { slot:1, x:40 }) === null, 'and then the second');
+    t.ok(IB.foeSeen[1] === 'pitch', 'which is learned the same way');
+    t.ok(!/class="fchip un"/.test(strip()), 'once both have been spent nothing is left unknown');
+
+    /* Per MACHINE, not per match. It is what this seat has seen, the two seats
+       are supposed to disagree about it, and the lockstep hash must never
+       hear about it — a fog-of-war record that both machines had to agree on
+       would not be fog of war. */
+    const h0 = IB.netHash();
+    IB.foeForget();
+    t.ok(IB.netHash() === h0, 'forgetting what this seat has seen moves nothing in the world');
+    const snap = JSON.stringify(IB.netSnap());
+    t.ok(!/foeSeen/.test(snap), 'and none of it travels in the snapshot');
+    // My own two are never in it, whichever seat I am sitting in.
+    IB.chooseSpell(G.sides[0], 0, 'pyre');
+    G.sides[0].spellCd[0] = 0;
+    const foe = G.units.find(u => !u.dead && u.side === 1 && (u.isHero || u.kind === 'super'));
+    if (foe){
+      IB.castSpell(G.sides[0], { slot:0, hero:foe.id });
+      t.ok(IB.foeSeen[0] !== 'pyre', 'my own casts never fill their slots');
+    }
+    IB.foeForget();
+  }
+
   /* ------------------------------------------------- the ninth order
      The eight before it all answered a MOMENT — a salvo, a retreat, a hero
      made worse for four seconds — and none of them answered a piece of
@@ -14194,7 +14251,17 @@ t.ok(true, 'drawing an empty bridge is harmless');
     s.spellCd[0] = 0;
     IB.castSpell(s, { slot:0, x:enemy.length ? enemy[0].x : 40 });
     for (let i = 0; i < 40 && !G.toasts.length; i++) step(.1);
-    t.ok(G.toasts.length === 0, 'the other seat is told nothing about my cast');
+    /* The other seat is told WHICH order was spent — that is the fog-of-war
+       reveal, and it is the same thing a player watching carefully would work
+       out. What it is never told is the COUNT: how many bodies the salvo
+       caught is the caster's own readout, and handing it to the other side
+       would be telling them how well their own line held before they could
+       see it for themselves. */
+    const heard = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/Their commander — Bombard/.test(heard),
+      'the other seat is told which order was spent (' + heard + ')');
+    t.ok(!/caught|nothing on that stretch/.test(heard),
+      'and never the count, which belongs to the side that gave the order');
     IB.MY = seat;
     t.ok(IB.netHash() !== undefined && typeof IB.netHash() === typeof h0,
       'and the hash is still a hash either way');

@@ -917,6 +917,23 @@
      on a row of its own looking like an afterthought, which is exactly what a
      new order must not look like next to eight that shipped together. */
   .spgrid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  /* Their two, in the dock column that already describes what is walking at
+     you. On felt rather than card, because this is a READING of the other side
+     rather than a control — nothing here is pressable, and it should not
+     invite a press. */
+  .foeord{ display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-top:7px; }
+  .foeord .fol{ font-size:var(--t1); letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--dim2); font-weight:700; margin-right:2px; }
+  .fchip{ display:inline-flex; align-items:center; gap:5px; padding:2px 7px 2px 5px;
+    border-radius:var(--r2); background:rgba(255,240,210,.07); border:1px solid rgba(201,163,85,.26);
+    font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t3);
+    font-weight:700; color:#ecdfc6; white-space:nowrap; }
+  .fchip .ico{ width:16px; height:16px; vertical-align:0; }
+  /* Not yet shown. A slot rather than a gap: "they have one more you have not
+     seen" is itself worth knowing. */
+  .fchip.un{ color:var(--dim2); font-family:var(--display); letter-spacing:1px;
+    background:var(--well); border-style:dashed; border-color:rgba(201,163,85,.2); min-width:26px;
+    justify-content:center; }
   .sptile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:5px;
     padding:10px 6px 9px; min-width:0;
     background:var(--raise); border:1px solid var(--rim); border-radius:var(--r3);
@@ -1993,6 +2010,7 @@ function newMatch(opt){
   reseed(opt.seed || (HEADLESS ? 1337 : (Date.now() & 0x7fffffff)));
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null; G.overHold = 0;
+  foeForget();                       // a new match has shown this seat nothing yet
   // Where the labels were sitting belonged to the last match, and a new board
   // starting with the old board's rows would slide them all into place from
   // wherever the old ones happened to be.
@@ -2635,6 +2653,25 @@ const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
    A readout that inflates itself is worse than none: it is the number the
    player will use to decide whether the order is worth its slot. */
 const bombSeen = [new Set(), new Set()];
+
+/* -------------------------------------- what the OTHER commander is carrying
+
+   Both holds draft two orders out of the same nine, and until now the only
+   trace of theirs was an effect on a body that never named its source: a
+   minion slowing down could be a Hobble, a Pitch Fire, a Frost tower or a
+   Cannon, and there was no way to tell and no way to learn. A player who
+   cannot name what hit them cannot plan around it the second time.
+
+   Learned rather than given. A slot stays unknown until they SPEND it, which
+   is the same information a player would have if they were watching carefully
+   — and it means the reveal is a reward for surviving the first cast rather
+   than a list handed over at the start.
+
+   Per machine, not per match: it is what THIS seat has seen. Which is exactly
+   why it lives here and not on a side — netHash must never see it, and the
+   two machines are supposed to disagree about it. */
+const foeSeen = [null, null];
+const foeForget = () => { foeSeen[0] = null; foeSeen[1] = null; };
 function castTell(s, name, n, verb){
   // No HEADLESS guard: fxToast is already safe there (paintToasts returns
   // early) and every other notice from simulation code goes out the same way.
@@ -2700,6 +2737,13 @@ function castSpell(s, c){
   pay(s, d.cost);
   s.spellCd[slot] = d.cd;
   if (!HEADLESS && forMe(s.i)) sfx('cast');
+  // Their commander spending one of its two. Named the first time and every
+  // time after, because "which of the nine was that" is the question, and it
+  // does not stop being the question once you know the answer.
+  if (!forMe(s.i)){
+    foeSeen[slot] = d.id;
+    fxToast('Their commander — ' + d.n + '.', 'bad', TOAST_W.foe);
+  }
   return null;
 }
 
@@ -5896,7 +5940,7 @@ const TOAST = { life:{ min:1.8, max:5.2 }, cap:3, plain:.4, loud:.7 };
 const toastLife = (w) => TOAST.life.min + (TOAST.life.max - TOAST.life.min) * clamp(w, 0, 1);
 // What each thing the game can say is worth. The whole point of the table is
 // that these are not all the same number.
-const TOAST_W = { fall:.55, hero:.8, level:.5, rebuild:.6, wave:.45, levy:.3, ui:.1, cast:.5 };
+const TOAST_W = { fall:.55, hero:.8, level:.5, rebuild:.6, wave:.45, levy:.3, ui:.1, cast:.5, foe:.6 };
 // A structure's fall is already laid out on a ladder by how deep into the line
 // it is — the same one that sizes the sparks and the camera kick. One ladder,
 // so the biggest bang and the longest sentence cannot disagree about which
@@ -14978,7 +15022,7 @@ function dockHtml(){
   // gets one of each. It is its own thing, so it is its own column.
   sec.bridge = '<div class="ptitle">On the bridge' +
     (pend0 || s.superT <= 0 ? '' : ' · ogres in ' + Math.ceil(s.superT) + 's') +
-    '</div><div class="insp note">' + foeWarning() + '</div>';
+    '</div><div class="insp note">' + foeWarning() + '</div>' + foeOrdersHtml();
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -15368,6 +15412,23 @@ function spellTake(id){
   if (!me().spells[other]) spellUI.slot = other;
   openModal(spellSheetHtml(), G.held);
   return true;
+}
+
+/* Their two, as far as this seat has been shown them. Unknown slots are drawn
+   as slots rather than hidden, because "they have one more you have not seen"
+   is itself worth knowing — it is the difference between a commander who has
+   shown their hand and one who is holding something back. */
+function foeOrdersHtml(){
+  if (!G.sides.length || G.state !== 'play') return '';
+  let h = '<div class="foeord"><span class="fol">Their orders</span>';
+  for (let i = 0; i < SPELL_SLOTS; i++){
+    const d = foeSeen[i] ? SPELL[foeSeen[i]] : null;
+    h += d
+      ? '<span class="fchip" title="' + esc(d.n + ' — ' + d.d) + '">' + SPELL_ICON[d.id] +
+          '<b>' + d.n + '</b></span>'
+      : '<span class="fchip un" title="You have not seen this one used yet">?</span>';
+  }
+  return h + '</div>';
 }
 
 /* -------------------------------------------------- the pair, in the bar
@@ -17991,7 +18052,7 @@ window.IB = {
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
-  ordersHtml, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
+  ordersHtml, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
