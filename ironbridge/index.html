@@ -291,6 +291,7 @@
      row added to explain something. #5a4009 is 5.14:1 on the same background
      and still reads as the gold this row is about. */
   .tier.held .tl{ color:#5a4009; }
+  .ord.up{ border-color:#7fa8d8; background:linear-gradient(180deg,#dbeaff,#a8c6ea); color:#1c2c40; }
   .ord.ult.on{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
   .ord.ult.on.ready{ box-shadow:0 0 0 1px #ffe6a4 inset, 0 0 9px rgba(255,214,110,.55); }
   .ord.pickme{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
@@ -584,10 +585,20 @@
      can no longer be squeezed past. */
   .dsec{ flex:0 1 auto; display:flex; flex-direction:column; gap:3px; padding:0 11px 4px;
     border-right:none; min-width:112px; overflow-y:auto; overflow-x:hidden; position:relative;
-    scrollbar-width:none;
+    /* A rail, where there used to be `scrollbar-width:none` and a hidden webkit
+       one. At 1024x768 this column is 117px tall and two fog rows are 169 — the
+       older "Their orders" row sat entirely below a fold that nothing on screen
+       admitted to, and a half-cut chip reads as a paint bug rather than as more
+       to see. Deliberately NOT `scrollbar-width:thin`: setting it switches
+       Chromium to an overlay bar and makes the ::-webkit rules below do
+       nothing, which is the exact trap the orders sheet fell into. */
+    scrollbar-gutter:stable;
     background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0)); }
   .dsec:last-child{ border-right:none; }
-  .dsec::-webkit-scrollbar{ display:none; }
+  .dsec::-webkit-scrollbar{ width:8px; }
+  .dsec::-webkit-scrollbar-thumb{ background:rgba(180,200,220,.30); border-radius:4px; }
+  .dsec::-webkit-scrollbar-thumb:hover{ background:rgba(180,200,220,.48); }
+  .dsec::-webkit-scrollbar-track{ background:transparent; }
   #dock::-webkit-scrollbar{ display:none; }
   /* the divider is a hairline that fades out at both ends instead of a hard
      rule butting into the padding */
@@ -1047,6 +1058,10 @@
   .fchip .ico{ width:16px; height:16px; vertical-align:0; }
   /* Not yet shown. A slot rather than a gap: "they have one more you have not
      seen" is itself worth knowing. */
+  /* The bodies, as text. Not a chip: a chip beside the ultimate chips read as
+     one more of them, and on a phone there is no hover to correct it. */
+  .fname{ font-size:var(--t1); color:#8fa2b8; letter-spacing:.2px; }
+  .fchip.ult{ color:#ffe6a4; border-color:#8a6a1e; }
   .fchip.un{ color:var(--dim2); font-family:var(--display); letter-spacing:1px;
     background:var(--well); border-style:dashed; border-color:rgba(201,163,85,.2); min-width:26px;
     justify-content:center; }
@@ -2877,7 +2892,7 @@ const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 const NUM_WORD = (n) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
   'eight', 'nine', 'ten', 'eleven', 'twelve'][n] || String(n);
 
-/* What the ten are FOR, in five answers.
+/* What the eleven are FOR, in five answers.
 
    The sheet used to be nine cards in one flat grid, each with a name and a
    cooldown, and a first-time player had no way to see the shape of the set:
@@ -3100,6 +3115,12 @@ const SPELL_CAST = {
      Same fxToast path every other notice takes, each side told only its own
      half — a machine printing the other one's line would be inventing it. */
   brace(s){
+    // Refused on top of itself. The Host has always been forbidden this
+    // (aiSpellTarget returns null while braceT is up), and the player was
+    // given neither the state nor the refusal — so the one thing the order
+    // most invites, burning a hundred-second recovery into a brace already
+    // running, was possible for exactly one of the two commanders.
+    if (s.braceT > 0) return 'Already braced — ' + Math.ceil(s.braceT) + 's of it left.';
     s.braceT = BRACE.dur;
     if (forMe(s.i))
       fxToast('Braced — ' + Math.round(BRACE.cut * 100) + '% off their abilities for ' +
@@ -3347,7 +3368,7 @@ function dealDmg(src, tgt, amt, o){
      an ability: their minions, their turrets and their own commander orders go
      through untouched, so this answers exactly the class of thing the fog
      strip names and nothing else. */
-  if (o.ability && src && src.isHero && tgt.side !== undefined &&
+  if (o.ability && !o.rider && src && src.isHero && tgt.side !== undefined &&
       (G.sides[tgt.side] || {}).braceT > 0) amt *= 1 - BRACE.cut;
   if (src && src.isHero){
     let m = 1 + passVal(src, 'dmgAll') + bsum(src, 'bdmg');
@@ -3773,9 +3794,14 @@ function basicAttack(u, tgt){
       const rg = passVal(u, 'rage'); if (rg) u.rage = Math.min(.2, (u.rage || 0) + rg);
       u.atkN = (u.atkN || 0) + 1;
       const ef = passVal(u, 'everyFourth');
-      if (ef && u.atkN % 4 === 0) areaHit(u, tgt.x, tgt.y, 2.6, ef, { magic:true, ability:true });
+      // rider:true — bolted onto a BASIC ATTACK rather than cast. It travels as an
+      // ability because it is an area effect, and Brace was cutting it 40% while
+      // leaving the pure and burn riders beside it untouched: of the four things
+      // an attack can bolt on, two were blunted and two were not, split by which
+      // flag the call site happened to type.
+      if (ef && u.atkN % 4 === 0) areaHit(u, tgt.x, tgt.y, 2.6, ef, { magic:true, ability:true, rider:true });
       const ch = passVal(u, 'chainHit');
-      if (ch && u.atkN % 5 === 0) chainHit(u, tgt, ch, 2);
+      if (ch && u.atkN % 5 === 0) chainHit(u, tgt, ch, 2, true);
     }
     if (crit && !HEADLESS){
       // A crit was five extra sparks, indistinguishable from an ordinary hit.
@@ -3864,7 +3890,10 @@ function areaHit(src, x, y, rad, amt, o){
   return hits.length;
 }
 
-function chainHit(src, first, amt, jumps){
+/* `rider` marks a chain bolted onto a basic ATTACK rather than cast as one:
+   Stormcaller passes it, Arcane Torrent — which is an ultimate — does not, and
+   the two share this function. */
+function chainHit(src, first, amt, jumps, rider){
   let cur = first; const seen = new Set([first.id]);
   for (let i = 0; i < jumps; i++){
     let nxt = null, bd = 36;
@@ -3876,7 +3905,7 @@ function chainHit(src, first, amt, jumps){
     if (!nxt) break;
     seen.add(nxt.id);
     if (!HEADLESS) boltFx(cur.x, cur.y, nxt.x, nxt.y, '#9ad8ff');
-    dealDmg(src, nxt, amt, { magic:true, ability:true });
+    dealDmg(src, nxt, amt, { magic:true, ability:true, rider:!!rider });
     cur = nxt;
   }
 }
@@ -15483,7 +15512,12 @@ const SPELL_ICON = {
       'fill="#41556c" ' + ICO_EDGE + '/>' +
     '<path d="M15.6 4.6 22.4 6.8v5.5c0 3.9-2.9 6.3-6.8 7.6-4-1.3-6.8-3.7-6.8-7.6V6.8Z" ' +
       'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
-    '<path d="M15.6 8.2v8.2M12 10.4h7.2" fill="none" stroke="#5e6f85" stroke-width="1.4"/>'),
+    // A vertical seam and two rivets. It was a cross bar over a vertical —
+    // which at 19px is the medic glyph, on the order that does NOT heal, while
+    // Rampart (which does) wears the masonry grid.
+    '<path d="M15.6 7.8v8.6" fill="none" stroke="#5e6f85" stroke-width="1.4"/>' +
+    '<circle cx="15.6" cy="6.4" r="1" fill="#5e6f85"/>' +
+    '<circle cx="15.6" cy="17.8" r="1" fill="#5e6f85"/>'),
   counter: ico('<path d="M5.6 2.6h12.8M5.6 21.4h12.8" fill="none" stroke="#3d2d1a" ' +
       'stroke-width="2.6" stroke-linecap="round"/>' +
     '<path d="M7 3.4h10c0 4.2-3.4 6.2-3.4 8.6s3.4 4.4 3.4 8.6H7c0-4.2 3.4-6.2 3.4-8.6S7 7.6 7 3.4Z" ' +
@@ -16182,15 +16216,26 @@ function foeHeroHtml(){
   let h = '<div class="foeord"><span class="fol">Their hero</span><span class="fchips">';
   if (!live.length)
     return h + '<span class="fchip un" title="They have not forged one yet">none yet</span></span></div>';
-  for (const x of live)
-    h += '<span class="fchip" title="' + esc(x.name + ' — ' + CLS[x.cls].name + ', level ' + x.lvl) + '">' +
-      '<b>' + esc(x.name) + '</b> ' + CLS[x.cls].name + ' ' + x.lvl + '</span>';
-  for (const id of foeUlts){
-    const d = SKILL[id];
-    if (d) h += '<span class="fchip" title="' + esc(d.n + ' — ' + skNums(d, 1)) + '">' + d.n + '</span>';
+  /* The bodies as ONE line of text rather than a chip each. Three of them is an
+     ordinary late-game state — heroCap is three — and three name chips plus
+     their ultimates grew this row past the bottom of a dock column that has
+     `scrollbar-width:none`, which pushed the OLDER "Their orders" row entirely
+     below a fold with no affordance to say so. The round that added their hero
+     had quietly deleted their orders from the screen. */
+  h += '<span class="fname" title="' + esc(live.map(x =>
+        x.name + ' — ' + CLS[x.cls].name + ', level ' + x.lvl).join(' · ')) + '">' +
+    esc(live.map(x => x.name + ' ' + x.lvl).join(' · ')) + '</span>';
+  /* ...and one SLOT per hero, the way the orders row does it, rather than a
+     chip only for what is known. With three of theirs on the bridge and one
+     ultimate seen, "you have seen one of three" is the fact worth having, and
+     the version that printed a single chip and nothing else said the opposite.
+     The rule is the one .fchip.un was written for: a slot rather than a gap. */
+  for (let i = 0; i < live.length; i++){
+    const d = SKILL[foeUlts[i]];
+    h += d
+      ? '<span class="fchip ult" title="' + esc(d.n + ' — ' + skNums(d, 1)) + '">' + d.n + '</span>'
+      : '<span class="fchip un" title="You have not seen this one\u2019s ultimate yet">?</span>';
   }
-  if (!foeUlts.length)
-    h += '<span class="fchip un" title="You have not seen their ultimate yet">?</span>';
   return h + '</span></div>';
 }
 
@@ -16344,6 +16389,22 @@ function syncOrders(){
         b.classList.toggle('closing', left <= ORDER_WINDOW_WARN);
       } else b.classList.remove('closing');
       continue;
+    }
+    /* An order with a live DURATION says so on its own tile. Brace runs for
+       eight seconds and its only sign was a toast, which toastLife gives 3.5s
+       and TOAST.cap can evict sooner — so for most of its window the player
+       had no way to tell a wasted cast from a live one, while the code knew.
+       The same lit brass a held ultimate wears, for the same reason. */
+    if (d.id === 'brace'){
+      // The class, not the label: the .on span already carries the recovery
+      // countdown, written a few lines below, and a second writer for it just
+      // loses the race. The lit tile is the sign that reads at every size and
+      // on a phone, where the label is hidden anyway; the seconds go in the
+      // title, where the recovery's already do.
+      const up = s.braceT > 0;
+      b.classList.toggle('up', up);
+      if (up) b.title = d.n + ' — braced, ' + Math.ceil(s.braceT) + 's left.';
+      else if (b.title.indexOf('braced') > 0) b.title = d.n + ' — ' + d.d;
     }
     const cd = s.spellCd[i];
     const fill = b.querySelector('.ocd');
