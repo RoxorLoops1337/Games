@@ -1047,8 +1047,14 @@
      unknown "?" stayed glued to the heading, so it read as "THEIR ORDERS ?"
      with the answer orphaned underneath. */
   .foeord{ margin-top:7px; }
-  .foeord .fol{ display:block; margin-bottom:4px;
-    font-size:var(--t1); letter-spacing:1.4px; text-transform:uppercase;
+  /* Tighter than it was, by 8px a row at the width this column really is.
+     Measured three ways at 192px, which is the live column: leaving it as a
+     block costs 127px for the two fog rows; putting the label INLINE with the
+     chips costs 158, because the label eats the horizontal room the chips need
+     and they wrap more than the line it saved; tightening the block costs 119.
+     The obvious change was the wrong one, and only the width told me. */
+  .foeord .fol{ display:block; margin-bottom:1px;
+    font-size:9px; letter-spacing:.6px; text-transform:uppercase;
     color:var(--dim2); font-weight:700; }
   .foeord .fchips{ display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
   .fchip{ display:inline-flex; align-items:center; gap:5px; padding:2px 7px 2px 5px;
@@ -1062,6 +1068,9 @@
      one more of them, and on a phone there is no hover to correct it. */
   .fname{ font-size:var(--t1); color:#8fa2b8; letter-spacing:.2px; }
   .fchip.ult{ color:#ffe6a4; border-color:#8a6a1e; }
+  .fchip.ult.nobrace{ border-color:#7a5560; }
+  .fchip .nb{ font-style:normal; font-size:9px; letter-spacing:.4px; text-transform:uppercase;
+    color:#e2a3ad; margin-left:5px; }
   .fchip.un{ color:var(--dim2); font-family:var(--display); letter-spacing:1px;
     background:var(--well); border-style:dashed; border-color:rgba(201,163,85,.2); min-width:26px;
     justify-content:center; }
@@ -1790,6 +1799,19 @@ const SKILLS = [
     f:'Glass, oil, and a bad afternoon.' }),
   S('ironhook','Iron Hook','any',{ k:'hook', tag:'cc', cd:15, mana:55, dmg:[80,42], adR:.55, apR:.25, rng:9.5,
     stun:.6, pull:.45, f:'The chain goes out. Whoever it finds comes back.' }),
+  /* Fifty-five skills and every one of them worked by ADDING: damage, a buff,
+     a summon, a status. Nothing a hero could learn took anything off. The
+     commander had Unbind, aimed at one of your own heroes on a ninety-second
+     cooldown and drafted into two slots out of eleven candidates — so for most
+     of most matches a hobbled, slowed, burning hero simply stayed that way,
+     and the fog panel telling you their commander is carrying Hobble changed
+     nothing you could do about it.
+
+     Universal on purpose rather than tucked into the support pool: a counter
+     that only one class in six can ever be offered is a counter most heroes
+     never see, and the thing it answers lands on all of them. */
+  S('unfetter','Unfetter','any',{ k:'cleanse', tag:'free', cd:20, mana:40, ally:true, rng:6.5, free:2.5,
+    f:'The chain goes slack, and stays that way.' }),
   // ---- tank -------------------------------------------------------------
   S('shieldbash','Shield Bash','tank',{ k:'strike', tag:'cc', cd:12, mana:40, dmg:[70,34], adR:.6, stun:.9, rng:2.2,
     f:'The rim of the shield, straight to the jaw.' }),
@@ -1913,6 +1935,13 @@ function skOutput(s, rank, ad, ap){
   if (s.pull) util += 230 + (s.rng || 0) * 18;
   if (s.slow) util += s.slow * 70 * (s.dur ? 2 : 1);
   if (s.k === 'taunt') util += 90 + (s.dur || 0) * 110;
+  /* A cleanse grants nothing skOutput can see — no damage, no heal, no shield,
+     no stat in the buff bag — so it priced at zero and the no-trap assertion
+     would have called it the worst skill in the game. What it is actually
+     worth is the debuff it takes off, and the one it will usually take off is
+     a hobble: -40% damage, -30% swing and -40% walk for four and a half
+     seconds, which is 78% of every debuffed second a hero spends. */
+  if (s.k === 'cleanse') util += 200 + (s.free || 0) * 70 + (s.ally ? 40 : 0);
   const buff = (s.bad || 0) * 6 + (s.bas || 0) * 400 + (s.bcrit || 0) * 300 + (s.bms || 0) * 200
     + (s.barm || 0) * 8 + (s.bmr || 0) * 8 + (s.bls || 0) * 350 + (s.bburn || 0) * 8
     + (s.brng || 0) * 90 + (s.amp || 0) * 400;
@@ -1948,6 +1977,8 @@ function skNums(s, rank){
   if (s.bcrit) out.push('+' + Math.round(s.bcrit * 100) + '% crit');
   if (s.amp) out.push('+' + Math.round(s.amp * 100) + '% damage to the mark');
   if (s.exec) out.push('up to +' + Math.round(s.exec * 100) + '% versus the wounded');
+  if (s.k === 'cleanse') out.push('takes every hold off');
+  if (s.free) out.push(s.free.toFixed(1) + 's of slack after');
   return out.join(' · ');
 }
 
@@ -2833,11 +2864,39 @@ const COUNTER = { add:25 };
    on cooldowns rather than on anything you read there. This is the move. It
    does not stop an ability; it makes the one you can see coming cost them.
 
-   Everything a hero does with an ABILITY, which is what an ultimate is, so it
-   answers the whole class rather than one entry in it — a ward that only
-   blunted Cataclysm would be a ward you could only give after learning they
-   have Cataclysm, and useless in the match where they took Bladestorm. */
+   Everything a hero CASTS, rather than one named ability — a ward that only
+   blunted Cataclysm would be one you could only give after learning they have
+   Cataclysm, and useless in the match where they took Bladestorm.
+
+   What it does NOT reach, measured rather than assumed: the reduction keys on
+   the damage's `src` being the hero, so eight of the eighteen ultimates go
+   through it untouched — Unbreakable, Iron March, War Banner, Trueshot, Shadow
+   Legion, Blood Feast, Sanctuary and Hymn of Valour. Every one of those is a
+   buff, a shield or a summon: the damage that follows is dealt by a shade or
+   by an ally who was made stronger, and neither of them is the hero. War Banner
+   measured 514.8 into a braced hold and 514.8 into an unbraced one. That is
+   arguably the right line — you are bracing against their champion, not
+   against their army — but the card used to promise the whole class, so the
+   card says it now. */
 const BRACE = { dur:8, cut:.40 };
+/* WHICH abilities a brace does nothing about, and why it is not a hole.
+
+   The cut keys on the damage's `src` being the hero. Eight of the eighteen
+   ultimates never produce any: Unbreakable, Iron March, War Banner, Trueshot,
+   Shadow Legion, Blood Feast, Sanctuary and Hymn of Valour are buffs, shields
+   and summons, and what hurts you afterwards is a shade or an ally who was
+   made stronger — a different body, doing its own damage. There is nothing at
+   the moment they land for a brace to reduce, so this is the line being in the
+   right place rather than a gap in it. Measured across 28 brace windows, the
+   damage reaching a braced hold from summoned bodies was 310 against 52,512
+   from the hero side: not the thing that kills you.
+
+   Derived from the kinds that deal nothing through the caster rather than
+   written out by name — a hand-copied list of eight is the same trap
+   SKILL_NEEDS_TARGET fell into, and a test measures this one against what
+   dealDmg actually does rather than against this comment. */
+const NO_HERO_DAMAGE = { buff:1, teambuff:1, shield:1, summon:1, teamheal:1, heal:1, regen:1 };
+const braceBlind = (d) => !!(d && NO_HERO_DAMAGE[d.k]);
 /* How much there is for it to hold back: orders of theirs already recovering.
    One answer, asked by three different things — the cast, the greyed tile and
    the refusal — so they cannot drift apart. */
@@ -2871,7 +2930,7 @@ const SPELLS = [
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold',
     say:'no target — it braces everything you have',
-    d:'For eight seconds everything of yours takes 40% less from their heroes\u2019 abilities. Worth most while one of them is fighting on your half of the bridge.' },
+    d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
   { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
@@ -2904,8 +2963,8 @@ const NUM_WORD = (n) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', '
 
    Ordered by how universal they are: everybody has a lane, most matches have
    an enemy hero, every hold has walls, and a hero of your own is the one that
-   arrives last — measured at a median of 271 seconds, over half a match after
-   these are chosen. */
+   arrives last — measured at a median of about 262 seconds, roughly 42% of a
+   match after these are chosen. */
 const SPELL_GROUPS = [
   { k:'lane',   n:'The lane',      d:'a stretch of bridge, and whatever is standing on it' },
   { k:'theirs', n:'Their hero',    d:'one body of theirs, made worse at what it does' },
@@ -2913,11 +2972,13 @@ const SPELL_GROUPS = [
   { k:'hold',   n:'Your hold',     d:'your own walls and your own wave' },
   /* The timing is the whole decision here, and the warning alone did not carry
      it. These two are chosen in the opening twenty-two seconds and do nothing
-     until a hero exists — and a hero arrives late: measured over 28 holds,
-     every one of them forged a hero eventually, at a MEDIAN of 271 seconds
-     into a match that runs about 480. So a slot spent here is a slot that
-     spends more than half the match asleep, which is a thing to know while
-     choosing rather than a thing to find out. */
+     until a hero exists — and a hero arrives late: every hold forges one
+     eventually, at a MEDIAN of about 262 seconds. The match length behind that
+     was wrong the first time it was written down — 480s was the sampling
+     window, not the match — and a veteran match actually runs a median 590s
+     over sixty of them. So a slot spent here sleeps through roughly 42% of the
+     match rather than "over half": still the longest wait of anything in the
+     set, and still a thing to know while choosing rather than to find out. */
   { k:'mine',   n:'Your hero',     d:'nothing until you have one, and most holds do not by the fourth minute' },
 ];
 
@@ -3021,6 +3082,42 @@ function castTell(s, name, n, verb, gold){
   fxToast(n > 0 ? name + ' — ' + n + ' ' + verb + paid : name + ' — nothing on that stretch of lane.',
     n > 0 ? 'good' : 'bad', TOAST_W.cast);
 }
+
+/* What a strip took, said out loud. Same seat gate and same toast lane as
+   castTell next door — the other side is watching its own hero shrug something
+   off and does not need a scoreboard for it — but a different sentence,
+   because a strip's report is WHICH holds came off rather than how many things
+   it caught. Both endings are honest: the window is what a cast on a clean
+   hero actually buys, so it is what a cast on a clean hero says. */
+/* What to call the body a strip landed on. Reading .name off a minion produced
+   "Unfetter → undefined — a slow off." in 2 of the first 97 notices measured —
+   a cleanse sent to a friend in the line, which is a quarter of where this one
+   goes.
+
+   The obvious fix was to stop naming minions at all and call them "the line",
+   and measuring it says no — the same answer the dock's fog column gave when
+   the obvious fix there was to inline a label. Four of the six kinds are
+   SHORTER than "the line" (Levy 4, Shade 5, Caster 6, Cannon 6 against 8), so
+   the simplification lengthens the case that actually happens in order to
+   shorten the one that does not. Only Siege Ogre is long, and a cleanse goes
+   to one of those about never.
+
+   So: whatever the game already calls that body. Hero names are bounded — the
+   pool is thirty and the longest is Garrick at seven — which is what makes the
+   budget below hold. */
+const strippedName = (u) => u.isHero ? u.name : ((UNITS[u.kind] || {}).n || 'the line');
+/* Both endings measured against that same 338px. The empty one used to read
+   "nothing was on it; 5s of slack either way" at 51 characters and 386px, so
+   the one sentence a player sees when they have just wasted a ninety-second
+   order was the one sentence they could not finish reading. */
+function stripTell(side, name, took, slack){
+  if (!forMe(side)) return;
+  const what = tookPhrase(took);
+  fxToast(what ? name + ' — ' + what + ' off.'
+                : name + ' — nothing on it; ' + slack + 's of slack.',
+    what ? 'good' : 'bad', TOAST_W.cast);
+}
+const unbindTell = (s, h) => stripTell(s.i, 'Unbind', stripTook.slice(), UNBIND.dur);
 
 const spellOf = (s, slot) => SPELL[s.spells[slot | 0]] || null;
 const spellReady = (s, slot) => {
@@ -3190,15 +3287,25 @@ const SPELL_CAST = {
     const h = ownHero(s, c);
     if (!h) return 'no such hero';
     if (h.dead) return 'that hero is down';
-    h.stunT = 0; h.slowT = 0; h.slowP = 0; h.taunt = 0;
-    // pullBy is in NET_REFS, which means a snapshot stores it as an INDEX into
-    // the body table and re-links it on the way back. Clearing the timer and
-    // leaving the reference behind leaves a pointer at a body nothing is
-    // reading — until the next snapshot re-links it to whatever now sits at
-    // that index. The two go together.
-    h.pullT = 0; h.pullBy = null;
-    h.burn = null;
+    // One definition of "everything comes off", shared with the hero skill
+    // that strips — see stripStatus, and the measurement above it that is the
+    // reason a hobble now comes off with the rest of it.
+    stripStatus(h);
     h.freeT = UNBIND.dur;
+    /* Bombard has said what it caught since the round that measured it; the
+       strip is the order that needed it most and had none. Its whole effect is
+       a status icon ceasing to be drawn, on a hero the player was probably not
+       watching, and the amount at stake is real: 3.10 seconds of hold per
+       strip, measured over 24 veteran matches.
+
+       Deliberately NOT a refusal when there is nothing to take. Countermand
+       refuses because Countermand with nothing recovering does LITERALLY
+       nothing; this one still leaves the window, and the window is not
+       decoration — 30% of every piece of crowd control that lands on a hero
+       lands inside one, and it cancels 123.8s of it across those same matches.
+       So a clean hero is a legitimate pre-emptive cast, and what the player is
+       owed is an honest sentence rather than a veto. */
+    unbindTell(s, h);
     return null;
   },
   pyre(s, c){
@@ -3974,6 +4081,75 @@ function applyBurn(t, dps, dur, src){
   t.burn = { dps:Math.max(dps, t.burn ? t.burn.dps : 0), t:Math.max(dur, t.burn ? t.burn.t : 0), src };
 }
 
+/* --------------------------------------------------- what comes off a body
+
+   Unbind's card says everything on your hero comes off, and it was not true.
+   It cleared the stun, the slow, the drag and the burn, and left HOBBLE —
+   which is 78% of every debuffed second a hero spends. Measured over 32
+   veteran matches with both holds playing: 38,951 hero-ticks carrying a
+   hobble against 11,199 carrying any of the four things Unbind did clear, out
+   of 636,540 live hero-ticks. The heaviest debuff in the game (-40% damage,
+   -30% swing, -40% walk, for four and a half seconds) was the one thing the
+   game's only counter to debuffs could not touch. Pyre Brand and a hunter's
+   mark were in the same position, and the Host's own Unbind gate even listed
+   pyreT as a reason to cast it — a trigger for a cleanse that did not clean.
+
+   So there is now exactly ONE definition of "comes off", and everything that
+   strips calls it. A test walks the fields a fresh body is built with and
+   fails if a timed status is missing from this list, because the next debuff
+   somebody adds is the one that gets forgotten here.
+
+   Paired references go with their timers, always. pullBy is in NET_REFS,
+   which means a snapshot stores it as an INDEX into the body table and
+   re-links it on the way back — clear the timer and leave the reference and
+   the next snapshot points it at whatever now sits at that index. pyreSide is
+   the only thing left on the bridge that knows whose order a body is burning
+   for, so a brand that goes out has to take its owner with it.
+
+   Returns how many distinct statuses actually came off. Nothing in the sim
+   branches on the number, but the AI gates and the readout do, and a cleanse
+   that reports what it caught is the same courtesy Bombard already pays. */
+/* What the last strip actually took, by name. COSMETIC, on exactly the path
+   bombSeen and orderGold already take: written from simulation code, read by
+   nothing but the notice, in no snapshot, no save and no hash. Cleared at the
+   top of every strip, so it only ever describes the one that just happened.
+
+   A count would not have done. Measured over 24 veteran matches with both
+   holds playing, a strip takes 1.05 holds off and 3.10 seconds of hold with
+   them — so "2 taken off" is almost never the sentence, and "the hobble and a
+   burn" is the one that says whether ninety seconds were worth spending. */
+const stripTook = [];
+function stripStatus(t){
+  stripTook.length = 0;
+  let n = 0;
+  if (t.stunT > 0){ t.stunT = 0; stripTook.push('a stun'); n++; }
+  if (t.slowT > 0){ t.slowT = 0; t.slowP = 0; stripTook.push('a slow'); n++; }
+  if (t.taunt > 0){ t.taunt = 0; stripTook.push('a taunt'); n++; }
+  if (t.pullT > 0){ t.pullT = 0; t.pullBy = null; stripTook.push('a chain'); n++; }
+  if (t.burn){ t.burn = null; stripTook.push('a burn'); n++; }
+  if (t.hobT > 0){ t.hobT = 0; stripTook.push('the hobble'); n++; }
+  if (t.markT > 0){ t.markT = 0; t.markBy = -1; t.markAmp = 0; stripTook.push('a mark'); n++; }
+  if (t.pyreT > 0){ t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; stripTook.push('the brand'); n++; }
+  return n;
+}
+/* "a slow", "the hobble and a burn", "a stun, a chain and the brand". Built
+   from whatever the strip just recorded rather than from a count, and it is
+   the whole reason stripTook exists. */
+function tookPhrase(list){
+  const a = list || stripTook;
+  if (!a.length) return '';
+  if (a.length === 1) return a[0];
+  return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+}
+// The same list, asked rather than acted on: how many of them a body is
+// carrying right now. Every gate that means "is there anything to take off"
+// reads this, so a gate cannot fall out of step with the strip.
+function heldBy(t){
+  return (t.stunT > 0 ? 1 : 0) + (t.slowT > 0 ? 1 : 0) + (t.taunt > 0 ? 1 : 0) +
+    (t.pullT > 0 ? 1 : 0) + (t.burn ? 1 : 0) + (t.hobT > 0 ? 1 : 0) +
+    (t.markT > 0 ? 1 : 0) + (t.pyreT > 0 ? 1 : 0);
+}
+
 /* ------------------------------------------------------------------ unit tick */
 function speedOf(u){
   let sp = u.spd * (1 - Math.min(.75, u.slowP > 0 && u.slowT > 0 ? u.slowP : 0));
@@ -4393,7 +4569,7 @@ function pickOption(h, idx){
 // Monte Carlo over real three-option menus puts it at 0.0-0.6% everywhere.
 // Fighter's Dash Strike was the same story at 2%, because the dash bonus
 // below was written for the Assassin only.
-const TAG_WORTH = { dmg:0, cc:.5, buff:.45, heal:.5, summon:.55, move:.45 };
+const TAG_WORTH = { dmg:0, cc:.5, buff:.45, heal:.5, summon:.55, move:.45, free:.45 };
 function skillWorth(h, d){
   let sc = skRate(d, 1, ad0(h), ap0(h)) / 30;
   sc += TAG_WORTH[d.tag] || 0;
@@ -4607,7 +4783,11 @@ function enterLane(h){
   // not a corner: heroes respawned at full health and could not move.
   h.stunT = 0; h.slowT = 0; h.slowP = 0; h.taunt = 0;
   h.pullT = 0; h.pullBy = null;
-  h.markT = 0; h.markBy = undefined; h.markAmp = 0;
+  // -1 rather than undefined: markBy travels as a plain number now, and a
+  // field whose cleared value is undefined is a field JSON drops from the
+  // snapshot entirely — leaving the machine that adopts it holding whatever
+  // it had before. No side is ever -1, so the mark stays owned by nobody.
+  h.markT = 0; h.markBy = -1; h.markAmp = 0;
   h.burn = null; h.shield = 0; h.shT = 0; h.target = null;
   // Same reason as the line above: these are frozen, not spent, while a hero is
   // down. A hero that died mid-channel would otherwise walk back out and finish
@@ -4914,6 +5094,11 @@ function castLoop(h, tgt, dt){
 function wantCast(h, s, tgt){
   const frac = h.hp / h.mhp;
   if (s.tag === 'heal') return frac < .7 || (s.ally && lowAlly(h, s.rng || 6));
+  /* A cleanse cast at a clean hero is the whole cooldown spent on nothing, and
+     it takes no aim, so it would otherwise sail past every test below and fire
+     on sight. Same gate as the strip itself, asked of the two bodies it can
+     actually land on. */
+  if (s.k === 'cleanse') return heldBy(h) > 0 || !!(s.ally && heldAlly(h, s.rng || 6));
   if (s.tag === 'buff' && (s.shield || s.barm)) return frac < .8 && (tgt || h.retreat);
   if (s.tag === 'move' && h.retreat) return true;
   if (!tgt) return false;
@@ -4939,6 +5124,21 @@ function lowAlly(h, rad){
     if (f >= .7) return;
     if (u.isHero){ if (!hero || f < hero.hp / hero.mhp) hero = u; }
     else if (!any || f < any.hp / any.mhp) any = u;
+  });
+  return hero || any;
+}
+// The friend carrying the most, for the skill that takes things off. Same
+// shape as lowAlly and the same hero-before-minion preference, ranked by
+// heldBy instead of by health. Strictly greater, so on a tie the first body
+// the spatial index hands back wins on both machines.
+function heldAlly(h, rad){
+  let hero = null, hn = 0, any = null, an = 0;
+  nearby(h.x, rad, (u) => {
+    if (u.dead || u.side !== h.side || u === h || u.struct) return;
+    const n = heldBy(u);
+    if (n <= 0) return;
+    if (u.isHero){ if (n > hn){ hn = n; hero = u; } }
+    else if (n > an){ an = n; any = u; }
   });
   return hero || any;
 }
@@ -5045,6 +5245,25 @@ function castSkill(h, sk, tgt){
     }
     case 'regen': {
       addBuff(h, { t:dur, tag:'regen', hps:(skVal(s.heal, r) + (s.apR || 0) * apBase(h, s)) / dur });
+      break;
+    }
+    /* Takes it off, then makes the next one stick less. Yourself first
+       whenever there is anything on you — a hero who spends its own cleanse on
+       a levy while carrying a hobble has read the situation backwards — and
+       otherwise the friend carrying the most. Deliberately NOT lowAlly, which
+       ranks by health: the most hurt body on the bridge is very often the one
+       with nothing on it at all. */
+    case 'cleanse': {
+      const t = heldBy(h) > 0 ? h : (heldAlly(h, s.rng || 6) || h);
+      stripStatus(t);
+      const took = stripTook.slice();
+      t.freeT = Math.max(t.freeT, s.free || 0);
+      if (t !== h && !HEADLESS) linkFx(h.x, h.y, t.x, t.y, '#8ce39a');
+      // Per SEAT, not per side: the notice belongs to whoever is playing this
+      // hero's hold. Named for the body it landed on rather than the caster,
+      // because "Unfetter — the hobble off" is a different fact depending on
+      // whether it went out to a friend.
+      stripTell(h.side, s.n + (t === h ? '' : ' → ' + strippedName(t)), took, s.free || 0);
       break;
     }
     case 'shield': {
@@ -5400,8 +5619,10 @@ function aiSpellTarget(s, d, fs){
     return h ? { hero:h.id } : null;
   }
   if (d.id === 'unbind'){
-    const h = s.heroes.find(x => !x.dead && x.inLane &&
-      (x.stunT > 0 || x.slowT > 0 || x.pullT > 0 || x.burn || x.pyreT > 0));
+    // The gate used to name five fields by hand, and it named one — pyreT —
+    // that the order did not actually clear. heldBy IS the strip list, asked
+    // instead of acted on, so the two cannot drift apart again.
+    const h = s.heroes.find(x => !x.dead && x.inLane && heldBy(x) > 0);
     return h ? { hero:h.id } : null;
   }
   if (d.id === 'hobble'){
@@ -5431,15 +5652,31 @@ function aiSpellTarget(s, d, fs){
      casts per draft when every other order in the set runs 1 to 5.6: a
      commander who drafted it essentially never got to use it.
 
-     Dropping that clause takes the window to 25.2%, and it is the right window
-     anyway — Brace blunts a hero's ABILITIES, which it throws constantly, not
-     its ultimate, which it throws once a minute. The card was teaching the
-     player to wait for the same moment that never comes; it no longer does. */
+     Dropping that clause alone was an overcorrection, and the sentence that
+     replaced it — "abilities, which it throws constantly" — was measurably
+     false: a hero lands a damaging ability about once every ten seconds, into
+     an eight-second ward. Presence is not a test. Measured over 337 windows,
+     bracing on "a hero is near" caught nothing at all 49% of the time: a
+     hundred-second recovery and 30 wood and 30 iron for eight seconds of air.
+
+     So it asks whether they have something to THROW, which is the thing this
+     order answers. skillArmed is the same predicate the hero's own brain uses
+     and the ultimate tile lights from, so all three agree about what "loaded"
+     means. Measured across the same matches:
+
+       gate                      holds    catches an ability
+       near                       25.7%          51.0%
+       near + something armed     12.3%          62.7%
+       near + armed + within 10    9.3%          67.4%
+
+     The middle one. The tightest buys five points of accuracy for a third of
+     the opportunity, and the old ultimate-only clause held 2.5% — unusable. */
   if (d.id === 'brace'){
     if (s.braceT > 0) return null;
     for (const h of G.sides[fs].heroes){
       if (h.dead || !h.inLane) continue;
-      if (Math.abs(h.x - frontlineX(s.i)) < 16) return {};
+      if (Math.abs(h.x - frontlineX(s.i)) >= 16) continue;
+      if (h.skills.some(sk => skillArmed(h, sk))) return {};
     }
     return null;
   }
@@ -6169,7 +6406,10 @@ function addFloat(x, y, txt, col, sc){
   G.floats.push({ x:x + ox, y:y + oy + fxRr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1,
     vy:fxRr(-.5, -.9), jx:jitter() });
 }
-const CAST_COL = { dmg:'#ffa96a', heal:'#7fdc8a', buff:'#ffcf4d', cc:'#9ad8ff', move:'#bfe0ff', summon:'#c9a6ff' };
+const CAST_COL = { dmg:'#ffa96a', heal:'#7fdc8a', buff:'#ffcf4d', cc:'#9ad8ff', move:'#bfe0ff', summon:'#c9a6ff',
+  // deliberately near cc's blue and lighter than it: a cleanse is the same
+  // subject as a hold, read from the other end
+  free:'#a7f0d0' };
 function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a'); }
 
 // You choose these skills, so you should be able to see them happen: the name
@@ -6318,6 +6558,15 @@ function castFx(h, s, tgt){
       moteFx(tx, ty, fxMix(col, -.3), ult ? 6 : 4, r * .9, true);
       break;
     }
+
+    // it comes off. Every other shape in here closes IN on something; this one
+    // opens outward, because that is the whole difference between a hold and
+    // the end of one.
+    case 'cleanse':
+      ringFx(h.x, h.y, 2.4, col);
+      burstFx(h.x, h.y, col, 10);
+      moteFx(h.x, h.y, '#cfe6ff', 6, 1.2);
+      break;
 
     // it puts something back
     case 'heal': case 'teamheal': case 'regen':
@@ -15377,6 +15626,25 @@ const SKILL_TAG_ICON = {
       'stroke-width="2" stroke-linecap="round"/>' +
     '<path d="M11.6 4.4h4v9.4l4.4 2.6v5H11.6Z" fill="#2f4763"/>' +
     '<path d="M11.6 2.6h4V12l4.4 2.6v5H11.6Z" fill="#7fb2ff" ' + ICO_EDGE + '/>'),
+  /* A chain, snapped. The first cut of this drew two half-links pulling apart
+     on a DIAGONAL with a scatter of sparks, and rendered at the 16px these
+     actually paint at it read as a scribble — beside Mend's cross, which is
+     legible at any size, it was plainly the worst icon in the set. What
+     survives shrinking is a big shape and a big gap: two half-links facing
+     each other across clear air, on the horizontal, nothing crossing anything.
+     `cc` next door is a ring with a bar through it, so the difference here is
+     a ring that is OPEN rather than one drawn slightly differently — and the
+     piece that came out of it, thrown clear, so the gap reads as a break
+     rather than as a badly closed circle. Two half-links facing each other
+     was tried before this and merged into one blob at 16px. */
+  free: ico('<path d="M17.91 13.76A6 6 0 1 1 14.05 9.16" fill="none" ' +
+      'stroke="#4a5568" stroke-width="5.2" stroke-linecap="round"/>' +
+    '<path d="M16.6 8A6 6 0 0 1 19.04 10.66" fill="none" ' +
+      'stroke="#4a5568" stroke-width="5.2" stroke-linecap="round"/>' +
+    '<path d="M17.91 11.96A6 6 0 1 1 14.05 7.36" fill="none" ' +
+      'stroke="' + ICO_STEEL + '" stroke-width="3.8" stroke-linecap="round"/>' +
+    '<path d="M16.6 6.2A6 6 0 0 1 19.04 8.86" fill="none" ' +
+      'stroke="#8ce39a" stroke-width="3.8" stroke-linecap="round"/>'),
   // two more of them, stood beside you
   summon: ico('<circle cx="8" cy="7.6" r="3.4" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
     '<path d="M3.4 21.4v-6a4.6 4.6 0 0 1 9.2 0v6Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
@@ -16252,8 +16520,17 @@ function foeHeroHtml(){
      The rule is the one .fchip.un was written for: a slot rather than a gap. */
   for (let i = 0; i < live.length; i++){
     const d = SKILL[foeUlts[i]];
+    /* ...and whether Brace is any answer to it. The strip has named their
+       ultimate since the round that added it, and the knowledge bought nothing
+       — you could learn they carry Shadow Legion and still spend a hundred
+       seconds of recovery on a ward that does not touch it. The mark is the
+       shortest way to close that: it is the one thing about their ultimate
+       that changes which of YOUR orders is worth giving. */
     h += d
-      ? '<span class="fchip ult" title="' + esc(d.n + ' — ' + skNums(d, 1)) + '">' + d.n + '</span>'
+      ? '<span class="fchip ult' + (braceBlind(d) ? ' nobrace' : '') + '" title="' +
+          esc(d.n + ' — ' + skNums(d, 1) +
+            (braceBlind(d) ? ' · Brace does not blunt this — it deals no damage itself.' : '')) +
+          '">' + d.n + (braceBlind(d) ? '<i class="nb">no brace</i>' : '') + '</span>'
       : '<span class="fchip un" title="You have not seen this one\u2019s ultimate yet">?</span>';
   }
   return h + '</span></div>';
@@ -17661,8 +17938,18 @@ const packHero = (h) => ({
   // Whatever a commander spell left on it. pyreSrc is not here: a hold spell
   // has no caster body, and a save file has no body table to re-link one
   // against — it is restored as null, which is what it always is.
+  //
+  // pyreSide WAS missing, and the read side hid it completely: the unpack says
+  // `ph.pyreSide === undefined ? -1 : ph.pyreSide`, so a field nobody wrote
+  // came back as "owned by nobody" and looked deliberate at the only place
+  // anyone would have looked. A hero's brand survived the save; who cast it
+  // did not, so the kill two seconds later paid no hold and moved no tally —
+  // while a levy carrying the same brand on the same save kept its owner,
+  // because packUnit below happens to list the field. Measured before the fix:
+  // hero packs {pyreT:6, pyreDps:40} and loads back at pyreSide -1.
   warpT:h.warpT || 0, fallT:h.fallT || 0, hobT:h.hobT || 0, freeT:h.freeT || 0,
   pyreT:h.pyreT || 0, pyreDps:h.pyreDps || 0,
+  pyreSide:h.pyreSide === undefined ? -1 : h.pyreSide,
 });
 const packUnit = (u) => ({
   kind:u.kind, side:u.side, x:u.x, y:u.y, hp:u.hp, mhp:u.mhp, ad:u.ad, armor:u.armor, mr:u.mr,
@@ -18671,7 +18958,17 @@ function netCheckHash(tick){
    again immediately. Everything primitive is copied; the handful of values that
    are references to other bodies are stored as indices into one table and
    re-linked on the way back in. */
-const NET_REFS = { target:1, markBy:1, lastKiller:1, pullBy:1, pyreSrc:1 };
+/* markBy is NOT in here, and used to be. It is the SIDE that placed the mark —
+   `tgt.markBy = h.side`, a 0 or a 1 — and treating it as a body reference
+   destroyed it in both directions: ref(0) short-circuits on the falsy value
+   and returns 0, ref(1) misses the body table and returns 0, so every mark
+   packed as "nothing" and came back as null. `tgt.markBy === src.side` is then
+   false forever, the mark's amplifier silently stops applying on the joiner
+   alone, and since that feeds dealDmg it feeds hp and hp is hashed: a resync
+   that desyncs, on every snapshot taken while a Hunter's Mark or a Death Mark
+   was live. A plain number needs no re-linking — packBody's primitive branch
+   carries it and netLoad's field copy restores it. */
+const NET_REFS = { target:1, lastKiller:1, pullBy:1, pyreSrc:1 };
 
 // One table of every body on the board. Heroes live in BOTH sides[].heroes and
 // G.units while they are in the lane, and they are the same object — so the
@@ -19260,6 +19557,7 @@ window.IB = {
   createHero, makeHero, pickOption, autoPick, gainXp, recalcHero, offer, enterLane, heroStep,
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
+  stripStatus, heldBy, heldAlly, NET_REFS,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
   structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard, paintHeld,
   towerCover, towerCovered, COVERED,
@@ -19290,7 +19588,8 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
-  foeHeroHtml, foeUlts, foeUltSeen, fireSkill,
+  foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
+  stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,

@@ -313,8 +313,21 @@ t.ok(G.state === 'menu', 'boots into the menu without starting a match');
 {
   const ids = new Set(IB.SKILLS.map(s => s.id));
   t.ok(ids.size === IB.SKILLS.length, 'every skill id is unique');
-  const kinds = new Set(['strike','bolt','nova','dash','heal','shield','buff','teambuff','regen','dot','summon','chain','volley','mark','taunt','storm','teamheal','hook']);
-  t.ok(IB.SKILLS.every(s => kinds.has(s.k)), 'every skill uses an effect kind the sim implements');
+  /* "The sim implements it" was a list of eighteen strings written out by
+     hand here, which is a claim ABOUT castSkill kept in a second place that
+     could not notice castSkill changing. Read the switch instead: these are
+     the kinds the simulation actually has a branch for, so a skill declaring a
+     kind nobody wrote a case for fails, and a new case needs no edit here. */
+  const fn = SRC.slice(SRC.indexOf('function castSkill('));
+  const sw = fn.slice(0, fn.indexOf('\n}\n'));
+  const kinds = new Set([...sw.matchAll(/case '(\w+)'/g)].map(m => m[1]));
+  t.ok(kinds.size > 12, 'the castSkill switch really parsed (' + kinds.size + ' kinds)');
+  const orphan = IB.SKILLS.filter(s => !kinds.has(s.k)).map(s => s.n + ':' + s.k);
+  t.ok(orphan.length === 0, 'every skill uses an effect kind the sim implements (' + orphan.join(', ') + ')');
+  // and the other way round: a case nobody declares is a branch that can never
+  // run, which is how a renamed kind hides
+  const unused = [...kinds].filter(k => !IB.SKILLS.some(s => s.k === k));
+  t.ok(unused.length === 0, 'every branch in castSkill belongs to a skill (' + unused.join(', ') + ')');
   t.ok(IB.SKILLS.every(s => s.cd > 0 && s.mana >= 0 && s.f), 'every skill has a cooldown, a cost and flavour');
   // A summon skill once carried its count in `n`, which is the name field —
   // Object.assign quietly replaced "Banner Call" with the number 2.
@@ -10588,10 +10601,21 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(back2 && back2.retreat === false, 'and a hero that was holding its ground still is');
     }
   }
-  // and it is a live match, not a museum piece
-  const wave0 = G.wave;
+  /* and it is a live match, not a museum piece.
+
+     This used to demand the WAVE COUNTER advance inside three minutes, which
+     is not the property — it is one way the property can show. A save taken
+     late enough resumes into a hold that is already losing its gates, and a
+     match that reaches a winner 12 seconds into the window has plainly kept
+     running while failing the assertion. Measured when it first fired: seed 4
+     resumed at wave 16 and ended at t=372.5 with side 1 the winner, having
+     simulated the whole window. Progress is the claim — the clock moved and
+     the match either drew another wave or reached its end. */
+  const wave0 = G.wave, t0 = G.t;
   for (let i = 0; i < 30 * 60 * 3 && G.state === 'play'; i++) IB.update(1 / 30);
-  t.ok(G.wave > wave0, 'the resumed match keeps running');
+  t.ok(G.t > t0, 'the resumed match runs its clock forward (' + t0.toFixed(1) + ' → ' + G.t.toFixed(1) + ')');
+  t.ok(G.wave > wave0 || G.state === 'over',
+    'and it keeps running — another wave, or a finish (wave ' + wave0 + ' → ' + G.wave + ', ' + G.state + ')');
   t.ok(G.units.every(u => finite(u.x) && finite(u.hp)), 'and stays numerically sane');
   IB.draw();
   t.ok(true, 'and draws');
@@ -17556,9 +17580,12 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 
   {
-    /* The Host gives it when there is something to brace AGAINST — a hero of
-       theirs on the bridge with its ultimate off recovery. Bracing an empty
-       lane is eight seconds of nothing, which is the mistake this most invites. */
+    /* The Host gives it when there is something to brace AGAINST: a hero of
+       theirs at the line WITH A SKILL ARMED. Presence alone is not a test —
+       bracing on "a hero is near" caught nothing at all in 49% of 337 measured
+       windows — and the ultimate-only clause that preceded it held 2.5% of a
+       match and made the order unusable. Armed-and-near holds 12.3% of a match
+       and catches an ability 62.7% of the time. */
     const b = board(4403);
     const d = IB.SPELL.brace;
     b.fh.inLane = false;
@@ -17575,10 +17602,19 @@ t.ok(true, 'a final draw on a live match is clean');
        constantly, not the ultimate, which it throws once a minute. */
     const u = b.fh.skills.find(x => x.ult);
     u.cdT = 40;
+    b.fh.mana = b.fh.mmana;
     t.ok(!!IB.aiSpellTarget(b.me, d, 1),
-      'a hero of theirs fighting close is reason enough, loaded or not');
-    u.cdT = 0;
-    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'and still so when it is loaded');
+      'a hero of theirs at the line with anything armed is reason enough — not only its ultimate');
+    // ...but a hero with nothing to throw is a hero there is nothing to brace
+    // against, and that is the test the widened gate was missing.
+    for (const sk of b.fh.skills) sk.cdT = 99;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null,
+      'and one whose every skill is recovering is not');
+    for (const sk of b.fh.skills) sk.cdT = 0;
+    b.fh.mana = 0;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'nor one that cannot pay for any of them');
+    b.fh.mana = b.fh.mmana;
+    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'and it comes back when they can throw again');
     b.fh.x = IB.frontlineX(0) + 40;
     t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'but not for one fighting far away');
     b.fh.x = IB.frontlineX(0);
@@ -17842,15 +17878,17 @@ t.ok(true, 'a final draw on a live match is clean');
    design is right and this block is here so nobody re-litigates it blind.
 
      every hold forges a hero eventually        100% of 28
-     median arrival                             271s, in a match of about 480
+     median arrival                             about 262s, in a match of ~590
      a side HAS a hero                          42% of sampled ticks
      ...with one in the lane                    37.4%
      Warp Banner's moment holds                 3.6%
      Unbind's moment holds                      0.4%
 
-   Orders are chosen in the opening twenty-two seconds. A hero turns up after
-   the halfway mark, so a slot spent on one of these sleeps through most of the
-   match — which is exactly what a weight of 1 is for. And Unbind's 0.4% is not
+   Orders are chosen in the opening twenty-two seconds. A hero turns up around
+   the 262-second mark of a median 590-second match, so a slot spent on one of
+   these sleeps through roughly 42% of it — the longest wait in the set, which
+   is what a weight of 1 is for. (The first version said "over half", off a
+   480s figure that was the sampling window rather than the match.) And Unbind's 0.4% is not
    Brace's 1.3%: Brace wanted a state that barely existed for a reason
    unrelated to what it did, while Unbind is a CLEANSE and a rare gate is its
    whole purpose. Drafted, it still fires about once a draft.                */
@@ -17890,6 +17928,733 @@ t.ok(true, 'a final draw on a live match is clean');
     t.ok(bothAtOnce === 0,
       'and not one of them carries both hero orders (' + bothAtOnce + ' of ' + rounds + ')');
     IB.MY = seat0;
+    IB.netEnd();
+  }
+}
+
+/* ------------------------- which of theirs a brace is no answer to, and why
+   Brace keys on the damage's src being the hero, so eight of the eighteen
+   ultimates go through it untouched — and the review that found that read it
+   as a broken promise. Measured, it is the line being in the right place: all
+   eight are buffs, shields and summons that produce NO damage through the
+   caster at all, so there is nothing at the moment they land to reduce. What
+   hurts you afterwards is a shade, or an ally who was made stronger, and
+   neither of those is the hero. Across 28 brace windows the damage reaching a
+   braced hold from summoned bodies was 310 against 52,512 from the hero side.
+
+   So the code is right and the PLAYER was the one left out: the fog strip has
+   named their ultimate for several rounds and the knowledge bought nothing —
+   you could learn they carry Shadow Legion and still spend a hundred seconds
+   of recovery on a ward that does not touch it.                            */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  /* The set is DERIVED, and this holds the derivation against what dealDmg
+     actually does rather than against the comment beside it. A hand-copied
+     list of eight is the trap SKILL_NEEDS_TARGET fell into two rounds ago. */
+  {
+    const ults = IB.SKILLS.filter(d => d.ult);
+    const blind = ults.filter(d => IB.braceBlind(d));
+    const bites = ults.filter(d => !IB.braceBlind(d));
+    t.ok(ults.length >= 12, 'there are a lot of ultimates (' + ults.length + ')');
+    t.ok(blind.length > 0 && bites.length > 0,
+      'and both kinds exist (' + blind.length + ' blind, ' + bites.length + ' bitten)');
+    t.ok(blind.every(d => IB.NO_HERO_DAMAGE[d.k]),
+      'every blind one is a kind that deals nothing through the caster (' +
+        [...new Set(blind.map(d => d.k))].sort().join(', ') + ')');
+    t.ok(bites.every(d => !IB.NO_HERO_DAMAGE[d.k]),
+      'and every bitten one is a kind that does');
+
+    // ...and the claim underneath it: a blind kind produces no hero-sourced
+    // damage at all, which is why a brace has nothing to take off it.
+    const dmgKinds = new Set(['strike', 'bolt', 'volley', 'hook', 'nova', 'dash',
+      'chain', 'dot', 'storm', 'mark']);
+    t.ok(blind.every(d => !dmgKinds.has(d.k)),
+      'no blind ultimate is one of the kinds that damage through the hero');
+    t.ok(bites.some(d => dmgKinds.has(d.k)), 'while the bitten ones are');
+  }
+
+  /* Measured rather than reasoned: a damaging ultimate is cut, and one of the
+     blind ones deals nothing for the cut to apply to in the first place. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:7400 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+    fh.inLane = true; fh.dead = false; fh.x = 40; fh.y = 0; fh.mana = fh.mmana;
+    const u = IB.spawnUnit(0, 'grunt', { x:41, y:0 });
+    u.hp = u.mhp = 200000;
+    step(2 / 30);
+
+    const bite = IB.SKILLS.find(d => d.ult && !IB.braceBlind(d) && d.k === 'nova');
+    const blind = IB.SKILLS.find(d => d.ult && IB.braceBlind(d));
+    t.ok(!!bite && !!blind, 'one of each to measure (' + (bite||{}).n + ' / ' + (blind||{}).n + ')');
+
+    const fire = (id, braced) => {
+      G.sides[0].braceT = braced ? IB.BRACE.dur : 0;
+      u.hp = u.mhp;
+      const sk = { id, rank:1, cdT:0, ult:true };
+      IB.castSkill(fh, sk, u);
+      return u.mhp - u.hp;
+    };
+    const plain = fire(bite.id, false), cut = fire(bite.id, true);
+    t.ok(plain > 0, bite.n + ' lands for something (' + plain.toFixed(1) + ')');
+    t.ok(Math.abs((1 - cut / plain) - IB.BRACE.cut) < .02,
+      'and a braced hold takes ' + Math.round(IB.BRACE.cut * 100) + '% less of it (' +
+        (100 * (1 - cut / plain)).toFixed(1) + '%)');
+    const blindPlain = fire(blind.id, false);
+    t.ok(blindPlain === 0,
+      blind.n + ' deals nothing itself, which is why a brace has nothing to take off it (' +
+        blindPlain + ')');
+  }
+
+  /* ...and the strip says so, on the chip that names it. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:7401 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+
+    const blind = IB.SKILLS.find(d => d.ult && IB.braceBlind(d));
+    const bite = IB.SKILLS.find(d => d.ult && !IB.braceBlind(d));
+
+    IB.foeForget();
+    IB.foeUlts.push(bite.id);
+    let html = IB.foeHeroHtml();
+    t.ok(html.indexOf(bite.n) > 0, 'a bitten ultimate is named (' + bite.n + ')');
+    t.ok(!/nobrace/.test(html), 'and carries no warning, because Brace does answer it');
+
+    IB.foeForget();
+    IB.foeUlts.push(blind.id);
+    html = IB.foeHeroHtml();
+    t.ok(html.indexOf(blind.n) > 0, 'a blind one is named too (' + blind.n + ')');
+    t.ok(/fchip ult nobrace/.test(html), 'and marked');
+    t.ok(/no brace/.test(html), 'in words, not only in a border colour');
+    t.ok(/Brace does not blunt this/.test(html),
+      'with the reason on the chip for anyone who asks it');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------ the dock column that fog outgrew
+   Three rounds running added height to "On the bridge": the hero row, a slot
+   per hero, then the NO BRACE mark. Measured across every viewport, with the
+   worst case of three enemy heroes and three learned ultimates:
+
+     size          column   content   over
+     1024x768        117      219      102
+     1280x800        164      219       55
+     1440x900        186      219       33
+     1440x1080       226      226        0
+     390x844         140      159       19
+
+   Broken down: 20px of section title, 29px of wave note, ~101px of hero row
+   and 37px of orders row. The hero row is the elephant and its cost is the
+   CHIPS wrapping in a 192px column, not the text.
+
+   The obvious fix was wrong. Putting the row label inline with the chips —
+   which saves a line — measured 158px against the current 127 at that width,
+   because the label takes horizontal room the chips then wrap for. Only
+   tightening the label helped, and only by 8px. The width had to be measured;
+   reasoning about it gave the wrong answer.
+
+   And the honest conclusion, which no trimming reaches: at a 768-tall viewport
+   the column is 117px while the fog needs 84px at ONE enemy hero plus 49px of
+   chrome. It cannot fit there and never could. The rail added earlier is the
+   answer, and this block exists so the next thing added to this column has to
+   argue with the budget rather than discover it.                            */
+{
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+
+  const fol = rule('.foeord .fol{');
+  t.ok(/font-size:9px/.test(fol) && /letter-spacing:\.6px/.test(fol),
+    'the fog row label is the tight one the measurement chose');
+  t.ok(/display:block/.test(fol),
+    'and still a block — inline measured 31px WORSE at the width this column really is');
+
+  // The rail is what makes the overflow honest, and it is load-bearing now
+  // rather than a nicety. Same three properties the round that added it pinned.
+  const d = rule('.dsec{');
+  t.ok(!/scrollbar-width:none/.test(d), 'the column still shows its rail');
+  t.ok(/\.dsec\{[^}]*scrollbar-gutter:stable/s.test(css), 'and keeps room for it');
+  t.ok(!/scrollbar-width:thin/.test(d),
+    'and does not ask for a thin one, which would switch Chromium to an overlay');
+  t.ok(/\.dsec::-webkit-scrollbar\{ width:8px; \}/.test(SRC), 'at a real width');
+
+  /* The fog's own content, measured through the same builders the dock uses,
+     so the budget above is checkable rather than remembered. */
+  {
+    const seat0 = IB.MY;
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:7800 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    for (let k = 0; k < 3; k++){
+      rich(f);
+      if (IB.bList(f, 'tavern').length < 3) IB.build(f, f.plot.indexOf(null), 'tavern');
+    }
+    for (let k = 0; k < 3; k++){ rich(f); IB.createHero(f, ['fighter', 'mage', 'marksman'][k]); }
+    for (const h of f.heroes){ IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true); }
+    t.ok(f.heroes.length === 3, 'three of theirs, which the cap allows');
+
+    IB.foeForget();
+    const none = IB.foeHeroHtml();
+    t.ok((none.match(/class="fchip un"/g) || []).length === 3,
+      'unseen, that is a slot each rather than one gap');
+    for (const h of f.heroes){
+      const u = h.skills.find(sk => sk.ult);
+      if (u && IB.foeUlts.indexOf(u.id) < 0) IB.foeUlts.push(u.id);
+    }
+    const full = IB.foeHeroHtml();
+    t.ok((full.match(/class="fchip un"/g) || []).length === 0, 'all seen, no slots left');
+    t.ok(full.length > none.length, 'and the row is bigger for it, which is the cost being measured');
+    IB.MY = seat0;
+    IB.netEnd();
+  }
+}
+
+/* ============================================ what comes off, and who can do it
+
+   Fifty-five skills and every one of them worked by ADDING. Nothing a hero
+   could learn took anything off — the only strip in the game was Unbind, a
+   commander order aimed at one of your own heroes.
+
+   And Unbind's card was not true. It said everything comes off; it cleared the
+   stun, the slow, the drag and the burn and left HOBBLE, which is the heaviest
+   debuff in the set and 78% of every debuffed second a hero spends. Measured
+   over 32 veteran matches with both holds playing: 38,951 hero-ticks carrying
+   a hobble against 11,199 for all four things it did clear, out of 636,540
+   live hero-ticks. Its own AI gate even listed pyreT as a reason to cast it —
+   a trigger for a cleanse that did not clean.
+
+   These assertions hold the SHAPE of the repair: one definition of "comes
+   off", every gate reading that same definition, and the card checkable
+   against the code rather than against the last person to read it. */
+{
+  IB.newMatch({ diff:'veteran', seed:6120 });
+
+  // ---- stripStatus and heldBy are one list, asked two ways. Derived from the
+  // source, not restated here: a debuff added to one and forgotten in the
+  // other is exactly the failure this is for.
+  {
+    const cut = (name) => { const f = SRC.slice(SRC.indexOf('function ' + name + '(')); return f.slice(0, f.indexOf('\n}\n')); };
+    const fields = (body) => new Set([...body.matchAll(/t\.(\w+)\s*(?:>\s*0|\)|\?)/g)].map(m => m[1])
+      .filter(k => /T$|^burn$|^taunt$/.test(k)));
+    const strips = fields(cut('stripStatus'));
+    const asks = fields(cut('heldBy'));
+    t.ok(strips.size >= 7, 'stripStatus really parsed (' + [...strips].join(' ') + ')');
+    const onlyStrip = [...strips].filter(k => !asks.has(k));
+    const onlyAsk = [...asks].filter(k => !strips.has(k));
+    t.ok(onlyStrip.length === 0, 'heldBy asks about everything stripStatus takes off (' + onlyStrip.join(', ') + ')');
+    t.ok(onlyAsk.length === 0, 'and stripStatus takes off everything heldBy asks about (' + onlyAsk.join(', ') + ')');
+  }
+
+  // ---- every status, one at a time: heldBy sees exactly one, stripStatus
+  // returns one, and nothing is left behind. Written as a table so a new
+  // debuff is one line here rather than a new block.
+  {
+    const LOADS = [
+      ['a stun',   (b) => { b.stunT = 2; }],
+      ['a slow',   (b) => { b.slowT = 2; b.slowP = .5; }],
+      ['a taunt',  (b) => { b.taunt = 2; }],
+      ['a drag',   (b) => { b.pullT = .4; b.pullBy = {}; }],
+      ['a burn',   (b) => { b.burn = { dps:20, t:3, src:null }; }],
+      ['a hobble', (b) => { b.hobT = 4.5; }],
+      ['a mark',   (b) => { b.markT = 6; b.markBy = 1; b.markAmp = .22; }],
+      ['a brand',  (b) => { b.pyreT = 6; b.pyreDps = 30; b.pyreSide = 1; }],
+    ];
+    for (const [what, load] of LOADS){
+      const b = { stunT:0, slowT:0, slowP:0, taunt:0, pullT:0, pullBy:null, burn:null,
+        hobT:0, markT:0, markBy:-1, markAmp:0, pyreT:0, pyreDps:0, pyreSrc:null, pyreSide:-1 };
+      load(b);
+      t.ok(IB.heldBy(b) === 1, what + ' is one hold, and heldBy counts it');
+      t.ok(IB.stripStatus(b) === 1, 'and stripStatus reports taking one thing off it');
+      t.ok(IB.heldBy(b) === 0, 'and ' + what + ' is gone afterwards');
+    }
+    // all eight at once, and the paired references go with their timers — a
+    // cleared timer beside a live reference is how pullBy pointed at whatever
+    // body a later snapshot happened to put at that index.
+    const b = { stunT:2, slowT:2, slowP:.5, taunt:2, pullT:.4, pullBy:{}, burn:{ dps:20, t:3 },
+      hobT:4.5, markT:6, markBy:1, markAmp:.22, pyreT:6, pyreDps:30, pyreSrc:{}, pyreSide:1 };
+    t.ok(IB.heldBy(b) === 8, 'a body can carry all eight at once');
+    t.ok(IB.stripStatus(b) === 8, 'and one strip takes all eight');
+    t.ok(IB.heldBy(b) === 0 && b.slowP === 0 && b.markAmp === 0, 'with the values beside the timers zeroed too');
+    t.ok(b.pullBy === null && b.pyreSrc === null && b.pyreSide === -1 && b.markBy === -1,
+      'and the references that belong to those timers cleared with them');
+    t.ok(IB.stripStatus(b) === 0, 'stripping a clean body takes nothing off it');
+  }
+
+  // ---- the card is now checkable against the code. Everything on your hero
+  // comes off means everything, including the hobble it used to leave.
+  {
+    IB.newMatch({ diff:'veteran', seed:6121 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'tank');
+    const h = P().heroes[0];
+    t.ok(!!h, 'a hero of ours to bind');
+    P().spells[0] = 'unbind'; P().spellCd[0] = 0;
+    h.stunT = 2; h.slowT = 2; h.slowP = .5; h.hobT = 4.5; h.burn = { dps:20, t:3, src:null };
+    h.markT = 6; h.markBy = 1; h.markAmp = .22; h.pyreT = 6; h.pyreDps = 30; h.pyreSide = 1;
+    t.ok(IB.heldBy(h) === 6, 'the hero is carrying six holds (' + IB.heldBy(h) + ')');
+    t.ok(IB.castSpell(P(), { id:'unbind', hero:h.id }) === null, 'Unbind is given');
+    t.ok(IB.heldBy(h) === 0, 'and everything on the hero came off — the card is true');
+    t.ok(h.freeT > 0, 'with the window where what lands next barely sticks');
+    t.ok(/[Ee]verything on your hero comes off/.test(IB.SPELL.unbind.d), 'which is what the card claims');
+  }
+
+  // ---- the Host's gate for Unbind IS the strip list rather than a second
+  // hand-written one. It used to name five fields and one of them, pyreT, was
+  // not among the four the order actually cleared.
+  {
+    const fn = SRC.slice(SRC.indexOf('function aiSpellTarget('));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    const branch = body.slice(body.indexOf("d.id === 'unbind'"));
+    // comments stripped: the note above the gate names pyreT on purpose, as
+    // the record of what the hand-written version got wrong
+    const gate = branch.slice(0, branch.indexOf('\n  }')).replace(/\/\/[^\n]*/g, '');
+    t.ok(/heldBy\(/.test(gate), 'the Unbind gate asks heldBy rather than naming fields');
+    t.ok(!/stunT|slowT|pullT|pyreT/.test(gate), 'and names no status field of its own');
+  }
+}
+
+/* ================================================= the mark's owner is a NUMBER
+
+   markBy was in NET_REFS — the table of fields that are references to other
+   BODIES, stored as an index and re-linked on the way back. It is not a body.
+   It is the SIDE that placed the mark, a 0 or a 1, and treating it as a
+   reference destroyed it in both directions: ref(0) short-circuits on the
+   falsy value, ref(1) misses the body table, so every mark packed as "nothing"
+   and came back null. `tgt.markBy === src.side` is then false forever, the
+   amplifier silently stops applying on the joiner alone, and since that feeds
+   dealDmg it feeds hp and hp is hashed. A resync that desyncs — on every
+   snapshot taken while a Hunter's Mark or a Death Mark was live. */
+{
+  t.ok(!IB.NET_REFS.markBy, 'markBy is not treated as a reference to a body');
+  t.ok(IB.NET_REFS.pullBy && IB.NET_REFS.target && IB.NET_REFS.pyreSrc,
+    'while the fields that really are bodies still are');
+
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:6130 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'marksman'); IB.createHero(G.sides[1], 'tank');
+  for (const s of G.sides) for (const h of s.heroes){ h.lvl = 10; IB.recalcHero(h, true); IB.autoPick(h); }
+  step(40);
+  const foe = G.units.find(u => u.side === 1 && !u.isHero && !u.dead);
+  t.ok(!!foe, 'a body of theirs on the bridge to mark');
+  if (foe){
+    foe.markT = 6; foe.markBy = 0; foe.markAmp = .22;
+    const json = JSON.stringify(IB.netSnap());
+    t.ok(/"markBy":0/.test(json), 'the snapshot carries the mark’s owner as the side number it is');
+    // move it off, then adopt the snapshot back
+    foe.markBy = -1; foe.markT = 0;
+    t.ok(IB.netLoad(JSON.parse(json)), 'the snapshot loads');
+    const back = G.units.find(u => u.id === foe.id);
+    t.ok(!!back && back.markT > 0, 'the mark comes back');
+    t.ok(back && back.markBy === 0, 'still owned by the side that placed it, not turned into a body');
+  }
+  IB.netEnd();
+}
+
+/* ================================================== a hero that can take it off
+
+   Universal on purpose. A counter only one class in six can ever be offered is
+   a counter most heroes never see, and a hobble lands on all of them.
+
+   Measured after it went in, over 40 veteran matches with both holds playing:
+   11 heroes drew it, it fired 34 times — 3.1 casts per carrying hero — and NOT
+   ONE of those casts caught nothing. 73.5% landed on the caster, and what came
+   off was a slow 38% of the time, a brand 24%, a hobble 21% and a burn 18%.
+   The brand is the interesting one: Pyre Brand is a commander order, so a hero
+   skill now answers something the other signal room did. */
+{
+  const uf = IB.SKILL.unfetter;
+  t.ok(!!uf && uf.k === 'cleanse', 'there is a skill whose whole job is taking things off');
+  t.ok(uf.cls === 'any', 'and every class can be offered it');
+  t.ok(IB.SKILLS.filter(s => s.k === 'cleanse').length >= 1, 'the cleanse verb exists in the pool');
+  t.ok(!uf.ult, 'as a basic rather than an ultimate — it has to come round often');
+  t.ok(!IB.SKILL_NEEDS_TARGET || !IB.SKILL_NEEDS_TARGET.cleanse, 'it takes no aim');
+
+  // ---- it is not a trap. skOutput sees no damage, no heal, no shield and no
+  // stat in the buff bag, so a cleanse priced at ZERO until it was paid for
+  // what it actually removes.
+  t.ok(IB.skOutput(uf, 1, 120, 120) > 0, 'a cleanse is worth more than nothing to the Host’s brain');
+  for (const cls of IB.CLASSES.map(c => c.id)){
+    const pool = IB.basicPool(cls);
+    const rates = pool.map(s => [s.n, IB.skOutput(s, 1, 120, 120) / Math.max(4, s.cd)]);
+    rates.sort((a, b) => a[1] - b[1]);
+    t.ok(rates[0][0] !== uf.n, 'and it is not the floor of the ' + cls + ' pool (floor is ' + rates[0][0] + ')');
+  }
+
+  // ---- the tag is a real one with an icon of its own, held by the loop above
+  t.ok(!!IB.SKILL_TAG_ICON[uf.tag], 'its tag has an icon');
+  t.ok(uf.tag !== 'buff' && uf.tag !== 'heal', 'and it is not filed as a buff or a heal, which it is not');
+  t.ok(/takes every hold off/.test(IB.skNums(uf, 1)), 'the card says what it does');
+  t.ok(/slack/.test(IB.skNums(uf, 1)), 'and mentions the window it leaves behind');
+
+  // ---- the gate. A cleanse cast at a clean hero is the whole cooldown spent
+  // on nothing, and it takes no aim, so it would otherwise sail past every
+  // range test and fire on sight. This is the assertion the Brace round taught:
+  // measure that the gate REFUSES, not merely that it exists.
+  {
+    IB.newMatch({ diff:'veteran', seed:6140 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'support');
+    const h = P().heroes[0];
+    h.lvl = 10; IB.recalcHero(h, true); h.mana = h.mmana;
+    t.ok(IB.heldBy(h) === 0, 'a clean hero, with nothing on it');
+    t.ok(IB.wantCast(h, uf, null) === false, 'and it will not spend the cleanse on nothing');
+    h.hobT = 4.5;
+    t.ok(IB.wantCast(h, uf, null) === true, 'hobble it and the cleanse is worth casting');
+    // and it really strips when it goes off
+    IB.castSkill(h, { id:'unfetter', rank:1 }, null);
+    t.ok(IB.heldBy(h) === 0, 'the hobble comes off');
+    t.ok(h.freeT >= uf.free - .001, 'and the slack window is on (' + h.freeT.toFixed(1) + 's)');
+  }
+
+  // ---- yourself first, then the friend carrying the most. Deliberately NOT
+  // lowAlly, which ranks by health: the most hurt body on the bridge is very
+  // often the one with nothing on it at all.
+  {
+    IB.newMatch({ diff:'veteran', seed:6141 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'support'); IB.createHero(P(), 'tank');
+    const [a, b] = P().heroes;
+    t.ok(!!a && !!b, 'two heroes of ours');
+    if (a && b){
+      for (const h of [a, b]){ h.lvl = 10; IB.recalcHero(h, true); h.mana = h.mmana; h.inLane = true; }
+      b.x = a.x + 2; b.y = a.y;
+      if (!G.units.includes(b)) G.units.push(b);
+      IB.update(1 / 30);
+      // the friend is held and nearly dead; the caster is clean
+      b.hobT = 4.5; b.hp = b.mhp * .2;
+      t.ok(IB.heldAlly(a, 6.5) === b, 'the held friend is the one the cleanse reaches for');
+      // now hold the caster too — self wins, because a hero spending its own
+      // cleanse on somebody else while hobbled has read the fight backwards
+      a.slowT = 2; a.slowP = .5;
+      IB.castSkill(a, { id:'unfetter', rank:1 }, null);
+      t.ok(IB.heldBy(a) === 0, 'a held caster cleanses itself');
+      t.ok(b.hobT > 0, 'and leaves the friend’s hobble for the next one');
+      // clean caster, held friend: it goes out
+      IB.castSkill(a, { id:'unfetter', rank:1 }, null);
+      t.ok(b.hobT === 0, 'a clean caster sends it to the friend instead');
+    }
+    // a friend with nothing on it is not a target at all, however hurt it is
+    const c = P().heroes[1];
+    if (c){ c.hp = c.mhp * .1; t.ok(IB.heldAlly(P().heroes[0], 6.5) !== c || IB.heldBy(c) > 0,
+      'the most hurt friend is not the target unless something is actually on it'); }
+  }
+}
+
+/* ========================= the two save lists have to agree about a status
+
+   The single-player save packs a hero and a minion through two DIFFERENT
+   hand-written lists, and packHero was missing pyreSide. The read side hid it
+   perfectly: the unpack says `ph.pyreSide === undefined ? -1 : ph.pyreSide`,
+   so a field nobody ever wrote came back as "owned by nobody" and looked
+   deliberate at the one place anyone would have looked. Measured before the
+   fix — a hero packed as {pyreT:6, pyreDps:40} and loaded back at pyreSide -1,
+   while a levy carrying the same brand on the same save kept its owner.
+
+   The consequence is quiet: the brand keeps burning, and the kill it lands two
+   seconds later pays no hold and moves no tally.
+
+   So this does not assert "packHero has pyreSide". It derives BOTH lists from
+   the source and holds that a status a minion carries is a status a hero
+   carries, which is the rule that was broken and the rule the next field will
+   break. */
+{
+  const cut = (name) => {
+    const at = SRC.indexOf('const ' + name + ' = (');
+    return SRC.slice(at, SRC.indexOf('\n});', at));
+  };
+  // the status fields each list packs, comments stripped so the note above
+  // packHero naming pyreSide does not count as packing it
+  const packed = (name) => new Set(
+    [...cut(name).replace(/\/\/[^\n]*/g, '').matchAll(/(\w+):[hu]\.\1\b/g)].map(m => m[1])
+      .filter(k => /T$|^pyre|^slowP$|^taunt$|^burn$|^mark/.test(k)));
+  const hero = packed('packHero'), unit = packed('packUnit');
+  t.ok(hero.size >= 6 && unit.size >= 5, 'both save lists really parsed (hero ' + hero.size + ', unit ' + unit.size + ')');
+  const gap = [...unit].filter(k => !hero.has(k));
+  t.ok(gap.length === 0, 'every status a minion is saved with, a hero is saved with too (' + gap.join(', ') + ')');
+  t.ok(hero.has('pyreSide'), 'including who owns the brand — the field that was missing');
+
+  // and behaviourally, through a real save and load
+  IB.newMatch({ diff:'veteran', seed:7010 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[1], 'tank');
+  const eh = G.sides[1].heroes[0];
+  t.ok(!!eh, 'a hero of theirs to brand');
+  if (eh){
+    eh.lvl = 8; IB.recalcHero(eh, true); eh.inLane = true;
+    if (!G.units.includes(eh)) G.units.push(eh);
+    eh.pyreT = 6; eh.pyreDps = 40; eh.pyreSide = 0;
+    IB.saveMatch();
+    const pack = IB.savedMatch();
+    const ph = pack.sides[1].heroes.find(x => x.name === eh.name);
+    t.ok(!!ph && ph.pyreT > 0, 'the brand is written to the save');
+    t.ok(ph && ph.pyreSide === 0, 'and so is the hold that lit it');
+    IB.newMatch({ diff:'veteran', seed:1 });
+    t.ok(IB.loadMatch(pack) === null, 'the save loads');
+    const back = G.sides[1].heroes.find(x => x.name === eh.name);
+    t.ok(back && back.pyreT > 0, 'the hero comes back still burning');
+    t.ok(back && back.pyreSide === 0, 'and still burning for somebody — the kill has an owner to pay');
+    t.ok(back && back.pyreSrc === null, 'with no caster body, which a hold spell never had');
+  }
+}
+
+/* ====================== a new tag has to reach every table that is keyed by one
+
+   Three tables in this file are keyed by a skill's tag — its icon, the colour
+   its cast is drawn in, and what the Host's brain pays for the job. Adding a
+   seventh tag reached all three, but only because I went and looked; nothing
+   would have said so. A tag missing from SKILL_TAG_ICON falls back to the
+   blade, from CAST_COL to orange, and from TAG_WORTH to zero — three silent
+   wrong answers rather than one loud one. */
+{
+  const tags = [...new Set(IB.SKILLS.map(s => s.tag))];
+  t.ok(tags.length >= 7, 'there are at least seven kinds of thing a skill can be (' + tags.join(' ') + ')');
+  const table = (name) => {
+    const m = SRC.match(new RegExp('const ' + name + ' = \\{[\\s\\S]*?\\n(?:\\}|.*\\};)'));
+    return m ? m[0] : '';
+  };
+  for (const name of ['SKILL_TAG_ICON', 'CAST_COL', 'TAG_WORTH']){
+    const body = table(name);
+    t.ok(body.length > 40, name + ' really parsed');
+    const missing = tags.filter(tg => !new RegExp('(?:^|[{\\s,])' + tg + ':').test(body));
+    t.ok(missing.length === 0, 'every tag has an entry in ' + name + ' (' + missing.join(', ') + ')');
+  }
+  // the cleanse does not go through a tag branch at all — it is gated on its
+  // KIND, before wantCast reaches the tag tests, because a tag branch would
+  // have let it fire on sight at a hero with nothing on it
+  const fn = SRC.slice(SRC.indexOf('function wantCast('));
+  const wc = fn.slice(0, fn.indexOf('\n}\n'));
+  const kindAt = wc.indexOf("s.k === 'cleanse'");
+  const tagAt = wc.indexOf("s.tag === 'buff'");
+  t.ok(kindAt > 0, 'wantCast gates the cleanse on its kind');
+  t.ok(kindAt < tagAt, 'and does it before the tag branches, which would let it fire on sight');
+  t.ok(wc.indexOf('if (!tgt) return false') > kindAt, 'and before the no-target bail, since a cleanse takes no aim');
+}
+
+/* ========================================= a strip is a single dispel, said so
+
+   Both strips measured 1.00-1.07 statuses per cast, which raised the question
+   of whether they only LOOK like single dispels because they fire on the first
+   hold to land. They do not. Over 24 veteran matches, counting the world
+   rather than the cast:
+
+     heroes  (cleansed)          5.85% of held time carrying two or more
+     minions (never cleansed)    1.43% of held time carrying two or more
+
+   The control group overlaps LESS, so nothing is being hidden — a hero simply
+   is not carrying two holds at once. The pairs that do occur are incidental
+   combat ones (slow+burn 3.33%, stun+chain 1.60%, both halves of one skill);
+   the commander-order pairs are near zero (slow+hobble 0.13%).
+
+   Which settles what the strip is worth reporting: not a COUNT. "2 taken off"
+   is a sentence that almost never happens and says nothing when it does. What
+   came off is the fact — and 3.10 seconds of hold per strip is a real quantity
+   the player previously had no way to see, since the entire visible effect was
+   a status icon ceasing to be drawn on a hero they were probably not watching.
+
+   The window was measured too, because it was the obvious rival explanation:
+   the strip removes 458.7s of hold across those matches and the five seconds
+   afterwards cancel 123.8s of incoming crowd control. The window is 0.27x the
+   strip, so the strip is the work — but the window is NOT decoration, which is
+   why a cast on a clean hero is answered with an honest sentence rather than
+   the refusal Countermand gets. Countermand with nothing recovering does
+   literally nothing; this one still buys the window. */
+{
+  // ---- the phrase is built from what came off, in every shape it can take
+  t.ok(IB.tookPhrase([]) === '', 'nothing taken off is no phrase at all');
+  t.ok(IB.tookPhrase(['a slow']) === 'a slow', 'one hold is just itself');
+  t.ok(IB.tookPhrase(['the hobble', 'a burn']) === 'the hobble and a burn', 'two are joined with an and');
+  t.ok(IB.tookPhrase(['a stun', 'a chain', 'the brand']) === 'a stun, a chain and the brand',
+    'three are a list with an and before the last');
+  {
+    const all = IB.tookPhrase(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+    t.ok((all.match(/ and /g) || []).length === 1, 'however long the list, there is exactly one and');
+    t.ok(!/,\s*and/.test(all), 'and no comma in front of it');
+  }
+
+  // ---- stripTook is FILLED by the strip and CLEARED by the next one, so a
+  // notice can never describe the cast before it
+  {
+    const body = () => ({ stunT:0, slowT:0, slowP:0, taunt:0, pullT:0, pullBy:null, burn:null,
+      hobT:0, markT:0, markBy:-1, markAmp:0, pyreT:0, pyreDps:0, pyreSrc:null, pyreSide:-1 });
+    const a = body(); a.hobT = 4.5; a.burn = { dps:10, t:2 };
+    IB.stripStatus(a);
+    // the order is the STRIP's own order, not a second list that could
+    // disagree with it — combat statuses first, the commander's last, which
+    // puts the hobble and the brand in the stressed slot of the sentence
+    t.ok(IB.tookPhrase(IB.stripTook) === 'a burn and the hobble', 'the strip records what it took');
+    const clean = body();
+    IB.stripStatus(clean);
+    t.ok(IB.stripTook.length === 0, 'and a strip that took nothing records nothing');
+    t.ok(IB.tookPhrase(IB.stripTook) === '', 'rather than leaving the last cast’s list behind');
+    // every entry the strip can push has to be a phrase, not a field name
+    const every = body();
+    every.stunT = 1; every.slowT = 1; every.taunt = 1; every.pullT = 1;
+    every.burn = { dps:1, t:1 }; every.hobT = 1; every.markT = 1; every.pyreT = 1;
+    t.ok(IB.stripStatus(every) === 8, 'all eight come off at once');
+    t.ok(IB.stripTook.length === 8, 'and all eight are named');
+    t.ok(IB.stripTook.every(x => /^(a|the) [a-z]+$/.test(x)),
+      'each one reads as a thing rather than a field (' + IB.stripTook.join(' / ') + ')');
+  }
+
+  // ---- the notice. Per SEAT, like every other thing written from simulation
+  // code for one player to read.
+  {
+    IB.newMatch({ diff:'veteran', seed:8210 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'tank');
+    const h = P().heroes[0];
+    t.ok(!!h, 'a hero of ours');
+    P().spells[0] = 'unbind'; P().spellCd[0] = 0;
+
+    G.log.length = 0; G.toasts.length = 0;
+    h.hobT = 4.5; h.burn = { dps:20, t:3, src:null };
+    t.ok(IB.castSpell(P(), { id:'unbind', hero:h.id }) === null, 'Unbind is given');
+    const said = G.log.map(e => e.msg).filter(m => /^Unbind/.test(m));
+    t.ok(said.length === 1, 'and it says one thing about it (' + said.length + ')');
+    t.ok(said[0] === 'Unbind — a burn and the hobble off.',
+      'naming what came off, in the order the strip takes them (' + JSON.stringify(said[0]) + ')');
+
+    // the clean-hero cast: it still happens, and it says what it actually bought
+    G.log.length = 0; G.toasts.length = 0;
+    P().spellCd[0] = 0;
+    t.ok(IB.heldBy(h) === 0, 'the hero is clean now');
+    t.ok(IB.castSpell(P(), { id:'unbind', hero:h.id }) === null,
+      'and the order is NOT refused — the window is worth something on its own');
+    const said2 = G.log.map(e => e.msg).filter(m => /^Unbind/.test(m));
+    t.ok(said2.length === 1 && /nothing on it/.test(said2[0]),
+      'it says so plainly (' + JSON.stringify(said2[0]) + ')');
+    t.ok(/slack/.test(said2[0]), 'and names the window, which is what the cast actually bought');
+    t.ok(h.freeT > 0, 'and the window really is on');
+
+    // the other seat hears nothing about its own hero shrugging something off
+    const seat0 = IB.MY;
+    IB.MY = 1;
+    G.log.length = 0;
+    P().spellCd[0] = 0; h.hobT = 4.5;
+    IB.castSpell(P(), { id:'unbind', hero:h.id });
+    t.ok(G.log.filter(e => /^Unbind/.test(e.msg)).length === 0,
+      'the other seat is told nothing — it is watching its own board');
+    IB.MY = seat0;
+  }
+
+  /* ---- a body in a sentence, and the room there is for one.
+
+     Reading .name off a minion produced "Unfetter → undefined" in 2 of the
+     first 97 notices measured. And the fix for that has a budget: the toast
+     lane holds 338px of text on a desktop and 368px on a phone, measured in a
+     real browser at 1440x900 and 390x844, which is about 43 characters at this
+     face. "Unfetter → Siege Ogre — a stun and a chain off." is 47 and clips.
+
+     So the cap is asserted rather than the strings. Every sentence the strip
+     system can produce in play — one hold or two, on yourself, on a hero, on
+     the line — has to fit it. The game's own wave notice already runs to 45
+     and clips on a desktop; that is pre-existing and not this round's to fix,
+     but it is the reason the budget is worth pinning for anything new. */
+  {
+    const CAP = 43;              // characters that fit 338px at the toast face
+    IB.newMatch({ diff:'veteran', seed:8211 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    step(35);
+    const mu = G.units.find(u => !u.isHero && !u.dead);
+    t.ok(!!mu, 'a body of the line to name');
+    if (mu){
+      const nm = IB.strippedName(mu);
+      t.ok(typeof nm === 'string' && nm.length > 1 && nm !== 'undefined',
+        'a minion has something to be called (' + nm + ')');
+      t.ok(nm === (IB.UNITS[mu.kind] || {}).n, 'and it is what the game already calls that kind');
+    }
+    IB.createHero(P(), 'mage');
+    const hr = P().heroes.find(x => x.cls === 'mage') || P().heroes[0];
+    t.ok(!!hr, 'a hero of ours');
+    t.ok(hr && IB.strippedName(hr) === hr.name, 'a hero is called by its name, which does');
+
+    /* every sentence play actually reaches, against the measured budget.
+
+       The name pools are what make this boundable, so they are read rather
+       than imagined: thirty hero names, longest Garrick at 7, and six kinds,
+       longest Siege Ogre at 11. An earlier version of this test invented
+       "Kassandra" — nine characters, and not a name the game can produce.
+
+       94% of strips take ONE hold off (measured: 1.05 per strip, and two-or-
+       more is 5.85% of a hero's held time). That case fits with every target
+       the game can name. The residue is stated rather than hidden below. */
+    const heroNames = [...IB.SRC_HERO_NAMES || []];
+    const names = heroNames.length ? heroNames : ['Garrick'];
+    const longestHero = names.reduce((a, b) => a.length >= b.length ? a : b);
+    const kinds = Object.values(IB.UNITS).map(u => u.n);
+    const longestKind = kinds.reduce((a, b) => a.length >= b.length ? a : b);
+    t.ok(longestHero.length <= 8, 'hero names are bounded (' + longestHero + ', ' + longestHero.length + ')');
+    t.ok(kinds.length >= 5, 'and the kinds really parsed (' + kinds.length + ')');
+
+    const line = (tg, hl) => 'Unfetter' + (tg ? ' → ' + tg : '') + ' — ' + IB.tookPhrase(hl) + ' off.';
+    const one = [];
+    for (const tg of ['', longestHero, longestKind])
+      { const L = line(tg, ['the hobble']); if (L.length > CAP) one.push(L.length + 'ch ' + L); }
+    t.ok(one.length === 0,
+      'a single-hold strip fits whatever it landed on — which is 94% of them (' + one.join(' | ') + ')');
+    t.ok(line('', ['a burn', 'the hobble']).length <= CAP,
+      'and so does a two-hold strip on the caster itself');
+    t.ok(('Unbind — nothing on it; 5s of slack.').length <= CAP,
+      'and the one you see when the order was wasted, which is the sentence that used to clip');
+
+    /* The residue, measured rather than waved at: a two-hold strip SENT to a
+       named body runs over, by 4 on the longest hero name and 8 on Siege Ogre.
+       It clips its tail — " off." — which is the least of the sentence, and it
+       was 1 of 97 notices observed over thirty matches. The game's own wave
+       notice already runs to 45 and clips on a desktop, so this is the house
+       condition rather than a new failure. Asserted so the day somebody widens
+       the lane or shortens the phrase, this stops being true and gets noticed. */
+    const sent2 = line(longestHero, ['a burn', 'the hobble']).length;
+    t.ok(sent2 > CAP && sent2 <= CAP + 8,
+      'a two-hold strip sent to a friend is over by a known amount, not an unknown one (' +
+      sent2 + 'ch vs ' + CAP + ')');
+  }
+
+  // ---- and none of it is anything the simulation can see
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:8212 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'tank');
+    const h = P().heroes[0];
+    if (h){
+      h.hobT = 4.5;
+      const before = IB.netHash();
+      IB.stripStatus(h);                      // fills stripTook
+      const jsonA = JSON.stringify(IB.netSnap());
+      t.ok(IB.stripTook.length > 0, 'the strip left a record behind');
+      t.ok(!/hobble|stripTook|a slow|a stun/.test(jsonA), 'which is in no snapshot');
+      IB.saveMatch();
+      t.ok(!/hobble|stripTook/.test(JSON.stringify(IB.savedMatch())), 'and in no save');
+      // the hash moved because the hobble came off, not because a phrase exists
+      // a phrase nobody put there cannot move the hash; the STRIP moved it
+      const quiet = IB.netHash();
+      IB.stripTook.push('a fabrication');
+      t.ok(IB.netHash() === quiet, 'and the hash does not read it');
+      t.ok(before !== quiet, 'while the strip itself is something the hash did see');
+      IB.stripTook.length = 0;
+    }
     IB.netEnd();
   }
 }
