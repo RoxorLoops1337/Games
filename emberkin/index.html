@@ -66,12 +66,19 @@
     box-shadow:0 3px 0 rgba(0,0,0,.55); cursor:pointer; position:relative; overflow:hidden;
     display:flex; flex-direction:column; gap:2%; transition:transform .12s ease, box-shadow .12s ease;
   }
-  .cardel .cn{ font-size:.95em; font-weight:700; line-height:1.1; letter-spacing:.2px; }
-  .cardel .ct{ font-size:.7em; color:var(--dim); line-height:1.2; flex:1; }
+  /* The card is a token: name and cost read at a glance, and the line above
+     the hand carries the full rules text for whichever one you are aiming at. */
+  .cardel .cn{ font-size:.92em; font-weight:700; line-height:1.05; letter-spacing:.2px;
+    white-space:normal; overflow-wrap:anywhere; hyphens:auto; overflow:hidden;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .cardel .ct{ font-size:.66em; color:var(--dim); line-height:1.15; flex:1; overflow:hidden; }
   .cardel .cc{ position:absolute; right:5%; top:4%; width:1.5em; height:1.5em; border-radius:50%;
     background:#0d0812; border:1px solid var(--gold); color:var(--gold); font-size:.72em;
     display:flex; align-items:center; justify-content:center; font-weight:700; }
   .cardel .cg{ position:absolute; right:5%; bottom:4%; font-size:.68em; color:var(--hp-good); font-weight:700; }
+  .cardel .ck{ position:absolute; left:8%; top:4%; font-size:.62em; color:var(--dim); font-weight:700; }
+  .cardel .cp{ position:absolute; left:0; right:0; bottom:3%; text-align:center;
+    font-size:.62em; letter-spacing:1px; color:var(--gold); text-transform:uppercase; }
   .cardel .cr{ position:absolute; left:0; top:0; bottom:0; width:4px; }
   .cardel.sel{ transform:translateY(-8%); box-shadow:0 0 0 2px var(--gold), 0 6px 0 rgba(0,0,0,.55); }
   .cardel.dead{ opacity:.4; }
@@ -83,7 +90,13 @@
   #acts{ position:absolute; right:1.5%; top:54%; display:flex; gap:4px; }
   #acts .abtn{ padding:3px 9px; font-size:.72em; border-radius:5px; cursor:pointer;
     background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--edge); }
-  #acts .abtn.key{ color:var(--gold); }
+  #acts .abtn .key{ color:var(--gold); }
+  /* Nothing left you can pay for — say so rather than let the player hunt. */
+  #acts .abtn.nag{ border-color:var(--gold); color:var(--gold); animation:nag 1s ease-in-out infinite; }
+  @keyframes nag{ 50%{ box-shadow:0 0 10px rgba(255,201,77,.5); } }
+  /* Fingers need more to hit than a mouse does. */
+  body:not(.notouch) #acts .abtn{ padding:7px 14px; font-size:.8em; }
+  body:not(.notouch) #acts{ gap:7px; }
   #intent{ position:absolute; left:3%; top:14%; padding:3px 9px; font-size:.72em; z-index:6; }
   #intent b{ color:var(--hp-bad); }
   #shieldpip{ color:var(--xp); }
@@ -157,17 +170,17 @@
   #titleArt{ image-rendering:pixelated; }
 
   /* ---------------- touch controls ---------------- */
-  #pad{ position:absolute; z-index:8; left:8px; bottom:8px; width:118px; height:118px; opacity:.5; }
+  #pad{ position:absolute; z-index:8; left:8px; bottom:8px; width:144px; height:144px; opacity:.5; }
   /* On a phone the stage rarely fills the screen — park the controls in the
      dead space under it so they never sit on top of the text box. */
   body.ctlsbelow{ align-items:flex-start; padding-top:7vh; }
   body.ctlsbelow #pad{ bottom:auto; top:calc(100% + 14px); opacity:.9; }
   body.ctlsbelow #btns{ bottom:auto; top:calc(100% + 34px); opacity:.95; }
-  #pad div{ position:absolute; width:38px; height:38px; border-radius:7px; background:#241a2e; border:2px solid var(--edge); }
-  #pad .u{ left:40px; top:0; } #pad .d{ left:40px; top:80px; } #pad .l{ left:0; top:40px; } #pad .r{ left:80px; top:40px; }
+  #pad div{ position:absolute; width:46px; height:46px; border-radius:8px; background:#241a2e; border:2px solid var(--edge); }
+  #pad .u{ left:49px; top:0; } #pad .d{ left:49px; top:98px; } #pad .l{ left:0; top:49px; } #pad .r{ left:98px; top:49px; }
   #btns{ position:absolute; z-index:8; right:8px; bottom:8px; display:flex; gap:8px; opacity:.55; }
-  #btns div{ width:46px; height:46px; border-radius:50%; background:#241a2e; border:2px solid var(--edge);
-    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; }
+  #btns div{ width:56px; height:56px; border-radius:50%; background:#241a2e; border:2px solid var(--edge);
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; text-align:center; line-height:1.1; }
   .notouch #pad, .notouch #btns{ display:none; }
 
   #toast{ position:absolute; left:50%; top:27%; transform:translateX(-50%); z-index:11; padding:6px 14px;
@@ -198,7 +211,7 @@
   <div id="toast" class="panel"></div>
 
   <div id="pad"><div class="u"></div><div class="d"></div><div class="l"></div><div class="r"></div></div>
-  <div id="btns"><div data-k="x">B</div><div data-k="z">A</div></div>
+  <div id="btns"><div data-k="x">Menu</div><div data-k="z">Talk</div></div>
 
   <div id="title">
     <canvas id="titleArt" width="372" height="128"></canvas>
@@ -206,7 +219,8 @@
     <p>cute enough to want one · armed enough to respect one</p>
     <div class="btn panel" data-act="new">New journey</div>
     <div class="btn panel hidden" data-act="cont">Continue</div>
-    <p style="font-size:11px;letter-spacing:1px;text-transform:none">arrows / WASD to move · Z or Enter to talk · X for the menu · M for sound</p>
+    <p style="font-size:11px;letter-spacing:1px;text-transform:none">arrows / WASD move · Z or Enter acts · X opens the menu · M mutes</p>
+    <p style="font-size:11px;letter-spacing:1px;text-transform:none">in a fight: ← → pick a card · ↑ or Z plays it · 1-5 plays one outright · E ends the turn</p>
   </div>
 </div>
 
@@ -2688,7 +2702,8 @@ function startBattle(opt) {
   // One-time nudge, the first time a wild kin shows up with orbs in the bag.
   if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
     G.flags.taughtCatch = 1;
-    lines.push('Three energy, five cards. Play what you can afford, then end the turn — X, or the button.');
+    lines.push('Five cards, three energy. Left and right pick one, up plays it — or press its number, or just tap it.');
+    lines.push('When you have spent what you can, end the turn: E, or the button under the hand.');
     lines.push('Knock it down first, then reach for an orb — Bag, then the orb. A hurt kin holds.');
   }
   battleSay(lines, () => renderHand());
@@ -3340,6 +3355,8 @@ function cacheEls() {
   if (HEADLESS) return;
   for (const id of ['view', 'dialogue', 'mainmenu', 'battlemenu', 'movemenu', 'screen', 'hudFoe', 'hudMine',
     'title', 'toast', 'titleArt', 'battlebar', 'hand', 'energy', 'piles', 'acts', 'intent']) els[id] = $(id);
+  els.btnA = document.querySelector('#btns [data-k="z"]');
+  els.btnB = document.querySelector('#btns [data-k="x"]');
 }
 const show = (el, on) => { if (el) el.classList.toggle('hidden', !on); };
 
@@ -3546,6 +3563,18 @@ function renderHUD() {
 }
 
 /* ---- the hand ---------------------------------------------------------- */
+/** The two touch buttons say what they do right now, not "A" and "B". */
+function touchLabels() {
+  if (HEADLESS || !els.btnA) return;
+  const m = G.mode;
+  const [a, b] = m === 'battle' ? ['Play', 'Menu']
+    : m === 'dialogue' ? ['Next', 'Next']
+    : (m === 'menu' || m === 'screen') ? ['Pick', 'Back']
+    : ['Talk', 'Menu'];
+  els.btnA.textContent = a;
+  els.btnB.textContent = b;
+}
+
 function battleBar(on) {
   if (HEADLESS) return;
   show(els.battlebar, on);
@@ -3568,22 +3597,40 @@ function renderHand() {
     const inst = kin ? null : { id: c.id, plus: owned ? owned.plus : 0, bg: c.bg || 0 };
     const txt = kin ? moveCardText(c.id) : cardText(inst);
     const grown = !kin && (owned && owned.plus ? `+${owned.plus}` : '') || '';
-    return `<div class="cardel ${kin ? 'kin' : ''} ${i === b.sel ? 'sel' : ''} ${cost > b.energy || !playable ? 'dead' : ''}" data-c="${i}">
+    const affordable = cost <= b.energy && playable;
+    return `<div class="cardel ${kin ? 'kin' : ''} ${i === b.sel ? 'sel' : ''} ${affordable ? '' : 'dead'}" data-c="${i}">
       <div class="cr" style="background:${kin ? 'var(--gold)' : RARITY[CARDS[c.id].r]}"></div>
       <div class="cc">${cost}</div>
+      <div class="ck">${i + 1}</div>
       <div class="cn">${cardName(c)}</div>
       <div class="ct">${txt}</div>
       ${grown ? `<div class="cg">${grown}</div>` : ''}
+      ${i === b.sel && affordable ? '<div class="cp">▲ play</div>' : ''}
     </div>`;
   }).join('');
+  // When there is nothing left you can pay for, the End turn button says so.
+  const canPlay = b.hand.some((c) => cardCost(c) <= b.energy) && playable;
   els.acts.innerHTML = [
-    ['end', 'End turn <span class="key">X</span>'],
-    ['kin', 'Kin'], ['bag', 'Bag'], [b.wild ? 'run' : 'forfeit', b.wild ? 'Run' : 'Forfeit'],
-  ].map(([a, label]) => `<div class="abtn" data-a="${a}">${label}</div>`).join('');
+    ['end', `End turn <span class="key">E</span>`, !canPlay && playable],
+    ['kin', 'Kin', false], ['bag', 'Bag', false],
+    [b.wild ? 'run' : 'forfeit', b.wild ? 'Run' : 'Forfeit', false],
+  ].map(([a, label, nag]) => `<div class="abtn ${nag ? 'nag' : ''}" data-a="${a}">${label}</div>`).join('');
   const it = b.intent;
   els.intent.innerHTML = it
     ? `Foe: <b>${it.name}</b>${it.kind === 'attack' ? ` · about ${it.dmg}` : ''}`
     : '';
+  // The hand is too small to hold a card's whole rules text, so the line above
+  // it spells out whichever card you are aiming at whenever it is otherwise idle.
+  const aimed = b.hand[b.sel];
+  if (aimed && playable && !(b.lineT > 0) && !b.log) {
+    const kin = aimed.src === 'kin';
+    const own = kin ? null : ownedCard(aimed.u);
+    const full = kin ? moveCardText(aimed.id)
+      : cardText({ id: aimed.id, plus: own ? own.plus : 0, bg: aimed.bg || 0 });
+    els.dialogue.innerHTML = `<b style="color:${kin ? 'var(--gold)' : RARITY[CARDS[aimed.id].r]}">${cardName(aimed)}</b> — ${full}`;
+    els.dialogue.classList.add('narrow');
+    show(els.dialogue, true);
+  }
   battleBar(true);
 }
 
@@ -3603,11 +3650,44 @@ function moveCardText(id) {
   return bits.join(', ');
 }
 
-function submitLog(log) {
+/**
+ * Show what just happened.
+ *
+ * A card you played resolves under your own hand, so it lands instantly: the
+ * effects fire, the bars start moving, one line of text explains it, and you
+ * keep your turn. Anything you are on the receiving end of — the foe's swing,
+ * a faint, a level-up — plays back a line at a time, because that is the part
+ * worth watching.
+ */
+function submitLog(log, opts = {}) {
   const b = B();
+  b.armed = null;                       // a new hand is never pre-aimed
+  if (opts.instant && log && log.length && !b.over) {
+    for (const e of log) {
+      if (e.fx === 'hit') { if (e.side === 'mine') b.flashM = .8; else b.flashF = .8; b.shake = 1; playCue('hit'); }
+      else if (e.fx === 'grow' || e.fx === 'buff') playCue('level');
+      else if (e.fx === 'heal' || e.fx === 'block') playCue('heal');
+    }
+    const last = log[log.length - 1];
+    b.tgtM = last.hpM; b.tgtF = last.hpF;
+    b.log = null; b.li = 0; b.started = false;
+    battleLine(last.t);
+    renderHand();
+    return;
+  }
   b.log = log && log.length ? log : null;
   b.li = 0; b.started = false; b.hold = 0;
   renderHand();
+}
+
+/** One line of battle text that fades on its own. */
+function battleLine(text) {
+  const b = B();
+  b.lineT = 1.6;
+  if (HEADLESS) return;
+  els.dialogue.innerHTML = text;
+  els.dialogue.classList.add('narrow');
+  show(els.dialogue, true);
 }
 
 function playSelected() {
@@ -3620,7 +3700,7 @@ function playSelected() {
   playCue('select');
   const log = playCard(i);
   b.sel = clamp(i, 0, Math.max(0, b.hand.length - 1));
-  submitLog(log);
+  submitLog(log, { instant: true });
 }
 
 function doEndTurn() {
@@ -3738,6 +3818,11 @@ function updateBattle(dt) {
   const chase = (cur, tgt) => Math.abs(tgt - cur) < .6 ? tgt : cur + (tgt - cur) * Math.min(1, dt * 7);
   b.dispM = chase(b.dispM, b.tgtM); b.dispF = chase(b.dispF, b.tgtF);
   renderHUD();
+  if (b.lineT > 0 && !b.log) {
+    b.lineT -= dt;
+    // When the message fades, the line goes back to explaining the aimed card.
+    if (b.lineT <= 0) renderHand();
+  }
 
   if (G.battleMsg) {
     G.battleMsg.hold = Math.max(0, G.battleMsg.hold - dt);
@@ -3765,13 +3850,21 @@ function updateBattle(dt) {
   if (G.dialogue) return;
 
   // ---- the player's turn: pick a card, play it, or end the turn
+  //
+  // Left/right walks the hand, up or A plays the card you are on — pushing it
+  // forward, the way you would with a real one. 1-5 plays a card outright.
+  // E ends the turn and X opens everything that is not a card. Nothing here
+  // needs remembering: the buttons under the hand say the same thing.
   if (b.hand.length) b.sel = clamp(b.sel || 0, 0, b.hand.length - 1);
   let moved = false;
   if (justPressed('left')) { b.sel = (b.sel + b.hand.length - 1) % Math.max(1, b.hand.length); moved = true; }
   if (justPressed('right')) { b.sel = (b.sel + 1) % Math.max(1, b.hand.length); moved = true; }
-  if (justPressed('up')) { openBattleActions(); return; }
-  if (justPressed('a')) { playSelected(); return; }
-  if (justPressed('b')) { doEndTurn(); return; }
+  for (let n = 1; n <= 9; n++) {
+    if (justPressed(String(n)) && b.hand[n - 1]) { b.sel = n - 1; playSelected(); return; }
+  }
+  if (justPressed('a') || justPressed('up')) { playSelected(); return; }
+  if (justPressed('e') || justPressed('E')) { doEndTurn(); return; }
+  if (justPressed('b')) { openBattleActions(); return; }
   if (moved) renderHand();
   else if (!b.barShown) { b.barShown = true; renderHand(); }
 }
@@ -4302,6 +4395,7 @@ function step(dt) {
     if (G.toastT <= 0 && !HEADLESS) els.toast.classList.remove('on');
   }
   if (justPressed('m')) toggleMute();
+  if (G.mode !== G.uiMode) { G.uiMode = G.mode; touchLabels(); }
 
   if (G.mode === 'dialogue') {
     if (G.dialogue) G.dialogue.hold = Math.max(0, G.dialogue.hold - dt);
@@ -4357,13 +4451,32 @@ function boot() {
   document.querySelectorAll('#btns div').forEach((el) => bindHold(el, el.dataset.k === 'z' ? 'a' : 'b'));
   window.addEventListener('touchstart', () => document.body.classList.remove('notouch'), { once: true });
 
+  // Hovering a card aims it, so a mouse click plays in one go.
+  document.addEventListener('mouseover', (e) => {
+    if (!G.battle || !document.body.classList.contains('notouch')) return;
+    const cel = e.target.closest && e.target.closest('.cardel');
+    if (!cel) return;
+    const i = +cel.dataset.c;
+    if (G.battle.sel === i && G.battle.armed === i) return;
+    G.battle.sel = i; G.battle.armed = i;
+    renderHand();
+  });
+
   // clicks on menus / cards / dialogue
   document.addEventListener('click', (e) => {
     const row = e.target.closest && e.target.closest('.menu .row');
     if (row && G.menu) { G.menu.i = +row.dataset.i; renderMenu(); playCue('select');
       const r = G.menu.rows[G.menu.i]; if (r && !r.off && r.fn) r.fn(); return; }
+    // A card takes one click with a mouse (hovering already aimed it) and two
+    // taps with a finger (aim, then confirm) — so a fat-fingered tap on a phone
+    // never spends energy by accident.
     const cel = e.target.closest && e.target.closest('.cardel');
-    if (cel && G.battle) { G.battle.sel = +cel.dataset.c; playSelected(); return; }
+    if (cel && G.battle) {
+      const i = +cel.dataset.c;
+      if (G.battle.armed === i) { G.battle.sel = i; G.battle.armed = null; playSelected(); }
+      else { G.battle.sel = i; G.battle.armed = i; renderHand(); }
+      return;
+    }
     const act = e.target.closest && e.target.closest('.abtn');
     if (act && G.battle) {
       const a = act.dataset.a;
@@ -4376,8 +4489,7 @@ function boot() {
     const card = e.target.closest && e.target.closest('[data-i]');
     if (card && G.screen && els.screen.contains(card)) { G.screen.i = +card.dataset.i; renderScreen(); screenSelect(); return; }
     if (e.target.closest && e.target.closest('.back')) { closeScreen(); return; }
-    if (els.dialogue && !els.dialogue.classList.contains('hidden') && els.dialogue.contains(e.target)) { pressKey('a'); return; }
-    if (els.view && els.view.contains(e.target) && G.mode === 'battle') pressKey('a');
+    if (els.dialogue && !els.dialogue.classList.contains('hidden')) { pressKey('a'); return; }
   });
 
   // title
