@@ -44,11 +44,24 @@ function loadGame(store = {}){
   if (!m) throw new Error('no inline <script> found in birds_and_beasts/index.html');
 
   const ctx = mkCtx();
+  // classList used to be four no-ops, which meant every "this card is marked"
+  // assertion silently passed on a stub that had thrown the mark away. It is a
+  // real set now, kept in sync with .className in both directions.
   const mkEl = () => {
+    const cls = new Set();
     const el = {
-      style: {}, dataset: {}, children: [], className: '', innerHTML: '', textContent: '',
+      style: {}, dataset: {}, children: [], textContent: '',
       title: '', width: 236, height: 164, disabled: false, onclick: null,
-      classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+      classList: {
+        add(){ for (const c of arguments) if (c) cls.add(c); },
+        remove(){ for (const c of arguments) cls.delete(c); },
+        toggle(c, on){
+          const want = on === undefined ? !cls.has(c) : !!on;
+          if (want) cls.add(c); else cls.delete(c);
+          return want;
+        },
+        contains: (c) => cls.has(c),
+      },
       addEventListener: noop, removeEventListener: noop,
       appendChild(c){ this.children.push(c); return c; },
       remove: noop, setAttribute: noop, removeAttribute: noop,
@@ -56,6 +69,20 @@ function loadGame(store = {}){
       querySelector: () => mkEl(), querySelectorAll: () => [],
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 200 }),
     };
+    // `g.innerHTML = ''` is how every grid in the game clears itself before it
+    // repopulates. On the old stub that was a no-op, so children accumulated
+    // across renders and any count taken from them was fiction.
+    let html = '';
+    Object.defineProperty(el, 'innerHTML', {
+      get(){ return html; },
+      set(v){ html = '' + v; el.children.length = 0; },
+      enumerable: true, configurable: true,
+    });
+    Object.defineProperty(el, 'className', {
+      get(){ return Array.from(cls).join(' '); },
+      set(v){ cls.clear(); for (const c of String(v).split(/\s+/)) if (c) cls.add(c); },
+      enumerable: true, configurable: true,
+    });
     return el;
   };
   const els = {};
@@ -868,8 +895,10 @@ function walkover(G){
   walkover();
   const slop0 = BB.R.slop;
   BB.winFight();
+  // the standing order settles in the same breath, so it has to be counted here
+  const ord = BB.orderMet(BB.R.litter[0].child) ? BB.R.order.pay : 0;
   BB.keepChick(0);
-  eq(BB.R.slop, slop0 + BB.C.SLOP_PER_WIN + BB.C.SLOP_PER_CHICK + BB.C.HAZARD_PAY,
+  eq(BB.R.slop, slop0 + BB.C.SLOP_PER_WIN + BB.C.SLOP_PER_CHICK + BB.C.HAZARD_PAY + ord,
     'a hazard pays extra on the way out');
   eq(BB.R.hazard, null, 'and does not follow you to the next round');
 }
@@ -1079,6 +1108,114 @@ function autoRun(seed){
   eq(G4.loadFounder(), null, 'a corrupt founder save degrades to none');
   G4.newRun(1);
   eq(G4.R.deck.length, 8, 'and the run starts normally anyway');
+}
+
+/* =========================== the standing order =========================== */
+{
+  const G = loadGame({});
+  G.newRun(3131);
+  ok(G.R.order && G.R.order.id, 'a run opens with an order already on the table');
+  ok(G.ORDERS.every((o) => o.pay > 0 && o.want && o.who && typeof o.ok === 'function'),
+    'every order has a buyer, a want, a price and a test');
+  ok(G.ORDERS.some((o) => o.id === 'cursed') && G.ORDERS.some((o) => o.id === 'runt'),
+    'and at least two of them argue with keeping the best chick');
+
+  // the predicates, straight
+  const byId = {};
+  for (const o of G.ORDERS) byId[o.id] = o;
+  const par = { trait: 'none' };
+  ok(byId.brute.ok({ might: 9, hide: 0, trait: 'none', gen: 1 }, par, par), 'the pit boss takes a 9 Might chick');
+  ok(!byId.brute.ok({ might: 8, hide: 20, trait: 'none', gen: 1 }, par, par), 'and not an 8');
+  ok(byId.runt.ok({ might: 4, hide: 4, trait: 'none', gen: 1 }, par, par), 'the tanner wants it small in both');
+  ok(!byId.runt.ok({ might: 4, hide: 5, trait: 'none', gen: 1 }, par, par), 'one good stat and the runt order is off');
+  ok(byId.cursed.ok({ might: 1, hide: 1, trait: 'cursed', gen: 1 }, par, par), 'the butcher pays for bad blood');
+  ok(!byId.strange.ok({ trait: 'venom', might: 1, hide: 1, gen: 1 }, { trait: 'venom' }, par),
+    'a trait a parent already had is not strange');
+  ok(byId.strange.ok({ trait: 'venom', might: 1, hide: 1, gen: 1 }, { trait: 'stun' }, { trait: 'none' }),
+    'a trait neither parent had is');
+
+  // the banner on the clutch is the ONLY moment the order can still change what
+  // the player does, and it has to land on the qualifying chick alone
+  G.R.order = byId.brute;
+  G.R.lastHatch = { a: par, b: par };
+  const ban = (might) => G.ui.chickBanners({ child: { might, hide: 1, trait: 'none', gen: 1 }, tags: [] });
+  ok(/FILLS THE ORDER \+3/.test(ban(9)), 'the chick that fits is banner-marked on the clutch');
+  ok(!/FILLS THE ORDER/.test(ban(4)), 'and the one beside it is not');
+
+  // orderMet needs a hatch to compare against, and never fires without one
+  G.R.lastHatch = null;
+  ok(!G.orderMet({ might: 99, hide: 99, trait: 'cursed', gen: 9 }), 'nothing fills an order before a hatch');
+
+  // and the full round: keeping a chick that fits pays, and it is logged
+  G.newRun(3132);
+  G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
+  for (let i = 0; i < 40 && !G.R.litter; i++) G.winFight();
+  ok(!!G.R.litter, 'the round hatched a clutch');
+  G.R.order = byId.cursed;
+  G.R.litter[0].child.trait = 'cursed';
+  const slop0 = G.R.slop, logs0 = G.R.log.length, id0 = G.R.order.id;
+  G.keepChick(0);
+  eq(G.R.filled, 1, 'the run counts the order it filled');
+  eq(G.R.slop, slop0 + G.C.SLOP_PER_WIN + (G.R.sold * G.C.SLOP_PER_CHICK) + byId.cursed.pay,
+    'and the buyer pays on the way out');
+  ok(G.R.log.length >= logs0 + 2, 'the log carries the sale as well as the birth');
+  ok(/butcher/i.test(G.R.log.join(' ')), 'and names who bought it');
+  ok(G.R.order && G.R.order.id !== undefined, 'a fresh order is posted for the next round');
+  ok(id0 === 'cursed', 'the order that paid is the one that was posted, not the next one');
+
+  // a chick that does not fit pays nothing
+  G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
+  for (let i = 0; i < 40 && !G.R.litter; i++) G.winFight();
+  ok(!!G.R.litter, 'the round hatched a clutch');
+  G.R.order = byId.brute;
+  for (const res of G.R.litter){ res.child.might = 1; res.child.hide = 1; }
+  const slop1 = G.R.slop, filled1 = G.R.filled;
+  G.keepChick(0);
+  eq(G.R.filled, filled1, 'a chick that misses the want fills nothing');
+  ok(G.R.slop < slop1 + G.C.SLOP_PER_WIN + 9, 'and no buyer pays for it');
+}
+
+/* ============================== kin marks ================================= */
+// Sharing blood is the biggest single swing in the game (wild x1.85 plus a 30%
+// curse roll) and it used to be announced only after both parents were locked
+// in. The marks have to be on the grid after the FIRST tap or they are useless.
+{
+  const G = loadGame({});
+  G.ui.boot();
+  G.ui.startRun();
+  G.newRun(7);                           // fixed seed: the same barn every run
+  const d = G.R.deck;
+  d[1].blood = d[1].blood.concat([d[0].id]);
+  d[2].blood = d[2].blood.concat([d[0].id]);
+
+  eq(G.kinIn([]).length, 0, 'nothing is marked before a parent is picked');
+  const k = G.kinIn([d[0].id]);
+  eq(k.length, 2, 'both relatives of the picked beast are kin');
+  ok(k.indexOf(d[0].id) < 0, 'the picked beast is never its own kin');
+  ok(k.indexOf(d[1].id) >= 0 && k.indexOf(d[2].id) >= 0, 'and they are the right two');
+  eq(G.kinIn([d[0].id, d[1].id]).length, 1, 'picking a relative leaves the third marked');
+  eq(G.kinIn([d[3].id]).length, 0, 'an unrelated beast lights nothing up');
+
+  G.R.nest = [d[0].id];
+  G.ui.renderNest();
+  const grid = global.document.getElementById('nGrid');
+  eq(grid.children.length, d.length, 'the barn draws every beast');
+  const marked = grid.children.filter((el) => el.classList.contains('kin'));
+  eq(marked.length, 2, 'one tap marks both relatives in the barn');
+  const sel = grid.children.filter((el) => el.classList.contains('sel'));
+  eq(sel.length, 1, 'and the picked beast still reads as picked, not as kin');
+  ok(!sel[0].classList.contains('kin'), 'a card is never both at once');
+  const hint = global.document.getElementById('nHint').innerHTML;
+  ok(/share/.test(hint), 'the hint says how many share blood');
+  ok(/cursed/.test(hint), 'and names the risk before the second pick, not after');
+
+  G.R.nest = [d[3].id];
+  G.ui.renderNest();
+  eq(global.document.getElementById('nGrid').children.filter(
+    (el) => el.classList.contains('kin')).length, 0,
+    'picking an unrelated beast clears the marks');
+  ok(!/cursed/.test(global.document.getElementById('nHint').innerHTML),
+    'and drops the warning with them');
 }
 
 /* =============================== the UI =================================== */
