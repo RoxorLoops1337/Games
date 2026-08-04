@@ -2871,7 +2871,7 @@ const SPELLS = [
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold',
     say:'no target — it braces everything you have',
-    d:'For eight seconds everything of yours takes 40% less from their heroes\u2019 abilities. Worth most in the seconds you can see one coming.' },
+    d:'For eight seconds everything of yours takes 40% less from their heroes\u2019 abilities. Worth most while one of them is fighting on your half of the bridge.' },
   { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
@@ -5411,15 +5411,27 @@ function aiSpellTarget(s, d, fs){
   }
   /* Given after they spend, not before. It waits for something of theirs to
      actually be recovering, which is the only state it does anything in. */
-  /* Given when there is something to brace AGAINST: a hero of theirs on the
-     bridge with its ultimate off recovery. Bracing an empty lane is eight
-     seconds of nothing, which is the mistake this order most invites. */
+  /* Given when there is something to brace AGAINST: a hero of theirs in the
+     lane, close to my line, and nothing already running.
+
+     It used to also require their ULTIMATE to be off recovery, and that clause
+     was the order. Measured over 26,362 samples of live matches: an enemy hero
+     exists 46% of the time, is in the lane 41%, and has its ultimate loaded
+     2.5% — a sixteenfold collapse on one condition, because a hero spends its
+     ultimate the moment its own brain approves and the loaded state barely
+     exists. The whole gate held 1.3% of a match, and Brace came out at 0.43
+     casts per draft when every other order in the set runs 1 to 5.6: a
+     commander who drafted it essentially never got to use it.
+
+     Dropping that clause takes the window to 25.2%, and it is the right window
+     anyway — Brace blunts a hero's ABILITIES, which it throws constantly, not
+     its ultimate, which it throws once a minute. The card was teaching the
+     player to wait for the same moment that never comes; it no longer does. */
   if (d.id === 'brace'){
     if (s.braceT > 0) return null;
     for (const h of G.sides[fs].heroes){
       if (h.dead || !h.inLane) continue;
-      const u = h.skills.find(x => x.ult);
-      if (u && !(u.cdT > 0) && Math.abs(h.x - frontlineX(s.i)) < 16) return {};
+      if (Math.abs(h.x - frontlineX(s.i)) < 16) return {};
     }
     return null;
   }
