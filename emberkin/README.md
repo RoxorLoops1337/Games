@@ -69,6 +69,11 @@ Never hand-edit the generated block in `index.html` — edit the JSON and re-emb
 The two touch buttons relabel themselves for what they do right now — Talk /
 Menu in the world, Play / Menu in a fight, Next while someone is talking.
 
+The aim moves itself onto a card you can afford whenever the hand changes under
+you — dealing a hand, or spending the card you were on — but never when you
+walked it somewhere yourself, since looking at a card you cannot pay for yet is
+a fair thing to want to do.
+
 A card takes one click with a mouse, because hovering already aimed it, and two
 taps with a finger — aim, then confirm — so a fat-fingered tap never spends
 energy by accident. Dragging is the third way: lift a card past a third of the
@@ -110,6 +115,16 @@ moment they return; the UI plays the list back at reading speed. That is why
 the tests drive real battles without touching the renderer, and why the HP bars
 can lag the text without ever disagreeing with it.
 
+Two invariants are worth stating because breaking either one deadlocks or
+corrupts a run, and both did:
+
+- **Every path out of the foe's turn ends in `startPlayerTurn`.** A foe can die
+  on its own turn — burn or snare finishing it, thorns answering the hit it
+  landed — and `afterFoe` has to send the next one in *and* hand the turn back.
+- **`FOE_HP_MUL` never leaves the battle.** `toughen` is undone by `untoughen`
+  when you catch a foe, and the max-HP a card grants is booked per kin in
+  `b.maxAdds` so a switch cannot hand the bill to somebody else.
+
 ### Cards
 
 A card has one growable number, `v`, and `vt` says what that number is — damage,
@@ -127,6 +142,15 @@ Jabs in the same deck end up different cards. Growth stops at `growCap(id)` —
 several times the card's own value — because a card that grows forever
 eventually plays the game for you.
 
+**The number on the card is the damage.** `cardDamage()` deals `v` flat, plus
+whatever attack you have banked this battle, times the type chart if the card
+has an element, times a crit. It does not go through the level-scaled move
+formula, because a card belongs to you and not to whichever kin is holding it:
+a Strike that reads "Deal 10" must deal 10 at level 5 and 10 at level 50, or
+growing it by +1 stops meaning anything you can read off the card. That is also
+why growth is the deck's whole power curve — an ungrown deck falls behind by
+Emberwood, and a grown one does not.
+
 Kin move cards are priced by weight (`moveCost`): a real move plus a support
 card is a turn, and three real moves is not. That is where the deck earns its
 place. Foes carry `FOE_HP_MUL` times their normal HP in a fight, because a hand
@@ -137,6 +161,20 @@ lands two or three cards where a move landed one.
 Rare gems come from winning; Vane in the Hollowbrook shop turns them into
 cards. Four tiers, each costing roughly triple the last and shifting its odds up
 the rarity table — Silver never drops a legendary, Prism drops one in five.
+
+### Trainers
+
+A trainer gets exactly one ambush. Walk into their line and they call you out;
+after that the sight is spent (`seen_<id>` in the flags) whatever the outcome,
+and the rematch is there when you walk up and ask for it. Without that rule a
+trainer standing on the only road out of town re-challenges you every time you
+walk back, and one loss becomes a soft-lock you cannot train your way out of —
+the grass is on their far side.
+
+The rival's first team is the same level as your starter. He already holds the
+kin that beats yours; two levels on top of that made the opening fight
+unwinnable, which the story suite missed for a while because it fought that
+battle with a stacked party. It fights it with the level-5 starter now.
 
 ## Tests
 
@@ -168,6 +206,7 @@ tests with it rather than re-implementing game logic.
 ## Balance dials
 
 - Battle: `BASE_ENERGY` 3, `HAND_SIZE` 5, `FOE_HP_MUL` 2.0, `moveCost` by move power.
+- Card damage: flat, `cardDamage()` — the card's `v` plus `mods.atk`, × type × crit.
 - Card growth ceiling: `growCap` = card value × `capMul` (default 4).
 - Chest costs and odds: the `CHESTS` table. Gem payouts: `gemReward`.
 - Encounter rate: `enc.rate` per map (0.12–0.14).

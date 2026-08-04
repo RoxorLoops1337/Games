@@ -186,6 +186,28 @@ eq(EK.B().over, 'win', 'beating the whole team wins');
 eq(EK.B().teamIdx, 1, 'the second team member was sent out');
 ok(EK.gemReward(EK.B()) > 0, 'a trainer win is worth gems');
 
+// A foe can die on its own turn — burn or snare finishing it at end of turn, or
+// thorns answering the hit it just landed. The next one has to step in AND the
+// turn has to come back to you. It used to stop in the foe phase with an empty
+// hand and no energy, and nothing the player pressed could move it again.
+for (const how of ['burn', 'thorns']) {
+  G.party = [EK.mkMon('tsunaga', 45)];
+  const chain = [['cindercub', 5], ['zaplet', 5]];
+  EK.G.battle = null;
+  EK.startBattle({ foe: EK.mkMon('cindercub', 5), team: chain, npc: { name: 'Tester', id: 't_y', trainer: { team: chain, prize: 100 } }, wild: false });
+  const bk = EK.B();
+  bk.foe.hp = 1;                                   // one point of anything finishes it
+  if (how === 'burn') bk.foe.status = 'burn';
+  else bk.mods.thorns = 40;
+  EK.endTurn();                                    // the foe swings, then dies to it
+  eq(bk.teamIdx, 1, `${how}: the next kin is sent out when the foe dies on its own turn`);
+  ok(!bk.over, `${how}: and the battle is not over`);
+  eq(bk.phase, 'player', `${how}: the turn comes back to the player`);
+  ok(bk.hand.length > 0, `${how}: with a hand to play`);
+  ok(bk.energy > 0, `${how}: and energy to play it with`);
+  EK.G.battle = null;
+}
+
 section('shields, buffs and max HP all wear off with the battle');
 G.party = [EK.mkMon('gargolem', 30)];
 const rock = G.party[0];
@@ -207,6 +229,28 @@ ok(rock.hp >= hpNow - 5, 'and HP only takes what got through');
 EK.clearMods(b3);
 eq(rock.max, baseMax, 'max HP goes back to normal after the battle');
 eq(EK.effStat(rock, 'atk'), baseAtk, 'and so does attack');
+EK.G.battle = null;
+
+// The bonus has to be given back to the kin that got it. Booking one running
+// total and taking it off whoever was out at the end let you buff a kin, switch,
+// and keep the HP forever — while the kin you switched to paid for it, in the
+// save, every battle. Repeat it and one kin grows without limit and the other
+// grinds down to 1.
+G.party = [EK.mkMon('gargolem', 30), EK.mkMon('brookite', 30)];
+const [buffed, bench] = G.party;
+const wasBuffed = buffed.max, wasBench = bench.max;
+EK.startBattle({ foe: EK.mkMon('pebblet', 30), wild: true });
+const b3b = EK.B();
+b3b.hand = [{ src: 'deck', u: EK.grantCard('heartroot').u, id: 'heartroot', bg: 0 }];
+b3b.energy = 9;
+EK.playCard(0);
+ok(buffed.max > wasBuffed, 'the active kin gains the max HP');
+b3b.mine = bench;                                  // switch, the way the party screen does
+EK.swapKinCards(b3b);
+EK.clearMods(b3b);
+eq(buffed.max, wasBuffed, 'and gives it back even though it was benched at the end');
+eq(bench.max, wasBench, 'the kin that came in never pays for it');
+ok(G.party.every((m) => m.hp <= m.max && m.hp >= 0), 'nobody is left with more HP than they can hold');
 EK.G.battle = null;
 
 section('capture maths');
@@ -238,6 +282,28 @@ const beforeParty = G.party.length;
 EK.addCaught(EK.B().foe);
 eq(G.party.length, beforeParty + 1, 'the catch joins the party');
 eq(G.dex.zaplet, 2, 'the dex marks it caught');
+
+// Foes fight with FOE_HP_MUL times their real HP. A catch must hand that pool
+// back: otherwise every kin you ever caught walks around on double HP, and the
+// first level-up recomputes the honest maximum, finds it smaller than what the
+// creature is carrying, and drives HP straight through zero.
+const kept = G.party[G.party.length - 1];
+eq(kept.species, 'zaplet', 'the caught kin is the one that joined');
+eq(kept.max, EK.hpAt(EK.DEX.zaplet.base[0], kept.lvl), 'and joins on its own HP, not the fight-sized pool');
+ok(kept.hp > 0 && kept.hp <= kept.max, 'alive, and inside its own bar');
+const beforeLvl = kept.max;
+kept.lvl++; EK.refresh(kept);
+ok(kept.hp > 0, 'and levelling it up does not knock it out');
+ok(kept.max > beforeLvl, 'the level-up raised its maximum');
+ok(kept.hp <= kept.max, 'without leaving it holding more HP than it can');
+
+// The same correction has to survive a creature that is already wrong — an old
+// save, or anything else carrying a maximum its stats do not justify.
+const bloated = EK.mkMon('zaplet', 10);
+bloated.max = bloated.max * 2; bloated.hp = 3;
+bloated.lvl++; EK.refresh(bloated);
+ok(bloated.hp > 0, 'a bloated maximum is corrected without fainting the creature');
+ok(bloated.hp <= bloated.max, 'and it ends up inside its bar');
 
 section('a full party sends the catch to the box');
 G.party = ['cindercub', 'dewdrip', 'sproutle', 'zaplet', 'pebblet', 'mothrix'].map((id) => EK.mkMon(id, 5));
@@ -511,6 +577,32 @@ for (const id of ROUTE_ORDER) {
 // And the legendary must not outclass the region it guards.
 ok(26 <= Math.max(...MAPS.crown_hollow.enc.table.map((e) => e[2])) + 8, 'Vespyr sits close to Crown Hollow levels');
 
+// The first fight is the one that has to be winnable on what the game just
+// handed you: a level-5 starter, the starter deck, no grass walked yet — and a
+// rival holding the kin that beats yours. It stands on the only road out of
+// town, so an unwinnable version of it is an unwinnable game. Played greedily
+// (spend everything, then end the turn) it should still go the player's way
+// most of the time; a careful player does better than this bot.
+const firstRival = MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+const opening = loadGame({});
+for (const starter of ['cindercub', 'dewdrip', 'sproutle']) {
+  const foe = opening.RIVAL_PICK[starter];
+  const lvl = opening.trainerTeam(firstRival)[0][1];
+  let wins = 0;
+  const RUNS = 120;
+  for (let i = 0; i < RUNS; i++) {
+    withDeck(opening);                                  // a deck nobody has grown yet
+    opening.G.party = [opening.mkMon(starter, 5)];
+    opening.startBattle({ foe: opening.mkMon(foe, lvl), team: [[foe, lvl]], npc: firstRival, wild: false });
+    autoFight(opening);
+    if (opening.B() && opening.B().over === 'win') wins++;
+    opening.G.battle = null;
+  }
+  const rate = wins / RUNS;
+  ok(rate >= .6, `a fresh ${starter} beats the rival's Lv${lvl} ${foe} ${(rate * 100) | 0}% of the time playing greedily`);
+  ok(rate <= .98, `and it is still a fight, not a formality (${(rate * 100) | 0}%)`);
+}
+
 section('encounters only fire in tall grass');
 EK.G.party = [EK.mkMon('cindercub', 5)];
 EK.enterMap('route_one', 9, 10, 'down');
@@ -528,21 +620,35 @@ ok(started > 10, `tall grass produces encounters (${started}/400)`);
 EK.G.battle = null; EK.G.mode = 'world';
 
 section('trainers spot you down their own line');
-const spot = (mapId, x, y) => {
+// A trainer's ambush is spent the moment it fires, so each probe starts clean.
+const spot = (mapId, x, y, keepFlags) => {
+  if (!keepFlags) EK.G.flags = {};
   EK.enterMap(mapId, x, y, 'down');
   EK.G.battle = null; EK.G.mode = 'world'; EK.G.dialogue = null; EK.G.alert = null;
   const hit = EK.trainerSight();
   return hit ? EK.G.alert.npc.name : null;
 };
 const pell = MAPS.route_one.npcs.find((n) => n.id === 't_pell');   // faces down
-EK.G.flags = {};
 eq(spot('route_one', pell.x, pell.y + 1), pell.name, 'one tile ahead is seen');
 eq(spot('route_one', pell.x, pell.y + 4), pell.name, 'four tiles ahead is seen');
 eq(spot('route_one', pell.x, pell.y + 5), null, 'five tiles is too far');
 eq(spot('route_one', pell.x, pell.y - 1), null, 'behind them is safe');
 eq(spot('route_one', pell.x + 1, pell.y + 2), null, 'beside the line is safe');
+EK.G.flags = {};
 EK.G.flags[pell.id] = 1;
-eq(spot('route_one', pell.x, pell.y + 1), null, 'a beaten trainer does not re-challenge');
+eq(spot('route_one', pell.x, pell.y + 1, true), null, 'a beaten trainer does not re-challenge');
+
+// Losing is not a soft-lock: a trainer standing on the only road out of town
+// would otherwise re-challenge you forever, and the grass is on their far side.
+EK.G.flags = {};
+eq(spot('route_one', pell.x, pell.y + 1, true), pell.name, 'they call you out the first time');
+ok(!EK.G.flags[pell.id], 'and are still unbeaten');
+eq(spot('route_one', pell.x, pell.y + 2, true), null, 'but the ambush is spent — walking back past them is free');
+eq(spot('route_one', pell.x, pell.y + 1, true), null, 'however many times you walk the line');
+EK.G.party = [EK.mkMon('cindercub', 20)];
+EK.talkTo(pell);
+ok(!!EK.G.dialogue || !!EK.G.battle, 'and talking to them still starts the rematch');
+EK.G.dialogue = null; EK.G.battle = null;
 EK.G.flags = {};
 // Sight must not pass through walls.
 const coll = MAPS.emberwood.npcs.find((n) => n.id === 't_coll');    // faces left

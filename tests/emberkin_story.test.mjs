@@ -88,11 +88,59 @@ ok(EK.trainerSight(), 'he calls you out');
 clear();
 ok(!!G.battle, 'and the battle starts');
 eq(EK.B().foe.species, EK.RIVAL_PICK.cindercub, 'with the starter that beats yours');
-stack(20);
-EK.B().mine = G.party[0];
+// This one is fought on what Rowan just handed over — no stacked party. It is
+// the first fight in the game and it stands on the only road out of town, so
+// if it is not winnable on a level-5 starter and the starting deck, the game
+// is not winnable at all. Every other beat below may stack; this one may not.
+eq(G.party.length, 1, 'with the one kin you were given');
+eq(G.party[0].lvl, 5, 'at the level you were given it');
+ok(EK.B().foe.lvl <= G.party[0].lvl, 'and he does not outlevel you on top of the type advantage');
+// fightToEnd plays greedily — spend everything, end the turn — so it drops one
+// of these now and again, exactly like a player learning the deck. What must
+// hold is that a loss costs you a retry and nothing else: heal up, walk back,
+// go again. If it took more than a handful the fight would be too steep.
+let attempts = 1;
 ok(fightToEnd(), 'the rival battle resolved');
+while (!G.flags.t_wick1 && attempts < 12) {
+  attempts++;
+  EK.healParty();
+  G.mode = 'world'; G.dialogue = null; G.battle = null;
+  EK.enterMap('hollowbrook', wick1.x - wdx, wick1.y - wdy, 'up');
+  EK.talkTo(wick1);
+  clear();
+  ok(!!G.battle, `attempt ${attempts}: he takes the rematch`);
+  ok(fightToEnd(), `attempt ${attempts} resolved`);
+}
 eq(G.flags.t_wick1, 1, 'beating him is recorded');
-ok(G.money > 500, 'and paid for');
+ok(attempts <= 6, `and a fresh starter gets there without a grind (${attempts} attempt${attempts > 1 ? 's' : ''})`);
+// Each loss costs a quarter of your shards, so only the single-attempt run ends
+// up ahead of where it started — what has to be true either way is that the
+// prize was actually paid out.
+ok(G.money >= wick1.trainer.prize, `the prize was paid (${G.money} shards after ${attempts} attempt${attempts > 1 ? 's' : ''})`);
+
+section('and losing to him does not lock you in town');
+// Wick stands between Hollowbrook and the only grass in the game. If a loss
+// let him re-challenge on the way back, there would be no way to train out of it.
+const stuckRun = loadGame({});
+stuckRun.setCtx(mkCtx());
+stuckRun.newGame();
+stuckRun.G.flags = { gotStarter: 1, starter: 'cindercub' };
+stuckRun.G.party = [stuckRun.mkMon('cindercub', 5)];
+const w = stuckRun.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+const [sdx, sdy] = DIR[w.dir];
+const walkInto = () => {
+  stuckRun.enterMap('hollowbrook', w.x + sdx * 2, w.y + sdy * 2, 'up');
+  stuckRun.G.mode = 'world'; stuckRun.G.alert = null; stuckRun.G.battle = null;
+  return stuckRun.trainerSight();
+};
+ok(walkInto(), 'he calls you out the first time');
+stuckRun.G.dialogue = null; stuckRun.G.battle = null;
+ok(!walkInto(), 'and never again, win or lose — the road out is open');
+ok(!stuckRun.G.flags.t_wick1, 'he is still unbeaten, so the rematch is still worth something');
+stuckRun.G.party = [stuckRun.mkMon('pyrelynx', 30)];
+stuckRun.G.mode = 'world'; stuckRun.G.dialogue = null;
+stuckRun.talkTo(w);
+ok(!!stuckRun.G.dialogue || !!stuckRun.G.battle, 'and walking up to him still starts it');
 
 // ----------------------------------------------------------------- routes --
 section('Route One');
