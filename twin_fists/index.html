@@ -49,6 +49,12 @@
   .stat .v{ font-size:22px; font-weight:900; color:#ffcf3d; }
   .story{ text-align:left; color:#d6c4b1; font-size:13px; line-height:1.8; margin:0 0 16px; }
   .story b{ color:#ff9a4c; }
+  .movelist{ text-align:left; margin:0 0 12px; font-size:11.5px; line-height:1.55; color:#cbb9a6; }
+  .movelist h4{ margin:8px 0 3px; font-size:10px; letter-spacing:3px; color:#ff8a4c; font-weight:700; }
+  .movelist .mv{ display:flex; justify-content:space-between; gap:10px; border-bottom:1px solid #241a2c; padding:1px 0; }
+  .movelist .mv b{ color:#ffcf3d; font-weight:700; }
+  .movelist .mv i{ color:#8d7a8c; font-style:normal; }
+  .movelist .own{ color:#7fe0ff; }
   .tiny{ font-size:11px; color:#8d7a8c; letter-spacing:1px; margin-top:10px; }
 
   /* touch controls */
@@ -159,6 +165,7 @@
   <div class="ov" id="pause" hidden>
     <div class="card">
       <h2>PAUSED</h2>
+      <div id="moveList" class="movelist"></div>
       <div class="seg" id="segSound">
         <button data-v="1" class="on">SOUND ON</button>
         <button data-v="0">SOUND OFF</button>
@@ -1193,6 +1200,11 @@ function applyHit(atk, def, a){
   G.hitStop = Math.max(G.hitStop, a.heavy ? 0.11 : a.down ? 0.07 : 0.045);
   shakeScreen(a.heavy ? 5 : a.down ? 3.4 : 1.6, a.heavy ? 0.26 : a.down ? 0.2 : 0.1);
   spawnFx('impact', (def.x + atk.x) / 2 + atk.face * 5, def.y, def.z + 24 * def.sc, a.down ? '#fff0a0' : '#ffffff');
+  if (a.all){                       // something that hits everyone kicks up the floor
+    spawnFx('ring', def.x, def.y, 2, '#cfc0a8');
+    for (let i = 0; i < 3; i++) spawnFx('dust', def.x + rr(-9, 9), def.y, 2, '#a89880');
+  }
+  if (a.multi) spawnFx('spark', def.x + rr(-6, 6), def.y, def.z + rr(14, 30), '#fff0c0');
   if (a.heavy){
     spawnFx('ring', (def.x + atk.x) / 2, def.y, def.z + 22 * def.sc, '#fff0b0');
     for (let i = 0; i < 5; i++) spawnFx('chip', def.x, def.y, def.z + 20 + rr(0, 16), '#ffd88a');
@@ -3031,8 +3043,9 @@ function bgStreet(c){
       const x = (hash(i) * VW) | 0, y = (hash(i + 300) * 100) | 0;
       px(x, y, 1, 1, i % 7 ? '#8f9ad0' : '#e8eaff');
     }
-    ellipse(300, 30, 12, 12, '#f0e8d0');
-    ellipse(296, 27, 9, 9, '#fffaf0');
+    ellipse(292, 64, 12, 12, '#e8dfc4');
+    ellipse(289, 61, 9, 9, '#fffaf0');
+    px(286, 60, 2, 2, '#ddd2b4'); px(295, 68, 3, 2, '#ddd2b4');
   }), 0, 0);
 
   // far skyline, hazed toward the sky it stands in
@@ -3114,7 +3127,8 @@ function bgJunk(c){
     dgrad(0, 54, VW, 46, '#22141f', '#33201f');
     dgrad(0, 100, VW, 50, '#33201f', '#4a2e24');
     for (let i = 0; i < 40; i++) px((hash(i) * VW) | 0, (hash(i + 91) * 60) | 0, 1, 1, '#8a7f9a');
-    ellipse(96, 36, 11, 11, '#d8c8a8'); ellipse(93, 33, 8, 8, '#f0e4c8');
+    ellipse(96, 62, 11, 11, '#cdbb9a'); ellipse(93, 59, 8, 8, '#f0e4c8');
+    px(91, 64, 3, 2, '#c6b48f');
   }), 0, 0);
 
   for (let i = -1; i < 10; i++){
@@ -3796,66 +3810,102 @@ function visibleList(){
 }
 
 /* ----------------------------------------------------------------- HUD */
+/* A small head-and-shoulders of a fighter, for the corner of the HUD. */
+function drawPortrait(skinKey, x, y, w, h, hurt){
+  const s = SKINS[skinKey] || SKINS.ryn;
+  px(x - 1, y - 1, w + 2, h + 2, '#0c0812');
+  px(x, y, w, h, '#181222');
+  px(x, y, w, 1, '#2e2440');
+  const cx = x + w / 2, cy = y + h * 0.52;
+  px(cx - 6, y + h - 7, 12, 7, s.shirt2);          // shoulders
+  px(cx - 6, y + h - 7, 12, 1, s.shirt);
+  ellipse(cx, cy, 6, 6, s.skin2);                   // head, two tone
+  ellipse(cx - 1, cy - 1, 5, 5, hurt ? '#ffb4b4' : s.skin);
+  px(cx - 6, cy - 7, 12, 3, s.hair);                // hair cap
+  px(cx - 6, cy - 7, 12, 1, shade(s.hair, 28));
+  if ((s.hair2 || 'flat') === 'mohawk') for (let i = 0; i < 3; i++) px(cx - 2 + i * 2, cy - 10, 1, 3, s.hair);
+  if ((s.hair2 || 'flat') === 'band') px(cx - 6, cy - 6, 12, 2, s.trim);
+  if ((s.hair2 || 'flat') === 'ponytail') px(cx - 8, cy - 5, 2, 7, s.hair);
+  px(cx + 2, cy - 1, 1, 2, '#20131c');              // eyes
+  px(cx - 3, cy - 1, 1, 2, '#20131c');
+  px(cx - 2, cy + 3, 4, 1, shade(s.skin2, -20));    // mouth
+}
+
+/* A bar in a frame with a bevel, instead of a bar. */
+function gauge(x, y, w, h, frac, col, bg){
+  px(x - 1, y - 1, w + 2, h + 2, '#0c0812');
+  px(x, y, w, h, bg || '#1d1626');
+  const fw = Math.round((w - 2) * clamp(frac, 0, 1));
+  if (fw > 0){
+    px(x + 1, y + 1, fw, h - 2, col);
+    px(x + 1, y + 1, fw, 1, shade(col, 40));
+    px(x + 1, y + h - 2, fw, 1, shade(col, -34));
+  }
+}
+
 function drawHUD(){
-  px(0, 0, VW, 30, 'rgba(10,8,16,0.72)');
-  px(0, 30, VW, 1, '#3a2f42');
+  px(0, 0, VW, 34, 'rgba(9,7,14,0.78)');
+  px(0, 34, VW, 1, '#3a2f42');
+  px(0, 33, VW, 1, '#1b1526');
   for (let i = 0; i < G.players; i++){
     const p = players[i];
-    const x = i === 0 ? 4 : VW - 116;
-    const nm = i === 0 ? 'RYN' : 'COLE';
-    text(nm, x, 3, i === 0 ? '#7fb0ff' : '#ff8a7a', 1, '#100c18');
-    text(String(G.score[i]).padStart(6, '0'), x + 46, 3, '#ffd23d', 1, '#100c18');
-    // health
+    const x = i === 0 ? 4 : VW - 148;
+    const accent = i === 0 ? '#7fb0ff' : '#ff8a7a';
     const hp = p ? clamp(p.hp / p.hpMax, 0, 1) : 0;
-    px(x, 13, 96, 7, '#241c2c'); px(x + 1, 14, 94, 5, '#120d18');
+    drawPortrait(i === 0 ? 'ryn' : 'cole', x, 4, 24, 26, p && p.hitFlash > 0);
+    const bx = x + 29;
+    text(i === 0 ? 'RYN' : 'COLE', bx, 3, accent, 1, '#100c18');
+    text(String(G.score[i]).padStart(6, '0'), bx + 30, 3, '#ffd23d', 1, '#100c18');
+    // health, with a notch every fifth
     const col = hp > 0.5 ? '#4ad06a' : hp > 0.22 ? '#ffcf3d' : '#e84a3a';
-    px(x + 1, 14, Math.round(94 * hp), 5, col);
-    for (let s = 1; s < 5; s++) px(x + 1 + Math.round(94 * s / 5), 14, 1, 5, '#241c2c');
+    gauge(bx, 13, 96, 8, hp, col);
+    for (let sIdx = 1; sIdx < 5; sIdx++) px(bx + Math.round(94 * sIdx / 5), 14, 1, 6, 'rgba(12,8,18,0.7)');
     // lives
-    for (let l = 0; l < Math.min(5, G.lives[i]); l++) px(x + 100 + l * 5, 14, 3, 5, i === 0 ? '#7fb0ff' : '#ff8a7a');
-    // special: a charge bar, then a row of stocks
+    for (let l = 0; l < Math.min(6, G.lives[i]); l++){
+      px(bx + 100 + l * 5, 14, 3, 6, accent);
+      px(bx + 100 + l * 5, 14, 3, 1, '#ffffff');
+    }
+    // rush charge, then the stocks it banks into
     const mv = p ? clamp(p.meter / METER_MAX, 0, 1) : 0;
-    px(x, 22, 62, 5, '#241c2c'); px(x + 1, 23, 60, 3, '#120d18');
-    px(x + 1, 23, Math.round(60 * mv), 3, mv >= 1 ? '#ffe27a' : '#c86ad0');
+    gauge(bx, 23, 58, 6, mv, mv >= 1 ? '#ffe27a' : '#c86ad0');
     const stocks = p ? p.stocks : 0;
     for (let sIdx = 0; sIdx < STOCK_MAX; sIdx++){
-      const sx2 = x + 66 + sIdx * 7;
+      const sx2 = bx + 62 + sIdx * 7;
       const lit = sIdx < stocks;
-      const blink = lit && stocks > 0 && Math.floor(T * 4) % 2 === 0;
-      px(sx2, 22, 5, 5, lit ? (blink ? '#fff4c0' : '#ffd23d') : '#2a2233');
-      if (lit) px(sx2 + 1, 23, 3, 3, '#c86a18');
+      const blink = lit && Math.floor(T * 4) % 2 === 0;
+      px(sx2 - 1, 22, 7, 8, '#0c0812');
+      px(sx2, 23, 5, 6, lit ? (blink ? '#fff4c0' : '#ffd23d') : '#241d2e');
+      if (lit){ px(sx2 + 1, 24, 3, 4, '#d07a1c'); px(sx2 + 1, 24, 3, 1, '#fff0b0'); }
     }
-    // what tier your rush is, and what is left of the thing in your hands
     if (p){
       const tier = rushTier(p);
-      if (tier > 1) text('R' + tier, x + 103, 22, '#ffe27a', 1, '#20101a');
+      if (tier > 1) text('R' + tier, bx + 99, 23, '#ffe27a', 1, '#20101a');
       if (p.weapon){
         const wf = clamp(p.wUses / ((WEAPON[p.weapon] || { uses: 8 }).uses || 8), 0, 1);
-        px(x + 120, 22, 22, 5, '#241c2c');
-        px(x + 121, 23, Math.round(20 * wf), 3, wf > 0.3 ? '#9aa4b0' : '#e05a3a');
+        gauge(bx + 116, 23, 24, 6, wf, wf > 0.3 ? '#9aa4b0' : '#e05a3a');
       }
     }
   }
   // stage plate
   const s = stage();
-  textC('STAGE ' + (G.stage + 1), VW / 2, 3, '#ffe9b8', 1, '#100c18');
-  textC(s.name, VW / 2, 13, '#c08a6e', 1, '#100c18');
+  textC('STAGE ' + (G.stage + 1), VW / 2, 5, '#ffe9b8', 1, '#100c18');
+  textC(s.name, VW / 2, 15, '#c08a6e', 1, '#100c18');
 
   // boss bar
   if (G.bossHp > 0 && G.bossMax > 0){
     const w = 150, x = (VW - w) / 2;
-    px(x - 2, 34, w + 4, 10, 'rgba(10,8,16,0.8)');
-    px(x, 36, w, 6, '#2a1420');
-    px(x, 36, Math.round(w * clamp(G.bossHp / G.bossMax, 0, 1)), 6, '#e0402a');
-    px(x, 36, Math.round(w * clamp(G.bossHp / G.bossMax, 0, 1)), 2, '#ff7a5a');
-    textC(G.bossName, VW / 2, 45, '#ff8a6a', 1, '#100c18');
+    px(x - 2, 38, w + 4, 10, 'rgba(10,8,16,0.8)');
+    px(x, 40, w, 6, '#2a1420');
+    px(x, 40, Math.round(w * clamp(G.bossHp / G.bossMax, 0, 1)), 6, '#e0402a');
+    px(x, 40, Math.round(w * clamp(G.bossHp / G.bossMax, 0, 1)), 2, '#ff7a5a');
+    textC(G.bossName, VW / 2, 49, '#ff8a6a', 1, '#100c18');
   }
 
   // GO arrow
   if (W.goT > 0 && Math.floor(T * 6) % 2 === 0){
     const bx = VW - 46;
-    text('GO', bx, 56, '#ffd23d', 2, '#20101a');
-    for (let i = 0; i < 3; i++) px(bx + 26 + i * 4, 60 + i, 3, 8 - i * 2, '#ffd23d');
+    text('GO', bx, 60, '#ffd23d', 2, '#20101a');
+    for (let i = 0; i < 3; i++) px(bx + 26 + i * 4, 64 + i, 3, 8 - i * 2, '#ffd23d');
   }
   // opening coaching, stage one only
   if (G.stage === 0 && G.time < 34 && G.phase === 'play'){
@@ -3884,7 +3934,7 @@ function drawHUD(){
   for (let i = 0; i < G.players; i++){
     const p = players[i];
     if (p && p.hitsT > 0 && p.hits > 1){
-      text(p.hits + ' HIT', i === 0 ? 6 : VW - 52, 34, '#ffd23d', 1, '#20101a');
+      text(p.hits + ' HIT', i === 0 ? 6 : VW - 52, 38, '#ffd23d', 1, '#20101a');
     }
   }
 }
@@ -4154,9 +4204,41 @@ function startGame(){
   else startStage();
 }
 
+const BASE_MOVES = [
+  ['PUNCH x3', 'JAB, CROSS, HOOK'],
+  ['KICK x3', 'SHIN, BODY, HEAD'],
+  ['UP + PUNCH', 'UPPERCUT - LAUNCHES'],
+  ['DOWN + KICK', 'SWEEP - HITS ALL ROUND'],
+  ['DASH + KICK', 'SLIDING KICK'],
+  ['PUNCH + KICK', 'WHIRL'],
+  ['JUMP + KICK', 'JUMP KICK'],
+  ['WALK INTO THEM', 'GRAB, THEN KNEE OR THROW'],
+  ['SPECIAL', 'TWIN FIST RUSH'],
+];
+function fillMoveList(){
+  const el = $('moveList');
+  if (!el) return;
+  let h = '<h4>MOVES</h4>';
+  for (const [k, v] of BASE_MOVES) h += `<div class="mv"><b>${k}</b><i>${v}</i></div>`;
+  const bought = UPGRADES.filter(u => u.move && hasMove(u.id));
+  if (bought.length){
+    h += '<h4>BOUGHT</h4>';
+    for (const u of bought) h += `<div class="mv"><b class="own">${u.desc[0]}</b><i>${u.name}</i></div>`;
+  }
+  const stats = UPGRADES.filter(u => !u.move && upCount(u.id));
+  if (stats.length){
+    h += '<h4>UPGRADES</h4>';
+    for (const u of stats) h += `<div class="mv"><b>${u.name}</b><i>x${upCount(u.id)}</i></div>`;
+  }
+  const p = players[0];
+  if (p) h += `<div class="mv"><b>RUSH TIER</b><i>${RUSH_NAMES[rushTier(p)] || 'RUSH I'}</i></div>`;
+  el.innerHTML = h;
+}
+
 function togglePause(){
   if (G.phase === 'play' || G.phase === 'card' || G.phase === 'clear' || G.phase === 'cut' || G.phase === 'upgrade'){
     G._prev = G.phase; G.phase = 'pause';
+    fillMoveList();
     show('pause', true);
     musicStop();
   } else if (G.phase === 'pause'){
