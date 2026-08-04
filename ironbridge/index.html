@@ -2528,7 +2528,7 @@ function ecoStep(s, dt){
       bombardHit(s, s.bombX + (BOMB.n - s.bombN - 1) * BOMB.spread);
       s.bombN--;
       // The salvo is over: one line for all three shells rather than three.
-      if (s.bombN === 0){ castTell(s, 'Bombard', bombSeen[s.i].size, 'caught'); bombSeen[s.i].clear(); }
+      if (s.bombN === 0){ castTell(s, 'Bombard', bombSeen[s.i].size, 'caught', orderGold[s.i]); bombSeen[s.i].clear(); orderGold[s.i] = 0; }
     }
   }
   if (s.fireT > 0){
@@ -2540,7 +2540,7 @@ function ecoStep(s, dt){
     nearby(s.fireX, PITCH.rad + 2, (u) => {
       if (u.dead || u.side !== fs) return;
       if (hyp(u.x - s.fireX, u.y) > PITCH.rad + u.r) return;
-      dealDmg(null, u, PITCH.dps * dt, { magic:true, pure:true, noHooks:true });
+      dealDmg(null, u, PITCH.dps * dt, { magic:true, pure:true, noHooks:true, by:s.i });
       if (!u.dead) applySlow(u, PITCH.slow, PITCH.slowT);
     });
   }
@@ -2594,7 +2594,7 @@ function spawnUnit(side, kind, o){
     // added on demand so packBody, which walks the object, always sees them —
     // and so pyreSrc is present as a key, which is what makes NET_REFS pack it
     // as a body index instead of dropping it as a null.
-    fallT:0, hobT:0, freeT:0, pyreT:0, pyreDps:0, pyreSrc:null,
+    fallT:0, hobT:0, freeT:0, pyreT:0, pyreDps:0, pyreSrc:null, pyreSide:-1,
   };
   u.hp = u.mhp;
   G.units.push(u);
@@ -2810,6 +2810,14 @@ const SPELL_GROUPS = [
    A readout that inflates itself is worse than none: it is the number the
    player will use to decide whether the order is worth its slot. */
 const bombSeen = [new Set(), new Set()];
+/* What an order earned, for the sentence that reports it. COSMETIC: written
+   from simulation code the way fxToast already is, read by nothing but the
+   readout, in no snapshot, no save and no hash. The gold itself is sim state
+   and lives in s.res.gold; this is only the running total of the part of it
+   that came from one salvo, because "9 caught" and "9 caught, 45 gold" are
+   different sentences and the second one is the one that says why the order
+   was worth its price. */
+const orderGold = [0, 0];
 
 /* -------------------------------------- what the OTHER commander is carrying
 
@@ -2834,13 +2842,16 @@ const bombSeen = [new Set(), new Set()];
    started out remembering an order from the match before. */
 const foeSeen = new Array(SPELL_SLOTS).fill(null);
 const foeForget = () => { for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = null; };
-function castTell(s, name, n, verb){
+function castTell(s, name, n, verb, gold){
   // No HEADLESS guard: fxToast is already safe there (paintToasts returns
   // early) and every other notice from simulation code goes out the same way.
   // Guarding it here would have made the one thing worth asserting about this
   // — that it says the right number — impossible to assert.
   if (!forMe(s.i)) return;
-  fxToast(n > 0 ? name + ' — ' + n + ' ' + verb : name + ' — nothing on that stretch of lane.',
+  // The bounty is the half of the report that says whether the order paid for
+  // itself, so it is only worth printing when there is one.
+  const paid = gold >= 1 ? ', ' + Math.round(gold) + ' gold' : '';
+  fxToast(n > 0 ? name + ' — ' + n + ' ' + verb + paid : name + ' — nothing on that stretch of lane.',
     n > 0 ? 'good' : 'bad', TOAST_W.cast);
 }
 
@@ -2993,6 +3004,10 @@ const SPELL_CAST = {
     // burn hands over burn.src), which is why it is in NET_REFS: packed as an
     // index and re-linked, never copied as a number that means something else.
     t.pyreSrc = null;
+    // ...which is exactly why the brand has to remember the HOLD. A body that
+    // burns to death two seconds after the cast still died to that hold's
+    // order, and pyreSide is the only thing left on the bridge that knows it.
+    t.pyreSide = s.i;
     return null;
   },
   rampart(s, c){
@@ -3017,7 +3032,7 @@ function bombardHit(s, x){
   for (const u of hits){
     // Counted once across the whole salvo, however many shells reach it.
     bombSeen[s.i].add(u.id);
-    dealDmg(null, u, BOMB.dmg, { magic:true, ability:true });
+    dealDmg(null, u, BOMB.dmg, { magic:true, ability:true, by:s.i });
     if (!u.dead) applySlow(u, BOMB.slow, BOMB.slowT);
   }
   if (!HEADLESS){ ringFx(x, 0, BOMB.r, '#ffbe6a'); shake(2.2, x); sfx('stone', x); }
@@ -3219,7 +3234,7 @@ function dealDmg(src, tgt, amt, o){
   }
   if (tgt.isHero && !o.ability && src && !src.struct && passVal(tgt, 'thorns') > 0 && src.hp !== undefined)
     dealDmg(tgt, src, dmg * passVal(tgt, 'thorns'), { pure:true, noHooks:true });
-  if (tgt.hp <= 0) killThing(tgt, src);
+  if (tgt.hp <= 0) killThing(tgt, src, o.by);
   return dmg;
 }
 
@@ -3277,15 +3292,29 @@ function healUnit(u, amt){
   addFloat(u.x, u.y, '+' + Math.round(shown), HEAL.col, floatScale(shown, u.mhp) * .9);
 }
 
-function killThing(t, src){
+function killThing(t, src, by){
   if (t.dead) return;
   t.dead = true; t.hp = 0;
   if (t.struct){ onStructDown(t, src); return; }
-  const s = src && src.side !== undefined ? G.sides[src.side] : null;
+  /* WHO GETS PAID. A body killed by a tower, a minion or a hero pays the hold
+     that owns the killer, and it always has. A commander order has no body on
+     the bridge to own it — that is the whole point of an order — so `src` was
+     null and the kill paid nobody: eight grunts wiped off the lane by one
+     bombardment earned 0 of the 40 gold the same eight would have paid a
+     turret, and did not count as kills either. So the orders that are best at
+     clearing a wave were the orders that starved the hold that cast them,
+     which is backwards. `by` is the hold that cast, carried on the blow itself
+     because there is nothing standing on the bridge to carry it. */
+  const side = src && src.side !== undefined ? src.side
+    : (typeof by === 'number' && by >= 0 ? by : -1);
+  const s = side >= 0 ? G.sides[side] : null;
   if (s && !t.isHero){
     let g = minionWorth(t);
-    if (src.isHero) g = g * (1 + passVal(src, 'goldM')) + passVal(src, 'killGold');
+    // The hero multipliers stay a HERO's: an order is not a hero and does not
+    // read its passives, so a hold kill pays the flat bounty and no more.
+    if (src && src.isHero) g = g * (1 + passVal(src, 'goldM')) + passVal(src, 'killGold');
     s.res.gold += g; s.kills++;
+    if (side === by && !(src && src.side !== undefined)) orderGold[side] += g;
   }
   if (src && !src.isHero && !src.struct) troopOnKill(src);
   if (src && src.isHero){
@@ -3756,8 +3785,8 @@ function statusTick(u, dt){
   // happened to be larger.
   if (u.pyreT > 0){
     u.pyreT -= dt;
-    dealDmg(u.pyreSrc || null, u, u.pyreDps * dt, { magic:true, pure:true, noHooks:true });
-    if (u.pyreT <= 0){ u.pyreT = 0; u.pyreDps = 0; u.pyreSrc = null; }
+    dealDmg(u.pyreSrc || null, u, u.pyreDps * dt, { magic:true, pure:true, noHooks:true, by:u.pyreSide });
+    if (u.pyreT <= 0){ u.pyreT = 0; u.pyreDps = 0; u.pyreSrc = null; u.pyreSide = -1; }
   }
 }
 
@@ -3977,7 +4006,7 @@ function makeHero(side, cls, name){
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
     // Commander spells. warpT is a hero-only channel; the rest are the same
     // fields a minion carries, so one branch in statusTick serves both.
-    warpT:0, fallT:0, hobT:0, freeT:0, pyreT:0, pyreDps:0, pyreSrc:null,
+    warpT:0, fallT:0, hobT:0, freeT:0, pyreT:0, pyreDps:0, pyreSrc:null, pyreSide:-1,
   };
   recalcHero(h, true);
   h.hp = h.mhp; h.mana = h.mmana;
@@ -4354,7 +4383,7 @@ function enterLane(h){
   // down. A hero that died mid-channel would otherwise walk back out and finish
   // raising its banner, and a branded one would come back still burning.
   h.warpT = 0; h.fallT = 0; h.hobT = 0; h.freeT = 0;
-  h.pyreT = 0; h.pyreDps = 0; h.pyreSrc = null;
+  h.pyreT = 0; h.pyreDps = 0; h.pyreSrc = null; h.pyreSide = -1;
   const sh = passVal(h, 'spawnShield');
   if (sh){ h.shield = sh; h.shT = 20; }
   G.units.push(h);
@@ -17093,7 +17122,7 @@ const packUnit = (u) => ({
   kind:u.kind, side:u.side, x:u.x, y:u.y, hp:u.hp, mhp:u.mhp, ad:u.ad, armor:u.armor, mr:u.mr,
   paid:!!u.paid, life:u.life, cd:u.cd,
   fallT:u.fallT || 0, hobT:u.hobT || 0, freeT:u.freeT || 0,
-  pyreT:u.pyreT || 0, pyreDps:u.pyreDps || 0,
+  pyreT:u.pyreT || 0, pyreDps:u.pyreDps || 0, pyreSide:u.pyreSide === undefined ? -1 : u.pyreSide,
 });
 const packSide = (s) => ({
   res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
@@ -17205,6 +17234,7 @@ function loadMatch(pack){
       h.dead = ph.dead; h.respawnT = ph.respawnT; h.inLane = false; h.retreat = !!ph.retreat;
       h.warpT = ph.warpT || 0; h.fallT = ph.fallT || 0; h.hobT = ph.hobT || 0;
       h.freeT = ph.freeT || 0; h.pyreT = ph.pyreT || 0; h.pyreDps = ph.pyreDps || 0;
+      h.pyreSide = ph.pyreSide === undefined ? -1 : ph.pyreSide;
       h.pyreSrc = null;
       if (!ph.dead){ h.inLane = true; G.units.push(h); }
       return h;
@@ -17217,6 +17247,7 @@ function loadMatch(pack){
     u.armor = pu.armor; u.mr = pu.mr; u.cd = pu.cd;
     u.fallT = pu.fallT || 0; u.hobT = pu.hobT || 0; u.freeT = pu.freeT || 0;
     u.pyreT = pu.pyreT || 0; u.pyreDps = pu.pyreDps || 0; u.pyreSrc = null;
+    u.pyreSide = pu.pyreSide === undefined ? -1 : pu.pyreSide;
   }
   scatterCache[0] = scatterCache[1] = null;
   grassCache[0] = grassCache[1] = null;
@@ -17898,6 +17929,9 @@ function mixTimers(mix, u){
   // which is exactly the class of difference this hash exists to catch.
   mix(q30(u.warpT)); mix(q30(u.fallT)); mix(q30(u.hobT)); mix(q30(u.freeT));
   mix(q30(u.pyreT)); mix(q64(u.pyreDps));
+  // Whose brand it is decides where the gold from it lands, so the two
+  // machines have to agree about it exactly as they agree about the timer.
+  mix(u.pyreSide);
 }
 
 function netHash(){
@@ -18622,7 +18656,7 @@ window.IB = {
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
-  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
+  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,

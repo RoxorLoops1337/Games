@@ -14606,7 +14606,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
     for (let i = 0; i < 40 && !told; i++){ step(.1); told = G.toasts.length; }
     t.ok(told === 1, 'exactly one line for the whole salvo (' + told + ')');
     const hit = G.toasts[0];
-    t.ok(/^Bombard — \d+ caught$/.test(hit.msg), 'which is the count (' + hit.msg + ')');
+    // The count, and — once an order's kills started paying the hold that cast
+    // it — what the salvo earned. The bounty half only appears when there is
+    // one, so a salvo that caught bodies without finishing any still reads as
+    // the plain count.
+    t.ok(/^Bombard — \d+ caught(, \d+ gold)?$/.test(hit.msg), 'which is the count (' + hit.msg + ')');
     const caught = +(hit.msg.match(/(\d+)/) || [0, 0])[1];
     t.ok(caught > 0, 'and it caught somebody, having been aimed at one');
     t.ok(hit.kind === 'good', 'reported as a hit rather than as a miss');
@@ -16195,6 +16199,222 @@ t.ok(true, 'a final draw on a live match is clean');
     t.ok(s2.spells[0] === 'bombard' && s2.spells[1] === 'withdraw', 'both of the opening pair are taken');
     t.ok(/Commander orders/.test(G.sheet),
       'and the sheet stays up, because either of them can still be changed');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------------- an order that kills, and pays
+   A body killed by a turret, a minion or a hero pays the hold that owns the
+   killer. A commander order has no body on the bridge to own it — that is what
+   an order IS — so src was null and the kill paid nobody: measured, eight
+   grunts wiped off the lane by one bombardment earned 0 of the 40 gold the
+   same eight paid a turret, and counted as 0 kills. The orders best at
+   clearing a wave were the orders that starved the hold that cast them.
+
+   Experience was never the problem and has not moved: shareXp pays every hero
+   standing near the body 70% whoever swung, and an order kill paid that 70%
+   before this and pays exactly the same 70% after it. Measured both ways
+   below, because "orders give no experience" is a claim I made once without
+   measuring it and it was not true.                                         */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  // No structures, no workers: nothing on the board can move gold except the
+  // one thing under test. A measurement taken with a turret still shooting and
+  // five workers still digging is a measurement of the turret and the workers.
+  const bare = (victimSide, seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:seed || 31337 });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    for (const s of G.sides){
+      for (const st of s.structs){ st.dead = true; st.hp = 0; }
+      for (const k in s.workers) s.workers[k] = 0;
+    }
+    G.units.length = 0;
+    for (let i = 0; i < 6; i++) IB.spawnUnit(victimSide, 'grunt', { x:40, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);                       // let the spatial index catch up
+    return G.units.filter(u => !u.dead);
+  };
+  const gold = (i) => G.sides[i].res.gold;
+
+  /* ------------------------------------------ the same body, the same bounty */
+  {
+    let vics = bare(1);
+    const worth = IB.minionWorth(vics[0]);
+    const tower = { side:0, struct:true };
+    let g0 = gold(0), k0 = G.sides[0].kills;
+    IB.killThing(vics[0], tower);
+    const byTower = { g:gold(0) - g0, k:G.sides[0].kills - k0 };
+
+    vics = bare(1);
+    g0 = gold(0); k0 = G.sides[0].kills;
+    IB.dealDmg(null, vics[0], 999999, { magic:true, ability:true, by:0 });
+    const byOrder = { g:gold(0) - g0, k:G.sides[0].kills - k0 };
+
+    t.ok(byTower.g === worth && byTower.k === 1,
+      'a turret kill pays the bounty and counts (' + byTower.g + ' for ' + worth + ')');
+    t.ok(byOrder.g === byTower.g && byOrder.k === byTower.k,
+      'and an order kills the same body for the same money (' + byOrder.g + ', ' + byOrder.k + ' kills)');
+
+    // The hero multipliers stay a hero's. An order reads no passives, so it
+    // cannot be worth MORE than the flat bounty either.
+    t.ok(byOrder.g === worth, 'no more than the bounty, because an order is not a hero');
+  }
+
+  /* ------------------------------------------------- nobody is still nobody */
+  {
+    const vics = bare(1);
+    const g0 = gold(0), g1 = gold(1);
+    IB.killThing(vics[0], null);
+    t.ok(gold(0) === g0 && gold(1) === g1,
+      'a kill with no hold behind it still pays neither side');
+    t.ok(vics[0].dead, 'and the body is still dead, which was never the question');
+  }
+
+  /* ---------------------------------------------------- a whole bombardment */
+  {
+    const vics = bare(1);
+    const worth = vics.reduce((n, u) => n + IB.minionWorth(u), 0);
+    const g0 = gold(0), k0 = G.sides[0].kills;
+    for (let i = 0; i < 40; i++) IB.bombardHit(G.sides[0], 40);
+    const dead = vics.filter(u => u.dead).length;
+    t.ok(dead === vics.length, 'a long enough salvo finishes everything under it (' + dead + ')');
+    t.ok(gold(0) - g0 === worth,
+      'and the hold that fired it is paid for every one (' + (gold(0) - g0) + ' of ' + worth + ')');
+    t.ok(G.sides[0].kills - k0 === dead, 'with the kills on its own ledger');
+  }
+
+  /* --------------------------------------------------------- and pitch fire */
+  {
+    const vics = bare(1);
+    const s = G.sides[0];
+    const worth = vics.reduce((n, u) => n + IB.minionWorth(u), 0);
+    const g0 = gold(0), g1 = gold(1);
+    // A levy has 190hp and walks at 3.5, so it is out of a 5.5-radius fire in
+    // under two seconds and takes ~54 of the 204 the full six would do. Left
+    // whole, this measured how fast a grunt walks. Brought to the edge first,
+    // it measures what the fire is worth to the hold that lit it.
+    for (const u of vics) u.hp = 1;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    step(.2);
+    t.ok(gold(0) - g0 === worth,
+      'the fire pays the hold that lit it (' + (gold(0) - g0) + ' of ' + worth + ')');
+    t.ok(gold(1) === g1, 'and pays the hold it was lit against nothing at all');
+  }
+
+  /* ------------------------------------------------ a brand outlives its cast
+     Pyre Brand is the one that cannot be attributed at the moment of damage:
+     the body burns down seconds after the order went out, with nothing
+     standing on the bridge that belongs to the caster. pyreSide is the only
+     thing left that knows whose brand it is, which is why it is hashed. */
+  {
+    const vics = bare(1);
+    const v = vics[0];
+    const worth = IB.minionWorth(v);
+    v.pyreT = IB.PYRE.dur; v.pyreDps = 999999; v.pyreSide = 0;
+    const g0 = gold(0), g1 = gold(1);
+    step(1);
+    t.ok(v.dead, 'the brand burns it down');
+    t.ok(gold(0) - g0 === worth, 'and pays the hold that branded it (' + (gold(0) - g0) + ')');
+    t.ok(gold(1) === g1, 'and only that one');
+
+    // The same brand with no hold on it pays nobody — the -1 is a real value
+    // and not an accident that happens to index side 0.
+    const v2 = bare(1)[0];
+    v2.pyreT = IB.PYRE.dur; v2.pyreDps = 999999; v2.pyreSide = -1;
+    const h0 = gold(0), h1 = gold(1);
+    step(1);
+    t.ok(v2.dead && gold(0) === h0 && gold(1) === h1,
+      'a brand with no hold behind it burns the body down and pays neither side');
+  }
+
+  /* ------------------------------------------------------ and it is THEIRS */
+  {
+    const vics = bare(0);                       // this time the bodies are mine
+    const worth = vics.reduce((n, u) => n + IB.minionWorth(u), 0);
+    const g0 = gold(0), g1 = gold(1);
+    for (let i = 0; i < 40; i++) IB.bombardHit(G.sides[1], 40);
+    t.ok(gold(1) - g1 === worth,
+      'their bombardment pays them for my dead (' + (gold(1) - g1) + ' of ' + worth + ')');
+    t.ok(gold(0) === g0, 'and pays me nothing for them');
+  }
+
+  /* ---------------------------------------------- experience did not change
+     The claim was "orders award no gold and no XP". Half of it was true. */
+  {
+    const vics = bare(1);
+    const h = IB.makeHero(0, 'fighter', 'Probe');
+    if (!G.sides[0].heroes.includes(h)) G.sides[0].heroes.push(h);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.xp = 0; h.lvl = 1;
+    const x0 = h.xp;
+    IB.dealDmg(null, vics[0], 999999, { magic:true, ability:true, by:0 });
+    const withHold = h.xp - x0;
+    const x1 = h.xp;
+    IB.dealDmg(null, vics[1], 999999, { magic:true, ability:true });
+    const without = h.xp - x1;
+    t.ok(withHold > 0, 'a hero standing over an order kill has always earned from it (' + withHold + ')');
+    t.ok(withHold === without,
+      'and earns exactly the same now that the gold has somewhere to go');
+  }
+
+  /* ------------------------------------------- both machines agree about it */
+  {
+    const v = bare(1, 777)[0];
+    v.pyreT = IB.PYRE.dur; v.pyreDps = 40; v.pyreSide = 0;
+    const hA = IB.netHash();
+    v.pyreSide = 1;
+    t.ok(IB.netHash() !== hA, 'whose brand it is is part of what the two machines check');
+    v.pyreSide = 0;
+    t.ok(IB.netHash() === hA, 'and putting it back puts the hash back');
+
+    const snap = IB.netSnap();
+    v.pyreSide = -1;
+    IB.netLoad(snap);
+    const v2 = G.units.find(u => u.pyreT > 0);
+    t.ok(v2 && v2.pyreSide === 0, 'a resynced body remembers whose brand it carries');
+    t.ok(IB.netHash() === hA, 'and the board it lands on is the board it left');
+
+    // The single-player save runs through the same packing, so it is the same
+    // question asked once more rather than a second mechanism to get wrong.
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    v.pyreSide = -1;
+    IB.loadMatch(pack);
+    const v3 = G.units.find(u => u.pyreT > 0);
+    t.ok(v3 && v3.pyreSide === 0, 'and a reloaded one does too');
+    IB.clearSave();
+  }
+
+  /* ---------------------------------------- what the readout says it earned
+     orderGold is the running total for the sentence, and nothing else: it is
+     written from simulation code exactly as fxToast is, and read by the
+     readout alone. If it ever entered the hash, two machines whose toasts had
+     drifted apart would desync over a sentence. */
+  {
+    const v = bare(1)[0];
+    const hA = IB.netHash();
+    IB.orderGold[0] += 500;
+    t.ok(IB.netHash() === hA, 'the readout total is not something the two machines check');
+    const snap = IB.netSnap();
+    t.ok(JSON.stringify(snap).indexOf('orderGold') < 0, 'nor something a snapshot carries');
+    IB.orderGold[0] = 0;
+
+    G.toasts.length = 0;
+    IB.castTell(G.sides[0], 'Bombard', 9, 'caught', 45);
+    t.ok(G.toasts.length === 1 && /^Bombard — 9 caught, 45 gold$/.test(G.toasts[0].msg),
+      'a salvo that earned says so (' + (G.toasts[0] ? G.toasts[0].msg : 'nothing') + ')');
+    G.toasts.length = 0;
+    IB.castTell(G.sides[0], 'Bombard', 9, 'caught', 0);
+    t.ok(/^Bombard — 9 caught$/.test(G.toasts[0].msg),
+      'and one that caught without finishing anything does not invent a nought');
+    G.toasts.length = 0;
+    IB.castTell(G.sides[0], 'Bombard', 0, 'caught', 0);
+    t.ok(/nothing on that stretch/.test(G.toasts[0].msg), 'and a miss still reads as a miss');
+    G.toasts.length = 0;
   }
 
   IB.MY = seat0;
