@@ -13213,7 +13213,44 @@ t.ok(true, 'drawing an empty bridge is harmless');
         d.n + '’s icon is inline SVG on the same 24 grid as the rest');
       t.ok(!/<img|url\(|\p{Extended_Pictographic}/u.test(ic),
         d.n + '’s icon fetches nothing and is not an emoji');
+      /* The cut edge is what makes one of these read as a shape lying on the
+         card rather than a stain in it, and Unbind — the only one of the
+         eight built out of strokes rather than filled shapes — had none,
+         because ICO_EDGE sets a stroke and this icon's stroke IS the shape.
+         It gets the edge the other way round: the path again underneath, in
+         the same ink, wider. Either construction satisfies this. */
+      t.ok(ic.includes('#3d2d1a'), d.n + '’s icon has the cream cut edge round it');
+      /* These eight are only ever seen on cream — the bar tiles, the chooser
+         cards, the slots — and the HUD's light iron against #f2e4c6 is about
+         one percent of separation, so a spear head reads as a hole punched in
+         the card. They are lit in their own darker steel; the HUD keeps its
+         own, because on felt the light one is right. */
+      for (const pale of ['#c3cedd', '#c3d1e2', '#9aabc0'])
+        t.ok(!ic.includes(pale), d.n + '’s icon does not use the felt steel ' + pale + ' on cream');
     }
+    // ...and that darker steel really is darker, rather than being a second
+    // name for the same value.
+    const lum = (h) => {
+      const v = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map(c => c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4));
+      return .2126 * v[0] + .7152 * v[1] + .0722 * v[2];
+    };
+    t.ok(lum(IB.ICO_STEEL) < lum('#c3d1e2') - .1,
+      'the orders’ steel is meaningfully darker than the HUD’s (' + IB.ICO_STEEL + ')');
+    t.ok((lum('#f2e4c6') + .05) / (lum(IB.ICO_STEEL) + .05) > 1.9,
+      'far enough off the cream card to read as metal on it');
+    /* Two silhouette collisions the first pass shipped: Bombard beside Hobble
+       (a ball in the lower left with something small in the upper right, both
+       of them) and Withdraw beside Rampart (a crenelated wall, both of them).
+       At 19px in the bar detail cannot separate those; the outline and the
+       value have to. Rampart is a shield now, and Bombard is dark iron under
+       a gold flame where Hobble is bright steel. */
+    t.ok(!/M3\.4 7\.4h3\.6/.test(IB.SPELL_ICON.rampart),
+      'Rampart is no longer the same battlement Withdraw is drawn from');
+    t.ok(IB.SPELL_ICON.rampart.includes('#8fa2b8') && !IB.SPELL_ICON.withdraw.includes('20.6'),
+      'and the two of them no longer share an outline');
+    t.ok(IB.SPELL_ICON.bombard.includes('#41556c') && IB.SPELL_ICON.hobble.includes(IB.ICO_STEEL),
+      'Bombard is the dark mass and Hobble the bright ring, so 19px can tell them apart');
     IB.showSpells(0);
     const h = G.sheet;
     for (const d of IB.SPELLS){
@@ -13318,8 +13355,18 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.spellUI.slot = 1;
     IB.spellLook('hobble');
     t.ok(IB.spellClash() === 0, 'an order already in the other slot is a clash');
-    t.ok(/already your first order/.test(IB.spellWhyHtml()),
+    t.ok(/in your first order/.test(IB.spellWhyHtml()),
       'which the panel says out loud (' + (IB.spellWhyHtml().match(/wk">([^<]*)/) || [])[1] + ')');
+    // A STATEMENT of where it already is, not a refusal. The same line is what
+    // the panel shows for the quarter-second after a successful choice, when
+    // the order has just landed in a slot and the lit slot has moved on — and
+    // "you cannot have this" is the wrong sentence to answer a press that
+    // worked. Both halves of it are held here so the wording cannot drift back.
+    t.ok(!/\bcannot have|already in a slot/i.test(IB.spellWhyHtml() + IB.spellAcceptLabel().txt),
+      'and says it without telling the player no about something they already own');
+    t.ok(/first order/.test(IB.spellAcceptLabel().txt),
+      'the dead Accept names the slot it is in rather than shrugging (' +
+      IB.spellAcceptLabel().txt + ')');
     t.ok(IB.spellAcceptLabel().on === false, 'and Accept goes dead rather than promising it');
     t.ok(IB.spellAccept() === false && s.spells.join() === 'hobble,unbind',
       'pressing it anyway changes nothing');
@@ -13378,8 +13425,15 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(G.units.length === n, 'and no second muster marched');
     t.ok(!IB.spellUI.aim, 'nothing was armed by the refusal either');
     t.ok(IB.spellReady(s, 0) === false, 'the order reads as not ready...');
-    t.ok(/b\.disabled = !spellReady\(s, i\)/.test(SRC),
-      '...and the tile in the bar is disabled from that same fact rather than a second one');
+    t.ok(/classList\.toggle\('dead', !spellReady\(s, i\)\)/.test(SRC),
+      '...and the tile in the bar is marked spent from that same fact rather than a second one');
+    // A CLASS and not `disabled`, and the difference is the whole point: a
+    // disabled button eats its own click, so the two sentences castPress has
+    // ready for exactly this — the one asserted above and the one asserted
+    // below — could then only be reached from Q and E. A phone has neither.
+    t.ok(!/\bb\.disabled\s*=/.test(SRC),
+      'and it is a class rather than `disabled`, so the press still reaches its explanation');
+    t.ok(/\.ord\.dead\{/.test(SRC), 'with a dead look of its own to wear while it is spent');
     // The other half of "not ready": an order it cannot pay for.
     s.spellCd[0] = 0;
     s.res.food = 0; s.res.iron = 0; s.res.wood = 0;
@@ -13528,7 +13582,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const i = m.index + m[0].length;
       return css.slice(i, css.indexOf('}', i));
     };
-    for (const [face, press] of [['.ord', '.ord:active:not(:disabled)'], ['.spslot', '.spslot:active']]){
+    for (const [face, press] of [['.ord', '.ord:active:not(.dead)'], ['.spslot', '.spslot:active']]){
       t.ok(/var\(--shelf/.test(block(face)), face + ' has a shelf under it, so it reads as a thing');
       t.ok(/translateY\(\s*[2-9]/.test(block(press)), face + ' travels far enough on a press to be felt');
       t.ok(/inset 0 \d+px/.test(block(press)), face + ' goes INTO the panel rather than only down');
@@ -13554,6 +13608,93 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(/var\(--display\)/.test(block(sel)), sel + ' is set in the display face');
       t.ok(/small-caps/.test(block(sel)), 'and in small caps — ' + sel);
     }
+
+    /* Rebinding --ink is only half of it. A piece of card that never states a
+       `color` inherits the FELT ink from the panel around it, and the rebind
+       sits there unread — which is how the empty slot's "+" ended up at about
+       one percent of separation against its own card while every variable
+       involved was correct. Anything cream-faced says its own colour. */
+    const col = css.slice(0, css.indexOf('color:var(--cream-ink); }'));
+    const colSel = col.slice(col.lastIndexOf('}') + 1);
+    for (const sel of ['.abtn', '.sptile', '.spslot'])
+      t.ok(colSel.includes(sel),
+        sel + ' states the dark ink rather than inheriting the felt one');
+
+    /* Cast brass has a dead state. Without one the biggest and brightest thing
+       on a sheet keeps its lift, its brightening hover and its pointer while
+       doing nothing at all — so a refusal is drawn exactly like an invitation,
+       and the button that says ACCEPT in gold is the one that is not going to.
+       The rest of the interface has had this treatment all along. */
+    const dead = block('.big:disabled');
+    t.ok(dead, 'cast brass has a dead state at all');
+    t.ok(/cursor:not-allowed/.test(dead), 'which says so with the cursor');
+    t.ok(/#d9cdb4/.test(dead) && /#8f8370/.test(dead),
+      'in the same putty every other dead control in the game wears');
+    t.ok(/filter:none/.test(dead), 'and it does not keep the brass brightening under it');
+    for (const st of [':hover', ':active']){
+      const b = block('.big' + st + ':not(:disabled)');
+      t.ok(b, '.big' + st + ' is fenced off from the dead state');
+      t.ok(!block('.big' + st), 'with no unfenced rule left to overrule it — ' + st);
+    }
+
+    /* The count on a recovering order. The shutter passes UNDER the label on
+       its way down, so a label with no ground of its own is dim ink on a dark
+       field at the start of a recovery and dim ink on a light one at the end:
+       least legible exactly when the wait is longest and the number matters
+       most. The chip does not move, so the contrast does not depend on how far
+       the shutter has fallen. */
+    const cool = block('.ord.cool .on');
+    t.ok(/background:/.test(cool), 'the recovery count carries its own ground');
+    t.ok(/color:#ffe9c4/.test(cool), 'and its own ink on top of it');
+    t.ok(/tabular-nums/.test(cool), 'in figures that do not shuffle as it counts down');
+
+    /* Every order is the height of the things beside it on a phone as well as
+       on a desktop. A 32px control in a row of 28px ones is the one that looks
+       like it was added later. */
+    t.ok(/height:28px/.test(block('body.narrow .ord')),
+      'a phone drops the order tile to the height of its neighbours');
+
+    /* Reading an order that is already in a slot must not take the lit look
+       away from it. `.taken` comes after `.at` in the sheet, so without the
+       guard the later rule quietly wins and the card being read goes flat. */
+    t.ok(!block('.sptile.taken') && block('.sptile.taken:not(.at)'),
+      'the already-taken look stands aside for the one being read');
+
+    /* The way out of a targeting state is a button like any other: stitched
+       like card, inked like card, and it clicks. It was none of the three. */
+    t.ok(stSel.includes('.acx'), 'the cancel chip carries the stitch');
+    t.ok(inkSel.includes('.acx'), 'and the cream ink');
+    t.ok(/const PRESSABLE = '[^']*\.acx/.test(SRC), 'and makes a sound when it is pressed');
+  }
+
+  /* ------------------------------- what the panel says it is about to do
+     The one thing a chooser must never do is take something away without
+     naming it first. Two slots and eight orders means most presses in the
+     second half of the window are REPLACEMENTS, and "would fill your second
+     order" is a sentence about a slot that is not empty. */
+  {
+    const s = fresh(8532);
+    IB.showSpells(0);
+    IB.spellPress('muster'); IB.spellPress('muster');
+    IB.spellUI.slot = 0;
+    IB.spellLook('bombard');
+    const why = IB.spellWhyHtml();
+    t.ok(/would replace Second Muster/.test(why),
+      'a press over a full slot names what it would push out (' +
+      (why.match(/wk">([^<]*)/) || [])[1] + ')');
+    IB.spellUI.slot = 1;
+    IB.spellLook('warp');
+    t.ok(/would fill your second order/.test(IB.spellWhyHtml()),
+      'and an empty one is still only filled');
+    // The rule for how to choose is printed once, at the top of the sheet. On
+    // a 390px screen the panel sits directly under it, so the empty state
+    // repeating it put the same instruction on the screen twice.
+    IB.spellUI.at = null;
+    const empty = IB.spellWhyHtml();
+    t.ok(!/second press|press it again|tap it again/i.test(empty),
+      'the empty panel does not reprint the rule the sheet already gave');
+    t.ok(empty.length < 200, 'and stays short enough not to be a second paragraph');
+    release();
   }
 
   /* --------------------------- and none of it can decide anything on its own */

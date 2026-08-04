@@ -241,9 +241,10 @@
      the pair, which ties them to the resource instrument they are paid out of
      rather than to the clock they sit beside.
 
-     The recovery is drawn as the card FILLING BACK UP from the bottom — a
-     shutter over the face, not a bar beside it — so the whole control is the
-     readout and a glance costs nothing. */
+     The recovery is drawn as a shutter over the face rather than a bar beside
+     it — so the whole control is the readout and a glance costs nothing. It
+     covers the card at the moment of the cast and DRAINS away as the order
+     comes back, so an empty card is a ready one. */
   #orders{ display:flex; align-items:center; gap:5px; margin-left:14px; }
   #orders:empty{ display:none; }
   .ord{ position:relative; overflow:hidden; display:inline-flex; align-items:center; gap:6px;
@@ -253,8 +254,8 @@
     font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t4);
     font-weight:700; letter-spacing:.3px; white-space:nowrap;
     transition:background .12s,border-color .12s,box-shadow .12s,transform .05s; }
-  .ord:hover:not(:disabled){ background:var(--raise-hi); border-color:var(--rim-hi); }
-  .ord:active:not(:disabled){ transform:translateY(3px); box-shadow:inset 0 2px 5px rgba(0,0,0,.6); }
+  .ord:hover:not(.dead){ background:var(--raise-hi); border-color:var(--rim-hi); }
+  .ord:active:not(.dead){ transform:translateY(3px); box-shadow:inset 0 2px 5px rgba(0,0,0,.6); }
   .ord .ico{ width:19px; height:19px; vertical-align:0; position:relative; z-index:2; }
   .ord .on{ position:relative; z-index:2; overflow:hidden; text-overflow:ellipsis; }
   /* The shutter. Height is written every frame from the cooldown; nothing else
@@ -268,16 +269,26 @@
   /* Armed and waiting for a point on the world. */
   .ord.aim{ border-color:#8a6524; background:linear-gradient(180deg,#ffe8b0,#f6cf72); color:#3a2704;
     box-shadow:var(--lip), var(--shelf-gold), 0 0 0 2px rgba(255,190,90,.5); }
-  .ord:disabled{ background:#d9cdb4; border-color:#bcae92; color:#8f8370;
+  /* Spent: recovering, or the stores cannot pay for it. NOT `disabled` — the
+     press has to reach castPress so it can say WHICH of the two it is. The
+     look is the family's dead treatment; only the behaviour differs. */
+  .ord.dead{ background:#d9cdb4; border-color:#bcae92; color:#8f8370;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.3); }
   /* The window has closed and the slot was left empty. A well, not a card:
      there is nothing here to press, and it should not look like there is. */
   .ord.locked{ background:var(--well); border-color:#202a3a; color:#7c8ea1;
     box-shadow:var(--sunk); font-size:var(--t2); }
-  .ord.cool .on{ font-variant-numeric:tabular-nums; letter-spacing:0; }
+  /* The count rides its own dark chip. The shutter passes UNDER the label on
+     its way down, so without one the number would be dim ink on a dark field
+     at the start of the recovery and dim ink on a light one at the end — worst
+     exactly when the wait is longest. The chip does not move, so the contrast
+     does not depend on how far the shutter has fallen. */
+  .ord.cool .on{ font-variant-numeric:tabular-nums; letter-spacing:0;
+    padding:1px 5px; border-radius:var(--r1); color:#ffe9c4;
+    background:rgba(22,15,6,.72); box-shadow:inset 0 0 0 1px rgba(255,224,160,.22); }
   /* The width is held so the pair does not shuffle sideways every time one of
      them swaps its name for a count. A phone drops the floor with the name. */
-  body.narrow .ord{ min-width:0; max-width:none; padding:0 7px; }
+  body.narrow .ord{ min-width:0; max-width:none; padding:0 7px; height:28px; }
   body.narrow .ord .on{ display:none; }
   /* ...except the count. A phone drops the name for room and keeps the number,
      which is the half of the label that changes. */
@@ -675,23 +686,27 @@
      reads correctly on felt and on card without one call site knowing which it
      is on. The alternative was a second class on every span. */
   .abtn, .pick, .hcard, .tst, .hnew, .sq, .qm, .big.ghost, .dtab, .ib,
-  .ord, .sptile, .spslot{
+  .ord, .sptile, .spslot, #aimbar .acx{
     --gold:#8a6410; --iron:#41556c; --wood:#7a4e20; --red:#b3241c; --pop:#2e7a3c;
     --dim:#7d6647; --dim2:#9a8663; --ink:var(--cream-ink); }
-  .abtn{ color:var(--cream-ink); }
+  /* Rebinding --ink is not enough on its own for a piece of card that never
+     sets `color`: it would inherit the FELT ink from the panel around it and
+     the rebind would sit there unread. Anything faced in cream states it. */
+  .abtn, .sptile, .spslot{ color:var(--cream-ink); }
   /* THE STITCH. A running seam set in from the edge of every piece of card, and
      a dashed `outline` at a negative offset is exactly that: it follows the
      corner radius on its own, costs no border width, needs no source image and
      scales to any size. A nine-slice would be a worse stitch and a thicker
      button — see the note by --deckle for where a nine-slice does earn it. */
-  .abtn, .pick, .hcard, .hnew, .qchip, .mchip, .ib, .job, .sptile, .spslot{
+  .abtn, .pick, .hcard, .hnew, .qchip, .mchip, .ib, .job, .sptile, .spslot,
+  #aimbar .acx{
     outline:1.4px dashed rgba(122,90,44,.34); outline-offset:-5px; }
-  .qchip, .mchip{ outline-offset:-4px; }
+  .qchip, .mchip, #aimbar .acx{ outline-offset:-4px; }
   /* The order tiles are 32px tall; a seam set in five would be a line through
      the middle of the icon rather than a hem round the edge of the card. */
   .ord{ outline:1.4px dashed rgba(122,90,44,.30); outline-offset:-4px; }
   .ord.locked{ outline-color:rgba(214,190,140,.16); }
-  .ord:disabled{ outline-color:rgba(122,90,44,.16); }
+  .ord.dead{ outline-color:rgba(122,90,44,.16); }
   /* ...but not on the felt-faced ones, where the thread would read as a scratch
      rather than a seam. */
   .job{ outline-color:rgba(214,190,140,.20); }
@@ -892,8 +907,11 @@
   .sptile.at:hover{ background:linear-gradient(180deg,#fff0c4,#ffd370); }
   .sptile.at .spn{ color:#4a3405; }
   .sptile.at .spc{ color:#7d6120; }
-  /* Already in a slot: a tag in the corner, and the card sits back. */
-  .sptile.taken{ background:linear-gradient(180deg,#e4d7ba,#cfbf9c); }
+  /* Already in a slot: a tag in the corner, and the card sits back. Never over
+     the top of the lit card, though — an order you are READING while it sits in
+     a slot is still the one being read, and this rule comes after .at, so
+     without the guard it would quietly take the lit look away. */
+  .sptile.taken:not(.at){ background:linear-gradient(180deg,#e4d7ba,#cfbf9c); }
   .sptile .spin{ position:absolute; top:-6px; right:-4px; padding:1px 6px; border-radius:999px;
     font-size:9px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
     color:#2b1c05; background:linear-gradient(180deg,#ffe6a4,#e8b74e);
@@ -946,11 +964,19 @@
     transition:filter .12s, box-shadow .12s, transform .05s; }
   .big.ghost{ background:var(--raise); border:1px solid var(--rim); color:var(--ink);
     text-shadow:none; box-shadow:var(--lip), var(--shelf); }
-  .big:hover{ filter:brightness(1.07); }
-  .big.ghost:hover{ filter:none; background:var(--raise-hi); border-color:var(--rim-hi); }
-  .big:active{ transform:translateY(4px);
+  .big:hover:not(:disabled){ filter:brightness(1.07); }
+  .big.ghost:hover:not(:disabled){ filter:none; background:var(--raise-hi); border-color:var(--rim-hi); }
+  .big:active:not(:disabled){ transform:translateY(4px);
     box-shadow:inset 0 2px 7px rgba(0,0,0,.45), 0 0 0 rgba(0,0,0,0); }
-  .big.ghost:active{ transform:translateY(3px); box-shadow:inset 0 2px 6px rgba(0,0,0,.55); }
+  .big.ghost:active:not(:disabled){ transform:translateY(3px); box-shadow:inset 0 2px 6px rgba(0,0,0,.55); }
+  /* Cast brass has a dead state too. Without one the biggest, brightest thing
+     on the sheet keeps its lift, its hover and its pointer while doing
+     nothing — and a refusal reads exactly like an invitation. Same putty as
+     .abtn:disabled and .ord.dead, so "you cannot press this" is one look
+     across the whole interface rather than eight. */
+  .big:disabled{ background:#d9cdb4; border:1px solid #bcae92; color:#8f8370;
+    text-shadow:none; cursor:not-allowed; filter:none;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.3), inset 0 2px 5px rgba(60,45,25,.2); }
   /* the network report — selectable, scrollable, monospaced, because it exists
      to be read and pasted rather than admired */
   .netlog{ max-height:46vh; overflow:auto; margin:12px 0 0; padding:10px 12px; text-align:left;
@@ -14289,26 +14315,43 @@ const UI_ICON = {
    each one is a SILHOUETTE first — a ball, an arrow into a wall, three spears,
    a banner, a shackle, a broken link, a flame, a battlement — and the shading
    is the second thing, never the thing carrying the meaning. */
+
+/* The steel these eight are lit in. Darker than the HUD's iron on purpose:
+   every one of them is only ever seen on CREAM — the bar tiles, the chooser
+   cards, the slots — and the HUD's #c3d1e2 against #f2e4c6 is barely a
+   percent of separation, so a spear head or a battlement crenel read as a
+   hole in the card rather than as metal. The HUD keeps its own light steel,
+   because on felt that is the one that is right. */
+const ICO_STEEL = '#8fa2b8';
 const SPELL_ICON = {
-  // a shell with its fuse lit
-  bombard: ico('<circle cx="10.6" cy="16.2" r="6.9" fill="#4a5568"/>' +
+  /* A shell with its fuse lit — in DARK iron with a big flame, not in the
+     steel the rest of them share. Bombard and Hobble are both a ball in the
+     lower left with something small in the upper right, and at 19px a
+     silhouette that close cannot be told apart by its detail. The value can
+     do it where the outline cannot: one is a dark mass under a gold flame,
+     the other is a bright ring. */
+  bombard: ico('<circle cx="10.6" cy="16.2" r="6.9" fill="#22303f"/>' +
     '<rect x="14.2" y="6.1" width="4.8" height="4.8" rx="1.1" transform="rotate(45 16.6 8.5)" ' +
-      'fill="#6b7d94" ' + ICO_EDGE + '/>' +
-    '<circle cx="10.6" cy="14.2" r="6.9" fill="#9aabc0" ' + ICO_EDGE + '/>' +
-    '<path d="M18.6 6.2c2.1-1.5 3.2-.6 2.8 1.3" fill="none" stroke="#c08a4a" stroke-width="1.5" stroke-linecap="round"/>' +
-    '<path d="M21 2.2 21.8 3.9 23.5 4.7 21.8 5.5 21 7.2 20.2 5.5 18.5 4.7 20.2 3.9Z" fill="#ffcf5e"/>'),
+      'fill="#4a5568" ' + ICO_EDGE + '/>' +
+    '<circle cx="10.6" cy="14.2" r="6.9" fill="#41556c" ' + ICO_EDGE + '/>' +
+    '<path d="M7.4 10.4a4.6 4.6 0 0 1 3.4-2.1" fill="none" stroke="#7d90a8" ' +
+      'stroke-width="1.5" stroke-linecap="round"/>' +
+    '<path d="M18.4 6.4c2.3-1.7 3.6-.7 3 1.5" fill="none" stroke="#a9741a" ' +
+      'stroke-width="1.7" stroke-linecap="round"/>' +
+    '<path d="M20.6 1 21.8 4 24 4.6 21.8 5.2 20.6 8.2 19.4 5.2 17.2 4.6 19.4 4Z" ' +
+      'fill="#ffcf5e" stroke="#a9741a" stroke-width="1.1" stroke-linejoin="round"/>'),
   // everything of yours turns and walks back behind the wall
   withdraw: ico('<path d="M2.6 8.4h7.9v13H2.6Z" fill="#6b7686"/>' +
     '<path d="M13.4 12.5h8v3.6h-8v3.4L8.6 14.3 13.4 9.1Z" fill="#2f4763"/>' +
-    '<path d="M2.6 5.4h1.7v1.5h1.4V5.4h1.7v1.5h1.4V5.4h1.7V19.4H2.6Z" fill="#c3cedd" ' + ICO_EDGE + '/>' +
+    '<path d="M2.6 5.4h1.7v1.5h1.4V5.4h1.7v1.5h1.4V5.4h1.7V19.4H2.6Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
     '<path d="M13.4 10.6h8v3.6h-8v3.4L8.6 12.4 13.4 7.2Z" fill="#7fb2ff" ' + ICO_EDGE + '/>'),
   // one more wave of the shape already marching
   muster: ico('<path d="M6.4 21.4V10.6M12 21.4V7.4M17.6 21.4V10.6" fill="none" stroke="#8a5c31" ' +
       'stroke-width="2.3" stroke-linecap="round"/>' +
     '<path d="M6.4 6.7 9 12.6H3.8ZM12 3.5 14.6 9.4H9.4ZM17.6 6.7 20.2 12.6H15Z" fill="#5e6f85"/>' +
-    '<path d="M6.4 5 9 10.9H3.8Z" fill="#c3d1e2" ' + ICO_EDGE + '/>' +
-    '<path d="M12 1.8 14.6 7.7H9.4Z" fill="#c3d1e2" ' + ICO_EDGE + '/>' +
-    '<path d="M17.6 5 20.2 10.9H15Z" fill="#c3d1e2" ' + ICO_EDGE + '/>'),
+    '<path d="M6.4 5 9 10.9H3.8Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M12 1.8 14.6 7.7H9.4Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M17.6 5 20.2 10.9H15Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>'),
   // the banner goes up, and the hero is at its own wall
   warp: ico('<path d="M7.6 6.4h12.4l-3 4 3 4H7.6Z" fill="#2f4763"/>' +
     '<path d="M6.6 21.4V4" fill="none" stroke="#8a5c31" stroke-width="2.8" stroke-linecap="round"/>' +
@@ -14319,27 +14362,39 @@ const SPELL_ICON = {
   // capsule, and the whole icon reads as a magnifying glass.
   hobble: ico('<circle cx="8.4" cy="17" r="6.4" fill="#4a5568"/>' +
     '<rect x="11.4" y="7.3" width="8" height="5.4" rx="2.7" transform="rotate(-42 15.4 10)" ' +
-      'fill="#9aabc0" ' + ICO_EDGE + '/>' +
+      'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
     '<rect x="13.2" y="9.1" width="4.4" height="1.8" rx=".9" transform="rotate(-42 15.4 10)" fill="#2b3b4d"/>' +
     '<rect x="15" y="1.9" width="8" height="5.4" rx="2.7" transform="rotate(-42 19 4.6)" ' +
-      'fill="#9aabc0" ' + ICO_EDGE + '/>' +
+      'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
     '<rect x="16.8" y="3.7" width="4.4" height="1.8" rx=".9" transform="rotate(-42 19 4.6)" fill="#2b3b4d"/>' +
-    '<circle cx="8.4" cy="15" r="6.4" fill="#9aabc0" ' + ICO_EDGE + '/>' +
+    '<circle cx="8.4" cy="15" r="6.4" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
     '<circle cx="8.4" cy="15" r="3.4" fill="#2b3b4d"/>'),
   // and the same link, snapped
+  // The one icon here made of STROKES rather than filled shapes, so its cut
+  // edge cannot come from ICO_EDGE — that sets a stroke, and this shape's
+  // stroke is the shape. It gets the same edge the other way round: the same
+  // path again underneath, in the same ink, a little wider.
   unbind: ico('<path d="M9.8 10.6H6.9a4.1 4.1 0 0 0 0 8.2h2.9M14.2 10.6h2.9a4.1 4.1 0 0 1 0 8.2h-2.9" ' +
       'fill="none" stroke="#4a5568" stroke-width="3.2" stroke-linecap="round"/>' +
     '<path d="M9.8 8.8H6.9a4.1 4.1 0 0 0 0 8.2h2.9M14.2 8.8h2.9a4.1 4.1 0 0 1 0 8.2h-2.9" ' +
-      'fill="none" stroke="#9aabc0" stroke-width="3.2" stroke-linecap="round"/>' +
+      'fill="none" stroke="#3d2d1a" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M9.8 8.8H6.9a4.1 4.1 0 0 0 0 8.2h2.9M14.2 8.8h2.9a4.1 4.1 0 0 1 0 8.2h-2.9" ' +
+      'fill="none" stroke="' + ICO_STEEL + '" stroke-width="3.2" stroke-linecap="round"/>' +
     '<path d="M12 1.6 13 5.2 16.6 6.2 13 7.2 12 10.8 11 7.2 7.4 6.2 11 5.2Z" fill="#ffe08a" ' + ICO_EDGE + '/>'),
   // pure fire, and the mending shuts down
   pyre: ico('<path d="M12 4.4c2.9 3.9 6 5.5 6 9.9A6 6 0 0 1 6 14.3c0-4.4 3.1-6 6-9.9Z" fill="#a8380f"/>' +
     '<path d="M12 2.4c2.9 3.9 6 5.5 6 9.9A6 6 0 0 1 6 12.3c0-4.4 3.1-6 6-9.9Z" fill="#f5811f" ' + ICO_EDGE + '/>' +
     '<path d="M12 10c1.5 1.9 2.7 2.9 2.7 4.9a2.7 2.7 0 0 1-5.4 0c0-2 1.2-3 2.7-4.9Z" fill="#ffd45e"/>'),
-  // masons on the wall, and a warded face
-  rampart: ico('<path d="M3.4 10.4h16.6v11.2H3.4Z" fill="#6b7686"/>' +
-    '<path d="M3.4 7.4h3.6V10h2.9V7.4h3.6V10h2.9V7.4H20V19.4H3.4Z" fill="#c3cedd" ' + ICO_EDGE + '/>' +
-    '<path d="M3.4 13.6H20M11.7 13.6v5.8M7.4 10.4v3.2M16 10.4v3.2" fill="none" stroke="#6b7686" stroke-width="1.3"/>'),
+  /* Masonry mended, and a ward over it. A SHIELD rather than a battlement:
+     Withdraw is a battlement with an arrow going into it, and two crenelated
+     walls side by side in the bar were one shape twice. The courses of stone
+     inside keep the masonry, and the outline is nothing else in the set. */
+  rampart: ico('<path d="M12 4.4 20.6 7.2v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V7.2Z" ' +
+      'fill="#41556c"/>' +
+    '<path d="M12 2.2 20.6 5v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V5Z" ' +
+      'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M3.7 9.2h16.6M3.7 14.4h16.4M7.9 5v4.2M16.1 5v4.2M12 9.2v5.2M7.9 14.4v4.9M16.1 14.4v4.6" ' +
+      'fill="none" stroke="#5e6f85" stroke-width="1.3"/>'),
 };
 
 function costHtml(cost){
@@ -14784,17 +14839,30 @@ const spellClash = () => {
 };
 function spellWhyHtml(){
   const d = SPELL[spellUI.at];
+  // The rule for how to choose is printed once, at the top of the sheet. On a
+  // 390px screen this panel is directly under it, so repeating it here would
+  // put the same three sentences on screen twice.
   if (!d) return '<div class="wn">Nothing open yet</div>' +
-    '<div class="wd">Hover an order — or tap one — to read what it does. Reading it does not ' +
-    'choose it: that takes a second press on the same one, or Accept.</div>';
+    '<div class="wd">Choose one below to read what it does.</div>';
   const free = !Object.keys(d.cost).length;
   const clash = spellClash();
+  // What is standing in the slot this would go into. A player who has both
+  // slots filled and presses a ninth order is REPLACING something, and the
+  // panel has to name what before the press rather than after it.
+  const cur = spellOf(me(), spellUI.slot);
   // Which slot this would go into, printed on the panel rather than only on the
   // row of slots above: on a phone the panel is what is pinned to the bottom of
   // the sheet while the grid scrolls, so it has to carry the answer with it.
+  //
+  // The clash line is a STATEMENT, not a refusal. It is also what the panel
+  // shows in the moment right after a successful choice — the order is now in
+  // a slot and the lit slot has moved on to the other one — and telling a
+  // player they cannot have the thing they just got is a bad sentence.
   return '<div class="wk">' + (clash >= 0
-      ? 'already your ' + SLOT_NAME[clash] + ' — one order cannot fill both'
-      : 'would fill your ' + SLOT_NAME[spellUI.slot]) + '</div>' +
+      ? 'in your ' + SLOT_NAME[clash] + ' — one order cannot fill both'
+      : cur
+        ? 'would replace ' + cur.n + ' as your ' + SLOT_NAME[spellUI.slot]
+        : 'would fill your ' + SLOT_NAME[spellUI.slot]) + '</div>' +
     '<div class="wn">' + d.n + '</div><div class="wd">' + d.d + '</div>' +
     '<div class="wm"><span>' + (free ? 'costs nothing' : costHtml(d.cost)) + '</span>' +
     '<span>' + d.cd + 's between castings</span>' +
@@ -14838,7 +14906,9 @@ function spellGridHtml(){
 function spellAcceptLabel(){
   const d = SPELL[spellUI.at];
   if (!d) return { on:false, txt:'Accept' };
-  if (spellClash() >= 0) return { on:false, txt:'Already in a slot' };
+  // Names the slot it is already in rather than saying "no". Same information,
+  // and it survives being read a quarter-second after a successful press.
+  if (spellClash() >= 0) return { on:false, txt:'In your ' + SLOT_NAME[spellClash()] };
   return { on:true, txt:'Accept ' + d.n };
 }
 function spellSheetHtml(){
@@ -14846,9 +14916,13 @@ function spellSheetHtml(){
   const acc = spellAcceptLabel();
   const full = s.spells[0] && s.spells[1];
   return '<h2>Commander orders</h2>' +
-    '<p class="sub">Two, and they belong to the hold rather than to a hero. Hover one — or tap it ' +
-    'once — to read it; press it again, or press Accept, to put it in the lit slot. Set for good ' +
-    'when the first wave marches.</p>' +
+    // A phone has no hover, so it is not told about one. The rule underneath is
+    // identical on both — one press reads, a second one takes — which is why
+    // only the verb changes.
+    '<p class="sub">Two, and they belong to the hold rather than to a hero. ' +
+    (NARROW() ? 'Tap one to read it; tap it again, or press Accept, to put it in the lit slot. '
+              : 'Hover one to read it; press it, or press Accept, to put it in the lit slot. ') +
+    'Set for good when the first wave marches.</p>' +
     spellSlotsHtml() + spellGridHtml() +
     // The panel and the way out of the sheet are one piece of furniture,
     // because on a phone they are pinned to the bottom of it together while
@@ -14984,7 +15058,12 @@ function syncOrders(){
     b.classList.toggle('cool', cd > 0);
     // Only once the orders are set: while the window is open the tile is the
     // way back into the chooser and must never be dead.
-    if (G.wave >= 1) b.disabled = !spellReady(s, i);
+    //
+    // A CLASS, not `disabled`. A disabled button swallows its own click, and
+    // the two sentences castPress has ready — "still recovering, 41s" and "not
+    // enough in the stores" — could then only ever be reached from Q and E.
+    // A phone has no Q and no E, so on a phone the control simply went quiet.
+    if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i));
   }
 }
 
@@ -16276,7 +16355,7 @@ function doAction(a){
    PRESS. A click fires on release and can be several hundred milliseconds
    later, by which time the noise is a comment on something you already did.
    Disabled controls stay quiet: a dead button that clicks is a lie. */
-const PRESSABLE = '.abtn,.sq,.tbtn,.vbtn,.pick,.big,.hnew,.dtab,.hcard,.qm,.job,.ord,.sptile,.spslot';
+const PRESSABLE = '.abtn,.sq,.tbtn,.vbtn,.pick,.big,.hnew,.dtab,.hcard,.qm,.job,.ord,.sptile,.spslot,.acx';
 function wirePress(){
   if (HEADLESS || typeof document === 'undefined') return;
   document.addEventListener('pointerdown', (e) => {
@@ -17416,7 +17495,7 @@ window.IB = {
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   SPELLS, SPELL, SPELL_SLOTS, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
-  SPELL_ICON, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
+  SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   ordersHtml, syncOrders, castPress, spellAimOff, spellAimTarget, spellAimSend, syncAim,
