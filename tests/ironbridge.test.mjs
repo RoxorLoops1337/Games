@@ -13920,6 +13920,120 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and lifting fires at where it ended, moved or not');
   }
 
+  /* ------------------------------------ what the cast actually did
+     Six of the eight orders land on something you picked, so the outcome is
+     never in doubt. The two POINT orders are the exception: whether a
+     bombardment caught six bodies or none is the only thing worth knowing
+     about the ninety-five seconds just spent on it, and a near miss and a
+     perfect salvo produced exactly the same three rings and the same silence. */
+  {
+    const s = fresh(8550);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'withdraw');
+    step(23);
+    rich(s);
+    IB.spawnWave();
+    step(4);
+    const said = () => G.toasts.map(x => x.msg).join(' | ');
+    const enemy = G.units.filter(u => !u.dead && u.side === 1);
+    t.ok(enemy.length > 0, 'there are bodies of theirs on the bridge (' + enemy.length + ')');
+
+    // A salvo that lands on somebody says how many, ONCE, when the last shell
+    // has fallen — not three times, and not before the walk is finished.
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(s, { slot:0, x:enemy[0].x }) === null, 'the bombardment goes out');
+    t.ok(said() === '', 'and says nothing while the shells are still in the air');
+    let told = 0;
+    for (let i = 0; i < 40 && !told; i++){ step(.1); told = G.toasts.length; }
+    t.ok(told === 1, 'exactly one line for the whole salvo (' + told + ')');
+    const hit = G.toasts[0];
+    t.ok(/^Bombard — \d+ caught$/.test(hit.msg), 'which is the count (' + hit.msg + ')');
+    const caught = +(hit.msg.match(/(\d+)/) || [0, 0])[1];
+    t.ok(caught > 0, 'and it caught somebody, having been aimed at one');
+    t.ok(hit.kind === 'good', 'reported as a hit rather than as a miss');
+    /* BODIES, not hits. The three shells overlap by design — spread 3.0
+       against a radius of 3.6 — so a body in the middle of the footprint is
+       hit by two of them, and the naive sum said seventeen against nine bodies
+       on the lane. A readout that inflates itself is worse than none: it is
+       the number a player uses to decide whether the order is worth its slot. */
+    t.ok(caught <= enemy.length,
+      'and never claims more bodies than were on the lane (' + caught + ' of ' + enemy.length + ')');
+
+    // ...and one that lands on nothing says so, which is the half that makes
+    // the other half worth reading.
+    G.toasts.length = 0;
+    s.spellCd[0] = 0;
+    const empty = C.LANE_LEN - .5;
+    t.ok(IB.castSpell(s, { slot:0, x:empty }) === null, 'a second bombardment goes out at empty lane');
+    for (let i = 0; i < 40 && !G.toasts.length; i++) step(.1);
+    t.ok(/nothing on that stretch/.test(said()), 'a miss says so (' + said() + ')');
+    t.ok(G.toasts[0].kind === 'bad', 'and does not dress itself up as a hit');
+
+    // Withdraw counts the bodies it turned round, on the same path.
+    G.toasts.length = 0;
+    const mine = G.units.filter(u => !u.dead && u.side === 0 && !u.isHero);
+    if (mine.length){
+      t.ok(IB.castSpell(s, { slot:1, x:mine[0].x }) === null, 'Withdraw goes out');
+      t.ok(/^Withdraw — \d+ turned back$/.test(said()), 'and says how many turned (' + said() + ')');
+    }
+
+    /* Cosmetic, and it has to be provably so: the count comes off the
+       simulation, but the LINE is only shown to the side that gave the order —
+       the other machine is watching its own bodies fall over and does not need
+       a scoreboard for it. A toast that both machines had to agree on would be
+       a toast in the lockstep hash. */
+    G.toasts.length = 0;
+    const h0 = IB.netHash();
+    const seat = IB.MY;
+    IB.MY = 1;
+    s.spellCd[0] = 0;
+    IB.castSpell(s, { slot:0, x:enemy.length ? enemy[0].x : 40 });
+    for (let i = 0; i < 40 && !G.toasts.length; i++) step(.1);
+    t.ok(G.toasts.length === 0, 'the other seat is told nothing about my cast');
+    IB.MY = seat;
+    t.ok(IB.netHash() !== undefined && typeof IB.netHash() === typeof h0,
+      'and the hash is still a hash either way');
+    t.ok(!/toasts|castTell|bombTally/.test(SRC.slice(SRC.indexOf('function netHash'), SRC.indexOf('function netHash') + 3000)),
+      'nothing about the telling is in netHash');
+    G.toasts.length = 0;
+  }
+
+  /* -------------------------------------- and that the window is closing
+     The choice is permanent and the window is twenty-two seconds long, and the
+     empty slot said neither. A player reading the sheet, or building their
+     hold, or simply not looking at the top bar, arrived at the first wave with
+     no orders at all and nothing had told them anything was expiring. */
+  {
+    const s = fresh(8551);
+    t.ok(G.wave < 1 && G.waveT > 0, 'the window is open');
+    const open = IB.ordersHtml();
+    t.ok((open.match(/class="owin"/g) || []).length === IB.SPELL_SLOTS,
+      'both empty slots carry room for the clock');
+    // Its own chip rather than part of the name: a count spliced into the label
+    // shuffles the name sideways once a second.
+    t.ok(/<span class="on">[^<]*<\/span><i class="owin">/.test(open),
+      'which is beside the name rather than inside it');
+    IB.chooseSpell(s, 0, 'muster');
+    t.ok((IB.ordersHtml().match(/class="owin"/g) || []).length === IB.SPELL_SLOTS - 1,
+      'a slot that has been filled stops counting');
+    step(23);
+    t.ok(G.wave >= 1 && !/owin/.test(IB.ordersHtml()),
+      'and once the wave has marched there is no clock left to read');
+    // The warning point is a real threshold rather than the whole window or
+    // none of it — a chip that shouts for twenty-two seconds is wallpaper.
+    t.ok(IB.ORDER_WINDOW_WARN > 0 && IB.ORDER_WINDOW_WARN < C.FIRST_WAVE,
+      'the last-call threshold sits inside the window (' + IB.ORDER_WINDOW_WARN + ' of ' + C.FIRST_WAVE + ')');
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    t.ok(/\.ord\.closing \.owin\{/.test(css), 'and it has a look of its own when it is nearly gone');
+    t.ok(/@media \(prefers-reduced-motion:reduce\)\{ \.ord\.closing \.owin\{ animation:none/.test(css),
+      'that stops moving for anyone who asked motion to stop');
+    // The name goes on a phone; the clock never does.
+    const narrow = css.slice(css.indexOf('body.narrow .ord{'));
+    t.ok(/body\.narrow \.ord \.on\{ display:none/.test(narrow) &&
+         /body\.narrow \.ord \.owin\{ display:inline/.test(narrow),
+      'a phone drops the slot name and keeps the count');
+  }
+
   /* --------------------------- and none of it can decide anything on its own */
   {
     const at = SRC.indexOf('COMMANDER ORDERS — the interface half');
