@@ -680,8 +680,10 @@
                 0 0 20px -4px rgba(232,138,172,.5),
                 0 3px 0 #100609, 0 12px 20px -8px rgba(0,0,0,.8);
     filter:brightness(1.13); }
+  /* on the art, not on the frame edge: at top:0 it collided with the cost
+     badge on every card and with the cull's rank chip on the three it ranks */
   .card.kin::before{ content:'KIN'; position:absolute; z-index:4;
-    top:0; left:50%; transform:translateX(-50%);
+    top:28px; left:50%; transform:translateX(-50%);
     font-family:var(--f-display); font-size:8px; font-weight:900; letter-spacing:1.5px;
     padding:1px 7px 2px; border-radius:0 0 3px 3px; color:#2b0a16;
     background:linear-gradient(180deg,#f0a2bd,#c05a83);
@@ -860,6 +862,7 @@
   #cull .deckwrap .card{ width:100%; max-width:86px; }
   #cull .deckwrap .card .art{ height:62px; }
   #cull .deckwrap .card .nm{ font-size:9.5px; min-height:22px; }
+  #cull .deckwrap .card.kin::before{ top:22px; font-size:7px; padding:1px 5px 2px; }
   #cull .deckwrap .card .st{ font-size:11px; gap:4px; }
   #cull .deckwrap .card .tr{ font-size:7.5px; letter-spacing:.6px; }
   #cull .deckwrap .card .cost{ width:17px; height:17px; font-size:10px; }
@@ -931,8 +934,8 @@
     color:#ecdfbe; letter-spacing:.2px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .orderbar .opay{ flex:0 0 auto; display:flex; align-items:center; gap:3px;
-    font-family:var(--f-display); font-size:13px; font-weight:900; color:#ffd34d;
-    text-shadow:0 1px 0 rgba(0,0,0,.7); }
+    font-family:var(--f-display); font-size:11px; font-weight:900; letter-spacing:.8px;
+    color:#cfae66; text-shadow:0 1px 0 rgba(0,0,0,.7); }
   /* the ledger, folded shut until you want it */
   .ritwrap{ flex:0 0 auto; margin-bottom:6px; }
   .ritsum{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px;
@@ -1887,6 +1890,19 @@
     #nFoeHaz{ grid-area:haz; }
     #bHazard{ grid-area:btn; width:auto; justify-self:end; margin-top:2px; }
     #nFoeStats{ white-space:nowrap; }
+    /* ONCE A PARENT IS IN HAND, THE FOE PANEL STEPS BACK. Its prose informs the
+       hazard and the ritual, both of which you settle before you start picking,
+       and from that moment the barn is what you are reading — measured at 390px
+       with a full deck, the grid showed 3 of 10 cards with a parent up. The
+       hazard BUTTON stays, because it is still an action; only the sentence
+       under it folds away, and deselecting brings it straight back. */
+    #nest.picking .foeprev{ grid-template-areas:'em info btn';
+      grid-template-columns:auto 1fr auto; gap:6px 8px; }
+    #nest.picking #nFoeHaz{ display:none; }
+    #nest.picking .foeprev .fe{ width:42px; }
+    #nest.picking .foeprev .fp > .tiny:first-child{ display:none; }
+    #nest.picking .foeprev h3{ font-size:16px; }
+    #nest.picking #bHazard{ margin-top:0; }
     .scrhead h2{ font-size:19px; }
     .scrhead .count{ font-size:22px; }
     /* four cards must FIT, or gridCols can never balance ten head into 4+3+3 */
@@ -2880,9 +2896,9 @@ const HAZARD_PAY = 3;
    the game asks whether you would sell out your own bloodline for two meals.
    The pay is small on purpose: it is a thumb on a decision, not an income. */
 const ORDERS = [
-  { id: 'cursed',   who: 'The butcher', want: 'bad blood \u2014 cursed or hollow', pay: 5,
+  { id: 'cursed',   who: 'The butcher', want: 'cursed or hollow blood', pay: 5,
     ok: (c) => BAD_TRAITS.indexOf(c.trait) >= 0 },
-  { id: 'weakest',  who: 'The tanner',  want: 'the weaker chick of the two', pay: 6,
+  { id: 'weakest',  who: 'The tanner',  want: 'the weaker of the two', pay: 6,
     ok: (c, a, b, lit) => {
       if (!lit || lit.length < 2) return false;
       let lo = Infinity;
@@ -4868,7 +4884,11 @@ function renderNest(){
     // banner still carry the buyer's full name.
     ob.innerHTML = '<span class="olbl">' + R.order.who.replace(/^The /, '') + ' wants</span>' +
       '<span class="owant">' + R.order.want + '</span>' +
-      '<span class="opay">+' + R.order.pay + ' ' + ICO('slop') + '</span>';
+      // The hazard button ends in "+3 (slop)" in gold and sat 19px above an
+      // order strip ending in "+3 (slop)" in the same gold — one is a risk you
+      // opt into, the other a standing want, and they read as one offer printed
+      // twice. This one is a price now, in brass, and it says so in a word.
+      '<span class="opay">PAYS ' + R.order.pay + ' ' + ICO('slop') + '</span>';
   }
   setSlop(R.slop);
   hpBar($('nHp'), $('nHpBar'));
@@ -4897,6 +4917,9 @@ function renderNest(){
   vet.disabled = R.slop < VET_COST || R.hp >= R.maxHp;
   vet.innerHTML = ICO('vet') + ' VET +' + VET_HEAL + ' &mdash; ' + VET_COST + ' ' + ICO('slop');
 
+  // drives the compact foe panel: see #nest.picking
+  const scr = $('nest');
+  if (scr && scr.classList) scr.classList.toggle('picking', R.nest.length > 0);
   const g = $('nGrid');
   g.innerHTML = '';
   const sorted = R.deck.slice().sort((a, b) => power(b) - power(a));
@@ -4948,12 +4971,13 @@ function renderNest(){
     // name the trade in the same breath — inbreeding is not a penalty, it is a
     // wider spread in BOTH directions, and the player should be able to choose
     // it on purpose.
-    $('nHint').innerHTML = '<b class="pink">' + a1.name + '</b> &mdash; and who else?' +
+    $('nHint').innerHTML = '<b class="pink">' + a1.name + '</b> &mdash; ' +
+      (kin.length ? '' : 'and who else?') +
       (kin.length
-        ? ' <b class="pink">' + kin.length + '</b> in rose ' + (kin.length === 1 ? 'shares' : 'share') +
+        ? '<b class="pink">' + kin.length + '</b> in rose ' + (kin.length === 1 ? 'shares' : 'share') +
           // 0.30, and half of those land on Hollow rather than Cursed — naming
           // only the one keyword promised it twice as often as it happens
-          ' blood &mdash; wilder both ways, <b>1 in 3</b> comes out <b>cursed or hollow</b>.'
+          ' blood: wilder both ways, <b>1 in 3</b> <b>cursed or hollow</b>.'
         : '');
   } else {
     bt.textContent = 'SEND 2 TO THE NEST';
@@ -6024,8 +6048,13 @@ function renderHud(){
   const nextW = F.spawns.length ? F.spawns[0] : null;
   const soon = nextW && nextW.wave > F.waveSeen ? Math.max(0, nextW.at - F.t) : -1;
   const lbl = $('gateLbl');
+  // Before you open the gates, F.t is pinned at 0, so this counter sat at
+  // "next 1s" and never moved — a countdown frozen mid-tick, promising time
+  // pressure on the one screen in the game that has none. Nothing is coming
+  // until you send them in, so that is what it says.
   const html = 'WAVE <b>' + w + '</b>/<b>' + F.waves + '</b>' +
-    (soon >= 0 ? ' <span class="nxt">&middot; next ' + soon.toFixed(0) + 's</span>' : '');
+    (!F.started ? ' <span class="nxt">&middot; gates shut</span>'
+      : soon >= 0 ? ' <span class="nxt">&middot; next ' + soon.toFixed(0) + 's</span>' : '');
   if (html !== F.lblSig){
     F.lblSig = html;
     lbl.innerHTML = html;
@@ -6754,7 +6783,17 @@ function goCull(){
     }
     el.onclick = () => {
       cullPick = c.id;
-      [...g.children].forEach((x) => x.classList.toggle('sel', +x.dataset.id === c.id));
+      // THE SAME FACT IN THE SAME LANGUAGE. Removing a beast is a bloodline
+      // decision, and this screen said so only in 10px grey prose under two
+      // cards while the Nest had a whole rose-and-KIN vocabulary for it. Tap
+      // one here and its blood lights up: the question the cull is actually
+      // asking is who else carries this line, and now you can see it.
+      const kin = kinIn([c.id]);
+      [...g.children].forEach((x) => {
+        const id = +x.dataset.id;
+        x.classList.toggle('sel', id === c.id);
+        x.classList.toggle('kin', kin.indexOf(id) >= 0);
+      });
       $('bCull').disabled = false;
     };
     g.appendChild(el);
