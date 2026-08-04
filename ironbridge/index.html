@@ -318,7 +318,14 @@
     background:rgba(22,15,6,.72); box-shadow:inset 0 0 0 1px rgba(255,224,160,.22); }
   /* The width is held so the pair does not shuffle sideways every time one of
      them swaps its name for a count. A phone drops the floor with the name. */
-  body.narrow .ord{ min-width:0; max-width:none; padding:0 7px; height:28px; }
+  /* A phone drops the name, so a filled tile is an icon and nothing else —
+     measured at 35x28, which is well under any touch minimum AND changes width
+     the moment the count appears, sliding the other tile 41px sideways under
+     your thumb. A floor wide enough for the count holds the pair still, and
+     the hit area is grown without moving anything: the ::after covers 44px of
+     height without the tile taking 44px of a top bar that has not got it. */
+  body.narrow .ord{ min-width:72px; max-width:none; padding:0 7px; height:28px; }
+  body.narrow .ord::after{ content:''; position:absolute; left:0; right:0; top:-8px; bottom:-8px; }
   body.narrow .ord .on{ display:none; }
   /* The name goes; the clock never does. It is the half a phone most needs,
      because a phone is the screen where the top bar is smallest and the sheet
@@ -1001,25 +1008,47 @@
   .spwhy .cost i{ background:rgba(255,240,210,.09);
     box-shadow:inset 0 0 0 1px rgba(255,240,210,.12); }
   .spwhy.none .wn{ color:var(--dim2); }
-  /* The sheet is read by SCROLLING it, and the whole design falls over if the
-     panel a press fills in is below the fold — the press would have no visible
-     effect at all, which is exactly the thing the two-press rule needs to be
-     obvious. So the panel and the two buttons pin to the bottom of the sheet
-     and the cards scroll past behind them. `bottom` eats the sheet's own
-     bottom padding, or the last few pixels of the grid would show under it.
+  /* The panel a press fills in must never be below the fold — a press with no
+     visible effect is the one thing the two-press rule cannot survive — and
+     neither must ACCEPT.
 
-     This used to be inside the phone's media query, because on a desktop the
-     sheet fitted. Then the nine cards grew four group headings between them
-     and it stopped fitting: at 1440x900 the grid ran 897px into an 804px
-     sheet and put ACCEPT below the bottom of the screen. A sheet whose
-     primary action can be pushed off the end by its own content wants the
-     footer pinned at every size, not at one. */
-  .spfoot{ position:sticky; bottom:-18px; z-index:3; padding:10px 0 18px;
-    background:linear-gradient(180deg,rgba(24,34,45,0) 0,#1b2531 10px,#18222d 100%); }
+     This was a STICKY footer laid over a scrolling sheet, which kept the
+     buttons on screen and paid for it by covering the cards underneath: at
+     1440x900 the last two of the nine sat behind it with 24px of a 93px card
+     showing, elementFromPoint at the card's centre returned the panel rather
+     than the card, and no scrollbar rendered to say there was anything down
+     there. On a phone only five of the nine were even partly visible on open,
+     while the panel underneath said "choose one below".
+
+     So the sheet is a COLUMN instead: a middle that scrolls and a footer that
+     owns its own row. Nothing overlays anything, every card can be brought
+     fully into view, and the scrollbar is the cue that there is more. */
+  .sheet.orders{ display:flex; flex-direction:column; overflow:hidden; }
+  .sheet.orders .sproll{ flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+    scrollbar-gutter:stable; padding-right:6px; }
+  .sheet.orders .spfoot{ flex:0 0 auto; padding-top:10px; }
   .spfoot .spwhy{ margin-top:0; }
   .spfoot .rowbtn{ margin-top:8px; }
+  /* A rail that is ALWAYS there, because an overlay scrollbar paints only
+     while you are already scrolling and so cannot be the thing that tells you
+     to scroll. `scrollbar-gutter:stable` reserves the track whether or not the
+     platform would, and the ::-webkit- rules paint it — deliberately WITHOUT
+     `scrollbar-width`, which switches Chromium to the standard overlay path
+     and quietly turns all of this off. Measured before that was removed: the
+     rail took 0px of layout and never appeared. */
+  .sheet.orders .sproll::-webkit-scrollbar{ width:10px; }
+  .sheet.orders .sproll::-webkit-scrollbar-thumb{ border-radius:10px;
+    background:rgba(201,163,85,.5); border:2px solid transparent; background-clip:padding-box; }
+  .sheet.orders .sproll::-webkit-scrollbar-track{ background:rgba(0,0,0,.28); border-radius:10px; }
   @media (max-width:700px){
     .spgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+    /* Three columns at 390px makes a card 93px wide, and "Second Muster" and
+       "Warp Banner" wrap to a second line while the other seven do not — rows
+       of 93px against rows of 108px. Which is the exact failure the one-grid
+       design was chosen to avoid: nine cards that are not all the same size
+       read as nine cards of unequal importance. True at 1440, false here
+       until every card reserved the taller of the two. */
+    .sptile{ min-height:108px; justify-content:center; }
     .spslots{ flex-direction:column; }
     .spwhy .wd{ font-size:var(--t3); }
   }
@@ -15426,7 +15455,7 @@ function spellSheetHtml(){
     (NARROW() ? 'Tap one to read it; tap it again, or press Accept, to put it in the lit slot. '
               : 'Hover one to read it; press it, or press Accept, to put it in the lit slot. ') +
     'Set for good when the first wave marches.</p>' +
-    spellSlotsHtml() + spellGridHtml() +
+    '<div class="sproll">' + spellSlotsHtml() + spellGridHtml() + '</div>' +
     // The panel and the way out of the sheet are one piece of furniture,
     // because on a phone they are pinned to the bottom of it together while
     // the eight cards scroll past above them.
@@ -15450,7 +15479,7 @@ function showSpells(slot){
      match that punishes reading. Never in a two-player game — a match belongs
      to two people and cannot stop for one of them. */
   G.held = !NET.on && !me().ai && G.wave < 1;
-  openModal(spellSheetHtml(), G.held);
+  openModal(spellSheetHtml(), G.held, 'orders');
   return true;
 }
 
@@ -15492,7 +15521,7 @@ function spellTake(id){
   // obvious next thing rather than an overwrite of the first.
   const other = SPELL_SLOTS - 1 - spellUI.slot;
   if (!me().spells[other]) spellUI.slot = other;
-  openModal(spellSheetHtml(), G.held);
+  openModal(spellSheetHtml(), G.held, 'orders');
   return true;
 }
 
@@ -16065,7 +16094,7 @@ function uiTick(dt){
 
 /* ------------------------------------------------------------------ modals */
 function closeModal(){ G.held = false; $('modal').classList.remove('on'); paintHeld(); }
-function openModal(html, blocking){
+function openModal(html, blocking, kind){
   // Every sheet in the game is built as a string and handed straight to a DOM
   // node. Under the test harness $('sheet') is a throwaway proxy, so nothing
   // any modal renders could be checked from outside — which is how a test that
@@ -16073,6 +16102,9 @@ function openModal(html, blocking){
   // existed. Keep the last one where a test can read it.
   G.sheet = html;
   $('sheet').innerHTML = html;
+  // The orders sheet is the only one tall enough to need its middle to scroll
+  // under a footer that stays put, so it is the only one told to.
+  $('sheet').classList.toggle('orders', kind === 'orders');
   $('modal').classList.add('on');
   $('modal').classList.toggle('solid', !!blocking);
   paintHeld();

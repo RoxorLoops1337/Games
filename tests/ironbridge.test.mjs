@@ -12803,23 +12803,48 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(grid.indexOf('>The lane<') < grid.indexOf('>Your hero<'),
       'the lane comes before the group that needs a hero you may not have');
 
-    /* The sheet is read by scrolling it, and the whole design falls over if
-       the panel a press fills in is below the fold — the press would have no
-       visible effect at all, which is the one thing the two-press rule needs
-       to be obvious.
+    /* The panel a press fills in must never be below the fold — a press with
+       no visible effect is the one thing the two-press rule cannot survive —
+       and neither must ACCEPT.
 
-       The pin used to live inside the phone's media query, because on a
-       desktop the sheet fitted. Then the nine cards grew four group headings
-       between them and it stopped fitting: at 1440x900 the grid ran 897px
-       into an 804px sheet and put ACCEPT below the bottom of the screen. A
-       sheet whose primary action can be pushed off the end by its own content
-       wants its footer pinned at every size, not at one. */
+       This was a STICKY footer over a scrolling sheet, which kept the buttons
+       on screen and paid for it by covering the cards: at 1440x900 the last
+       two of the nine sat behind it with 24px of a 93px card showing, and
+       elementFromPoint at a card's centre returned the panel rather than the
+       card. So the sheet is a column now — a middle that scrolls, a footer
+       that owns its own row — and the property worth holding is that nothing
+       overlays anything. */
     const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
-    const pin = css.indexOf('.spfoot{ position:sticky');
-    t.ok(pin > 0, 'the sheet footer is pinned');
-    const phone = css.indexOf('@media (max-width:700px){');
-    t.ok(pin < phone,
-      'and pinned for every screen rather than only the one that noticed first');
+    t.ok(/\.sheet\.orders\{ display:flex; flex-direction:column; overflow:hidden; \}/.test(css),
+      'the orders sheet is a column');
+    t.ok(/\.sheet\.orders \.sproll\{ flex:1 1 auto; min-height:0; overflow-y:auto/.test(css),
+      'with a middle that scrolls on its own');
+    t.ok(/\.sheet\.orders \.spfoot\{ flex:0 0 auto/.test(css),
+      'and a footer that takes its own row rather than lying over the cards');
+    t.ok(!/\.spfoot\{ position:sticky/.test(css),
+      'nothing sticky left to overlay them');
+    // min-height:0 is the whole reason the middle can be shorter than its
+    // content — without it a flex item refuses to shrink past it and the
+    // footer goes back off the bottom of the screen.
+    t.ok(/\.sheet\.orders \.sproll\{[^}]*min-height:0/.test(css),
+      'and the middle may shrink below its content, or the footer leaves again');
+    // The scrollbar is the cue. An overlay bar that appears only once you are
+    // already scrolling cannot tell you there is more to scroll to.
+    /* Measured in a browser: with `scrollbar-width:thin` set, Chromium takes
+       the standard overlay path, the ::-webkit- rules are ignored, the rail
+       occupies 0px of layout and paints only while you are already scrolling
+       — so the one thing telling you there is more to see appeared only after
+       you had found it. The gutter reserves the track; the webkit rules paint
+       it; naming scrollbar-width again would turn both off. */
+    t.ok(/scrollbar-gutter:stable/.test(css), 'the rail is reserved rather than overlaid');
+    t.ok(/\.sheet\.orders \.sproll::-webkit-scrollbar\{ width:10px/.test(css), 'and painted');
+    t.ok(!/\.sheet\.orders \.sproll\{[^}]*scrollbar-width/.test(css),
+      'without scrollbar-width, which switches Chromium back to an overlay and undoes both');
+    // The middle really does hold the choosing surface.
+    const sheet = IB.spellSheetHtml();
+    t.ok(sheet.indexOf('class="sproll"') < sheet.indexOf('class="spgrid"') &&
+         sheet.indexOf('class="spgrid"') < sheet.indexOf('class="spfoot"'),
+      'and the cards are inside it, above the footer');
 
     // They belong to the HOLD. Three heroes is still two spells; no heroes at
     // all is still two spells.
