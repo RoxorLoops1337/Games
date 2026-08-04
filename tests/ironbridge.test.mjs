@@ -17564,11 +17564,24 @@ t.ok(true, 'a final draw on a live match is clean');
     b.fh.inLane = false;
     t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'not into an empty bridge');
     b.fh.inLane = true; b.fh.x = IB.frontlineX(0);
+    /* It used to ALSO require their ultimate to be off recovery, and that
+       clause was the order. Measured over 26,362 samples of live matches: an
+       enemy hero exists 46% of the time, is in the lane 41%, and has its
+       ultimate loaded 2.5% — a hero spends it the moment its own brain
+       approves, so the loaded state barely exists. The whole gate held 1.3% of
+       a match and Brace came out at 0.43 casts per draft, against 1 to 5.6 for
+       every other order in the set. Without the clause the window is 25.2%,
+       and it is the right window: Brace blunts ABILITIES, which a hero throws
+       constantly, not the ultimate, which it throws once a minute. */
     const u = b.fh.skills.find(x => x.ult);
     u.cdT = 40;
-    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'nor while their ultimate is still recovering');
+    t.ok(!!IB.aiSpellTarget(b.me, d, 1),
+      'a hero of theirs fighting close is reason enough, loaded or not');
     u.cdT = 0;
-    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'but yes once it is loaded and close');
+    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'and still so when it is loaded');
+    b.fh.x = IB.frontlineX(0) + 40;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'but not for one fighting far away');
+    b.fh.x = IB.frontlineX(0);
     b.me.braceT = 3;
     t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'and never on top of a brace already running');
   }
