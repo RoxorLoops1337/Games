@@ -313,8 +313,21 @@ t.ok(G.state === 'menu', 'boots into the menu without starting a match');
 {
   const ids = new Set(IB.SKILLS.map(s => s.id));
   t.ok(ids.size === IB.SKILLS.length, 'every skill id is unique');
-  const kinds = new Set(['strike','bolt','nova','dash','heal','shield','buff','teambuff','regen','dot','summon','chain','volley','mark','taunt','storm','teamheal','hook']);
-  t.ok(IB.SKILLS.every(s => kinds.has(s.k)), 'every skill uses an effect kind the sim implements');
+  /* "The sim implements it" was a list of eighteen strings written out by
+     hand here, which is a claim ABOUT castSkill kept in a second place that
+     could not notice castSkill changing. Read the switch instead: these are
+     the kinds the simulation actually has a branch for, so a skill declaring a
+     kind nobody wrote a case for fails, and a new case needs no edit here. */
+  const fn = SRC.slice(SRC.indexOf('function castSkill('));
+  const sw = fn.slice(0, fn.indexOf('\n}\n'));
+  const kinds = new Set([...sw.matchAll(/case '(\w+)'/g)].map(m => m[1]));
+  t.ok(kinds.size > 12, 'the castSkill switch really parsed (' + kinds.size + ' kinds)');
+  const orphan = IB.SKILLS.filter(s => !kinds.has(s.k)).map(s => s.n + ':' + s.k);
+  t.ok(orphan.length === 0, 'every skill uses an effect kind the sim implements (' + orphan.join(', ') + ')');
+  // and the other way round: a case nobody declares is a branch that can never
+  // run, which is how a renamed kind hides
+  const unused = [...kinds].filter(k => !IB.SKILLS.some(s => s.k === k));
+  t.ok(unused.length === 0, 'every branch in castSkill belongs to a skill (' + unused.join(', ') + ')');
   t.ok(IB.SKILLS.every(s => s.cd > 0 && s.mana >= 0 && s.f), 'every skill has a cooldown, a cost and flavour');
   // A summon skill once carried its count in `n`, which is the name field —
   // Object.assign quietly replaced "Banner Call" with the number 2.
@@ -10588,10 +10601,21 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(back2 && back2.retreat === false, 'and a hero that was holding its ground still is');
     }
   }
-  // and it is a live match, not a museum piece
-  const wave0 = G.wave;
+  /* and it is a live match, not a museum piece.
+
+     This used to demand the WAVE COUNTER advance inside three minutes, which
+     is not the property — it is one way the property can show. A save taken
+     late enough resumes into a hold that is already losing its gates, and a
+     match that reaches a winner 12 seconds into the window has plainly kept
+     running while failing the assertion. Measured when it first fired: seed 4
+     resumed at wave 16 and ended at t=372.5 with side 1 the winner, having
+     simulated the whole window. Progress is the claim — the clock moved and
+     the match either drew another wave or reached its end. */
+  const wave0 = G.wave, t0 = G.t;
   for (let i = 0; i < 30 * 60 * 3 && G.state === 'play'; i++) IB.update(1 / 30);
-  t.ok(G.wave > wave0, 'the resumed match keeps running');
+  t.ok(G.t > t0, 'the resumed match runs its clock forward (' + t0.toFixed(1) + ' → ' + G.t.toFixed(1) + ')');
+  t.ok(G.wave > wave0 || G.state === 'over',
+    'and it keeps running — another wave, or a finish (wave ' + wave0 + ' → ' + G.wave + ', ' + G.state + ')');
   t.ok(G.units.every(u => finite(u.x) && finite(u.hp)), 'and stays numerically sane');
   IB.draw();
   t.ok(true, 'and draws');
@@ -18102,6 +18126,238 @@ t.ok(true, 'a final draw on a live match is clean');
     t.ok(full.length > none.length, 'and the row is bigger for it, which is the cost being measured');
     IB.MY = seat0;
     IB.netEnd();
+  }
+}
+
+/* ============================================ what comes off, and who can do it
+
+   Fifty-five skills and every one of them worked by ADDING. Nothing a hero
+   could learn took anything off — the only strip in the game was Unbind, a
+   commander order aimed at one of your own heroes.
+
+   And Unbind's card was not true. It said everything comes off; it cleared the
+   stun, the slow, the drag and the burn and left HOBBLE, which is the heaviest
+   debuff in the set and 78% of every debuffed second a hero spends. Measured
+   over 32 veteran matches with both holds playing: 38,951 hero-ticks carrying
+   a hobble against 11,199 for all four things it did clear, out of 636,540
+   live hero-ticks. Its own AI gate even listed pyreT as a reason to cast it —
+   a trigger for a cleanse that did not clean.
+
+   These assertions hold the SHAPE of the repair: one definition of "comes
+   off", every gate reading that same definition, and the card checkable
+   against the code rather than against the last person to read it. */
+{
+  IB.newMatch({ diff:'veteran', seed:6120 });
+
+  // ---- stripStatus and heldBy are one list, asked two ways. Derived from the
+  // source, not restated here: a debuff added to one and forgotten in the
+  // other is exactly the failure this is for.
+  {
+    const cut = (name) => { const f = SRC.slice(SRC.indexOf('function ' + name + '(')); return f.slice(0, f.indexOf('\n}\n')); };
+    const fields = (body) => new Set([...body.matchAll(/t\.(\w+)\s*(?:>\s*0|\)|\?)/g)].map(m => m[1])
+      .filter(k => /T$|^burn$|^taunt$/.test(k)));
+    const strips = fields(cut('stripStatus'));
+    const asks = fields(cut('heldBy'));
+    t.ok(strips.size >= 7, 'stripStatus really parsed (' + [...strips].join(' ') + ')');
+    const onlyStrip = [...strips].filter(k => !asks.has(k));
+    const onlyAsk = [...asks].filter(k => !strips.has(k));
+    t.ok(onlyStrip.length === 0, 'heldBy asks about everything stripStatus takes off (' + onlyStrip.join(', ') + ')');
+    t.ok(onlyAsk.length === 0, 'and stripStatus takes off everything heldBy asks about (' + onlyAsk.join(', ') + ')');
+  }
+
+  // ---- every status, one at a time: heldBy sees exactly one, stripStatus
+  // returns one, and nothing is left behind. Written as a table so a new
+  // debuff is one line here rather than a new block.
+  {
+    const LOADS = [
+      ['a stun',   (b) => { b.stunT = 2; }],
+      ['a slow',   (b) => { b.slowT = 2; b.slowP = .5; }],
+      ['a taunt',  (b) => { b.taunt = 2; }],
+      ['a drag',   (b) => { b.pullT = .4; b.pullBy = {}; }],
+      ['a burn',   (b) => { b.burn = { dps:20, t:3, src:null }; }],
+      ['a hobble', (b) => { b.hobT = 4.5; }],
+      ['a mark',   (b) => { b.markT = 6; b.markBy = 1; b.markAmp = .22; }],
+      ['a brand',  (b) => { b.pyreT = 6; b.pyreDps = 30; b.pyreSide = 1; }],
+    ];
+    for (const [what, load] of LOADS){
+      const b = { stunT:0, slowT:0, slowP:0, taunt:0, pullT:0, pullBy:null, burn:null,
+        hobT:0, markT:0, markBy:-1, markAmp:0, pyreT:0, pyreDps:0, pyreSrc:null, pyreSide:-1 };
+      load(b);
+      t.ok(IB.heldBy(b) === 1, what + ' is one hold, and heldBy counts it');
+      t.ok(IB.stripStatus(b) === 1, 'and stripStatus reports taking one thing off it');
+      t.ok(IB.heldBy(b) === 0, 'and ' + what + ' is gone afterwards');
+    }
+    // all eight at once, and the paired references go with their timers — a
+    // cleared timer beside a live reference is how pullBy pointed at whatever
+    // body a later snapshot happened to put at that index.
+    const b = { stunT:2, slowT:2, slowP:.5, taunt:2, pullT:.4, pullBy:{}, burn:{ dps:20, t:3 },
+      hobT:4.5, markT:6, markBy:1, markAmp:.22, pyreT:6, pyreDps:30, pyreSrc:{}, pyreSide:1 };
+    t.ok(IB.heldBy(b) === 8, 'a body can carry all eight at once');
+    t.ok(IB.stripStatus(b) === 8, 'and one strip takes all eight');
+    t.ok(IB.heldBy(b) === 0 && b.slowP === 0 && b.markAmp === 0, 'with the values beside the timers zeroed too');
+    t.ok(b.pullBy === null && b.pyreSrc === null && b.pyreSide === -1 && b.markBy === -1,
+      'and the references that belong to those timers cleared with them');
+    t.ok(IB.stripStatus(b) === 0, 'stripping a clean body takes nothing off it');
+  }
+
+  // ---- the card is now checkable against the code. Everything on your hero
+  // comes off means everything, including the hobble it used to leave.
+  {
+    IB.newMatch({ diff:'veteran', seed:6121 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'tank');
+    const h = P().heroes[0];
+    t.ok(!!h, 'a hero of ours to bind');
+    P().spells[0] = 'unbind'; P().spellCd[0] = 0;
+    h.stunT = 2; h.slowT = 2; h.slowP = .5; h.hobT = 4.5; h.burn = { dps:20, t:3, src:null };
+    h.markT = 6; h.markBy = 1; h.markAmp = .22; h.pyreT = 6; h.pyreDps = 30; h.pyreSide = 1;
+    t.ok(IB.heldBy(h) === 6, 'the hero is carrying six holds (' + IB.heldBy(h) + ')');
+    t.ok(IB.castSpell(P(), { id:'unbind', hero:h.id }) === null, 'Unbind is given');
+    t.ok(IB.heldBy(h) === 0, 'and everything on the hero came off — the card is true');
+    t.ok(h.freeT > 0, 'with the window where what lands next barely sticks');
+    t.ok(/[Ee]verything on your hero comes off/.test(IB.SPELL.unbind.d), 'which is what the card claims');
+  }
+
+  // ---- the Host's gate for Unbind IS the strip list rather than a second
+  // hand-written one. It used to name five fields and one of them, pyreT, was
+  // not among the four the order actually cleared.
+  {
+    const fn = SRC.slice(SRC.indexOf('function aiSpellTarget('));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    const branch = body.slice(body.indexOf("d.id === 'unbind'"));
+    // comments stripped: the note above the gate names pyreT on purpose, as
+    // the record of what the hand-written version got wrong
+    const gate = branch.slice(0, branch.indexOf('\n  }')).replace(/\/\/[^\n]*/g, '');
+    t.ok(/heldBy\(/.test(gate), 'the Unbind gate asks heldBy rather than naming fields');
+    t.ok(!/stunT|slowT|pullT|pyreT/.test(gate), 'and names no status field of its own');
+  }
+}
+
+/* ================================================= the mark's owner is a NUMBER
+
+   markBy was in NET_REFS — the table of fields that are references to other
+   BODIES, stored as an index and re-linked on the way back. It is not a body.
+   It is the SIDE that placed the mark, a 0 or a 1, and treating it as a
+   reference destroyed it in both directions: ref(0) short-circuits on the
+   falsy value, ref(1) misses the body table, so every mark packed as "nothing"
+   and came back null. `tgt.markBy === src.side` is then false forever, the
+   amplifier silently stops applying on the joiner alone, and since that feeds
+   dealDmg it feeds hp and hp is hashed. A resync that desyncs — on every
+   snapshot taken while a Hunter's Mark or a Death Mark was live. */
+{
+  t.ok(!IB.NET_REFS.markBy, 'markBy is not treated as a reference to a body');
+  t.ok(IB.NET_REFS.pullBy && IB.NET_REFS.target && IB.NET_REFS.pyreSrc,
+    'while the fields that really are bodies still are');
+
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:6130 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'marksman'); IB.createHero(G.sides[1], 'tank');
+  for (const s of G.sides) for (const h of s.heroes){ h.lvl = 10; IB.recalcHero(h, true); IB.autoPick(h); }
+  step(40);
+  const foe = G.units.find(u => u.side === 1 && !u.isHero && !u.dead);
+  t.ok(!!foe, 'a body of theirs on the bridge to mark');
+  if (foe){
+    foe.markT = 6; foe.markBy = 0; foe.markAmp = .22;
+    const json = JSON.stringify(IB.netSnap());
+    t.ok(/"markBy":0/.test(json), 'the snapshot carries the mark’s owner as the side number it is');
+    // move it off, then adopt the snapshot back
+    foe.markBy = -1; foe.markT = 0;
+    t.ok(IB.netLoad(JSON.parse(json)), 'the snapshot loads');
+    const back = G.units.find(u => u.id === foe.id);
+    t.ok(!!back && back.markT > 0, 'the mark comes back');
+    t.ok(back && back.markBy === 0, 'still owned by the side that placed it, not turned into a body');
+  }
+  IB.netEnd();
+}
+
+/* ================================================== a hero that can take it off
+
+   Universal on purpose. A counter only one class in six can ever be offered is
+   a counter most heroes never see, and a hobble lands on all of them.
+
+   Measured after it went in, over 40 veteran matches with both holds playing:
+   11 heroes drew it, it fired 34 times — 3.1 casts per carrying hero — and NOT
+   ONE of those casts caught nothing. 73.5% landed on the caster, and what came
+   off was a slow 38% of the time, a brand 24%, a hobble 21% and a burn 18%.
+   The brand is the interesting one: Pyre Brand is a commander order, so a hero
+   skill now answers something the other signal room did. */
+{
+  const uf = IB.SKILL.unfetter;
+  t.ok(!!uf && uf.k === 'cleanse', 'there is a skill whose whole job is taking things off');
+  t.ok(uf.cls === 'any', 'and every class can be offered it');
+  t.ok(IB.SKILLS.filter(s => s.k === 'cleanse').length >= 1, 'the cleanse verb exists in the pool');
+  t.ok(!uf.ult, 'as a basic rather than an ultimate — it has to come round often');
+  t.ok(!IB.SKILL_NEEDS_TARGET || !IB.SKILL_NEEDS_TARGET.cleanse, 'it takes no aim');
+
+  // ---- it is not a trap. skOutput sees no damage, no heal, no shield and no
+  // stat in the buff bag, so a cleanse priced at ZERO until it was paid for
+  // what it actually removes.
+  t.ok(IB.skOutput(uf, 1, 120, 120) > 0, 'a cleanse is worth more than nothing to the Host’s brain');
+  for (const cls of IB.CLASSES.map(c => c.id)){
+    const pool = IB.basicPool(cls);
+    const rates = pool.map(s => [s.n, IB.skOutput(s, 1, 120, 120) / Math.max(4, s.cd)]);
+    rates.sort((a, b) => a[1] - b[1]);
+    t.ok(rates[0][0] !== uf.n, 'and it is not the floor of the ' + cls + ' pool (floor is ' + rates[0][0] + ')');
+  }
+
+  // ---- the tag is a real one with an icon of its own, held by the loop above
+  t.ok(!!IB.SKILL_TAG_ICON[uf.tag], 'its tag has an icon');
+  t.ok(uf.tag !== 'buff' && uf.tag !== 'heal', 'and it is not filed as a buff or a heal, which it is not');
+  t.ok(/takes every hold off/.test(IB.skNums(uf, 1)), 'the card says what it does');
+  t.ok(/slack/.test(IB.skNums(uf, 1)), 'and mentions the window it leaves behind');
+
+  // ---- the gate. A cleanse cast at a clean hero is the whole cooldown spent
+  // on nothing, and it takes no aim, so it would otherwise sail past every
+  // range test and fire on sight. This is the assertion the Brace round taught:
+  // measure that the gate REFUSES, not merely that it exists.
+  {
+    IB.newMatch({ diff:'veteran', seed:6140 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'support');
+    const h = P().heroes[0];
+    h.lvl = 10; IB.recalcHero(h, true); h.mana = h.mmana;
+    t.ok(IB.heldBy(h) === 0, 'a clean hero, with nothing on it');
+    t.ok(IB.wantCast(h, uf, null) === false, 'and it will not spend the cleanse on nothing');
+    h.hobT = 4.5;
+    t.ok(IB.wantCast(h, uf, null) === true, 'hobble it and the cleanse is worth casting');
+    // and it really strips when it goes off
+    IB.castSkill(h, { id:'unfetter', rank:1 }, null);
+    t.ok(IB.heldBy(h) === 0, 'the hobble comes off');
+    t.ok(h.freeT >= uf.free - .001, 'and the slack window is on (' + h.freeT.toFixed(1) + 's)');
+  }
+
+  // ---- yourself first, then the friend carrying the most. Deliberately NOT
+  // lowAlly, which ranks by health: the most hurt body on the bridge is very
+  // often the one with nothing on it at all.
+  {
+    IB.newMatch({ diff:'veteran', seed:6141 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'support'); IB.createHero(P(), 'tank');
+    const [a, b] = P().heroes;
+    t.ok(!!a && !!b, 'two heroes of ours');
+    if (a && b){
+      for (const h of [a, b]){ h.lvl = 10; IB.recalcHero(h, true); h.mana = h.mmana; h.inLane = true; }
+      b.x = a.x + 2; b.y = a.y;
+      if (!G.units.includes(b)) G.units.push(b);
+      IB.update(1 / 30);
+      // the friend is held and nearly dead; the caster is clean
+      b.hobT = 4.5; b.hp = b.mhp * .2;
+      t.ok(IB.heldAlly(a, 6.5) === b, 'the held friend is the one the cleanse reaches for');
+      // now hold the caster too — self wins, because a hero spending its own
+      // cleanse on somebody else while hobbled has read the fight backwards
+      a.slowT = 2; a.slowP = .5;
+      IB.castSkill(a, { id:'unfetter', rank:1 }, null);
+      t.ok(IB.heldBy(a) === 0, 'a held caster cleanses itself');
+      t.ok(b.hobT > 0, 'and leaves the friend’s hobble for the next one');
+      // clean caster, held friend: it goes out
+      IB.castSkill(a, { id:'unfetter', rank:1 }, null);
+      t.ok(b.hobT === 0, 'a clean caster sends it to the friend instead');
+    }
+    // a friend with nothing on it is not a target at all, however hurt it is
+    const c = P().heroes[1];
+    if (c){ c.hp = c.mhp * .1; t.ok(IB.heldAlly(P().heroes[0], 6.5) !== c || IB.heldBy(c) > 0,
+      'the most hurt friend is not the target unless something is actually on it'); }
   }
 }
 
