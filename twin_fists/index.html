@@ -890,16 +890,19 @@ function drawFighter(f){
   rigLimb(shX, shY, X(pose.aF[0]), Y(pose.aF[1]), aw, shirtL, shirtD);
   rigLimb(X(pose.aF[0]), Y(pose.aF[1]), X(pose.aF[2]), Y(pose.aF[3]), aw, skinL, skinD);
 
-  drawRigPass(2, ink, false);          // outline
+  // Three passes each is what makes them read; with a horde on screen the
+  // lit edge is the one you can least afford and least notice going.
+  const lean = crowdCount > 15 && f.team === 'e' && !f.boss;
+  drawRigPass(2, ink, false);          // outline — never dropped, it is the read
   drawRigPass(0, null, false);         // shadow tone
-  drawRigPass(-2, null, true);         // lit edge
+  if (!lean) drawRigPass(-2, null, true);   // lit edge
 
   /* ---- detail, drawn over the top and never outlined ---- */
   const fistX = X(pose.aF[2]), fistY = Y(pose.aF[3]);
   px(fistX - 1.5 * sc, fistY - 1.5 * sc, Math.max(3, 3.4 * sc), Math.max(3, 3.4 * sc), skinL);
   px(fistX - 1.5 * sc, fistY - 1.5 * sc, Math.max(2, 2 * sc), Math.max(1, sc), shade(skinL, 22));
   // boots
-  for (const leg of [pose.lF, pose.lB]){
+  if (!lean) for (const leg of [pose.lF, pose.lB]){
     const bx = X(leg[2]), by = Y(leg[3]);
     px(bx - 2.2 * sc, by - 1.5 * sc, Math.max(3, 4.6 * sc), Math.max(2, 2.4 * sc), leg === pose.lF ? '#241c22' : '#1b1519');
     px(bx - 2.2 * sc, by - 1.5 * sc, Math.max(2, 3 * sc), 1, '#3d323a');
@@ -921,7 +924,7 @@ function drawFighter(f){
     px(beltX + th - Math.max(1, sc), hipY + 2 * sc, Math.max(1, sc), 7 * sc, shade(shirtD, -20));
   }
   // a stripe across the chest reads as clothing rather than paint
-  px(shX - th / 2, shY - 4 * sc, th, Math.max(1, sc), shade(shirtL, 20));
+  if (!lean) px(shX - th / 2, shY - 4 * sc, th, Math.max(1, sc), shade(shirtL, 20));
 
   drawHair(f, s, headX, headY, hr, sc, dir, hairL, hairD);
 
@@ -933,6 +936,14 @@ function drawFighter(f){
     px(headX - dir * (hr - sc), headY + 1.6 * sc, Math.max(1, 1.6 * sc), Math.max(1, sc), shade(skinD, -14));
   }
 
+  // In a crowd you lose yourself, so put a marker over your own head
+  if (f.team === 'p' && crowdCount > 10){
+    const mx = headX, my = Y(pose.hipY + 34);
+    const col = f.pi === 0 ? '#7fb0ff' : '#ff8a7a';
+    for (let i = 0; i < 4; i++) px(mx - 3 + i, my + i, 7 - i * 2, 1, col);
+    px(mx - 1, my - 3, 3, 3, col);
+    px(mx - 1, my - 3, 3, 1, '#ffffff');
+  }
   if (f.tell > 0 && Math.floor(T * 14) % 2 === 0){
     const ty = Y(pose.hipY + 30);
     px(headX - 1, ty - 7, 3, 6, '#ff5a4a');
@@ -1012,6 +1023,7 @@ function frameOf(atk, t){
 
 /* -------------------------------------------------------- enemy roster */
 const ENEMY = {
+  grunt:  { hp: 15, spd: 54, sc: 0.92, skin: 'punk',   score: 60,  atks: ['jab', 'swipe'], aggro: 1.15, guard: 0, name: 'GRUNT', horde: true },
   punk:   { hp: 26, spd: 46, sc: 1.0,  skin: 'punk',   score: 100, atks: ['jab', 'swipe', 'boot'], aggro: 0.9,  guard: 0.06, name: 'PUNK' },
   runner: { hp: 20, spd: 74, sc: 0.95, skin: 'runner', score: 140, atks: ['jab', 'jumpkick'], aggro: 1.3, guard: 0.0, hop: true, name: 'JITTER' },
   bruiser:{ hp: 58, spd: 34, sc: 1.22, skin: 'bruiser',score: 260, atks: ['haymaker', 'swipe'], aggro: 0.6, guard: 0.22, armor: 1, grabber: true, name: 'BRUISER' },
@@ -1069,11 +1081,13 @@ function spawnPlayer(pi, x, y){
   return f;
 }
 
+const HORDE_SKINS = ['punk', 'runner', 'chain', 'blade'];
 function spawnEnemy(type, x, y, face){
   const d = ENEMY[type] || ENEMY.punk;
   const dm = DIFF[G.diff];
+  const skin = d.horde ? HORDE_SKINS[Math.floor(rng() * HORDE_SKINS.length) % HORDE_SKINS.length] : d.skin;
   const f = mkFighter({
-    team: 'e', kind: type, skin: d.skin, sc: d.sc, x, y,
+    team: 'e', kind: type, skin, sc: (d.sc || 1) * (d.horde ? 0.94 + rng() * 0.14 : 1), x, y,
     hp: Math.round(d.hp * dm.hp), spd: d.spd, face: face || -1,
     armor: d.armor || 0, boss: !!d.boss, name: d.name, weapon: d.weapon || null,
     keep: d.keep || 0, grabber: d.grabber, hop: d.hop, guard: d.guard, gun: d.gun,
@@ -2369,7 +2383,11 @@ function foeBehind(f){
    is the token: only a couple of them are allowed to be swinging at any
    moment, so a crowd reads as a crowd instead of a blender. */
 function tokensOut(){ let n = 0; for (const f of fighters) if (f.team === 'e' && f.token && !f.gone && !f.dead) n++; return n; }
-function tokenCap(){ return DIFF[G.diff].tokens + (G.players - 1); }
+function tokenCap(){
+  const live = liveEnemies().length;
+  const swarm = live > 12 ? 2 : live > 7 ? 1 : 0;    // a horde presses harder
+  return DIFF[G.diff].tokens + (G.players - 1) + swarm;
+}
 
 function aiControl(f, dt){
   const ai = f.ai;
@@ -2679,7 +2697,7 @@ const STAGES = [
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
       { x: 400,  spawn: [['punk', 3]], items: [['crate', 120], ['crate', 200]] },
-      { x: 780,  spawn: [['punk', 2], ['runner', 1]], items: [['pipe', 90]] },
+      { x: 780,  spawn: [['grunt', 16]], cap: 22, items: [['pipe', 90], ['crate', 200]] },
       { x: 1130, spawn: [['runner', 2], ['bruiser', 1]], items: [['barrel', 150]] },
       { x: 1396, spawn: [['punk', 2]], boss: 'rook', items: [['bat', 120]] },
     ],
@@ -2689,7 +2707,7 @@ const STAGES = [
     gates: [
       { x: 0,    spawn: [['punk', 2], ['chain', 1]] },
       { x: 430,  spawn: [['chain', 1], ['runner', 2]], items: [['pipe', 60], ['crate', 170]] },
-      { x: 820,  spawn: [['bruiser', 1], ['punk', 2]], items: [['barrel', 100]] },
+      { x: 820,  spawn: [['grunt', 20], ['bruiser', 1]], cap: 26, items: [['barrel', 100], ['bat', 170]] },
       { x: 1200, spawn: [['blade', 1], ['runner', 2]], items: [['crate', 80], ['crate', 140]] },
       { x: 1516, spawn: [['punk', 1], ['chain', 1]], boss: 'vex', items: [['pipe', 130]] },
     ],
@@ -2700,7 +2718,7 @@ const STAGES = [
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
       { x: 440,  spawn: [['runner', 2], ['chain', 1]], items: [['crate', 110], ['bat', 190]] },
-      { x: 830,  spawn: [['bruiser', 2]], items: [['barrel', 90], ['barrel', 160]] },
+      { x: 830,  spawn: [['grunt', 22], ['bruiser', 2]], cap: 28, items: [['barrel', 90], ['barrel', 160]] },
       { x: 1210, spawn: [['blade', 2], ['punk', 2]], items: [['knife', 120]] },
       { x: 1616, spawn: [['bruiser', 1]], boss: 'hammer', items: [['pipe', 150]] },
     ],
@@ -2711,7 +2729,7 @@ const STAGES = [
     gates: [
       { x: 0,    spawn: [['punk', 2], ['bruiser', 1]] },
       { x: 430,  spawn: [['blade', 1], ['chain', 2]], items: [['pipe', 80], ['crate', 160]] },
-      { x: 820,  spawn: [['runner', 3], ['punk', 1]], items: [['bat', 130]] },
+      { x: 820,  spawn: [['grunt', 26], ['runner', 2]], cap: 30, items: [['bat', 130], ['pipe', 210]] },
       { x: 1210, spawn: [['bruiser', 2], ['blade', 1]], items: [['barrel', 110]] },
       { x: 1560, spawn: [['punk', 2], ['runner', 2]], items: [['crate', 100]] },
       { x: 1716, spawn: [['blade', 1]], boss: 'nyx', items: [['pipe', 140]] },
@@ -2724,7 +2742,7 @@ const STAGES = [
       { x: 0,    spawn: [['blade', 2], ['punk', 2]] },
       { x: 430,  spawn: [['bruiser', 2], ['chain', 1]], items: [['pipe', 90]] },
       { x: 820,  spawn: [['runner', 2], ['blade', 2]], items: [['knife', 120], ['crate', 180]] },
-      { x: 1180, spawn: [['bruiser', 1], ['chain', 2], ['punk', 2]], items: [['bat', 100]] },
+      { x: 1180, spawn: [['grunt', 30], ['bruiser', 1], ['chain', 1]], cap: 32, items: [['bat', 100], ['crate', 210]] },
       { x: 1500, spawn: [], boss: 'rook', items: [['barrel', 130]] },
       { x: 1816, spawn: [['blade', 1]], boss: 'warden', items: [['pipe', 120], ['crate', 190]] },
     ],
@@ -2733,12 +2751,15 @@ const STAGES = [
 const stage = () => STAGES[clamp(G.stage, 0, STAGES.length - 1)];
 
 /* wave bookkeeping */
-const W = { gi: 0, active: false, queue: [], goT: 0, clearT: 0, gate: null, spawnedBoss: false };
-const MAX_ON = () => 4 + G.players;
+const W = { gi: 0, active: false, queue: [], goT: 0, clearT: 0, gate: null, spawnedBoss: false, cap: 0 };
+/* How many bodies the street may hold at once. Ordinary waves stay at half
+   a dozen so you can read them; a gate marked `cap` opens the taps. */
+const MAX_ON = () => (W.cap || 4 + G.players);
 
 function resetStage(){
   fighters = []; items = []; fx = [];
   W.gi = 0; W.active = false; W.queue = []; W.goT = 0; W.clearT = 0; W.gate = null; W.spawnedBoss = false;
+  W.cap = 0;
   cam.x = 0; cam.targetX = 0; cam.lock = -1; cam.shakeX = 0; cam.shakeY = 0;
   G.bossHp = 0; G.bossMax = 0; G.bossName = '';
   G.time = 0;
@@ -2812,24 +2833,29 @@ function updateWaves(dt){
 
 function startWave(g){
   W.active = true; W.gate = g;
+  W.cap = (g.cap || 4 + G.players) + (G.players - 1) * 4;
   cam.lock = g.x;
   const list = [];
-  let side = 1, delay = 0.25;
+  // Only the head of the queue counts down, so each entry holds the GAP after
+  // the one before it — a running total would make the twentieth man wait
+  // twenty gaps instead of one.
+  let side = 1, first = true;
   for (const [type, count] of (g.spawn || [])){
     for (let i = 0; i < count; i++){
       const fromRight = side > 0;
+      const quick = (ENEMY[type] || {}).horde;
       list.push({
-        type, t: delay,
-        x: fromRight ? g.x + VW + 26 + i * 18 : g.x - 26 - i * 18,
+        type, t: first ? 0.25 : (quick ? 0.07 : 0.28),
+        x: fromRight ? g.x + VW + 26 + i * 12 : g.x - 26 - i * 12,
         y: rr(FLOOR_TOP + 6, FLOOR_BOT - 4),
         face: fromRight ? -1 : 1,
       });
+      first = false;
       side *= -1;
-      delay += 0.28;
     }
   }
   if (g.boss){
-    list.push({ type: g.boss, t: delay + 0.4, x: g.x + VW + 34, y: FLOOR_MID, face: -1, boss: true });
+    list.push({ type: g.boss, t: 0.8, x: g.x + VW + 34, y: FLOOR_MID, face: -1, boss: true });
   }
   W.queue = list;
   for (const [kind, dx] of (g.items || [])) mkItem(kind, g.x + dx, rr(FLOOR_TOP + 8, FLOOR_BOT - 6), 0);
@@ -3807,8 +3833,10 @@ function draw(){
 /* What is actually on screen this frame, sorted back to front.  Split out
    of draw() so a test can ask whether somebody is visible — a blink that
    swallowed the whole super was how this one earned its own function. */
+let crowdCount = 0;
 function visibleList(){
   const list = [];
+  crowdCount = 0;
   for (const it of items) if (!it.gone) list.push({ y: it.y - (it.thrown ? 40 : 0), it, d: () => drawItem(it) });
   for (const f of fighters) if (!f.gone && f.state !== 'out'){
     if (f.dead && f.deadT > 0){
@@ -3818,6 +3846,7 @@ function visibleList(){
     // mercy blink after a respawn — never during a rush, which must read
     if (f.invuln > 0 && f.team === 'p' && f.state !== 'super' && f.state !== 'jump' &&
         Math.floor(f.invuln * 12) % 2 === 0) continue;
+    crowdCount++;
     list.push({ y: f.y, f, d: () => drawFighter(f) });
   }
   list.sort((a, b) => a.y - b.y);
@@ -4455,7 +4484,7 @@ function update(dt){
   updateDeaths(dt);
   updateCamera(dt);
 
-  if (fighters.length > 40) fighters = fighters.filter(f => !f.gone || f.team === 'p');
+  if (fighters.length > 90) fighters = fighters.filter(f => !f.gone || f.team === 'p');
   else fighters = fighters.filter(f => !(f.gone && f.team === 'e'));
   for (let i = 0; i < G.players; i++) if (players[i] && fighters.indexOf(players[i]) < 0) fighters.push(players[i]);
 }
