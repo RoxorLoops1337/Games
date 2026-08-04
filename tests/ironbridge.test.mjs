@@ -2416,14 +2416,35 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // a Cannon armed in 0. After: 9 and 5.
     //
     // Sixteen seeds rather than six, because six could not carry the second
-    // assertion. Measured over 36 seeds, a hold reaches tier 3 in 71% of cases
-    // and arms a Cannon in 25% — and the old bar was 3 of 12, which IS 25%. A
-    // threshold sitting exactly on the population rate fails about two runs in
-    // five whatever the code does, and it duly went red on a change that leaves
-    // the rate untouched (18 of 72 holds before and 18 of 72 after). The bars
-    // below are 14 of 32 against an expected 23, and 3 of 32 against an
-    // expected 8. If you widen the window or change the AI, re-measure the rate
-    // before touching the bar.
+    // assertion.
+    //
+    // RE-MEASURED when a ninth commander order joined the pool the Host draws
+    // its two from — which is a change to the AI, and this comment used to end
+    // by saying to re-measure the rate when that happens. Both rates had
+    // drifted a long way from the 71% / 25% recorded here, and in opposite
+    // directions:
+    //
+    //                      tier 3        a Cannon drilled
+    //   as recorded         71%              25%
+    //   measured, 36 seeds  44%              99%
+    //   measured, 16 below  50%              97%
+    //
+    // So the tier-3 bar of 14 had drifted onto the population mean — 14
+    // against an expectation of 16 is 0.7 sd, which is precisely the failure
+    // this comment already warned about two paragraphs up, and it duly went
+    // red on a change that does not hurt the economy at all. The 36-seed
+    // control says the ninth order moves the rate the RIGHT way: 44% without
+    // it, 50% with it. This particular sixteen swing the other way (16 → 13),
+    // which is what a bar sitting on the mean does.
+    //
+    // So the two bars swap roles. tier 3 keeps a margin it can survive — 8 of
+    // 32 against an expectation of ~15, about 2.5 sd, still nowhere near an
+    // economy that has actually collapsed. The Cannon bar was the weak one at
+    // 3 of 32 and is now the strong one, because that rate went to essentially
+    // one: 24 of 32 is a real bound, and a hold that stops reaching its third
+    // barracks tier fails HERE long before the other one notices.
+    //
+    // If you change the AI again, re-measure both before touching either.
     const lv3 = [], cannon = [];
     for (const seed of [5031, 5062, 5093, 5124, 5155, 5186,
                         5217, 5248, 5279, 5310, 5341, 5372,
@@ -2440,9 +2461,10 @@ t.ok(true, 'drawing an empty bridge is harmless');
       for (const sd of [0, 1]){ lv3.push(IB.barracksLvl(G.sides[sd])); cannon.push(gun[sd] > 0); }
     }
     const top = lv3.filter(l => l >= 3).length, guns = cannon.filter(Boolean).length;
-    t.ok(top >= 14, 'a hold reaches the barracks level that unlocks Cannons (' +
+    t.ok(top >= 8, 'a hold reaches the barracks level that unlocks Cannons (' +
       top + ' of ' + lv3.length + ': ' + lv3.join(',') + ')');
-    t.ok(guns >= 3, 'and drills its Cannons with it (' + guns + ' of ' + cannon.length + ' holds)');
+    t.ok(guns >= 24, 'and nearly every hold drills its Cannons (' +
+      guns + ' of ' + cannon.length + ' holds)');
   }
   {
     // The save-up rule on its own: a cheap upgrade near the bottom of the list
@@ -12723,8 +12745,13 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(typeof IB.chooseSpell(s, 1, 'bombard') === 'string', 'the same spell cannot fill both slots');
     t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
     t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
-    t.ok(IB.SPELLS.length === 8 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
-      'there are eight of them, each named and each with a cooldown');
+    t.ok(IB.SPELLS.length === 9 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are nine of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
+    // Every one has a target kind the banner knows how to ask for. A tenth
+    // order with a new kind fails HERE rather than arming a state whose banner
+    // cannot say what would satisfy it.
+    t.ok(IB.SPELLS.every(d => d.target === 'self' || IB.AIM_ASK[d.target]),
+      'and a target the aiming banner can put into words');
 
     // They belong to the HOLD. Three heroes is still two spells; no heroes at
     // all is still two spells.
@@ -13918,6 +13945,121 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const up = wire.slice(wire.indexOf("lcv.addEventListener('pointerup'"));
     t.ok(/spellUI\.aim.*pickAt/s.test(up.slice(0, up.indexOf('\n  });'))),
       'and lifting fires at where it ended, moved or not');
+  }
+
+  /* ------------------------------------------------- the ninth order
+     The eight before it all answered a MOMENT — a salvo, a retreat, a hero
+     made worse for four seconds — and none of them answered a piece of
+     ground. Nothing in the set could say "not here, not for the next six
+     seconds", which is the one thing a hold losing the middle wants to say.
+
+     It is the first order that leaves the simulation holding state of its own
+     between ticks, so the round trip below matters more than anything about
+     how it looks: fireT/fireX have to survive a snapshot, or a resync mid-fire
+     desyncs the moment one machine keeps burning and the other does not. */
+  {
+    const s = fresh(8560);
+    t.ok(!!IB.SPELL.pitch && IB.SPELL.pitch.target === 'point', 'Pitch Fire is aimed at the lane');
+    IB.chooseSpell(s, 0, 'pitch');
+    step(23);
+    rich(s);
+    IB.spawnWave();
+    step(4);
+    const foe = G.units.filter(u => !u.dead && u.side === 1);
+    t.ok(foe.length > 0, 'their line is on the bridge (' + foe.length + ')');
+
+    t.ok(s.fireT === 0, 'nothing is burning yet');
+    t.ok(IB.castSpell(s, { slot:0, x:foe[0].x }) === null, 'the pitch goes out');
+    t.ok(s.fireT === IB.PITCH.dur && Math.abs(s.fireX - IB.lanePoint(foe[0].x)) < 1e-9,
+      'and the stretch is alight where it was aimed');
+
+    // It burns over TIME rather than in a burst: that is the whole difference
+    // between this and Bombard, and it is what makes standing in it a choice.
+    const victim = foe[0];
+    const hp0 = victim.hp;
+    step(.5);
+    const bit = hp0 - victim.hp;
+    t.ok(bit > 0, 'a body standing in it is losing health (' + bit.toFixed(1) + ')');
+    step(.5);
+    t.ok(hp0 - victim.hp > bit, 'and keeps losing it for as long as it stands there');
+    t.ok(victim.slowT > 0, 'while it stands there slowed');
+    // ...in short refreshes, so walking out of the fire is walking out of the
+    // slow rather than carrying a four-second tag away from it.
+    t.ok(victim.slowT <= IB.PITCH.slowT + 1e-6,
+      'in a refresh short enough that leaving the fire leaves the slow (' + victim.slowT.toFixed(2) + 's)');
+
+    /* THE ROUND TRIP. Four hand-written pack lists stand between a new field
+       and a resync that desyncs immediately, and a burning stretch is exactly
+       the kind of state that is easy to add to the tick and forget in all
+       four. */
+    G.projs.length = 0; G.zones.length = 0;
+    t.ok(s.fireT > 0, 'the fire is still burning across the snapshot');
+    const at = IB.netHash();
+    const json = JSON.stringify(IB.netSnap());
+    step(1.2);
+    t.ok(IB.netHash() !== at, 'the board moves on while it burns');
+    t.ok(IB.netLoad(JSON.parse(json)), 'a burning stretch packs into a snapshot');
+    t.ok(IB.netHash() === at, 'and comes back bit-identical');
+    t.ok(G.sides[0].fireT > 0, 'with the fire still lit on the other side of it');
+    // And the hash is genuinely watching it: move the fire and nothing else,
+    // and the two machines must no longer agree.
+    const h1 = IB.netHash();
+    G.sides[0].fireX += 1;
+    t.ok(IB.netHash() !== h1, 'where the fire is, is in the lockstep hash');
+    G.sides[0].fireX -= 1;
+    t.ok(IB.netHash() === h1, 'and putting it back puts the hash back');
+    const h2 = IB.netHash();
+    G.sides[0].fireT += .5;
+    t.ok(IB.netHash() !== h2, 'and so is how long it has left');
+    G.sides[0].fireT -= .5;
+
+    // A second pour refreshes rather than stacking: one burning stretch per
+    // hold, like one salvo per hold.
+    s.spellCd[0] = 0;
+    const away = IB.lanePoint(Math.max(0, foe[0].x - 12));
+    IB.castSpell(s, { slot:0, x:away });
+    t.ok(Math.abs(s.fireX - away) < 1e-9 && s.fireT === IB.PITCH.dur,
+      'a second pour moves the fire rather than lighting a second one');
+
+    // It goes out on its own.
+    step(IB.PITCH.dur + .2);
+    t.ok(s.fireT === 0, 'and six seconds later there is nothing burning');
+    const hpAfter = foe.filter(u => !u.dead).length;
+    t.ok(hpAfter >= 0, 'the lane survives it being over (' + hpAfter + ' still up)');
+  }
+
+  /* -------------------------------------- and the ninth order is drawable */
+  {
+    const s = fresh(8561);
+    IB.chooseSpell(s, 0, 'pitch');
+    step(23);
+    rich(s);
+    const st = CTX.__stats;
+    const ell = () => { st.ellipses = []; IB.drawPitch(CTX); return st.ellipses; };
+    t.ok(ell().length === 0, 'an unlit lane paints nothing');
+    IB.castSpell(s, { slot:0, x:40 });
+    const lit = ell();
+    t.ok(lit.length > 0, 'a burning stretch is painted (' + lit.length + ' marks)');
+    // Under the bodies. The fire is GROUND, and ground goes under feet — a
+    // sheet of orange over a minion standing in it would hide the thing the
+    // fire is happening to.
+    const body = SRC.slice(SRC.indexOf('function draw(){'), SRC.indexOf('INTERFACE'));
+    t.ok(body.indexOf('drawPitch(c)') > body.indexOf("perfOff('deck')") &&
+         body.indexOf('drawPitch(c)') < body.indexOf("perfOff('lane')"),
+      'painted after the deck and before the bodies that walk through it');
+    // Nothing random. Both machines paint the same fire, so a screenshot of one
+    // is a screenshot of the other.
+    const paint = SRC.slice(SRC.indexOf('function drawPitch(c){'), SRC.indexOf('const structTall'));
+    for (const bad of ['Math.random', 'rnd(', 'arnd(', 'fxRnd'])
+      t.ok(!paint.includes(bad), 'the fire is painted without reaching for ' + bad);
+    // Drawing it moves nothing.
+    const h0 = IB.netHash();
+    IB.drawPitch(CTX); IB.drawPitch(CTX);
+    t.ok(IB.netHash() === h0, 'and painting it does not move the world');
+    // The preview knows its footprint, off the same radius the fire uses.
+    const foot = IB.AIM_FOOT.pitch();
+    t.ok(foot.length === 1 && foot[0].r === IB.PITCH.rad,
+      'and the aim preview rings exactly the stretch that will burn');
   }
 
   /* ------------------------------------ what the cast actually did

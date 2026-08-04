@@ -913,7 +913,10 @@
     line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .spslot .sv.none{ color:#8f8370; font-style:italic; font-variant-caps:normal; font-size:var(--t3); }
 
-  .spgrid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  /* Three across, because there are nine of them. At four the ninth sat alone
+     on a row of its own looking like an afterthought, which is exactly what a
+     new order must not look like next to eight that shipped together. */
+  .spgrid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
   .sptile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:5px;
     padding:10px 6px 9px; min-width:0;
     background:var(--raise); border:1px solid var(--rim); border-radius:var(--r3);
@@ -965,7 +968,7 @@
      `bottom` eats the sheet's own bottom padding, or the last few pixels of
      the grid would show under the footer. */
   @media (max-width:700px){
-    .spgrid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .spgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
     .spslots{ flex-direction:column; }
     .spfoot{ position:sticky; bottom:-18px; z-index:3; padding:10px 0 18px;
       background:linear-gradient(180deg,rgba(24,34,45,0) 0,#1b2531 10px,#18222d 100%); }
@@ -1959,6 +1962,9 @@ function makeSide(i, ai){
     // entry, because a resync drops the zone list wholesale.
     spells:[null, null], spellCd:[0, 0],
     bombT:0, bombX:0, bombN:0,
+    // ...and fireT/fireX are the stretch of burning boards another leaves,
+    // on this object for exactly the same reason.
+    fireT:0, fireX:0,
   };
   // Every hold opens with a pit and a farm already standing.
   s.plot[5] = { type:'pit', lvl:1, tile:5 };
@@ -2387,6 +2393,19 @@ function ecoStep(s, dt){
       if (s.bombN === 0){ castTell(s, 'Bombard', bombSeen[s.i].size, 'caught'); bombSeen[s.i].clear(); }
     }
   }
+  if (s.fireT > 0){
+    s.fireT = Math.max(0, s.fireT - dt);
+    const fs = enemyOf(s.i);
+    // Per-frame damage scaled by dt, the same way a burn is charged, so the
+    // total a body takes is decided by how long it stood in the fire and not
+    // by what the frame rate happened to be.
+    nearby(s.fireX, PITCH.rad + 2, (u) => {
+      if (u.dead || u.side !== fs) return;
+      if (hyp(u.x - s.fireX, u.y) > PITCH.rad + u.r) return;
+      dealDmg(null, u, PITCH.dps * dt, { magic:true, pure:true, noHooks:true });
+      if (!u.dead) applySlow(u, PITCH.slow, PITCH.slowT);
+    });
+  }
 }
 
 /* =====================================================================
@@ -2560,6 +2579,17 @@ const UNBIND = { dur:5, mul:.30, floor:.15 };
 const PYRE = { dur:6, base:22, perWave:2.4, heal:.60 };
 // Masons for five seconds and a warded face for eight.
 const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
+/* Pitch poured on a stretch of boards and lit. The eight orders before it all
+   answered a MOMENT — a salvo, a retreat, a hero made worse for four seconds —
+   and none of them answered a piece of ground. Nothing in the set could say
+   "not here, not for the next six seconds", which is the one thing a hold that
+   is losing the middle actually wants to say.
+
+   Damage over time rather than a burst, so the number it does depends on how
+   long they are willing to stand in it. It slows in short refreshes rather
+   than one long one, so walking out of the fire is walking out of the slow —
+   the ground is the effect, not a tag it hands you on the way past. */
+const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
   { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },
@@ -2578,6 +2608,8 @@ const SPELLS = [
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
   { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 },
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 },
+    d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 
@@ -2686,6 +2718,13 @@ const SPELL_CAST = {
       u.fallT = WITHDRAW.dur; u.target = null; n++;
     });
     castTell(s, 'Withdraw', n, 'turned back');
+    return null;
+  },
+  /* Refreshing rather than stacking: a second pour on the same stretch resets
+     the clock and moves the patch, and does not light a second fire nobody can
+     see the edges of. One burning stretch per hold, like one salvo per hold. */
+  pitch(s, c){
+    s.fireX = lanePoint(c.x); s.fireT = PITCH.dur;
     return null;
   },
   muster(s){ musterWave(s); return null; },
@@ -4767,6 +4806,15 @@ function aiSpellTarget(s, d, fs){
   if (d.id === 'hobble'){
     const h = G.sides[fs].heroes.find(x => !x.dead && x.inLane && !(x.hobT > 0));
     return h ? { hero:h.id } : null;
+  }
+  if (d.id === 'pitch'){
+    // Where their line actually is, and only once enough of it is standing
+    // there to be worth six seconds of burning boards. Same shape of test as
+    // Bombard's, over the radius this one covers.
+    const at = frontlineX(fs);
+    let n = 0;
+    nearby(at, PITCH.rad, (u) => { if (!u.dead && u.side === fs && !u.isHero) n++; });
+    return n >= 3 ? { x:Math.round(at * 16) / 16 } : null;
   }
   if (d.id === 'pyre'){
     for (const u of G.units)
@@ -8963,6 +9011,47 @@ function ogreWindow(c, x, y, st){
   setText(c, 'bold ' + Math.max(8, Math.round(9 * cam.z)) + 'px system-ui', 'center', 'middle');
   c.fillText("OGRES " + Math.ceil(left) + "s", x, by - DOWNSTACK.gap * cam.z);
   endText(c);
+}
+
+/* The stretch of boards that is on fire. Painted on the deck and before the
+   bodies, so a minion standing in it is standing IN it rather than behind a
+   sheet of orange — the fire is ground, and ground goes under feet.
+
+   Both sides' fires are drawn, and neither is drawn in a side colour: a
+   burning plank does not belong to anybody, and the thing a player needs to
+   read off it is where it is rather than whose it was. */
+function drawPitch(c){
+  if (!G.sides.length) return;
+  for (const s of G.sides){
+    if (!(s.fireT > 0)) continue;
+    const p = lp(s.fireX, 0), rx = PITCH.rad * LS(), ry = rx * .55;
+    // It burns down rather than out: the patch keeps its footprint the whole
+    // six seconds — a fire that shrank would say the ground was coming back
+    // when it is not — and it is the LIGHT that goes.
+    const f = statusFade(s.fireT, 1.6);
+    c.save();
+    c.globalAlpha = .42 * f;
+    ell(c, p[0], p[1], rx, ry, '#3d1104');
+    c.globalAlpha = .38 * f;
+    ell(c, p[0], p[1], rx * .74, ry * .74, '#c24a10');
+    c.globalAlpha = .3 * f;
+    ell(c, p[0], p[1], rx * .42, ry * .42, '#ff8a2b');
+    // Flames along the stretch, spaced across it rather than stacked in the
+    // middle, so the EDGES are where they look like they are. Nothing here is
+    // random: the phase comes off the index, so both machines paint the same
+    // fire and a screenshot of one is a screenshot of the other.
+    for (let i = 0; i < 7; i++){
+      const t = i / 6 - .5;
+      const a = G.t * 8 + i * 1.9, lift = Math.sin(a) * .5 + .5;
+      const fx0 = p[0] + t * rx * 1.7, fy = p[1] - (2 + lift * 12) * cam.z + Math.abs(t) * ry * .3;
+      c.globalAlpha = (.92 - lift * .34) * f;
+      ell(c, fx0, fy, 2.6 * cam.z, (4 + lift * 2.4) * cam.z, i & 1 ? '#ff8a1f' : '#e8500c');
+      // a bright core, so it reads as burning rather than as scorched
+      c.globalAlpha = (.85 - lift * .45) * f;
+      ell(c, fx0, fy + 1.2 * cam.z, 1.3 * cam.z, (2.1 + lift * 1.2) * cam.z, '#ffe89a');
+    }
+    c.restore();
+  }
 }
 
 /* How big a structure IS, for anything that has to draw round one. Three
@@ -14427,6 +14516,7 @@ function draw(){
     gorgeDepth(c);         // and everything below it falling away into the dark
   }
   if (!perfOff('deck')) drawDeck(c);
+  drawPitch(c);                        // burning boards, UNDER the bodies walking through them
   if (!perfOff('lane')) drawLane(c);
   if (!perfOff('post')) postFx(c);     // the world is finished here — below is interface
   drawAim(c);                          // ...and the first thing on top of it is where a cast would land
@@ -14610,6 +14700,17 @@ const SPELL_ICON = {
   pyre: ico('<path d="M12 4.4c2.9 3.9 6 5.5 6 9.9A6 6 0 0 1 6 14.3c0-4.4 3.1-6 6-9.9Z" fill="#a8380f"/>' +
     '<path d="M12 2.4c2.9 3.9 6 5.5 6 9.9A6 6 0 0 1 6 12.3c0-4.4 3.1-6 6-9.9Z" fill="#f5811f" ' + ICO_EDGE + '/>' +
     '<path d="M12 10c1.5 1.9 2.7 2.9 2.7 4.9a2.7 2.7 0 0 1-5.4 0c0-2 1.2-3 2.7-4.9Z" fill="#ffd45e"/>'),
+  /* A stretch of the boards alight. Deliberately WIDE and sitting on a line
+     where Pyre Brand is a single tall flame on a body: one of them is a place
+     and the other is a person, and at 19px the proportion is what says which. */
+  pitch: ico('<path d="M2.2 18.4h19.6v3.4H2.2Z" fill="#5c3c1f"/>' +
+    '<path d="M2.2 16.2h19.6v3.4H2.2Z" fill="#8a5c31" ' + ICO_EDGE + '/>' +
+    '<path d="M6.6 15.8c-1.5-2.6.4-4 .1-6 1.9 1.5 3.1 3 3.1 4.6a2.6 2.6 0 0 1-3.2 1.4Z" fill="#a8380f"/>' +
+    '<path d="M6.4 14.6c-1.6-2.7.4-4.2.1-6.3 2 1.6 3.3 3.2 3.3 4.9a2.7 2.7 0 0 1-3.4 1.4Z" ' +
+      'fill="#f5811f" ' + ICO_EDGE + '/>' +
+    '<path d="M15.2 15.4c-2-3.4.5-5.4.1-8.1 2.6 2 4.2 4.1 4.2 6.3a3.5 3.5 0 0 1-4.3 1.8Z" fill="#a8380f"/>' +
+    '<path d="M15 13.9c-2.1-3.5.5-5.6.1-8.4 2.7 2.1 4.4 4.2 4.4 6.5a3.6 3.6 0 0 1-4.5 1.9Z" ' +
+      'fill="#ffcf5e" ' + ICO_EDGE + '/>'),
   /* Masonry mended, and a ward over it. A SHIELD rather than a battlement:
      Withdraw is a battlement with an arrow going into it, and two crenelated
      walls side by side in the bar were one shape twice. The courses of stone
@@ -15442,6 +15543,7 @@ const AIM_FOOT = {
     return o;
   },
   withdraw: () => [{ d:0, r:WITHDRAW.rad }],
+  pitch: () => [{ d:0, r:PITCH.rad }],
 };
 
 /* Where the pointer is, for the preview and for nothing else. Cosmetic to the
@@ -16371,7 +16473,7 @@ const packSide = (s) => ({
   troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
   spells:s.spells.slice(), spellCd:s.spellCd.slice(),
-  bombT:s.bombT, bombX:s.bombX, bombN:s.bombN,
+  bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
   trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -16426,6 +16528,7 @@ function loadMatch(pack){
     if (ps.spells) s.spells = ps.spells.slice();
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
+    s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     // Without this a resumed match reported the quiet wave for up to a full
     // 22-second period, however heavy the wave actually on the bridge was —
     // the briefing reads sides[1].waveKind and it was falling back to the
@@ -17168,6 +17271,7 @@ function netHash(){
     // a bombardment has got to.
     for (let i = 0; i < SPELL_SLOTS; i++){ mixs(s.spells[i]); mix(q30(s.spellCd[i])); }
     mix(s.bombN); mix(q30(s.bombT)); mix(Math.round(s.bombX * 16));
+    mix(q30(s.fireT)); mix(Math.round(s.fireX * 16));
     mix(s.heroes.length);
     for (const h of s.heroes){
       mixs(h.cls); mixs(h.passive); mix(h.lvl); mix(Math.round(h.xp)); mix(h.passRank);
@@ -17300,7 +17404,7 @@ function netSnap(){
       // nobody remembered to add — and a field missing from a resync is a
       // resync that desyncs again immediately.
       spells:s.spells.slice(), spellCd:s.spellCd.slice(),
-      bombT:s.bombT, bombX:s.bombX, bombN:s.bombN,
+      bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
       trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -17349,6 +17453,7 @@ function netLoad(p){
     if (ps.spells) s.spells = ps.spells.slice();
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
+    s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
     s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
     s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
@@ -17845,7 +17950,7 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   ordersHtml, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
-  drawStructMarks, structTall, structWide,
+  drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
   BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART,
