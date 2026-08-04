@@ -52,6 +52,7 @@ const EXPOSE = `__out.api = {
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
+  stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
 };
 `;
@@ -973,6 +974,54 @@ test("the warden's shot travels flat and hurts", () => {
   for (let i = 0; i < 60; i++) api.updateItems(api.STEP);
   assert(p.hp < hp0, 'the slug connects');
   assert(slug.gone || Math.abs(slug.z - z0) < 1, 'a bullet does not arc');
+});
+
+/* ------------------------------------------------------------ the stick */
+test('the thumb stick reads eight directions and has a dead middle', () => {
+  const api = boot();
+  const R = api.STICK_MAX;
+  const cases = [
+    [R, 0, 'r'], [-R, 0, 'l'], [0, -R, 'u'], [0, R, 'd'],
+    [R, R, 'rd'], [-R, R, 'ld'], [R, -R, 'ru'], [-R, -R, 'lu'],
+  ];
+  for (const [dx, dy, want] of cases){
+    const v = api.stickVector(dx, dy);
+    const got = (v.l ? 'l' : '') + (v.r ? 'r' : '') + (v.u ? 'u' : '') + (v.d ? 'd' : '');
+    assert(got === want, `(${dx},${dy}) should read ${want}, got ${got || 'nothing'}`);
+  }
+  const dead = api.stickVector(api.STICK_DEAD - 3, 0);
+  assert(!dead.l && !dead.r && !dead.u && !dead.d, 'a small wobble is not a direction');
+  assert(api.stickVector(api.STICK_DEAD + 4, 0).r === 1, 'just past the dead zone it moves');
+});
+
+test('opposite directions never come out of one thumb', () => {
+  const api = boot();
+  for (let a = 0; a < 360; a += 7){
+    const r = a * Math.PI / 180;
+    const v = api.stickVector(Math.cos(r) * 40, Math.sin(r) * 40);
+    assert(!(v.l && v.r), 'left and right at ' + a);
+    assert(!(v.u && v.d), 'up and down at ' + a);
+    assert(v.l || v.r || v.u || v.d, 'some direction at ' + a);
+  }
+});
+
+test('dragging past the ring drags the stick with it', () => {
+  const api = boot();
+  const still = api.stickRecentre(100, 100, 120, 100);
+  assert(still.x === 100 && still.y === 100, 'inside the ring the origin holds');
+  const moved = api.stickRecentre(100, 100, 300, 100);
+  assert(moved.x > 100, 'past the ring the origin follows: ' + moved.x);
+  const d = Math.hypot(300 - moved.x, 100 - moved.y);
+  near(d, api.STICK_MAX, 0.001, 'and the thumb ends up exactly on the ring');
+  const diag = api.stickRecentre(0, 0, 200, 200);
+  near(Math.hypot(200 - diag.x, 200 - diag.y), api.STICK_MAX, 0.001, 'diagonals too');
+});
+
+test('fullscreen degrades quietly where the browser has none', () => {
+  const api = boot();
+  assert(api.fullscreenSupported() === false, 'the stub DOM has no fullscreen');
+  assert(api.isFullscreen() === false, 'and is not in it');
+  api.toggleFullscreen();                       // must not throw
 });
 
 /* ------------------------------------------------------------ new moves */

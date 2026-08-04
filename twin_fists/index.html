@@ -60,14 +60,17 @@
   /* touch controls */
   #touch{ position:absolute; inset:0; pointer-events:none; display:none; }
   #touch.on{ display:block; }
-  .pad{ position:absolute; left:10px; bottom:10px; width:150px; height:150px; pointer-events:auto; }
-  .pad i{ position:absolute; display:block; background:rgba(255,207,61,.13); border:2px solid rgba(255,207,61,.34);
-    border-radius:6px; }
-  .pad i.pl{ left:0; top:50px; width:50px; height:50px; }
-  .pad i.pr{ left:100px; top:50px; width:50px; height:50px; }
-  .pad i.pu{ left:50px; top:0; width:50px; height:50px; }
-  .pad i.pd{ left:50px; top:100px; width:50px; height:50px; }
-  .pad i.on{ background:rgba(255,207,61,.42); }
+  /* The stick is wherever your thumb lands: the left of the screen is one
+     big capture area, and the ring is drawn where you touched down. */
+  .stickzone{ position:absolute; left:0; top:0; width:54%; height:100%; pointer-events:auto; }
+  .stick{ position:absolute; left:0; top:0; width:0; height:0; display:none; }
+  .stick.on{ display:block; }
+  .stick i{ position:absolute; display:block; border-radius:50%; }
+  .stick .base{ left:-54px; top:-54px; width:108px; height:108px;
+    border:2px solid rgba(255,207,61,.34); background:rgba(255,207,61,.07); }
+  .stick .knob{ left:-25px; top:-25px; width:50px; height:50px;
+    border:2px solid rgba(255,207,61,.55); background:rgba(255,180,60,.30);
+    transform:translate(var(--kx,0px), var(--ky,0px)); }
   .tbtns{ position:absolute; right:10px; bottom:10px; width:250px; height:150px; pointer-events:auto; }
   .tb{ position:absolute; width:62px; height:62px; border-radius:50%; border:2px solid rgba(255,207,61,.4);
     background:rgba(255,120,40,.16); color:#ffcf3d; font:900 15px/62px 'Courier New',monospace; text-align:center;
@@ -86,6 +89,11 @@
   #pausebtn{ position:absolute; right:8px; top:8px; width:36px; height:30px; pointer-events:auto;
     border:2px solid rgba(255,207,61,.4); background:rgba(20,12,28,.65); color:#ffcf3d; border-radius:3px;
     font:900 12px 'Courier New',monospace; }
+  #fsbtn{ position:absolute; right:50px; top:8px; width:36px; height:30px; pointer-events:auto;
+    border:2px solid rgba(255,207,61,.4); background:rgba(20,12,28,.65); color:#ffcf3d; border-radius:3px;
+    font:900 15px 'Courier New',monospace; display:none; }
+  #fsbtn.on{ display:block; }
+  #wrap.fs{ background:#000; }
 </style>
 </head>
 <body>
@@ -96,7 +104,9 @@
   <div id="rotate"><b>TURN YOUR PHONE</b>SIDEWAYS FOR A BIGGER FIGHT</div>
 
   <div id="touch">
-    <div class="pad" id="tpad"><i class="pu"></i><i class="pl"></i><i class="pr"></i><i class="pd"></i></div>
+    <div class="stickzone" id="tstick">
+      <div class="stick" id="tstickUI"><i class="base"></i><i class="knob"></i></div>
+    </div>
     <div class="tbtns" id="tbtns">
       <button class="tb c" data-k="c">JUMP</button>
       <button class="tb a" data-k="a">PUNCH</button>
@@ -104,6 +114,7 @@
       <button class="tb sp" data-k="s">SPEC</button>
     </div>
     <button id="pausebtn">II</button>
+    <button id="fsbtn" title="Full screen">&#9974;</button>
   </div>
 
   <div class="ov" id="title">
@@ -464,7 +475,11 @@ function fit(){
   const rot = document.getElementById('rotate');
   if (rot && rot.classList) rot.classList.toggle('on', tall && w < 760);
   let s = Math.min(w / VW, (tall ? h * 0.55 : h) / VH);
-  s = s >= 1 ? Math.max(1, Math.floor(s * 2) / 2) : s;
+  // Half-step scaling keeps the pixel grid even on a 1x display, where an
+  // uneven one shows. On a phone the pixels are far too small to see it, so
+  // take the whole screen instead of throwing away a seventh of it.
+  const dpr = (window.devicePixelRatio || 1);
+  if (dpr < 2) s = s >= 1 ? Math.max(1, Math.floor(s * 2) / 2) : s;
   VIEW.scale = s;
   canvas.style.width = Math.round(VW * s) + 'px';
   canvas.style.height = Math.round(VH * s) + 'px';
@@ -4065,6 +4080,32 @@ function pollInput(){
   }
 }
 
+/* Where the thumb has pulled the stick, as the four flags the game reads.
+   Pure maths, so it can be tested without a screen: a dead zone in the
+   middle, then eight directions, and past the ring the origin follows the
+   thumb so the stick never runs out of travel. */
+const STICK_DEAD = 13, STICK_MAX = 48;
+function stickVector(dx, dy){
+  const out = { l: 0, r: 0, u: 0, d: 0, mag: Math.sqrt(dx * dx + dy * dy) };
+  if (out.mag < STICK_DEAD) return out;
+  const ang = Math.atan2(dy, dx);                     // screen space: +y is down
+  const oct = Math.round(ang / (Math.PI / 4));        // -4..4
+  const o = ((oct % 8) + 8) % 8;
+  if (o === 7 || o === 0 || o === 1) out.r = 1;
+  if (o >= 3 && o <= 5) out.l = 1;
+  if (o >= 1 && o <= 3) out.d = 1;
+  if (o >= 5 && o <= 7) out.u = 1;
+  return out;
+}
+/* How far the origin has to slide so the thumb stays on the ring. */
+function stickRecentre(ox, oy, tx, ty){
+  const dx = tx - ox, dy = ty - oy;
+  const mag = Math.sqrt(dx * dx + dy * dy);
+  if (mag <= STICK_MAX || mag === 0) return { x: ox, y: oy };
+  const k = (mag - STICK_MAX) / mag;
+  return { x: ox + dx * k, y: oy + dy * k };
+}
+
 function readPad(i){
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
   let pads;
@@ -4093,34 +4134,69 @@ function bindInput(){
       else if (G.contT > 0) doContinue();
     }
     if (e.code === 'KeyM'){ snd.on = !snd.on; saveMeta(); syncUI(); }
+    if (e.code === 'KeyF'){ toggleFullscreen(); }
     if ((e.code === 'KeyJ' || e.code === 'Comma') && G.contT > 0) doContinue();
   });
   window.addEventListener('keyup', (e) => { KEYS[e.code] = 0; });
   window.addEventListener('blur', () => { for (const k in KEYS) KEYS[k] = 0; });
   window.addEventListener('resize', fit);
 
-  /* touch */
-  const tp = document.getElementById('tpad');
+  /* touch: a stick that lives wherever the thumb came down */
+  const zone = document.getElementById('tstick');
+  const stickUI = document.getElementById('tstickUI');
   const raw = INPUT[0].raw;
-  const padTouch = (e) => {
+  const stick = { id: null, ox: 0, oy: 0 };
+  const clearDirs = () => { raw.l = raw.r = raw.u = raw.d = 0; };
+  const placeStick = (x, y, kx, ky) => {
+    if (!stickUI || !stickUI.style) return;
+    const r = zone.getBoundingClientRect ? zone.getBoundingClientRect() : { left: 0, top: 0 };
+    stickUI.style.left = (x - r.left) + 'px';
+    stickUI.style.top = (y - r.top) + 'px';
+    stickUI.style.setProperty('--kx', (kx || 0) + 'px');
+    stickUI.style.setProperty('--ky', (ky || 0) + 'px');
+  };
+  const findTouch = (e, id) => {
+    const list = e.touches || [];
+    for (let i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i];
+    return null;
+  };
+  const stickDown = (e) => {
     e.preventDefault();
     audioResume();
-    raw.l = raw.r = raw.u = raw.d = 0;
-    const r = tp.getBoundingClientRect();
-    const list = e.touches || [];
-    for (let i = 0; i < list.length; i++){
-      const t = list[i];
-      const nx = (t.clientX - r.left) / r.width, ny = (t.clientY - r.top) / r.height;
-      if (nx < -0.25 || nx > 1.25 || ny < -0.25 || ny > 1.25) continue;
-      if (nx < 0.38) raw.l = 1; else if (nx > 0.62) raw.r = 1;
-      if (ny < 0.38) raw.u = 1; else if (ny > 0.62) raw.d = 1;
-    }
+    if (stick.id !== null) return;
+    const t = (e.changedTouches || e.touches || [])[0];
+    if (!t) return;
+    stick.id = t.identifier;
+    stick.ox = t.clientX; stick.oy = t.clientY;
+    if (stickUI && stickUI.classList) stickUI.classList.add('on');
+    placeStick(stick.ox, stick.oy, 0, 0);
+    clearDirs();
   };
-  const padEnd = (e) => { if (!e.touches || !e.touches.length){ raw.l = raw.r = raw.u = raw.d = 0; } else padTouch(e); };
-  tp.addEventListener('touchstart', padTouch, { passive: false });
-  tp.addEventListener('touchmove', padTouch, { passive: false });
-  tp.addEventListener('touchend', padEnd);
-  tp.addEventListener('touchcancel', padEnd);
+  const stickMove = (e) => {
+    if (stick.id === null) return;
+    e.preventDefault();
+    const t = findTouch(e, stick.id);
+    if (!t) return;
+    const c = stickRecentre(stick.ox, stick.oy, t.clientX, t.clientY);
+    stick.ox = c.x; stick.oy = c.y;
+    const dx = t.clientX - stick.ox, dy = t.clientY - stick.oy;
+    const v = stickVector(dx, dy);
+    raw.l = v.l; raw.r = v.r; raw.u = v.u; raw.d = v.d;
+    placeStick(stick.ox, stick.oy, dx, dy);
+  };
+  const stickUp = (e) => {
+    if (stick.id === null) return;
+    if (findTouch(e, stick.id)) return;               // some other finger let go
+    stick.id = null;
+    clearDirs();
+    if (stickUI && stickUI.classList) stickUI.classList.remove('on');
+  };
+  if (zone && zone.addEventListener){
+    zone.addEventListener('touchstart', stickDown, { passive: false });
+    zone.addEventListener('touchmove', stickMove, { passive: false });
+    zone.addEventListener('touchend', stickUp);
+    zone.addEventListener('touchcancel', stickUp);
+  }
 
   const btns = document.getElementById('tbtns');
   const setBtn = (k, v) => { raw[k] = v; };
@@ -4136,11 +4212,48 @@ function bindInput(){
     el.addEventListener('mouseleave', up);
   });
   document.getElementById('pausebtn').addEventListener('click', togglePause);
+  const fsb = document.getElementById('fsbtn');
+  if (fsb && fsb.addEventListener){
+    if (fullscreenSupported() && fsb.classList) fsb.classList.add('on');
+    fsb.addEventListener('click', (e) => { e.preventDefault(); toggleFullscreen(); });
+  }
+  if (document.addEventListener){
+    document.addEventListener('fullscreenchange', onFullscreen);
+    document.addEventListener('webkitfullscreenchange', onFullscreen);
+  }
 
   if (('ontouchstart' in window) || (navigator && navigator.maxTouchPoints > 0)){
     document.getElementById('touch').classList.add('on');
   }
   canvas.addEventListener('pointerdown', audioResume);
+}
+
+/* ------------------------------------------------------------ fullscreen
+   Wrapped because the vendor prefixes are still with us, and because the
+   headless test DOM has none of this. */
+function fullscreenSupported(){
+  const el = document.documentElement;
+  return !!(el && (el.requestFullscreen || el.webkitRequestFullscreen));
+}
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function toggleFullscreen(){
+  try {
+    if (!isFullscreen()){
+      const el = document.documentElement;
+      const go = el && (el.requestFullscreen || el.webkitRequestFullscreen);
+      if (go) go.call(el);
+    } else {
+      const out = document.exitFullscreen || document.webkitExitFullscreen;
+      if (out) out.call(document);
+    }
+  } catch (e){ /* denied, or not allowed from here */ }
+}
+function onFullscreen(){
+  const wrap = document.getElementById('wrap');
+  if (wrap && wrap.classList) wrap.classList.toggle('fs', isFullscreen());
+  fit();
 }
 
 /* ============================================================= UI glue */
