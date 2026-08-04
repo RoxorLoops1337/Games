@@ -281,6 +281,12 @@
     background:linear-gradient(180deg,rgba(60,44,20,.30),rgba(60,44,20,.46));
     border-top:1px solid rgba(255,236,190,.5); pointer-events:none; }
   /* Empty, and the window to fill it is still open. */
+  /* Held reads as ON — the same lit brass an armed order wears, because it is
+     the same kind of fact: something is being kept back for you to spend. The
+     ready ring is the second half of it: held with nothing banked yet is not
+     the same state as held with an ultimate waiting, and the tile says which. */
+  .ord.ult.on{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
+  .ord.ult.on.ready{ box-shadow:0 0 0 1px #ffe6a4 inset, 0 0 9px rgba(255,214,110,.55); }
   .ord.pickme{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
   .ord.pickme:hover{ background:linear-gradient(180deg,#fff0c4,#ffd370); }
   /* The clock on an empty slot. Its own chip rather than part of the name, so
@@ -2098,6 +2104,16 @@ function makeSide(i, ai){
     // the lane — primitive countdowns on this object rather than a G.zones
     // entry, because a resync drops the zone list wholesale.
     spells:[null, null, null], spellCd:[0, 0, 0], slots:SLOTS_AT_START,
+    /* Held ultimates. A hero fights on its own and always has — it picks its
+       own moment for everything it knows — so the one ability in the game that
+       decides a fight was spent by nobody in particular, on the first target
+       that walked into range. This is the player's hand on that one lever, and
+       nothing else: while it is set, no hero of this hold casts its ultimate,
+       and letting go IS the release, because castLoop fires it on the very
+       next beat. One flag on the hold rather than one per hero, so there is a
+       single thing to press, a single thing to hash and a single thing for the
+       four pack lists to carry. */
+    holdUlt:false,
     bombT:0, bombX:0, bombN:0,
     // ...and fireT/fireX are the stretch of burning boards another leaves,
     // on this object for exactly the same reason.
@@ -4727,19 +4743,29 @@ function skillArmed(h, sk){
 }
 const heroArmed = (h) => (h.skills || []).some(sk => skillArmed(h, sk));
 
+/* Spending one. Pulled out of castLoop because the release needs the very same
+   four lines, and a second copy of them is a second place for the mana, the
+   recovery or the cast lock to be forgotten. */
+function fireSkill(h, sk, tgt){
+  const d = SKILL[sk.id];
+  castSkill(h, sk, tgt);
+  h.mana -= d.mana;
+  sk.cdT = d.cd * (1 - h.cdr - bsum(h, 'bcdr'));
+  h.castLock = .35;
+}
+
 function castLoop(h, tgt, dt){
   for (const sk of h.skills){
     if (sk.cdT > 0) sk.cdT -= dt;
   }
   if (h.castLock > 0){ h.castLock -= dt; return; }
+  const held = (G.sides[h.side] || {}).holdUlt;
   for (const sk of h.skills){
     const s = SKILL[sk.id];
+    if (sk.ult && held) continue;         // banked, until the hold comes off
     if (!skillArmed(h, sk)) continue;
     if (!wantCast(h, s, tgt)) continue;
-    castSkill(h, sk, tgt);
-    h.mana -= s.mana;
-    sk.cdT = s.cd * (1 - h.cdr - bsum(h, 'bcdr'));
-    h.castLock = .35;
+    fireSkill(h, sk, tgt);
     return;                       // one cast per beat keeps it readable
   }
 }
@@ -15060,6 +15086,15 @@ const UI_ICON = {
   mute:   cico('<path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" fill="currentColor" stroke-width="1.8"/>' +
                '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
   pause:  cico('<path d="M9 5v14M15 5v14" stroke-width="3.4"/>'),
+  /* The one ability big enough to decide a fight, as a four-pointed flourish —
+     the same shape the ult pip on a hero card already wears, so the tile in the
+     bar and the pip under the hero are recognisably about the same thing. Drawn
+     in currentColor like every other control here, which is what lets the tile
+     go gold when the hold is on without a second icon. */
+  ult:    cico('<path d="M12 3.2c.9 4.4 2.2 5.7 6.6 6.6-4.4.9-5.7 2.2-6.6 6.6-.9-4.4-2.2-5.7-6.6-6.6 4.4-.9 5.7-2.2 6.6-6.6Z" ' +
+               'fill="currentColor" stroke-width="1.6"/>' +
+               '<path d="M6.6 17.4c.4 1.9 1 2.5 2.9 2.9-1.9.4-2.5 1-2.9 2.9-.4-1.9-1-2.5-2.9-2.9 1.9-.4 2.5-1 2.9-2.9Z" ' +
+               'fill="currentColor" stroke-width="1.2"/>'),
   play:   cico('<path d="M7 4.6 19.5 12 7 19.4Z" fill="currentColor" stroke-width="2"/>'),
   menu:   cico('<path d="M4 7h16M4 12h16M4 17h16" stroke-width="2.6"/>'),
   // an empty slot, waiting to be filled
@@ -16026,7 +16061,30 @@ function ordersHtml(){
       '<i class="ocd"></i><kbd class="okey">' + ORDER_KEY[i] + '</kbd>' + SPELL_ICON[d.id] +
       '<span class="on">' + d.n + '</span></button>';
   }
+  /* ...and one tile that is not an order at all. The orders are the hold's; this
+     is the hold's hand on its HEROES, who until now fought entirely by
+     themselves — a hero picked its own moment for the one ability big enough to
+     decide a fight, and the player had no say in it at all. It sits here rather
+     than on the hero card because the hero card is a button and cannot hold
+     another one, and because this bar is the only furniture that is never not
+     on screen, which is the whole argument for the orders being here too.
+
+     Absent, not dead, when no hero of yours has an ultimate: a bar that grows a
+     permanently grey tile the moment the match starts is a bar teaching you
+     about something you cannot use for ten minutes. */
+  if (ultHolders(s)) h += ultHtml(s);
   return h;
+}
+const ULT_KEY = 'X';
+function ultHtml(s){
+  const on = !!s.holdUlt;
+  return '<button class="ord ult' + (on ? ' on' : '') + '" data-act="holdult"' +
+    ' title="' + esc(on
+      ? 'Your ultimates are held — no hero will cast one until you let go. (' + ULT_KEY + ')'
+      : 'Hold your ultimates, and spend them when you choose rather than when the hero does. (' +
+        ULT_KEY + ')') + '">' +
+    '<i class="ocd"></i><kbd class="okey">' + ULT_KEY + '</kbd>' + UI_ICON.ult +
+    '<span class="on">' + (on ? 'Held' : 'Ultimates') + '</span></button>';
 }
 
 /* The tiles are rebuilt only when WHAT they are changes; the recovery shutter
@@ -16041,9 +16099,33 @@ function syncOrders(){
   if (!el || typeof el.querySelector !== 'function') return;
   const live = G.sides.length > 0 && G.state === 'play' && !G.demo;
   const s = live ? me() : null;
-  const sig = live ? s.spells.join('/') + '|' + s.slots + '|' + (G.wave < 1 ? 'open' : 'set') : 'off';
+  // The ult tile appears when the first hero learns one and changes its whole
+  // face when the hold goes on, so both belong in what decides a rebuild.
+  const sig = live ? s.spells.join('/') + '|' + s.slots + '|' + (G.wave < 1 ? 'open' : 'set') +
+    '|' + (ultHolders(s) ? 1 : 0) + (s.holdUlt ? 'h' : '-') : 'off';
   if (sig !== ordSig){ ordSig = sig; el.innerHTML = live ? ordersHtml() : ''; }
   if (!live) return;
+  /* The readiest ultimate this hold has, as the same draining shutter the
+     orders wear — so "held" and "held AND ready" are different things to look
+     at. A hold with nothing banked yet is a hold whose letting go does nothing,
+     and that should be visible without opening a hero sheet. */
+  const ub = el.querySelector('.ord.ult');
+  if (ub){
+    let rem = 1;
+    for (const h of s.heroes){
+      if (h.dead) continue;
+      for (const sk of h.skills){
+        if (!sk.ult) continue;
+        const d = SKILL[sk.id];
+        if (!d) continue;
+        const full = Math.max(.1, d.cd * (1 - h.cdr - bsum(h, 'bcdr')));
+        rem = Math.min(rem, clamp(sk.cdT / full, 0, 1));
+      }
+    }
+    const uf = ub.querySelector('.ocd');
+    if (uf && uf.style) uf.style.height = Math.round(rem * 100) + '%';
+    ub.classList.toggle('ready', rem <= 0);
+  }
   for (let i = 0; i < s.slots; i++){
     const b = el.querySelector('.ord[data-slot="' + i + '"]');
     if (!b) continue;
@@ -16137,6 +16219,18 @@ function castPress(slot){
   if (d.target === 'self'){ say(sendCmd('cast', { slot:slot })); return null; }
   spellUI.aim = { slot:slot, id:d.id };
   syncAim();
+  return null;
+}
+
+/* Pressing it. The refusal is a sentence and it is asked HERE, before the
+   command goes out, for the same reason Countermand's is: sendCmd returns ''
+   in a two-player match, so anything decided inside the command reaches that
+   player as a press that does nothing at all. */
+function holdPress(){
+  if (!G.sides.length || G.state !== 'play' || G.demo) return 'no match';
+  const s = me();
+  if (!ultHolders(s)){ say('No hero of yours has an ultimate yet.'); return 'no ultimate'; }
+  say(sendCmd('hold', { on:!s.holdUlt }));
   return null;
 }
 
@@ -17277,7 +17371,7 @@ const packSide = (s) => ({
           cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
   troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
-  spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots,
+  spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots, holdUlt:!!s.holdUlt,
   bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
@@ -17345,6 +17439,7 @@ function loadMatch(pack){
     if (ps.spells) s.spells = ps.spells.slice();
     s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
+    s.holdUlt = !!ps.holdUlt;
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     // Without this a resumed match reported the quiet wave for up to a full
@@ -17546,6 +17641,7 @@ const KEYS = [
   { k:'B',     a:'camFoe',  d:'look at their base' },
   { k:'F',     a:'follow',  d:'follow the fighting' },
   { k:ORDER_KEY.join(' '), a:'order', d:'cast your commander orders, in the order the bar shows them' },
+  { k:ULT_KEY, a:'holdult', d:'hold your heroes’ ultimates, and let go when you want them' },
   { k:'+ −',   a:'zoom',    d:'zoom in and out' },
   { k:'?',     a:'help',    d:'this sheet' },
   { k:'Esc',   a:'close',   d:'close whatever is open' },
@@ -17570,6 +17666,7 @@ function keyAction(key){
   if (k === 'f') return 'follow';
   for (let i = 0; i < ORDER_KEY.length; i++)
     if (k === ORDER_KEY[i].toLowerCase()) return 'order' + (i + 1);
+  if (k === 'x') return 'holdult';
   if (k === '+' || k === '=') return 'zoomIn';
   if (k === '-' || k === '_') return 'zoomOut';
   if (k === '?' || k === '/') return 'help';
@@ -17598,6 +17695,7 @@ function doAction(a){
   // on itself and the help sheet listed it, and the key did nothing — which is
   // the exact failure the one-list rule at ORDER_KEY exists to stop.
   if (/^order\d+$/.test(a)){ castPress(+a.slice(5) - 1); return; }
+  if (a === 'holdult'){ holdPress(); return; }
   if (a === 'close'){
     // An armed order is the innermost thing Escape can be closing, so it goes
     // first: otherwise Escape would unpause a match with a live reticle on it.
@@ -17661,6 +17759,7 @@ function wire(){
     else if (a === 'upgrade') say(sendCmd('upgrade', { tile:sel.tile }));
     else if (a === 'up') say(sendCmd('up', { up:b.dataset.up }));
     else if (a === 'nodeup') say(sendCmd('nodeup', { node:b.dataset.node }));
+    else if (a === 'holdult'){ holdPress(); return; }
     else if (a === 'newhero'){ showHeroCreate(); return; }
     // Cosmetic and local: which of the two machines wants the beginner's
     // paragraph up is nobody else's business, so this one does not go near
@@ -17967,7 +18066,58 @@ const CMD = {
   // on the lane, quantised to 1/16 before it is sent; `hero` for a body, looked
   // up by id exactly as `pick` does; `key` for one of your own structures.
   cast:    (s, c) => castSpell(s, c),
+  // Holding your own ultimates. A command like any other, so a two-player match
+  // agrees about it on the same tick both machines agree about everything else
+  // — a hold that took effect locally would be a hold the other machine's
+  // simulation never heard about, which is a desync in the one ability big
+  // enough to decide the match.
+  hold:    (s, c) => setHoldUlt(s, !!c.on),
 };
+
+/* Who this can possibly apply to. Asked by the tile that greys itself, by the
+   refusal, and by the command — one answer, three readers, the same shape as
+   counterCatch. A hold with no ultimate under it is a switch wired to nothing. */
+function ultHolders(s){
+  let n = 0;
+  for (const h of s.heroes) if (h.skills.some(sk => sk.ult)) n++;
+  return n;
+}
+function setHoldUlt(s, on){
+  if (!ultHolders(s)) return 'No hero of yours has an ultimate yet.';
+  if (s.holdUlt === on) return 'already ' + (on ? 'held' : 'loose');
+  s.holdUlt = on;
+  /* Letting go FIRES them, here, rather than handing the moment back to
+     castLoop. It has to: castLoop asks wantCast first, and wantCast refuses an
+     ultimate unless the target is a hero, or three bodies are within six, or a
+     structure is under 70% — so a player who let go into a thin wave got
+     nothing at all, and the line telling them the next beat was theirs was a
+     lie. Judging whether the moment is worth it is exactly the judgement the
+     player is taking over; the RANGE check is not, so that one stays.
+
+     Range is the same test wantCast ends on. No rnd, no arnd: this runs inside
+     a command, on the agreed tick, and both machines walk the same heroes in
+     the same order. */
+  let n = 0;
+  if (!on) for (const h of s.heroes){
+    if (h.dead || !h.inLane) continue;
+    const sk = h.skills.find(x => x.ult);
+    if (!sk || !skillArmed(h, sk)) continue;
+    const d = SKILL[sk.id];
+    const tgt = heroTarget(h);
+    if (!tgt) continue;
+    if (hyp(tgt.x - h.x, tgt.y - h.y) > (d.rng || h.rng + 2) + (tgt.r || 0)) continue;
+    fireSkill(h, sk, tgt);
+    n++;
+  }
+  // Said on both machines, each about its own hold. The second line is the one
+  // that matters, and it says what actually happened rather than what was hoped.
+  if (forMe(s.i))
+    fxToast(on ? 'Ultimates held — they wait for you now.'
+      : n > 0 ? (n === 1 ? 'Let go — it goes off now.' : 'Let go — ' + n + ' of them go off now.')
+              : 'Let go — nothing of yours was ready and in reach.',
+      on ? 'bad' : n > 0 ? 'good' : 'bad', TOAST_W.hero);
+  return null;
+}
 
 // The single door every player action goes through. In one-player it runs the
 // action immediately, exactly as before — so single-player behaviour, and every
@@ -18120,6 +18270,7 @@ function netHash(){
     // The commander spells: which two, how long until each is back, and where
     // a bombardment has got to.
     mix(s.slots);
+    mix(s.holdUlt ? 1 : 0);           // decides whether the biggest ability fires at all
     for (let i = 0; i < SPELL_SLOTS; i++){ mixs(s.spells[i]); mix(q30(s.spellCd[i])); }
     mix(s.bombN); mix(q30(s.bombT)); mix(Math.round(s.bombX * 16));
     mix(q30(s.fireT)); mix(Math.round(s.fireX * 16));
@@ -18254,7 +18405,7 @@ function netSnap(){
       // This list is hand-written, which means it silently drops any field
       // nobody remembered to add — and a field missing from a resync is a
       // resync that desyncs again immediately.
-      spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots,
+      spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots, holdUlt:!!s.holdUlt,
       bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
@@ -18304,6 +18455,7 @@ function netLoad(p){
     if (ps.spells) s.spells = ps.spells.slice();
     s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
+    s.holdUlt = !!ps.holdUlt;
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
@@ -18801,7 +18953,7 @@ window.IB = {
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
-  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
