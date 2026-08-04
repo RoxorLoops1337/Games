@@ -2424,18 +2424,27 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // drifted a long way from the 71% / 25% recorded here, and in opposite
     // directions:
     //
-    //                      tier 3        a Cannon drilled
-    //   as recorded         71%              25%
-    //   measured, 36 seeds  44%              99%
-    //   measured, 16 below  50%              97%
+    //                            tier 3     a Cannon drilled
+    //   as recorded               71%            25%
+    //   36 seeds, eight orders    44%            99%
+    //   36 seeds, nine orders     50%           100%
+    //   36 seeds, drafted         58%           100%
+    //     rather than shuffled
+    //
+    // Three AI changes in a row, and the tier-3 rate moved 44 -> 50 -> 58
+    // while the Cannon rate never left 99-100. That is the whole argument for
+    // which of these two bars is allowed to be tight: the first is sensitive
+    // to every decision the Host makes and the second is not, so pinning the
+    // first closely just means re-fitting it every time somebody touches the
+    // AI — which is how it ended up 0.7 sd under its own mean.
     //
     // So the tier-3 bar of 14 had drifted onto the population mean — 14
     // against an expectation of 16 is 0.7 sd, which is precisely the failure
     // this comment already warned about two paragraphs up, and it duly went
-    // red on a change that does not hurt the economy at all. The 36-seed
-    // control says the ninth order moves the rate the RIGHT way: 44% without
-    // it, 50% with it. This particular sixteen swing the other way (16 → 13),
-    // which is what a bar sitting on the mean does.
+    // red on a change that does not hurt the economy at all. Every measured
+    // control says these changes move the rate the RIGHT way; this particular
+    // sixteen swung the other way on one of them (16 → 13), which is what a
+    // bar sitting on the mean does.
     //
     // So the two bars swap roles. tier 3 keeps a margin it can survive — 8 of
     // 32 against an expectation of ~15, about 2.5 sd, still nowhere near an
@@ -13215,6 +13224,60 @@ t.ok(true, 'drawing an empty bridge is harmless');
       if (i % 15 === 0) for (const sd of G.sides) for (let k = 0; k < 2; k++) if (sd.spellCd[k] > 0) cast++;
     }
     t.ok(cast > 0, 'and it does cast them in a real match (' + cast + ' samples with a spell recovering)');
+
+    /* ---- and it is a DRAFT rather than a shuffle.
+
+       It used to splice two ids out of the pool uniformly at random, so it
+       could walk into a match carrying Warp Banner AND Unbind — both of which
+       do nothing until it has built a hero. Two from nine puts that at one
+       match in thirty-six.
+
+       Worth being precise about the size of it: measured over 24 matches, the
+       Host used 92 of 96 slots with the shuffle and 92 of 96 with the draft,
+       and no hold in 48 ever finished a match having cast nothing. It recovers
+       from the bad pair once it builds a hero. What the rule below buys is the
+       first several minutes, not the match — so this asserts the rule holds,
+       and claims nothing about a Host sitting on its hands. */
+    t.ok(IB.SPELLS.every(d => d.ai && d.ai.w > 0 && d.ai.go > 0 && d.ai.go <= 1),
+      'every order says how often it is worth drafting and how readily it fires');
+    t.ok(Object.keys(IB.SPELL_OWN_HERO).every(id => IB.SPELL[id] && IB.SPELL[id].target === 'own'),
+      'the hero-only orders are exactly the ones aimed at a hero of your own');
+
+    let bothNeedy = 0, drafts = 0;
+    const takenBy = new Map();
+    for (let sd = 8400; sd < 8480; sd++){
+      IB.newMatch({ diff:'veteran', seed:sd });
+      const host = G.sides[1];
+      IB.aiDraft(host);
+      drafts++;
+      const pair = host.spells;
+      t.ok(!!(IB.SPELL[pair[0]] && IB.SPELL[pair[1]]), 'the draft fills both slots — seed ' + sd);
+      if (pair[0] === pair[1]) bothNeedy = -999;      // would be a rule break of its own
+      if (IB.SPELL_OWN_HERO[pair[0]] && IB.SPELL_OWN_HERO[pair[1]]) bothNeedy++;
+      for (const id of pair) takenBy.set(id, (takenBy.get(id) || 0) + 1);
+    }
+    t.ok(bothNeedy === 0,
+      'and never hands the Host two orders it cannot use without a hero (' + bothNeedy + ' of ' + drafts + ')');
+    // The weights are a preference, not a filter: everything still gets drafted
+    // sometimes, or the ones at weight 1 may as well not be in the set.
+    t.ok(takenBy.size === IB.SPELLS.length,
+      'every order is still drafted sometimes (' + takenBy.size + ' of ' + IB.SPELLS.length + ')');
+    // ...and the preference is real. The threes should outdraw the ones by a
+    // margin no shuffle would produce over eighty drafts.
+    const heavy = IB.SPELLS.filter(d => d.ai.w >= 3).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    const light = IB.SPELLS.filter(d => d.ai.w === 1).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    t.ok(heavy > light, 'and the orders worth drafting are drafted more (' + heavy + ' vs ' + light + ')');
+
+    // Deterministic, like everything else the Host decides: the same seed
+    // drafts the same pair, and it comes off the side's own stream.
+    const twice = [];
+    for (const pass of [0, 1]){
+      IB.newMatch({ diff:'veteran', seed:8499 });
+      IB.aiDraft(G.sides[1]);
+      twice.push(G.sides[1].spells.join(','));
+      void pass;
+    }
+    t.ok(twice[0] === twice[1], 'the same seed drafts the same pair (' + twice[0] + ')');
   }
 
   /* ------------------------------------- two machines, one match, with spells

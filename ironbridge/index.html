@@ -2592,23 +2592,23 @@ const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
-  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 },
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
-  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},
+  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 },
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
-  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 },
+  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 },
     d:'One more wave of the shape already marching, at 85% health. The wave clock does not move.' },
-  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},
+  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 },
     d:'Three seconds of raising it, then your hero is back at its own front structure. Broken by a blow.' },
-  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},
+  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 },
     d:'Their hero hits 40% softer, swings 30% slower and walks 40% slower for four and a half seconds.' },
-  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},
+  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 },
     d:'Everything on your hero comes off, and for five seconds what lands next barely sticks.' },
-  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},
+  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 },
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
-  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 },
+  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 },
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
-  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 },
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 },
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
@@ -4745,24 +4745,67 @@ function aiStep(s, dt){
    rnd(). A hold's decisions are not allowed to move the stream the battlefield
    runs on, or which hold happened to think first that tick would change where
    the next wave stands. */
+/* The two orders that are worth nothing without a hero OF YOUR OWN standing on
+   the bridge. Everything else in the set works off bodies, structures or a
+   stretch of lane, all of which every hold always has. */
+const SPELL_OWN_HERO = { warp:1, unbind:1 };
+
+/* What the Host takes, and it is a draft rather than a shuffle.
+
+   It used to splice two ids out of the pool uniformly at random, so it could
+   walk into a match carrying Warp Banner AND Unbind — both of which do nothing
+   until it has built a hero. Two from nine puts that at one match in
+   thirty-six.
+
+   MEASURED, because the obvious story about it is wrong: over 24 matches the
+   Host used 92 of 96 slots either way, and not one hold in 48 finished a match
+   having never cast at all. It recovers from the bad pair, because it does
+   eventually build a hero and then the pair is fine. So this is not a fix for
+   a Host that sits on its hands — it is a fix for a Host that spends the first
+   several minutes holding two orders it cannot use yet, and it is worth having
+   on those grounds and not on louder ones.
+
+   Two rules, and no more: an order's weight says how often it is worth
+   drafting, and at most one of the pair may be an order that needs a hero of
+   its own. Exactly one arnd() per slot either way, so the stream this consumes
+   still depends only on things both machines already agree about. */
+function aiDraft(s){
+  const pool = SPELLS.slice();
+  let needy = 0;
+  for (let i = 0; i < SPELL_SLOTS && pool.length; i++){
+    // The second slot stops considering hero-only orders once the first took
+    // one. If that leaves nothing at all — it cannot, with nine — the rule
+    // stands aside rather than leaving a slot empty.
+    const room = pool.filter(d => !(SPELL_OWN_HERO[d.id] && needy));
+    const list = room.length ? room : pool;
+    let tot = 0;
+    for (const d of list) tot += d.ai.w;
+    let r = arnd(s) * tot, pick = list[list.length - 1];
+    for (const d of list){ r -= d.ai.w; if (r <= 0){ pick = d; break; } }
+    chooseSpell(s, i, pick.id);
+    if (SPELL_OWN_HERO[pick.id]) needy++;
+    pool.splice(pool.indexOf(pick), 1);
+  }
+}
+
 function aiSpells(s){
   // Chosen once, before the first wave marches — the same window a player gets
   // and the same command they would send.
-  if (!s.spells[0] && !s.spells[1] && G.wave < 1){
-    const pool = SPELLS.map(p => p.id);
-    for (let i = 0; i < SPELL_SLOTS && pool.length; i++)
-      chooseSpell(s, i, pool.splice(Math.floor(arnd(s) * pool.length), 1)[0]);
-    return;
-  }
+  if (!s.spells[0] && !s.spells[1] && G.wave < 1){ aiDraft(s); return; }
   const fs = enemyOf(s.i);
   for (let i = 0; i < SPELL_SLOTS; i++){
     const d = spellOf(s, i);
     if (!d || s.spellCd[i] > 0 || !canPay(s, d.cost)) continue;
-    // It does not fire the instant it can. The draw is taken before the target
-    // is looked for, so how many numbers this consumes depends only on what the
-    // hold owns, what it has spent and what it can pay for — all of which both
-    // machines already agree about.
-    if (arnd(s) < .35) continue;
+    /* It does not fire the instant it can, and how readily is the ORDER's
+       business rather than one number for all nine. A Second Muster costs a
+       wave's worth of three resources and is worth waiting for a better
+       moment; a Withdraw costs nothing and the only question is whether the
+       line is losing, which its target test has already answered.
+
+       The draw is taken before the target is looked for, so how many numbers
+       this consumes depends only on what the hold owns, what it has spent and
+       what it can pay for — all of which both machines already agree about. */
+    if (arnd(s) > d.ai.go) continue;
     const at = aiSpellTarget(s, d, fs);
     if (!at) continue;
     castSpell(s, Object.assign({ slot:i }, at));
@@ -17948,7 +17991,8 @@ window.IB = {
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
-  ordersHtml, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, spellAimOff, spellAimTarget, spellAimSend, syncAim,
+  ordersHtml, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
+  aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
