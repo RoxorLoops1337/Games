@@ -2306,5 +2306,45 @@ test('the whole first stage can be beaten and it ends in a clear', () => {
   assert(api.G.score[0] > 1000, 'and it scored on the way');
 });
 
+/* The two names share a HUD row with the score, and the score sat at a bare
+   `bx + 30` — which fitted JOSKE exactly (5 glyphs at 6px, less one, is 29)
+   and had no room at all for a sixth letter. It got one: the partner is
+   Smoske, not Smoke, and at the old offset his name printed straight through
+   the first digit of his own score.
+
+   So the gap is derived from the LONGER of the two names rather than typed,
+   and this holds the derivation against the font's own metric and against the
+   width the health gauge below it already claims. */
+test('the HUD score clears the longer of the two names', () => {
+  const src = source();
+  const names = [...src.matchAll(/const nm = i === 0 \? '(\w+)' : '(\w+)'/g)][0];
+  if (!names) throw new Error('could not find the two HUD names');
+  const [, p1, p2] = names;
+  if (p2 !== 'SMOSKE') throw new Error(`the second player is ${p2}, expected SMOSKE`);
+  const w = (t) => t.length * 6 - 1;                 // textW at scale 1
+  const m = src.match(/const nameGap = Math\.max\(textW\('(\w+)', 1\), textW\('(\w+)', 1\)\) \+ (\d+);/);
+  if (!m) throw new Error('the score offset is not derived from the names');
+  if (m[1] !== p1 || m[2] !== p2) throw new Error(`the gap measures ${m[1]}/${m[2]} but the HUD prints ${p1}/${p2}`);
+  const gap = Math.max(w(p1), w(p2)) + Number(m[3]);
+  if (gap <= Math.max(w(p1), w(p2))) throw new Error(`gap ${gap} does not clear the longer name`);
+  // and the score still lands inside the strip the gauge below it occupies
+  const scoreEnd = gap + w('000000');
+  const gauge = Number((src.match(/gauge\(bx, 13, (\d+),/) || [])[1] || 0);
+  if (!gauge) throw new Error('could not find the health gauge width');
+  if (scoreEnd > gauge) throw new Error(`the score runs to ${scoreEnd}, past the ${gauge}px the row has`);
+});
+
+test('the partner is spelled Smoske everywhere the player can read it', () => {
+  const html = fs.readFileSync(HTML, 'utf8');
+  const bad = [];
+  const re = /\bSmoke\b|\bSMOKE\b/g;
+  let m;
+  while ((m = re.exec(html))) {
+    const line = html.slice(0, m.index).split('\n').length;
+    bad.push(`${m[0]} at line ${line}`);
+  }
+  if (bad.length) throw new Error(bad.join(', '));
+});
+
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

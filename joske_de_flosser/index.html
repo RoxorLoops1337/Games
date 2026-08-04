@@ -122,7 +122,7 @@
       <h1>JOSKE<br>DE FLOSSER</h1>
       <p class="sub">Out-floss the whole world</p>
       <div class="story">
-        Nobody flosses like <b>Joske</b>. Nobody except <b>Smoke</b>, his dance partner,
+        Nobody flosses like <b>Joske</b>. Nobody except <b>Smoske</b>, his dance partner,
         and he is only half a step behind. Then the <b>wannabees</b> came flossing down the
         street, closed a circle round <b>Mokske</b>, and flossed off with her.
         Out-floss the street. Then keep going.
@@ -762,7 +762,7 @@ const A = {                                   // animation frame tables
 /* --------------------------------------------------------- characters */
 const SKINS = {
   joske:  { skin: '#e8b07a', skin2: '#b8794a', shirt: '#3f6ecf', shirt2: '#2a4a94', pants: '#22285a', hair: '#221a20', trim: '#f0e2c4', name: 'JOSKE', bulk: 1.05, hair2: 'flat', ink: '#101a34' },
-  smoke:  { skin: '#f0c08c', skin2: '#c08a52', shirt: '#c8402f', shirt2: '#8c2318', pants: '#3a2038', hair: '#e0c060', trim: '#f6ead0', name: 'SMOKE', bulk: 1.05, hair2: 'flat', ink: '#2a0e14' },
+  smoke:  { skin: '#f0c08c', skin2: '#c08a52', shirt: '#c8402f', shirt2: '#8c2318', pants: '#3a2038', hair: '#e0c060', trim: '#f6ead0', name: 'SMOSKE', bulk: 1.05, hair2: 'flat', ink: '#2a0e14' },
   mokske: { skin: '#e6bb8e', skin2: '#b4835a', shirt: '#2f8f6a', shirt2: '#1d6248', pants: '#2a2438', hair: '#33221c', trim: '#ffd8a0', name: 'MOKSKE', bulk: 0.85, hair2: 'ponytail' },
   punk:   { skin: '#d0a070', skin2: '#a06f45', shirt: '#7a4bb0', shirt2: '#4e2c78', pants: '#2b2b3a', hair: '#4ec06a', trim: '#d6d0e0', name: 'POSER', hair2: 'mohawk' },
   runner: { skin: '#c8956a', skin2: '#986440', shirt: '#e8b024', shirt2: '#a87610', pants: '#3b3020', hair: '#8a2b2b', trim: '#f0e0b0', name: 'TWITCHER', hair2: 'band' },
@@ -3764,7 +3764,7 @@ const CUT_ACTORS = {
 
 const SCENES = {
   intro: { bg: 'street', cam: 60, music: 0, beats: [
-    { d: 3.0, cap: ['NOBODY FLOSSES LIKE JOSKE.', 'NOBODY EXCEPT SMOKE, AND HE IS HALF A STEP BACK.'],
+    { d: 3.0, cap: ['NOBODY FLOSSES LIKE JOSKE.', 'NOBODY EXCEPT SMOSKE, AND HE IS HALF A STEP BACK.'],
       act: { smoke: { x: 130, y: 190, anim: 'walk', face: 1 },
              joske: { x: 168, y: 178, anim: 'walk', face: -1 },
              mokske: { x: 200, y: 186, anim: 'walk', face: -1 } } },
@@ -4105,8 +4105,19 @@ function drawHUD(){
     const hp = p ? clamp(p.hp / p.hpMax, 0, 1) : 0;
     drawPortrait(i === 0 ? 'joske' : 'smoke', x, 4, 24, 26, p && p.hitFlash > 0);
     const bx = x + 29;
-    text(i === 0 ? 'JOSKE' : 'SMOKE', bx, 3, accent, 1, '#100c18');
-    text(String(G.score[i]).padStart(6, '0'), bx + 30, 3, '#ffd23d', 1, '#100c18');
+    // The score clears the LONGER of the two names, so the two HUDs line up
+    // with each other and neither can run into it. This was a bare 30, which
+    // fitted JOSKE exactly (5 glyphs, 29px) and broke the moment his partner
+    // got his missing S back — SMOSKE is 35px and would have printed straight
+    // through the first digit.
+    const nm = i === 0 ? 'JOSKE' : 'SMOSKE';
+    // +6 rather than +1: at +2 the longer name and the first digit were not
+    // overlapping but read as one run — SMOSKE000000 — and a score you have
+    // to parse out of a name is not a score. 41 + 35 for six digits is 76,
+    // inside the 96 the health gauge below it already occupies.
+    const nameGap = Math.max(textW('JOSKE', 1), textW('SMOSKE', 1)) + 6;
+    text(nm, bx, 3, accent, 1, '#100c18');
+    text(String(G.score[i]).padStart(6, '0'), bx + nameGap, 3, '#ffd23d', 1, '#100c18');
     // health, with a notch every fifth
     const col = hp > 0.5 ? '#4ad06a' : hp > 0.22 ? '#ffcf3d' : '#e84a3a';
     gauge(bx, 13, 96, 8, hp, col);
