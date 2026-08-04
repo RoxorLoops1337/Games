@@ -1110,6 +1110,27 @@ function autoRun(seed){
   eq(G4.R.deck.length, 8, 'and the run starts normally anyway');
 }
 
+/* ===================== the title reel keeps running ======================= */
+// `at()` is a no-op headlessly, so the stub cannot see this class of bug at all:
+// boot() armed the reel's next generation and then called show('title') one line
+// later, whose clearTimers() bumped TGEN and killed the chain. The front door
+// showed one frozen trio for as long as the reel has existed. The order is the
+// thing worth pinning, and only the source can carry that assertion.
+{
+  const src = readFileSync(GAME, 'utf8');
+  const from = src.slice(src.indexOf('function boot('));
+  // comments only, stripped: the explanation of this bug quotes the very call
+  // it is about, and a first version of this check matched the comment and so
+  // passed in both directions.
+  const body = from.slice(0, from.indexOf('\n}') + 2)
+    .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const iShow = body.indexOf("show('title')");
+  const iRender = body.indexOf('renderTitle()');
+  ok(iShow >= 0 && iRender >= 0, 'boot shows the title and renders it');
+  ok(iShow < iRender,
+    "boot must show('title') BEFORE renderTitle, or clearTimers kills the reel");
+}
+
 /* =========================== the standing order =========================== */
 {
   const G = loadGame({});
