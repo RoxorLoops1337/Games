@@ -1875,7 +1875,16 @@ t.ok(true, 'drawing an empty bridge is harmless');
 
      Per-seed standard deviation is ~0.45, so the standard error on 24 seeds is
      0.092. The band is 0.35: about 1.4 standard errors above the worst honest
-     reading and 1.6 below the rigged one. The seeds are drawn from BOTH
+     reading and 1.6 below the rigged one.
+
+     What that does NOT mean, since the band has been cited loosely once
+     already: the rigged reading above is the COMBINED rig — 1.6x tower damage
+     AND 1.5x structure health. A pure 1.6x turret-damage edge on one hold,
+     with health left alone, measures -0.148 and passes here, with the kill
+     split at 0.026 and the battle line at -4.81 passing too. This guard
+     catches a hold that is winning the exchange outright; it does not catch a
+     single stat handed one side. Nothing here should be described as proving
+     more than that. The seeds are drawn from BOTH
      families for the same reason the pooling was dropped — one family can lean
      0.2 on nothing, and the two of them lean opposite ways. */
   const seeds = [];
@@ -16609,6 +16618,175 @@ t.ok(true, 'a final draw on a live match is clean');
     IB.netLoad(snap);
     t.ok(IB.netHash() === at, 'and it survives a resync exactly');
     t.ok(foe.spellCd[0] === 40 + IB.COUNTER.add, 'with the set-back intact (' + foe.spellCd[0] + ')');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* -------------------------------------- what the fifth review pass measured
+   Four defects, three of them in the two rounds immediately before it, and the
+   worst of them a number the game printed at the player that was not true. */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  // No structures, no workers: nothing on the board can move gold except the
+  // thing under test.
+  const bare = (seed, victimSide) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    for (const s of G.sides){
+      for (const st of s.structs){ st.dead = true; st.hp = 0; }
+      for (const k in s.workers) s.workers[k] = 0;
+    }
+    G.units.length = 0;
+    for (let i = 0; i < 6; i++) IB.spawnUnit(victimSide === undefined ? 1 : victimSide, 'grunt', { x:40, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    return G.sides[0];
+  };
+
+  /* ------------------------------------ the salvo readout counts the salvo
+     It was added up inside killThing for every kill with no body behind it,
+     which is Pitch Fire and Pyre Brand as well as Bombard — and the only reset
+     was when a salvo ENDED. So a bombardment that finished nothing still
+     printed whatever the fire had been earning while it burned, and because
+     the tally was module scope and newMatch never cleared it, the first salvo
+     of a match printed the last match's kills. */
+  {
+    const s = bare(9600);
+    for (const u of G.units) u.hp = 1;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    step(2 / 30);
+    t.ok(G.units.filter(u => u.side === 1 && !u.dead).length === 0, 'the fire finishes the line');
+    t.ok(s.res.gold > 0, 'and pays for it, as it should (' + s.res.gold + ')');
+    t.ok(IB.orderGold[0] === 0,
+      'but none of it lands in the salvo readout, which is not what earned it (' + IB.orderGold[0] + ')');
+  }
+  {
+    // A salvo that catches a body it cannot kill has earned nothing, and says
+    // nothing rather than the fire's takings.
+    const s = bare(9601);
+    const tank = G.units.find(u => u.side === 1);
+    tank.hp = tank.mhp = 999999;
+    for (const u of G.units) if (u !== tank) u.dead = true;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    s.spells[0] = 'bombard'; s.spellCd[0] = 0; rich(s);
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(s, { slot:0, x:40 }) === null, 'the bombardment goes out');
+    for (let i = 0; i < 300 && s.bombN > 0; i++) step(1 / 30);
+    const said = G.toasts.map(x => x.msg).find(m => /^Bombard/.test(m)) || '';
+    t.ok(/^Bombard — \d+ caught$/.test(said),
+      'a salvo that finished nothing reports no takings (' + said + ')');
+  }
+  {
+    // ...and one that DID earn still reports exactly its own bodies.
+    const s = bare(9602);
+    for (const u of G.units) u.hp = 1;
+    const worth = G.units.filter(u => u.side === 1).reduce((a, u) => a + IB.minionWorth(u), 0);
+    s.spells[0] = 'bombard'; s.spellCd[0] = 0; rich(s);
+    G.toasts.length = 0;
+    IB.castSpell(s, { slot:0, x:40 });
+    for (let i = 0; i < 300 && s.bombN > 0; i++) step(1 / 30);
+    const said = G.toasts.map(x => x.msg).find(m => /^Bombard/.test(m)) || '';
+    t.ok(said.indexOf(', ' + Math.round(worth) + ' gold') > 0,
+      'and a salvo that earned reports its own bodies and no others (' + said + ' for ' + worth + ')');
+  }
+  {
+    // A salvo does not survive the match it was fired in.
+    const s = bare(9603);
+    for (const u of G.units) u.hp = 1;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    IB.orderGold[0] = 500; IB.bombSeen[0].add(1);
+    IB.newMatch({ diff:'veteran', seed:9604 });
+    t.ok(IB.orderGold[0] === 0 && IB.orderGold[1] === 0,
+      'a new match starts with no takings owed to a salvo in the last one');
+    t.ok(IB.bombSeen[0].size === 0, 'and nobody still counted as caught by it');
+  }
+
+  /* ---------------------------------- Countermand refuses in words, and early
+     It returned 'nothing of theirs is recovering to hold back' out of the cast
+     table, which say() toasted verbatim: no capital, no order name, no full
+     stop, where every other refusal the player can reach is a sentence. And
+     because a self-target order goes straight to sendCmd — which returns ''
+     while NET.on — the refusal in a two-player match produced no toast, no
+     cooldown and no sound. The one order whose refusal condition is invisible
+     was the one that pressed like a dead button. */
+  {
+    const s = bare(9605);
+    G.wave = 3;
+    s.spells[0] = 'counter'; s.spellCd = [0, 0, 0]; rich(s);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0;
+
+    t.ok(IB.counterCatch(s) === 0, 'a commander holding everything ready offers nothing to hold back');
+    t.ok(IB.spellTargets(IB.SPELL.counter) === 0,
+      'which is what the bar greys the tile by');
+    G.toasts.length = 0;
+    const iron0 = s.res.iron;
+    t.ok(IB.castPress(0) === 'no target', 'so the press refuses');
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/^[A-Z]/.test(said) && /\.$/.test(said.trim()) && /Countermand/.test(said),
+      'in a sentence with a capital, the order’s name and a full stop (' + said + ')');
+    t.ok(s.spellCd[0] === 0 && s.res.iron === iron0, 'and nothing is spent');
+
+    /* The half that mattered most: the same refusal in a two-player match.
+       sendCmd returns '' there, so anything decided inside castSpell reaches
+       that player as silence. */
+    const wasOn = IB.NET.on;
+    IB.NET.on = true;
+    G.toasts.length = 0;
+    t.ok(IB.castPress(0) === 'no target', 'the same press refuses in a two-player match');
+    t.ok(/Countermand/.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and says so there too, where it used to say nothing at all');
+    IB.NET.on = wasOn;
+
+    // ...and with something of theirs running it goes out as before.
+    foe.spellCd[1] = 30;
+    t.ok(IB.counterCatch(s) === 1, 'one of theirs recovering is one thing to hold back');
+    t.ok(IB.spellTargets(IB.SPELL.counter) === 1, 'and the tile comes back to life');
+    G.toasts.length = 0;
+    t.ok(IB.castPress(0) === null, 'and the press goes through');
+    t.ok(foe.spellCd[1] === 30 + IB.COUNTER.add && foe.spellCd[0] === 0,
+      'setting back only the one already running (' + foe.spellCd.slice(0, 2).join() + ')');
+  }
+
+  /* ------------------------------------------- an icon that is not a control
+     It was a horn with a bar through it, which is the universal MUTE symbol,
+     and the game's own sound toggle sits in the same top bar built from the
+     same trapezoid and arcs. On a phone the order's name is hidden, so that
+     glyph was the whole label. */
+  {
+    const horn = /M3\.4 9\.2h4\.3l8\.7-4\.6v14\.8L7\.7 14\.8H3\.4Z/;
+    t.ok(!horn.test(SRC), 'no order is drawn as a speaker cone any more');
+    const at = (k) => { const i = SRC.indexOf(k); return i < 0 ? '' : SRC.slice(i, i + 700); };
+    const cm = at('  counter: ico('), snd = at('  sound:');
+    t.ok(cm.length > 40 && snd.length > 40, 'both icons are found in the file');
+    const paths = (t2) => (t2.match(/d="([^"]+)"/g) || []).map(x => x.slice(3));
+    const shared = paths(cm).filter(d => paths(snd).includes(d));
+    t.ok(shared.length === 0,
+      'and the order shares no outline with the control it sat next to (' + shared.length + ')');
+  }
+
+  /* ------------------------------------------------ the tutorial counts them
+     The one sheet that explains the orders said "from nine" while the chooser
+     it opens held ten. Counted rather than written out, so the next order to
+     be added cannot leave it lying. */
+  {
+    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'ten',
+      'the set has a word for its size (' + IB.NUM_WORD(IB.SPELLS.length) + ')');
+    IB.newMatch({ diff:'veteran', seed:9606 });
+    IB.showIntro('veteran');
+    const sheet = G.sheet || '';
+    t.ok(/Two commander orders/.test(sheet), 'the intro sheet still explains the orders');
+    t.ok(sheet.indexOf('from ' + IB.NUM_WORD(IB.SPELLS.length)) > 0,
+      'and says how many there really are (' + (sheet.match(/from (\w+)/) || [])[1] + ')');
+    t.ok(!/from nine/.test(sheet), 'rather than the number there used to be');
+    const grid = IB.spellGridHtml();
+    t.ok((grid.match(/class="sptile/g) || []).length === IB.SPELLS.length,
+      'which is what the chooser it opens actually holds');
   }
 
   IB.MY = seat0;
