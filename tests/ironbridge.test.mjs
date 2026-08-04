@@ -18361,4 +18361,94 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 }
 
+/* ========================= the two save lists have to agree about a status
+
+   The single-player save packs a hero and a minion through two DIFFERENT
+   hand-written lists, and packHero was missing pyreSide. The read side hid it
+   perfectly: the unpack says `ph.pyreSide === undefined ? -1 : ph.pyreSide`,
+   so a field nobody ever wrote came back as "owned by nobody" and looked
+   deliberate at the one place anyone would have looked. Measured before the
+   fix — a hero packed as {pyreT:6, pyreDps:40} and loaded back at pyreSide -1,
+   while a levy carrying the same brand on the same save kept its owner.
+
+   The consequence is quiet: the brand keeps burning, and the kill it lands two
+   seconds later pays no hold and moves no tally.
+
+   So this does not assert "packHero has pyreSide". It derives BOTH lists from
+   the source and holds that a status a minion carries is a status a hero
+   carries, which is the rule that was broken and the rule the next field will
+   break. */
+{
+  const cut = (name) => {
+    const at = SRC.indexOf('const ' + name + ' = (');
+    return SRC.slice(at, SRC.indexOf('\n});', at));
+  };
+  // the status fields each list packs, comments stripped so the note above
+  // packHero naming pyreSide does not count as packing it
+  const packed = (name) => new Set(
+    [...cut(name).replace(/\/\/[^\n]*/g, '').matchAll(/(\w+):[hu]\.\1\b/g)].map(m => m[1])
+      .filter(k => /T$|^pyre|^slowP$|^taunt$|^burn$|^mark/.test(k)));
+  const hero = packed('packHero'), unit = packed('packUnit');
+  t.ok(hero.size >= 6 && unit.size >= 5, 'both save lists really parsed (hero ' + hero.size + ', unit ' + unit.size + ')');
+  const gap = [...unit].filter(k => !hero.has(k));
+  t.ok(gap.length === 0, 'every status a minion is saved with, a hero is saved with too (' + gap.join(', ') + ')');
+  t.ok(hero.has('pyreSide'), 'including who owns the brand — the field that was missing');
+
+  // and behaviourally, through a real save and load
+  IB.newMatch({ diff:'veteran', seed:7010 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[1], 'tank');
+  const eh = G.sides[1].heroes[0];
+  t.ok(!!eh, 'a hero of theirs to brand');
+  if (eh){
+    eh.lvl = 8; IB.recalcHero(eh, true); eh.inLane = true;
+    if (!G.units.includes(eh)) G.units.push(eh);
+    eh.pyreT = 6; eh.pyreDps = 40; eh.pyreSide = 0;
+    IB.saveMatch();
+    const pack = IB.savedMatch();
+    const ph = pack.sides[1].heroes.find(x => x.name === eh.name);
+    t.ok(!!ph && ph.pyreT > 0, 'the brand is written to the save');
+    t.ok(ph && ph.pyreSide === 0, 'and so is the hold that lit it');
+    IB.newMatch({ diff:'veteran', seed:1 });
+    t.ok(IB.loadMatch(pack) === null, 'the save loads');
+    const back = G.sides[1].heroes.find(x => x.name === eh.name);
+    t.ok(back && back.pyreT > 0, 'the hero comes back still burning');
+    t.ok(back && back.pyreSide === 0, 'and still burning for somebody — the kill has an owner to pay');
+    t.ok(back && back.pyreSrc === null, 'with no caster body, which a hold spell never had');
+  }
+}
+
+/* ====================== a new tag has to reach every table that is keyed by one
+
+   Three tables in this file are keyed by a skill's tag — its icon, the colour
+   its cast is drawn in, and what the Host's brain pays for the job. Adding a
+   seventh tag reached all three, but only because I went and looked; nothing
+   would have said so. A tag missing from SKILL_TAG_ICON falls back to the
+   blade, from CAST_COL to orange, and from TAG_WORTH to zero — three silent
+   wrong answers rather than one loud one. */
+{
+  const tags = [...new Set(IB.SKILLS.map(s => s.tag))];
+  t.ok(tags.length >= 7, 'there are at least seven kinds of thing a skill can be (' + tags.join(' ') + ')');
+  const table = (name) => {
+    const m = SRC.match(new RegExp('const ' + name + ' = \\{[\\s\\S]*?\\n(?:\\}|.*\\};)'));
+    return m ? m[0] : '';
+  };
+  for (const name of ['SKILL_TAG_ICON', 'CAST_COL', 'TAG_WORTH']){
+    const body = table(name);
+    t.ok(body.length > 40, name + ' really parsed');
+    const missing = tags.filter(tg => !new RegExp('(?:^|[{\\s,])' + tg + ':').test(body));
+    t.ok(missing.length === 0, 'every tag has an entry in ' + name + ' (' + missing.join(', ') + ')');
+  }
+  // the cleanse does not go through a tag branch at all — it is gated on its
+  // KIND, before wantCast reaches the tag tests, because a tag branch would
+  // have let it fire on sight at a hero with nothing on it
+  const fn = SRC.slice(SRC.indexOf('function wantCast('));
+  const wc = fn.slice(0, fn.indexOf('\n}\n'));
+  const kindAt = wc.indexOf("s.k === 'cleanse'");
+  const tagAt = wc.indexOf("s.tag === 'buff'");
+  t.ok(kindAt > 0, 'wantCast gates the cleanse on its kind');
+  t.ok(kindAt < tagAt, 'and does it before the tag branches, which would let it fire on sight');
+  t.ok(wc.indexOf('if (!tgt) return false') > kindAt, 'and before the no-target bail, since a cleanse takes no aim');
+}
+
 t.done();

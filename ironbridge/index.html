@@ -17862,8 +17862,18 @@ const packHero = (h) => ({
   // Whatever a commander spell left on it. pyreSrc is not here: a hold spell
   // has no caster body, and a save file has no body table to re-link one
   // against — it is restored as null, which is what it always is.
+  //
+  // pyreSide WAS missing, and the read side hid it completely: the unpack says
+  // `ph.pyreSide === undefined ? -1 : ph.pyreSide`, so a field nobody wrote
+  // came back as "owned by nobody" and looked deliberate at the only place
+  // anyone would have looked. A hero's brand survived the save; who cast it
+  // did not, so the kill two seconds later paid no hold and moved no tally —
+  // while a levy carrying the same brand on the same save kept its owner,
+  // because packUnit below happens to list the field. Measured before the fix:
+  // hero packs {pyreT:6, pyreDps:40} and loads back at pyreSide -1.
   warpT:h.warpT || 0, fallT:h.fallT || 0, hobT:h.hobT || 0, freeT:h.freeT || 0,
   pyreT:h.pyreT || 0, pyreDps:h.pyreDps || 0,
+  pyreSide:h.pyreSide === undefined ? -1 : h.pyreSide,
 });
 const packUnit = (u) => ({
   kind:u.kind, side:u.side, x:u.x, y:u.y, hp:u.hp, mhp:u.mhp, ad:u.ad, armor:u.armor, mr:u.mr,
