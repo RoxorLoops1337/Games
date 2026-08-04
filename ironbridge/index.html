@@ -286,7 +286,11 @@
      ready ring is the second half of it: held with nothing banked yet is not
      the same state as held with an ultimate waiting, and the tile says which. */
   .tier.held{ border-color:#c08f1d; }
-  .tier.held .tl{ color:#8a6a1e; }
+  /* 2.67:1 on the composited card, measured, against 6.26:1 for every other
+     tier heading in the sheet — the least legible label in the game, on the
+     row added to explain something. #5a4009 is 5.14:1 on the same background
+     and still reads as the gold this row is about. */
+  .tier.held .tl{ color:#5a4009; }
   .ord.ult.on{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
   .ord.ult.on.ready{ box-shadow:0 0 0 1px #ffe6a4 inset, 0 0 9px rgba(255,214,110,.55); }
   .ord.pickme{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
@@ -342,6 +346,22 @@
   body.narrow .ord{ min-width:72px; max-width:none; padding:0 7px; height:28px; }
   body.narrow .ord::after{ content:''; position:absolute; left:0; right:0; top:-8px; bottom:-8px; }
   body.narrow .ord .on{ display:none; }
+  /* ...and the same trade on a narrow DESKTOP, which the fourth tile made
+     necessary. Measured with three orders and the ultimate tile at 1024: every
+     tile squeezed to ~30px and the bar became four bare key chips — Q E R X —
+     with every spell icon and every name gone, while the same width with three
+     tiles still showed the glyphs. The name is the part that can go: the icon
+     and the key are what a tile is recognised by mid-fight, and losing those
+     to keep a word is the wrong way round. */
+  @media (max-width:1200px){ #orders .ord .on{ display:none; } }
+  /* Below that again the KEY chip goes, and the icon still does not. At 1024
+     the tiles reach ~30px, and with the icon free to shrink the bar became
+     four bare key chips — Q E R X — with the glyphs clipped out of their own
+     tiles. Ranked by what a tile is recognised by while something is walking
+     at you: the icon first, the key second (it is a shortcut for a control you
+     can still press), the name last. */
+  @media (max-width:1100px){ #orders .ord .okey{ display:none; } }
+  #orders .ord .ico{ flex:0 0 auto; }
   /* The name goes; the clock never does. It is the half a phone most needs,
      because a phone is the screen where the top bar is smallest and the sheet
      covers everything else. */
@@ -4759,7 +4779,20 @@ const heroArmed = (h) => (h.skills || []).some(sk => skillArmed(h, sk));
    target at all — so a player holding one and letting go while the wave stood
    just outside heroTarget's reach got nothing, and was told nothing was ready.
    The gate was measuring the wrong thing for most of the abilities it gated. */
-const SKILL_NEEDS_TARGET = { bolt:1, chain:1, hook:1, mark:1, strike:1, volley:1 };
+const SKILL_NEEDS_TARGET = { bolt:1, chain:1, hook:1, mark:1, strike:1, volley:1, dash:1 };
+/* ...and `dash` is why that list is not just a scan for `if (!tgt) break`.
+
+   Six of the seven do NOTHING without a body: they open with that guard and
+   return. `dash` does not — it takes an else branch and moves the hero `dist`
+   tiles along `-dirOf(h.side)`, which is BACKWARDS, away from the enemy. So
+   Death Mark released with nothing in reach teleported the assassin eight
+   tiles toward its own base, spent 110 mana, started a sixty-second recovery,
+   and the readout said "Let go — it goes off now."
+
+   castLoop could never do it: wantCast refuses a damage ultimate outright when
+   there is no target. It was reachable only through the release, and only
+   because the table was derived from the SHAPE of the code rather than from
+   what the code DOES without a target. Syntax was the wrong test. */
 const needsTarget = (d) => !!(d && SKILL_NEEDS_TARGET[d.k]);
 
 /* Spending one. Pulled out of castLoop because the release needs the very same
@@ -10878,22 +10911,34 @@ function drawUnitMarks(c, u, bx, by, p, sc){
   /* A hero holding a loaded ultimate. The hold is a decision the player made
      about this body, and until now the only trace of it was a lit tile in the
      top bar — so the thing being held back was invisible on the bridge it was
-     being held back from, and "which of my two is actually loaded" had no
-     answer short of opening a sheet.
+     being held back from, and whether the hero in front of you was carrying
+     anything had no answer short of opening a sheet. (Two heroes standing on
+     the same tile still overlap into one mark; the name plates already
+     suppress each other there, and this does not claim to solve it.)
 
      Cosmetic to the last pixel: it reads holdUlt and a cooldown the simulation
      already agreed about, draws, and tells nobody. The pulse is off G.t, which
      is the match clock both machines share — not fxRnd, because there is
      nothing random about it. */
-  if (u.isHero && !u.dead && (G.sides[u.side] || {}).holdUlt){
+  /* forMe, not the side index. Keyed on the unit's own side this drew the
+     ENEMY commander's hold on the enemy hero — in your gold, on your screen —
+     which in a two-player match hands you their private decision and the fact
+     that their ultimate is off cooldown and paid for. holdUlt is synced, so
+     both machines had the information; only one of them was ever meant to be
+     shown it. The same rule this file argues for further down: ten bugs in
+     this game have been a per-side value that was not per-seat. */
+  if (u.isHero && !u.dead && forMe(u.side) && (G.sides[u.side] || {}).holdUlt){
     const sk = (u.skills || []).find(x => x.ult);
     if (sk && !(sk.cdT > 0) && u.mana >= (SKILL[sk.id] || {}).mana){
       /* At the shoulder, not over the head. Centred above the body it landed
          squarely under the name plate and the two bars — which are painted
          after this layer — and a 13px flourish behind them read as a smudge
          rather than a token. Off to the side it has clear air at every zoom. */
+      // A floor on the size. At ZOOM_MIN, sc falls to .735 and a mark that
+      // scaled all the way down was a two-and-a-half-pixel speck — present in
+      // the pixels and invisible in the room.
       const puls = .72 + .28 * Math.sin(G.t * 3.4);
-      const y = by - 11 * sc, r = 2.2 * sc;
+      const y = by - 11 * sc, r = Math.max(1.7, 2.2 * sc);
       c.globalAlpha = .34 * puls;
       ell(c, bx - 9 * sc, y, r * 2.2, r * 2.2, '#ffd98a');
       c.globalAlpha = puls;
@@ -16167,7 +16212,14 @@ function syncOrders(){
      and that should be visible without opening a hero sheet. */
   const ub = el.querySelector('.ord.ult');
   if (ub){
-    let rem = 1;
+    /* The shutter is the RECOVERY and the glow is whether anything can
+       actually be spent — which are two different questions, and the glow used
+       to answer the first one. A hero off cooldown but a mana short lit the
+       full gold ready ring while the shoulder mark (which does ask about mana)
+       stayed dark and the release answered "nothing of yours was ready". Four
+       surfaces, one state, three answers. skillArmed is the one the release
+       itself uses, so it is the one the glow uses now. */
+    let rem = 1, armed = false;
     for (const h of s.heroes){
       if (h.dead) continue;
       for (const sk of h.skills){
@@ -16176,11 +16228,12 @@ function syncOrders(){
         if (!d) continue;
         const full = Math.max(.1, d.cd * (1 - h.cdr - bsum(h, 'bcdr')));
         rem = Math.min(rem, clamp(sk.cdT / full, 0, 1));
+        if (skillArmed(h, sk)) armed = true;
       }
     }
     const uf = ub.querySelector('.ocd');
     if (uf && uf.style) uf.style.height = Math.round(rem * 100) + '%';
-    ub.classList.toggle('ready', rem <= 0);
+    ub.classList.toggle('ready', armed);
   }
   for (let i = 0; i < s.slots; i++){
     const b = el.querySelector('.ord[data-slot="' + i + '"]');
@@ -17144,12 +17197,20 @@ function showHeroSheet(h){
      all, so the answer to "why has it not gone off" was not here. */
   if (ult && G.sides[h.side] && G.sides[h.side].holdUlt){
     const ud = SKILL[ult.id];
-    const ready = !(ult.cdT > 0) && h.mana >= (ud ? ud.mana : 0);
+    const need = ud ? ud.mana : 0;
+    const cooling = ult.cdT > 0;
+    const ready = !cooling && h.mana >= need;
+    /* Three states, not two. `ready` had always accounted for mana and the
+       sentence under it had not, so a hero off cooldown and a mana short was
+       told "It will be loaded in 0s" — a countdown of nought, in the one view
+       whose whole job is answering "why has it not gone off". */
     rows += '<div class="tier held"><div class="tl">Held</div><div class="tb"><div class="chosen">' +
       '<b>' + (ud ? ud.n : 'The ultimate') + ' is being held back.</b>' +
       '<div class="pd">' + (ready
         ? 'It is loaded and waiting. Press ' + ULT_KEY + ', or the lit tile in the top bar, to spend it.'
-        : 'It will be loaded in ' + Math.ceil(ult.cdT) + 's, and will wait for you then.') +
+        : cooling
+          ? 'It will be loaded in ' + Math.ceil(ult.cdT) + 's, and will wait for you then.'
+          : 'It is off recovery, but ' + Math.ceil(need - h.mana) + ' short of the mana it costs.') +
       '</div></div></div></div>';
   }
   const rankPend = pend && pend.kind === 'rank';

@@ -17026,11 +17026,30 @@ t.ok(true, 'a final draw on a live match is clean');
     }
     t.ok(hard.size > 0 && soft.size > 0,
       'the switch really does have both kinds in it (' + hard.size + ' hard, ' + soft.size + ' soft)');
-    const listed = Object.keys(IB.SKILL_NEEDS_TARGET).sort().join(',');
-    t.ok(listed === [...hard].sort().join(','),
-      'and the table names exactly the ones that are nothing without a body (' + listed + ')');
+    /* The rule this holds CHANGED, because the first version of it was the
+       bug. It asserted the table was exactly the `if (!tgt) break` scan — and
+       `dash` passes that scan as "soft" while doing something far worse than
+       nothing: it takes an else branch and moves the hero `dist` tiles
+       BACKWARDS. Death Mark released with nothing in reach fled eight tiles
+       toward its own base and spent a sixty-second recovery doing it.
+
+       So: everything that does nothing must be listed, because it would be
+       wasted; `dash` must be listed too, because it would be worse than
+       wasted; and nothing else may be, because every other kind is a hero
+       aiming at its own feet and is fine without a body. */
+    const listed = new Set(Object.keys(IB.SKILL_NEEDS_TARGET));
+    for (const k of hard)
+      t.ok(listed.has(k), k + ' does nothing without a body, so the release does not spend it');
+    t.ok(listed.has('dash'),
+      'and dash is listed too, because without a body it runs the hero AWAY rather than doing nothing');
+    const dash = SRC.slice(SRC.indexOf("    case 'dash': {"), SRC.indexOf("    case 'heal': {"));
+    t.ok(/else\s*\{[^}]*-dirOf\(h\.side\)/.test(dash),
+      'which is still what the code does, rather than something this comment remembers');
     for (const k of soft)
-      t.ok(!IB.SKILL_NEEDS_TARGET[k], k + ' works without a target, so it is not on the list');
+      t.ok(k === 'dash' || !listed.has(k),
+        k + ' fires at the hero’s own feet and needs nobody, so it stays off the list');
+    t.ok(listed.size === hard.size + 1,
+      'and the list is those and no others (' + [...listed].sort().join(',') + ')');
   }
 
   /* How much of the game this is about, measured rather than asserted. */
@@ -17148,6 +17167,187 @@ t.ok(true, 'a final draw on a live match is clean');
     s.holdUlt = false;
     t.ok(IB.netHash() === at, 'and the hold is the only thing that did');
     t.ok(!!h, 'with a hero on the board to have drawn it for');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ---------------------------------- what the sixth review pass measured
+   Six defects, and the two that mattered were both about a rule being derived
+   from the wrong thing: one from the SHAPE of some code rather than what it
+   does, one from a side index rather than a seat.                          */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+
+  const forge = (seed, cls) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls);
+    const h = s.heroes[0];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    return { s, h, ult:h.skills.find(sk => sk.ult) };
+  };
+
+  /* ------------------------------------ a release that ran the hero away
+     The table was a scan for `if (!tgt) break`, and `dash` passes that scan as
+     harmless while being the opposite: no target means the else branch, which
+     moves the hero `dist` tiles along -dirOf(side) — BACKWARDS. Death Mark
+     released into empty air teleported the assassin eight tiles toward its own
+     base, spent the mana, started a sixty-second recovery, and said "Let go —
+     it goes off now." castLoop could never do it; wantCast refuses a damage
+     ultimate outright with no target. It was reachable only through here. */
+  {
+    let found = null;
+    for (const seed of [9950, 9951, 9952, 9953, 9954, 9955, 9956, 9957]){
+      const got = forge(seed, 'assassin');
+      if (got.ult && IB.SKILL[got.ult.id].k === 'dash'){ found = got; break; }
+    }
+    if (!found){
+      // Force it rather than skip: the defect is about the KIND, and a suite
+      // that only tests it when the roll obliges is a suite that stops testing
+      // it the day the pool changes.
+      const got = forge(9950, 'assassin');
+      const dashUlt = IB.SKILLS.find(d => d.ult && d.k === 'dash');
+      t.ok(!!dashUlt, 'the game has a dash ultimate to test (' + (dashUlt ? dashUlt.id : 'none') + ')');
+      got.h.skills = got.h.skills.filter(sk => !sk.ult);
+      got.h.skills.push({ id:dashUlt.id, rank:1, cdT:0, ult:true });
+      found = { s:got.s, h:got.h, ult:got.h.skills[got.h.skills.length - 1] };
+    } else t.ok(true, 'a dash ultimate came up on its own');
+
+    const { s, h, ult } = found;
+    const d = IB.SKILL[ult.id];
+    t.ok(d.k === 'dash', 'the ultimate under test moves the hero (' + ult.id + ')');
+    t.ok(IB.needsTarget(d), 'and is on the list of ones that must not go off blind');
+
+    for (const u of G.units) if (u.side === 1) u.dead = true;
+    step(2 / 30);
+    t.ok(!IB.heroTarget(h), 'with nothing at all in front of it');
+    const x0 = h.x, mana0 = h.mana;
+    s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(!(ult.cdT > 0), 'and the ultimate is NOT spent on nothing');
+    t.ok(Math.abs(h.x - x0) < .01,
+      'the hero does not run backwards (' + (h.x - x0).toFixed(2) + ' tiles)');
+    t.ok(h.mana >= mana0 - .01 || h.mana === h.mmana, 'and pays nothing for it');
+    t.ok(/nothing of yours was ready/i.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and is told so rather than congratulated');
+  }
+
+  /* ------------------------------------------- a mark that was not yours
+     Keyed on the unit's side rather than through forMe, so the ENEMY
+     commander's hold was painted on the enemy hero, in your gold, on your
+     screen — handing you their decision AND the fact their ultimate is loaded.
+     holdUlt is synced, so both machines had it; one was meant to be shown it. */
+  {
+    const marks = SRC.slice(SRC.indexOf('function drawUnitMarks'),
+      SRC.indexOf('function drawUnitMarks') + 2600);
+    const cond = marks.slice(marks.indexOf('if (u.isHero'), marks.indexOf('if (u.isHero') + 140);
+    t.ok(/forMe\(u\.side\)/.test(cond),
+      'the mark asks whose seat this is, not merely whose side the body is on');
+    t.ok(/holdUlt/.test(cond), 'as well as whether that hold is holding');
+  }
+
+  /* -------------------------------- one state, one answer, on every surface
+     The tile's ready glow was computed from the cooldown alone while the
+     release, the shoulder mark and skillArmed all account for mana. A hero off
+     recovery and a mana short lit the full gold ring, showed no mark, and
+     refused when pressed. */
+  {
+    const sync = SRC.slice(SRC.indexOf('function syncOrders'), SRC.indexOf('function syncOrders') + 2600);
+    t.ok(/skillArmed\(h, sk\)/.test(sync),
+      'the bar asks the same question the release asks');
+    t.ok(/classList\.toggle\('ready', armed\)/.test(sync),
+      'and lights the ready ring off that answer rather than off the cooldown alone');
+
+    const { s, h, ult } = forge(9960, 'mage');
+    const need = IB.SKILL[ult.id].mana;
+    ult.cdT = 0; h.mana = need - 1;
+    t.ok(!IB.skillArmed(h, ult),
+      'a hero off recovery but a mana short is not armed (' + Math.round(h.mana) + ' of ' + need + ')');
+    s.holdUlt = true;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(!(ult.cdT > 0), 'and nothing is spent, which is what the glow must agree with');
+  }
+
+  /* ------------------------------------------ and the sheet says which one */
+  {
+    const { s, h, ult } = forge(9961, 'mage');
+    const need = IB.SKILL[ult.id].mana;
+    s.holdUlt = true;
+
+    ult.cdT = 0; h.mana = h.mmana;
+    IB.showHeroSheet(h);
+    t.ok(/It is loaded and waiting/.test(G.sheet || ''), 'loaded says loaded');
+
+    ult.cdT = 30; h.mana = h.mmana;
+    IB.showHeroSheet(h);
+    t.ok(/will be loaded in 30s/.test(G.sheet || ''), 'recovering says how long');
+
+    ult.cdT = 0; h.mana = need - 12;
+    IB.showHeroSheet(h);
+    const sheet = G.sheet || '';
+    t.ok(!/will be loaded in 0s/.test(sheet),
+      'and a hero short of mana is not told to wait nought seconds');
+    t.ok(/short of the mana/.test(sheet),
+      'but told what it is actually waiting for (' +
+        ((sheet.match(/It is off recovery[^<]*/) || ['nothing'])[0]) + ')');
+  }
+
+  /* --------------------------------------------- a heading that can be read
+     2.67:1 on the composited card, against 6.26:1 for every other tier
+     heading — the least legible label in the sheet, on the row added to
+     explain something. */
+  {
+    const hex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const lin = (v) => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+    const lum = (rgb) => .2126 * lin(rgb[0]) + .7152 * lin(rgb[1]) + .0722 * lin(rgb[2]);
+    const over = (fg, a, bg) => fg.map((v, i) => v * a + bg[i] * (1 - a));
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    // .tier sits on rgba(232,214,180,.55) over the .parch gradient; take the
+    // WORSE of its two stops, the way the cream-card contrast pass does.
+    const card = [hex('#c9a978'), hex('#b08e5e')].map(st => over(hex('#e8d6b4'), .55, st));
+    const held = rule('.tier.held .tl{').match(/color:(#[0-9a-f]{6})/i)[1];
+    const worst = Math.min(...card.map(bg => ratio(hex(held), bg)));
+    t.ok(worst >= 4.5,
+      'the Held heading is legible on both ends of the card it sits on (' + worst.toFixed(2) + ':1)');
+    // ...and it is still visibly the gold this row is about, not the same ink
+    // as every other heading.
+    t.ok(held.toLowerCase() !== '#4a3322', 'while still not being the same ink as every other heading');
+  }
+
+  /* ----------------------------------- the fourth tile does not eat the other three
+     Measured at 1024 with three orders and the ultimate: every tile squeezed to
+     ~30px and the bar became four bare key chips, every spell glyph clipped out
+     of its own tile, while the same width with three tiles still showed them.
+     Ranked by what a tile is recognised by mid-fight: icon, then key, then name. */
+  {
+    t.ok(/@media \(max-width:1200px\)\{ #orders \.ord \.on\{ display:none; \} \}/.test(SRC),
+      'the name goes first on a narrow desktop');
+    t.ok(/@media \(max-width:1100px\)\{ #orders \.ord \.okey\{ display:none; \} \}/.test(SRC),
+      'the key chip goes second');
+    t.ok(/#orders \.ord \.ico\{ flex:0 0 auto; \}/.test(SRC),
+      'and the icon never gives ground at all, which is the whole ordering');
+  }
+
+  /* ------------------------------------- and the mark survives the far zoom */
+  {
+    const marks = SRC.slice(SRC.indexOf('function drawUnitMarks'),
+      SRC.indexOf('function drawUnitMarks') + 2600);
+    t.ok(/Math\.max\(1\.7, 2\.2 \* sc\)/.test(marks),
+      'the mark has a floor, so ZOOM_MIN does not reduce it to a speck');
   }
 
   IB.MY = seat0;
