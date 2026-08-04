@@ -52,6 +52,29 @@ node tools/spritegrid/embed.mjs --check  # CI: fail if index.html is stale
 
 Never hand-edit the generated block in `index.html` — edit the JSON and re-embed.
 
+## Controls
+
+| | keyboard | touch |
+|---|---|---|
+| walk | arrows / WASD | d-pad |
+| talk, confirm | Z · Enter · Space | the **Talk** button, or tap the text box |
+| menu, back | X · Esc | the **Menu** button |
+| aim a card | ← → | tap it |
+| play the aimed card | ↑ · Z · Enter | tap it again |
+| play a card outright | its number, 1-5 | — |
+| end the turn | E | the **End turn** button |
+| mute | M | Sound, in the field menu |
+
+The two touch buttons relabel themselves for what they do right now — Talk /
+Menu in the world, Play / Menu in a fight, Next while someone is talking.
+
+A card takes one click with a mouse, because hovering already aimed it, and two
+taps with a finger — aim, then confirm — so a fat-fingered tap never spends
+energy by accident. The line above the hand spells out whichever card you are
+aiming at, since the card itself is too small to hold its own rules text.
+Playing a card resolves instantly and you keep your turn; only what happens
+*to* you plays back a line at a time.
+
 ## How a battle works
 
 Each turn you are dealt five cards and three energy. The deck is your support

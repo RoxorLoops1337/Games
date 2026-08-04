@@ -159,7 +159,7 @@ while (fresh.G.battle && guard++ < 600) {
   const b = fresh.B();
   const stuck = b && b.phase === 'player' && !b.log && !b.over
     && !b.hand.some((c) => fresh.cardCost(c) <= b.energy);
-  const key = stuck ? 'b' : 'a';
+  const key = stuck ? 'e' : 'a';
   fresh.step(.12);
   fresh.pressKey(key); fresh.step(.02); fresh.releaseKey(key); fresh.fired.clear();
   fresh.draw();
@@ -167,6 +167,58 @@ while (fresh.G.battle && guard++ < 600) {
 ok(guard < 600, `the battle resolved by playing cards and ending turns (${guard} frames)`);
 eq(fresh.G.battle, null, 'and handed control back to the world');
 eq(fresh.G.mode, 'world', 'the player is walking again');
+
+section('the battle controls do what they say');
+const ctl = loadGame({});
+ctl.setCtx(mkCtx());
+ctl.STARTER_DECK.forEach(ctl.grantCard);
+ctl.G.party = [ctl.mkMon('pyrelynx', 30)];
+const tapC = (k) => { ctl.pressKey(k); ctl.step(.2); ctl.releaseKey(k); ctl.fired.clear(); };
+const freshBattle = () => {
+  ctl.G.battle = null;
+  ctl.healParty();                    // the foe hits back between probes
+  ctl.startBattle({ foe: ctl.mkMon('gargolem', 40), wild: true });
+  for (let i = 0; i < 6 && ctl.G.mode !== 'battle'; i++) tapC('a');
+  const bb = ctl.B();
+  bb.log = null; bb.started = false; ctl.G.battleMsg = null; ctl.G.dialogue = null;
+  bb.energy = 9;
+  return bb;
+};
+
+let cb = freshBattle();
+cb.sel = 0;
+tapC('right');
+eq(cb.sel, 1, 'right walks along the hand');
+tapC('left');
+eq(cb.sel, 0, 'left walks back');
+
+cb = freshBattle();
+const handWas = cb.hand.length;
+tapC('up');
+ok(cb.hand.length < handWas, 'up plays the card you are on');
+
+cb = freshBattle();
+const third = cb.hand[2] && ctl.cardName(cb.hand[2]);
+tapC('3');
+ok(cb.hand.length < 5 || !third, 'a number key plays that card outright');
+ok(!cb.hand.some((c, i) => i === 2 && ctl.cardName(c) === third && cb.hand.length === 5), 'the third card is the one that left');
+
+cb = freshBattle();
+const turnWas = cb.turn;
+tapC('e');
+for (let i = 0; i < 40 && ctl.B() && ctl.B().log; i++) tapC('a');
+ok(!ctl.B() || ctl.B().turn > turnWas || ctl.B().over, 'E ends the turn');
+
+cb = freshBattle();
+const handBefore = cb.hand.length, turnBefore = cb.turn;
+tapC('b');
+eq(!!ctl.G.menu, true, 'X opens the actions menu instead of ending the turn');
+eq(cb.hand.length, handBefore, 'and plays nothing');
+eq(cb.turn, turnBefore, 'and does not pass the turn');
+ok(ctl.G.menu.rows.some((r) => /End turn/i.test(r.label)), 'the menu offers End turn');
+ok(ctl.G.menu.rows.some((r) => /Kin/i.test(r.label)), 'and the party');
+ok(ctl.G.menu.rows.some((r) => /Bag/i.test(r.label)), 'and the bag');
+ctl.G.battle = null;
 
 section('a monkey on the keyboard cannot break it');
 // Random input for thousands of frames, drawing every one. This is the cheapest
