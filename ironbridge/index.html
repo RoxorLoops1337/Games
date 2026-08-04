@@ -14205,6 +14205,7 @@ function draw(){
   if (!perfOff('deck')) drawDeck(c);
   if (!perfOff('lane')) drawLane(c);
   if (!perfOff('post')) postFx(c);     // the world is finished here — below is interface
+  drawAim(c);                          // ...and the first thing on top of it is where a cast would land
   if (sel.struct && !sel.struct.dead){
     const q = lp(sel.struct.x, sel.struct.y);
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.5, 2.2 * cam.z);
@@ -14804,6 +14805,10 @@ const spellUI = {
   at:null,          // the order being read. NOT the order chosen.
   slot:0,           // which of the two a choice would fill
   aim:null,         // { slot, id } while the next world click is a target
+  // Where the pointer last was, in canvas pixels, so the preview can draw
+  // where the next press would land. Cosmetic: nothing in the simulation
+  // reads it and netHash has never heard of it.
+  pt:null,
 };
 
 // What the banner asks for while an order is armed, and how the chooser
@@ -15126,43 +15131,125 @@ function castPress(slot){
    Same ellipse test and same nearest-wins rule, over the bodies this
    particular order is allowed to touch and nothing else, so a click that lands
    on the wrong kind of thing refuses instead of arming a doomed command. */
-function spellAimTarget(sx, sy){
+/* Every body this armed order is allowed to touch, as the ellipses a click is
+   tested against.
+
+   ONE enumeration, read by the resolver AND by the preview. A preview built
+   from a second list is a preview that can ring a body the click will not
+   take — which is worse than showing nothing, because it is a promise. */
+function spellAimCandidates(){
   const a = spellUI.aim;
-  if (!a) return null;
-  const d = SPELL[a.id], s = me();
-  if (d.target === 'point') return { x:lanePoint(unproject(sx, sy)[0]) };
-  let best = null, bd = Infinity;
-  const test = (cx, cy, rx, ry, hit) => {
-    const dx = (sx - cx) / rx, dy = (sy - cy) / ry;
-    const q = dx * dx + dy * dy;
-    if (q <= 1 && q < bd){ bd = q; best = hit; }
-  };
+  if (!a) return [];
+  const d = SPELL[a.id], s = me(), out = [];
   if (d.target === 'struct'){
     for (const st of s.structs){
       if (st.dead) continue;
       const p = lp(st.x, st.y);
       const tall = st.key === 'gate' ? 60 : st.key === 'inhib' ? 34 : 44;
-      test(p[0], p[1] - tall * .5 * cam.z, (st.key === 'gate' ? 56 : 22) * cam.z,
-        tall * .6 * cam.z, { key:st.key });
+      out.push({ cx:p[0], cy:p[1] - tall * .5 * cam.z, rx:(st.key === 'gate' ? 56 : 22) * cam.z,
+        ry:tall * .6 * cam.z, hit:{ key:st.key } });
     }
-    return best;
+    return out;
   }
   if (d.target === 'own'){
     for (const h of s.heroes){
       if (h.dead) continue;
       const p = lp(h.x, h.y);
-      test(p[0], p[1] - 18 * cam.z, 18 * cam.z, 28 * cam.z, { hero:h.id });
+      out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:h.id } });
     }
-    return best;
+    return out;
   }
   const fs = enemyOf(MY);
   for (const u of G.units){
     if (u.dead || u.side !== fs) continue;
     if (!u.isHero && !(d.target === 'foebody' && u.kind === 'super')) continue;
     const p = lp(u.x, u.y);
-    test(p[0], p[1] - 18 * cam.z, 18 * cam.z, 28 * cam.z, { hero:u.id });
+    out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:u.id } });
+  }
+  return out;
+}
+// Nearest-wins over that list, in the ellipse the body is DRAWN in. Returns
+// the candidate rather than its payload, so the preview can light the very
+// object the click resolved to instead of matching one up by its fields.
+function spellAimPick(list, sx, sy){
+  let best = null, bd = Infinity;
+  for (const k of list){
+    const dx = (sx - k.cx) / k.rx, dy = (sy - k.cy) / k.ry;
+    const q = dx * dx + dy * dy;
+    if (q <= 1 && q < bd){ bd = q; best = k; }
   }
   return best;
+}
+function spellAimTarget(sx, sy){
+  const a = spellUI.aim;
+  if (!a) return null;
+  if (SPELL[a.id].target === 'point') return { x:lanePoint(unproject(sx, sy)[0]) };
+  const k = spellAimPick(spellAimCandidates(), sx, sy);
+  return k ? k.hit : null;
+}
+
+/* What a point-targeted order would actually cover, in lane units, read off
+   the same constants the cast reads. A footprint with numbers of its own is a
+   footprint that goes stale the first time somebody tunes the spell — and a
+   bombardment drawn one radius wider than it lands is a lie told in gold. */
+const AIM_FOOT = {
+  bombard: () => {
+    const o = [];
+    for (let i = 0; i < BOMB.n; i++) o.push({ d:(i - (BOMB.n - 1) / 2) * BOMB.spread, r:BOMB.r });
+    return o;
+  },
+  withdraw: () => [{ d:0, r:WITHDRAW.rad }],
+};
+
+/* Where the pointer is, for the preview and for nothing else. Cosmetic to the
+   last bit: the simulation never reads it, netHash never sees it, and a
+   machine with no pointer at all leaves it null and simply draws no preview
+   until a finger lands. */
+function aimAt(clientX, clientY){
+  if (!lcv || typeof lcv.getBoundingClientRect !== 'function') return;
+  const r = lcv.getBoundingClientRect();
+  spellUI.pt = { x:clientX - r.left, y:clientY - r.top };
+}
+
+/* The preview. Gold, dashed, and on top of the world rather than in it — this
+   is a thing the interface is saying, not a thing that has happened.
+
+   Drawn from `spellUI.pt` and never from the armed order alone, so it appears where
+   the next press would land rather than in the middle of the screen. */
+const AIM_COL = '#ffc14d';
+function drawAim(c){
+  const a = spellUI.aim, pt = spellUI.pt;
+  if (!a || !pt || !G.sides.length) return;
+  const d = SPELL[a.id];
+  c.save();
+  c.setLineDash([6 * cam.z, 4 * cam.z]);
+  c.lineWidth = Math.max(1.4, 2.1 * cam.z);
+  c.strokeStyle = AIM_COL;
+  if (d.target === 'point'){
+    const x = lanePoint(unproject(pt.x, pt.y)[0]);
+    const foot = (AIM_FOOT[a.id] || (() => [{ d:0, r:2.4 }]))();
+    for (const f of foot){
+      const q = lp(clamp(x + f.d, 0, C.LANE_LEN), 0);
+      const rx = f.r * LS();
+      // The centre of the three is the one the click sets; the outliers are
+      // consequences of it, and are drawn a shade quieter so the point being
+      // aimed reads as the point being aimed.
+      c.globalAlpha = f.d === 0 ? .95 : .55;
+      c.beginPath(); c.ellipse(q[0], q[1], rx, rx * .55, 0, 0, 6.2832); c.stroke();
+    }
+    c.restore();
+    return;
+  }
+  const list = spellAimCandidates();
+  const hot = spellAimPick(list, pt.x, pt.y);
+  for (const k of list){
+    // Everything it COULD take, quietly, so a player can see there is a second
+    // hero over there before moving the cursor to find out.
+    c.globalAlpha = k === hot ? 1 : .52;
+    c.lineWidth = (k === hot ? 2.8 : 1.9) * Math.max(.6, cam.z);
+    c.beginPath(); c.ellipse(k.cx, k.cy, k.rx, k.ry, 0, 0, 6.2832); c.stroke();
+  }
+  c.restore();
 }
 
 /* A target, or nothing. Nothing leaves the order ARMED — a click on bare
@@ -16515,10 +16602,22 @@ function wire(){
   // one canvas: drag to pan, wheel to zoom, click to select a plot or a hero
   let drag = null;
   lcv.addEventListener('pointerdown', (e) => {
+    if (spellUI.aim) aimAt(e.clientX, e.clientY);
     drag = { x:e.clientX, y:e.clientY, cx:cam.x, moved:false };
     lcv.setPointerCapture(e.pointerId);
   });
+  /* While an order is armed the world does not pan: a drag AIMS it.
+
+     This is the phone's half of the feature. A tap places a bombardment the
+     instant it lands, which on a 390px screen means placing it by memory —
+     the finger is over the point it is choosing. Press, slide the footprint
+     to where you want it, lift to fire, and the whole time the three rings
+     are visible beside your thumb rather than under it.
+
+     A mouse gets the same handler for free, because a pointermove with no
+     button down still arrives here and still moves the preview. */
   lcv.addEventListener('pointermove', (e) => {
+    if (spellUI.aim){ aimAt(e.clientX, e.clientY); return; }
     if (!drag) return;
     const dx = (e.clientX - drag.x) / (LS() * .96);
     if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 5){
@@ -16527,6 +16626,9 @@ function wire(){
     if (drag.moved) cam.x = clamp(drag.cx - dx, CAM_MIN, CAM_MAX);
   });
   lcv.addEventListener('pointerup', (e) => {
+    // A slide that ends on the target is a placement, not a discarded pan, so
+    // the `moved` gate that protects ordinary selection does not apply here.
+    if (spellUI.aim){ aimAt(e.clientX, e.clientY); pickAt(e.clientX, e.clientY); drag = null; return; }
     if (drag && !drag.moved) pickAt(e.clientX, e.clientY);
     drag = null;
   });
@@ -17499,6 +17601,7 @@ window.IB = {
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   ordersHtml, syncOrders, castPress, spellAimOff, spellAimTarget, spellAimSend, syncAim,
+  spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
   BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART,
