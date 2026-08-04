@@ -797,6 +797,11 @@ function drawHair(f, s, hx, hy, hr, sc, dir, cHair, cDark){
   if (style !== 'bald'){
     px(hx - hr, hy - hr - 1, hr * 2, capH, cHair);
     px(hx - hr, hy - hr - 1, hr * 2, 1, shade(cHair, 26));
+    // a fringe over the brow on the side you are facing, and bulk behind
+    px(hx + dir * (hr - 2 * sc), hy - hr - 1 + capH, Math.max(1, 2 * sc), Math.max(1, 1.6 * sc), cHair);
+    px(hx + dir * (hr - 0.4 * sc), hy - hr + sc, Math.max(1, sc), Math.max(1, 1.4 * sc), cDark);
+    px(hx - dir * hr, hy - hr, Math.max(1, 1.6 * sc), Math.max(2, 3.4 * sc), cHair);
+    px(hx - dir * (hr + 0.6 * sc), hy - hr + sc, Math.max(1, sc), Math.max(1, 2 * sc), cDark);
   }
   switch (style){
     case 'mohawk':
@@ -862,6 +867,8 @@ function drawFighter(f){
     }
   }
 
+  // the further back you stand the more of the night is between us
+  const dk = Math.round(-15 + 15 * clamp((f.y - FLOOR_TOP) / (FLOOR_BOT - FLOOR_TOP), 0, 1));
   const flash = f.hitFlash > 0 && ((f.hitFlash * 60) | 0) % 2 === 0;
   const shirtL = flash ? '#ffffff' : s.shirt,  shirtD = flash ? '#ffd0d0' : s.shirt2;
   const skinL  = flash ? '#ffffff' : s.skin,   skinD  = flash ? '#ffdcdc' : s.skin2;
@@ -869,44 +876,62 @@ function drawFighter(f){
   const hairL  = flash ? '#ffffff' : s.hair,   hairD  = flash ? '#ffd8d8' : shade(s.hair, -26);
   const ink = flash ? '#ff9090' : (s.ink || INK);
 
-  const lw = Math.max(3, Math.round(3.4 * sc));
-  const aw = Math.max(3, Math.round(3.2 * sc));
-  const th = Math.max(5, Math.round(8.5 * sc * (s.bulk || 1)));
+  // thigh is thicker than calf, upper arm than forearm — uniform tubes are
+  // what made them read as mannequins
+  const lw = Math.max(3, Math.round(3.6 * sc)), lw2 = Math.max(2, Math.round(2.7 * sc));
+  const aw = Math.max(3, Math.round(3.3 * sc)), aw2 = Math.max(2, Math.round(2.5 * sc));
+  const th = Math.max(5, Math.round(9 * sc * (s.bulk || 1)));
   const hr = Math.max(4, Math.round(4.7 * sc));
-
-  rigParts.length = 0;
-  // back limbs
-  rigLimb(hipX, hipY, X(pose.lB[0]), Y(pose.lB[1]), lw, shade(pantsL, -18), shade(pantsD, -18));
-  rigLimb(X(pose.lB[0]), Y(pose.lB[1]), X(pose.lB[2]), Y(pose.lB[3]), lw, shade(pantsL, -18), shade(pantsD, -18));
-  rigLimb(shX, shY, X(pose.aB[0]), Y(pose.aB[1]), aw, shade(shirtD, 10), shade(shirtD, -18));
-  rigLimb(X(pose.aB[0]), Y(pose.aB[1]), X(pose.aB[2]), Y(pose.aB[3]), aw, skinD, shade(skinD, -20));
-  // trunk and neck
-  rigLimb(hipX, hipY, shX, shY, th, shirtL, shirtD);
-  rigLimb(shX, shY, headX, headY, Math.max(3, 3.6 * sc), skinD, shade(skinD, -18));
-  // head
-  rigBall(headX, headY, hr, hr + (sc > 1 ? 1 : 0), skinL, skinD);
-  // front limbs
-  rigLimb(hipX, hipY, X(pose.lF[0]), Y(pose.lF[1]), lw, pantsL, pantsD);
-  rigLimb(X(pose.lF[0]), Y(pose.lF[1]), X(pose.lF[2]), Y(pose.lF[3]), lw, pantsL, pantsD);
-  rigLimb(shX, shY, X(pose.aF[0]), Y(pose.aF[1]), aw, shirtL, shirtD);
-  rigLimb(X(pose.aF[0]), Y(pose.aF[1]), X(pose.aF[2]), Y(pose.aF[3]), aw, skinL, skinD);
 
   // Three passes each is what makes them read; with a horde on screen the
   // lit edge is the one you can least afford and least notice going.
   const lean = crowdCount > 15 && f.team === 'e' && !f.boss;
+
+  rigParts.length = 0;
+  // back limbs
+  rigLimb(hipX, hipY, X(pose.lB[0]), Y(pose.lB[1]), lw, tint(shade(pantsL, -18), dk), tint(shade(pantsD, -18), dk));
+  rigLimb(X(pose.lB[0]), Y(pose.lB[1]), X(pose.lB[2]), Y(pose.lB[3]), lw2, tint(shade(pantsL, -18), dk), tint(shade(pantsD, -18), dk));
+  rigLimb(shX, shY, X(pose.aB[0]), Y(pose.aB[1]), aw, tint(shade(shirtD, 10), dk), tint(shade(shirtD, -18), dk));
+  rigLimb(X(pose.aB[0]), Y(pose.aB[1]), X(pose.aB[2]), Y(pose.aB[3]), aw2, tint(skinD, dk), tint(shade(skinD, -20), dk));
+
+  // trunk in three: hips, a waist, then the chest — that is the whole
+  // difference between a body and a bar
+  const tx = (t) => hipX + (shX - hipX) * t, ty = (t) => hipY + (shY - hipY) * t;
+  rigLimb(tx(0), ty(0), tx(0.42), ty(0.42), th * 0.86, tint(shirtL, dk), tint(shirtD, dk));
+  rigLimb(tx(0.36), ty(0.36), tx(0.74), ty(0.74), th * 0.74, tint(shirtL, dk), tint(shirtD, dk));
+  rigLimb(tx(0.68), ty(0.68), tx(1), ty(1), th, tint(shirtL, dk), tint(shirtD, dk));
+  rigLimb(shX, shY, headX, headY, Math.max(3, 3.4 * sc), tint(skinD, dk), tint(shade(skinD, -18), dk));
+  // head
+  rigBall(headX, headY, hr, hr + (sc > 1 ? 1 : 0), tint(skinL, dk), tint(skinD, dk));
+  // front limbs
+  rigLimb(hipX, hipY, X(pose.lF[0]), Y(pose.lF[1]), lw, tint(pantsL, dk), tint(pantsD, dk));
+  rigLimb(X(pose.lF[0]), Y(pose.lF[1]), X(pose.lF[2]), Y(pose.lF[3]), lw2, tint(pantsL, dk), tint(pantsD, dk));
+  rigLimb(shX, shY, X(pose.aF[0]), Y(pose.aF[1]), aw, tint(shade(shirtL, 16), dk), tint(shade(shirtD, 14), dk));
+  rigLimb(X(pose.aF[0]), Y(pose.aF[1]), X(pose.aF[2]), Y(pose.aF[3]), aw2, tint(skinL, dk), tint(skinD, dk));
+  // shoulder caps, so the arm has somewhere to hang from
+  rigBall(shX + dir * 0.5 * sc, shY, aw * 0.75, aw * 0.7, tint(shirtL, dk), tint(shirtD, dk));
+
   drawRigPass(2, ink, false);          // outline — never dropped, it is the read
   drawRigPass(0, null, false);         // shadow tone
   if (!lean) drawRigPass(-2, null, true);   // lit edge
 
   /* ---- detail, drawn over the top and never outlined ---- */
+  // a fist, not a square: knuckles catch the light, the wrist does not
   const fistX = X(pose.aF[2]), fistY = Y(pose.aF[3]);
-  px(fistX - 1.5 * sc, fistY - 1.5 * sc, Math.max(3, 3.4 * sc), Math.max(3, 3.4 * sc), skinL);
-  px(fistX - 1.5 * sc, fistY - 1.5 * sc, Math.max(2, 2 * sc), Math.max(1, sc), shade(skinL, 22));
-  // boots
+  ellipse(fistX, fistY, 2.2 * sc, 2 * sc, tint(skinD, dk));
+  ellipse(fistX - dir * 0.4 * sc, fistY - 0.6 * sc, 1.7 * sc, 1.5 * sc, tint(skinL, dk));
+  px(fistX + dir * 1.4 * sc, fistY - 1.6 * sc, Math.max(1, sc), Math.max(1, sc), shade(skinL, 30));
+  px(X(pose.aF[0]), Y(pose.aF[1]) - sc, Math.max(1, 2 * sc), Math.max(1, sc), s.trim);   // cuff
+  // boots with a toe and a heel
   if (!lean) for (const leg of [pose.lF, pose.lB]){
     const bx = X(leg[2]), by = Y(leg[3]);
-    px(bx - 2.2 * sc, by - 1.5 * sc, Math.max(3, 4.6 * sc), Math.max(2, 2.4 * sc), leg === pose.lF ? '#241c22' : '#1b1519');
-    px(bx - 2.2 * sc, by - 1.5 * sc, Math.max(2, 3 * sc), 1, '#3d323a');
+    const front = leg === pose.lF;
+    const base = front ? '#241c22' : '#1b1519';
+    px(bx - 2.4 * sc, by - 2.4 * sc, Math.max(3, 4.4 * sc), Math.max(2, 2.6 * sc), base);
+    px(bx + dir * 0.6 * sc, by - 1.6 * sc, Math.max(3, 3.4 * sc), Math.max(2, 1.8 * sc), base);   // toe
+    px(bx - 2.6 * sc, by - 0.6 * sc, Math.max(4, 6 * sc), Math.max(1, sc), '#120e12');            // sole
+    px(bx - 2.4 * sc, by - 2.4 * sc, Math.max(2, 3 * sc), 1, front ? '#4a3d47' : '#332a32');
+    px(bx - dir * 2.2 * sc, by - 2.2 * sc, Math.max(1, sc), Math.max(1, 2 * sc), tint(pantsD, dk)); // trouser hem
   }
   // belt, then whatever this one wears over the shirt
   const beltX = Math.min(hipX, shX) - th / 2;
@@ -930,11 +955,15 @@ function drawFighter(f){
   drawHair(f, s, headX, headY, hr, sc, dir, hairL, hairD);
 
   if (!flash){                                    // face
-    const ex = headX + dir * (hr - 1.6 * sc);
-    px(ex, headY - sc, Math.max(1, sc), Math.max(1, 1.6 * sc), '#20131c');
-    px(ex - dir * 0.4 * sc, headY - 2.4 * sc, Math.max(1, 2 * sc), Math.max(1, sc), shade(skinD, -26));
-    px(headX + dir * hr, headY + 0.6 * sc, Math.max(1, sc), Math.max(1, sc), skinD);
-    px(headX - dir * (hr - sc), headY + 1.6 * sc, Math.max(1, 1.6 * sc), Math.max(1, sc), shade(skinD, -14));
+    const ex = headX + dir * (hr - 1.7 * sc);
+    px(ex, headY - sc, Math.max(1, sc), Math.max(1, 1.6 * sc), '#20131c');               // eye
+    px(ex - dir * 0.4 * sc, headY - 2.6 * sc, Math.max(1, 2.2 * sc), Math.max(1, sc), shade(skinD, -30)); // brow
+    px(headX + dir * (hr - 0.2 * sc), headY + 0.4 * sc, Math.max(1, 1.4 * sc), Math.max(1, 1.4 * sc), tint(skinL, dk)); // nose
+    px(headX + dir * (hr - 1.2 * sc), headY + 2.4 * sc, Math.max(1, 2 * sc), Math.max(1, sc), shade(skinD, -18)); // mouth
+    px(headX - dir * (hr - 0.6 * sc), headY - 0.4 * sc, Math.max(1, 1.4 * sc), Math.max(1, 2 * sc), tint(skinD, dk)); // ear
+    ellipse(headX - dir * 0.5 * sc, headY + hr - sc, hr * 0.8, sc, shade(skinD, -12));   // jaw shadow
+  } else {
+    px(headX - hr + sc, headY + sc, hr * 1.6, Math.max(1, sc), '#ff9a9a');               // a grimace
   }
 
   // In a crowd you lose yourself, so put a marker over your own head
@@ -959,6 +988,15 @@ function currentPose(f){
   const set = A[f.anim] || A.idle;
   const i = Math.min(set.length - 1, Math.max(0, f.frame | 0));
   return set[i];
+}
+
+const _tint = {};
+function tint(hex, amt){
+  if (!amt) return hex;
+  const k = hex + '|' + amt;
+  let v = _tint[k];
+  if (v === undefined){ v = _tint[k] = shade(hex, amt); }
+  return v;
 }
 
 function shade(hex, amt){
