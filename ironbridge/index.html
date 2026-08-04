@@ -2910,28 +2910,28 @@ function counterCatch(s){
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
-  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane',
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
-  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane',
+  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane', bound:'aim',
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
-  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 }, grp:'hold',
+  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'cd',
     d:'One more wave of the shape already marching, at 85% health. The wave clock does not move.' },
-  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 }, grp:'mine',
+  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 }, grp:'mine', bound:'aim',
     d:'Three seconds of raising it, then your hero is back at its own front structure. Broken by a blow.' },
-  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 }, grp:'theirs',
+  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 }, grp:'theirs', bound:'aim',
     d:'Their hero hits 40% softer, swings 30% slower and walks 40% slower for four and a half seconds.' },
-  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 }, grp:'mine',
+  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 }, grp:'mine', bound:'aim',
     d:'Everything on your hero comes off, and for five seconds what lands next barely sticks.' },
-  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 }, grp:'theirs',
+  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 }, grp:'theirs', bound:'aim',
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
-  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold',
+  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold', bound:'coin',
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
-  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane',
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
-  { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold',
+  { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
     say:'no target — it braces everything you have',
     d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
-  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
+  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold', bound:'cd',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
        what it needs is a STATE rather than a body: something of theirs already
@@ -2945,6 +2945,49 @@ const SPELLS = [
     d:'Every order of theirs that is still recovering takes 25 seconds longer. Nothing at all to one they are holding ready — time it to their cast.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
+/* WHAT ACTUALLY LIMITS EACH ONE.
+
+   A card says what an order costs, how long it takes to come back, and what it
+   lands on. It never said which of those is the one that stops you casting it —
+   and measured, they are wildly different orders in that respect.
+
+   Ten veteran matches per order, given to BOTH holds in the first slot, counting
+   how often it fired against how often its cooldown alone would have allowed,
+   and what share of the match it sat off cooldown and unspent:
+
+     order           cd    fired/match   ceiling   USE    ready+idle   no stores
+     Second Muster   110      4.0          4.3      92%      2.0%        12.2%
+     Pitch Fire       85      7.0          7.9      90%      3.8%        10.4%
+     Bombard          95      6.0          6.9      87%      5.6%        11.5%
+     Countermand     120      4.2          5.3      79%     10.5%         4.2%
+     Withdraw         70      6.0          8.8      68%     33.0%         0.0%
+     Hobble           80      5.0          8.2      61%     43.9%         0.0%
+     Pyre Brand       75      5.0          8.3      59%     44.9%         0.0%
+     Warp Banner     130      2.5          4.7      52%     53.8%         0.0%
+     Rampart         100      2.8          6.1      45%     22.4%        37.9%
+     Brace           100      2.3          5.9      39%     28.8%        37.2%
+     Unbind           90      1.6          6.7      23%     78.5%         0.0%
+
+   Four of eleven run at 87% or better of their cooldown ceiling: for those the
+   recovery IS the limit and nothing else is. Five sit ready and unspent for a
+   third to four fifths of the match, waiting for something to aim at. Two spend
+   a third of the match unaffordable.
+
+   That is the single most decision-relevant fact about a card at draft time and
+   it was the one thing the card did not carry. A slot spent on Unbind against a
+   commander who brought no debuff is a slot that does nothing for the whole
+   match, and nothing said so.
+
+   Hand-written because it is a MEASUREMENT rather than something derivable —
+   there is no expression over an order's fields that yields it, and pretending
+   otherwise would be worse than saying where the number came from. A test holds
+   that every order carries one and that the values come from this set. */
+const SPELL_BOUND = {
+  cd:   'its recovery is the limit',
+  aim:  'often waits for a target',
+  coin: 'often waits for the stores',
+};
+
 /* Prose counts things in words, and a count written by hand goes stale the
    first time the list it counts grows. Falls back to the digit rather than
    inventing a word it does not have. */
@@ -16357,7 +16400,8 @@ function spellWhyHtml(){
     // there is nothing on the bridge to aim it at, but AIM_SAID's phrase for
     // that — "it lands on your own hold" — flatly contradicts the sentence
     // directly above it, which is that it lands in THEIRS.
-    '<span>' + (d.say || AIM_SAID[d.target] || d.target) + '</span></div>';
+    '<span>' + (d.say || AIM_SAID[d.target] || d.target) + '</span>' +
+    '<span class="wb">' + (SPELL_BOUND[d.bound] || '') + '</span></div>';
 }
 
 function spellSlotsHtml(){
@@ -17062,10 +17106,21 @@ function drawAim(c){
 
    Per-strip quality rises 24% and the wasted presses nearly vanish, and the
    TOTAL barely moves — 21.4 to 22.7 seconds a match, about 6%, inside the
-   noise of twelve matches. The reason is that the strip is COOLDOWN-BOUND: at
-   roughly seven casts a match against a ninety-second cooldown in a match that
-   runs a median 590s, the order goes out very nearly every time it comes back,
-   so a press spent early mostly just means the next one arrives sooner.
+   noise of twelve matches.
+
+   The reason first written here was that the strip is cooldown-bound, at
+   "roughly seven casts a match against a ninety-second cooldown". Both halves
+   of that were wrong. The seven was per MATCH across both holds rather than
+   per hold, and it counted every call to stripStatus — which is Unbind, a
+   ninety-second order, AND Unfetter, a twenty-second hero skill, together.
+   Split: 3.29 Unbinds and 0.38 Unfetters per hold per match.
+
+   And Unbind is the LEAST cooldown-bound order in the set — 44% of its ceiling
+   in a match where the enemy commander is carrying Hobble, and 23% when it is
+   not, sitting ready and unspent for 78.5% of the match. See SPELL_BOUND. The
+   real reason the total is flat is that holds worth stripping are scarce: the
+   order is idle most of the time anyway, so waiting for a better one costs
+   almost nothing and gains almost nothing. Same number, right explanation.
 
    Which is worth being straight about, because it prices this label honestly.
    It is not worth double. It tells you whether THIS press is a good one — the
@@ -19701,7 +19756,7 @@ window.IB = {
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
-  SPELLS, SPELL, SPELL_GROUPS, SPELL_SLOTS, SLOTS_AT_START, killThing, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
+  SPELLS, SPELL, SPELL_BOUND, SPELL_GROUPS, SPELL_SLOTS, SLOTS_AT_START, killThing, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
