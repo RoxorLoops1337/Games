@@ -2833,10 +2833,20 @@ const COUNTER = { add:25 };
    on cooldowns rather than on anything you read there. This is the move. It
    does not stop an ability; it makes the one you can see coming cost them.
 
-   Everything a hero does with an ABILITY, which is what an ultimate is, so it
-   answers the whole class rather than one entry in it — a ward that only
-   blunted Cataclysm would be a ward you could only give after learning they
-   have Cataclysm, and useless in the match where they took Bladestorm. */
+   Everything a hero CASTS, rather than one named ability — a ward that only
+   blunted Cataclysm would be one you could only give after learning they have
+   Cataclysm, and useless in the match where they took Bladestorm.
+
+   What it does NOT reach, measured rather than assumed: the reduction keys on
+   the damage's `src` being the hero, so eight of the eighteen ultimates go
+   through it untouched — Unbreakable, Iron March, War Banner, Trueshot, Shadow
+   Legion, Blood Feast, Sanctuary and Hymn of Valour. Every one of those is a
+   buff, a shield or a summon: the damage that follows is dealt by a shade or
+   by an ally who was made stronger, and neither of them is the hero. War Banner
+   measured 514.8 into a braced hold and 514.8 into an unbraced one. That is
+   arguably the right line — you are bracing against their champion, not
+   against their army — but the card used to promise the whole class, so the
+   card says it now. */
 const BRACE = { dur:8, cut:.40 };
 /* How much there is for it to hold back: orders of theirs already recovering.
    One answer, asked by three different things — the cast, the greyed tile and
@@ -2871,7 +2881,7 @@ const SPELLS = [
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold',
     say:'no target — it braces everything you have',
-    d:'For eight seconds everything of yours takes 40% less from their heroes\u2019 abilities. Worth most while one of them is fighting on your half of the bridge.' },
+    d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
   { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
@@ -2904,8 +2914,8 @@ const NUM_WORD = (n) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', '
 
    Ordered by how universal they are: everybody has a lane, most matches have
    an enemy hero, every hold has walls, and a hero of your own is the one that
-   arrives last — measured at a median of 271 seconds, over half a match after
-   these are chosen. */
+   arrives last — measured at a median of about 262 seconds, roughly 42% of a
+   match after these are chosen. */
 const SPELL_GROUPS = [
   { k:'lane',   n:'The lane',      d:'a stretch of bridge, and whatever is standing on it' },
   { k:'theirs', n:'Their hero',    d:'one body of theirs, made worse at what it does' },
@@ -2913,11 +2923,13 @@ const SPELL_GROUPS = [
   { k:'hold',   n:'Your hold',     d:'your own walls and your own wave' },
   /* The timing is the whole decision here, and the warning alone did not carry
      it. These two are chosen in the opening twenty-two seconds and do nothing
-     until a hero exists — and a hero arrives late: measured over 28 holds,
-     every one of them forged a hero eventually, at a MEDIAN of 271 seconds
-     into a match that runs about 480. So a slot spent here is a slot that
-     spends more than half the match asleep, which is a thing to know while
-     choosing rather than a thing to find out. */
+     until a hero exists — and a hero arrives late: every hold forges one
+     eventually, at a MEDIAN of about 262 seconds. The match length behind that
+     was wrong the first time it was written down — 480s was the sampling
+     window, not the match — and a veteran match actually runs a median 590s
+     over sixty of them. So a slot spent here sleeps through roughly 42% of the
+     match rather than "over half": still the longest wait of anything in the
+     set, and still a thing to know while choosing rather than to find out. */
   { k:'mine',   n:'Your hero',     d:'nothing until you have one, and most holds do not by the fourth minute' },
 ];
 
@@ -5431,15 +5443,31 @@ function aiSpellTarget(s, d, fs){
      casts per draft when every other order in the set runs 1 to 5.6: a
      commander who drafted it essentially never got to use it.
 
-     Dropping that clause takes the window to 25.2%, and it is the right window
-     anyway — Brace blunts a hero's ABILITIES, which it throws constantly, not
-     its ultimate, which it throws once a minute. The card was teaching the
-     player to wait for the same moment that never comes; it no longer does. */
+     Dropping that clause alone was an overcorrection, and the sentence that
+     replaced it — "abilities, which it throws constantly" — was measurably
+     false: a hero lands a damaging ability about once every ten seconds, into
+     an eight-second ward. Presence is not a test. Measured over 337 windows,
+     bracing on "a hero is near" caught nothing at all 49% of the time: a
+     hundred-second recovery and 30 wood and 30 iron for eight seconds of air.
+
+     So it asks whether they have something to THROW, which is the thing this
+     order answers. skillArmed is the same predicate the hero's own brain uses
+     and the ultimate tile lights from, so all three agree about what "loaded"
+     means. Measured across the same matches:
+
+       gate                      holds    catches an ability
+       near                       25.7%          51.0%
+       near + something armed     12.3%          62.7%
+       near + armed + within 10    9.3%          67.4%
+
+     The middle one. The tightest buys five points of accuracy for a third of
+     the opportunity, and the old ultimate-only clause held 2.5% — unusable. */
   if (d.id === 'brace'){
     if (s.braceT > 0) return null;
     for (const h of G.sides[fs].heroes){
       if (h.dead || !h.inLane) continue;
-      if (Math.abs(h.x - frontlineX(s.i)) < 16) return {};
+      if (Math.abs(h.x - frontlineX(s.i)) >= 16) continue;
+      if (h.skills.some(sk => skillArmed(h, sk))) return {};
     }
     return null;
   }
