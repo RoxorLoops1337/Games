@@ -12754,6 +12754,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(typeof IB.chooseSpell(s, 1, 'bombard') === 'string', 'the same spell cannot fill both slots');
     t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
     t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
+    const SPELLS_IN = (k) => IB.SPELLS.filter(d => d.grp === k);
     t.ok(IB.SPELLS.length === 9 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
       'there are nine of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
     // Every one has a target kind the banner knows how to ask for. A tenth
@@ -12761,6 +12762,64 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // cannot say what would satisfy it.
     t.ok(IB.SPELLS.every(d => d.target === 'self' || IB.AIM_ASK[d.target]),
       'and a target the aiming banner can put into words');
+
+    /* ---- and the sheet teaches the SHAPE of the set.
+
+       Nine cards in one flat grid, each with a name and a cooldown, gave a
+       first-time player no way to see that three of them answer a stretch of
+       lane and that two do nothing at all without a hero of their own. Which
+       matters, because the whole skill in picking a pair is covering two
+       different problems rather than two flavours of the same one — and a
+       flat grid was as likely to teach you to take Warp Banner beside
+       Unbind. */
+    t.ok(IB.SPELLS.every(d => d.grp && IB.SPELL_GROUPS.some(g => g.k === d.grp)),
+      'every order belongs to one of the groups');
+    t.ok(IB.SPELL_GROUPS.every(g => SPELLS_IN(g.k).length > 0),
+      'and no group is empty (' + IB.SPELL_GROUPS.map(g => g.k + ':' + SPELLS_IN(g.k).length).join(' ') + ')');
+    t.ok(IB.SPELL_GROUPS.reduce((a, g) => a + SPELLS_IN(g.k).length, 0) === IB.SPELLS.length,
+      'the groups account for all nine and no order twice');
+    t.ok(IB.SPELL_GROUPS.every(g => g.n && g.d), 'each group says what it is and what it is for');
+    // The two that need a hero of your own are one group, and it is the same
+    // pair the Host's draft refuses to take twice. Two lists of the same fact
+    // would drift the first time a tenth order joined either.
+    const heroGrp = SPELLS_IN('mine').map(d => d.id).sort().join(',');
+    t.ok(heroGrp === Object.keys(IB.SPELL_OWN_HERO).sort().join(','),
+      'the hero-only group is exactly the hero-only pair the draft knows about (' + heroGrp + ')');
+
+    const grid = IB.spellGridHtml();
+    t.ok((grid.match(/class="sgh"/g) || []).length === IB.SPELL_GROUPS.length,
+      'the sheet prints a heading per group');
+    t.ok((grid.match(/class="sptile/g) || []).length === IB.SPELLS.length,
+      'and still every card, none lost to the grouping');
+    // Headings SPAN the grid rather than sitting in a cell of their own. Four
+    // separate grids would give the two-card groups cards of a different width
+    // from the three-card one, and nine cards that are not all the same size
+    // read as nine cards of unequal importance.
+    const gcss = SRC.slice(SRC.indexOf('  .sgh{'), SRC.indexOf('  .sgh b{'));
+    t.ok(/grid-column:1 \/ -1/.test(gcss), 'and the heading spans the grid rather than taking a cell');
+    t.ok((grid.match(/class="spgrid"/g) || []).length === 1, 'which is one grid, so every card is one width');
+    // Order matters: the group that needs something you may never build comes
+    // last, and the one every match has comes first.
+    t.ok(grid.indexOf('>The lane<') < grid.indexOf('>Your hero<'),
+      'the lane comes before the group that needs a hero you may not have');
+
+    /* The sheet is read by scrolling it, and the whole design falls over if
+       the panel a press fills in is below the fold — the press would have no
+       visible effect at all, which is the one thing the two-press rule needs
+       to be obvious.
+
+       The pin used to live inside the phone's media query, because on a
+       desktop the sheet fitted. Then the nine cards grew four group headings
+       between them and it stopped fitting: at 1440x900 the grid ran 897px
+       into an 804px sheet and put ACCEPT below the bottom of the screen. A
+       sheet whose primary action can be pushed off the end by its own content
+       wants its footer pinned at every size, not at one. */
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    const pin = css.indexOf('.spfoot{ position:sticky');
+    t.ok(pin > 0, 'the sheet footer is pinned');
+    const phone = css.indexOf('@media (max-width:700px){');
+    t.ok(pin < phone,
+      'and pinned for every screen rather than only the one that noticed first');
 
     // They belong to the HOLD. Three heroes is still two spells; no heroes at
     // all is still two spells.

@@ -917,6 +917,14 @@
      on a row of its own looking like an afterthought, which is exactly what a
      new order must not look like next to eight that shipped together. */
   .spgrid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  /* The section break. Spans the whole grid, which is what makes it start a
+     new row and leaves every card the same width as every other. */
+  .sgh{ grid-column:1 / -1; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+    margin:5px 0 -1px; padding-bottom:4px; border-bottom:1px solid rgba(201,163,85,.22); }
+  .sgh:first-child{ margin-top:0; }
+  .sgh b{ font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t4);
+    letter-spacing:.6px; color:var(--gold); font-weight:700; }
+  .sgh i{ font-style:normal; font-size:var(--t2); color:var(--dim2); }
   /* Their two, in the dock column that already describes what is walking at
      you. On felt rather than card, because this is a READING of the other side
      rather than a control — nothing here is pressable, and it should not
@@ -977,21 +985,27 @@
   .spwhy .cost i{ background:rgba(255,240,210,.09);
     box-shadow:inset 0 0 0 1px rgba(255,240,210,.12); }
   .spwhy.none .wn{ color:var(--dim2); }
-  /* A phone reads the sheet by SCROLLING it, and the whole design falls over if
-     the panel a tap fills in is below the fold — the tap would have no visible
+  /* The sheet is read by SCROLLING it, and the whole design falls over if the
+     panel a press fills in is below the fold — the press would have no visible
      effect at all, which is exactly the thing the two-press rule needs to be
-     obvious. So on a narrow screen the panel and the two buttons pin to the
-     bottom of the sheet and the eight cards scroll past behind them.
-     `bottom` eats the sheet's own bottom padding, or the last few pixels of
-     the grid would show under the footer. */
+     obvious. So the panel and the two buttons pin to the bottom of the sheet
+     and the cards scroll past behind them. `bottom` eats the sheet's own
+     bottom padding, or the last few pixels of the grid would show under it.
+
+     This used to be inside the phone's media query, because on a desktop the
+     sheet fitted. Then the nine cards grew four group headings between them
+     and it stopped fitting: at 1440x900 the grid ran 897px into an 804px
+     sheet and put ACCEPT below the bottom of the screen. A sheet whose
+     primary action can be pushed off the end by its own content wants the
+     footer pinned at every size, not at one. */
+  .spfoot{ position:sticky; bottom:-18px; z-index:3; padding:10px 0 18px;
+    background:linear-gradient(180deg,rgba(24,34,45,0) 0,#1b2531 10px,#18222d 100%); }
+  .spfoot .spwhy{ margin-top:0; }
+  .spfoot .rowbtn{ margin-top:8px; }
   @media (max-width:700px){
     .spgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
     .spslots{ flex-direction:column; }
-    .spfoot{ position:sticky; bottom:-18px; z-index:3; padding:10px 0 18px;
-      background:linear-gradient(180deg,rgba(24,34,45,0) 0,#1b2531 10px,#18222d 100%); }
-    .spfoot .spwhy{ margin-top:0; }
     .spwhy{ min-height:0; }
-    .spfoot .rowbtn{ margin-top:8px; }
     .spwhy .wd{ font-size:var(--t3); }
   }
   .rowbtn{ display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
@@ -2610,26 +2624,46 @@ const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
-  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 },
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane',
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
-  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 },
+  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane',
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
-  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 },
+  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 }, grp:'hold',
     d:'One more wave of the shape already marching, at 85% health. The wave clock does not move.' },
-  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 },
+  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 }, grp:'mine',
     d:'Three seconds of raising it, then your hero is back at its own front structure. Broken by a blow.' },
-  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 },
+  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 }, grp:'theirs',
     d:'Their hero hits 40% softer, swings 30% slower and walks 40% slower for four and a half seconds.' },
-  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 },
+  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 }, grp:'mine',
     d:'Everything on your hero comes off, and for five seconds what lands next barely sticks.' },
-  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 },
+  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 }, grp:'theirs',
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
-  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 },
+  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold',
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
-  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 },
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
+
+/* What the nine are FOR, in four answers.
+
+   The sheet used to be nine cards in one flat grid, each with a name and a
+   cooldown, and a first-time player had no way to see the shape of the set:
+   that three of them answer a stretch of lane, that two do nothing at all
+   without a hero of your own, that two are aimed at theirs. Which matters,
+   because the whole skill in picking a pair is covering two different
+   problems rather than two flavours of the same one — and the flat grid was
+   as likely to teach you to take Warp Banner beside Unbind.
+
+   Ordered by how universal they are: everybody has a lane, most matches have
+   an enemy hero, every hold has walls, and a hero of your own is the one
+   thing you might never get round to building. */
+const SPELL_GROUPS = [
+  { k:'lane',   n:'The lane',      d:'a stretch of bridge, and whatever is standing on it' },
+  { k:'theirs', n:'Their hero',    d:'one body of theirs, made worse at what it does' },
+  { k:'hold',   n:'Your hold',     d:'your own walls and your own wave' },
+  { k:'mine',   n:'Your hero',     d:'nothing at all until you have one on the bridge' },
+];
 
 /* ------------------------------------------------- what the cast actually did
 
@@ -15309,17 +15343,29 @@ function spellSlotsHtml(){
 // cost and the recovery are on the card too because they are one line each and
 // they are what a player compares; the paragraph is not, which is why it lives
 // in one panel below rather than eight times over.
+/* One grid, with headings that span it. Four separate grids would have given
+   the two-card groups cards of a different width from the three-card one, and
+   nine cards that are not all the same size read as nine cards of unequal
+   importance. A spanning heading starts a new row on its own, which is the
+   section break, and every card stays exactly as wide as every other. */
 function spellGridHtml(){
   const s = me();
-  return '<div class="spgrid">' + SPELLS.map(d => {
-    const held = s.spells.indexOf(d.id);
-    return '<button class="sptile' + (spellUI.at === d.id ? ' at' : '') +
-      (held >= 0 ? ' taken' : '') + '" data-spell="' + d.id + '" title="' + esc(d.d) + '">' +
-      (held >= 0 ? '<span class="spin">slot ' + (held + 1) + '</span>' : '') +
-      SPELL_ICON[d.id] +
-      '<span class="spn">' + d.n + '</span>' +
-      '<span class="spc">' + d.cd + 's</span></button>';
-  }).join('') + '</div>';
+  let h = '<div class="spgrid">';
+  for (const g of SPELL_GROUPS){
+    const inside = SPELLS.filter(d => d.grp === g.k);
+    if (!inside.length) continue;
+    h += '<div class="sgh"><b>' + g.n + '</b><i>' + g.d + '</i></div>';
+    for (const d of inside){
+      const held = s.spells.indexOf(d.id);
+      h += '<button class="sptile' + (spellUI.at === d.id ? ' at' : '') +
+        (held >= 0 ? ' taken' : '') + '" data-spell="' + d.id + '" title="' + esc(d.d) + '">' +
+        (held >= 0 ? '<span class="spin">slot ' + (held + 1) + '</span>' : '') +
+        SPELL_ICON[d.id] +
+        '<span class="spn">' + d.n + '</span>' +
+        '<span class="spc">' + d.cd + 's</span></button>';
+    }
+  }
+  return h + '</div>';
 }
 
 // What the Accept button says and whether it can be pressed. One function, so
@@ -18048,7 +18094,7 @@ window.IB = {
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
-  SPELLS, SPELL, SPELL_SLOTS, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
+  SPELLS, SPELL, SPELL_GROUPS, SPELL_SLOTS, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
