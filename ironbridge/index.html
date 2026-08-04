@@ -257,6 +257,16 @@
   .ord:hover:not(.dead){ background:var(--raise-hi); border-color:var(--rim-hi); }
   .ord:active:not(.dead){ transform:translateY(3px); box-shadow:inset 0 2px 5px rgba(0,0,0,.6); }
   .ord .ico{ width:19px; height:19px; vertical-align:0; position:relative; z-index:2; }
+  /* The key that casts it, on the control rather than only in the help sheet.
+     Cream-faced like the tile it sits on — the kbd elsewhere in the game is
+     drawn for felt and would be a dark hole punched in a card. */
+  .ord .okey{ position:relative; z-index:2; flex:0 0 auto; min-width:14px; padding:0 4px;
+    font:700 9px system-ui; line-height:15px; color:#6b5326; background:rgba(255,255,255,.5);
+    border:1px solid rgba(122,90,44,.4); border-bottom-width:2px; border-radius:var(--r1);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6); }
+  /* A phone has no Q and no E. It also has the least room, so the pip is the
+     first thing to go rather than something to shrink. */
+  body.narrow .ord .okey{ display:none; }
   .ord .on{ position:relative; z-index:2; overflow:hidden; text-overflow:ellipsis; }
   /* The shutter. Height is written every frame from the cooldown; nothing else
      about the control moves, so a recovering order is legible without reading. */
@@ -15278,6 +15288,16 @@ const AIM_SAID = {
   struct:  'aimed at one of your structures',
 };
 const SLOT_NAME = ['first order', 'second order'];
+/* The keys that cast them. ONE list: the key handler reads it, the tile in the
+   bar prints it, and the help sheet's line is checked against it — so the pip
+   on the control cannot end up naming a key that does something else.
+
+   The tile is where this belongs. The sheet has listed Q and E all along, but
+   a player deciding whether to spend a bombardment is not going to open the
+   help sheet to find out how — and the orders are the one control in the game
+   that is genuinely time-critical, so reaching for the mouse is the cost of
+   not knowing. */
+const ORDER_KEY = ['Q', 'E'];
 // When an empty slot stops counting quietly and starts insisting. Late enough
 // that it is not nagging for the whole window, early enough that there is
 // still time to open the sheet, read one and take it.
@@ -15508,8 +15528,9 @@ function ordersHtml(){
     // damage on any structure, no enemy hero — and what the control is for in
     // that window is the choice.
     h += '<button class="ord" data-slot="' + i + '"' +
-      ' title="' + esc(d.n + ' — ' + d.d + (open ? ' (press to change it)' : '')) + '">' +
-      '<i class="ocd"></i>' + SPELL_ICON[d.id] +
+      ' title="' + esc(d.n + ' — ' + d.d + ' (' + ORDER_KEY[i] + ')' +
+        (open ? ' (press to change it)' : '')) + '">' +
+      '<i class="ocd"></i><kbd class="okey">' + ORDER_KEY[i] + '</kbd>' + SPELL_ICON[d.id] +
       '<span class="on">' + d.n + '</span></button>';
   }
   return h;
@@ -16869,7 +16890,7 @@ const KEYS = [
   { k:'M',     a:'camMid',  d:'look at the middle of the bridge' },
   { k:'B',     a:'camFoe',  d:'look at their base' },
   { k:'F',     a:'follow',  d:'follow the fighting' },
-  { k:'Q E',   a:'order',   d:'cast your first or second commander order' },
+  { k:ORDER_KEY.join(' '), a:'order', d:'cast your first or second commander order' },
   { k:'+ −',   a:'zoom',    d:'zoom in and out' },
   { k:'?',     a:'help',    d:'this sheet' },
   { k:'Esc',   a:'close',   d:'close whatever is open' },
@@ -16892,8 +16913,8 @@ function keyAction(key){
   if (k === 'm') return 'camMid';
   if (k === 'b') return 'camFoe';
   if (k === 'f') return 'follow';
-  if (k === 'q') return 'order1';
-  if (k === 'e') return 'order2';
+  for (let i = 0; i < ORDER_KEY.length; i++)
+    if (k === ORDER_KEY[i].toLowerCase()) return 'order' + (i + 1);
   if (k === '+' || k === '=') return 'zoomIn';
   if (k === '-' || k === '_') return 'zoomOut';
   if (k === '?' || k === '/') return 'help';
@@ -18098,7 +18119,7 @@ window.IB = {
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
-  ordersHtml, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
+  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,

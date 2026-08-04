@@ -14069,6 +14069,46 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and lifting fires at where it ended, moved or not');
   }
 
+  /* ------------------------------------------ the key is on the control
+     The help sheet has listed Q and E all along, but a player deciding
+     whether to spend a bombardment is not going to open the help sheet to
+     find out how — and the orders are the one control in the game that is
+     genuinely time-critical, so reaching for the mouse is the cost of not
+     knowing. */
+  {
+    const s = fresh(8580);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'rampart');
+    step(23);
+    const bar = IB.ordersHtml();
+    for (let i = 0; i < IB.SPELL_SLOTS; i++)
+      t.ok(bar.includes('<kbd class="okey">' + IB.ORDER_KEY[i] + '</kbd>'),
+        'the tile carries the key that casts it — ' + IB.ORDER_KEY[i]);
+
+    /* ONE list. The key handler reads it, the tile prints it and the help
+       sheet's line is built from it, so a pip on the control cannot end up
+       naming a key that does something else — which is the failure mode of
+       writing 'Q' in three places. */
+    for (let i = 0; i < IB.ORDER_KEY.length; i++)
+      t.ok(IB.keyAction(IB.ORDER_KEY[i].toLowerCase()) === 'order' + (i + 1),
+        IB.ORDER_KEY[i] + ' really is the key that casts slot ' + (i + 1));
+    const line = IB.KEYS.find(k => k.a === 'order');
+    t.ok(line && line.k === IB.ORDER_KEY.join(' '),
+      'and the help sheet lists the same two (' + (line ? line.k : 'missing') + ')');
+    t.ok(!/if \(k === 'q'\) return/.test(SRC),
+      'with no second copy of the binding left behind in the handler');
+
+    // A phone has no Q and no E, and the least room to say so.
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    t.ok(/body\.narrow \.ord \.okey\{ display:none/.test(css),
+      'a phone drops the pip rather than shrinking it');
+    // Cream-faced, because the kbd everywhere else in the game is drawn for
+    // felt and would be a dark hole punched in a card.
+    const pip = css.slice(css.indexOf('.ord .okey{'), css.indexOf('}', css.indexOf('.ord .okey{')));
+    t.ok(/color:#6b5326/.test(pip) && !/#232d40/.test(pip),
+      'and the pip is inked for card rather than for felt');
+  }
+
   /* --------------------------------- what the other commander is carrying
      Both holds draft two out of the same nine, and the only trace of theirs
      was an effect on a body that never named its source: a minion slowing
