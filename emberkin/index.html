@@ -2029,7 +2029,11 @@ function refresh(m) {
   m.atk = statAt(sp.base[1], m.lvl);
   m.def = statAt(sp.base[2], m.lvl);
   m.spd = statAt(sp.base[3], m.lvl);
-  m.hp = Math.min(m.max, m.hp + (m.max - oldMax));
+  // A level-up hands over the HP it added. Clamped at both ends: if this mon is
+  // carrying a maximum bigger than its stats say it should — a caught foe still
+  // holding the battle pool, an old save — the correction must not push it
+  // through zero and faint a creature that was standing up a moment ago.
+  m.hp = clamp(m.hp + (m.max - oldMax), m.hp > 0 ? 1 : 0, m.max);
   m.types = sp.types.slice();
 }
 
@@ -2115,7 +2119,7 @@ const MAPS = {
       { x: 12, y: 5, dir: 'left', sprite: 'npc_rival', name: 'Wick', id: 't_wick1', requires: 'gotStarter',
         lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
         dynamic: 'rival1',
-        trainer: { team: [['dewdrip', 7]], prize: 300,
+        trainer: { team: [['dewdrip', 5]], prize: 300,
           lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
         after: ['I am going north. Try to keep up.'] },
     ],
@@ -2568,13 +2572,22 @@ function onArrive() {
 const SIGHT = 4;                       // how far down their own line a trainer looks
 
 /**
+ * A trainer only gets to ambush you once. Beat them and they are done; lose to
+ * them and they have made their point — the rematch is there when you go and
+ * ask for it. Without this a trainer standing on the only road out of town
+ * re-challenges you the moment you walk back, and a loss becomes a soft-lock
+ * you cannot train your way out of, because the grass is on their side of them.
+ */
+const sightSpent = (id) => `seen_${id}`;
+
+/**
  * Did an unbeaten trainer just see the player walk into their line? Sight is
  * blocked by anything solid, so you can sneak behind a tree.
  */
 function trainerSight() {
   const p = G.player;
   for (const n of (G.map.npcs || [])) {
-    if (!n.trainer || !npcActive(n) || G.flags[n.id]) continue;
+    if (!n.trainer || !npcActive(n) || G.flags[n.id] || G.flags[sightSpent(n.id)]) continue;
     const [dx, dy] = DIRS[n.dir] || [0, 1];
     for (let i = 1; i <= SIGHT; i++) {
       const x = n.x + dx * i, y = n.y + dy * i;
@@ -2582,6 +2595,7 @@ function trainerSight() {
       if (x === p.x && y === p.y) {
         // Turn and face whoever just called you out.
         p.dir = dx ? (dx > 0 ? 'left' : 'right') : (dy > 0 ? 'up' : 'down');
+        G.flags[sightSpent(n.id)] = 1;         // they got their ambush; that was it
         G.alert = { npc: n, t: 0 };
         say(n.name, ['…'], () => { G.alert = null; talkTo(n); });
         return true;
@@ -2753,7 +2767,7 @@ function startBattle(opt) {
     // the card game
     draw: [], hand: [], disc: [], exh: [],
     energy: 0, phase: 'player', intent: null, powers: {},
-    mods: { atk: 0, def: 0, thorns: 0 }, maxAdd: 0, shield: 0,
+    mods: { atk: 0, def: 0, thorns: 0 }, maxAdd: 0, maxAdds: new Map(), shield: 0,
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
@@ -2976,6 +2990,7 @@ function addCaught(mon) {
   catchMon(mon.species);
   G.caught++;
   mon.stages = { atk: 0, def: 0, spd: 0 };
+  untoughen(mon);
   if (G.party.length < 6) { G.party.push(mon); return 'party'; }
   G.box.push(mon); return 'box';
 }
@@ -3033,6 +3048,22 @@ function toughen(mon) {
 }
 
 /**
+ * Hand the battle pool back. A foe you catch joins the party as itself, not as
+ * the fight-sized version of itself — otherwise every kin you ever caught walks
+ * around with double HP, and the first time one levels up `refresh` recomputes
+ * the honest maximum, finds it smaller than what it is carrying, and drives HP
+ * straight through zero.
+ */
+function untoughen(mon) {
+  const real = hpAt(DEX[mon.species].base[0], mon.lvl);
+  if (mon.max === real) return mon;
+  const frac = mon.max > 0 ? mon.hp / mon.max : 1;
+  mon.max = real;
+  mon.hp = clamp(Math.round(real * frac), 1, real);      // it was caught, so it lives
+  return mon;
+}
+
+/**
  * Kin moves are the heavy hitters, so they are priced as such: a real move
  * plus a support card is a turn, and three real moves is not. That is where
  * the deck earns its place.
@@ -3085,12 +3116,20 @@ function drawCards(log, n) {
   }
 }
 
-/** Battle-only modifiers live here so nothing leaks into the save. */
+/**
+ * Battle-only modifiers live here so nothing leaks into the save.
+ *
+ * Max HP has to be given back to whichever kin it was given to. Tracking one
+ * running total and taking it off whoever happened to be out at the end meant
+ * you could play a +max HP card, switch, and keep the HP forever while the kin
+ * you switched to paid for it — permanently, in the save, every battle.
+ */
 function clearMods(b) {
-  if (b.maxAdd && b.mine) {
-    b.mine.max = Math.max(1, b.mine.max - b.maxAdd);
-    b.mine.hp = Math.min(b.mine.hp, b.mine.max);
+  for (const [mon, add] of (b.maxAdds || [])) {
+    mon.max = Math.max(1, mon.max - add);
+    mon.hp = Math.min(mon.hp, mon.max);
   }
+  b.maxAdds = new Map();
   b.mods = { atk: 0, def: 0, thorns: 0 };
   b.maxAdd = 0;
   b.shield = 0;
@@ -3110,6 +3149,27 @@ function startPlayerTurn(log) {
   if (chill) snap(log, `${dispName(b.mine)} is chilled — one card fewer.`, 'status', 'mine');
   readIntent();
   b.phase = 'player';
+  aimPlayable(b);
+}
+
+/**
+ * Park the aim on a card you can actually pay for. Only ever called when the
+ * hand changes underneath the player — dealing a hand, or spending the card
+ * they were on — never when they walked the aim there themselves, because
+ * looking at a card you cannot afford yet is a fair thing to want to do.
+ * Without it, confirm lands on a dead card and does nothing but toast at you
+ * while three playable cards sit next to it.
+ */
+function aimPlayable(b) {
+  if (!b.hand.length) { b.sel = 0; return; }
+  b.sel = clamp(b.sel || 0, 0, b.hand.length - 1);
+  if (cardCost(b.hand[b.sel]) <= b.energy) return;
+  // Nearest playable card, searching outward from where the aim already is.
+  for (let d = 1; d < b.hand.length; d++) {
+    for (const i of [b.sel + d, b.sel - d]) {
+      if (i >= 0 && i < b.hand.length && cardCost(b.hand[i]) <= b.energy) { b.sel = i; return; }
+    }
+  }
 }
 
 /** Damage the player's side takes, shield first. */
@@ -3126,6 +3186,24 @@ function hurtMine(log, amount, why) {
     snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine');
   }
   return dmg;
+}
+
+/**
+ * What a card's attack actually lands for. A card says "Deal 10" and deals 10 —
+ * the number on the card is the number, not a power rating fed through the
+ * level-scaled move formula. Cards belong to you, not to the kin holding them,
+ * so they must not shrink because the kin is level 5 or because the foe rolled
+ * a fat defence stat; growing the card is the only thing that grows the damage.
+ * Attack buffs add on top, an element on the card still meets the type chart,
+ * and crits still land, because those are the game's own language.
+ */
+function cardDamage(value, type, opts = {}) {
+  const b = B();
+  const eff = type ? effect(type, b.foe.types) : 1;
+  const crit = opts.crit != null ? opts.crit : critRoll();
+  const raw = Math.max(0, value + (b.mods.atk || 0));
+  const dmg = Math.floor(raw * eff * (crit ? 1.5 : 1));
+  return { dmg: eff === 0 ? 0 : Math.max(1, dmg), eff, crit };
 }
 
 /**
@@ -3163,8 +3241,7 @@ function playCard(i) {
   if (def.kind === 'attack') {
     const hits = fx.hits || 1;
     for (let h = 0; h < hits && b.foe.hp > 0; h++) {
-      const synth = { name: def.name, type: fx.type || 'Wild', pow: Math.max(1, value * 4), acc: 100 };
-      const { dmg, eff } = damageOf(b.mine, b.foe, synth);
+      const { dmg, eff } = cardDamage(value, fx.type);
       b.foe.hp = clamp(b.foe.hp - dmg, 0, b.foe.max);
       snap(log, `Foe ${dispName(b.foe)} took ${dmg}.`, 'hit', 'foe');
       const w = effWord(eff);
@@ -3191,6 +3268,9 @@ function playCard(i) {
   if (amt('maxhp')) {
     const add = amt('maxhp');
     b.maxAdd += add; b.mine.max += add; b.mine.hp += add;
+    // Booked against this kin, so the switch does not hand the bill to another.
+    if (!b.maxAdds) b.maxAdds = new Map();
+    b.maxAdds.set(b.mine, (b.maxAdds.get(b.mine) || 0) + add);
     snap(log, `${dispName(b.mine)}'s max HP is up ${add}.`, 'heal', 'mine');
   }
   if (fx.healFull) { b.mine.hp = b.mine.max; snap(log, `${dispName(b.mine)} is whole again.`, 'heal', 'mine'); }
@@ -3274,7 +3354,12 @@ function foeTurn(log) {
 
 function afterFoe(log) {
   const b = B();
-  if (b.foe.hp <= 0 && !b.over) { resolveFoeDown(log); return; }
+  // A foe can die on its own turn — burn or snare finishing it at end of turn,
+  // or thorns answering the hit it just landed. When that happens and there is
+  // another kin behind it, the next one steps in and the turn has to come back
+  // to the player: returning here left the battle sitting in the foe phase with
+  // an empty hand and no energy, and nothing the player pressed could move it.
+  if (b.foe.hp <= 0 && !b.over) resolveFoeDown(log);
   if (b.mine.hp <= 0) {
     snap(log, `${dispName(b.mine)} has fainted.`, 'faint', 'mine');
     clearMods(b);
@@ -3519,7 +3604,10 @@ const RIVAL_PICK = { cindercub: 'dewdrip', dewdrip: 'sproutle', sproutle: 'cinde
 /** A trainer's team, resolved at challenge time so the rival can react to you. */
 function trainerTeam(npc) {
   const pick = RIVAL_PICK[G.flags.starter] || 'dewdrip';
-  if (npc.dynamic === 'rival1') return [[pick, 7]];
+  // Same level as yours. He already has the type advantage and two levels on
+  // top of that made the first fight in the game unwinnable, which is a poor
+  // way to open — and he stands between the town and the only grass to grind in.
+  if (npc.dynamic === 'rival1') return [[pick, 5]];
   if (npc.dynamic === 'rival2') {
     const evo = DEX[pick].evo ? DEX[pick].evo[0] : pick;
     return [['kindlark', 15], [evo, 16]];
@@ -3770,6 +3858,7 @@ function playSelected() {
   playCue('select');
   const log = playCard(i);
   b.sel = clamp(i, 0, Math.max(0, b.hand.length - 1));
+  aimPlayable(b);
   submitLog(log, { instant: true });
 }
 
@@ -3854,7 +3943,11 @@ function finishBattle() {
       enterMap('wayhouse', 5, 5, 'down');
       G.mode = 'world';
       playCue('world');
-      say('Sable', [`Sable patched them up. It cost you ${lost} shards.`, 'Go easier out there.'], () => saveGame());
+      const after = [`Sable patched them up. It cost you ${lost} shards.`, 'Go easier out there.'];
+      // Say it out loud, so nobody stands in front of a trainer wondering
+      // whether the game has stopped letting them through.
+      if (b.npc) after.push(`${b.npc.name} will not stop you again. Go and ask for the rematch when you want it.`);
+      say('Sable', after, () => saveGame());
     });
   } else {
     done();
@@ -4753,7 +4846,7 @@ if (typeof window !== 'undefined') {
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
-    cardValue, cardText, cardCost, cardName, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
+    cardValue, cardText, cardCost, cardName, cardDamage, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
     openChest, rollRarity, cardsOfRarity, gemReward, moveCost, clearMods, hurtMine, toughen, FOE_HP_MUL,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn,

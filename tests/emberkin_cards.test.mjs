@@ -223,6 +223,43 @@ eq(all.filter((c) => c.src === 'deck').length, EK6.G.deck.length, 'every deck ca
 eq(all.filter((c) => c.src === 'kin').length, EK6.G.party[0].moves.length, 'and every move the kin knows');
 ok(all.filter((c) => c.src === 'deck').every((c) => EK6.G.deck.includes(c.u)), 'nothing you set aside came along');
 
+section('a card deals the number printed on it');
+// The card is the contract. It must not be quietly rescaled by the kin's level
+// or the foe's defence, or "Deal 10" means 3 at level 5 and 30 at level 40 and
+// growing a card by +1 stops meaning anything you can read off the card.
+const EK7 = withDeck(loadGame({}));
+const flat = (species, lvl, foe, flvl, cardId) => {
+  EK7.G.party = [EK7.mkMon(species, lvl)];
+  EK7.G.battle = null;
+  EK7.startBattle({ foe: EK7.mkMon(foe, flvl), wild: true });
+  const c = EK7.CARDS[cardId];
+  return EK7.cardDamage(c.v, (c.fx || {}).type, { crit: false }).dmg;
+};
+const strikeV = EK7.CARDS.strike.v;
+eq(flat('cindercub', 5, 'gargolem', 5, 'strike'), strikeV, `a fresh level-5 kin's Strike deals ${strikeV}`);
+eq(flat('pyrelynx', 50, 'sproutle', 5, 'strike'), strikeV, 'and a level-50 kin\'s Strike deals exactly the same');
+eq(flat('cindercub', 5, 'gargolem', 40, 'strike'), strikeV, 'a fat defence stat does not shrink it either');
+
+// An element on the card still meets the type chart — that is the card's own
+// text, not the kin's level talking.
+EK7.G.party = [EK7.mkMon('cindercub', 20)];
+EK7.G.battle = null;
+EK7.startBattle({ foe: EK7.mkMon('sproutle', 20), wild: true });
+const leaf = EK7.CARDS.leafcut;
+const vsVerdant = EK7.cardDamage(leaf.v, leaf.fx.type, { crit: false }).dmg;
+EK7.G.battle = null;
+EK7.startBattle({ foe: EK7.mkMon('pebblet', 20), wild: true });
+const vsStone = EK7.cardDamage(leaf.v, leaf.fx.type, { crit: false }).dmg;
+ok(vsStone > vsVerdant, 'a typed card is still read against the chart');
+eq(EK7.cardDamage(10, null, { crit: false }).dmg, 10, 'and a colourless card is neutral against everything');
+
+// Attack buffs are the thing that raises card damage, and they say so.
+EK7.B().mods.atk = 5;
+eq(EK7.cardDamage(10, null, { crit: false }).dmg, 15, '+5 attack adds 5 to every card attack');
+EK7.B().mods.atk = 0;
+eq(EK7.cardDamage(10, null, { crit: true }).dmg, 15, 'a crit still multiplies');
+EK7.G.battle = null;
+
 section('gems are paid out for winning');
 EK6.G.gems = 0;
 ok(EK6.gemReward({ wild: true }) > 0, 'a wild win pays something');
