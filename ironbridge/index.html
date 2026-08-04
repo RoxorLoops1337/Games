@@ -1062,6 +1062,9 @@
      one more of them, and on a phone there is no hover to correct it. */
   .fname{ font-size:var(--t1); color:#8fa2b8; letter-spacing:.2px; }
   .fchip.ult{ color:#ffe6a4; border-color:#8a6a1e; }
+  .fchip.ult.nobrace{ border-color:#7a5560; }
+  .fchip .nb{ font-style:normal; font-size:9px; letter-spacing:.4px; text-transform:uppercase;
+    color:#e2a3ad; margin-left:5px; }
   .fchip.un{ color:var(--dim2); font-family:var(--display); letter-spacing:1px;
     background:var(--well); border-style:dashed; border-color:rgba(201,163,85,.2); min-width:26px;
     justify-content:center; }
@@ -2848,6 +2851,24 @@ const COUNTER = { add:25 };
    against their army — but the card used to promise the whole class, so the
    card says it now. */
 const BRACE = { dur:8, cut:.40 };
+/* WHICH abilities a brace does nothing about, and why it is not a hole.
+
+   The cut keys on the damage's `src` being the hero. Eight of the eighteen
+   ultimates never produce any: Unbreakable, Iron March, War Banner, Trueshot,
+   Shadow Legion, Blood Feast, Sanctuary and Hymn of Valour are buffs, shields
+   and summons, and what hurts you afterwards is a shade or an ally who was
+   made stronger — a different body, doing its own damage. There is nothing at
+   the moment they land for a brace to reduce, so this is the line being in the
+   right place rather than a gap in it. Measured across 28 brace windows, the
+   damage reaching a braced hold from summoned bodies was 310 against 52,512
+   from the hero side: not the thing that kills you.
+
+   Derived from the kinds that deal nothing through the caster rather than
+   written out by name — a hand-copied list of eight is the same trap
+   SKILL_NEEDS_TARGET fell into, and a test measures this one against what
+   dealDmg actually does rather than against this comment. */
+const NO_HERO_DAMAGE = { buff:1, teambuff:1, shield:1, summon:1, teamheal:1, heal:1, regen:1 };
+const braceBlind = (d) => !!(d && NO_HERO_DAMAGE[d.k]);
 /* How much there is for it to hold back: orders of theirs already recovering.
    One answer, asked by three different things — the cast, the greyed tile and
    the refusal — so they cannot drift apart. */
@@ -16280,8 +16301,17 @@ function foeHeroHtml(){
      The rule is the one .fchip.un was written for: a slot rather than a gap. */
   for (let i = 0; i < live.length; i++){
     const d = SKILL[foeUlts[i]];
+    /* ...and whether Brace is any answer to it. The strip has named their
+       ultimate since the round that added it, and the knowledge bought nothing
+       — you could learn they carry Shadow Legion and still spend a hundred
+       seconds of recovery on a ward that does not touch it. The mark is the
+       shortest way to close that: it is the one thing about their ultimate
+       that changes which of YOUR orders is worth giving. */
     h += d
-      ? '<span class="fchip ult" title="' + esc(d.n + ' — ' + skNums(d, 1)) + '">' + d.n + '</span>'
+      ? '<span class="fchip ult' + (braceBlind(d) ? ' nobrace' : '') + '" title="' +
+          esc(d.n + ' — ' + skNums(d, 1) +
+            (braceBlind(d) ? ' · Brace does not blunt this — it deals no damage itself.' : '')) +
+          '">' + d.n + (braceBlind(d) ? '<i class="nb">no brace</i>' : '') + '</span>'
       : '<span class="fchip un" title="You have not seen this one\u2019s ultimate yet">?</span>';
   }
   return h + '</span></div>';
@@ -19318,7 +19348,7 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
-  foeHeroHtml, foeUlts, foeUltSeen, fireSkill,
+  foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
