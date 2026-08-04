@@ -17908,4 +17908,123 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 }
 
+/* ------------------------- which of theirs a brace is no answer to, and why
+   Brace keys on the damage's src being the hero, so eight of the eighteen
+   ultimates go through it untouched — and the review that found that read it
+   as a broken promise. Measured, it is the line being in the right place: all
+   eight are buffs, shields and summons that produce NO damage through the
+   caster at all, so there is nothing at the moment they land to reduce. What
+   hurts you afterwards is a shade, or an ally who was made stronger, and
+   neither of those is the hero. Across 28 brace windows the damage reaching a
+   braced hold from summoned bodies was 310 against 52,512 from the hero side.
+
+   So the code is right and the PLAYER was the one left out: the fog strip has
+   named their ultimate for several rounds and the knowledge bought nothing —
+   you could learn they carry Shadow Legion and still spend a hundred seconds
+   of recovery on a ward that does not touch it.                            */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  /* The set is DERIVED, and this holds the derivation against what dealDmg
+     actually does rather than against the comment beside it. A hand-copied
+     list of eight is the trap SKILL_NEEDS_TARGET fell into two rounds ago. */
+  {
+    const ults = IB.SKILLS.filter(d => d.ult);
+    const blind = ults.filter(d => IB.braceBlind(d));
+    const bites = ults.filter(d => !IB.braceBlind(d));
+    t.ok(ults.length >= 12, 'there are a lot of ultimates (' + ults.length + ')');
+    t.ok(blind.length > 0 && bites.length > 0,
+      'and both kinds exist (' + blind.length + ' blind, ' + bites.length + ' bitten)');
+    t.ok(blind.every(d => IB.NO_HERO_DAMAGE[d.k]),
+      'every blind one is a kind that deals nothing through the caster (' +
+        [...new Set(blind.map(d => d.k))].sort().join(', ') + ')');
+    t.ok(bites.every(d => !IB.NO_HERO_DAMAGE[d.k]),
+      'and every bitten one is a kind that does');
+
+    // ...and the claim underneath it: a blind kind produces no hero-sourced
+    // damage at all, which is why a brace has nothing to take off it.
+    const dmgKinds = new Set(['strike', 'bolt', 'volley', 'hook', 'nova', 'dash',
+      'chain', 'dot', 'storm', 'mark']);
+    t.ok(blind.every(d => !dmgKinds.has(d.k)),
+      'no blind ultimate is one of the kinds that damage through the hero');
+    t.ok(bites.some(d => dmgKinds.has(d.k)), 'while the bitten ones are');
+  }
+
+  /* Measured rather than reasoned: a damaging ultimate is cut, and one of the
+     blind ones deals nothing for the cut to apply to in the first place. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:7400 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+    fh.inLane = true; fh.dead = false; fh.x = 40; fh.y = 0; fh.mana = fh.mmana;
+    const u = IB.spawnUnit(0, 'grunt', { x:41, y:0 });
+    u.hp = u.mhp = 200000;
+    step(2 / 30);
+
+    const bite = IB.SKILLS.find(d => d.ult && !IB.braceBlind(d) && d.k === 'nova');
+    const blind = IB.SKILLS.find(d => d.ult && IB.braceBlind(d));
+    t.ok(!!bite && !!blind, 'one of each to measure (' + (bite||{}).n + ' / ' + (blind||{}).n + ')');
+
+    const fire = (id, braced) => {
+      G.sides[0].braceT = braced ? IB.BRACE.dur : 0;
+      u.hp = u.mhp;
+      const sk = { id, rank:1, cdT:0, ult:true };
+      IB.castSkill(fh, sk, u);
+      return u.mhp - u.hp;
+    };
+    const plain = fire(bite.id, false), cut = fire(bite.id, true);
+    t.ok(plain > 0, bite.n + ' lands for something (' + plain.toFixed(1) + ')');
+    t.ok(Math.abs((1 - cut / plain) - IB.BRACE.cut) < .02,
+      'and a braced hold takes ' + Math.round(IB.BRACE.cut * 100) + '% less of it (' +
+        (100 * (1 - cut / plain)).toFixed(1) + '%)');
+    const blindPlain = fire(blind.id, false);
+    t.ok(blindPlain === 0,
+      blind.n + ' deals nothing itself, which is why a brace has nothing to take off it (' +
+        blindPlain + ')');
+  }
+
+  /* ...and the strip says so, on the chip that names it. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:7401 });
+    IB.MY = 0;
+    const f = G.sides[1];
+    rich(f);
+    if (!IB.bList(f, 'tavern').length) IB.build(f, f.plot.indexOf(null), 'tavern');
+    rich(f);
+    IB.createHero(f, 'mage');
+    const fh = f.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+
+    const blind = IB.SKILLS.find(d => d.ult && IB.braceBlind(d));
+    const bite = IB.SKILLS.find(d => d.ult && !IB.braceBlind(d));
+
+    IB.foeForget();
+    IB.foeUlts.push(bite.id);
+    let html = IB.foeHeroHtml();
+    t.ok(html.indexOf(bite.n) > 0, 'a bitten ultimate is named (' + bite.n + ')');
+    t.ok(!/nobrace/.test(html), 'and carries no warning, because Brace does answer it');
+
+    IB.foeForget();
+    IB.foeUlts.push(blind.id);
+    html = IB.foeHeroHtml();
+    t.ok(html.indexOf(blind.n) > 0, 'a blind one is named too (' + blind.n + ')');
+    t.ok(/fchip ult nobrace/.test(html), 'and marked');
+    t.ok(/no brace/.test(html), 'in words, not only in a border colour');
+    t.ok(/Brace does not blunt this/.test(html),
+      'with the reason on the chip for anyone who asks it');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();
