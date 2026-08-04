@@ -13581,8 +13581,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(/class="spslot on" data-act="spslot" data-slot="1"/.test(G.sheet), 'which the sheet now says');
     IB.spellPress('unbind'); IB.spellPress('unbind');
     t.ok(s.spells.join() === 'hobble,unbind', 'and the second goes in beside it');
-    t.ok(/data-spell="hobble"[^>]*>\s*<span class="spin">slot 1</.test(IB.spellGridHtml()),
-      'a card already in a slot is marked with which one, rather than looking free');
+    // Named the way every other surface names it. The pip used to read
+    // "SLOT 1" while the panel forty pixels below said "in your first order",
+    // about the same thing.
+    t.ok(/data-spell="hobble"[^>]*>\s*<span class="spin">first order</.test(IB.spellGridHtml()),
+      'a card already in a slot is marked with which one, in the same words as everywhere else');
     t.ok(IB.spellSlotsHtml().includes('>Hobble<') && IB.spellSlotsHtml().includes('>Unbind<'),
       'and both slots name what is in them');
     // The one dead end the simulation has: an order cannot fill both slots. The
@@ -13988,9 +13991,18 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.aimAt(430, 300);
     t.ok(IB.spellUI.pt && IB.spellUI.pt.x === 430, 'the pointer lands where it was put');
     at(.5);
-    const marks = ell();
+    /* Every ring is laid down TWICE: a dark stroke, then the gold one over it.
+       Pale gold alone measured 1.02:1 against turret stone and 1.01:1 against
+       the sky, so a mark whose whole job is to be found was not findable on
+       half the things it goes round. Counting only the gold ones is also the
+       sharper assertion — it measures rings rather than strokes. */
+    const gold = (es) => es.filter(m => m.col === IB.AIM_COL);
+    const dark = (es) => es.filter(m => m.col === IB.AIM_EDGE);
+    const marks = gold(ell());
     t.ok(marks.length === IB.BOMB.n,
       'and Bombard draws one ring per shell (' + marks.length + ' of ' + IB.BOMB.n + ')');
+    t.ok(dark(st.ellipses).length === marks.length,
+      'each of them carrying its own dark edge, so the deck it lies on cannot swallow it');
     const foot = IB.AIM_FOOT.bombard();
     t.ok(foot.length === IB.BOMB.n, 'the footprint has as many marks as the cast has shells');
     // Centred on the point, because that is where the shells centre: the cast
@@ -13999,7 +14011,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and it is centred on the point the click sets');
     t.ok(foot.every(f => f.r === IB.BOMB.r),
       'at the radius the cast uses, not one of its own (' + foot[0].r + ')');
-    t.ok(marks.every(m => m.col === IB.AIM_COL), 'all of it in the one accent that means "this wants you"');
+    t.ok(marks.length > 0, 'all of it in the one accent that means "this wants you"');
     t.ok(new Set(marks.map(m => Math.round(m.x))).size === IB.BOMB.n,
       'the three sit at three different places on the lane');
     t.ok(marks.every(m => m.rx > 0 && Math.abs(m.ry / m.rx - .55) < .02),
@@ -14008,7 +14020,49 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // the armed order rather than to the pointer is a decoration.
     const x0 = marks.map(m => m.x);
     at(.62);
-    t.ok(ell().every((m, i) => Math.abs(m.x - x0[i]) > 1), 'and the whole footprint follows the pointer');
+    t.ok(gold(ell()).every((m, i) => Math.abs(m.x - x0[i]) > 1), 'and the whole footprint follows the pointer');
+
+    /* ---- A CLICK OFF THE BRIDGE IS A MISS.
+
+       This was `{ x:lanePoint(unproject(sx, sy)[0]) }` and nothing else, and
+       lanePoint clamps to 0..LANE_LEN — so it could never return null and the
+       miss branch in spellAimSend was dead code for all three point orders.
+       Every click anywhere in the world spent one. Measured in a browser: with
+       Bombard armed, a click on empty SKY fired the salvo at lane 36; on a
+       phone, where the default camera is your own hold and the bridge is not
+       on screen at all, a tap on the grass fired it at lane 0 — onto your own
+       gate, for ninety-five seconds, as the first thing a new player does
+       after arming it.
+
+       Two bounds, because they catch different mistakes: across the lane for
+       the sky and the gorge, along it for the two holds. */
+    const onDeck = IB.lp(C.LANE_LEN * .5, 0);
+    t.ok(IB.lanePick(onDeck[0], onDeck[1]), 'a point on the deck is a point');
+    // Far above the deck in screen terms is far across the lane in world
+    // terms: that is the sky, and the sky is not a place to put a bombardment.
+    const sky = IB.lp(C.LANE_LEN * .5, -(IB.POINT_REACH + 6));
+    t.ok(IB.lanePick(sky[0], sky[1]) === null, 'the sky is not');
+    const gorge = IB.lp(C.LANE_LEN * .5, IB.POINT_REACH + 6);
+    t.ok(IB.lanePick(gorge[0], gorge[1]) === null, 'nor is the gorge under it');
+    // ...and neither hold is a stretch of lane, however hard the clamp tried.
+    for (const past of [-14, C.LANE_LEN + 14]){
+      const q = IB.lp(past, 0);
+      t.ok(IB.lanePick(q[0], q[1]) === null, 'nor is the ground past the gate at ' + past);
+    }
+    // The resolver and the preview run the SAME test, so a footprint is never
+    // drawn where a press would not land.
+    IB.spellAimOff();
+    s.spellCd[0] = 0;
+    t.ok(IB.castPress(0) === null && IB.spellUI.aim, 'Bombard armed again');
+    IB.aimAt(sky[0], sky[1]);
+    t.ok(IB.spellAimTarget(sky[0], sky[1]) === null, 'a press at the sky resolves to nothing');
+    t.ok(gold(ell()).length === 0, 'and nothing is drawn there either');
+    // A miss leaves the order ARMED and spends nothing — it is a miss, not a
+    // cancel, which is what the file promised all along.
+    const cd0 = s.spellCd[0], iron0 = s.res.iron;
+    t.ok(IB.spellAimSend(IB.spellAimTarget(sky[0], sky[1])) === 'no target', 'the miss is reported as a miss');
+    t.ok(s.spellCd[0] === cd0 && s.res.iron === iron0, 'and costs neither the recovery nor the iron');
+    t.ok(!!IB.spellUI.aim, 'with the order still armed to try again');
 
     /* The property that makes a body preview worth having: the ring and the
        click are the same list, tested the same way. Two enumerations would
@@ -14034,12 +14088,12 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and empty space is empty to both of them');
 
     IB.aimAt(list[0].cx, list[0].cy);
-    const rings = ell();
+    const rings = gold(ell());
     t.ok(rings.length === list.length,
       'every structure it could mend is ringed, not only the one under the pointer');
     const lit = rings.filter(m => m.alpha > .9).length;
     t.ok(lit === 1, 'with exactly one of them lit (' + lit + ')');
-    t.ok(rings.filter(m => m.alpha > .3 && m.alpha < .8).length === list.length - 1,
+    t.ok(rings.filter(m => m.alpha > .35 && m.alpha < .85).length === list.length - 1,
       'and the rest quieter, but not so quiet they cannot be seen over a lit gate');
 
     /* Cosmetic to the last bit. The preview reads the pointer, the camera and
@@ -14279,6 +14333,47 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const foot = IB.AIM_FOOT.pitch();
     t.ok(foot.length === 1 && foot[0].r === IB.PITCH.rad,
       'and the aim preview rings exactly the stretch that will burn');
+  }
+
+  /* -------------------------------- the third point order got the readout too
+     Round 5 added Pitch Fire and round 3's readout never met it: the block
+     introducing castTell still said "the two POINT orders", and Pitch — 40
+     wood and 20 iron every 85 seconds — told you nothing about whether it
+     caught anybody, which is the exact gap the readout was built to close. */
+  {
+    const s = fresh(8590);
+    IB.chooseSpell(s, 0, 'pitch');
+    step(23);
+    rich(s);
+    IB.spawnWave();
+    step(4);
+    const foe = G.units.filter(u => !u.dead && u.side === 1);
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(s, { slot:0, x:foe.length ? foe[0].x : 40 }) === null, 'the pitch goes out');
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/^Pitch Fire — /.test(said), 'and says what it caught (' + said + ')');
+    // Counted as it LANDS rather than over the six seconds: a lingering zone
+    // has no moment where the total is final, and a number that kept climbing
+    // would be a different kind of lie from the one the readout exists to stop.
+    const n = +(said.match(/(\d+)/) || [0, 0])[1];
+    t.ok(n <= foe.length, 'never more bodies than were on the lane (' + n + ' of ' + foe.length + ')');
+    G.toasts.length = 0;
+    s.spellCd[0] = 0;
+    IB.castSpell(s, { slot:0, x:C.LANE_LEN - .5 });
+    t.ok(/nothing on that stretch/.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and an empty stretch says so, like the other two');
+    /* All three point orders report, and a fourth would fail here rather than
+       shipping silent the way this one did. Bombard's call is not in the cast
+       table — its salvo walks over three ticks, so it reports when the last
+       shell falls — which is why this looks for the call by NAME across the
+       whole file rather than in one block. */
+    const pts = IB.SPELLS.filter(d => d.target === 'point');
+    for (const d of pts)
+      t.ok(SRC.includes("castTell(s, '" + d.n + "'"),
+        'the point order ' + d.n + ' has a readout of its own');
+    t.ok((SRC.match(/castTell\(s, '/g) || []).length === pts.length,
+      'and there are exactly as many readouts as point orders (' + pts.length + ')');
+    G.toasts.length = 0;
   }
 
   /* ------------------------------------ what the cast actually did

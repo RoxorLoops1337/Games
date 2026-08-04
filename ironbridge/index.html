@@ -248,7 +248,7 @@
   #orders{ display:flex; align-items:center; gap:5px; margin-left:14px; }
   #orders:empty{ display:none; }
   .ord{ position:relative; overflow:hidden; display:inline-flex; align-items:center; gap:6px;
-    height:32px; padding:0 10px 0 8px; min-width:104px; max-width:150px;
+    height:32px; padding:0 10px 0 8px; min-width:104px; max-width:186px;
     background:var(--raise); border:1px solid var(--rim); border-radius:var(--r2);
     box-shadow:var(--lip), var(--shelf); color:var(--cream-ink);
     font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t4);
@@ -939,9 +939,15 @@
      you. On felt rather than card, because this is a READING of the other side
      rather than a control — nothing here is pressable, and it should not
      invite a press. */
-  .foeord{ display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-top:7px; }
-  .foeord .fol{ font-size:var(--t1); letter-spacing:1.4px; text-transform:uppercase;
-    color:var(--dim2); font-weight:700; margin-right:2px; }
+  /* The label on its own line and the two chips together on the next. As one
+     wrapping row, a long name pushed its own chip to line two while the
+     unknown "?" stayed glued to the heading, so it read as "THEIR ORDERS ?"
+     with the answer orphaned underneath. */
+  .foeord{ margin-top:7px; }
+  .foeord .fol{ display:block; margin-bottom:4px;
+    font-size:var(--t1); letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--dim2); font-weight:700; }
+  .foeord .fchips{ display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
   .fchip{ display:inline-flex; align-items:center; gap:5px; padding:2px 7px 2px 5px;
     border-radius:var(--r2); background:rgba(255,240,210,.07); border:1px solid rgba(201,163,85,.26);
     font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t3);
@@ -1015,7 +1021,6 @@
   @media (max-width:700px){
     .spgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
     .spslots{ flex-direction:column; }
-    .spwhy{ min-height:0; }
     .spwhy .wd{ font-size:var(--t3); }
   }
   .rowbtn{ display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
@@ -2813,6 +2818,17 @@ const SPELL_CAST = {
      see the edges of. One burning stretch per hold, like one salvo per hold. */
   pitch(s, c){
     s.fireX = lanePoint(c.x); s.fireT = PITCH.dur;
+    // The third point order, and it was the one left out of the readout the
+    // other two got. It counts who is standing in it AS IT LANDS rather than
+    // over the six seconds — a lingering zone has no moment where the total is
+    // final, and a number that kept climbing for six seconds would be a
+    // different kind of lie from the one the readout exists to stop.
+    let n = 0;
+    nearby(s.fireX, PITCH.rad + 2, (u) => {
+      if (u.dead || u.side === s.i) return;
+      if (hyp(u.x - s.fireX, u.y) <= PITCH.rad + u.r) n++;
+    });
+    castTell(s, 'Pitch Fire', n, 'standing in it');
     return null;
   },
   muster(s){ musterWave(s); return null; },
@@ -15379,7 +15395,7 @@ function spellGridHtml(){
       const held = s.spells.indexOf(d.id);
       h += '<button class="sptile' + (spellUI.at === d.id ? ' at' : '') +
         (held >= 0 ? ' taken' : '') + '" data-spell="' + d.id + '" title="' + esc(d.d) + '">' +
-        (held >= 0 ? '<span class="spin">slot ' + (held + 1) + '</span>' : '') +
+        (held >= 0 ? '<span class="spin">' + SLOT_NAME[held] + '</span>' : '') +
         SPELL_ICON[d.id] +
         '<span class="spn">' + d.n + '</span>' +
         '<span class="spc">' + d.cd + 's</span></button>';
@@ -15486,7 +15502,7 @@ function spellTake(id){
    shown their hand and one who is holding something back. */
 function foeOrdersHtml(){
   if (!G.sides.length || G.state !== 'play') return '';
-  let h = '<div class="foeord"><span class="fol">Their orders</span>';
+  let h = '<div class="foeord"><span class="fol">Their orders</span><span class="fchips">';
   for (let i = 0; i < SPELL_SLOTS; i++){
     const d = foeSeen[i] ? SPELL[foeSeen[i]] : null;
     h += d
@@ -15494,7 +15510,7 @@ function foeOrdersHtml(){
           '<b>' + d.n + '</b></span>'
       : '<span class="fchip un" title="You have not seen this one used yet">?</span>';
   }
-  return h + '</div>';
+  return h + '</span></div>';
 }
 
 /* -------------------------------------------------- the pair, in the bar
@@ -15695,10 +15711,38 @@ function spellAimPick(list, sx, sy){
   }
   return best;
 }
+/* Is that point on the BRIDGE, or is it the sky?
+
+   This was `{ x:lanePoint(unproject(sx, sy)[0]) }` and nothing else, and
+   lanePoint clamps to 0..LANE_LEN — so it could never return null and the
+   miss branch in spellAimSend was dead code for all three point orders. Every
+   click anywhere in the world spent one. Measured: with Bombard armed, a click
+   on empty SKY at (700, 170) fired the salvo at lane 36; on a phone, where the
+   default camera is your own hold and the bridge is not on screen at all, a
+   tap on the grass fired it at lane 0 — onto your own gate, for ninety-five
+   seconds, as the first thing a new player does after arming it.
+
+   The comment above spellAimSend already promised the opposite: "a click on
+   bare ground while placing a bombardment is a miss, not a cancel". There was
+   no such thing as bare ground. There is now.
+
+   Both bounds are needed and they catch different mistakes. The cross-lane one
+   catches the sky and the gorge, which unproject to a y far outside the nine
+   units a body can stand in. The along-lane one catches the two holds, which
+   sit past the ends of the bridge and were being quietly clamped to the gate
+   nearest them. */
+const POINT_REACH = C.LANE_W / 2 + 3;   // how far off the deck still counts as the deck
+const POINT_OVER = 2;                   // ...and how far past either gate
+function lanePick(sx, sy){
+  const [ux, uy] = unproject(sx, sy);
+  if (Math.abs(uy) > POINT_REACH) return null;
+  if (ux < -POINT_OVER || ux > C.LANE_LEN + POINT_OVER) return null;
+  return { x:lanePoint(ux) };
+}
 function spellAimTarget(sx, sy){
   const a = spellUI.aim;
   if (!a) return null;
-  if (SPELL[a.id].target === 'point') return { x:lanePoint(unproject(sx, sy)[0]) };
+  if (SPELL[a.id].target === 'point') return lanePick(sx, sy);
   const k = spellAimPick(spellAimCandidates(), sx, sy);
   return k ? k.hit : null;
 }
@@ -15732,7 +15776,26 @@ function aimAt(clientX, clientY){
 
    Drawn from `spellUI.pt` and never from the armed order alone, so it appears where
    the next press would land rather than in the middle of the screen. */
+/* Gold, and a dark stroke under it.
+
+   Pale gold alone measured 1.02:1 against turret stone and 1.01:1 against the
+   sky — Rampart could ring five valid structures and none of them was findable
+   at 100%. A mark whose whole job is to be found cannot depend on what it
+   happens to be lying on, and half the things these rings go round are pale
+   stone. The under-stroke is the same trick the icons use: the shape is drawn
+   twice, wider and darker underneath, so it carries its own contrast with it. */
 const AIM_COL = '#ffc14d';
+const AIM_EDGE = 'rgba(28,18,4,.72)';
+// One ring, laid down twice. `w` is the light stroke's width; the dark one is
+// always wider by the same margin, so the outline reads at any zoom.
+function aimRing(c, x, y, rx, ry, w, a){
+  c.globalAlpha = a * .85;
+  c.strokeStyle = AIM_EDGE; c.lineWidth = w + Math.max(1.6, 2.2 * cam.z);
+  c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.stroke();
+  c.globalAlpha = a;
+  c.strokeStyle = AIM_COL; c.lineWidth = w;
+  c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.stroke();
+}
 function drawAim(c){
   const a = spellUI.aim, pt = spellUI.pt;
   if (!a || !pt || !G.sides.length) return;
@@ -15742,7 +15805,14 @@ function drawAim(c){
   c.lineWidth = Math.max(1.4, 2.1 * cam.z);
   c.strokeStyle = AIM_COL;
   if (d.target === 'point'){
-    const x = lanePoint(unproject(pt.x, pt.y)[0]);
+    // The same test the click will run, so the footprint is drawn exactly
+    // where a press would land and nowhere else. It used to be drawn off the
+    // clamped value, which meant pointing a hundred pixels below the deck
+    // slid the rings twelve world units up the bridge — a fifth of its length
+    // — with no line back to the cursor to say so.
+    const at = lanePick(pt.x, pt.y);
+    if (!at){ c.restore(); return; }
+    const x = at.x;
     const foot = (AIM_FOOT[a.id] || (() => [{ d:0, r:2.4 }]))();
     for (const f of foot){
       const q = lp(clamp(x + f.d, 0, C.LANE_LEN), 0);
@@ -15750,8 +15820,7 @@ function drawAim(c){
       // The centre of the three is the one the click sets; the outliers are
       // consequences of it, and are drawn a shade quieter so the point being
       // aimed reads as the point being aimed.
-      c.globalAlpha = f.d === 0 ? .95 : .55;
-      c.beginPath(); c.ellipse(q[0], q[1], rx, rx * .55, 0, 0, 6.2832); c.stroke();
+      aimRing(c, q[0], q[1], rx, rx * .55, Math.max(1.4, 2.1 * cam.z), f.d === 0 ? .95 : .6);
     }
     c.restore();
     return;
@@ -15761,9 +15830,8 @@ function drawAim(c){
   for (const k of list){
     // Everything it COULD take, quietly, so a player can see there is a second
     // hero over there before moving the cursor to find out.
-    c.globalAlpha = k === hot ? 1 : .52;
-    c.lineWidth = (k === hot ? 2.8 : 1.9) * Math.max(.6, cam.z);
-    c.beginPath(); c.ellipse(k.cx, k.cy, k.rx, k.ry, 0, 0, 6.2832); c.stroke();
+    aimRing(c, k.cx, k.cy, k.rx, k.ry,
+      (k === hot ? 2.8 : 1.9) * Math.max(.6, cam.z), k === hot ? 1 : .62);
   }
   c.restore();
 }
@@ -18121,7 +18189,7 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
-  spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
+  spellAimCandidates, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
