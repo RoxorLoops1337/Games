@@ -7,9 +7,9 @@
 // save round-trips.
 //
 // Run: node tests/emberkin.test.mjs
-import { loadGame, ok, eq, near, done, section } from './emberkin_lib.mjs';
+import { loadGame, autoFight, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
 
-const EK = loadGame();
+const EK = withDeck(loadGame());
 const { DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART } = EK;
 
 // ---------------------------------------------------------------- data --
@@ -38,9 +38,7 @@ for (const id of DEX_ORDER) {
 }
 for (const [id, m] of Object.entries(MOVES)) {
   ok(!!TYPES[m.type], `${id} has a real type`);
-  // Falter is the out-of-PP fallback: it never occupies a slot, so its own PP
-  // is never spent and the usual floor does not apply to it.
-  if (id !== 'falter') ok(m.pp >= 5 && m.pp <= 40, `${id} pp sane`);
+  ok(m.pp >= 1 && m.pp <= 40, `${id} pp sane`);
   ok(m.pow >= 0 && m.pow <= 130, `${id} power sane`);
   ok(m.pow > 0 || !!m.fx, `${id} either hits or does something`);
 }
@@ -59,6 +57,7 @@ ok(cub50.max > cub5.max * 2, 'HP grows a lot with level');
 ok(cub50.atk > cub5.atk, 'attack grows with level');
 eq(cub5.hp, cub5.max, 'a new creature is at full HP');
 ok(cub5.moves.length >= 2 && cub5.moves.length <= 4, 'starting kit is 2-4 moves');
+cub5.moves.forEach((m) => ok(EK.moveCost(m.id) >= 0 && EK.moveCost(m.id) <= 3, `${m.id} costs 0-3 energy as a card`));
 eq(EK.movesAt('pyrelynx', 60).length, 4, 'a maxed learnset keeps 4 moves');
 ok(EK.xpFor(10) > EK.xpFor(9), 'xp curve is monotone');
 
@@ -93,68 +92,122 @@ ok(EK.effStat(s, 'atk') < s.atk, 'burn softens attack');
 s.status = 'chill';
 ok(EK.effStat(s, 'spd') < s.spd, 'chill halves speed');
 
-section('a wild battle runs to a conclusion');
+section('a wild battle is played from a hand of cards');
 const G = EK.G;
 G.party = [EK.mkMon('pyrelynx', 40)];
 G.bag = { bloomorb: 30, salve: 5 };
 ok(EK.startBattle({ foe: EK.mkMon('sproutle', 5), wild: true }), 'battle starts');
-let guard = 0;
-while (!EK.B().over && guard++ < 40) {
-  const mv = EK.B().mine.moves.find((m) => m.pp > 0).id;
-  const log = EK.doTurn({ kind: 'move', id: mv });
-  ok(log.length > 0, 'every turn produces log lines');
-  ok(log.every((e) => typeof e.t === 'string' && e.hpM != null), 'log entries carry text and an HP snapshot');
-}
+const b0 = EK.B();
+eq(b0.hand.length, 5, 'you are dealt five cards');
+eq(b0.energy, 3, 'and three energy');
+ok(b0.hand.concat(b0.draw, b0.disc).some((c) => c.src === 'kin'), 'the kin shuffles its own moves in');
+eq(b0.draw.length + b0.hand.length + b0.disc.length,
+   EK.deckCards().length + G.party[0].moves.length, 'every card is somewhere in the piles');
+ok(!!b0.intent && !!b0.intent.name, 'the foe telegraphs what it will do');
+const affordable = b0.hand.findIndex((c) => EK.cardCost(c) <= b0.energy);
+const energyBefore = b0.energy, handBefore = b0.hand.length;
+const costPaid = EK.cardCost(b0.hand[affordable]);
+const cardLog = EK.playCard(affordable);
+ok(cardLog.length > 0, 'playing a card logs what happened');
+eq(b0.energy, energyBefore - costPaid, 'it costs its energy');
+eq(b0.hand.length, handBefore - 1, 'and leaves your hand');
+ok(b0.disc.length + b0.exh.length >= 1, 'landing in the discard or the spent pile');
+ok(autoFight(EK), 'the battle resolved');
 eq(EK.B().over, 'win', 'a level 40 beats a level 5');
 ok(G.party[0].xp > EK.xpFor(40), 'the winner gained experience');
 eq(G.dex.sproutle, 1, 'a defeated wild kin is marked seen, not caught');
+
+section('energy, hands and piles behave');
+G.party = [EK.mkMon('brookite', 20)];
+EK.startBattle({ foe: EK.mkMon('pebblet', 20), wild: true });
+const b1 = EK.B();
+b1.energy = 0;
+const dear = b1.hand.findIndex((c) => EK.cardCost(c) > 0);
+if (dear >= 0) {
+  const before = b1.hand.length;
+  EK.playCard(dear);
+  eq(b1.hand.length, before, 'a card you cannot pay for stays in hand');
+}
+b1.energy = 3;
+EK.endTurn();
+eq(b1.hand.length, 5, 'ending the turn deals a fresh hand');
+eq(b1.energy, 3, 'and refills energy');
+b1.disc.push(...b1.draw); b1.draw = [];
+const handWas = b1.hand.length;
+EK.drawCards([], 3);
+ok(b1.hand.length > handWas, 'the discards shuffle back in when the draw pile empties');
+EK.G.battle = null;
 
 section('faint, party wipe and switching');
 G.party = [EK.mkMon('zaplet', 5), EK.mkMon('mothrix', 5)];
 G.party[0].hp = 1;
 EK.startBattle({ foe: EK.mkMon('magmane', 50), wild: true });
-let over = null, g2 = 0;
-while (!over && g2++ < 20) over = EK.doTurn({ kind: 'move', id: G.party[0].moves[0].id }).length ? EK.B().over : null;
-eq(over, 'switch', 'one fainted but the bench is not empty');
+let guard = 0;
+while (!EK.B().over && guard++ < 30) EK.endTurn();
+eq(EK.B().over, 'switch', 'one fainted but the bench is not empty');
+// Same thing the forced-switch screen does when you send out the next one.
 G.party[0].hp = 0;
-// Same thing the forced-switch screen does when the player sends out the next one.
 EK.B().mine = G.party[1];
 EK.B().over = null;
+EK.swapKinCards(EK.B());
+EK.startPlayerTurn([]);
 G.party[1].hp = 1;
-let lastStand = [], g2b = 0;
-// The foe may buff or miss, so give the last stand a few turns to actually end.
-while (!EK.B().over && g2b++ < 20) lastStand = EK.doTurn({ kind: 'move', id: G.party[1].moves[0].id });
-ok(lastStand.length > 0, 'the last stand still logs');
+guard = 0;
+while (!EK.B().over && guard++ < 30) EK.endTurn();
 eq(EK.B().over, 'lose', 'the whole party down ends the battle');
+
+section('switching swaps the kin cards, not the deck');
+G.party = [EK.mkMon('cindercub', 20), EK.mkMon('dewdrip', 20)];
+EK.startBattle({ foe: EK.mkMon('mothrix', 5), wild: true });
+const b2 = EK.B();
+const kinOf = (mon) => mon.moves.map((m) => m.id);
+const allKin = () => b2.draw.concat(b2.hand, b2.disc).filter((c) => c.src === 'kin').map((c) => c.id);
+ok(allKin().every((id) => kinOf(G.party[0]).includes(id)), 'only the active kin moves are in the deck');
+const supportBefore = b2.draw.concat(b2.hand, b2.disc).filter((c) => c.src === 'deck').length;
+EK.doAction({ kind: 'switch', idx: 1 });
+eq(b2.mine.species, 'dewdrip', 'the bench kin stepped in');
+ok(allKin().every((id) => kinOf(G.party[1]).includes(id)), 'and brought its own move cards');
+eq(b2.draw.concat(b2.hand, b2.disc).filter((c) => c.src === 'deck').length, supportBefore,
+   'the support cards are untouched by the swap');
+EK.G.battle = null;
 
 section('trainer battles chain their team and refuse capture');
 G.party = [EK.mkMon('tsunaga', 45)];
 G.bag = { bloomorb: 5 };
 const team = [['cindercub', 5], ['zaplet', 5]];
 EK.startBattle({ foe: EK.mkMon('cindercub', 5), team, npc: { name: 'Tester', id: 't_x', trainer: { team, prize: 100 } }, wild: false });
-const noRun = EK.doTurn({ kind: 'run' });
+const noRun = EK.doAction({ kind: 'run' });
 ok(noRun.some((e) => /no running/i.test(e.t)), 'you cannot flee a trainer');
-const noCatch = EK.doTurn({ kind: 'item', id: 'bloomorb' });
+const noCatch = EK.doAction({ kind: 'item', id: 'bloomorb' });
 ok(noCatch.some((e) => /No\./.test(e.t)), 'you cannot catch a trainer kin');
 eq(G.bag.bloomorb, 5, 'the refused orb is not consumed');
-let g3 = 0;
-while (!EK.B().over && g3++ < 30) EK.doTurn({ kind: 'move', id: G.party[0].moves[0].id });
+ok(autoFight(EK), 'the trainer battle resolved');
 eq(EK.B().over, 'win', 'beating the whole team wins');
-ok(g3 > 1, 'the second team member was sent out');
+eq(EK.B().teamIdx, 1, 'the second team member was sent out');
+ok(EK.gemReward(EK.B()) > 0, 'a trainer win is worth gems');
 
-section('running out of PP never locks the battle');
-ok(!!MOVES.falter, 'there is a last-resort move');
-ok(!DEX_ORDER.some((id) => DEX[id].learn.some((e) => e[1] === 'falter')), 'nobody learns Falter');
+section('shields, buffs and max HP all wear off with the battle');
 G.party = [EK.mkMon('gargolem', 30)];
-EK.startBattle({ foe: EK.mkMon('pebblet', 30), wild: false, team: [['pebblet', 30]], npc: { name: 'T', id: 't_pp', trainer: { team: [['pebblet', 30]], prize: 1 } } });
-const dry = EK.B().mine;
-dry.moves.forEach((m) => { m.pp = 0; });
-const foeHp = EK.B().foe.hp;
-const faltered = EK.doTurn({ kind: 'move', id: 'falter' });
-ok(faltered.some((e) => /Falter/.test(e.t)), 'Falter can still be used');
-ok(EK.B().foe.hp < foeHp, 'and it does damage');
-ok(dry.hp < dry.max, 'at a cost to yourself');
-ok(dry.moves.every((m) => m.pp === 0), 'Falter does not consume a move slot');
+const rock = G.party[0];
+const baseMax = rock.max, baseAtk = EK.effStat(rock, 'atk');
+EK.startBattle({ foe: EK.mkMon('pebblet', 30), wild: true });
+const b3 = EK.B();
+b3.hand = ['guard', 'focus', 'heartroot'].map((id) => ({ src: 'deck', u: EK.grantCard(id).u, id, bg: 0 }));
+b3.energy = 9;
+EK.playCard(0);
+ok(b3.shield > 0, 'Guard puts up a shield');
+EK.playCard(0);
+ok(EK.effStat(rock, 'atk') > baseAtk, 'Focus raises attack for the battle');
+EK.playCard(0);
+ok(rock.max > baseMax, 'Heartroot raises max HP for the battle');
+const hpNow = rock.hp;
+const through = EK.hurtMine([], 5, 'test');
+ok(through < 5, 'the shield eats damage before HP does');
+ok(rock.hp >= hpNow - 5, 'and HP only takes what got through');
+EK.clearMods(b3);
+eq(rock.max, baseMax, 'max HP goes back to normal after the battle');
+eq(EK.effStat(rock, 'atk'), baseAtk, 'and so does attack');
+EK.G.battle = null;
 
 section('capture maths');
 const weak = EK.mkMon('zaplet', 5); weak.hp = 1;
@@ -174,16 +227,16 @@ EK.startBattle({ foe: EK.mkMon('zaplet', 3), wild: true });
 EK.B().foe.hp = 1;
 let caught = false;
 for (let i = 0; i < 400 && !caught; i++) {
-  EK.doTurn({ kind: 'item', id: 'prismorb' });
-  if (EK.B().over === 'caught') caught = true;
-  else if (EK.B().over) { EK.startBattle({ foe: EK.mkMon('zaplet', 3), wild: true }); EK.B().foe.hp = 1; }
-  else EK.B().foe.hp = 1;
+  EK.doAction({ kind: 'item', id: 'prismorb' });
+  if (EK.B() && EK.B().over === 'caught') caught = true;
+  else if (!EK.B() || EK.B().over) { EK.startBattle({ foe: EK.mkMon('zaplet', 3), wild: true }); EK.B().foe.hp = 1; }
+  else { EK.B().foe.hp = 1; EK.B().mine.hp = EK.B().mine.max; }
 }
 ok(caught, 'a weakened kin is eventually caught');
 ok(G.bag.prismorb < 400, 'orbs are consumed');
-const before = G.party.length;
+const beforeParty = G.party.length;
 EK.addCaught(EK.B().foe);
-eq(G.party.length, before + 1, 'the catch joins the party');
+eq(G.party.length, beforeParty + 1, 'the catch joins the party');
 eq(G.dex.zaplet, 2, 'the dex marks it caught');
 
 section('a full party sends the catch to the box');

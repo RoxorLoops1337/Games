@@ -20,7 +20,7 @@ export function mkCtx(log) {
       if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: noop });
       if (k === 'measureText') return () => ({ width: 10 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
-      if (k === 'canvas') return { width: 256, height: 176 };
+      if (k === 'canvas') return { width: 256, height: 208 };
       if (log && (k === 'drawImage' || k === 'fillRect')) return (...a) => { log.push([k, ...a]); };
       return noop;
     },
@@ -38,12 +38,12 @@ export function loadGame(store = {}) {
   const ctx = mkCtx();
   const mkEl = () => new Proxy({
     style: {}, dataset: {}, children: [], className: '', innerHTML: '', textContent: '',
-    width: 256, height: 176,
+    width: 256, height: 208,
     classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
     addEventListener: noop, removeEventListener: noop, appendChild: noop, remove: noop,
     setAttribute: noop, getContext: () => ctx, querySelector: () => mkEl(), querySelectorAll: () => [],
     closest: () => null, contains: () => false,
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 256, height: 176 }),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 256, height: 208 }),
   }, { get(t, k) { return (k in t) ? t[k] : noop; }, set(t, k, v) { t[k] = v; return true; } });
 
   global.localStorage = {
@@ -69,6 +69,32 @@ export function loadGame(store = {}) {
 
   eval('(function(){' + code + '\n})()');
   return globalThis.EK;
+}
+
+/**
+ * Play the current battle to its end the way a player would: spend every card
+ * you can afford, then end the turn. Returns false if it never resolved.
+ */
+export function autoFight(EK, limit = 300) {
+  let guard = 0;
+  while (EK.G.battle && !EK.B().over && guard++ < limit) {
+    const b = EK.B();
+    for (let spun = 0; spun < 12; spun++) {
+      const i = b.hand.findIndex((c) => EK.cardCost(c) <= b.energy);
+      if (i < 0 || b.over) break;
+      EK.playCard(i);
+    }
+    if (b.over) break;
+    EK.endTurn();
+  }
+  return guard < limit;
+}
+
+/** A fresh game with the starting deck dealt out, ready to fight. */
+export function withDeck(EK) {
+  EK.G.cards = []; EK.G.deck = []; EK.G.nextUid = 0;
+  EK.STARTER_DECK.forEach(EK.grantCard);
+  return EK;
 }
 
 // ---- tiny assert kit ---------------------------------------------------

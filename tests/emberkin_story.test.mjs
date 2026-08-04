@@ -8,7 +8,7 @@
 // never appears — this suite deadlocks and fails rather than quietly skipping.
 //
 // Run: node tests/emberkin_story.test.mjs
-import { loadGame, mkCtx, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = loadGame({});
 EK.setCtx(mkCtx());
@@ -25,30 +25,26 @@ const clear = (limit = 40) => {
   for (let i = 0; i < limit && G.mode !== 'world' && G.mode !== 'battle'; i++) tap('a');
   return G.mode;
 };
-/** Fight the current battle to the end, always picking the strongest legal move. */
-function fightToEnd(limit = 200) {
-  let guard = 0;
-  while (G.battle && guard++ < limit) {
+/** Fight the current battle to the end, sending out the next kin when one falls. */
+function fightToEnd(limit = 40) {
+  for (let round = 0; round < limit; round++) {
+    if (!G.battle) return true;
+    autoFight(EK, 200);
     const b = EK.B();
-    // A faint hands control to the party screen; pick whoever can still stand.
-    if (G.screen && G.screen.kind === 'party') {
+    if (!b) return true;
+    if (b.over === 'switch') {
+      // The forced-switch screen: pick whoever can still stand.
+      tap('a', 3);
       const next = G.party.findIndex((m) => m.hp > 0);
-      if (next < 0) break;
-      G.screen.i = next;
-      tap('a', 2);
+      if (next < 0) return true;
+      if (G.screen) { G.screen.i = next; tap('a', 2); }
       continue;
     }
-    if (b.over) { tap('a', 6); continue; }
-    const usable = b.mine.moves.filter((m) => m.pp > 0);
-    const best = usable.sort((a, c) =>
-      EK.damageOf(b.mine, b.foe, c.id, { crit: false, roll: 1 }).dmg -
-      EK.damageOf(b.mine, b.foe, a.id, { crit: false, roll: 1 }).dmg)[0];
-    EK.doTurn({ kind: 'move', id: best ? best.id : 'falter' });
-    tap('a', 3);
+    if (b.over) { tap('a', 8); clear(); return true; }
   }
-  clear();
-  return guard < limit;
+  return false;
 }
+
 /** A party strong enough that story progress is never a balance question. */
 const stack = (lvl, ids = ['tsunaga', 'magmane', 'bramblor']) => {
   G.party = ids.filter((id) => EK.DEX[id]).map((id) => EK.mkMon(id, lvl));
@@ -166,7 +162,7 @@ for (let round = 0; round < 120 && !caught; round++) {
   const b = EK.B();
   if (!b) break;
   b.foe.hp = 1;                                    // stand in for whittling it down
-  EK.doTurn({ kind: 'item', id: 'prismorb' });
+  EK.doAction({ kind: 'item', id: 'prismorb' });
   if (EK.B() && EK.B().over === 'caught') { tap('a', 8); caught = G.dex.vespyr === 2; }
   else if (EK.B() && EK.B().over) { tap('a', 8); }
   if (G.party.some((m) => m.hp <= 0)) EK.healParty();
@@ -188,6 +184,11 @@ EK.rowanScript();
 ok(!!G.dialogue, 'Rowan has something to say');
 ok(G.dialogue.lines.join(' ').includes('So it went with you'), 'and it is the ending, not the briefing');
 clear();
+
+section('the deck came along for the ride');
+ok(G.cards.length >= EK.STARTER_DECK.length, 'you still have your starting cards');
+ok(G.deck.length >= EK.DECK_MIN, 'and a legal deck');
+ok(G.gems > 0, `the journey paid out gems (${G.gems})`);
 
 section('the run holds together afterwards');
 ok(EK.saveGame(), 'the finished run saves');
