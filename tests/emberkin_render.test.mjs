@@ -220,6 +220,85 @@ ok(ctl.G.menu.rows.some((r) => /Kin/i.test(r.label)), 'and the party');
 ok(ctl.G.menu.rows.some((r) => /Bag/i.test(r.label)), 'and the bag');
 ctl.G.battle = null;
 
+section('the stage lays itself out for the screen it is on');
+// layoutFor is pure — viewport in, mode/scale/gutter out — so the whole
+// fullscreen/landscape/portrait story is testable without a browser.
+const VW = EK.VIEW_W, VH = EK.VIEW_H;
+const gameH = (L) => VH * L.scale, gameW = (L) => VW * L.scale;
+
+const desk = EK.layoutFor(1280, 900, false);
+eq(desk.mode, 'none', 'a mouse gets no on-screen controls');
+eq(desk.scale, 4, 'and integer scaling when there is room (1280x900 -> 4x)');
+eq(desk.gutter, 0, 'and no gutter');
+const deskSmall = EK.layoutFor(400, 300, false);
+eq(deskSmall.mode, 'none', 'a small window is still mouse layout');
+ok(deskSmall.scale > 1 && deskSmall.scale < 2, 'and drops to fractional scale rather than to 1x');
+ok(EK.layoutFor(120, 120, false).scale >= 1, 'scale never falls below 1x, however small the window');
+
+const land = EK.layoutFor(844, 390, true);
+eq(land.mode, 'side', 'a phone in landscape puts the controls in the gutters');
+ok(gameH(land) / 390 >= .95, `the game is the full height of the screen (${(gameH(land) / 390 * 100) | 0}%)`);
+ok(land.gutter >= 96, `each gutter is wide enough for a thumb (${land.gutter}px)`);
+ok(gameW(land) + land.gutter * 2 <= 844 + 1, 'stage plus both gutters fit across');
+
+const narrow = EK.layoutFor(568, 320, true);
+eq(narrow.mode, 'overlay', 'a short landscape screen has no room for gutters, so controls overlay');
+ok(gameH(narrow) / 320 >= .95, 'and the game still fills the height');
+
+const port = EK.layoutFor(412, 900, true);
+eq(port.mode, 'below', 'a phone in portrait keeps the controls under the game');
+ok(gameW(port) / 412 >= .95, 'the game is the full width');
+ok(port.below >= 190, `and the band underneath is deep enough to hold them (${port.below | 0}px)`);
+eq(EK.layoutFor(360, 640, true).mode, 'below', 'a small portrait phone still gets the band');
+eq(EK.layoutFor(400, 420, true).mode, 'overlay', 'a squat portrait window falls back to overlay');
+
+const LAYOUTS = new Set(['none', 'side', 'below', 'overlay']);
+let badFit = null;
+for (const [w, h] of [[320, 480], [375, 667], [390, 844], [414, 896], [768, 1024], [480, 320],
+  [667, 375], [844, 390], [896, 414], [1024, 768], [1180, 820], [240, 240], [2400, 1080]]) {
+  for (const touch of [false, true]) {
+    const L = EK.layoutFor(w, h, touch);
+    const why = !LAYOUTS.has(L.mode) ? `mode ${L.mode}`
+      : !(L.scale >= 1) ? `scale ${L.scale}`
+      : !(L.gutter >= 0) ? `gutter ${L.gutter}`
+      : (gameW(L) > w && w >= VW) ? `${gameW(L)}px wide on a ${w}px screen`
+      : (gameH(L) > h && h >= VH) ? `${gameH(L)}px tall on a ${h}px screen`
+      : null;
+    if (why && !badFit) badFit = `${w}x${h} touch=${touch}: ${why}`;
+  }
+}
+ok(!badFit, `every viewport gets a sane layout${badFit ? ' — ' + badFit : ''}`);
+
+eq(EK.stickDir(0, 0), null, 'a thumb resting on the stick walks nowhere');
+eq(EK.stickDir(10, 6), null, 'and neither does a twitch inside the dead zone');
+eq(EK.stickDir(40, 0), 'right', 'a pull right walks right');
+eq(EK.stickDir(-40, 0), 'left', 'a pull left walks left');
+eq(EK.stickDir(0, 40), 'down', 'screen-down is down');
+eq(EK.stickDir(0, -40), 'up', 'and screen-up is up');
+eq(EK.stickDir(40, 30), 'right', 'a diagonal resolves to its dominant axis');
+eq(EK.stickDir(30, 40), 'down', 'either way round');
+eq(EK.stickDir(30, 30), 'down', 'a perfect diagonal picks one and sticks to it');
+eq(EK.stickDir(10, 6, 4), 'right', 'the dead zone is tunable');
+
+eq(EK.toggleFullscreen(), false, 'toggleFullscreen is a no-op with no document to expand');
+
+section('the touch layer is wired up in the markup');
+// The drag/scroll affordances live in CSS and pointer handlers the stub DOM
+// cannot exercise. Assert they are present so a refactor cannot quietly drop them.
+const { readFileSync } = await import('node:fs');
+const SRC = readFileSync(new URL('../emberkin/index.html', import.meta.url), 'utf8');
+for (const id of ['pad', 'stick', 'knob', 'btns', 'fsbtn']) {
+  ok(SRC.includes(`id="${id}"`), `#${id} exists in the markup`);
+}
+ok(/#pad, #btns\{[^}]*position:fixed/.test(SRC), 'the controls are fixed to the screen, not to the stage');
+ok(/#hand\{[^}]*touch-action:none/.test(SRC), 'the hand claims its own gestures so a drag is a drag');
+ok(/touch-action:pan-y/.test(SRC), 'scrollable screens still scroll under a finger');
+ok(SRC.includes('pointerdown') && SRC.includes('pointermove') && SRC.includes('pointerup'),
+  'card dragging is on pointer events, so mouse and finger take the same path');
+ok(SRC.includes('willplay'), 'a card lifted past the threshold says so');
+ok(/fullscreenchange/.test(SRC), 'leaving fullscreen re-fits the stage');
+ok(/orientationchange/.test(SRC), 'so does turning the phone');
+
 section('a monkey on the keyboard cannot break it');
 // Random input for thousands of frames, drawing every one. This is the cheapest
 // way to find the state a hand-written test would never think to reach.
