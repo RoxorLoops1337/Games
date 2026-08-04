@@ -18152,17 +18152,44 @@ t.ok(true, 'a final draw on a live match is clean');
   // ---- stripStatus and heldBy are one list, asked two ways. Derived from the
   // source, not restated here: a debuff added to one and forgotten in the
   // other is exactly the failure this is for.
+  /* It used to be that stripStatus and heldBy were two hand-written lists, and
+     this asserted they agreed. They cannot disagree now — both walk HOLDS, and
+     so do the phrase and the preview label, which is what stopped the label
+     from becoming a fifth copy of one fact. Four copies is the arrangement
+     that has already cost this file a hobble Unbind could not remove, a
+     pyreSide the save dropped, and a markBy packed as a body.
+
+     So what is asserted is the structure that makes agreement automatic, and
+     then the thing a table cannot guarantee: that the table is COMPLETE. */
   {
     const cut = (name) => { const f = SRC.slice(SRC.indexOf('function ' + name + '(')); return f.slice(0, f.indexOf('\n}\n')); };
-    const fields = (body) => new Set([...body.matchAll(/t\.(\w+)\s*(?:>\s*0|\)|\?)/g)].map(m => m[1])
-      .filter(k => /T$|^burn$|^taunt$/.test(k)));
-    const strips = fields(cut('stripStatus'));
-    const asks = fields(cut('heldBy'));
-    t.ok(strips.size >= 7, 'stripStatus really parsed (' + [...strips].join(' ') + ')');
-    const onlyStrip = [...strips].filter(k => !asks.has(k));
-    const onlyAsk = [...asks].filter(k => !strips.has(k));
-    t.ok(onlyStrip.length === 0, 'heldBy asks about everything stripStatus takes off (' + onlyStrip.join(', ') + ')');
-    t.ok(onlyAsk.length === 0, 'and stripStatus takes off everything heldBy asks about (' + onlyAsk.join(', ') + ')');
+    t.ok(/for \(const k of HOLDS\)/.test(cut('stripStatus')), 'the strip walks the one table');
+    t.ok(/for \(const k of HOLDS\)/.test(cut('heldBy')), 'and so does the count');
+    t.ok(/for \(const k of HOLDS\)/.test(cut('topHold')), 'and so does the preview label');
+
+    t.ok(IB.HOLDS.length >= 8, 'the table has every hold in it (' + IB.HOLDS.length + ')');
+    for (const k of IB.HOLDS){
+      t.ok(k.id && k.a && k.n && typeof k.left === 'function' && typeof k.off === 'function',
+        k.id + ' has a name for a sentence, a name for a label, a reader and a remover');
+      t.ok(k.n.length <= 6, k.id + '’s label name fits a preview (' + k.n + ')');
+      t.ok(/^(a|the) /.test(k.a), k.id + '’s sentence name reads as a thing (' + k.a + ')');
+    }
+
+    /* Completeness: every timed field a fresh hero is built with, minus the
+       ones that are not holds at all. fallT is Withdraw — YOUR order, and it
+       makes a body take 25% LESS — and freeT is what a strip GRANTS. Naming
+       the exceptions here rather than the members is the point: a new debuff
+       is caught by default, and only a deliberate edit can excuse one. */
+    const NOT_HOLDS = new Set(['castT', 'hitT', 'hitT0', 'respawnT', 'shT', 'warpT', 'fallT', 'freeT', 'pullSp']);
+    const init = SRC.slice(SRC.indexOf('function makeHero('));
+    const timed = new Set([...init.slice(0, init.indexOf('\n}\n')).matchAll(/\b(\w+T):/g)].map(m => m[1]));
+    t.ok(timed.size >= 8, 'the hero’s own field list really parsed (' + [...timed].join(' ') + ')');
+    const covered = new Set(IB.HOLDS.map(k => k.id));
+    const missing = [...timed].filter(f => !NOT_HOLDS.has(f) &&
+      !IB.HOLDS.some(k => new RegExp('\\b' + f + '\\b').test(String(k.left))));
+    t.ok(missing.length === 0,
+      'every timed status a hero carries is either a hold or a named exception (' + missing.join(', ') + ')');
+    t.ok(covered.has('hob') && covered.has('pyre') && covered.has('burn'), 'including the three that are not plain timers');
   }
 
   // ---- every status, one at a time: heldBy sees exactly one, stripStatus
@@ -18654,6 +18681,125 @@ t.ok(true, 'a final draw on a live match is clean');
       t.ok(IB.netHash() === quiet, 'and the hash does not read it');
       t.ok(before !== quiet, 'while the strip itself is something the hash did see');
       IB.stripTook.length = 0;
+    }
+    IB.netEnd();
+  }
+}
+
+/* ================================ what is on that one, and for how much longer
+
+   A strip is a ninety-second order and what it buys is however many seconds of
+   hold were left. Measured over 2,838 sampled moments with a hold running
+   across sixteen veteran matches: 38.3% had UNDER A SECOND left and 53.9%
+   under two. So a player pressing Unbind because a hero looks hobbled is
+   throwing the order away more than a third of the time.
+
+   The Host is not, because it reads the field: 13.1% of its strips caught a
+   hold with under a second on it, at a mean of 3.07s against the 1.67s median
+   of a random moment. The entire gap between the two players is a number on
+   screen for one of them.
+
+   This was NOT the readout I set out to build. The first candidate was a body
+   count on the Bombard footprint — the game tells you "9 caught" only after
+   the ninety-five seconds are spent — and measuring it said no: across 1,539
+   sampled moments the best aim on the lane catches 6.91 bodies and simply
+   pointing at the middle of their line catches 6.34. Aiming well is worth 0.57
+   of a body, so a count would not move the crosshair. It is a real readout of
+   a decision nobody is making. */
+{
+  // ---- the longest-remaining hold, not the heaviest. What is being decided
+  // is whether there is enough left to be worth an order, and a hobble with
+  // 0.3s on it is not worth one however heavy a hobble is.
+  {
+    const body = { stunT:0, slowT:0, slowP:0, taunt:0, pullT:0, pullBy:null, burn:null,
+      hobT:0, markT:0, markBy:-1, markAmp:0, pyreT:0, pyreDps:0, pyreSrc:null, pyreSide:-1 };
+    t.ok(IB.topHold(body) === null, 'a clean body has nothing to report');
+    body.hobT = 0.3; body.slowT = 2.6;
+    const top = IB.topHold(body);
+    t.ok(top && top.id === 'slow', 'the longest-remaining one wins, not the heaviest (' + (top || {}).id + ')');
+    t.ok(top && Math.abs(top.t - 2.6) < 1e-9, 'and it reports the seconds it actually has left');
+    body.hobT = 4.5;
+    t.ok(IB.topHold(body).id === 'hob', 'and it changes when the hobble outlasts the slow');
+    t.ok(IB.topHold(body).n.length <= 6, 'the label name is short enough to draw');
+  }
+
+  // ---- the preview carries the body so it can read it, and the CLICK still
+  // resolves by id through hit — the body is for drawing and nothing else.
+  {
+    IB.newMatch({ diff:'veteran', seed:9410 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'tank'); IB.createHero(P(), 'mage');
+    let g = 0; while (G.wave < 1 && g++ < 30 * 90) IB.update(1 / 30);
+    for (const h of P().heroes){ h.lvl = 10; IB.recalcHero(h, true); h.dead = false; h.hp = h.mhp;
+      h.inLane = true; if (!G.units.includes(h)) G.units.push(h); }
+    const [a, b] = P().heroes;
+    t.ok(!!a && !!b, 'two heroes of ours');
+    if (a && b){
+      a.x = 32; a.y = -1; b.x = 33.4; b.y = 1;
+      a.hobT = 4.2; b.hobT = 4.4;
+      P().spells[0] = 'unbind'; P().spellCd[0] = 0;
+      t.ok(IB.castPress(0) === null, 'Unbind arms rather than opening the chooser');
+      const list = IB.spellAimCandidates();
+      t.ok(list.length === 2, 'both heroes are candidates (' + list.length + ')');
+      t.ok(list.every(k => !!k.body), 'each candidate carries the body the label reads');
+      t.ok(list.every(k => k.hit && k.hit.hero !== undefined), 'and still resolves by id, which is what the click uses');
+      t.ok(list.every(k => k.body && k.hit && k.hit.hero === k.body.id),
+        'the two agree about which body it is');
+
+      // the nudge: two labels that would land on each other do not
+      const c = CTX;
+      const placed = [];
+      for (let i = 0; i < list.length; i++) IB.aimHoldLabel(c, list[i], i === 0, placed);
+      t.ok(placed.length === 2, 'both labels were placed (' + placed.length + ')');
+      if (placed.length === 2){
+        const dy = Math.abs(placed[0].y - placed[1].y);
+        t.ok(dy >= IB.AIM_LABEL.h, 'and they do not sit on top of each other (' + dy.toFixed(0) + 'px apart)');
+        t.ok(dy <= (IB.AIM_LABEL.h + 3) * 4 + 1, 'nor run away down the screen — the step is bounded');
+      }
+      // a clean hero gets no label at all, rather than an empty chip
+      a.hobT = 0; b.hobT = 0;
+      const placed2 = [];
+      for (const k of list) IB.aimHoldLabel(c, k, false, placed2);
+      t.ok(placed2.length === 0, 'nothing on them is nothing drawn');
+      IB.spellAimOff();
+    }
+  }
+
+  // ---- a struct is a candidate too (Rampart), and a wall carries no holds,
+  // so it must not be handed a body and must not print a chip
+  {
+    IB.newMatch({ diff:'veteran', seed:9411 });
+    for (const s of G.sides) rich(s);
+    let g = 0; while (G.wave < 1 && g++ < 30 * 90) IB.update(1 / 30);
+    P().spells[0] = 'rampart'; P().spellCd[0] = 0;
+    t.ok(IB.castPress(0) === null, 'Rampart arms');
+    const list = IB.spellAimCandidates();
+    t.ok(list.length > 0, 'your walls are candidates (' + list.length + ')');
+    t.ok(list.every(k => !k.body), 'and none of them carries a body, because a wall carries no holds');
+    IB.spellAimOff();
+  }
+
+  // ---- and the label is cosmetic to the last bit
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:9412 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(P(), 'tank');
+    let g = 0; while (G.wave < 1 && g++ < 30 * 90) IB.update(1 / 30);
+    const h = P().heroes[0];
+    if (h){
+      h.dead = false; h.hp = h.mhp; h.inLane = true;
+      if (!G.units.includes(h)) G.units.push(h);
+      h.hobT = 4.5;
+      P().spells[0] = 'unbind'; P().spellCd[0] = 0;
+      IB.castPress(0);
+      const before = IB.netHash();
+      const c = CTX;
+      const placed = [];
+      for (const k of IB.spellAimCandidates()) IB.aimHoldLabel(c, k, true, placed);
+      t.ok(IB.netHash() === before, 'drawing the label moves nothing the simulation reads');
+      t.ok(!/AIM_LABEL|hobble 4/.test(JSON.stringify(IB.netSnap())), 'and it is in no snapshot');
+      IB.spellAimOff();
     }
     IB.netEnd();
   }

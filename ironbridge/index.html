@@ -4118,19 +4118,50 @@ function applyBurn(t, dps, dur, src){
    holds playing, a strip takes 1.05 holds off and 3.10 seconds of hold with
    them — so "2 taken off" is almost never the sentence, and "the hobble and a
    burn" is the one that says whether ninety seconds were worth spending. */
+/* ONE table, and everything about a hold reads it: what takes it off, whether
+   a body is carrying it, what to call it in a sentence, and what to call it in
+   the two words a preview label has room for.
+
+   It was four hand-written lists a moment ago — the strip, the count, the
+   phrase, and the label wanted a fifth. Four copies of one fact is the exact
+   arrangement that has already cost this file a hobble Unbind could not
+   remove, a pyreSide the save dropped, and a markBy packed as a body. The
+   fifth copy is the one that does not get written.
+
+     left  how many seconds of it are left, 0 for none
+     off   take it off, INCLUDING whatever travels with the timer — pullBy is
+           in NET_REFS and a stale one re-links to whatever a later snapshot
+           puts at that index; pyreSide is the only thing on the bridge that
+           knows whose order a body is burning for
+     a     what it is called in a sentence
+     n     what it is called in a label, where there is room for one word */
+const HOLDS = [
+  { id:'stun',  a:'a stun',     n:'stun',   left:(t) => t.stunT || 0,          off:(t) => { t.stunT = 0; } },
+  { id:'slow',  a:'a slow',     n:'slow',   left:(t) => t.slowT || 0,          off:(t) => { t.slowT = 0; t.slowP = 0; } },
+  { id:'taunt', a:'a taunt',    n:'taunt',  left:(t) => t.taunt || 0,          off:(t) => { t.taunt = 0; } },
+  { id:'pull',  a:'a chain',    n:'chain',  left:(t) => t.pullT || 0,          off:(t) => { t.pullT = 0; t.pullBy = null; } },
+  { id:'burn',  a:'a burn',     n:'burn',   left:(t) => t.burn ? t.burn.t : 0, off:(t) => { t.burn = null; } },
+  { id:'hob',   a:'the hobble', n:'hobble', left:(t) => t.hobT || 0,           off:(t) => { t.hobT = 0; } },
+  { id:'mark',  a:'a mark',     n:'mark',   left:(t) => t.markT || 0,          off:(t) => { t.markT = 0; t.markBy = -1; t.markAmp = 0; } },
+  { id:'pyre',  a:'the brand',  n:'brand',  left:(t) => t.pyreT || 0,
+    off:(t) => { t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; } },
+];
 const stripTook = [];
 function stripStatus(t){
   stripTook.length = 0;
   let n = 0;
-  if (t.stunT > 0){ t.stunT = 0; stripTook.push('a stun'); n++; }
-  if (t.slowT > 0){ t.slowT = 0; t.slowP = 0; stripTook.push('a slow'); n++; }
-  if (t.taunt > 0){ t.taunt = 0; stripTook.push('a taunt'); n++; }
-  if (t.pullT > 0){ t.pullT = 0; t.pullBy = null; stripTook.push('a chain'); n++; }
-  if (t.burn){ t.burn = null; stripTook.push('a burn'); n++; }
-  if (t.hobT > 0){ t.hobT = 0; stripTook.push('the hobble'); n++; }
-  if (t.markT > 0){ t.markT = 0; t.markBy = -1; t.markAmp = 0; stripTook.push('a mark'); n++; }
-  if (t.pyreT > 0){ t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; stripTook.push('the brand'); n++; }
+  for (const k of HOLDS) if (k.left(t) > 0){ k.off(t); stripTook.push(k.a); n++; }
   return n;
+}
+/* The heaviest thing on a body and how long it has to run, for a preview that
+   has to answer "is this worth ninety seconds" before the ninety seconds are
+   spent. Longest-remaining wins rather than most-damaging: what the player is
+   deciding is whether there is enough left to be worth taking, and a hobble
+   with 0.3s on it is not worth an order however heavy a hobble is. */
+function topHold(t){
+  let best = null, bl = 0;
+  for (const k of HOLDS){ const v = k.left(t); if (v > bl){ bl = v; best = k; } }
+  return best ? { id:best.id, n:best.n, a:best.a, t:bl } : null;
 }
 /* "a slow", "the hobble and a burn", "a stun, a chain and the brand". Built
    from whatever the strip just recorded rather than from a count, and it is
@@ -4145,9 +4176,9 @@ function tookPhrase(list){
 // carrying right now. Every gate that means "is there anything to take off"
 // reads this, so a gate cannot fall out of step with the strip.
 function heldBy(t){
-  return (t.stunT > 0 ? 1 : 0) + (t.slowT > 0 ? 1 : 0) + (t.taunt > 0 ? 1 : 0) +
-    (t.pullT > 0 ? 1 : 0) + (t.burn ? 1 : 0) + (t.hobT > 0 ? 1 : 0) +
-    (t.markT > 0 ? 1 : 0) + (t.pyreT > 0 ? 1 : 0);
+  let n = 0;
+  for (const k of HOLDS) if (k.left(t) > 0) n++;
+  return n;
 }
 
 /* ------------------------------------------------------------------ unit tick */
@@ -16846,11 +16877,14 @@ function spellAimCandidates(){
     }
     return out;
   }
+  // `body` is carried on the candidate purely so the preview can read what
+  // that body is holding. Cosmetic to the last bit — the click resolves by id
+  // through hit, exactly as it always did, and nothing here reaches the sim.
   if (d.target === 'own'){
     for (const h of s.heroes){
       if (h.dead) continue;
       const p = lp(h.x, h.y);
-      out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:h.id } });
+      out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:h.id }, body:h });
     }
     return out;
   }
@@ -16859,7 +16893,7 @@ function spellAimCandidates(){
     if (u.dead || u.side !== fs) continue;
     if (!u.isHero && !(d.target === 'foebody' && u.kind === 'super')) continue;
     const p = lp(u.x, u.y);
-    out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:u.id } });
+    out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:u.id }, body:u });
   }
   return out;
 }
@@ -16991,12 +17025,78 @@ function drawAim(c){
   }
   const list = spellAimCandidates();
   const hot = spellAimPick(list, pt.x, pt.y);
+  // Boxes already placed, so a second hero standing beside the first does not
+  // print its label on top of the first one's. Two heroes at once is not the
+  // common case — measured, a hold peaks at 1.13 heroes on the field and 28 of
+  // 32 finish with a cap of one — but "rare" is not "never", and a stack of
+  // two chips is unreadable rather than merely crowded.
+  const placed = [];
   for (const k of list){
     // Everything it COULD take, quietly, so a player can see there is a second
     // hero over there before moving the cursor to find out.
     aimRing(c, k.cx, k.cy, k.rx, k.ry,
       (k === hot ? 2.8 : 1.9) * Math.max(.6, cam.z), k === hot ? 1 : .62);
+    if (k.body) aimHoldLabel(c, k, k === hot, placed);
   }
+  c.restore();
+}
+
+/* WHAT IS ON THAT ONE, AND FOR HOW MUCH LONGER.
+
+   A strip is a ninety-second order and what it buys is however many seconds of
+   hold were left, which ranged from 0.00 to 5.97 across sixteen veteran
+   matches — a six-fold swing decided by nothing but when you press. Measured
+   over 2,838 sampled moments with a hold running: 38.3% of them had under a
+   second left, and 53.9% under two. So a player pressing Unbind because a hero
+   looks hobbled is throwing the order away more than a third of the time.
+
+   The Host does not, because it reads the field: only 13.1% of its strips
+   caught a hold with under a second on it, at a mean of 3.07s against the
+   1.67s median of a random moment. The whole gap between the two is a number
+   on screen for one of them.
+
+   The status icons already fade with the timer — statusFade — but an alpha
+   ramp is a mood, not a quantity, and "0.4s" and "4.4s" are the same decision
+   only if you cannot tell them apart.
+
+   Drawn on the ring rather than in the aim bar because the bar has no hot
+   candidate on a phone: there is no hover to read, and the tap IS the choice.
+   Cosmetic to the last bit — it draws from a body the preview was handed, the
+   simulation never learns it was drawn, and it is skipped whole in HEADLESS
+   along with everything else on this canvas. */
+const AIM_LABEL = { pad:4, h:14, dim:'#0d141c', lit:'#ffe8b0', cold:'#c9b48a' };
+function aimHoldLabel(c, k, hot, placed){
+  // A candidate with no body is a wall — Rampart aims at those, and a wall
+  // carries no holds. Guarded here as well as at the call site, because a
+  // drawing routine that throws takes the whole frame with it.
+  if (!k || !k.body) return;
+  const top = topHold(k.body);
+  if (!top) return;
+  const txt = top.n + ' ' + top.t.toFixed(1) + 's';
+  // BELOW the ring, at the feet. Above it is where the nameplate and the two
+  // bars paint, and they paint after this does — the same collision the hold
+  // marker hit when it was first drawn over a hero's head, and the same fix.
+  let y = k.cy + k.ry + 9;
+  c.save();
+  c.setLineDash([]);
+  c.font = 'bold ' + Math.max(9, Math.round(11 * cam.z)) + 'px system-ui';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  const w = c.measureText(txt).width + AIM_LABEL.pad * 2;
+  // Step down past anything already there. Bounded rather than a while-loop
+  // over an unbounded list: the candidates are heroes, there are never many,
+  // and a drawing routine that can spin is worse than one that can crowd.
+  const hits = (yy) => (placed || []).some(p =>
+    Math.abs(p.x - k.cx) < (p.w + w) / 2 && Math.abs(p.y - yy) < AIM_LABEL.h + 2);
+  for (let i = 0; i < 4 && hits(y); i++) y += AIM_LABEL.h + 3;
+  if (placed) placed.push({ x:k.cx, y, w });
+  c.globalAlpha = hot ? .92 : .6;
+  c.fillStyle = AIM_LABEL.dim;
+  c.fillRect(k.cx - w / 2, y - AIM_LABEL.h / 2, w, AIM_LABEL.h);
+  // Under a second is the case the whole label exists for, so it is the one
+  // that looks different rather than merely reading differently.
+  c.fillStyle = top.t < 1 ? AIM_LABEL.cold : AIM_LABEL.lit;
+  c.fillText(txt, k.cx, y);
   c.restore();
 }
 
@@ -19589,7 +19689,7 @@ window.IB = {
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
-  stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES,
+  stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
