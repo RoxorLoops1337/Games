@@ -17556,9 +17556,12 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 
   {
-    /* The Host gives it when there is something to brace AGAINST — a hero of
-       theirs on the bridge with its ultimate off recovery. Bracing an empty
-       lane is eight seconds of nothing, which is the mistake this most invites. */
+    /* The Host gives it when there is something to brace AGAINST: a hero of
+       theirs at the line WITH A SKILL ARMED. Presence alone is not a test —
+       bracing on "a hero is near" caught nothing at all in 49% of 337 measured
+       windows — and the ultimate-only clause that preceded it held 2.5% of a
+       match and made the order unusable. Armed-and-near holds 12.3% of a match
+       and catches an ability 62.7% of the time. */
     const b = board(4403);
     const d = IB.SPELL.brace;
     b.fh.inLane = false;
@@ -17575,10 +17578,19 @@ t.ok(true, 'a final draw on a live match is clean');
        constantly, not the ultimate, which it throws once a minute. */
     const u = b.fh.skills.find(x => x.ult);
     u.cdT = 40;
+    b.fh.mana = b.fh.mmana;
     t.ok(!!IB.aiSpellTarget(b.me, d, 1),
-      'a hero of theirs fighting close is reason enough, loaded or not');
-    u.cdT = 0;
-    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'and still so when it is loaded');
+      'a hero of theirs at the line with anything armed is reason enough — not only its ultimate');
+    // ...but a hero with nothing to throw is a hero there is nothing to brace
+    // against, and that is the test the widened gate was missing.
+    for (const sk of b.fh.skills) sk.cdT = 99;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null,
+      'and one whose every skill is recovering is not');
+    for (const sk of b.fh.skills) sk.cdT = 0;
+    b.fh.mana = 0;
+    t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'nor one that cannot pay for any of them');
+    b.fh.mana = b.fh.mmana;
+    t.ok(!!IB.aiSpellTarget(b.me, d, 1), 'and it comes back when they can throw again');
     b.fh.x = IB.frontlineX(0) + 40;
     t.ok(IB.aiSpellTarget(b.me, d, 1) === null, 'but not for one fighting far away');
     b.fh.x = IB.frontlineX(0);
@@ -17842,15 +17854,17 @@ t.ok(true, 'a final draw on a live match is clean');
    design is right and this block is here so nobody re-litigates it blind.
 
      every hold forges a hero eventually        100% of 28
-     median arrival                             271s, in a match of about 480
+     median arrival                             about 262s, in a match of ~590
      a side HAS a hero                          42% of sampled ticks
      ...with one in the lane                    37.4%
      Warp Banner's moment holds                 3.6%
      Unbind's moment holds                      0.4%
 
-   Orders are chosen in the opening twenty-two seconds. A hero turns up after
-   the halfway mark, so a slot spent on one of these sleeps through most of the
-   match — which is exactly what a weight of 1 is for. And Unbind's 0.4% is not
+   Orders are chosen in the opening twenty-two seconds. A hero turns up around
+   the 262-second mark of a median 590-second match, so a slot spent on one of
+   these sleeps through roughly 42% of it — the longest wait in the set, which
+   is what a weight of 1 is for. (The first version said "over half", off a
+   480s figure that was the sampling window rather than the match.) And Unbind's 0.4% is not
    Brace's 1.3%: Brace wanted a state that barely existed for a reason
    unrelated to what it did, while Unbind is a CLEANSE and a rare gate is its
    whole purpose. Drafted, it still fires about once a draft.                */
