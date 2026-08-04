@@ -140,6 +140,7 @@
         <button data-v="2">HARD</button>
       </div>
       <button class="btn" id="bStart">FIGHT</button>
+      <button class="btn" id="bHorde">HORDE</button>
       <button class="btn alt" id="bHow">HOW TO PLAY</button>
       <div class="tiny" id="tBest">BEST 0</div>
     </div>
@@ -196,7 +197,7 @@
       <p class="sub" id="ovSub">The street keeps what it takes</p>
       <div class="stats">
         <div class="stat"><div class="k">Score</div><div class="v" id="ovScore">0</div></div>
-        <div class="stat"><div class="k">Stage</div><div class="v" id="ovStage">1</div></div>
+        <div class="stat"><div class="k" id="ovStageK">Stage</div><div class="v" id="ovStage">1</div></div>
         <div class="stat"><div class="k">Best</div><div class="v" id="ovBest">0</div></div>
       </div>
       <div class="story" id="ovStory"></div>
@@ -276,10 +277,10 @@ const G = {
   flash: 0,
   contT: 0,                         // continue countdown
   contP: -1,
-  bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '',
+  bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '', bestWave: 0,
   ups: [], picks: [], pick: 0,
   time: 0,                          // seconds spent in the current stage
-  sound: true, scan: true, story: true,
+  sound: true, scan: true, story: true, mode: 'story',
 };
 
 const cam = { x: 0, lock: -1, targetX: 0, shakeX: 0, shakeY: 0 };
@@ -1421,6 +1422,7 @@ function chooseUpgrade(){
   const u = G.picks[clamp(G.pick, 0, G.picks.length - 1)];
   if (u) applyUpgrade(u.id);
   G.picks = [];
+  if (G.mode === 'horde'){ G.phase = 'play'; HORDE.restT = 1.6; musicStart(stage().music); return; }
   nextStage();
 }
 
@@ -2696,9 +2698,9 @@ const STAGES = [
     name: 'RIVERSIDE', sub: 'EAST BRIDGE - 11PM', bg: 'street', len: 1780, music: 0,
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
-      { x: 400,  spawn: [['punk', 3]], items: [['crate', 120], ['crate', 200]] },
-      { x: 780,  spawn: [['grunt', 16]], cap: 22, items: [['pipe', 90], ['crate', 200]] },
-      { x: 1130, spawn: [['runner', 2], ['bruiser', 1]], items: [['barrel', 150]] },
+      { x: 400,  spawn: [['grunt', 24], ['punk', 2]], cap: 18, items: [['crate', 120], ['crate', 200]] },
+      { x: 780,  spawn: [['grunt', 34]], cap: 22, items: [['pipe', 90], ['crate', 200]] },
+      { x: 1130, spawn: [['grunt', 28], ['runner', 2], ['bruiser', 1]], cap: 24, items: [['barrel', 150]] },
       { x: 1396, spawn: [['punk', 2]], boss: 'rook', items: [['bat', 120]] },
     ],
   },
@@ -2706,9 +2708,9 @@ const STAGES = [
     name: 'THE JUNKYARD', sub: 'SCRAP LINE - 1AM', bg: 'junk', len: 1900, music: 1,
     gates: [
       { x: 0,    spawn: [['punk', 2], ['chain', 1]] },
-      { x: 430,  spawn: [['chain', 1], ['runner', 2]], items: [['pipe', 60], ['crate', 170]] },
-      { x: 820,  spawn: [['grunt', 20], ['bruiser', 1]], cap: 26, items: [['barrel', 100], ['bat', 170]] },
-      { x: 1200, spawn: [['blade', 1], ['runner', 2]], items: [['crate', 80], ['crate', 140]] },
+      { x: 430,  spawn: [['grunt', 30], ['chain', 1], ['runner', 2]], cap: 22, items: [['pipe', 60], ['crate', 170]] },
+      { x: 820,  spawn: [['grunt', 40], ['bruiser', 2]], cap: 26, items: [['barrel', 100], ['bat', 170]] },
+      { x: 1200, spawn: [['grunt', 26], ['blade', 2], ['runner', 2]], cap: 24, items: [['crate', 80], ['crate', 140]] },
       { x: 1516, spawn: [['punk', 1], ['chain', 1]], boss: 'vex', items: [['pipe', 130]] },
     ],
   },
@@ -2717,9 +2719,9 @@ const STAGES = [
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
-      { x: 440,  spawn: [['runner', 2], ['chain', 1]], items: [['crate', 110], ['bat', 190]] },
-      { x: 830,  spawn: [['grunt', 22], ['bruiser', 2]], cap: 28, items: [['barrel', 90], ['barrel', 160]] },
-      { x: 1210, spawn: [['blade', 2], ['punk', 2]], items: [['knife', 120]] },
+      { x: 440,  spawn: [['grunt', 32], ['runner', 2], ['chain', 1]], cap: 24, items: [['crate', 110], ['bat', 190]] },
+      { x: 830,  spawn: [['grunt', 44], ['bruiser', 3]], cap: 28, items: [['barrel', 90], ['barrel', 160]] },
+      { x: 1210, spawn: [['grunt', 30], ['blade', 3], ['punk', 2]], cap: 26, items: [['knife', 120]] },
       { x: 1616, spawn: [['bruiser', 1]], boss: 'hammer', items: [['pipe', 150]] },
     ],
   },
@@ -2728,10 +2730,10 @@ const STAGES = [
     hazard: { edge: 'front', kind: 'molten', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['punk', 2], ['bruiser', 1]] },
-      { x: 430,  spawn: [['blade', 1], ['chain', 2]], items: [['pipe', 80], ['crate', 160]] },
-      { x: 820,  spawn: [['grunt', 26], ['runner', 2]], cap: 30, items: [['bat', 130], ['pipe', 210]] },
+      { x: 430,  spawn: [['grunt', 34], ['blade', 1], ['chain', 2]], cap: 24, items: [['pipe', 80], ['crate', 160]] },
+      { x: 820,  spawn: [['grunt', 48], ['runner', 3]], cap: 30, items: [['bat', 130], ['pipe', 210]] },
       { x: 1210, spawn: [['bruiser', 2], ['blade', 1]], items: [['barrel', 110]] },
-      { x: 1560, spawn: [['punk', 2], ['runner', 2]], items: [['crate', 100]] },
+      { x: 1560, spawn: [['grunt', 30], ['punk', 2], ['runner', 2]], cap: 26, items: [['crate', 100]] },
       { x: 1716, spawn: [['blade', 1]], boss: 'nyx', items: [['pipe', 140]] },
     ],
   },
@@ -2741,14 +2743,103 @@ const STAGES = [
     gates: [
       { x: 0,    spawn: [['blade', 2], ['punk', 2]] },
       { x: 430,  spawn: [['bruiser', 2], ['chain', 1]], items: [['pipe', 90]] },
-      { x: 820,  spawn: [['runner', 2], ['blade', 2]], items: [['knife', 120], ['crate', 180]] },
-      { x: 1180, spawn: [['grunt', 30], ['bruiser', 1], ['chain', 1]], cap: 32, items: [['bat', 100], ['crate', 210]] },
+      { x: 820,  spawn: [['grunt', 36], ['runner', 2], ['blade', 2]], cap: 26, items: [['knife', 120], ['crate', 180]] },
+      { x: 1180, spawn: [['grunt', 52], ['bruiser', 2], ['chain', 2]], cap: 32, items: [['bat', 100], ['crate', 210]] },
       { x: 1500, spawn: [], boss: 'rook', items: [['barrel', 130]] },
       { x: 1816, spawn: [['blade', 1]], boss: 'warden', items: [['pipe', 120], ['crate', 190]] },
     ],
   },
 ];
 const stage = () => STAGES[clamp(G.stage, 0, STAGES.length - 1)];
+
+/* ================================================================ horde
+   One street, no walking, and they never stop coming.  Each wave is bigger
+   and meaner than the last; every third one buys you a pick.  Reuses the
+   ordinary spawn queue, so a horde wave and a street wave are the same
+   machinery with a different filler. */
+const HORDE = { wave: 0, restT: 0, best: 0, lastSize: 0 };
+
+/* What turns up in wave n. */
+function hordeWave(n){
+  const list = [];
+  list.push(['grunt', Math.min(60, 10 + n * 4)]);
+  if (n >= 2) list.push(['punk', Math.min(8, 1 + Math.floor(n / 2))]);
+  if (n >= 3) list.push(['runner', Math.min(6, Math.floor(n / 3))]);
+  if (n >= 5) list.push(['blade', Math.min(5, Math.floor(n / 4))]);
+  if (n >= 6) list.push(['chain', Math.min(4, Math.floor(n / 5))]);
+  if (n >= 7) list.push(['bruiser', Math.min(5, Math.floor(n / 4))]);
+  if (n % 5 === 0) list.push([['rook', 'vex', 'hammer', 'nyx', 'warden'][Math.floor(n / 5 - 1) % 5], 1]);
+  return list;
+}
+const hordeCap = (n) => Math.min(34, 12 + n * 2) + (G.players - 1) * 4;
+
+function startHordeRun(){
+  G.mode = 'horde';
+  G.stage = 0;
+  HORDE.wave = 0; HORDE.restT = 0;
+  reseed(4242 + G.diff);
+  resetStage();
+  cam.x = 120; cam.targetX = 120; cam.lock = 120;
+  G.phase = 'play';
+  musicStart(stage().music);
+  nextHordeWave();
+}
+
+function nextHordeWave(){
+  HORDE.wave++;
+  const spawns = hordeWave(HORDE.wave);
+  HORDE.lastSize = spawns.reduce((n, [, c]) => n + c, 0);
+  W.cap = hordeCap(HORDE.wave);
+  W.active = true;
+  W.queue = [];
+  let side = 1, first = true;
+  for (const [type, count] of spawns){
+    for (let i = 0; i < count; i++){
+      const fromRight = side > 0;
+      W.queue.push({
+        type, t: first ? 0.4 : ((ENEMY[type] || {}).horde ? 0.07 : 0.3),
+        x: fromRight ? cam.x + VW + 24 + i * 10 : cam.x - 24 - i * 10,
+        y: rr(FLOOR_TOP + 6, FLOOR_BOT - 4),
+        face: fromRight ? -1 : 1,
+      });
+      first = false;
+      side *= -1;
+    }
+  }
+  G.flash = 0.2;
+  SFX.siren();
+}
+
+function updateHorde(dt){
+  if (W.queue.length){
+    const on = liveEnemies().length;
+    if (on < MAX_ON() && (W.queue[0].t -= dt) <= 0){
+      const q = W.queue.shift();
+      const e = spawnEnemy(q.type, q.x, q.y, q.face);
+      if (ENEMY[q.type] && ENEMY[q.type].boss){
+        G.bossHp = e.hp; G.bossMax = e.hpMax; G.bossName = e.name;
+      }
+    }
+  }
+  const boss = fighters.find(f => f.boss && !f.gone && f.team === 'e');
+  if (boss){ G.bossHp = Math.max(0, boss.hp); G.bossMax = boss.hpMax; G.bossName = boss.name; }
+  else G.bossHp = 0;
+
+  if (W.active && !W.queue.length && liveEnemies().length === 0){
+    W.active = false;
+    HORDE.best = Math.max(HORDE.best, HORDE.wave);
+    HORDE.restT = 2.4;
+    for (let i = 0; i < G.players; i++){        // a breather, and a little back
+      const p = players[i];
+      if (p && p.state !== 'out') p.hp = Math.min(p.hpMax, p.hp + 18);
+    }
+    if (HORDE.wave % 3 === 0){ startUpgrade(); return; }
+  }
+  if (!W.active && HORDE.restT > 0){
+    HORDE.restT -= dt;
+    if (HORDE.restT <= 0) nextHordeWave();
+  }
+}
 
 /* wave bookkeeping */
 const W = { gi: 0, active: false, queue: [], goT: 0, clearT: 0, gate: null, spawnedBoss: false, cap: 0 };
@@ -2792,6 +2883,7 @@ function scatterProps(){
 }
 
 function updateWaves(dt){
+  if (G.mode === 'horde'){ updateHorde(dt); return; }
   const s = stage();
   /* release queued spawns as room allows */
   if (W.queue.length){
@@ -2916,6 +3008,10 @@ function startStage(){
 }
 
 function finishGame(won){
+  if (G.mode === 'horde'){
+    HORDE.best = Math.max(HORDE.best, HORDE.wave);
+    if (HORDE.best > G.bestWave) G.bestWave = HORDE.best;
+  }
   G.cleared = won;
   G.phase = 'over';
   musicStop();
@@ -3039,12 +3135,14 @@ function loadMeta(){
     if (d.scan != null) G.scan = !!d.scan;
     if (d.diff != null) G.diff = clamp(d.diff | 0, 0, 2);
     if (d.story != null) G.story = !!d.story;
+    G.bestWave = d.bestWave || 0;
   } catch (e){ /* first run */ }
 }
 function saveMeta(){
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, diff: G.diff, story: G.story,
+      bestWave: G.bestWave,
     }));
   } catch (e){ /* private mode */ }
 }
@@ -3930,10 +4028,16 @@ function drawHUD(){
       }
     }
   }
-  // stage plate
+  // stage plate — or, in a horde run, how far you have got
   const s = stage();
-  textC('STAGE ' + (G.stage + 1), VW / 2, 5, '#ffe9b8', 1, '#100c18');
-  textC(s.name, VW / 2, 15, '#c08a6e', 1, '#100c18');
+  if (G.mode === 'horde'){
+    textC('WAVE ' + HORDE.wave, VW / 2, 5, '#ffd23d', 1, '#100c18');
+    const left = liveEnemies().length + W.queue.length;
+    textC(left > 0 ? left + ' LEFT' : 'CLEARED', VW / 2, 15, left > 0 ? '#c08a6e' : '#7fe07f', 1, '#100c18');
+  } else {
+    textC('STAGE ' + (G.stage + 1), VW / 2, 5, '#ffe9b8', 1, '#100c18');
+    textC(s.name, VW / 2, 15, '#c08a6e', 1, '#100c18');
+  }
 
   // boss bar
   if (G.bossHp > 0 && G.bossMax > 0){
@@ -4304,7 +4408,8 @@ function syncUI(){
   segSet('segSound', snd.on ? 1 : 0);
   segSet('segScan', G.scan ? 1 : 0);
   const sc = $('scan'); if (sc) sc.className = G.scan ? '' : 'off';
-  const tb = $('tBest'); if (tb) tb.textContent = 'BEST ' + G.best;
+  const tb = $('tBest');
+  if (tb) tb.textContent = 'BEST ' + G.best + (G.bestWave ? '   BEST WAVE ' + G.bestWave : '');
 }
 function segSet(id, v){
   const el = $(id); if (!el) return;
@@ -4331,8 +4436,9 @@ function toTitle(){
   syncUI();
 }
 
-function startGame(){
+function startGame(mode){
   audioResume();
+  G.mode = mode === 'horde' ? 'horde' : 'story';
   G.score = [0, 0];
   G.lives = [3, 3];
   G.credits = [0, 0];
@@ -4342,6 +4448,7 @@ function startGame(){
   G.ups = []; G.picks = []; G.pick = 0;
   players.length = 0;                            // a new run starts fresh
   show('title', false); show('how', false); show('over', false); show('pause', false);
+  if (G.mode === 'horde'){ startHordeRun(); return; }
   if (G.story) startCut('intro', startStage);
   else startStage();
 }
@@ -4392,11 +4499,20 @@ function togglePause(){
 
 function showOver(won){
   show('over', true);
-  $('ovTitle').textContent = won ? 'THE KEEP IS YOURS' : 'GAME OVER';
-  $('ovSub').textContent = won ? 'Sunrise over the east bridge' : 'The street keeps what it takes';
+  const horde = G.mode === 'horde';
+  $('ovTitle').textContent = horde ? 'WAVE ' + HORDE.wave : (won ? 'THE KEEP IS YOURS' : 'GAME OVER');
+  $('ovSub').textContent = horde
+    ? (HORDE.wave >= G.bestWave ? 'A new record' : 'Best wave ' + G.bestWave)
+    : (won ? 'Sunrise over the east bridge' : 'The street keeps what it takes');
   $('ovScore').textContent = String(G.score[0] + (G.players > 1 ? G.score[1] : 0));
-  $('ovStage').textContent = String(G.stage + 1);
+  $('ovStage').textContent = G.mode === 'horde' ? String(HORDE.wave) : String(G.stage + 1);
   $('ovBest').textContent = String(G.best);
+  const sk = $('ovStageK'); if (sk) sk.textContent = G.mode === 'horde' ? 'Wave' : 'Stage';
+  if (G.mode === 'horde'){
+    $('ovStory').innerHTML = 'They kept coming and you kept standing, for <b>' + HORDE.wave +
+      '</b> wave' + (HORDE.wave === 1 ? '' : 's') + '. Best so far: <b>' + G.bestWave + '</b>.';
+    return;
+  }
   $('ovStory').innerHTML = won
     ? 'Kane goes down on his own roof and the Wardens go with him. Mira takes the stairs on her own two feet. <b>You walk home.</b>'
     : 'They drag you off the pavement and the city keeps moving. <b>Get back up.</b>';
@@ -4404,6 +4520,7 @@ function showOver(won){
 
 function bindUI(){
   $('bStart').addEventListener('click', () => { SFX.select(); startGame(); });
+  $('bHorde').addEventListener('click', () => { SFX.select(); startGame('horde'); });
   $('bHow').addEventListener('click', () => { SFX.select(); show('title', false); show('how', true); G.phase = 'howto'; });
   $('bHowBack').addEventListener('click', () => { SFX.select(); show('how', false); show('title', true); G.phase = 'title'; });
   $('bResume').addEventListener('click', togglePause);
