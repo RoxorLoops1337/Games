@@ -150,15 +150,21 @@ tap('b');
 eq(fresh.G.mode, 'world', 'B closes it again');
 
 section('a battle can be fought entirely through input');
+// Play every card you can, then end the turn — the two keys a player uses.
 fresh.G.party = [fresh.mkMon('pyrelynx', 30)];
+fresh.STARTER_DECK.forEach(fresh.grantCard);
 fresh.startBattle({ foe: fresh.mkMon('sproutle', 4), wild: true });
 let guard = 0;
-while (fresh.G.battle && guard++ < 400) {
+while (fresh.G.battle && guard++ < 600) {
+  const b = fresh.B();
+  const stuck = b && b.phase === 'player' && !b.log && !b.over
+    && !b.hand.some((c) => fresh.cardCost(c) <= b.energy);
+  const key = stuck ? 'b' : 'a';
   fresh.step(.12);
-  fresh.pressKey('a'); fresh.step(.02); fresh.releaseKey('a'); fresh.fired.clear();
+  fresh.pressKey(key); fresh.step(.02); fresh.releaseKey(key); fresh.fired.clear();
   fresh.draw();
 }
-ok(guard < 400, `the battle resolved through button mashing (${guard} frames)`);
+ok(guard < 600, `the battle resolved by playing cards and ending turns (${guard} frames)`);
 eq(fresh.G.battle, null, 'and handed control back to the world');
 eq(fresh.G.mode, 'world', 'the player is walking again');
 

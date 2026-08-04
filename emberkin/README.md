@@ -1,14 +1,15 @@
 # EMBERKIN
 
-A creature collector for the browser. Walk the Hollowbrook valley, meet 19 kin,
-weaken them, catch them, raise them, and take them up to Crown Hollow.
+A creature collector crossed with a deck-builder. Walk the Hollowbrook valley,
+meet 19 kin, catch them, raise them — and fight with a hand of cards. Your kin
+brings its own moves to the deck; you bring everything else.
 
 Play: https://games-71g.pages.dev/emberkin/
 
 ## Shape of the thing
 
 - `index.html` — the whole game: markup, CSS, one inline `<script>`. Canvas
-  (256×176, integer-scaled) draws the world and battles; every panel — dialogue,
+  (256×208, integer-scaled) draws the world and battles; every panel — dialogue,
   menus, HP bars, dex, party, bag — is DOM, so text stays crisp at any zoom.
 - `art/*.json` — one file per creature, 40×40 character grids plus a palette.
 - `art/tiles/*.json` — 16×16 terrain tiles. `art/actors/*.json` — 16×22 walk
@@ -22,10 +23,11 @@ The script is sectioned; each marker is a real boundary:
 |---|---|
 | 1 | helpers, the `G` state object, save/load |
 | 2 | types, the effectiveness chart, moves, the dex, items, stat maths |
+| 2b | cards, rarities, growth rules, chests |
 | 3 | maps as char grids, warps, NPCs, encounter tables |
 | 4 | sprite rasterising and the missing-art fallbacks |
 | 5 | overworld movement, encounters, world rendering |
-| 6 | battle resolution and the battle scene |
+| 6 | the card battle — deck, hand, energy, turns — and the battle scene |
 | 7 | dialogue, menus, screens, battle playback |
 | 8 | the square-wave sequencer |
 | 9 | boot, input, frame loop, the `window.EK` test export |
@@ -50,23 +52,61 @@ node tools/spritegrid/embed.mjs --check  # CI: fail if index.html is stale
 
 Never hand-edit the generated block in `index.html` — edit the JSON and re-embed.
 
-## How a turn works
+## How a battle works
 
-`doTurn(action)` resolves an entire turn immediately and returns a list of log
-entries, each carrying an HP/status snapshot. State is consistent the moment it
-returns; the UI just plays the list back at reading speed. That is why the
-tests can drive real battles without touching the renderer, and why the HP bars
+Each turn you are dealt five cards and three energy. The deck is your support
+cards plus the active kin's own moves, shuffled together — switch kin and its
+move cards leave with it. Spend energy on whatever you like, then end the turn
+and take the foe's telegraphed hit.
+
+`playCard(i)`, `endTurn()` and `doAction()` each resolve immediately and return
+a list of log entries carrying HP/status snapshots. State is consistent the
+moment they return; the UI plays the list back at reading speed. That is why
+the tests drive real battles without touching the renderer, and why the HP bars
 can lag the text without ever disagreeing with it.
+
+### Cards
+
+A card has one growable number, `v`, and `vt` says what that number is — damage,
+shield, heal, max HP, attack, guard, draw or energy. Growth is the point:
+
+| field | what it does |
+|-------|--------------|
+| `grow` | permanent, saved with that copy — the card is stronger forever |
+| `bgrow` | grows for this battle only, on every copy in the piles |
+| `kill` | permanent, but only when this card lands the killing blow |
+| `exhaust` | one use, then out of the deck for the rest of the fight |
+
+Cards are owned as individual copies, because each one grows on its own: two
+Jabs in the same deck end up different cards. Growth stops at `growCap(id)` —
+several times the card's own value — because a card that grows forever
+eventually plays the game for you.
+
+Kin move cards are priced by weight (`moveCost`): a real move plus a support
+card is a turn, and three real moves is not. That is where the deck earns its
+place. Foes carry `FOE_HP_MUL` times their normal HP in a fight, because a hand
+lands two or three cards where a move landed one.
+
+### Chests
+
+Rare gems come from winning; Vane in the Hollowbrook shop turns them into
+cards. Four tiers, each costing roughly triple the last and shifting its odds up
+the rarity table — Silver never drops a legendary, Prism drops one in five.
 
 ## Tests
 
 ```bash
-npm run test:emberkin     # logic + render + art + "is the embed stale?"
+npm run test:emberkin     # logic + cards + render + story + art + embed freshness
 npm run check             # the whole repo
 ```
 
 - `tests/emberkin.test.mjs` — data sanity, type maths, damage, capture,
-  levelling, evolution, map connectivity, save round-trip.
+  levelling, evolution, map connectivity, save round-trip, and the card battle
+  end to end (hand, energy, piles, switching, shields).
+- `tests/emberkin_cards.test.mjs` — the deck-builder itself: growth sticks to
+  the copy that earned it, battle growth does not survive the battle, exhaust
+  means gone, kill bonuses only fire on kills, growth respects its ceiling,
+  chest odds improve with price, and deck size limits hold.
 - `tests/emberkin_render.test.mjs` — draws every map and every battle state
   against a no-op canvas, then plays the opening through simulated key presses.
 - `tests/emberkin_art.test.mjs` — enforces the mechanical half of the art brief:
@@ -79,10 +119,14 @@ tests with it rather than re-implementing game logic.
 
 ## Balance dials
 
+- Battle: `BASE_ENERGY` 3, `HAND_SIZE` 5, `FOE_HP_MUL` 2.0, `moveCost` by move power.
+- Card growth ceiling: `growCap` = card value × `capMul` (default 4).
+- Chest costs and odds: the `CHESTS` table. Gem payouts: `gemReward`.
 - Encounter rate: `enc.rate` per map (0.12–0.14).
 - XP curve `xpFor(lvl) = 0.8·lvl³`; XP gain `yield · foeLevel / 7`.
 - Stats: `statAt = ⌊base·2·lvl/100⌋ + 5`, HP adds `lvl + 10`.
 - Capture: `captureChance()` — HP ratio × species `rate` × orb `mul` × status.
 - Crit rate 1/16, crit multiplier 1.5, STAB 1.5, damage roll 0.85–1.0.
-- Status chip damage: max/16 per turn (burn, snare).
+- Status chip damage: max/16 per turn (burn, snare). Shock costs the player a
+  point of energy; chill costs a card.
 - A creature is immune to the status of its own element (`IMMUNE_TO`).

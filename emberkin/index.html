@@ -33,8 +33,10 @@
     position:absolute; left:2.5%; right:2.5%; bottom:2.5%; min-height:16%;
     padding:.62em .82em; font-size:.95em; line-height:1.45; letter-spacing:.2px; z-index:6;
   }
-  /* In battle the action menu sits beside the text, so the box gives way. */
-  #dialogue.narrow{ right:30%; }
+  /* In battle the log is a single line sitting just above the hand. */
+  #dialogue.narrow{ left:1.5%; right:1.5%; bottom:auto; top:62%; min-height:0; padding:4px 10px;
+    font-size:.8em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #dialogue.narrow .more{ bottom:2px; }
   #dialogue .who{ color:var(--gold); font-weight:700; display:block; margin-bottom:2px; font-size:.8em; letter-spacing:1px; text-transform:uppercase; }
   #dialogue .more{ position:absolute; right:10px; bottom:6px; color:var(--gold); animation:bob .7s infinite; }
   @keyframes bob{ 50%{ transform:translateY(3px); } }
@@ -52,14 +54,48 @@
   .menu .title{ font-size:.7em; letter-spacing:1.5px; text-transform:uppercase; color:var(--dim); padding:2px 8px 5px; }
 
   #mainmenu{ right:2.5%; top:2.5%; }
-  #battlemenu{ right:2.5%; bottom:2.5%; }
+
+  /* ---------------- the hand ---------------- */
+  #battlebar{ position:absolute; inset:0; z-index:6; pointer-events:none; }
+  #battlebar > *{ pointer-events:auto; }
+  #hand{ position:absolute; left:1.5%; right:1.5%; bottom:1.5%; height:30%;
+    display:flex; gap:1%; justify-content:center; align-items:flex-end; }
+  .cardel{
+    flex:0 0 18%; height:100%; border-radius:7px; padding:5% 5% 4%;
+    background:linear-gradient(180deg,#241a2e,#150e1d); border:2px solid var(--edge);
+    box-shadow:0 3px 0 rgba(0,0,0,.55); cursor:pointer; position:relative; overflow:hidden;
+    display:flex; flex-direction:column; gap:2%; transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .cardel .cn{ font-size:.95em; font-weight:700; line-height:1.1; letter-spacing:.2px; }
+  .cardel .ct{ font-size:.7em; color:var(--dim); line-height:1.2; flex:1; }
+  .cardel .cc{ position:absolute; right:5%; top:4%; width:1.5em; height:1.5em; border-radius:50%;
+    background:#0d0812; border:1px solid var(--gold); color:var(--gold); font-size:.72em;
+    display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .cardel .cg{ position:absolute; right:5%; bottom:4%; font-size:.68em; color:var(--hp-good); font-weight:700; }
+  .cardel .cr{ position:absolute; left:0; top:0; bottom:0; width:4px; }
+  .cardel.sel{ transform:translateY(-8%); box-shadow:0 0 0 2px var(--gold), 0 6px 0 rgba(0,0,0,.55); }
+  .cardel.dead{ opacity:.4; }
+  .cardel.kin .cn{ color:var(--gold); }
+
+  #energy{ position:absolute; left:1.5%; top:53%; padding:3px 9px; font-size:1em; color:var(--gold); }
+  #energy small{ color:var(--dim); font-size:.7em; }
+  #piles{ position:absolute; left:13%; top:54%; padding:3px 8px; font-size:.72em; color:var(--dim); }
+  #acts{ position:absolute; right:1.5%; top:54%; display:flex; gap:4px; }
+  #acts .abtn{ padding:3px 9px; font-size:.72em; border-radius:5px; cursor:pointer;
+    background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--edge); }
+  #acts .abtn.key{ color:var(--gold); }
+  #intent{ position:absolute; left:3%; top:14%; padding:3px 9px; font-size:.72em; z-index:6; }
+  #intent b{ color:var(--hp-bad); }
+  #shieldpip{ color:var(--xp); }
+
+  #battlemenu{ right:2.5%; top:54%; }
   #movemenu{ left:2.5%; bottom:2.5%; right:32%; }
   #movemenu .row{ justify-content:space-between; }
 
   /* ---------------- battle HUD ---------------- */
   .hud{ position:absolute; z-index:5; width:44%; padding:6px 8px 7px; }
-  #hudFoe{ left:3%; top:4%; }
-  #hudMine{ right:3%; top:44%; }
+  #hudFoe{ left:3%; top:2%; }
+  #hudMine{ right:3%; top:35%; }
   .hud .nm{ font-size:.82em; font-weight:700; display:flex; justify-content:space-between; gap:8px; }
   .hud .nm .lv{ color:var(--gold); font-size:.75em; }
   .hud .bar{ height:7px; border-radius:4px; background:#0d0812; margin-top:4px; overflow:hidden; border:1px solid #000; }
@@ -91,6 +127,13 @@
   .card .info small{ color:var(--dim); font-size:.7em; }
   .card .bar{ height:5px; border-radius:3px; background:#0d0812; margin-top:4px; overflow:hidden; }
   .card .bar > i{ display:block; height:100%; background:var(--hp-good); }
+  .chest{ flex:0 0 auto; width:34px; height:28px; border-radius:4px; position:relative;
+    background:linear-gradient(180deg,var(--tint),#0000), #2a1f36;
+    border:2px solid #1a1222; box-shadow:inset 0 -6px 0 rgba(0,0,0,.35); }
+  .chest::before{ content:''; position:absolute; left:-2px; right:-2px; top:7px; height:4px;
+    background:#1a1222; }
+  .chest::after{ content:''; position:absolute; left:50%; top:5px; width:6px; height:9px;
+    margin-left:-3px; border-radius:2px; background:var(--tint); box-shadow:0 0 0 2px #1a1222; }
   .dexgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:6px; }
   .dexcell{ padding:5px; text-align:center; cursor:pointer; }
   .dexcell canvas{ image-rendering:pixelated; width:80px; height:80px; }
@@ -127,17 +170,25 @@
     display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; }
   .notouch #pad, .notouch #btns{ display:none; }
 
-  #toast{ position:absolute; left:50%; top:8%; transform:translateX(-50%); z-index:11; padding:6px 14px;
+  #toast{ position:absolute; left:50%; top:27%; transform:translateX(-50%); z-index:11; padding:6px 14px;
     font-size:.82em; letter-spacing:1px; opacity:0; transition:opacity .25s; pointer-events:none; }
   #toast.on{ opacity:1; }
 </style>
 </head>
 <body class="notouch">
 <div id="stage">
-  <canvas id="view" width="256" height="176"></canvas>
+  <canvas id="view" width="256" height="208"></canvas>
 
   <div id="hudFoe" class="hud panel hidden"></div>
   <div id="hudMine" class="hud panel hidden"></div>
+
+  <div id="intent" class="panel hidden"></div>
+  <div id="battlebar" class="hidden">
+    <div id="energy" class="panel"><b>3</b><small>/3</small></div>
+    <div id="piles" class="panel"></div>
+    <div id="acts"></div>
+    <div id="hand"></div>
+  </div>
 
   <div id="dialogue" class="panel hidden"></div>
   <div id="mainmenu" class="menu panel hidden"></div>
@@ -1457,7 +1508,8 @@ const G = {
   map: null, mapId: '',
   player: { x: 5, y: 8, dir: 'down', px: 5, py: 8, moveT: 0, moveLen: 1, step: 0, bump: 0, hop: false },
   fade: 0, wipe: 0, evoAnim: null, alert: null, prevMode: 'world',
-  party: [], box: [], bag: {}, money: 500,
+  party: [], box: [], bag: {}, money: 500, gems: 0,
+  cards: [], deck: [], nextUid: 0, chestsOpened: 0,
   dex: {},                 // id -> 1 seen, 2 caught
   flags: {},               // story progress
   battle: null,
@@ -1480,9 +1532,11 @@ const setToast = (msg) => {
 function saveGame() {
   const packMon = (m) => ({ s: m.species, l: m.lvl, hp: m.hp, xp: m.xp, mv: m.moves.map((x) => [x.id, x.pp]), nm: m.nick || '', st: m.status || '' });
   const blob = {
-    v: 1, map: G.mapId, x: G.player.x, y: G.player.y, dir: G.player.dir,
+    v: 2, map: G.mapId, x: G.player.x, y: G.player.y, dir: G.player.dir,
     party: G.party.map(packMon), box: G.box.map(packMon),
-    bag: G.bag, money: G.money, dex: G.dex, flags: G.flags,
+    bag: G.bag, money: G.money, gems: G.gems, dex: G.dex, flags: G.flags,
+    cards: G.cards.map((c) => [c.u, c.id, c.plus, c.plays, c.kills]),
+    deck: G.deck, uid: G.nextUid, chests: G.chestsOpened,
     steps: G.steps, playtime: Math.round(G.playtime), wins: G.wins, caught: G.caught,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(blob)); return true; }
@@ -1509,7 +1563,14 @@ function loadGame() {
   };
   G.party = (blob.party || []).map(unpack).filter(Boolean);
   G.box = (blob.box || []).map(unpack).filter(Boolean);
-  G.bag = blob.bag || {}; G.money = blob.money ?? 500;
+  G.bag = blob.bag || {}; G.money = blob.money ?? 500; G.gems = blob.gems ?? 0;
+  // Cards carry their own permanent growth, so they round-trip per copy.
+  G.cards = (blob.cards || []).filter((c) => CARDS[c[1]])
+    .map((c) => ({ u: c[0], id: c[1], plus: c[2] || 0, plays: c[3] || 0, kills: c[4] || 0 }));
+  G.nextUid = blob.uid || G.cards.reduce((m, c) => Math.max(m, c.u), 0);
+  G.deck = (blob.deck || []).filter((u) => G.cards.some((c) => c.u === u));
+  G.chestsOpened = blob.chests || 0;
+  if (!G.cards.length) { STARTER_DECK.forEach(grantCard); }
   G.dex = blob.dex || {}; G.flags = blob.flags || {};
   G.steps = blob.steps || 0; G.playtime = blob.playtime || 0;
   G.wins = blob.wins || 0; G.caught = blob.caught || 0;
@@ -1689,8 +1750,189 @@ const ITEMS = {
   salve:     { name: 'Salve',       cost: 150,  kind: 'heal',  amt: 30,  desc: 'Restores 30 HP.' },
   greatsalve:{ name: 'Great Salve', cost: 500,  kind: 'heal',  amt: 90,  desc: 'Restores 90 HP.' },
   revive:    { name: 'Emberroot',   cost: 900,  kind: 'revive',           desc: 'Wakes a fainted kin at half HP.' },
-  elixir:    { name: 'Elixir',      cost: 700,  kind: 'pp',    amt: 10,  desc: 'Restores 10 PP to every move.' },
+  elixir:    { name: 'Elixir',      cost: 700,  kind: 'draw',  amt: 2,   desc: 'Draw two cards in battle.' },
 };
+
+/* ============================================================ §2b — cards ==
+   A battle is played from a deck. The active kin contributes its own moves as
+   cards; everything else comes from the deck you build out of chests.
+
+   Every card has one growable number, `v`, and `vt` says what that number is.
+   Growth is the point of the system:
+     grow    — permanent, kept in the save, the card gets stronger forever
+     bgrow   — grows while the battle lasts, resets after
+     kill    — permanent, but only when this card lands the killing blow
+     exhaust — one use, then out of the deck for the rest of the battle
+   ======================================================================== */
+const RARITY = { common: '#b9adc4', rare: '#5fc9ff', epic: '#c86bff', legendary: '#ffc94d' };
+const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary'];
+
+const CARDS = {
+  // ---- common ----------------------------------------------------------
+  strike:    { name: 'Strike',      r: 'common', cost: 1, kind: 'attack', v: 10, vt: 'dmg',
+    txt: 'Deal {v}.' },
+  jab:       { name: 'Jab',         r: 'common', cost: 0, kind: 'attack', v: 5, vt: 'dmg', grow: 1,
+    txt: 'Deal {v}. Permanently +1 each time you play it.' },
+  guard:     { name: 'Guard',       r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'shield',
+    txt: 'Gain {v} shield.' },
+  focus:     { name: 'Focus',       r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'atk',
+    txt: '+{v} attack for this battle.' },
+  hunker:    { name: 'Hunker',      r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'def',
+    txt: '+{v} guard for this battle.' },
+  vigor:     { name: 'Vigor',       r: 'common', cost: 1, kind: 'skill', v: 6, vt: 'maxhp', fx: { heal: 6 },
+    txt: '+{v} max HP and heal 6.' },
+  snack:     { name: 'Snack',       r: 'common', cost: 1, kind: 'skill', v: 12, vt: 'heal',
+    txt: 'Heal {v}.' },
+  quickstep: { name: 'Quickstep',   r: 'common', cost: 0, kind: 'skill', v: 1, vt: 'draw',
+    txt: 'Draw {v} card.' },
+  pebble:    { name: 'Pebble Fling',r: 'common', cost: 1, kind: 'attack', v: 8, vt: 'dmg', fx: { type: 'Stone' },
+    txt: 'Deal {v} Stone damage.' },
+  sparktap:  { name: 'Spark Tap',   r: 'common', cost: 1, kind: 'attack', v: 7, vt: 'dmg', fx: { type: 'Spark', st: ['shock', .25] },
+    txt: 'Deal {v} Spark. 25% to shock.' },
+  leafcut:   { name: 'Leaf Cut',    r: 'common', cost: 1, kind: 'attack', v: 8, vt: 'dmg', fx: { type: 'Verdant' },
+    txt: 'Deal {v} Verdant damage.' },
+  dewdrop:   { name: 'Dewdrop',     r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'heal', fx: { def: 1 },
+    txt: 'Heal {v} and +1 guard.' },
+
+  // ---- rare ------------------------------------------------------------
+  whetstone: { name: 'Whetstone',   r: 'rare', cost: 1, kind: 'skill', v: 3, vt: 'atk', grow: 1,
+    txt: '+{v} attack this battle. Permanently +1 each play.' },
+  ironhide:  { name: 'Ironhide',    r: 'rare', cost: 1, kind: 'skill', v: 12, vt: 'shield', fx: { def: 2 },
+    txt: 'Gain {v} shield and +2 guard.' },
+  bloodlust: { name: 'Bloodlust',   r: 'rare', cost: 0, kind: 'attack', v: 11, vt: 'dmg', kill: 3,
+    txt: 'Deal {v}. On a kill, permanently +3.' },
+  surge:     { name: 'Surge',       r: 'rare', cost: 0, kind: 'skill', v: 2, vt: 'draw', fx: { energy: 1 },
+    txt: 'Draw {v} and gain 1 energy.' },
+  heartroot: { name: 'Heartroot',   r: 'rare', cost: 2, kind: 'skill', v: 15, vt: 'maxhp', fx: { heal: 15 },
+    txt: '+{v} max HP and heal 15.' },
+  doubletap: { name: 'Double Tap',  r: 'rare', cost: 2, kind: 'attack', v: 9, vt: 'dmg', fx: { hits: 2 },
+    txt: 'Deal {v} twice.' },
+  frostbind: { name: 'Frostbind',   r: 'rare', cost: 1, kind: 'attack', v: 6, vt: 'dmg', fx: { type: 'Tide', st: ['chill', 1] },
+    txt: 'Deal {v} Tide and chill.' },
+  emberbite: { name: 'Ember Bite',  r: 'rare', cost: 1, kind: 'attack', v: 9, vt: 'dmg', fx: { type: 'Ember', st: ['burn', .5] },
+    txt: 'Deal {v} Ember. 50% to burn.' },
+  shieldwall:{ name: 'Shieldwall',  r: 'rare', cost: 2, kind: 'skill', v: 22, vt: 'shield',
+    txt: 'Gain {v} shield.' },
+  adrenaline:{ name: 'Adrenaline',  r: 'rare', cost: 0, kind: 'skill', v: 1, vt: 'draw', fx: { energy: 1 }, exhaust: true,
+    txt: 'Draw {v}, gain 1 energy. Exhaust.' },
+  fanghone:  { name: 'Fang Hone',   r: 'rare', cost: 1, kind: 'skill', v: 4, vt: 'atk', bgrow: 1,
+    txt: '+{v} attack this battle. +1 more each play this battle.' },
+  thornmail: { name: 'Thornmail',   r: 'rare', cost: 1, kind: 'skill', v: 10, vt: 'shield', fx: { thorns: 4 },
+    txt: 'Gain {v} shield. Attackers take 4.' },
+
+  // ---- epic ------------------------------------------------------------
+  bulwark:   { name: 'Bulwark',     r: 'epic', cost: 2, kind: 'skill', v: 18, vt: 'shield', fx: { def: 4 }, grow: 2,
+    txt: 'Gain {v} shield, +4 guard. Permanently +2 each play.' },
+  berserk:   { name: 'Berserk',     r: 'epic', cost: 1, kind: 'skill', v: 6, vt: 'atk', fx: { selfdmg: 5 },
+    txt: '+{v} attack this battle. Costs you 5 HP.' },
+  lifeleech: { name: 'Lifeleech',   r: 'epic', cost: 2, kind: 'attack', v: 14, vt: 'dmg', fx: { drain: .5, type: 'Gloom' }, grow: 1,
+    txt: 'Deal {v} Gloom, heal half. Permanently +1 each play.' },
+  titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true,
+    txt: '+{v} max HP, heal 30. Exhaust.' },
+  stormcall: { name: 'Stormcall',   r: 'epic', cost: 3, kind: 'attack', v: 11, vt: 'dmg', fx: { hits: 3, type: 'Spark' },
+    txt: 'Deal {v} Spark three times.' },
+  wardstance:{ name: 'Ward Stance', r: 'epic', cost: 2, kind: 'skill', v: 15, vt: 'shield', fx: { def: 3, draw: 1 },
+    txt: 'Gain {v} shield, +3 guard, draw 1.' },
+  reaper:    { name: 'Reaper',      r: 'epic', cost: 1, kind: 'attack', v: 16, vt: 'dmg', kill: 4, exhaust: true,
+    txt: 'Deal {v}. On a kill, permanently +4. Exhaust.' },
+
+  // ---- legendary -------------------------------------------------------
+  dragonheart:{ name: 'Dragonheart', r: 'legendary', cost: 2, kind: 'skill', v: 25, vt: 'maxhp', fx: { atk: 5, heal: 25 }, grow: 2,
+    txt: '+{v} max HP, heal 25, +5 attack. Permanently +2 each play.' },
+  soulfang:  { name: 'Soulfang',    r: 'legendary', cost: 2, kind: 'attack', v: 22, vt: 'dmg', kill: 5, exhaust: true,
+    txt: 'Deal {v}. On a kill, permanently +5. Exhaust.' },
+  eternal:   { name: 'Eternal Spark', r: 'legendary', cost: 0, kind: 'power', v: 1, vt: 'energy', exhaust: true,
+    txt: '+{v} energy every turn for the rest of the battle. Exhaust.' },
+  kinbond:   { name: 'Kinbond',     r: 'legendary', cost: 3, kind: 'skill', v: 10, vt: 'maxhp', fx: { healFull: true }, exhaust: true, grow: 2,
+    txt: 'Heal to full, +{v} max HP. Exhaust. Permanently +2 each play.' },
+};
+const CARD_IDS = Object.keys(CARDS);
+
+/**
+ * How far a card may grow. Growth is the fun of the system, so the ceiling is
+ * generous — several times the card's own value — but it exists, because a
+ * card that grows forever eventually plays the game for you.
+ */
+const growCap = (id) => Math.round(CARDS[id].v * (CARDS[id].capMul || 4));
+
+/** The live value of a card: its base, its permanent growth, its battle growth. */
+const cardValue = (inst) => {
+  const c = CARDS[inst.id];
+  return Math.max(0, c.v + (inst.plus || 0) + (inst.bg || 0));
+};
+
+/** Add permanent growth to an owned copy, up to its ceiling. Returns the gain. */
+function growCard(owned, amount) {
+  const cap = growCap(owned.id);
+  const before = owned.plus || 0;
+  owned.plus = Math.min(cap, before + amount);
+  return owned.plus - before;
+}
+
+const cardText = (inst) => CARDS[inst.id].txt.replace('{v}', cardValue(inst));
+
+/** Cards are owned as individual copies, because each one grows on its own. */
+function mkCard(id) {
+  G.nextUid = (G.nextUid || 1) + 1;
+  return { u: G.nextUid, id, plus: 0, plays: 0, kills: 0 };
+}
+
+const ownedCard = (u) => G.cards.find((c) => c.u === u) || null;
+const deckCards = () => G.deck.map(ownedCard).filter(Boolean);
+
+const STARTER_DECK = ['strike', 'strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'focus', 'vigor', 'jab'];
+const DECK_MIN = 8, DECK_MAX = 24;
+
+function grantCard(id) {
+  const c = mkCard(id);
+  G.cards.push(c);
+  if (G.deck.length < DECK_MAX) G.deck.push(c.u);
+  return c;
+}
+
+// ---- chests ------------------------------------------------------------
+// Costs climb steeply; odds shift toward the top of the table as they do.
+const CHESTS = {
+  silver:  { name: 'Silver Chest',  cost: 60,   pulls: 3, odds: { common: 80, rare: 17, epic: 3, legendary: 0 } },
+  gold:    { name: 'Gold Chest',    cost: 180,  pulls: 3, odds: { common: 55, rare: 33, epic: 11, legendary: 1 } },
+  diamond: { name: 'Diamond Chest', cost: 540,  pulls: 3, odds: { common: 25, rare: 40, epic: 28, legendary: 7 } },
+  prism:   { name: 'Prism Chest',   cost: 1620, pulls: 4, odds: { common: 5, rare: 30, epic: 45, legendary: 20 } },
+};
+const CHEST_IDS = Object.keys(CHESTS);
+
+function rollRarity(odds) {
+  const total = RARITY_ORDER.reduce((s, r) => s + (odds[r] || 0), 0);
+  let n = Math.random() * total;
+  for (const r of RARITY_ORDER) {
+    n -= odds[r] || 0;
+    if (n <= 0) return r;
+  }
+  return 'common';
+}
+
+const cardsOfRarity = (r) => CARD_IDS.filter((id) => CARDS[id].r === r);
+
+/** Open a chest. Returns the card instances granted, or null if you can't pay. */
+function openChest(kind) {
+  const ch = CHESTS[kind];
+  if (!ch || G.gems < ch.cost) return null;
+  G.gems -= ch.cost;
+  const got = [];
+  for (let i = 0; i < ch.pulls; i++) {
+    let r = rollRarity(ch.odds);
+    let pool = cardsOfRarity(r);
+    while (!pool.length) { r = RARITY_ORDER[Math.max(0, RARITY_ORDER.indexOf(r) - 1)]; pool = cardsOfRarity(r); }
+    got.push(grantCard(pool[rnd(pool.length)]));
+  }
+  G.chestsOpened = (G.chestsOpened || 0) + 1;
+  return got;
+}
+
+/** Gems for winning: wild kin are pocket change, trainers pay properly. */
+function gemReward(b) {
+  if (b.npc) return 6 + Math.floor(b.npc.trainer.prize / 120) + rrange(0, 4);
+  return 1 + rrange(0, 2) + (b.legendary ? 40 : 0);
+}
 
 // ---- levels, stats, creatures -----------------------------------------
 const xpFor = (lvl) => Math.floor(0.8 * lvl * lvl * lvl);
@@ -1743,6 +1985,8 @@ function effStat(m, key) {
   const st = clamp(m.stages ? m.stages[key] || 0 : 0, -6, 6);
   const mul = st >= 0 ? (2 + st) / 2 : 2 / (2 - st);
   let v = m[key] * mul;
+  const b = G.battle;
+  if (b && b.mine === m && b.mods && b.mods[key]) v += b.mods[key];   // card buffs
   if (key === 'atk' && m.status === 'burn') v *= .85;
   if (key === 'spd' && m.status === 'chill') v *= .5;
   return Math.max(1, Math.floor(v));
@@ -1838,8 +2082,13 @@ const MAPS = {
   shop: {
     name: 'Hollowbrook Supply', kind: 'inside', rows: interior(12, 9),
     warps: [{ x: 5, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }, { x: 6, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }],
-    npcs: [{ x: 5, y: 2, dir: 'down', sprite: 'npc_rival', name: 'Bell', shop: true,
-      lines: ['Orbs, salves, and no credit. Mother\'s rule, not mine.'] }],
+    npcs: [
+      { x: 4, y: 2, dir: 'down', sprite: 'npc_rival', name: 'Bell', shop: true,
+        lines: ['Orbs, salves, and no credit. Mother\'s rule, not mine.'] },
+      { x: 8, y: 2, dir: 'down', sprite: 'npc_elder', name: 'Vane', chests: true,
+        lines: ['Gems only. Shards are for people who buy salves.',
+          'Silver is a nibble. Prism is a mortgage. Everything between is a decision.'] },
+    ],
     enc: null,
   },
 
@@ -2157,7 +2406,7 @@ function paintTo(canvas, kind, id, scale, sil) {
    tall grass, warps on arrival, and A-button interaction with whatever the
    player is facing.
    ======================================================================== */
-const VIEW_W = 256, VIEW_H = 176;
+const VIEW_W = 256, VIEW_H = 208;
 const STEP_TIME = .15;
 const WIPE_T = .55;                    // battle-entry wipe, seconds
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
@@ -2391,7 +2640,7 @@ function drawWorld(g) {
     // The blades sway while whoever is standing in them is moving.
     const moving = e.moveT > 0;
     const sway = moving ? Math.round(Math.sin(G.t * 22) * 1.2) : 0;
-    g.save(); g.beginPath(); g.rect(sx, sy + 7, TILE, 9); g.clip();
+    g.save(); g.beginPath(); g.rect(sx, sy + 10, TILE, 6); g.clip();
     drawTile(g, ',', sx + sway, sy);
     g.restore();
   }
@@ -2404,8 +2653,8 @@ function drawWorld(g) {
 /* =========================================================== §6 — battle ==
    A turn resolves completely, up front, into a list of log entries. Each entry
    carries an HP snapshot, so the UI can play the turn back at reading speed
-   while the underlying state is already consistent. Tests drive doTurn()
-   directly and read the same log.
+   while the underlying state is already consistent. Tests drive playCard(),
+   endTurn() and doAction() directly and read the same log.
    ======================================================================== */
 function startBattle(opt) {
   const mine = firstAlive();
@@ -2418,21 +2667,31 @@ function startBattle(opt) {
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
     started: false, finishing: false, await: null,
+    // the card game
+    draw: [], hand: [], disc: [], exh: [],
+    energy: 0, phase: 'player', intent: null, powers: {},
+    mods: { atk: 0, def: 0, thorns: 0 }, maxAdd: 0, shield: 0,
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
+  toughen(opt.foe);
+  G.battle.dispF = G.battle.tgtF = opt.foe.hp;
+  buildDeck(G.battle);
   G.wipe = WIPE_T;
   seeMon(opt.foe.species);
   G.mode = 'battle';
   const who = opt.npc ? `${opt.npc.name} wants to battle!` : `A wild ${opt.foe.name} bristles!`;
   playCue(opt.legendary ? 'shrine' : 'battle');
   const lines = [who, `Go, ${dispName(mine)}!`];
+  // The very first hand is dealt as the battle opens.
+  startPlayerTurn([]);
   // One-time nudge, the first time a wild kin shows up with orbs in the bag.
   if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
     G.flags.taughtCatch = 1;
+    lines.push('Three energy, five cards. Play what you can afford, then end the turn — X, or the button.');
     lines.push('Knock it down first, then reach for an orb — Bag, then the orb. A hurt kin holds.');
   }
-  battleSay(lines, () => openBattleMenu());
+  battleSay(lines, () => renderHand());
   return true;
 }
 
@@ -2441,9 +2700,9 @@ const B = () => G.battle;
 // ---- damage ------------------------------------------------------------
 function critRoll() { return chance(1 / 16); }
 
-/** Pure-ish damage calc; returns {dmg, eff, crit}. */
+/** Pure-ish damage calc; `move` is a move id or a card's synthetic move. */
 function damageOf(atkMon, defMon, move, opts = {}) {
-  const m = MOVES[move];
+  const m = typeof move === 'string' ? MOVES[move] : move;
   if (!m.pow) return { dmg: 0, eff: 1, crit: false };
   const eff = effect(m.type, defMon.types);
   const stab = atkMon.types.includes(m.type) ? 1.5 : 1;
@@ -2490,8 +2749,6 @@ function useMove(log, atkSide, moveId) {
   }
 
   const m = MOVES[moveId];
-  const slot = attacker.moves.find((x) => x.id === moveId);
-  if (slot) slot.pp = Math.max(0, slot.pp - 1);
   snap(log, `${who} used ${m.name}!`, 'use', atkSide);
 
   if (m.acc && rnd(100) >= m.acc) { snap(log, `${who}'s attack missed!`, 'miss', atkSide); return; }
@@ -2499,18 +2756,23 @@ function useMove(log, atkSide, moveId) {
   const fx = m.fx || {};
   if (m.pow) {
     const { dmg, eff, crit } = damageOf(attacker, defender, moveId);
-    defender.hp = clamp(defender.hp - dmg, 0, defender.max);
-    snap(log, `${them} took ${dmg}.`, 'hit', atkSide === 'mine' ? 'foe' : 'mine');
+    let dealt = dmg;
+    if (atkSide === 'foe') {
+      dealt = hurtMine(log, dmg, `${them} took ${dmg}.`);          // shield first
+    } else {
+      defender.hp = clamp(defender.hp - dmg, 0, defender.max);
+      snap(log, `${them} took ${dmg}.`, 'hit', 'foe');
+    }
     if (crit && eff !== 0) snap(log, 'A critical hit!');
     const w = effWord(eff);
     if (w) snap(log, w);
-    if (fx.drain && dmg > 0) {
-      const heal = Math.max(1, Math.floor(dmg * fx.drain));
+    if (fx.drain && dealt > 0) {
+      const heal = Math.max(1, Math.floor(dealt * fx.drain));
       attacker.hp = clamp(attacker.hp + heal, 0, attacker.max);
       snap(log, `${who} drank the energy back.`, 'heal', atkSide);
     }
-    if (fx.recoil && dmg > 0) {
-      const r = Math.max(1, Math.floor(dmg * fx.recoil));
+    if (fx.recoil && dealt > 0) {
+      const r = Math.max(1, Math.floor(dealt * fx.recoil));
       attacker.hp = clamp(attacker.hp - r, 0, attacker.max);
       snap(log, `${who} is hurt by the recoil.`, 'hit', atkSide);
     }
@@ -2638,8 +2900,7 @@ function addCaught(mon) {
 /** Picks the move with the best expected value, with a little noise. */
 function foeChoose() {
   const b = B();
-  const usable = b.foe.moves.filter((m) => m.pp > 0);
-  const list = usable.length ? usable : [{ id: 'falter', pp: 1, max: 1 }];
+  const list = b.foe.moves.length ? b.foe.moves : [{ id: 'falter' }];
   let best = null, bestScore = -1;
   for (const slot of list) {
     const m = MOVES[slot.id];
@@ -2647,7 +2908,7 @@ function foeChoose() {
     if (m.pow) {
       const { dmg, eff } = damageOf(b.foe, b.mine, slot.id, { crit: false, roll: .925 });
       score = dmg * (eff === 0 ? 0 : 1);
-      if (dmg >= b.mine.hp) score *= 2.2;                 // go for the kill
+      if (dmg >= b.mine.hp + b.shield) score *= 2.2;      // go for the kill
     } else {
       const fx = m.fx || {};
       score = b.foe.hp < b.foe.max * .45 && fx.heal ? b.foe.max * .35 : b.foe.max * .12;
@@ -2659,78 +2920,333 @@ function foeChoose() {
   return best;
 }
 
-// ---- the turn ----------------------------------------------------------
+/** What the foe is about to do, telegraphed so the hand can be played into it. */
+function readIntent() {
+  const b = B();
+  const id = foeChoose();
+  const m = MOVES[id];
+  const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg : 0;
+  b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
+  return b.intent;
+}
+
+/* ---------------------------------------------------------- the card game --
+   A turn is: draw a hand, spend energy on it, end the turn, take the foe's
+   hit. The active kin's own moves are shuffled into the same deck as the
+   cards you brought, so a fight is the two of them together.
+   ------------------------------------------------------------------------ */
+const BASE_ENERGY = 3, HAND_SIZE = 5;
+// A hand lands two or three cards a turn where a move landed one, so a foe
+// needs proportionally more to hit back through. Their stats are untouched —
+// only the pool of HP a fight is played over.
+const FOE_HP_MUL = 2.0;
+
+/** Give a foe its battle-sized health as it steps in. */
+function toughen(mon) {
+  mon.max = Math.round(mon.max * FOE_HP_MUL);
+  mon.hp = mon.max;
+  return mon;
+}
+
 /**
- * action: {kind:'move', id} | {kind:'switch', idx} | {kind:'item', id}
- *         | {kind:'run'}
- * Returns the log; b.over is set when the battle finished.
+ * Kin moves are the heavy hitters, so they are priced as such: a real move
+ * plus a support card is a turn, and three real moves is not. That is where
+ * the deck earns its place.
  */
-function doTurn(action) {
+const moveCost = (id) => {
+  const m = MOVES[id];
+  if (!m.pow) return 1;
+  return m.pow >= 100 ? 3 : m.pow >= 45 ? 2 : 1;
+};
+
+const cardCost = (card) => card.src === 'kin' ? moveCost(card.id) : CARDS[card.id].cost;
+const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : CARDS[card.id].name;
+const cardRarity = (card) => card.src === 'kin' ? 'kin' : CARDS[card.id].r;
+
+function shuffleInto(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = rnd(i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** The active kin's moves, as cards. They leave with it when it switches out. */
+const kinCards = (mon) => mon.moves.map((slot) => ({ src: 'kin', id: slot.id }));
+
+function buildDeck(b) {
+  const support = deckCards().map((c) => ({ src: 'deck', u: c.u, id: c.id, bg: 0 }));
+  b.draw = shuffleInto(support.concat(kinCards(b.mine)));
+  b.hand = []; b.disc = []; b.exh = [];
+}
+
+/** Swap the outgoing kin's move cards for the incoming one's. */
+function swapKinCards(b) {
+  const strip = (pile) => pile.filter((c) => c.src !== 'kin');
+  b.draw = strip(b.draw); b.hand = strip(b.hand); b.disc = strip(b.disc);
+  b.draw = shuffleInto(b.draw.concat(kinCards(b.mine)));
+}
+
+function drawCards(log, n) {
+  const b = B();
+  for (let i = 0; i < n; i++) {
+    if (b.hand.length >= 10) break;
+    if (!b.draw.length) {
+      if (!b.disc.length) break;
+      b.draw = shuffleInto(b.disc);
+      b.disc = [];
+      snap(log, 'You shuffle the discards back in.');
+    }
+    b.hand.push(b.draw.pop());
+  }
+}
+
+/** Battle-only modifiers live here so nothing leaks into the save. */
+function clearMods(b) {
+  if (b.maxAdd && b.mine) {
+    b.mine.max = Math.max(1, b.mine.max - b.maxAdd);
+    b.mine.hp = Math.min(b.mine.hp, b.mine.max);
+  }
+  b.mods = { atk: 0, def: 0, thorns: 0 };
+  b.maxAdd = 0;
+  b.shield = 0;
+}
+
+function startPlayerTurn(log) {
+  const b = B();
+  b.turn++;
+  b.shield = 0;                                   // shield is for one round only
+  b.energy = BASE_ENERGY + (b.powers.energy || 0);
+  if (b.mine.status === 'shock') {
+    b.energy = Math.max(1, b.energy - 1);
+    snap(log, `${dispName(b.mine)} is jolted — one less energy.`, 'status', 'mine');
+  }
+  const chill = b.mine.status === 'chill' ? 1 : 0;
+  drawCards(log, HAND_SIZE - chill);
+  if (chill) snap(log, `${dispName(b.mine)} is chilled — one card fewer.`, 'status', 'mine');
+  readIntent();
+  b.phase = 'player';
+}
+
+/** Damage the player's side takes, shield first. */
+function hurtMine(log, amount, why) {
+  const b = B();
+  let dmg = amount;
+  if (b.shield > 0) {
+    const absorbed = Math.min(b.shield, dmg);
+    b.shield -= absorbed; dmg -= absorbed;
+    if (absorbed > 0) snap(log, `Shield absorbs ${absorbed}.`, 'block', 'mine');
+  }
+  if (dmg > 0) {
+    b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine');
+  }
+  return dmg;
+}
+
+/**
+ * Play the card at hand index `i`. Returns the log; the turn does not end, so
+ * you can keep spending energy until it runs out.
+ */
+function playCard(i) {
   const b = B();
   const log = [];
-  b.turn++;
-  b.over = null;          // recomputed below; never inherit last turn's verdict
+  const card = b.hand[i];
+  if (!card || b.phase !== 'player' || b.over) return log;
+  const cost = cardCost(card);
+  if (cost > b.energy) { snap(log, 'Not enough energy.'); return log; }
 
-  // Non-move player actions happen first, then the foe still gets its turn.
-  let playerMoved = false;
+  b.hand.splice(i, 1);
+  b.energy -= cost;
+
+  if (card.src === 'kin') {
+    const before = b.foe.hp;
+    snap(log, `${dispName(b.mine)} plays ${MOVES[card.id].name}.`, 'use', 'mine');
+    useMove(log, 'mine', card.id);
+    b.disc.push(card);
+    if (before > 0 && b.foe.hp <= 0) resolveFoeDown(log);
+    return log;
+  }
+
+  const def = CARDS[card.id];
+  const owned = ownedCard(card.u);
+  const inst = { id: card.id, plus: owned ? owned.plus : 0, bg: card.bg || 0 };
+  const value = cardValue(inst);
+  const fx = def.fx || {};
+  snap(log, `You play ${def.name}.`, 'card', 'mine');
+
+  let killed = false;
+  if (def.kind === 'attack') {
+    const hits = fx.hits || 1;
+    for (let h = 0; h < hits && b.foe.hp > 0; h++) {
+      const synth = { name: def.name, type: fx.type || 'Wild', pow: Math.max(1, value * 4), acc: 100 };
+      const { dmg, eff } = damageOf(b.mine, b.foe, synth);
+      b.foe.hp = clamp(b.foe.hp - dmg, 0, b.foe.max);
+      snap(log, `Foe ${dispName(b.foe)} took ${dmg}.`, 'hit', 'foe');
+      const w = effWord(eff);
+      if (w) snap(log, w);
+      if (fx.drain && dmg > 0) {
+        b.mine.hp = clamp(b.mine.hp + Math.max(1, Math.floor(dmg * fx.drain)), 0, b.mine.max);
+        snap(log, `${dispName(b.mine)} drinks it back.`, 'heal', 'mine');
+      }
+      if (b.foe.hp <= 0) killed = true;
+    }
+    if (fx.st && b.foe.hp > 0 && !b.foe.status && chance(fx.st[1])
+        && !b.foe.types.includes(IMMUNE_TO[fx.st[0]] || '')) {
+      b.foe.status = fx.st[0];
+      snap(log, `Foe ${dispName(b.foe)} is ${STATUS[fx.st[0]].name.toLowerCase()}!`, 'status', 'foe');
+    }
+  }
+
+  // Non-damage effects. `vt` names whichever number the card grows.
+  const amt = (key) => (def.vt === key ? value : (fx[key] || 0));
+  if (amt('shield')) { b.shield += amt('shield'); snap(log, `Shield up to ${b.shield}.`, 'block', 'mine'); }
+  if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `${dispName(b.mine)}'s attack is up.`, 'buff', 'mine'); }
+  if (amt('def')) { b.mods.def += amt('def'); snap(log, `${dispName(b.mine)}'s guard is up.`, 'buff', 'mine'); }
+  if (fx.thorns) { b.mods.thorns += fx.thorns; snap(log, 'Thorns bristle.', 'buff', 'mine'); }
+  if (amt('maxhp')) {
+    const add = amt('maxhp');
+    b.maxAdd += add; b.mine.max += add; b.mine.hp += add;
+    snap(log, `${dispName(b.mine)}'s max HP is up ${add}.`, 'heal', 'mine');
+  }
+  if (fx.healFull) { b.mine.hp = b.mine.max; snap(log, `${dispName(b.mine)} is whole again.`, 'heal', 'mine'); }
+  if (amt('heal')) {
+    b.mine.hp = clamp(b.mine.hp + amt('heal'), 0, b.mine.max);
+    snap(log, `${dispName(b.mine)} recovers.`, 'heal', 'mine');
+  }
+  if (fx.selfdmg) hurtMine(log, fx.selfdmg, `${dispName(b.mine)} pays ${fx.selfdmg} HP for it.`);
+  if (amt('energy')) {
+    if (def.kind === 'power') { b.powers.energy = (b.powers.energy || 0) + amt('energy'); snap(log, 'Energy will run higher from now on.', 'buff', 'mine'); }
+    else { b.energy += amt('energy'); snap(log, 'Energy surges.', 'buff', 'mine'); }
+  }
+  if (amt('draw')) drawCards(log, amt('draw'));
+
+  // ---- growth: the whole point of the system
+  if (owned) {
+    owned.plays = (owned.plays || 0) + 1;
+    if (def.grow) {
+      const got = growCard(owned, def.grow);
+      if (got) snap(log, `${def.name} grows — now ${cardValue({ id: card.id, plus: owned.plus })}.`, 'grow', 'mine');
+      else snap(log, `${def.name} is as sharp as it will ever be.`, 'grow', 'mine');
+    }
+    if (def.kill && killed) {
+      const got = growCard(owned, def.kill);
+      owned.kills = (owned.kills || 0) + 1;
+      snap(log, got ? `${def.name} tasted the kill — permanently +${got}.`
+        : `${def.name} tasted the kill, but it is already at its limit.`, 'grow', 'mine');
+    }
+  }
+  if (def.bgrow) {
+    // Battle-only growth rides on every copy of this card still in the piles.
+    for (const pile of [b.draw, b.hand, b.disc]) {
+      for (const c of pile) if (c.src === 'deck' && c.id === card.id) c.bg = (c.bg || 0) + def.bgrow;
+    }
+    card.bg = (card.bg || 0) + def.bgrow;
+    snap(log, `${def.name} sharpens for the rest of the fight.`, 'grow', 'mine');
+  }
+
+  if (def.exhaust) { b.exh.push(card); snap(log, `${def.name} is spent.`, 'exhaust', 'mine'); }
+  else b.disc.push(card);
+
+  if (killed) resolveFoeDown(log);
+  return log;
+}
+
+/** The foe is down: award XP and gems, or send out the next of a trainer's team. */
+function resolveFoeDown(log) {
+  const b = B();
+  snap(log, `${b.wild ? 'Wild ' : 'Foe '}${dispName(b.foe)} is down!`, 'faint', 'foe');
+  if (b.mine.hp > 0) grantXP(log, b.mine, b.foe);
+  if (b.team && b.teamIdx < b.team.length - 1) {
+    b.teamIdx++;
+    const nxt = b.team[b.teamIdx];
+    b.foe = toughen(mkMon(nxt[0], nxt[1]));
+    b.foe.stages = { atk: 0, def: 0, spd: 0 };
+    b.dispF = b.tgtF = b.foe.hp;
+    seeMon(b.foe.species);
+    snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${b.foe.name}!`, 'send', 'foe');
+    readIntent();
+  } else {
+    b.over = 'win';
+  }
+}
+
+/** The foe takes its telegraphed action, then statuses tick. */
+function foeTurn(log) {
+  const b = B();
+  if (b.over || b.foe.hp <= 0 || b.mine.hp <= 0) return;
+  b.phase = 'foe';
+  const id = (b.intent && b.intent.id) || foeChoose();
+  const hpBefore = b.mine.hp;
+  useMove(log, 'foe', id);
+  // Thorns answer anything that actually connected.
+  if (b.mods.thorns && b.mine.hp < hpBefore && b.foe.hp > 0) {
+    b.foe.hp = clamp(b.foe.hp - b.mods.thorns, 0, b.foe.max);
+    snap(log, `Thorns bite back for ${b.mods.thorns}.`, 'hit', 'foe');
+    if (b.foe.hp <= 0) { resolveFoeDown(log); return; }
+  }
+  if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+}
+
+function afterFoe(log) {
+  const b = B();
+  if (b.foe.hp <= 0 && !b.over) { resolveFoeDown(log); return; }
+  if (b.mine.hp <= 0) {
+    snap(log, `${dispName(b.mine)} has fainted.`, 'faint', 'mine');
+    clearMods(b);
+    b.over = partyAlive() ? 'switch' : 'lose';
+    return;
+  }
+  if (!b.over) startPlayerTurn(log);
+}
+
+/** End the player's turn: hand goes to the discard, then the foe swings. */
+function endTurn() {
+  const b = B();
+  const log = [];
+  if (b.phase !== 'player' || b.over) return log;
+  b.disc.push(...b.hand);
+  b.hand = [];
+  foeTurn(log);
+  afterFoe(log);
+  return log;
+}
+
+/**
+ * Actions that are not cards: an item, a switch, or running. Each one costs
+ * the rest of your turn, exactly as it did before.
+ */
+function doAction(action) {
+  const b = B();
+  const log = [];
+  if (b.over || b.phase !== 'player') return log;
+
   if (action.kind === 'run') {
     if (!b.wild) { snap(log, 'There is no running from a challenge!'); return log; }
     b.escapes++;
     const odds = clamp(.4 + .35 * (effStat(b.mine, 'spd') / Math.max(1, effStat(b.foe, 'spd')) - 1) + b.escapes * .15, .12, .95);
-    if (b.mine.status === 'snare') { snap(log, 'Roots hold you fast — no escape!'); }
+    if (b.mine.status === 'snare') snap(log, 'Roots hold you fast — no escape!');
     else if (chance(odds)) { snap(log, 'You slip away into the grass.', 'flee'); b.over = 'fled'; return log; }
     else snap(log, 'You could not get away!');
   } else if (action.kind === 'item') {
-    const it = ITEMS[action.id];
     if (!useItemInBattle(log, action.id, action.target)) return log;
-    if (it.kind === 'orb' && b.over === 'caught') return log;
+    if (b.over === 'caught') return log;
   } else if (action.kind === 'switch') {
     const next = G.party[action.idx];
+    if (!next || !alive(next) || next === b.mine) return log;
     snap(log, `Come back, ${dispName(b.mine)}!`);
+    clearMods(b);
     b.mine.stages = { atk: 0, def: 0, spd: 0 };
     b.mine = next;
     next.stages = { atk: 0, def: 0, spd: 0 };
+    swapKinCards(b);
     snap(log, `Go, ${dispName(next)}!`, 'send', 'mine');
   }
 
-  const foeMove = foeChoose();
-  if (action.kind === 'move') {
-    const mMine = MOVES[action.id], mFoe = MOVES[foeMove];
-    const priM = (mMine.fx && mMine.fx.pri) || 0, priF = (mFoe.fx && mFoe.fx.pri) || 0;
-    const mineFirst = priM !== priF ? priM > priF
-      : effStat(b.mine, 'spd') !== effStat(b.foe, 'spd') ? effStat(b.mine, 'spd') > effStat(b.foe, 'spd')
-      : chance(.5);
-    const order = mineFirst ? ['mine', 'foe'] : ['foe', 'mine'];
-    for (const side of order) {
-      if (b.mine.hp <= 0 || b.foe.hp <= 0) break;
-      useMove(log, side, side === 'mine' ? action.id : foeMove);
-    }
-    playerMoved = true;
-  } else if (b.foe.hp > 0 && b.mine.hp > 0) {
-    useMove(log, 'foe', foeMove);
-  }
-
-  if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
-
-  // ---- resolution
-  if (b.foe.hp <= 0) {
-    snap(log, `${b.wild ? 'Wild ' : 'Foe '}${dispName(b.foe)} is down!`, 'faint', 'foe');
-    if (b.mine.hp > 0) grantXP(log, b.mine, b.foe);
-    if (b.team && b.teamIdx < b.team.length - 1) {
-      b.teamIdx++;
-      const nxt = b.team[b.teamIdx];
-      b.foe = mkMon(nxt[0], nxt[1]);
-      b.foe.stages = { atk: 0, def: 0, spd: 0 };
-      seeMon(b.foe.species);
-      snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${b.foe.name}!`, 'send', 'foe');
-    } else {
-      b.over = 'win';
-    }
-  } else if (b.mine.hp <= 0) {
-    snap(log, `${dispName(b.mine)} has fainted.`, 'faint', 'mine');
-    if (!partyAlive()) b.over = 'lose';
-    else b.over = 'switch';
-  }
+  b.disc.push(...b.hand);
+  b.hand = [];
+  foeTurn(log);
+  afterFoe(log);
   return log;
 }
 
@@ -2756,10 +3272,10 @@ function useItemInBattle(log, id, targetIdx) {
     G.bag[id]--;
     target.hp = Math.floor(target.max / 2);
     snap(log, `${dispName(target)} opens its eyes.`, 'heal', 'mine');
-  } else if (it.kind === 'pp') {
+  } else if (it.kind === 'draw') {
     G.bag[id]--;
-    target.moves.forEach((m) => { m.pp = Math.min(m.max, m.pp + it.amt); });
-    snap(log, `${dispName(target)}'s moves feel fresh.`, 'heal', 'mine');
+    drawCards(log, it.amt);
+    snap(log, 'The elixir clears your head.', 'buff', 'mine');
   }
   if (G.bag[id] <= 0) delete G.bag[id];
   return true;
@@ -2784,7 +3300,7 @@ function drawBattle(g) {
   };
   // Ground lines: the foe stands high and far, yours low and near, with the
   // text box below both — nothing may overlap the panels.
-  const FOE_GROUND = 68, MY_GROUND = 128;
+  const FOE_GROUND = 66, MY_GROUND = 108;
   disc(178, FOE_GROUND + 2, 50, 12, '#2e4a30');
   disc(178, FOE_GROUND + 2, 42, 9, '#3c6136');
   disc(72, MY_GROUND + 3, 60, 14, '#2e4a30');
@@ -2822,7 +3338,8 @@ const $ = (id) => HEADLESS ? null : document.getElementById(id);
 const els = {};
 function cacheEls() {
   if (HEADLESS) return;
-  for (const id of ['view', 'dialogue', 'mainmenu', 'battlemenu', 'movemenu', 'screen', 'hudFoe', 'hudMine', 'title', 'toast', 'titleArt']) els[id] = $(id);
+  for (const id of ['view', 'dialogue', 'mainmenu', 'battlemenu', 'movemenu', 'screen', 'hudFoe', 'hudMine',
+    'title', 'toast', 'titleArt', 'battlebar', 'hand', 'energy', 'piles', 'acts', 'intent']) els[id] = $(id);
 }
 const show = (el, on) => { if (el) el.classList.toggle('hidden', !on); };
 
@@ -2900,10 +3417,11 @@ function openMainMenu() {
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
     { label: 'Bag', fn: () => openScreen('bag') },
     { label: 'Box', sub: '' + G.box.length, fn: () => openScreen('box') },
+    { label: 'Deck', sub: `${G.deck.length}/${DECK_MAX}`, fn: () => openScreen('deck') },
     { label: 'Sound', sub: muted ? 'off' : 'on', fn: () => { toggleMute(); openMainMenu(); } },
     { label: 'Save', fn: () => { setToast(saveGame() ? 'Journey saved.' : 'Could not save.'); } },
     { label: 'Close', fn: closeWorldMenu },
-  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards` });
+  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems` });
 }
 function closeWorldMenu() { closeMenu(); G.mode = 'world'; }
 
@@ -2946,6 +3464,7 @@ function talkTo(npc) {
     return;
   }
   if (npc.shop) { say(npc.name, npc.lines, () => openScreen('shop')); return; }
+  if (npc.chests) { say(npc.name, npc.lines, () => openScreen('chests')); return; }
   say(npc.name, npc.trainer && G.flags[npc.id] ? (npc.after || ['Good match. Go on.']) : npc.lines);
 }
 
@@ -2997,8 +3516,10 @@ function chooseStarter() {
       G.mode = 'world';
       say('Elder Rowan', [
         `${DEX[id].name}. Of course.`,
-        'Five orbs and three salves. That is the whole grant, do not spend it in one route.',
-        'Fill the dex. Catch what you can. Come back when something surprises you.',
+        'Five orbs, three salves, and a deck. Ten cards — half of them nothing special.',
+        'Your kin brings its own moves to the fight. The deck is what you bring.',
+        'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
+        'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
       ], () => { saveGame(); });
     },
   })), { title: 'Choose your kin', cancel: () => { closeMenu(); G.mode = 'world'; } });
@@ -3024,49 +3545,95 @@ function renderHUD() {
   show(els.hudFoe, true); show(els.hudMine, true);
 }
 
-function openBattleMenu() {
-  const b = B();
-  b.await = 'menu';
-  openMenu('battlemenu', [
-    { label: 'Fight', fn: openMoveMenu },
-    { label: 'Kin', fn: () => openScreen('party') },
-    { label: 'Bag', fn: () => openScreen('bag') },
-    { label: b.wild ? 'Run' : 'Forfeit', fn: () => { closeMenu(); submitTurn({ kind: 'run' }); } },
-  ], { cancel: null });
+/* ---- the hand ---------------------------------------------------------- */
+function battleBar(on) {
+  if (HEADLESS) return;
+  show(els.battlebar, on);
+  show(els.intent, on);
 }
 
-function openMoveMenu() {
+function renderHand() {
+  if (HEADLESS) return;
   const b = B();
-  // Out of PP on everything: offer Falter rather than leave the player stuck
-  // with a menu of dead options in a battle they may not be allowed to flee.
-  if (!b.mine.moves.some((m) => m.pp > 0)) {
-    openMenu('movemenu', [{
-      label: `<span style="color:${TYPES.Wild}">●</span> Falter`, sub: '—',
-      fn: () => { closeMenu(); submitTurn({ kind: 'move', id: 'falter' }); },
-    }], { cancel: openBattleMenu, title: 'Nothing left' });
-    return;
-  }
-  const rows = b.mine.moves.map((slot) => {
-    const m = MOVES[slot.id];
-    const eff = m.pow ? effect(m.type, b.foe.types) : 1;
-    const hint = !m.pow ? '' : eff >= 2 ? ' ▲' : eff === 0 ? ' ×' : eff < 1 ? ' ▼' : '';
-    return {
-      label: `<span style="color:${TYPES[m.type]}">●</span> ${m.name}${hint}`,
-      sub: `${slot.pp}/${slot.max}`, off: slot.pp <= 0,
-      fn: () => { closeMenu(); submitTurn({ kind: 'move', id: slot.id }); },
-    };
-  });
-  openMenu('movemenu', rows, { cancel: openBattleMenu, title: 'Moves' });
+  if (!b) { battleBar(false); return; }
+  const playable = b.phase === 'player' && !b.over && !b.log;
+  els.energy.innerHTML = `<b>${b.energy}</b><small>/${BASE_ENERGY + (b.powers.energy || 0)}</small>`;
+  els.piles.innerHTML = `draw ${b.draw.length} · used ${b.disc.length}` +
+    (b.exh.length ? ` · spent ${b.exh.length}` : '') +
+    (b.shield ? ` · <span id="shieldpip">shield ${b.shield}</span>` : '');
+  els.hand.innerHTML = b.hand.map((c, i) => {
+    const kin = c.src === 'kin';
+    const cost = cardCost(c);
+    const owned = kin ? null : ownedCard(c.u);
+    const inst = kin ? null : { id: c.id, plus: owned ? owned.plus : 0, bg: c.bg || 0 };
+    const txt = kin ? moveCardText(c.id) : cardText(inst);
+    const grown = !kin && (owned && owned.plus ? `+${owned.plus}` : '') || '';
+    return `<div class="cardel ${kin ? 'kin' : ''} ${i === b.sel ? 'sel' : ''} ${cost > b.energy || !playable ? 'dead' : ''}" data-c="${i}">
+      <div class="cr" style="background:${kin ? 'var(--gold)' : RARITY[CARDS[c.id].r]}"></div>
+      <div class="cc">${cost}</div>
+      <div class="cn">${cardName(c)}</div>
+      <div class="ct">${txt}</div>
+      ${grown ? `<div class="cg">${grown}</div>` : ''}
+    </div>`;
+  }).join('');
+  els.acts.innerHTML = [
+    ['end', 'End turn <span class="key">X</span>'],
+    ['kin', 'Kin'], ['bag', 'Bag'], [b.wild ? 'run' : 'forfeit', b.wild ? 'Run' : 'Forfeit'],
+  ].map(([a, label]) => `<div class="abtn" data-a="${a}">${label}</div>`).join('');
+  const it = b.intent;
+  els.intent.innerHTML = it
+    ? `Foe: <b>${it.name}</b>${it.kind === 'attack' ? ` · about ${it.dmg}` : ''}`
+    : '';
+  battleBar(true);
 }
 
-/** Player committed to an action: resolve the turn and play it back. */
-function submitTurn(action) {
+/** Kin move cards show what the move does, in the same voice as the deck. */
+function moveCardText(id) {
+  const m = MOVES[id];
+  const bits = [];
+  if (m.pow) bits.push(`${m.type} · power ${m.pow}`);
+  else bits.push(`${m.type} · status`);
+  const fx = m.fx || {};
+  if (fx.st) bits.push(`may ${fx.st[0]}`);
+  if (fx.heal) bits.push('heals');
+  if (fx.drain) bits.push('drains');
+  if (fx.self) bits.push('buffs you');
+  if (fx.foe) bits.push('weakens them');
+  if (fx.pri) bits.push('strikes first');
+  return bits.join(', ');
+}
+
+function submitLog(log) {
   const b = B();
-  closeMenu();
-  b.await = null;
-  const log = doTurn(action);
-  b.log = log; b.li = 0; b.hold = 0;
-  if (!log.length) { openBattleMenu(); return; }
+  b.log = log && log.length ? log : null;
+  b.li = 0; b.started = false; b.hold = 0;
+  renderHand();
+}
+
+function playSelected() {
+  const b = B();
+  if (b.phase !== 'player' || b.over || b.log) return;
+  const i = clamp(b.sel || 0, 0, Math.max(0, b.hand.length - 1));
+  const card = b.hand[i];
+  if (!card) return;
+  if (cardCost(card) > b.energy) { setToast('Not enough energy.'); return; }
+  playCue('select');
+  const log = playCard(i);
+  b.sel = clamp(i, 0, Math.max(0, b.hand.length - 1));
+  submitLog(log);
+}
+
+function doEndTurn() {
+  const b = B();
+  if (b.phase !== 'player' || b.over || b.log) return;
+  submitLog(endTurn());
+}
+
+function openActionMenu(kind) {
+  const b = B();
+  if (kind === 'kin') { openScreen('party'); return; }
+  if (kind === 'bag') { openScreen('bag'); return; }
+  submitLog(doAction({ kind: 'run' }));
 }
 
 function playbackStep() {
@@ -3096,8 +3663,9 @@ function finishBattle() {
     return;
   }
   const done = () => {
+    clearMods(b);
     G.battle = null; G.battleMsg = null;
-    if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); show(els.dialogue, false); }
+    if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); show(els.dialogue, false); battleBar(false); }
     G.mode = 'world';
     playCue('world');
     const evo = checkEvolve();
@@ -3105,8 +3673,10 @@ function finishBattle() {
     saveGame();
   };
   if (over === 'win') {
-    if (!b.npc) { done(); return; }        // the log already narrated a wild win
-    const lines = [];
+    const gems = gemReward(b);
+    G.gems += gems;
+    if (!b.npc) { setToast(`+${gems} gems`); done(); return; }
+    const lines = [`You pocket ${gems} rare gems.`];
     if (b.npc) {
       lines.push(...(b.npc.trainer.lose || []));
       G.flags[b.npc.id] = 1;
@@ -3128,8 +3698,9 @@ function finishBattle() {
       const lost = Math.floor(G.money * .25);
       G.money -= lost;
       healParty();
+      clearMods(b);
       G.battle = null; G.battleMsg = null;
-      if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); }
+      if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); battleBar(false); }
       enterMap('wayhouse', 5, 5, 'down');
       G.mode = 'world';
       playCue('world');
@@ -3176,6 +3747,7 @@ function updateBattle(dt) {
   if (G.menu) { menuInput(); return; }
   if (G.screen) { screenInput(); return; }
 
+  // ---- playing back what just happened
   if (b.log && b.li < b.log.length) {
     b.hold = Math.max(0, (b.hold || 0) - dt);
     const settled = Math.abs(b.dispM - b.tgtM) < 1 && Math.abs(b.dispF - b.tgtF) < 1;
@@ -3187,9 +3759,33 @@ function updateBattle(dt) {
     }
     return;
   }
-  b.started = false;
+  if (b.log) { b.log = null; b.started = false; renderHand(); }
+
   if (b.over) { if (!b.finishing) { b.finishing = true; finishBattle(); } return; }
-  if (!b.await && !G.dialogue) openBattleMenu();
+  if (G.dialogue) return;
+
+  // ---- the player's turn: pick a card, play it, or end the turn
+  if (b.hand.length) b.sel = clamp(b.sel || 0, 0, b.hand.length - 1);
+  let moved = false;
+  if (justPressed('left')) { b.sel = (b.sel + b.hand.length - 1) % Math.max(1, b.hand.length); moved = true; }
+  if (justPressed('right')) { b.sel = (b.sel + 1) % Math.max(1, b.hand.length); moved = true; }
+  if (justPressed('up')) { openBattleActions(); return; }
+  if (justPressed('a')) { playSelected(); return; }
+  if (justPressed('b')) { doEndTurn(); return; }
+  if (moved) renderHand();
+  else if (!b.barShown) { b.barShown = true; renderHand(); }
+}
+
+/** Up opens the non-card actions, so the whole fight is reachable by keyboard. */
+function openBattleActions() {
+  const b = B();
+  openMenu('battlemenu', [
+    { label: 'Kin', fn: () => { closeMenu(); openScreen('party'); } },
+    { label: 'Bag', fn: () => { closeMenu(); openScreen('bag'); } },
+    { label: b.wild ? 'Run' : 'Forfeit', fn: () => { closeMenu(); submitLog(doAction({ kind: 'run' })); } },
+    { label: 'End turn', fn: () => { closeMenu(); doEndTurn(); } },
+    { label: 'Back', fn: () => { closeMenu(); renderHand(); } },
+  ], { cancel: () => { closeMenu(); renderHand(); }, title: 'Actions' });
 }
 
 // ---- full screens ------------------------------------------------------
@@ -3207,8 +3803,28 @@ function closeScreen() {
   if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
   G.screen = null;
   if (!HEADLESS) show(els.screen, false);
-  if (G.battle) { G.mode = 'battle'; if (!G.battle.over) openBattleMenu(); }
+  if (G.battle) { G.mode = 'battle'; if (!G.battle.over) renderHand(); }
   else { G.mode = 'world'; }
+}
+
+/**
+ * What a screen is listing. Built here rather than as a side effect of
+ * rendering, so navigation and selection agree with the view even when there
+ * is no view — the headless suites drive exactly these paths.
+ */
+function screenList(s) {
+  if (!s) return [];
+  if (s.kind === 'bag') return Object.keys(G.bag).filter((k) => G.bag[k] > 0);
+  if (s.kind === 'shop') return Object.keys(ITEMS);
+  if (s.kind === 'chests') return CHEST_IDS;
+  if (s.kind === 'deck') {
+    const inDeck = G.deck.map(ownedCard).filter(Boolean);
+    return inDeck.concat(G.cards.filter((c) => !G.deck.includes(c.u)));
+  }
+  if (s.kind === 'party') return G.party;
+  if (s.kind === 'box') return G.party.concat(G.box);
+  if (s.kind === 'dex') return DEX_ORDER;
+  return [];
 }
 
 const typeChips = (types) => types.map((t) => `<span class="tp" style="background:${TYPES[t]}">${t}</span>`).join('');
@@ -3228,7 +3844,9 @@ function habitat(id) {
 }
 
 function renderScreen() {
-  if (HEADLESS || !G.screen) return;
+  if (!G.screen) return;
+  G.screen.list = screenList(G.screen);
+  if (HEADLESS) return;
   const s = G.screen, el = els.screen;
   let html = '<div class="back">X — back</div>';
   if (s.kind === 'party') {
@@ -3245,7 +3863,7 @@ function renderScreen() {
       html += `<h2 style="margin-top:12px">${dispName(m)}</h2><div class="cards">` + m.moves.map((slot) => {
         const mv = MOVES[slot.id];
         return `<div class="card panel"><div class="info"><b style="color:${TYPES[mv.type]}">${mv.name}</b>
-          <small>${mv.type} · ${mv.pow ? 'PWR ' + mv.pow : 'status'} · PP ${slot.pp}/${slot.max}</small></div></div>`;
+          <small>${mv.type} · ${mv.pow ? 'PWR ' + mv.pow : 'status'} · costs ${moveCost(slot.id)}</small></div></div>`;
       }).join('') + '</div>';
       html += `<p style="font-size:12px;color:var(--dim)">ATK ${m.atk} · GUARD ${m.def} · SPD ${m.spd} · EXP ${m.xp - xpFor(m.lvl)}/${xpFor(m.lvl + 1) - xpFor(m.lvl)}</p>`;
     }
@@ -3278,17 +3896,54 @@ function renderScreen() {
     html += G.box.length ? `<div class="cards">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
       : '<p style="color:var(--dim)">Nothing stored yet.</p>';
     html += `<p style="font-size:12px;color:var(--dim)">A on a boxed kin withdraws it · A on a party kin stores it · with a full party, pick the newcomer then pick who it replaces.</p>`;
+  } else if (s.kind === 'deck') {
+    // Owned cards, deck first. Selecting one moves it in or out.
+    const inDeck = G.deck.map(ownedCard).filter(Boolean);
+    const rest = G.cards.filter((c) => !G.deck.includes(c.u));
+    const cardTile = (c, i, on) => {
+      const def = CARDS[c.id];
+      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}"
+        style="border-color:${RARITY[def.r]}${on ? '' : ';opacity:.55'}">
+        <div class="info"><b style="color:${RARITY[def.r]}">${def.name}${c.plus ? ` +${c.plus}` : ''}</b>
+        <small>${def.r} · ${def.cost} energy · ${cardText(c)}</small>
+        <small style="color:var(--dim)">played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}${
+          (def.grow || def.kill) ? ` · grows to +${growCap(c.id)}` : ''}</small></div></div>`;
+    };
+    html += `<h2>Deck — ${inDeck.length}/${DECK_MAX} (min ${DECK_MIN})</h2>`;
+    html += `<div class="cards">` + inDeck.map((c, i) => cardTile(c, i, true)).join('') + '</div>';
+    html += `<h2 style="margin-top:12px">Collection — ${rest.length} spare</h2>`;
+    html += rest.length ? `<div class="cards">` + rest.map((c, i) => cardTile(c, inDeck.length + i, false)).join('') + '</div>'
+      : '<p style="color:var(--dim)">Everything you own is in the deck.</p>';
+  } else if (s.kind === 'chests') {
+    html += `<h2>Gem chests — ${G.gems} gems</h2>`;
+    html += `<div class="cards">` + CHEST_IDS.map((k, i) => {
+      const ch = CHESTS[k];
+      const odds = RARITY_ORDER.filter((r) => ch.odds[r])
+        .map((r) => `<span style="color:${RARITY[r]}">${r} ${ch.odds[r]}%</span>`).join(' · ');
+      const tint = { silver: '#c8ccd4', gold: '#ffc94d', diamond: '#7fe0f5', prism: '#c86bff' }[k];
+      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}"
+        style="border-color:${tint}${G.gems < ch.cost ? ';opacity:.5' : ''}">
+        <div class="chest" style="--tint:${tint}"></div>
+        <div class="info"><b style="color:${tint}">${ch.name}</b><small>${ch.cost} gems · ${ch.pulls} cards</small>
+        <small>${odds}</small></div></div>`;
+    }).join('') + '</div>';
+    if (s.got) {
+      html += `<h2 style="margin-top:12px">You pulled</h2><div class="cards">` + s.got.map((c) => {
+        const def = CARDS[c.id];
+        return `<div class="card panel" style="border-color:${RARITY[def.r]}">
+          <div class="info"><b style="color:${RARITY[def.r]}">${def.name}</b>
+          <small>${def.r} · ${def.cost} energy · ${cardText(c)}</small></div></div>`;
+      }).join('') + '</div>';
+    }
   } else if (s.kind === 'bag') {
-    const list = Object.keys(G.bag).filter((k) => G.bag[k] > 0);
-    s.list = list;
+    const list = s.list;
     html += `<h2>Bag — ${G.money} shards</h2>`;
     html += list.length ? `<div class="cards">` + list.map((k, i) => `
       <div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
         <div class="info"><b>${ITEMS[k].name} ×${G.bag[k]}</b><small>${ITEMS[k].desc}</small></div></div>`).join('') + '</div>'
       : '<p style="color:var(--dim)">Empty. Even the lint.</p>';
   } else if (s.kind === 'shop') {
-    const list = Object.keys(ITEMS);
-    s.list = list;
+    const list = s.list;
     html += `<h2>Supply — ${G.money} shards</h2><div class="cards">` + list.map((k, i) => `
       <div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
         <div class="info"><b>${ITEMS[k].name}</b><small>${ITEMS[k].cost} shards · ${ITEMS[k].desc}</small></div></div>`).join('') + '</div>';
@@ -3301,8 +3956,9 @@ function renderScreen() {
 function screenInput() {
   const s = G.screen;
   if (!s) return;
-  const len = s.kind === 'party' ? G.party.length : s.kind === 'dex' ? DEX_ORDER.length
-    : s.kind === 'box' ? G.party.length + G.box.length : (s.list || []).length;
+  s.list = screenList(s);
+  const len = (s.list || []).length;
+  if (s.kind === 'chests' && s.got && (justPressed('left') || justPressed('right') || justPressed('up') || justPressed('down'))) s.got = null;
   let moved = false;
   const cols = s.kind === 'dex' ? 5 : 2;
   if (justPressed('left')) { s.i = (s.i + len - 1) % Math.max(1, len); moved = true; }
@@ -3356,6 +4012,8 @@ function boxSelect(s) {
 
 function screenSelect() {
   const s = G.screen;
+  if (!s) return;
+  s.list = screenList(s);
   if (s.kind === 'party') {
     const m = G.party[s.i];
     if (!m) return;
@@ -3366,31 +4024,58 @@ function screenSelect() {
         G.battle.mine = m; m.stages = { atk: 0, def: 0, spd: 0 };
         G.battle.dispM = m.hp; G.battle.tgtM = m.hp;
         G.battle.over = null; G.battle.finishing = false; G.battle.entry = 0;
+        swapKinCards(G.battle);
+        startPlayerTurn([]);
         s.opt.force = false;
         G.screen = null; if (!HEADLESS) show(els.screen, false);
         G.mode = 'battle';
-        battleSay([`Go, ${dispName(m)}!`], () => openBattleMenu());
+        battleSay([`Go, ${dispName(m)}!`], () => renderHand());
         return;
       }
       G.screen = null; if (!HEADLESS) show(els.screen, false);
       G.mode = 'battle';
-      submitTurn({ kind: 'switch', idx: s.i });
+      submitLog(doAction({ kind: 'switch', idx: s.i }));
       return;
     }
     setToast(`${dispName(m)} · Lv${m.lvl} · ${m.hp}/${m.max}`);
   } else if (s.kind === 'box') {
     boxSelect(s);
+  } else if (s.kind === 'deck') {
+    const c = (s.list || [])[s.i];
+    if (!c) return;
+    const at = G.deck.indexOf(c.u);
+    if (at >= 0) {
+      if (G.deck.length <= DECK_MIN) { setToast(`A deck needs at least ${DECK_MIN} cards.`); return; }
+      G.deck.splice(at, 1);
+      setToast(`${CARDS[c.id].name} set aside.`);
+    } else {
+      if (G.deck.length >= DECK_MAX) { setToast(`A deck holds at most ${DECK_MAX} cards.`); return; }
+      G.deck.push(c.u);
+      setToast(`${CARDS[c.id].name} shuffled in.`);
+    }
+    saveGame();
+    renderScreen();
+  } else if (s.kind === 'chests') {
+    const kind = (s.list || [])[s.i];
+    const ch = CHESTS[kind];
+    if (!ch) return;
+    if (G.gems < ch.cost) { setToast(`${ch.cost - G.gems} gems short.`); return; }
+    s.got = openChest(kind);
+    playCue('catch');
+    saveGame();
+    renderScreen();
   } else if (s.kind === 'bag') {
     const id = (s.list || [])[s.i];
     if (!id) return;
     if (G.battle) {
       G.screen = null; if (!HEADLESS) show(els.screen, false);
       G.mode = 'battle';
-      submitTurn({ kind: 'item', id });
+      submitLog(doAction({ kind: 'item', id }));
       return;
     }
     const it = ITEMS[id];
     if (it.kind === 'orb') { setToast('Save those for the wild.'); return; }
+    if (it.kind === 'draw') { setToast('Save that for a battle.'); return; }
     const target = G.party.find((m) => it.kind === 'revive' ? m.hp <= 0 : m.hp < m.max) || G.party[0];
     if (!target) return;
     if (it.kind === 'heal' && target.hp >= target.max) { setToast('Nobody needs that.'); return; }
@@ -3398,12 +4083,12 @@ function screenSelect() {
     G.bag[id]--; if (G.bag[id] <= 0) delete G.bag[id];
     if (it.kind === 'heal') target.hp = clamp(target.hp + it.amt, 0, target.max);
     if (it.kind === 'revive') target.hp = Math.floor(target.max / 2);
-    if (it.kind === 'pp') target.moves.forEach((m) => { m.pp = m.max; });
     setToast(`${dispName(target)} feels better.`);
     renderScreen();
   } else if (s.kind === 'shop') {
     const id = (s.list || [])[s.i];
     const it = ITEMS[id];
+    if (!it) return;
     if (G.money < it.cost) { setToast('Not enough shards.'); return; }
     G.money -= it.cost;
     G.bag[id] = (G.bag[id] || 0) + 1;
@@ -3630,7 +4315,9 @@ function step(dt) {
 }
 
 function newGame() {
-  G.party = []; G.box = []; G.bag = {}; G.money = 500; G.dex = {}; G.flags = {};
+  G.party = []; G.box = []; G.bag = {}; G.money = 500; G.gems = 0; G.dex = {}; G.flags = {};
+  G.cards = []; G.deck = []; G.nextUid = 0; G.chestsOpened = 0;
+  STARTER_DECK.forEach(grantCard);
   G.steps = 0; G.playtime = 0; G.wins = 0; G.caught = 0; G.battle = null;
   enterMap('lab', 5, 5, 'up');
   G.mode = 'world';
@@ -3675,6 +4362,17 @@ function boot() {
     const row = e.target.closest && e.target.closest('.menu .row');
     if (row && G.menu) { G.menu.i = +row.dataset.i; renderMenu(); playCue('select');
       const r = G.menu.rows[G.menu.i]; if (r && !r.off && r.fn) r.fn(); return; }
+    const cel = e.target.closest && e.target.closest('.cardel');
+    if (cel && G.battle) { G.battle.sel = +cel.dataset.c; playSelected(); return; }
+    const act = e.target.closest && e.target.closest('.abtn');
+    if (act && G.battle) {
+      const a = act.dataset.a;
+      if (a === 'end') doEndTurn();
+      else if (a === 'kin') openScreen('party');
+      else if (a === 'bag') openScreen('bag');
+      else submitLog(doAction({ kind: 'run' }));
+      return;
+    }
     const card = e.target.closest && e.target.closest('[data-i]');
     if (card && G.screen && els.screen.contains(card)) { G.screen.i = +card.dataset.i; renderScreen(); screenSelect(); return; }
     if (e.target.closest && e.target.closest('.back')) { closeScreen(); return; }
@@ -3728,12 +4426,17 @@ if (typeof window !== 'undefined') {
     advanceDialogue, liveBattleMsg,
     ART_CREATURES, ART_TILES, ART_ACTORS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
-    doTurn, startBattle, foeChoose, captureChance, tryCatch, addCaught,
+    startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
+    playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
+    cardValue, cardText, cardCost, cardName, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
+    CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
+    openChest, rollRarity, cardsOfRarity, gemReward, moveCost, clearMods, hurtMine, toughen, FOE_HP_MUL,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
+    renderHand, playSelected, doEndTurn, submitLog,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired,
     setCtx: (c) => { ctx = c; },
