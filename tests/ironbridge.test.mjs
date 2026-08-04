@@ -12746,8 +12746,10 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.newMatch({ diff:'veteran', seed:8100 });
     G.sides[1].ai = false;
     const s = G.sides[0];
-    t.ok(s.spells.length === 2 && s.spellCd.length === 2,
-      'a hold gets two spell slots and two cooldowns');
+    t.ok(s.spells.length === IB.SPELL_SLOTS && s.spellCd.length === IB.SPELL_SLOTS,
+      'a hold has a slot array as wide as the game allows');
+    t.ok(s.slots === IB.SLOTS_AT_START && s.slots < IB.SPELL_SLOTS,
+      'and opens with fewer of them open than exist (' + s.slots + ' of ' + IB.SPELL_SLOTS + ')');
     t.ok(IB.chooseSpell(s, 0, 'bombard') === null, 'a spell goes into a slot');
     t.ok(IB.chooseSpell(s, 1, 'rampart') === null, 'and another into the other');
     t.ok(s.spells[0] === 'bombard' && s.spells[1] === 'rampart', 'and they stay where they were put');
@@ -12851,10 +12853,10 @@ t.ok(true, 'drawing an empty bridge is harmless');
     rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 };
     IB.createHero(s, 'fighter'); IB.createHero(s, 'mage'); IB.createHero(s, 'tank');
     t.ok(s.heroes.length >= 2, 'the hold has more than one hero (' + s.heroes.length + ')');
-    t.ok(s.spells.length === 2 && s.spellCd.length === 2,
-      'and still exactly two spells, because they belong to the hold and not to a hero');
-    t.ok(G.sides[1].heroes.length === 0 && G.sides[1].spells.length === 2,
-      'a hold with no heroes at all gets both of its own');
+    t.ok(s.slots === IB.SLOTS_AT_START,
+      'and still exactly as many orders, because they belong to the hold and not to a hero');
+    t.ok(G.sides[1].heroes.length === 0 && G.sides[1].slots === IB.SLOTS_AT_START,
+      'a hold with no heroes at all gets its own, all the same');
 
     // It is an ordinary command, through the same door as everything else —
     // deliberately not a pre-match handshake with a protocol of its own.
@@ -13338,7 +13340,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(!!(IB.SPELL[pair[0]] && IB.SPELL[pair[1]]), 'the draft fills both slots — seed ' + sd);
       if (pair[0] === pair[1]) bothNeedy = -999;      // would be a rule break of its own
       if (IB.SPELL_OWN_HERO[pair[0]] && IB.SPELL_OWN_HERO[pair[1]]) bothNeedy++;
-      for (const id of pair) takenBy.set(id, (takenBy.get(id) || 0) + 1);
+      for (const id of pair) if (id) takenBy.set(id, (takenBy.get(id) || 0) + 1);
     }
     t.ok(bothNeedy === 0,
       'and never hands the Host two orders it cannot use without a hero (' + bothNeedy + ' of ' + drafts + ')');
@@ -13392,8 +13394,9 @@ t.ok(true, 'drawing an empty bridge is harmless');
     B.sendCmd('spell', { slot:0, id:'rampart' });
     B.sendCmd('spell', { slot:1, id:'withdraw' });
     pump(60);
-    t.ok(A.G.sides[0].spells.join() === 'bombard,muster' && A.G.sides[1].spells.join() === 'rampart,withdraw',
-      'the host machine learned both holds’ choices (' + A.G.sides.map(s => s.spells.join('/')).join(' | ') + ')');
+    const open2 = (g, i) => g.sides[i].spells.slice(0, g.sides[i].slots).join();
+    t.ok(open2(A.G, 0) === 'bombard,muster' && open2(A.G, 1) === 'rampart,withdraw',
+      'the host machine learned both holds’ choices (' + A.G.sides.map(s => s.spells.slice(0, s.slots).join('/')).join(' | ') + ')');
     t.ok(B.G.sides[0].spells.join() === A.G.sides[0].spells.join() &&
          B.G.sides[1].spells.join() === A.G.sides[1].spells.join(),
       'and so did the joiner');
@@ -13605,7 +13608,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(IB.spellUI.slot === 1, 'and the still-empty slot becomes the one being filled');
     t.ok(/class="spslot on" data-act="spslot" data-slot="1"/.test(G.sheet), 'which the sheet now says');
     IB.spellPress('unbind'); IB.spellPress('unbind');
-    t.ok(s.spells.join() === 'hobble,unbind', 'and the second goes in beside it');
+    t.ok(s.spells.slice(0, s.slots).join() === 'hobble,unbind', 'and the second goes in beside it');
     // Named the way every other surface names it. The pip used to read
     // "SLOT 1" while the panel forty pixels below said "in your first order",
     // about the same thing.
@@ -13632,7 +13635,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'the dead Accept names the slot it is in rather than shrugging (' +
       IB.spellAcceptLabel().txt + ')');
     t.ok(IB.spellAcceptLabel().on === false, 'and Accept goes dead rather than promising it');
-    t.ok(IB.spellAccept() === false && s.spells.join() === 'hobble,unbind',
+    t.ok(IB.spellAccept() === false && s.spells.slice(0, s.slots).join() === 'hobble,unbind',
       'pressing it anyway changes nothing');
     // ...and the same order back in its OWN slot is not a clash at all.
     IB.spellUI.slot = 0;
@@ -13647,11 +13650,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.showSpells(0);
     IB.spellPress('bombard'); IB.spellPress('bombard');
     IB.spellPress('muster');  IB.spellPress('muster');
-    t.ok(s.spells.join() === 'bombard,muster', 'both slots are full');
+    t.ok(s.spells.slice(0, s.slots).join() === 'bombard,muster', 'both slots are full');
     t.ok(G.wave < 1, 'and the first wave has not marched');
     IB.spellUI.slot = 0;
     IB.spellPress('pyre'); IB.spellPress('pyre');
-    t.ok(s.spells.join() === 'pyre,muster', 'a FULL slot can still be changed');
+    t.ok(s.spells.slice(0, s.slots).join() === 'pyre,muster', 'a FULL slot can still be changed');
     // The tile in the bar is the way back in while the window is open, which is
     // why it does not cast in that window.
     t.ok(/press to change it/.test(IB.ordersHtml()), 'and the order in the bar says so');
@@ -13823,21 +13826,22 @@ t.ok(true, 'drawing an empty bridge is harmless');
      middle of doing something else.                                         */
   {
     const s = fresh(8512);
-    t.ok((IB.ordersHtml().match(/class="ord pickme"/g) || []).length === IB.SPELL_SLOTS,
-      'two empty slots in the bar, both asking to be filled');
+    t.ok((IB.ordersHtml().match(/class="ord pickme"/g) || []).length === s.slots,
+      'an empty slot in the bar for each one open, all asking to be filled');
     IB.chooseSpell(s, 0, 'pyre'); IB.chooseSpell(s, 1, 'rampart');
     const open = IB.ordersHtml();
     t.ok(open.includes(IB.SPELL_ICON.pyre), 'a filled slot carries the order’s own icon');
     t.ok(open.includes('>Pyre Brand</span>'), 'and its name beside it');
-    t.ok((open.match(/class="ocd"/g) || []).length === IB.SPELL_SLOTS,
+    t.ok((open.match(/class="ocd"/g) || []).length === s.slots,
       'and each one has a shutter for the recovery to fill');
-    t.ok((open.match(/data-slot="/g) || []).length === IB.SPELL_SLOTS, 'two of them, and only two');
+    t.ok((open.match(/data-slot="/g) || []).length === s.slots,
+      'one tile per slot the hold has open');
     // Left empty when the wave marches, a slot stops being a control at all.
     const s2 = fresh(8513);
     step(23);
     t.ok(G.wave >= 1 && !s2.spells[0] && !s2.spells[1], 'a hold that chose nothing, once the wave is out');
     const shut = IB.ordersHtml();
-    t.ok((shut.match(/class="ord locked"/g) || []).length === IB.SPELL_SLOTS,
+    t.ok((shut.match(/class="ord locked"/g) || []).length === s2.slots,
       'both slots are dead plates rather than buttons');
     t.ok(!/data-slot=/.test(shut), 'with nothing on them to press');
     t.ok(IB.castPress(0) === 'nothing in that slot', 'and pressing where one was does nothing');
@@ -14211,7 +14215,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.chooseSpell(s, 1, 'rampart');
     step(23);
     const bar = IB.ordersHtml();
-    for (let i = 0; i < IB.SPELL_SLOTS; i++)
+    for (let i = 0; i < s.slots; i++)
       t.ok(bar.includes('<kbd class="okey">' + IB.ORDER_KEY[i] + '</kbd>'),
         'the tile carries the key that casts it — ' + IB.ORDER_KEY[i]);
 
@@ -14249,9 +14253,9 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const s = fresh(8570);
     const host = G.sides[1];
     IB.foeForget();
-    t.ok(IB.foeSeen[0] === null && IB.foeSeen[1] === null, 'a new match has shown this seat nothing');
+    t.ok(IB.foeSeen.every(x => x === null), 'a new match has shown this seat nothing');
     const strip = () => IB.foeOrdersHtml();
-    t.ok((strip().match(/class="fchip un"/g) || []).length === IB.SPELL_SLOTS,
+    t.ok((strip().match(/class="fchip un"/g) || []).length === G.sides[1].slots,
       'both of their slots start unknown');
     // A slot drawn rather than hidden: "they have one more you have not seen"
     // is itself worth knowing.
@@ -14301,20 +14305,122 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.foeSeen[0] = 'muster'; IB.foeSeen[1] = 'pitch';
     t.ok(IB.saveMatch(), 'the match saves');
     const pack = IB.savedMatch();
-    t.ok(pack && pack.foe && pack.foe.join() === 'muster,pitch',
+    t.ok(pack && pack.foe && pack.foe.slice(0, 2).join() === 'muster,pitch',
       'carrying what this seat had been shown (' + (pack && pack.foe ? pack.foe.join() : 'nothing') + ')');
     IB.foeForget();
     t.ok(IB.loadMatch(pack) === undefined || true, 'and it loads');
-    t.ok(IB.foeSeen.join() === 'muster,pitch', 'with the reveal still revealed');
+    t.ok(IB.foeSeen.slice(0, 2).join() === 'muster,pitch', 'with the reveal still revealed');
     t.ok(!/class="fchip un"/.test(IB.foeOrdersHtml()), 'and the strip no longer claiming otherwise');
     // A save from before this existed says nothing, and two question marks is
     // the right answer to that rather than a crash.
     IB.foeForget();
     const old = Object.assign({}, pack); delete old.foe;
     IB.loadMatch(old);
-    t.ok(IB.foeSeen.join() === ',', 'an older save restores to knowing nothing');
+    t.ok(IB.foeSeen.every(x => x === null), 'an older save restores to knowing nothing');
     IB.clearSave();
     IB.foeForget();
+  }
+
+  /* --------------------------------------------- the third order, earned
+     The orders were ONE decision, made in twenty-two seconds and then executed
+     for the rest of the match: nothing you did afterwards ever changed what
+     you were carrying, so the best play in the tenth minute was the one you
+     had already chosen in the first. And breaking their inhibitor — the
+     biggest moment a match has — paid out in Siege Ogres and nothing else. */
+  {
+    const s = fresh(8600);
+    const foe = G.sides[1];
+    t.ok(s.slots === IB.SLOTS_AT_START && IB.SPELL_SLOTS > IB.SLOTS_AT_START,
+      'a hold opens with fewer slots than the game has (' + s.slots + ' of ' + IB.SPELL_SLOTS + ')');
+    t.ok(typeof IB.chooseSpell(s, IB.SLOTS_AT_START, 'pitch') === 'string',
+      'and cannot fill one it has not earned');
+    t.ok((IB.ordersHtml().match(/data-slot=/g) || []).length === s.slots,
+      'the bar shows only the slots it has');
+
+    IB.chooseSpell(s, 0, 'bombard'); IB.chooseSpell(s, 1, 'muster');
+    step(23);
+    t.ok(G.wave >= 1, 'the window has closed on the opening pair');
+    t.ok(typeof IB.chooseSpell(s, 0, 'pitch') === 'string', 'which are set for good');
+
+    // Breaking THEIR inhibitor is what opens it.
+    const inhib = foe.structs.find(x => x.key === 'inhib');
+    t.ok(!!inhib, 'they have an inhibitor');
+    G.toasts.length = 0;
+    IB.killThing(inhib, null);
+    t.ok(s.slots === IB.SPELL_SLOTS, 'taking it opens the third (' + s.slots + ')');
+    t.ok(foe.slots === IB.SLOTS_AT_START, 'and opens nothing for the side that lost it');
+    t.ok(/third order/.test(G.toasts.map(x => x.msg).join(' | ')), 'and the player is told');
+
+    /* Chosen NOW, not in a window that closed nine minutes ago — the slot did
+       not exist then. Which is the second decision the feature did not have:
+       made with everything you have since learned about what they carry. */
+    // Pressing the empty earned tile is a CHOICE, not a cast — the same thing
+    // the tile means during the opening window, for the same reason.
+    t.ok(IB.castPress(2) === 'still choosing', 'pressing the earned tile opens the chooser');
+    t.ok(/Commander orders/.test(G.sheet), 'which is the sheet that comes up');
+    t.ok(!G.held, 'and it does NOT stop the world — a wave is already walking at you');
+    // "Set for good when the first wave marches" is the truth about the
+    // opening pair and a lie about a slot whose deadline ran out before it
+    // existed.
+    t.ok(!/first wave marches/.test(G.sheet), 'the sheet does not cite a deadline that has passed');
+    t.ok(/inhibitor/.test(G.sheet), 'and says where this one came from instead');
+    t.ok(IB.chooseSpell(s, 2, 'pitch') === null, 'the third can be filled mid-match');
+    t.ok(IB.castPress(2) !== 'still choosing', '...and once filled the tile casts like the others');
+    t.ok(s.spells[2] === 'pitch', 'and holds what it was given');
+    t.ok(typeof IB.chooseSpell(s, 2, 'hobble') === 'string',
+      'once. An order, once given, is given');
+    t.ok(typeof IB.chooseSpell(s, 2, 'bombard') === 'string',
+      'and the no-two-the-same rule still spans all three');
+
+    // It casts like the others, off its own key.
+    t.ok(IB.ORDER_KEY.length === IB.SPELL_SLOTS, 'there is a key for every slot');
+    t.ok(IB.keyAction(IB.ORDER_KEY[2].toLowerCase()) === 'order3', 'and the third one casts the third');
+    const bar = IB.ordersHtml();
+    t.ok((bar.match(/data-slot=/g) || []).length === IB.SPELL_SLOTS, 'the bar grew a tile');
+    t.ok(bar.includes('<kbd class="okey">' + IB.ORDER_KEY[2] + '</kbd>'), 'with its key on it');
+    /* Named, and NOT counting down. SLOT_NAME had two entries, so the third
+       tile read "UNDEFINED" — and it carried the opening window's clock, which
+       is a deadline that had already run out before this slot existed. */
+    t.ok(IB.SLOT_NAME.length === IB.SPELL_SLOTS && IB.SLOT_NAME.every(Boolean),
+      'every slot has a name (' + IB.SLOT_NAME.join(', ') + ')');
+    const empty3 = (() => { const was = s.spells[2]; s.spells[2] = null;
+      const html = IB.ordersHtml(); s.spells[2] = was; return html; })();
+    t.ok(!/undefined/i.test(empty3), 'and the earned tile is not called undefined');
+    t.ok((empty3.match(/class="owin"/g) || []).length === 0,
+      'nor given a countdown to a deadline that ran out before it existed');
+
+    /* A second inhibitor is worth ninety-five seconds of ogres and NOT a
+       fourth slot, because nothing in the bar was designed for one. */
+    inhib.dead = false; inhib.hp = inhib.mhp;
+    IB.killThing(inhib, null);
+    t.ok(s.slots === IB.SPELL_SLOTS, 'a second break does not open a fourth');
+
+    /* And it travels. A slot count that one machine has and the other does not
+       is a desync waiting for the next cast, so it goes in the hash, the
+       snapshot and the save alike. */
+    const h0 = IB.netHash();
+    s.slots = IB.SLOTS_AT_START;
+    t.ok(IB.netHash() !== h0, 'how many slots a hold has is in the lockstep hash');
+    s.slots = IB.SPELL_SLOTS;
+    t.ok(IB.netHash() === h0, 'and putting it back puts the hash back');
+    G.projs.length = 0; G.zones.length = 0;
+    const at = IB.netHash();
+    const json = JSON.stringify(IB.netSnap());
+    step(1.5);
+    t.ok(IB.netLoad(JSON.parse(json)), 'a hold with three slots packs into a snapshot');
+    t.ok(IB.netHash() === at && G.sides[0].slots === IB.SPELL_SLOTS, 'and comes back with all three');
+    t.ok(IB.saveMatch(), 'and saves');
+    const pack = IB.savedMatch();
+    t.ok(pack.sides[0].slots === IB.SPELL_SLOTS, 'carrying the count');
+    IB.loadMatch(pack);
+    t.ok(G.sides[0].slots === IB.SPELL_SLOTS, 'which survives the reload');
+    // A save from before the third existed opens with two rather than none.
+    const old = JSON.parse(JSON.stringify(pack));
+    for (const ps of old.sides) delete ps.slots;
+    IB.loadMatch(old);
+    t.ok(G.sides[0].slots === IB.SLOTS_AT_START, 'and an older save restores to the opening pair');
+    IB.clearSave();
+    G.toasts.length = 0;
   }
 
   /* ------------------------------------------------- the ninth order
@@ -14570,14 +14676,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const s = fresh(8551);
     t.ok(G.wave < 1 && G.waveT > 0, 'the window is open');
     const open = IB.ordersHtml();
-    t.ok((open.match(/class="owin"/g) || []).length === IB.SPELL_SLOTS,
+    t.ok((open.match(/class="owin"/g) || []).length === s.slots,
       'both empty slots carry room for the clock');
     // Its own chip rather than part of the name: a count spliced into the label
     // shuffles the name sideways once a second.
     t.ok(/<span class="on">[^<]*<\/span><i class="owin">/.test(open),
       'which is beside the name rather than inside it');
     IB.chooseSpell(s, 0, 'muster');
-    t.ok((IB.ordersHtml().match(/class="owin"/g) || []).length === IB.SPELL_SLOTS - 1,
+    t.ok((IB.ordersHtml().match(/class="owin"/g) || []).length === s.slots - 1,
       'a slot that has been filled stops counting');
     step(23);
     t.ok(G.wave >= 1 && !/owin/.test(IB.ordersHtml()),

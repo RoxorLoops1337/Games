@@ -2083,7 +2083,7 @@ function makeSide(i, ai){
     // six. bombT/bombX/bombN are the shells one of them leaves walking along
     // the lane — primitive countdowns on this object rather than a G.zones
     // entry, because a resync drops the zone list wholesale.
-    spells:[null, null], spellCd:[0, 0],
+    spells:[null, null, null], spellCd:[0, 0, 0], slots:SLOTS_AT_START,
     bombT:0, bombX:0, bombN:0,
     // ...and fireT/fireX are the stretch of burning boards another leaves,
     // on this object for exactly the same reason.
@@ -2668,7 +2668,24 @@ function waveKindFor(s){
        one board and not the other for as long as it burned. Bombard's three
        impacts are plain countdowns on the side object, ticked in ecoStep.
    ===================================================================== */
-const SPELL_SLOTS = 2;
+/* Three slots exist in the data; a hold opens with TWO of them.
+
+   The orders were one decision, made in twenty-two seconds, and then executed
+   for the rest of the match. Nothing you did afterwards ever changed what you
+   were carrying, so the best play in the tenth minute was the one you had
+   already chosen in the first — and breaking their inhibitor, the biggest
+   moment a match has, paid out in Siege Ogres and nothing else.
+
+   It opens the third now. Which puts a second choice at the far end of a
+   match, made with everything you have learned about what they are carrying,
+   and gives a push a reward that outlives the ninety-five seconds of ogres.
+
+   Three in the array and `s.slots` saying how many are open, rather than a
+   growing array: every pack list, the hash and the save already walk
+   SPELL_SLOTS, and a length that changes mid-match is a length two machines
+   can disagree about. */
+const SPELL_SLOTS = 3;
+const SLOTS_AT_START = 2;
 
 // Three shells walk along the lane, 3 units apart and 0.40s apart. Radius 3.6
 // is a little under the width of the deck, so a shot placed on the centre line
@@ -2838,11 +2855,17 @@ function pyreTarget(s, c){
    wrong. */
 function chooseSpell(s, slot, id){
   slot = slot | 0;
-  if (slot < 0 || slot >= SPELL_SLOTS) return 'there are only two slots';
+  if (slot < 0 || slot >= s.slots) return 'no such slot';
   if (!SPELL[id]) return 'no such spell';
-  if (G.wave >= 1) return 'the first wave has marched — the orders are set';
+  /* The opening pair is set when the first wave marches, as it always was. A
+     slot EARNED later cannot be — it did not exist during that window — so it
+     is set the moment it is filled instead, and only while it is empty. Both
+     rules come to the same thing: an order, once given, is given. */
+  if (slot < SLOTS_AT_START){
+    if (G.wave >= 1) return 'the first wave has marched — the orders are set';
+  } else if (s.spells[slot]) return 'that order is already given';
   for (let i = 0; i < SPELL_SLOTS; i++)
-    if (i !== slot && s.spells[i] === id) return 'already in the other slot';
+    if (i !== slot && s.spells[i] === id) return 'already in another slot';
   s.spells[slot] = id;
   s.spellCd[slot] = 0;
   return null;
@@ -2853,7 +2876,7 @@ function chooseSpell(s, slot, id){
    `key`. Refusals happen before anything is paid or started. */
 function castSpell(s, c){
   const slot = c.slot | 0;
-  if (slot < 0 || slot >= SPELL_SLOTS) return 'there are only two slots';
+  if (slot < 0 || slot >= s.slots) return 'no such slot';
   const d = spellOf(s, slot);
   if (!d) return 'nothing in that slot';
   if (s.spellCd[slot] > 0) return 'still recovering';
@@ -3356,7 +3379,16 @@ function onStructDown(st, src){
   // shake() guards itself on HEADLESS and on being off screen.
   shake(fallShake(st), st.x);
   G.timeline.push({ t:G.t, side:st.side, key:st.key, n:st.n });
-  if (st.key === 'inhib'){ foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN; }
+  if (st.key === 'inhib'){
+    foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN;
+    // ...and the third order, once. A second inhibitor break is already worth
+    // ninety-five seconds of ogres; it does not also need to be worth a fourth
+    // slot nobody designed the bar for.
+    if (foe.slots < SPELL_SLOTS){
+      foe.slots = SPELL_SLOTS;
+      if (forMe(foe.i)) fxToast('Their inhibitor is down — you may give a third order.', 'good', TOAST_W.hero);
+    }
+  }
   if (st.key === 'gate'){ endMatch(enemyOf(st.side)); }
 }
 
@@ -4953,7 +4985,7 @@ const SPELL_OWN_HERO = { warp:1, unbind:1 };
 function aiDraft(s){
   const pool = SPELLS.slice();
   let needy = 0;
-  for (let i = 0; i < SPELL_SLOTS && pool.length; i++){
+  for (let i = 0; i < s.slots && pool.length; i++){
     // The second slot stops considering hero-only orders once the first took
     // one. If that leaves nothing at all — it cannot, with nine — the rule
     // stands aside rather than leaving a slot empty.
@@ -4974,7 +5006,7 @@ function aiSpells(s){
   // and the same command they would send.
   if (!s.spells[0] && !s.spells[1] && G.wave < 1){ aiDraft(s); return; }
   const fs = enemyOf(s.i);
-  for (let i = 0; i < SPELL_SLOTS; i++){
+  for (let i = 0; i < s.slots; i++){
     const d = spellOf(s, i);
     if (!d || s.spellCd[i] > 0 || !canPay(s, d.cost)) continue;
     /* It does not fire the instant it can, and how readily is the ORDER's
@@ -15501,7 +15533,7 @@ const NO_TARGET = {
   foebody: 'Nothing of theirs on the bridge is worth burning.',
   struct:  'Nothing of yours is standing to mend.',
 };
-const SLOT_NAME = ['first order', 'second order'];
+const SLOT_NAME = ['first order', 'second order', 'third order'];
 /* The keys that cast them. ONE list: the key handler reads it, the tile in the
    bar prints it, and the help sheet's line is checked against it — so the pip
    on the control cannot end up naming a key that does something else.
@@ -15511,7 +15543,7 @@ const SLOT_NAME = ['first order', 'second order'];
    help sheet to find out how — and the orders are the one control in the game
    that is genuinely time-critical, so reaching for the mouse is the cost of
    not knowing. */
-const ORDER_KEY = ['Q', 'E'];
+const ORDER_KEY = ['Q', 'E', 'R'];
 // When an empty slot stops counting quietly and starts insisting. Late enough
 // that it is not nagging for the whole window, early enough that there is
 // still time to open the sheet, read one and take it.
@@ -15561,7 +15593,7 @@ function spellWhyHtml(){
 function spellSlotsHtml(){
   const s = me();
   let h = '<div class="spslots">';
-  for (let i = 0; i < SPELL_SLOTS; i++){
+  for (let i = 0; i < me().slots; i++){
     const d = spellOf(s, i);
     h += '<button class="spslot' + (spellUI.slot === i ? ' on' : '') +
       '" data-act="spslot" data-slot="' + i + '">' +
@@ -15620,10 +15652,20 @@ function spellSheetHtml(){
     // A phone has no hover, so it is not told about one. The rule underneath is
     // identical on both — one press reads, a second one takes — which is why
     // only the verb changes.
-    '<p class="sub">Two, and they belong to the hold rather than to a hero. ' +
+    //
+    // The last sentence changes with WHICH slot is being filled. "Set for good
+    // when the first wave marches" is the truth about the opening pair and a
+    // lie about a slot earned in the tenth minute, whose deadline ran out
+    // before it existed.
+    '<p class="sub">' +
+    (spellUI.slot >= SLOTS_AT_START
+      ? 'Won by breaking their inhibitor, and yours for the rest of the match. '
+      : 'Two to start with, and they belong to the hold rather than to a hero. ') +
     (NARROW() ? 'Tap one to read it; tap it again, or press Accept, to put it in the lit slot. '
               : 'Hover one to read it; press it, or press Accept, to put it in the lit slot. ') +
-    'Set for good when the first wave marches.</p>' +
+    (spellUI.slot >= SLOTS_AT_START
+      ? 'Set for good once you give it.'
+      : 'Set for good when the first wave marches.') + '</p>' +
     '<div class="sproll">' + spellSlotsHtml() + spellGridHtml() + '</div>' +
     // The panel and the way out of the sheet are one piece of furniture,
     // because on a phone they are pinned to the bottom of it together while
@@ -15639,7 +15681,7 @@ function spellSheetHtml(){
 
 function showSpells(slot){
   if (!G.sides.length || G.state !== 'play' || G.demo) return false;
-  if (typeof slot === 'number' && slot >= 0 && slot < SPELL_SLOTS) spellUI.slot = slot | 0;
+  if (typeof slot === 'number' && slot >= 0 && slot < me().slots) spellUI.slot = slot | 0;
   spellUI.at = null;
   spellAimOff();
   /* Held for the same reason a hero's choice holds the board, under exactly the
@@ -15647,6 +15689,10 @@ function showSpells(slot){
      is permanent, and a match that keeps running while it is being read is a
      match that punishes reading. Never in a two-player game — a match belongs
      to two people and cannot stop for one of them. */
+  /* Held only for the opening pair, and only in a single-player match. A slot
+     earned by breaking an inhibitor is chosen with a wave already walking at
+     you — stopping the world for that would be stopping it in the middle of
+     the push that won the slot. */
   G.held = !NET.on && !me().ai && G.wave < 1;
   openModal(spellSheetHtml(), G.held, 'orders');
   return true;
@@ -15688,8 +15734,10 @@ function spellTake(id){
   if (err){ say(err); return false; }
   // Move on to the empty slot if there is one, so the second choice is the
   // obvious next thing rather than an overwrite of the first.
-  const other = SPELL_SLOTS - 1 - spellUI.slot;
-  if (!me().spells[other]) spellUI.slot = other;
+  // The next slot still standing empty, whichever it is — with three of them
+  // "the other one" stopped being a single answer.
+  const s = me();
+  for (let i = 0; i < s.slots; i++) if (!s.spells[i]){ spellUI.slot = i; break; }
   openModal(spellSheetHtml(), G.held, 'orders');
   return true;
 }
@@ -15701,7 +15749,7 @@ function spellTake(id){
 function foeOrdersHtml(){
   if (!G.sides.length || G.state !== 'play') return '';
   let h = '<div class="foeord"><span class="fol">Their orders</span><span class="fchips">';
-  for (let i = 0; i < SPELL_SLOTS; i++){
+  for (let i = 0; i < G.sides[enemyOf(MY)].slots; i++){
     const d = foeSeen[i] ? SPELL[foeSeen[i]] : null;
     h += d
       ? '<span class="fchip" title="' + esc(d.n + ' — ' + d.d) + '">' + SPELL_ICON[d.id] +
@@ -15718,9 +15766,12 @@ function foeOrdersHtml(){
    for in the middle of something else. The bar is the only furniture that is
    never not on screen. */
 function ordersHtml(){
-  const s = me(), open = G.wave < 1;
+  const s = me();
   let h = '';
-  for (let i = 0; i < SPELL_SLOTS; i++){
+  for (let i = 0; i < s.slots; i++){
+    // An earned slot did not exist during the opening window, so the window
+    // cannot have closed on it: it is fillable for as long as it is empty.
+    const open = i >= SLOTS_AT_START || G.wave < 1;
     const d = spellOf(s, i);
     if (!d){
       /* An empty slot carries the CLOCK. The choice is permanent and the window
@@ -15729,10 +15780,16 @@ function ordersHtml(){
          looking at the top bar, arrived at the first wave with no orders at
          all and no idea that anything had expired. The count is written every
          frame in syncOrders; this is only the room for it. */
+      // The clock is the OPENING window's, so only the slots that window
+      // applies to carry one. An earned slot has no deadline at all — it was
+      // won after that clock had already run out — and printing 21s on it
+      // would be inventing a second deadline nobody set.
+      const timed = i < SLOTS_AT_START;
       h += open
         ? '<button class="ord pickme" data-slot="' + i + '" title="Choose your ' + SLOT_NAME[i] +
-            ' — they are set when the first wave marches">' + UI_ICON.add +
-            '<span class="on">' + SLOT_NAME[i] + '</span><i class="owin"></i></button>'
+            (timed ? ' — they are set when the first wave marches' : ' — won by breaking their inhibitor') +
+            '">' + UI_ICON.add +
+            '<span class="on">' + SLOT_NAME[i] + '</span>' + (timed ? '<i class="owin"></i>' : '') + '</button>'
         : '<span class="ord locked" title="This slot was left empty when the first wave marched">' +
             'no ' + SLOT_NAME[i] + '</span>';
       continue;
@@ -15762,10 +15819,10 @@ function syncOrders(){
   if (!el || typeof el.querySelector !== 'function') return;
   const live = G.sides.length > 0 && G.state === 'play' && !G.demo;
   const s = live ? me() : null;
-  const sig = live ? s.spells.join('/') + '|' + (G.wave < 1 ? 'open' : 'set') : 'off';
+  const sig = live ? s.spells.join('/') + '|' + s.slots + '|' + (G.wave < 1 ? 'open' : 'set') : 'off';
   if (sig !== ordSig){ ordSig = sig; el.innerHTML = live ? ordersHtml() : ''; }
   if (!live) return;
-  for (let i = 0; i < SPELL_SLOTS; i++){
+  for (let i = 0; i < s.slots; i++){
     const b = el.querySelector('.ord[data-slot="' + i + '"]');
     if (!b) continue;
     b.classList.toggle('aim', !!spellUI.aim && spellUI.aim.slot === i);
@@ -15777,7 +15834,7 @@ function syncOrders(){
         const left = Math.max(0, Math.ceil(G.waveT));
         win.textContent = left + 's';
         b.classList.toggle('closing', left <= ORDER_WINDOW_WARN);
-      }
+      } else b.classList.remove('closing');
       continue;
     }
     const cd = s.spellCd[i];
@@ -15832,9 +15889,15 @@ function syncAim(){
 function castPress(slot){
   slot = slot | 0;
   if (!G.sides.length || G.state !== 'play' || G.demo) return 'no match';
-  if (slot < 0 || slot >= SPELL_SLOTS) return 'there are only two slots';
-  const s = me(), d = spellOf(s, slot);
+  const s = me();
+  if (slot < 0 || slot >= s.slots) return 'no such slot';
+  const d = spellOf(s, slot);
+  // While the opening window is open the tile is the way back INTO the
+  // chooser, filled or not — that is what it is for in that window.
   if (G.wave < 1){ showSpells(slot); return 'still choosing'; }
+  // ...and afterwards, a slot that was earned and is still empty is the same
+  // thing: a choice waiting to be made, not a cast waiting to happen.
+  if (!d && slot >= SLOTS_AT_START){ showSpells(slot); return 'still choosing'; }
   if (!d) return 'nothing in that slot';
   // A second press on an armed order puts it away, which is the other half of
   // being able to change your mind without spending anything.
@@ -16973,7 +17036,7 @@ const packSide = (s) => ({
           cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
   troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
-  spells:s.spells.slice(), spellCd:s.spellCd.slice(),
+  spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots,
   bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
@@ -17039,6 +17102,7 @@ function loadMatch(pack){
     if (ps.troopPend) s.troopPend = ps.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl }));
     s.superT = ps.superT; s.aiT = ps.aiT; s.rs = ps.rs;
     if (ps.spells) s.spells = ps.spells.slice();
+    s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
@@ -17806,6 +17870,7 @@ function netHash(){
     }
     // The commander spells: which two, how long until each is back, and where
     // a bombardment has got to.
+    mix(s.slots);
     for (let i = 0; i < SPELL_SLOTS; i++){ mixs(s.spells[i]); mix(q30(s.spellCd[i])); }
     mix(s.bombN); mix(q30(s.bombT)); mix(Math.round(s.bombX * 16));
     mix(q30(s.fireT)); mix(Math.round(s.fireX * 16));
@@ -17940,7 +18005,7 @@ function netSnap(){
       // This list is hand-written, which means it silently drops any field
       // nobody remembered to add — and a field missing from a resync is a
       // resync that desyncs again immediately.
-      spells:s.spells.slice(), spellCd:s.spellCd.slice(),
+      spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots,
       bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
@@ -17988,6 +18053,7 @@ function netLoad(p){
     if (ps.troopPend) s.troopPend = ps.troopPend.map(q => ({ kind:q.kind, opts:q.opts.slice(), lvl:q.lvl }));
     s.rs = ps.rs; s.superT = ps.superT; s.aiT = ps.aiT; s.aiBuild = ps.aiBuild;
     if (ps.spells) s.spells = ps.spells.slice();
+    s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
@@ -18481,7 +18547,7 @@ window.IB = {
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
-  SPELLS, SPELL, SPELL_GROUPS, SPELL_SLOTS, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
+  SPELLS, SPELL, SPELL_GROUPS, SPELL_SLOTS, SLOTS_AT_START, killThing, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
