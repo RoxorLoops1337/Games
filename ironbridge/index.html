@@ -266,6 +266,26 @@
   /* Empty, and the window to fill it is still open. */
   .ord.pickme{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
   .ord.pickme:hover{ background:linear-gradient(180deg,#fff0c4,#ffd370); }
+  /* The clock on an empty slot. Its own chip rather than part of the name, so
+     the name does not shuffle sideways once a second as the digits change. */
+  .ord .owin{ position:relative; z-index:2; flex:0 0 auto; font-style:normal;
+    font-variant-numeric:tabular-nums; letter-spacing:0; padding:1px 5px; border-radius:var(--r1);
+    font-size:var(--t2); text-align:center; min-width:2.6em;
+    color:#4a3405; background:rgba(255,255,255,.42); box-shadow:inset 0 0 0 1px rgba(122,90,44,.28); }
+  /* Room for both. A tile carrying a name AND a clock does not fit the width a
+     tile carrying only a name was given, and the name is what lost — both
+     slots read "FIRST OR…" and "SECOND …" with the count sitting beside the
+     truncation. Only the empty ones are wider, and only while the window is
+     open: the moment one is filled it goes back to the name-only width and the
+     pair stops moving for the rest of the match. */
+  .ord.pickme{ max-width:208px; }
+  /* ...and once it is nearly gone it stops counting quietly. The pulse is on
+     the CHIP, not on the tile: a control that throbs is a control you cannot
+     read, and this one still has to be pressed. */
+  .ord.closing .owin{ color:#fff1d4; background:#b3241c;
+    box-shadow:inset 0 0 0 1px rgba(255,214,160,.5); animation:owin 1s steps(2, end) infinite; }
+  @keyframes owin{ 50%{ background:#7d1710; } }
+  @media (prefers-reduced-motion:reduce){ .ord.closing .owin{ animation:none; } }
   /* Armed and waiting for a point on the world. */
   .ord.aim{ border-color:#8a6524; background:linear-gradient(180deg,#ffe8b0,#f6cf72); color:#3a2704;
     box-shadow:var(--lip), var(--shelf-gold), 0 0 0 2px rgba(255,190,90,.5); }
@@ -290,6 +310,10 @@
      them swaps its name for a count. A phone drops the floor with the name. */
   body.narrow .ord{ min-width:0; max-width:none; padding:0 7px; height:28px; }
   body.narrow .ord .on{ display:none; }
+  /* The name goes; the clock never does. It is the half a phone most needs,
+     because a phone is the screen where the top bar is smallest and the sheet
+     covers everything else. */
+  body.narrow .ord .owin{ display:inline; }
   /* ...except the count. A phone drops the name for room and keeps the number,
      which is the half of the label that changes. */
   body.narrow .ord.cool .on{ display:inline; }
@@ -2359,6 +2383,8 @@ function ecoStep(s, dt){
       // from where it was aimed.
       bombardHit(s, s.bombX + (BOMB.n - s.bombN - 1) * BOMB.spread);
       s.bombN--;
+      // The salvo is over: one line for all three shells rather than three.
+      if (s.bombN === 0){ castTell(s, 'Bombard', bombSeen[s.i].size, 'caught'); bombSeen[s.i].clear(); }
     }
   }
 }
@@ -2555,6 +2581,38 @@ const SPELLS = [
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 
+/* ------------------------------------------------- what the cast actually did
+
+   Six of the eight orders land on something you picked, so the outcome is
+   never in doubt. The two POINT orders are the exception: Bombard and Withdraw
+   are aimed at a stretch of lane, and whether they caught six bodies or none
+   is the only thing worth knowing about the ninety-five seconds you just spent
+   — and it was the one thing nothing in the game said. A near miss and a
+   perfect salvo produced exactly the same three rings and the same silence.
+
+   Cosmetic, on the same path a hero's death notice already takes: a toast, on
+   G.toasts, which netHash has never seen and which is ALREADY allowed to
+   differ between the two machines (a level-up is announced only to the player
+   whose hero levelled). The count itself is the simulation's own — both
+   machines compute the same one — but only the side that gave the order is
+   told, because the other one is watching its own bodies fall over and does
+   not need a scoreboard for it. */
+/* Bodies, not hits. The three shells overlap by design — spread 3.0 against a
+   radius of 3.6 — so a body in the middle of the footprint is hit by two of
+   them and the naive sum reported seventeen against nine bodies on the lane.
+   A readout that inflates itself is worse than none: it is the number the
+   player will use to decide whether the order is worth its slot. */
+const bombSeen = [new Set(), new Set()];
+function castTell(s, name, n, verb){
+  // No HEADLESS guard: fxToast is already safe there (paintToasts returns
+  // early) and every other notice from simulation code goes out the same way.
+  // Guarding it here would have made the one thing worth asserting about this
+  // — that it says the right number — impossible to assert.
+  if (!forMe(s.i)) return;
+  fxToast(n > 0 ? name + ' — ' + n + ' ' + verb : name + ' — nothing on that stretch of lane.',
+    n > 0 ? 'good' : 'bad', TOAST_W.cast);
+}
+
 const spellOf = (s, slot) => SPELL[s.spells[slot | 0]] || null;
 const spellReady = (s, slot) => {
   const d = spellOf(s, slot);
@@ -2620,12 +2678,14 @@ const SPELL_CAST = {
   },
   withdraw(s, c){
     const px = lanePoint(c.x);
+    let n = 0;
     // Heroes are exempt on purpose: they already have a retreat state machine
     // with its own two thresholds, and a second one laid over it would fight it.
     nearby(px, WITHDRAW.rad, (u) => {
       if (u.dead || u.side !== s.i || u.isHero) return;
-      u.fallT = WITHDRAW.dur; u.target = null;
+      u.fallT = WITHDRAW.dur; u.target = null; n++;
     });
+    castTell(s, 'Withdraw', n, 'turned back');
     return null;
   },
   muster(s){ musterWave(s); return null; },
@@ -2693,6 +2753,8 @@ function bombardHit(s, x){
     if (hyp(u.x - x, u.y) <= BOMB.r + u.r) hits.push(u);
   });
   for (const u of hits){
+    // Counted once across the whole salvo, however many shells reach it.
+    bombSeen[s.i].add(u.id);
     dealDmg(null, u, BOMB.dmg, { magic:true, ability:true });
     if (!u.dead) applySlow(u, BOMB.slow, BOMB.slowT);
   }
@@ -5743,7 +5805,7 @@ const TOAST = { life:{ min:1.8, max:5.2 }, cap:3, plain:.4, loud:.7 };
 const toastLife = (w) => TOAST.life.min + (TOAST.life.max - TOAST.life.min) * clamp(w, 0, 1);
 // What each thing the game can say is worth. The whole point of the table is
 // that these are not all the same number.
-const TOAST_W = { fall:.55, hero:.8, level:.5, rebuild:.6, wave:.45, levy:.3, ui:.1 };
+const TOAST_W = { fall:.55, hero:.8, level:.5, rebuild:.6, wave:.45, levy:.3, ui:.1, cast:.5 };
 // A structure's fall is already laid out on a ladder by how deep into the line
 // it is — the same one that sizes the sparks and the camera kick. One ladder,
 // so the biggest bang and the longest sentence cannot disagree about which
@@ -14994,6 +15056,10 @@ const AIM_SAID = {
   struct:  'aimed at one of your structures',
 };
 const SLOT_NAME = ['first order', 'second order'];
+// When an empty slot stops counting quietly and starts insisting. Late enough
+// that it is not nagging for the whole window, early enough that there is
+// still time to open the sheet, read one and take it.
+const ORDER_WINDOW_WARN = 8;
 
 /* ------------------------------------------------------------ the chooser
    An order already sitting in the OTHER slot cannot be taken — the simulation
@@ -15172,10 +15238,16 @@ function ordersHtml(){
   for (let i = 0; i < SPELL_SLOTS; i++){
     const d = spellOf(s, i);
     if (!d){
+      /* An empty slot carries the CLOCK. The choice is permanent and the window
+         to make it is twenty-two seconds long, and the tile said neither — so
+         a player reading the sheet, or building their hold, or simply not
+         looking at the top bar, arrived at the first wave with no orders at
+         all and no idea that anything had expired. The count is written every
+         frame in syncOrders; this is only the room for it. */
       h += open
         ? '<button class="ord pickme" data-slot="' + i + '" title="Choose your ' + SLOT_NAME[i] +
             ' — they are set when the first wave marches">' + UI_ICON.add +
-            '<span class="on">' + SLOT_NAME[i] + '</span></button>'
+            '<span class="on">' + SLOT_NAME[i] + '</span><i class="owin"></i></button>'
         : '<span class="ord locked" title="This slot was left empty when the first wave marched">' +
             'no ' + SLOT_NAME[i] + '</span>';
       continue;
@@ -15212,7 +15284,16 @@ function syncOrders(){
     if (!b) continue;
     b.classList.toggle('aim', !!spellUI.aim && spellUI.aim.slot === i);
     const d = spellOf(s, i);
-    if (!d) continue;
+    if (!d){
+      // An empty slot, while the window is still open: how long is left.
+      const win = b.querySelector('.owin');
+      if (win){
+        const left = Math.max(0, Math.ceil(G.waveT));
+        win.textContent = left + 's';
+        b.classList.toggle('closing', left <= ORDER_WINDOW_WARN);
+      }
+      continue;
+    }
     const cd = s.spellCd[i];
     const fill = b.querySelector('.ocd');
     if (fill && fill.style)
@@ -17762,7 +17843,7 @@ window.IB = {
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
-  ordersHtml, syncOrders, castPress, spellAimOff, spellAimTarget, spellAimSend, syncAim,
+  ordersHtml, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellAimPick, AIM_FOOT, AIM_COL, drawAim, aimAt,
   drawStructMarks, structTall, structWide,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
