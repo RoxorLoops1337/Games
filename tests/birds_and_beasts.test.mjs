@@ -1112,6 +1112,30 @@ function autoRun(seed){
   eq(G4.R.deck.length, 8, 'and the run starts normally anyway');
 }
 
+/* ======================= the wave comes in wall first ====================== */
+// The enemy side arrived as a flat row for the life of this game: `lineOf` is
+// computed for both sides but both readers of `myHold` are gated to 'us'. A 16%
+// speed stagger was tried first and measured at exactly 50.0% build-agreement
+// over 480 waves — chance — so the formation lives in ARRIVAL ORDER instead.
+{
+  const G = loadGame({});
+  G.newRun(9091);
+  const sp = G.buildSpawns({});
+  let pairs = 0, agree = 0;
+  for (let i = 0; i + 1 < sp.length; i++){
+    if (sp[i].wave !== sp[i + 1].wave) continue;   // order only means anything inside a wave
+    const a2 = G.stanceOf(sp[i].c), b2 = G.stanceOf(sp[i + 1].c);
+    if (a2 === b2) continue;
+    pairs++;
+    if (a2 > b2) agree++;
+  }
+  ok(pairs > 0, 'a wave has beasts of different builds to order');
+  eq(agree, pairs, 'inside a wave, every bruiser comes through the door ahead of every glass cannon');
+  // and the ordering must not have eaten anybody
+  const n = G.buildSpawns({}).length;
+  eq(n, sp.length, 'sorting the wave changes the order and nothing else');
+}
+
 /* ===================== the title reel keeps running ======================= */
 // `at()` is a no-op headlessly, so the stub cannot see this class of bug at all:
 // boot() armed the reel's next generation and then called show('title') one line

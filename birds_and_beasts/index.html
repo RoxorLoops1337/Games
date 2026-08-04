@@ -3210,6 +3210,11 @@ function pickTarget(u){
 /* Where in the pit this animal wants to stand. A thick-hided beast steps up and
    a glass cannon hangs back, so a wave forms a LINE with a front and a back
    instead of a single row of everything at once. */
+function stanceOf(c){
+  const bulk = (c.hide || 0) + (c.trait === 'bulwark' ? 7 : 0) + (c.trait === 'plump' ? 3 : 0);
+  const hit = (c.might || 0) + (c.trait === 'venom' || c.trait === 'stun' ? 4 : 0);
+  return bulk - hit;
+}
 function lineOf(u){
   const bulk = (u.c.hide || 0) + (u.c.trait === 'bulwark' ? 7 : 0) +
     (u.c.trait === 'plump' ? 3 : 0);
@@ -3218,6 +3223,13 @@ function lineOf(u){
   // pixels, against a 60px fan step. A stance you cannot see is not a stance.
   return clamp((bulk - hit) * 1.5, -15, 15);
 }
+/* THEIR line lives in buildSpawns, not here — see the comment there. Two ways
+   of expressing it have now been tried and measured and neither worked:
+   carrying it in `reach` stranded two tanks diagonally apart outside their own
+   swinging distance, and a hold line cannot exist on their side at all (yours
+   stops your lot chasing to the door; theirs must REACH the nest, and any x
+   floor lands inside the 47.6..84.4 span your own line occupies against a 5.2
+   reach, so both sides stop advancing and the fight stalls). */
 function hurtUnit(u, dmg, from){
   if (!u.alive) return 0;
   let d = dmg;
@@ -3471,7 +3483,14 @@ function buildSpawns(mods){
   const list = [];
   let t = 1.2;
   for (let w = 1; w <= waves; w++){
-    const team = makeEnemyTeam(R.idx, mods, w, waves);
+    // THE WAVE COMES IN WALL FIRST. A 16% speed stagger was tried and measured
+    // at exactly 50.0% build-agreement over 480 waves — chance — because the
+    // gap between spawns dwarfs any speed difference over the run to contact.
+    // Arrival ORDER is where an approaching formation actually lives: bruisers
+    // through the door first, glass cannons behind them, so you meet the wall
+    // and the damage arrives after it.
+    const team = makeEnemyTeam(R.idx, mods, w, waves).slice()
+      .sort((x, y) => stanceOf(y) - stanceOf(x));
     for (const c of team){ list.push({ at: t, c, wave: w }); t += SPAWN_GAP; }
     t += WAVE_GAP;
   }
@@ -7219,7 +7238,7 @@ window.BB = {
   newRun, setNest, deckForFight,
   // the arena
   startBattle, arenaTick, runBattle, playCardA, drawInto, spawnUnit, hurtUnit, killUnit,
-  swingAt2, nearestFoe, unitMightA, unitHide, unitSpeed, unitSwing, buildSpawns, waveCount,
+  swingAt2, nearestFoe, unitMightA, unitHide, unitSpeed, unitSwing, buildSpawns, waveCount, stanceOf, lineOf,
   makeEnemyTeam, teamSize, waveSize, inheritCost, appetite, feedWeight, statPower, cardHide, cardDamage,
   C2: { AW, AH, GATE_X, DOOR_X, NEST_X, BASE_SPEED, BASE_RANGE, BASE_SWING,
         FEED_MAX, FEED_START, FEED_EVERY, HAND_SIZE_A, DRAW_DELAY, SPAWN_GAP, WAVE_GAP,
