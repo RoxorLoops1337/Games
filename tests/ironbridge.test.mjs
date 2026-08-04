@@ -13697,6 +13697,142 @@ t.ok(true, 'drawing an empty bridge is harmless');
     release();
   }
 
+  /* ------------------------------------------- where the cast would land
+     An armed order used to show nothing at all. `spellUI.aim` was read by no
+     drawing function in the file, so a bombardment — three shells, a lane and
+     a half wide, locked in for ninety-five seconds — was placed by guessing
+     where the click would go and then finding out.
+
+     The preview cannot be tested by looking at it, so what is held here is the
+     only thing that makes it trustworthy: it is drawn from the SAME
+     enumeration the click resolves against, and its footprint is read off the
+     same constants the cast reads.
+
+     Driven through drawAim(CTX) rather than draw(): a later block in this file
+     loads a second copy of the game, and loading one REBINDS `CTX` to the new
+     stub's context — so `IB.draw()` here paints into a canvas nothing is
+     watching. Handing the painter its context is the version that cannot be
+     wrong about which canvas it is talking to, and the call site is checked
+     separately below. */
+  {
+    const s = fresh(8540);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'rampart');
+    step(23);
+    rich(s);
+    const st = CTX.__stats;
+    const ell = () => { st.ellipses = []; IB.drawAim(CTX); return st.ellipses; };
+
+    // The preview has to be ON the picture, or none of the rest of this means
+    // anything: it is drawn once, over the finished world, before the
+    // selection rings that share its language.
+    const body = SRC.slice(SRC.indexOf('function draw(){'), SRC.indexOf('INTERFACE'));
+    t.ok((body.match(/\bdrawAim\(c\)/g) || []).length === 1, 'draw() paints the preview exactly once');
+    t.ok(body.indexOf('drawAim(c)') > body.indexOf("perfOff('post')"),
+      'over the finished world rather than inside it');
+
+    // Nothing armed: nothing drawn. The preview is a thing the interface is
+    // saying, and while it is saying nothing there must be no marks at all.
+    // Aimed through lp() rather than at an arbitrary pixel: 430,300 on a
+    // 900x520 stub unprojects to somewhere off the end of the bridge, where
+    // lanePoint's clamp piles all three shells on the same spot — a test that
+    // would then be asserting the clamp works rather than the footprint does.
+    const at = (v) => { const q = IB.lp(C.LANE_LEN * v, 0); IB.aimAt(q[0], q[1]); };
+    IB.spellAimOff();
+    at(.5);
+    t.ok(ell().length === 0, 'with no order armed the world is left alone');
+
+    t.ok(IB.castPress(0) === null && IB.spellUI.aim, 'Bombard arms rather than firing');
+    // Armed but never pointed at anything: still nothing. A preview that
+    // defaults to the middle of the screen is a preview that lies on the first
+    // frame, before the pointer has said anything.
+    IB.spellUI.pt = null;
+    t.ok(ell().length === 0, 'an armed order with nowhere to point draws nothing');
+
+    IB.aimAt(430, 300);
+    t.ok(IB.spellUI.pt && IB.spellUI.pt.x === 430, 'the pointer lands where it was put');
+    at(.5);
+    const marks = ell();
+    t.ok(marks.length === IB.BOMB.n,
+      'and Bombard draws one ring per shell (' + marks.length + ' of ' + IB.BOMB.n + ')');
+    const foot = IB.AIM_FOOT.bombard();
+    t.ok(foot.length === IB.BOMB.n, 'the footprint has as many marks as the cast has shells');
+    // Centred on the point, because that is where the shells centre: the cast
+    // walks them from -spread to +spread around bombX.
+    t.ok(Math.abs(foot.reduce((a, f) => a + f.d, 0)) < 1e-9,
+      'and it is centred on the point the click sets');
+    t.ok(foot.every(f => f.r === IB.BOMB.r),
+      'at the radius the cast uses, not one of its own (' + foot[0].r + ')');
+    t.ok(marks.every(m => m.col === IB.AIM_COL), 'all of it in the one accent that means "this wants you"');
+    t.ok(new Set(marks.map(m => Math.round(m.x))).size === IB.BOMB.n,
+      'the three sit at three different places on the lane');
+    t.ok(marks.every(m => m.rx > 0 && Math.abs(m.ry / m.rx - .55) < .02),
+      'and lie flat on the deck like every other mark on it');
+    // Move the pointer, and the footprint moves with it. A preview pinned to
+    // the armed order rather than to the pointer is a decoration.
+    const x0 = marks.map(m => m.x);
+    at(.62);
+    t.ok(ell().every((m, i) => Math.abs(m.x - x0[i]) > 1), 'and the whole footprint follows the pointer');
+
+    /* The property that makes a body preview worth having: the ring and the
+       click are the same list, tested the same way. Two enumerations would
+       drift the first time one of them learned about a new kind of body, and
+       the failure would be a ring round something a press cannot take. */
+    IB.spellAimOff();
+    s.spellCd[1] = 0;
+    t.ok(IB.castPress(1) === null && IB.spellUI.aim, 'Rampart arms on its own structures');
+    const list = IB.spellAimCandidates();
+    t.ok(list.length > 1, 'there is more than one thing it could be pointed at (' + list.length + ')');
+    let agree = 0;
+    for (const k of list){
+      const got = IB.spellAimTarget(k.cx, k.cy);
+      const pick = IB.spellAimPick(list, k.cx, k.cy);
+      if (got && pick && pick.hit.key === got.key && got.key === k.hit.key) agree++;
+    }
+    t.ok(agree === list.length,
+      'every candidate the preview would ring is the one a press there takes (' +
+      agree + '/' + list.length + ')');
+    // ...and a point nothing is under rings nothing and takes nothing, rather
+    // than the two disagreeing about the nearest thing.
+    t.ok(IB.spellAimTarget(-9999, -9999) === null && IB.spellAimPick(list, -9999, -9999) === null,
+      'and empty space is empty to both of them');
+
+    IB.aimAt(list[0].cx, list[0].cy);
+    const rings = ell();
+    t.ok(rings.length === list.length,
+      'every structure it could mend is ringed, not only the one under the pointer');
+    const lit = rings.filter(m => m.alpha > .9).length;
+    t.ok(lit === 1, 'with exactly one of them lit (' + lit + ')');
+    t.ok(rings.filter(m => m.alpha > .3 && m.alpha < .8).length === list.length - 1,
+      'and the rest quieter, but not so quiet they cannot be seen over a lit gate');
+
+    /* Cosmetic to the last bit. The preview reads the pointer, the camera and
+       the zoom — three things the two machines in a match do not share — so if
+       any of it reached the simulation a lockstep game would desync the moment
+       one player moved their mouse. */
+    const h0 = IB.netHash();
+    IB.aimAt(12, 34); IB.drawAim(CTX);
+    IB.aimAt(880, 500); IB.drawAim(CTX);
+    t.ok(IB.netHash() === h0, 'moving the pointer under an armed order moves nothing in the world');
+    t.ok(!('pt' in IB.netSnap()) && !JSON.stringify(IB.netSnap()).includes('aimPt'),
+      'and the pointer is nowhere in the snapshot the other machine is handed');
+    IB.spellAimOff();
+    t.ok(IB.spellUI.aim === null && ell().length === 0, 'calling it off puts the world back');
+
+    /* The phone half. A tap places a bombardment the instant it lands, which on
+       a 390px screen means placing it under your own thumb; the drag has to
+       aim instead of panning so the footprint can be slid into place and fired
+       on the lift. Held on the wiring, because the gesture itself is a
+       browser's to deliver. */
+    const wire = SRC.slice(SRC.indexOf('let drag = null;'), SRC.indexOf("lcv.addEventListener('dblclick'"));
+    const move = wire.slice(wire.indexOf("lcv.addEventListener('pointermove'"));
+    t.ok(/if \(spellUI\.aim\)\{ aimAt\([^)]*\); return; \}/.test(move),
+      'a drag while an order is armed aims it instead of panning the camera');
+    const up = wire.slice(wire.indexOf("lcv.addEventListener('pointerup'"));
+    t.ok(/spellUI\.aim.*pickAt/s.test(up.slice(0, up.indexOf('\n  });'))),
+      'and lifting fires at where it ended, moved or not');
+  }
+
   /* --------------------------- and none of it can decide anything on its own */
   {
     const at = SRC.indexOf('COMMANDER ORDERS — the interface half');
