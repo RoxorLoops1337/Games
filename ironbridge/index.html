@@ -245,10 +245,16 @@
      it — so the whole control is the readout and a glance costs nothing. It
      covers the card at the moment of the cast and DRAINS away as the order
      comes back, so an empty card is a ready one. */
-  #orders{ display:flex; align-items:center; gap:5px; margin-left:14px; }
+  /* The bar SHRINKS before it pushes. A third tile added 150px to a row that
+     already only just fitted, and at 1280 it drove the Menu button 38px off
+     the right edge of a #top that has nothing to scroll — earning the third
+     order cost you the way back to the lobby. min-width:0 is what lets a flex
+     item give ground at all; the name ellipsises and the icon, the key and the
+     clock — the parts you actually read mid-fight — never move. */
+  #orders{ display:flex; align-items:center; gap:5px; margin-left:14px; min-width:0; }
   #orders:empty{ display:none; }
   .ord{ position:relative; overflow:hidden; display:inline-flex; align-items:center; gap:6px;
-    height:32px; padding:0 10px 0 8px; min-width:104px; max-width:186px;
+    height:32px; padding:0 10px 0 8px; min-width:0; flex:0 1 auto; max-width:186px;
     background:var(--raise); border:1px solid var(--rim); border-radius:var(--r2);
     box-shadow:var(--lip), var(--shelf); color:var(--cream-ink);
     font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t4);
@@ -267,7 +273,8 @@
   /* A phone has no Q and no E. It also has the least room, so the pip is the
      first thing to go rather than something to shrink. */
   body.narrow .ord .okey{ display:none; }
-  .ord .on{ position:relative; z-index:2; overflow:hidden; text-overflow:ellipsis; }
+  .ord .on{ position:relative; z-index:2; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; min-width:0; flex:0 1 auto; }
   /* The shutter. Height is written every frame from the cooldown; nothing else
      about the control moves, so a recovering order is legible without reading. */
   .ord .ocd{ position:absolute; left:0; right:0; bottom:0; height:0; z-index:1; display:block;
@@ -896,7 +903,14 @@
     color:#7a6033; font-weight:700; }
   .pick.opt .pt{ font-family:var(--display); font-variant-caps:small-caps;
     font-size:var(--t4); font-weight:700; color:var(--cream-ink); line-height:1.1; }
-  .pick.opt .pm{ font-size:var(--t1); color:#63502f; white-space:nowrap; }
+  /* The card carries a SHORT line and nothing else. The full numbers were
+     here once, nowrap and unclipped, and three quarters of the skills in the
+     game printed straight through their neighbours and off the sheet —
+     "26 damage/s for 5s · 35% slow · area 3.0 · 16s" is 232px of text in an
+     86px card. The numbers belong in the panel, which is what the panel is
+     for; the clip is the belt to that braces, so no future line can spill. */
+  .pick.opt .pm{ font-size:var(--t1); color:#63502f;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
   /* Being read. NOT taken — that is the second press, the same rule the
      commander orders use, and it matters more here: a hero's choice is
      permanent and there is no way back from it. */
@@ -2813,8 +2827,13 @@ const bombSeen = [new Set(), new Set()];
    Per machine, not per match: it is what THIS seat has seen. Which is exactly
    why it lives here and not on a side — netHash must never see it, and the
    two machines are supposed to disagree about it. */
-const foeSeen = [null, null];
-const foeForget = () => { foeSeen[0] = null; foeSeen[1] = null; };
+/* One entry per slot, sized off SPELL_SLOTS rather than written out — the
+   third slot arrived and this stayed two long, so a third order seen being
+   cast pushed foeSeen to length 3 and foeForget, which cleared two by name,
+   left it there. A new match, and a save from before the fog existed, both
+   started out remembering an order from the match before. */
+const foeSeen = new Array(SPELL_SLOTS).fill(null);
+const foeForget = () => { for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = null; };
 function castTell(s, name, n, verb){
   // No HEADLESS guard: fxToast is already safe there (paintToasts returns
   // early) and every other notice from simulation code goes out the same way.
@@ -3386,7 +3405,10 @@ function onStructDown(st, src){
     // slot nobody designed the bar for.
     if (foe.slots < SPELL_SLOTS){
       foe.slots = SPELL_SLOTS;
-      if (forMe(foe.i)) fxToast('Their inhibitor is down — you may give a third order.', 'good', TOAST_W.hero);
+      // Short enough to survive the toast. The sentence this replaces was 416px
+      // of text in a 338px line and ended "...YOU MAY GIVE A…" — the one place
+      // the game explains the new slot, cut off mid-word at every size.
+      if (forMe(foe.i)) fxToast('Inhibitor down — a third order is yours.', 'good', TOAST_W.hero);
     }
   }
   if (st.key === 'gate'){ endMatch(enemyOf(st.side)); }
@@ -4982,6 +5004,13 @@ const SPELL_OWN_HERO = { warp:1, unbind:1 };
    drafting, and at most one of the pair may be an order that needs a hero of
    its own. Exactly one arnd() per slot either way, so the stream this consumes
    still depends only on things both machines already agree about. */
+function aiPickSpell(s, list){
+  let tot = 0;
+  for (const d of list) tot += d.ai.w;
+  let r = arnd(s) * tot, pick = list[list.length - 1];
+  for (const d of list){ r -= d.ai.w; if (r <= 0){ pick = d; break; } }
+  return pick;
+}
 function aiDraft(s){
   const pool = SPELLS.slice();
   let needy = 0;
@@ -4991,20 +5020,34 @@ function aiDraft(s){
     // stands aside rather than leaving a slot empty.
     const room = pool.filter(d => !(SPELL_OWN_HERO[d.id] && needy));
     const list = room.length ? room : pool;
-    let tot = 0;
-    for (const d of list) tot += d.ai.w;
-    let r = arnd(s) * tot, pick = list[list.length - 1];
-    for (const d of list){ r -= d.ai.w; if (r <= 0){ pick = d; break; } }
+    const pick = aiPickSpell(s, list);
     chooseSpell(s, i, pick.id);
     if (SPELL_OWN_HERO[pick.id]) needy++;
     pool.splice(pool.indexOf(pick), 1);
   }
+}
+/* A slot EARNED mid-match arrives long after the draft, and the draft was the
+   only thing that ever filled one. So the Host broke an inhibitor, took a third
+   slot, and carried it empty for the rest of the match — while the player's
+   fog-of-war dock drew a third "?" chip for a hidden order that did not exist.
+   Same weights, same one-hero-order rule, one arnd() and only when there is
+   something in the pool to spend it on. */
+function aiDraftLate(s, slot){
+  const held = {};
+  let needy = 0;
+  for (const id of s.spells) if (id){ held[id] = 1; if (SPELL_OWN_HERO[id]) needy++; }
+  const pool = SPELLS.filter(d => !held[d.id]);
+  if (!pool.length) return;
+  const room = pool.filter(d => !(SPELL_OWN_HERO[d.id] && needy));
+  chooseSpell(s, slot, aiPickSpell(s, room.length ? room : pool).id);
 }
 
 function aiSpells(s){
   // Chosen once, before the first wave marches — the same window a player gets
   // and the same command they would send.
   if (!s.spells[0] && !s.spells[1] && G.wave < 1){ aiDraft(s); return; }
+  // Anything the draft could not reach, because it did not exist yet.
+  for (let i = 0; i < s.slots; i++) if (!s.spells[i]){ aiDraftLate(s, i); break; }
   const fs = enemyOf(s.i);
   for (let i = 0; i < s.slots; i++){
     const d = spellOf(s, i);
@@ -15737,7 +15780,15 @@ function spellTake(id){
   // The next slot still standing empty, whichever it is — with three of them
   // "the other one" stopped being a single answer.
   const s = me();
-  for (let i = 0; i < s.slots; i++) if (!s.spells[i]){ spellUI.slot = i; break; }
+  // ...and if there is no empty slot left and the window has closed, the sheet
+  // has nothing left to do. It used to stay open on the slot it had just
+  // filled, offering "would replace Second Muster as your third order" over a
+  // live gold Accept whose only effect was to print the raw refusal string
+  // "that order is already given". A mid-match choice is over when it is made.
+  let empty = -1;
+  for (let i = 0; i < s.slots; i++) if (!s.spells[i]){ empty = i; break; }
+  if (empty < 0 && G.wave >= 1){ closeModal(); return true; }
+  if (empty >= 0) spellUI.slot = empty;
   openModal(spellSheetHtml(), G.held, 'orders');
   return true;
 }
@@ -15798,9 +15849,14 @@ function ordersHtml(){
     // Nothing it could be cast at exists yet — no bodies on the bridge, no
     // damage on any structure, no enemy hero — and what the control is for in
     // that window is the choice.
+    // A FILLED slot is a different question from an empty one. An earned slot
+    // is open while empty and set the moment it is given, so `open` is true
+    // for it forever — and the filled tile was offering a change that
+    // chooseSpell refuses, on a press that spends the order instead.
+    const canSwap = i < SLOTS_AT_START && G.wave < 1;
     h += '<button class="ord" data-slot="' + i + '"' +
       ' title="' + esc(d.n + ' — ' + d.d + ' (' + ORDER_KEY[i] + ')' +
-        (open ? ' (press to change it)' : '')) + '">' +
+        (canSwap ? ' (press to change it)' : '')) + '">' +
       '<i class="ocd"></i><kbd class="okey">' + ORDER_KEY[i] + '</kbd>' + SPELL_ICON[d.id] +
       '<span class="on">' + d.n + '</span></button>';
   }
@@ -16640,14 +16696,18 @@ function optBits(h, kind, id){
   if (kind === 'rank'){
     if (id.startsWith('P:')){
       const p = PASS[id.slice(2)];
-      return { k:'rank ' + (h.passRank + 1), n:p.n, d:p.d, m:'Strengthens the passive.' };
+      return { k:'rank ' + (h.passRank + 1), n:p.n, d:p.d, m:'', mf:'Strengthens the passive.' };
     }
     const s = SKILL[id], own = h.skills.find(o => o.id === id);
-    return { k:'rank ' + (own.rank + 1), n:s.n, d:skNums(s, own.rank + 1), m:'' };
+    return { k:'rank ' + (own.rank + 1), n:s.n, d:skNums(s, own.rank + 1), m:'', mf:'' };
   }
   const s = SKILL[id];
+  // m is the card's line and mf is the panel's. They were one field, which is
+  // how the card ended up trying to wear a whole stat block: the card gets the
+  // one number that is the same shape on every skill, and the panel — the
+  // thing the second press exists to open — gets all of them.
   return { k:s.ult ? 'ultimate' : s.cls === 'any' ? 'common' : s.cls, n:s.n, d:s.f,
-    m:skNums(s, 1) + ' · ' + s.cd + 's' };
+    m:'every ' + s.cd + 's', mf:skNums(s, 1) + ' · ' + s.cd + 's' };
 }
 function optCard(h, kind, id, i){
   const b = optBits(h, kind, id);
@@ -16673,9 +16733,16 @@ function picksHtml(h, kind, opts){
 }
 function optWhyHtml(h, kind, opts){
   const i = optUI.at;
-  if (!(i >= 0) || !opts[i]) return '<div class="ow none">Read one, then press it again to take it.</div>';
+  // A mouse reveals on the way to the card, so for a mouse the second press
+  // IS the first click and "press it again" describes something the player
+  // never does. The rule underneath is the same on both — nothing is taken
+  // out of a card that has not been read — so only the verb changes.
+  if (!(i >= 0) || !opts[i])
+    return '<div class="ow none">' + (NARROW()
+      ? 'Tap one to read it, then tap it again to take it.'
+      : 'Hover one to read it. Pressing it takes it.') + '</div>';
   const b = optBits(h, kind, opts[i]);
-  return '<div class="ow"><b>' + b.n + '</b>' + (b.m ? '<i>' + b.m + '</i>' : '') +
+  return '<div class="ow"><b>' + b.n + '</b>' + (b.mf ? '<i>' + b.mf + '</i>' : '') +
     '<div class="pd">' + b.d + '</div></div>';
 }
 
@@ -17302,7 +17369,7 @@ const KEYS = [
   { k:'M',     a:'camMid',  d:'look at the middle of the bridge' },
   { k:'B',     a:'camFoe',  d:'look at their base' },
   { k:'F',     a:'follow',  d:'follow the fighting' },
-  { k:ORDER_KEY.join(' '), a:'order', d:'cast your first or second commander order' },
+  { k:ORDER_KEY.join(' '), a:'order', d:'cast your commander orders, in the order the bar shows them' },
   { k:'+ −',   a:'zoom',    d:'zoom in and out' },
   { k:'?',     a:'help',    d:'this sheet' },
   { k:'Esc',   a:'close',   d:'close whatever is open' },
@@ -17351,7 +17418,10 @@ function doAction(a){
   if (a === 'zoomIn') { cam.tz = clamp(cam.tz * 1.25, ZOOM_MIN, ZOOM_MAX); return; }
   if (a === 'zoomOut'){ cam.tz = clamp(cam.tz * .8, ZOOM_MIN, ZOOM_MAX); return; }
   if (a === 'help'){ if (G.state === 'play' && !HEADLESS) showHelp(); return; }
-  if (a === 'order1' || a === 'order2'){ castPress(+a.slice(5) - 1); return; }
+  // Every key in ORDER_KEY, not two of them by name. The third tile printed R
+  // on itself and the help sheet listed it, and the key did nothing — which is
+  // the exact failure the one-list rule at ORDER_KEY exists to stop.
+  if (/^order\d+$/.test(a)){ castPress(+a.slice(5) - 1); return; }
   if (a === 'close'){
     // An armed order is the innermost thing Escape can be closing, so it goes
     // first: otherwise Escape would unpause a match with a live reticle on it.

@@ -15984,4 +15984,221 @@ t.ok(true, 'a final draw on a live match is clean');
     'and the phone keeps them, where the panel is a tab and has the room');
 }
 
+/* ------------------------------------ what the fourth review pass measured
+   Nine defects across the two rounds before it, and every one of them is a
+   rule rather than a preference: a card cannot print past its own edge, a bar
+   shrinks before it pushes a button off the screen, a key does what the tile
+   says it does, a tooltip does not offer what the rules refuse, and a sheet
+   closes when the choice it was opened for has been made.                   */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+  const fresh = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    return G.sides[0];
+  };
+
+  /* ------------------------------------------- the card and its stat line
+     The icon cards shipped with the whole stat block on the face of the card
+     and white-space:nowrap holding it on one line. Three quarters of the
+     skills in the game printed straight through their neighbours and off the
+     sheet — "26 damage/s for 5s · 35% slow · area 3.0 · 16s" is 232px of text
+     in an 86px card, and Frost Nova started 10px to the LEFT of the sheet. */
+  {
+    const s = fresh(9100);
+    const pm = rule('.pick.opt .pm{');
+    t.ok(/overflow:hidden/.test(pm) && /text-overflow:ellipsis/.test(pm) && /max-width:100%/.test(pm),
+      'a card line that outgrows its card is clipped rather than printed over the card beside it');
+
+    const h = IB.makeHero(0, 'mage', 'Probe');
+    const ids = Object.keys(IB.SKILL);
+    let worst = 0, worstTxt = '', keptNums = 0;
+    for (const id of ids){
+      const b = IB.optBits(h, 'skill', id);
+      if (b.m.length > worst){ worst = b.m.length; worstTxt = b.m; }
+      if (b.mf.indexOf(IB.SKILL[id].cd + 's') >= 0) keptNums++;
+    }
+    // The measured cards are 131px at 1440 and 85px at 390. Fourteen characters
+    // of --t1 fits both; forty — which is what the old line averaged — fits
+    // neither, and nothing in CSS can make it.
+    t.ok(worst <= 14,
+      'the longest line any card carries is ' + worst + ' characters ("' + worstTxt + '")');
+    t.ok(keptNums === ids.length,
+      'and all ' + ids.length + ' skills keep their full numbers for the panel');
+
+    const opts = ids.slice(0, 3);
+    IB.optUI.at = 0;
+    const html = IB.picksHtml(h, 'skill', opts);
+    const cut = html.indexOf('<div class="ow');
+    const grid = html.slice(0, cut), panel = html.slice(cut);
+    const b0 = IB.optBits(h, 'skill', opts[0]);
+    t.ok(panel.indexOf(b0.mf) >= 0, 'the panel prints the whole stat line ("' + b0.mf + '")');
+    t.ok(grid.indexOf(b0.mf) < 0, 'and the card never tries to');
+    t.ok(grid.indexOf(b0.m) >= 0, 'while the card keeps the one number that is the same shape on every skill');
+
+    // A rank has nothing short to say, so it says nothing on the card rather
+    // than printing a sentence sideways through the card next to it.
+    const pid = h.passive && IB.PASS[h.passive] ? h.passive : Object.keys(IB.PASS)[0];
+    const rk = IB.optBits(h, 'rank', 'P:' + pid);
+    t.ok(rk.m === '' && /Strengthens/.test(rk.mf),
+      'a rank card carries no line of its own and explains itself in the panel');
+    t.ok(!/class="pm"/.test(IB.picksHtml(h, 'rank', ['P:' + pid])),
+      'so the element is not there at all rather than there and empty');
+    IB.optUI.at = null;
+  }
+
+  /* --------------------------------------------- what the panel tells you
+     A mouse reveals a card on the way to clicking it, so for a mouse the
+     "second press" IS the first click, and "press it again to take it" — shown
+     to every device — described something a desktop player never does. */
+  {
+    const why = SRC.slice(SRC.indexOf('function optWhyHtml'), SRC.indexOf('function optWhyHtml') + 800);
+    t.ok(/NARROW\(\)/.test(why),
+      'the panel asks which device it is on before saying how a card is taken');
+    t.ok(/Tap one to read it/.test(why) && /Hover one to read it/.test(why),
+      'and has a true sentence for each');
+    const desk = why.slice(why.indexOf('Hover one to read it'));
+    t.ok(!/again/.test(desk.slice(0, 70)),
+      'with the mouse no longer told to press a second time it never presses');
+  }
+
+  /* ------------------------------------------------ a bar that gives ground
+     The third tile added ~150px to a row that only just fitted. At 1280 it
+     drove the Menu button 38px past the right edge of a #top with nothing to
+     scroll — so earning the third order cost you the way back to the lobby. */
+  {
+    t.ok(/min-width:0/.test(rule('#orders{')), 'the order bar may give ground');
+    const ord = rule('  .ord{');
+    t.ok(/min-width:0/.test(ord) && /flex:0 1 auto/.test(ord),
+      'and so may each tile, so a third one shrinks the row instead of pushing what follows off it');
+    const on = rule('.ord .on{');
+    t.ok(/text-overflow:ellipsis/.test(on) && /min-width:0/.test(on) && /white-space:nowrap/.test(on),
+      'the NAME is what gives way — the icon, the key and the clock are what a fight is read from');
+  }
+
+  /* ------------------------------------------------------ three keys, three
+     R was printed on the third tile and listed in the help sheet, and the key
+     did nothing: doAction tested for 'order1' and 'order2' by name. */
+  {
+    const s = fresh(9101);
+    t.ok(IB.ORDER_KEY.every((k, i) => IB.keyAction(k.toLowerCase()) === 'order' + (i + 1)),
+      'every key printed on a tile is a key the board answers to');
+
+    s.slots = IB.SPELL_SLOTS;
+    IB.chooseSpell(s, 0, 'bombard'); IB.chooseSpell(s, 1, 'withdraw');
+    step(23);
+    t.ok(IB.chooseSpell(s, 2, 'pitch') === null, 'an earned slot is filled after the window has shut');
+    for (const k in s.res) s.res[k] = 9999;
+    s.spellCd = [0, 0, 0];
+    IB.spellAimOff();
+    IB.doAction('order3');
+    t.ok(IB.spellUI.aim && IB.spellUI.aim.slot === 2,
+      'and the key on its tile arms it rather than doing nothing at all');
+    IB.spellAimOff();
+
+    t.ok(!/first or second commander order/.test(SRC),
+      'the help sheet no longer describes two keys in the row where it lists three');
+
+    /* The tooltip on a FILLED earned slot said "(press to change it)", which
+       chooseSpell refuses — and the press it invited SPENDS the order. */
+    t.ok(!/press to change it/.test(IB.ordersHtml()),
+      'once the window has shut no tile offers a change, earned or opening');
+    t.ok(typeof IB.chooseSpell(s, 2, 'rampart') === 'string',
+      'because there is none to be had');
+
+    const s2 = fresh(9102);
+    IB.chooseSpell(s2, 0, 'bombard');
+    t.ok(/press to change it/.test(IB.ordersHtml()),
+      'while the window is open the opening pair still says what it still allows');
+  }
+
+  /* ------------------------------------ the sentence that explains the slot
+     .tst is nowrap-and-ellipsis by design, and this was 416px of text in a
+     338px line: "THEIR INHIBITOR IS DOWN — YOU MAY GIVE A…". It is the only
+     place the game explains the third order, and on a phone the new tile is a
+     bare gold "+" with no label, so it was the only place at all. */
+  {
+    const s = fresh(9103);
+    G.toasts.length = 0;
+    IB.killThing(G.sides[1].structs.find(x => x.key === 'inhib'), null);
+    const msg = G.toasts.map(x => x.msg).find(m => /third order/.test(m));
+    t.ok(!!msg && msg.length <= 42,
+      'the one sentence that explains the new slot fits the line it is written on (' +
+        (msg ? msg.length : '?') + ' characters)');
+    t.ok(s.slots === IB.SPELL_SLOTS, 'and the slot it is about is really there');
+  }
+
+  /* ------------------------------------ a slot the Host could never fill
+     aiDraft ran once, before the first wave, and was the only thing that ever
+     filled a slot. So the Host broke an inhibitor, took a third slot and
+     carried it empty for the rest of the match — while the player's fog dock
+     drew a third "?" chip for a hidden order that did not exist. */
+  {
+    fresh(9104);
+    const host = G.sides[1];
+    IB.aiSpells(host);
+    t.ok(!!host.spells[0] && !!host.spells[1], 'the Host still drafts its opening pair');
+    host.slots = IB.SPELL_SLOTS;
+    G.wave = Math.max(G.wave, 1);
+    IB.aiSpells(host);
+    t.ok(!!host.spells[2], 'and now fills a slot it earns afterwards (' + host.spells[2] + ')');
+    const held = host.spells.filter(Boolean);
+    t.ok(new Set(held).size === held.length, 'without drawing one it is already carrying');
+    const own = held.filter(id => IB.SPELL_OWN_HERO[id]).length;
+    t.ok(own <= 1, 'and still under the one-hero-order rule the draft works to');
+  }
+
+  /* --------------------------------------------- a fog as wide as the game
+     foeSeen was written out two long and stayed that way when the third slot
+     arrived, so a third order seen being cast pushed it to length 3 and
+     foeForget — which cleared two by name — left it there. A new match, and a
+     save from before the fog existed, both opened remembering the last one. */
+  {
+    t.ok(IB.foeSeen.length === IB.SPELL_SLOTS,
+      'the fog has one place per order the game can hold (' + IB.foeSeen.length + ')');
+    IB.foeSeen[IB.SPELL_SLOTS - 1] = 'pitch';
+    IB.foeForget();
+    t.ok(IB.foeSeen.every(x => x === null),
+      'and forgetting forgets all of them, including whatever a third slot showed');
+  }
+
+  /* ------------------------------------- a sheet that closes when it is done
+     Taking the third order left the chooser open on the slot it had just
+     filled, offering "would replace Second Muster as your third order" over a
+     live gold Accept whose only effect was to print the raw internal refusal
+     "that order is already given". A mid-match choice is over when it is made;
+     the opening pair is not, because either of them can still be swapped. */
+  {
+    const s = fresh(9105);
+    s.slots = IB.SPELL_SLOTS;
+    IB.chooseSpell(s, 0, 'bombard'); IB.chooseSpell(s, 1, 'withdraw');
+    step(23);
+    IB.showSpells(2);
+    G.sheet = '';
+    IB.spellPress('pitch'); IB.spellPress('pitch');
+    t.ok(s.spells[2] === 'pitch', 'the second press takes the order');
+    t.ok(G.sheet === '',
+      'and the sheet is not drawn again, because there is nothing left in it to choose');
+
+    // ...and the opening window keeps its old behaviour, which this broke once
+    // already: a pair still being chosen is a sheet still worth having open.
+    const s2 = fresh(9106);
+    IB.showSpells(0);
+    G.sheet = '';
+    IB.spellPress('bombard'); IB.spellPress('bombard');
+    IB.spellPress('withdraw'); IB.spellPress('withdraw');
+    t.ok(s2.spells[0] === 'bombard' && s2.spells[1] === 'withdraw', 'both of the opening pair are taken');
+    t.ok(/Commander orders/.test(G.sheet),
+      'and the sheet stays up, because either of them can still be changed');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();
