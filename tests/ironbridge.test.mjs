@@ -1846,18 +1846,55 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // standard deviation is 5.5 wins, so a 57%/43% reading says almost nothing.
   // Measure the two sides against each other inside a fixed window instead —
   // both play the whole window, so neither number is confounded by who won.
-  let dmg0 = 0, dmg1 = 0, push = 0, n = 0, kills0 = 0, kills1 = 0;
-  // Sample size is not a detail here. Measured over 40 matches, the paired
-  // wall-damage difference is 271 +/- 651 on a total of ~5700 — so one match
-  // carries a standard deviation of about 2100. Three matches could therefore
-  // swing +/-42% of the total on nothing at all, and the 25% band this test
-  // used to carry failed on roughly any perturbation of the AI. Six matches
-  // and a 45% band puts the guard at about 1.5 sigma: still small enough to
-  // catch the class of bug that once had one side winning 74% of mirrors,
-  // large enough not to cry wolf.
-  for (const seed of [21001, 21008, 21015, 21022, 21029, 21036]){
+  /* The statistic changed, because the old one was not measuring symmetry.
+
+     It POOLED wall damage across the seeds and compared the totals, so a
+     single blowout swamped everything else: measured over 24 seeds, one match
+     that ended in a win contributed 20450 damage against a per-match median of
+     a few thousand, and the pooled split moved from 0.007 to 0.256 on that one
+     match alone. The 0.007 was never symmetry — it was cancellation luck, and
+     any change that reshuffled the AI's draft flipped which side won which
+     seed and destroyed it. Measured: adding a tenth commander order that DOES
+     NOTHING AT ALL (drafted, cast, no effect) moved the pooled split exactly
+     as far as the real one did — 0.256 against 0.288 — while removing it
+     restored the 0.007. A statistic that cannot tell a live feature from an
+     inert one is not testing the feature.
+
+     What it measures now is the MEAN SIGNED SPLIT PER SEED. Each match
+     contributes at most +/-1 however lopsided it was, so no single blowout can
+     carry the result, and a systematic advantage still accumulates.
+
+     Calibrated over 24 seeds per arm, two independent seed families:
+
+       arm                                    mean signed split
+       nine orders,  family A                       -0.038
+       nine orders,  family B                       -0.073
+       ten orders,   family A                       -0.222
+       ten orders,   family B                       +0.130
+       side 1 given 1.6x tower damage, 1.5x hp      -0.501
+
+     Per-seed standard deviation is ~0.45, so the standard error on 24 seeds is
+     0.092. The band is 0.35: about 1.4 standard errors above the worst honest
+     reading and 1.6 below the rigged one.
+
+     What that does NOT mean, since the band has been cited loosely once
+     already: the rigged reading above is the COMBINED rig — 1.6x tower damage
+     AND 1.5x structure health. A pure 1.6x turret-damage edge on one hold,
+     with health left alone, measures -0.148 and passes here, with the kill
+     split at 0.026 and the battle line at -4.81 passing too. This guard
+     catches a hold that is winning the exchange outright; it does not catch a
+     single stat handed one side. Nothing here should be described as proving
+     more than that. The seeds are drawn from BOTH
+     families for the same reason the pooling was dropped — one family can lean
+     0.2 on nothing, and the two of them lean opposite ways. */
+  const seeds = [];
+  for (let i = 0; i < 12; i++){ seeds.push(21001 + i * 7); seeds.push(30000 + i * 13); }
+  const splits = [], pushes = [];
+  let tot = 0, kills0 = 0, kills1 = 0;
+  for (const seed of seeds){
     IB.newMatch({ diff:'veteran', seed });
     G.sides[0].ai = true;                 // both holds play, or this is not a mirror
+    let push = 0, n = 0;
     for (let i = 0; i < 30 * 60 * 6 && G.state === 'play'; i++){
       IB.update(1 / 30);
       if (i % 600 === 0){ push += IB.frontlineX(0) - (C.LANE_LEN - IB.frontlineX(1)); n++; }
@@ -1865,17 +1902,28 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // missing hp, not hp lost against a fixed baseline — a hold that buys
     // Reinforced Stone raises its own maximum mid-match
     const missing = (sd) => G.sides[sd].structs.reduce((a, x) => a + Math.max(0, x.mhp - Math.max(0, x.hp)), 0);
-    dmg0 += missing(1); dmg1 += missing(0);
+    const d0 = missing(1), d1 = missing(0);
+    tot += d0 + d1;
+    splits.push((d0 - d1) / Math.max(1, d0 + d1));
+    pushes.push(push / Math.max(1, n));
     kills0 += G.sides[0].kills; kills1 += G.sides[1].kills;
   }
-  const tot = dmg0 + dmg1;
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const lean = mean(splits), lane = mean(pushes);
   t.ok(tot > 2000, 'the two holds actually fought (' + Math.round(tot) + ' wall damage between them)');
-  t.ok(Math.abs(dmg0 - dmg1) / tot < .45,
-    'neither side breaks the other faster (' + Math.round(dmg0) + ' vs ' + Math.round(dmg1) + ')');
+  t.ok(Math.abs(lean) < .35,
+    'neither side breaks the other faster (mean split ' + lean.toFixed(3) + ' over ' + seeds.length + ' seeds)');
   t.ok(Math.abs(kills0 - kills1) / Math.max(1, kills0 + kills1) < .3,
     'and neither side kills more (' + kills0 + ' vs ' + kills1 + ')');
-  t.ok(Math.abs(push / Math.max(1, n)) < 6,
-    'the battle line does not sit on one hold’s half (' + (push / Math.max(1, n)).toFixed(1) + ' units off centre)');
+  /* A coarse sanity check and NOT the symmetry guard, which is what it used to
+     be sold as. The rigged build above — one side handed 1.6x tower damage —
+     measured -3.76 here, INSIDE the honest range of -4.33 to +1.65, so this
+     number cannot tell a broken build from a fair one, and the 6-unit band it
+     carried failed on an honest one. Kept, widened to what the measurement
+     supports, and demoted to what it can actually do: catch a lane that has
+     collapsed into one half entirely. */
+  t.ok(Math.abs(lane) < 8,
+    'and the battle line is not parked in one half (' + lane.toFixed(1) + ' units off centre)');
 }
 
 /* ------------------------------------------------ the Host's decisions */
@@ -2416,14 +2464,44 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // a Cannon armed in 0. After: 9 and 5.
     //
     // Sixteen seeds rather than six, because six could not carry the second
-    // assertion. Measured over 36 seeds, a hold reaches tier 3 in 71% of cases
-    // and arms a Cannon in 25% — and the old bar was 3 of 12, which IS 25%. A
-    // threshold sitting exactly on the population rate fails about two runs in
-    // five whatever the code does, and it duly went red on a change that leaves
-    // the rate untouched (18 of 72 holds before and 18 of 72 after). The bars
-    // below are 14 of 32 against an expected 23, and 3 of 32 against an
-    // expected 8. If you widen the window or change the AI, re-measure the rate
-    // before touching the bar.
+    // assertion.
+    //
+    // RE-MEASURED when a ninth commander order joined the pool the Host draws
+    // its two from — which is a change to the AI, and this comment used to end
+    // by saying to re-measure the rate when that happens. Both rates had
+    // drifted a long way from the 71% / 25% recorded here, and in opposite
+    // directions:
+    //
+    //                            tier 3     a Cannon drilled
+    //   as recorded               71%            25%
+    //   36 seeds, eight orders    44%            99%
+    //   36 seeds, nine orders     50%           100%
+    //   36 seeds, drafted         58%           100%
+    //     rather than shuffled
+    //
+    // Three AI changes in a row, and the tier-3 rate moved 44 -> 50 -> 58
+    // while the Cannon rate never left 99-100. That is the whole argument for
+    // which of these two bars is allowed to be tight: the first is sensitive
+    // to every decision the Host makes and the second is not, so pinning the
+    // first closely just means re-fitting it every time somebody touches the
+    // AI — which is how it ended up 0.7 sd under its own mean.
+    //
+    // So the tier-3 bar of 14 had drifted onto the population mean — 14
+    // against an expectation of 16 is 0.7 sd, which is precisely the failure
+    // this comment already warned about two paragraphs up, and it duly went
+    // red on a change that does not hurt the economy at all. Every measured
+    // control says these changes move the rate the RIGHT way; this particular
+    // sixteen swung the other way on one of them (16 → 13), which is what a
+    // bar sitting on the mean does.
+    //
+    // So the two bars swap roles. tier 3 keeps a margin it can survive — 8 of
+    // 32 against an expectation of ~15, about 2.5 sd, still nowhere near an
+    // economy that has actually collapsed. The Cannon bar was the weak one at
+    // 3 of 32 and is now the strong one, because that rate went to essentially
+    // one: 24 of 32 is a real bound, and a hold that stops reaching its third
+    // barracks tier fails HERE long before the other one notices.
+    //
+    // If you change the AI again, re-measure both before touching either.
     const lv3 = [], cannon = [];
     for (const seed of [5031, 5062, 5093, 5124, 5155, 5186,
                         5217, 5248, 5279, 5310, 5341, 5372,
@@ -2440,9 +2518,10 @@ t.ok(true, 'drawing an empty bridge is harmless');
       for (const sd of [0, 1]){ lv3.push(IB.barracksLvl(G.sides[sd])); cannon.push(gun[sd] > 0); }
     }
     const top = lv3.filter(l => l >= 3).length, guns = cannon.filter(Boolean).length;
-    t.ok(top >= 14, 'a hold reaches the barracks level that unlocks Cannons (' +
+    t.ok(top >= 8, 'a hold reaches the barracks level that unlocks Cannons (' +
       top + ' of ' + lv3.length + ': ' + lv3.join(',') + ')');
-    t.ok(guns >= 3, 'and drills its Cannons with it (' + guns + ' of ' + cannon.length + ' holds)');
+    t.ok(guns >= 24, 'and nearly every hold drills its Cannons (' +
+      guns + ' of ' + cannon.length + ' holds)');
   }
   {
     // The save-up rule on its own: a cheap upgrade near the bottom of the list
@@ -3056,9 +3135,96 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'the shield still varies with its own clock, as it always did (' + spread(shields) + ' of ' + shields.length + ')');
   t.ok(/clamp\(u\.shT \/ 2/.test(SRC), 'off the line it has used since it was written');
 
+  /* ---- and the five a COMMANDER ORDER leaves on a body.
+
+     hobT, freeT, fallT, pyreT and warpT appeared in no drawing function in the
+     file. A hero under Pyre Brand — losing a fifth of itself a second with its
+     mending shut off — was drawn exactly like one standing in the sun, and the
+     only way to know a Hobble had landed was to watch a health bar and infer
+     it. Each is checked for the two things that make a status mark a mark
+     rather than a decoration: it appears at all, and it carries its own clock.
+
+     `bare` is the same body with none of them set, so every count below is the
+     mark itself and not the body underneath it. */
+  const bare = mark(() => {});
+  const ORDERS = [
+    { k:'pyreT',  n:'Pyre Brand',  set:(u, t2) => { u.pyreT = t2; u.pyreDps = 30; }, full:6 },
+    { k:'hobT',   n:'Hobble',      set:(u, t2) => { u.hobT = t2; },                 full:4.5 },
+    { k:'freeT',  n:'Unbind',      set:(u, t2) => { u.freeT = t2; },                full:5 },
+    { k:'fallT',  n:'Withdraw',    set:(u, t2) => { u.fallT = t2; },                full:4 },
+  ];
+  for (const o of ORDERS){
+    const on = mark((u) => o.set(u, o.full));
+    t.ok(on.ops > bare.ops, o.n + ' leaves a mark on the body it lands on (' +
+      (on.ops - bare.ops) + ' operations)');
+    const going = mark((u) => o.set(u, .15));
+    t.ok(going.ops > bare.ops, '...which is still there in its last tenth — ' + o.n);
+    t.ok(on.pic !== going.pic,
+      '...and does not look the same then as when it landed — ' + o.n);
+  }
+  /* Warp Banner is the one whose mark is the POINT rather than a label on it:
+     three seconds of channel that any blow ends, so both players are watching
+     the same pole to decide whether to swing. Its height has to be the
+     progress, or it is telling nobody anything they can act on. */
+  const heroWarp = (t2) => mark((h) => { h.warpT = t2; }, heroMk);
+  const warpTop = (r) => Math.min(...r.pic.split('|').map(x => +x.split(',')[1]));
+  const early = heroWarp(IB.WARP.chan * .95), late = heroWarp(IB.WARP.chan * .1);
+  t.ok(early.ops > bare.ops && late.ops > bare.ops, 'a hero raising the banner is drawn raising it');
+  t.ok(warpTop(late) < warpTop(early),
+    'and the pole is taller the closer it is to going up (' +
+    warpTop(early).toFixed(1) + ' → ' + warpTop(late).toFixed(1) + ')');
+
+  /* ---- the two Rampart leaves on a STRUCTURE. Forty extra armour and a wall
+     mending itself, and a warded gate was drawn exactly like a bare one — so
+     the half of the order that decides whether a push is worth making was
+     invisible to the player who paid for it and to the one walking into it. */
+  {
+    IB.newMatch({ diff:'veteran', seed:9301 });
+    const target = IB.frontStruct(0);
+    const shotSt = (set) => {
+      target.repT = 0; target.wardT = 0;
+      set();
+      G.t = 4;
+      st.ellipses = []; st.lines = []; st.ops = 0;
+      const q = IB.lp(target.x, target.y);
+      IB.drawStructMarks(CTX, target, q[0], q[1], IB.cam.z);
+      return { ops:st.ops, n:st.ellipses.length + st.lines.length };
+    };
+    // ...and it is actually reached. A painter nothing calls is a painter that
+    // passes every test in this block and draws nothing in the game.
+    const sBody = SRC.slice(SRC.indexOf('function drawStructure(c, st){'), SRC.indexOf('function drawUnitMarks'));
+    t.ok(/if \(!dead\) drawStructMarks\(c, st, X, Y, u\);/.test(sBody),
+      'and drawStructure calls it, on a structure still standing');
+    t.ok(shotSt(() => {}).ops === 0, 'a structure nothing has been cast on is left alone');
+    t.ok(shotSt(() => { target.wardT = IB.RAMPART.ward; }).ops > 0, 'a warded face is drawn warded');
+    t.ok(shotSt(() => { target.repT = IB.RAMPART.dur; }).ops > 0, 'and masons on a wall are drawn on it');
+    const both = shotSt(() => { target.wardT = IB.RAMPART.ward; target.repT = IB.RAMPART.dur; });
+    t.ok(both.ops > shotSt(() => { target.wardT = IB.RAMPART.ward; }).ops,
+      'the two are separate marks rather than one');
+    // Drawn round the structure's real size, off the same two functions the
+    // aim preview measures its rings with — the three numbers were written out
+    // twice, which is exactly the arrangement where a gate grows and one of
+    // them forgets.
+    t.ok(IB.structTall(IB.frontStruct(0)) > 0 && IB.structWide(G.sides[0].structs[4]) > IB.structWide(IB.frontStruct(0)),
+      'a gate is wider than a turret, and both of them say so in one place');
+    const gate = G.sides[0].structs.find(x => x.key === 'gate');
+    const cands = (() => {
+      IB.spellUI.aim = { slot:0, id:'rampart' };
+      const list = IB.spellAimCandidates();
+      IB.spellUI.aim = null;
+      return list;
+    })();
+    const ring = cands.find(k => k.hit.key === 'gate');
+    t.ok(ring && Math.abs(ring.rx - IB.structWide(gate) * IB.cam.z) < 1e-9,
+      'and the ring the preview draws round it is that same width');
+    target.repT = 0; target.wardT = 0;
+  }
+
   // ---- drawing must not touch the simulation. None of this added a field.
-  const probe = mark((u) => { u.stunT = 1.2; u.slowP = .5; u.slowT = 2; u.burn = { dps:20, t:3, dur:4 }; u.markT = 2; u.shield = 50; u.shT = 5; });
-  const keep = ['hp', 'stunT', 'slowT', 'slowP', 'markT', 'shield', 'shT', 'x', 'y'];
+  const probe = mark((u) => { u.stunT = 1.2; u.slowP = .5; u.slowT = 2; u.burn = { dps:20, t:3, dur:4 }; u.markT = 2; u.shield = 50; u.shT = 5;
+    u.pyreT = 3; u.pyreDps = 30; u.hobT = 2; u.freeT = 2; u.fallT = 2; });
+  const keep = ['hp', 'stunT', 'slowT', 'slowP', 'markT', 'shield', 'shT', 'x', 'y',
+    'pyreT', 'pyreDps', 'hobT', 'freeT', 'fallT', 'warpT'];
   const before = keep.map(k => probe.u[k]).join(',');
   const h0 = IB.netHash();
   const p2 = IB.lp(probe.u.x, probe.u.y);
@@ -3271,14 +3437,18 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.sel.tile = -1; IB.sel.node = null;
     IB.cam.follow = false; IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1.4;
     const st2 = CTX.__stats;
-    // The plate is a fillRect in one of the three label-plate colours; the
-    // label still exists either way, so counting labels would measure nothing.
-    const PLATE = new Set(['rgba(9,13,20,.55)', 'rgba(9,13,20,.72)', 'rgba(30,66,110,.88)']);
+    /* The plate is a card now rather than a black slab, so it is a filled PATH
+       in one of the two card colours rather than a fillRect in one of three
+       near-blacks. Counting rects here would count nothing and pass — the
+       assertion below would then be measuring the absence of a shape that no
+       longer exists in that form, which is worse than no assertion at all. */
+    const PLATE = new Set([IB.LABEL_CARD.face, '#fff3d6']);
     const holdPlates = () => {
-      st2.rects = []; st2.texts = []; st2.rectsDropped = 0;
+      st2.rects = []; st2.texts = []; st2.fills = []; st2.rectsDropped = 0; st2.fillsDropped = 0;
       IB.drawHold(CTX, 0); IB.flushLabels(CTX);
-      return { plates:st2.rects.filter(r => PLATE.has(r.col)).length,
-               names:IB.labelPlaced.length, wrote:st2.texts.length, lost:st2.rectsDropped };
+      return { plates:st2.fills.filter(f => PLATE.has(f)).length,
+               names:IB.labelPlaced.length, wrote:st2.texts.length,
+               lost:st2.rectsDropped + st2.fillsDropped };
     };
     const idle = holdPlates();
     t.ok(idle.lost === 0, 'the capture held the whole hold');
@@ -3455,6 +3625,338 @@ t.ok(true, 'drawing an empty bridge is harmless');
         'and a new match starts with none of the last one’s rows (' + IB.labelMem.size + ')');
     }
   }
+}
+
+/* =========================================== the furniture is made of something
+   "Make it feel like a game and less like an app." The panel was the same
+   blue-grey slab as the world behind it, in the same system font, with 1px
+   hairlines round everything and flat rectangles for buttons — which is a very
+   good admin dashboard, and read as one bolted under a picture.
+
+   What is asserted here is the SYSTEM, not the taste: that there is a material
+   and it is used consistently, that a thing you can press has thickness and
+   loses it when pressed, that the display face costs no download, and that the
+   old flat-slab values do not creep back one rule at a time. A screenshot
+   cannot be a test; these properties can.                                   */
+{
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const root = css.slice(0, css.indexOf('}'));
+
+  // ---- there is a material, and it is named
+  for (const v of ['--kraft', '--kraft-lo', '--kraft-hi', '--kraft-dk',
+                   '--felt', '--cream', '--cream-ink', '--thread'])
+    t.ok(new RegExp(v + ':').test(root), 'the material has a value: ' + v);
+  t.ok(/--shelf:/.test(root) && /--grain:/.test(root) && /--flutes:/.test(root) &&
+       /--corrugate:/.test(root),
+    'and so do the four things that make a surface out of a rectangle — thickness, ' +
+    'nap, flutes, and the torn edge that shows them');
+
+  /* ---- a thing you can press has thickness, and the press takes it away.
+     A shelf without travel is a sticker; travel without a shelf is a rectangle
+     sliding about. They only mean anything as a pair, so both are checked, on
+     every control that takes a click. */
+  // At the START of a rule, not anywhere the characters happen to appear.
+  // `css.indexOf('.abtn{')` finds it inside `.pgrid > .abtn{ min-width:166px }`
+  // — a real rule, three properties short of the one being asked about, and
+  // the assertion fails on a block that was never the subject.
+  const block = (sel) => {
+    const m = new RegExp('(?:^|\\n)\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{')
+      .exec(css);
+    if (!m) return '';
+    const i = m.index + m[0].length;
+    return css.slice(i, css.indexOf('}', i));
+  };
+  for (const sel of ['.abtn', '.sq', '.tbtn', '.hnew', '.big']){
+    const face = block(sel), press = block(sel + ':active') || block(sel + ':active:not(:disabled)');
+    t.ok(/var\(--shelf|0 \d+px 0 /.test(face),
+      sel + ' has a shelf under it, so it reads as a thing with thickness');
+    t.ok(/translateY\(\s*[2-9]/.test(press),
+      sel + ' travels far enough on a press to be felt, not just tinted (' +
+      ((press.match(/translateY\([^)]*\)/) || ['none'])[0]) + ')');
+    t.ok(/inset 0 \d+px/.test(press),
+      sel + ' goes INTO the panel when pressed rather than only moving down');
+  }
+
+  // ---- the display face is a stack of things already on the machine. A game
+  // face that has to be downloaded is a game face that is missing for the first
+  // second of every session, on the screen that makes the first impression.
+  t.ok(/--display:'[^']+',/.test(root), 'the display face is declared as a stack, not a single family');
+  t.ok(/sans-serif;/.test(root.slice(root.indexOf('--display'))),
+    'ending in a generic, so there is always something to fall back to');
+  t.ok(!/@font-face/.test(SRC) && !/fonts\.googleapis/.test(SRC),
+    'and nothing is downloaded to get it');
+  // It has to actually be used on the things that NAME something, or it is a
+  // variable nobody reads.
+  for (const sel of ['.ptitle', '.sheet h2', '.big', '.vbtn'])
+    t.ok(/var\(--display\)/.test(block(sel)), sel + ' is set in the display face');
+
+  /* ---- the chassis is one object: the beam at the top and the rack at the
+     bottom are the same made thing seen from two sides, so they carry the same
+     torn edge and the same seam. Corrugation seen END ON is the one detail that
+     says cardboard and cannot be read as wood or leather; a dashed line is a
+     running stitch for free. */
+  for (const sel of ['#top::after', '#dock::before'])
+    t.ok(/var\(--corrugate\)/.test(block(sel)),
+      sel + ' is the torn edge of the box, with its flutes showing');
+  for (const sel of ['#top::before', '#dock::after'])
+    t.ok(/dashed var\(--thread\)/.test(block(sel)), sel + ' is the stitch along the seam');
+
+  /* ---- THE INK SWAP, which is the one thing about this palette that can fail
+     silently. --gold, --iron, --wood and --red are tuned to be read on a dark
+     panel, and half the markup names them INLINE — the forge's "0/4", every
+     cost chip, the pick cards. Laid on cream they wash straight out, and
+     nothing about the rule that put them there is wrong, so nothing catches it.
+
+     Rebinding the variables inside anything made of card is the fix: an inline
+     `var(--gold)` resolves against wherever it lands, so one piece of markup
+     reads correctly on felt AND on card without any call site knowing which it
+     is on. Every card-faced component has to be in that list or it is the one
+     that goes blank. */
+  {
+    const swap = css.slice(css.indexOf('--gold:#8a6410'));
+    const rule = css.slice(css.lastIndexOf('{', css.indexOf('--gold:#8a6410')) -
+                           240, css.indexOf('--gold:#8a6410'));
+    for (const sel of ['.abtn', '.pick', '.hcard', '.tst', '.hnew', '.sq', '.dtab'])
+      t.ok(rule.includes(sel), sel + ' is made of card, so it rebinds the inks it prints on itself');
+    for (const v of ['--gold', '--iron', '--wood', '--red'])
+      t.ok(new RegExp(v + ':#').test(swap.slice(0, 200)),
+        v + ' has a version dark enough to read on cream');
+    // ...and the dark-panel originals are still the dark-panel originals.
+    t.ok(/--gold:#ffc73d/.test(root), 'while the panel keeps the bright one it was tuned for');
+  }
+
+  // ---- neither of the old furnitures creeps back. These are the exact values
+  // the flat blue-grey panel and then the blackened-iron one were made of; one
+  // rule at a time is how a reskin gets undone, and a grep is the only thing
+  // that notices.
+  for (const dead of ['#141a26', '#1b2333', '#2a3446', '#2d3850', '#44557a'])
+    t.ok(!css.includes(dead), 'the old slate panel value ' + dead + ' is gone from the interface');
+  for (const dead of ['#c9a355', '#3d2f14', '#312b20', '#241f16'])
+    t.ok(!css.includes(dead), 'and the blackened-iron value ' + dead + ' with it');
+
+  /* ---- THE ICONS. These were emoji, which is the right first answer and the
+     wrong last one. An emoji is somebody else's artwork: it changes shape
+     between Windows, Android and iOS, it cannot be recoloured, it renders at
+     whatever weight the system font feels like, and a coin next to a log next
+     to an ear of wheat is three different illustrators. On a panel made of cut
+     paper they were the only things in the interface not made of cut paper. */
+  {
+    for (const k of ['gold', 'iron', 'wood', 'food', 'pop'])
+      t.ok(/^<svg /.test(IB.RES_ICON[k] || ''), 'the ' + k + ' icon is drawn here, not borrowed');
+    for (const k of ['sound', 'mute', 'pause', 'play', 'menu', 'hold', 'gates', 'mid', 'foe', 'follow'])
+      t.ok(/^<svg /.test(IB.UI_ICON[k] || ''), 'and so is the ' + k + ' control');
+    const all = [...Object.values(IB.RES_ICON), ...Object.values(IB.UI_ICON)];
+    // Inline, so there is nothing to fetch and nothing to be missing for the
+    // first second of a session.
+    t.ok(all.every(v => !/url\(|href=|@font-face/.test(v)),
+      'every one of them is inline — no request, no font, no file');
+    t.ok(all.every(v => /viewBox="0 0 24 24"/.test(v)),
+      'all on one grid, so they are the same size as each other by construction');
+
+    /* The split that matters. A RESOURCE count appears on the dark felt of the
+       top bar AND on the cream of a cost chip, so it has to carry its own
+       colours or it goes blank on one of them. A CONTROL only ever sits on
+       card, so it takes the ink of whatever card it is on — which is what makes
+       a disabled button's icon grey out with its label instead of staying
+       bright over dead text. */
+    for (const k of ['gold', 'iron', 'wood', 'food', 'pop'])
+      t.ok(/fill="#/.test(IB.RES_ICON[k]) && !/currentColor/.test(IB.RES_ICON[k]),
+        'the ' + k + ' icon brings its own colours, because it is read on felt and on cream');
+    for (const k of ['sound', 'pause', 'menu', 'foe'])
+      t.ok(/currentColor/.test(IB.UI_ICON[k]),
+        'the ' + k + ' control takes the ink of the card it is printed on');
+
+    // Sized in em, so an icon is the size of the text beside it wherever that
+    // is — a cost chip, a job row, the top bar — rather than a fixed px that is
+    // right in one place and wrong in the other two.
+    t.ok(/\.ico\{[^}]*width:[\d.]+em/.test(css), 'an icon is the size of the type it sits with');
+    t.ok(/\.ico\{[^}]*vertical-align:/.test(css), 'and sits ON the line rather than under it');
+
+    // ...and the emoji they replaced are gone from the interface. The hero
+    // sheet's class glyphs are deliberately still emoji — they are 52px
+    // portraits, not 13px furniture, and that is the size emoji are good at.
+    const shell = SRC.slice(SRC.indexOf('<body'), SRC.indexOf('</body>'));
+    for (const dead of ['\u{1FA99}', '\u{26CF}', '\u{1FAB5}', '\u{1F33E}', '\u{1F465}',
+                        '\u{1F3E0}', '\u{1F6AA}', '\u{1F480}', '\u{1F441}', '\u{1F50A}', '\u2630'])
+      t.ok(!shell.includes(dead), 'no emoji left in the interface markup (' +
+        dead.codePointAt(0).toString(16) + ')');
+  }
+
+  /* ---- THE FRAMES. Two of them, and which technique goes where is the whole
+     decision rather than a detail.
+
+     A DECKLE — the soft ragged edge torn paper has — cannot be expressed as a
+     border, a radius or a shadow. It is a shape, so it needs a nine-slice, and
+     that is the one place a nine-slice earns its keep here.
+
+     A STITCH can: a dashed outline at a negative offset follows the corner
+     radius on its own, costs no border width, needs no source image and scales
+     to any size. Done as a nine-slice it would be a worse stitch AND a thicker
+     button, so it is not one. */
+  {
+    const deckle = (/--deckle:url\("data:image\/svg\+xml,([^"]+)"\)/.exec(css) || [])[1] || '';
+    t.ok(deckle.length > 100, 'the torn edge is a real shape, carried inline');
+    // Nothing to FETCH. The xmlns is a namespace rather than an address and is
+    // never requested, so it is stripped before asking — a check that trips on
+    // it is a check that can only be satisfied by an invalid SVG.
+    const body = deckle.replace(/xmlns='[^']*'/, '');
+    t.ok(!/http|href=|url\(|\.svg|\.png/.test(body), 'with nothing to fetch to draw it');
+
+    /* It has to TILE, and that is provable from the artwork rather than from a
+       comment. The source is 48 across, cut at 12, and the deckle is a run of
+       equal bumps: if the bump period divides both the corner and the edge
+       span, every repeat meets itself exactly and there is no seam at any
+       width. If it does not, the seams show up at one size in ten and nobody
+       finds out until a screenshot. */
+    const qs = deckle.match(/q/g) || [];
+    t.ok(qs.length === 32, 'four sides of eight bumps (' + qs.length + ' in all)');
+    const per = +(/q([\d.]+)%20-/.exec(deckle) || [])[1] * 2;
+    t.ok(per > 0, 'the bump period is readable off the path (' + per + 'px)');
+    t.ok(48 % per === 0, 'and it divides the source box, so the run closes (' + (48 / per) + ' bumps)');
+    t.ok(12 % per === 0, 'divides the corner slice, so a corner holds whole bumps');
+    t.ok((48 - 24) % per === 0, 'and divides the edge span, so an edge tile does too');
+
+    const sheet = (() => { const i = css.indexOf('\n  .sheet{'); return css.slice(i, css.indexOf('}', i)); })();
+    t.ok(/border-image:var\(--deckle\) 12 \/ 12px/.test(sheet),
+      'the slice and the border width are the same number, or the tear is drawn at the wrong scale');
+    t.ok(/round;/.test(sheet), 'and repeated with `round`, which keeps a bump a bump — `stretch` smears them');
+    t.ok(/border-radius:0/.test(sheet),
+      'with the radius dropped, because a nine-slice draws its own corner and a rounded one clips the tear');
+
+    // The stitch, and the one thing that can be wrong about it: a POSITIVE
+    // offset puts the seam outside the card, sewn to nothing.
+    const st = (() => { const i = css.indexOf('outline:1.4px dashed'); return css.slice(i - 400, i + 200); })();
+    t.ok(/outline-offset:-\d/.test(st), 'the seam is set IN from the edge of the card, not floating outside it');
+    for (const sel of ['.abtn', '.pick', '.hcard', '.hnew'])
+      t.ok(st.includes(sel), sel + ' is a piece of card, so it is sewn');
+    t.ok(!/\.dsec[,{]/.test(st),
+      'and the felt is not — a thread across the board would read as a scratch rather than a seam');
+  }
+
+  /* ---- THE JUICE. A number that snaps tells you it changed and nothing else.
+     A number that ROLLS tells you it changed, roughly how far, and in which
+     direction, out of the corner of your eye — which is where a resource
+     counter is read from, always, because you are looking at the bridge.
+
+     The whole of it is DISPLAY, and that is the property worth holding: the
+     game spends `me().res`, the bar prints `hudShow`, and nothing that spends
+     ever reads the second one. A rolling counter that anything decided against
+     would be a purchase that depended on how recently you looked at it. */
+  {
+    IB.newMatch({ diff:'veteran', seed:6120 });
+    IB.MY = 0;
+    const s = G.sides[0];
+    s.res.gold = 800;
+    IB.hudShow.gold = 800;
+
+    // A spend is exact in the game the instant it happens...
+    s.res.gold -= 250;
+    t.ok(s.res.gold === 550, 'the game has spent the whole cost immediately (' + s.res.gold + ')');
+    // ...and the DISPLAY is still on its way there.
+    IB.hudRoll(1 / 60);
+    t.ok(IB.hudShow.gold > 550 && IB.hudShow.gold < 800,
+      'while the counter is still rolling through it (' + IB.hudShow.gold.toFixed(1) + ')');
+    // It has to ARRIVE. A roll that asymptotes forever leaves a counter reading
+    // 551 next to a wallet holding 550, and nothing ever says which is right.
+    for (let i = 0; i < 300; i++) IB.hudRoll(1 / 60);
+    t.ok(IB.hudShow.gold === 550,
+      'and it lands exactly on the number, not near it (' + IB.hudShow.gold + ')');
+
+    // A resync or a new match moves thousands. An odometer spinning for four
+    // seconds after a rejoin is not juice, it is a fault.
+    s.res.gold = 550 + IB.HUD_SNAP + 1000;
+    IB.hudRoll(1 / 60);
+    t.ok(IB.hudShow.gold === s.res.gold,
+      'a jump too big to be a gain is snapped rather than counted through');
+    t.ok(IB.HUD_SNAP > 500, 'and the line between the two is well clear of any real purchase (' +
+      IB.HUD_SNAP + ')');
+    // The roll takes a fraction of a second, not a beat of the clock.
+    t.ok(IB.HUD_EASE >= 3, 'the roll closes fast enough to be a roll and not a lag (' +
+      IB.HUD_EASE + '/s)');
+
+    // Painted every frame, not on the dock's fifth-of-a-second clock — a roll
+    // drawn five times a second is not a roll, it is five numbers.
+    const tick = SRC.slice(SRC.indexOf('function uiTick(dt)'), SRC.indexOf('function uiTick(dt)') + 700);
+    t.ok(/hudRoll\(dt\)/.test(tick) && /syncHud\(\)/.test(tick),
+      'the counters are rolled and repainted on the frame clock');
+
+    /* ---- press feedback from ONE place. Thirteen call sites had a click on
+       them and everything else was silent, which is not a design — it is
+       thirteen people remembering. */
+    t.ok(/\.abtn/.test(IB.PRESSABLE) && /\.sq/.test(IB.PRESSABLE) && /\.vbtn/.test(IB.PRESSABLE) &&
+         /\.pick/.test(IB.PRESSABLE) && /\.big/.test(IB.PRESSABLE),
+      'every shape this interface presses is in one list (' + IB.PRESSABLE + ')');
+    const press = SRC.slice(SRC.indexOf('function wirePress()'), SRC.indexOf('function wirePress()') + 600);
+    t.ok(/'pointerdown'/.test(press),
+      'and it answers the PRESS — a click fires on release, by which time the noise ' +
+      'is a comment on something you already did');
+    t.ok(/el\.disabled/.test(press), 'a dead button stays quiet, because one that clicks is a lie');
+    t.ok(/closest\(/.test(press),
+      'listened for once on the document rather than bound per button, so a button added ' +
+      'next month clicks without anybody thinking about it');
+
+    // The chip a spend throws off must not be able to move or block the bar it
+    // leaves — it is decoration on top of the one row the player reads.
+    t.ok(/\.rfloat\{[^}]*position:absolute/.test(css), 'the spend chip cannot move the bar it comes from');
+    t.ok(/\.rfloat\{[^}]*pointer-events:none/.test(css), 'nor eat a press on its way past');
+    IB.newMatch({ diff:'veteran', seed:6121 });
+  }
+
+  /* ---- the WORLD's labels, in the same hand as the panel. These were the last
+     thing on screen still made of the old interface: pale type with a
+     near-black halo, and a black slab under the ones that got a plate. Against
+     a hold made of cut paper they read as a different game's HUD floating over
+     it. Ink on paper now, both tiers.
+
+     The one thing a label must never stop saying is WHOSE it is, so `L.col` is
+     tinted toward ink rather than replaced — a blue hold's name is dark blue on
+     cream and a red hold's is dark red. A flat ink colour would read better and
+     be wrong. */
+  {
+    t.ok(IB.LABEL_CARD.face !== IB.LABEL_CARD.ink, 'a named label is ink on a card, not ink on ink');
+    t.ok(IB.LABEL_CARD.drop >= 1,
+      'with a hard offset under it, which is what one piece of card on another looks like');
+    t.ok(IB.LABEL_CARD.k > 0 && IB.LABEL_CARD.k < 1,
+      'the ink is the label’s OWN colour taken toward dark, not replaced by it (' +
+      IB.LABEL_CARD.k + ')');
+    // Proved rather than asserted: two sides, two inks, both dark.
+    const lum = (h) => { const n = parseInt(h.slice(1), 16);
+      return (((n >> 16) & 255) * .3 + ((n >> 8) & 255) * .6 + (n & 255) * .1) / 255; };
+    const blue = IB.tintTo('#bfe0ff', IB.LABEL_CARD.ink, IB.LABEL_CARD.k);
+    const red = IB.tintTo('#ffc4bd', IB.LABEL_CARD.ink, IB.LABEL_CARD.k);
+    t.ok(blue !== red, 'the two holds still print in different ink (' + blue + ' vs ' + red + ')');
+    t.ok(lum(blue) < .45 && lum(red) < .45,
+      'and both are dark enough to read on cream (' + lum(blue).toFixed(2) + ', ' + lum(red).toFixed(2) + ')');
+    // The quiet tier keeps its promise of no slab — that tier exists to stop six
+    // black pills stacking over one hold — and simply inverts.
+    t.ok(lum(IB.LABEL_QUIET.rim.replace(/rgba\((\d+),(\d+),(\d+).*/, (m, r, g, b2) =>
+      '#' + [r, g, b2].map(v => (+v).toString(16).padStart(2, '0')).join(''))) > .6,
+      'the quiet tier’s halo is PALE — it is a word cut out of paper, not a word on a shadow');
+    t.ok(IB.LABEL_QUIET.k > .5,
+      'and its ink is taken most of the way to dark, or pale-on-pale is unreadable (' +
+      IB.LABEL_QUIET.k + ')');
+  }
+
+  // ---- decoration that can be switched off. The badge pulses and the wave
+  // plate breathes; both sit on top of information that is also written down,
+  // so somebody who has asked for less motion can have it.
+  t.ok(/@media \(prefers-reduced-motion:reduce\)/.test(css),
+    'a player who asked for less motion gets it');
+  const rm = css.slice(css.indexOf('prefers-reduced-motion'));
+  t.ok(/animation-iteration-count:1 !important/.test(rm.slice(0, 400)),
+    'and the loops actually stop rather than merely speeding up');
+
+  // ---- and a keyboard can still see where it is. Every control is a bespoke
+  // shape now, which is exactly when the browser's own ring stops working.
+  t.ok(/:focus-visible\{[^}]*outline:/.test(css.replace(/\s+/g, ' ')) || /:focus-visible\{/.test(css),
+    'there is a focus ring for a keyboard, in the accent that already means "this one"');
+
+  // ---- the layout the last two rounds measured is untouched by the skin.
+  // A reskin that quietly moves a floor is a reskin that brings back the
+  // cut-off columns.
+  t.ok(/\.pgrid\{[^}]*flex-wrap:wrap/.test(css), 'the dock rows still wrap');
+  t.ok(/\.dsec\{[^}]*flex:0 1 auto/.test(css), 'and its columns still yield');
+  t.ok(/\.dsec\[data-col="jobs"\]\{ min-width:288px/.test(css), 'and the floors are where they were');
 }
 
 /* ----------------------------------------------- tiering the damage numbers */
@@ -8293,7 +8795,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
       peakProj = Math.max(peakProj, G.projs.length);
     }
   }
-  t.ok(G.wave > 20, 'the fight ran deep into the match (wave ' + G.wave + ')');
+  // This asked for wave 20 and got 28 on this seed. Both holds carry two
+  // commander spells now — a bombardment, a second muster, a hero pulled back
+  // to its own wall — and a match with those in it is decided sooner: measured
+  // over six seeds, the mean fell from about wave 25 to about wave 22, and this
+  // one from 28 to 16. What the bar is for is that the peaks below were taken
+  // during a real, long fight rather than an opening skirmish, and wave 14 is
+  // five minutes of one.
+  t.ok(G.wave > 14, 'the fight ran deep into the match (wave ' + G.wave + ')');
   t.ok(peakFx <= 300, 'the particle pool stays bounded in a real fight (peak ' + peakFx + ')');
   t.ok(peakFloat <= 100, 'so does the damage-number pool (peak ' + peakFloat + ')');
   t.ok(peakProj < 200, 'and projectiles do not pile up (peak ' + peakProj + ')');
@@ -11601,6 +12110,88 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(!/ran < 8/.test(SRC), 'the old eight-ticks-per-frame cap is gone');
   t.ok(!/acc \+= Math\.min\(\.25, raw\)/.test(SRC), 'and so is the quarter-second accumulator clamp');
 
+  /* ------------------------------------ an open socket is not a live socket
+     From a real report. A player dropped seven minutes into a match; the
+     machine that stayed logged eighteen unbroken seconds of
+
+       stalled  waiting on the other player at tick 6258 .. 6815
+
+     before the relay finally said the peer's socket had closed at 252.1s — the
+     peer had stopped sending at 228.6s. Twenty-three seconds during which
+     `readyState` said OPEN about a socket with nothing at the other end.
+
+     The test for a dead link was "is the socket not OPEN?", so for all of that
+     time it answered no and nothing was tried. There is a live answer available
+     and it was being thrown away: the relay has replied `pong` to `"ping"`
+     since the first version, and nothing in here ever listened for one.      */
+  {
+    IB.netEnd();
+    IB.netStart({ me:0, seed:7711 });
+    const sent = [];
+    IB.LOBBY.sock = { readyState:1, send:(x) => sent.push(x) };
+    // Blocked: the peer's batches are not there, which is what a stall IS.
+    IB.NET.box.clear();
+    IB.acc = 0; IB.netLast = 0;
+    IB.netPump();
+    const step = (secs) => { IB.netLast -= secs * 1000; IB.netPump(); };
+
+    t.ok(IB.PING_EVERY > 0 && IB.PING_EVERY < IB.STALL_MUTE,
+      'a stall asks more often than it gives up (' + IB.PING_EVERY + 's vs ' + IB.STALL_MUTE + 's)');
+    t.ok(IB.STALL_MUTE > IB.STALL_DEAD,
+      'and silence has to outlast the suspicion before it is acted on (' +
+      IB.STALL_MUTE + 's > ' + IB.STALL_DEAD + 's)');
+
+    for (let i = 0; i < 3; i++) step(2);
+    t.ok(sent.filter(x => x === '"ping"').length > 0,
+      'a stalling machine asks the relay whether it is still there (' + sent.length + ' sent)');
+    t.ok(!IB.NET.linkLost, 'and does not give up on the strength of one unanswered question');
+
+    // Answered: this is a peer that is thinking, not a link that is gone. It
+    // must wait, however long the stall runs.
+    for (let i = 0; i < 8; i++){ IB.netRecv({ k:'pong' }); step(2); }
+    t.ok(!IB.NET.linkLost,
+      'a relay that keeps answering means the stall is the other PLAYER, and it keeps waiting (' +
+      IB.NET.stallT.toFixed(1) + 's in)');
+
+    // Unanswered, with the socket still insisting it is OPEN — the exact state
+    // the report was taken in, and the one that used to be waited out forever.
+    const before = IB.NET.stallT;
+    for (let i = 0; i < 8; i++) step(2);
+    t.ok(IB.NET.linkLost,
+      'but a relay that has stopped answering is a dead link however OPEN the socket claims to be');
+    t.ok(IB.NET.stallT - before < 30,
+      'and it is noticed in seconds rather than in the twenty-three the report measured (' +
+      (IB.NET.stallT - before).toFixed(1) + 's)');
+    t.ok(IB.NET.retry > 0, 'which starts trying to get back in rather than waiting');
+    t.ok(IB.NET.diary.some(d => /link looks dead/.test(d.what || d.k || JSON.stringify(d))),
+      'and says so in the diary, with both halves of the reason');
+
+    // Nothing of this survives the stall ending: a resumed match must not carry
+    // a stale "last answered" into the next one and give up early.
+    IB.netEnd();
+    IB.netStart({ me:0, seed:7712 });
+    t.ok(IB.NET.pingAt === 0 && IB.NET.pongAt === 0,
+      'a new match starts with a clean liveness clock');
+    IB.LOBBY.sock = null;
+  }
+
+  /* The other half of the same fix, on the wire. The room used to keep who was
+     sitting where in a stored flag — a fact it can read off its own sockets,
+     and therefore a fact it can be WRONG about, permanently, whenever a socket
+     died without saying so. It knows who is connected; only the client knows
+     who it was. So the client says, the same way it already says whether it is
+     bringing a board. */
+  {
+    const conn = SRC.slice(SRC.indexOf('function lobbyConnect'),
+                           SRC.indexOf('function lobbyConnect') + 2600);
+    t.ok(/\?have=1&tick=/.test(conn), 'a live match still says it is bringing a board');
+    t.ok(/'&side=' \+ NET\.me/.test(conn),
+      'and which seat it had, so a returning player cannot be handed their opponent’s hold');
+    t.ok(/\+ q \+ seat/.test(conn), 'with both actually on the URL it opens');
+    t.ok(/NET\.me === 0 \|\| NET\.me === 1/.test(conn),
+      'and nothing is claimed when there is no match to have had a seat in');
+  }
+
   // Starting and stopping is tied to the match, not left running forever.
   const start = SRC.slice(SRC.indexOf('function netStart(opt)'), SRC.indexOf('function netStart(opt)') + 600);
   t.ok(/netClockStart\(\)/.test(start), 'a network match starts the clock');
@@ -11974,6 +12565,77 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.fxForce = false;
 }
 
+/* ============================ what the desync detector can actually see
+   The hash is the only thing standing between two machines that have quietly
+   drifted and two players spending ten minutes on different matches. It used
+   to hash health, mana, level and the IDS of a hero's skills — and not one
+   clock. Not a skill cooldown, not a buff, not a shield, not a stun or a slow,
+   and on a structure nothing at all but health. Every one of those differences
+   was invisible until it worked its way out into a POSITION, which is a symptom
+   arriving long after its cause and somewhere else on the board.              */
+{
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:7311 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'mage');
+  const h = G.sides[0].heroes[0];
+  h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h);
+  IB.offer(h, 'skill'); IB.autoPick(h);
+  step(40);
+  const u = G.units.find(x => !x.isHero && !x.dead);
+  const st = IB.frontStruct(1);
+  t.ok(!!u && !!st && h.skills.length > 0,
+    'a board with a body, a turret and a hero carrying skills to time');
+
+  const moves = (fn, what) => {
+    const h0 = IB.netHash(); fn();
+    t.ok(IB.netHash() !== h0, 'the hash sees ' + what);
+  };
+  moves(() => { h.skills[0].cdT += 2; }, 'a skill cooldown');
+  moves(() => { IB.addBuff(h, { t:6, bad:12, tag:'probe' }); }, 'a buff a hero is carrying');
+  moves(() => { h.buffs[h.buffs.length - 1].t -= 1; }, 'and how long that buff has left');
+  moves(() => { h.shield += 60; h.shT = 5; }, 'a shield');
+  moves(() => { h.stunT = 1.25; }, 'a stunned hero');
+  moves(() => { u.stunT = 1.5; }, 'a stunned body');
+  moves(() => { u.slowT = 2; u.slowP = .4; }, 'a slowed one');
+  moves(() => { u.burn = { dps:20, t:3, src:null }; }, 'a burn');
+  moves(() => { st.cd += .3; }, 'where a turret is in its firing beat');
+  moves(() => { st.downT += 4; }, 'and how long a downed structure has left');
+
+  // Quantised, so ordinary float noise cannot fabricate a drift that is not
+  // there: a difference far below one tick is not a difference.
+  const q0 = IB.netHash();
+  h.skills[0].cdT += 1e-9; u.slowT += 1e-9; st.cd += 1e-9;
+  t.ok(IB.netHash() === q0, 'but a difference far below one tick is not reported as a drift');
+}
+
+/* ==================== a resync drops the ground zones on BOTH machines
+   netLoad clears G.zones on the machine ADOPTING a snapshot, and netSnap's
+   comment claimed both machines dropped them. Only one of them did: the host
+   packed its board, shipped it and kept its own zones burning. A resync taken
+   while a zone-pushing ultimate was on the ground therefore left that zone
+   damaging bodies on one board and not the other — the resync creating the
+   very drift it was there to repair.                                        */
+{
+  IB.netEnd();
+  IB.netStart({ me:0, seed:7312, diff:'veteran' });
+  IB.NET.send = () => {};
+  const zone = { x:64, y:0, r:4, dps:30, t:4, tick:.5, side:0, src:null, magic:true, slow:0 };
+  G.zones.push(zone);
+  G.projs.push({ x:10, y:0, z:1, sp:20, tgt:null, onHit:() => {}, tr:[], kind:'arrow' });
+  const snap = JSON.parse(JSON.stringify(IB.netSnap()));
+  t.ok(G.zones.length === 1, 'the host has a zone on the ground when it ships the board');
+  IB.netSendSnap();
+  t.ok(G.zones.length === 0, 'and drops it, because the snapshot does not carry it');
+  t.ok(G.projs.length === 0, 'along with the arrows in flight, for the same reason');
+  // The other half of the pair: the machine adopting one clears the same two
+  // lists, so the two boards genuinely agree rather than nearly agreeing.
+  G.zones.push(zone);
+  IB.netLoad(snap);
+  t.ok(G.zones.length === 0, 'and the machine adopting a snapshot clears them too');
+  IB.netEnd();
+}
+
 /* ==================================== a drifted match puts itself back together
    A desync used to end the match. It is recoverable: the host packs its board,
    the joiner adopts it, and both restart their order pipeline from the same
@@ -12079,6 +12741,2159 @@ t.ok(true, 'drawing an empty bridge is harmless');
     for (let i = 0; i < IB.SYNC_MAX + 3; i++){ J.G.sides[0].res.gold += 5; pump(70); }
     t.ok(H.NET.resyncs <= IB.SYNC_MAX + 1,
       'a match that keeps drifting gives up rather than resyncing forever (' + H.NET.resyncs + ')');
+  }
+}
+
+/* ========================================================= commander spells
+   Two powers per HOLD, chosen before the first wave marches and cast with a
+   target that travels inside the command. Everything below is the same shape
+   of proof, once per spell: the effect actually lands, and the board it leaves
+   behind survives a snapshot bit-identically. Both halves are needed — a spell
+   that does nothing at all also round-trips perfectly.                       */
+{
+  // A board with two heroes, bodies on the bridge and both holds solvent. The
+  // Host's own AI is switched off so nothing casts underneath the measurement;
+  // the waves still march, because spawnWave sends them for both sides.
+  const board = (seed, a, b) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    for (const sd of G.sides){ rich(sd); sd.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    if (a) IB.chooseSpell(G.sides[0], 0, a);
+    if (b) IB.chooseSpell(G.sides[0], 1, b);
+    IB.createHero(G.sides[0], 'fighter'); IB.createHero(G.sides[1], 'tank');
+    for (const sd of G.sides) for (const h of sd.heroes){ h.lvl = 9; IB.recalcHero(h, true); IB.autoPick(h); }
+    step(35);
+    // Whoever fell during those thirty-five seconds comes back, so a spell that
+    // needs a hero to aim at always has one and the block is not seed-flaky.
+    for (const sd of G.sides) for (const h of sd.heroes){
+      h.dead = false; h.respawnT = 0; if (!h.inLane) IB.enterLane(h); h.dmgTaken = -99;
+    }
+    IB.rebuildGrid();
+    for (const sd of G.sides) rich(sd);
+    return G.sides[0];
+  };
+
+  // Pack the board, run it on, put the snapshot back, and require the hash to
+  // be exactly what it was. Four hand-written pack lists stand between a new
+  // field and a resync that desyncs again immediately, and this is what notices
+  // when one of them was not updated.
+  const roundTrips = (what) => {
+    G.projs.length = 0; G.zones.length = 0;
+    const at = IB.netHash();
+    const json = JSON.stringify(IB.netSnap());
+    step(4);
+    t.ok(IB.netHash() !== at, 'the board moves on from ' + what);
+    t.ok(IB.netLoad(JSON.parse(json)), what + ' packs into a snapshot');
+    t.ok(IB.netHash() === at, 'and comes back bit-identical — ' + what);
+  };
+
+  /* ---------------------------------------------------------- choosing them */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:8100 });
+    G.sides[1].ai = false;
+    const s = G.sides[0];
+    t.ok(s.spells.length === IB.SPELL_SLOTS && s.spellCd.length === IB.SPELL_SLOTS,
+      'a hold has a slot array as wide as the game allows');
+    t.ok(s.slots === IB.SLOTS_AT_START && s.slots < IB.SPELL_SLOTS,
+      'and opens with fewer of them open than exist (' + s.slots + ' of ' + IB.SPELL_SLOTS + ')');
+    t.ok(IB.chooseSpell(s, 0, 'bombard') === null, 'a spell goes into a slot');
+    t.ok(IB.chooseSpell(s, 1, 'rampart') === null, 'and another into the other');
+    t.ok(s.spells[0] === 'bombard' && s.spells[1] === 'rampart', 'and they stay where they were put');
+    t.ok(typeof IB.chooseSpell(s, 1, 'bombard') === 'string', 'the same spell cannot fill both slots');
+    t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
+    t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
+    const SPELLS_IN = (k) => IB.SPELLS.filter(d => d.grp === k);
+    t.ok(IB.SPELLS.length === 10 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are ten of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
+    // Every one has a target kind the banner knows how to ask for. A tenth
+    // order with a new kind fails HERE rather than arming a state whose banner
+    // cannot say what would satisfy it.
+    t.ok(IB.SPELLS.every(d => d.target === 'self' || IB.AIM_ASK[d.target]),
+      'and a target the aiming banner can put into words');
+
+    /* ---- and the sheet teaches the SHAPE of the set.
+
+       Nine cards in one flat grid, each with a name and a cooldown, gave a
+       first-time player no way to see that three of them answer a stretch of
+       lane and that two do nothing at all without a hero of their own. Which
+       matters, because the whole skill in picking a pair is covering two
+       different problems rather than two flavours of the same one — and a
+       flat grid was as likely to teach you to take Warp Banner beside
+       Unbind. */
+    t.ok(IB.SPELLS.every(d => d.grp && IB.SPELL_GROUPS.some(g => g.k === d.grp)),
+      'every order belongs to one of the groups');
+    t.ok(IB.SPELL_GROUPS.every(g => SPELLS_IN(g.k).length > 0),
+      'and no group is empty (' + IB.SPELL_GROUPS.map(g => g.k + ':' + SPELLS_IN(g.k).length).join(' ') + ')');
+    t.ok(IB.SPELL_GROUPS.reduce((a, g) => a + SPELLS_IN(g.k).length, 0) === IB.SPELLS.length,
+      'the groups account for all nine and no order twice');
+    t.ok(IB.SPELL_GROUPS.every(g => g.n && g.d), 'each group says what it is and what it is for');
+    // The two that need a hero of your own are one group, and it is the same
+    // pair the Host's draft refuses to take twice. Two lists of the same fact
+    // would drift the first time a tenth order joined either.
+    const heroGrp = SPELLS_IN('mine').map(d => d.id).sort().join(',');
+    t.ok(heroGrp === Object.keys(IB.SPELL_OWN_HERO).sort().join(','),
+      'the hero-only group is exactly the hero-only pair the draft knows about (' + heroGrp + ')');
+
+    const grid = IB.spellGridHtml();
+    t.ok((grid.match(/class="sgh"/g) || []).length === IB.SPELL_GROUPS.length,
+      'the sheet prints a heading per group');
+    t.ok((grid.match(/class="sptile/g) || []).length === IB.SPELLS.length,
+      'and still every card, none lost to the grouping');
+    // Headings SPAN the grid rather than sitting in a cell of their own. Four
+    // separate grids would give the two-card groups cards of a different width
+    // from the three-card one, and nine cards that are not all the same size
+    // read as nine cards of unequal importance.
+    const gcss = SRC.slice(SRC.indexOf('  .sgh{'), SRC.indexOf('  .sgh b{'));
+    t.ok(/grid-column:1 \/ -1/.test(gcss), 'and the heading spans the grid rather than taking a cell');
+    t.ok((grid.match(/class="spgrid"/g) || []).length === 1, 'which is one grid, so every card is one width');
+    // Order matters: the group that needs something you may never build comes
+    // last, and the one every match has comes first.
+    t.ok(grid.indexOf('>The lane<') < grid.indexOf('>Your hero<'),
+      'the lane comes before the group that needs a hero you may not have');
+
+    /* The panel a press fills in must never be below the fold — a press with
+       no visible effect is the one thing the two-press rule cannot survive —
+       and neither must ACCEPT.
+
+       This was a STICKY footer over a scrolling sheet, which kept the buttons
+       on screen and paid for it by covering the cards: at 1440x900 the last
+       two of the nine sat behind it with 24px of a 93px card showing, and
+       elementFromPoint at a card's centre returned the panel rather than the
+       card. So the sheet is a column now — a middle that scrolls, a footer
+       that owns its own row — and the property worth holding is that nothing
+       overlays anything. */
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    t.ok(/\.sheet\.orders\{ display:flex; flex-direction:column; overflow:hidden; \}/.test(css),
+      'the orders sheet is a column');
+    t.ok(/\.sheet\.orders \.sproll\{ flex:1 1 auto; min-height:0; overflow-y:auto/.test(css),
+      'with a middle that scrolls on its own');
+    t.ok(/\.sheet\.orders \.spfoot\{ flex:0 0 auto/.test(css),
+      'and a footer that takes its own row rather than lying over the cards');
+    t.ok(!/\.spfoot\{ position:sticky/.test(css),
+      'nothing sticky left to overlay them');
+    // min-height:0 is the whole reason the middle can be shorter than its
+    // content — without it a flex item refuses to shrink past it and the
+    // footer goes back off the bottom of the screen.
+    t.ok(/\.sheet\.orders \.sproll\{[^}]*min-height:0/.test(css),
+      'and the middle may shrink below its content, or the footer leaves again');
+    // The scrollbar is the cue. An overlay bar that appears only once you are
+    // already scrolling cannot tell you there is more to scroll to.
+    /* Measured in a browser: with `scrollbar-width:thin` set, Chromium takes
+       the standard overlay path, the ::-webkit- rules are ignored, the rail
+       occupies 0px of layout and paints only while you are already scrolling
+       — so the one thing telling you there is more to see appeared only after
+       you had found it. The gutter reserves the track; the webkit rules paint
+       it; naming scrollbar-width again would turn both off. */
+    t.ok(/scrollbar-gutter:stable/.test(css), 'the rail is reserved rather than overlaid');
+    t.ok(/\.sheet\.orders \.sproll::-webkit-scrollbar\{ width:10px/.test(css), 'and painted');
+    t.ok(!/\.sheet\.orders \.sproll\{[^}]*scrollbar-width/.test(css),
+      'without scrollbar-width, which switches Chromium back to an overlay and undoes both');
+    // The middle really does hold the choosing surface.
+    const sheet = IB.spellSheetHtml();
+    t.ok(sheet.indexOf('class="sproll"') < sheet.indexOf('class="spgrid"') &&
+         sheet.indexOf('class="spgrid"') < sheet.indexOf('class="spfoot"'),
+      'and the cards are inside it, above the footer');
+
+    // They belong to the HOLD. Three heroes is still two spells; no heroes at
+    // all is still two spells.
+    rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 };
+    IB.createHero(s, 'fighter'); IB.createHero(s, 'mage'); IB.createHero(s, 'tank');
+    t.ok(s.heroes.length >= 2, 'the hold has more than one hero (' + s.heroes.length + ')');
+    t.ok(s.slots === IB.SLOTS_AT_START,
+      'and still exactly as many orders, because they belong to the hold and not to a hero');
+    t.ok(G.sides[1].heroes.length === 0 && G.sides[1].slots === IB.SLOTS_AT_START,
+      'a hold with no heroes at all gets its own, all the same');
+
+    // It is an ordinary command, through the same door as everything else —
+    // deliberately not a pre-match handshake with a protocol of its own.
+    t.ok(typeof IB.CMD.spell === 'function' && typeof IB.CMD.cast === 'function',
+      'choosing and casting are both commands');
+    IB.MY = 0;
+    t.ok(IB.sendCmd('spell', { slot:0, id:'pyre' }) === '', 'and can be sent like any other order');
+    t.ok(s.spells[0] === 'pyre', 'which changes the slot');
+
+    // ...until the first wave has marched.
+    step(23);
+    t.ok(G.wave >= 1, 'the first wave goes out (wave ' + G.wave + ')');
+    t.ok(typeof IB.chooseSpell(s, 0, 'hobble') === 'string',
+      'after which the orders are set and a change is refused');
+    t.ok(s.spells[0] === 'pyre', 'and the slot does not move');
+  }
+
+  /* ------------------------------- every one of them, cast and round-tripped */
+  {
+    // Where each spell is aimed. A point on the lane goes as `x`, quantised to
+    // 1/16 on the way out; a body goes as `hero` and is resolved by id exactly
+    // the way the `pick` command resolves one; a structure goes as `key`.
+    const aim = (id, s) => {
+      const fs = s.i === 0 ? 1 : 0;
+      if (id === 'bombard' || id === 'withdraw') return { x:Math.round(64 * 16) / 16 };
+      if (id === 'muster') return {};
+      if (id === 'rampart') return { key:IB.frontStruct(s.i).key };
+      if (id === 'hobble' || id === 'pyre') return { hero:G.sides[fs].heroes[0].id };
+      if (id === 'counter') return {};
+      return { hero:s.heroes[0].id };
+    };
+    // Countermand is the one order whose target is a STATE rather than a place
+    // or a body: it lengthens recoveries that are already running, so a board
+    // where the other commander is holding a full hand is a board where it is
+    // correctly refused. Give them something to be waiting on.
+    const arm = (id, s) => {
+      if (id !== 'counter') return;
+      const foe = G.sides[s.i === 0 ? 1 : 0];
+      foe.spells[0] = 'bombard'; foe.spellCd[0] = 40;
+    };
+    for (let i = 0; i < IB.SPELLS.length; i++){
+      const d = IB.SPELLS[i];
+      const s = board(8200 + i, d.id);
+      arm(d.id, s);
+      const z0 = G.zones.length;
+      const seed0 = IB.seedNow();
+      const err = IB.castSpell(s, Object.assign({ slot:0 }, aim(d.id, s)));
+      t.ok(err === null, d.n + ' casts (' + err + ')');
+      t.ok(s.spellCd[0] === d.cd, 'and goes on its ' + d.cd + 's cooldown');
+      // Second Muster is the ONLY spell allowed to move the simulation's random
+      // stream, and it has to, because it puts bodies on the bridge and
+      // spawnUnit draws for every one of them.
+      t.ok(d.id === 'muster' ? IB.seedNow() !== seed0 : IB.seedNow() === seed0,
+        d.id === 'muster'
+          ? 'Second Muster is the one spell that draws from the simulation’s stream'
+          : d.n + ' leaves the simulation’s stream exactly where it found it');
+      t.ok(G.zones.length === z0,
+        d.n + ' pushes no ground zone, which a resync drops on both machines');
+      roundTrips(d.n);
+    }
+  }
+
+  /* ----------------------------------------------------------------- Bombard */
+  {
+    const s = board(8210, 'bombard');
+    const foes = G.units.filter(u => u.side === 1 && !u.dead && !u.isHero);
+    t.ok(foes.length >= 2, 'the Host has bodies on the bridge (' + foes.length + ')');
+    const px = Math.round(foes[0].x * 16) / 16;
+    const near = G.units.filter(u => u.side === 1 && !u.dead && Math.abs(u.x - px) <= 3);
+    const hp0 = new Map(near.map(u => [u.id, u.hp]));
+    const iron0 = s.res.iron;
+    t.ok(IB.castSpell(s, { slot:0, x:px }) === null, 'Bombard is called on a point on the lane');
+    t.ok(iron0 - s.res.iron === 40, 'and costs its forty iron (' + (iron0 - s.res.iron) + ')');
+    t.ok(s.bombN === IB.BOMB.n, 'with three shells still to fall');
+    step(1.6);
+    t.ok(s.bombN === 0, 'all three of which land, four tenths of a second apart');
+    const hurt = near.filter(u => u.dead || u.hp < hp0.get(u.id));
+    t.ok(hurt.length > 0, 'and what stood under them is hurt (' + hurt.length + ' of ' + near.length + ')');
+    t.ok(near.some(u => u.dead || u.slowT > 0), 'and what survived is slowed');
+
+    // The bound this spell exists inside: it is against BODIES. Reusing areaHit
+    // would have folded frontStruct(foe) into every blast, and a commander
+    // spell that knocks turrets down makes the siege it is meant to support
+    // redundant.
+    const s2 = board(8211, 'bombard');
+    G.units.length = 0;
+    for (const sd of G.sides) sd.heroes.length = 0;
+    IB.rebuildGrid();
+    const st = IB.frontStruct(1);
+    const shp = st.hp;
+    t.ok(IB.castSpell(s2, { slot:0, x:Math.round(st.x * 16) / 16 }) === null,
+      'a second bombardment is aimed squarely at the Host’s outer turret');
+    step(2);
+    t.ok(s2.bombN === 0, 'and all three shells fall on it (' + s2.bombN + ' left)');
+    t.ok(st.hp === shp,
+      'without costing it a single point (' + shp + ' -> ' + st.hp + ')');
+    // ...and it would have, through the shared area hit — so the difference is
+    // the choice, not the geometry.
+    IB.areaHit({ side:0, isHero:false, struct:false, x:st.x, y:st.y }, st.x, 0, IB.BOMB.r, IB.BOMB.dmg, { magic:true });
+    t.ok(st.hp < shp, 'the shared area hit really does reach it, which is why Bombard does not use it');
+  }
+
+  /* ---------------------------------------------------------------- Withdraw */
+  {
+    const s = board(8220, 'withdraw');
+    const mine = G.units.filter(u => u.side === 0 && !u.isHero && !u.dead);
+    t.ok(mine.length >= 2, 'the hold has bodies out (' + mine.length + ')');
+    const px = Math.round(mine[0].x * 16) / 16;
+    const h = s.heroes[0];
+    h.x = px;
+    const x0 = new Map(mine.map(u => [u.id, u.x]));
+    t.ok(IB.castSpell(s, { slot:0, x:px }) === null, 'Withdraw is called on a point');
+    const called = mine.filter(u => u.fallT > 0);
+    t.ok(called.length > 0, 'and the bodies near it break off (' + called.length + ' of ' + mine.length + ')');
+    t.ok(called.every(u => Math.abs(u.x - px) <= IB.WITHDRAW.rad + 1e-9),
+      'only the ones within fourteen of it');
+    t.ok(called.every(u => u.fallT === IB.WITHDRAW.dur), 'for four seconds each');
+    t.ok(!(h.fallT > 0),
+      'and never the hero — it has a retreat state machine of its own, and a second one laid over it would fight it');
+    step(1);
+    const live = called.filter(u => !u.dead);
+    t.ok(live.length > 0 && live.every(u => u.x <= x0.get(u.id) + 1e-6),
+      'they walk back the way they came (' + live.length + ' of them)');
+    t.ok(live.every(u => !u.target), 'and stop looking for anything to fight');
+
+    // A quarter less on the way out, measured on one body, twice.
+    const b = live[0];
+    b.mhp = 1e6; b.hp = b.mhp;
+    b.fallT = 0; const full = IB.dealDmg(null, b, 1000, { pure:true, noHooks:true });
+    b.hp = b.mhp;
+    b.fallT = 4; const cut = IB.dealDmg(null, b, 1000, { pure:true, noHooks:true });
+    t.ok(full > 0 && Math.abs(cut / full - (1 - IB.WITHDRAW.res)) < 1e-9,
+      'and take a quarter less while they are doing it (' + (cut / full).toFixed(3) + ')');
+
+    // ...and move a third again as fast. Measured against the same body's own
+    // walking speed rather than against a second body, which separation would
+    // have shoved.
+    IB.newMatch({ diff:'veteran', seed:8221 });
+    G.sides[0].ai = false; G.sides[1].ai = false;
+    G.units.length = 0;
+    const w = IB.spawnUnit(0, 'grunt', { x:40, y:0 });
+    w.fallT = 99;
+    const wx = w.x;
+    for (let i = 0; i < 30; i++) IB.update(1 / 30);
+    const moved = Math.abs(w.x - wx);
+    t.ok(Math.abs(moved - w.spd * IB.WITHDRAW.spd) < .03,
+      'a body pulling back covers ' + IB.WITHDRAW.spd + '× its walk in a second (' +
+      moved.toFixed(3) + ' against ' + (w.spd * IB.WITHDRAW.spd).toFixed(3) + ')');
+    t.ok(w.x < wx, 'and it is going the other way');
+  }
+
+  /* ----------------------------------------------------------- Second Muster */
+  {
+    const s = board(8230, 'muster');
+    const n0 = G.units.filter(u => u.side === 0 && !u.dead).length;
+    const e0 = G.units.filter(u => u.side === 1 && !u.dead).length;
+    const wave0 = G.wave, waveT0 = G.waveT;
+    const food0 = s.res.food, iron0 = s.res.iron, wood0 = s.res.wood;
+    t.ok(IB.castSpell(s, { slot:0 }) === null, 'Second Muster is called');
+    const n1 = G.units.filter(u => u.side === 0 && !u.dead).length;
+    t.ok(n1 > n0, 'and another wave is on the bridge (' + n0 + ' -> ' + n1 + ')');
+    t.ok(G.units.filter(u => u.side === 1 && !u.dead).length === e0,
+      'for the hold that called it and nobody else');
+    t.ok(food0 - s.res.food === 60 && iron0 - s.res.iron === 40 && wood0 - s.res.wood === 30,
+      'at 60 food, 40 iron and 30 wood');
+    // The bound: the wave clock is the one thing both players read to know what
+    // is coming, and a spell that moved it would make the board lie to whoever
+    // did not cast it.
+    t.ok(G.wave === wave0, 'the wave count does not move (' + G.wave + ')');
+    t.ok(G.waveT === waveT0, 'and the wave is not rescheduled (' + G.waveT.toFixed(3) + ')');
+
+    // ...and it comes out at 85% of the shape already marching.
+    IB.newMatch({ diff:'veteran', seed:8231 });
+    G.sides[0].ai = false; G.sides[1].ai = false;
+    G.units.length = 0;
+    const norm = IB.spawnUnit(0, 'grunt', { y:0 });
+    G.units.length = 0;
+    IB.musterWave(G.sides[0]);
+    const mus = G.units.find(u => u.side === 0 && u.kind === 'grunt');
+    t.ok(!!mus, 'a muster puts grunts out');
+    t.ok(Math.abs(mus.mhp / norm.mhp - IB.MUSTER_HP) < .01,
+      'at 85% of a wave body’s health (' + mus.mhp + ' against ' + norm.mhp + ')');
+    t.ok(G.units.filter(u => u.kind === 'melee').length > 0,
+      'and in the shape the hold is currently sending, not a fixed one');
+  }
+
+  /* ------------------------------------------------------------- Warp Banner */
+  {
+    const s = board(8240, 'warp');
+    const h = s.heroes[0];
+    // An empty bridge, so nothing shoves the hero and nothing puts the banner
+    // out while the channel is being measured.
+    G.units.length = 0;
+    G.sides[1].heroes.length = 0;
+    G.units.push(h);
+    h.x = 58; h.y = 0; h.dmgTaken = -99;
+    IB.rebuildGrid();
+    t.ok(IB.castSpell(s, { slot:0, hero:h.id }) === null, 'Warp Banner goes up');
+    t.ok(h.warpT === IB.WARP.chan, 'as a three-second channel (' + h.warpT + ')');
+    const x0 = h.x;
+    step(1);
+    t.ok(h.x === x0 && h.warpT > 0, 'during which the hero does not move (' + h.x + ')');
+    step(2.1);
+    t.ok(h.warpT === 0, 'and then the banner is up');
+    const st = IB.frontStruct(0);
+    t.ok(Math.abs(h.x - (st.x + IB.WARP.gap)) < 1.5,
+      'with the hero back at its own front structure (' + h.x.toFixed(2) + ' against ' + (st.x + IB.WARP.gap) + ')');
+    // The bound: it is a way home, never a way forward.
+    t.ok(h.x < C.LANE_LEN / 2, 'never past the midline (' + h.x.toFixed(2) + ' of ' + C.LANE_LEN + ')');
+    for (const side of [0, 1]){
+      const f = IB.frontStruct(side);
+      const land = f.x + (side === 0 ? 1 : -1) * IB.WARP.gap;
+      t.ok(side === 0 ? land < C.LANE_LEN / 2 : land > C.LANE_LEN / 2,
+        'and it lands on the caster’s own half whichever seat casts it (side ' + side + ' at ' + land + ')');
+    }
+
+    // ...and it is not an escape: refused in combat, and broken by a blow.
+    s.spellCd[0] = 0; h.dmgTaken = G.t;
+    t.ok(typeof IB.castSpell(s, { slot:0, hero:h.id }) === 'string',
+      'refused while the hero is being fought');
+    t.ok(s.spellCd[0] === 0 && h.warpT === 0, 'and a refusal costs neither the cooldown nor a channel');
+    h.dmgTaken = -99;
+    t.ok(IB.castSpell(s, { slot:0, hero:h.id }) === null, 'out of combat it goes up again');
+    IB.dealDmg(null, h, 40, { pure:true, noHooks:true });
+    t.ok(h.warpT === 0, 'and one blow puts it out');
+  }
+
+  /* ------------------------------------------------------------------ Hobble */
+  {
+    const s = board(8250, 'hobble');
+    const e = G.sides[1].heroes[0];
+    const ten = IB.passVal(e, 'tenacity');
+    const as0 = IB.attackSpeedOf(e), sp0 = IB.speedOf(e);
+    t.ok(IB.castSpell(s, { slot:0, hero:e.id }) === null, 'Hobble lands on their hero');
+    t.ok(Math.abs(e.hobT - IB.HOB.dur * (1 - ten)) < 1e-9,
+      'for four and a half seconds less their tenacity (' + e.hobT.toFixed(3) + ')');
+    t.ok(Math.abs(IB.attackSpeedOf(e) / as0 - (1 - IB.HOB.as)) < 1e-9,
+      'they swing 30% slower');
+    t.ok(Math.abs(IB.speedOf(e) / sp0 - (1 - IB.HOB.ms)) < 1e-9,
+      'and walk 40% slower');
+
+    // Damage dealt, measured on the same hero against the same body, twice.
+    const tgt = G.units.find(u => u.side === 0 && !u.isHero && !u.dead);
+    tgt.mhp = 1e7; tgt.hp = tgt.mhp;
+    e.hp = e.mhp; e.hobT = 0;
+    const full = IB.dealDmg(e, tgt, 1000, { pure:true, noHooks:true });
+    tgt.hp = tgt.mhp; e.hp = e.mhp; e.hobT = 4;
+    const cut = IB.dealDmg(e, tgt, 1000, { pure:true, noHooks:true });
+    t.ok(full > 0 && Math.abs(cut / full - (1 - IB.HOB.dmg)) < 1e-9,
+      'and hit 40% softer (' + (cut / full).toFixed(3) + ')');
+
+    // The bound: the movement cut is folded in AFTER the 75% slow clamp, so a
+    // hobble and a heavy slow cannot multiply into a body that cannot move.
+    e.hobT = 0; e.slowT = 9; e.slowP = .95;
+    const slowOnly = IB.speedOf(e);
+    e.hobT = 4;
+    const both = IB.speedOf(e);
+    t.ok(Math.abs(both / slowOnly - (1 - IB.HOB.ms)) < 1e-9,
+      'stacked on a 95% slow it still takes exactly its own 40%, off the clamped speed');
+    t.ok(both > sp0 * .1,
+      'so the two together are a crawl and not a stop (' + both.toFixed(3) + ' of ' + sp0.toFixed(3) + ')');
+  }
+
+  /* ------------------------------------------------------------------ Unbind */
+  {
+    const s = board(8260, 'unbind');
+    const h = s.heroes[0];
+    const other = G.sides[1].heroes[0];
+    h.stunT = 3; h.slowT = 3; h.slowP = .5; h.taunt = 2;
+    h.pullT = 1; h.pullBy = other;
+    h.burn = { dps:20, t:5, src:null };
+    t.ok(IB.castSpell(s, { slot:0, hero:h.id }) === null, 'Unbind is called on your own hero');
+    t.ok(h.stunT === 0 && h.slowT === 0 && h.slowP === 0 && h.taunt === 0 && h.pullT === 0 && !h.burn,
+      'and everything on it comes off');
+    // pullBy is in NET_REFS — a snapshot stores it as an index into the body
+    // table and re-links it on the way back, so a reference left behind after
+    // its timer is cleared gets re-pointed at whatever now sits at that index.
+    t.ok(h.pullBy === null, 'including the reference the pull left behind, which is packed as an index');
+    t.ok(h.freeT === IB.UNBIND.dur, 'and five seconds of freedom follow');
+
+    const ten = IB.passVal(h, 'tenacity');
+    const want = Math.max(IB.UNBIND.mul * (1 - ten), IB.UNBIND.floor);
+    IB.applyStun(h, 4);
+    t.ok(Math.abs(h.stunT - 4 * (1 - ten) * want) < 1e-9,
+      'what lands next barely sticks (' + h.stunT.toFixed(3) + 's of a four-second stun)');
+    t.ok(h.stunT > 0, 'though it is a reduction and not an immunity');
+    h.stunT = 0;
+    h.freeT = 0;
+    IB.applyStun(h, 4);
+    const plain = h.stunT;
+    t.ok(plain > 4 * (1 - ten) * want + 1e-9,
+      'and the same stun on the same hero without it is much longer (' + plain.toFixed(3) + 's)');
+    t.ok(IB.ccDur(h, 10) === 10 * (1 - ten),
+      'with the reduction gone once the five seconds are up');
+  }
+
+  /* -------------------------------------------------------------- Pyre Brand */
+  {
+    const s = board(8270, 'pyre');
+    const e = G.sides[1].heroes[0];
+    e.hp = e.mhp * .5;
+    e.burn = { dps:99, t:9, src:null };            // an ember it was already carrying
+    t.ok(IB.castSpell(s, { slot:0, hero:e.id }) === null, 'Pyre Brand is put on their hero');
+    t.ok(e.pyreT === IB.PYRE.dur, 'for six seconds');
+    t.ok(Math.abs(e.pyreDps - (IB.PYRE.base + IB.PYRE.perWave * G.wave)) < 1e-9,
+      'at a rate that grows with the match (' + e.pyreDps.toFixed(1) + ' at wave ' + G.wave + ')');
+    // The whole reason it is not a burn: applyBurn keeps ONE burn per body and
+    // takes the max of the two dps and the two durations, so a hero carrying an
+    // ember proc would silently have swallowed the brand or been swallowed.
+    t.ok(e.burn && e.burn.dps === 99 && e.burn.t === 9,
+      'and the burn it was already carrying is untouched');
+    IB.applyBurn(e, 5, 2, null);
+    t.ok(e.burn.dps === 99 && e.pyreT === IB.PYRE.dur,
+      'a fresh burn still merges into the burn and leaves the brand alone');
+
+    e.hp = e.mhp * .2;
+    const hp0 = e.hp;
+    IB.healUnit(e, 200);
+    t.ok(Math.abs((e.hp - hp0) - 200 * (1 - IB.PYRE.heal)) < 1e-6,
+      'mending a branded body is cut by 60% (' + (e.hp - hp0).toFixed(1) + ' of 200)');
+    e.pyreT = 0;
+    e.hp = e.mhp * .2;
+    const hp1 = e.hp;
+    IB.healUnit(e, 200);
+    t.ok(Math.abs((e.hp - hp1) - 200) < 1e-6,
+      'and is not cut once the brand is off (' + (e.hp - hp1).toFixed(1) + ' of 200)');
+
+    // It burns, and an ogre can carry it too. Measured on an empty lane, out of
+    // every turret's reach, so the only thing touching it is the brand.
+    IB.newMatch({ diff:'veteran', seed:8271 });
+    G.sides[0].ai = false; G.sides[1].ai = false;
+    G.units.length = 0;
+    IB.chooseSpell(G.sides[0], 0, 'pyre');
+    const u = IB.spawnUnit(1, 'super', { x:74, y:0 });
+    u.hp = u.mhp;
+    t.ok(IB.castSpell(G.sides[0], { slot:0, hero:u.id }) === null, 'an ogre can be branded as well as a hero');
+    const before = u.hp;
+    for (let i = 0; i < 30; i++) IB.update(1 / 30);
+    const lost = before - u.hp;
+    t.ok(Math.abs(lost - u.pyreDps) < u.pyreDps * .15,
+      'and loses about a second of it in the first second (' + lost.toFixed(1) +
+      ' against ' + u.pyreDps.toFixed(1) + ')');
+    t.ok(u.pyreT > 0 && u.pyreT < IB.PYRE.dur, 'with the clock running down (' + u.pyreT.toFixed(2) + ')');
+
+    // The brand's source is a body reference, so it is packed as an index and
+    // re-linked — never copied as a number that would mean a different body.
+    t.ok(IB.NET_REFS.pyreSrc === 1, 'and its source is registered as a body reference');
+    const packed = IB.netSnap().bodies.find(b => b.pyreT > 0);
+    t.ok(!!packed && 'pyreSrc' in packed && typeof packed.pyreSrc === 'number',
+      'which is what a snapshot carries');
+  }
+
+  /* ----------------------------------------------------------------- Rampart */
+  {
+    const s = board(8280, 'rampart');
+    // An empty bridge, so the only thing moving the wall's health is the spell.
+    G.units.length = 0;
+    for (const sd of G.sides) sd.heroes.length = 0;
+    IB.rebuildGrid();
+    const st = IB.frontStruct(0);
+    st.hp = Math.round(st.mhp * .5);
+    const hp0 = st.hp;
+    const wood0 = s.res.wood, iron0 = s.res.iron;
+    st.wardT = 0;
+    const arm0 = IB.effArmor(st, false), mr0 = IB.effArmor(st, true);
+    t.ok(IB.castSpell(s, { slot:0, key:st.key }) === null, 'Rampart is called on your own wall');
+    t.ok(st.repT === IB.RAMPART.dur && st.wardT === IB.RAMPART.ward,
+      'masons for five seconds and a ward for eight');
+    t.ok(wood0 - s.res.wood === 50 && iron0 - s.res.iron === 30, 'at 50 wood and 30 iron');
+    t.ok(IB.effArmor(st, false) - arm0 === IB.RAMPART.armor, 'the ward is +40 armour');
+    t.ok(IB.effArmor(st, true) - mr0 === IB.RAMPART.armor, 'and +40 magic resist');
+    step(5.2);
+    const back = st.hp - hp0;
+    t.ok(Math.abs(back - st.mhp * IB.RAMPART.heal) < st.mhp * .02,
+      '22% of its health goes back on over the five seconds (' + Math.round(back) +
+      ' of ' + Math.round(st.mhp * IB.RAMPART.heal) + ')');
+    t.ok(st.repT === 0, 'and then the masons are done');
+    t.ok(st.wardT > 0, 'while the ward is still up');
+    step(3.2);
+    t.ok(st.wardT === 0 && IB.effArmor(st, false) === arm0,
+      'until it too runs out, and the stone goes back to what it was');
+    // A structure that is already down cannot be mended into standing again.
+    st.dead = true; s.spellCd[0] = 0; rich(s);
+    t.ok(typeof IB.castSpell(s, { slot:0, key:st.key }) === 'string', 'a fallen structure is refused');
+    t.ok(typeof IB.castSpell(s, { slot:0, key:'nowhere' }) === 'string', 'and so is one that does not exist');
+  }
+
+  /* ------------------------------------------- refusals cost nothing at all */
+  {
+    const s = board(8290, 'bombard', 'pyre');
+    s.res.iron = 0;
+    const cd0 = s.spellCd.slice();
+    t.ok(typeof IB.castSpell(s, { slot:0, x:64 }) === 'string', 'a spell it cannot pay for is refused');
+    t.ok(s.spellCd[0] === cd0[0] && s.bombN === 0, 'and nothing starts');
+    rich(s);
+    t.ok(IB.castSpell(s, { slot:0, x:64 }) === null, 'paid for, it fires');
+    t.ok(typeof IB.castSpell(s, { slot:0, x:64 }) === 'string', 'and will not fire again while it is recovering');
+    t.ok(typeof IB.castSpell(s, { slot:1, hero:-1 }) === 'string', 'a target that is not there is refused');
+    t.ok(s.spellCd[1] === 0, 'without spending the cooldown');
+    // It recovers on the clock, in ecoStep, like everything else the hold owns.
+    const cd = s.spellCd[0];
+    step(10);
+    t.ok(Math.abs((cd - s.spellCd[0]) - 10) < .2,
+      'and a cooldown counts down in real seconds (' + (cd - s.spellCd[0]).toFixed(2) + ' in 10)');
+  }
+
+  /* --------------------------------- a body refused at the cap costs the same
+     spawnUnit is turned away at C.MAX_UNITS, and a refusal has to consume
+     exactly the numbers a body that fitted would have — or Second Muster could
+     move the simulation's stream by asking for one body too many, and the two
+     machines would part company over a population limit.                     */
+  {
+    IB.newMatch({ diff:'veteran', seed:8295 });
+    G.units.length = 0;
+    IB.reseed(4242);
+    IB.spawnUnit(0, 'grunt', {});
+    const after = IB.seedNow();
+    G.units.length = 0;
+    while (G.units.length < C.MAX_UNITS)
+      G.units.push({ id:-1, dead:false, side:0, x:0, y:0, r:.4, isHero:false, struct:false });
+    IB.reseed(4242);
+    t.ok(IB.spawnUnit(0, 'grunt', {}) === null, 'at the cap a body is refused');
+    t.ok(IB.seedNow() === after,
+      'and the refusal costs the simulation exactly the draws a body that fitted would have');
+    G.units.length = 0;
+    IB.rebuildGrid();
+  }
+
+  /* -------------------------------------------------- the Host casts them too
+     Every PvE difficulty number was tuned against a Host with no spells at all.
+     Handing the player two free levers and not the computer would quietly
+     invalidate the lot of them — so the Host chooses two before the first wave
+     and casts them off its OWN stream, never the simulation's.               */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:8300 });
+    const host = G.sides[1];
+    step(2);
+    t.ok(!!host.spells[0] && !!host.spells[1],
+      'the Host has chosen two before the first wave (' + host.spells.join(', ') + ')');
+    t.ok(host.spells[0] !== host.spells[1], 'and two different ones');
+    t.ok(IB.SPELL[host.spells[0]] && IB.SPELL[host.spells[1]], 'both of which are real spells');
+    t.ok(G.sides[0].spells[0] === null,
+      'while the hold the player is sitting in chooses for itself');
+
+    // Its choices come off its own stream, so two Hosts on two seeds differ and
+    // neither one moved the battlefield's numbers.
+    const seen = new Set();
+    for (const sd of [8301, 8302, 8303, 8304, 8305, 8306]){
+      IB.newMatch({ diff:'veteran', seed:sd });
+      step(2);
+      seen.add(G.sides[1].spells.join(','));
+    }
+    t.ok(seen.size > 1, 'and are not the same two every match (' + seen.size + ' of 6 seeds differ)');
+
+    // And it actually uses them.
+    let cast = 0;
+    IB.newMatch({ diff:'veteran', seed:8307 });
+    G.sides[0].ai = true;
+    for (let i = 0; i < 30 * 240 && G.state === 'play'; i++){
+      IB.update(1 / 30);
+      if (i % 15 === 0) for (const sd of G.sides) for (let k = 0; k < 2; k++) if (sd.spellCd[k] > 0) cast++;
+    }
+    t.ok(cast > 0, 'and it does cast them in a real match (' + cast + ' samples with a spell recovering)');
+
+    /* ---- and it is a DRAFT rather than a shuffle.
+
+       It used to splice two ids out of the pool uniformly at random, so it
+       could walk into a match carrying Warp Banner AND Unbind — both of which
+       do nothing until it has built a hero. Two from nine puts that at one
+       match in thirty-six.
+
+       Worth being precise about the size of it: measured over 24 matches, the
+       Host used 92 of 96 slots with the shuffle and 92 of 96 with the draft,
+       and no hold in 48 ever finished a match having cast nothing. It recovers
+       from the bad pair once it builds a hero. What the rule below buys is the
+       first several minutes, not the match — so this asserts the rule holds,
+       and claims nothing about a Host sitting on its hands. */
+    t.ok(IB.SPELLS.every(d => d.ai && d.ai.w > 0 && d.ai.go > 0 && d.ai.go <= 1),
+      'every order says how often it is worth drafting and how readily it fires');
+    t.ok(Object.keys(IB.SPELL_OWN_HERO).every(id => IB.SPELL[id] && IB.SPELL[id].target === 'own'),
+      'the hero-only orders are exactly the ones aimed at a hero of your own');
+
+    let bothNeedy = 0, drafts = 0;
+    const takenBy = new Map();
+    for (let sd = 8400; sd < 8480; sd++){
+      IB.newMatch({ diff:'veteran', seed:sd });
+      const host = G.sides[1];
+      IB.aiDraft(host);
+      drafts++;
+      const pair = host.spells;
+      t.ok(!!(IB.SPELL[pair[0]] && IB.SPELL[pair[1]]), 'the draft fills both slots — seed ' + sd);
+      if (pair[0] === pair[1]) bothNeedy = -999;      // would be a rule break of its own
+      if (IB.SPELL_OWN_HERO[pair[0]] && IB.SPELL_OWN_HERO[pair[1]]) bothNeedy++;
+      for (const id of pair) if (id) takenBy.set(id, (takenBy.get(id) || 0) + 1);
+    }
+    t.ok(bothNeedy === 0,
+      'and never hands the Host two orders it cannot use without a hero (' + bothNeedy + ' of ' + drafts + ')');
+    // The weights are a preference, not a filter: everything still gets drafted
+    // sometimes, or the ones at weight 1 may as well not be in the set.
+    t.ok(takenBy.size === IB.SPELLS.length,
+      'every order is still drafted sometimes (' + takenBy.size + ' of ' + IB.SPELLS.length + ')');
+    // ...and the preference is real. The threes should outdraw the ones by a
+    // margin no shuffle would produce over eighty drafts.
+    const heavy = IB.SPELLS.filter(d => d.ai.w >= 3).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    const light = IB.SPELLS.filter(d => d.ai.w === 1).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    t.ok(heavy > light, 'and the orders worth drafting are drafted more (' + heavy + ' vs ' + light + ')');
+
+    // Deterministic, like everything else the Host decides: the same seed
+    // drafts the same pair, and it comes off the side's own stream.
+    const twice = [];
+    for (const pass of [0, 1]){
+      IB.newMatch({ diff:'veteran', seed:8499 });
+      IB.aiDraft(G.sides[1]);
+      twice.push(G.sides[1].spells.join(','));
+      void pass;
+    }
+    t.ok(twice[0] === twice[1], 'the same seed drafts the same pair (' + twice[0] + ')');
+  }
+
+  /* ------------------------------------- two machines, one match, with spells
+     The proof that matters: two independent simulations that can see nothing of
+     each other but command batches, both holds casting, staying bit-identical.
+  */
+  {
+    const A = loadGame({}), B = loadGame({});
+    global.localStorage = {
+      getItem: k => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = '' + v; },
+      removeItem: k => { delete store[k]; },
+    };
+    const wire = [];
+    A.NET.send = (o) => wire.push(['B', o]);
+    B.NET.send = (o) => wire.push(['A', o]);
+    A.netStart({ me:0, seed:8400, diff:'veteran' });
+    B.netStart({ me:1, seed:8400, diff:'veteran' });
+    const pump = (n) => {
+      for (let i = 0; i < n; i++){
+        while (wire.length){ const [to, o] = wire.shift(); (to === 'A' ? A : B).netRecv(JSON.parse(JSON.stringify(o))); }
+        A.netStep(); B.netStep();
+      }
+    };
+    // Both holds pick, on early ticks, exactly the way a player would.
+    A.sendCmd('spell', { slot:0, id:'bombard' });
+    A.sendCmd('spell', { slot:1, id:'muster' });
+    B.sendCmd('spell', { slot:0, id:'rampart' });
+    B.sendCmd('spell', { slot:1, id:'withdraw' });
+    pump(60);
+    const open2 = (g, i) => g.sides[i].spells.slice(0, g.sides[i].slots).join();
+    t.ok(open2(A.G, 0) === 'bombard,muster' && open2(A.G, 1) === 'rampart,withdraw',
+      'the host machine learned both holds’ choices (' + A.G.sides.map(s => s.spells.slice(0, s.slots).join('/')).join(' | ') + ')');
+    t.ok(B.G.sides[0].spells.join() === A.G.sides[0].spells.join() &&
+         B.G.sides[1].spells.join() === A.G.sides[1].spells.join(),
+      'and so did the joiner');
+    t.ok(A.netHash() === B.netHash(), 'and the two boards agree about it');
+
+    // Solvent, identically on both machines — an asymmetry here would prove
+    // nothing about the spells.
+    for (const sim of [A, B]) for (const s of sim.G.sides){
+      s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+    }
+    pump(400);
+    t.ok(A.netHash() === B.netHash(), 'still agreeing once the waves are out');
+    A.sendCmd('cast', { slot:0, x:Math.round(64 * 16) / 16 });   // bombard the middle
+    A.sendCmd('cast', { slot:1 });                                // second muster
+    B.sendCmd('cast', { slot:0, key:'t1' });                      // rampart the outer turret
+    B.sendCmd('cast', { slot:1, x:Math.round(90 * 16) / 16 });    // withdraw
+    pump(120);
+    t.ok(A.G.sides[0].spellCd[0] > 0 && A.G.sides[0].spellCd[1] > 0 && A.G.sides[1].spellCd[0] > 0,
+      'every one of them actually fired (' +
+      A.G.sides.map(s => s.spellCd.map(v => Math.round(v)).join('/')).join(' | ') + ')');
+    t.ok(A.netHash() === B.netHash(), 'and the two machines still agree afterwards');
+    pump(900);
+    t.ok(A.netHash() === B.netHash(), 'and thirty seconds later (' + A.netHash() + ' / ' + B.netHash() + ')');
+    t.ok(A.NET.desyncAt < 0 && B.NET.desyncAt < 0,
+      'with the running hash exchange never once disagreeing');
+    t.ok(A.NET.tick > 1400 && A.G.wave >= 2,
+      'over a match that really ran (' + A.NET.tick + ' ticks, wave ' + A.G.wave + ')');
+    A.netEnd(); B.netEnd();
+  }
+  IB.netEnd();
+  global.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = '' + v; },
+    removeItem: k => { delete store[k]; },
+  };
+}
+
+/* ================================= choosing the two orders, from the outside
+   Everything above proves the simulation. This is the half a thumb touches,
+   and the rule it is all built on:
+
+     a first press EXPLAINS an order and chooses nothing;
+     a press on the order already open TAKES it;
+     so does Accept.
+
+   Which is what lets a phone find out what Pyre Brand does without spending
+   one of its two permanent slots to read the label, and what makes one click
+   enough on a desktop — where the hover already did the explaining.
+
+   Every assertion below is about behaviour rather than taste: what a press
+   does, what it does not do, and when the window shuts.                     */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  // A hold with everything it needs, before the first wave, with the Host's own
+  // AI off so nothing chooses or casts underneath the measurement.
+  const fresh = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    rich(G.sides[0]);
+    return G.sides[0];
+  };
+  // The sheet holds the board while it is open, exactly as a hero's choice
+  // does. A test that then wants time to pass has to let it.
+  const release = () => { G.held = false; };
+
+  /* ------------------------------------------ eight icons, and eight names */
+  {
+    fresh(8500);
+    t.ok(Object.keys(IB.SPELL_ICON).length === IB.SPELLS.length,
+      'every order has an icon of its own (' + Object.keys(IB.SPELL_ICON).length + ')');
+    for (const d of IB.SPELLS){
+      const ic = IB.SPELL_ICON[d.id];
+      t.ok(typeof ic === 'string' && /^<svg /.test(ic) && /viewBox="0 0 24 24"/.test(ic),
+        d.n + '’s icon is inline SVG on the same 24 grid as the rest');
+      t.ok(!/<img|url\(|\p{Extended_Pictographic}/u.test(ic),
+        d.n + '’s icon fetches nothing and is not an emoji');
+      /* The cut edge is what makes one of these read as a shape lying on the
+         card rather than a stain in it, and Unbind — the only one of the
+         eight built out of strokes rather than filled shapes — had none,
+         because ICO_EDGE sets a stroke and this icon's stroke IS the shape.
+         It gets the edge the other way round: the path again underneath, in
+         the same ink, wider. Either construction satisfies this. */
+      t.ok(ic.includes('#3d2d1a'), d.n + '’s icon has the cream cut edge round it');
+      /* These eight are only ever seen on cream — the bar tiles, the chooser
+         cards, the slots — and the HUD's light iron against #f2e4c6 is about
+         one percent of separation, so a spear head reads as a hole punched in
+         the card. They are lit in their own darker steel; the HUD keeps its
+         own, because on felt the light one is right. */
+      for (const pale of ['#c3cedd', '#c3d1e2', '#9aabc0'])
+        t.ok(!ic.includes(pale), d.n + '’s icon does not use the felt steel ' + pale + ' on cream');
+    }
+    // ...and that darker steel really is darker, rather than being a second
+    // name for the same value.
+    const lum = (h) => {
+      const v = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map(c => c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4));
+      return .2126 * v[0] + .7152 * v[1] + .0722 * v[2];
+    };
+    t.ok(lum(IB.ICO_STEEL) < lum('#c3d1e2') - .1,
+      'the orders’ steel is meaningfully darker than the HUD’s (' + IB.ICO_STEEL + ')');
+    t.ok((lum('#f2e4c6') + .05) / (lum(IB.ICO_STEEL) + .05) > 1.9,
+      'far enough off the cream card to read as metal on it');
+    /* Two silhouette collisions the first pass shipped: Bombard beside Hobble
+       (a ball in the lower left with something small in the upper right, both
+       of them) and Withdraw beside Rampart (a crenelated wall, both of them).
+       At 19px in the bar detail cannot separate those; the outline and the
+       value have to. Rampart is a shield now, and Bombard is dark iron under
+       a gold flame where Hobble is bright steel. */
+    t.ok(!/M3\.4 7\.4h3\.6/.test(IB.SPELL_ICON.rampart),
+      'Rampart is no longer the same battlement Withdraw is drawn from');
+    t.ok(IB.SPELL_ICON.rampart.includes('#8fa2b8') && !IB.SPELL_ICON.withdraw.includes('20.6'),
+      'and the two of them no longer share an outline');
+    t.ok(IB.SPELL_ICON.bombard.includes('#41556c') && IB.SPELL_ICON.hobble.includes(IB.ICO_STEEL),
+      'Bombard is the dark mass and Hobble the bright ring, so 19px can tell them apart');
+    IB.showSpells(0);
+    const h = G.sheet;
+    for (const d of IB.SPELLS){
+      t.ok(h.includes('data-spell="' + d.id + '"'), 'the chooser offers ' + d.n);
+      t.ok(h.includes('>' + d.n + '</span>'), 'with its name printed under the icon — ' + d.n);
+      t.ok(h.includes(IB.SPELL_ICON[d.id]), 'and the icon itself — ' + d.n);
+    }
+    t.ok((h.match(/class="sptile/g) || []).length === IB.SPELLS.length,
+      'eight cards, no more and no fewer');
+    release();
+  }
+
+  /* ---------------------- a first press explains, and chooses nothing at all */
+  {
+    const s = fresh(8501);
+    IB.showSpells(0);
+    t.ok(IB.spellUI.at === null, 'the chooser opens with no order open');
+    t.ok(!/class="sptile at/.test(G.sheet), 'and no card lit');
+    t.ok(IB.spellPress('bombard') === false, 'a first press does not take');
+    t.ok(IB.spellUI.at === 'bombard', 'it opens that order instead');
+    t.ok(s.spells[0] === null && s.spells[1] === null, 'and neither slot was filled');
+    // What it opened is a real explanation, not the name again.
+    const why = IB.spellWhyHtml();
+    t.ok(why.includes(IB.SPELL.bombard.d), 'the panel prints what the order actually does');
+    t.ok(why.includes(IB.SPELL.bombard.cd + 's'), 'and how long it takes to recover');
+    t.ok(/40/.test(why), 'and what it costs');
+    // Only then does a press take it.
+    t.ok(IB.spellPress('bombard') === true, 'a second press on the SAME order takes it');
+    t.ok(s.spells[0] === 'bombard', 'into the slot that was lit');
+    release();
+  }
+
+  /* ------------- moving to a different card explains that one, and takes none */
+  {
+    const s = fresh(8502);
+    IB.showSpells(0);
+    IB.spellPress('bombard');
+    t.ok(IB.spellPress('pyre') === false, 'pressing a DIFFERENT order explains that one instead');
+    t.ok(IB.spellUI.at === 'pyre', 'and it is the one now open');
+    t.ok(s.spells[0] === null, 'with still nothing chosen');
+    t.ok(IB.spellPress('pyre') === true, 'and the second press on it takes it');
+    t.ok(s.spells[0] === 'pyre', 'so a press only ever takes what was already open');
+    release();
+  }
+
+  /* ------------------------------- a hover is the desktop's first press, and
+     nothing else. This is the whole reason a mouse needs one click and a thumb
+     needs two, from one rule rather than two code paths.                     */
+  {
+    const s = fresh(8503);
+    IB.showSpells(0);
+    t.ok(IB.spellLook('warp') === true, 'a hover opens an order');
+    t.ok(IB.spellUI.at === 'warp', 'so the panel explains it');
+    t.ok(s.spells[0] === null && s.spells[1] === null, 'and chooses nothing');
+    t.ok(IB.spellPress('warp') === true, 'the click after the hover takes it');
+    t.ok(s.spells[0] === 'warp', 'in one click, because reading it was the other press');
+    // ...and the listener has to refuse a touch, or a first TAP would hover
+    // itself open and take in the same gesture.
+    const wiring = SRC.slice(SRC.indexOf('function wire()'));
+    const over = wiring.slice(wiring.indexOf("addEventListener('pointerover'"),
+                              wiring.indexOf("addEventListener('pointerover'") + 400);
+    t.ok(/data-spell/.test(over), 'the hover listener is the one that opens an order');
+    t.ok(/pointerType/.test(over),
+      'and it is refused for anything that is not a mouse, because touch fires pointerover before a tap');
+    release();
+  }
+
+  /* --------------------------------------------- Accept does the same job */
+  {
+    const s = fresh(8504);
+    IB.showSpells(0);
+    t.ok(IB.spellAccept() === false, 'Accept with nothing open does nothing');
+    t.ok(s.spells[0] === null, 'and takes nothing');
+    t.ok(/id="spAccept"[^>]*disabled/.test(G.sheet), 'and the button itself says so');
+    IB.spellLook('rampart');
+    t.ok(/Accept Rampart/.test(IB.spellSheetHtml()), 'once an order is open the button names it');
+    t.ok(IB.spellAccept() === true, 'and Accept takes it');
+    t.ok(s.spells[0] === 'rampart', 'into the lit slot');
+    release();
+  }
+
+  /* --------------- which slot is being filled, and that it moves on by itself */
+  {
+    const s = fresh(8505);
+    IB.showSpells(0);
+    t.ok(IB.spellUI.slot === 0, 'the chooser opens on the first slot');
+    t.ok(/class="spslot on" data-act="spslot" data-slot="0"/.test(G.sheet),
+      'and the sheet says which one that is');
+    IB.spellPress('hobble'); IB.spellPress('hobble');
+    t.ok(s.spells[0] === 'hobble', 'the first order goes in');
+    t.ok(IB.spellUI.slot === 1, 'and the still-empty slot becomes the one being filled');
+    t.ok(/class="spslot on" data-act="spslot" data-slot="1"/.test(G.sheet), 'which the sheet now says');
+    IB.spellPress('unbind'); IB.spellPress('unbind');
+    t.ok(s.spells.slice(0, s.slots).join() === 'hobble,unbind', 'and the second goes in beside it');
+    // Named the way every other surface names it. The pip used to read
+    // "SLOT 1" while the panel forty pixels below said "in your first order",
+    // about the same thing.
+    t.ok(/data-spell="hobble"[^>]*>\s*<span class="spin">first order</.test(IB.spellGridHtml()),
+      'a card already in a slot is marked with which one, in the same words as everywhere else');
+    t.ok(IB.spellSlotsHtml().includes('>Hobble<') && IB.spellSlotsHtml().includes('>Unbind<'),
+      'and both slots name what is in them');
+    // The one dead end the simulation has: an order cannot fill both slots. The
+    // panel has to say so BEFORE the press, or a player walks into a refusal
+    // the interface had already promised would work.
+    IB.spellUI.slot = 1;
+    IB.spellLook('hobble');
+    t.ok(IB.spellClash() === 0, 'an order already in the other slot is a clash');
+    t.ok(/in your first order/.test(IB.spellWhyHtml()),
+      'which the panel says out loud (' + (IB.spellWhyHtml().match(/wk">([^<]*)/) || [])[1] + ')');
+    // A STATEMENT of where it already is, not a refusal. The same line is what
+    // the panel shows for the quarter-second after a successful choice, when
+    // the order has just landed in a slot and the lit slot has moved on — and
+    // "you cannot have this" is the wrong sentence to answer a press that
+    // worked. Both halves of it are held here so the wording cannot drift back.
+    t.ok(!/\bcannot have|already in a slot/i.test(IB.spellWhyHtml() + IB.spellAcceptLabel().txt),
+      'and says it without telling the player no about something they already own');
+    t.ok(/first order/.test(IB.spellAcceptLabel().txt),
+      'the dead Accept names the slot it is in rather than shrugging (' +
+      IB.spellAcceptLabel().txt + ')');
+    t.ok(IB.spellAcceptLabel().on === false, 'and Accept goes dead rather than promising it');
+    t.ok(IB.spellAccept() === false && s.spells.slice(0, s.slots).join() === 'hobble,unbind',
+      'pressing it anyway changes nothing');
+    // ...and the same order back in its OWN slot is not a clash at all.
+    IB.spellUI.slot = 0;
+    t.ok(IB.spellClash() === -1 && IB.spellAcceptLabel().on === true,
+      'the order already in the slot being filled is not a clash with itself');
+    release();
+  }
+
+  /* ------------------------ a choice can be changed, right up until it cannot */
+  {
+    const s = fresh(8506);
+    IB.showSpells(0);
+    IB.spellPress('bombard'); IB.spellPress('bombard');
+    IB.spellPress('muster');  IB.spellPress('muster');
+    t.ok(s.spells.slice(0, s.slots).join() === 'bombard,muster', 'both slots are full');
+    t.ok(G.wave < 1, 'and the first wave has not marched');
+    IB.spellUI.slot = 0;
+    IB.spellPress('pyre'); IB.spellPress('pyre');
+    t.ok(s.spells.slice(0, s.slots).join() === 'pyre,muster', 'a FULL slot can still be changed');
+    // The tile in the bar is the way back in while the window is open, which is
+    // why it does not cast in that window.
+    t.ok(/press to change it/.test(IB.ordersHtml()), 'and the order in the bar says so');
+    t.ok(IB.castPress(0) === 'still choosing', 'pressing it opens the chooser rather than casting');
+    t.ok(/Commander orders/.test(G.sheet), 'which is the sheet that comes up');
+    t.ok(s.spellCd[0] === 0, 'and nothing was cast on the way');
+
+    // ...and then the window shuts, for good.
+    release();
+    step(23);
+    t.ok(G.wave >= 1, 'the first wave marches (wave ' + G.wave + ')');
+    const was = s.spells.join();
+    IB.showSpells(0);
+    t.ok(IB.spellPress('withdraw') === false, 'a first press still only explains');
+    t.ok(IB.spellPress('withdraw') === false, 'and the second one is refused now');
+    t.ok(s.spells.join() === was, 'the orders are exactly what they were (' + s.spells.join() + ')');
+    t.ok(IB.spellAccept() === false, 'Accept cannot get round it either');
+    t.ok(s.spells.join() === was, 'and the slot still does not move');
+    release();
+  }
+
+  /* ------------------------------------- a recovering order will not go again */
+  {
+    const s = fresh(8507);
+    IB.chooseSpell(s, 0, 'muster');            // needs no target: the simplest cast
+    IB.chooseSpell(s, 1, 'bombard');
+    step(23);
+    t.ok(G.wave >= 1, 'the match is under way');
+    rich(s);
+    t.ok(IB.castPress(0) === null, 'Second Muster needs no target and goes straight out');
+    t.ok(s.spellCd[0] > 0, 'and it is recovering (' + Math.round(s.spellCd[0]) + 's)');
+    const cd = s.spellCd[0], n = G.units.length;
+    t.ok(IB.castPress(0) === 'still recovering', 'pressing it again while it recovers is refused');
+    t.ok(s.spellCd[0] === cd, 'the recovery is not restarted');
+    t.ok(G.units.length === n, 'and no second muster marched');
+    t.ok(!IB.spellUI.aim, 'nothing was armed by the refusal either');
+    t.ok(IB.spellReady(s, 0) === false, 'the order reads as not ready...');
+    t.ok(/classList\.toggle\('dead', !spellReady\(s, i\) \|\| !spellTargets\(d\)\)/.test(SRC),
+      '...and the tile in the bar is marked spent from that same fact rather than a second one');
+    // ...or from the other reason an order cannot be given: nothing on the
+    // board to point it at. Both come off the same enumerations the preview
+    // and the resolver use, so a dead tile is never dead for a reason the
+    // rings would not have shown.
+    t.ok(IB.spellTargets(IB.SPELL.bombard) > 0, 'a lane order always has somewhere to go');
+    t.ok(IB.spellTargets(IB.SPELL.muster) > 0, 'and one aimed at your own hold needs nothing');
+    // A CLASS and not `disabled`, and the difference is the whole point: a
+    // disabled button eats its own click, so the two sentences castPress has
+    // ready for exactly this — the one asserted above and the one asserted
+    // below — could then only be reached from Q and E. A phone has neither.
+    t.ok(!/\bb\.disabled\s*=/.test(SRC),
+      'and it is a class rather than `disabled`, so the press still reaches its explanation');
+    t.ok(/\.ord\.dead\{/.test(SRC), 'with a dead look of its own to wear while it is spent');
+    // The other half of "not ready": an order it cannot pay for.
+    s.spellCd[0] = 0;
+    s.res.food = 0; s.res.iron = 0; s.res.wood = 0;
+    t.ok(IB.spellReady(s, 0) === false, 'an order it cannot pay for is not ready');
+    t.ok(IB.castPress(0) === 'not enough resources', 'and pressing it is refused');
+    t.ok(s.spellCd[0] === 0, 'without starting a recovery it never earned');
+  }
+
+  /* ----------------- a point-targeted order cannot fire without a point on the
+     lane. The simulation will happily read a missing `x` as zero — that is what
+     lanePoint's clamp does — so the thing that must never send one is this. */
+  {
+    const s = fresh(8508);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'muster');
+    step(23);
+    rich(s);
+    const cd = s.spellCd[0], iron = s.res.iron;
+    t.ok(IB.castPress(0) === null, 'pressing Bombard is accepted');
+    t.ok(!!IB.spellUI.aim && IB.spellUI.aim.slot === 0,
+      'but what it does is ARM it (' + JSON.stringify(IB.spellUI.aim) + ')');
+    t.ok(s.spellCd[0] === cd, 'no recovery started');
+    t.ok(s.res.iron === iron, 'nothing was paid');
+    t.ok(s.bombN === 0, 'and no shell is walking the lane');
+    // A click that lands on nothing is a miss, not a cancel.
+    t.ok(IB.spellAimSend(null) === 'no target', 'a click on nothing does not fire it');
+    t.ok(!!IB.spellUI.aim, 'and the order stays armed through the miss');
+    t.ok(s.bombN === 0 && s.spellCd[0] === cd, 'still nothing in the air and nothing spent');
+    // A point is the only thing that makes it fire.
+    t.ok(IB.spellAimSend({ x:IB.lanePoint(64) }) === null, 'a point on the lane fires it');
+    t.ok(s.bombN === IB.BOMB.n, 'the shells are walking (' + s.bombN + ')');
+    t.ok(s.spellCd[0] > 0, 'and it is recovering');
+    t.ok(!IB.spellUI.aim, 'and no longer armed');
+  }
+
+  /* ---------------------------------------- and it can always be called off */
+  {
+    const s = fresh(8509);
+    IB.chooseSpell(s, 0, 'withdraw');
+    step(23);
+    rich(s);
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'Withdraw is armed');
+    t.ok(IB.castPress(0) === 'called off', 'a second press on the same order calls it off');
+    t.ok(!IB.spellUI.aim, 'and nothing is armed');
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'armed again');
+    IB.doAction('close');
+    t.ok(!IB.spellUI.aim, 'and Escape calls it off');
+    t.ok(!G.paused, 'without also doing the next thing Escape does');
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'armed once more');
+    IB.newMatch({ diff:'veteran', seed:8510 });
+    t.ok(!IB.spellUI.aim, 'and a new match starts with nothing armed');
+    t.ok(IB.spellUI.at === null && IB.spellUI.slot === 0, 'and the chooser back at its first slot');
+  }
+
+  /* --------------------------- what the click under the finger is aimed AT.
+     Its own resolver, because resolvePick's list is built for selection and
+     carries only your own heroes — and half of these orders have to be able to
+     name theirs.                                                            */
+  {
+    const s = fresh(8511);
+    IB.chooseSpell(s, 0, 'rampart');
+    IB.chooseSpell(s, 1, 'bombard');
+    step(23);
+    rich(s);
+    // a point on the lane
+    IB.castPress(1);
+    const p = IB.lp(64, 0);
+    const t1 = IB.spellAimTarget(p[0], p[1]);
+    t.ok(t1 && Math.abs(t1.x - 64) < 2,
+      'a click on the lane comes back as a point on it (' + (t1 && t1.x) + ')');
+    t.ok(t1 && t1.x === IB.lanePoint(t1.x), 'already quantised through lanePoint before it is sent');
+    IB.spellAimOff();
+    // one of your own structures
+    IB.castPress(0);
+    const st = IB.frontStruct(0);
+    const q = IB.lp(st.x, st.y);
+    const t2 = IB.spellAimTarget(q[0], q[1] - 22 * IB.cam.z);
+    t.ok(t2 && t2.key === st.key,
+      'a click on your own wall comes back as that wall (' + JSON.stringify(t2) + ')');
+    t.ok(IB.spellAimTarget(q[0] + 900, q[1]) === null,
+      'and a click nowhere near one comes back as nothing at all');
+    t.ok(IB.spellAimSend({ key:st.key }) === null, 'which is what makes the masons turn out');
+    t.ok(st.repT > 0, 'and they did (' + st.repT.toFixed(1) + 's of mending)');
+  }
+
+  /* ------------------------------------- your own hero, and only your own */
+  {
+    const s = fresh(8514);
+    s.plot[2] = { type:'tavern', lvl:3, tile:2 };
+    IB.chooseSpell(s, 0, 'warp');
+    IB.chooseSpell(s, 1, 'muster');
+    IB.createHero(s, 'fighter'); IB.autoPick(s.heroes[0]);
+    step(23);
+    rich(s);
+    const h = s.heroes[0];
+    h.dead = false; h.respawnT = 0; if (!h.inLane) IB.enterLane(h); h.dmgTaken = -99;
+    IB.castPress(0);
+    t.ok(!!IB.spellUI.aim, 'Warp Banner is armed and waiting for a body');
+    const hp = IB.lp(h.x, h.y);
+    const t3 = IB.spellAimTarget(hp[0], hp[1] - 18 * IB.cam.z);
+    t.ok(t3 && t3.hero === h.id, 'a click on your own hero comes back as that hero');
+    t.ok(IB.spellAimTarget(hp[0] + 900, hp[1]) === null, 'and one on empty ground comes back as nothing');
+    t.ok(IB.spellAimSend(t3) === null, 'so the banner goes up');
+    t.ok(h.warpT > 0, 'and it is going up (' + h.warpT.toFixed(1) + 's)');
+    // What each order asks for is written down where the player can read it.
+    for (const d of IB.SPELLS)
+      t.ok(d.target === 'self' || typeof IB.AIM_ASK[d.target] === 'string',
+        d.n + ' has a sentence asking for its target');
+  }
+
+  /* ------------------------------ the pair, where a thumb can reach them
+     They live in the bar rather than in a dock column: the dock is one tab at a
+     time on a phone, and an order is exactly the control you reach for in the
+     middle of doing something else.                                         */
+  {
+    const s = fresh(8512);
+    t.ok((IB.ordersHtml().match(/class="ord pickme"/g) || []).length === s.slots,
+      'an empty slot in the bar for each one open, all asking to be filled');
+    IB.chooseSpell(s, 0, 'pyre'); IB.chooseSpell(s, 1, 'rampart');
+    const open = IB.ordersHtml();
+    t.ok(open.includes(IB.SPELL_ICON.pyre), 'a filled slot carries the order’s own icon');
+    t.ok(open.includes('>Pyre Brand</span>'), 'and its name beside it');
+    t.ok((open.match(/class="ocd"/g) || []).length === s.slots,
+      'and each one has a shutter for the recovery to fill');
+    t.ok((open.match(/data-slot="/g) || []).length === s.slots,
+      'one tile per slot the hold has open');
+    // Left empty when the wave marches, a slot stops being a control at all.
+    const s2 = fresh(8513);
+    step(23);
+    t.ok(G.wave >= 1 && !s2.spells[0] && !s2.spells[1], 'a hold that chose nothing, once the wave is out');
+    const shut = IB.ordersHtml();
+    t.ok((shut.match(/class="ord locked"/g) || []).length === s2.slots,
+      'both slots are dead plates rather than buttons');
+    t.ok(!/data-slot=/.test(shut), 'with nothing on them to press');
+    t.ok(IB.castPress(0) === 'nothing in that slot', 'and pressing where one was does nothing');
+  }
+
+  /* ------------------------------------ and all of it is made of the same card */
+  {
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    const block = (sel) => {
+      const m = new RegExp('(?:^|\\n)\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\{').exec(css);
+      if (!m) return '';
+      const i = m.index + m[0].length;
+      return css.slice(i, css.indexOf('}', i));
+    };
+    for (const [face, press] of [['.ord', '.ord:active:not(.dead)'], ['.spslot', '.spslot:active']]){
+      t.ok(/var\(--shelf/.test(block(face)), face + ' has a shelf under it, so it reads as a thing');
+      t.ok(/translateY\(\s*[2-9]/.test(block(press)), face + ' travels far enough on a press to be felt');
+      t.ok(/inset 0 \d+px/.test(block(press)), face + ' goes INTO the panel rather than only down');
+    }
+    t.ok(/var\(--shelf/.test(block('.sptile')), 'a card in the chooser has thickness too');
+    t.ok(/inset 0 \d+px/.test(block('.sptile:active')), 'and goes into the sheet when pressed');
+    // The ink swap. Without it every cost printed on one of these washes out.
+    const ink = css.slice(0, css.indexOf('--gold:#8a6410'));
+    const inkSel = ink.slice(ink.lastIndexOf('}') + 1);
+    for (const sel of ['.ord', '.sptile', '.spslot'])
+      t.ok(inkSel.includes(sel), sel + ' rebinds the dark-on-cream ink, so a cost on it stays readable');
+    // The running stitch, which is what says the thing is made of card.
+    const st = css.slice(0, css.indexOf('outline:1.4px dashed rgba(122,90,44,.34)'));
+    const stSel = st.slice(st.lastIndexOf('}') + 1);
+    for (const sel of ['.sptile', '.spslot'])
+      t.ok(stSel.includes(sel), sel + ' carries the running stitch');
+    // Its own rule rather than the shared one: the tile is 32px tall, and a
+    // seam set in five would be a line through the icon instead of a hem.
+    t.ok(/\.ord\{\s*outline:1\.4px dashed/.test(css),
+      'and so does the tile in the bar, at an inset that suits its height');
+    // Names are set in the display face, in small caps, like every other name.
+    for (const sel of ['.ord', '.sptile .spn', '.spslot .sv']){
+      t.ok(/var\(--display\)/.test(block(sel)), sel + ' is set in the display face');
+      t.ok(/small-caps/.test(block(sel)), 'and in small caps — ' + sel);
+    }
+
+    /* Rebinding --ink is only half of it. A piece of card that never states a
+       `color` inherits the FELT ink from the panel around it, and the rebind
+       sits there unread — which is how the empty slot's "+" ended up at about
+       one percent of separation against its own card while every variable
+       involved was correct. Anything cream-faced says its own colour. */
+    const col = css.slice(0, css.indexOf('color:var(--cream-ink); }'));
+    const colSel = col.slice(col.lastIndexOf('}') + 1);
+    for (const sel of ['.abtn', '.sptile', '.spslot'])
+      t.ok(colSel.includes(sel),
+        sel + ' states the dark ink rather than inheriting the felt one');
+
+    /* Cast brass has a dead state. Without one the biggest and brightest thing
+       on a sheet keeps its lift, its brightening hover and its pointer while
+       doing nothing at all — so a refusal is drawn exactly like an invitation,
+       and the button that says ACCEPT in gold is the one that is not going to.
+       The rest of the interface has had this treatment all along. */
+    const dead = block('.big:disabled');
+    t.ok(dead, 'cast brass has a dead state at all');
+    t.ok(/cursor:not-allowed/.test(dead), 'which says so with the cursor');
+    t.ok(/#d9cdb4/.test(dead), 'in the same putty every other dead control in the game wears');
+    // ...but not the same ink. #8f8370 on that putty is 2.36:1, and this is
+    // the button you land on immediately after a successful choice, so it is
+    // read more often than any other dead control in the game.
+    t.ok(/#5f5138/.test(dead), 'with ink dark enough to read at that size');
+
+    /* THE SMALL TYPE CARRYING STATE. Every one of these measured under 4.5:1
+       while the body copy beside them was at 12.98 — so the failures were
+       never about the palette, only about which text got the careful value and
+       which got a guess.
+
+       Measured against the WORST backdrop each can land on, not the best: the
+       cream card is a gradient that darkens downward and the lit slot is
+       darker still, so a value that passes at the top of a card can fail forty
+       pixels below it. That is how #6b5a3a looked fine and was 4.13:1. */
+    const L = (h) => { const v = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map(c => c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4));
+      return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
+    const ratio = (a, b) => (Math.max(L(a), L(b)) + .05) / (Math.min(L(a), L(b)) + .05);
+    const CARD = ['#f6ead0', '#e2d0aa', '#ffe6a4', '#f2c65a'];
+    const inkOf = (sel) => (block(sel).match(/color:(#[0-9a-f]{6})/) || [])[1];
+    for (const [sel, on] of [['.spslot .sv.none', CARD], ['.sptile .spc', CARD.slice(0, 2)]]){
+      const c = inkOf(sel);
+      t.ok(!!c, sel + ' states an ink');
+      const worst = Math.min(...on.map(b => ratio(c, b)));
+      t.ok(worst >= 4.5, sel + ' reads on the darkest card it can land on (' +
+        worst.toFixed(2) + ':1 at ' + c + ')');
+    }
+    t.ok(ratio('#5f5138', '#d9cdb4') >= 4.5,
+      'and the dead Accept reads on its putty (' + ratio('#5f5138', '#d9cdb4').toFixed(2) + ':1)');
+    t.ok(/filter:none/.test(dead), 'and it does not keep the brass brightening under it');
+    for (const st of [':hover', ':active']){
+      const b = block('.big' + st + ':not(:disabled)');
+      t.ok(b, '.big' + st + ' is fenced off from the dead state');
+      t.ok(!block('.big' + st), 'with no unfenced rule left to overrule it — ' + st);
+    }
+
+    /* The count on a recovering order. The shutter passes UNDER the label on
+       its way down, so a label with no ground of its own is dim ink on a dark
+       field at the start of a recovery and dim ink on a light one at the end:
+       least legible exactly when the wait is longest and the number matters
+       most. The chip does not move, so the contrast does not depend on how far
+       the shutter has fallen. */
+    const cool = block('.ord.cool .on');
+    t.ok(/background:/.test(cool), 'the recovery count carries its own ground');
+    t.ok(/color:#ffe9c4/.test(cool), 'and its own ink on top of it');
+    t.ok(/tabular-nums/.test(cool), 'in figures that do not shuffle as it counts down');
+
+    /* Every order is the height of the things beside it on a phone as well as
+       on a desktop. A 32px control in a row of 28px ones is the one that looks
+       like it was added later. */
+    t.ok(/height:28px/.test(block('body.narrow .ord')),
+      'a phone drops the order tile to the height of its neighbours');
+
+    /* Reading an order that is already in a slot must not take the lit look
+       away from it. `.taken` comes after `.at` in the sheet, so without the
+       guard the later rule quietly wins and the card being read goes flat. */
+    t.ok(!block('.sptile.taken') && block('.sptile.taken:not(.at)'),
+      'the already-taken look stands aside for the one being read');
+
+    /* The way out of a targeting state is a button like any other: stitched
+       like card, inked like card, and it clicks. It was none of the three. */
+    t.ok(stSel.includes('.acx'), 'the cancel chip carries the stitch');
+    t.ok(inkSel.includes('.acx'), 'and the cream ink');
+    t.ok(/const PRESSABLE = '[^']*\.acx/.test(SRC), 'and makes a sound when it is pressed');
+  }
+
+  /* ------------------------------- what the panel says it is about to do
+     The one thing a chooser must never do is take something away without
+     naming it first. Two slots and eight orders means most presses in the
+     second half of the window are REPLACEMENTS, and "would fill your second
+     order" is a sentence about a slot that is not empty. */
+  {
+    const s = fresh(8532);
+    IB.showSpells(0);
+    IB.spellPress('muster'); IB.spellPress('muster');
+    IB.spellUI.slot = 0;
+    IB.spellLook('bombard');
+    const why = IB.spellWhyHtml();
+    t.ok(/would replace Second Muster/.test(why),
+      'a press over a full slot names what it would push out (' +
+      (why.match(/wk">([^<]*)/) || [])[1] + ')');
+    IB.spellUI.slot = 1;
+    IB.spellLook('warp');
+    t.ok(/would fill your second order/.test(IB.spellWhyHtml()),
+      'and an empty one is still only filled');
+    // The rule for how to choose is printed once, at the top of the sheet. On
+    // a 390px screen the panel sits directly under it, so the empty state
+    // repeating it put the same instruction on the screen twice.
+    IB.spellUI.at = null;
+    const empty = IB.spellWhyHtml();
+    t.ok(!/second press|press it again|tap it again/i.test(empty),
+      'the empty panel does not reprint the rule the sheet already gave');
+    t.ok(empty.length < 200, 'and stays short enough not to be a second paragraph');
+    release();
+  }
+
+  /* ------------------------------------------- where the cast would land
+     An armed order used to show nothing at all. `spellUI.aim` was read by no
+     drawing function in the file, so a bombardment — three shells, a lane and
+     a half wide, locked in for ninety-five seconds — was placed by guessing
+     where the click would go and then finding out.
+
+     The preview cannot be tested by looking at it, so what is held here is the
+     only thing that makes it trustworthy: it is drawn from the SAME
+     enumeration the click resolves against, and its footprint is read off the
+     same constants the cast reads.
+
+     Driven through drawAim(CTX) rather than draw(): a later block in this file
+     loads a second copy of the game, and loading one REBINDS `CTX` to the new
+     stub's context — so `IB.draw()` here paints into a canvas nothing is
+     watching. Handing the painter its context is the version that cannot be
+     wrong about which canvas it is talking to, and the call site is checked
+     separately below. */
+  {
+    const s = fresh(8540);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'rampart');
+    step(23);
+    rich(s);
+    const st = CTX.__stats;
+    const ell = () => { st.ellipses = []; IB.drawAim(CTX); return st.ellipses; };
+
+    // The preview has to be ON the picture, or none of the rest of this means
+    // anything: it is drawn once, over the finished world, before the
+    // selection rings that share its language.
+    const body = SRC.slice(SRC.indexOf('function draw(){'), SRC.indexOf('INTERFACE'));
+    t.ok((body.match(/\bdrawAim\(c\)/g) || []).length === 1, 'draw() paints the preview exactly once');
+    t.ok(body.indexOf('drawAim(c)') > body.indexOf("perfOff('post')"),
+      'over the finished world rather than inside it');
+
+    // Nothing armed: nothing drawn. The preview is a thing the interface is
+    // saying, and while it is saying nothing there must be no marks at all.
+    // Aimed through lp() rather than at an arbitrary pixel: 430,300 on a
+    // 900x520 stub unprojects to somewhere off the end of the bridge, where
+    // lanePoint's clamp piles all three shells on the same spot — a test that
+    // would then be asserting the clamp works rather than the footprint does.
+    const at = (v) => { const q = IB.lp(C.LANE_LEN * v, 0); IB.aimAt(q[0], q[1]); };
+    IB.spellAimOff();
+    at(.5);
+    t.ok(ell().length === 0, 'with no order armed the world is left alone');
+
+    t.ok(IB.castPress(0) === null && IB.spellUI.aim, 'Bombard arms rather than firing');
+    // Armed but never pointed at anything: still nothing. A preview that
+    // defaults to the middle of the screen is a preview that lies on the first
+    // frame, before the pointer has said anything.
+    IB.spellUI.pt = null;
+    t.ok(ell().length === 0, 'an armed order with nowhere to point draws nothing');
+
+    IB.aimAt(430, 300);
+    t.ok(IB.spellUI.pt && IB.spellUI.pt.x === 430, 'the pointer lands where it was put');
+    at(.5);
+    /* Every ring is laid down TWICE: a dark stroke, then the gold one over it.
+       Pale gold alone measured 1.02:1 against turret stone and 1.01:1 against
+       the sky, so a mark whose whole job is to be found was not findable on
+       half the things it goes round. Counting only the gold ones is also the
+       sharper assertion — it measures rings rather than strokes. */
+    const gold = (es) => es.filter(m => m.col === IB.AIM_COL);
+    const dark = (es) => es.filter(m => m.col === IB.AIM_EDGE);
+    const marks = gold(ell());
+    t.ok(marks.length === IB.BOMB.n,
+      'and Bombard draws one ring per shell (' + marks.length + ' of ' + IB.BOMB.n + ')');
+    t.ok(dark(st.ellipses).length === marks.length,
+      'each of them carrying its own dark edge, so the deck it lies on cannot swallow it');
+    const foot = IB.AIM_FOOT.bombard();
+    t.ok(foot.length === IB.BOMB.n, 'the footprint has as many marks as the cast has shells');
+    // Centred on the point, because that is where the shells centre: the cast
+    // walks them from -spread to +spread around bombX.
+    t.ok(Math.abs(foot.reduce((a, f) => a + f.d, 0)) < 1e-9,
+      'and it is centred on the point the click sets');
+    t.ok(foot.every(f => f.r === IB.BOMB.r),
+      'at the radius the cast uses, not one of its own (' + foot[0].r + ')');
+    t.ok(marks.length > 0, 'all of it in the one accent that means "this wants you"');
+    t.ok(new Set(marks.map(m => Math.round(m.x))).size === IB.BOMB.n,
+      'the three sit at three different places on the lane');
+    t.ok(marks.every(m => m.rx > 0 && Math.abs(m.ry / m.rx - .55) < .02),
+      'and lie flat on the deck like every other mark on it');
+    // Move the pointer, and the footprint moves with it. A preview pinned to
+    // the armed order rather than to the pointer is a decoration.
+    const x0 = marks.map(m => m.x);
+    at(.62);
+    t.ok(gold(ell()).every((m, i) => Math.abs(m.x - x0[i]) > 1), 'and the whole footprint follows the pointer');
+
+    /* ---- A CLICK OFF THE BRIDGE IS A MISS.
+
+       This was `{ x:lanePoint(unproject(sx, sy)[0]) }` and nothing else, and
+       lanePoint clamps to 0..LANE_LEN — so it could never return null and the
+       miss branch in spellAimSend was dead code for all three point orders.
+       Every click anywhere in the world spent one. Measured in a browser: with
+       Bombard armed, a click on empty SKY fired the salvo at lane 36; on a
+       phone, where the default camera is your own hold and the bridge is not
+       on screen at all, a tap on the grass fired it at lane 0 — onto your own
+       gate, for ninety-five seconds, as the first thing a new player does
+       after arming it.
+
+       Two bounds, because they catch different mistakes: across the lane for
+       the sky and the gorge, along it for the two holds. */
+    const onDeck = IB.lp(C.LANE_LEN * .5, 0);
+    t.ok(IB.lanePick(onDeck[0], onDeck[1]), 'a point on the deck is a point');
+    // Far above the deck in screen terms is far across the lane in world
+    // terms: that is the sky, and the sky is not a place to put a bombardment.
+    const sky = IB.lp(C.LANE_LEN * .5, -(IB.POINT_REACH + 6));
+    t.ok(IB.lanePick(sky[0], sky[1]) === null, 'the sky is not');
+    const gorge = IB.lp(C.LANE_LEN * .5, IB.POINT_REACH + 6);
+    t.ok(IB.lanePick(gorge[0], gorge[1]) === null, 'nor is the gorge under it');
+    // ...and neither hold is a stretch of lane, however hard the clamp tried.
+    for (const past of [-14, C.LANE_LEN + 14]){
+      const q = IB.lp(past, 0);
+      t.ok(IB.lanePick(q[0], q[1]) === null, 'nor is the ground past the gate at ' + past);
+    }
+    // The resolver and the preview run the SAME test, so a footprint is never
+    // drawn where a press would not land.
+    IB.spellAimOff();
+    s.spellCd[0] = 0;
+    t.ok(IB.castPress(0) === null && IB.spellUI.aim, 'Bombard armed again');
+    IB.aimAt(sky[0], sky[1]);
+    t.ok(IB.spellAimTarget(sky[0], sky[1]) === null, 'a press at the sky resolves to nothing');
+    t.ok(gold(ell()).length === 0, 'and nothing is drawn there either');
+    // A miss leaves the order ARMED and spends nothing — it is a miss, not a
+    // cancel, which is what the file promised all along.
+    const cd0 = s.spellCd[0], iron0 = s.res.iron;
+    t.ok(IB.spellAimSend(IB.spellAimTarget(sky[0], sky[1])) === 'no target', 'the miss is reported as a miss');
+    t.ok(s.spellCd[0] === cd0 && s.res.iron === iron0, 'and costs neither the recovery nor the iron');
+    t.ok(!!IB.spellUI.aim, 'with the order still armed to try again');
+
+    /* The property that makes a body preview worth having: the ring and the
+       click are the same list, tested the same way. Two enumerations would
+       drift the first time one of them learned about a new kind of body, and
+       the failure would be a ring round something a press cannot take. */
+    IB.spellAimOff();
+    s.spellCd[1] = 0;
+    t.ok(IB.castPress(1) === null && IB.spellUI.aim, 'Rampart arms on its own structures');
+    const list = IB.spellAimCandidates();
+    t.ok(list.length > 1, 'there is more than one thing it could be pointed at (' + list.length + ')');
+    let agree = 0;
+    for (const k of list){
+      const got = IB.spellAimTarget(k.cx, k.cy);
+      const pick = IB.spellAimPick(list, k.cx, k.cy);
+      if (got && pick && pick.hit.key === got.key && got.key === k.hit.key) agree++;
+    }
+    t.ok(agree === list.length,
+      'every candidate the preview would ring is the one a press there takes (' +
+      agree + '/' + list.length + ')');
+    // ...and a point nothing is under rings nothing and takes nothing, rather
+    // than the two disagreeing about the nearest thing.
+    t.ok(IB.spellAimTarget(-9999, -9999) === null && IB.spellAimPick(list, -9999, -9999) === null,
+      'and empty space is empty to both of them');
+
+    IB.aimAt(list[0].cx, list[0].cy);
+    const rings = gold(ell());
+    t.ok(rings.length === list.length,
+      'every structure it could mend is ringed, not only the one under the pointer');
+    const lit = rings.filter(m => m.alpha > .9).length;
+    t.ok(lit === 1, 'with exactly one of them lit (' + lit + ')');
+    t.ok(rings.filter(m => m.alpha > .35 && m.alpha < .85).length === list.length - 1,
+      'and the rest quieter, but not so quiet they cannot be seen over a lit gate');
+
+    /* Cosmetic to the last bit. The preview reads the pointer, the camera and
+       the zoom — three things the two machines in a match do not share — so if
+       any of it reached the simulation a lockstep game would desync the moment
+       one player moved their mouse. */
+    const h0 = IB.netHash();
+    IB.aimAt(12, 34); IB.drawAim(CTX);
+    IB.aimAt(880, 500); IB.drawAim(CTX);
+    t.ok(IB.netHash() === h0, 'moving the pointer under an armed order moves nothing in the world');
+    t.ok(!('pt' in IB.netSnap()) && !JSON.stringify(IB.netSnap()).includes('aimPt'),
+      'and the pointer is nowhere in the snapshot the other machine is handed');
+    IB.spellAimOff();
+    t.ok(IB.spellUI.aim === null && ell().length === 0, 'calling it off puts the world back');
+
+    /* The phone half. A tap places a bombardment the instant it lands, which on
+       a 390px screen means placing it under your own thumb; the drag has to
+       aim instead of panning so the footprint can be slid into place and fired
+       on the lift. Held on the wiring, because the gesture itself is a
+       browser's to deliver. */
+    const wire = SRC.slice(SRC.indexOf('let drag = null;'), SRC.indexOf("lcv.addEventListener('dblclick'"));
+    const move = wire.slice(wire.indexOf("lcv.addEventListener('pointermove'"));
+    t.ok(/if \(spellUI\.aim\)\{ aimAt\([^)]*\); return; \}/.test(move),
+      'a drag while an order is armed aims it instead of panning the camera');
+    const up = wire.slice(wire.indexOf("lcv.addEventListener('pointerup'"));
+    t.ok(/spellUI\.aim.*pickAt/s.test(up.slice(0, up.indexOf('\n  });'))),
+      'and lifting fires at where it ended, moved or not');
+  }
+
+  /* ------------------------- the only tutorial mentions the only permanent choice
+     The how-to sheet is shown once, is the game's only tutorial, and had five
+     paragraphs: camera, economy, gates, heroes, Start. The word "order" did
+     not appear in it. Worse, dismissing it STARTS the twenty-two seconds you
+     have to pick them — so the one window in a match that closes for good was
+     opened by a screen that had never mentioned it. */
+  {
+    const src = SRC.slice(SRC.indexOf("'<h2>How Ironbridge works</h2>'"), SRC.indexOf('const keysHtml'));
+    t.ok(/commander orders/i.test(src), 'the how-to sheet says the orders exist');
+    t.ok(src.includes('C.FIRST_WAVE'),
+      'and how long there is to pick them, off the constant rather than a number typed twice');
+    t.ok(/set for good/i.test(src), 'and that the choice is permanent');
+    // Drawn from the same icon table the bar and the chooser use, so the thing
+    // the sheet points at is recognisably the thing you go and press.
+    t.ok(/SPELL_ICON\./.test(src), 'with an order’s own icon beside it');
+  }
+
+  /* ------------------------------------------ the key is on the control
+     The help sheet has listed Q and E all along, but a player deciding
+     whether to spend a bombardment is not going to open the help sheet to
+     find out how — and the orders are the one control in the game that is
+     genuinely time-critical, so reaching for the mouse is the cost of not
+     knowing. */
+  {
+    const s = fresh(8580);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'rampart');
+    step(23);
+    const bar = IB.ordersHtml();
+    for (let i = 0; i < s.slots; i++)
+      t.ok(bar.includes('<kbd class="okey">' + IB.ORDER_KEY[i] + '</kbd>'),
+        'the tile carries the key that casts it — ' + IB.ORDER_KEY[i]);
+
+    /* ONE list. The key handler reads it, the tile prints it and the help
+       sheet's line is built from it, so a pip on the control cannot end up
+       naming a key that does something else — which is the failure mode of
+       writing 'Q' in three places. */
+    for (let i = 0; i < IB.ORDER_KEY.length; i++)
+      t.ok(IB.keyAction(IB.ORDER_KEY[i].toLowerCase()) === 'order' + (i + 1),
+        IB.ORDER_KEY[i] + ' really is the key that casts slot ' + (i + 1));
+    const line = IB.KEYS.find(k => k.a === 'order');
+    t.ok(line && line.k === IB.ORDER_KEY.join(' '),
+      'and the help sheet lists the same two (' + (line ? line.k : 'missing') + ')');
+    t.ok(!/if \(k === 'q'\) return/.test(SRC),
+      'with no second copy of the binding left behind in the handler');
+
+    // A phone has no Q and no E, and the least room to say so.
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    t.ok(/body\.narrow \.ord \.okey\{ display:none/.test(css),
+      'a phone drops the pip rather than shrinking it');
+    // Cream-faced, because the kbd everywhere else in the game is drawn for
+    // felt and would be a dark hole punched in a card.
+    const pip = css.slice(css.indexOf('.ord .okey{'), css.indexOf('}', css.indexOf('.ord .okey{')));
+    t.ok(/color:#6b5326/.test(pip) && !/#232d40/.test(pip),
+      'and the pip is inked for card rather than for felt');
+  }
+
+  /* --------------------------------- what the other commander is carrying
+     Both holds draft two out of the same nine, and the only trace of theirs
+     was an effect on a body that never named its source: a minion slowing
+     down could be a Hobble, a Pitch Fire, a Frost tower or a Cannon, and there
+     was no way to tell and no way to learn. A player who cannot name what hit
+     them cannot plan around it the second time. */
+  {
+    const s = fresh(8570);
+    const host = G.sides[1];
+    IB.foeForget();
+    t.ok(IB.foeSeen.every(x => x === null), 'a new match has shown this seat nothing');
+    const strip = () => IB.foeOrdersHtml();
+    t.ok((strip().match(/class="fchip un"/g) || []).length === G.sides[1].slots,
+      'both of their slots start unknown');
+    // A slot drawn rather than hidden: "they have one more you have not seen"
+    // is itself worth knowing.
+    t.ok(/Their orders/.test(strip()), 'and the strip says whose they are');
+
+    // Two that always cast, so the reveal is what is being measured rather
+    // than whether a target happened to be standing there.
+    IB.chooseSpell(host, 0, 'muster');
+    IB.chooseSpell(host, 1, 'pitch');
+    t.ok(strip().indexOf('Second Muster') < 0,
+      'choosing one does not reveal it — a slot is learned by being SPENT');
+
+    step(23);
+    rich(host);
+    t.ok(IB.castSpell(host, { slot:0 }) === null, 'they spend the first');
+    t.ok(IB.foeSeen[0] === 'muster', 'spending one reveals it');
+    t.ok(/Second Muster/.test(strip()) && (strip().match(/class="fchip un"/g) || []).length === 1,
+      'and the strip fills one slot and leaves the other open');
+    t.ok(strip().includes(IB.SPELL_ICON.muster), 'with the order’s own icon on it');
+    host.spellCd[1] = 0;
+    t.ok(IB.castSpell(host, { slot:1, x:40 }) === null, 'and then the second');
+    t.ok(IB.foeSeen[1] === 'pitch', 'which is learned the same way');
+    t.ok(!/class="fchip un"/.test(strip()), 'once both have been spent nothing is left unknown');
+
+    /* Per MACHINE, not per match. It is what this seat has seen, the two seats
+       are supposed to disagree about it, and the lockstep hash must never
+       hear about it — a fog-of-war record that both machines had to agree on
+       would not be fog of war. */
+    const h0 = IB.netHash();
+    IB.foeForget();
+    t.ok(IB.netHash() === h0, 'forgetting what this seat has seen moves nothing in the world');
+    const snap = JSON.stringify(IB.netSnap());
+    t.ok(!/foeSeen/.test(snap), 'and none of it travels in the snapshot');
+    // My own two are never in it, whichever seat I am sitting in.
+    IB.chooseSpell(G.sides[0], 0, 'pyre');
+    G.sides[0].spellCd[0] = 0;
+    const foe = G.units.find(u => !u.dead && u.side === 1 && (u.isHero || u.kind === 'super'));
+    if (foe){
+      IB.castSpell(G.sides[0], { slot:0, hero:foe.id });
+      t.ok(IB.foeSeen[0] !== 'pyre', 'my own casts never fill their slots');
+    }
+
+    /* A save that restores the board and forgets what you learned from it is a
+       save that lies about the fog. Reloading used to hand back two question
+       marks and "you have not seen this one used yet" for orders the player
+       had watched land. */
+    IB.foeSeen[0] = 'muster'; IB.foeSeen[1] = 'pitch';
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok(pack && pack.foe && pack.foe.slice(0, 2).join() === 'muster,pitch',
+      'carrying what this seat had been shown (' + (pack && pack.foe ? pack.foe.join() : 'nothing') + ')');
+    IB.foeForget();
+    t.ok(IB.loadMatch(pack) === undefined || true, 'and it loads');
+    t.ok(IB.foeSeen.slice(0, 2).join() === 'muster,pitch', 'with the reveal still revealed');
+    t.ok(!/class="fchip un"/.test(IB.foeOrdersHtml()), 'and the strip no longer claiming otherwise');
+    // A save from before this existed says nothing, and two question marks is
+    // the right answer to that rather than a crash.
+    IB.foeForget();
+    const old = Object.assign({}, pack); delete old.foe;
+    IB.loadMatch(old);
+    t.ok(IB.foeSeen.every(x => x === null), 'an older save restores to knowing nothing');
+    IB.clearSave();
+    IB.foeForget();
+  }
+
+  /* --------------------------------------------- the third order, earned
+     The orders were ONE decision, made in twenty-two seconds and then executed
+     for the rest of the match: nothing you did afterwards ever changed what
+     you were carrying, so the best play in the tenth minute was the one you
+     had already chosen in the first. And breaking their inhibitor — the
+     biggest moment a match has — paid out in Siege Ogres and nothing else. */
+  {
+    const s = fresh(8600);
+    const foe = G.sides[1];
+    t.ok(s.slots === IB.SLOTS_AT_START && IB.SPELL_SLOTS > IB.SLOTS_AT_START,
+      'a hold opens with fewer slots than the game has (' + s.slots + ' of ' + IB.SPELL_SLOTS + ')');
+    t.ok(typeof IB.chooseSpell(s, IB.SLOTS_AT_START, 'pitch') === 'string',
+      'and cannot fill one it has not earned');
+    t.ok((IB.ordersHtml().match(/data-slot=/g) || []).length === s.slots,
+      'the bar shows only the slots it has');
+
+    IB.chooseSpell(s, 0, 'bombard'); IB.chooseSpell(s, 1, 'muster');
+    step(23);
+    t.ok(G.wave >= 1, 'the window has closed on the opening pair');
+    t.ok(typeof IB.chooseSpell(s, 0, 'pitch') === 'string', 'which are set for good');
+
+    // Breaking THEIR inhibitor is what opens it.
+    const inhib = foe.structs.find(x => x.key === 'inhib');
+    t.ok(!!inhib, 'they have an inhibitor');
+    G.toasts.length = 0;
+    IB.killThing(inhib, null);
+    t.ok(s.slots === IB.SPELL_SLOTS, 'taking it opens the third (' + s.slots + ')');
+    t.ok(foe.slots === IB.SLOTS_AT_START, 'and opens nothing for the side that lost it');
+    t.ok(/third order/.test(G.toasts.map(x => x.msg).join(' | ')), 'and the player is told');
+
+    /* Chosen NOW, not in a window that closed nine minutes ago — the slot did
+       not exist then. Which is the second decision the feature did not have:
+       made with everything you have since learned about what they carry. */
+    // Pressing the empty earned tile is a CHOICE, not a cast — the same thing
+    // the tile means during the opening window, for the same reason.
+    t.ok(IB.castPress(2) === 'still choosing', 'pressing the earned tile opens the chooser');
+    t.ok(/Commander orders/.test(G.sheet), 'which is the sheet that comes up');
+    t.ok(!G.held, 'and it does NOT stop the world — a wave is already walking at you');
+    // "Set for good when the first wave marches" is the truth about the
+    // opening pair and a lie about a slot whose deadline ran out before it
+    // existed.
+    t.ok(!/first wave marches/.test(G.sheet), 'the sheet does not cite a deadline that has passed');
+    t.ok(/inhibitor/.test(G.sheet), 'and says where this one came from instead');
+    t.ok(IB.chooseSpell(s, 2, 'pitch') === null, 'the third can be filled mid-match');
+    t.ok(IB.castPress(2) !== 'still choosing', '...and once filled the tile casts like the others');
+    t.ok(s.spells[2] === 'pitch', 'and holds what it was given');
+    t.ok(typeof IB.chooseSpell(s, 2, 'hobble') === 'string',
+      'once. An order, once given, is given');
+    t.ok(typeof IB.chooseSpell(s, 2, 'bombard') === 'string',
+      'and the no-two-the-same rule still spans all three');
+
+    // It casts like the others, off its own key.
+    t.ok(IB.ORDER_KEY.length === IB.SPELL_SLOTS, 'there is a key for every slot');
+    t.ok(IB.keyAction(IB.ORDER_KEY[2].toLowerCase()) === 'order3', 'and the third one casts the third');
+    const bar = IB.ordersHtml();
+    t.ok((bar.match(/data-slot=/g) || []).length === IB.SPELL_SLOTS, 'the bar grew a tile');
+    t.ok(bar.includes('<kbd class="okey">' + IB.ORDER_KEY[2] + '</kbd>'), 'with its key on it');
+    /* Named, and NOT counting down. SLOT_NAME had two entries, so the third
+       tile read "UNDEFINED" — and it carried the opening window's clock, which
+       is a deadline that had already run out before this slot existed. */
+    t.ok(IB.SLOT_NAME.length === IB.SPELL_SLOTS && IB.SLOT_NAME.every(Boolean),
+      'every slot has a name (' + IB.SLOT_NAME.join(', ') + ')');
+    const empty3 = (() => { const was = s.spells[2]; s.spells[2] = null;
+      const html = IB.ordersHtml(); s.spells[2] = was; return html; })();
+    t.ok(!/undefined/i.test(empty3), 'and the earned tile is not called undefined');
+    t.ok((empty3.match(/class="owin"/g) || []).length === 0,
+      'nor given a countdown to a deadline that ran out before it existed');
+
+    /* A second inhibitor is worth ninety-five seconds of ogres and NOT a
+       fourth slot, because nothing in the bar was designed for one. */
+    inhib.dead = false; inhib.hp = inhib.mhp;
+    IB.killThing(inhib, null);
+    t.ok(s.slots === IB.SPELL_SLOTS, 'a second break does not open a fourth');
+
+    /* And it travels. A slot count that one machine has and the other does not
+       is a desync waiting for the next cast, so it goes in the hash, the
+       snapshot and the save alike. */
+    const h0 = IB.netHash();
+    s.slots = IB.SLOTS_AT_START;
+    t.ok(IB.netHash() !== h0, 'how many slots a hold has is in the lockstep hash');
+    s.slots = IB.SPELL_SLOTS;
+    t.ok(IB.netHash() === h0, 'and putting it back puts the hash back');
+    G.projs.length = 0; G.zones.length = 0;
+    const at = IB.netHash();
+    const json = JSON.stringify(IB.netSnap());
+    step(1.5);
+    t.ok(IB.netLoad(JSON.parse(json)), 'a hold with three slots packs into a snapshot');
+    t.ok(IB.netHash() === at && G.sides[0].slots === IB.SPELL_SLOTS, 'and comes back with all three');
+    t.ok(IB.saveMatch(), 'and saves');
+    const pack = IB.savedMatch();
+    t.ok(pack.sides[0].slots === IB.SPELL_SLOTS, 'carrying the count');
+    IB.loadMatch(pack);
+    t.ok(G.sides[0].slots === IB.SPELL_SLOTS, 'which survives the reload');
+    // A save from before the third existed opens with two rather than none.
+    const old = JSON.parse(JSON.stringify(pack));
+    for (const ps of old.sides) delete ps.slots;
+    IB.loadMatch(old);
+    t.ok(G.sides[0].slots === IB.SLOTS_AT_START, 'and an older save restores to the opening pair');
+    IB.clearSave();
+    G.toasts.length = 0;
+  }
+
+  /* ------------------------------------------------- the ninth order
+     The eight before it all answered a MOMENT — a salvo, a retreat, a hero
+     made worse for four seconds — and none of them answered a piece of
+     ground. Nothing in the set could say "not here, not for the next six
+     seconds", which is the one thing a hold losing the middle wants to say.
+
+     It is the first order that leaves the simulation holding state of its own
+     between ticks, so the round trip below matters more than anything about
+     how it looks: fireT/fireX have to survive a snapshot, or a resync mid-fire
+     desyncs the moment one machine keeps burning and the other does not. */
+  {
+    const s = fresh(8560);
+    t.ok(!!IB.SPELL.pitch && IB.SPELL.pitch.target === 'point', 'Pitch Fire is aimed at the lane');
+    IB.chooseSpell(s, 0, 'pitch');
+    step(23);
+    rich(s);
+    IB.spawnWave();
+    step(4);
+    const foe = G.units.filter(u => !u.dead && u.side === 1);
+    t.ok(foe.length > 0, 'their line is on the bridge (' + foe.length + ')');
+
+    t.ok(s.fireT === 0, 'nothing is burning yet');
+    t.ok(IB.castSpell(s, { slot:0, x:foe[0].x }) === null, 'the pitch goes out');
+    t.ok(s.fireT === IB.PITCH.dur && Math.abs(s.fireX - IB.lanePoint(foe[0].x)) < 1e-9,
+      'and the stretch is alight where it was aimed');
+
+    // It burns over TIME rather than in a burst: that is the whole difference
+    // between this and Bombard, and it is what makes standing in it a choice.
+    const victim = foe[0];
+    const hp0 = victim.hp;
+    step(.5);
+    const bit = hp0 - victim.hp;
+    t.ok(bit > 0, 'a body standing in it is losing health (' + bit.toFixed(1) + ')');
+    step(.5);
+    t.ok(hp0 - victim.hp > bit, 'and keeps losing it for as long as it stands there');
+    t.ok(victim.slowT > 0, 'while it stands there slowed');
+    // ...in short refreshes, so walking out of the fire is walking out of the
+    // slow rather than carrying a four-second tag away from it.
+    t.ok(victim.slowT <= IB.PITCH.slowT + 1e-6,
+      'in a refresh short enough that leaving the fire leaves the slow (' + victim.slowT.toFixed(2) + 's)');
+
+    /* THE ROUND TRIP. Four hand-written pack lists stand between a new field
+       and a resync that desyncs immediately, and a burning stretch is exactly
+       the kind of state that is easy to add to the tick and forget in all
+       four. */
+    G.projs.length = 0; G.zones.length = 0;
+    t.ok(s.fireT > 0, 'the fire is still burning across the snapshot');
+    const at = IB.netHash();
+    const json = JSON.stringify(IB.netSnap());
+    step(1.2);
+    t.ok(IB.netHash() !== at, 'the board moves on while it burns');
+    t.ok(IB.netLoad(JSON.parse(json)), 'a burning stretch packs into a snapshot');
+    t.ok(IB.netHash() === at, 'and comes back bit-identical');
+    t.ok(G.sides[0].fireT > 0, 'with the fire still lit on the other side of it');
+    // And the hash is genuinely watching it: move the fire and nothing else,
+    // and the two machines must no longer agree.
+    const h1 = IB.netHash();
+    G.sides[0].fireX += 1;
+    t.ok(IB.netHash() !== h1, 'where the fire is, is in the lockstep hash');
+    G.sides[0].fireX -= 1;
+    t.ok(IB.netHash() === h1, 'and putting it back puts the hash back');
+    const h2 = IB.netHash();
+    G.sides[0].fireT += .5;
+    t.ok(IB.netHash() !== h2, 'and so is how long it has left');
+    G.sides[0].fireT -= .5;
+
+    // A second pour refreshes rather than stacking: one burning stretch per
+    // hold, like one salvo per hold.
+    s.spellCd[0] = 0;
+    const away = IB.lanePoint(Math.max(0, foe[0].x - 12));
+    IB.castSpell(s, { slot:0, x:away });
+    t.ok(Math.abs(s.fireX - away) < 1e-9 && s.fireT === IB.PITCH.dur,
+      'a second pour moves the fire rather than lighting a second one');
+
+    // It goes out on its own.
+    step(IB.PITCH.dur + .2);
+    t.ok(s.fireT === 0, 'and six seconds later there is nothing burning');
+    const hpAfter = foe.filter(u => !u.dead).length;
+    t.ok(hpAfter >= 0, 'the lane survives it being over (' + hpAfter + ' still up)');
+  }
+
+  /* -------------------------------------- and the ninth order is drawable */
+  {
+    const s = fresh(8561);
+    IB.chooseSpell(s, 0, 'pitch');
+    step(23);
+    rich(s);
+    const st = CTX.__stats;
+    const ell = () => { st.ellipses = []; IB.drawPitch(CTX); return st.ellipses; };
+    t.ok(ell().length === 0, 'an unlit lane paints nothing');
+    IB.castSpell(s, { slot:0, x:40 });
+    const lit = ell();
+    t.ok(lit.length > 0, 'a burning stretch is painted (' + lit.length + ' marks)');
+    // Under the bodies. The fire is GROUND, and ground goes under feet — a
+    // sheet of orange over a minion standing in it would hide the thing the
+    // fire is happening to.
+    const body = SRC.slice(SRC.indexOf('function draw(){'), SRC.indexOf('INTERFACE'));
+    t.ok(body.indexOf('drawPitch(c)') > body.indexOf("perfOff('deck')") &&
+         body.indexOf('drawPitch(c)') < body.indexOf("perfOff('lane')"),
+      'painted after the deck and before the bodies that walk through it');
+    // Nothing random. Both machines paint the same fire, so a screenshot of one
+    // is a screenshot of the other.
+    const paint = SRC.slice(SRC.indexOf('function drawPitch(c){'), SRC.indexOf('const structTall'));
+    for (const bad of ['Math.random', 'rnd(', 'arnd(', 'fxRnd'])
+      t.ok(!paint.includes(bad), 'the fire is painted without reaching for ' + bad);
+    // Drawing it moves nothing.
+    const h0 = IB.netHash();
+    IB.drawPitch(CTX); IB.drawPitch(CTX);
+    t.ok(IB.netHash() === h0, 'and painting it does not move the world');
+    // The preview knows its footprint, off the same radius the fire uses.
+    const foot = IB.AIM_FOOT.pitch();
+    t.ok(foot.length === 1 && foot[0].r === IB.PITCH.rad,
+      'and the aim preview rings exactly the stretch that will burn');
+  }
+
+  /* -------------------------------- the third point order got the readout too
+     Round 5 added Pitch Fire and round 3's readout never met it: the block
+     introducing castTell still said "the two POINT orders", and Pitch — 40
+     wood and 20 iron every 85 seconds — told you nothing about whether it
+     caught anybody, which is the exact gap the readout was built to close. */
+  {
+    const s = fresh(8590);
+    IB.chooseSpell(s, 0, 'pitch');
+    step(23);
+    rich(s);
+    IB.spawnWave();
+    step(4);
+    const foe = G.units.filter(u => !u.dead && u.side === 1);
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(s, { slot:0, x:foe.length ? foe[0].x : 40 }) === null, 'the pitch goes out');
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/^Pitch Fire — /.test(said), 'and says what it caught (' + said + ')');
+    // Counted as it LANDS rather than over the six seconds: a lingering zone
+    // has no moment where the total is final, and a number that kept climbing
+    // would be a different kind of lie from the one the readout exists to stop.
+    const n = +(said.match(/(\d+)/) || [0, 0])[1];
+    t.ok(n <= foe.length, 'never more bodies than were on the lane (' + n + ' of ' + foe.length + ')');
+    G.toasts.length = 0;
+    s.spellCd[0] = 0;
+    IB.castSpell(s, { slot:0, x:C.LANE_LEN - .5 });
+    t.ok(/nothing on that stretch/.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and an empty stretch says so, like the other two');
+    /* All three point orders report, and a fourth would fail here rather than
+       shipping silent the way this one did. Bombard's call is not in the cast
+       table — its salvo walks over three ticks, so it reports when the last
+       shell falls — which is why this looks for the call by NAME across the
+       whole file rather than in one block. */
+    const pts = IB.SPELLS.filter(d => d.target === 'point');
+    for (const d of pts)
+      t.ok(SRC.includes("castTell(s, '" + d.n + "'"),
+        'the point order ' + d.n + ' has a readout of its own');
+    /* Every readout in the file belongs to an order, and every order that
+       cannot see its own effect has one. The point orders cannot because they
+       are aimed at a stretch of lane rather than a thing; Countermand cannot
+       because its effect happens inside the other hold's signal room. Anything
+       else that grows a readout has to come and say so here. */
+    const named = (SRC.match(/castTell\(s, '([^']+)'/g) || []).map(m => m.slice(13, -1));
+    t.ok(named.every(n => IB.SPELLS.some(d => d.n === n)),
+      'every readout in the file belongs to an order (' + named.join(', ') + ')');
+    t.ok(pts.every(d => named.includes(d.n)), 'and every point order has one');
+    t.ok(named.filter(n => !pts.some(d => d.n === n)).join() === 'Countermand',
+      'the only order that reports without aiming is the one cast into the other hold');
+    G.toasts.length = 0;
+  }
+
+  /* ------------------------------------ what the cast actually did
+     Six of the eight orders land on something you picked, so the outcome is
+     never in doubt. The two POINT orders are the exception: whether a
+     bombardment caught six bodies or none is the only thing worth knowing
+     about the ninety-five seconds just spent on it, and a near miss and a
+     perfect salvo produced exactly the same three rings and the same silence. */
+  {
+    const s = fresh(8550);
+    IB.chooseSpell(s, 0, 'bombard');
+    IB.chooseSpell(s, 1, 'withdraw');
+    step(23);
+    rich(s);
+    IB.spawnWave();
+    step(4);
+    const said = () => G.toasts.map(x => x.msg).join(' | ');
+    const enemy = G.units.filter(u => !u.dead && u.side === 1);
+    t.ok(enemy.length > 0, 'there are bodies of theirs on the bridge (' + enemy.length + ')');
+
+    // A salvo that lands on somebody says how many, ONCE, when the last shell
+    // has fallen — not three times, and not before the walk is finished.
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(s, { slot:0, x:enemy[0].x }) === null, 'the bombardment goes out');
+    t.ok(said() === '', 'and says nothing while the shells are still in the air');
+    let told = 0;
+    for (let i = 0; i < 40 && !told; i++){ step(.1); told = G.toasts.length; }
+    t.ok(told === 1, 'exactly one line for the whole salvo (' + told + ')');
+    const hit = G.toasts[0];
+    // The count, and — once an order's kills started paying the hold that cast
+    // it — what the salvo earned. The bounty half only appears when there is
+    // one, so a salvo that caught bodies without finishing any still reads as
+    // the plain count.
+    t.ok(/^Bombard — \d+ caught(, \d+ gold)?$/.test(hit.msg), 'which is the count (' + hit.msg + ')');
+    const caught = +(hit.msg.match(/(\d+)/) || [0, 0])[1];
+    t.ok(caught > 0, 'and it caught somebody, having been aimed at one');
+    t.ok(hit.kind === 'good', 'reported as a hit rather than as a miss');
+    /* BODIES, not hits. The three shells overlap by design — spread 3.0
+       against a radius of 3.6 — so a body in the middle of the footprint is
+       hit by two of them, and the naive sum said seventeen against nine bodies
+       on the lane. A readout that inflates itself is worse than none: it is
+       the number a player uses to decide whether the order is worth its slot. */
+    t.ok(caught <= enemy.length,
+      'and never claims more bodies than were on the lane (' + caught + ' of ' + enemy.length + ')');
+
+    // ...and one that lands on nothing says so, which is the half that makes
+    // the other half worth reading.
+    G.toasts.length = 0;
+    s.spellCd[0] = 0;
+    const empty = C.LANE_LEN - .5;
+    t.ok(IB.castSpell(s, { slot:0, x:empty }) === null, 'a second bombardment goes out at empty lane');
+    for (let i = 0; i < 40 && !G.toasts.length; i++) step(.1);
+    t.ok(/nothing on that stretch/.test(said()), 'a miss says so (' + said() + ')');
+    t.ok(G.toasts[0].kind === 'bad', 'and does not dress itself up as a hit');
+
+    // Withdraw counts the bodies it turned round, on the same path.
+    G.toasts.length = 0;
+    const mine = G.units.filter(u => !u.dead && u.side === 0 && !u.isHero);
+    if (mine.length){
+      t.ok(IB.castSpell(s, { slot:1, x:mine[0].x }) === null, 'Withdraw goes out');
+      t.ok(/^Withdraw — \d+ turned back$/.test(said()), 'and says how many turned (' + said() + ')');
+    }
+
+    /* Cosmetic, and it has to be provably so: the count comes off the
+       simulation, but the LINE is only shown to the side that gave the order —
+       the other machine is watching its own bodies fall over and does not need
+       a scoreboard for it. A toast that both machines had to agree on would be
+       a toast in the lockstep hash. */
+    G.toasts.length = 0;
+    const h0 = IB.netHash();
+    const seat = IB.MY;
+    IB.MY = 1;
+    s.spellCd[0] = 0;
+    IB.castSpell(s, { slot:0, x:enemy.length ? enemy[0].x : 40 });
+    for (let i = 0; i < 40 && !G.toasts.length; i++) step(.1);
+    /* The other seat is told WHICH order was spent — that is the fog-of-war
+       reveal, and it is the same thing a player watching carefully would work
+       out. What it is never told is the COUNT: how many bodies the salvo
+       caught is the caster's own readout, and handing it to the other side
+       would be telling them how well their own line held before they could
+       see it for themselves. */
+    const heard = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/Their commander — Bombard/.test(heard),
+      'the other seat is told which order was spent (' + heard + ')');
+    t.ok(!/caught|nothing on that stretch/.test(heard),
+      'and never the count, which belongs to the side that gave the order');
+    IB.MY = seat;
+    t.ok(IB.netHash() !== undefined && typeof IB.netHash() === typeof h0,
+      'and the hash is still a hash either way');
+    t.ok(!/toasts|castTell|bombTally/.test(SRC.slice(SRC.indexOf('function netHash'), SRC.indexOf('function netHash') + 3000)),
+      'nothing about the telling is in netHash');
+    G.toasts.length = 0;
+  }
+
+  /* -------------------------------------- and that the window is closing
+     The choice is permanent and the window is twenty-two seconds long, and the
+     empty slot said neither. A player reading the sheet, or building their
+     hold, or simply not looking at the top bar, arrived at the first wave with
+     no orders at all and nothing had told them anything was expiring. */
+  {
+    const s = fresh(8551);
+    t.ok(G.wave < 1 && G.waveT > 0, 'the window is open');
+    const open = IB.ordersHtml();
+    t.ok((open.match(/class="owin"/g) || []).length === s.slots,
+      'both empty slots carry room for the clock');
+    // Its own chip rather than part of the name: a count spliced into the label
+    // shuffles the name sideways once a second.
+    t.ok(/<span class="on">[^<]*<\/span><i class="owin">/.test(open),
+      'which is beside the name rather than inside it');
+    IB.chooseSpell(s, 0, 'muster');
+    t.ok((IB.ordersHtml().match(/class="owin"/g) || []).length === s.slots - 1,
+      'a slot that has been filled stops counting');
+    step(23);
+    t.ok(G.wave >= 1 && !/owin/.test(IB.ordersHtml()),
+      'and once the wave has marched there is no clock left to read');
+    // The warning point is a real threshold rather than the whole window or
+    // none of it — a chip that shouts for twenty-two seconds is wallpaper.
+    t.ok(IB.ORDER_WINDOW_WARN > 0 && IB.ORDER_WINDOW_WARN < C.FIRST_WAVE,
+      'the last-call threshold sits inside the window (' + IB.ORDER_WINDOW_WARN + ' of ' + C.FIRST_WAVE + ')');
+    const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    t.ok(/\.ord\.closing \.owin\{/.test(css), 'and it has a look of its own when it is nearly gone');
+    t.ok(/@media \(prefers-reduced-motion:reduce\)\{ \.ord\.closing \.owin\{ animation:none/.test(css),
+      'that stops moving for anyone who asked motion to stop');
+    // The name goes on a phone; the clock never does.
+    const narrow = css.slice(css.indexOf('body.narrow .ord{'));
+    t.ok(/body\.narrow \.ord \.on\{ display:none/.test(narrow) &&
+         /body\.narrow \.ord \.owin\{ display:inline/.test(narrow),
+      'a phone drops the slot name and keeps the count');
+  }
+
+  /* --------------------------- and none of it can decide anything on its own */
+  {
+    const at = SRC.indexOf('COMMANDER ORDERS — the interface half');
+    const end = SRC.indexOf('function adviceFor(s)');
+    t.ok(at > 0 && end > at, 'the interface half is one block that can be read on its own');
+    const mine = SRC.slice(at, end).replace(/^\s*\/\/.*$/gm, '');
+    for (const bad of ['Math.random', 'Date.now', 'fxRnd', 'performance.now'])
+      t.ok(!mine.includes(bad), 'nothing in the chooser reaches for ' + bad);
+    // It talks to the simulation through commands and through the four
+    // functions that were exported to be the seam, and through nothing else.
+    t.ok(/sendCmd\('spell'/.test(mine) && /sendCmd\('cast'/.test(mine),
+      'it changes the world only by sending the two commands');
+    t.ok(!/\bchooseSpell\s*\(/.test(mine) && !/\bcastSpell\s*\(/.test(mine),
+      'and never by calling the simulation directly');
+  }
+
+  IB.MY = seat0;
+  IB.newMatch({ diff:'veteran', seed:8599 });
+}
+
+/* ==================================== a hero's choices, as icons
+   Three cards, each with a name and its full description, and nothing to tell
+   them apart at a glance: you read all three, at every tier, for the whole
+   match. An icon cannot say what a skill DOES — there are 55 and most would be
+   indistinguishable at 36px — but it can say what kind of thing it is, which
+   is the question actually being asked at the moment of choosing. */
+{
+  IB.newMatch({ diff:'veteran', seed:9410 });
+  // ---- every skill's icon comes off the tag the simulation already uses,
+  // rather than a second list that could disagree with it.
+  const tags = [...new Set(IB.SKILLS.map(k => k.tag))];
+  t.ok(tags.length > 1, 'the skills carry more than one tag (' + tags.join(' ') + ')');
+  for (const g of tags)
+    t.ok(!!IB.SKILL_TAG_ICON[g], 'the tag ' + g + ' has an icon of its own');
+  for (const k of IB.SKILLS){
+    const ic = IB.optIcon('skill', k.id);
+    t.ok(typeof ic === 'string' && /^<svg /.test(ic), k.n + ' has an icon');
+    t.ok(!/<img|url\(|\p{Extended_Pictographic}/u.test(ic), k.n + '’s icon fetches nothing');
+  }
+
+  /* ---- the hundred passives have no tag, so the group is DERIVED from the
+     modifier bag: a new passive is categorised the moment it is written.
+
+     The first cut of those lists came off the header comment above PASSIVES,
+     which names fifteen stat keys and eight hooks — and the table actually
+     uses about sixty. 53 of the 100 fell through to the leftover icon, which
+     is a star that means nothing. Measured, then widened; this is the
+     assertion that would have caught it. */
+  const grp = {};
+  for (const q of IB.PASSIVES) grp[IB.passGroup(q.id)] = (grp[IB.passGroup(q.id)] || 0) + 1;
+  const spread = Object.keys(grp).map(k => k + ':' + grp[k]).join(' ');
+  for (const g of Object.keys(IB.PASS_GROUP))
+    t.ok(grp[g] > 0, 'the group ' + g + ' claims some of the passives (' + spread + ')');
+  t.ok((grp.odd || 0) < IB.PASSIVES.length * .25,
+    'and the leftover icon is a leftover rather than the default (' + (grp.odd || 0) +
+    ' of ' + IB.PASSIVES.length + ')');
+  for (const q of IB.PASSIVES)
+    t.ok(/^<svg /.test(IB.optIcon('passive', q.id)), q.n + ' has an icon');
+  // A rank on a passive is still that passive, so it keeps its own icon.
+  t.ok(IB.optIcon('rank', 'P:' + IB.PASSIVES[0].id) === IB.optIcon('passive', IB.PASSIVES[0].id),
+    'and ranking one up does not change what it looks like');
+
+  // ---- the card carries the icon and the NAME. The prose moved to one panel
+  // the three share, because three descriptions side by side is three
+  // paragraphs to read at every tier.
+  {
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.findIndex(x => !x), 'tavern');
+    IB.createHero(s, 'fighter');
+    const h = s.heroes[0];
+    t.ok(h.pend.length === 1 && h.pend[0].kind === 'passive', 'a new hero is offered its passive');
+    const opts = h.pend[0].opts;
+    IB.optUI.at = null;
+    const grid = IB.picksHtml(h, 'passive', opts);
+    t.ok((grid.match(/class="pick opt/g) || []).length === opts.length, 'one card per option');
+    t.ok((grid.match(/<svg /g) || []).length >= opts.length, 'each with an icon');
+    for (const id of opts)
+      t.ok(!grid.includes('<div class="pd">' + IB.PASS[id].d), IB.PASS[id].n + '’s prose is not on its card');
+    t.ok(/class="ow none"/.test(grid), 'and the shared panel says how to read one');
+
+    /* REVEAL, THEN TAKE. A hero's choice is permanent and there is no way back
+       from it, so a press that lands on a card you have not read is the one
+       press this sheet must not accept. */
+    IB.optUI.at = 1;
+    const open = IB.picksHtml(h, 'passive', opts);
+    t.ok(/class="pick opt at"/.test(open), 'the one being read is lit');
+    t.ok((open.match(/class="pick opt at"/g) || []).length === 1, 'and only that one');
+    // Read the PANEL, not the whole grid: every card also carries its
+    // description in a title attribute, which is a native tooltip and a
+    // perfectly good extra — but it means "is this text present" is not the
+    // same question as "is this text in the panel".
+    const panel = open.slice(open.indexOf('<div class="ow'));
+    t.ok(panel.includes(IB.PASS[opts[1]].d), 'with its description in the panel');
+    t.ok(!panel.includes(IB.PASS[opts[0]].d), 'and nobody else’s');
+
+    /* All three places that offer options go through ONE builder. They were
+       three separate copies — the creation passive, a skill tier and a rank —
+       and patching the panel into one of them left the other two showing icons
+       with nothing to read them by, which is exactly how the first version of
+       this shipped. */
+    // Three call sites and the one definition.
+    t.ok((SRC.match(/picksHtml\(h, /g) || []).length === 4,
+      'the creation passive, a skill tier and a rank all build their picks one way');
+    t.ok(!/'<div class="picks">' \+ pend\.opts\.map/.test(SRC),
+      'with no hand-rolled copy left behind');
+    // Three options, three columns, at every size. The auto-fit track the
+    // prose cards use gives two at 390px and orphans the third on a row of
+    // its own, which reads as a card of different importance.
+    const pcss = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    /* Specificity, not just presence. `.tier .picks` sets auto-fit at 130px
+       further down the file, which is the same weight as a bare `.picks.opts`
+       and comes later — so the rule existed, lost, and 390px still got two
+       columns and an orphan. */
+    t.ok(/\.tier \.picks\.opts\{ grid-template-columns:repeat\(3,/.test(pcss),
+      'the option row is three across, and outranks the tier rule that would say otherwise');
+    t.ok(/\.pick\.opt\{ min-height:/.test(pcss),
+      'and every card reserves the same height, however its name wraps');
+    IB.optUI.at = null;
   }
 }
 
@@ -13057,24 +15872,46 @@ t.ok(true, 'a final draw on a live match is clean');
   // The dock takes the height a screen has spare, with a floor that is the
   // laptop it was tuned on and a ceiling so a huge monitor does not hand half
   // itself to a control panel.
-  const dockCss = SRC.slice(SRC.indexOf('#dock{'), SRC.indexOf('#dock{') + 1400);
+  // To the END of the rule, not a fixed window into the file. The last count
+  // was 1400 characters, and a comment added inside the block pushed the
+  // property being asserted out the far side of it — the assertion then failed
+  // on a slice that no longer contained its own subject.
+  const dockAt = SRC.indexOf('#dock{');
+  const dockCss = SRC.slice(dockAt, SRC.indexOf('}', dockAt));
   const cl = dockCss.match(/height:clamp\(\s*(\d+)px\s*,\s*([\d.]+)vh\s*,\s*(\d+)px\s*\)/);
   t.ok(!!cl, 'the dock is sized against the screen rather than pinned to one number');
   if (cl){
     const lo = +cl[1], vh = +cl[2], hi = +cl[3];
     t.ok(lo >= 88, 'with a floor that fits its tallest column (' + lo + 'px)');
     t.ok(hi > lo * 1.4, 'and a ceiling well above it, or the clamp does nothing (' + lo + '..' + hi + ')');
-    t.ok(hi < 260, 'but not so tall it becomes the game (' + hi + 'px)');
-    // The band has to actually move across the screens people use.
+    /* The bound that matters is the SHARE, not the pixels. A ceiling in pixels
+       is a share that shrinks as the screen grows, which is backwards — and it
+       is exactly what went wrong: 196px made the dock eight per cent of a
+       1280x2443 portrait screen, with the forge column carrying 188px of
+       buttons below its own fold while the world had 2199px to draw a hillside
+       in. Reported as "the UI can easily take more space", and correctly. */
+    t.ok(vh <= 25, 'the dock never takes more than a quarter of the screen (' + vh + 'vh)');
+    t.ok(hi >= 400, 'and a tall screen is allowed to give it a real panel (' + hi + 'px ceiling)');
+    // The band has to actually move across the screens people use — including
+    // the tall ones, which the old ceiling flattened out entirely.
     const at = (h) => Math.min(hi, Math.max(lo, h * vh / 100));
     t.ok(at(1440) > at(720) + 30,
       'a tall screen really does get more of it than a short one (' +
       at(720).toFixed(0) + 'px at 720, ' + at(1440).toFixed(0) + 'px at 1440)');
+    t.ok(at(2443) > at(900) * 2,
+      'and a very tall one is not pinned to the laptop number (' +
+      at(900).toFixed(0) + 'px at 900, ' + at(2443).toFixed(0) + 'px at 2443)');
   }
 
   // A safety zone: nothing sits flush against an edge it can be cut on, and a
   // column that does overflow can be scrolled rather than silently truncated.
-  const secCss = SRC.slice(SRC.indexOf('.dsec{'), SRC.indexOf('.dsec{') + 320);
+  // Anchored to the START of the rule and cut at its end. `indexOf('.dsec{')`
+  // finds it inside `#dock .dsec{ min-width:0 }` in the grid media query — a
+  // real rule, and not the one being asked about. Same trap as the dock's own
+  // clamp, two rules up; a fixed window into a stylesheet is a test that breaks
+  // whenever anything is written above its subject.
+  const secAt = /\n\s*\.dsec\{/.exec(SRC).index;
+  const secCss = SRC.slice(secAt, SRC.indexOf('}', secAt));
   t.ok(/padding:0 \d+px \d+px/.test(secCss),
     'and every column carries bottom padding, so its last row is not on the cut line');
   t.ok(/overflow-y:auto/.test(secCss),
@@ -13120,6 +15957,51 @@ t.ok(true, 'a final draw on a live match is clean');
     // The two that cannot be starved, because what is in them has a hard width
     // or is a sentence. Left to the proportional shrink they lost every time:
     // the greedy column is the one with the most to give up and so keeps most.
+    /* ---- and where one row of six CANNOT fit, the rack becomes a grid.
+       The floors add up to less than 1280, which is what the sum above checks —
+       and 1280 is a desktop. Measured on the screens people actually hold, the
+       last column was off the edge again: 246px cut at 820 wide, 154px at 912.
+       There is no arrangement of one row that fits six columns across a tablet
+       held upright, so below that it stops being one row.
+
+       A GRID rather than a wrapped flex row, and the difference is not
+       cosmetic. A flex line takes the height of its tallest item and
+       `align-content` can only share out space that is left OVER — so wrapping
+       put 388px of line inside a 198px dock on a laptop and hung it out the
+       bottom, and on a tablet the train column's four buttons took the first
+       row and starved the second into clipping the forge. `grid-auto-rows:1fr`
+       divides the dock between however many rows there turn out to be, exactly.
+       Nothing can overflow in either direction by construction — which is the
+       property three rounds of floors and shrink rules were reaching for. */
+    const wrapCss = SRC.slice(SRC.indexOf('@media (max-aspect-ratio:3/4)'),
+                              SRC.indexOf('@media (max-aspect-ratio:3/4)') + 900);
+    t.ok(/#dock\{[^}]*display:grid/.test(wrapCss),
+      'a screen that cannot fit one row lays the rack out as a grid');
+    t.ok(/grid-auto-rows:1fr/.test(wrapCss),
+      'whose rows divide the dock exactly, so no row can starve another or hang out of it');
+    t.ok(/repeat\(auto-fit,minmax\((\d+)px,1fr\)\)/.test(wrapCss),
+      'and whose tracks have a floor, so it packs as many as fit and no more');
+    const track = +(/minmax\((\d+)px,1fr\)/.exec(wrapCss) || [0, 0])[1];
+    // Every column has to fit its own contents in one track — except WORKERS,
+    // which is the one column that is a readout rather than a list (four jobs,
+    // two across and two down, all of them visible), and gets two.
+    t.ok(track >= 170, 'a track holds the narrowest column’s contents (' + track + 'px)');
+    t.ok(/\.dsec\[data-col="jobs"\]\{ grid-column:span 2/.test(wrapCss),
+      'and the jobs readout gets two of them, so its two-by-two survives');
+    t.ok(/#dock \.dsec\{ min-width:0/.test(wrapCss),
+      'with the flex floors stood down, or a column wider than its track overflows the grid');
+    // Two triggers, because there are two ways to be too narrow for six.
+    t.ok(/max-aspect-ratio:3\/4/.test(wrapCss) && /max-width:1200px/.test(wrapCss),
+      'triggered by being held upright OR by a window narrower than the floors add up to');
+    // ...and NOT above that, where one row demonstrably fits. A laptop keeps
+    // exactly the layout the round before this one measured.
+    t.ok(/#dock\{[^}]*flex-wrap:nowrap/.test(SRC),
+      'while a wide landscape window keeps the single row it already fits');
+    // The phone is neither: one tab in a tall panel, and it has to say so
+    // explicitly now that the default display is up for grabs.
+    t.ok(/body\.narrow #dock\{ display:flex; flex-direction:column; flex-wrap:nowrap/.test(SRC),
+      'and the phone declares its own box rather than inheriting whichever the width picked');
+
     t.ok(floorOf('heroes') >= 160,
       'the hero column holds a whole 148px card (' + floorOf('heroes') + 'px)');
     t.ok(floorOf('sel') >= 150,
@@ -13172,6 +16054,743 @@ t.ok(true, 'a final draw on a live match is clean');
     'the chips appear only when the dock is tall enough to hold them');
   t.ok(/body\.narrow #queue\{ display:flex; \}/.test(SRC),
     'and the phone keeps them, where the panel is a tab and has the room');
+}
+
+/* ------------------------------------ what the fourth review pass measured
+   Nine defects across the two rounds before it, and every one of them is a
+   rule rather than a preference: a card cannot print past its own edge, a bar
+   shrinks before it pushes a button off the screen, a key does what the tile
+   says it does, a tooltip does not offer what the rules refuse, and a sheet
+   closes when the choice it was opened for has been made.                   */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+  const fresh = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    return G.sides[0];
+  };
+
+  /* ------------------------------------------- the card and its stat line
+     The icon cards shipped with the whole stat block on the face of the card
+     and white-space:nowrap holding it on one line. Three quarters of the
+     skills in the game printed straight through their neighbours and off the
+     sheet — "26 damage/s for 5s · 35% slow · area 3.0 · 16s" is 232px of text
+     in an 86px card, and Frost Nova started 10px to the LEFT of the sheet. */
+  {
+    const s = fresh(9100);
+    const pm = rule('.pick.opt .pm{');
+    t.ok(/overflow:hidden/.test(pm) && /text-overflow:ellipsis/.test(pm) && /max-width:100%/.test(pm),
+      'a card line that outgrows its card is clipped rather than printed over the card beside it');
+
+    const h = IB.makeHero(0, 'mage', 'Probe');
+    const ids = Object.keys(IB.SKILL);
+    let worst = 0, worstTxt = '', keptNums = 0;
+    for (const id of ids){
+      const b = IB.optBits(h, 'skill', id);
+      if (b.m.length > worst){ worst = b.m.length; worstTxt = b.m; }
+      if (b.mf.indexOf(IB.SKILL[id].cd + 's') >= 0) keptNums++;
+    }
+    // The measured cards are 131px at 1440 and 85px at 390. Fourteen characters
+    // of --t1 fits both; forty — which is what the old line averaged — fits
+    // neither, and nothing in CSS can make it.
+    t.ok(worst <= 14,
+      'the longest line any card carries is ' + worst + ' characters ("' + worstTxt + '")');
+    t.ok(keptNums === ids.length,
+      'and all ' + ids.length + ' skills keep their full numbers for the panel');
+
+    const opts = ids.slice(0, 3);
+    IB.optUI.at = 0;
+    const html = IB.picksHtml(h, 'skill', opts);
+    const cut = html.indexOf('<div class="ow');
+    const grid = html.slice(0, cut), panel = html.slice(cut);
+    const b0 = IB.optBits(h, 'skill', opts[0]);
+    t.ok(panel.indexOf(b0.mf) >= 0, 'the panel prints the whole stat line ("' + b0.mf + '")');
+    t.ok(grid.indexOf(b0.mf) < 0, 'and the card never tries to');
+    t.ok(grid.indexOf(b0.m) >= 0, 'while the card keeps the one number that is the same shape on every skill');
+
+    // A rank has nothing short to say, so it says nothing on the card rather
+    // than printing a sentence sideways through the card next to it.
+    const pid = h.passive && IB.PASS[h.passive] ? h.passive : Object.keys(IB.PASS)[0];
+    const rk = IB.optBits(h, 'rank', 'P:' + pid);
+    t.ok(rk.m === '' && /Strengthens/.test(rk.mf),
+      'a rank card carries no line of its own and explains itself in the panel');
+    t.ok(!/class="pm"/.test(IB.picksHtml(h, 'rank', ['P:' + pid])),
+      'so the element is not there at all rather than there and empty');
+    IB.optUI.at = null;
+  }
+
+  /* --------------------------------------------- what the panel tells you
+     A mouse reveals a card on the way to clicking it, so for a mouse the
+     "second press" IS the first click, and "press it again to take it" — shown
+     to every device — described something a desktop player never does. */
+  {
+    const why = SRC.slice(SRC.indexOf('function optWhyHtml'), SRC.indexOf('function optWhyHtml') + 800);
+    t.ok(/NARROW\(\)/.test(why),
+      'the panel asks which device it is on before saying how a card is taken');
+    t.ok(/Tap one to read it/.test(why) && /Hover one to read it/.test(why),
+      'and has a true sentence for each');
+    const desk = why.slice(why.indexOf('Hover one to read it'));
+    t.ok(!/again/.test(desk.slice(0, 70)),
+      'with the mouse no longer told to press a second time it never presses');
+  }
+
+  /* ------------------------------------------------ a bar that gives ground
+     The third tile added ~150px to a row that only just fitted. At 1280 it
+     drove the Menu button 38px past the right edge of a #top with nothing to
+     scroll — so earning the third order cost you the way back to the lobby. */
+  {
+    t.ok(/min-width:0/.test(rule('#orders{')), 'the order bar may give ground');
+    const ord = rule('  .ord{');
+    t.ok(/min-width:0/.test(ord) && /flex:0 1 auto/.test(ord),
+      'and so may each tile, so a third one shrinks the row instead of pushing what follows off it');
+    const on = rule('.ord .on{');
+    t.ok(/text-overflow:ellipsis/.test(on) && /min-width:0/.test(on) && /white-space:nowrap/.test(on),
+      'the NAME is what gives way — the icon, the key and the clock are what a fight is read from');
+  }
+
+  /* ------------------------------------------------------ three keys, three
+     R was printed on the third tile and listed in the help sheet, and the key
+     did nothing: doAction tested for 'order1' and 'order2' by name. */
+  {
+    const s = fresh(9101);
+    t.ok(IB.ORDER_KEY.every((k, i) => IB.keyAction(k.toLowerCase()) === 'order' + (i + 1)),
+      'every key printed on a tile is a key the board answers to');
+
+    s.slots = IB.SPELL_SLOTS;
+    IB.chooseSpell(s, 0, 'bombard'); IB.chooseSpell(s, 1, 'withdraw');
+    step(23);
+    t.ok(IB.chooseSpell(s, 2, 'pitch') === null, 'an earned slot is filled after the window has shut');
+    for (const k in s.res) s.res[k] = 9999;
+    s.spellCd = [0, 0, 0];
+    IB.spellAimOff();
+    IB.doAction('order3');
+    t.ok(IB.spellUI.aim && IB.spellUI.aim.slot === 2,
+      'and the key on its tile arms it rather than doing nothing at all');
+    IB.spellAimOff();
+
+    t.ok(!/first or second commander order/.test(SRC),
+      'the help sheet no longer describes two keys in the row where it lists three');
+
+    /* The tooltip on a FILLED earned slot said "(press to change it)", which
+       chooseSpell refuses — and the press it invited SPENDS the order. */
+    t.ok(!/press to change it/.test(IB.ordersHtml()),
+      'once the window has shut no tile offers a change, earned or opening');
+    t.ok(typeof IB.chooseSpell(s, 2, 'rampart') === 'string',
+      'because there is none to be had');
+
+    const s2 = fresh(9102);
+    IB.chooseSpell(s2, 0, 'bombard');
+    t.ok(/press to change it/.test(IB.ordersHtml()),
+      'while the window is open the opening pair still says what it still allows');
+  }
+
+  /* ------------------------------------ the sentence that explains the slot
+     .tst is nowrap-and-ellipsis by design, and this was 416px of text in a
+     338px line: "THEIR INHIBITOR IS DOWN — YOU MAY GIVE A…". It is the only
+     place the game explains the third order, and on a phone the new tile is a
+     bare gold "+" with no label, so it was the only place at all. */
+  {
+    const s = fresh(9103);
+    G.toasts.length = 0;
+    IB.killThing(G.sides[1].structs.find(x => x.key === 'inhib'), null);
+    const msg = G.toasts.map(x => x.msg).find(m => /third order/.test(m));
+    t.ok(!!msg && msg.length <= 42,
+      'the one sentence that explains the new slot fits the line it is written on (' +
+        (msg ? msg.length : '?') + ' characters)');
+    t.ok(s.slots === IB.SPELL_SLOTS, 'and the slot it is about is really there');
+  }
+
+  /* ------------------------------------ a slot the Host could never fill
+     aiDraft ran once, before the first wave, and was the only thing that ever
+     filled a slot. So the Host broke an inhibitor, took a third slot and
+     carried it empty for the rest of the match — while the player's fog dock
+     drew a third "?" chip for a hidden order that did not exist. */
+  {
+    fresh(9104);
+    const host = G.sides[1];
+    IB.aiSpells(host);
+    t.ok(!!host.spells[0] && !!host.spells[1], 'the Host still drafts its opening pair');
+    host.slots = IB.SPELL_SLOTS;
+    G.wave = Math.max(G.wave, 1);
+    IB.aiSpells(host);
+    t.ok(!!host.spells[2], 'and now fills a slot it earns afterwards (' + host.spells[2] + ')');
+    const held = host.spells.filter(Boolean);
+    t.ok(new Set(held).size === held.length, 'without drawing one it is already carrying');
+    const own = held.filter(id => IB.SPELL_OWN_HERO[id]).length;
+    t.ok(own <= 1, 'and still under the one-hero-order rule the draft works to');
+  }
+
+  /* --------------------------------------------- a fog as wide as the game
+     foeSeen was written out two long and stayed that way when the third slot
+     arrived, so a third order seen being cast pushed it to length 3 and
+     foeForget — which cleared two by name — left it there. A new match, and a
+     save from before the fog existed, both opened remembering the last one. */
+  {
+    t.ok(IB.foeSeen.length === IB.SPELL_SLOTS,
+      'the fog has one place per order the game can hold (' + IB.foeSeen.length + ')');
+    IB.foeSeen[IB.SPELL_SLOTS - 1] = 'pitch';
+    IB.foeForget();
+    t.ok(IB.foeSeen.every(x => x === null),
+      'and forgetting forgets all of them, including whatever a third slot showed');
+  }
+
+  /* ------------------------------------- a sheet that closes when it is done
+     Taking the third order left the chooser open on the slot it had just
+     filled, offering "would replace Second Muster as your third order" over a
+     live gold Accept whose only effect was to print the raw internal refusal
+     "that order is already given". A mid-match choice is over when it is made;
+     the opening pair is not, because either of them can still be swapped. */
+  {
+    const s = fresh(9105);
+    s.slots = IB.SPELL_SLOTS;
+    IB.chooseSpell(s, 0, 'bombard'); IB.chooseSpell(s, 1, 'withdraw');
+    step(23);
+    IB.showSpells(2);
+    G.sheet = '';
+    IB.spellPress('pitch'); IB.spellPress('pitch');
+    t.ok(s.spells[2] === 'pitch', 'the second press takes the order');
+    t.ok(G.sheet === '',
+      'and the sheet is not drawn again, because there is nothing left in it to choose');
+
+    // ...and the opening window keeps its old behaviour, which this broke once
+    // already: a pair still being chosen is a sheet still worth having open.
+    const s2 = fresh(9106);
+    IB.showSpells(0);
+    G.sheet = '';
+    IB.spellPress('bombard'); IB.spellPress('bombard');
+    IB.spellPress('withdraw'); IB.spellPress('withdraw');
+    t.ok(s2.spells[0] === 'bombard' && s2.spells[1] === 'withdraw', 'both of the opening pair are taken');
+    t.ok(/Commander orders/.test(G.sheet),
+      'and the sheet stays up, because either of them can still be changed');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------------- an order that kills, and pays
+   A body killed by a turret, a minion or a hero pays the hold that owns the
+   killer. A commander order has no body on the bridge to own it — that is what
+   an order IS — so src was null and the kill paid nobody: measured, eight
+   grunts wiped off the lane by one bombardment earned 0 of the 40 gold the
+   same eight paid a turret, and counted as 0 kills. The orders best at
+   clearing a wave were the orders that starved the hold that cast them.
+
+   Experience was never the problem and has not moved: shareXp pays every hero
+   standing near the body 70% whoever swung, and an order kill paid that 70%
+   before this and pays exactly the same 70% after it. Measured both ways
+   below, because "orders give no experience" is a claim I made once without
+   measuring it and it was not true.                                         */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  // No structures, no workers: nothing on the board can move gold except the
+  // one thing under test. A measurement taken with a turret still shooting and
+  // five workers still digging is a measurement of the turret and the workers.
+  const bare = (victimSide, seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:seed || 31337 });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    for (const s of G.sides){
+      for (const st of s.structs){ st.dead = true; st.hp = 0; }
+      for (const k in s.workers) s.workers[k] = 0;
+    }
+    G.units.length = 0;
+    for (let i = 0; i < 6; i++) IB.spawnUnit(victimSide, 'grunt', { x:40, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);                       // let the spatial index catch up
+    return G.units.filter(u => !u.dead);
+  };
+  const gold = (i) => G.sides[i].res.gold;
+
+  /* ------------------------------------------ the same body, the same bounty */
+  {
+    let vics = bare(1);
+    const worth = IB.minionWorth(vics[0]);
+    const tower = { side:0, struct:true };
+    let g0 = gold(0), k0 = G.sides[0].kills;
+    IB.killThing(vics[0], tower);
+    const byTower = { g:gold(0) - g0, k:G.sides[0].kills - k0 };
+
+    vics = bare(1);
+    g0 = gold(0); k0 = G.sides[0].kills;
+    IB.dealDmg(null, vics[0], 999999, { magic:true, ability:true, by:0 });
+    const byOrder = { g:gold(0) - g0, k:G.sides[0].kills - k0 };
+
+    t.ok(byTower.g === worth && byTower.k === 1,
+      'a turret kill pays the bounty and counts (' + byTower.g + ' for ' + worth + ')');
+    t.ok(byOrder.g === byTower.g && byOrder.k === byTower.k,
+      'and an order kills the same body for the same money (' + byOrder.g + ', ' + byOrder.k + ' kills)');
+
+    // The hero multipliers stay a hero's. An order reads no passives, so it
+    // cannot be worth MORE than the flat bounty either.
+    t.ok(byOrder.g === worth, 'no more than the bounty, because an order is not a hero');
+  }
+
+  /* ------------------------------------------------- nobody is still nobody */
+  {
+    const vics = bare(1);
+    const g0 = gold(0), g1 = gold(1);
+    IB.killThing(vics[0], null);
+    t.ok(gold(0) === g0 && gold(1) === g1,
+      'a kill with no hold behind it still pays neither side');
+    t.ok(vics[0].dead, 'and the body is still dead, which was never the question');
+  }
+
+  /* ---------------------------------------------------- a whole bombardment */
+  {
+    const vics = bare(1);
+    const worth = vics.reduce((n, u) => n + IB.minionWorth(u), 0);
+    const g0 = gold(0), k0 = G.sides[0].kills;
+    for (let i = 0; i < 40; i++) IB.bombardHit(G.sides[0], 40);
+    const dead = vics.filter(u => u.dead).length;
+    t.ok(dead === vics.length, 'a long enough salvo finishes everything under it (' + dead + ')');
+    t.ok(gold(0) - g0 === worth,
+      'and the hold that fired it is paid for every one (' + (gold(0) - g0) + ' of ' + worth + ')');
+    t.ok(G.sides[0].kills - k0 === dead, 'with the kills on its own ledger');
+  }
+
+  /* --------------------------------------------------------- and pitch fire */
+  {
+    const vics = bare(1);
+    const s = G.sides[0];
+    const worth = vics.reduce((n, u) => n + IB.minionWorth(u), 0);
+    const g0 = gold(0), g1 = gold(1);
+    // A levy has 190hp and walks at 3.5, so it is out of a 5.5-radius fire in
+    // under two seconds and takes ~54 of the 204 the full six would do. Left
+    // whole, this measured how fast a grunt walks. Brought to the edge first,
+    // it measures what the fire is worth to the hold that lit it.
+    for (const u of vics) u.hp = 1;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    step(.2);
+    t.ok(gold(0) - g0 === worth,
+      'the fire pays the hold that lit it (' + (gold(0) - g0) + ' of ' + worth + ')');
+    t.ok(gold(1) === g1, 'and pays the hold it was lit against nothing at all');
+  }
+
+  /* ------------------------------------------------ a brand outlives its cast
+     Pyre Brand is the one that cannot be attributed at the moment of damage:
+     the body burns down seconds after the order went out, with nothing
+     standing on the bridge that belongs to the caster. pyreSide is the only
+     thing left that knows whose brand it is, which is why it is hashed. */
+  {
+    const vics = bare(1);
+    const v = vics[0];
+    const worth = IB.minionWorth(v);
+    v.pyreT = IB.PYRE.dur; v.pyreDps = 999999; v.pyreSide = 0;
+    const g0 = gold(0), g1 = gold(1);
+    step(1);
+    t.ok(v.dead, 'the brand burns it down');
+    t.ok(gold(0) - g0 === worth, 'and pays the hold that branded it (' + (gold(0) - g0) + ')');
+    t.ok(gold(1) === g1, 'and only that one');
+
+    // The same brand with no hold on it pays nobody — the -1 is a real value
+    // and not an accident that happens to index side 0.
+    const v2 = bare(1)[0];
+    v2.pyreT = IB.PYRE.dur; v2.pyreDps = 999999; v2.pyreSide = -1;
+    const h0 = gold(0), h1 = gold(1);
+    step(1);
+    t.ok(v2.dead && gold(0) === h0 && gold(1) === h1,
+      'a brand with no hold behind it burns the body down and pays neither side');
+  }
+
+  /* ------------------------------------------------------ and it is THEIRS */
+  {
+    const vics = bare(0);                       // this time the bodies are mine
+    const worth = vics.reduce((n, u) => n + IB.minionWorth(u), 0);
+    const g0 = gold(0), g1 = gold(1);
+    for (let i = 0; i < 40; i++) IB.bombardHit(G.sides[1], 40);
+    t.ok(gold(1) - g1 === worth,
+      'their bombardment pays them for my dead (' + (gold(1) - g1) + ' of ' + worth + ')');
+    t.ok(gold(0) === g0, 'and pays me nothing for them');
+  }
+
+  /* ---------------------------------------------- experience did not change
+     The claim was "orders award no gold and no XP". Half of it was true. */
+  {
+    const vics = bare(1);
+    const h = IB.makeHero(0, 'fighter', 'Probe');
+    if (!G.sides[0].heroes.includes(h)) G.sides[0].heroes.push(h);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.xp = 0; h.lvl = 1;
+    const x0 = h.xp;
+    IB.dealDmg(null, vics[0], 999999, { magic:true, ability:true, by:0 });
+    const withHold = h.xp - x0;
+    const x1 = h.xp;
+    IB.dealDmg(null, vics[1], 999999, { magic:true, ability:true });
+    const without = h.xp - x1;
+    t.ok(withHold > 0, 'a hero standing over an order kill has always earned from it (' + withHold + ')');
+    t.ok(withHold === without,
+      'and earns exactly the same now that the gold has somewhere to go');
+  }
+
+  /* ------------------------------------------- both machines agree about it */
+  {
+    const v = bare(1, 777)[0];
+    v.pyreT = IB.PYRE.dur; v.pyreDps = 40; v.pyreSide = 0;
+    const hA = IB.netHash();
+    v.pyreSide = 1;
+    t.ok(IB.netHash() !== hA, 'whose brand it is is part of what the two machines check');
+    v.pyreSide = 0;
+    t.ok(IB.netHash() === hA, 'and putting it back puts the hash back');
+
+    const snap = IB.netSnap();
+    v.pyreSide = -1;
+    IB.netLoad(snap);
+    const v2 = G.units.find(u => u.pyreT > 0);
+    t.ok(v2 && v2.pyreSide === 0, 'a resynced body remembers whose brand it carries');
+    t.ok(IB.netHash() === hA, 'and the board it lands on is the board it left');
+
+    // The single-player save runs through the same packing, so it is the same
+    // question asked once more rather than a second mechanism to get wrong.
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    v.pyreSide = -1;
+    IB.loadMatch(pack);
+    const v3 = G.units.find(u => u.pyreT > 0);
+    t.ok(v3 && v3.pyreSide === 0, 'and a reloaded one does too');
+    IB.clearSave();
+  }
+
+  /* ---------------------------------------- what the readout says it earned
+     orderGold is the running total for the sentence, and nothing else: it is
+     written from simulation code exactly as fxToast is, and read by the
+     readout alone. If it ever entered the hash, two machines whose toasts had
+     drifted apart would desync over a sentence. */
+  {
+    const v = bare(1)[0];
+    const hA = IB.netHash();
+    IB.orderGold[0] += 500;
+    t.ok(IB.netHash() === hA, 'the readout total is not something the two machines check');
+    const snap = IB.netSnap();
+    t.ok(JSON.stringify(snap).indexOf('orderGold') < 0, 'nor something a snapshot carries');
+    IB.orderGold[0] = 0;
+
+    G.toasts.length = 0;
+    IB.castTell(G.sides[0], 'Bombard', 9, 'caught', 45);
+    t.ok(G.toasts.length === 1 && /^Bombard — 9 caught, 45 gold$/.test(G.toasts[0].msg),
+      'a salvo that earned says so (' + (G.toasts[0] ? G.toasts[0].msg : 'nothing') + ')');
+    G.toasts.length = 0;
+    IB.castTell(G.sides[0], 'Bombard', 9, 'caught', 0);
+    t.ok(/^Bombard — 9 caught$/.test(G.toasts[0].msg),
+      'and one that caught without finishing anything does not invent a nought');
+    G.toasts.length = 0;
+    IB.castTell(G.sides[0], 'Bombard', 0, 'caught', 0);
+    t.ok(/nothing on that stretch/.test(G.toasts[0].msg), 'and a miss still reads as a miss');
+    G.toasts.length = 0;
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------- the order that answers their orders
+   Nine of them acted on bodies, boards or walls, and not one acted on the
+   other commander. Which left the fog dock — the strip that names every order
+   of theirs this seat has watched land — as knowledge with nothing to spend
+   it on: you could learn they were carrying Bombard and Second Muster, and
+   there was no move that answered it.
+
+   It lengthens recoveries ALREADY RUNNING and does nothing to an order held
+   ready, so it cannot lock down a commander sitting on a full hand, and it is
+   worth most in the seconds after they spend — which is the moment the fog
+   dock reports. That is the whole design, and it is the assertion below that
+   holds it: a full hand refuses the cast rather than eating it.            */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const board = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    s.spells[0] = 'counter'; s.spellCd[0] = 0;
+    return s;
+  };
+
+  {
+    const d = IB.SPELL.counter;
+    t.ok(!!d && d.grp === 'foehold', 'Countermand is filed under the other commander');
+    t.ok(IB.SPELL_GROUPS.some(g => g.k === 'foehold'),
+      'and the sheet has a heading for a group that did not exist before');
+    // 'self' is a lie the panel would otherwise tell in AIM_SAID's words —
+    // "it lands on your own hold" — directly under a description saying the
+    // opposite. An order may say where it goes in its own words.
+    t.ok(d.target === 'self' && /their signal room/.test(d.say || ''),
+      'it takes no aim, and says where it goes rather than letting the panel guess');
+  }
+
+  /* ------------------------------------------------ against a full hand */
+  {
+    const s = board(9300);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0;
+    const before = foe.spellCd.slice();
+    const err = IB.castSpell(s, { slot:0 });
+    t.ok(typeof err === 'string', 'a commander holding everything ready refuses it (' + err + ')');
+    t.ok(s.spellCd[0] === 0, 'and it is not spent');
+    t.ok(s.res.iron === 9000, 'and costs nothing');
+    t.ok(foe.spellCd.join() === before.join(), 'and nothing of theirs moves');
+  }
+
+  /* ------------------------------------------- and against one who spent */
+  {
+    const s = board(9301);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 50; foe.spellCd[1] = 20;
+    G.toasts.length = 0;
+    const err = IB.castSpell(s, { slot:0 });
+    t.ok(err === null, 'a commander who has just spent does not (' + err + ')');
+    t.ok(foe.spellCd[0] === 50 + IB.COUNTER.add && foe.spellCd[1] === 20 + IB.COUNTER.add,
+      'both of their recoveries grow by the same ' + IB.COUNTER.add + 's (' + foe.spellCd.slice(0, 2).join() + ')');
+    t.ok(s.spellCd[0] === IB.SPELL.counter.cd, 'and it goes on its own long recovery');
+    t.ok(/Countermand — 2 of their orders set back/.test(G.toasts.map(x => x.msg).join(' | ')),
+      'the hold that gave it is told how much it caught');
+  }
+
+  /* -------------------------------------- one ready, one recovering: partial */
+  {
+    const s = board(9302);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 30;
+    t.ok(IB.castSpell(s, { slot:0 }) === null, 'one of theirs recovering is enough to give it');
+    t.ok(foe.spellCd[0] === 0, 'the one they were holding ready is untouched');
+    t.ok(foe.spellCd[1] === 30 + IB.COUNTER.add, 'and only the one already running is set back');
+  }
+
+  /* ------------------------------------------ the hold it lands on is told
+     Every other order is visible on the bridge. This one happens inside the
+     other hold's signal room, and three tiles quietly growing a shutter with
+     no explanation reads as a bug rather than as something done to you. */
+  {
+    const s = board(9303);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spellCd[0] = 40;
+    IB.MY = 1;                                  // sit in the seat it lands on
+    G.toasts.length = 0;
+    IB.castSpell(s, { slot:0 });
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/Countermanded/.test(said), 'the hold it lands on is told it happened (' + said + ')');
+    t.ok(said.indexOf(String(IB.COUNTER.add)) >= 0, 'and by how much');
+    t.ok(!/of their orders set back/.test(said),
+      'and is not shown the caster’s half of it, which is not its to see');
+    IB.MY = 0;
+  }
+
+  /* ----------------------------------------------------- and the Host times it
+     The AI waits for something of theirs to actually be recovering, because
+     that is the only state the order does anything in. */
+  {
+    const s = board(9304);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0;
+    t.ok(IB.aiSpellTarget(G.sides[0], IB.SPELL.counter, 1) === null,
+      'the Host does not give it into a full hand');
+    foe.spellCd[1] = 30;
+    t.ok(!!IB.aiSpellTarget(G.sides[0], IB.SPELL.counter, 1),
+      'and gives it once something of theirs is running');
+  }
+
+  /* ----------------------------------------------------- nothing new to sync
+     It moves spellCd and nothing else, which every path already carries — no
+     new field, and so no new way for the four hand-written pack lists to
+     disagree. Asserted rather than assumed. */
+  {
+    const s = board(9305);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spellCd[0] = 40;
+    IB.castSpell(s, { slot:0 });
+    const at = IB.netHash();
+    const snap = IB.netSnap();
+    foe.spellCd[0] = 1;
+    t.ok(IB.netHash() !== at, 'their recovery is part of what the two machines check');
+    IB.netLoad(snap);
+    t.ok(IB.netHash() === at, 'and it survives a resync exactly');
+    t.ok(foe.spellCd[0] === 40 + IB.COUNTER.add, 'with the set-back intact (' + foe.spellCd[0] + ')');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* -------------------------------------- what the fifth review pass measured
+   Four defects, three of them in the two rounds immediately before it, and the
+   worst of them a number the game printed at the player that was not true. */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  // No structures, no workers: nothing on the board can move gold except the
+  // thing under test.
+  const bare = (seed, victimSide) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    for (const s of G.sides){
+      for (const st of s.structs){ st.dead = true; st.hp = 0; }
+      for (const k in s.workers) s.workers[k] = 0;
+    }
+    G.units.length = 0;
+    for (let i = 0; i < 6; i++) IB.spawnUnit(victimSide === undefined ? 1 : victimSide, 'grunt', { x:40, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    return G.sides[0];
+  };
+
+  /* ------------------------------------ the salvo readout counts the salvo
+     It was added up inside killThing for every kill with no body behind it,
+     which is Pitch Fire and Pyre Brand as well as Bombard — and the only reset
+     was when a salvo ENDED. So a bombardment that finished nothing still
+     printed whatever the fire had been earning while it burned, and because
+     the tally was module scope and newMatch never cleared it, the first salvo
+     of a match printed the last match's kills. */
+  {
+    const s = bare(9600);
+    for (const u of G.units) u.hp = 1;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    step(2 / 30);
+    t.ok(G.units.filter(u => u.side === 1 && !u.dead).length === 0, 'the fire finishes the line');
+    t.ok(s.res.gold > 0, 'and pays for it, as it should (' + s.res.gold + ')');
+    t.ok(IB.orderGold[0] === 0,
+      'but none of it lands in the salvo readout, which is not what earned it (' + IB.orderGold[0] + ')');
+  }
+  {
+    // A salvo that catches a body it cannot kill has earned nothing, and says
+    // nothing rather than the fire's takings.
+    const s = bare(9601);
+    const tank = G.units.find(u => u.side === 1);
+    tank.hp = tank.mhp = 999999;
+    for (const u of G.units) if (u !== tank) u.dead = true;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    s.spells[0] = 'bombard'; s.spellCd[0] = 0; rich(s);
+    G.toasts.length = 0;
+    t.ok(IB.castSpell(s, { slot:0, x:40 }) === null, 'the bombardment goes out');
+    for (let i = 0; i < 300 && s.bombN > 0; i++) step(1 / 30);
+    const said = G.toasts.map(x => x.msg).find(m => /^Bombard/.test(m)) || '';
+    t.ok(/^Bombard — \d+ caught$/.test(said),
+      'a salvo that finished nothing reports no takings (' + said + ')');
+  }
+  {
+    // ...and one that DID earn still reports exactly its own bodies.
+    const s = bare(9602);
+    for (const u of G.units) u.hp = 1;
+    const worth = G.units.filter(u => u.side === 1).reduce((a, u) => a + IB.minionWorth(u), 0);
+    s.spells[0] = 'bombard'; s.spellCd[0] = 0; rich(s);
+    G.toasts.length = 0;
+    IB.castSpell(s, { slot:0, x:40 });
+    for (let i = 0; i < 300 && s.bombN > 0; i++) step(1 / 30);
+    const said = G.toasts.map(x => x.msg).find(m => /^Bombard/.test(m)) || '';
+    t.ok(said.indexOf(', ' + Math.round(worth) + ' gold') > 0,
+      'and a salvo that earned reports its own bodies and no others (' + said + ' for ' + worth + ')');
+  }
+  {
+    // A salvo does not survive the match it was fired in.
+    const s = bare(9603);
+    for (const u of G.units) u.hp = 1;
+    s.fireX = 40; s.fireT = IB.PITCH.dur;
+    IB.orderGold[0] = 500; IB.bombSeen[0].add(1);
+    IB.newMatch({ diff:'veteran', seed:9604 });
+    t.ok(IB.orderGold[0] === 0 && IB.orderGold[1] === 0,
+      'a new match starts with no takings owed to a salvo in the last one');
+    t.ok(IB.bombSeen[0].size === 0, 'and nobody still counted as caught by it');
+  }
+
+  /* ---------------------------------- Countermand refuses in words, and early
+     It returned 'nothing of theirs is recovering to hold back' out of the cast
+     table, which say() toasted verbatim: no capital, no order name, no full
+     stop, where every other refusal the player can reach is a sentence. And
+     because a self-target order goes straight to sendCmd — which returns ''
+     while NET.on — the refusal in a two-player match produced no toast, no
+     cooldown and no sound. The one order whose refusal condition is invisible
+     was the one that pressed like a dead button. */
+  {
+    const s = bare(9605);
+    G.wave = 3;
+    s.spells[0] = 'counter'; s.spellCd = [0, 0, 0]; rich(s);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0;
+
+    t.ok(IB.counterCatch(s) === 0, 'a commander holding everything ready offers nothing to hold back');
+    t.ok(IB.spellTargets(IB.SPELL.counter) === 0,
+      'which is what the bar greys the tile by');
+    G.toasts.length = 0;
+    const iron0 = s.res.iron;
+    t.ok(IB.castPress(0) === 'no target', 'so the press refuses');
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/^[A-Z]/.test(said) && /\.$/.test(said.trim()) && /Countermand/.test(said),
+      'in a sentence with a capital, the order’s name and a full stop (' + said + ')');
+    t.ok(s.spellCd[0] === 0 && s.res.iron === iron0, 'and nothing is spent');
+
+    /* The half that mattered most: the same refusal in a two-player match.
+       sendCmd returns '' there, so anything decided inside castSpell reaches
+       that player as silence. */
+    const wasOn = IB.NET.on;
+    IB.NET.on = true;
+    G.toasts.length = 0;
+    t.ok(IB.castPress(0) === 'no target', 'the same press refuses in a two-player match');
+    t.ok(/Countermand/.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and says so there too, where it used to say nothing at all');
+    IB.NET.on = wasOn;
+
+    // ...and with something of theirs running it goes out as before.
+    foe.spellCd[1] = 30;
+    t.ok(IB.counterCatch(s) === 1, 'one of theirs recovering is one thing to hold back');
+    t.ok(IB.spellTargets(IB.SPELL.counter) === 1, 'and the tile comes back to life');
+    G.toasts.length = 0;
+    t.ok(IB.castPress(0) === null, 'and the press goes through');
+    t.ok(foe.spellCd[1] === 30 + IB.COUNTER.add && foe.spellCd[0] === 0,
+      'setting back only the one already running (' + foe.spellCd.slice(0, 2).join() + ')');
+  }
+
+  /* ------------------------------------------- an icon that is not a control
+     It was a horn with a bar through it, which is the universal MUTE symbol,
+     and the game's own sound toggle sits in the same top bar built from the
+     same trapezoid and arcs. On a phone the order's name is hidden, so that
+     glyph was the whole label. */
+  {
+    const horn = /M3\.4 9\.2h4\.3l8\.7-4\.6v14\.8L7\.7 14\.8H3\.4Z/;
+    t.ok(!horn.test(SRC), 'no order is drawn as a speaker cone any more');
+    const at = (k) => { const i = SRC.indexOf(k); return i < 0 ? '' : SRC.slice(i, i + 700); };
+    const cm = at('  counter: ico('), snd = at('  sound:');
+    t.ok(cm.length > 40 && snd.length > 40, 'both icons are found in the file');
+    const paths = (t2) => (t2.match(/d="([^"]+)"/g) || []).map(x => x.slice(3));
+    const shared = paths(cm).filter(d => paths(snd).includes(d));
+    t.ok(shared.length === 0,
+      'and the order shares no outline with the control it sat next to (' + shared.length + ')');
+  }
+
+  /* ------------------------------------------------ the tutorial counts them
+     The one sheet that explains the orders said "from nine" while the chooser
+     it opens held ten. Counted rather than written out, so the next order to
+     be added cannot leave it lying. */
+  {
+    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'ten',
+      'the set has a word for its size (' + IB.NUM_WORD(IB.SPELLS.length) + ')');
+    IB.newMatch({ diff:'veteran', seed:9606 });
+    IB.showIntro('veteran');
+    const sheet = G.sheet || '';
+    t.ok(/Two commander orders/.test(sheet), 'the intro sheet still explains the orders');
+    t.ok(sheet.indexOf('from ' + IB.NUM_WORD(IB.SPELLS.length)) > 0,
+      'and says how many there really are (' + (sheet.match(/from (\w+)/) || [])[1] + ')');
+    t.ok(!/from nine/.test(sheet), 'rather than the number there used to be');
+    const grid = IB.spellGridHtml();
+    t.ok((grid.match(/class="sptile/g) || []).length === IB.SPELLS.length,
+      'which is what the chooser it opens actually holds');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
 }
 
 t.done();

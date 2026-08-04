@@ -143,6 +143,24 @@ const hero = (id) => HQ.G.q.actors.find(a => a.kind === 'hero' && a.id === id);
 function put(h, x, y){ h.x = x; h.y = y; h.px = x + .5; h.py = y + .5; HQ.recomputeVision(); HQ.refreshField(); }
 // make this hero the one the action buttons talk to
 function use(h){ HQ.G.q.activeId = h.id; h.acted = false; h.done = false; HQ.refreshField(); return h; }
+// A test that recycles a generated monster inherits whatever that monster was:
+// a fleeing key-bearer, a cultist that has already screamed, a hound that has
+// used its breath. Every one of those changes what monsterAct does. Scrub them
+// before you start measuring behaviour.
+function plain(m, mt){
+  if (!m) return m;
+  if (mt){
+    const d = HQ.MONSTERS[mt];
+    m.mt = mt; m.name = d.name;
+    m.atk = d.atk; m.def = d.def; m.mind = d.mind; m.mv = d.move;
+    m.bpMax = m.bp = d.bp;
+  }
+  delete m.affix; m.elite = false; m.boss = false;
+  m.runner = 0; m.cornered = 0; m.skittish = 0; m.fled = 0;
+  m.breathed = 0; m.heralded = 0; m.cast = 0; m.parried = 0;
+  m.risen = 0; m.webbed = 0; m.stun = 0; m.sleep = 0;
+  return m;
+}
 // clear a square of monsters and furniture so a test can rely on it
 function clearSquare(x, y){
   for (const a of HQ.G.q.actors) if (a.kind === 'monster' && a.x === x && a.y === y) a.alive = false;
@@ -869,7 +887,7 @@ t.test("the Warlock: a woken monster closes the distance and swings", () => {
   const h = hero('barbarian');
   put(h, 8, 10);
   for (const m of HQ.monstersOf()) m.alive = false;
-  const m = HQ.monstersOf.call(null) && HQ.G.q.actors.find(a => a.kind === 'monster');
+  const m = plain(HQ.G.q.actors.find(a => a.kind === 'monster'));
   m.alive = true; m.awake = true; m.x = 8; m.y = 6; m.mv = 6; m.atk = 3;
   m.sleep = 0; m.stun = 0;
   HQ.G.q.seen.fill(1); HQ.recomputeVision();
@@ -1907,7 +1925,8 @@ t.test('monsters: the Chaos Sorcerer finally casts', () => {
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
   const sorc = HQ.monstersOf().find(m => HQ.MONSTERS[m.mt].caster);
   t.ok(sorc, 'there is a caster on the board');
-  sorc.x = 11; sorc.y = 11; sorc.awake = true; sorc.sleep = 0; sorc.stun = 0;
+  plain(sorc);                                     // it may have been the vault's key-bearer
+  sorc.x = 11; sorc.y = 11; sorc.awake = true;
   for (const m of HQ.monstersOf()) if (m !== sorc) m.alive = false;
   HQ.recomputeVision();
   const bp = h.bp;
@@ -1990,8 +2009,8 @@ t.test('monsters: a bloodied goblin breaks off instead of trading blows', () => 
   const h = use(hero('barbarian'));
   put(h, 11, 8);
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
-  const g = HQ.monstersOf()[0];
-  g.mt = 'goblin'; g.x = 11; g.y = 7; g.bp = g.bpMax = 4; g.awake = true;
+  const g = plain(HQ.monstersOf()[0], 'goblin');
+  g.x = 11; g.y = 7; g.bp = g.bpMax = 4; g.awake = true;
   g.sleep = 0; g.stun = 0; g.mv = 6; g.skittish = 1; g.fled = 0;
   for (const m of HQ.monstersOf()) if (m !== g) m.alive = false;
   HQ.recomputeVision();
@@ -2480,8 +2499,8 @@ t.test('troll: it knits itself back together unless the wound was fire', () => {
   HQ.G.run.depth = 8;
   HQ.beginFloor();
   const m = HQ.monstersOf()[0];
-  m.mt = 'troll'; m.bpMax = 6; m.bp = 3; m.awake = true; m.sleep = 0; m.stun = 0; m.burned = 0;
-  delete m.affix; m.elite = false;                 // a warded champion would eat the spell
+  plain(m, 'troll');                               // a warded champion would eat the spell
+  m.bpMax = 6; m.bp = 3; m.awake = true; m.burned = 0;
   m.x = 20; m.y = 3;
   for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
   HQ.monsterAct(m, () => {});
@@ -2516,8 +2535,8 @@ t.test('archer: it shoots from range instead of walking into reach', () => {
   h.x = 11; h.y = 11;
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
   const m = HQ.monstersOf()[0];
-  m.mt = 'archer'; m.atk = 4; m.x = 11; m.y = 7; m.awake = true; m.sleep = 0; m.stun = 0;
-  delete m.affix; m.elite = false;
+  plain(m, 'archer');
+  m.atk = 4; m.x = 11; m.y = 7; m.awake = true;
   for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
   HQ.recomputeVision();
   const bp = h.bp, at = [m.x, m.y].join();
@@ -2536,8 +2555,8 @@ t.test('cultist: it wakes the room it is standing in, once', () => {
   const h = HQ.runAlive()[0];
   const rid = 6;
   const tiles = HQ.roomTiles(rid).filter(([x,y]) => !HQ.furnAt(x,y));
-  const c = HQ.monstersOf()[0];
-  c.mt = 'cultist'; [c.x, c.y] = tiles[0]; c.awake = true; c.sleep = 0; c.stun = 0; c.heralded = 0;
+  const c = plain(HQ.monstersOf()[0], 'cultist');
+  [c.x, c.y] = tiles[0]; c.awake = true;
   let sleepers = 0;
   HQ.monstersOf().forEach((o, i) => {
     if (o === c) return;
@@ -2778,9 +2797,8 @@ t.test('curses: a dim party is spotted later than a bright one', () => {
   // twelve squares apart: inside the normal twelve, outside the blind six
   h.x = 9; h.y = 6;
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
-  const m = HQ.monstersOf()[0];
-  m.mt = 'orc'; m.x = 16; m.y = 11; m.awake = true; m.sleep = 0; m.stun = 0; m.mv = 1;
-  delete m.affix; m.elite = false;
+  const m = plain(HQ.monstersOf()[0], 'orc');
+  m.x = 16; m.y = 11; m.awake = true; m.mv = 1;
   for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
   HQ.G.q.furn = [];
   HQ.recomputeVision();
@@ -3125,6 +3143,7 @@ t.test('chests: the room only asks the question when there is a chest to ask it 
 t.test('chests: searching a room with a chest in it goes through the chest', () => {
   runAt(3);
   const rid = 4;
+  HQ.G.q.rtrait.fill(null);        // a hoarded room doubles gold; these are chest tests
   HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
   const c = chestAt(rid);
   emptyRoom(rid);
@@ -3161,6 +3180,7 @@ t.test('chests: forcing one pays twice, and turns anything else into coin', () =
 t.test('chests: easing one open is the search you have always had', () => {
   runAt(3);
   const rid = 4;
+  HQ.G.q.rtrait.fill(null);        // a hoarded room doubles gold; these are chest tests
   HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
   const c = chestAt(rid);
   const h = HQ.runAlive()[0];
@@ -3209,6 +3229,7 @@ t.test('chests: forcing one either pays double or goes badly, and the odds are t
 t.test('chests: from the second floor down, the chest may not be a chest', () => {
   runAt(4);
   const rid = 4;
+  HQ.G.q.rtrait.fill(null);        // a hoarded room doubles gold; these are chest tests
   HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
   const c = chestAt(rid);
   const h = HQ.runAlive()[0];
@@ -6104,8 +6125,8 @@ t.test('collapse: it never seals anything off', () => {
   collapseRun();
   HQ.G.q.furn = []; HQ.G.q.traps = [];
   for (const a of HQ.G.q.actors) if (a.kind === 'monster') a.alive = false;
-  // run the floor out for a long time and check the board stays whole
-  for (let turn = 0; turn < 40; turn++) HQ.tickCollapse();
+  // run the floor right out and check the board stays whole
+  for (let turn = 0; turn < 90; turn++) HQ.tickCollapse();
   t.ok(holes().length > 0, 'a lot of it has fallen in');
   // every remaining floor square is still reachable from the stair
   const { W, H, idx, STAIRS, linkedIgnoringDoors, isFloor } = HQ;
@@ -6126,6 +6147,25 @@ t.test('collapse: it never seals anything off', () => {
     if (isFloor(x, y) && !HQ.holeAt(x, y)) standing++;
   t.eq(seen.size, standing, 'and every square still there can be walked to');
   t.ok(!HQ.holeAt(STAIRS[0][0], STAIRS[0][1]), 'the stair never goes');
+});
+
+t.test('collapse: two squares that are each safe can be fatal together', () => {
+  collapseRun();
+  HQ.G.q.hole.fill(0); HQ.G.q.crack.fill(0);
+  // Room 0's corner at (1,1) hangs off exactly two squares. Either can go; both
+  // cannot. This is the case a one-candidate-at-a-time check waves through,
+  // because the first square has not fallen yet when the second is tested.
+  t.ok(HQ.stillWhole(2, 1), 'taking one of them alone leaves the board whole');
+  t.ok(HQ.stillWhole(1, 2), 'and so does taking the other');
+
+  HQ.G.q.crack[HQ.idx(2, 1)] = HQ.CRACK_TURNS;
+  t.ok(HQ.goingOrGone(2, 1), 'a cracked square is a hole with a delay on it');
+  t.ok(!HQ.goingOrGone(1, 2), 'and an untouched one is not');
+  t.ok(!HQ.stillWhole(1, 2), 'so with the first already cracking, the second is refused');
+
+  // and it comes back the moment the pending collapse is called off
+  HQ.G.q.crack[HQ.idx(2, 1)] = 0;
+  t.ok(HQ.stillWhole(1, 2), 'once nothing is pending it is fair game again');
 });
 
 t.test('collapse: the doorways and the doorstep are never taken', () => {
@@ -6371,6 +6411,145 @@ t.test('carry: a hero with somebody on their shoulder shows it', () => {
   t.ok(painted(held, '#7a6a58'), 'the shape goes on the shoulder');
   t.ok(painted(held, 'rgba(20,18,16,.5)'), 'over a dark backing, so it reads on a lit floor');
   t.ok(painted(held, 'rgba(232,186,96,.9)'), 'and an amber rim, like every other cost on this board');
+});
+
+/* ---------------------------------------------------------- room traits */
+
+// A floor with a chosen trait on a chosen room, and nothing else in the way.
+function traitRoom(rid, id, depth){
+  themedRun(null, depth || 5);
+  HQ.G.q.rtrait.fill(null);
+  HQ.G.q.rtrait[rid] = id;
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  return HQ.ROOMS[rid];
+}
+
+t.test('traits: the table says what each one is, and some tempt while some warn', () => {
+  t.ok(HQ.ROOM_TRAITS.length >= 4, 'there are traits to draw from');
+  for (const tr of HQ.ROOM_TRAITS){
+    t.ok(tr.id && tr.ic && tr.name && tr.desc, `${tr.id} says what it is`);
+    t.eq(typeof tr.good, 'boolean', `${tr.id} knows whether it tempts or warns`);
+  }
+  t.ok(HQ.ROOM_TRAITS.some(x => x.good), 'some are worth walking into');
+  t.ok(HQ.ROOM_TRAITS.some(x => !x.good), 'and some are not — a trait you always want is not a decision');
+  t.ok(!HQ.THEMES.some(th => HQ.ROOM_TRAITS.some(x => x.id === th.id)), 'no trait is also a whole-floor theme');
+});
+
+t.test('traits: they land on rooms, but never where there is no choice to make', () => {
+  let withTrait = 0, rooms = 0, bad = 0;
+  for (let i = 0; i < 8; i++){
+    themedRun(null, 6);
+    const start = HQ.roomAt(HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+    const goal = HQ.G.q.def.objective && HQ.G.q.def.objective.room;
+    for (const r of HQ.ROOMS){
+      rooms++;
+      const id = HQ.roomTraitOf(r.id);
+      if (!id) continue;
+      withTrait++;
+      if (!HQ.RTRAIT(id)) bad++;
+      if (r.id === start || r.id === goal) bad++;
+    }
+  }
+  t.ok(withTrait > 0, 'traits turn up');
+  t.ok(withTrait < rooms, 'but not on every room');
+  t.eq(bad, 0, 'never the room you start beside, never the objective room');
+});
+
+t.test('traits: HALLOWED is worth retreating into', () => {
+  const rid = 4, r = traitRoom(rid, 'hallowed');
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  t.ok(HQ.roomAt(12,9) !== rid, 'standing outside it');
+  const out = HQ.defendDice(h);
+  put(h, r.x, r.y);
+  t.eq(HQ.roomAt(r.x,r.y), rid, 'and now inside it');
+  t.eq(HQ.defendDice(h), out + 1, 'HALLOWED is worth one more defend die');
+  t.ok(HQ.inTrait(h, 'hallowed'), 'and the hero knows where they are standing');
+  t.ok(!HQ.inTrait(h, 'choked'), 'and what they are not standing in');
+});
+
+t.test('traits: CHOKED is worth pulling them out of', () => {
+  const rid = 4, r = traitRoom(rid, 'choked');
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  const out = HQ.attackDice(h, null);
+  put(h, r.x, r.y);
+  t.eq(HQ.attackDice(h, null), out - 1, 'CHOKED costs an attack die');
+  // never down to nothing — a hero with one die still throws it
+  h.weapon = 'dagger';
+  t.ok(HQ.attackDice(h, null) >= 1, 'but never below one die');
+});
+
+t.test('traits: HOARDED pays a search twice, and only gold', () => {
+  const rid = 4;
+  traitRoom(rid, null);
+  HQ.G.q.vault = -1;               // a vault room deals its own fixed card, not the deck's
+  const plain = HQ.drawCard(rid, HQ.runAlive()[0]);
+  traitRoom(rid, 'hoarded');
+  HQ.G.q.vault = -1;
+  HQ.G.q.deckAt = 0;
+  let sawGold = false, doubled = 0, tries = 0;
+  // walk the deck: every gold card in a hoarded room pays double its face
+  for (let i = 0; i < HQ.TREASURE_DECK.length; i++){
+    HQ.G.q.rtrait[rid] = null; HQ.G.q.deckAt = i;
+    const a = HQ.drawCard(rid, HQ.runAlive()[0]);
+    HQ.G.q.rtrait[rid] = 'hoarded'; HQ.G.q.deckAt = i;
+    const b = HQ.drawCard(rid, HQ.runAlive()[0]);
+    tries++;
+    if (a.k === 'gold'){ sawGold = true; if (b.n === a.n*2) doubled++; else doubled = -99; }
+    else if (b.k !== a.k || b.n !== a.n) doubled = -99;   // nothing else may change
+  }
+  t.ok(tries > 0, 'the deck has cards in it');
+  t.ok(sawGold, 'and gold among them');
+  t.ok(doubled > 0, 'every gold card pays double in a hoarded room, and nothing else changes');
+  t.ok(plain, 'a plain room still deals normally');
+});
+
+t.test('traits: WATCHED makes everything you do twice as loud', () => {
+  // one floor, one room, searched twice — regenerating between the two halves
+  // gives them different decks and different rooms, and then the two numbers
+  // are not measuring the same thing
+  const rid = 4, r = traitRoom(rid, null);
+  HQ.G.q.vault = -1;
+  HQ.G.q.deck = [0];
+  for (const m of HQ.monstersOf()) if (HQ.roomAt(m.x,m.y) === rid) m.alive = false;
+  const h = HQ.runAlive()[0];
+
+  const searchOnce = () => {
+    put(h, r.x, r.y); use(h);
+    HQ.G.q.searched[rid] = 0; HQ.G.q.deckAt = 0;
+    const w0 = HQ.G.q.wrath;
+    HQ.searchTreasure();
+    return HQ.G.q.wrath - w0;
+  };
+
+  HQ.G.q.rtrait[rid] = null;
+  const quiet = searchOnce();
+  t.ok(quiet > 0, 'rummaging always stirs him a little');
+
+  HQ.G.q.rtrait[rid] = 'watched';
+  t.eq(searchOnce(), quiet + 3, 'and three more of him in a watched room — the rummaging counts double');
+
+  // and back off again when you leave
+  HQ.G.q.rtrait[rid] = null;
+  t.eq(searchOnce(), quiet, 'a plain room is quiet again');
+});
+
+t.test('traits: a room you have opened wears its trait on the floor', () => {
+  const rid = 4;
+  traitRoom(rid, null);
+  HQ.G.q.roomSeen.fill(1); HQ.G.q.seen.fill(1);
+  const clean = paintOf(() => HQ.draw());
+  t.ok(!paintedLike(clean, /^rgba\(110,200,130,[\d.]+\)$/), 'a plain room paints no trait');
+
+  HQ.G.q.rtrait[rid] = 'hallowed';
+  t.ok(paintedLike(paintOf(() => HQ.draw()), /^rgba\(110,200,130,[\d.]+\)$/), 'one that tempts is painted green');
+  HQ.G.q.rtrait[rid] = 'choked';
+  t.ok(paintedLike(paintOf(() => HQ.draw()), /^rgba\(200,110,90,[\d.]+\)$/), 'one that warns is painted hot');
+
+  // and a room nobody has opened keeps it to itself
+  HQ.G.q.roomSeen.fill(0);
+  t.ok(!paintedLike(paintOf(() => HQ.draw()), /^rgba\(200,110,90,[\d.]+\)$/), 'an unopened room shows nothing');
 });
 
 t.run();

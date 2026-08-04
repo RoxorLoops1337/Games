@@ -946,11 +946,29 @@ S.run.purse.silver = 4;
 S.wheelAsk.pick = { silver: 2, coin: wheelFee - 2 };
 S.wheelAsk.first = 'silver';
 t.eq(DP.wheelPicked(), wheelFee, 'the palm is full');
-t.ok(DP.wheelConfirm(), 'and the coin goes down the slot');
-t.ok(S.wheelAnim !== null, 'the wheel of fortune turns');
-t.eq(S.wheelAnim.coin, 'silver', 'the piece you see drop is the one you chose first');
+t.ok(DP.wheelConfirm(), 'and the coins go down the slot');
+// PAYING IS NOT SPINNING any more. Every piece you paid falls in, and then
+// the machine WAITS — the prize is not drawn until your own second press.
+t.ok(!S.wheelAnim, 'the wheel does not start on its own');
+t.ok(S.wheelFeed && S.wheelFeed.ph === 'feed', 'the slot is swallowing your pieces');
+t.eq(S.wheelFeed.coins.length, wheelFee, 'every piece you paid goes in, not just one');
+t.eq(S.wheelFeed.coins[0], 'silver', 'and the kind you chose first leads');
+t.eq(S.wheelFeed.coins.filter(k => k === 'silver').length, 2, 'both silver among them');
 t.eq(S.run.purse.silver, 2, 'exactly the silver you picked is gone');
 t.eq(DP.purseTotal(), wheelPurse + 4 - wheelFee, 'and exactly this floor\'s ' + wheelFee + ' coins in total');
+// the feed runs out, and the SPIN button arms
+for (let i = 0; i < 400 && S.wheelFeed.ph === 'feed'; i++) DP.wheelFeedTick(1 / 60);
+t.eq(S.wheelFeed.ph, 'armed', 'the pieces are in and the machine arms');
+t.ok(!S.wheelAnim, 'and STILL nothing has been drawn');
+t.ok(DP.wheelPress(), 'you press SPIN...');
+t.eq(S.wheelFeed.ph, 'power', '...and the needle starts running');
+t.ok(!S.wheelAnim, 'the prize is still not drawn while you aim');
+for (let i = 0; i < 12; i++) DP.wheelFeedTick(1 / 60);
+t.ok(S.wheelFeed.pw > 0 && S.wheelFeed.pw <= 1, 'the needle has travelled (' + S.wheelFeed.pw.toFixed(2) + ')');
+t.ok(DP.wheelPress(), 'you press again to lock it in');
+t.ok(S.wheelAnim !== null, 'and NOW the wheel of fortune turns');
+t.ok(!S.wheelFeed, 'the feed is done with');
+t.eq(S.wheelAnim.lead, 0, 'it starts the instant you press, with no lead-in');
 t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
 t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -wheelFee, 'and the LEDGER wrote the fee down');
 S.run.floor = 1;                                       // rewind for what follows
@@ -4306,6 +4324,40 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     t.eq(K.S.run.potions, plainPot + 1, 'and +1 potion');
     t.eq(K.S.run.gold, 20, 'and 20 gold for the first shop');
   }
+  // rail 3b: THE BLADE RAMPS. Attack used to step only when the ACT did, so
+  // the same foe hit for the same damage on floor 1 and floor 5 and the deep
+  // got harder only by taking longer to chew through. Now it climbs per floor.
+  {
+    const foeAt = (f) => {
+      DS.run.floor = f;
+      DS.run.depth = 1;
+      D.srand(4242);
+      const e = D.mkEnemy('mob', 'orc');
+      return { hp: e.hp, atk: e.atk };
+    };
+    const rows = [1, 5, 10, 15, 20].map(f => ({ f, ...foeAt(f) }));
+    console.log('# orc curve: ' + rows.map(r => r.f + ':' + r.hp + 'hp/' + r.atk + 'atk').join(' '));
+    for (let i = 1; i < rows.length; i++) {
+      t.ok(rows[i].atk >= rows[i - 1].atk,
+           'the floor-' + rows[i].f + ' blade is no softer than the last');
+      t.ok(rows[i].hp > rows[i - 1].hp,
+           'and the floor-' + rows[i].f + ' hide is thicker');
+    }
+    // THE RAMP MUST BE REAL, not the act curve wearing a new name. scaleMult
+    // is the act curve on its own, so anything the blade gains BEYOND its
+    // ratio is the per-floor ramp — and if the ramp is removed this collapses
+    // to 1.00 however steep the acts are.
+    const sm = (f) => { DS.run.floor = f; DS.run.depth = 1; return D.scaleMult(); };
+    const actOnly = sm(20) / sm(1);
+    const gained = (rows[4].atk / rows[0].atk) / actOnly;
+    t.ok(gained > 1.35,
+         'the blade climbs well beyond the act curve (x' + gained.toFixed(2) + ' on top of x' + actOnly.toFixed(2) + ')');
+    // ...and it is a ramp, not a cliff: twenty floors must not make a grunt
+    // hit like a boss
+    t.ok(gained < 2.6, 'but it is a ramp, not a cliff (x' + gained.toFixed(2) + ')');
+    t.ok(rows[4].atk <= rows[0].atk * 9,
+         'a floor-20 grunt still swings like a grunt (' + rows[0].atk + ' -> ' + rows[4].atk + ')');
+  }
   // rail 4: the bosses climb in order, and THE AUDITOR crowns them sanely
   const bossPow = (f) => {
     DS.run.floor = f;
@@ -7426,7 +7478,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.18.1', 'the cabinet ships as v1.18.1');
+  t.eq(D.VERSION, '1.20.0', 'the cabinet ships as v1.20.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8923,6 +8975,107 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
 }
 
+// ====== THE POWER METER IS THEATRE, AND THE ODDS MUST PROVE IT ======
+// A meter that changes what you win is a rigged wheel wearing a skill mask.
+// Power sets how HARD the wheel is thrown and nothing else, so the same seed
+// must draw the same prize at every power — and the wheel must still land
+// exactly where it was drawn to land.
+{
+  const { DP: Dw } = loadGame({}, false);
+  const seeds = [7, 91, 404, 1234, 55555];
+  const byPower = {};
+  for (const pw of [0, 0.25, 0.5, 0.75, 1]) {
+    byPower[pw] = seeds.map((sd) => {
+      Dw.srand(sd); Dw.newRun('knight');
+      const won = Dw.spinWheel(null, pw);
+      return won ? won.label : '?';
+    });
+  }
+  const base = seeds.map((sd) => { Dw.srand(sd); Dw.newRun('knight'); const w = Dw.spinWheel('coin'); return w ? w.label : '?'; });
+  for (const pw of [0, 0.25, 0.5, 0.75, 1]) {
+    t.eq(byPower[pw].join('|'), base.join('|'),
+         'power ' + pw + ' draws exactly what no power draws — the meter cannot touch the odds');
+  }
+  // ...and over a real sample the distribution is unmoved
+  const tally = (pw) => {
+    const c = {};
+    Dw.srand(20260731);
+    for (let i = 0; i < 400; i++) {
+      Dw.newRun('knight');
+      const w = pw === null ? Dw.spinWheel('coin') : Dw.spinWheel(null, pw);
+      c[w ? w.label : '?'] = (c[w ? w.label : '?'] | 0) + 1;
+    }
+    return Object.keys(c).sort().map(k => k + ':' + c[k]).join(' ');
+  };
+  const flat = tally(null), weak = tally(0), hard = tally(1);
+  t.eq(weak, flat, 'a limp flick pays the same spread as no meter at all');
+  t.eq(hard, flat, 'and so does a full-power throw');
+  console.log('# wheel spread, unmoved by power: ' + flat.slice(0, 110));
+
+  // AND THE STREAM MUST NOT SHIFT. spinWheel keeps its turns draw even when
+  // power overrides it; drop that draw and every roll AFTER a spin slides by
+  // one, which a single-spin comparison can never see.
+  const chain = (pw) => {
+    Dw.srand(8675309); Dw.newRun('knight');
+    const out = [];
+    for (let i = 0; i < 6; i++) {
+      const w = pw === null ? Dw.spinWheel('coin') : Dw.spinWheel(null, pw);
+      out.push(w ? w.label : '?');
+    }
+    return out.join('|');
+  };
+  const chainFlat = chain(null);
+  t.eq(chain(0), chainFlat, 'six spins at zero power run the same seeded stream');
+  t.eq(chain(1), chainFlat, 'and so do six at full power — the draw count is unchanged');
+  // ...and pinned, because the comparison above moves with BOTH sides. A spin
+  // must consume a fixed number of rolls: change that and every seeded thing
+  // after a spin slides, which no relative check can see. If this fails and
+  // the wheel's prizes were deliberately changed, re-pin it — otherwise
+  // something quietly altered how much of the stream a spin eats.
+  t.eq(chainFlat, '+GOLD|COMMON\nRELIC|+10 HP|\u22125 HP|COMMON\nRELIC|+5 HP',
+       'a spin eats exactly its fixed share of the seeded stream');
+
+  // what power DOES change: how far the wheel travels in the same time
+  Dw.srand(404); Dw.newRun('knight'); Dw.spinWheel(null, 0);
+  const soft = Math.abs(Dw.S.wheelAnim.target);
+  Dw.srand(404); Dw.newRun('knight'); Dw.spinWheel(null, 1);
+  const full = Math.abs(Dw.S.wheelAnim.target);
+  t.ok(full > soft * 1.6, 'a hard throw carries the wheel much further (' + soft.toFixed(1) + ' vs ' + full.toFixed(1) + ')');
+  // ...but it still comes to rest exactly where the draw said
+  for (const pw of [0, 0.5, 1]) {
+    Dw.srand(404); Dw.newRun('knight');
+    const won = Dw.spinWheel(null, pw);
+    const a = Dw.S.wheelAnim;
+    a.t = 1e6;
+    const at = Dw.wheelAt(Dw.wheelRot(a));
+    t.eq(Dw.WHEEL[at.i].label, won.label, 'at power ' + pw + ' it comes to rest on the prize it drew');
+  }
+
+  // the needle itself: it must actually sweep, and turn round at both ends
+  Dw.S.wheelFeed = { coins: ['coin', 'silver'], t: 0, ph: 'power', pw: 0, dir: 1 };
+  let hi = 0, lo = 1, turns = 0, last = 1;
+  for (let i = 0; i < 600; i++) {
+    Dw.wheelFeedTick(1 / 60);
+    const v = Dw.S.wheelFeed.pw;
+    hi = Math.max(hi, v); lo = Math.min(lo, v);
+    if (Dw.S.wheelFeed.dir !== last) { turns++; last = Dw.S.wheelFeed.dir; }
+  }
+  t.ok(hi > 0.98 && lo < 0.02, 'the needle uses the whole meter (' + lo.toFixed(2) + '..' + hi.toFixed(2) + ')');
+  t.ok(turns >= 2, 'and runs back and forth rather than off the end (' + turns + ' turns)');
+  t.ok(Dw.S.wheelFeed.pw >= 0 && Dw.S.wheelFeed.pw <= 1, 'and never leaves the bar');
+
+  // the feed: every piece falls before the machine arms, and pressing early
+  // must not draw a prize
+  Dw.S.wheelAnim = null;
+  Dw.S.wheelFeed = { coins: ['coin', 'coin', 'silver', 'lucky'], t: 0, ph: 'feed', pw: 0, dir: 1 };
+  const end = Dw.wheelFeedEnd(Dw.S.wheelFeed);
+  t.ok(end > Dw.WH_FEED, 'four pieces take longer to swallow than one (' + end.toFixed(2) + 's)');
+  t.ok(!Dw.wheelPress(), 'you cannot spin while the slot is still eating');
+  t.ok(!Dw.S.wheelAnim, 'and nothing is drawn by trying');
+  for (let i = 0; i < 600 && Dw.S.wheelFeed.ph === 'feed'; i++) Dw.wheelFeedTick(1 / 60);
+  t.eq(Dw.S.wheelFeed.ph, 'armed', 'once they are all in, it arms');
+}
+
 // ============== THE SIDES ARE POLISHED METAL ==============
 {
   const here7 = dirname(fileURLToPath(import.meta.url));
@@ -9300,6 +9453,105 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     frames(3);
     t.eq(globalThis.__ctxDepth, 0, 'and so does a ' + size + '-shaped room in the glass');
   }
+}
+
+// ------------------------------------------------------------- ROOM TRAITS
+// A trait is one line on a door that changes how the room is fought. It has to
+// be readable before you spend the key, and it has to actually bite in the
+// fight held there.
+{
+  const S = DP.S;
+  t.eq(DP.ROOM_TRAITS.length >= 4, true, 'there are traits to draw from');
+  for (const tr of DP.ROOM_TRAITS) {
+    t.ok(tr.id && tr.ic && tr.name && tr.desc, tr.id + ' says what it is');
+    t.eq(typeof tr.good, 'boolean', tr.id + ' knows whether it tempts or warns');
+  }
+  t.ok(DP.ROOM_TRAITS.some(x => x.good) && DP.ROOM_TRAITS.some(x => !x.good),
+       'some tempt and some warn — a trait you always want is not a decision');
+
+  // they land on floors, and never where they would make no choice
+  DP.newRun();
+  let withTrait = 0, rooms = 0, badPlace = 0;
+  for (let i = 0; i < 10; i++) {
+    S.run.floor = i + 1;
+    DP.genFloor();
+    for (const k of Object.keys(S.run.map.rooms)) {
+      const r = S.run.map.rooms[k];
+      rooms++;
+      if (!r.trait) continue;
+      withTrait++;
+      if (!DP.TRAIT(r.trait)) badPlace++;                 // must be a real trait
+      if (k === '0,0' || r.boss || r.vault) badPlace++;    // never these three
+    }
+  }
+  t.ok(withTrait > 0, 'traits turn up on floors');
+  t.ok(withTrait < rooms, 'but not on every room');
+  t.eq(badPlace, 0, 'never the entrance, the lair or the vault');
+
+  // adding them must not shift a shared seed's fights — same discipline the
+  // mimic and the collector keep
+  const layout = () => Object.keys(S.run.map.rooms).sort().join('|') + '#' +
+                       Object.keys(S.run.map.links).sort().join('|');
+  S.run.seed = 12345; S.run.floor = 3;
+  DP.genFloor(); const a = layout(); const tA = Object.keys(S.run.map.rooms).map(k => S.run.map.rooms[k].trait || '-').join();
+  DP.genFloor(); const b = layout(); const tB = Object.keys(S.run.map.rooms).map(k => S.run.map.rooms[k].trait || '-').join();
+  t.eq(a, b, 'the same seed and floor rebuild the same maze');
+  t.eq(tA, tB, 'and lay the same traits on it');
+}
+
+// each trait actually bites, and only in the room that carries it
+{
+  const S = DP.S;
+  const roomWith = (id) => {                 // stand in a room carrying this trait
+    DP.newRun();
+    DP.genFloor();
+    const k = Object.keys(S.run.map.rooms).find(x => x !== '0,0' && !S.run.map.rooms[x].boss);
+    S.run.map.rooms[k].trait = id;
+    S.run.map.cur = k;
+    S.run.room = S.run.map.rooms[k];
+    return S.run.map.rooms[k];
+  };
+  const roomPlain = () => roomWith(null);
+
+  // CRAMPED: one fewer bank slot
+  roomPlain(); DP.startBattle('battle');
+  const bankPlain = DP.bankMax();
+  roomWith('cramped'); DP.startBattle('battle');
+  t.eq(DP.bankMax(), Math.max(1, bankPlain - 1), 'CRAMPED costs a bank slot');
+  t.eq(DP.inTrait('cramped'), true, 'and the room knows it is cramped');
+
+  // BLESSED: +3 block a round
+  roomPlain();
+  const blockPlain = DP.startBlock();
+  roomWith('blessed');
+  t.eq(DP.startBlock(), blockPlain + 3, 'BLESSED opens every round with +3 block');
+
+  // GILDED: a prize pays double gold, and only here
+  roomPlain();
+  const p0 = S.run.gold | 0;
+  DP.grantPrize({ kind: 'gold', n: 20 });
+  t.eq((S.run.gold | 0) - p0, 20, 'a plain room pays a prize at face value');
+  roomWith('gilded');
+  const p1 = S.run.gold | 0;
+  DP.grantPrize({ kind: 'gold', n: 20 });
+  t.eq((S.run.gold | 0) - p1, 40, 'GILDED pays it double');
+  // and it is gold it doubles, not everything
+  const k0 = S.run.keys | 0;
+  DP.grantPrize({ kind: 'key', n: 1 });
+  t.eq((S.run.keys | 0) - k0, 1, 'a key is still just a key');
+
+  // WARDED: the guard opens each round behind block
+  roomWith('warded'); DP.startBattle('battle');
+  for (const f of DP.S.foes) f.block = 0;
+  DP.newRound();
+  t.ok(DP.S.foes.some(f => f.hp > 0 && (f.block | 0) >= 3), 'WARDED arms the foe with block');
+
+  // and a plain room does none of it
+  roomPlain(); DP.startBattle('battle');
+  for (const f of DP.S.foes) f.block = 0;
+  DP.newRound();
+  t.eq(DP.inTrait('warded'), false, 'a plain room is not warded');
+  t.ok(!DP.S.foes.some(f => f.hp > 0 && (f.block | 0) >= 3), 'and its foe gets no free guard');
 }
 
 t.done();

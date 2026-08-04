@@ -56,6 +56,15 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 3 — gameplay depth
 
+- [x] **Room traits**: every room was an interchangeable bag of dice and every fight
+      played the same wherever you had it. Four traits — GILDED (prizes pay double),
+      BLESSED (+3 block a round), CRAMPED (one fewer bank slot), WARDED (the foe
+      opens each round behind +3 block) — roll onto ~a third of rooms, never the
+      entrance/lair/vault. The glyph rides the door sign (green tempts, orange
+      warns) and shows even through a '?', so spending a key is an informed
+      choice; the trait then bites in the fight held there. Rolled off a side
+      RNG stream so shared seeds keep their fights (session 18)
+
 - [x] **Boss mechanics v2**: arena twists — Dragon breathes on 2 gold coins each
       round (collect alight = +2 burn), Lich raises a half-HP skeleton every 3rd
       round, Pit Boss taxes the smallest tray piece every 3rd round (belly-refunded)

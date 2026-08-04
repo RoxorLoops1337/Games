@@ -793,7 +793,8 @@ function attackDice(h, target){
   if (curseHas('frail')) n += 1;                 // nothing to lose
   if (relicHas('ring') && target && MONSTERS[target.mt] && MONSTERS[target.mt].undead) n += 1;
   if (h.cursed) n = Math.max(1, n - 1);
-  return n;
+  if (inTrait(h, 'choked')) n -= 1;              // no room to swing
+  return Math.max(1, n);
 }
 function defendDice(h){
   let n = h.baseDef;
@@ -806,6 +807,7 @@ function defendDice(h){
   if (curseHas('frail')) n -= 1;
   if (curseHas('heavy')) n += 1;                 // dug in
   if (relicHas('anvil')) n += 1;
+  if (inTrait(h, 'hallowed')) n += 1;            // old prayers still hold
   return Math.max(0, n);
 }
 function moveSlow(h){
@@ -837,6 +839,7 @@ function startQuest(qi, def, seed){
     log:[], activeId:null, escaped:false,
     water: new Array(W*H).fill(0),
     hole: new Array(W*H).fill(0), crack: new Array(W*H).fill(0),
+    rtrait: new Array(ROOMS.length).fill(null),
   };
   // shuffle the treasure deck with the quest seed
   for (let i=Q.deck.length-1; i>0; i--){ const j = Math.floor(R()*(i+1)); const t=Q.deck[i]; Q.deck[i]=Q.deck[j]; Q.deck[j]=t; }
@@ -921,6 +924,18 @@ function startQuest(qi, def, seed){
   for (let i=0; i<(q.traps||0) && trapSpots.length; i++){
     const [[x,y]] = trapSpots.splice(Math.floor(R()*trapSpots.length), 1);
     Q.traps.push({ x, y, t:TT[Math.floor(R()*TT.length)], found:false, sprung:false, disarmed:false });
+  }
+
+  // --- the traits -------------------------------------------------------
+  // Never the room the party starts beside, and never the objective room: the
+  // first is a choice nobody gets to make, the second already has a reason to
+  // be entered. Everything else is fair ground.
+  if (q.rtraits){                       // Descent floors only — the Quest Book is authored
+    const startRoom = roomAt(STAIRS[0][0], STAIRS[0][1]);
+    for (const r of ROOMS){
+      if (r.id === startRoom || r.id === (q.objective && q.objective.room)) continue;
+      if (R() < .28) Q.rtrait[r.id] = ROOM_TRAITS[Math.floor(R()*ROOM_TRAITS.length)].id;
+    }
   }
 
   // --- the water --------------------------------------------------------
@@ -3260,6 +3275,7 @@ function draw(){
   if (BAKE) ctx.drawImage(BAKE, 0, 0);
   drawWater(ctx, t);
   drawCollapse(ctx, t);
+  drawRoomTrait(ctx, t);
 
   // furniture, doors, traps
   for (const f of G.q.furn) if (G.q.seen[idx(f.x,f.y)]) drawFurniture(ctx, f, t);
@@ -3577,6 +3593,31 @@ function drawCollapse(g, t){
     g.strokeStyle = `rgba(228,150,70,${(.20 + p*.30).toFixed(3)})`;
     g.lineWidth = 1.5;
     rr(g, px+3, py+3, TS-6, TS-6, 4); g.stroke();
+  }
+}
+
+// The log scrolls; the room does not. A trait gets a mark on its own floor so
+// walking back into it a dozen turns later still tells you what you are standing on.
+function drawRoomTrait(g, t){
+  if (!G.q.rtrait) return;
+  const p = .5 + Math.sin(t*.0035)*.5;
+  for (const r of ROOMS){
+    const id = G.q.rtrait[r.id];
+    if (!id || !G.q.roomSeen[r.id]) continue;
+    const tr = RTRAIT(id);
+    if (!tr) continue;
+    const col = tr.good ? '110,200,130' : '200,110,90';
+    // a wash over the room's own floor, corner sigils so it reads at any zoom
+    g.fillStyle = `rgba(${col},${(.045 + p*.030).toFixed(3)})`;
+    g.fillRect(r.x*TS, r.y*TS, r.w*TS, r.h*TS);
+    g.strokeStyle = `rgba(${col},${(.20 + p*.16).toFixed(3)})`; g.lineWidth = 2;
+    rr(g, r.x*TS+3, r.y*TS+3, r.w*TS-6, r.h*TS-6, 6); g.stroke();
+    g.font = `${TS*.42}px Georgia,serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = 'rgba(0,0,0,.6)';
+    g.fillText(tr.ic, (r.x+.5)*TS + 1, (r.y+.5)*TS + 1);
+    g.fillStyle = `rgba(${col},${(.55 + p*.35).toFixed(3)})`;
+    g.fillText(tr.ic, (r.x+.5)*TS, (r.y+.5)*TS);
+    g.textBaseline = 'alphabetic';
   }
 }
 
@@ -4979,6 +5020,8 @@ function openDoorAt(h, d){
     G.q.announced[d.rid] = 1;
     const n = monstersOf().filter(m => roomAt(m.x,m.y) === d.rid).length;
     say(`${room.name}${n ? ' — ' + n + ' hostile' + (n>1?'s':'') : ' — empty'}`, n ? 'bad' : '');
+    const rt = RTRAIT(roomTraitOf(d.rid));
+    if (rt) say(`${rt.ic} ${rt.name} — ${rt.desc}`, rt.good ? 'good' : 'bad');
     if (n) setMood('fight');
     bossIntro(d.rid);
   }
@@ -5136,7 +5179,7 @@ function searchTreasure(){
   // everything in here has been gone through, and should look it from the door
   for (const f of G.q.furn)
     if (f.r === rid && FURN[f.t] && FURN[f.t].search) f.searched = true;
-  stirWrath(3, 'rummaging');
+  stirWrath(roomTraitOf(rid) === 'watched' ? 6 : 3, 'rummaging');
   sfx('search');
   const qf = G.q.furn.find(f => f.r === rid && f.quest && !f.taken);
   if (qf){
@@ -5164,6 +5207,9 @@ function chestIn(rid){
 }
 function drawCard(rid, h){
   let card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
+  // somebody stashed their takings in this one
+  if (roomTraitOf(rid) === 'hoarded' && card.k === 'gold')
+    card = Object.assign({}, card, { n: card.n*2, d: card.d + ' Somebody had been saving.' });
   if (rid === G.q.vault){
     card = { k:'gold', n:250 + ri(200), t:'The vault', d:'This is what the lock was for.' };
     // it pays what has been standing on the plinth in here all along
@@ -5361,17 +5407,21 @@ function bodyWatch(h){
 const CRACK_TURNS = 2;
 
 // Can everything still be reached from the stair if this square goes?
+//
+// The test has to be against the board as it will be, not as it is: a square
+// that is already cracked is a hole with a delay on it. Two candidates that are
+// each safe on their own can cut a pocket off once both have fallen, so every
+// pending collapse counts as gone here. Pessimistic in the only direction that
+// is safe — it refuses candidates it did not have to, never accepts one it
+// should not have. A crack is a promise: CRACK_TURNS later it drops, so weighing
+// a candidate against a board that still counts every cracking square as solid
+// lets two cracks each pass on their own and sever a corridor together.
+const goingOrGone = (x,y) => holeAt(x,y) || crackAt(x,y) > 0;
+
 function stillWhole(hx, hy){
   const seen = new Uint8Array(W*H);
   const [sx,sy] = STAIRS[0];
-  // A square counts as GONE if it has already fallen OR is cracking, because
-  // a crack is a promise: CRACK_TURNS later it drops. Weighing a candidate
-  // against a board that still counted every cracking square as solid meant
-  // two cracks could each pass on their own and then sever a corridor
-  // together when they both went — the floor sealing off a wing with the
-  // party in it, which is exactly what this guard exists to prevent.
-  const gone = (x,y) => holeAt(x,y) || G.q.crack[idx(x,y)] > 0;
-  if ((sx === hx && sy === hy) || gone(sx,sy)) return false;
+  if ((sx === hx && sy === hy) || goingOrGone(sx,sy)) return false;
   const stack = [[sx,sy]];
   seen[idx(sx,sy)] = 1;
   let n = 1;
@@ -5382,7 +5432,7 @@ function stillWhole(hx, hy){
       if (!inB(nx,ny) || seen[ni]) continue;
       if (!isFloor(nx,ny)) continue;
       if (nx === hx && ny === hy) continue;      // the square under test is gone
-      if (gone(nx,ny)) continue;
+      if (goingOrGone(nx,ny)) continue;
       // doors may be shut and still count — you can always open one
       if (!linkedIgnoringDoors(x,y,nx,ny)) continue;
       seen[ni] = 1; n++; stack.push([nx,ny]);
@@ -5390,7 +5440,7 @@ function stillWhole(hx, hy){
   }
   let want = 0;
   for (let y=0;y<H;y++) for (let x=0;x<W;x++){
-    if (!isFloor(x,y) || gone(x,y)) continue;
+    if (!isFloor(x,y) || goingOrGone(x,y)) continue;
     if (x === hx && y === hy) continue;
     want++;
   }
@@ -7111,6 +7161,28 @@ const THEMES = [
     desc:'The floor is going. Cracks open behind you, and what has cracked falls in two turns later.' },
 ];
 const THEME = (id) => THEMES.find(x => x.id === id);
+
+/* -------------------------------------------------------- 12c3. ROOM TRAITS */
+// A theme is the whole floor. A trait is one room of it. Rooms were the last
+// interchangeable thing on the board — a box with monsters in it — so a trait
+// gives a room a reason to be fought in, avoided, or hurried through. Two
+// tempt, two warn, and every one of them is a line you read on the door before
+// you open it.
+const ROOM_TRAITS = [
+  { id:'hallowed', ic:'✝', name:'Hallowed', good:true,
+    desc:'Old prayers still hold here. Everyone defends with one more die.' },
+  { id:'hoarded',  ic:'💰', name:'Hoarded',  good:true,
+    desc:'Somebody stashed their takings here. A search pays twice.' },
+  { id:'choked',   ic:'🕸', name:'Choked',   good:false,
+    desc:'No room to swing. Your blows throw one die fewer while you are in here.' },
+  { id:'watched',  ic:'👁', name:'Watched',  good:false,
+    desc:'He is looking straight at this room. Everything you do in here is twice as loud.' },
+];
+const RTRAIT = (id) => ROOM_TRAITS.find(x => x.id === id) || null;
+const roomTraitOf = (rid) => (G && G.q && G.q.rtrait && rid >= 0) ? (G.q.rtrait[rid] || null) : null;
+// the trait of the square somebody is standing on
+const traitAt = (x,y) => roomTraitOf(roomAt(x,y));
+const inTrait = (a, id) => !!(a && traitAt(a.x, a.y) === id);
 const themeIs = (id) => !!(G && G.q && G.q.def && G.q.def.theme === id);
 
 // Water is the only thing on the board that costs more than one square to enter.
@@ -7748,7 +7820,7 @@ function makeFloor(depth, R){
   let traps = 2 + Math.floor(depth*.8);
   if (mods.includes('brittle')) traps *= 2;
   return {
-    name, sub:`Depth ${depth}`, depth, mods, theme, vaultKind,
+    name, sub:`Depth ${depth}`, depth, mods, theme, vaultKind, rtraits:true,
     intro:'', objective, monsters, furn,
     traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
     eliteChance: Math.min(.32, .06 + depth*.032),
@@ -8717,7 +8789,9 @@ globalThis.HQ = {
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes, BOON, MOD,
   THEMES, THEME, themeIs, isWater, stepCost, wading, drawWater, showWatchedVault, revealRoom,
-  holeAt, crackAt, CRACK_TURNS, tickCollapse, collapseCandidates, stillWhole, stumbleClear, drawCollapse,
+  ROOM_TRAITS, RTRAIT, roomTraitOf, traitAt, inTrait, drawRoomTrait,
+  searchTreasure,
+  holeAt, crackAt, CRACK_TURNS, tickCollapse, collapseCandidates, stillWhole, goingOrGone, stumbleClear, drawCollapse,
   CARRY_SLOW, shoulder, putDown, carriedBody, anyCarried, dragAlong, carriedOut,
   markCornered, dist2,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
