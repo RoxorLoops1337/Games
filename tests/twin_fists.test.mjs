@@ -42,7 +42,7 @@ const EXPOSE = `__out.api = {
   updateFighter, playerControl, aiControl, separate, updateItems, updateFx, updateWaves,
   updateDeaths, updateCamera, respawnPlayer, doContinue, tokensOut, tokenCap, foeBehind, nearestFoe,
   liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep, MAX_ON, HORDE_SKINS,
-  HORDE, hordeWave, hordeCap, startHordeRun, nextHordeWave, updateHorde,
+  HORDE, hordeWave, hordeCap, startHordeRun, nextHordeWave, updateHorde, buildQueue, surgeSize, SURGE_GAP,
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
   rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
@@ -1755,6 +1755,62 @@ test('an ordinary wave stays small enough to read', () => {
   assert(worst <= api.MAX_ON() + 1, 'an ordinary street never floods: ' + worst);
 });
 
+/* ---------------------------------------------------------------- surges */
+test('a wave arrives a side at a time, not one from each in turn', () => {
+  const api = boot();
+  play(api);
+  const q = api.buildQueue([['grunt', 30]], 500, 1, 24);
+  assert(q.length === 30, 'everybody is in the queue');
+  // walk the queue and collect the runs of same-side arrivals
+  const runs = [];
+  let cur = q[0].side, n = 0;
+  for (const e of q){
+    if (e.side === cur) n++;
+    else { runs.push(n); cur = e.side; n = 1; }
+  }
+  runs.push(n);
+  assert(runs.length >= 2, 'a wave that big should come in more than one surge');
+  assert(runs[0] >= 6, 'and the first surge is a proper wall, not one man: ' + runs[0]);
+  for (const r of runs.slice(0, -1))
+    assert(r === api.surgeSize(24), `every full surge is the same size: ${r} vs ${api.surgeSize(24)}`);
+  const sides = new Set(q.map(e => e.side));
+  assert(sides.size === 2, 'and they do come from both sides eventually');
+});
+
+test('the surge is sized off the street, so grouping never thins the crowd', () => {
+  const api = boot();
+  assert(api.surgeSize(30) > api.surgeSize(10), 'a bigger street takes a bigger surge');
+  assert(api.surgeSize(30) >= 18, 'big enough to fill a cap of thirty: ' + api.surgeSize(30));
+  assert(api.surgeSize(0) >= 6, 'and never silly-small');
+});
+
+test('the beat between surges is longer than the gap inside one', () => {
+  const api = boot();
+  const q = api.buildQueue([['grunt', 24]], 0, 1, 12);
+  const size = api.surgeSize(12);
+  const withinSurge = q[2].t;
+  const acrossSurge = q[size].t;
+  assert(acrossSurge > withinSurge, `a side change should be a beat: ${acrossSurge} vs ${withinSurge}`);
+  near(acrossSurge, api.SURGE_GAP, 0.001, 'and it is the surge gap');
+  assert(q[size].side !== q[size - 1].side, 'the side really flipped there');
+});
+
+test('both wave builders arrive in surges', () => {
+  const api = boot();
+  play(api);
+  const gate = api.STAGES[0].gates.find(g => g.cap);
+  api.startWave(gate);
+  assert(api.W.queue.length > 10, 'a street horde queued up');
+  assert(new Set(api.W.queue.map(e => e.side)).size === 2, 'street waves use both sides');
+  api.G.mode = 'horde';
+  api.HORDE.wave = 5;
+  api.nextHordeWave();
+  assert(new Set(api.W.queue.filter(e => e.side).map(e => e.side)).size === 2, 'so do horde waves');
+  const first = api.W.queue.slice(0, 6).map(e => e.side);
+  assert(new Set(first).size === 1, 'and the first six all come through the same side');
+  api.G.mode = 'story';
+});
+
 /* ----------------------------------------------------------- horde mode */
 test('horde waves get bigger and bring worse company', () => {
   const api = boot();
@@ -1807,9 +1863,11 @@ test('a horde run rolls wave after wave without walking anywhere', () => {
     if (api.G.phase === 'upgrade') api.chooseUpgrade();
   }
   assert(api.HORDE.wave >= 3, 'it reached wave three, got ' + api.HORDE.wave);
-  // the tester kills two every quarter second, so the street sits well below
-  // its cap here — the cap itself is covered by the horde-gate tests
-  assert(sawCrowd >= 8, 'and filled the street on the way, peak ' + sawCrowd);
+  // The tester kills two every quarter second and surges land a side at a
+  // time, so the street sits well below its cap here. Real crowding is
+  // measured by the horde-gate test below (twenty-plus) — in a browser this
+  // same wave sits pinned at its cap of thirty.
+  assert(sawCrowd >= 5, 'and filled the street on the way, peak ' + sawCrowd);
   assert(api.cam.lock === camAt, 'the camera never moves off the arena');
   assert(api.G.stage === 0, 'and it never walks to another street');
 });
