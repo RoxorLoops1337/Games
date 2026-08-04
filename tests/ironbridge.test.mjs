@@ -18872,4 +18872,83 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 }
 
+/* ============================ what limits an order, on the card that offers it
+
+   A card said what an order costs, how long it takes to come back, and what it
+   lands on. It never said which of those is the one that actually stops you
+   casting it — and measured over ten veteran matches per order, given to both
+   holds in the first slot, they are wildly different in that respect:
+
+     four of eleven run at 87-92% of their cooldown ceiling — the recovery is
+     the limit and nothing else is;
+     five sit off cooldown and unspent for a THIRD to FOUR FIFTHS of the match,
+     waiting for something to aim at (Unbind is the extreme, 23% use and 78.5%
+     ready-and-idle);
+     two spend better than a third of the match unaffordable.
+
+   A slot spent on Unbind against a commander who brought no debuff does nothing
+   for the whole match, and nothing said so at the moment of choosing.
+
+   It is hand-written because it is a MEASUREMENT — there is no expression over
+   an order's own fields that yields it. So what is asserted is that every order
+   carries one, that the values come from the one table, that the card reads
+   that table rather than restating it, and that the split still matches the
+   claim written above the numbers. */
+{
+  const KEYS = Object.keys(IB.SPELL_BOUND);
+  t.ok(KEYS.length === 3, 'there are three things that can limit an order (' + KEYS.join(' ') + ')');
+  t.ok(KEYS.every(k => typeof IB.SPELL_BOUND[k] === 'string' && IB.SPELL_BOUND[k].length > 8),
+    'each is a phrase rather than a code');
+  t.ok(new Set(KEYS.map(k => IB.SPELL_BOUND[k])).size === KEYS.length, 'and no two say the same thing');
+  // the row already carries cost, recovery and aim; a fourth entry has to earn
+  // its width. Measured in a browser: +0px on a desktop and +19px on a phone,
+  // which the sheet has (811 of 844 used at 390x844).
+  t.ok(KEYS.every(k => IB.SPELL_BOUND[k].length <= 30),
+    'and each is short enough for a row that already has three things in it');
+
+  const missing = IB.SPELLS.filter(d => !d.bound).map(d => d.n);
+  t.ok(missing.length === 0, 'every order says what limits it (' + missing.join(', ') + ')');
+  const strange = IB.SPELLS.filter(d => !IB.SPELL_BOUND[d.bound]).map(d => d.n + ':' + d.bound);
+  t.ok(strange.length === 0, 'and only from the one table (' + strange.join(', ') + ')');
+
+  // the split, against the sentence written above the measurement
+  const by = {};
+  for (const d of IB.SPELLS) by[d.bound] = (by[d.bound] || 0) + 1;
+  t.ok(by.cd === 4, 'four run at their cooldown ceiling (' + by.cd + ')');
+  t.ok(by.aim === 5, 'five wait for a target (' + by.aim + ')');
+  t.ok(by.coin === 2, 'two wait for the stores (' + by.coin + ')');
+  t.ok(by.cd + by.aim + by.coin === IB.SPELLS.length, 'and that is all of them');
+
+  // the ones the measurement calls out by name, so a later edit that reshuffles
+  // the field cannot quietly contradict the numbers written down beside it
+  t.ok(IB.SPELL.unbind.bound === 'aim', 'Unbind waits for a target — 23% use, 78.5% idle');
+  t.ok(IB.SPELL.brace.bound === 'coin' && IB.SPELL.rampart.bound === 'coin',
+    'Brace and Rampart wait for the stores — both unaffordable a third of the match');
+  t.ok(IB.SPELL.muster.bound === 'cd' && IB.SPELL.bombard.bound === 'cd',
+    'Second Muster and Bombard go out every time they are ready');
+
+  // ---- the card reads the table rather than restating it
+  {
+    IB.newMatch({ diff:'veteran', seed:9800 });
+    for (const s of G.sides) rich(s);
+    IB.showSpells(0);
+    const seen = [];
+    for (const d of IB.SPELLS){
+      IB.spellLook(d.id);
+      const html = IB.spellWhyHtml();
+      if (html.indexOf(IB.SPELL_BOUND[d.bound]) < 0) seen.push(d.n);
+    }
+    t.ok(seen.length === 0, 'every card prints what limits that order (' + seen.join(', ') + ')');
+    // and it is the order's OWN phrase, not one phrase for all of them
+    IB.spellLook('unbind');
+    const a = IB.spellWhyHtml();
+    IB.spellLook('bombard');
+    const b = IB.spellWhyHtml();
+    t.ok(a.indexOf(IB.SPELL_BOUND.aim) >= 0 && a.indexOf(IB.SPELL_BOUND.cd) < 0,
+      'the one that waits for a target says so and nothing else');
+    t.ok(b.indexOf(IB.SPELL_BOUND.cd) >= 0 && b.indexOf(IB.SPELL_BOUND.aim) < 0,
+      'and the one bound by its recovery says that');
+  }
+}
+
 t.done();
