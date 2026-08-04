@@ -846,9 +846,11 @@ function walkover(G){
   ok(BB.R.hp <= BB.R.maxHp, 'healing never overshoots');
   eq(BB.F, null, 'the fight is torn down');
 
+  // the standing order settles in the same call, so it is counted here too
+  const ord0 = BB.orderMet(BB.R.litter[0].child) ? BB.R.order.pay : 0;
   ok(BB.keepChick(0), 'you keep one chick');
   eq(BB.R.deck.length, n0 + 1, 'and it joins the barn');
-  eq(BB.R.slop, slop0 + BB.C.SLOP_PER_WIN + BB.C.SLOP_PER_CHICK, 'the rejected chick is sold on');
+  eq(BB.R.slop, slop0 + BB.C.SLOP_PER_WIN + BB.C.SLOP_PER_CHICK + ord0, 'the rejected chick is sold on');
   eq(BB.R.sold, 1, 'and the sale is counted');
   eq(BB.R.born, 1, 'the keeper is counted too');
   eq(BB.R.nest.length, 0, 'the nest empties');
@@ -1138,30 +1140,64 @@ function autoRun(seed){
   ok(G.R.order && G.R.order.id, 'a run opens with an order already on the table');
   ok(G.ORDERS.every((o) => o.pay > 0 && o.want && o.who && typeof o.ok === 'function'),
     'every order has a buyer, a want, a price and a test');
-  ok(G.ORDERS.some((o) => o.id === 'cursed') && G.ORDERS.some((o) => o.id === 'runt'),
+  ok(G.ORDERS.some((o) => o.id === 'cursed') && G.ORDERS.some((o) => o.id === 'weakest'),
     'and at least two of them argue with keeping the best chick');
+
+  // EVERY want must be able to tell two chicks of one clutch apart. Four of the
+  // first six could not: chicks in a clutch always share `gen`, so the registry's
+  // "three generations deep" was all-or-nothing by construction and produced
+  // zero decisions in 977 measured postings.
+  const kids = [
+    { might: 12, hide: 2, trait: 'venom', gen: 3, cost: 1 },
+    { might: 3, hide: 3, trait: 'none', gen: 3, cost: 3 },
+  ];
+  const lit2 = kids.map((c) => ({ child: c }));
+  const pa = { trait: 'stun', cost: 2 }, pb = { trait: 'none', cost: 2 };
+  for (const o of G.ORDERS){
+    const seen = kids.map((c) => !!o.ok(c, pa, pb, lit2));
+    ok(seen[0] !== seen[1] || o.id === 'meek' || o.id === 'cursed',
+      o.id + ' can tell two chicks of one clutch apart');
+  }
+
+  // The strip is one line and it ellipsises. Four of the six wants truncated at
+  // 360px on the first pass ("a chick that eats less than b…"), which is a want
+  // the player cannot read. The stub has no layout, so this is a budget on the
+  // copy: measured 26 characters as the longest that fits once the buyer's
+  // article was dropped from the label.
+  for (const o of G.ORDERS){
+    ok(o.want.length <= 28, o.id + ' fits the order strip (' + o.want.length + ' chars)');
+    ok(!/^The /.test(o.want), o.id + ' does not repeat the article the label drops');
+  }
 
   // the predicates, straight
   const byId = {};
   for (const o of G.ORDERS) byId[o.id] = o;
-  const par = { trait: 'none' };
-  ok(byId.brute.ok({ might: 9, hide: 0, trait: 'none', gen: 1 }, par, par), 'the pit boss takes a 9 Might chick');
-  ok(!byId.brute.ok({ might: 8, hide: 20, trait: 'none', gen: 1 }, par, par), 'and not an 8');
-  ok(byId.runt.ok({ might: 4, hide: 4, trait: 'none', gen: 1 }, par, par), 'the tanner wants it small in both');
-  ok(!byId.runt.ok({ might: 4, hide: 5, trait: 'none', gen: 1 }, par, par), 'one good stat and the runt order is off');
+  const par = { trait: 'none', cost: 2 };
   ok(byId.cursed.ok({ might: 1, hide: 1, trait: 'cursed', gen: 1 }, par, par), 'the butcher pays for bad blood');
+  ok(!byId.cursed.ok({ might: 1, hide: 1, trait: 'none', gen: 1 }, par, par), 'and not for clean blood');
   ok(!byId.strange.ok({ trait: 'venom', might: 1, hide: 1, gen: 1 }, { trait: 'venom' }, par),
     'a trait a parent already had is not strange');
   ok(byId.strange.ok({ trait: 'venom', might: 1, hide: 1, gen: 1 }, { trait: 'stun' }, { trait: 'none' }),
     'a trait neither parent had is');
+  ok(byId.meek.ok({ trait: 'none', might: 9, hide: 9, gen: 1 }, par, par), 'the dairy wants no trait at all');
+  ok(byId.lopsided.ok({ might: 9, hide: 3, trait: 'none', gen: 1 }, par, par), 'triple one way is lopsided');
+  ok(!byId.lopsided.ok({ might: 8, hide: 3, trait: 'none', gen: 1 }, par, par), 'just under triple is not');
+  ok(byId.lean.ok({ cost: 1, might: 1, hide: 1, trait: 'none', gen: 1 }, { cost: 2 }, { cost: 3 }),
+    'a chick that eats less than both parents is lean');
+  ok(!byId.lean.ok({ cost: 2, might: 1, hide: 1, trait: 'none', gen: 1 }, { cost: 2 }, { cost: 3 }),
+    'matching the cheaper parent is not');
+  // the tanner's want is relative, so it needs the clutch and cannot fire alone
+  ok(byId.weakest.ok(kids[1], pa, pb, lit2), 'the tanner takes the weaker of the two');
+  ok(!byId.weakest.ok(kids[0], pa, pb, lit2), 'and never the stronger');
+  ok(!byId.weakest.ok(kids[1], pa, pb, [lit2[1]]), 'a clutch of one has no weaker chick');
 
   // the banner on the clutch is the ONLY moment the order can still change what
   // the player does, and it has to land on the qualifying chick alone
-  G.R.order = byId.brute;
-  G.R.lastHatch = { a: par, b: par };
-  const ban = (might) => G.ui.chickBanners({ child: { might, hide: 1, trait: 'none', gen: 1 }, tags: [] });
-  ok(/FILLS THE ORDER \+3/.test(ban(9)), 'the chick that fits is banner-marked on the clutch');
-  ok(!/FILLS THE ORDER/.test(ban(4)), 'and the one beside it is not');
+  G.R.order = byId.meek;
+  G.R.lastHatch = { a: par, b: par, litter: lit2 };
+  const ban = (trait) => G.ui.chickBanners({ child: { might: 5, hide: 5, trait, gen: 1, cost: 2 }, tags: [] });
+  ok(/FILLS THE ORDER \+5/.test(ban('none')), 'the chick that fits is banner-marked on the clutch');
+  ok(!/FILLS THE ORDER/.test(ban('venom')), 'and the one beside it is not');
 
   // orderMet needs a hatch to compare against, and never fires without one
   G.R.lastHatch = null;
@@ -1188,8 +1224,8 @@ function autoRun(seed){
   G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
   for (let i = 0; i < 40 && !G.R.litter; i++) G.winFight();
   ok(!!G.R.litter, 'the round hatched a clutch');
-  G.R.order = byId.brute;
-  for (const res of G.R.litter){ res.child.might = 1; res.child.hide = 1; }
+  G.R.order = byId.cursed;
+  for (const res of G.R.litter){ res.child.trait = 'none'; }
   const slop1 = G.R.slop, filled1 = G.R.filled;
   G.keepChick(0);
   eq(G.R.filled, filled1, 'a chick that misses the want fills nothing');
