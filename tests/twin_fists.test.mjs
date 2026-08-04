@@ -42,6 +42,7 @@ const EXPOSE = `__out.api = {
   updateFighter, playerControl, aiControl, separate, updateItems, updateFx, updateWaves,
   updateDeaths, updateCamera, respawnPlayer, doContinue, tokensOut, tokenCap, foeBehind, nearestFoe,
   liveEnemies, alivePlayers, isDown, canAct, addScore, fireSlug, thrownSweep, MAX_ON, HORDE_SKINS,
+  HORDE, hordeWave, hordeCap, startHordeRun, nextHordeWave, updateHorde,
   chainAttack, PUNCH_CHAIN, KICK_CHAIN, gainMeter, startSuper, superTick, superStrike,
   SUPER, METER_MAX, STOCK_MAX, START_STOCKS, weaponAngle, drawSwoosh, drawAttackSwoosh, SWOOSH,
   rushTier, TOKENS_PER_TIER, RUSH_NAMES, bossTick, pickAttack, launchAttack, slamShock,
@@ -1754,20 +1755,125 @@ test('an ordinary wave stays small enough to read', () => {
   assert(worst <= api.MAX_ON() + 1, 'an ordinary street never floods: ' + worst);
 });
 
+/* ----------------------------------------------------------- horde mode */
+test('horde waves get bigger and bring worse company', () => {
+  const api = boot();
+  const size = (n) => api.hordeWave(n).reduce((t, [, c]) => t + c, 0);
+  for (let n = 1; n < 14; n++)
+    assert(size(n + 1) >= size(n), `wave ${n + 1} should not be smaller than ${n}`);
+  assert(size(10) > size(1) * 2, 'and much bigger by wave ten');
+  const kinds = (n) => api.hordeWave(n).map(([k]) => k);
+  assert(kinds(1).length === 1, 'wave one is just bodies');
+  assert(kinds(8).length >= 5, 'by wave eight it is a mixed mob: ' + kinds(8).join(','));
+  for (let n = 1; n < 30; n++)
+    for (const [k] of api.hordeWave(n)) assert(api.ENEMY[k], `wave ${n} spawns unknown ${k}`);
+  assert(api.hordeCap(1) < api.hordeCap(9), 'the street holds more as it goes on');
+  assert(api.hordeCap(99) <= 34 + 4, 'but never past what the frame can carry');
+});
+
+test('every fifth wave sends a boss, cycling through all five', () => {
+  const api = boot();
+  const seen = new Set();
+  for (let n = 5; n <= 25; n += 5){
+    const boss = api.hordeWave(n).find(([k]) => api.ENEMY[k].boss);
+    assert(boss, 'wave ' + n + ' should bring a boss');
+    seen.add(boss[0]);
+  }
+  assert(seen.size === 5, 'all five bosses take a turn, saw ' + [...seen].join(','));
+  for (const n of [4, 6, 7, 9]) assert(!api.hordeWave(n).some(([k]) => api.ENEMY[k].boss), 'no boss on wave ' + n);
+});
+
+test('a horde run rolls wave after wave without walking anywhere', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame('horde');
+  assert(api.G.mode === 'horde' && api.G.phase === 'play', 'it started');
+  assert(api.HORDE.wave === 1, 'on wave one');
+  const camAt = api.cam.lock;
+  const p = api.players[0];
+  p.hpMax = 1e6; p.hp = 1e6;
+  let sawCrowd = 0;
+  for (let i = 0; i < 60 * 90 && api.HORDE.wave < 3; i++){
+    p.hp = p.hpMax; api.G.lives[0] = 9;
+    if (i % 16 === 0){                                  // a stand-in for punching
+      let killed = 0;
+      for (const f of api.fighters){
+        if (killed >= 2) break;
+        if (f.team === 'e' && !f.dead && !f.gone){ api.knockOut(f, p, api.ATK.hook); killed++; }
+      }
+    }
+    api.update(api.STEP);
+    sawCrowd = Math.max(sawCrowd, api.liveEnemies().length);
+    if (api.G.phase === 'upgrade') api.chooseUpgrade();
+  }
+  assert(api.HORDE.wave >= 3, 'it reached wave three, got ' + api.HORDE.wave);
+  // the tester kills two every quarter second, so the street sits well below
+  // its cap here — the cap itself is covered by the horde-gate tests
+  assert(sawCrowd >= 8, 'and filled the street on the way, peak ' + sawCrowd);
+  assert(api.cam.lock === camAt, 'the camera never moves off the arena');
+  assert(api.G.stage === 0, 'and it never walks to another street');
+});
+
+test('every third wave pays out a pick, and taking it resumes the fight', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame('horde');
+  api.HORDE.wave = 3;
+  api.W.active = true; api.W.queue = [];
+  api.fighters = api.fighters.filter(f => f.team === 'p');
+  api.updateHorde(api.STEP);
+  assert(api.G.phase === 'upgrade', 'wave three buys a pick, got ' + api.G.phase);
+  api.chooseUpgrade();
+  assert(api.G.phase === 'play', 'and then straight back to it');
+  assert(api.G.mode === 'horde' && api.G.stage === 0, 'still in the arena');
+});
+
+test('the best wave is remembered between runs', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame('horde');
+  api.HORDE.wave = 7;
+  api.finishGame(false);
+  assert(api.G.bestWave === 7, 'recorded, got ' + api.G.bestWave);
+  const api2 = boot({ store: api._store });
+  assert(api2.G.bestWave === 7, 'and survived a reboot');
+  api2.startGame('horde');
+  api2.HORDE.wave = 3;
+  api2.finishGame(false);
+  assert(api2.G.bestWave === 7, 'a worse run leaves the record alone');
+});
+
+test('a horde run draws, wave counter and all', () => {
+  const api = boot();
+  api.G.story = false;
+  api.startGame('horde');
+  for (let i = 0; i < 60 * 4; i++) api.update(api.STEP);
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  assert((api._counts.fillRect || 0) > 400, 'it painted a real frame');
+  assert(api.liveEnemies().length > 0, 'with a wave on the street');
+});
+
 /* ---------------------------------------------------------------- hordes */
-test('every street has a gate that sends tens of them at once', () => {
+test('every street sends several waves of tens of them', () => {
   const api = boot();
   let hordes = 0;
   for (const st of api.STAGES){
-    for (const g of st.gates){
-      if (!g.cap) continue;
+    const gates = st.gates.filter(g => g.cap);
+    assert(gates.length >= 2, `${st.name} only has ${gates.length} horde gate(s)`);
+    let biggest = 0;
+    for (const g of gates){
       hordes++;
       const total = g.spawn.reduce((n, [, c]) => n + c, 0);
       assert(total >= 15, `${st.name} horde is only ${total} bodies`);
-      assert(g.cap >= 20, `${st.name} horde cap is only ${g.cap}`);
+      assert(g.cap >= 16, `${st.name} horde cap is only ${g.cap}`);
+      assert(total > g.cap, `${st.name} horde should out-number its cap so they keep coming`);
+      biggest = Math.max(biggest, g.cap);
     }
+    assert(biggest >= 22, `${st.name} never gets properly crowded (max cap ${biggest})`);
   }
-  assert(hordes >= 5, 'every street should have one, found ' + hordes);
+  assert(hordes >= 12, 'the game should be full of them, found ' + hordes);
 });
 
 test('a horde really does put tens of them on the street', () => {
