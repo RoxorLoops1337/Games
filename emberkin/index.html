@@ -58,30 +58,32 @@
   /* ---------------- the hand ---------------- */
   #battlebar{ position:absolute; inset:0; z-index:6; pointer-events:none; }
   #battlebar > *{ pointer-events:auto; }
-  #hand{ position:absolute; left:1.5%; right:1.5%; bottom:1.5%; height:30%;
+  #hand{ position:absolute; left:1.5%; right:1.5%; bottom:1.5%; height:30%; touch-action:none;
     display:flex; gap:1%; justify-content:center; align-items:flex-end; }
   .cardel{
-    flex:0 0 18%; height:100%; border-radius:7px; padding:5% 5% 4%;
+    /* Percentage padding resolves against the hand's width, not the card's,
+       which left a 32px content box inside an 82px card. Ems do not. */
+    flex:0 0 18%; height:100%; border-radius:7px; padding:.5em .45em .4em;
     background:linear-gradient(180deg,#241a2e,#150e1d); border:2px solid var(--edge);
     box-shadow:0 3px 0 rgba(0,0,0,.55); cursor:pointer; position:relative; overflow:hidden;
     display:flex; flex-direction:column; gap:2%; transition:transform .12s ease, box-shadow .12s ease;
   }
   /* The card is a token: name and cost read at a glance, and the line above
      the hand carries the full rules text for whichever one you are aiming at. */
-  .cardel .cn{ font-size:.92em; font-weight:700; line-height:1.05; letter-spacing:.2px;
-    white-space:normal; overflow-wrap:anywhere; hyphens:auto; overflow:hidden;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .cardel .cn{ margin-top:.55em; font-size:.92em; font-weight:700; line-height:1.05; letter-spacing:.2px; padding-right:1.5em;
+    white-space:normal; overflow-wrap:break-word; overflow:hidden; }
   .cardel .ct{ font-size:.66em; color:var(--dim); line-height:1.15; flex:1; overflow:hidden; }
-  .cardel .cc{ position:absolute; right:5%; top:4%; width:1.5em; height:1.5em; border-radius:50%;
+  .cardel .cc{ position:absolute; right:.35em; top:.3em; width:1.5em; height:1.5em; border-radius:50%;
     background:#0d0812; border:1px solid var(--gold); color:var(--gold); font-size:.72em;
     display:flex; align-items:center; justify-content:center; font-weight:700; }
-  .cardel .cg{ position:absolute; right:5%; bottom:4%; font-size:.68em; color:var(--hp-good); font-weight:700; }
-  .cardel .ck{ position:absolute; left:8%; top:4%; font-size:.62em; color:var(--dim); font-weight:700; }
-  .cardel .cp{ position:absolute; left:0; right:0; bottom:3%; text-align:center;
+  .cardel .cg{ position:absolute; right:.35em; bottom:.3em; font-size:.68em; color:var(--hp-good); font-weight:700; }
+  .cardel .ck{ position:absolute; left:.4em; top:.25em; font-size:.58em; color:var(--dim); font-weight:700; }
+  .cardel .cp{ position:absolute; left:0; right:0; bottom:.25em; text-align:center;
     font-size:.62em; letter-spacing:1px; color:var(--gold); text-transform:uppercase; }
   .cardel .cr{ position:absolute; left:0; top:0; bottom:0; width:4px; }
   .cardel.sel{ transform:translateY(-8%); box-shadow:0 0 0 2px var(--gold), 0 6px 0 rgba(0,0,0,.55); }
   .cardel.dead{ opacity:.4; }
+  .cardel.willplay{ box-shadow:0 0 0 3px var(--gold), 0 0 22px rgba(255,201,77,.5); }
   .cardel.kin .cn{ color:var(--gold); }
 
   #energy{ position:absolute; left:1.5%; top:53%; padding:3px 9px; font-size:1em; color:var(--gold); }
@@ -95,8 +97,8 @@
   #acts .abtn.nag{ border-color:var(--gold); color:var(--gold); animation:nag 1s ease-in-out infinite; }
   @keyframes nag{ 50%{ box-shadow:0 0 10px rgba(255,201,77,.5); } }
   /* Fingers need more to hit than a mouse does. */
-  body:not(.notouch) #acts .abtn{ padding:7px 14px; font-size:.8em; }
-  body:not(.notouch) #acts{ gap:7px; }
+  body.touch #acts .abtn{ padding:7px 14px; font-size:.8em; }
+  body.touch #acts{ gap:7px; }
   #intent{ position:absolute; left:3%; top:14%; padding:3px 9px; font-size:.72em; z-index:6; }
   #intent b{ color:var(--hp-bad); }
   #shieldpip{ color:var(--xp); }
@@ -126,6 +128,7 @@
   #screen{
     position:absolute; inset:0; z-index:9; padding:12px; overflow:auto;
     background:linear-gradient(180deg,#1a1222fa,#0d0913fd); backdrop-filter:blur(3px);
+    touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
   }
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
@@ -170,18 +173,54 @@
   #titleArt{ image-rendering:pixelated; }
 
   /* ---------------- touch controls ---------------- */
-  #pad{ position:absolute; z-index:8; left:8px; bottom:8px; width:144px; height:144px; opacity:.5; }
-  /* On a phone the stage rarely fills the screen — park the controls in the
-     dead space under it so they never sit on top of the text box. */
-  body.ctlsbelow{ align-items:flex-start; padding-top:7vh; }
-  body.ctlsbelow #pad{ bottom:auto; top:calc(100% + 14px); opacity:.9; }
-  body.ctlsbelow #btns{ bottom:auto; top:calc(100% + 34px); opacity:.95; }
-  #pad div{ position:absolute; width:46px; height:46px; border-radius:8px; background:#241a2e; border:2px solid var(--edge); }
-  #pad .u{ left:49px; top:0; } #pad .d{ left:49px; top:98px; } #pad .l{ left:0; top:49px; } #pad .r{ left:98px; top:49px; }
-  #btns{ position:absolute; z-index:8; right:8px; bottom:8px; display:flex; gap:8px; opacity:.55; }
-  #btns div{ width:56px; height:56px; border-radius:50%; background:#241a2e; border:2px solid var(--edge);
-    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; text-align:center; line-height:1.1; }
-  .notouch #pad, .notouch #btns{ display:none; }
+  /* ---------------- touch controls ----------------
+     The pad and the buttons live outside the stage so they can take the
+     margins the game does not use — the left gutter in landscape, the band
+     under the stage in portrait — and only overlay the game when there is
+     nowhere else for them to go. */
+  /* Portrait puts the game at the top so the band underneath is all controls. */
+  body.topalign{ align-items:flex-start; padding-top:4vh; }
+  #pad, #btns{ position:fixed; z-index:20; display:none; touch-action:none; user-select:none; }
+  body.touch #pad, body.touch #btns{ display:block; }
+
+  body.ctl-side #pad{ left:0; top:0; bottom:0; width:var(--gutter,120px); }
+  body.ctl-side #btns{ right:0; top:0; bottom:0; width:var(--gutter,120px); }
+  body.ctl-below #pad{ left:0; width:50%; bottom:0; top:var(--stagebot,60%); }
+  body.ctl-below #btns{ right:0; width:50%; bottom:0; top:var(--stagebot,60%); }
+  body.ctl-overlay #pad{ left:0; bottom:0; width:36%; height:46%; }
+  body.ctl-overlay #btns{ right:0; bottom:0; width:30%; height:34%; }
+
+  /* The stick is wherever your thumb lands, not where the layout guessed. */
+  #stick{ position:absolute; width:120px; height:120px; margin:-60px 0 0 -60px; border-radius:50%;
+    border:2px solid var(--edge); background:rgba(30,22,40,.45); opacity:0; transition:opacity .12s;
+    pointer-events:none; }
+  #stick.on{ opacity:.9; }
+  #knob{ position:absolute; left:50%; top:50%; width:52px; height:52px; margin:-26px 0 0 -26px;
+    border-radius:50%; background:linear-gradient(180deg,#4a3560,#241a2e); border:2px solid var(--gold);
+    box-shadow:0 0 12px rgba(255,201,77,.3); }
+  body.touch #pad::after{ content:'move'; position:absolute; left:0; right:0; bottom:8%;
+    text-align:center; font-size:12px; letter-spacing:2px; color:#4a3560; text-transform:uppercase; }
+
+  #btns .rbtn{ position:absolute; left:50%; width:82px; height:82px; margin-left:-41px;
+    border-radius:50%; background:linear-gradient(180deg,#2b2038,#171021); border:2px solid var(--edge);
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;
+    letter-spacing:.5px; color:var(--ink); box-shadow:0 4px 0 rgba(0,0,0,.5); }
+  #btns .rbtn:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.5); }
+  #btns .rbtn[data-k="z"]{ bottom:calc(50% - 96px); border-color:var(--gold); color:var(--gold); }
+  #btns .rbtn[data-k="x"]{ bottom:calc(50% + 10px); }
+  /* Portrait: put the controls in the middle of the band, not at its floor. */
+  body.ctl-below #btns .rbtn{ bottom:auto; top:50%; margin-top:-41px; }
+  body.ctl-below #btns .rbtn[data-k="z"]{ left:68%; }
+  body.ctl-below #btns .rbtn[data-k="x"]{ left:26%; }
+  body.ctl-below #pad::after{ bottom:auto; top:calc(50% - 8px); }
+  body.ctl-overlay #btns .rbtn{ width:64px; height:64px; margin-left:-32px; font-size:12px; }
+
+  /* Fullscreen: a corner button, out of the way until you want it. */
+  #fsbtn{ position:fixed; right:8px; top:8px; z-index:22; width:34px; height:34px; border-radius:8px;
+    background:rgba(36,26,46,.75); border:2px solid var(--edge); color:var(--dim);
+    display:flex; align-items:center; justify-content:center; font-size:17px; cursor:pointer; }
+  #fsbtn:hover{ color:var(--gold); border-color:var(--gold); }
+  body.fs #fsbtn{ color:var(--gold); }
 
   #toast{ position:absolute; left:50%; top:27%; transform:translateX(-50%); z-index:11; padding:6px 14px;
     font-size:.82em; letter-spacing:1px; opacity:0; transition:opacity .25s; pointer-events:none; }
@@ -210,8 +249,6 @@
   <div id="screen" class="hidden"></div>
   <div id="toast" class="panel"></div>
 
-  <div id="pad"><div class="u"></div><div class="d"></div><div class="l"></div><div class="r"></div></div>
-  <div id="btns"><div data-k="x">Menu</div><div data-k="z">Talk</div></div>
 
   <div id="title">
     <canvas id="titleArt" width="372" height="128"></canvas>
@@ -223,6 +260,13 @@
     <p style="font-size:11px;letter-spacing:1px;text-transform:none">in a fight: ← → pick a card · ↑ or Z plays it · 1-5 plays one outright · E ends the turn</p>
   </div>
 </div>
+
+<div id="pad"><div id="stick"><i id="knob"></i></div></div>
+<div id="btns">
+  <div class="rbtn" data-k="x">Menu</div>
+  <div class="rbtn" data-k="z">Talk</div>
+</div>
+<div id="fsbtn" title="Fullscreen">⛶</div>
 
 <script>
 /* ART:BEGIN — generated by tools/spritegrid/embed.mjs, do not edit by hand */
@@ -2438,6 +2482,31 @@ const KEYMAP = {
 };
 
 function pressKey(k) { if (!keys.has(k)) fired.add(k); keys.add(k); }
+
+/** Which way a stick pull counts as, or null inside the dead zone. */
+function stickDir(dx, dy, dead = 14) {
+  if (Math.hypot(dx, dy) < dead) return null;
+  return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+
+/** Go fullscreen, or come back. Silently fine on browsers that refuse. */
+function toggleFullscreen() {
+  if (HEADLESS) return false;
+  const doc = document, el = doc.documentElement;
+  const on = doc.fullscreenElement || doc.webkitFullscreenElement;
+  try {
+    if (!on) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!req) { setToast('This browser will not go fullscreen.'); return false; }
+      const r = req.call(el);
+      if (r && r.catch) r.catch(() => setToast('Fullscreen was refused.'));
+    } else {
+      const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
+      if (exit) exit.call(doc);
+    }
+  } catch (e) { return false; }
+  return true;
+}
 function releaseKey(k) { keys.delete(k); }
 
 const cam = { x: 0, y: 0 };
@@ -3436,6 +3505,7 @@ function openMainMenu() {
     { label: 'Box', sub: '' + G.box.length, fn: () => openScreen('box') },
     { label: 'Deck', sub: `${G.deck.length}/${DECK_MAX}`, fn: () => openScreen('deck') },
     { label: 'Sound', sub: muted ? 'off' : 'on', fn: () => { toggleMute(); openMainMenu(); } },
+    { label: 'Fullscreen', fn: () => { toggleFullscreen(); closeWorldMenu(); } },
     { label: 'Save', fn: () => { setToast(saveGame() ? 'Journey saved.' : 'Could not save.'); } },
     { label: 'Close', fn: closeWorldMenu },
   ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems` });
@@ -4301,22 +4371,59 @@ function toggleMute() {
    ======================================================================== */
 let ctx = null;
 
+/**
+ * Work out how big the stage should be and where the touch controls go.
+ *
+ * Pure, so the sizes can be checked without a browser. Three shapes:
+ *   side    — landscape: fill the height, stick and buttons take the gutters
+ *   below   — portrait: fill the width, controls take the band underneath
+ *   overlay — neither margin is big enough, so they sit on the game corners
+ * A mouse gets none of that: integer scaling, centred, no controls at all.
+ */
+function layoutFor(vw, vh, touch) {
+  const pad = 8;
+  if (!touch) {
+    const raw = Math.min((vw - pad) / VIEW_W, (vh - pad) / VIEW_H);
+    // Integer scaling keeps pixels square when there is room for it.
+    return { mode: 'none', scale: raw >= 2 ? Math.floor(raw) : Math.max(1, raw), gutter: 0 };
+  }
+  if (vw > vh) {
+    // Landscape: the game is as tall as the screen, the gutters do the rest.
+    const scale = Math.max(1, (vh - pad) / VIEW_H);
+    const gutter = Math.floor((vw - VIEW_W * scale) / 2);
+    return gutter >= 96
+      ? { mode: 'side', scale, gutter }
+      : { mode: 'overlay', scale: Math.max(1, (vh - pad) / VIEW_H), gutter: 0 };
+  }
+  // Portrait: fill the width, and use whatever is left underneath.
+  const scale = Math.max(1, (vw - pad) / VIEW_W);
+  const below = vh - VIEW_H * scale;
+  return below >= 190
+    ? { mode: 'below', scale, gutter: 0, below }
+    : { mode: 'overlay', scale, gutter: 0, below };
+}
+
 function fitStage() {
   if (HEADLESS) return;
-  const pad = 8;
-  const raw = Math.min((window.innerWidth - pad) / VIEW_W, (window.innerHeight - pad) / VIEW_H);
-  // Integer scaling keeps pixels square when there is room for it; on a phone
-  // there isn't, so fill the screen instead of leaving half of it black.
-  const sc = raw >= 2 ? Math.floor(raw) : Math.max(1, raw);
+  const touch = document.body.classList.contains('touch');
+  const L = layoutFor(window.innerWidth, window.innerHeight, touch);
   const st = document.getElementById('stage');
-  els.view.style.width = VIEW_W * sc + 'px';
-  els.view.style.height = VIEW_H * sc + 'px';
-  st.style.width = VIEW_W * sc + 'px';
-  st.style.height = VIEW_H * sc + 'px';
+  const w = VIEW_W * L.scale, h = VIEW_H * L.scale;
+  els.view.style.width = w + 'px';
+  els.view.style.height = h + 'px';
+  st.style.width = w + 'px';
+  st.style.height = h + 'px';
   // Panel text is em-based, so one number scales the whole UI with the stage.
-  st.style.fontSize = clamp(sc * 4.1, 11, 21) + 'px';
-  const below = window.innerHeight - VIEW_H * sc;
-  document.body.classList.toggle('ctlsbelow', below >= 300);
+  st.style.fontSize = clamp(L.scale * 4.1, 11, 21) + 'px';
+
+  document.body.classList.remove('ctl-side', 'ctl-below', 'ctl-overlay');
+  if (L.mode !== 'none') document.body.classList.add('ctl-' + L.mode);
+  document.body.style.setProperty('--gutter', L.gutter + 'px');
+  // In portrait the stage sits at the top so the band underneath is all ours.
+  document.body.classList.toggle('topalign', L.mode === 'below');
+  const top = L.mode === 'below' ? Math.round(window.innerHeight * .04) : 0;
+  document.body.style.setProperty('--stagebot', (top + h) + 'px');
+  G.layout = L;
 }
 
 function draw() {
@@ -4435,7 +4542,63 @@ function boot() {
   window.addEventListener('keyup', (e) => releaseKey(KEYMAP[e.key] || e.key));
 
   // touch
-  const padMap = { u: 'up', d: 'down', l: 'left', r: 'right' };
+  // ---- the stick: it appears under your thumb, wherever that lands
+  const stick = { id: null, cx: 0, cy: 0, dir: null };
+  const stickEl = document.getElementById('stick');
+  const knobEl = document.getElementById('knob');
+  const padEl = document.getElementById('pad');
+
+  const setStickDir = (dir) => {
+    for (const d of ['up', 'down', 'left', 'right']) if (d !== dir) releaseKey(d);
+    if (dir) pressKey(dir);
+    stick.dir = dir;
+  };
+  const stickPlace = (x, y) => {
+    const r = padEl.getBoundingClientRect();
+    stickEl.style.left = (x - r.left) + 'px';
+    stickEl.style.top = (y - r.top) + 'px';
+  };
+  const stickDrag = (x, y) => {
+    const dx = x - stick.cx, dy = y - stick.cy;
+    const d = Math.hypot(dx, dy), R = 42;
+    const k = d > R ? R / d : 1;
+    knobEl.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    setStickDir(stickDir(dx, dy));
+  };
+  const stickEnd = () => {
+    stick.id = null;
+    setStickDir(null);
+    stickEl.classList.remove('on');
+    knobEl.style.transform = '';
+  };
+
+  padEl.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    stick.id = t.identifier; stick.cx = t.clientX; stick.cy = t.clientY;
+    stickPlace(t.clientX, t.clientY);
+    stickEl.classList.add('on');
+    knobEl.style.transform = '';
+  }, { passive: false });
+  padEl.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === stick.id) stickDrag(t.clientX, t.clientY);
+  }, { passive: false });
+  for (const ev of ['touchend', 'touchcancel']) {
+    padEl.addEventListener(ev, (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) if (t.identifier === stick.id) stickEnd();
+    }, { passive: false });
+  }
+  // A mouse can drive it too, which makes it testable in a desktop browser.
+  padEl.addEventListener('mousedown', (e) => {
+    stick.id = 'mouse'; stick.cx = e.clientX; stick.cy = e.clientY;
+    stickPlace(e.clientX, e.clientY); stickEl.classList.add('on');
+  });
+  window.addEventListener('mousemove', (e) => { if (stick.id === 'mouse') stickDrag(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => { if (stick.id === 'mouse') stickEnd(); });
+
+  // ---- the two action buttons
   const bindHold = (el, key) => {
     const on = (e) => { e.preventDefault(); pressKey(key); };
     const off = (e) => { e.preventDefault(); releaseKey(key); };
@@ -4444,16 +4607,76 @@ function boot() {
     el.addEventListener('touchcancel', off, { passive: false });
     el.addEventListener('mousedown', on); el.addEventListener('mouseup', off); el.addEventListener('mouseleave', off);
   };
-  document.querySelectorAll('#pad div').forEach((el) => {
-    const cls = el.className;
-    bindHold(el, padMap[cls]);
+  document.querySelectorAll('#btns .rbtn').forEach((el) => bindHold(el, el.dataset.k === 'z' ? 'a' : 'b'));
+
+  const goTouch = () => {
+    document.body.classList.add('touch');
+    document.body.classList.remove('notouch');
+    fitStage();
+  };
+  if ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0) goTouch();
+  window.addEventListener('touchstart', goTouch, { once: true });
+
+  // ---- the hand: drag a card up to play it, or tap it
+  //
+  // Dragging is the gesture a card game teaches you, so it is the primary one;
+  // a tap still works (aim, then confirm), and a mouse plays in one click
+  // because hovering already aimed it.
+  const handEl = els.hand;
+  let drag = null;
+  const dragLift = () => Math.max(28, handEl.getBoundingClientRect().height * .34);
+
+  handEl.addEventListener('pointerdown', (e) => {
+    const cel = e.target.closest && e.target.closest('.cardel');
+    if (!cel || !G.battle) return;
+    const i = +cel.dataset.c;
+    drag = { i, x0: e.clientX, y0: e.clientY, el: cel, moved: false };
+    G.battle.sel = i;
+    try { cel.setPointerCapture(e.pointerId); } catch (err) {}
+    renderHand();
+    // renderHand rebuilds the row, so re-find the element we are dragging.
+    drag.el = handEl.querySelector(`.cardel[data-c="${i}"]`) || cel;
   });
-  document.querySelectorAll('#btns div').forEach((el) => bindHold(el, el.dataset.k === 'z' ? 'a' : 'b'));
-  window.addEventListener('touchstart', () => document.body.classList.remove('notouch'), { once: true });
+
+  handEl.addEventListener('pointermove', (e) => {
+    if (!drag || !G.battle) return;
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (Math.hypot(dx, dy) > 8) drag.moved = true;
+    if (!drag.moved) return;
+    drag.el.style.transform = `translate(${dx}px, ${Math.min(0, dy)}px)`;
+    drag.el.classList.toggle('willplay', -dy >= dragLift());
+  });
+
+  const endDrag = (e) => {
+    if (!drag || !G.battle) { drag = null; return; }
+    const lift = drag.y0 - (e.clientY != null ? e.clientY : drag.y0);
+    const d = drag;
+    drag = null;
+    d.el.style.transform = '';
+    d.el.classList.remove('willplay');
+    const b = G.battle;
+    if (d.moved && lift >= dragLift()) { b.sel = d.i; b.armed = null; playSelected(); return; }
+    if (d.moved) { renderHand(); return; }               // dragged nowhere: put it back
+    if (b.armed === d.i) { b.sel = d.i; b.armed = null; playSelected(); }
+    else { b.sel = d.i; b.armed = d.i; renderHand(); }
+  };
+  handEl.addEventListener('pointerup', endDrag);
+  handEl.addEventListener('pointercancel', () => { if (drag) { drag.el.style.transform = ''; drag.el.classList.remove('willplay'); drag = null; } });
+
+  // ---- fullscreen
+  document.getElementById('fsbtn').addEventListener('click', toggleFullscreen);
+  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
+    document.addEventListener(ev, () => {
+      document.body.classList.toggle('fs', !!(document.fullscreenElement || document.webkitFullscreenElement));
+      setTimeout(fitStage, 60);
+    });
+  }
+  window.addEventListener('orientationchange', () => setTimeout(fitStage, 120));
+
 
   // Hovering a card aims it, so a mouse click plays in one go.
   document.addEventListener('mouseover', (e) => {
-    if (!G.battle || !document.body.classList.contains('notouch')) return;
+    if (!G.battle || document.body.classList.contains('touch')) return;
     const cel = e.target.closest && e.target.closest('.cardel');
     if (!cel) return;
     const i = +cel.dataset.c;
@@ -4467,16 +4690,6 @@ function boot() {
     const row = e.target.closest && e.target.closest('.menu .row');
     if (row && G.menu) { G.menu.i = +row.dataset.i; renderMenu(); playCue('select');
       const r = G.menu.rows[G.menu.i]; if (r && !r.off && r.fn) r.fn(); return; }
-    // A card takes one click with a mouse (hovering already aimed it) and two
-    // taps with a finger (aim, then confirm) — so a fat-fingered tap on a phone
-    // never spends energy by accident.
-    const cel = e.target.closest && e.target.closest('.cardel');
-    if (cel && G.battle) {
-      const i = +cel.dataset.c;
-      if (G.battle.armed === i) { G.battle.sel = i; G.battle.armed = null; playSelected(); }
-      else { G.battle.sel = i; G.battle.armed = i; renderHand(); }
-      return;
-    }
     const act = e.target.closest && e.target.closest('.abtn');
     if (act && G.battle) {
       const a = act.dataset.a;
@@ -4548,6 +4761,7 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
+    layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     renderHand, playSelected, doEndTurn, submitLog,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired,

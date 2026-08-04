@@ -56,13 +56,14 @@ Never hand-edit the generated block in `index.html` — edit the JSON and re-emb
 
 | | keyboard | touch |
 |---|---|---|
-| walk | arrows / WASD | d-pad |
+| walk | arrows / WASD | the joystick — put a thumb down anywhere in the left zone and it appears there |
 | talk, confirm | Z · Enter · Space | the **Talk** button, or tap the text box |
 | menu, back | X · Esc | the **Menu** button |
 | aim a card | ← → | tap it |
-| play the aimed card | ↑ · Z · Enter | tap it again |
+| play the aimed card | ↑ · Z · Enter | tap it again, or drag it up |
 | play a card outright | its number, 1-5 | — |
 | end the turn | E | the **End turn** button |
+| fullscreen | — | ⛶, top right, or Fullscreen in the field menu |
 | mute | M | Sound, in the field menu |
 
 The two touch buttons relabel themselves for what they do right now — Talk /
@@ -70,10 +71,31 @@ Menu in the world, Play / Menu in a fight, Next while someone is talking.
 
 A card takes one click with a mouse, because hovering already aimed it, and two
 taps with a finger — aim, then confirm — so a fat-fingered tap never spends
-energy by accident. The line above the hand spells out whichever card you are
-aiming at, since the card itself is too small to hold its own rules text.
-Playing a card resolves instantly and you keep your turn; only what happens
-*to* you plays back a line at a time.
+energy by accident. Dragging is the third way: lift a card past a third of the
+hand's height, it lights gold and says **▲ PLAY**, and letting go plays it. Menus,
+lists and every screen take a plain tap, and the long ones (deck, dex, box) scroll
+under a finger. The line above the hand spells out whichever card you are aiming
+at, since the card itself is too small to hold its own rules text. Playing a card
+resolves instantly and you keep your turn; only what happens *to* you plays back a
+line at a time.
+
+### Fitting the screen
+
+`layoutFor(vw, vh, touch)` is a pure function — viewport in, layout out — and
+everything else follows from what it returns:
+
+| mode | when | what it looks like |
+|------|------|--------------------|
+| `none` | mouse | integer-scaled, centred, no on-screen controls |
+| `side` | landscape touch with ≥96px to spare either side | game at full screen height, joystick in the left gutter, buttons in the right |
+| `below` | portrait touch with ≥190px underneath | game at full width up top, controls in the band below |
+| `overlay` | neither margin is big enough | controls sit on the game's corners |
+
+The controls are `position:fixed` children of `<body>`, not of the stage, so
+in `side` and `below` they never cover a pixel of the game. Panel text is sized
+in `em` off one font-size on the stage, so the whole UI scales with it. Because
+the function is pure, the suite checks every phone and tablet viewport without a
+browser.
 
 ## How a battle works
 
@@ -131,7 +153,10 @@ npm run check             # the whole repo
   means gone, kill bonuses only fire on kills, growth respects its ceiling,
   chest odds improve with price, and deck size limits hold.
 - `tests/emberkin_render.test.mjs` — draws every map and every battle state
-  against a no-op canvas, then plays the opening through simulated key presses.
+  against a no-op canvas, plays the opening through simulated key presses, and
+  checks the touch layout: `layoutFor` across a table of real phone and tablet
+  viewports, the joystick's dead zone and dominant axis, and that the drag and
+  scroll affordances are still wired up in the markup.
 - `tests/emberkin_art.test.mjs` — enforces the mechanical half of the art brief:
   grid size, palette completeness, continuous dark outline, feet on the ground
   line, evolutions bigger than their pre-evolutions, matched walk frames.
