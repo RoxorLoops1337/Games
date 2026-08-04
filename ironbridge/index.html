@@ -987,7 +987,7 @@
      careful value and which got a guess. */
   .spslot .sv.none{ color:#5a4a2c; font-style:italic; font-variant-caps:normal; font-size:var(--t3); }
 
-  /* Three across, because there are nine of them. At four the ninth sat alone
+  /* Three across, because the set divides that way. At four the last one sat alone
      on a row of its own looking like an afterthought, which is exactly what a
      new order must not look like next to eight that shipped together. */
   .spgrid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
@@ -2140,6 +2140,7 @@ function newMatch(opt){
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null; G.overHold = 0;
   foeForget();                       // a new match has shown this seat nothing yet
+  orderTallyForget();                // ...and no salvo of the last one is still in the air
   // Where the labels were sitting belonged to the last match, and a new board
   // starting with the old board's rows would slide them all into place from
   // wherever the old ones happened to be.
@@ -2773,6 +2774,16 @@ const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
    dock reports. The order that answers their orders is timed off watching
    them, which is the counterplay the set was missing. */
 const COUNTER = { add:25 };
+/* How much there is for it to hold back: orders of theirs already recovering.
+   One answer, asked by three different things — the cast, the greyed tile and
+   the refusal — so they cannot drift apart. */
+function counterCatch(s){
+  const foe = G.sides[enemyOf(s.i)];
+  if (!foe) return 0;
+  let n = 0;
+  for (let i = 0; i < foe.slots; i++) if (foe.spells[i] && foe.spellCd[i] > 0) n++;
+  return n;
+}
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
@@ -2796,11 +2807,25 @@ const SPELLS = [
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
   { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
     say:'no target — it lands in their signal room',
+    /* Countermand takes no aim, but it can still have nothing to work on, and
+       what it needs is a STATE rather than a body: something of theirs already
+       recovering. count() is what the bar greys the tile by and what castPress
+       refuses on — locally, before the command goes out, which matters because
+       sendCmd returns '' in a two-player match, so a refusal decided inside
+       castSpell would reach that player as no toast, no cooldown and no sound:
+       a tile that does nothing at all when pressed. */
+    count:(s) => counterCatch(s),
+    none:'Nothing of theirs is recovering — Countermand would be wasted.',
     d:'Every order of theirs that is still recovering takes 25 seconds longer. Nothing at all to one they are holding ready — time it to their cast.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
+/* Prose counts things in words, and a count written by hand goes stale the
+   first time the list it counts grows. Falls back to the digit rather than
+   inventing a word it does not have. */
+const NUM_WORD = (n) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+  'eight', 'nine', 'ten', 'eleven', 'twelve'][n] || String(n);
 
-/* What the nine are FOR, in four answers.
+/* What the ten are FOR, in five answers.
 
    The sheet used to be nine cards in one flat grid, each with a name and a
    cooldown, and a first-time player had no way to see the shape of the set:
@@ -2823,7 +2848,7 @@ const SPELL_GROUPS = [
 
 /* ------------------------------------------------- what the cast actually did
 
-   Six of the eight orders land on something you picked, so the outcome is
+   Most of the orders land on something you picked, so the outcome is
    never in doubt. The two POINT orders are the exception: Bombard and Withdraw
    are aimed at a stretch of lane, and whether they caught six bodies or none
    is the only thing worth knowing about the ninety-five seconds you just spent
@@ -2846,15 +2871,30 @@ const bombSeen = [new Set(), new Set()];
 /* What an order earned, for the sentence that reports it. COSMETIC: written
    from simulation code the way fxToast already is, read by nothing but the
    readout, in no snapshot, no save and no hash. The gold itself is sim state
-   and lives in s.res.gold; this is only the running total of the part of it
-   that came from one salvo, because "9 caught" and "9 caught, 45 gold" are
-   different sentences and the second one is the one that says why the order
-   was worth its price. */
+   and lives in s.res.gold; this is the part of it a single salvo earned,
+   because "9 caught" and "9 caught, 45 gold" are different sentences and the
+   second one is the one that says why the order was worth its price.
+
+   A SALVO, and nothing else. It used to be added up inside killThing for every
+   kill that had no body behind it, which is Pitch Fire and Pyre Brand as well
+   as Bombard — and the only reset was when a salvo ENDED, so a bombardment
+   that finished nothing at all still reported whatever the fire had been
+   earning while it burned. It was module scope and newMatch never cleared it,
+   so it carried across matches too: 100 gold of the last match's kills printed
+   on the first salvo of the next one. Measured at the shell instead, from the
+   caster's own purse, which is the only thing that cannot pick up somebody
+   else's kill. */
 const orderGold = [0, 0];
+// Both of these belong to a salvo in flight, and a salvo does not survive the
+// match it was fired in.
+function orderTallyForget(){
+  bombSeen[0].clear(); bombSeen[1].clear();
+  orderGold[0] = 0; orderGold[1] = 0;
+}
 
 /* -------------------------------------- what the OTHER commander is carrying
 
-   Both holds draft two orders out of the same nine, and until now the only
+   Both holds draft two orders out of the same ten, and until now the only
    trace of theirs was an effect on a body that never named its source: a
    minion slowing down could be a Hobble, a Pitch Fire, a Frost tower or a
    Cannon, and there was no way to tell and no way to learn. A player who
@@ -2950,7 +2990,7 @@ function castSpell(s, c){
   s.spellCd[slot] = d.cd;
   if (!HEADLESS && forMe(s.i)) sfx('cast');
   // Their commander spending one of its two. Named the first time and every
-  // time after, because "which of the nine was that" is the question, and it
+  // time after, because "which of them was that" is the question, and it
   // does not stop being the question once you know the answer.
   if (!forMe(s.i)){
     foeSeen[slot] = d.id;
@@ -2962,6 +3002,9 @@ function castSpell(s, c){
 const SPELL_CAST = {
   bombard(s, c){
     s.bombX = lanePoint(c.x); s.bombN = BOMB.n; s.bombT = 0;
+    // Cleared at both ends. The end alone was not enough: a salvo cut short by
+    // the match ending left its tally standing for the next one to print.
+    bombSeen[s.i].clear(); orderGold[s.i] = 0;
     return null;
   },
   withdraw(s, c){
@@ -3086,12 +3129,19 @@ function bombardHit(s, x){
     if (u.dead || u.side !== fs) return;
     if (hyp(u.x - x, u.y) <= BOMB.r + u.r) hits.push(u);
   });
+  // What THIS shell earned, read off the caster's own purse. killThing is the
+  // only thing in here that moves gold, so the difference across the loop is
+  // exactly the bounty on the bodies this shell finished — and it cannot pick
+  // up a Pitch Fire kill happening in the same tick the way a tally kept
+  // inside killThing did.
+  const g0 = s.res.gold;
   for (const u of hits){
     // Counted once across the whole salvo, however many shells reach it.
     bombSeen[s.i].add(u.id);
     dealDmg(null, u, BOMB.dmg, { magic:true, ability:true, by:s.i });
     if (!u.dead) applySlow(u, BOMB.slow, BOMB.slowT);
   }
+  orderGold[s.i] += s.res.gold - g0;
   if (!HEADLESS){ ringFx(x, 0, BOMB.r, '#ffbe6a'); shake(2.2, x); sfx('stone', x); }
   return hits.length;
 }
@@ -3371,7 +3421,6 @@ function killThing(t, src, by){
     // read its passives, so a hold kill pays the flat bounty and no more.
     if (src && src.isHero) g = g * (1 + passVal(src, 'goldM')) + passVal(src, 'killGold');
     s.res.gold += g; s.kills++;
-    if (side === by && !(src && src.side !== undefined)) orderGold[side] += g;
   }
   if (src && !src.isHero && !src.struct) troopOnKill(src);
   if (src && src.isHero){
@@ -5075,8 +5124,8 @@ const SPELL_OWN_HERO = { warp:1, unbind:1 };
 
    It used to splice two ids out of the pool uniformly at random, so it could
    walk into a match carrying Warp Banner AND Unbind — both of which do nothing
-   until it has built a hero. Two from nine puts that at one match in
-   thirty-six.
+   until it has built a hero. Two drawn from the pool put that at one match in
+   forty-five once the pool reached ten.
 
    MEASURED, because the obvious story about it is wrong: over 24 matches the
    Host used 92 of 96 slots either way, and not one hold in 48 finished a match
@@ -5102,7 +5151,7 @@ function aiDraft(s){
   let needy = 0;
   for (let i = 0; i < s.slots && pool.length; i++){
     // The second slot stops considering hero-only orders once the first took
-    // one. If that leaves nothing at all — it cannot, with nine — the rule
+    // one. If that leaves nothing at all — it cannot, at this pool size — the rule
     // stands aside rather than leaving a slot empty.
     const room = pool.filter(d => !(SPELL_OWN_HERO[d.id] && needy));
     const list = room.length ? room : pool;
@@ -15216,21 +15265,25 @@ const SPELL_ICON = {
      Withdraw is a battlement with an arrow going into it, and two crenelated
      walls side by side in the bar were one shape twice. The courses of stone
      inside keep the masonry, and the outline is nothing else in the set. */
-  /* A signal horn with a bar through it. The horn is one closed silhouette,
-     which is what survives 19px — a snapped banner pole is two thin shapes and
-     reads as noise at that size — and the bar is the whole meaning of the
-     order, so it is the thickest stroke in the set and the only red one.
-     Nothing else in the nine is red, so this is the one that cannot be
-     mistaken for a neighbour at a glance. */
-  counter: ico('<path d="M3.4 9.2h4.3l8.7-4.6v14.8L7.7 14.8H3.4Z" ' +
+  /* An hourglass. It was a horn with a bar across it, which is the universal
+     MUTE symbol — and the game's own sound toggle sits 33px away in the same
+     top bar, built out of the same trapezoid-and-arcs (UI_ICON.sound), so at
+     the 19px the tile renders the order was indistinguishable from "audio
+     off". Worst on a phone, where body.narrow hides the order's name and the
+     glyph is the whole label with no hover title behind it.
+
+     An hourglass says the one thing the order does — their recoveries take
+     longer — and nothing else in the set or in the top bar is one, so it
+     cannot be read as a neighbour or as a control. The sand is the only warm
+     colour on it, which is what carries at 19px once the frame has gone grey. */
+  counter: ico('<path d="M5.6 2.6h12.8M5.6 21.4h12.8" fill="none" stroke="#3d2d1a" ' +
+      'stroke-width="2.6" stroke-linecap="round"/>' +
+    '<path d="M7 3.4h10c0 4.2-3.4 6.2-3.4 8.6s3.4 4.4 3.4 8.6H7c0-4.2 3.4-6.2 3.4-8.6S7 7.6 7 3.4Z" ' +
       'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
-    '<path d="M7.7 9.2v5.6" fill="none" stroke="#5e6f85" stroke-width="1.3"/>' +
-    '<path d="M18.8 7.4a6.4 6.4 0 0 1 0 9.2" fill="none" stroke="#7d90a8" ' +
-      'stroke-width="1.8" stroke-linecap="round"/>' +
-    '<path d="M3.2 3.6 20.8 20.4" fill="none" stroke="#3d2d1a" ' +
-      'stroke-width="4.2" stroke-linecap="round"/>' +
-    '<path d="M3.2 3.6 20.8 20.4" fill="none" stroke="#c9483c" ' +
-      'stroke-width="2.2" stroke-linecap="round"/>'),
+    '<path d="M8.9 5.2h6.2c-.3 2.4-3.1 4.1-3.1 5.4s2.8 3 3.1 5.4" fill="none" ' +
+      'stroke="#5e6f85" stroke-width="1.1" stroke-linecap="round"/>' +
+    '<path d="M9.2 5.2h5.6c-.4 2.1-2.8 3.6-2.8 4.8s2.4 2.7 2.8 4.8Z" fill="#f7c53f"/>' +
+    '<path d="M12 12.6c1.5 2 2.6 3.4 2.9 6.4H9.1c.3-3 1.4-4.4 2.9-6.4Z" fill="#f7c53f"/>'),
   rampart: ico('<path d="M12 4.4 20.6 7.2v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V7.2Z" ' +
       'fill="#41556c"/>' +
     '<path d="M12 2.2 20.6 5v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V5Z" ' +
@@ -16076,11 +16129,12 @@ function castPress(slot){
     return 'still recovering';
   }
   if (!canPay(s, d.cost)){ say('Not enough in the stores for ' + d.n + '.'); return 'not enough resources'; }
-  // Nothing to aim: it lands on your own hold and can go straight out.
+  // Nothing to work on is a refusal with a reason rather than a crosshair over
+  // an empty board — and it is asked BEFORE the order that needs no aim goes
+  // out, because that one has no crosshair to stop at.
+  if (!spellTargets(d)){ say(d.none || NO_TARGET[d.target] || ('Nothing for ' + d.n + ' to work on.')); return 'no target'; }
+  // Nothing to aim: it lands on a hold and can go straight out.
   if (d.target === 'self'){ say(sendCmd('cast', { slot:slot })); return null; }
-  // ...and nothing to aim AT is a refusal with a reason rather than a
-  // crosshair over an empty board.
-  if (!spellTargets(d)){ say(NO_TARGET[d.target] || ('Nothing for ' + d.n + ' to work on.')); return 'no target'; }
   spellUI.aim = { slot:slot, id:d.id };
   syncAim();
   return null;
@@ -16113,7 +16167,9 @@ function castPress(slot){
    Same enumeration as the preview and the resolver, so a tile can only go
    dead for a reason the rings would have shown. */
 const spellTargets = (d) => {
-  if (!d || d.target === 'point' || d.target === 'self') return 1;
+  if (!d) return 1;
+  if (d.count) return d.count(me());
+  if (d.target === 'point' || d.target === 'self') return 1;
   const was = spellUI.aim;
   spellUI.aim = { slot:0, id:d.id };
   const n = spellAimCandidates().length;
@@ -17151,7 +17207,12 @@ function showIntro(diff){
        opened by a screen that had never mentioned it. On a phone the only
        other signal is two unlabelled gold chips in the top bar. */
     '<div class="ib"><span class="ic">' + SPELL_ICON.bombard + '</span><div><b>Two commander orders.</b> Pick them in the next ' +
-    C.FIRST_WAVE + ' seconds, from nine — a bombardment, a retreat, a hero hauled home. ' +
+    // Counted rather than written out. This said "from nine" while the chooser
+    // it opens held ten, because the round that added the tenth order never
+    // came back here — and this sheet is the only place the game explains the
+    // orders at all.
+    C.FIRST_WAVE + ' seconds, from ' + NUM_WORD(SPELLS.length) +
+    ' — a bombardment, a retreat, a hero hauled home. ' +
     'They belong to the hold rather than to a hero, they are set for good once the first wave marches, ' +
     'and you cast them from the top bar' + (NARROW() ? '' : ' or with Q and E') + '.</div></div>' +
     '</div>' +
@@ -18740,7 +18801,7 @@ window.IB = {
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
-  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold,
+  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
