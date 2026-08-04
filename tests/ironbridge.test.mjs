@@ -1846,18 +1846,46 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // standard deviation is 5.5 wins, so a 57%/43% reading says almost nothing.
   // Measure the two sides against each other inside a fixed window instead —
   // both play the whole window, so neither number is confounded by who won.
-  let dmg0 = 0, dmg1 = 0, push = 0, n = 0, kills0 = 0, kills1 = 0;
-  // Sample size is not a detail here. Measured over 40 matches, the paired
-  // wall-damage difference is 271 +/- 651 on a total of ~5700 — so one match
-  // carries a standard deviation of about 2100. Three matches could therefore
-  // swing +/-42% of the total on nothing at all, and the 25% band this test
-  // used to carry failed on roughly any perturbation of the AI. Six matches
-  // and a 45% band puts the guard at about 1.5 sigma: still small enough to
-  // catch the class of bug that once had one side winning 74% of mirrors,
-  // large enough not to cry wolf.
-  for (const seed of [21001, 21008, 21015, 21022, 21029, 21036]){
+  /* The statistic changed, because the old one was not measuring symmetry.
+
+     It POOLED wall damage across the seeds and compared the totals, so a
+     single blowout swamped everything else: measured over 24 seeds, one match
+     that ended in a win contributed 20450 damage against a per-match median of
+     a few thousand, and the pooled split moved from 0.007 to 0.256 on that one
+     match alone. The 0.007 was never symmetry — it was cancellation luck, and
+     any change that reshuffled the AI's draft flipped which side won which
+     seed and destroyed it. Measured: adding a tenth commander order that DOES
+     NOTHING AT ALL (drafted, cast, no effect) moved the pooled split exactly
+     as far as the real one did — 0.256 against 0.288 — while removing it
+     restored the 0.007. A statistic that cannot tell a live feature from an
+     inert one is not testing the feature.
+
+     What it measures now is the MEAN SIGNED SPLIT PER SEED. Each match
+     contributes at most +/-1 however lopsided it was, so no single blowout can
+     carry the result, and a systematic advantage still accumulates.
+
+     Calibrated over 24 seeds per arm, two independent seed families:
+
+       arm                                    mean signed split
+       nine orders,  family A                       -0.038
+       nine orders,  family B                       -0.073
+       ten orders,   family A                       -0.222
+       ten orders,   family B                       +0.130
+       side 1 given 1.6x tower damage, 1.5x hp      -0.501
+
+     Per-seed standard deviation is ~0.45, so the standard error on 24 seeds is
+     0.092. The band is 0.35: about 1.4 standard errors above the worst honest
+     reading and 1.6 below the rigged one. The seeds are drawn from BOTH
+     families for the same reason the pooling was dropped — one family can lean
+     0.2 on nothing, and the two of them lean opposite ways. */
+  const seeds = [];
+  for (let i = 0; i < 12; i++){ seeds.push(21001 + i * 7); seeds.push(30000 + i * 13); }
+  const splits = [], pushes = [];
+  let tot = 0, kills0 = 0, kills1 = 0;
+  for (const seed of seeds){
     IB.newMatch({ diff:'veteran', seed });
     G.sides[0].ai = true;                 // both holds play, or this is not a mirror
+    let push = 0, n = 0;
     for (let i = 0; i < 30 * 60 * 6 && G.state === 'play'; i++){
       IB.update(1 / 30);
       if (i % 600 === 0){ push += IB.frontlineX(0) - (C.LANE_LEN - IB.frontlineX(1)); n++; }
@@ -1865,17 +1893,28 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // missing hp, not hp lost against a fixed baseline — a hold that buys
     // Reinforced Stone raises its own maximum mid-match
     const missing = (sd) => G.sides[sd].structs.reduce((a, x) => a + Math.max(0, x.mhp - Math.max(0, x.hp)), 0);
-    dmg0 += missing(1); dmg1 += missing(0);
+    const d0 = missing(1), d1 = missing(0);
+    tot += d0 + d1;
+    splits.push((d0 - d1) / Math.max(1, d0 + d1));
+    pushes.push(push / Math.max(1, n));
     kills0 += G.sides[0].kills; kills1 += G.sides[1].kills;
   }
-  const tot = dmg0 + dmg1;
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const lean = mean(splits), lane = mean(pushes);
   t.ok(tot > 2000, 'the two holds actually fought (' + Math.round(tot) + ' wall damage between them)');
-  t.ok(Math.abs(dmg0 - dmg1) / tot < .45,
-    'neither side breaks the other faster (' + Math.round(dmg0) + ' vs ' + Math.round(dmg1) + ')');
+  t.ok(Math.abs(lean) < .35,
+    'neither side breaks the other faster (mean split ' + lean.toFixed(3) + ' over ' + seeds.length + ' seeds)');
   t.ok(Math.abs(kills0 - kills1) / Math.max(1, kills0 + kills1) < .3,
     'and neither side kills more (' + kills0 + ' vs ' + kills1 + ')');
-  t.ok(Math.abs(push / Math.max(1, n)) < 6,
-    'the battle line does not sit on one hold’s half (' + (push / Math.max(1, n)).toFixed(1) + ' units off centre)');
+  /* A coarse sanity check and NOT the symmetry guard, which is what it used to
+     be sold as. The rigged build above — one side handed 1.6x tower damage —
+     measured -3.76 here, INSIDE the honest range of -4.33 to +1.65, so this
+     number cannot tell a broken build from a fair one, and the 6-unit band it
+     carried failed on an honest one. Kept, widened to what the measurement
+     supports, and demoted to what it can actually do: catch a lane that has
+     collapsed into one half entirely. */
+  t.ok(Math.abs(lane) < 8,
+    'and the battle line is not parked in one half (' + lane.toFixed(1) + ' units off centre)');
 }
 
 /* ------------------------------------------------ the Host's decisions */
@@ -12757,8 +12796,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
     t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
     const SPELLS_IN = (k) => IB.SPELLS.filter(d => d.grp === k);
-    t.ok(IB.SPELLS.length === 9 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
-      'there are nine of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
+    t.ok(IB.SPELLS.length === 10 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are ten of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
     // Every one has a target kind the banner knows how to ask for. A tenth
     // order with a new kind fails HERE rather than arming a state whose banner
     // cannot say what would satisfy it.
@@ -12885,11 +12924,22 @@ t.ok(true, 'drawing an empty bridge is harmless');
       if (id === 'muster') return {};
       if (id === 'rampart') return { key:IB.frontStruct(s.i).key };
       if (id === 'hobble' || id === 'pyre') return { hero:G.sides[fs].heroes[0].id };
+      if (id === 'counter') return {};
       return { hero:s.heroes[0].id };
+    };
+    // Countermand is the one order whose target is a STATE rather than a place
+    // or a body: it lengthens recoveries that are already running, so a board
+    // where the other commander is holding a full hand is a board where it is
+    // correctly refused. Give them something to be waiting on.
+    const arm = (id, s) => {
+      if (id !== 'counter') return;
+      const foe = G.sides[s.i === 0 ? 1 : 0];
+      foe.spells[0] = 'bombard'; foe.spellCd[0] = 40;
     };
     for (let i = 0; i < IB.SPELLS.length; i++){
       const d = IB.SPELLS[i];
       const s = board(8200 + i, d.id);
+      arm(d.id, s);
       const z0 = G.zones.length;
       const seed0 = IB.seedNow();
       const err = IB.castSpell(s, Object.assign({ slot:0 }, aim(d.id, s)));
@@ -14574,8 +14624,17 @@ t.ok(true, 'drawing an empty bridge is harmless');
     for (const d of pts)
       t.ok(SRC.includes("castTell(s, '" + d.n + "'"),
         'the point order ' + d.n + ' has a readout of its own');
-    t.ok((SRC.match(/castTell\(s, '/g) || []).length === pts.length,
-      'and there are exactly as many readouts as point orders (' + pts.length + ')');
+    /* Every readout in the file belongs to an order, and every order that
+       cannot see its own effect has one. The point orders cannot because they
+       are aimed at a stretch of lane rather than a thing; Countermand cannot
+       because its effect happens inside the other hold's signal room. Anything
+       else that grows a readout has to come and say so here. */
+    const named = (SRC.match(/castTell\(s, '([^']+)'/g) || []).map(m => m.slice(13, -1));
+    t.ok(named.every(n => IB.SPELLS.some(d => d.n === n)),
+      'every readout in the file belongs to an order (' + named.join(', ') + ')');
+    t.ok(pts.every(d => named.includes(d.n)), 'and every point order has one');
+    t.ok(named.filter(n => !pts.some(d => d.n === n)).join() === 'Countermand',
+      'the only order that reports without aiming is the one cast into the other hold');
     G.toasts.length = 0;
   }
 
@@ -16415,6 +16474,141 @@ t.ok(true, 'a final draw on a live match is clean');
     IB.castTell(G.sides[0], 'Bombard', 0, 'caught', 0);
     t.ok(/nothing on that stretch/.test(G.toasts[0].msg), 'and a miss still reads as a miss');
     G.toasts.length = 0;
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------- the order that answers their orders
+   Nine of them acted on bodies, boards or walls, and not one acted on the
+   other commander. Which left the fog dock — the strip that names every order
+   of theirs this seat has watched land — as knowledge with nothing to spend
+   it on: you could learn they were carrying Bombard and Second Muster, and
+   there was no move that answered it.
+
+   It lengthens recoveries ALREADY RUNNING and does nothing to an order held
+   ready, so it cannot lock down a commander sitting on a full hand, and it is
+   worth most in the seconds after they spend — which is the moment the fog
+   dock reports. That is the whole design, and it is the assertion below that
+   holds it: a full hand refuses the cast rather than eating it.            */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const board = (seed) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    s.spells[0] = 'counter'; s.spellCd[0] = 0;
+    return s;
+  };
+
+  {
+    const d = IB.SPELL.counter;
+    t.ok(!!d && d.grp === 'foehold', 'Countermand is filed under the other commander');
+    t.ok(IB.SPELL_GROUPS.some(g => g.k === 'foehold'),
+      'and the sheet has a heading for a group that did not exist before');
+    // 'self' is a lie the panel would otherwise tell in AIM_SAID's words —
+    // "it lands on your own hold" — directly under a description saying the
+    // opposite. An order may say where it goes in its own words.
+    t.ok(d.target === 'self' && /their signal room/.test(d.say || ''),
+      'it takes no aim, and says where it goes rather than letting the panel guess');
+  }
+
+  /* ------------------------------------------------ against a full hand */
+  {
+    const s = board(9300);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0;
+    const before = foe.spellCd.slice();
+    const err = IB.castSpell(s, { slot:0 });
+    t.ok(typeof err === 'string', 'a commander holding everything ready refuses it (' + err + ')');
+    t.ok(s.spellCd[0] === 0, 'and it is not spent');
+    t.ok(s.res.iron === 9000, 'and costs nothing');
+    t.ok(foe.spellCd.join() === before.join(), 'and nothing of theirs moves');
+  }
+
+  /* ------------------------------------------- and against one who spent */
+  {
+    const s = board(9301);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 50; foe.spellCd[1] = 20;
+    G.toasts.length = 0;
+    const err = IB.castSpell(s, { slot:0 });
+    t.ok(err === null, 'a commander who has just spent does not (' + err + ')');
+    t.ok(foe.spellCd[0] === 50 + IB.COUNTER.add && foe.spellCd[1] === 20 + IB.COUNTER.add,
+      'both of their recoveries grow by the same ' + IB.COUNTER.add + 's (' + foe.spellCd.slice(0, 2).join() + ')');
+    t.ok(s.spellCd[0] === IB.SPELL.counter.cd, 'and it goes on its own long recovery');
+    t.ok(/Countermand — 2 of their orders set back/.test(G.toasts.map(x => x.msg).join(' | ')),
+      'the hold that gave it is told how much it caught');
+  }
+
+  /* -------------------------------------- one ready, one recovering: partial */
+  {
+    const s = board(9302);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 30;
+    t.ok(IB.castSpell(s, { slot:0 }) === null, 'one of theirs recovering is enough to give it');
+    t.ok(foe.spellCd[0] === 0, 'the one they were holding ready is untouched');
+    t.ok(foe.spellCd[1] === 30 + IB.COUNTER.add, 'and only the one already running is set back');
+  }
+
+  /* ------------------------------------------ the hold it lands on is told
+     Every other order is visible on the bridge. This one happens inside the
+     other hold's signal room, and three tiles quietly growing a shutter with
+     no explanation reads as a bug rather than as something done to you. */
+  {
+    const s = board(9303);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spellCd[0] = 40;
+    IB.MY = 1;                                  // sit in the seat it lands on
+    G.toasts.length = 0;
+    IB.castSpell(s, { slot:0 });
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/Countermanded/.test(said), 'the hold it lands on is told it happened (' + said + ')');
+    t.ok(said.indexOf(String(IB.COUNTER.add)) >= 0, 'and by how much');
+    t.ok(!/of their orders set back/.test(said),
+      'and is not shown the caster’s half of it, which is not its to see');
+    IB.MY = 0;
+  }
+
+  /* ----------------------------------------------------- and the Host times it
+     The AI waits for something of theirs to actually be recovering, because
+     that is the only state the order does anything in. */
+  {
+    const s = board(9304);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spells[1] = 'pyre';
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0;
+    t.ok(IB.aiSpellTarget(G.sides[0], IB.SPELL.counter, 1) === null,
+      'the Host does not give it into a full hand');
+    foe.spellCd[1] = 30;
+    t.ok(!!IB.aiSpellTarget(G.sides[0], IB.SPELL.counter, 1),
+      'and gives it once something of theirs is running');
+  }
+
+  /* ----------------------------------------------------- nothing new to sync
+     It moves spellCd and nothing else, which every path already carries — no
+     new field, and so no new way for the four hand-written pack lists to
+     disagree. Asserted rather than assumed. */
+  {
+    const s = board(9305);
+    const foe = G.sides[1];
+    foe.spells[0] = 'bombard'; foe.spellCd[0] = 40;
+    IB.castSpell(s, { slot:0 });
+    const at = IB.netHash();
+    const snap = IB.netSnap();
+    foe.spellCd[0] = 1;
+    t.ok(IB.netHash() !== at, 'their recovery is part of what the two machines check');
+    IB.netLoad(snap);
+    t.ok(IB.netHash() === at, 'and it survives a resync exactly');
+    t.ok(foe.spellCd[0] === 40 + IB.COUNTER.add, 'with the set-back intact (' + foe.spellCd[0] + ')');
   }
 
   IB.MY = seat0;

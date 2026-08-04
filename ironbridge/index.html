@@ -2117,6 +2117,15 @@ function makeSide(i, ai){
       hp:d.hp, base:d, mhp:d.hp, ad:d.ad, as:d.as, rng:d.rng, armor:d.armor, mr:d.mr, r:d.r,
       cd:0, dead:false, downT:0, target:null, hitT:0, id:G.uid++, chipHp:d.hp,
       repT:0, wardT:0,                          // Rampart: masons, and a warded face
+      /* A structure was born WITHOUT this and grew it the first time anything
+         hit it. netHash mixes it, both snapshots pack it — and JSON.stringify
+         drops an undefined value, so a structure nobody had touched yet packed
+         no key at all and the `!== undefined` guard on the way back in left the
+         DRIFTED machine's number sitting there. A resync then landed on a board
+         that hashed differently from the one it had just loaded. Nothing found
+         it because a match usually damages every structure early; it took an
+         order that changes when the first blow lands to shake it out. */
+      dmgTaken:0,
     });
   }
   // Attack order runs from the bridge inward: outer turret first, gates last.
@@ -2744,6 +2753,26 @@ const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
    long they are willing to stand in it. It slows in short refreshes rather
    than one long one, so walking out of the fire is walking out of the slow —
    the ground is the effect, not a tag it hands you on the way past. */
+/* The tenth order, and the only one aimed at the other COMMANDER rather than
+   at the bridge. Every one of the nine before it acts on bodies, boards or
+   walls; none of them acts on their orders. Which left the fog dock — which
+   names every order of theirs this seat has watched land — as knowledge with
+   nothing to spend it on: you could learn that they were carrying Bombard and
+   Second Muster and there was no move that answered it.
+
+   It lengthens recoveries that are ALREADY RUNNING and does nothing at all to
+   an order sitting ready. That is the whole design, and the first version had
+   it backwards: hitting a full hand let whoever drew this suppress everything
+   at once, and over 24 mirror seeds the wall-damage split between two
+   identical holds went from 0.7% to 13.5% and the battle line from half a unit
+   off centre to three. A tempo lead that shuts down the answer to it is a
+   snowball, and a mirror is where a snowball shows.
+
+   Turned round, it cannot lock down a commander who is holding fire, and it is
+   worth most in the seconds after they spend — which is exactly what the fog
+   dock reports. The order that answers their orders is timed off watching
+   them, which is the counterplay the set was missing. */
+const COUNTER = { add:25 };
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
@@ -2765,6 +2794,9 @@ const SPELLS = [
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
   { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
+  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
+    say:'no target — it lands in their signal room',
+    d:'Every order of theirs that is still recovering takes 25 seconds longer. Nothing at all to one they are holding ready — time it to their cast.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 
@@ -2784,6 +2816,7 @@ const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 const SPELL_GROUPS = [
   { k:'lane',   n:'The lane',      d:'a stretch of bridge, and whatever is standing on it' },
   { k:'theirs', n:'Their hero',    d:'one body of theirs, made worse at what it does' },
+  { k:'foehold', n:'Their commander', d:'the orders in the other signal room, and how soon they come back' },
   { k:'hold',   n:'Your hold',     d:'your own walls and your own wave' },
   { k:'mine',   n:'Your hero',     d:'nothing at all until you have one on the bridge' },
 ];
@@ -2946,6 +2979,30 @@ const SPELL_CAST = {
   /* Refreshing rather than stacking: a second pour on the same stretch resets
      the clock and moves the patch, and does not light a second fire nobody can
      see the edges of. One burning stretch per hold, like one salvo per hold. */
+  /* The only order whose effect happens somewhere the caster cannot see. It
+     lands in the other hold's signal room, so BOTH sides are told: the caster
+     needs to know how much of their hand it caught, and the hold it lands on
+     needs to know why three tiles it was counting on just grew a shutter.
+     Same fxToast path every other notice takes, each side told only its own
+     half — a machine printing the other one's line would be inventing it. */
+  counter(s){
+    const foe = G.sides[enemyOf(s.i)];
+    let n = 0;
+    for (let i = 0; i < foe.slots; i++){
+      // A ready order is not recovering, and there is nothing in it to lengthen.
+      if (!foe.spells[i] || foe.spellCd[i] <= 0) continue;
+      foe.spellCd[i] += COUNTER.add;
+      n++;
+    }
+    // Refused rather than spent. Against a commander holding a full hand there
+    // is nothing running to hold back, and 120 seconds is far too long to pay
+    // for nothing — the refusal is also the lesson about when to give it.
+    if (!n) return 'nothing of theirs is recovering to hold back';
+    castTell(s, 'Countermand', n, 'of their orders set back');
+    if (forMe(foe.i))
+      fxToast('Countermanded — your orders are ' + COUNTER.add + 's further off.', 'bad', TOAST_W.cast);
+    return null;
+  },
   pitch(s, c){
     s.fireX = lanePoint(c.x); s.fireT = PITCH.dur;
     // The third point order, and it was the one left out of the readout the
@@ -5143,6 +5200,14 @@ function aiSpellTarget(s, d, fs){
     let n = 0;
     nearby(at, PITCH.rad, (u) => { if (!u.dead && u.side === fs && !u.isHero) n++; });
     return n >= 3 ? { x:Math.round(at * 16) / 16 } : null;
+  }
+  /* Given after they spend, not before. It waits for something of theirs to
+     actually be recovering, which is the only state it does anything in. */
+  if (d.id === 'counter'){
+    const foe = G.sides[fs];
+    let running = 0;
+    for (let i = 0; i < foe.slots; i++) if (foe.spells[i] && foe.spellCd[i] > 0) running++;
+    return running >= 1 ? {} : null;
   }
   if (d.id === 'pyre'){
     for (const u of G.units)
@@ -15151,6 +15216,21 @@ const SPELL_ICON = {
      Withdraw is a battlement with an arrow going into it, and two crenelated
      walls side by side in the bar were one shape twice. The courses of stone
      inside keep the masonry, and the outline is nothing else in the set. */
+  /* A signal horn with a bar through it. The horn is one closed silhouette,
+     which is what survives 19px — a snapped banner pole is two thin shapes and
+     reads as noise at that size — and the bar is the whole meaning of the
+     order, so it is the thickest stroke in the set and the only red one.
+     Nothing else in the nine is red, so this is the one that cannot be
+     mistaken for a neighbour at a glance. */
+  counter: ico('<path d="M3.4 9.2h4.3l8.7-4.6v14.8L7.7 14.8H3.4Z" ' +
+      'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M7.7 9.2v5.6" fill="none" stroke="#5e6f85" stroke-width="1.3"/>' +
+    '<path d="M18.8 7.4a6.4 6.4 0 0 1 0 9.2" fill="none" stroke="#7d90a8" ' +
+      'stroke-width="1.8" stroke-linecap="round"/>' +
+    '<path d="M3.2 3.6 20.8 20.4" fill="none" stroke="#3d2d1a" ' +
+      'stroke-width="4.2" stroke-linecap="round"/>' +
+    '<path d="M3.2 3.6 20.8 20.4" fill="none" stroke="#c9483c" ' +
+      'stroke-width="2.2" stroke-linecap="round"/>'),
   rampart: ico('<path d="M12 4.4 20.6 7.2v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V7.2Z" ' +
       'fill="#41556c"/>' +
     '<path d="M12 2.2 20.6 5v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V5Z" ' +
@@ -15659,7 +15739,11 @@ function spellWhyHtml(){
     '<div class="wn">' + d.n + '</div><div class="wd">' + d.d + '</div>' +
     '<div class="wm"><span>' + (free ? 'costs nothing' : costHtml(d.cost)) + '</span>' +
     '<span>' + d.cd + 's between castings</span>' +
-    '<span>' + (AIM_SAID[d.target] || d.target) + '</span></div>';
+    // An order may say this in its own words. Countermand is 'self' because
+    // there is nothing on the bridge to aim it at, but AIM_SAID's phrase for
+    // that — "it lands on your own hold" — flatly contradicts the sentence
+    // directly above it, which is that it lands in THEIRS.
+    '<span>' + (d.say || AIM_SAID[d.target] || d.target) + '</span></div>';
 }
 
 function spellSlotsHtml(){
@@ -17217,7 +17301,7 @@ function loadMatch(pack){
       st.mhp = structMaxHp(s, st);
       st.hp = Math.min(p.hp, st.mhp); st.dead = p.dead; st.downT = p.downT;
       if (p.cd !== undefined) st.cd = p.cd;
-      if (p.dmgTaken !== undefined) st.dmgTaken = p.dmgTaken;
+      st.dmgTaken = p.dmgTaken === undefined ? 0 : p.dmgTaken;
       if (p.chipHp !== undefined) st.chipHp = p.chipHp;
       if (p.hitT !== undefined){ st.hitT = p.hitT; st.hitT0 = p.hitT0; st.hitW = p.hitW; }
       st.repT = p.repT || 0; st.wardT = p.wardT || 0;
@@ -18169,7 +18253,7 @@ function netLoad(p){
       const live = s.structs[k];
       if (!live) return;
       live.hp = st.hp; live.mhp = st.mhp; live.dead = st.dead; live.downT = st.downT; live.cd = st.cd;
-      if (st.dmgTaken !== undefined) live.dmgTaken = st.dmgTaken;
+      live.dmgTaken = st.dmgTaken === undefined ? 0 : st.dmgTaken;
       if (st.chipHp !== undefined) live.chipHp = st.chipHp;
       if (st.hitT !== undefined){ live.hitT = st.hitT; live.hitT0 = st.hitT0; live.hitW = st.hitW; }
       live.repT = st.repT || 0; live.wardT = st.wardT || 0;
@@ -18662,7 +18746,7 @@ window.IB = {
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
-  BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART,
+  BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART, COUNTER,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
