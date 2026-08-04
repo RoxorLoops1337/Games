@@ -2135,7 +2135,7 @@ function makeSide(i, ai){
        next beat. One flag on the hold rather than one per hero, so there is a
        single thing to press, a single thing to hash and a single thing for the
        four pack lists to carry. */
-    holdUlt:false,
+    holdUlt:false, braceT:0,
     bombT:0, bombX:0, bombN:0,
     // ...and fireT/fireX are the stretch of burning boards another leaves,
     // on this object for exactly the same reason.
@@ -2579,6 +2579,7 @@ function ecoStep(s, dt){
       if (s.bombN === 0){ castTell(s, 'Bombard', bombSeen[s.i].size, 'caught', orderGold[s.i]); bombSeen[s.i].clear(); orderGold[s.i] = 0; }
     }
   }
+  if (s.braceT > 0) s.braceT = Math.max(0, s.braceT - dt);
   if (s.fireT > 0){
     s.fireT = Math.max(0, s.fireT - dt);
     const fs = enemyOf(s.i);
@@ -2812,6 +2813,16 @@ const RAMPART = { dur:5, heal:.22, ward:8, armor:40 };
    dock reports. The order that answers their orders is timed off watching
    them, which is the counterplay the set was missing. */
 const COUNTER = { add:25 };
+/* Bracing. The fog strip names their orders and, since the last round, their
+   hero's ultimate — and none of that knowledge bought a move: Countermand acts
+   on cooldowns rather than on anything you read there. This is the move. It
+   does not stop an ability; it makes the one you can see coming cost them.
+
+   Everything a hero does with an ABILITY, which is what an ultimate is, so it
+   answers the whole class rather than one entry in it — a ward that only
+   blunted Cataclysm would be a ward you could only give after learning they
+   have Cataclysm, and useless in the match where they took Bladestorm. */
+const BRACE = { dur:8, cut:.40 };
 /* How much there is for it to hold back: orders of theirs already recovering.
    One answer, asked by three different things — the cast, the greyed tile and
    the refusal — so they cannot drift apart. */
@@ -2843,6 +2854,9 @@ const SPELLS = [
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
   { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
+  { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold',
+    say:'no target — it braces everything you have',
+    d:'For eight seconds everything of yours takes 40% less from their heroes\u2019 abilities. Worth most in the seconds you can see one coming.' },
   { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
@@ -3085,6 +3099,14 @@ const SPELL_CAST = {
      needs to know why three tiles it was counting on just grew a shutter.
      Same fxToast path every other notice takes, each side told only its own
      half — a machine printing the other one's line would be inventing it. */
+  brace(s){
+    s.braceT = BRACE.dur;
+    if (forMe(s.i))
+      fxToast('Braced — ' + Math.round(BRACE.cut * 100) + '% off their abilities for ' +
+        BRACE.dur + 's.', 'good', TOAST_W.cast);
+    if (!HEADLESS) ringFx(frontlineX(s.i), 0, 7, '#bcd8ff');
+    return null;
+  },
   counter(s){
     const foe = G.sides[enemyOf(s.i)];
     let n = 0;
@@ -3319,6 +3341,14 @@ function dealDmg(src, tgt, amt, o){
   o = o || {};
   if (!tgt || tgt.dead || amt <= 0) return 0;
   const magic = !!o.magic;
+  /* Braced. Before every multiplier and every mitigation, because it is not
+     armour — it is the hold bracing for a blow it can see coming, and it should
+     read the same against a big one as a small one. Only what a HERO does with
+     an ability: their minions, their turrets and their own commander orders go
+     through untouched, so this answers exactly the class of thing the fog
+     strip names and nothing else. */
+  if (o.ability && src && src.isHero && tgt.side !== undefined &&
+      (G.sides[tgt.side] || {}).braceT > 0) amt *= 1 - BRACE.cut;
   if (src && src.isHero){
     let m = 1 + passVal(src, 'dmgAll') + bsum(src, 'bdmg');
     if (tgt.struct) m += passVal(src, 'tdmg') + (tgt.key === 'gate' ? passVal(src, 'gateDmg') : 0);
@@ -5352,6 +5382,18 @@ function aiSpellTarget(s, d, fs){
   }
   /* Given after they spend, not before. It waits for something of theirs to
      actually be recovering, which is the only state it does anything in. */
+  /* Given when there is something to brace AGAINST: a hero of theirs on the
+     bridge with its ultimate off recovery. Bracing an empty lane is eight
+     seconds of nothing, which is the mistake this order most invites. */
+  if (d.id === 'brace'){
+    if (s.braceT > 0) return null;
+    for (const h of G.sides[fs].heroes){
+      if (h.dead || !h.inLane) continue;
+      const u = h.skills.find(x => x.ult);
+      if (u && !(u.cdT > 0) && Math.abs(h.x - frontlineX(s.i)) < 16) return {};
+    }
+    return null;
+  }
   if (d.id === 'counter'){
     const foe = G.sides[fs];
     let running = 0;
@@ -15434,6 +15476,14 @@ const SPELL_ICON = {
      longer — and nothing else in the set or in the top bar is one, so it
      cannot be read as a neighbour or as a control. The sand is the only warm
      colour on it, which is what carries at 19px once the frame has gone grey. */
+  /* Two shields overlapping — a line bracing, not one wall. Rampart is a
+     single shield with a masonry grid; this is a pair, offset, so the two read
+     apart at 19px where a lone shield would not. */
+  brace: ico('<path d="M8.4 3.6 15.2 5.8v5.5c0 3.9-2.9 6.3-6.8 7.6-4-1.3-6.8-3.7-6.8-7.6V5.8Z" ' +
+      'fill="#41556c" ' + ICO_EDGE + '/>' +
+    '<path d="M15.6 4.6 22.4 6.8v5.5c0 3.9-2.9 6.3-6.8 7.6-4-1.3-6.8-3.7-6.8-7.6V6.8Z" ' +
+      'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M15.6 8.2v8.2M12 10.4h7.2" fill="none" stroke="#5e6f85" stroke-width="1.4"/>'),
   counter: ico('<path d="M5.6 2.6h12.8M5.6 21.4h12.8" fill="none" stroke="#3d2d1a" ' +
       'stroke-width="2.6" stroke-linecap="round"/>' +
     '<path d="M7 3.4h10c0 4.2-3.4 6.2-3.4 8.6s3.4 4.4 3.4 8.6H7c0-4.2 3.4-6.2 3.4-8.6S7 7.6 7 3.4Z" ' +
@@ -17548,7 +17598,7 @@ const packSide = (s) => ({
   troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
   spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots, holdUlt:!!s.holdUlt,
-  bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
+  bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX, braceT:s.braceT,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
   trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -17620,6 +17670,7 @@ function loadMatch(pack){
     s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
     s.holdUlt = !!ps.holdUlt;
+    s.braceT = ps.braceT || 0;
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     // Without this a resumed match reported the quiet wave for up to a full
@@ -18455,6 +18506,7 @@ function netHash(){
     // a bombardment has got to.
     mix(s.slots);
     mix(s.holdUlt ? 1 : 0);           // decides whether the biggest ability fires at all
+    mix(q30(s.braceT));               // ...and this decides what their biggest one does
     for (let i = 0; i < SPELL_SLOTS; i++){ mixs(s.spells[i]); mix(q30(s.spellCd[i])); }
     mix(s.bombN); mix(q30(s.bombT)); mix(Math.round(s.bombX * 16));
     mix(q30(s.fireT)); mix(Math.round(s.fireX * 16));
@@ -18590,7 +18642,7 @@ function netSnap(){
       // nobody remembered to add — and a field missing from a resync is a
       // resync that desyncs again immediately.
       spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots, holdUlt:!!s.holdUlt,
-      bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
+      bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX, braceT:s.braceT,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
       trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -18640,6 +18692,7 @@ function netLoad(p){
     s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
     s.holdUlt = !!ps.holdUlt;
+    s.braceT = ps.braceT || 0;
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
@@ -19145,7 +19198,7 @@ window.IB = {
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
-  BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART, COUNTER,
+  BOMB, WITHDRAW, MUSTER_HP, WARP, HOB, UNBIND, PYRE, RAMPART, COUNTER, BRACE,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
