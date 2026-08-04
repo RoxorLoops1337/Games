@@ -27,23 +27,37 @@ const between = (a, lo, hi, l) => ok(a >= lo && a <= hi, `${l} (got ${a}, want $
 
 /* ------------------------------------------------------------- harness --- */
 const noop = () => {};
+// The stub used to throw away everything the renderer said. It tracks two
+// things now — the current globalAlpha, and how many drawImage calls happen
+// while it is below 1 — because "this is drawn ghosted, and only before the
+// gates open" is otherwise invisible to any headless test.
 function mkCtx(){
-  return new Proxy({}, {
-    get(_t, k){
+  const st = { globalAlpha: 1, draws: 0, ghosts: 0 };
+  return new Proxy(st, {
+    get(t, k){
+      if (k === '__st') return t;
+      if (k === 'globalAlpha') return t.globalAlpha;
+      if (k === 'drawImage') return () => {
+        t.draws++;
+        if (t.globalAlpha > 0 && t.globalAlpha < 1) t.ghosts++;
+      };
       if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: noop });
       if (k === 'measureText') return () => ({ width: 10 });
       if (k === 'canvas') return { width: 236, height: 164 };
       return noop;
     },
-    set(){ return true; },
+    set(t, k, v){ if (k === 'globalAlpha') t.globalAlpha = v; return true; },
   });
 }
+/** The ctx state of the most recently loaded game, for render-side assertions. */
+let LAST_CTX = null;
 function loadGame(store = {}){
   const html = readFileSync(GAME, 'utf8');
   const m = html.match(/<script>([\s\S]*?)<\/script>/);
   if (!m) throw new Error('no inline <script> found in birds_and_beasts/index.html');
 
   const ctx = mkCtx();
+  LAST_CTX = ctx;
   // classList used to be four no-ops, which meant every "this card is marked"
   // assertion silently passed on a stub that had thrown the mark away. It is a
   // real set now, kept in sync with .className in both directions.
@@ -1110,6 +1124,25 @@ function autoRun(seed){
   eq(G4.loadFounder(), null, 'a corrupt founder save degrades to none');
   G4.newRun(1);
   eq(G4.R.deck.length, 8, 'and the run starts normally anyway');
+}
+
+/* =================== what is waiting behind the door ====================== */
+{
+  const G = loadGame({});
+  G.ui.boot(); G.ui.startRun();
+  G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
+  G.startBattle(G.fightMods());
+  const st = LAST_CTX.__st;
+  const wave1 = G.F.spawns.filter((s) => s.wave === 1).length;
+  ok(wave1 > 0, 'the first wave has arrivals to preview');
+  st.ghosts = 0; G.ui.drawPit();
+  const prep = st.ghosts;
+  G.F.started = 1;
+  st.ghosts = 0; G.ui.drawPit();
+  const live = st.ghosts;
+  console.log('    (prep ghosts ' + prep + ', wave1 ' + wave1 + ', after gates ' + live + ')');
+  ok(prep >= wave1, 'every beast of the first wave is drawn ghosted before the gates open');
+  ok(live < prep, 'and the preview is gone once they are actually walking in');
 }
 
 /* ======================= the wave comes in wall first ====================== */
