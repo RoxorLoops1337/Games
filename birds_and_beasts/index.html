@@ -5617,6 +5617,34 @@ function drawPit(){
   }
   ctx.globalAlpha = 1;
 
+  // --- WHAT IS COMING ------------------------------------------------------
+  // Before the gates open, the pit is 434px of empty sand on an 844px phone —
+  // 51% of the screen holding nothing. The box is a fixed 4/5 on purpose, so an
+  // arena that resized between prep and fight is exactly what it was made to
+  // stop being; shrinking it here would put that back. The box does not move.
+  // It stops being EMPTY. The first wave stands ghosted where it will walk in,
+  // which is the one thing this screen never told you before you had to commit
+  // Feed to a hand.
+  if (F && !F.started && F.spawns && F.spawns.length){
+    const w1 = F.spawns.filter((s2) => s2.wave === 1);
+    ctx.save();
+    for (let i = 0; i < w1.length; i++){
+      // mid-depth, not laneY: the walk-in lanes for the first arrivals sit far
+      // up the pit, where scaleAt draws them too small to identify
+      const gy = AH * (0.5 + (i - (w1.length - 1) / 2) * 0.17), gsc = scaleAt(gy);
+      const gw = SPR * gsc, gh = SPR * gsc * (104 / 128);
+      const spr0 = spriteFor(w1[i].c);
+      ctx.globalAlpha = 0.42;
+      ctx.save();
+      ctx.translate(px(DOOR_X - 8 - i * 10), py(gy));
+      ctx.scale(-1, 1);
+      ctx.drawImage(spr0, -gw / 2, -gh + gh * 0.04, gw, gh);
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   // --- the beasts ----------------------------------------------------------
   for (const u of order){
     const sc = scaleAt(u.y);
