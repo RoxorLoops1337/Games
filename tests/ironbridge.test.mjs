@@ -14617,6 +14617,108 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.newMatch({ diff:'veteran', seed:8599 });
 }
 
+/* ==================================== a hero's choices, as icons
+   Three cards, each with a name and its full description, and nothing to tell
+   them apart at a glance: you read all three, at every tier, for the whole
+   match. An icon cannot say what a skill DOES — there are 55 and most would be
+   indistinguishable at 36px — but it can say what kind of thing it is, which
+   is the question actually being asked at the moment of choosing. */
+{
+  IB.newMatch({ diff:'veteran', seed:9410 });
+  // ---- every skill's icon comes off the tag the simulation already uses,
+  // rather than a second list that could disagree with it.
+  const tags = [...new Set(IB.SKILLS.map(k => k.tag))];
+  t.ok(tags.length > 1, 'the skills carry more than one tag (' + tags.join(' ') + ')');
+  for (const g of tags)
+    t.ok(!!IB.SKILL_TAG_ICON[g], 'the tag ' + g + ' has an icon of its own');
+  for (const k of IB.SKILLS){
+    const ic = IB.optIcon('skill', k.id);
+    t.ok(typeof ic === 'string' && /^<svg /.test(ic), k.n + ' has an icon');
+    t.ok(!/<img|url\(|\p{Extended_Pictographic}/u.test(ic), k.n + '’s icon fetches nothing');
+  }
+
+  /* ---- the hundred passives have no tag, so the group is DERIVED from the
+     modifier bag: a new passive is categorised the moment it is written.
+
+     The first cut of those lists came off the header comment above PASSIVES,
+     which names fifteen stat keys and eight hooks — and the table actually
+     uses about sixty. 53 of the 100 fell through to the leftover icon, which
+     is a star that means nothing. Measured, then widened; this is the
+     assertion that would have caught it. */
+  const grp = {};
+  for (const q of IB.PASSIVES) grp[IB.passGroup(q.id)] = (grp[IB.passGroup(q.id)] || 0) + 1;
+  const spread = Object.keys(grp).map(k => k + ':' + grp[k]).join(' ');
+  for (const g of Object.keys(IB.PASS_GROUP))
+    t.ok(grp[g] > 0, 'the group ' + g + ' claims some of the passives (' + spread + ')');
+  t.ok((grp.odd || 0) < IB.PASSIVES.length * .25,
+    'and the leftover icon is a leftover rather than the default (' + (grp.odd || 0) +
+    ' of ' + IB.PASSIVES.length + ')');
+  for (const q of IB.PASSIVES)
+    t.ok(/^<svg /.test(IB.optIcon('passive', q.id)), q.n + ' has an icon');
+  // A rank on a passive is still that passive, so it keeps its own icon.
+  t.ok(IB.optIcon('rank', 'P:' + IB.PASSIVES[0].id) === IB.optIcon('passive', IB.PASSIVES[0].id),
+    'and ranking one up does not change what it looks like');
+
+  // ---- the card carries the icon and the NAME. The prose moved to one panel
+  // the three share, because three descriptions side by side is three
+  // paragraphs to read at every tier.
+  {
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.findIndex(x => !x), 'tavern');
+    IB.createHero(s, 'fighter');
+    const h = s.heroes[0];
+    t.ok(h.pend.length === 1 && h.pend[0].kind === 'passive', 'a new hero is offered its passive');
+    const opts = h.pend[0].opts;
+    IB.optUI.at = null;
+    const grid = IB.picksHtml(h, 'passive', opts);
+    t.ok((grid.match(/class="pick opt/g) || []).length === opts.length, 'one card per option');
+    t.ok((grid.match(/<svg /g) || []).length >= opts.length, 'each with an icon');
+    for (const id of opts)
+      t.ok(!grid.includes('<div class="pd">' + IB.PASS[id].d), IB.PASS[id].n + '’s prose is not on its card');
+    t.ok(/class="ow none"/.test(grid), 'and the shared panel says how to read one');
+
+    /* REVEAL, THEN TAKE. A hero's choice is permanent and there is no way back
+       from it, so a press that lands on a card you have not read is the one
+       press this sheet must not accept. */
+    IB.optUI.at = 1;
+    const open = IB.picksHtml(h, 'passive', opts);
+    t.ok(/class="pick opt at"/.test(open), 'the one being read is lit');
+    t.ok((open.match(/class="pick opt at"/g) || []).length === 1, 'and only that one');
+    // Read the PANEL, not the whole grid: every card also carries its
+    // description in a title attribute, which is a native tooltip and a
+    // perfectly good extra — but it means "is this text present" is not the
+    // same question as "is this text in the panel".
+    const panel = open.slice(open.indexOf('<div class="ow'));
+    t.ok(panel.includes(IB.PASS[opts[1]].d), 'with its description in the panel');
+    t.ok(!panel.includes(IB.PASS[opts[0]].d), 'and nobody else’s');
+
+    /* All three places that offer options go through ONE builder. They were
+       three separate copies — the creation passive, a skill tier and a rank —
+       and patching the panel into one of them left the other two showing icons
+       with nothing to read them by, which is exactly how the first version of
+       this shipped. */
+    // Three call sites and the one definition.
+    t.ok((SRC.match(/picksHtml\(h, /g) || []).length === 4,
+      'the creation passive, a skill tier and a rank all build their picks one way');
+    t.ok(!/'<div class="picks">' \+ pend\.opts\.map/.test(SRC),
+      'with no hand-rolled copy left behind');
+    // Three options, three columns, at every size. The auto-fit track the
+    // prose cards use gives two at 390px and orphans the third on a row of
+    // its own, which reads as a card of different importance.
+    const pcss = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+    /* Specificity, not just presence. `.tier .picks` sets auto-fit at 130px
+       further down the file, which is the same weight as a bare `.picks.opts`
+       and comes later — so the rule existed, lost, and 390px still got two
+       columns and an orphan. */
+    t.ok(/\.tier \.picks\.opts\{ grid-template-columns:repeat\(3,/.test(pcss),
+      'the option row is three across, and outranks the tier rule that would say otherwise');
+    t.ok(/\.pick\.opt\{ min-height:/.test(pcss),
+      'and every card reserves the same height, however its name wraps');
+    IB.optUI.at = null;
+  }
+}
+
 /* ============================================== and it says what happened
    A desync or a dead socket used to leave one sentence in the advice bar and
    nothing to work from. */

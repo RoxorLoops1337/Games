@@ -876,6 +876,44 @@
     text-shadow:0 2px 0 rgba(0,0,0,.35); }
   .sheet .sub{ margin:0 0 16px; color:var(--dim); font-size:var(--t4); line-height:1.45; }
   .picks{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  /* An OPTION card, as opposed to the prose cards the menus use. Icon first,
+     name under it, one line of numbers — and the description in the panel
+     below the row, because three descriptions side by side is three paragraphs
+     to read at every tier for the whole match. */
+  /* Always three, so always three columns. The auto-fit track the prose cards
+     use gives two at 390px and leaves the third on a row of its own — and a
+     row of one reads as a card of different importance, which is the same
+     thing the order grid was reshaped to avoid. */
+  /* `.tier .picks` further down sets auto-fit at 130px, which is the same
+     specificity as `.picks.opts` and comes later — so it won, and 390px got
+     two columns and an orphaned third card anyway. Named with the tier in it
+     so it outranks that rule wherever either of them sits. */
+  .tier .picks.opts{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+  .pick.opt{ display:flex; flex-direction:column; align-items:center; gap:3px;
+    min-width:0; padding:9px 8px 8px; text-align:center; }
+  .pick.opt .ico{ width:34px; height:34px; vertical-align:0; }
+  .pick.opt .pk{ font-size:var(--t1); letter-spacing:1.4px; text-transform:uppercase;
+    color:#7a6033; font-weight:700; }
+  .pick.opt .pt{ font-family:var(--display); font-variant-caps:small-caps;
+    font-size:var(--t4); font-weight:700; color:var(--cream-ink); line-height:1.1; }
+  .pick.opt .pm{ font-size:var(--t1); color:#63502f; white-space:nowrap; }
+  /* Being read. NOT taken — that is the second press, the same rule the
+     commander orders use, and it matters more here: a hero's choice is
+     permanent and there is no way back from it. */
+  .pick.opt.at{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a);
+    box-shadow:var(--lip), var(--shelf-gold), 0 0 0 2px rgba(224,165,46,.5); }
+  .pick.opt.at .pk{ color:#7d6120; }
+  .pick.opt.at .pm{ color:#7d6120; }
+  /* The one panel the three share. */
+  .ow{ margin-top:8px; padding:9px 12px; background:var(--grain),linear-gradient(180deg,rgba(48,39,26,.94),rgba(18,14,10,.95));
+    border:1px solid rgba(201,163,85,.26); border-radius:var(--r3); min-height:58px;
+    box-shadow:inset 3px 0 0 var(--gold), inset 0 1px 0 rgba(255,255,255,.06); }
+  .ow b{ font-family:var(--display); font-variant-caps:small-caps; font-size:17px;
+    color:#ffe6ae; letter-spacing:.4px; }
+  .ow i{ font-style:normal; font-size:var(--t2); color:#b5a686; margin-left:8px; }
+  .ow .pd{ font-size:var(--t4); color:#ecdfc6; line-height:1.5; margin-top:2px; }
+  .ow.none{ color:#b5a686; font-size:var(--t3); font-style:italic; display:flex;
+    align-items:center; min-height:58px; }
   .pick{ padding:12px 13px; background:var(--raise); border:1px solid var(--rim); border-radius:var(--r3);
     text-align:left; box-shadow:var(--lip), var(--shelf);
     transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease,background .12s ease; }
@@ -1049,6 +1087,9 @@
   .sheet.orders .sproll::-webkit-scrollbar-track{ background:rgba(0,0,0,.28); border-radius:10px; }
   @media (max-width:700px){
     .spgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+    /* A hundred-pixel card wraps some names to two lines and not others, so
+       every one reserves the taller. */
+    .pick.opt{ min-height:112px; justify-content:center; }
     /* Three columns at 390px makes a card 93px wide, and "Second Muster" and
        "Warp Banner" wrap to a second line while the other seven do not — rows
        of 93px against rows of 108px. Which is the exact failure the one-grid
@@ -14834,6 +14875,101 @@ const UI_ICON = {
    hole in the card rather than as metal. The HUD keeps its own light steel,
    because on felt that is the one that is right. */
 const ICO_STEEL = '#8fa2b8';
+/* ---------------------------------------------- what a hero's choices ARE
+
+   A hero's picks were nine lines of prose in a row: three cards, each with a
+   name and its full description, and nothing to tell them apart at a glance.
+   You read all three every time, at every tier, for the whole match.
+
+   An icon cannot say what a skill does — there are 55 of them and most would
+   be indistinguishable at 36px — but it can say what KIND of thing it is,
+   which is the question actually being asked at the moment of choosing: is
+   this damage or is this defence? The tag is already in the data, so the icon
+   is read off the same field the simulation uses rather than a second list
+   that could disagree with it. */
+const SKILL_TAG_ICON = {
+  // a blade, point down
+  dmg: ico('<path d="M12 2.6 15.4 9.6v6.2h-6.8V9.6Z" fill="#4a5568"/>' +
+    '<path d="M12 1.2 15.4 8.2v6.2h-6.8V8.2Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M7.4 14.4h9.2v2.4H7.4Z" fill="#8a5c31" ' + ICO_EDGE + '/>' +
+    '<path d="M10.9 16.8h2.2v5.4h-2.2Z" fill="#8a5c31" ' + ICO_EDGE + '/>'),
+  // a body held still: a ring with the bar through it
+  cc: ico('<circle cx="12" cy="13.4" r="7.8" fill="#4a5568"/>' +
+    '<circle cx="12" cy="11.6" r="7.8" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M6.6 6.2 17.4 17" fill="none" stroke="#2b3b4d" stroke-width="3.4" stroke-linecap="round"/>' +
+    '<circle cx="12" cy="11.6" r="3.2" fill="#2b3b4d"/>'),
+  // an arrow going up, off a bar
+  buff: ico('<path d="M4.6 19.4h14.8v3H4.6Z" fill="#8a5c31" ' + ICO_EDGE + '/>' +
+    '<path d="M12 3.4 19 11.6h-4v6.2h-6v-6.2H5Z" fill="#2f4763"/>' +
+    '<path d="M12 1.8 19 10h-4v6.2h-6V10H5Z" fill="#8ce39a" ' + ICO_EDGE + '/>'),
+  // a cross
+  heal: ico('<path d="M9.4 4.4h5.2v5.6h5.6v5.2h-5.6v5.6H9.4v-5.6H3.8v-5.2h5.6Z" fill="#2f6b3c"/>' +
+    '<path d="M9.4 2.6h5.2v5.6h5.6v5.2h-5.6v5.6H9.4v-5.6H3.8V8.2h5.6Z" fill="#8ce39a" ' + ICO_EDGE + '/>'),
+  // a boot, and the ground going past it
+  move: ico('<path d="M2.4 17.6h6.2M2.4 12.4h4.4" fill="none" stroke="#8a5c31" ' +
+      'stroke-width="2" stroke-linecap="round"/>' +
+    '<path d="M11.6 4.4h4v9.4l4.4 2.6v5H11.6Z" fill="#2f4763"/>' +
+    '<path d="M11.6 2.6h4V12l4.4 2.6v5H11.6Z" fill="#7fb2ff" ' + ICO_EDGE + '/>'),
+  // two more of them, stood beside you
+  summon: ico('<circle cx="8" cy="7.6" r="3.4" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<path d="M3.4 21.4v-6a4.6 4.6 0 0 1 9.2 0v6Z" fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>' +
+    '<circle cx="17.4" cy="9.6" r="2.8" fill="#6b7d94" ' + ICO_EDGE + '/>' +
+    '<path d="M13.6 21.4v-4.8a3.8 3.8 0 0 1 7.6 0v4.8Z" fill="#6b7d94" ' + ICO_EDGE + '/>'),
+};
+
+/* The hundred passives have no tag, but they all have a modifier bag, and what
+   a player wants off an icon is the same question: is this making me hit
+   harder, or harder to kill? Derived from the bag rather than hand-labelled a
+   hundred times — a new passive is categorised the moment it is written. */
+const PASS_GROUP = {
+  hit:  ['ad', 'ap', 'apPct', 'as', 'asLow', 'asDuel', 'crit', 'critD', 'exec', 'burn', 'truOn',
+         'thorns', 'tdmg', 'mdmg', 'hdmg', 'onHitAp', 'auraDmg', 'dmgAll', 'dmgHigh', 'dmgLow',
+         'killAd', 'killAs', 'gateDmg', 'cannonDmg', 'casterDmg', 'firstHit', 'everyFourth',
+         'chainHit', 'echo', 'rage', 'grudge', 'lone', 'pack', 'crowd'],
+  hold: ['armor', 'mr', 'hp', 'hpPct', 'shieldLow', 'takeLess', 'takeMore', 'armorLow',
+         'towerRes', 'tenacity', 'spawnShield', 'auraArm', 'auraHp', 'meleeHp'],
+  last: ['ls', 'hreg', 'mreg', 'mana', 'killHeal', 'spellVamp', 'auraHeal', 'deathHeal', 'respawn'],
+};
+const PASS_ICON = {
+  hit:  SKILL_TAG_ICON.dmg,
+  hold: ico('<path d="M12 4.4 20.6 7.2v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V7.2Z" fill="#41556c"/>' +
+    '<path d="M12 2.2 20.6 5v6.9c0 4.9-3.6 7.9-8.6 9.5-5-1.6-8.6-4.6-8.6-9.5V5Z" ' +
+      'fill="' + ICO_STEEL + '" ' + ICO_EDGE + '/>'),
+  last: ico('<path d="M12 3.6c3.4 4.6 6.4 7.2 6.4 11a6.4 6.4 0 0 1-12.8 0c0-3.8 3-6.4 6.4-11Z" fill="#1f5c86"/>' +
+    '<path d="M12 1.8c3.4 4.6 6.4 7.2 6.4 11a6.4 6.4 0 0 1-12.8 0c0-3.8 3-6.4 6.4-11Z" ' +
+      'fill="#7fb2ff" ' + ICO_EDGE + '/>'),
+  /* Everything the other three do not claim: gold, gathering, experience,
+     movement, range, cooldowns, a slow on hit. Written last on purpose — the
+     first cut of these lists came off the header comment at the top of the
+     PASSIVES table, which names fifteen stat keys and eight hooks, and the
+     table actually uses about sixty. 53 of the 100 fell through to this icon,
+     which is a star that means nothing. Measured, then widened. */
+  odd:  ico('<path d="M12 3.4 14.4 9.2 20.6 9.6 15.8 13.6 17.4 19.6 12 16.2 6.6 19.6 8.2 13.6 3.4 9.6 9.6 9.2Z" ' +
+    'fill="#a9741a"/>' +
+    '<path d="M12 1.8 14.4 7.6 20.6 8 15.8 12 17.4 18 12 14.6 6.6 18 8.2 12 3.4 8 9.6 7.6Z" ' +
+      'fill="#f7c53f" ' + ICO_EDGE + '/>'),
+};
+// One pass over the bag, keeping whichever group owns the most of its keys —
+// a passive that adds armour AND health is a "hold" without anybody saying so.
+function passGroup(id){
+  const p = PASS[id];
+  if (!p || !p.m) return 'odd';
+  let best = 'odd', bn = 0;
+  for (const g of Object.keys(PASS_GROUP)){
+    let n = 0;
+    for (const k of PASS_GROUP[g]) if (p.m[k] !== undefined) n++;
+    if (n > bn){ bn = n; best = g; }
+  }
+  return best;
+}
+// The icon for any option a hero can be offered, whatever kind it is.
+function optIcon(kind, id){
+  if (kind === 'passive' || (kind === 'rank' && id.startsWith('P:')))
+    return PASS_ICON[passGroup(kind === 'rank' ? id.slice(2) : id)] || PASS_ICON.odd;
+  const s = SKILL[kind === 'rank' ? id : id];
+  return (s && SKILL_TAG_ICON[s.tag]) || SKILL_TAG_ICON.dmg;
+}
+
 const SPELL_ICON = {
   /* A shell with its fuse lit — in DARK iron with a big flame, not in the
      steel the rest of them share. Bombard and Hobble are both a ball in the
@@ -15322,6 +15458,10 @@ function heroBarHtml(){
    is open. Two fields (one for "explained", one for "armed") would let the
    panel explain one order while Accept took a different one, which is the
    failure this shape cannot have.                                          */
+/* Which of the three offered options is open. Cosmetic and local, exactly
+   like spellUI: the two machines are not choosing together, and a hero's sheet
+   is a thing one player is reading. */
+const optUI = { at:null };
 const spellUI = {
   at:null,          // the order being read. NOT the order chosen.
   slot:0,           // which of the two a choice would fill
@@ -16424,33 +16564,63 @@ function showHeroCreate(){
   );
 }
 
-function optCard(h, kind, id, i){
+/* WHAT an option is, as the four things a card has to carry: its kicker, its
+   icon, its name and its one line of numbers. The prose moved out — see
+   optWhyHtml — because three descriptions side by side is three paragraphs to
+   read at every tier, for the whole match, and the choice is nearly always
+   between kinds rather than between sentences. */
+function optBits(h, kind, id){
   if (kind === 'passive'){
     const p = PASS[id];
-    return '<button class="pick" data-act="pick" data-i="' + i + '"><div class="pk">passive</div>' +
-      '<div class="pt">' + p.n + '</div><div class="pd">' + p.d + '</div></button>';
+    return { k:'passive', n:p.n, d:p.d, m:'' };
   }
   if (kind === 'rank'){
     if (id.startsWith('P:')){
       const p = PASS[id.slice(2)];
-      return '<button class="pick" data-act="pick" data-i="' + i + '"><div class="pk">rank ' + (h.passRank + 1) + '</div>' +
-        '<div class="pt">' + p.n + '</div><div class="pd">' + p.d + '</div><div class="pm">Strengthens the passive.</div></button>';
+      return { k:'rank ' + (h.passRank + 1), n:p.n, d:p.d, m:'Strengthens the passive.' };
     }
     const s = SKILL[id], own = h.skills.find(o => o.id === id);
-    return '<button class="pick" data-act="pick" data-i="' + i + '"><div class="pk">rank ' + (own.rank + 1) + '</div>' +
-      '<div class="pt">' + s.n + '</div><div class="pd">' + skNums(s, own.rank + 1) + '</div></button>';
+    return { k:'rank ' + (own.rank + 1), n:s.n, d:skNums(s, own.rank + 1), m:'' };
   }
   const s = SKILL[id];
-  return '<button class="pick" data-act="pick" data-i="' + i + '"><div class="pk">' + (s.ult ? 'ultimate' : s.cls === 'any' ? 'common' : s.cls) + '</div>' +
-    '<div class="pt">' + s.n + '</div><div class="pd">' + s.f + '</div>' +
-    '<div class="pm">' + skNums(s, 1) + ' · ' + s.cd + 's</div></button>';
+  return { k:s.ult ? 'ultimate' : s.cls === 'any' ? 'common' : s.cls, n:s.n, d:s.f,
+    m:skNums(s, 1) + ' · ' + s.cd + 's' };
+}
+function optCard(h, kind, id, i){
+  const b = optBits(h, kind, id);
+  const open = optUI.at === i;
+  return '<button class="pick opt' + (open ? ' at' : '') + '" data-act="pick" data-i="' + i +
+    '" title="' + esc(b.n + ' — ' + b.d) + '">' +
+    '<div class="pk">' + b.k + '</div>' + optIcon(kind, id) +
+    '<div class="pt">' + b.n + '</div>' +
+    (b.m ? '<div class="pm">' + b.m + '</div>' : '') + '</button>';
+}
+/* The one panel the three cards share. Same rule the commander orders use: a
+   hover or a first press OPENS one, and it takes a second press on the same
+   card — or Accept — to spend the level on it. Which matters more here than
+   there, because a hero's choice is permanent and there is no way back. */
+/* The grid AND its panel, together. They were built in three separate places
+   — the creation passive, a skill tier and a rank — and patching the panel
+   into one of them left the other two showing icons with nothing to read
+   them by, which is how the first version of this shipped a card you could
+   not find out about before pressing twice. */
+function picksHtml(h, kind, opts){
+  return '<div class="picks opts">' + opts.map((id, i) => optCard(h, kind, id, i)).join('') + '</div>' +
+    optWhyHtml(h, kind, opts);
+}
+function optWhyHtml(h, kind, opts){
+  const i = optUI.at;
+  if (!(i >= 0) || !opts[i]) return '<div class="ow none">Read one, then press it again to take it.</div>';
+  const b = optBits(h, kind, opts[i]);
+  return '<div class="ow"><b>' + b.n + '</b>' + (b.m ? '<i>' + b.m + '</i>' : '') +
+    '<div class="pd">' + b.d + '</div></div>';
 }
 
 function tierRow(h, label, level, kind, filled){
   const pend = h.pend[0];
   const active = pend && pend.kind === kind && (kind !== 'skill' || pend.lvl === level);
   let body;
-  if (active) body = '<div class="picks">' + pend.opts.map((id, i) => optCard(h, kind, id, i)).join('') + '</div>';
+  if (active) body = picksHtml(h, kind, pend.opts);
   else if (filled){
     const s = SKILL[filled.id];
     body = '<div class="chosen"><b>' + s.n + '</b> <span class="pips">' +
@@ -16508,8 +16678,8 @@ function showHeroSheet(h){
   const pend = h.pend[0];
   const passRow = (() => {
     if (pend && pend.kind === 'passive')
-      return '<div class="tier hot"><div class="tl">Creation (Passive)</div><div class="tb"><div class="picks">' +
-        pend.opts.map((id, i) => optCard(h, 'passive', id, i)).join('') + '</div></div></div>';
+      return '<div class="tier hot"><div class="tl">Creation (Passive)</div><div class="tb">' +
+        picksHtml(h, 'passive', pend.opts) + '</div></div>';
     const p = PASS[h.passive];
     return '<div class="tier"><div class="tl">Creation (Passive)</div><div class="tb"><div class="chosen"><b>' + (p ? p.n : '—') + '</b>' +
       ' <span class="pips">' + '●'.repeat(h.passRank) + '<span style="opacity:.3">' + '●'.repeat(C.MAX_HERO_RANK - h.passRank) + '</span></span>' +
@@ -16521,7 +16691,7 @@ function showHeroSheet(h){
   rows += tierRow(h, 'Level 12 (Ultimate)', C.ULT_LEVEL, 'ult', ult);
   const rankPend = pend && pend.kind === 'rank';
   rows += '<div class="tier' + (rankPend ? ' hot' : '') + '"><div class="tl">Skill Progression (15+)</div><div class="tb">' +
-    (rankPend ? '<div class="picks">' + pend.opts.map((id, i) => optCard(h, 'rank', id, i)).join('') + '</div>'
+    (rankPend ? picksHtml(h, 'rank', pend.opts)
       : '<div class="locked">A rank at levels ' + C.RANK_LEVELS.join(', ') + '. Next at ' +
         (C.RANK_LEVELS.find(l => l > h.lvl) || 'max') + '.</div>') + '</div></div>';
 
@@ -17041,7 +17211,13 @@ function pickAt(clientX, clientY){
   }
   const t = resolvePick(sx, sy);
   if (t.kind !== 'none') sfx('click');
-  if (t.kind === 'hero'){ sel.hero = t.hero; showHeroSheet(t.hero); return; }
+  if (t.kind === 'hero'){
+    // A fresh sheet opens with nothing read. Carrying the last hero's open
+    // card over would put a description under a card that is not the one it
+    // belongs to, and the SECOND press would then take a thing you never read.
+    if (sel.hero !== t.hero) optUI.at = null;
+    sel.hero = t.hero; showHeroSheet(t.hero); return;
+  }
   sel.node = t.kind === 'node' ? t.node : null;
   sel.tile = (t.kind === 'build' || t.kind === 'plot') ? t.tile : -1;
   sel.struct = t.kind === 'struct' ? t.struct : null;
@@ -17161,7 +17337,7 @@ function wire(){
     if (!b || b.disabled) return;
     if (b.dataset.hero){
       const h = s0().heroes.find(x => x.id === +b.dataset.hero);
-      if (h){ sel.hero = h; showHeroSheet(h); }
+      if (h){ if (sel.hero !== h) optUI.at = null; sel.hero = h; showHeroSheet(h); }
       return;
     }
     const s = s0(), a = b.dataset.act;
@@ -17202,7 +17378,15 @@ function wire(){
   $('sheet').addEventListener('pointerover', (e) => {
     if (e.pointerType && e.pointerType !== 'mouse') return;
     const t = e.target && e.target.closest && e.target.closest('[data-spell]');
-    if (t) spellLook(t.dataset.spell);
+    if (t){ spellLook(t.dataset.spell); return; }
+    // The same rule for a hero's three options. A mouse reads by hovering, so
+    // by the time it clicks the card is already open and the click is the
+    // second press — the reveal costs a mouse nothing at all.
+    const o = e.target.closest && e.target.closest('.pick.opt[data-i]');
+    if (o && optUI.at !== +o.dataset.i && sel.hero){
+      optUI.at = +o.dataset.i;
+      showHeroSheet(sel.hero);
+    }
   });
   $('modal').addEventListener('click', (e) => {
     if (e.target === $('modal')){ if (G.state === 'play') doAction('close'); return; }
@@ -17254,14 +17438,24 @@ function wire(){
       const err = sendCmd('hero', { cls:b.dataset.cls });
       if (err){ say(err); return; }
       const h = s0().heroes[s0().heroes.length - 1];
+      if (sel.hero !== h) optUI.at = null;
       sel.hero = h; showHeroSheet(h); syncUI();
     } else if (a === 'pick'){
       const h = sel.hero;
       if (!h) return;
+      const i = +b.dataset.i;
+      /* Reveal, then take. A hero's choice is permanent and there is no way
+         back from it, so a press that lands on a card you have not read is
+         the one press this sheet must not accept. The first opens it; the
+         second on the SAME card spends the level. On a mouse the hover has
+         usually opened it already, so the click that follows is the second
+         press and nothing feels slower. */
+      if (optUI.at !== i){ optUI.at = i; showHeroSheet(h); syncUI(); return; }
       // Keyed by hero id, not by the selection, because the two machines do not
       // share a selection — and by the time this runs on the other one, `sel`
       // there is pointing at whatever that player was looking at.
-      say(sendCmd('pick', { hero:h.id, opt:+b.dataset.i }));
+      say(sendCmd('pick', { hero:h.id, opt:i }));
+      optUI.at = null;
       showHeroSheet(h); syncUI();
     }
   });
@@ -18291,6 +18485,7 @@ window.IB = {
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
+  optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
