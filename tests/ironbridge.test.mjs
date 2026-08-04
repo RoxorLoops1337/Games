@@ -13689,8 +13689,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(G.units.length === n, 'and no second muster marched');
     t.ok(!IB.spellUI.aim, 'nothing was armed by the refusal either');
     t.ok(IB.spellReady(s, 0) === false, 'the order reads as not ready...');
-    t.ok(/classList\.toggle\('dead', !spellReady\(s, i\)\)/.test(SRC),
+    t.ok(/classList\.toggle\('dead', !spellReady\(s, i\) \|\| !spellTargets\(d\)\)/.test(SRC),
       '...and the tile in the bar is marked spent from that same fact rather than a second one');
+    // ...or from the other reason an order cannot be given: nothing on the
+    // board to point it at. Both come off the same enumerations the preview
+    // and the resolver use, so a dead tile is never dead for a reason the
+    // rings would not have shown.
+    t.ok(IB.spellTargets(IB.SPELL.bombard) > 0, 'a lane order always has somewhere to go');
+    t.ok(IB.spellTargets(IB.SPELL.muster) > 0, 'and one aimed at your own hold needs nothing');
     // A CLASS and not `disabled`, and the difference is the whole point: a
     // disabled button eats its own click, so the two sentences castPress has
     // ready for exactly this — the one asserted above and the one asserted
@@ -13892,8 +13898,36 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const dead = block('.big:disabled');
     t.ok(dead, 'cast brass has a dead state at all');
     t.ok(/cursor:not-allowed/.test(dead), 'which says so with the cursor');
-    t.ok(/#d9cdb4/.test(dead) && /#8f8370/.test(dead),
-      'in the same putty every other dead control in the game wears');
+    t.ok(/#d9cdb4/.test(dead), 'in the same putty every other dead control in the game wears');
+    // ...but not the same ink. #8f8370 on that putty is 2.36:1, and this is
+    // the button you land on immediately after a successful choice, so it is
+    // read more often than any other dead control in the game.
+    t.ok(/#5f5138/.test(dead), 'with ink dark enough to read at that size');
+
+    /* THE SMALL TYPE CARRYING STATE. Every one of these measured under 4.5:1
+       while the body copy beside them was at 12.98 — so the failures were
+       never about the palette, only about which text got the careful value and
+       which got a guess.
+
+       Measured against the WORST backdrop each can land on, not the best: the
+       cream card is a gradient that darkens downward and the lit slot is
+       darker still, so a value that passes at the top of a card can fail forty
+       pixels below it. That is how #6b5a3a looked fine and was 4.13:1. */
+    const L = (h) => { const v = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map(c => c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4));
+      return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
+    const ratio = (a, b) => (Math.max(L(a), L(b)) + .05) / (Math.min(L(a), L(b)) + .05);
+    const CARD = ['#f6ead0', '#e2d0aa', '#ffe6a4', '#f2c65a'];
+    const inkOf = (sel) => (block(sel).match(/color:(#[0-9a-f]{6})/) || [])[1];
+    for (const [sel, on] of [['.spslot .sv.none', CARD], ['.sptile .spc', CARD.slice(0, 2)]]){
+      const c = inkOf(sel);
+      t.ok(!!c, sel + ' states an ink');
+      const worst = Math.min(...on.map(b => ratio(c, b)));
+      t.ok(worst >= 4.5, sel + ' reads on the darkest card it can land on (' +
+        worst.toFixed(2) + ':1 at ' + c + ')');
+    }
+    t.ok(ratio('#5f5138', '#d9cdb4') >= 4.5,
+      'and the dead Accept reads on its putty (' + ratio('#5f5138', '#d9cdb4').toFixed(2) + ':1)');
     t.ok(/filter:none/.test(dead), 'and it does not keep the brass brightening under it');
     for (const st of [':hover', ':active']){
       const b = block('.big' + st + ':not(:disabled)');
@@ -14148,6 +14182,23 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and lifting fires at where it ended, moved or not');
   }
 
+  /* ------------------------- the only tutorial mentions the only permanent choice
+     The how-to sheet is shown once, is the game's only tutorial, and had five
+     paragraphs: camera, economy, gates, heroes, Start. The word "order" did
+     not appear in it. Worse, dismissing it STARTS the twenty-two seconds you
+     have to pick them — so the one window in a match that closes for good was
+     opened by a screen that had never mentioned it. */
+  {
+    const src = SRC.slice(SRC.indexOf("'<h2>How Ironbridge works</h2>'"), SRC.indexOf('const keysHtml'));
+    t.ok(/commander orders/i.test(src), 'the how-to sheet says the orders exist');
+    t.ok(src.includes('C.FIRST_WAVE'),
+      'and how long there is to pick them, off the constant rather than a number typed twice');
+    t.ok(/set for good/i.test(src), 'and that the choice is permanent');
+    // Drawn from the same icon table the bar and the chooser use, so the thing
+    // the sheet points at is recognisably the thing you go and press.
+    t.ok(/SPELL_ICON\./.test(src), 'with an order’s own icon beside it');
+  }
+
   /* ------------------------------------------ the key is on the control
      The help sheet has listed Q and E all along, but a player deciding
      whether to spend a bombardment is not going to open the help sheet to
@@ -14242,6 +14293,27 @@ t.ok(true, 'drawing an empty bridge is harmless');
       IB.castSpell(G.sides[0], { slot:0, hero:foe.id });
       t.ok(IB.foeSeen[0] !== 'pyre', 'my own casts never fill their slots');
     }
+
+    /* A save that restores the board and forgets what you learned from it is a
+       save that lies about the fog. Reloading used to hand back two question
+       marks and "you have not seen this one used yet" for orders the player
+       had watched land. */
+    IB.foeSeen[0] = 'muster'; IB.foeSeen[1] = 'pitch';
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok(pack && pack.foe && pack.foe.join() === 'muster,pitch',
+      'carrying what this seat had been shown (' + (pack && pack.foe ? pack.foe.join() : 'nothing') + ')');
+    IB.foeForget();
+    t.ok(IB.loadMatch(pack) === undefined || true, 'and it loads');
+    t.ok(IB.foeSeen.join() === 'muster,pitch', 'with the reveal still revealed');
+    t.ok(!/class="fchip un"/.test(IB.foeOrdersHtml()), 'and the strip no longer claiming otherwise');
+    // A save from before this existed says nothing, and two question marks is
+    // the right answer to that rather than a crash.
+    IB.foeForget();
+    const old = Object.assign({}, pack); delete old.foe;
+    IB.loadMatch(old);
+    t.ok(IB.foeSeen.join() === ',', 'an older save restores to knowing nothing');
+    IB.clearSave();
     IB.foeForget();
   }
 

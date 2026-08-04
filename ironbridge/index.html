@@ -924,11 +924,16 @@
      a run-on. */
   .spslot .sb{ min-width:0; display:block; text-align:left; }
   .spslot .sk{ display:block; font-size:var(--t1); letter-spacing:1.8px; text-transform:uppercase;
-    color:var(--gold); font-weight:700; line-height:1.3; }
+    color:#654a05; font-weight:700; line-height:1.3; }
   .spslot .sv{ display:block; font-family:var(--display); font-variant-caps:small-caps;
     font-size:var(--t5); font-weight:700; color:var(--cream-ink); letter-spacing:.3px;
     line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .spslot .sv.none{ color:#8f8370; font-style:italic; font-variant-caps:normal; font-size:var(--t3); }
+  /* "empty" is the whole "you have not chosen yet" signal and it measured
+     2.77:1 on its own card. Every colour touched in this block is small type
+     carrying STATE — the body copy beside them was already 12.98:1, so the
+     failures were never about the palette, only about which text got the
+     careful value and which got a guess. */
+  .spslot .sv.none{ color:#5a4a2c; font-style:italic; font-variant-caps:normal; font-size:var(--t3); }
 
   /* Three across, because there are nine of them. At four the ninth sat alone
      on a row of its own looking like an afterthought, which is exactly what a
@@ -941,7 +946,7 @@
   .sgh:first-child{ margin-top:0; }
   .sgh b{ font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t4);
     letter-spacing:.6px; color:var(--gold); font-weight:700; }
-  .sgh i{ font-style:normal; font-size:var(--t2); color:var(--dim2); }
+  .sgh i{ font-style:normal; font-size:var(--t2); color:#b5a686; }
   /* Their two, in the dock column that already describes what is walking at
      you. On felt rather than card, because this is a READING of the other side
      rather than a control — nothing here is pressable, and it should not
@@ -973,7 +978,9 @@
   .sptile .ico{ width:36px; height:36px; vertical-align:0; }
   .sptile .spn{ font-family:var(--display); font-variant-caps:small-caps; font-size:var(--t4);
     font-weight:700; color:var(--cream-ink); letter-spacing:.3px; text-align:center; line-height:1.15; }
-  .sptile .spc{ font-size:var(--t1); color:#7d6647; white-space:nowrap; }
+  /* The one figure the cards are compared on. 3.68:1 for a 10px number is
+     the wrong way round: the smaller the type, the more contrast it needs. */
+  .sptile .spc{ font-size:var(--t1); color:#63502f; white-space:nowrap; }
   .sptile:hover{ transform:translateY(-3px); border-color:var(--kraft); background:var(--raise-hi); }
   .sptile:active{ transform:translateY(0); box-shadow:inset 0 2px 6px rgba(0,0,0,.5); }
   /* Being read. NOT chosen — that takes a second press, or Accept. */
@@ -1076,7 +1083,7 @@
      nothing — and a refusal reads exactly like an invitation. Same putty as
      .abtn:disabled and .ord.dead, so "you cannot press this" is one look
      across the whole interface rather than eight. */
-  .big:disabled{ background:#d9cdb4; border:1px solid #bcae92; color:#8f8370;
+  .big:disabled{ background:#d9cdb4; border:1px solid #bcae92; color:#5f5138;
     text-shadow:none; cursor:not-allowed; filter:none;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.3), inset 0 2px 5px rgba(60,45,25,.2); }
   /* the network report — selectable, scrollable, monospaced, because it exists
@@ -9234,7 +9241,20 @@ function drawPitch(c){
    numbers that were written out twice — once here and once in the list the
    aim preview rings — which is exactly the arrangement where a gate quietly
    grows and one of the two forgets. */
-const structTall = (st) => st.key === 'gate' ? 60 : st.key === 'inhib' ? 34 : 44;
+/* How tall a structure is DRAWN, which is not the same as how tall its body
+   is. These are the numbers the health bar has always used to sit just above
+   each one, and they were the right ones all along — the aim preview and the
+   ward were using a second, shorter set, so Rampart's target ellipse covered
+   less than half the turret you can see. Measured: a click 40px above a
+   turret's centre, squarely on the tower, resolved to nothing and answered
+   "click one of your own structures".
+
+   `clickTargets` states the rule for every other clickable in the game — "what
+   you click is what you see. A building is drawn standing UP from its ground
+   cell, so testing the cell under the cursor misses the thing you actually
+   aimed at" — and the order resolver was the one place not following it. One
+   set of numbers now, read by the bar, the preview and the ward alike. */
+const structTall = (st) => st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84;
 const structWide = (st) => st.key === 'gate' ? 56 : 22;
 
 /* The third half of Rampart, and the one that was missing: masons for five
@@ -9566,7 +9586,7 @@ function drawStructure(c, st){
     }
   }
   if (!dead) drawStructMarks(c, st, X, Y, u);
-  if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
+  if (!dead) hpBar(c, X, Y - structTall(st) * cam.z, st, 44 * cam.z, true);
   else {
     if (st.downT > 0){
       c.fillStyle = '#d8c49a';
@@ -15332,6 +15352,15 @@ const AIM_SAID = {
   foebody: 'aimed at their hero or an ogre',
   struct:  'aimed at one of your structures',
 };
+// Why an order cannot be given at all, as opposed to where to point it. Keyed
+// by target the same way AIM_ASK is, and the suite requires every kind that
+// needs a target to have a sentence here.
+const NO_TARGET = {
+  own:     'No hero of yours is on the bridge.',
+  foe:     'Their hero is not on the bridge.',
+  foebody: 'Nothing of theirs on the bridge is worth burning.',
+  struct:  'Nothing of yours is standing to mend.',
+};
 const SLOT_NAME = ['first order', 'second order'];
 /* The keys that cast them. ONE list: the key handler reads it, the tile in the
    bar prints it, and the help sheet's line is checked against it — so the pip
@@ -15628,7 +15657,7 @@ function syncOrders(){
     // the two sentences castPress has ready — "still recovering, 41s" and "not
     // enough in the stores" — could then only ever be reached from Q and E.
     // A phone has no Q and no E, so on a phone the control simply went quiet.
-    if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i));
+    if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i) || !spellTargets(d));
   }
 }
 
@@ -15677,6 +15706,9 @@ function castPress(slot){
   if (!canPay(s, d.cost)){ say('Not enough in the stores for ' + d.n + '.'); return 'not enough resources'; }
   // Nothing to aim: it lands on your own hold and can go straight out.
   if (d.target === 'self'){ say(sendCmd('cast', { slot:slot })); return null; }
+  // ...and nothing to aim AT is a refusal with a reason rather than a
+  // crosshair over an empty board.
+  if (!spellTargets(d)){ say(NO_TARGET[d.target] || ('Nothing for ' + d.n + ' to work on.')); return 'no target'; }
   spellUI.aim = { slot:slot, id:d.id };
   syncAim();
   return null;
@@ -15697,6 +15729,25 @@ function castPress(slot){
    ONE enumeration, read by the resolver AND by the preview. A preview built
    from a second list is a preview that can ring a body the click will not
    take — which is worse than showing nothing, because it is a promise. */
+/* Is there anything on the board this order could be pointed at?
+
+   An order used to arm with zero possible targets and say nothing: banner up,
+   tile lit, crosshair cursor, and not one ring anywhere. Clicking then gave
+   "Nothing there — click their hero, or one of their Siege Ogres", which is
+   the banner read back at you. Worst for the two the chooser already captions
+   "nothing at all until you have one on the bridge" — the sheet knew, the bar
+   did not.
+
+   Same enumeration as the preview and the resolver, so a tile can only go
+   dead for a reason the rings would have shown. */
+const spellTargets = (d) => {
+  if (!d || d.target === 'point' || d.target === 'self') return 1;
+  const was = spellUI.aim;
+  spellUI.aim = { slot:0, id:d.id };
+  const n = spellAimCandidates().length;
+  spellUI.aim = was;
+  return n;
+};
 function spellAimCandidates(){
   const a = spellUI.aim;
   if (!a) return [];
@@ -15706,8 +15757,8 @@ function spellAimCandidates(){
       if (st.dead) continue;
       const p = lp(st.x, st.y);
       const tall = structTall(st);
-      out.push({ cx:p[0], cy:p[1] - tall * .5 * cam.z, rx:structWide(st) * cam.z,
-        ry:tall * .6 * cam.z, hit:{ key:st.key } });
+      out.push({ cx:p[0], cy:p[1] - tall * .48 * cam.z, rx:structWide(st) * cam.z,
+        ry:tall * .56 * cam.z, hit:{ key:st.key } });
     }
     return out;
   }
@@ -16681,6 +16732,15 @@ function showIntro(diff){
     '<div class="ib"><span class="ic">' + UI_ICON.mid + '</span><div><b>Heroes fight on their own.</b> You choose the build: a class, ' +
     'then one passive out of a hundred, a skill at levels 3, 6 and 9, an ultimate at 12. Tap a hero card ' +
     'to choose.</div></div>' +
+    /* The orders had no line here at all, and this sheet is the game's only
+       tutorial. Worse, dismissing it STARTS the twenty-two seconds you have to
+       pick them — so the one window in the match that closes for good was
+       opened by a screen that had never mentioned it. On a phone the only
+       other signal is two unlabelled gold chips in the top bar. */
+    '<div class="ib"><span class="ic">' + SPELL_ICON.bombard + '</span><div><b>Two commander orders.</b> Pick them in the next ' +
+    C.FIRST_WAVE + ' seconds, from nine — a bombardment, a retreat, a hero hauled home. ' +
+    'They belong to the hold rather than to a hero, they are set for good once the first wave marches, ' +
+    'and you cast them from the top bar' + (NARROW() ? '' : ' or with Q and E') + '.</div></div>' +
     '</div>' +
     '<div class="rowbtn"><button class="big" data-act="introgo" data-diff="' + diff + '">Start the match</button></div>');
 }
@@ -16768,6 +16828,14 @@ function saveMatch(){
       v:SAVE_VER, at:Date.now(), diff:G.diff.id, t:G.t, wave:G.wave, waveT:G.waveT,
       seed:_seed, sides:G.sides.map(packSide),
       units:G.units.filter(u => !u.isHero).map(packUnit),
+      // What this seat had SEEN of their orders. Not part of the board — the
+      // two machines in a live match are supposed to disagree about it, and
+      // netHash has never heard of it — but it is part of what the player
+      // knows, and reloading a save used to hand back two question marks and
+      // the words "you have not seen this one used yet" for orders they had
+      // watched land. A save that restores the board and forgets what you
+      // learned from it is a save that lies about the fog.
+      foe:foeSeen.slice(),
     }));
     return true;
   } catch (e){ return false; }
@@ -16785,6 +16853,10 @@ function loadMatch(pack){
   if (!pack) return 'no saved match';
   newMatch({ diff:pack.diff, seed:pack.seed || 1 });
   reseed(pack.seed || 1);
+  // AFTER newMatch, which clears it: a resumed match knows what this seat had
+  // already been shown. An older save simply has nothing to say, and two
+  // question marks is the right answer to that.
+  if (pack.foe) for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = SPELL[pack.foe[i]] ? pack.foe[i] : null;
   G.t = pack.t; G.wave = pack.wave; G.waveT = pack.waveT;
   pack.sides.forEach((ps, i) => {
     const s = G.sides[i];
@@ -18221,7 +18293,7 @@ window.IB = {
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
-  spellAimCandidates, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
+  spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
   speedOf, areaHit, statusTick, NET_REFS,
