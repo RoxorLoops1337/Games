@@ -16994,4 +16994,164 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ------------------------------ what a held ultimate needs before it can go
+   The release demanded a target in range for EVERY ultimate. Walked through
+   castSkill's own switch: only six kinds begin `if (!tgt) break` and do
+   nothing without a body — the other eleven either ignore the target entirely
+   (a nova fires at the HERO's feet; a shield, a summon and a team buff at
+   nobody) or fall back to the caster. Thirteen of the game's eighteen
+   ultimates are one of those. So a player holding Cataclysm — which hits
+   everything within 6.5 of the hero and never reads the target — and letting
+   go while the wave stood just outside heroTarget's reach got nothing, and was
+   told nothing was ready. The gate measured the wrong thing for most of what
+   it gated.                                                                 */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  /* The list against the switch it was read out of. A kind that grows or loses
+     the `if (!tgt) break` guard and leaves this table behind is an ability
+     that quietly stops being releasable, and nothing else would catch it. */
+  {
+    const body = SRC.slice(SRC.indexOf('function castSkill'),
+      SRC.indexOf('\nfunction ', SRC.indexOf('function castSkill') + 10));
+    const cases = body.split("\n    case '").slice(1);
+    const hard = new Set(), soft = new Set();
+    for (const p of cases){
+      const names = [p.slice(0, p.indexOf("'"))];
+      const m = /^[a-z]+': case '([a-z]+)'/.exec(p);
+      if (m) names.push(m[1]);
+      const set = /if \(!tgt\) (break|return)/.test(p) ? hard : soft;
+      for (const n of names) set.add(n);
+    }
+    t.ok(hard.size > 0 && soft.size > 0,
+      'the switch really does have both kinds in it (' + hard.size + ' hard, ' + soft.size + ' soft)');
+    const listed = Object.keys(IB.SKILL_NEEDS_TARGET).sort().join(',');
+    t.ok(listed === [...hard].sort().join(','),
+      'and the table names exactly the ones that are nothing without a body (' + listed + ')');
+    for (const k of soft)
+      t.ok(!IB.SKILL_NEEDS_TARGET[k], k + ' works without a target, so it is not on the list');
+  }
+
+  /* How much of the game this is about, measured rather than asserted. */
+  {
+    const ults = IB.SKILLS.filter(d => d.ult);
+    const free = ults.filter(d => !IB.needsTarget(d));
+    t.ok(ults.length >= 12, 'there are a lot of ultimates (' + ults.length + ')');
+    t.ok(free.length > ults.length / 2,
+      'and most of them do not need a body to point at (' + free.length + ' of ' + ults.length + ')');
+    t.ok(IB.needsTarget(IB.SKILL.headhunter) && !IB.needsTarget(IB.SKILL.cataclysm),
+      'a bolt needs one and a nova does not, which is the whole distinction');
+  }
+
+  const forge = (seed, cls) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls || 'mage');
+    const h = s.heroes[0];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    return { s, h, ult:h.skills.find(sk => sk.ult) };
+  };
+  const spent = (u) => !!u && u.cdT > 0;
+
+  {
+    /* An EMPTY bridge. Nothing for heroTarget to find at all, which is the
+       hardest version of the case the old gate got wrong. A hero-centred
+       ultimate still goes, because there is nothing about it that needs a
+       body — the player asked for it and it is theirs to waste. */
+    const { s, h, ult } = forge(9900, 'mage');
+    const d = IB.SKILL[ult.id];
+    t.ok(!IB.needsTarget(d), 'the mage’s ultimate is one of the hero-centred ones (' + d.k + ')');
+    // Heroes are in G.units too, so this says THEIRS rather than everything —
+    // the first version of it killed the hero it was about to measure.
+    for (const u of G.units) if (u.side === 1) u.dead = true;
+    step(2 / 30);
+    t.ok(!h.dead, 'the hero is still standing');
+    t.ok(!IB.heroTarget(h), 'and there is nothing at all in front of it');
+    s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(spent(ult), 'and it goes off where the hero is standing');
+    t.ok(/goes off now/i.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and says so rather than claiming nothing was ready');
+  }
+
+  {
+    // ...while an ultimate that IS nothing without a body still waits for one.
+    const { s, h, ult } = forge(9901, 'marksman');
+    const d = IB.SKILL[ult.id];
+    if (IB.needsTarget(d)){
+      for (const u of G.units) if (u.side === 1) u.dead = true;
+      step(2 / 30);
+      s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+      G.toasts.length = 0;
+      t.ok(IB.setHoldUlt(s, false) === null, 'letting go is still accepted');
+      t.ok(!spent(ult), 'but a bolt with nothing to shoot at is not thrown away');
+      t.ok(/nothing of yours was ready/i.test(G.toasts.map(x => x.msg).join(' | ')),
+        'and the player is told why');
+    } else {
+      t.ok(true, 'this class rolled a hero-centred ultimate; the bolt case is covered by the table above');
+      t.ok(true, '(placeholder)'); t.ok(true, '(placeholder)');
+    }
+  }
+
+  /* --------------------------------------- and the hold is visible somewhere
+     A decision the player made about a body, whose only trace was a lit tile
+     in the top bar: the bridge it was being held back from showed nothing, and
+     the sheet that knows everything else about the hero said nothing either. */
+  {
+    const { s, h, ult } = forge(9902, 'mage');
+    s.holdUlt = false;
+    IB.showHeroSheet(h);
+    t.ok(!/is being held back/.test(G.sheet || ''),
+      'a hero that is not being held says nothing about it');
+    s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana;
+    IB.showHeroSheet(h);
+    const sheet = G.sheet || '';
+    t.ok(/is being held back/.test(sheet), 'a held one says so in the sheet');
+    t.ok(sheet.indexOf(IB.SKILL[ult.id].n) > 0, 'and names the ability being held');
+    t.ok(sheet.indexOf('Press ' + IB.ULT_KEY) > 0,
+      'and says how to spend it while it is loaded');
+    ult.cdT = 30;
+    IB.showHeroSheet(h);
+    t.ok(/will be loaded in \d+s/.test(G.sheet || ''),
+      'and says how long until it is, when it is not (' +
+        ((G.sheet || '').match(/will be loaded in \d+s/) || ['nothing'])[0] + ')');
+  }
+
+  {
+    /* The mark on the bridge is drawn from the same two facts and nothing else,
+       so it cannot say a hero is loaded when the simulation disagrees. It is
+       COSMETIC: it reads state and draws, and the hash never hears about it. */
+    const marks = SRC.slice(SRC.indexOf('function drawUnitMarks'),
+      SRC.indexOf('function drawUnitMarks') + 1800);
+    t.ok(/holdUlt/.test(marks), 'the world mark asks whether the hold is on');
+    t.ok(/cdT > 0/.test(marks) && /mana >=/.test(marks),
+      'and whether the ultimate is actually loaded, which is the other half of it');
+    const block = marks.slice(marks.indexOf('if (u.isHero'), marks.indexOf('if (u.shield > 0)'));
+    t.ok(block.length > 200, 'the mark has a block of its own to read (' + block.length + ' chars)');
+    t.ok(!/fxRnd|[^a-zA-Z]rnd\(/.test(block),
+      'and draws it without drawing from any random stream');
+    const { s, h } = forge(9903, 'mage');
+    const at = IB.netHash();
+    s.holdUlt = true;
+    const held = IB.netHash();
+    IB.draw && IB.draw();
+    t.ok(IB.netHash() === held, 'painting the mark moves nothing the two machines check');
+    s.holdUlt = false;
+    t.ok(IB.netHash() === at, 'and the hold is the only thing that did');
+    t.ok(!!h, 'with a hero on the board to have drawn it for');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();

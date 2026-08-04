@@ -285,6 +285,8 @@
      the same kind of fact: something is being kept back for you to spend. The
      ready ring is the second half of it: held with nothing banked yet is not
      the same state as held with an ultimate waiting, and the tile says which. */
+  .tier.held{ border-color:#c08f1d; }
+  .tier.held .tl{ color:#8a6a1e; }
   .ord.ult.on{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
   .ord.ult.on.ready{ box-shadow:0 0 0 1px #ffe6a4 inset, 0 0 9px rgba(255,214,110,.55); }
   .ord.pickme{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
@@ -4742,6 +4744,23 @@ function skillArmed(h, sk){
   return !!s && !(sk.cdT > 0) && h.mana >= s.mana;
 }
 const heroArmed = (h) => (h.skills || []).some(sk => skillArmed(h, sk));
+
+/* WHICH abilities are nothing without a body to point at. Walked out of
+   castSkill's own switch rather than guessed: these six begin `if (!tgt) break`
+   and do nothing whatever without one, while the other eleven kinds either
+   ignore the target completely (a nova fires at the HERO's feet, a shield and a
+   summon at nobody) or fall back to the caster themselves. A test holds this
+   list against that switch, because a kind that grows or loses the guard and
+   leaves this behind is an ability that silently stops being releasable.
+
+   It matters because the release used to demand a target in range for ALL of
+   them. Thirteen of the game's eighteen ultimates are hero-centred, self or
+   team — Cataclysm hits everything within 6.5 of the hero and does not read the
+   target at all — so a player holding one and letting go while the wave stood
+   just outside heroTarget's reach got nothing, and was told nothing was ready.
+   The gate was measuring the wrong thing for most of the abilities it gated. */
+const SKILL_NEEDS_TARGET = { bolt:1, chain:1, hook:1, mark:1, strike:1, volley:1 };
+const needsTarget = (d) => !!(d && SKILL_NEEDS_TARGET[d.k]);
 
 /* Spending one. Pulled out of castLoop because the release needs the very same
    four lines, and a second copy of them is a second place for the mana, the
@@ -10856,6 +10875,43 @@ const spanN = (a, b, f) => Math.round(a + (b - a) * clamp(f, 0, 1));
 
 function drawUnitMarks(c, u, bx, by, p, sc){
   const col = SIDE_COL[u.side];
+  /* A hero holding a loaded ultimate. The hold is a decision the player made
+     about this body, and until now the only trace of it was a lit tile in the
+     top bar — so the thing being held back was invisible on the bridge it was
+     being held back from, and "which of my two is actually loaded" had no
+     answer short of opening a sheet.
+
+     Cosmetic to the last pixel: it reads holdUlt and a cooldown the simulation
+     already agreed about, draws, and tells nobody. The pulse is off G.t, which
+     is the match clock both machines share — not fxRnd, because there is
+     nothing random about it. */
+  if (u.isHero && !u.dead && (G.sides[u.side] || {}).holdUlt){
+    const sk = (u.skills || []).find(x => x.ult);
+    if (sk && !(sk.cdT > 0) && u.mana >= (SKILL[sk.id] || {}).mana){
+      /* At the shoulder, not over the head. Centred above the body it landed
+         squarely under the name plate and the two bars — which are painted
+         after this layer — and a 13px flourish behind them read as a smudge
+         rather than a token. Off to the side it has clear air at every zoom. */
+      const puls = .72 + .28 * Math.sin(G.t * 3.4);
+      const y = by - 11 * sc, r = 2.2 * sc;
+      c.globalAlpha = .34 * puls;
+      ell(c, bx - 9 * sc, y, r * 2.2, r * 2.2, '#ffd98a');
+      c.globalAlpha = puls;
+      c.fillStyle = '#ffe6a4';
+      c.strokeStyle = 'rgba(60,40,10,.75)';
+      c.lineWidth = Math.max(1, 1.1 * cam.z);
+      // the same four-pointed flourish the tile and the ult pip wear
+      const mx = bx - 9 * sc;
+      c.beginPath();
+      c.moveTo(mx, y - r * 2.1);
+      c.quadraticCurveTo(mx + r * .34, y - r * .34, mx + r * 2.1, y);
+      c.quadraticCurveTo(mx + r * .34, y + r * .34, mx, y + r * 2.1);
+      c.quadraticCurveTo(mx - r * .34, y + r * .34, mx - r * 2.1, y);
+      c.quadraticCurveTo(mx - r * .34, y - r * .34, mx, y - r * 2.1);
+      c.closePath(); c.fill(); c.stroke();
+      c.globalAlpha = 1;
+    }
+  }
   // A shield is a thing that BREAKS, so it reads as a surface rather than a
   // smudge — and it flickers harder as it runs out of time.
   if (u.shield > 0){
@@ -17082,6 +17138,20 @@ function showHeroSheet(h){
   let rows = passRow;
   C.SKILL_TIERS.forEach((lv, i) => { rows += tierRow(h, 'Level ' + lv + ' Skill', lv, 'skill', basics[i]); });
   rows += tierRow(h, 'Level 12 (Ultimate)', C.ULT_LEVEL, 'ult', ult);
+  /* The sheet knew everything about the ultimate except the one thing the
+     player had decided about it. A hold set from the top bar left this view —
+     the most detailed thing the game shows about a hero — saying nothing at
+     all, so the answer to "why has it not gone off" was not here. */
+  if (ult && G.sides[h.side] && G.sides[h.side].holdUlt){
+    const ud = SKILL[ult.id];
+    const ready = !(ult.cdT > 0) && h.mana >= (ud ? ud.mana : 0);
+    rows += '<div class="tier held"><div class="tl">Held</div><div class="tb"><div class="chosen">' +
+      '<b>' + (ud ? ud.n : 'The ultimate') + ' is being held back.</b>' +
+      '<div class="pd">' + (ready
+        ? 'It is loaded and waiting. Press ' + ULT_KEY + ', or the lit tile in the top bar, to spend it.'
+        : 'It will be loaded in ' + Math.ceil(ult.cdT) + 's, and will wait for you then.') +
+      '</div></div></div></div>';
+  }
   const rankPend = pend && pend.kind === 'rank';
   rows += '<div class="tier' + (rankPend ? ' hot' : '') + '"><div class="tl">Skill Progression (15+)</div><div class="tb">' +
     (rankPend ? picksHtml(h, 'rank', pend.opts)
@@ -18104,8 +18174,12 @@ function setHoldUlt(s, on){
     if (!sk || !skillArmed(h, sk)) continue;
     const d = SKILL[sk.id];
     const tgt = heroTarget(h);
-    if (!tgt) continue;
-    if (hyp(tgt.x - h.x, tgt.y - h.y) > (d.rng || h.rng + 2) + (tgt.r || 0)) continue;
+    // Only the abilities that are nothing without a body have to find one. The
+    // rest go off where the hero is standing, which is the whole point of them.
+    if (needsTarget(d)){
+      if (!tgt) continue;
+      if (hyp(tgt.x - h.x, tgt.y - h.y) > (d.rng || h.rng + 2) + (tgt.r || 0)) continue;
+    }
     fireSkill(h, sk, tgt);
     n++;
   }
@@ -18953,7 +19027,8 @@ window.IB = {
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
-  ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
+  SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
