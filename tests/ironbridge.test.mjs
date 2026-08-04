@@ -17833,4 +17833,65 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ------------------------------ the two hero orders, and why they stay rare
+   The usage sweep that caught Brace also showed Unbind drafted two or three
+   times in twenty matches and Warp Banner four, against eight to twelve for
+   everything else — because both carry ai.w:1 and SPELL_OWN_HERO allows at
+   most one of them in a hand. That looked like the same shape of defect, so it
+   was measured the same way, and the measurement came back the other way: the
+   design is right and this block is here so nobody re-litigates it blind.
+
+     every hold forges a hero eventually        100% of 28
+     median arrival                             271s, in a match of about 480
+     a side HAS a hero                          42% of sampled ticks
+     ...with one in the lane                    37.4%
+     Warp Banner's moment holds                 3.6%
+     Unbind's moment holds                      0.4%
+
+   Orders are chosen in the opening twenty-two seconds. A hero turns up after
+   the halfway mark, so a slot spent on one of these sleeps through most of the
+   match — which is exactly what a weight of 1 is for. And Unbind's 0.4% is not
+   Brace's 1.3%: Brace wanted a state that barely existed for a reason
+   unrelated to what it did, while Unbind is a CLEANSE and a rare gate is its
+   whole purpose. Drafted, it still fires about once a draft.                */
+{
+  const own = IB.SPELLS.filter(d => IB.SPELL_OWN_HERO[d.id]);
+  t.ok(own.length === 2, 'two of the orders need a hero of your own (' +
+    own.map(d => d.n).join(', ') + ')');
+  t.ok(own.every(d => d.ai.w === 1),
+    'and both are drafted at the lowest weight in the set');
+  const rest = IB.SPELLS.filter(d => !IB.SPELL_OWN_HERO[d.id]);
+  t.ok(rest.every(d => d.ai.w > 1),
+    'which nothing else is — everything else works the moment it is given');
+  t.ok(own.every(d => d.grp === 'mine'),
+    'they are the whole of one chooser group, so the sheet can warn about them together');
+
+  // ...and the warning carries the timing now, because the timing IS the
+  // decision: "nothing until you have one" is true and says nothing about when.
+  const g = IB.SPELL_GROUPS.find(x => x.k === 'mine');
+  t.ok(/fourth minute/.test(g.d),
+    'and the group says when a hero actually turns up (' + g.d + ')');
+
+  /* The cap holds too: a commander cannot walk into a match carrying BOTH of
+     them, which would be a hand that does nothing until the fourth minute. */
+  {
+    const seat0 = IB.MY;
+    let bothAtOnce = 0, rounds = 0;
+    for (let seed = 6000; seed < 6040; seed++){
+      IB.netEnd();
+      IB.newMatch({ diff:'veteran', seed });
+      for (const s of G.sides){
+        rounds++;
+        const held = s.spells.filter(Boolean);
+        if (held.filter(id => IB.SPELL_OWN_HERO[id]).length > 1) bothAtOnce++;
+      }
+    }
+    t.ok(rounds > 40, 'a lot of drafted hands to look at (' + rounds + ')');
+    t.ok(bothAtOnce === 0,
+      'and not one of them carries both hero orders (' + bothAtOnce + ' of ' + rounds + ')');
+    IB.MY = seat0;
+    IB.netEnd();
+  }
+}
+
 t.done();
