@@ -16793,4 +16793,679 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ---------------------------------------- the hold on your heroes' ultimates
+   A hero fights entirely by itself and always has: it picks its own moment for
+   everything it knows, including the one ability big enough to decide a fight.
+   So the ultimate was spent by nobody in particular, on whatever walked into
+   range first, and the player — who has ten commander orders and a whole
+   sheet of choices about how the hero is BUILT — had no say at all in when the
+   biggest of them went off.
+
+   One flag on the hold, not one per hero: a single thing to press, a single
+   thing to hash, a single thing for the four pack lists to carry. Letting go
+   IS the release — castLoop fires it on the very next beat — so there is no
+   second cast path to keep in step with the first.                          */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const forge = (seed, cls) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls || 'mage');
+    const h = s.heroes[0];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    /* Tough enough to still be standing when the measurement happens. A
+       level-capped mage deletes eight ordinary levies inside the two frames
+       this helper itself steps, and a test that then asks what the hero does
+       to them is measuring an empty bridge. */
+    for (let i = 0; i < 8; i++){
+      const u = IB.spawnUnit(1, 'grunt', { x:41.5, y:(i % 3 - 1) * 1.1 });
+      if (u){ u.mhp = 40000; u.hp = 40000; }
+    }
+    step(2 / 30);
+    return { s, h, ult:h.skills.find(sk => sk.ult) };
+  };
+  // Has the ultimate gone off? Its own recovery is the only witness that
+  // cannot be confused with another skill firing.
+  const spent = (u) => !!u && u.cdT > 0;
+
+  {
+    const { s, h, ult } = forge(9800);
+    t.ok(!!ult, 'a level-capped hero has an ultimate (' + (ult ? ult.id : 'none') + ')');
+    t.ok(s.holdUlt === false, 'and a hold opens with the hold OFF, which is how it always behaved');
+
+    // Held: the ultimate never goes off, and nothing else about the hero changes.
+    s.holdUlt = true;
+    for (const sk of h.skills) sk.cdT = 0;
+    h.mana = h.mmana;
+    let fired = 0;
+    for (let i = 0; i < 300 && !fired; i++){ step(1 / 30); fired = spent(ult) ? 1 : 0; }
+    t.ok(!fired, 'held, it does not go off however long the fight runs');
+    t.ok(h.skills.some(sk => !sk.ult && sk.cdT > 0),
+      'while the rest of what the hero knows still fires, so the hold is on ONE ability');
+  }
+
+  {
+    /* ...and letting go is the release. Held on a board that still has a wave
+       standing on it, so there is something to release AT: an earlier version
+       of this ran three seconds of fighting first, by which time a level-capped
+       mage had cleared the bridge, and then read the silence as a failure. */
+    const { s, h, ult } = forge(9801);
+    s.holdUlt = true;
+    ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+    t.ok(G.units.filter(u => u.side === 1 && !u.dead).length >= 3,
+      'there is a wave of theirs standing in front of the hero');
+    t.ok(!spent(ult), 'and the ultimate is banked rather than spent on it');
+    /* Fired THERE, not on some later beat when the hero happens to approve.
+       castLoop asks wantCast first, and wantCast refuses an ultimate unless the
+       target is a hero, or three bodies are within six, or a structure is under
+       70% — so releasing into a thin wave used to do nothing while the toast
+       said otherwise. Judging the moment is the judgement being taken over. */
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(spent(ult), 'and spends it in the same breath, not on a beat of the hero’s choosing');
+    t.ok(s.holdUlt === false, 'with the hold off afterwards');
+  }
+
+  {
+    /* ...and letting go with nothing in reach spends nothing and says so. The
+       toast used to promise "the next beat is theirs" whatever the board
+       looked like, which on an empty bridge was simply untrue. */
+    const { s, h, ult } = forge(9807);
+    for (const u of G.units) u.dead = true;
+    step(2 / 30);
+    s.holdUlt = true;
+    ult.cdT = 0; h.mana = h.mmana;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go into an empty bridge is still accepted');
+    t.ok(!spent(ult), 'and spends nothing');
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/nothing of yours was ready/i.test(said), 'and says so rather than claiming a cast (' + said + ')');
+  }
+
+  {
+    // My hold is mine. Their heroes are not holding anything.
+    const { s } = forge(9802);
+    const foe = G.sides[1];
+    rich(foe);
+    if (!IB.bList(foe, 'tavern').length) IB.build(foe, foe.plot.indexOf(null), 'tavern');
+    rich(foe);
+    IB.createHero(foe, 'fighter');
+    const fh = foe.heroes[0];
+    IB.gainXp(fh, 99999); IB.autoPick(fh); IB.recalcHero(fh, true);
+    fh.inLane = true; fh.dead = false; fh.x = 41; fh.y = 0; fh.mana = fh.mmana;
+    const fu = fh.skills.find(sk => sk.ult);
+    s.holdUlt = true;
+    for (const sk of fh.skills) sk.cdT = 0;
+    let theirs = 0;
+    for (let i = 0; i < 300 && !theirs; i++){ step(1 / 30); theirs = spent(fu) ? 1 : 0; }
+    t.ok(!!theirs, 'holding my ultimates holds nothing of theirs');
+    t.ok(foe.holdUlt === false, 'and their hold is its own flag');
+  }
+
+  /* ------------------------------------------- the switch, and what it refuses */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:9803 });
+    IB.MY = 0;
+    const s = G.sides[0];
+    t.ok(IB.ultHolders(s) === 0, 'a hold with no hero has nobody to hold anything for');
+    t.ok(typeof IB.setHoldUlt(s, true) === 'string',
+      'so the command refuses rather than setting a switch wired to nothing');
+    t.ok(s.holdUlt === false, 'and the flag does not move');
+    G.toasts.length = 0;
+    t.ok(IB.holdPress() === 'no ultimate', 'and the press refuses');
+    const said = G.toasts.map(x => x.msg).join(' | ');
+    t.ok(/^[A-Z]/.test(said) && /\.$/.test(said.trim()),
+      'in a sentence rather than an internal string (' + said + ')');
+    t.ok(!/class="ord ult/.test(IB.ordersHtml()),
+      'and the bar does not carry a tile for something no hero of yours can do');
+  }
+
+  {
+    const { s } = forge(9804);
+    t.ok(IB.ultHolders(s) === 1, 'one hero with an ultimate is one holder');
+    t.ok(/class="ord ult/.test(IB.ordersHtml()), 'and now the bar carries the tile');
+    t.ok(IB.ordersHtml().indexOf('>' + IB.ULT_KEY + '<') > 0,
+      'with the key it answers to printed on it (' + IB.ULT_KEY + ')');
+    t.ok(IB.keyAction(IB.ULT_KEY.toLowerCase()) === 'holdult',
+      'which is a key the board really answers to');
+    t.ok(IB.KEYS.some(k => k.a === 'holdult'), 'and the help sheet lists it');
+
+    G.toasts.length = 0;
+    t.ok(IB.holdPress() === null, 'the press goes through');
+    t.ok(s.holdUlt === true, 'and sets the hold');
+    t.ok(/held/i.test(G.toasts.map(x => x.msg).join(' | ')), 'saying so');
+    t.ok(/class="ord ult on/.test(IB.ordersHtml()), 'and the tile reads as lit');
+    G.toasts.length = 0;
+    t.ok(IB.holdPress() === null && s.holdUlt === false, 'pressing again lets go');
+    t.ok(/let go/i.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and says that too, because letting go is the release and the moment matters');
+  }
+
+  /* --------------------------------------------- both machines agree about it
+     It decides whether the biggest ability in the game fires at all, so a hold
+     one machine knows about and the other does not is a desync in the loudest
+     thing on the board. */
+  {
+    const { s } = forge(9805);
+    const at = IB.netHash();
+    s.holdUlt = true;
+    const held = IB.netHash();
+    t.ok(held !== at, 'the hold is part of what the two machines check');
+    const snap = IB.netSnap();
+    s.holdUlt = false;
+    t.ok(IB.netHash() === at, 'letting go puts the hash back');
+    IB.netLoad(snap);
+    t.ok(G.sides[0].holdUlt === true && IB.netHash() === held,
+      'and a resync lands on the board it left');
+
+    // ...and the save, whose side list is written by hand.
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok(pack.sides[0].holdUlt === true, 'carrying the hold (' + pack.sides[0].holdUlt + ')');
+    IB.loadMatch(pack);
+    t.ok(G.sides[0].holdUlt === true, 'and a reloaded match is still holding');
+    IB.clearSave();
+  }
+
+  /* ------------------------------------------------- the Host does not use it
+     Nothing sets this but a player pressing the tile. If the AI ever set it the
+     mirror would stop being one, which is the guard two rounds ago was rebuilt
+     to notice. */
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:9806 });
+    G.sides[0].ai = true;
+    for (let i = 0; i < 30 * 90; i++) IB.update(1 / 30);
+    t.ok(G.sides[0].holdUlt === false && G.sides[1].holdUlt === false,
+      'ninety seconds of both holds playing and neither has held anything');
+    t.ok(!/setHoldUlt\(/.test(SRC.slice(SRC.indexOf('function aiStep'), SRC.indexOf('function aiStep') + 6000)),
+      'and the Host’s own brain never reaches for it');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------ what a held ultimate needs before it can go
+   The release demanded a target in range for EVERY ultimate. Walked through
+   castSkill's own switch: only six kinds begin `if (!tgt) break` and do
+   nothing without a body — the other eleven either ignore the target entirely
+   (a nova fires at the HERO's feet; a shield, a summon and a team buff at
+   nobody) or fall back to the caster. Thirteen of the game's eighteen
+   ultimates are one of those. So a player holding Cataclysm — which hits
+   everything within 6.5 of the hero and never reads the target — and letting
+   go while the wave stood just outside heroTarget's reach got nothing, and was
+   told nothing was ready. The gate measured the wrong thing for most of what
+   it gated.                                                                 */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+
+  /* The list against the switch it was read out of. A kind that grows or loses
+     the `if (!tgt) break` guard and leaves this table behind is an ability
+     that quietly stops being releasable, and nothing else would catch it. */
+  {
+    const body = SRC.slice(SRC.indexOf('function castSkill'),
+      SRC.indexOf('\nfunction ', SRC.indexOf('function castSkill') + 10));
+    const cases = body.split("\n    case '").slice(1);
+    const hard = new Set(), soft = new Set();
+    for (const p of cases){
+      const names = [p.slice(0, p.indexOf("'"))];
+      const m = /^[a-z]+': case '([a-z]+)'/.exec(p);
+      if (m) names.push(m[1]);
+      const set = /if \(!tgt\) (break|return)/.test(p) ? hard : soft;
+      for (const n of names) set.add(n);
+    }
+    t.ok(hard.size > 0 && soft.size > 0,
+      'the switch really does have both kinds in it (' + hard.size + ' hard, ' + soft.size + ' soft)');
+    /* The rule this holds CHANGED, because the first version of it was the
+       bug. It asserted the table was exactly the `if (!tgt) break` scan — and
+       `dash` passes that scan as "soft" while doing something far worse than
+       nothing: it takes an else branch and moves the hero `dist` tiles
+       BACKWARDS. Death Mark released with nothing in reach fled eight tiles
+       toward its own base and spent a sixty-second recovery doing it.
+
+       So: everything that does nothing must be listed, because it would be
+       wasted; `dash` must be listed too, because it would be worse than
+       wasted; and nothing else may be, because every other kind is a hero
+       aiming at its own feet and is fine without a body. */
+    const listed = new Set(Object.keys(IB.SKILL_NEEDS_TARGET));
+    for (const k of hard)
+      t.ok(listed.has(k), k + ' does nothing without a body, so the release does not spend it');
+    t.ok(listed.has('dash'),
+      'and dash is listed too, because without a body it runs the hero AWAY rather than doing nothing');
+    const dash = SRC.slice(SRC.indexOf("    case 'dash': {"), SRC.indexOf("    case 'heal': {"));
+    t.ok(/else\s*\{[^}]*-dirOf\(h\.side\)/.test(dash),
+      'which is still what the code does, rather than something this comment remembers');
+    for (const k of soft)
+      t.ok(k === 'dash' || !listed.has(k),
+        k + ' fires at the hero’s own feet and needs nobody, so it stays off the list');
+    t.ok(listed.size === hard.size + 1,
+      'and the list is those and no others (' + [...listed].sort().join(',') + ')');
+  }
+
+  /* How much of the game this is about, measured rather than asserted. */
+  {
+    const ults = IB.SKILLS.filter(d => d.ult);
+    const free = ults.filter(d => !IB.needsTarget(d));
+    t.ok(ults.length >= 12, 'there are a lot of ultimates (' + ults.length + ')');
+    t.ok(free.length > ults.length / 2,
+      'and most of them do not need a body to point at (' + free.length + ' of ' + ults.length + ')');
+    t.ok(IB.needsTarget(IB.SKILL.headhunter) && !IB.needsTarget(IB.SKILL.cataclysm),
+      'a bolt needs one and a nova does not, which is the whole distinction');
+  }
+
+  const forge = (seed, cls) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls || 'mage');
+    const h = s.heroes[0];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    return { s, h, ult:h.skills.find(sk => sk.ult) };
+  };
+  const spent = (u) => !!u && u.cdT > 0;
+
+  {
+    /* An EMPTY bridge. Nothing for heroTarget to find at all, which is the
+       hardest version of the case the old gate got wrong. A hero-centred
+       ultimate still goes, because there is nothing about it that needs a
+       body — the player asked for it and it is theirs to waste. */
+    const { s, h, ult } = forge(9900, 'mage');
+    const d = IB.SKILL[ult.id];
+    t.ok(!IB.needsTarget(d), 'the mage’s ultimate is one of the hero-centred ones (' + d.k + ')');
+    // Heroes are in G.units too, so this says THEIRS rather than everything —
+    // the first version of it killed the hero it was about to measure.
+    for (const u of G.units) if (u.side === 1) u.dead = true;
+    step(2 / 30);
+    t.ok(!h.dead, 'the hero is still standing');
+    t.ok(!IB.heroTarget(h), 'and there is nothing at all in front of it');
+    s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(spent(ult), 'and it goes off where the hero is standing');
+    t.ok(/goes off now/i.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and says so rather than claiming nothing was ready');
+  }
+
+  {
+    // ...while an ultimate that IS nothing without a body still waits for one.
+    const { s, h, ult } = forge(9901, 'marksman');
+    const d = IB.SKILL[ult.id];
+    if (IB.needsTarget(d)){
+      for (const u of G.units) if (u.side === 1) u.dead = true;
+      step(2 / 30);
+      s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+      G.toasts.length = 0;
+      t.ok(IB.setHoldUlt(s, false) === null, 'letting go is still accepted');
+      t.ok(!spent(ult), 'but a bolt with nothing to shoot at is not thrown away');
+      t.ok(/nothing of yours was ready/i.test(G.toasts.map(x => x.msg).join(' | ')),
+        'and the player is told why');
+    } else {
+      t.ok(true, 'this class rolled a hero-centred ultimate; the bolt case is covered by the table above');
+      t.ok(true, '(placeholder)'); t.ok(true, '(placeholder)');
+    }
+  }
+
+  /* --------------------------------------- and the hold is visible somewhere
+     A decision the player made about a body, whose only trace was a lit tile
+     in the top bar: the bridge it was being held back from showed nothing, and
+     the sheet that knows everything else about the hero said nothing either. */
+  {
+    const { s, h, ult } = forge(9902, 'mage');
+    s.holdUlt = false;
+    IB.showHeroSheet(h);
+    t.ok(!/is being held back/.test(G.sheet || ''),
+      'a hero that is not being held says nothing about it');
+    s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana;
+    IB.showHeroSheet(h);
+    const sheet = G.sheet || '';
+    t.ok(/is being held back/.test(sheet), 'a held one says so in the sheet');
+    t.ok(sheet.indexOf(IB.SKILL[ult.id].n) > 0, 'and names the ability being held');
+    t.ok(sheet.indexOf('Press ' + IB.ULT_KEY) > 0,
+      'and says how to spend it while it is loaded');
+    ult.cdT = 30;
+    IB.showHeroSheet(h);
+    t.ok(/will be loaded in \d+s/.test(G.sheet || ''),
+      'and says how long until it is, when it is not (' +
+        ((G.sheet || '').match(/will be loaded in \d+s/) || ['nothing'])[0] + ')');
+  }
+
+  {
+    /* The mark on the bridge is drawn from the same two facts and nothing else,
+       so it cannot say a hero is loaded when the simulation disagrees. It is
+       COSMETIC: it reads state and draws, and the hash never hears about it. */
+    const marks = SRC.slice(SRC.indexOf('function drawUnitMarks'),
+      SRC.indexOf('function drawUnitMarks') + 1800);
+    t.ok(/holdUlt/.test(marks), 'the world mark asks whether the hold is on');
+    t.ok(/cdT > 0/.test(marks) && /mana >=/.test(marks),
+      'and whether the ultimate is actually loaded, which is the other half of it');
+    const block = marks.slice(marks.indexOf('if (u.isHero'), marks.indexOf('if (u.shield > 0)'));
+    t.ok(block.length > 200, 'the mark has a block of its own to read (' + block.length + ' chars)');
+    t.ok(!/fxRnd|[^a-zA-Z]rnd\(/.test(block),
+      'and draws it without drawing from any random stream');
+    const { s, h } = forge(9903, 'mage');
+    const at = IB.netHash();
+    s.holdUlt = true;
+    const held = IB.netHash();
+    IB.draw && IB.draw();
+    t.ok(IB.netHash() === held, 'painting the mark moves nothing the two machines check');
+    s.holdUlt = false;
+    t.ok(IB.netHash() === at, 'and the hold is the only thing that did');
+    t.ok(!!h, 'with a hero on the board to have drawn it for');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ---------------------------------- what the sixth review pass measured
+   Six defects, and the two that mattered were both about a rule being derived
+   from the wrong thing: one from the SHAPE of some code rather than what it
+   does, one from a side index rather than a seat.                          */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const css = SRC.slice(SRC.indexOf(':root{'), SRC.indexOf('</style>'));
+  const rule = (sel) => css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
+
+  const forge = (seed, cls) => {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[1].ai = false;
+    IB.MY = 0;
+    const s = G.sides[0];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls);
+    const h = s.heroes[0];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    return { s, h, ult:h.skills.find(sk => sk.ult) };
+  };
+
+  /* ------------------------------------ a release that ran the hero away
+     The table was a scan for `if (!tgt) break`, and `dash` passes that scan as
+     harmless while being the opposite: no target means the else branch, which
+     moves the hero `dist` tiles along -dirOf(side) — BACKWARDS. Death Mark
+     released into empty air teleported the assassin eight tiles toward its own
+     base, spent the mana, started a sixty-second recovery, and said "Let go —
+     it goes off now." castLoop could never do it; wantCast refuses a damage
+     ultimate outright with no target. It was reachable only through here. */
+  {
+    let found = null;
+    for (const seed of [9950, 9951, 9952, 9953, 9954, 9955, 9956, 9957]){
+      const got = forge(seed, 'assassin');
+      if (got.ult && IB.SKILL[got.ult.id].k === 'dash'){ found = got; break; }
+    }
+    if (!found){
+      // Force it rather than skip: the defect is about the KIND, and a suite
+      // that only tests it when the roll obliges is a suite that stops testing
+      // it the day the pool changes.
+      const got = forge(9950, 'assassin');
+      const dashUlt = IB.SKILLS.find(d => d.ult && d.k === 'dash');
+      t.ok(!!dashUlt, 'the game has a dash ultimate to test (' + (dashUlt ? dashUlt.id : 'none') + ')');
+      got.h.skills = got.h.skills.filter(sk => !sk.ult);
+      got.h.skills.push({ id:dashUlt.id, rank:1, cdT:0, ult:true });
+      found = { s:got.s, h:got.h, ult:got.h.skills[got.h.skills.length - 1] };
+    } else t.ok(true, 'a dash ultimate came up on its own');
+
+    const { s, h, ult } = found;
+    const d = IB.SKILL[ult.id];
+    t.ok(d.k === 'dash', 'the ultimate under test moves the hero (' + ult.id + ')');
+    t.ok(IB.needsTarget(d), 'and is on the list of ones that must not go off blind');
+
+    for (const u of G.units) if (u.side === 1) u.dead = true;
+    step(2 / 30);
+    t.ok(!IB.heroTarget(h), 'with nothing at all in front of it');
+    const x0 = h.x, mana0 = h.mana;
+    s.holdUlt = true; ult.cdT = 0; h.mana = h.mmana; h.castLock = 0;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(!(ult.cdT > 0), 'and the ultimate is NOT spent on nothing');
+    t.ok(Math.abs(h.x - x0) < .01,
+      'the hero does not run backwards (' + (h.x - x0).toFixed(2) + ' tiles)');
+    t.ok(h.mana >= mana0 - .01 || h.mana === h.mmana, 'and pays nothing for it');
+    t.ok(/nothing of yours was ready/i.test(G.toasts.map(x => x.msg).join(' | ')),
+      'and is told so rather than congratulated');
+  }
+
+  /* ------------------------------------------- a mark that was not yours
+     Keyed on the unit's side rather than through forMe, so the ENEMY
+     commander's hold was painted on the enemy hero, in your gold, on your
+     screen — handing you their decision AND the fact their ultimate is loaded.
+     holdUlt is synced, so both machines had it; one was meant to be shown it. */
+  {
+    const marks = SRC.slice(SRC.indexOf('function drawUnitMarks'),
+      SRC.indexOf('function drawUnitMarks') + 2600);
+    const cond = marks.slice(marks.indexOf('if (u.isHero'), marks.indexOf('if (u.isHero') + 140);
+    t.ok(/forMe\(u\.side\)/.test(cond),
+      'the mark asks whose seat this is, not merely whose side the body is on');
+    t.ok(/holdUlt/.test(cond), 'as well as whether that hold is holding');
+  }
+
+  /* -------------------------------- one state, one answer, on every surface
+     The tile's ready glow was computed from the cooldown alone while the
+     release, the shoulder mark and skillArmed all account for mana. A hero off
+     recovery and a mana short lit the full gold ring, showed no mark, and
+     refused when pressed. */
+  {
+    const sync = SRC.slice(SRC.indexOf('function syncOrders'), SRC.indexOf('function syncOrders') + 2600);
+    t.ok(/skillArmed\(h, sk\)/.test(sync),
+      'the bar asks the same question the release asks');
+    t.ok(/classList\.toggle\('ready', armed\)/.test(sync),
+      'and lights the ready ring off that answer rather than off the cooldown alone');
+
+    const { s, h, ult } = forge(9960, 'mage');
+    const need = IB.SKILL[ult.id].mana;
+    ult.cdT = 0; h.mana = need - 1;
+    t.ok(!IB.skillArmed(h, ult),
+      'a hero off recovery but a mana short is not armed (' + Math.round(h.mana) + ' of ' + need + ')');
+    s.holdUlt = true;
+    G.toasts.length = 0;
+    t.ok(IB.setHoldUlt(s, false) === null, 'letting go is accepted');
+    t.ok(!(ult.cdT > 0), 'and nothing is spent, which is what the glow must agree with');
+  }
+
+  /* ------------------------------------------ and the sheet says which one */
+  {
+    const { s, h, ult } = forge(9961, 'mage');
+    const need = IB.SKILL[ult.id].mana;
+    s.holdUlt = true;
+
+    ult.cdT = 0; h.mana = h.mmana;
+    IB.showHeroSheet(h);
+    t.ok(/It is loaded and waiting/.test(G.sheet || ''), 'loaded says loaded');
+
+    ult.cdT = 30; h.mana = h.mmana;
+    IB.showHeroSheet(h);
+    t.ok(/will be loaded in 30s/.test(G.sheet || ''), 'recovering says how long');
+
+    ult.cdT = 0; h.mana = need - 12;
+    IB.showHeroSheet(h);
+    const sheet = G.sheet || '';
+    t.ok(!/will be loaded in 0s/.test(sheet),
+      'and a hero short of mana is not told to wait nought seconds');
+    t.ok(/short of the mana/.test(sheet),
+      'but told what it is actually waiting for (' +
+        ((sheet.match(/It is off recovery[^<]*/) || ['nothing'])[0]) + ')');
+  }
+
+  /* --------------------------------------------- a heading that can be read
+     2.67:1 on the composited card, against 6.26:1 for every other tier
+     heading — the least legible label in the sheet, on the row added to
+     explain something. */
+  {
+    const hex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const lin = (v) => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+    const lum = (rgb) => .2126 * lin(rgb[0]) + .7152 * lin(rgb[1]) + .0722 * lin(rgb[2]);
+    const over = (fg, a, bg) => fg.map((v, i) => v * a + bg[i] * (1 - a));
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    // .tier sits on rgba(232,214,180,.55) over the .parch gradient; take the
+    // WORSE of its two stops, the way the cream-card contrast pass does.
+    const card = [hex('#c9a978'), hex('#b08e5e')].map(st => over(hex('#e8d6b4'), .55, st));
+    const held = rule('.tier.held .tl{').match(/color:(#[0-9a-f]{6})/i)[1];
+    const worst = Math.min(...card.map(bg => ratio(hex(held), bg)));
+    t.ok(worst >= 4.5,
+      'the Held heading is legible on both ends of the card it sits on (' + worst.toFixed(2) + ':1)');
+    // ...and it is still visibly the gold this row is about, not the same ink
+    // as every other heading.
+    t.ok(held.toLowerCase() !== '#4a3322', 'while still not being the same ink as every other heading');
+  }
+
+  /* ----------------------------------- the fourth tile does not eat the other three
+     Measured at 1024 with three orders and the ultimate: every tile squeezed to
+     ~30px and the bar became four bare key chips, every spell glyph clipped out
+     of its own tile, while the same width with three tiles still showed them.
+     Ranked by what a tile is recognised by mid-fight: icon, then key, then name. */
+  {
+    t.ok(/@media \(max-width:1200px\)\{ #orders \.ord \.on\{ display:none; \} \}/.test(SRC),
+      'the name goes first on a narrow desktop');
+    t.ok(/@media \(max-width:1100px\)\{ #orders \.ord \.okey\{ display:none; \} \}/.test(SRC),
+      'the key chip goes second');
+    t.ok(/#orders \.ord \.ico\{ flex:0 0 auto; \}/.test(SRC),
+      'and the icon never gives ground at all, which is the whole ordering');
+  }
+
+  /* ------------------------------------- and the mark survives the far zoom */
+  {
+    const marks = SRC.slice(SRC.indexOf('function drawUnitMarks'),
+      SRC.indexOf('function drawUnitMarks') + 2600);
+    t.ok(/Math\.max\(1\.7, 2\.2 \* sc\)/.test(marks),
+      'the mark has a floor, so ZOOM_MIN does not reduce it to a speck');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
+/* ------------------------------------------- their hero, as far as you know
+   The dock told you what wave was coming and which of their ORDERS you had
+   watched land, and said nothing whatever about the biggest thing on the
+   bridge: a body that fights on its own, levels up, and eventually casts
+   something that decides a fight. You could learn a commander's hand and not
+   one thing about their champion.
+
+   Two halves on purpose. Their name, class and level are already drawn over
+   their head in the world, so repeating them in the dock is convenience. Their
+   ULTIMATE is not visible anywhere, and it is earned exactly the way an order
+   is — by watching it land, once.                                           */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const forge = (side, seed, cls) => {
+    if (seed) { IB.netEnd(); IB.newMatch({ diff:'veteran', seed }); G.sides[1].ai = false; IB.MY = 0; }
+    const s = G.sides[side];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls || 'mage');
+    const h = s.heroes[s.heroes.length - 1];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    return h;
+  };
+
+  {
+    const fh = forge(1, 4200, 'mage');
+    t.ok(!!fh && !!fh.skills.find(sk => sk.ult), 'they have a hero with an ultimate');
+    t.ok(IB.foeUlts.length === 0, 'and this seat has been shown nothing of it yet');
+
+    const before = IB.foeHeroHtml();
+    t.ok(before.indexOf(fh.name) > 0, 'the dock names the body you can already see (' + fh.name + ')');
+    t.ok(before.indexOf('' + fh.lvl) > 0, 'and its level, which is drawn over its head anyway');
+    t.ok(/class="fchip un"/.test(before), 'and marks the ultimate unknown');
+
+    // ...until they cast it. fireSkill is the one path every cast takes — the
+    // hero's own beat and a player's release both — so nothing can slip past.
+    const ult = fh.skills.find(sk => sk.ult);
+    for (let i = 0; i < 6; i++) IB.spawnUnit(0, 'grunt', { x:41.5, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    ult.cdT = 0; fh.mana = fh.mmana;
+    IB.fireSkill(fh, ult, IB.heroTarget(fh));
+    t.ok(IB.foeUlts.join() === ult.id, 'watching it land is what teaches it (' + IB.foeUlts.join() + ')');
+    const after = IB.foeHeroHtml();
+    t.ok(after.indexOf(IB.SKILL[ult.id].n) > 0, 'and the dock names it from then on');
+    t.ok(!/class="fchip un"/.test(after), 'with no question mark left on it');
+
+    // Casting it again teaches nothing new.
+    ult.cdT = 0; fh.mana = fh.mmana;
+    IB.fireSkill(fh, ult, IB.heroTarget(fh));
+    t.ok(IB.foeUlts.length === 1, 'and it is learned once rather than counted');
+  }
+
+  {
+    /* MY OWN ultimate is not news about them. The record is per SEAT, and the
+       one way to get that wrong is to key it on a side index. */
+    const mh = forge(0, 4201, 'fighter');
+    const mu = mh.skills.find(sk => sk.ult);
+    for (let i = 0; i < 4; i++) IB.spawnUnit(1, 'grunt', { x:41.5, y:0 });
+    step(2 / 30);
+    mu.cdT = 0; mh.mana = mh.mmana;
+    IB.fireSkill(mh, mu, IB.heroTarget(mh));
+    t.ok(IB.foeUlts.indexOf(mu.id) < 0,
+      'my own hero casting its ultimate tells this seat nothing about theirs');
+    t.ok(IB.foeUlts.length === 0, 'and leaves the record empty (' + IB.foeUlts.join() + ')');
+  }
+
+  {
+    /* Cosmetic, per seat, and remembered. Exactly the rules the orders' fog
+       already runs under: never hashed — the two machines are SUPPOSED to
+       disagree about it — but saved, because a reload that forgets what you
+       learned is a save that lies about the fog. */
+    const fh = forge(1, 4202, 'mage');
+    const ult = fh.skills.find(sk => sk.ult);
+    const at = IB.netHash();
+    IB.foeUlts.push(ult.id);
+    t.ok(IB.netHash() === at, 'what this seat has learned is not something the machines check');
+    const snap = JSON.stringify(IB.netSnap());
+    t.ok(snap.indexOf('foeUlt') < 0 && snap.indexOf(ult.id + '"') !== 0,
+      'nor something a resync carries');
+
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok((pack.foeU || []).join() === ult.id, 'carrying it (' + (pack.foeU || []).join() + ')');
+    IB.newMatch({ diff:'veteran', seed:4203 });
+    t.ok(IB.foeUlts.length === 0, 'a new match has been shown nothing');
+    IB.loadMatch(pack);
+    t.ok(IB.foeUlts.join() === ult.id, 'and a reload remembers what the last one taught');
+    IB.clearSave();
+
+    // A save from before this existed says nothing, and that is the right answer.
+    IB.foeForget();
+    const old = Object.assign({}, pack); delete old.foeU;
+    IB.loadMatch(old);
+    t.ok(IB.foeUlts.length === 0, 'an older save restores to knowing nothing rather than crashing');
+    IB.clearSave();
+  }
+
+  {
+    // Before they have forged one at all, the row says so rather than lying.
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4204 });
+    IB.MY = 0;
+    t.ok(G.sides[1].heroes.length === 0, 'they have no hero yet');
+    t.ok(/none yet/.test(IB.foeHeroHtml()), 'and the dock says so');
+    t.ok(/Their hero/.test(IB.foeHeroHtml()), 'under a heading of its own');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();

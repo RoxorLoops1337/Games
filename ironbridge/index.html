@@ -281,6 +281,18 @@
     background:linear-gradient(180deg,rgba(60,44,20,.30),rgba(60,44,20,.46));
     border-top:1px solid rgba(255,236,190,.5); pointer-events:none; }
   /* Empty, and the window to fill it is still open. */
+  /* Held reads as ON — the same lit brass an armed order wears, because it is
+     the same kind of fact: something is being kept back for you to spend. The
+     ready ring is the second half of it: held with nothing banked yet is not
+     the same state as held with an ultimate waiting, and the tile says which. */
+  .tier.held{ border-color:#c08f1d; }
+  /* 2.67:1 on the composited card, measured, against 6.26:1 for every other
+     tier heading in the sheet — the least legible label in the game, on the
+     row added to explain something. #5a4009 is 5.14:1 on the same background
+     and still reads as the gold this row is about. */
+  .tier.held .tl{ color:#5a4009; }
+  .ord.ult.on{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
+  .ord.ult.on.ready{ box-shadow:0 0 0 1px #ffe6a4 inset, 0 0 9px rgba(255,214,110,.55); }
   .ord.pickme{ border-color:#c08f1d; background:linear-gradient(180deg,#ffe6a4,#f2c65a); color:#4a3405; }
   .ord.pickme:hover{ background:linear-gradient(180deg,#fff0c4,#ffd370); }
   /* The clock on an empty slot. Its own chip rather than part of the name, so
@@ -334,6 +346,22 @@
   body.narrow .ord{ min-width:72px; max-width:none; padding:0 7px; height:28px; }
   body.narrow .ord::after{ content:''; position:absolute; left:0; right:0; top:-8px; bottom:-8px; }
   body.narrow .ord .on{ display:none; }
+  /* ...and the same trade on a narrow DESKTOP, which the fourth tile made
+     necessary. Measured with three orders and the ultimate tile at 1024: every
+     tile squeezed to ~30px and the bar became four bare key chips — Q E R X —
+     with every spell icon and every name gone, while the same width with three
+     tiles still showed the glyphs. The name is the part that can go: the icon
+     and the key are what a tile is recognised by mid-fight, and losing those
+     to keep a word is the wrong way round. */
+  @media (max-width:1200px){ #orders .ord .on{ display:none; } }
+  /* Below that again the KEY chip goes, and the icon still does not. At 1024
+     the tiles reach ~30px, and with the icon free to shrink the bar became
+     four bare key chips — Q E R X — with the glyphs clipped out of their own
+     tiles. Ranked by what a tile is recognised by while something is walking
+     at you: the icon first, the key second (it is a shortcut for a control you
+     can still press), the name last. */
+  @media (max-width:1100px){ #orders .ord .okey{ display:none; } }
+  #orders .ord .ico{ flex:0 0 auto; }
   /* The name goes; the clock never does. It is the half a phone most needs,
      because a phone is the screen where the top bar is smallest and the sheet
      covers everything else. */
@@ -2098,6 +2126,16 @@ function makeSide(i, ai){
     // the lane — primitive countdowns on this object rather than a G.zones
     // entry, because a resync drops the zone list wholesale.
     spells:[null, null, null], spellCd:[0, 0, 0], slots:SLOTS_AT_START,
+    /* Held ultimates. A hero fights on its own and always has — it picks its
+       own moment for everything it knows — so the one ability in the game that
+       decides a fight was spent by nobody in particular, on the first target
+       that walked into range. This is the player's hand on that one lever, and
+       nothing else: while it is set, no hero of this hold casts its ultimate,
+       and letting go IS the release, because castLoop fires it on the very
+       next beat. One flag on the hold rather than one per hero, so there is a
+       single thing to press, a single thing to hash and a single thing for the
+       four pack lists to carry. */
+    holdUlt:false,
     bombT:0, bombX:0, bombN:0,
     // ...and fireT/fireX are the stretch of burning boards another leaves,
     // on this object for exactly the same reason.
@@ -2914,7 +2952,26 @@ function orderTallyForget(){
    left it there. A new match, and a save from before the fog existed, both
    started out remembering an order from the match before. */
 const foeSeen = new Array(SPELL_SLOTS).fill(null);
-const foeForget = () => { for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = null; };
+const foeForget = () => { for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = null; foeUlts.length = 0; };
+/* ...and the same discipline for their HEROES. The dock told you what wave was
+   coming and which of their orders you had seen, and said nothing at all about
+   the biggest thing on the bridge: a body that fights on its own, levels up,
+   and eventually casts something that decides a fight. Their class and level
+   are already drawn over their head in the world, so putting them in the dock
+   is convenience; their ULTIMATE is not, and it is earned the way an order is
+   — by watching it land, once, and then remembered.
+
+   Per SEAT, like foeSeen: written from simulation code, read only by the dock,
+   in no hash, and in the save for the same reason the orders are — a reload
+   that forgets what you learned is a save that lies about the fog. Kept as the
+   ids seen rather than keyed by hero, because a hero id is not stable across a
+   reload and "you have seen Cataclysm" is the fact worth keeping. */
+const foeUlts = [];
+function foeUltSeen(h, sk){
+  if (!sk || !sk.ult || forMe(h.side)) return;
+  const id = sk.id;
+  if (foeUlts.indexOf(id) < 0) foeUlts.push(id);
+}
 function castTell(s, name, n, verb, gold){
   // No HEADLESS guard: fxToast is already safe there (paintToasts returns
   // early) and every other notice from simulation code goes out the same way.
@@ -4727,19 +4784,62 @@ function skillArmed(h, sk){
 }
 const heroArmed = (h) => (h.skills || []).some(sk => skillArmed(h, sk));
 
+/* WHICH abilities are nothing without a body to point at. Walked out of
+   castSkill's own switch rather than guessed: these six begin `if (!tgt) break`
+   and do nothing whatever without one, while the other eleven kinds either
+   ignore the target completely (a nova fires at the HERO's feet, a shield and a
+   summon at nobody) or fall back to the caster themselves. A test holds this
+   list against that switch, because a kind that grows or loses the guard and
+   leaves this behind is an ability that silently stops being releasable.
+
+   It matters because the release used to demand a target in range for ALL of
+   them. Thirteen of the game's eighteen ultimates are hero-centred, self or
+   team — Cataclysm hits everything within 6.5 of the hero and does not read the
+   target at all — so a player holding one and letting go while the wave stood
+   just outside heroTarget's reach got nothing, and was told nothing was ready.
+   The gate was measuring the wrong thing for most of the abilities it gated. */
+const SKILL_NEEDS_TARGET = { bolt:1, chain:1, hook:1, mark:1, strike:1, volley:1, dash:1 };
+/* ...and `dash` is why that list is not just a scan for `if (!tgt) break`.
+
+   Six of the seven do NOTHING without a body: they open with that guard and
+   return. `dash` does not — it takes an else branch and moves the hero `dist`
+   tiles along `-dirOf(h.side)`, which is BACKWARDS, away from the enemy. So
+   Death Mark released with nothing in reach teleported the assassin eight
+   tiles toward its own base, spent 110 mana, started a sixty-second recovery,
+   and the readout said "Let go — it goes off now."
+
+   castLoop could never do it: wantCast refuses a damage ultimate outright when
+   there is no target. It was reachable only through the release, and only
+   because the table was derived from the SHAPE of the code rather than from
+   what the code DOES without a target. Syntax was the wrong test. */
+const needsTarget = (d) => !!(d && SKILL_NEEDS_TARGET[d.k]);
+
+/* Spending one. Pulled out of castLoop because the release needs the very same
+   four lines, and a second copy of them is a second place for the mana, the
+   recovery or the cast lock to be forgotten. */
+function fireSkill(h, sk, tgt){
+  const d = SKILL[sk.id];
+  // Every ultimate in the game goes through here — the hero's own beat and the
+  // player's release both — so this is the one place that cannot miss one.
+  foeUltSeen(h, sk);
+  castSkill(h, sk, tgt);
+  h.mana -= d.mana;
+  sk.cdT = d.cd * (1 - h.cdr - bsum(h, 'bcdr'));
+  h.castLock = .35;
+}
+
 function castLoop(h, tgt, dt){
   for (const sk of h.skills){
     if (sk.cdT > 0) sk.cdT -= dt;
   }
   if (h.castLock > 0){ h.castLock -= dt; return; }
+  const held = (G.sides[h.side] || {}).holdUlt;
   for (const sk of h.skills){
     const s = SKILL[sk.id];
+    if (sk.ult && held) continue;         // banked, until the hold comes off
     if (!skillArmed(h, sk)) continue;
     if (!wantCast(h, s, tgt)) continue;
-    castSkill(h, sk, tgt);
-    h.mana -= s.mana;
-    sk.cdT = s.cd * (1 - h.cdr - bsum(h, 'bcdr'));
-    h.castLock = .35;
+    fireSkill(h, sk, tgt);
     return;                       // one cast per beat keeps it readable
   }
 }
@@ -10830,6 +10930,55 @@ const spanN = (a, b, f) => Math.round(a + (b - a) * clamp(f, 0, 1));
 
 function drawUnitMarks(c, u, bx, by, p, sc){
   const col = SIDE_COL[u.side];
+  /* A hero holding a loaded ultimate. The hold is a decision the player made
+     about this body, and until now the only trace of it was a lit tile in the
+     top bar — so the thing being held back was invisible on the bridge it was
+     being held back from, and whether the hero in front of you was carrying
+     anything had no answer short of opening a sheet. (Two heroes standing on
+     the same tile still overlap into one mark; the name plates already
+     suppress each other there, and this does not claim to solve it.)
+
+     Cosmetic to the last pixel: it reads holdUlt and a cooldown the simulation
+     already agreed about, draws, and tells nobody. The pulse is off G.t, which
+     is the match clock both machines share — not fxRnd, because there is
+     nothing random about it. */
+  /* forMe, not the side index. Keyed on the unit's own side this drew the
+     ENEMY commander's hold on the enemy hero — in your gold, on your screen —
+     which in a two-player match hands you their private decision and the fact
+     that their ultimate is off cooldown and paid for. holdUlt is synced, so
+     both machines had the information; only one of them was ever meant to be
+     shown it. The same rule this file argues for further down: ten bugs in
+     this game have been a per-side value that was not per-seat. */
+  if (u.isHero && !u.dead && forMe(u.side) && (G.sides[u.side] || {}).holdUlt){
+    const sk = (u.skills || []).find(x => x.ult);
+    if (sk && !(sk.cdT > 0) && u.mana >= (SKILL[sk.id] || {}).mana){
+      /* At the shoulder, not over the head. Centred above the body it landed
+         squarely under the name plate and the two bars — which are painted
+         after this layer — and a 13px flourish behind them read as a smudge
+         rather than a token. Off to the side it has clear air at every zoom. */
+      // A floor on the size. At ZOOM_MIN, sc falls to .735 and a mark that
+      // scaled all the way down was a two-and-a-half-pixel speck — present in
+      // the pixels and invisible in the room.
+      const puls = .72 + .28 * Math.sin(G.t * 3.4);
+      const y = by - 11 * sc, r = Math.max(1.7, 2.2 * sc);
+      c.globalAlpha = .34 * puls;
+      ell(c, bx - 9 * sc, y, r * 2.2, r * 2.2, '#ffd98a');
+      c.globalAlpha = puls;
+      c.fillStyle = '#ffe6a4';
+      c.strokeStyle = 'rgba(60,40,10,.75)';
+      c.lineWidth = Math.max(1, 1.1 * cam.z);
+      // the same four-pointed flourish the tile and the ult pip wear
+      const mx = bx - 9 * sc;
+      c.beginPath();
+      c.moveTo(mx, y - r * 2.1);
+      c.quadraticCurveTo(mx + r * .34, y - r * .34, mx + r * 2.1, y);
+      c.quadraticCurveTo(mx + r * .34, y + r * .34, mx, y + r * 2.1);
+      c.quadraticCurveTo(mx - r * .34, y + r * .34, mx - r * 2.1, y);
+      c.quadraticCurveTo(mx - r * .34, y - r * .34, mx, y - r * 2.1);
+      c.closePath(); c.fill(); c.stroke();
+      c.globalAlpha = 1;
+    }
+  }
   // A shield is a thing that BREAKS, so it reads as a surface rather than a
   // smudge — and it flickers harder as it runs out of time.
   if (u.shield > 0){
@@ -15060,6 +15209,15 @@ const UI_ICON = {
   mute:   cico('<path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4Z" fill="currentColor" stroke-width="1.8"/>' +
                '<path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
   pause:  cico('<path d="M9 5v14M15 5v14" stroke-width="3.4"/>'),
+  /* The one ability big enough to decide a fight, as a four-pointed flourish —
+     the same shape the ult pip on a hero card already wears, so the tile in the
+     bar and the pip under the hero are recognisably about the same thing. Drawn
+     in currentColor like every other control here, which is what lets the tile
+     go gold when the hold is on without a second icon. */
+  ult:    cico('<path d="M12 3.2c.9 4.4 2.2 5.7 6.6 6.6-4.4.9-5.7 2.2-6.6 6.6-.9-4.4-2.2-5.7-6.6-6.6 4.4-.9 5.7-2.2 6.6-6.6Z" ' +
+               'fill="currentColor" stroke-width="1.6"/>' +
+               '<path d="M6.6 17.4c.4 1.9 1 2.5 2.9 2.9-1.9.4-2.5 1-2.9 2.9-.4-1.9-1-2.5-2.9-2.9 1.9-.4 2.5-1 2.9-2.9Z" ' +
+               'fill="currentColor" stroke-width="1.2"/>'),
   play:   cico('<path d="M7 4.6 19.5 12 7 19.4Z" fill="currentColor" stroke-width="2"/>'),
   menu:   cico('<path d="M4 7h16M4 12h16M4 17h16" stroke-width="2.6"/>'),
   // an empty slot, waiting to be filled
@@ -15504,7 +15662,7 @@ function dockHtml(){
   // gets one of each. It is its own thing, so it is its own column.
   sec.bridge = '<div class="ptitle">On the bridge' +
     (pend0 || s.superT <= 0 ? '' : ' · ogres in ' + Math.ceil(s.superT) + 's') +
-    '</div><div class="insp note">' + foeWarning() + '</div>' + foeOrdersHtml();
+    '</div><div class="insp note">' + foeWarning() + '</div>' + foeHeroHtml() + foeOrdersHtml();
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -15963,6 +16121,29 @@ function spellTake(id){
    as slots rather than hidden, because "they have one more you have not seen"
    is itself worth knowing — it is the difference between a commander who has
    shown their hand and one who is holding something back. */
+/* Their hero, as far as this seat has been shown it. Two halves, deliberately:
+   what is already drawn over its head in the world (name, class, level) is
+   simply repeated here, and what is not — the one ability big enough to decide
+   the fight — is a question mark until it has been watched. */
+function foeHeroHtml(){
+  if (!G.sides.length || G.state !== 'play') return '';
+  const f = G.sides[enemyOf(MY)];
+  const live = f.heroes.filter(x => !x.dead || x.lvl > 1);
+  let h = '<div class="foeord"><span class="fol">Their hero</span><span class="fchips">';
+  if (!live.length)
+    return h + '<span class="fchip un" title="They have not forged one yet">none yet</span></span></div>';
+  for (const x of live)
+    h += '<span class="fchip" title="' + esc(x.name + ' — ' + CLS[x.cls].name + ', level ' + x.lvl) + '">' +
+      '<b>' + esc(x.name) + '</b> ' + CLS[x.cls].name + ' ' + x.lvl + '</span>';
+  for (const id of foeUlts){
+    const d = SKILL[id];
+    if (d) h += '<span class="fchip" title="' + esc(d.n + ' — ' + skNums(d, 1)) + '">' + d.n + '</span>';
+  }
+  if (!foeUlts.length)
+    h += '<span class="fchip un" title="You have not seen their ultimate yet">?</span>';
+  return h + '</span></div>';
+}
+
 function foeOrdersHtml(){
   if (!G.sides.length || G.state !== 'play') return '';
   let h = '<div class="foeord"><span class="fol">Their orders</span><span class="fchips">';
@@ -16026,7 +16207,30 @@ function ordersHtml(){
       '<i class="ocd"></i><kbd class="okey">' + ORDER_KEY[i] + '</kbd>' + SPELL_ICON[d.id] +
       '<span class="on">' + d.n + '</span></button>';
   }
+  /* ...and one tile that is not an order at all. The orders are the hold's; this
+     is the hold's hand on its HEROES, who until now fought entirely by
+     themselves — a hero picked its own moment for the one ability big enough to
+     decide a fight, and the player had no say in it at all. It sits here rather
+     than on the hero card because the hero card is a button and cannot hold
+     another one, and because this bar is the only furniture that is never not
+     on screen, which is the whole argument for the orders being here too.
+
+     Absent, not dead, when no hero of yours has an ultimate: a bar that grows a
+     permanently grey tile the moment the match starts is a bar teaching you
+     about something you cannot use for ten minutes. */
+  if (ultHolders(s)) h += ultHtml(s);
   return h;
+}
+const ULT_KEY = 'X';
+function ultHtml(s){
+  const on = !!s.holdUlt;
+  return '<button class="ord ult' + (on ? ' on' : '') + '" data-act="holdult"' +
+    ' title="' + esc(on
+      ? 'Your ultimates are held — no hero will cast one until you let go. (' + ULT_KEY + ')'
+      : 'Hold your ultimates, and spend them when you choose rather than when the hero does. (' +
+        ULT_KEY + ')') + '">' +
+    '<i class="ocd"></i><kbd class="okey">' + ULT_KEY + '</kbd>' + UI_ICON.ult +
+    '<span class="on">' + (on ? 'Held' : 'Ultimates') + '</span></button>';
 }
 
 /* The tiles are rebuilt only when WHAT they are changes; the recovery shutter
@@ -16041,9 +16245,41 @@ function syncOrders(){
   if (!el || typeof el.querySelector !== 'function') return;
   const live = G.sides.length > 0 && G.state === 'play' && !G.demo;
   const s = live ? me() : null;
-  const sig = live ? s.spells.join('/') + '|' + s.slots + '|' + (G.wave < 1 ? 'open' : 'set') : 'off';
+  // The ult tile appears when the first hero learns one and changes its whole
+  // face when the hold goes on, so both belong in what decides a rebuild.
+  const sig = live ? s.spells.join('/') + '|' + s.slots + '|' + (G.wave < 1 ? 'open' : 'set') +
+    '|' + (ultHolders(s) ? 1 : 0) + (s.holdUlt ? 'h' : '-') : 'off';
   if (sig !== ordSig){ ordSig = sig; el.innerHTML = live ? ordersHtml() : ''; }
   if (!live) return;
+  /* The readiest ultimate this hold has, as the same draining shutter the
+     orders wear — so "held" and "held AND ready" are different things to look
+     at. A hold with nothing banked yet is a hold whose letting go does nothing,
+     and that should be visible without opening a hero sheet. */
+  const ub = el.querySelector('.ord.ult');
+  if (ub){
+    /* The shutter is the RECOVERY and the glow is whether anything can
+       actually be spent — which are two different questions, and the glow used
+       to answer the first one. A hero off cooldown but a mana short lit the
+       full gold ready ring while the shoulder mark (which does ask about mana)
+       stayed dark and the release answered "nothing of yours was ready". Four
+       surfaces, one state, three answers. skillArmed is the one the release
+       itself uses, so it is the one the glow uses now. */
+    let rem = 1, armed = false;
+    for (const h of s.heroes){
+      if (h.dead) continue;
+      for (const sk of h.skills){
+        if (!sk.ult) continue;
+        const d = SKILL[sk.id];
+        if (!d) continue;
+        const full = Math.max(.1, d.cd * (1 - h.cdr - bsum(h, 'bcdr')));
+        rem = Math.min(rem, clamp(sk.cdT / full, 0, 1));
+        if (skillArmed(h, sk)) armed = true;
+      }
+    }
+    const uf = ub.querySelector('.ocd');
+    if (uf && uf.style) uf.style.height = Math.round(rem * 100) + '%';
+    ub.classList.toggle('ready', armed);
+  }
   for (let i = 0; i < s.slots; i++){
     const b = el.querySelector('.ord[data-slot="' + i + '"]');
     if (!b) continue;
@@ -16137,6 +16373,18 @@ function castPress(slot){
   if (d.target === 'self'){ say(sendCmd('cast', { slot:slot })); return null; }
   spellUI.aim = { slot:slot, id:d.id };
   syncAim();
+  return null;
+}
+
+/* Pressing it. The refusal is a sentence and it is asked HERE, before the
+   command goes out, for the same reason Countermand's is: sendCmd returns ''
+   in a two-player match, so anything decided inside the command reaches that
+   player as a press that does nothing at all. */
+function holdPress(){
+  if (!G.sides.length || G.state !== 'play' || G.demo) return 'no match';
+  const s = me();
+  if (!ultHolders(s)){ say('No hero of yours has an ultimate yet.'); return 'no ultimate'; }
+  say(sendCmd('hold', { on:!s.holdUlt }));
   return null;
 }
 
@@ -16988,6 +17236,28 @@ function showHeroSheet(h){
   let rows = passRow;
   C.SKILL_TIERS.forEach((lv, i) => { rows += tierRow(h, 'Level ' + lv + ' Skill', lv, 'skill', basics[i]); });
   rows += tierRow(h, 'Level 12 (Ultimate)', C.ULT_LEVEL, 'ult', ult);
+  /* The sheet knew everything about the ultimate except the one thing the
+     player had decided about it. A hold set from the top bar left this view —
+     the most detailed thing the game shows about a hero — saying nothing at
+     all, so the answer to "why has it not gone off" was not here. */
+  if (ult && G.sides[h.side] && G.sides[h.side].holdUlt){
+    const ud = SKILL[ult.id];
+    const need = ud ? ud.mana : 0;
+    const cooling = ult.cdT > 0;
+    const ready = !cooling && h.mana >= need;
+    /* Three states, not two. `ready` had always accounted for mana and the
+       sentence under it had not, so a hero off cooldown and a mana short was
+       told "It will be loaded in 0s" — a countdown of nought, in the one view
+       whose whole job is answering "why has it not gone off". */
+    rows += '<div class="tier held"><div class="tl">Held</div><div class="tb"><div class="chosen">' +
+      '<b>' + (ud ? ud.n : 'The ultimate') + ' is being held back.</b>' +
+      '<div class="pd">' + (ready
+        ? 'It is loaded and waiting. Press ' + ULT_KEY + ', or the lit tile in the top bar, to spend it.'
+        : cooling
+          ? 'It will be loaded in ' + Math.ceil(ult.cdT) + 's, and will wait for you then.'
+          : 'It is off recovery, but ' + Math.ceil(need - h.mana) + ' short of the mana it costs.') +
+      '</div></div></div></div>';
+  }
   const rankPend = pend && pend.kind === 'rank';
   rows += '<div class="tier' + (rankPend ? ' hot' : '') + '"><div class="tl">Skill Progression (15+)</div><div class="tb">' +
     (rankPend ? picksHtml(h, 'rank', pend.opts)
@@ -17277,7 +17547,7 @@ const packSide = (s) => ({
           cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
   troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
-  spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots,
+  spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots, holdUlt:!!s.holdUlt,
   bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
@@ -17310,6 +17580,9 @@ function saveMatch(){
       // watched land. A save that restores the board and forgets what you
       // learned from it is a save that lies about the fog.
       foe:foeSeen.slice(),
+      // ...and what this seat has watched their heroes cast, for the same
+      // reason: a reload that forgets it is a save that lies about the fog.
+      foeU:foeUlts.slice(),
     }));
     return true;
   } catch (e){ return false; }
@@ -17331,6 +17604,7 @@ function loadMatch(pack){
   // already been shown. An older save simply has nothing to say, and two
   // question marks is the right answer to that.
   if (pack.foe) for (let i = 0; i < SPELL_SLOTS; i++) foeSeen[i] = SPELL[pack.foe[i]] ? pack.foe[i] : null;
+  if (pack.foeU) for (const id of pack.foeU) if (SKILL[id] && foeUlts.indexOf(id) < 0) foeUlts.push(id);
   G.t = pack.t; G.wave = pack.wave; G.waveT = pack.waveT;
   pack.sides.forEach((ps, i) => {
     const s = G.sides[i];
@@ -17345,6 +17619,7 @@ function loadMatch(pack){
     if (ps.spells) s.spells = ps.spells.slice();
     s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
+    s.holdUlt = !!ps.holdUlt;
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     // Without this a resumed match reported the quiet wave for up to a full
@@ -17546,6 +17821,7 @@ const KEYS = [
   { k:'B',     a:'camFoe',  d:'look at their base' },
   { k:'F',     a:'follow',  d:'follow the fighting' },
   { k:ORDER_KEY.join(' '), a:'order', d:'cast your commander orders, in the order the bar shows them' },
+  { k:ULT_KEY, a:'holdult', d:'hold your heroes’ ultimates, and let go when you want them' },
   { k:'+ −',   a:'zoom',    d:'zoom in and out' },
   { k:'?',     a:'help',    d:'this sheet' },
   { k:'Esc',   a:'close',   d:'close whatever is open' },
@@ -17570,6 +17846,7 @@ function keyAction(key){
   if (k === 'f') return 'follow';
   for (let i = 0; i < ORDER_KEY.length; i++)
     if (k === ORDER_KEY[i].toLowerCase()) return 'order' + (i + 1);
+  if (k === 'x') return 'holdult';
   if (k === '+' || k === '=') return 'zoomIn';
   if (k === '-' || k === '_') return 'zoomOut';
   if (k === '?' || k === '/') return 'help';
@@ -17598,6 +17875,7 @@ function doAction(a){
   // on itself and the help sheet listed it, and the key did nothing — which is
   // the exact failure the one-list rule at ORDER_KEY exists to stop.
   if (/^order\d+$/.test(a)){ castPress(+a.slice(5) - 1); return; }
+  if (a === 'holdult'){ holdPress(); return; }
   if (a === 'close'){
     // An armed order is the innermost thing Escape can be closing, so it goes
     // first: otherwise Escape would unpause a match with a live reticle on it.
@@ -17661,6 +17939,7 @@ function wire(){
     else if (a === 'upgrade') say(sendCmd('upgrade', { tile:sel.tile }));
     else if (a === 'up') say(sendCmd('up', { up:b.dataset.up }));
     else if (a === 'nodeup') say(sendCmd('nodeup', { node:b.dataset.node }));
+    else if (a === 'holdult'){ holdPress(); return; }
     else if (a === 'newhero'){ showHeroCreate(); return; }
     // Cosmetic and local: which of the two machines wants the beginner's
     // paragraph up is nobody else's business, so this one does not go near
@@ -17967,7 +18246,62 @@ const CMD = {
   // on the lane, quantised to 1/16 before it is sent; `hero` for a body, looked
   // up by id exactly as `pick` does; `key` for one of your own structures.
   cast:    (s, c) => castSpell(s, c),
+  // Holding your own ultimates. A command like any other, so a two-player match
+  // agrees about it on the same tick both machines agree about everything else
+  // — a hold that took effect locally would be a hold the other machine's
+  // simulation never heard about, which is a desync in the one ability big
+  // enough to decide the match.
+  hold:    (s, c) => setHoldUlt(s, !!c.on),
 };
+
+/* Who this can possibly apply to. Asked by the tile that greys itself, by the
+   refusal, and by the command — one answer, three readers, the same shape as
+   counterCatch. A hold with no ultimate under it is a switch wired to nothing. */
+function ultHolders(s){
+  let n = 0;
+  for (const h of s.heroes) if (h.skills.some(sk => sk.ult)) n++;
+  return n;
+}
+function setHoldUlt(s, on){
+  if (!ultHolders(s)) return 'No hero of yours has an ultimate yet.';
+  if (s.holdUlt === on) return 'already ' + (on ? 'held' : 'loose');
+  s.holdUlt = on;
+  /* Letting go FIRES them, here, rather than handing the moment back to
+     castLoop. It has to: castLoop asks wantCast first, and wantCast refuses an
+     ultimate unless the target is a hero, or three bodies are within six, or a
+     structure is under 70% — so a player who let go into a thin wave got
+     nothing at all, and the line telling them the next beat was theirs was a
+     lie. Judging whether the moment is worth it is exactly the judgement the
+     player is taking over; the RANGE check is not, so that one stays.
+
+     Range is the same test wantCast ends on. No rnd, no arnd: this runs inside
+     a command, on the agreed tick, and both machines walk the same heroes in
+     the same order. */
+  let n = 0;
+  if (!on) for (const h of s.heroes){
+    if (h.dead || !h.inLane) continue;
+    const sk = h.skills.find(x => x.ult);
+    if (!sk || !skillArmed(h, sk)) continue;
+    const d = SKILL[sk.id];
+    const tgt = heroTarget(h);
+    // Only the abilities that are nothing without a body have to find one. The
+    // rest go off where the hero is standing, which is the whole point of them.
+    if (needsTarget(d)){
+      if (!tgt) continue;
+      if (hyp(tgt.x - h.x, tgt.y - h.y) > (d.rng || h.rng + 2) + (tgt.r || 0)) continue;
+    }
+    fireSkill(h, sk, tgt);
+    n++;
+  }
+  // Said on both machines, each about its own hold. The second line is the one
+  // that matters, and it says what actually happened rather than what was hoped.
+  if (forMe(s.i))
+    fxToast(on ? 'Ultimates held — they wait for you now.'
+      : n > 0 ? (n === 1 ? 'Let go — it goes off now.' : 'Let go — ' + n + ' of them go off now.')
+              : 'Let go — nothing of yours was ready and in reach.',
+      on ? 'bad' : n > 0 ? 'good' : 'bad', TOAST_W.hero);
+  return null;
+}
 
 // The single door every player action goes through. In one-player it runs the
 // action immediately, exactly as before — so single-player behaviour, and every
@@ -18120,6 +18454,7 @@ function netHash(){
     // The commander spells: which two, how long until each is back, and where
     // a bombardment has got to.
     mix(s.slots);
+    mix(s.holdUlt ? 1 : 0);           // decides whether the biggest ability fires at all
     for (let i = 0; i < SPELL_SLOTS; i++){ mixs(s.spells[i]); mix(q30(s.spellCd[i])); }
     mix(s.bombN); mix(q30(s.bombT)); mix(Math.round(s.bombX * 16));
     mix(q30(s.fireT)); mix(Math.round(s.fireX * 16));
@@ -18254,7 +18589,7 @@ function netSnap(){
       // This list is hand-written, which means it silently drops any field
       // nobody remembered to add — and a field missing from a resync is a
       // resync that desyncs again immediately.
-      spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots,
+      spells:s.spells.slice(), spellCd:s.spellCd.slice(), slots:s.slots, holdUlt:!!s.holdUlt,
       bombT:s.bombT, bombX:s.bombX, bombN:s.bombN, fireT:s.fireT, fireX:s.fireX,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
@@ -18304,6 +18639,7 @@ function netLoad(p){
     if (ps.spells) s.spells = ps.spells.slice();
     s.slots = ps.slots || SLOTS_AT_START;
     if (ps.spellCd) s.spellCd = ps.spellCd.slice();
+    s.holdUlt = !!ps.holdUlt;
     s.bombT = ps.bombT || 0; s.bombX = ps.bombX || 0; s.bombN = ps.bombN || 0;
     s.fireT = ps.fireT || 0; s.fireX = ps.fireX || 0;
     s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
@@ -18801,7 +19137,9 @@ window.IB = {
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
-  ordersHtml, ORDER_KEY, foeOrdersHtml, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
+  foeHeroHtml, foeUlts, foeUltSeen, fireSkill,
+  SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
