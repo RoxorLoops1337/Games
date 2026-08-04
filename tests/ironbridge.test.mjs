@@ -284,6 +284,7 @@ const E = () => G.sides[1];
 // Give a side everything it needs so a test can exercise one system in isolation.
 const SKILLOF = (id) => IB.SKILL[id];
 const mmss = (t) => Math.floor(t/60) + 'm' + String(Math.floor(t%60)).padStart(2,'0') + 's';
+const spellPt = (list) => { IB.spellUI.pt = list[0] ? { x:list[0].cx, y:list[0].cy } : null; };
 const rich = (s) => { s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000; };
 
 /* ---------------------------------------------------------------- content */
@@ -18800,6 +18801,72 @@ t.ok(true, 'a final draw on a live match is clean');
       t.ok(IB.netHash() === before, 'drawing the label moves nothing the simulation reads');
       t.ok(!/AIM_LABEL|hobble 4/.test(JSON.stringify(IB.netSnap())), 'and it is in no snapshot');
       IB.spellAimOff();
+    }
+    IB.netEnd();
+  }
+}
+
+/* ===================== an armed aim is not part of the simulation, and the
+   label it draws is bounded
+
+   The aim label reads a live body every frame, which is exactly the shape of
+   thing that has bitten this file before — markBy travelling as a body
+   reference, pullBy left pointing at whatever a later snapshot put at its
+   index. So the claim is checked rather than assumed: arming an order and
+   hovering a candidate must leave the hash where it was, produce a
+   byte-identical snapshot, and give the same future as never arming at all.
+
+   And the round that added it priced it too high. Sweeping a "only strip if
+   the top hold has at least N seconds left" gate through the Host over twelve
+   matches: per-strip quality rises 24% (2.99s to 3.72s) and wasted presses go
+   from 15.1% to 1.4%, while the TOTAL moves 21.44 to 22.74 seconds a match —
+   about 6%, inside the noise. The strip is cooldown-bound at roughly seven
+   casts a match against a ninety-second cooldown, so a press spent early
+   mostly means the next arrives sooner. The label is worth a few percent and a
+   number that was nowhere on screen, not a transformation. */
+{
+  // ---- bounded. Every hold name against the widest number the timer can show.
+  {
+    const worst = IB.HOLDS.map(k => k.n + ' 59.9s').sort((a, b) => b.length - a.length)[0];
+    t.ok(worst.length <= 14, 'the widest label a hold can produce still fits a chip (' + worst + ', ' + worst.length + ')');
+    t.ok(IB.HOLDS.every(k => !/\s/.test(k.n)), 'and no label name has a space in it to wrap on');
+  }
+
+  // ---- arming and hovering are outside the simulation entirely
+  {
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:9500 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(G.sides[0], 'tank'); IB.createHero(G.sides[1], 'mage');
+    let g = 0; while (G.wave < 1 && g++ < 30 * 90) IB.update(1 / 30);
+    for (const s of G.sides) for (const h of s.heroes){ h.lvl = 10; IB.recalcHero(h, true); IB.autoPick(h);
+      h.dead = false; h.hp = h.mhp; h.inLane = true; if (!G.units.includes(h)) G.units.push(h); }
+    step(20);
+    G.projs.length = 0; G.zones.length = 0;
+    G.sides[0].spells[0] = 'unbind'; G.sides[0].spellCd[0] = 0;
+    const h0 = G.sides[0].heroes[0];
+    t.ok(!!h0, 'a hero of ours to aim at');
+    if (h0){
+      h0.hobT = 4.5;
+      const before = IB.netHash();
+      const json = JSON.stringify(IB.netSnap());
+      t.ok(IB.castPress(0) === null, 'the order arms');
+      const list = IB.spellAimCandidates();
+      spellPt(list);
+      const c = CTX;
+      const placed = [];
+      for (const k of list) IB.aimHoldLabel(c, k, true, placed);
+      t.ok(placed.length > 0, 'and a label really was drawn (' + placed.length + ')');
+      t.ok(IB.netHash() === before, 'arming and labelling move nothing the hash reads');
+      t.ok(JSON.stringify(IB.netSnap()) === json, 'and the snapshot is byte-identical');
+
+      // the part that matters: the same FUTURE, not just the same moment
+      const run = () => { const o = []; for (let i = 0; i < 180; i++){ IB.update(1 / 30); if (i % 60 === 0) o.push(IB.netHash()); } return o.join(','); };
+      const armed = run();
+      IB.netLoad(JSON.parse(json));
+      IB.spellAimOff();
+      const plain = run();
+      t.ok(armed === plain, 'and a board played with an order armed runs identically to one played without');
     }
     IB.netEnd();
   }
