@@ -17354,4 +17354,118 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.netEnd();
 }
 
+/* ------------------------------------------- their hero, as far as you know
+   The dock told you what wave was coming and which of their ORDERS you had
+   watched land, and said nothing whatever about the biggest thing on the
+   bridge: a body that fights on its own, levels up, and eventually casts
+   something that decides a fight. You could learn a commander's hand and not
+   one thing about their champion.
+
+   Two halves on purpose. Their name, class and level are already drawn over
+   their head in the world, so repeating them in the dock is convenience. Their
+   ULTIMATE is not visible anywhere, and it is earned exactly the way an order
+   is — by watching it land, once.                                           */
+{
+  const seat0 = IB.MY;
+  IB.MY = 0;
+  const forge = (side, seed, cls) => {
+    if (seed) { IB.netEnd(); IB.newMatch({ diff:'veteran', seed }); G.sides[1].ai = false; IB.MY = 0; }
+    const s = G.sides[side];
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    rich(s);
+    IB.createHero(s, cls || 'mage');
+    const h = s.heroes[s.heroes.length - 1];
+    IB.gainXp(h, 99999); IB.autoPick(h); IB.recalcHero(h, true);
+    h.inLane = true; h.dead = false; h.x = 40; h.y = 0; h.mana = h.mmana;
+    return h;
+  };
+
+  {
+    const fh = forge(1, 4200, 'mage');
+    t.ok(!!fh && !!fh.skills.find(sk => sk.ult), 'they have a hero with an ultimate');
+    t.ok(IB.foeUlts.length === 0, 'and this seat has been shown nothing of it yet');
+
+    const before = IB.foeHeroHtml();
+    t.ok(before.indexOf(fh.name) > 0, 'the dock names the body you can already see (' + fh.name + ')');
+    t.ok(before.indexOf('' + fh.lvl) > 0, 'and its level, which is drawn over its head anyway');
+    t.ok(/class="fchip un"/.test(before), 'and marks the ultimate unknown');
+
+    // ...until they cast it. fireSkill is the one path every cast takes — the
+    // hero's own beat and a player's release both — so nothing can slip past.
+    const ult = fh.skills.find(sk => sk.ult);
+    for (let i = 0; i < 6; i++) IB.spawnUnit(0, 'grunt', { x:41.5, y:(i % 3 - 1) * 1.1 });
+    step(2 / 30);
+    ult.cdT = 0; fh.mana = fh.mmana;
+    IB.fireSkill(fh, ult, IB.heroTarget(fh));
+    t.ok(IB.foeUlts.join() === ult.id, 'watching it land is what teaches it (' + IB.foeUlts.join() + ')');
+    const after = IB.foeHeroHtml();
+    t.ok(after.indexOf(IB.SKILL[ult.id].n) > 0, 'and the dock names it from then on');
+    t.ok(!/class="fchip un"/.test(after), 'with no question mark left on it');
+
+    // Casting it again teaches nothing new.
+    ult.cdT = 0; fh.mana = fh.mmana;
+    IB.fireSkill(fh, ult, IB.heroTarget(fh));
+    t.ok(IB.foeUlts.length === 1, 'and it is learned once rather than counted');
+  }
+
+  {
+    /* MY OWN ultimate is not news about them. The record is per SEAT, and the
+       one way to get that wrong is to key it on a side index. */
+    const mh = forge(0, 4201, 'fighter');
+    const mu = mh.skills.find(sk => sk.ult);
+    for (let i = 0; i < 4; i++) IB.spawnUnit(1, 'grunt', { x:41.5, y:0 });
+    step(2 / 30);
+    mu.cdT = 0; mh.mana = mh.mmana;
+    IB.fireSkill(mh, mu, IB.heroTarget(mh));
+    t.ok(IB.foeUlts.indexOf(mu.id) < 0,
+      'my own hero casting its ultimate tells this seat nothing about theirs');
+    t.ok(IB.foeUlts.length === 0, 'and leaves the record empty (' + IB.foeUlts.join() + ')');
+  }
+
+  {
+    /* Cosmetic, per seat, and remembered. Exactly the rules the orders' fog
+       already runs under: never hashed — the two machines are SUPPOSED to
+       disagree about it — but saved, because a reload that forgets what you
+       learned is a save that lies about the fog. */
+    const fh = forge(1, 4202, 'mage');
+    const ult = fh.skills.find(sk => sk.ult);
+    const at = IB.netHash();
+    IB.foeUlts.push(ult.id);
+    t.ok(IB.netHash() === at, 'what this seat has learned is not something the machines check');
+    const snap = JSON.stringify(IB.netSnap());
+    t.ok(snap.indexOf('foeUlt') < 0 && snap.indexOf(ult.id + '"') !== 0,
+      'nor something a resync carries');
+
+    t.ok(IB.saveMatch(), 'the match saves');
+    const pack = IB.savedMatch();
+    t.ok((pack.foeU || []).join() === ult.id, 'carrying it (' + (pack.foeU || []).join() + ')');
+    IB.newMatch({ diff:'veteran', seed:4203 });
+    t.ok(IB.foeUlts.length === 0, 'a new match has been shown nothing');
+    IB.loadMatch(pack);
+    t.ok(IB.foeUlts.join() === ult.id, 'and a reload remembers what the last one taught');
+    IB.clearSave();
+
+    // A save from before this existed says nothing, and that is the right answer.
+    IB.foeForget();
+    const old = Object.assign({}, pack); delete old.foeU;
+    IB.loadMatch(old);
+    t.ok(IB.foeUlts.length === 0, 'an older save restores to knowing nothing rather than crashing');
+    IB.clearSave();
+  }
+
+  {
+    // Before they have forged one at all, the row says so rather than lying.
+    IB.netEnd();
+    IB.newMatch({ diff:'veteran', seed:4204 });
+    IB.MY = 0;
+    t.ok(G.sides[1].heroes.length === 0, 'they have no hero yet');
+    t.ok(/none yet/.test(IB.foeHeroHtml()), 'and the dock says so');
+    t.ok(/Their hero/.test(IB.foeHeroHtml()), 'under a heading of its own');
+  }
+
+  IB.MY = seat0;
+  IB.netEnd();
+}
+
 t.done();
