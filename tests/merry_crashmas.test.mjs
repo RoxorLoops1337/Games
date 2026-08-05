@@ -42,7 +42,8 @@ const EXPOSE = `__out.api = {
   takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
   gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
   GOALS, THEMES, rollGoals, checkGoals, goalTest, replayGore, drawStains,
-  CARS, CAR_KEY, KILLS_KEY, selectCar, carUnlocked, renderGarage,
+  CARS, CAR_KEY, KILLS_KEY, STARS_KEY, BESTPER_KEY, selectCar, carUnlocked, renderGarage,
+  pickLevel, readStars, readBest, starsOn, bestOn, starsTotal,
   getCar: () => CAR, getDims: () => ({ l: CARL, w: CARW, r: CARR }),
   getTheme: () => TH,
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
@@ -697,6 +698,108 @@ test('a pram breaks loose when whoever was pushing it goes down', () => {
   api.killPerson(p, 900, 0, 'car');
   assert(p.pramT === 0, 'the pram is gone');
   assert(api.fx.some(f => f.type === 'pram'), 'and it is airborne');
+});
+
+/* ------------------------------------------------------------ progress --- */
+
+test('stars are kept per market and survive a reload', () => {
+  const api = boot();
+  api.G.starsPer = []; api.G.bestPer = [];
+  api.G.unlocked = 8;
+  api.G.starsPer[0] = 3; api.G.starsPer[3] = 1; api.G.starsPer[7] = 2;
+  api.G.bestPer[3] = 24000;
+  api.saveBest();
+  assert(api._store[api.STARS_KEY], 'stars written');
+
+  const again = boot({ store: api._store });
+  assert(again.starsOn(0) === 3 && again.starsOn(3) === 1 && again.starsOn(7) === 2,
+    'stars read back: ' + JSON.stringify(again.G.starsPer.slice(0, 8)));
+  assert(again.starsOn(5) === 0, 'markets never played read as none');
+  assert(again.bestOn(3) === 24000, 'per-market best read back');
+  assert(again.starsTotal() === 6, 'running total, got ' + again.starsTotal());
+});
+
+test('a worse run never takes a market star away', () => {
+  const api = boot();
+  api.startLevel(2); api.beginLevel();
+  api.G.starsPer = []; api.G.bestPer = [];
+  api.G.carsLeft = 0;
+  api.G.levelScore = api.G.target * 3; api.G.goalsDone = 3;
+  api.levelEnd();
+  assert(api.starsOn(2) === 3, 'three stars banked');
+  const best = api.bestOn(2);
+
+  api.retryLevel(); api.beginLevel();
+  api.G.carsLeft = 0;
+  api.G.levelScore = api.G.target; api.G.goalsDone = 0;
+  api.levelEnd();
+  assert(api.starsOn(2) === 3, 'a one-star run took the record down to ' + api.starsOn(2));
+  assert(api.bestOn(2) === best, 'and the best score went down to ' + api.bestOn(2));
+});
+
+test('stars are the target plus the goals', () => {
+  const api = boot();
+  api.startLevel(1); api.beginLevel();
+  const cases = [[false, 0, 0], [false, 3, 0], [true, 0, 1], [true, 1, 2], [true, 2, 2], [true, 3, 3]];
+  for (const [hit, goals, want] of cases){
+    api.G.starsPer = [];
+    api.G.carsLeft = 0;
+    api.G.levelScore = hit ? api.G.target : api.G.target - 1;
+    api.G.goalsDone = goals;
+    api.levelEnd();
+    assert(api.G.stars === want,
+      'target ' + (hit ? 'hit' : 'missed') + ' with ' + goals + ' goals should be ' +
+      want + ' stars, got ' + api.G.stars);
+  }
+});
+
+test('the menu only opens markets you have reached', () => {
+  const api = boot();
+  api.G.unlocked = 4;
+  assert(api.pickLevel(4) === true, 'the furthest market you reached is open');
+  assert(api.G.level === 4 && api.G.phase === 'brief', 'and it starts');
+  assert(api.pickLevel(5) === false, 'the next one is not');
+  assert(api.pickLevel(20) === false, 'nor the last');
+  assert(api.pickLevel(-1) === false && api.pickLevel(99) === false, 'nonsense is refused');
+  assert(api.G.level === 4, 'a refused pick does not move you');
+});
+
+test('a single market is scored on its own, and goes back to the menu', () => {
+  const api = boot();
+  api.G.unlocked = 6;
+  api.startCampaign();
+  assert(api.G.campaign === true, 'the campaign is a campaign');
+  api.pickLevel(3);
+  assert(api.G.campaign === false, 'a picked market is not');
+  assert(api.G.score === 0, 'and starts from zero, got ' + api.G.score);
+  api.beginLevel();
+  api.G.carsLeft = 0;
+  api.G.levelScore = api.G.target * 2; api.G.goalsDone = 1;
+  api.levelEnd();
+  api.nextLevel();
+  assert(api.G.phase === 'menu', 'a cleared single market returns to the menu, got ' + api.G.phase);
+  assert(api.starsOn(3) === 2, 'and still banks its stars');
+});
+
+test('unreadable progress reads as a clean sheet, not a crash', () => {
+  const api = boot({ store: { merry_crashmas_stars_v1: 'not json',
+                              merry_crashmas_marketbest_v1: '{"nope":1}' } });
+  assert(api.starsTotal() === 0, 'garbage stars read as none');
+  assert(api.bestOn(0) === 0, 'garbage bests read as none');
+  api.toMenu();                       // the menu still builds
+});
+
+test('the menu chips are buttons wired to the level select', () => {
+  const api = boot();
+  api.G.unlocked = 3;
+  api.G.starsPer = [3, 1, 0, 0];
+  api.toMenu();
+  const html = api._nodes.mLevels.innerHTML;
+  assert(/data-lv="0"/.test(html) && /data-lv="20"/.test(html), 'every market is listed');
+  assert(/★★★/.test(html), 'earned stars are shown');
+  assert(/disabled/.test(html), 'locked markets are disabled');
+  assert((html.match(/disabled/g) || []).length === api.LEVELS.length - 4,
+    'exactly the unreached markets are locked');
 });
 
 /* -------------------------------------------------------------- garage --- */

@@ -61,10 +61,16 @@
   .targetline{ margin:0 0 14px; font-size:14px; color:#a8bcd8; }
   .targetline b{ color:#ffd34d; }
   .levels{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 14px; }
-  .lv{ padding:6px 11px; border-radius:9px; font-size:13px; font-weight:800; letter-spacing:1px;
+  .lv{ display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:9px;
+    font-size:13px; font-weight:800; letter-spacing:1px; font-family:inherit; cursor:pointer;
     background:#0b1524; border:2px solid #22395c; color:#6b82a3; }
+  .lv em{ font-style:normal; font-size:11px; letter-spacing:0; color:#e8a91f; }
   .lv.on{ color:#ffd34d; border-color:#4a6a9c; }
   .lv.done{ color:#8effb0; border-color:#2c6b45; }
+  .lv.full{ color:#0b1524; background:#8effb0; border-color:#8effb0; }
+  .lv.full em{ color:#0b1524; }
+  .lv.locked{ opacity:.45; cursor:not-allowed; }
+  .lv:not(.locked):hover{ border-color:#e8a91f; }
 
   #hint{ position:absolute; left:0; right:0; bottom:14px; text-align:center; pointer-events:none;
     font-size:13px; letter-spacing:2.4px; color:#9fb6d4; text-shadow:0 2px 6px rgba(0,0,0,.8); z-index:3; }
@@ -131,6 +137,7 @@
         <div class="stat"><div class="k">Best combo</div><div class="v" id="rsCombo">0</div></div>
       </div>
       <div class="goals" id="rsGoals"></div>
+      <p class="sub" id="rsStarline"></p>
       <div class="targetline" id="rsLine"></div>
       <button class="btn gold" id="bNext">NEXT MARKET</button>
       <button class="btn alt" id="bRetry">RETRY</button>
@@ -483,6 +490,8 @@ function checkGoals(){
 }
 
 const BEST_KEY = 'merry_crashmas_best_v1';
+const STARS_KEY = 'merry_crashmas_stars_v1';
+const BESTPER_KEY = 'merry_crashmas_marketbest_v1';
 const PROG_KEY = 'merry_crashmas_progress_v1';
 
 /* ---------- state ---------- */
@@ -499,6 +508,9 @@ const G = {
   combo: 0, comboT: 0, mult: 1, bestCombo: 0,
   kills: 0, wrecks: 0, totalKills: 0, lifeKills: 0,
   goals: null, goalsDone: 0,
+  starsPer: [],           // best stars ever earned on each market
+  bestPer: [],            // best score ever posted on each market
+  campaign: true,         // false when a single market was picked from the menu
   rolls: 0, jumps: 0, bestSlam: 0, bestRun: 0, nitroKills: 0,
   byKind: {}, treeDown: false, carouselDown: false,
   best: 0,
@@ -866,6 +878,8 @@ function loadBest(){
     G.best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
     G.unlocked = clamp(parseInt(localStorage.getItem(PROG_KEY) || '0', 10) || 0, 0, LEVELS.length - 1);
     G.lifeKills = Math.max(0, parseInt(localStorage.getItem(KILLS_KEY) || '0', 10) || 0);
+    G.starsPer = readStars();
+    G.bestPer = readBest();
     const want = localStorage.getItem(CAR_KEY);
     if (want && !selectCar(want)) selectCar('hatch');
   } catch (_){ G.best = 0; G.unlocked = 0; G.lifeKills = 0; }
@@ -875,19 +889,53 @@ function saveBest(){
     if (G.score > G.best){ G.best = G.score; localStorage.setItem(BEST_KEY, String(G.best)); }
     localStorage.setItem(PROG_KEY, String(G.unlocked));
     localStorage.setItem(KILLS_KEY, String(G.lifeKills));
+    localStorage.setItem(STARS_KEY, JSON.stringify(G.starsPer));
+    localStorage.setItem(BESTPER_KEY, JSON.stringify(G.bestPer));
   } catch (_){}
 }
+
+/* Best stars per market, one entry each, written as plain JSON. Anything
+   unreadable reads back as a clean sheet rather than taking the game down. */
+function readStars(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(STARS_KEY) || '[]');
+    if (!Array.isArray(raw)) return [];
+    return LEVELS.map((_, i) => clamp(parseInt(raw[i], 10) || 0, 0, 3));
+  } catch (_){ return []; }
+}
+function readBest(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(BESTPER_KEY) || '[]');
+    if (!Array.isArray(raw)) return [];
+    return LEVELS.map((_, i) => Math.max(0, parseInt(raw[i], 10) || 0));
+  } catch (_){ return []; }
+}
+const starsOn = i => (G.starsPer && G.starsPer[i]) || 0;
+const bestOn = i => (G.bestPer && G.bestPer[i]) || 0;
+const starsTotal = () => LEVELS.reduce((n, _, i) => n + starsOn(i), 0);
 
 function toMenu(){
   G.phase = 'menu';
   show('menu', true); show('brief', false); show('results', false); show('finale', false);
   show('hint', false);
-  setTxt('mBest', G.best > 0 ? 'Best run: ' + fmt(G.best) : 'No damage on record yet.');
+  const tot = starsTotal();
+  setTxt('mBest', (tot > 0 ? '★ ' + tot + ' / ' + (LEVELS.length * 3) + ' — ' : '') +
+    (G.best > 0 ? 'best campaign run ' + fmt(G.best) : 'no damage on record yet'));
   const el = $('mLevels');
   if (el){
-    el.innerHTML = LEVELS.map((lv, i) =>
-      '<span class="lv' + (i <= G.unlocked ? (i < G.unlocked ? ' done' : ' on') : '') + '">' +
-      (i + 1) + '. ' + lv.name + '</span>').join('');
+    el.innerHTML = LEVELS.map((lv, i) => {
+      const open = i <= G.unlocked;
+      const st = starsOn(i);
+      const stars = open ? '<em>' + '★'.repeat(st) + '☆'.repeat(3 - st) + '</em>' : '<em>🔒</em>';
+      return '<button class="lv' + (open ? (st === 3 ? ' full' : st > 0 ? ' done' : ' on') : ' locked') +
+        '" data-lv="' + i + '"' + (open ? '' : ' disabled') + '>' +
+        (i + 1) + '. ' + lv.name + stars + '</button>';
+    }).join('');
+    if (el.querySelectorAll){
+      el.querySelectorAll('button[data-lv]').forEach(btn => {
+        btn.addEventListener('click', () => pickLevel(parseInt(btn.dataset.lv, 10)));
+      });
+    }
   }
   genMarket(LEVELS[0]);
   camSnap();
@@ -895,7 +943,18 @@ function toMenu(){
 
 function startCampaign(){
   G.score = 0; G.totalKills = 0;
+  G.campaign = true;
   startLevel(0);
+}
+
+/* Straight to one market from the menu. Scores for that market only — the
+   campaign total is what "START THE ENGINE" is for. */
+function pickLevel(i){
+  if (!(i >= 0 && i < LEVELS.length) || i > G.unlocked) return false;
+  G.score = 0; G.totalKills = 0;
+  G.campaign = false;
+  startLevel(i);
+  return true;
 }
 
 function startLevel(i){
@@ -915,12 +974,16 @@ function startLevel(i){
   G.phase = 'brief';
   show('menu', false); show('results', false); show('finale', false); show('brief', true);
   show('hint', false);
-  setTxt('brNo', 'Market ' + (G.level + 1) + ' of ' + LEVELS.length);
+  setTxt('brNo', G.campaign
+    ? 'Market ' + (G.level + 1) + ' of ' + LEVELS.length
+    : 'Market ' + (G.level + 1) + ' — single run');
   setTxt('brTitle', lv.name);
   setTxt('brCars', G.cars);
   setTxt('brTarget', fmt(G.target));
   setTxt('brPeople', fmt(people.length));
-  setTxt('brFlavour', lv.flavour);
+  setTxt('brFlavour', lv.flavour +
+    (bestOn(G.level) ? '  ·  your best here: ' + fmt(bestOn(G.level)) +
+      ' (★ ' + starsOn(G.level) + '/3)' : ''));
   renderGarage();
   const gl = $('brGoals');
   if (gl) gl.innerHTML = G.goals.map(g => '<div class="goal"><i></i>' + g.text + '</div>').join('');
@@ -1023,8 +1086,12 @@ function levelEnd(){
   const lv = LEVELS[G.level];
   // one star for the target, then one per pair of goals on top
   const hit = G.levelScore >= G.target;
+  // the target opens the market; the goals are what the other two stars cost
   G.stars = !hit ? 0 : G.goalsDone >= 3 ? 3 : G.goalsDone >= 1 ? 2 : 1;
   const passed = hit;
+  if (!G.starsPer) G.starsPer = [];
+  if (G.stars > starsOn(G.level)) G.starsPer[G.level] = G.stars;
+  if (G.levelScore > bestOn(G.level)) G.bestPer[G.level] = G.levelScore;
   if (passed && G.level + 1 > G.unlocked) G.unlocked = Math.min(LEVELS.length - 1, G.level + 1);
   G.phase = 'results';
   saveBest();
@@ -1044,12 +1111,17 @@ function levelEnd(){
     rg.innerHTML = G.goals.map(g =>
       '<div class="goal' + (g.done ? ' on' : '') + '"><i>' + (g.done ? '✓' : '') + '</i>' + g.text + '</div>').join('');
   }
+  setTxt('rsStarline', !passed ? 'Beat the target to clear the market.'
+    : G.stars === 3 ? 'Three stars. Nothing left to prove here.'
+    : 'Target cleared. ' + (3 - G.goalsDone) + ' goal' + (3 - G.goalsDone === 1 ? '' : 's') +
+      ' left for the last ' + (3 - G.stars) + ' star' + (3 - G.stars === 1 ? '' : 's') + '.');
   setTxt('rsLine', passed
     ? 'Target was ' + fmt(G.target) + '. Running total ' + fmt(G.score) + '.'
     : 'You needed ' + fmt(G.target) + '. Have another go.');
   const nx = $('bNext'), rt = $('bRetry');
   if (nx){
     nx.textContent = !passed ? 'NEXT MARKET (LOCKED)'
+      : !G.campaign ? 'BACK TO THE MARKETS'
       : (G.level + 1 >= LEVELS.length ? 'FINISH' : 'NEXT MARKET');
     nx.className = passed ? 'btn gold' : 'btn alt dim';
   }
@@ -1059,6 +1131,7 @@ function levelEnd(){
 
 function nextLevel(){
   if (G.stars <= 0) return retryLevel();
+  if (!G.campaign){ show('results', false); return toMenu(); }
   if (G.level + 1 >= LEVELS.length) return finale();
   show('results', false);
   startLevel(G.level + 1);
