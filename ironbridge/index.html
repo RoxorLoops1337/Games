@@ -319,11 +319,27 @@
   /* Armed and waiting for a point on the world. */
   .ord.aim{ border-color:#8a6524; background:linear-gradient(180deg,#ffe8b0,#f6cf72); color:#3a2704;
     box-shadow:var(--lip), var(--shelf-gold), 0 0 0 2px rgba(255,190,90,.5); }
-  /* Spent: recovering, or the stores cannot pay for it. NOT `disabled` — the
-     press has to reach castPress so it can say WHICH of the two it is. The
-     look is the family's dead treatment; only the behaviour differs. */
+  /* Spent: recovering, the stores cannot pay for it, or there is nothing on
+     the bridge to aim it at. NOT `disabled` — the press has to reach castPress
+     so it can say which. But it should not TAKE a press to find out, because
+     measured, a slot is castable only 0.1 to 0.4 of the time out of two or
+     three: the dead tile is the state a commander looks at for most of a
+     match, and one flat grey for three different reasons is the state saying
+     nothing at all.
+
+     Recovering already speaks for itself — .cool turns the label into the
+     countdown. These two are the pair that looked identical. */
   .ord.dead{ background:#d9cdb4; border-color:#bcae92; color:#8f8370;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.3); }
+  /* Cannot pay: the coin-coloured wash the resource rail already uses for a
+     shortfall, so the reason reads in the same language the stores do. */
+  .ord.dead.poor{ background:linear-gradient(180deg,#e0d0a6,#d3bf8d); border-color:#b9a26e;
+    color:#7d6a42; }
+  /* Nothing to aim at: cooler and flatter, and the icon dims rather than the
+     card yellowing — there is nothing wrong with your hold, there is nothing
+     out there. */
+  .ord.dead.noaim{ background:#cfd3d8; border-color:#a9b1ba; color:#71797f; }
+  .ord.dead.noaim .ico{ opacity:.45; }
   /* The window has closed and the slot was left empty. A well, not a card:
      there is nothing here to press, and it should not look like there is. */
   .ord.locked{ background:var(--well); border-color:#202a3a; color:#7c8ea1;
@@ -16921,7 +16937,31 @@ function syncOrders(){
        the very least, and this tile going from dead to live inside their field
        of view is already the whole of the warning they need. A toast on top of
        it would be noise arriving 30 seconds early. */
-    if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i) || !spellTargets(d));
+    if (G.wave >= 1){
+      /* dead is still the SAME two facts the press reads — spellReady and
+         spellTargets — and the reason is derived on top of them rather than by
+         asking the world a second time. A test holds that line, and it caught
+         the first version of this reaching for canPay directly. */
+      const notReady = !spellReady(s, i);
+      const noTarget = !spellTargets(d);
+      const cool = cd > 0;
+      const poor = notReady && !cool;          // not ready, and not the clock
+      const noaim = !notReady && noTarget;     // affordable and off cooldown, nothing out there
+      b.classList.toggle('dead', notReady || noTarget);
+      // the two that used to share one look. Recovering keeps the plain dead
+      // treatment, because .cool is already telling that story in the label.
+      b.classList.toggle('poor', poor);
+      b.classList.toggle('noaim', noaim);
+      // and the same sentence castPress would have given, without the press
+      b.title = cool ? d.n + ' — recovering, ' + Math.ceil(cd) + 's.'
+        : poor ? d.n + ' — not enough in the stores.'
+        // NO_TARGET's phrases already end in a stop, and d.none's do too — the
+        // first version of this appended a second one and read "not on the
+        // bridge..". Trim whatever is there and put exactly one back.
+        : noaim ? d.n + ' — ' + String(d.none || NO_TARGET[d.target] || 'nothing to work on right now')
+            .replace(/[.\s]+$/, '') + '.'
+        : d.n + ' — ' + d.d;
+    }
   }
 }
 
