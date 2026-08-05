@@ -5910,7 +5910,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
       moveTo(x, y){ cur.push([x, y]); },
       lineTo(x, y){ cur.push([x, y]); },
       closePath(){},
-      fill(){ fills.push({ col:c2.fillStyle, pts:cur }); },
+      /* The cut edge is laid under every filled shape in CUT.ink — it is the
+         card the cone is cut from, not a face of the cone, so the recorder
+         drops it. Filtered by its own ink rather than by position, so a change
+         to where the edge sits does not quietly change what is measured. */
+      fill(){ if (c2.fillStyle !== IB.CUT.ink) fills.push({ col:c2.fillStyle, pts:cur }); },
       stroke(){ rims.push({ col:c2.strokeStyle, pts:cur }); },
     };
     const wasX = IB.SUN.x;
@@ -8584,8 +8588,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const near = holdAt(1.6), far = holdAt(.5);
     t.ok(near.n > 500 && far.n > 500, 'the hold drew at both zooms (' + far.n + ' / ' + near.n + ')');
     t.ok(near.dropped === 0 && far.dropped === 0, 'and the capture held both');
-    t.ok(near.n > far.n, 'a plot spells itself out only when you are close (' + far.n + ' → ' + near.n + ')');
-    t.ok(near.texts > far.texts, 'and the labels do the same (' + far.texts + ' → ' + near.texts + ')');
+    /* Total canvas ops used to stand in for "spells itself out", and it was
+       always a weak proxy — it counts every shape on screen, and a wider view
+       has more of them. The cut edge made that plain by adding a uniform pass
+       to every filled shape: far came back ABOVE near, not because the plot
+       says less up close but because the low zoom fits more world in.
+       The line under it was always the real claim, so it is the one kept. */
+    t.ok(near.texts > far.texts,
+      'a plot spells itself out only when you are close (' + far.texts + ' → ' + near.texts + ' labels)');
     // The crisp version: the flags and the labels must cross at the SAME zoom,
     // because they now ask one function. Find each crossing and compare.
     {
@@ -8872,8 +8882,21 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const dist = Math.abs(u.x - x0);
     return { dist, halfSteps, perM: dist > .01 ? halfSteps / dist : 0 };
   };
-  const kinds = Object.keys(IB.UNITS);
-  t.ok(kinds.length >= 4, 'the gait sweep covers every unit kind (' + kinds.length + ')');
+  /* Every kind that WALKS. A planted kind has spd 0 by design — speedOf(u)*dt
+     is the whole of the movement, so it never covers ground and never takes a
+     step, and it would fail every check below for the right reason. The
+     exclusion is turned into its own claim underneath rather than left as a
+     hole in the sweep. */
+  const kinds = Object.keys(IB.UNITS).filter(k => IB.UNITS[k].spd > 0);
+  const planted = Object.keys(IB.UNITS).filter(k => !(IB.UNITS[k].spd > 0));
+  t.ok(kinds.length >= 4, 'the gait sweep covers every walking kind (' + kinds.length + ')');
+  t.ok(planted.length > 0, 'and something is planted rather than walking (' + planted.join(', ') + ')');
+  for (const k of planted){
+    const r = gaitRun(k, 0);
+    t.ok(!r || r.dist < .5,
+      IB.UNITS[k].n + ' stays where it is put (' + (r ? r.dist.toFixed(2) : '-') + ' covered)');
+    t.ok(!r || r.halfSteps === 0, 'and does not walk on the spot either');
+  }
   const runs = [];
   for (const kind of kinds) for (const slow of [0, .5]){
     const r = gaitRun(kind, slow);
@@ -12848,8 +12871,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
     t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
     const SPELLS_IN = (k) => IB.SPELLS.filter(d => d.grp === k);
-    t.ok(IB.SPELLS.length === 11 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
-      'there are eleven of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
+    t.ok(IB.SPELLS.length === 12 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are twelve of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
     // Every one has a target kind the banner knows how to ask for. A tenth
     // order with a new kind fails HERE rather than arming a state whose banner
     // cannot say what would satisfy it.
@@ -12983,6 +13006,24 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // or a body: it lengthens recoveries that are already running, so a board
     // where the other commander is holding a full hand is a board where it is
     // correctly refused. Give them something to be waiting on.
+    /* Which orders legitimately draw from the simulation's stream: exactly the
+       ones that put bodies on the bridge. Read off the cast table so it cannot
+       go stale — an order that starts spawning joins this by spawning, and one
+       that starts drawing without spawning still fails below. */
+    const SPAWNING_ORDERS = (() => {
+      const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      const tbl = src.slice(src.indexOf('const SPELL_CAST'),
+        src.indexOf('\nfunction ', src.indexOf('const SPELL_CAST')));
+      return IB.SPELLS.filter(d => {
+        const i = tbl.indexOf('\n  ' + d.id + '(');
+        if (i < 0) return false;
+        const end = tbl.indexOf('\n  }', i);
+        return /spawnUnit|musterWave/.test(tbl.slice(i, end < 0 ? i + 300 : end + 4));
+      }).map(d => d.id);
+    })();
+    t.ok(SPAWNING_ORDERS.length === 2,
+      'two orders spawn, so two may touch the stream (' + SPAWNING_ORDERS.join(', ') + ')');
+
     const arm = (id, s) => {
       if (id !== 'counter') return;
       const foe = G.sides[s.i === 0 ? 1 : 0];
@@ -12997,12 +13038,16 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const err = IB.castSpell(s, Object.assign({ slot:0 }, aim(d.id, s)));
       t.ok(err === null, d.n + ' casts (' + err + ')');
       t.ok(s.spellCd[0] === d.cd, 'and goes on its ' + d.cd + 's cooldown');
-      // Second Muster is the ONLY spell allowed to move the simulation's random
-      // stream, and it has to, because it puts bodies on the bridge and
-      // spawnUnit draws for every one of them.
-      t.ok(d.id === 'muster' ? IB.seedNow() !== seed0 : IB.seedNow() === seed0,
-        d.id === 'muster'
-          ? 'Second Muster is the one spell that draws from the simulation’s stream'
+      /* An order may move the simulation's random stream ONLY if it puts bodies
+         on the bridge, because spawnUnit draws for every one of them. That set
+         used to be Second Muster alone and is now Muster and Pikewall, so the
+         rule is read off SPAWNS rather than written down as a name — the next
+         order to spawn joins it by spawning, and any other order that starts
+         drawing still fails here. */
+      const spawns = SPAWNING_ORDERS.includes(d.id);
+      t.ok(spawns ? IB.seedNow() !== seed0 : IB.seedNow() === seed0,
+        spawns
+          ? d.n + ' draws from the simulation’s stream, because it puts bodies on the bridge'
           : d.n + ' leaves the simulation’s stream exactly where it found it');
       t.ok(G.zones.length === z0,
         d.n + ' pushes no ground zone, which a resync drops on both machines');
@@ -13450,10 +13495,17 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // sometimes, or the ones at weight 1 may as well not be in the set.
     t.ok(takenBy.size === IB.SPELLS.length,
       'every order is still drafted sometimes (' + takenBy.size + ' of ' + IB.SPELLS.length + ')');
-    // ...and the preference is real. The threes should outdraw the ones by a
-    // margin no shuffle would produce over eighty drafts.
-    const heavy = IB.SPELLS.filter(d => d.ai.w >= 3).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
-    const light = IB.SPELLS.filter(d => d.ai.w === 1).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    /* ...and the preference is real: the heaviest orders should outdraw the
+       lightest by a margin no shuffle would produce over eighty drafts.
+       Both groups are read off ai.w rather than written down. This said
+       `w >= 3` and went red the moment the top weight became 2 — which is a
+       test reporting the number it was written beside, not the property it
+       was written for. */
+    const top = Math.max(...IB.SPELLS.map(d => d.ai.w));
+    const bot = Math.min(...IB.SPELLS.map(d => d.ai.w));
+    t.ok(top > bot, 'the draft is weighted at all (' + top + ' against ' + bot + ')');
+    const heavy = IB.SPELLS.filter(d => d.ai.w === top).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    const light = IB.SPELLS.filter(d => d.ai.w === bot).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
     t.ok(heavy > light, 'and the orders worth drafting are drafted more (' + heavy + ' vs ' + light + ')');
 
     // Deterministic, like everything else the Host decides: the same seed
@@ -13794,8 +13846,38 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(G.units.length === n, 'and no second muster marched');
     t.ok(!IB.spellUI.aim, 'nothing was armed by the refusal either');
     t.ok(IB.spellReady(s, 0) === false, 'the order reads as not ready...');
-    t.ok(/classList\.toggle\('dead', !spellReady\(s, i\) \|\| !spellTargets\(d\)\)/.test(SRC),
+    /* The tile's spent look still comes from the same two facts the press
+       reads. It now also says WHICH of them, because measured, a slot is
+       castable only 0.1-0.4 of the time out of two or three — the dead tile is
+       what a commander looks at for most of a match, and one flat grey for
+       three reasons says nothing. The reasons are derived from those same two
+       facts rather than asking the world again; the first version of this
+       reached for canPay directly and this assertion caught it. */
+    t.ok(/const notReady = !spellReady\(s, i\);/.test(SRC),
       '...and the tile in the bar is marked spent from that same fact rather than a second one');
+    t.ok(/const noTarget = !spellTargets\(d\);/.test(SRC), 'and from the same target test');
+    t.ok(/toggle\('dead', notReady \|\| noTarget\)/.test(SRC), 'which together are what makes it dead');
+    {
+      const fn = SRC.slice(SRC.indexOf('function syncOrders('));
+      const body = fn.slice(0, fn.indexOf('\n}\n')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+      t.ok(!/canPay\(/.test(body), 'and the reason never re-asks the stores itself');
+      t.ok(/toggle\('poor'/.test(body) && /toggle\('noaim'/.test(body),
+        'the two that used to look identical now do not');
+
+      /* Every phrase the no-target title can be built from already ends in a
+         stop. The first version appended a second and the tile read "not on
+         the bridge..", which the browser showed and the suite did not — so the
+         suite gets to see it now. */
+      const ends = Object.values(IB.NO_TARGET || {}).concat(
+        IB.SPELLS.map(d => d.none).filter(Boolean));
+      t.ok(ends.length >= 4, 'there are refusal phrases to check (' + ends.length + ')');
+      const dbl = ends.filter(x => /\.\s*$/.test(String(x)))
+        .map(x => String(x).replace(/[.\s]+$/, '') + '.')
+        .filter(x => /\.\./.test(x));
+      t.ok(dbl.length === 0, 'and trimming before the stop leaves exactly one (' + dbl.join(' | ') + ')');
+      t.ok(/replace\(\/\[\.\\s\]\+\$\/, ''\)/.test(SRC),
+        'which the title actually does rather than trusting the phrases');
+    }
     // ...or from the other reason an order cannot be given: nothing on the
     // board to point it at. Both come off the same enumerations the preview
     // and the resolver use, so a dead tile is never dead for a reason the
@@ -13938,13 +14020,25 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and each one has a shutter for the recovery to fill');
     t.ok((open.match(/data-slot="/g) || []).length === s.slots,
       'one tile per slot the hold has open');
-    // Left empty when the wave marches, a slot stops being a control at all.
+    /* Playing to the wave no longer reaches the empty state at all: musterDraft
+       deals a hand to any side that gave no orders, so the commander loses the
+       CHOICE to the clock and not the tools. That is the invariant now. */
     const s2 = fresh(8513);
     step(23);
-    t.ok(G.wave >= 1 && !s2.spells[0] && !s2.spells[1], 'a hold that chose nothing, once the wave is out');
+    t.ok(G.wave >= 1, 'the wave marches on a hold that chose nothing');
+    t.ok(s2.spells[0] && s2.spells[1], 'and it is holding a dealt hand rather than two blanks');
+    t.ok(!/class="ord locked"/.test(IB.ordersHtml()), 'so the bar has no dead plates on it');
+    t.ok(IB.castPress(0) !== 'nothing in that slot', 'and the first slot is a control again');
+
+    /* The dead plate still has one way to appear, which is why the branch that
+       draws it is kept: a save written BEFORE the muster existed stores
+       s.spells, so a mid-match resume can land here holding blanks that no
+       window is open to fill. Constructed directly, because play cannot get
+       here any more. */
+    s2.spells[0] = null; s2.spells[1] = null;
     const shut = IB.ordersHtml();
     t.ok((shut.match(/class="ord locked"/g) || []).length === s2.slots,
-      'both slots are dead plates rather than buttons');
+      'an old save resumed with empty slots draws them as dead plates, not as buttons');
     t.ok(!/data-slot=/.test(shut), 'with nothing on them to press');
     t.ok(IB.castPress(0) === 'nothing in that slot', 'and pressing where one was does nothing');
   }
@@ -16818,7 +16912,7 @@ t.ok(true, 'a final draw on a live match is clean');
      it opens held ten. Counted rather than written out, so the next order to
      be added cannot leave it lying. */
   {
-    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'eleven',
+    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'twelve',
       'the set has a word for its size (' + IB.NUM_WORD(IB.SPELLS.length) + ')');
     IB.newMatch({ diff:'veteran', seed:9606 });
     IB.showIntro('veteran');
@@ -17308,7 +17402,14 @@ t.ok(true, 'a final draw on a live match is clean');
      recovery and a mana short lit the full gold ring, showed no mark, and
      refused when pressed. */
   {
-    const sync = SRC.slice(SRC.indexOf('function syncOrders'), SRC.indexOf('function syncOrders') + 2600);
+    /* The whole function, not a fixed 2600 characters of it. The window was
+       long enough on the day it was written and a later insert near the top
+       pushed the line it looks for out the far end — a red suite that meant
+       "syncOrders grew", not "the ring lies again". Ends at the next top-level
+       function instead, so it cannot go stale by length. */
+    const at = SRC.indexOf('function syncOrders');
+    const end = SRC.indexOf('\nfunction ', at + 1);
+    const sync = SRC.slice(at, end > at ? end : at + 4000);
     t.ok(/skillArmed\(h, sk\)/.test(sync),
       'the bar asks the same question the release asks');
     t.ok(/classList\.toggle\('ready', armed\)/.test(sync),
@@ -18936,10 +19037,18 @@ t.ok(true, 'a final draw on a live match is clean');
   // the split, against the sentence written above the measurement
   const by = {};
   for (const d of IB.SPELLS) by[d.bound] = (by[d.bound] || 0) + 1;
+  /* Countermand moved from 'cd' to 'call', so this went 4/4/2/1 to 3/4/2/2.
+     Measured: it sat ready with nothing to catch 70.4% of its idle time, which
+     makes "its recovery is the limit" a sentence the player could read and be
+     misled by. Recovery was never what limited it. */
   t.ok(by.cd === 4, 'four run at their cooldown ceiling (' + by.cd + ')');
   t.ok(by.aim === 4, 'four wait for a target (' + by.aim + ')');
+  /* Pikewall was declared 'coin' on the strength of costing two stores, and
+     measured 46.0% recovering against 42.7% short — the only order where the
+     two are close, and the recovery still larger. Relabelled 'cd' by the same
+     rule the others were, which puts the split back to 4/4/2/2. */
   t.ok(by.coin === 2, 'two wait for the stores (' + by.coin + ')');
-  t.ok(by.call === 1, 'and one is castable whenever, so the timing is the whole of it (' + by.call + ')');
+  t.ok(by.call === 2, 'and two are all about the moment you pick (' + by.call + ')');
   t.ok(by.cd + by.aim + by.coin + by.call === IB.SPELLS.length, 'and that is all of them');
 
   /* The rule that caught the mislabel, derived rather than hand-checked.
@@ -18960,8 +19069,15 @@ t.ok(true, 'a final draw on a live match is clean');
       'so no point order claims it waits for one (' + wrong.join(', ') + ')');
     t.ok(IB.SPELL.withdraw.bound === 'call',
       'Withdraw is the one whose whole difficulty is choosing the moment');
-    t.ok(IB.SPELLS.filter(d => d.bound === 'call').every(d => d.target === 'point'),
-      'and everything in that category is one you can always cast');
+    /* Nothing in 'call' ever waits for a BODY — that is what separates it from
+       'aim'. Withdraw has no gate at all; Countermand has one, but what it
+       waits on is the enemy's cooldowns rather than anything standing on the
+       bridge, which is why it belongs here and not with the four that hunt for
+       a target. Both are orders whose whole difficulty is picking the moment. */
+    t.ok(IB.SPELLS.filter(d => d.bound === 'call').every(d => d.target === 'point' || d.target === 'self'),
+      'nothing in that category waits for a body on the bridge');
+    t.ok(IB.SPELL.counter.bound === 'call' && IB.SPELL.counter.target === 'self',
+      'Countermand is the one that waits on a state instead — their orders recovering');
   }
 
   // the ones the measurement calls out by name, so a later edit that reshuffles
@@ -19149,6 +19265,1240 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(good.skills.filter(sk => sk.ult).length === 1, 'exactly one of them');
   const ids = good.skills.map(sk => sk.id);
   t.ok(new Set(ids).size === ids.length, 'and no skill twice (' + ids.join(', ') + ')');
+}
+
+/* ================== letting go FIRES — it does not hand the moment to the AI
+
+   I misread this twice, in a commit and in a pull request, and both times the
+   comment inside setHoldUlt said plainly what it does. Releasing casts on the
+   spot, deliberately skipping the worth test wantCast applies to an ultimate
+   (a hero target, or three bodies within six, or a structure under 70%) and
+   keeping only the RANGE test. Judging whether the moment is worth it is
+   exactly the judgement the player is taking over.
+
+   The consequence is the whole value of the lever: a release fires into a thin
+   wave the AI would refuse. That is asserted below against wantCast itself, so
+   it cannot quietly stop being true.
+
+   And what the lever is worth, measured over 24 seeds, releasing through the
+   real command when N of theirs stand inside the ultimate's own reach:
+
+     rule           ults/match   hero kills   side-0 wins
+     AI decides        1.63          48          9/24
+     go at 2           1.67          36          9/24
+     go at 3           1.71          39          9/24
+     go at 4           1.79          41          9/24
+     go at 6           1.29          40          9/24
+
+   A rule moves WHEN and HOW OFTEN — up 10% at four, down a fifth at six, where
+   it holds past windows it should have taken. It does not move the result. The
+   reason is in the first column: an ultimate goes off under twice a match
+   against a ceiling near nine, because heroes arrive at a median 262s and die.
+   The one lever the player has on a hero operates on something that happens
+   1.7 times. That is worth knowing before anybody builds a second one. */
+{
+  IB.newMatch({ diff:'veteran', seed:7001 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(P(), 'mage');
+  const h = climb(P().heroes[0]);
+  h.dead = false; h.hp = h.mhp; h.mana = h.mmana; h.inLane = true; h.castLock = 0;
+  if (!G.units.includes(h)) G.units.push(h);
+  h.x = 40; h.y = 0;
+  const ult = h.skills.find(sk => sk.ult);
+  t.ok(!!ult, 'the hero owns an ultimate (' + h.skills.map(x => x.id).join(', ') + ')');
+
+  if (ult){
+    // ONE body in front of it: not a hero, not three, not a structure — the
+    // exact case wantCast turns down
+    const lone = IB.spawnUnit(1, 'melee', { x:h.x + 1.5, y:0 });
+    if (lone) lone.hp = lone.mhp;
+    IB.update(1 / 30);
+    ult.cdT = 0; h.mana = h.mmana;
+    const d = IB.SKILL[ult.id];
+    t.ok(IB.wantCast(h, d, lone) === false,
+      'the AI refuses an ultimate over a single body, which is its worth test');
+
+    t.ok(IB.setHoldUlt(P(), true) === null, 'the hold goes on');
+    ult.cdT = 0;
+    t.ok(IB.setHoldUlt(P(), false) === null, 'and comes off');
+    t.ok(ult.cdT > 0,
+      'and letting go FIRED it, in the same call, with no tick in between (' + ult.cdT.toFixed(1) + 's)');
+
+    // the range test is the one that survives
+    const src2 = SRC.slice(SRC.indexOf('function setHoldUlt('));
+    // comments stripped: the note inside setHoldUlt names wantCast on purpose,
+    // as the record of what it deliberately does NOT call
+    const body = src2.slice(0, src2.indexOf('\n}\n'))
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    t.ok(/fireSkill\(h, sk, tgt\)/.test(body), 'the release calls fireSkill itself');
+    t.ok(!/wantCast/.test(body), 'and never asks wantCast, which is the point of it');
+    t.ok(/needsTarget\(d\)/.test(body) && /d\.rng/.test(body),
+      'while the range test it does keep is the same one wantCast ends on');
+  }
+}
+
+/* ================== the ultimate rung is out of reach on lane time alone
+
+   An ultimate fires 1.63 times a match against a ceiling near nine, and the
+   accounting says why: 73.4% of a match passes before the side owns one at
+   all — 40.8% with no hero and 32.6% with a hero below the rung. The AI
+   declining accounts for 6.6% and dying 5.3%.
+
+   That is structural, and this is the part of it that is arithmetic rather
+   than measurement: the cost of the rung against the income that is always
+   flowing. A hero standing in the lane and doing nothing else cannot reach an
+   ultimate inside a match. It has to kill for it. */
+{
+  const total = (() => { let x = 0; for (let l = 1; l < C.ULT_LEVEL; l++) x += IB.xpNeed(l); return x; })();
+  t.ok(C.ULT_LEVEL === 12, 'the ultimate rung is the last of the ladder (' + C.ULT_LEVEL + ')');
+  t.ok(total > 5000 && total < 6000, 'reaching it costs ' + total + ' xp');
+
+  // the income that never stops, read off the source rather than restated
+  const m = SRC.match(/gainXp\(h, ([\d.]+) \* dt\);\s*\/\/ standing in the lane/);
+  t.ok(!!m, 'the lane income parsed (' + (m ? m[1] : 'missing') + '/s)');
+  if (m){
+    const perSec = Number(m[1]);
+    const secs = total / perSec;
+    t.ok(secs > 600,
+      'so lane time alone needs ' + secs.toFixed(0) + 's to reach it, which is longer than a match');
+    // 632s is the measured median over those same 24 matches
+    t.ok(secs > 632,
+      'and longer than the 632s median specifically — a hero reaches an ultimate by killing or not at all');
+  }
+
+  // and the rungs below it are where the three basics come from, which is why
+  // a hand-levelled hero has none of them
+  t.ok(C.SKILL_TIERS.length === 3, 'three rungs hand out skills (' + C.SKILL_TIERS.join(', ') + ')');
+  t.ok(C.SKILL_TIERS.every(l => l < C.ULT_LEVEL), 'all of them below the ultimate');
+  t.ok(Math.max(...C.SKILL_TIERS) < C.ULT_LEVEL, 'with the ultimate last of all');
+}
+
+
+/* ================== the opening's one decision, and the fuse on it
+
+   I set out to count how many decisions the opening holds. The first probe
+   said the answer was flat and healthy; it was arithmetic about the probe
+   (upCost was not exported, so canPay(s, {}) was always true). The second
+   probe, calibrated column by column against known answers, said the opposite
+   — 1.9 available actions at minute 0 against 15.8 at minute 11.
+
+   Both were wrong about the same thing. The order bar reads dark at t=0
+   because the slots are EMPTY, and filling them is the decision: two orders of
+   eleven, 55 distinct opening hands, given once and kept for the match. A
+   counter of "things pressable right now" scores the largest single choice in
+   the match at ~0.4, because it is one press.
+
+   The window it happens in is C.FIRST_WAVE — measured at 22.0s across 24
+   seeds, min and max both 22.0, because it is a constant and not a race.
+
+   What is asserted below is the arithmetic of that window and the three
+   things the sheet can truthfully say inside it. The per-minute table stays in
+   the comment where a measurement belongs. */
+{
+  const s0 = IB.G.sides[0];
+  t.ok(IB.SLOTS_AT_START === 2, 'the opening hand is two orders (' + IB.SLOTS_AT_START + ')');
+  t.ok(IB.SPELLS.length >= 11, 'drawn from ' + IB.SPELLS.length + ' on the board');
+  // 55 hands: C(11,2). Derived rather than typed, so adding a twelfth order
+  // moves the number instead of reddening the suite.
+  const hands = (() => {
+    const n = IB.SPELLS.length, k = IB.SLOTS_AT_START;
+    let r = 1; for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
+    return Math.round(r);
+  })();
+  t.ok(hands > 50, 'which is ' + hands + ' distinct opening hands, chosen once');
+  t.ok(C.FIRST_WAVE === 22, 'and the window to choose in is ' + C.FIRST_WAVE + 's');
+  t.ok(IB.ORDER_WINDOW_WARN * 2 < C.FIRST_WAVE,
+    'with last call at ' + IB.ORDER_WINDOW_WARN + 's — inside the second half of it');
+
+  // The gate itself: open before the wave, shut after, forever.
+  IB.newMatch({ diff:'veteran', seed:9400 });
+  const s = IB.G.sides[0], ids = IB.SPELLS.map(x => x.id);
+  t.ok(!s.spells[0] && !s.spells[1], 'a fresh side owns no orders at all');
+  t.ok(!IB.spellReady(s, 0), 'so the first slot is dark, and not because of a cooldown');
+  t.ok(IB.chooseSpell(s, 0, ids[0]) === null, 'the draft takes one before the wave');
+  t.ok(IB.spellReady(s, 0) === true, 'and the slot lights the moment it is given');
+  t.ok(IB.chooseSpell(s, 1, ids[0]) === 'already in another slot',
+    'the same order cannot fill both slots');
+  t.ok(IB.chooseSpell(s, 1, ids[1]) === null, 'a different one can');
+  IB.G.wave = 1;
+  t.ok(typeof IB.chooseSpell(IB.G.sides[1], 0, ids[0]) === 'string',
+    'and once the wave marches the draft refuses — that is what makes it a decision');
+
+  /* The three truths the sheet can tell, from one reader so the sentence built
+     into it and the digits rewritten under it once a frame cannot disagree.
+
+     Single player HOLDS the board while the sheet is open, so there is nothing
+     running out and a countdown there would be a clock that never moves. A net
+     match does not hold it — and the sheet is fixed to the whole viewport,
+     covering the dock and with it the .owin chip that was the only thing
+     saying so. */
+  IB.newMatch({ diff:'veteran', seed:9401 });
+  IB.G.held = false;
+  const open = IB.orderWindow();
+  t.ok(!!open && open.held === false, 'a running board reports an open window');
+  t.ok(open.left === C.FIRST_WAVE, 'with the whole ' + open.left + 's still on it');
+  t.ok(/\bid="spClock"/.test(IB.orderWindowTail()), 'which the sheet carries as its own chip');
+  t.ok(IB.orderWindowText() === C.FIRST_WAVE + 's', 'reading ' + IB.orderWindowText());
+
+  IB.G.waveT = IB.ORDER_WINDOW_WARN;
+  t.ok(/\bclosing\b/.test(IB.orderWindowTail()),
+    'at last call exactly, the chip goes red — the boundary counts as closing');
+  IB.G.waveT = IB.ORDER_WINDOW_WARN + 1;
+  t.ok(!/\bclosing\b/.test(IB.orderWindowTail()), 'a second earlier it does not');
+  t.ok(IB.orderWindowText() === (IB.ORDER_WINDOW_WARN + 1) + 's',
+    'and the digits follow the clock rather than a rebuild');
+
+  // a fraction of a second left still reads as a second, never as zero-with-time-on-it
+  IB.G.waveT = 0.2;
+  t.ok(IB.orderWindowText() === '1s', 'a fifth of a second left rounds up, not down');
+  IB.G.waveT = 0;
+  t.ok(IB.orderWindowText() === '0s', 'and only an empty clock reads zero');
+
+  IB.G.waveT = 12; IB.G.held = true;
+  const held = IB.orderWindow();
+  t.ok(held && held.held === true, 'a held board reports a held window');
+  t.ok(IB.orderWindowText() === '', 'and prints no clock, because nothing is moving');
+  t.ok(!/\d/.test(IB.orderWindowTail()) && /held while you choose/.test(IB.orderWindowTail()),
+    'it says so in words instead');
+
+  IB.G.held = false; IB.G.wave = 1;
+  t.ok(IB.orderWindow() === null, 'once the wave marches there is no window to report');
+  t.ok(IB.orderWindowTail() === '.', 'and the sentence just ends');
+  t.ok(IB.orderWindowText() === '', 'with nothing to count');
+}
+
+/* ================== the deadline had teeth for one side only
+
+   aiSpells is reached only through `if (s.ai) aiStep(s, dt)`, and nothing else
+   in the game ever filled an opening slot. Nothing opens the chooser on its own
+   either — showSpells is reached only by pressing a tile. So a player who never
+   pressed one arrived at the first wave with no orders and carried none for the
+   rest of the match: measured at 16 of 16 matches ending with the player's side
+   holding zero, over a median 377 seconds, while the Host on the same clock
+   drafted a full hand every time. With musterDraft in place the same probe
+   reports 0 of 16.
+
+   The window keeps its teeth. A hand you were dealt is worse than a hand you
+   chose — choosing is what the 55 openings are for — but it no longer costs you
+   the tools. What is asserted here is that shape: it fills only what is empty,
+   only once, only in the window, and identically on both peers. */
+{
+  const toWave = (secs) => { let g = 0;
+    while (IB.G.state === 'play' && IB.G.wave < 1 && g++ < 30 * (secs || 60)) IB.update(1 / 30); };
+
+  // it runs before the wave, because chooseSpell shuts the opening slots after
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const seam = src.slice(src.indexOf('G.waveT -= dt'), src.indexOf('G.waveT -= dt') + 220);
+  t.ok(seam.indexOf('musterDraft') < seam.indexOf('spawnWave'),
+    'the muster draft runs before spawnWave, which is what raises G.wave');
+  t.ok(/G\.wave === 0/.test(seam), 'and only on the wave that closes the window');
+
+  // a player who never touched it ends the window holding a full hand
+  IB.newMatch({ diff:'veteran', seed:9700 });
+  IB.G.sides[0].ai = false; IB.G.sides[1].ai = true;
+  t.ok(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).every(x => !x),
+    'a seat that never opened the chooser starts with nothing');
+  toWave();
+  const dealt = IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START);
+  t.ok(dealt.every(Boolean), 'and reaches the first wave holding ' + dealt.length + ' orders');
+  t.ok(new Set(dealt).size === dealt.length, 'no order dealt into two slots at once');
+  t.ok(dealt.every(id => !!IB.SPELL[id]), 'and every one of them is a real order');
+
+  // the hand it dealt is the hand it keeps — it is not a per-wave top-up
+  const before = dealt.join(',');
+  let g = 0;
+  while (IB.G.state === 'play' && IB.G.wave < 4 && g++ < 30 * 300) IB.update(1 / 30);
+  t.ok(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).join(',') === before,
+    'and three waves later it is still that hand, not a fresh one');
+
+  // an order the player DID give is never overwritten. aiDraft() would have:
+  // chooseSpell allows a pre-wave swap by design, so filling with it rather
+  // than per-empty-slot would spend the one decision the player managed to make
+  IB.newMatch({ diff:'veteran', seed:9701 });
+  IB.G.sides[0].ai = false; IB.G.sides[1].ai = true;
+  const mine = IB.SPELLS[3].id;
+  t.ok(IB.chooseSpell(IB.G.sides[0], 0, mine) === null, 'the player gives one order and runs out of clock');
+  toWave();
+  t.ok(IB.G.sides[0].spells[0] === mine, 'the muster leaves it exactly where they put it');
+  t.ok(!!IB.G.sides[0].spells[1], 'and fills only the slot they left empty');
+  t.ok(IB.G.sides[0].spells[1] !== mine, 'with a different order, not a second copy');
+
+  // a side that drafted for itself is untouched, which is why this changes
+  // nothing about how the Host plays
+  IB.newMatch({ diff:'veteran', seed:9702 });
+  IB.G.sides[0].ai = true; IB.G.sides[1].ai = true;
+  toWave();
+  t.ok(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).every(Boolean),
+    'an AI seat reaches the wave already holding its own hand');
+  // ...and calling it again on a full hand changes nothing at all
+  const full = IB.G.sides[0].spells.join(',');
+  IB.musterDraft();
+  t.ok(IB.G.sides[0].spells.join(',') === full, 'so a second call is a no-op on it');
+
+  /* Lockstep. s.spells is mixed into netHash, so a hand dealt by the muster is
+     a hand both machines have to agree on. aiDraftLate spends one arnd() per
+     slot from the per-side stream and both peers run the same tick, so the
+     same seed must produce the same hand AND the same hash. */
+  const run = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    IB.G.sides[0].ai = false; IB.G.sides[1].ai = true;
+    let n = 0;
+    while (IB.G.state === 'play' && n++ < 30 * 120) IB.update(1 / 30);
+    return { h:IB.netHash(), hand:IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).join(',') };
+  };
+  const a = run(9703), b = run(9703);
+  t.ok(a.hand === b.hand, 'the same seed deals the same hand twice (' + a.hand + ')');
+  t.ok(a.h === b.h, 'and the two runs agree on the hash a peer would compare');
+  const c = run(9704);
+  t.ok(c.hand !== a.hand, 'a different seed deals a different hand — it is drawn, not fixed');
+}
+
+/* ---- and the notice that goes with it fits the lane it is written into.
+
+   Measured in a real browser: the muster notice renders 329px wide at both
+   1440x900 and 390x844, inside a toast lane of about 338px on desktop and
+   368px on a phone, and does not clip. The first version named the two orders
+   it had dealt — "the muster chose Countermand and Second Muster" — and came
+   back as "…the muster chose Coun…", because two order names can exceed the
+   whole budget on their own. The tiles it just filled carry those names in
+   full, on screen, at the moment the toast appears.
+
+   So what is held here is the rule that follows from that: this notice does
+   not name orders. A character bound rather than a pixel one, because the
+   suite has no browser — and the pixel measurement above is what says 43 is
+   the right number. */
+{
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const tAt = src.indexOf('function musterTell');
+  const tell = src.slice(tAt, src.indexOf('\nfunction ', tAt + 1));
+  t.ok(tell.length > 40, 'musterTell parsed out of the source');
+  for (const m of tell.matchAll(/'([^']{12,})'/g))
+    t.ok(m[1].length <= 43, 'the notice "' + m[1] + '" fits the lane (' + m[1].length + ' of 43)');
+  t.ok(!/\bd\.n\b|tookPhrase|\.map\(/.test(tell),
+    'and it does not build a list of order names — that is what clipped it');
+  // it is a cosmetic writer, so it must be behind the same two gates the rest are
+  t.ok(/HEADLESS/.test(tell), 'it stands down under the harness');
+  t.ok(/forMe\(/.test(tell), 'and speaks only to the seat it happened to, not to the side');
+  // and the draft it reports is NOT cosmetic, so the toast must not be what does it
+  // Bounded to the function, not to a character count: musterTell is the very
+  // next thing in the file, so a fixed window reads its fxToast and calls it
+  // musterDraft's. That is the same brittleness the syncOrders slice had.
+  const dAt = src.indexOf('function musterDraft');
+  const draft = src.slice(dAt, src.indexOf('\nfunction ', dAt + 1));
+  t.ok(/aiDraftLate/.test(draft), 'the draft itself goes through the same command a slot fill always did');
+  t.ok(!/fxToast|fxRnd/.test(draft), 'and the sim half of it says nothing and draws nothing');
+}
+
+/* ================== the draft weight and the win rate had come apart
+
+   ai.w is how often aiPickSpell takes an order into a slot — for the Host, and
+   since the muster for a commander who gave no orders too. It is not how well
+   the order plays, and the two had drifted all the way apart.
+
+   Measured: all 55 openings, 32 seeds each, both sides AI-played so the only
+   difference between arms was the opening pair. Read per ORDER, because each
+   appears in 10 pairs and so carries 320 matches (SE 2.8) where a single pair
+   at n=32 carries 8.8 and answers nothing:
+
+     muster 66.3  withdraw 60.9  pyre 53.4  rampart 46.6  warp 45.3
+     hobble 42.8  unbind 42.2  brace 40.3  pitch 40.0  bombard 38.1  counter 37.2
+
+   29.1 points best to worst, 7.4 standard errors apart — which opening you take
+   is one of the largest single effects in the game, which is what the window
+   and the sheet clock were built on the assumption of.
+
+   The weights knew none of it: Spearman rank correlation 0.07. And the draft
+   left to itself came in at 47.5% (76/160, SE 4.0) against a 46.6% all-hands
+   mean — 0.2 SE, indistinguishable from taking a hand at random. The two orders
+   it dealt most, Pitch Fire at 14.7% of slots and Bombard at 11.9%, were two of
+   the three weakest.
+
+   What is asserted here is the STRUCTURE the fix restores, not the ranking. A
+   test that pinned those eleven numbers would bake one sample into the suite
+   and go red the first time an order is retuned. The invariant is that no order
+   carries a draft boost without a stated reason. */
+{
+  const W = {};
+  for (const d of IB.SPELLS) W[d.id] = d.ai.w;
+  const vals = Object.values(W);
+  t.ok(vals.every(w => w >= 1), 'every order is drafted sometimes (min weight ' + Math.min(...vals) + ')');
+
+  /* Two tiers, and only two. The rare pair is rare for a stated reason — Warp
+     Banner and Unbind are situational rather than weak, and both measured
+     mid-table (45.3 and 42.2), so their 1 is about when they are useful, not
+     about how strong they are. Everything else sits on the common weight. */
+  const common = 2, rare = 1;
+  const rares = Object.keys(W).filter(id => W[id] === rare).sort();
+  t.ok(rares.join(',') === 'unbind,warp',
+    'exactly two orders are drafted rarely, and they are the situational pair (' + rares.join(',') + ')');
+  const boosted = Object.keys(W).filter(id => W[id] > common).sort();
+  t.ok(boosted.length === 0,
+    'and no order carries a boost above the common weight (' + (boosted.join(',') || 'none') + ')');
+  t.ok(Object.keys(W).filter(id => W[id] === common).length === IB.SPELLS.length - rares.length,
+    'so the rest of the table is flat');
+
+  /* The share arithmetic, which is what the fix actually changed and the one
+     thing here that is exact rather than sampled. Before: Bombard and Pitch
+     each carried 3 of a 22-point pool, 13.6% apiece and 27.3% together. */
+  const tot = vals.reduce((a, b) => a + b, 0);
+  const share = (id) => 100 * W[id] / tot;
+  /* The pool was 22 points across ELEVEN orders when Bombard and Pitch carried
+     3 apiece, fell to 20 when that boost came off, and is 22 again across
+     TWELVE now Pikewall has joined at the common weight. So the absolute
+     shares have come back to where they started — everything is diluted by the
+     new order — and pinning them would be pinning a coincidence.
+     What the #1464 fix actually established survives dilution: no order carries
+     a weight its peers do not. That is what is checked. */
+  t.ok(tot === 22, 'the draft pool is ' + tot + ' points across ' + IB.SPELLS.length + ' orders');
+  t.ok(share('bombard') === share('muster'),
+    'Bombard is dealt exactly as often as the strongest order, not 1.5x as often');
+  t.ok(share('pitch') === share('muster'), 'and so is Pitch Fire');
+  t.ok(share('pike') === share('muster'), 'and the new order joined at that same weight');
+  t.ok(share('bombard') + share('pitch') < 27.3,
+    'so the two lane-damage orders together carry ' +
+    (share('bombard') + share('pitch')).toFixed(1) + '% rather than the 27.3% they once did');
+
+  // the widest share gap left is the situational pair's, and it is 2:1 by design
+  const shares = Object.keys(W).map(share);
+  t.ok(Math.max(...shares) / Math.min(...shares) === 2,
+    'the widest ratio in the pool is the stated 2:1, not an accident');
+
+  /* And the draft still works: it is the same command, it fills every slot, and
+     it never deals the same order twice. Those are the properties the muster
+     leans on, so a weight change must not disturb them. */
+  IB.newMatch({ diff:'veteran', seed:9800 });
+  const s = IB.G.sides[0];
+  IB.aiDraft(s);
+  const hand = s.spells.slice(0, IB.SLOTS_AT_START);
+  t.ok(hand.every(Boolean), 'aiDraft still fills every opening slot');
+  t.ok(new Set(hand).size === hand.length, 'and never twice with the same order');
+  t.ok(hand.every(id => !!IB.SPELL[id]), 'with real orders');
+}
+
+/* ================== the draft weight did not know which orders win
+
+   Measured: all 55 openings, 32 seeds each, both sides AI-played so the only
+   difference between arms is the opening pair side 0 starts holding. Read per
+   ORDER — each appears in 10 of the 55 pairs, so 320 matches and a standard
+   error of 2.8 points, where a single pair at n=32 carries 8.8 and settles
+   nothing.
+
+     muster 66.3  withdraw 60.9  pyre 53.4  rampart 46.6  warp 45.3
+     hobble 42.8  unbind 42.2  brace 40.3  pitch 40.0  bombard 38.1  counter 37.2
+
+   Best minus worst is 29.1 points, 7.4 standard errors apart. Which opening you
+   take is one of the largest single effects in the game, so the 22-second window
+   really is a decision — which is the assumption the sheet clock and the muster
+   were both built on, now checked rather than asserted.
+
+   The draft weights knew none of it: Spearman rank correlation between ai.w and
+   win rate was 0.07. And the draft left to itself came out at 47.5% over 160
+   seeds (SE 4.0) against a 46.6% all-hands mean — 0.2 SE, indistinguishable
+   from taking a hand at random. So the muster shipped last round was not
+   handing anyone the AI's good judgement; there was no judgement in it.
+
+   Worse, the two orders it dealt MOST often were two of the three weakest.
+
+   What is asserted below is the invariant the fix establishes — no order
+   carries an unexplained boost — rather than the ranking itself, which is a
+   sample and would go stale the moment an order is tuned. */
+{
+  const W = {};
+  for (const d of IB.SPELLS) W[d.id] = d.ai.w;
+  const vals = IB.SPELLS.map(d => d.ai.w);
+
+  t.ok(vals.every(w => w > 0), 'every order can be drafted at all');
+  // Two orders are deliberately rare — situational, not weak (Warp Banner and
+  // Unbind both measured mid-table at 45.3 and 42.2). Everything else sits on
+  // one common weight, so nothing is over-dealt for a reason nobody recorded.
+  const rare = IB.SPELLS.filter(d => d.ai.w === 1).map(d => d.id).sort();
+  const common = IB.SPELLS.filter(d => d.ai.w !== 1);
+  t.ok(rare.join(',') === 'unbind,warp', 'the two rare orders are the two stated ones (' + rare.join(', ') + ')');
+  t.ok(new Set(common.map(d => d.ai.w)).size === 1,
+    'and every other order shares one weight — no unexplained boost (' +
+    [...new Set(common.map(d => d.ai.w))].join('/') + ')');
+  t.ok(Math.max(...vals) <= 2 * Math.min(...vals),
+    'so the most-dealt order is at most twice the least (' + Math.max(...vals) + ':' + Math.min(...vals) + ')');
+
+  // Bombard and Pitch Fire specifically: they carried 3 while measuring 38.1 and
+  // 40.0, the bottom of the table, and so were dealt at 13.6% of the pool each.
+  t.ok(W.bombard === W.muster && W.pitch === W.muster,
+    'Bombard and Pitch Fire are dealt no more often than Second Muster');
+
+  /* The share arithmetic, which is exact rather than sampled: aiPickSpell walks
+     the list accumulating ai.w, so an order's chance of being taken first is
+     its weight over the total. This is what actually changed. */
+  const tot = vals.reduce((a, b) => a + b, 0);
+  const share = (id) => 100 * W[id] / tot;
+  t.ok(Math.abs(share('bombard') - share('pitch')) < 1e-9,
+    'the two share one figure, as two lane orders of the same kind should');
+  t.ok(share('bombard') < 13.6,
+    'and it is below the 13.6% each of them used to carry (now ' + share('bombard').toFixed(1) + '%)');
+  /* This used to say the strongest order was dealt MORE often than before —
+     true when removing the boost shrank the pool from 22 to 20. A twelfth order
+     puts the pool back to 22 and dilutes everyone equally, so that sentence is
+     now false for a reason that has nothing to do with the fix it was written
+     for. The fix itself is the equality above. */
+  t.ok(share('muster') === share('bombard') && share('muster') === share('pitch'),
+    'the strongest order is dealt no more often than the two that were boosted (' +
+    share('muster').toFixed(1) + '% each)');
+  // the pool still sums to one whole draft
+  t.ok(Math.abs(IB.SPELLS.reduce((a, d) => a + 100 * d.ai.w / tot, 0) - 100) < 1e-9,
+    'and the eleven shares still make exactly one draft');
+
+  /* It is still a draw, not a ranking. Fitting 11 weights to 11 measured win
+     rates would bake this sample into the game and sharpen the Host, and the
+     PvE numbers were tuned against a Host with no spells at all. */
+  t.ok(new Set(vals).size > 1, 'the draft is still weighted rather than flat');
+  const seen = new Set();
+  for (let seed = 6100; seed < 6140; seed++){
+    IB.newMatch({ diff:'veteran', seed });
+    IB.G.sides[0].ai = true; IB.G.sides[1].ai = true;
+    let g = 0; while (IB.G.state === 'play' && IB.G.wave < 1 && g++ < 30 * 60) IB.update(1 / 30);
+    seen.add(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).join(','));
+  }
+  t.ok(seen.size > 8, 'and over 40 matches it drew ' + seen.size + ' different opening hands');
+}
+
+/* ================== the obvious fix for Countermand does not work
+
+   It measured 37.2% over 320 matches — the weakest order in the set, and the
+   whole "their commander" group on its own. The reason is a trade, and most of
+   it is arithmetic rather than sampling.
+
+   It lengthens each of the foe's RECOVERING orders by COUNTER.add. With two
+   enemy slots the most it can ever deny is 2 x 25 = 50 seconds, and at a 120s
+   recovery it spends 120 of its own to do it — a ceiling of 0.42, where 1.00
+   is an even trade of slot-seconds. Measured over 40 matches holding it: 157
+   casts, a mean of 1.30 orders caught, 5,100 seconds denied for 18,840 spent.
+   A realised ratio of 0.27.
+
+   So the recovery was cut to 75s, lifting that to 0.43, and the same ten pairs
+   over the same 32 seeds were re-run: 37.8% against 37.2%. A change of 0.6
+   points, 0.2 standard errors. The cut was reverted.
+
+   That is the finding worth keeping — not "Countermand is weak", which was
+   already known, but that its PRICE is not why. Making it cheaper to use does
+   not make holding it better. The weakness is in what it does, and no constant
+   in this row will fix it.
+
+   Asserted below: the trade arithmetic, which is exact, and the refusal, which
+   is the design. Not the win rate, which is a sample. */
+{
+  const d = IB.SPELL.counter;
+  t.ok(!!d, 'Countermand is in the set');
+  t.ok(d.target === 'self', 'it is cast on your own hold, so it never waits for a body');
+  t.ok(d.cd === 120, 'and it still recovers in ' + d.cd + 's, because cutting it changed nothing');
+
+  // COUNTER.add is not exported; read it off the source beside the effect
+  const csrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const cm = csrc.match(/const COUNTER = \{ add:(\d+) \}/);
+  t.ok(!!cm, 'the amount it adds parsed off the source (' + (cm ? cm[1] : 'missing') + ')');
+  const add = cm ? Number(cm[1]) : 0;
+
+  /* The ceiling: every enemy opening slot caught, every single time. This is
+     the best the order can do against a commander who never earns a third. */
+  const ceiling = (IB.SLOTS_AT_START * add) / d.cd;
+  t.ok(ceiling < 0.5,
+    'even catching everything, it trades ' + ceiling.toFixed(2) + ' slot-seconds per slot-second');
+  t.ok(ceiling > 0, 'though it does deny something');
+  // and the realised rate, at the measured mean catch of 1.30
+  const realised = (1.30 * add) / d.cd;
+  t.ok(realised < ceiling, 'in play it lands under that (' + realised.toFixed(2) + ')');
+  t.ok(realised < 0.35, 'well under an even trade — which a cheaper price did not repair');
+
+  /* The label. bound is what the chooser prints under "what limits this", and
+     'cd' claimed recovery was it while the order sat ready with nothing to
+     catch 70.4% of its idle time. */
+  t.ok(d.bound === 'call', 'what limits it is the call, not the recovery');
+  t.ok(/time it/i.test(d.d), 'which is what the card already told the player');
+  t.ok(!!IB.SPELL_BOUND[d.bound], 'and the label resolves to a phrase (' + IB.SPELL_BOUND[d.bound] + ')');
+  t.ok(!/recovery/i.test(IB.SPELL_BOUND[d.bound]), 'that no longer claims recovery is the limit');
+
+  // every order still declares one, and every declared one is real
+  for (const sp of IB.SPELLS)
+    t.ok(!!IB.SPELL_BOUND[sp.bound], sp.n + ' declares a bound the table knows (' + sp.bound + ')');
+
+  /* The refusal is the other half of the design: against a commander holding a
+     full ready hand there is nothing to lengthen, and it must not be spent. */
+  IB.newMatch({ diff:'veteran', seed:7810 });
+  const cme = IB.G.sides[0], cfoe = IB.G.sides[1];
+  IB.chooseSpell(cme, 0, 'counter'); IB.chooseSpell(cme, 1, 'muster');
+  IB.chooseSpell(cfoe, 0, 'bombard'); IB.chooseSpell(cfoe, 1, 'pitch');
+  t.ok(IB.counterCatch(cme) === 0, 'nothing to catch against a full ready hand');
+  t.ok(typeof IB.castSpell(cme, { slot:0 }) === 'string', 'so the cast is refused rather than spent');
+  t.ok(cme.spellCd[0] === 0, 'and the order is still ready afterwards');
+
+  cfoe.spellCd[0] = 40; cfoe.spellCd[1] = 10;
+  t.ok(IB.counterCatch(cme) === 2, 'both of theirs recovering is a catch of two');
+  t.ok(IB.castSpell(cme, { slot:0 }) === null, 'and now it fires');
+  t.ok(Math.abs(cfoe.spellCd[1] - (10 + add)) < 1e-6,
+    'adding exactly ' + add + 's to each (' + cfoe.spellCd[1].toFixed(1) + 's)');
+  t.ok(Math.abs(cme.spellCd[0] - d.cd) < 1e-6,
+    'and costing its own full recovery (' + cme.spellCd[0].toFixed(0) + 's)');
+}
+/* ================== Countermand stops being pure denial
+
+   Two rounds established what was wrong with it. It measured 37.2% over 320
+   matches, the weakest order in the set. It denied 5,100 seconds of their
+   order time for 18,840 of its own — a ratio of 0.27 where 1.00 is an even
+   trade — and cutting its recovery 120s to 75s moved the win rate 0.6 points,
+   0.2 standard errors. The price was never the problem. Denial of a resource
+   spent a handful of times a match is worth very little at any price.
+
+   So the effect changed rather than the number: every second it puts on theirs
+   now comes off yours, by the same rule read the other way. An order already
+   recovering, and only that, on both sides.
+
+   Measured over the same 40 matches: 153 casts, and on 87.6% of them the
+   refund had something of mine to shorten, taking off 17.9 seconds per cast —
+   2,746 seconds across the run, about 69 a match. The mechanic lands; it is
+   not a line on a card describing something that rarely happens.
+
+   The win rate went 37.2% to 39.7%: +2.5 points, 0.6 standard errors on 320
+   matches. That is BELOW what this rig resolves — roughly 8 points — and is
+   not claimed. Resolving 2.5 points would need about 3,200 matches per arm,
+   fifty times this run. What is asserted below is the arithmetic and the
+   symmetry, both of which are exact. */
+{
+  const csrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const cm = csrc.match(/const COUNTER = \{ add:(\d+) \}/);
+  t.ok(!!cm, 'the amount it moves parsed off the source (' + (cm ? cm[1] : 'missing') + ')');
+  const add = cm ? Number(cm[1]) : 0;
+
+  const mk = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    const me = IB.G.sides[0], foe = IB.G.sides[1];
+    IB.chooseSpell(me, 0, 'counter'); IB.chooseSpell(me, 1, 'muster');
+    IB.chooseSpell(foe, 0, 'bombard'); IB.chooseSpell(foe, 1, 'pitch');
+    return { me, foe };
+  };
+
+  // the two halves, one cast, same amount each way
+  {
+    const { me, foe } = mk(8600);
+    foe.spellCd[0] = 40; me.spellCd[1] = 60;
+    t.ok(IB.castSpell(me, { slot:0 }) === null, 'it fires with one of theirs recovering');
+    t.ok(Math.abs(foe.spellCd[0] - (40 + add)) < 1e-6,
+      'theirs goes out by ' + add + 's (' + foe.spellCd[0].toFixed(0) + ')');
+    t.ok(Math.abs(me.spellCd[1] - (60 - add)) < 1e-6,
+      'and mine comes in by the same ' + add + 's (' + me.spellCd[1].toFixed(0) + ')');
+    t.ok(Math.abs(me.spellCd[0] - IB.SPELL.counter.cd) < 1e-6,
+      'while Countermand itself pays full price — it cannot shorten its own recovery');
+  }
+
+  /* The same rule read both ways: a READY order is not recovering, and there
+     is nothing in it to lengthen or to shorten. That symmetry is the whole
+     design, so it is checked on both sides rather than assumed from one. */
+  {
+    const { me, foe } = mk(8601);
+    foe.spellCd[0] = 30; me.spellCd[1] = 0;
+    IB.castSpell(me, { slot:0 });
+    t.ok(me.spellCd[1] === 0, 'an order of mine held ready is left alone');
+  }
+  {
+    const { me, foe } = mk(8602);
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0; me.spellCd[1] = 50;
+    t.ok(typeof IB.castSpell(me, { slot:0 }) === 'string',
+      'and against a full ready hand it is still refused outright');
+    t.ok(Math.abs(me.spellCd[1] - 50) < 1e-6, 'so a refusal refunds nothing either');
+    t.ok(me.spellCd[0] === 0, 'and costs nothing');
+  }
+
+  // never below zero — a recovery shorter than the refund lands on ready
+  {
+    const { me, foe } = mk(8603);
+    foe.spellCd[0] = 30; me.spellCd[1] = Math.max(1, add - 4);
+    IB.castSpell(me, { slot:0 });
+    t.ok(me.spellCd[1] === 0, 'a recovery shorter than the refund lands on zero, not under it');
+    t.ok(IB.spellReady(me, 1) === true, 'which means ready, not negative');
+  }
+
+  /* What the trade is now, as arithmetic. Denial alone had a ceiling of
+     2 x add / cd; the refund adds up to the same again on my own side, so the
+     ceiling doubles without the recovery moving at all. */
+  const d = IB.SPELL.counter;
+  const denyCeil = (IB.SLOTS_AT_START * add) / d.cd;
+  const bothCeil = (2 * IB.SLOTS_AT_START * add) / d.cd;
+  t.ok(d.cd === 120, 'the recovery is untouched at ' + d.cd + 's — that was tried and did nothing');
+  t.ok(Math.abs(bothCeil - 2 * denyCeil) < 1e-9,
+    'the ceiling doubles, ' + denyCeil.toFixed(2) + ' to ' + bothCeil.toFixed(2) +
+    ' slot-seconds per slot-second');
+  t.ok(bothCeil > 0.8, 'which brings it near an even trade at last (' + bothCeil.toFixed(2) + ')');
+
+  // and the card says both halves, because a card that says one is a lie
+  t.ok(/25 seconds longer/.test(d.d), 'the card still states what it does to theirs');
+  t.ok(/sooner/.test(d.d), 'and now states what it does for yours');
+  t.ok(/held ready|holding ready/.test(d.d), 'and that neither half touches a ready order');
+  t.ok(/time it/i.test(d.d), 'while still telling the player the moment is the decision');
+  t.ok(d.bound === 'call', 'which is what its bound says too');
+}
+
+/* ================== Bombard caught six and finished one
+
+   It measured 38.1% over 320 matches, next-weakest in the set — while Withdraw,
+   also a lane-point order aimed the same way at the same frontline, measured
+   60.9%. So neither the shape nor the aim was the problem.
+
+   What a salvo actually did, over 191 salvos in 40 matches: it CAUGHT 5.94
+   bodies and earned 3.27 gold. Gold here is bounty on bodies finished, read off
+   the caster's own purse, and bounties run 2 to 7 — so a salvo that caught six
+   finished about one. The damage was spread too thin to convert.
+
+   The arithmetic under that: 140 magic a shell against a 340hp Footman at 12mr
+   is 2.7 shells to kill, and at a spread of 3.0 against a radius of 3.6 only a
+   body near the middle of the walk stood inside more than one shell.
+
+   Both knobs were measured on gold per salvo rather than on win rate, because
+   191 salvos is far better powered than 40 matches:
+
+     dmg  spread   caught   gold
+     140     3.0     5.94   3.27      <- was
+     170     3.0     5.72   4.57
+     240     3.0     5.81   9.44
+     140     2.2     5.83   5.18      <- is
+     140     1.6     5.66   5.73
+
+   Tightening the walk did most of the work with no extra damage at all. 1.6
+   scored a shade higher and was refused: at that spacing the three shells
+   nearly coincide and the salvo stops walking anywhere, which is the one thing
+   its card says it does.
+
+   Asserted below is the geometry, which is exact. Not the gold, which is a
+   sample. */
+{
+  const B = IB.BOMB;
+  t.ok(B.n === 3, 'the salvo is ' + B.n + ' shells');
+  t.ok(B.dmg === 140, 'at ' + B.dmg + ' magic each — untouched, because the spread was the fault');
+
+  /* The walk still walks. Total travel is (n-1) x spread, and it has to stay a
+     line rather than collapse onto a point, or the card is describing something
+     the player cannot see happen. */
+  const walk = (B.n - 1) * B.spread;
+  t.ok(B.spread < 3.0, 'the shells landed closer together (' + B.spread + ' from 3.0)');
+  t.ok(walk > B.r, 'but the salvo still travels further than one shell is wide (' +
+    walk.toFixed(1) + ' against ' + B.r + ')');
+  t.ok(B.spread > B.r / 3, 'and no two of them sit on top of each other (' + B.spread + ')');
+
+  /* How many shells a body in the middle of the walk is inside. This is the
+     number that changed: a shell covers r either side, so the count is how many
+     step positions fall within r. */
+  const overlap = (sp) => Math.min(B.n, 1 + 2 * Math.floor(B.r / sp));
+  t.ok(overlap(B.spread) >= overlap(3.0),
+    'a body in the middle is inside at least as many shells as before (' +
+    overlap(B.spread) + ' against ' + overlap(3.0) + ')');
+  t.ok(overlap(B.spread) === B.n, 'in fact all ' + B.n + ' of them');
+
+  /* And what that is worth against the line, from the unit table rather than
+     from a number typed here. Magic damage is cut by mr the standard way. */
+  const after = (mr) => B.dmg * (100 / (100 + mr));
+  const need = (k) => IB.UNITS[k].hp / after(IB.UNITS[k].mr);
+  t.ok(need('melee') > 2, 'a Footman still takes more than two shells (' + need('melee').toFixed(1) + ')');
+  t.ok(need('melee') <= B.n, 'but no more than the salvo carries — which it can now all land');
+  t.ok(need('grunt') < 2, 'a Levy still falls to two (' + need('grunt').toFixed(1) + ')');
+  t.ok(need('cannon') > B.n, 'and a Cannon still survives a full salvo (' + need('cannon').toFixed(1) + ')');
+
+  // the slow it leaves on whatever lives is untouched
+  t.ok(B.slow === .30 && B.slowT === 1.5, 'and what survives is slowed exactly as before');
+
+  /* The salvo end still clears its own tally at both ends, or a run cut short
+     leaves a count standing for the next one to print. */
+  const bsrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const cast = bsrc.slice(bsrc.indexOf('bombard(s, c){'), bsrc.indexOf('bombard(s, c){') + 220);
+  t.ok(/bombSeen\[s\.i\]\.clear\(\)/.test(cast), 'the cast clears the tally it is about to fill');
+  t.ok(/orderGold\[s\.i\] = 0/.test(cast), 'and the purse reading with it');
+
+  // it lands where it is aimed, and a salvo is one salvo per hold
+  IB.newMatch({ diff:'veteran', seed:8850 });
+  const bs = IB.G.sides[0];
+  IB.chooseSpell(bs, 0, 'bombard'); IB.chooseSpell(bs, 1, 'muster');
+  bs.res.iron = 9000;
+  t.ok(IB.castSpell(bs, { slot:0, x:40 }) === null, 'a salvo is accepted onto a point');
+  t.ok(bs.bombN === B.n, 'and queues every shell (' + bs.bombN + ')');
+  t.ok(Math.abs(bs.bombX - 40) < 1e-6, 'at the point it was given (' + bs.bombX + ')');
+}
+
+/* ================== Pitch Fire was broad and shallow
+
+   It measured 40.0%, last of the bottom four, and the measurement had to be
+   built differently from Bombard's. That was a salvo resolved in a fraction of
+   a second; this is a zone that burns for six, so the count as it LANDS — all
+   its castTell reports — is not the count that burns. Bodies walk in and out.
+   The unit is body-seconds.
+
+   It was never short of damage. Over 241 pours in 40 matches: 25.04
+   body-seconds a pour, and with pure:true skipping mitigation that is 851
+   damage — two and a half Footmen worth of health. But spread across 6.36
+   bodies at its widest, ~134 each, where the cheapest body on the bridge is a
+   190hp Levy.
+
+   Kills needed a twin to mean anything: a body dying inside a fire did not
+   necessarily die OF it, and a fire at 0.01 dps still scored 1.25 kills a pour
+   from turrets and the front line. Every arm ran against its own near-zero
+   twin at the same seeds, and the difference is what the fire itself did:
+
+     dps  rad  dur   body-secs   kills   would have died   NET   ceiling
+      34  5.5    6       25.52    1.86              1.25  0.60       204   <- was
+      58  5.5    6       25.11    2.38              1.25  1.12       348   <- is
+      34  5.5    9       34.22    2.42              1.67  0.75       306
+      45  5.5    8       31.49    2.38              1.67  0.71       360
+
+   The ceiling turned out to be the wrong statistic: 45/8 carries a higher one
+   than 58/6 and converts worse, because bodies transit rather than stand. What
+   turns damage into bodies is the RATE.
+
+   Asserted below is the arithmetic against the unit table, which is exact.
+   Not the kills, which are a sample. */
+{
+  const P = IB.PITCH;
+  const U = IB.UNITS;
+  t.ok(P.dur === 6, 'the pour still burns for ' + P.dur + 's — duration was tried and barely moved it');
+  t.ok(P.rad === 5.5, 'and covers the same ' + P.rad + ' either side');
+
+  /* The threshold that was crossed. A body standing in the whole pour takes
+     dps x dur, and with pure damage none of it is mitigated — so this compares
+     directly against raw hp. */
+  const ceiling = P.dps * P.dur;
+  t.ok(ceiling >= U.melee.hp,
+    'a body that never leaves now dies even if it is a Footman (' + ceiling + ' against ' + U.melee.hp + 'hp)');
+  t.ok(34 * P.dur < U.melee.hp,
+    'where at the old 34 it could not (' + (34 * P.dur) + ' against ' + U.melee.hp + 'hp)');
+  t.ok(ceiling < U.cannon.hp,
+    'and a Cannon still walks out of a full pour (' + ceiling + ' against ' + U.cannon.hp + 'hp)');
+  t.ok(ceiling < U.super.hp, 'as does a Siege Ogre (' + U.super.hp + 'hp)');
+
+  // the cheap bodies were always dying to it and still are
+  for (const k of ['grunt', 'caster'])
+    t.ok(ceiling > U[k].hp, U[k].n + ' still falls well inside the pour (' + U[k].hp + 'hp)');
+
+  /* It is a rate, and the rate is what converts — so the seconds a body needs
+     to stand there is the number worth pinning. A Footman must still be made to
+     stand in nearly the whole thing. */
+  const secs = (k) => U[k].hp / P.dps;
+  t.ok(secs('melee') > P.dur * .8,
+    'a Footman still has to stand in most of it (' + secs('melee').toFixed(1) + 's of ' + P.dur + ')');
+  // 190/58 is 3.3s of a 6s pour — inside it with time to spare, but NOT inside
+  // the first half, which is what this claimed before the arithmetic was run.
+  t.ok(secs('grunt') < P.dur && secs('grunt') > P.dur / 2,
+    'while a Levy dies with time to spare, but still past halfway (' +
+    secs('grunt').toFixed(1) + 's of ' + P.dur + ')');
+  t.ok(secs('grunt') < secs('melee'), 'and always before a Footman does');
+
+  // pure means pure: the arithmetic above is only valid if nothing mitigates it
+  const psrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const tick = psrc.slice(psrc.indexOf('if (s.fireT > 0){'), psrc.indexOf('if (s.fireT > 0){') + 600);
+  t.ok(/pure:true/.test(tick), 'the burn is pure, so hp compares to hp with nothing in between');
+  t.ok(/PITCH\.dps \* dt/.test(tick), 'and charged per second, not per frame');
+
+  // the slow it leaves is untouched — this was a damage change, not a control one
+  t.ok(P.slow === .22 && P.slowT === .45, 'what walks through is slowed exactly as before');
+
+  // and one burning stretch per hold, refreshed rather than stacked
+  IB.newMatch({ diff:'veteran', seed:8960 });
+  const ps = IB.G.sides[0];
+  IB.chooseSpell(ps, 0, 'pitch'); IB.chooseSpell(ps, 1, 'muster');
+  ps.res.wood = 9000; ps.res.iron = 9000;
+  t.ok(IB.castSpell(ps, { slot:0, x:40 }) === null, 'a pour is accepted onto a point');
+  t.ok(Math.abs(ps.fireT - P.dur) < 1e-6, 'and burns for its full time (' + ps.fireT + ')');
+  t.ok(Math.abs(ps.fireX - 40) < 1e-6, 'at the point it was given');
+  ps.fireT = 2; ps.spellCd[0] = 0;
+  IB.castSpell(ps, { slot:0, x:55 });
+  t.ok(Math.abs(ps.fireT - P.dur) < 1e-6, 'a second pour refreshes the clock rather than stacking');
+  t.ok(Math.abs(ps.fireX - 55) < 1e-6, 'and moves the patch to the new point');
+}
+
+/* ================== the noise floor, measured rather than predicted
+
+   The 55 openings were re-swept on one consistent build after three orders had
+   changed. RAMPART MOVED 6.6 POINTS WITHOUT BEING TOUCHED — nothing about it
+   differed between the two sweeps. That is this rig's empirical noise floor,
+   and it is larger than two of the three movements the changes had been
+   credited with. Bombard's single-arm +1.9 reads +0.3 on the consistent table.
+
+   So the ~8-point claim threshold, which had been arithmetic (SE 2.8 an arm,
+   4.0 on a difference), is now also an observation. What is asserted below is
+   the arithmetic that makes Second Muster the outlier, which is exact, and the
+   property that it is alone in doing what it does. Not the table, which is a
+   sample and would go stale the moment anything is tuned. */
+{
+  const cd = IB.SPELL.muster.cd;
+  t.ok(cd > 0, 'Second Muster recovers in ' + cd + 's');
+  t.ok(C.WAVE_PERIOD > 0, 'and a wave marches every ' + C.WAVE_PERIOD + 's on its own');
+
+  /* One extra wave per (cd / WAVE_PERIOD) natural ones. This is the whole
+     reason it sits 20 points above the mean: it is the only order that adds to
+     the one currency the game keeps score in. */
+  const per = cd / C.WAVE_PERIOD;
+  t.ok(per > 1, 'so it buys one extra wave for every ' + per.toFixed(1) + ' that march anyway');
+  t.ok(1 / per > .15, 'which is ' + (100 / per).toFixed(0) + '% more waves than the clock gives');
+  t.ok(1 / per < .5, 'though not so many that the clock stops mattering');
+
+  // and the bodies it musters are real bodies, just slightly cheaper ones
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const mh = msrc.match(/const MUSTER_HP = ([\d.]+);/);
+  t.ok(!!mh, 'the muster health fraction parsed (' + (mh ? mh[1] : 'missing') + ')');
+  const hp = mh ? Number(mh[1]) : 0;
+  t.ok(hp > .5 && hp < 1, 'a mustered body is ' + (100 * hp).toFixed(0) + '% of a marched one');
+
+  /* Alone in the set. Every other order damages, delays or moves what is
+     already on the bridge; this one puts more of it there. Read off the cast
+     table rather than asserted, so an order that learns to spawn later cannot
+     quietly join it without this saying so. */
+  const castTable = msrc.slice(msrc.indexOf('const SPELL_CAST'), msrc.indexOf('\nfunction ', msrc.indexOf('const SPELL_CAST')));
+  const spawners = IB.SPELLS.filter(d => {
+    const i = castTable.indexOf('\n  ' + d.id + '(');
+    if (i < 0) return false;
+    const body = castTable.slice(i, castTable.indexOf('\n  }', i) + 4 || i + 200);
+    return /spawnUnit|musterWave/.test(body);
+  }).map(d => d.id);
+  /* Second Muster used to be alone here, and that was the whole diagnosis: its
+     20-point lead survived every number because units are the only currency the
+     game scores in and it was the only order that made any. Pikewall is the
+     second, so the monopoly is over BY DESIGN. What has to stay true is that
+     the two are different shapes — one marches from your gate, one is planted
+     where you point and cannot advance at all. */
+  t.ok(spawners.length === 2 && spawners.includes('muster') && spawners.includes('pike'),
+    'two orders put new bodies on the bridge (' + (spawners.join(', ') || 'none') + ')');
+  t.ok(IB.UNITS.pike.spd === 0, 'and what Pikewall plants cannot advance (spd ' + IB.UNITS.pike.spd + ')');
+  t.ok(IB.SPELL.muster.target === 'self' && IB.SPELL.pike.target === 'point',
+    'one musters at your own gate, the other is planted where you point');
+
+  // it costs three of the four stores, which is the counterweight it has
+  const cost = IB.SPELL.muster.cost;
+  t.ok(Object.keys(cost).length >= 3,
+    'and it is the only one paid for out of ' + Object.keys(cost).length + ' stores at once (' +
+    Object.keys(cost).join(', ') + ')');
+  t.ok(IB.SPELL.muster.bound === 'cd',
+    'its recovery is what limits it, which is why the recovery is where a fix would go');
+}
+
+/* ================== neither number on Second Muster moves it
+
+   It measures 66.6% against an all-order mean of 45.9 and is the only order in
+   the set that adds units. Two numeric levers, both tested, both refused.
+
+   The RECOVERY self-compensates: 110 -> 200, an 82% increase, bought a 32% cut
+   in casts (4.47 -> 3.03) because a weaker muster lengthens the match (522s ->
+   576s) and a longer match hands the slower recovery more time. The knob
+   fights itself. It IS recovery-bound — it sits ready only 11.8% of ticks — so
+   the lever was aimed correctly and still did not work.
+
+   The HEALTH does not self-compensate and did nothing anyway. At .65, a 24%
+   cut to every mustered body, the full 55 openings re-swept put Muster at 64.1
+   against 66.6 — 2.5 points, 0.6 standard errors, while untouched orders in
+   the same run moved as much as 2.8. The spread went 28.1 to 26.9.
+
+   The advantage is CATEGORICAL. Units are the only currency the game scores
+   in, and this is the only order that makes them; scaling either number leaves
+   that untouched. Asserted below is what makes that true, which is exact. */
+{
+  const M = IB.SPELL.muster;
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  t.ok(M.cd === 110, 'the recovery is back at ' + M.cd + 's — raising it fights itself');
+  const mh = msrc.match(/const MUSTER_HP = ([\d.]+);/);
+  t.ok(!!mh && Number(mh[1]) === .85,
+    'and the mustered wave is back at ' + (mh ? mh[1] : '?') + ' health, because .65 measured the same');
+
+  /* What no number reaches: it is alone in spawning. Read off the cast table so
+     an order that learns to spawn later cannot join it quietly. */
+  const castTable = msrc.slice(msrc.indexOf('const SPELL_CAST'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('const SPELL_CAST')));
+  const spawners = IB.SPELLS.filter(d => {
+    const i = castTable.indexOf('\n  ' + d.id + '(');
+    if (i < 0) return false;
+    const body = castTable.slice(i, castTable.indexOf('\n  }', i) + 4 || i + 200);
+    return /spawnUnit|musterWave/.test(body);
+  }).map(d => d.id);
+  /* It was alone, and that was the diagnosis. Pikewall ended the monopoly on
+     purpose — what stays true is that Muster is the only one that adds a wave
+     which MARCHES, which is the part no number reached. */
+  t.ok(spawners.includes('muster'), 'Second Muster puts new bodies on the bridge');
+  t.ok(spawners.length === 2, 'and is no longer alone in it (' + spawners.join(', ') + ')');
+  t.ok(IB.UNITS.pike.spd === 0 && IB.UNITS.grunt.spd > 0,
+    'the other one plants what cannot advance, which is a different thing to add');
+
+  /* And the wave it makes is a real wave, drawn from the same table the clock
+     draws from — which is the categorical part. It is not a summon with its own
+     private roster. */
+  const mw = msrc.slice(msrc.indexOf('function musterWave'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('function musterWave') + 1));
+  t.ok(/WAVE_KINDS/.test(mw), 'the mustered wave is drawn from the same table the clock uses');
+  t.ok(/s\.waveKind/.test(mw), 'and follows whatever kind is marching');
+  for (const k of ['grunt', 'melee', 'caster', 'cannon'])
+    t.ok(new RegExp("'" + k + "'").test(mw), 'it can muster a ' + IB.UNITS[k].n);
+  t.ok(/hpM/.test(mw), 'and every body it makes is scaled, not full-strength');
+
+  /* The self-compensation, as arithmetic rather than as the measurement: extra
+     waves bought is cd against the wave clock, and the match length that
+     divides it is not fixed. Both halves move, which is why the ratio barely
+     does. */
+  const perNatural = M.cd / C.WAVE_PERIOD;
+  t.ok(perNatural > 4 && perNatural < 6,
+    'one extra wave per ' + perNatural.toFixed(1) + ' that march on their own');
+  t.ok(200 / C.WAVE_PERIOD > perNatural * 1.5,
+    'where a 200s recovery would be one per ' + (200 / C.WAVE_PERIOD).toFixed(1) +
+    ' — a far bigger change on paper than it was in play');
+}
+
+/* ================== the hash could not see a summon's clock
+
+   packBody carries u.life — it is a plain number and packBody keeps every
+   primitive — so a resynced joiner always got the right value. mixTimers did
+   not list it, which is the half that matters: two peers whose summon timers
+   had drifted agreed on the hash right up until the body vanished on one board
+   and not the other, and the divergence then reported was a missing unit
+   rather than the clock that removed it.
+
+   Verified against a control before the fix — moving a body's hp changed the
+   hash, moving its life did not. Nothing casts a life-limited body today but a
+   hero's summon, which is exactly the sort of rarely-walked path a hash exists
+   for, and the next order that adds one will rest on this. */
+{
+  IB.newMatch({ diff:'veteran', seed:9310 });
+  for (let i = 0; i < 20; i++) IB.update(1 / 30);
+  const u = IB.spawnUnit(1, 'shade', { x:40, y:0, life:8 });
+  t.ok(!!u, 'a life-limited body can be made');
+  t.ok(u.life === 8, 'and carries the clock it was given (' + u.life + 's)');
+  IB.update(1 / 30);
+
+  // the control first: something already hashed has to move the hash, or the
+  // test below proves nothing about life
+  const a0 = IB.netHash();
+  u.hp -= 10;
+  t.ok(IB.netHash() !== a0, 'CONTROL: changing a hashed field moves the hash');
+  u.hp += 10;
+  t.ok(IB.netHash() === a0, 'and putting it back restores it');
+
+  const b0 = IB.netHash();
+  const was = u.life;
+  u.life = was - 3;
+  t.ok(IB.netHash() !== b0, 'so does changing how long the body has left');
+  u.life = was;
+  t.ok(IB.netHash() === b0, 'and that is reversible too, so it is the value and not the visit');
+
+  // the quantisation is the same one every other timer uses, so a difference
+  // smaller than a frame does not register as a divergence
+  const c0 = IB.netHash();
+  u.life = was + 1 / 90;
+  t.ok(IB.netHash() === c0, 'a third of a frame of drift is below the quantiser, as for every other timer');
+  u.life = was + 1;
+  t.ok(IB.netHash() !== c0, 'a whole second is not');
+  u.life = was;
+
+  // and it still survives the snapshot, which was never the broken half
+  const snap = IB.netSnap();
+  t.ok(JSON.stringify(snap).includes('"life"'), 'the snapshot still carries it');
+
+  /* It is listed with the other unit clocks rather than somewhere of its own,
+     so anything that walks that list walks this too. */
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const mt = msrc.slice(msrc.indexOf('function mixTimers'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('function mixTimers') + 1));
+  t.ok(/mix\(q30\(u\.life\)\)/.test(mt), 'life is mixed in with the rest of the body clocks');
+  t.ok(/q30/.test(mt), 'at the same quantisation they use');
+
+  // a summoned body really does expire, which is the behaviour the hash guards
+  const v = IB.spawnUnit(1, 'shade', { x:41, y:0, life:0.5 });
+  t.ok(!!v && G.units.includes(v), 'a short-lived body starts on the board');
+  for (let i = 0; i < 30; i++) IB.update(1 / 30);
+  t.ok(v.dead || !G.units.includes(v), 'and is gone once its clock runs out');
+}
+
+/* ================== a second order that adds something
+
+   Second Muster measured 66.6% against an all-order mean of 45.9 and neither of
+   its numbers would move it: the recovery self-compensates through match length
+   and a 24% health cut moved 2.5 points. The advantage was categorical — units
+   are the only currency the game keeps score in, and Muster was the only order
+   that made any.
+
+   Pikewall is the second, so that stops being true. Deliberately a different
+   shape: Muster is macro, a full wave at your own gate that marches; this is
+   tactical, a short line planted where you point that cannot advance and is
+   gone in PIKE.dur seconds.
+
+   Asserted below is what makes the two different, which is exact, and the
+   lockstep behaviour, which a new spawning order has to get right. Not a win
+   rate — a twelfth order takes the sweep from 55 pairs to 66 and that is a
+   separate round. */
+{
+  const P = IB.SPELL.pike, U = IB.UNITS.pike;
+  t.ok(!!P && !!U, 'the order and the body it plants both exist');
+  t.ok(P.target === 'point', 'it is aimed at a stretch of deck');
+  t.ok(P.grp === 'lane', 'and lives with the other orders about the lane');
+
+  /* What separates it from Muster, one line at a time. */
+  t.ok(U.spd === 0, 'what it plants never advances (spd ' + U.spd + ')');
+  t.ok(IB.UNITS.grunt.spd > 0, 'where a mustered body does');
+  t.ok(U.bounty === 0, 'and is worth nothing to whoever kills it');
+  t.ok(IB.UNITS.grunt.bounty > 0, 'where a mustered body pays a bounty (' + IB.UNITS.grunt.bounty + ')');
+  t.ok(U.tdmg < IB.UNITS.grunt.tdmg / 2,
+    'it barely scratches a structure (' + U.tdmg + ' against a Levy’s ' + IB.UNITS.grunt.tdmg + ')');
+  t.ok(U.hp > IB.UNITS.melee.hp && U.armor > IB.UNITS.melee.armor,
+    'but outlasts a Footman, since it can neither chase nor retreat (' +
+    U.hp + 'hp/' + U.armor + ' against ' + IB.UNITS.melee.hp + '/' + IB.UNITS.melee.armor + ')');
+
+  // the constants, and that the wall spans the deck rather than stacking
+  const psrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const pk = psrc.match(/const PIKE = \{ n:(\d+), dur:(\d+), span:([\d.]+) \}/);
+  t.ok(!!pk, 'the Pikewall constants parsed (' + (pk ? pk.slice(1).join('/') : 'missing') + ')');
+  const N = pk ? +pk[1] : 0, DUR = pk ? +pk[2] : 0, SPAN = pk ? +pk[3] : 0;
+  t.ok(N >= 2, 'it plants ' + N + ' of them, so it is a line and not a body');
+  t.ok(SPAN * 2 < C.LANE_W, 'spanning ' + (SPAN * 2) + ' of a ' + C.LANE_W + '-wide deck — a wall, not a blockade');
+  t.ok(DUR > 0 && DUR < IB.SPELL.pike.cd,
+    'and it is gone (' + DUR + 's) long before the order comes back (' + P.cd + 's)');
+
+  /* Planting it: the bodies arrive where they were aimed, expire on their own,
+     and the order refuses rather than spending itself on nothing. */
+  IB.newMatch({ diff:'veteran', seed:9400 });
+  const s = IB.G.sides[0];
+  IB.chooseSpell(s, 0, 'pike'); IB.chooseSpell(s, 1, 'muster');
+  s.res.wood = 9000; s.res.iron = 9000;
+  const before = IB.G.units.filter(u => u.kind === 'pike').length;
+  t.ok(IB.castSpell(s, { slot:0, x:40 }) === null, 'a wall is accepted onto a point');
+  const mine = IB.G.units.filter(u => u.kind === 'pike');
+  t.ok(mine.length === before + N, 'and puts ' + N + ' bodies on the bridge');
+  t.ok(mine.every(u => Math.abs(u.x - 40) < 1e-6), 'all of them at the point it was given');
+  t.ok(mine.every(u => u.side === 0), 'and all of them yours');
+  t.ok(mine.every(u => u.life > 0), 'each carrying the clock that will remove it');
+  t.ok(new Set(mine.map(u => u.y)).size === N, 'spread across the deck rather than stacked');
+
+  // it holds the ground it was put on
+  const x0 = mine[0].x;
+  for (let i = 0; i < 60; i++) IB.update(1 / 30);
+  t.ok(mine.every(u => u.dead || Math.abs(u.x - x0) < .6),
+    'two seconds later it is still standing where it was planted');
+
+  // and it goes away on its own
+  for (let i = 0; i < 30 * (DUR + 1); i++) IB.update(1 / 30);
+  t.ok(IB.G.units.filter(u => u.kind === 'pike' && !u.dead).length === 0,
+    'and after ' + DUR + 's there is none of it left');
+
+  /* Lockstep. It is only the second order allowed to move the simulation's
+     stream, and the same seed must produce the same wall and the same hash. */
+  const run = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    const q = IB.G.sides[0];
+    IB.chooseSpell(q, 0, 'pike'); IB.chooseSpell(q, 1, 'muster');
+    q.res.wood = 9000; q.res.iron = 9000;
+    IB.castSpell(q, { slot:0, x:38 });
+    for (let i = 0; i < 90; i++) IB.update(1 / 30);
+    return { h:IB.netHash(), n:IB.G.units.filter(u => u.kind === 'pike').length };
+  };
+  const a = run(9401), b = run(9401);
+  t.ok(a.n === b.n && a.h === b.h,
+    'the same seed plants the same wall and agrees on the hash (' + a.h + ')');
+
+  // the body it plants survives a snapshot, clock and all
+  IB.newMatch({ diff:'veteran', seed:9402 });
+  const t2 = IB.G.sides[0];
+  IB.chooseSpell(t2, 0, 'pike'); IB.chooseSpell(t2, 1, 'muster');
+  t2.res.wood = 9000; t2.res.iron = 9000;
+  IB.castSpell(t2, { slot:0, x:36 });
+  const snap = JSON.stringify(IB.netSnap());
+  t.ok(snap.includes('"pike"'), 'a planted body is in the snapshot');
+  t.ok(snap.includes('"life"'), 'with the clock that removes it');
+}
+
+/* ================== the thesis Pikewall was built on did not survive
+
+   The reasoning: Second Muster's 66.6% resisted every number because its
+   advantage was categorical — the only order that added units — so a second
+   adding order should compress the lead. All 66 openings, 32 seeds each, 352
+   matches an order at SE 2.7:
+
+     muster   65.6 (66.6)   hobble  47.7 (41.9)   unbind   41.5 (39.7)
+     withdraw 56.0 (56.9)   warp    45.5 (45.9)   rampart  40.6 (40.0)
+     pyre     51.7 (50.0)   pike    44.3 ( new)   brace    35.8 (40.0)
+     pitch    48.9 (45.6)   counter 43.5 (39.4)
+     bombard  48.3 (38.4)                         spread 29.8 (28.1)
+
+   Muster moved 1.0 point and the spread went UP. The monopoly is over and the
+   lead is untouched, so it was never the monopoly holding it there.
+
+   The brackets are NOT a clean comparison: every order's pairs now include a
+   Pikewall pairing that did not exist before, so each row faces a different mix
+   of opponents. Bombard's +9.9 is the biggest number in the table and Bombard
+   was not touched — which is a warning about reading across sweeps, not a
+   finding about Bombard.
+
+   Asserted here is only what is structural. The table is a sample and lives in
+   the comment. */
+{
+  // the sweep got bigger because the set did, and that is exact
+  const n = IB.SPELLS.length;
+  const pairs = n * (n - 1) / 2;
+  t.ok(n === 12, 'twelve orders');
+  t.ok(pairs === 66, 'so 66 distinct openings to sweep, up from 55 (' + pairs + ')');
+  t.ok(n - 1 === 11, 'and each order is measured across ' + (n - 1) + ' pairs rather than 10');
+
+  /* Which is why a row cannot be read across two sweeps: the opponent mix
+     changed underneath it. The count of pairs an order appears in is the thing
+     that moved, and it is derivable rather than remembered. */
+  const appearsIn = (id) => IB.SPELLS.filter(d => d.id !== id).length;
+  t.ok(appearsIn('bombard') === 11 && appearsIn('muster') === 11,
+    'every order appears in the same number of pairs as every other (' + appearsIn('muster') + ')');
+
+  // the two adding orders are still two, and still different shapes
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const tbl = msrc.slice(msrc.indexOf('const SPELL_CAST'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('const SPELL_CAST')));
+  const spawners = IB.SPELLS.filter(d => {
+    const i = tbl.indexOf('\n  ' + d.id + '(');
+    if (i < 0) return false;
+    const end = tbl.indexOf('\n  }', i);
+    return /spawnUnit|musterWave/.test(tbl.slice(i, end < 0 ? i + 300 : end + 4));
+  }).map(d => d.id);
+  t.ok(spawners.length === 2, 'two orders add bodies (' + spawners.join(', ') + ')');
+  t.ok(IB.UNITS.pike.spd === 0 && IB.UNITS.grunt.spd > 0,
+    'one plants what cannot move, the other sends what marches');
+
+  /* Pikewall's bound was set from design intent and corrected by measurement,
+     which is the same treatment every other bound has had. */
+  t.ok(IB.SPELL.pike.bound === 'cd',
+    'Pikewall waits on its recovery (46.0% of ticks) more than on the stores (42.7%)');
+  const by = {};
+  for (const d of IB.SPELLS) by[d.bound] = (by[d.bound] || 0) + 1;
+  t.ok(by.cd + by.aim + by.coin + by.call === n, 'every order still declares one bound');
+  t.ok(Object.keys(by).length === 4, 'and all four kinds are still in use');
+}
+
+/* ================== the sky is strips of paper, not a photograph
+
+   Every shape in the world got a cut edge, and then the world was sitting on a
+   smoothly blended sky — the only soft transition left on screen, arguing with
+   everything around it. Each authored stop now HOLDS its colour until the next
+   and jumps, so the sky is nine flat strips laid one over another.
+
+   The palette is untouched: the band edges are the stop offsets and the band
+   fills are the stop colours. That is what is asserted — that this repainted
+   the same colours rather than inventing new ones. */
+{
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const grad = src.slice(src.indexOf('function skyGrad'),
+    src.indexOf('\n}', src.indexOf('function skyGrad')));
+
+  t.ok(/addColorStop\(at, col\)/.test(grad), 'each stop is laid down at its own offset');
+  t.ok(/next\[0\] - 1e-4/.test(grad),
+    'and held until a hair before the next, which is how a gradient is told to step');
+  t.ok(/Math\.max\(at,/.test(grad),
+    'never behind the offset it started at, so two close stops cannot cross over');
+
+  /* The stops themselves are unchanged, and that is the point — banding is a
+     way of drawing this palette, not a different palette. */
+  t.ok(IB.SKY_STOPS.length >= 8, 'the sky is built from ' + IB.SKY_STOPS.length + ' colours');
+  t.ok(IB.SKY_STOPS.every(s => s.length === 2 && typeof s[1] === 'string'),
+    'each one an offset and a colour');
+  t.ok(IB.SKY_STOPS[0][0] === 0, 'starting at the top of the screen');
+  t.ok(IB.SKY_STOPS[IB.SKY_STOPS.length - 1][0] === 1, 'and running to the bottom');
+  // strictly increasing, or a held band could run backwards
+  let rising = true;
+  for (let i = 1; i < IB.SKY_STOPS.length; i++)
+    if (IB.SKY_STOPS[i][0] <= IB.SKY_STOPS[i - 1][0]) rising = false;
+  t.ok(rising, 'the offsets only ever go down the screen');
+  t.ok(IB.SKY_STOPS.every(s => /^#[0-9a-f]{6}$/i.test(s[1])),
+    'and every band is a flat colour a canvas can read');
 }
 
 t.done();

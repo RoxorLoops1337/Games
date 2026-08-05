@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HTML = path.join(__dirname, '..', 'joske_de_flosser', 'index.html');
+const RAW = fs.readFileSync(HTML, 'utf8');
 
 let passed = 0, failed = 0;
 function test(name, fn){ try { fn(); passed++; } catch (e){ failed++; console.error(`FAIL ${name}: ${e.message}`); } }
@@ -54,6 +55,7 @@ const EXPOSE = `__out.api = {
   startStage, resetStage, nextStage, stageClear, finishGame, startWave, startGame, toTitle,
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
+  attract, ATTRACT_CAST, drawAttract, logo, logoGlyphs, logoFeet, LOGO_BAND,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
 };
@@ -508,6 +510,35 @@ test('the hit counter counts hits, not chain position', () => {
   assert(p.hits >= 2, 'two landed hits should read as two, got ' + p.hits);
   stepFighter(api, p, 2.2);
   assert(p.hits === 0, 'and the counter lapses');
+});
+
+test('the moves you throw most have frames to spare', () => {
+  const api = boot();
+  for (const key of ['jab', 'cross', 'hook', 'midkick', 'highkick']){
+    const a = api.ATK[key];
+    const frames = new Set(a.seq.map(([f]) => f));
+    assert(frames.size >= 3, `${key} only has ${frames.size} distinct frames`);
+    assert(api.A[a.anim].length >= frames.size, `${key} references a frame its animation lacks`);
+    let prev = 0;
+    for (const [f, t] of a.seq){
+      assert(t > prev, `${key} frame times must move forward`);
+      assert(f < api.A[a.anim].length, `${key} frame ${f} is out of range`);
+      prev = t;
+    }
+  }
+});
+
+test('a kick folds before it goes, and the punch comes back', () => {
+  const api = boot();
+  const knee = (pose) => pose.lF[1];
+  const foot = (pose) => pose.lF[2];
+  const kick = api.A.highkick;
+  assert(knee(kick[0]) > knee(kick[3]), 'the chamber lifts the knee above where it ends');
+  assert(foot(kick[1]) > foot(kick[0]), 'and the foot travels out from it');
+  const punch = api.A.punchA;
+  const fist = (pose) => pose.aF[2];
+  assert(fist(punch[1]) > fist(punch[2]), 'the fist recoils from full extension');
+  assert(fist(punch[2]) > fist(punch[0]), 'but does not snap all the way home');
 });
 
 /* ---------------------------------------------------------- swing arcs */
@@ -2329,6 +2360,92 @@ test('the title screen draws', () => {
   const api = boot();
   api.draw();
   assert(api._counts.fillRect > 50, 'the attract screen actually paints something');
+});
+
+/* ------------------------------------------------------------------ logo */
+test('the logo is set in the game font, with a band down every letter', () => {
+  const api = boot();
+  const cells = api.logoGlyphs('JOSKE');
+  assert(cells.length > 60, 'the word has real pixels: ' + cells.length);
+  const rows = new Set(cells.map(([, y]) => y));
+  for (let r = 0; r < 7; r++) assert(rows.has(r), 'row ' + r + ' of the type is empty');
+  assert(api.LOGO_BAND.length === 7, 'one colour band per font row');
+  // top of the letter catches the light, the bottom is the deepest tone
+  const lum = (c) => parseInt(c.slice(1, 3), 16) + parseInt(c.slice(3, 5), 16) + parseInt(c.slice(5, 7), 16);
+  for (let r = 1; r < 7; r++) assert(lum(api.LOGO_BAND[r]) < lum(api.LOGO_BAND[r - 1]), 'band ' + r + ' should be darker than the one above');
+});
+
+test('the slab under the type leaves the counters of O and E open', () => {
+  const api = boot();
+  const cells = api.logoGlyphs('O');
+  const feet = api.logoFeet(cells);
+  assert(feet.length > 0 && feet.length < cells.length, 'only some pixels cast the slab');
+  const solid = new Set(cells.map(([x, y]) => x + ',' + y));
+  // the hole in an O is the cells no glyph pixel covers, two rows above a foot
+  for (const [x, y] of feet){
+    assert(!solid.has(x + ',' + (y + 1)), 'a foot has type below it, so it is not a foot');
+    for (const d of [2, 3]) assert(!solid.has(x + ',' + (y + d)), 'the slab would land on top of the letter');
+  }
+  const inside = feet.filter(([x, y]) => solid.has(x + ',' + (y + 2)) || solid.has(x + ',' + (y + 3)));
+  assert(inside.length === 0, 'the counter of the O would fill with shadow');
+});
+
+test('the logo bakes once — only the shine costs anything per frame', () => {
+  const api = boot();
+  api.draw();                                   // first title frame pays for the plates
+  api._resetCounts();
+  const first = (api.draw(), api._counts.fillRect || 0);
+  for (let i = 0; i < 40; i++) api.draw();     // run the shine a good way along
+  api._resetCounts();
+  api.draw();
+  const second = api._counts.fillRect || 0;
+  assert(second < 3000, 'a warm title frame is too expensive: ' + second + ' fillRects');
+  assert(Math.abs(second - first) < 400, 'the title frame cost should not wander: ' + first + ' vs ' + second);
+});
+
+test('the attract screen is a floss-off: two crews, facing each other, on the beat', () => {
+  const api = boot();
+  api.attract.t = 0.4;
+  api.draw();
+  const cast = api.attract.cast;
+  assert(cast && cast.length === 5, 'the whole cast turned up');
+  const heroes = cast.filter(f => f.team === 'p'), foes = cast.filter(f => f.team === 'e');
+  assert(heroes.length === 2 && foes.length === 3, 'Joske and Smoske against three wannabees');
+  assert(heroes.every(f => f.face === 1) && foes.every(f => f.face === -1), 'the crews face each other');
+  assert(Math.max(...heroes.map(f => f.x)) < Math.min(...foes.map(f => f.x)), 'the crews hold their own side of the street');
+  assert(cast.every(f => f.anim === 'idle'), 'everybody is flossing');
+  const frames = new Set(cast.map(f => f.frame));
+  assert(frames.size > 1, 'the crews are offset on the beat, not one puppet copied five times');
+  const skins = new Set(cast.map(f => f.skin));
+  assert(skins.has('joske') && skins.has('smoke'), 'Joske and his dance partner lead it');
+});
+
+test('every few seconds the floss-off turns into a punch, then resets', () => {
+  const api = boot();
+  const at = (t) => { api.attract.t = t; api.draw(); return api.attract.cast; };
+  at(0.4);
+  const joske = api.attract.cast[0], foe = api.attract.cast[2];
+  const restX = joske.x, foeRest = foe.x;
+  at(3.4);
+  assert(joske.anim !== 'idle', 'Joske swings on the beat');
+  assert(joske.x > restX, 'and steps in to do it');
+  at(3.9);
+  assert(foe.anim === 'hurt', 'the near wannabee wears it');
+  assert(foe.x > foeRest, 'and gets knocked back');
+  at(4.3);
+  assert(foe.anim === 'lie', 'and goes down');
+  at(4.5);                                      // the cycle is 4.4s long, so this is a fresh loop
+  assert(joske.anim === 'idle' && joske.x === restX, 'everybody is back on the beat');
+  assert(foe.anim === 'idle' && foe.x === foeRest, 'including the man who just ate it');
+});
+
+test('the title screen carries the game name, and not the old one', () => {
+  assert(!/TWIN FISTS/.test(RAW), 'a stale title is still in the source');
+  assert(/logo\('JOSKE'/.test(RAW) && /logo\('DE FLOSSER'/.test(RAW), 'the canvas draws the name');
+  const card = RAW.slice(RAW.indexOf('id="title"'), RAW.indexOf('id="how"'));
+  assert(!/<h1/.test(card), 'the DOM heading would double the canvas logo');
+  assert(/#title \.card\{/.test(RAW), 'the menu is styled to sit under the logo, not over it');
+  assert(/twin_fists_v1/.test(RAW), 'the save key is never renamed, whatever the game is called');
 });
 
 test('every stage draws, with fighters in every state', () => {

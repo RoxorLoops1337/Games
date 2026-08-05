@@ -319,11 +319,27 @@
   /* Armed and waiting for a point on the world. */
   .ord.aim{ border-color:#8a6524; background:linear-gradient(180deg,#ffe8b0,#f6cf72); color:#3a2704;
     box-shadow:var(--lip), var(--shelf-gold), 0 0 0 2px rgba(255,190,90,.5); }
-  /* Spent: recovering, or the stores cannot pay for it. NOT `disabled` — the
-     press has to reach castPress so it can say WHICH of the two it is. The
-     look is the family's dead treatment; only the behaviour differs. */
+  /* Spent: recovering, the stores cannot pay for it, or there is nothing on
+     the bridge to aim it at. NOT `disabled` — the press has to reach castPress
+     so it can say which. But it should not TAKE a press to find out, because
+     measured, a slot is castable only 0.1 to 0.4 of the time out of two or
+     three: the dead tile is the state a commander looks at for most of a
+     match, and one flat grey for three different reasons is the state saying
+     nothing at all.
+
+     Recovering already speaks for itself — .cool turns the label into the
+     countdown. These two are the pair that looked identical. */
   .ord.dead{ background:#d9cdb4; border-color:#bcae92; color:#8f8370;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.3); }
+  /* Cannot pay: the coin-coloured wash the resource rail already uses for a
+     shortfall, so the reason reads in the same language the stores do. */
+  .ord.dead.poor{ background:linear-gradient(180deg,#e0d0a6,#d3bf8d); border-color:#b9a26e;
+    color:#7d6a42; }
+  /* Nothing to aim at: cooler and flatter, and the icon dims rather than the
+     card yellowing — there is nothing wrong with your hold, there is nothing
+     out there. */
+  .ord.dead.noaim{ background:#cfd3d8; border-color:#a9b1ba; color:#71797f; }
+  .ord.dead.noaim .ico{ opacity:.45; }
   /* The window has closed and the slot was left empty. A well, not a card:
      there is nothing here to press, and it should not look like there is. */
   .ord.locked{ background:var(--well); border-color:#202a3a; color:#7c8ea1;
@@ -921,6 +937,17 @@
     font-family:var(--display); font-variant-caps:small-caps; color:#ffe6ae;
     text-shadow:0 2px 0 rgba(0,0,0,.35); }
   .sheet .sub{ margin:0 0 16px; color:var(--dim); font-size:var(--t4); line-height:1.45; }
+  /* The draft clock, inside the sheet that covers the dock. Deliberately the
+     same chip the empty dock tile wears — a player who has seen "8s" pulse red
+     down there should not have to learn a second sign for the same fuse. It sits
+     in a sentence rather than on a control, so the digits are tabular and the
+     chip does not resize under them. */
+  .spwin{ display:inline-block; font-variant-numeric:tabular-nums; font-weight:800;
+    padding:1px 6px; border-radius:var(--r1); min-width:2.7em; text-align:center;
+    color:#4a3405; background:rgba(255,224,164,.5); box-shadow:inset 0 0 0 1px rgba(122,90,44,.34); }
+  .spwin.closing{ color:#fff1d4; background:#b3241c;
+    box-shadow:inset 0 0 0 1px rgba(255,214,160,.5); animation:owin 1s steps(2, end) infinite; }
+  @media (prefers-reduced-motion:reduce){ .spwin.closing{ animation:none; } }
   .picks{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
   /* An OPTION card, as opposed to the prose cards the menus use. Icon first,
      name under it, one line of numbers — and the description in the panel
@@ -1990,6 +2017,17 @@ const UNITS = {
   cannon: { n:'Cannon',  hp:560, ad:70, armor:18, mr:18, as:.5,  rng:8.5, spd:3.0, tdmg:2.2, r:.62, bounty:7 },
   super:  { n:'Siege Ogre', hp:1250, ad:95, armor:40, mr:36, as:.75, rng:2.0, spd:3.5, tdmg:1.6, r:.7, bounty:9 },
   shade:  { n:'Shade',   hp:260, ad:44, armor:10, mr:10, as:1.2, rng:1.6, spd:4.2, tdmg:.3,  r:.44, bounty:0 },
+  /* Planted, not marched. spd 0 makes it stand where it is put: speedOf(u)*dt
+     is the whole of the movement, so a zero simply never moves and the body
+     falls through to fighting whatever comes into reach.
+     bounty 0 because it expires on its own — a temporary body worth gold is a
+     gift to whoever bothers to hit it, and this one is meant to be an obstacle
+     rather than a farm. tdmg .08 for the same reason in the other direction:
+     it holds the deck, it does not push down it. That is what separates the
+     order from Second Muster, which adds a wave that advances.
+     Tougher than a Footman (340hp, 22 armour) because it cannot chase, cannot
+     retreat, and is gone in eighteen seconds whatever happens. */
+  pike:   { n:'Pikeman',  hp:430, ad:30, armor:28, mr:16, as:.9, rng:2.0, spd:0,   tdmg:.08, r:.46, bounty:0 },
 };
 const TRAIN = {
   melee:  { cost:{ iron:28, wood:16, food:12 }, time:9,  need:1, barracks:1, n:'Footman',
@@ -2799,7 +2837,36 @@ const SLOTS_AT_START = 2;
 // Three shells walk along the lane, 3 units apart and 0.40s apart. Radius 3.6
 // is a little under the width of the deck, so a shot placed on the centre line
 // covers it. Bodies only — see bombardHit.
-const BOMB = { n:3, gap:.40, spread:3.0, r:3.6, dmg:140, slow:.30, slowT:1.5 };
+/* spread was 3.0. Bombard measured 38.1% over 320 matches, next-weakest in the
+   set, while Withdraw — also a lane-point order, aimed the same way — measured
+   60.9%. So the shape was not the problem, and neither was the aim.
+
+   What a salvo actually did, over 191 salvos in 40 matches: it CAUGHT 5.94
+   bodies and earned 3.27 gold. Bounties run 2 to 7, so a salvo that caught six
+   finished about one. The damage was spread too thin to convert — 140 a shell
+   against a 340hp Footman is 2.7 shells, and at a spread of 3.0 against a
+   radius of 3.6 only a body near the middle of the walk stood inside more than
+   one of them.
+
+   Two knobs could fix that and they pull opposite ways: more damage a shell, or
+   the shells closer together. Measured on gold per salvo — bodies FINISHED,
+   191 samples over 40 matches, far better powered than one win-rate point per
+   match:
+
+     dmg  spread   caught   gold
+     140     3.0     5.94   3.27      <- was
+     170     3.0     5.72   4.57
+     240     3.0     5.81   9.44
+     140     2.2     5.83   5.18      <- is
+     140     1.6     5.66   5.73
+
+   Tightening the walk does most of the work with no extra damage at all: the
+   bodies caught barely move, because a radius of 3.6 already overlaps, but the
+   shells now compound on what they catch instead of grazing three sets of it.
+   1.6 scored a shade higher and was not taken — at that spacing the three
+   shells nearly coincide and the salvo stops walking anywhere, which is what
+   the card says it does. */
+const BOMB = { n:3, gap:.40, spread:2.2, r:3.6, dmg:140, slow:.30, slowT:1.5 };
 // Everything of yours that is not a hero, within fourteen of the point, walks
 // home for four seconds — faster than it came, and harder to finish off on the
 // way. Heroes are exempt: they have their own retreat state machine, with its
@@ -2809,6 +2876,87 @@ const WITHDRAW = { rad:14, dur:4, spd:1.35, res:.25 };
 // G.wave and it does not touch G.waveT: the wave clock is the one thing both
 // players read to know what is coming, and a spell that moved it would make
 // the board lie to the person who did not cast it.
+/* THE ORDER TABLE, re-measured on one consistent build.
+   All 55 openings x 32 seeds, both sides AI-played, so the only difference
+   between arms is the opening pair side 0 starts holding. Read per order —
+   each appears in 10 pairs, so 320 matches and a standard error of 2.8.
+
+     muster   66.6 (66.3)   warp     45.9 (45.3)   rampart  40.0 (46.6)
+     withdraw 56.9 (60.9)   pitch    45.6 (40.0)   brace    40.0 (40.3)
+     pyre     50.0 (53.4)   hobble   41.9 (42.8)   unbind   39.7 (42.2)
+                                                   counter  39.4 (37.2)
+                                                   bombard  38.4 (38.1)
+
+   The bracketed figures are the sweep taken before Countermand's refund,
+   Bombard's tighter walk and Pitch Fire's higher rate landed. Two things come
+   out of the comparison and the first one is a correction.
+
+   RAMPART MOVED 6.6 POINTS WITHOUT BEING TOUCHED. Nothing about it changed
+   between the two sweeps. That is the empirical noise floor of this rig, and it
+   is larger than two of the three movements those changes were credited with —
+   so Bombard's single-arm +1.9 was noise, and reads +0.3 here. Refusing to
+   claim anything under about 8 points was the right call, and this is the
+   measurement that proves it rather than the arithmetic that predicted it.
+
+   THE SPREAD DID NOT COMPRESS: 29.1 points to 28.1. Three buffs, no change.
+   But the shape did. The floor is now five orders inside 1.6 points — bombard
+   38.4, counter 39.4, unbind 39.7, brace 40.0, rampart 40.0 — and the anomaly
+   has moved to the top. Second Muster is 9.7 points clear of second place and
+   20.7 above the all-order mean of 45.9.
+
+   The mechanism is right here and it is not subtle. musterWave spawns AN ENTIRE
+   EXTRA WAVE at MUSTER_HP of full. It is the only order in the set that adds
+   units at all; every other one damages, delays or moves them. Against a
+   C.WAVE_PERIOD of 22s, a 110s recovery buys one extra wave for every five that
+   march on their own — about a fifth more of the only currency the game keeps
+   score in.
+
+   That also qualifies the finding from the draft-window round. The choice of
+   opening is worth a lot, but a good part of what makes it worth a lot is that
+   one of the eleven is plainly the answer. Wide, and shallow.
+
+   Not rebalanced here. Four rounds of evidence now say an unmeasured constant
+   change either does nothing or cannot be told apart from noise, and the fix
+   for a 20-point outlier deserves the same measurement its diagnosis got. */
+/* BOTH NUMERIC LEVERS ON THIS ORDER ARE WEAK, and that is the finding.
+
+   Second Muster measured 66.6% against an all-order mean of 45.9 — 9.7 clear of
+   second place — and it is the only order in the set that adds units at all.
+   Two ways to bring it down, both tested, both refused.
+
+   THE RECOVERY, which is what bound:'cd' points at, self-compensates. Raising
+   it 110 -> 200, an 82% increase, bought only a 32% cut in casts:
+
+     cd    casts/match   bodies/cast   match length
+     110          4.47           5.5          522s
+     140          4.00           5.6          561s
+     170          3.63           5.4          593s
+     200          3.03           5.4          576s
+
+   A weaker muster makes the match LONGER, and a longer match hands the slower
+   recovery more time to fire in. The knob fights itself. (Measured properly:
+   it sits ready only 11.8% of ticks, so it is genuinely recovery-bound and not
+   waiting on the stores — the lever was aimed at the right thing.)
+
+   THE HEALTH does not self-compensate, and did nothing anyway. At .65 — a 24%
+   cut to every mustered body — the full 55 openings were re-swept:
+
+     muster 64.1 (66.6)  withdraw 54.4 (56.9)  pyre 49.1 (50.0)  warp 44.4 (45.9)
+     pitch 41.9 (45.6)  hobble 41.3 (41.9)  rampart 40.3 (40.0)  unbind 38.4 (39.7)
+     counter 38.4 (39.4)  bombard 37.5 (38.4)  brace 37.2 (40.0)   spread 26.9 (28.1)
+
+   Muster moved 2.5 points, 0.6 standard errors, while untouched orders in the
+   same run moved as much as 2.8. The spread went 28.1 to 26.9. Nothing.
+
+   So the advantage is not in how good the mustered bodies are, nor in how often
+   they come. It is CATEGORICAL: units are the only currency the game keeps
+   score in, and this is the only order that makes them. Scaling either number
+   leaves that untouched, which is why neither number moved the result.
+
+   Reverted to .85 for the same reason Countermand's recovery was: a constant
+   that buys no measurable difference is not worth the churn. The fix, if one is
+   wanted, has to change what the order IS — the same conclusion Countermand
+   reached from the opposite direction. */
 const MUSTER_HP = .85;
 // Three seconds of standing still, then the hero is at its own front structure.
 // Refused within five seconds of taking a blow, and a blow during the channel
@@ -2907,10 +3055,105 @@ function counterCatch(s){
   for (let i = 0; i < foe.slots; i++) if (foe.spells[i] && foe.spellCd[i] > 0) n++;
   return n;
 }
-const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
+/* dps was 34. Pitch Fire measured 40.0%, last of the bottom four, and the
+   measurement had to be built differently from Bombard's: this is a zone that
+   burns for six seconds, so the count as it LANDS — all its castTell reports —
+   is not the count that burns. Bodies walk in and out. The unit is body-seconds.
 
+   Over 241 pours in 40 matches it was not short of damage at all: 25.04
+   body-seconds a pour, and pure:true skips mitigation, so 851 damage a pour —
+   two and a half Footmen worth of health. But spread over 6.36 bodies at its
+   widest that is ~134 each, and the cheapest body on the bridge is a 190hp
+   Levy. Broad and shallow. The dps x dur ceiling of 204 only ever applied to a
+   body that never left, and the commonest body, a 340hp Footman, could not be
+   finished by a perfect pour.
+
+   Kills had to be measured against a twin, because a body dying inside a fire
+   did not necessarily die OF it — turrets kill things standing in fires too. A
+   fire at 0.01 dps still scored 1.25 kills a pour, so every arm below is run
+   against its own near-zero twin at the same seeds and what is reported is the
+   difference:
+
+     dps  rad  dur   body-secs   kills   would have died   NET   ceiling
+      34  5.5    6       25.52    1.86              1.25  0.60       204   <- was
+      58  5.5    6       25.11    2.38              1.25  1.12       348   <- is
+      34  5.5    9       34.22    2.42              1.67  0.75       306
+      45  5.5    8       31.49    2.38              1.67  0.71       360
+
+   The ceiling is the wrong statistic. 45/8 carries a HIGHER ceiling than 58/6
+   and converts worse, because bodies transit rather than stand: what turns
+   damage into bodies is the rate, not the total on offer. Duration barely
+   moves it. 340/6 = 56.7 is where a fully-exposed Footman starts dying, and 58
+   is the measured value just past that line. */
+const PITCH = { dur:6, rad:5.5, dps:58, slow:.22, slowT:.45 };
+/* Pikewall. Second Muster measured 66.6% against an all-order mean of 45.9 and
+   neither of its numbers would move it (#1470) — because its advantage is
+   categorical: units are the only currency the game keeps score in, and it was
+   the ONLY order that made any. This is the second one, so that stops being
+   true. It is deliberately a different shape: Muster is macro, a full wave at
+   your own gate that marches; this is tactical, a short line planted where you
+   point that does not advance and is gone in PIKE.dur seconds. */
+const PIKE = { n:3, dur:18, span:1.6 };
+/* AND THE THESIS IT WAS BUILT ON DID NOT SURVIVE MEASUREMENT.
+
+   The reasoning was: Second Muster's 66.6% resisted every number because its
+   advantage was categorical — it was the only order that added units — so a
+   second adding order should compress the lead. All 66 openings, 32 seeds each,
+   352 matches an order (SE 2.7):
+
+     muster   65.6 (66.6)   hobble  47.7 (41.9)   unbind   41.5 (39.7)
+     withdraw 56.0 (56.9)   warp    45.5 (45.9)   rampart  40.6 (40.0)
+     pyre     51.7 (50.0)   pike    44.3 ( new)   brace    35.8 (40.0)
+     pitch    48.9 (45.6)   counter 43.5 (39.4)
+     bombard  48.3 (38.4)                         spread 29.8 (28.1)
+
+   Muster moved 1.0 point. The spread went UP, 28.1 to 29.8. Ending the monopoly
+   did not touch the lead, so whatever holds Muster at the top is not the fact
+   that it was alone in adding units.
+
+   Pikewall itself landed mid-table at 44.3, a little under the all-order mean —
+   a competitive order rather than a dominant or a dead one, which is the most
+   that can be claimed for it.
+
+   READ THE BRACKETS WITH CARE. The twelve-order table is not cleanly comparable
+   to the eleven-order one: every order's pairs now include a Pikewall pairing
+   that did not exist before, so each row is measured against a different mix of
+   opponents. Bombard's +9.9 is the largest movement in the table and it was not
+   touched this round — which is a warning about the comparison, not a finding
+   about Bombard. Only figures within ONE sweep are comparable to each other. */
+
+/* ai.w is the DRAFT weight — how often aiPickSpell takes this order into a
+   slot, for the Host and (since the muster) for a commander who gave no orders.
+   It is not how well the order plays. Those two had drifted apart completely.
+
+   Measured: all 55 openings, 32 seeds each, both sides AI-played so the only
+   difference between arms is the opening pair. Read per ORDER — each appears in
+   10 pairs, so 320 matches and a standard error of 2.8 points, where a single
+   pair at n=32 carries 8.8 and tells you nothing.
+
+     muster 66.3  withdraw 60.9  pyre 53.4  rampart 46.6  warp 45.3
+     hobble 42.8  unbind 42.2  brace 40.3  pitch 40.0  bombard 38.1  counter 37.2
+
+   Best minus worst is 29.1 points, 7.4 standard errors apart: which opening you
+   take is one of the largest single effects in the game. The window is a real
+   decision, which is the thing the sheet clock and the muster were both built
+   on the assumption of.
+
+   The weights did not know any of it — Spearman rank correlation between draft
+   weight and win rate was 0.07. Worse, the two orders dealt MOST often, Bombard
+   and Pitch Fire at 13.6% of the pool each, were two of the three weakest.
+   A commander who let the clock run was being handed the bad end of the table
+   by the very thing meant to rescue them.
+
+   The correction here is deliberately not a re-tune to that ranking: fitting 11
+   weights to 11 measured win rates would bake this sample into the game and
+   make the Host sharper, and the PvE numbers were tuned against a Host with no
+   spells at all. It only removes the boost that was never justified — Bombard
+   and Pitch Fire come down to the 2 that seven other orders already carry.
+   Warp Banner and Unbind stay at 1 for their own stated reason: they are
+   situational, not weak. */
 const SPELLS = [
-  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:2, go:.80 }, grp:'lane', bound:'cd',
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
   { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane', bound:'call',
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
@@ -2926,12 +3169,59 @@ const SPELLS = [
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
   { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold', bound:'coin',
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
-  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:2, go:.80 }, grp:'lane', bound:'cd',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
+  /* bound was 'coin' when this shipped, from design intent rather than
+     measurement — it costs two stores, so the stores looked like the answer.
+     Measured after, as every other bound has been, by sampling what the order
+     is waiting on each tick it cannot be cast:
+
+       order      cooling    poor     declared
+       pike          46.0    42.7     coin -> cd
+       brace         32.2    44.6     coin
+       rampart       36.5    47.2     coin
+       bombard       78.1    16.3     cd
+       muster        87.5    10.5     cd
+
+     It is the only order where the two are close, and the recovery is still
+     the larger of them. The other two 'coin' orders are clearly short of the
+     stores more often than they are recovering; this one is not, so it is
+     labelled by the same rule they were rather than by what it costs. */
+  { id:'pike',     n:'Pikewall',      target:'point',   cd:100, cost:{ wood:45, iron:35 }, ai:{ w:2, go:.70 }, grp:'lane', bound:'cd',
+    say:'a stretch of deck, held rather than cleared',
+    d:'Three pikemen plant themselves across the deck and hold it for 18 seconds. They never advance, they barely scratch a structure, and they are worth nothing to whoever kills them.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
     say:'no target — it braces everything you have',
     d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
-  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold', bound:'cd',
+  /* Countermand is the weakest order in the set — 37.2% over 320 matches — and
+     the recovery is NOT why. That was tested rather than assumed, and the test
+     came back negative.
+
+     What it does, measured over 40 matches holding it: 157 casts, a mean of
+     1.30 of their orders caught, denying 5,100 seconds of their order time for
+     18,840 seconds of its own. A ratio of 0.27, where 1.00 would be an even
+     trade of slot-seconds — and an arithmetic ceiling of only 0.42 (two enemy
+     slots x 25s against a 120s recovery), so no amount of good timing reached
+     an even trade.
+
+     So the recovery came down to 75s, which lifts the same catch rate to 0.43 —
+     the old ceiling becoming the new average — and the whole set was re-run:
+     Countermand's own ten pairs, the same 32 seeds, 320 matches. It scored
+     37.8% against 37.2%. A change of 0.6 points, 0.2 standard errors. Nothing.
+     The 120s stands, because a number that buys no measurable difference is
+     not worth the churn.
+
+     What that rules out is the obvious fix. Making the order cheaper to use
+     does not make holding it better, which means its weakness is in WHAT IT
+     DOES: two enemy orders delayed 25s apiece is a small tempo effect however
+     often you may buy it. Fixing it means changing the effect, not the price —
+     a design decision, and a bigger one than a constant.
+
+     One thing here did change. bound:'cd' told the player "its recovery is the
+     limit", and it sat ready with nothing to catch 70.4% of its idle time.
+     Recovery was never the limit. Its own card already said "time it to their
+     cast", which is exactly what bound:'call' means, so the two now agree. */
+  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold', bound:'call',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
        what it needs is a STATE rather than a body: something of theirs already
@@ -2942,7 +3232,7 @@ const SPELLS = [
        a tile that does nothing at all when pressed. */
     count:(s) => counterCatch(s),
     none:'Nothing of theirs is recovering — Countermand would be wasted.',
-    d:'Every order of theirs that is still recovering takes 25 seconds longer. Nothing at all to one they are holding ready — time it to their cast.' },
+    d:'Every order of theirs that is still recovering takes 25 seconds longer, and every one of yours comes back 25 sooner. Neither half touches an order held ready — time it to their cast.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 /* WHAT ACTUALLY LIMITS EACH ONE.
@@ -3312,9 +3602,48 @@ const SPELL_CAST = {
     // is nothing running to hold back, and 120 seconds is far too long to pay
     // for nothing — the refusal is also the lesson about when to give it.
     if (!n) return 'nothing of theirs is recovering to hold back';
+    /* ...and the same hand, the other way round, on your own side of the room.
+       Measured before this existed: it denied 5,100 seconds of their order time
+       for 18,840 seconds of its own, a ratio of 0.27 against an even trade of
+       1.00 — and cutting its recovery to 75s moved its win rate 0.6 points,
+       0.2 standard errors. The price was never the problem. Pure denial of a
+       resource spent a handful of times a match is simply worth very little.
+
+       So it stops being pure denial. Every second it puts on theirs comes off
+       yours, by the same rule read in the same direction: an order already
+       recovering, and only that. Countermand's own slot is not among them —
+       castSpell sets that AFTER this returns, so it still reads as ready here
+       and the order cannot shorten itself.
+
+       No new state and nothing new in the hash: spellCd was already both. */
+    let mine = 0;
+    for (let i = 0; i < s.slots; i++){
+      if (!s.spells[i] || s.spellCd[i] <= 0) continue;
+      s.spellCd[i] = Math.max(0, s.spellCd[i] - COUNTER.add);
+      mine++;
+    }
     castTell(s, 'Countermand', n, 'of their orders set back');
+    if (mine && forMe(s.i))
+      fxToast('...and ' + NUM_WORD(mine) + ' of yours ' + COUNTER.add + 's sooner.', 'good', TOAST_W.cast);
     if (forMe(foe.i))
       fxToast('Countermanded — your orders are ' + COUNTER.add + 's further off.', 'bad', TOAST_W.cast);
+    return null;
+  },
+  pike(s, c){
+    const px = lanePoint(c.x);
+    /* Every body is asked for whether or not there is room, because spawnUnit
+       takes its draws BEFORE the population cap can refuse one — so the stream
+       advances by how many were asked for, never by how many fit. Counting what
+       came back is how the refusal below stays honest. */
+    let n = 0;
+    for (let i = 0; i < PIKE.n; i++){
+      const y = PIKE.n > 1 ? lerp(-PIKE.span, PIKE.span, i / (PIKE.n - 1)) : 0;
+      if (spawnUnit(s.i, 'pike', { x:px, y, life:PIKE.dur })) n++;
+    }
+    // The bridge is full. Spending a hundred seconds of recovery on nothing is
+    // the one outcome worth refusing outright, as Countermand does.
+    if (!n) return 'no room on the bridge for them';
+    castTell(s, 'Pikewall', n, 'planted');
     return null;
   },
   pitch(s, c){
@@ -4581,6 +4910,36 @@ function gainXp(h, amt){
     h.lvl++;
     recalcHero(h);
     h.hp = Math.min(h.mhp, h.hp + h.mhp * .18);
+    /* WHERE THE OTHER SEVEN ULTIMATES GO.
+
+       An ultimate fires 1.63 times a match against a cooldown ceiling near
+       nine. Splitting every second of 24 veteran matches into the one bucket
+       it belongs to, from the point of view of one side's ultimate — the
+       buckets reconcile against the clock to 15159.7s of 15159.7s, which is
+       the only reason the rest of it is worth reading:
+
+         no hero exists yet          40.8%   257s a match
+         a hero, below this rung     32.6%   206s
+         owns it and is dead          5.3%    33s
+         owns it, recovering         14.8%    93s
+         owns it, ready, declined     6.6%    42s
+
+       73.4% of a match passes before the side has an ultimate AT ALL. The AI
+       declining is 6.6%; dying is 5.3%. Neither is the story. First hero at a
+       median 258s, first ultimate at 455s, leaving about 177s of ownership —
+       which at a 60-80s cooldown is the two casts observed.
+
+       And it is structural rather than incidental. Reaching this rung costs
+       5,412 xp; standing in the lane pays 8.0/s, so passive time alone needs
+       677s — LONGER THAN THE WHOLE MEDIAN MATCH of 632s. A hero only gets here
+       by killing, which is the design, and it means the ultimate layer is a
+       last-quarter feature by construction rather than by accident.
+
+       Anything built on the hero's ultimate — the hold, the shoulder mark, the
+       release notice, the fog chips that show theirs — is UI over an event
+       that happens 1.7 times, in the final third. That is not an argument
+       against those things. It is the number to have in hand before building
+       the next one. */
     if (C.SKILL_TIERS.includes(h.lvl)) offer(h, 'skill');
     else if (h.lvl === C.ULT_LEVEL) offer(h, 'ult');
     else if (C.RANK_LEVELS.includes(h.lvl)) offer(h, 'rank');
@@ -5720,6 +6079,54 @@ function aiDraftLate(s, slot){
   chooseSpell(s, slot, aiPickSpell(s, room.length ? room : pool).id);
 }
 
+/* What the muster does for a commander who gave no orders.
+
+   Measured: aiSpells is reached only through `if (s.ai) aiStep(s, dt)`, and
+   nothing else in the game ever filled an opening slot. Nothing opens the
+   chooser on its own either — showSpells is reached only by pressing a tile.
+   So a player who never pressed one arrived at the first wave with no orders
+   and kept none for the rest of the match: 16 of 16 matches ended with the
+   player's side holding zero, over a median 377 seconds. The Host, on the same
+   clock, drafted a full hand every time.
+
+   That is not the deadline having teeth, it is the deadline having teeth for
+   one side only. The window keeps them: a hand you were dealt is worse than a
+   hand you chose, because choosing is what the 55 openings are for. What it no
+   longer costs is the tools themselves.
+
+   Only EMPTY opening slots, one call each, so a commander who gave one order
+   and ran out of clock keeps the one they gave — aiDraft() would have
+   overwritten it, since chooseSpell allows a pre-wave swap by design.
+   aiDraftLate already excludes what a side is holding and honours the
+   one-hero-order rule, and spends one arnd() per slot from the per-side
+   stream, so both peers in a net match draw the same hand on the same tick. */
+function musterDraft(){
+  for (const s of G.sides){
+    const before = [];
+    for (let i = 0; i < SLOTS_AT_START; i++) if (!s.spells[i]) before.push(i);
+    if (!before.length) continue;              // no-op for any side that drafted
+    for (const i of before) aiDraftLate(s, i);
+    musterTell(s, before);
+  }
+}
+/* Cosmetic, and only for the seat it happened to. Reads what the draft left
+   behind rather than what it was handed, so a slot the pool could not fill is
+   not announced as filled.
+
+   It does NOT name the orders. The first version did — "the muster chose
+   Countermand and Second Muster" — and clipped to "…the muster chose Coun…" in
+   a real browser, because the toast lane is about 43 characters and the two
+   names alone can run past that on their own. The tiles it just filled are on
+   screen carrying those names in full, three inches away. Saying it twice was
+   what cost the sentence its ending. */
+function musterTell(s, slots){
+  if (HEADLESS || !forMe(s.i)) return;
+  const got = slots.filter(i => spellOf(s, i)).length;
+  fxToast(got ? 'No orders given — the muster chose them.'
+              : 'No orders given, and none to choose.',
+    'bad', TOAST_W.cast);
+}
+
 function aiSpells(s){
   // Chosen once, before the first wave marches — the same window a player gets
   // and the same command they would send.
@@ -5754,6 +6161,20 @@ function aiSpellTarget(s, d, fs){
     let n = 0;
     nearby(at, BOMB.r, (u) => { if (!u.dead && u.side === fs && !u.isHero) n++; });
     return n >= 3 ? { x:Math.round(at * 16) / 16 } : null;
+  }
+  if (d.id === 'pike'){
+    /* Where its own line is losing, which is the same question Withdraw asks —
+       the two are answers to one moment, and that is on purpose. Withdraw pulls
+       the line out of a fight it is losing; this plants something that cannot
+       be pulled out at all. Planted slightly behind the front so the wall is
+       between their line and the hold rather than inside it. */
+    const at = frontlineX(s.i);
+    let mine = 0, theirs = 0;
+    nearby(at, 6, (u) => {
+      if (u.dead || u.isHero) return;
+      if (u.side === s.i) mine++; else theirs++;
+    });
+    return theirs >= mine + 2 ? { x:Math.round((at - dirOf(s.i) * 1.5) * 16) / 16 } : null;
   }
   if (d.id === 'withdraw'){
     const at = frontlineX(s.i);
@@ -5877,7 +6298,12 @@ function update(dt){
     if (s.ai) aiStep(s, dt);
   }
   G.waveT -= dt;
-  if (G.waveT <= 0){ G.waveT = C.WAVE_PERIOD; spawnWave(); }
+  if (G.waveT <= 0){
+    // Before the wave marches, not after: chooseSpell shuts the opening slots
+    // the instant G.wave reaches 1, and spawnWave is what raises it.
+    if (G.wave === 0) musterDraft();
+    G.waveT = C.WAVE_PERIOD; spawnWave();
+  }
   rebuildGrid();
   const list = G.units.slice();
   // Acting first is a real advantage over thousands of ticks. Reversing the
@@ -7057,10 +7483,70 @@ const shade = (hex, f) => {
   const b = clamp(Math.round(b1 * k), 0, 255);
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 };
+/* THE CUT EDGE.
+
+   The chrome around this game has been paper since it was built — a kraft box
+   with its flutes showing, cards with shelves under them, a torn lid. The world
+   inside it was flat vector shapes with nothing in common with any of that, so
+   the two halves of the screen never looked like the same object.
+
+   What makes cut card read as cut card is the EDGE: the pale core of the stock,
+   showing along the side the light reaches. So every filled shape is laid down
+   twice — once nudged toward the sun in that pale ink, then again in its own
+   colour on top. What survives is a hairline of card edge on the lit side and
+   nothing on the other, which is exactly where a real cut would catch light.
+
+   It goes here rather than at the hundred call sites because there is only one
+   right answer to where the light is, and SUN already holds it. The nudge is
+   AGAINST the sun vector for the same reason the ground shadow is thrown along
+   it — one light, two consequences.
+
+   It applies to EVERY filled shape, with no size cutoff, and that is deliberate.
+   The first version skipped shapes under 7px on the reasoning that a 1px rim
+   swamps a tiny one. What that actually bought was an op count that depended on
+   sub-pixel geometry: a shape sitting on the threshold flipped in and out, and
+   the render suite caught it immediately — two heroes that draw identically
+   came back 195 ops against 187, which read like a hero picking up kit it
+   should not have. Removing the cutoff made them equal again. A uniform pass is
+   worth more than the shapes it saves.
+
+   WHAT IT COSTS, measured rather than assumed: an extra fill per filled shape
+   is +6.7ms on a 41.8ms frame, about +16%. Those absolute figures are from a
+   headless browser software-rendering with no GPU, so the ratio is the finding
+   and the milliseconds are not. CUT.on is the switch if that ever stops being
+   worth paying — it is read per shape, so flipping it costs nothing but the
+   branch. */
+/* The nudge was -.9 and it very nearly was not there. Compared at both ends of
+   the zoom range, which is the check this needed and had not had: at .5 a .9px
+   rim all but vanishes — the shapes are small and the edge is a suggestion —
+   while at 1.6 it is legible but weak. At 1.5px it reads at BOTH: crisp lit
+   edges on the towers and layered ridges up close, and still visibly there when
+   the whole bridge is on screen. It does not scale with zoom on purpose. A cut
+   edge is a property of the card, not of how far away you are standing. */
+/* ONE EDGE, NOT TWO, and that was measured rather than assumed.
+   A cut-out is card lifted off the page, so the obvious completion of the pale
+   rim was a dark one on the side the light does not reach — the card's
+   thickness against the layer behind it. Built, and then looked at: the frame
+   went from +6.7ms to +11.9ms, roughly doubling what the whole treatment costs,
+   and in a side-by-side of the same view the dark rim is very hard to find. The
+   pale one was plainly visible for its price; this one was not for twice it.
+   Reverted. The world already casts real ground shadows in twenty-one places —
+   keeps, trees, structures, bodies, buildings, nodes — so the card is lifted
+   off the page by those rather than by a rim, and this was paying a second time
+   for something already there. */
+const CUT = { on:true, dx:-1.5, dy:-1.5, ink:'rgba(255,247,228,.5)' };
 function poly(c, pts, fill, stroke, lw){
+  const n = pts.length;
+  if (CUT.on && fill && n > 2){
+    c.beginPath();
+    c.moveTo(pts[0][0] + CUT.dx, pts[0][1] + CUT.dy);
+    for (let i = 1; i < n; i++) c.lineTo(pts[i][0] + CUT.dx, pts[i][1] + CUT.dy);
+    c.closePath();
+    c.fillStyle = CUT.ink; c.fill();
+  }
   c.beginPath();
   c.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  for (let i = 1; i < n; i++) c.lineTo(pts[i][0], pts[i][1]);
   c.closePath();
   if (fill){ c.fillStyle = fill; c.fill(); }
   if (stroke){ c.strokeStyle = stroke; c.lineWidth = lw || 1; c.stroke(); }
@@ -7376,7 +7862,23 @@ function skyGrad(c){
   if (SKYG && SKYG_K === k && SKYG_C === c) return SKYG;
   SKYG_C = c;
   const g = c.createLinearGradient(0, 0, 0, LH);
-  for (const s of SKY_STOPS) g.addColorStop(s[0], s[1]);
+  /* BANDED, not blended. A world cut from card was sitting on a smooth
+     photographic sky, and the two were arguing: nothing else on screen has a
+     soft transition in it. Each authored stop now HOLDS its colour until the
+     next one and jumps, so the sky becomes nine flat strips of paper laid one
+     over another.
+     Every colour and every boundary is still exactly the one SKY_STOPS names —
+     the band edges are the stop offsets and the band fills are the stop
+     colours, so this repaints the same palette rather than inventing one. The
+     epsilon is what makes the jump a jump: a hair before the next offset,
+     because two stops at the SAME offset is how a gradient is told to step,
+     and a hair is the smallest step this can be without the seam softening. */
+  for (let i = 0; i < SKY_STOPS.length; i++){
+    const [at, col] = SKY_STOPS[i];
+    g.addColorStop(at, col);
+    const next = SKY_STOPS[i + 1];
+    if (next) g.addColorStop(Math.max(at, next[0] - 1e-4), col);
+  }
   SKYG = g; SKYG_K = k;
   return g;
 }
@@ -7944,85 +8446,15 @@ function softBlob(c, x, y, rx, ry, col, a){
   c.fillStyle = g; c.fillRect(-1, -1, 2, 2);
   c.restore();
 }
-// Where a cloud's puffs sit, in puff radii. Jittered per cloud so no two have
-// the same outline, and with a wider flatter puff along the base — cumulus
-// sits on a line, it does not scallop.
-function cloudPuffs(cl){
-  const out = [], w = cl.w;
-  for (let i = 0; i <= w; i++){
-    const f = 1 - Math.abs(i - w / 2) / (w + 1);
-    const j = hash2(i * 3.3 + cl.k * 7.1, 2.9), j2 = hash2(i * 5.7 + cl.k * 2.3, 6.4);
-    out.push({
-      x:(i - w / 2) * .70 + (j - .5) * .18,
-      y:-f * .58 - j2 * .18,
-      rx:(.52 + f * .50) * (.84 + j * .30),
-      ry:(.40 + f * .48) * (.82 + j2 * .34),
-    });
-  }
-  out.push({ x:(hash2(cl.k * 2.7, 1.1) - .5) * .3, y:.16, rx:w * .40 + .5, ry:.27 });
-  // Roughly half of them get a tower: a second head boiling up off one
-  // shoulder. Without it every cloud in the sky is the same lumpy sausage
-  // seen at a different size, which is the thing that makes a bank of them
-  // read as a repeat rather than as weather.
-  const t = hash2(cl.k * 6.7, 12.9);
-  if (t > .42){
-    const t2 = hash2(cl.k * 4.9, 3.7), side = t2 > .5 ? 1 : -1;
-    out.push({ x:side * (w * .22 + t2 * .35), y:-.86 - t * .34,
-      rx:.44 + t2 * .30, ry:.40 + t * .26 });
-  }
-  return out;
-}
-// Puff radius in sprite pixels. Scaled by the cloud's own size so the biggest
-// one is not blitted at twice the resolution it was drawn at — a soft edge is
-// meant to be soft, not out of focus.
-const cloudRes = (cl) => Math.round(clamp(30 * (.7 + cl.s * .75), 24, 96));
-const CLOUD_SPR = new Map();
-function cloudSprite(cl){
-  if (CLOUD_SPR.has(cl.k)) return CLOUD_SPR.get(cl.k);
-  const P = cloudPuffs(cl);
-  let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
-  for (const p of P){
-    x0 = Math.min(x0, p.x - p.rx); x1 = Math.max(x1, p.x + p.rx);
-    y0 = Math.min(y0, p.y - p.ry); y1 = Math.max(y1, p.y + p.ry);
-  }
-  x0 -= .3; x1 += .3; y0 -= .3; y1 += .3;
-  const R = cloudRes(cl), W = (x1 - x0) * R, H = (y1 - y0) * R;
-  const body = skyCanvas(W, H), rim = skyCanvas(W, H);
-  if (!body || !rim){ CLOUD_SPR.set(cl.k, null); return null; }
-  const ox = -x0 * R, oy = -y0 * R;
-  const bc = body.cc, lean = cloudLean('crown'), rise = cloudRise('crown');
-  for (const p of P) softBlob(bc, ox + p.x * R, oy + p.y * R, p.rx * R, p.ry * R, CLOUD.body.col, 1);
-  // The shading is painted with `source-atop`, which is the soft-edged answer
-  // to the clip the hard-edged version needed: an offset copy only lands where
-  // the cloud already is, and it lands with the cloud's own feathered alpha
-  // instead of against a cut-out. Directions come off cloudLean/cloudRise, the
-  // same calls the ground shadows use, so the sky cannot drift out of
-  // agreement with the island under it.
-  bc.globalCompositeOperation = 'source-atop';
-  for (const p of P)
-    softBlob(bc, ox + (p.x + CLOUD.belly.dx * cloudLean('belly') * .58) * R,
-                 oy + (p.y + CLOUD.belly.dy * cloudRise('belly') * .70) * R,
-                 p.rx * R * CLOUD.belly.sc, p.ry * R * CLOUD.belly.sc, CLOUD.belly.col, CLOUD.belly.a * .76);
-  for (const p of P)
-    softBlob(bc, ox + (p.x + CLOUD.crown.dx * lean * .52) * R,
-                 oy + (p.y + CLOUD.crown.dy * rise * .60) * R,
-                 p.rx * R * CLOUD.crown.sc, p.ry * R * CLOUD.crown.sc, CLOUD.crown.col, CLOUD.crown.a * 1.05);
-  bc.globalCompositeOperation = 'source-over';
-  // And a second sprite holding the sunward edge alone, kept in reserve for
-  // the clouds that pass near the sun. `destination-in` trims it back to the
-  // cloud's own silhouette, so what is left is a rim and nothing else.
-  const rc = rim.cc;
-  for (const p of P)
-    softBlob(rc, ox + (p.x + CLOUD.crown.dx * lean * .84) * R,
-                 oy + (p.y + CLOUD.crown.dy * rise * .84) * R,
-                 p.rx * R * .80, p.ry * R * .76, SUN.warm, .9);
-  rc.globalCompositeOperation = 'destination-in';
-  for (const p of P) softBlob(rc, ox + p.x * R, oy + p.y * R, p.rx * R, p.ry * R, '255,255,255', 1);
-  rc.globalCompositeOperation = 'source-over';
-  const spr = { cv:body.cv, rim:rim.cv, ox, oy, R, w:W, h:H };
-  CLOUD_SPR.set(cl.k, spr);
-  return spr;
-}
+/* The offscreen cloud-sprite path used to live here: cloudPuffs, the
+   CLOUD_SPR cache and cloudSprite itself, about eighty lines that
+   pre-rendered each cloud with a radial falloff per puff and blitted it,
+   plus a second sprite for the burnt-out sunward rim.
+   Paper clouds draw CLOUD's three passes straight onto the canvas, so none
+   of it had a caller any more. Removed rather than left sitting: it was
+   the answer to a cost — a falloff sixty times a second — that no longer
+   exists. softBlob and skyCanvas stay, because the cirrus and the sky
+   plates still use them; only what was cloudSprite's alone has gone. */
 /* ----------------------------------------------------------------- cirrus
    Ice, five miles up, moving on a different wind from the cumulus and far
    enough away that it barely parallaxes at all. Four sheets of thin streaks,
@@ -8109,16 +8541,31 @@ function drawClouds(c){
     const x = ((cl.x - cam.x * LS() * cl.d - drift * cl.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 200;
     if (x < -340 || x > LW + 340) continue;
     const y = LH * cl.y, R = 26 * cl.s * (.7 + cam.z * .5);
-    const spr = cloudSprite(cl);
-    if (!spr){
-      // No offscreen canvas to render into — a headless or hostile document.
-      // The art system is graceful everywhere else in this game and the sky is
-      // not the place to start throwing: hard-edged weather beats no weather.
-      cloudPath(c, x, y, R, cl.w, 1);
-      c.fillStyle = 'rgba(' + CLOUD.body.col + ',' + cl.a.toFixed(3) + ')';
+    /* PAPER CLOUDS. These were soft on purpose and the reasoning above
+       skyCanvas was explicit about it — "a cloud drawn as a row of hard
+       ellipses is a row of hard ellipses, and no amount of shading fixes an
+       edge you can cut yourself on". That was right for a world of blended
+       vector shapes. It is backwards for one cut from card, where the edge you
+       could cut yourself on is the entire point, and it left the clouds as the
+       only soft thing on a screen where the ground, the buildings and the sky
+       had all become paper.
+
+       Nothing new was needed to turn them. CLOUD already carries three passes —
+       a silhouette, a belly shaded AWAY from the sun, a crown lit TOWARD it —
+       with cloudLean and cloudRise for which way each leans. That is the same
+       sentence the cut edge says on every other shape, and it was being spent
+       on a sprite that blurred it away. Laid straight onto the canvas it reads
+       as three pieces of card stacked, which is what a paper cloud is.
+
+       The silver lining goes with it: a burnt-out sunward rim is a photograph's
+       idea of a cloud, and the crown pass already does that job in card. */
+    for (const k of CLOUD_PASSES){
+      const P = CLOUD[k];
+      cloudPath(c, x + P.dx * R * cloudLean(k), y + P.dy * R * cloudRise(k), R, cl.w, P.sc);
+      c.fillStyle = 'rgba(' + P.col + ',' + (P.a * cl.a).toFixed(3) + ')';
       c.fill();
-      continue;
     }
+    continue;
     const k = R / spr.R;
     const ddx = (x - sx) / reach, ddy = (y - sy) / reach;
     const lit = clamp(1 - Math.sqrt(ddx * ddx + ddy * ddy), 0, 1);
@@ -15879,6 +16326,22 @@ const SPELL_ICON = {
       'stroke-width="1.7" stroke-linecap="round"/>' +
     '<path d="M20.6 1 21.8 4 24 4.6 21.8 5.2 20.6 8.2 19.4 5.2 17.2 4.6 19.4 4Z" ' +
       'fill="#ffcf5e" stroke="#a9741a" stroke-width="1.1" stroke-linejoin="round"/>'),
+  /* Three uprights with heads on them, standing on a line. The first version
+     was three plain spears and read as a fence at 19px — nothing said they were
+     a WALL rather than a barricade. The ground line under them is what makes
+     them planted; the angled heads are what keep them from reading as posts. */
+  pike: ico('<path d="M2.4 20.6h19.2" stroke="#3d2d1a" stroke-width="3.4" stroke-linecap="round"/>' +
+    '<path d="M2.4 20.6h19.2" stroke="#3b4757" stroke-width="2.2" stroke-linecap="round"/>' +
+    '<path d="M6 20V7.4M12 20V5.6M18 20V7.4" stroke="#3d2d1a" ' +
+      'stroke-width="3.5" stroke-linecap="round"/>' +
+    '<path d="M6 20V7.4M12 20V5.6M18 20V7.4" stroke="' + ICO_STEEL + '" ' +
+      'stroke-width="2.1" stroke-linecap="round"/>' +
+    '<path d="M6 8.2 4.2 5.2 6 2.2 7.8 5.2Z" fill="#c9d4e2" stroke="#46586e" ' +
+      'stroke-width="1.1" stroke-linejoin="round"/>' +
+    '<path d="M12 6.4 10.2 3.4 12 .4 13.8 3.4Z" fill="#e6edf5" stroke="#46586e" ' +
+      'stroke-width="1.1" stroke-linejoin="round"/>' +
+    '<path d="M18 8.2 16.2 5.2 18 2.2 19.8 5.2Z" fill="#c9d4e2" stroke="#46586e" ' +
+      'stroke-width="1.1" stroke-linejoin="round"/>'),
   // everything of yours turns and walks back behind the wall
   withdraw: ico('<path d="M2.6 8.4h7.9v13H2.6Z" fill="#6b7686"/>' +
     '<path d="M13.4 12.5h8v3.6h-8v3.4L8.6 14.3 13.4 9.1Z" fill="#2f4763"/>' +
@@ -16441,6 +16904,44 @@ const ORDER_KEY = ['Q', 'E', 'R'];
 // still time to open the sheet, read one and take it.
 const ORDER_WINDOW_WARN = 8;
 
+/* The draft window, said out loud INSIDE the sheet.
+   Measured this round, on a probe whose own assumptions failed first: I set out
+   to count how many decisions the opening holds, scored minute zero at 1.9
+   available actions and nearly wrote down "the opening is thin". It is not. The
+   order bar reads dark at t=0 because the slots are EMPTY — the opening decision
+   is the draft itself, two orders of eleven, 55 distinct hands, and chooseSpell
+   refuses forever once G.wave reaches 1. C.FIRST_WAVE puts that exactly 22.0s
+   after the match starts; across 24 seeds the close came at 22.0s every time,
+   because it is a constant and not a race. My counter scored the largest single
+   decision in the match as ~0.4, which is what a counter of "things pressable
+   right now" does to a choice that is one press.
+   Single player HOLDS the board while the sheet is open (G.held, set in
+   openSpellSheet) so nothing is running out and printing "22s" would be a clock
+   that never moves. A net match does not hold it. There the fuse is lit and the
+   sheet — which is fixed to the whole viewport, covering the dock and with it
+   the .owin chip that would have said so — was the only thing on screen and said
+   nothing about it. Both readings come from here so the sentence built into the
+   sheet and the digits rewritten under it once a frame cannot disagree. */
+function orderWindow(){
+  if (G.state !== 'play' || G.wave >= 1) return null;   // shut, or never opened
+  if (G.held) return { held:true, left:0 };
+  return { held:false, left:Math.max(0, Math.ceil(G.waveT)) };
+}
+const orderWindowText = () => {
+  const w = orderWindow();
+  return w && !w.held ? w.left + 's' : '';
+};
+/* The tail of the sheet's deadline sentence. The clock is its own chip with an
+   id, not a number baked into the prose, so the once-a-frame writer can replace
+   the digits without rebuilding the sheet under the hand that is reading it. */
+function orderWindowTail(){
+  const w = orderWindow();
+  if (!w) return '.';
+  if (w.held) return ' — the board is held while you choose.';
+  return ' — <b class="spwin' + (w.left <= ORDER_WINDOW_WARN ? ' closing' : '') +
+    '" id="spClock">' + w.left + 's</b>';
+}
+
 /* ------------------------------------------------------------ the chooser
    An order already sitting in the OTHER slot cannot be taken — the simulation
    refuses two of the same — so the panel says that before the press rather
@@ -16560,9 +17061,13 @@ function spellSheetHtml(){
       : 'Two to start with, and they belong to the hold rather than to a hero. ') +
     (NARROW() ? 'Tap one to read it; tap it again, or press Accept, to put it in the lit slot. '
               : 'Hover one to read it; press it, or press Accept, to put it in the lit slot. ') +
+    // ...and for the opening pair, HOW LONG. Three endings, because there are
+    // three truths: a slot won in the tenth minute has no window at all, a held
+    // board has one that is not moving, and a net match has a lit fuse the
+    // sheet used to hide behind itself.
     (spellUI.slot >= SLOTS_AT_START
       ? 'Set for good once you give it.'
-      : 'Set for good when the first wave marches.') + '</p>' +
+      : 'Set for good when the first wave marches' + orderWindowTail()) + '</p>' +
     '<div class="sproll">' + spellSlotsHtml() + spellGridHtml() + '</div>' +
     // The panel and the way out of the sheet are one piece of furniture,
     // because on a phone they are pinned to the bottom of it together while
@@ -16793,6 +17298,18 @@ function syncOrders(){
   if (HEADLESS) return;
   const el = $('orders');
   if (!el || typeof el.querySelector !== 'function') return;
+  /* The sheet's own copy of the clock, if a sheet is open on it. Written here
+     rather than from a second frame hook because this is already the function
+     that owns the .owin chip a few dozen lines down — one writer for one fact,
+     and the sheet and the dock cannot drift a second apart. */
+  const sc = $('spClock');
+  if (sc && typeof sc === 'object' && 'textContent' in sc){
+    const w = orderWindow();
+    if (w && !w.held){
+      sc.textContent = w.left + 's';
+      if (sc.classList) sc.classList.toggle('closing', w.left <= ORDER_WINDOW_WARN);
+    }
+  }
   const live = G.sides.length > 0 && G.state === 'play' && !G.demo;
   const s = live ? me() : null;
   // The ult tile appears when the first hero learns one and changes its whole
@@ -16891,7 +17408,31 @@ function syncOrders(){
        the very least, and this tile going from dead to live inside their field
        of view is already the whole of the warning they need. A toast on top of
        it would be noise arriving 30 seconds early. */
-    if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i) || !spellTargets(d));
+    if (G.wave >= 1){
+      /* dead is still the SAME two facts the press reads — spellReady and
+         spellTargets — and the reason is derived on top of them rather than by
+         asking the world a second time. A test holds that line, and it caught
+         the first version of this reaching for canPay directly. */
+      const notReady = !spellReady(s, i);
+      const noTarget = !spellTargets(d);
+      const cool = cd > 0;
+      const poor = notReady && !cool;          // not ready, and not the clock
+      const noaim = !notReady && noTarget;     // affordable and off cooldown, nothing out there
+      b.classList.toggle('dead', notReady || noTarget);
+      // the two that used to share one look. Recovering keeps the plain dead
+      // treatment, because .cool is already telling that story in the label.
+      b.classList.toggle('poor', poor);
+      b.classList.toggle('noaim', noaim);
+      // and the same sentence castPress would have given, without the press
+      b.title = cool ? d.n + ' — recovering, ' + Math.ceil(cd) + 's.'
+        : poor ? d.n + ' — not enough in the stores.'
+        // NO_TARGET's phrases already end in a stop, and d.none's do too — the
+        // first version of this appended a second one and read "not on the
+        // bridge..". Trim whatever is there and put exactly one back.
+        : noaim ? d.n + ' — ' + String(d.none || NO_TARGET[d.target] || 'nothing to work on right now')
+            .replace(/[.\s]+$/, '') + '.'
+        : d.n + ' — ' + d.d;
+    }
   }
 }
 
@@ -19106,6 +19647,18 @@ const netReady = (tick) => { const s = NET.box.get(tick); return !!(s && s[0] &&
 const q30 = (v) => Math.round((v || 0) * 30);
 const q64 = (v) => Math.round((v || 0) * 64);
 function mixTimers(mix, u){
+  /* How long a summoned body has left. packBody already carried it — it is a
+     plain number on the unit and packBody keeps every primitive — so a resynced
+     joiner got the right value. The HASH did not list it, which is the half that
+     matters: two peers whose summon timers had drifted agreed on the hash right
+     up until the body vanished on one board and not the other, and by then the
+     divergence being reported was a missing unit rather than the clock that
+     removed it.
+     Verified against a control before the fix: moving a body's hp changed the
+     hash, moving its life did not. Nothing casts a life-limited body today
+     except a hero's summon, which is exactly the kind of rarely-exercised path
+     a hash is for. */
+  mix(q30(u.life));
   mix(q30(u.stunT)); mix(q30(u.slowT)); mix(q64(u.slowP));
   mix(q30(u.taunt)); mix(q30(u.markT)); mix(q30(u.pullT));
   mix(q64(u.shield)); mix(q30(u.shT)); mix(q30(u.cd));
@@ -19860,8 +20413,8 @@ window.IB = {
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
-  SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
-  aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
+  CUT, SKY_STOPS, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  aiDraft, aiDraftLate, musterDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,

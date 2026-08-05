@@ -196,6 +196,7 @@ move plus the support you stack onto it. Foes carry `FOE_HP_MUL` times their
 normal HP — only a little over 1, now that the deck sharpens attacks instead of
 adding its own.
 
+<<<<<<< HEAD
 ### Elements
 
 Every kin fights with its own element. Nothing learns a `Wild` move — a
@@ -225,6 +226,8 @@ uses a stated yardstick — a same-level target that neither resists the element
 nor is weak to it — and the screen says `~15 dmg`. A mirror of the kin itself
 would resist its own element and make every move read as feeble.
 
+=======
+>>>>>>> origin/main
 ### A card after every win
 
 Every win — wild, trainer, the legendary — offers three cards and a **No
@@ -268,11 +271,16 @@ npm run check             # the whole repo
 - `tests/emberkin.test.mjs` — data sanity, type maths, damage, capture,
   levelling, evolution, map connectivity, save round-trip, and the card battle
   end to end (hand, energy, piles, switching, shields).
+<<<<<<< HEAD
 - `tests/emberkin_cards.test.mjs` — the deck-builder itself. Every card in the
   table is played in a controlled fight and the thing it promises is checked, so
   a card cannot be added with a `vt` or an `fx` that nothing reads — and the
   audit proves itself by failing a planted card whose value nothing applies.
   Also: that no card in your deck deals damage, that a support card adds exactly the number it prints
+=======
+- `tests/emberkin_cards.test.mjs` — the deck-builder itself: that no card in
+  your deck deals damage, that a support card adds exactly the number it prints
+>>>>>>> origin/main
   at level 5 and at level 50, that an edge is spent by the next attack that
   connects and survives a miss, that every win offers three distinct cards and
   harder fights offer better ones, and that growth sticks to

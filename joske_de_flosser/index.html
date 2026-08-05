@@ -19,6 +19,24 @@
   .ov{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:14px;
     background:radial-gradient(900px 560px at 50% 42%, rgba(30,10,18,.82), rgba(4,3,7,.95)); }
   .ov[hidden]{ display:none; }
+  /* The title screen paints its own logo and floss-off on the canvas, so the
+     menu sits low and the wash fades out toward the top to let the art read. */
+  #title{ align-items:flex-end; padding-bottom:18px;
+    background:linear-gradient(180deg, rgba(4,3,7,0) 0%, rgba(6,4,10,.18) 22%, rgba(8,5,12,.72) 44%, rgba(6,4,10,.9) 100%); }
+  #title .card{ width:min(520px,94vw); max-height:70vh; padding-top:14px; }
+  #title .sub{ margin-bottom:10px; }
+  /* Phone held sideways: the logo still needs its band of sky, so the menu
+     gives up the story text before it gives up the FIGHT button. */
+  @media (max-height:520px){
+    #title{ padding:6px 10px 8px; }
+    #title .card{ max-height:76vh; padding:8px 14px 10px; }
+    #title .story{ font-size:11.5px; line-height:1.6; margin-bottom:8px; }
+    #title .sub{ margin-bottom:6px; font-size:11px; }
+    #title .btn{ padding:9px 16px; }
+  }
+  @media (max-height:420px){
+    #title .story{ display:none; }
+  }
   .card{ width:min(600px,94vw); max-height:94vh; overflow:auto; padding:22px 24px 20px; text-align:center;
     border-radius:4px; background:linear-gradient(180deg,#1a1122,#0d0813);
     border:3px solid #4a2f2f; box-shadow:0 0 0 3px #0a0710, 0 18px 50px rgba(0,0,0,.7); }
@@ -119,7 +137,6 @@
 
   <div class="ov" id="title">
     <div class="card">
-      <h1>JOSKE<br>DE FLOSSER</h1>
       <p class="sub">Out-floss the whole world</p>
       <div class="story">
         Nobody flosses like <b>Joske</b>. Nobody except <b>Smoske</b>, his dance partner,
@@ -209,7 +226,7 @@
 </div>
 <script>
 /* =====================================================================
-   TWIN FISTS  —  an arcade beat-'em-up.
+   JOSKE DE FLOSSER  —  an arcade beat-'em-up.
 
    Original game: original fighters, original streets, original music.
    What is borrowed is the grammar of the genre — a 2.5D floor you walk
@@ -678,17 +695,20 @@ const A = {                                   // animation frame tables
   jump: [P({ hipY: 19, lean: 1, lF: [7, 13, 9, 6], lB: [-6, 12, -8, 5], aF: [7, 28, 10, 30], aB: [-7, 28, -10, 30] })],
   fall: [P({ hipY: 19, lean: -1, lF: [8, 12, 12, 4], lB: [-7, 11, -9, 2], aF: [8, 27, 12, 26], aB: [-8, 27, -11, 26] })],
   punchA: [
-    P({ hipY: 19, lean: -1, aF: [4, 26, 2, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 19, lean: -2, aF: [3, 26, 0, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 2, aF: [9, 26, 17, 26], aB: [-6, 25, -2, 21], lF: [5, 10, 8, 0], lB: [-5, 10, -7, 0] }),
+    P({ hipY: 19, lean: 0, aF: [6, 26, 10, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 7, 0], lB: [-5, 10, -7, 0] }),
   ],
   punchB: [
-    P({ hipY: 19, lean: -1, aB: [-4, 26, -2, 24], aF: [6, 25, 3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 19, lean: -2, aB: [-4, 26, -2, 24], aF: [6, 25, 3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 2, aB: [9, 26, 17, 25], aF: [6, 25, 2, 21], lF: [5, 10, 8, 0], lB: [-5, 10, -7, 0] }),
+    P({ hipY: 19, lean: 0, aB: [6, 26, 10, 24], aF: [6, 25, 3, 22], lF: [4, 10, 7, 0], lB: [-5, 10, -7, 0] }),
   ],
   hook: [
     P({ hipY: 18, lean: -3, aF: [-2, 24, -8, 27], aB: [-6, 25, -4, 21], lF: [3, 10, 5, 0], lB: [-5, 10, -8, 0] }),
     P({ hipY: 19, lean: 1, aF: [6, 30, 12, 30], aB: [-5, 25, -3, 22], lF: [4, 10, 7, 0], lB: [-5, 10, -8, 0] }),
     P({ hipY: 19, lean: 4, aF: [12, 27, 19, 23], aB: [-4, 24, 0, 20], lF: [6, 10, 10, 0], lB: [-5, 10, -8, 0] }),
+    P({ hipY: 18, lean: 5, aF: [15, 23, 17, 16], aB: [-2, 24, 3, 21], lF: [7, 10, 12, 0], lB: [-4, 10, -7, 0] }),
   ],
   kick: [
     P({ hipY: 19, lean: -2, lF: [4, 13, 3, 6], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-7, 26, -9, 22] }),
@@ -701,13 +721,15 @@ const A = {                                   // animation frame tables
     P({ hipY: 19, lean: -1, lF: [6, 9, 11, 2], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-6, 26, -8, 22] }),
   ],
   midkick: [
-    P({ hipY: 19, lean: -2, lF: [4, 13, 3, 8], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-7, 26, -9, 22] }),
+    P({ hipY: 19, lean: -2, lF: [6, 15, 3, 12], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-7, 26, -9, 22] }),
     P({ hipY: 20, lean: -4, lF: [11, 15, 21, 15], lB: [-3, 10, -5, 0], aF: [2, 26, -2, 23], aB: [-9, 26, -12, 24] }),
+    P({ hipY: 20, lean: -3, lF: [8, 14, 12, 11], lB: [-4, 10, -6, 0], aF: [3, 25, 0, 22], aB: [-8, 26, -10, 23] }),
     P({ hipY: 19, lean: -1, lF: [6, 12, 9, 5], lB: [-4, 10, -6, 0], aF: [4, 25, 2, 21], aB: [-7, 26, -9, 22] }),
   ],
   highkick: [
-    P({ hipY: 19, lean: -3, lF: [3, 14, 1, 10], lB: [-4, 10, -6, 0], aF: [3, 25, 0, 21], aB: [-7, 26, -10, 23] }),
+    P({ hipY: 19, lean: -3, lF: [6, 17, 2, 14], lB: [-4, 10, -6, 0], aF: [3, 25, 0, 21], aB: [-7, 26, -10, 23] }),
     P({ hipY: 21, lean: -6, headX: -2, lF: [10, 21, 17, 30], lB: [-3, 10, -6, 0], aF: [1, 26, -4, 25], aB: [-9, 27, -13, 27] }),
+    P({ hipY: 20, lean: -4, lF: [9, 19, 15, 22], lB: [-3, 10, -6, 0], aF: [2, 26, -2, 24], aB: [-8, 26, -12, 25] }),
     P({ hipY: 19, lean: -2, lF: [7, 14, 11, 8], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 22], aB: [-7, 26, -10, 23] }),
   ],
   jumpkick: [P({ hipY: 19, lean: -3, lF: [10, 16, 20, 15], lB: [-6, 12, -10, 8], aF: [4, 27, 0, 24], aB: [-8, 27, -12, 26] })],
@@ -1069,14 +1091,14 @@ function shade(hex, amt){
    far it reaches and what it does on contact.  Nothing about a move is
    hidden in the state machine — the state machine only runs the table. */
 const ATK = {
-  jab:      { anim: 'punchA', dur: 0.24, hit: [0.07, 0.14], dmg: 6,  reach: 21, kb: 34,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.07], [1, 0.24]] },
-  cross:    { anim: 'punchB', dur: 0.25, hit: [0.07, 0.15], dmg: 7,  reach: 22, kb: 38,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.07], [1, 0.25]] },
-  hook:     { anim: 'hook',   dur: 0.44, hit: [0.14, 0.25], dmg: 14, reach: 26, kb: 165, lift: 120, down: true,  sfx: 'heavy', swoosh: 'hook', heavy: true, seq: [[0, 0.12], [1, 0.2], [2, 0.44]] },
+  jab:      { anim: 'punchA', dur: 0.24, hit: [0.07, 0.14], dmg: 6,  reach: 21, kb: 34,  lift: 0,   down: false, sfx: 'hit',   swoosh: 'streak', seq: [[0, 0.06], [1, 0.15], [2, 0.24]] },
+  cross:    { anim: 'punchB', dur: 0.25, hit: [0.07, 0.15], dmg: 7,  reach: 22, kb: 38,  lift: 0,   down: false, sfx: 'hit',   swoosh: 'streak', seq: [[0, 0.06], [1, 0.16], [2, 0.25]] },
+  hook:     { anim: 'hook',   dur: 0.44, hit: [0.14, 0.25], dmg: 14, reach: 26, kb: 165, lift: 120, down: true,  sfx: 'heavy', swoosh: 'hook', heavy: true, seq: [[0, 0.12], [1, 0.2], [2, 0.32], [3, 0.44]] },
   kick:     { anim: 'kick',   dur: 0.42, hit: [0.13, 0.23], dmg: 11, reach: 29, kb: 105, lift: 30,  down: false, sfx: 'heavy', seq: [[0, 0.12], [1, 0.26], [2, 0.42]] },
   /* the kick chain: shin, body, head — the last one launches */
   lowkick:  { anim: 'lowkick', dur: 0.30, hit: [0.09, 0.17], dmg: 7,  reach: 27, kb: 55,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.09], [1, 0.21], [2, 0.3]] },
-  midkick:  { anim: 'midkick', dur: 0.40, hit: [0.13, 0.23], dmg: 11, reach: 30, kb: 115, lift: 28,  down: false, sfx: 'heavy', swoosh: 'mid', seq: [[0, 0.12], [1, 0.26], [2, 0.4]] },
-  highkick: { anim: 'highkick', dur: 0.52, hit: [0.17, 0.29], dmg: 16, reach: 31, kb: 195, lift: 140, down: true, sfx: 'heavy', swoosh: 'high', heavy: true, seq: [[0, 0.15], [1, 0.32], [2, 0.52]] },
+  midkick:  { anim: 'midkick', dur: 0.40, hit: [0.13, 0.23], dmg: 11, reach: 30, kb: 115, lift: 28,  down: false, sfx: 'heavy', swoosh: 'mid', seq: [[0, 0.11], [1, 0.24], [2, 0.32], [3, 0.4]] },
+  highkick: { anim: 'highkick', dur: 0.52, hit: [0.17, 0.29], dmg: 16, reach: 31, kb: 195, lift: 140, down: true, sfx: 'heavy', swoosh: 'high', heavy: true, seq: [[0, 0.14], [1, 0.3], [2, 0.4], [3, 0.52]] },
   jumpkick: { anim: 'jumpkick', dur: 0.5, hit: [0.04, 0.42], dmg: 15, reach: 27, kb: 165, lift: 120, down: true, sfx: 'heavy', air: true, seq: [[0, 0.5]] },
   jumppunch:{ anim: 'jumppunch', dur: 0.4, hit: [0.04, 0.3], dmg: 9, reach: 22, kb: 70,  lift: 20,  down: false, sfx: 'hit',   air: true, seq: [[0, 0.4]] },
   whirl:    { anim: 'whirl',  dur: 0.58, hit: [0.12, 0.42], dmg: 10, reach: 27, kb: 150, lift: 110, down: true,  sfx: 'heavy', all: true, cost: 4, swoosh: 'spin', seq: [[0, 0.16], [1, 0.3], [2, 0.58]] },
@@ -2028,6 +2050,7 @@ const SWOOSH = {
   high:   { pivot: 'hip', r: 24, a0: 195, a1: 62 },
   spin:   { pivot: 'sh',  r: 19, a0: 0,   a1: 355 },
   weapon: { pivot: 'hand', r: 0, a0: 0, a1: 0 },
+  streak: { pivot: 'sh', r: 0, a0: 0, a1: 0 },
 };
 
 function drawAttackSwoosh(f, X, Y, pose, sc){
@@ -2038,6 +2061,16 @@ function drawAttackSwoosh(f, X, Y, pose, sc){
   const fade = clamp(1.3 - k, 0, 1) * 0.5;
   const sp = SWOOSH[a.swoosh];
   const col = 'rgba(255,250,225,' + fade.toFixed(2) + ')';
+  if (a.swoosh === 'streak'){        // a jab leaves a line, not an arc
+    const hx = X(pose.aF[2]), hy = Y(pose.aF[3]);
+    const shx = X(pose.hipX + pose.lean), shy = Y(pose.hipY + pose.sh);
+    for (let i = 1; i <= 3; i++){
+      const t = i / 4;
+      limb(lerp(shx, hx, t), lerp(shy, hy, t), hx, hy, Math.max(1, 2 * sc - i * 0.4),
+        'rgba(255,250,225,' + (fade * (0.5 - i * 0.12)).toFixed(2) + ')');
+    }
+    return;
+  }
   if (a.swoosh === 'weapon'){
     const hx = X(pose.aF[2]), hy = Y(pose.aF[3]);
     drawSwoosh(hx, hy, (W_LEN[f.weapon] || 14) * sc, a.arc[0], weaponAngle(f, 0), f.face, col);
@@ -4338,32 +4371,117 @@ function fmtTime(t){
   return m + ':' + String(s).padStart(2, '0');
 }
 
+/* ---------------------------------------------------------------- logo
+   The title is set in the game's own 5x7 font, blown up and dressed: a
+   hard ink outline, a slab extrude under it, colour bands running down the
+   rows, and a shine that sweeps across on a diagonal.  Everything but the
+   sweep is baked once, so the animation costs a handful of pixels. */
+const LOGO_BAND = ['#fffbe4', '#ffe98a', '#ffcf46', '#ffb02a', '#f9891a', '#e86a12', '#d4520e'];
+const logoCells = {};
+function logoGlyphs(s){
+  if (logoCells[s]) return logoCells[s];
+  const cells = [];
+  for (let i = 0; i < s.length; i++){
+    const g = FONT[s[i]];
+    if (!g) continue;
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) if (g[r][c] === '1') cells.push([i * 6 + c, r]);
+  }
+  logoCells[s] = cells;
+  return cells;
+}
+/* Only the bottom pixel of each column casts the slab, so the counters of
+   O and E stay open instead of filling with shadow. */
+function logoFeet(cells){
+  const set = new Set(cells.map(([x, y]) => x + ',' + y));
+  return cells.filter(([x, y]) => !set.has(x + ',' + (y + 1)));
+}
+const LOGO_RING = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+function logo(s, cx, y, sc, shine){
+  s = String(s).toUpperCase();
+  const cells = logoGlyphs(s), w = textW(s, sc), pad = sc * 2;
+  const plate = bake('logo:' + s + ':' + sc, w + pad * 2, 7 * sc + pad * 3, () => {
+    for (const [ox, oy] of LOGO_RING)
+      for (const [gx, gy] of cells) px(pad + (gx + ox) * sc, pad + (gy + oy) * sc, sc, sc, '#1b0a06');
+    for (const [gx, gy] of logoFeet(cells)){
+      px(pad + gx * sc, pad + (gy + 3) * sc, sc, sc, '#3a1004');
+      px(pad + gx * sc, pad + (gy + 2) * sc, sc, sc, '#75210a');
+    }
+    for (const [gx, gy] of cells) px(pad + gx * sc, pad + gy * sc, sc, sc, LOGO_BAND[gy]);
+  });
+  const x = Math.round(cx - w / 2) - pad, yy = Math.round(y) - pad;
+  blit(plate, x, yy);
+  /* The sweep is measured in screen pixels, not glyph cells, so one bar of
+     light crosses both lines of the logo as a single wavefront. */
+  if (shine != null){
+    for (const [gx, gy] of cells){
+      const sx = x + pad + gx * sc, sy = yy + pad + gy * sc;
+      const d = Math.abs((sx - VW / 2) * 0.5 + sy - shine);
+      if (d < 11) px(sx, sy, sc, sc, d < 5 ? '#fffdf2' : '#ffeeb4');
+    }
+  }
+}
+
 /* ------------------------------------------------------------- attract
-   The title screen is not a still: two fighters spar behind the menu so
-   the game is showing you what it is before you press anything. */
-const attract = { t: 0, a: null, b: null };
+   The title screen is not a still: a floss-off runs behind the menu, so
+   the game shows you what it is before you press anything.  Joske and
+   Smoske hold the beat on the left, the wannabees answer on the right,
+   and every few seconds the answer turns into a punch. */
+const attract = { t: 0, cast: null };
+const ATTRACT_CAST = [
+  { skin: 'joske', x: 150, face: 1, hero: true, tail: true, lunge: 58 },
+  { skin: 'smoke', x: 116, face: 1, hero: true, off: 2, lunge: 30 },
+  { skin: 'punk', x: 238, face: -1 },
+  { skin: 'runner', x: 280, face: -1, off: 2, sc: 0.95 },
+  { skin: 'chain', x: 314, face: -1, off: 1, sc: 0.95 },
+];
 function drawAttract(){
   attract.t += 1 / 60;
   bgStreet(attract.t * 12);
-  if (!attract.a){
-    attract.a = mkFighter({ team: 'p', kind: 'player', skin: 'joske', x: 150, y: 178, face: 1, hairTail: true });
-    attract.b = mkFighter({ team: 'e', kind: 'punk', skin: 'punk', x: 226, y: 178, face: -1 });
+  if (!attract.cast){
+    attract.cast = ATTRACT_CAST.map(c => mkFighter({
+      team: c.hero ? 'p' : 'e', kind: c.hero ? 'player' : 'punk', sc: c.sc || 1,
+      skin: c.skin, x: c.x, y: c.hero ? 176 : 182, face: c.face, hairTail: !!c.tail }));
   }
-  const cyc = attract.t % 3.2;
-  const a = attract.a, b = attract.b;
+  const cyc = attract.t % 4.4, beat = Math.floor(attract.t * 8);
   const oldCam = cam.x, oldSX = cam.shakeX, oldSY = cam.shakeY;
   cam.x = 0; cam.shakeX = 0; cam.shakeY = 0;
-  a.anim = cyc < 1.1 ? 'walk' : cyc < 1.35 ? 'punchA' : cyc < 1.6 ? 'punchB' : cyc < 2.1 ? 'hook' : cyc < 2.6 ? 'jumpkick' : 'idle';
-  a.frame = a.anim === 'walk' ? Math.floor(attract.t * 8) % 4 : (cyc % 0.25 > 0.09 ? 1 : 0);
-  a.x = 150 + (cyc < 1.1 ? cyc * 22 : 24);
-  a.z = a.anim === 'jumpkick' ? 20 : 0;
-  b.anim = cyc < 1.3 ? 'idle' : cyc < 2.1 ? 'hurt' : cyc < 3 ? 'lie' : 'idle';
-  b.frame = 0;
-  b.x = 226 + (cyc > 1.3 ? Math.min(20, (cyc - 1.3) * 40) : 0);
-  drawFighter(b); drawFighter(a);
+  for (let i = 0; i < attract.cast.length; i++){
+    const f = attract.cast[i], c = ATTRACT_CAST[i];
+    f.anim = 'idle';
+    f.frame = (beat + (c.off || 0)) % 4;
+    f.x = c.x;
+    f.z = 0;
+    if (c.hero && cyc > 3.0){                       // Joske and Smoske step in swinging
+      f.anim = cyc < 3.3 ? 'punchA' : cyc < 3.6 ? 'punchB' : 'hook';
+      f.frame = cyc % 0.3 > 0.11 ? 1 : 0;
+      f.x = c.x + Math.min(c.lunge, (cyc - 3.0) * c.lunge * 1.7);
+    }
+    if (!c.hero && i === 2 && cyc > 3.55){
+      f.anim = cyc < 4.1 ? 'hurt' : 'lie';
+      f.x = c.x + Math.min(16, (cyc - 3.55) * 40);
+    }
+  }
+  for (const f of attract.cast) if (f.team === 'e') drawFighter(f);
+  for (const f of attract.cast) if (f.team === 'p') drawFighter(f);
   cam.x = oldCam; cam.shakeX = oldSX; cam.shakeY = oldSY;
-  px(0, 0, VW, 30, 'rgba(8,6,12,0.55)');
-  textC('TWIN FISTS', VW / 2, 8, '#ffd23d', 2, '#3a1408');
+
+  for (let i = 0; i < 34; i++) px(0, i, VW, 1, 'rgba(6,4,10,' + (0.78 - i * 0.006).toFixed(3) + ')');
+  px(0, 34, VW, 26, 'rgba(6,4,10,0.58)');
+  /* A warm halo so the type lifts off the skyline.  Nine nested ellipses at
+     a whisper of alpha each: the overlap gives a falloff on both axes that a
+     single shape cannot.  Baked once — it never changes. */
+  blit(bake('logoglow', 264, 96, () => {
+    for (let s = 0; s < 9; s++){
+      const rx = 124 - s * 12, ry = 44 - s * 4.2;
+      for (let y = -ry; y <= ry; y++){
+        const w = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
+        if (w > 0) px(132 - w, Math.round(48 + y), w * 2, 1, 'rgba(255,124,44,0.028)');
+      }
+    }
+  }), VW / 2 - 132, -6);
+  const sweep = (attract.t % 3.4) * 36 - 14;
+  logo('JOSKE', VW / 2, 8, 4, sweep);
+  logo('DE FLOSSER', VW / 2, 44, 2, sweep);
 }
 </script>
 <script>
