@@ -2988,7 +2988,35 @@ const SPELLS = [
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
     say:'no target — it braces everything you have',
     d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
-  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold', bound:'cd',
+  /* Countermand is the weakest order in the set — 37.2% over 320 matches — and
+     the recovery is NOT why. That was tested rather than assumed, and the test
+     came back negative.
+
+     What it does, measured over 40 matches holding it: 157 casts, a mean of
+     1.30 of their orders caught, denying 5,100 seconds of their order time for
+     18,840 seconds of its own. A ratio of 0.27, where 1.00 would be an even
+     trade of slot-seconds — and an arithmetic ceiling of only 0.42 (two enemy
+     slots x 25s against a 120s recovery), so no amount of good timing reached
+     an even trade.
+
+     So the recovery came down to 75s, which lifts the same catch rate to 0.43 —
+     the old ceiling becoming the new average — and the whole set was re-run:
+     Countermand's own ten pairs, the same 32 seeds, 320 matches. It scored
+     37.8% against 37.2%. A change of 0.6 points, 0.2 standard errors. Nothing.
+     The 120s stands, because a number that buys no measurable difference is
+     not worth the churn.
+
+     What that rules out is the obvious fix. Making the order cheaper to use
+     does not make holding it better, which means its weakness is in WHAT IT
+     DOES: two enemy orders delayed 25s apiece is a small tempo effect however
+     often you may buy it. Fixing it means changing the effect, not the price —
+     a design decision, and a bigger one than a constant.
+
+     One thing here did change. bound:'cd' told the player "its recovery is the
+     limit", and it sat ready with nothing to catch 70.4% of its idle time.
+     Recovery was never the limit. Its own card already said "time it to their
+     cast", which is exactly what bound:'call' means, so the two now agree. */
+  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold', bound:'call',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
        what it needs is a STATE rather than a body: something of theirs already
