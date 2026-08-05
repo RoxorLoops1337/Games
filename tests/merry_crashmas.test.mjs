@@ -29,7 +29,7 @@ toMenu();
 requestAnimationFrame(loop);`;
 
 const EXPOSE = `__out.api = {
-  G, car, aim, props, people, pickups, ice, spills, fx, tracks, snow, snd, cam, shake, bounds,
+  G, car, aim, props, people, pickups, ice, spills, fx, tracks, gore, snow, snd, cam, shake, bounds,
   LEVELS, PROPS, COMBO_BANNERS, BEST_KEY, PROG_KEY,
   reseed, rnd, rr, ri, clamp, lerp, angLerp, fmt,
   genMarket, addProp, addPerson,
@@ -39,12 +39,14 @@ const EXPOSE = `__out.api = {
   killPerson, stepPeople, wreckProp, stepProps, stepSpills, stepFx,
   carSpeed, inCar, doBoost, hitProp, stepCarCollisions, stepCarKills, stepPickups,
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
+  takeOff, land, stepAir, addGore, bleed, drawCar, drawPerson,
   draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
   SHOUTS, SHOUT_TIME,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
-       SCARE_R, FLEE_SPD, BOOST_KICK, PLOW_TIME, PERSON_PTS, SANTA_PTS },
+       SCARE_R, FLEE_SPD, BOOST_KICK, PLOW_TIME, PERSON_PTS, SANTA_PTS,
+       GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX },
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
   _setCtx: (c) => { ctx = c; },
@@ -511,6 +513,143 @@ test('golden gifts pay out and cannot be taken twice', () => {
   assert(api.G.levelScore === 500, 'star pays 500, got ' + api.G.levelScore);
   api.stepPickups();
   assert(api.G.levelScore === 500, 'and only once');
+});
+
+/* ----------------------------------------------------------------- air --- */
+
+test('a snowbank at speed puts the car in the air', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const ramp = api.addProp('ramp', 2000, 1100, {});
+  assert(ramp.ramp, 'the snowbank is flagged as a ramp');
+  drive(api, 1200, 0, 2000 - ramp.w / 2 - api.C.CAR_R - 10, 1100);
+  step(api, 0.25);
+  assert(api.car.air === 1, 'the car should be airborne');
+  assert(api.car.z > 0, 'and off the ground');
+  assert(api.car.vx > 900, 'a ramp costs almost no speed, got ' + api.car.vx);
+  assert(Math.abs(api.car.rollV) > 2, 'it should be rolling');
+});
+
+test('a crawl over a snowbank is just a bump', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const ramp = api.addProp('ramp', 2000, 1100, {});
+  drive(api, api.C.RAMP_MIN - 120, 0, 2000 - ramp.w / 2 - api.C.CAR_R - 10, 1100);
+  step(api, 0.4);
+  assert(api.car.air === 0, 'too slow to take off');
+  assert(api.car.z === 0, 'still on the ground');
+});
+
+test('an airborne car flies over stalls and lands again', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const ramp = api.addProp('ramp', 1600, 1100, {});
+  const hut = api.addProp('hut', 1900, 1100, {});
+  drive(api, 1400, 0, 1600 - ramp.w / 2 - api.C.CAR_R - 10, 1100);
+  step(api, 0.2);
+  assert(api.car.air === 1, 'airborne');
+  const hp0 = hut.hp;
+  let maxZ = 0, flew = false;
+  for (let i = 0; i < 200 && api.car.air; i++){
+    api.update(1 / 60);
+    maxZ = Math.max(maxZ, api.car.z);
+    if (api.car.x > 1900) flew = true;
+  }
+  assert(maxZ > 60, 'it should get properly airborne, peak ' + maxZ);
+  assert(flew, 'and travel past the stall');
+  assert(hut.hp === hp0 && !hut.dead, 'the stall it flew over is untouched');
+  assert(api.car.air === 0 && api.car.z === 0, 'and it comes back down');
+});
+
+test('the landing flattens everyone underneath at once', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  for (let i = 0; i < 5; i++) api.addPerson(2000 + Math.cos(i) * 30, 1100 + Math.sin(i) * 30);
+  const far = api.addPerson(2400, 1100);
+  drive(api, 800, 0, 2000, 1100);
+  api.car.air = 1; api.car.z = 40; api.car.vz = -300; api.car.rollAcc = 0;
+  api.land();
+  assert(api.people.filter(p => p.dead).length >= 5, 'the whole cluster goes under the wheels');
+  assert(!far.dead, 'and the one down the aisle does not');
+  assert(api.G.banner && /UNDER THE WHEELS/.test(api.G.banner.text), 'a slam banner fires');
+});
+
+test('a completed roll pays out on landing', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  drive(api, 700, 0, 2000, 1100);
+  api.G.levelScore = 0; api.G.mult = 1;
+  api.car.air = 1; api.car.z = 20; api.car.rollAcc = Math.PI * 2 * 2 + 0.3;   // two full rolls
+  api.land();
+  assert(api.G.levelScore >= api.C.FLIP_PTS * 2, 'two rolls pay twice, got ' + api.G.levelScore);
+  assert(api.G.banner && /ROLL/.test(api.G.banner.text), 'a roll banner fires');
+  assert(api.car.rollAcc === 0 && api.car.roll === 0, 'the roll resets on the ground');
+});
+
+test('the flight arc is gravity, not a straight line', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  drive(api, 900, 0, 2000, 1100);
+  api.takeOff(900, null);
+  const up = api.car.vz;
+  assert(up > 0, 'launched upward');
+  const heights = [];
+  for (let i = 0; i < 40 && api.car.air; i++){ api.update(1 / 60); heights.push(api.car.z); }
+  const peak = Math.max(...heights);
+  assert(peak > 20, 'it gets some height, peak ' + peak);
+  assert(heights[heights.length - 1] < peak, 'and comes back down');
+});
+
+/* --------------------------------------------------------------- blood --- */
+
+test('a kill leaves blood on the snow and on the car', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.gore.length = 0;
+  const p = api.addPerson(2000, 1100);
+  drive(api, 900, 0, 1990, 1100);
+  assert(api.car.gore === 0, 'clean car to start');
+  api.stepCarKills();
+  assert(p.dead, 'killed');
+  assert(api.gore.length > 4, 'a pool and spray, got ' + api.gore.length);
+  assert(api.gore.some(g => g.kind === 'pool'), 'there is a pool');
+  assert(api.car.gore > 0 && api.car.bloody > 0, 'the car is marked too');
+  assert(api.fx.some(f => f.type === 'blood'), 'blood sprays as particles');
+});
+
+test('blood dries off the tyres, and the decal buffer is capped', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  drive(api, 400, 0, 1200, 1100);
+  api.car.bloody = 1;
+  step(api, 3);
+  assert(api.car.bloody < 0.6, 'the smear fades as you drive, got ' + api.car.bloody);
+  for (let i = 0; i < api.C.GORE_MAX + 200; i++) api.addGore(1000 + i, 1100, 10, 'splat');
+  assert(api.gore.length <= api.C.GORE_MAX, 'decals capped, got ' + api.gore.length);
+});
+
+test('a run through a crowd paints the aisle', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  step(api, 8);
+  assert(api.G.kills > 0, 'somebody went under');
+  assert(api.gore.length > api.G.kills, 'every kill leaves more than one mark');
+  assert(api.tracks.some(t => t.red > 0.05), 'and the tyres carry it down the aisle');
+});
+
+test('bodies are squashed by what hit them', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0;
+  const slow = api.addPerson(2000, 1100);
+  api.killPerson(slow, 200, 0, 'car');
+  const fast = api.addPerson(2200, 1100);
+  api.killPerson(fast, 1900, 0, 'car');
+  const slam = api.addPerson(2400, 1100);
+  api.killPerson(slam, 0, 0, 'slam');
+  assert(fast.squash < slow.squash, 'faster leaves them flatter');
+  assert(slam.squash < 0.4, 'a landing flattens them most');
+  api.drawPerson(fast);            // the sprawled body renders
 });
 
 /* ---------------------------------------------------------------- flow --- */
