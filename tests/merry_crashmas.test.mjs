@@ -40,6 +40,8 @@ const EXPOSE = `__out.api = {
   carSpeed, inCar, doBoost, hitProp, stepCarCollisions, stepCarKills, stepPickups,
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
   takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
+  gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
+  stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
   drawCar, drawPerson, drawLens,
   draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
   SHOUTS, SHOUT_TIME,
@@ -47,7 +49,8 @@ const EXPOSE = `__out.api = {
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
        SCARE_R, FLEE_SPD, BOOST_KICK, PLOW_TIME, PERSON_PTS, SANTA_PTS,
-       GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX, DEBRIS_MAX },
+       GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX, DEBRIS_MAX,
+       REC_HZ, REC_WINDOW, REC_KEEP, REC_RADIUS, REPLAY_SPEED, REPLAY_MIN_KILLS },
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
 };
@@ -571,6 +574,193 @@ test('a pram breaks loose when whoever was pushing it goes down', () => {
   api.killPerson(p, 900, 0, 'car');
   assert(p.pramT === 0, 'the pram is gone');
   assert(api.fx.some(f => f.type === 'pram'), 'and it is airborne');
+});
+
+/* -------------------------------------------------------------- replay --- */
+
+test('a fast kill throws limbs and pixels; a slow one only pixels', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.fx.length = 0;
+  api.killPerson(api.addPerson(2000, 1100), 1800, 0, 'car');
+  const limbs = api.fx.filter(f => f.type === 'limb');
+  assert(limbs.length > 0, 'flat out should take pieces off, got ' + limbs.length);
+  assert(limbs.some(f => f.part === 'arm' || f.part === 'leg' || f.part === 'head'), 'named parts');
+  assert(api.fx.filter(f => f.type === 'pixel').length > 8, 'and a burst of pixels');
+
+  api.fx.length = 0;
+  api.killPerson(api.addPerson(2300, 1100), 220, 0, 'car');
+  assert(api.fx.filter(f => f.type === 'limb').length === 0, 'a slow bump leaves them whole');
+  assert(api.fx.filter(f => f.type === 'pixel').length > 0, 'but still throws pixels');
+});
+
+test('limbs land and stain the snow', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.fx.length = 0; api.gore.length = 0;
+  api.gib(2000, 1100, 1200, 0, 2, '#c8443a', '#f0c9a4');
+  const before = api.gore.length;
+  step(api, 2.2);
+  assert(api.gore.length > before, 'the pieces leave marks where they settle');
+});
+
+test('the recorder keeps a rolling window, not the whole run', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  step(api, 4);
+  const held = api.rec.frames.length;
+  assert(held > 10, 'it is recording, got ' + held);
+  assert(held <= Math.ceil(api.C.REC_KEEP * api.C.REC_HZ) + 3,
+    'the ring should stay about ' + api.C.REC_KEEP + 's, got ' + held);
+  const spanS = api.rec.frames[held - 1].t - api.rec.frames[0].t;
+  assert(spanS <= api.C.REC_KEEP + 0.15, 'window span ' + spanS.toFixed(2) + 's');
+});
+
+test('only what is near the car gets filmed', () => {
+  const api = boot();
+  api.startLevel(5); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100;
+  const f = api.recSnap();
+  const n = f.ents.length / 8;
+  assert(n > 0, 'somebody is in shot');
+  assert(n < api.people.length, 'but not all 700 of them: ' + n + ' of ' + api.people.length);
+  for (let i = 0; i < f.ents.length; i += 8){
+    assert(Math.abs(f.ents[i + 1] - api.car.x) <= api.C.REC_RADIUS, 'filmed someone out of range');
+  }
+});
+
+test('a recorded frame is bounded even in the thickest crowd', () => {
+  const api = boot();
+  api.startLevel(5); api.beginLevel();
+  api.G.phase = 'drive';
+  // park the car in the densest spot we can find and film it
+  let best = api.people[0], bestN = 0;
+  for (const p of api.people){
+    let n = 0;
+    for (const q of api.people){
+      if (Math.abs(q.x - p.x) < 300 && Math.abs(q.y - p.y) < 300) n++;
+    }
+    if (n > bestN){ bestN = n; best = p; }
+  }
+  api.car.x = best.x; api.car.y = best.y;
+  const f = api.recSnap();
+  assert(f.ents.length <= 96 * 8, 'per-frame entity cap held, got ' + f.ents.length / 8);
+  assert(f.props.length <= 46 * 5, 'per-frame prop cap held, got ' + f.props.length / 5);
+  // and the ring cannot grow without bound over a long run
+  for (let i = 0; i < 3000; i++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
+  assert(api.rec.frames.length <= Math.ceil(api.C.REC_KEEP * api.C.REC_HZ) + 3,
+    'ring bounded, got ' + api.rec.frames.length);
+});
+
+test('the best two seconds beat a quieter window', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  api.G.phase = 'drive';
+  // a thin crowd first...
+  for (let i = 0; i < 2; i++) api.addPerson(1700 + i * 60, 1100);
+  // ...then a dense one further along
+  for (let i = 0; i < 9; i++) api.addPerson(2600 + i * 70, 1100 + (i % 3) * 12);
+  drive(api, 1500, 0, 1500, 1100);
+  for (let i = 0; i < 600 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  assert(api.clip.kills >= api.C.REPLAY_MIN_KILLS, 'a clip was kept, kills ' + api.clip.kills);
+  assert(api.clip.kills >= 5, 'it should have kept the busy stretch, got ' + api.clip.kills);
+  assert(api.clip.cx > 2400, 'and centred on the dense crowd, got ' + Math.round(api.clip.cx));
+});
+
+test('a quiet run is not worth a replay', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  drive(api, 900, 0, 1500, 1100);
+  for (let i = 0; i < 600 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  assert(!api.replayReady(), 'nothing happened, so nothing to show');
+  step(api, 3);
+  assert(api.G.phase === 'aim' || api.G.phase === 'results', 'it goes straight on, got ' + api.G.phase);
+});
+
+test('the replay plays back in slow motion and then hands over', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  api.G.carsLeft = 2;
+  for (let i = 0; i < 10; i++) api.addPerson(2000 + i * 70, 1100);
+  drive(api, 1500, 0, 1700, 1100);
+  for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  assert(api.replayReady(), 'a clip is waiting');
+  const clipKills = api.clip.kills;
+
+  step(api, 1.4);                            // settle hands over to the replay
+  assert(api.G.phase === 'replay', 'expected the replay, got ' + api.G.phase);
+  assert(/IN TWO SECONDS/.test(api.rp.caption), 'captioned: ' + api.rp.caption);
+  assert(api.rp.caption.indexOf(String(clipKills)) === 0, 'with the kill count');
+  const wide = api.camTarget().z;
+  assert(wide < 700, 'the camera moves in close, z=' + wide);
+
+  const t0 = api.rp.t;
+  api.update(1 / 60);
+  near(api.rp.t - t0, api.C.REPLAY_SPEED / 60, 1e-4, 'playback runs slow');
+  api.draw();                                // the letterboxed frame renders
+
+  for (let i = 0; i < 1200 && api.G.phase === 'replay'; i++) api.update(1 / 60);
+  assert(api.G.phase === 'aim', 'and then the next car is up, got ' + api.G.phase);
+});
+
+test('the replay leaves the market exactly as it found it', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.recReset();
+  api.launch(-api.C.MAX_PULL, 0);
+  for (let i = 0; i < 1800 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  if (!api.replayReady()){ return; }         // nothing to check on a quiet run
+  const before = api.people.map(p => [p.x, p.y, p.dead, p.squash]);
+  const propsBefore = api.props.map(o => [o.x, o.y, o.dead, o.hp]);
+  const kills = api.G.kills, score = api.G.levelScore;
+
+  step(api, 1.4);
+  assert(api.G.phase === 'replay', 'in the replay');
+  for (let i = 0; i < 1200 && api.G.phase === 'replay'; i++) api.update(1 / 60);
+
+  api.people.forEach((p, i) => {
+    near(p.x, before[i][0], 0.001, 'person ' + i + ' moved during the replay');
+    assert(p.dead === before[i][2], 'person ' + i + ' changed state');
+    near(p.squash, before[i][3], 0.001, 'person ' + i + ' squash changed');
+  });
+  api.props.forEach((o, i) => {
+    near(o.x, propsBefore[i][0], 0.001, 'prop ' + i + ' moved');
+    assert(o.dead === propsBefore[i][2], 'prop ' + i + ' changed state');
+  });
+  assert(api.G.kills === kills, 'the replay must not score again');
+  assert(api.G.levelScore === score, 'nor add points');
+});
+
+test('the replay can be skipped', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  api.G.carsLeft = 2;
+  for (let i = 0; i < 10; i++) api.addPerson(2000 + i * 70, 1100);
+  drive(api, 1500, 0, 1700, 1100);
+  for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  step(api, 1.4);
+  assert(api.G.phase === 'replay', 'in the replay');
+  api.skipReplay();
+  api.update(1 / 60);
+  assert(api.G.phase === 'aim', 'skipping goes straight to the next car');
+});
+
+test('the last car still ends the level after its replay', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  api.G.carsLeft = 0;
+  for (let i = 0; i < 10; i++) api.addPerson(2000 + i * 70, 1100);
+  drive(api, 1500, 0, 1700, 1100);
+  for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  step(api, 1.4);
+  assert(api.G.phase === 'replay', 'the last run gets its replay too');
+  api.skipReplay(); api.update(1 / 60);
+  assert(api.G.phase === 'results', 'then the scoreboard, got ' + api.G.phase);
 });
 
 /* ---------------------------------------------------------- destruction --- */
