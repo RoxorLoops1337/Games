@@ -8446,85 +8446,15 @@ function softBlob(c, x, y, rx, ry, col, a){
   c.fillStyle = g; c.fillRect(-1, -1, 2, 2);
   c.restore();
 }
-// Where a cloud's puffs sit, in puff radii. Jittered per cloud so no two have
-// the same outline, and with a wider flatter puff along the base — cumulus
-// sits on a line, it does not scallop.
-function cloudPuffs(cl){
-  const out = [], w = cl.w;
-  for (let i = 0; i <= w; i++){
-    const f = 1 - Math.abs(i - w / 2) / (w + 1);
-    const j = hash2(i * 3.3 + cl.k * 7.1, 2.9), j2 = hash2(i * 5.7 + cl.k * 2.3, 6.4);
-    out.push({
-      x:(i - w / 2) * .70 + (j - .5) * .18,
-      y:-f * .58 - j2 * .18,
-      rx:(.52 + f * .50) * (.84 + j * .30),
-      ry:(.40 + f * .48) * (.82 + j2 * .34),
-    });
-  }
-  out.push({ x:(hash2(cl.k * 2.7, 1.1) - .5) * .3, y:.16, rx:w * .40 + .5, ry:.27 });
-  // Roughly half of them get a tower: a second head boiling up off one
-  // shoulder. Without it every cloud in the sky is the same lumpy sausage
-  // seen at a different size, which is the thing that makes a bank of them
-  // read as a repeat rather than as weather.
-  const t = hash2(cl.k * 6.7, 12.9);
-  if (t > .42){
-    const t2 = hash2(cl.k * 4.9, 3.7), side = t2 > .5 ? 1 : -1;
-    out.push({ x:side * (w * .22 + t2 * .35), y:-.86 - t * .34,
-      rx:.44 + t2 * .30, ry:.40 + t * .26 });
-  }
-  return out;
-}
-// Puff radius in sprite pixels. Scaled by the cloud's own size so the biggest
-// one is not blitted at twice the resolution it was drawn at — a soft edge is
-// meant to be soft, not out of focus.
-const cloudRes = (cl) => Math.round(clamp(30 * (.7 + cl.s * .75), 24, 96));
-const CLOUD_SPR = new Map();
-function cloudSprite(cl){
-  if (CLOUD_SPR.has(cl.k)) return CLOUD_SPR.get(cl.k);
-  const P = cloudPuffs(cl);
-  let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
-  for (const p of P){
-    x0 = Math.min(x0, p.x - p.rx); x1 = Math.max(x1, p.x + p.rx);
-    y0 = Math.min(y0, p.y - p.ry); y1 = Math.max(y1, p.y + p.ry);
-  }
-  x0 -= .3; x1 += .3; y0 -= .3; y1 += .3;
-  const R = cloudRes(cl), W = (x1 - x0) * R, H = (y1 - y0) * R;
-  const body = skyCanvas(W, H), rim = skyCanvas(W, H);
-  if (!body || !rim){ CLOUD_SPR.set(cl.k, null); return null; }
-  const ox = -x0 * R, oy = -y0 * R;
-  const bc = body.cc, lean = cloudLean('crown'), rise = cloudRise('crown');
-  for (const p of P) softBlob(bc, ox + p.x * R, oy + p.y * R, p.rx * R, p.ry * R, CLOUD.body.col, 1);
-  // The shading is painted with `source-atop`, which is the soft-edged answer
-  // to the clip the hard-edged version needed: an offset copy only lands where
-  // the cloud already is, and it lands with the cloud's own feathered alpha
-  // instead of against a cut-out. Directions come off cloudLean/cloudRise, the
-  // same calls the ground shadows use, so the sky cannot drift out of
-  // agreement with the island under it.
-  bc.globalCompositeOperation = 'source-atop';
-  for (const p of P)
-    softBlob(bc, ox + (p.x + CLOUD.belly.dx * cloudLean('belly') * .58) * R,
-                 oy + (p.y + CLOUD.belly.dy * cloudRise('belly') * .70) * R,
-                 p.rx * R * CLOUD.belly.sc, p.ry * R * CLOUD.belly.sc, CLOUD.belly.col, CLOUD.belly.a * .76);
-  for (const p of P)
-    softBlob(bc, ox + (p.x + CLOUD.crown.dx * lean * .52) * R,
-                 oy + (p.y + CLOUD.crown.dy * rise * .60) * R,
-                 p.rx * R * CLOUD.crown.sc, p.ry * R * CLOUD.crown.sc, CLOUD.crown.col, CLOUD.crown.a * 1.05);
-  bc.globalCompositeOperation = 'source-over';
-  // And a second sprite holding the sunward edge alone, kept in reserve for
-  // the clouds that pass near the sun. `destination-in` trims it back to the
-  // cloud's own silhouette, so what is left is a rim and nothing else.
-  const rc = rim.cc;
-  for (const p of P)
-    softBlob(rc, ox + (p.x + CLOUD.crown.dx * lean * .84) * R,
-                 oy + (p.y + CLOUD.crown.dy * rise * .84) * R,
-                 p.rx * R * .80, p.ry * R * .76, SUN.warm, .9);
-  rc.globalCompositeOperation = 'destination-in';
-  for (const p of P) softBlob(rc, ox + p.x * R, oy + p.y * R, p.rx * R, p.ry * R, '255,255,255', 1);
-  rc.globalCompositeOperation = 'source-over';
-  const spr = { cv:body.cv, rim:rim.cv, ox, oy, R, w:W, h:H };
-  CLOUD_SPR.set(cl.k, spr);
-  return spr;
-}
+/* The offscreen cloud-sprite path used to live here: cloudPuffs, the
+   CLOUD_SPR cache and cloudSprite itself, about eighty lines that
+   pre-rendered each cloud with a radial falloff per puff and blitted it,
+   plus a second sprite for the burnt-out sunward rim.
+   Paper clouds draw CLOUD's three passes straight onto the canvas, so none
+   of it had a caller any more. Removed rather than left sitting: it was
+   the answer to a cost — a falloff sixty times a second — that no longer
+   exists. softBlob and skyCanvas stay, because the cirrus and the sky
+   plates still use them; only what was cloudSprite's alone has gone. */
 /* ----------------------------------------------------------------- cirrus
    Ice, five miles up, moving on a different wind from the cumulus and far
    enough away that it barely parallaxes at all. Four sheets of thin streaks,
