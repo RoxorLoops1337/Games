@@ -2017,6 +2017,17 @@ const UNITS = {
   cannon: { n:'Cannon',  hp:560, ad:70, armor:18, mr:18, as:.5,  rng:8.5, spd:3.0, tdmg:2.2, r:.62, bounty:7 },
   super:  { n:'Siege Ogre', hp:1250, ad:95, armor:40, mr:36, as:.75, rng:2.0, spd:3.5, tdmg:1.6, r:.7, bounty:9 },
   shade:  { n:'Shade',   hp:260, ad:44, armor:10, mr:10, as:1.2, rng:1.6, spd:4.2, tdmg:.3,  r:.44, bounty:0 },
+  /* Planted, not marched. spd 0 makes it stand where it is put: speedOf(u)*dt
+     is the whole of the movement, so a zero simply never moves and the body
+     falls through to fighting whatever comes into reach.
+     bounty 0 because it expires on its own — a temporary body worth gold is a
+     gift to whoever bothers to hit it, and this one is meant to be an obstacle
+     rather than a farm. tdmg .08 for the same reason in the other direction:
+     it holds the deck, it does not push down it. That is what separates the
+     order from Second Muster, which adds a wave that advances.
+     Tougher than a Footman (340hp, 22 armour) because it cannot chase, cannot
+     retreat, and is gone in eighteen seconds whatever happens. */
+  pike:   { n:'Pikeman',  hp:430, ad:30, armor:28, mr:16, as:.9, rng:2.0, spd:0,   tdmg:.08, r:.46, bounty:0 },
 };
 const TRAIN = {
   melee:  { cost:{ iron:28, wood:16, food:12 }, time:9,  need:1, barracks:1, n:'Footman',
@@ -3075,6 +3086,14 @@ function counterCatch(s){
    moves it. 340/6 = 56.7 is where a fully-exposed Footman starts dying, and 58
    is the measured value just past that line. */
 const PITCH = { dur:6, rad:5.5, dps:58, slow:.22, slowT:.45 };
+/* Pikewall. Second Muster measured 66.6% against an all-order mean of 45.9 and
+   neither of its numbers would move it (#1470) — because its advantage is
+   categorical: units are the only currency the game keeps score in, and it was
+   the ONLY order that made any. This is the second one, so that stops being
+   true. It is deliberately a different shape: Muster is macro, a full wave at
+   your own gate that marches; this is tactical, a short line planted where you
+   point that does not advance and is gone in PIKE.dur seconds. */
+const PIKE = { n:3, dur:18, span:1.6 };
 
 /* ai.w is the DRAFT weight — how often aiPickSpell takes this order into a
    slot, for the Host and (since the muster) for a commander who gave no orders.
@@ -3125,6 +3144,9 @@ const SPELLS = [
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
   { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:2, go:.80 }, grp:'lane', bound:'cd',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
+  { id:'pike',     n:'Pikewall',      target:'point',   cd:100, cost:{ wood:45, iron:35 }, ai:{ w:2, go:.70 }, grp:'lane', bound:'coin',
+    say:'a stretch of deck, held rather than cleared',
+    d:'Three pikemen plant themselves across the deck and hold it for 18 seconds. They never advance, they barely scratch a structure, and they are worth nothing to whoever kills them.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
     say:'no target — it braces everything you have',
     d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
@@ -3562,6 +3584,23 @@ const SPELL_CAST = {
       fxToast('...and ' + NUM_WORD(mine) + ' of yours ' + COUNTER.add + 's sooner.', 'good', TOAST_W.cast);
     if (forMe(foe.i))
       fxToast('Countermanded — your orders are ' + COUNTER.add + 's further off.', 'bad', TOAST_W.cast);
+    return null;
+  },
+  pike(s, c){
+    const px = lanePoint(c.x);
+    /* Every body is asked for whether or not there is room, because spawnUnit
+       takes its draws BEFORE the population cap can refuse one — so the stream
+       advances by how many were asked for, never by how many fit. Counting what
+       came back is how the refusal below stays honest. */
+    let n = 0;
+    for (let i = 0; i < PIKE.n; i++){
+      const y = PIKE.n > 1 ? lerp(-PIKE.span, PIKE.span, i / (PIKE.n - 1)) : 0;
+      if (spawnUnit(s.i, 'pike', { x:px, y, life:PIKE.dur })) n++;
+    }
+    // The bridge is full. Spending a hundred seconds of recovery on nothing is
+    // the one outcome worth refusing outright, as Countermand does.
+    if (!n) return 'no room on the bridge for them';
+    castTell(s, 'Pikewall', n, 'planted');
     return null;
   },
   pitch(s, c){
@@ -6079,6 +6118,20 @@ function aiSpellTarget(s, d, fs){
     let n = 0;
     nearby(at, BOMB.r, (u) => { if (!u.dead && u.side === fs && !u.isHero) n++; });
     return n >= 3 ? { x:Math.round(at * 16) / 16 } : null;
+  }
+  if (d.id === 'pike'){
+    /* Where its own line is losing, which is the same question Withdraw asks —
+       the two are answers to one moment, and that is on purpose. Withdraw pulls
+       the line out of a fight it is losing; this plants something that cannot
+       be pulled out at all. Planted slightly behind the front so the wall is
+       between their line and the hold rather than inside it. */
+    const at = frontlineX(s.i);
+    let mine = 0, theirs = 0;
+    nearby(at, 6, (u) => {
+      if (u.dead || u.isHero) return;
+      if (u.side === s.i) mine++; else theirs++;
+    });
+    return theirs >= mine + 2 ? { x:Math.round((at - dirOf(s.i) * 1.5) * 16) / 16 } : null;
   }
   if (d.id === 'withdraw'){
     const at = frontlineX(s.i);
@@ -16209,6 +16262,22 @@ const SPELL_ICON = {
       'stroke-width="1.7" stroke-linecap="round"/>' +
     '<path d="M20.6 1 21.8 4 24 4.6 21.8 5.2 20.6 8.2 19.4 5.2 17.2 4.6 19.4 4Z" ' +
       'fill="#ffcf5e" stroke="#a9741a" stroke-width="1.1" stroke-linejoin="round"/>'),
+  /* Three uprights with heads on them, standing on a line. The first version
+     was three plain spears and read as a fence at 19px — nothing said they were
+     a WALL rather than a barricade. The ground line under them is what makes
+     them planted; the angled heads are what keep them from reading as posts. */
+  pike: ico('<path d="M2.4 20.6h19.2" stroke="#3d2d1a" stroke-width="3.4" stroke-linecap="round"/>' +
+    '<path d="M2.4 20.6h19.2" stroke="#3b4757" stroke-width="2.2" stroke-linecap="round"/>' +
+    '<path d="M6 20V7.4M12 20V5.6M18 20V7.4" stroke="#3d2d1a" ' +
+      'stroke-width="3.5" stroke-linecap="round"/>' +
+    '<path d="M6 20V7.4M12 20V5.6M18 20V7.4" stroke="' + ICO_STEEL + '" ' +
+      'stroke-width="2.1" stroke-linecap="round"/>' +
+    '<path d="M6 8.2 4.2 5.2 6 2.2 7.8 5.2Z" fill="#c9d4e2" stroke="#46586e" ' +
+      'stroke-width="1.1" stroke-linejoin="round"/>' +
+    '<path d="M12 6.4 10.2 3.4 12 .4 13.8 3.4Z" fill="#e6edf5" stroke="#46586e" ' +
+      'stroke-width="1.1" stroke-linejoin="round"/>' +
+    '<path d="M18 8.2 16.2 5.2 18 2.2 19.8 5.2Z" fill="#c9d4e2" stroke="#46586e" ' +
+      'stroke-width="1.1" stroke-linejoin="round"/>'),
   // everything of yours turns and walks back behind the wall
   withdraw: ico('<path d="M2.6 8.4h7.9v13H2.6Z" fill="#6b7686"/>' +
     '<path d="M13.4 12.5h8v3.6h-8v3.4L8.6 14.3 13.4 9.1Z" fill="#2f4763"/>' +
