@@ -937,6 +937,17 @@
     font-family:var(--display); font-variant-caps:small-caps; color:#ffe6ae;
     text-shadow:0 2px 0 rgba(0,0,0,.35); }
   .sheet .sub{ margin:0 0 16px; color:var(--dim); font-size:var(--t4); line-height:1.45; }
+  /* The draft clock, inside the sheet that covers the dock. Deliberately the
+     same chip the empty dock tile wears — a player who has seen "8s" pulse red
+     down there should not have to learn a second sign for the same fuse. It sits
+     in a sentence rather than on a control, so the digits are tabular and the
+     chip does not resize under them. */
+  .spwin{ display:inline-block; font-variant-numeric:tabular-nums; font-weight:800;
+    padding:1px 6px; border-radius:var(--r1); min-width:2.7em; text-align:center;
+    color:#4a3405; background:rgba(255,224,164,.5); box-shadow:inset 0 0 0 1px rgba(122,90,44,.34); }
+  .spwin.closing{ color:#fff1d4; background:#b3241c;
+    box-shadow:inset 0 0 0 1px rgba(255,214,160,.5); animation:owin 1s steps(2, end) infinite; }
+  @media (prefers-reduced-motion:reduce){ .spwin.closing{ animation:none; } }
   .picks{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
   /* An OPTION card, as opposed to the prose cards the menus use. Icon first,
      name under it, one line of numbers — and the description in the panel
@@ -16487,6 +16498,44 @@ const ORDER_KEY = ['Q', 'E', 'R'];
 // still time to open the sheet, read one and take it.
 const ORDER_WINDOW_WARN = 8;
 
+/* The draft window, said out loud INSIDE the sheet.
+   Measured this round, on a probe whose own assumptions failed first: I set out
+   to count how many decisions the opening holds, scored minute zero at 1.9
+   available actions and nearly wrote down "the opening is thin". It is not. The
+   order bar reads dark at t=0 because the slots are EMPTY — the opening decision
+   is the draft itself, two orders of eleven, 55 distinct hands, and chooseSpell
+   refuses forever once G.wave reaches 1. C.FIRST_WAVE puts that exactly 22.0s
+   after the match starts; across 24 seeds the close came at 22.0s every time,
+   because it is a constant and not a race. My counter scored the largest single
+   decision in the match as ~0.4, which is what a counter of "things pressable
+   right now" does to a choice that is one press.
+   Single player HOLDS the board while the sheet is open (G.held, set in
+   openSpellSheet) so nothing is running out and printing "22s" would be a clock
+   that never moves. A net match does not hold it. There the fuse is lit and the
+   sheet — which is fixed to the whole viewport, covering the dock and with it
+   the .owin chip that would have said so — was the only thing on screen and said
+   nothing about it. Both readings come from here so the sentence built into the
+   sheet and the digits rewritten under it once a frame cannot disagree. */
+function orderWindow(){
+  if (G.state !== 'play' || G.wave >= 1) return null;   // shut, or never opened
+  if (G.held) return { held:true, left:0 };
+  return { held:false, left:Math.max(0, Math.ceil(G.waveT)) };
+}
+const orderWindowText = () => {
+  const w = orderWindow();
+  return w && !w.held ? w.left + 's' : '';
+};
+/* The tail of the sheet's deadline sentence. The clock is its own chip with an
+   id, not a number baked into the prose, so the once-a-frame writer can replace
+   the digits without rebuilding the sheet under the hand that is reading it. */
+function orderWindowTail(){
+  const w = orderWindow();
+  if (!w) return '.';
+  if (w.held) return ' — the board is held while you choose.';
+  return ' — <b class="spwin' + (w.left <= ORDER_WINDOW_WARN ? ' closing' : '') +
+    '" id="spClock">' + w.left + 's</b>';
+}
+
 /* ------------------------------------------------------------ the chooser
    An order already sitting in the OTHER slot cannot be taken — the simulation
    refuses two of the same — so the panel says that before the press rather
@@ -16606,9 +16655,13 @@ function spellSheetHtml(){
       : 'Two to start with, and they belong to the hold rather than to a hero. ') +
     (NARROW() ? 'Tap one to read it; tap it again, or press Accept, to put it in the lit slot. '
               : 'Hover one to read it; press it, or press Accept, to put it in the lit slot. ') +
+    // ...and for the opening pair, HOW LONG. Three endings, because there are
+    // three truths: a slot won in the tenth minute has no window at all, a held
+    // board has one that is not moving, and a net match has a lit fuse the
+    // sheet used to hide behind itself.
     (spellUI.slot >= SLOTS_AT_START
       ? 'Set for good once you give it.'
-      : 'Set for good when the first wave marches.') + '</p>' +
+      : 'Set for good when the first wave marches' + orderWindowTail()) + '</p>' +
     '<div class="sproll">' + spellSlotsHtml() + spellGridHtml() + '</div>' +
     // The panel and the way out of the sheet are one piece of furniture,
     // because on a phone they are pinned to the bottom of it together while
@@ -16839,6 +16892,18 @@ function syncOrders(){
   if (HEADLESS) return;
   const el = $('orders');
   if (!el || typeof el.querySelector !== 'function') return;
+  /* The sheet's own copy of the clock, if a sheet is open on it. Written here
+     rather than from a second frame hook because this is already the function
+     that owns the .owin chip a few dozen lines down — one writer for one fact,
+     and the sheet and the dock cannot drift a second apart. */
+  const sc = $('spClock');
+  if (sc && typeof sc === 'object' && 'textContent' in sc){
+    const w = orderWindow();
+    if (w && !w.held){
+      sc.textContent = w.left + 's';
+      if (sc.classList) sc.classList.toggle('closing', w.left <= ORDER_WINDOW_WARN);
+    }
+  }
   const live = G.sides.length > 0 && G.state === 'play' && !G.demo;
   const s = live ? me() : null;
   // The ult tile appears when the first hero learns one and changes its whole
@@ -19930,7 +19995,7 @@ window.IB = {
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
-  SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,

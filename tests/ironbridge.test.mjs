@@ -17338,7 +17338,14 @@ t.ok(true, 'a final draw on a live match is clean');
      recovery and a mana short lit the full gold ring, showed no mark, and
      refused when pressed. */
   {
-    const sync = SRC.slice(SRC.indexOf('function syncOrders'), SRC.indexOf('function syncOrders') + 2600);
+    /* The whole function, not a fixed 2600 characters of it. The window was
+       long enough on the day it was written and a later insert near the top
+       pushed the line it looks for out the far end — a red suite that meant
+       "syncOrders grew", not "the ring lies again". Ends at the next top-level
+       function instead, so it cannot go stale by length. */
+    const at = SRC.indexOf('function syncOrders');
+    const end = SRC.indexOf('\nfunction ', at + 1);
+    const sync = SRC.slice(at, end > at ? end : at + 4000);
     t.ok(/skillArmed\(h, sk\)/.test(sync),
       'the bar asks the same question the release asks');
     t.ok(/classList\.toggle\('ready', armed\)/.test(sync),
@@ -19285,6 +19292,100 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(C.SKILL_TIERS.length === 3, 'three rungs hand out skills (' + C.SKILL_TIERS.join(', ') + ')');
   t.ok(C.SKILL_TIERS.every(l => l < C.ULT_LEVEL), 'all of them below the ultimate');
   t.ok(Math.max(...C.SKILL_TIERS) < C.ULT_LEVEL, 'with the ultimate last of all');
+}
+
+
+/* ================== the opening's one decision, and the fuse on it
+
+   I set out to count how many decisions the opening holds. The first probe
+   said the answer was flat and healthy; it was arithmetic about the probe
+   (upCost was not exported, so canPay(s, {}) was always true). The second
+   probe, calibrated column by column against known answers, said the opposite
+   — 1.9 available actions at minute 0 against 15.8 at minute 11.
+
+   Both were wrong about the same thing. The order bar reads dark at t=0
+   because the slots are EMPTY, and filling them is the decision: two orders of
+   eleven, 55 distinct opening hands, given once and kept for the match. A
+   counter of "things pressable right now" scores the largest single choice in
+   the match at ~0.4, because it is one press.
+
+   The window it happens in is C.FIRST_WAVE — measured at 22.0s across 24
+   seeds, min and max both 22.0, because it is a constant and not a race.
+
+   What is asserted below is the arithmetic of that window and the three
+   things the sheet can truthfully say inside it. The per-minute table stays in
+   the comment where a measurement belongs. */
+{
+  const s0 = IB.G.sides[0];
+  t.ok(IB.SLOTS_AT_START === 2, 'the opening hand is two orders (' + IB.SLOTS_AT_START + ')');
+  t.ok(IB.SPELLS.length >= 11, 'drawn from ' + IB.SPELLS.length + ' on the board');
+  // 55 hands: C(11,2). Derived rather than typed, so adding a twelfth order
+  // moves the number instead of reddening the suite.
+  const hands = (() => {
+    const n = IB.SPELLS.length, k = IB.SLOTS_AT_START;
+    let r = 1; for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
+    return Math.round(r);
+  })();
+  t.ok(hands > 50, 'which is ' + hands + ' distinct opening hands, chosen once');
+  t.ok(C.FIRST_WAVE === 22, 'and the window to choose in is ' + C.FIRST_WAVE + 's');
+  t.ok(IB.ORDER_WINDOW_WARN * 2 < C.FIRST_WAVE,
+    'with last call at ' + IB.ORDER_WINDOW_WARN + 's — inside the second half of it');
+
+  // The gate itself: open before the wave, shut after, forever.
+  IB.newMatch({ diff:'veteran', seed:9400 });
+  const s = IB.G.sides[0], ids = IB.SPELLS.map(x => x.id);
+  t.ok(!s.spells[0] && !s.spells[1], 'a fresh side owns no orders at all');
+  t.ok(!IB.spellReady(s, 0), 'so the first slot is dark, and not because of a cooldown');
+  t.ok(IB.chooseSpell(s, 0, ids[0]) === null, 'the draft takes one before the wave');
+  t.ok(IB.spellReady(s, 0) === true, 'and the slot lights the moment it is given');
+  t.ok(IB.chooseSpell(s, 1, ids[0]) === 'already in another slot',
+    'the same order cannot fill both slots');
+  t.ok(IB.chooseSpell(s, 1, ids[1]) === null, 'a different one can');
+  IB.G.wave = 1;
+  t.ok(typeof IB.chooseSpell(IB.G.sides[1], 0, ids[0]) === 'string',
+    'and once the wave marches the draft refuses — that is what makes it a decision');
+
+  /* The three truths the sheet can tell, from one reader so the sentence built
+     into it and the digits rewritten under it once a frame cannot disagree.
+
+     Single player HOLDS the board while the sheet is open, so there is nothing
+     running out and a countdown there would be a clock that never moves. A net
+     match does not hold it — and the sheet is fixed to the whole viewport,
+     covering the dock and with it the .owin chip that was the only thing
+     saying so. */
+  IB.newMatch({ diff:'veteran', seed:9401 });
+  IB.G.held = false;
+  const open = IB.orderWindow();
+  t.ok(!!open && open.held === false, 'a running board reports an open window');
+  t.ok(open.left === C.FIRST_WAVE, 'with the whole ' + open.left + 's still on it');
+  t.ok(/\bid="spClock"/.test(IB.orderWindowTail()), 'which the sheet carries as its own chip');
+  t.ok(IB.orderWindowText() === C.FIRST_WAVE + 's', 'reading ' + IB.orderWindowText());
+
+  IB.G.waveT = IB.ORDER_WINDOW_WARN;
+  t.ok(/\bclosing\b/.test(IB.orderWindowTail()),
+    'at last call exactly, the chip goes red — the boundary counts as closing');
+  IB.G.waveT = IB.ORDER_WINDOW_WARN + 1;
+  t.ok(!/\bclosing\b/.test(IB.orderWindowTail()), 'a second earlier it does not');
+  t.ok(IB.orderWindowText() === (IB.ORDER_WINDOW_WARN + 1) + 's',
+    'and the digits follow the clock rather than a rebuild');
+
+  // a fraction of a second left still reads as a second, never as zero-with-time-on-it
+  IB.G.waveT = 0.2;
+  t.ok(IB.orderWindowText() === '1s', 'a fifth of a second left rounds up, not down');
+  IB.G.waveT = 0;
+  t.ok(IB.orderWindowText() === '0s', 'and only an empty clock reads zero');
+
+  IB.G.waveT = 12; IB.G.held = true;
+  const held = IB.orderWindow();
+  t.ok(held && held.held === true, 'a held board reports a held window');
+  t.ok(IB.orderWindowText() === '', 'and prints no clock, because nothing is moving');
+  t.ok(!/\d/.test(IB.orderWindowTail()) && /held while you choose/.test(IB.orderWindowTail()),
+    'it says so in words instead');
+
+  IB.G.held = false; IB.G.wave = 1;
+  t.ok(IB.orderWindow() === null, 'once the wave marches there is no window to report');
+  t.ok(IB.orderWindowTail() === '.', 'and the sentence just ends');
+  t.ok(IB.orderWindowText() === '', 'with nothing to count');
 }
 
 t.done();
