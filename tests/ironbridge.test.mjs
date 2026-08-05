@@ -19031,10 +19031,13 @@ t.ok(true, 'a final draw on a live match is clean');
      Measured: it sat ready with nothing to catch 70.4% of its idle time, which
      makes "its recovery is the limit" a sentence the player could read and be
      misled by. Recovery was never what limited it. */
-  t.ok(by.cd === 3, 'three run at their cooldown ceiling (' + by.cd + ')');
+  t.ok(by.cd === 4, 'four run at their cooldown ceiling (' + by.cd + ')');
   t.ok(by.aim === 4, 'four wait for a target (' + by.aim + ')');
-  // Pikewall joined as a third: 45 wood and 35 iron on a 100s recovery.
-  t.ok(by.coin === 3, 'three wait for the stores (' + by.coin + ')');
+  /* Pikewall was declared 'coin' on the strength of costing two stores, and
+     measured 46.0% recovering against 42.7% short — the only order where the
+     two are close, and the recovery still larger. Relabelled 'cd' by the same
+     rule the others were, which puts the split back to 4/4/2/2. */
+  t.ok(by.coin === 2, 'two wait for the stores (' + by.coin + ')');
   t.ok(by.call === 2, 'and two are all about the moment you pick (' + by.call + ')');
   t.ok(by.cd + by.aim + by.coin + by.call === IB.SPELLS.length, 'and that is all of them');
 
@@ -20386,6 +20389,69 @@ t.ok(true, 'a final draw on a live match is clean');
   const snap = JSON.stringify(IB.netSnap());
   t.ok(snap.includes('"pike"'), 'a planted body is in the snapshot');
   t.ok(snap.includes('"life"'), 'with the clock that removes it');
+}
+
+/* ================== the thesis Pikewall was built on did not survive
+
+   The reasoning: Second Muster's 66.6% resisted every number because its
+   advantage was categorical — the only order that added units — so a second
+   adding order should compress the lead. All 66 openings, 32 seeds each, 352
+   matches an order at SE 2.7:
+
+     muster   65.6 (66.6)   hobble  47.7 (41.9)   unbind   41.5 (39.7)
+     withdraw 56.0 (56.9)   warp    45.5 (45.9)   rampart  40.6 (40.0)
+     pyre     51.7 (50.0)   pike    44.3 ( new)   brace    35.8 (40.0)
+     pitch    48.9 (45.6)   counter 43.5 (39.4)
+     bombard  48.3 (38.4)                         spread 29.8 (28.1)
+
+   Muster moved 1.0 point and the spread went UP. The monopoly is over and the
+   lead is untouched, so it was never the monopoly holding it there.
+
+   The brackets are NOT a clean comparison: every order's pairs now include a
+   Pikewall pairing that did not exist before, so each row faces a different mix
+   of opponents. Bombard's +9.9 is the biggest number in the table and Bombard
+   was not touched — which is a warning about reading across sweeps, not a
+   finding about Bombard.
+
+   Asserted here is only what is structural. The table is a sample and lives in
+   the comment. */
+{
+  // the sweep got bigger because the set did, and that is exact
+  const n = IB.SPELLS.length;
+  const pairs = n * (n - 1) / 2;
+  t.ok(n === 12, 'twelve orders');
+  t.ok(pairs === 66, 'so 66 distinct openings to sweep, up from 55 (' + pairs + ')');
+  t.ok(n - 1 === 11, 'and each order is measured across ' + (n - 1) + ' pairs rather than 10');
+
+  /* Which is why a row cannot be read across two sweeps: the opponent mix
+     changed underneath it. The count of pairs an order appears in is the thing
+     that moved, and it is derivable rather than remembered. */
+  const appearsIn = (id) => IB.SPELLS.filter(d => d.id !== id).length;
+  t.ok(appearsIn('bombard') === 11 && appearsIn('muster') === 11,
+    'every order appears in the same number of pairs as every other (' + appearsIn('muster') + ')');
+
+  // the two adding orders are still two, and still different shapes
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const tbl = msrc.slice(msrc.indexOf('const SPELL_CAST'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('const SPELL_CAST')));
+  const spawners = IB.SPELLS.filter(d => {
+    const i = tbl.indexOf('\n  ' + d.id + '(');
+    if (i < 0) return false;
+    const end = tbl.indexOf('\n  }', i);
+    return /spawnUnit|musterWave/.test(tbl.slice(i, end < 0 ? i + 300 : end + 4));
+  }).map(d => d.id);
+  t.ok(spawners.length === 2, 'two orders add bodies (' + spawners.join(', ') + ')');
+  t.ok(IB.UNITS.pike.spd === 0 && IB.UNITS.grunt.spd > 0,
+    'one plants what cannot move, the other sends what marches');
+
+  /* Pikewall's bound was set from design intent and corrected by measurement,
+     which is the same treatment every other bound has had. */
+  t.ok(IB.SPELL.pike.bound === 'cd',
+    'Pikewall waits on its recovery (46.0% of ticks) more than on the stores (42.7%)');
+  const by = {};
+  for (const d of IB.SPELLS) by[d.bound] = (by[d.bound] || 0) + 1;
+  t.ok(by.cd + by.aim + by.coin + by.call === n, 'every order still declares one bound');
+  t.ok(Object.keys(by).length === 4, 'and all four kinds are still in use');
 }
 
 t.done();

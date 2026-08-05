@@ -3094,6 +3094,33 @@ const PITCH = { dur:6, rad:5.5, dps:58, slow:.22, slowT:.45 };
    your own gate that marches; this is tactical, a short line planted where you
    point that does not advance and is gone in PIKE.dur seconds. */
 const PIKE = { n:3, dur:18, span:1.6 };
+/* AND THE THESIS IT WAS BUILT ON DID NOT SURVIVE MEASUREMENT.
+
+   The reasoning was: Second Muster's 66.6% resisted every number because its
+   advantage was categorical — it was the only order that added units — so a
+   second adding order should compress the lead. All 66 openings, 32 seeds each,
+   352 matches an order (SE 2.7):
+
+     muster   65.6 (66.6)   hobble  47.7 (41.9)   unbind   41.5 (39.7)
+     withdraw 56.0 (56.9)   warp    45.5 (45.9)   rampart  40.6 (40.0)
+     pyre     51.7 (50.0)   pike    44.3 ( new)   brace    35.8 (40.0)
+     pitch    48.9 (45.6)   counter 43.5 (39.4)
+     bombard  48.3 (38.4)                         spread 29.8 (28.1)
+
+   Muster moved 1.0 point. The spread went UP, 28.1 to 29.8. Ending the monopoly
+   did not touch the lead, so whatever holds Muster at the top is not the fact
+   that it was alone in adding units.
+
+   Pikewall itself landed mid-table at 44.3, a little under the all-order mean —
+   a competitive order rather than a dominant or a dead one, which is the most
+   that can be claimed for it.
+
+   READ THE BRACKETS WITH CARE. The twelve-order table is not cleanly comparable
+   to the eleven-order one: every order's pairs now include a Pikewall pairing
+   that did not exist before, so each row is measured against a different mix of
+   opponents. Bombard's +9.9 is the largest movement in the table and it was not
+   touched this round — which is a warning about the comparison, not a finding
+   about Bombard. Only figures within ONE sweep are comparable to each other. */
 
 /* ai.w is the DRAFT weight — how often aiPickSpell takes this order into a
    slot, for the Host and (since the muster) for a commander who gave no orders.
@@ -3144,7 +3171,23 @@ const SPELLS = [
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
   { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:2, go:.80 }, grp:'lane', bound:'cd',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
-  { id:'pike',     n:'Pikewall',      target:'point',   cd:100, cost:{ wood:45, iron:35 }, ai:{ w:2, go:.70 }, grp:'lane', bound:'coin',
+  /* bound was 'coin' when this shipped, from design intent rather than
+     measurement — it costs two stores, so the stores looked like the answer.
+     Measured after, as every other bound has been, by sampling what the order
+     is waiting on each tick it cannot be cast:
+
+       order      cooling    poor     declared
+       pike          46.0    42.7     coin -> cd
+       brace         32.2    44.6     coin
+       rampart       36.5    47.2     coin
+       bombard       78.1    16.3     cd
+       muster        87.5    10.5     cd
+
+     It is the only order where the two are close, and the recovery is still
+     the larger of them. The other two 'coin' orders are clearly short of the
+     stores more often than they are recovering; this one is not, so it is
+     labelled by the same rule they were rather than by what it costs. */
+  { id:'pike',     n:'Pikewall',      target:'point',   cd:100, cost:{ wood:45, iron:35 }, ai:{ w:2, go:.70 }, grp:'lane', bound:'cd',
     say:'a stretch of deck, held rather than cleared',
     d:'Three pikemen plant themselves across the deck and hold it for 18 seconds. They never advance, they barely scratch a structure, and they are worth nothing to whoever kills them.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
