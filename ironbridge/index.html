@@ -7483,10 +7483,52 @@ const shade = (hex, f) => {
   const b = clamp(Math.round(b1 * k), 0, 255);
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 };
+/* THE CUT EDGE.
+
+   The chrome around this game has been paper since it was built — a kraft box
+   with its flutes showing, cards with shelves under them, a torn lid. The world
+   inside it was flat vector shapes with nothing in common with any of that, so
+   the two halves of the screen never looked like the same object.
+
+   What makes cut card read as cut card is the EDGE: the pale core of the stock,
+   showing along the side the light reaches. So every filled shape is laid down
+   twice — once nudged toward the sun in that pale ink, then again in its own
+   colour on top. What survives is a hairline of card edge on the lit side and
+   nothing on the other, which is exactly where a real cut would catch light.
+
+   It goes here rather than at the hundred call sites because there is only one
+   right answer to where the light is, and SUN already holds it. The nudge is
+   AGAINST the sun vector for the same reason the ground shadow is thrown along
+   it — one light, two consequences.
+
+   It applies to EVERY filled shape, with no size cutoff, and that is deliberate.
+   The first version skipped shapes under 7px on the reasoning that a 1px rim
+   swamps a tiny one. What that actually bought was an op count that depended on
+   sub-pixel geometry: a shape sitting on the threshold flipped in and out, and
+   the render suite caught it immediately — two heroes that draw identically
+   came back 195 ops against 187, which read like a hero picking up kit it
+   should not have. Removing the cutoff made them equal again. A uniform pass is
+   worth more than the shapes it saves.
+
+   WHAT IT COSTS, measured rather than assumed: an extra fill per filled shape
+   is +6.7ms on a 41.8ms frame, about +16%. Those absolute figures are from a
+   headless browser software-rendering with no GPU, so the ratio is the finding
+   and the milliseconds are not. CUT.on is the switch if that ever stops being
+   worth paying — it is read per shape, so flipping it costs nothing but the
+   branch. */
+const CUT = { on:true, dx:-.9, dy:-.9, ink:'rgba(255,247,228,.5)' };
 function poly(c, pts, fill, stroke, lw){
+  const n = pts.length;
+  if (CUT.on && fill && n > 2){
+    c.beginPath();
+    c.moveTo(pts[0][0] + CUT.dx, pts[0][1] + CUT.dy);
+    for (let i = 1; i < n; i++) c.lineTo(pts[i][0] + CUT.dx, pts[i][1] + CUT.dy);
+    c.closePath();
+    c.fillStyle = CUT.ink; c.fill();
+  }
   c.beginPath();
   c.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  for (let i = 1; i < n; i++) c.lineTo(pts[i][0], pts[i][1]);
   c.closePath();
   if (fill){ c.fillStyle = fill; c.fill(); }
   if (stroke){ c.strokeStyle = stroke; c.lineWidth = lw || 1; c.stroke(); }
@@ -20392,7 +20434,7 @@ window.IB = {
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
-  SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  CUT, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, aiDraftLate, musterDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,

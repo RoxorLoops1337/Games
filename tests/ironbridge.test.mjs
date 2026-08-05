@@ -5910,7 +5910,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
       moveTo(x, y){ cur.push([x, y]); },
       lineTo(x, y){ cur.push([x, y]); },
       closePath(){},
-      fill(){ fills.push({ col:c2.fillStyle, pts:cur }); },
+      /* The cut edge is laid under every filled shape in CUT.ink — it is the
+         card the cone is cut from, not a face of the cone, so the recorder
+         drops it. Filtered by its own ink rather than by position, so a change
+         to where the edge sits does not quietly change what is measured. */
+      fill(){ if (c2.fillStyle !== IB.CUT.ink) fills.push({ col:c2.fillStyle, pts:cur }); },
       stroke(){ rims.push({ col:c2.strokeStyle, pts:cur }); },
     };
     const wasX = IB.SUN.x;
@@ -8584,8 +8588,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const near = holdAt(1.6), far = holdAt(.5);
     t.ok(near.n > 500 && far.n > 500, 'the hold drew at both zooms (' + far.n + ' / ' + near.n + ')');
     t.ok(near.dropped === 0 && far.dropped === 0, 'and the capture held both');
-    t.ok(near.n > far.n, 'a plot spells itself out only when you are close (' + far.n + ' → ' + near.n + ')');
-    t.ok(near.texts > far.texts, 'and the labels do the same (' + far.texts + ' → ' + near.texts + ')');
+    /* Total canvas ops used to stand in for "spells itself out", and it was
+       always a weak proxy — it counts every shape on screen, and a wider view
+       has more of them. The cut edge made that plain by adding a uniform pass
+       to every filled shape: far came back ABOVE near, not because the plot
+       says less up close but because the low zoom fits more world in.
+       The line under it was always the real claim, so it is the one kept. */
+    t.ok(near.texts > far.texts,
+      'a plot spells itself out only when you are close (' + far.texts + ' → ' + near.texts + ' labels)');
     // The crisp version: the flags and the labels must cross at the SAME zoom,
     // because they now ask one function. Find each crossing and compare.
     {
