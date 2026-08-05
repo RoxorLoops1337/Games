@@ -2,7 +2,8 @@
 
 A creature collector crossed with a deck-builder. Walk the Hollowbrook valley,
 meet 19 kin, catch them, raise them — and fight with a hand of cards. Your kin
-brings its own moves to the deck; you bring everything else.
+brings the attacks; your deck makes them land harder. Every win offers another
+card.
 
 Play: https://games-71g.pages.dev/emberkin/
 
@@ -60,6 +61,7 @@ Never hand-edit the generated block in `index.html` — edit the JSON and re-emb
 | talk, confirm | Z · Enter · Space | the **Talk** button, or tap the text box |
 | menu, back | X · Esc | the **Menu** button |
 | aim a card | ← → | tap it |
+| take a card after a win | ← → then Z | tap it, or **Skip** |
 | play the aimed card | ↑ · Z · Enter | tap it again, or drag it up |
 | play a card outright | its number, 1-5 | — |
 | end the turn | E | the **End turn** button |
@@ -104,10 +106,11 @@ browser.
 
 ## How a battle works
 
-Each turn you are dealt five cards and three energy. The deck is your support
-cards plus the active kin's own moves, shuffled together — switch kin and its
-move cards leave with it. Spend energy on whatever you like, then end the turn
-and take the foe's telegraphed hit.
+Each turn you are dealt five cards and three energy. The deck has two halves
+shuffled together: the active kin's own moves, which are the only cards that
+deal damage, and your support cards, which sharpen them. Switch kin and its move
+cards leave with it. Spend energy on whatever you like, then end the turn and
+take the foe's telegraphed hit.
 
 `playCard(i)`, `endTurn()` and `doAction()` each resolve immediately and return
 a list of log entries carrying HP/status snapshots. State is consistent the
@@ -140,34 +143,68 @@ cost a frame, not the save.
 
 ### Cards
 
-A card has one growable number, `v`, and `vt` says what that number is — damage,
-shield, heal, max HP, attack, guard, draw or energy. Growth is the point:
+**The kin brings the attacks. The deck makes them land harder.** Nothing in your
+own deck damages the foe by itself — a support card that did would make the kin
+an accessory to the deck, and it is meant to be the other way round. Every point
+of damage in the game comes out of a move the active kin knows.
+
+A card has one growable number, `v`, and `vt` says what that number is:
+
+| `vt` | what the number does |
+|------|----------------------|
+| `edge` | the **next** attack hits for +v — spend it on the right move |
+| `atk` | +v on every attack for the rest of the battle |
+| `might` | +v on every attack **for ever**, saved with the run |
+| `shield` | soak v damage this round |
+| `def` | take v less from every hit for the rest of the battle |
+| `heal` / `maxhp` | heal v / +v maximum HP for the battle |
+| `draw` / `energy` | draw v / +v energy (every turn, for a power) |
+
+and `fx` carries the riders: `st` puts a status on everything you hit, `hits`
+gives your attacks extra swings, `mul` multiplies their damage, `thorns` answers
+back, `drain` heals you for a share of what the next attack deals.
+
+Growth is the point:
 
 | field | what it does |
 |-------|--------------|
 | `grow` | permanent, saved with that copy — the card is stronger forever |
 | `bgrow` | grows for this battle only, on every copy in the piles |
-| `kill` | permanent, but only when this card lands the killing blow |
+| `kill` | permanent, but only when **the attack it sharpened** lands the kill |
 | `exhaust` | one use, then out of the deck for the rest of the fight |
 
 Cards are owned as individual copies, because each one grows on its own: two
-Jabs in the same deck end up different cards. Growth stops at `growCap(id)` —
+Whets in the same deck end up different cards. Growth stops at `growCap(id)` —
 several times the card's own value — because a card that grows forever
 eventually plays the game for you.
 
-**The number on the card is the damage.** `cardDamage()` deals `v` flat, plus
-whatever attack you have banked this battle, times the type chart if the card
-has an element, times a crit. It does not go through the level-scaled move
-formula, because a card belongs to you and not to whichever kin is holding it:
-a Strike that reads "Deal 10" must deal 10 at level 5 and 10 at level 50, or
-growing it by +1 stops meaning anything you can read off the card. That is also
-why growth is the deck's whole power curve — an ungrown deck falls behind by
-Emberwood, and a grown one does not.
+**The number on the card is the number on the bar.** `attackBonus()` collects
+everything the deck has stacked onto the next swing and `useMove` adds it flat.
+Buffs deliberately do *not* go through `effStat` and the level-scaled damage
+formula: a card that reads "+4" would be worth about 1 to a level-5 kin and
+about 12 to a level-50 one, and then growing it by +1 would stop meaning
+anything you can read off the card.
 
-Kin move cards are priced by weight (`moveCost`): a real move plus a support
-card is a turn, and three real moves is not. That is where the deck earns its
-place. Foes carry `FOE_HP_MUL` times their normal HP in a fight, because a hand
-lands two or three cards where a move landed one.
+An `edge` survives a miss. Spending two turns setting up a Soulfang and losing
+it to a 5% accuracy roll is how you teach someone never to set anything up.
+
+Kin move cards are priced by weight (`moveCost`), so a turn is roughly one real
+move plus the support you stack onto it. Foes carry `FOE_HP_MUL` times their
+normal HP — only a little over 1, now that the deck sharpens attacks instead of
+adding its own.
+
+### A card after every win
+
+Every win — wild, trainer, the legendary — offers three cards and a **No
+thanks**, and the deck grows one card at a time out of what you were actually
+offered. A harder fight offers from further up the rarity table (`REWARD_ODDS`:
+wild → trainer → legendary). The offer never repeats a card inside one draw,
+because a choice between two Guards is not a choice.
+
+`rollReward()` only rolls; picking is what commits, so nothing is spent if the
+game is interrupted mid-offer. There is nothing behind the offer to go back to,
+so **Back means No thanks** rather than being a button that looks live and does
+nothing.
 
 ### Chests
 
@@ -199,7 +236,11 @@ npm run check             # the whole repo
 - `tests/emberkin.test.mjs` — data sanity, type maths, damage, capture,
   levelling, evolution, map connectivity, save round-trip, and the card battle
   end to end (hand, energy, piles, switching, shields).
-- `tests/emberkin_cards.test.mjs` — the deck-builder itself: growth sticks to
+- `tests/emberkin_cards.test.mjs` — the deck-builder itself: that no card in
+  your deck deals damage, that a support card adds exactly the number it prints
+  at level 5 and at level 50, that an edge is spent by the next attack that
+  connects and survives a miss, that every win offers three distinct cards and
+  harder fights offer better ones, and that growth sticks to
   the copy that earned it, battle growth does not survive the battle, exhaust
   means gone, kill bonuses only fire on kills, growth respects its ceiling,
   chest odds improve with price, and deck size limits hold.
@@ -218,8 +259,9 @@ tests with it rather than re-implementing game logic.
 
 ## Balance dials
 
-- Battle: `BASE_ENERGY` 3, `HAND_SIZE` 5, `FOE_HP_MUL` 2.0, `moveCost` by move power.
-- Card damage: flat, `cardDamage()` — the card's `v` plus `mods.atk`, × type × crit.
+- Battle: `BASE_ENERGY` 3, `HAND_SIZE` 5, `FOE_HP_MUL` 1.4, `moveCost` by move power.
+- Support maths: flat, `attackBonus()` — `mods.atk` + `mods.edge` + `G.might`, × `mods.mul`, over `mods.hits` swings.
+- Card reward odds per win: `REWARD_ODDS`, `REWARD_PICKS` 3.
 - Card growth ceiling: `growCap` = card value × `capMul` (default 4).
 - Chest costs and odds: the `CHESTS` table. Gem payouts: `gemReward`.
 - Encounter rate: `enc.rate` per map (0.12–0.14).

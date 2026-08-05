@@ -192,16 +192,17 @@ eq(cb.sel, 1, 'right walks along the hand');
 tapC('left');
 eq(cb.sel, 0, 'left walks back');
 
+// Not hand-size checks: some cards draw, so the hand can refill as one leaves.
 cb = freshBattle();
-const handWas = cb.hand.length;
+const aimed = cb.hand[cb.sel];
 tapC('up');
-ok(cb.hand.length < handWas, 'up plays the card you are on');
+ok(!cb.hand.includes(aimed), 'up plays the card you are on');
 
 cb = freshBattle();
-const third = cb.hand[2] && ctl.cardName(cb.hand[2]);
+const third = cb.hand[2];
 tapC('3');
-ok(cb.hand.length < 5 || !third, 'a number key plays that card outright');
-ok(!cb.hand.some((c, i) => i === 2 && ctl.cardName(c) === third && cb.hand.length === 5), 'the third card is the one that left');
+ok(!third || !cb.hand.includes(third), 'a number key plays that card outright');
+ok(!third || cb.disc.includes(third) || cb.exh.includes(third), 'and the third card is the one that left');
 
 cb = freshBattle();
 const turnWas = cb.turn;
@@ -319,9 +320,12 @@ crashy.setCtx(new Proxy({}, { get(_t, k) {
   return () => { thrown++; throw new Error('render blew up'); };
 }, set() { return true; } }));
 let escaped = null;
+const realErr = console.error;
+console.error = () => {};                      // the loop reports; that is the point
 for (let i = 0; i < 20; i++) {
   try { crashy.frame(i * 16); } catch (e) { escaped = e; break; }
 }
+console.error = realErr;
 ok(!escaped, `the loop swallowed ${thrown} render errors instead of dying${escaped ? ' — ' + escaped.message : ''}`);
 ok(thrown > 0, 'and the errors were real ones, not a test that proved nothing');
 // Put a working context back and check the game is still playable afterwards.

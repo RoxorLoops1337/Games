@@ -1594,7 +1594,7 @@ function saveGame() {
     party: G.party.map(packMon), box: G.box.map(packMon),
     bag: G.bag, money: G.money, gems: G.gems, dex: G.dex, flags: G.flags,
     cards: G.cards.map((c) => [c.u, c.id, c.plus, c.plays, c.kills]),
-    deck: G.deck, uid: G.nextUid, chests: G.chestsOpened,
+    deck: G.deck, uid: G.nextUid, chests: G.chestsOpened, might: G.might || 0,
     steps: G.steps, playtime: Math.round(G.playtime), wins: G.wins, caught: G.caught,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(blob)); return true; }
@@ -1628,6 +1628,7 @@ function loadGame() {
   G.nextUid = blob.uid || G.cards.reduce((m, c) => Math.max(m, c.u), 0);
   G.deck = (blob.deck || []).filter((u) => G.cards.some((c) => c.u === u));
   G.chestsOpened = blob.chests || 0;
+  G.might = blob.might || 0;                 // permanent damage, earned card by card
   if (!G.cards.length) { STARTER_DECK.forEach(grantCard); }
   G.dex = blob.dex || {}; G.flags = blob.flags || {};
   G.steps = blob.steps || 0; G.playtime = blob.playtime || 0;
@@ -1812,97 +1813,116 @@ const ITEMS = {
 };
 
 /* ============================================================ §2b — cards ==
-   A battle is played from a deck. The active kin contributes its own moves as
-   cards; everything else comes from the deck you build out of chests.
+   A battle is played from a deck with two halves. The active kin contributes
+   its own moves as cards — those are the attacks, and they are the ONLY thing
+   in the game that deals damage. Everything in your own deck is support: it
+   makes the kin's attacks land harder, more often, or with something nasty
+   riding along. A support card that dealt damage by itself would make the kin
+   an accessory to the deck, and it is meant to be the other way round.
 
    Every card has one growable number, `v`, and `vt` says what that number is.
    Growth is the point of the system:
      grow    — permanent, kept in the save, the card gets stronger forever
      bgrow   — grows while the battle lasts, resets after
-     kill    — permanent, but only when this card lands the killing blow
+     kill    — permanent, but only when the attack after it lands a kill
      exhaust — one use, then out of the deck for the rest of the battle
+
+   What a support card can do, by `vt`:
+     edge    — the NEXT attack hits for +v. Spend it on the right move.
+     atk     — +v damage on every attack for the rest of the battle
+     might   — +v damage on every attack, for ever, saved with the run
+     shield  — soak v damage this round
+     def     — take v less from every hit for the rest of the battle
+     heal    — heal v      maxhp — +v maximum HP for the battle
+     draw    — draw v      energy — +v energy (once, or every turn for a power)
+   and `fx` riders: `st` puts a status on everything you hit, `hits` gives your
+   attacks extra swings, `mul` multiplies their damage, `thorns` answers back.
    ======================================================================== */
 const RARITY = { common: '#b9adc4', rare: '#5fc9ff', epic: '#c86bff', legendary: '#ffc94d' };
 const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary'];
 
 const CARDS = {
   // ---- common ----------------------------------------------------------
-  strike:    { name: 'Strike',      r: 'common', cost: 1, kind: 'attack', v: 10, vt: 'dmg',
-    txt: 'Deal {v}.' },
-  jab:       { name: 'Jab',         r: 'common', cost: 0, kind: 'attack', v: 5, vt: 'dmg', grow: 1,
-    txt: 'Deal {v}. Permanently +1 each time you play it.' },
+  edge:      { name: 'Edge',        r: 'common', cost: 0, kind: 'skill', v: 4, vt: 'edge',
+    txt: 'Your next attack hits for +{v}.' },
+  whet:      { name: 'Whet',        r: 'common', cost: 1, kind: 'skill', v: 6, vt: 'edge', grow: 1,
+    txt: 'Next attack +{v}. Permanently +1 each play.' },
+  focus:     { name: 'Focus',       r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'atk',
+    txt: 'Every attack +{v} for this battle.' },
   guard:     { name: 'Guard',       r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'shield',
     txt: 'Gain {v} shield.' },
-  focus:     { name: 'Focus',       r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'atk',
-    txt: '+{v} attack for this battle.' },
   hunker:    { name: 'Hunker',      r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'def',
-    txt: '+{v} guard for this battle.' },
+    txt: 'Take {v} less from every hit this battle.' },
   vigor:     { name: 'Vigor',       r: 'common', cost: 1, kind: 'skill', v: 6, vt: 'maxhp', fx: { heal: 6 },
     txt: '+{v} max HP and heal 6.' },
   snack:     { name: 'Snack',       r: 'common', cost: 1, kind: 'skill', v: 12, vt: 'heal',
     txt: 'Heal {v}.' },
   quickstep: { name: 'Quickstep',   r: 'common', cost: 0, kind: 'skill', v: 1, vt: 'draw',
     txt: 'Draw {v} card.' },
-  pebble:    { name: 'Pebble Fling',r: 'common', cost: 1, kind: 'attack', v: 8, vt: 'dmg', fx: { type: 'Stone' },
-    txt: 'Deal {v} Stone damage.' },
-  sparktap:  { name: 'Spark Tap',   r: 'common', cost: 1, kind: 'attack', v: 7, vt: 'dmg', fx: { type: 'Spark', st: ['shock', .25] },
-    txt: 'Deal {v} Spark. 25% to shock.' },
-  leafcut:   { name: 'Leaf Cut',    r: 'common', cost: 1, kind: 'attack', v: 8, vt: 'dmg', fx: { type: 'Verdant' },
-    txt: 'Deal {v} Verdant damage.' },
+  kindle:    { name: 'Kindle',      r: 'common', cost: 1, kind: 'skill', v: 3, vt: 'edge', fx: { st: ['burn', .5] },
+    txt: 'Next attack +{v} and 50% to burn.' },
+  rootbind:  { name: 'Rootbind',    r: 'common', cost: 1, kind: 'skill', v: 3, vt: 'edge', fx: { st: ['snare', .5] },
+    txt: 'Next attack +{v} and 50% to snare.' },
   dewdrop:   { name: 'Dewdrop',     r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'heal', fx: { def: 1 },
-    txt: 'Heal {v} and +1 guard.' },
+    txt: 'Heal {v} and take 1 less from every hit.' },
 
   // ---- rare ------------------------------------------------------------
   whetstone: { name: 'Whetstone',   r: 'rare', cost: 1, kind: 'skill', v: 3, vt: 'atk', grow: 1,
-    txt: '+{v} attack this battle. Permanently +1 each play.' },
+    txt: 'Every attack +{v} this battle. Permanently +1 each play.' },
+  fanghone:  { name: 'Fang Hone',   r: 'rare', cost: 1, kind: 'skill', v: 4, vt: 'atk', bgrow: 1,
+    txt: 'Every attack +{v} this battle. +1 more each play this battle.' },
+  killedge:  { name: 'Killing Edge',r: 'rare', cost: 0, kind: 'skill', v: 7, vt: 'edge', kill: 3,
+    txt: 'Next attack +{v}. If it kills, permanently +3.' },
+  venomcoat: { name: 'Venom Coat',  r: 'rare', cost: 1, kind: 'power', v: 1, vt: 'none', fx: { st: ['snare', 1] },
+    txt: 'Every attack you make also snares. Rest of the battle.' },
+  emberoil:  { name: 'Ember Oil',   r: 'rare', cost: 1, kind: 'power', v: 1, vt: 'none', fx: { st: ['burn', .6] },
+    txt: 'Every attack you make has a 60% to burn. Rest of the battle.' },
   ironhide:  { name: 'Ironhide',    r: 'rare', cost: 1, kind: 'skill', v: 12, vt: 'shield', fx: { def: 2 },
-    txt: 'Gain {v} shield and +2 guard.' },
-  bloodlust: { name: 'Bloodlust',   r: 'rare', cost: 0, kind: 'attack', v: 11, vt: 'dmg', kill: 3,
-    txt: 'Deal {v}. On a kill, permanently +3.' },
+    txt: 'Gain {v} shield, take 2 less from every hit.' },
   surge:     { name: 'Surge',       r: 'rare', cost: 0, kind: 'skill', v: 2, vt: 'draw', fx: { energy: 1 },
     txt: 'Draw {v} and gain 1 energy.' },
   heartroot: { name: 'Heartroot',   r: 'rare', cost: 2, kind: 'skill', v: 15, vt: 'maxhp', fx: { heal: 15 },
     txt: '+{v} max HP and heal 15.' },
-  doubletap: { name: 'Double Tap',  r: 'rare', cost: 2, kind: 'attack', v: 9, vt: 'dmg', fx: { hits: 2 },
-    txt: 'Deal {v} twice.' },
-  frostbind: { name: 'Frostbind',   r: 'rare', cost: 1, kind: 'attack', v: 6, vt: 'dmg', fx: { type: 'Tide', st: ['chill', 1] },
-    txt: 'Deal {v} Tide and chill.' },
-  emberbite: { name: 'Ember Bite',  r: 'rare', cost: 1, kind: 'attack', v: 9, vt: 'dmg', fx: { type: 'Ember', st: ['burn', .5] },
-    txt: 'Deal {v} Ember. 50% to burn.' },
   shieldwall:{ name: 'Shieldwall',  r: 'rare', cost: 2, kind: 'skill', v: 22, vt: 'shield',
     txt: 'Gain {v} shield.' },
   adrenaline:{ name: 'Adrenaline',  r: 'rare', cost: 0, kind: 'skill', v: 1, vt: 'draw', fx: { energy: 1 }, exhaust: true,
     txt: 'Draw {v}, gain 1 energy. Exhaust.' },
-  fanghone:  { name: 'Fang Hone',   r: 'rare', cost: 1, kind: 'skill', v: 4, vt: 'atk', bgrow: 1,
-    txt: '+{v} attack this battle. +1 more each play this battle.' },
   thornmail: { name: 'Thornmail',   r: 'rare', cost: 1, kind: 'skill', v: 10, vt: 'shield', fx: { thorns: 4 },
     txt: 'Gain {v} shield. Attackers take 4.' },
+  grit:      { name: 'Grit',        r: 'rare', cost: 1, kind: 'skill', v: 1, vt: 'might', exhaust: true,
+    txt: '+{v} damage on every attack, for ever. Exhaust.' },
 
   // ---- epic ------------------------------------------------------------
-  bulwark:   { name: 'Bulwark',     r: 'epic', cost: 2, kind: 'skill', v: 18, vt: 'shield', fx: { def: 4 }, grow: 2,
-    txt: 'Gain {v} shield, +4 guard. Permanently +2 each play.' },
   berserk:   { name: 'Berserk',     r: 'epic', cost: 1, kind: 'skill', v: 6, vt: 'atk', fx: { selfdmg: 5 },
-    txt: '+{v} attack this battle. Costs you 5 HP.' },
-  lifeleech: { name: 'Lifeleech',   r: 'epic', cost: 2, kind: 'attack', v: 14, vt: 'dmg', fx: { drain: .5, type: 'Gloom' }, grow: 1,
-    txt: 'Deal {v} Gloom, heal half. Permanently +1 each play.' },
+    txt: 'Every attack +{v} this battle. Costs you 5 HP.' },
+  bulwark:   { name: 'Bulwark',     r: 'epic', cost: 2, kind: 'skill', v: 18, vt: 'shield', fx: { def: 4 }, grow: 2,
+    txt: 'Gain {v} shield, take 4 less from every hit. Permanently +2 each play.' },
+  bloodedge: { name: 'Blooded Edge',r: 'epic', cost: 1, kind: 'skill', v: 14, vt: 'edge', fx: { drain: .5 }, grow: 1,
+    txt: 'Next attack +{v} and heals you for half it deals. Permanently +1 each play.' },
+  twinstrike:{ name: 'Twin Strike', r: 'epic', cost: 2, kind: 'power', v: 1, vt: 'none', fx: { hits: 1 },
+    txt: 'Every attack you make swings one extra time. Rest of the battle.' },
   titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true,
     txt: '+{v} max HP, heal 30. Exhaust.' },
-  stormcall: { name: 'Stormcall',   r: 'epic', cost: 3, kind: 'attack', v: 11, vt: 'dmg', fx: { hits: 3, type: 'Spark' },
-    txt: 'Deal {v} Spark three times.' },
   wardstance:{ name: 'Ward Stance', r: 'epic', cost: 2, kind: 'skill', v: 15, vt: 'shield', fx: { def: 3, draw: 1 },
-    txt: 'Gain {v} shield, +3 guard, draw 1.' },
-  reaper:    { name: 'Reaper',      r: 'epic', cost: 1, kind: 'attack', v: 16, vt: 'dmg', kill: 4, exhaust: true,
-    txt: 'Deal {v}. On a kill, permanently +4. Exhaust.' },
+    txt: 'Gain {v} shield, take 3 less from every hit, draw 1.' },
+  temper:    { name: 'Temper',      r: 'epic', cost: 2, kind: 'skill', v: 2, vt: 'might', exhaust: true, grow: 1,
+    txt: '+{v} damage on every attack, for ever. Exhaust. Permanently +1 each play.' },
+  reaper:    { name: 'Reaper',      r: 'epic', cost: 1, kind: 'skill', v: 16, vt: 'edge', kill: 4, exhaust: true,
+    txt: 'Next attack +{v}. If it kills, permanently +4. Exhaust.' },
 
   // ---- legendary -------------------------------------------------------
+  overkill:  { name: 'Overkill',    r: 'legendary', cost: 3, kind: 'power', v: 1, vt: 'none', fx: { mul: 2 }, exhaust: true,
+    txt: 'Every attack you make deals double. Rest of the battle. Exhaust.' },
   dragonheart:{ name: 'Dragonheart', r: 'legendary', cost: 2, kind: 'skill', v: 25, vt: 'maxhp', fx: { atk: 5, heal: 25 }, grow: 2,
-    txt: '+{v} max HP, heal 25, +5 attack. Permanently +2 each play.' },
-  soulfang:  { name: 'Soulfang',    r: 'legendary', cost: 2, kind: 'attack', v: 22, vt: 'dmg', kill: 5, exhaust: true,
-    txt: 'Deal {v}. On a kill, permanently +5. Exhaust.' },
+    txt: '+{v} max HP, heal 25, every attack +5. Permanently +2 each play.' },
   eternal:   { name: 'Eternal Spark', r: 'legendary', cost: 0, kind: 'power', v: 1, vt: 'energy', exhaust: true,
     txt: '+{v} energy every turn for the rest of the battle. Exhaust.' },
   kinbond:   { name: 'Kinbond',     r: 'legendary', cost: 3, kind: 'skill', v: 10, vt: 'maxhp', fx: { healFull: true }, exhaust: true, grow: 2,
     txt: 'Heal to full, +{v} max HP. Exhaust. Permanently +2 each play.' },
+  warcry:    { name: 'War Cry',     r: 'legendary', cost: 1, kind: 'skill', v: 3, vt: 'might', exhaust: true, grow: 1,
+    txt: '+{v} damage on every attack, for ever. Draw 2. Exhaust. Permanently +1 each play.', fx: { draw: 2 } },
+  soulfang:  { name: 'Soulfang',    r: 'legendary', cost: 2, kind: 'skill', v: 24, vt: 'edge', kill: 5, exhaust: true,
+    txt: 'Next attack +{v}. If it kills, permanently +5. Exhaust.' },
 };
 const CARD_IDS = Object.keys(CARDS);
 
@@ -1938,7 +1958,8 @@ function mkCard(id) {
 const ownedCard = (u) => G.cards.find((c) => c.u === u) || null;
 const deckCards = () => G.deck.map(ownedCard).filter(Boolean);
 
-const STARTER_DECK = ['strike', 'strike', 'strike', 'strike', 'guard', 'guard', 'guard', 'focus', 'vigor', 'jab'];
+// All support: the kin brings the damage, the deck makes it hurt more.
+const STARTER_DECK = ['edge', 'edge', 'edge', 'guard', 'guard', 'guard', 'focus', 'snack', 'quickstep', 'whet'];
 const DECK_MIN = 8, DECK_MAX = 24;
 
 function grantCard(id) {
@@ -1984,6 +2005,40 @@ function openChest(kind) {
   }
   G.chestsOpened = (G.chestsOpened || 0) + 1;
   return got;
+}
+
+/**
+ * Three cards to pick from after a win — the deck grows a card at a time, out
+ * of what you were actually offered, rather than only out of what you could
+ * afford at a shop. A tougher fight offers from further up the rarity table.
+ * Never the same card twice in one offer, because a choice between two copies
+ * of Guard is not a choice.
+ */
+const REWARD_ODDS = {
+  wild:      { common: 72, rare: 24, epic: 4, legendary: 0 },
+  trainer:   { common: 45, rare: 38, epic: 15, legendary: 2 },
+  legendary: { common: 10, rare: 35, epic: 40, legendary: 15 },
+};
+const REWARD_PICKS = 3;
+
+function rewardOdds(b) {
+  return b && b.legendary ? REWARD_ODDS.legendary : (b && b.npc ? REWARD_ODDS.trainer : REWARD_ODDS.wild);
+}
+
+/** Roll the offer. Returns card ids, no state touched — picking is what commits. */
+function rollReward(b, n = REWARD_PICKS) {
+  const odds = rewardOdds(b);
+  const out = [];
+  for (let i = 0; i < n * 12 && out.length < n; i++) {
+    let r = rollRarity(odds);
+    let pool = cardsOfRarity(r);
+    while (!pool.length && RARITY_ORDER.indexOf(r) > 0) { r = RARITY_ORDER[RARITY_ORDER.indexOf(r) - 1]; pool = cardsOfRarity(r); }
+    const id = pool[rnd(pool.length)];
+    if (id && !out.includes(id)) out.push(id);
+  }
+  // A short pool should still fill the offer rather than silently shrink it.
+  for (const id of CARD_IDS) { if (out.length >= n) break; if (!out.includes(id)) out.push(id); }
+  return out.slice(0, n);
 }
 
 /** Gems for winning: wild kin are pocket change, trainers pay properly. */
@@ -2047,8 +2102,10 @@ function effStat(m, key) {
   const st = clamp(m.stages ? m.stages[key] || 0 : 0, -6, 6);
   const mul = st >= 0 ? (2 + st) / 2 : 2 / (2 - st);
   let v = m[key] * mul;
-  const b = G.battle;
-  if (b && b.mine === m && b.mods && b.mods[key]) v += b.mods[key];   // card buffs
+  // Card buffs deliberately do NOT live here. A support card promises flat
+  // damage — "+4" means 4 on the bar — and a stat nudged through the level
+  // formula would be worth 1 to a level-5 kin and 12 to a level-50 one. They
+  // are applied where the damage is, in useMove and hurtMine.
   if (key === 'atk' && m.status === 'burn') v *= .85;
   if (key === 'spd' && m.status === 'chill') v *= .5;
   return Math.max(1, Math.floor(v));
@@ -2768,7 +2825,7 @@ function startBattle(opt) {
     // the card game
     draw: [], hand: [], disc: [], exh: [],
     energy: 0, phase: 'player', intent: null, powers: {},
-    mods: { atk: 0, def: 0, thorns: 0 }, maxAdd: 0, maxAdds: new Map(), shield: 0,
+    mods: freshMods(), maxAdd: 0, maxAdds: new Map(), shield: 0,
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
@@ -2850,32 +2907,50 @@ function useMove(log, atkSide, moveId) {
   const m = MOVES[moveId];
   snap(log, `${who} used ${m.name}!`, 'use', atkSide);
 
+  // A miss does not eat the edge you were saving. Losing a Soulfang you spent
+  // two turns setting up to a 5% accuracy roll is the kind of thing that makes
+  // people stop setting things up; it waits for the next swing instead.
   if (m.acc && rnd(100) >= m.acc) { snap(log, `${who}'s attack missed!`, 'miss', atkSide); return; }
 
   const fx = m.fx || {};
   if (m.pow) {
-    const { dmg, eff, crit } = damageOf(attacker, defender, moveId);
-    let dealt = dmg;
-    if (atkSide === 'foe') {
-      dealt = hurtMine(log, dmg, `${them} took ${dmg}.`);          // shield first
-    } else {
-      defender.hp = clamp(defender.hp - dmg, 0, defender.max);
-      snap(log, `${them} took ${dmg}.`, 'hit', 'foe');
+    // Everything the deck stacked onto this swing rides here. Support cards
+    // never touch the foe themselves; this is the only place their numbers turn
+    // into damage, so a card that says "+4" is worth exactly 4 on the bar.
+    const bonus = atkSide === 'mine' ? attackBonus() : { flat: 0, mul: 1, hits: 1, drain: 0 };
+    let totalDealt = 0;
+    for (let h = 0; h < bonus.hits && defender.hp > 0; h++) {
+      const roll = damageOf(attacker, defender, moveId);
+      const { eff, crit } = roll;
+      const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * bonus.mul));
+      let dealt = dmg;
+      if (atkSide === 'foe') {
+        dealt = hurtMine(log, dmg, `${them} took ${dmg}.`);        // shield first
+      } else {
+        defender.hp = clamp(defender.hp - dmg, 0, defender.max);
+        snap(log, `${them} took ${dmg}.`, 'hit', 'foe');
+      }
+      totalDealt += dealt;
+      if (crit && eff !== 0) snap(log, 'A critical hit!');
+      if (h === 0) { const w = effWord(eff); if (w) snap(log, w); }
+      if (eff === 0) { if (atkSide === 'mine') spendEdge(); return; }
     }
-    if (crit && eff !== 0) snap(log, 'A critical hit!');
-    const w = effWord(eff);
-    if (w) snap(log, w);
-    if (fx.drain && dealt > 0) {
-      const heal = Math.max(1, Math.floor(dealt * fx.drain));
+    const drain = (fx.drain || 0) + (atkSide === 'mine' ? bonus.drain : 0);
+    if (drain && totalDealt > 0) {
+      const heal = Math.max(1, Math.floor(totalDealt * drain));
       attacker.hp = clamp(attacker.hp + heal, 0, attacker.max);
       snap(log, `${who} drank the energy back.`, 'heal', atkSide);
     }
-    if (fx.recoil && dealt > 0) {
-      const r = Math.max(1, Math.floor(dealt * fx.recoil));
+    if (fx.recoil && totalDealt > 0) {
+      const r = Math.max(1, Math.floor(totalDealt * fx.recoil));
       attacker.hp = clamp(attacker.hp - r, 0, attacker.max);
       snap(log, `${who} is hurt by the recoil.`, 'hit', atkSide);
     }
-    if (eff === 0) return;
+    if (atkSide === 'mine') {
+      applyRiders(log, defender);
+      awardEdgeKill(log, defender);
+      spendEdge();
+    }
   }
 
   if (fx.heal) {
@@ -3036,10 +3111,11 @@ function readIntent() {
    cards you brought, so a fight is the two of them together.
    ------------------------------------------------------------------------ */
 const BASE_ENERGY = 3, HAND_SIZE = 5;
-// A hand lands two or three cards a turn where a move landed one, so a foe
-// needs proportionally more to hit back through. Their stats are untouched —
-// only the pool of HP a fight is played over.
-const FOE_HP_MUL = 2.0;
+// A turn is roughly one attack plus the support stacked onto it, so a foe wants
+// a little more than its bare HP to be worth fighting — but only a little, now
+// that the deck sharpens attacks rather than adding its own. Their stats are
+// untouched: this is only the pool of HP a fight is played over.
+const FOE_HP_MUL = 1.4;
 
 /** Give a foe its battle-sized health as it steps in. */
 function toughen(mon) {
@@ -3118,6 +3194,20 @@ function drawCards(log, n) {
 }
 
 /**
+ * Everything a deck can stack onto one battle.
+ *   atk/def   flat damage added to your attacks / taken off theirs, this battle
+ *   edge*     the one-shot half: spent by the next attack you make
+ *   riders    statuses every attack of yours tries to apply
+ *   hits/mul  extra swings and a damage multiplier on every attack
+ * `G.might` is the same idea but permanent, so it lives on the run, not here.
+ */
+const freshMods = () => ({
+  atk: 0, def: 0, thorns: 0,
+  edge: 0, edgeSt: null, edgeDrain: 0, edgeCard: null,
+  riders: [], hits: 0, mul: 1,
+});
+
+/**
  * Battle-only modifiers live here so nothing leaks into the save.
  *
  * Max HP has to be given back to whichever kin it was given to. Tracking one
@@ -3131,7 +3221,7 @@ function clearMods(b) {
     mon.hp = Math.min(mon.hp, mon.max);
   }
   b.maxAdds = new Map();
-  b.mods = { atk: 0, def: 0, thorns: 0 };
+  b.mods = freshMods();
   b.maxAdd = 0;
   b.shield = 0;
 }
@@ -3176,7 +3266,9 @@ function aimPlayable(b) {
 /** Damage the player's side takes, shield first. */
 function hurtMine(log, amount, why) {
   const b = B();
-  let dmg = amount;
+  // Guard is flat and honest too: "take 2 less" takes 2 off the number, and a
+  // hit never falls below 1 so a stack of guard cannot make you untouchable.
+  let dmg = Math.max(amount > 0 ? 1 : 0, amount - (b.mods.def || 0));
   if (b.shield > 0) {
     const absorbed = Math.min(b.shield, dmg);
     b.shield -= absorbed; dmg -= absorbed;
@@ -3190,21 +3282,68 @@ function hurtMine(log, amount, why) {
 }
 
 /**
- * What a card's attack actually lands for. A card says "Deal 10" and deals 10 —
- * the number on the card is the number, not a power rating fed through the
- * level-scaled move formula. Cards belong to you, not to the kin holding them,
- * so they must not shrink because the kin is level 5 or because the foe rolled
- * a fat defence stat; growing the card is the only thing that grows the damage.
- * Attack buffs add on top, an element on the card still meets the type chart,
- * and crits still land, because those are the game's own language.
+ * Everything the deck has stacked onto the kin's next swing. Support cards are
+ * honest numbers: "+4" adds 4 to the damage, it is not a stat nudged through
+ * the level formula where a level-5 kin would see 1 of it and a level-50 kin
+ * would see 12. `edge` is the one-shot half — spent by the next attack, so you
+ * choose which move it lands on.
  */
-function cardDamage(value, type, opts = {}) {
+function attackBonus() {
   const b = B();
-  const eff = type ? effect(type, b.foe.types) : 1;
-  const crit = opts.crit != null ? opts.crit : critRoll();
-  const raw = Math.max(0, value + (b.mods.atk || 0));
-  const dmg = Math.floor(raw * eff * (crit ? 1.5 : 1));
-  return { dmg: eff === 0 ? 0 : Math.max(1, dmg), eff, crit };
+  if (!b) return { flat: 0, mul: 1, hits: 1 };
+  const m = b.mods;
+  return {
+    flat: (m.atk || 0) + (G.might || 0) + (m.edge || 0),
+    mul: m.mul || 1,
+    hits: 1 + (m.hits || 0),
+    drain: m.edgeDrain || 0,
+  };
+}
+
+/** The next attack has been made: the one-shot half of the stack is gone. */
+function spendEdge() {
+  const b = B();
+  if (!b) return;
+  b.mods.edge = 0;
+  b.mods.edgeDrain = 0;
+  b.mods.edgeSt = null;
+  b.mods.edgeCard = null;
+}
+
+/**
+ * A `kill` card pays out when the attack it sharpened lands the killing blow.
+ * The card no longer swings itself, so the kill belongs to whatever it buffed —
+ * which is the deal the card offers: spend it on the swing you think finishes.
+ */
+function awardEdgeKill(log, defender) {
+  const b = B();
+  const card = b.mods.edgeCard;
+  if (!card || defender.hp > 0) return;
+  const def = CARDS[card.id];
+  if (!def || !def.kill) return;
+  const owned = ownedCard(card.u);
+  if (!owned) return;
+  const got = growCard(owned, def.kill);
+  owned.kills = (owned.kills || 0) + 1;
+  snap(log, got ? `${def.name} tasted the kill — permanently +${got}.`
+    : `${def.name} tasted the kill, but it is already at its limit.`, 'grow', 'mine');
+}
+
+/**
+ * Put a status on whatever you just hit, from a rider a card set up. Riders
+ * stack: the powers apply on every attack, an `edge` rider only on the next.
+ */
+function applyRiders(log, target) {
+  const b = B();
+  const list = (b.mods.riders || []).concat(b.mods.edgeSt ? [b.mods.edgeSt] : []);
+  for (const [st, odds] of list) {
+    if (target.hp <= 0 || target.status) return;
+    if (target.types.includes(IMMUNE_TO[st] || '')) continue;
+    if (!chance(odds)) continue;
+    target.status = st;
+    snap(log, `Foe ${dispName(target)} is ${STATUS[st].name.toLowerCase()}!`, 'status', 'foe');
+    return;
+  }
 }
 
 /**
@@ -3238,33 +3377,29 @@ function playCard(i) {
   const fx = def.fx || {};
   snap(log, `You play ${def.name}.`, 'card', 'mine');
 
-  let killed = false;
-  if (def.kind === 'attack') {
-    const hits = fx.hits || 1;
-    for (let h = 0; h < hits && b.foe.hp > 0; h++) {
-      const { dmg, eff } = cardDamage(value, fx.type);
-      b.foe.hp = clamp(b.foe.hp - dmg, 0, b.foe.max);
-      snap(log, `Foe ${dispName(b.foe)} took ${dmg}.`, 'hit', 'foe');
-      const w = effWord(eff);
-      if (w) snap(log, w);
-      if (fx.drain && dmg > 0) {
-        b.mine.hp = clamp(b.mine.hp + Math.max(1, Math.floor(dmg * fx.drain)), 0, b.mine.max);
-        snap(log, `${dispName(b.mine)} drinks it back.`, 'heal', 'mine');
-      }
-      if (b.foe.hp <= 0) killed = true;
-    }
-    if (fx.st && b.foe.hp > 0 && !b.foe.status && chance(fx.st[1])
-        && !b.foe.types.includes(IMMUNE_TO[fx.st[0]] || '')) {
-      b.foe.status = fx.st[0];
-      snap(log, `Foe ${dispName(b.foe)} is ${STATUS[fx.st[0]].name.toLowerCase()}!`, 'status', 'foe');
-    }
-  }
-
-  // Non-damage effects. `vt` names whichever number the card grows.
+  // Support only: a card in your deck never damages the foe itself, it makes
+  // the kin's attacks do more. `vt` names whichever number the card grows.
   const amt = (key) => (def.vt === key ? value : (fx[key] || 0));
+  if (amt('edge')) {
+    b.mods.edge += amt('edge');
+    if (fx.st) b.mods.edgeSt = fx.st;
+    if (fx.drain) b.mods.edgeDrain = Math.max(b.mods.edgeDrain || 0, fx.drain);
+    b.mods.edgeCard = card;                    // whoever swings next earns its kill bonus
+    snap(log, `The next attack will hit for +${b.mods.edge}.`, 'buff', 'mine');
+  }
+  if (amt('might')) {
+    G.might = (G.might || 0) + amt('might');
+    snap(log, `Every attack from now on hits for +${G.might}. For good.`, 'grow', 'mine');
+  }
+  if (def.kind === 'power' && fx.st) {
+    b.mods.riders.push(fx.st);
+    snap(log, `Your attacks now ${fx.st[0] === 'snare' ? 'snare' : STATUS[fx.st[0]].name.toLowerCase() + ' on'} what they touch.`, 'buff', 'mine');
+  }
+  if (fx.hits) { b.mods.hits = (b.mods.hits || 0) + fx.hits; snap(log, 'Your attacks swing again.', 'buff', 'mine'); }
+  if (fx.mul) { b.mods.mul = (b.mods.mul || 1) * fx.mul; snap(log, 'Everything you land hits twice as hard.', 'buff', 'mine'); }
   if (amt('shield')) { b.shield += amt('shield'); snap(log, `Shield up to ${b.shield}.`, 'block', 'mine'); }
-  if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `${dispName(b.mine)}'s attack is up.`, 'buff', 'mine'); }
-  if (amt('def')) { b.mods.def += amt('def'); snap(log, `${dispName(b.mine)}'s guard is up.`, 'buff', 'mine'); }
+  if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `Every attack now hits for +${b.mods.atk}.`, 'buff', 'mine'); }
+  if (amt('def')) { b.mods.def += amt('def'); snap(log, `Every hit will land ${b.mods.def} lighter.`, 'buff', 'mine'); }
   if (fx.thorns) { b.mods.thorns += fx.thorns; snap(log, 'Thorns bristle.', 'buff', 'mine'); }
   if (amt('maxhp')) {
     const add = amt('maxhp');
@@ -3294,12 +3429,6 @@ function playCard(i) {
       if (got) snap(log, `${def.name} grows — now ${cardValue({ id: card.id, plus: owned.plus })}.`, 'grow', 'mine');
       else snap(log, `${def.name} is as sharp as it will ever be.`, 'grow', 'mine');
     }
-    if (def.kill && killed) {
-      const got = growCard(owned, def.kill);
-      owned.kills = (owned.kills || 0) + 1;
-      snap(log, got ? `${def.name} tasted the kill — permanently +${got}.`
-        : `${def.name} tasted the kill, but it is already at its limit.`, 'grow', 'mine');
-    }
   }
   if (def.bgrow) {
     // Battle-only growth rides on every copy of this card still in the piles.
@@ -3313,7 +3442,6 @@ function playCard(i) {
   if (def.exhaust) { b.exh.push(card); snap(log, `${def.name} is spent.`, 'exhaust', 'mine'); }
   else b.disc.push(card);
 
-  if (killed) resolveFoeDown(log);
   return log;
 }
 
@@ -3739,7 +3867,9 @@ function renderHUD() {
 function touchLabels() {
   if (HEADLESS || !els.btnA) return;
   const m = G.mode;
-  const [a, b] = m === 'battle' ? ['Play', 'Menu']
+  const reward = m === 'screen' && G.screen && G.screen.kind === 'reward';
+  const [a, b] = reward ? ['Take', 'Skip']            // nothing behind it to go back to
+    : m === 'battle' ? ['Play', 'Menu']
     : m === 'dialogue' ? ['Next', 'Next']
     : (m === 'menu' || m === 'screen') ? ['Pick', 'Back']
     : ['Talk', 'Menu'];
@@ -3915,30 +4045,39 @@ function finishBattle() {
     say('', [`${dispName(b.mine)} is done. Send out who?`], () => openScreen('party', { force: true }));
     return;
   }
-  const done = () => {
+  // Take the battle off the board. Split from `done` because the card offer is
+  // a screen, and a screen cannot open while a battle is still on top of it.
+  const teardown = () => {
     clearMods(b);
     G.battle = null; G.battleMsg = null;
     if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); show(els.dialogue, false); battleBar(false); }
     G.mode = 'world';
     playCue('world');
+  };
+  const settle = () => {
     const evo = checkEvolve();
     if (evo) { runEvolution(evo); return; }
     saveGame();
   };
+  const done = () => { teardown(); settle(); };
+  /** Every win grows the deck by one card of your choosing — or by none. */
+  const withReward = () => {
+    const offer = rollReward(b);
+    teardown();
+    openScreen('reward', { offer, done: settle });
+  };
   if (over === 'win') {
     const gems = gemReward(b);
     G.gems += gems;
-    if (!b.npc) { setToast(`+${gems} gems`); done(); return; }
-    const lines = [`You pocket ${gems} rare gems.`];
-    if (b.npc) {
-      lines.push(...(b.npc.trainer.lose || []));
-      G.flags[b.npc.id] = 1;
-      G.money += b.npc.trainer.prize;
-      lines.push(`You collected ${b.npc.trainer.prize} shards.`);
-      if (b.npc.block) { b.npc.gone = true; lines.push(`${b.npc.name} steps off the path.`); }
-    }
     G.wins++;
-    say('', lines.length ? lines : ['You won.'], done);
+    if (!b.npc) { setToast(`+${gems} gems`); withReward(); return; }
+    const lines = [`You pocket ${gems} rare gems.`];
+    lines.push(...(b.npc.trainer.lose || []));
+    G.flags[b.npc.id] = 1;
+    G.money += b.npc.trainer.prize;
+    lines.push(`You collected ${b.npc.trainer.prize} shards.`);
+    if (b.npc.block) { b.npc.gone = true; lines.push(`${b.npc.name} steps off the path.`); }
+    say('', lines, withReward);
   } else if (over === 'caught') {
     const where = addCaught(b.foe);
     const lines = [`${b.foe.name} was added to your ${where === 'party' ? 'party' : 'box'}.`];
@@ -4091,6 +4230,9 @@ function screenList(s) {
   if (s.kind === 'bag') return Object.keys(G.bag).filter((k) => G.bag[k] > 0);
   if (s.kind === 'shop') return Object.keys(ITEMS);
   if (s.kind === 'chests') return CHEST_IDS;
+  // The offer plus "no thanks" — a deck you cannot decline to grow is a deck
+  // that fills up with cards you never wanted.
+  if (s.kind === 'reward') return (s.opt.offer || []).concat(['skip']);
   if (s.kind === 'deck') {
     const inDeck = G.deck.map(ownedCard).filter(Boolean);
     return inDeck.concat(G.cards.filter((c) => !G.deck.includes(c.u)));
@@ -4188,6 +4330,23 @@ function renderScreen() {
     html += `<h2 style="margin-top:12px">Collection — ${rest.length} spare</h2>`;
     html += rest.length ? `<div class="cards">` + rest.map((c, i) => cardTile(c, inDeck.length + i, false)).join('') + '</div>'
       : '<p style="color:var(--dim)">Everything you own is in the deck.</p>';
+  } else if (s.kind === 'reward') {
+    html = '';                                  // no way back out but choosing
+    html += `<h2>Take a card</h2>`;
+    html += `<p style="font-size:.8em;color:var(--dim);max-width:520px">Your kin brings the attacks. These make them land harder.</p>`;
+    html += `<div class="cards">` + s.list.map((id, i) => {
+      if (id === 'skip') return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
+        <div class="info"><b>No thanks</b><small style="color:var(--dim)">Leave the deck as it is.</small></div></div>`;
+      const def = CARDS[id];
+      const owned = G.cards.filter((c) => c.id === id).length;
+      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}" style="border-color:${RARITY[def.r]}">
+        <div class="cr" style="background:${RARITY[def.r]}"></div>
+        <div class="info"><b style="color:${RARITY[def.r]}">${def.name}</b>
+        <small>${def.r} · ${def.cost} energy</small>
+        <small>${cardText({ id, plus: 0, bg: 0 })}</small>
+        <small style="color:var(--dim)">${owned ? `you own ${owned}` : 'new to you'}${
+          (def.grow || def.kill) ? ` · grows to +${growCap(id)}` : ''}</small></div></div>`;
+    }).join('') + '</div>';
   } else if (s.kind === 'chests') {
     html += `<h2>Gem chests — ${G.gems} gems</h2>`;
     html += `<div class="cards">` + CHEST_IDS.map((k, i) => {
@@ -4241,7 +4400,13 @@ function screenInput() {
   if (justPressed('down')) { s.i = clamp(s.i + cols, 0, Math.max(0, len - 1)); moved = true; }
   if (moved) renderScreen();
   if (justPressed('a')) screenSelect();
-  if (justPressed('b')) closeScreen();
+  if (justPressed('b')) {
+    // The reward is a choice, not a menu — there is nothing behind it to go
+    // back to. Back means "No thanks", which is a real option on the screen,
+    // rather than a button that looks live and does nothing.
+    if (s.kind === 'reward') { s.i = Math.max(0, (s.list || []).length - 1); screenSelect(); }
+    else closeScreen();
+  }
 }
 
 /**
@@ -4288,6 +4453,19 @@ function screenSelect() {
   const s = G.screen;
   if (!s) return;
   s.list = screenList(s);
+  if (s.kind === 'reward') {
+    const id = s.list[s.i];
+    const done = s.opt.done;
+    G.screen = null; if (!HEADLESS) show(els.screen, false);
+    G.mode = G.battle ? 'battle' : 'world';
+    if (id && id !== 'skip') {
+      const c = grantCard(id);
+      setToast(`${CARDS[id].name} joins the deck.`);
+      if (!G.deck.includes(c.u)) setToast(`${CARDS[id].name} — deck is full, it went to the collection.`);
+    }
+    if (done) done();
+    return;
+  }
   if (s.kind === 'party') {
     const m = G.party[s.i];
     if (!m) return;
@@ -4628,7 +4806,17 @@ function step(dt) {
     if (G.toastT <= 0 && !HEADLESS) els.toast.classList.remove('on');
   }
   if (justPressed('m')) toggleMute();
-  if (G.mode !== G.uiMode) { G.uiMode = G.mode; touchLabels(); }
+  // Keyed on the screen too, because the reward screen labels its buttons
+  // differently from every other one and can open from another screen.
+  const uiKey = G.mode + (G.screen ? ':' + G.screen.kind : '');
+  if (uiKey !== G.uiMode) { G.uiMode = uiKey; touchLabels(); }
+
+  // Both message queues age here and nowhere else. Ticking a hold inside the
+  // branch that happens to be running means a message left over from another
+  // branch keeps its hold for ever, and a hold that never expires is a message
+  // that can never be dismissed.
+  if (G.dialogue) G.dialogue.hold = Math.max(0, G.dialogue.hold - dt);
+  if (G.battleMsg) G.battleMsg.hold = Math.max(0, G.battleMsg.hold - dt);
 
   // Both message queues age here and nowhere else. Ticking a hold inside the
   // branch that happens to be running means a message left over from another
@@ -4649,7 +4837,7 @@ function step(dt) {
 
 function newGame() {
   G.party = []; G.box = []; G.bag = {}; G.money = 500; G.gems = 0; G.dex = {}; G.flags = {};
-  G.cards = []; G.deck = []; G.nextUid = 0; G.chestsOpened = 0;
+  G.cards = []; G.deck = []; G.nextUid = 0; G.chestsOpened = 0; G.might = 0;
   STARTER_DECK.forEach(grantCard);
   G.steps = 0; G.playtime = 0; G.wins = 0; G.caught = 0; G.battle = null;
   enterMap('lab', 5, 5, 'up');
@@ -4885,9 +5073,10 @@ if (typeof window !== 'undefined') {
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
-    cardValue, cardText, cardCost, cardName, cardDamage, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
+    cardValue, cardText, cardCost, cardName, attackBonus, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
-    openChest, rollRarity, cardsOfRarity, gemReward, moveCost, clearMods, hurtMine, toughen, FOE_HP_MUL,
+    openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
+    gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
