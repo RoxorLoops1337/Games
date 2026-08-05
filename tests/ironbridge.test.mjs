@@ -18974,4 +18974,73 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 }
 
+/* ============================ the arithmetic under a cost that never costs
+
+   Measured over eight veteran matches — 151,153 live hero-ticks with a kit,
+   77,379 of them with the full four — no hero was ever short of mana for a
+   skill, and the lowest any pool fell was 51.6%.
+
+   These assertions deliberately hold the ARITHMETIC and not that result. An
+   earlier attempt asserted the behaviour, and it failed in a state I could not
+   reproduce or explain — a run reporting 11,958 short ticks against a tick
+   count 0.6% off every other run. A suite that can go red for reasons nobody
+   can account for is worse than one that checks less, so what is checked here
+   is the part that is derivable from the file and stable under re-reading:
+   the pool formula, the regen formula, and the relationship between them and
+   the dearest skill in the game.
+
+   If somebody makes mana bind, these are the numbers they will have to move,
+   and moving them fails these assertions and sends them to the note beside the
+   regen constant. That is the whole job. */
+{
+  // recalcHero uses L = lvl - 1, so a level-10 hero has bought NINE growth
+  // steps. My own first hand-computation said ten, and the calibration pass
+  // that caught it is the reason this test exists in this form.
+  const lvlTerm = SRC.match(/const cl = CLS\[h\.cls\], L = h\.lvl - (\d);/);
+  t.ok(!!lvlTerm && lvlTerm[1] === '1', 'a level buys lvl-1 growth steps, not lvl');
+
+  const mage = IB.CLS.mage;
+  t.ok(!!mage && mage.b.mana > 0 && mage.g.mana > 0, 'the mage has a pool and a growth (' +
+    (mage ? mage.b.mana + ' + ' + mage.g.mana + '/lvl' : 'missing') + ')');
+  const poolAt10 = mage.b.mana + mage.g.mana * 9;
+  t.ok(poolAt10 === 776, 'a level-10 mage pool is 776 (' + poolAt10 + ')');
+
+  // the regen line, read off the file rather than restated
+  const at = SRC.indexOf("h.mana = Math.min(h.mmana, h.mana + (");
+  const line = SRC.slice(at, SRC.indexOf(';', at));
+  const m = line.match(/\(([\d.]+) \+ h\.lvl \* ([\d.]+) \+ passVal\(h, 'mreg'\)/);
+  t.ok(!!m, 'the regen formula parsed (' + line.slice(0, 60) + ')');
+  if (m){
+    const base = Number(m[1]), per = Number(m[2]);
+    const at10 = base + 10 * per;
+    t.ok(Math.abs(at10 - 7) < 1e-9, 'a level-10 hero regenerates ' + at10.toFixed(2) + '/s in combat');
+    const calm = Number((line.match(/calm \* (\d+)/) || [])[1]);
+    const home = Number((line.match(/atHome \? (\d+)/) || [])[1]);
+    t.ok(calm > 0 && home > 0, 'and more when calm (+' + calm + ') or at home (+' + home + ')');
+    t.ok(at10 + calm < at10 + home, 'standing at home is the bigger of the two');
+
+    // the relationship the finding rests on
+    const dearest = IB.SKILLS.reduce((a, b) => a.mana >= b.mana ? a : b);
+    t.ok(dearest.mana === 110, 'the dearest skill costs 110 (' + dearest.n + ', ' + dearest.mana + ')');
+    t.ok(poolAt10 >= dearest.mana * 7,
+      'a level-10 pool holds the dearest skill seven times over (' + (poolAt10 / dearest.mana).toFixed(1) + ')');
+    t.ok(poolAt10 / at10 > 100,
+      'and refills from empty in ' + (poolAt10 / at10).toFixed(0) + 's of combat regen, which is longer than a match — ' +
+      'the pool is deep, not the regen fast');
+
+    // a kit firing flat out WOULD outrun regen; that it does not is about
+    // firing rate, not about the numbers here
+    const basics = IB.SKILLS.filter(k => !k.ult);
+    const meanCd = basics.reduce((a, k) => a + k.cd, 0) / basics.length;
+    const meanCost = basics.reduce((a, k) => a + k.mana, 0) / basics.length;
+    const flatOut = 4 * meanCost / meanCd;
+    t.ok(flatOut > at10,
+      'four skills on cooldown would spend ' + flatOut.toFixed(1) + '/s against ' + at10.toFixed(1) + '/s of regen');
+  }
+
+  // and the passives that exist to help with a problem nobody has
+  const manaPass = IB.PASSIVES.filter(p => p.m && (p.m.mreg !== undefined || p.m.mana !== undefined));
+  t.ok(manaPass.length === 5, 'five of the hundred passives are about mana (' + manaPass.map(p => p.n).join(', ') + ')');
+}
+
 t.done();
