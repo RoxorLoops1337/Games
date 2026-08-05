@@ -19083,6 +19083,38 @@ function resolvePick(sx, sy){
 }
 const s0Plot = (t) => me().plot[t];
 
+/* What separates a tap from a pan.
+
+   The gate was `|dx| + |dy| > 5`, and a Manhattan sum is not a distance: along
+   an axis it gives the five pixels it claims, but on the diagonal three and
+   three score six and the press is thrown away. Measured on a real browser, a
+   tap survived TWO pixels of drift before the selection was discarded — at
+   1440x900 and at 390x844 alike.
+
+   And `moved` latched. Once tripped it was never cleared, so a press that
+   wandered and settled back exactly where it started was still read as a pan,
+   which is the shape of every real tap: out a little, and back.
+
+   So: a radius rather than a sum, and a different one per input, because a
+   mouse is resting on a desk and a thumb is not. Panning still begins the
+   moment the radius is crossed — that has to latch or the camera stutters
+   mid-drag — but whether the release SELECTS is judged on where the pointer
+   ENDED, not on the worst place it ever passed through. A wobble that comes
+   home is a tap. A sweep out and back is not, because you meant to go and
+   look at something, and TAP_RETURN is where the difference is drawn. */
+/* A trackpad reports itself as a mouse and drifts like a thumb — tap-to-click
+   has no button to brace against — so the pointer one is not the five a mouse
+   button would want. Nobody pans deliberately by eight pixels; panning is a
+   sweep. The cost of being generous here is selecting when you meant to nudge
+   the camera, and the cost of being mean is what this whole note is about. */
+const DRAG_SLOP = { mouse:8, pen:8, touch:12 };
+const dragSlop = (type) => DRAG_SLOP[type] || DRAG_SLOP.mouse;
+const TAP_RETURN = 3;          // how many slops a tap may wander and still count
+// Pure, and split out of the handler for the reason resolvePick is: a test can
+// then ask it the question a thumb asks, without a browser to ask it in.
+const isTap = (dx, dy, far, slop) =>
+  hyp(dx, dy) <= slop && far <= slop * TAP_RETURN;
+
 function pickAt(clientX, clientY){
   const r = lcv.getBoundingClientRect();
   const sx = clientX - r.left, sy = clientY - r.top;
@@ -19381,7 +19413,9 @@ function wire(){
   let drag = null;
   lcv.addEventListener('pointerdown', (e) => {
     if (spellUI.aim) aimAt(e.clientX, e.clientY);
-    drag = { x:e.clientX, y:e.clientY, cx:cam.x, moved:false };
+    // `far` is the farthest this press ever got from where it started, which is
+    // the only thing a release cannot work out for itself. See isTap.
+    drag = { x:e.clientX, y:e.clientY, cx:cam.x, moved:false, far:0, slop:dragSlop(e.pointerType) };
     lcv.setPointerCapture(e.pointerId);
   });
   /* While an order is armed the world does not pan: a drag AIMS it.
@@ -19398,7 +19432,9 @@ function wire(){
     if (spellUI.aim){ aimAt(e.clientX, e.clientY); return; }
     if (!drag) return;
     const dx = (e.clientX - drag.x) / (LS() * .96);
-    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 5){
+    const d = hyp(e.clientX - drag.x, e.clientY - drag.y);
+    if (d > drag.far) drag.far = d;
+    if (d > drag.slop){
       drag.moved = true; cam.follow = false; $('camFollow').classList.remove('on');
     }
     if (drag.moved) cam.x = clamp(drag.cx - dx, CAM_MIN, CAM_MAX);
@@ -19407,7 +19443,10 @@ function wire(){
     // A slide that ends on the target is a placement, not a discarded pan, so
     // the `moved` gate that protects ordinary selection does not apply here.
     if (spellUI.aim){ aimAt(e.clientX, e.clientY); pickAt(e.clientX, e.clientY); drag = null; return; }
-    if (drag && !drag.moved) pickAt(e.clientX, e.clientY);
+    // Not `!drag.moved`: a press that crossed the slop and came home is a tap
+    // whose finger shook, and the camera it panned came home with it.
+    if (drag && isTap(e.clientX - drag.x, e.clientY - drag.y, drag.far, drag.slop))
+      pickAt(e.clientX, e.clientY);
     drag = null;
   });
   lcv.addEventListener('pointercancel', () => { drag = null; });
@@ -20445,7 +20484,7 @@ window.IB = {
   passiveWorth, PASSIVE_W, CLASS_KEY_BOOST,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
-  resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
+  resolvePick, clickTargets, DRAG_SLOP, dragSlop, TAP_RETURN, isTap, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   EDGE, edgeFor, edgeCache, edgeRing, edgeOnScreen, vnoise, fbm1, SWARD, swardAt, DECAL, decalWash, decalAlpha,
   decalTint, washFor, composite, hueRot, rgbOf, hexOf, rgbStr, decalPass, DECAL_LOBES, relLum, GROUND_SHADE, groundShadow, mixHex,
