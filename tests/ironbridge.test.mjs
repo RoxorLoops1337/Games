@@ -8872,8 +8872,21 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const dist = Math.abs(u.x - x0);
     return { dist, halfSteps, perM: dist > .01 ? halfSteps / dist : 0 };
   };
-  const kinds = Object.keys(IB.UNITS);
-  t.ok(kinds.length >= 4, 'the gait sweep covers every unit kind (' + kinds.length + ')');
+  /* Every kind that WALKS. A planted kind has spd 0 by design — speedOf(u)*dt
+     is the whole of the movement, so it never covers ground and never takes a
+     step, and it would fail every check below for the right reason. The
+     exclusion is turned into its own claim underneath rather than left as a
+     hole in the sweep. */
+  const kinds = Object.keys(IB.UNITS).filter(k => IB.UNITS[k].spd > 0);
+  const planted = Object.keys(IB.UNITS).filter(k => !(IB.UNITS[k].spd > 0));
+  t.ok(kinds.length >= 4, 'the gait sweep covers every walking kind (' + kinds.length + ')');
+  t.ok(planted.length > 0, 'and something is planted rather than walking (' + planted.join(', ') + ')');
+  for (const k of planted){
+    const r = gaitRun(k, 0);
+    t.ok(!r || r.dist < .5,
+      IB.UNITS[k].n + ' stays where it is put (' + (r ? r.dist.toFixed(2) : '-') + ' covered)');
+    t.ok(!r || r.halfSteps === 0, 'and does not walk on the spot either');
+  }
   const runs = [];
   for (const kind of kinds) for (const slow of [0, .5]){
     const r = gaitRun(kind, slow);
@@ -12848,8 +12861,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(typeof IB.chooseSpell(s, 0, 'nonesuch') === 'string', 'and one that does not exist is refused');
     t.ok(typeof IB.chooseSpell(s, 2, 'pyre') === 'string', 'there is no third slot');
     const SPELLS_IN = (k) => IB.SPELLS.filter(d => d.grp === k);
-    t.ok(IB.SPELLS.length === 11 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
-      'there are eleven of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
+    t.ok(IB.SPELLS.length === 12 && IB.SPELLS.every(d => d.id && d.n && d.cd > 0),
+      'there are twelve of them, each named and each with a cooldown (' + IB.SPELLS.length + ')');
     // Every one has a target kind the banner knows how to ask for. A tenth
     // order with a new kind fails HERE rather than arming a state whose banner
     // cannot say what would satisfy it.
@@ -12983,6 +12996,24 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // or a body: it lengthens recoveries that are already running, so a board
     // where the other commander is holding a full hand is a board where it is
     // correctly refused. Give them something to be waiting on.
+    /* Which orders legitimately draw from the simulation's stream: exactly the
+       ones that put bodies on the bridge. Read off the cast table so it cannot
+       go stale — an order that starts spawning joins this by spawning, and one
+       that starts drawing without spawning still fails below. */
+    const SPAWNING_ORDERS = (() => {
+      const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      const tbl = src.slice(src.indexOf('const SPELL_CAST'),
+        src.indexOf('\nfunction ', src.indexOf('const SPELL_CAST')));
+      return IB.SPELLS.filter(d => {
+        const i = tbl.indexOf('\n  ' + d.id + '(');
+        if (i < 0) return false;
+        const end = tbl.indexOf('\n  }', i);
+        return /spawnUnit|musterWave/.test(tbl.slice(i, end < 0 ? i + 300 : end + 4));
+      }).map(d => d.id);
+    })();
+    t.ok(SPAWNING_ORDERS.length === 2,
+      'two orders spawn, so two may touch the stream (' + SPAWNING_ORDERS.join(', ') + ')');
+
     const arm = (id, s) => {
       if (id !== 'counter') return;
       const foe = G.sides[s.i === 0 ? 1 : 0];
@@ -12997,12 +13028,16 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const err = IB.castSpell(s, Object.assign({ slot:0 }, aim(d.id, s)));
       t.ok(err === null, d.n + ' casts (' + err + ')');
       t.ok(s.spellCd[0] === d.cd, 'and goes on its ' + d.cd + 's cooldown');
-      // Second Muster is the ONLY spell allowed to move the simulation's random
-      // stream, and it has to, because it puts bodies on the bridge and
-      // spawnUnit draws for every one of them.
-      t.ok(d.id === 'muster' ? IB.seedNow() !== seed0 : IB.seedNow() === seed0,
-        d.id === 'muster'
-          ? 'Second Muster is the one spell that draws from the simulation’s stream'
+      /* An order may move the simulation's random stream ONLY if it puts bodies
+         on the bridge, because spawnUnit draws for every one of them. That set
+         used to be Second Muster alone and is now Muster and Pikewall, so the
+         rule is read off SPAWNS rather than written down as a name — the next
+         order to spawn joins it by spawning, and any other order that starts
+         drawing still fails here. */
+      const spawns = SPAWNING_ORDERS.includes(d.id);
+      t.ok(spawns ? IB.seedNow() !== seed0 : IB.seedNow() === seed0,
+        spawns
+          ? d.n + ' draws from the simulation’s stream, because it puts bodies on the bridge'
           : d.n + ' leaves the simulation’s stream exactly where it found it');
       t.ok(G.zones.length === z0,
         d.n + ' pushes no ground zone, which a resync drops on both machines');
@@ -16867,7 +16902,7 @@ t.ok(true, 'a final draw on a live match is clean');
      it opens held ten. Counted rather than written out, so the next order to
      be added cannot leave it lying. */
   {
-    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'eleven',
+    t.ok(IB.NUM_WORD(IB.SPELLS.length) === 'twelve',
       'the set has a word for its size (' + IB.NUM_WORD(IB.SPELLS.length) + ')');
     IB.newMatch({ diff:'veteran', seed:9606 });
     IB.showIntro('veteran');
@@ -18998,7 +19033,8 @@ t.ok(true, 'a final draw on a live match is clean');
      misled by. Recovery was never what limited it. */
   t.ok(by.cd === 3, 'three run at their cooldown ceiling (' + by.cd + ')');
   t.ok(by.aim === 4, 'four wait for a target (' + by.aim + ')');
-  t.ok(by.coin === 2, 'two wait for the stores (' + by.coin + ')');
+  // Pikewall joined as a third: 45 wood and 35 iron on a 100s recovery.
+  t.ok(by.coin === 3, 'three wait for the stores (' + by.coin + ')');
   t.ok(by.call === 2, 'and two are all about the moment you pick (' + by.call + ')');
   t.ok(by.cd + by.aim + by.coin + by.call === IB.SPELLS.length, 'and that is all of them');
 
@@ -19593,16 +19629,21 @@ t.ok(true, 'a final draw on a live match is clean');
      each carried 3 of a 22-point pool, 13.6% apiece and 27.3% together. */
   const tot = vals.reduce((a, b) => a + b, 0);
   const share = (id) => 100 * W[id] / tot;
-  t.ok(tot === 20, 'the draft pool is ' + tot + ' points across ' + IB.SPELLS.length + ' orders');
-  t.ok(Math.abs(share('bombard') - 10) < 0.01,
-    'Bombard is dealt at ' + share('bombard').toFixed(1) + '% of it, down from 13.6');
-  t.ok(Math.abs(share('pitch') - 10) < 0.01,
-    'Pitch Fire at ' + share('pitch').toFixed(1) + '%, down from 13.6');
+  /* The pool was 22 points across ELEVEN orders when Bombard and Pitch carried
+     3 apiece, fell to 20 when that boost came off, and is 22 again across
+     TWELVE now Pikewall has joined at the common weight. So the absolute
+     shares have come back to where they started — everything is diluted by the
+     new order — and pinning them would be pinning a coincidence.
+     What the #1464 fix actually established survives dilution: no order carries
+     a weight its peers do not. That is what is checked. */
+  t.ok(tot === 22, 'the draft pool is ' + tot + ' points across ' + IB.SPELLS.length + ' orders');
+  t.ok(share('bombard') === share('muster'),
+    'Bombard is dealt exactly as often as the strongest order, not 1.5x as often');
+  t.ok(share('pitch') === share('muster'), 'and so is Pitch Fire');
+  t.ok(share('pike') === share('muster'), 'and the new order joined at that same weight');
   t.ok(share('bombard') + share('pitch') < 27.3,
-    'so the two weakest-measured orders together carry ' +
-    (share('bombard') + share('pitch')).toFixed(1) + '% rather than 27.3%');
-  t.ok(share('muster') === share('bombard'),
-    'and the best-measured order is now dealt as often as the worst, rather than less often');
+    'so the two lane-damage orders together carry ' +
+    (share('bombard') + share('pitch')).toFixed(1) + '% rather than the 27.3% they once did');
 
   // the widest share gap left is the situational pair's, and it is 2:1 by design
   const shares = Object.keys(W).map(share);
@@ -19680,9 +19721,14 @@ t.ok(true, 'a final draw on a live match is clean');
     'the two share one figure, as two lane orders of the same kind should');
   t.ok(share('bombard') < 13.6,
     'and it is below the 13.6% each of them used to carry (now ' + share('bombard').toFixed(1) + '%)');
-  t.ok(share('muster') > 9.1,
-    'while the strongest order is dealt more often than before, not less (' +
-    share('muster').toFixed(1) + '% against 9.1%)');
+  /* This used to say the strongest order was dealt MORE often than before —
+     true when removing the boost shrank the pool from 22 to 20. A twelfth order
+     puts the pool back to 22 and dilutes everyone equally, so that sentence is
+     now false for a reason that has nothing to do with the fix it was written
+     for. The fix itself is the equality above. */
+  t.ok(share('muster') === share('bombard') && share('muster') === share('pitch'),
+    'the strongest order is dealt no more often than the two that were boosted (' +
+    share('muster').toFixed(1) + '% each)');
   // the pool still sums to one whole draft
   t.ok(Math.abs(IB.SPELLS.reduce((a, d) => a + 100 * d.ai.w / tot, 0) - 100) < 1e-9,
     'and the eleven shares still make exactly one draft');
@@ -20092,8 +20138,17 @@ t.ok(true, 'a final draw on a live match is clean');
     const body = castTable.slice(i, castTable.indexOf('\n  }', i) + 4 || i + 200);
     return /spawnUnit|musterWave/.test(body);
   }).map(d => d.id);
-  t.ok(spawners.length === 1 && spawners[0] === 'muster',
-    'exactly one order puts new bodies on the bridge (' + (spawners.join(', ') || 'none') + ')');
+  /* Second Muster used to be alone here, and that was the whole diagnosis: its
+     20-point lead survived every number because units are the only currency the
+     game scores in and it was the only order that made any. Pikewall is the
+     second, so the monopoly is over BY DESIGN. What has to stay true is that
+     the two are different shapes — one marches from your gate, one is planted
+     where you point and cannot advance at all. */
+  t.ok(spawners.length === 2 && spawners.includes('muster') && spawners.includes('pike'),
+    'two orders put new bodies on the bridge (' + (spawners.join(', ') || 'none') + ')');
+  t.ok(IB.UNITS.pike.spd === 0, 'and what Pikewall plants cannot advance (spd ' + IB.UNITS.pike.spd + ')');
+  t.ok(IB.SPELL.muster.target === 'self' && IB.SPELL.pike.target === 'point',
+    'one musters at your own gate, the other is planted where you point');
 
   // it costs three of the four stores, which is the counterweight it has
   const cost = IB.SPELL.muster.cost;
@@ -20142,8 +20197,13 @@ t.ok(true, 'a final draw on a live match is clean');
     const body = castTable.slice(i, castTable.indexOf('\n  }', i) + 4 || i + 200);
     return /spawnUnit|musterWave/.test(body);
   }).map(d => d.id);
-  t.ok(spawners.length === 1 && spawners[0] === 'muster',
-    'exactly one order puts new bodies on the bridge (' + (spawners.join(', ') || 'none') + ')');
+  /* It was alone, and that was the diagnosis. Pikewall ended the monopoly on
+     purpose — what stays true is that Muster is the only one that adds a wave
+     which MARCHES, which is the part no number reached. */
+  t.ok(spawners.includes('muster'), 'Second Muster puts new bodies on the bridge');
+  t.ok(spawners.length === 2, 'and is no longer alone in it (' + spawners.join(', ') + ')');
+  t.ok(IB.UNITS.pike.spd === 0 && IB.UNITS.grunt.spd > 0,
+    'the other one plants what cannot advance, which is a different thing to add');
 
   /* And the wave it makes is a real wave, drawn from the same table the clock
      draws from — which is the categorical part. It is not a summon with its own
@@ -20230,6 +20290,102 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(!!v && G.units.includes(v), 'a short-lived body starts on the board');
   for (let i = 0; i < 30; i++) IB.update(1 / 30);
   t.ok(v.dead || !G.units.includes(v), 'and is gone once its clock runs out');
+}
+
+/* ================== a second order that adds something
+
+   Second Muster measured 66.6% against an all-order mean of 45.9 and neither of
+   its numbers would move it: the recovery self-compensates through match length
+   and a 24% health cut moved 2.5 points. The advantage was categorical — units
+   are the only currency the game keeps score in, and Muster was the only order
+   that made any.
+
+   Pikewall is the second, so that stops being true. Deliberately a different
+   shape: Muster is macro, a full wave at your own gate that marches; this is
+   tactical, a short line planted where you point that cannot advance and is
+   gone in PIKE.dur seconds.
+
+   Asserted below is what makes the two different, which is exact, and the
+   lockstep behaviour, which a new spawning order has to get right. Not a win
+   rate — a twelfth order takes the sweep from 55 pairs to 66 and that is a
+   separate round. */
+{
+  const P = IB.SPELL.pike, U = IB.UNITS.pike;
+  t.ok(!!P && !!U, 'the order and the body it plants both exist');
+  t.ok(P.target === 'point', 'it is aimed at a stretch of deck');
+  t.ok(P.grp === 'lane', 'and lives with the other orders about the lane');
+
+  /* What separates it from Muster, one line at a time. */
+  t.ok(U.spd === 0, 'what it plants never advances (spd ' + U.spd + ')');
+  t.ok(IB.UNITS.grunt.spd > 0, 'where a mustered body does');
+  t.ok(U.bounty === 0, 'and is worth nothing to whoever kills it');
+  t.ok(IB.UNITS.grunt.bounty > 0, 'where a mustered body pays a bounty (' + IB.UNITS.grunt.bounty + ')');
+  t.ok(U.tdmg < IB.UNITS.grunt.tdmg / 2,
+    'it barely scratches a structure (' + U.tdmg + ' against a Levy’s ' + IB.UNITS.grunt.tdmg + ')');
+  t.ok(U.hp > IB.UNITS.melee.hp && U.armor > IB.UNITS.melee.armor,
+    'but outlasts a Footman, since it can neither chase nor retreat (' +
+    U.hp + 'hp/' + U.armor + ' against ' + IB.UNITS.melee.hp + '/' + IB.UNITS.melee.armor + ')');
+
+  // the constants, and that the wall spans the deck rather than stacking
+  const psrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const pk = psrc.match(/const PIKE = \{ n:(\d+), dur:(\d+), span:([\d.]+) \}/);
+  t.ok(!!pk, 'the Pikewall constants parsed (' + (pk ? pk.slice(1).join('/') : 'missing') + ')');
+  const N = pk ? +pk[1] : 0, DUR = pk ? +pk[2] : 0, SPAN = pk ? +pk[3] : 0;
+  t.ok(N >= 2, 'it plants ' + N + ' of them, so it is a line and not a body');
+  t.ok(SPAN * 2 < C.LANE_W, 'spanning ' + (SPAN * 2) + ' of a ' + C.LANE_W + '-wide deck — a wall, not a blockade');
+  t.ok(DUR > 0 && DUR < IB.SPELL.pike.cd,
+    'and it is gone (' + DUR + 's) long before the order comes back (' + P.cd + 's)');
+
+  /* Planting it: the bodies arrive where they were aimed, expire on their own,
+     and the order refuses rather than spending itself on nothing. */
+  IB.newMatch({ diff:'veteran', seed:9400 });
+  const s = IB.G.sides[0];
+  IB.chooseSpell(s, 0, 'pike'); IB.chooseSpell(s, 1, 'muster');
+  s.res.wood = 9000; s.res.iron = 9000;
+  const before = IB.G.units.filter(u => u.kind === 'pike').length;
+  t.ok(IB.castSpell(s, { slot:0, x:40 }) === null, 'a wall is accepted onto a point');
+  const mine = IB.G.units.filter(u => u.kind === 'pike');
+  t.ok(mine.length === before + N, 'and puts ' + N + ' bodies on the bridge');
+  t.ok(mine.every(u => Math.abs(u.x - 40) < 1e-6), 'all of them at the point it was given');
+  t.ok(mine.every(u => u.side === 0), 'and all of them yours');
+  t.ok(mine.every(u => u.life > 0), 'each carrying the clock that will remove it');
+  t.ok(new Set(mine.map(u => u.y)).size === N, 'spread across the deck rather than stacked');
+
+  // it holds the ground it was put on
+  const x0 = mine[0].x;
+  for (let i = 0; i < 60; i++) IB.update(1 / 30);
+  t.ok(mine.every(u => u.dead || Math.abs(u.x - x0) < .6),
+    'two seconds later it is still standing where it was planted');
+
+  // and it goes away on its own
+  for (let i = 0; i < 30 * (DUR + 1); i++) IB.update(1 / 30);
+  t.ok(IB.G.units.filter(u => u.kind === 'pike' && !u.dead).length === 0,
+    'and after ' + DUR + 's there is none of it left');
+
+  /* Lockstep. It is only the second order allowed to move the simulation's
+     stream, and the same seed must produce the same wall and the same hash. */
+  const run = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    const q = IB.G.sides[0];
+    IB.chooseSpell(q, 0, 'pike'); IB.chooseSpell(q, 1, 'muster');
+    q.res.wood = 9000; q.res.iron = 9000;
+    IB.castSpell(q, { slot:0, x:38 });
+    for (let i = 0; i < 90; i++) IB.update(1 / 30);
+    return { h:IB.netHash(), n:IB.G.units.filter(u => u.kind === 'pike').length };
+  };
+  const a = run(9401), b = run(9401);
+  t.ok(a.n === b.n && a.h === b.h,
+    'the same seed plants the same wall and agrees on the hash (' + a.h + ')');
+
+  // the body it plants survives a snapshot, clock and all
+  IB.newMatch({ diff:'veteran', seed:9402 });
+  const t2 = IB.G.sides[0];
+  IB.chooseSpell(t2, 0, 'pike'); IB.chooseSpell(t2, 1, 'muster');
+  t2.res.wood = 9000; t2.res.iron = 9000;
+  IB.castSpell(t2, { slot:0, x:36 });
+  const snap = JSON.stringify(IB.netSnap());
+  t.ok(snap.includes('"pike"'), 'a planted body is in the snapshot');
+  t.ok(snap.includes('"life"'), 'with the clock that removes it');
 }
 
 t.done();
