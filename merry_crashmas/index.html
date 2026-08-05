@@ -360,6 +360,49 @@ const LEVELS = [
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
   { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.35, par:0.22, theme:'eve', shape:'chevron',
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
+
+  /* ---- markets 7 to 21: each one designed around a single idea ---------- */
+  { name:'THE ICE RINK',         seed:7301, cars:4, rows:3, span:0.86, crowd:1.05, par:0.24, theme:'nordic', shape:'rows',
+    feature:['rink'],
+    flavour:'A sheet of ice in the middle of it. Once you are on it, you are a passenger.' },
+  { name:'THE GAUNTLET',         seed:7714, cars:4, rows:3, span:0.90, crowd:1.10, par:0.12, theme:'night', shape:'rows',
+    feature:['chicane'],
+    flavour:'Nutcrackers in the way of every straight line. Find the angle.' },
+  { name:'CAROUSEL SQUARE',      seed:8120, cars:4, rows:3, span:0.88, crowd:1.20, par:0.26, theme:'alpine', shape:'plaza',
+    flavour:'The whole market rings the square. The carousel is the prize in the middle.' },
+  { name:'THE PARADE',           seed:8533, cars:4, rows:3, span:0.92, crowd:1.05, par:0.38, theme:'dusk', shape:'rows',
+    feature:['parade'],
+    flavour:'A column of carollers marching across your line. Time it.' },
+  { name:'NARROW ALLEYS',        seed:8946, cars:5, rows:5, span:0.84, crowd:1.10, par:0.33, theme:'night', shape:'rows',
+    flavour:'Five rows, no room. You will be bouncing between the stalls the whole way.' },
+  { name:'THE LONG BOULEVARD',   seed:9352, cars:3, rows:2, span:1.00, crowd:1.30, par:0.13, theme:'dusk', shape:'rows',
+    flavour:'One aisle, end to end. Nothing to hit but people, if you keep it straight.' },
+  { name:'FROZEN LAKE',          seed:9765, cars:4, rows:2, span:0.94, crowd:1.00, par:0.24, theme:'blizzard', shape:'wave',
+    feature:['rink', 'ramps'],
+    flavour:'Ice, snowbanks, and a market that made the wrong choice of venue.' },
+  { name:'BONFIRE NIGHT',        seed:10178, cars:4, rows:3, span:0.90, crowd:1.15, par:0.21, theme:'night', shape:'wave',
+    flavour:'Glühwein on every corner. Break one and the spill does the rest.' },
+  { name:'THE CHOIR',            seed:10591, cars:4, rows:3, span:0.92, crowd:1.05, par:0.22, theme:'nordic', shape:'funnel',
+    feature:['choir'],
+    flavour:'Sixty of them on a stand, mid-verse, backs to the road.' },
+  { name:'ROOFTOPS',             seed:11004, cars:4, rows:4, span:0.94, crowd:1.15, par:0.22, theme:'alpine', shape:'chevron',
+    feature:['ramps'],
+    flavour:'Snowbanks everywhere. The fastest way down the market is over it.' },
+  { name:'THE CROSSROADS',       seed:11417, cars:5, rows:4, span:0.96, crowd:1.20, par:0.24, theme:'eve', shape:'spiral',
+    feature:['chicane'],
+    flavour:'Two markets crossing. Whichever way you go, something is in the way.' },
+  { name:'SANTA’S PARADE',  seed:11830, cars:5, rows:4, span:0.96, crowd:1.25, par:0.28, theme:'dusk', shape:'wave',
+    feature:['parade'],
+    flavour:'He is out front, walking. Everyone else is behind him.' },
+  { name:'THE SPIRAL',           seed:12243, cars:5, rows:4, span:0.98, crowd:1.20, par:0.24, theme:'nordic', shape:'spiral',
+    feature:['ramps'],
+    flavour:'Stalls wound around the tree. There is a line through it. Find it.' },
+  { name:'GRAND MARKET',         seed:12656, cars:5, rows:5, span:1.00, crowd:1.30, par:0.22, theme:'night', shape:'funnel',
+    feature:['choir', 'chicane'],
+    flavour:'Everything the town owns, in one place, on the busiest night of the year.' },
+  { name:'MIDNIGHT MASS',        seed:13069, cars:6, rows:5, span:1.00, crowd:1.40, par:0.24, theme:'eve', shape:'chevron',
+    feature:['parade', 'choir', 'ramps'],
+    flavour:'The last one. Everyone in town is out, and the bells have just started.' },
 ];
 
 const COMBO_BANNERS = [
@@ -549,7 +592,7 @@ function addPerson(x, y, kind){
     walk: rr(24, 46) * d.walk, flee: d.flee, voice: d.voice * rr(0.92, 1.09),
     cryK: d.cry, pram: !!d.pram, pramT: d.pram ? 1 : 0,
     side: rnd() < 0.5 ? -1 : 1,
-    wt: rr(0, 2), panic: 0, cry: 0, dropped: 0, bob: rr(0, 6.28),
+    wt: rr(0, 2), panic: 0, cry: 0, dropped: 0, bob: rr(0, 6.28), march: null,
     dead: false, fly: 0, spin: 0, flat: 0, smear: 0,
     squash: 1, bleedT: 0, gib: 0,
     pts: d.pts,
@@ -586,6 +629,7 @@ function genMarket(lv){
     if (shape === 'wave') return cy + Math.sin(k * 6.4 + r) * rowH * 0.3;
     if (shape === 'funnel') return midY + (cy - midY) * (0.42 + k * 0.95);
     if (shape === 'chevron') return cy + (0.5 - Math.abs(k - 0.5)) * rowH * 0.7 * (r % 2 ? 1 : -1);
+    if (shape === 'spiral') return midY + (cy - midY) * (0.3 + k * 0.8) + Math.sin(k * 4 + r * 1.6) * rowH * 0.35;
     return cy;
   };
 
@@ -688,6 +732,76 @@ function genMarket(lv){
       // drawn broadside-on to the incoming car, so it collides that way too
       addProp('fence', x0 - rr(190, 320), y + rr(-40, 40),
         { w: PROPS.fence.h, h: PROPS.fence.w, r: PROPS.fence.w / 2 });
+    }
+  }
+
+  const feats = lv.feature || [];
+
+  /* An ice rink: a wide sheet of ice fenced off, with skaters on it. Whatever
+     you do on it, you are not steering out of it. */
+  if (feats.indexOf('rink') >= 0){
+    const rx = clamp(x0 + (x1 - x0) * 0.42, x0 + 420, x1 - 420);
+    const ry = midY + (rnd() < 0.5 ? -1 : 1) * rowH * 0.5;
+    const R = Math.min(470, rowH * 1.35);
+    ice.push({ x: rx, y: ry, r: R, seed: rnd() });
+    for (let i = 0; i < 26; i++){
+      const a = (i / 26) * Math.PI * 2;
+      if (Math.abs(Math.cos(a)) > 0.86) continue;          // gaps at both ends
+      addProp('fence', rx + Math.cos(a) * (R + 26), ry + Math.sin(a) * (R + 26),
+        { w: PROPS.fence.h, h: PROPS.fence.w, r: PROPS.fence.w / 2, rot: a });
+    }
+    for (let i = 0; i < Math.round(30 * lv.crowd); i++){
+      const a = rr(0, 6.283), d = R * Math.sqrt(rnd());
+      const sk = addPerson(rx + Math.cos(a) * d, ry + Math.sin(a) * d);
+      sk.walk *= 2.1;                                       // skaters keep moving
+      sk.march = { dx: Math.cos(a + 1.57), dy: Math.sin(a + 1.57) };
+    }
+  }
+
+  /* A parade: a column of shoppers marching across the market, still walking
+     while you line up your shot. */
+  if (feats.indexOf('parade') >= 0){
+    const px = clamp(x0 + (x1 - x0) * 0.6, x0 + 300, x1 - 300);
+    const dir = rnd() < 0.5 ? -1 : 1;
+    for (let i = 0; i < Math.round(34 * lv.crowd); i++){
+      const m = addPerson(px + rr(-70, 70) + (i % 5) * 26, yTop + (i / Math.round(34 * lv.crowd)) * (yBot - yTop));
+      m.march = { dx: 0, dy: dir };
+      m.walk = rr(52, 74);
+      m.hat = true;
+    }
+  }
+
+  /* A choir stand: a block of people packed shoulder to shoulder, railed in. */
+  if (feats.indexOf('choir') >= 0){
+    const cx2 = clamp(x0 + (x1 - x0) * 0.78, x0 + 300, x1 - 220);
+    const cy2 = midY + (rnd() < 0.5 ? -1 : 1) * rowH * 0.35;
+    for (let r2 = 0; r2 < 6; r2++){
+      for (let c2 = 0; c2 < 10; c2++){
+        addPerson(cx2 - 130 + c2 * 29, cy2 - 78 + r2 * 31);
+      }
+    }
+    for (let i = 0; i < 5; i++){
+      addProp('fence', cx2 - 160 + i * 80, cy2 + 116, {});
+    }
+  }
+
+  /* Bollard chicanes: indestructible, and placed to make the straight line the
+     wrong line. */
+  if (feats.indexOf('chicane') >= 0){
+    for (let i = 0; i < 5; i++){
+      const gx = x0 + (i + 0.5) * ((x1 - x0) / 5);
+      const gap = (i % 2 ? -1 : 1) * rowH * 0.55;
+      for (let j = -3; j <= 3; j++){
+        if (Math.abs(j) < 2) continue;
+        addProp('nutcracker', gx, midY + gap + j * 96, {});
+      }
+    }
+  }
+
+  /* Extra snowbanks, for the markets that want to be flown over. */
+  if (feats.indexOf('ramps') >= 0){
+    for (let i = 0; i < 5; i++){
+      addProp('ramp', rr(x0 - 200, x1 - 300), rr(yTop, yBot), {});
     }
   }
 
@@ -1194,7 +1308,12 @@ function stepPeople(dt){
     } else if (p.panic > 0){
       p.panic = Math.max(0, p.panic - dt * 0.7);
     }
-    if (p.panic <= 0.02){
+    if (p.panic <= 0.02 && p.march){
+      fx0 = p.march.dx; fy0 = p.march.dy;
+      spd = p.walk;
+      if (p.y < bounds.y0 + 40 || p.y > bounds.y1 - 40) p.march.dy *= -1;
+      if (p.x < bounds.x0 + 40 || p.x > bounds.x1 - 40) p.march.dx *= -1;
+    } else if (p.panic <= 0.02){
       p.wt -= dt;
       if (p.wt <= 0){ p.wt = rr(1.1, 3.6); p.tx = p.hx + rr(-95, 95); p.ty = p.hy + rr(-95, 95); }
       const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
