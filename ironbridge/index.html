@@ -7840,6 +7840,28 @@ const BAND_FX = BANDS.map(b => {
 // to a bright band at the horizon, where you are looking through the most of
 // it. These stops are that curve, sampled. The old two-stop version is why the
 // whole picture read as paper: nothing in it changed with distance.
+/* Paper, not photograph. A stop HOLDS its colour until the next one and then
+   jumps, so a gradient becomes a stack of flat strips in exactly the palette it
+   was already written in — the band edges are the authored offsets and the band
+   fills are the authored colours. Nothing is recoloured and nothing invented.
+
+   The epsilon is what makes a jump a jump: two stops at one offset is how a
+   canvas gradient is told to step, so each band ends a hair before the next
+   begins, clamped never to run behind where it started or two close stops could
+   cross and invert a band.
+
+   One function because there are two skies that need it — the dome and the
+   valley floor — and a banding rule that lived in both would eventually be two
+   different rules. */
+function bandStops(g, stops){
+  for (let i = 0; i < stops.length; i++){
+    const at = stops[i][0], col = stops[i][1];
+    g.addColorStop(at, col);
+    const next = stops[i + 1];
+    if (next) g.addColorStop(Math.max(at, next[0] - 1e-4), col);
+  }
+  return g;
+}
 const SKY_STOPS = [
   [0,    '#2f5f8a'],
   [.10,  '#3d6f96'],
@@ -7862,23 +7884,8 @@ function skyGrad(c){
   if (SKYG && SKYG_K === k && SKYG_C === c) return SKYG;
   SKYG_C = c;
   const g = c.createLinearGradient(0, 0, 0, LH);
-  /* BANDED, not blended. A world cut from card was sitting on a smooth
-     photographic sky, and the two were arguing: nothing else on screen has a
-     soft transition in it. Each authored stop now HOLDS its colour until the
-     next one and jumps, so the sky becomes nine flat strips of paper laid one
-     over another.
-     Every colour and every boundary is still exactly the one SKY_STOPS names —
-     the band edges are the stop offsets and the band fills are the stop
-     colours, so this repaints the same palette rather than inventing one. The
-     epsilon is what makes the jump a jump: a hair before the next offset,
-     because two stops at the SAME offset is how a gradient is told to step,
-     and a hair is the smallest step this can be without the seam softening. */
-  for (let i = 0; i < SKY_STOPS.length; i++){
-    const [at, col] = SKY_STOPS[i];
-    g.addColorStop(at, col);
-    const next = SKY_STOPS[i + 1];
-    if (next) g.addColorStop(Math.max(at, next[0] - 1e-4), col);
-  }
+  // Nine flat strips rather than one long ramp — see bandStops.
+  bandStops(g, SKY_STOPS);
   SKYG = g; SKYG_K = k;
   return g;
 }
@@ -8006,13 +8013,17 @@ function skyWash(c, w, h){
 // The valley floor, and how far down it goes. Its own plate because it is
 // half the screen of gradient and never changes; the mist strata that drift
 // over it stay live, being thin and being the part that moves.
+const FLOOR_STOPS = [
+  [0,   'rgba(58,84,72,0)'],
+  [.13, 'rgba(44,66,57,.70)'],
+  [.28, 'rgba(30,48,44,.90)'],
+  [.6,  'rgba(20,34,32,.94)'],
+  [1,   '#0c1414'],
+];
 function skyFloor(c, w, h){
-  const vg = c.createLinearGradient(0, 0, 0, h);
-  vg.addColorStop(0, 'rgba(58,84,72,0)');
-  vg.addColorStop(.13, 'rgba(44,66,57,.70)');
-  vg.addColorStop(.28, 'rgba(30,48,44,.90)');
-  vg.addColorStop(.6, 'rgba(20,34,32,.94)');
-  vg.addColorStop(1, '#0c1414');
+  // The last blended thing in the world, banded like the dome above it. It
+  // costs nothing extra to do: this is a plate, painted once.
+  const vg = bandStops(c.createLinearGradient(0, 0, 0, h), FLOOR_STOPS);
   c.fillStyle = vg; c.fillRect(0, 0, w, h);
 }
 // Everything in the sky that SCROLLS. Cached plates cannot help here — the
@@ -9367,12 +9378,32 @@ const GORGE_WALLS = [
   { p:.49, y:.440, amp:26, step:187, top:'#222e39', bot:'#17222b', rim:'#4d5c63' },
   { p:.66, y:.560, amp:24, step:126, top:'#151f29', bot:'#0c141b', rim:'#3a4852' },
 ];
+/* How a wall is cut into flats, top to bottom. `at` is where a stratum starts
+   as a fraction of the drop to the wall below it; `of` which of that wall's two
+   tones it is made from, and `v` what shade() does to it — null meaning the
+   tone untouched, so the table above still says what colour its own rock is. */
+const STRATA = [
+  { at:0,   of:'top', v:1.12 },   // the ledge, which is what the sun reaches
+  { at:.10, of:'top', v:.66 },    // the riser under it, which it does not
+  { at:.30, of:'top', v:null },   // the terrace
+  { at:.62, of:'bot', v:null },   // and the shelf running into the dark
+];
+const strataCol = (w, st) => st.v === null ? w[st.of] : shade(w[st.of], st.v);
 // The wall on YOUR side of the gap, rising into the bottom of the frame. It is
 // the closest rock in the picture and it is looking away from the sun, so it
 // is the darkest thing on screen — which is exactly what gives the five
 // layers above it somewhere to recede to.
 const GORGE_NEAR = { p:1.0, y:.845, amp:34, step:255, top:'#0b1119', bot:'#04070b' };
 const RIVER = { y:.705, h:.020, p:.78 };
+// The reach itself, top to bottom: the shadowed near lip, the two bands with
+// the sky in them, and the far lip going back under the rock.
+const RIVER_STOPS = [
+  [0,   '#131d26'],
+  [.30, '#3d5f68'],
+  [.52, '#4a6f75'],
+  [.78, '#26414d'],
+  [1,   '#101923'],
+];
 
 // One wall lip, walked left to right: a ledge, the flat run of it, and the
 // riser off the end. `floor` closes the shape down to the bottom of the canvas;
@@ -9472,6 +9503,11 @@ function drawChasm(c){
   crestPath(c, rimY + 9 * zw, 17 * zw, 186 * zw, -cam.x * S * .09, 41,
     y(GORGE_WALLS[0].y) + GORGE_WALLS[0].amp * 2.4 * zw);
   c.fillStyle = vg; c.fill();
+  // This one keeps its ramp while the rock below it loses every gradient it
+  // had. The void is the empty BEHIND everything and there is no profile here
+  // for a flat to follow, so cutting it into bands would draw straight lines
+  // across the full width of the canvas — which is the shoreline the note above
+  // is about, arriving through the other door.
 
   // five walls stepping down and back
   for (let i = 0; i < GORGE_WALLS.length; i++){
@@ -9484,31 +9520,38 @@ function drawChasm(c){
     // five times the fill rate for one layer's worth of visible pixels.
     const floorY = next + (i + 1 < GORGE_WALLS.length ? GORGE_WALLS[i + 1].amp : GORGE_NEAR.amp) * 2.4 * zw;
     crestPath(c, wy, amp, step, off, i * 3 + 1, floorY);
-    // A ledge is three things going down: the lip in full light, the riser
-    // under it that the sun cannot reach, and the terrace below that. Fill the
-    // whole layer with that sequence and the wall has shelves in it; fill it
-    // with one ramp, as the first pass did, and it has none.
-    const g = c.createLinearGradient(0, wy - amp, 0, next + amp);
-    g.addColorStop(0, shade(w.top, 1.1));
-    g.addColorStop(.14, shade(w.top, .60));
-    g.addColorStop(.42, w.top);
-    g.addColorStop(1, w.bot);
-    c.fillStyle = g; c.fill();
-    // the spurs and gullies down its face
+    /* A ledge is four things going down — the lip in full light, the riser
+       under it the sun cannot reach, the terrace below that, and the shelf
+       running into the dark — and that sequence used to be ONE VERTICAL
+       GRADIENT with two bedding planes stroked across it.
+
+       Counted against the rest of the frame, the gorge was 2.3 screens of
+       gradient fill, the largest airbrush in this world after the god rays and
+       the only one made of rock. Banding it the way the sky dome and the valley
+       floor are banded is the obvious repair and it is the wrong one: a colour
+       stop is a straight line across the whole canvas, and a ruler laid over a
+       jagged rock face is the shoreline mistake again.
+
+       So the flats are cut from the ROCK'S OWN PROFILE. Each is a crestPath
+       closed to the foot of the layer and laid over the one above it, at its
+       own amplitude and its own step, so every boundary wanders the way the
+       ledges do and no two of them wander together. The old bedding-plane
+       strokes are gone with the ramp: a stratum has an EDGE now, and a drawn
+       line on top of an edge is the thing paper does not have. */
+    const gap = next - wy;
+    for (let k = 0; k < STRATA.length; k++){
+      const st = STRATA[k];
+      // k=0 reuses the silhouette that was just laid down
+      if (k) crestPath(c, wy + gap * st.at, amp * (.88 - k * .07), step * (1 + k * .10),
+        off, i * 3 + 1, floorY);
+      c.fillStyle = strataCol(w, st); c.fill();
+    }
+    // the spurs and gullies down its face, over the flats rather than under
+    // them — a buttress stands in front of the strata it is cut out of.
     // Only the layers you can still see the rock on: by the fourth the wall is
     // two shades off black and the ribs cost fill rate to say nothing.
     if (i < 3) crestRibs(c, wy, amp, step * .84, off, i * 3 + 1, (next - wy) * 1.1,
       shade(w.top, 1.30), shade(w.bot, .48), .32 - i * .02);
-    // bedding planes: the same profile, a little lower each time, which is what
-    // makes the rock read as layered rather than as a cut-out
-    const gap = next - wy;
-    for (let k = 1; k <= 2; k++){
-      c.globalAlpha = (k % 2 ? .22 : .28) * (1 - i * .13);
-      crestPath(c, wy + gap * (k / 2.6), amp * .8, step * 1.15, off, i * 3 + 1, null);
-      c.strokeStyle = k % 2 ? shade(w.top, 1.28) : shade(w.bot, .55);
-      c.lineWidth = Math.max(1, (k % 2 ? 1.4 : 2.2) * zw);
-      c.stroke();
-    }
     c.globalAlpha = .34 - i * .04;
     crestRim(c, wy, amp, step, off, i * 3 + 1, w.rim, Math.max(1, 1.9 * zw));
     c.globalAlpha = 1;
@@ -9518,10 +9561,16 @@ function drawChasm(c){
   // light left in it, which is what tells you how far down "down" is.
   const ry = y(RIVER.y), rh = Math.max(3, H * RIVER.h);
   const roff = -cam.x * S * RIVER.p;
-  const rg = c.createLinearGradient(0, ry - rh * 1.6, 0, ry + rh * 1.6);
-  rg.addColorStop(0, '#131d26'); rg.addColorStop(.30, '#3d5f68');
-  rg.addColorStop(.52, '#4a6f75'); rg.addColorStop(.78, '#26414d');
-  rg.addColorStop(1, '#101923');
+  /* Banded, like the sky dome and the valley floor. With the walls cut into
+     flats the river was the last vertical RAMP in the gorge, and it measured
+     like one: eighteen consecutive rows each stepping in over ninety per cent
+     of columns, which is what a full-width airbrush looks like from below.
+
+     Water gets away with the straight edges a wall could not. A reach seen from
+     a thousand feet up IS a horizontal strip, and every one of these bands ends
+     on rock rather than running off into sky, so there is no horizon here for a
+     flat to imply. */
+  const rg = bandStops(c.createLinearGradient(0, ry - rh * 1.6, 0, ry + rh * 1.6), RIVER_STOPS);
   c.fillStyle = rg; c.fillRect(0, ry - rh * 1.6, LW, rh * 3.2);
   // Current: pale streaks sliding downstream, slowly, because it is far away.
   // Kept soft — at full strength this came out as a neon strip laid across the
@@ -9592,20 +9641,29 @@ function drawChasm(c){
 
   // Depth haze over the lot, thickening downward, so the floor of the canyon
   // is genuinely further away than the rim and not merely darker.
-  const hz = c.createLinearGradient(0, rimY, 0, y(.52));
+  // It still thickens downward — but it now ENDS at nothing instead of ending
+  // at twelve per cent, which is a straight line across the full width of the
+  // canvas laid over the one thing in the picture with no straight lines in it.
+  // Air is allowed to stay smooth here, the same way the fog on the mountains
+  // does; what it is not allowed to do is stop.
+  const hz = c.createLinearGradient(0, rimY, 0, y(.60));
   hz.addColorStop(0, 'rgba(140,170,172,.10)');
-  hz.addColorStop(.5, 'rgba(108,142,152,.05)');
-  hz.addColorStop(1, 'rgba(70,98,112,.12)');
-  c.fillStyle = hz; c.fillRect(0, rimY, LW, y(.52) - rimY);
+  hz.addColorStop(.42, 'rgba(108,142,152,.05)');
+  hz.addColorStop(.80, 'rgba(70,98,112,.12)');
+  hz.addColorStop(1, 'rgba(70,98,112,0)');
+  c.fillStyle = hz; c.fillRect(0, rimY, LW, y(.60) - rimY);
 
   // and the near wall, closing the frame off at the bottom
   {
     const ny = y(GORGE_NEAR.y), amp = GORGE_NEAR.amp * zw, step = GORGE_NEAR.step * zw;
     const off = -cam.x * S * GORGE_NEAR.p;
+    // Two flats on the same rule as the five above it. This one gets a pair
+    // rather than four: it is the darkest rock on screen and its two tones are
+    // seven values apart, so a four-step cut here would be four blacks.
     crestPath(c, ny, amp, step, off, 29, LH + 40);
-    const g = c.createLinearGradient(0, ny - amp, 0, LH);
-    g.addColorStop(0, GORGE_NEAR.top); g.addColorStop(1, GORGE_NEAR.bot);
-    c.fillStyle = g; c.fill();
+    c.fillStyle = GORGE_NEAR.top; c.fill();
+    crestPath(c, ny + (LH - ny) * .34, amp * .72, step * 1.2, off, 29, LH + 40);
+    c.fillStyle = GORGE_NEAR.bot; c.fill();
     c.globalAlpha = .22;
     crestRim(c, ny, amp, step, off, 29, '#5d757a', Math.max(1, 2.4 * zw));
     c.globalAlpha = 1;
@@ -19025,6 +19083,38 @@ function resolvePick(sx, sy){
 }
 const s0Plot = (t) => me().plot[t];
 
+/* What separates a tap from a pan.
+
+   The gate was `|dx| + |dy| > 5`, and a Manhattan sum is not a distance: along
+   an axis it gives the five pixels it claims, but on the diagonal three and
+   three score six and the press is thrown away. Measured on a real browser, a
+   tap survived TWO pixels of drift before the selection was discarded — at
+   1440x900 and at 390x844 alike.
+
+   And `moved` latched. Once tripped it was never cleared, so a press that
+   wandered and settled back exactly where it started was still read as a pan,
+   which is the shape of every real tap: out a little, and back.
+
+   So: a radius rather than a sum, and a different one per input, because a
+   mouse is resting on a desk and a thumb is not. Panning still begins the
+   moment the radius is crossed — that has to latch or the camera stutters
+   mid-drag — but whether the release SELECTS is judged on where the pointer
+   ENDED, not on the worst place it ever passed through. A wobble that comes
+   home is a tap. A sweep out and back is not, because you meant to go and
+   look at something, and TAP_RETURN is where the difference is drawn. */
+/* A trackpad reports itself as a mouse and drifts like a thumb — tap-to-click
+   has no button to brace against — so the pointer one is not the five a mouse
+   button would want. Nobody pans deliberately by eight pixels; panning is a
+   sweep. The cost of being generous here is selecting when you meant to nudge
+   the camera, and the cost of being mean is what this whole note is about. */
+const DRAG_SLOP = { mouse:8, pen:8, touch:12 };
+const dragSlop = (type) => DRAG_SLOP[type] || DRAG_SLOP.mouse;
+const TAP_RETURN = 3;          // how many slops a tap may wander and still count
+// Pure, and split out of the handler for the reason resolvePick is: a test can
+// then ask it the question a thumb asks, without a browser to ask it in.
+const isTap = (dx, dy, far, slop) =>
+  hyp(dx, dy) <= slop && far <= slop * TAP_RETURN;
+
 function pickAt(clientX, clientY){
   const r = lcv.getBoundingClientRect();
   const sx = clientX - r.left, sy = clientY - r.top;
@@ -19323,7 +19413,9 @@ function wire(){
   let drag = null;
   lcv.addEventListener('pointerdown', (e) => {
     if (spellUI.aim) aimAt(e.clientX, e.clientY);
-    drag = { x:e.clientX, y:e.clientY, cx:cam.x, moved:false };
+    // `far` is the farthest this press ever got from where it started, which is
+    // the only thing a release cannot work out for itself. See isTap.
+    drag = { x:e.clientX, y:e.clientY, cx:cam.x, moved:false, far:0, slop:dragSlop(e.pointerType) };
     lcv.setPointerCapture(e.pointerId);
   });
   /* While an order is armed the world does not pan: a drag AIMS it.
@@ -19340,7 +19432,9 @@ function wire(){
     if (spellUI.aim){ aimAt(e.clientX, e.clientY); return; }
     if (!drag) return;
     const dx = (e.clientX - drag.x) / (LS() * .96);
-    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 5){
+    const d = hyp(e.clientX - drag.x, e.clientY - drag.y);
+    if (d > drag.far) drag.far = d;
+    if (d > drag.slop){
       drag.moved = true; cam.follow = false; $('camFollow').classList.remove('on');
     }
     if (drag.moved) cam.x = clamp(drag.cx - dx, CAM_MIN, CAM_MAX);
@@ -19349,7 +19443,10 @@ function wire(){
     // A slide that ends on the target is a placement, not a discarded pan, so
     // the `moved` gate that protects ordinary selection does not apply here.
     if (spellUI.aim){ aimAt(e.clientX, e.clientY); pickAt(e.clientX, e.clientY); drag = null; return; }
-    if (drag && !drag.moved) pickAt(e.clientX, e.clientY);
+    // Not `!drag.moved`: a press that crossed the slop and came home is a tap
+    // whose finger shook, and the camera it panned came home with it.
+    if (drag && isTap(e.clientX - drag.x, e.clientY - drag.y, drag.far, drag.slop))
+      pickAt(e.clientX, e.clientY);
     drag = null;
   });
   lcv.addEventListener('pointercancel', () => { drag = null; });
@@ -20387,11 +20484,11 @@ window.IB = {
   passiveWorth, PASSIVE_W, CLASS_KEY_BOOST,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
-  resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
+  resolvePick, clickTargets, DRAG_SLOP, dragSlop, TAP_RETURN, isTap, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   EDGE, edgeFor, edgeCache, edgeRing, edgeOnScreen, vnoise, fbm1, SWARD, swardAt, DECAL, decalWash, decalAlpha,
   decalTint, washFor, composite, hueRot, rgbOf, hexOf, rgbStr, decalPass, DECAL_LOBES, relLum, GROUND_SHADE, groundShadow, mixHex,
-  drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
+  drawPiers, drawChasm, gorgeDepth, spires, GORGE, GORGE_WALLS, GORGE_NEAR, STRATA, strataCol, crestPath, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, PLOT_FADE, plotFade, plotDetail, TRAINEE, trainCrew, trainSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
@@ -20413,7 +20510,7 @@ window.IB = {
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
-  CUT, SKY_STOPS, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  CUT, SKY_STOPS, FLOOR_STOPS, RIVER_STOPS, bandStops, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, aiDraftLate, musterDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,

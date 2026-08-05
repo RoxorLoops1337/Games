@@ -1677,6 +1677,76 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.resolvePick(-500, -500).kind === 'none', 'clicking empty sky selects nothing');
 }
 
+/* ------------------------------------------- a press that is not quite still
+
+   Reported as "it is not easy to select things, like buildings or building
+   plots". Everything about WHERE you press turned out to be fine — a sweep of
+   every pixel of the viewport found no unreachable clickable, no DOM overlay
+   eating the pointer, and footprints around 50x50 on a desktop. The failure was
+   in whether a press counted as a click at all.
+
+   The gate read `|dx| + |dy| > 5`. A Manhattan sum is not a distance: along an
+   axis it gives the five pixels it claims, but on the diagonal three and three
+   score six. Driven in a real browser, a tap survived TWO pixels of drift.
+
+   And it latched — `moved` was never cleared — so a press that wandered and
+   came back exactly where it started was still thrown away as a pan. That is
+   the shape of every real tap.
+
+   These hold the shape of the rule, not the numbers in it: the gate is a
+   radius, it is not the same for a thumb as for a mouse, and where a press
+   ENDS is what decides. */
+{
+  const slop = IB.dragSlop('mouse');
+
+  /* Direction independence is the bug itself. A displacement of the same
+     LENGTH must be judged the same whichever way it points — under the old sum
+     the diagonal was penalised by root two and nothing else was. */
+  const r = slop * .8;
+  const diag = r / Math.SQRT2;
+  t.ok(IB.isTap(r, 0, r, slop), 'a drift straight along an axis, inside the slop, is a tap');
+  t.ok(IB.isTap(diag, diag, r, slop), 'and the same distance on the diagonal is the same answer');
+  const R = slop * 1.4, D = R / Math.SQRT2;
+  t.ok(!IB.isTap(R, 0, R, slop), 'past the slop it is a pan, along an axis');
+  t.ok(!IB.isTap(D, D, R, slop), 'and past the slop on the diagonal too');
+
+  /* The regression, stated as the case that used to fail: three pixels each
+     way scored six against a gate of five and the selection was discarded. */
+  t.ok(IB.isTap(3, 3, IB.hyp(3, 3), slop),
+    'three pixels of diagonal wobble still selects — it used to score 6 against a gate of 5');
+
+  /* Coming home. `far` is the farthest the press ever got; a wobble that
+     returns is a tap, and a deliberate sweep out and back is not, because you
+     went somewhere to look at it. */
+  t.ok(IB.isTap(0, 0, slop * 2, slop), 'a press that wandered past the slop and came home is a tap');
+  t.ok(IB.isTap(0, 0, slop * IB.TAP_RETURN, slop), 'as far out as TAP_RETURN allows');
+  t.ok(!IB.isTap(0, 0, slop * IB.TAP_RETURN + 1, slop),
+    'but a sweep further than that is a pan, however it ends');
+  t.ok(!IB.isTap(200, 0, 200, slop), 'and an ordinary drag across the map is never a tap');
+
+  /* Per input. A thumb is not braced against anything and a trackpad reports
+     itself as a mouse, so neither number is the other's. */
+  t.ok(IB.dragSlop('touch') > IB.dragSlop('mouse'),
+    'a thumb is allowed more drift than a mouse (' + IB.dragSlop('touch') + ' vs ' + IB.dragSlop('mouse') + ')');
+  t.ok(IB.dragSlop('pen') > 0, 'a pen has its own number');
+  /* An unknown pointerType must fall back to a real number. Reading a missing
+     key straight out of the table would give undefined, and every comparison
+     against it is false — which silently turns every press into a pan. */
+  for (const bad of [undefined, '', 'wand', null])
+    t.ok(IB.dragSlop(bad) === IB.DRAG_SLOP.mouse,
+      'an unrecognised pointer (' + String(bad) + ') falls back to the mouse slop, not to undefined');
+
+  /* And the handler actually uses it. The rule being right in a pure function
+     is worth nothing if pointerup still asks the old question. */
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  t.ok(!/Math\.abs\(e\.clientX - drag\.x\) \+ Math\.abs\(e\.clientY - drag\.y\)/.test(src),
+    'no handler adds the two axes together any more');
+  t.ok(/isTap\(e\.clientX - drag\.x, e\.clientY - drag\.y, drag\.far, drag\.slop\)/.test(src),
+    'pointerup asks isTap where it used to ask !drag.moved');
+  t.ok(/drag\.slop = |slop:dragSlop\(e\.pointerType\)/.test(src),
+    'and the slop is chosen from the pointer that started the press');
+}
+
 /* ------------------------------------------------- inspecting the bridge */
 {
   // Everything standing out on the lane is a question the player can ask:
@@ -20476,14 +20546,31 @@ t.ok(true, 'a final draw on a live match is clean');
    the same colours rather than inventing new ones. */
 {
   const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  const grad = src.slice(src.indexOf('function skyGrad'),
-    src.indexOf('\n}', src.indexOf('function skyGrad')));
+  /* The banding rule moved out of skyGrad into bandStops when the valley floor
+     needed it too — one rule for both skies, rather than two that drift. */
+  const grad = src.slice(src.indexOf('function bandStops'),
+    src.indexOf('\n}', src.indexOf('function bandStops')));
 
   t.ok(/addColorStop\(at, col\)/.test(grad), 'each stop is laid down at its own offset');
   t.ok(/next\[0\] - 1e-4/.test(grad),
     'and held until a hair before the next, which is how a gradient is told to step');
   t.ok(/Math\.max\(at,/.test(grad),
     'never behind the offset it started at, so two close stops cannot cross over');
+  t.ok(/bandStops\(g, SKY_STOPS\)/.test(src), 'the dome uses it');
+  t.ok(/bandStops\(c\.createLinearGradient\(0, 0, 0, h\), FLOOR_STOPS\)/.test(src),
+    'and so does the valley floor, which was the last blended thing in the world');
+
+  /* The floor's own stops get the same checks the dome's do — same shape of
+     table, same rules, so a change to one cannot quietly break the other. */
+  t.ok(IB.FLOOR_STOPS.length >= 4, 'the valley floor is built from ' + IB.FLOOR_STOPS.length + ' bands');
+  t.ok(IB.FLOOR_STOPS[0][0] === 0 && IB.FLOOR_STOPS[IB.FLOOR_STOPS.length - 1][0] === 1,
+    'running the full depth of it');
+  let fRising = true;
+  for (let i = 1; i < IB.FLOOR_STOPS.length; i++)
+    if (IB.FLOOR_STOPS[i][0] <= IB.FLOOR_STOPS[i - 1][0]) fRising = false;
+  t.ok(fRising, 'its offsets only ever go down');
+  t.ok(IB.FLOOR_STOPS[0][1].includes(',0)'),
+    'and it starts fully clear, so the gorge fades in rather than beginning on a line');
 
   /* The stops themselves are unchanged, and that is the point — banding is a
      way of drawing this palette, not a different palette. */
@@ -20499,6 +20586,105 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(rising, 'the offsets only ever go down the screen');
   t.ok(IB.SKY_STOPS.every(s => /^#[0-9a-f]{6}$/i.test(s[1])),
     'and every band is a flat colour a canvas can read');
+}
+
+/* ================== the gorge is stacked paper too
+
+   With the sky banded and every shape carrying a cut edge, a census of the
+   frame put the gorge second only to the god rays: 2.3 screens of gradient
+   fill, and the only one of them made of rock rather than of light. Each of the
+   six walls was one vertical ramp with two bedding planes stroked across it.
+
+   The repair is NOT the sky's repair. A colour stop is a straight line across
+   the whole canvas, and this file already records what a straight line across
+   the gorge reads as — a shoreline. So the flats are cut from the rock's own
+   profile instead: a crestPath per stratum, closed to the foot of its layer and
+   laid over the one above it.
+
+   What is held here is the SYSTEM, not the taste: that no wall is painted with
+   a gradient any more, that the strata are ordered and come from the tones the
+   wall table already declares, and that the two gradients left in the gorge are
+   the ones with an argument for staying. */
+{
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const chasm = src.slice(src.indexOf('function drawChasm'),
+    src.indexOf('\nfunction ', src.indexOf('function drawChasm') + 10));
+
+  /* The table. Four flats, top to bottom, each naming which of the wall's own
+     two tones it is cut from — so a change to GORGE_WALLS still reaches the
+     rock rather than being overridden by a colour written out here. */
+  t.ok(IB.STRATA.length >= 3, 'a wall is cut into ' + IB.STRATA.length + ' flats');
+  t.ok(IB.STRATA[0].at === 0, 'the first starts at the lip');
+  let sRising = true, sTone = true;
+  for (let i = 0; i < IB.STRATA.length; i++){
+    if (i && IB.STRATA[i].at <= IB.STRATA[i - 1].at) sRising = false;
+    if (IB.STRATA[i].at >= 1) sRising = false;
+    if (IB.STRATA[i].of !== 'top' && IB.STRATA[i].of !== 'bot') sTone = false;
+  }
+  t.ok(sRising, 'and each one starts below the last, all of them inside the layer');
+  t.ok(sTone, 'every flat is cut from a tone the wall table already declares');
+  t.ok(IB.STRATA[IB.STRATA.length - 1].of === 'bot',
+    'the deepest is the wall\'s own bot, so the foot of the rock is still that colour');
+
+  /* strataCol is where the table becomes a colour, and it is the piece a test
+     can hold without a canvas: every wall must produce as many DISTINCT flats
+     as the table has entries, or two strata are the same paper and the cut
+     between them is invisible. */
+  let distinct = true, lastDark = true;
+  for (const w of IB.GORGE_WALLS){
+    const cols = IB.STRATA.map(st => IB.strataCol(w, st));
+    if (new Set(cols).size !== IB.STRATA.length) distinct = false;
+    if (cols[cols.length - 1] !== w.bot) lastDark = false;
+  }
+  t.ok(distinct, 'no wall cuts two strata out of the same colour');
+  t.ok(lastDark, 'and the bottom flat of every wall is that wall\'s bot, untouched');
+
+  /* The bug, stated as the thing that was true and now must not be: a wall was
+     a gradient. The recorder keeps what each gradient was BUILT from, so this
+     asks how many gradients drawChasm makes at all — and names them. */
+  const st = CTX.__stats;
+  st.grads = []; st.fills = []; st.fillsDropped = 0;
+  IB.drawChasm(CTX);
+  const grads = st.grads.length;
+  t.ok(grads > 0, 'drawChasm still draws (' + grads + ' gradients, ' + st.fills.length + ' fills)');
+  /* Four left, and each has a reason. The void is the empty BEHIND everything
+     and has no profile for a flat to follow. The depth haze and the mist on the
+     water are AIR, which this world lets stay smooth wherever it lies over rock
+     — the same licence the fog on the mountains has. The river is banded, so it
+     is a gradient that draws flats. Ten before, of which six were the walls. */
+  t.ok(grads <= 4, 'and makes at most four of them, down from ten (' + grads + ')');
+  t.ok(!/createLinearGradient\(0, wy/.test(chasm),
+    'no wall builds a ramp down its own face any more');
+  t.ok(!/createLinearGradient\(0, ny/.test(chasm),
+    'and neither does the near wall');
+  t.ok(/for \(let k = 0; k < STRATA\.length; k\+\+\)/.test(chasm),
+    'each wall walks the strata table instead');
+  t.ok(/crestPath\(c, wy \+ gap \* st\.at/.test(chasm),
+    'and every flat is cut on a crest profile, so its edge wanders like the ledges');
+  t.ok(!/c\.stroke\(\);/.test(chasm.slice(chasm.indexOf('STRATA.length'),
+    chasm.indexOf('crestRibs'))),
+    'with no line drawn over the edge it just cut');
+
+  /* The depth haze ends at nothing. It used to stop at twelve per cent, which
+     is a rect edge — a ruler across the full width of the one thing in the
+     picture that has no straight lines in it. */
+  const haze = chasm.slice(chasm.indexOf('const hz = '), chasm.indexOf('const hz = ') + 400);
+  t.ok(/addColorStop\(1, 'rgba\([\d,]+,0\)'\)/.test(haze),
+    'the depth haze fades out at its own bottom edge instead of stopping on a line');
+
+  /* And the river, which measured as eighteen consecutive rows each stepping in
+     over ninety per cent of columns — the last vertical ramp in the gorge. */
+  t.ok(/bandStops\(c\.createLinearGradient\(0, ry - rh \* 1\.6, 0, ry \+ rh \* 1\.6\), RIVER_STOPS\)/.test(chasm),
+    'the river is banded on the same rule as the sky dome and the valley floor');
+  t.ok(IB.RIVER_STOPS.length >= 4, 'out of ' + IB.RIVER_STOPS.length + ' colours');
+  t.ok(IB.RIVER_STOPS[0][0] === 0 && IB.RIVER_STOPS[IB.RIVER_STOPS.length - 1][0] === 1,
+    'running the full depth of the reach');
+  let rRising = true;
+  for (let i = 1; i < IB.RIVER_STOPS.length; i++)
+    if (IB.RIVER_STOPS[i][0] <= IB.RIVER_STOPS[i - 1][0]) rRising = false;
+  t.ok(rRising, 'its offsets only ever go down');
+  t.ok(IB.RIVER_STOPS.every(s => /^#[0-9a-f]{6}$/i.test(s[1])),
+    'and every band of it is a flat colour');
 }
 
 t.done();
