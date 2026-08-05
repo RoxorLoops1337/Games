@@ -8,7 +8,7 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
-## CURRENT PHASE: B — three critics
+## CURRENT PHASE: D — execute the plan
 
 The owner asked for 15 more levels, designed rather than generated, and then a
 critique cycle. Work the phases in order; when a phase's exit condition is met,
@@ -18,17 +18,15 @@ edit this block to name the next one.
   its own idea, new set pieces (ice rink, parade, choir stand, bollard chicanes,
   extra snowbanks) and a spiral layout. All beatable blind, targets tuned to
   ~0.8× the median blind run.
-- **B — three critics.** Three critic agents are running over the shipped game
-  (design, feel/juice, code+performance), writing to
-  `.polish/crashmas-critique-{design,feel,code}.md`. Exit: all three on disk.
-  **While fewer than three exist, do nothing else** — do not edit the game, the
-  critics are reading it and their line references would go stale. Just check
-  again next pass. `ls .polish/crashmas-critique-*.md | wc -l` should read 3.
-- **C — synthesis.** One agent reads all three reports and writes a prioritised
-  plan to `.polish/crashmas-plan.md` — concrete, ordered, each item small enough
-  to ship in one pass. Exit: the plan exists and is listed below.
-- **D — execute the plan.** Work it top to bottom, one item per pass, same
-  standards as everything else. Exit: every item ticked.
+- [x] **B — three critics.** Done: design, feel and code critiques on disk under
+  `.polish/`. Between them: no persisted progress, goals that are arithmetically
+  impossible, a camera that loses the car at speed, portrait unplayable, and a
+  market that scored itself between runs.
+- [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
+  with five critic conflicts resolved and six proposals cut.
+- **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
+  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–3 are
+  done. **Next: item 4** (persist stars, level select). Exit: all 19 ticked.
 - **E — three more critics, then back to C.** Repeat the cycle.
 
 ## Working agreement for each pass
