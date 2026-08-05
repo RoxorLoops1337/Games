@@ -37,6 +37,13 @@
   .btn.alt{ color:#dce8fb; background:linear-gradient(180deg,#33507d,#213a5c); box-shadow:0 5px 0 #142640, 0 10px 22px rgba(0,0,0,.42); }
   .btn.alt:active{ box-shadow:0 2px 0 #142640; }
   .btn.dim{ opacity:.45; }
+  .goals{ text-align:left; max-width:400px; margin:0 auto 14px; }
+  .goal{ display:flex; align-items:center; gap:9px; padding:6px 10px; margin:5px 0; border-radius:9px;
+    background:#0b1524; border:2px solid #22395c; color:#b9cbe4; font-size:14px; font-weight:600; }
+  .goal i{ display:inline-block; width:16px; height:16px; border-radius:5px; background:#1b2c47;
+    border:1px solid #34537f; font-style:normal; font-size:11px; line-height:15px; text-align:center; color:#0b1524; }
+  .goal.on{ color:#8effb0; border-color:#2c6b45; }
+  .goal.on i{ background:#8effb0; border-color:#8effb0; color:#0b1524; font-weight:900; }
   .stats{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:4px 0 14px; }
   .stat{ min-width:100px; padding:9px 8px; border-radius:12px; background:#0b1524; border:2px solid #22395c; }
   .stat .k{ font-size:11px; letter-spacing:2px; color:#7d92b2; text-transform:uppercase; }
@@ -97,6 +104,8 @@
         <div class="stat"><div class="k">Shoppers</div><div class="v" id="brPeople">0</div></div>
       </div>
       <div class="targetline" id="brFlavour"></div>
+      <p class="sub" id="brTheme"></p>
+      <div class="goals" id="brGoals"></div>
       <button class="btn gold" id="bGo">LET&rsquo;S RUIN CHRISTMAS</button>
     </div>
   </div>
@@ -111,6 +120,7 @@
         <div class="stat"><div class="k">Wrecked</div><div class="v" id="rsWrecks">0</div></div>
         <div class="stat"><div class="k">Best combo</div><div class="v" id="rsCombo">0</div></div>
       </div>
+      <div class="goals" id="rsGoals"></div>
       <div class="targetline" id="rsLine"></div>
       <button class="btn gold" id="bNext">NEXT MARKET</button>
       <button class="btn alt" id="bRetry">RETRY</button>
@@ -250,18 +260,49 @@ const PROPS = {
 };
 
 /* ---------- levels ---------- */
+/* Each market gets its own look: ground, stall colours, tree, the colour the
+   lights throw, how hard it is snowing and how dark it is. Two markets should
+   never read the same at a glance. */
+const THEMES = {
+  dusk:     { name:'DUSK',        ground:'#c3d1e6', floor:'150,170,200', ink:'#0b1424',
+              awning:'#cf3b32', awning2:'#f3ece0', wood:'#6b4a2f', wood2:'#7d5838',
+              tree:['#1f5c38','#2a7145','#358a54','#43a163'], light:'255,186,86',
+              snow:70, fog:0.0, dark:0.55, sky:'#0b1424' },
+  night:    { name:'NIGHT',       ground:'#8fa0c0', floor:'70,90,130', ink:'#060a14',
+              awning:'#c4322a', awning2:'#e8e0cf', wood:'#4d3722', wood2:'#5e4429',
+              tree:['#17452a','#215836','#2b6b42','#35804f'], light:'255,196,110',
+              snow:60, fog:0.06, dark:0.78, sky:'#060a14' },
+  blizzard: { name:'BLIZZARD',    ground:'#dbe6f5', floor:'170,190,215', ink:'#16233a',
+              awning:'#d9483d', awning2:'#ffffff', wood:'#6f5138', wood2:'#836044',
+              tree:['#2a6b44','#347a4e','#3f8a59','#4c9a66'], light:'255,214,140',
+              snow:220, fog:0.22, dark:0.42, sky:'#16233a' },
+  alpine:   { name:'ALPINE',      ground:'#cfdcec', floor:'160,180,205', ink:'#122036',
+              awning:'#2f7a52', awning2:'#f6f2e6', wood:'#7a5533', wood2:'#8f663d',
+              tree:['#1d5a3a','#276e47','#318255','#3d9764'], light:'255,206,120',
+              snow:95, fog:0.03, dark:0.5, sky:'#122036' },
+  nordic:   { name:'NORDIC',      ground:'#b9c9e2', floor:'130,155,190', ink:'#0d1a2c',
+              awning:'#2f5f9e', awning2:'#eef3fb', wood:'#5c4630', wood2:'#6d543a',
+              tree:['#1b5340','#24654d','#2d775a','#398b68'], light:'170,205,255',
+              snow:130, fog:0.10, dark:0.62, sky:'#0d1a2c' },
+  eve:      { name:'CHRISTMAS EVE', ground:'#a9b8d4', floor:'100,125,165', ink:'#080e1c',
+              awning:'#b8302a', awning2:'#f0e6d2', wood:'#513a26', wood2:'#63472e',
+              tree:['#173f2a','#1f5236','#286542','#33794f'], light:'255,170,90',
+              snow:150, fog:0.14, dark:0.72, sky:'#080e1c' },
+};
+let TH = THEMES.dusk;
+
 const LEVELS = [
-  { name:'OPENING NIGHT',        seed:1207, cars:3, rows:2, span:0.48, crowd:1.05, par:0.30,
+  { name:'OPENING NIGHT',        seed:1207, cars:3, rows:2, span:0.48, crowd:1.05, par:0.30, theme:'dusk', shape:'rows',
     flavour:'A quiet little market. Nobody is expecting a car.' },
-  { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.24,
+  { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.24, theme:'alpine', shape:'wave',
     flavour:'Everyone is three mugs deep. Reaction times are excellent.' },
-  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.00, par:0.26,
+  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.00, par:0.26, theme:'night', shape:'rows',
     flavour:'Long straight aisles. Build the combo, do not stop.' },
-  { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.10, par:0.26,
+  { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.10, par:0.26, theme:'nordic', shape:'plaza',
     flavour:'The town tree is worth a fortune. So is the crowd around it.' },
-  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.15, par:0.28,
+  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.15, par:0.28, theme:'blizzard', shape:'funnel',
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
-  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.35, par:0.22,
+  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.35, par:0.22, theme:'eve', shape:'chevron',
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
 ];
 
@@ -273,6 +314,74 @@ const COMBO_BANNERS = [
   [16, 'MARKET MAYHEM'],
   [22, 'CRASHMAS MIRACLE'],
 ];
+
+/* Three things to go after in every market, on top of the score target. They
+   are what turns a run from "aim at the crowd" into "aim at that". Picked
+   from the pool by the market's own seed, so a given market always asks for
+   the same three things. */
+const GOALS = [
+  { id:'combo',   text: n => 'Chain a ×' + n + ' combo',          gen: lv => 4 + lv * 2,
+    test: (G2, n) => G2.bestCombo >= n },
+  { id:'stalls',  text: n => 'Wreck ' + n + ' stalls',            gen: lv => 4 + lv * 2,
+    test: (G2, n) => G2.wrecks >= n },
+  { id:'roll',    text: n => 'Land ' + (n > 1 ? n + ' barrel rolls' : 'a barrel roll'), gen: lv => 1 + (lv > 2 ? 1 : 0),
+    test: (G2, n) => G2.rolls >= n },
+  { id:'air',     text: n => 'Take ' + n + ' jumps off a snowbank', gen: lv => 1 + Math.floor(lv / 2),
+    test: (G2, n) => G2.jumps >= n },
+  { id:'slam',    text: n => 'Flatten ' + n + ' at once with a landing', gen: lv => 2 + Math.floor(lv / 2),
+    test: (G2, n) => G2.bestSlam >= n },
+  { id:'elders',  text: n => 'Catch ' + n + ' pensioners',        gen: lv => 3 + lv,
+    test: (G2, n) => (G2.byKind.elder || 0) >= n },
+  { id:'kids',    text: n => 'Catch ' + n + ' children',          gen: lv => 3 + lv,
+    test: (G2, n) => (G2.byKind.kid || 0) >= n },
+  { id:'prams',   text: n => 'Send ' + n + ' prams flying',       gen: lv => 2 + Math.floor(lv / 2),
+    test: (G2, n) => (G2.byKind.parent || 0) >= n },
+  { id:'santa',   text: () => 'Run over Santa',                   gen: () => 1,
+    test: (G2) => (G2.byKind.santa || 0) >= 1, needs: 'santa' },
+  { id:'tree',    text: () => 'Fell the town tree',               gen: () => 1,
+    test: (G2) => G2.treeDown, needs: 'bigtree' },
+  { id:'carousel',text: () => 'Wreck the carousel',               gen: () => 1,
+    test: (G2) => G2.carouselDown, needs: 'carousel' },
+  { id:'onerun',  text: n => 'Score ' + fmt(n) + ' with one car',  gen: lv => 2200 + lv * 1400,
+    test: (G2, n) => G2.bestRun >= n },
+  { id:'nitro',   text: n => 'Catch ' + n + ' while the nitro burns', gen: lv => 3 + lv,
+    test: (G2, n) => G2.nitroKills >= n },
+];
+
+function rollGoals(lv, levelIdx){
+  const has = { santa: people.some(p => p.kind === 'santa'),
+                bigtree: props.some(o => o.kind === 'bigtree'),
+                carousel: props.some(o => o.kind === 'carousel') };
+  const pool = GOALS.filter(g => !g.needs || has[g.needs]);
+  const picked = [];
+  const used = {};
+  let guard = 0;
+  while (picked.length < 3 && guard++ < 60){
+    const g = pool[ri(0, pool.length - 1)];
+    if (used[g.id]) continue;
+    used[g.id] = 1;
+    const n = g.gen(levelIdx);
+    picked.push({ id: g.id, n, text: g.text(n), done: false });
+  }
+  return picked;
+}
+
+function goalTest(goal){
+  const def = GOALS.find(g => g.id === goal.id);
+  return def ? !!def.test(G, goal.n) : false;
+}
+
+function checkGoals(){
+  if (!G.goals) return;
+  for (const goal of G.goals){
+    if (goal.done || !goalTest(goal)) continue;
+    goal.done = true;
+    G.goalsDone++;
+    popText(car.x, car.y - 90, 'GOAL: ' + goal.text.toUpperCase(), '#8effb0', true);
+    G.banner = { text: 'GOAL DONE', t: 1.1 };
+    if (typeof sndGoal === 'function') sndGoal();
+  }
+}
 
 const BEST_KEY = 'merry_crashmas_best_v1';
 const PROG_KEY = 'merry_crashmas_progress_v1';
@@ -290,6 +399,9 @@ const G = {
   cars: 3, carsLeft: 3,
   combo: 0, comboT: 0, mult: 1, bestCombo: 0,
   kills: 0, wrecks: 0, totalKills: 0,
+  goals: null, goalsDone: 0,
+  rolls: 0, jumps: 0, bestSlam: 0, bestRun: 0, nitroKills: 0,
+  byKind: {}, treeDown: false, carouselDown: false,
   best: 0,
   stars: 0,
   settleT: 0,
@@ -395,6 +507,9 @@ function addPerson(x, y, kind){
    attractions. Everything here is deterministic — same seed, same market. */
 function genMarket(lv){
   reseed(lv.seed);
+  TH = THEMES[lv.theme] || THEMES.dusk;
+  seedSnow();
+  floorGrad = null;                      // the tint changed, rebuild it
   props.length = 0; people.length = 0; pickups.length = 0;
   ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0;
   gore.length = 0; lens.length = 0; debris.length = 0;
@@ -404,6 +519,19 @@ function genMarket(lv){
   const yTop = 300, yBot = WORLD_H - 300;
   const rows = lv.rows;
   const rowH = (yBot - yTop) / rows;
+  const midY = (yTop + yBot) / 2;
+
+  /* How the stalls are arranged. Straight rows are the classic; the others
+     change what a run through the middle actually meets. */
+  const shape = lv.shape || 'rows';
+  const laneAt = (r, x) => {
+    const cy = yTop + (r + 0.5) * rowH;
+    const k = (x - x0) / Math.max(1, x1 - x0);
+    if (shape === 'wave') return cy + Math.sin(k * 6.4 + r) * rowH * 0.3;
+    if (shape === 'funnel') return midY + (cy - midY) * (0.42 + k * 0.95);
+    if (shape === 'chevron') return cy + (0.5 - Math.abs(k - 0.5)) * rowH * 0.7 * (r % 2 ? 1 : -1);
+    return cy;
+  };
 
   for (let r = 0; r < rows; r++){
     const cy = yTop + (r + 0.5) * rowH;
@@ -411,21 +539,22 @@ function genMarket(lv){
     for (let side = -1; side <= 1; side += 2){
       let x = x0 + rr(0, 140);
       while (x < x1){
+        const ly = laneAt(r, x);
         const roll = rnd();
         if (roll < 0.62){
-          addProp('hut', x, cy + side * off, { face: -side });
+          addProp('hut', x, ly + side * off, { face: -side });
           // goods stacked behind the counter, crates in front
-          if (rnd() < 0.5) addProp('barrel', x + rr(-60, 60), cy + side * (off + 78), {});
-          if (rnd() < 0.35) addProp('gifts', x + rr(-50, 50), cy + side * (off + 84), {});
+          if (rnd() < 0.5) addProp('barrel', x + rr(-60, 60), ly + side * (off + 78), {});
+          if (rnd() < 0.35) addProp('gifts', x + rr(-50, 50), ly + side * (off + 84), {});
           x += rr(210, 300);
         } else if (roll < 0.80){
-          addProp('gluh', x, cy + side * off, {});
+          addProp('gluh', x, ly + side * off, {});
           x += rr(150, 220);
         } else if (roll < 0.91){
-          addProp('tree', x, cy + side * (off + rr(-16, 22)), {});
+          addProp('tree', x, ly + side * (off + rr(-16, 22)), {});
           x += rr(150, 210);
         } else {
-          addProp('snowman', x, cy + side * (off + rr(-24, 16)), {});
+          addProp('snowman', x, ly + side * (off + rr(-24, 16)), {});
           x += rr(120, 180);
         }
       }
@@ -434,15 +563,17 @@ function genMarket(lv){
     const aisleLen = x1 - x0;
     const n = Math.round(aisleLen / 78 * lv.crowd);
     for (let i = 0; i < n; i++){
-      addPerson(rr(x0 - 60, x1 + 40), cy + rr(-72, 72));
+      const px = rr(x0 - 60, x1 + 40);
+      addPerson(px, laneAt(r, px) + rr(-72, 72));
     }
     // clusters queueing at the stalls
     for (const o of props){
       if (o.kind !== 'hut' && o.kind !== 'gluh') continue;
-      if (Math.abs(o.y - cy) > rowH * 0.6) continue;
+      const lane = laneAt(r, o.x);
+      if (Math.abs(o.y - lane) > rowH * 0.6) continue;
       const c = ri(1, 2 + Math.round(lv.crowd));
       for (let i = 0; i < c; i++){
-        const dir = o.y < cy ? 1 : -1;
+        const dir = o.y < lane ? 1 : -1;
         const q = addPerson(o.x + rr(-70, 70), o.y + dir * rr(60, 105));
         // families stand together: a grown-up at the stall, a kid beside them
         if ((q.kind === 'parent' || q.kind === 'elder') && rnd() < 0.6){
@@ -453,7 +584,6 @@ function genMarket(lv){
   }
 
   // attractions down the middle of the market
-  const midY = (yTop + yBot) / 2;
   const treeY = midY + (rnd() < 0.5 ? -1 : 1) * rowH * 0.42;   // off the launch line
   const treeX = clamp(x0 + (x1 - x0) * 0.55, x0 + 300, x1 - 200);
   addProp('bigtree', treeX, treeY, {});
@@ -467,6 +597,21 @@ function genMarket(lv){
     const a = rr(0, Math.PI * 2), d = rr(190, 330);
     addProp(rnd() < 0.5 ? 'gifts' : 'snowman', treeX + Math.cos(a) * d, treeY + Math.sin(a) * d, {});
   }
+  if (shape === 'plaza'){
+    // a full ring of stalls facing inward, with the crowd packed between them
+    const R = Math.min(560, rowH * 1.5);
+    const count = 14;
+    for (let i = 0; i < count; i++){
+      const a = (i / count) * Math.PI * 2 + rnd() * 0.1;
+      addProp(rnd() < 0.7 ? 'hut' : 'gluh', treeX + Math.cos(a) * R, treeY + Math.sin(a) * R,
+        { face: Math.sin(a) > 0 ? -1 : 1 });
+      for (let k = 0; k < 3; k++){
+        addPerson(treeX + Math.cos(a + rr(-0.15, 0.15)) * (R - rr(60, 190)),
+                  treeY + Math.sin(a + rr(-0.15, 0.15)) * (R - rr(60, 190)));
+      }
+    }
+  }
+
   // guardsmen stand behind the tree, so a ricochet punts you back into the
   // market instead of out over the empty approach
   for (const a of [-0.9, -0.35, 0.35, 0.9]){
@@ -574,6 +719,10 @@ function startLevel(i){
   G.levelScore = 0;
   G.cars = lv.cars; G.carsLeft = lv.cars;
   G.kills = 0; G.wrecks = 0; G.bestCombo = 0;
+  G.rolls = 0; G.jumps = 0; G.bestSlam = 0; G.bestRun = 0; G.nitroKills = 0;
+  G.byKind = {}; G.treeDown = false; G.carouselDown = false;
+  G.goalsDone = 0;
+  G.goals = rollGoals(lv, G.level);
   G.combo = 0; G.comboT = 0; G.mult = 1;
   G.stars = 0;
   G.phase = 'brief';
@@ -585,6 +734,9 @@ function startLevel(i){
   setTxt('brTarget', fmt(G.target));
   setTxt('brPeople', fmt(people.length));
   setTxt('brFlavour', lv.flavour);
+  const gl = $('brGoals');
+  if (gl) gl.innerHTML = G.goals.map(g => '<div class="goal"><i></i>' + g.text + '</div>').join('');
+  setTxt('brTheme', (TH.name || '') + (TH.fog > 0.1 ? ' · POOR VISIBILITY' : ''));
   camSnap();
 }
 
@@ -640,6 +792,8 @@ function launch(px, py){
 
 function endRun(){
   if (G.phase !== 'drive') return;
+  if (G.runScore > G.bestRun) G.bestRun = G.runScore;
+  checkGoals();
   G.phase = 'settle';
   G.settleT = 1.3;
   breakCombo();
@@ -655,10 +809,10 @@ function endRun(){
 
 function levelEnd(){
   const lv = LEVELS[G.level];
-  G.stars = G.levelScore >= G.target * 2.2 ? 3
-          : G.levelScore >= G.target * 1.5 ? 2
-          : G.levelScore >= G.target ? 1 : 0;
-  const passed = G.stars > 0;
+  // one star for the target, then one per pair of goals on top
+  const hit = G.levelScore >= G.target;
+  G.stars = !hit ? 0 : G.goalsDone >= 3 ? 3 : G.goalsDone >= 1 ? 2 : 1;
+  const passed = hit;
   if (passed && G.level + 1 > G.unlocked) G.unlocked = Math.min(LEVELS.length - 1, G.level + 1);
   G.phase = 'results';
   saveBest();
@@ -673,6 +827,11 @@ function levelEnd(){
   setTxt('rsKills', fmt(G.kills));
   setTxt('rsWrecks', fmt(G.wrecks));
   setTxt('rsCombo', '×' + G.bestCombo);
+  const rg = $('rsGoals');
+  if (rg && G.goals){
+    rg.innerHTML = G.goals.map(g =>
+      '<div class="goal' + (g.done ? ' on' : '') + '"><i>' + (g.done ? '✓' : '') + '</i>' + g.text + '</div>').join('');
+  }
   setTxt('rsLine', passed
     ? 'Target was ' + fmt(G.target) + '. Running total ' + fmt(G.score) + '.'
     : 'You needed ' + fmt(G.target) + '. Have another go.');
@@ -880,8 +1039,15 @@ function killPerson(p, vx, vy, cause){
   bumpCombo();
   const pts = addScore(p.pts);
   G.kills++; G.totalKills++; G.runKills++;
+  G.byKind[p.kind] = (G.byKind[p.kind] || 0) + 1;
+  if (car.boostT > 0) G.nitroKills++;
   rec.kills++;
-  if (rec.killPos.length < 40) rec.killPos.push(p.x, p.y);
+  if (rec.killed.length < 24){
+    // enough about the victim to re-stage the hit properly in the replay
+    rec.killed.push({ x: p.x, y: p.y, vx: vx || 0, vy: vy || 0, kind: p.kind,
+      coat: COATS_RT[p.coat % COATS_RT.length], skin: SKIN_RT[p.coat % SKIN_RT.length],
+      cause: cause || 'car' });
+  }
   popText(p.x, p.y - 18, '+' + pts, p.kind === 'santa' ? '#ff6b5e' : '#ffd34d', p.kind === 'santa');
   if (p.kind === 'santa'){
     G.banner = { text: 'HO HO NO', t: 1.6 };
@@ -994,6 +1160,8 @@ function wreckProp(o, vx, vy){
   o.vx = (vx || 0) * 0.18; o.vy = (vy || 0) * 0.18;
   G.wrecks++; G.runWrecks++;
   rec.wrecks++;
+  if (o.kind === 'bigtree') G.treeDown = true;
+  if (o.kind === 'carousel') G.carouselDown = true;
   bumpCombo();
   const pts = addScore(o.pts);
   popText(o.x, o.y - 24, '+' + pts, '#ffb347', o.pts >= 900);
@@ -1230,6 +1398,7 @@ function takeOff(sp, o){
   car.z = 6;
   car.vz = Math.min(RAMP_MAX_VZ, sp * RAMP_KICK);
   car.rollV = (rnd() < 0.5 ? -1 : 1) * (2.4 + sp / 420);
+  G.jumps++;
   car.rollAcc = 0;
   car.airT = 0;
   if (o) o.shakeT = 0.3;
@@ -1275,6 +1444,8 @@ function land(){
   car.spin += rr(-1.2, 1.2);
   sndThud(0.9);
 
+  G.rolls += flips;
+  if (squashed > G.bestSlam) G.bestSlam = squashed;
   if (flips > 0){
     const pts = addScore(FLIP_PTS * flips);
     G.banner = { text: flips >= 3 ? 'INSANE ROLL ×' + flips : flips === 2 ? 'DOUBLE ROLL' : 'BARREL ROLL', t: 1.4 };
@@ -1461,13 +1632,13 @@ const REC_ENTS = 96, REC_PROPS = 46;
 const REPLAY_SPEED = 0.45;              // slow motion factor
 const REPLAY_MIN_WORTH = 2;             // kills + 0.7 per wreck, below this we skip
 
-const rec = { frames: [], acc: 0, kills: 0, wrecks: 0, killPos: [], lastCopy: -9 };
+const rec = { frames: [], acc: 0, kills: 0, wrecks: 0, killed: [], lastCopy: -9 };
 const clip = { frames: [], kills: 0, wrecks: 0, worth: 0, cx: 0, cy: 0 };
 const rp = { t: 0, dur: 0, skip: false, restore: null, caption: '' };
 
 function recReset(){
   rec.frames.length = 0; rec.acc = 0; rec.kills = 0; rec.wrecks = 0;
-  rec.killPos.length = 0; rec.lastCopy = -9;
+  rec.killed.length = 0; rec.lastCopy = -9;
   clip.frames.length = 0; clip.kills = 0;
 }
 
@@ -1490,7 +1661,7 @@ function recSnap(){
     ents, props: pr,
     kills: rec.kills,
     wrecks: rec.wrecks,
-    killPos: rec.killPos.slice(),
+    killed: rec.killed.slice(),
   };
 }
 
@@ -1499,7 +1670,7 @@ function recStep(dt){
   if (rec.acc < 1 / REC_HZ) return;
   rec.acc = 0;
   rec.frames.push(recSnap());
-  rec.kills = 0; rec.wrecks = 0; rec.killPos.length = 0;
+  rec.kills = 0; rec.wrecks = 0; rec.killed.length = 0;
   while (rec.frames.length && T - rec.frames[0].t > REC_KEEP) rec.frames.shift();
 
   // is the trailing window the best one yet?
@@ -1511,7 +1682,7 @@ function recStep(dt){
     if (first < 0) first = i;
     kills += f.kills;
     wrecks += f.wrecks || 0;
-    for (let k = 0; k < f.killPos.length; k += 2){ sx += f.killPos[k]; sy += f.killPos[k + 1]; n++; }
+    for (const kd of f.killed){ sx += kd.x; sy += kd.y; n++; }
   }
   const worth = kills + wrecks * 0.7;             // a good smash is watchable too
   if (worth <= clip.worth || worth < REPLAY_MIN_WORTH || first < 0) return;
@@ -1601,15 +1772,56 @@ function stepReplay(dt){
   for (const f of clip.frames){
     const rel = f.t - t0;
     if (rel <= before || rel > rp.t) continue;
-    for (let k = 0; k < f.killPos.length; k += 2){
-      pixels(f.killPos[k], f.killPos[k + 1], 14, rr(0, 6.283), 700);
-      addFx({ type:'mist', x: f.killPos[k], y: f.killPos[k + 1], vx: rr(-30, 30), vy: rr(-30, 30),
-        ttl: 0.7, size: rr(18, 30), col:'#8e1410' });
-      hitstop = Math.max(hitstop, 0.04);
-    }
+    for (const kd of f.killed) replayGore(kd);
   }
   if (rp.t >= rp.dur || rp.skip) endReplay();
   return a;
+}
+
+/* The replay is a close-up in slow motion, so it gets the full works: an
+   arterial arc that hangs in the air, limbs, chunks, mist, pixels, a stain
+   that soaks into the snow, and a kick on the camera. Everything lives
+   longer than in play — at 0.45× a normal particle is gone before you see it. */
+function replayGore(kd){
+  const sp = Math.hypot(kd.vx, kd.vy) || 600;
+  const a = Math.atan2(kd.vy, kd.vx);
+  const big = kd.kind === 'santa' ? 1.7 : kd.kind === 'kid' ? 0.75 : 1;
+
+  // the arc: a line of drops leaving the body, each a little slower
+  for (let i = 0; i < Math.round(16 * big); i++){
+    const sa = a + rr(-0.5, 0.5), s = rr(0.35, 1.35) * (120 + sp * 0.45);
+    addFx({ type:'blood', x: kd.x, y: kd.y, vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+      ttl: rr(0.8, 1.8), size: rr(3, 10), col: rnd() < 0.3 ? '#7d1410' : '#b3201a' });
+  }
+  for (let i = 0; i < Math.round(6 * big); i++){
+    addFx({ type:'mist', x: kd.x + rr(-14, 14), y: kd.y + rr(-14, 14),
+      vx: rr(-40, 40) + kd.vx * 0.08, vy: rr(-40, 40) + kd.vy * 0.08,
+      ttl: rr(1.2, 2.2), size: rr(20, 40), col:'#8e1410' });
+  }
+  for (let i = 0; i < Math.round(6 * big); i++){
+    const sa = a + rr(-1.0, 1.0), s = rr(0.4, 1.2) * (130 + sp * 0.35);
+    addFx({ type:'chunk', x: kd.x, y: kd.y, vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+      ttl: rr(1.1, 2.2), size: rr(4, 10), rot: rr(0, 6.283), spin: rr(-10, 10),
+      col: rnd() < 0.3 ? '#c95a4e' : '#8e1a14' });
+  }
+  const parts = ['arm', 'arm', 'leg', 'leg', 'head'];
+  for (let i = 0; i < Math.round(4 * big); i++){
+    const part = parts[ri(0, parts.length - 1)];
+    const sa = a + rr(-1.1, 1.1), s = rr(0.4, 1.2) * (130 + sp * 0.4);
+    addFx({ type:'limb', part, x: kd.x + rr(-6, 6), y: kd.y + rr(-6, 6),
+      vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+      ttl: rr(1.6, 2.8), size: part === 'head' ? 8 : rr(9, 15),
+      rot: rr(0, 6.283), spin: rr(-9, 9), col: kd.coat, col2: kd.skin });
+  }
+  pixels(kd.x, kd.y, Math.round(26 * big), a, sp, kd.coat, kd.skin);
+  // a stain that spreads and then stays for the rest of the clip
+  addFx({ type:'stain', x: kd.x, y: kd.y, vx: 0, vy: 0, ttl: 3.2,
+    size: rr(26, 46) * big, rot: rr(0, 6.283), col:'#8e1210' });
+  addFx({ type:'ring', x: kd.x, y: kd.y, ttl: 0.5, size: 90 * big, col:'#ff8a7a' });
+  hitstop = Math.max(hitstop, 0.05);
+  addShake(0.2, 6 * big);
+  flash = Math.max(flash, 0.18);
+  splatLens(2);
 }
 
 function skipReplay(){ if (G.phase === 'replay') rp.skip = true; }
@@ -1678,6 +1890,7 @@ function update(dt){
   stepFx(dt);
   stepLens(dt);
   stepCombo(dt);
+  if (G.phase === 'drive') checkGoals();
 
   if (G.phase === 'drive'){ stepCar(dt); recStep(rawDt); }
   else if (G.phase === 'settle'){
@@ -1696,8 +1909,12 @@ function update(dt){
 const snow = [];
 function seedSnow(){
   snow.length = 0;
-  for (let i = 0; i < 90; i++){
-    snow.push({ x: rnd(), y: rnd(), s: rr(0.6, 2.4), v: rr(0.02, 0.07), d: rr(-0.02, 0.02), p: rr(0, 6.28) });
+  const n = (TH && TH.snow) || 70;
+  const hard = n > 150;                                // a blizzard blows sideways
+  for (let i = 0; i < n; i++){
+    snow.push({ x: rnd(), y: rnd(), s: rr(0.6, 2.4) * (hard ? 1.3 : 1),
+      v: rr(0.02, 0.07) * (hard ? 3 : 1),
+      d: rr(-0.02, 0.02) - (hard ? 0.09 : 0), p: rr(0, 6.28) });
   }
 }
 function stepSnow(dt){
@@ -1750,7 +1967,7 @@ function drawGround(){
   const halfW = VW / cam.s / 2, halfH = VH / cam.s / 2;
   const x0 = cam.x - halfW - 60, x1 = cam.x + halfW + 60;
   const y0 = cam.y - halfH - 60, y1 = cam.y + halfH + 60;
-  ctx.fillStyle = '#c3d1e6';
+  ctx.fillStyle = TH.ground;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 
   // packed snow of the market floor, fading in rather than starting on a seam
@@ -1760,11 +1977,11 @@ function drawGround(){
     if (!floorGrad){
       floorGrad = ctx.createLinearGradient(MARKET_X - 620, 0, MARKET_X + 160, 0);
       if (floorGrad && floorGrad.addColorStop){
-        floorGrad.addColorStop(0, 'rgba(150,170,200,0)');
-        floorGrad.addColorStop(1, 'rgba(150,170,200,.42)');
+        floorGrad.addColorStop(0, 'rgba(' + TH.floor + ',0)');
+        floorGrad.addColorStop(1, 'rgba(' + TH.floor + ',.5)');
       }
     }
-    ctx.fillStyle = floorGrad || 'rgba(150,170,200,.42)';
+    ctx.fillStyle = floorGrad || 'rgba(' + TH.floor + ',.5)';
     ctx.fillRect(gx0, Math.max(y0, 160), gx1 - gx0, Math.min(y1, WORLD_H - 160) - Math.max(y0, 160));
   }
 
@@ -1777,7 +1994,7 @@ function drawGround(){
   }
 
   // playfield fence
-  ctx.fillStyle = '#0b1424';
+  ctx.fillStyle = TH.sky;
   if (x1 > bounds.x1 + CAR_R) ctx.fillRect(bounds.x1 + CAR_R, y0, x1 - bounds.x1, y1 - y0);
   ctx.strokeStyle = '#8fa2c0'; ctx.lineWidth = 10;
   ctx.strokeRect(bounds.x0 - CAR_R, bounds.y0 - CAR_R,
@@ -1893,7 +2110,7 @@ function drawHut(o){
     // torn awning
     ctx.save(); ctx.rotate(0.5 + o.seed);
     for (let i = 0; i < 4; i++){
-      ctx.fillStyle = i % 2 ? '#e8e2d6' : '#c23a30';
+      ctx.fillStyle = i % 2 ? TH.awning2 : TH.awning;
       ctx.fillRect(-w * 0.22 + i * (w * 0.11), h * 0.08, w * 0.11, 20);
     }
     ctx.restore();
@@ -1908,17 +2125,17 @@ function drawHut(o){
   ctx.rotate(wear * 0.07 * (o.seed < 0.5 ? -1 : 1));
   shadow(0, h * 0.42, w * 0.54, h * 0.26, 0.3);
   // hut body
-  ctx.fillStyle = '#6b4a30';
+  ctx.fillStyle = TH.wood;
   roundRect(-w / 2, -h / 2, w, h, 8); ctx.fill();
-  ctx.fillStyle = '#7d5838';
+  ctx.fillStyle = TH.wood2;
   roundRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16, 6); ctx.fill();
   // striped awning on the customer side
   const fs = o.face || 1;
   const ay = fs > 0 ? h / 2 - 6 : -h / 2 - 26;
   const stripes = 7, sw = w / stripes;
-  ctx.fillStyle = '#f3ece0';
+  ctx.fillStyle = TH.awning2;
   ctx.fillRect(-w / 2, ay, w, 32);
-  ctx.fillStyle = '#cf3b32';
+  ctx.fillStyle = TH.awning;
   ctx.beginPath();
   for (let i = 0; i < stripes; i += 2) ctx.rect(-w / 2 + i * sw, ay, sw, 32);
   ctx.fill();
@@ -1967,7 +2184,7 @@ function drawTreeTop(x, y, r, dead, rot, seed){
     ctx.restore(); return;
   }
   shadow(0, r * 0.4, r * 0.95, r * 0.42, 0.3);
-  const rings = [[1, '#1f5c38'], [0.72, '#2a7145'], [0.46, '#358a54'], [0.24, '#43a163']];
+  const rings = [[1, TH.tree[0]], [0.72, TH.tree[1]], [0.46, TH.tree[2]], [0.24, TH.tree[3]]];
   for (const [k, col] of rings){
     ctx.fillStyle = col; circle(0, 0, r * k); ctx.fill();
   }
@@ -2006,7 +2223,7 @@ function drawProp(o){
         const seg = 10;
         for (let i = 0; i < seg; i++){
           const a0 = spin + i * (6.283 / seg), a1 = a0 + 6.283 / seg;
-          ctx.fillStyle = i % 2 ? '#cf3b32' : '#f6f0e4';
+          ctx.fillStyle = i % 2 ? TH.awning : TH.awning2;
           ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, o.r, a0, a1); ctx.closePath(); ctx.fill();
         }
         ctx.fillStyle = '#2b3f63'; circle(0, 0, o.r * 0.3); ctx.fill();
@@ -2593,8 +2810,29 @@ function drawPickup(u){
   ctx.restore();
 }
 
+/* Wet blood, drawn with the ground rather than with the particles so bodies
+   lie on top of it. */
+function drawStains(){
+  for (const f of fx){
+    if (f.type !== 'stain') continue;
+    const k = 1 - f.t / f.ttl;
+    const grow = clamp(f.t / 0.5, 0, 1);
+    ctx.globalAlpha = clamp(k * 1.6, 0, 0.78);
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+    ctx.fillStyle = f.col;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, f.size * grow, f.size * grow * 0.62, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(180,30,24,.5)';
+    ctx.beginPath();
+    ctx.ellipse(f.size * 0.15 * grow, 0, f.size * 0.4 * grow, f.size * 0.3 * grow, 0, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawFx(){
   for (const f of fx){
+    if (f.type === 'stain') continue;          // already down, under the bodies
     const k = 1 - f.t / f.ttl;
     ctx.globalAlpha = clamp(k, 0, 1);
     if (f.type === 'txt'){
@@ -2723,10 +2961,11 @@ function drawLights(){
     if (o.dead) continue;
     if (Math.abs(o.x - cam.x) > halfW || Math.abs(o.y - cam.y) > halfH) continue;
     let r = 0, col = null;
-    if (o.kind === 'hut'){ r = 96; col = 'rgba(255,186,86,.075)'; }
-    else if (o.kind === 'gluh'){ r = 78; col = 'rgba(255,140,60,.09)'; }
-    else if (o.kind === 'bigtree'){ r = 250; col = 'rgba(255,210,110,.07)'; }
-    else if (o.kind === 'carousel'){ r = 200; col = 'rgba(255,170,120,.08)'; }
+    const L = TH.light;
+    if (o.kind === 'hut'){ r = 96; col = 'rgba(' + L + ',.1)'; }
+    else if (o.kind === 'gluh'){ r = 78; col = 'rgba(' + L + ',.12)'; }
+    else if (o.kind === 'bigtree'){ r = 250; col = 'rgba(' + L + ',.1)'; }
+    else if (o.kind === 'carousel'){ r = 200; col = 'rgba(' + L + ',.11)'; }
     if (!col) continue;
     const dx = o.x - cam.x, dy = o.y - cam.y;
     lightBuf.push({ o, r, col, d: dx * dx + dy * dy });
@@ -2827,6 +3066,16 @@ function drawHUD(){
   ctx.fillStyle = prog >= 1 ? '#8effb0' : '#e8a91f';
   roundRect(bx, by, bw * prog, bh, 4); ctx.fill();
 
+  // goals
+  if (G.goals){
+    ctx.font = '700 12px system-ui';
+    for (let i = 0; i < G.goals.length; i++){
+      const g = G.goals[i], gy = pad + 96 + i * 18;
+      ctx.fillStyle = g.done ? 'rgba(142,255,176,.95)' : 'rgba(190,205,228,.75)';
+      ctx.fillText((g.done ? '✓ ' : '○ ') + g.text, pad + 14, gy);
+    }
+  }
+
   // cars remaining
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(8,14,26,.55)';
@@ -2922,7 +3171,7 @@ function drawLens(){
   ctx.globalAlpha = 1;
 }
 
-let vigGrad = null, vigKey = '';
+let vigGrad = null, vigKey = '', vigTheme = '';
 /* Letterbox, caption and a progress bar, so the slow-motion reads as a
    replay rather than the game having gone wrong. */
 function drawReplayFrame(){
@@ -2958,15 +3207,20 @@ function drawReplayFrame(){
 
 function drawVignette(){
   screenTransform();
+  if (TH.fog > 0){
+    ctx.fillStyle = 'rgba(214,228,246,' + TH.fog + ')';
+    ctx.fillRect(0, 0, VW, VH);
+  }
   const key = VW + 'x' + VH;
-  if (key !== vigKey){
+  if (key !== vigKey || TH.name !== vigTheme){
     vigKey = key;
     vigGrad = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.35,
       VW / 2, VH / 2, Math.max(VW, VH) * 0.72);
     if (vigGrad && vigGrad.addColorStop){
       vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      vigGrad.addColorStop(1, 'rgba(4,8,18,.55)');
+      vigGrad.addColorStop(1, 'rgba(4,8,18,' + (TH.dark || 0.55) + ')');
     }
+    vigTheme = TH.name;
   }
   if (vigGrad){
     ctx.fillStyle = vigGrad;
@@ -2981,7 +3235,7 @@ function drawVignette(){
 function draw(){
   screenTransform();
   ctx.clearRect(0, 0, VW, VH);
-  ctx.fillStyle = '#0b1424';
+  ctx.fillStyle = TH.sky;
   ctx.fillRect(0, 0, VW, VH);
 
   worldTransform();
@@ -2991,6 +3245,8 @@ function draw(){
   // most of them are nowhere near the windscreen
   const halfW = VW / cam.s / 2 + 220, halfH = VH / cam.s / 2 + 220;
   const near = (e) => Math.abs(e.x - cam.x) <= halfW && Math.abs(e.y - cam.y) <= halfH;
+
+  drawStains();
 
   // dead bodies and wrecks sit on the ground, under everything else
   for (const p of people) if (p.dead && p.fly <= 0 && near(p)) drawPerson(p);
@@ -3086,6 +3342,7 @@ const sndCrunch = m => { noise(0.22 + m * 0.2, 0.2 + m * 0.2, 700 - m * 260); to
 const sndSquish = () => { tone(420 + Math.random() * 260, 0.10, 'square', 0.10, 130); noise(0.07, 0.08, 1600); };
 const sndBoost  = () => { tone(220, 0.35, 'sawtooth', 0.2, 880); noise(0.3, 0.14, 1200); };
 const sndPickup = () => { tone(660, 0.09, 'triangle', 0.18); setTimeout(() => tone(990, 0.12, 'triangle', 0.16), 70); };
+const sndGoal = () => { [660, 880, 1180].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'triangle', 0.17), i * 80)); };
 /* A wail. Pitch comes from who is doing it — kids high, pensioners low. */
 const sndWail = v => {
   const f = 300 * (v || 1);
