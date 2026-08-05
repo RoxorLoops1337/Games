@@ -162,12 +162,14 @@ function fit(){
 
 /* ---------- world constants ---------- */
 const WORLD_W = 5400, WORLD_H = 2200;
-const ANCHOR = { x: 440, y: WORLD_H / 2 };   // where every car starts
+const ANCHOR = { x: 820, y: WORLD_H / 2 };   // where every car starts —
+                                             // far enough off the fence for a
+                                             // full-length wind-up behind it
 const MARKET_X = 1560;                        // first stall row
 const FENCE_PAD = 90;                         // world edge the car bounces off
 
 const CAR_L = 76, CAR_W = 38, CAR_R = 27;     // body length / width / collide radius
-const MAX_PULL = 360;                         // world units of sling travel
+const MAX_PULL = 430;                         // world units of sling travel
 const MIN_POWER = 0.16;
 const MAX_LAUNCH = 1900;                      // world px/s at full pull
 const FRICTION = 0.36;                        // exponential decay per second
@@ -177,6 +179,15 @@ const STOP_SPD = 60;                          // below this the run is over
 const RUN_TIMEOUT = 26;                       // seconds, safety net
 const REST = 0.46, REST_HARD = 0.60;          // restitution: props vs statues
 const BONK_PTS = 140;                         // ricochet bonus off a statue
+const SHOUT_TIME = 1.4;
+const SHOUTS = [
+  'MERRY CRASHMAS!!',
+  'HOLD MY GLÜHWEIN!',
+  'BRAKE? WHAT BRAKE?',
+  'YEEEHAAAA!',
+  'HO HO HOOOO!',
+  'SHOPPING TIME!',
+];
 const KILL_SPD = 85;                          // slower than this and you just nudge them
 const DMG_PER_SPD = 0.115;
 const COMBO_WIN = 1.75;                       // seconds to keep a combo alive
@@ -205,17 +216,17 @@ const PROPS = {
 
 /* ---------- levels ---------- */
 const LEVELS = [
-  { name:'OPENING NIGHT',        seed:1207, cars:3, rows:2, span:0.48, crowd:0.85, par:0.20,
+  { name:'OPENING NIGHT',        seed:1207, cars:3, rows:2, span:0.48, crowd:0.85, par:0.30,
     flavour:'A quiet little market. Nobody is expecting a car.' },
-  { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.20,
+  { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.24,
     flavour:'Everyone is three mugs deep. Reaction times are excellent.' },
-  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.22,
+  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.24,
     flavour:'Long straight aisles. Build the combo, do not stop.' },
   { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.35, par:0.21,
     flavour:'The town tree is worth a fortune. So is the crowd around it.' },
-  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.22,
+  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.23,
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
-  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.23,
+  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.26,
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
 ];
 
@@ -256,6 +267,7 @@ const G = {
 const car = {
   x: ANCHOR.x, y: ANCHOR.y, ang: 0, vx: 0, vy: 0, spin: 0,
   boost: 1, boostT: 0, plowT: 0, onIce: 0, hits: 0, dents: 0, launched: false,
+  shoutT: 0, shout: '',
 };
 
 const aim = { active: false, x: ANCHOR.x, y: ANCHOR.y, power: 0 };
@@ -519,6 +531,7 @@ function nextCar(){
   car.vx = 0; car.vy = 0; car.ang = 0; car.spin = 0;
   car.boost = 1; car.boostT = 0; car.plowT = 0; car.onIce = 0;
   car.hits = 0; car.dents = 0; car.launched = false;
+  car.shoutT = 0; car.shout = '';
   G.runKills = 0; G.runWrecks = 0; G.runScore = 0; G.runBest = 0;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
@@ -859,6 +872,8 @@ function doBoost(){
   if (sp < 25) return false;
   car.boost--;
   car.boostT = 0.55;
+  car.shout = SHOUTS[ri(0, SHOUTS.length - 1)];
+  car.shoutT = SHOUT_TIME;
   const a = Math.atan2(car.vy, car.vx);
   car.vx += Math.cos(a) * BOOST_KICK;
   car.vy += Math.sin(a) * BOOST_KICK;
@@ -1020,6 +1035,7 @@ function stepCar(dt){
   car.onIce = onIce() ? 1 : 0;
   if (car.boostT > 0) car.boostT -= dt;
   if (car.plowT > 0) car.plowT -= dt;
+  if (car.shoutT > 0) car.shoutT -= dt;
 
   // friction
   const fr = car.onIce ? ICE_FRICTION : FRICTION;
@@ -1071,7 +1087,7 @@ function stepCar(dt){
 /* ---------- camera ---------- */
 function camTarget(){
   if (G.phase === 'aim' || G.phase === 'menu' || G.phase === 'brief'){
-    return { x: ANCHOR.x + 470, y: ANCHOR.y, z: 1450 };
+    return { x: ANCHOR.x + 330, y: ANCHOR.y, z: 1500 };
   }
   const sp = carSpeed();
   return { x: car.x + car.vx * 0.17, y: car.y + car.vy * 0.17, z: clamp(880 + sp * 0.24, 880, 1300) };
@@ -1557,6 +1573,17 @@ function drawCar(){
   ctx.fillRect(-CAR_L * 0.1, -CAR_W / 2 + 4, CAR_L * 0.2, CAR_W - 8);
   ctx.fillStyle = '#2b3a58';
   roundRect(-CAR_L * 0.26, -CAR_W * 0.34, CAR_L * 0.42, CAR_W * 0.68, 6); ctx.fill();
+  // the driver, seen through the roof: santa hat, and a mouth that opens when
+  // he is shouting
+  const yell = car.shoutT > 0;
+  ctx.fillStyle = '#f0c9a4';
+  circle(-CAR_L * 0.04, 0, CAR_W * 0.23); ctx.fill();
+  ctx.fillStyle = '#e0483c';
+  circle(-CAR_L * 0.11, 0, CAR_W * 0.2); ctx.fill();
+  ctx.fillStyle = '#f6f2ea';
+  circle(-CAR_L * 0.2, 0, CAR_W * 0.09); ctx.fill();
+  ctx.fillStyle = '#2a1a16';
+  circle(CAR_L * 0.02, 0, CAR_W * (yell ? 0.11 : 0.05)); ctx.fill();
   ctx.fillStyle = '#4b6a9c';
   roundRect(CAR_L * 0.2, -CAR_W * 0.3, CAR_L * 0.14, CAR_W * 0.6, 4); ctx.fill();
   // antlers + red nose, because it is that kind of game
@@ -1579,6 +1606,8 @@ function drawCar(){
   }
   ctx.restore();
 
+  if (car.shoutT > 0) drawShout();
+
   // headlight wash while moving
   if (sp > 60){
     ctx.save();
@@ -1593,6 +1622,41 @@ function drawCar(){
     ctx.closePath(); ctx.fill();
     ctx.restore();
   }
+}
+
+/* A comic speech bubble above the car. Drawn in world space so it rides
+   along with the wreck, and it wobbles because he is not calm. */
+function drawShout(){
+  const k = clamp(car.shoutT / SHOUT_TIME, 0, 1);
+  const wob = Math.sin(T * 22) * 3 * k;
+  const txt = car.shout;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, k * 2.6);
+  ctx.translate(car.x + wob, car.y - 86 - (1 - k) * 26);
+  ctx.rotate(Math.sin(T * 13) * 0.045);
+  const pop = 1 + (1 - k) * 0.18;
+  ctx.scale(pop, pop);
+  ctx.font = '900 32px system-ui';
+  const m = ctx.measureText ? ctx.measureText(txt) : null;
+  const w = Math.max(170, (m && m.width ? m.width : txt.length * 17) + 40);
+  const h = 56;
+  ctx.fillStyle = '#0d1a2e';
+  roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 14); ctx.fill();
+  ctx.fillStyle = '#fff8e8';
+  roundRect(-w / 2, -h / 2, w, h, 12); ctx.fill();
+  ctx.fillStyle = '#0d1a2e';
+  ctx.beginPath();
+  ctx.moveTo(-13, h / 2 - 2); ctx.lineTo(13, h / 2 - 2); ctx.lineTo(2, h / 2 + 22);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff8e8';
+  ctx.beginPath();
+  ctx.moveTo(-9, h / 2 - 6); ctx.lineTo(9, h / 2 - 6); ctx.lineTo(1, h / 2 + 15);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#c8261c';
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, 0, 11);
+  ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 /* ---------- pickups & fx ---------- */

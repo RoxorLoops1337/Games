@@ -39,7 +39,8 @@ const EXPOSE = `__out.api = {
   killPerson, stepPeople, wreckProp, stepProps, stepSpills, stepFx,
   carSpeed, inCar, doBoost, hitProp, stepCarCollisions, stepCarKills, stepPickups,
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
-  draw, drawHUD, drawAim, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
+  draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
+  SHOUTS, SHOUT_TIME,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
@@ -463,6 +464,30 @@ test('nitro refills and fires the boost, and the boost is one-shot', () => {
   api.stepPickups();
   assert(api.pickups[0].taken, 'can should be collected');
   assert(api.car.boost === 0 && api.carSpeed() > v0, 'the can fires immediately');
+});
+
+test('the driver shouts when the nitro fires, and shuts up again', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  drive(api, 600, 0, 1000, 1100);
+  assert(api.car.shoutT === 0, 'quiet to start with');
+  api.doBoost();
+  assert(api.SHOUTS.indexOf(api.car.shout) >= 0, 'shouts one of the lines, got ' + api.car.shout);
+  near(api.car.shoutT, api.SHOUT_TIME, 0.001, 'shout timer armed');
+  api.drawShout();                               // the bubble renders
+  step(api, api.SHOUT_TIME + 0.3);
+  assert(api.car.shoutT <= 0, 'and it fades');
+  api.G.phase = 'aim';
+  api.nextCar();
+  assert(api.car.shoutT === 0 && api.car.shout === '', 'the next car starts quiet');
+});
+
+test('the wind-up has real room behind the sling', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  const room = api.C.ANCHOR.x - api.bounds.x0;
+  assert(room > api.C.MAX_PULL, 'a full pull must fit inside the fence: ' + room + ' vs ' + api.C.MAX_PULL);
+  assert(api.C.ANCHOR.x + 200 < api.C.MARKET_X, 'and the market still starts well downrange');
 });
 
 test('the plough pickup arms the wide bumper for a while', () => {
