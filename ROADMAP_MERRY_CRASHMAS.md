@@ -8,6 +8,26 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
+## CURRENT PHASE: B — three critics
+
+The owner asked for 15 more levels, designed rather than generated, and then a
+critique cycle. Work the phases in order; when a phase's exit condition is met,
+edit this block to name the next one.
+
+- [x] **A — fifteen more markets (markets 7–21).** Done: 21 markets, each with
+  its own idea, new set pieces (ice rink, parade, choir stand, bollard chicanes,
+  extra snowbanks) and a spiral layout. All beatable blind, targets tuned to
+  ~0.8× the median blind run.
+- **B — three critics.** Run three independent critic agents over the shipped
+  game (design, feel/juice, code+performance). Save their reports under
+  `.polish/crashmas-critique-<n>.md`. Exit: three reports on disk.
+- **C — synthesis.** One agent reads all three reports and writes a prioritised
+  plan to `.polish/crashmas-plan.md` — concrete, ordered, each item small enough
+  to ship in one pass. Exit: the plan exists and is listed below.
+- **D — execute the plan.** Work it top to bottom, one item per pass, same
+  standards as everything else. Exit: every item ticked.
+- **E — three more critics, then back to C.** Repeat the cycle.
+
 ## Working agreement for each pass
 
 1. Take the **top unchecked item**. One item per pass; finish it properly rather
@@ -39,6 +59,8 @@ addictive, more challenge, puzzles, cars that behave differently over time.**
 - [x] Market layout shapes: rows / wave / plaza ring / funnel / chevron
 - [x] Three per-market goals from a pool of 13, driving the star rating
 - [x] Car garage: five cars, own art and handling, unlocked by lifetime kills
+- [x] 21 markets: ice rink, gauntlet, parade, alleys, boulevard, frozen lake,
+      bonfire, choir, rooftops, crossroads, spiral, grand market, midnight mass
 
 ## Next
 

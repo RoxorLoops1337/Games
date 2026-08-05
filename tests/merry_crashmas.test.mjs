@@ -1485,6 +1485,90 @@ function blindBest(api, level, angles){
   return best;
 }
 
+test('the campaign is twenty-one markets, each with an identity', () => {
+  const api = boot();
+  assert(api.LEVELS.length === 21, 'expected 21 markets, got ' + api.LEVELS.length);
+  const names = new Set(), seeds = new Set(), shapes = new Set(), themes = new Set();
+  for (const lv of api.LEVELS){
+    assert(lv.name && lv.flavour && lv.flavour.length > 20, lv.name + ' needs a line about it');
+    names.add(lv.name); seeds.add(lv.seed); shapes.add(lv.shape); themes.add(lv.theme);
+    assert(lv.cars >= 3 && lv.cars <= 6, lv.name + ' car count');
+    assert(lv.par > 0.05 && lv.par < 0.6, lv.name + ' par out of range: ' + lv.par);
+  }
+  assert(names.size === 21 && seeds.size === 21, 'no duplicate names or seeds');
+  assert(shapes.size >= 5, 'at least five layout shapes in play, got ' + shapes.size);
+  assert(themes.size >= 5, 'at least five themes in play, got ' + themes.size);
+});
+
+test('every market builds, is populated, and renders', () => {
+  const api = boot();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    const lv = api.LEVELS[i];
+    assert(api.people.length > 60, lv.name + ' is empty: ' + api.people.length + ' people');
+    assert(api.props.length > 20, lv.name + ' has no market: ' + api.props.length + ' props');
+    assert(api.G.target > 1000, lv.name + ' target ' + api.G.target);
+    assert(api.G.goals.length === 3, lv.name + ' goals');
+    for (const p of api.people){
+      assert(p.x > api.C.ANCHOR.x + 60, lv.name + ': somebody is standing on the launch pad');
+    }
+    api.beginLevel();
+    api.draw();
+  }
+});
+
+test('the set pieces actually appear where a market asks for them', () => {
+  const api = boot();
+  const byName = n => api.LEVELS.findIndex(l => l.name === n);
+
+  api.startLevel(byName('THE ICE RINK'));
+  assert(api.ice.some(p => p.r > 380), 'the rink is a proper sheet of ice');
+  assert(api.people.some(p => p.march), 'with skaters going round it');
+
+  api.startLevel(byName('THE GAUNTLET'));
+  const bollards = api.props.filter(o => o.kind === 'nutcracker').length;
+  assert(bollards >= 20, 'the gauntlet needs its chicanes, got ' + bollards);
+
+  api.startLevel(byName('THE PARADE'));
+  const marchers = api.people.filter(p => p.march).length;
+  assert(marchers >= 25, 'the parade should be a column, got ' + marchers);
+
+  api.startLevel(byName('THE CHOIR'));
+  // a block of sixty standing in ten-wide rows
+  let packed = 0;
+  for (const p of api.people){
+    let n = 0;
+    for (const q of api.people) if (Math.abs(q.x - p.x) < 90 && Math.abs(q.y - p.y) < 90) n++;
+    packed = Math.max(packed, n);
+  }
+  assert(packed >= 12, 'the choir stand should be shoulder to shoulder, got ' + packed);
+
+  api.startLevel(byName('ROOFTOPS'));
+  assert(api.props.filter(o => o.kind === 'ramp').length >= 6, 'rooftops needs its snowbanks');
+});
+
+test('marchers walk their line and turn at the fence', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0;
+  const m = api.addPerson(2000, api.bounds.y1 - 80);
+  m.march = { dx: 0, dy: 1 };
+  m.walk = 70;
+  const y0 = m.y;
+  for (let i = 0; i < 60; i++) api.stepPeople(1 / 60);
+  assert(m.y > y0, 'it marches');
+  for (let i = 0; i < 400; i++) api.stepPeople(1 / 60);
+  assert(m.y < api.bounds.y1, 'and turns rather than walking through the fence');
+});
+
+test('targets climb across the campaign', () => {
+  const api = boot();
+  const targets = [];
+  for (let i = 0; i < api.LEVELS.length; i++){ api.startLevel(i); targets.push(api.G.target); }
+  const early = targets.slice(0, 5).reduce((a, b) => a + b, 0) / 5;
+  const late = targets.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  assert(late > early * 1.6, 'the last markets should ask a lot more: ' + Math.round(early) + ' → ' + Math.round(late));
+});
+
 test('the first market is beatable blind', () => {
   const api = boot();
   api.startLevel(0);
@@ -1499,6 +1583,17 @@ test('the last market is beatable blind too', () => {
   const target = api.G.target;
   const best = blindBest(api, api.LEVELS.length - 1, [-180, 0, 180]);
   assert(best >= target, 'best blind run ' + best + ' vs target ' + target);
+});
+
+test('the awkward markets are beatable blind as well', () => {
+  const api = boot();
+  for (const name of ['THE GAUNTLET', 'THE LONG BOULEVARD', 'THE CHOIR']){
+    const i = api.LEVELS.findIndex(l => l.name === name);
+    api.startLevel(i);
+    const target = api.G.target;
+    const best = blindBest(api, i, [-200, 0, 200]);
+    assert(best >= target, name + ': best blind run ' + best + ' vs target ' + target);
+  }
 });
 
 test('particle and track buffers stay bounded', () => {
