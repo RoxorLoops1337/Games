@@ -198,6 +198,19 @@ const BOOST_KICK = 560;
 const PLOW_TIME = 7;                          // seconds of extra-wide bumper
 const TRACK_MAX = 460;
 
+/* Air. Hit a snowbank at speed and the car leaves the ground: it flies over
+   whatever is in the way, barrel-rolls, and everything under the landing is
+   flattened at once. */
+const GRAV_Z = 2100;                          // px/s² pulling the car back down
+const RAMP_MIN = 380;                         // slower than this you just bump it
+const RAMP_KICK = 0.40;                       // fraction of speed turned into lift
+const RAMP_MAX_VZ = 660;
+const AIR_DRAG = 0.06;                        // barely any — you keep your speed
+const LAND_R = 52;                            // slam radius, grows with speed
+const FLIP_PTS = 450;
+const AIR_PTS = 300;
+const GORE_MAX = 460;                         // ground decals kept around
+
 const PERSON_PTS = 100, SANTA_PTS = 1200;
 
 /* Prop table. mass = how much speed you lose ploughing through it. */
@@ -212,6 +225,7 @@ const PROPS = {
   barrel:    { shape:'circ', r:27,          hp:13,  pts:80,   mass:0.10 },
   fence:     { shape:'box',  w:230, h:20,   hp:16,  pts:40,   mass:0.08 },
   nutcracker:{ shape:'circ', r:36,          hp:Infinity, pts:0, mass:1, hard:true },
+  ramp:      { shape:'box',  w:130, h:190,  hp:Infinity, pts:0, mass:0.05, hard:true, ramp:true },
 };
 
 /* ---------- levels ---------- */
@@ -220,13 +234,13 @@ const LEVELS = [
     flavour:'A quiet little market. Nobody is expecting a car.' },
   { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.24,
     flavour:'Everyone is three mugs deep. Reaction times are excellent.' },
-  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.24,
+  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.36,
     flavour:'Long straight aisles. Build the combo, do not stop.' },
-  { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.35, par:0.21,
+  { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.35, par:0.26,
     flavour:'The town tree is worth a fortune. So is the crowd around it.' },
-  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.23,
+  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.30,
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
-  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.26,
+  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.25,
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
 ];
 
@@ -268,6 +282,7 @@ const car = {
   x: ANCHOR.x, y: ANCHOR.y, ang: 0, vx: 0, vy: 0, spin: 0,
   boost: 1, boostT: 0, plowT: 0, onIce: 0, hits: 0, dents: 0, launched: false,
   shoutT: 0, shout: '',
+  z: 0, vz: 0, roll: 0, rollV: 0, air: 0, airT: 0, rollAcc: 0, gore: 0, bloody: 0,
 };
 
 const aim = { active: false, x: ANCHOR.x, y: ANCHOR.y, power: 0 };
@@ -279,6 +294,7 @@ const ice = [];         // slippery patches
 const spills = [];      // hot glühwein
 const fx = [];          // particles & floating text
 const tracks = [];      // tyre marks
+const gore = [];        // blood left on the snow — pools, spray, tyre smears
 const shake = { t: 0, a: 0 };
 let hitstop = 0;
 let flash = 0;
@@ -324,6 +340,7 @@ function addProp(kind, x, y, extra){
     kind, x, y, shape: d.shape,
     w: d.w || 0, h: d.h || 0, r: d.r || Math.hypot(d.w || 0, d.h || 0) / 2,
     hp: d.hp, maxHp: d.hp, pts: d.pts, mass: d.mass, hard: !!d.hard, spill: !!d.spill,
+    ramp: !!d.ramp,
     dead: false, vx: 0, vy: 0, rot: 0, spin: 0, shakeT: 0, seed: rnd(),
   };
   if (extra) Object.assign(o, extra);
@@ -337,6 +354,7 @@ function addPerson(x, y, kind){
     r: kind === 'santa' ? 17 : 13, kind: kind || 'shopper',
     coat: ri(0, 6), hat: rnd() < 0.72, hatCol: ri(0, 4), walk: rr(24, 46), side: rnd() < 0.5 ? -1 : 1,
     wt: rr(0, 2), panic: 0, bob: rr(0, 6.28), dead: false, fly: 0, spin: 0, flat: 0,
+    squash: 1, bleedT: 0,
     pts: kind === 'santa' ? SANTA_PTS : PERSON_PTS,
   };
   people.push(p);
@@ -349,7 +367,7 @@ function addPerson(x, y, kind){
 function genMarket(lv){
   reseed(lv.seed);
   props.length = 0; people.length = 0; pickups.length = 0;
-  ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0;
+  ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0; gore.length = 0;
 
   const x0 = MARKET_X;
   const x1 = FENCE_PAD + (WORLD_W - FENCE_PAD * 2 - 120) * lv.span;
@@ -442,6 +460,15 @@ function genMarket(lv){
   for (let i = 0; i < 3 + lv.rows; i++){
     ice.push({ x: rr(laneX0, x1), y: rr(240, WORLD_H - 240), r: rr(120, 230), seed: rnd() });
   }
+  // ploughed snowbanks, inside the market only — a hop clears the row in front
+  // of you and lands in the next aisle, it never sails over the whole place
+  for (let r = 0; r < rows; r++){
+    if (rnd() < 0.75){
+      const cy = yTop + (r + 0.5) * rowH;
+      addProp('ramp', rr(x0 + 120, Math.max(x0 + 200, x1 - 200)), cy + (rnd() < 0.5 ? -1 : 1) * rowH * 0.42, {});
+    }
+  }
+
   const kinds = ['nitro', 'plow', 'star'];
   for (let i = 0; i < 3 + Math.round(lv.rows * 1.2); i++){
     pickups.push({
@@ -532,6 +559,9 @@ function nextCar(){
   car.boost = 1; car.boostT = 0; car.plowT = 0; car.onIce = 0;
   car.hits = 0; car.dents = 0; car.launched = false;
   car.shoutT = 0; car.shout = '';
+  tracks.push({ x: car.x, y: car.y, a: 0, red: 0, ice: 0, gap: 1 });
+  car.z = 0; car.vz = 0; car.roll = 0; car.rollV = 0; car.air = 0;
+  car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0;
   G.runKills = 0; G.runWrecks = 0; G.runScore = 0; G.runBest = 0;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
@@ -672,6 +702,32 @@ function shards(x, y, n, col, spd){
   }
 }
 
+/* ---------- blood on the snow ---------- */
+function addGore(x, y, r, kind, rot){
+  if (gore.length >= GORE_MAX) gore.splice(0, 60);
+  gore.push({ x, y, r, kind: kind || 'splat', rot: rot || rr(0, 6.283), seed: rnd(), t: 0 });
+}
+
+/* A kill throws blood the way the car was going and leaves a pool where the
+   body ends up. The pools are what makes a finished run readable at a glance. */
+function bleed(x, y, vx, vy, amount){
+  const a = Math.atan2(vy, vx);
+  const sp = Math.hypot(vx, vy);
+  addGore(x, y, rr(20, 34) * amount, 'pool');
+  for (let i = 0; i < Math.round(7 * amount); i++){
+    const sa = a + rr(-0.55, 0.55);
+    const d = rr(18, 40 + Math.min(150, sp * 0.16));
+    addGore(x + Math.cos(sa) * d, y + Math.sin(sa) * d, rr(5, 15) * amount, 'splat');
+  }
+  for (let i = 0; i < Math.round(12 * amount); i++){
+    const sa = a + rr(-1.1, 1.1), s = rr(0.3, 1.3) * (90 + sp * 0.35);
+    addFx({ type:'blood', x, y, vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+      ttl: rr(0.3, 0.7), size: rr(3, 8), col: rnd() < 0.25 ? '#7d1410' : '#b3201a' });
+  }
+  car.bloody = 1;
+  car.gore = Math.min(9, car.gore + 1);
+}
+
 /* ---------- scoring ---------- */
 function addScore(base){
   const pts = Math.round(base * G.mult);
@@ -710,6 +766,8 @@ function killPerson(p, vx, vy, cause){
   if (p.dead) return 0;
   p.dead = true;
   p.fly = 0.75;
+  p.bleedT = rr(0.8, 1.8);
+  p.squash = cause === 'slam' ? 0.34 : clamp(1 - Math.hypot(vx || 0, vy || 0) / 2600, 0.42, 0.95);
   p.vx = (vx || 0) * 0.55 + rr(-70, 70);
   p.vy = (vy || 0) * 0.55 + rr(-70, 70);
   p.spin = rr(-16, 16);
@@ -721,10 +779,8 @@ function killPerson(p, vx, vy, cause){
     G.banner = { text: 'HO HO NO', t: 1.6 };
     addShake(0.4, 12); flash = Math.max(flash, 0.5);
   }
-  puff(p.x, p.y, 6, '#f2f7ff', 170);
-  for (let i = 0; i < 3; i++){
-    addFx({ type:'star', x: p.x, y: p.y - 10, vx: rr(-90, 90), vy: rr(-140, -40), ttl: rr(0.4, 0.75), size: rr(6, 11), col:'#ffe9a8' });
-  }
+  puff(p.x, p.y, 5, '#f2f7ff', 170);
+  bleed(p.x, p.y, vx || rr(-40, 40), vy || rr(-40, 40), p.kind === 'santa' ? 1.6 : 1);
   if (p.hat){
     addFx({ type:'hat', x: p.x, y: p.y, vx: (vx || 0) * 0.35 + rr(-60, 60), vy: (vy || 0) * 0.35 + rr(-90, 30),
       ttl: 1.1, size: 11, col:'#e33', rot: rr(0, 6.28), spin: rr(-10, 10) });
@@ -748,6 +804,10 @@ function stepPeople(dt){
         p.ang += p.spin * dt; p.spin *= Math.exp(-2.8 * dt);
         p.fly -= dt;
         if (p.fly <= 0) p.flat = 1;
+        if (p.bleedT > 0){
+          p.bleedT -= dt;
+          if (rnd() < dt * 22) addGore(p.x + rr(-8, 8), p.y + rr(-8, 8), rr(7, 18), 'pool');
+        }
       }
       continue;
     }
@@ -916,6 +976,15 @@ function hitProp(o){
   }
   if (o.dead) return false;
 
+  if (o.ramp){
+    const sp2 = carSpeed();
+    if (sp2 >= RAMP_MIN && car.z <= 4){
+      takeOff(sp2, o);
+      return true;
+    }
+    if (car.z > 4) return false;              // already flying: sail over it
+  }
+
   const vn = car.vx * nx + car.vy * ny;
   const impact = Math.max(0, -vn);
   o.shakeT = 0.25;
@@ -962,6 +1031,88 @@ function hitProp(o){
     car.vx *= loss; car.vy *= loss;
   }
   return true;
+}
+
+/* Up the snowbank and off. Airborne the car ignores every prop, so a good
+   ramp is a shortcut straight over a whole row of stalls. */
+function takeOff(sp, o){
+  car.air = 1;
+  car.z = 6;
+  car.vz = Math.min(RAMP_MAX_VZ, sp * RAMP_KICK);
+  car.rollV = (rnd() < 0.5 ? -1 : 1) * (2.4 + sp / 420);
+  car.rollAcc = 0;
+  car.airT = 0;
+  if (o) o.shakeT = 0.3;
+  car.vx *= 0.97; car.vy *= 0.97;
+  addShake(0.25, 8);
+  puff(car.x, car.y, 12, '#f4f9ff', 260);
+  popText(car.x, car.y - 60, 'AIRBORNE!', '#7ec8ff');
+  if (car.shoutT <= 0){ car.shout = 'WHEEEEE!'; car.shoutT = SHOUT_TIME; }
+  sndBoost();
+  return true;
+}
+
+/* Coming down. Everything under the car is flattened at once — that is the
+   payoff for the jump — and the flips banked on the way cash in. */
+function land(){
+  const sp = carSpeed();
+  car.air = 0; car.z = 0; car.vz = 0;
+  const flips = Math.floor(car.rollAcc / (Math.PI * 2));
+  car.roll = 0; car.rollV = 0;
+
+  const r = LAND_R + Math.min(70, sp * 0.05);
+  let squashed = 0;
+  for (const p of people){
+    if (p.dead) continue;
+    const dx = p.x - car.x, dy = p.y - car.y;
+    if (dx * dx + dy * dy > r * r) continue;
+    killPerson(p, dx * 5, dy * 5, 'slam');
+    squashed++;
+  }
+  for (const o of props){
+    if (o.dead || o.hard) continue;
+    const dx = o.x - car.x, dy = o.y - car.y;
+    const reach = r + (o.shape === 'circ' ? o.r : Math.max(o.w, o.h) / 2);
+    if (dx * dx + dy * dy > reach * reach) continue;
+    if (o.mass <= 0.25) wreckProp(o, car.vx, car.vy);
+  }
+
+  addShake(0.4, 13);
+  hitstop = Math.max(hitstop, 0.05);
+  puff(car.x, car.y, 16, '#eef5ff', 300);
+  addFx({ type:'ring', x: car.x, y: car.y, ttl: 0.45, size: r * 1.5, col:'#ffffff' });
+  car.vx *= 0.86; car.vy *= 0.86;
+  car.spin += rr(-1.2, 1.2);
+  sndThud(0.9);
+
+  if (flips > 0){
+    const pts = addScore(FLIP_PTS * flips);
+    G.banner = { text: flips >= 3 ? 'INSANE ROLL ×' + flips : flips === 2 ? 'DOUBLE ROLL' : 'BARREL ROLL', t: 1.4 };
+    popText(car.x, car.y - 70, '+' + pts, '#8effb0', true);
+    G.comboT = Math.max(G.comboT, 1);
+    sndBanner(6);
+  }
+  if (car.airT > 0.55){
+    const pts = addScore(AIR_PTS);
+    popText(car.x, car.y - 46, 'BIG AIR +' + pts, '#7ec8ff');
+  }
+  if (squashed >= 3){
+    G.banner = { text: squashed + ' UNDER THE WHEELS', t: 1.4 };
+    flash = Math.max(flash, 0.55);
+  }
+  car.rollAcc = 0;
+  car.airT = 0;
+}
+
+function stepAir(dt){
+  car.airT += dt;
+  car.vz -= GRAV_Z * dt;
+  car.z += car.vz * dt;
+  car.roll += car.rollV * dt;
+  car.rollAcc += Math.abs(car.rollV) * dt;
+  const k = Math.exp(-AIR_DRAG * dt);
+  car.vx *= k; car.vy *= k;
+  if (car.z <= 0) land();
 }
 
 function stepCarCollisions(){
@@ -1032,17 +1183,18 @@ function onIce(){
 
 function stepCar(dt){
   G.runT += dt;
-  car.onIce = onIce() ? 1 : 0;
+  car.onIce = car.air ? 0 : (onIce() ? 1 : 0);
+  if (car.bloody > 0) car.bloody = Math.max(0, car.bloody - dt * 0.45);
   if (car.boostT > 0) car.boostT -= dt;
   if (car.plowT > 0) car.plowT -= dt;
   if (car.shoutT > 0) car.shoutT -= dt;
 
-  // friction
-  const fr = car.onIce ? ICE_FRICTION : FRICTION;
+  // friction — none of it applies while the wheels are off the ground
+  const fr = car.air ? 0 : (car.onIce ? ICE_FRICTION : FRICTION);
   let sp = carSpeed();
   if (sp > 0){
     const decay = Math.exp(-fr * dt);
-    let ns = sp * decay - (car.onIce ? DRAG * 0.25 : DRAG) * dt;
+    let ns = sp * decay - (car.air ? 0 : car.onIce ? DRAG * 0.25 : DRAG) * dt;
     if (ns < 0) ns = 0;
     const k = ns / sp;
     car.vx *= k; car.vy *= k;
@@ -1056,9 +1208,13 @@ function stepCar(dt){
     car.x += car.vx * sdt;
     car.y += car.vy * sdt;
     bounceBounds();
-    stepCarCollisions();
-    stepCarKills();
-    stepPickups();
+    if (car.air){
+      stepAir(sdt);
+    } else {
+      stepCarCollisions();
+      stepCarKills();
+      stepPickups();
+    }
   }
 
   // heading follows velocity, spin decays back into it
@@ -1069,8 +1225,9 @@ function stepCar(dt){
 
   // tyre tracks
   const last = tracks[tracks.length - 1];
-  if (v > 40 && (!last || Math.hypot(car.x - last.x, car.y - last.y) > 16)){
-    tracks.push({ x: car.x, y: car.y, a: car.ang, red: G.combo > 0 ? 1 : 0, ice: car.onIce });
+  if (!car.air && v > 40 && (!last || Math.hypot(car.x - last.x, car.y - last.y) > 16)){
+    const gap = !last || Math.hypot(car.x - last.x, car.y - last.y) > 90;
+    tracks.push({ x: car.x, y: car.y, a: car.ang, red: car.bloody, ice: car.onIce, gap });
   }
   if (car.boostT > 0 && v > 60){
     const a = car.ang + Math.PI;
@@ -1081,7 +1238,8 @@ function stepCar(dt){
   if (car.onIce && v > 120 && rnd() < 0.3) puff(car.x, car.y, 1, '#dff0ff', 90);
 
   const leaving = car.x < MARKET_X - 520 && car.vx < 0 && G.runT > 1.2;
-  if (v < STOP_SPD || G.runT > RUN_TIMEOUT || leaving) endRun();
+  if (!car.air && (v < STOP_SPD || leaving)) endRun();
+  else if (G.runT > RUN_TIMEOUT) endRun();
 }
 
 /* ---------- camera ---------- */
@@ -1240,17 +1398,46 @@ function drawGround(){
     circle(s.x, s.y, s.r * 0.62); ctx.fill();
   }
 
-  // tyre tracks
+  // blood: pools and spray, laid down before the tyre marks so the car smears
+  // through them
+  for (const g of gore){
+    if (g.x + g.r < x0 || g.x - g.r > x1 || g.y + g.r < y0 || g.y - g.r > y1) continue;
+    ctx.save();
+    ctx.translate(g.x, g.y);
+    ctx.rotate(g.rot);
+    if (g.kind === 'pool'){
+      ctx.fillStyle = 'rgba(146,18,14,.52)';
+      ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * (0.62 + g.seed * 0.34), 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(182,32,24,.5)';
+      ctx.beginPath(); ctx.ellipse(g.r * 0.2, 0, g.r * 0.55, g.r * 0.4, 0, 0, 6.283); ctx.fill();
+    } else {
+      ctx.fillStyle = 'rgba(160,22,18,.56)';
+      ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * 0.5, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(150,20,16,.5)';
+      for (let i = 0; i < 3; i++){
+        const a = g.seed * 6.283 + i * 2.1;
+        circle(Math.cos(a) * g.r * 1.5, Math.sin(a) * g.r * 1.1, g.r * 0.3); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // tyre marks: two continuous lines, red for as long as the tyres are wet
   ctx.lineCap = 'round';
-  for (let i = 0; i < tracks.length; i++){
-    const t = tracks[i];
-    if (t.x < x0 || t.x > x1 || t.y < y0 || t.y > y1) continue;
-    const nx = Math.cos(t.a + Math.PI / 2) * 12, ny = Math.sin(t.a + Math.PI / 2) * 12;
-    ctx.strokeStyle = t.red ? 'rgba(126,26,26,.42)' : 'rgba(96,110,134,.34)';
-    ctx.lineWidth = 6;
+  ctx.lineWidth = 7;
+  for (let i = 1; i < tracks.length; i++){
+    const a = tracks[i - 1], t = tracks[i];
+    if (t.gap) continue;
+    if (Math.max(a.x, t.x) < x0 || Math.min(a.x, t.x) > x1) continue;
+    if (Math.max(a.y, t.y) < y0 || Math.min(a.y, t.y) > y1) continue;
+    ctx.strokeStyle = t.red > 0.05
+      ? 'rgba(122,14,10,' + (0.3 + 0.5 * t.red) + ')'
+      : 'rgba(96,110,134,.3)';
+    const n1x = Math.cos(a.a + Math.PI / 2) * 12, n1y = Math.sin(a.a + Math.PI / 2) * 12;
+    const n2x = Math.cos(t.a + Math.PI / 2) * 12, n2y = Math.sin(t.a + Math.PI / 2) * 12;
     ctx.beginPath();
-    ctx.moveTo(t.x + nx, t.y + ny); ctx.lineTo(t.x + nx + 1, t.y + ny + 1);
-    ctx.moveTo(t.x - nx, t.y - ny); ctx.lineTo(t.x - nx - 1, t.y - ny - 1);
+    ctx.moveTo(a.x + n1x, a.y + n1y); ctx.lineTo(t.x + n2x, t.y + n2y);
+    ctx.moveTo(a.x - n1x, a.y - n1y); ctx.lineTo(t.x - n2x, t.y - n2y);
     ctx.stroke();
   }
 }
@@ -1448,6 +1635,36 @@ function drawProp(o){
       }
       ctx.restore(); break;
     }
+    case 'ramp': {
+      ctx.save(); ctx.translate(o.x, o.y);
+      shadow(0, o.h * 0.3, o.w * 0.55, o.h * 0.2, 0.18);
+      // a wedge of ploughed snow, low at the near edge and high at the crest
+      // a heap of ploughed snow: dirty at the foot, bright along the crest,
+      // with the ramp chevrons pointing the way over
+      const hw = o.w / 2, hh = o.h / 2;
+      ctx.fillStyle = '#aebfd8';
+      ctx.beginPath();
+      ctx.moveTo(-hw, -hh + 18); ctx.quadraticCurveTo(0, -hh - 16, hw, -hh + 18);
+      ctx.lineTo(hw, hh - 18); ctx.quadraticCurveTo(0, hh + 16, -hw, hh - 18);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#d3e0f2';
+      ctx.beginPath();
+      ctx.moveTo(-hw * 0.55, -hh + 14); ctx.quadraticCurveTo(hw * 0.5, -hh - 4, hw * 0.86, 0);
+      ctx.quadraticCurveTo(hw * 0.5, hh + 4, -hw * 0.55, hh - 14);
+      ctx.quadraticCurveTo(-hw * 0.2, 0, -hw * 0.55, -hh + 14);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#f7fbff';
+      ctx.beginPath();
+      ctx.ellipse(hw * 0.36, 0, hw * 0.42, hh * 0.74, 0, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = 'rgba(90,130,180,.45)'; ctx.lineWidth = 5;
+      for (let i = 0; i < 3; i++){
+        const cx2 = -hw * 0.42 + i * hw * 0.42;
+        ctx.beginPath();
+        ctx.moveTo(cx2, -hh * 0.5); ctx.lineTo(cx2 + hw * 0.3, 0); ctx.lineTo(cx2, hh * 0.5);
+        ctx.stroke();
+      }
+      ctx.restore(); break;
+    }
     case 'nutcracker': {
       ctx.save(); ctx.translate(o.x, o.y);
       const j = o.shakeT > 0 ? Math.sin(T * 50) * o.shakeT * 6 : 0;
@@ -1464,75 +1681,113 @@ function drawProp(o){
 }
 
 /* ---------- people ---------- */
+/* Seen from above: coat with shoulders, arms that swing (and fly up when they
+   panic), legs that stride, a head with a hat on top. Dead ones sprawl with
+   their limbs where the car left them. */
 function drawPerson(p){
   const coat = COATS[p.coat % COATS.length];
+  const skin = SKIN[p.coat % SKIN.length];
+  const trous = ['#3a4256', '#4a3b30', '#2f3b4c', '#5a4a52'][p.coat % 4];
   ctx.save();
   ctx.translate(p.x, p.y);
+
   if (p.dead){
     ctx.rotate(p.ang);
-    shadow(0, 4, p.r * 1.3, p.r * 0.6, 0.16);
-    ctx.fillStyle = coat;
-    ctx.beginPath(); ctx.ellipse(0, 0, p.r * 1.5, p.r * 0.75, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = SKIN[p.coat % SKIN.length];
-    circle(p.r * 1.25, 0, p.r * 0.55); ctx.fill();
-    ctx.strokeStyle = '#22304a'; ctx.lineWidth = 2;
+    ctx.scale(1, clamp(p.squash || 1, 0.3, 1));
+    shadow(0, 3, p.r * 1.2, p.r * 0.5, 0.14);
+    // legs and arms thrown outward
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.42;
     ctx.beginPath();
-    ctx.moveTo(p.r * 1.1, -p.r * 0.25); ctx.lineTo(p.r * 1.4, p.r * 0.05);
-    ctx.moveTo(p.r * 1.4, -p.r * 0.25); ctx.lineTo(p.r * 1.1, p.r * 0.05);
+    ctx.moveTo(-p.r * 0.4, -p.r * 0.25); ctx.lineTo(-p.r * 1.5, -p.r * 0.75);
+    ctx.moveTo(-p.r * 0.4, p.r * 0.25); ctx.lineTo(-p.r * 1.35, p.r * 0.9);
     ctx.stroke();
-    // splayed limbs
-    ctx.strokeStyle = coat; ctx.lineWidth = 4;
+    ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.36;
     ctx.beginPath();
-    ctx.moveTo(-p.r * 0.2, -p.r * 0.5); ctx.lineTo(-p.r * 1.1, -p.r * 1.1);
-    ctx.moveTo(-p.r * 0.2, p.r * 0.5); ctx.lineTo(-p.r * 1.1, p.r * 1.1);
+    ctx.moveTo(p.r * 0.2, -p.r * 0.4); ctx.lineTo(p.r * 0.9, -p.r * 1.25);
+    ctx.moveTo(p.r * 0.2, p.r * 0.4); ctx.lineTo(p.r * 1.05, p.r * 1.15);
+    ctx.stroke();
+    // torso, face down
+    ctx.fillStyle = coat;
+    ctx.beginPath(); ctx.ellipse(0, 0, p.r * 0.95, p.r * 0.72, 0, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = 'rgba(18,28,48,.45)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = skin;
+    circle(p.r * 1.05, 0, p.r * 0.46); ctx.fill();
+    if (p.hat){
+      ctx.fillStyle = HATS[p.hatCol % HATS.length];
+      circle(p.r * 1.3, p.r * 0.18, p.r * 0.34); ctx.fill();
+    }
+    ctx.strokeStyle = '#2a1a16'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(p.r * 0.92, -p.r * 0.2); ctx.lineTo(p.r * 1.16, p.r * 0.04);
+    ctx.moveTo(p.r * 1.16, -p.r * 0.2); ctx.lineTo(p.r * 0.92, p.r * 0.04);
     ctx.stroke();
     ctx.restore();
     return;
   }
+
+  const sp = Math.hypot(p.vx, p.vy);
+  const stride = Math.sin(p.bob) * clamp(sp / 60, 0.15, 1);
   const wob = Math.sin(p.bob) * (0.1 + p.panic * 0.28);
   ctx.rotate(p.ang + Math.PI / 2);
-  shadow(0, p.r * 0.5, p.r * 0.95, p.r * 0.45, 0.26);
-  // arms only come out when they are flailing — a calm crowd stays a clean shape
-  if (p.panic > 0.25){
-    ctx.strokeStyle = coat; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    const arm = p.r * 1.4;
-    ctx.beginPath();
-    ctx.moveTo(-p.r * 0.5, 0); ctx.lineTo(-arm, -p.r * 0.6 - wob * 12);
-    ctx.moveTo(p.r * 0.5, 0); ctx.lineTo(arm, -p.r * 0.6 + wob * 12);
-    ctx.stroke();
-  }
-  // shoulders
-  ctx.fillStyle = coat;
-  ctx.beginPath(); ctx.ellipse(0, p.r * 0.06, p.r * 0.98, p.r * 0.86, 0, 0, 6.283); ctx.fill();
-  ctx.strokeStyle = 'rgba(18,28,48,.5)'; ctx.lineWidth = 2;
+  shadow(0, p.r * 0.55, p.r * 0.9, p.r * 0.42, 0.24);
+  ctx.lineCap = 'round';
+
+  // legs, striding under the coat
+  ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.38;
+  ctx.beginPath();
+  ctx.moveTo(-p.r * 0.32, p.r * 0.2); ctx.lineTo(-p.r * 0.36, p.r * (0.85 + stride * 0.45));
+  ctx.moveTo(p.r * 0.32, p.r * 0.2); ctx.lineTo(p.r * 0.36, p.r * (0.85 - stride * 0.45));
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.14)';
-  circle(-p.r * 0.32, -p.r * 0.26, p.r * 0.4); ctx.fill();
-  // head, then a hat pulled back off the face — from above you see a sliver
-  // of face at the front and wool everywhere else
-  ctx.fillStyle = SKIN[p.coat % SKIN.length];
-  circle(0, -p.r * 0.16, p.r * 0.52); ctx.fill();
+
+  // arms: swinging when walking, straight up when running for their life
+  ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.34;
+  ctx.beginPath();
+  if (p.panic > 0.25){
+    ctx.moveTo(-p.r * 0.62, 0); ctx.lineTo(-p.r * 1.25, -p.r * (0.75 + wob));
+    ctx.moveTo(p.r * 0.62, 0); ctx.lineTo(p.r * 1.25, -p.r * (0.75 - wob));
+  } else {
+    ctx.moveTo(-p.r * 0.62, -p.r * 0.1); ctx.lineTo(-p.r * 0.9, p.r * (0.35 + stride * 0.4));
+    ctx.moveTo(p.r * 0.62, -p.r * 0.1); ctx.lineTo(p.r * 0.9, p.r * (0.35 - stride * 0.4));
+  }
+  ctx.stroke();
+
+  // coat: shoulders wider than deep
+  ctx.fillStyle = coat;
+  ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.86, p.r * 0.72, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = 'rgba(18,28,48,.5)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.13)';
+  circle(-p.r * 0.3, -p.r * 0.15, p.r * 0.34); ctx.fill();
+  // a scarf tail, because it is freezing
+  ctx.strokeStyle = HATS[(p.coat + 3) % HATS.length]; ctx.lineWidth = p.r * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(0, p.r * 0.05); ctx.lineTo(-p.r * 0.15 * (1 + stride), p.r * 0.6);
+  ctx.stroke();
+
+  // head
+  ctx.fillStyle = skin;
+  circle(0, -p.r * 0.34, p.r * 0.5); ctx.fill();
   if (p.kind === 'santa'){
     ctx.fillStyle = '#f6f2ea';
-    circle(0, p.r * 0.22, p.r * 0.46); ctx.fill();
+    circle(0, -p.r * 0.1, p.r * 0.44); ctx.fill();
     ctx.fillStyle = '#e0483c';
-    circle(0, -p.r * 0.02, p.r * 0.52); ctx.fill();
+    circle(0, -p.r * 0.22, p.r * 0.5); ctx.fill();
     ctx.fillStyle = '#f6f2ea';
-    circle(0, p.r * 0.4, p.r * 0.24); ctx.fill();
+    circle(0, p.r * 0.16, p.r * 0.22); ctx.fill();
   } else if (p.hat){
     ctx.fillStyle = HATS[p.hatCol % HATS.length];
-    circle(0, -p.r * 0.02, p.r * 0.47); ctx.fill();
+    circle(0, -p.r * 0.22, p.r * 0.45); ctx.fill();
     ctx.fillStyle = '#f6f2ea';
-    circle(0, p.r * 0.34, p.r * 0.19); ctx.fill();
+    circle(0, p.r * 0.12, p.r * 0.18); ctx.fill();
   } else {
-    ctx.fillStyle = 'rgba(40,30,26,.55)';
-    circle(0, p.r * 0.06, p.r * 0.4); ctx.fill();   // bare head: hair from above
+    ctx.fillStyle = 'rgba(40,30,26,.6)';
+    circle(0, -p.r * 0.2, p.r * 0.4); ctx.fill();
   }
   if (p.panic > 0.5){
     ctx.fillStyle = 'rgba(255,255,255,.9)';
     ctx.font = '900 16px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('!', 0, -p.r * 1.6);
+    ctx.fillText('!', 0, -p.r * 1.9);
     ctx.textAlign = 'left';
   }
   ctx.restore();
@@ -1541,10 +1796,40 @@ function drawPerson(p){
 /* ---------- car ---------- */
 function drawCar(){
   const sp = carSpeed();
+  const z = car.z || 0;
+  // the shadow stays on the ground and shrinks away as the car climbs
+  ctx.save();
+  ctx.translate(car.x + z * 0.15, car.y + z * 0.24);
+  shadow(0, 8, CAR_L * 0.52 * (1 - z / 1400), CAR_W * 0.5 * (1 - z / 1400), 0.32 * (1 - z / 900));
+  ctx.restore();
+
+  const hs = 1 + z / 380;                     // bigger = higher off the snow
+  const roll = Math.cos(car.roll || 0);       // 1 upright, -1 on its roof
   ctx.save();
   ctx.translate(car.x, car.y);
-  shadow(0, 8, CAR_L * 0.52, CAR_W * 0.5, 0.32);
+  ctx.scale(hs, hs);
   ctx.rotate(car.ang);
+  ctx.scale(1, Math.max(0.1, Math.abs(roll)));
+  if (roll < 0){
+    // underside: chassis, axles, spinning wheels
+    ctx.fillStyle = '#2a3242';
+    roundRect(-CAR_L / 2, -CAR_W / 2, CAR_L, CAR_W, 11); ctx.fill();
+    ctx.fillStyle = '#3d4859';
+    ctx.fillRect(-CAR_L * 0.34, -CAR_W * 0.16, CAR_L * 0.68, CAR_W * 0.32);
+    ctx.fillStyle = '#141a26';
+    for (const wx of [-CAR_L * 0.3, CAR_L * 0.3]){
+      roundRect(wx - 11, -CAR_W * 0.62, 22, 12, 4); ctx.fill();
+      roundRect(wx - 11, CAR_W * 0.5, 22, 12, 4); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(120,16,12,.7)';
+    for (let i = 0; i < car.gore; i++){
+      const a = i * 1.9;
+      circle(Math.cos(a) * CAR_L * 0.28, Math.sin(a) * CAR_W * 0.28, 4 + (i % 3) * 2); ctx.fill();
+    }
+    ctx.restore();
+    if (car.shoutT > 0) drawShout();
+    return;
+  }
   // snow plough
   if (car.plowT > 0){
     ctx.fillStyle = '#dfe8f6';
@@ -1596,6 +1881,17 @@ function drawCar(){
   ctx.stroke();
   ctx.fillStyle = '#ff4d4d';
   circle(CAR_L * 0.5, 0, 6); ctx.fill();
+  // whatever the wheels have been through
+  if (car.gore > 0){
+    ctx.fillStyle = 'rgba(126,14,10,.75)';
+    for (let i = 0; i < car.gore; i++){
+      const a = i * 2.3, d = 0.18 + (i % 4) * 0.09;
+      circle(CAR_L * (0.16 + d), Math.sin(a) * CAR_W * 0.36, 3.5 + (i % 3) * 2.2); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(150,20,16,.55)';
+    ctx.fillRect(CAR_L * 0.34, -CAR_W * 0.4, 7, CAR_W * 0.8);
+  }
+
   // dents
   if (car.dents > 0){
     ctx.fillStyle = 'rgba(40,20,16,.35)';
@@ -1710,6 +2006,16 @@ function drawFx(){
       ctx.fillRect(-f.size / 2, -1.6, f.size, 3.2);
       ctx.fillRect(-1.6, -f.size / 2, 3.2, f.size);
       ctx.restore();
+    } else if (f.type === 'ring'){
+      ctx.strokeStyle = f.col;
+      ctx.globalAlpha = clamp(k, 0, 1) * 0.55;
+      ctx.lineWidth = 6 * k;
+      circle(f.x, f.y, f.size * (1 - k) + 12); ctx.stroke();
+    } else if (f.type === 'blood'){
+      ctx.fillStyle = f.col;
+      ctx.beginPath();
+      ctx.ellipse(f.x, f.y, f.size * (0.6 + k * 0.6), f.size * 0.55, Math.atan2(f.vy, f.vx), 0, 6.283);
+      ctx.fill();
     } else if (f.type === 'flame'){
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = f.col; circle(f.x, f.y, f.size * k); ctx.fill();
