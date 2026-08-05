@@ -19151,4 +19151,74 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(new Set(ids).size === ids.length, 'and no skill twice (' + ids.join(', ') + ')');
 }
 
+/* ================== letting go FIRES — it does not hand the moment to the AI
+
+   I misread this twice, in a commit and in a pull request, and both times the
+   comment inside setHoldUlt said plainly what it does. Releasing casts on the
+   spot, deliberately skipping the worth test wantCast applies to an ultimate
+   (a hero target, or three bodies within six, or a structure under 70%) and
+   keeping only the RANGE test. Judging whether the moment is worth it is
+   exactly the judgement the player is taking over.
+
+   The consequence is the whole value of the lever: a release fires into a thin
+   wave the AI would refuse. That is asserted below against wantCast itself, so
+   it cannot quietly stop being true.
+
+   And what the lever is worth, measured over 24 seeds, releasing through the
+   real command when N of theirs stand inside the ultimate's own reach:
+
+     rule           ults/match   hero kills   side-0 wins
+     AI decides        1.63          48          9/24
+     go at 2           1.67          36          9/24
+     go at 3           1.71          39          9/24
+     go at 4           1.79          41          9/24
+     go at 6           1.29          40          9/24
+
+   A rule moves WHEN and HOW OFTEN — up 10% at four, down a fifth at six, where
+   it holds past windows it should have taken. It does not move the result. The
+   reason is in the first column: an ultimate goes off under twice a match
+   against a ceiling near nine, because heroes arrive at a median 262s and die.
+   The one lever the player has on a hero operates on something that happens
+   1.7 times. That is worth knowing before anybody builds a second one. */
+{
+  IB.newMatch({ diff:'veteran', seed:7001 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(P(), 'mage');
+  const h = climb(P().heroes[0]);
+  h.dead = false; h.hp = h.mhp; h.mana = h.mmana; h.inLane = true; h.castLock = 0;
+  if (!G.units.includes(h)) G.units.push(h);
+  h.x = 40; h.y = 0;
+  const ult = h.skills.find(sk => sk.ult);
+  t.ok(!!ult, 'the hero owns an ultimate (' + h.skills.map(x => x.id).join(', ') + ')');
+
+  if (ult){
+    // ONE body in front of it: not a hero, not three, not a structure — the
+    // exact case wantCast turns down
+    const lone = IB.spawnUnit(1, 'melee', { x:h.x + 1.5, y:0 });
+    if (lone) lone.hp = lone.mhp;
+    IB.update(1 / 30);
+    ult.cdT = 0; h.mana = h.mmana;
+    const d = IB.SKILL[ult.id];
+    t.ok(IB.wantCast(h, d, lone) === false,
+      'the AI refuses an ultimate over a single body, which is its worth test');
+
+    t.ok(IB.setHoldUlt(P(), true) === null, 'the hold goes on');
+    ult.cdT = 0;
+    t.ok(IB.setHoldUlt(P(), false) === null, 'and comes off');
+    t.ok(ult.cdT > 0,
+      'and letting go FIRED it, in the same call, with no tick in between (' + ult.cdT.toFixed(1) + 's)');
+
+    // the range test is the one that survives
+    const src2 = SRC.slice(SRC.indexOf('function setHoldUlt('));
+    // comments stripped: the note inside setHoldUlt names wantCast on purpose,
+    // as the record of what it deliberately does NOT call
+    const body = src2.slice(0, src2.indexOf('\n}\n'))
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    t.ok(/fireSkill\(h, sk, tgt\)/.test(body), 'the release calls fireSkill itself');
+    t.ok(!/wantCast/.test(body), 'and never asks wantCast, which is the point of it');
+    t.ok(/needsTarget\(d\)/.test(body) && /d\.rng/.test(body),
+      'while the range test it does keep is the same one wantCast ends on');
+  }
+}
+
 t.done();
