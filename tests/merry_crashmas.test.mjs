@@ -50,7 +50,7 @@ const EXPOSE = `__out.api = {
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
        SCARE_R, FLEE_SPD, BOOST_KICK, PLOW_TIME, PERSON_PTS, SANTA_PTS,
        GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX, DEBRIS_MAX,
-       REC_HZ, REC_WINDOW, REC_KEEP, REC_RADIUS, REPLAY_SPEED, REPLAY_MIN_KILLS },
+       REC_HZ, REC_WINDOW, REC_KEEP, REC_RADIUS, REPLAY_SPEED, REPLAY_MIN_WORTH },
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
 };
@@ -657,15 +657,50 @@ test('the best two seconds beat a quieter window', () => {
   api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
   api.recReset();
   api.G.phase = 'drive';
-  // a thin crowd first...
-  for (let i = 0; i < 2; i++) api.addPerson(1700 + i * 60, 1100);
-  // ...then a dense one further along
-  for (let i = 0; i < 9; i++) api.addPerson(2600 + i * 70, 1100 + (i % 3) * 12);
-  drive(api, 1500, 0, 1500, 1100);
-  for (let i = 0; i < 600 && api.G.phase === 'drive'; i++) api.update(1 / 60);
-  assert(api.clip.kills >= api.C.REPLAY_MIN_KILLS, 'a clip was kept, kills ' + api.clip.kills);
-  assert(api.clip.kills >= 5, 'it should have kept the busy stretch, got ' + api.clip.kills);
-  assert(api.clip.cx > 2400, 'and centred on the dense crowd, got ' + Math.round(api.clip.cx));
+  api.car.x = 1700; api.car.y = 1100;
+
+  // drive the recorder directly: two kills over here...
+  const tick = (secs) => {
+    for (let i = 0; i < Math.round(secs * 60); i++){
+      api.setT(api.getT() + 1 / 60);
+      api.recStep(1 / 60);
+    }
+  };
+  for (let i = 0; i < 2; i++){
+    api.killPerson(api.addPerson(1700 + i * 40, 1100), 900, 0, 'car');
+    tick(0.2);
+  }
+  const quiet = api.clip.kills;
+  tick(3);                                   // ...a long quiet stretch...
+
+  // ...then six kills in a second, a long way away
+  api.car.x = 3800;
+  for (let i = 0; i < 6; i++){
+    api.killPerson(api.addPerson(3800 + i * 40, 1100), 900, 0, 'car');
+    tick(0.16);
+  }
+  tick(0.3);
+
+  assert(quiet === 2, 'the first pair was captured while it was the best, got ' + quiet);
+  assert(api.clip.kills >= 5, 'the busy stretch should win, got ' + api.clip.kills);
+  assert(api.clip.cx > 3600, 'and the clip centres on it, got ' + Math.round(api.clip.cx));
+  assert(api.clip.worth >= api.C.REPLAY_MIN_WORTH, 'worth ' + api.clip.worth);
+  const span = api.clip.frames[api.clip.frames.length - 1].t - api.clip.frames[0].t;
+  assert(span <= api.C.REC_WINDOW + 0.1, 'the clip is a two-second window, got ' + span.toFixed(2));
+});
+
+test('a stretch of pure demolition is worth a replay too', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100;
+  for (let i = 0; i < 3; i++){
+    api.wreckProp(api.addProp('hut', 2000 + i * 200, 1100, {}), 800, 0);
+    for (let k = 0; k < 12; k++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
+  }
+  assert(api.clip.wrecks >= 3, 'the smashes were recorded, got ' + api.clip.wrecks);
+  assert(api.replayReady(), 'three stalls in two seconds earns a replay');
 });
 
 test('a quiet run is not worth a replay', () => {
@@ -713,12 +748,11 @@ test('the replay leaves the market exactly as it found it', () => {
   api.launch(-api.C.MAX_PULL, 0);
   for (let i = 0; i < 1800 && api.G.phase === 'drive'; i++) api.update(1 / 60);
   if (!api.replayReady()){ return; }         // nothing to check on a quiet run
+  for (let i = 0; i < 200 && api.G.phase !== 'replay'; i++) api.update(1 / 60);
+  assert(api.G.phase === 'replay', 'in the replay');
   const before = api.people.map(p => [p.x, p.y, p.dead, p.squash]);
   const propsBefore = api.props.map(o => [o.x, o.y, o.dead, o.hp]);
   const kills = api.G.kills, score = api.G.levelScore;
-
-  step(api, 1.4);
-  assert(api.G.phase === 'replay', 'in the replay');
   for (let i = 0; i < 1200 && api.G.phase === 'replay'; i++) api.update(1 / 60);
 
   api.people.forEach((p, i) => {
@@ -1084,8 +1118,9 @@ test('each run reports its own tally when the car stops', () => {
   assert(api.G.runScore > 0, 'run score tallied');
   assert(api.G.banner && /DOWN|SCRATCH/.test(api.G.banner.text), 'a run summary is shown');
   const first = api.G.runScore;
-  step(api, 2);                       // settle hands over to the next car
-  assert(api.G.phase === 'aim', 'next car ready');
+  step(api, 2);                       // settle hands over to the replay or the next car
+  if (api.G.phase === 'replay'){ api.skipReplay(); api.update(1 / 60); }
+  assert(api.G.phase === 'aim', 'next car ready, got ' + api.G.phase);
   api.launch(-api.C.MAX_PULL, 0);
   assert(api.G.runScore === 0, 'the tally resets for the next car');
   assert(api.G.levelScore >= first, 'but the level total keeps it');
