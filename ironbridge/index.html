@@ -2963,7 +2963,37 @@ function counterCatch(s){
   for (let i = 0; i < foe.slots; i++) if (foe.spells[i] && foe.spellCd[i] > 0) n++;
   return n;
 }
-const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
+/* dps was 34. Pitch Fire measured 40.0%, last of the bottom four, and the
+   measurement had to be built differently from Bombard's: this is a zone that
+   burns for six seconds, so the count as it LANDS — all its castTell reports —
+   is not the count that burns. Bodies walk in and out. The unit is body-seconds.
+
+   Over 241 pours in 40 matches it was not short of damage at all: 25.04
+   body-seconds a pour, and pure:true skips mitigation, so 851 damage a pour —
+   two and a half Footmen worth of health. But spread over 6.36 bodies at its
+   widest that is ~134 each, and the cheapest body on the bridge is a 190hp
+   Levy. Broad and shallow. The dps x dur ceiling of 204 only ever applied to a
+   body that never left, and the commonest body, a 340hp Footman, could not be
+   finished by a perfect pour.
+
+   Kills had to be measured against a twin, because a body dying inside a fire
+   did not necessarily die OF it — turrets kill things standing in fires too. A
+   fire at 0.01 dps still scored 1.25 kills a pour, so every arm below is run
+   against its own near-zero twin at the same seeds and what is reported is the
+   difference:
+
+     dps  rad  dur   body-secs   kills   would have died   NET   ceiling
+      34  5.5    6       25.52    1.86              1.25  0.60       204   <- was
+      58  5.5    6       25.11    2.38              1.25  1.12       348   <- is
+      34  5.5    9       34.22    2.42              1.67  0.75       306
+      45  5.5    8       31.49    2.38              1.67  0.71       360
+
+   The ceiling is the wrong statistic. 45/8 carries a HIGHER ceiling than 58/6
+   and converts worse, because bodies transit rather than stand: what turns
+   damage into bodies is the rate, not the total on offer. Duration barely
+   moves it. 340/6 = 56.7 is where a fully-exposed Footman starts dying, and 58
+   is the measured value just past that line. */
+const PITCH = { dur:6, rad:5.5, dps:58, slow:.22, slowT:.45 };
 
 /* ai.w is the DRAFT weight — how often aiPickSpell takes this order into a
    slot, for the Host and (since the muster) for a commander who gave no orders.
