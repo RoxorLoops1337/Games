@@ -36,6 +36,33 @@ for (const id of DEX_ORDER) {
     ok(sum(sp.evo[0]) > sum(id), `${sp.evo[0]} is stronger than ${id}`);
   }
 }
+// A kin fights with its own element. Nothing learns a Wild move — a Cindercub
+// bites with fire, not with a generic Nip — so `Wild` is only the fallback for
+// the move you are given when every real one is spent.
+section('every kin fights with its own element');
+for (const id of DEX_ORDER) {
+  const sp = DEX[id];
+  for (const [, mv] of sp.learn) {
+    ok(sp.types.includes(MOVES[mv].type),
+      `${id} (${sp.types.join('/')}) learns ${mv}, which is ${MOVES[mv].type}`);
+  }
+}
+// And each element carries a full kit, so no kin has to reach outside itself.
+for (const t of Object.keys(TYPES)) {
+  if (t === 'Wild') continue;
+  const kit = Object.keys(MOVES).filter((m) => MOVES[m].type === t);
+  const pow = kit.filter((m) => MOVES[m].pow > 0).map((m) => MOVES[m].pow);
+  ok(kit.length >= 6, `${t} has a full kit (${kit.length} moves)`);
+  ok(Math.min(...pow) <= 45, `${t} has something cheap to open with`);
+  ok(Math.max(...pow) >= 95, `${t} has a finisher`);
+  ok(kit.some((m) => (MOVES[m].fx || {}).pri), `${t} has a move that strikes first`);
+  ok(kit.some((m) => !MOVES[m].pow), `${t} has something that is not just damage`);
+}
+ok(DEX_ORDER.every((id) => !DEX[id].learn.some(([, mv]) => MOVES[mv].type === 'Wild')),
+  'no kin learns a Wild move');
+eq(MOVES.falter.type, 'Wild', 'the last-resort move is the one Wild move left');
+
+section('dex + moves are internally consistent (moves)');
 for (const [id, m] of Object.entries(MOVES)) {
   ok(!!TYPES[m.type], `${id} has a real type`);
   ok(m.pp >= 1 && m.pp <= 40, `${id} pp sane`);
@@ -73,11 +100,13 @@ const atk = EK.mkMon('pyrelynx', 30), defV = EK.mkMon('sproutle', 30), defT = EK
 const dv = EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg;
 const dt = EK.damageOf(atk, defT, 'cinder', { crit: false, roll: 1 }).dmg;
 ok(dv > dt * 2.5, 'super-effective hits far harder than resisted');
-const noStab = EK.damageOf(atk, defV, 'lunge', { crit: false, roll: 1 }).dmg;
-ok(EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg > noStab, 'STAB + effectiveness beats a neutral move of similar power');
+// Same power, one with STAB and effectiveness behind it, one without.
+const noStab = EK.damageOf(atk, defV, 'brine', { crit: false, roll: 1 }).dmg;
+ok(EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg > noStab,
+  'STAB + effectiveness beats the same power with neither');
 const critDmg = EK.damageOf(atk, defV, 'cinder', { crit: true, roll: 1 }).dmg;
 ok(critDmg > dv, 'crits hurt more');
-eq(EK.damageOf(atk, defV, 'rally', { crit: false, roll: 1 }).dmg, 0, 'status moves deal no damage');
+eq(EK.damageOf(atk, defV, 'ashveil', { crit: false, roll: 1 }).dmg, 0, 'status moves deal no damage');
 
 section('stat stages');
 const s = EK.mkMon('zaplet', 20);
@@ -364,6 +393,132 @@ eq(pending.species, 'pyrelynx', 'it became Pyrelynx');
 eq(res.newName, 'Pyrelynx', 'the evolution is reported');
 eq(EK.G.dex.pyrelynx, 2, 'evolving registers the new form in the dex');
 ok(pending.moves.length <= 4, 'move list never exceeds four');
+
+section('every move effect does what it says');
+// The kin's moves are the only source of damage now, so each fx a move can
+// carry is exercised against a foe that cannot die mid-measurement.
+const mv = withDeck(loadGame({}));
+mv.enterMap('route_one', 9, 10, 'down');
+const useOn = (moveId, opt = {}) => {
+  mv.G.might = 0;
+  mv.G.party = [mv.mkMon(opt.mine || 'pyrelynx', 40)];
+  mv.G.battle = null;
+  mv.startBattle({ foe: mv.mkMon(opt.foe || 'gargolem', 30), wild: true });
+  const bb = mv.B();
+  bb.foe.hp = bb.foe.max = 99999;
+  bb.mine.hp = Math.floor(bb.mine.max / 2);
+  bb.mine.moves = [{ id: moveId, pp: 30, max: 30 }];
+  const before = { foe: bb.foe.hp, hp: bb.mine.hp, atk: bb.mine.stages.atk, def: bb.mine.stages.def,
+    spd: bb.mine.stages.spd, fAtk: bb.foe.stages.atk, fSpd: bb.foe.stages.spd, status: bb.foe.status };
+  const log = [];
+  mv.useMove(log, 'mine', moveId);
+  return { b: bb, before, log,
+    dealt: before.foe - bb.foe.hp, hpDelta: bb.mine.hp - before.hp,
+    missed: log.some((e) => /missed/.test(e.t)) };
+};
+for (const [id, m] of Object.entries(MOVES)) {
+  const fx = m.fx || {};
+  // Damage: a move with power takes HP off, one without never does.
+  let r = useOn(id);
+  for (let i = 0; i < 30 && r.missed; i++) r = useOn(id);      // accuracy, not the effect
+  if (m.pow) ok(r.dealt > 0, `${id} (power ${m.pow}) takes HP off`);
+  else eq(r.dealt, 0, `${id} has no power and deals nothing`);
+
+  if (fx.drain) ok(r.hpDelta > 0, `${id} drains life back`);
+  if (fx.recoil) ok(r.hpDelta < 0, `${id} costs the user HP`);
+  if (fx.heal && !m.pow) ok(r.hpDelta > 0, `${id} heals its user`);
+  if (fx.self) {
+    for (const [stat, n] of fx.self) {
+      const key = { atk: 'atk', def: 'def', spd: 'spd' }[stat];
+      ok(Math.sign(r.b.mine.stages[key] - r.before[key]) === Math.sign(n),
+        `${id} moves its own ${stat} ${n > 0 ? 'up' : 'down'}`);
+    }
+  }
+  if (fx.foe) {
+    for (const [stat, n] of fx.foe) {
+      const was = stat === 'atk' ? r.before.fAtk : stat === 'spd' ? r.before.fSpd : 0;
+      ok(Math.sign(r.b.foe.stages[stat] - was) === Math.sign(n),
+        `${id} moves the foe's ${stat} ${n > 0 ? 'up' : 'down'}`);
+    }
+  }
+  if (fx.st) {
+    // A kin is immune to the status of its own element, so pick a target that
+    // is not — and swing until the chance lands rather than trusting one roll.
+    const immuneType = EK.IMMUNE_TO[fx.st[0]];
+    const target = DEX_ORDER.find((sp) => !DEX[sp].types.includes(immuneType));
+    ok(!!target, `${fx.st[0]} has somebody it can be applied to`);
+    let landed = null;
+    for (let i = 0; i < 200 && !landed; i++) {
+      const t = useOn(id, { foe: target });
+      if (t.b.foe.status) landed = t.b.foe.status;
+    }
+    eq(landed, fx.st[0], `${id} can leave the foe ${fx.st[0]}`);
+  }
+  if (fx.pri) ok(fx.pri > 0, `${id} carries priority`);
+}
+// Recoil and drain are paid on what came off, not on the number rolled. A
+// heavy move finishing something already beaten must not kill its own user.
+const overkill = MOVES.magmacharge ? 'magmacharge' : Object.keys(MOVES).find((id) => (MOVES[id].fx || {}).recoil && MOVES[id].pow > 50);
+mv.G.might = 0;
+mv.G.party = [mv.mkMon('pyrelynx', 50)];
+mv.G.battle = null;
+mv.startBattle({ foe: mv.mkMon('sproutle', 3), wild: true });
+const ob = mv.B();
+ob.mine.hp = ob.mine.max;
+ob.foe.hp = 1;                                    // one point left, huge swing incoming
+ob.mine.moves = [{ id: overkill, pp: 30, max: 30 }];
+for (let i = 0; i < 40 && ob.foe.hp > 0; i++) {   // it can miss; that is accuracy, not recoil
+  ob.foe.hp = 1; ob.mine.hp = ob.mine.max;
+  mv.useMove([], 'mine', overkill);
+}
+eq(ob.foe.hp, 0, 'the swing finishes it');
+ok(ob.mine.max - ob.mine.hp <= 1, `recoil is paid on the 1 HP it took, not the ${MOVES[overkill].pow} it rolled`);
+mv.G.battle = null;
+// Priority is the one that has to be read by the turn order, not just stored.
+ok(Object.keys(MOVES).filter((id) => (MOVES[id].fx || {}).pri).length >= 7,
+  'every element has a first-strike move');
+mv.G.battle = null;
+
+section('a card shows the damage, not a power rating');
+// Power is an internal number nobody can act on: 45 means one thing at level 5
+// and another at level 50, and nothing at all against something that resists it.
+const dt2 = withDeck(loadGame({}));
+dt2.enterMap('route_one', 9, 10, 'down');
+dt2.G.might = 0;
+dt2.G.party = [dt2.mkMon('cindercub', 14)];
+dt2.startBattle({ foe: dt2.mkMon('sproutle', 14), wild: true });   // Verdant: Ember eats it
+const emberMove = dt2.B().mine.moves.find((m) => MOVES[m.id].type === 'Ember' && MOVES[m.id].pow);
+const vsWeak = dt2.moveDamage(emberMove.id);
+ok(!/power/.test(dt2.moveCardText(emberMove.id)), 'the card does not say "power"');
+ok(/deal /.test(dt2.moveCardText(emberMove.id)), 'it says what it deals');
+ok(vsWeak.lo > 0 && vsWeak.hi >= vsWeak.lo, `and gives a range (${vsWeak.lo}-${vsWeak.hi})`);
+
+// The number moves with the deck stacked onto it.
+const edgeCard2 = dt2.grantCard('edge');
+dt2.B().hand = [{ src: 'deck', u: edgeCard2.u, id: 'edge', bg: 0 }];
+dt2.B().energy = 9;
+dt2.playCard(0);
+const sharpened = dt2.moveDamage(emberMove.id);
+eq(sharpened.lo - vsWeak.lo, dt2.CARDS.edge.v, 'an edge adds exactly its number to what the card shows');
+
+// And with the type chart.
+dt2.G.battle = null;
+dt2.G.might = 0;
+dt2.startBattle({ foe: dt2.mkMon('dewdrip', 14), wild: true });     // Tide: Ember flops
+const vsResist = dt2.moveDamage(emberMove.id);
+ok(vsResist.hi < vsWeak.lo, `the same move reads lower against something that resists it (${vsResist.lo}-${vsResist.hi} vs ${vsWeak.lo}-${vsWeak.hi})`);
+
+// Out of a fight there is nobody to measure against, so the party screen uses a
+// stated yardstick: a same-level target that neither resists nor is weak to it.
+const shelf = dt2.mkMon('cindercub', 14);
+const emberN = dt2.moveDamageNeutral(shelf, emberMove.id);
+ok(emberN > 0, `the party screen shows a real number (~${emberN})`);
+const byPow = shelf.moves.filter((m) => MOVES[m.id].pow).sort((a, c) => MOVES[c.id].pow - MOVES[a.id].pow);
+ok(dt2.moveDamageNeutral(shelf, byPow[0].id) >= dt2.moveDamageNeutral(shelf, byPow[byPow.length - 1].id),
+  'and the heavier move reads heavier');
+const statusMove = shelf.moves.find((m) => !MOVES[m.id].pow);
+if (statusMove) eq(dt2.moveDamageNeutral(shelf, statusMove.id), 0, 'a status move reads as no damage at all');
+dt2.G.battle = null;
 
 section('status effects tick and expire sensibly');
 G.party = [EK.mkMon('gargolem', 30)];

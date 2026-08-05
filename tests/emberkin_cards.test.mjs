@@ -280,7 +280,7 @@ section('a support card adds exactly the number printed on it');
 const EK7 = withDeck(loadGame({}));
 /** Damage the same move does with the card played, minus without it. */
 const gainFrom = (cardId, species, lvl, foe, flvl) => {
-  const move = 'lunge';                            // fixed, neutral, no rider
+  const move = 'shalecut';                         // fixed power, no rider, off-element
   const roll = { crit: false, roll: 1 };
   EK7.G.might = 0;
   EK7.G.party = [EK7.mkMon(species, lvl)];
@@ -361,6 +361,123 @@ ok(EK8.saveGame(), 'saved');
 const EK9 = loadGame(store2);
 ok(EK9.loadGame(), 'loaded');
 eq(EK9.G.might, EK8.CARDS.grit.v, 'and it came back with the save');
+
+// The heart of "does it actually do what it says". Every card in the table is
+// played in a controlled fight and the thing it promises is checked, so a new
+// card cannot be added with a `vt` or an `fx` that nothing reads.
+section('every card does what its text says');
+const EKA = withDeck(loadGame({}));
+EKA.enterMap('route_one', 9, 10, 'down');
+const bench = (cardId) => {
+  EKA.G.might = 0;
+  EKA.G.party = [EKA.mkMon('pyrelynx', 30), EKA.mkMon('brookite', 30)];
+  EKA.G.battle = null;
+  EKA.startBattle({ foe: EKA.mkMon('gargolem', 30), wild: true });
+  const bb = EKA.B();
+  bb.foe.hp = bb.foe.max = 99999;                 // nothing dies mid-measurement
+  bb.mine.hp = Math.floor(bb.mine.max / 2);       // room to heal, room to hurt
+  bb.energy = 99;
+  const owned = EKA.grantCard(cardId);
+  bb.hand = [{ src: 'deck', u: owned.u, id: cardId, bg: 0 }];   // measured with the card in hand
+  const before = {
+    flat: EKA.attackBonus().flat, mul: EKA.attackBonus().mul, hits: EKA.attackBonus().hits,
+    shield: bb.shield, def: bb.mods.def, thorns: bb.mods.thorns,
+    hp: bb.mine.hp, max: bb.mine.max, hand: bb.hand.length, energy: bb.energy,
+    riders: bb.mods.riders.length, might: EKA.G.might, piles: bb.disc.length + bb.exh.length,
+  };
+  EKA.playCard(0);
+  const after = {
+    flat: EKA.attackBonus().flat, mul: EKA.attackBonus().mul, hits: EKA.attackBonus().hits,
+    shield: bb.shield, def: bb.mods.def, thorns: bb.mods.thorns,
+    hp: bb.mine.hp, max: bb.mine.max, hand: bb.hand.length, energy: bb.energy,
+    riders: bb.mods.riders.length, might: EKA.G.might, piles: bb.disc.length + bb.exh.length,
+  };
+  return { b: bb, owned, before, after, v: EKA.cardValue({ id: cardId, plus: 0, bg: 0 }) };
+};
+for (const id of CARD_IDS) {
+  const c = CARDS[id];
+  const fx = c.fx || {};
+  const r = bench(id);
+  const gained = (k) => r.after[k] - r.before[k];
+  // Whatever `vt` names, the number moved by exactly that much.
+  if (c.vt === 'edge') eq(gained('flat'), r.v, `${id}: next attack is +${r.v}`);
+  if (c.vt === 'atk') eq(gained('flat'), r.v, `${id}: every attack is +${r.v}`);
+  if (c.vt === 'might') eq(gained('might'), r.v, `${id}: banks +${r.v} damage permanently`);
+  if (c.vt === 'shield') eq(gained('shield'), r.v, `${id}: puts up ${r.v} shield`);
+  if (c.vt === 'def') eq(gained('def'), r.v, `${id}: takes ${r.v} less per hit`);
+  if (c.vt === 'maxhp') eq(gained('max'), r.v, `${id}: raises max HP by ${r.v}`);
+  if (c.vt === 'heal') ok(gained('hp') >= Math.min(r.v, r.before.max - r.before.hp) - (fx.selfdmg || 0),
+    `${id}: heals ${r.v}`);
+  // The card itself left the hand, so drawing v means the hand ends v-1 up.
+  if (c.vt === 'draw') eq(gained('hand'), r.v - 1, `${id}: draws ${r.v}`);
+  if (fx.draw) ok(gained('hand') >= fx.draw - 1, `${id}: also draws ${fx.draw}`);
+  if (fx.energy) ok(gained('energy') >= fx.energy - c.cost, `${id}: also gives ${fx.energy} energy`);
+  // And every rider in `fx` did its thing too.
+  if (fx.st && c.kind === 'power') ok(gained('riders') >= 1, `${id}: rides on every attack`);
+  if (fx.st && c.kind !== 'power') ok(!!r.b.mods.edgeSt, `${id}: rides on the next attack`);
+  if (fx.hits) eq(gained('hits'), fx.hits, `${id}: adds ${fx.hits} swing`);
+  if (fx.mul) eq(r.after.mul, r.before.mul * fx.mul, `${id}: multiplies damage by ${fx.mul}`);
+  if (fx.thorns) eq(gained('thorns'), fx.thorns, `${id}: bristles for ${fx.thorns}`);
+  if (fx.def) ok(gained('def') >= fx.def, `${id}: also takes ${fx.def} less per hit`);
+  if (fx.atk) ok(gained('flat') >= fx.atk, `${id}: also adds ${fx.atk} to attacks`);
+  if (fx.selfdmg) ok(gained('hp') <= 0, `${id}: costs you HP`);
+  if (fx.healFull) eq(r.after.hp, r.after.max, `${id}: heals to full`);
+  if (fx.drain) ok(r.b.mods.edgeDrain > 0, `${id}: the swing it sharpens drinks back`);
+  if (fx.thorns) ok(gained('thorns') > 0, `${id}: thorns are up`);
+  // Exhaust versus discard, and growth, are structural — check them for all.
+  if (c.exhaust) eq(r.b.exh.length, 1, `${id}: exhausts instead of discarding`);
+  else eq(r.b.disc.filter((x) => x.id === id).length, 1, `${id}: goes to the discard`);
+  if (c.grow) eq(r.owned.plus, c.grow, `${id}: grew by ${c.grow} on the play`);
+  eq(r.owned.plays, 1, `${id}: the play was counted`);
+}
+EKA.G.battle = null;
+
+// The audit is only worth having if it would notice. A card whose promised
+// number nothing applies must fail the same check the real ones pass.
+EKA.CARDS.__probe = { name: 'Probe', r: 'common', cost: 0, kind: 'skill', v: 9, vt: 'shield', txt: 'Gain {v} shield.' };
+const honest = bench('__probe');
+eq(honest.after.shield - honest.before.shield, 9, 'the audit passes a card that keeps its word');
+EKA.CARDS.__probe.vt = 'nonsense';                // nothing reads this
+const liar = bench('__probe');
+eq(liar.after.shield - liar.before.shield, 0, 'and would have caught one that did not');
+delete EKA.CARDS.__probe;
+
+// The riders are only worth having if they actually land on the foe.
+section('riders land on what you hit');
+EKA.G.might = 0;
+EKA.G.party = [EKA.mkMon('pyrelynx', 40)];
+EKA.G.battle = null;
+EKA.startBattle({ foe: EKA.mkMon('gargolem', 20), wild: true });
+const rb = EKA.B();
+rb.foe.hp = rb.foe.max = 99999;
+rb.energy = 99;
+const venomCard = EKA.grantCard('venomcoat');
+rb.hand = [{ src: 'deck', u: venomCard.u, id: 'venomcoat', bg: 0 }];
+EKA.playCard(0);
+const kinAtk = rb.mine.moves.find((m) => EKA.MOVES[m.id].pow);
+for (let i = 0; i < 30 && !rb.foe.status; i++) {
+  rb.hand = [{ src: 'kin', id: kinAtk.id }];
+  rb.energy = 99;
+  EKA.playCard(0);
+}
+eq(rb.foe.status, 'snare', 'Venom Coat snares the foe through the kin\'s own attack');
+EKA.G.battle = null;
+
+// Guard is flat and honest on the way in, the same as attack is on the way out.
+section('guard takes its number off every hit');
+EKA.G.party = [EKA.mkMon('pyrelynx', 40)];
+EKA.G.battle = null;
+EKA.startBattle({ foe: EKA.mkMon('gargolem', 20), wild: true });
+const gb = EKA.B();
+gb.shield = 0;
+const bareHit = EKA.hurtMine([], 20, 'test');
+gb.mine.hp = gb.mine.max;
+gb.mods.def = 6;
+const guardedHit = EKA.hurtMine([], 20, 'test');
+eq(bareHit - guardedHit, 6, 'six guard takes six off the hit');
+gb.mods.def = 999;
+ok(EKA.hurtMine([], 20, 'test') >= 1, 'and a hit never falls to nothing however much guard you stack');
+EKA.G.battle = null;
 
 section('every win offers a card');
 const EKR = withDeck(loadGame({}));
