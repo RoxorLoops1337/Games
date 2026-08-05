@@ -213,6 +213,8 @@ const GORE_MAX = 360;                         // ground decals kept around
 const DEBRIS_MAX = 300;
 
 const PERSON_PTS = 100, SANTA_PTS = 1200;
+const COATS_RT = ['#e05143', '#3f86c4', '#41a066', '#9a5cbe', '#e08a2e', '#6b7a94', '#cf4a80'];
+const SKIN_RT = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 
 /* Who is out doing their Christmas shopping. Speed, size and payout differ,
    and each type panics in its own way. */
@@ -591,6 +593,7 @@ function nextCar(){
   car.boost = 1; car.boostT = 0; car.plowT = 0; car.onIce = 0;
   car.hits = 0; car.dents = 0; car.launched = false;
   car.shoutT = 0; car.shout = '';
+  recReset();
   tracks.push({ x: car.x, y: car.y, a: 0, red: 0, ice: 0, gap: 1 });
   car.z = 0; car.vz = 0; car.roll = 0; car.rollV = 0; car.air = 0;
   car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0;
@@ -742,6 +745,7 @@ function addGore(x, y, r, kind, rot){
 
 /* A kill throws blood the way the car was going and leaves a pool where the
    body ends up. The pools are what makes a finished run readable at a glance. */
+let bleedCoat = null, bleedSkin = null;      // set by the caller that knows
 function bleed(x, y, vx, vy, amount){
   const a = Math.atan2(vy, vx);
   const sp = Math.hypot(vx, vy);
@@ -771,8 +775,41 @@ function bleed(x, y, vx, vy, amount){
     }
   }
   splatLens(Math.round((2 + hard * 4) * amount));
+  if (hard > 0.5) gib(x, y, vx, vy, amount * (0.6 + hard * 0.5), bleedCoat, bleedSkin);
+  else pixels(x, y, Math.round(8 * amount), a, sp, bleedCoat, bleedSkin);
   car.bloody = 1;
   car.gore = Math.min(9, car.gore + 1);
+}
+
+/* What comes off a person at speed: an arm, a leg, the odd head, and a burst
+   of pixels. Limbs tumble and settle onto the snow; pixels are pure sparkle
+   and are gone in half a second. */
+function gib(x, y, vx, vy, amount, coat, skin){
+  const a = Math.atan2(vy, vx);
+  const sp = Math.hypot(vx, vy);
+  const parts = ['arm', 'arm', 'leg', 'leg', 'head'];
+  const n = clamp(Math.round(amount * (1 + sp / 700)), 1, 5);
+  for (let i = 0; i < n; i++){
+    const part = parts[ri(0, parts.length - 1)];
+    const sa = a + rr(-1.0, 1.0), s = rr(0.45, 1.25) * (150 + sp * 0.42);
+    addFx({ type:'limb', part, x: x + rr(-6, 6), y: y + rr(-6, 6),
+      vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+      ttl: rr(0.9, 1.6), size: part === 'head' ? 8 : rr(9, 15),
+      rot: rr(0, 6.283), spin: rr(-18, 18),
+      col: part === 'head' ? (skin || '#f0c9a4') : (coat || '#c8443a'),
+      col2: skin || '#f0c9a4' });
+  }
+  pixels(x, y, Math.round(10 + amount * 10 + sp * 0.012), a, sp, coat, skin);
+}
+
+/* Loose pixels. Cheap, bright, and they sell the hit more than anything. */
+function pixels(x, y, n, a, sp, coat, skin){
+  const cols = ['#c4160f', '#e0342a', '#8e1210', '#ff6b5e', coat || '#c8443a', skin || '#f0c9a4'];
+  for (let i = 0; i < n; i++){
+    const sa = (a || 0) + rr(-1.5, 1.5), s = rr(0.3, 1.5) * (170 + (sp || 0) * 0.5);
+    addFx({ type:'pixel', x, y, vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+      ttl: rr(0.22, 0.6), size: rr(2, 5), col: cols[ri(0, cols.length - 1)] });
+  }
 }
 
 /* Blood on the camera. Screen space, so it stays put while the world moves. */
@@ -837,13 +874,18 @@ function killPerson(p, vx, vy, cause){
   bumpCombo();
   const pts = addScore(p.pts);
   G.kills++; G.totalKills++; G.runKills++;
+  rec.kills++;
+  if (rec.killPos.length < 40) rec.killPos.push(p.x, p.y);
   popText(p.x, p.y - 18, '+' + pts, p.kind === 'santa' ? '#ff6b5e' : '#ffd34d', p.kind === 'santa');
   if (p.kind === 'santa'){
     G.banner = { text: 'HO HO NO', t: 1.6 };
     addShake(0.4, 12); flash = Math.max(flash, 0.5);
   }
   puff(p.x, p.y, 5, '#f2f7ff', 170);
+  bleedCoat = COATS_RT[p.coat % COATS_RT.length];
+  bleedSkin = SKIN_RT[p.coat % SKIN_RT.length];
   bleed(p.x, p.y, vx || rr(-40, 40), vy || rr(-40, 40), p.kind === 'santa' ? 1.6 : 1);
+  bleedCoat = bleedSkin = null;
   if (p.pram && p.pramT > 0){
     p.pramT = 0;
     const a = Math.atan2(vy || 0, vx || 0) + rr(-0.5, 0.5);
@@ -1044,6 +1086,13 @@ function stepFx(dt){
     f.vx *= k; f.vy *= k;
     if (f.type === 'star' || f.type === 'hat' || f.type === 'drop' || f.type === 'pram') f.vy += 90 * dt;
     if (f.type === 'chunk' && f.t >= f.ttl - dt) addGore(f.x, f.y, f.size * 1.1, 'chunk');
+    if (f.type === 'limb'){
+      f.vy += 40 * dt;
+      if (f.t >= f.ttl - dt){
+        addGore(f.x, f.y, f.size * 0.8, 'chunk');
+        addGore(f.x, f.y, f.size * 1.2, 'splat');
+      }
+    }
   }
   if (tracks.length > TRACK_MAX) tracks.splice(0, tracks.length - TRACK_MAX);
 }
@@ -1390,8 +1439,192 @@ function stepCar(dt){
   else if (G.runT > RUN_TIMEOUT) endRun();
 }
 
+/* ============================ INSTANT REPLAY =============================
+   A rolling two-and-a-bit seconds of the run is always being recorded at
+   30Hz — the car, and whatever people and props are near it. Every time the
+   trailing two seconds beat the best two seconds so far, that window is
+   copied aside. When the car finally stops, the best window is played back
+   in slow motion, close in. Nothing is re-simulated: playback writes the
+   recorded positions onto the real objects and puts them back afterwards. */
+const REC_HZ = 30;
+const REC_WINDOW = 2.0;                 // the clip length we are hunting for
+const REC_KEEP = 2.5;                   // how much history the ring holds
+const REC_RADIUS = 680;                 // only what is near the car is filmed
+const REC_ENTS = 96, REC_PROPS = 46;
+const REPLAY_SPEED = 0.45;              // slow motion factor
+const REPLAY_MIN_KILLS = 3;             // fewer than this is not worth watching
+
+const rec = { frames: [], acc: 0, kills: 0, killPos: [], lastCopy: -9 };
+const clip = { frames: [], kills: 0, cx: 0, cy: 0 };
+const rp = { t: 0, dur: 0, skip: false, restore: null, caption: '' };
+
+function recReset(){
+  rec.frames.length = 0; rec.acc = 0; rec.kills = 0; rec.killPos.length = 0; rec.lastCopy = -9;
+  clip.frames.length = 0; clip.kills = 0;
+}
+
+function recSnap(){
+  const ents = [];
+  for (let i = 0; i < people.length && ents.length < REC_ENTS * 8; i++){
+    const p = people[i];
+    if (Math.abs(p.x - car.x) > REC_RADIUS || Math.abs(p.y - car.y) > REC_RADIUS) continue;
+    ents.push(i, p.x, p.y, p.ang, p.dead ? 1 : 0, p.squash, p.panic, p.cry);
+  }
+  const pr = [];
+  for (let i = 0; i < props.length && pr.length < REC_PROPS * 5; i++){
+    const o = props[i];
+    if (Math.abs(o.x - car.x) > REC_RADIUS || Math.abs(o.y - car.y) > REC_RADIUS) continue;
+    pr.push(i, o.x, o.y, o.dead ? 1 : 0, o.hp);
+  }
+  return {
+    t: T,
+    car: [car.x, car.y, car.ang, car.z, car.roll, car.gore, car.plowT, car.boostT],
+    ents, props: pr,
+    kills: rec.kills,
+    killPos: rec.killPos.slice(),
+  };
+}
+
+function recStep(dt){
+  rec.acc += dt;
+  if (rec.acc < 1 / REC_HZ) return;
+  rec.acc = 0;
+  rec.frames.push(recSnap());
+  rec.kills = 0; rec.killPos.length = 0;
+  while (rec.frames.length && T - rec.frames[0].t > REC_KEEP) rec.frames.shift();
+
+  // is the trailing window the best one yet?
+  if (T - rec.lastCopy < 0.2) return;
+  let kills = 0, sx = 0, sy = 0, n = 0, first = -1;
+  for (let i = 0; i < rec.frames.length; i++){
+    const f = rec.frames[i];
+    if (T - f.t > REC_WINDOW) continue;
+    if (first < 0) first = i;
+    kills += f.kills;
+    for (let k = 0; k < f.killPos.length; k += 2){ sx += f.killPos[k]; sy += f.killPos[k + 1]; n++; }
+  }
+  if (kills <= clip.kills || kills < REPLAY_MIN_KILLS || first < 0) return;
+  rec.lastCopy = T;
+  clip.frames = rec.frames.slice(first);
+  clip.kills = kills;
+  clip.cx = n ? sx / n : car.x;
+  clip.cy = n ? sy / n : car.y;
+}
+
+/* ---------- playback ---------- */
+function replayReady(){ return clip.kills >= REPLAY_MIN_KILLS && clip.frames.length > 4; }
+
+function startReplay(){
+  const f0 = clip.frames[0], f1 = clip.frames[clip.frames.length - 1];
+  rp.t = 0;
+  rp.dur = Math.max(0.4, f1.t - f0.t);
+  rp.skip = false;
+  rp.caption = clip.kills + ' IN TWO SECONDS';
+  // remember the state we are about to scribble on
+  const ents = [], pr = [];
+  for (const p of people) ents.push([p.x, p.y, p.ang, p.dead, p.squash, p.panic, p.cry, p.fly]);
+  for (const o of props) pr.push([o.x, o.y, o.dead, o.hp]);
+  rp.restore = {
+    ents, props: pr,
+    car: [car.x, car.y, car.ang, car.z, car.roll, car.gore, car.plowT, car.boostT],
+  };
+  G.phase = 'replay';
+  show('hint', true);
+  setTxt('hint', 'REPLAY — TAP OR PRESS SPACE TO SKIP');
+  camSnap();
+  if (typeof sndReplay === 'function') sndReplay();
+}
+
+function replayApply(){
+  const fr = clip.frames;
+  const t0 = fr[0].t, want = t0 + rp.t;
+  let i = 0;
+  while (i < fr.length - 2 && fr[i + 1].t <= want) i++;
+  const a = fr[i], b = fr[Math.min(fr.length - 1, i + 1)];
+  const span = Math.max(1e-4, b.t - a.t);
+  const k = clamp((want - a.t) / span, 0, 1);
+
+  car.x = lerp(a.car[0], b.car[0], k);
+  car.y = lerp(a.car[1], b.car[1], k);
+  car.ang = angLerp(a.car[2], b.car[2], k);
+  car.z = lerp(a.car[3], b.car[3], k);
+  car.roll = lerp(a.car[4], b.car[4], k);
+  car.gore = a.car[5]; car.plowT = a.car[6]; car.boostT = a.car[7];
+
+  for (let j = 0; j < a.ents.length; j += 8){
+    const idx = a.ents[j], p = people[idx];
+    if (!p) continue;
+    p.x = a.ents[j + 1]; p.y = a.ents[j + 2]; p.ang = a.ents[j + 3];
+    p.dead = !!a.ents[j + 4]; p.squash = a.ents[j + 5];
+    p.panic = a.ents[j + 6]; p.cry = a.ents[j + 7];
+    p.fly = 0;
+    // find the same person in the next frame and slide between the two
+    for (let m = 0; m < b.ents.length; m += 8){
+      if (b.ents[m] !== idx) continue;
+      p.x = lerp(p.x, b.ents[m + 1], k);
+      p.y = lerp(p.y, b.ents[m + 2], k);
+      p.ang = angLerp(p.ang, b.ents[m + 3], k);
+      break;
+    }
+  }
+  for (let j = 0; j < a.props.length; j += 5){
+    const o = props[a.props[j]];
+    if (!o) continue;
+    o.x = a.props[j + 1]; o.y = a.props[j + 2];
+    o.dead = !!a.props[j + 3]; o.hp = a.props[j + 4];
+  }
+  return a;
+}
+
+function stepReplay(dt){
+  const before = rp.t;
+  rp.t += dt * REPLAY_SPEED;
+  const a = replayApply();
+  // re-fire the sprays that happened on the frames we just crossed
+  const t0 = clip.frames[0].t;
+  for (const f of clip.frames){
+    const rel = f.t - t0;
+    if (rel <= before || rel > rp.t) continue;
+    for (let k = 0; k < f.killPos.length; k += 2){
+      pixels(f.killPos[k], f.killPos[k + 1], 14, rr(0, 6.283), 700);
+      addFx({ type:'mist', x: f.killPos[k], y: f.killPos[k + 1], vx: rr(-30, 30), vy: rr(-30, 30),
+        ttl: 0.7, size: rr(18, 30), col:'#8e1410' });
+      hitstop = Math.max(hitstop, 0.04);
+    }
+  }
+  if (rp.t >= rp.dur || rp.skip) endReplay();
+  return a;
+}
+
+function skipReplay(){ if (G.phase === 'replay') rp.skip = true; }
+
+function endReplay(){
+  const r = rp.restore;
+  if (r){
+    for (let i = 0; i < people.length && i < r.ents.length; i++){
+      const p = people[i], e = r.ents[i];
+      p.x = e[0]; p.y = e[1]; p.ang = e[2]; p.dead = e[3]; p.squash = e[4];
+      p.panic = e[5]; p.cry = e[6]; p.fly = e[7];
+    }
+    for (let i = 0; i < props.length && i < r.props.length; i++){
+      const o = props[i], e = r.props[i];
+      o.x = e[0]; o.y = e[1]; o.dead = e[2]; o.hp = e[3];
+    }
+    car.x = r.car[0]; car.y = r.car[1]; car.ang = r.car[2]; car.z = r.car[3];
+    car.roll = r.car[4]; car.gore = r.car[5]; car.plowT = r.car[6]; car.boostT = r.car[7];
+  }
+  rp.restore = null;
+  clip.frames = []; clip.kills = 0;
+  show('hint', false);
+  if (G.carsLeft > 0) nextCar(); else levelEnd();
+}
+
 /* ---------- camera ---------- */
 function camTarget(){
+  if (G.phase === 'replay'){
+    // close in on the car, biased toward where the bodies are
+    return { x: car.x * 0.68 + clip.cx * 0.32, y: car.y * 0.68 + clip.cy * 0.32, z: 470 };
+  }
   if (G.phase === 'aim' || G.phase === 'menu' || G.phase === 'brief'){
     return { x: ANCHOR.x + 330, y: ANCHOR.y, z: 1500 };
   }
@@ -1416,25 +1649,30 @@ function stepCam(dt){ camApply(camTarget(), 1 - Math.exp(-6 * dt)); }
 /* ---------- main step ---------- */
 function update(dt){
   T += dt;
-  if (hitstop > 0){ hitstop -= dt; dt *= 0.18; }
+  const rawDt = dt;                 // the recorder ticks in real time, not
+  if (hitstop > 0){ hitstop -= dt; dt *= 0.18; }   // in hit-stopped time
   if (shake.t > 0){ shake.t -= dt; if (shake.t <= 0) shake.a = 0; }
   if (flash > 0) flash = Math.max(0, flash - dt * 2.6);
 
-  stepPeople(dt);
-  stepProps(dt);
-  stepSpills(dt);
+  if (G.phase !== 'replay'){
+    stepPeople(dt);
+    stepProps(dt);
+    stepSpills(dt);
+  }
   stepFx(dt);
   stepLens(dt);
   stepCombo(dt);
 
-  if (G.phase === 'drive') stepCar(dt);
+  if (G.phase === 'drive'){ stepCar(dt); recStep(rawDt); }
   else if (G.phase === 'settle'){
     G.settleT -= dt;
     if (G.settleT <= 0){
-      if (G.carsLeft > 0) nextCar();
+      if (replayReady()) startReplay();
+      else if (G.carsLeft > 0) nextCar();
       else levelEnd();
     }
   }
+  else if (G.phase === 'replay') stepReplay(dt);
   stepCam(dt);
 }
 
@@ -2310,6 +2548,44 @@ function drawFx(){
       ctx.globalAlpha = clamp(k, 0, 1) * 0.3;
       ctx.fillStyle = f.col;
       circle(f.x, f.y, f.size * (1.2 - k * 0.5)); ctx.fill();
+    } else if (f.type === 'pixel'){
+      ctx.fillStyle = f.col;
+      ctx.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size);
+    } else if (f.type === 'limb'){
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      if (f.part === 'head'){
+        ctx.fillStyle = f.col2;
+        circle(0, 0, f.size); ctx.fill();
+        ctx.fillStyle = 'rgba(120,14,10,.85)';
+        circle(0, f.size * 0.6, f.size * 0.5); ctx.fill();
+      } else {
+        ctx.fillStyle = f.col;                       // sleeve or trouser leg
+        roundRect(-f.size, -f.size * 0.28, f.size * 1.7, f.size * 0.56, f.size * 0.28); ctx.fill();
+        ctx.fillStyle = f.col2;                      // the end that came off
+        circle(f.size * 0.7, 0, f.size * 0.3); ctx.fill();
+        ctx.fillStyle = 'rgba(120,14,10,.9)';
+        circle(-f.size * 0.92, 0, f.size * 0.26); ctx.fill();
+      }
+      ctx.restore();
+    } else if (f.type === 'pixel'){
+      ctx.fillStyle = f.col;
+      ctx.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size);
+    } else if (f.type === 'limb'){
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      if (f.part === 'head'){
+        ctx.fillStyle = f.col2;
+        circle(0, 0, f.size); ctx.fill();
+        ctx.fillStyle = 'rgba(120,14,10,.85)';
+        circle(0, f.size * 0.6, f.size * 0.5); ctx.fill();
+      } else {
+        ctx.fillStyle = f.col;                       // sleeve or trouser leg
+        roundRect(-f.size, -f.size * 0.28, f.size * 1.7, f.size * 0.56, f.size * 0.28); ctx.fill();
+        ctx.fillStyle = f.col2;                      // the end that came off
+        circle(f.size * 0.7, 0, f.size * 0.3); ctx.fill();
+        ctx.fillStyle = 'rgba(120,14,10,.9)';
+        circle(-f.size * 0.92, 0, f.size * 0.26); ctx.fill();
+      }
+      ctx.restore();
     } else if (f.type === 'chunk'){
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
       ctx.fillStyle = f.col;
@@ -2451,6 +2727,7 @@ function drawAim(){
 
 /* ---------- HUD ---------- */
 function drawHUD(){
+  if (G.phase === 'replay') return;
   screenTransform();
   const pad = 14;
   ctx.textAlign = 'left';
@@ -2567,6 +2844,39 @@ function drawLens(){
 }
 
 let vigGrad = null, vigKey = '';
+/* Letterbox, caption and a progress bar, so the slow-motion reads as a
+   replay rather than the game having gone wrong. */
+function drawReplayFrame(){
+  if (G.phase !== 'replay') return;
+  screenTransform();
+  const inT = clamp(rp.t / 0.25, 0, 1);
+  const outT = clamp((rp.dur - rp.t) / 0.3, 0, 1);
+  const bar = VH * 0.11 * Math.min(inT, outT);
+  ctx.fillStyle = '#05080f';
+  ctx.fillRect(0, 0, VW, bar);
+  ctx.fillRect(0, VH - bar, VW, bar);
+
+  ctx.globalAlpha = Math.min(inT, outT);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ff5a4a';
+  ctx.font = '900 15px system-ui';
+  ctx.fillText('● REPLAY', 22, bar + 30);
+  ctx.fillStyle = '#fff';
+  ctx.font = '900 30px system-ui';
+  ctx.fillText(rp.caption, 22, bar + 64);
+  ctx.fillStyle = '#8fa6c6';
+  ctx.font = '700 13px system-ui';
+  ctx.fillText('SLOW MOTION ×' + REPLAY_SPEED.toFixed(2).replace(/0+$/, ''), 22, bar + 84);
+
+  // scrub bar
+  const bw = VW - 44, by = VH - bar - 16;
+  ctx.fillStyle = 'rgba(255,255,255,.16)';
+  roundRect(22, by, bw, 4, 2); ctx.fill();
+  ctx.fillStyle = '#ff5a4a';
+  roundRect(22, by, bw * clamp(rp.t / rp.dur, 0, 1), 4, 2); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
 function drawVignette(){
   screenTransform();
   const key = VW + 'x' + VH;
@@ -2627,6 +2937,7 @@ function draw(){
   drawSnow();
   drawLens();
   drawVignette();
+  drawReplayFrame();
   drawHUD();
 }
 </script>
@@ -2702,6 +3013,11 @@ function sndBanner(n){
   const base = 520 + Math.min(6, n / 4) * 60;
   [0, 90, 180].forEach((d, i) => setTimeout(() => tone(base * (1 + i * 0.26), 0.14, 'triangle', 0.18), d));
 }
+/* Two notes dropping — the sound of everything slowing down. */
+const sndReplay = () => {
+  tone(520, 0.3, 'triangle', 0.15, 300);
+  setTimeout(() => tone(300, 0.45, 'triangle', 0.13, 190), 180);
+};
 function sndFanfare(){
   const notes = [523, 659, 784, 1047];
   notes.forEach((f, i) => setTimeout(() => tone(f, 0.22, 'triangle', 0.2), i * 130));
@@ -2722,6 +3038,7 @@ function screenToWorld(sx, sy){
 
 function pointerDown(sx, sy){
   audioInit();
+  if (G.phase === 'replay'){ skipReplay(); return; }
   if (G.phase === 'aim'){
     aim.active = true;
     const w = screenToWorld(sx, sy);
@@ -2763,7 +3080,8 @@ function bindInput(){
     if (e.code === 'Space'){
       e.preventDefault();
       audioInit();
-      if (G.phase === 'drive') doBoost();
+      if (G.phase === 'replay') skipReplay();
+      else if (G.phase === 'drive') doBoost();
       else if (G.phase === 'menu') startCampaign();
       else if (G.phase === 'brief') beginLevel();
     }
