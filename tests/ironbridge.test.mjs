@@ -20048,4 +20048,60 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(Math.abs(ps.fireX - 55) < 1e-6, 'and moves the patch to the new point');
 }
 
+/* ================== the noise floor, measured rather than predicted
+
+   The 55 openings were re-swept on one consistent build after three orders had
+   changed. RAMPART MOVED 6.6 POINTS WITHOUT BEING TOUCHED — nothing about it
+   differed between the two sweeps. That is this rig's empirical noise floor,
+   and it is larger than two of the three movements the changes had been
+   credited with. Bombard's single-arm +1.9 reads +0.3 on the consistent table.
+
+   So the ~8-point claim threshold, which had been arithmetic (SE 2.8 an arm,
+   4.0 on a difference), is now also an observation. What is asserted below is
+   the arithmetic that makes Second Muster the outlier, which is exact, and the
+   property that it is alone in doing what it does. Not the table, which is a
+   sample and would go stale the moment anything is tuned. */
+{
+  const cd = IB.SPELL.muster.cd;
+  t.ok(cd > 0, 'Second Muster recovers in ' + cd + 's');
+  t.ok(C.WAVE_PERIOD > 0, 'and a wave marches every ' + C.WAVE_PERIOD + 's on its own');
+
+  /* One extra wave per (cd / WAVE_PERIOD) natural ones. This is the whole
+     reason it sits 20 points above the mean: it is the only order that adds to
+     the one currency the game keeps score in. */
+  const per = cd / C.WAVE_PERIOD;
+  t.ok(per > 1, 'so it buys one extra wave for every ' + per.toFixed(1) + ' that march anyway');
+  t.ok(1 / per > .15, 'which is ' + (100 / per).toFixed(0) + '% more waves than the clock gives');
+  t.ok(1 / per < .5, 'though not so many that the clock stops mattering');
+
+  // and the bodies it musters are real bodies, just slightly cheaper ones
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const mh = msrc.match(/const MUSTER_HP = ([\d.]+);/);
+  t.ok(!!mh, 'the muster health fraction parsed (' + (mh ? mh[1] : 'missing') + ')');
+  const hp = mh ? Number(mh[1]) : 0;
+  t.ok(hp > .5 && hp < 1, 'a mustered body is ' + (100 * hp).toFixed(0) + '% of a marched one');
+
+  /* Alone in the set. Every other order damages, delays or moves what is
+     already on the bridge; this one puts more of it there. Read off the cast
+     table rather than asserted, so an order that learns to spawn later cannot
+     quietly join it without this saying so. */
+  const castTable = msrc.slice(msrc.indexOf('const SPELL_CAST'), msrc.indexOf('\nfunction ', msrc.indexOf('const SPELL_CAST')));
+  const spawners = IB.SPELLS.filter(d => {
+    const i = castTable.indexOf('\n  ' + d.id + '(');
+    if (i < 0) return false;
+    const body = castTable.slice(i, castTable.indexOf('\n  }', i) + 4 || i + 200);
+    return /spawnUnit|musterWave/.test(body);
+  }).map(d => d.id);
+  t.ok(spawners.length === 1 && spawners[0] === 'muster',
+    'exactly one order puts new bodies on the bridge (' + (spawners.join(', ') || 'none') + ')');
+
+  // it costs three of the four stores, which is the counterweight it has
+  const cost = IB.SPELL.muster.cost;
+  t.ok(Object.keys(cost).length >= 3,
+    'and it is the only one paid for out of ' + Object.keys(cost).length + ' stores at once (' +
+    Object.keys(cost).join(', ') + ')');
+  t.ok(IB.SPELL.muster.bound === 'cd',
+    'its recovery is what limits it, which is why the recovery is where a fix would go');
+}
+
 t.done();
