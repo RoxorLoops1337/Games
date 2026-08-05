@@ -2944,7 +2944,6 @@ function useMove(log, atkSide, moveId) {
       if (atkSide === 'foe') {
         dealt = hurtMine(log, dmg, `${them} took ${dmg}.`);        // shield first
       } else {
-<<<<<<< HEAD
         // Recoil and drain are paid on what actually came off, not on the
         // number rolled: hitting a foe with 3 HP left for 300 must not recoil
         // as though it had dealt 300, or a heavy move kills its own user
@@ -2952,9 +2951,6 @@ function useMove(log, atkSide, moveId) {
         const had = defender.hp;
         defender.hp = clamp(defender.hp - dmg, 0, defender.max);
         dealt = had - defender.hp;
-=======
-        defender.hp = clamp(defender.hp - dmg, 0, defender.max);
->>>>>>> origin/main
         snap(log, `${them} took ${dmg}.`, 'hit', 'foe');
       }
       totalDealt += dealt;
@@ -5142,11 +5138,7 @@ if (typeof window !== 'undefined') {
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL,
-<<<<<<< HEAD
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
-=======
-    grantXP, checkEvolve, evolveMon, useMove, endOfTurn,
->>>>>>> origin/main
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
