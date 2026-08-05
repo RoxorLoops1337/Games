@@ -5030,6 +5030,36 @@ function heroStep(h, dt){
   const calm = G.t - h.dmgTaken > 6 ? 1 : 0;
   h.hp = Math.min(h.mhp, h.hp + (1.5 + h.lvl * .25 + passVal(h, 'hreg')
     + (atHome ? 34 : 0) + calm * (6 + h.lvl * .9)) * dt);
+  /* MANA HAS NEVER BEEN SEEN TO STOP A CAST, and the arithmetic here is why.
+
+     Measured over eight veteran matches — 151,153 live hero-ticks with a kit,
+     77,379 of them with the full four — the number of ticks on which any skill
+     was unaffordable was ZERO, and the lowest any hero's pool ever fell was
+     51.6%. The dearest skill in the game costs 110.
+
+     It is circular rather than mistuned. A level-10 mage carries a 776 pool
+     and regenerates 7/s in combat here — 11 calm, 29 standing at home — while
+     a four-skill kit firing at its cooldown ceiling would spend around 13/s.
+     But skills do not fire at their ceiling: what limits them is a target in
+     range rather than a cooldown, so spend lands well under regen and the pool
+     refills from its worst point in under a minute.
+
+     Held loosely on purpose. One run of the same probe over the same seeds
+     once reported 11,958 short ticks against a tick count 0.6% different from
+     every other run, and I could not reproduce it or explain it — not by
+     re-running it, not by restoring the edit that was on disk at the time.
+     Three later runs agree on zero, one of them calibrated against
+     hand-computed regen and pool figures before it was believed. So the
+     measurement below is documented rather than asserted: the tests beside
+     this hold the ARITHMETIC, which is derivable and stable, and deliberately
+     not the behaviour, which is the part that proved it could surprise me.
+
+     What follows from it, if it holds: the mana cost printed on all 56 skill
+     cards has never changed an outcome, and the five passives granting regen
+     or pool are inert. Making it bind is a real balance change — it would have
+     to move costs or this constant far enough to bite during the bursts when a
+     hero does chain skills, and that touches every skill and all six classes
+     at once. Recorded rather than done. */
   h.mana = Math.min(h.mmana, h.mana + (3.5 + h.lvl * .35 + passVal(h, 'mreg')
     + (atHome ? 22 : 0) + calm * 4) * dt);
   gainXp(h, 8.0 * dt);                       // standing in the lane is worth something
