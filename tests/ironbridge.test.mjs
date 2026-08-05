@@ -20168,4 +20168,68 @@ t.ok(true, 'a final draw on a live match is clean');
     ' — a far bigger change on paper than it was in play');
 }
 
+/* ================== the hash could not see a summon's clock
+
+   packBody carries u.life — it is a plain number and packBody keeps every
+   primitive — so a resynced joiner always got the right value. mixTimers did
+   not list it, which is the half that matters: two peers whose summon timers
+   had drifted agreed on the hash right up until the body vanished on one board
+   and not the other, and the divergence then reported was a missing unit
+   rather than the clock that removed it.
+
+   Verified against a control before the fix — moving a body's hp changed the
+   hash, moving its life did not. Nothing casts a life-limited body today but a
+   hero's summon, which is exactly the sort of rarely-walked path a hash exists
+   for, and the next order that adds one will rest on this. */
+{
+  IB.newMatch({ diff:'veteran', seed:9310 });
+  for (let i = 0; i < 20; i++) IB.update(1 / 30);
+  const u = IB.spawnUnit(1, 'shade', { x:40, y:0, life:8 });
+  t.ok(!!u, 'a life-limited body can be made');
+  t.ok(u.life === 8, 'and carries the clock it was given (' + u.life + 's)');
+  IB.update(1 / 30);
+
+  // the control first: something already hashed has to move the hash, or the
+  // test below proves nothing about life
+  const a0 = IB.netHash();
+  u.hp -= 10;
+  t.ok(IB.netHash() !== a0, 'CONTROL: changing a hashed field moves the hash');
+  u.hp += 10;
+  t.ok(IB.netHash() === a0, 'and putting it back restores it');
+
+  const b0 = IB.netHash();
+  const was = u.life;
+  u.life = was - 3;
+  t.ok(IB.netHash() !== b0, 'so does changing how long the body has left');
+  u.life = was;
+  t.ok(IB.netHash() === b0, 'and that is reversible too, so it is the value and not the visit');
+
+  // the quantisation is the same one every other timer uses, so a difference
+  // smaller than a frame does not register as a divergence
+  const c0 = IB.netHash();
+  u.life = was + 1 / 90;
+  t.ok(IB.netHash() === c0, 'a third of a frame of drift is below the quantiser, as for every other timer');
+  u.life = was + 1;
+  t.ok(IB.netHash() !== c0, 'a whole second is not');
+  u.life = was;
+
+  // and it still survives the snapshot, which was never the broken half
+  const snap = IB.netSnap();
+  t.ok(JSON.stringify(snap).includes('"life"'), 'the snapshot still carries it');
+
+  /* It is listed with the other unit clocks rather than somewhere of its own,
+     so anything that walks that list walks this too. */
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const mt = msrc.slice(msrc.indexOf('function mixTimers'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('function mixTimers') + 1));
+  t.ok(/mix\(q30\(u\.life\)\)/.test(mt), 'life is mixed in with the rest of the body clocks');
+  t.ok(/q30/.test(mt), 'at the same quantisation they use');
+
+  // a summoned body really does expire, which is the behaviour the hash guards
+  const v = IB.spawnUnit(1, 'shade', { x:41, y:0, life:0.5 });
+  t.ok(!!v && G.units.includes(v), 'a short-lived body starts on the board');
+  for (let i = 0; i < 30; i++) IB.update(1 / 30);
+  t.ok(v.dead || !G.units.includes(v), 'and is gone once its clock runs out');
+}
+
 t.done();
