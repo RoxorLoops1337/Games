@@ -38,15 +38,10 @@ addictive, more challenge, puzzles, cars that behave differently over time.**
       ground, stalls, trees, light colour, snowfall, fog, darkness
 - [x] Market layout shapes: rows / wave / plaza ring / funnel / chevron
 - [x] Three per-market goals from a pool of 13, driving the star rating
+- [x] Car garage: five cars, own art and handling, unlocked by lifetime kills
 
 ## Next
 
-- [ ] **Car garage.** Several cars with genuinely different handling, picked
-      before a run: hatchback (the current one), van (heavy, ploughs, barely
-      bounces), sports (fast, low friction, fragile), monster truck (huge
-      airtime, crushes on landing), sleigh (very slippery, high restitution).
-      Unlocked by lifetime kills. Each needs its own art and its own feel — a
-      car that is only a number change is not a car.
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
       spent on nitro charges, plough duration, mass, ramp lift, restitution.
       Persist alongside the existing `merry_crashmas_*` keys. This is the

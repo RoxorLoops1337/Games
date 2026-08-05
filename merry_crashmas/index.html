@@ -37,6 +37,14 @@
   .btn.alt{ color:#dce8fb; background:linear-gradient(180deg,#33507d,#213a5c); box-shadow:0 5px 0 #142640, 0 10px 22px rgba(0,0,0,.42); }
   .btn.alt:active{ box-shadow:0 2px 0 #142640; }
   .btn.dim{ opacity:.45; }
+  .garage{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:0 0 14px; }
+  .car{ flex:1 1 160px; max-width:190px; padding:8px 10px; border-radius:10px; cursor:pointer;
+    background:#0b1524; border:2px solid #22395c; color:#cfdcee; font-family:inherit; text-align:left; }
+  .car b{ display:block; font-size:12px; letter-spacing:1.2px; color:#e8f0ff; }
+  .car i{ display:block; font-style:normal; font-size:11px; line-height:1.35; color:#8fa6c6; margin-top:3px; }
+  .car.on{ border-color:#e8a91f; background:#17233a; }
+  .car.on b{ color:#ffd34d; }
+  .car.locked{ opacity:.45; cursor:not-allowed; }
   .goals{ text-align:left; max-width:400px; margin:0 auto 14px; }
   .goal{ display:flex; align-items:center; gap:9px; padding:6px 10px; margin:5px 0; border-radius:9px;
     background:#0b1524; border:2px solid #22395c; color:#b9cbe4; font-size:14px; font-weight:600; }
@@ -106,6 +114,8 @@
       <div class="targetline" id="brFlavour"></div>
       <p class="sub" id="brTheme"></p>
       <div class="goals" id="brGoals"></div>
+      <p class="sub" id="brKills"></p>
+      <div class="garage" id="brGarage"></div>
       <button class="btn gold" id="bGo">LET&rsquo;S RUIN CHRISTMAS</button>
     </div>
   </div>
@@ -178,7 +188,53 @@ const ANCHOR = { x: 820, y: WORLD_H / 2 };   // where every car starts —
 const MARKET_X = 1560;                        // first stall row
 const FENCE_PAD = 90;                         // world edge the car bounces off
 
-const CAR_L = 76, CAR_W = 38, CAR_R = 27;     // body length / width / collide radius
+const CAR_L = 76, CAR_W = 38, CAR_R = 27;     // the hatchback: length / width / collide radius
+
+/* The garage. Every car is a different shape on the snow and a different thing
+   to aim: what it weighs, how far it slides, how hard it comes off a stall,
+   what a snowbank does to it. Unlocked by lifetime kills across every run. */
+const CARS = [
+  { id:'hatch', name:'THE HATCHBACK', unlock:0,
+    blurb:'The family car. Good at everything, remarkable at nothing.',
+    launch:1, glide:1, rest:1, dmg:1, ramp:1, boost:1, plow:0, slam:1,
+    len:76, wid:38, rad:27,
+    body:'#cf2f26', body2:'#e8463a', roof:'#2b3a58', trim:'#f6f2ea' },
+  { id:'van', name:'THE DELIVERY VAN', unlock:500,
+    blurb:'Two tonnes of parcels. Goes through stalls rather than off them.',
+    launch:0.88, glide:1.22, rest:0.55, dmg:1.8, ramp:0.75, boost:1, plow:9, slam:1.15,
+    len:94, wid:44, rad:31,
+    body:'#e6e0d2', body2:'#f5f1e6', roof:'#33507d', trim:'#33507d' },
+  { id:'sport', name:'THE SPORTS COUPE', unlock:1500,
+    blurb:'Quickest off the sling and bounces off everything. Two nitros.',
+    launch:1.16, glide:0.9, rest:1.4, dmg:0.75, ramp:1.15, boost:2, plow:0, slam:0.9,
+    len:74, wid:35, rad:25,
+    body:'#ffcf3d', body2:'#ffe692', roof:'#22252e', trim:'#22252e' },
+  { id:'monster', name:'THE MONSTER TRUCK', unlock:4000,
+    blurb:'Leaves the ground off anything and lands like a dropped piano.',
+    launch:0.92, glide:1.1, rest:0.85, dmg:1.4, ramp:1.75, boost:1, plow:5, slam:1.7,
+    len:86, wid:52, rad:32, bigWheels:true,
+    body:'#3f8a5c', body2:'#57a875', roof:'#1a2a1d', trim:'#ffd34d' },
+  { id:'sleigh', name:'SANTA’S SLEIGH', unlock:9000,
+    blurb:'No brakes, no grip, no mercy. It simply does not stop.',
+    launch:1.06, glide:2.6, rest:1.45, dmg:0.95, ramp:1.3, boost:2, plow:0, slam:1,
+    len:82, wid:40, rad:28, runners:true,
+    body:'#c8261c', body2:'#e0483c', roof:'#7a1a12', trim:'#ffd34d' },
+];
+let CAR = CARS[0];
+let CARL = CAR_L, CARW = CAR_W, CARR = CAR_R;
+const CAR_KEY = 'merry_crashmas_car_v1';
+const KILLS_KEY = 'merry_crashmas_kills_v1';
+
+function carUnlocked(c){ return G.lifeKills >= c.unlock; }
+
+function selectCar(id){
+  const c = CARS.find(x => x.id === id);
+  if (!c || !carUnlocked(c)) return false;
+  CAR = c;
+  CARL = c.len; CARW = c.wid; CARR = c.rad;
+  try { localStorage.setItem(CAR_KEY, c.id); } catch (_){}
+  return true;
+}
 const MAX_PULL = 430;                         // world units of sling travel
 const MIN_POWER = 0.16;
 const MAX_LAUNCH = 1900;                      // world px/s at full pull
@@ -326,7 +382,7 @@ const GOALS = [
     test: (G2, n) => G2.wrecks >= n },
   { id:'roll',    text: n => 'Land ' + (n > 1 ? n + ' barrel rolls' : 'a barrel roll'), gen: lv => 1 + (lv > 2 ? 1 : 0),
     test: (G2, n) => G2.rolls >= n },
-  { id:'air',     text: n => 'Take ' + n + ' jumps off a snowbank', gen: lv => 1 + Math.floor(lv / 2),
+  { id:'air',     text: n => 'Take ' + n + (n > 1 ? ' jumps' : ' jump') + ' off a snowbank', gen: lv => 1 + Math.floor(lv / 2),
     test: (G2, n) => G2.jumps >= n },
   { id:'slam',    text: n => 'Flatten ' + n + ' at once with a landing', gen: lv => 2 + Math.floor(lv / 2),
     test: (G2, n) => G2.bestSlam >= n },
@@ -398,7 +454,7 @@ const G = {
   potential: 0,
   cars: 3, carsLeft: 3,
   combo: 0, comboT: 0, mult: 1, bestCombo: 0,
-  kills: 0, wrecks: 0, totalKills: 0,
+  kills: 0, wrecks: 0, totalKills: 0, lifeKills: 0,
   goals: null, goalsDone: 0,
   rolls: 0, jumps: 0, bestSlam: 0, bestRun: 0, nitroKills: 0,
   byKind: {}, treeDown: false, carouselDown: false,
@@ -682,12 +738,16 @@ function loadBest(){
   try {
     G.best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
     G.unlocked = clamp(parseInt(localStorage.getItem(PROG_KEY) || '0', 10) || 0, 0, LEVELS.length - 1);
-  } catch (_){ G.best = 0; G.unlocked = 0; }
+    G.lifeKills = Math.max(0, parseInt(localStorage.getItem(KILLS_KEY) || '0', 10) || 0);
+    const want = localStorage.getItem(CAR_KEY);
+    if (want && !selectCar(want)) selectCar('hatch');
+  } catch (_){ G.best = 0; G.unlocked = 0; G.lifeKills = 0; }
 }
 function saveBest(){
   try {
     if (G.score > G.best){ G.best = G.score; localStorage.setItem(BEST_KEY, String(G.best)); }
     localStorage.setItem(PROG_KEY, String(G.unlocked));
+    localStorage.setItem(KILLS_KEY, String(G.lifeKills));
   } catch (_){}
 }
 
@@ -734,10 +794,33 @@ function startLevel(i){
   setTxt('brTarget', fmt(G.target));
   setTxt('brPeople', fmt(people.length));
   setTxt('brFlavour', lv.flavour);
+  renderGarage();
   const gl = $('brGoals');
   if (gl) gl.innerHTML = G.goals.map(g => '<div class="goal"><i></i>' + g.text + '</div>').join('');
   setTxt('brTheme', (TH.name || '') + (TH.fog > 0.1 ? ' · POOR VISIBILITY' : ''));
   camSnap();
+}
+
+/* The garage row on the briefing card. Locked cars show what they cost. */
+function renderGarage(){
+  const el = $('brGarage');
+  if (!el) return;
+  el.innerHTML = CARS.map(c => {
+    const open = carUnlocked(c);
+    return '<button class="car' + (c === CAR ? ' on' : '') + (open ? '' : ' locked') +
+      '" data-car="' + c.id + '"' + (open ? '' : ' disabled') + '>' +
+      '<b>' + c.name + '</b>' +
+      '<i>' + (open ? c.blurb : 'Locked — ' + fmt(c.unlock) + ' lifetime shoppers') + '</i>' +
+      '</button>';
+  }).join('');
+  if (el.querySelectorAll){
+    el.querySelectorAll('button[data-car]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (selectCar(btn.dataset.car)) renderGarage();
+      });
+    });
+  }
+  setTxt('brKills', fmt(G.lifeKills) + ' shoppers on the clock');
 }
 
 function beginLevel(){
@@ -748,7 +831,7 @@ function beginLevel(){
 function nextCar(){
   car.x = ANCHOR.x; car.y = ANCHOR.y;
   car.vx = 0; car.vy = 0; car.ang = 0; car.spin = 0;
-  car.boost = 1; car.boostT = 0; car.plowT = 0; car.onIce = 0;
+  car.boost = CAR.boost; car.boostT = 0; car.plowT = 0; car.onIce = 0;
   car.hits = 0; car.dents = 0; car.launched = false;
   car.shoutT = 0; car.shout = '';
   recReset();
@@ -775,7 +858,7 @@ function launch(px, py){
     return false;
   }
   const p = clamp(len / MAX_PULL, MIN_POWER, 1);
-  const spd = MAX_LAUNCH * p;
+  const spd = MAX_LAUNCH * CAR.launch * p;
   car.vx = -px / len * spd;
   car.vy = -py / len * spd;
   car.ang = Math.atan2(car.vy, car.vx);
@@ -1038,7 +1121,7 @@ function killPerson(p, vx, vy, cause){
   p.spin = rr(-16, 16);
   bumpCombo();
   const pts = addScore(p.pts);
-  G.kills++; G.totalKills++; G.runKills++;
+  G.kills++; G.totalKills++; G.runKills++; G.lifeKills++;
   G.byKind[p.kind] = (G.byKind[p.kind] || 0) + 1;
   if (car.boostT > 0) G.nitroKills++;
   rec.kills++;
@@ -1280,8 +1363,8 @@ function inCar(x, y, padX, padY){
   const c = Math.cos(car.ang), s = Math.sin(car.ang);
   const dx = x - car.x, dy = y - car.y;
   const lx = dx * c + dy * s, ly = -dx * s + dy * c;
-  const plow = car.plowT > 0 ? 12 : 0;
-  return Math.abs(lx) <= CAR_L / 2 + (padX || 0) + plow && Math.abs(ly) <= CAR_W / 2 + (padY || 0) + plow;
+  const plow = (car.plowT > 0 ? 12 : 0) + CAR.plow;
+  return Math.abs(lx) <= CARL / 2 + (padX || 0) + plow && Math.abs(ly) <= CARW / 2 + (padY || 0) + plow;
 }
 
 function doBoost(){
@@ -1309,7 +1392,7 @@ function hitProp(o){
   if (o.shape === 'circ'){
     const dx = car.x - o.x, dy = car.y - o.y;
     const d = Math.hypot(dx, dy) || 0.001;
-    const rad = o.r + CAR_R;
+    const rad = o.r + CARR;
     if (d >= rad) return false;
     nx = dx / d; ny = dy / d; pen = rad - d;
   } else {
@@ -1318,18 +1401,18 @@ function hitProp(o){
     const cy = clamp(car.y, o.y - hh, o.y + hh);
     let dx = car.x - cx, dy = car.y - cy;
     let d = Math.hypot(dx, dy);
-    if (d >= CAR_R){
+    if (d >= CARR){
       if (d > 0.001) return false;
       // dead centre: push out the shortest way
       dx = car.x - o.x; dy = car.y - o.y;
-      const ox = hw + CAR_R - Math.abs(dx), oy = hh + CAR_R - Math.abs(dy);
+      const ox = hw + CARR - Math.abs(dx), oy = hh + CARR - Math.abs(dy);
       if (ox < oy){ nx = Math.sign(dx) || 1; ny = 0; pen = ox; }
       else { nx = 0; ny = Math.sign(dy) || 1; pen = oy; }
       d = 0;
     }
     if (pen === undefined){
-      if (d < 0.001){ nx = 0; ny = -1; pen = CAR_R; }
-      else { nx = dx / d; ny = dy / d; pen = CAR_R - d; }
+      if (d < 0.001){ nx = 0; ny = -1; pen = CARR; }
+      else { nx = dx / d; ny = dy / d; pen = CARR - d; }
     }
   }
   if (o.dead) return false;
@@ -1346,7 +1429,7 @@ function hitProp(o){
   const vn = car.vx * nx + car.vy * ny;
   const impact = Math.max(0, -vn);
   o.shakeT = 0.25;
-  const dmg = impact * DMG_PER_SPD;
+  const dmg = impact * DMG_PER_SPD * CAR.dmg;
   const willBreak = !o.hard && dmg >= o.hp;
 
   if (willBreak){
@@ -1361,7 +1444,7 @@ function hitProp(o){
     if (!o.hard) o.hp -= dmg;
     car.x += nx * pen; car.y += ny * pen;
     if (vn < 0){
-      const rest = o.hard ? REST_HARD : REST;
+      const rest = (o.hard ? REST_HARD : REST) * CAR.rest;
       const tx = -ny, ty = nx;
       const vt = car.vx * tx + car.vy * ty;
       const nvn = -vn * rest;
@@ -1396,7 +1479,7 @@ function hitProp(o){
 function takeOff(sp, o){
   car.air = 1;
   car.z = 6;
-  car.vz = Math.min(RAMP_MAX_VZ, sp * RAMP_KICK);
+  car.vz = Math.min(RAMP_MAX_VZ * CAR.ramp, sp * RAMP_KICK * CAR.ramp);
   car.rollV = (rnd() < 0.5 ? -1 : 1) * (2.4 + sp / 420);
   G.jumps++;
   car.rollAcc = 0;
@@ -1419,7 +1502,7 @@ function land(){
   const flips = Math.floor(car.rollAcc / (Math.PI * 2));
   car.roll = 0; car.rollV = 0;
 
-  const r = LAND_R + Math.min(70, sp * 0.05);
+  const r = (LAND_R + Math.min(70, sp * 0.05)) * CAR.slam;
   let squashed = 0;
   for (const p of people){
     if (p.dead) continue;
@@ -1479,7 +1562,7 @@ function stepAir(dt){
 function stepCarCollisions(){
   for (const o of props){
     if (o.dead) continue;
-    const reach = (o.shape === 'circ' ? o.r : Math.max(o.w, o.h) / 2) + CAR_R + 4;
+    const reach = (o.shape === 'circ' ? o.r : Math.max(o.w, o.h) / 2) + CARR + 4;
     if (Math.abs(o.x - car.x) > reach || Math.abs(o.y - car.y) > reach) continue;
     hitProp(o);
   }
@@ -1514,7 +1597,7 @@ function stepPickups(){
     if (u.taken) continue;
     if (Math.abs(u.x - car.x) > 70 || Math.abs(u.y - car.y) > 70) continue;
     const dx = u.x - car.x, dy = u.y - car.y;
-    if (dx * dx + dy * dy > (u.r + CAR_R) * (u.r + CAR_R)) continue;
+    if (dx * dx + dy * dy > (u.r + CARR) * (u.r + CARR)) continue;
     u.taken = true;
     if (u.kind === 'nitro'){
       car.boost++;
@@ -1565,11 +1648,11 @@ function stepCar(dt){
   if (car.shoutT > 0) car.shoutT -= dt;
 
   // friction — none of it applies while the wheels are off the ground
-  const fr = car.air ? 0 : (car.onIce ? ICE_FRICTION : FRICTION);
+  const fr = car.air ? 0 : (car.onIce ? ICE_FRICTION : FRICTION) / CAR.glide;
   let sp = carSpeed();
   if (sp > 0){
     const decay = Math.exp(-fr * dt);
-    let ns = sp * decay - (car.air ? 0 : car.onIce ? DRAG * 0.25 : DRAG) * dt;
+    let ns = sp * decay - (car.air ? 0 : car.onIce ? DRAG * 0.25 : DRAG) / CAR.glide * dt;
     if (ns < 0) ns = 0;
     const k = ns / sp;
     car.vx *= k; car.vy *= k;
@@ -2629,7 +2712,7 @@ function drawCar(){
   // the shadow stays on the ground and shrinks away as the car climbs
   ctx.save();
   ctx.translate(car.x + z * 0.15, car.y + z * 0.24);
-  shadow(0, 8, CAR_L * 0.52 * (1 - z / 1400), CAR_W * 0.5 * (1 - z / 1400), 0.32 * (1 - z / 900));
+  shadow(0, 8, CARL * 0.52 * (1 - z / 1400), CARW * 0.5 * (1 - z / 1400), 0.32 * (1 - z / 900));
   ctx.restore();
 
   const hs = 1 + z / 380;                     // bigger = higher off the snow
@@ -2642,18 +2725,18 @@ function drawCar(){
   if (roll < 0){
     // underside: chassis, axles, spinning wheels
     ctx.fillStyle = '#2a3242';
-    roundRect(-CAR_L / 2, -CAR_W / 2, CAR_L, CAR_W, 11); ctx.fill();
+    roundRect(-CARL / 2, -CARW / 2, CARL, CARW, 11); ctx.fill();
     ctx.fillStyle = '#3d4859';
-    ctx.fillRect(-CAR_L * 0.34, -CAR_W * 0.16, CAR_L * 0.68, CAR_W * 0.32);
+    ctx.fillRect(-CARL * 0.34, -CARW * 0.16, CARL * 0.68, CARW * 0.32);
     ctx.fillStyle = '#141a26';
-    for (const wx of [-CAR_L * 0.3, CAR_L * 0.3]){
-      roundRect(wx - 11, -CAR_W * 0.62, 22, 12, 4); ctx.fill();
-      roundRect(wx - 11, CAR_W * 0.5, 22, 12, 4); ctx.fill();
+    for (const wx of [-CARL * 0.3, CARL * 0.3]){
+      roundRect(wx - 11, -CARW * 0.62, 22, 12, 4); ctx.fill();
+      roundRect(wx - 11, CARW * 0.5, 22, 12, 4); ctx.fill();
     }
     ctx.fillStyle = 'rgba(120,16,12,.7)';
     for (let i = 0; i < car.gore; i++){
       const a = i * 1.9;
-      circle(Math.cos(a) * CAR_L * 0.28, Math.sin(a) * CAR_W * 0.28, 4 + (i % 3) * 2); ctx.fill();
+      circle(Math.cos(a) * CARL * 0.28, Math.sin(a) * CARW * 0.28, 4 + (i % 3) * 2); ctx.fill();
     }
     ctx.restore();
     if (car.shoutT > 0) drawShout();
@@ -2663,62 +2746,84 @@ function drawCar(){
   if (car.plowT > 0){
     ctx.fillStyle = '#dfe8f6';
     ctx.beginPath();
-    ctx.moveTo(CAR_L * 0.46, -CAR_W * 0.85);
-    ctx.lineTo(CAR_L * 0.72, -CAR_W * 0.5);
-    ctx.lineTo(CAR_L * 0.72, CAR_W * 0.5);
-    ctx.lineTo(CAR_L * 0.46, CAR_W * 0.85);
+    ctx.moveTo(CARL * 0.46, -CARW * 0.85);
+    ctx.lineTo(CARL * 0.72, -CARW * 0.5);
+    ctx.lineTo(CARL * 0.72, CARW * 0.5);
+    ctx.lineTo(CARL * 0.46, CARW * 0.85);
     ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#c8443a';
-    ctx.fillRect(CAR_L * 0.46, -CAR_W * 0.8, 8, CAR_W * 1.6);
+    ctx.fillRect(CARL * 0.46, -CARW * 0.8, 8, CARW * 1.6);
   }
-  // wheels
+  // wheels — the monster truck's are twice the size and stick right out
+  const ww = CAR.bigWheels ? 30 : 22, wh = CAR.bigWheels ? 18 : 12;
   ctx.fillStyle = '#1a2030';
-  for (const [wx, wy] of [[-CAR_L * 0.3, -CAR_W * 0.56], [CAR_L * 0.3, -CAR_W * 0.56],
-                          [-CAR_L * 0.3, CAR_W * 0.56], [CAR_L * 0.3, CAR_W * 0.56]]){
-    roundRect(wx - 11, wy - 6, 22, 12, 4); ctx.fill();
+  if (CAR.runners){
+    // a sleigh has runners, not wheels
+    ctx.fillStyle = CAR.trim;
+    for (const sy of [-1, 1]){
+      roundRect(-CARL * 0.5, sy * CARW * 0.52 - 4, CARL, 8, 4); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(CARL * 0.5, sy * CARW * 0.52);
+      ctx.quadraticCurveTo(CARL * 0.66, sy * CARW * 0.52, CARL * 0.62, sy * CARW * 0.3);
+      ctx.lineWidth = 7; ctx.strokeStyle = CAR.trim; ctx.stroke();
+    }
+    ctx.fillStyle = '#1a2030';
+  } else {
+    for (const [wx, wy] of [[-CARL * 0.3, -CARW * 0.56], [CARL * 0.3, -CARW * 0.56],
+                            [-CARL * 0.3, CARW * 0.56], [CARL * 0.3, CARW * 0.56]]){
+      roundRect(wx - ww / 2, wy - wh / 2, ww, wh, 4); ctx.fill();
+    }
   }
   // body
-  ctx.fillStyle = '#cf2f26';
-  roundRect(-CAR_L / 2, -CAR_W / 2, CAR_L, CAR_W, 11); ctx.fill();
-  ctx.fillStyle = '#e8463a';
-  roundRect(-CAR_L / 2 + 4, -CAR_W / 2 + 4, CAR_L - 8, CAR_W - 8, 9); ctx.fill();
-  // white stripe + roof
-  ctx.fillStyle = '#f6f2ea';
-  ctx.fillRect(-CAR_L * 0.1, -CAR_W / 2 + 4, CAR_L * 0.2, CAR_W - 8);
-  ctx.fillStyle = '#2b3a58';
-  roundRect(-CAR_L * 0.26, -CAR_W * 0.34, CAR_L * 0.42, CAR_W * 0.68, 6); ctx.fill();
+  ctx.fillStyle = CAR.body;
+  roundRect(-CARL / 2, -CARW / 2, CARL, CARW, CAR.id === 'van' ? 7 : 11); ctx.fill();
+  ctx.fillStyle = CAR.body2;
+  roundRect(-CARL / 2 + 4, -CARW / 2 + 4, CARL - 8, CARW - 8, 9); ctx.fill();
+  // the stripe down the middle, or the van's side panel
+  ctx.fillStyle = CAR.trim;
+  ctx.fillRect(-CARL * 0.1, -CARW / 2 + 4, CARL * 0.2, CARW - 8);
+  ctx.fillStyle = CAR.roof;
+  roundRect(-CARL * 0.26, -CARW * 0.34, CARL * 0.42, CARW * 0.68, 6); ctx.fill();
   // the driver, seen through the roof: santa hat, and a mouth that opens when
   // he is shouting
   const yell = car.shoutT > 0;
   ctx.fillStyle = '#f0c9a4';
-  circle(-CAR_L * 0.04, 0, CAR_W * 0.23); ctx.fill();
+  circle(-CARL * 0.04, 0, CARW * 0.23); ctx.fill();
   ctx.fillStyle = '#e0483c';
-  circle(-CAR_L * 0.11, 0, CAR_W * 0.2); ctx.fill();
+  circle(-CARL * 0.11, 0, CARW * 0.2); ctx.fill();
   ctx.fillStyle = '#f6f2ea';
-  circle(-CAR_L * 0.2, 0, CAR_W * 0.09); ctx.fill();
+  circle(-CARL * 0.2, 0, CARW * 0.09); ctx.fill();
   ctx.fillStyle = '#2a1a16';
-  circle(CAR_L * 0.02, 0, CAR_W * (yell ? 0.11 : 0.05)); ctx.fill();
+  circle(CARL * 0.02, 0, CARW * (yell ? 0.11 : 0.05)); ctx.fill();
   ctx.fillStyle = '#4b6a9c';
-  roundRect(CAR_L * 0.2, -CAR_W * 0.3, CAR_L * 0.14, CAR_W * 0.6, 4); ctx.fill();
+  roundRect(CARL * 0.2, -CARW * 0.3, CARL * 0.14, CARW * 0.6, 4); ctx.fill();
+  if (CAR.id === 'sport'){
+    ctx.fillStyle = CAR.roof;                       // rear wing
+    ctx.fillRect(-CARL * 0.52, -CARW * 0.44, 7, CARW * 0.88);
+  }
+  if (CAR.id === 'van'){
+    ctx.fillStyle = 'rgba(255,255,255,.75)';        // roof box
+    roundRect(-CARL * 0.06, -CARW * 0.3, CARL * 0.3, CARW * 0.6, 5); ctx.fill();
+  }
   // antlers + red nose, because it is that kind of game
   ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(CAR_L * 0.16, -CAR_W * 0.5); ctx.lineTo(CAR_L * 0.26, -CAR_W * 0.92);
-  ctx.lineTo(CAR_L * 0.40, -CAR_W * 0.78);
-  ctx.moveTo(CAR_L * 0.16, CAR_W * 0.5); ctx.lineTo(CAR_L * 0.26, CAR_W * 0.92);
-  ctx.lineTo(CAR_L * 0.40, CAR_W * 0.78);
+  ctx.moveTo(CARL * 0.16, -CARW * 0.5); ctx.lineTo(CARL * 0.26, -CARW * 0.92);
+  ctx.lineTo(CARL * 0.40, -CARW * 0.78);
+  ctx.moveTo(CARL * 0.16, CARW * 0.5); ctx.lineTo(CARL * 0.26, CARW * 0.92);
+  ctx.lineTo(CARL * 0.40, CARW * 0.78);
   ctx.stroke();
   ctx.fillStyle = '#ff4d4d';
-  circle(CAR_L * 0.5, 0, 6); ctx.fill();
+  circle(CARL * 0.5, 0, 6); ctx.fill();
   // whatever the wheels have been through
   if (car.gore > 0){
     ctx.fillStyle = 'rgba(126,14,10,.75)';
     for (let i = 0; i < car.gore; i++){
       const a = i * 2.3, d = 0.18 + (i % 4) * 0.09;
-      circle(CAR_L * (0.16 + d), Math.sin(a) * CAR_W * 0.36, 3.5 + (i % 3) * 2.2); ctx.fill();
+      circle(CARL * (0.16 + d), Math.sin(a) * CARW * 0.36, 3.5 + (i % 3) * 2.2); ctx.fill();
     }
     ctx.fillStyle = 'rgba(150,20,16,.55)';
-    ctx.fillRect(CAR_L * 0.34, -CAR_W * 0.4, 7, CAR_W * 0.8);
+    ctx.fillRect(CARL * 0.34, -CARW * 0.4, 7, CARW * 0.8);
   }
 
   // dents
@@ -2726,7 +2831,7 @@ function drawCar(){
     ctx.fillStyle = 'rgba(40,20,16,.35)';
     for (let i = 0; i < car.dents; i++){
       const a = i * 1.7;
-      circle(Math.cos(a) * CAR_L * 0.3, Math.sin(a) * CAR_W * 0.3, 5 + (i % 3)); ctx.fill();
+      circle(Math.cos(a) * CARL * 0.3, Math.sin(a) * CARW * 0.3, 5 + (i % 3)); ctx.fill();
     }
   }
   ctx.restore();
@@ -2740,10 +2845,10 @@ function drawCar(){
     ctx.translate(car.x, car.y); ctx.rotate(car.ang);
     ctx.fillStyle = 'rgba(255,206,120,.10)';
     ctx.beginPath();
-    ctx.moveTo(CAR_L * 0.45, -CAR_W * 0.4);
-    ctx.lineTo(CAR_L * 0.45 + 150, -62);
-    ctx.lineTo(CAR_L * 0.45 + 150, 62);
-    ctx.lineTo(CAR_L * 0.45, CAR_W * 0.4);
+    ctx.moveTo(CARL * 0.45, -CARW * 0.4);
+    ctx.lineTo(CARL * 0.45 + 150, -62);
+    ctx.lineTo(CARL * 0.45 + 150, 62);
+    ctx.lineTo(CARL * 0.45, CARW * 0.4);
     ctx.closePath(); ctx.fill();
     ctx.restore();
   }

@@ -42,6 +42,8 @@ const EXPOSE = `__out.api = {
   takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
   gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
   GOALS, THEMES, rollGoals, checkGoals, goalTest, replayGore, drawStains,
+  CARS, CAR_KEY, KILLS_KEY, selectCar, carUnlocked, renderGarage,
+  getCar: () => CAR, getDims: () => ({ l: CARL, w: CARW, r: CARR }),
   getTheme: () => TH,
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
   drawCar, drawPerson, drawLens,
@@ -576,6 +578,154 @@ test('a pram breaks loose when whoever was pushing it goes down', () => {
   api.killPerson(p, 900, 0, 'car');
   assert(p.pramT === 0, 'the pram is gone');
   assert(api.fx.some(f => f.type === 'pram'), 'and it is airborne');
+});
+
+/* -------------------------------------------------------------- garage --- */
+
+test('the garage unlocks in order and starts with the hatchback', () => {
+  const api = boot();
+  assert(api.CARS.length >= 5, 'five cars, got ' + api.CARS.length);
+  assert(api.CARS[0].unlock === 0, 'the first one is free');
+  for (let i = 1; i < api.CARS.length; i++){
+    assert(api.CARS[i].unlock > api.CARS[i - 1].unlock, 'unlocks climb: ' + api.CARS[i].id);
+  }
+  assert(api.getCar().id === 'hatch', 'the hatchback is the default');
+  const ids = api.CARS.map(c => c.id);
+  assert(new Set(ids).size === ids.length, 'no duplicate ids');
+});
+
+test('a locked car cannot be picked, an unlocked one can', () => {
+  const api = boot();
+  api.G.lifeKills = 0;
+  const locked = api.CARS[api.CARS.length - 1];
+  assert(!api.carUnlocked(locked), 'the last car starts locked');
+  assert(api.selectCar(locked.id) === false, 'and cannot be selected');
+  assert(api.getCar().id === 'hatch', 'so the hatchback stays');
+  api.G.lifeKills = locked.unlock;
+  assert(api.carUnlocked(locked), 'lifetime kills unlock it');
+  assert(api.selectCar(locked.id) === true, 'and now it takes');
+  assert(api.getCar().id === locked.id, 'selected');
+  assert(api.selectCar('not-a-car') === false, 'nonsense ids are refused');
+});
+
+test('each car is a different size on the road', () => {
+  const api = boot();
+  api.G.lifeKills = 999999;
+  const seen = new Set();
+  for (const c of api.CARS){
+    api.selectCar(c.id);
+    const d = api.getDims();
+    assert(d.l === c.len && d.w === c.wid && d.r === c.rad, c.id + ' dimensions applied');
+    seen.add(d.l + 'x' + d.w);
+  }
+  assert(seen.size >= 4, 'the cars should not all be one box, got ' + seen.size);
+});
+
+test('the sports coupe launches harder than the van', () => {
+  const api = boot();
+  api.G.lifeKills = 999999;
+  api.startCampaign(); api.beginLevel();
+  api.selectCar('sport'); api.nextCar();
+  api.launch(-api.C.MAX_PULL, 0);
+  const fast = api.carSpeed();
+  api.G.phase = 'aim';
+  api.selectCar('van'); api.nextCar();
+  api.launch(-api.C.MAX_PULL, 0);
+  const slow = api.carSpeed();
+  assert(fast > slow * 1.2, 'coupe ' + Math.round(fast) + ' vs van ' + Math.round(slow));
+});
+
+test('the sleigh slides far past where the hatchback stops', () => {
+  const roll = (id) => {
+    const api = boot();
+    api.G.lifeKills = 999999;
+    api.selectCar(id);
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+    api.bounds.x1 = 20000;
+    drive(api, 900, 0, 1000, 1100);
+    const x0 = api.car.x;
+    for (let i = 0; i < 3000 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+    return api.car.x - x0;
+  };
+  const hatch = roll('hatch'), sleigh = roll('sleigh');
+  assert(sleigh > hatch * 1.5, 'sleigh ' + Math.round(sleigh) + ' vs hatchback ' + Math.round(hatch));
+});
+
+test('the van ploughs a stall the hatchback only dents', () => {
+  const hit = (id) => {
+    const api = boot();
+    api.G.lifeKills = 999999;
+    api.selectCar(id);
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+    const hut = api.addProp('hut', 2000, 1100, {});
+    drive(api, 620, 0, 2000 - hut.w / 2 - api.getDims().r - 8, 1100);
+    step(api, 0.5);
+    return hut.dead;
+  };
+  assert(hit('van'), 'the van goes through it');
+  assert(!hit('hatch'), 'the hatchback does not, at the same speed');
+});
+
+test('the monster truck gets more air, the coupe carries two nitros', () => {
+  const jump = (id) => {
+    const api = boot();
+    api.G.lifeKills = 999999;
+    api.selectCar(id);
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+    drive(api, 1100, 0, 2000, 1100);
+    api.takeOff(1100, null);
+    let peak = 0;
+    for (let i = 0; i < 200 && api.car.air; i++){ api.update(1 / 60); peak = Math.max(peak, api.car.z); }
+    return peak;
+  };
+  assert(jump('monster') > jump('hatch') * 1.4, 'the truck flies higher');
+
+  const api = boot();
+  api.G.lifeKills = 999999;
+  api.selectCar('sport');
+  api.startCampaign(); api.beginLevel();
+  assert(api.car.boost === 2, 'the coupe starts with two nitros, got ' + api.car.boost);
+  api.selectCar('hatch'); api.nextCar();
+  assert(api.car.boost === 1, 'the hatchback with one');
+});
+
+test('the chosen car and the lifetime tally survive a reload', () => {
+  const api = boot();
+  api.G.lifeKills = 5000;
+  api.selectCar('monster');
+  api.saveBest();
+  assert(api._store[api.CAR_KEY] === 'monster', 'car written');
+  assert(api._store[api.KILLS_KEY] === '5000', 'kills written');
+  const again = boot({ store: api._store });
+  assert(again.G.lifeKills === 5000, 'tally read back');
+  assert(again.getCar().id === 'monster', 'car read back');
+});
+
+test('a saved car that is no longer unlocked falls back to the hatchback', () => {
+  const api = boot({ store: { merry_crashmas_car_v1: 'sleigh', merry_crashmas_kills_v1: '0' } });
+  assert(api.getCar().id === 'hatch', 'fell back, got ' + api.getCar().id);
+});
+
+test('kills add to the lifetime tally', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0;
+  const before = api.G.lifeKills;
+  api.killPerson(api.addPerson(2000, 1100), 800, 0, 'car');
+  assert(api.G.lifeKills === before + 1, 'counted');
+});
+
+test('every car renders, on the ground and mid-roll', () => {
+  const api = boot();
+  api.G.lifeKills = 999999;
+  api.startCampaign(); api.beginLevel();
+  for (const c of api.CARS){
+    api.selectCar(c.id);
+    api.G.phase = 'drive';
+    api.car.z = 0; api.car.roll = 0; api.draw();
+    api.car.z = 120; api.car.roll = 3.0; api.car.air = 1; api.draw();
+    api.car.air = 0; api.car.z = 0;
+  }
+  api.renderGarage();
 });
 
 /* --------------------------------------------------------------- goals --- */
