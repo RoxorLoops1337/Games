@@ -18896,7 +18896,7 @@ t.ok(true, 'a final draw on a live match is clean');
    claim written above the numbers. */
 {
   const KEYS = Object.keys(IB.SPELL_BOUND);
-  t.ok(KEYS.length === 3, 'there are three things that can limit an order (' + KEYS.join(' ') + ')');
+  t.ok(KEYS.length === 4, 'there are four things that can limit an order (' + KEYS.join(' ') + ')');
   t.ok(KEYS.every(k => typeof IB.SPELL_BOUND[k] === 'string' && IB.SPELL_BOUND[k].length > 8),
     'each is a phrase rather than a code');
   t.ok(new Set(KEYS.map(k => IB.SPELL_BOUND[k])).size === KEYS.length, 'and no two say the same thing');
@@ -18915,9 +18915,32 @@ t.ok(true, 'a final draw on a live match is clean');
   const by = {};
   for (const d of IB.SPELLS) by[d.bound] = (by[d.bound] || 0) + 1;
   t.ok(by.cd === 4, 'four run at their cooldown ceiling (' + by.cd + ')');
-  t.ok(by.aim === 5, 'five wait for a target (' + by.aim + ')');
+  t.ok(by.aim === 4, 'four wait for a target (' + by.aim + ')');
   t.ok(by.coin === 2, 'two wait for the stores (' + by.coin + ')');
-  t.ok(by.cd + by.aim + by.coin === IB.SPELLS.length, 'and that is all of them');
+  t.ok(by.call === 1, 'and one is castable whenever, so the timing is the whole of it (' + by.call + ')');
+  t.ok(by.cd + by.aim + by.coin + by.call === IB.SPELLS.length, 'and that is all of them');
+
+  /* The rule that caught the mislabel, derived rather than hand-checked.
+
+     spellTargets returns 1 UNCONDITIONALLY for a point order — a stretch of
+     lane is always there — so a point order cannot be waiting for a target.
+     Withdraw was labelled 'aim' with the other four, and measured, 0% of its
+     idle time was "nothing to aim at" against 72-95% for the real ones. Read
+     off spellTargets itself so the day that function learns to refuse a point,
+     this stops being true and says so. */
+  {
+    const fn = SRC.slice(SRC.indexOf('const spellTargets = ('));
+    const body = fn.slice(0, fn.indexOf('\n};'));
+    t.ok(/target === 'point'[^\n]*return 1/.test(body),
+      'a point order always has somewhere to land, by construction');
+    const wrong = IB.SPELLS.filter(d => d.target === 'point' && d.bound === 'aim').map(d => d.n);
+    t.ok(wrong.length === 0,
+      'so no point order claims it waits for one (' + wrong.join(', ') + ')');
+    t.ok(IB.SPELL.withdraw.bound === 'call',
+      'Withdraw is the one whose whole difficulty is choosing the moment');
+    t.ok(IB.SPELLS.filter(d => d.bound === 'call').every(d => d.target === 'point'),
+      'and everything in that category is one you can always cast');
+  }
 
   // the ones the measurement calls out by name, so a later edit that reshuffles
   // the field cannot quietly contradict the numbers written down beside it

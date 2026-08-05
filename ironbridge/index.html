@@ -2912,7 +2912,7 @@ const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 const SPELLS = [
   { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
-  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane', bound:'aim',
+  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane', bound:'call',
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
   { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'cd',
     d:'One more wave of the shape already marching, at 85% health. The wave clock does not move.' },
@@ -2986,7 +2986,30 @@ const SPELL_BOUND = {
   cd:   'its recovery is the limit',
   aim:  'often waits for a target',
   coin: 'often waits for the stores',
+  call: 'timing is the whole decision',
 };
+/* The fourth category is a correction to the first cut of this table, and the
+   measurement that forced it is worth keeping.
+
+   Splitting the idle time of every order — off cooldown, affordable and still
+   unspent — into "there was nothing to aim at" against "there was, and the
+   commander declined":
+
+     Pyre Brand    95% nothing there     5% declined
+     Hobble        93%                   7%
+     Warp Banner   86%                  14%
+     Unbind        72%                  28%
+     Withdraw       0%                 100%
+
+   Withdraw was labelled aim with the other four and cannot be. spellTargets
+   returns 1 UNCONDITIONALLY for a point order — a stretch of lane is always
+   there — so a point order is never waiting for a target, by construction
+   rather than by luck. Its tile is never dead and it can be cast at any
+   moment; what makes it good is picking the moment. That is a different fact
+   about a card and it now has its own sentence.
+
+   A test derives this rather than trusting the list: no order that aims at a
+   point may claim it waits for a target, read off spellTargets itself. */
 
 /* Prose counts things in words, and a count written by hand goes stale the
    first time the list it counts grows. Falls back to the digit rather than
@@ -16795,6 +16818,19 @@ function syncOrders(){
     // the two sentences castPress has ready — "still recovering, 41s" and "not
     // enough in the stores" — could then only ever be reached from Q and E.
     // A phone has no Q and no E, so on a phone the control simply went quiet.
+    /* Dead when it cannot be cast, for whichever of the three reasons. This is
+       also the answer to a feature that got measured and NOT built: a notice
+       when a target-bound order's target finally arrives, since four of them
+       sit ready and unspent for a third to four fifths of a match.
+
+       The windows are far too long to be worth announcing. Measured over ten
+       veteran matches each, an unbroken run of "there is something to aim at"
+       lasts a MEDIAN of 29.7s for Unbind, 35.1s for Pyre Brand, 38.8s for
+       Hobble and 76.6s for Warp Banner, with 90th percentiles between 160s and
+       376s. Under three seconds: 0-3% of windows. A player has half a minute at
+       the very least, and this tile going from dead to live inside their field
+       of view is already the whole of the warning they need. A toast on top of
+       it would be noise arriving 30 seconds early. */
     if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i) || !spellTargets(d));
   }
 }
