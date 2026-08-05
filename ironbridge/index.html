@@ -5075,7 +5075,12 @@ function heroStep(h, dt){
      does not add a decision — it throttles an autonomous body. The ONE place
      mana reaches the player is the held ultimate, and there it is ruinous:
 
-       ultimate off cooldown AND affordable    shipped 100.0%    at 1.2  75.2%
+       ultimate off cooldown AND affordable    shipped 100.0%    at 1.2  78.1%
+
+     — 144,937 off-cooldown ticks against 176,801, over 24 heroes verified to
+     own an ultimate. The first pass of this measured 469 ticks on heroes built
+     by setting h.lvl by hand, which skips the rungs that hand out skills; the
+     conclusion held when it was redone properly, the evidence for it did not.
 
      A quarter of the windows where the shutter says ready would answer
      "nothing of yours was ready" on release. That is precisely the four-
