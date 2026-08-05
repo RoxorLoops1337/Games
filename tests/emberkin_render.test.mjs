@@ -299,6 +299,39 @@ ok(SRC.includes('willplay'), 'a card lifted past the threshold says so');
 ok(/fullscreenchange/.test(SRC), 'leaving fullscreen re-fits the stage');
 ok(/orientationchange/.test(SRC), 'so does turning the phone');
 
+section('one bad frame does not take the game with it');
+// The frame loop used to let an exception escape, which stopped the
+// requestAnimationFrame chain for good: the page froze on its last drawn frame,
+// with the buttons still labelled for a state the game had already left, and
+// nothing the player pressed did anything again.
+const crashy = loadGame({});
+crashy.setCtx(mkCtx());
+crashy.newGame();
+crashy.G.party = [crashy.mkMon('cindercub', 8)];
+crashy.enterMap('route_one', 9, 10, 'down');
+crashy.G.mode = 'world'; crashy.G.dialogue = null;
+let thrown = 0;
+// A context that throws the way a real render bug would.
+crashy.setCtx(new Proxy({}, { get(_t, k) {
+  if (k === 'canvas') return { width: 256, height: 208 };
+  if (k === 'measureText') return () => ({ width: 10 });
+  if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: () => {} });
+  return () => { thrown++; throw new Error('render blew up'); };
+}, set() { return true; } }));
+let escaped = null;
+for (let i = 0; i < 20; i++) {
+  try { crashy.frame(i * 16); } catch (e) { escaped = e; break; }
+}
+ok(!escaped, `the loop swallowed ${thrown} render errors instead of dying${escaped ? ' — ' + escaped.message : ''}`);
+ok(thrown > 0, 'and the errors were real ones, not a test that proved nothing');
+// Put a working context back and check the game is still playable afterwards.
+crashy.setCtx(mkCtx());
+const beforeX = crashy.G.player.x;
+crashy.pressKey('right');
+for (let i = 0; i < 30; i++) { crashy.step(.05); crashy.fired.clear(); }
+crashy.releaseKey('right');
+ok(crashy.G.player.x !== beforeX || crashy.G.battle, 'and it still responds to input once the bad frames pass');
+
 section('a monkey on the keyboard cannot break it');
 // Random input for thousands of frames, drawing every one. This is the cheapest
 // way to find the state a hand-written test would never think to reach.

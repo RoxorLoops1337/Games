@@ -124,6 +124,19 @@ corrupts a run, and both did:
 - **`FOE_HP_MUL` never leaves the battle.** `toughen` is undone by `untoughen`
   when you catch a foe, and the max-HP a card grants is booked per kin in
   `b.maxAdds` so a switch cannot hand the bill to somebody else.
+- **Drawing a message and advancing it agree on which message that is.** Both go
+  through `shownDialogue()`. They used to disagree: an unread `battleSay` line
+  still pending when the fight ended meant every press was applied to an
+  invisible message whose `hold` nothing was ticking any more, and the run was
+  over — no button did anything again. Message holds age in `step` and nowhere
+  else, so a message can never be left holding a timer that never runs down.
+- **Playback treats an impossible HP bar as settled.** The next log line waits
+  for the bars to catch up; a bar that never arrives used to wait for ever.
+
+And `frame()` catches. An exception used to escape, stop the
+`requestAnimationFrame` chain, and freeze the page on its last drawn frame with
+the buttons still labelled for a state the game had already left. A bug should
+cost a frame, not the save.
 
 ### Cards
 

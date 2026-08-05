@@ -2756,6 +2756,7 @@ function drawWorld(g) {
 function startBattle(opt) {
   const mine = firstAlive();
   if (!mine) return false;
+  G.battleMsg = null;              // nothing from the last fight gets to speak in this one
   G.battle = {
     foe: opt.foe, mine, wild: !!opt.wild, legendary: !!opt.legendary,
     npc: opt.npc || null,
@@ -3527,9 +3528,21 @@ function battleSay(lines, done) {
 }
 const liveBattleMsg = () => (G.battle ? G.battleMsg : null);
 
+/**
+ * The message the player is actually looking at. Drawing it and advancing it
+ * MUST agree on which one that is: they used to disagree, and a battle message
+ * left unread — "Go, Cindercub!" from a switch, the first-fight tutorial lines —
+ * would still be sitting in `G.battleMsg` when the battle ended. The end-of-
+ * battle text went up on screen through `G.dialogue`, every press was applied to
+ * the invisible battle message instead, and that one's `hold` was only ever
+ * ticked by `updateBattle`, which no longer runs once the mode is 'dialogue'.
+ * Nothing on screen moved, no button did anything, and the run was over.
+ */
+const shownDialogue = () => G.dialogue || liveBattleMsg();
+
 function renderDialogue() {
   if (HEADLESS) return;
-  const d = G.dialogue || liveBattleMsg();
+  const d = shownDialogue();
   if (!d) { show(els.dialogue, false); return; }
   const line = d.lines[d.i] || '';
   els.dialogue.innerHTML = (d.who ? `<span class="who">${d.who}</span>` : '') +
@@ -3538,16 +3551,17 @@ function renderDialogue() {
   show(els.dialogue, true);
 }
 function advanceDialogue() {
-  const inBattle = !!liveBattleMsg();
-  const d = inBattle ? G.battleMsg : G.dialogue;
+  const d = shownDialogue();
   if (!d) return;
   if (d.hold > 0) return;
+  const isBattleMsg = d !== G.dialogue;
   d.i++;
   if (d.i >= d.lines.length) {
-    if (inBattle) G.battleMsg = null; else { G.dialogue = null; G.mode = G.prevMode || 'world'; }
+    if (isBattleMsg) G.battleMsg = null;
+    else { G.dialogue = null; G.mode = G.prevMode || 'world'; }
     show(els.dialogue, false);
     if (d.done) d.done();
-    else if (!inBattle) renderDialogue();
+    else renderDialogue();                 // whatever is behind it, if anything
   } else renderDialogue();
 }
 
@@ -3988,7 +4002,6 @@ function updateBattle(dt) {
   }
 
   if (G.battleMsg) {
-    G.battleMsg.hold = Math.max(0, G.battleMsg.hold - dt);
     if (justPressed('a') || justPressed('b')) advanceDialogue();
     return;
   }
@@ -3998,7 +4011,12 @@ function updateBattle(dt) {
   // ---- playing back what just happened
   if (b.log && b.li < b.log.length) {
     b.hold = Math.max(0, (b.hold || 0) - dt);
-    const settled = Math.abs(b.dispM - b.tgtM) < 1 && Math.abs(b.dispF - b.tgtF) < 1;
+    // "Settled" gates the next line on the HP bars catching up. A bar that can
+    // never catch up — a NaN from anywhere upstream — would gate it for ever and
+    // hang the fight with the bar on screen and no way out, so a bar that is not
+    // a real number counts as settled rather than as a wall.
+    const done = (cur, tgt) => !(Number.isFinite(cur) && Number.isFinite(tgt)) || Math.abs(cur - tgt) < 1;
+    const settled = done(b.dispM, b.tgtM) && done(b.dispF, b.tgtF);
     if (b.li === 0 && !b.started) { b.started = true; playbackStep(); return; }
     if ((justPressed('a') || b.hold <= 0) && settled) {
       b.li++;
@@ -4575,11 +4593,26 @@ function drawEvolution(g) {
   }
 }
 
+/**
+ * One exception used to take the whole game with it: the throw escaped, the
+ * requestAnimationFrame chain stopped, and the page froze on its last drawn
+ * frame with the buttons still labelled for a state the game was no longer in.
+ * Nothing the player pressed did anything and the run was gone. The loop keeps
+ * going now, and says so, so a bug costs a frame rather than the save.
+ */
 function frame(now) {
   const dt = Math.min(.05, (now - (frame.last || now)) / 1000);
   frame.last = now;
-  step(dt);
-  draw();
+  try {
+    step(dt);
+    draw();
+  } catch (e) {
+    frame.errs = (frame.errs || 0) + 1;
+    if (frame.errs <= 3) {
+      console.error('emberkin frame error', e);
+      setToast('Something went wrong — the game kept going.');
+    }
+  }
   fired.clear();
   if (!HEADLESS) requestAnimationFrame(frame);
 }
@@ -4597,8 +4630,14 @@ function step(dt) {
   if (justPressed('m')) toggleMute();
   if (G.mode !== G.uiMode) { G.uiMode = G.mode; touchLabels(); }
 
+  // Both message queues age here and nowhere else. Ticking a hold inside the
+  // branch that happens to be running means a message left over from another
+  // branch keeps its hold for ever, and a hold that never expires is a message
+  // that can never be dismissed.
+  if (G.dialogue) G.dialogue.hold = Math.max(0, G.dialogue.hold - dt);
+  if (G.battleMsg) G.battleMsg.hold = Math.max(0, G.battleMsg.hold - dt);
+
   if (G.mode === 'dialogue') {
-    if (G.dialogue) G.dialogue.hold = Math.max(0, G.dialogue.hold - dt);
     if (justPressed('a') || justPressed('b')) advanceDialogue();
     return;
   }
@@ -4857,7 +4896,7 @@ if (typeof window !== 'undefined') {
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     renderHand, playSelected, doEndTurn, submitLog,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
-    pressKey, releaseKey, keys, fired,
+    pressKey, releaseKey, keys, fired, frame,
     setCtx: (c) => { ctx = c; },
     B,
   };
