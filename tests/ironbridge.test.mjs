@@ -20476,14 +20476,31 @@ t.ok(true, 'a final draw on a live match is clean');
    the same colours rather than inventing new ones. */
 {
   const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  const grad = src.slice(src.indexOf('function skyGrad'),
-    src.indexOf('\n}', src.indexOf('function skyGrad')));
+  /* The banding rule moved out of skyGrad into bandStops when the valley floor
+     needed it too — one rule for both skies, rather than two that drift. */
+  const grad = src.slice(src.indexOf('function bandStops'),
+    src.indexOf('\n}', src.indexOf('function bandStops')));
 
   t.ok(/addColorStop\(at, col\)/.test(grad), 'each stop is laid down at its own offset');
   t.ok(/next\[0\] - 1e-4/.test(grad),
     'and held until a hair before the next, which is how a gradient is told to step');
   t.ok(/Math\.max\(at,/.test(grad),
     'never behind the offset it started at, so two close stops cannot cross over');
+  t.ok(/bandStops\(g, SKY_STOPS\)/.test(src), 'the dome uses it');
+  t.ok(/bandStops\(c\.createLinearGradient\(0, 0, 0, h\), FLOOR_STOPS\)/.test(src),
+    'and so does the valley floor, which was the last blended thing in the world');
+
+  /* The floor's own stops get the same checks the dome's do — same shape of
+     table, same rules, so a change to one cannot quietly break the other. */
+  t.ok(IB.FLOOR_STOPS.length >= 4, 'the valley floor is built from ' + IB.FLOOR_STOPS.length + ' bands');
+  t.ok(IB.FLOOR_STOPS[0][0] === 0 && IB.FLOOR_STOPS[IB.FLOOR_STOPS.length - 1][0] === 1,
+    'running the full depth of it');
+  let fRising = true;
+  for (let i = 1; i < IB.FLOOR_STOPS.length; i++)
+    if (IB.FLOOR_STOPS[i][0] <= IB.FLOOR_STOPS[i - 1][0]) fRising = false;
+  t.ok(fRising, 'its offsets only ever go down');
+  t.ok(IB.FLOOR_STOPS[0][1].includes(',0)'),
+    'and it starts fully clear, so the gorge fades in rather than beginning on a line');
 
   /* The stops themselves are unchanged, and that is the point — banding is a
      way of drawing this palette, not a different palette. */
