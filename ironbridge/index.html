@@ -2907,6 +2907,45 @@ const WITHDRAW = { rad:14, dur:4, spd:1.35, res:.25 };
    Not rebalanced here. Four rounds of evidence now say an unmeasured constant
    change either does nothing or cannot be told apart from noise, and the fix
    for a 20-point outlier deserves the same measurement its diagnosis got. */
+/* BOTH NUMERIC LEVERS ON THIS ORDER ARE WEAK, and that is the finding.
+
+   Second Muster measured 66.6% against an all-order mean of 45.9 — 9.7 clear of
+   second place — and it is the only order in the set that adds units at all.
+   Two ways to bring it down, both tested, both refused.
+
+   THE RECOVERY, which is what bound:'cd' points at, self-compensates. Raising
+   it 110 -> 200, an 82% increase, bought only a 32% cut in casts:
+
+     cd    casts/match   bodies/cast   match length
+     110          4.47           5.5          522s
+     140          4.00           5.6          561s
+     170          3.63           5.4          593s
+     200          3.03           5.4          576s
+
+   A weaker muster makes the match LONGER, and a longer match hands the slower
+   recovery more time to fire in. The knob fights itself. (Measured properly:
+   it sits ready only 11.8% of ticks, so it is genuinely recovery-bound and not
+   waiting on the stores — the lever was aimed at the right thing.)
+
+   THE HEALTH does not self-compensate, and did nothing anyway. At .65 — a 24%
+   cut to every mustered body — the full 55 openings were re-swept:
+
+     muster 64.1 (66.6)  withdraw 54.4 (56.9)  pyre 49.1 (50.0)  warp 44.4 (45.9)
+     pitch 41.9 (45.6)  hobble 41.3 (41.9)  rampart 40.3 (40.0)  unbind 38.4 (39.7)
+     counter 38.4 (39.4)  bombard 37.5 (38.4)  brace 37.2 (40.0)   spread 26.9 (28.1)
+
+   Muster moved 2.5 points, 0.6 standard errors, while untouched orders in the
+   same run moved as much as 2.8. The spread went 28.1 to 26.9. Nothing.
+
+   So the advantage is not in how good the mustered bodies are, nor in how often
+   they come. It is CATEGORICAL: units are the only currency the game keeps
+   score in, and this is the only order that makes them. Scaling either number
+   leaves that untouched, which is why neither number moved the result.
+
+   Reverted to .85 for the same reason Countermand's recovery was: a constant
+   that buys no measurable difference is not worth the churn. The fix, if one is
+   wanted, has to change what the order IS — the same conclusion Countermand
+   reached from the opposite direction. */
 const MUSTER_HP = .85;
 // Three seconds of standing still, then the hero is at its own front structure.
 // Refused within five seconds of taking a blow, and a blow during the channel

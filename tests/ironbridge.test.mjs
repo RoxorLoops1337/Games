@@ -20104,4 +20104,68 @@ t.ok(true, 'a final draw on a live match is clean');
     'its recovery is what limits it, which is why the recovery is where a fix would go');
 }
 
+/* ================== neither number on Second Muster moves it
+
+   It measures 66.6% against an all-order mean of 45.9 and is the only order in
+   the set that adds units. Two numeric levers, both tested, both refused.
+
+   The RECOVERY self-compensates: 110 -> 200, an 82% increase, bought a 32% cut
+   in casts (4.47 -> 3.03) because a weaker muster lengthens the match (522s ->
+   576s) and a longer match hands the slower recovery more time. The knob
+   fights itself. It IS recovery-bound — it sits ready only 11.8% of ticks — so
+   the lever was aimed correctly and still did not work.
+
+   The HEALTH does not self-compensate and did nothing anyway. At .65, a 24%
+   cut to every mustered body, the full 55 openings re-swept put Muster at 64.1
+   against 66.6 — 2.5 points, 0.6 standard errors, while untouched orders in
+   the same run moved as much as 2.8. The spread went 28.1 to 26.9.
+
+   The advantage is CATEGORICAL. Units are the only currency the game scores
+   in, and this is the only order that makes them; scaling either number leaves
+   that untouched. Asserted below is what makes that true, which is exact. */
+{
+  const M = IB.SPELL.muster;
+  const msrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  t.ok(M.cd === 110, 'the recovery is back at ' + M.cd + 's — raising it fights itself');
+  const mh = msrc.match(/const MUSTER_HP = ([\d.]+);/);
+  t.ok(!!mh && Number(mh[1]) === .85,
+    'and the mustered wave is back at ' + (mh ? mh[1] : '?') + ' health, because .65 measured the same');
+
+  /* What no number reaches: it is alone in spawning. Read off the cast table so
+     an order that learns to spawn later cannot join it quietly. */
+  const castTable = msrc.slice(msrc.indexOf('const SPELL_CAST'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('const SPELL_CAST')));
+  const spawners = IB.SPELLS.filter(d => {
+    const i = castTable.indexOf('\n  ' + d.id + '(');
+    if (i < 0) return false;
+    const body = castTable.slice(i, castTable.indexOf('\n  }', i) + 4 || i + 200);
+    return /spawnUnit|musterWave/.test(body);
+  }).map(d => d.id);
+  t.ok(spawners.length === 1 && spawners[0] === 'muster',
+    'exactly one order puts new bodies on the bridge (' + (spawners.join(', ') || 'none') + ')');
+
+  /* And the wave it makes is a real wave, drawn from the same table the clock
+     draws from — which is the categorical part. It is not a summon with its own
+     private roster. */
+  const mw = msrc.slice(msrc.indexOf('function musterWave'),
+    msrc.indexOf('\nfunction ', msrc.indexOf('function musterWave') + 1));
+  t.ok(/WAVE_KINDS/.test(mw), 'the mustered wave is drawn from the same table the clock uses');
+  t.ok(/s\.waveKind/.test(mw), 'and follows whatever kind is marching');
+  for (const k of ['grunt', 'melee', 'caster', 'cannon'])
+    t.ok(new RegExp("'" + k + "'").test(mw), 'it can muster a ' + IB.UNITS[k].n);
+  t.ok(/hpM/.test(mw), 'and every body it makes is scaled, not full-strength');
+
+  /* The self-compensation, as arithmetic rather than as the measurement: extra
+     waves bought is cd against the wave clock, and the match length that
+     divides it is not fixed. Both halves move, which is why the ratio barely
+     does. */
+  const perNatural = M.cd / C.WAVE_PERIOD;
+  t.ok(perNatural > 4 && perNatural < 6,
+    'one extra wave per ' + perNatural.toFixed(1) + ' that march on their own');
+  t.ok(200 / C.WAVE_PERIOD > perNatural * 1.5,
+    'where a 200s recovery would be one per ' + (200 / C.WAVE_PERIOD).toFixed(1) +
+    ' — a far bigger change on paper than it was in play');
+}
+
 t.done();
