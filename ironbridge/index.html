@@ -7844,7 +7844,23 @@ function skyGrad(c){
   if (SKYG && SKYG_K === k && SKYG_C === c) return SKYG;
   SKYG_C = c;
   const g = c.createLinearGradient(0, 0, 0, LH);
-  for (const s of SKY_STOPS) g.addColorStop(s[0], s[1]);
+  /* BANDED, not blended. A world cut from card was sitting on a smooth
+     photographic sky, and the two were arguing: nothing else on screen has a
+     soft transition in it. Each authored stop now HOLDS its colour until the
+     next one and jumps, so the sky becomes nine flat strips of paper laid one
+     over another.
+     Every colour and every boundary is still exactly the one SKY_STOPS names —
+     the band edges are the stop offsets and the band fills are the stop
+     colours, so this repaints the same palette rather than inventing one. The
+     epsilon is what makes the jump a jump: a hair before the next offset,
+     because two stops at the SAME offset is how a gradient is told to step,
+     and a hair is the smallest step this can be without the seam softening. */
+  for (let i = 0; i < SKY_STOPS.length; i++){
+    const [at, col] = SKY_STOPS[i];
+    g.addColorStop(at, col);
+    const next = SKY_STOPS[i + 1];
+    if (next) g.addColorStop(Math.max(at, next[0] - 1e-4), col);
+  }
   SKYG = g; SKYG_K = k;
   return g;
 }
@@ -20434,7 +20450,7 @@ window.IB = {
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
-  CUT, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  CUT, SKY_STOPS, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, aiDraftLate, musterDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
