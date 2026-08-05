@@ -18992,10 +18992,14 @@ t.ok(true, 'a final draw on a live match is clean');
   // the split, against the sentence written above the measurement
   const by = {};
   for (const d of IB.SPELLS) by[d.bound] = (by[d.bound] || 0) + 1;
-  t.ok(by.cd === 4, 'four run at their cooldown ceiling (' + by.cd + ')');
+  /* Countermand moved from 'cd' to 'call', so this went 4/4/2/1 to 3/4/2/2.
+     Measured: it sat ready with nothing to catch 70.4% of its idle time, which
+     makes "its recovery is the limit" a sentence the player could read and be
+     misled by. Recovery was never what limited it. */
+  t.ok(by.cd === 3, 'three run at their cooldown ceiling (' + by.cd + ')');
   t.ok(by.aim === 4, 'four wait for a target (' + by.aim + ')');
   t.ok(by.coin === 2, 'two wait for the stores (' + by.coin + ')');
-  t.ok(by.call === 1, 'and one is castable whenever, so the timing is the whole of it (' + by.call + ')');
+  t.ok(by.call === 2, 'and two are all about the moment you pick (' + by.call + ')');
   t.ok(by.cd + by.aim + by.coin + by.call === IB.SPELLS.length, 'and that is all of them');
 
   /* The rule that caught the mislabel, derived rather than hand-checked.
@@ -19016,8 +19020,15 @@ t.ok(true, 'a final draw on a live match is clean');
       'so no point order claims it waits for one (' + wrong.join(', ') + ')');
     t.ok(IB.SPELL.withdraw.bound === 'call',
       'Withdraw is the one whose whole difficulty is choosing the moment');
-    t.ok(IB.SPELLS.filter(d => d.bound === 'call').every(d => d.target === 'point'),
-      'and everything in that category is one you can always cast');
+    /* Nothing in 'call' ever waits for a BODY — that is what separates it from
+       'aim'. Withdraw has no gate at all; Countermand has one, but what it
+       waits on is the enemy's cooldowns rather than anything standing on the
+       bridge, which is why it belongs here and not with the four that hunt for
+       a target. Both are orders whose whole difficulty is picking the moment. */
+    t.ok(IB.SPELLS.filter(d => d.bound === 'call').every(d => d.target === 'point' || d.target === 'self'),
+      'nothing in that category waits for a body on the bridge');
+    t.ok(IB.SPELL.counter.bound === 'call' && IB.SPELL.counter.target === 'self',
+      'Countermand is the one that waits on a state instead — their orders recovering');
   }
 
   // the ones the measurement calls out by name, so a later edit that reshuffles
@@ -19690,4 +19701,81 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(seen.size > 8, 'and over 40 matches it drew ' + seen.size + ' different opening hands');
 }
 
+/* ================== the obvious fix for Countermand does not work
+
+   It measured 37.2% over 320 matches — the weakest order in the set, and the
+   whole "their commander" group on its own. The reason is a trade, and most of
+   it is arithmetic rather than sampling.
+
+   It lengthens each of the foe's RECOVERING orders by COUNTER.add. With two
+   enemy slots the most it can ever deny is 2 x 25 = 50 seconds, and at a 120s
+   recovery it spends 120 of its own to do it — a ceiling of 0.42, where 1.00
+   is an even trade of slot-seconds. Measured over 40 matches holding it: 157
+   casts, a mean of 1.30 orders caught, 5,100 seconds denied for 18,840 spent.
+   A realised ratio of 0.27.
+
+   So the recovery was cut to 75s, lifting that to 0.43, and the same ten pairs
+   over the same 32 seeds were re-run: 37.8% against 37.2%. A change of 0.6
+   points, 0.2 standard errors. The cut was reverted.
+
+   That is the finding worth keeping — not "Countermand is weak", which was
+   already known, but that its PRICE is not why. Making it cheaper to use does
+   not make holding it better. The weakness is in what it does, and no constant
+   in this row will fix it.
+
+   Asserted below: the trade arithmetic, which is exact, and the refusal, which
+   is the design. Not the win rate, which is a sample. */
+{
+  const d = IB.SPELL.counter;
+  t.ok(!!d, 'Countermand is in the set');
+  t.ok(d.target === 'self', 'it is cast on your own hold, so it never waits for a body');
+  t.ok(d.cd === 120, 'and it still recovers in ' + d.cd + 's, because cutting it changed nothing');
+
+  // COUNTER.add is not exported; read it off the source beside the effect
+  const csrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const cm = csrc.match(/const COUNTER = \{ add:(\d+) \}/);
+  t.ok(!!cm, 'the amount it adds parsed off the source (' + (cm ? cm[1] : 'missing') + ')');
+  const add = cm ? Number(cm[1]) : 0;
+
+  /* The ceiling: every enemy opening slot caught, every single time. This is
+     the best the order can do against a commander who never earns a third. */
+  const ceiling = (IB.SLOTS_AT_START * add) / d.cd;
+  t.ok(ceiling < 0.5,
+    'even catching everything, it trades ' + ceiling.toFixed(2) + ' slot-seconds per slot-second');
+  t.ok(ceiling > 0, 'though it does deny something');
+  // and the realised rate, at the measured mean catch of 1.30
+  const realised = (1.30 * add) / d.cd;
+  t.ok(realised < ceiling, 'in play it lands under that (' + realised.toFixed(2) + ')');
+  t.ok(realised < 0.35, 'well under an even trade — which a cheaper price did not repair');
+
+  /* The label. bound is what the chooser prints under "what limits this", and
+     'cd' claimed recovery was it while the order sat ready with nothing to
+     catch 70.4% of its idle time. */
+  t.ok(d.bound === 'call', 'what limits it is the call, not the recovery');
+  t.ok(/time it/i.test(d.d), 'which is what the card already told the player');
+  t.ok(!!IB.SPELL_BOUND[d.bound], 'and the label resolves to a phrase (' + IB.SPELL_BOUND[d.bound] + ')');
+  t.ok(!/recovery/i.test(IB.SPELL_BOUND[d.bound]), 'that no longer claims recovery is the limit');
+
+  // every order still declares one, and every declared one is real
+  for (const sp of IB.SPELLS)
+    t.ok(!!IB.SPELL_BOUND[sp.bound], sp.n + ' declares a bound the table knows (' + sp.bound + ')');
+
+  /* The refusal is the other half of the design: against a commander holding a
+     full ready hand there is nothing to lengthen, and it must not be spent. */
+  IB.newMatch({ diff:'veteran', seed:7810 });
+  const cme = IB.G.sides[0], cfoe = IB.G.sides[1];
+  IB.chooseSpell(cme, 0, 'counter'); IB.chooseSpell(cme, 1, 'muster');
+  IB.chooseSpell(cfoe, 0, 'bombard'); IB.chooseSpell(cfoe, 1, 'pitch');
+  t.ok(IB.counterCatch(cme) === 0, 'nothing to catch against a full ready hand');
+  t.ok(typeof IB.castSpell(cme, { slot:0 }) === 'string', 'so the cast is refused rather than spent');
+  t.ok(cme.spellCd[0] === 0, 'and the order is still ready afterwards');
+
+  cfoe.spellCd[0] = 40; cfoe.spellCd[1] = 10;
+  t.ok(IB.counterCatch(cme) === 2, 'both of theirs recovering is a catch of two');
+  t.ok(IB.castSpell(cme, { slot:0 }) === null, 'and now it fires');
+  t.ok(Math.abs(cfoe.spellCd[1] - (10 + add)) < 1e-6,
+    'adding exactly ' + add + 's to each (' + cfoe.spellCd[1].toFixed(1) + 's)');
+  t.ok(Math.abs(cme.spellCd[0] - d.cd) < 1e-6,
+    'and costing its own full recovery (' + cme.spellCd[0].toFixed(0) + 's)');
+}
 t.done();
