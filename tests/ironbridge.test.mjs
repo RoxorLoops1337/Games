@@ -20518,4 +20518,103 @@ t.ok(true, 'a final draw on a live match is clean');
     'and every band is a flat colour a canvas can read');
 }
 
+/* ================== the gorge is stacked paper too
+
+   With the sky banded and every shape carrying a cut edge, a census of the
+   frame put the gorge second only to the god rays: 2.3 screens of gradient
+   fill, and the only one of them made of rock rather than of light. Each of the
+   six walls was one vertical ramp with two bedding planes stroked across it.
+
+   The repair is NOT the sky's repair. A colour stop is a straight line across
+   the whole canvas, and this file already records what a straight line across
+   the gorge reads as — a shoreline. So the flats are cut from the rock's own
+   profile instead: a crestPath per stratum, closed to the foot of its layer and
+   laid over the one above it.
+
+   What is held here is the SYSTEM, not the taste: that no wall is painted with
+   a gradient any more, that the strata are ordered and come from the tones the
+   wall table already declares, and that the two gradients left in the gorge are
+   the ones with an argument for staying. */
+{
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const chasm = src.slice(src.indexOf('function drawChasm'),
+    src.indexOf('\nfunction ', src.indexOf('function drawChasm') + 10));
+
+  /* The table. Four flats, top to bottom, each naming which of the wall's own
+     two tones it is cut from — so a change to GORGE_WALLS still reaches the
+     rock rather than being overridden by a colour written out here. */
+  t.ok(IB.STRATA.length >= 3, 'a wall is cut into ' + IB.STRATA.length + ' flats');
+  t.ok(IB.STRATA[0].at === 0, 'the first starts at the lip');
+  let sRising = true, sTone = true;
+  for (let i = 0; i < IB.STRATA.length; i++){
+    if (i && IB.STRATA[i].at <= IB.STRATA[i - 1].at) sRising = false;
+    if (IB.STRATA[i].at >= 1) sRising = false;
+    if (IB.STRATA[i].of !== 'top' && IB.STRATA[i].of !== 'bot') sTone = false;
+  }
+  t.ok(sRising, 'and each one starts below the last, all of them inside the layer');
+  t.ok(sTone, 'every flat is cut from a tone the wall table already declares');
+  t.ok(IB.STRATA[IB.STRATA.length - 1].of === 'bot',
+    'the deepest is the wall\'s own bot, so the foot of the rock is still that colour');
+
+  /* strataCol is where the table becomes a colour, and it is the piece a test
+     can hold without a canvas: every wall must produce as many DISTINCT flats
+     as the table has entries, or two strata are the same paper and the cut
+     between them is invisible. */
+  let distinct = true, lastDark = true;
+  for (const w of IB.GORGE_WALLS){
+    const cols = IB.STRATA.map(st => IB.strataCol(w, st));
+    if (new Set(cols).size !== IB.STRATA.length) distinct = false;
+    if (cols[cols.length - 1] !== w.bot) lastDark = false;
+  }
+  t.ok(distinct, 'no wall cuts two strata out of the same colour');
+  t.ok(lastDark, 'and the bottom flat of every wall is that wall\'s bot, untouched');
+
+  /* The bug, stated as the thing that was true and now must not be: a wall was
+     a gradient. The recorder keeps what each gradient was BUILT from, so this
+     asks how many gradients drawChasm makes at all — and names them. */
+  const st = CTX.__stats;
+  st.grads = []; st.fills = []; st.fillsDropped = 0;
+  IB.drawChasm(CTX);
+  const grads = st.grads.length;
+  t.ok(grads > 0, 'drawChasm still draws (' + grads + ' gradients, ' + st.fills.length + ' fills)');
+  /* Four left, and each has a reason. The void is the empty BEHIND everything
+     and has no profile for a flat to follow. The depth haze and the mist on the
+     water are AIR, which this world lets stay smooth wherever it lies over rock
+     — the same licence the fog on the mountains has. The river is banded, so it
+     is a gradient that draws flats. Ten before, of which six were the walls. */
+  t.ok(grads <= 4, 'and makes at most four of them, down from ten (' + grads + ')');
+  t.ok(!/createLinearGradient\(0, wy/.test(chasm),
+    'no wall builds a ramp down its own face any more');
+  t.ok(!/createLinearGradient\(0, ny/.test(chasm),
+    'and neither does the near wall');
+  t.ok(/for \(let k = 0; k < STRATA\.length; k\+\+\)/.test(chasm),
+    'each wall walks the strata table instead');
+  t.ok(/crestPath\(c, wy \+ gap \* st\.at/.test(chasm),
+    'and every flat is cut on a crest profile, so its edge wanders like the ledges');
+  t.ok(!/c\.stroke\(\);/.test(chasm.slice(chasm.indexOf('STRATA.length'),
+    chasm.indexOf('crestRibs'))),
+    'with no line drawn over the edge it just cut');
+
+  /* The depth haze ends at nothing. It used to stop at twelve per cent, which
+     is a rect edge — a ruler across the full width of the one thing in the
+     picture that has no straight lines in it. */
+  const haze = chasm.slice(chasm.indexOf('const hz = '), chasm.indexOf('const hz = ') + 400);
+  t.ok(/addColorStop\(1, 'rgba\([\d,]+,0\)'\)/.test(haze),
+    'the depth haze fades out at its own bottom edge instead of stopping on a line');
+
+  /* And the river, which measured as eighteen consecutive rows each stepping in
+     over ninety per cent of columns — the last vertical ramp in the gorge. */
+  t.ok(/bandStops\(c\.createLinearGradient\(0, ry - rh \* 1\.6, 0, ry \+ rh \* 1\.6\), RIVER_STOPS\)/.test(chasm),
+    'the river is banded on the same rule as the sky dome and the valley floor');
+  t.ok(IB.RIVER_STOPS.length >= 4, 'out of ' + IB.RIVER_STOPS.length + ' colours');
+  t.ok(IB.RIVER_STOPS[0][0] === 0 && IB.RIVER_STOPS[IB.RIVER_STOPS.length - 1][0] === 1,
+    'running the full depth of the reach');
+  let rRising = true;
+  for (let i = 1; i < IB.RIVER_STOPS.length; i++)
+    if (IB.RIVER_STOPS[i][0] <= IB.RIVER_STOPS[i - 1][0]) rRising = false;
+  t.ok(rRising, 'its offsets only ever go down');
+  t.ok(IB.RIVER_STOPS.every(s => /^#[0-9a-f]{6}$/i.test(s[1])),
+    'and every band of it is a flat colour');
+}
+
 t.done();
