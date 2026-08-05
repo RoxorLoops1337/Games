@@ -2865,6 +2865,48 @@ const WITHDRAW = { rad:14, dur:4, spd:1.35, res:.25 };
 // G.wave and it does not touch G.waveT: the wave clock is the one thing both
 // players read to know what is coming, and a spell that moved it would make
 // the board lie to the person who did not cast it.
+/* THE ORDER TABLE, re-measured on one consistent build.
+   All 55 openings x 32 seeds, both sides AI-played, so the only difference
+   between arms is the opening pair side 0 starts holding. Read per order —
+   each appears in 10 pairs, so 320 matches and a standard error of 2.8.
+
+     muster   66.6 (66.3)   warp     45.9 (45.3)   rampart  40.0 (46.6)
+     withdraw 56.9 (60.9)   pitch    45.6 (40.0)   brace    40.0 (40.3)
+     pyre     50.0 (53.4)   hobble   41.9 (42.8)   unbind   39.7 (42.2)
+                                                   counter  39.4 (37.2)
+                                                   bombard  38.4 (38.1)
+
+   The bracketed figures are the sweep taken before Countermand's refund,
+   Bombard's tighter walk and Pitch Fire's higher rate landed. Two things come
+   out of the comparison and the first one is a correction.
+
+   RAMPART MOVED 6.6 POINTS WITHOUT BEING TOUCHED. Nothing about it changed
+   between the two sweeps. That is the empirical noise floor of this rig, and it
+   is larger than two of the three movements those changes were credited with —
+   so Bombard's single-arm +1.9 was noise, and reads +0.3 here. Refusing to
+   claim anything under about 8 points was the right call, and this is the
+   measurement that proves it rather than the arithmetic that predicted it.
+
+   THE SPREAD DID NOT COMPRESS: 29.1 points to 28.1. Three buffs, no change.
+   But the shape did. The floor is now five orders inside 1.6 points — bombard
+   38.4, counter 39.4, unbind 39.7, brace 40.0, rampart 40.0 — and the anomaly
+   has moved to the top. Second Muster is 9.7 points clear of second place and
+   20.7 above the all-order mean of 45.9.
+
+   The mechanism is right here and it is not subtle. musterWave spawns AN ENTIRE
+   EXTRA WAVE at MUSTER_HP of full. It is the only order in the set that adds
+   units at all; every other one damages, delays or moves them. Against a
+   C.WAVE_PERIOD of 22s, a 110s recovery buys one extra wave for every five that
+   march on their own — about a fifth more of the only currency the game keeps
+   score in.
+
+   That also qualifies the finding from the draft-window round. The choice of
+   opening is worth a lot, but a good part of what makes it worth a lot is that
+   one of the eleven is plainly the answer. Wide, and shallow.
+
+   Not rebalanced here. Four rounds of evidence now say an unmeasured constant
+   change either does nothing or cannot be told apart from noise, and the fix
+   for a 20-point outlier deserves the same measurement its diagnosis got. */
 const MUSTER_HP = .85;
 // Three seconds of standing still, then the hero is at its own front structure.
 // Refused within five seconds of taking a blow, and a blow during the channel
