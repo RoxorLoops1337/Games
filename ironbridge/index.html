@@ -7523,6 +7523,17 @@ const shade = (hex, f) => {
    edges on the towers and layered ridges up close, and still visibly there when
    the whole bridge is on screen. It does not scale with zoom on purpose. A cut
    edge is a property of the card, not of how far away you are standing. */
+/* ONE EDGE, NOT TWO, and that was measured rather than assumed.
+   A cut-out is card lifted off the page, so the obvious completion of the pale
+   rim was a dark one on the side the light does not reach — the card's
+   thickness against the layer behind it. Built, and then looked at: the frame
+   went from +6.7ms to +11.9ms, roughly doubling what the whole treatment costs,
+   and in a side-by-side of the same view the dark rim is very hard to find. The
+   pale one was plainly visible for its price; this one was not for twice it.
+   Reverted. The world already casts real ground shadows in twenty-one places —
+   keeps, trees, structures, bodies, buildings, nodes — so the card is lifted
+   off the page by those rather than by a rim, and this was paying a second time
+   for something already there. */
 const CUT = { on:true, dx:-1.5, dy:-1.5, ink:'rgba(255,247,228,.5)' };
 function poly(c, pts, fill, stroke, lw){
   const n = pts.length;
