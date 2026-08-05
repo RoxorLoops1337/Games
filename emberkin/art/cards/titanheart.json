@@ -1,0 +1,37 @@
+{
+  "id": "titanheart",
+  "name": "titanheart",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#8f7aa8",
+    "K": "#1b1220",
+    "a": "#4a3550",
+    "b": "#ffc94d",
+    "d": "#7a5410",
+    "h": "#fff0b8",
+    "m": "#c69320"
+  },
+  "rows": [
+    ".KKKKKK....KKKKKK...",
+    "KhbbbbbmKKhbbbbbmK..",
+    "KhbmmmmmmbmmmmmmmK..",
+    "KhbmhhmmmmmmmmmmmdK.",
+    "KhbmhhmmmmmmmmmmmdK.",
+    "KhbmmhmmmmmmmmmmmdK.",
+    "KhbmmmmmmmmmmmmmmdK.",
+    "KhbmmmmmmmmmmmmmmdK.",
+    ".KhbmmmmmmmmmmmmdK..",
+    "..KhbmmmmmmmmmmdK...",
+    "...KhbmmmmmmmmdK....",
+    "....KhbmmmmmmdK.....",
+    ".....KhbmmmmdK......",
+    "......KhbmmdK.......",
+    ".......KhbdK........",
+    "........KdK.........",
+    "..KKKKKKKKKKKKKK....",
+    ".KaAAAAAAAAAAAAaK...",
+    ".KaaaaaaaaaaaaaaK...",
+    "..KKKKKKKKKKKKKK...."
+  ]
+}

@@ -60,31 +60,100 @@
   #battlebar > *{ pointer-events:auto; }
   #hand{ position:absolute; left:1.5%; right:1.5%; bottom:1.5%; height:30%; touch-action:none;
     display:flex; gap:1%; justify-content:center; align-items:flex-end; }
+
+  /* ---- the card face --------------------------------------------------
+     Built the way a card game teaches you to scan one: cost on the frame,
+     art in a lit window, name on a rule, rules text under it, rarity in the
+     frame itself. Everything is in `em` off the stage font-size, so the same
+     markup is a thumbnail in the hand and a full card on a screen.
+     Percentage padding is banned here: it resolves against the ROW's width,
+     not the card's, which once left a 32px content box inside an 82px card. */
   .cardel{
-    /* Percentage padding resolves against the hand's width, not the card's,
-       which left a 32px content box inside an 82px card. Ems do not. */
-    flex:0 0 18%; height:100%; border-radius:7px; padding:.5em .45em .4em;
-    background:linear-gradient(180deg,#241a2e,#150e1d); border:2px solid var(--edge);
-    box-shadow:0 3px 0 rgba(0,0,0,.55); cursor:pointer; position:relative; overflow:hidden;
-    display:flex; flex-direction:column; gap:2%; transition:transform .12s ease, box-shadow .12s ease;
+    flex:0 0 18%; height:100%; position:relative; overflow:hidden; cursor:pointer;
+    border-radius:.55em; padding:.34em .34em .3em;
+    background:
+      radial-gradient(120% 62% at 50% 8%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 70%),
+      linear-gradient(180deg,#2a2036,#150e1d 62%,#100a17);
+    border:.14em solid color-mix(in srgb, var(--tint) 55%, #2a2136);
+    box-shadow:0 .22em 0 rgba(0,0,0,.55), inset 0 0 0 .07em rgba(255,255,255,.05);
+    display:flex; flex-direction:column; align-items:center;
+    transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
   }
-  /* The card is a token: name and cost read at a glance, and the line above
-     the hand carries the full rules text for whichever one you are aiming at. */
-  .cardel .cn{ margin-top:.55em; font-size:.92em; font-weight:700; line-height:1.05; letter-spacing:.2px; padding-right:1.5em;
-    white-space:normal; overflow-wrap:break-word; overflow:hidden; }
-  .cardel .ct{ font-size:.66em; color:var(--dim); line-height:1.15; flex:1; overflow:hidden; }
-  .cardel .cc{ position:absolute; right:.35em; top:.3em; width:1.5em; height:1.5em; border-radius:50%;
-    background:#0d0812; border:1px solid var(--gold); color:var(--gold); font-size:.72em;
-    display:flex; align-items:center; justify-content:center; font-weight:700; }
-  .cardel .cg{ position:absolute; right:.35em; bottom:.3em; font-size:.68em; color:var(--hp-good); font-weight:700; }
-  .cardel .ck{ position:absolute; left:.4em; top:.25em; font-size:.58em; color:var(--dim); font-weight:700; }
-  .cardel .cp{ position:absolute; left:0; right:0; bottom:.25em; text-align:center;
-    font-size:.62em; letter-spacing:1px; color:var(--gold); text-transform:uppercase; }
-  .cardel .cr{ position:absolute; left:0; top:0; bottom:0; width:4px; }
-  .cardel.sel{ transform:translateY(-8%); box-shadow:0 0 0 2px var(--gold), 0 6px 0 rgba(0,0,0,.55); }
-  .cardel.dead{ opacity:.4; }
-  .cardel.willplay{ box-shadow:0 0 0 3px var(--gold), 0 0 22px rgba(255,201,77,.5); }
-  .cardel.kin .cn{ color:var(--gold); }
+  /* A hairline inside the border reads as a printed frame rather than a div. */
+  .cardel .cframe{ position:absolute; inset:.16em; border-radius:.36em; pointer-events:none;
+    border:.07em solid color-mix(in srgb, var(--tint) 30%, transparent); }
+
+  .cardel .cart{ position:relative; width:100%; height:44%; margin-top:.9em;
+    display:flex; align-items:center; justify-content:center; }
+  /* The glow sits behind the art so a dark glyph still reads on a dark card. */
+  .cardel .cart::before{ content:''; position:absolute; width:82%; aspect-ratio:1; border-radius:50%;
+    background:radial-gradient(circle, color-mix(in srgb, var(--tint) 45%, transparent), transparent 68%); }
+  .cardel .cart canvas{ position:relative; height:100%; width:auto; image-rendering:pixelated; }
+  .cardel .cglyph{ position:relative; font-size:1.5em; font-weight:700; color:var(--tint);
+    text-shadow:0 .06em 0 rgba(0,0,0,.7); }
+
+  .cardel .cname{ width:100%; margin-top:.18em; padding:.1em 0 .12em; text-align:center;
+    font-size:.8em; font-weight:700; line-height:1.05; letter-spacing:.2px;
+    border-top:1px solid color-mix(in srgb, var(--tint) 40%, transparent);
+    overflow-wrap:break-word; overflow:hidden; }
+  .cardel .ctext{ width:100%; font-size:.6em; color:var(--dim); line-height:1.2; text-align:center;
+    flex:1; overflow:hidden; }
+
+  /* Cost is a gem punched through the frame — the first thing you check. */
+  .cardel .ccost{ position:absolute; left:.16em; top:.1em; width:1.5em; height:1.5em; z-index:2;
+    border-radius:50%; background:radial-gradient(circle at 34% 30%, #4a3a5e, #120c1c 70%);
+    border:.1em solid var(--gold); color:var(--gold); font-size:.72em; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 .5em rgba(255,201,77,.28); }
+  .cardel .cslot{ position:absolute; right:.32em; top:.24em; font-size:.55em; color:var(--dim); font-weight:700; }
+  .cardel .cgrow{ position:absolute; right:.24em; top:1.3em; font-size:.62em; font-weight:700;
+    color:#0e0a14; background:var(--hp-good); border-radius:.3em; padding:0 .22em; z-index:2; }
+  /* The foot is in normal flow, not two absolute lines fighting for the same
+     few pixels: the note sits on the pip, and the pip closes the card. */
+  .cardel .cfoot{ width:100%; margin-top:auto; }
+  .cardel .cnote{ font-size:.44em; color:var(--dim); line-height:1.15; text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cardel .cpip{ width:100%; text-align:center; padding-top:.15em;
+    font-size:.44em; letter-spacing:.12em; text-transform:uppercase;
+    color:color-mix(in srgb, var(--tint) 80%, #fff 20%); opacity:.85; }
+  .cardel .cp{ position:absolute; left:0; right:0; bottom:.9em; text-align:center; z-index:2;
+    font-size:.6em; letter-spacing:1px; color:var(--gold); text-transform:uppercase;
+    text-shadow:0 0 .5em rgba(0,0,0,.9); }
+
+  /* Rarity is the frame, not a label you have to read. Epic and legendary get
+     a sheen that moves, because a card you were pleased to draw should look it. */
+  .cardel.r-rare{ box-shadow:0 .22em 0 rgba(0,0,0,.55), 0 0 .7em rgba(95,201,255,.22); }
+  .cardel.r-epic{ box-shadow:0 .22em 0 rgba(0,0,0,.55), 0 0 .9em rgba(200,107,255,.3); }
+  .cardel.r-legendary{ box-shadow:0 .22em 0 rgba(0,0,0,.55), 0 0 1.1em rgba(255,201,77,.42); }
+  .cardel.r-epic::after, .cardel.r-legendary::after{
+    content:''; position:absolute; inset:0; pointer-events:none; border-radius:.4em;
+    background:linear-gradient(115deg, transparent 38%, rgba(255,255,255,.16) 48%, transparent 58%);
+    background-size:280% 100%; animation:sheen 3.6s linear infinite; }
+  @keyframes sheen{ from{ background-position:180% 0; } to{ background-position:-80% 0; } }
+
+  /* A kin's own move belongs to the creature, not the deck, and says so. */
+  .cardel.kin{ border-color:var(--gold); }
+  .cardel.kin .cname{ color:var(--gold); }
+
+  .cardel.sel{ transform:translateY(-8%); box-shadow:0 0 0 .14em var(--gold), 0 .4em 0 rgba(0,0,0,.55); }
+  .cardel.dead{ filter:grayscale(.7) brightness(.62); }
+  .cardel.willplay{ box-shadow:0 0 0 .2em var(--gold), 0 0 1.5em rgba(255,201,77,.5); }
+
+  /* Off a hand the same card gets room: a wrapping shelf of full-size faces,
+     which is where you actually read the rules text and the growth. */
+  .cardrow{ display:flex; flex-wrap:wrap; gap:.5em; margin-top:1.1em; }
+  .cardel.big{ flex:0 0 8em; height:11.4em; font-size:1.2em; padding:.4em .4em .34em; }
+  /* The offer is the one moment the card IS the decision, so it gets room —
+     but it must never wrap: four cards side by side is the whole choice, and a
+     card that has fallen onto a second row reads as a different question.
+     They share the width instead, and the lifted one has space to lift into. */
+  .cardrow.big{ flex-wrap:nowrap; gap:.7em; margin-top:1.7em; align-items:stretch; }
+  .cardrow.big .cardel{ flex:1 1 0; min-width:0; max-width:11em; height:14.6em; font-size:1.4em; }
+  .cardel.big .cart{ height:40%; margin-top:1em; }
+  .cardel.big .ctext{ font-size:.56em; flex:0 1 auto; }
+  .cardel.off{ opacity:.45; }
+  .cardel.skipcard{ flex:0 0 8em; height:11.4em; font-size:1.2em; justify-content:center; }
+  .cardel.skipcard .cglyph{ font-size:2.4em; }
 
   #energy{ position:absolute; left:1.5%; top:53%; padding:3px 9px; font-size:1em; color:var(--gold); }
   #energy small{ color:var(--dim); font-size:.7em; }
@@ -1546,6 +1615,932 @@ const ART_ACTORS = {
 "....KbbKKbbK....",
 "....KKKKKKKK...."]}
 };
+const ART_CARDS = {
+"adrenaline":{n:"adrenaline",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#e8546a","d":"#6b1730","h":"#ffb3bd","m":"#b32a45"},r:[
+".........KaK........",
+"........KaAaK.......",
+".........KaK........",
+".......KKKaKKK......",
+"......KhbbAbbmK.....",
+".....KhbmmAmmmdK....",
+".....KhbmmAmmmdK....",
+".....KhbmmAmmmdK....",
+".....KhbmmAmmmdK....",
+".....KhbmmAmmmdK....",
+".....KhbmmmmmmdK....",
+".....KhbmhhmmmdK....",
+".....KhbmhhmmmdK....",
+".....KhbmmmmmmdK....",
+".....KhbmmmmmmdK....",
+".....KdbmmmmmmdK....",
+"......KdbmmmmdK.....",
+".......KKKKKK.......",
+"....................",
+"...................."]},
+"berserk":{n:"berserk",p:{"K":"#1b1220","b":"#e8546a","d":"#6b1730","h":"#ffb3bd","m":"#b32a45"},r:[
+"..KK............KK..",
+".KhbK..........KbmK.",
+".KhbmK........KdbmK.",
+"..KhbmK......KdbmK..",
+"...KhbmK....KdbmK...",
+"....KhbmK..KdbmK....",
+".....KhbmKKdbmK.....",
+"......KhbmbmdK......",
+".......KhbmdK.......",
+".......KKKKKK.......",
+".....KKhbbbmdKK.....",
+"....KhbmmmmmmmdK....",
+"...KhbmmhhmmmmmdK...",
+"...KhbmmhhmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"....KdbmmmmmmmdK....",
+".....KdbmmmmmdK.....",
+"......KdbbbbdK......",
+".......KKKKKK.......",
+"...................."]},
+"bloodedge":{n:"bloodedge",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#e8546a","d":"#6b1730","h":"#ffb3bd","m":"#b32a45"},r:[
+"...............KK...",
+"..............KhbK..",
+".............KhbmK..",
+"............KhbmdK..",
+"...........KhbmdK...",
+"..........KhbmdK....",
+".........KhbmdK.....",
+"........KhbmdK......",
+".......KhbmdK.......",
+"......KhbmdK........",
+".....KKbmdK.........",
+"....KaAAaK..........",
+"....KaaaK...........",
+".....KKK............",
+"....................",
+"..KdK.....KdK.......",
+".KdmbK...KdmbK......",
+".KmbhK...KmbhK......",
+"..KbK.....KbK.......",
+"...K.......K........"]},
+"bulwark":{n:"bulwark",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ffc94d","d":"#7a5410","h":"#fff0b8","m":"#c69320"},r:[
+"..KKKKKKKKKKKKKKKK..",
+".KhhbbbbbbbbbbbbmdK.",
+".KhbmmmmmmmmmmmmmdK.",
+".KhbmmKKKKKKKKmmmdK.",
+".KhbmmKaAAAAaKmmmdK.",
+".KhbmmKaAaaaAKmmmdK.",
+".KhbmmKaAAAAaKmmmdK.",
+".KhbmmKKKKKKKKmmmdK.",
+".KhbmmmmmmmmmmmmmdK.",
+"..KhbmmmmmmmmmmmmdK.",
+"..KhbmmmmmmmmmmmdK..",
+"...KhbmmmmmmmmmdK...",
+"....KhbmmmmmmmdK....",
+".....KhbmmmmmdK.....",
+"......KhbmmmdK......",
+".......KhbmdK.......",
+"........KhdK........",
+".........KK.........",
+"....................",
+"...................."]},
+"dewdrop":{n:"dewdrop",p:{"K":"#1b1220","b":"#46b6e8","d":"#12406b","h":"#c8f2ff","m":"#1f74b0"},r:[
+".........KK.........",
+"........KhbK........",
+"........KhbK........",
+".......KhbmK........",
+".......KhbmdK.......",
+"......KhbmmdK.......",
+".....KhbmmmmdK......",
+"....KhbmmmmmmdK.....",
+"....KhbmmmmmmdK.....",
+"...KhbmhhmmmmmdK....",
+"...KhbmhhmmmmmdK....",
+"...KhbmmmmmmmmdK....",
+"...KhbmmmmmmmmdK....",
+"...KdbmmmmmmmmdK....",
+"....KdbmmmmmmdK.....",
+".....KdbmmmmdK......",
+"......KdbmmdK.......",
+".......KKKK.........",
+"....................",
+"...................."]},
+"dragonheart":{n:"dragonheart",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ff8a2b","d":"#7a1e12","h":"#ffd98a","m":"#c8451c"},r:[
+"...KKKK....KKKK.....",
+"..KhbbbmKKhbbbmK....",
+".KhbmmmmmbmmmmmdK...",
+"KhbmmmmmmmmmmmmmdK..",
+"KhbmmKKKKKKKKmmmdK..",
+"KhbmKaAAAAAAaKmmdK..",
+"KhbmKaAaaaaaAKmmdK..",
+"KhbmKaAAAAAAaKmmdK..",
+"KhbmKKKKKKKKKKmmdK..",
+"KhbmmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmdK...",
+"..KhbmmmmmmmmmdK....",
+"...KhbmmmmmmmdK.....",
+"....KhbmmmmmdK......",
+".....KhbmmmdK.......",
+"......KhbmdK........",
+".......KhdK.........",
+"........KK..........",
+"....................",
+"...................."]},
+"edge":{n:"edge",p:{"A":"#c08444","K":"#1b1220","a":"#7a4a20","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
+"................KK..",
+"...............KhbK.",
+"..............KhbmK.",
+".............KhbmdK.",
+"............KhbmdKK.",
+"...........KhbmdK...",
+"..........KhbmdK....",
+".........KhbmdK.....",
+"........KhbmdK......",
+".......KhbmdK.......",
+"......KhbmdK........",
+".....KhbmdK.........",
+"....KKbmdK..........",
+"...KaAAaK...........",
+"..KaAaaK............",
+"..KaaaK.............",
+".KAaK...............",
+".KaK................",
+".KK.................",
+"...................."]},
+"elem_aether":{n:"elem_aether",p:{"K":"#1b1220","b":"#ffc94d","d":"#7a5410","h":"#fff0b8","m":"#c69320"},r:[
+".........KK.........",
+"........KhbK........",
+"........KhbK........",
+".......KhbmK........",
+".......KhbmK........",
+"..KK...KhbmK...KK...",
+".KhbKKKKhbmKKKKbmK..",
+".KhbmmmmhbmmmmmmdK..",
+"..KhbmmmmbmmmmmdK...",
+"...KhbmmmmmmmmdK....",
+"....KhbmmmmmmdK.....",
+"....KhbmmmmmmdK.....",
+"...KhbmmdKdbmmdK....",
+"..KhbmdK...KdbmdK...",
+"..KbmdK.....KdbmK...",
+"..KdK.........KdK...",
+"..KK...........KK...",
+"....................",
+"....................",
+"...................."]},
+"elem_ember":{n:"elem_ember",p:{"K":"#1b1220","b":"#ff8a2b","d":"#7a1e12","h":"#ffd98a","m":"#c8451c"},r:[
+"..........KK........",
+".........KhbK.......",
+".........KhbK.......",
+"........KhbmK.......",
+".......KhbmmK.......",
+"......KhbmmdK.......",
+".....KhbmmmdK.......",
+"....KhbmmmmdK.......",
+"...KhbmmmmmdKK......",
+"..KhbmmmmmmmbdK.....",
+"..KbmmmmmmmmmdK.....",
+"..KbmmmmmmmmmdK.....",
+"..KdbmmmmmmmmdK.....",
+"...KdbmmmmmmdK......",
+"....KdbmmmmdK.......",
+".....KdbmmdK........",
+"......KddK..........",
+".......KK...........",
+"....................",
+"...................."]},
+"elem_gloom":{n:"elem_gloom",p:{"K":"#1b1220","b":"#8f5fd0","d":"#2c1c46","h":"#d9b8ff","m":"#553087"},r:[
+".......KKKKKK.......",
+".....KKhbbbbmKK.....",
+"....KhbmmmmmmmdK....",
+"...KhbmmmmmmmmmdK...",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmKKKKKmmmdK..",
+".KhbmmmKKKKKKKmmmdK.",
+".KhbmmKKKKKKKKKmmdK.",
+".KhbmmKKKKKKKKKmmdK.",
+".KhbmmKKKKKKKKKmmdK.",
+".KhbmmmKKKKKKKmmmdK.",
+"..KhbmmmKKKKKmmmdK..",
+"..KdbmmmmmmmmmmmdK..",
+"...KdbmmmmmmmmmdK...",
+"....KdbmmmmmmmdK....",
+".....KKdbbbbdKK.....",
+".......KKKKKK.......",
+"....................",
+"....................",
+"...................."]},
+"elem_spark":{n:"elem_spark",p:{"K":"#1b1220","b":"#ffe14d","d":"#6b5210","h":"#fffbcf","m":"#c39a18"},r:[
+"..........KKKK......",
+".........KhbbmK.....",
+"........KhbmmdK.....",
+".......KhbmmdK......",
+"......KhbmmdK.......",
+".....KhbmmdKKKKK....",
+"....KhbmmdhbbbmdK...",
+"...KhbmmdhbmmmmdK...",
+"...KKKKKKbmmmmdK....",
+"........KbmmmdK.....",
+".......KdbmmdK......",
+"......KdbmmdK.......",
+".....KdbmmdK........",
+"....KdbmmdK.........",
+"....KKKKKK..........",
+"....................",
+"....................",
+"....................",
+"....................",
+"...................."]},
+"elem_stone":{n:"elem_stone",p:{"K":"#1b1220","b":"#9d94a4","d":"#3c3340","h":"#d6cfdc","m":"#6b6270"},r:[
+"....................",
+".......KKKKKK.......",
+".....KKhbbbbmdKK....",
+"...KKhbmmmmmmmmdK...",
+"..KhbmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmmdK.",
+"KhbmmmmhhmmmmmmmmdK.",
+"KhbmmmhhmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KdbmmmmmmmmmmmmmmdK.",
+".KdbmmmmmmmmmmmmdK..",
+"..KdbmmmmmmmmmmdK...",
+"...KdbmmmmmmmmdK....",
+"....KKdbbbbbbdKK....",
+"......KKKKKKKK......",
+"....................",
+"....................",
+"...................."]},
+"elem_tide":{n:"elem_tide",p:{"K":"#1b1220","b":"#46b6e8","d":"#12406b","h":"#c8f2ff","m":"#1f74b0"},r:[
+".........KK.........",
+"........KhbK........",
+"........KhbK........",
+".......KhbmK........",
+".......KhbmdK.......",
+"......KhbmmdK.......",
+".....KhbmmmmdK......",
+"....KhbmmmmmmdK.....",
+"....KhbmmmmmmdK.....",
+"...KhbmhhmmmmmdK....",
+"...KhbmhhmmmmmdK....",
+"...KhbmmmmmmmmdK....",
+"...KhbmmmmmmmmdK....",
+"...KdbmmmmmmmmdK....",
+"....KdbmmmmmmdK.....",
+".....KdbmmmmdK......",
+"......KdbmmdK.......",
+".......KKKK.........",
+"....................",
+"...................."]},
+"elem_verdant":{n:"elem_verdant",p:{"A":"#9c7a5c","K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+"...............KKK..",
+".............KKhbmK.",
+"...........KKhbmmdK.",
+".........KKhbmmmmdK.",
+".......KKhbmmmmmmdK.",
+".....KKhbmmmmmmmmdK.",
+"....KhbmmmmmmmmmmdK.",
+"...KhbmmmmmhmmmmmdK.",
+"..KhbmmmmmhhmmmmmdK.",
+"..KhbmmmmhhmmmmmmdK.",
+"..KhbmmmhhmmmmmmdK..",
+"..KhbmmhhmmmmmmdK...",
+"..KdbmhhmmmmmmdK....",
+"...KdbhmmmmmmdK.....",
+"....KdbmmmmmdK......",
+".....KdbmmmdK.......",
+"..KaaaKdbmdK........",
+".KaAaaaaKdK.........",
+"KaaK.....K..........",
+".K.................."]},
+"emberoil":{n:"emberoil",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ff8a2b","d":"#7a1e12","h":"#ffd98a","m":"#c8451c"},r:[
+".......KKKKKK.......",
+"......KhbbbbmK......",
+"......KhbmmmdK......",
+"......KhbmmmdK......",
+".......KKmmKK.......",
+".....KKKKmmKKKK.....",
+"....KhbbbbbbbbmK....",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KhbmhhmmmmmmdK...",
+"...KhbmhhmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KdbmmmmmmmmmdK...",
+"....KdbmmmmmmmdK....",
+".....KKKKKKKKKK.....",
+"........KaK.........",
+".......KaAaK........",
+"......KaAAAaK.......",
+".......KaAaK........",
+"........KaK........."]},
+"eternal":{n:"eternal",p:{"A":"#8f7aa8","K":"#1b1220","a":"#3d3350","b":"#ffe14d","d":"#6b5210","h":"#fffbcf","m":"#c39a18"},r:[
+"..........KKKK......",
+".........KhbbmK.....",
+"........KhbmmdK.....",
+".......KhbmmdK......",
+"......KhbmmdK.......",
+".....KhbmmdKKKKK....",
+"....KhbmmdhbbbmdK...",
+"...KhbmmdhbmmmmdK...",
+"...KKKKKKbmmmmdK....",
+"........KbmmmdK.....",
+".......KdbmmdK......",
+"......KdbmmdK.......",
+".....KdbmmdK........",
+"....KKKKKK..........",
+"....................",
+"..KKKKKKKKKKKKKK....",
+".KaAAAAAAAAAAAAaK...",
+".KaAaaaaaaaaaaAaK...",
+".KaaaaaaaaaaaaaaK...",
+"..KKKKKKKKKKKKKK...."]},
+"fanghone":{n:"fanghone",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ff8a2b","d":"#7a1e12","h":"#ffd98a","m":"#c8451c"},r:[
+".........KKK........",
+"........KhbmK.......",
+"........KhbmK.......",
+"........KhbmdK......",
+"........KhbmdK......",
+".........KbmdK......",
+".........KbmdK......",
+".........KbmdK......",
+"..........KbmK......",
+"..........KmK.......",
+"...........KK.......",
+"....................",
+"..KKKKKKKKKKKKKK....",
+".KaAAAAAAAAAAAAaK...",
+".KaAaaaaaaaaaaaAK...",
+".KaaaaaaaaaaaaaaK...",
+"..KKKKKKKKKKKKKK....",
+"....................",
+"....................",
+"...................."]},
+"focus":{n:"focus",p:{"A":"#8f7aa8","K":"#1b1220","a":"#3d3350","b":"#ffe14d","d":"#6b5210","h":"#fffbcf","m":"#c39a18"},r:[
+"....................",
+"....................",
+".....KKKKKKKKKK.....",
+"...KKhbbbbbbbbmKK...",
+"..KhbmmmmmmmmmmmdK..",
+".KhbmmmmKKKKmmmmmdK.",
+"KhbmmmmKaAAaKmmmmmdK",
+"KhbmmmKaAAAAaKmmmmdK",
+"KhbmmmKaAKKAaKmmmmdK",
+"KhbmmmKaAKKAaKmmmmdK",
+"KhbmmmKaAAAAaKmmmmdK",
+"KdbmmmmKaAAaKmmmmmdK",
+".KdbmmmmKKKKmmmmmdK.",
+"..KdbmmmmmmmmmmmdK..",
+"...KKdbbbbbbbbdKK...",
+".....KKKKKKKKKK.....",
+"....................",
+"....................",
+"....................",
+"...................."]},
+"grit":{n:"grit",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#9d94a4","d":"#3c3340","h":"#d6cfdc","m":"#6b6270"},r:[
+"....................",
+".....KKKKKKKK.......",
+"....KhbbbbbbmK......",
+"...KhbmKKKKmmdK.....",
+"...KhbmKaAaKmmdK....",
+"..KhbmmKaAaKmmmdK...",
+"..KhbmmKaAaKmmmdK...",
+"..KhbmmKaAaKmmmdK...",
+"..KhbmmmmmmmmmmdK...",
+"..KhbmmmmmmmmmmdK...",
+"...KdbmmmmmmmmdK....",
+"....KdbmmmmmmdK.....",
+".....KKKKKKKKK......",
+"....................",
+"..KKKKKKKKKKKKKKKK..",
+".KaAAAAAAAAAAAAAAaK.",
+".KaaaaaaaaaaaaaaaaK.",
+".KKKKKKKKKKKKKKKKKK.",
+"....................",
+"...................."]},
+"guard":{n:"guard",p:{"A":"#c08444","K":"#1b1220","a":"#7a4a20","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
+"...KKKKKKKKKKKKKK...",
+"..KhhbbbbbbbbbbmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmKaAaKmmmdK..",
+"..KhbmmmKaAaKmmmdK..",
+"..KhbmmmKaAaKmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"....KhbmmmmmmmdK....",
+".....KhbmmmmmdK.....",
+"......KhbmmmdK......",
+".......KhbmdK.......",
+"........KhdK........",
+".........KK.........",
+"....................",
+"...................."]},
+"heartroot":{n:"heartroot",p:{"A":"#9c7a5c","K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+"..KKKK....KKKK......",
+".KhbbbmKKhbbbmK.....",
+"KhbmmmmmbmmmmmdK....",
+"KhbmhhmmmmmmmmmdK...",
+"KhbmhhmmmmmmmmmdK...",
+"KhbmmhmmmmmmmmmdK...",
+"KhbmmmmmmmmmmmmdK...",
+".KhbmmmmmmmmmmdK....",
+"..KhbmmmmmmmmdK.....",
+"...KhbmmmmmmdK......",
+"....KhbmmmmdK.......",
+".....KhbmmdK........",
+"......KhbdK.........",
+".......KaK..........",
+"......KaAaK.........",
+".....KaAKAaK........",
+"....KaAaKaAaK.......",
+"...KaAaK.KaAaK......",
+"...KaaK...KaaK......",
+"....KK.....KK......."]},
+"hunker":{n:"hunker",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#9d94a4","d":"#3c3340","h":"#d6cfdc","m":"#6b6270"},r:[
+"....................",
+"....KKKKKKKKKK......",
+"...KhbbbbbbbmdK.....",
+"..KhbmmmmmmmmmdK....",
+"..KhbmmmmmmmmmdK....",
+"..KhbmmKaAaKmmdK....",
+"..KhbmmKaAaKmmdK....",
+"..KhbmmmmmmmmmdK....",
+"...KhbmmmmmmmdK.....",
+"....KhbmmmmmdK......",
+".....KhbmmmdK.......",
+"......KKKKKK........",
+"....................",
+"..KKKKKKKKKKKKKK....",
+".KaAAAAAAAAAAAAaK...",
+".KaaaaaaaaaaaaaaK...",
+".KKKKKKKKKKKKKKKK...",
+"....................",
+"....................",
+"...................."]},
+"ironhide":{n:"ironhide",p:{"A":"#c08444","K":"#1b1220","a":"#7a4a20","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
+"..KKKKKKKKKKKKKK....",
+".KhhbbbbbbbbbbmdK...",
+".KhbmKKKKKKKKmmdK...",
+".KhbmKaAAAAaKmmdK...",
+".KhbmKaAaaaAKmmdK...",
+".KhbmKaAAAAaKmmdK...",
+".KhbmKKKKKKKKmmdK...",
+".KhbmmmmmmmmmmmdK...",
+".KhbmmmmmmmmmmmdK...",
+"..KhbmmmmmmmmmdK....",
+"..KhbmmmmmmmmmdK....",
+"...KhbmmmmmmmdK.....",
+"....KhbmmmmmdK......",
+".....KhbmmmdK.......",
+"......KhbmdK........",
+".......KhdK.........",
+"........KK..........",
+"....................",
+"....................",
+"...................."]},
+"killedge":{n:"killedge",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#e8546a","d":"#6b1730","h":"#ffb3bd","m":"#b32a45"},r:[
+".........KK.........",
+"........KhbK........",
+"........KhbK........",
+".......KhbmK........",
+".......KhbmK........",
+"......KhbmdK........",
+"......KhbmdK...KK...",
+".....KhbmdK...KhbK..",
+".....KhbmdK..KhbmK..",
+"....KKbmdKK.KhbmdK..",
+"...KaAAAAaKKhbmdK...",
+"...KaaaaaaKhbmdK....",
+"....KKaaKKKbmdK.....",
+".....KaaK.KmdK......",
+".....KaaK.KdK.......",
+".....KaaK.K.........",
+".....KKKK...........",
+"....................",
+"....................",
+"...................."]},
+"kinbond":{n:"kinbond",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ffc94d","d":"#7a5410","h":"#fff0b8","m":"#c69320"},r:[
+"..KKKK....KKKK......",
+".KhbbbmKKhbbbmK.....",
+"KhbmmmmmbmmmmmdK....",
+"KhbmhhmmmmmmmmmdK...",
+"KhbmmhmmmmmmmmmdK...",
+"KhbmmmmmmmmmmmmdK...",
+".KhbmmmmmmmmmmdK....",
+"..KhbmmmmmmmmdK.....",
+"...KhbmmmmmmdK......",
+"....KhbmmmmdK.......",
+".....KhbmmdK........",
+"......KhbdK.........",
+".......KaK..........",
+"....KKKKaKKKK.......",
+"...KaAAAAAAAaK......",
+"...KaAaaaaaaAK......",
+"...KaAAAAAAAaK......",
+"...KaaaaaaaaaK......",
+"...KKKKKKKKKKK......",
+"...................."]},
+"kindle":{n:"kindle",p:{"K":"#1b1220","b":"#ff8a2b","d":"#7a1e12","h":"#ffd98a","m":"#c8451c"},r:[
+"..........KK........",
+".........KhbK.......",
+".........KhbK.......",
+"........KhbmK.......",
+".......KhbmmK.......",
+"......KhbmmdK.......",
+".....KhbmmmdK.......",
+"....KhbmmmmdK.......",
+"...KhbmmmmmdKK......",
+"..KhbmmmmmmmbdK.....",
+"..KbmmmmmmmmmdK.....",
+"..KbmmmmmmmmmdK.....",
+"..KdbmmmmmmmmdK.....",
+"...KdbmmmmmmdK......",
+"....KdbmmmmdK.......",
+".....KdbmmdK........",
+"......KddK..........",
+".......KK...........",
+"....................",
+"...................."]},
+"overkill":{n:"overkill",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ff8a2b","d":"#7a1e12","h":"#ffd98a","m":"#c8451c"},r:[
+"..K..............K..",
+".KbK............KbK.",
+".KmK............KmK.",
+".KdKK..........KKdK.",
+"..KhbK........KbmK..",
+"..KhbmKKKKKKKKdbmK..",
+"...KhbmhbbbbbmmdK...",
+"...KhbmmmmmmmmmdK...",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmKKKKKKmmmdK..",
+"..KhbmKaAAAAaKmmdK..",
+"..KhbmKaAaaaAKmmdK..",
+"..KhbmKKKKKKKKmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"...KdbmmmmmmmmmbdK..",
+"....KdbmmmmmmmbdK...",
+".....KdbmmmmmbdK....",
+"......KdbbbbbdK.....",
+".......KKKKKK.......",
+"...................."]},
+"quickstep":{n:"quickstep",p:{"A":"#8f7aa8","K":"#1b1220","a":"#3d3350","b":"#ffe14d","d":"#6b5210","h":"#fffbcf","m":"#c39a18"},r:[
+".............KKKK...",
+"............KhbbmK..",
+"...........KhbmmdK..",
+"..........KhbmdKK...",
+".........KhbmdK.....",
+".KKKKKKKKKhbmdK.....",
+"KhbbbbbbbbbmdK......",
+"KhbmmmmmmmmdK.......",
+"KdbmmmmmmmdK........",
+".KKKKKKKKKK.........",
+"....................",
+"..KK...KK...KK......",
+".KhbK.KhbK.KhbK.....",
+".KbmK.KbmK.KbmK.....",
+"..KK...KK...KK......",
+"....................",
+"....KaAAAAAAaK......",
+"....KaaaaaaaaK......",
+".....KKKKKKKK.......",
+"...................."]},
+"reaper":{n:"reaper",p:{"A":"#7c6470","K":"#1b1220","a":"#3a2a30","b":"#8f5fd0","d":"#2c1c46","h":"#d9b8ff","m":"#553087"},r:[
+"...KKKKKKKKKKKK.....",
+"..KhbbbbbbbbbmdK....",
+".KhbmmmmmmmmmmdK....",
+"KhbmmdKKKKKKKKKK....",
+"KhbmdK..............",
+"KbmdK...............",
+"KmdK................",
+"KdK.................",
+"KK......KaK.........",
+"........KAK.........",
+"........KaK.........",
+"........KAK.........",
+"........KaK.........",
+"........KAK.........",
+"........KaK.........",
+"........KAK.........",
+".......KKaKK........",
+".......KaaaK........",
+".......KaaaK........",
+"........KKK........."]},
+"rootbind":{n:"rootbind",p:{"A":"#9c7a5c","K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+"....................",
+"...KK..........KK...",
+"..KhbK........KbmK..",
+"..KhbmKKKKKKKKdbmK..",
+"...KhbmmmmmmmmmmdK..",
+"....KKKKKKKKKKKKK...",
+".......KaAAaK.......",
+".......KaAaaK.......",
+".......KaAAaK.......",
+".......KaAaaK.......",
+".......KaAAaK.......",
+".......KaAaaK.......",
+"....KKKKKKKKKKKKK...",
+"...KhbmmmmmmmmmmdK..",
+"..KhbmKKKKKKKKdbmK..",
+"..KhbK........KbmK..",
+"...KK..........KK...",
+"....................",
+"....................",
+"...................."]},
+"shieldwall":{n:"shieldwall",p:{"A":"#c08444","K":"#1b1220","a":"#7a4a20","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
+".KKKKKKKK..KKKKKKKK.",
+"KhhbbbbmdKKhhbbbbmdK",
+"KhbmmmmmdKKhbmmmmmdK",
+"KhbmKaAKdKKhbmKaAKdK",
+"KhbmKaAKdKKhbmKaAKdK",
+"KhbmmmmmdKKhbmmmmmdK",
+"KhbmmmmmdKKhbmmmmmdK",
+".KhbmmmmdK.KhbmmmmdK",
+".KhbmmmdK...KhbmmmdK",
+"..KhbmdK.....KhbmdK.",
+"...KhbK.......KhbK..",
+"....KK.........KK...",
+"....................",
+".KKKKKKKKKKKKKKKKKK.",
+"KaAAAAAAAAAAAAAAAAaK",
+"KaaaaaaaaaaaaaaaaaaK",
+".KKKKKKKKKKKKKKKKKK.",
+"....................",
+"....................",
+"...................."]},
+"snack":{n:"snack",p:{"A":"#9c7a5c","K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+"..........KaK.......",
+"..........KaK..KaAK.",
+"..KKKKKK..KaK.KaAaK.",
+".KhbbbbmKKKaKKaaK...",
+"KhbmmmmmmbmmmmmK....",
+"KhbmmmmmmmmmmmmmdK..",
+"KhbmhhmmmmmmmmmmdK..",
+"KhbmhhmmmmmmmmmmdK..",
+"KhbmmhmmmmmmmmmmdK..",
+"KhbmmmmmmmmmmmmmdK..",
+"KhbmmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmdK...",
+".KhbmmmmmmmmmmmdK...",
+"..KhbmmmmmmmmmdK....",
+"...KhbmmmmmmmdK.....",
+"....KhbmmmmmdK......",
+".....KKKKKKKK.......",
+"....................",
+"....................",
+"...................."]},
+"soulfang":{n:"soulfang",p:{"A":"#7c6470","K":"#1b1220","a":"#3a2a30","b":"#8f5fd0","d":"#2c1c46","h":"#d9b8ff","m":"#553087"},r:[
+"..KKK........KKK....",
+".KhbmK......KhbmK...",
+".KhbmK......KhbmK...",
+".KhbmdK....KhbmdK...",
+".KhbmdK....KhbmdK...",
+".KhbmdK....KhbmdK...",
+"..KbmdK....KbmdK....",
+"..KbmdK....KbmdK....",
+"..KbmdK....KbmdK....",
+"...KbmK....KbmK.....",
+"...KbmK....KbmK.....",
+"....KmK....KmK......",
+"....KmK....KmK......",
+".....KK....KK.......",
+"....................",
+"....KaAAAAAAaK......",
+"...KaAaaaaaaAaK.....",
+"....KaaaaaaaaK......",
+".....KKKKKKKK.......",
+"...................."]},
+"surge":{n:"surge",p:{"A":"#8f7aa8","K":"#1b1220","a":"#3d3350","b":"#ffe14d","d":"#6b5210","h":"#fffbcf","m":"#c39a18"},r:[
+"..........KKKK......",
+".........KhbbmK.....",
+"........KhbmmdK.....",
+".......KhbmmdK......",
+"......KhbmmdK.......",
+".....KhbmmdKKKKK....",
+"....KhbmmdhbbbmdK...",
+"...KhbmmdhbmmmmdK...",
+"...KKKKKKbmmmmdK....",
+"........KbmmmdK.....",
+".......KdbmmdK......",
+"......KdbmmdK.......",
+".....KdbmmdK........",
+"....KdbmmdK.........",
+"....KKKKKK..........",
+"....................",
+"..KaK.KaK.KaK.KaK...",
+".KaAaKKaAaKaAaKaAaK.",
+"..KaK.KaK.KaK.KaK...",
+"...................."]},
+"temper":{n:"temper",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ffc94d","d":"#7a5410","h":"#fff0b8","m":"#c69320"},r:[
+".........KK.........",
+"........KhbK........",
+"........KhbK........",
+".......KhbmK........",
+"......KhbmmK........",
+".....KhbmmdK........",
+"....KhbmmmdK........",
+"...KhbmmmmdKK.......",
+"..KhbmmmmmmbdK......",
+"..KbmmmmmmmmdK......",
+"..KdbmmmmmmmdK......",
+"...KdbmmmmmdK.......",
+"....KdbmmmdK........",
+".....KddddK.........",
+"...KKKKKKKKKKKK.....",
+"..KaAAAAAAAAAaK.....",
+"..KaaaaaaaaaaaK.....",
+"..KKKKKKKKKKKKK.....",
+"....................",
+"...................."]},
+"thornmail":{n:"thornmail",p:{"A":"#9c7a5c","K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+"...K.....K.....K....",
+"..KbK...KbK...KbK...",
+".KKmKKKKKmKKKKKmKK..",
+"KhbbbbbbbbbbbbbbmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KhbmmmKaAAAaKmmmmdK.",
+"KhbmmmKaAaaAKmmmmdK.",
+"KhbmmmKaAAAaKmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+".KhbmmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmdK...",
+"...KhbmmmmmmmmdK....",
+"....KKmKKKKKmKK.....",
+".....KbK...KbK......",
+"......K.....K.......",
+"....................",
+"....................",
+"...................."]},
+"titanheart":{n:"titanheart",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ffc94d","d":"#7a5410","h":"#fff0b8","m":"#c69320"},r:[
+".KKKKKK....KKKKKK...",
+"KhbbbbbmKKhbbbbbmK..",
+"KhbmmmmmmbmmmmmmmK..",
+"KhbmhhmmmmmmmmmmmdK.",
+"KhbmhhmmmmmmmmmmmdK.",
+"KhbmmhmmmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+"KhbmmmmmmmmmmmmmmdK.",
+".KhbmmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmdK...",
+"...KhbmmmmmmmmdK....",
+"....KhbmmmmmmdK.....",
+".....KhbmmmmdK......",
+"......KhbmmdK.......",
+".......KhbdK........",
+"........KdK.........",
+"..KKKKKKKKKKKKKK....",
+".KaAAAAAAAAAAAAaK...",
+".KaaaaaaaaaaaaaaK...",
+"..KKKKKKKKKKKKKK...."]},
+"twinstrike":{n:"twinstrike",p:{"K":"#1b1220","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
+"..KK............KK..",
+".KhbK..........KbmK.",
+".KhbmK........KdbmK.",
+"..KhbmK......KdbmK..",
+"...KhbmK....KdbmK...",
+"....KhbmK..KdbmK....",
+".....KhbmKKdbmK.....",
+"......KhbmbmdK......",
+".......KhbmdK.......",
+"......KhbmbmdK......",
+".....KhbmKKdbmK.....",
+"....KhbmK..KdbmK....",
+"...KhbmK....KdbmK...",
+"..KhbmK......KdbmK..",
+".KhbmK........KdbmK.",
+".KhbK..........KbmK.",
+"..KK............KK..",
+"....................",
+"....................",
+"...................."]},
+"venomcoat":{n:"venomcoat",p:{"A":"#9c7a5c","K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+".......KKKKKK.......",
+"......KhbbbbmK......",
+"......KhbmmmdK......",
+"......KhbmmmdK......",
+".......KKmmKK.......",
+".....KKKKmmKKKK.....",
+"....KhbbbbbbbbmK....",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KhbmhhmmmmmmdK...",
+"...KhbmhhmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KdbmmmmmmmmmdK...",
+"....KdbmmmmmmmdK....",
+".....KKKKKKKKKK.....",
+"........KaK.........",
+".......KaAaK........",
+"........KaK.........",
+"...................."]},
+"vigor":{n:"vigor",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#e8546a","d":"#6b1730","h":"#ffb3bd","m":"#b32a45"},r:[
+"...KKKK....KKKK.....",
+"..KhbbbmKKhbbbmK....",
+".KhbmmmmmbmmmmmdK...",
+"KhbmhhmmmmmmmmmmdK..",
+"KhbmhhmmmmmmmmmmdK..",
+"KhbmmhmmmmmmmmmmdK..",
+"KhbmmmmmmmmmmmmmdK..",
+"KhbmmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmdK...",
+"..KhbmmmmmmmmmdK....",
+"...KhbmmmmmmmdK.....",
+"....KhbmmmmmdK......",
+".....KhbmmmdK.......",
+"......KhbmdK........",
+".......KhdK.........",
+"........KK..........",
+".......KaAK.........",
+"......KaAAaK........",
+".......KaaK.........",
+"........K..........."]},
+"warcry":{n:"warcry",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#ffc94d","d":"#7a5410","h":"#fff0b8","m":"#c69320"},r:[
+"................KK..",
+"...............KhbK.",
+"..............KhbmK.",
+"...KKKKKKKKKKKhbmdK.",
+"..KhbbbbbbbbbbbmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KdbmmmmmmmmmmmdK...",
+"..KKKKKKKKKKKhbmdK..",
+"..............KhbmK.",
+"...............KhbK.",
+"................KK..",
+"....................",
+"....KaK....KaK......",
+"...KaAaK..KaAaK.....",
+"....KaK....KaK......",
+"...................."]},
+"wardstance":{n:"wardstance",p:{"A":"#8f7aa8","K":"#1b1220","a":"#3d3350","b":"#ffe14d","d":"#6b5210","h":"#fffbcf","m":"#c39a18"},r:[
+".........KK.........",
+"........KhbK........",
+"..KKKKKKKbmKKKKKKK..",
+".KhbbbbbbbmbbbbbmdK.",
+".KhbmmmmmmmmmmmmmdK.",
+".KhbmKKKKKKKKKKmmdK.",
+".KhbmKaAAAAAAaKmmdK.",
+".KhbmKaAaaaaaAKmmdK.",
+".KhbmKaAAAAAAaKmmdK.",
+".KhbmKKKKKKKKKKmmdK.",
+".KhbmmmmmmmmmmmmmdK.",
+"..KhbmmmmmmmmmmmdK..",
+"...KhbmmmmmmmmmdK...",
+"....KhbmmmmmmmdK....",
+".....KhbmmmmmdK.....",
+"......KhbmmmdK......",
+".......KhbmdK.......",
+"........KhdK........",
+".........KK.........",
+"...................."]},
+"whet":{n:"whet",p:{"K":"#1b1220","a":"#4a3550","b":"#9d94a4","d":"#3c3340","h":"#d6cfdc","m":"#6b6270"},r:[
+"....................",
+".................KK.",
+"................KhbK",
+"...............KhbmK",
+"..............KhbmdK",
+".............KhbmdK.",
+"............KhbmdK..",
+"...........KhbmdK...",
+"..........KhbmdK....",
+".........KKmdKK.....",
+"....KKKKKKKKKKKK....",
+"...KhbbbbbbbbbmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KdmmmmmmmmmmdK...",
+"....KKKKKKKKKKKK....",
+"....KaaK....KaaK....",
+"....KaaK....KaaK....",
+"....KKKK....KKKK....",
+"...................."]},
+"whetstone":{n:"whetstone",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#9d94a4","d":"#3c3340","h":"#d6cfdc","m":"#6b6270"},r:[
+"....................",
+"....KKKKKKKKKKKK....",
+"...KhbbbbbbbbbmdK...",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KdbmmmmmmmmmmmdK..",
+"...KKKKKKKKKKKKKK...",
+"....................",
+".............KK.....",
+"............KhbK....",
+"...........KhbmK....",
+"..........KhbmdK....",
+".........KhbmdK.....",
+"........KhbmdK......",
+".......KKbmdK.......",
+"......KaAAaK........",
+"......KaaaK.........",
+".......KKK..........",
+"...................."]}
+};
 /* ART:END */
 /* ============================================================ §1 — core ==
    Tiny helpers, the global game state G, and the save file. Everything below
@@ -2436,7 +3431,7 @@ function rollEncounter(map) {
    into an offscreen canvas at 1:1 and then blitted scaled with smoothing off.
    Missing art must never break anything — every lookup falls back.
    ======================================================================== */
-const SPR = { creature: ART_CREATURES, tile: ART_TILES, actor: ART_ACTORS };
+const SPR = { creature: ART_CREATURES, tile: ART_TILES, actor: ART_ACTORS, card: ART_CARDS };
 const sprCache = new Map();
 
 function mkCanvas(w, h) {
@@ -3906,6 +4901,57 @@ function battleBar(on) {
   show(els.intent, on);
 }
 
+/* ---- the card face ------------------------------------------------------
+   One component for the hand, the deck screen and the post-win offer, because
+   a card the player learns to read in a fight should look the same everywhere
+   they meet it. The frame is built out of five parts, in the order a card game
+   teaches you to scan them:
+
+     cost gem   top left, on the frame — the first thing you check
+     art        a window with a glow behind it in the card's own colour
+     name       a band across the middle, on a rule
+     rules      the text, which is the only part that shrinks in a small hand
+     rarity     the frame itself, plus a pip at the foot
+
+   Kin move cards wear gold and carry their element instead of a rarity: they
+   belong to the creature, not to the deck, and they should read that way from
+   across the table.
+   ---------------------------------------------------------------------- */
+function cardHTML(c, opt = {}) {
+  const kin = c.src === 'kin';
+  const def = kin ? MOVES[c.id] : CARDS[c.id];
+  const rarity = kin ? 'kin' : def.r;
+  const owned = kin ? null : ownedCard(c.u);
+  const inst = kin ? null : { id: c.id, plus: owned ? owned.plus : 0, bg: c.bg || 0 };
+  const tint = kin ? (TYPES[def.type] || 'var(--gold)') : RARITY[rarity];
+  const txt = kin ? moveCardText(c.id) : cardText(inst);
+  const grown = owned && owned.plus ? `+${owned.plus}` : '';
+  // A kin's move wears its element; a deck card wears its own glyph.
+  const artId = kin ? `elem_${String(def.type).toLowerCase()}` : c.id;
+  const art = hasArt('card', artId) ? `<canvas width="20" height="20" data-card="${artId}"></canvas>` : '';
+  return `<div class="cardel r-${rarity} ${kin ? 'kin' : ''} ${opt.cls || ''}" ${opt.attr || ''}
+      style="--tint:${tint}">
+    <div class="cframe"></div>
+    <div class="ccost">${cardCost(c)}</div>
+    ${opt.slot ? `<div class="cslot">${opt.slot}</div>` : ''}
+    ${grown ? `<div class="cgrow">${grown}</div>` : ''}
+    <div class="cart">${art || `<span class="cglyph">${(def.name || '?')[0]}</span>`}</div>
+    <div class="cname">${cardName(c)}</div>
+    <div class="ctext">${txt}</div>
+    <div class="cfoot">
+      ${opt.note ? `<div class="cnote">${opt.note}</div>` : ''}
+      <div class="cpip">${kin ? def.type : rarity}</div>
+    </div>
+    ${opt.foot || ''}
+  </div>`;
+}
+
+/** Fill in every card icon canvas under `root`. */
+function paintCardArt(root) {
+  if (HEADLESS || !root || !root.querySelectorAll) return;
+  root.querySelectorAll('canvas[data-card]').forEach((c) => paintTo(c, 'card', c.dataset.card, 1, false));
+}
+
 function renderHand() {
   if (HEADLESS) return;
   const b = B();
@@ -3916,23 +4962,14 @@ function renderHand() {
     (b.exh.length ? ` · spent ${b.exh.length}` : '') +
     (b.shield ? ` · <span id="shieldpip">shield ${b.shield}</span>` : '');
   els.hand.innerHTML = b.hand.map((c, i) => {
-    const kin = c.src === 'kin';
-    const cost = cardCost(c);
-    const owned = kin ? null : ownedCard(c.u);
-    const inst = kin ? null : { id: c.id, plus: owned ? owned.plus : 0, bg: c.bg || 0 };
-    const txt = kin ? moveCardText(c.id) : cardText(inst);
-    const grown = !kin && (owned && owned.plus ? `+${owned.plus}` : '') || '';
-    const affordable = cost <= b.energy && playable;
-    return `<div class="cardel ${kin ? 'kin' : ''} ${i === b.sel ? 'sel' : ''} ${affordable ? '' : 'dead'}" data-c="${i}">
-      <div class="cr" style="background:${kin ? 'var(--gold)' : RARITY[CARDS[c.id].r]}"></div>
-      <div class="cc">${cost}</div>
-      <div class="ck">${i + 1}</div>
-      <div class="cn">${cardName(c)}</div>
-      <div class="ct">${txt}</div>
-      ${grown ? `<div class="cg">${grown}</div>` : ''}
-      ${i === b.sel && affordable ? '<div class="cp">▲ play</div>' : ''}
-    </div>`;
+    const affordable = cardCost(c) <= b.energy && playable;
+    return cardHTML(c, {
+      cls: `${i === b.sel ? 'sel' : ''} ${affordable ? '' : 'dead'}`,
+      attr: `data-c="${i}"`, slot: i + 1,
+      foot: i === b.sel && affordable ? '<div class="cp">▲ play</div>' : '',
+    });
   }).join('');
+  paintCardArt(els.hand);
   // When there is nothing left you can pay for, the End turn button says so.
   const canPlay = b.hand.some((c) => cardCost(c) <= b.energy) && playable;
   els.acts.innerHTML = [
@@ -4377,36 +5414,36 @@ function renderScreen() {
     // Owned cards, deck first. Selecting one moves it in or out.
     const inDeck = G.deck.map(ownedCard).filter(Boolean);
     const rest = G.cards.filter((c) => !G.deck.includes(c.u));
-    const cardTile = (c, i, on) => {
-      const def = CARDS[c.id];
-      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}"
-        style="border-color:${RARITY[def.r]}${on ? '' : ';opacity:.55'}">
-        <div class="info"><b style="color:${RARITY[def.r]}">${def.name}${c.plus ? ` +${c.plus}` : ''}</b>
-        <small>${def.r} · ${def.cost} energy · ${cardText(c)}</small>
-        <small style="color:var(--dim)">played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}${
-          (def.grow || def.kill) ? ` · grows to +${growCap(c.id)}` : ''}</small></div></div>`;
-    };
+    const shelf = (c, i, on) => cardHTML({ src: 'deck', u: c.u, id: c.id, bg: 0 }, {
+      cls: `big ${i === s.i ? 'sel' : ''} ${on ? '' : 'off'}`,
+      attr: `data-i="${i}"`,
+      note: `played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}`,
+    });
     html += `<h2>Deck — ${inDeck.length}/${DECK_MAX} (min ${DECK_MIN})</h2>`;
-    html += `<div class="cards">` + inDeck.map((c, i) => cardTile(c, i, true)).join('') + '</div>';
+    html += `<div class="cardrow">` + inDeck.map((c, i) => shelf(c, i, true)).join('') + '</div>';
     html += `<h2 style="margin-top:12px">Collection — ${rest.length} spare</h2>`;
-    html += rest.length ? `<div class="cards">` + rest.map((c, i) => cardTile(c, inDeck.length + i, false)).join('') + '</div>'
+    html += rest.length ? `<div class="cardrow">` + rest.map((c, i) => shelf(c, inDeck.length + i, false)).join('') + '</div>'
       : '<p style="color:var(--dim)">Everything you own is in the deck.</p>';
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
     html += `<p style="font-size:.8em;color:var(--dim);max-width:520px">Your kin brings the attacks. These make them land harder.</p>`;
-    html += `<div class="cards">` + s.list.map((id, i) => {
-      if (id === 'skip') return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
-        <div class="info"><b>No thanks</b><small style="color:var(--dim)">Leave the deck as it is.</small></div></div>`;
-      const def = CARDS[id];
+    html += `<div class="cardrow big">` + s.list.map((id, i) => {
+      if (id === 'skip') {
+        return `<div class="cardel skipcard ${i === s.i ? 'sel' : ''}" data-i="${i}" style="--tint:#6b6270">
+          <div class="cframe"></div>
+          <div class="cart"><span class="cglyph">×</span></div>
+          <div class="cname">No thanks</div>
+          <div class="ctext">Leave the deck as it is.</div>
+          <div class="cfoot"><div class="cpip">skip</div></div></div>`;
+      }
       const owned = G.cards.filter((c) => c.id === id).length;
-      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}" style="border-color:${RARITY[def.r]}">
-        <div class="cr" style="background:${RARITY[def.r]}"></div>
-        <div class="info"><b style="color:${RARITY[def.r]}">${def.name}</b>
-        <small>${def.r} · ${def.cost} energy</small>
-        <small>${cardText({ id, plus: 0, bg: 0 })}</small>
-        <small style="color:var(--dim)">${owned ? `you own ${owned}` : 'new to you'}${
-          (def.grow || def.kill) ? ` · grows to +${growCap(id)}` : ''}</small></div></div>`;
+      return cardHTML({ src: 'deck', u: -1, id, bg: 0 }, {
+        cls: `big ${i === s.i ? 'sel' : ''}`,
+        attr: `data-i="${i}"`,
+        note: `${owned ? `you own ${owned}` : 'new to you'}${
+          (CARDS[id].grow || CARDS[id].kill) ? ` · to +${growCap(id)}` : ''}`,
+      });
     }).join('') + '</div>';
   } else if (s.kind === 'chests') {
     html += `<h2>Gem chests — ${G.gems} gems</h2>`;
@@ -4445,6 +5482,7 @@ function renderScreen() {
   el.innerHTML = html;
   show(el, true);
   el.querySelectorAll('canvas[data-mon]').forEach((c) => paintTo(c, 'creature', c.dataset.mon, 1, !!c.dataset.sil));
+  paintCardArt(el);
 }
 
 function screenInput() {
@@ -5130,7 +6168,7 @@ if (typeof window !== 'undefined') {
   window.EK = {
     G, DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART, STATUS, TILE_ART, SOLID,
     advanceDialogue, liveBattleMsg,
-    ART_CREATURES, ART_TILES, ART_ACTORS,
+    ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
@@ -5144,7 +6182,7 @@ if (typeof window !== 'undefined') {
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
-    renderHand, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral,
+    renderHand, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral, cardHTML,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired, frame,
     setCtx: (c) => { ctx = c; },

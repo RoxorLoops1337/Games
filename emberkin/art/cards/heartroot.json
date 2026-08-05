@@ -1,0 +1,37 @@
+{
+  "id": "heartroot",
+  "name": "heartroot",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#9c7a5c",
+    "K": "#1b1220",
+    "a": "#5d4436",
+    "b": "#63c14a",
+    "d": "#1c4a24",
+    "h": "#d2f5a0",
+    "m": "#2f8438"
+  },
+  "rows": [
+    "..KKKK....KKKK......",
+    ".KhbbbmKKhbbbmK.....",
+    "KhbmmmmmbmmmmmdK....",
+    "KhbmhhmmmmmmmmmdK...",
+    "KhbmhhmmmmmmmmmdK...",
+    "KhbmmhmmmmmmmmmdK...",
+    "KhbmmmmmmmmmmmmdK...",
+    ".KhbmmmmmmmmmmdK....",
+    "..KhbmmmmmmmmdK.....",
+    "...KhbmmmmmmdK......",
+    "....KhbmmmmdK.......",
+    ".....KhbmmdK........",
+    "......KhbdK.........",
+    ".......KaK..........",
+    "......KaAaK.........",
+    ".....KaAKAaK........",
+    "....KaAaKaAaK.......",
+    "...KaAaK.KaAaK......",
+    "...KaaK...KaaK......",
+    "....KK.....KK......."
+  ]
+}

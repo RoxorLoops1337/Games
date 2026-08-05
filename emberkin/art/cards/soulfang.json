@@ -1,0 +1,37 @@
+{
+  "id": "soulfang",
+  "name": "soulfang",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#7c6470",
+    "K": "#1b1220",
+    "a": "#3a2a30",
+    "b": "#8f5fd0",
+    "d": "#2c1c46",
+    "h": "#d9b8ff",
+    "m": "#553087"
+  },
+  "rows": [
+    "..KKK........KKK....",
+    ".KhbmK......KhbmK...",
+    ".KhbmK......KhbmK...",
+    ".KhbmdK....KhbmdK...",
+    ".KhbmdK....KhbmdK...",
+    ".KhbmdK....KhbmdK...",
+    "..KbmdK....KbmdK....",
+    "..KbmdK....KbmdK....",
+    "..KbmdK....KbmdK....",
+    "...KbmK....KbmK.....",
+    "...KbmK....KbmK.....",
+    "....KmK....KmK......",
+    "....KmK....KmK......",
+    ".....KK....KK.......",
+    "....................",
+    "....KaAAAAAAaK......",
+    "...KaAaaaaaaAaK.....",
+    "....KaaaaaaaaK......",
+    ".....KKKKKKKK.......",
+    "...................."
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "dragonheart",
+  "name": "dragonheart",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#8f7aa8",
+    "K": "#1b1220",
+    "a": "#4a3550",
+    "b": "#ff8a2b",
+    "d": "#7a1e12",
+    "h": "#ffd98a",
+    "m": "#c8451c"
+  },
+  "rows": [
+    "...KKKK....KKKK.....",
+    "..KhbbbmKKhbbbmK....",
+    ".KhbmmmmmbmmmmmdK...",
+    "KhbmmmmmmmmmmmmmdK..",
+    "KhbmmKKKKKKKKmmmdK..",
+    "KhbmKaAAAAAAaKmmdK..",
+    "KhbmKaAaaaaaAKmmdK..",
+    "KhbmKaAAAAAAaKmmdK..",
+    "KhbmKKKKKKKKKKmmdK..",
+    "KhbmmmmmmmmmmmmmdK..",
+    ".KhbmmmmmmmmmmmdK...",
+    "..KhbmmmmmmmmmdK....",
+    "...KhbmmmmmmmdK.....",
+    "....KhbmmmmmdK......",
+    ".....KhbmmmdK.......",
+    "......KhbmdK........",
+    ".......KhdK.........",
+    "........KK..........",
+    "....................",
+    "...................."
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "adrenaline",
+  "name": "adrenaline",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#8f7aa8",
+    "K": "#1b1220",
+    "a": "#4a3550",
+    "b": "#e8546a",
+    "d": "#6b1730",
+    "h": "#ffb3bd",
+    "m": "#b32a45"
+  },
+  "rows": [
+    ".........KaK........",
+    "........KaAaK.......",
+    ".........KaK........",
+    ".......KKKaKKK......",
+    "......KhbbAbbmK.....",
+    ".....KhbmmAmmmdK....",
+    ".....KhbmmAmmmdK....",
+    ".....KhbmmAmmmdK....",
+    ".....KhbmmAmmmdK....",
+    ".....KhbmmAmmmdK....",
+    ".....KhbmmmmmmdK....",
+    ".....KhbmhhmmmdK....",
+    ".....KhbmhhmmmdK....",
+    ".....KhbmmmmmmdK....",
+    ".....KhbmmmmmmdK....",
+    ".....KdbmmmmmmdK....",
+    "......KdbmmmmdK.....",
+    ".......KKKKKK.......",
+    "....................",
+    "...................."
+  ]
+}

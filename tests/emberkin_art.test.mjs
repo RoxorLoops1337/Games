@@ -11,7 +11,7 @@
 import { loadGame, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = loadGame();
-const { ART_CREATURES, ART_TILES, ART_ACTORS, DEX, DEX_ORDER } = EK;
+const { ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS, DEX, DEX_ORDER, CARD_IDS, TYPES } = EK;
 
 const lum = (hex) => {
   const n = parseInt(hex.slice(1), 16);
@@ -117,6 +117,59 @@ if (ART_TILES.grass && ART_TILES.tallgrass) {
     return s / Math.max(1, n);
   };
   ok(avg(ART_TILES.tallgrass) < avg(ART_TILES.grass), 'tall grass is darker than short grass, so encounters read at a glance');
+}
+
+section('every card has a face, and every element has one too');
+// A card with no art falls back to its first letter, which is a placeholder,
+// not a design. The offer screen is the moment a card has to sell itself.
+for (const id of CARD_IDS) {
+  ok(!!ART_CARDS[id], `${id} has an icon`);
+}
+for (const t of Object.keys(TYPES)) {
+  if (t === 'Wild') continue;              // the fallback move's type, never on a card face
+  ok(!!ART_CARDS[`elem_${t.toLowerCase()}`], `${t} has an element glyph for kin move cards`);
+}
+
+section('card icons are built to the same rules as the rest of the art');
+const OUTLINE = '#1b1220';
+for (const [id, sp] of Object.entries(ART_CARDS)) {
+  eq(sp.r.length, 20, `${id} is 20 rows`);
+  ok(sp.r.every((row) => row.length === 20), `${id} rows are 20 wide`);
+  // One outline colour across the set is what makes a mixed hand look like a set.
+  eq((sp.p.K || '').toLowerCase(), OUTLINE, `${id} uses the shared outline colour`);
+  const filled = sp.r.join('').split('').filter((c) => !isBlank(c)).length;
+  ok(filled >= 60, `${id} fills the frame rather than floating in it (${filled}px)`);
+  ok(filled <= 340, `${id} leaves room around itself (${filled}px)`);
+  // Readable as a solid silhouette: no stray single pixels off on their own.
+  let strays = 0;
+  for (let y = 0; y < 20; y++) {
+    for (let x = 0; x < 20; x++) {
+      if (isBlank(sp.r[y][x])) continue;
+      let n = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < 20 && ny >= 0 && ny < 20 && !isBlank(sp.r[ny][nx])) n++;
+      }
+      if (n === 0) strays++;
+    }
+  }
+  eq(strays, 0, `${id} has no orphan pixels`);
+  // The silhouette is outlined, so the topmost and leftmost pixel of each run
+  // should be the outline colour far more often than not.
+  let edge = 0, edgeDark = 0;
+  for (let y = 0; y < 20; y++) {
+    for (let x = 0; x < 20; x++) {
+      if (isBlank(sp.r[y][x])) continue;
+      const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+        const nx = x + dx, ny = y + dy;
+        return nx < 0 || nx > 19 || ny < 0 || ny > 19 || isBlank(sp.r[ny][nx]);
+      });
+      if (!open) continue;
+      edge++;
+      if (lum(sp.p[sp.r[y][x]]) < .28) edgeDark++;
+    }
+  }
+  ok(edgeDark / Math.max(1, edge) > .6, `${id} is outlined against the card (${Math.round(edgeDark / edge * 100)}% of its edge is dark)`);
 }
 
 section('the player has a full walk cycle');

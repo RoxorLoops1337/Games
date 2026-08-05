@@ -1,0 +1,37 @@
+{
+  "id": "eternal",
+  "name": "eternal",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#8f7aa8",
+    "K": "#1b1220",
+    "a": "#3d3350",
+    "b": "#ffe14d",
+    "d": "#6b5210",
+    "h": "#fffbcf",
+    "m": "#c39a18"
+  },
+  "rows": [
+    "..........KKKK......",
+    ".........KhbbmK.....",
+    "........KhbmmdK.....",
+    ".......KhbmmdK......",
+    "......KhbmmdK.......",
+    ".....KhbmmdKKKKK....",
+    "....KhbmmdhbbbmdK...",
+    "...KhbmmdhbmmmmdK...",
+    "...KKKKKKbmmmmdK....",
+    "........KbmmmdK.....",
+    ".......KdbmmdK......",
+    "......KdbmmdK.......",
+    ".....KdbmmdK........",
+    "....KKKKKK..........",
+    "....................",
+    "..KKKKKKKKKKKKKK....",
+    ".KaAAAAAAAAAAAAaK...",
+    ".KaAaaaaaaaaaaAaK...",
+    ".KaaaaaaaaaaaaaaK...",
+    "..KKKKKKKKKKKKKK...."
+  ]
+}

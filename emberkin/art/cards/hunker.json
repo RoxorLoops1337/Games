@@ -1,0 +1,37 @@
+{
+  "id": "hunker",
+  "name": "hunker",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#8f7aa8",
+    "K": "#1b1220",
+    "a": "#4a3550",
+    "b": "#9d94a4",
+    "d": "#3c3340",
+    "h": "#d6cfdc",
+    "m": "#6b6270"
+  },
+  "rows": [
+    "....................",
+    "....KKKKKKKKKK......",
+    "...KhbbbbbbbmdK.....",
+    "..KhbmmmmmmmmmdK....",
+    "..KhbmmmmmmmmmdK....",
+    "..KhbmmKaAaKmmdK....",
+    "..KhbmmKaAaKmmdK....",
+    "..KhbmmmmmmmmmdK....",
+    "...KhbmmmmmmmdK.....",
+    "....KhbmmmmmdK......",
+    ".....KhbmmmdK.......",
+    "......KKKKKK........",
+    "....................",
+    "..KKKKKKKKKKKKKK....",
+    ".KaAAAAAAAAAAAAaK...",
+    ".KaaaaaaaaaaaaaaK...",
+    ".KKKKKKKKKKKKKKKK...",
+    "....................",
+    "....................",
+    "...................."
+  ]
+}
