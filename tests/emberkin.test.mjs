@@ -724,6 +724,49 @@ eq(EK.G.mode, 'world', 'and can be advanced past');
 eq(EK.G.flags.spoke, 1, 'its callback runs');
 EK.G.battleMsg = null; EK.G.flags = {};
 
+// The other half of the same mistake, and the one that actually bricked a run:
+// an unread battle message still pending when the battle ENDS. The end-of-battle
+// text goes up through G.dialogue, but every press was applied to the invisible
+// battle message instead — and its `hold` was only ticked by updateBattle, which
+// stops running the moment the mode is 'dialogue'. The hold never expired, so
+// nothing on screen moved and no button did anything, ever.
+EK.G.party = [EK.mkMon('cindercub', 20)];
+EK.enterMap('route_one', 9, 10, 'down');
+EK.G.mode = 'world';
+EK.startBattle({ foe: EK.mkMon('sproutle', 5), wild: true });
+EK.G.battleMsg = { lines: ['a line nobody got round to reading'], i: 0, done: null, hold: .12 };
+let finished = false;
+EK.say('', ['You pocket 8 rare gems.', 'Told you.', 'You collected 300 shards.'],
+  () => { finished = true; EK.G.battle = null; EK.G.battleMsg = null; EK.G.mode = 'world'; });
+eq(EK.G.mode, 'dialogue', 'the end-of-battle text opens');
+for (let i = 0; i < 30 && EK.G.mode === 'dialogue'; i++) { EK.pressKey('a'); EK.step(.05); EK.releaseKey('a'); EK.fired.clear(); }
+ok(finished, 'confirm walks the end-of-battle lines to the end');
+eq(EK.G.mode, 'world', 'and hands control back to the world');
+eq(EK.G.battle, null, 'with the battle torn down');
+
+// Playback waits for the HP bars to catch up before it shows the next line. A
+// bar that can never catch up would gate it for ever and hang the fight on
+// screen with no way out, so an unreal number counts as settled, not as a wall.
+EK.G.mode = 'world'; EK.G.battle = null; EK.G.battleMsg = null; EK.G.dialogue = null;
+EK.G.party = [EK.mkMon('cindercub', 20)];
+EK.startBattle({ foe: EK.mkMon('sproutle', 5), wild: true });
+const stuckB = EK.B();
+EK.submitLog(EK.endTurn());
+stuckB.dispM = NaN; stuckB.tgtM = NaN;                  // a bar that will never arrive
+const liWas = stuckB.li;
+for (let i = 0; i < 60 && EK.G.battle && EK.B().log; i++) {
+  EK.pressKey('a'); EK.step(.05); EK.releaseKey('a'); EK.fired.clear();
+}
+ok(!EK.G.battle || !EK.B().log || EK.B().li > liWas, 'playback keeps moving even when a bar never arrives');
+EK.G.battle = null; EK.G.mode = 'world';
+
+// And a new fight never inherits the last one's unread line.
+EK.G.battleMsg = { lines: ['left over'], i: 0, done: null, hold: .12 };
+EK.G.party = [EK.mkMon('cindercub', 20)];
+EK.startBattle({ foe: EK.mkMon('zaplet', 5), wild: true });
+ok(!EK.G.battleMsg || EK.G.battleMsg.lines[0] !== 'left over', 'a new battle does not inherit the old message');
+EK.G.battle = null; EK.G.battleMsg = null; EK.G.mode = 'world';
+
 section('healing restores the whole party');
 EK.G.party = [EK.mkMon('bramblor', 30), EK.mkMon('voltyx', 25)];
 EK.G.party[0].hp = 1; EK.G.party[0].status = 'burn'; EK.G.party[0].moves[0].pp = 0;
