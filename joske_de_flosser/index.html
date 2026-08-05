@@ -19,6 +19,24 @@
   .ov{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:14px;
     background:radial-gradient(900px 560px at 50% 42%, rgba(30,10,18,.82), rgba(4,3,7,.95)); }
   .ov[hidden]{ display:none; }
+  /* The title screen paints its own logo and floss-off on the canvas, so the
+     menu sits low and the wash fades out toward the top to let the art read. */
+  #title{ align-items:flex-end; padding-bottom:18px;
+    background:linear-gradient(180deg, rgba(4,3,7,0) 0%, rgba(6,4,10,.18) 22%, rgba(8,5,12,.72) 44%, rgba(6,4,10,.9) 100%); }
+  #title .card{ width:min(520px,94vw); max-height:70vh; padding-top:14px; }
+  #title .sub{ margin-bottom:10px; }
+  /* Phone held sideways: the logo still needs its band of sky, so the menu
+     gives up the story text before it gives up the FIGHT button. */
+  @media (max-height:520px){
+    #title{ padding:6px 10px 8px; }
+    #title .card{ max-height:76vh; padding:8px 14px 10px; }
+    #title .story{ font-size:11.5px; line-height:1.6; margin-bottom:8px; }
+    #title .sub{ margin-bottom:6px; font-size:11px; }
+    #title .btn{ padding:9px 16px; }
+  }
+  @media (max-height:420px){
+    #title .story{ display:none; }
+  }
   .card{ width:min(600px,94vw); max-height:94vh; overflow:auto; padding:22px 24px 20px; text-align:center;
     border-radius:4px; background:linear-gradient(180deg,#1a1122,#0d0813);
     border:3px solid #4a2f2f; box-shadow:0 0 0 3px #0a0710, 0 18px 50px rgba(0,0,0,.7); }
@@ -119,7 +137,6 @@
 
   <div class="ov" id="title">
     <div class="card">
-      <h1>JOSKE<br>DE FLOSSER</h1>
       <p class="sub">Out-floss the whole world</p>
       <div class="story">
         Nobody flosses like <b>Joske</b>. Nobody except <b>Smoske</b>, his dance partner,
@@ -209,7 +226,7 @@
 </div>
 <script>
 /* =====================================================================
-   TWIN FISTS  —  an arcade beat-'em-up.
+   JOSKE DE FLOSSER  —  an arcade beat-'em-up.
 
    Original game: original fighters, original streets, original music.
    What is borrowed is the grammar of the genre — a 2.5D floor you walk
@@ -4354,32 +4371,117 @@ function fmtTime(t){
   return m + ':' + String(s).padStart(2, '0');
 }
 
+/* ---------------------------------------------------------------- logo
+   The title is set in the game's own 5x7 font, blown up and dressed: a
+   hard ink outline, a slab extrude under it, colour bands running down the
+   rows, and a shine that sweeps across on a diagonal.  Everything but the
+   sweep is baked once, so the animation costs a handful of pixels. */
+const LOGO_BAND = ['#fffbe4', '#ffe98a', '#ffcf46', '#ffb02a', '#f9891a', '#e86a12', '#d4520e'];
+const logoCells = {};
+function logoGlyphs(s){
+  if (logoCells[s]) return logoCells[s];
+  const cells = [];
+  for (let i = 0; i < s.length; i++){
+    const g = FONT[s[i]];
+    if (!g) continue;
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) if (g[r][c] === '1') cells.push([i * 6 + c, r]);
+  }
+  logoCells[s] = cells;
+  return cells;
+}
+/* Only the bottom pixel of each column casts the slab, so the counters of
+   O and E stay open instead of filling with shadow. */
+function logoFeet(cells){
+  const set = new Set(cells.map(([x, y]) => x + ',' + y));
+  return cells.filter(([x, y]) => !set.has(x + ',' + (y + 1)));
+}
+const LOGO_RING = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+function logo(s, cx, y, sc, shine){
+  s = String(s).toUpperCase();
+  const cells = logoGlyphs(s), w = textW(s, sc), pad = sc * 2;
+  const plate = bake('logo:' + s + ':' + sc, w + pad * 2, 7 * sc + pad * 3, () => {
+    for (const [ox, oy] of LOGO_RING)
+      for (const [gx, gy] of cells) px(pad + (gx + ox) * sc, pad + (gy + oy) * sc, sc, sc, '#1b0a06');
+    for (const [gx, gy] of logoFeet(cells)){
+      px(pad + gx * sc, pad + (gy + 3) * sc, sc, sc, '#3a1004');
+      px(pad + gx * sc, pad + (gy + 2) * sc, sc, sc, '#75210a');
+    }
+    for (const [gx, gy] of cells) px(pad + gx * sc, pad + gy * sc, sc, sc, LOGO_BAND[gy]);
+  });
+  const x = Math.round(cx - w / 2) - pad, yy = Math.round(y) - pad;
+  blit(plate, x, yy);
+  /* The sweep is measured in screen pixels, not glyph cells, so one bar of
+     light crosses both lines of the logo as a single wavefront. */
+  if (shine != null){
+    for (const [gx, gy] of cells){
+      const sx = x + pad + gx * sc, sy = yy + pad + gy * sc;
+      const d = Math.abs((sx - VW / 2) * 0.5 + sy - shine);
+      if (d < 11) px(sx, sy, sc, sc, d < 5 ? '#fffdf2' : '#ffeeb4');
+    }
+  }
+}
+
 /* ------------------------------------------------------------- attract
-   The title screen is not a still: two fighters spar behind the menu so
-   the game is showing you what it is before you press anything. */
-const attract = { t: 0, a: null, b: null };
+   The title screen is not a still: a floss-off runs behind the menu, so
+   the game shows you what it is before you press anything.  Joske and
+   Smoske hold the beat on the left, the wannabees answer on the right,
+   and every few seconds the answer turns into a punch. */
+const attract = { t: 0, cast: null };
+const ATTRACT_CAST = [
+  { skin: 'joske', x: 150, face: 1, hero: true, tail: true, lunge: 58 },
+  { skin: 'smoke', x: 116, face: 1, hero: true, off: 2, lunge: 30 },
+  { skin: 'punk', x: 238, face: -1 },
+  { skin: 'runner', x: 280, face: -1, off: 2, sc: 0.95 },
+  { skin: 'chain', x: 314, face: -1, off: 1, sc: 0.95 },
+];
 function drawAttract(){
   attract.t += 1 / 60;
   bgStreet(attract.t * 12);
-  if (!attract.a){
-    attract.a = mkFighter({ team: 'p', kind: 'player', skin: 'joske', x: 150, y: 178, face: 1, hairTail: true });
-    attract.b = mkFighter({ team: 'e', kind: 'punk', skin: 'punk', x: 226, y: 178, face: -1 });
+  if (!attract.cast){
+    attract.cast = ATTRACT_CAST.map(c => mkFighter({
+      team: c.hero ? 'p' : 'e', kind: c.hero ? 'player' : 'punk', sc: c.sc || 1,
+      skin: c.skin, x: c.x, y: c.hero ? 176 : 182, face: c.face, hairTail: !!c.tail }));
   }
-  const cyc = attract.t % 3.2;
-  const a = attract.a, b = attract.b;
+  const cyc = attract.t % 4.4, beat = Math.floor(attract.t * 8);
   const oldCam = cam.x, oldSX = cam.shakeX, oldSY = cam.shakeY;
   cam.x = 0; cam.shakeX = 0; cam.shakeY = 0;
-  a.anim = cyc < 1.1 ? 'walk' : cyc < 1.35 ? 'punchA' : cyc < 1.6 ? 'punchB' : cyc < 2.1 ? 'hook' : cyc < 2.6 ? 'jumpkick' : 'idle';
-  a.frame = a.anim === 'walk' ? Math.floor(attract.t * 8) % 4 : (cyc % 0.25 > 0.09 ? 1 : 0);
-  a.x = 150 + (cyc < 1.1 ? cyc * 22 : 24);
-  a.z = a.anim === 'jumpkick' ? 20 : 0;
-  b.anim = cyc < 1.3 ? 'idle' : cyc < 2.1 ? 'hurt' : cyc < 3 ? 'lie' : 'idle';
-  b.frame = 0;
-  b.x = 226 + (cyc > 1.3 ? Math.min(20, (cyc - 1.3) * 40) : 0);
-  drawFighter(b); drawFighter(a);
+  for (let i = 0; i < attract.cast.length; i++){
+    const f = attract.cast[i], c = ATTRACT_CAST[i];
+    f.anim = 'idle';
+    f.frame = (beat + (c.off || 0)) % 4;
+    f.x = c.x;
+    f.z = 0;
+    if (c.hero && cyc > 3.0){                       // Joske and Smoske step in swinging
+      f.anim = cyc < 3.3 ? 'punchA' : cyc < 3.6 ? 'punchB' : 'hook';
+      f.frame = cyc % 0.3 > 0.11 ? 1 : 0;
+      f.x = c.x + Math.min(c.lunge, (cyc - 3.0) * c.lunge * 1.7);
+    }
+    if (!c.hero && i === 2 && cyc > 3.55){
+      f.anim = cyc < 4.1 ? 'hurt' : 'lie';
+      f.x = c.x + Math.min(16, (cyc - 3.55) * 40);
+    }
+  }
+  for (const f of attract.cast) if (f.team === 'e') drawFighter(f);
+  for (const f of attract.cast) if (f.team === 'p') drawFighter(f);
   cam.x = oldCam; cam.shakeX = oldSX; cam.shakeY = oldSY;
-  px(0, 0, VW, 30, 'rgba(8,6,12,0.55)');
-  textC('TWIN FISTS', VW / 2, 8, '#ffd23d', 2, '#3a1408');
+
+  for (let i = 0; i < 34; i++) px(0, i, VW, 1, 'rgba(6,4,10,' + (0.78 - i * 0.006).toFixed(3) + ')');
+  px(0, 34, VW, 26, 'rgba(6,4,10,0.58)');
+  /* A warm halo so the type lifts off the skyline.  Nine nested ellipses at
+     a whisper of alpha each: the overlap gives a falloff on both axes that a
+     single shape cannot.  Baked once — it never changes. */
+  blit(bake('logoglow', 264, 96, () => {
+    for (let s = 0; s < 9; s++){
+      const rx = 124 - s * 12, ry = 44 - s * 4.2;
+      for (let y = -ry; y <= ry; y++){
+        const w = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
+        if (w > 0) px(132 - w, Math.round(48 + y), w * 2, 1, 'rgba(255,124,44,0.028)');
+      }
+    }
+  }), VW / 2 - 132, -6);
+  const sweep = (attract.t % 3.4) * 36 - 14;
+  logo('JOSKE', VW / 2, 8, 4, sweep);
+  logo('DE FLOSSER', VW / 2, 44, 2, sweep);
 }
 </script>
 <script>
