@@ -5,3 +5,6 @@
 # rebranded name should also resolve.
 /jellei_hq/*     /chase_hq/:splat            200
 /jellei_hq       /chase_hq/                  200
+# Twin Fists became Joske de Flosser — keep old links alive.
+/twin_fists/*    /joske_de_flosser/:splat    301
+/twin_fists      /joske_de_flosser/          301

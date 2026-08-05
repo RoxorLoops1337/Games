@@ -2910,28 +2910,28 @@ function counterCatch(s){
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
 const SPELLS = [
-  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane',
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
-  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane',
+  { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane', bound:'call',
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
-  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 }, grp:'hold',
+  { id:'muster',   n:'Second Muster', target:'self',    cd:110, cost:{ food:60, iron:40, wood:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'cd',
     d:'One more wave of the shape already marching, at 85% health. The wave clock does not move.' },
-  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 }, grp:'mine',
+  { id:'warp',     n:'Warp Banner',   target:'own',     cd:130, cost:{},           ai:{ w:1, go:.90 }, grp:'mine', bound:'aim',
     d:'Three seconds of raising it, then your hero is back at its own front structure. Broken by a blow.' },
-  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 }, grp:'theirs',
+  { id:'hobble',   n:'Hobble',        target:'foe',     cd:80,  cost:{},           ai:{ w:2, go:.70 }, grp:'theirs', bound:'aim',
     d:'Their hero hits 40% softer, swings 30% slower and walks 40% slower for four and a half seconds.' },
-  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 }, grp:'mine',
+  { id:'unbind',   n:'Unbind',        target:'own',     cd:90,  cost:{},           ai:{ w:1, go:.90 }, grp:'mine', bound:'aim',
     d:'Everything on your hero comes off, and for five seconds what lands next barely sticks.' },
-  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 }, grp:'theirs',
+  { id:'pyre',     n:'Pyre Brand',    target:'foebody', cd:75,  cost:{},           ai:{ w:2, go:.80 }, grp:'theirs', bound:'aim',
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
-  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold',
+  { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold', bound:'coin',
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
-  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane',
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
-  { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold',
+  { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
     say:'no target — it braces everything you have',
     d:'For eight seconds everything of yours takes 40% less from any ability their heroes cast at it \u2014 though not from what their summons and banners do for them. Worth most while one of them is at your line with something to throw.' },
-  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold',
+  { id:'counter',  n:'Countermand',   target:'self',    cd:120, cost:{ iron:30 },  ai:{ w:2, go:.55 }, grp:'foehold', bound:'cd',
     say:'no target — it lands in their signal room',
     /* Countermand takes no aim, but it can still have nothing to work on, and
        what it needs is a STATE rather than a body: something of theirs already
@@ -2945,6 +2945,72 @@ const SPELLS = [
     d:'Every order of theirs that is still recovering takes 25 seconds longer. Nothing at all to one they are holding ready — time it to their cast.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
+/* WHAT ACTUALLY LIMITS EACH ONE.
+
+   A card says what an order costs, how long it takes to come back, and what it
+   lands on. It never said which of those is the one that stops you casting it —
+   and measured, they are wildly different orders in that respect.
+
+   Ten veteran matches per order, given to BOTH holds in the first slot, counting
+   how often it fired against how often its cooldown alone would have allowed,
+   and what share of the match it sat off cooldown and unspent:
+
+     order           cd    fired/match   ceiling   USE    ready+idle   no stores
+     Second Muster   110      4.0          4.3      92%      2.0%        12.2%
+     Pitch Fire       85      7.0          7.9      90%      3.8%        10.4%
+     Bombard          95      6.0          6.9      87%      5.6%        11.5%
+     Countermand     120      4.2          5.3      79%     10.5%         4.2%
+     Withdraw         70      6.0          8.8      68%     33.0%         0.0%
+     Hobble           80      5.0          8.2      61%     43.9%         0.0%
+     Pyre Brand       75      5.0          8.3      59%     44.9%         0.0%
+     Warp Banner     130      2.5          4.7      52%     53.8%         0.0%
+     Rampart         100      2.8          6.1      45%     22.4%        37.9%
+     Brace           100      2.3          5.9      39%     28.8%        37.2%
+     Unbind           90      1.6          6.7      23%     78.5%         0.0%
+
+   Four of eleven run at 87% or better of their cooldown ceiling: for those the
+   recovery IS the limit and nothing else is. Five sit ready and unspent for a
+   third to four fifths of the match, waiting for something to aim at. Two spend
+   a third of the match unaffordable.
+
+   That is the single most decision-relevant fact about a card at draft time and
+   it was the one thing the card did not carry. A slot spent on Unbind against a
+   commander who brought no debuff is a slot that does nothing for the whole
+   match, and nothing said so.
+
+   Hand-written because it is a MEASUREMENT rather than something derivable —
+   there is no expression over an order's fields that yields it, and pretending
+   otherwise would be worse than saying where the number came from. A test holds
+   that every order carries one and that the values come from this set. */
+const SPELL_BOUND = {
+  cd:   'its recovery is the limit',
+  aim:  'often waits for a target',
+  coin: 'often waits for the stores',
+  call: 'timing is the whole decision',
+};
+/* The fourth category is a correction to the first cut of this table, and the
+   measurement that forced it is worth keeping.
+
+   Splitting the idle time of every order — off cooldown, affordable and still
+   unspent — into "there was nothing to aim at" against "there was, and the
+   commander declined":
+
+     Pyre Brand    95% nothing there     5% declined
+     Hobble        93%                   7%
+     Warp Banner   86%                  14%
+     Unbind        72%                  28%
+     Withdraw       0%                 100%
+
+   Withdraw was labelled aim with the other four and cannot be. spellTargets
+   returns 1 UNCONDITIONALLY for a point order — a stretch of lane is always
+   there — so a point order is never waiting for a target, by construction
+   rather than by luck. Its tile is never dead and it can be cast at any
+   moment; what makes it good is picking the moment. That is a different fact
+   about a card and it now has its own sentence.
+
+   A test derives this rather than trusting the list: no order that aims at a
+   point may claim it waits for a target, read off spellTargets itself. */
+
 /* Prose counts things in words, and a count written by hand goes stale the
    first time the list it counts grows. Falls back to the digit rather than
    inventing a word it does not have. */
@@ -4118,19 +4184,50 @@ function applyBurn(t, dps, dur, src){
    holds playing, a strip takes 1.05 holds off and 3.10 seconds of hold with
    them — so "2 taken off" is almost never the sentence, and "the hobble and a
    burn" is the one that says whether ninety seconds were worth spending. */
+/* ONE table, and everything about a hold reads it: what takes it off, whether
+   a body is carrying it, what to call it in a sentence, and what to call it in
+   the two words a preview label has room for.
+
+   It was four hand-written lists a moment ago — the strip, the count, the
+   phrase, and the label wanted a fifth. Four copies of one fact is the exact
+   arrangement that has already cost this file a hobble Unbind could not
+   remove, a pyreSide the save dropped, and a markBy packed as a body. The
+   fifth copy is the one that does not get written.
+
+     left  how many seconds of it are left, 0 for none
+     off   take it off, INCLUDING whatever travels with the timer — pullBy is
+           in NET_REFS and a stale one re-links to whatever a later snapshot
+           puts at that index; pyreSide is the only thing on the bridge that
+           knows whose order a body is burning for
+     a     what it is called in a sentence
+     n     what it is called in a label, where there is room for one word */
+const HOLDS = [
+  { id:'stun',  a:'a stun',     n:'stun',   left:(t) => t.stunT || 0,          off:(t) => { t.stunT = 0; } },
+  { id:'slow',  a:'a slow',     n:'slow',   left:(t) => t.slowT || 0,          off:(t) => { t.slowT = 0; t.slowP = 0; } },
+  { id:'taunt', a:'a taunt',    n:'taunt',  left:(t) => t.taunt || 0,          off:(t) => { t.taunt = 0; } },
+  { id:'pull',  a:'a chain',    n:'chain',  left:(t) => t.pullT || 0,          off:(t) => { t.pullT = 0; t.pullBy = null; } },
+  { id:'burn',  a:'a burn',     n:'burn',   left:(t) => t.burn ? t.burn.t : 0, off:(t) => { t.burn = null; } },
+  { id:'hob',   a:'the hobble', n:'hobble', left:(t) => t.hobT || 0,           off:(t) => { t.hobT = 0; } },
+  { id:'mark',  a:'a mark',     n:'mark',   left:(t) => t.markT || 0,          off:(t) => { t.markT = 0; t.markBy = -1; t.markAmp = 0; } },
+  { id:'pyre',  a:'the brand',  n:'brand',  left:(t) => t.pyreT || 0,
+    off:(t) => { t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; } },
+];
 const stripTook = [];
 function stripStatus(t){
   stripTook.length = 0;
   let n = 0;
-  if (t.stunT > 0){ t.stunT = 0; stripTook.push('a stun'); n++; }
-  if (t.slowT > 0){ t.slowT = 0; t.slowP = 0; stripTook.push('a slow'); n++; }
-  if (t.taunt > 0){ t.taunt = 0; stripTook.push('a taunt'); n++; }
-  if (t.pullT > 0){ t.pullT = 0; t.pullBy = null; stripTook.push('a chain'); n++; }
-  if (t.burn){ t.burn = null; stripTook.push('a burn'); n++; }
-  if (t.hobT > 0){ t.hobT = 0; stripTook.push('the hobble'); n++; }
-  if (t.markT > 0){ t.markT = 0; t.markBy = -1; t.markAmp = 0; stripTook.push('a mark'); n++; }
-  if (t.pyreT > 0){ t.pyreT = 0; t.pyreDps = 0; t.pyreSrc = null; t.pyreSide = -1; stripTook.push('the brand'); n++; }
+  for (const k of HOLDS) if (k.left(t) > 0){ k.off(t); stripTook.push(k.a); n++; }
   return n;
+}
+/* The heaviest thing on a body and how long it has to run, for a preview that
+   has to answer "is this worth ninety seconds" before the ninety seconds are
+   spent. Longest-remaining wins rather than most-damaging: what the player is
+   deciding is whether there is enough left to be worth taking, and a hobble
+   with 0.3s on it is not worth an order however heavy a hobble is. */
+function topHold(t){
+  let best = null, bl = 0;
+  for (const k of HOLDS){ const v = k.left(t); if (v > bl){ bl = v; best = k; } }
+  return best ? { id:best.id, n:best.n, a:best.a, t:bl } : null;
 }
 /* "a slow", "the hobble and a burn", "a stun, a chain and the brand". Built
    from whatever the strip just recorded rather than from a count, and it is
@@ -4145,9 +4242,9 @@ function tookPhrase(list){
 // carrying right now. Every gate that means "is there anything to take off"
 // reads this, so a gate cannot fall out of step with the strip.
 function heldBy(t){
-  return (t.stunT > 0 ? 1 : 0) + (t.slowT > 0 ? 1 : 0) + (t.taunt > 0 ? 1 : 0) +
-    (t.pullT > 0 ? 1 : 0) + (t.burn ? 1 : 0) + (t.hobT > 0 ? 1 : 0) +
-    (t.markT > 0 ? 1 : 0) + (t.pyreT > 0 ? 1 : 0);
+  let n = 0;
+  for (const k of HOLDS) if (k.left(t) > 0) n++;
+  return n;
 }
 
 /* ------------------------------------------------------------------ unit tick */
@@ -4933,6 +5030,36 @@ function heroStep(h, dt){
   const calm = G.t - h.dmgTaken > 6 ? 1 : 0;
   h.hp = Math.min(h.mhp, h.hp + (1.5 + h.lvl * .25 + passVal(h, 'hreg')
     + (atHome ? 34 : 0) + calm * (6 + h.lvl * .9)) * dt);
+  /* MANA HAS NEVER BEEN SEEN TO STOP A CAST, and the arithmetic here is why.
+
+     Measured over eight veteran matches — 151,153 live hero-ticks with a kit,
+     77,379 of them with the full four — the number of ticks on which any skill
+     was unaffordable was ZERO, and the lowest any hero's pool ever fell was
+     51.6%. The dearest skill in the game costs 110.
+
+     It is circular rather than mistuned. A level-10 mage carries a 776 pool
+     and regenerates 7/s in combat here — 11 calm, 29 standing at home — while
+     a four-skill kit firing at its cooldown ceiling would spend around 13/s.
+     But skills do not fire at their ceiling: what limits them is a target in
+     range rather than a cooldown, so spend lands well under regen and the pool
+     refills from its worst point in under a minute.
+
+     Held loosely on purpose. One run of the same probe over the same seeds
+     once reported 11,958 short ticks against a tick count 0.6% different from
+     every other run, and I could not reproduce it or explain it — not by
+     re-running it, not by restoring the edit that was on disk at the time.
+     Three later runs agree on zero, one of them calibrated against
+     hand-computed regen and pool figures before it was believed. So the
+     measurement below is documented rather than asserted: the tests beside
+     this hold the ARITHMETIC, which is derivable and stable, and deliberately
+     not the behaviour, which is the part that proved it could surprise me.
+
+     What follows from it, if it holds: the mana cost printed on all 56 skill
+     cards has never changed an outcome, and the five passives granting regen
+     or pool are inert. Making it bind is a real balance change — it would have
+     to move costs or this constant far enough to bite during the bursts when a
+     hero does chain skills, and that touches every skill and all six classes
+     at once. Recorded rather than done. */
   h.mana = Math.min(h.mmana, h.mana + (3.5 + h.lvl * .35 + passVal(h, 'mreg')
     + (atHome ? 22 : 0) + calm * 4) * dt);
   gainXp(h, 8.0 * dt);                       // standing in the lane is worth something
@@ -16326,7 +16453,8 @@ function spellWhyHtml(){
     // there is nothing on the bridge to aim it at, but AIM_SAID's phrase for
     // that — "it lands on your own hold" — flatly contradicts the sentence
     // directly above it, which is that it lands in THEIRS.
-    '<span>' + (d.say || AIM_SAID[d.target] || d.target) + '</span></div>';
+    '<span>' + (d.say || AIM_SAID[d.target] || d.target) + '</span>' +
+    '<span class="wb">' + (SPELL_BOUND[d.bound] || '') + '</span></div>';
 }
 
 function spellSlotsHtml(){
@@ -16720,6 +16848,19 @@ function syncOrders(){
     // the two sentences castPress has ready — "still recovering, 41s" and "not
     // enough in the stores" — could then only ever be reached from Q and E.
     // A phone has no Q and no E, so on a phone the control simply went quiet.
+    /* Dead when it cannot be cast, for whichever of the three reasons. This is
+       also the answer to a feature that got measured and NOT built: a notice
+       when a target-bound order's target finally arrives, since four of them
+       sit ready and unspent for a third to four fifths of a match.
+
+       The windows are far too long to be worth announcing. Measured over ten
+       veteran matches each, an unbroken run of "there is something to aim at"
+       lasts a MEDIAN of 29.7s for Unbind, 35.1s for Pyre Brand, 38.8s for
+       Hobble and 76.6s for Warp Banner, with 90th percentiles between 160s and
+       376s. Under three seconds: 0-3% of windows. A player has half a minute at
+       the very least, and this tile going from dead to live inside their field
+       of view is already the whole of the warning they need. A toast on top of
+       it would be noise arriving 30 seconds early. */
     if (G.wave >= 1) b.classList.toggle('dead', !spellReady(s, i) || !spellTargets(d));
   }
 }
@@ -16846,11 +16987,14 @@ function spellAimCandidates(){
     }
     return out;
   }
+  // `body` is carried on the candidate purely so the preview can read what
+  // that body is holding. Cosmetic to the last bit — the click resolves by id
+  // through hit, exactly as it always did, and nothing here reaches the sim.
   if (d.target === 'own'){
     for (const h of s.heroes){
       if (h.dead) continue;
       const p = lp(h.x, h.y);
-      out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:h.id } });
+      out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:h.id }, body:h });
     }
     return out;
   }
@@ -16859,7 +17003,7 @@ function spellAimCandidates(){
     if (u.dead || u.side !== fs) continue;
     if (!u.isHero && !(d.target === 'foebody' && u.kind === 'super')) continue;
     const p = lp(u.x, u.y);
-    out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:u.id } });
+    out.push({ cx:p[0], cy:p[1] - 18 * cam.z, rx:18 * cam.z, ry:28 * cam.z, hit:{ hero:u.id }, body:u });
   }
   return out;
 }
@@ -16991,12 +17135,108 @@ function drawAim(c){
   }
   const list = spellAimCandidates();
   const hot = spellAimPick(list, pt.x, pt.y);
+  // Boxes already placed, so a second hero standing beside the first does not
+  // print its label on top of the first one's. Two heroes at once is not the
+  // common case — measured, a hold peaks at 1.13 heroes on the field and 28 of
+  // 32 finish with a cap of one — but "rare" is not "never", and a stack of
+  // two chips is unreadable rather than merely crowded.
+  const placed = [];
   for (const k of list){
     // Everything it COULD take, quietly, so a player can see there is a second
     // hero over there before moving the cursor to find out.
     aimRing(c, k.cx, k.cy, k.rx, k.ry,
       (k === hot ? 2.8 : 1.9) * Math.max(.6, cam.z), k === hot ? 1 : .62);
+    if (k.body) aimHoldLabel(c, k, k === hot, placed);
   }
+  c.restore();
+}
+
+/* WHAT IS ON THAT ONE, AND FOR HOW MUCH LONGER.
+
+   A strip is a ninety-second order and what it buys is however many seconds of
+   hold were left, which ranged from 0.00 to 5.97 across sixteen veteran
+   matches — a six-fold swing decided by nothing but when you press. Measured
+   over 2,838 sampled moments with a hold running: 38.3% of them had under a
+   second left, and 53.9% under two.
+
+   That was first written up here as "a player pressing Unbind because a hero
+   looks hobbled is throwing the order away more than a third of the time",
+   which overstates it, and the next round's measurement is the correction.
+   Sweeping a "only strip if the top hold has at least N seconds left" gate
+   through the Host over twelve matches:
+
+     gate    strips/match   sec/strip   SEC/MATCH   under 1s
+     any         7.2          2.99        21.44       15.1%
+     >=1.5s      6.3          3.59        22.74        1.3%
+     >=3s        5.9          3.72        22.00        1.4%
+
+   Per-strip quality rises 24% and the wasted presses nearly vanish, and the
+   TOTAL barely moves — 21.4 to 22.7 seconds a match, about 6%, inside the
+   noise of twelve matches.
+
+   The reason first written here was that the strip is cooldown-bound, at
+   "roughly seven casts a match against a ninety-second cooldown". Both halves
+   of that were wrong. The seven was per MATCH across both holds rather than
+   per hold, and it counted every call to stripStatus — which is Unbind, a
+   ninety-second order, AND Unfetter, a twenty-second hero skill, together.
+   Split: 3.29 Unbinds and 0.38 Unfetters per hold per match.
+
+   And Unbind is the LEAST cooldown-bound order in the set — 44% of its ceiling
+   in a match where the enemy commander is carrying Hobble, and 23% when it is
+   not, sitting ready and unspent for 78.5% of the match. See SPELL_BOUND. The
+   real reason the total is flat is that holds worth stripping are scarce: the
+   order is idle most of the time anyway, so waiting for a better one costs
+   almost nothing and gains almost nothing. Same number, right explanation.
+
+   Which is worth being straight about, because it prices this label honestly.
+   It is not worth double. It tells you whether THIS press is a good one — the
+   difference between 0.4s and 4.4s is real and was invisible — and over a
+   match that is worth a few percent rather than a transformation. The number
+   is still true and still nowhere else on screen; the claim about what it buys
+   is the part that needed correcting.
+
+   The status icons already fade with the timer — statusFade — but an alpha
+   ramp is a mood, not a quantity, and "0.4s" and "4.4s" are the same decision
+   only if you cannot tell them apart.
+
+   Drawn on the ring rather than in the aim bar because the bar has no hot
+   candidate on a phone: there is no hover to read, and the tap IS the choice.
+   Cosmetic to the last bit — it draws from a body the preview was handed, the
+   simulation never learns it was drawn, and it is skipped whole in HEADLESS
+   along with everything else on this canvas. */
+const AIM_LABEL = { pad:4, h:14, dim:'#0d141c', lit:'#ffe8b0', cold:'#c9b48a' };
+function aimHoldLabel(c, k, hot, placed){
+  // A candidate with no body is a wall — Rampart aims at those, and a wall
+  // carries no holds. Guarded here as well as at the call site, because a
+  // drawing routine that throws takes the whole frame with it.
+  if (!k || !k.body) return;
+  const top = topHold(k.body);
+  if (!top) return;
+  const txt = top.n + ' ' + top.t.toFixed(1) + 's';
+  // BELOW the ring, at the feet. Above it is where the nameplate and the two
+  // bars paint, and they paint after this does — the same collision the hold
+  // marker hit when it was first drawn over a hero's head, and the same fix.
+  let y = k.cy + k.ry + 9;
+  c.save();
+  c.setLineDash([]);
+  c.font = 'bold ' + Math.max(9, Math.round(11 * cam.z)) + 'px system-ui';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  const w = c.measureText(txt).width + AIM_LABEL.pad * 2;
+  // Step down past anything already there. Bounded rather than a while-loop
+  // over an unbounded list: the candidates are heroes, there are never many,
+  // and a drawing routine that can spin is worse than one that can crowd.
+  const hits = (yy) => (placed || []).some(p =>
+    Math.abs(p.x - k.cx) < (p.w + w) / 2 && Math.abs(p.y - yy) < AIM_LABEL.h + 2);
+  for (let i = 0; i < 4 && hits(y); i++) y += AIM_LABEL.h + 3;
+  if (placed) placed.push({ x:k.cx, y, w });
+  c.globalAlpha = hot ? .92 : .6;
+  c.fillStyle = AIM_LABEL.dim;
+  c.fillRect(k.cx - w / 2, y - AIM_LABEL.h / 2, w, AIM_LABEL.h);
+  // Under a second is the case the whole label exists for, so it is the one
+  // that looks different rather than merely reading differently.
+  c.fillStyle = top.t < 1 ? AIM_LABEL.cold : AIM_LABEL.lit;
+  c.fillText(txt, k.cx, y);
   c.restore();
 }
 
@@ -19582,14 +19822,14 @@ window.IB = {
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
-  SPELLS, SPELL, SPELL_GROUPS, SPELL_SLOTS, SLOTS_AT_START, killThing, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
+  SPELLS, SPELL, SPELL_BOUND, SPELL_GROUPS, SPELL_SLOTS, SLOTS_AT_START, killThing, SPELL_CAST, chooseSpell, castSpell, spellOf, spellReady,
   SPELL_ICON, ICO_STEEL, spellUI, AIM_ASK, AIM_SAID, SLOT_NAME, spellClash, spellAcceptLabel,
   spellWhyHtml, spellSlotsHtml, spellGridHtml,
   spellSheetHtml, showSpells, spellPaint, spellLook, spellPress, spellAccept, spellTake,
   optUI, optBits, optIcon, optWhyHtml, picksHtml, passGroup, PASS_GROUP, PASS_ICON, SKILL_TAG_ICON,
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
-  stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES,
+  stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,

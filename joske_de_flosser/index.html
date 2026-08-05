@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Twin Fists</title>
+<title>Joske de Flosser</title>
 <style>
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
   html,body{ margin:0; padding:0; height:100%; background:#07070b; overflow:hidden;
@@ -119,12 +119,13 @@
 
   <div class="ov" id="title">
     <div class="card">
-      <h1>TWIN FISTS</h1>
-      <p class="sub">Arcade brawler &mdash; five streets, one keep</p>
+      <h1>JOSKE<br>DE FLOSSER</h1>
+      <p class="sub">Out-floss the whole world</p>
       <div class="story">
-        The <b>Iron Wardens</b> took the east bridge, the docks, and then they took
-        <b>Mira</b> &mdash; straight out of the gym you and your brother built with your hands.
-        Nobody is coming. Walk east until somebody stops you.
+        Nobody flosses like <b>Joske</b>. Nobody except <b>Smoske</b>, his dance partner,
+        and he is only half a step behind. Then the <b>wannabees</b> came flossing down the
+        street, closed a circle round <b>Mokske</b>, and flossed off with her.
+        Out-floss the street. Then keep going.
       </div>
       <div class="seg" id="segPlayers">
         <button data-v="1" class="on">1 PLAYER</button>
@@ -159,11 +160,11 @@
         <b>Punch chain</b> &mdash; jab, cross, hook. The third one puts them down.<br>
         <b>Kick chain</b> &mdash; shin, body, head. The head kick launches them.<br>
         <b>Mix them</b> &mdash; the chain is shared: punch, punch, <i>kick</i> ends on the head kick.<br>
-        <b>Special</b> &mdash; spend a stock for the <b>Twin Fist Rush</b>: nine strikes,
+        <b>Special</b> &mdash; spend a stock for the <b>Mega Floss</b>: nine strikes,
         nothing can touch you, and the last one clears the room. Fill the bar by
         fighting, or pick up a gold token. You start with three.<br>
         <b>Jump kick</b> &mdash; jump, then kick. The bread and butter.<br>
-        <b>Whirl</b> &mdash; punch + kick together. Hits everyone around you, costs a little health.<br>
+        <b>Whirl</b> &mdash; punch + kick together. Out-flosses everyone around you, costs a little health.<br>
         <b>Elbow</b> &mdash; punch with somebody standing behind you.<br>
         <b>Grab</b> &mdash; walk into a dazed enemy. Then punch to knee, kick to throw.<br>
         <b>Dash</b> &mdash; tap left or right twice, then punch for a shoulder charge.<br>
@@ -649,7 +650,19 @@ function P(o){
   };
 }
 const A = {                                   // animation frame tables
-  idle: [P({}), P({ hipY: 18, aF: [5, 25, 8, 19], aB: [-5, 25, -7, 19] })],
+  /* Standing still is not standing still: both arms swing to one side while
+     the hips go the other, which is the whole move. The walk cycle already
+     did this by accident and it is why it reads. */
+  idle: [
+    P({ hipY: 19, hipX: -1, lean: 1, aF: [6, 24, 11, 18], aB: [5, 23, 10, 17],
+        lF: [3, 10, 4, 0], lB: [-3, 10, -5, 0] }),
+    P({ hipY: 20, hipX: 0, lean: 0, aF: [3, 25, 4, 17], aB: [2, 24, 3, 16],
+        lF: [3, 11, 4, 0], lB: [-3, 11, -4, 0] }),
+    P({ hipY: 19, hipX: 1, lean: -1, aF: [-5, 24, -10, 18], aB: [-4, 23, -9, 17],
+        lF: [3, 10, 5, 0], lB: [-3, 10, -4, 0] }),
+    P({ hipY: 20, hipX: 0, lean: 0, aF: [3, 25, 4, 17], aB: [2, 24, 3, 16],
+        lF: [3, 11, 4, 0], lB: [-3, 11, -4, 0] }),
+  ],
   walk: [
     P({ lF: [6, 11, 10, 0], lB: [-5, 9, -9, 0], aF: [4, 26, 3, 18], aB: [-6, 26, -4, 18] }),
     P({ hipY: 20, lF: [2, 11, 2, 0], lB: [-2, 11, -2, 0], aF: [5, 26, 7, 19], aB: [-5, 26, -7, 19] }),
@@ -748,19 +761,19 @@ const A = {                                   // animation frame tables
 
 /* --------------------------------------------------------- characters */
 const SKINS = {
-  ryn:    { skin: '#e8b07a', skin2: '#b8794a', shirt: '#3f6ecf', shirt2: '#2a4a94', pants: '#22285a', hair: '#221a20', trim: '#f0e2c4', name: 'RYN', bulk: 1.05, hair2: 'flat', ink: '#101a34' },
-  cole:   { skin: '#f0c08c', skin2: '#c08a52', shirt: '#c8402f', shirt2: '#8c2318', pants: '#3a2038', hair: '#e0c060', trim: '#f6ead0', name: 'COLE', bulk: 1.05, hair2: 'flat', ink: '#2a0e14' },
-  mira:   { skin: '#e6bb8e', skin2: '#b4835a', shirt: '#2f8f6a', shirt2: '#1d6248', pants: '#2a2438', hair: '#33221c', trim: '#ffd8a0', name: 'MIRA', bulk: 0.85, hair2: 'ponytail' },
-  punk:   { skin: '#d0a070', skin2: '#a06f45', shirt: '#7a4bb0', shirt2: '#4e2c78', pants: '#2b2b3a', hair: '#4ec06a', trim: '#d6d0e0', name: 'PUNK', hair2: 'mohawk' },
-  runner: { skin: '#c8956a', skin2: '#986440', shirt: '#e8b024', shirt2: '#a87610', pants: '#3b3020', hair: '#8a2b2b', trim: '#f0e0b0', name: 'JITTER', hair2: 'band' },
-  bruiser:{ skin: '#c08a62', skin2: '#8f5f3d', shirt: '#8b8f96', shirt2: '#5c6068', pants: '#43331f', hair: '#2a2420', trim: '#c9ccd2', name: 'BRUISER', bulk: 1.3, deco: 'pads', hair2: 'bald' },
-  blade:  { skin: '#d6a878', skin2: '#a4744a', shirt: '#232733', shirt2: '#12141c', pants: '#1b1b26', hair: '#c02a2a', trim: '#e04040', name: 'BLADE', hair2: 'band' },
-  chain:  { skin: '#b8845c', skin2: '#8a5c38', shirt: '#2f9c8c', shirt2: '#1c6a60', pants: '#2a3a40', hair: '#20303a', trim: '#7fe0d0', name: 'CHAIN', deco: 'vest', hair2: 'flat' },
-  rook:   { skin: '#d8a06a', skin2: '#a06c40', shirt: '#c86a18', shirt2: '#8c4408', pants: '#33261c', hair: '#1a1410', trim: '#ffd070', name: 'ROOK', bulk: 1.12, deco: 'vest', hair2: 'crop' },
-  vex:    { skin: '#e2b48c', skin2: '#ac7c56', shirt: '#9c1f4a', shirt2: '#6a0f30', pants: '#241426', hair: '#f0f0f0', trim: '#ff6a9a', name: 'VEX', bulk: 0.9, hair2: 'ponytail' },
-  hammer: { skin: '#b47a52', skin2: '#824f30', shirt: '#5a6a3a', shirt2: '#3a4626', pants: '#2f2a1e', hair: '#3a2a1a', trim: '#c8b060', name: 'HAMMER', bulk: 1.45, deco: 'pads', hair2: 'spikes' },
-  nyx:    { skin: '#c68a5a', skin2: '#95603a', shirt: '#3a2c6a', shirt2: '#241a48', pants: '#181038', hair: '#6a4ac0', trim: '#a08cf0', name: 'NYX', hair2: 'spikes' },
-  warden: { skin: '#cfa07a', skin2: '#9a6c4a', shirt: '#7c1c1c', shirt2: '#4e0e0e', pants: '#241416', hair: '#d8d0c0', trim: '#ffb020', name: 'KANE', bulk: 1.22, deco: 'coat', hair2: 'crop' },
+  joske:  { skin: '#e8b07a', skin2: '#b8794a', shirt: '#3f6ecf', shirt2: '#2a4a94', pants: '#22285a', hair: '#221a20', trim: '#f0e2c4', name: 'JOSKE', bulk: 1.05, hair2: 'flat', ink: '#101a34' },
+  smoke:  { skin: '#f0c08c', skin2: '#c08a52', shirt: '#c8402f', shirt2: '#8c2318', pants: '#3a2038', hair: '#e0c060', trim: '#f6ead0', name: 'SMOSKE', bulk: 1.05, hair2: 'flat', ink: '#2a0e14' },
+  mokske: { skin: '#e6bb8e', skin2: '#b4835a', shirt: '#2f8f6a', shirt2: '#1d6248', pants: '#2a2438', hair: '#33221c', trim: '#ffd8a0', name: 'MOKSKE', bulk: 0.85, hair2: 'ponytail' },
+  punk:   { skin: '#d0a070', skin2: '#a06f45', shirt: '#7a4bb0', shirt2: '#4e2c78', pants: '#2b2b3a', hair: '#4ec06a', trim: '#d6d0e0', name: 'POSER', hair2: 'mohawk' },
+  runner: { skin: '#c8956a', skin2: '#986440', shirt: '#e8b024', shirt2: '#a87610', pants: '#3b3020', hair: '#8a2b2b', trim: '#f0e0b0', name: 'TWITCHER', hair2: 'band' },
+  bruiser:{ skin: '#c08a62', skin2: '#8f5f3d', shirt: '#8b8f96', shirt2: '#5c6068', pants: '#43331f', hair: '#2a2420', trim: '#c9ccd2', name: 'BIG DAWG', bulk: 1.3, deco: 'pads', hair2: 'bald' },
+  blade:  { skin: '#d6a878', skin2: '#a4744a', shirt: '#232733', shirt2: '#12141c', pants: '#1b1b26', hair: '#c02a2a', trim: '#e04040', name: 'SHUFFLER', hair2: 'band' },
+  chain:  { skin: '#b8845c', skin2: '#8a5c38', shirt: '#2f9c8c', shirt2: '#1c6a60', pants: '#2a3a40', hair: '#20303a', trim: '#7fe0d0', name: 'WORMER', deco: 'vest', hair2: 'flat' },
+  rook:   { skin: '#d8a06a', skin2: '#a06c40', shirt: '#c86a18', shirt2: '#8c4408', pants: '#33261c', hair: '#1a1410', trim: '#ffd070', name: 'BREAKER BRAM', bulk: 1.12, deco: 'vest', hair2: 'crop' },
+  vex:    { skin: '#e2b48c', skin2: '#ac7c56', shirt: '#9c1f4a', shirt2: '#6a0f30', pants: '#241426', hair: '#f0f0f0', trim: '#ff6a9a', name: 'VEXY', bulk: 0.9, hair2: 'ponytail' },
+  hammer: { skin: '#b47a52', skin2: '#824f30', shirt: '#5a6a3a', shirt2: '#3a4626', pants: '#2f2a1e', hair: '#3a2a1a', trim: '#c8b060', name: 'BONKER', bulk: 1.45, deco: 'pads', hair2: 'spikes' },
+  nyx:    { skin: '#c68a5a', skin2: '#95603a', shirt: '#3a2c6a', shirt2: '#241a48', pants: '#181038', hair: '#6a4ac0', trim: '#a08cf0', name: 'NIKKI NEON', hair2: 'spikes' },
+  warden: { skin: '#cfa07a', skin2: '#9a6c4a', shirt: '#7c1c1c', shirt2: '#4e0e0e', pants: '#241416', hair: '#d8d0c0', trim: '#ffb020', name: 'KING KEVIN', bulk: 1.22, deco: 'coat', hair2: 'crop' },
 };
 
 /* Draws one fighter from its current pose.  `sc` scales the whole rig so
@@ -1062,18 +1075,18 @@ function frameOf(atk, t){
 
 /* -------------------------------------------------------- enemy roster */
 const ENEMY = {
-  grunt:  { hp: 15, spd: 54, sc: 0.92, skin: 'punk',   score: 60,  atks: ['jab', 'swipe'], aggro: 1.15, guard: 0, name: 'GRUNT', horde: true },
-  punk:   { hp: 26, spd: 46, sc: 1.0,  skin: 'punk',   score: 100, atks: ['jab', 'swipe', 'boot'], aggro: 0.9,  guard: 0.06, name: 'PUNK' },
-  runner: { hp: 20, spd: 74, sc: 0.95, skin: 'runner', score: 140, atks: ['jab', 'jumpkick'], aggro: 1.3, guard: 0.0, hop: true, name: 'JITTER' },
-  bruiser:{ hp: 58, spd: 34, sc: 1.22, skin: 'bruiser',score: 260, atks: ['haymaker', 'swipe'], aggro: 0.6, guard: 0.22, armor: 1, grabber: true, name: 'BRUISER' },
-  blade:  { hp: 30, spd: 58, sc: 1.0,  skin: 'blade',  score: 220, atks: ['lunge', 'knife'], aggro: 1.0, guard: 0.1, keep: 34, weapon: 'knife', name: 'BLADE' },
-  chain:  { hp: 34, spd: 44, sc: 1.05, skin: 'chain',  score: 200, atks: ['lash'], aggro: 0.7, guard: 0.12, keep: 40, name: 'CHAIN' },
+  grunt:  { hp: 15, spd: 54, sc: 0.92, skin: 'punk',   score: 60,  atks: ['jab', 'swipe'], aggro: 1.15, guard: 0, name: 'WANNABEE', horde: true },
+  punk:   { hp: 26, spd: 46, sc: 1.0,  skin: 'punk',   score: 100, atks: ['jab', 'swipe', 'boot'], aggro: 0.9,  guard: 0.06, name: 'POSER' },
+  runner: { hp: 20, spd: 74, sc: 0.95, skin: 'runner', score: 140, atks: ['jab', 'jumpkick'], aggro: 1.3, guard: 0.0, hop: true, name: 'TWITCHER' },
+  bruiser:{ hp: 58, spd: 34, sc: 1.22, skin: 'bruiser',score: 260, atks: ['haymaker', 'swipe'], aggro: 0.6, guard: 0.22, armor: 1, grabber: true, name: 'BIG DAWG' },
+  blade:  { hp: 30, spd: 58, sc: 1.0,  skin: 'blade',  score: 220, atks: ['lunge', 'knife'], aggro: 1.0, guard: 0.1, keep: 34, weapon: 'knife', name: 'SHUFFLER' },
+  chain:  { hp: 34, spd: 44, sc: 1.05, skin: 'chain',  score: 200, atks: ['lash'], aggro: 0.7, guard: 0.12, keep: 40, name: 'WORMER' },
   /* bosses */
-  rook:   { hp: 150, spd: 48, sc: 1.18, skin: 'rook',  score: 1200, atks: ['bat', 'boot'], aggro: 1.0, guard: 0.2, armor: 1, boss: true, weapon: 'bat', name: 'ROOK' },
-  vex:    { hp: 170, spd: 76, sc: 1.02, skin: 'vex',   score: 1600, atks: ['lunge', 'knife', 'jumpkick'], aggro: 1.5, guard: 0.15, boss: true, weapon: 'knife', name: 'VEX' },
-  hammer: { hp: 240, spd: 32, sc: 1.42, skin: 'hammer',score: 2000, atks: ['slam', 'haymaker'], aggro: 0.7, guard: 0.3, armor: 2, grabber: true, boss: true, name: 'HAMMER' },
-  nyx:    { hp: 210, spd: 70, sc: 1.06, skin: 'nyx',   score: 2400, atks: ['flyknee', 'boot', 'cross'], aggro: 1.4, guard: 0.25, boss: true, name: 'NYX' },
-  warden: { hp: 320, spd: 52, sc: 1.3,  skin: 'warden',score: 5000, atks: ['haymaker', 'boot', 'slam'], aggro: 1.1, guard: 0.3, armor: 2, boss: true, gun: true, name: 'KANE' },
+  rook:   { hp: 150, spd: 48, sc: 1.18, skin: 'rook',  score: 1200, atks: ['bat', 'boot'], aggro: 1.0, guard: 0.2, armor: 1, boss: true, weapon: 'bat', name: 'BREAKER BRAM' },
+  vex:    { hp: 170, spd: 76, sc: 1.02, skin: 'vex',   score: 1600, atks: ['lunge', 'knife', 'jumpkick'], aggro: 1.5, guard: 0.15, boss: true, weapon: 'knife', name: 'VEXY' },
+  hammer: { hp: 240, spd: 32, sc: 1.42, skin: 'hammer',score: 2000, atks: ['slam', 'haymaker'], aggro: 0.7, guard: 0.3, armor: 2, grabber: true, boss: true, name: 'BONKER' },
+  nyx:    { hp: 210, spd: 70, sc: 1.06, skin: 'nyx',   score: 2400, atks: ['flyknee', 'boot', 'cross'], aggro: 1.4, guard: 0.25, boss: true, name: 'NIKKI NEON' },
+  warden: { hp: 320, spd: 52, sc: 1.3,  skin: 'warden',score: 5000, atks: ['haymaker', 'boot', 'slam'], aggro: 1.1, guard: 0.3, armor: 2, boss: true, gun: true, name: 'KING KEVIN' },
 };
 
 const DIFF = [
@@ -1111,7 +1124,7 @@ function mkFighter(o){
 
 function spawnPlayer(pi, x, y){
   const f = mkFighter({
-    team: 'p', kind: 'player', skin: pi === 0 ? 'ryn' : 'cole', pi,
+    team: 'p', kind: 'player', skin: pi === 0 ? 'joske' : 'smoke', pi,
     x, y, hp: 100, spd: 82, face: 1, band: pi === 1, hairTail: pi === 0,
   });
   f.hpMax = 100; f.hp = 100;
@@ -1512,7 +1525,7 @@ const RUSH_NAMES = ['', 'RUSH I', 'RUSH II', 'RUSH III'];
 
 const SUPER = {
   dur: 2.05,
-  name: 'TWIN FIST RUSH',
+  name: 'MEGA FLOSS',
   strikes: [
     { t: 0.34, anim: 'punchA', frame: 1, dmg: 5, reach: 26, kb: 14 },
     { t: 0.46, anim: 'punchB', frame: 1, dmg: 5, reach: 26, kb: 14 },
@@ -2146,7 +2159,7 @@ function updateFighter(f, dt){
     const rate = f.state === 'run' ? 11 : 8;
     f.frame = Math.floor(f.animT * rate) % 4;
   } else if (f.state === 'idle'){
-    f.frame = Math.floor(f.animT * 3) % 2;
+    f.frame = Math.floor(f.animT * 7) % 4;          // everybody flosses on the spot
   }
 }
 
@@ -2733,7 +2746,7 @@ function fireSlug(f){
    and it does not move again until everybody standing in it is not. */
 const STAGES = [
   {
-    name: 'RIVERSIDE', sub: 'EAST BRIDGE - 11PM', bg: 'street', len: 1780, music: 0,
+    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', bg: 'street', len: 1780, music: 0,
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
       { x: 400,  spawn: [['grunt', 24], ['punk', 2]], cap: 18, items: [['crate', 120], ['crate', 200]] },
@@ -2743,7 +2756,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE JUNKYARD', sub: 'SCRAP LINE - 1AM', bg: 'junk', len: 1900, music: 1,
+    name: 'THE NEIGHBOURHOOD', sub: 'EVERY BACK YARD OF IT', bg: 'junk', len: 1900, music: 1,
     gates: [
       { x: 0,    spawn: [['punk', 2], ['chain', 1]] },
       { x: 430,  spawn: [['grunt', 30], ['chain', 1], ['runner', 2]], cap: 22, items: [['pipe', 60], ['crate', 170]] },
@@ -2753,7 +2766,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'CARGO DOCKS', sub: 'PIER SEVEN - 3AM', bg: 'docks', len: 2000, music: 2,
+    name: 'THE CITY', sub: 'DOWN TO THE WATER', bg: 'docks', len: 2000, music: 2,
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
@@ -2764,7 +2777,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE FOUNDRY', sub: 'NIGHT SHIFT - 4AM', bg: 'foundry', len: 2100, music: 3,
+    name: 'THE STATE', sub: 'THE WHOLE WORKING END OF IT', bg: 'foundry', len: 2100, music: 3,
     hazard: { edge: 'front', kind: 'molten', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['punk', 2], ['bruiser', 1]] },
@@ -2776,7 +2789,7 @@ const STAGES = [
     ],
   },
   {
-    name: "THE WARDEN'S KEEP", sub: 'TOP FLOOR - DAWN', bg: 'keep', len: 2200, music: 4,
+    name: 'THE NATION', sub: 'ON THE ROOF OF IT', bg: 'keep', len: 2200, music: 4,
     hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['blade', 2], ['punk', 2]] },
@@ -2785,6 +2798,30 @@ const STAGES = [
       { x: 1180, spawn: [['grunt', 52], ['bruiser', 2], ['chain', 2]], cap: 32, items: [['bat', 100], ['crate', 210]] },
       { x: 1500, spawn: [], boss: 'rook', items: [['barrel', 130]] },
       { x: 1816, spawn: [['blade', 1]], boss: 'warden', items: [['pipe', 120], ['crate', 190]] },
+    ],
+  },
+  {
+    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', bg: 'docks', music: 2, len: 2200,
+    grade: 'rgba(60,20,90,0.22)',
+    hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
+    gates: [
+      { x: 0,    spawn: [['grunt', 30], ['blade', 2]], cap: 26 },
+      { x: 430,  spawn: [['grunt', 40], ['bruiser', 2], ['chain', 2]], cap: 30, items: [['pipe', 90], ['crate', 190]] },
+      { x: 900,  spawn: [['grunt', 44], ['runner', 4]], cap: 30, items: [['bat', 120]] },
+      { x: 1340, spawn: [['grunt', 36], ['blade', 3], ['bruiser', 2]], cap: 30, items: [['barrel', 110]] },
+      { x: 1816, spawn: [['grunt', 28]], boss: 'nyx', cap: 24, items: [['pipe', 130], ['crate', 200]] },
+    ],
+  },
+  {
+    name: 'THE WORLD', sub: 'AND THEN THERE IS NOBODY LEFT', bg: 'keep', music: 4, len: 2400,
+    grade: 'rgba(90,20,40,0.20)',
+    hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
+    gates: [
+      { x: 0,    spawn: [['grunt', 34], ['blade', 3]], cap: 28 },
+      { x: 460,  spawn: [['grunt', 46], ['bruiser', 3], ['chain', 2]], cap: 32, items: [['bat', 100], ['crate', 200]] },
+      { x: 960,  spawn: [['grunt', 54], ['runner', 4], ['blade', 3]], cap: 32, items: [['pipe', 130]] },
+      { x: 1420, spawn: [['grunt', 40], ['bruiser', 2]], boss: 'hammer', cap: 30, items: [['barrel', 120]] },
+      { x: 1980, spawn: [['grunt', 34], ['blade', 2]], boss: 'warden', cap: 28, items: [['pipe', 120], ['crate', 190]] },
     ],
   },
 ];
@@ -3045,7 +3082,7 @@ function nextStage(){
 }
 
 /* Which scene, if any, plays after each street is cleared. */
-const STORY_AFTER = ['after1', 'after2', 'after3', 'after4', null];
+const STORY_AFTER = ['after1', 'after2', 'after3', 'after4', 'after5', 'after6', null];
 
 function startStage(){
   reseed(9000 + G.stage * 77 + G.diff);
@@ -3716,108 +3753,130 @@ function drawVignette(){
    there on their own.  Every scene is skippable, and the whole thing can be
    switched off from the title. */
 const CUT_ACTORS = {
-  ryn:   { skin: 'ryn',    sc: 1,    hairTail: true },
-  cole:  { skin: 'cole',   sc: 1,    band: true },
-  mira:  { skin: 'mira',   sc: 0.94, hairTail: true },
+  joske:  { skin: 'joske',    sc: 1,    hairTail: true },
+  smoke:  { skin: 'smoke',   sc: 1,    band: true },
+  mokske: { skin: 'mokske',   sc: 0.94, hairTail: true },
   g1:    { skin: 'punk',   sc: 1 },
   g2:    { skin: 'blade',  sc: 1,    band: true },
   g3:    { skin: 'bruiser', sc: 1.22 },
-  kane:  { skin: 'warden', sc: 1.3 },
+  kevin:  { skin: 'warden', sc: 1.3 },
 };
 
 const SCENES = {
   intro: { bg: 'street', cam: 60, music: 0, beats: [
-    { d: 3.0, cap: ['TWIN FISTS GYM.', 'CLOSING TIME ON THE EAST BRIDGE.'],
-      act: { cole: { x: 130, y: 190, anim: 'idle', face: 1 },
-             ryn: { x: 160, y: 178, anim: 'idle', face: -1 },
-             mira: { x: 196, y: 184, anim: 'idle', face: -1 } } },
-    { d: 2.6, cap: ['THE IRON WARDENS DO NOT KNOCK.'],
-      act: { cole: { x: 130, y: 190, anim: 'idle', face: 1 },
-             ryn: { x: 160, y: 178, anim: 'idle', face: 1 },
-             mira: { x: 196, y: 184, anim: 'idle', face: 1 },
-             g1: { x: 300, y: 186, anim: 'walk', face: -1 },
-             g2: { x: 330, y: 172, anim: 'walk', face: -1 } } },
-    { d: 2.2, cap: ['COLE GOES FIRST. HE ALWAYS DOES.'],
-      act: { cole: { x: 200, y: 188, anim: 'walk', face: 1 },
-             ryn: { x: 160, y: 178, anim: 'idle', face: 1 },
-             mira: { x: 190, y: 184, anim: 'idle', face: 1 },
-             g1: { x: 240, y: 186, anim: 'swing', frame: 1, face: -1, weapon: 'bat' },
-             g2: { x: 268, y: 174, anim: 'idle', face: -1 } } },
-    { d: 1.6, cap: [],
-      act: { cole: { x: 150, y: 188, z: 16, anim: 'air', face: 1 },
-             ryn: { x: 160, y: 178, anim: 'hurt', face: 1 },
-             mira: { x: 190, y: 184, anim: 'idle', face: 1 },
-             g1: { x: 230, y: 186, anim: 'swing', frame: 3, face: -1, weapon: 'bat' },
-             g2: { x: 250, y: 176, anim: 'walk', face: -1 } },
-      shake: 4 },
-    { d: 2.8, cap: ['THEY TAKE HER OUT THE BACK.'],
-      act: { cole: { x: 138, y: 192, anim: 'lie', face: 1 },
-             ryn: { x: 182, y: 174, anim: 'lie', face: 1 },
-             mira: { x: 300, y: 178, anim: 'held', face: -1 },
-             g2: { x: 315, y: 178, anim: 'hold', face: -1 },
-             g1: { x: 340, y: 186, anim: 'walk', face: -1, weapon: 'bat' } } },
-    { d: 3.2, cap: ['THEY WENT EAST.', 'NOBODY IS COMING.'],
-      act: { cole: { x: 138, y: 192, anim: 'lie', face: 1 },
-             ryn: { x: 186, y: 176, anim: 'getup', frame: 1, face: 1 } } },
+    { d: 3.0, cap: ['NOBODY FLOSSES LIKE JOSKE.', 'NOBODY EXCEPT SMOSKE, AND HE IS HALF A STEP BACK.'],
+      act: { smoke: { x: 130, y: 190, anim: 'walk', face: 1 },
+             joske: { x: 168, y: 178, anim: 'walk', face: -1 },
+             mokske: { x: 200, y: 186, anim: 'walk', face: -1 } } },
+    { d: 2.6, cap: ['THE THREE OF THEM. A TUESDAY. NO REASON.'],
+      act: { smoke: { x: 138, y: 190, anim: 'walk', face: 1 },
+             joske: { x: 172, y: 178, anim: 'walk', face: 1 },
+             mokske: { x: 204, y: 186, anim: 'walk', face: 1 } } },
+    { d: 2.6, cap: ['THEN THE WANNABEES CAME FLOSSING DOWN THE STREET.'],
+      act: { smoke: { x: 138, y: 190, anim: 'idle', face: 1 },
+             joske: { x: 172, y: 178, anim: 'idle', face: 1 },
+             mokske: { x: 204, y: 186, anim: 'idle', face: 1 },
+             g1: { x: 300, y: 188, anim: 'walk', face: -1 },
+             g2: { x: 336, y: 174, anim: 'walk', face: -1 },
+             g3: { x: 368, y: 194, anim: 'walk', face: -1 } } },
+    { d: 2.4, cap: ['THEY CLOSED A CIRCLE ROUND MOKSKE.'],
+      act: { smoke: { x: 138, y: 190, anim: 'hurt', face: 1 },
+             joske: { x: 168, y: 178, anim: 'hurt', face: 1 },
+             mokske: { x: 236, y: 184, anim: 'held', face: 1 },
+             g1: { x: 218, y: 184, anim: 'walk', face: 1 },
+             g2: { x: 252, y: 176, anim: 'hold', face: -1 },
+             g3: { x: 268, y: 192, anim: 'walk', face: -1 } },
+      shake: 3 },
+    { d: 2.8, cap: ['AND THEY FLOSSED OFF WITH HER.'],
+      act: { smoke: { x: 136, y: 192, anim: 'lie', face: 1 },
+             joske: { x: 178, y: 176, anim: 'lie', face: 1 },
+             mokske: { x: 330, y: 180, anim: 'held', face: -1 },
+             g2: { x: 346, y: 180, anim: 'hold', face: -1 },
+             g1: { x: 366, y: 188, anim: 'walk', face: -1 } } },
+    { d: 3.2, cap: ['SO. OUT-FLOSS THE STREET.', 'THEN KEEP GOING.'],
+      act: { smoke: { x: 136, y: 192, anim: 'getup', frame: 1, face: 1 },
+             joske: { x: 182, y: 176, anim: 'idle', face: 1 } } },
   ] },
 
   after1: { bg: 'street', cam: 900, music: 0, beats: [
-    { d: 2.8, cap: ['THE BRIDGE CREW TALKED.', 'THEY TALK WHEN YOU ASK RIGHT.'],
-      act: { ryn: { x: 960, y: 184, anim: 'idle', face: 1 },
-             g1: { x: 990, y: 190, anim: 'lie', face: -1 } } },
-    { d: 3.0, cap: ['A GREY VAN. NO PLATES.', 'IT WENT TO THE JUNKYARD.'],
-      act: { ryn: { x: 970, y: 184, anim: 'walk', face: 1 },
-             g1: { x: 990, y: 190, anim: 'lie', face: -1 } },
+    { d: 2.8, cap: ['THE STREET IS OUT-FLOSSED.', 'NOT ONE OF THEM LEFT STANDING ON THE BEAT.'],
+      act: { joske: { x: 960, y: 184, anim: 'idle', face: 1 },
+             g1: { x: 992, y: 190, anim: 'lie', face: -1 } } },
+    { d: 3.0, cap: ['THEY WENT UP THE ROAD.', 'THE WHOLE NEIGHBOURHOOD IS FLOSSING NOW.'],
+      act: { joske: { x: 972, y: 184, anim: 'walk', face: 1 },
+             g1: { x: 992, y: 190, anim: 'lie', face: -1 } },
       prop: { van: { x: 1150, y: 168 }, vanTo: 1290 } },
   ] },
 
   after2: { bg: 'junk', cam: 700, music: 1, beats: [
-    { d: 3.0, cap: ['THE VAN IS HERE.', 'SHE IS NOT.'],
-      act: { ryn: { x: 790, y: 186, anim: 'idle', face: 1 },
+    { d: 3.0, cap: ['EVERY BACK YARD, EVERY GARAGE.', 'THEY ALL WANTED A GO.'],
+      act: { joske: { x: 790, y: 186, anim: 'idle', face: 1 },
              g3: { x: 830, y: 192, anim: 'lie', face: -1 } },
       prop: { van: { x: 880, y: 166 } } },
-    { d: 3.0, cap: ['A TRUCK TOOK HER TO PIER SEVEN.', 'HIGH TIDE, THEY SAID.'],
-      act: { ryn: { x: 860, y: 186, anim: 'walk', face: 1 },
+    { d: 3.0, cap: ['SOMEBODY SAID SHE IS IN THE CITY NOW.'],
+      act: { joske: { x: 862, y: 186, anim: 'walk', face: 1 },
              g3: { x: 830, y: 192, anim: 'lie', face: -1 } },
       prop: { van: { x: 880, y: 166 } } },
   ] },
 
   after3: { bg: 'docks', cam: 800, music: 2, beats: [
-    { d: 3.0, cap: ['PIER SEVEN. AN HOUR LATE.'],
-      act: { mira: { x: 900, y: 172, anim: 'held', face: -1 },
-             g2: { x: 916, y: 172, anim: 'hold', face: -1 },
-             g1: { x: 940, y: 182, anim: 'walk', face: -1 } } },
-    { d: 3.2, cap: ['SHE GOES ON THE FOUNDRY TRUCK.', 'SHE IS STILL FIGHTING THEM.'],
-      act: { mira: { x: 1010, y: 172, anim: 'hurt', face: -1 },
-             g2: { x: 1026, y: 172, anim: 'walk', face: -1 },
-             g1: { x: 1050, y: 182, anim: 'walk', face: -1 } },
+    { d: 3.0, cap: ['THE CITY GOES DOWN BLOCK BY BLOCK.'],
+      act: { mokske: { x: 900, y: 172, anim: 'held', face: -1 },
+             g2: { x: 918, y: 172, anim: 'hold', face: -1 },
+             g1: { x: 944, y: 182, anim: 'walk', face: -1 } } },
+    { d: 3.2, cap: ['SHE IS STILL FLOSSING. SHE HAS NOT STOPPED ONCE.'],
+      act: { mokske: { x: 1010, y: 172, anim: 'walk', face: -1 },
+             g2: { x: 1028, y: 172, anim: 'walk', face: -1 },
+             g1: { x: 1052, y: 182, anim: 'walk', face: -1 } },
       prop: { van: { x: 1080, y: 156 }, vanTo: 1180 } },
   ] },
 
   after4: { bg: 'foundry', cam: 900, music: 3, beats: [
-    { d: 3.0, cap: ['THE FOREMAN TALKS TOO.', 'EVERYBODY DOES, EVENTUALLY.'],
-      act: { ryn: { x: 980, y: 184, anim: 'idle', face: 1 },
-             g3: { x: 1012, y: 190, anim: 'lie', face: -1 } } },
-    { d: 3.2, cap: ['KANE HAS HER ON THE ROOF.', 'HIS OWN ROOF. HE IS NOT HIDING.'],
-      act: { ryn: { x: 1040, y: 184, anim: 'run', face: 1 },
-             g3: { x: 1012, y: 190, anim: 'lie', face: -1 } } },
+    { d: 3.0, cap: ['THE WHOLE STATE TRIED. THE WHOLE STATE SAT DOWN.'],
+      act: { joske: { x: 980, y: 184, anim: 'idle', face: 1 },
+             g3: { x: 1014, y: 190, anim: 'lie', face: -1 } } },
+    { d: 3.2, cap: ['KING KEVIN HAS HER. HE IS TAKING HER NATIONAL.'],
+      act: { joske: { x: 1042, y: 184, anim: 'run', face: 1 },
+             g3: { x: 1014, y: 190, anim: 'lie', face: -1 } } },
+  ] },
+
+  after5: { bg: 'keep', cam: 1400, music: 4, beats: [
+    { d: 3.0, cap: ['A NATION OF WANNABEES, ONE ROOF AT A TIME.'],
+      act: { joske: { x: 1460, y: 182, anim: 'idle', face: 1 },
+             smoke: { x: 1426, y: 190, anim: 'idle', face: 1 },
+             g2: { x: 1500, y: 188, anim: 'lie', face: -1 } } },
+    { d: 3.2, cap: ['HE PUT HER ON A PLANE.', 'THE CONTINENT IS WARMING UP.'],
+      act: { joske: { x: 1520, y: 182, anim: 'run', face: 1 },
+             smoke: { x: 1484, y: 190, anim: 'run', face: 1 },
+             g2: { x: 1500, y: 188, anim: 'lie', face: -1 } } },
+  ] },
+
+  after6: { bg: 'docks', cam: 800, music: 2, beats: [
+    { d: 3.0, cap: ['EVERY CAPITAL. ONE NIGHT EACH.'],
+      act: { joske: { x: 880, y: 180, anim: 'idle', face: 1 },
+             smoke: { x: 846, y: 190, anim: 'idle', face: 1 },
+             g1: { x: 918, y: 186, anim: 'lie', face: -1 } } },
+    { d: 3.2, cap: ['THERE IS ONLY THE WORLD LEFT.', 'AND KEVIN IS STANDING ON IT.'],
+      act: { joske: { x: 940, y: 180, anim: 'run', face: 1 },
+             smoke: { x: 906, y: 190, anim: 'run', face: 1 },
+             g1: { x: 918, y: 186, anim: 'lie', face: -1 } } },
   ] },
 
   ending: { bg: 'keep', cam: 1400, music: 4, beats: [
-    { d: 3.0, cap: ['KANE GOES DOWN ON HIS OWN ROOF.'],
-      act: { kane: { x: 1500, y: 190, anim: 'lie', face: -1 },
-             ryn: { x: 1460, y: 182, anim: 'idle', face: 1 },
-             mira: { x: 1560, y: 174, anim: 'idle', face: -1 } } },
-    { d: 3.0, cap: ['MIRA TAKES THE STAIRS', 'ON HER OWN TWO FEET.'],
-      act: { kane: { x: 1500, y: 190, anim: 'lie', face: -1 },
-             ryn: { x: 1470, y: 178, anim: 'idle', face: 1 },
-             mira: { x: 1512, y: 184, anim: 'walk', face: -1 },
-             cole: { x: 1436, y: 190, anim: 'idle', face: 1 } } },
-    { d: 3.4, cap: ['THE SUN COMES UP OVER THE EAST BRIDGE.', 'YOU WALK HOME.'],
-      act: { kane: { x: 1500, y: 190, anim: 'lie', face: -1 },
-             ryn: { x: 1416, y: 178, anim: 'walk', face: -1 },
-             mira: { x: 1452, y: 186, anim: 'walk', face: -1 },
-             cole: { x: 1380, y: 192, anim: 'walk', face: -1 } } },
+    { d: 3.0, cap: ['KING KEVIN SITS DOWN ON HIS OWN ROOF.'],
+      act: { kevin: { x: 1500, y: 190, anim: 'lie', face: -1 },
+             joske: { x: 1460, y: 182, anim: 'idle', face: 1 },
+             mokske: { x: 1560, y: 174, anim: 'idle', face: -1 } } },
+    { d: 3.0, cap: ['MOKSKE WAS FLOSSING THE WHOLE TIME.', 'SHE NEVER NEEDED FETCHING.'],
+      act: { kevin: { x: 1500, y: 190, anim: 'lie', face: -1 },
+             joske: { x: 1470, y: 178, anim: 'idle', face: 1 },
+             mokske: { x: 1512, y: 184, anim: 'walk', face: -1 },
+             smoke: { x: 1436, y: 190, anim: 'idle', face: 1 } } },
+    { d: 3.4, cap: ['THREE OF THEM, FLOSSING HOME.', 'THE WHOLE WORLD BEHIND THEM, SITTING DOWN.'],
+      act: { kevin: { x: 1500, y: 190, anim: 'lie', face: -1 },
+             joske: { x: 1416, y: 178, anim: 'walk', face: -1 },
+             mokske: { x: 1452, y: 186, anim: 'walk', face: -1 },
+             smoke: { x: 1380, y: 192, anim: 'walk', face: -1 } } },
   ] },
 };
 
@@ -3956,6 +4015,8 @@ function draw(){
   if (G.phase === 'upgrade'){ drawUpgrade(); return; }
 
   drawBackground();
+  const grade = stage().grade;
+  if (grade){ ctx.fillStyle = grade; ctx.fillRect(0, 0, VW, VH); }
 
   /* everything on the floor, painter-sorted back to front */
   const list = visibleList();
@@ -4002,7 +4063,7 @@ function visibleList(){
 /* ----------------------------------------------------------------- HUD */
 /* A small head-and-shoulders of a fighter, for the corner of the HUD. */
 function drawPortrait(skinKey, x, y, w, h, hurt){
-  const s = SKINS[skinKey] || SKINS.ryn;
+  const s = SKINS[skinKey] || SKINS.joske;
   px(x - 1, y - 1, w + 2, h + 2, '#0c0812');
   px(x, y, w, h, '#181222');
   px(x, y, w, 1, '#2e2440');
@@ -4042,10 +4103,21 @@ function drawHUD(){
     const x = i === 0 ? 4 : VW - 148;
     const accent = i === 0 ? '#7fb0ff' : '#ff8a7a';
     const hp = p ? clamp(p.hp / p.hpMax, 0, 1) : 0;
-    drawPortrait(i === 0 ? 'ryn' : 'cole', x, 4, 24, 26, p && p.hitFlash > 0);
+    drawPortrait(i === 0 ? 'joske' : 'smoke', x, 4, 24, 26, p && p.hitFlash > 0);
     const bx = x + 29;
-    text(i === 0 ? 'RYN' : 'COLE', bx, 3, accent, 1, '#100c18');
-    text(String(G.score[i]).padStart(6, '0'), bx + 30, 3, '#ffd23d', 1, '#100c18');
+    // The score clears the LONGER of the two names, so the two HUDs line up
+    // with each other and neither can run into it. This was a bare 30, which
+    // fitted JOSKE exactly (5 glyphs, 29px) and broke the moment his partner
+    // got his missing S back — SMOSKE is 35px and would have printed straight
+    // through the first digit.
+    const nm = i === 0 ? 'JOSKE' : 'SMOSKE';
+    // +6 rather than +1: at +2 the longer name and the first digit were not
+    // overlapping but read as one run — SMOSKE000000 — and a score you have
+    // to parse out of a name is not a score. 41 + 35 for six digits is 76,
+    // inside the 96 the health gauge below it already occupies.
+    const nameGap = Math.max(textW('JOSKE', 1), textW('SMOSKE', 1)) + 6;
+    text(nm, bx, 3, accent, 1, '#100c18');
+    text(String(G.score[i]).padStart(6, '0'), bx + nameGap, 3, '#ffd23d', 1, '#100c18');
     // health, with a notch every fifth
     const col = hp > 0.5 ? '#4ad06a' : hp > 0.22 ? '#ffcf3d' : '#e84a3a';
     gauge(bx, 13, 96, 8, hp, col);
@@ -4114,11 +4186,11 @@ function drawHUD(){
   // opening coaching, stage one only
   if (G.stage === 0 && G.time < 34 && G.phase === 'play'){
     const HINTS = [
-      'PUNCH THREE TIMES TO PUT THEM DOWN',
+      'PUNCH THREE TIMES TO SIT THEM DOWN',
       'KICK THREE TIMES - SHIN, BODY, HEAD',
-      'SPECIAL SPENDS A STOCK AND HITS EVERYTHING',
+      'SPECIAL IS THE MEGA FLOSS - IT CLEARS THE FLOOR',
       'JUMP THEN KICK - IT ALWAYS WORKS',
-      'WALK INTO A DAZED ENEMY TO GRAB HIM',
+      'WALK INTO A DIZZY WANNABEE TO GRAB HIM',
       'STAND OVER A WEAPON AND PUNCH',
     ];
     const i = Math.floor(G.time / 5.5) % HINTS.length;
@@ -4128,7 +4200,7 @@ function drawHUD(){
   // the street tells you when its edges are a weapon
   const hz = stage().hazard;
   if (hz && G.time < 15 && G.phase === 'play' && Math.floor(T * 2) % 2 === 0){
-    const line = hz.kind === 'water' ? 'GRAB THEM, HOLD UP, KICK - INTO THE HARBOUR'
+    const line = hz.kind === 'water' ? 'GRAB THEM, HOLD UP, KICK - INTO THE WATER'
       : hz.kind === 'molten' ? 'GRAB THEM, HOLD DOWN, KICK - INTO THE CHANNEL'
       : 'GRAB THEM, HOLD DOWN, KICK - OFF THE ROOF';
     textC(line, VW / 2, VH - 14, '#ffb070', 1, '#100c18');
@@ -4185,7 +4257,7 @@ function drawAttract(){
   attract.t += 1 / 60;
   bgStreet(attract.t * 12);
   if (!attract.a){
-    attract.a = mkFighter({ team: 'p', kind: 'player', skin: 'ryn', x: 150, y: 178, face: 1, hairTail: true });
+    attract.a = mkFighter({ team: 'p', kind: 'player', skin: 'joske', x: 150, y: 178, face: 1, hairTail: true });
     attract.b = mkFighter({ team: 'e', kind: 'punk', skin: 'punk', x: 226, y: 178, face: -1 });
   }
   const cyc = attract.t % 3.2;
@@ -4556,10 +4628,10 @@ function togglePause(){
 function showOver(won){
   show('over', true);
   const horde = G.mode === 'horde';
-  $('ovTitle').textContent = horde ? 'WAVE ' + HORDE.wave : (won ? 'THE KEEP IS YOURS' : 'GAME OVER');
+  $('ovTitle').textContent = horde ? 'WAVE ' + HORDE.wave : (won ? 'THE WORLD SAT DOWN' : 'OUT-FLOSSED');
   $('ovSub').textContent = horde
     ? (HORDE.wave >= G.bestWave ? 'A new record' : 'Best wave ' + G.bestWave)
-    : (won ? 'Sunrise over the east bridge' : 'The street keeps what it takes');
+    : (won ? 'Nobody left standing on the beat' : 'They flossed you off your own street');
   $('ovScore').textContent = String(G.score[0] + (G.players > 1 ? G.score[1] : 0));
   $('ovStage').textContent = G.mode === 'horde' ? String(HORDE.wave) : String(G.stage + 1);
   $('ovBest').textContent = String(G.best);
@@ -4570,8 +4642,8 @@ function showOver(won){
     return;
   }
   $('ovStory').innerHTML = won
-    ? 'Kane goes down on his own roof and the Wardens go with him. Mira takes the stairs on her own two feet. <b>You walk home.</b>'
-    : 'They drag you off the pavement and the city keeps moving. <b>Get back up.</b>';
+    ? 'King Kevin sits down on his own roof and the wannabees sit with him. Mokske was flossing the whole time \u2014 she never needed fetching. <b>The three of you floss home.</b>'
+    : 'They floss over you while you are still on the floor. <b>Get up and out-floss them.</b>';
 }
 
 function bindUI(){
