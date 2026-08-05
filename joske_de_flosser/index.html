@@ -857,6 +857,25 @@ function drawFighter(f){
   const pose = currentPose(f);
   const dir = f.face;
 
+  // A reflection in the wet: not the rig again — a squashed smear of the
+   // colours it is made of, which is all you can read at this size anyway.
+  const wet = stage().wet;
+  if (wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss)){
+    const gy0 = Math.round(f.y + cam.shakeY) + 2;
+    const rx = Math.round(f.x - cam.x + cam.shakeX);
+    const w = Math.max(4, Math.round(9 * (f.sc || 1)));
+    const fade = wet * clamp(1 - f.z / 26, 0, 1);
+    const bands = [[s.pants, 4], [s.pants, 3], [s.shirt2, 3], [s.shirt, 3], [s.skin2, 2]];
+    let yy = gy0;
+    for (let i = 0; i < bands.length; i++){
+      const a = fade * (0.34 - i * 0.055);
+      if (a <= 0.01) break;
+      const wob = Math.round(Math.sin(T * 2.4 + f.id + i) * 1.2);
+      px(rx - w / 2 + wob, yy, w, bands[i][1], rgba(bands[i][0], a));
+      yy += bands[i][1];
+    }
+  }
+
   // contact shadow, soft-edged and tighter the higher you are
   const shR = 9 * sc * clamp(1 - f.z / 90, 0.45, 1);
   const gy = Math.round(f.y + cam.shakeY) + 1;
@@ -2806,7 +2825,7 @@ function fireSlug(f){
    and it does not move again until everybody standing in it is not. */
 const STAGES = [
   {
-    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', bg: 'street', len: 1780, music: 0,
+    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', wet: 0.5, bg: 'street', len: 1780, music: 0,
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
       { x: 400,  spawn: [['grunt', 24], ['punk', 2]], cap: 18, items: [['crate', 120], ['crate', 200]] },
@@ -2826,7 +2845,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', bg: 'docks', len: 2000, music: 2,
+    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', wet: 0.42, bg: 'docks', len: 2000, music: 2,
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
@@ -2861,7 +2880,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', bg: 'docks', music: 2, len: 2200,
+    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', wet: 0.42, bg: 'docks', music: 2, len: 2200,
     grade: 'rgba(60,20,90,0.22)',
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
@@ -3393,6 +3412,16 @@ function bgStreet(c){
     const gx = Math.floor(c / 130) + i, x = gx * 130 - c + hash(gx) * 40;
     ellipse(x, 172 + hash(gx + 2) * 26, 14, 4, 'rgba(70,90,130,0.20)');
     px(x - 6, 172 + hash(gx + 2) * 26, 9, 1, 'rgba(150,190,255,0.14)');
+  }
+  for (let i = 0; i < 6; i++){                        // the signs, smeared down the road
+    const gx = Math.floor(c * 0.55 / 82) + i, x = gx * 82 - c * 0.55;
+    if (x < -40 || x > VW + 10) continue;
+    const neon = hash(gx + 11) > 0.5;
+    const nc = neon ? '#ff2f7a' : '#2fc8e8';
+    for (let r = 0; r < 5; r++){
+      const wob = Math.round(Math.sin(T * 1.7 + gx + r * 0.6) * 1.6);
+      px(x + 24 + wob, 158 + r * 6, 26 - r * 3, 3, rgba(nc, 0.11 - r * 0.017));
+    }
   }
   for (let i = -1; i < 5; i++){                       // lamps, with a cone
     const gx = Math.floor(c * 0.55 / 140) + i, x = gx * 140 - c * 0.55;
