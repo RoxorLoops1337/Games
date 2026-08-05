@@ -19959,4 +19959,93 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(Math.abs(bs.bombX - 40) < 1e-6, 'at the point it was given (' + bs.bombX + ')');
 }
 
+/* ================== Pitch Fire was broad and shallow
+
+   It measured 40.0%, last of the bottom four, and the measurement had to be
+   built differently from Bombard's. That was a salvo resolved in a fraction of
+   a second; this is a zone that burns for six, so the count as it LANDS — all
+   its castTell reports — is not the count that burns. Bodies walk in and out.
+   The unit is body-seconds.
+
+   It was never short of damage. Over 241 pours in 40 matches: 25.04
+   body-seconds a pour, and with pure:true skipping mitigation that is 851
+   damage — two and a half Footmen worth of health. But spread across 6.36
+   bodies at its widest, ~134 each, where the cheapest body on the bridge is a
+   190hp Levy.
+
+   Kills needed a twin to mean anything: a body dying inside a fire did not
+   necessarily die OF it, and a fire at 0.01 dps still scored 1.25 kills a pour
+   from turrets and the front line. Every arm ran against its own near-zero
+   twin at the same seeds, and the difference is what the fire itself did:
+
+     dps  rad  dur   body-secs   kills   would have died   NET   ceiling
+      34  5.5    6       25.52    1.86              1.25  0.60       204   <- was
+      58  5.5    6       25.11    2.38              1.25  1.12       348   <- is
+      34  5.5    9       34.22    2.42              1.67  0.75       306
+      45  5.5    8       31.49    2.38              1.67  0.71       360
+
+   The ceiling turned out to be the wrong statistic: 45/8 carries a higher one
+   than 58/6 and converts worse, because bodies transit rather than stand. What
+   turns damage into bodies is the RATE.
+
+   Asserted below is the arithmetic against the unit table, which is exact.
+   Not the kills, which are a sample. */
+{
+  const P = IB.PITCH;
+  const U = IB.UNITS;
+  t.ok(P.dur === 6, 'the pour still burns for ' + P.dur + 's — duration was tried and barely moved it');
+  t.ok(P.rad === 5.5, 'and covers the same ' + P.rad + ' either side');
+
+  /* The threshold that was crossed. A body standing in the whole pour takes
+     dps x dur, and with pure damage none of it is mitigated — so this compares
+     directly against raw hp. */
+  const ceiling = P.dps * P.dur;
+  t.ok(ceiling >= U.melee.hp,
+    'a body that never leaves now dies even if it is a Footman (' + ceiling + ' against ' + U.melee.hp + 'hp)');
+  t.ok(34 * P.dur < U.melee.hp,
+    'where at the old 34 it could not (' + (34 * P.dur) + ' against ' + U.melee.hp + 'hp)');
+  t.ok(ceiling < U.cannon.hp,
+    'and a Cannon still walks out of a full pour (' + ceiling + ' against ' + U.cannon.hp + 'hp)');
+  t.ok(ceiling < U.super.hp, 'as does a Siege Ogre (' + U.super.hp + 'hp)');
+
+  // the cheap bodies were always dying to it and still are
+  for (const k of ['grunt', 'caster'])
+    t.ok(ceiling > U[k].hp, U[k].n + ' still falls well inside the pour (' + U[k].hp + 'hp)');
+
+  /* It is a rate, and the rate is what converts — so the seconds a body needs
+     to stand there is the number worth pinning. A Footman must still be made to
+     stand in nearly the whole thing. */
+  const secs = (k) => U[k].hp / P.dps;
+  t.ok(secs('melee') > P.dur * .8,
+    'a Footman still has to stand in most of it (' + secs('melee').toFixed(1) + 's of ' + P.dur + ')');
+  // 190/58 is 3.3s of a 6s pour — inside it with time to spare, but NOT inside
+  // the first half, which is what this claimed before the arithmetic was run.
+  t.ok(secs('grunt') < P.dur && secs('grunt') > P.dur / 2,
+    'while a Levy dies with time to spare, but still past halfway (' +
+    secs('grunt').toFixed(1) + 's of ' + P.dur + ')');
+  t.ok(secs('grunt') < secs('melee'), 'and always before a Footman does');
+
+  // pure means pure: the arithmetic above is only valid if nothing mitigates it
+  const psrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const tick = psrc.slice(psrc.indexOf('if (s.fireT > 0){'), psrc.indexOf('if (s.fireT > 0){') + 600);
+  t.ok(/pure:true/.test(tick), 'the burn is pure, so hp compares to hp with nothing in between');
+  t.ok(/PITCH\.dps \* dt/.test(tick), 'and charged per second, not per frame');
+
+  // the slow it leaves is untouched — this was a damage change, not a control one
+  t.ok(P.slow === .22 && P.slowT === .45, 'what walks through is slowed exactly as before');
+
+  // and one burning stretch per hold, refreshed rather than stacked
+  IB.newMatch({ diff:'veteran', seed:8960 });
+  const ps = IB.G.sides[0];
+  IB.chooseSpell(ps, 0, 'pitch'); IB.chooseSpell(ps, 1, 'muster');
+  ps.res.wood = 9000; ps.res.iron = 9000;
+  t.ok(IB.castSpell(ps, { slot:0, x:40 }) === null, 'a pour is accepted onto a point');
+  t.ok(Math.abs(ps.fireT - P.dur) < 1e-6, 'and burns for its full time (' + ps.fireT + ')');
+  t.ok(Math.abs(ps.fireX - 40) < 1e-6, 'at the point it was given');
+  ps.fireT = 2; ps.spellCd[0] = 0;
+  IB.castSpell(ps, { slot:0, x:55 });
+  t.ok(Math.abs(ps.fireT - P.dur) < 1e-6, 'a second pour refreshes the clock rather than stacking');
+  t.ok(Math.abs(ps.fireX - 55) < 1e-6, 'and moves the patch to the new point');
+}
+
 t.done();
