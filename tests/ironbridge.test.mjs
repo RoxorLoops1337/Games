@@ -19041,6 +19041,45 @@ t.ok(true, 'a final draw on a live match is clean');
   // and the passives that exist to help with a problem nobody has
   const manaPass = IB.PASSIVES.filter(p => p.m && (p.m.mreg !== undefined || p.m.mana !== undefined));
   t.ok(manaPass.length === 5, 'five of the hundred passives are about mana (' + manaPass.map(p => p.n).join(', ') + ')');
+
+  /* ---- the headroom that keeps a HELD ULTIMATE honest, which is the reason
+     the deep pool stays.
+
+     Cutting regen to make mana bind was measured and vetoed. It reads well on
+     every aggregate — 10.8% of hero-ticks short at under 2% of casting, no
+     class collapsing — and then ruins the one lever the player actually holds:
+     an ultimate that is off cooldown goes from 100% affordable to 75.2%. A
+     quarter of the windows where the shutter says ready would answer "nothing
+     of yours was ready" on release, which is the four-surfaces-one-state
+     confusion the ult tile was fixed for, made permanent.
+
+     What guarantees it is headroom, not luck: by the time the shortest
+     ultimate cooldown has run, in-combat regen at the level ultimates are
+     earned has brought in several times the dearest ultimate's cost. That
+     multiple is the invariant. Cutting the base to 1.2 takes it from 4.2x to
+     1.4x and fails this. */
+  {
+    const at = SRC.indexOf("h.mana = Math.min(h.mmana, h.mana + (");
+    const m = SRC.slice(at, SRC.indexOf(';', at))
+      .match(/\(([\d.]+) \+ h\.lvl \* ([\d.]+) \+ passVal\(h, 'mreg'\)/);
+    t.ok(!!m, 'the regen formula parsed for the headroom check');
+    if (m){
+      const ults = IB.SKILLS.filter(k => k.ult);
+      t.ok(ults.length >= 15, 'there are ultimates to protect (' + ults.length + ')');
+      const shortestCd = Math.min(...ults.map(k => k.cd));
+      const dearest = Math.max(...ults.map(k => k.mana));
+      const ULT_LEVEL = 12;                      // the last rung of the 3/6/9/12 ladder
+      const regen = Number(m[1]) + ULT_LEVEL * Number(m[2]);
+      const earned = regen * shortestCd;
+      const headroom = earned / dearest;
+      t.ok(headroom >= 3,
+        'a hero regenerates ' + headroom.toFixed(1) + 'x the dearest ultimate (' + dearest +
+        ') over the shortest ultimate cooldown (' + shortestCd + 's) — under 3x and a held ' +
+        'ultimate starts finding nothing ready on release');
+      t.ok(shortestCd >= 55 && dearest <= 115,
+        'and the two numbers behind that are the ones measured (' + shortestCd + 's, ' + dearest + ')');
+    }
+  }
 }
 
 t.done();
