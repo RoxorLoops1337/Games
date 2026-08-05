@@ -472,6 +472,75 @@ test('nothing scores while there is no car on the field', () => {
   assert(api.G.kills > kills0, 'the spill still works while driving');
 });
 
+test('drawing a frame cannot change what the frame contains', () => {
+  /* Camera shake used to pull from the simulation's own generator, so the same
+     shot scored differently depending on whether it was being rendered — a
+     144Hz player got a different result from a 60Hz one, and every headless
+     measurement in this suite was a lie by a few percent. */
+  const run = (drawIt) => {
+    const api = boot();
+    api.startLevel(2); api.beginLevel();
+    api.launch(-api.C.MAX_PULL, 120);
+    for (let i = 0; i < 900 && api.G.phase !== 'aim' && api.G.phase !== 'results'; i++){
+      api.skipReplay();
+      api.update(1 / 60);
+      if (drawIt) api.draw();
+    }
+    return { score: api.G.levelScore, kills: api.G.kills, gore: api.gore.length,
+             x: Math.round(api.car.x), y: Math.round(api.car.y),
+             dead: api.people.filter(p => p.dead).length };
+  };
+  const undrawn = run(false), drawn = run(true);
+  assert(undrawn.score === drawn.score, 'score differs when drawn: ' + undrawn.score + ' vs ' + drawn.score);
+  assert(undrawn.kills === drawn.kills, 'kills differ: ' + undrawn.kills + ' vs ' + drawn.kills);
+  assert(undrawn.dead === drawn.dead, 'bodies differ: ' + undrawn.dead + ' vs ' + drawn.dead);
+  assert(undrawn.x === drawn.x && undrawn.y === drawn.y,
+    'the car ends somewhere else: ' + JSON.stringify(undrawn) + ' vs ' + JSON.stringify(drawn));
+  assert(undrawn.gore === drawn.gore, 'gore differs: ' + undrawn.gore + ' vs ' + drawn.gore);
+});
+
+test('the recorder starts empty on every launch', () => {
+  const api = boot();
+  api.startLevel(0); api.beginLevel();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  for (let i = 0; i < 8; i++) api.addPerson(2000 + i * 70, 1100);
+  api.launch(-api.C.MAX_PULL, 0);
+  for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  assert(api.rec.frames.length > 0, 'it recorded something');
+  api.G.phase = 'aim';
+  api.launch(-api.C.MAX_PULL, 0);
+  assert(api.rec.kills === 0 && api.rec.killed.length === 0 && api.rec.frames.length === 0,
+    'the next launch inherited ' + api.rec.frames.length + ' frames and ' + api.rec.kills + ' kills');
+});
+
+test('a stale clip cannot set a bar the next run has to clear', () => {
+  const api = boot();
+  api.startLevel(0); api.beginLevel();
+  api.clip.worth = 9; api.clip.kills = 9; api.clip.wrecks = 4;
+  api.clip.frames = [{ t: 0 }, { t: 1 }];
+  api.recReset();
+  assert(api.clip.worth === 0 && api.clip.kills === 0 && api.clip.wrecks === 0,
+    'clip survived the reset: worth ' + api.clip.worth);
+  assert(api.clip.frames.length === 0, 'frames survived the reset');
+  assert(!api.replayReady(), 'and it is not offering a replay of nothing');
+});
+
+test('the replay caption says how long the clip really is', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.recReset();
+  api.G.carsLeft = 2;
+  for (let i = 0; i < 10; i++) api.addPerson(2000 + i * 70, 1100);
+  drive(api, 1500, 0, 1700, 1100);
+  for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  step(api, 1.4);
+  assert(api.G.phase === 'replay', 'in the replay');
+  const secs = api.rp.dur;
+  if (secs >= 1.85) assert(/IN TWO SECONDS/.test(api.rp.caption), 'a full clip says two seconds');
+  else assert(api.rp.caption.indexOf(secs.toFixed(1).replace(/\.0$/, '')) > 0,
+    'a ' + secs.toFixed(1) + 's clip should say so, got: ' + api.rp.caption);
+});
+
 test('a new car starts on a clean chain', () => {
   const api = boot();
   api.startLevel(0); api.beginLevel();
@@ -503,6 +572,7 @@ test('a spilled glühwein pot scalds the shoppers around it', () => {
   const pot = api.addProp('gluh', 2000, 1100, {});
   const near1 = api.addPerson(2030, 1120);
   const far = api.addPerson(2600, 1100);
+  api.G.phase = 'drive';
   api.wreckProp(pot, 0, 0);
   assert(api.spills.length === 1, 'the pot should leave a spill');
   step(api, 0.2);
@@ -623,6 +693,7 @@ test('a pram breaks loose when whoever was pushing it goes down', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.fx.length = 0;
   const p = api.addPerson(2000, 1100, 'parent');
+  api.G.phase = 'drive';
   api.killPerson(p, 900, 0, 'car');
   assert(p.pramT === 0, 'the pram is gone');
   assert(api.fx.some(f => f.type === 'pram'), 'and it is airborne');
@@ -758,6 +829,7 @@ test('kills add to the lifetime tally', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0;
   const before = api.G.lifeKills;
+  api.G.phase = 'drive';
   api.killPerson(api.addPerson(2000, 1100), 800, 0, 'car');
   assert(api.G.lifeKills === before + 1, 'counted');
 });
@@ -825,6 +897,7 @@ test('the trackers behind the goals actually move', () => {
   api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
   api.startLevel(0);
   api.G.byKind = {}; api.G.rolls = 0; api.G.jumps = 0; api.G.bestSlam = 0; api.G.nitroKills = 0;
+  api.G.phase = 'drive';
 
   api.killPerson(api.addPerson(2000, 1100, 'elder'), 900, 0, 'car');
   api.killPerson(api.addPerson(2100, 1100, 'kid'), 900, 0, 'car');
@@ -876,6 +949,7 @@ test('the whole campaign renders, theme by theme', () => {
 test('a fast kill throws limbs and pixels; a slow one only pixels', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.fx.length = 0;
+  api.G.phase = 'drive';
   api.killPerson(api.addPerson(2000, 1100), 1800, 0, 'car');
   const limbs = api.fx.filter(f => f.type === 'limb');
   assert(limbs.length > 0, 'flat out should take pieces off, got ' + limbs.length);
@@ -1022,7 +1096,7 @@ test('the replay plays back in slow motion and then hands over', () => {
 
   step(api, 1.4);                            // settle hands over to the replay
   assert(api.G.phase === 'replay', 'expected the replay, got ' + api.G.phase);
-  assert(/IN TWO SECONDS/.test(api.rp.caption), 'captioned: ' + api.rp.caption);
+  assert(/ IN [\d.]+ SECONDS| IN TWO SECONDS/.test(api.rp.caption), 'captioned: ' + api.rp.caption);
   assert(api.rp.caption.indexOf(String(clipKills)) === 0, 'with the kill count');
   const wide = api.camTarget().z;
   assert(wide < 700, 'the camera moves in close, z=' + wide);
@@ -1039,26 +1113,45 @@ test('the replay plays back in slow motion and then hands over', () => {
 test('the replay leaves the market exactly as it found it', () => {
   const api = boot();
   api.startCampaign(); api.beginLevel();
+  // build the clip deterministically rather than hoping the run earns one —
+  // this test used to bail out silently when it did not
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
   api.recReset();
-  api.launch(-api.C.MAX_PULL, 0);
-  for (let i = 0; i < 1800 && api.G.phase === 'drive'; i++) api.update(1 / 60);
-  if (!api.replayReady()){ return; }         // nothing to check on a quiet run
+  api.G.carsLeft = 2;
+  for (let i = 0; i < 10; i++) api.addPerson(2000 + i * 70, 1100);
+  drive(api, 1500, 0, 1700, 1100);
+  for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+  assert(api.replayReady(), 'the run earned a clip');
   for (let i = 0; i < 200 && api.G.phase !== 'replay'; i++) api.update(1 / 60);
   assert(api.G.phase === 'replay', 'in the replay');
-  const before = api.people.map(p => [p.x, p.y, p.dead, p.squash]);
+  const before = api.people.map(p => [p.x, p.y, p.dead, p.squash, p.ang, p.panic, p.cry, p.fly]);
   const propsBefore = api.props.map(o => [o.x, o.y, o.dead, o.hp]);
+  const carBefore = [api.car.x, api.car.y, api.car.ang, api.car.z, api.car.roll, api.car.gore];
   const kills = api.G.kills, score = api.G.levelScore;
   for (let i = 0; i < 1200 && api.G.phase === 'replay'; i++) api.update(1 / 60);
 
   api.people.forEach((p, i) => {
     near(p.x, before[i][0], 0.001, 'person ' + i + ' moved during the replay');
+    near(p.y, before[i][1], 0.001, 'person ' + i + ' moved in y');
     assert(p.dead === before[i][2], 'person ' + i + ' changed state');
     near(p.squash, before[i][3], 0.001, 'person ' + i + ' squash changed');
+    near(p.ang, before[i][4], 0.001, 'person ' + i + ' facing changed');
+    near(p.panic, before[i][5], 0.001, 'person ' + i + ' panic changed');
+    near(p.cry, before[i][6], 0.001, 'person ' + i + ' crying changed');
+    near(p.fly, before[i][7], 0.001, 'person ' + i + ' flight changed');
   });
   api.props.forEach((o, i) => {
     near(o.x, propsBefore[i][0], 0.001, 'prop ' + i + ' moved');
+    near(o.y, propsBefore[i][1], 0.001, 'prop ' + i + ' moved in y');
     assert(o.dead === propsBefore[i][2], 'prop ' + i + ' changed state');
+    near(o.hp, propsBefore[i][3], 0.001, 'prop ' + i + ' hp changed');
   });
+  // the car is the one thing that legitimately moves: the replay hands over to
+  // the next car, which starts on the sling
+  near(api.car.x, api.C.ANCHOR.x, 0.001, 'the next car should be on the sling');
+  near(api.car.z, 0, 0.001, 'and on the ground');
+  near(api.car.roll, 0, 0.001, 'and the right way up');
+  assert(carBefore[0] > api.C.ANCHOR.x + 200, 'the wreck really was out in the market');
   assert(api.G.kills === kills, 'the replay must not score again');
   assert(api.G.levelScore === score, 'nor add points');
 });
@@ -1097,6 +1190,7 @@ test('the last car still ends the level after its replay', () => {
 test('a big stall takes the neighbours with it', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.G.phase = 'drive';
   const tree = api.addProp('bigtree', 2000, 1100, {});
   const gifts = api.addProp('gifts', 2090, 1100, {});
   const far = api.addProp('gifts', 2600, 1100, {});
@@ -1262,6 +1356,7 @@ test('a run through a crowd paints the aisle', () => {
 test('a fast kill throws chunks that stain where they land', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.gore.length = 0; api.fx.length = 0;
+  api.G.phase = 'drive';
   const p = api.addPerson(2000, 1100);
   api.killPerson(p, 1700, 0, 'car');
   const chunks = api.fx.filter(f => f.type === 'chunk');
@@ -1275,6 +1370,7 @@ test('a fast kill throws chunks that stain where they land', () => {
 test('a slow kill is messy but not chunky', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.gore.length = 0; api.fx.length = 0;
+  api.G.phase = 'drive';
   const p = api.addPerson(2000, 1100);
   api.killPerson(p, 300, 0, 'car');
   assert(api.gore.length > 3, 'still leaves blood');
@@ -1284,6 +1380,7 @@ test('a slow kill is messy but not chunky', () => {
 test('blood hits the camera and then dries off it', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.lens.length = 0;
+  api.G.phase = 'drive';
   api.killPerson(api.addPerson(2000, 1100), 1500, 0, 'car');
   assert(api.lens.length > 0, 'the lens catches some');
   api.splatLens(60);
@@ -1297,6 +1394,7 @@ test('driving back over a body drags it and paints the snow', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
   const p = api.addPerson(2000, 1100);
+  api.G.phase = 'drive';
   api.killPerson(p, 200, 0, 'car');
   p.fly = 0;
   api.gore.length = 0;
@@ -1313,6 +1411,7 @@ test('driving back over a body drags it and paints the snow', () => {
 test('bodies are squashed by what hit them', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0;
+  api.G.phase = 'drive';
   const slow = api.addPerson(2000, 1100);
   api.killPerson(slow, 200, 0, 'car');
   const fast = api.addPerson(2200, 1100);
