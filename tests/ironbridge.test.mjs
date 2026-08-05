@@ -13794,8 +13794,38 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(G.units.length === n, 'and no second muster marched');
     t.ok(!IB.spellUI.aim, 'nothing was armed by the refusal either');
     t.ok(IB.spellReady(s, 0) === false, 'the order reads as not ready...');
-    t.ok(/classList\.toggle\('dead', !spellReady\(s, i\) \|\| !spellTargets\(d\)\)/.test(SRC),
+    /* The tile's spent look still comes from the same two facts the press
+       reads. It now also says WHICH of them, because measured, a slot is
+       castable only 0.1-0.4 of the time out of two or three — the dead tile is
+       what a commander looks at for most of a match, and one flat grey for
+       three reasons says nothing. The reasons are derived from those same two
+       facts rather than asking the world again; the first version of this
+       reached for canPay directly and this assertion caught it. */
+    t.ok(/const notReady = !spellReady\(s, i\);/.test(SRC),
       '...and the tile in the bar is marked spent from that same fact rather than a second one');
+    t.ok(/const noTarget = !spellTargets\(d\);/.test(SRC), 'and from the same target test');
+    t.ok(/toggle\('dead', notReady \|\| noTarget\)/.test(SRC), 'which together are what makes it dead');
+    {
+      const fn = SRC.slice(SRC.indexOf('function syncOrders('));
+      const body = fn.slice(0, fn.indexOf('\n}\n')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+      t.ok(!/canPay\(/.test(body), 'and the reason never re-asks the stores itself');
+      t.ok(/toggle\('poor'/.test(body) && /toggle\('noaim'/.test(body),
+        'the two that used to look identical now do not');
+
+      /* Every phrase the no-target title can be built from already ends in a
+         stop. The first version appended a second and the tile read "not on
+         the bridge..", which the browser showed and the suite did not — so the
+         suite gets to see it now. */
+      const ends = Object.values(IB.NO_TARGET || {}).concat(
+        IB.SPELLS.map(d => d.none).filter(Boolean));
+      t.ok(ends.length >= 4, 'there are refusal phrases to check (' + ends.length + ')');
+      const dbl = ends.filter(x => /\.\s*$/.test(String(x)))
+        .map(x => String(x).replace(/[.\s]+$/, '') + '.')
+        .filter(x => /\.\./.test(x));
+      t.ok(dbl.length === 0, 'and trimming before the stop leaves exactly one (' + dbl.join(' | ') + ')');
+      t.ok(/replace\(\/\[\.\\s\]\+\$\/, ''\)/.test(SRC),
+        'which the title actually does rather than trusting the phrases');
+    }
     // ...or from the other reason an order cannot be given: nothing on the
     // board to point it at. Both come off the same enumerations the preview
     // and the resolver use, so a dead tile is never dead for a reason the
