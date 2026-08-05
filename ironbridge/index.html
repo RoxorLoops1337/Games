@@ -19514,6 +19514,18 @@ const netReady = (tick) => { const s = NET.box.get(tick); return !!(s && s[0] &&
 const q30 = (v) => Math.round((v || 0) * 30);
 const q64 = (v) => Math.round((v || 0) * 64);
 function mixTimers(mix, u){
+  /* How long a summoned body has left. packBody already carried it — it is a
+     plain number on the unit and packBody keeps every primitive — so a resynced
+     joiner got the right value. The HASH did not list it, which is the half that
+     matters: two peers whose summon timers had drifted agreed on the hash right
+     up until the body vanished on one board and not the other, and by then the
+     divergence being reported was a missing unit rather than the clock that
+     removed it.
+     Verified against a control before the fix: moving a body's hp changed the
+     hash, moving its life did not. Nothing casts a life-limited body today
+     except a hero's summon, which is exactly the kind of rarely-exercised path
+     a hash is for. */
+  mix(q30(u.life));
   mix(q30(u.stunT)); mix(q30(u.slowT)); mix(q64(u.slowP));
   mix(q30(u.taunt)); mix(q30(u.markT)); mix(q30(u.pullT));
   mix(q64(u.shield)); mix(q30(u.shT)); mix(q30(u.cd));
