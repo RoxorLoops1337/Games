@@ -8611,16 +8611,31 @@ function drawClouds(c){
     const x = ((cl.x - cam.x * LS() * cl.d - drift * cl.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 200;
     if (x < -340 || x > LW + 340) continue;
     const y = LH * cl.y, R = 26 * cl.s * (.7 + cam.z * .5);
-    const spr = cloudSprite(cl);
-    if (!spr){
-      // No offscreen canvas to render into — a headless or hostile document.
-      // The art system is graceful everywhere else in this game and the sky is
-      // not the place to start throwing: hard-edged weather beats no weather.
-      cloudPath(c, x, y, R, cl.w, 1);
-      c.fillStyle = 'rgba(' + CLOUD.body.col + ',' + cl.a.toFixed(3) + ')';
+    /* PAPER CLOUDS. These were soft on purpose and the reasoning above
+       skyCanvas was explicit about it — "a cloud drawn as a row of hard
+       ellipses is a row of hard ellipses, and no amount of shading fixes an
+       edge you can cut yourself on". That was right for a world of blended
+       vector shapes. It is backwards for one cut from card, where the edge you
+       could cut yourself on is the entire point, and it left the clouds as the
+       only soft thing on a screen where the ground, the buildings and the sky
+       had all become paper.
+
+       Nothing new was needed to turn them. CLOUD already carries three passes —
+       a silhouette, a belly shaded AWAY from the sun, a crown lit TOWARD it —
+       with cloudLean and cloudRise for which way each leans. That is the same
+       sentence the cut edge says on every other shape, and it was being spent
+       on a sprite that blurred it away. Laid straight onto the canvas it reads
+       as three pieces of card stacked, which is what a paper cloud is.
+
+       The silver lining goes with it: a burnt-out sunward rim is a photograph's
+       idea of a cloud, and the crown pass already does that job in card. */
+    for (const k of CLOUD_PASSES){
+      const P = CLOUD[k];
+      cloudPath(c, x + P.dx * R * cloudLean(k), y + P.dy * R * cloudRise(k), R, cl.w, P.sc);
+      c.fillStyle = 'rgba(' + P.col + ',' + (P.a * cl.a).toFixed(3) + ')';
       c.fill();
-      continue;
     }
+    continue;
     const k = R / spr.R;
     const ddx = (x - sx) / reach, ddy = (y - sy) / reach;
     const lit = clamp(1 - Math.sqrt(ddx * ddx + ddy * ddy), 0, 1);
