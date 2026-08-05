@@ -7840,6 +7840,28 @@ const BAND_FX = BANDS.map(b => {
 // to a bright band at the horizon, where you are looking through the most of
 // it. These stops are that curve, sampled. The old two-stop version is why the
 // whole picture read as paper: nothing in it changed with distance.
+/* Paper, not photograph. A stop HOLDS its colour until the next one and then
+   jumps, so a gradient becomes a stack of flat strips in exactly the palette it
+   was already written in — the band edges are the authored offsets and the band
+   fills are the authored colours. Nothing is recoloured and nothing invented.
+
+   The epsilon is what makes a jump a jump: two stops at one offset is how a
+   canvas gradient is told to step, so each band ends a hair before the next
+   begins, clamped never to run behind where it started or two close stops could
+   cross and invert a band.
+
+   One function because there are two skies that need it — the dome and the
+   valley floor — and a banding rule that lived in both would eventually be two
+   different rules. */
+function bandStops(g, stops){
+  for (let i = 0; i < stops.length; i++){
+    const at = stops[i][0], col = stops[i][1];
+    g.addColorStop(at, col);
+    const next = stops[i + 1];
+    if (next) g.addColorStop(Math.max(at, next[0] - 1e-4), col);
+  }
+  return g;
+}
 const SKY_STOPS = [
   [0,    '#2f5f8a'],
   [.10,  '#3d6f96'],
@@ -7862,23 +7884,8 @@ function skyGrad(c){
   if (SKYG && SKYG_K === k && SKYG_C === c) return SKYG;
   SKYG_C = c;
   const g = c.createLinearGradient(0, 0, 0, LH);
-  /* BANDED, not blended. A world cut from card was sitting on a smooth
-     photographic sky, and the two were arguing: nothing else on screen has a
-     soft transition in it. Each authored stop now HOLDS its colour until the
-     next one and jumps, so the sky becomes nine flat strips of paper laid one
-     over another.
-     Every colour and every boundary is still exactly the one SKY_STOPS names —
-     the band edges are the stop offsets and the band fills are the stop
-     colours, so this repaints the same palette rather than inventing one. The
-     epsilon is what makes the jump a jump: a hair before the next offset,
-     because two stops at the SAME offset is how a gradient is told to step,
-     and a hair is the smallest step this can be without the seam softening. */
-  for (let i = 0; i < SKY_STOPS.length; i++){
-    const [at, col] = SKY_STOPS[i];
-    g.addColorStop(at, col);
-    const next = SKY_STOPS[i + 1];
-    if (next) g.addColorStop(Math.max(at, next[0] - 1e-4), col);
-  }
+  // Nine flat strips rather than one long ramp — see bandStops.
+  bandStops(g, SKY_STOPS);
   SKYG = g; SKYG_K = k;
   return g;
 }
@@ -8006,13 +8013,17 @@ function skyWash(c, w, h){
 // The valley floor, and how far down it goes. Its own plate because it is
 // half the screen of gradient and never changes; the mist strata that drift
 // over it stay live, being thin and being the part that moves.
+const FLOOR_STOPS = [
+  [0,   'rgba(58,84,72,0)'],
+  [.13, 'rgba(44,66,57,.70)'],
+  [.28, 'rgba(30,48,44,.90)'],
+  [.6,  'rgba(20,34,32,.94)'],
+  [1,   '#0c1414'],
+];
 function skyFloor(c, w, h){
-  const vg = c.createLinearGradient(0, 0, 0, h);
-  vg.addColorStop(0, 'rgba(58,84,72,0)');
-  vg.addColorStop(.13, 'rgba(44,66,57,.70)');
-  vg.addColorStop(.28, 'rgba(30,48,44,.90)');
-  vg.addColorStop(.6, 'rgba(20,34,32,.94)');
-  vg.addColorStop(1, '#0c1414');
+  // The last blended thing in the world, banded like the dome above it. It
+  // costs nothing extra to do: this is a plate, painted once.
+  const vg = bandStops(c.createLinearGradient(0, 0, 0, h), FLOOR_STOPS);
   c.fillStyle = vg; c.fillRect(0, 0, w, h);
 }
 // Everything in the sky that SCROLLS. Cached plates cannot help here — the
@@ -20413,7 +20424,7 @@ window.IB = {
   ordersHtml, ORDER_KEY, ULT_KEY, ultHtml, ultHolders, setHoldUlt, holdPress, foeOrdersHtml,
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
-  CUT, SKY_STOPS, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
+  CUT, SKY_STOPS, FLOOR_STOPS, bandStops, SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
   aiDraft, aiDraftLate, musterDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
