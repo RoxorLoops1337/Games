@@ -1677,6 +1677,76 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.resolvePick(-500, -500).kind === 'none', 'clicking empty sky selects nothing');
 }
 
+/* ------------------------------------------- a press that is not quite still
+
+   Reported as "it is not easy to select things, like buildings or building
+   plots". Everything about WHERE you press turned out to be fine — a sweep of
+   every pixel of the viewport found no unreachable clickable, no DOM overlay
+   eating the pointer, and footprints around 50x50 on a desktop. The failure was
+   in whether a press counted as a click at all.
+
+   The gate read `|dx| + |dy| > 5`. A Manhattan sum is not a distance: along an
+   axis it gives the five pixels it claims, but on the diagonal three and three
+   score six. Driven in a real browser, a tap survived TWO pixels of drift.
+
+   And it latched — `moved` was never cleared — so a press that wandered and
+   came back exactly where it started was still thrown away as a pan. That is
+   the shape of every real tap.
+
+   These hold the shape of the rule, not the numbers in it: the gate is a
+   radius, it is not the same for a thumb as for a mouse, and where a press
+   ENDS is what decides. */
+{
+  const slop = IB.dragSlop('mouse');
+
+  /* Direction independence is the bug itself. A displacement of the same
+     LENGTH must be judged the same whichever way it points — under the old sum
+     the diagonal was penalised by root two and nothing else was. */
+  const r = slop * .8;
+  const diag = r / Math.SQRT2;
+  t.ok(IB.isTap(r, 0, r, slop), 'a drift straight along an axis, inside the slop, is a tap');
+  t.ok(IB.isTap(diag, diag, r, slop), 'and the same distance on the diagonal is the same answer');
+  const R = slop * 1.4, D = R / Math.SQRT2;
+  t.ok(!IB.isTap(R, 0, R, slop), 'past the slop it is a pan, along an axis');
+  t.ok(!IB.isTap(D, D, R, slop), 'and past the slop on the diagonal too');
+
+  /* The regression, stated as the case that used to fail: three pixels each
+     way scored six against a gate of five and the selection was discarded. */
+  t.ok(IB.isTap(3, 3, IB.hyp(3, 3), slop),
+    'three pixels of diagonal wobble still selects — it used to score 6 against a gate of 5');
+
+  /* Coming home. `far` is the farthest the press ever got; a wobble that
+     returns is a tap, and a deliberate sweep out and back is not, because you
+     went somewhere to look at it. */
+  t.ok(IB.isTap(0, 0, slop * 2, slop), 'a press that wandered past the slop and came home is a tap');
+  t.ok(IB.isTap(0, 0, slop * IB.TAP_RETURN, slop), 'as far out as TAP_RETURN allows');
+  t.ok(!IB.isTap(0, 0, slop * IB.TAP_RETURN + 1, slop),
+    'but a sweep further than that is a pan, however it ends');
+  t.ok(!IB.isTap(200, 0, 200, slop), 'and an ordinary drag across the map is never a tap');
+
+  /* Per input. A thumb is not braced against anything and a trackpad reports
+     itself as a mouse, so neither number is the other's. */
+  t.ok(IB.dragSlop('touch') > IB.dragSlop('mouse'),
+    'a thumb is allowed more drift than a mouse (' + IB.dragSlop('touch') + ' vs ' + IB.dragSlop('mouse') + ')');
+  t.ok(IB.dragSlop('pen') > 0, 'a pen has its own number');
+  /* An unknown pointerType must fall back to a real number. Reading a missing
+     key straight out of the table would give undefined, and every comparison
+     against it is false — which silently turns every press into a pan. */
+  for (const bad of [undefined, '', 'wand', null])
+    t.ok(IB.dragSlop(bad) === IB.DRAG_SLOP.mouse,
+      'an unrecognised pointer (' + String(bad) + ') falls back to the mouse slop, not to undefined');
+
+  /* And the handler actually uses it. The rule being right in a pure function
+     is worth nothing if pointerup still asks the old question. */
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  t.ok(!/Math\.abs\(e\.clientX - drag\.x\) \+ Math\.abs\(e\.clientY - drag\.y\)/.test(src),
+    'no handler adds the two axes together any more');
+  t.ok(/isTap\(e\.clientX - drag\.x, e\.clientY - drag\.y, drag\.far, drag\.slop\)/.test(src),
+    'pointerup asks isTap where it used to ask !drag.moved');
+  t.ok(/drag\.slop = |slop:dragSlop\(e\.pointerType\)/.test(src),
+    'and the slop is chosen from the pointer that started the press');
+}
+
 /* ------------------------------------------------- inspecting the bridge */
 {
   // Everything standing out on the lane is a question the player can ask:
