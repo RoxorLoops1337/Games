@@ -7516,7 +7516,14 @@ const shade = (hex, f) => {
    and the milliseconds are not. CUT.on is the switch if that ever stops being
    worth paying — it is read per shape, so flipping it costs nothing but the
    branch. */
-const CUT = { on:true, dx:-.9, dy:-.9, ink:'rgba(255,247,228,.5)' };
+/* The nudge was -.9 and it very nearly was not there. Compared at both ends of
+   the zoom range, which is the check this needed and had not had: at .5 a .9px
+   rim all but vanishes — the shapes are small and the edge is a suggestion —
+   while at 1.6 it is legible but weak. At 1.5px it reads at BOTH: crisp lit
+   edges on the towers and layered ridges up close, and still visibly there when
+   the whole bridge is on screen. It does not scale with zoom on purpose. A cut
+   edge is a property of the card, not of how far away you are standing. */
+const CUT = { on:true, dx:-1.5, dy:-1.5, ink:'rgba(255,247,228,.5)' };
 function poly(c, pts, fill, stroke, lw){
   const n = pts.length;
   if (CUT.on && fill && n > 2){
