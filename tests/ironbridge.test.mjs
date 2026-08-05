@@ -284,6 +284,24 @@ const E = () => G.sides[1];
 // Give a side everything it needs so a test can exercise one system in isolation.
 const SKILLOF = (id) => IB.SKILL[id];
 const mmss = (t) => Math.floor(t/60) + 'm' + String(Math.floor(t%60)).padStart(2,'0') + 's';
+/* Build a hero the way the GAME builds one.
+
+   Setting h.lvl by hand and calling recalcHero looks like it levels a hero and
+   does not: the 3/6/9/12 rungs are where offer() hands out the three skills and
+   the ultimate, and a hero that jumps past them arrives at level 24 with an
+   EMPTY KIT and nothing but its passive to rank. Every assertion about skills
+   on such a hero is then vacuously true — `skills.some(sk => sk.ult)` is false,
+   `skills.every(...)` is true, and a lockstep run "with two heroes fighting"
+   is two heroes throwing punches.
+
+   Caught by a calibration pass that asked, before believing anything else,
+   whether the hero it had just built owned an ultimate. It did not.
+
+   gainXp in steps, draining the offers as they appear, is the only way up. */
+const climb = (h, steps) => {
+  for (let i = 0; i < (steps || 40); i++){ IB.gainXp(h, 400); IB.autoPick(h); }
+  return h;
+};
 const spellPt = (list) => { IB.spellUI.pt = list[0] ? { x:list[0].cx, y:list[0].cy } : null; };
 const rich = (s) => { s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000; };
 
@@ -18839,8 +18857,12 @@ t.ok(true, 'a final draw on a live match is clean');
     for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
     IB.createHero(G.sides[0], 'tank'); IB.createHero(G.sides[1], 'mage');
     let g = 0; while (G.wave < 1 && g++ < 30 * 90) IB.update(1 / 30);
-    for (const s of G.sides) for (const h of s.heroes){ h.lvl = 10; IB.recalcHero(h, true); IB.autoPick(h);
+    // climb, not h.lvl = 10 — that leaves an empty kit and this becomes a
+    // lockstep test over two heroes with nothing to cast
+    for (const s of G.sides) for (const h of s.heroes){ climb(h);
       h.dead = false; h.hp = h.mhp; h.inLane = true; if (!G.units.includes(h)) G.units.push(h); }
+    t.ok(G.sides.every(s => s.heroes.every(h => h.skills.length > 0)),
+      'both heroes have a kit, so the board under test really has abilities in it');
     step(20);
     G.projs.length = 0; G.zones.length = 0;
     G.sides[0].spells[0] = 'unbind'; G.sides[0].spellCd[0] = 0;
@@ -19041,6 +19063,92 @@ t.ok(true, 'a final draw on a live match is clean');
   // and the passives that exist to help with a problem nobody has
   const manaPass = IB.PASSIVES.filter(p => p.m && (p.m.mreg !== undefined || p.m.mana !== undefined));
   t.ok(manaPass.length === 5, 'five of the hundred passives are about mana (' + manaPass.map(p => p.n).join(', ') + ')');
+
+  /* ---- the headroom that keeps a HELD ULTIMATE honest, which is the reason
+     the deep pool stays.
+
+     Cutting regen to make mana bind was measured and vetoed. It reads well on
+     every aggregate — 10.8% of hero-ticks short at under 2% of casting, no
+     class collapsing — and then ruins the one lever the player actually holds:
+     an ultimate that is off cooldown goes from 100% affordable to 75.2%. A
+     quarter of the windows where the shutter says ready would answer "nothing
+     of yours was ready" on release, which is the four-surfaces-one-state
+     confusion the ult tile was fixed for, made permanent.
+
+     What guarantees it is headroom, not luck: by the time the shortest
+     ultimate cooldown has run, in-combat regen at the level ultimates are
+     earned has brought in several times the dearest ultimate's cost. That
+     multiple is the invariant. Cutting the base to 1.2 takes it from 4.2x to
+     1.4x and fails this. */
+  {
+    const at = SRC.indexOf("h.mana = Math.min(h.mmana, h.mana + (");
+    const m = SRC.slice(at, SRC.indexOf(';', at))
+      .match(/\(([\d.]+) \+ h\.lvl \* ([\d.]+) \+ passVal\(h, 'mreg'\)/);
+    t.ok(!!m, 'the regen formula parsed for the headroom check');
+    if (m){
+      const ults = IB.SKILLS.filter(k => k.ult);
+      t.ok(ults.length >= 15, 'there are ultimates to protect (' + ults.length + ')');
+      const shortestCd = Math.min(...ults.map(k => k.cd));
+      const dearest = Math.max(...ults.map(k => k.mana));
+      const ULT_LEVEL = 12;                      // the last rung of the 3/6/9/12 ladder
+      const regen = Number(m[1]) + ULT_LEVEL * Number(m[2]);
+      const earned = regen * shortestCd;
+      const headroom = earned / dearest;
+      t.ok(headroom >= 3,
+        'a hero regenerates ' + headroom.toFixed(1) + 'x the dearest ultimate (' + dearest +
+        ') over the shortest ultimate cooldown (' + shortestCd + 's) — under 3x and a held ' +
+        'ultimate starts finding nothing ready on release');
+      t.ok(shortestCd >= 55 && dearest <= 115,
+        'and the two numbers behind that are the ones measured (' + shortestCd + 's, ' + dearest + ')');
+    }
+  }
+}
+
+/* ===================== a hero levelled by hand is a hero with no skills at all
+
+   This is a trap in the harness rather than a defect in the game, and it has
+   already cost real work: a probe built its heroes by setting h.lvl = 12 and
+   calling recalcHero, then measured what their ultimates did. They had none.
+   Every number that came out of it described two heroes punching each other.
+
+   The 3/6/9/12 rungs are where offer() hands out skills and the ultimate. Jump
+   them and h.pend fills with RANK offers instead — and a rank offer over an
+   empty kit can only rank the passive, so the hero climbs to 24 owning
+   nothing. Nothing throws. Nothing is empty-looking at a glance. The kit is
+   just not there.
+
+   Asserted in both directions so the shape of the trap is on the record. */
+{
+  IB.newMatch({ diff:'veteran', seed:7001 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+
+  // the wrong way
+  IB.createHero(P(), 'mage');
+  const bad = P().heroes[0];
+  t.ok(!!bad, 'a hero to mis-level');
+  if (bad){
+    bad.lvl = 12; IB.recalcHero(bad, true);
+    IB.gainXp(bad, 99999);
+    for (let i = 0; i < 12; i++) IB.autoPick(bad);
+    t.ok(bad.lvl >= 12, 'it reaches the level (' + bad.lvl + ')');
+    t.ok(bad.pend.length === 0, 'and drains every offer it was given');
+    t.ok(bad.skills.length === 0,
+      'and owns NOT ONE SKILL, because it jumped the rungs that hand them out (' + bad.skills.length + ')');
+    t.ok(!bad.skills.some(sk => sk.ult),
+      'so any assertion about its ultimate is vacuously false, which is the trap');
+  }
+
+  // the right way
+  IB.newMatch({ diff:'veteran', seed:7001 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(P(), 'mage');
+  const good = climb(P().heroes[0]);
+  t.ok(good.lvl > 12, 'climbing reaches a real level (' + good.lvl + ')');
+  t.ok(good.skills.length === 4, 'and ends with three skills and an ultimate (' + good.skills.length + ')');
+  t.ok(good.skills.some(sk => sk.ult), 'the ultimate among them');
+  t.ok(good.skills.filter(sk => sk.ult).length === 1, 'exactly one of them');
+  const ids = good.skills.map(sk => sk.id);
+  t.ok(new Set(ids).size === ids.length, 'and no skill twice (' + ids.join(', ') + ')');
 }
 
 t.done();

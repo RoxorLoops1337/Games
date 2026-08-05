@@ -787,16 +787,20 @@ const INK = '#140e1a';
 const LIT_X = -1, LIT_Y = -1;             // the light sits up and to the left
 const rigParts = [];
 
-function rigLimb(x1, y1, x2, y2, w, lit, shadow){
-  rigParts.push({ k: 'l', x1, y1, x2, y2, w, c: lit, cs: shadow });
+function rigLimb(x1, y1, x2, y2, w, lit, shadow, zone){
+  rigParts.push({ k: 'l', x1, y1, x2, y2, w, c: lit, cs: shadow, z: zone || 0 });
 }
-function rigBall(x, y, r, ry, lit, shadow){
-  rigParts.push({ k: 'e', x, y, r, ry, c: lit, cs: shadow });
+function rigBall(x, y, r, ry, lit, shadow, zone){
+  rigParts.push({ k: 'e', x, y, r, ry, c: lit, cs: shadow, z: zone || 0 });
 }
-function drawRigPass(grow, ink, lit){
-  const ox = lit ? LIT_X : 0, oy = lit ? LIT_Y : 0;
+/* zone 1 is everything above the belt, zone 2 the legs.  The key light only
+   ever catches the top of a body and the ground only ever throws light back
+   at the bottom of it, so each light pass walks half the rig. */
+function drawRigPass(grow, ink, lit, ox2, oy2, zone){
+  const ox = (lit ? LIT_X : 0) + (ox2 || 0), oy = (lit ? LIT_Y : 0) + (oy2 || 0);
   for (let i = 0; i < rigParts.length; i++){
     const p = rigParts[i];
+    if (zone && p.z !== zone) continue;
     const col = ink || (lit ? p.c : p.cs);
     if (p.k === 'l') limb(p.x1 + ox, p.y1 + oy, p.x2 + ox, p.y2 + oy, p.w + grow, col);
     else ellipse(p.x + ox, p.y + oy, Math.max(1, p.r + grow / 2), Math.max(1, p.ry + grow / 2), col);
@@ -853,6 +857,25 @@ function drawFighter(f){
   const pose = currentPose(f);
   const dir = f.face;
 
+  // A reflection in the wet: not the rig again — a squashed smear of the
+   // colours it is made of, which is all you can read at this size anyway.
+  const wet = stage().wet;
+  if (wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss)){
+    const gy0 = Math.round(f.y + cam.shakeY) + 2;
+    const rx = Math.round(f.x - cam.x + cam.shakeX);
+    const w = Math.max(4, Math.round(9 * (f.sc || 1)));
+    const fade = wet * clamp(1 - f.z / 26, 0, 1);
+    const bands = [[s.pants, 4], [s.pants, 3], [s.shirt2, 3], [s.shirt, 3], [s.skin2, 2]];
+    let yy = gy0;
+    for (let i = 0; i < bands.length; i++){
+      const a = fade * (0.34 - i * 0.055);
+      if (a <= 0.01) break;
+      const wob = Math.round(Math.sin(T * 2.4 + f.id + i) * 1.2);
+      px(rx - w / 2 + wob, yy, w, bands[i][1], rgba(bands[i][0], a));
+      yy += bands[i][1];
+    }
+  }
+
   // contact shadow, soft-edged and tighter the higher you are
   const shR = 9 * sc * clamp(1 - f.z / 90, 0.45, 1);
   const gy = Math.round(f.y + cam.shakeY) + 1;
@@ -902,31 +925,39 @@ function drawFighter(f){
 
   rigParts.length = 0;
   // back limbs
-  rigLimb(hipX, hipY, X(pose.lB[0]), Y(pose.lB[1]), lw, tint(shade(pantsL, -18), dk), tint(shade(pantsD, -18), dk));
-  rigLimb(X(pose.lB[0]), Y(pose.lB[1]), X(pose.lB[2]), Y(pose.lB[3]), lw2, tint(shade(pantsL, -18), dk), tint(shade(pantsD, -18), dk));
-  rigLimb(shX, shY, X(pose.aB[0]), Y(pose.aB[1]), aw, tint(shade(shirtD, 10), dk), tint(shade(shirtD, -18), dk));
-  rigLimb(X(pose.aB[0]), Y(pose.aB[1]), X(pose.aB[2]), Y(pose.aB[3]), aw2, tint(skinD, dk), tint(shade(skinD, -20), dk));
+  rigLimb(hipX, hipY, X(pose.lB[0]), Y(pose.lB[1]), lw, tint(shade(pantsL, -18), dk), tint(shade(pantsD, -18), dk), 2);
+  rigLimb(X(pose.lB[0]), Y(pose.lB[1]), X(pose.lB[2]), Y(pose.lB[3]), lw2, tint(shade(pantsL, -18), dk), tint(shade(pantsD, -18), dk), 2);
+  rigLimb(shX, shY, X(pose.aB[0]), Y(pose.aB[1]), aw, tint(shade(shirtD, 10), dk), tint(shade(shirtD, -18), dk), 0);
+  rigLimb(X(pose.aB[0]), Y(pose.aB[1]), X(pose.aB[2]), Y(pose.aB[3]), aw2, tint(skinD, dk), tint(shade(skinD, -20), dk), 0);
 
   // trunk in three: hips, a waist, then the chest — that is the whole
   // difference between a body and a bar
   const tx = (t) => hipX + (shX - hipX) * t, ty = (t) => hipY + (shY - hipY) * t;
-  rigLimb(tx(0), ty(0), tx(0.42), ty(0.42), th * 0.86, tint(shirtL, dk), tint(shirtD, dk));
-  rigLimb(tx(0.36), ty(0.36), tx(0.74), ty(0.74), th * 0.74, tint(shirtL, dk), tint(shirtD, dk));
-  rigLimb(tx(0.68), ty(0.68), tx(1), ty(1), th, tint(shirtL, dk), tint(shirtD, dk));
-  rigLimb(shX, shY, headX, headY, Math.max(3, 3.4 * sc), tint(skinD, dk), tint(shade(skinD, -18), dk));
+  rigLimb(tx(0), ty(0), tx(0.42), ty(0.42), th * 0.86, tint(shirtL, dk), tint(shirtD, dk), 2);
+  rigLimb(tx(0.36), ty(0.36), tx(0.74), ty(0.74), th * 0.74, tint(shirtL, dk), tint(shirtD, dk), 1);
+  rigLimb(tx(0.68), ty(0.68), tx(1), ty(1), th, tint(shirtL, dk), tint(shirtD, dk), 1);
+  rigLimb(shX, shY, headX, headY, Math.max(3, 3.4 * sc), tint(skinD, dk), tint(shade(skinD, -18), dk), 1);
   // head
-  rigBall(headX, headY, hr, hr + (sc > 1 ? 1 : 0), tint(skinL, dk), tint(skinD, dk));
+  rigBall(headX, headY, hr, hr + (sc > 1 ? 1 : 0), tint(skinL, dk), tint(skinD, dk), 1);
   // front limbs
-  rigLimb(hipX, hipY, X(pose.lF[0]), Y(pose.lF[1]), lw, tint(pantsL, dk), tint(pantsD, dk));
-  rigLimb(X(pose.lF[0]), Y(pose.lF[1]), X(pose.lF[2]), Y(pose.lF[3]), lw2, tint(pantsL, dk), tint(pantsD, dk));
-  rigLimb(shX, shY, X(pose.aF[0]), Y(pose.aF[1]), aw, tint(shade(shirtL, 16), dk), tint(shade(shirtD, 14), dk));
-  rigLimb(X(pose.aF[0]), Y(pose.aF[1]), X(pose.aF[2]), Y(pose.aF[3]), aw2, tint(skinL, dk), tint(skinD, dk));
+  rigLimb(hipX, hipY, X(pose.lF[0]), Y(pose.lF[1]), lw, tint(pantsL, dk), tint(pantsD, dk), 2);
+  rigLimb(X(pose.lF[0]), Y(pose.lF[1]), X(pose.lF[2]), Y(pose.lF[3]), lw2, tint(pantsL, dk), tint(pantsD, dk), 2);
+  rigLimb(shX, shY, X(pose.aF[0]), Y(pose.aF[1]), aw, tint(shade(shirtL, 16), dk), tint(shade(shirtD, 14), dk), 1);
+  rigLimb(X(pose.aF[0]), Y(pose.aF[1]), X(pose.aF[2]), Y(pose.aF[3]), aw2, tint(skinL, dk), tint(skinD, dk), 1);
   // shoulder caps, so the arm has somewhere to hang from
-  rigBall(shX + dir * 0.5 * sc, shY, aw * 0.75, aw * 0.7, tint(shirtL, dk), tint(shirtD, dk));
+  rigBall(shX + dir * 0.5 * sc, shY, aw * 0.75, aw * 0.7, tint(shirtL, dk), tint(shirtD, dk), 1);
 
   drawRigPass(2, ink, false);          // outline — never dropped, it is the read
   drawRigPass(0, null, false);         // shadow tone
   if (!lean) drawRigPass(-2, null, true);   // lit edge
+  if (!lean){
+    // the street's own light, catching the edge that faces it, and the
+    // ground throwing a little of itself back up under the chin
+    const st = stage();
+    const flick = st.flick ? 0.75 + Math.sin(T * st.flick + f.id) * 0.25 : 1;
+    if (st.key) drawRigPass(-3, rgba(st.key, 0.42 * flick), false, LIT_X * 2, LIT_Y * 2, 1);
+    if (st.bounce) drawRigPass(-3, rgba(st.bounce, 0.5), false, 0, 2, 2);
+  }
 
   /* ---- detail, drawn over the top and never outlined ---- */
   // a fist, not a square: knuckles catch the light, the wrist does not
@@ -1009,6 +1040,19 @@ function tint(hex, amt){
   const k = hex + '|' + amt;
   let v = _tint[k];
   if (v === undefined){ v = _tint[k] = shade(hex, amt); }
+  return v;
+}
+
+/* A hex colour at an alpha, memoised — the light passes ask for the same
+   handful of these every frame. */
+const _rgba = {};
+function rgba(hex, a){
+  const k = hex + '|' + a.toFixed(2);
+  let v = _rgba[k];
+  if (v === undefined){
+    const n = parseInt(hex.slice(1), 16);
+    v = _rgba[k] = 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a.toFixed(2) + ')';
+  }
   return v;
 }
 
@@ -1287,6 +1331,7 @@ function applyHit(atk, def, a){
   }
   if (a.multi) spawnFx('spark', def.x + rr(-6, 6), def.y, def.z + rr(14, 30), '#fff0c0');
   if (a.heavy){
+    spawnFx('burst', (def.x + atk.x) / 2, def.y, def.z + 22 * def.sc, '#ffe9a0');
     spawnFx('ring', (def.x + atk.x) / 2, def.y, def.z + 22 * def.sc, '#fff0b0');
     for (let i = 0; i < 5; i++) spawnFx('chip', def.x, def.y, def.z + 20 + rr(0, 16), '#ffd88a');
     SFX.crunch();
@@ -1595,6 +1640,10 @@ function gainMeter(f, n){
 function startSuper(f){
   if (!f || f.stocks <= 0) return false;
   f.stocks--;
+  // While your stocks are capped the bar is pinned full and every hit's
+  // charge is thrown away — so spending one starts the next bar from empty
+  // rather than leaving it sitting full and re-banking on the first punch.
+  if (f.meter >= METER_MAX) f.meter = 0;
   f.tier = SUPER.tiers[rushTier(f) - 1];
   f.state = 'super'; f.superT = 0; f.superI = 0;
   f.invuln = Math.max(f.invuln, f.tier.dur + 0.3);
@@ -1661,6 +1710,7 @@ function superStrike(f, st){
     if (inRange && Math.abs(o.y - f.y) <= HIT_DEPTH + 7 && Math.abs(o.z - f.z) < 36) applyHit(f, o, def);
   }
   spawnFx('impact', f.x + f.face * 16, f.y, f.z + 26, st.finisher ? '#ffffff' : '#ffe27a');
+  if (st.finisher || st.all) spawnFx('burst', f.x + f.face * 10, f.y, f.z + 24, '#ffe27a');
   G.hitStop = Math.max(G.hitStop, st.finisher ? 0.15 : 0.035);
   shakeScreen(st.finisher ? 6 : 1.8, st.finisher ? 0.3 : 0.09);
   if (st.finisher){
@@ -1683,12 +1733,32 @@ function mkItem(kind, x, y, z){
   items.push(it);
   return it;
 }
+/* Pickups already lying about waiting to be walked over. */
+const LOOSE_MAX = 5;
+function loosePickups(){
+  let n = 0;
+  for (const it of items)
+    if (!it.gone && (it.kind === 'meat' || it.kind === 'cash' || it.kind === 'token')) n++;
+  return n;
+}
+
+/* A boss always pays. Everybody else pays rarely, and the horde stock —
+   of which there are forty in a wave — almost never, or the street ends up
+   carpeted in food. */
 function maybeDrop(f){
+  if (f.boss){ mkItem('meat', f.x, f.y, 0); mkItem('token', f.x + 12, f.y, 0); return; }
+  if (loosePickups() >= LOOSE_MAX) return;
+  const horde = (ENEMY[f.kind] || {}).horde;
   const r = rng();
-  if (f.boss) { mkItem('meat', f.x, f.y, 0); mkItem('token', f.x + 12, f.y, 0); return; }
-  if (r < 0.09) mkItem('token', f.x, f.y, 0);
-  else if (r < 0.24) mkItem('meat', f.x, f.y, 0);
-  else if (r < 0.42) mkItem('cash', f.x, f.y, 0);
+  if (horde){
+    if (r < 0.015) mkItem('token', f.x, f.y, 0);
+    else if (r < 0.04) mkItem('meat', f.x, f.y, 0);
+    else if (r < 0.075) mkItem('cash', f.x, f.y, 0);
+    return;
+  }
+  if (r < 0.04) mkItem('token', f.x, f.y, 0);
+  else if (r < 0.12) mkItem('meat', f.x, f.y, 0);
+  else if (r < 0.20) mkItem('cash', f.x, f.y, 0);
 }
 function dropWeapon(f){
   if (!f.weapon) return;
@@ -1749,8 +1819,10 @@ function breakItem(it, by){
   for (let i = 0; i < 7; i++) spawnFx('chip', it.x, it.y, it.z + 8, '#c8a060');
   if (by && by.team === 'p') addScore(by.pi, 20);
   const roll = rng();
-  if (roll < 0.18) mkItem('token', it.x, it.y, 4);
-  else if (roll < 0.6) mkItem(rng() < 0.5 ? 'meat' : 'cash', it.x, it.y, 4);
+  if (loosePickups() < LOOSE_MAX){
+    if (roll < 0.08) mkItem('token', it.x, it.y, 4);
+    else if (roll < 0.34) mkItem(rng() < 0.5 ? 'meat' : 'cash', it.x, it.y, 4);
+  }
 }
 
 function updateItems(dt){
@@ -1979,7 +2051,8 @@ function drawAttackSwoosh(f, X, Y, pose, sc){
 /* ------------------------------------------------------------------ fx */
 function spawnFx(kind, x, y, z, col, val){
   fx.push({ kind, x, y, z, col, val, t: 0,
-    life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : kind === 'ring' ? 0.34 : kind === 'quake' ? 0.5 : 0.5,
+    life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : kind === 'ring' ? 0.34
+      : kind === 'quake' ? 0.5 : kind === 'burst' ? 0.16 : 0.5,
     vx: kind === 'chip' ? rr(-70, 70) : 0, vz: kind === 'chip' ? rr(40, 130) : 0, r: 0 });
 }
 function updateFx(dt){
@@ -2008,6 +2081,12 @@ function drawFx(p){
     px(sx, sy, 2, 2, p.col);
   } else if (p.kind === 'dust'){
     ellipse(sx, sy, 3 + k * 5, 1 + k * 2, 'rgba(160,150,130,' + (0.45 * (1 - k)).toFixed(2) + ')');
+  } else if (p.kind === 'burst'){
+    // a hit that lights the street for a frame or two
+    const a = (1 - k) * (1 - k);
+    ellipse(sx, sy, 30 * (0.5 + k), 22 * (0.5 + k), rgba(p.col, 0.16 * a));
+    ellipse(sx, sy, 17 * (0.5 + k), 13 * (0.5 + k), rgba(p.col, 0.26 * a));
+    ellipse(sx, sy, 8 - k * 4, 7 - k * 3, rgba('#ffffff', 0.55 * a));
   } else if (p.kind === 'ring'){
     const r = 4 + k * 26;
     const n = 14;
@@ -2746,7 +2825,7 @@ function fireSlug(f){
    and it does not move again until everybody standing in it is not. */
 const STAGES = [
   {
-    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', bg: 'street', len: 1780, music: 0,
+    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', wet: 0.5, bg: 'street', len: 1780, music: 0,
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
       { x: 400,  spawn: [['grunt', 24], ['punk', 2]], cap: 18, items: [['crate', 120], ['crate', 200]] },
@@ -2756,7 +2835,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE NEIGHBOURHOOD', sub: 'EVERY BACK YARD OF IT', bg: 'junk', len: 1900, music: 1,
+    name: 'THE NEIGHBOURHOOD', sub: 'EVERY BACK YARD OF IT', key: '#ffb060', bounce: '#5a3a22', flick: 9, bg: 'junk', len: 1900, music: 1,
     gates: [
       { x: 0,    spawn: [['punk', 2], ['chain', 1]] },
       { x: 430,  spawn: [['grunt', 30], ['chain', 1], ['runner', 2]], cap: 22, items: [['pipe', 60], ['crate', 170]] },
@@ -2766,7 +2845,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CITY', sub: 'DOWN TO THE WATER', bg: 'docks', len: 2000, music: 2,
+    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', wet: 0.42, bg: 'docks', len: 2000, music: 2,
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
@@ -2777,7 +2856,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE STATE', sub: 'THE WHOLE WORKING END OF IT', bg: 'foundry', len: 2100, music: 3,
+    name: 'THE STATE', sub: 'THE WHOLE WORKING END OF IT', key: '#ffd06a', bounce: '#ff6a1e', flick: 4, bg: 'foundry', len: 2100, music: 3,
     hazard: { edge: 'front', kind: 'molten', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['punk', 2], ['bruiser', 1]] },
@@ -2789,7 +2868,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE NATION', sub: 'ON THE ROOF OF IT', bg: 'keep', len: 2200, music: 4,
+    name: 'THE NATION', sub: 'ON THE ROOF OF IT', key: '#ffc98a', bounce: '#8c4a3a', bg: 'keep', len: 2200, music: 4,
     hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['blade', 2], ['punk', 2]] },
@@ -2801,7 +2880,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', bg: 'docks', music: 2, len: 2200,
+    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', wet: 0.42, bg: 'docks', music: 2, len: 2200,
     grade: 'rgba(60,20,90,0.22)',
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
@@ -2813,7 +2892,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE WORLD', sub: 'AND THEN THERE IS NOBODY LEFT', bg: 'keep', music: 4, len: 2400,
+    name: 'THE WORLD', sub: 'AND THEN THERE IS NOBODY LEFT', key: '#ffb0b0', bounce: '#7a2438', bg: 'keep', music: 4, len: 2400,
     grade: 'rgba(90,20,40,0.20)',
     hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
     gates: [
@@ -3333,6 +3412,16 @@ function bgStreet(c){
     const gx = Math.floor(c / 130) + i, x = gx * 130 - c + hash(gx) * 40;
     ellipse(x, 172 + hash(gx + 2) * 26, 14, 4, 'rgba(70,90,130,0.20)');
     px(x - 6, 172 + hash(gx + 2) * 26, 9, 1, 'rgba(150,190,255,0.14)');
+  }
+  for (let i = 0; i < 6; i++){                        // the signs, smeared down the road
+    const gx = Math.floor(c * 0.55 / 82) + i, x = gx * 82 - c * 0.55;
+    if (x < -40 || x > VW + 10) continue;
+    const neon = hash(gx + 11) > 0.5;
+    const nc = neon ? '#ff2f7a' : '#2fc8e8';
+    for (let r = 0; r < 5; r++){
+      const wob = Math.round(Math.sin(T * 1.7 + gx + r * 0.6) * 1.6);
+      px(x + 24 + wob, 158 + r * 6, 26 - r * 3, 3, rgba(nc, 0.11 - r * 0.017));
+    }
   }
   for (let i = -1; i < 5; i++){                       // lamps, with a cone
     const gx = Math.floor(c * 0.55 / 140) + i, x = gx * 140 - c * 0.55;
