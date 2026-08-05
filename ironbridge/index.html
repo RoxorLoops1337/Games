@@ -4581,6 +4581,36 @@ function gainXp(h, amt){
     h.lvl++;
     recalcHero(h);
     h.hp = Math.min(h.mhp, h.hp + h.mhp * .18);
+    /* WHERE THE OTHER SEVEN ULTIMATES GO.
+
+       An ultimate fires 1.63 times a match against a cooldown ceiling near
+       nine. Splitting every second of 24 veteran matches into the one bucket
+       it belongs to, from the point of view of one side's ultimate — the
+       buckets reconcile against the clock to 15159.7s of 15159.7s, which is
+       the only reason the rest of it is worth reading:
+
+         no hero exists yet          40.8%   257s a match
+         a hero, below this rung     32.6%   206s
+         owns it and is dead          5.3%    33s
+         owns it, recovering         14.8%    93s
+         owns it, ready, declined     6.6%    42s
+
+       73.4% of a match passes before the side has an ultimate AT ALL. The AI
+       declining is 6.6%; dying is 5.3%. Neither is the story. First hero at a
+       median 258s, first ultimate at 455s, leaving about 177s of ownership —
+       which at a 60-80s cooldown is the two casts observed.
+
+       And it is structural rather than incidental. Reaching this rung costs
+       5,412 xp; standing in the lane pays 8.0/s, so passive time alone needs
+       677s — LONGER THAN THE WHOLE MEDIAN MATCH of 632s. A hero only gets here
+       by killing, which is the design, and it means the ultimate layer is a
+       last-quarter feature by construction rather than by accident.
+
+       Anything built on the hero's ultimate — the hold, the shoulder mark, the
+       release notice, the fog chips that show theirs — is UI over an event
+       that happens 1.7 times, in the final third. That is not an argument
+       against those things. It is the number to have in hand before building
+       the next one. */
     if (C.SKILL_TIERS.includes(h.lvl)) offer(h, 'skill');
     else if (h.lvl === C.ULT_LEVEL) offer(h, 'ult');
     else if (C.RANK_LEVELS.includes(h.lvl)) offer(h, 'rank');

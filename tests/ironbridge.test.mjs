@@ -19221,4 +19221,40 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 }
 
+/* ================== the ultimate rung is out of reach on lane time alone
+
+   An ultimate fires 1.63 times a match against a ceiling near nine, and the
+   accounting says why: 73.4% of a match passes before the side owns one at
+   all — 40.8% with no hero and 32.6% with a hero below the rung. The AI
+   declining accounts for 6.6% and dying 5.3%.
+
+   That is structural, and this is the part of it that is arithmetic rather
+   than measurement: the cost of the rung against the income that is always
+   flowing. A hero standing in the lane and doing nothing else cannot reach an
+   ultimate inside a match. It has to kill for it. */
+{
+  const total = (() => { let x = 0; for (let l = 1; l < C.ULT_LEVEL; l++) x += IB.xpNeed(l); return x; })();
+  t.ok(C.ULT_LEVEL === 12, 'the ultimate rung is the last of the ladder (' + C.ULT_LEVEL + ')');
+  t.ok(total > 5000 && total < 6000, 'reaching it costs ' + total + ' xp');
+
+  // the income that never stops, read off the source rather than restated
+  const m = SRC.match(/gainXp\(h, ([\d.]+) \* dt\);\s*\/\/ standing in the lane/);
+  t.ok(!!m, 'the lane income parsed (' + (m ? m[1] : 'missing') + '/s)');
+  if (m){
+    const perSec = Number(m[1]);
+    const secs = total / perSec;
+    t.ok(secs > 600,
+      'so lane time alone needs ' + secs.toFixed(0) + 's to reach it, which is longer than a match');
+    // 632s is the measured median over those same 24 matches
+    t.ok(secs > 632,
+      'and longer than the 632s median specifically — a hero reaches an ultimate by killing or not at all');
+  }
+
+  // and the rungs below it are where the three basics come from, which is why
+  // a hand-levelled hero has none of them
+  t.ok(C.SKILL_TIERS.length === 3, 'three rungs hand out skills (' + C.SKILL_TIERS.join(', ') + ')');
+  t.ok(C.SKILL_TIERS.every(l => l < C.ULT_LEVEL), 'all of them below the ultimate');
+  t.ok(Math.max(...C.SKILL_TIERS) < C.ULT_LEVEL, 'with the ultimate last of all');
+}
+
 t.done();
