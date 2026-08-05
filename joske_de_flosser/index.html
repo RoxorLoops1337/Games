@@ -678,17 +678,20 @@ const A = {                                   // animation frame tables
   jump: [P({ hipY: 19, lean: 1, lF: [7, 13, 9, 6], lB: [-6, 12, -8, 5], aF: [7, 28, 10, 30], aB: [-7, 28, -10, 30] })],
   fall: [P({ hipY: 19, lean: -1, lF: [8, 12, 12, 4], lB: [-7, 11, -9, 2], aF: [8, 27, 12, 26], aB: [-8, 27, -11, 26] })],
   punchA: [
-    P({ hipY: 19, lean: -1, aF: [4, 26, 2, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 19, lean: -2, aF: [3, 26, 0, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 2, aF: [9, 26, 17, 26], aB: [-6, 25, -2, 21], lF: [5, 10, 8, 0], lB: [-5, 10, -7, 0] }),
+    P({ hipY: 19, lean: 0, aF: [6, 26, 10, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 7, 0], lB: [-5, 10, -7, 0] }),
   ],
   punchB: [
-    P({ hipY: 19, lean: -1, aB: [-4, 26, -2, 24], aF: [6, 25, 3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 19, lean: -2, aB: [-4, 26, -2, 24], aF: [6, 25, 3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 2, aB: [9, 26, 17, 25], aF: [6, 25, 2, 21], lF: [5, 10, 8, 0], lB: [-5, 10, -7, 0] }),
+    P({ hipY: 19, lean: 0, aB: [6, 26, 10, 24], aF: [6, 25, 3, 22], lF: [4, 10, 7, 0], lB: [-5, 10, -7, 0] }),
   ],
   hook: [
     P({ hipY: 18, lean: -3, aF: [-2, 24, -8, 27], aB: [-6, 25, -4, 21], lF: [3, 10, 5, 0], lB: [-5, 10, -8, 0] }),
     P({ hipY: 19, lean: 1, aF: [6, 30, 12, 30], aB: [-5, 25, -3, 22], lF: [4, 10, 7, 0], lB: [-5, 10, -8, 0] }),
     P({ hipY: 19, lean: 4, aF: [12, 27, 19, 23], aB: [-4, 24, 0, 20], lF: [6, 10, 10, 0], lB: [-5, 10, -8, 0] }),
+    P({ hipY: 18, lean: 5, aF: [15, 23, 17, 16], aB: [-2, 24, 3, 21], lF: [7, 10, 12, 0], lB: [-4, 10, -7, 0] }),
   ],
   kick: [
     P({ hipY: 19, lean: -2, lF: [4, 13, 3, 6], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-7, 26, -9, 22] }),
@@ -701,13 +704,15 @@ const A = {                                   // animation frame tables
     P({ hipY: 19, lean: -1, lF: [6, 9, 11, 2], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-6, 26, -8, 22] }),
   ],
   midkick: [
-    P({ hipY: 19, lean: -2, lF: [4, 13, 3, 8], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-7, 26, -9, 22] }),
+    P({ hipY: 19, lean: -2, lF: [6, 15, 3, 12], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 21], aB: [-7, 26, -9, 22] }),
     P({ hipY: 20, lean: -4, lF: [11, 15, 21, 15], lB: [-3, 10, -5, 0], aF: [2, 26, -2, 23], aB: [-9, 26, -12, 24] }),
+    P({ hipY: 20, lean: -3, lF: [8, 14, 12, 11], lB: [-4, 10, -6, 0], aF: [3, 25, 0, 22], aB: [-8, 26, -10, 23] }),
     P({ hipY: 19, lean: -1, lF: [6, 12, 9, 5], lB: [-4, 10, -6, 0], aF: [4, 25, 2, 21], aB: [-7, 26, -9, 22] }),
   ],
   highkick: [
-    P({ hipY: 19, lean: -3, lF: [3, 14, 1, 10], lB: [-4, 10, -6, 0], aF: [3, 25, 0, 21], aB: [-7, 26, -10, 23] }),
+    P({ hipY: 19, lean: -3, lF: [6, 17, 2, 14], lB: [-4, 10, -6, 0], aF: [3, 25, 0, 21], aB: [-7, 26, -10, 23] }),
     P({ hipY: 21, lean: -6, headX: -2, lF: [10, 21, 17, 30], lB: [-3, 10, -6, 0], aF: [1, 26, -4, 25], aB: [-9, 27, -13, 27] }),
+    P({ hipY: 20, lean: -4, lF: [9, 19, 15, 22], lB: [-3, 10, -6, 0], aF: [2, 26, -2, 24], aB: [-8, 26, -12, 25] }),
     P({ hipY: 19, lean: -2, lF: [7, 14, 11, 8], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 22], aB: [-7, 26, -10, 23] }),
   ],
   jumpkick: [P({ hipY: 19, lean: -3, lF: [10, 16, 20, 15], lB: [-6, 12, -10, 8], aF: [4, 27, 0, 24], aB: [-8, 27, -12, 26] })],
@@ -1069,14 +1074,14 @@ function shade(hex, amt){
    far it reaches and what it does on contact.  Nothing about a move is
    hidden in the state machine — the state machine only runs the table. */
 const ATK = {
-  jab:      { anim: 'punchA', dur: 0.24, hit: [0.07, 0.14], dmg: 6,  reach: 21, kb: 34,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.07], [1, 0.24]] },
-  cross:    { anim: 'punchB', dur: 0.25, hit: [0.07, 0.15], dmg: 7,  reach: 22, kb: 38,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.07], [1, 0.25]] },
-  hook:     { anim: 'hook',   dur: 0.44, hit: [0.14, 0.25], dmg: 14, reach: 26, kb: 165, lift: 120, down: true,  sfx: 'heavy', swoosh: 'hook', heavy: true, seq: [[0, 0.12], [1, 0.2], [2, 0.44]] },
+  jab:      { anim: 'punchA', dur: 0.24, hit: [0.07, 0.14], dmg: 6,  reach: 21, kb: 34,  lift: 0,   down: false, sfx: 'hit',   swoosh: 'streak', seq: [[0, 0.06], [1, 0.15], [2, 0.24]] },
+  cross:    { anim: 'punchB', dur: 0.25, hit: [0.07, 0.15], dmg: 7,  reach: 22, kb: 38,  lift: 0,   down: false, sfx: 'hit',   swoosh: 'streak', seq: [[0, 0.06], [1, 0.16], [2, 0.25]] },
+  hook:     { anim: 'hook',   dur: 0.44, hit: [0.14, 0.25], dmg: 14, reach: 26, kb: 165, lift: 120, down: true,  sfx: 'heavy', swoosh: 'hook', heavy: true, seq: [[0, 0.12], [1, 0.2], [2, 0.32], [3, 0.44]] },
   kick:     { anim: 'kick',   dur: 0.42, hit: [0.13, 0.23], dmg: 11, reach: 29, kb: 105, lift: 30,  down: false, sfx: 'heavy', seq: [[0, 0.12], [1, 0.26], [2, 0.42]] },
   /* the kick chain: shin, body, head — the last one launches */
   lowkick:  { anim: 'lowkick', dur: 0.30, hit: [0.09, 0.17], dmg: 7,  reach: 27, kb: 55,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.09], [1, 0.21], [2, 0.3]] },
-  midkick:  { anim: 'midkick', dur: 0.40, hit: [0.13, 0.23], dmg: 11, reach: 30, kb: 115, lift: 28,  down: false, sfx: 'heavy', swoosh: 'mid', seq: [[0, 0.12], [1, 0.26], [2, 0.4]] },
-  highkick: { anim: 'highkick', dur: 0.52, hit: [0.17, 0.29], dmg: 16, reach: 31, kb: 195, lift: 140, down: true, sfx: 'heavy', swoosh: 'high', heavy: true, seq: [[0, 0.15], [1, 0.32], [2, 0.52]] },
+  midkick:  { anim: 'midkick', dur: 0.40, hit: [0.13, 0.23], dmg: 11, reach: 30, kb: 115, lift: 28,  down: false, sfx: 'heavy', swoosh: 'mid', seq: [[0, 0.11], [1, 0.24], [2, 0.32], [3, 0.4]] },
+  highkick: { anim: 'highkick', dur: 0.52, hit: [0.17, 0.29], dmg: 16, reach: 31, kb: 195, lift: 140, down: true, sfx: 'heavy', swoosh: 'high', heavy: true, seq: [[0, 0.14], [1, 0.3], [2, 0.4], [3, 0.52]] },
   jumpkick: { anim: 'jumpkick', dur: 0.5, hit: [0.04, 0.42], dmg: 15, reach: 27, kb: 165, lift: 120, down: true, sfx: 'heavy', air: true, seq: [[0, 0.5]] },
   jumppunch:{ anim: 'jumppunch', dur: 0.4, hit: [0.04, 0.3], dmg: 9, reach: 22, kb: 70,  lift: 20,  down: false, sfx: 'hit',   air: true, seq: [[0, 0.4]] },
   whirl:    { anim: 'whirl',  dur: 0.58, hit: [0.12, 0.42], dmg: 10, reach: 27, kb: 150, lift: 110, down: true,  sfx: 'heavy', all: true, cost: 4, swoosh: 'spin', seq: [[0, 0.16], [1, 0.3], [2, 0.58]] },
@@ -2028,6 +2033,7 @@ const SWOOSH = {
   high:   { pivot: 'hip', r: 24, a0: 195, a1: 62 },
   spin:   { pivot: 'sh',  r: 19, a0: 0,   a1: 355 },
   weapon: { pivot: 'hand', r: 0, a0: 0, a1: 0 },
+  streak: { pivot: 'sh', r: 0, a0: 0, a1: 0 },
 };
 
 function drawAttackSwoosh(f, X, Y, pose, sc){
@@ -2038,6 +2044,16 @@ function drawAttackSwoosh(f, X, Y, pose, sc){
   const fade = clamp(1.3 - k, 0, 1) * 0.5;
   const sp = SWOOSH[a.swoosh];
   const col = 'rgba(255,250,225,' + fade.toFixed(2) + ')';
+  if (a.swoosh === 'streak'){        // a jab leaves a line, not an arc
+    const hx = X(pose.aF[2]), hy = Y(pose.aF[3]);
+    const shx = X(pose.hipX + pose.lean), shy = Y(pose.hipY + pose.sh);
+    for (let i = 1; i <= 3; i++){
+      const t = i / 4;
+      limb(lerp(shx, hx, t), lerp(shy, hy, t), hx, hy, Math.max(1, 2 * sc - i * 0.4),
+        'rgba(255,250,225,' + (fade * (0.5 - i * 0.12)).toFixed(2) + ')');
+    }
+    return;
+  }
   if (a.swoosh === 'weapon'){
     const hx = X(pose.aF[2]), hy = Y(pose.aF[3]);
     drawSwoosh(hx, hy, (W_LEN[f.weapon] || 14) * sc, a.arc[0], weaponAngle(f, 0), f.face, col);

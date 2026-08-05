@@ -510,6 +510,35 @@ test('the hit counter counts hits, not chain position', () => {
   assert(p.hits === 0, 'and the counter lapses');
 });
 
+test('the moves you throw most have frames to spare', () => {
+  const api = boot();
+  for (const key of ['jab', 'cross', 'hook', 'midkick', 'highkick']){
+    const a = api.ATK[key];
+    const frames = new Set(a.seq.map(([f]) => f));
+    assert(frames.size >= 3, `${key} only has ${frames.size} distinct frames`);
+    assert(api.A[a.anim].length >= frames.size, `${key} references a frame its animation lacks`);
+    let prev = 0;
+    for (const [f, t] of a.seq){
+      assert(t > prev, `${key} frame times must move forward`);
+      assert(f < api.A[a.anim].length, `${key} frame ${f} is out of range`);
+      prev = t;
+    }
+  }
+});
+
+test('a kick folds before it goes, and the punch comes back', () => {
+  const api = boot();
+  const knee = (pose) => pose.lF[1];
+  const foot = (pose) => pose.lF[2];
+  const kick = api.A.highkick;
+  assert(knee(kick[0]) > knee(kick[3]), 'the chamber lifts the knee above where it ends');
+  assert(foot(kick[1]) > foot(kick[0]), 'and the foot travels out from it');
+  const punch = api.A.punchA;
+  const fist = (pose) => pose.aF[2];
+  assert(fist(punch[1]) > fist(punch[2]), 'the fist recoils from full extension');
+  assert(fist(punch[2]) > fist(punch[0]), 'but does not snap all the way home');
+});
+
 /* ---------------------------------------------------------- swing arcs */
 test('a bat swings through an arc instead of teleporting', () => {
   const api = boot();
