@@ -1595,6 +1595,10 @@ function gainMeter(f, n){
 function startSuper(f){
   if (!f || f.stocks <= 0) return false;
   f.stocks--;
+  // While your stocks are capped the bar is pinned full and every hit's
+  // charge is thrown away — so spending one starts the next bar from empty
+  // rather than leaving it sitting full and re-banking on the first punch.
+  if (f.meter >= METER_MAX) f.meter = 0;
   f.tier = SUPER.tiers[rushTier(f) - 1];
   f.state = 'super'; f.superT = 0; f.superI = 0;
   f.invuln = Math.max(f.invuln, f.tier.dur + 0.3);
@@ -1683,12 +1687,32 @@ function mkItem(kind, x, y, z){
   items.push(it);
   return it;
 }
+/* Pickups already lying about waiting to be walked over. */
+const LOOSE_MAX = 5;
+function loosePickups(){
+  let n = 0;
+  for (const it of items)
+    if (!it.gone && (it.kind === 'meat' || it.kind === 'cash' || it.kind === 'token')) n++;
+  return n;
+}
+
+/* A boss always pays. Everybody else pays rarely, and the horde stock —
+   of which there are forty in a wave — almost never, or the street ends up
+   carpeted in food. */
 function maybeDrop(f){
+  if (f.boss){ mkItem('meat', f.x, f.y, 0); mkItem('token', f.x + 12, f.y, 0); return; }
+  if (loosePickups() >= LOOSE_MAX) return;
+  const horde = (ENEMY[f.kind] || {}).horde;
   const r = rng();
-  if (f.boss) { mkItem('meat', f.x, f.y, 0); mkItem('token', f.x + 12, f.y, 0); return; }
-  if (r < 0.09) mkItem('token', f.x, f.y, 0);
-  else if (r < 0.24) mkItem('meat', f.x, f.y, 0);
-  else if (r < 0.42) mkItem('cash', f.x, f.y, 0);
+  if (horde){
+    if (r < 0.015) mkItem('token', f.x, f.y, 0);
+    else if (r < 0.04) mkItem('meat', f.x, f.y, 0);
+    else if (r < 0.075) mkItem('cash', f.x, f.y, 0);
+    return;
+  }
+  if (r < 0.04) mkItem('token', f.x, f.y, 0);
+  else if (r < 0.12) mkItem('meat', f.x, f.y, 0);
+  else if (r < 0.20) mkItem('cash', f.x, f.y, 0);
 }
 function dropWeapon(f){
   if (!f.weapon) return;
@@ -1749,8 +1773,10 @@ function breakItem(it, by){
   for (let i = 0; i < 7; i++) spawnFx('chip', it.x, it.y, it.z + 8, '#c8a060');
   if (by && by.team === 'p') addScore(by.pi, 20);
   const roll = rng();
-  if (roll < 0.18) mkItem('token', it.x, it.y, 4);
-  else if (roll < 0.6) mkItem(rng() < 0.5 ? 'meat' : 'cash', it.x, it.y, 4);
+  if (loosePickups() < LOOSE_MAX){
+    if (roll < 0.08) mkItem('token', it.x, it.y, 4);
+    else if (roll < 0.34) mkItem(rng() < 0.5 ? 'meat' : 'cash', it.x, it.y, 4);
+  }
 }
 
 function updateItems(dt){
