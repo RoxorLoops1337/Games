@@ -19778,4 +19778,101 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(Math.abs(cme.spellCd[0] - d.cd) < 1e-6,
     'and costing its own full recovery (' + cme.spellCd[0].toFixed(0) + 's)');
 }
+/* ================== Countermand stops being pure denial
+
+   Two rounds established what was wrong with it. It measured 37.2% over 320
+   matches, the weakest order in the set. It denied 5,100 seconds of their
+   order time for 18,840 of its own — a ratio of 0.27 where 1.00 is an even
+   trade — and cutting its recovery 120s to 75s moved the win rate 0.6 points,
+   0.2 standard errors. The price was never the problem. Denial of a resource
+   spent a handful of times a match is worth very little at any price.
+
+   So the effect changed rather than the number: every second it puts on theirs
+   now comes off yours, by the same rule read the other way. An order already
+   recovering, and only that, on both sides.
+
+   Measured over the same 40 matches: 153 casts, and on 87.6% of them the
+   refund had something of mine to shorten, taking off 17.9 seconds per cast —
+   2,746 seconds across the run, about 69 a match. The mechanic lands; it is
+   not a line on a card describing something that rarely happens.
+
+   The win rate went 37.2% to 39.7%: +2.5 points, 0.6 standard errors on 320
+   matches. That is BELOW what this rig resolves — roughly 8 points — and is
+   not claimed. Resolving 2.5 points would need about 3,200 matches per arm,
+   fifty times this run. What is asserted below is the arithmetic and the
+   symmetry, both of which are exact. */
+{
+  const csrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const cm = csrc.match(/const COUNTER = \{ add:(\d+) \}/);
+  t.ok(!!cm, 'the amount it moves parsed off the source (' + (cm ? cm[1] : 'missing') + ')');
+  const add = cm ? Number(cm[1]) : 0;
+
+  const mk = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    const me = IB.G.sides[0], foe = IB.G.sides[1];
+    IB.chooseSpell(me, 0, 'counter'); IB.chooseSpell(me, 1, 'muster');
+    IB.chooseSpell(foe, 0, 'bombard'); IB.chooseSpell(foe, 1, 'pitch');
+    return { me, foe };
+  };
+
+  // the two halves, one cast, same amount each way
+  {
+    const { me, foe } = mk(8600);
+    foe.spellCd[0] = 40; me.spellCd[1] = 60;
+    t.ok(IB.castSpell(me, { slot:0 }) === null, 'it fires with one of theirs recovering');
+    t.ok(Math.abs(foe.spellCd[0] - (40 + add)) < 1e-6,
+      'theirs goes out by ' + add + 's (' + foe.spellCd[0].toFixed(0) + ')');
+    t.ok(Math.abs(me.spellCd[1] - (60 - add)) < 1e-6,
+      'and mine comes in by the same ' + add + 's (' + me.spellCd[1].toFixed(0) + ')');
+    t.ok(Math.abs(me.spellCd[0] - IB.SPELL.counter.cd) < 1e-6,
+      'while Countermand itself pays full price — it cannot shorten its own recovery');
+  }
+
+  /* The same rule read both ways: a READY order is not recovering, and there
+     is nothing in it to lengthen or to shorten. That symmetry is the whole
+     design, so it is checked on both sides rather than assumed from one. */
+  {
+    const { me, foe } = mk(8601);
+    foe.spellCd[0] = 30; me.spellCd[1] = 0;
+    IB.castSpell(me, { slot:0 });
+    t.ok(me.spellCd[1] === 0, 'an order of mine held ready is left alone');
+  }
+  {
+    const { me, foe } = mk(8602);
+    foe.spellCd[0] = 0; foe.spellCd[1] = 0; me.spellCd[1] = 50;
+    t.ok(typeof IB.castSpell(me, { slot:0 }) === 'string',
+      'and against a full ready hand it is still refused outright');
+    t.ok(Math.abs(me.spellCd[1] - 50) < 1e-6, 'so a refusal refunds nothing either');
+    t.ok(me.spellCd[0] === 0, 'and costs nothing');
+  }
+
+  // never below zero — a recovery shorter than the refund lands on ready
+  {
+    const { me, foe } = mk(8603);
+    foe.spellCd[0] = 30; me.spellCd[1] = Math.max(1, add - 4);
+    IB.castSpell(me, { slot:0 });
+    t.ok(me.spellCd[1] === 0, 'a recovery shorter than the refund lands on zero, not under it');
+    t.ok(IB.spellReady(me, 1) === true, 'which means ready, not negative');
+  }
+
+  /* What the trade is now, as arithmetic. Denial alone had a ceiling of
+     2 x add / cd; the refund adds up to the same again on my own side, so the
+     ceiling doubles without the recovery moving at all. */
+  const d = IB.SPELL.counter;
+  const denyCeil = (IB.SLOTS_AT_START * add) / d.cd;
+  const bothCeil = (2 * IB.SLOTS_AT_START * add) / d.cd;
+  t.ok(d.cd === 120, 'the recovery is untouched at ' + d.cd + 's — that was tried and did nothing');
+  t.ok(Math.abs(bothCeil - 2 * denyCeil) < 1e-9,
+    'the ceiling doubles, ' + denyCeil.toFixed(2) + ' to ' + bothCeil.toFixed(2) +
+    ' slot-seconds per slot-second');
+  t.ok(bothCeil > 0.8, 'which brings it near an even trade at last (' + bothCeil.toFixed(2) + ')');
+
+  // and the card says both halves, because a card that says one is a lie
+  t.ok(/25 seconds longer/.test(d.d), 'the card still states what it does to theirs');
+  t.ok(/sooner/.test(d.d), 'and now states what it does for yours');
+  t.ok(/held ready|holding ready/.test(d.d), 'and that neither half touches a ready order');
+  t.ok(/time it/i.test(d.d), 'while still telling the player the moment is the decision');
+  t.ok(d.bound === 'call', 'which is what its bound says too');
+}
+
 t.done();

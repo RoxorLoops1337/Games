@@ -3027,7 +3027,7 @@ const SPELLS = [
        a tile that does nothing at all when pressed. */
     count:(s) => counterCatch(s),
     none:'Nothing of theirs is recovering — Countermand would be wasted.',
-    d:'Every order of theirs that is still recovering takes 25 seconds longer. Nothing at all to one they are holding ready — time it to their cast.' },
+    d:'Every order of theirs that is still recovering takes 25 seconds longer, and every one of yours comes back 25 sooner. Neither half touches an order held ready — time it to their cast.' },
 ];
 const SPELL = {}; for (const p of SPELLS) SPELL[p.id] = p;
 /* WHAT ACTUALLY LIMITS EACH ONE.
@@ -3397,7 +3397,29 @@ const SPELL_CAST = {
     // is nothing running to hold back, and 120 seconds is far too long to pay
     // for nothing — the refusal is also the lesson about when to give it.
     if (!n) return 'nothing of theirs is recovering to hold back';
+    /* ...and the same hand, the other way round, on your own side of the room.
+       Measured before this existed: it denied 5,100 seconds of their order time
+       for 18,840 seconds of its own, a ratio of 0.27 against an even trade of
+       1.00 — and cutting its recovery to 75s moved its win rate 0.6 points,
+       0.2 standard errors. The price was never the problem. Pure denial of a
+       resource spent a handful of times a match is simply worth very little.
+
+       So it stops being pure denial. Every second it puts on theirs comes off
+       yours, by the same rule read in the same direction: an order already
+       recovering, and only that. Countermand's own slot is not among them —
+       castSpell sets that AFTER this returns, so it still reads as ready here
+       and the order cannot shorten itself.
+
+       No new state and nothing new in the hash: spellCd was already both. */
+    let mine = 0;
+    for (let i = 0; i < s.slots; i++){
+      if (!s.spells[i] || s.spellCd[i] <= 0) continue;
+      s.spellCd[i] = Math.max(0, s.spellCd[i] - COUNTER.add);
+      mine++;
+    }
     castTell(s, 'Countermand', n, 'of their orders set back');
+    if (mine && forMe(s.i))
+      fxToast('...and ' + NUM_WORD(mine) + ' of yours ' + COUNTER.add + 's sooner.', 'good', TOAST_W.cast);
     if (forMe(foe.i))
       fxToast('Countermanded — your orders are ' + COUNTER.add + 's further off.', 'bad', TOAST_W.cast);
     return null;
