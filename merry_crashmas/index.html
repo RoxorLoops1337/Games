@@ -529,7 +529,7 @@ const car = {
   z: 0, vz: 0, roll: 0, rollV: 0, air: 0, airT: 0, rollAcc: 0, gore: 0, bloody: 0,
 };
 
-const aim = { active: false, x: ANCHOR.x, y: ANCHOR.y, power: 0 };
+const aim = { active: false, x: ANCHOR.x, y: ANCHOR.y, power: 0, dx: 0, dy: 0 };
 
 const props = [];       // stalls, trees, statues…
 const people = [];      // shoppers
@@ -1041,7 +1041,10 @@ function nextCar(){
 function launch(px, py){
   if (G.phase !== 'aim') return false;
   const len = Math.hypot(px, py);
-  if (len < 26) return false;                  // a tap is not a launch
+  if (len < 26){                               // a tap is not a launch
+    setTxt('hint', 'PULL FURTHER BACK');
+    return false;
+  }
   if (px > -20){
     // pulling from the wrong side would fire away from the market — refuse it
     // rather than spend a car on it
@@ -2151,23 +2154,57 @@ function camTarget(){
   if (G.phase === 'aim' || G.phase === 'menu' || G.phase === 'brief'){
     return { x: ANCHOR.x + 330, y: ANCHOR.y, z: 1500 };
   }
+  // lead scales with speed: at 1900px/s the camera sits ~570px down the road
+  // rather than 320, which is the difference between seeing what you are about
+  // to hit and arriving at it
   const sp = carSpeed();
-  return { x: car.x + car.vx * 0.17, y: car.y + car.vy * 0.17, z: clamp(880 + sp * 0.24, 880, 1300) };
+  const lead = 0.17 + sp / 9000;
+  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead, z: clamp(880 + sp * 0.24, 880, 1300) };
 }
+
+/* How far past the fence the camera may look. Hard-clamping to the fence meant
+   the last halfW of every market — exactly where genMarket pulls the fence in
+   to bounce a long shot back into the crowd — could never be centred, so the
+   car spent the climax pinned in the outer quarter of the frame and, at full
+   power, went off the edge entirely. Beyond the fence is drawn as sky. */
+const CAM_OVERSHOOT = 0.55;
 
 function camApply(t, k){
   cam.tz = lerp(cam.tz, t.z, k);
-  cam.s = VH / cam.tz;
+  // a narrow window pulls back rather than cropping the market away
+  cam.s = Math.min(VH / cam.tz, VW / (cam.tz * 1.6));
   const halfW = VW / cam.s / 2, halfH = VH / cam.s / 2;
   const bw = bounds.x1 - bounds.x0, bh = bounds.y1 - bounds.y0;
-  const cx = halfW * 2 >= bw ? (bounds.x0 + bounds.x1) / 2 : clamp(t.x, bounds.x0 + halfW, bounds.x1 - halfW);
-  const cy = halfH * 2 >= bh ? (bounds.y0 + bounds.y1) / 2 : clamp(t.y, bounds.y0 + halfH, bounds.y1 - halfH);
+  const ovx = halfW * CAM_OVERSHOOT, ovy = halfH * CAM_OVERSHOOT;
+  const cx = halfW * 2 >= bw + ovx * 2 ? (bounds.x0 + bounds.x1) / 2
+    : clamp(t.x, bounds.x0 + halfW - ovx, bounds.x1 - halfW + ovx);
+  const cy = halfH * 2 >= bh + ovy * 2 ? (bounds.y0 + bounds.y1) / 2
+    : clamp(t.y, bounds.y0 + halfH - ovy, bounds.y1 - halfH + ovy);
   cam.x = lerp(cam.x, cx, k);
   cam.y = lerp(cam.y, cy, k);
+
+  /* Whatever the bounds and the lerp would prefer, there is always road in
+     front of the car. The leash is asymmetric on purpose: the camera may run a
+     long way ahead (that is the point of the speed lead — more of the market in
+     view), but it may only trail far enough back to leave AHEAD_MIN screen px
+     of road in front, which is what stops the car reaching the right edge at
+     the fence. Beyond the fence is drawn as sky, which is a fair price. */
+  if (G.phase === 'drive'){
+    const aheadMin = Math.min(620, VW * 0.47);
+    const maxTrail = Math.max(20, (VW / 2 - aheadMin) / cam.s);
+    cam.x = clamp(cam.x, car.x - maxTrail, car.x + halfW * 0.6);
+    const aheadY = Math.min(620, VH * 0.47);
+    const trailY = Math.max(20, (VH / 2 - aheadY) / cam.s);
+    cam.y = clamp(cam.y, car.y - trailY - halfH * 0.2, car.y + trailY + halfH * 0.2);
+  }
 }
 
 function camSnap(){ const t = camTarget(); cam.tz = t.z; camApply(t, 1); }
-function stepCam(dt){ camApply(camTarget(), 1 - Math.exp(-6 * dt)); }
+function stepCam(dt){
+  // the faster it goes the harder the camera works to stay ahead of it
+  const rate = G.phase === 'drive' && carSpeed() > 900 ? 9 : 6;
+  camApply(camTarget(), 1 - Math.exp(-rate * dt));
+}
 
 /* ---------- main step ---------- */
 function update(dt){
@@ -3365,18 +3402,22 @@ function drawHUD(){
   if (G.phase === 'replay') return;
   screenTransform();
   const pad = 14;
+  // a phone in portrait had the score panel and the car count on top of each
+  // other — everything narrows rather than overlapping
+  const narrow = VW < 560;
+  const panelW = narrow ? 168 : 250;
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(8,14,26,.55)';
-  roundRect(pad, pad, 250, 74, 12); ctx.fill();
+  roundRect(pad, pad, panelW, narrow ? 62 : 74, 12); ctx.fill();
   ctx.fillStyle = '#ffd34d';
-  ctx.font = '900 32px system-ui';
-  ctx.fillText(fmt(G.levelScore), pad + 14, pad + 42);
+  ctx.font = '900 ' + (narrow ? 24 : 32) + 'px system-ui';
+  ctx.fillText(fmt(G.levelScore), pad + 12, pad + (narrow ? 32 : 42));
   ctx.fillStyle = '#8fa6c6';
-  ctx.font = '700 12px system-ui';
-  ctx.fillText('TARGET ' + fmt(G.target), pad + 14, pad + 62);
+  ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
+  ctx.fillText('TARGET ' + fmt(G.target), pad + 12, pad + (narrow ? 48 : 62));
 
   // target progress
-  const bw = 222, bh = 7, bx = pad + 14, by = pad + 68;
+  const bw = panelW - 28, bh = 7, bx = pad + 12, by = pad + (narrow ? 52 : 68);
   ctx.fillStyle = 'rgba(255,255,255,.12)';
   roundRect(bx, by, bw, bh, 4); ctx.fill();
   const prog = clamp(G.levelScore / Math.max(1, G.target), 0, 1);
@@ -3385,24 +3426,25 @@ function drawHUD(){
 
   // goals
   if (G.goals){
-    ctx.font = '700 12px system-ui';
+    ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
     for (let i = 0; i < G.goals.length; i++){
-      const g = G.goals[i], gy = pad + 96 + i * 18;
+      const g = G.goals[i], gy = pad + (narrow ? 78 : 96) + i * (narrow ? 15 : 18);
       ctx.fillStyle = g.done ? 'rgba(142,255,176,.95)' : 'rgba(190,205,228,.75)';
       ctx.fillText((g.done ? '✓ ' : '○ ') + g.text, pad + 14, gy);
     }
   }
 
   // cars remaining
+  const carsW = narrow ? 118 : 190;
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(8,14,26,.55)';
-  roundRect(VW - pad - 190, pad, 190, 48, 12); ctx.fill();
+  roundRect(VW - pad - carsW, pad, carsW, narrow ? 40 : 48, 12); ctx.fill();
   ctx.fillStyle = '#cfdcee';
-  ctx.font = '700 12px system-ui';
-  ctx.fillText('CARS LEFT', VW - pad - 16, pad + 19);
+  ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
+  ctx.fillText('CARS LEFT', VW - pad - 12, pad + (narrow ? 16 : 19));
   const live = Math.max(0, G.carsLeft - (G.phase === 'drive' || G.phase === 'aim' ? 1 : 0));
   for (let i = 0; i < G.cars; i++){
-    const x = VW - pad - 20 - i * 24;
+    const x = VW - pad - (narrow ? 12 : 20) - i * (narrow ? 17 : 24);
     ctx.fillStyle = i < (G.phase === 'results' ? 0 : Math.max(0, G.carsLeft)) ? '#e8463a' : 'rgba(255,255,255,.16)';
     roundRect(x - 18, pad + 27, 18, 11, 3); ctx.fill();
   }
@@ -3694,13 +3736,17 @@ function screenToWorld(sx, sy){
   return { x: (sx - VW / 2) / cam.s + cam.x, y: (sy - VH / 2) / cam.s + cam.y };
 }
 
+/* The sling reads the drag, not where the finger landed. Absolute aiming meant
+   the reachable pull depended on where the anchor happened to sit on screen —
+   on a 390-wide phone that was 4% power, i.e. no gesture could launch the car
+   at all — and it also let a stray tap 300px left of the car spend one at 70%. */
 function pointerDown(sx, sy){
   audioInit();
   if (G.phase === 'replay'){ skipReplay(); return; }
   if (G.phase === 'aim'){
     aim.active = true;
-    const w = screenToWorld(sx, sy);
-    aim.x = w.x; aim.y = w.y;
+    aim.dx = sx; aim.dy = sy;              // where the drag started, in screen px
+    aim.x = ANCHOR.x; aim.y = ANCHOR.y;
     return;
   }
   if (G.phase === 'drive') doBoost();
@@ -3708,8 +3754,8 @@ function pointerDown(sx, sy){
 
 function pointerMove(sx, sy){
   if (!aim.active || G.phase !== 'aim') return;
-  const w = screenToWorld(sx, sy);
-  aim.x = w.x; aim.y = w.y;
+  aim.x = ANCHOR.x + (sx - aim.dx) / cam.s;
+  aim.y = ANCHOR.y + (sy - aim.dy) / cam.s;
 }
 
 function pointerUp(){
