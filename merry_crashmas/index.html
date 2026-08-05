@@ -251,17 +251,17 @@ const PROPS = {
 
 /* ---------- levels ---------- */
 const LEVELS = [
-  { name:'OPENING NIGHT',        seed:1207, cars:3, rows:2, span:0.48, crowd:0.85, par:0.30,
+  { name:'OPENING NIGHT',        seed:1207, cars:3, rows:2, span:0.48, crowd:1.05, par:0.30,
     flavour:'A quiet little market. Nobody is expecting a car.' },
   { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.24,
     flavour:'Everyone is three mugs deep. Reaction times are excellent.' },
-  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.32,
+  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.00, par:0.26,
     flavour:'Long straight aisles. Build the combo, do not stop.' },
-  { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.35, par:0.26,
+  { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.10, par:0.26,
     flavour:'The town tree is worth a fortune. So is the crowd around it.' },
-  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.22,
+  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.15, par:0.28,
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
-  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.22,
+  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.35, par:0.22,
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
 ];
 
@@ -432,7 +432,7 @@ function genMarket(lv){
     }
     // crowd walking the aisle
     const aisleLen = x1 - x0;
-    const n = Math.round(aisleLen / 150 * lv.crowd);
+    const n = Math.round(aisleLen / 78 * lv.crowd);
     for (let i = 0; i < n; i++){
       addPerson(rr(x0 - 60, x1 + 40), cy + rr(-72, 72));
     }
@@ -440,7 +440,7 @@ function genMarket(lv){
     for (const o of props){
       if (o.kind !== 'hut' && o.kind !== 'gluh') continue;
       if (Math.abs(o.y - cy) > rowH * 0.6) continue;
-      const c = ri(1, 3) * (lv.crowd > 1.1 ? 2 : 1);
+      const c = ri(1, 2 + Math.round(lv.crowd));
       for (let i = 0; i < c; i++){
         const dir = o.y < cy ? 1 : -1;
         const q = addPerson(o.x + rr(-70, 70), o.y + dir * rr(60, 105));
@@ -454,29 +454,30 @@ function genMarket(lv){
 
   // attractions down the middle of the market
   const midY = (yTop + yBot) / 2;
+  const treeY = midY + (rnd() < 0.5 ? -1 : 1) * rowH * 0.42;   // off the launch line
   const treeX = clamp(x0 + (x1 - x0) * 0.55, x0 + 300, x1 - 200);
-  addProp('bigtree', treeX, midY, {});
+  addProp('bigtree', treeX, treeY, {});
   // the plaza is a filled crowd, not a thin ring — the centre lane has to be
   // worth driving down, because it is the shot everyone tries first
-  for (let i = 0; i < Math.round(34 * lv.crowd); i++){
-    const a = rr(0, Math.PI * 2), d = 165 + 300 * Math.sqrt(rnd());
-    addPerson(treeX + Math.cos(a) * d, midY + Math.sin(a) * d);
+  for (let i = 0; i < Math.round(46 * lv.crowd); i++){
+    const a = rr(0, Math.PI * 2), d = 150 + 320 * Math.sqrt(rnd());
+    addPerson(treeX + Math.cos(a) * d, treeY + Math.sin(a) * d);
   }
   for (let i = 0; i < 7; i++){
     const a = rr(0, Math.PI * 2), d = rr(190, 330);
-    addProp(rnd() < 0.5 ? 'gifts' : 'snowman', treeX + Math.cos(a) * d, midY + Math.sin(a) * d, {});
+    addProp(rnd() < 0.5 ? 'gifts' : 'snowman', treeX + Math.cos(a) * d, treeY + Math.sin(a) * d, {});
   }
   // guardsmen stand behind the tree, so a ricochet punts you back into the
   // market instead of out over the empty approach
   for (const a of [-0.9, -0.35, 0.35, 0.9]){
-    addProp('nutcracker', treeX + Math.cos(a) * 320, midY + Math.sin(a) * 320, {});
+    addProp('nutcracker', treeX + Math.cos(a) * 320, treeY + Math.sin(a) * 320, {});
   }
   if (lv.rows >= 3){
     const cx = clamp(x0 + (x1 - x0) * 0.86, x0 + 400, x1 - 120);
     addProp('carousel', cx, midY + (rnd() < 0.5 ? -1 : 1) * rowH * 0.9, {});
   }
   if (lv.rows >= 4){
-    const s = addPerson(treeX + rr(-260, 260), midY + rr(-240, 240), 'santa');
+    const s = addPerson(treeX + rr(-260, 260), treeY + rr(-240, 240), 'santa');
     s.walk = 30;
   }
 
@@ -511,8 +512,13 @@ function genMarket(lv){
       kind: kinds[i % 3], taken: false, bob: rr(0, 6.28), r: 34,
     });
   }
-  for (let i = 0; i < Math.round(8 * lv.crowd); i++){
+  for (let i = 0; i < Math.round(14 * lv.crowd); i++){
     addPerson(rr(laneX0, x0), rr(260, WORLD_H - 260));
+  }
+  // a knot of shoppers straight down the launch line, so the first shot every
+  // player takes hits somebody
+  for (let i = 0; i < Math.round(18 * lv.crowd); i++){
+    addPerson(rr(x0 + 60, x0 + (x1 - x0) * 0.55), ANCHOR.y + rr(-120, 120));
   }
 
   bounds.x0 = FENCE_PAD; bounds.y0 = FENCE_PAD; bounds.y1 = WORLD_H - FENCE_PAD;
@@ -987,6 +993,7 @@ function wreckProp(o, vx, vy){
   o.rot = rr(-0.7, 0.7);
   o.vx = (vx || 0) * 0.18; o.vy = (vy || 0) * 0.18;
   G.wrecks++; G.runWrecks++;
+  rec.wrecks++;
   bumpCombo();
   const pts = addScore(o.pts);
   popText(o.x, o.y - 24, '+' + pts, '#ffb347', o.pts >= 900);
@@ -1452,14 +1459,15 @@ const REC_KEEP = 2.5;                   // how much history the ring holds
 const REC_RADIUS = 680;                 // only what is near the car is filmed
 const REC_ENTS = 96, REC_PROPS = 46;
 const REPLAY_SPEED = 0.45;              // slow motion factor
-const REPLAY_MIN_KILLS = 3;             // fewer than this is not worth watching
+const REPLAY_MIN_WORTH = 2;             // kills + 0.7 per wreck, below this we skip
 
-const rec = { frames: [], acc: 0, kills: 0, killPos: [], lastCopy: -9 };
-const clip = { frames: [], kills: 0, cx: 0, cy: 0 };
+const rec = { frames: [], acc: 0, kills: 0, wrecks: 0, killPos: [], lastCopy: -9 };
+const clip = { frames: [], kills: 0, wrecks: 0, worth: 0, cx: 0, cy: 0 };
 const rp = { t: 0, dur: 0, skip: false, restore: null, caption: '' };
 
 function recReset(){
-  rec.frames.length = 0; rec.acc = 0; rec.kills = 0; rec.killPos.length = 0; rec.lastCopy = -9;
+  rec.frames.length = 0; rec.acc = 0; rec.kills = 0; rec.wrecks = 0;
+  rec.killPos.length = 0; rec.lastCopy = -9;
   clip.frames.length = 0; clip.kills = 0;
 }
 
@@ -1481,6 +1489,7 @@ function recSnap(){
     car: [car.x, car.y, car.ang, car.z, car.roll, car.gore, car.plowT, car.boostT],
     ents, props: pr,
     kills: rec.kills,
+    wrecks: rec.wrecks,
     killPos: rec.killPos.slice(),
   };
 }
@@ -1490,36 +1499,43 @@ function recStep(dt){
   if (rec.acc < 1 / REC_HZ) return;
   rec.acc = 0;
   rec.frames.push(recSnap());
-  rec.kills = 0; rec.killPos.length = 0;
+  rec.kills = 0; rec.wrecks = 0; rec.killPos.length = 0;
   while (rec.frames.length && T - rec.frames[0].t > REC_KEEP) rec.frames.shift();
 
   // is the trailing window the best one yet?
   if (T - rec.lastCopy < 0.2) return;
-  let kills = 0, sx = 0, sy = 0, n = 0, first = -1;
+  let kills = 0, wrecks = 0, sx = 0, sy = 0, n = 0, first = -1;
   for (let i = 0; i < rec.frames.length; i++){
     const f = rec.frames[i];
     if (T - f.t > REC_WINDOW) continue;
     if (first < 0) first = i;
     kills += f.kills;
+    wrecks += f.wrecks || 0;
     for (let k = 0; k < f.killPos.length; k += 2){ sx += f.killPos[k]; sy += f.killPos[k + 1]; n++; }
   }
-  if (kills <= clip.kills || kills < REPLAY_MIN_KILLS || first < 0) return;
+  const worth = kills + wrecks * 0.7;             // a good smash is watchable too
+  if (worth <= clip.worth || worth < REPLAY_MIN_WORTH || first < 0) return;
   rec.lastCopy = T;
   clip.frames = rec.frames.slice(first);
   clip.kills = kills;
+  clip.wrecks = wrecks;
+  clip.worth = worth;
   clip.cx = n ? sx / n : car.x;
   clip.cy = n ? sy / n : car.y;
 }
 
 /* ---------- playback ---------- */
-function replayReady(){ return clip.kills >= REPLAY_MIN_KILLS && clip.frames.length > 4; }
+function replayReady(){ return clip.worth >= REPLAY_MIN_WORTH && clip.frames.length > 4; }
 
 function startReplay(){
   const f0 = clip.frames[0], f1 = clip.frames[clip.frames.length - 1];
   rp.t = 0;
   rp.dur = Math.max(0.4, f1.t - f0.t);
   rp.skip = false;
-  rp.caption = clip.kills + ' IN TWO SECONDS';
+  const stalls = clip.wrecks + (clip.wrecks === 1 ? ' STALL' : ' STALLS');
+  rp.caption = clip.kills > 0
+    ? clip.kills + (clip.wrecks ? ' AND ' + stalls : '') + ' IN TWO SECONDS'
+    : stalls + ' IN TWO SECONDS';
   // remember the state we are about to scribble on
   const ents = [], pr = [];
   for (const p of people) ents.push([p.x, p.y, p.ang, p.dead, p.squash, p.panic, p.cry, p.fly]);
@@ -1614,7 +1630,7 @@ function endReplay(){
     car.roll = r.car[4]; car.gore = r.car[5]; car.plowT = r.car[6]; car.boostT = r.car[7];
   }
   rp.restore = null;
-  clip.frames = []; clip.kills = 0;
+  clip.frames = []; clip.kills = 0; clip.wrecks = 0; clip.worth = 0;
   show('hint', false);
   if (G.carsLeft > 0) nextCar(); else levelEnd();
 }
@@ -1699,6 +1715,8 @@ function stepSnow(dt){
 /* ============================== RENDERING ================================ */
 
 const COATS = ['#e05143', '#3f86c4', '#41a066', '#9a5cbe', '#e08a2e', '#6b7a94', '#cf4a80'];
+const ELDER_COATS = ['#6b6f7e', '#7a6a5e', '#5f6b7a', '#79697a'];
+const KID_COATS = ['#ff8a3d', '#3fc4d8', '#ffcf3d', '#8ee06a'];
 const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 
@@ -2134,8 +2152,8 @@ function drawProp(o){
    panic), legs that stride, a head with a hat on top. Dead ones sprawl with
    their limbs where the car left them. */
 function drawPerson(p){
-  const coat = p.kind === 'elder' ? ['#6b6f7e', '#7a6a5e', '#5f6b7a', '#79697a'][p.coat % 4]
-             : p.kind === 'kid' ? ['#ff8a3d', '#3fc4d8', '#ffcf3d', '#8ee06a'][p.coat % 4]
+  const coat = p.kind === 'elder' ? ELDER_COATS[p.coat % 4]
+             : p.kind === 'kid' ? KID_COATS[p.coat % 4]
              : COATS[p.coat % COATS.length];
   const skin = SKIN[p.coat % SKIN.length];
   const trous = ['#3a4256', '#4a3b30', '#2f3b4c', '#5a4a52'][p.coat % 4];
@@ -2183,7 +2201,7 @@ function drawPerson(p){
   ctx.rotate(p.ang + Math.PI / 2);
 
   // zoomed out far enough and the limbs are sub-pixel anyway: coat, head, hat
-  if (p.r * cam.s < 8.5){
+  if (p.r * cam.s < 10.5){
     ctx.fillStyle = coat;
     ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.9, p.r * 0.75, 0, 0, 6.283); ctx.fill();
     ctx.fillStyle = p.hat ? HATS[p.hatCol % HATS.length] : skin;
@@ -2324,6 +2342,67 @@ function drawPerson(p){
     ctx.textAlign = 'left';
   }
   ctx.restore();
+}
+
+/* At a wide zoom a shopper is a coloured blob with a hat on it, and there can
+   be four hundred of them in shot. Drawing each one costs more in call
+   overhead than in pixels, so the far crowd is bucketed by colour and each
+   bucket goes down as a single path. Depth order within the far crowd is lost;
+   at that size nobody can tell. */
+const crowdBody = [], crowdHead = [];
+function drawCrowdBatch(list){
+  for (const b of crowdBody) if (b) b.length = 0;
+  for (const h of crowdHead) if (h) h.length = 0;
+  for (const p of list){
+    const ci = p.kind === 'elder' ? 7 + (p.coat % 4)
+             : p.kind === 'kid' ? 11 + (p.coat % 4)
+             : (p.coat % 7);
+    (crowdBody[ci] || (crowdBody[ci] = [])).push(p);
+    const hi = p.hat ? (p.hatCol % HATS.length) : HATS.length + (p.coat % SKIN.length);
+    (crowdHead[hi] || (crowdHead[hi] = [])).push(p);
+  }
+  for (let i = 0; i < crowdBody.length; i++){
+    const bucket = crowdBody[i];
+    if (!bucket || !bucket.length) continue;
+    ctx.fillStyle = i >= 11 ? KID_COATS[i - 11] : i >= 7 ? ELDER_COATS[i - 7] : COATS[i];
+    ctx.beginPath();
+    for (const p of bucket){
+      const a = p.ang + Math.PI / 2;
+      ctx.moveTo(p.x + Math.cos(a) * p.r * 0.9, p.y + Math.sin(a) * p.r * 0.9);
+      ctx.ellipse(p.x, p.y, p.r * 0.9, p.r * 0.75, a, 0, 6.283);
+    }
+    ctx.fill();
+  }
+  for (let i = 0; i < crowdHead.length; i++){
+    const bucket = crowdHead[i];
+    if (!bucket || !bucket.length) continue;
+    ctx.fillStyle = i < HATS.length ? HATS[i] : SKIN[i - HATS.length];
+    ctx.beginPath();
+    for (const p of bucket){
+      const a = p.ang + Math.PI / 2;
+      const hx = p.x - Math.cos(a) * p.r * 0.3, hy = p.y - Math.sin(a) * p.r * 0.3;
+      ctx.moveTo(hx + p.r * 0.5, hy);
+      ctx.arc(hx, hy, p.r * 0.5, 0, 6.283);
+    }
+    ctx.fill();
+  }
+  // arms up, in one stroke, for the ones who have noticed
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(30,40,60,.5)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  let any = false;
+  for (const p of list){
+    if (p.panic <= 0.5) continue;
+    any = true;
+    const a = p.ang + Math.PI / 2, c = Math.cos(a), s2 = Math.sin(a);
+    const px = -s2, py = c;                       // sideways in person space
+    ctx.moveTo(p.x + px * p.r * 0.6, p.y + py * p.r * 0.6);
+    ctx.lineTo(p.x + px * p.r * 1.2 - c * p.r * 0.7, p.y + py * p.r * 1.2 - s2 * p.r * 0.7);
+    ctx.moveTo(p.x - px * p.r * 0.6, p.y - py * p.r * 0.6);
+    ctx.lineTo(p.x - px * p.r * 1.2 - c * p.r * 0.7, p.y - py * p.r * 1.2 - s2 * p.r * 0.7);
+  }
+  if (any) ctx.stroke();
 }
 
 /* ---------- car ---------- */
@@ -2633,7 +2712,7 @@ function drawFx(){
 }
 
 /* ---------- warm lights, drawn additively over the scene ---------- */
-const MAX_LIGHTS = 16;
+const MAX_LIGHTS = 11;
 const lightBuf = [];
 function drawLights(){
   const halfW = VW / cam.s / 2 + 120, halfH = VH / cam.s / 2 + 120;
@@ -2920,8 +2999,13 @@ function draw(){
 
   // living things painted back-to-front so the market reads as depth
   const order = [];
+  const far = [];
   for (const o of props) if (!o.dead && near(o)) order.push(o);
-  for (const p of people) if (!(p.dead && p.fly <= 0) && near(p)) order.push(p);
+  for (const p of people){
+    if ((p.dead && p.fly <= 0) || !near(p)) continue;
+    if (!p.dead && p.r * cam.s < 10.5) far.push(p); else order.push(p);
+  }
+  drawCrowdBatch(far);
   order.sort((a, b) => a.y - b.y);
   for (const e of order){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
