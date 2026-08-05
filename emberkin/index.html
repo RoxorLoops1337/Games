@@ -142,6 +142,34 @@
   /* Off a hand the same card gets room: a wrapping shelf of full-size faces,
      which is where you actually read the rules text and the growth. */
   .cardrow{ display:flex; flex-wrap:wrap; gap:.5em; margin-top:1.1em; }
+
+  /* ---- a kin's papers -------------------------------------------------- */
+  .profile{ display:flex; gap:1em; align-items:flex-start; flex-wrap:wrap; margin-top:.6em; }
+  .profile .pcard{ padding:.6em; display:flex; flex-direction:column; align-items:center; gap:.4em;
+    background:radial-gradient(120% 80% at 50% 12%, rgba(255,201,77,.14), transparent 70%),
+      linear-gradient(180deg,#2a2036,#150e1d); }
+  .profile .pcard canvas{ width:150px; height:150px; image-rendering:pixelated; }
+  .profile .ptypes{ display:flex; gap:.25em; }
+  .profile .pbody{ flex:1 1 15em; min-width:13em; }
+  .profile .prow{ display:flex; align-items:center; gap:.5em; }
+  .profile .prow label{ font-size:.72em; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  /* The field looks like a field, so it is obvious it can be typed in. */
+  .profile #nickin{ flex:0 1 10em; min-width:6em; font:inherit; font-size:1em; padding:.28em .5em;
+    color:var(--gold); background:#0d0812; border:2px solid var(--edge); border-radius:.35em; }
+  .profile #nickin:focus{ outline:none; border-color:var(--gold); box-shadow:0 0 .6em rgba(255,201,77,.35); }
+  .profile .phint{ font-size:.68em; color:var(--dim); margin:.3em 0; }
+  .profile .pdex{ font-size:.8em; color:var(--dim); font-style:italic; margin:.8em 0; max-width:26em; line-height:1.4; }
+  .profile .pstats{ display:flex; flex-wrap:wrap; gap:.7em; font-size:.78em; margin-top:.7em; }
+  .profile .pstats span{ color:var(--dim); }
+  .profile .pstats span:first-child{ color:var(--gold); font-weight:700; }
+  .profile .bar{ margin-top:.35em; max-width:18em; height:.5em; border-radius:.25em;
+    background:#0d0812; border:1px solid var(--edge); overflow:hidden; }
+  .profile .bar i{ display:block; height:100%; }
+  .profile .pacts{ display:flex; gap:.5em; margin-top:.8em; }
+  .profile .pacts .abtn{ padding:.35em .9em; font-size:.8em; border-radius:.35em; cursor:pointer;
+    background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--edge); }
+  .profile .pacts .abtn.sel{ border-color:var(--gold); color:var(--gold); }
+
   .cardel.big{ flex:0 0 8em; height:11.4em; font-size:1.2em; padding:.4em .4em .34em; }
   /* The offer is the one moment the card IS the decision, so it gets room —
      but it must never wrap: four cards side by side is the whole choice, and a
@@ -4063,22 +4091,73 @@ function captureChance(foe, orbMul) {
   return clamp(a / 255, 0, 1);
 }
 
+/**
+ * How long each beat of a throw lasts. The whole point of a catch is the wait,
+ * so the wobbles are slow and the gap between them is dead air — the outcome is
+ * already decided when the orb leaves your hand, and every one of these seconds
+ * is spent not knowing it.
+ */
+const ORB = { throw: .55, suck: .34, fall: .34, wobble: .5, gap: .22, click: .9, burst: .55 };
+
+/** The beats a throw plays out, given how many times the orb held. */
+function orbBeats(shakes, caught) {
+  const beats = [['throw', ORB.throw], ['suck', ORB.suck], ['fall', ORB.fall]];
+  for (let i = 0; i < shakes; i++) {
+    beats.push(['wobble', ORB.wobble]);
+    if (i < shakes - 1 || caught) beats.push(['gap', ORB.gap]);
+  }
+  beats.push(caught ? ['click', ORB.click] : ['burst', ORB.burst]);
+  return beats;
+}
+
 function tryCatch(log, orbId) {
   const b = B();
   const orb = ITEMS[orbId];
   const p = captureChance(b.foe, orb.mul);
-  snap(log, `You lob a ${orb.name}!`, 'throw', 'foe');
   const shakeP = Math.pow(p, 1 / 4);
   let shakes = 0;
   while (shakes < 4 && chance(shakeP)) shakes++;
-  if (shakes >= 4) {
+  const caught = shakes >= 4;
+  // The outcome is settled here, as everything in this game is; the animation
+  // below only plays it back. Three shakes really did mean three shakes.
+  b.orbPlan = { beats: orbBeats(Math.min(shakes, 3), caught), shakes, caught };
+  snap(log, `You lob a ${orb.name}!`, 'throw', 'foe');
+  if (caught) {
     snap(log, `…click. ${b.foe.name} is yours!`, 'caught', 'foe');
     b.over = 'caught';
     return true;
   }
-  snap(log, ['It broke out immediately!', 'So close — one shake.', 'Two shakes… and out.', 'Three shakes! It nearly held!'][shakes], 'break', 'foe');
+  snap(log, ['It burst straight back out!', 'One shake. Not even close.',
+    'Two shakes… and out.', 'Three shakes. You had it.'][Math.min(shakes, 3)], 'break', 'foe');
   return false;
 }
+
+/**
+ * Run the throw. Returns true while it is still playing, which is what holds
+ * the log back: the outcome line must not appear before the orb has stopped.
+ */
+function orbStep(dt) {
+  const b = B();
+  const o = b.orb;
+  if (!o || o.done) return false;
+  o.t += dt;
+  const beat = o.beats[o.i];
+  if (!beat) { o.done = true; return false; }
+  if (o.t < beat[1]) return true;
+  o.t -= beat[1];
+  o.i++;
+  const next = o.beats[o.i];
+  if (!next) { o.done = true; return false; }
+  if (next[0] === 'wobble') playCue('wobble');
+  if (next[0] === 'click') playCue('click');
+  if (next[0] === 'burst') { playCue('burst'); b.entry = .35; }
+  return true;
+}
+
+const orbPhase = () => {
+  const b = B();
+  return b && b.orb && !b.orb.done ? b.orb.beats[b.orb.i][0] : null;
+};
 
 function addCaught(mon) {
   catchMon(mon.species);
@@ -4636,14 +4715,107 @@ function drawBattle(g) {
   g.restore();
 
   const entry = clamp(b.entry, 0, 1);
-  drawSpr(g, 'creature', foeId, fx + (1 - entry) * 90, fy, fs, { flash: b.flashF > 0 ? b.flashF : 0, alpha: b.foe.hp <= 0 ? .35 : 1 });
+  // While the orb has it, the foe is not on the field. It shrinks into the
+  // shell on the way in and comes back the same way if the shell gives.
+  const held = orbPhase();
+  const inOrb = held === 'fall' || held === 'wobble' || held === 'gap' || held === 'click';
+  if (!inOrb) {
+    let alpha = b.foe.hp <= 0 ? .35 : 1;
+    let scale = fs;
+    if (held === 'suck') {
+      const k = clamp(b.orb.t / ORB.suck, 0, 1);
+      alpha *= 1 - k; scale = Math.max(1, Math.round(fs * (1 - k * .7)));
+    }
+    drawSpr(g, 'creature', foeId, fx + (1 - entry) * 90, fy, scale,
+      { flash: b.flashF > 0 ? b.flashF : 0, alpha });
+  }
   drawSpr(g, 'creature', myId, mx - (1 - entry) * 90, my, ms, { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: b.mine.hp <= 0 ? .35 : 1 });
 
-  if (b.throwT > 0) {                       // an orb arcing toward the foe
-    const k = 1 - b.throwT / .6;
-    const ox = 72 + (178 - 72) * k, oy = MY_GROUND - Math.sin(k * Math.PI) * 60 - k * 50;
-    g.fillStyle = '#ffc94d'; g.beginPath(); g.arc(ox, oy, 4, 0, Math.PI * 2); g.fill();
+  drawOrb(g, MY_GROUND, FOE_GROUND);
+}
+
+/**
+ * The throw, beat by beat. Nothing here decides anything — the outcome was
+ * settled when the orb left your hand — but every beat is a second the player
+ * spends not knowing it, and that is the whole of what a catch is.
+ */
+function drawOrb(g, myGround, foeGround) {
+  const b = B();
+  const o = b.orb;
+  const phase = orbPhase();
+  if (!phase && !(b.throwT > 0)) return;
+  const rest = { x: 178, y: foeGround + 4 };
+  // Only a live beat has a length to measure against; a finished throw is just
+  // the tail of the old arc still fading out.
+  const k = phase ? clamp(o.t / o.beats[o.i][1], 0, 1) : 0;
+
+  // The orb itself: a gold shell with a dark seam, so it reads at 8 pixels.
+  const shell = (x, y, r, tilt) => {
+    g.save(); g.translate(x, y); g.rotate(tilt);
+    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2);
+    const grd = g.createLinearGradient(-r, -r, r, r);
+    grd.addColorStop(0, '#ffe9a8'); grd.addColorStop(.5, '#ffc94d'); grd.addColorStop(1, '#a8761b');
+    g.fillStyle = grd; g.fill();
     g.strokeStyle = '#2a1b2e'; g.lineWidth = 1; g.stroke();
+    g.beginPath(); g.moveTo(-r, 0); g.lineTo(r, 0); g.stroke();
+    g.beginPath(); g.arc(0, 0, r * .34, 0, Math.PI * 2); g.fillStyle = '#2a1b2e'; g.fill();
+    g.restore();
+  };
+  const ring = (x, y, r, a, col) => {
+    g.save(); g.globalAlpha = a; g.strokeStyle = col; g.lineWidth = 1;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); g.restore();
+  };
+
+  if (phase === 'throw' || (!phase && b.throwT > 0)) {
+    const t = phase ? k : 1 - b.throwT / .6;
+    const ox = 72 + (rest.x - 72) * t, oy = myGround - Math.sin(t * Math.PI) * 62 - t * 46;
+    shell(ox, oy, 4, t * 9);
+    return;
+  }
+  if (phase === 'suck') {
+    // The creature is drawn small and fading by drawBattle; here the orb opens.
+    shell(rest.x, rest.y - 26 * (1 - k), 4, 0);
+    ring(rest.x, rest.y - 26 * (1 - k), 6 + k * 22, 1 - k, '#ffe9a8');
+    return;
+  }
+  if (phase === 'fall') {
+    const drop = k * k;                       // accelerate, then a small settle
+    shell(rest.x, rest.y - 26 * (1 - drop), 4, 0);
+    return;
+  }
+  if (phase === 'wobble' || phase === 'gap') {
+    const w = phase === 'wobble' ? Math.sin(k * Math.PI * 2) * .55 : 0;
+    shell(rest.x + w * 5, rest.y - Math.abs(w) * 2, 4, w);
+    // A tick of light on each swing, so the wobble reads as an effort.
+    if (phase === 'wobble') ring(rest.x, rest.y, 6 + k * 8, (1 - k) * .5, '#ffc94d');
+    return;
+  }
+  if (phase === 'click') {
+    shell(rest.x, rest.y, 4, 0);
+    for (let i = 0; i < 3; i++) {
+      const t = clamp(k * 1.6 - i * .22, 0, 1);
+      if (t > 0) ring(rest.x, rest.y, 4 + t * 40, 1 - t, '#ffe9a8');
+    }
+    // Sparks going up: the moment reads as a win before the text says so.
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2, t = clamp(k * 1.3 - (i % 3) * .1, 0, 1);
+      if (t <= 0) continue;
+      g.globalAlpha = 1 - t;
+      g.fillStyle = i % 2 ? '#ffe9a8' : '#fff';
+      g.fillRect(Math.round(rest.x + Math.cos(a) * t * 34), Math.round(rest.y - 4 - Math.sin(a) * t * 26 - t * 10), 2, 2);
+      g.globalAlpha = 1;
+    }
+    return;
+  }
+  if (phase === 'burst') {
+    // Two halves flung apart, and the light it failed to hold.
+    const half = (dir) => {
+      g.save(); g.translate(rest.x + dir * k * 16, rest.y - k * 12); g.rotate(dir * k * 2.4);
+      g.fillStyle = '#c69320'; g.beginPath(); g.arc(0, 0, 4, Math.PI, Math.PI * 2); g.fill();
+      g.strokeStyle = '#2a1b2e'; g.lineWidth = 1; g.stroke(); g.restore();
+    };
+    half(-1); half(1);
+    ring(rest.x, rest.y, 4 + k * 26, 1 - k, '#8f7aa8');
   }
 }
 /* =============================================================== §7 — UI ==
@@ -4946,6 +5118,33 @@ function cardHTML(c, opt = {}) {
   </div>`;
 }
 
+/**
+ * The name field. A real <input> rather than a letter-picker: this game is
+ * played on a phone as often as a keyboard, and the phone already has a very
+ * good letter-picker in it. While it has focus the game's own key handling
+ * stands down, or typing "e" would end your turn.
+ */
+const nickEl = () => (HEADLESS ? null : document.getElementById('nickin'));
+const nickFocused = () => !HEADLESS && document.activeElement === nickEl();
+
+function focusNick() {
+  const el = nickEl();
+  if (!el) return;
+  el.focus();
+  el.select();
+}
+
+/** Take whatever is in the field. Blank, or its own name, means no nickname. */
+function commitNick(s) {
+  const m = s && s.opt && s.opt.mon;
+  if (!m) return '';
+  const el = nickEl();
+  const raw = el ? el.value : (m.nick || '');
+  const name = String(raw).replace(/\s+/g, ' ').trim().slice(0, 12);
+  m.nick = (!name || name === m.name) ? '' : name;
+  return m.nick;
+}
+
 /** Fill in every card icon canvas under `root`. */
 function paintCardArt(root) {
   if (HEADLESS || !root || !root.querySelectorAll) return;
@@ -5126,7 +5325,13 @@ function playbackStep() {
   if (e.fx === 'faint') playCue('faint');
   if (e.fx === 'level' || e.fx === 'learn') playCue('level');
   if (e.fx === 'caught') playCue('catch');
-  if (e.fx === 'throw') { b.throwT = .6; playCue('throw'); }
+  if (e.fx === 'throw') {
+    playCue('throw');
+    // The throw starts when its own line is the one on screen, so the player
+    // reads "you lob a Bloom Orb" and then watches it happen, not the reverse.
+    if (b.orbPlan) { b.orb = { ...b.orbPlan, i: 0, t: 0, done: false }; b.orbPlan = null; }
+    else b.throwT = .6;
+  }
   if (e.fx === 'send') b.entry = 0;
   if (!HEADLESS) {
     els.dialogue.innerHTML = e.t + '<span class="more">▼</span>';
@@ -5177,10 +5382,26 @@ function finishBattle() {
     if (b.npc.block) { b.npc.gone = true; lines.push(`${b.npc.name} steps off the path.`); }
     say('', lines, withReward);
   } else if (over === 'caught') {
-    const where = addCaught(b.foe);
-    const lines = [`${b.foe.name} was added to your ${where === 'party' ? 'party' : 'box'}.`];
-    if (b.legendary) { G.flags.beatVespyr = 1; lines.push('The light goes out of the hollow. It went with you.'); }
-    say('', lines, done);
+    const caught = b.foe;
+    const where = addCaught(caught);
+    if (b.legendary) G.flags.beatVespyr = 1;
+    const gems = gemReward(b);
+    G.gems += gems;
+    teardown();
+    // The celebration runs on its own clock, then hands you the new kin's
+    // papers — the one screen where the name is still yours to choose.
+    G.gotcha = {
+      t: 0, species: caught.species, name: caught.name,
+      where: where === 'party' ? 'joined your party' : 'was sent to the box',
+      done: () => {
+        G.gotcha = null;
+        openScreen('profile', {
+          mon: caught, fresh: true, legendary: !!b.legendary,
+          done: () => { setToast(`+${gems} gems`); settle(); },
+        });
+      },
+    };
+    playCue('gotcha');
   } else if (over === 'fled') {
     say('', ['You got away.'], done);
   } else if (over === 'lose') {
@@ -5228,6 +5449,9 @@ function updateBattle(dt) {
   b.flashF = Math.max(0, b.flashF - dt * 3);
   b.shake = Math.max(0, b.shake - dt * 4);
   if (b.throwT > 0) b.throwT = Math.max(0, b.throwT - dt);
+  // A throw in flight holds everything else: the line that says what happened
+  // must not arrive before the orb has stopped moving.
+  const orbBusy = orbStep(dt);
   // HP bars chase their target so damage reads as motion, not a jump.
   const chase = (cur, tgt) => Math.abs(tgt - cur) < .6 ? tgt : cur + (tgt - cur) * Math.min(1, dt * 7);
   b.dispM = chase(b.dispM, b.tgtM); b.dispF = chase(b.dispF, b.tgtF);
@@ -5255,6 +5479,7 @@ function updateBattle(dt) {
     const done = (cur, tgt) => !(Number.isFinite(cur) && Number.isFinite(tgt)) || Math.abs(cur - tgt) < 1;
     const settled = done(b.dispM, b.tgtM) && done(b.dispF, b.tgtF);
     if (b.li === 0 && !b.started) { b.started = true; playbackStep(); return; }
+    if (orbBusy) return;                    // the orb is still in the air
     if ((justPressed('a') || b.hold <= 0) && settled) {
       b.li++;
       if (b.li < b.log.length) playbackStep();
@@ -5303,7 +5528,11 @@ function openBattleActions() {
 function openScreen(kind, opt = {}) {
   closeMenu();
   // When you must send someone out, start the cursor on someone who can go.
-  const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive)) : 0;
+  // On a profile, start it on the way out: confirm should always mean "that
+  // will do", and renaming is a thing you go and choose, not a wall you have
+  // to get past to leave the screen.
+  const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive))
+    : kind === 'profile' ? 1 : 0;
   G.screen = { kind, i, sel: null, opt, prev: G.mode };
   G.mode = 'screen';
   renderScreen();
@@ -5312,6 +5541,11 @@ function closeScreen() {
   const s = G.screen;
   if (!s) return;
   if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
+  if (s.kind === 'profile') {
+    commitNick(s);                                       // never lose what was typed
+    if (s.opt.fresh) { screenSelect(); return; }          // a fresh catch has one way out
+    if (s.opt.back) { G.screen = null; openScreen(s.opt.back); saveGame(); return; }
+  }
   G.screen = null;
   if (!HEADLESS) show(els.screen, false);
   if (G.battle) { G.mode = 'battle'; if (!G.battle.over) renderHand(); }
@@ -5331,6 +5565,8 @@ function screenList(s) {
   // The offer plus "no thanks" — a deck you cannot decline to grow is a deck
   // that fills up with cards you never wanted.
   if (s.kind === 'reward') return (s.opt.offer || []).concat(['skip']);
+  // The profile is one creature and two buttons; the list is what you can press.
+  if (s.kind === 'profile') return ['name', 'done'];
   if (s.kind === 'deck') {
     const inDeck = G.deck.map(ownedCard).filter(Boolean);
     return inDeck.concat(G.cards.filter((c) => !G.deck.includes(c.u)));
@@ -5445,6 +5681,33 @@ function renderScreen() {
           (CARDS[id].grow || CARDS[id].kill) ? ` · to +${growCap(id)}` : ''}`,
       });
     }).join('') + '</div>';
+  } else if (s.kind === 'profile') {
+    const m = s.opt.mon;
+    html = s.opt.fresh ? '' : html;             // a fresh catch has nothing behind it
+    const f = m.hp / m.max;
+    const boxed = !G.party.includes(m);
+    html += `<h2>${s.opt.fresh ? (s.opt.legendary ? 'The valley lets it go' : 'Caught') : dispName(m)}</h2>`;
+    html += `<div class="profile">
+      <div class="pcard panel">
+        <canvas width="40" height="40" data-mon="${m.species}"></canvas>
+        <div class="ptypes">${typeChips(m.types)}</div>
+      </div>
+      <div class="pbody">
+        <div class="prow"><label for="nickin">Name</label>
+          <input id="nickin" maxlength="12" value="${(m.nick || m.name).replace(/"/g, '&quot;')}"
+            placeholder="${m.name}" autocomplete="off" spellcheck="false"></div>
+        <p class="phint">${m.nick && m.nick !== m.name ? `A ${m.name}, by any other name.` : 'It answers to its own name for now.'}</p>
+        <div class="pstats">
+          <span>Lv${m.lvl}</span><span>${m.hp}/${m.max} HP</span>
+          <span>ATK ${m.atk}</span><span>GUARD ${m.def}</span><span>SPD ${m.spd}</span></div>
+        <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div>
+        <p class="pdex">${DEX[m.species].dex}</p>
+        <p class="phint">${boxed ? 'Resting in the box until you send for it.' : 'Walking with you.'}</p>
+        <div class="pacts">
+          <div class="abtn ${s.i === 0 ? 'sel' : ''}" data-i="0">Rename</div>
+          <div class="abtn ${s.i === 1 ? 'sel' : ''}" data-i="1">${s.opt.fresh ? 'Take it along' : 'Done'}</div>
+        </div>
+      </div></div>`;
   } else if (s.kind === 'chests') {
     html += `<h2>Gem chests — ${G.gems} gems</h2>`;
     html += `<div class="cards">` + CHEST_IDS.map((k, i) => {
@@ -5488,6 +5751,7 @@ function renderScreen() {
 function screenInput() {
   const s = G.screen;
   if (!s) return;
+  if (nickFocused()) return;                  // the field has the keyboard
   s.list = screenList(s);
   const len = (s.list || []).length;
   if (s.kind === 'chests' && s.got && (justPressed('left') || justPressed('right') || justPressed('up') || justPressed('down'))) s.got = null;
@@ -5552,6 +5816,16 @@ function screenSelect() {
   const s = G.screen;
   if (!s) return;
   s.list = screenList(s);
+  if (s.kind === 'profile') {
+    if (s.i === 0) { focusNick(); return; }
+    commitNick(s);
+    const done = s.opt.done;
+    G.screen = null; if (!HEADLESS) show(els.screen, false);
+    G.mode = G.battle ? 'battle' : 'world';
+    saveGame();
+    if (done) done();
+    return;
+  }
   if (s.kind === 'reward') {
     const id = s.list[s.i];
     const done = s.opt.done;
@@ -5588,7 +5862,9 @@ function screenSelect() {
       submitLog(doAction({ kind: 'switch', idx: s.i }));
       return;
     }
-    setToast(`${dispName(m)} · Lv${m.lvl} · ${m.hp}/${m.max}`);
+    // Out of a fight, picking a kin opens its papers — the same screen a catch
+    // hands you, so renaming is not a thing you only get one chance at.
+    openScreen('profile', { mon: m, back: 'party' });
   } else if (s.kind === 'box') {
     boxSelect(s);
   } else if (s.kind === 'deck') {
@@ -5744,6 +6020,15 @@ function playCue(kind) {
   else if (kind === 'level') { [0, 4, 7, 12].forEach((s, i) => blip(note(12 + s), .16, 'square', .05, t + i * .07)); }
   else if (kind === 'catch') { [0, 5, 9, 14].forEach((s, i) => blip(note(12 + s), .2, 'triangle', .06, t + i * .1)); }
   else if (kind === 'throw') blip(500, .12, 'sine', .05);
+  // A throw is three sounds: the effort, the verdict, and the disappointment.
+  else if (kind === 'wobble') { blip(300, .07, 'square', .05); blip(240, .07, 'square', .04, t + .09); }
+  else if (kind === 'click') { blip(880, .06, 'square', .06); blip(1320, .1, 'square', .05, t + .06); }
+  else if (kind === 'burst') { blip(200, .1, 'sawtooth', .06); blip(120, .22, 'sawtooth', .05, t + .08); }
+  // The one fanfare in the game that is allowed to be a bit much.
+  else if (kind === 'gotcha') {
+    [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => blip(note(12 + s), .22, 'triangle', .06, t + i * .085));
+    [0, 12].forEach((s, i) => blip(note(s), .5, 'square', .04, t + .6 + i * .12));
+  }
   else if (kind === 'heal') { [0, 7, 12].forEach((s, i) => blip(note(12 + s), .2, 'sine', .05, t + i * .09)); }
   else if (kind === 'select') blip(660, .05, 'square', .04);
 }
@@ -5814,6 +6099,67 @@ function fitStage() {
   G.layout = L;
 }
 
+/**
+ * The celebration. A catch is the thing the whole genre is named after, so it
+ * gets the one moment in the game that stops everything else: light off the
+ * new kin, its name, and a shower that takes its time.
+ */
+function drawGotcha(g) {
+  const a = G.gotcha;
+  const k = clamp(a.t / 1.9, 0, 1);
+  const fade = k > .86 ? 1 - (k - .86) / .14 : 1;
+  g.save();
+  g.globalAlpha = clamp(fade, 0, 1);
+  g.fillStyle = 'rgba(10,6,16,.82)';
+  g.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  // Rays turning slowly behind it — the cheapest way to make a moment feel big.
+  const cx = VIEW_W / 2, cy = 88;
+  g.save(); g.translate(cx, cy); g.rotate(a.t * .5);
+  for (let i = 0; i < 12; i++) {
+    g.rotate(Math.PI / 6);
+    g.globalAlpha = .12 * fade;
+    g.fillStyle = '#ffc94d';
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(160, -13); g.lineTo(160, 13); g.closePath(); g.fill();
+  }
+  g.restore();
+
+  // The kin, arriving with a bounce that settles.
+  const pop = k < .3 ? 1 - Math.pow(1 - k / .3, 3) : 1;
+  const bob = Math.sin(a.t * 4) * 2 * (k > .3 ? 1 : 0);
+  const scale = Math.max(1, Math.round(2 + pop));
+  const spr = sprite('creature', a.species);
+  const w = (spr ? spr.width : 40) * scale, h = (spr ? spr.height : 40) * scale;
+  g.globalAlpha = fade;
+  drawSpr(g, 'creature', a.species, Math.round(cx - w / 2), Math.round(cy - h / 2 + bob), scale);
+
+  // Sparks rising past it, seeded off their index so they do not all agree.
+  for (let i = 0; i < 26; i++) {
+    const seed = (i * 97 % 41) / 41, sp = .5 + (i % 5) * .16;
+    const ty = ((a.t * sp + seed) % 1);
+    const x = 20 + seed * (VIEW_W - 40) + Math.sin(a.t * 2 + i) * 5;
+    g.globalAlpha = (1 - ty) * .9 * fade;
+    g.fillStyle = i % 3 === 0 ? '#fff' : '#ffc94d';
+    g.fillRect(Math.round(x), Math.round(VIEW_H - 10 - ty * 130), 2, 2);
+  }
+
+  g.globalAlpha = fade;
+  g.textAlign = 'center';
+  g.font = 'bold 22px monospace';
+  g.fillStyle = '#2a1b2e';
+  g.fillText('GOTCHA!', cx + 1, 36);
+  g.fillStyle = '#ffc94d';
+  g.fillText('GOTCHA!', cx, 35);
+  g.font = 'bold 11px monospace';
+  g.fillStyle = '#f3ecff';
+  g.fillText(a.name, cx, 150);
+  g.font = '8px monospace';
+  g.fillStyle = '#b9adc4';
+  g.fillText(a.where, cx, 164);
+  g.textAlign = 'left';
+  g.restore();
+}
+
 function draw() {
   if (!ctx) return;
   ctx.imageSmoothingEnabled = false;
@@ -5822,6 +6168,7 @@ function draw() {
   if (G.evoAnim) drawEvolution(ctx);
   else if (G.battle) drawBattle(ctx);
   else if (G.map) drawWorld(ctx);
+  if (G.gotcha) drawGotcha(ctx);
   if (G.fade > 0) {
     ctx.fillStyle = `rgba(8,5,12,${clamp(G.fade * 2.4, 0, 1)})`;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -5917,13 +6264,17 @@ function step(dt) {
   if (G.dialogue) G.dialogue.hold = Math.max(0, G.dialogue.hold - dt);
   if (G.battleMsg) G.battleMsg.hold = Math.max(0, G.battleMsg.hold - dt);
 
-  // Both message queues age here and nowhere else. Ticking a hold inside the
-  // branch that happens to be running means a message left over from another
-  // branch keeps its hold for ever, and a hold that never expires is a message
-  // that can never be dismissed.
-  if (G.dialogue) G.dialogue.hold = Math.max(0, G.dialogue.hold - dt);
-  if (G.battleMsg) G.battleMsg.hold = Math.max(0, G.battleMsg.hold - dt);
-
+  // The celebration owns the screen while it runs, and any key skips the tail
+  // of it — nobody should have to sit through a flourish twice.
+  if (G.gotcha) {
+    G.gotcha.t += dt;
+    if (G.gotcha.t > 2 || justPressed('a') || justPressed('b')) {
+      const done = G.gotcha.done;
+      G.gotcha = null;
+      if (done) done();
+    }
+    return;
+  }
   if (G.mode === 'dialogue') {
     if (justPressed('a') || justPressed('b')) advanceDialogue();
     return;
@@ -5953,12 +6304,22 @@ function boot() {
   window.addEventListener('resize', fitStage);
 
   // keyboard
+  // A field with focus is being typed into, not played with — every key goes
+  // to it, except Enter and Escape, which mean "that will do" either way.
+  const typing = (e) => {
+    const t = e.target;
+    return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+  };
   window.addEventListener('keydown', (e) => {
+    if (typing(e)) {
+      if (e.key === 'Enter' || e.key === 'Escape') { e.target.blur(); e.preventDefault(); }
+      return;
+    }
     const k = KEYMAP[e.key] || e.key;
     if (KEYMAP[e.key] || e.key === 'm') e.preventDefault();
     pressKey(k);
   });
-  window.addEventListener('keyup', (e) => releaseKey(KEYMAP[e.key] || e.key));
+  window.addEventListener('keyup', (e) => { if (!typing(e)) releaseKey(KEYMAP[e.key] || e.key); });
 
   // touch
   // ---- the stick: it appears under your thumb, wherever that lands
@@ -6171,6 +6532,7 @@ if (typeof window !== 'undefined') {
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
+    orbBeats, orbStep, orbPhase, commitNick, ORB, dispName,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
     cardValue, cardText, cardCost, cardName, attackBonus, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,

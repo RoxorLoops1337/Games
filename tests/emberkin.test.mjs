@@ -7,7 +7,7 @@
 // save round-trips.
 //
 // Run: node tests/emberkin.test.mjs
-import { loadGame, autoFight, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, autoFight, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = withDeck(loadGame());
 const { DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART } = EK;
@@ -952,6 +952,123 @@ winRun.pressKey('right');
 for (let i = 0; i < 30; i++) { winRun.step(.05); winRun.fired.clear(); }
 winRun.releaseKey('right');
 ok(winRun.G.player.x !== wx || winRun.G.battle, 'you can walk away from it');
+
+section('a throw takes its time, and says what really happened');
+// The outcome is decided the moment the orb leaves your hand — everything after
+// is playback. What matters is that the playback tells the truth: three shakes
+// on screen means the roll really did hold three times.
+for (const shakes of [0, 1, 2, 3]) {
+  const beats = EK.orbBeats(shakes, false).map((b) => b[0]);
+  eq(beats.filter((b) => b === 'wobble').length, shakes, `a ${shakes}-shake miss wobbles ${shakes} times`);
+  eq(beats[beats.length - 1], 'burst', `and ends by bursting open`);
+  ok(beats[0] === 'throw' && beats.includes('suck') && beats.includes('fall'), 'after an arc, a vanish and a drop');
+}
+const held = EK.orbBeats(3, true).map((b) => b[0]);
+eq(held[held.length - 1], 'click', 'a catch ends on the click');
+eq(held.filter((b) => b === 'wobble').length, 3, 'having wobbled all the way');
+ok(EK.orbBeats(3, false).reduce((n, b) => n + b[1], 0) > 2.5, 'a full three-shake throw is a real wait');
+
+// The line it prints is the number of shakes it actually did.
+const thr = withDeck(loadGame({}));
+thr.enterMap('route_one', 9, 10, 'down');
+const outcomes = new Map();
+for (let i = 0; i < 400 && outcomes.size < 3; i++) {
+  thr.G.party = [thr.mkMon('pyrelynx', 30)];
+  thr.G.bag = { bloomorb: 99 };
+  thr.G.battle = null;
+  thr.startBattle({ foe: thr.mkMon('gargolem', 30), wild: true });
+  const bb = thr.B();
+  const log = [];
+  thr.tryCatch(log, 'bloomorb');
+  const plan = bb.orbPlan;
+  const wobbles = plan.beats.filter((b) => b[0] === 'wobble').length;
+  const line = log[log.length - 1].t;
+  outcomes.set(wobbles + ':' + plan.caught, line);
+  if (plan.caught) {
+    eq(bb.over, 'caught', 'a hold ends the battle as a catch');
+    ok(/click/.test(line), 'and says so');
+  } else {
+    ok(/out|shake|close/i.test(line), `a ${wobbles}-shake miss says how close it came: "${line}"`);
+  }
+  thr.G.battle = null;
+}
+ok(outcomes.size >= 2, `throws produce more than one outcome (${outcomes.size} distinct)`);
+
+section('the orb holds the battle log until it stops moving');
+const orbRun = withDeck(loadGame({}));
+orbRun.setCtx(mkCtx());
+orbRun.enterMap('route_one', 9, 10, 'down');
+orbRun.G.party = [orbRun.mkMon('pyrelynx', 30)];
+orbRun.G.bag = { prismorb: 99 };
+orbRun.startBattle({ foe: orbRun.mkMon('mothrix', 5), wild: true });
+orbRun.G.battleMsg = null;
+orbRun.B().foe.hp = 1;                              // as close to a certain hold as the maths gets
+orbRun.submitLog(orbRun.doAction({ kind: 'item', id: 'prismorb' }));
+let frames = 0, sawOrb = false;
+while (orbRun.G.battle && frames++ < 400) {
+  orbRun.step(.05);
+  if (orbRun.orbPhase()) sawOrb = true;
+  orbRun.fired.clear();
+}
+ok(sawOrb, 'the throw actually plays out rather than resolving on the spot');
+ok(frames > 40, `and holds the battle while it does (${frames} frames, ${(frames * .05).toFixed(1)}s)`);
+
+section('a catch celebrates, then hands you its papers');
+const cel = withDeck(loadGame({}));
+cel.setCtx(mkCtx());
+cel.enterMap('route_one', 9, 10, 'down');
+cel.G.party = [cel.mkMon('pyrelynx', 30)];
+cel.G.bag = { prismorb: 200 };
+let caughtOne = false;
+for (let tryN = 0; tryN < 60 && !caughtOne; tryN++) {
+  cel.G.battle = null; cel.G.gotcha = null; cel.G.screen = null; cel.G.mode = 'world';
+  cel.startBattle({ foe: cel.mkMon('mothrix', 4), wild: true });
+  cel.G.battleMsg = null;
+  cel.B().foe.hp = 1;
+  cel.submitLog(cel.doAction({ kind: 'item', id: 'prismorb' }));
+  for (let i = 0; i < 400 && !cel.G.gotcha; i++) { cel.step(.05); cel.fired.clear(); }
+  caughtOne = !!cel.G.gotcha;
+}
+ok(caughtOne, 'a weakened kin under a prism orb is eventually caught');
+eq(cel.G.battle, null, 'the battle is off the board before the celebration');
+ok(cel.G.gotcha.species === 'mothrix', 'the celebration is about the kin you caught');
+// It ends on its own, and hands over to the profile.
+for (let i = 0; i < 200 && cel.G.gotcha; i++) { cel.step(.05); cel.fired.clear(); }
+eq(cel.G.gotcha, null, 'the celebration ends on its own');
+eq(cel.G.screen && cel.G.screen.kind, 'profile', 'and opens the new kin\'s papers');
+ok(cel.G.party.some((m) => m.species === 'mothrix'), 'which is a kin you now have');
+
+section('naming a kin you just caught');
+const prof = cel.G.screen;
+const mine = prof.opt.mon;
+eq(mine.nick || '', '', 'it starts with no nickname of its own');
+// commitNick reads the field; headless there is none, so drive it directly.
+mine.nick = '  Mothy  McMoth  ';
+eq(cel.commitNick({ opt: { mon: mine } }), 'Mothy McMoth', 'a name is trimmed and its spaces squashed');
+mine.nick = 'a'.repeat(40);
+eq(cel.commitNick({ opt: { mon: mine } }).length, 12, 'and capped at something a name box can hold');
+mine.nick = mine.name;
+eq(cel.commitNick({ opt: { mon: mine } }), '', 'naming it after its own species is not a nickname');
+mine.nick = 'Mothy';
+eq(cel.dispName(mine), 'Mothy', 'a named kin goes by its name');
+// Confirm always means "that will do": the cursor starts on the way out, so
+// mashing the one button you always have cannot trap you on this screen.
+eq(cel.G.screen.i, 1, 'the cursor starts on the way out, not on the name field');
+cel.screenSelect();
+eq(cel.G.screen, null, 'and taking it along closes the papers');
+eq(cel.G.mode, 'world', 'back to the world');
+ok(cel.hasSave(), 'with the name written down');
+
+section('the papers are reachable again from the party');
+cel.G.mode = 'world';
+cel.openScreen('party');
+cel.G.screen.i = cel.G.party.findIndex((m) => m.species === 'mothrix');
+cel.screenSelect();
+eq(cel.G.screen.kind, 'profile', 'picking a kin outside a fight opens its papers');
+eq(cel.G.screen.opt.mon.species, 'mothrix', 'the one you picked');
+cel.closeScreen();
+eq(cel.G.screen.kind, 'party', 'and closing goes back to the party, not to nowhere');
+cel.closeScreen();
 
 section('healing restores the whole party');
 EK.G.party = [EK.mkMon('bramblor', 30), EK.mkMon('voltyx', 25)];

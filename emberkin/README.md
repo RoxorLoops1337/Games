@@ -86,6 +86,7 @@ between floating and bursting out of the frame.
 | menu, back | X · Esc | the **Menu** button |
 | aim a card | ← → | tap it |
 | take a card after a win | ← → then Z | tap it, or **Skip** |
+| name a kin | ← → to Rename, Z, then type; Enter when done | tap the field |
 | play the aimed card | ↑ · Z · Enter | tap it again, or drag it up |
 | play a card outright | its number, 1-5 | — |
 | end the turn | E | the **End turn** button |
@@ -273,6 +274,45 @@ Epic and legendary carry a slow sheen, because a card you were pleased to draw
 should look it. A kin's own move wears gold and its element instead of a
 rarity: it belongs to the creature, not to the deck, and should read that way
 from across the table.
+
+### Catching one
+
+A throw is the thing the genre is named after, so it is the one action in the
+game that is allowed to take four seconds. `tryCatch` rolls it the moment the
+orb leaves your hand — as everything here resolves immediately — and then
+`orbBeats` turns the result into a list of beats the animation plays back:
+
+    throw · suck · fall · (wobble · gap) × shakes · click | burst
+
+so three shakes on screen means the roll really did hold three times, and the
+line that follows says which it was ("Three shakes. You had it." reads
+differently from "It burst straight back out!"). `orbStep` holds the battle log
+while the orb is in the air: the line that says what happened must never arrive
+before the orb has stopped moving. The throw begins from *its own* log line, so
+you read "you lob a Prism Orb" and then watch it happen, not the reverse.
+
+A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
+a shower that takes its time — and hands you its papers afterwards. Any key
+skips the tail of the flourish; nobody should sit through it twice.
+
+### A kin's papers
+
+`openScreen('profile', { mon })` is the same screen whether it comes from a
+catch or from picking a kin on the party screen, so **renaming is never a thing
+you get one chance at**. The name is a real `<input>` rather than an in-game
+letter picker: this game is played on a phone as often as a keyboard, and the
+phone already has a very good letter picker in it. While the field has focus the
+game's own key handling stands down — otherwise typing "e" would end your turn —
+and Enter or Escape hands the keyboard back.
+
+The cursor starts on the way out, not on the name field. Confirm should always
+mean "that will do"; renaming is something you go and choose. Starting it on the
+field made a screen you could not leave by pressing the one button every player
+always has.
+
+`commitNick` trims, squashes runs of spaces, caps at 12 characters, and treats
+"named after its own species" as no nickname at all. It runs on the way out as
+well as on the button, so a name you typed is never lost by closing the screen.
 
 ### A card after every win
 
