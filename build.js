@@ -68,6 +68,7 @@ const STATIC_PATHS = [
   'birds_and_beasts',
   'joske_de_flosser',
   'donut_patrol',
+  'merry_crashmas',
   'tools',
 ];
 
