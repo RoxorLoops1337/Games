@@ -18,9 +18,12 @@ edit this block to name the next one.
   its own idea, new set pieces (ice rink, parade, choir stand, bollard chicanes,
   extra snowbanks) and a spiral layout. All beatable blind, targets tuned to
   ~0.8× the median blind run.
-- **B — three critics.** Run three independent critic agents over the shipped
-  game (design, feel/juice, code+performance). Save their reports under
-  `.polish/crashmas-critique-<n>.md`. Exit: three reports on disk.
+- **B — three critics.** Three critic agents are running over the shipped game
+  (design, feel/juice, code+performance), writing to
+  `.polish/crashmas-critique-{design,feel,code}.md`. Exit: all three on disk.
+  **While fewer than three exist, do nothing else** — do not edit the game, the
+  critics are reading it and their line references would go stale. Just check
+  again next pass. `ls .polish/crashmas-critique-*.md | wc -l` should read 3.
 - **C — synthesis.** One agent reads all three reports and writes a prioritised
   plan to `.polish/crashmas-plan.md` — concrete, ordered, each item small enough
   to ship in one pass. Exit: the plan exists and is listed below.
