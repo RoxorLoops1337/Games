@@ -449,6 +449,54 @@ test('shoppers scatter away from an oncoming car', () => {
   assert(d1 > d0 + 40, 'they should have run: ' + d0 + ' → ' + d1);
 });
 
+test('nothing scores while there is no car on the field', () => {
+  const api = boot();
+  api.startLevel(0); api.beginLevel();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.spills.length = 0;
+  const pot = api.addProp('gluh', 2500, 1100, {});
+  for (let i = 0; i < 14; i++) api.addPerson(2500 + Math.cos(i) * 60, 1100 + Math.sin(i) * 60);
+  api.G.phase = 'aim';                       // between runs: nobody is driving
+  api.G.levelScore = 0; api.G.kills = 0;
+  api.wreckProp(pot, 0, 0);                  // the pot still goes over and steams
+  const score0 = api.G.levelScore, kills0 = api.G.kills;
+  step(api, 3);
+  assert(api.G.kills === kills0, 'a spill must not kill with no car on the field, got +' + (api.G.kills - kills0));
+  assert(api.G.levelScore === score0, 'and must not score, got +' + (api.G.levelScore - score0));
+  assert(api.rec.kills === 0, 'nor leak kills into the next recording, got ' + api.rec.kills);
+  assert(api.spills.length === 1, 'the spill is still there, it just is not lethal');
+
+  // and it is lethal again the moment a car is back on it
+  api.G.phase = 'drive';
+  step(api, 0.2);
+  assert(api.G.kills > kills0, 'the spill still works while driving');
+});
+
+test('a new car starts on a clean chain', () => {
+  const api = boot();
+  api.startLevel(0); api.beginLevel();
+  api.G.combo = 7; api.G.mult = 4; api.G.comboT = 1.2;
+  api.nextCar();
+  assert(api.G.combo === 0 && api.G.mult === 1 && api.G.comboT === 0,
+    'combo carried into the next car: ' + api.G.combo + ' / ×' + api.G.mult);
+});
+
+test('the scoreboard does not move after the level has ended', () => {
+  const api = boot();
+  api.startLevel(0); api.beginLevel();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const pot = api.addProp('gluh', 2500, 1100, {});
+  for (let i = 0; i < 10; i++) api.addPerson(2500 + Math.cos(i) * 55, 1100 + Math.sin(i) * 55);
+  api.G.phase = 'drive';
+  api.wreckProp(pot, 0, 0);
+  api.G.carsLeft = 0;
+  api.levelEnd();
+  const frozen = api.G.levelScore, total = api.G.score;
+  step(api, 3);                              // reading the results card
+  assert(api.G.levelScore === frozen, 'level score moved after the card was up: +' + (api.G.levelScore - frozen));
+  assert(api.G.score === total, 'campaign total moved: +' + (api.G.score - total));
+});
+
 test('a spilled glühwein pot scalds the shoppers around it', () => {
   const api = boot();
   api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.spills.length = 0;

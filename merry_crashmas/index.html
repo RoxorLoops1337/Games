@@ -953,6 +953,7 @@ function nextCar(){
   car.z = 0; car.vz = 0; car.roll = 0; car.rollV = 0; car.air = 0;
   car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0;
   G.runKills = 0; G.runWrecks = 0; G.runScore = 0; G.runBest = 0;
+  G.combo = 0; G.comboT = 0; G.mult = 1;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
   G.phase = 'aim';
@@ -1442,7 +1443,7 @@ function stepSpills(dt){
     s.t += dt;
     s.r = Math.min(120, s.r + dt * 26);
     if (s.t > s.ttl){ spills.splice(i, 1); continue; }
-    if (s.t < 3.5){
+    if (s.t < 3.5 && G.phase === 'drive'){
       for (const p of people){
         if (p.dead) continue;
         const dx = p.x - s.x, dy = p.y - s.y;
