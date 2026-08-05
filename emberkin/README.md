@@ -23,7 +23,7 @@ The script is sectioned; each marker is a real boundary:
 | § | what lives there |
 |---|---|
 | 1 | helpers, the `G` state object, save/load |
-| 2 | types, the effectiveness chart, moves, the dex, items, stat maths |
+| 2 | types, the effectiveness chart, moves by element, the dex, items, stat maths |
 | 2b | cards, rarities, growth rules, chests |
 | 3 | maps as char grids, warps, NPCs, encounter tables |
 | 4 | sprite rasterising and the missing-art fallbacks |
@@ -135,6 +135,9 @@ corrupts a run, and both did:
   else, so a message can never be left holding a timer that never runs down.
 - **Playback treats an impossible HP bar as settled.** The next log line waits
   for the bars to catch up; a bar that never arrives used to wait for ever.
+- **Recoil and drain are paid on what came off, not on what was rolled.**
+  Hitting a foe with 3 HP left for 300 recoiled as though it had dealt 300, so a
+  heavy move could kill its own user finishing something already beaten.
 
 And `frame()` catches. An exception used to escape, stop the
 `requestAnimationFrame` chain, and freeze the page on its last drawn frame with
@@ -193,6 +196,35 @@ move plus the support you stack onto it. Foes carry `FOE_HP_MUL` times their
 normal HP — only a little over 1, now that the deck sharpens attacks instead of
 adding its own.
 
+### Elements
+
+Every kin fights with its own element. Nothing learns a `Wild` move — a
+Cindercub bites with fire, not with a generic Nip — so each element carries a
+full kit: a quick opener, a first-strike, a workhorse, a heavy fang, a piece of
+utility and a finisher. `Wild` survives only as the type of `falter`, the move
+you are handed when every real one is spent. The suite enforces both halves: no
+kin learns outside its own types, and every element has the whole kit.
+
+That means STAB and the type chart are always in play, which is the point — the
+chart is the game's main lever and a deck of colourless moves left it idle.
+
+### What a card says it does
+
+A move card shows **the damage it will do to the foe in front of you**, not a
+power rating. Power is an internal number nobody can act on: 45 means one thing
+at level 5 and another at level 50, and nothing at all against something that
+resists it. `moveDamage()` rolls the real formula against the real foe with the
+whole deck stack applied, and shows the range:
+
+    Ember Spit    Ember · deal 20-24, may burn      (vs a Verdant foe)
+    Ember Spit    Ember · deal 5-6, may burn        (vs a Tide foe)
+    Ember Spit    Ember · deal 24-28, may burn      (with an Edge banked)
+
+On the party screen there is nobody to measure against, so `moveDamageNeutral()`
+uses a stated yardstick — a same-level target that neither resists the element
+nor is weak to it — and the screen says `~15 dmg`. A mirror of the kin itself
+would resist its own element and make every move read as feeble.
+
 ### A card after every win
 
 Every win — wild, trainer, the legendary — offers three cards and a **No
@@ -236,14 +268,20 @@ npm run check             # the whole repo
 - `tests/emberkin.test.mjs` — data sanity, type maths, damage, capture,
   levelling, evolution, map connectivity, save round-trip, and the card battle
   end to end (hand, energy, piles, switching, shields).
-- `tests/emberkin_cards.test.mjs` — the deck-builder itself: that no card in
-  your deck deals damage, that a support card adds exactly the number it prints
+- `tests/emberkin_cards.test.mjs` — the deck-builder itself. Every card in the
+  table is played in a controlled fight and the thing it promises is checked, so
+  a card cannot be added with a `vt` or an `fx` that nothing reads — and the
+  audit proves itself by failing a planted card whose value nothing applies.
+  Also: that no card in your deck deals damage, that a support card adds exactly the number it prints
   at level 5 and at level 50, that an edge is spent by the next attack that
   connects and survives a miss, that every win offers three distinct cards and
   harder fights offer better ones, and that growth sticks to
   the copy that earned it, battle growth does not survive the battle, exhaust
   means gone, kill bonuses only fire on kills, growth respects its ceiling,
   chest odds improve with price, and deck size limits hold.
+  The logic suite does the same for moves: every `fx` a move can carry — drain,
+  recoil, self and foe stat stages, statuses against a target that is not immune
+  to them, priority — is exercised against a foe that cannot die mid-measurement.
 - `tests/emberkin_render.test.mjs` — draws every map and every battle state
   against a no-op canvas, plays the opening through simulated key presses, and
   checks the touch layout: `layoutFor` across a table of real phone and tablet
