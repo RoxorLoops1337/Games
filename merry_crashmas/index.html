@@ -298,7 +298,9 @@ const KINDS = {
   elder:   { r: 13, walk: 0.45, flee: 0.5,  pts: 220, cry: 0.8, voice: 0.72 },
   parent:  { r: 14, walk: 0.8,  flee: 0.92, pts: 180, cry: 1.2, voice: 1.1, pram: true },
   kid:     { r: 9,  walk: 1.35, flee: 1.3,  pts: 140, cry: 1.6, voice: 1.7 },
-  santa:   { r: 17, walk: 0.6,  flee: 0.85, pts: SANTA_PTS, cry: 1, voice: 0.6 },
+  // he is old, padded, and carrying a sack: aimed shots kept missing him by
+  // 150px because he sprinted like a shopper
+  santa:   { r: 17, walk: 0.6,  flee: 0.42, pts: SANTA_PTS, cry: 1, voice: 0.6 },
 };
 const KIND_ROLL = [
   [0.60, 'shopper'], [0.75, 'elder'], [0.88, 'parent'], [1.00, 'kid'],
@@ -314,8 +316,8 @@ const PROPS = {
   hut:       { shape:'box',  w:158, h:112, hp:72,  pts:400,  mass:0.46 },
   gluh:      { shape:'circ', r:48,          hp:38,  pts:360,  mass:0.22, spill:true },
   tree:      { shape:'circ', r:56,          hp:95,  pts:260,  mass:0.55 },
-  bigtree:   { shape:'circ', r:132,         hp:175, pts:3000, mass:0.80 },
-  carousel:  { shape:'circ', r:150,         hp:150, pts:2500, mass:0.78 },
+  bigtree:   { shape:'circ', r:132,         hp:55,  pts:3000, mass:0.80 },
+  carousel:  { shape:'circ', r:150,         hp:55,  pts:2500, mass:0.78 },
   snowman:   { shape:'circ', r:36,          hp:8,   pts:130,  mass:0.05 },
   gifts:     { shape:'box',  w:78,  h:78,   hp:7,   pts:90,   mass:0.04 },
   barrel:    { shape:'circ', r:27,          hp:13,  pts:80,   mass:0.10 },
@@ -428,21 +430,21 @@ const COMBO_BANNERS = [
    from the pool by the market's own seed, so a given market always asks for
    the same three things. */
 const GOALS = [
-  { id:'combo',   text: n => 'Chain a ×' + n + ' combo',          gen: lv => 4 + lv * 2,
+  { id:'combo',   text: n => 'Chain a ×' + n + ' combo',          gen: lv => Math.min(14, 4 + lv),
     test: (G2, n) => G2.bestCombo >= n },
-  { id:'stalls',  text: n => 'Wreck ' + n + ' stalls',            gen: lv => 4 + lv * 2,
-    test: (G2, n) => G2.wrecks >= n },
-  { id:'roll',    text: n => 'Land ' + (n > 1 ? n + ' barrel rolls' : 'a barrel roll'), gen: lv => 1 + (lv > 2 ? 1 : 0),
-    test: (G2, n) => G2.rolls >= n },
-  { id:'air',     text: n => 'Take ' + n + (n > 1 ? ' jumps' : ' jump') + ' off a snowbank', gen: lv => 1 + Math.floor(lv / 2),
-    test: (G2, n) => G2.jumps >= n },
-  { id:'slam',    text: n => 'Flatten ' + n + ' at once with a landing', gen: lv => 2 + Math.floor(lv / 2),
-    test: (G2, n) => G2.bestSlam >= n },
-  { id:'elders',  text: n => 'Catch ' + n + ' pensioners',        gen: lv => 3 + lv,
+  { id:'stalls',  text: n => 'Wreck ' + n + ' stalls',            gen: lv => Math.min(14, 4 + lv),
+    test: (G2, n) => G2.bigWrecks >= n },
+  { id:'roll',    text: n => 'Land ' + (n > 1 ? n + ' barrel rolls' : 'a barrel roll'), gen: lv => 1 + (lv > 6 ? 1 : 0),
+    test: (G2, n) => G2.rolls >= n, needs: 'ramps' },
+  { id:'air',     text: n => 'Take ' + n + (n > 1 ? ' jumps' : ' jump') + ' off a snowbank', gen: lv => 1 + Math.floor(lv / 4),
+    test: (G2, n) => G2.jumps >= n, needs: 'ramps' },
+  { id:'slam',    text: n => 'Flatten ' + n + ' at once with a landing', gen: lv => 2 + Math.floor(lv / 6),
+    test: (G2, n) => G2.bestSlam >= n, needs: 'ramps' },
+  { id:'elders',  text: n => 'Catch ' + n + ' pensioners',        gen: lv => Math.min(6, 2 + Math.round(lv / 3)),
     test: (G2, n) => (G2.byKind.elder || 0) >= n },
-  { id:'kids',    text: n => 'Catch ' + n + ' children',          gen: lv => 3 + lv,
+  { id:'kids',    text: n => 'Catch ' + n + ' children',          gen: lv => Math.min(6, 2 + Math.round(lv / 3)),
     test: (G2, n) => (G2.byKind.kid || 0) >= n },
-  { id:'prams',   text: n => 'Send ' + n + ' prams flying',       gen: lv => 2 + Math.floor(lv / 2),
+  { id:'prams',   text: n => 'Send ' + n + ' prams flying',       gen: lv => Math.min(8, 2 + Math.round(lv / 3)),
     test: (G2, n) => (G2.byKind.parent || 0) >= n },
   { id:'santa',   text: () => 'Run over Santa',                   gen: () => 1,
     test: (G2) => (G2.byKind.santa || 0) >= 1, needs: 'santa' },
@@ -450,16 +452,28 @@ const GOALS = [
     test: (G2) => G2.treeDown, needs: 'bigtree' },
   { id:'carousel',text: () => 'Wreck the carousel',               gen: () => 1,
     test: (G2) => G2.carouselDown, needs: 'carousel' },
-  { id:'onerun',  text: n => 'Score ' + fmt(n) + ' with one car',  gen: lv => 2200 + lv * 1400,
+  { id:'onerun',  text: n => 'Score ' + fmt(n) + ' with one car',  gen: lv => 2200 + lv * 900,
     test: (G2, n) => G2.bestRun >= n },
-  { id:'nitro',   text: n => 'Catch ' + n + ' while the nitro burns', gen: lv => 3 + lv,
+  { id:'nitro',   text: n => 'Catch ' + n + ' on the nitro',      gen: lv => Math.min(4, 2 + Math.round(lv / 5)),
     test: (G2, n) => G2.nitroKills >= n },
 ];
 
+/* A landmark deeper than this cannot be reached with speed left to break it —
+   everything in front of it takes the speed. Measured by firing aimed
+   full-power shots with the starting car: at 2600px it falls with a
+   well-timed nitro, at 2700 the car never gets there at all. */
+const LANDMARK_REACH = 2650;
+
 function rollGoals(lv, levelIdx){
-  const has = { santa: people.some(p => p.kind === 'santa'),
-                bigtree: props.some(o => o.kind === 'bigtree'),
-                carousel: props.some(o => o.kind === 'carousel') };
+  const ramps = props.filter(o => o.kind === 'ramp').length;
+  const reachable = o => o.x - ANCHOR.x <= LANDMARK_REACH;
+  // a market whose whole idea is that straight lines are denied should not also
+  // ask you to hit one specific walking man
+  const blocked = (lv.feature || []).indexOf('chicane') >= 0;
+  const has = { santa: !blocked && people.some(p => p.kind === 'santa'),
+                bigtree: props.some(o => o.kind === 'bigtree' && reachable(o)),
+                carousel: props.some(o => o.kind === 'carousel' && reachable(o)),
+                ramps: ramps > 0 };
   const pool = GOALS.filter(g => !g.needs || has[g.needs]);
   const picked = [];
   const used = {};
@@ -468,7 +482,9 @@ function rollGoals(lv, levelIdx){
     const g = pool[ri(0, pool.length - 1)];
     if (used[g.id]) continue;
     used[g.id] = 1;
-    const n = g.gen(levelIdx);
+    // never ask for more jumps than there are snowbanks to jump off
+    let n = g.gen(levelIdx);
+    if (g.needs === 'ramps' && g.id !== 'slam') n = Math.min(n, ramps);
     picked.push({ id: g.id, n, text: g.text(n), done: false });
   }
   return picked;
@@ -513,7 +529,7 @@ const G = {
   starsPer: [],           // best stars ever earned on each market
   bestPer: [],            // best score ever posted on each market
   campaign: true,         // false when a single market was picked from the menu
-  rolls: 0, jumps: 0, bestSlam: 0, bestRun: 0, nitroKills: 0,
+  rolls: 0, jumps: 0, bestSlam: 0, bestRun: 0, nitroKills: 0, bigWrecks: 0,
   byKind: {}, treeDown: false, carouselDown: false,
   best: 0,
   stars: 0,
@@ -528,7 +544,7 @@ const car = {
   x: ANCHOR.x, y: ANCHOR.y, ang: 0, vx: 0, vy: 0, spin: 0,
   boost: 1, boostT: 0, plowT: 0, onIce: 0, hits: 0, dents: 0, launched: false,
   shoutT: 0, shout: '',
-  z: 0, vz: 0, roll: 0, rollV: 0, air: 0, airT: 0, rollAcc: 0, gore: 0, bloody: 0,
+  z: 0, vz: 0, roll: 0, rollV: 0, air: 0, airT: 0, rollAcc: 0, gore: 0, bloody: 0, nitroT: 0,
 };
 
 const aim = { active: false, x: ANCHOR.x, y: ANCHOR.y, power: 0, dx: 0, dy: 0 };
@@ -745,11 +761,16 @@ function genMarket(lv){
     addProp('nutcracker', treeX + Math.cos(a) * 320, treeY + Math.sin(a) * 320, {});
   }
   if (lv.rows >= 3){
-    const cx = clamp(x0 + (x1 - x0) * 0.86, x0 + 400, x1 - 120);
+    const cx = clamp(x0 + (x1 - x0) * 0.62, x0 + 360, x1 - 200);
     addProp('carousel', cx, midY + (rnd() < 0.5 ? -1 : 1) * rowH * 0.9, {});
   }
   if (lv.rows >= 4){
-    const s = addPerson(treeX + rr(-260, 260), treeY + rr(-240, 240), 'santa');
+    // he used to stand behind the tree, which on the deep markets meant no car
+    // ever got near him: three aimed full-power runs and he walked away from
+    // all of them. He works the front of the market now — still a needle in a
+    // haystack, but a reachable one.
+    const sx2 = clamp(x0 + (x1 - x0) * rr(0.15, 0.45), x0 + 120, ANCHOR.x + LANDMARK_REACH - 200);
+    const s = addPerson(sx2, midY + rr(-rowH * 0.42, rowH * 0.42), 'santa');
     s.walk = 30;
   }
 
@@ -863,6 +884,26 @@ function genMarket(lv){
     addPerson(rr(x0 + 60, x0 + (x1 - x0) * 0.55), ANCHOR.y + rr(-120, 120));
   }
 
+  /* One snowbank has to sit on the approach to the thickest part of the crowd,
+     or a landing can never be aimed at anybody: the worst market had its
+     nearest ramp 2610px from where the people actually were. */
+  {
+    const cell = 200;
+    const bins = {};
+    let best = null;
+    for (const p of people){
+      const kx = Math.round(p.x / cell), ky = Math.round(p.y / cell);
+      const key = kx + ',' + ky;
+      const b2 = bins[key] || (bins[key] = { n: 0, x: kx * cell, y: ky * cell });
+      b2.n++;
+      if (!best || b2.n > best.n) best = b2;
+    }
+    if (best){
+      const rx = clamp(best.x - rr(360, 480), MARKET_X - 260, x1 - 120);
+      addProp('ramp', rx, clamp(best.y + rr(-70, 70), yTop - 60, yBot + 60), {});
+    }
+  }
+
   bounds.x0 = FENCE_PAD; bounds.y0 = FENCE_PAD; bounds.y1 = WORLD_H - FENCE_PAD;
   bounds.x1 = clamp(x1 + 460, MARKET_X + 700, WORLD_W - FENCE_PAD);
 
@@ -967,7 +1008,7 @@ function startLevel(i){
   G.levelScore = 0;
   G.cars = lv.cars; G.carsLeft = lv.cars;
   G.kills = 0; G.wrecks = 0; G.bestCombo = 0;
-  G.rolls = 0; G.jumps = 0; G.bestSlam = 0; G.bestRun = 0; G.nitroKills = 0;
+  G.rolls = 0; G.jumps = 0; G.bestSlam = 0; G.bestRun = 0; G.nitroKills = 0; G.bigWrecks = 0;
   G.byKind = {}; G.treeDown = false; G.carouselDown = false;
   G.goalsDone = 0;
   G.goals = rollGoals(lv, G.level);
@@ -1029,7 +1070,7 @@ function nextCar(){
   recReset();
   tracks.push({ x: car.x, y: car.y, a: 0, red: 0, ice: 0, gap: 1 });
   car.z = 0; car.vz = 0; car.roll = 0; car.rollV = 0; car.air = 0;
-  car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0;
+  car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0; car.nitroT = 0;
   G.runKills = 0; G.runWrecks = 0; G.runScore = 0; G.runBest = 0;
   G.combo = 0; G.comboT = 0; G.mult = 1;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
@@ -1333,7 +1374,7 @@ function killPerson(p, vx, vy, cause){
   const pts = addScore(p.pts);
   G.kills++; G.totalKills++; G.runKills++; G.lifeKills++;
   G.byKind[p.kind] = (G.byKind[p.kind] || 0) + 1;
-  if (car.boostT > 0) G.nitroKills++;
+  if (car.nitroT > 0) G.nitroKills++;
   rec.kills++;
   if (rec.killed.length < 24){
     // enough about the victim to re-stage the hit properly in the replay
@@ -1463,6 +1504,7 @@ function wreckProp(o, vx, vy){
   o.vx = (vx || 0) * 0.18; o.vy = (vy || 0) * 0.18;
   G.wrecks++; G.runWrecks++;
   rec.wrecks++;
+  if (o.pts >= 260) G.bigWrecks++;        // a snowman is not a stall
   if (o.kind === 'bigtree') G.treeDown = true;
   if (o.kind === 'carousel') G.carouselDown = true;
   bumpCombo();
@@ -1593,6 +1635,7 @@ function doBoost(){
   if (sp < 25) return false;
   car.boost--;
   car.boostT = 0.55;
+  car.nitroT = 1.6;                        // the window the nitro goal counts in
   car.shout = SHOUTS[ri(0, SHOUTS.length - 1)];
   car.shoutT = SHOUT_TIME;
   const a = Math.atan2(car.vy, car.vx);
@@ -1700,7 +1743,17 @@ function takeOff(sp, o){
   car.air = 1;
   car.z = 6;
   car.vz = Math.min(RAMP_MAX_VZ * CAR.ramp, sp * RAMP_KICK * CAR.ramp);
-  car.rollV = (rnd() < 0.5 ? -1 : 1) * (2.4 + sp / 420);
+  /* The roll rate used to be a constant while the flight time it had to fill
+     was capped by RAMP_MAX_VZ — so the faster you went the further you flew
+     without turning any more, and no car in the game could complete two turns.
+     The hatchback needed 3140px/s for one and tops out at 2072. Rate is now
+     derived from the flight it actually has: any real jump is one turn, and
+     speed buys the second. */
+  const airT = 2 * car.vz / GRAV_Z;
+  const need = Math.PI * 2 + 1.2;
+  car.rollV = (rnd() < 0.5 ? -1 : 1) * (airT > 0.3
+    ? (need / airT) * (1 + Math.min(0.85, sp / 2800))
+    : 2.4 + sp / 420);                      // a hop is a wobble, not a roll
   G.jumps++;
   car.rollAcc = 0;
   car.airT = 0;
@@ -1865,6 +1918,7 @@ function stepCar(dt){
   car.onIce = car.air ? 0 : (onIce() ? 1 : 0);
   if (car.bloody > 0) car.bloody = Math.max(0, car.bloody - dt * 0.45);
   if (car.boostT > 0) car.boostT -= dt;
+  if (car.nitroT > 0) car.nitroT -= dt;
   if (car.plowT > 0) car.plowT -= dt;
   if (car.shoutT > 0) car.shoutT -= dt;
 

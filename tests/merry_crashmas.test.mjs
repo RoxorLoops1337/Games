@@ -1028,15 +1028,93 @@ test('goals never ask for something the market does not have', () => {
   }
 });
 
+test('a market never asks you to fell something you cannot reach', () => {
+  /* The landmark goals were nine 2-star walls: the starting car needed 1522px/s
+     at contact for the tree and arrives at ~900 in an empty world, and on the
+     deepest markets it never gets there at all. HP came down, the carousel moved
+     forward, and anything still out of reach is no longer asked for. */
+  const api = boot();
+  let offered = 0;
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    for (const g of api.G.goals){
+      const kind = g.id === 'tree' ? 'bigtree' : g.id === 'carousel' ? 'carousel' : null;
+      if (!kind) continue;
+      offered++;
+      const o = api.props.find(x => x.kind === kind);
+      assert(o.x - api.C.ANCHOR.x <= 2650,
+        api.LEVELS[i].name + ' asks for a ' + kind + ' ' + Math.round(o.x - api.C.ANCHOR.x) + 'px downrange');
+    }
+  }
+  assert(offered > 0, 'landmark goals should still be offered somewhere');
+});
+
+test('an aimed shot with the starting car can fell a landmark', () => {
+  const felled = (name, kind) => {
+    for (const off of [-90, 0, 90]){
+      const api = boot();
+      const i = api.LEVELS.findIndex(l => l.name === name);
+      api.startLevel(i); api.beginLevel();
+      const t = api.props.find(o => o.kind === kind);
+      if (!t) return false;
+      const dx = t.x - api.C.ANCHOR.x, dy = (t.y + off) - api.C.ANCHOR.y, d = Math.hypot(dx, dy);
+      api.launch(-dx / d * api.C.MAX_PULL, -dy / d * api.C.MAX_PULL);
+      let fired = false;
+      for (let f = 0; f < 900 && api.G.phase === 'drive'; f++){
+        api.update(1 / 60);
+        if (!fired && Math.hypot(t.x - api.car.x, t.y - api.car.y) < 800){ api.doBoost(); fired = true; }
+      }
+      if (t.dead) return true;
+    }
+    return false;
+  };
+  assert(felled('THE BIG TREE', 'bigtree'), 'the town tree survives an aimed nitro run');
+  assert(felled('CAROUSEL SQUARE', 'carousel'), 'the carousel survives an aimed nitro run');
+});
+
+test('Santa can be run over by somebody who aims at him', () => {
+  /* He is one person in a market of hundreds, so a blind run never finds him;
+     what has to be true is that a player who spots him and takes a few goes can
+     have him. He also used to sprint like a shopper, which meant an aimed shot
+     missed by ~150px every time — he flees at 0.42 now, being old and padded
+     and carrying a sack. */
+  const api = boot();
+  const markets = [];
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    if (api.G.goals.some(g => g.id === 'santa')) markets.push(i);
+  }
+  assert(markets.length > 0, 'somebody should be asked to run over Santa');
+
+  for (const i of markets){
+    let got = false;
+    for (const off of [-120, -60, -20, 0, 20, 60, 120]){
+      const run = boot();
+      run.startLevel(i); run.beginLevel();
+      const s = run.people.find(p => p.kind === 'santa');
+      assert(s, api.LEVELS[i].name + ' asks for Santa but has none');
+      const dx = s.x - run.C.ANCHOR.x, dy = (s.y + off) - run.C.ANCHOR.y, d = Math.hypot(dx, dy);
+      run.launch(-dx / d * run.C.MAX_PULL, -dy / d * run.C.MAX_PULL);
+      let fired = false;
+      for (let f = 0; f < 900 && run.G.phase === 'drive'; f++){
+        run.update(1 / 60);
+        if (!fired && Math.hypot(s.x - run.car.x, s.y - run.car.y) < 800){ run.doBoost(); fired = true; }
+      }
+      if ((run.G.byKind.santa || 0) > 0){ got = true; break; }
+    }
+    assert(got, api.LEVELS[i].name + ': seven aimed runs and Santa walked away from all of them');
+  }
+});
+
 test('a goal ticks off the moment it is met', () => {
   const api = boot();
   api.startLevel(0); api.beginLevel();
   api.G.goals = [{ id:'stalls', n: 2, text:'Wreck 2 stalls', done: false }];
   api.G.goalsDone = 0;
-  api.G.wrecks = 1;
+  api.G.bigWrecks = 1;
   api.checkGoals();
   assert(!api.G.goals[0].done, 'not yet');
-  api.G.wrecks = 2;
+  api.G.bigWrecks = 2;
   api.checkGoals();
   assert(api.G.goals[0].done && api.G.goalsDone === 1, 'ticked');
   api.checkGoals();
@@ -1546,6 +1624,73 @@ test('the landing flattens everyone underneath at once', () => {
   assert(api.people.filter(p => p.dead).length >= 5, 'the whole cluster goes under the wheels');
   assert(!far.dead, 'and the one down the aisle does not');
   assert(api.G.banner && /UNDER THE WHEELS/.test(api.G.banner.text), 'a slam banner fires');
+});
+
+test('one real jump is one barrel roll, in every car', () => {
+  /* Driven through takeOff/stepAir/land for real rather than by hand-setting
+     rollAcc — the roll rate used to be a constant fighting a capped flight
+     time, so the van could not complete a turn at any speed up to 4000px/s and
+     no car in the game could complete two. */
+  for (const car of ['hatch', 'van', 'sport', 'monster', 'sleigh']){
+    for (const sp of [1400, 1900]){
+      const api = boot();
+      api.G.lifeKills = 999999;
+      api.selectCar(car);
+      api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+      api.G.rolls = 0;
+      const ramp = api.addProp('ramp', 2200, 1100, {});
+      drive(api, sp, 0, 2200 - ramp.w / 2 - api.getDims().r - 12, 1100);
+      for (let i = 0; i < 400 && (api.car.air || api.car.z > 0 || i < 6); i++) api.update(1 / 60);
+      assert(api.G.rolls >= 1,
+        car + ' at ' + sp + 'px/s landed ' + api.G.rolls + ' rolls off one jump');
+    }
+  }
+});
+
+test('a crawl over a snowbank is a wobble, not a roll', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.G.rolls = 0;
+  const ramp = api.addProp('ramp', 2200, 1100, {});
+  drive(api, api.C.RAMP_MIN + 40, 0, 2200 - ramp.w / 2 - api.C.CAR_R - 12, 1100);
+  for (let i = 0; i < 400 && (api.car.air || i < 6); i++) api.update(1 / 60);
+  assert(api.G.rolls === 0, 'a barely-airborne hop should not count as a roll');
+});
+
+test('no market asks for more jumps than it has snowbanks', () => {
+  const api = boot();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    const ramps = api.props.filter(o => o.kind === 'ramp').length;
+    for (const g of api.G.goals){
+      if (g.id === 'air' || g.id === 'roll'){
+        assert(ramps > 0, api.LEVELS[i].name + ' asks for ' + g.id + ' with no ramps');
+        assert(g.n <= ramps,
+          api.LEVELS[i].name + ' asks for ' + g.n + ' ' + g.id + ' with ' + ramps + ' ramps');
+      }
+      if (g.id === 'slam') assert(ramps > 0, api.LEVELS[i].name + ' asks for a slam with no ramps');
+    }
+  }
+});
+
+test('every market has a snowbank on the approach to its densest crowd', () => {
+  const api = boot();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    // find the fullest 200px cell, the way genMarket does
+    const cell = 200, bins = {};
+    let best = null;
+    for (const p of api.people){
+      const key = Math.round(p.x / cell) + ',' + Math.round(p.y / cell);
+      const b = bins[key] || (bins[key] = { n: 0, x: Math.round(p.x / cell) * cell, y: Math.round(p.y / cell) * cell });
+      b.n++;
+      if (!best || b.n > best.n) best = b;
+    }
+    const near = api.props.some(o => o.kind === 'ramp' &&
+      o.x < best.x && best.x - o.x < 620 && Math.abs(o.y - best.y) < 220);
+    assert(near, api.LEVELS[i].name + ': no snowbank upstream of the crowd at ' +
+      Math.round(best.x) + ',' + Math.round(best.y));
+  }
 });
 
 test('a completed roll pays out on landing', () => {
