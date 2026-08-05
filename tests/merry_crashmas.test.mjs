@@ -29,7 +29,7 @@ toMenu();
 requestAnimationFrame(loop);`;
 
 const EXPOSE = `__out.api = {
-  G, car, aim, props, people, pickups, ice, spills, fx, tracks, gore, snow, snd, cam, shake, bounds,
+  G, car, aim, props, people, pickups, ice, spills, fx, tracks, gore, lens, debris, snow, snd, cam, shake, bounds,
   LEVELS, PROPS, COMBO_BANNERS, BEST_KEY, PROG_KEY,
   reseed, rnd, rr, ri, clamp, lerp, angLerp, fmt,
   genMarket, addProp, addPerson,
@@ -39,27 +39,31 @@ const EXPOSE = `__out.api = {
   killPerson, stepPeople, wreckProp, stepProps, stepSpills, stepFx,
   carSpeed, inCar, doBoost, hitProp, stepCarCollisions, stepCarKills, stepPickups,
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
-  takeOff, land, stepAir, addGore, bleed, drawCar, drawPerson,
+  takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
+  drawCar, drawPerson, drawLens,
   draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
   SHOUTS, SHOUT_TIME,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
        SCARE_R, FLEE_SPD, BOOST_KICK, PLOW_TIME, PERSON_PTS, SANTA_PTS,
-       GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX },
+       GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX, DEBRIS_MAX },
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
-  _setCtx: (c) => { ctx = c; },
 };
 `;
 
 function boot(opts){
   const o = opts || {};
   const gradient = { addColorStop(){} };
+  const counts = {};
   const ctxStub = new Proxy({}, { get(t, p){
     if (p === 'measureText') return () => ({ width: 30 });
-    if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => gradient;
-    if (p === 'canvas') return { width: 960, height: 600 };
+    if (p === 'createLinearGradient' || p === 'createRadialGradient')
+      return () => { if (o.count) counts[p] = (counts[p] || 0) + 1; return gradient; };
+    if (p === 'canvas') return { width: o.w || 960, height: o.h || 600 };
+    if (o.count && typeof p === 'string' && p !== 'then')
+      return () => { counts[p] = (counts[p] || 0) + 1; };
     return () => {};
   }, set(){ return true; } });
   const el = () => ({
@@ -104,6 +108,8 @@ function boot(opts){
     sandbox.requestAnimationFrame, sandbox.setTimeout, sandbox.__out);
   const api = sandbox.__out.api;
   api._store = store;
+  api._counts = counts;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; };
   api._nodes = nodes;
   api._listeners = listeners;
   api._window = sandbox.window;
@@ -515,6 +521,99 @@ test('golden gifts pay out and cannot be taken twice', () => {
   assert(api.G.levelScore === 500, 'and only once');
 });
 
+/* --------------------------------------------------------------- crowd --- */
+
+test('the market is a mixed crowd, not one kind of shopper', () => {
+  const api = boot();
+  api.genMarket(api.LEVELS[5]);
+  const seen = {};
+  for (const p of api.people) seen[p.kind] = (seen[p.kind] || 0) + 1;
+  for (const k of ['shopper', 'elder', 'parent', 'kid']){
+    assert(seen[k] > 5, 'expected a decent number of ' + k + ', got ' + (seen[k] || 0));
+  }
+  assert(seen.santa === 1, 'exactly one Santa in the last market');
+});
+
+test('each kind moves and pays differently', () => {
+  const api = boot();
+  api.people.length = 0;
+  const elder = api.addPerson(2000, 1100, 'elder');
+  const kid = api.addPerson(2100, 1100, 'kid');
+  const parent = api.addPerson(2200, 1100, 'parent');
+  assert(elder.walk < kid.walk, 'pensioners are slower than children');
+  assert(elder.flee < kid.flee, 'and they cannot run either');
+  assert(elder.pts > kid.pts, 'the slow ones are worth more');
+  assert(parent.pram && parent.pramT > 0, 'a parent comes with a pram');
+  assert(kid.r < elder.r, 'children are smaller');
+  assert(kid.voice > elder.voice, 'and higher pitched');
+});
+
+test('fear turns into crying, dropped shopping and tears', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const p = api.addPerson(2000, 1100, 'kid');
+  p.walk = 0;
+  api.G.phase = 'drive';
+  api.car.x = 1900; api.car.y = 1100; api.car.vx = 0; api.car.vy = 0;
+  for (let i = 0; i < 90; i++) api.stepPeople(1 / 60);
+  assert(p.panic > 0.8, 'terrified');
+  assert(p.cry > 0.5, 'and crying, got ' + p.cry);
+  assert(p.dropped === 1, 'dropped what they were carrying');
+  assert(api.fx.some(f => f.type === 'tear'), 'tears fly');
+  assert(api.fx.some(f => f.type === 'drop'), 'so does the shopping');
+  api.drawPerson(p);                       // the crying face renders
+});
+
+test('a pram breaks loose when whoever was pushing it goes down', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.fx.length = 0;
+  const p = api.addPerson(2000, 1100, 'parent');
+  api.killPerson(p, 900, 0, 'car');
+  assert(p.pramT === 0, 'the pram is gone');
+  assert(api.fx.some(f => f.type === 'pram'), 'and it is airborne');
+});
+
+/* ---------------------------------------------------------- destruction --- */
+
+test('a big stall takes the neighbours with it', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const tree = api.addProp('bigtree', 2000, 1100, {});
+  const gifts = api.addProp('gifts', 2090, 1100, {});
+  const far = api.addProp('gifts', 2600, 1100, {});
+  const close = api.addPerson(2050, 1100);
+  const nearby = api.addPerson(2180, 1100);
+  const away = api.addPerson(2700, 1100);
+  api.wreckProp(tree, 600, 0);
+  assert(gifts.dead, 'the gift pile beside it is destroyed');
+  assert(!far.dead, 'the one down the aisle is not');
+  assert(close.dead, 'anyone against it is killed');
+  assert(!away.dead, 'the far shopper is fine');
+  assert(nearby.panic === 1 && Math.hypot(nearby.vx, nearby.vy) > 100, 'the rest are blown back');
+});
+
+test('wrecks leave a debris field, and it stays bounded', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.debris.length = 0;
+  for (let i = 0; i < 60; i++){
+    const hut = api.addProp('hut', 2000 + i * 200, 1100, {});
+    api.wreckProp(hut, 500, 0);
+  }
+  assert(api.debris.length > 20, 'planks everywhere, got ' + api.debris.length);
+  assert(api.debris.length <= api.C.DEBRIS_MAX, 'but capped, got ' + api.debris.length);
+});
+
+test('a damaged stall is still standing but visibly worse', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const hut = api.addProp('hut', 2000, 1100, {});
+  drive(api, 560, 0, 2000 - hut.w / 2 - api.C.CAR_R - 8, 1100);
+  step(api, 0.4);
+  assert(!hut.dead, 'it survived');
+  assert(hut.hp < hut.maxHp * 0.8, 'but it is battered, ' + hut.hp + '/' + hut.maxHp);
+  api.draw();                             // the damaged state renders
+});
+
 /* ----------------------------------------------------------------- air --- */
 
 test('a snowbank at speed puts the car in the air', () => {
@@ -631,11 +730,65 @@ test('blood dries off the tyres, and the decal buffer is capped', () => {
 test('a run through a crowd paints the aisle', () => {
   const api = boot();
   api.startCampaign(); api.beginLevel();
-  api.launch(-api.C.MAX_PULL, 0);
-  step(api, 8);
+  // a whole level of full-power runs, spread across the market
+  for (let i = 0; i < api.G.cars; i++){
+    api.launch(-api.C.MAX_PULL, (i - 1) * 110);
+    step(api, 30);
+  }
   assert(api.G.kills > 0, 'somebody went under');
   assert(api.gore.length > api.G.kills, 'every kill leaves more than one mark');
   assert(api.tracks.some(t => t.red > 0.05), 'and the tyres carry it down the aisle');
+});
+
+test('a fast kill throws chunks that stain where they land', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.gore.length = 0; api.fx.length = 0;
+  const p = api.addPerson(2000, 1100);
+  api.killPerson(p, 1700, 0, 'car');
+  const chunks = api.fx.filter(f => f.type === 'chunk');
+  assert(chunks.length > 0, 'flat out should throw chunks');
+  assert(api.fx.some(f => f.type === 'mist'), 'and a mist');
+  const before = api.gore.filter(g => g.kind === 'chunk').length;
+  step(api, 1.5);
+  assert(api.gore.filter(g => g.kind === 'chunk').length > before, 'chunks stain where they land');
+});
+
+test('a slow kill is messy but not chunky', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.gore.length = 0; api.fx.length = 0;
+  const p = api.addPerson(2000, 1100);
+  api.killPerson(p, 300, 0, 'car');
+  assert(api.gore.length > 3, 'still leaves blood');
+  assert(!api.fx.some(f => f.type === 'chunk'), 'but nothing comes apart at 300px/s');
+});
+
+test('blood hits the camera and then dries off it', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.lens.length = 0;
+  api.killPerson(api.addPerson(2000, 1100), 1500, 0, 'car');
+  assert(api.lens.length > 0, 'the lens catches some');
+  api.splatLens(60);
+  assert(api.lens.length <= 27, 'the lens buffer is bounded, got ' + api.lens.length);
+  api.drawLens();
+  step(api, 7);
+  assert(api.lens.length === 0, 'and it clears, got ' + api.lens.length);
+});
+
+test('driving back over a body drags it and paints the snow', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  const p = api.addPerson(2000, 1100);
+  api.killPerson(p, 200, 0, 'car');
+  p.fly = 0;
+  api.gore.length = 0;
+  const sq = p.squash;
+  drive(api, 600, 0, 2000, 1100);
+  api.stepCarKills();
+  assert(p.smear === 1, 'the pass is counted');
+  assert(p.squash < sq, 'and it flattens them further');
+  assert(api.gore.length > 3, 'leaving a smear');
+  for (let i = 0; i < 6; i++){ api.car.x = 2000; api.car.y = 1100; api.stepCarKills(); }
+  assert(p.smear <= 3, 'but a body only smears so far, got ' + p.smear);
 });
 
 test('bodies are squashed by what hit them', () => {
@@ -865,6 +1018,61 @@ test('the sim survives a wildly variable frame rate', () => {
   assert(Number.isFinite(api.car.x) && Number.isFinite(api.car.y), 'car position stayed finite');
   assert(api.car.x >= api.bounds.x0 - 1 && api.car.x <= api.bounds.x1 + 1, 'car in bounds');
   for (const p of api.people) assert(Number.isFinite(p.x) && Number.isFinite(p.y), 'person went NaN');
+});
+
+/* ---------------------------------------------------------------- cost --- */
+
+/* The draw path is what a busy market costs per frame. Off-camera culling is
+   the whole defence: a late market holds 700 shoppers, hundreds of blood
+   decals and a debris field, and almost none of it is in shot. This counts the
+   2d calls one frame actually issues so the culling cannot quietly rot. */
+test('one frame of the worst market stays inside its draw budget', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(api.LEVELS.length - 1);
+  api.beginLevel();
+  // saturate every buffer the way a finished run would
+  for (let i = 0; i < api.C.GORE_MAX + 100; i++){
+    api.addGore(1600 + (i * 37) % 3000, 300 + (i * 53) % 1600, 20, i % 3 ? 'splat' : 'pool');
+  }
+  for (let i = 0; i < api.C.DEBRIS_MAX; i++){
+    api.debris.push({ x: 1600 + (i * 41) % 3000, y: 300 + (i * 59) % 1600,
+      w: 30, h: 8, rot: i, col: '#a8703c' });
+  }
+  for (let i = 0; i < 140; i++) api.people[i % api.people.length].panic = 1;
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.vx = 800;
+  api.camSnap();
+  api.draw();                       // warm the cached gradients
+  api._resetCounts();
+  api.draw();
+
+  const c = api._counts;
+  const fills = c.fill || 0, strokes = c.stroke || 0;
+  assert(fills > 200, 'the frame should actually be drawing something, got ' + fills);
+  console.log('    (worst-frame draw cost: ' + fills + ' fills, ' + strokes + ' strokes)');
+  assert(fills < 3400, 'fill budget blown: ' + fills);
+  assert(strokes < 1500, 'stroke budget blown: ' + strokes);
+  assert(!c.createRadialGradient, 'the vignette gradient should be cached, not rebuilt');
+  assert(!c.createLinearGradient, 'the floor gradient should be cached, not rebuilt');
+  assert(api.gore.length <= api.C.GORE_MAX, 'gore capped');
+});
+
+test('drawing scales with what is on camera, not with the whole market', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(api.LEVELS.length - 1);
+  api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100;
+  api.camSnap();
+  api.draw(); api._resetCounts(); api.draw();
+  const busy = api._counts.fill || 0;
+
+  // same market, camera parked out on the empty approach
+  api.car.x = api.C.ANCHOR.x; api.car.y = api.C.ANCHOR.y;
+  api.camSnap();
+  api.draw(); api._resetCounts(); api.draw();
+  const empty = api._counts.fill || 0;
+  assert(empty < busy * 0.7, 'an empty view should cost far less: ' + empty + ' vs ' + busy);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -209,9 +209,28 @@ const AIR_DRAG = 0.06;                        // barely any — you keep your sp
 const LAND_R = 52;                            // slam radius, grows with speed
 const FLIP_PTS = 450;
 const AIR_PTS = 300;
-const GORE_MAX = 460;                         // ground decals kept around
+const GORE_MAX = 360;                         // ground decals kept around
+const DEBRIS_MAX = 300;
 
 const PERSON_PTS = 100, SANTA_PTS = 1200;
+
+/* Who is out doing their Christmas shopping. Speed, size and payout differ,
+   and each type panics in its own way. */
+const KINDS = {
+  shopper: { r: 13, walk: 1,    flee: 1,    pts: 100, cry: 1,   voice: 1 },
+  elder:   { r: 13, walk: 0.45, flee: 0.5,  pts: 220, cry: 0.8, voice: 0.72 },
+  parent:  { r: 14, walk: 0.8,  flee: 0.92, pts: 180, cry: 1.2, voice: 1.1, pram: true },
+  kid:     { r: 9,  walk: 1.35, flee: 1.3,  pts: 140, cry: 1.6, voice: 1.7 },
+  santa:   { r: 17, walk: 0.6,  flee: 0.85, pts: SANTA_PTS, cry: 1, voice: 0.6 },
+};
+const KIND_ROLL = [
+  [0.60, 'shopper'], [0.75, 'elder'], [0.88, 'parent'], [1.00, 'kid'],
+];
+function rollKind(){
+  const r = rnd();
+  for (const [t, k] of KIND_ROLL) if (r < t) return k;
+  return 'shopper';
+}
 
 /* Prop table. mass = how much speed you lose ploughing through it. */
 const PROPS = {
@@ -234,13 +253,13 @@ const LEVELS = [
     flavour:'A quiet little market. Nobody is expecting a car.' },
   { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.24,
     flavour:'Everyone is three mugs deep. Reaction times are excellent.' },
-  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.36,
+  { name:'BRATWURST BOULEVARD',  seed:3110, cars:4, rows:3, span:0.80, crowd:1.20, par:0.32,
     flavour:'Long straight aisles. Build the combo, do not stop.' },
   { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.35, par:0.26,
     flavour:'The town tree is worth a fortune. So is the crowd around it.' },
-  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.30,
+  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.5,  par:0.22,
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
-  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.25,
+  { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.75, par:0.22,
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
 ];
 
@@ -294,7 +313,9 @@ const ice = [];         // slippery patches
 const spills = [];      // hot glühwein
 const fx = [];          // particles & floating text
 const tracks = [];      // tyre marks
-const gore = [];        // blood left on the snow — pools, spray, tyre smears
+const gore = [];        // blood left on the snow — pools, spray, chunks, smears
+const debris = [];      // planks and panels left where a stall used to be
+const lens = [];        // droplets thrown at the camera itself
 const shake = { t: 0, a: 0 };
 let hitstop = 0;
 let flash = 0;
@@ -349,13 +370,19 @@ function addProp(kind, x, y, extra){
 }
 
 function addPerson(x, y, kind){
+  const k = kind || rollKind();
+  const d = KINDS[k] || KINDS.shopper;
   const p = {
     x, y, hx: x, hy: y, tx: x, ty: y, vx: 0, vy: 0, ang: rr(-Math.PI, Math.PI),
-    r: kind === 'santa' ? 17 : 13, kind: kind || 'shopper',
-    coat: ri(0, 6), hat: rnd() < 0.72, hatCol: ri(0, 4), walk: rr(24, 46), side: rnd() < 0.5 ? -1 : 1,
-    wt: rr(0, 2), panic: 0, bob: rr(0, 6.28), dead: false, fly: 0, spin: 0, flat: 0,
-    squash: 1, bleedT: 0,
-    pts: kind === 'santa' ? SANTA_PTS : PERSON_PTS,
+    r: d.r, kind: k,
+    coat: ri(0, 6), hat: rnd() < (k === 'elder' ? 0.85 : 0.72), hatCol: ri(0, 4),
+    walk: rr(24, 46) * d.walk, flee: d.flee, voice: d.voice * rr(0.92, 1.09),
+    cryK: d.cry, pram: !!d.pram, pramT: d.pram ? 1 : 0,
+    side: rnd() < 0.5 ? -1 : 1,
+    wt: rr(0, 2), panic: 0, cry: 0, dropped: 0, bob: rr(0, 6.28),
+    dead: false, fly: 0, spin: 0, flat: 0, smear: 0,
+    squash: 1, bleedT: 0, gib: 0,
+    pts: d.pts,
   };
   people.push(p);
   return p;
@@ -367,7 +394,8 @@ function addPerson(x, y, kind){
 function genMarket(lv){
   reseed(lv.seed);
   props.length = 0; people.length = 0; pickups.length = 0;
-  ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0; gore.length = 0;
+  ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0;
+  gore.length = 0; lens.length = 0; debris.length = 0;
 
   const x0 = MARKET_X;
   const x1 = FENCE_PAD + (WORLD_W - FENCE_PAD * 2 - 120) * lv.span;
@@ -413,7 +441,11 @@ function genMarket(lv){
       const c = ri(1, 3) * (lv.crowd > 1.1 ? 2 : 1);
       for (let i = 0; i < c; i++){
         const dir = o.y < cy ? 1 : -1;
-        addPerson(o.x + rr(-70, 70), o.y + dir * rr(60, 105));
+        const q = addPerson(o.x + rr(-70, 70), o.y + dir * rr(60, 105));
+        // families stand together: a grown-up at the stall, a kid beside them
+        if ((q.kind === 'parent' || q.kind === 'elder') && rnd() < 0.6){
+          addPerson(q.x + rr(-34, 34), q.y + rr(-30, 30), 'kid');
+        }
       }
     }
   }
@@ -713,19 +745,50 @@ function addGore(x, y, r, kind, rot){
 function bleed(x, y, vx, vy, amount){
   const a = Math.atan2(vy, vx);
   const sp = Math.hypot(vx, vy);
-  addGore(x, y, rr(20, 34) * amount, 'pool');
-  for (let i = 0; i < Math.round(7 * amount); i++){
+  const hard = sp / 900;                                  // 0 = a nudge, 2 = flat out
+  addGore(x, y, rr(22, 38) * amount, 'pool');
+  for (let i = 0; i < Math.round((8 + hard * 7) * amount); i++){
     const sa = a + rr(-0.55, 0.55);
-    const d = rr(18, 40 + Math.min(150, sp * 0.16));
-    addGore(x + Math.cos(sa) * d, y + Math.sin(sa) * d, rr(5, 15) * amount, 'splat');
+    const d = rr(18, 40 + Math.min(210, sp * 0.2));
+    addGore(x + Math.cos(sa) * d, y + Math.sin(sa) * d, rr(5, 16) * amount, 'splat');
   }
-  for (let i = 0; i < Math.round(12 * amount); i++){
-    const sa = a + rr(-1.1, 1.1), s = rr(0.3, 1.3) * (90 + sp * 0.35);
+  // arterial spray, then the heavy stuff that lands and stays
+  for (let i = 0; i < Math.round((14 + hard * 10) * amount); i++){
+    const sa = a + rr(-1.1, 1.1), s = rr(0.3, 1.3) * (90 + sp * 0.4);
     addFx({ type:'blood', x, y, vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
-      ttl: rr(0.3, 0.7), size: rr(3, 8), col: rnd() < 0.25 ? '#7d1410' : '#b3201a' });
+      ttl: rr(0.3, 0.75), size: rr(3, 9), col: rnd() < 0.25 ? '#7d1410' : '#b3201a' });
   }
+  for (let i = 0; i < Math.round(3 * amount); i++){
+    addFx({ type:'mist', x: x + rr(-10, 10), y: y + rr(-10, 10), vx: rr(-40, 40) + (vx || 0) * 0.1,
+      vy: rr(-40, 40) + (vy || 0) * 0.1, ttl: rr(0.5, 0.9), size: rr(16, 30), col:'#8e1410' });
+  }
+  if (hard > 0.55){
+    for (let i = 0; i < Math.round((3 + hard * 4) * amount); i++){
+      const sa = a + rr(-0.9, 0.9), s = rr(0.4, 1.1) * (140 + sp * 0.3);
+      addFx({ type:'chunk', x, y, vx: Math.cos(sa) * s, vy: Math.sin(sa) * s,
+        ttl: rr(0.5, 1.1), size: rr(4, 9), rot: rr(0, 6.283), spin: rr(-14, 14),
+        col: rnd() < 0.3 ? '#c95a4e' : '#8e1a14' });
+    }
+  }
+  splatLens(Math.round((2 + hard * 4) * amount));
   car.bloody = 1;
   car.gore = Math.min(9, car.gore + 1);
+}
+
+/* Blood on the camera. Screen space, so it stays put while the world moves. */
+function splatLens(n){
+  for (let i = 0; i < n; i++){
+    if (lens.length > 26) lens.shift();
+    lens.push({ x: rr(0.06, 0.94), y: rr(0.06, 0.94), r: rr(4, 17), t: 0,
+      ttl: rr(2.4, 5.5), seed: rnd() });
+  }
+}
+
+function stepLens(dt){
+  for (let i = lens.length - 1; i >= 0; i--){
+    lens[i].t += dt;
+    if (lens[i].t >= lens[i].ttl) lens.splice(i, 1);
+  }
 }
 
 /* ---------- scoring ---------- */
@@ -781,6 +844,13 @@ function killPerson(p, vx, vy, cause){
   }
   puff(p.x, p.y, 5, '#f2f7ff', 170);
   bleed(p.x, p.y, vx || rr(-40, 40), vy || rr(-40, 40), p.kind === 'santa' ? 1.6 : 1);
+  if (p.pram && p.pramT > 0){
+    p.pramT = 0;
+    const a = Math.atan2(vy || 0, vx || 0) + rr(-0.5, 0.5);
+    addFx({ type:'pram', x: p.x + Math.cos(p.ang) * 22, y: p.y + Math.sin(p.ang) * 22,
+      vx: Math.cos(a) * rr(180, 420), vy: Math.sin(a) * rr(180, 420),
+      ttl: 1.6, size: 15, rot: p.ang, spin: rr(-12, 12), col:'#e8eef8' });
+  }
   if (p.hat){
     addFx({ type:'hat', x: p.x, y: p.y, vx: (vx || 0) * 0.35 + rr(-60, 60), vy: (vy || 0) * 0.35 + rr(-90, 30),
       ttl: 1.1, size: 11, col:'#e33', rot: rr(0, 6.28), spin: rr(-10, 10) });
@@ -820,7 +890,7 @@ function stepPeople(dt){
         p.panic = Math.min(1, p.panic + dt * 5);
         fx0 = dx / d - (dy / d) * p.side * 0.5;
         fy0 = dy / d + (dx / d) * p.side * 0.5;
-        spd = FLEE_SPD * (0.7 + 0.55 * p.panic);
+        spd = FLEE_SPD * p.flee * (0.7 + 0.55 * p.panic);
       } else if (p.panic > 0){
         p.panic = Math.max(0, p.panic - dt * 0.35);
       }
@@ -844,6 +914,27 @@ function stepPeople(dt){
     const sp = Math.hypot(p.vx, p.vy);
     if (sp > 4) p.ang = Math.atan2(p.vy, p.vx);
     p.bob += dt * (3 + sp * 0.06);
+
+    // fear turns into tears, and whatever they were carrying hits the floor
+    const wantCry = p.panic * p.cryK;
+    p.cry += (wantCry - p.cry) * Math.min(1, dt * 3);
+    if (p.cry > 0.45){
+      if (rnd() < dt * (2.5 + p.cry * 5)){
+        const a = p.ang + Math.PI + rr(-0.7, 0.7);
+        addFx({ type:'tear', x: p.x + Math.cos(p.ang) * p.r * 0.5, y: p.y + Math.sin(p.ang) * p.r * 0.5,
+          vx: Math.cos(a) * rr(30, 90) + p.vx * 0.3, vy: Math.sin(a) * rr(30, 90) + p.vy * 0.3,
+          ttl: rr(0.35, 0.7), size: rr(2.5, 4.5), col:'#bfe6ff' });
+      }
+      if (!p.wailT || p.wailT <= 0){ p.wailT = rr(0.7, 2.2); if (typeof sndWail === 'function') sndWail(p.voice); }
+    }
+    if (p.wailT > 0) p.wailT -= dt;
+    if (!p.dropped && p.panic > 0.5){
+      p.dropped = 1;
+      const a = rr(0, 6.283);
+      addFx({ type:'drop', x: p.x, y: p.y, vx: Math.cos(a) * rr(60, 150), vy: Math.sin(a) * rr(60, 150),
+        ttl: 1.2, size: rr(7, 12), rot: rr(0, 6.283), spin: rr(-9, 9),
+        col: ['#c8443a', '#e8b53a', '#8a5a2f', '#3f8a5c'][ri(0, 3)] });
+    }
   }
 }
 
@@ -860,8 +951,20 @@ function wreckProp(o, vx, vy){
   const col = o.kind === 'tree' || o.kind === 'bigtree' ? '#2f7a44'
             : o.kind === 'snowman' ? '#eaf3ff'
             : o.kind === 'gluh' ? '#c8442f' : '#a8703c';
-  shards(o.x, o.y, o.pts >= 900 ? 26 : 12, col, o.pts >= 900 ? 460 : 320);
-  puff(o.x, o.y, 8, '#e8f1ff', 200);
+  const big = o.pts >= 900;
+  shards(o.x, o.y, big ? 44 : 22, col, big ? 520 : 380);
+  shards(o.x, o.y, big ? 14 : 7, '#f3ece0', big ? 420 : 300);
+  puff(o.x, o.y, big ? 20 : 12, '#e8f1ff', 240);
+  addFx({ type:'ring', x: o.x, y: o.y, ttl: big ? 0.5 : 0.32,
+    size: (o.shape === 'circ' ? o.r : Math.max(o.w, o.h) / 2) * (big ? 2.6 : 1.8), col:'#ffffff' });
+  // the debris field it leaves behind, drawn on the ground from here on
+  for (let i = 0; i < (big ? 14 : 7); i++){
+    const a = rr(0, 6.283), d = rr(10, big ? 150 : 74);
+    debris.push({ x: o.x + Math.cos(a) * d, y: o.y + Math.sin(a) * d,
+      w: rr(14, big ? 46 : 32), h: rr(5, 12), rot: rr(0, 6.283), col });
+  }
+  if (debris.length > DEBRIS_MAX) debris.splice(0, debris.length - DEBRIS_MAX);
+  blast(o, big);
   if (o.spill){
     spills.push({ x: o.x, y: o.y, r: 74, t: 0, ttl: 6.5 });
     sndCrunch(0.7);
@@ -870,6 +973,36 @@ function wreckProp(o, vx, vy){
   else { addShake(0.22, 6); hitstop = Math.max(hitstop, 0.03); }
   sndCrunch(o.mass);
   return pts;
+}
+
+/* Whatever a big stall was holding up goes with it: the crates and gift piles
+   around it are thrown outward, and anyone standing too close is knocked over
+   (or, if they were right against it, killed by the falling timber). */
+function blast(o, big){
+  const R = big ? 240 : 118;
+  for (const q of props){
+    if (q === o || q.dead || q.hard || q.mass > 0.24) continue;
+    const dx = q.x - o.x, dy = q.y - o.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > R * R) continue;
+    const d = Math.sqrt(d2) || 1;
+    if (big && d < R * 0.45) wreckProp(q, dx / d * 240, dy / d * 240);
+    else { q.vx += dx / d * 190; q.vy += dy / d * 190; q.shakeT = 0.3; }
+  }
+  for (const q of people){
+    if (q.dead) continue;
+    const dx = q.x - o.x, dy = q.y - o.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > R * R) continue;
+    const d = Math.sqrt(d2) || 1;
+    if (d < (big ? 96 : 46)){
+      killPerson(q, dx / d * 420, dy / d * 420, 'blast');
+    } else {
+      q.vx += dx / d * 260; q.vy += dy / d * 260;
+      q.panic = 1;
+      q.cry = Math.max(q.cry, 0.8);
+    }
+  }
 }
 
 function stepProps(dt){
@@ -909,7 +1042,8 @@ function stepFx(dt){
     f.rot += f.spin * dt;
     const k = Math.exp((f.type === 'txt' ? -1.2 : -3.2) * dt);
     f.vx *= k; f.vy *= k;
-    if (f.type === 'star' || f.type === 'hat') f.vy += 90 * dt;
+    if (f.type === 'star' || f.type === 'hat' || f.type === 'drop' || f.type === 'pram') f.vy += 90 * dt;
+    if (f.type === 'chunk' && f.t >= f.ttl - dt) addGore(f.x, f.y, f.size * 1.1, 'chunk');
   }
   if (tracks.length > TRACK_MAX) tracks.splice(0, tracks.length - TRACK_MAX);
 }
@@ -1128,7 +1262,21 @@ function stepCarKills(){
   const sp = carSpeed();
   if (sp < KILL_SPD) return;
   for (const p of people){
-    if (p.dead) continue;
+    if (p.dead){
+      // driving back over a body drags it along and paints the snow
+      if (p.smear < 3 && p.fly <= 0 && Math.abs(p.x - car.x) < 70 && Math.abs(p.y - car.y) < 70
+          && inCar(p.x, p.y, p.r, p.r)){
+        p.smear++;
+        p.squash = Math.max(0.22, p.squash * 0.72);
+        p.x += car.vx * 0.02; p.y += car.vy * 0.02;
+        addGore(p.x, p.y, rr(14, 24), 'pool');
+        for (let i = 0; i < 4; i++){
+          addGore(p.x - car.vx * rr(0.01, 0.05), p.y - car.vy * rr(0.01, 0.05), rr(6, 13), 'splat');
+        }
+        car.bloody = 1;
+      }
+      continue;
+    }
     if (Math.abs(p.x - car.x) > 90 || Math.abs(p.y - car.y) > 90) continue;
     if (inCar(p.x, p.y, p.r * 0.6, p.r * 0.6)) killPerson(p, car.vx, car.vy, 'car');
   }
@@ -1276,6 +1424,7 @@ function update(dt){
   stepProps(dt);
   stepSpills(dt);
   stepFx(dt);
+  stepLens(dt);
   stepCombo(dt);
 
   if (G.phase === 'drive') stepCar(dt);
@@ -1340,6 +1489,7 @@ function shadow(x, y, rx, ry, a){
 }
 
 /* ---------- ground ---------- */
+let floorGrad = null;
 function drawGround(){
   const halfW = VW / cam.s / 2, halfH = VH / cam.s / 2;
   const x0 = cam.x - halfW - 60, x1 = cam.x + halfW + 60;
@@ -1350,12 +1500,15 @@ function drawGround(){
   // packed snow of the market floor, fading in rather than starting on a seam
   const gx0 = Math.max(x0, MARKET_X - 620), gx1 = Math.min(x1, bounds.x1);
   if (gx1 > gx0){
-    const g = ctx.createLinearGradient(MARKET_X - 620, 0, MARKET_X + 160, 0);
-    if (g && g.addColorStop){
-      g.addColorStop(0, 'rgba(150,170,200,0)');
-      g.addColorStop(1, 'rgba(150,170,200,.42)');
-      ctx.fillStyle = g;
-    } else ctx.fillStyle = 'rgba(150,170,200,.42)';
+    // the gradient is fixed in world space, so build it once and keep it
+    if (!floorGrad){
+      floorGrad = ctx.createLinearGradient(MARKET_X - 620, 0, MARKET_X + 160, 0);
+      if (floorGrad && floorGrad.addColorStop){
+        floorGrad.addColorStop(0, 'rgba(150,170,200,0)');
+        floorGrad.addColorStop(1, 'rgba(150,170,200,.42)');
+      }
+    }
+    ctx.fillStyle = floorGrad || 'rgba(150,170,200,.42)';
     ctx.fillRect(gx0, Math.max(y0, 160), gx1 - gx0, Math.min(y1, WORLD_H - 160) - Math.max(y0, 160));
   }
 
@@ -1410,14 +1563,33 @@ function drawGround(){
       ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * (0.62 + g.seed * 0.34), 0, 0, 6.283); ctx.fill();
       ctx.fillStyle = 'rgba(182,32,24,.5)';
       ctx.beginPath(); ctx.ellipse(g.r * 0.2, 0, g.r * 0.55, g.r * 0.4, 0, 0, 6.283); ctx.fill();
+    } else if (g.kind === 'chunk'){
+      ctx.fillStyle = 'rgba(96,12,10,.8)';
+      ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * 0.7, 0, 0, 6.283); ctx.fill();
     } else {
       ctx.fillStyle = 'rgba(160,22,18,.56)';
-      ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * 0.5, 0, 0, 6.283); ctx.fill();
-      ctx.fillStyle = 'rgba(150,20,16,.5)';
-      for (let i = 0; i < 3; i++){
-        const a = g.seed * 6.283 + i * 2.1;
-        circle(Math.cos(a) * g.r * 1.5, Math.sin(a) * g.r * 1.1, g.r * 0.3); ctx.fill();
-      }
+      ctx.beginPath();
+      ctx.ellipse(0, 0, g.r, g.r * 0.5, 0, 0, 6.283);
+      const a = g.seed * 6.283;
+      ctx.moveTo(Math.cos(a) * g.r * 1.8 + g.r * 0.3, Math.sin(a) * g.r * 1.3);
+      ctx.arc(Math.cos(a) * g.r * 1.8, Math.sin(a) * g.r * 1.3, g.r * 0.3, 0, 6.283);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // planks and panels, lying where they fell
+  for (const d of debris){
+    if (d.x < x0 - 60 || d.x > x1 + 60 || d.y < y0 - 60 || d.y > y1 + 60) continue;
+    ctx.save();
+    ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+    ctx.fillStyle = 'rgba(10,20,36,.16)';
+    ctx.fillRect(-d.w / 2 + 3, -d.h / 2 + 4, d.w, d.h);
+    ctx.fillStyle = d.col;
+    ctx.fillRect(-d.w / 2, -d.h / 2, d.w, d.h);
+    if (cam.s > 0.75){
+      ctx.fillStyle = 'rgba(255,255,255,.14)';
+      ctx.fillRect(-d.w / 2, -d.h / 2, d.w, 2);
     }
     ctx.restore();
   }
@@ -1431,7 +1603,7 @@ function drawGround(){
     if (Math.max(a.x, t.x) < x0 || Math.min(a.x, t.x) > x1) continue;
     if (Math.max(a.y, t.y) < y0 || Math.min(a.y, t.y) > y1) continue;
     ctx.strokeStyle = t.red > 0.05
-      ? 'rgba(122,14,10,' + (0.3 + 0.5 * t.red) + ')'
+      ? 'rgba(122,14,10,' + (0.2 + 0.34 * t.red) + ')'
       : 'rgba(96,110,134,.3)';
     const n1x = Math.cos(a.a + Math.PI / 2) * 12, n1y = Math.sin(a.a + Math.PI / 2) * 12;
     const n2x = Math.cos(t.a + Math.PI / 2) * 12, n2y = Math.sin(t.a + Math.PI / 2) * 12;
@@ -1446,20 +1618,38 @@ function drawGround(){
 function drawHut(o){
   const w = o.w, h = o.h, x = o.x, y = o.y;
   if (o.dead){
+    // a heap: the frame came down roughly the way it was hit, the canvas
+    // crumpled on top of it
     ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot);
-    shadow(0, h * 0.3, w * 0.5, h * 0.22, 0.18);
+    shadow(0, h * 0.24, w * 0.52, h * 0.24, 0.2);
+    ctx.fillStyle = '#5f4530';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w * 0.44, h * 0.34, 0, 0, 6.283); ctx.fill();
     ctx.fillStyle = '#7a5a3c';
-    for (let i = 0; i < 5; i++){
-      const a = o.seed * 6.28 + i * 1.3;
-      ctx.save(); ctx.rotate(a); ctx.fillRect(-w * 0.42, -7, w * 0.84, 13); ctx.restore();
+    for (let i = 0; i < 7; i++){
+      const a = (o.seed * 2 - 1) * 0.5 + (i - 3) * 0.16;
+      const ox = (i - 3) * w * 0.1, oy = ((i % 3) - 1) * h * 0.16;
+      ctx.save(); ctx.translate(ox, oy); ctx.rotate(a);
+      ctx.fillStyle = i % 2 ? '#7a5a3c' : '#8d6a45';
+      ctx.fillRect(-w * (0.2 + o.seed * 0.16), -6, w * (0.4 + o.seed * 0.3), 11);
+      ctx.restore();
     }
-    ctx.fillStyle = 'rgba(210,60,50,.7)';
-    ctx.fillRect(-w * 0.3, -h * 0.2, w * 0.36, 12);
+    // torn awning
+    ctx.save(); ctx.rotate(0.5 + o.seed);
+    for (let i = 0; i < 4; i++){
+      ctx.fillStyle = i % 2 ? '#e8e2d6' : '#c23a30';
+      ctx.fillRect(-w * 0.22 + i * (w * 0.11), h * 0.08, w * 0.11, 20);
+    }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(30,22,16,.22)';
+    circle(w * 0.1, -h * 0.08, w * 0.16); ctx.fill();
     ctx.restore();
     return;
   }
   const j = o.shakeT > 0 ? Math.sin(T * 60) * o.shakeT * 5 : 0;
+  const wear = clamp(1 - o.hp / o.maxHp, 0, 1);     // 0 pristine, 1 about to go
   ctx.save(); ctx.translate(x + j, y);
+  ctx.rotate(wear * 0.07 * (o.seed < 0.5 ? -1 : 1));
   shadow(0, h * 0.42, w * 0.54, h * 0.26, 0.3);
   // hut body
   ctx.fillStyle = '#6b4a30';
@@ -1470,20 +1660,41 @@ function drawHut(o){
   const fs = o.face || 1;
   const ay = fs > 0 ? h / 2 - 6 : -h / 2 - 26;
   const stripes = 7, sw = w / stripes;
-  for (let i = 0; i < stripes; i++){
-    ctx.fillStyle = i % 2 ? '#f3ece0' : '#cf3b32';
-    ctx.fillRect(-w / 2 + i * sw, ay, sw, 32);
-  }
+  ctx.fillStyle = '#f3ece0';
+  ctx.fillRect(-w / 2, ay, w, 32);
+  ctx.fillStyle = '#cf3b32';
+  ctx.beginPath();
+  for (let i = 0; i < stripes; i += 2) ctx.rect(-w / 2 + i * sw, ay, sw, 32);
+  ctx.fill();
   ctx.fillStyle = 'rgba(10,20,36,.18)';
   ctx.fillRect(-w / 2, ay + 26, w, 6);
   // snowy roof cap + goods
   ctx.fillStyle = '#eef4ff';
   roundRect(-w / 2 + 14, -h / 2 + 14, w - 28, h * 0.34, 6); ctx.fill();
   ctx.fillStyle = '#c9a24a';
+  ctx.beginPath();
   for (let i = 0; i < 4; i++){
-    ctx.beginPath();
-    ctx.arc(-w * 0.28 + i * (w * 0.19), fs > 0 ? h * 0.12 : -h * 0.12, 7, 0, 6.283);
-    ctx.fill();
+    if (wear > 0.5 && i % 2 === 0) continue;        // the goods are already off
+    const gx = -w * 0.28 + i * (w * 0.19), gy = fs > 0 ? h * 0.12 : -h * 0.12;
+    ctx.moveTo(gx + 7, gy);
+    ctx.arc(gx, gy, 7, 0, 6.283);
+  }
+  ctx.fill();
+  // splits in the panelling once it has taken a hit
+  if (wear > 0.28){
+    ctx.strokeStyle = 'rgba(30,20,14,.5)'; ctx.lineWidth = 3;
+    const n = wear > 0.65 ? 4 : 2;
+    for (let i = 0; i < n; i++){
+      const sx = -w * 0.4 + (i + o.seed) * (w * 0.26);
+      ctx.beginPath();
+      ctx.moveTo(sx, -h * 0.45);
+      ctx.lineTo(sx + (o.seed - 0.5) * 26, h * 0.45);
+      ctx.stroke();
+    }
+  }
+  if (wear > 0.65){
+    ctx.fillStyle = 'rgba(20,14,10,.35)';
+    roundRect(-w * 0.34, -h * 0.2, w * 0.5, h * 0.34, 6); ctx.fill();
   }
   ctx.restore();
 }
@@ -1685,7 +1896,9 @@ function drawProp(o){
    panic), legs that stride, a head with a hat on top. Dead ones sprawl with
    their limbs where the car left them. */
 function drawPerson(p){
-  const coat = COATS[p.coat % COATS.length];
+  const coat = p.kind === 'elder' ? ['#6b6f7e', '#7a6a5e', '#5f6b7a', '#79697a'][p.coat % 4]
+             : p.kind === 'kid' ? ['#ff8a3d', '#3fc4d8', '#ffcf3d', '#8ee06a'][p.coat % 4]
+             : COATS[p.coat % COATS.length];
   const skin = SKIN[p.coat % SKIN.length];
   const trous = ['#3a4256', '#4a3b30', '#2f3b4c', '#5a4a52'][p.coat % 4];
   ctx.save();
@@ -1730,15 +1943,59 @@ function drawPerson(p){
   const stride = Math.sin(p.bob) * clamp(sp / 60, 0.15, 1);
   const wob = Math.sin(p.bob) * (0.1 + p.panic * 0.28);
   ctx.rotate(p.ang + Math.PI / 2);
-  shadow(0, p.r * 0.55, p.r * 0.9, p.r * 0.42, 0.24);
+
+  // zoomed out far enough and the limbs are sub-pixel anyway: coat, head, hat
+  if (p.r * cam.s < 8.5){
+    ctx.fillStyle = coat;
+    ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.9, p.r * 0.75, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = p.hat ? HATS[p.hatCol % HATS.length] : skin;
+    circle(0, -p.r * 0.3, p.r * 0.5); ctx.fill();
+    if (p.panic > 0.5){
+      ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(-p.r * 0.6, 0); ctx.lineTo(-p.r * 1.2, -p.r * 0.7);
+      ctx.moveTo(p.r * 0.6, 0); ctx.lineTo(p.r * 1.2, -p.r * 0.7);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const fine = p.r * cam.s > 11;                  // close enough to see detail
+  if (fine) shadow(0, p.r * 0.55, p.r * 0.9, p.r * 0.42, 0.24);
   ctx.lineCap = 'round';
 
+  // a pram, pushed along in front
+  if (p.pram && p.pramT > 0){
+    ctx.save();
+    ctx.translate(0, -p.r * 1.75);
+    shadow(0, p.r * 0.5, p.r * 0.72, p.r * 0.3, 0.2);
+    ctx.fillStyle = '#22354f';
+    roundRect(-p.r * 0.62, -p.r * 0.72, p.r * 1.24, p.r * 1.44, 6); ctx.fill();
+    ctx.fillStyle = '#dfe8f6';
+    roundRect(-p.r * 0.46, -p.r * 0.56, p.r * 0.92, p.r * 1.1, 5); ctx.fill();
+    ctx.fillStyle = '#f3c9a8';
+    circle(0, -p.r * 0.16, p.r * 0.24); ctx.fill();
+    ctx.fillStyle = '#101722';
+    circle(-p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
+    circle(p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
+    ctx.restore();
+    // hands on the handle
+    ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(-p.r * 0.5, -p.r * 0.2); ctx.lineTo(-p.r * 0.45, -p.r * 1.05);
+    ctx.moveTo(p.r * 0.5, -p.r * 0.2); ctx.lineTo(p.r * 0.45, -p.r * 1.05);
+    ctx.stroke();
+  }
+
   // legs, striding under the coat
-  ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.38;
-  ctx.beginPath();
-  ctx.moveTo(-p.r * 0.32, p.r * 0.2); ctx.lineTo(-p.r * 0.36, p.r * (0.85 + stride * 0.45));
-  ctx.moveTo(p.r * 0.32, p.r * 0.2); ctx.lineTo(p.r * 0.36, p.r * (0.85 - stride * 0.45));
-  ctx.stroke();
+  if (fine || p.panic < 0.25){
+    ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.38;
+    ctx.beginPath();
+    ctx.moveTo(-p.r * 0.32, p.r * 0.2); ctx.lineTo(-p.r * 0.36, p.r * (0.85 + stride * 0.45));
+    ctx.moveTo(p.r * 0.32, p.r * 0.2); ctx.lineTo(p.r * 0.36, p.r * (0.85 - stride * 0.45));
+    ctx.stroke();
+  }
 
   // arms: swinging when walking, straight up when running for their life
   ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.34;
@@ -1752,17 +2009,27 @@ function drawPerson(p){
   }
   ctx.stroke();
 
+  if (p.kind === 'elder'){
+    ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = p.r * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(p.r * 0.75, -p.r * 0.1);
+    ctx.lineTo(p.r * (1.05 + stride * 0.1), p.r * 0.95);
+    ctx.stroke();
+  }
+
   // coat: shoulders wider than deep
   ctx.fillStyle = coat;
   ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.86, p.r * 0.72, 0, 0, 6.283); ctx.fill();
   ctx.strokeStyle = 'rgba(18,28,48,.5)'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.13)';
-  circle(-p.r * 0.3, -p.r * 0.15, p.r * 0.34); ctx.fill();
-  // a scarf tail, because it is freezing
-  ctx.strokeStyle = HATS[(p.coat + 3) % HATS.length]; ctx.lineWidth = p.r * 0.2;
-  ctx.beginPath();
-  ctx.moveTo(0, p.r * 0.05); ctx.lineTo(-p.r * 0.15 * (1 + stride), p.r * 0.6);
-  ctx.stroke();
+  if (fine){
+    ctx.fillStyle = 'rgba(255,255,255,.13)';
+    circle(-p.r * 0.3, -p.r * 0.15, p.r * 0.34); ctx.fill();
+    // a scarf tail, because it is freezing
+    ctx.strokeStyle = HATS[(p.coat + 3) % HATS.length]; ctx.lineWidth = p.r * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(0, p.r * 0.05); ctx.lineTo(-p.r * 0.15 * (1 + stride), p.r * 0.6);
+    ctx.stroke();
+  }
 
   // head
   ctx.fillStyle = skin;
@@ -1777,17 +2044,45 @@ function drawPerson(p){
   } else if (p.hat){
     ctx.fillStyle = HATS[p.hatCol % HATS.length];
     circle(0, -p.r * 0.22, p.r * 0.45); ctx.fill();
-    ctx.fillStyle = '#f6f2ea';
-    circle(0, p.r * 0.12, p.r * 0.18); ctx.fill();
+    if (fine){
+      ctx.fillStyle = '#f6f2ea';
+      circle(0, p.r * 0.12, p.r * 0.18); ctx.fill();
+    }
   } else {
     ctx.fillStyle = 'rgba(40,30,26,.6)';
     circle(0, -p.r * 0.2, p.r * 0.4); ctx.fill();
   }
+  // grey hair on the pensioners, so they read as old from above
+  if (p.kind === 'elder' && !p.hat){
+    ctx.fillStyle = 'rgba(226,230,238,.9)';
+    circle(0, -p.r * 0.2, p.r * 0.4); ctx.fill();
+  }
+
+  // the face, once there is something to see on it
+  if (p.cry > 0.25 && Math.abs(p.x - car.x) < 640 && Math.abs(p.y - car.y) < 640){
+    // squeezed-shut eyes, a wide-open mouth, and tears running off both sides
+    const open = p.r * (0.13 + 0.12 * p.cry) * (1 + Math.sin(p.bob * 2.2) * 0.25);
+    ctx.strokeStyle = 'rgba(24,32,50,.85)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-p.r * 0.32, -p.r * 0.48); ctx.lineTo(-p.r * 0.1, -p.r * 0.5);
+    ctx.moveTo(p.r * 0.32, -p.r * 0.48); ctx.lineTo(p.r * 0.1, -p.r * 0.5);
+    ctx.stroke();
+    ctx.fillStyle = '#5c1f1f';
+    ctx.beginPath();
+    ctx.ellipse(0, -p.r * 0.26, open * 0.85, open, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(150,220,255,.9)';
+    for (const sx of [-1, 1]){
+      ctx.beginPath();
+      ctx.ellipse(sx * p.r * 0.36, -p.r * (0.34 - 0.08 * Math.sin(p.bob * 3)),
+        p.r * 0.09, p.r * 0.15, 0, 0, 6.283);
+      ctx.fill();
+    }
+  }
   if (p.panic > 0.5){
     ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.font = '900 16px system-ui';
+    ctx.font = '900 ' + Math.round(13 + p.r * 0.3) + 'px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('!', 0, -p.r * 1.9);
+    ctx.fillText(p.cry > 0.6 ? '!!' : '!', 0, -p.r * 1.95);
     ctx.textAlign = 'left';
   }
   ctx.restore();
@@ -2006,6 +2301,39 @@ function drawFx(){
       ctx.fillRect(-f.size / 2, -1.6, f.size, 3.2);
       ctx.fillRect(-1.6, -f.size / 2, 3.2, f.size);
       ctx.restore();
+    } else if (f.type === 'tear'){
+      ctx.fillStyle = f.col;
+      ctx.beginPath();
+      ctx.ellipse(f.x, f.y, f.size * 0.7, f.size, Math.atan2(f.vy, f.vx) + Math.PI / 2, 0, 6.283);
+      ctx.fill();
+    } else if (f.type === 'mist'){
+      ctx.globalAlpha = clamp(k, 0, 1) * 0.3;
+      ctx.fillStyle = f.col;
+      circle(f.x, f.y, f.size * (1.2 - k * 0.5)); ctx.fill();
+    } else if (f.type === 'chunk'){
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      ctx.fillStyle = f.col;
+      ctx.beginPath(); ctx.ellipse(0, 0, f.size, f.size * 0.66, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(255,180,170,.35)';
+      circle(-f.size * 0.25, -f.size * 0.2, f.size * 0.3); ctx.fill();
+      ctx.restore();
+    } else if (f.type === 'drop'){
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      ctx.fillStyle = f.col;
+      roundRect(-f.size / 2, -f.size * 0.6, f.size, f.size * 1.2, 3); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.3)';
+      ctx.fillRect(-f.size / 2, -f.size * 0.6, f.size, 3);
+      ctx.restore();
+    } else if (f.type === 'pram'){
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      ctx.fillStyle = '#22354f';
+      roundRect(-f.size, -f.size * 0.7, f.size * 2, f.size * 1.4, 6); ctx.fill();
+      ctx.fillStyle = f.col;
+      roundRect(-f.size * 0.8, -f.size * 0.5, f.size * 1.6, f.size, 5); ctx.fill();
+      ctx.fillStyle = '#101722';
+      circle(-f.size * 0.6, f.size * 0.8, f.size * 0.34); ctx.fill();
+      circle(f.size * 0.6, f.size * 0.8, f.size * 0.34); ctx.fill();
+      ctx.restore();
     } else if (f.type === 'ring'){
       ctx.strokeStyle = f.col;
       ctx.globalAlpha = clamp(k, 0, 1) * 0.55;
@@ -2029,10 +2357,13 @@ function drawFx(){
 }
 
 /* ---------- warm lights, drawn additively over the scene ---------- */
+const MAX_LIGHTS = 16;
+const lightBuf = [];
 function drawLights(){
   const halfW = VW / cam.s / 2 + 120, halfH = VH / cam.s / 2 + 120;
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
+  // big additive circles are the most expensive thing on screen, so only the
+  // nearest handful are lit
+  lightBuf.length = 0;
   for (const o of props){
     if (o.dead) continue;
     if (Math.abs(o.x - cam.x) > halfW || Math.abs(o.y - cam.y) > halfH) continue;
@@ -2042,8 +2373,17 @@ function drawLights(){
     else if (o.kind === 'bigtree'){ r = 250; col = 'rgba(255,210,110,.07)'; }
     else if (o.kind === 'carousel'){ r = 200; col = 'rgba(255,170,120,.08)'; }
     if (!col) continue;
-    ctx.fillStyle = col;
-    circle(o.x, o.y, r * (0.94 + 0.06 * Math.sin(T * 2 + o.seed * 6.28))); ctx.fill();
+    const dx = o.x - cam.x, dy = o.y - cam.y;
+    lightBuf.push({ o, r, col, d: dx * dx + dy * dy });
+  }
+  lightBuf.sort((a, b) => a.d - b.d);
+  const lit = Math.min(lightBuf.length, MAX_LIGHTS);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < lit; i++){
+    const L = lightBuf[i];
+    ctx.fillStyle = L.col;
+    circle(L.o.x, L.o.y, L.r * (0.94 + 0.06 * Math.sin(T * 2 + L.o.seed * 6.28))); ctx.fill();
   }
   if (car.boostT > 0){
     ctx.fillStyle = 'rgba(120,255,170,.16)';
@@ -2196,18 +2536,51 @@ function drawHUD(){
 function drawSnow(){
   screenTransform();
   ctx.fillStyle = 'rgba(255,255,255,.7)';
+  ctx.beginPath();
   for (const f of snow){
-    circle(f.x * VW, f.y * VH, f.s); ctx.fill();
+    const x = f.x * VW, y = f.y * VH;
+    ctx.moveTo(x + f.s, y);
+    ctx.arc(x, y, f.s, 0, 6.283);
   }
+  ctx.fill();
 }
 
+/* Blood thrown at the camera lens. Screen space, fades away on its own. */
+function drawLens(){
+  if (!lens.length) return;
+  screenTransform();
+  for (const d of lens){
+    const k = clamp(1 - d.t / d.ttl, 0, 1);
+    const x = d.x * VW, y = d.y * VH, r = d.r * (0.85 + 0.15 * k);
+    ctx.globalAlpha = 0.5 * k;
+    ctx.fillStyle = '#8e1210';
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * (0.6 + d.seed * 0.5), d.seed * 6.283, 0, 6.283); ctx.fill();
+    for (let i = 0; i < 3; i++){
+      const a = d.seed * 6.283 + i * 2.1;
+      circle(x + Math.cos(a) * r * 1.7, y + Math.sin(a) * r * 1.4, r * 0.3); ctx.fill();
+    }
+    ctx.globalAlpha = 0.25 * k;
+    ctx.fillStyle = '#d8483a';
+    circle(x - r * 0.2, y - r * 0.25, r * 0.45); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+let vigGrad = null, vigKey = '';
 function drawVignette(){
   screenTransform();
-  const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.35, VW / 2, VH / 2, Math.max(VW, VH) * 0.72);
-  if (g && g.addColorStop){
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(4,8,18,.55)');
-    ctx.fillStyle = g;
+  const key = VW + 'x' + VH;
+  if (key !== vigKey){
+    vigKey = key;
+    vigGrad = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.35,
+      VW / 2, VH / 2, Math.max(VW, VH) * 0.72);
+    if (vigGrad && vigGrad.addColorStop){
+      vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      vigGrad.addColorStop(1, 'rgba(4,8,18,.55)');
+    }
+  }
+  if (vigGrad){
+    ctx.fillStyle = vigGrad;
     ctx.fillRect(0, 0, VW, VH);
   }
   if (flash > 0){
@@ -2225,24 +2598,20 @@ function draw(){
   worldTransform();
   drawGround();
 
+  // everything off-camera is skipped — a late market holds 700 shoppers and
+  // most of them are nowhere near the windscreen
+  const halfW = VW / cam.s / 2 + 220, halfH = VH / cam.s / 2 + 220;
+  const near = (e) => Math.abs(e.x - cam.x) <= halfW && Math.abs(e.y - cam.y) <= halfH;
+
   // dead bodies and wrecks sit on the ground, under everything else
-  for (const p of people) if (p.dead && p.fly <= 0) drawPerson(p);
-  for (const o of props) if (o.dead) drawProp(o);
-  for (const u of pickups) drawPickup(u);
+  for (const p of people) if (p.dead && p.fly <= 0 && near(p)) drawPerson(p);
+  for (const o of props) if (o.dead && near(o)) drawProp(o);
+  for (const u of pickups) if (near(u)) drawPickup(u);
 
   // living things painted back-to-front so the market reads as depth
   const order = [];
-  const halfW = VW / cam.s / 2 + 220, halfH = VH / cam.s / 2 + 220;
-  for (const o of props){
-    if (o.dead) continue;
-    if (Math.abs(o.x - cam.x) > halfW || Math.abs(o.y - cam.y) > halfH) continue;
-    order.push(o);
-  }
-  for (const p of people){
-    if (p.dead && p.fly <= 0) continue;
-    if (Math.abs(p.x - cam.x) > halfW || Math.abs(p.y - cam.y) > halfH) continue;
-    order.push(p);
-  }
+  for (const o of props) if (!o.dead && near(o)) order.push(o);
+  for (const p of people) if (!(p.dead && p.fly <= 0) && near(p)) order.push(p);
   order.sort((a, b) => a.y - b.y);
   for (const e of order){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
@@ -2256,6 +2625,7 @@ function draw(){
   drawLights();
 
   drawSnow();
+  drawLens();
   drawVignette();
   drawHUD();
 }
@@ -2321,6 +2691,12 @@ const sndCrunch = m => { noise(0.22 + m * 0.2, 0.2 + m * 0.2, 700 - m * 260); to
 const sndSquish = () => { tone(420 + Math.random() * 260, 0.10, 'square', 0.10, 130); noise(0.07, 0.08, 1600); };
 const sndBoost  = () => { tone(220, 0.35, 'sawtooth', 0.2, 880); noise(0.3, 0.14, 1200); };
 const sndPickup = () => { tone(660, 0.09, 'triangle', 0.18); setTimeout(() => tone(990, 0.12, 'triangle', 0.16), 70); };
+/* A wail. Pitch comes from who is doing it — kids high, pensioners low. */
+const sndWail = v => {
+  const f = 300 * (v || 1);
+  tone(f, 0.34, 'sawtooth', 0.055, f * 1.7);
+  setTimeout(() => tone(f * 1.5, 0.26, 'triangle', 0.045, f * 0.8), 150);
+};
 const sndFail   = () => { tone(300, 0.3, 'square', 0.16, 120); };
 function sndBanner(n){
   const base = 520 + Math.min(6, n / 4) * 60;
