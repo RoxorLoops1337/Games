@@ -14,7 +14,8 @@ Play: https://games-71g.pages.dev/emberkin/
   menus, HP bars, dex, party, bag — is DOM, so text stays crisp at any zoom.
 - `art/*.json` — one file per creature, 40×40 character grids plus a palette.
 - `art/tiles/*.json` — 16×16 terrain tiles. `art/actors/*.json` — 16×22 walk
-  frames and NPCs.
+  frames and NPCs. `art/cards/*.json` — 20×20 card faces, one per card plus one
+  per element, generated from `tools/spritegrid/cardicons.mjs`.
 - `art/BRIEF.md` — the style bible the art was drawn against. `art/ROSTER.md` —
   the dex and its concepts.
 
@@ -52,6 +53,29 @@ node tools/spritegrid/embed.mjs --check  # CI: fail if index.html is stale
 ```
 
 Never hand-edit the generated block in `index.html` — edit the JSON and re-embed.
+
+Card faces are the exception to "one file per sprite": they live together in
+`tools/spritegrid/cardicons.mjs` because they share a construction and want to
+be compared side by side while you draw them.
+
+```bash
+node tools/spritegrid/cardicons.mjs --sheet /tmp/icons.png   # draw them, then look
+node tools/spritegrid/embed.mjs                              # stamp them in
+```
+
+Four rules keep a mixed hand looking like one set, all learned from a first
+pass where every icon came out looking like a pendant:
+
+- the silhouette has to read filled solid black — if it needs the shading to be
+  legible, it is the wrong shape
+- fill the frame; a 10px shape floating in 20px reads as a trinket
+- outline the outside only. A ring of dark tone *inside* the shape punches a
+  hole and turns a flame into a locket
+- light from the upper left, always
+
+The art suite enforces the mechanical half: 20×20, the shared outline colour,
+no orphan pixels, a silhouette that is actually outlined, and a fill somewhere
+between floating and bursting out of the frame.
 
 ## Controls
 
@@ -224,6 +248,31 @@ On the party screen there is nobody to measure against, so `moveDamageNeutral()`
 uses a stated yardstick — a same-level target that neither resists the element
 nor is weak to it — and the screen says `~15 dmg`. A mirror of the kin itself
 would resist its own element and make every move read as feeble.
+
+### What a card looks like
+
+One component — `cardHTML()` — builds the card face for the hand, the deck
+shelf and the post-win offer, because a card the player learns to read in a
+fight should look the same everywhere they meet it. It is laid out in the order
+a card game teaches you to scan one:
+
+| part | where | why there |
+|------|-------|-----------|
+| cost gem | punched through the top-left frame | the first thing you check, and the only one you check every turn |
+| art | a window with a glow behind it in the card's own colour | so a dark glyph still reads on a dark card |
+| name | a band on a hairline rule | the split between "what is it" and "what does it do" |
+| rules | under the rule | the only part that shrinks in a small hand — the line above the hand carries the full text for whatever you are aiming at |
+| rarity | the frame itself, plus a pip at the foot | rarity you can see beats rarity you have to read |
+
+Everything is sized in `em` off one stage font-size, so the same markup is a
+thumbnail in the hand and a full card on a screen. Percentage padding is banned
+on a card: it resolves against the *row's* width, not the card's, which once
+left a 32px content box inside an 82px card.
+
+Epic and legendary carry a slow sheen, because a card you were pleased to draw
+should look it. A kin's own move wears gold and its element instead of a
+rarity: it belongs to the creature, not to the deck, and should read that way
+from across the table.
 
 ### A card after every win
 

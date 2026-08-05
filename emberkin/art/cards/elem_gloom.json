@@ -1,0 +1,35 @@
+{
+  "id": "elem_gloom",
+  "name": "elem_gloom",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "b": "#8f5fd0",
+    "d": "#2c1c46",
+    "h": "#d9b8ff",
+    "m": "#553087"
+  },
+  "rows": [
+    ".......KKKKKK.......",
+    ".....KKhbbbbmKK.....",
+    "....KhbmmmmmmmdK....",
+    "...KhbmmmmmmmmmdK...",
+    "..KhbmmmmmmmmmmmdK..",
+    "..KhbmmmKKKKKmmmdK..",
+    ".KhbmmmKKKKKKKmmmdK.",
+    ".KhbmmKKKKKKKKKmmdK.",
+    ".KhbmmKKKKKKKKKmmdK.",
+    ".KhbmmKKKKKKKKKmmdK.",
+    ".KhbmmmKKKKKKKmmmdK.",
+    "..KhbmmmKKKKKmmmdK..",
+    "..KdbmmmmmmmmmmmdK..",
+    "...KdbmmmmmmmmmdK...",
+    "....KdbmmmmmmmdK....",
+    ".....KKdbbbbdKK.....",
+    ".......KKKKKK.......",
+    "....................",
+    "....................",
+    "...................."
+  ]
+}

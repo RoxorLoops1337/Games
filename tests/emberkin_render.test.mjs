@@ -336,6 +336,45 @@ for (let i = 0; i < 30; i++) { crashy.step(.05); crashy.fired.clear(); }
 crashy.releaseKey('right');
 ok(crashy.G.player.x !== beforeX || crashy.G.battle, 'and it still responds to input once the bad frames pass');
 
+section('a card face carries everything you need to read it');
+// One component builds the hand, the deck shelf and the post-win offer, so a
+// card the player learns to read in a fight looks the same everywhere.
+const face = loadGame({});
+face.setCtx(mkCtx());
+face.STARTER_DECK.forEach(face.grantCard);
+face.G.party = [face.mkMon('pyrelynx', 30)];
+face.startBattle({ foe: face.mkMon('sproutle', 20), wild: true });
+const fb = face.B();
+const deckCard = fb.hand.find((c) => c.src === 'deck') || { src: 'deck', u: face.G.cards[0].u, id: face.G.cards[0].id, bg: 0 };
+const kinCard = { src: 'kin', id: fb.mine.moves[0].id };
+for (const [label, c] of [['a deck card', deckCard], ['a kin move', kinCard]]) {
+  const html = face.cardHTML(c, { slot: 1 });
+  ok(/class="cardel /.test(html), `${label}: renders a card`);
+  ok(html.includes(face.cardName(c)), `${label}: shows its name`);
+  ok(html.includes('ccost'), `${label}: shows what it costs`);
+  ok(html.includes('cart'), `${label}: has an art window`);
+  ok(html.includes('canvas'), `${label}: with real art in it, not a letter`);
+  ok(html.includes('cpip'), `${label}: says what it is at the foot`);
+  ok(html.includes('--tint:'), `${label}: is tinted by rarity or element`);
+}
+// Rarity is the frame, not a word you have to read.
+for (const r of face.RARITY_ORDER) {
+  const id = face.cardsOfRarity(r)[0];
+  const owned = face.grantCard(id);
+  const html = face.cardHTML({ src: 'deck', u: owned.u, id, bg: 0 });
+  ok(html.includes(`r-${r}`), `${r} cards carry their rarity in the frame`);
+  ok(html.includes(face.RARITY[r]), `${r} cards are tinted with its colour`);
+}
+// A grown copy wears its growth; an ungrown one does not.
+const grownCard = face.grantCard('whet');
+ok(!face.cardHTML({ src: 'deck', u: grownCard.u, id: 'whet', bg: 0 }).includes('cgrow'), 'an ungrown card has no badge');
+grownCard.plus = 4;
+ok(face.cardHTML({ src: 'deck', u: grownCard.u, id: 'whet', bg: 0 }).includes('+4'), 'a grown card wears what it has earned');
+// A kin move wears its element rather than a rarity.
+ok(face.cardHTML(kinCard, {}).includes('elem_'), 'a kin move shows its element');
+ok(face.cardHTML(kinCard, {}).includes('kin'), 'and is marked as the creature\'s own');
+face.G.battle = null;
+
 section('a monkey on the keyboard cannot break it');
 // Random input for thousands of frames, drawing every one. This is the cheapest
 // way to find the state a hand-written test would never think to reach.

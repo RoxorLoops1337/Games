@@ -48,12 +48,14 @@ const emit = (group) => {
 const creatures = loadDir(ART, [40, 40]);
 const tiles = loadDir(join(ART, 'tiles'), [16, 16]);
 const actors = loadDir(join(ART, 'actors'));
+const cards = loadDir(join(ART, 'cards'), [20, 20]);
 
 const block = [
   BEGIN,
   `const ART_CREATURES = ${emit(creatures)};`,
   `const ART_TILES = ${emit(tiles)};`,
   `const ART_ACTORS = ${emit(actors)};`,
+  `const ART_CARDS = ${emit(cards)};`,
   END,
 ].join('\n');
 
@@ -68,8 +70,8 @@ if (process.argv.includes('--check')) {
     console.error('emberkin/index.html art block is stale — run: node tools/spritegrid/embed.mjs');
     process.exit(1);
   }
-  console.log(`art block up to date (${Object.keys(creatures).length} creatures, ${Object.keys(tiles).length} tiles, ${Object.keys(actors).length} actors)`);
+  console.log(`art block up to date (${Object.keys(creatures).length} creatures, ${Object.keys(tiles).length} tiles, ${Object.keys(actors).length} actors, ${Object.keys(cards).length} card icons)`);
 } else {
   writeFileSync(INDEX, next);
-  console.log(`embedded ${Object.keys(creatures).length} creatures, ${Object.keys(tiles).length} tiles, ${Object.keys(actors).length} actors → emberkin/index.html`);
+  console.log(`embedded ${Object.keys(creatures).length} creatures, ${Object.keys(tiles).length} tiles, ${Object.keys(actors).length} actors, ${Object.keys(cards).length} card icons → emberkin/index.html`);
 }

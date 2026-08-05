@@ -1,0 +1,35 @@
+{
+  "id": "dewdrop",
+  "name": "dewdrop",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "b": "#46b6e8",
+    "d": "#12406b",
+    "h": "#c8f2ff",
+    "m": "#1f74b0"
+  },
+  "rows": [
+    ".........KK.........",
+    "........KhbK........",
+    "........KhbK........",
+    ".......KhbmK........",
+    ".......KhbmdK.......",
+    "......KhbmmdK.......",
+    ".....KhbmmmmdK......",
+    "....KhbmmmmmmdK.....",
+    "....KhbmmmmmmdK.....",
+    "...KhbmhhmmmmmdK....",
+    "...KhbmhhmmmmmdK....",
+    "...KhbmmmmmmmmdK....",
+    "...KhbmmmmmmmmdK....",
+    "...KdbmmmmmmmmdK....",
+    "....KdbmmmmmmdK.....",
+    ".....KdbmmmmdK......",
+    "......KdbmmdK.......",
+    ".......KKKK.........",
+    "....................",
+    "...................."
+  ]
+}

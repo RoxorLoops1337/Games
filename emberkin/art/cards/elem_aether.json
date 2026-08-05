@@ -1,0 +1,35 @@
+{
+  "id": "elem_aether",
+  "name": "elem_aether",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "b": "#ffc94d",
+    "d": "#7a5410",
+    "h": "#fff0b8",
+    "m": "#c69320"
+  },
+  "rows": [
+    ".........KK.........",
+    "........KhbK........",
+    "........KhbK........",
+    ".......KhbmK........",
+    ".......KhbmK........",
+    "..KK...KhbmK...KK...",
+    ".KhbKKKKhbmKKKKbmK..",
+    ".KhbmmmmhbmmmmmmdK..",
+    "..KhbmmmmbmmmmmdK...",
+    "...KhbmmmmmmmmdK....",
+    "....KhbmmmmmmdK.....",
+    "....KhbmmmmmmdK.....",
+    "...KhbmmdKdbmmdK....",
+    "..KhbmdK...KdbmdK...",
+    "..KbmdK.....KdbmK...",
+    "..KdK.........KdK...",
+    "..KK...........KK...",
+    "....................",
+    "....................",
+    "...................."
+  ]
+}

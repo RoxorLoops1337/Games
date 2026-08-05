@@ -1,0 +1,35 @@
+{
+  "id": "berserk",
+  "name": "berserk",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "b": "#e8546a",
+    "d": "#6b1730",
+    "h": "#ffb3bd",
+    "m": "#b32a45"
+  },
+  "rows": [
+    "..KK............KK..",
+    ".KhbK..........KbmK.",
+    ".KhbmK........KdbmK.",
+    "..KhbmK......KdbmK..",
+    "...KhbmK....KdbmK...",
+    "....KhbmK..KdbmK....",
+    ".....KhbmKKdbmK.....",
+    "......KhbmbmdK......",
+    ".......KhbmdK.......",
+    ".......KKKKKK.......",
+    ".....KKhbbbmdKK.....",
+    "....KhbmmmmmmmdK....",
+    "...KhbmmhhmmmmmdK...",
+    "...KhbmmhhmmmmmdK...",
+    "...KhbmmmmmmmmmdK...",
+    "....KdbmmmmmmmdK....",
+    ".....KdbmmmmmdK.....",
+    "......KdbbbbdK......",
+    ".......KKKKKK.......",
+    "...................."
+  ]
+}
