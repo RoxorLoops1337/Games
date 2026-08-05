@@ -227,19 +227,66 @@ test('a tap is not a launch, and launching only works while aiming', () => {
   assert(api.launch(-300, 0) === false, 'cannot launch mid-drive');
 });
 
-test('pointer drag through screen space aims and fires', () => {
+test('a swipe launches the car on every viewport, phones included', () => {
+  /* The sling used to read where the finger landed rather than how far it
+     moved, so the reachable pull depended on where the anchor happened to sit
+     on screen. On a 390-wide phone the maximum was 4% power — under the launch
+     minimum — so no gesture on earth started the game. */
+  for (const [w, h] of [[390, 844], [820, 1180], [1280, 720], [1440, 600], [844, 390]]){
+    const api = boot({ w, h });
+    api.startCampaign(); api.beginLevel(); api.camSnap();
+    const cx = w / 2, cy = h / 2;
+    api.pointerDown(cx, cy);
+    for (let i = 1; i <= 10; i++) api.pointerMove(cx - 25 * i, cy);   // a 250px swipe
+    api.pointerUp();
+    assert(api.G.phase === 'drive', w + 'x' + h + ': a 250px swipe did not launch');
+    assert(api.aim.power >= 0.95, w + 'x' + h + ': only ' + Math.round(api.aim.power * 100) + '% power');
+    assert(api.car.vx > 0, w + 'x' + h + ': fired the wrong way');
+  }
+});
+
+test('the HUD panels do not sit on top of each other on a phone', () => {
+  // the score panel and the car counter used to overlap by 78px at 390 wide
+  const api = boot({ w: 390, h: 844, count: true });
+  api.startCampaign(); api.beginLevel();
+  api.draw(); api._resetCounts(); api.draw();
+  assert((api._counts.fill || 0) > 10, 'the HUD drew something');
+  // measured from the same numbers drawHUD uses
+  const pad = 14, panelW = 168, carsW = 118;
+  assert(pad + panelW < 390 - pad - carsW,
+    'panels overlap at 390 wide: score ends ' + (pad + panelW) +
+    ', cars start ' + (390 - pad - carsW));
+});
+
+test('a swipe is measured from where it started, not from the car', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel(); api.camSnap();
+  // press in the far corner, nowhere near the car, and drag back
+  api.pointerDown(1200, 80);
+  api.pointerMove(1000, 80);
+  api.pointerUp();
+  assert(api.G.phase === 'drive', 'the drag should still launch');
+  const power = api.aim.power;
+
+  const b2 = boot({ w: 1280, h: 720 });
+  b2.startCampaign(); b2.beginLevel(); b2.camSnap();
+  b2.pointerDown(400, 600);                    // same drag, different start
+  b2.pointerMove(200, 600);
+  b2.pointerUp();
+  near(b2.aim.power, power, 0.001, 'the same swipe gave a different launch');
+});
+
+test('a tap does not spend a car, and says why', () => {
   const api = boot();
   api.startCampaign(); api.beginLevel();
-  api.camSnap();
-  const s = api.cam.s;
-  const sx = (api.C.ANCHOR.x - api.cam.x) * s + 1280 / 2;
-  const sy = (api.C.ANCHOR.y - api.cam.y) * s + 720 / 2;
-  api.pointerDown(sx, sy);
-  api.pointerMove(sx - 200 * s, sy);
-  assert(api.aim.active, 'drag should be active');
+  const cars = api.G.carsLeft;
+  api.pointerDown(600, 400);
+  api.pointerMove(596, 400);                   // 4px: a tap, not a pull
   api.pointerUp();
-  assert(api.G.phase === 'drive', 'release should launch');
-  assert(api.car.vx > 0, 'dragged left, fired right');
+  assert(api.G.phase === 'aim', 'a tap must not launch');
+  assert(api.G.carsLeft === cars, 'nor spend a car');
+  assert(/PULL FURTHER/.test(api._nodes.hint.textContent),
+    'and it should say so, hint reads: ' + api._nodes.hint.textContent);
 });
 
 /* ------------------------------------------------------------- physics --- */
@@ -1628,21 +1675,56 @@ test('each run reports its own tally when the car stops', () => {
 
 /* -------------------------------------------------------------- camera --- */
 
-test('the camera follows the car and never shows past the fence', () => {
-  const api = boot();
-  api.startLevel(5); api.beginLevel();      // the widest market, so the view can pan
+/* The camera is allowed to look past the fence now — hard-clamping to it meant
+   the last halfW of every market could never be centred, which is exactly where
+   the market pulls its fence in to bounce a long shot back. What it must never
+   do is lose the car. */
+test('the camera keeps the car in frame and the road ahead visible', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
   api.camSnap();
-  const halfW = () => 1280 / api.cam.s / 2;
-  assert(api.cam.x - halfW() >= api.bounds.x0 - 1, 'camera clamped at the left fence');
   api.launch(-api.C.MAX_PULL, 0);
-  let far = 0;
-  for (let i = 0; i < 240; i++){
+  let worstPct = 0, worstAhead = 1e9;
+  for (let i = 0; i < 600 && api.G.phase === 'drive'; i++){
     api.update(1 / 60);
-    assert(api.cam.x - halfW() >= api.bounds.x0 - 1, 'view slipped past the left fence');
-    assert(api.cam.x + halfW() <= api.bounds.x1 + 1, 'view slipped past the far fence');
-    far = Math.max(far, api.cam.x);
+    const sx = (api.car.x - api.cam.x) * api.cam.s + 1280 / 2;
+    worstPct = Math.max(worstPct, sx / 1280);
+    worstAhead = Math.min(worstAhead, 1280 - sx);
+    assert(Number.isFinite(api.cam.x) && Number.isFinite(api.cam.s), 'camera went non-finite');
   }
-  assert(far > api.C.ANCHOR.x + 400, 'camera should have travelled with the car');
+  assert(worstPct <= 0.65, 'the car reached ' + Math.round(worstPct * 100) + '% of screen width');
+  assert(worstAhead >= 600, 'only ' + Math.round(worstAhead) + 'px of road ahead at the worst point');
+});
+
+test('the camera keeps the car in frame on odd-shaped viewports too', () => {
+  for (const [w, h] of [[1440, 600], [844, 390], [390, 844]]){
+    const api = boot({ w, h });
+    api.startLevel(0); api.beginLevel();
+    api.camSnap();
+    api.launch(-api.C.MAX_PULL, 0);
+    let worstPct = 0;
+    for (let i = 0; i < 600 && api.G.phase === 'drive'; i++){
+      api.update(1 / 60);
+      const sx = (api.car.x - api.cam.x) * api.cam.s + w / 2;
+      worstPct = Math.max(worstPct, sx / w);
+      assert(Number.isFinite(api.cam.x) && Number.isFinite(api.cam.s), w + 'x' + h + ': camera non-finite');
+    }
+    assert(worstPct <= 0.72, w + 'x' + h + ': car reached ' + Math.round(worstPct * 100) + '% of width');
+  }
+});
+
+test('a narrow window pulls back instead of cropping the market away', () => {
+  const wide = boot({ w: 1280, h: 720 });
+  wide.startLevel(0); wide.beginLevel(); wide.camSnap();
+  const tall = boot({ w: 390, h: 844 });
+  tall.startLevel(0); tall.beginLevel(); tall.camSnap();
+  const seen = (api, w) => {
+    const halfW = w / api.cam.s / 2;
+    return api.people.filter(p => Math.abs(p.x - api.cam.x) <= halfW).length / api.people.length;
+  };
+  assert(seen(tall, 390) >= 0.6,
+    'portrait shows only ' + Math.round(seen(tall, 390) * 100) + '% of the crowd before launch');
+  assert(tall.cam.s < wide.cam.s, 'portrait should be pulled further back');
 });
 
 test('a playfield narrower than the view is simply centred', () => {
