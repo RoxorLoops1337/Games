@@ -41,6 +41,8 @@ const EXPOSE = `__out.api = {
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
   takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
   gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
+  GOALS, THEMES, rollGoals, checkGoals, goalTest, replayGore, drawStains,
+  getTheme: () => TH,
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
   drawCar, drawPerson, drawLens,
   draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
@@ -576,6 +578,101 @@ test('a pram breaks loose when whoever was pushing it goes down', () => {
   assert(api.fx.some(f => f.type === 'pram'), 'and it is airborne');
 });
 
+/* --------------------------------------------------------------- goals --- */
+
+test('every market asks for three different things, and the same three twice', () => {
+  const api = boot();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    const goals = api.G.goals;
+    assert(goals.length === 3, 'market ' + i + ' has three goals, got ' + goals.length);
+    const ids = goals.map(g => g.id);
+    assert(new Set(ids).size === 3, 'and no duplicates: ' + ids.join());
+    for (const g of goals) assert(g.text && g.text.length > 4, 'each goal reads: ' + JSON.stringify(g));
+    const again = boot();
+    again.startLevel(i);
+    assert(again.G.goals.map(g => g.id).join() === ids.join(), 'market ' + i + ' rerolls the same goals');
+  }
+});
+
+test('goals never ask for something the market does not have', () => {
+  const api = boot();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    for (const g of api.G.goals){
+      if (g.id === 'santa') assert(api.people.some(p => p.kind === 'santa'), 'santa goal without a santa');
+      if (g.id === 'carousel') assert(api.props.some(o => o.kind === 'carousel'), 'carousel goal without one');
+      if (g.id === 'tree') assert(api.props.some(o => o.kind === 'bigtree'), 'tree goal without one');
+    }
+  }
+});
+
+test('a goal ticks off the moment it is met', () => {
+  const api = boot();
+  api.startLevel(0); api.beginLevel();
+  api.G.goals = [{ id:'stalls', n: 2, text:'Wreck 2 stalls', done: false }];
+  api.G.goalsDone = 0;
+  api.G.wrecks = 1;
+  api.checkGoals();
+  assert(!api.G.goals[0].done, 'not yet');
+  api.G.wrecks = 2;
+  api.checkGoals();
+  assert(api.G.goals[0].done && api.G.goalsDone === 1, 'ticked');
+  api.checkGoals();
+  assert(api.G.goalsDone === 1, 'and only counted once');
+});
+
+test('the trackers behind the goals actually move', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.startLevel(0);
+  api.G.byKind = {}; api.G.rolls = 0; api.G.jumps = 0; api.G.bestSlam = 0; api.G.nitroKills = 0;
+
+  api.killPerson(api.addPerson(2000, 1100, 'elder'), 900, 0, 'car');
+  api.killPerson(api.addPerson(2100, 1100, 'kid'), 900, 0, 'car');
+  assert(api.G.byKind.elder === 1 && api.G.byKind.kid === 1, 'kills counted by kind');
+
+  const ramp = api.addProp('ramp', 2400, 1100, {});
+  drive(api, 1200, 0, 2400 - ramp.w / 2 - api.C.CAR_R - 10, 1100);
+  step(api, 0.25);
+  assert(api.G.jumps === 1, 'jumps counted');
+
+  api.car.air = 1; api.car.z = 20; api.car.rollAcc = Math.PI * 2 * 2;
+  for (let i = 0; i < 4; i++) api.addPerson(api.car.x + i * 8, api.car.y);
+  api.land();
+  assert(api.G.rolls >= 2, 'rolls counted, got ' + api.G.rolls);
+  assert(api.G.bestSlam >= 3, 'the biggest landing is remembered, got ' + api.G.bestSlam);
+
+  drive(api, 600, 0, 3000, 1100);
+  api.car.boost = 1;
+  api.doBoost();
+  api.killPerson(api.addPerson(3010, 1100), 900, 0, 'car');
+  assert(api.G.nitroKills === 1, 'kills under nitro counted');
+});
+
+test('a market carries its own weather and palette', () => {
+  const api = boot();
+  const seen = new Set();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.genMarket(api.LEVELS[i]);
+    const th = api.getTheme();
+    assert(th && th.name, 'market ' + i + ' has a theme');
+    seen.add(th.name);
+    assert(api.snow.length === th.snow, 'snowfall matches the weather: ' + api.snow.length + ' vs ' + th.snow);
+  }
+  assert(seen.size >= 5, 'the markets should not all look the same, got ' + seen.size);
+});
+
+test('the whole campaign renders, theme by theme', () => {
+  const api = boot();
+  for (let i = 0; i < api.LEVELS.length; i++){
+    api.startLevel(i);
+    api.beginLevel();
+    api.launch(-api.C.MAX_PULL, (i - 2) * 40);
+    for (let f = 0; f < 240; f++){ api.update(1 / 60); api.stepSnow(1 / 60); api.draw(); }
+  }
+});
+
 /* -------------------------------------------------------------- replay --- */
 
 test('a fast kill throws limbs and pixels; a slow one only pixels', () => {
@@ -1052,9 +1149,12 @@ test('stars are awarded against the target, and a miss locks the next market', (
   api.nextLevel();
   assert(api.G.level === 0, 'a miss sends you back to the same market');
 
-  api.G.levelScore = api.G.target;      api.levelEnd(); assert(api.G.stars === 1, 'target = 1 star');
-  api.G.levelScore = api.G.target * 1.6; api.levelEnd(); assert(api.G.stars === 2, '1.5× = 2 stars');
-  api.G.levelScore = api.G.target * 2.3; api.levelEnd(); assert(api.G.stars === 3, '2.2× = 3 stars');
+  api.G.levelScore = api.G.target; api.G.goalsDone = 0;
+  api.levelEnd(); assert(api.G.stars === 1, 'target alone is one star');
+  api.G.goalsDone = 2; api.levelEnd(); assert(api.G.stars === 2, 'goals earn the second');
+  api.G.goalsDone = 3; api.levelEnd(); assert(api.G.stars === 3, 'all three goals earn the third');
+  api.G.levelScore = api.G.target - 1; api.levelEnd();
+  assert(api.G.stars === 0, 'goals alone do not clear a market');
   assert(api.G.unlocked === 1, 'clearing unlocks the next market');
 });
 
@@ -1213,16 +1313,42 @@ test('a real run leaves wreckage, particles and tyre tracks behind', () => {
   assert(api.fx.length < peakFx, 'and they should clear up afterwards');
 });
 
-test('a full-power run into the market scores real points', () => {
-  const api = boot();
-  api.startCampaign(); api.beginLevel();
-  for (let i = 0; i < api.G.cars; i++){
-    api.launch(-api.C.MAX_PULL, (i - 1) * 60);
-    step(api, 30);
+/* A market has to be beatable by aiming at the crowd, not by knowing the
+   layout. Fire a level's cars down a few different lines and the best of them
+   should clear the target — with room to spare, since a player aims at what
+   they can see and these are blind. */
+function blindBest(api, level, angles){
+  let best = 0;
+  for (const dy of angles){
+    const run = boot();
+    run.startLevel(level);
+    run.beginLevel();
+    for (let i = 0; i < run.G.cars; i++){
+      run.launch(-run.C.MAX_PULL, dy + (i - 1) * 40);
+      for (let f = 0; f < 2400 && run.G.phase !== 'aim' && run.G.phase !== 'results'; f++){
+        run.skipReplay();
+        run.update(1 / 60);
+      }
+    }
+    best = Math.max(best, run.G.levelScore);
   }
-  assert(api.G.levelScore > api.G.target * 0.4,
-    'three blind full-power runs should get within reach of the target: ' +
-    api.G.levelScore + ' vs ' + api.G.target);
+  return best;
+}
+
+test('the first market is beatable blind', () => {
+  const api = boot();
+  api.startLevel(0);
+  const target = api.G.target;
+  const best = blindBest(api, 0, [-140, 0, 140]);
+  assert(best >= target, 'best blind run ' + best + ' vs target ' + target);
+});
+
+test('the last market is beatable blind too', () => {
+  const api = boot();
+  api.startLevel(api.LEVELS.length - 1);
+  const target = api.G.target;
+  const best = blindBest(api, api.LEVELS.length - 1, [-180, 0, 180]);
+  assert(best >= target, 'best blind run ' + best + ' vs target ' + target);
 });
 
 test('particle and track buffers stay bounded', () => {
