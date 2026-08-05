@@ -20464,4 +20464,41 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(Object.keys(by).length === 4, 'and all four kinds are still in use');
 }
 
+/* ================== the sky is strips of paper, not a photograph
+
+   Every shape in the world got a cut edge, and then the world was sitting on a
+   smoothly blended sky — the only soft transition left on screen, arguing with
+   everything around it. Each authored stop now HOLDS its colour until the next
+   and jumps, so the sky is nine flat strips laid one over another.
+
+   The palette is untouched: the band edges are the stop offsets and the band
+   fills are the stop colours. That is what is asserted — that this repainted
+   the same colours rather than inventing new ones. */
+{
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const grad = src.slice(src.indexOf('function skyGrad'),
+    src.indexOf('\n}', src.indexOf('function skyGrad')));
+
+  t.ok(/addColorStop\(at, col\)/.test(grad), 'each stop is laid down at its own offset');
+  t.ok(/next\[0\] - 1e-4/.test(grad),
+    'and held until a hair before the next, which is how a gradient is told to step');
+  t.ok(/Math\.max\(at,/.test(grad),
+    'never behind the offset it started at, so two close stops cannot cross over');
+
+  /* The stops themselves are unchanged, and that is the point — banding is a
+     way of drawing this palette, not a different palette. */
+  t.ok(IB.SKY_STOPS.length >= 8, 'the sky is built from ' + IB.SKY_STOPS.length + ' colours');
+  t.ok(IB.SKY_STOPS.every(s => s.length === 2 && typeof s[1] === 'string'),
+    'each one an offset and a colour');
+  t.ok(IB.SKY_STOPS[0][0] === 0, 'starting at the top of the screen');
+  t.ok(IB.SKY_STOPS[IB.SKY_STOPS.length - 1][0] === 1, 'and running to the bottom');
+  // strictly increasing, or a held band could run backwards
+  let rising = true;
+  for (let i = 1; i < IB.SKY_STOPS.length; i++)
+    if (IB.SKY_STOPS[i][0] <= IB.SKY_STOPS[i - 1][0]) rising = false;
+  t.ok(rising, 'the offsets only ever go down the screen');
+  t.ok(IB.SKY_STOPS.every(s => /^#[0-9a-f]{6}$/i.test(s[1])),
+    'and every band is a flat colour a canvas can read');
+}
+
 t.done();
