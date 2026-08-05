@@ -13450,10 +13450,17 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // sometimes, or the ones at weight 1 may as well not be in the set.
     t.ok(takenBy.size === IB.SPELLS.length,
       'every order is still drafted sometimes (' + takenBy.size + ' of ' + IB.SPELLS.length + ')');
-    // ...and the preference is real. The threes should outdraw the ones by a
-    // margin no shuffle would produce over eighty drafts.
-    const heavy = IB.SPELLS.filter(d => d.ai.w >= 3).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
-    const light = IB.SPELLS.filter(d => d.ai.w === 1).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    /* ...and the preference is real: the heaviest orders should outdraw the
+       lightest by a margin no shuffle would produce over eighty drafts.
+       Both groups are read off ai.w rather than written down. This said
+       `w >= 3` and went red the moment the top weight became 2 — which is a
+       test reporting the number it was written beside, not the property it
+       was written for. */
+    const top = Math.max(...IB.SPELLS.map(d => d.ai.w));
+    const bot = Math.min(...IB.SPELLS.map(d => d.ai.w));
+    t.ok(top > bot, 'the draft is weighted at all (' + top + ' against ' + bot + ')');
+    const heavy = IB.SPELLS.filter(d => d.ai.w === top).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
+    const light = IB.SPELLS.filter(d => d.ai.w === bot).reduce((a, d) => a + (takenBy.get(d.id) || 0), 0);
     t.ok(heavy > light, 'and the orders worth drafting are drafted more (' + heavy + ' vs ' + light + ')');
 
     // Deterministic, like everything else the Host decides: the same seed
@@ -19520,6 +19527,167 @@ t.ok(true, 'a final draw on a live match is clean');
   const draft = src.slice(dAt, src.indexOf('\nfunction ', dAt + 1));
   t.ok(/aiDraftLate/.test(draft), 'the draft itself goes through the same command a slot fill always did');
   t.ok(!/fxToast|fxRnd/.test(draft), 'and the sim half of it says nothing and draws nothing');
+}
+
+/* ================== the draft weight and the win rate had come apart
+
+   ai.w is how often aiPickSpell takes an order into a slot — for the Host, and
+   since the muster for a commander who gave no orders too. It is not how well
+   the order plays, and the two had drifted all the way apart.
+
+   Measured: all 55 openings, 32 seeds each, both sides AI-played so the only
+   difference between arms was the opening pair. Read per ORDER, because each
+   appears in 10 pairs and so carries 320 matches (SE 2.8) where a single pair
+   at n=32 carries 8.8 and answers nothing:
+
+     muster 66.3  withdraw 60.9  pyre 53.4  rampart 46.6  warp 45.3
+     hobble 42.8  unbind 42.2  brace 40.3  pitch 40.0  bombard 38.1  counter 37.2
+
+   29.1 points best to worst, 7.4 standard errors apart — which opening you take
+   is one of the largest single effects in the game, which is what the window
+   and the sheet clock were built on the assumption of.
+
+   The weights knew none of it: Spearman rank correlation 0.07. And the draft
+   left to itself came in at 47.5% (76/160, SE 4.0) against a 46.6% all-hands
+   mean — 0.2 SE, indistinguishable from taking a hand at random. The two orders
+   it dealt most, Pitch Fire at 14.7% of slots and Bombard at 11.9%, were two of
+   the three weakest.
+
+   What is asserted here is the STRUCTURE the fix restores, not the ranking. A
+   test that pinned those eleven numbers would bake one sample into the suite
+   and go red the first time an order is retuned. The invariant is that no order
+   carries a draft boost without a stated reason. */
+{
+  const W = {};
+  for (const d of IB.SPELLS) W[d.id] = d.ai.w;
+  const vals = Object.values(W);
+  t.ok(vals.every(w => w >= 1), 'every order is drafted sometimes (min weight ' + Math.min(...vals) + ')');
+
+  /* Two tiers, and only two. The rare pair is rare for a stated reason — Warp
+     Banner and Unbind are situational rather than weak, and both measured
+     mid-table (45.3 and 42.2), so their 1 is about when they are useful, not
+     about how strong they are. Everything else sits on the common weight. */
+  const common = 2, rare = 1;
+  const rares = Object.keys(W).filter(id => W[id] === rare).sort();
+  t.ok(rares.join(',') === 'unbind,warp',
+    'exactly two orders are drafted rarely, and they are the situational pair (' + rares.join(',') + ')');
+  const boosted = Object.keys(W).filter(id => W[id] > common).sort();
+  t.ok(boosted.length === 0,
+    'and no order carries a boost above the common weight (' + (boosted.join(',') || 'none') + ')');
+  t.ok(Object.keys(W).filter(id => W[id] === common).length === IB.SPELLS.length - rares.length,
+    'so the rest of the table is flat');
+
+  /* The share arithmetic, which is what the fix actually changed and the one
+     thing here that is exact rather than sampled. Before: Bombard and Pitch
+     each carried 3 of a 22-point pool, 13.6% apiece and 27.3% together. */
+  const tot = vals.reduce((a, b) => a + b, 0);
+  const share = (id) => 100 * W[id] / tot;
+  t.ok(tot === 20, 'the draft pool is ' + tot + ' points across ' + IB.SPELLS.length + ' orders');
+  t.ok(Math.abs(share('bombard') - 10) < 0.01,
+    'Bombard is dealt at ' + share('bombard').toFixed(1) + '% of it, down from 13.6');
+  t.ok(Math.abs(share('pitch') - 10) < 0.01,
+    'Pitch Fire at ' + share('pitch').toFixed(1) + '%, down from 13.6');
+  t.ok(share('bombard') + share('pitch') < 27.3,
+    'so the two weakest-measured orders together carry ' +
+    (share('bombard') + share('pitch')).toFixed(1) + '% rather than 27.3%');
+  t.ok(share('muster') === share('bombard'),
+    'and the best-measured order is now dealt as often as the worst, rather than less often');
+
+  // the widest share gap left is the situational pair's, and it is 2:1 by design
+  const shares = Object.keys(W).map(share);
+  t.ok(Math.max(...shares) / Math.min(...shares) === 2,
+    'the widest ratio in the pool is the stated 2:1, not an accident');
+
+  /* And the draft still works: it is the same command, it fills every slot, and
+     it never deals the same order twice. Those are the properties the muster
+     leans on, so a weight change must not disturb them. */
+  IB.newMatch({ diff:'veteran', seed:9800 });
+  const s = IB.G.sides[0];
+  IB.aiDraft(s);
+  const hand = s.spells.slice(0, IB.SLOTS_AT_START);
+  t.ok(hand.every(Boolean), 'aiDraft still fills every opening slot');
+  t.ok(new Set(hand).size === hand.length, 'and never twice with the same order');
+  t.ok(hand.every(id => !!IB.SPELL[id]), 'with real orders');
+}
+
+/* ================== the draft weight did not know which orders win
+
+   Measured: all 55 openings, 32 seeds each, both sides AI-played so the only
+   difference between arms is the opening pair side 0 starts holding. Read per
+   ORDER — each appears in 10 of the 55 pairs, so 320 matches and a standard
+   error of 2.8 points, where a single pair at n=32 carries 8.8 and settles
+   nothing.
+
+     muster 66.3  withdraw 60.9  pyre 53.4  rampart 46.6  warp 45.3
+     hobble 42.8  unbind 42.2  brace 40.3  pitch 40.0  bombard 38.1  counter 37.2
+
+   Best minus worst is 29.1 points, 7.4 standard errors apart. Which opening you
+   take is one of the largest single effects in the game, so the 22-second window
+   really is a decision — which is the assumption the sheet clock and the muster
+   were both built on, now checked rather than asserted.
+
+   The draft weights knew none of it: Spearman rank correlation between ai.w and
+   win rate was 0.07. And the draft left to itself came out at 47.5% over 160
+   seeds (SE 4.0) against a 46.6% all-hands mean — 0.2 SE, indistinguishable
+   from taking a hand at random. So the muster shipped last round was not
+   handing anyone the AI's good judgement; there was no judgement in it.
+
+   Worse, the two orders it dealt MOST often were two of the three weakest.
+
+   What is asserted below is the invariant the fix establishes — no order
+   carries an unexplained boost — rather than the ranking itself, which is a
+   sample and would go stale the moment an order is tuned. */
+{
+  const W = {};
+  for (const d of IB.SPELLS) W[d.id] = d.ai.w;
+  const vals = IB.SPELLS.map(d => d.ai.w);
+
+  t.ok(vals.every(w => w > 0), 'every order can be drafted at all');
+  // Two orders are deliberately rare — situational, not weak (Warp Banner and
+  // Unbind both measured mid-table at 45.3 and 42.2). Everything else sits on
+  // one common weight, so nothing is over-dealt for a reason nobody recorded.
+  const rare = IB.SPELLS.filter(d => d.ai.w === 1).map(d => d.id).sort();
+  const common = IB.SPELLS.filter(d => d.ai.w !== 1);
+  t.ok(rare.join(',') === 'unbind,warp', 'the two rare orders are the two stated ones (' + rare.join(', ') + ')');
+  t.ok(new Set(common.map(d => d.ai.w)).size === 1,
+    'and every other order shares one weight — no unexplained boost (' +
+    [...new Set(common.map(d => d.ai.w))].join('/') + ')');
+  t.ok(Math.max(...vals) <= 2 * Math.min(...vals),
+    'so the most-dealt order is at most twice the least (' + Math.max(...vals) + ':' + Math.min(...vals) + ')');
+
+  // Bombard and Pitch Fire specifically: they carried 3 while measuring 38.1 and
+  // 40.0, the bottom of the table, and so were dealt at 13.6% of the pool each.
+  t.ok(W.bombard === W.muster && W.pitch === W.muster,
+    'Bombard and Pitch Fire are dealt no more often than Second Muster');
+
+  /* The share arithmetic, which is exact rather than sampled: aiPickSpell walks
+     the list accumulating ai.w, so an order's chance of being taken first is
+     its weight over the total. This is what actually changed. */
+  const tot = vals.reduce((a, b) => a + b, 0);
+  const share = (id) => 100 * W[id] / tot;
+  t.ok(Math.abs(share('bombard') - share('pitch')) < 1e-9,
+    'the two share one figure, as two lane orders of the same kind should');
+  t.ok(share('bombard') < 13.6,
+    'and it is below the 13.6% each of them used to carry (now ' + share('bombard').toFixed(1) + '%)');
+  t.ok(share('muster') > 9.1,
+    'while the strongest order is dealt more often than before, not less (' +
+    share('muster').toFixed(1) + '% against 9.1%)');
+  // the pool still sums to one whole draft
+  t.ok(Math.abs(IB.SPELLS.reduce((a, d) => a + 100 * d.ai.w / tot, 0) - 100) < 1e-9,
+    'and the eleven shares still make exactly one draft');
+
+  /* It is still a draw, not a ranking. Fitting 11 weights to 11 measured win
+     rates would bake this sample into the game and sharpen the Host, and the
+     PvE numbers were tuned against a Host with no spells at all. */
+  t.ok(new Set(vals).size > 1, 'the draft is still weighted rather than flat');
+  const seen = new Set();
+  for (let seed = 6100; seed < 6140; seed++){
+    IB.newMatch({ diff:'veteran', seed });
+    IB.G.sides[0].ai = true; IB.G.sides[1].ai = true;
+    let g = 0; while (IB.G.state === 'play' && IB.G.wave < 1 && g++ < 30 * 60) IB.update(1 / 30);
+    seen.add(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).join(','));
+  }
+  t.ok(seen.size > 8, 'and over 40 matches it drew ' + seen.size + ' different opening hands');
 }
 
 t.done();

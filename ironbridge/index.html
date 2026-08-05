@@ -2936,8 +2936,38 @@ function counterCatch(s){
 }
 const PITCH = { dur:6, rad:5.5, dps:34, slow:.22, slowT:.45 };
 
+/* ai.w is the DRAFT weight — how often aiPickSpell takes this order into a
+   slot, for the Host and (since the muster) for a commander who gave no orders.
+   It is not how well the order plays. Those two had drifted apart completely.
+
+   Measured: all 55 openings, 32 seeds each, both sides AI-played so the only
+   difference between arms is the opening pair. Read per ORDER — each appears in
+   10 pairs, so 320 matches and a standard error of 2.8 points, where a single
+   pair at n=32 carries 8.8 and tells you nothing.
+
+     muster 66.3  withdraw 60.9  pyre 53.4  rampart 46.6  warp 45.3
+     hobble 42.8  unbind 42.2  brace 40.3  pitch 40.0  bombard 38.1  counter 37.2
+
+   Best minus worst is 29.1 points, 7.4 standard errors apart: which opening you
+   take is one of the largest single effects in the game. The window is a real
+   decision, which is the thing the sheet clock and the muster were both built
+   on the assumption of.
+
+   The weights did not know any of it — Spearman rank correlation between draft
+   weight and win rate was 0.07. Worse, the two orders dealt MOST often, Bombard
+   and Pitch Fire at 13.6% of the pool each, were two of the three weakest.
+   A commander who let the clock run was being handed the bad end of the table
+   by the very thing meant to rescue them.
+
+   The correction here is deliberately not a re-tune to that ranking: fitting 11
+   weights to 11 measured win rates would bake this sample into the game and
+   make the Host sharper, and the PvE numbers were tuned against a Host with no
+   spells at all. It only removes the boost that was never justified — Bombard
+   and Pitch Fire come down to the 2 that seven other orders already carry.
+   Warp Banner and Unbind stay at 1 for their own stated reason: they are
+   situational, not weak. */
 const SPELLS = [
-  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
+  { id:'bombard',  n:'Bombard',       target:'point',   cd:95,  cost:{ iron:40 },  ai:{ w:2, go:.80 }, grp:'lane', bound:'cd',
     d:'Three shells walk along the lane, 140 magic damage each, and slow what survives.' },
   { id:'withdraw', n:'Withdraw',      target:'point',   cd:70,  cost:{},           ai:{ w:2, go:.90 }, grp:'lane', bound:'call',
     d:'Your bodies near the point break off and walk home faster, and take a quarter less on the way.' },
@@ -2953,7 +2983,7 @@ const SPELLS = [
     d:'Six seconds of pure fire on one enemy hero or ogre, and their mending is cut by 60%.' },
   { id:'rampart',  n:'Rampart',       target:'struct',  cd:100, cost:{ wood:50, iron:30 }, ai:{ w:2, go:.60 }, grp:'hold', bound:'coin',
     d:'One of your structures is mended for 22% over five seconds and warded for eight.' },
-  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:3, go:.80 }, grp:'lane', bound:'cd',
+  { id:'pitch',    n:'Pitch Fire',    target:'point',   cd:85,  cost:{ wood:40, iron:20 }, ai:{ w:2, go:.80 }, grp:'lane', bound:'cd',
     d:'A stretch of the boards burns for six seconds: 34 a second to anything of theirs standing in it, and it slows them while they do.' },
   { id:'brace',    n:'Brace',         target:'self',    cd:100, cost:{ wood:30, iron:30 }, ai:{ w:2, go:.50 }, grp:'hold', bound:'coin',
     say:'no target — it braces everything you have',
