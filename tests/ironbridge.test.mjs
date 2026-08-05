@@ -19875,4 +19875,88 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(d.bound === 'call', 'which is what its bound says too');
 }
 
+/* ================== Bombard caught six and finished one
+
+   It measured 38.1% over 320 matches, next-weakest in the set — while Withdraw,
+   also a lane-point order aimed the same way at the same frontline, measured
+   60.9%. So neither the shape nor the aim was the problem.
+
+   What a salvo actually did, over 191 salvos in 40 matches: it CAUGHT 5.94
+   bodies and earned 3.27 gold. Gold here is bounty on bodies finished, read off
+   the caster's own purse, and bounties run 2 to 7 — so a salvo that caught six
+   finished about one. The damage was spread too thin to convert.
+
+   The arithmetic under that: 140 magic a shell against a 340hp Footman at 12mr
+   is 2.7 shells to kill, and at a spread of 3.0 against a radius of 3.6 only a
+   body near the middle of the walk stood inside more than one shell.
+
+   Both knobs were measured on gold per salvo rather than on win rate, because
+   191 salvos is far better powered than 40 matches:
+
+     dmg  spread   caught   gold
+     140     3.0     5.94   3.27      <- was
+     170     3.0     5.72   4.57
+     240     3.0     5.81   9.44
+     140     2.2     5.83   5.18      <- is
+     140     1.6     5.66   5.73
+
+   Tightening the walk did most of the work with no extra damage at all. 1.6
+   scored a shade higher and was refused: at that spacing the three shells
+   nearly coincide and the salvo stops walking anywhere, which is the one thing
+   its card says it does.
+
+   Asserted below is the geometry, which is exact. Not the gold, which is a
+   sample. */
+{
+  const B = IB.BOMB;
+  t.ok(B.n === 3, 'the salvo is ' + B.n + ' shells');
+  t.ok(B.dmg === 140, 'at ' + B.dmg + ' magic each — untouched, because the spread was the fault');
+
+  /* The walk still walks. Total travel is (n-1) x spread, and it has to stay a
+     line rather than collapse onto a point, or the card is describing something
+     the player cannot see happen. */
+  const walk = (B.n - 1) * B.spread;
+  t.ok(B.spread < 3.0, 'the shells landed closer together (' + B.spread + ' from 3.0)');
+  t.ok(walk > B.r, 'but the salvo still travels further than one shell is wide (' +
+    walk.toFixed(1) + ' against ' + B.r + ')');
+  t.ok(B.spread > B.r / 3, 'and no two of them sit on top of each other (' + B.spread + ')');
+
+  /* How many shells a body in the middle of the walk is inside. This is the
+     number that changed: a shell covers r either side, so the count is how many
+     step positions fall within r. */
+  const overlap = (sp) => Math.min(B.n, 1 + 2 * Math.floor(B.r / sp));
+  t.ok(overlap(B.spread) >= overlap(3.0),
+    'a body in the middle is inside at least as many shells as before (' +
+    overlap(B.spread) + ' against ' + overlap(3.0) + ')');
+  t.ok(overlap(B.spread) === B.n, 'in fact all ' + B.n + ' of them');
+
+  /* And what that is worth against the line, from the unit table rather than
+     from a number typed here. Magic damage is cut by mr the standard way. */
+  const after = (mr) => B.dmg * (100 / (100 + mr));
+  const need = (k) => IB.UNITS[k].hp / after(IB.UNITS[k].mr);
+  t.ok(need('melee') > 2, 'a Footman still takes more than two shells (' + need('melee').toFixed(1) + ')');
+  t.ok(need('melee') <= B.n, 'but no more than the salvo carries — which it can now all land');
+  t.ok(need('grunt') < 2, 'a Levy still falls to two (' + need('grunt').toFixed(1) + ')');
+  t.ok(need('cannon') > B.n, 'and a Cannon still survives a full salvo (' + need('cannon').toFixed(1) + ')');
+
+  // the slow it leaves on whatever lives is untouched
+  t.ok(B.slow === .30 && B.slowT === 1.5, 'and what survives is slowed exactly as before');
+
+  /* The salvo end still clears its own tally at both ends, or a run cut short
+     leaves a count standing for the next one to print. */
+  const bsrc = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const cast = bsrc.slice(bsrc.indexOf('bombard(s, c){'), bsrc.indexOf('bombard(s, c){') + 220);
+  t.ok(/bombSeen\[s\.i\]\.clear\(\)/.test(cast), 'the cast clears the tally it is about to fill');
+  t.ok(/orderGold\[s\.i\] = 0/.test(cast), 'and the purse reading with it');
+
+  // it lands where it is aimed, and a salvo is one salvo per hold
+  IB.newMatch({ diff:'veteran', seed:8850 });
+  const bs = IB.G.sides[0];
+  IB.chooseSpell(bs, 0, 'bombard'); IB.chooseSpell(bs, 1, 'muster');
+  bs.res.iron = 9000;
+  t.ok(IB.castSpell(bs, { slot:0, x:40 }) === null, 'a salvo is accepted onto a point');
+  t.ok(bs.bombN === B.n, 'and queues every shell (' + bs.bombN + ')');
+  t.ok(Math.abs(bs.bombX - 40) < 1e-6, 'at the point it was given (' + bs.bombX + ')');
+}
+
 t.done();

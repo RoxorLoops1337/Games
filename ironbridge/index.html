@@ -2826,7 +2826,36 @@ const SLOTS_AT_START = 2;
 // Three shells walk along the lane, 3 units apart and 0.40s apart. Radius 3.6
 // is a little under the width of the deck, so a shot placed on the centre line
 // covers it. Bodies only — see bombardHit.
-const BOMB = { n:3, gap:.40, spread:3.0, r:3.6, dmg:140, slow:.30, slowT:1.5 };
+/* spread was 3.0. Bombard measured 38.1% over 320 matches, next-weakest in the
+   set, while Withdraw — also a lane-point order, aimed the same way — measured
+   60.9%. So the shape was not the problem, and neither was the aim.
+
+   What a salvo actually did, over 191 salvos in 40 matches: it CAUGHT 5.94
+   bodies and earned 3.27 gold. Bounties run 2 to 7, so a salvo that caught six
+   finished about one. The damage was spread too thin to convert — 140 a shell
+   against a 340hp Footman is 2.7 shells, and at a spread of 3.0 against a
+   radius of 3.6 only a body near the middle of the walk stood inside more than
+   one of them.
+
+   Two knobs could fix that and they pull opposite ways: more damage a shell, or
+   the shells closer together. Measured on gold per salvo — bodies FINISHED,
+   191 samples over 40 matches, far better powered than one win-rate point per
+   match:
+
+     dmg  spread   caught   gold
+     140     3.0     5.94   3.27      <- was
+     170     3.0     5.72   4.57
+     240     3.0     5.81   9.44
+     140     2.2     5.83   5.18      <- is
+     140     1.6     5.66   5.73
+
+   Tightening the walk does most of the work with no extra damage at all: the
+   bodies caught barely move, because a radius of 3.6 already overlaps, but the
+   shells now compound on what they catch instead of grazing three sets of it.
+   1.6 scored a shade higher and was not taken — at that spacing the three
+   shells nearly coincide and the salvo stops walking anywhere, which is what
+   the card says it does. */
+const BOMB = { n:3, gap:.40, spread:2.2, r:3.6, dmg:140, slow:.30, slowT:1.5 };
 // Everything of yours that is not a hero, within fourteen of the point, walks
 // home for four seconds — faster than it came, and harder to finish off on the
 // way. Heroes are exempt: they have their own retreat state machine, with its
