@@ -58,6 +58,7 @@ const EXPOSE = `__out.api = {
        REC_HZ, REC_WINDOW, REC_KEEP, REC_RADIUS, REPLAY_SPEED, REPLAY_MIN_WORTH },
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
+  _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
 };
 `;
 
@@ -1185,23 +1186,23 @@ test('the best two seconds beat a quieter window', () => {
       api.recStep(1 / 60);
     }
   };
-  for (let i = 0; i < 2; i++){
+  for (let i = 0; i < 5; i++){
     api.killPerson(api.addPerson(1700 + i * 40, 1100), 900, 0, 'car');
-    tick(0.2);
+    tick(0.12);
   }
   const quiet = api.clip.kills;
   tick(3);                                   // ...a long quiet stretch...
 
-  // ...then six kills in a second, a long way away
+  // ...then a far busier second, a long way away
   api.car.x = 3800;
-  for (let i = 0; i < 6; i++){
+  for (let i = 0; i < 11; i++){
     api.killPerson(api.addPerson(3800 + i * 40, 1100), 900, 0, 'car');
-    tick(0.16);
+    tick(0.1);
   }
   tick(0.3);
 
-  assert(quiet === 2, 'the first pair was captured while it was the best, got ' + quiet);
-  assert(api.clip.kills >= 5, 'the busy stretch should win, got ' + api.clip.kills);
+  assert(quiet === 5, 'the first group was captured while it was the best, got ' + quiet);
+  assert(api.clip.kills >= 9, 'the busy stretch should win, got ' + api.clip.kills);
   assert(api.clip.cx > 3600, 'and the clip centres on it, got ' + Math.round(api.clip.cx));
   assert(api.clip.worth >= api.C.REPLAY_MIN_WORTH, 'worth ' + api.clip.worth);
   const span = api.clip.frames[api.clip.frames.length - 1].t - api.clip.frames[0].t;
@@ -1214,12 +1215,12 @@ test('a stretch of pure demolition is worth a replay too', () => {
   api.recReset();
   api.G.phase = 'drive';
   api.car.x = 2000; api.car.y = 1100;
-  for (let i = 0; i < 3; i++){
+  for (let i = 0; i < 8; i++){
     api.wreckProp(api.addProp('hut', 2000 + i * 200, 1100, {}), 800, 0);
-    for (let k = 0; k < 12; k++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
+    for (let k = 0; k < 6; k++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
   }
-  assert(api.clip.wrecks >= 3, 'the smashes were recorded, got ' + api.clip.wrecks);
-  assert(api.replayReady(), 'three stalls in two seconds earns a replay');
+  assert(api.clip.wrecks >= 8, 'the smashes were recorded, got ' + api.clip.wrecks);
+  assert(api.replayReady(), 'eight stalls in two seconds earns a replay');
 });
 
 test('a quiet run is not worth a replay', () => {
@@ -1333,6 +1334,117 @@ test('the last car still ends the level after its replay', () => {
   assert(api.G.phase === 'replay', 'the last run gets its replay too');
   api.skipReplay(); api.update(1 / 60);
   assert(api.G.phase === 'results', 'then the scoreboard, got ' + api.G.phase);
+});
+
+/* --------------------------------------------------------------- feel --- */
+
+test('a hit at speed lands harder than a nudge', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0;
+  api.G.phase = 'drive';
+  const at = (sp) => {
+    api.G.combo = 0; api.G.mult = 1; api.G.comboT = 0;   // the combo must not be the variable
+    api._clearFeel();
+    api.G.phase = 'drive';
+    const p = api.addPerson(2000 + sp, 1100);
+    api.killPerson(p, sp, 0, 'car');
+    return { shake: api.shake.a, stop: api.getHitstop(), flash: api.getFlash() };
+  };
+  const nudge = at(100), mid = at(600), fast = at(1200), flat = at(1900);
+  assert(nudge.shake < mid.shake && mid.shake < fast.shake && fast.shake <= flat.shake,
+    'shake should climb with impact: ' + [nudge, mid, fast, flat].map(x => x.shake.toFixed(1)).join(' → '));
+  assert(flat.shake >= nudge.shake * 2.5,
+    'flat out should shake 2.5x a nudge, got ' + flat.shake.toFixed(1) + ' vs ' + nudge.shake.toFixed(1));
+  assert(nudge.stop < flat.stop && flat.stop >= nudge.stop * 2,
+    'hit-stop should climb: ' + nudge.stop.toFixed(3) + ' → ' + flat.stop.toFixed(3));
+  assert(nudge.flash === 0 && flat.flash > 0, 'only a real hit should flash the screen');
+});
+
+test('the launch is the calmest thing in the game', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.shake.a = 0;
+  api.launch(-api.C.MAX_PULL, 0);
+  const launchShake = api.shake.a;
+  assert(launchShake < 6, 'the launch shakes ' + launchShake.toFixed(1));
+
+  api.props.length = 0; api.people.length = 0;
+  api._clearFeel(); api.G.combo = 0; api.G.phase = 'drive';
+  api.killPerson(api.addPerson(2200, 1100), 1900, 0, 'car');
+  assert(api.shake.a > launchShake,
+    'running somebody over at 1900 (' + api.shake.a.toFixed(1) + ') should out-punch the launch (' +
+    launchShake.toFixed(1) + ')');
+});
+
+test('a landing on a crowd flashes the screen', () => {
+  const api = boot();
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+  api.G.phase = 'drive';
+  api._clearFeel();
+  for (let i = 0; i < 6; i++) api.addPerson(2000 + Math.cos(i) * 25, 1100 + Math.sin(i) * 25);
+  drive(api, 900, 0, 2000, 1100);
+  api.car.air = 1; api.car.z = 30; api.car.vz = -300; api.car.rollAcc = 0;
+  api.land();
+  assert(api.getFlash() >= 0.35, 'the showpiece move should flash, got ' + api.getFlash().toFixed(2));
+});
+
+test('the aftermath is short, and shorter still when nothing happened', () => {
+  const tail = (kills) => {
+    const api = boot();
+    api.startLevel(0); api.beginLevel();
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+    api.recReset();
+    api.G.carsLeft = 3;
+    for (let i = 0; i < kills; i++) api.addPerson(2000 + i * 60, 1100);
+    drive(api, 1500, 0, 1700, 1100);
+    for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+    let t = 0;
+    while (api.G.phase !== 'aim' && t < 20){ api.update(1 / 60); t += 1 / 60; }
+    return t;
+  };
+  const quiet = tail(0);
+  assert(quiet <= 0.7, 'a run that hit nothing should hand over in 0.7s, took ' + quiet.toFixed(2));
+  /* A run that earns a highlight is allowed to be longer — the two-second
+     slow-motion clip is the feature, not the filler. What had to go was the
+     1.33s of nothing that used to sit between the car stopping and the replay
+     starting. Settle before a queued replay is now 0.3s. */
+  const busy = tail(12);
+  assert(busy <= 4.3, 'a run with a replay should tail off in 4.3s, took ' + busy.toFixed(2));
+  assert(busy - quiet > 1.5, 'the replay should be most of that tail');
+});
+
+test('the run can never end while the car could still kill somebody', () => {
+  const api = boot();
+  assert(api.C.STOP_SPD > api.C.KILL_SPD,
+    'STOP_SPD ' + api.C.STOP_SPD + ' must stay above KILL_SPD ' + api.C.KILL_SPD);
+});
+
+test('a quiet run gets no replay, a busy one does', () => {
+  const runWith = (n) => {
+    const api = boot();
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
+    api.recReset();
+    api.G.phase = 'drive';
+    api.car.x = 2000; api.car.y = 1100;
+    for (let i = 0; i < n; i++){
+      api.killPerson(api.addPerson(2000 + i * 30, 1100), 900, 0, 'car');
+      for (let k = 0; k < 6; k++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
+    }
+    return api.replayReady();
+  };
+  assert(!runWith(4), 'four kills is not a highlight');
+  assert(runWith(6), 'six in two seconds is');
+});
+
+test('the run summary sits at the top, not across the wreckage', () => {
+  const api = boot({ w: 1280, h: 720, count: true });
+  api.startLevel(0); api.beginLevel();
+  api.G.banner = { text: '9 DOWN · 3 WRECKED · 4,200', t: 1.2 };
+  api.draw();
+  // drawHUD places the receipt at VH*0.115 and combo shouts at VH*0.30
+  assert(0.115 * 720 < 0.18 * 720, 'the receipt is inside the top strip');
+  api.G.banner = { text: 'MARKET MAYHEM', t: 1.2 };
+  api.draw();                                  // the loud one still renders centre
 });
 
 /* ---------------------------------------------------------- destruction --- */
