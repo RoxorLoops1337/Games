@@ -13968,13 +13968,25 @@ t.ok(true, 'drawing an empty bridge is harmless');
       'and each one has a shutter for the recovery to fill');
     t.ok((open.match(/data-slot="/g) || []).length === s.slots,
       'one tile per slot the hold has open');
-    // Left empty when the wave marches, a slot stops being a control at all.
+    /* Playing to the wave no longer reaches the empty state at all: musterDraft
+       deals a hand to any side that gave no orders, so the commander loses the
+       CHOICE to the clock and not the tools. That is the invariant now. */
     const s2 = fresh(8513);
     step(23);
-    t.ok(G.wave >= 1 && !s2.spells[0] && !s2.spells[1], 'a hold that chose nothing, once the wave is out');
+    t.ok(G.wave >= 1, 'the wave marches on a hold that chose nothing');
+    t.ok(s2.spells[0] && s2.spells[1], 'and it is holding a dealt hand rather than two blanks');
+    t.ok(!/class="ord locked"/.test(IB.ordersHtml()), 'so the bar has no dead plates on it');
+    t.ok(IB.castPress(0) !== 'nothing in that slot', 'and the first slot is a control again');
+
+    /* The dead plate still has one way to appear, which is why the branch that
+       draws it is kept: a save written BEFORE the muster existed stores
+       s.spells, so a mid-match resume can land here holding blanks that no
+       window is open to fill. Constructed directly, because play cannot get
+       here any more. */
+    s2.spells[0] = null; s2.spells[1] = null;
     const shut = IB.ordersHtml();
     t.ok((shut.match(/class="ord locked"/g) || []).length === s2.slots,
-      'both slots are dead plates rather than buttons');
+      'an old save resumed with empty slots draws them as dead plates, not as buttons');
     t.ok(!/data-slot=/.test(shut), 'with nothing on them to press');
     t.ok(IB.castPress(0) === 'nothing in that slot', 'and pressing where one was does nothing');
   }
@@ -19386,6 +19398,128 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(IB.orderWindow() === null, 'once the wave marches there is no window to report');
   t.ok(IB.orderWindowTail() === '.', 'and the sentence just ends');
   t.ok(IB.orderWindowText() === '', 'with nothing to count');
+}
+
+/* ================== the deadline had teeth for one side only
+
+   aiSpells is reached only through `if (s.ai) aiStep(s, dt)`, and nothing else
+   in the game ever filled an opening slot. Nothing opens the chooser on its own
+   either — showSpells is reached only by pressing a tile. So a player who never
+   pressed one arrived at the first wave with no orders and carried none for the
+   rest of the match: measured at 16 of 16 matches ending with the player's side
+   holding zero, over a median 377 seconds, while the Host on the same clock
+   drafted a full hand every time. With musterDraft in place the same probe
+   reports 0 of 16.
+
+   The window keeps its teeth. A hand you were dealt is worse than a hand you
+   chose — choosing is what the 55 openings are for — but it no longer costs you
+   the tools. What is asserted here is that shape: it fills only what is empty,
+   only once, only in the window, and identically on both peers. */
+{
+  const toWave = (secs) => { let g = 0;
+    while (IB.G.state === 'play' && IB.G.wave < 1 && g++ < 30 * (secs || 60)) IB.update(1 / 30); };
+
+  // it runs before the wave, because chooseSpell shuts the opening slots after
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const seam = src.slice(src.indexOf('G.waveT -= dt'), src.indexOf('G.waveT -= dt') + 220);
+  t.ok(seam.indexOf('musterDraft') < seam.indexOf('spawnWave'),
+    'the muster draft runs before spawnWave, which is what raises G.wave');
+  t.ok(/G\.wave === 0/.test(seam), 'and only on the wave that closes the window');
+
+  // a player who never touched it ends the window holding a full hand
+  IB.newMatch({ diff:'veteran', seed:9700 });
+  IB.G.sides[0].ai = false; IB.G.sides[1].ai = true;
+  t.ok(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).every(x => !x),
+    'a seat that never opened the chooser starts with nothing');
+  toWave();
+  const dealt = IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START);
+  t.ok(dealt.every(Boolean), 'and reaches the first wave holding ' + dealt.length + ' orders');
+  t.ok(new Set(dealt).size === dealt.length, 'no order dealt into two slots at once');
+  t.ok(dealt.every(id => !!IB.SPELL[id]), 'and every one of them is a real order');
+
+  // the hand it dealt is the hand it keeps — it is not a per-wave top-up
+  const before = dealt.join(',');
+  let g = 0;
+  while (IB.G.state === 'play' && IB.G.wave < 4 && g++ < 30 * 300) IB.update(1 / 30);
+  t.ok(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).join(',') === before,
+    'and three waves later it is still that hand, not a fresh one');
+
+  // an order the player DID give is never overwritten. aiDraft() would have:
+  // chooseSpell allows a pre-wave swap by design, so filling with it rather
+  // than per-empty-slot would spend the one decision the player managed to make
+  IB.newMatch({ diff:'veteran', seed:9701 });
+  IB.G.sides[0].ai = false; IB.G.sides[1].ai = true;
+  const mine = IB.SPELLS[3].id;
+  t.ok(IB.chooseSpell(IB.G.sides[0], 0, mine) === null, 'the player gives one order and runs out of clock');
+  toWave();
+  t.ok(IB.G.sides[0].spells[0] === mine, 'the muster leaves it exactly where they put it');
+  t.ok(!!IB.G.sides[0].spells[1], 'and fills only the slot they left empty');
+  t.ok(IB.G.sides[0].spells[1] !== mine, 'with a different order, not a second copy');
+
+  // a side that drafted for itself is untouched, which is why this changes
+  // nothing about how the Host plays
+  IB.newMatch({ diff:'veteran', seed:9702 });
+  IB.G.sides[0].ai = true; IB.G.sides[1].ai = true;
+  toWave();
+  t.ok(IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).every(Boolean),
+    'an AI seat reaches the wave already holding its own hand');
+  // ...and calling it again on a full hand changes nothing at all
+  const full = IB.G.sides[0].spells.join(',');
+  IB.musterDraft();
+  t.ok(IB.G.sides[0].spells.join(',') === full, 'so a second call is a no-op on it');
+
+  /* Lockstep. s.spells is mixed into netHash, so a hand dealt by the muster is
+     a hand both machines have to agree on. aiDraftLate spends one arnd() per
+     slot from the per-side stream and both peers run the same tick, so the
+     same seed must produce the same hand AND the same hash. */
+  const run = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    IB.G.sides[0].ai = false; IB.G.sides[1].ai = true;
+    let n = 0;
+    while (IB.G.state === 'play' && n++ < 30 * 120) IB.update(1 / 30);
+    return { h:IB.netHash(), hand:IB.G.sides[0].spells.slice(0, IB.SLOTS_AT_START).join(',') };
+  };
+  const a = run(9703), b = run(9703);
+  t.ok(a.hand === b.hand, 'the same seed deals the same hand twice (' + a.hand + ')');
+  t.ok(a.h === b.h, 'and the two runs agree on the hash a peer would compare');
+  const c = run(9704);
+  t.ok(c.hand !== a.hand, 'a different seed deals a different hand — it is drawn, not fixed');
+}
+
+/* ---- and the notice that goes with it fits the lane it is written into.
+
+   Measured in a real browser: the muster notice renders 329px wide at both
+   1440x900 and 390x844, inside a toast lane of about 338px on desktop and
+   368px on a phone, and does not clip. The first version named the two orders
+   it had dealt — "the muster chose Countermand and Second Muster" — and came
+   back as "…the muster chose Coun…", because two order names can exceed the
+   whole budget on their own. The tiles it just filled carry those names in
+   full, on screen, at the moment the toast appears.
+
+   So what is held here is the rule that follows from that: this notice does
+   not name orders. A character bound rather than a pixel one, because the
+   suite has no browser — and the pixel measurement above is what says 43 is
+   the right number. */
+{
+  const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const tAt = src.indexOf('function musterTell');
+  const tell = src.slice(tAt, src.indexOf('\nfunction ', tAt + 1));
+  t.ok(tell.length > 40, 'musterTell parsed out of the source');
+  for (const m of tell.matchAll(/'([^']{12,})'/g))
+    t.ok(m[1].length <= 43, 'the notice "' + m[1] + '" fits the lane (' + m[1].length + ' of 43)');
+  t.ok(!/\bd\.n\b|tookPhrase|\.map\(/.test(tell),
+    'and it does not build a list of order names — that is what clipped it');
+  // it is a cosmetic writer, so it must be behind the same two gates the rest are
+  t.ok(/HEADLESS/.test(tell), 'it stands down under the harness');
+  t.ok(/forMe\(/.test(tell), 'and speaks only to the seat it happened to, not to the side');
+  // and the draft it reports is NOT cosmetic, so the toast must not be what does it
+  // Bounded to the function, not to a character count: musterTell is the very
+  // next thing in the file, so a fixed window reads its fxToast and calls it
+  // musterDraft's. That is the same brittleness the syncOrders slice had.
+  const dAt = src.indexOf('function musterDraft');
+  const draft = src.slice(dAt, src.indexOf('\nfunction ', dAt + 1));
+  t.ok(/aiDraftLate/.test(draft), 'the draft itself goes through the same command a slot fill always did');
+  t.ok(!/fxToast|fxRnd/.test(draft), 'and the sim half of it says nothing and draws nothing');
 }
 
 t.done();

@@ -5777,6 +5777,54 @@ function aiDraftLate(s, slot){
   chooseSpell(s, slot, aiPickSpell(s, room.length ? room : pool).id);
 }
 
+/* What the muster does for a commander who gave no orders.
+
+   Measured: aiSpells is reached only through `if (s.ai) aiStep(s, dt)`, and
+   nothing else in the game ever filled an opening slot. Nothing opens the
+   chooser on its own either — showSpells is reached only by pressing a tile.
+   So a player who never pressed one arrived at the first wave with no orders
+   and kept none for the rest of the match: 16 of 16 matches ended with the
+   player's side holding zero, over a median 377 seconds. The Host, on the same
+   clock, drafted a full hand every time.
+
+   That is not the deadline having teeth, it is the deadline having teeth for
+   one side only. The window keeps them: a hand you were dealt is worse than a
+   hand you chose, because choosing is what the 55 openings are for. What it no
+   longer costs is the tools themselves.
+
+   Only EMPTY opening slots, one call each, so a commander who gave one order
+   and ran out of clock keeps the one they gave — aiDraft() would have
+   overwritten it, since chooseSpell allows a pre-wave swap by design.
+   aiDraftLate already excludes what a side is holding and honours the
+   one-hero-order rule, and spends one arnd() per slot from the per-side
+   stream, so both peers in a net match draw the same hand on the same tick. */
+function musterDraft(){
+  for (const s of G.sides){
+    const before = [];
+    for (let i = 0; i < SLOTS_AT_START; i++) if (!s.spells[i]) before.push(i);
+    if (!before.length) continue;              // no-op for any side that drafted
+    for (const i of before) aiDraftLate(s, i);
+    musterTell(s, before);
+  }
+}
+/* Cosmetic, and only for the seat it happened to. Reads what the draft left
+   behind rather than what it was handed, so a slot the pool could not fill is
+   not announced as filled.
+
+   It does NOT name the orders. The first version did — "the muster chose
+   Countermand and Second Muster" — and clipped to "…the muster chose Coun…" in
+   a real browser, because the toast lane is about 43 characters and the two
+   names alone can run past that on their own. The tiles it just filled are on
+   screen carrying those names in full, three inches away. Saying it twice was
+   what cost the sentence its ending. */
+function musterTell(s, slots){
+  if (HEADLESS || !forMe(s.i)) return;
+  const got = slots.filter(i => spellOf(s, i)).length;
+  fxToast(got ? 'No orders given — the muster chose them.'
+              : 'No orders given, and none to choose.',
+    'bad', TOAST_W.cast);
+}
+
 function aiSpells(s){
   // Chosen once, before the first wave marches — the same window a player gets
   // and the same command they would send.
@@ -5934,7 +5982,12 @@ function update(dt){
     if (s.ai) aiStep(s, dt);
   }
   G.waveT -= dt;
-  if (G.waveT <= 0){ G.waveT = C.WAVE_PERIOD; spawnWave(); }
+  if (G.waveT <= 0){
+    // Before the wave marches, not after: chooseSpell shuts the opening slots
+    // the instant G.wave reaches 1, and spawnWave is what raises it.
+    if (G.wave === 0) musterDraft();
+    G.waveT = C.WAVE_PERIOD; spawnWave();
+  }
   rebuildGrid();
   const list = G.units.slice();
   // Acting first is a real advantage over thousands of ticks. Reversing the
@@ -19996,7 +20049,7 @@ window.IB = {
   foeHeroHtml, foeUlts, foeUltSeen, fireSkill, braceBlind, NO_HERO_DAMAGE,
   stripTook, tookPhrase, stripTell, strippedName, SRC_HERO_NAMES:HERO_NAMES, HOLDS, topHold, aimHoldLabel, AIM_LABEL,
   SKILL_NEEDS_TARGET, needsTarget, foeSeen, foeForget, syncOrders, castPress, castTell, ORDER_WINDOW_WARN, orderWindow, orderWindowText, orderWindowTail, bombSeen, orderGold, orderTallyForget, counterCatch, NUM_WORD, showIntro,
-  aiDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
+  aiDraft, aiDraftLate, musterDraft, SPELL_OWN_HERO, spellAimOff, spellAimTarget, spellAimSend, syncAim,
   spellAimCandidates, spellTargets, NO_TARGET, spellAimPick, lanePick, POINT_REACH, AIM_FOOT, AIM_COL, AIM_EDGE, aimRing, drawAim, aimAt,
   drawStructMarks, structTall, structWide, drawPitch, PITCH,
   bombardHit, musterWave, aiSpells, aiSpellTarget, lanePoint, ccDur, ccMul, applyBurn,
