@@ -8,6 +8,27 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
+## CURRENT PHASE: D — execute the plan
+
+The owner asked for 15 more levels, designed rather than generated, and then a
+critique cycle. Work the phases in order; when a phase's exit condition is met,
+edit this block to name the next one.
+
+- [x] **A — fifteen more markets (markets 7–21).** Done: 21 markets, each with
+  its own idea, new set pieces (ice rink, parade, choir stand, bollard chicanes,
+  extra snowbanks) and a spiral layout. All beatable blind, targets tuned to
+  ~0.8× the median blind run.
+- [x] **B — three critics.** Done: design, feel and code critiques on disk under
+  `.polish/`. Between them: no persisted progress, goals that are arithmetically
+  impossible, a camera that loses the car at speed, portrait unplayable, and a
+  market that scored itself between runs.
+- [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
+  with five critic conflicts resolved and six proposals cut.
+- **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
+  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–3 are
+  done. **Next: item 4** (persist stars, level select). Exit: all 19 ticked.
+- **E — three more critics, then back to C.** Repeat the cycle.
+
 ## Working agreement for each pass
 
 1. Take the **top unchecked item**. One item per pass; finish it properly rather
@@ -39,6 +60,8 @@ addictive, more challenge, puzzles, cars that behave differently over time.**
 - [x] Market layout shapes: rows / wave / plaza ring / funnel / chevron
 - [x] Three per-market goals from a pool of 13, driving the star rating
 - [x] Car garage: five cars, own art and handling, unlocked by lifetime kills
+- [x] 21 markets: ice rink, gauntlet, parade, alleys, boulevard, frozen lake,
+      bonfire, choir, rooftops, crossroads, spiral, grand market, midnight mass
 
 ## Next
 
