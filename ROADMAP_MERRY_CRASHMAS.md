@@ -106,6 +106,19 @@ edit this block to name the next one.
 
 ## Notes for whoever picks this up
 
+- **A phone plays landscape whatever way it is held.** Real orientation lock is
+  Android-and-fullscreen-only and iOS Safari has never had it, so `fit()` turns
+  `#wrap` a quarter turn instead when the window is portrait and under
+  `ROT_MAX_SIDE` (820) wide. Everything inside comes along; only `toCanvas()`
+  has to know, and it does the inverse rotation. **Consequences:** `vw`/`vh`
+  inside the wrap still mean the *viewport*, so they are swapped relative to the
+  game — see `body.rot .card`. And media queries cannot see the game's frame at
+  all, so the compact layouts are driven by `body.short` / `body.narrow`, which
+  `fit()` sets from `VW`/`VH`. Add a media query at your peril.
+- Fullscreen rides the first tap and the START button (it needs a gesture), and
+  latches only when the request resolves, so a refusal does not burn the
+  session.
+
 - The market generator is one function, `genMarket(lv)`, driven entirely by the
   level's seed. Everything about a market's look lives in `THEMES`; its shape in
   `lv.shape` and the `laneAt()` helper.
