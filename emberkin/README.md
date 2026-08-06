@@ -533,7 +533,7 @@ is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
 of all thirty-three mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-one passes on this
+likely to be a variation on those than something new. Twenty-two passes on this
 game produced about eight changes to the game and thirty-three fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
@@ -584,6 +584,60 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### How flat, exactly: one card in four is worth measuring
+
+Pass 29 deduced the flatness from two build policies tying. `--ban <id>` and
+`--force <id>` measure it directly: play the run with a card struck out of the
+offers and the starting deck, or with three copies pinned in that nothing may
+swap out. Sixty solo runs each.
+
+| | lost or ran | no kin in doubt | wipes |
+| --- | --- | --- | --- |
+| **baseline** | .268 ±.031 | 35% ±3 | .117 ±.015 |
+| without Ward Stance | .251 ±.026 | 35% ±3 | .105 ±.014 |
+| without War Cry | .274 ±.030 | 37% ±3 | .115 ±.014 |
+| without Grit | .270 ±.037 | 37% ±3 | .112 ±.017 |
+| **without Whetstone** | .223 ±.031 | **43% ±4** | .093 ±.012 |
+| **with 3× Whetstone** | **.326 ±.028** | **26% ±3** | .149 ±.013 |
+
+**Three of the four cards are worth nothing measurable.** Take Ward Stance, War
+Cry or Grit out of the game entirely and every line stays inside its interval.
+That is the flatness proven rather than inferred, and it is a stronger statement
+than the policy tie, because it is one card at a time against a fixed baseline.
+
+**Whetstone is the exception, and it is a big one.** Banning it takes
+no-kin-in-doubt from 35% to 43% — intervals nowhere near each other — and pinning
+three copies takes it to 26%. That is a **17-point span on the oldest metric in
+the project, from one card.** Its danger line spans .223 to .326 across the same
+two runs.
+
+A caveat that has to be said: `--force` pins three copies and therefore costs
+three deck slots, so it conflates a card's strength with the price of carrying
+it. Ward Stance forced is *worse* than baseline (.318) for exactly that reason.
+`--ban` is the clean half of the measurement; force is the confirmation.
+
+#### What "a card that matters" would have to be
+
+Whetstone is +3 to every attack for the rest of the battle, one energy, and it
+compounds three ways at once: **combo** adds 3 more when it follows another card,
+**grow** raises it permanently on every play toward a ceiling of five times base,
+and `atk` applies to every swing rather than the next one. It ends a run in the
+deck of nearly every build, drawn in most fights and played in 88% of the ones it
+could be paid for.
+
+That is the size a card has to be here. Below it, a card can be removed from the
+game without any headline noticing. So "make the good cards better" is not the
+lever it sounds like — the useful version is **make more cards compound**, on the
+Whetstone pattern: something that pays every swing, grows across the run, and
+rewards being played in sequence. One axis of those three is not enough; Grit
+grows and is worth nothing measurable, Ward Stance draws and is worth nothing
+measurable.
+
+**No card was changed.** Whetstone is already pulling the direction the design
+wants — its presence makes fights sharper, and removing it makes them longer and
+safer, which is the boring end. Changing the one card that works to prove a point
+about the twenty-odd that do not would be the wrong move.
 
 #### The card set is flat: two very different decks, the same run
 

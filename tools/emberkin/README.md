@@ -31,6 +31,12 @@ harder-and-easier versions of one thing; they are different games, and a change
 that helps one can do nothing for the other. **Judge a change against both**, and
 if it only moves one, say which.
 
+`--ban <id>` plays the run with a card struck out of the reward offers, the chest
+pulls and the starting deck. `--force <id>` pins three copies into the deck that
+nothing may swap out. The two together are what a single card is worth. Prefer
+`--ban` for the clean reading: force also costs three deck slots, so it mixes a
+card's strength with the price of carrying it.
+
 `--build value|grow|rarity` changes how the run builds its deck — by what a card
 does per energy, by its permanence keywords, or by taking whichever card is
 rarest. `rarity` is the default and the baseline. The other two exist because a
