@@ -3472,6 +3472,17 @@ const CARDS = {
     txt: 'Gain {v} shield, take 4 less from every hit. Permanently +2 each play. Retain.' },
   bloodedge: { name: 'Blooded Edge',r: 'epic', cost: 1, kind: 'skill', v: 14, vt: 'edge', fx: { drain: .5 }, grow: 1,
     txt: 'Next attack +{v} and heals you for half it deals. Permanently +1 each play.' },
+  // Twin Strike buys one extra swing a turn for the rest of the fight, worth
+  // about one swing times the turns left — 32-48 points on a real turn, where a
+  // good one-energy card scores 28-57. So it charges two for what one buys
+  // elsewhere, and it sits at 25% of the fights it could be paid for, second from
+  // bottom of the deck. That reading is solid; the obvious fix is not. At cost 1
+  // it went to 77-84% and took the game with it: party fights fell to 2.86 turns,
+  // solo no-kin-in-doubt went 37% to 42%, Bulwark fell to 55% and Ward Stance to
+  // 13%. An extra swing a turn scales with the kin's damage, which grows all run,
+  // so halving its price makes it the best card in the deck at every level.
+  // Left at two on purpose. If this gets fixed it is by looking at whether
+  // Whetstone, Blooded Edge and Fang Hone are the ones priced wrong.
   twinstrike:{ name: 'Twin Strike', r: 'epic', cost: 2, kind: 'power', v: 1, vt: 'none', fx: { hits: 1 },
     txt: 'Every attack you make swings one extra time. Rest of the battle.' },
   titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true, chain: 1,
