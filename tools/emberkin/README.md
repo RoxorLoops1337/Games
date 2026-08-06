@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and thirty-five fixes to
+this game have produced roughly six changes to the game and thirty-seven fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -49,7 +49,7 @@ the rarest card converges".
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 37.
+a sample — see mistake 39.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -278,19 +278,33 @@ and the family is more useful than the individual entry.
     stronger card is not a more important one — which is what the ban-gap is for,
     and why the buff was reverted.
 
+36. **The turn policy is a model of the rules, and a card that changes the rules
+    invalidates it** (pass 32). Second Wind lets a kin move twice; the probe's
+    turn is *swing once, then spend what is left*, so it read 1-3 plays in 200-300
+    draws through four separate fixes — nothing took the second swing; the support
+    pass spent the budget before the card was wanted; reserving the turn failed
+    because the swing takes the best move and ate the reserve; capping the swing
+    starved it entirely, 4.60 turns a fight. Each attempt measured the plumbing.
+    **Before calling a new mechanic weak, check the policy can express it.**
+37. **A price that is an arithmetic wall is not a price** (pass 32). Second Wind
+    at one energy asks for swing + card + swing out of three, which is exactly
+    three in the best case and impossible whenever a kin move costs two. It read
+    2 plays in 306 draws. That is not a card nobody wants, it is a card nobody
+    *can* play, and the two look identical in the table.
+
 ### Sampling — a claim the sample could not carry
 
-36. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+38. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-37. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+39. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-38. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+40. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -302,7 +316,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of thirty-five are denominators.** If a number will not move, or moves the
+- **Nine of thirty-seven are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all thirty-five mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-three passes on this
-game produced about eight changes to the game and thirty-five fixes to the tool.
+of all thirty-seven mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-four passes on this
+game produced about nine changes to the game and thirty-seven fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,60 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### A new kind of card is not load-bearing either
+
+Pass 31 ended on "a fix is not a bigger number, it is a card that does something
+nothing else does". So the set got one. **Second Wind** clears `swungTurn`: your
+kin may move twice this turn. Every other card in the deck is a number on a
+swing, a shield or a heal — this is the only one that changes a rule, and it adds
+no number at all.
+
+It is playable, it is drawn constantly (2,280 draws over sixty runs), and it is
+worth nothing measurable:
+
+| solo, 60 runs each | with Second Wind | banned |
+| --- | --- | --- |
+| lost or ran | .317 ±.041 | .267 ±.028 |
+| no kin in doubt | 34% ±3 | 35% ±3 |
+| wipes | .129 ±.016 | .105 ±.015 |
+| turns per fight | 3.72 ±0.20 | 3.75 ±0.24 |
+| over in one turn | 14% ±2 | 12% ±2 |
+
+Every line overlaps. Take the only rule-bending card in the game out of the game
+and nothing moves. **So it is not that the cards are all the same shape — a
+genuinely different shape does not help either.**
+
+Which is the answer to the question pass 31 posed, and it points somewhere else:
+**the flatness is in the fights, not the cards.** A three-turn fight against a
+wild kin does not have enough structure for any card to be pivotal in. There is
+no phase to set up for, no window to hit, nothing that a second swing this
+particular turn rescues. Until a fight has shape, the deck cannot have shape
+either, and the next pass belongs to encounter design rather than the card list.
+
+Second Wind is kept. Not because it worked — it did not — but because it costs
+nothing measurable, and it is the one card that would have something to bite on
+if fights ever get the structure they lack.
+
+#### Four policy fixes to make one card playable
+
+Worth recording, because most of the pass went here. The probe's turn is *swing
+once, then spend what is left*, and a card that bends the one-swing rule read 1-3
+plays in 200-300 draws through four separate attempts:
+
+1. Nothing took the second swing, because the loop swung once by construction.
+2. The support pass spent the budget before the card's own condition was met, so
+   it was never affordable when it became wanted.
+3. Reserving the turn did not help, because the swing takes the *best* move and
+   ate the reserve.
+4. Capping the first swing to a cheap move starved it entirely — no swing at all,
+   4.60 turns a fight.
+
+None of those were the card. **The card's real problem was arithmetic**: a turn is
+three energy and kin moves cost one or two, so swing + card + swing at one energy
+is exactly three in the best case and impossible in every other. Free, it works.
+A policy is a model of the rules, and a card that changes the rules invalidates
+the model — four times over, the measurement was of the plumbing.
 
 #### The deck substitutes: a stronger card is not a more important one
 
