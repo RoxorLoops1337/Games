@@ -1,0 +1,36 @@
+{
+  "id": "item_elixir",
+  "name": "item_elixir",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "a": "#3a2a30",
+    "b": "#8f5fd0",
+    "d": "#2c1c46",
+    "h": "#d9b8ff",
+    "m": "#553087"
+  },
+  "rows": [
+    ".......KKKKKK.......",
+    ".......KaaaaK.......",
+    "........KaaK........",
+    "........KaaK........",
+    ".......KhbmmK.......",
+    "......KhbmmmmK......",
+    ".....KhbmmmmmmK.....",
+    "....KhbmmmmmmmmK....",
+    "...KhbmmmmmmmmmmK...",
+    "..KhbmmmhhmmmmmmdK..",
+    "..KhbmmhhhhmmmmmdK..",
+    "..KhbmmmhhmmmmmmdK..",
+    "..KhbmmmmmmmmmmmdK..",
+    "..KhbmmmmmmmmmmmdK..",
+    "..KhbmmmmmmmmmmmdK..",
+    "...KhbmmmmmmmmmdK...",
+    "....KKdmmmmmmdKK....",
+    "......KKKKKKKK......",
+    "....................",
+    "...................."
+  ]
+}

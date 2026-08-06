@@ -7,7 +7,7 @@
 // save round-trips.
 //
 // Run: node tests/emberkin.test.mjs
-import { loadGame, autoFight, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, autoFight, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = withDeck(loadGame());
 const { DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART } = EK;
@@ -99,7 +99,12 @@ eq(EK.effect('Wild', ['Aether']), 1, 'Wild is neutral');
 const atk = EK.mkMon('pyrelynx', 30), defV = EK.mkMon('sproutle', 30), defT = EK.mkMon('dewdrip', 30);
 const dv = EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg;
 const dt = EK.damageOf(atk, defT, 'cinder', { crit: false, roll: 1 }).dmg;
-ok(dv > dt * 2.5, 'super-effective hits far harder than resisted');
+// The chart points the same way, but not as hard: a 2x entry lands as 1.6x and
+// a 0.5x as 0.65x, so the right element is the best thing you can bring without
+// the wrong one deciding the fight before a card is played. The spread used to
+// be fourfold, which is what made half of every run a coin toss on the chart.
+ok(dv > dt * 2, `super-effective still hits far harder than resisted (${(dv / dt).toFixed(2)}x)`);
+ok(dv < dt * 3.2, 'but not so much that the matchup is the whole fight');
 // Same power, one with STAB and effectiveness behind it, one without.
 const noStab = EK.damageOf(atk, defV, 'brine', { crit: false, roll: 1 }).dmg;
 ok(EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg > noStab,
@@ -214,7 +219,9 @@ ok(noCatch.some((e) => /No\./.test(e.t)), 'you cannot catch a trainer kin');
 eq(G.bag.bloomorb, 5, 'the refused orb is not consumed');
 ok(autoFight(EK), 'the trainer battle resolved');
 eq(EK.B().over, 'win', 'beating the whole team wins');
-eq(EK.B().teamIdx, 1, 'the second team member was sent out');
+// A trainer has a bench now and may send its kin out in any order, so "the
+// second one was used" is the claim, not "the second one was last".
+ok(EK.B().roster.every((m) => m.hp <= 0), 'the whole team was sent out and beaten');
 ok(EK.gemReward(EK.B()) > 0, 'a trainer win is worth gems');
 
 // A foe can die on its own turn — burn or snare finishing it at end of turn, or
@@ -227,6 +234,7 @@ for (const how of ['burn', 'thorns']) {
   EK.G.battle = null;
   EK.startBattle({ foe: EK.mkMon('cindercub', 5), team: chain, npc: { name: 'Tester', id: 't_y', trainer: { team: chain, prize: 100 } }, wild: false });
   const bk = EK.B();
+  bk.foePotions = 0;                               // no reaching for the bag; we want it dead
   bk.foe.hp = 1;                                   // one point of anything finishes it
   if (how === 'burn') bk.foe.status = 'burn';
   else bk.mods.thorns = 40;
@@ -540,6 +548,37 @@ for (let i = 0; i < 60; i++) { emberMon.hp = emberMon.max; EK.useMove([], 'foe',
 eq(emberMon.status, '', 'Ember kin never catch fire');
 
 // -------------------------------------------------------------- world --
+section('no map is a rectangle of one tile');
+// The valley used to be blocks: a 2×2 square of trees, a straight shoreline, a
+// rectangle of tall grass. Everything below is a shape test, not a taste test —
+// a region whose every row is the same run is a rectangle, and a rectangle is
+// what a map looks like before anybody has drawn it.
+const OUTSIDE = Object.keys(MAPS).filter((id) => MAPS[id].kind !== 'inside');
+/** For each tile kind, the set of distinct row-signatures it makes. */
+const shapesOf = (map, ch) => {
+  const runs = new Set();
+  for (const row of map.rows) {
+    const sig = [...row].map((c, i) => (c === ch ? i : -1)).filter((i) => i >= 0).join(',');
+    if (sig) runs.add(sig);
+  }
+  return runs;
+};
+for (const id of OUTSIDE) {
+  const map = MAPS[id];
+  for (const ch of [',', '#', 's']) {
+    const rows = map.rows.filter((r) => r.includes(ch)).length;
+    if (rows < 3) continue;                       // too little of it to have a shape
+    const shapes = shapesOf(map, ch);
+    ok(shapes.size > 1, `${id}: ${EK.TILE_ART[ch]} is not the same run on every row (${shapes.size} shapes over ${rows} rows)`);
+  }
+  // Something to look at: every outdoor map carries scatter of some kind.
+  const chars = new Set(map.rows.join(''));
+  ok([...'of~sL'].some((c) => chars.has(c)), `${id} has something in it besides ground and cover`);
+}
+// The shore in particular: a coast that steps in and out, not a wall of sand.
+const shoreWidths = new Set(MAPS.stillmere.rows.map((r) => (r.match(/s+/g) || ['']).join('').length));
+ok(shoreWidths.size >= 4, `Stillmere's beach varies in width (${[...shoreWidths].sort((a, b) => a - b).join(', ')})`);
+
 section('maps are well formed and connected');
 for (const [id, map] of Object.entries(MAPS)) {
   const w = map.rows[0].length;
@@ -659,7 +698,14 @@ EK.enterMap('route_one', 9, 10, 'down');
 eq(EK.G.mapId, 'route_one', 'entered the route');
 ok(!EK.passable(MAPS.route_one, 0, 5, 5), 'trees block');
 ok(EK.passable(MAPS.route_one, 9, 5, 5), 'the path is walkable');
-ok(!EK.passable(MAPS.hollowbrook, 4, 9, 9), 'water blocks');
+// Found rather than hard-coded: the pond gets reshaped whenever the town does.
+const pond = (() => {
+  const rows = MAPS.hollowbrook.rows;
+  for (let y = 0; y < rows.length; y++) { const x = rows[y].indexOf('~'); if (x >= 0) return [x, y]; }
+  return null;
+})();
+ok(pond, 'Hollowbrook still has a pond');
+ok(!EK.passable(MAPS.hollowbrook, pond[0], pond[1], pond[1]), 'water blocks');
 // A ledge is one-way: you may drop down it, never climb it.
 const ledgeRow = MAPS.route_one.rows.findIndex((r) => r.includes('L'));
 const ledgeCol = MAPS.route_one.rows[ledgeRow].indexOf('L');
@@ -771,6 +817,10 @@ ok(!EK.G.battle, 'standing on the path never starts a fight');
 let started = 0;
 for (let i = 0; i < 400; i++) {
   EK.G.battle = null; EK.G.mode = 'world';
+  // Heal between rolls. A fast wild kin now opens the fight, so without this
+  // the party is on the floor after a dozen encounters and startBattle starts
+  // refusing — which measures the speed rule rather than the encounter rate.
+  EK.healParty();
   EK.G.player.x = 4; EK.G.player.y = 1;              // tall grass
   EK.onArrive();
   if (EK.G.battle) started++;
@@ -821,13 +871,29 @@ if (blockedAt) {
 }
 EK.G.flags = {}; EK.G.alert = null; EK.G.battle = null; EK.G.mode = 'world';
 
-section('encounter tables roll inside their level bands');
-for (let i = 0; i < 300; i++) {
-  const mon = EK.rollEncounter(MAPS.stillmere);
-  const row = MAPS.stillmere.enc.table.find((e) => e[0] === mon.species);
-  ok(!!row, 'rolled a species from the table');
-  ok(mon.lvl >= row[1] && mon.lvl <= row[2], `${mon.species} level ${mon.lvl} inside ${row[1]}-${row[2]}`);
+section('the valley keeps up with you, and never overtakes');
+// The bands used to be absolute, so a route you had outgrown kept sending
+// level-3 kin at a level-12 party and two fights in five were decided before
+// they started. A wild kin is rolled in its band and then brought up to within
+// WILD_TRAIL of your best — never above it.
+for (const lead of [1, 5, 12, 30]) {
+  EK.G.party = [EK.mkMon('pyrelynx', lead)];
+  for (let i = 0; i < 200; i++) {
+    const mon = EK.rollEncounter(MAPS.stillmere);
+    const row = MAPS.stillmere.enc.table.find((e) => e[0] === mon.species);
+    ok(!!row, 'rolled a species from the table');
+    ok(mon.lvl >= row[1], `${mon.species} ${mon.lvl} is not below its band floor ${row[1]} (lead ${lead})`);
+    ok(mon.lvl <= Math.max(row[2], lead), `${mon.species} ${mon.lvl} never outranks band or lead (${row[2]}/${lead})`);
+    // Once you are past the band, the valley closes to within WILD_TRAIL.
+    if (lead - EK.WILD_TRAIL > row[2]) {
+      ok(mon.lvl >= lead - EK.WILD_TRAIL, `${mon.species} ${mon.lvl} keeps up with a lead of ${lead}`);
+    }
+  }
 }
+// An empty party must not crash the roll — it happens on a fresh save.
+EK.G.party = [];
+ok(EK.rollEncounter(MAPS.stillmere), 'a party-less roll still produces something');
+EK.G.party = [EK.mkMon('pyrelynx', 22)];
 
 // --------------------------------------------------------------- save --
 section('save round-trips');
@@ -937,7 +1003,17 @@ const cardsBefore = winRun.G.cards.length;
 winRun.startBattle({ foe: winRun.mkMon('sproutle', 3), wild: true });
 ok(autoFight(winRun), 'the fight resolved');
 eq(winRun.B().over, 'win', 'and it was a win');
-for (let i = 0; i < 20 && winRun.G.battle; i++) { winRun.pressKey('a'); winRun.step(.2); winRun.releaseKey('a'); winRun.fired.clear(); }
+// A win holds the arena for a beat before the card offer — a fight you won
+// should not turn straight into a transaction. It is skippable, so the press
+// that ends it must not also confirm the screen behind it.
+let sawFlourish = false;
+for (let i = 0; i < 40 && !winRun.G.screen; i++) {
+  winRun.pressKey('a'); winRun.step(.2); winRun.releaseKey('a'); winRun.fired.clear();
+  winRun.draw();
+  sawFlourish = sawFlourish || !!winRun.G.flourish;
+}
+ok(sawFlourish, 'the win got a moment first');
+eq(winRun.G.flourish, null, 'and the moment ended');
 eq(winRun.G.battle, null, 'the battle is off the board');
 eq(winRun.G.mode, 'screen', 'and the card offer is up');
 eq(winRun.G.screen.kind, 'reward', 'it is the reward screen');
@@ -952,6 +1028,123 @@ winRun.pressKey('right');
 for (let i = 0; i < 30; i++) { winRun.step(.05); winRun.fired.clear(); }
 winRun.releaseKey('right');
 ok(winRun.G.player.x !== wx || winRun.G.battle, 'you can walk away from it');
+
+section('a throw takes its time, and says what really happened');
+// The outcome is decided the moment the orb leaves your hand — everything after
+// is playback. What matters is that the playback tells the truth: three shakes
+// on screen means the roll really did hold three times.
+for (const shakes of [0, 1, 2, 3]) {
+  const beats = EK.orbBeats(shakes, false).map((b) => b[0]);
+  eq(beats.filter((b) => b === 'wobble').length, shakes, `a ${shakes}-shake miss wobbles ${shakes} times`);
+  eq(beats[beats.length - 1], 'burst', `and ends by bursting open`);
+  ok(beats[0] === 'throw' && beats.includes('suck') && beats.includes('fall'), 'after an arc, a vanish and a drop');
+}
+const held = EK.orbBeats(3, true).map((b) => b[0]);
+eq(held[held.length - 1], 'click', 'a catch ends on the click');
+eq(held.filter((b) => b === 'wobble').length, 3, 'having wobbled all the way');
+ok(EK.orbBeats(3, false).reduce((n, b) => n + b[1], 0) > 2.5, 'a full three-shake throw is a real wait');
+
+// The line it prints is the number of shakes it actually did.
+const thr = withDeck(loadGame({}));
+thr.enterMap('route_one', 9, 10, 'down');
+const outcomes = new Map();
+for (let i = 0; i < 400 && outcomes.size < 3; i++) {
+  thr.G.party = [thr.mkMon('pyrelynx', 30)];
+  thr.G.bag = { bloomorb: 99 };
+  thr.G.battle = null;
+  thr.startBattle({ foe: thr.mkMon('gargolem', 30), wild: true });
+  const bb = thr.B();
+  const log = [];
+  thr.tryCatch(log, 'bloomorb');
+  const plan = bb.orbPlan;
+  const wobbles = plan.beats.filter((b) => b[0] === 'wobble').length;
+  const line = log[log.length - 1].t;
+  outcomes.set(wobbles + ':' + plan.caught, line);
+  if (plan.caught) {
+    eq(bb.over, 'caught', 'a hold ends the battle as a catch');
+    ok(/click/.test(line), 'and says so');
+  } else {
+    ok(/out|shake|close/i.test(line), `a ${wobbles}-shake miss says how close it came: "${line}"`);
+  }
+  thr.G.battle = null;
+}
+ok(outcomes.size >= 2, `throws produce more than one outcome (${outcomes.size} distinct)`);
+
+section('the orb holds the battle log until it stops moving');
+const orbRun = withDeck(loadGame({}));
+orbRun.setCtx(mkCtx());
+orbRun.enterMap('route_one', 9, 10, 'down');
+orbRun.G.party = [orbRun.mkMon('pyrelynx', 30)];
+orbRun.G.bag = { prismorb: 99 };
+orbRun.startBattle({ foe: orbRun.mkMon('mothrix', 5), wild: true });
+orbRun.G.battleMsg = null;
+orbRun.B().foe.hp = 1;                              // as close to a certain hold as the maths gets
+orbRun.submitLog(orbRun.doAction({ kind: 'item', id: 'prismorb' }));
+let frames = 0, sawOrb = false;
+while (orbRun.G.battle && frames++ < 400) {
+  orbRun.step(.05);
+  if (orbRun.orbPhase()) sawOrb = true;
+  orbRun.fired.clear();
+}
+ok(sawOrb, 'the throw actually plays out rather than resolving on the spot');
+ok(frames > 40, `and holds the battle while it does (${frames} frames, ${(frames * .05).toFixed(1)}s)`);
+
+section('a catch celebrates, then hands you its papers');
+const cel = withDeck(loadGame({}));
+cel.setCtx(mkCtx());
+cel.enterMap('route_one', 9, 10, 'down');
+cel.G.party = [cel.mkMon('pyrelynx', 30)];
+cel.G.bag = { prismorb: 200 };
+let caughtOne = false;
+for (let tryN = 0; tryN < 60 && !caughtOne; tryN++) {
+  cel.G.battle = null; cel.G.gotcha = null; cel.G.screen = null; cel.G.mode = 'world';
+  cel.startBattle({ foe: cel.mkMon('mothrix', 4), wild: true });
+  cel.G.battleMsg = null;
+  cel.B().foe.hp = 1;
+  cel.submitLog(cel.doAction({ kind: 'item', id: 'prismorb' }));
+  for (let i = 0; i < 400 && !cel.G.gotcha; i++) { cel.step(.05); cel.fired.clear(); }
+  caughtOne = !!cel.G.gotcha;
+}
+ok(caughtOne, 'a weakened kin under a prism orb is eventually caught');
+eq(cel.G.battle, null, 'the battle is off the board before the celebration');
+ok(cel.G.gotcha.species === 'mothrix', 'the celebration is about the kin you caught');
+// It ends on its own, and hands over to the profile.
+for (let i = 0; i < 200 && cel.G.gotcha; i++) { cel.step(.05); cel.fired.clear(); }
+eq(cel.G.gotcha, null, 'the celebration ends on its own');
+eq(cel.G.screen && cel.G.screen.kind, 'profile', 'and opens the new kin\'s papers');
+ok(cel.G.party.some((m) => m.species === 'mothrix'), 'which is a kin you now have');
+
+section('naming a kin you just caught');
+const prof = cel.G.screen;
+const mine = prof.opt.mon;
+eq(mine.nick || '', '', 'it starts with no nickname of its own');
+// commitNick reads the field; headless there is none, so drive it directly.
+mine.nick = '  Mothy  McMoth  ';
+eq(cel.commitNick({ opt: { mon: mine } }), 'Mothy McMoth', 'a name is trimmed and its spaces squashed');
+mine.nick = 'a'.repeat(40);
+eq(cel.commitNick({ opt: { mon: mine } }).length, 12, 'and capped at something a name box can hold');
+mine.nick = mine.name;
+eq(cel.commitNick({ opt: { mon: mine } }), '', 'naming it after its own species is not a nickname');
+mine.nick = 'Mothy';
+eq(cel.dispName(mine), 'Mothy', 'a named kin goes by its name');
+// Confirm always means "that will do": the cursor starts on the way out, so
+// mashing the one button you always have cannot trap you on this screen.
+eq(cel.G.screen.i, 1, 'the cursor starts on the way out, not on the name field');
+cel.screenSelect();
+eq(cel.G.screen, null, 'and taking it along closes the papers');
+eq(cel.G.mode, 'world', 'back to the world');
+ok(cel.hasSave(), 'with the name written down');
+
+section('the papers are reachable again from the party');
+cel.G.mode = 'world';
+cel.openScreen('party');
+cel.G.screen.i = cel.G.party.findIndex((m) => m.species === 'mothrix');
+cel.screenSelect();
+eq(cel.G.screen.kind, 'profile', 'picking a kin outside a fight opens its papers');
+eq(cel.G.screen.opt.mon.species, 'mothrix', 'the one you picked');
+cel.closeScreen();
+eq(cel.G.screen.kind, 'party', 'and closing goes back to the party, not to nowhere');
+cel.closeScreen();
 
 section('healing restores the whole party');
 EK.G.party = [EK.mkMon('bramblor', 30), EK.mkMon('voltyx', 25)];

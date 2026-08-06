@@ -21,7 +21,10 @@ export function mkCtx(log) {
       if (k === 'measureText') return () => ({ width: 10 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (k === 'canvas') return { width: 256, height: 208 };
-      if (log && (k === 'drawImage' || k === 'fillRect')) return (...a) => { log.push([k, ...a]); };
+      // Transforms are logged too: a mirrored sprite is a scale(-1,1), and
+      // that is the only way a suite can see which way somebody is facing.
+      if (log && (k === 'drawImage' || k === 'fillRect' || k === 'scale' || k === 'translate'))
+        return (...a) => { log.push([k, ...a]); };
       return noop;
     },
     set() { return true; },
@@ -29,11 +32,16 @@ export function mkCtx(log) {
 }
 
 /** Fresh game instance. `store` is the localStorage backing object. */
-export function loadGame(store = {}) {
+export function loadGame(store = {}, patch = null) {
   const html = readFileSync(GAME, 'utf8');
   const m = html.match(/<script>([\s\S]*?)<\/script>/);
   if (!m) throw new Error('no inline <script> found in emberkin/index.html');
-  const code = m[1];
+  // `patch` rewrites the source before it is evalled, which is how the
+  // playthrough probe runs a baseline and a variant of a tuning constant in one
+  // sitting. Comparing a new build against a number from a previous pass is
+  // worth about +/-.05 on the danger line; comparing two arms measured together
+  // is not.
+  const code = patch ? patch(m[1]) : m[1];
 
   const ctx = mkCtx();
   const mkEl = () => new Proxy({
@@ -75,15 +83,38 @@ export function loadGame(store = {}) {
  * Play the current battle to its end the way a player would: spend every card
  * you can afford, then end the turn. Returns false if it never resolved.
  */
+/**
+ * Fight to the end, greedily but not stupidly.
+ *
+ * A kin may swing once a turn, so a bot that plays whatever is leftmost burns
+ * its energy on the move and then has nothing to sharpen it with — which
+ * measures the bot, not the game. Support first, then the swing: still greedy
+ * (it spends an Edge whether or not the swing lands), but it no longer beats
+ * itself.
+ */
 export function autoFight(EK, limit = 300) {
   let guard = 0;
   while (EK.G.battle && !EK.B().over && guard++ < limit) {
     const b = EK.B();
-    for (let spun = 0; spun < 12; spun++) {
-      const i = b.hand.findIndex((c) => EK.cardCost(c) <= b.energy);
-      if (i < 0 || b.over) break;
-      EK.playCard(i);
+    const kinCost = () => {
+      let c = Infinity;
+      for (const h of b.hand) if (h.src === 'kin') c = Math.min(c, EK.cardCost(h));
+      return c === Infinity ? 0 : c;
+    };
+    const spend = (reserve) => {
+      for (let spun = 0; spun < 10; spun++) {
+        if (b.over) break;
+        const i = b.hand.findIndex((c) => c.src !== 'kin' && EK.cardCost(c) <= b.energy - reserve);
+        if (i < 0) break;
+        EK.playCard(i);
+      }
+    };
+    spend(kinCost());
+    if (!b.over) {
+      const i = b.hand.findIndex((c) => c.src === 'kin' && EK.cardCost(c) <= b.energy);
+      if (i >= 0) EK.playCard(i);
     }
+    spend(0);
     if (b.over) break;
     EK.endTurn();
   }

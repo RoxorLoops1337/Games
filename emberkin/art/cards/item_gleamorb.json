@@ -1,0 +1,36 @@
+{
+  "id": "item_gleamorb",
+  "name": "item_gleamorb",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "a": "#3d3350",
+    "b": "#46b6e8",
+    "d": "#12406b",
+    "h": "#c8f2ff",
+    "m": "#1f74b0"
+  },
+  "rows": [
+    ".......KKKKK........",
+    ".....KKKbbmKKK......",
+    "...KKhhbbbbmmmKK....",
+    "..KKhhhhbbbbmmmKK...",
+    "..KhhhhhbbbbmmmdK...",
+    ".KhhhhhhbbbbmmmddK..",
+    ".KhhhhhhbbbbmmmddK..",
+    "KKbhhhhbbbbmmmmddKK.",
+    "KbbbbbbbbbbmmmmdddK.",
+    "KKKKKKKKKKKKKKKKKKK.",
+    "KaaaaaaaaaaaaaaaaaK.",
+    "KKmbbbbmmmmmmddddKK.",
+    ".KmmmmmmmmmmdddddK..",
+    ".KmmmmmmmmmddddddK..",
+    "..KmmmmmmdddddddK...",
+    "..KKdddddddddddKK...",
+    "...KKdddddddddKK....",
+    ".....KKKdddKKK......",
+    ".......KKKKK........",
+    "...................."
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "ironhide",
+  "name": "ironhide",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#c08444",
+    "K": "#1b1220",
+    "a": "#7a4a20",
+    "b": "#a8a5bd",
+    "d": "#33303f",
+    "h": "#e6e4f2",
+    "m": "#6f6c82"
+  },
+  "rows": [
+    "..KKKKKKKKKKKKKK....",
+    ".KhhbbbbbbbbbbmdK...",
+    ".KhbmKKKKKKKKmmdK...",
+    ".KhbmKaAAAAaKmmdK...",
+    ".KhbmKaAaaaAKmmdK...",
+    ".KhbmKaAAAAaKmmdK...",
+    ".KhbmKKKKKKKKmmdK...",
+    ".KhbmmmmmmmmmmmdK...",
+    ".KhbmmmmmmmmmmmdK...",
+    "..KhbmmmmmmmmmdK....",
+    "..KhbmmmmmmmmmdK....",
+    "...KhbmmmmmmmdK.....",
+    "....KhbmmmmmdK......",
+    ".....KhbmmmdK.......",
+    "......KhbmdK........",
+    ".......KhdK.........",
+    "........KK..........",
+    "....................",
+    "....................",
+    "...................."
+  ]
+}

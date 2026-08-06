@@ -1,0 +1,32 @@
+{
+  "id": "floor",
+  "name": "Floorboards",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "K": "#241a16",
+    "d": "#48362f",
+    "m": "#5e483a",
+    "b": "#745b47",
+    "l": "#8c7159"
+  },
+  "rows": [
+    "mbmmmmlmmmmbmmmm",
+    "mmmmbmmmmmmmmlmm",
+    "KKKKKKKKKKKKKKKK",
+    "mmmlmmmmbmmmmmmm",
+    "mmmmmmmmmmbmmmlm",
+    "mmbmmmmmmmmmmmmm",
+    "KKKKKKKKKKKKKKKK",
+    "lmmmmmbmmmmmmmmb",
+    "mmmmmmmmmlmmmmmm",
+    "mmmmbmmmmmmmmmmm",
+    "KKKKKKKKKKKKKKKK",
+    "mmlmmmmmmmbmmmmm",
+    "mmmmmmbmmmmmmmlm",
+    "mmmmmmmmmmmmbmmm",
+    "KKKKKKKKKKKKKKKK",
+    "bmmmmlmmmmmmmmmm"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "bulwark",
+  "name": "bulwark",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#8f7aa8",
+    "K": "#1b1220",
+    "a": "#4a3550",
+    "b": "#ffc94d",
+    "d": "#7a5410",
+    "h": "#fff0b8",
+    "m": "#c69320"
+  },
+  "rows": [
+    "..KKKKKKKKKKKKKKKK..",
+    ".KhhbbbbbbbbbbbbmdK.",
+    ".KhbmmmmmmmmmmmmmdK.",
+    ".KhbmmKKKKKKKKmmmdK.",
+    ".KhbmmKaAAAAaKmmmdK.",
+    ".KhbmmKaAaaaAKmmmdK.",
+    ".KhbmmKaAAAAaKmmmdK.",
+    ".KhbmmKKKKKKKKmmmdK.",
+    ".KhbmmmmmmmmmmmmmdK.",
+    "..KhbmmmmmmmmmmmmdK.",
+    "..KhbmmmmmmmmmmmdK..",
+    "...KhbmmmmmmmmmdK...",
+    "....KhbmmmmmmmdK....",
+    ".....KhbmmmmmdK.....",
+    "......KhbmmmdK......",
+    ".......KhbmdK.......",
+    "........KhdK........",
+    ".........KK.........",
+    "....................",
+    "...................."
+  ]
+}

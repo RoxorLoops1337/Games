@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Adjudicator — World Choir Games</title>
+<meta name="description" content="You are on the jury at the World Choir Games. Hear the flaws, mark the card, defend your score against the panel.">
+<style>
+  :root{
+    --bg:#08070d; --hall:#120e1c; --ink:#f2eeff; --dim:#9a93b4;
+    --gold:#ffcf4d; --silver:#cfd6e4; --bronze:#c9884a;
+    --int:#6ee7ff; --snd:#ffb35c; --bln:#b48cff; --fid:#5eff9e; --art:#ff6fa8;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif; overflow:hidden;
+    -webkit-user-select:none; user-select:none; touch-action:none; }
+  #wrap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas{ display:block; image-rendering:auto; }
+  #topbar{ position:fixed; top:0; right:0; z-index:20; display:flex; gap:6px; padding:8px 10px; }
+  #topbar button{
+    background:rgba(20,17,32,.82); color:var(--dim); border:1px solid #2e2a44; border-radius:8px;
+    font:600 12px/1 'Segoe UI',system-ui,sans-serif; letter-spacing:1px; padding:8px 11px; cursor:pointer;
+  }
+  #topbar button:hover{ color:var(--ink); border-color:#4a4470; }
+  #topbar button.off{ opacity:.45; }
+  #hint{ position:fixed; left:0; right:0; bottom:6px; z-index:20; text-align:center;
+    color:#6d6788; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<div id="topbar">
+  <button id="mute" type="button">SOUND</button>
+  <button id="full" type="button">FULL</button>
+</div>
+<div id="hint">1–5 flag a criterion &nbsp;·&nbsp; ← → set score &nbsp;·&nbsp; ENTER continue</div>
+
+<script>
+/* ============================================================================
+   ADJUDICATOR — World Choir Games (Helsingborg 2026)
+   ---------------------------------------------------------------------------
+   You are the fifth adjudicator on an INTERKULTUR jury. Choirs sing; the
+   performance is synthesised live (four SATB part-voices, three detuned
+   singers each, formant-filtered). Flaws are injected into the *part state* —
+   a cents offset, a gain multiplier, a timing offset, a brightness shift —
+   which the audio graph and the renderer both read. So what you hear and what
+   you see are the same data: the tell is never faked.
+
+   Flag flaws on the five criteria while the choir sings, then set your score
+   on the 30-point card. The other four jurors reveal, the panel takes a
+   trimmed mean, and the diploma is awarded. You are scored on Accuracy
+   (how close to the truth), Attention (what you caught) and Integrity
+   (holding a correct score when the panel drifted to the crowd favourite).
+   ========================================================================= */
+
+const VW = 1000, VH = 620;                 // virtual canvas, letterboxed to fit
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let DPR = 1, SCALE = 1;
+
+/* ------------------------------------------------------------------ random */
+let SEED = 20260806;
+function reseed(s){ SEED = (s >>> 0) || 1; }
+function rng(){
+  SEED |= 0; SEED = (SEED + 0x6D2B79F5) | 0;
+  let t = Math.imul(SEED ^ (SEED >>> 15), 1 | SEED);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const rnd = (a, b) => a + rng() * (b - a);
+const rint = (a, b) => Math.floor(a + rng() * (b - a + 1));
+const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* ================================================================= the data */
+
+/* The five MUSICA MUNDI-style criteria the jury marks on. Keys 1..5. */
+const CRITS = [
+  { id:'int', key:'1', name:'Intonation',          short:'INTONATION',  col:'#6ee7ff',
+    blurb:'Is the choir in tune with itself and with the pitch it started on?' },
+  { id:'snd', key:'2', name:'Sound Quality',       short:'SOUND',       col:'#ffb35c',
+    blurb:'Tone, vowel, resonance. Is it a healthy sound or a pushed one?' },
+  { id:'bln', key:'3', name:'Blend & Balance',     short:'BLEND',       col:'#b48cff',
+    blurb:'Do the four parts weigh the same? Is anyone sticking out, or missing?' },
+  { id:'fid', key:'4', name:'Fidelity to Score',   short:'FIDELITY',    col:'#5eff9e',
+    blurb:'Entries, rhythm, tempo, text. Is the choir singing what is written?' },
+  { id:'art', key:'5', name:'Artistic Impression', short:'ARTISTRY',    col:'#ff6fa8',
+    blurb:'Phrasing, dynamics, intent. Is anybody actually saying anything?' },
+];
+const CRIT_BY_ID = {};
+for (const c of CRITS) CRIT_BY_ID[c.id] = c;
+
+/* Voice parts, low index = highest voice. `state` is what audio and render share. */
+const PART_DEFS = [
+  { name:'Soprano', plural:'Sopranos', abbr:'S', lo:60, hi:79, col:'#ffd8ea' },
+  { name:'Alto',    plural:'Altos',    abbr:'A', lo:55, hi:72, col:'#cfe0ff' },
+  { name:'Tenor',   plural:'Tenors',   abbr:'T', lo:48, hi:64, col:'#d8ffd9' },
+  { name:'Bass',    plural:'Basses',   abbr:'B', lo:40, hi:57, col:'#ffe8c2' },
+];
+
+/* Every flaw names a criterion, a severity in card points, and how it bends
+   the part state. `apply(P, k)` runs each frame with k = 0..1 intensity, so
+   flaws fade in and out instead of snapping. */
+const FLAWS = [
+  { id:'flat_part',   crit:'int', sev:1.5, dur:5.0, label:'{part} settles flat',
+    note:'the {part} line sags roughly a third of a semitone under pitch',
+    setup:(f) => { f.part = rint(0, 3); },
+    apply:(f, P, k) => { P[f.part].cents -= 34 * k; } },
+  { id:'sharp_top',   crit:'int', sev:1.2, dur:4.2, label:'Sopranos push sharp',
+    note:'the top line rides sharp as the phrase climbs',
+    setup:(f) => { f.part = 0; },
+    apply:(f, P, k) => { P[0].cents += 27 * k; } },
+  { id:'pitch_drop',  crit:'int', sev:2.0, dur:6.0, label:'The whole choir drops pitch',
+    note:'a cappella pitch drift — the ensemble is a quarter-tone below where it began',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k) => { for (const p of P) p.cents -= 42 * k; } },
+
+  { id:'strained',    crit:'snd', sev:1.6, dur:4.6, label:'{part} tone turns strained',
+    note:'pushed, edgy tone in the {part} — volume bought with tension',
+    setup:(f) => { f.part = rint(0, 2); },
+    apply:(f, P, k) => { P[f.part].bright += 1.5 * k; P[f.part].gain *= 1 + 0.5 * k; } },
+  { id:'breathy',     crit:'snd', sev:1.1, dur:4.0, label:'{part} goes breathy',
+    note:'the {part} loses core to breath — air, not tone',
+    setup:(f) => { f.part = rint(0, 3); },
+    apply:(f, P, k) => { P[f.part].air += 0.85 * k; P[f.part].gain *= 1 - 0.28 * k; } },
+  { id:'spread',      crit:'snd', sev:1.3, dur:4.4, label:'Vowels spread and whiten',
+    note:'the vowel unravels across the ensemble — bright, shallow, unsupported',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k) => { for (const p of P){ p.bright += 0.75 * k; p.air += 0.3 * k; } } },
+
+  { id:'soloist',     crit:'bln', sev:1.4, dur:4.4, label:'A {part} sticks out',
+    note:'one {part} voice is singing a recital over the top of the section',
+    setup:(f) => { f.part = rint(0, 3); },
+    apply:(f, P, k) => { P[f.part].gain *= 1 + 1.5 * k; P[f.part].rogue = k; } },
+  { id:'buried',      crit:'bln', sev:1.5, dur:5.0, label:'{part} line disappears',
+    note:'the {part} part is inaudible under the rest of the texture',
+    setup:(f) => { f.part = rint(1, 3); },
+    apply:(f, P, k) => { P[f.part].gain *= 1 - 0.78 * k; } },
+  { id:'bass_heavy',  crit:'bln', sev:1.2, dur:4.2, label:'Bottom-heavy texture',
+    note:'basses and tenors swamp the upper parts — the chord loses its top',
+    setup:(f) => { f.part = 3; },
+    apply:(f, P, k) => { P[3].gain *= 1 + 1.1 * k; P[2].gain *= 1 + 0.6 * k; P[0].gain *= 1 - 0.4 * k; } },
+
+  { id:'late_entry',  crit:'fid', sev:1.5, dur:3.6, label:'{part} entry is late',
+    note:'the {part} come in behind the beat and never quite catch up',
+    setup:(f) => { f.part = rint(0, 3); },
+    apply:(f, P, k) => { P[f.part].lag += 0.19 * k; } },
+  { id:'drag',        crit:'fid', sev:1.7, dur:5.4, label:'The tempo drags',
+    note:'the pulse sags — the phrase arrives late to every bar line',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k, S) => { S.tempoMul *= 1 - 0.17 * k; } },
+  { id:'rush',        crit:'fid', sev:1.4, dur:4.4, label:'The choir rushes',
+    note:'the ensemble runs ahead of the conductor',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k, S) => { S.tempoMul *= 1 + 0.16 * k; } },
+  { id:'ragged',      crit:'fid', sev:1.3, dur:4.0, label:'Ragged ensemble',
+    note:'entries and releases are untidy — no two parts agree where the bar ends',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k) => { P[0].lag += 0.10 * k; P[2].lag += 0.16 * k; P[3].lag -= 0.09 * k; } },
+
+  { id:'flat_dyn',    crit:'art', sev:1.6, dur:5.6, label:'Dynamics go flat',
+    note:'one unvaried mezzo-forte from bar to bar — the shape has gone',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k, S) => { S.expression *= 1 - 0.8 * k; } },
+  { id:'no_phrase',   crit:'art', sev:1.4, dur:5.0, label:'Phrases stop arriving',
+    note:'nothing is being said — every phrase ends where it started',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k, S) => { S.expression *= 1 - 0.55 * k; S.phrasing *= 1 - 0.75 * k; } },
+  { id:'stiff',       crit:'art', sev:1.2, dur:4.4, label:'Delivery turns stiff',
+    note:'accurate and completely uninhabited — the choir has stopped listening to itself',
+    setup:(f) => { f.part = -1; },
+    apply:(f, P, k, S) => { S.expression *= 1 - 0.4 * k; S.life *= 1 - 0.7 * k; } },
+];
+const FLAW_BY_ID = {};
+for (const f of FLAWS) FLAW_BY_ID[f.id] = f;
+
+/* Flags are drawn from a tiny description, not from images. */
+const COUNTRIES = [
+  { n:'Sweden',       t:'nordic', f:['#006aa7','#fecc00'] },
+  { n:'Norway',       t:'nordic3',f:['#ba0c2f','#ffffff','#00205b'] },
+  { n:'Denmark',      t:'nordic', f:['#c8102e','#ffffff'] },
+  { n:'Finland',      t:'nordic', f:['#ffffff','#003580'] },
+  { n:'Iceland',      t:'nordic3',f:['#02529c','#ffffff','#dc1e35'] },
+  { n:'Philippines',  t:'h2',     f:['#0038a8','#ce1126'] },
+  { n:'Indonesia',    t:'h2',     f:['#ce1126','#ffffff'] },
+  { n:'South Africa', t:'h3',     f:['#007a4d','#ffffff','#001489'] },
+  { n:'Kenya',        t:'h3',     f:['#000000','#bb0000','#006600'] },
+  { n:'Nigeria',      t:'v3',     f:['#008751','#ffffff','#008751'] },
+  { n:'Germany',      t:'h3',     f:['#000000','#dd0000','#ffce00'] },
+  { n:'Austria',      t:'h3',     f:['#ed2939','#ffffff','#ed2939'] },
+  { n:'Belgium',      t:'v3',     f:['#000000','#fdda24','#ef3340'] },
+  { n:'Netherlands',  t:'h3',     f:['#ae1c28','#ffffff','#21468b'] },
+  { n:'Latvia',       t:'h3',     f:['#9e3039','#ffffff','#9e3039'] },
+  { n:'Estonia',      t:'h3',     f:['#0072ce','#000000','#ffffff'] },
+  { n:'Lithuania',    t:'h3',     f:['#fdb913','#006a44','#c1272d'] },
+  { n:'Hungary',      t:'h3',     f:['#cd2a3e','#ffffff','#436f4d'] },
+  { n:'Poland',       t:'h2',     f:['#ffffff','#dc143c'] },
+  { n:'Slovenia',     t:'h3',     f:['#ffffff','#0000ff','#ff0000'] },
+  { n:'Georgia',      t:'h3',     f:['#ffffff','#ff0000','#ffffff'] },
+  { n:'Ukraine',      t:'h2',     f:['#0057b7','#ffd700'] },
+  { n:'Japan',        t:'sun',    f:['#ffffff','#bc002d'] },
+  { n:'China',        t:'h2',     f:['#de2910','#de2910'] },
+  { n:'Viet Nam',     t:'sun',    f:['#da251d','#ffff00'] },
+  { n:'Colombia',     t:'h3',     f:['#fcd116','#003893','#ce1126'] },
+  { n:'Brazil',       t:'sun',    f:['#009c3b','#ffdf00'] },
+  { n:'Ireland',      t:'v3',     f:['#169b62','#ffffff','#ff883e'] },
+  { n:'Italy',        t:'v3',     f:['#008c45','#f4f5f0','#cd212a'] },
+  { n:'Spain',        t:'h3',     f:['#aa151b','#f1bf00','#aa151b'] },
+  { n:'USA',          t:'h3',     f:['#b31942','#ffffff','#b31942'] },
+  { n:'Canada',       t:'v3',     f:['#d80621','#ffffff','#d80621'] },
+];
+
+/* Categories in the spirit of the real WCG category list. */
+const CATEGORIES = [
+  { n:'Mixed Choirs',              flavour:'hymn' },
+  { n:'Chamber Choirs',            flavour:'hymn' },
+  { n:'Musica Sacra a cappella',   flavour:'sacred' },
+  { n:'Gospel & Spiritual',        flavour:'gospel' },
+  { n:'Jazz',                      flavour:'jazz' },
+  { n:'Folklore a cappella',       flavour:'folk' },
+  { n:'Youth Choirs of Mixed Voices', flavour:'hymn' },
+  { n:'Children’s Choirs',    flavour:'bright' },
+  { n:'Male Choirs',               flavour:'low' },
+  { n:'Female Choirs',             flavour:'bright' },
+  { n:'Pop & Show Choirs',         flavour:'jazz' },
+  { n:'Vocal Ensembles',           flavour:'sacred' },
+  { n:'Senior Choirs',             flavour:'hymn' },
+  { n:'Barbershop',                flavour:'jazz' },
+];
+
+/* Choir names: a first word, a second word, occasionally a place-ish prefix. */
+const NAME_A = ['Northern','Kammar','Cantabile','Aurora','Harbour','Lumen','Vox','Cantus','Coastal',
+  'Golden','Silver','Bright','Ember','Meridian','Solstice','Riverside','Highland','Blue Hour',
+  'Morning','Evening','Wandering','Open','Sunward','Windward','Stone','Cedar','Amber','Quiet'];
+const NAME_B = ['Voices','Singers','Chorale','Choir','Chamber Choir','Ensemble','Consort','Company',
+  'Collective','Chorus','Vocal Group','Academy Choir','Youth Choir','Society'];
+const NAME_C = ['of the North','of the Bay','of St. Mary','of the Valley','of the Coast','of the Hill',
+  '', '', '', '', ''];
+
+/* Fellow jurors. Each has a bias the player learns to read across the run. */
+const JURORS = [
+  { id:'hawk',   name:'Dr. Ilse Vahrenbrink', from:'Germany',      style:'hawk',
+    tag:'Marks low, marks the same way every time.' },
+  { id:'dove',   name:'Padre António Simões', from:'Brazil', style:'dove',
+    tag:'Believes a jury exists to encourage.' },
+  { id:'crowd',  name:'Mei-Lin Toh',          from:'Singapore',    style:'crowd',
+    tag:'Reads the hall as much as the stage.' },
+  { id:'pedant', name:'Erik Hallström',  from:'Sweden',       style:'pedant',
+    tag:'Hears everything. Forgives none of it.' },
+];
+
+/* Diploma bands on the 30-point card. */
+const BANDS = [
+  { min:29.0, id:'goldI',   name:'Golden Diploma, Level I',  col:'#ffcf4d', metal:'gold' },
+  { min:26.0, id:'goldII',  name:'Golden Diploma, Level II', col:'#e8b93c', metal:'gold' },
+  { min:23.0, id:'silverI', name:'Silver Diploma, Level I',  col:'#dfe6f2', metal:'silver' },
+  { min:20.0, id:'silverII',name:'Silver Diploma, Level II', col:'#bcc4d4', metal:'silver' },
+  { min:17.0, id:'bronzeI', name:'Bronze Diploma',           col:'#c9884a', metal:'bronze' },
+  { min:0,    id:'part',    name:'Successful Participation',  col:'#8b849f', metal:'none' },
+];
+function bandFor(score){
+  for (const b of BANDS) if (score >= b.min - 1e-9) return b;
+  return BANDS[BANDS.length - 1];
+}
+
+/* Adjudicator's own end-of-run title, from the combined three meters. */
+const RANKS = [
+  { min:0.90, name:'Champion Adjudicator', col:'#ffcf4d',
+    line:'Interkultur would like a word about next year’s panel.' },
+  { min:0.78, name:'Golden Diploma — Jury',  col:'#e8b93c',
+    line:'A card the other four could not argue with.' },
+  { min:0.64, name:'Silver Diploma — Jury',  col:'#dfe6f2',
+    line:'Solid hearing. A couple of things got past you.' },
+  { min:0.50, name:'Bronze Diploma — Jury',  col:'#c9884a',
+    line:'You were in the room and you were mostly right.' },
+  { min:0,    name:'Observer’s Pass',        col:'#8b849f',
+    line:'Sit in again tomorrow. Bring the score this time.' },
+];
+
+/* The three rounds of the competition. */
+const STAGES = [
+  { id:'open',      name:'The Open Competition',      sub:'Round 1 · Diplomas',
+    choirs:3, diff:0.0,  tell:1.00, win:3.4,
+    intro:'Emerging choirs, on a stage most of them have never stood on. Be fair and be exact.' },
+  { id:'champions', name:'The Champions Competition', sub:'Round 2 · Medals',
+    choirs:3, diff:0.45, tell:0.62, win:2.6,
+    intro:'Advanced ensembles. The flaws get small and they get quick — and so do you.' },
+  { id:'grand',     name:'The Grand Prix Final',      sub:'Round 3 · The Champion title',
+    choirs:2, diff:1.0,  tell:0.26, win:2.0,
+    intro:'Two choirs. One title. From here you are listening on your own.' },
+];
+
+const VENUES = ['Helsingborg Arena','Konserthuset, Stora Salen','S:ta Maria kyrka','Dunkers Kulturhus'];
+const SAVE_KEY = 'wcg_adjudicator_v1';
+/* Where every card starts before anything goes wrong. */
+const CARD_TOP = 29.0;
+const PHANTOM_COST = 0.7;
+
+/* ============================================================ global state */
+
+const G = {
+  phase:'title',       // title | howto | parade | brief | perform | deliberate | panel | round | results
+  t:0,                 // phase-local clock
+  stage:0,             // index into STAGES
+  idx:0,               // choir index within the stage
+  field:[],            // every choir of the whole competition, in order
+  cur:null,            // the choir singing now
+  perf:null,           // live performance state
+  card:null,           // the player's completed card for `cur`
+  myScore:24,          // the dial
+  log:[],              // every judged choir
+  acc:[], att:[], integ:[],
+  best:null,
+  firstRun:true,
+  paused:false,
+  shake:0,
+};
+
+/* Part state, rebuilt every frame from the base plus whatever flaws are live. */
+const PARTS = PART_DEFS.map((d) => ({
+  def:d, name:d.name, abbr:d.abbr,
+  midi:d.lo, targetMidi:d.lo,
+  cents:0, gain:1, bright:0, air:0, lag:0, rogue:0,
+  mouth:0, sway:0,
+}));
+const SING = { tempoMul:1, expression:1, phrasing:1, life:1, level:0 };
+
+const fx = [];
+function spawnFx(o){ fx.push(Object.assign({ t:0, life:0.8 }, o)); }
+function fxTick(dt){
+  for (let i = fx.length - 1; i >= 0; i--){
+    const p = fx[i]; p.t += dt;
+    p.y += (p.vy || 0) * dt; p.x += (p.vx || 0) * dt;
+    if (p.t >= p.life) fx.splice(i, 1);
+  }
+}
+
+/* ================================================================== audio */
+/* Four persistent part-voices. Each is three saw oscillators a few cents
+   apart, through two formant band-passes, into a part gain. Notes glide, so
+   the choir sounds legato and a cents offset is instantly audible. */
+const AUDIO = {
+  ac:null, ok:false, muted:false, master:null, voices:[], noise:null, noiseGain:null,
+  init(){
+    if (this.ac || this.ok) return;
+    const AC = (typeof window !== 'undefined') && (window.AudioContext || window.webkitAudioContext);
+    if (!AC) return;
+    try {
+      const ac = new AC();
+      const master = ac.createGain();
+      master.gain.value = 0.0001;
+      master.connect(ac.destination);
+      const voices = PART_DEFS.map((d, i) => {
+        const out = ac.createGain(); out.gain.value = 0.0001; out.connect(master);
+        const f1 = ac.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 4;
+        const f2 = ac.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1180; f2.Q.value = 6;
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 0.7;
+        f1.connect(out); f2.connect(out); lp.connect(out);
+        const oscs = [];
+        for (let k = 0; k < 3; k++){
+          const o = ac.createOscillator();
+          o.type = k === 1 ? 'triangle' : 'sawtooth';
+          o.frequency.value = 220;
+          o.detune.value = (k - 1) * 7;
+          const g = ac.createGain(); g.gain.value = k === 1 ? 0.20 : 0.13;
+          o.connect(g); g.connect(f1); g.connect(f2); g.connect(lp);
+          const lfo = ac.createOscillator(); lfo.frequency.value = 4.6 + k * 0.42 + i * 0.11;
+          const lg = ac.createGain(); lg.gain.value = 5;
+          lfo.connect(lg); lg.connect(o.detune);
+          try { o.start(); lfo.start(); } catch (e) { /* already running */ }
+          oscs.push({ o, g, lfo, lg, base:(k - 1) * 7 });
+        }
+        return { out, f1, f2, lp, oscs };
+      });
+      // A breath/applause noise bed, used for `air` and for the hall.
+      const buf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+      const noise = ac.createBufferSource(); noise.buffer = buf; noise.loop = true;
+      const nf = ac.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 2400; nf.Q.value = 0.8;
+      const ng = ac.createGain(); ng.gain.value = 0.0001;
+      noise.connect(nf); nf.connect(ng); ng.connect(master);
+      try { noise.start(); } catch (e) { /* noop */ }
+      this.ac = ac; this.master = master; this.voices = voices;
+      this.noise = noise; this.noiseGain = ng; this.noiseFilter = nf;
+      this.ok = true;
+    } catch (e) { this.ok = false; }
+  },
+  resume(){
+    this.init();
+    if (this.ok && this.ac.state === 'suspended') { try { this.ac.resume(); } catch (e) { /* noop */ } }
+  },
+  /* Reads PARTS + SING every frame. This is the whole instrument. */
+  frame(){
+    if (!this.ok) return;
+    const ac = this.ac, now = ac.currentTime, S = 0.06;
+    const on = !this.muted && G.phase === 'perform' && !G.paused;
+    try {
+      this.master.gain.setTargetAtTime(this.muted ? 0.0001 : 0.30, now, 0.08);
+      for (let i = 0; i < PARTS.length; i++){
+        const p = PARTS[i], v = this.voices[i];
+        const hz = 440 * Math.pow(2, (p.midi - 69) / 12 + p.cents / 1200);
+        for (const osc of v.oscs){
+          osc.o.frequency.setTargetAtTime(hz, now, 0.05);
+          osc.lg.gain.setTargetAtTime(4 + 7 * SING.expression, now, 0.1);
+        }
+        const lvl = on ? clamp(p.gain, 0, 3) * (0.10 + 0.09 * SING.level) * (0.55 + 0.45 * SING.expression) : 0.0001;
+        v.out.gain.setTargetAtTime(Math.max(0.0001, lvl), now, S);
+        v.f1.frequency.setTargetAtTime(620 + 260 * p.bright, now, 0.1);
+        v.f2.frequency.setTargetAtTime(1120 + 900 * p.bright, now, 0.1);
+        v.lp.frequency.setTargetAtTime(2600 + 3400 * p.bright, now, 0.1);
+        v.f2.Q.setTargetAtTime(clamp(6 - 3 * p.air, 1, 8), now, 0.1);
+      }
+      let air = 0;
+      for (const p of PARTS) air += p.air;
+      const hall = (G.phase === 'panel' || G.phase === 'round') ? this.applause : 0;
+      this.noiseFilter.frequency.setTargetAtTime(hall > 0 ? 1600 : 2600, now, 0.1);
+      this.noiseGain.gain.setTargetAtTime(
+        Math.max(0.0001, this.muted ? 0.0001 : (on ? air * 0.016 : 0) + hall * 0.11), now, 0.12);
+    } catch (e) { /* an audio hiccup must never stop the game */ }
+  },
+  applause:0,
+  cheer(amount){ this.applause = clamp(amount, 0, 1); },
+  fadeCheer(dt){ this.applause = Math.max(0, this.applause - dt * 0.35); },
+  /* Short UI blips — a marked card, a rejected one. */
+  blip(freq, dur, type){
+    if (!this.ok || this.muted) return;
+    try {
+      const ac = this.ac, now = ac.currentTime;
+      const o = ac.createOscillator(); o.type = type || 'sine'; o.frequency.value = freq;
+      const g = ac.createGain(); g.gain.value = 0.0001;
+      o.connect(g); g.connect(this.master);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + (dur || 0.16));
+      o.start(now); o.stop(now + (dur || 0.16) + 0.05);
+    } catch (e) { /* noop */ }
+  },
+};
+
+/* =========================================================== music engine */
+/* A short SATB piece, generated per choir. Bars of four beats; each bar is a
+   chord, the soprano gets a two-note figure over it. Flavour bends the mode,
+   the tempo and the register. */
+const DEGREES = {
+  hymn:   [[0,4,7],[7,11,14],[9,12,16],[5,9,12],[0,4,7],[5,9,12],[7,11,14],[0,4,7]],
+  sacred: [[0,3,7],[7,10,14],[8,12,15],[5,8,12],[0,3,7],[3,7,10],[7,11,14],[0,3,7]],
+  gospel: [[0,4,7],[5,9,12],[0,4,7],[7,10,14],[0,4,7],[5,9,12],[7,11,14],[0,4,7]],
+  jazz:   [[0,4,7,11],[2,5,9,12],[7,11,14,17],[0,4,7,11],[9,12,16,19],[2,5,9,12],[7,11,14,17],[0,4,7,11]],
+  folk:   [[0,3,7],[10,14,17],[0,3,7],[5,8,12],[10,14,17],[0,3,7],[7,10,14],[0,3,7]],
+  bright: [[0,4,7],[5,9,12],[7,11,14],[0,4,7],[9,12,16],[5,9,12],[7,11,14],[0,4,7]],
+  low:    [[0,4,7],[5,9,12],[0,4,7],[7,11,14],[3,7,10],[5,9,12],[7,11,14],[0,4,7]],
+};
+const FLAVOUR_SETUP = {
+  hymn:   { tempo:72,  shift:0,  spread:0 },
+  sacred: { tempo:54,  shift:-2, spread:1 },
+  gospel: { tempo:88,  shift:0,  spread:0 },
+  jazz:   { tempo:104, shift:0,  spread:-1 },
+  folk:   { tempo:96,  shift:-1, spread:0 },
+  bright: { tempo:84,  shift:5,  spread:-2 },
+  low:    { tempo:66,  shift:-7, spread:2 },
+};
+
+function makePiece(flavour){
+  const set = FLAVOUR_SETUP[flavour] || FLAVOUR_SETUP.hymn;
+  const prog = DEGREES[flavour] || DEGREES.hymn;
+  const root = 60 + set.shift + rint(-2, 2);
+  const bars = [];
+  for (let i = 0; i < prog.length; i++){
+    const ch = prog[i];
+    // Voice the chord: soprano top, then alto/tenor/bass down through the
+    // chord tones, each dropped into that part's comfortable octave.
+    const tones = ch.map((d) => root + d);
+    const sop = tones[tones.length - 1] + (rng() < 0.35 ? 12 : 0);
+    const alt = tones[Math.max(0, tones.length - 2)];
+    const ten = tones[Math.max(0, tones.length - 3)];
+    const bas = tones[0] - 12;
+    const voiced = [sop, alt, ten, bas].map((m, k) => {
+      const d = PART_DEFS[k];
+      let v = m + set.spread * (k === 3 ? -1 : k === 0 ? 1 : 0);
+      while (v < d.lo) v += 12;
+      while (v > d.hi) v -= 12;
+      return clamp(v, d.lo, d.hi);
+    });
+    // A little soprano movement in the second half of the bar.
+    const step = pick([0, 0, 2, -2, 1, -1]);
+    const sopB = clamp(voiced[0] + step, PART_DEFS[0].lo, PART_DEFS[0].hi);
+    bars.push({ chord:voiced, sopB, dyn: 0.55 + 0.45 * Math.sin((i / prog.length) * Math.PI) });
+  }
+  return { bars, tempo: set.tempo + rint(-6, 6), beats:4 };
+}
+
+/* Which pitch each part is on, given the musical position. */
+function noteAt(piece, bar, beat){
+  const b = piece.bars[((bar % piece.bars.length) + piece.bars.length) % piece.bars.length];
+  const out = b.chord.slice();
+  if (beat >= 2) out[0] = b.sopB;
+  return out;
+}
+
+/* ============================================================ competition */
+
+function makeChoirName(){
+  const a = pick(NAME_A), b = pick(NAME_B), c = pick(NAME_C);
+  return (a + ' ' + b + (c ? ' ' + c : '')).trim();
+}
+
+function makeChoir(stageIdx, seatIdx){
+  const st = STAGES[stageIdx];
+  const cat = pick(CATEGORIES);
+  const country = pick(COUNTRIES);
+  const quality = clamp(0.30 + st.diff * 0.5 + rnd(-0.18, 0.22), 0, 1);
+  // A better choir goes wrong less often and less badly. Quality never moves
+  // the top of the card, only what comes off it — so a player who hears
+  // everything and marks it can land exactly on the truth.
+  const nFlaws = clamp(3 + Math.round(st.diff * 3 - quality * 1.6) + rint(-1, 1), 2, 7);
+  const dur = 30 + st.diff * 6;
+
+  // Pick flaws, no two of the same criterion overlapping, spaced out in time.
+  const chosen = [];
+  const pool = FLAWS.slice();
+  let guard = 0;
+  while (chosen.length < nFlaws && guard++ < 200){
+    const f = pool[Math.floor(rng() * pool.length)];
+    const d = f.dur * (1 - st.diff * 0.42);
+    const at = rnd(2.4, dur - d - 1.6);
+    const clash = chosen.some((o) =>
+      o.def.crit === f.crit && at < o.at + o.dur + 0.8 && o.at < at + d + 0.8);
+    if (clash) continue;
+    if (chosen.some((o) => o.def.id === f.id)) continue;
+    const sev = Math.round(f.sev * (0.75 + rng() * 0.5) * (1 - quality * 0.25) * 10) / 10;
+    const inst = { def:f, at, dur:d, sev, part:-1,
+      caught:false, catchT:0, missed:false, sharp:0 };
+    if (f.setup) f.setup(inst);
+    chosen.push(inst);
+  }
+  chosen.sort((a, b) => a.at - b.at);
+
+  // The truth: every choir starts at the same place on the card and pays for
+  // exactly what went wrong. CARD_TOP is public knowledge — the player's own
+  // suggested score is built from it — so hearing everything means landing on
+  // the truth, and the dial is only there for what you are unsure about.
+  let truth = CARD_TOP;
+  for (const f of chosen) truth -= f.sev;
+  truth = Math.round(clamp(truth, 9, 30) * 10) / 10;
+
+  return {
+    id: stageIdx + ':' + seatIdx,
+    stage: stageIdx, seat: seatIdx,
+    name: makeChoirName(), country, cat,
+    venue: pick(VENUES),
+    piece: makePiece(cat.flavour),
+    flaws: chosen, dur, quality,
+    truth: Math.round(truth * 10) / 10,
+    favourite: rng() < (stageIdx === 0 ? 0.25 : 0.45),   // the hall already loves them
+    singers: 18 + rint(0, 14),
+  };
+}
+
+function buildCompetition(){
+  G.field = [];
+  for (let s = 0; s < STAGES.length; s++)
+    for (let i = 0; i < STAGES[s].choirs; i++) G.field.push(makeChoir(s, i));
+}
+const totalChoirs = () => STAGES.reduce((n, s) => n + s.choirs, 0);
+function choirAt(stage, idx){
+  return G.field.find((c) => c.stage === stage && c.seat === idx) || null;
+}
+
+/* ------------------------------------------------------------- the jurors */
+/* Each juror produces a score for a choir. They are not random noise: they
+   are consistently wrong in their own direction, which is the whole point. */
+function jurorScore(juror, choir){
+  const t = choir.truth;
+  let s = t;
+  switch (juror.style){
+    case 'hawk':   s = t - 1.3 - choir.quality * 0.4; break;
+    case 'dove':   s = t + 1.6 - (t > 27 ? 0.8 : 0); break;
+    case 'crowd':  s = t + (choir.favourite ? 2.2 : -0.7); break;
+    case 'pedant': s = t - 0.35; break;
+    default: break;
+  }
+  // A little hearing error, deterministic per juror+choir so the panel never
+  // changes its mind between renders.
+  const h = hash32(juror.id + '|' + choir.id);
+  s += ((h % 1000) / 1000 - 0.5) * 1.1;
+  return clamp(Math.round(s * 10) / 10, 8, 30);
+}
+function hash32(str){
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+/* The panel result: drop the highest and the lowest, average the middle
+   three. That is genuinely how a five-judge card is usually resolved. */
+function trimmedMean(scores){
+  if (scores.length < 3) return scores.reduce((a, b) => a + b, 0) / Math.max(1, scores.length);
+  const s = scores.slice().sort((a, b) => a - b);
+  const mid = s.slice(1, s.length - 1);
+  return Math.round((mid.reduce((a, b) => a + b, 0) / mid.length) * 10) / 10;
+}
+
+/* ============================================================ performance */
+
+function startChoir(){
+  const c = choirAt(G.stage, G.idx);
+  if (!c){ finishStage(); return; }
+  G.cur = c;
+  G.card = null;
+  G.myScore = 25;
+  setPhase('brief');
+}
+
+function beginPerformance(){
+  const c = G.cur;
+  G.perf = {
+    t:0, dur:c.dur, bar:0, beat:0, beatF:0, musT:0,
+    caught:[], phantoms:[], cool:{}, active:[],
+    flash:{}, lastPress:{},
+  };
+  for (const f of c.flaws){ f.caught = false; f.catchT = 0; f.missed = false; }
+  for (const p of PARTS){
+    p.cents = 0; p.gain = 1; p.bright = 0; p.air = 0; p.lag = 0; p.rogue = 0;
+    p.midi = p.def.lo; p.targetMidi = p.def.lo;
+  }
+  SING.tempoMul = 1; SING.expression = 1; SING.phrasing = 1; SING.life = 1; SING.level = 0;
+  AUDIO.resume();
+  setPhase('perform');
+}
+
+/* A flaw's intensity: fades in over the first 18% and out over the last 22%. */
+function flawIntensity(f, t){
+  if (t < f.at || t > f.at + f.dur) return 0;
+  const u = (t - f.at) / f.dur;
+  if (u < 0.18) return u / 0.18;
+  if (u > 0.78) return (1 - u) / 0.22;
+  return 1;
+}
+
+function perfTick(dt){
+  const P = G.perf, c = G.cur;
+  if (!P || !c) return;
+  P.t += dt;
+
+  // ---- reset part state, then let every live flaw bend it -----------------
+  SING.tempoMul = 1; SING.expression = 1; SING.phrasing = 1; SING.life = 1;
+  for (const p of PARTS){ p.cents = 0; p.gain = 1; p.bright = 0; p.air = 0; p.lag = 0; p.rogue = 0; }
+  P.active.length = 0;
+  for (const f of c.flaws){
+    const k = flawIntensity(f, P.t);
+    if (k > 0){
+      P.active.push(f);
+      f.def.apply(f, PARTS, k, SING);
+    } else if (!f.missed && !f.caught && P.t > f.at + f.dur){
+      f.missed = true;
+    }
+  }
+
+  // ---- musical clock ------------------------------------------------------
+  const bps = (c.piece.tempo / 60) * SING.tempoMul;
+  P.musT += dt * bps;
+  const beatIdx = Math.floor(P.musT);
+  P.bar = Math.floor(beatIdx / c.piece.beats);
+  P.beat = beatIdx % c.piece.beats;
+  P.beatF = P.musT - beatIdx;
+
+  const dyn = c.piece.bars[P.bar % c.piece.bars.length].dyn;
+  const shaped = lerp(0.62, dyn, SING.phrasing);
+  SING.level = shaped * lerp(0.55, 1, SING.expression);
+
+  // Every part sits on the chord tone for its own (possibly lagged) position.
+  for (let i = 0; i < PARTS.length; i++){
+    const p = PARTS[i];
+    const lagT = P.musT - p.lag * bps;
+    const bi = Math.floor(lagT), bar = Math.floor(bi / c.piece.beats), beat = bi % c.piece.beats;
+    const notes = noteAt(c.piece, bar, beat);
+    p.targetMidi = notes[i];
+    p.midi += (p.targetMidi - p.midi) * Math.min(1, dt * 11);
+    const ph = lagT - bi;
+    p.mouth = 0.35 + 0.55 * Math.max(0, Math.sin(ph * Math.PI)) * SING.level * lerp(0.5, 1, SING.life);
+    p.sway = Math.sin(P.musT * 0.9 + i * 1.3) * lerp(0.25, 1, SING.life);
+  }
+
+  // ---- key cooldowns ------------------------------------------------------
+  for (const k in P.cool) P.cool[k] = Math.max(0, P.cool[k] - dt);
+  for (const k in P.flash) P.flash[k] = Math.max(0, P.flash[k] - dt);
+
+  if (P.t >= c.dur) endPerformance();
+}
+
+/* The player marks a criterion. */
+function flagCrit(critId){
+  if (G.phase !== 'perform' || G.paused) return null;
+  const P = G.perf, c = G.cur;
+  if (!P) return null;
+  if ((P.cool[critId] || 0) > 0) return null;
+  P.cool[critId] = 0.28;
+
+  const win = STAGES[G.stage].win;
+  // A live flaw on this criterion — or one that ended within the grace window.
+  let hit = null;
+  for (const f of c.flaws){
+    if (f.def.crit !== critId || f.caught) continue;
+    const early = P.t >= f.at - 0.25;
+    const late  = P.t <= f.at + f.dur + Math.min(1.1, win * 0.35);
+    if (early && late){ hit = f; break; }
+  }
+  if (hit){
+    hit.caught = true;
+    hit.catchT = P.t;
+    // Reaction bonus: catching it while it is still arriving is worth more.
+    const react = clamp((P.t - hit.at) / Math.max(0.6, hit.dur), 0, 1.4);
+    hit.sharp = clamp(1 - react * 0.7, 0, 1);
+    P.caught.push(hit);
+    P.flash[critId] = 0.5;
+    G.shake = Math.min(6, G.shake + 2);
+    AUDIO.blip(660 + hit.sharp * 260, 0.13, 'triangle');
+    spawnFx({ kind:'mark', crit:critId, x:critX(critId), y:VH - 96, vy:-42, life:1.1,
+      text:fmtFlaw(hit) });
+    return hit;
+  }
+  // Nothing there. You have written down something that did not happen.
+  const ph = { crit:critId, t:P.t };
+  P.phantoms.push(ph);
+  P.flash[critId] = 0.24;
+  AUDIO.blip(150, 0.1, 'sawtooth');
+  spawnFx({ kind:'phantom', crit:critId, x:critX(critId), y:VH - 96, vy:-26, life:0.8 });
+  return null;
+}
+
+function fmtFlaw(f){
+  const part = f.part >= 0 ? PART_DEFS[f.part].plural : '';
+  return f.def.label.replace('{part}', part || 'The choir');
+}
+function fmtNote(f){
+  const part = f.part >= 0 ? PART_DEFS[f.part].name.toLowerCase() : '';
+  return f.def.note.replace(/\{part\}/g, part || 'ensemble');
+}
+
+function endPerformance(){
+  const P = G.perf, c = G.cur;
+  let deduct = 0;
+  for (const f of P.caught) deduct += f.sev;
+  const phantomCost = P.phantoms.length * PHANTOM_COST;
+  // The card the player's own notes suggest. They can still override it.
+  const suggested = clamp(CARD_TOP - deduct - phantomCost, 8, 30);
+  G.myScore = Math.round(suggested * 2) / 2;
+  G.card = {
+    caught: P.caught.slice(),
+    missed: c.flaws.filter((f) => !f.caught),
+    phantoms: P.phantoms.slice(),
+    suggested: Math.round(suggested * 10) / 10,
+  };
+  for (const p of PARTS){ p.gain = 1; p.cents = 0; p.bright = 0; p.air = 0; }
+  setPhase('deliberate');
+}
+
+/* The player locks their score; the panel reveals; the diploma is awarded. */
+function submitScore(){
+  if (G.phase !== 'deliberate') return;
+  const c = G.cur;
+  const mine = G.myScore;
+  const others = JURORS.map((j) => ({ juror:j, score: jurorScore(j, c) }));
+  const all = others.map((o) => o.score).concat([mine]);
+  const panel = trimmedMean(all);
+  const panelNoMe = trimmedMean(others.map((o) => o.score));
+
+  const accuracy = clamp(1 - Math.abs(mine - c.truth) / 5, 0, 1);
+  const total = c.flaws.length || 1;
+  const attention = clamp(
+    (G.card.caught.length / total) - (G.card.phantoms.length * 0.12), 0, 1);
+
+  // Integrity: the panel drifted off the truth, and you were the one closer to it.
+  const panelErr = Math.abs(panelNoMe - c.truth);
+  const myErr = Math.abs(mine - c.truth);
+  let integrity = 0.5;
+  if (panelErr > 1.0) integrity = clamp(0.5 + (panelErr - myErr) / 3, 0, 1);
+  else integrity = clamp(1 - myErr / 3, 0, 1);
+
+  G.acc.push(accuracy); G.att.push(attention); G.integ.push(integrity);
+
+  const entry = {
+    choir:c, mine, others, panel, panelNoMe, truth:c.truth,
+    band: bandFor(panel), accuracy, attention, integrity,
+    caught:G.card.caught.length, total, phantoms:G.card.phantoms.length,
+  };
+  G.log.push(entry);
+  G.result = entry;
+  AUDIO.cheer(clamp(0.35 + (panel - 18) / 16, 0.2, 1));
+  setPhase('panel');
+}
+
+function finishStage(){
+  G.stage++;
+  if (G.stage >= STAGES.length) setPhase('results');
+  else { G.idx = 0; setPhase('round'); }
+}
+
+function nextChoir(){
+  G.idx++;
+  if (G.idx >= STAGES[G.stage].choirs) finishStage();
+  else startChoir();
+}
+
+const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+function overallScore(){
+  return clamp(avg(G.acc) * 0.45 + avg(G.att) * 0.30 + avg(G.integ) * 0.25, 0, 1);
+}
+function rankFor(v){
+  for (const r of RANKS) if (v >= r.min) return r;
+  return RANKS[RANKS.length - 1];
+}
+/* The choir the whole competition crowns, by panel score. */
+function championOfTheGames(){
+  let best = null;
+  for (const e of G.log) if (!best || e.panel > best.panel) best = e;
+  return best;
+}
+
+/* ================================================================= saving */
+function loadSave(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s && typeof s === 'object'){
+      G.best = s.best || null;
+      G.firstRun = s.firstRun !== false ? (s.seen ? false : true) : false;
+      if (s.seen) G.firstRun = false;
+    }
+  } catch (e) { /* a broken save must never block the door */ }
+}
+function writeSave(){
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ best:G.best, seen:true }));
+  } catch (e) { /* noop */ }
+}
+function recordBest(){
+  const v = overallScore();
+  const r = rankFor(v);
+  if (!G.best || v > G.best.score) G.best = { score:v, rank:r.name, at:G.log.length };
+  writeSave();
+}
+
+/* ============================================================ phase plumbing */
+function setPhase(p){
+  G.phase = p;
+  G.t = 0;
+  if (p === 'results') recordBest();
+}
+function startRun(){
+  reseed((SEED ^ (G.log.length * 7919 + 13)) >>> 0);
+  G.stage = 0; G.idx = 0; G.log = []; G.acc = []; G.att = []; G.integ = [];
+  G.result = null;
+  buildCompetition();
+  setPhase('parade');
+}
+
+/* ================================================================ layout */
+const CRIT_W = 176, CRIT_GAP = 12;
+const CRIT_X0 = (VW - (CRITS.length * CRIT_W + (CRITS.length - 1) * CRIT_GAP)) / 2;
+function critX(id){
+  const i = CRITS.findIndex((c) => c.id === id);
+  return CRIT_X0 + i * (CRIT_W + CRIT_GAP) + CRIT_W / 2;
+}
+function critRect(i){
+  return { x: CRIT_X0 + i * (CRIT_W + CRIT_GAP), y: VH - 86, w: CRIT_W, h: 64 };
+}
+const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+
+/* ================================================================ drawing */
+function fit(){
+  const w = window.innerWidth, h = window.innerHeight;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  SCALE = Math.min(w / VW, h / VH);
+  cv.width = Math.round(VW * SCALE * DPR);
+  cv.height = Math.round(VH * SCALE * DPR);
+  cv.style.width = Math.round(VW * SCALE) + 'px';
+  cv.style.height = Math.round(VH * SCALE) + 'px';
+}
+function toVirtual(clientX, clientY){
+  const r = cv.getBoundingClientRect();
+  return { x: (clientX - r.left) / (r.width || 1) * VW, y: (clientY - r.top) / (r.height || 1) * VH };
+}
+
+function rr(x, y, w, h, r){
+  const k = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + k, y);
+  ctx.arcTo(x + w, y, x + w, y + h, k);
+  ctx.arcTo(x + w, y + h, x, y + h, k);
+  ctx.arcTo(x, y + h, x, y, k);
+  ctx.arcTo(x, y, x + w, y, k);
+  ctx.closePath();
+}
+function txt(s, x, y, size, col, align, weight){
+  ctx.fillStyle = col || '#f2eeff';
+  ctx.font = (weight || 600) + ' ' + size + 'px "Segoe UI",system-ui,sans-serif';
+  ctx.textAlign = align || 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(s, x, y);
+}
+/* Trims a label to fit a column, so a long flaw name never runs into the
+   number sitting at the end of its row. */
+function clipTxt(s, maxW, size, weight){
+  ctx.font = (weight || 600) + ' ' + size + 'px "Segoe UI",system-ui,sans-serif';
+  if (ctx.measureText(s).width <= maxW) return s;
+  let out = s;
+  while (out.length > 2 && ctx.measureText(out + '…').width > maxW) out = out.slice(0, -1);
+  return out + '…';
+}
+function wrapTxt(s, x, y, maxW, size, col, lh, align){
+  ctx.font = '400 ' + size + 'px "Segoe UI",system-ui,sans-serif';
+  ctx.fillStyle = col; ctx.textAlign = align || 'left';
+  const words = String(s).split(' ');
+  let line = '', yy = y;
+  for (const w of words){
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line){ ctx.fillText(line, x, yy); line = w; yy += lh || size + 6; }
+    else line = test;
+  }
+  if (line) ctx.fillText(line, x, yy);
+  return yy;
+}
+
+function drawFlag(c, x, y, w, h){
+  const f = c.f;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  switch (c.t){
+    case 'h2':
+      ctx.fillStyle = f[0]; ctx.fillRect(x, y, w, h / 2);
+      ctx.fillStyle = f[1]; ctx.fillRect(x, y + h / 2, w, h / 2); break;
+    case 'h3':
+      for (let i = 0; i < 3; i++){ ctx.fillStyle = f[i]; ctx.fillRect(x, y + h * i / 3, w, h / 3 + 1); } break;
+    case 'v3':
+      for (let i = 0; i < 3; i++){ ctx.fillStyle = f[i]; ctx.fillRect(x + w * i / 3, y, w / 3 + 1, h); } break;
+    case 'nordic':
+      ctx.fillStyle = f[0]; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = f[1];
+      ctx.fillRect(x + w * 0.30, y, w * 0.16, h);
+      ctx.fillRect(x, y + h * 0.40, w, h * 0.20); break;
+    case 'nordic3':
+      ctx.fillStyle = f[0]; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = f[1];
+      ctx.fillRect(x + w * 0.27, y, w * 0.22, h);
+      ctx.fillRect(x, y + h * 0.36, w, h * 0.28);
+      ctx.fillStyle = f[2];
+      ctx.fillRect(x + w * 0.33, y, w * 0.10, h);
+      ctx.fillRect(x, y + h * 0.43, w, h * 0.14); break;
+    case 'sun':
+      ctx.fillStyle = f[0]; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = f[1];
+      ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, Math.min(w, h) * 0.30, 0, Math.PI * 2); ctx.fill(); break;
+    default:
+      ctx.fillStyle = f[0] || '#555'; ctx.fillRect(x, y, w, h);
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+
+/* ---------------------------------------------------------------- the hall */
+/* Staging, front to back. Row 0 (soprano) stands nearest the audience, so it
+   is the widest, the lowest on screen and the largest; each row behind steps
+   up a riser, narrows, and shrinks. */
+const STAGE_FRONT = 402;   // baseline of the front row
+const ROW_DY = 38;         // how much higher each row behind sits
+const ROW_INSET = 104;     // side inset of the front row
+const ROW_STEP = 26;       // extra inset for each row further back
+const rowY = (d) => STAGE_FRONT - d * ROW_DY;
+const rowInset = (d) => ROW_INSET + d * ROW_STEP;
+const rowSize = (d) => 16 - d * 1.15;
+
+function drawHall(){
+  const g = ctx.createLinearGradient(0, 0, 0, VH);
+  g.addColorStop(0, '#0d0a16'); g.addColorStop(0.55, '#160f22'); g.addColorStop(1, '#08060e');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+
+  // proscenium arch
+  ctx.fillStyle = '#0a0812';
+  ctx.fillRect(0, 0, 62, VH); ctx.fillRect(VW - 62, 0, 62, VH);
+  ctx.fillStyle = '#171129';
+  ctx.fillRect(52, 0, 12, VH); ctx.fillRect(VW - 64, 0, 12, VH);
+
+  // house lights / spots washing the stage
+  for (let i = 0; i < 3; i++){
+    const sx = VW / 2 + (i - 1) * 210;
+    const sg = ctx.createRadialGradient(sx, 40, 10, sx, 380, 340);
+    const warm = i === 1 ? 'rgba(255,226,180,.16)' : 'rgba(190,180,255,.10)';
+    sg.addColorStop(0, warm); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.moveTo(sx - 26, 0); ctx.lineTo(sx + 26, 0);
+    ctx.lineTo(sx + 200, 420); ctx.lineTo(sx - 200, 420); ctx.closePath(); ctx.fill();
+  }
+
+  // the arch at the back of the platform, with an organ behind it
+  const archL = 168, archR = VW - 168, archTop = 104, archBase = 470;
+  const arch = () => {
+    ctx.beginPath();
+    ctx.moveTo(archL, archBase); ctx.lineTo(archL, 300);
+    ctx.quadraticCurveTo(VW / 2, archTop, archR, 300);
+    ctx.lineTo(archR, archBase);
+  };
+  ctx.save();
+  arch(); ctx.closePath(); ctx.clip();
+  const wg = ctx.createLinearGradient(0, archTop, 0, archBase);
+  wg.addColorStop(0, '#1d1636'); wg.addColorStop(1, '#0e0a1a');
+  ctx.fillStyle = wg; ctx.fill();
+  for (let i = 0; i < 28; i++){
+    const px = 186 + i * 24;
+    const ph = 112 + Math.abs(Math.sin(i * 0.63)) * 104;
+    ctx.fillStyle = i % 2 ? 'rgba(255,235,200,.055)' : 'rgba(255,235,200,.028)';
+    ctx.fillRect(px, 316 - ph, 15, ph);
+    ctx.fillStyle = 'rgba(255,235,200,.08)';
+    ctx.fillRect(px, 316 - ph, 15, 3);
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,235,200,.09)'; ctx.lineWidth = 2;
+  arch(); ctx.stroke();
+
+  // risers, back row first so the front ones overlap them
+  for (let d = 3; d >= 0; d--){
+    const y = rowY(d);
+    const inset = rowInset(d) - 26;
+    ctx.fillStyle = d % 2 ? '#1b1430' : '#181128';
+    ctx.fillRect(inset, y, VW - inset * 2, ROW_DY + 8);
+    ctx.fillStyle = 'rgba(255,255,255,.055)';
+    ctx.fillRect(inset, y, VW - inset * 2, 2);
+    ctx.fillStyle = 'rgba(0,0,0,.30)';
+    ctx.fillRect(inset, y + ROW_DY + 6, VW - inset * 2, 2);
+  }
+  // stage floor in front of the choir, where the conductor stands
+  const fg = ctx.createLinearGradient(0, STAGE_FRONT + ROW_DY, 0, VH);
+  fg.addColorStop(0, '#120d1f'); fg.addColorStop(1, '#07050d');
+  ctx.fillStyle = fg;
+  ctx.fillRect(0, STAGE_FRONT + ROW_DY + 8, VW, VH - STAGE_FRONT - ROW_DY - 8);
+
+  // the backs of a few heads in the stalls, just in front of you
+  ctx.fillStyle = '#07050c';
+  for (let i = 0; i < 22; i++){
+    const x = 26 + i * 45 + ((i % 3) * 6);
+    const y = 556 + (i % 2) * 7;
+    ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(x - 16, y + 8, 32, 40);
+  }
+}
+
+/* One singer. Everything about them is read off their part's live state. */
+function drawSinger(x, y, s, p, tell){
+  const off = -(p.cents / 100) * 9 * tell;               // flat = physically sags
+  const yy = y + off + Math.sin(p.sway + x * 0.02) * 1.6;
+  const glow = clamp((p.gain - 1) * 0.7, -0.6, 1.2) * tell;
+  const heat = clamp(p.bright, 0, 2) * tell;
+  const fade = clamp(1 - p.air * 0.5 * tell, 0.35, 1);
+
+  let col = p.def.col;
+  if (heat > 0.05) col = mixHex(col, '#fff3b0', Math.min(0.85, heat * 0.5));
+  const dead = 1 - clamp(SING.life, 0, 1);
+  if (dead > 0.02) col = mixHex(col, '#6f6a80', dead * 0.75);
+
+  ctx.globalAlpha = fade * clamp(0.55 + p.gain * 0.45, 0.18, 1);
+  if (glow > 0.04){
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.10 * glow).toFixed(3) + ')';
+    ctx.beginPath(); ctx.arc(x, yy - s * 0.5, s * (1.6 + glow), 0, Math.PI * 2); ctx.fill();
+  }
+  // gown
+  ctx.fillStyle = mixHex('#241a3a', col, 0.18);
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.62, yy + s * 1.5);
+  ctx.lineTo(x - s * 0.42, yy - s * 0.05);
+  ctx.lineTo(x + s * 0.42, yy - s * 0.05);
+  ctx.lineTo(x + s * 0.62, yy + s * 1.5);
+  ctx.closePath(); ctx.fill();
+  // head
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(x, yy - s * 0.55, s * 0.46, 0, Math.PI * 2); ctx.fill();
+  // mouth — opens with the note, and lags when the part is behind the beat
+  const m = clamp(p.mouth, 0, 1);
+  ctx.fillStyle = 'rgba(20,10,26,.85)';
+  ctx.beginPath();
+  ctx.ellipse(x, yy - s * 0.42, s * 0.13, s * 0.10 + s * 0.20 * m, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // a rogue voice gets a little halo of its own
+  if (p.rogue > 0.05 && tell > 0.05){
+    ctx.strokeStyle = 'rgba(180,140,255,' + (0.5 * p.rogue * tell).toFixed(3) + ')';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(x, yy - s * 0.5, s * 1.25, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function mixHex(a, b, t){
+  const pa = hex2rgb(a), pb = hex2rgb(b);
+  const r = Math.round(lerp(pa[0], pb[0], t)), g = Math.round(lerp(pa[1], pb[1], t)), bl = Math.round(lerp(pa[2], pb[2], t));
+  return 'rgb(' + r + ',' + g + ',' + bl + ')';
+}
+function hex2rgb(h){
+  if (h[0] !== '#') {
+    const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(h.replace(/\s/g, ''));
+    return m ? [+m[1], +m[2], +m[3]] : [200, 200, 200];
+  }
+  const v = h.length === 4
+    ? [h[1] + h[1], h[2] + h[2], h[3] + h[3]]
+    : [h.slice(1, 3), h.slice(3, 5), h.slice(5, 7)];
+  return v.map((s) => parseInt(s, 16));
+}
+
+/* Rows are drawn back to front so a nearer singer overlaps the one behind. */
+function drawRows(perRow, tell){
+  for (let d = 3; d >= 0; d--){
+    const p = PARTS[d];
+    const y = rowY(d) - 4;
+    const inset = rowInset(d);
+    const w = VW - inset * 2;
+    const n = Math.max(4, perRow - d);
+    const s = rowSize(d);
+    for (let i = 0; i < n; i++){
+      drawSinger(inset + (w / (n + 1)) * (i + 1), y, s, p, tell);
+    }
+  }
+  drawConductor(tell);
+}
+function drawChoir(tell){
+  const c = G.cur;
+  if (!c) return;
+  drawRows(clamp(Math.ceil(c.singers / 4) + 1, 6, 10), tell);
+}
+
+function drawConductor(tell){
+  const P = G.perf;
+  const x = VW / 2, y = 470;
+  const beatPhase = P ? (P.beatF || 0) : (G.t % 1);
+  const amp = lerp(4, 24, clamp(SING.expression, 0, 1)) * lerp(0.35, 1, clamp(SING.life, 0, 1));
+  const bx = Math.cos(beatPhase * Math.PI * 2) * amp;
+  const by = Math.sin(beatPhase * Math.PI * 4) * amp * 0.5;
+  // Lit from the stage behind, so the conductor reads as a silhouette with a rim.
+  ctx.fillStyle = '#1b1430';
+  ctx.beginPath();
+  ctx.moveTo(x - 26, y + 68); ctx.lineTo(x - 15, y - 6);
+  ctx.lineTo(x + 15, y - 6); ctx.lineTo(x + 26, y + 68);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,232,190,.22)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = '#241b3c';
+  ctx.beginPath(); ctx.arc(x, y - 19, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,232,190,.26)'; ctx.lineWidth = 1.5; ctx.stroke();
+  // baton
+  ctx.strokeStyle = 'rgba(255,240,200,' + (0.35 + 0.4 * clamp(SING.expression, 0, 1)).toFixed(2) + ')';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x + 12, y + 4); ctx.lineTo(x + 12 + bx, y + 4 - 26 + by); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 12, y + 4); ctx.lineTo(x - 12 - bx * 0.7, y + 4 - 20 - by); ctx.stroke();
+}
+
+/* ---------------------------------------------------------- the criterion bar */
+function drawCritBar(){
+  const P = G.perf;
+  for (let i = 0; i < CRITS.length; i++){
+    const c = CRITS[i], r = critRect(i);
+    const flash = P ? (P.flash[c.id] || 0) : 0;
+    const cool = P ? (P.cool[c.id] || 0) : 0;
+    ctx.save();
+    rr(r.x, r.y, r.w, r.h, 10);
+    ctx.fillStyle = flash > 0.26 ? 'rgba(255,255,255,.14)' : 'rgba(20,16,34,.86)';
+    ctx.fill();
+    ctx.strokeStyle = flash > 0 ? c.col : 'rgba(120,110,160,.35)';
+    ctx.lineWidth = flash > 0 ? 2.4 : 1.2;
+    ctx.stroke();
+    if (flash > 0){
+      ctx.globalAlpha = clamp(flash, 0, 1) * 0.4;
+      rr(r.x, r.y, r.w, r.h, 10); ctx.fillStyle = c.col; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+    txt(c.key, r.x + 12, r.y + 26, 15, 'rgba(255,255,255,.45)', 'left', 700);
+    txt(c.short, r.x + r.w / 2 + 6, r.y + 26, 14, c.col, 'center', 700);
+    // how many of this criterion you have already written down
+    const n = P ? P.caught.filter((f) => f.def.crit === c.id).length : 0;
+    const ph = P ? P.phantoms.filter((f) => f.crit === c.id).length : 0;
+    let dots = '';
+    for (let k = 0; k < n; k++) dots += '● ';
+    for (let k = 0; k < ph; k++) dots += '○ ';
+    txt(dots.trim() || '—', r.x + r.w / 2, r.y + 48, 13, n ? c.col : 'rgba(150,143,180,.5)', 'center', 600);
+    if (cool > 0){
+      ctx.fillStyle = 'rgba(0,0,0,.35)';
+      rr(r.x, r.y, r.w * (cool / 0.28), r.h, 10); ctx.fill();
+    }
+  }
+}
+
+function drawFx(){
+  for (const p of fx){
+    const u = p.t / p.life;
+    ctx.globalAlpha = clamp(1 - u, 0, 1);
+    if (p.kind === 'mark'){
+      const col = CRIT_BY_ID[p.crit].col;
+      txt(p.text, p.x, p.y + (p.vy || 0) * p.t * 0.02, 13, col, 'center', 700);
+    } else if (p.kind === 'phantom'){
+      txt('nothing there', p.x, p.y + (p.vy || 0) * p.t * 0.02, 12, '#ff6b6b', 'center', 600);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* --------------------------------------------------------------- HUD bits */
+/* The top-right of the canvas is under the SOUND / FULL buttons, so nothing
+   the player needs mid-performance is allowed to live up there. */
+function drawChoirBanner(c, y){
+  drawFlag(c.country, 34, y - 20, 42, 28);
+  ctx.font = '700 22px "Segoe UI",system-ui,sans-serif';
+  const nameW = ctx.measureText(c.name).width;
+  txt(c.name, 88, y, 22, '#f2eeff', 'left', 700);
+  if (c.favourite) txt('★', 96 + nameW, y, 18, '#ffcf4d', 'left', 700);
+  txt(c.country.n + '  ·  ' + c.cat.n + '  ·  ' + c.venue, 88, y + 20, 13, '#9a93b4', 'left', 600);
+}
+
+function drawProgress(){
+  const P = G.perf, c = G.cur;
+  if (!P || !c) return;
+  const x = 34, w = VW - 196, y = 92, h = 6;
+  ctx.fillStyle = 'rgba(255,255,255,.09)';
+  rr(x, y, w, h, 3); ctx.fill();
+  const u = clamp(P.t / c.dur, 0, 1);
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  rr(x, y, w * u, h, 3); ctx.fill();
+  // bar lines, so the piece has a shape you can see
+  const barsTotal = Math.max(1, Math.round(c.dur * (c.piece.tempo / 60) / c.piece.beats));
+  for (let i = 1; i < barsTotal; i++){
+    const bx = x + (w * i) / barsTotal;
+    ctx.fillStyle = 'rgba(255,255,255,.14)';
+    ctx.fillRect(bx, y - 3, 1, h + 6);
+  }
+}
+
+/* The running card, low on the left where it never crosses the choir. */
+function drawNotepad(){
+  const P = G.perf;
+  if (!P) return;
+  const w = 274, h = 132, x = VW - 300, y = 132;
+  ctx.fillStyle = 'rgba(10,7,18,.72)';
+  rr(x, y, w, h, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,110,160,.20)'; ctx.lineWidth = 1; ctx.stroke();
+  txt('YOUR NOTES', x + 14, y + 22, 11, '#6d6788', 'left', 700);
+  let yy = y + 44;
+  const rows = P.caught.slice(-4);
+  if (!rows.length && !P.phantoms.length) txt('— nothing marked yet —', x + 14, yy, 12, '#4e4a63', 'left', 500);
+  for (const f of rows){
+    const col = CRIT_BY_ID[f.def.crit].col;
+    ctx.fillStyle = col; ctx.fillRect(x + 14, yy - 8, 3, 10);
+    txt(fmtFlaw(f), x + 24, yy, 12, '#cfc8e4', 'left', 600);
+    yy += 21;
+  }
+  if (P.phantoms.length){
+    txt(P.phantoms.length + ' mark' + (P.phantoms.length > 1 ? 's' : '') + ' with nothing behind ' +
+        (P.phantoms.length > 1 ? 'them' : 'it'), x + 14, y + h - 12, 11, '#ff6b6b', 'left', 600);
+  }
+}
+
+/* ================================================================= screens */
+
+function drawTitle(){
+  drawHall();
+  ctx.globalAlpha = 0.35; drawChoirIdle(); ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(6,4,12,.72)'; ctx.fillRect(0, 0, VW, VH);
+
+  txt('WORLD CHOIR GAMES  ·  HELSINGBORG 2026', VW / 2, 132, 14, '#9a93b4', 'center', 700);
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,207,77,.5)'; ctx.shadowBlur = 30;
+  txt('ADJUDICATOR', VW / 2, 202, 62, '#ffcf4d', 'center', 800);
+  ctx.restore();
+  txt('The judge gets judged.', VW / 2, 236, 17, '#cfc8e4', 'center', 400);
+
+  wrapTxt('You are the fifth chair on an INTERKULTUR jury. Eight choirs sing. Hear what actually ' +
+          'goes wrong, mark it on the card, then defend your number when the other four reveal theirs.',
+          VW / 2, 292, 640, 15, '#9a93b4', 23, 'center');
+
+  const bw = 300, bx = VW / 2 - bw / 2;
+  btn(bx, 360, bw, 54, 'TAKE YOUR SEAT', '#ffcf4d', true);
+  btn(bx, 424, bw, 44, 'HOW THE CARD WORKS', '#9a93b4', false);
+
+  if (G.best){
+    txt('Best so far: ' + G.best.rank + '  (' + Math.round(G.best.score * 100) + '%)',
+        VW / 2, 508, 13, '#6d6788', 'center', 600);
+  }
+  txt('An INTERKULTUR event, 6–16 August 2026. This is a fan-made game, not an official one.',
+      VW / 2, VH - 30, 11, '#45415a', 'center', 500);
+}
+
+function drawChoirIdle(){
+  for (let r = 0; r < 4; r++){
+    const p = PARTS[r];
+    p.mouth = 0.3 + 0.2 * Math.sin(G.t * 2 + r);
+    p.sway = Math.sin(G.t * 0.8 + r * 1.3);
+  }
+  drawRows(9, 1);
+}
+
+function btn(x, y, w, h, label, col, primary){
+  rr(x, y, w, h, 10);
+  ctx.fillStyle = primary ? col : 'rgba(22,17,38,.9)';
+  ctx.fill();
+  ctx.strokeStyle = primary ? 'rgba(0,0,0,0)' : 'rgba(120,110,160,.4)';
+  ctx.lineWidth = 1.4; ctx.stroke();
+  txt(label, x + w / 2, y + h / 2 + 6, 15, primary ? '#12101c' : col, 'center', 700);
+  return { x, y, w, h };
+}
+
+function drawHowTo(){
+  drawHall();
+  ctx.fillStyle = 'rgba(6,4,12,.86)'; ctx.fillRect(0, 0, VW, VH);
+  txt('THE 30-POINT CARD', VW / 2, 74, 30, '#ffcf4d', 'center', 800);
+  wrapTxt('While a choir sings, press the key for whatever you hear going wrong. Each criterion ' +
+          'has its own line on the card.', VW / 2, 108, 700, 14, '#9a93b4', 21, 'center');
+  let y = 158;
+  for (const c of CRITS){
+    ctx.fillStyle = c.col; ctx.fillRect(120, y - 12, 4, 34);
+    txt('[' + c.key + ']  ' + c.name, 140, y, 17, c.col, 'left', 700);
+    txt(c.blurb, 140, y + 20, 13, '#9a93b4', 'left', 400);
+    y += 54;
+  }
+  wrapTxt('Mark something that is not there and it costs you — a phantom note is worse than a ' +
+          'missed one. When the piece ends you set your score, the panel reveals, and the middle ' +
+          'three marks decide the diploma. You are rated on Accuracy, Attention, and Integrity: ' +
+          'the last only moves when the panel is wrong and you are not.',
+          VW / 2, y + 12, 720, 14, '#cfc8e4', 21, 'center');
+  btn(VW / 2 - 130, VH - 84, 260, 46, 'BACK', '#9a93b4', false);
+}
+
+function drawParade(){
+  drawHall();
+  ctx.fillStyle = 'rgba(6,4,12,.55)'; ctx.fillRect(0, 0, VW, VH);
+  const n = COUNTRIES.length;
+  const speed = 82;
+  for (let i = 0; i < n; i++){
+    const x = VW + 60 - ((G.t * speed + i * 92) % (n * 92 + VW + 240));
+    if (x < -70 || x > VW + 70) continue;
+    const y = 300 + Math.sin((x + i * 30) * 0.012) * 8;
+    drawFlag(COUNTRIES[i], x - 21, y - 14, 42, 28);
+    txt(COUNTRIES[i].n, x, y + 30, 10, 'rgba(200,193,224,.65)', 'center', 600);
+  }
+  txt('PARADE OF NATIONS', VW / 2, 168, 34, '#ffcf4d', 'center', 800);
+  txt('Helsingborg, 6 August 2026', VW / 2, 198, 15, '#9a93b4', 'center', 500);
+  wrapTxt('Thousands of singers from every corner of the map walk into one town for ten days. ' +
+          'You are here to listen harder than anybody else in the building.',
+          VW / 2, 402, 620, 15, '#cfc8e4', 22, 'center');
+  const a = clamp((G.t - 1.4) / 0.8, 0, 1);
+  ctx.globalAlpha = a;
+  btn(VW / 2 - 150, VH - 110, 300, 50, 'TO THE JURY TABLE', '#ffcf4d', true);
+  ctx.globalAlpha = 1;
+}
+
+function drawRoundCard(){
+  const st = STAGES[G.stage];
+  drawHall();
+  ctx.fillStyle = 'rgba(6,4,12,.82)'; ctx.fillRect(0, 0, VW, VH);
+  txt('ROUND ' + (G.stage + 1) + ' OF ' + STAGES.length, VW / 2, 176, 13, '#6d6788', 'center', 700);
+  txt(st.name, VW / 2, 226, 42, '#ffcf4d', 'center', 800);
+  txt(st.sub, VW / 2, 254, 15, '#9a93b4', 'center', 600);
+  wrapTxt(st.intro, VW / 2, 306, 620, 16, '#cfc8e4', 24, 'center');
+  txt(st.choirs + ' choir' + (st.choirs > 1 ? 's' : '') + '  ·  flaws are ' +
+      (st.tell < 0.5 ? 'nearly invisible' : st.tell < 0.8 ? 'harder to see' : 'visible if you look'),
+      VW / 2, 372, 13, '#6d6788', 'center', 600);
+  btn(VW / 2 - 140, 420, 280, 50, 'CALL THE FIRST CHOIR', '#ffcf4d', true);
+}
+
+function drawBrief(){
+  const c = G.cur;
+  drawHall();
+  ctx.globalAlpha = 0.5; drawChoirIdle(); ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(6,4,12,.78)'; ctx.fillRect(0, 0, VW, VH);
+
+  const bx = VW / 2 - 300, by = 116, bw = 600, bh = 330;
+  ctx.fillStyle = 'rgba(18,13,32,.96)'; rr(bx, by, bw, bh, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,207,77,.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  txt('NEXT ON STAGE  ·  ' + STAGES[G.stage].name.toUpperCase(), bx + 30, by + 34, 11, '#6d6788', 'left', 700);
+  drawFlag(c.country, bx + 30, by + 52, 58, 38);
+  txt(c.name, bx + 102, by + 76, 26, '#f2eeff', 'left', 700);
+  txt(c.country.n, bx + 102, by + 98, 14, '#9a93b4', 'left', 600);
+
+  const rows = [
+    ['Category', c.cat.n],
+    ['Venue', c.venue],
+    ['Singers on stage', String(c.singers)],
+    ['Programme', Math.round(c.dur) + ' seconds, a cappella'],
+  ];
+  let y = by + 146;
+  for (const [k, v] of rows){
+    txt(k, bx + 30, y, 12, '#6d6788', 'left', 600);
+    txt(v, bx + 260, y, 13, '#cfc8e4', 'left', 600);
+    y += 27;
+  }
+  if (c.favourite){
+    txt('★  The hall is already on their side. Two jurors will feel that.',
+        bx + 30, y + 8, 12, '#ffcf4d', 'left', 600);
+  }
+  txt('Choir ' + (G.idx + 1) + ' of ' + STAGES[G.stage].choirs + ' this round', bx + 30, by + bh - 26, 12, '#6d6788', 'left', 600);
+  btn(VW / 2 - 130, by + bh + 34, 260, 52, 'BEGIN THE PERFORMANCE', '#ffcf4d', true);
+}
+
+function drawPerform(){
+  const c = G.cur, P = G.perf;
+  drawHall();
+  drawChoir(STAGES[G.stage].tell);
+  drawFx();
+
+  const hg = ctx.createLinearGradient(0, 0, 0, 116);
+  hg.addColorStop(0, 'rgba(8,6,16,.86)'); hg.addColorStop(1, 'rgba(8,6,16,0)');
+  ctx.fillStyle = hg; ctx.fillRect(0, 0, VW, 116);
+  drawChoirBanner(c, 46);
+  drawProgress();
+  drawNotepad();
+  drawCritBar();
+
+  // Timer sits below the SOUND / FULL buttons, clear of them.
+  const left = Math.max(0, c.dur - P.t);
+  txt(left.toFixed(1) + 's', VW - 34, 100, 22, '#cfc8e4', 'right', 700);
+
+  if (G.paused){
+    ctx.fillStyle = 'rgba(6,4,12,.8)'; ctx.fillRect(0, 0, VW, VH);
+    txt('PAUSED', VW / 2, VH / 2, 40, '#ffcf4d', 'center', 800);
+    txt('Press P or ENTER to carry on', VW / 2, VH / 2 + 32, 14, '#9a93b4', 'center', 500);
+  }
+}
+
+/* -------------------------------------------------------- the score dial */
+function dialGeom(){ return { cx: VW / 2, cy: 356, r: 128 }; }
+function scoreFromPoint(x, y){
+  const d = dialGeom();
+  let a = Math.atan2(y - d.cy, x - d.cx);
+  // The arc runs from 180deg round the top to 0deg.
+  a = (a + Math.PI * 2) % (Math.PI * 2);
+  if (a < Math.PI) return null;                    // below the dial
+  const u = (a - Math.PI) / Math.PI;
+  return Math.round(clamp(8 + u * 22, 8, 30) * 2) / 2;
+}
+function drawDial(score){
+  const { cx, cy, r } = dialGeom();
+  ctx.lineWidth = 16;
+  ctx.strokeStyle = 'rgba(255,255,255,.07)';
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, Math.PI * 2); ctx.stroke();
+  // diploma bands painted straight onto the arc
+  for (const b of BANDS){
+    const from = clamp((b.min - 8) / 22, 0, 1);
+    const above = BANDS[BANDS.indexOf(b) - 1];
+    const to = above ? clamp((above.min - 8) / 22, 0, 1) : 1;
+    if (to <= from) continue;
+    ctx.strokeStyle = b.col; ctx.globalAlpha = 0.55;
+    ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI + Math.PI * from, Math.PI + Math.PI * to); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // a tick and the point value where each band begins
+    if (b.min > 0){
+      const a0 = Math.PI + Math.PI * from;
+      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a0) * (r - 9), cy + Math.sin(a0) * (r - 9));
+      ctx.lineTo(cx + Math.cos(a0) * (r + 9), cy + Math.sin(a0) * (r + 9));
+      ctx.stroke();
+      txt(String(b.min), cx + Math.cos(a0) * (r + 24), cy + Math.sin(a0) * (r + 24) + 4,
+          11, 'rgba(180,172,205,.8)', 'center', 600);
+      ctx.lineWidth = 16;
+    }
+  }
+  const u = clamp((score - 8) / 22, 0, 1);
+  const a = Math.PI + Math.PI * u;
+  const band = bandFor(score);
+  ctx.lineWidth = 16; ctx.strokeStyle = band.col;
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI + Math.PI * Math.max(0, u - 0.012), a); ctx.stroke();
+  // needle
+  ctx.strokeStyle = '#f2eeff'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx + Math.cos(a) * (r - 30), cy + Math.sin(a) * (r - 30));
+  ctx.lineTo(cx + Math.cos(a) * (r + 14), cy + Math.sin(a) * (r + 14));
+  ctx.stroke();
+  txt(score.toFixed(1), cx, cy - 12, 62, band.col, 'center', 800);
+  txt('of 30', cx, cy + 12, 14, '#6d6788', 'center', 600);
+  txt(band.name.toUpperCase(), cx, cy + 40, 13, band.col, 'center', 700);
+  txt('8', cx - r, cy + 30, 12, '#4e4a63', 'center', 600);
+  txt('30', cx + r, cy + 30, 12, '#4e4a63', 'center', 600);
+}
+
+function drawDeliberate(){
+  const c = G.cur, card = G.card;
+  drawHall();
+  ctx.fillStyle = 'rgba(6,4,12,.88)'; ctx.fillRect(0, 0, VW, VH);
+  drawChoirBanner(c, 46);
+  txt('YOUR CARD', VW / 2, 96, 13, '#6d6788', 'center', 700);
+
+  drawDial(G.myScore);
+
+  // left column: what you wrote down
+  const lx = 40, ly = 150;
+  txt('MARKED', lx, ly, 11, '#6d6788', 'left', 700);
+  let y = ly + 24;
+  if (!card.caught.length) txt('— an empty card —', lx, y, 12, '#4e4a63', 'left', 500);
+  const COL_W = 296;                       // the whole left column, clear of the dial
+  for (const f of card.caught.slice(0, 8)){
+    const col = CRIT_BY_ID[f.def.crit].col;
+    ctx.fillStyle = col; ctx.fillRect(lx, y - 8, 3, 10);
+    txt(clipTxt(fmtFlaw(f), COL_W - 62, 12), lx + 10, y, 12, '#cfc8e4', 'left', 600);
+    txt('-' + f.sev.toFixed(1), lx + COL_W, y, 12, col, 'right', 700);
+    y += 21;
+  }
+  if (card.phantoms.length){
+    y += 10;
+    txt(card.phantoms.length + ' phantom mark' + (card.phantoms.length > 1 ? 's' : ''),
+        lx, y, 12, '#ff6b6b', 'left', 700);
+    txt('-' + (card.phantoms.length * PHANTOM_COST).toFixed(1), lx + COL_W, y, 12, '#ff6b6b', 'right', 700);
+  }
+  txt('Your notes suggest ' + card.suggested.toFixed(1), lx, VH - 150, 13, '#9a93b4', 'left', 600);
+  txt('You may still overrule them.', lx, VH - 132, 12, '#6d6788', 'left', 500);
+
+  // right column: the panel, still face down
+  const rx = VW - 40;
+  txt('THE PANEL', rx, ly, 11, '#6d6788', 'right', 700);
+  let ry = ly + 24;
+  for (const j of JURORS){
+    txt(j.name, rx, ry, 12, '#9a93b4', 'right', 600);
+    txt('card face down', rx, ry + 16, 11, '#4e4a63', 'right', 500);
+    ry += 40;
+  }
+
+  txt('← → adjust  ·  ↑ ↓ by one point  ·  ENTER to lock it in',
+      VW / 2, VH - 96, 13, '#9a93b4', 'center', 600);
+  btn(VW / 2 - 130, VH - 76, 260, 48, 'LOCK IN ' + G.myScore.toFixed(1), '#ffcf4d', true);
+}
+
+function drawPanel(){
+  const e = G.result;
+  if (!e) return;
+  const c = e.choir;
+  drawHall();
+  ctx.fillStyle = 'rgba(6,4,12,.9)'; ctx.fillRect(0, 0, VW, VH);
+  drawChoirBanner(c, 46);
+
+  const reveal = clamp(G.t / 1.1, 0, 1);
+
+  // the five cards
+  const cards = e.others.map((o) => ({ name:o.juror.name, tag:o.juror.tag, score:o.score, me:false }))
+    .concat([{ name:'You', tag:'The fifth chair.', score:e.mine, me:true }]);
+  const cw = 168, gap = 14, x0 = (VW - (cards.length * cw + (cards.length - 1) * gap)) / 2;
+  for (let i = 0; i < cards.length; i++){
+    const k = cards[i];
+    const shown = reveal > (i / cards.length) * 0.9;
+    const x = x0 + i * (cw + gap), y = 110;
+    ctx.fillStyle = k.me ? 'rgba(46,36,12,.9)' : 'rgba(18,13,32,.9)';
+    rr(x, y, cw, 128, 10); ctx.fill();
+    ctx.strokeStyle = k.me ? 'rgba(255,207,77,.6)' : 'rgba(120,110,160,.25)';
+    ctx.lineWidth = k.me ? 2 : 1; ctx.stroke();
+    wrapTxt(k.name, x + cw / 2, y + 26, cw - 20, 12, k.me ? '#ffcf4d' : '#cfc8e4', 15, 'center');
+    if (shown){
+      txt(k.score.toFixed(1), x + cw / 2, y + 84, 34, k.me ? '#ffcf4d' : '#f2eeff', 'center', 800);
+      const off = k.score - e.truth;
+      txt((off >= 0 ? '+' : '') + off.toFixed(1) + ' vs truth', x + cw / 2, y + 108, 11,
+          Math.abs(off) < 1 ? '#5eff9e' : Math.abs(off) < 2 ? '#ffb35c' : '#ff6b6b', 'center', 600);
+    } else {
+      txt('—', x + cw / 2, y + 84, 34, '#2c2740', 'center', 800);
+    }
+  }
+
+  // the verdict
+  const vy = 274;
+  ctx.fillStyle = 'rgba(14,10,26,.9)'; rr(VW / 2 - 330, vy, 660, 132, 12); ctx.fill();
+  ctx.strokeStyle = 'rgba(' + hex2rgb(e.band.col).join(',') + ',.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+  txt('PANEL RESULT · MIDDLE THREE MARKS', VW / 2, vy + 26, 11, '#6d6788', 'center', 700);
+  txt(e.panel.toFixed(1), VW / 2 - 150, vy + 84, 48, e.band.col, 'center', 800);
+  txt(e.band.name, VW / 2 + 70, vy + 66, 20, e.band.col, 'center', 700);
+  const champ = (c.stage >= 1 && e.panel >= 26);
+  txt(champ ? 'Category winner — they take a medal home.'
+            : 'Recorded in the results book.', VW / 2 + 70, vy + 92, 13, '#9a93b4', 'center', 500);
+
+  // your three meters
+  const my = 424;
+  meter('ACCURACY', e.accuracy, VW / 2 - 330, my, 200, '#6ee7ff',
+        'you said ' + e.mine.toFixed(1) + ', the truth was ' + e.truth.toFixed(1));
+  meter('ATTENTION', e.attention, VW / 2 - 100, my, 200, '#5eff9e',
+        e.caught + ' of ' + e.total + ' caught' + (e.phantoms ? ', ' + e.phantoms + ' phantom' : ''));
+  meter('INTEGRITY', e.integrity, VW / 2 + 130, my, 200, '#ffcf4d',
+        Math.abs(e.panelNoMe - e.truth) > 1 ? 'the panel drifted — did you?' : 'the panel was steady');
+
+  // what you missed, said plainly
+  const missed = G.card.missed;
+  if (missed.length){
+    let mx = VW / 2, myy = 528;
+    txt('WHAT GOT PAST YOU', mx, myy, 11, '#6d6788', 'center', 700);
+    const lines = missed.slice(0, 3).map((f) => fmtNote(f));
+    wrapTxt(lines.join('   ·   '), mx, myy + 20, 820, 12, '#8f88a8', 17, 'center');
+  } else {
+    txt('Nothing got past you.', VW / 2, 546, 14, '#5eff9e', 'center', 700);
+  }
+  txt('ENTER — next', VW / 2, VH - 18, 12, '#6d6788', 'center', 600);
+}
+
+function meter(label, v, x, y, w, col, sub){
+  txt(label, x, y, 11, '#6d6788', 'left', 700);
+  ctx.fillStyle = 'rgba(255,255,255,.08)'; rr(x, y + 10, w, 9, 4); ctx.fill();
+  const a = clamp(G.t / 0.8, 0, 1);
+  ctx.fillStyle = col; rr(x, y + 10, w * clamp(v, 0, 1) * a, 9, 4); ctx.fill();
+  txt(Math.round(clamp(v, 0, 1) * 100) + '%', x + w, y, 12, col, 'right', 700);
+  if (sub) txt(sub, x, y + 36, 11, '#6d6788', 'left', 500);
+}
+
+function drawResults(){
+  drawHall();
+  ctx.fillStyle = 'rgba(6,4,12,.9)'; ctx.fillRect(0, 0, VW, VH);
+  const v = overallScore(), r = rankFor(v);
+  txt('THE GAMES ARE OVER', VW / 2, 62, 12, '#6d6788', 'center', 700);
+  ctx.save(); ctx.shadowColor = r.col; ctx.shadowBlur = 26;
+  txt(r.name, VW / 2, 110, 40, r.col, 'center', 800);
+  ctx.restore();
+  txt(r.line, VW / 2, 138, 15, '#9a93b4', 'center', 400);
+
+  meter('ACCURACY', avg(G.acc), VW / 2 - 330, 178, 200, '#6ee7ff', 'how close your cards ran to the truth');
+  meter('ATTENTION', avg(G.att), VW / 2 - 100, 178, 200, '#5eff9e', 'flaws you actually heard');
+  meter('INTEGRITY', avg(G.integ), VW / 2 + 130, 178, 200, '#ffcf4d', 'holding a right score against the room');
+
+  const L = VW / 2 - 330, R = VW / 2 + 330;
+  const champ = championOfTheGames();
+  if (champ){
+    ctx.fillStyle = 'rgba(40,31,8,.7)'; rr(L, 238, 660, 84, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,207,77,.5)'; ctx.lineWidth = 1.4; ctx.stroke();
+    txt('CHAMPION OF THE WORLD CHOIR GAMES', L + 16, 262, 11, '#6d6788', 'left', 700);
+    txt(clipTxt(champ.choir.name, 380, 21, 700), L + 16, 290, 21, '#ffcf4d', 'left', 700);
+    txt(champ.choir.cat.n + '  ·  ' + champ.choir.country.n, L + 16, 309, 12, '#9a93b4', 'left', 500);
+    drawFlag(champ.choir.country, R - 62, 254, 46, 30);
+    txt(champ.panel.toFixed(1), R - 78, 306, 30, '#ffcf4d', 'right', 800);
+  }
+
+  // the results book, with the legend on the header line so nothing collides
+  txt('RESULTS BOOK', L, 348, 11, '#6d6788', 'left', 700);
+  txt('the bar on the left is your card — green means you were right',
+      R, 348, 11, '#4e4a63', 'right', 500);
+  let y = 372;
+  const rowH = G.log.length > 8 ? 20 : 22;
+  for (const e of G.log){
+    const c = e.choir;
+    const off = Math.abs(e.mine - e.truth);
+    ctx.fillStyle = off < 1 ? '#5eff9e' : off < 2 ? '#ffb35c' : '#ff6b6b';
+    ctx.fillRect(L - 8, y - 10, 4, 12);
+    drawFlag(c.country, L, y - 12, 24, 16);
+    txt(clipTxt(c.name, 240, 13), L + 32, y, 13, '#cfc8e4', 'left', 600);
+    txt(clipTxt(c.cat.n, 170, 11, 500), L + 286, y, 11, '#6d6788', 'left', 500);
+    txt(e.panel.toFixed(1), L + 500, y, 13, e.band.col, 'right', 700);
+    txt(e.band.name, R, y, 11, e.band.col, 'right', 600);
+    y += rowH;
+  }
+
+  btn(VW / 2 - 150, VH - 62, 300, 46, 'JUDGE ANOTHER COMPETITION', '#ffcf4d', true);
+}
+
+/* ================================================================== render */
+function draw(){
+  ctx.setTransform(SCALE * DPR, 0, 0, SCALE * DPR, 0, 0);
+  ctx.clearRect(0, 0, VW, VH);
+  if (G.shake > 0.1){
+    ctx.translate((rng() - 0.5) * G.shake, (rng() - 0.5) * G.shake);
+  }
+  switch (G.phase){
+    case 'title':      drawTitle(); break;
+    case 'howto':      drawHowTo(); break;
+    case 'parade':     drawParade(); break;
+    case 'round':      drawRoundCard(); break;
+    case 'brief':      drawBrief(); break;
+    case 'perform':    drawPerform(); break;
+    case 'deliberate': drawDeliberate(); break;
+    case 'panel':      drawPanel(); break;
+    case 'results':    drawResults(); break;
+    default:           drawTitle(); break;
+  }
+}
+
+/* =================================================================== loop */
+let lastT = 0;
+function update(dt){
+  G.t += dt;
+  G.shake *= Math.pow(0.001, dt);
+  fxTick(dt);
+  if (G.phase === 'perform' && !G.paused) perfTick(dt);
+  if (G.phase === 'title' || G.phase === 'brief') {
+    for (let i = 0; i < PARTS.length; i++){
+      const p = PARTS[i];
+      p.mouth = 0.3 + 0.18 * Math.sin(G.t * 2 + i);
+      p.sway = Math.sin(G.t * 0.8 + i * 1.3);
+    }
+  }
+  AUDIO.fadeCheer(dt);
+  AUDIO.frame();
+}
+function loop(ts){
+  const t = ts / 1000;
+  let dt = lastT ? t - lastT : 0;
+  lastT = t;
+  if (dt > 0.1) dt = 0.1;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ================================================================== input */
+function advance(){
+  switch (G.phase){
+    case 'title':      startRun(); break;
+    case 'howto':      setPhase('title'); break;
+    case 'parade':     if (G.t > 1.4) setPhase('round'); break;
+    case 'round':      startChoir(); break;
+    case 'brief':      beginPerformance(); break;
+    case 'perform':    G.paused = !G.paused; break;
+    case 'deliberate': submitScore(); break;
+    case 'panel':      if (G.t > 0.6) nextChoir(); break;
+    case 'results':    startRun(); break;
+    default: break;
+  }
+}
+function nudgeScore(d){
+  if (G.phase !== 'deliberate') return;
+  G.myScore = Math.round(clamp(G.myScore + d, 8, 30) * 2) / 2;
+  AUDIO.blip(420 + G.myScore * 8, 0.05, 'sine');
+}
+
+function onKey(e){
+  const k = e.key;
+  AUDIO.resume();
+  if (G.phase === 'perform' && !G.paused){
+    const c = CRITS.find((x) => x.key === k);
+    if (c){ flagCrit(c.id); e.preventDefault && e.preventDefault(); return; }
+  }
+  if (k === 'Enter' || k === ' '){ advance(); e.preventDefault && e.preventDefault(); return; }
+  if (k === 'ArrowLeft')  nudgeScore(-0.5);
+  if (k === 'ArrowRight') nudgeScore(0.5);
+  if (k === 'ArrowDown')  nudgeScore(-1);
+  if (k === 'ArrowUp')    nudgeScore(1);
+  if (k === 'p' || k === 'P'){ if (G.phase === 'perform') G.paused = !G.paused; }
+  if (k === 'h' || k === 'H'){ if (G.phase === 'title') setPhase('howto'); }
+  if (k === 'm' || k === 'M') toggleMute();
+}
+
+function onPointer(cx, cy){
+  AUDIO.resume();
+  const { x, y } = toVirtual(cx, cy);
+  if (G.phase === 'perform' && !G.paused){
+    for (let i = 0; i < CRITS.length; i++){
+      if (inRect(critRect(i), x, y)){ flagCrit(CRITS[i].id); return; }
+    }
+    advance(); return;
+  }
+  if (G.phase === 'title'){
+    if (inRect({ x:VW / 2 - 150, y:424, w:300, h:44 }, x, y)){ setPhase('howto'); return; }
+    startRun(); return;
+  }
+  if (G.phase === 'deliberate'){
+    const s = scoreFromPoint(x, y);
+    if (s != null && y < dialGeom().cy + 20){ G.myScore = s; AUDIO.blip(400 + s * 9, 0.05, 'sine'); return; }
+    if (y > VH - 90){ submitScore(); return; }
+    return;
+  }
+  advance();
+}
+
+function bindInput(){
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('resize', fit);
+  cv.addEventListener('pointerdown', (e) => { onPointer(e.clientX, e.clientY); });
+  cv.addEventListener('pointermove', (e) => {
+    if (G.phase === 'deliberate' && e.buttons){
+      const { x, y } = toVirtual(e.clientX, e.clientY);
+      const s = scoreFromPoint(x, y);
+      if (s != null && y < dialGeom().cy + 20) G.myScore = s;
+    }
+  });
+  const mute = document.getElementById('mute');
+  if (mute) mute.addEventListener('click', toggleMute);
+  const full = document.getElementById('full');
+  if (full) full.addEventListener('click', () => {
+    try {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    } catch (err) { /* noop */ }
+  });
+}
+function toggleMute(){
+  AUDIO.muted = !AUDIO.muted;
+  const b = document.getElementById('mute');
+  if (b) b.className = AUDIO.muted ? 'off' : '';
+}
+
+/* ==================================================================== boot */
+loadSave();
+buildCompetition();
+bindInput();
+fit();
+setPhase('title');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

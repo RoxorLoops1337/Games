@@ -1,0 +1,37 @@
+{
+  "id": "item_revive",
+  "name": "item_revive",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "A": "#ff8a2b",
+    "K": "#1b1220",
+    "a": "#c8451c",
+    "b": "#8f6a3f",
+    "d": "#4a3320",
+    "h": "#c49a63",
+    "m": "#6b4a2c"
+  },
+  "rows": [
+    ".........KK.........",
+    "........KAAK........",
+    ".......KAAAAK.......",
+    ".......KAaaAK.......",
+    "........KaaK........",
+    "........KhbK........",
+    ".......KhbmdK.......",
+    "......KhbbmmdK......",
+    ".....KhbbmmmmdK.....",
+    "....KhbmmmmmmmdK....",
+    "...KhbmmmmmmmmmdK...",
+    "...KhbmmmmmmmmmdK...",
+    "..KhbmmmmmmmmmmmdK..",
+    "..KhbmmmmmmmmmmmdK..",
+    "...KhbmmmmmmmmmdK...",
+    "....KhbmmmmmmmdK....",
+    ".....KKdmmmmmdKK....",
+    ".......KKKKKKK......",
+    "....................",
+    "...................."
+  ]
+}

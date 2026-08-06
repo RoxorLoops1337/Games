@@ -1,0 +1,35 @@
+{
+  "id": "twinstrike",
+  "name": "twinstrike",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "b": "#a8a5bd",
+    "d": "#33303f",
+    "h": "#e6e4f2",
+    "m": "#6f6c82"
+  },
+  "rows": [
+    "..KK............KK..",
+    ".KhbK..........KbmK.",
+    ".KhbmK........KdbmK.",
+    "..KhbmK......KdbmK..",
+    "...KhbmK....KdbmK...",
+    "....KhbmK..KdbmK....",
+    ".....KhbmKKdbmK.....",
+    "......KhbmbmdK......",
+    ".......KhbmdK.......",
+    "......KhbmbmdK......",
+    ".....KhbmKKdbmK.....",
+    "....KhbmK..KdbmK....",
+    "...KhbmK....KdbmK...",
+    "..KhbmK......KdbmK..",
+    ".KhbmK........KdbmK.",
+    ".KhbK..........KbmK.",
+    "..KK............KK..",
+    "....................",
+    "....................",
+    "...................."
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "id": "window",
+  "name": "Window",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "K": "#221d29",
+    "d": "#453f4f",
+    "m": "#575163",
+    "b": "#6d6779",
+    "l": "#888194",
+    "t": "#48362f",
+    "y": "#ffe7b0",
+    "o": "#f7c979"
+  },
+  "rows": [
+    "KKKKKKKKKKKKKKKK",
+    "KmblllbmmKmbllbm",
+    "KdmmbbmmdKdmmbbm",
+    "KKKKKKKKKKKKKKKK",
+    "tttttttttttttttt",
+    "tyyyyyytyyyyyyot",
+    "tyyyyyytyyyyyoot",
+    "tyyyyyytyyyyooot",
+    "tttttttttttttttt",
+    "tyyyyyytyyyyyoot",
+    "tyyyyyytyyyyooot",
+    "tyyyyyytyyyoooot",
+    "tttttttttttttttt",
+    "KmblllbmmKmbllbm",
+    "KdmmbbmmdKdmmbbm",
+    "KKKKKKKKKKKKKKKK"
+  ]
+}

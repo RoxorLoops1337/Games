@@ -10,6 +10,8 @@
 import { loadGame, withDeck, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = withDeck(loadGame({}));
+/** A clean game with the starter deck, for probing one mechanic at a time. */
+const fresh = () => withDeck(loadGame({}));
 const { CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, G } = EK;
 
 // ------------------------------------------------------------------ data --
@@ -125,6 +127,7 @@ const swingWith = (cardId, foeHp) => {
   const owned = EK.grantCard(cardId);
   const bb = EK.B();
   bb.foe.hp = foeHp; bb.over = null;
+  bb.swungTurn = 0;                               // each probe is a fresh turn
   const move = bb.mine.moves.find((m) => EK.MOVES[m.id].pow);
   bb.hand = [{ src: 'deck', u: owned.u, id: cardId, bg: 0 }, { src: 'kin', id: move.id }];
   bb.energy = 9;
@@ -165,6 +168,7 @@ eq(EK.attackBonus().flat, EK.cardValue(edgeCard), 'the edge is waiting on the ne
 for (let i = 0; i < 30 && EK.attackBonus().flat > 0; i++) {
   b.hand = [{ src: 'kin', id: kinMove.id }];
   b.energy = 9;
+  b.swungTurn = 0;                                // each probe is a fresh turn
   EK.playCard(0);
 }
 eq(EK.attackBonus().flat, 0, 'and an attack that lands spends it');
@@ -458,6 +462,7 @@ const kinAtk = rb.mine.moves.find((m) => EKA.MOVES[m.id].pow);
 for (let i = 0; i < 30 && !rb.foe.status; i++) {
   rb.hand = [{ src: 'kin', id: kinAtk.id }];
   rb.energy = 99;
+  rb.swungTurn = 0;                               // each probe is a fresh turn
   EKA.playCard(0);
 }
 eq(rb.foe.status, 'snare', 'Venom Coat snares the foe through the kin\'s own attack');
@@ -541,4 +546,924 @@ ok(EK6.gemReward({ wild: true }) > 0, 'a wild win pays something');
 ok(EK6.gemReward({ npc: { trainer: { prize: 900 } } }) > EK6.gemReward({ wild: true }), 'a trainer pays more');
 ok(EK6.gemReward({ wild: true, legendary: true }) > 20, 'and the legendary pays a lot');
 
+section('cards that are decisions rather than numbers');
+// Three mechanics went in because thirty of thirty-seven cards were "+N to a
+// thing" and a measured run used the same six of them. Each one is checked
+// here against the real playCard/endTurn, not a model of them.
+
+// ---- retain: it stays in your hand across the turn ----------------------
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 30), wild: true });
+  const b = g.B();
+  const held = g.mkCard('dewdrop');
+  g.G.cards.push(held);
+  b.hand = [{ src: 'deck', u: held.u, id: 'dewdrop' }, { src: 'deck', u: -1, id: 'guard' }];
+  ok(g.CARDS.dewdrop.retain, 'Dewdrop is a card you hold');
+  ok(!g.CARDS.guard.retain, 'Guard is not');
+  g.endTurn();
+  const ids = g.B().hand.filter((c) => c.src === 'deck').map((c) => c.id);
+  ok(ids.includes('dewdrop'), 'the retained card is still in hand next turn');
+  ok(!g.B().disc.some((c) => c.id === 'dewdrop'), 'and not in the discard');
+  ok(g.B().disc.some((c) => c.id === 'guard'), 'while the ordinary one went to the discard');
+}
+
+// ---- combo: worth more when it is not the first card of the turn --------
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  const solo = (first) => {
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('gargolem', 40), wild: true });
+    const b = g.B();
+    b.energy = 9;
+    const c = g.mkCard('shieldwall'); g.G.cards.push(c);
+    b.hand = first ? [{ src: 'deck', u: -2, id: 'quickstep' }, { src: 'deck', u: c.u, id: 'shieldwall' }]
+                   : [{ src: 'deck', u: c.u, id: 'shieldwall' }];
+    if (first) g.playCard(0);
+    g.playCard(b.hand.findIndex((h) => h.id === 'shieldwall'));
+    return b.shield;
+  };
+  const alone = solo(false), after = solo(true);
+  eq(g.CARDS.shieldwall.combo, 10, 'Shieldwall has a combo bonus');
+  eq(after - alone, 10, `it is worth ${after - alone} more played second (${alone} → ${after})`);
+}
+
+// ---- chain: it gets cheaper the more you have played --------------------
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 40), wild: true });
+  const b = g.B();
+  b.energy = 9;
+  const fang = { src: 'deck', u: -3, id: 'fanghone' };
+  eq(g.cardCost(fang), g.CARDS.fanghone.cost, 'a chain card is full price at the top of the turn');
+  b.hand = [{ src: 'deck', u: -4, id: 'quickstep' }, fang];
+  g.playCard(0);
+  eq(g.cardCost(fang), Math.max(0, g.CARDS.fanghone.cost - 1), 'and a pound cheaper after one card');
+  // Never free-and-then-negative.
+  for (let i = 0; i < 6; i++) { b.hand.unshift({ src: 'deck', u: -9, id: 'quickstep' }); g.playCard(0); }
+  ok(g.cardCost(fang) >= 0, 'a chain never goes below nothing');
+  // A fresh turn resets it: the discount is this turn's, not the fight's.
+  ok(b.playedTurn > 0, 'the count is up after a turn of playing');
+  g.startPlayerTurn([]);
+  eq(b.playedTurn, 0, 'and back to nothing at the top of the next turn');
+  eq(g.cardCost(fang), g.CARDS.fanghone.cost, 'so the chain card is full price again');
+}
+
+// ---- every mechanic is on a card, and every card says what it does -------
+for (const id of CARD_IDS) {
+  const c = CARDS[id];
+  // Keywords, not sentences: a mechanic is named once and learned once, which
+  // is also the only way the rules text fits on the card face.
+  if (c.retain) ok(/\bRetain\b/.test(c.txt), `${c.name} is keyworded Retain`);
+  if (c.combo) ok(new RegExp(`Combo \\+${c.combo}\\b`).test(c.txt), `${c.name} names its Combo value`);
+  if (c.chain) ok(/\bChain\b/.test(c.txt), `${c.name} is keyworded Chain`);
+  // …and no card claims a keyword it does not have.
+  if (/\bRetain\b/.test(c.txt)) ok(c.retain, `${c.name} says Retain and means it`);
+  if (/\bCombo\b/.test(c.txt)) ok(c.combo, `${c.name} says Combo and means it`);
+  if (/\bChain\b/.test(c.txt)) ok(c.chain, `${c.name} says Chain and means it`);
+}
+ok(CARD_IDS.filter((id) => CARDS[id].retain).length >= 3, 'more than one card is worth holding');
+ok(CARD_IDS.filter((id) => CARDS[id].combo).length >= 3, 'and more than one rewards sequencing');
+ok(CARD_IDS.filter((id) => CARDS[id].chain).length >= 3, 'and more than one rewards setting up');
+
+section('a win puts something back');
+// A measured run walked to the Wayhouse five times before Crown Hollow. The
+// second wind is proportional, so a hard fight pays and a walkover does not.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('sproutle', 2), wild: true });
+  const b = g.B();
+  // A fight that cost you nothing gives you nothing.
+  b.hpMark = b.mine.hp;
+  b.foe.hp = 0;
+  const log1 = [];
+  g.resolveFoeDown(log1);
+  eq(b.mine.hp, b.mine.max, 'an untouched kin is still untouched');
+
+  // A fight that hurt gives it back, up to the cap.
+  g.G.battle = null;
+  g.startBattle({ foe: g.mkMon('sproutle', 2), wild: true });
+  const b2 = g.B();
+  b2.hpMark = b2.mine.max;
+  b2.mine.hp = Math.round(b2.mine.max * .4);
+  const before = b2.mine.hp;
+  b2.foe.hp = 0;
+  g.resolveFoeDown([]);
+  ok(b2.mine.hp > before, `it got something back (${before} → ${b2.mine.hp})`);
+  ok(b2.mine.hp - before <= Math.round(b2.mine.max * g.RALLY_CAP) + 1,
+    'and never more than the cap');
+  ok(b2.mine.hp <= b2.mine.max, 'and never past full');
+  eq(b2.hpMark, b2.mine.hp, 'the next foe is measured from where this one left it');
+}
+
+section('a reward always reaches the deck');
+// With the deck full, taking a card used to put it somewhere you would never
+// draw it, so the offer stopped being a decision part-way through a run.
+{
+  const g = fresh();
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is full');
+  // Make one card obviously the least used.
+  const idle = g.ownedCard(g.G.deck[3]);
+  for (const u of g.G.deck) { const o = g.ownedCard(u); o.plays = o === idle ? 0 : 5; }
+  const taken = g.grantCard('soulfang');
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is still exactly full');
+  ok(g.G.deck.includes(taken.u), 'and the new card is in it');
+  ok(!g.G.deck.includes(idle.u), 'the copy you had played least came out');
+  ok(g.G.cards.some((c) => c.u === idle.u), 'and it is still yours, in the collection');
+  ok(taken.replaced, `the offer can say what it replaced (${taken.replaced})`);
+}
+
+section('a full deck asks what comes out');
+// A twelve-card deck makes the offer the first half of a decision: something
+// has to go, and the game must not pick for you.
+{
+  const g = fresh();
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is full');
+  // Asked for: the card is yours but stays out of the deck until you choose.
+  const asked = g.grantCard('soulfang', true);
+  ok(g.G.cards.some((c) => c.u === asked.u), 'the card is owned');
+  ok(!g.G.deck.includes(asked.u), 'but it is not in the deck yet');
+  eq(g.G.deck.length, g.DECK_MAX, 'and nothing was silently thrown out');
+
+  // The swap screen lists the deck and nothing else, and has no way out.
+  g.openScreen('swap', { newCard: asked.u });
+  eq(g.G.screen.kind, 'swap', 'the swap screen opened');
+  eq(g.G.screen.list.length, g.DECK_MAX, 'it lists the whole deck');
+  g.closeScreen();
+  eq(g.G.screen && g.G.screen.kind, 'swap', 'and there is no way out but choosing');
+  g.renderScreen();
+  ok(true, 'it renders');
+
+  const out = g.G.screen.list[3];
+  g.G.screen.i = 3;
+  g.screenSelect();
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is still exactly full');
+  ok(g.G.deck.includes(asked.u), 'the new card went in');
+  ok(!g.G.deck.includes(out.u), 'the one you picked came out');
+  ok(g.G.cards.some((c) => c.u === out.u), 'and it is still yours');
+  eq(g.G.screen, null, 'the screen closed');
+}
+
+// Chests pull three or four at a time, so they still make room themselves —
+// being asked four times in a row is not a decision, it is a form.
+{
+  const g = fresh();
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  const auto = g.grantCard('soulfang');
+  ok(g.G.deck.includes(auto.u), 'an unasked grant lands in the deck');
+  eq(g.G.deck.length, g.DECK_MAX, 'and the deck stays its size');
+  ok(auto.replaced, `and it knows what it replaced (${auto.replaced})`);
+}
+
+// A card whose definition has gone — an old save, a renamed id — must not take
+// the game down, and should be the first thing evicted.
+{
+  const g = fresh();
+  g.CARDS.__gone = { name: 'Gone', r: 'legendary', cost: 1, kind: 'skill', v: 1, vt: 'shield', txt: '{v}' };
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  const ghost = g.grantCard('__gone');
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  delete g.CARDS.__gone;
+  eq(g.cardCost({ src: 'deck', u: ghost.u, id: '__gone' }), 0, 'a card with no definition costs nothing');
+  eq(g.cardName({ src: 'deck', u: ghost.u, id: '__gone' }), '?', 'and reads as unknown rather than throwing');
+  const fresher = g.grantCard('edge');
+  ok(!g.G.deck.includes(ghost.u), 'and it is the first thing out when room is needed');
+  ok(g.G.deck.includes(fresher.u), 'while the real card goes in');
+}
+
+section('speed decides who opens');
+// Fights ran under two turns, so a foe that always moved second often never
+// moved at all. Something faster than you now lands the first blow.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('gargolem', 20)];          // slow
+  const quick = g.mkMon('zaplet', 20);            // fast
+  ok(g.effStat(quick, 'spd') > g.effStat(g.G.party[0], 'spd'), 'the wild kin really is faster');
+  const full = g.G.party[0].hp;
+  g.startBattle({ foe: quick, wild: true });
+  ok(g.B().mine.hp <= full, 'a faster wild kin gets the first word');
+  ok(g.B().log && g.B().log.length, 'and the opening is played back rather than silent');
+
+  // A trainer squares up with you: the opening rival fight is meant to be
+  // winnable rather than a coin toss on speed.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('gargolem', 20)];
+  g.G.party[0].hp = g.G.party[0].max;
+  g.startBattle({ foe: g.mkMon('zaplet', 20), npc: { name: 'Wick', id: 't_x', trainer: { team: [], prize: 0 } } });
+  eq(g.B().mine.hp, g.B().mine.max, 'a trainer does not get a free hit in');
+
+  // And a slower foe never opens, however the fight starts.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('zaplet', 20)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  eq(g.B().mine.hp, g.B().mine.max, 'a slower wild kin waits its turn');
+}
+
+
+
+section('one swing a turn');
+// Three energy and moves costing one or two meant the best line was to attack
+// twice and never touch the deck — which is the exact opposite of "your kin
+// brings the attacks, your deck makes them land harder", and why a fight was
+// over in a turn and a half.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 30), wild: true });
+  const bb = g.B();
+  bb.foe.hp = bb.foe.max = 99999;                 // nothing dies, so we can count
+  bb.mine.hp = bb.mine.max = 99999;               // including us — trainers hit hard now
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  bb.hand = [{ src: 'kin', id: move.id }, { src: 'kin', id: move.id }];
+  bb.energy = 9;
+  eq(bb.swungTurn, 0, 'a fresh turn has not swung yet');
+  ok(g.playableNow(bb, bb.hand[0]), 'and the swing is playable');
+  const hpBefore = bb.foe.hp;
+  g.playCard(0);
+  eq(bb.swungTurn, 1, 'swinging marks the turn');
+  ok(bb.foe.hp <= hpBefore, 'and the swing happened');
+  const energyAfter = bb.energy, handAfter = bb.hand.length, hpAfter = bb.foe.hp;
+  ok(!g.playableNow(bb, bb.hand[0]), 'the second kin card reads as unplayable');
+  g.playCard(0);
+  eq(bb.hand.length, handAfter, 'and playing it puts it straight back in hand');
+  eq(bb.energy, energyAfter, 'costs nothing');
+  eq(bb.foe.hp, hpAfter, 'and does no damage');
+
+  // A support card is still free to play — the limit is on the swing, not the turn.
+  const owned = g.grantCard('edge');
+  bb.hand.push({ src: 'deck', u: owned.u, id: 'edge', bg: 0 });
+  ok(g.playableNow(bb, bb.hand[bb.hand.length - 1]), 'support is unaffected');
+
+  // The aim never rests on a card that will refuse the keypress.
+  bb.sel = 0;
+  g.aimPlayable(bb);
+  ok(g.playableNow(bb, bb.hand[bb.sel]), 'the aim moves off a spent swing');
+
+  // And ending the turn hands the swing back.
+  g.endTurn();
+  eq(g.B().swungTurn, 0, 'a new turn swings again');
+}
+
+section('a trainer works a plan, and telegraphs every beat of it');
+// Every hand-authored fight was "two kin, no plan": the foe scored its moves
+// each turn and never built toward anything. A plan is a short loop of beats,
+// each announced a turn ahead through the intent line, so the point is never
+// surprise — it is that you can see the big hit coming.
+{
+  const g = fresh();
+  const npc = { name: 'Wick', id: 't_x', trainer: { team: [], prize: 0, plan: ['sharpen', 'swing'] } };
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('sproutle', 20), npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;               // survive the payoff, so we can read it
+  // Leave it only one thing to do on a swing beat, so the payoff is readable.
+  bb.foe.moves = bb.foe.moves.filter((m) => g.MOVES[m.id].pow).slice(0, 1);
+  ok(bb.foe.moves.length, 'the foe has an attack to pay the plan off with');
+  ok(!!bb.plan, 'the trainer brought a plan');
+  eq(bb.intent.kind, 'plan', 'and the first beat is telegraphed before you act');
+  eq(bb.intent.name, g.PLANS.sharpen.label, 'by name');
+  ok(bb.intent.n > 0, `with the number on it (+${bb.intent.n})`);
+  ok(/\+/.test(bb.intent.tell), 'and a line the hand can print');
+  const edge = bb.intent.n;
+  eq(bb.foeEdge, 0, 'nothing is banked yet');
+  const hpBefore = bb.mine.hp;
+  g.endTurn();
+  eq(bb.foeEdge, edge, 'ending the turn is when the beat happens');
+  eq(bb.mine.hp, hpBefore, 'and a setup beat costs the foe its attack');
+  eq(bb.intent.kind, 'attack', 'the payoff is telegraphed in turn');
+  g.endTurn();
+  eq(bb.foeEdge, 0, 'the edge is spent on the swing it was saved for');
+  ok(bb.mine.hp < hpBefore, 'which lands');
+}
+
+section('a braced trainer eats a hit, and an aimed one goes round your shield');
+{
+  const g = fresh();
+  const npc = { name: 'Hale', id: 't_y', trainer: { team: [], prize: 0, plan: ['brace', 'swing'] } };
+  // A small attacker against a big guard, so the whole swing has somewhere to go.
+  g.G.party = [g.mkMon('pyrelynx', 5)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), npc });
+  const bb = g.B();
+  bb.foe.hp = bb.foe.max = 99999;
+  bb.mine.hp = bb.mine.max = 99999;
+  eq(bb.intent.step, 'brace', 'the guard is announced first');
+  const guard = bb.intent.n;
+  g.endTurn();
+  eq(bb.foeShield, guard, 'and banked when the turn ends');
+  const before = bb.foe.hp;
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  // Moves can miss, so swing until one actually connects with the guard.
+  for (let i = 0; i < 40 && bb.foeShield === guard; i++) {
+    bb.hand = [{ src: 'kin', id: move.id }];
+    bb.energy = 9; bb.swungTurn = 0;
+    g.playCard(0);
+  }
+  ok(bb.foeShield < guard, 'the guard eats the swing before the health does');
+  eq(bb.foe.hp, before, 'and none of it reaches the bar');
+
+  // Aim: the answer to a shield you banked because you saw the sharpen coming.
+  const h = fresh();
+  h.G.party = [h.mkMon('gargolem', 40)];
+  h.startBattle({ foe: h.mkMon('sproutle', 30), npc: { name: 'Wick', id: 't_z', trainer: { team: [], prize: 0, plan: ['aim', 'swing'] } } });
+  const hb = h.B();
+  hb.mine.hp = hb.mine.max = 99999;
+  hb.foe.moves = hb.foe.moves.filter((m) => h.MOVES[m.id].pow).slice(0, 1);
+  eq(hb.intent.step, 'aim', 'taking aim is telegraphed like anything else');
+  eq(hb.intent.n, 0, 'and carries no number, because it is not a number');
+  h.endTurn();
+  eq(hb.foePierce, 1, 'the aim is held');
+  hb.shield = 9999;                               // everything you could possibly bank
+  const hp = hb.mine.hp;
+  h.endTurn();
+  ok(hb.mine.hp < hp, 'and the hit lands anyway');
+  ok(!(h.B().log || []).some((e) => /Shield absorbs/.test(e.msg || '')),
+    'without a point of it going through the shield');
+  eq(hb.foePierce, 0, 'the aim is spent on the one swing');
+}
+
+section('the three Wick fights are the same person getting better');
+// The arc is data, so it is worth asserting as data: every rival fight has a
+// plan, each one is longer than the last, and each knows a beat the one before
+// it did not.
+{
+  const g = fresh();
+  const wicks = ['t_wick1', 't_wick2', 't_wick3'].map((id) => {
+    for (const m of Object.values(g.MAPS)) {
+      const n = (m.npcs || []).find((x) => x.id === id);
+      if (n) return n;
+    }
+    return null;
+  });
+  ok(wicks.every(Boolean), 'all three Wick fights are on the map');
+  const plans = wicks.map((n) => n.trainer.plan);
+  ok(plans.every((p) => Array.isArray(p) && p.length), 'and every one of them has a plan');
+  ok(plans[0].length < plans[1].length && plans[1].length < plans[2].length,
+    `the plan gets longer each time (${plans.map((p) => p.length).join(' < ')})`);
+  const kinds = plans.map((p) => new Set(p.filter((s) => s !== 'swing')));
+  eq(kinds[0].size, 1, 'the first Wick has one idea');
+  ok(kinds[1].size > kinds[0].size, 'the second has learned another');
+  ok(kinds[2].size > kinds[1].size, 'and the third has learned a third');
+  for (const p of plans) for (const s of p) ok(!!g.PLANS[s], `${s} is a beat the game knows`);
+  // Nobody gets two setup turns in a row: that is a free turn, not a plan.
+  for (const p of plans) {
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], bnext = p[(i + 1) % p.length];
+      ok(a === 'swing' || bnext === 'swing', `${a} is paid off before the next beat`);
+    }
+  }
+  // And every trainer in the game has one, not just the rival.
+  let trainers = 0, planned = 0;
+  for (const m of Object.values(g.MAPS)) {
+    for (const n of m.npcs || []) {
+      if (!n.trainer) continue;
+      trainers++;
+      if (n.trainer.plan) planned++;
+    }
+  }
+  ok(trainers >= 8, `there are trainers to check (${trainers})`);
+  eq(planned, trainers, 'every trainer in the valley brings a plan');
+}
+
+section('a trainer\'s kin is not a wild kin');
+// Trainers hit at full strength and come in teams, so each of their kin needs a
+// far smaller pool than a lone wild one — giving them the wild number made the
+// opening rival fight a coin toss.
+{
+  ok(EK.TRAINER_HP_MUL < EK.FOE_HP_MUL, 'a trainer\'s kin carries less of the fight on its own');
+  ok(EK.WILD_DMG_MUL < 1, 'and a wild kin hits softer than a trained one');
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  const wildMax = g.B().foe.max;
+  g.G.battle = null;
+  g.startBattle({ foe: g.mkMon('gargolem', 20), npc: { name: 'X', id: 't_w', trainer: { team: [], prize: 0 } } });
+  ok(g.B().foe.max < wildMax, `the same kin is tougher in the grass (${wildMax} vs ${g.B().foe.max})`);
+}
+
+
+section('the chart points the same way, but not as hard');
+// The chart says who beats whom, and that is knowledge worth having. What it
+// must not do is decide the fight before a card is played — measured over twelve
+// runs with one kin, the element being with you or against you swung the loss
+// rate from 6% to 57% with the level gap identical in both.
+{
+  const g = fresh();
+  eq(g.EFF_DMG(1), 1, 'a neutral hit is untouched');
+  eq(g.EFF_DMG(0), 0, 'and immune still means immune');
+  ok(g.EFF_DMG(2) > 1 && g.EFF_DMG(2) < 2, `an advantage still helps, less (${g.EFF_DMG(2)}×)`);
+  ok(g.EFF_DMG(.5) > .5 && g.EFF_DMG(.5) < 1, `a resist still hurts, less (${g.EFF_DMG(.5)}×)`);
+  ok(g.EFF_DMG(4) > g.EFF_DMG(2), 'a stacked weakness is still worse than a single one');
+  ok(g.EFF_DMG(.25) < g.EFF_DMG(.5), 'and a stacked resist still better');
+  // Softening must never flip the direction — that would make the dex a lie.
+  for (const e of [.25, .5, 1, 2, 4]) {
+    const d = g.EFF_DMG(e);
+    ok(e > 1 ? d > 1 : e < 1 ? d < 1 : d === 1, `${e}× still reads as ${e > 1 ? 'good' : e < 1 ? 'bad' : 'neutral'}`);
+  }
+  // The chart itself is untouched, because that is what the dex shows and what
+  // "It's brutally effective!" is about.
+  eq(g.effect('Ember', ['Verdant']), 2, 'the chart still says 2×');
+
+  // And it shows up on the bar the way it says it does.
+  const one = g.mkMon('pyrelynx', 30);
+  const wet = g.mkMon('dewdrip', 30), dry = g.mkMon('sproutle', 30);
+  const roll = { crit: false, roll: 1 };
+  const good = g.damageOf(one, dry, 'cinder', roll).dmg;
+  const bad = g.damageOf(one, wet, 'cinder', roll).dmg;
+  ok(good > bad, 'the right element still hits harder');
+  ok(good < bad * 4, `but not four times as hard (${good} vs ${bad})`);
+}
+
+section('a cornered wild kin gathers itself, out loud');
+// Two fights in five were never in doubt, and the reason was not that they were
+// easy — a wild fight was four identical small hits with no moment in it. Same
+// damage, gathered into one swing you are told about a turn ahead.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('sproutle', 30), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  bb.foe.moves = bb.foe.moves.filter((m) => g.MOVES[m.id].pow).slice(0, 1);
+  eq(bb.cornered, 0, 'a healthy wild kin is not cornered');
+  eq(bb.foeEdge, 0, 'and has nothing banked');
+  const calm = bb.intent.dmg;
+  ok(!/cornered/.test(bb.intent.name), 'nor does the line say so');
+
+  // Hurt it past the line and read the intent again — the telegraph is the point.
+  bb.foe.hp = Math.floor(bb.foe.max * (g.CORNER_AT - .05));
+  g.readIntent();
+  eq(bb.cornered, 1, 'past the line it corners');
+  ok(bb.foeEdge > 0, `and gathers itself (+${bb.foeEdge})`);
+  ok(/cornered/.test(bb.intent.name), 'the line says so a turn ahead');
+  ok(bb.intent.dmg > calm, `and the number it shows goes up with it (${calm} → ${bb.intent.dmg})`);
+
+  // It is one swing, not a new state of being.
+  const hp = bb.mine.hp;
+  g.endTurn();
+  ok(bb.mine.hp < hp, 'the big one lands');
+  eq(bb.foeEdge, 0, 'and spends the whole of it');
+  g.readIntent();
+  ok(!/cornered/.test(bb.intent.name), 'it does not corner twice');
+
+  // A trainer's kin does not do this — they have plans instead.
+  const t = fresh();
+  t.G.party = [t.mkMon('gargolem', 40)];
+  t.startBattle({ foe: t.mkMon('sproutle', 30), npc: { name: 'X', id: 't_c', trainer: { team: [], prize: 0 } } });
+  const tb = t.B();
+  tb.foe.hp = 1;
+  t.readIntent();
+  eq(tb.cornered, 0, 'a trained kin does not corner');
+}
+
+
+section('a plan keeps its own promise');
+// A sharpen beat costs the foe its turn to bank an edge, so the beat after it
+// has to be the one that cashes it in. It was not: the scorer would pick a
+// status move, the edge would sit there unspent, and a foe with a debuff to
+// spam banked edge after edge while grinding your attack down. Coll's three kin
+// turned a five-turn fight into a thirty-turn one that way.
+{
+  const g = fresh();
+  const npc = { name: 'X', id: 't_p', trainer: { team: [], prize: 0, plan: ['sharpen', 'swing'] } };
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('mothrix', 30), npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  ok(bb.foe.moves.some((m) => !g.MOVES[m.id].pow), 'the foe has something that is not an attack');
+  ok(bb.foe.moves.some((m) => g.MOVES[m.id].pow), 'and something that is');
+  eq(bb.intent.step, 'sharpen', 'it sets up first');
+  g.endTurn();
+  ok(bb.foeEdge > 0, 'and banks the edge');
+  // Whatever the scorer would rather do, the payoff turn is an attack.
+  for (let i = 0; i < 30; i++) {
+    g.readIntent();
+    ok(g.MOVES[bb.intent.id].pow, 'a banked edge forces an attack out of the foe');
+  }
+  // A miss never eats an edge in this game, so swing until one connects.
+  const hp = bb.mine.hp;
+  for (let i = 0; i < 40 && bb.foeEdge > 0; i++) g.endTurn();
+  ok(bb.mine.hp < hp, 'so the setup is actually paid off');
+  eq(bb.foeEdge, 0, 'and the edge is spent');
+
+  // With nothing banked it is free to do whatever it likes again.
+  let sawIdle = false;
+  for (let i = 0; i < 60 && !sawIdle; i++) {
+    bb.foeEdge = 0;
+    if (!g.MOVES[g.foeChoose(false)].pow) sawIdle = true;
+  }
+  ok(sawIdle, 'with nothing banked it can still choose not to attack');
+  // And a foe with only status moves is not left with nothing to do.
+  bb.foe.moves = bb.foe.moves.filter((m) => !g.MOVES[m.id].pow);
+  ok(!!g.foeChoose(true), 'a foe with no attack at all still picks something');
+}
+
+section('a switch is a moment you can be caught in');
+// Switching cost one turn and bought the whole matchup, which made it a reflex
+// rather than a decision: send in the right element, delete the thing, never
+// lose. With a party of four the probe was losing 0.006 fights per fight.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 20), g.mkMon('brookite', 20)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  g.G.party[1].hp = g.G.party[1].max = 99999;
+  eq(bb.foeEdge, 0, 'nothing is banked while you stand your ground');
+  const was = bb.mine;
+  // Swing until the hit on the way in actually connects, so the edge resolves.
+  for (let i = 0; i < 40; i++) {
+    g.doAction({ kind: 'switch', idx: bb.mine === g.G.party[0] ? 1 : 0 });
+    if (bb.foeEdge === 0) break;
+  }
+  ok(bb.mine !== was || g.G.party.length > 1, 'the switch happened');
+  // The punish is banked and spent by the hit that lands on the way in — unless
+  // that hit misses, and a miss never eats an edge in this game, so it waits.
+  eq(bb.foeEdge, 0, 'the edge it bought was spent on the way in');
+  ok(g.SWITCH_PUNISH > 0, 'a switch is not free');
+
+  // Switching into nothing, or into the kin already out, is not a switch.
+  const before = bb.mine;
+  g.doAction({ kind: 'switch', idx: 0 });
+  g.doAction({ kind: 'switch', idx: 9 });
+  ok(bb.mine === before || bb.mine === g.G.party[0], 'a no-op switch does not go wrong');
+}
+
+section('the wild damper does not compound with your own resistance');
+// A wild kin you resist was hitting for .65 x .70 of normal, which is where the
+// "nobody can hurt anybody" fights came from — three quarters never in doubt,
+// none of them lost, and the longest in the game.
+{
+  const g = fresh();
+  const roll = { crit: false, roll: 1 };
+  // Stone into Ember is resisted; Stone into Spark is not.
+  const foe = g.mkMon('gargolem', 30);
+  const resists = g.mkMon('pyrelynx', 30);         // Ember resists Stone? check the chart
+  const eff = g.effect('Stone', resists.types);
+  ok(eff !== 1, `the matchup is not neutral (${eff}x), or this measures nothing`);
+
+  const hitFor = (wild) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon(resists.species, 30)];
+    g.startBattle({ foe: g.mkMon('gargolem', 30), wild,
+      npc: wild ? null : { name: 'X', id: 't_d', trainer: { team: [], prize: 0 } } });
+    const b2 = g.B();
+    b2.mine.hp = b2.mine.max = 99999;
+    b2.foe.hp = b2.foe.max = 99999;
+    const move = b2.foe.moves.find((m) => g.MOVES[m.id].pow
+      && g.effect(g.MOVES[m.id].type, b2.mine.types) < 1);
+    if (!move) return null;
+    const hp = b2.mine.hp;
+    const log = [];
+    for (let i = 0; i < 60 && b2.mine.hp === hp; i++) g.useMove(log, 'foe', move.id);
+    return hp - b2.mine.hp;
+  };
+  const wildHit = hitFor(true), trainedHit = hitFor(false);
+  if (wildHit != null && trainedHit != null) {
+    ok(wildHit < trainedHit, `a wild kin still hits softer than a trained one (${wildHit} vs ${trainedHit})`);
+    ok(wildHit > trainedHit * g.WILD_DMG_MUL, 'but the damper only bites half as hard through a resistance');
+  }
+  ok(foe.lvl === 30, 'the fixture is what it says it is');
+}
+
+
+section('a kin sent in is still finding its feet');
+// Pricing the switch was not enough. It cost a turn and a harder hit and still
+// bought the whole matchup immediately, so with a party of four every fight was
+// send-in-the-right-element and delete. The payoff arrives a turn late now,
+// which over a three-turn fight is most of the reason to do it at all.
+{
+  const g = fresh();
+  ok(g.SETTLE_MUL < 1, 'a fresh kin does not arrive at full tilt');
+  // A matchup with real numbers in it: a fraction of 8 rounds to 8.
+  g.G.party = [g.mkMon('pyrelynx', 50), g.mkMon('pyrelynx', 50)];
+  g.startBattle({ foe: g.mkMon('sproutle', 5), wild: true });
+  const bb = g.B();
+  bb.foe.hp = bb.foe.max = 999999;                // nothing dies, so we can measure
+  bb.mine.hp = bb.mine.max = 999999;
+  g.G.party[1].hp = g.G.party[1].max = 999999;
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  /** Swing once and say what came off the bar. Misses do not count. */
+  const swing = () => {
+    for (let i = 0; i < 60; i++) {
+      const before = bb.foe.hp;
+      bb.hand = [{ src: 'kin', id: move.id }];
+      bb.energy = 9; bb.swungTurn = 0;
+      g.playCard(0);
+      if (bb.foe.hp < before) return before - bb.foe.hp;
+    }
+    return 0;
+  };
+  eq(bb.settling, 0, 'the kin you started with is settled');
+  const settled = swing();
+  ok(settled > 0, 'a settled kin swings for something');
+
+  g.doAction({ kind: 'switch', idx: 1 });
+  eq(bb.settling, 1, 'the one that just came in is not');
+  const fresh1 = swing();
+  eq(bb.settling, 0, 'and it is over after one swing');
+  ok(fresh1 < settled, `the arriving swing is the weaker one (${fresh1} vs ${settled})`);
+  const after = swing();
+  ok(after > fresh1, `and the next one is back to full (${after})`);
+}
+
+section('a trainer is a better hitter, not a bigger bag of health');
+// Every trainer but the opening rival sat at 0% losses with the player's party
+// above three quarters health. More health made the fights long rather than
+// dangerous — Coll's three kin were already the longest fight in the game.
+{
+  const g = fresh();
+  ok(g.TRAINER_DMG_MUL > 1, 'a trained kin hits harder than its level says');
+  ok(g.TRAINER_DMG_MUL > g.WILD_DMG_MUL, 'and harder than anything in the grass');
+
+  // The pool belongs to the trainer, so it is shared out across the team.
+  ok(g.trainerHp(1) > g.trainerHp(2), 'two kin each carry less than one alone');
+  ok(g.trainerHp(2) > g.trainerHp(3), 'and three less again');
+  ok(g.trainerHp(3) * 3 > g.trainerHp(1), 'a bigger team is still a bigger fight');
+  ok(g.trainerHp(3) * 3 < g.trainerHp(1) * 3, 'just not three times the fight');
+  eq(g.trainerHp(0), g.trainerHp(1), 'an empty team does not divide by nothing');
+
+  // And it shows up where it should: same species, same level, two roles.
+  const pool = (team) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('pyrelynx', 30)];
+    g.startBattle({ foe: g.mkMon('gargolem', 20), team,
+      npc: { name: 'X', id: 't_h', trainer: { team: [], prize: 0 } } });
+    return g.B().foe.max;
+  };
+  ok(pool([['gargolem', 20], ['gargolem', 20], ['gargolem', 20]]) < pool([['gargolem', 20]]),
+    'one of three is softer than one alone');
+}
+
+section('the trainers of the valley are still well formed');
+// Every plan front-loads, because a plan the fight is too short to show is not
+// a plan; and nobody gets two setup turns in a row, because that is a free turn.
+{
+  const g = fresh();
+  let seen = 0;
+  for (const m of Object.values(g.MAPS)) {
+    for (const n of m.npcs || []) {
+      if (!n.trainer || !n.trainer.plan) continue;
+      seen++;
+      const p = n.trainer.plan;
+      ok(p[0] !== 'swing', `${n.id} opens on the beat that makes it a plan (${p[0]})`);
+      ok(p.some((x) => x === 'swing'), `${n.id} pays it off`);
+      for (let i = 0; i < p.length; i++) {
+        ok(!!g.PLANS[p[i]], `${n.id}: ${p[i]} is a beat the game knows`);
+        const nxt = p[(i + 1) % p.length];
+        ok(p[i] === 'swing' || nxt === 'swing', `${n.id}: ${p[i]} is paid off before the next beat`);
+      }
+    }
+  }
+  ok(seen >= 8, `every trainer in the valley was checked (${seen})`);
+}
+
+
+section('a trainer buff is not there on the first morning');
+// Every global buff the trainers have ever been given landed on Wick's opening
+// fight first and made it unwinnable — twice now, caught both times by the
+// "still a fight, not a formality" assertion in the logic suite. A trainer at
+// level five is a kid who was handed their first kin the same morning you were.
+{
+  const g = fresh();
+  ok(g.planScale(5) < g.planScale(12), 'a plan beat is worth less at five than at twelve');
+  ok(g.planScale(12) < g.planScale(30), 'and less at twelve than at thirty');
+  ok(g.planScale(5) < 1, `a level-five plan beat is under its own base (${g.planScale(5).toFixed(2)}x)`);
+  ok(g.planScale(30) > 2, 'a level-thirty one is worth more than double');
+  ok(g.trainerDmg(5) < g.trainerDmg(20), 'and a trained kin hits harder the further north it lives');
+  ok(g.trainerDmg(5) < 1.15, `the opening rival barely gets it (${g.trainerDmg(5).toFixed(2)}x)`);
+  ok(Math.abs(g.trainerDmg(30) - g.TRAINER_DMG_MUL) < 1e-9, 'and a late one gets all of it');
+  ok(g.trainerDmg(1) >= 1, 'nobody hits softer than their level for being young');
+}
+
+
+section('a trainer plays the same game you do');
+// Trainers could not win, and pass 14 said no constant would fix it: the player
+// arrives with four rested kin and rotates freshness in while a trainer spends
+// one to three, one at a time, with no way to put any of it back. So they got
+// the two things you have — a bench and a bag.
+{
+  const g = fresh();
+  const npc = { name: 'Coll', id: 't_bench',
+    trainer: { team: [], prize: 0, plan: ['sharpen', 'swing'] } };
+  const team = [['gargolem', 20], ['brookite', 20], ['sproutle', 20]];
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon(team[0][0], team[0][1]), team, npc });
+  const bb = g.B();
+  ok(!!bb.roster, 'the whole team is on the field from the start, not conjured one at a time');
+  eq(bb.roster.length, 3, 'all three of them');
+  ok(bb.roster.every((m) => m.hp > 0), 'and all of them whole');
+  eq(bb.roster[0], bb.foe, 'the first one is the one out');
+  ok(bb.foePotions > 0, 'and the trainer brought a bag');
+
+  // A wild kin has neither.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  eq(g.B().roster, null, 'a wild kin has no bench');
+  eq(g.B().foePotions, 0, 'and no bag');
+}
+
+section('a trainer reaches for the bench when the one out is the wrong one');
+{
+  const g = fresh();
+  const npc = { name: 'X', id: 't_b2', trainer: { team: [], prize: 0 } };
+  // Out: something resisted. On the bench: something that is not.
+  const team = [['sproutle', 20], ['brookite', 20]];
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon(team[0][0], team[0][1]), team, npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  const was = bb.foe;
+  bb.turn = 9;                                    // past the no-swapping-twice window
+  const idx = g.foeBench(false);
+  ok(idx >= 0, 'a better kin is on the bench and the trainer can see it');
+  const log = [];
+  g.foeSwap(log, idx);
+  ok(bb.foe !== was, 'so it comes out');
+  eq(bb.foeSettling, 1, 'and it arrives still finding its feet');
+  ok(bb.mods.edge > 0, 'while you get the edge for catching them mid-change');
+  ok(log.some((e) => /sends out/.test(e.t || '')), 'and the swap is played back, not silent');
+  // Their banked plan does not survive the change.
+  eq(bb.foeShield, 0, 'the guard the last one banked goes with it');
+  eq(bb.foeEdge, 0, 'and so does its edge');
+
+  // A trainer whose kin is doing fine stays put.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('sproutle', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), team: [['gargolem', 20], ['sproutle', 20]], npc });
+  const cb = g.B();
+  cb.foe.hp = cb.foe.max;
+  eq(g.foeBench(false), -1, 'a kin that is winning is not called back');
+}
+
+section('a trainer with a potion uses it');
+{
+  const g = fresh();
+  const npc = { name: 'X', id: 't_pot', trainer: { team: [], prize: 0 } };
+  g.G.party = [g.mkMon('pyrelynx', 40)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), team: [['gargolem', 20]], npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  const had = bb.foePotions;
+  ok(had > 0, 'the trainer has one');
+  bb.foe.hp = Math.floor(bb.foe.max * (g.FOE_POTION_AT - .05));
+  const low = bb.foe.hp;
+  const hp = bb.mine.hp;
+  g.endTurn();
+  ok(bb.foe.hp > low, `the potion goes in (${low} to ${bb.foe.hp})`);
+  eq(bb.foePotions, had - 1, 'and it is gone from the bag');
+  eq(bb.mine.hp, hp, 'reaching for it costs them the swing, exactly as it costs you');
+
+  // The bag runs out.
+  for (let i = 0; i < 20 && bb.foePotions > 0; i++) {
+    bb.foe.hp = 1;
+    g.endTurn();
+  }
+  eq(bb.foePotions, 0, 'a trainer cannot heal for ever');
+  bb.foe.hp = 1;
+  const before = bb.mine.hp;
+  for (let i = 0; i < 40 && bb.mine.hp === before; i++) { bb.foe.hp = 1; g.endTurn(); }
+  ok(bb.mine.hp < before, 'and once it is empty they go back to swinging');
+}
+
+
+section('a wild kin does not go down without one moment of its own');
+// Three in ten party fights ended in a single swing — you send in the right
+// element and delete something that never got a turn — and the cornered
+// telegraph, the only readable thing a wild fight has, can only fire if the kin
+// lives long enough to be cornered.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 60)];
+  g.startBattle({ foe: g.mkMon('sproutle', 5), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  const full = bb.foe.max;
+  ok(g.damageOf(bb.mine, bb.foe, move.id, { crit: false, roll: 1 }).dmg > full,
+    'the swing really would have killed it outright');
+  // Swing until one connects.
+  for (let i = 0; i < 40 && bb.foe.hp === full; i++) {
+    bb.hand = [{ src: 'kin', id: move.id }];
+    bb.energy = 9; bb.swungTurn = 0;
+    g.playCard(0);
+  }
+  eq(bb.foe.hp, 1, 'it holds on by a point');
+  ok(!bb.over, 'so the fight is still going');
+  g.readIntent();
+  eq(bb.cornered, 1, 'and it corners on the spot');
+  ok(bb.foeEdge > 0, 'with something banked for the swing it just bought itself');
+
+  // Once only: the next blow finishes it.
+  for (let i = 0; i < 40 && bb.foe.hp > 0; i++) {
+    bb.hand = [{ src: 'kin', id: move.id }];
+    bb.energy = 9; bb.swungTurn = 0;
+    g.playCard(0);
+  }
+  eq(bb.foe.hp, 0, 'it does not hold on twice');
+
+  // It cannot rescue a kin that was already hurt past the line.
+  const h = fresh();
+  h.G.party = [h.mkMon('pyrelynx', 60)];
+  h.startBattle({ foe: h.mkMon('sproutle', 5), wild: true });
+  const hb = h.B();
+  hb.mine.hp = hb.mine.max = 99999;
+  hb.foe.hp = Math.floor(hb.foe.max * (h.CORNER_AT - .05));
+  const mv2 = hb.mine.moves.find((m) => h.MOVES[m.id].pow);
+  for (let i = 0; i < 40 && hb.foe.hp > 0; i++) {
+    hb.hand = [{ src: 'kin', id: mv2.id }];
+    hb.energy = 9; hb.swungTurn = 0;
+    h.playCard(0);
+  }
+  eq(hb.foe.hp, 0, 'a kin already on its last legs just dies');
+
+  // And a trainer's kin never does it — they have a bench and a bag instead.
+  const t = fresh();
+  t.G.party = [t.mkMon('pyrelynx', 60)];
+  t.startBattle({ foe: t.mkMon('sproutle', 5), team: [['sproutle', 5]],
+    npc: { name: 'X', id: 't_ls', trainer: { team: [], prize: 0 } } });
+  const tb = t.B();
+  tb.mine.hp = tb.mine.max = 99999;
+  tb.foePotions = 0;
+  const mv3 = tb.mine.moves.find((m) => t.MOVES[m.id].pow);
+  for (let i = 0; i < 40 && !tb.over; i++) {
+    tb.hand = [{ src: 'kin', id: mv3.id }];
+    tb.energy = 9; tb.swungTurn = 0;
+    t.playCard(0);
+  }
+  eq(tb.foe.hp, 0, 'a trained kin goes down when it is beaten');
+}
+
+
+section('a wild kin you resist fights dirtier, and does it more than once');
+// Nearly half of one-kin fights were never in doubt, and the cross-tab said
+// where they lived: 43% of fights are ones whose element you resist, and those
+// ran 59%, 59% and 45% never-in-doubt against 29% for the fights you walk into
+// at a disadvantage. A kin whose every blow bounces off you cannot threaten you
+// by hitting harder — hitting is the thing the chart has taken away.
+{
+  const g = fresh();
+  // Ember into Tide is resisted both ways round; pick a pair that is one-way.
+  const mine = g.mkMon('gargolem', 40);            // Stone
+  const soft = g.mkMon('sproutle', 30);            // Verdant: strong into Stone
+  const blunt = g.mkMon('cindercub', 30);          // Ember: blunted by Stone
+  ok(g.resistedBy(blunt, mine), 'the blunted one really is resisted');
+  ok(!g.resistedBy(soft, mine), 'and the other one is not');
+
+  // Two moments for a kin that can hurt you, three for one that cannot.
+  eq(g.cornerAt(soft, mine, 0), g.CORNER_PLAIN[0], 'a kin that can hurt you waits longer');
+  eq(g.cornerAt(soft, mine, 1), g.CORNER_PLAIN[1], 'and gets a second one');
+  eq(g.cornerAt(soft, mine, 2), -1, 'but not a third');
+  ok(g.CORNER_PLAIN.length < g.CORNER_RESIST.length,
+    'a kin that can hurt you needs fewer of them');
+  ok(g.CORNER_PLAIN[0] < g.CORNER_RESIST[0], 'and waits longer for the first');
+  for (let i = 1; i < g.CORNER_PLAIN.length; i++) {
+    ok(g.CORNER_PLAIN[i] < g.CORNER_PLAIN[i - 1], 'its thresholds march down too');
+  }
+  // Three, starting early, for one that cannot.
+  eq(g.cornerAt(blunt, mine, 0), g.CORNER_RESIST[0], 'a blunted kin gathers itself early');
+  ok(g.cornerAt(blunt, mine, 0) > g.CORNER_AT, 'earlier than a dangerous one does');
+  eq(g.cornerAt(blunt, mine, 1), g.CORNER_RESIST[1], 'and again');
+  eq(g.cornerAt(blunt, mine, 2), g.CORNER_RESIST[2], 'and again');
+  eq(g.cornerAt(blunt, mine, 3), -1, 'three times, not for ever');
+  for (let i = 1; i < g.CORNER_RESIST.length; i++) {
+    ok(g.CORNER_RESIST[i] < g.CORNER_RESIST[i - 1], 'the thresholds march down the bar');
+  }
+
+  // And it happens in a real fight.
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('cindercub', 30), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 999999;
+  bb.foe.hp = bb.foe.max = 400;
+  eq(bb.cornered, 0, 'it starts composed');
+  bb.foe.hp = Math.floor(bb.foe.max * (g.CORNER_RESIST[0] - .02));
+  g.readIntent();
+  eq(bb.cornered, 1, 'past the first line it gathers itself');
+  const first = bb.foeEdge;
+  ok(first > 0, `banking something (${first})`);
+  bb.foe.hp = Math.floor(bb.foe.max * (g.CORNER_RESIST[1] - .02));
+  g.readIntent();
+  eq(bb.cornered, 2, 'and past the second line it does it again');
+  ok(bb.foeEdge > first, 'stacking on what it had');
+
+  // A trainer's kin never does this, whatever it is made of.
+  const t = fresh();
+  t.G.party = [t.mkMon('gargolem', 40)];
+  t.startBattle({ foe: t.mkMon('cindercub', 30), team: [['cindercub', 30]],
+    npc: { name: 'X', id: 't_cr', trainer: { team: [], prize: 0 } } });
+  const tb = t.B();
+  tb.foe.hp = 1;
+  t.readIntent();
+  eq(tb.cornered, 0, 'a trained kin has a plan instead');
+}
 done('emberkin_cards');

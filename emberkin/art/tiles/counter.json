@@ -1,0 +1,34 @@
+{
+  "id": "counter",
+  "name": "Counter",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "K": "#1b1220",
+    "d": "#48362f",
+    "m": "#5e483a",
+    "b": "#745b47",
+    "l": "#8c7159",
+    "w": "#5e483a",
+    "v": "#48362f"
+  },
+  "rows": [
+    "wwwwwwwwwwwwwwww",
+    "wwvwwwwwwwwwwwww",
+    "KKKKKKKKKKKKKKKK",
+    "KllllllllllllllK",
+    "KlbbbbbbbbbbbblK",
+    "KbmmmmmmmmmmmmbK",
+    "KbmdmmmmdmmmmmbK",
+    "KbmmmmmmmmmmmmbK",
+    "KbdmmmdmmmmmdmbK",
+    "KbmmmmmmmmmmmmbK",
+    "KKKKKKKKKKKKKKKK",
+    "KddddddddddddddK",
+    "KKKKKKKKKKKKKKKK",
+    "wwwwwwwwwwwvwwww",
+    "wwwwwwwwwwwwwwww",
+    "wwvwwwwwwwwwwwww"
+  ]
+}
