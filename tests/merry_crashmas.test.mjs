@@ -974,6 +974,24 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
     'every car should preview differently: ' + JSON.stringify(ends));
 });
 
+/* ----------------------------------------------------------------- menu --- */
+
+/* The 21-chip market grid used to sit above START THE ENGINE, which put the
+   only thing a new player needs to press 237px below the fold at 1280x720 —
+   with overlay scrollbars, so there was no affordance either. The suite cannot
+   lay out a page, so it guards the thing that decided it: the order of the two
+   in the card. Measured in Chromium after the change, the button's bottom is
+   512/514/518/535 against viewport heights of 720/768/900/844. */
+test('the button you are meant to press comes before the market grid', () => {
+  const src = fs.readFileSync(HTML, 'utf8');
+  const card = src.slice(src.indexOf('<div class="ov" id="menu">'), src.indexOf('<div class="ov" id="brief"'));
+  const start = card.indexOf('id="bStart"'), levels = card.indexOf('id="mLevels"');
+  assert(start > 0 && levels > 0, 'the menu should have both a start button and a market grid');
+  assert(start < levels,
+    'START THE ENGINE must come before the 21-chip grid, or it lands below the fold');
+  assert(card.indexOf('id="mBest"') > start, 'and the record line sits under the button');
+});
+
 /* ---------------------------------------------------------------- goals --- */
 
 /* Ramp goals used to be rolled from a straight-line distance that ignored the
