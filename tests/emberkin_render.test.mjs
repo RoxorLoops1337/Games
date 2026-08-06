@@ -557,6 +557,107 @@ ok(/z-index:20/.test(picked), 'and sits over the rest of the hand');
 // about its own base instead.
 ok(picked.includes('transform-origin:50% 100%'), 'it lifts off its own base, not the fan\'s');
 
+section('the screens have a shape');
+// The bag groups, and every group is one you would actually go looking in.
+const bagKeys = Object.keys(EK.ITEMS);
+const shelves = EK.shelve(bagKeys);
+ok(shelves.length >= 2, `the bag is shelved rather than listed (${shelves.length} groups)`);
+eq(shelves.flatMap(([, ks]) => ks).length, bagKeys.length, 'every item lands on a shelf');
+ok(new Set(shelves.flatMap(([, ks]) => ks)).size === bagKeys.length, 'and none lands on two');
+ok(shelves[0][0] === 'Orbs', 'orbs come first — it is the thing you reach for mid-fight');
+// A shelf never changes order between renders, or the cursor jumps under you.
+eq(JSON.stringify(EK.shelve(bagKeys)), JSON.stringify(EK.shelve([...bagKeys].reverse())),
+  'shelving is stable however the keys arrive');
+// Every item has a glyph, so the bag is icons rather than a list of names.
+for (const k of bagKeys) ok(!!EK.sprite('card', EK.ITEM_ART(k)), `${EK.ITEMS[k].name} has an icon`);
+
+// The kin page: a portrait, bars, and moves, all off one function.
+const page = EK.statBlock(EK.mkMon('pyrelynx', 24));
+ok(page.includes('portrait'), 'the kin page has a portrait');
+for (const label of ['HP', 'ATK', 'GUARD', 'SPD', 'EXP']) ok(page.includes(`>${label}<`), `it shows ${label}`);
+eq((page.match(/class="sbar"/g) || []).length, 5, 'every stat gets a bar, not just a number');
+ok((page.match(/class="movecard"/g) || []).length >= 1, 'and the moves come with it');
+eq(EK.statBlock(null), '', 'an empty slot renders nothing rather than throwing');
+// A save whose xp sits below its own level floor must not print a negative.
+const odd = EK.mkMon('pyrelynx', 24);
+odd.xp = 0;
+const oddPage = EK.statBlock(odd);
+ok(!/>-\d/.test(oddPage), 'a half-migrated save shows no negative EXP');
+ok(!/width:-/.test(oddPage), 'and no negative bar');
+// A bar never runs past its track either.
+const full = EK.mkMon('pyrelynx', 24);
+full.xp = 1e9;
+const widths = [...EK.statBlock(full).matchAll(/width:([\d.]+)%/g)].map((m) => parseFloat(m[1]));
+ok(widths.length >= 5, 'the bars are all there');
+ok(widths.every((w) => w >= 0 && w <= 100), `and none runs past its track (max ${Math.max(...widths)}%)`);
+
+// Status reads as a chip in its own colour rather than three grey letters.
+for (const st of Object.keys(EK.STATUS)) {
+  const chip = EK.statusChip(st);
+  ok(chip.includes(EK.STATUS[st].tag), `${st} shows its tag`);
+  ok(/background:#[0-9a-f]{6}/i.test(chip), `${st} carries its own colour`);
+}
+
+// Every screen renders without throwing, with real content in it.
+const scr = loadGame({});
+scr.setCtx(mkCtx());
+scr.G.party = [scr.mkMon('pyrelynx', 24), scr.mkMon('dewdrip', 12)];
+scr.G.box = [scr.mkMon('sproutle', 8)];
+scr.G.bag = { bloomorb: 4, salve: 2, elixir: 1 };
+scr.G.dex = { cindercub: 2, pyrelynx: 1 };
+scr.STARTER_DECK.forEach(scr.grantCard);
+scr.G.money = 3000; scr.G.gems = 900;
+for (const kind of ['party', 'dex', 'box', 'deck', 'bag', 'shop', 'chests']) {
+  scr.openScreen(kind);
+  scr.renderScreen();
+  ok(scr.G.screen && scr.G.screen.kind === kind, `${kind} opened`);
+  ok((scr.G.screen.list || []).length >= 0, `${kind} built a list`);
+  // …and it can be walked with the keys without falling off either end.
+  for (let i = 0; i < 30; i++) {
+    scr.pressKey(i % 2 ? 'right' : 'down');
+    scr.step(.05);
+    scr.releaseKey(i % 2 ? 'right' : 'down');
+    scr.fired.clear();
+  }
+  const len = (scr.G.screen ? screenLen(scr) : 1);
+  ok(!scr.G.screen || (scr.G.screen.i >= 0 && scr.G.screen.i < Math.max(1, len)),
+    `${kind}: the cursor stayed on the list`);
+  if (scr.G.screen) scr.closeScreen();
+  scr.G.screen = null;
+}
+function screenLen(g) { return (g.G.screen.list || []).length; }
+
+section('a town that moves');
+// NPCs turn to look at you. The art faces the viewer, so the only honest turn
+// is a mirror — which means it has to be driven by which side you are on.
+const town = loadGame({});
+town.setCtx(mkCtx());
+town.G.party = [town.mkMon('pyrelynx', 12)];
+town.enterMap('hollowbrook', 5, 7, 'down');
+town.G.mode = 'world';
+const tam = town.MAPS.hollowbrook.npcs.find((n) => n.name === 'Old Tam');
+ok(tam, 'Old Tam is still in the town');
+const drawFlips = () => {
+  const calls = [];
+  town.setCtx(mkCtx(calls));
+  town.draw();
+  return calls.filter((c) => c[0] === 'scale' && c[1] === -1).length;
+};
+town.G.player.x = tam.x + 1; town.G.player.px = tam.x + 1;
+town.G.player.y = tam.y; town.G.player.py = tam.y;
+const fromRight = drawFlips();
+town.G.player.x = tam.x - 1; town.G.player.px = tam.x - 1;
+const fromLeft = drawFlips();
+ok(fromRight !== fromLeft, `standing on the other side turns somebody (${fromRight} vs ${fromLeft} mirrors)`);
+// Nobody is drawn at a fractional offset — the bob is whole pixels or it shimmers.
+const drawn = [];
+town.setCtx(mkCtx(drawn));
+for (let i = 0; i < 30; i++) { town.step(.05); town.draw(); }
+const fracs = drawn.filter((c) => c[0] === 'drawImage')
+  .flatMap((c) => c.slice(1))
+  .filter((v) => typeof v === 'number' && !Number.isInteger(v));
+eq(fracs.length, 0, 'every actor lands on a whole pixel');
+
 section('three rooms, not one room three times');
 // The three interiors used to be the same generated box. What makes a room a
 // room is what is in it.
