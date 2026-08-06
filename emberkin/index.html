@@ -5124,6 +5124,18 @@ function useMove(log, atkSide, moveId) {
           b.foeShield -= eaten; through -= eaten;
           if (eaten > 0) snap(log, `${them}'s guard absorbs ${eaten}.`, 'block', 'foe');
         }
+        // A wild kin does not go down without one moment of its own. Three in
+        // ten party fights ended in a single swing — you send in the right
+        // element and delete something that never got a turn — and the cornered
+        // telegraph, which is the only thing a wild fight has to read, can only
+        // fire if the kin lives long enough to be cornered. So a healthy one
+        // takes the blow and holds on by a point, once, and corners on the spot.
+        // It cannot save a kin that was already hurt, and it cannot happen twice.
+        if (b.wild && !b.cornered && defender === b.foe
+          && defender.hp > defender.max * CORNER_AT && through >= defender.hp) {
+          through = defender.hp - 1;
+          snap(log, `${them} will not go down yet!`, 'block', 'foe');
+        }
         defender.hp = clamp(defender.hp - through, 0, defender.max);
         dealt = had - defender.hp;
         if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
