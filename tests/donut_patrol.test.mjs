@@ -53,6 +53,8 @@ const EXPOSE = `__out.api = {
   poseDizzy, poseCuffed, poseSwing, poseCharge, poseLob, poseCuffMove, poseFarmSwing, poseCough,
   loadSave, writeSave, toTitle, beginGame, togglePause, showOver, fit, pollInput, isDown, canAct,
   attackTokens, drawPickers, TAP, KEYMAP, bindInput, get DOLLS(){ return DOLLS; },
+  poseCough, poseCharge, legIK, footAt, advanceWalk, STRIDE, LIFT, blendPose, copyPose,
+  springTick, squashHit, weaponTip, drawTrail, camKick, shake, smooth, easeOut, easeIn,
 };
 `;
 
@@ -258,10 +260,14 @@ test('no pose anywhere leaves the head off the body', () => {
     const d = Math.hypot(g.head[0] - g.sh[0], g.head[1] - g.sh[1]);
     assert(d <= 14, `${name}: head floats ${d.toFixed(1)} from the shoulder`);
     assert(g.hip[1] > 0, `${name}: hips below the tarmac`);
+    /* limbs are two rigid bones — the hand can never be further from its
+       socket than the two bones laid end to end */
+    const reach = { la: 20, ra: 20, ll: 26, rl: 26 };
     for (const limb of ['la', 'ra', 'll', 'rl']){
-      const e = g[limb].e;
+      const e = g[limb].e, root = limb[1] === 'a' ? g.sh : g.hip;
       assert(Number.isFinite(e[0]) && Number.isFinite(e[1]), `${name}: ${limb} went to NaN`);
-      assert(Math.hypot(e[0], e[1]) < 60, `${name}: ${limb} stretched to ${Math.hypot(e[0], e[1]).toFixed(1)}`);
+      const span = Math.hypot(e[0] - root[0], e[1] - root[1]);
+      assert(span <= reach[limb] + 0.5, `${name}: ${limb} stretched to ${span.toFixed(1)}`);
     }
   }
 });
@@ -279,10 +285,34 @@ test('a body on the tarmac lies down instead of standing there', () => {
 test('the flinch throws the head backwards, then returns it', () => {
   const api = boot();
   const f = api.mkFighter('farmer', 0, api.GROUND_MID, {});
-  const hit = api.poseHurt(f, 0), settled = api.poseHurt(f, 1);
-  assert(hit.headX < -3, 'head snaps back on contact: ' + hit.headX);
-  assert(hit.lean < -0.2, 'and the torso follows it');
-  near(settled.headX, 0, 0.35, 'the flinch resolves back to neutral');
+  const build = { torso: 1, arm: 1, leg: 1 };
+  /* measured where it matters: the head's position relative to the
+     shoulder, so the check survives any change of pose convention */
+  const headLead = (P) => { const g = api.rigGeom(P, build); return g.head[0] - g.sh[0]; };
+  const rest = headLead(api.poseIdle(f, 0));
+  const hit = headLead(api.poseHurt(f, 0));
+  const settled = headLead(api.poseHurt(f, 1));
+  assert(hit < rest - 6, `head snaps back on contact: ${hit.toFixed(1)} vs resting ${rest.toFixed(1)}`);
+  assert(api.poseHurt(f, 0).lean < -0.2, 'and the torso follows it');
+  assert(Math.abs(settled - rest) < 1.2, 'the flinch resolves back to neutral');
+});
+
+test('a forward lean actually leans forward', () => {
+  const api = boot();
+  const f = api.mkFighter('cop', 0, api.GROUND_MID, {});
+  const build = { torso: 1, arm: 1, leg: 1 };
+  const lead = (lean) => {
+    const P = api.basePose(); P.lean = lean;
+    const g = api.rigGeom(P, build);
+    return g.sh[0] - g.hip[0];
+  };
+  assert(lead(0.4) > 3, 'a positive lean puts the shoulders in front of the hips: ' + lead(0.4).toFixed(1));
+  assert(lead(-0.4) < -3, 'and a negative one puts them behind: ' + lead(-0.4).toFixed(1));
+  /* the swing has to lean into the blow, not away from it */
+  const swing = api.poseSwing(f, 0.52);
+  const wind = api.poseSwing(f, 0.28);
+  assert(swing.lean > 0.2, 'the strike leans into it: ' + swing.lean);
+  assert(wind.lean < -0.1, 'after leaning away to wind up: ' + wind.lean);
 });
 
 test('depth scaling keeps the back of the road smaller than the front', () => {
@@ -709,6 +739,211 @@ test('a tap that starts and ends between two polls still swings', () => {
   api.pollInput();
   assert(api.EDGE.baton === false, 'and it only counts once');
   assert(api.TAP.baton === 0, 'the latch is cleared after it is read');
+});
+
+/* ------------------------------------------------------------ animation
+   These are the checks that keep the rig honest.  Every one of them caught
+   something real while the animations were being built. */
+
+test('the stance foot stays planted at any speed', () => {
+  const api = boot();
+  const f = api.mkFighter('cop', 0, api.GROUND_MID, {});
+  const build = { torso: 1, arm: 1, leg: 1 };
+  for (const speed of [40, 90, 160, 260]){
+    f.walk = 0; f.vx = speed; f.vy = 0;
+    let x = 0, prev = null, worst = 0;
+    for (let i = 0; i < 180; i++){
+      api.advanceWalk(f, api.STEP, 1);
+      x += f.vx * api.STEP;
+      const g = api.rigGeom(api.poseWalk(f, 0, 0.6), build);
+      const planted = g.ll.e[1] < g.rl.e[1] ? 'l' : 'r';
+      const foot = x + (planted === 'l' ? g.ll.e[0] : g.rl.e[0]);
+      if (prev && prev.planted === planted) worst = Math.max(worst, Math.abs(foot - prev.foot));
+      prev = { planted, foot };
+    }
+    assert(worst < 0.5, `at ${speed}px/s the planted foot skids ${worst.toFixed(2)} units per frame`);
+  }
+});
+
+test('the hips bob because the legs make them, not because a sine says so', () => {
+  const api = boot();
+  const f = api.mkFighter('cop', 0, api.GROUND_MID, {});
+  const build = { torso: 1, arm: 1, leg: 1 };
+  let hi = -1e9, lo = 1e9;
+  for (let i = 0; i < 24; i++){
+    f.walk = (i / 24) * Math.PI * 2;
+    const g = api.rigGeom(api.poseWalk(f, 0, 0.6), build);
+    hi = Math.max(hi, g.hip[1]); lo = Math.min(lo, g.hip[1]);
+    /* whichever foot is down is ON the ground, every frame of the cycle */
+    const low = Math.min(g.ll.e[1], g.rl.e[1]);
+    assert(Math.abs(low - 2.2) < 0.6, 'a foot is on the tarmac at phase ' + i + ': ' + low.toFixed(2));
+  }
+  assert(hi - lo > 1.5 && hi - lo < 6, 'the walk bobs, but does not pogo: ' + (hi - lo).toFixed(2));
+});
+
+test('leg IK puts the foot where it was asked to', () => {
+  const api = boot();
+  for (const [hy, fx, fy] of [[24, 0, 0], [22, 9, 0], [20, -11, 3], [25, 5, 6]]){
+    const [a1, a2] = api.legIK(hy, fx, fy, 12.5, 12.5);
+    const kx = Math.sin(a1) * 12.5, ky = hy - Math.cos(a1) * 12.5;
+    const ex = kx + Math.sin(a1 + a2) * 12.5, ey = ky - Math.cos(a1 + a2) * 12.5;
+    near(ex, fx, 0.2, 'foot x');
+    near(ey, fy, 0.2, 'foot y');
+  }
+});
+
+test('the swing anticipates, snaps, and follows through', () => {
+  const api = boot();
+  const f = api.mkFighter('cop', 0, api.GROUND_MID, { weapon: 'baton' });
+  f.weapon = 'baton';
+  const build = { torso: 1, arm: 1, leg: 1 };
+  /* measured as the baton tip's position, so the check does not care how
+     the angle happens to be wrapped */
+  const tip = (u) => {
+    const P = api.poseSwing(f, u, true);
+    const g = api.rigGeom(P, build);
+    return { p: api.weaponTip(f, P, g), head: g.head };
+  };
+  const rest = tip(0), wind = tip(0.3), hit = tip(0.52), end = tip(1);
+  assert(wind.p[0] < rest.p[0] - 6, 'the baton is cocked back first: ' + wind.p[0].toFixed(1));
+  assert(wind.p[1] > rest.p[1] + 8, 'and up: ' + wind.p[1].toFixed(1));
+  assert(hit.p[0] > wind.p[0] + 20, 'then swings a long way through: ' + hit.p[0].toFixed(1));
+  assert(hit.p[1] < wind.p[1] - 15, 'and comes down: ' + hit.p[1].toFixed(1));
+  /* the arc passes over the head rather than scooping up off the floor */
+  let overhead = false, lowest = 1e9;
+  for (let u = 0.3; u <= 0.52; u += 0.01){
+    const t = tip(u);
+    if (t.p[1] > t.head[1] + 4) overhead = true;
+    lowest = Math.min(lowest, t.p[1]);
+  }
+  assert(overhead, 'the swing travels over the top of the head');
+  assert(lowest > 4, 'and never scrapes through the tarmac: ' + lowest.toFixed(1));
+  near(end.p[0], rest.p[0], 3, 'it settles back to guard');
+  /* fastest in the middle: anticipation is slow, the strike is not */
+  const travel = (u) => {
+    const a2 = tip(u).p, b2 = tip(u + 0.02).p;
+    return Math.hypot(b2[0] - a2[0], b2[1] - a2[1]);
+  };
+  assert(travel(0.4) > travel(0.1) * 2, 'the strike is faster than the wind-up');
+  assert(travel(0.4) > travel(0.85) * 2, 'and faster than the recovery');
+});
+
+test('poses never jump between one frame and the next', () => {
+  const api = boot();
+  const p = play(api, 3); clearField(api);
+  const build = { torso: 1, arm: 1, leg: 1 };
+  const names = ['baton1', 'batonX', 'lob', 'cuff'];
+  for (const name of names){
+    api.startAttack(p, name);
+    let prev = null, worst = 0, worstAt = 0;
+    const dur = api.ATK[name].dur;
+    for (let i = 0; i <= 60; i++){
+      p.stateT = dur * (1 - i / 60);
+      const g = api.rigGeom(api.poseFor(p), build);
+      if (prev){
+        for (const k of ['head', 'hip', 'sh']){
+          const d = Math.hypot(g[k][0] - prev[k][0], g[k][1] - prev[k][1]);
+          if (d > worst){ worst = d; worstAt = i / 60; }
+        }
+      }
+      prev = { head: g.head.slice(), hip: g.hip.slice(), sh: g.sh.slice() };
+    }
+    assert(worst < 6, `${name} teleports ${worst.toFixed(1)} units at u=${worstAt.toFixed(2)}`);
+  }
+});
+
+test('a state change cross-fades instead of snapping', () => {
+  const api = boot();
+  const p = play(api, 1); clearField(api);
+  const build = { torso: 1, arm: 1, leg: 1 };
+  p.state = 'idle'; p.stateT = 99;
+  api.poseFor(p);
+  const before = api.rigGeom(api.poseFor(p), build).head.slice();
+  p.state = 'attack'; p.atk = api.ATK.batonX; p.stateT = api.ATK.batonX.dur * 0.5;
+  const first = api.rigGeom(api.poseFor(p), build).head.slice();
+  const jump = Math.hypot(first[0] - before[0], first[1] - before[1]);
+  assert(jump < 3, 'the first frame of a new state is still near the old one: ' + jump.toFixed(1));
+  for (let i = 0; i < 12; i++) api.updateFighter(p, api.STEP);
+  const settled = api.rigGeom(api.poseFor(p), build).head.slice();
+  assert(Math.hypot(settled[0] - first[0], settled[1] - first[1]) > 1, 'and it does get there');
+});
+
+test('impacts squash the body and the spring settles it', () => {
+  const api = boot();
+  const p = play(api); clearField(api);
+  const e = api.spawnFarmer('big', p.x + 16, api.GROUND_MID, {});
+  e.entry = null;
+  api.applyHit(p, e, api.ATK.baton1, { dir: 1 });
+  assert(e.sqV < -0.5 || e.sq !== 0, 'the hit kicks the squash spring');
+  let peak = 0;
+  for (let i = 0; i < 60; i++){ api.springTick(e, api.STEP); peak = Math.max(peak, Math.abs(e.sq)); }
+  assert(peak > 0.02, 'the body visibly squashes: ' + peak.toFixed(3));
+  for (let i = 0; i < 240; i++) api.springTick(e, api.STEP);
+  assert(Math.abs(e.sq) < 0.01, 'and it comes back to rest: ' + e.sq);
+});
+
+test('a swing leaves an arc behind it and then tidies up', () => {
+  const api = boot();
+  const p = play(api, 2); clearField(api);
+  p.x = api.arenaX0(2) + 200; p.y = api.GROUND_MID; p.face = 1;
+  api.startAttack(p, 'batonX');
+  for (let i = 0; i < 12; i++){ api.updateFighter(p, api.STEP); api.draw(); }
+  assert(p.trail && p.trail.length > 2, 'the tip left a trail: ' + (p.trail ? p.trail.length : 0));
+  const spread = Math.max(...p.trail.map((q) => q.x)) - Math.min(...p.trail.map((q) => q.x));
+  assert(spread > 4, 'and the trail actually sweeps: ' + spread.toFixed(1));
+  p.state = 'idle'; p.atk = null;
+  api.draw();
+  assert(p.trail.length === 0, 'the arc is dropped when the swing ends');
+});
+
+test('everybody blinks, and not in lockstep', () => {
+  const api = boot();
+  play(api, 4);
+  for (let i = 0; i < 30; i++) api.spawnNext();
+  const farmers = api.fighters.filter((f) => f.kind === 'farmer');
+  for (const f of farmers) api.springTick(f, api.STEP);
+  const timers = farmers.map((f) => f.blinkT);
+  assert(new Set(timers.map((t) => t.toFixed(2))).size > farmers.length * 0.5, 'blink timers are spread out');
+  let blinked = 0;
+  for (let i = 0; i < 60 * 8; i++) for (const f of farmers) { api.springTick(f, api.STEP); if (f.blink > 0) blinked++; }
+  assert(blinked > 0, 'and they do actually blink');
+});
+
+test('the camera punches along the blow, then recovers', () => {
+  const api = boot();
+  play(api);
+  api.cam.kx = 0; api.cam.kxv = 0;
+  api.camKick(1, 0.8);
+  assert(api.cam.kxv < 0, 'a blow to the right shoves the frame left');
+  let peak = 0;
+  for (let i = 0; i < 30; i++){ api.cameraTick(api.STEP); peak = Math.max(peak, Math.abs(api.cam.kx)); }
+  assert(peak > 1.5, 'the kick visibly moves the camera: ' + peak.toFixed(2) + 'px');
+  assert(peak < 12, 'but does not throw the whole frame: ' + peak.toFixed(2) + 'px');
+  for (let i = 0; i < 200; i++) api.cameraTick(api.STEP);
+  assert(Math.abs(api.cam.kx) < 0.05 && Math.abs(api.cam.ky) < 0.05, 'and it settles back');
+});
+
+test('nothing in the rig ever produces a NaN, at any phase of any state', () => {
+  const api = boot();
+  const f = api.spawnFarmer('fork', 0, api.GROUND_MID, {});
+  const build = { torso: 1, arm: 1, leg: 1 };
+  const states = ['idle', 'walk', 'attack', 'hurt', 'launch', 'down', 'getup', 'dizzy', 'cuffed', 'cough', 'charge'];
+  for (const st of states){
+    for (let i = 0; i <= 40; i++){
+      const u = i / 40;
+      f.state = st; f.stateT = 0.6 * (1 - u); f.hurtLen = 0.6; f.dizzyT = 2; f.downT = u * 2;
+      f.walk = u * 12; f.spin = u * 6; f.z = u * 40;
+      api.setT(u * 4);
+      if (st === 'attack') { f.atk = api.ATK.chop; f.atkName = 'chop'; }
+      const g = api.rigGeom(api.poseFor(f), build);
+      for (const key of ['hip', 'sh', 'head']){
+        assert(Number.isFinite(g[key][0]) && Number.isFinite(g[key][1]), `${st}@${u}: ${key} is NaN`);
+      }
+      for (const limb of ['la', 'ra', 'll', 'rl']){
+        assert(Number.isFinite(g[limb].e[0]) && Number.isFinite(g[limb].e[1]), `${st}@${u}: ${limb} is NaN`);
+      }
+    }
+  }
 });
 
 /* ------------------------------------------------------------- rendering */

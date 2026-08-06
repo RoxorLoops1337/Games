@@ -227,7 +227,7 @@ const G = {
   seen: false,         // has the player read the help this session
 };
 
-const cam = { x: 0, tx: 0, shake: 0, shakeT: 0, lock: null, kick: 0 };
+const cam = { x: 0, tx: 0, shake: 0, shakeT: 0, lock: null, kx: 0, kxv: 0, ky: 0, kyv: 0 };
 let T = 0;                     // seconds since boot, advances only while simulating
 let fighters = [];             // every body on the tarmac, players and farmers
 let fx = [];                   // particles, pops, dust, blood
@@ -617,10 +617,16 @@ function mkCrowd(x, y, seg){
    are functions, a farmer can be launched, spun, folded over a baton and
    dropped on his hat without a single extra drawing. */
 
-const RIG = { thigh: 11, shin: 11, upper: 9.5, fore: 10, torso: 17.5, headR: 7.4, neck: 3.6 };
-const D2R = Math.PI / 180;
-/* angle 0 points straight down the body; +90 degrees points forward */
+const RIG = { thigh: 12.5, shin: 12.5, upper: 9.5, fore: 10, torso: 17.5, headR: 7.4, neck: 3.6 };
+/* Limb angles: 0 points straight down the body, +90 degrees points forward
+   (the way the fighter faces).  The spine uses the matching convention —
+   `up` is where the shoulders sit relative to the hips, and a POSITIVE lean
+   tips that forward.  Getting this backwards is exactly as visible as it
+   sounds: it had every walk, swing and flinch leaning away from the punch. */
 const dirx = (a) => Math.sin(a), diry = (a) => -Math.cos(a);
+const upx = (a) => Math.sin(a), upy = (a) => Math.cos(a);
+/* where the face points for a spine angle a */
+const facex = (a) => Math.cos(a), facey = (a) => -Math.sin(a);
 
 const FARM_SKINS = [
   { skin: '#e8b48c', shirt: '#d95b42', shirt2: '#96331f', deni: '#4b6b9c', deniLo: '#33507a', hair: '#5a3a24', boot: '#5b4230' },
@@ -642,12 +648,13 @@ function rigGeom(P, build){
   const hipY = P.hip * (P.sq == null ? 1 : P.sq);
   const hip = [P.off ? P.off[0] : 0, hipY + (P.off ? P.off[1] : 0)];
   const tl = RIG.torso * build.torso * (P.sq == null ? 1 : P.sq);
-  /* the torso runs *up* from the hip along the lean; angle + PI is "up" */
-  const shd = [hip[0] + dirx(P.lean + Math.PI) * tl, hip[1] + diry(P.lean + Math.PI) * tl];
+  /* the torso runs up from the hip, tipped forward by the lean */
+  const shd = [hip[0] + upx(P.lean) * tl + (P.shX || 0), hip[1] + upy(P.lean) * tl];
   const hAng = P.lean + (P.head || 0);
+  const neckLen = RIG.headR + RIG.neck;
   const head = [
-    shd[0] + dirx(hAng + Math.PI) * (RIG.headR + RIG.neck) + (P.headX || 0),
-    shd[1] + diry(hAng + Math.PI) * (RIG.headR + RIG.neck) + (P.headY || 0),
+    shd[0] + upx(hAng) * neckLen + (P.headX || 0),
+    shd[1] + upy(hAng) * neckLen + (P.headY || 0),
   ];
   const chain = (root, a1, a2, l1, l2) => {
     const j = [root[0] + dirx(a1) * l1, root[1] + diry(a1) * l1];
@@ -703,56 +710,133 @@ function perfTick(dt){
   else if (PERF.simple && PERF.ms < 20) PERF.simple = false;
 }
 
-/* --------------------------------------------------------------- poses */
+/* --------------------------------------------------------------- poses
+   Timing vocabulary, borrowed from the twelve principles and from what
+   Capcom's brawlers actually do: every action is ANTICIPATION (slow, pulls
+   the opposite way) → ACTION (fast, few frames, travels on an arc) →
+   FOLLOW-THROUGH (overshoots) → SETTLE.  The helpers below are the easing
+   that makes those three feel different from each other. */
 const TAU = Math.PI * 2;
+const smooth = (k) => k * k * (3 - 2 * k);          // ease in and out
+const easeOut = (k) => 1 - Math.pow(1 - k, 2.4);    // fast start, soft stop
+const easeIn = (k) => k * k * k;                    // slow start, snap end
+
 function basePose(){
-  return { hip: 22, lean: 0, head: 0, headX: 0, headY: 0, sq: 1, rot: 0, ground: true, off: [0, 0],
+  return { hip: 22, lean: 0, head: 0, headX: 0, headY: 0, shX: 0, sq: 1, rot: 0, ground: true, off: [0, 0],
     la: [0.35, 0.5], ra: [-0.35, 0.5], ll: [0.12, 0.1], rl: [-0.12, 0.1] };
 }
 
 /* Idle: a slow breath, weight shifting, the baton hand fidgeting. */
 function poseIdle(f, t){
   const P = basePose();
-  const b = Math.sin(t * 2.1 + f.ph) ;
-  P.hip = 22 + b * 0.5;
-  P.lean = 0.03 + b * 0.02;
-  P.head = -0.04 + Math.sin(t * 1.3 + f.ph) * 0.05;
-  P.la = [0.5 + b * 0.07, 0.55];
-  P.ra = [-0.42 - b * 0.07, 0.6];
-  P.ll = [0.16, 0.06]; P.rl = [-0.16, 0.06];
+  /* two breathing rates an octave apart keep the loop from reading as a
+     loop, and a slow weight shift stops the feet looking glued down */
+  const b = Math.sin(t * 2.1 + f.ph);
+  const b2 = Math.sin(t * 0.83 + f.ph * 1.7);
+  P.hip = 23.4 + b * 0.55;
+  P.lean = 0.04 + b * 0.025 + b2 * 0.03;
+  P.head = -0.05 + Math.sin(t * 1.3 + f.ph) * 0.06 - b * 0.03;
+  P.headY = b * 0.25;
+  P.la = [0.48 + b * 0.08 + b2 * 0.05, 0.5 + b * 0.05];
+  P.ra = [-0.4 - b * 0.08 + b2 * 0.05, 0.56 + b * 0.05];
+  P.ll = [0.15 + b2 * 0.03, 0.1]; P.rl = [-0.15 + b2 * 0.03, 0.1];
+  P.off = [b2 * 0.5, 0];
   return P;
 }
 
-/* Walk: a bouncy four-frame-feeling cycle built out of one sine. */
-function poseWalk(f, t, speed){
+/* Walk.  The phase is driven by distance travelled, not by a clock, so the
+   planted foot stays put on the tarmac at any speed — foot slide is the
+   single loudest tell that a walk is fake.  STRIDE is how far, in rig
+   units, one leg carries the body over half a cycle; `advanceWalk` divides
+   real movement by it. */
+const STRIDE = 25;                       // rig units the stance foot travels
+const LIFT = 5.5;                        // how high the swing foot clears
+
+/* Two-bone inverse kinematics in the rig's angle convention: given a hip
+   height and where the foot has to be, work out the thigh and knee angles.
+   Driving the legs from foot POSITIONS instead of from angles is what makes
+   the plant real — the stance foot is simply told to stay where it is. */
+function legIK(hipY, fx, fy, L1, L2){
+  const vx = fx, vy = fy - hipY;
+  let d = Math.hypot(vx, vy);
+  d = clamp(d, Math.abs(L1 - L2) + 0.01, (L1 + L2) * 0.999);
+  const theta = Math.atan2(vx, -vy);                       // 0 = straight down
+  const A = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
+  const a1 = theta + A;                                    // knee leads forward
+  const kx = Math.sin(a1) * L1, ky = -Math.cos(a1) * L1;
+  const a2 = Math.atan2(vx - kx, -(vy - ky)) - a1;
+  return [a1, a2];
+}
+
+/* Where one foot is at a given point in the cycle.  First half: planted,
+   sliding backwards under the body at a constant rate — that constant rate
+   is what `advanceWalk` matches to real movement, so the foot does not
+   skate.  Second half: lifted, swung forward, set down again. */
+function footAt(phase, stride, lift){
+  const q = ((phase % TAU) + TAU) % TAU;
+  if (q < Math.PI){
+    const k = q / Math.PI;
+    return [stride / 2 - stride * k, 0];
+  }
+  const k = (q - Math.PI) / Math.PI;
+  return [-stride / 2 + stride * smooth(k), Math.sin(k * Math.PI) * lift];
+}
+
+function poseWalk(f, t, speed, opts){
+  opts = opts || {};
   const P = basePose();
+  const legS = (f.build && f.build.leg) || 1;
+  const L1 = RIG.thigh * legS, L2 = RIG.shin * legS, maxLeg = (L1 + L2) * 0.985;
+  const stride = STRIDE * legS * (opts.stride || 1);
   const w = f.walk;
   const s = Math.sin(w), c = Math.cos(w);
-  P.hip = 22.6 + Math.abs(c) * 0.6;
-  P.lean = 0.16 + speed * 0.06;
-  P.head = -0.1 - speed * 0.03;
-  P.ll = [s * 0.72, Math.max(0, -s) * 0.75 + 0.08];
-  P.rl = [-s * 0.72, Math.max(0, s) * 0.75 + 0.08];
-  P.la = [-s * 0.5 + 0.15, 0.55 + Math.max(0, s) * 0.3];
-  P.ra = [s * 0.5 - 0.15, 0.6 + Math.max(0, -s) * 0.3];
-  P.off = [0, 0];
+  const lift = LIFT * legS * (opts.lift || 1);
+  const fl = footAt(w, stride, lift);
+  const fr = footAt(w + Math.PI, stride, lift);
+  /* the hips ride as high as the stance leg allows — that is the bob, and
+     it falls out of the geometry rather than being faked with a sine */
+  const reach = (foot) => foot[1] + Math.sqrt(Math.max(1, maxLeg * maxLeg - foot[0] * foot[0]));
+  const hipY = Math.min(reach(fl), reach(fr));
+  P.hip = hipY;
+  P.ll = legIK(hipY, fl[0], fl[1], L1, L2);
+  P.rl = legIK(hipY, fr[0], fr[1], L1, L2);
+  P.lean = (opts.lean == null ? 0.13 : opts.lean) + speed * 0.07;
+  P.head = -0.08 - speed * 0.04 + s * 0.04;
+  P.headY = -Math.abs(c) * 0.3;
+  const armS = opts.arms == null ? 1 : opts.arms;
+  P.la = [(-s * 0.62 + 0.1) * armS, 0.45 + Math.max(0, s) * 0.45];
+  P.ra = [(s * 0.62 - 0.1) * armS, 0.5 + Math.max(0, -s) * 0.45];
+  P.off = [c * 0.5, 0];
+  P.shX = -s * 0.9;                       // shoulders swing against the hips
   return P;
+}
+/* Feet stay planted: distance travelled becomes cycle phase.  Half a cycle
+   per stride is exactly the rate the stance foot slides backwards in
+   `footAt`, so the two cancel and the boot sits still on the tarmac. */
+function advanceWalk(f, dt, scale, mul){
+  const legS = (f.build && f.build.leg) || 1;
+  const moved = Math.hypot(f.vx, f.vy * 0.6) * dt / Math.max(0.3, scale);
+  f.walk += (moved / (STRIDE * legS * (mul || 1))) * Math.PI;
+  if (f.walk > TAU * 64) f.walk -= TAU * 64;
 }
 
 /* Hurt: the head goes first and the body follows it — that is the whole
    trick to a hit that reads.  `u` runs 0..1 across the flinch. */
 function poseHurt(f, u){
   const P = basePose();
-  const k = Math.pow(1 - u, 1.6);
-  P.lean = -0.55 * k;
-  P.head = -0.75 * k;
-  P.headX = -4.0 * k; P.headY = 1.2 * k;
-  P.hip = 22 - 2.5 * k;
-  P.la = [-1.6 * k + 0.4, 0.4 + 0.8 * k];
-  P.ra = [-2.2 * k - 0.3, 0.3 + 1.0 * k];
-  P.ll = [0.5 * k + 0.12, 0.12];
-  P.rl = [-0.55 * k - 0.14, 0.3 * k + 0.1];
-  P.sq = 1 - 0.06 * k;
+  /* the snap is instant, the recovery overshoots forward before it settles
+     — a flinch that only eases back looks like a slow-motion replay */
+  const k = Math.pow(1 - u, 1.7);
+  const over = Math.max(0, Math.sin(clamp((u - 0.45) / 0.55, 0, 1) * Math.PI)) * 0.7;
+  P.lean = -0.62 * k + 0.16 * over;
+  P.head = -0.82 * k + 0.22 * over;
+  P.headX = -2.2 * k + 0.7 * over; P.headY = 1.1 * k;
+  P.hip = 23.6 - 2.6 * k - 0.6 * over;
+  P.la = [-1.7 * k + 0.44, 0.4 + 0.9 * k];
+  P.ra = [-2.3 * k - 0.3, 0.3 + 1.1 * k];
+  P.ll = [0.55 * k + 0.13, 0.12];
+  P.rl = [-0.6 * k - 0.15, 0.34 * k + 0.1];
+  P.off = [-2.6 * k, 0];
   return P;
 }
 
@@ -763,11 +847,14 @@ function poseLaunch(f, t){
   P.rot = f.spin;
   P.lean = -0.4;
   P.head = -0.5;
+  /* limbs trail the spin and flap; nothing about a launched body is stiff */
   const flail = Math.sin(t * 16 + f.ph) * 0.35;
-  P.la = [-2.1 + flail, 0.5];
-  P.ra = [-2.5 - flail, 0.7];
-  P.ll = [0.9 + flail * 0.5, 0.25];
-  P.rl = [-0.5 - flail * 0.5, 0.7];
+  const rise = clamp(f.vz / 220, -1, 1);
+  P.la = [-2.1 + flail - rise * 0.3, 0.5];
+  P.ra = [-2.55 - flail - rise * 0.3, 0.7];
+  P.ll = [0.95 + flail * 0.5 + rise * 0.2, 0.25];
+  P.rl = [-0.55 - flail * 0.5, 0.7 + Math.max(0, -rise) * 0.4];
+  P.head = -0.5 - rise * 0.25;
   P.hip = 21;
   return P;
 }
@@ -787,15 +874,47 @@ function poseDown(f, t){
   return P;
 }
 
-/* Pushing up off the ground, one knee at a time. */
+/* Getting up is three beats, not one lerp: plant a hand and push the chest
+   off the tarmac, pull a knee under the hips, then stand and shake it off. */
 function poseGetUp(f, u){
-  const a = poseDown(f, T), b = poseIdle(f, T);
   const P = basePose();
   P.ground = false;
-  const e = u * u * (3 - 2 * u);
-  for (const k of ['hip', 'lean', 'head', 'headX', 'headY', 'sq', 'rot']) P[k] = lerp(a[k] || 0, b[k] || 0, e);
-  for (const k of ['la', 'ra', 'll', 'rl']) P[k] = [lerp(a[k][0], b[k][0], e), lerp(a[k][1], b[k][1], e)];
-  P.off = [lerp(a.off[0], b.off[0], e), 0];
+  if (u < 0.42){
+    const k = smooth(clamp(u / 0.42, 0, 1));
+    P.rot = lerp(-1.48, -0.75, k);
+    P.hip = lerp(7.5, 11, k);
+    P.lean = lerp(0.25, 0.55, k);
+    P.head = lerp(0.42, -0.1, k);
+    P.la = [lerp(-1.5, 1.9, k), lerp(0.9, 0.5, k)];
+    P.ra = [lerp(-2.4, 2.1, k), lerp(1.2, 0.4, k)];
+    P.ll = [lerp(0.5, 1.2, k), lerp(0.55, 1.4, k)];
+    P.rl = [lerp(-0.2, -0.9, k), lerp(0.9, 1.5, k)];
+    P.off = [lerp(-3, -1.5, k), 0];
+  } else if (u < 0.78){
+    const k = smooth(clamp((u - 0.42) / 0.36, 0, 1));
+    P.rot = lerp(-0.75, -0.12, k);
+    P.hip = lerp(11, 18, k);
+    P.lean = lerp(0.55, 0.3, k);
+    P.head = lerp(-0.1, -0.05, k);
+    P.la = [lerp(1.9, 0.9, k), lerp(0.5, 0.7, k)];
+    P.ra = [lerp(2.1, 0.4, k), lerp(0.4, 0.9, k)];
+    P.ll = [lerp(1.2, 0.7, k), lerp(1.4, 0.8, k)];
+    P.rl = [lerp(-0.9, -0.45, k), lerp(1.5, 0.5, k)];
+    P.off = [lerp(-1.5, -0.4, k), 0];
+  } else {
+    const k = easeOut(clamp((u - 0.78) / 0.22, 0, 1));
+    const idle = poseIdle(f, T);
+    P.ground = k > 0.9;
+    P.rot = lerp(-0.12, 0, k);
+    P.hip = lerp(18, idle.hip, k);
+    P.lean = lerp(0.3, idle.lean, k) + Math.sin(k * Math.PI) * 0.12;   // stagger
+    P.head = lerp(-0.05, idle.head, k);
+    P.la = [lerp(0.9, idle.la[0], k), lerp(0.7, idle.la[1], k)];
+    P.ra = [lerp(0.4, idle.ra[0], k), lerp(0.9, idle.ra[1], k)];
+    P.ll = [lerp(0.7, idle.ll[0], k), lerp(0.8, idle.ll[1], k)];
+    P.rl = [lerp(-0.45, idle.rl[0], k), lerp(0.5, idle.rl[1], k)];
+    P.off = [lerp(-0.4, 0, k), 0];
+  }
   return P;
 }
 
@@ -825,78 +944,187 @@ function poseCuffed(f, t){
 }
 
 /* Cop poses ------------------------------------------------------------ */
-/* The baton swing: wind up behind the head, snap through, follow through. */
+/* The baton swing.  Angles run 0 = arm hanging down, positive = forward, so
+   an overhead chop has to travel through -PI (straight up) — going the
+   short way round scoops the baton up from the floor, which is what this
+   used to do and it looked like a man handing over a parcel.
+      wind-up   pull the baton behind the head, weight onto the back foot
+      strike    accelerate through vertical to low-forward, body follows
+      settle    the arm falls back to guard the short way, with a wobble */
+const SWING = { wind: 0.28, hit: 0.48 };
 function poseSwing(f, u, big){
   const P = basePose();
-  const wind = clamp(u / 0.34, 0, 1);
-  const strike = clamp((u - 0.34) / 0.22, 0, 1);
-  const rec = clamp((u - 0.56) / 0.44, 0, 1);
-  const sw = strike * strike * (3 - 2 * strike);
-  const armA = lerp(lerp(-0.5, -2.5 - (big ? 0.5 : 0), wind), 1.8 + (big ? 0.5 : 0), sw) * (1 - rec * 0.55);
-  P.ra = [armA, 0.35 + (1 - sw) * 0.5];
-  P.la = [lerp(0.3, -0.9, wind) + sw * 1.2, 0.8];
-  P.lean = lerp(-0.22 * wind, 0.34, sw) * (1 - rec * 0.4);
-  P.head = -0.12 - sw * 0.12;
-  P.hip = 22 - sw * 1.6;
-  P.ll = [0.55 * (0.4 + sw), 0.16]; P.rl = [-0.5 - sw * 0.25, 0.2 + sw * 0.3];
-  P.off = [lerp(-2, 4.5, sw) * (1 - rec * 0.7), 0];
+  const back = -2.55 - (big ? 0.35 : 0);          // baton cocked behind the ear
+  const thru = -5.35 - (big ? 0.25 : 0);          // ...and buried low in front
+  const W = SWING.wind, S = SWING.hit;
+  if (u < W){
+    /* pull back fast, then settle — the little hold at the top of the
+       wind-up is what makes the strike feel like it was launched */
+    const k = easeOut(clamp(u / W, 0, 1));
+    P.ra = [lerp(-0.5, back, k), lerp(0.55, 1.15, k)];   // elbow folds to cock it
+    P.la = [lerp(0.3, -0.85, k), 0.8];
+    P.lean = lerp(0.04, -0.26, k);
+    P.head = lerp(-0.05, -0.2, k);
+    P.hip = lerp(23.4, 22.6, k);
+    P.ll = [lerp(0.15, 0.42, k), 0.12];
+    P.rl = [lerp(-0.15, -0.5, k), lerp(0.1, 0.34, k)];
+    P.off = [lerp(0, -3.4, k), 0];
+  } else if (u < S){
+    const k = clamp((u - W) / (S - W), 0, 1);
+    const kk = smooth(k);                                 // fastest mid-swing
+    P.ra = [lerp(back, thru, kk), lerp(1.15, 0.2, kk)];   // elbow snaps straight
+    P.la = [lerp(-0.85, 0.5, kk), lerp(0.8, 1.0, kk)];
+    P.lean = lerp(-0.26, 0.44, kk);
+    P.head = lerp(-0.2, -0.26, kk);
+    P.hip = lerp(22.6, 21.4, kk);
+    P.ll = [lerp(0.42, 0.62, kk), 0.14];
+    P.rl = [lerp(-0.5, -0.72, kk), lerp(0.34, 0.42, kk)];
+    P.off = [lerp(-3.4, 5.6, kk), 0];
+  } else {
+    const k = clamp((u - S) / (1 - S), 0, 1);
+    const kk = easeOut(k);
+    const wob = Math.sin(k * Math.PI) * 0.16;             // follow-through wobble
+    P.ra = [lerp(thru + TAU, -0.5, kk) + wob, lerp(0.2, 0.55, kk)];
+    P.la = [lerp(0.5, 0.3, kk), lerp(1.0, 0.8, kk)];
+    P.lean = lerp(0.44, 0.04, kk) - wob * 0.9;
+    P.head = lerp(-0.26, -0.05, kk);
+    P.hip = lerp(21.4, 23.4, kk);
+    P.ll = [lerp(0.62, 0.15, kk), 0.12];
+    P.rl = [lerp(-0.72, -0.15, kk), lerp(0.42, 0.1, kk)];
+    P.off = [lerp(5.6, 0, kk), 0];
+  }
   return P;
 }
 /* Shoulder charge: down low, leading shoulder, legs trailing. */
 function poseCharge(f, t){
-  const P = basePose();
-  P.hip = 19.5;
-  P.lean = 0.62;
-  P.head = -0.3;
-  P.la = [1.5, 0.25]; P.ra = [0.4, 1.5];
-  const s = Math.sin(t * 22 + f.ph);
-  P.ll = [0.9 + s * 0.3, 0.5]; P.rl = [-0.7 - s * 0.3, 0.9];
+  /* a sprint: longer stride, higher knees, the leading shoulder driven
+     forward and the head tucked in behind it */
+  const P = poseWalk(f, t, 1, { stride: 1.5, lift: 2.2, lean: 0.62, arms: 0 });
+  P.head = -0.34;
+  P.headY = -0.6;
+  P.la = [1.75, 0.3];                    // leading arm braced
+  P.ra = [-1.15, 1.5];                   // trailing arm cocked back
+  P.hip -= 1.6;                          // dropped into the charge
+  P.shX = 1.2;
   return P;
 }
 /* Overarm lob of a gas canister. */
 function poseLob(f, u){
   const P = basePose();
-  const wind = clamp(u / 0.4, 0, 1);
-  const th = clamp((u - 0.4) / 0.3, 0, 1);
-  P.ra = [lerp(-0.6, -2.7, wind) + th * 3.4, 0.4 + (1 - th) * 0.6];
-  P.la = [0.9 - th * 0.6, 0.7];
-  P.lean = lerp(-0.2, 0.3, th);
-  P.head = -0.2 + th * 0.1;
-  P.ll = [0.3, 0.12]; P.rl = [-0.4, 0.2];
+  const W = 0.34, S = 0.58;
+  if (u < W){
+    const k = smooth(clamp(u / W, 0, 1));
+    P.ra = [lerp(-0.5, -2.75, k), lerp(0.5, 1.2, k)];
+    P.la = [lerp(0.3, 0.95, k), 0.7];
+    P.lean = lerp(0.04, -0.26, k);
+    P.head = lerp(-0.05, -0.24, k);
+    P.hip = lerp(23.4, 22.8, k);
+    P.ll = [0.36, 0.12]; P.rl = [-0.44, 0.22];
+    P.off = [lerp(0, -2.4, k), 0];
+  } else if (u < S){
+    const k = easeIn(clamp((u - W) / (S - W), 0, 1)) * 0.5 + clamp((u - W) / (S - W), 0, 1) * 0.5;
+    P.ra = [lerp(-2.75, -4.6, k), lerp(1.2, 0.25, k)];
+    P.la = [lerp(0.95, 0.2, k), 0.7];
+    P.lean = lerp(-0.26, 0.3, k);
+    P.head = lerp(-0.24, -0.1, k);
+    P.hip = lerp(22.8, 22.2, k);
+    P.ll = [lerp(0.36, 0.6, k), 0.12]; P.rl = [lerp(-0.44, -0.62, k), 0.3];
+    P.off = [lerp(-2.4, 3.6, k), 0];
+  } else {
+    const k = easeOut(clamp((u - S) / (1 - S), 0, 1));
+    P.ra = [lerp(-4.6 + TAU, -0.5, k), lerp(0.25, 0.5, k)];
+    P.la = [lerp(0.2, 0.3, k), 0.7];
+    P.lean = lerp(0.3, 0.04, k);
+    P.head = lerp(-0.1, -0.05, k);
+    P.hip = lerp(22.2, 23.4, k);
+    P.ll = [lerp(0.6, 0.15, k), 0.12]; P.rl = [lerp(-0.62, -0.15, k), lerp(0.3, 0.1, k)];
+    P.off = [lerp(3.6, 0, k), 0];
+  }
   return P;
 }
 /* Reaching down to cuff someone. */
 function poseCuffMove(f, u){
   const P = basePose();
-  const d = Math.sin(clamp(u, 0, 1) * Math.PI);
-  P.hip = 22 - 7 * d;
-  P.lean = 0.5 * d;
-  P.head = -0.25 * d;
-  P.la = [1.9 * d + 0.3, 0.4]; P.ra = [2.1 * d - 0.2, 0.35];
-  P.ll = [0.75 * d + 0.15, 0.9 * d]; P.rl = [-0.6 * d - 0.15, 0.7 * d];
+  /* a short rock back, then a fast drop onto one knee to grab a collar */
+  const anticip = Math.max(0, 1 - Math.abs(u - 0.1) / 0.14);
+  const d = u < 0.24 ? 0 : Math.sin(clamp((u - 0.24) / 0.76, 0, 1) * Math.PI);
+  const drop = u < 0.24 ? 0 : easeIn(clamp((u - 0.24) / 0.2, 0, 1));
+  P.hip = 23.4 + anticip * 0.8 - 8.5 * Math.max(d, drop * 0.9);
+  P.lean = -0.14 * anticip + 0.58 * d;
+  P.head = 0.06 * anticip - 0.3 * d;
+  P.la = [0.3 + 1.9 * d - 0.3 * anticip, lerp(0.7, 0.35, d)];
+  P.ra = [-0.2 + 2.25 * d - 0.3 * anticip, lerp(0.6, 0.3, d)];
+  P.ll = [0.15 + 0.85 * d, 1.15 * d]; P.rl = [-0.15 - 0.7 * d, 0.9 * d];
+  P.off = [-1.6 * anticip + 3.4 * d, 0];
   return P;
 }
 /* Farmer swings: a big slow overhead with whatever is in their hands. */
+/* Farmers telegraph hard — a long slow wind-up is what makes their swing
+   dodgeable, and a farm tool is heavy, so it drags the whole body with it. */
 function poseFarmSwing(f, u, kind){
   const P = basePose();
-  const wind = clamp(u / 0.42, 0, 1);
-  const strike = clamp((u - 0.42) / 0.2, 0, 1);
-  const sw = strike * strike * (3 - 2 * strike);
   if (kind === 'poke'){
-    const th = clamp((u - 0.35) / 0.18, 0, 1);
-    P.ra = [lerp(-0.2, 1.45, th), lerp(1.5, 0.15, th)];
-    P.la = [lerp(0.4, 1.2, th), 0.7];
-    P.lean = lerp(-0.12, 0.3, th);
-    P.off = [lerp(-2, 5, th), 0];
-  } else {
-    P.ra = [lerp(lerp(-0.4, -2.8, wind), 1.7, sw), 0.3];
-    P.la = [lerp(lerp(-0.1, -2.4, wind), 1.4, sw), 0.35];
-    P.lean = lerp(-0.3 * wind, 0.42, sw);
-    P.off = [lerp(-3, 4, sw), 0];
+    /* pitchfork: draw the shaft back past the hip, then lunge */
+    const W = 0.40, S = 0.56;
+    if (u < W){
+      const k = smooth(clamp(u / W, 0, 1));
+      P.ra = [lerp(-0.28, -0.95, k), lerp(1.55, 1.9, k)];
+      P.la = [lerp(0.15, -0.35, k), lerp(1.15, 1.5, k)];
+      P.lean = lerp(0.04, -0.2, k);
+      P.off = [lerp(0, -3.2, k), 0];
+      P.hip = lerp(23.4, 22.8, k);
+      P.ll = [lerp(0.15, 0.4, k), 0.12]; P.rl = [lerp(-0.15, -0.5, k), lerp(0.1, 0.3, k)];
+    } else if (u < S){
+      const k = easeIn(clamp((u - W) / (S - W), 0, 1)) * 0.4 + clamp((u - W) / (S - W), 0, 1) * 0.6;
+      P.ra = [lerp(-0.95, 1.42, k), lerp(1.9, 0.18, k)];
+      P.la = [lerp(-0.35, 1.15, k), lerp(1.5, 0.5, k)];
+      P.lean = lerp(-0.2, 0.36, k);
+      P.off = [lerp(-3.2, 6.5, k), 0];
+      P.hip = lerp(22.8, 21.6, k);
+      P.ll = [lerp(0.4, 0.85, k), 0.12]; P.rl = [lerp(-0.5, -0.8, k), lerp(0.3, 0.45, k)];
+    } else {
+      const k = easeOut(clamp((u - S) / (1 - S), 0, 1));
+      P.ra = [lerp(1.42, -0.28, k), lerp(0.18, 1.55, k)];
+      P.la = [lerp(1.15, 0.15, k), lerp(0.5, 1.15, k)];
+      P.lean = lerp(0.36, 0.04, k);
+      P.off = [lerp(6.5, 0, k), 0];
+      P.hip = lerp(21.6, 23.4, k);
+      P.ll = [lerp(0.85, 0.15, k), 0.12]; P.rl = [lerp(-0.8, -0.15, k), lerp(0.45, 0.1, k)];
+    }
+    P.head = -0.06 - Math.sin(clamp(u, 0, 1) * Math.PI) * 0.12;
+    return P;
   }
-  P.head = -0.1 - sw * 0.1;
-  P.hip = 22 - sw * 1.2;
-  P.ll = [0.45, 0.14]; P.rl = [-0.45 - sw * 0.2, 0.18];
+  /* overhead chop with both hands, same arc rule as the baton */
+  const W = 0.44, S = 0.62;
+  const back = -2.75, thru = -5.5;
+  if (u < W){
+    const k = smooth(clamp(u / W, 0, 1));
+    P.ra = [lerp(-0.3, back, k), lerp(1.5, 0.95, k)];
+    P.la = [lerp(0.1, back + 0.45, k), lerp(1.1, 0.8, k)];
+    P.lean = lerp(0.04, -0.32, k);
+    P.hip = lerp(23.4, 22.4, k);
+    P.ll = [lerp(0.15, 0.45, k), 0.12]; P.rl = [lerp(-0.15, -0.55, k), lerp(0.1, 0.36, k)];
+    P.off = [lerp(0, -3.6, k), 0];
+  } else if (u < S){
+    const kr = clamp((u - W) / (S - W), 0, 1);
+    const k = easeIn(kr) * 0.4 + kr * 0.6;
+    P.ra = [lerp(back, thru, k), lerp(0.95, 0.2, k)];
+    P.la = [lerp(back + 0.45, thru + 0.4, k), lerp(0.8, 0.25, k)];
+    P.lean = lerp(-0.32, 0.5, k);
+    P.hip = lerp(22.4, 21, k);
+    P.ll = [lerp(0.45, 0.66, k), 0.14]; P.rl = [lerp(-0.55, -0.78, k), lerp(0.36, 0.44, k)];
+    P.off = [lerp(-3.6, 5.2, k), 0];
+  } else {
+    const k = easeOut(clamp((u - S) / (1 - S), 0, 1));
+    const wob = Math.sin(k * Math.PI) * 0.14;
+    P.ra = [lerp(thru + TAU, -0.3, k) + wob, lerp(0.2, 1.5, k)];
+    P.la = [lerp(thru + 0.4 + TAU, 0.1, k) + wob, lerp(0.25, 1.1, k)];
+    P.lean = lerp(0.5, 0.04, k) - wob;
+    P.hip = lerp(21, 23.4, k);
+    P.ll = [lerp(0.66, 0.15, k), 0.12]; P.rl = [lerp(-0.78, -0.15, k), lerp(0.44, 0.1, k)];
+    P.off = [lerp(5.2, 0, k), 0];
+  }
+  P.head = -0.08 - Math.sin(clamp(u, 0, 1) * Math.PI) * 0.14;
   return P;
 }
 /* Coughing their lungs out in the gas. */
@@ -915,13 +1143,51 @@ function poseCough(f, t){
    ploughing the tarmac with it. */
 function carry(P, f){
   if (!f.weapon || f.kind === 'cop') return P;
-  P.ra = [-0.28 + P.ra[0] * 0.15, 1.55];
-  P.la = [0.15 + P.la[0] * 0.2, 1.15];
+  /* a carried tool damps the arm swing without killing it — a farmer whose
+     arms are welded to his chest walks like a shop dummy */
+  P.ra = [-0.28 + P.ra[0] * 0.4, 1.55 - Math.max(0, P.ra[0]) * 0.3];
+  P.la = [0.15 + P.la[0] * 0.45, 1.15 - Math.max(0, P.la[0]) * 0.25];
   return P;
 }
 
-/* Picks the pose for whatever this body is doing right now. */
+/* Blends two poses.  Used to cross-fade the last frame of the old state
+   into the new one, so nothing ever teleports between poses. */
+const POSE_NUM = ['hip', 'lean', 'head', 'headX', 'headY', 'shX', 'sq', 'rot'];
+const POSE_ARM = ['la', 'ra', 'll', 'rl'];
+function blendPose(a, b, k){
+  const P = basePose();
+  for (const n of POSE_NUM) P[n] = lerp(a[n] || 0, b[n] || 0, k);
+  for (const n of POSE_ARM) P[n] = [lerp(a[n][0], b[n][0], k), lerp(a[n][1], b[n][1], k)];
+  P.off = [lerp(a.off[0], b.off[0], k), lerp(a.off[1], b.off[1], k)];
+  P.ground = k > 0.5 ? b.ground : a.ground;
+  return P;
+}
+function copyPose(P){
+  const o = basePose();
+  for (const n of POSE_NUM) o[n] = P[n] || 0;
+  for (const n of POSE_ARM) o[n] = [P[n][0], P[n][1]];
+  o.off = [P.off[0], P.off[1]];
+  o.ground = P.ground;
+  return o;
+}
+
+/* Picks the pose for whatever this body is doing right now, then cross-fades
+   out of whatever it was doing a moment ago. */
 function poseFor(f){
+  const raw = poseRaw(f);
+  if (f._state !== f.state){
+    if (f._pose) { f._from = f._pose; f._blend = 0; }
+    f._state = f.state;
+  }
+  let P = raw;
+  if (f._from && f._blend < 1){
+    P = blendPose(f._from, raw, smooth(clamp(f._blend, 0, 1)));
+  }
+  f._pose = copyPose(P);
+  return P;
+}
+
+function poseRaw(f){
   const t = T;
   switch (f.state){
     case 'hurt': return poseHurt(f, clamp(1 - f.stateT / Math.max(0.01, f.hurtLen), 0, 1));
@@ -986,7 +1252,7 @@ function paintBody(f, P, g){
   if (!lite) blob(g.hip[0], g.hip[1], bodyW * 0.72, bodyW * 0.55, legC, ink, 0);
   const mid = [(g.hip[0] + g.sh[0]) / 2, (g.hip[1] + g.sh[1]) / 2];
   const ang = Math.atan2(g.sh[1] - g.hip[1], g.sh[0] - g.hip[0]) - Math.PI / 2;
-  const front = dirx(P.lean + 1.57);
+  const front = 1;
   if (cop){
     blob(mid[0], mid[1], bodyW, g.tl * 0.62 + 1.5, c.uni, ink, ang);
     blob(mid[0], mid[1] + 1, bodyW * 0.84, g.tl * 0.5, c.vest, null, ang);
@@ -1019,20 +1285,33 @@ function paintBody(f, P, g){
 function paintHead(f, P, g){
   const c = f.pal, ink = INK, r = RIG.headR * (f.build.head || 1);
   const a = P.lean + (P.head || 0);
-  const fwd = [dirx(a + 1.57), diry(a + 1.57)];
-  /* head */
-  blob(g.head[0], g.head[1], r * 0.96, r, c.skin, ink, a);
-  /* ear */
-  if (!f.lite) blob(g.head[0] - fwd[0] * r * 0.8, g.head[1] - fwd[1] * r * 0.8, 1.3, 1.7, shade(c.skin, -0.2), null, a);
-  /* face */
-  const shut = f.state === 'down' || f.state === 'cuffed' || f.state === 'dizzy' || f.hurtT > 0.05;
-  const eyeAt = (dx, dy) => [
-    g.head[0] + fwd[0] * (r * dx) + -fwd[1] * (r * dy),
-    g.head[1] + fwd[1] * (r * dx) + fwd[0] * (r * dy),
+  const fwd = [facex(a), facey(a)];
+  const up = [upx(a), upy(a)];
+  const at = (fx, uy) => [
+    g.head[0] + fwd[0] * r * fx + up[0] * r * uy,
+    g.head[1] + fwd[1] * r * fx + up[1] * r * uy,
   ];
-  const e1 = eyeAt(0.34, 0.3), e2 = eyeAt(0.34, -0.16);
+  const lag = f.hatLag || 0;
+
+  /* head, then hair, THEN the face — hair painted last covers the eyes,
+     which is exactly how every farmer ended up faceless */
+  blob(g.head[0], g.head[1], r * 0.96, r, c.skin, ink, a);
+  if (!f.lite){
+    const ear = at(-0.8, 0);
+    blob(ear[0], ear[1], 1.3, 1.7, shade(c.skin, -0.2), null, a);
+  }
+  if (f.kind !== 'cop'){
+    const hair = at(-0.12, 0.66);
+    blob(hair[0], hair[1], r * 0.9, r * 0.5, c.hair, ink, a);
+  }
+
+  /* eyes: two dots, or squeezed shut when they have had enough */
+  const shut = f.state === 'down' || f.state === 'cuffed' || f.state === 'dizzy'
+    || f.hurtT > 0.05 || f.blink > 0;
+  const e1 = at(0.34, 0.3), e2 = at(0.34, -0.16);
   if (shut){
-    strokeSegs([[[e1[0] - 1.3, e1[1]], [e1[0] + 1.3, e1[1]]], [[e2[0] - 1.3, e2[1]], [e2[0] + 1.3, e2[1]]]], 1.4, '#2a1c30');
+    strokeSegs([[[e1[0] - 1.3, e1[1]], [e1[0] + 1.3, e1[1]]],
+      [[e2[0] - 1.3, e2[1]], [e2[0] + 1.3, e2[1]]]], 1.4, '#2a1c30');
   } else {
     ctx.fillStyle = '#2a1c30';
     ctx.beginPath();
@@ -1040,45 +1319,99 @@ function paintHead(f, P, g){
     ctx.ellipse(e2[0], e2[1], 1.15, 1.5, 0, 0, TAU);
     ctx.fill();
   }
-  /* nose */
-  if (!f.lite) blob(g.head[0] + fwd[0] * r * 0.88 - fwd[1] * -1.2, g.head[1] + fwd[1] * r * 0.88 + fwd[0] * -1.2, 1.7, 1.4, shade(c.skin, -0.14), null, a);
-  /* mouth */
-  const openMouth = f.state === 'hurt' || f.state === 'attack' || f.state === 'cough' || f.state === 'launch';
-  const mx = g.head[0] + fwd[0] * r * 0.62 - fwd[1] * r * -0.42;
-  const my = g.head[1] + fwd[1] * r * 0.62 + fwd[0] * r * -0.42;
-  if (openMouth) blob(mx, my, 1.8, 2.2, '#7a2a3a', null, a);
-  else if (!f.lite) capsule([mx - 1.2, my], [mx + 1.4, my - 0.6], 1.2, '#7a3a44', null);
+  if (!f.lite){
+    const nose = at(0.88, -0.16);
+    blob(nose[0], nose[1], 1.7, 1.4, shade(c.skin, -0.14), null, a);
+  }
+  /* the grunt is only open while the blow is actually being thrown */
+  const el = f.atk ? f.atk.dur - f.stateT : 0;
+  const swinging = f.state === 'attack' && f.atk && f.atk.dmg > 0
+    && el > f.atk.dur * 0.26 && el < f.atk.dur * 0.78;
+  const openMouth = f.state === 'hurt' || swinging || f.state === 'cough' || f.state === 'launch';
+  const m = at(0.62, -0.46);
+  if (openMouth) blob(m[0], m[1], 1.8, 2.2, '#7a2a3a', null, a);
+  else if (!f.lite) capsule([m[0] - 1.2, m[1]], [m[0] + 1.4, m[1] - 0.6], 1.2, '#7a3a44', null);
 
   if (f.kind === 'cop'){
-    /* peaked cap: dome, band, peak, badge */
-    const cx = g.head[0] - fwd[1] * r * 0.9, cy = g.head[1] + fwd[0] * r * 0.9;
-    blob(cx, cy, r * 1.06, r * 0.62, c.cap, ink, a);
-    capsule([cx - fwd[1] * r * 0.6 - fwd[0] * r * 0.9, cy + fwd[0] * r * 0.6 - fwd[1] * r * 0.9],
-      [cx + fwd[0] * r * 1.55, cy + fwd[1] * r * 1.55], 2.6, shade(c.cap, -0.25), ink);
-    blob(cx + fwd[0] * r * 0.55, cy + fwd[1] * r * 0.55, 1.6, 1.4, c.badge, null, a);
+    /* peaked cap: dome, band, peak, badge — set a touch behind the head so
+       it swings a beat after the head does */
+    const cap = at(-lag * 0.5, 0.9);
+    blob(cap[0], cap[1], r * 1.06, r * 0.62, c.cap, ink, a);
+    capsule([cap[0] - fwd[0] * r * 0.5 - up[0] * r * 0.2, cap[1] - fwd[1] * r * 0.5 - up[1] * r * 0.2],
+      [cap[0] + fwd[0] * r * 1.55 - up[0] * r * 0.25, cap[1] + fwd[1] * r * 1.55 - up[1] * r * 0.25],
+      2.6, shade(c.cap, -0.25), ink);
+    blob(cap[0] + fwd[0] * r * 0.55, cap[1] + fwd[1] * r * 0.55, 1.6, 1.4, c.badge, null, a);
   } else {
-    /* farmer headgear: straw hat, flat cap, bandana or nothing but hair */
-    const cx = g.head[0] - fwd[1] * r * 0.62, cy = g.head[1] + fwd[0] * r * 0.62;
-    blob(g.head[0] - fwd[1] * r * 0.42, g.head[1] + fwd[0] * r * 0.42, r * 0.92, r * 0.62, c.hair, ink, a);
+    const hat = at(-lag * 0.55, 0.72);
     if (f.hat === 0){
-      capsule([cx - fwd[0] * r * 1.15, cy - fwd[1] * r * 1.15], [cx + fwd[0] * r * 1.35, cy + fwd[1] * r * 1.35], 2.4, '#e0c169', ink);
-      blob(cx + fwd[0] * r * 0.1, cy + fwd[1] * r * 0.1, r * 0.62, r * 0.48, '#e8cd7c', ink, a);
+      /* straw hat: brim across, crown on top */
+      capsule([hat[0] - fwd[0] * r * 1.15, hat[1] - fwd[1] * r * 1.15],
+        [hat[0] + fwd[0] * r * 1.35, hat[1] + fwd[1] * r * 1.35], 2.4, '#e0c169', ink);
+      blob(hat[0] + up[0] * r * 0.22, hat[1] + up[1] * r * 0.22, r * 0.62, r * 0.46, '#e8cd7c', ink, a);
     } else if (f.hat === 1){
-      blob(cx, cy - 0.3, r * 0.8, r * 0.45, '#5a6b7a', ink, a);
-      capsule([cx, cy + 0.4], [cx + fwd[0] * r * 1.1, cy + fwd[1] * r * 1.1], 2, '#48596a', ink);
+      blob(hat[0], hat[1], r * 0.82, r * 0.46, '#5a6b7a', ink, a);
+      capsule([hat[0], hat[1]], [hat[0] + fwd[0] * r * 1.1, hat[1] + fwd[1] * r * 1.1], 2, '#48596a', ink);
     } else if (f.hat === 2){
-      blob(cx, cy, r * 0.78, r * 0.42, '#c9553f', ink, a);
+      blob(hat[0], hat[1], r * 0.78, r * 0.42, '#c9553f', ink, a);
     }
-    /* beard */
     if (f.beard && !f.lite){
-      blob(g.head[0] + fwd[0] * r * 0.5 - fwd[1] * r * -0.75, g.head[1] + fwd[1] * r * 0.5 + fwd[0] * r * -0.75,
-        r * 0.62, r * 0.62, c.hair, ink, a);
+      const bd = at(0.4, -0.85);
+      blob(bd[0], bd[1], r * 0.54, r * 0.4, c.hair, ink, a);
     }
   }
 }
 
 /* Whatever they are holding, drawn into the near hand. */
 const WEAPON_TILT = { baton: -0.35, pitchfork: -0.85, pickaxe: -0.7, rake: -0.85, sign: -1.15, shovel: -0.75 };
+const WEAPON_LEN = { baton: 17, pitchfork: 27, pickaxe: 24, rake: 26, sign: 26, shovel: 26 };
+
+/* Where the tip of a held tool is, in rig space. */
+function weaponTip(f, P, g){
+  const h = g.ra.e;
+  const a = P.lean + P.ra[0] + P.ra[1] + (WEAPON_TILT[f.weapon] || 0);
+  const len = WEAPON_LEN[f.weapon] || 16;
+  return [h[0] + dirx(a) * len, h[1] + diry(a) * len];
+}
+
+/* The swoosh.  A swing that leaves nothing behind reads as a pose change;
+   the arc the tip cut through the air is most of why a hit looks fast. */
+function pushTrail(f, tip, hand, sx, sy, s){
+  if (!f.trail) f.trail = [];
+  const flip = f.face < 0 ? -1 : 1;
+  f.trail.push({
+    x: sx + tip[0] * s * flip, y: sy - tip[1] * s,
+    hx: sx + hand[0] * s * flip, hy: sy - hand[1] * s, t: T,
+  });
+  while (f.trail.length > 10) f.trail.shift();
+}
+/* The swoosh, drawn as a ribbon between where the hand was and where the
+   tip was — a stroked line reads as a wire, a filled sweep reads as speed. */
+function drawTrail(f){
+  const tr = f.trail;
+  if (!tr || tr.length < 3) return;
+  const live = tr.filter((q) => T - q.t < 0.16);
+  if (live.length < 3) return;
+  ctx.save();
+  for (let pass = 0; pass < 2; pass++){
+    ctx.beginPath();
+    ctx.moveTo(live[0].x, live[0].y);
+    for (let i = 1; i < live.length; i++) ctx.lineTo(live[i].x, live[i].y);
+    for (let i = live.length - 1; i >= 0; i--){
+      const q = live[i];
+      /* pass 0 is the whole sweep, pass 1 a bright core along the tip */
+      const k = pass ? 0.72 : 0;
+      ctx.lineTo(lerp(q.hx, q.x, k), lerp(q.hy, q.y, k));
+    }
+    ctx.closePath();
+    ctx.fillStyle = pass ? 'rgba(255,250,232,.6)' : 'rgba(255,216,150,.38)';
+    ctx.fill();
+  }
+  /* and a hard leading edge on the newest frame */
+  const a = live[live.length - 1], b2 = live[live.length - 2];
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(a.hx, a.hy); ctx.lineTo(a.x, a.y); ctx.stroke();
+  ctx.restore();
+}
 function paintWeapon(f, P, g){
   const h = g.ra.e, ink = INK;
   /* tools are carried tilted forward-up; without this everyone drags their
@@ -1173,9 +1506,20 @@ function drawFighter(f){
   ctx.scale(s * (f.face < 0 ? -1 : 1), s);
   ctx.scale(1, -1);                       // rig space is y-up from here on
   if (P.rot) ctx.rotate(P.rot);           // +rot tips forward, -rot onto the back
-  if (f.squash) ctx.scale(1 + f.squash * 0.5, 1 - f.squash * 0.35);
+  const sq = clamp(f.sq || 0, -0.4, 0.4);
+  if (sq) ctx.scale(1 - sq * 0.9, 1 + sq);
   paintBody(f, P, g);
   ctx.restore();
+
+  /* record the tool tip while swinging, and paint the arc it left */
+  if (f.weapon && f.state === 'attack' && f.atk && f.atk.dmg > 0){
+    pushTrail(f, weaponTip(f, P, g), g.ra.e, sx, sy - f.z, s);
+  } else if (f.trail && f.trail.length) {
+    f.trail.length = 0;
+  }
+  /* the officer's arc is painted after everybody else, so a farmer standing
+     in front of him can never swallow the one cue that says "that was fast" */
+  if (f.kind !== 'cop') drawTrail(f);
 
   /* hit flash: a white bloom over torso and head, not a second full body */
   if (f.flash > 0){
@@ -1347,6 +1691,7 @@ function startAttack(f, name){
   if (!a) return false;
   f.state = 'attack'; f.stateT = a.dur; f.atk = a; f.atkName = name;
   f.didHit = {}; f.threw = false; f.cuffed = false; f.lunged = false;
+  if (f.trail) f.trail.length = 0;
   if (a.sfx) snd('swing');
   return true;
 }
@@ -1437,6 +1782,7 @@ function applyHit(src, tgt, a, opts){
   if (tgt.kind === 'cop' && tgt.dashT > 0) dmg *= 0.4;      // charging shrugs things off
   tgt.hp -= dmg;
   tgt.flash = 0.16;
+  squashHit(tgt, 0.10 + (a.pow || 0.6) * 0.09);
   tgt.hitBy = T;
   const dir = opts.dir || src.face;
   const sx = src.x == null ? tgt.x - dir * 12 : src.x;
@@ -1461,7 +1807,9 @@ function applyHit(src, tgt, a, opts){
     launchBody(tgt, dir, a.up || 150, kb * 1.5);
     snd('launch');
   } else {
-    tgt.state = 'hurt'; tgt.stateT = 0.24 + pow * 0.1; tgt.hurtLen = tgt.stateT; tgt.hurtT = tgt.stateT;
+    /* a little variance so a crowd taking hits does not flinch in unison */
+    tgt.state = 'hurt'; tgt.stateT = (0.24 + pow * 0.1) * rnd(0.85, 1.2);
+    tgt.hurtLen = tgt.stateT; tgt.hurtT = tgt.stateT;
     tgt.stun = 0.1;
   }
 
@@ -1469,9 +1817,10 @@ function applyHit(src, tgt, a, opts){
   const hx = lerp(sx, tgt.x, 0.6), hy = tgt.y, hz = tgt.z + 32;
   G.hitstop = Math.min(0.12, Math.max(G.hitstop, 0.035 + pow * 0.05));
   shake(2 + pow * 5, 0.1 + pow * 0.14);
+  if (src.kind === 'cop') camKick(dir, clamp(pow * 0.5, 0.1, 0.9));
   if (src.kind === 'cop'){
     spawnFx('ring', hx, hy, hz, { pow });
-    spawnFx('spark', hx, hy, hz, { n: 4 + Math.round(pow * 6), col: '#fff2c8' });
+    spawnFx('spark', hx, hy, hz, { n: 4 + Math.round(pow * 6), col: '#fff2c8', dir });
     if (G.blood && pow > 0.55) spawnFx('blood', hx, hy, hz, { n: 3 + Math.round(pow * 5), dir });
     if (pow >= 0.85) spawnFx('pop', hx, hy, hz + 12, { txt: pick(pow > 1.2 ? ['KA-BONK!', 'WHUMP!', 'SPLAT!'] : ['BONK!', 'WHACK!', 'THWAP!', 'DOINK!']) });
     G.flash = Math.max(G.flash, pow > 1.2 ? 0.22 : 0);
@@ -1659,7 +2008,7 @@ function spawnFx(kind, x, y, z, o){
     fx.push({
       kind, x, y, z, t: 0,
       life: o.life || (kind === 'pop' ? 0.85 : kind === 'ring' ? 0.3 : kind === 'smoke' ? 1.6 : rnd(0.3, 0.7)),
-      vx: o.vx != null ? o.vx : (kind === 'blood' ? (o.dir || 1) * rnd(40, 180) : rnd(-70, 70)),
+      vx: o.vx != null ? o.vx : (o.dir ? o.dir * rnd(30, 190) + rnd(-40, 40) : rnd(-70, 70)),
       vy: rnd(-18, 18) * 0.4,
       vz: kind === 'smoke' ? rnd(6, 22) : rnd(20, 150),
       col: o.col || (kind === 'blood' ? '#c8324a' : '#fff2c8'),
@@ -1701,15 +2050,24 @@ function shake(mag, dur){
   cam.shake = Math.max(cam.shake, mag);
   cam.shakeT = Math.max(cam.shakeT, dur);
 }
+/* A shove of the whole frame along the blow.  Random shake says "something
+   happened"; a directional kick says "it went that way". */
+function camKick(dir, mag){
+  cam.kxv -= dir * mag * 210;
+  cam.kyv -= mag * 70;
+}
 
 /* ------------------------------------------------------- fighter update */
+const BLEND_TIME = 0.085;                 // seconds to cross-fade a state change
 function updateFighter(f, dt){
   f.flash = Math.max(0, f.flash - dt * 4);
+  if (f._blend != null && f._blend < 1) f._blend = Math.min(1, f._blend + dt / BLEND_TIME);
+  else if (f._blend == null) f._blend = 1;
+  springTick(f, dt);
   f.stun = Math.max(0, f.stun - dt);
   f.cd = Math.max(0, f.cd - dt);
   f.invuln = Math.max(0, f.invuln - dt);
   f.hurtT = Math.max(0, f.hurtT - dt);
-  f.squash = Math.max(0, f.squash - dt * 4);
   if (f.chainT > 0){ f.chainT -= dt; if (f.chainT <= 0) f.chain = 0; }
   if (f.stateT < 90) f.stateT -= dt;
 
@@ -1724,6 +2082,7 @@ function updateFighter(f, dt){
       if (f.z <= 0 && f.vz < 0){
         f.z = 0;
         spawnFx('dust', f.x, f.y, 0, { n: 6 });
+        squashHit(f, clamp(Math.abs(f.vz) / 700, 0.08, 0.34));
         if (Math.abs(f.vz) > 220 && !f.bounced){
           f.bounced = true;
           f.vz = Math.abs(f.vz) * 0.32; f.vx *= 0.55;
@@ -1731,6 +2090,7 @@ function updateFighter(f, dt){
           if (G.blood && f.dead) spawnFx('blood', f.x, f.y, 4, { n: 4, dir: sign(f.vx) || 1 });
         } else {
           f.vz = 0; f.spin = 0; f.bounced = false;
+          squashHit(f, 0.26);
           f.state = 'down'; f.stateT = 99; f.downT = 0;
           f.vx *= 0.3;
           snd('thud'); shake(3, 0.1);
@@ -1783,8 +2143,35 @@ function updateFighter(f, dt){
   /* the walk cycle only advances when feet are actually moving */
   const sp = Math.hypot(f.vx, f.vy * 1.6);
   f.spd = clamp(sp / 110, 0, 1.4);
-  if (f.state === 'walk' || (f.state === 'charge')) f.walk += dt * (5.5 + f.spd * 5.5);
+  if (f.state === 'walk') advanceWalk(f, dt, depthScale(f.y) * (f.build.size || 1));
+  else if (f.state === 'charge') advanceWalk(f, dt, depthScale(f.y) * (f.build.size || 1), 1.5);
   else f.walk = lerp(f.walk, Math.round(f.walk / Math.PI) * Math.PI, dt * 8);
+}
+
+/* Secondary motion.  Three critically-ish damped springs: one squashes the
+   body on impact, one lets the hat lag behind the head, one gives a heavy
+   body a bit of follow-through when it stops.  None of them are simulated
+   accurately and all of them read instantly. */
+function spring(cur, vel, target, stiff, damp, dt){
+  const a = (target - cur) * stiff - vel * damp;
+  vel += a * dt;
+  cur += vel * dt;
+  return [cur, vel];
+}
+function springTick(f, dt){
+  let r = spring(f.sq || 0, f.sqV || 0, 0, 260, 15, dt);
+  f.sq = r[0]; f.sqV = r[1];
+  const targetLag = clamp(-(f.vx || 0) * f.face * 0.006, -0.5, 0.5);
+  r = spring(f.hatLag || 0, f.hatLagV || 0, targetLag, 170, 13, dt);
+  f.hatLag = r[0]; f.hatLagV = r[1];
+  /* blink: a couple of frames every few seconds, never in lockstep */
+  f.blinkT = (f.blinkT == null ? rng() * 4 : f.blinkT) - dt;
+  if (f.blinkT <= 0){ f.blinkT = rnd(2.4, 6.5); f.blink = 0.12; }
+  f.blink = Math.max(0, (f.blink || 0) - dt);
+}
+/* One hit's worth of squash, aimed along the blow. */
+function squashHit(f, amount){
+  f.sqV = (f.sqV || 0) - amount * 26;
 }
 
 function makeDizzy(f, dur){
@@ -2322,6 +2709,8 @@ function cameraTick(dt){
     cam.tx = clamp(p.x - VW * 0.42, arenaX0(W.i), arenaX0(next));
   }
   cam.x = lerp(cam.x, cam.tx, 1 - Math.pow(0.001, dt));
+  let r = spring(cam.kx, cam.kxv, 0, 320, 19, dt); cam.kx = r[0]; cam.kxv = r[1];
+  r = spring(cam.ky, cam.kyv, 0, 320, 19, dt); cam.ky = r[0]; cam.kyv = r[1];
   if (cam.shakeT > 0){
     cam.shakeT -= dt;
     cam.shake = Math.max(0, cam.shake - dt * 26);
@@ -2558,50 +2947,62 @@ function drawCrowd(){
     if (c.used) continue;
     const x = px(c.x);
     if (x < -30 || x > VW + 30) continue;
-    const s = 0.88;
+    /* the verge crowd is drawn in the same proportions as the fighters —
+       they are the same people, they just have not joined in yet */
+    const s = 0.94;
     const t = T * c.bob + c.t;
-    const bob = Math.sin(t * 2.2) * 1.4;
+    const bob = Math.sin(t * 2.2) * 1.6;
     const pal = FARM_SKINS[c.skin];
     const y = c.y + bob;
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(s, s);
-    /* legs + body */
     ctx.strokeStyle = INK; ctx.lineCap = 'round';
-    capsule([-3, 0], [-3, -13], 5.4, pal.deni, INK);
-    capsule([3, 0], [3, -13], 5.4, pal.deni, INK);
-    blob(0, -22, 8.5, 11, pal.shirt, INK, 0);
-    /* the waving arm */
+    /* legs, hips, body */
+    capsule([-3.5, 0], [-3.5, -22], 5.6, pal.deni, INK);
+    capsule([3.5, 0], [3.5, -22], 5.6, pal.deni, INK);
+    blob(0, -24, 7.2, 5, pal.deni, INK, 0);
+    blob(0, -34, 9, 11.5, pal.shirt, INK, 0);
+    blob(0, -30, 8, 6, pal.deni, null, 0);
+    /* the waving arm, and one holding whatever they brought */
     const a = Math.sin(t * 3.1) * 0.5;
-    capsule([5, -27], [11 + a * 4, -36 - a * 6], 4, pal.shirt, INK);
-    capsule([-6, -26], [-11, -18], 4, pal.shirt, INK);
+    capsule([5.5, -41], [12 + a * 4, -52 - a * 6], 4.2, pal.shirt, INK);
+    capsule([-6, -41], [-11.5, -31], 4.2, shade(pal.shirt, -0.22), INK);
     /* head */
-    blob(0, -37, 6.4, 6.8, pal.skin, INK, 0);
+    capsule([0, -43], [0, -50], 4.4, pal.skin, INK);
+    blob(0, -54, 7, 7.4, pal.skin, INK, 0);
+    blob(0, -57, 6.4, 4, pal.hair, INK, 0);
+    ctx.fillStyle = '#2a1c30';
+    ctx.beginPath();
+    ctx.ellipse(2.4, -55, 1.1, 1.4, 0, 0, TAU);
+    ctx.ellipse(5, -55, 1.1, 1.4, 0, 0, TAU);
+    ctx.fill();
     if (c.hat === 0){
-      capsule([-9, -42], [9, -42], 2.4, '#e0c169', INK);
-      blob(0, -44, 5.4, 3.6, '#e8cd7c', INK, 0);
+      capsule([-9.5, -59.5], [9.5, -59.5], 2.6, '#e0c169', INK);
+      blob(1, -61, 5.6, 4, '#e8cd7c', INK, 0);
     } else if (c.hat === 1){
-      blob(0, -42, 6.2, 3.4, '#5a6b7a', INK, 0);
-    } else {
-      blob(0, -42, 6.4, 4.4, pal.hair, INK, 0);
+      blob(0.5, -60, 6.4, 3.6, '#5a6b7a', INK, 0);
+      capsule([2, -60], [9, -59], 2.2, '#48596a', INK);
+    } else if (c.hat === 2){
+      blob(0.5, -60, 6.6, 3.4, '#c9553f', INK, 0);
     }
-    /* placard / flag */
+    /* placard or flag, waving a beat behind the arm */
     if (c.sign){
       const sw = Math.sin(t * 1.7) * 0.12;
-      ctx.save(); ctx.translate(10, -34); ctx.rotate(0.2 + sw);
-      capsule([0, 0], [0, -22], 2.2, '#a8814e', INK);
-      ctx.save(); ctx.translate(0, -30);
-      roundRect(-13, -8, 26, 16, 2, '#f4e3c0', INK, 1.8);
+      ctx.save(); ctx.translate(12, -50); ctx.rotate(0.2 + sw);
+      capsule([0, 0], [0, -24], 2.4, '#a8814e', INK);
+      ctx.save(); ctx.translate(0, -33);
+      roundRect(-14, -9, 28, 18, 2, '#f4e3c0', INK, 1.8);
       ctx.fillStyle = '#6b4a2a';
-      for (let r = 0; r < 3; r++) ctx.fillRect(-9.5, -5 + r * 4, 19 - (r % 2) * 6, 1.8);
+      for (let r = 0; r < 3; r++) ctx.fillRect(-10, -5.5 + r * 4.4, 20 - (r % 2) * 6, 2);
       ctx.restore();
       ctx.restore();
     } else if (c.flag){
       const sw = Math.sin(t * 2.6) * 0.2;
-      ctx.save(); ctx.translate(11, -34); ctx.rotate(0.15 + sw);
-      capsule([0, 0], [0, -26], 1.8, '#8a6a42', INK);
+      ctx.save(); ctx.translate(13, -50); ctx.rotate(0.15 + sw);
+      capsule([0, 0], [0, -28], 2, '#8a6a42', INK);
       ctx.fillStyle = '#4a8c3f';
-      ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(16, -22); ctx.lineTo(0, -17); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, -28); ctx.lineTo(17, -24); ctx.lineTo(0, -19); ctx.closePath(); ctx.fill();
       ctx.restore();
     }
     ctx.restore();
@@ -3038,7 +3439,7 @@ function draw(){
   ctx.setTransform(s, 0, 0, s, 0, 0);
   ctx.clearRect(0, 0, VW, VH);
   ctx.save();
-  if (cam.shake > 0) ctx.translate(camShakeX(), camShakeY());
+  ctx.translate(camShakeX() + cam.kx, camShakeY() + cam.ky);
 
   drawSky();
   drawFields();
@@ -3055,13 +3456,20 @@ function draw(){
   for (const f of fighters) if (!f.hidden) list.push(f);
   for (const it of items) list.push(it);
   list.sort((a, b) => (a.y - b.y) || 0);
+  const hero = players[0];
   for (const o of list){
     if (o.kind === 'cop' || o.kind === 'farmer'){
-      if (o.fade > 0){ ctx.save(); ctx.globalAlpha = clamp(1 - o.fade, 0, 1); drawFighter(o); ctx.restore(); }
+      /* anyone standing in front of the officer and on top of him goes
+         see-through: in a crowd of forty, losing the player is fatal */
+      const veil = hero && !hero.dead && o !== hero && o.y > hero.y
+        && Math.abs(o.x - hero.x) < 26 && o.y - hero.y < 26;
+      const alpha = clamp(1 - (o.fade || 0), 0, 1) * (veil ? 0.42 : 1);
+      if (alpha < 1){ ctx.save(); ctx.globalAlpha = alpha; drawFighter(o); ctx.restore(); }
       else drawFighter(o);
     } else if (o.live !== undefined) drawItem(o);
     else drawProp(o);
   }
+  if (hero) drawTrail(hero);
 
   if (G.phase === 'intro' && INTRO.car) drawCopCar(px(INTRO.car.x), INTRO.car.y, INTRO.t);
   if (BACKUP.on && BACKUP.car) drawCopCar(px(BACKUP.car.x), BACKUP.car.y, BACKUP.t);
