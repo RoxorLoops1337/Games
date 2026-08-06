@@ -1,0 +1,32 @@
+{
+  "id": "rug",
+  "name": "Woven rug",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "d": "#522c39",
+    "m": "#673c47",
+    "b": "#7e4e57",
+    "l": "#96646a",
+    "y": "#c69320"
+  },
+  "rows": [
+    "mmbmmmmdmmmmbmmm",
+    "mbbbmmdddmmbbbmm",
+    "mmbmmmmdmmmmbmmm",
+    "mmmmmmmmmmmmmmmm",
+    "ddmmmyymmmyymmdd",
+    "mmmmmyymmmyymmmm",
+    "mmmmmmmmmmmmmmmm",
+    "mmdmmmmbmmmmdmmm",
+    "mdddmmmbbbmmdddm",
+    "mmdmmmmbmmmmdmmm",
+    "mmmmmmmmmmmmmmmm",
+    "yymmmddmmmddmmyy",
+    "yymmmddmmmddmmyy",
+    "mmmmmmmmmmmmmmmm",
+    "mmmmbmmmmmmdmmmm",
+    "mmmbbbmmmmmdddmm"
+  ]
+}

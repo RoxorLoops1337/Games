@@ -104,9 +104,40 @@ pass where every icon came out looking like a pendant:
   hole and turns a flame into a locket
 - light from the upper left, always
 
+One tone for the whole roster, too. A set of sprites reads as a set when they
+share the colour they are drawn against; fourteen of the nineteen kin already
+used the same near-black violet and the other five each had their own, which is
+enough to make those five look like they wandered in from a different game.
+`tools/spritegrid/outline.mjs` finds the colour each sprite actually uses along
+its *silhouette* — not its darkest entry, which on a dark creature is a body
+tone — and moves that one entry onto the shared one, touching nothing else.
+
+```bash
+node tools/spritegrid/outline.mjs           # report
+node tools/spritegrid/outline.mjs --write   # fix the strays
+```
+
 The art suite enforces the mechanical half: 20×20, the shared outline colour,
 no orphan pixels, a silhouette that is actually outlined, and a fill somewhere
 between floating and bursting out of the frame.
+
+### Panels
+
+A panel is a lit object, not a rounded rectangle, and three things do the work
+without costing a pixel of canvas: a top-light gradient so the surface has a
+direction, a hairline *inside* the border so the frame reads as two materials
+rather than one stroke, and a shadow with warm violet in it rather than flat
+black — which is what stops the UI looking like it was cut from a different
+picture than the valley behind it.
+
+An HP bar is a track with something in it, not a coloured div: a recessed
+channel, a fill lit along its top edge, and a bright cap at the head of the fill
+so the eye finds where it ends at a glance.
+
+Interiors are floorboards rather than a dirt track laid indoors, with a rug set
+back from the door. The rug is one object, so it is a *seamless* weave and
+`drawEdges` puts the gold hem around wherever it happens to stop — the first
+version gave every rug tile its own frame and read as six coasters.
 
 ## Controls
 

@@ -250,6 +250,44 @@ gKdmggggeggKdmgg
 gKdmgggggggKdmgg
 ggeggggggggggegg
 gggggggegggggggg`],
+  floor: ['Floorboards', {
+    K: '#241a16', d: RAMP.wood.d, m: RAMP.wood.m, b: RAMP.wood.b, l: RAMP.wood.l,
+  }, `
+mbmmmmlmmmmbmmmm
+mmmmbmmmmmmmmlmm
+KKKKKKKKKKKKKKKK
+mmmlmmmmbmmmmmmm
+mmmmmmmmmmbmmmlm
+mmbmmmmmmmmmmmmm
+KKKKKKKKKKKKKKKK
+lmmmmmbmmmmmmmmb
+mmmmmmmmmlmmmmmm
+mmmmbmmmmmmmmmmm
+KKKKKKKKKKKKKKKK
+mmlmmmmmmmbmmmmm
+mmmmmmbmmmmmmmlm
+mmmmmmmmmmmmbmmm
+KKKKKKKKKKKKKKKK
+bmmmmlmmmmmmmmmm`],
+  rug: ['Woven rug', {
+    d: RAMP.roof.d, m: RAMP.roof.m, b: RAMP.roof.b, l: RAMP.roof.l, y: '#c69320',
+  }, `
+mmbmmmmdmmmmbmmm
+mbbbmmdddmmbbbmm
+mmbmmmmdmmmmbmmm
+mmmmmmmmmmmmmmmm
+ddmmmyymmmyymmdd
+mmmmmyymmmyymmmm
+mmmmmmmmmmmmmmmm
+mmdmmmmbmmmmdmmm
+mdddmmmbbbmmdddm
+mmdmmmmbmmmmdmmm
+mmmmmmmmmmmmmmmm
+yymmmddmmmddmmyy
+yymmmddmmmddmmyy
+mmmmmmmmmmmmmmmm
+mmmmbmmmmmmdmmmm
+mmmbbbmmmmmdddmm`],
   wall: ['Cut wall', {
     K: '#221d29', d: RAMP.stone.d, m: RAMP.stone.m, b: RAMP.stone.b, l: RAMP.stone.l,
   }, `
