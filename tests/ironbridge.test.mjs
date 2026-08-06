@@ -20808,4 +20808,62 @@ t.ok(true, 'a final draw on a live match is clean');
   }
 }
 
+/* ================== the second-pass correctness fixes
+
+   The audit's determinism desyncs shipped first; these are the rest — bugs
+   where both machines misbehave in lockstep (so no desync, but wrong), plus the
+   hash blind spots that let a REAL divergence in a next-tick field hide until it
+   surfaced somewhere else. */
+{
+  // --- a body killed inside statusTick takes no further action this tick.
+  // A lethal burn drops the hero to zero mid-step; without the guard heroStep
+  // fell through and healed the corpse off its own regen.
+  IB.newMatch({ diff:'veteran', seed:8321 });
+  IB.MY = 0;
+  const h = IB.makeHero(0, 'support', 'Ashwake'); h.pend.length = 0;
+  G.sides[0].heroes.push(h); IB.enterLane(h);
+  h.hp = 12; h.burn = { dps:100000, t:2, src:null };     // certain death this tick
+  IB.update(1 / 30);
+  t.ok(h.dead, 'a hero burned to death inside statusTick is dead after the step');
+  t.ok(h.hp <= 0, 'and did not heal itself back off regen after dying (' + h.hp.toFixed(1) + ')');
+
+  // --- separate() leaves the dead alone. It reads grid cells, which still hold
+  // a body that died earlier this tick, and every other grid reader checks dead.
+  const sepSrc = SRC.slice(SRC.indexOf('function separate'), SRC.indexOf('function separate') + 700);
+  t.ok(/if \(a\.dead\) continue;/.test(sepSrc) && /if \(b\.dead\) continue;/.test(sepSrc),
+    'separate() skips a body that died earlier in the tick rather than shoving it');
+
+  // --- bombSeen is cleared by newMatch, like every other per-match container.
+  IB.bombSeen[0].add(4242); IB.bombSeen[1].add(9);
+  IB.newMatch({ diff:'veteran', seed:5 });
+  t.ok(IB.bombSeen[0].size === 0 && IB.bombSeen[1].size === 0,
+    'the bombardment tally does not survive into the next match');
+
+  // --- the hash now catches the next-tick fields it used to miss. The test is
+  // the mirror of the desync bug: mutate one, and the fingerprint must move.
+  IB.newMatch({ diff:'veteran', seed:6161 });
+  IB.spawnWave(); step(2);
+  const u = G.units.find(x => !x.isHero);
+  t.ok(!!u, 'there is a minion to fingerprint');
+  if (u){
+    const base = IB.netHash();
+    u.mb = { t:3, ad:.2, ms:.1, as:.1 };
+    t.ok(IB.netHash() !== base, 'the drill buff moves the hash');
+    u.mb = null;
+    t.ok(IB.netHash() === base, 'and clearing it puts the hash back, so mb was the only thing that moved it');
+  }
+  const fBase = IB.netHash();
+  G.frame = (G.frame | 0) + 1;
+  t.ok(IB.netHash() !== fBase, 'the frame count — which decides side order — moves the hash');
+  G.frame = (G.frame | 0) - 1;
+  t.ok(IB.netHash() === fBase, 'and is the only change when restored');
+  const hero2 = G.sides[0].heroes[0] || (() => { const x = IB.makeHero(0, 'tank', 'Q'); x.pend.length = 0; G.sides[0].heroes.push(x); IB.enterLane(x); return x; })();
+  const rBase = IB.netHash();
+  hero2.retreat = !hero2.retreat;
+  t.ok(IB.netHash() !== rBase, 'a hero\'s retreat flag moves the hash');
+  hero2.retreat = !hero2.retreat;
+  hero2.lowT = (hero2.lowT || 0) + 5;
+  t.ok(IB.netHash() !== rBase, 'and so does the panic-shield gate');
+}
+
 t.done();
