@@ -533,6 +533,31 @@ below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
 through), walks back to town to heal, wipes, turns per fight, and which cards
 were drawn and never worth playing.
 
+It runs in two modes, and both are worth reading, because two very different
+games hide in one average:
+
+```bash
+node tools/emberkin/playthrough.mjs --runs 14          # a party of four, switching
+node tools/emberkin/playthrough.mjs --runs 14 --solo   # one kin, no switching
+```
+
+With a party you switch into every matchup and almost nothing can kill you
+(0.006 wipes per fight, and every trainer in the valley beaten first try); with
+one kin it is 0.220, and before the chart was softened it was 0.342. Judge a
+change against both, not against whichever is flattering. Switching is close to
+a hard counter — it costs a turn and buys the whole matchup — which is worth
+knowing when a party number looks too good.
+
+**The policy is the measurement, and cheapest-first was lying.** Every 2-cost card
+looked dead — Bulwark played 1% of the times it was drawn, Ward Stance 10% —
+and the reason was the ordering, not the cards: with three energy and the swing
+reserved out of it, a 2-cost card only got played when two 1-cost cards had not
+already eaten the budget. The probe scores cards now (damage added, damage
+prevented, health restored, per energy) and buys the best rate it can afford.
+Bulwark went to 52%, Ward Stance to 49%, Twin Strike to 58% — and the cards that
+*fell* were the ones cheapness had been flattering. Nothing about the cards
+changed. If a card looks dead, suspect the policy first.
+
 It reports **per trainer** as well as per run. Trainers are the hand-authored
 fights, and averaging them into the wild ones hides exactly the thing a scripted
 plan is meant to change; the line for each also counts how many plan beats were
@@ -672,6 +697,52 @@ Every other trainer carries one too, one idea each, in character: Dorn braces,
 Ivo sharpens, Coll does both, Hale opens on the back foot, Mio takes aim. Vespyr
 is the one wild fight that gets a plan, passed straight to `startBattle` rather
 than through an NPC.
+
+### The chart points the same way, but not as hard
+
+`effect(moveType, defTypes)` reads the chart; `EFF_DMG(e)` says what that entry is
+worth on the bar. They are separate on purpose.
+
+The chart says who beats whom, and that is knowledge worth having. What it must
+not do is decide the fight before a card is played — and at a straight 2× / 0.5×
+it did. Twelve runs with one kin, cross-tabbed by how the matchup read *before*
+the first turn:
+
+| your best element into theirs | share | never in doubt | lost |
+| --- | --- | --- | --- |
+| strong into weak | 16% | 69% | 6% |
+| even into even | 33% | 37% | 34% |
+| weak into strong | 32% | 7% | **57%** |
+
+A tenfold swing in whether you win, settled in advance, with the level gap
+identical in every bucket (0.6–1.8). It was never a level problem.
+
+So `EFF_DMG` softens: 2× lands as 1.6×, 0.5× as 0.65×, a stacked double weakness
+as 2.8× rather than 4×. `effect` still returns the chart value, because that is
+what the dex shows and what "It's brutally effective!" is about. After it, the
+same cross-tab runs 51% / 39% / 21% never-in-doubt and 6% / 25% / 41% lost. The
+headline average barely moved — that is the point. An average over a
+distribution whose two ends have walked toward each other looks identical to one
+that has not moved at all, which is why never-in-doubt is a poor number to steer
+by on its own and why the cross-tab is printed underneath it.
+
+Watch for compensations that go stale. `rival1` had been dropped a level because
+a type advantage plus one swing a turn made the opening fight unwinnable; with
+the chart softened that same drop had a bot winning 98 times in a hundred, so it
+came back off. `emberkin.test.mjs` asserts both ends of that fight.
+
+### A cornered wild kin
+
+Two fights in five were never in doubt, and it was not that they were easy — a
+wild fight was four identical small hits with no moment in it. `CORNER_AT` (.4)
+and `CORNER_EDGE` (14, through `planScale`) gather that damage instead: the first
+time a wild kin drops below the line it banks an edge, the intent line says
+`— cornered` with the bigger number on it, and the swing after that is the one
+that could lose you the fight. You get a full turn between the telegraph and the
+hit, which is the whole point.
+
+It is one swing, not a state of being, and only wild kin do it — a trainer's kin
+has a plan instead.
 
 ### Elements
 

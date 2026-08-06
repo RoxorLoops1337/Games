@@ -99,7 +99,12 @@ eq(EK.effect('Wild', ['Aether']), 1, 'Wild is neutral');
 const atk = EK.mkMon('pyrelynx', 30), defV = EK.mkMon('sproutle', 30), defT = EK.mkMon('dewdrip', 30);
 const dv = EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg;
 const dt = EK.damageOf(atk, defT, 'cinder', { crit: false, roll: 1 }).dmg;
-ok(dv > dt * 2.5, 'super-effective hits far harder than resisted');
+// The chart points the same way, but not as hard: a 2x entry lands as 1.6x and
+// a 0.5x as 0.65x, so the right element is the best thing you can bring without
+// the wrong one deciding the fight before a card is played. The spread used to
+// be fourfold, which is what made half of every run a coin toss on the chart.
+ok(dv > dt * 2, `super-effective still hits far harder than resisted (${(dv / dt).toFixed(2)}x)`);
+ok(dv < dt * 3.2, 'but not so much that the matchup is the whole fight');
 // Same power, one with STAB and effectiveness behind it, one without.
 const noStab = EK.damageOf(atk, defV, 'brine', { crit: false, roll: 1 }).dmg;
 ok(EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg > noStab,

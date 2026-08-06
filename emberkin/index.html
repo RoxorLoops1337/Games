@@ -3174,6 +3174,26 @@ const CHART = {
 const effect = (moveType, defTypes) =>
   defTypes.reduce((m, t) => m * ((CHART[moveType] || {})[t] ?? 1), 1);
 
+/**
+ * What a chart entry is actually worth on the bar.
+ *
+ * The chart above says who beats whom, and that is knowledge worth having. What
+ * it must not do is decide the fight before a card is played — and at a straight
+ * 2× / 0.5× it did. Measured over twelve runs with one kin: a fight you went
+ * into with the element was lost 6% of the time and never in doubt 69% of the
+ * time; the same fight with the element against you was lost 57% of the time and
+ * never in doubt 7%. A tenfold swing in whether you win, settled before the
+ * first turn, with the level gap identical in both.
+ *
+ * So the chart still points the same way, it just points less hard: 2× lands as
+ * 1.6×, 0.5× as 0.65×, and a stacked double weakness is 2.8× rather than 4×.
+ * Enough that bringing the right kin is the best thing you can do, not enough
+ * that bringing the wrong one is the end of the run. `effect` keeps returning
+ * the chart value, because that is what the dex shows and what "It's brutally
+ * effective!" is about — this is only the damage.
+ */
+const EFF_DMG = (e) => e === 0 ? 0 : e > 1 ? 1 + (e - 1) * .6 : 1 - (1 - e) * .7;
+
 // ---- statuses ----------------------------------------------------------
 // burn  — chip damage, attack softened      shock — may lose the turn
 // snare — chip damage, cannot flee          chill — speed halved
@@ -4925,7 +4945,7 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
-    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null,
+    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0,
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
@@ -4991,7 +5011,7 @@ function damageOf(atkMon, defMon, move, opts = {}) {
   const a = effStat(atkMon, 'atk'), d = effStat(defMon, 'def');
   let base = Math.floor((((2 * atkMon.lvl / 5 + 2) * m.pow * a / Math.max(1, d)) / 50) + 2);
   const roll = opts.roll != null ? opts.roll : (.85 + Math.random() * .15);
-  let dmg = Math.floor(base * stab * eff * (crit ? 1.5 : 1) * roll);
+  let dmg = Math.floor(base * stab * EFF_DMG(eff) * (crit ? 1.5 : 1) * roll);
   return { dmg: Math.max(eff === 0 ? 0 : 1, dmg), eff, crit };
 }
 
@@ -5302,10 +5322,25 @@ function readIntent() {
     b.intent = { id: null, name: p.label, dmg: 0, kind: 'plan', step, n, tell };
     return b.intent;
   }
+  // A wild kin that is losing stops fighting carefully. Two fights in five were
+  // never in doubt, and the reason was not that they were easy — it was that a
+  // wild fight is four identical small hits with no moment in it. Same damage,
+  // gathered into one swing you are told about a turn ahead: the fight now has a
+  // point where it could go wrong, and something to do about it.
+  if (b.wild && !b.cornered && b.foe.hp > 0 && b.foe.hp / b.foe.max < CORNER_AT) {
+    b.cornered = 1;
+    b.foeEdge += Math.round(CORNER_EDGE * planScale(b.foe.lvl));
+  }
   const id = foeChoose();
   const m = MOVES[id];
-  const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg : 0;
+  const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg + (b.foeEdge || 0) : 0;
   b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
+  // Being cornered is the loudest thing on the line while it lasts, because it
+  // is the only part of a wild fight worth reading.
+  if (b.cornered === 1 && b.foeEdge > 0 && m.pow) {
+    b.intent.name = `${m.name} — cornered`;
+    b.intent.tell = null;
+  }
   return b.intent;
 }
 
@@ -5350,6 +5385,9 @@ const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
 // a wild kin does not. Giving them the wild number made the opening rival fight
 // a coin toss and turned Dorn's two kin into a ten-turn slog.
 const TRAINER_HP_MUL = 2.2;
+// A wild kin fights for its life once it is losing: at this much health left it
+// gathers itself, and the swing after that is worth this much more.
+const CORNER_AT = .4, CORNER_EDGE = 14;
 
 /** Give a foe its battle-sized health as it steps in. */
 function toughen(mon, mul) {
@@ -6346,14 +6384,14 @@ const RIVAL_PICK = { cindercub: 'dewdrip', dewdrip: 'sproutle', sproutle: 'cinde
 /** A trainer's team, resolved at challenge time so the rival can react to you. */
 function trainerTeam(npc) {
   const pick = RIVAL_PICK[G.flags.starter] || 'dewdrip';
-  // Same level as yours. He already has the type advantage and two levels on
-  // top of that made the first fight in the game unwinnable, which is a poor
-  // way to open — and he stands between the town and the only grass to grind in.
-  // A level under yours. He has the type advantage and, since a kin swings once
-  // a turn, your damage per turn is half what it used to be — at parity the
-  // opening fight stopped being winnable on what the game had just handed you,
-  // which is the one thing it has to be.
-  if (npc.dynamic === 'rival1') return [[pick, 4]];
+  // Level with you. He has the type advantage and that used to be enough on its
+  // own — two levels on top made the first fight in the game unwinnable, and he
+  // stands between the town and the only grass to grind in. He was dropped a
+  // level when a kin went down to one swing a turn; now that a type advantage is
+  // a tilt rather than a verdict, that compensation had him losing 98 times in a
+  // hundred to a bot, so it comes back off. The opening fight has to be winnable
+  // on what the game has just handed you, and it also has to be a fight.
+  if (npc.dynamic === 'rival1') return [[pick, 5]];
   if (npc.dynamic === 'rival2') {
     const evo = DEX[pick].evo ? DEX[pick].evo[0] : pick;
     return [['kindlark', 15], [evo, 16]];
@@ -8562,8 +8600,9 @@ if (typeof window !== 'undefined') {
     cardValue, cardText, cardCost, cardName, attackBonus, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
-    gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL,
+    gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
+    CORNER_AT, CORNER_EDGE,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
