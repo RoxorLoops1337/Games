@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and forty-one fixes to
+this game have produced roughly six changes to the game and forty-two fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -359,9 +359,17 @@ and the family is more useful than the individual entry.
     *no output*. **A check for "did nothing" has to first check that something
     ran.**
 
+42. **A mechanism measured at its shipped rate reads as nothing** (pass 38). Wild
+    pairs ship at a quarter of encounters, and paired at that rate the effect on
+    fight length is +0.20 ±0.25 — a null result. At full strength it is
+    **+1.30 ±0.28**, one of the largest effects ever found here. A rate divides an
+    effect, and a per-fight average divides it again. **Test the mechanism at full
+    strength, then choose the rate** — they are two questions, and one
+    underpowered run answers them wrongly as one.
+
 ### Documentation — a note that was wrong for longer than any bug
 
-44. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+45. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -373,7 +381,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of forty-one are denominators.** If a number will not move, or moves the
+- **Nine of forty-two are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

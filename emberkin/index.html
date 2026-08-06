@@ -4382,7 +4382,10 @@ function onArrive() {
   }
   if (chance(G.map.enc.rate)) {
     const foe = rollEncounter(G.map);
-    if (foe) startBattle({ foe, wild: true });
+    // Sometimes two of them. The partner comes off the same table, so a pair is
+    // whatever that patch of grass holds rather than a special encounter.
+    const pair = foe && chance(WILD_PAIR) ? rollEncounter(G.map) : null;
+    if (foe) startBattle({ foe, wild: true, pair });
   }
 }
 
@@ -5033,7 +5036,10 @@ function startBattle(opt) {
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
-  toughen(opt.foe, opt.wild ? FOE_HP_MUL : trainerHp((opt.team || [1]).length));
+  // A wild pair splits one kin's pool between two bodies, so the fight is the
+  // same size and a different shape.
+  const paired = !!(opt.wild && opt.pair);
+  toughen(opt.foe, opt.wild ? FOE_HP_MUL * (paired ? .5 : 1) : trainerHp((opt.team || [1]).length));
   // A trainer's whole team exists from the start rather than being conjured as
   // the last one falls, because a trainer who can only ever send the next kin
   // in order is not playing the game you are playing. See `foeSwap`.
@@ -5042,6 +5048,11 @@ function startBattle(opt) {
   // potion is the answer, and it costs them the turn to reach for it exactly as
   // switching does.
   if (opt.npc && !opt.wild) G.battle.foePotions = POTIONS_FOR(opt.team ? opt.team.length : 1);
+  if (paired) {
+    const mate = toughen(opt.pair, FOE_HP_MUL * .5);
+    mate.stages = { atk: 0, def: 0, spd: 0 };
+    G.battle.roster = [opt.foe, mate];
+  }
   if (opt.team && !opt.wild) {
     const mul = trainerHp(opt.team.length);
     G.battle.roster = opt.team.map((e, i) => {
@@ -5587,6 +5598,18 @@ const planScale = (lvl) => (1 + lvl / 22) * Math.min(1, lvl / 12);
 const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
 // How hard a wild kin's plan beat lands, against a trainer's. See readIntent.
 const WILD_PLAN_MUL = .8;
+// How often a wild encounter is a pair rather than one kin.
+//
+// The only length lever this game has ever had is structure — every number on
+// both sides moves danger and leaves fight length where it was (see FOE_HP_MUL,
+// BASE_ENERGY, HAND_SIZE). The one structural thing never tried on the wild side
+// is a second body: a trainer's second kin is an extra opening, an extra settle
+// and a swap, and that is where a trainer's length comes from.
+//
+// The pool is held constant — each of a pair carries half the HP one would — so
+// this adds turns without adding difficulty, or it does nothing. It is a
+// structure test either way.
+const WILD_PAIR = .25;
 // A gathering wild kin can still lean on you, for this much of a normal hit.
 // Zero, because the cure costs more than the drift.
 //
