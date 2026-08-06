@@ -25,8 +25,8 @@ edit this block to name the next one.
 - [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
   with five critic conflicts resolved and six proposals cut.
 - **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–17 are
-  done. **Next: item 18** (correctness and dead-code cleanup). Exit: all 19 ticked.
+  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–18 are
+  done. **Next: item 19** (re-cost the garage). Exit: all 19 ticked.
 - **E — three more critics, then back to C.** Repeat the cycle.
 
 ## Working agreement for each pass
@@ -99,6 +99,11 @@ edit this block to name the next one.
   `lv.shape` and the `laneAt()` helper.
 - Goals live in `GOALS` with a `gen`/`test` pair each; adding one is a few lines.
   `needs` gates a goal on the market containing something (santa, carousel…).
+- Cosmetics must never draw from `rnd`/`rr`. Those are the simulation's seed:
+  anything that changes how many draws happen — a suppressed pop-up, one more
+  blood splat, an extra snowflake — moves every market's score. Scenery uses
+  `vrnd`/`vrr`. Already caught in `seedSnow`, `popText`, `addGore` and the
+  screen shake; grep for the rest before adding any.
 - The replay records people and props near the car at 30Hz and writes them back
   during playback, restoring afterwards — see the test that asserts the market is
   untouched. Anything new that moves during a run needs recording too, or it will

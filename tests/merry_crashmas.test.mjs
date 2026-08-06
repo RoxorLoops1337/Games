@@ -61,7 +61,8 @@ const EXPOSE = `__out.api = {
   getFlash: () => flash, getHitstop: () => hitstop,
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
-  wailSlot, noise, toggleMute,
+  wailSlot, noise, toggleMute, stepFx, hitProp,
+  COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
   // swap them out and count what a run actually asks the mixer for
@@ -803,6 +804,102 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const vals = Object.values(ends);
   assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
     'every car should preview differently: ' + JSON.stringify(ends));
+});
+
+/* ---------------------------------------------------------- correctness --- */
+
+/* killPerson reached for its own flat copy of the shopper palette, ignoring
+   p.kind, so a grey-coated pensioner exploded into orange sleeves and a
+   lime-green child into purple ones — and bleed() seeded the pixel burst from
+   the same value, so the whole thing was the wrong colour. */
+test('a pensioner does not explode in somebody else’s coat', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const drawn = (p) => (p.kind === 'elder' ? api.ELDER_COATS[p.coat % 4]
+                      : p.kind === 'kid' ? api.KID_COATS[p.coat % 4]
+                      : api.COATS[p.coat % api.COATS.length]);
+  for (const kind of ['elder', 'kid', 'shopper', 'santa']){
+    const p = api.addPerson(2000, 1100, kind);
+    p.coat = 3;
+    api.rec.killed.length = 0;
+    api.killPerson(p, 900, 0, 'car');
+    const rc = api.rec.killed[api.rec.killed.length - 1];
+    assert(rc && rc.coat === drawn(p),
+      kind + ' bleeds ' + (rc && rc.coat) + ' but is drawn ' + drawn(p));
+    assert(rc.skin === api.SKIN[p.coat % api.SKIN.length], kind + ' skin should match too');
+  }
+});
+
+/* `if (f.t >= f.ttl - dt)` dropped the same chunk's permanent mark 0, 1, 2 or
+   3 times depending purely on how the frames fell — which is the frame after
+   every hit-stop, and every frame on a variable-refresh display. */
+test('a chunk leaves exactly one mark, however the frames fall', () => {
+  const paces = {
+    steady: () => 1 / 60,
+    shrinking: (i) => Math.max(0.001, 0.02 - i * 0.0012),
+    stalling: (i) => (i === 3 ? 0.05 : 0.0005),
+    spiking: (i) => (i % 2 ? 0.010 : 0.003),
+  };
+  for (const name in paces){
+    const api = boot();
+    api.startCampaign(); api.beginLevel();
+    api.gore.length = 0;
+    api.fx.length = 0;
+    api.fx.push({ type: 'chunk', x: 2000, y: 1100, vx: 0, vy: 0, t: 0, ttl: 0.06,
+      size: 6, rot: 0, spin: 0, col: '#8e1a14' });
+    for (let i = 0; i < 60 && api.fx.length; i++) api.stepFx(paces[name](i));
+    assert(api.fx.length === 0, name + ': the chunk should be gone');
+    assert(api.gore.length === 1,
+      name + ' frame pacing left ' + api.gore.length + ' decals, expected 1');
+  }
+});
+
+test('a limb leaves its two marks once, however the frames fall', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.gore.length = 0; api.fx.length = 0;
+  api.fx.push({ type: 'limb', part: 'arm', x: 2000, y: 1100, vx: 0, vy: 0, t: 0,
+    ttl: 0.05, size: 7, rot: 0, spin: 0, col: '#e05143', col2: '#f0c9a4' });
+  for (let i = 0; i < 40 && api.fx.length; i++) api.stepFx(i === 2 ? 0.05 : 0.0005);
+  assert(api.gore.length === 2, 'a limb leaves two marks, got ' + api.gore.length);
+});
+
+/* The shortest-axis eject was written above a `d >= CARR` return, where
+   `d > 0.001` is implied, so it could never run. What actually ran pushed the
+   car one radius straight up whichever wall it came through. */
+test('a car buried in a hut leaves by the nearest wall, not northwards', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.props.length = 0; api.people.length = 0;
+  const hut = api.addProp('hut', 2000, 1100);
+  assert(hut.shape === 'box', 'the fixture should be a box');
+  const hw = hut.w / 2, hh = hut.h / 2;
+  // dead centre, and just off centre on each side
+  for (const [ox, oy, why] of [[0, 0, 'dead centre'], [hw * 0.6, 0, 'east of centre'],
+                               [-hw * 0.6, 0, 'west of centre'], [0, hh * 0.6, 'south of centre']]){
+    hut.dead = false; hut.hp = hut.maxHp;
+    drive(api, 200, 0, hut.x + ox, hut.y + oy);
+    api.hitProp(hut);
+    const dx = api.car.x - hut.x, dy = api.car.y - hut.y;
+    const outside = Math.abs(dx) >= hw + api.C.CAR_R - 1 || Math.abs(dy) >= hh + api.C.CAR_R - 1;
+    assert(outside, why + ': still inside the hut at ' +
+      Math.round(dx) + ',' + Math.round(dy) + ' (box ' + hw + 'x' + hh + ')');
+    if (ox > 0) assert(dx > 0, 'east of centre should leave eastwards, went ' + Math.round(dx));
+    if (ox < 0) assert(dx < 0, 'west of centre should leave westwards, went ' + Math.round(dx));
+    if (oy > 0) assert(dy > 0, 'south of centre should leave southwards, went ' + Math.round(dy));
+  }
+});
+
+/* Grep guards: these are the branches the pass deleted. They are cheap to
+   reintroduce by accident and expensive to notice. */
+test('the code this pass deleted stays deleted', () => {
+  const src = fs.readFileSync(HTML, 'utf8');
+  assert(!/COATS_RT|SKIN_RT/.test(src), 'the duplicate simulation palettes are gone');
+  assert(!/f\.t >= f\.ttl - dt/.test(src), 'the frame-paced gore drop is gone');
+  assert(!/G\.potential/.test(src), 'G.potential was written and never read');
+  const limbDraw = src.split("if (f.part === 'head')").length - 1;
+  assert(limbDraw === 1, 'drawFx had two byte-identical limb branches, now ' + limbDraw);
 });
 
 /* ---------------------------------------------------------------- sound --- */
@@ -2220,7 +2317,11 @@ test('a level is set up from its definition', () => {
   assert(api.G.phase === 'brief', 'brief first');
   assert(api.G.cars === lv.cars && api.G.carsLeft === lv.cars, 'cars from the level def');
   assert(api.G.levelScore === 0, 'level score starts clean');
-  assert(api.G.target > 0 && api.G.target < api.G.potential, 'target is a slice of the market');
+  // what the market is worth if you flatten every last bit of it
+  let pot = 0;
+  for (const p of api.people) pot += p.pts;
+  for (const o of api.props) pot += o.pts;
+  assert(api.G.target > 0 && api.G.target < pot, 'target is a slice of the market');
 });
 
 test('stars are awarded against the target, and a miss locks the next market', () => {
@@ -2746,22 +2847,34 @@ test('the crowd has three distinct levels of detail', () => {
   const p = api.addPerson(2600, 1100, 'shopper');
   p.panic = 1; p.cry = 1;
 
-  // a shopper's r is 13, so the tier is decided by the zoom alone
-  const cost = (tz) => {
+  /* A shopper's r is 13, so the zoom alone decides the tier. The far tier is
+     drawCrowdBatch's job — drawPerson has no copy of it, which is the point:
+     there used to be one and nothing but this suite ever reached it. */
+  const cost = (tz, fn) => {
     api.cam.tz = tz;
     api._resetCounts();
-    api.drawPerson(p);
+    fn();
     return { q: api.lodQ(p), fills: api._counts.fill || 0,
       strokes: api._counts.stroke || 0, text: api._counts.fillText || 0 };
   };
-  const far = cost(1500), mid = cost(800), close = cost(470);
-  assert(far.q < api.LOD_MID, 'the wide zoom should batch, q was ' + far.q);
+  const crowd = [];
+  for (let i = 0; i < 20; i++) crowd.push(Object.assign({}, p, { x: 2600 + i * 30 }));
+  const far1 = cost(1500, () => api.drawCrowdBatch([p]));
+  const far20 = cost(1500, () => api.drawCrowdBatch(crowd));
+  const mid = cost(800, () => api.drawPerson(p));
+  const close = cost(470, () => api.drawPerson(p));
+
+  assert(far1.q < api.LOD_MID, 'the wide zoom should batch, q was ' + far1.q);
   assert(mid.q >= api.LOD_MID && mid.q <= api.LOD_FINE, 'the middle tier should be reachable, q was ' + mid.q);
   assert(close.q > api.LOD_FINE, 'the replay zoom should be the full kit, q was ' + close.q);
-  assert(far.fills < mid.fills, 'the blob costs less than the middle tier: ' + far.fills + ' vs ' + mid.fills);
+  // the batch's win is that its cost does not grow with the crowd
+  assert(far20.fills === far1.fills,
+    'twenty batched shoppers cost what one does: ' + far20.fills + ' vs ' + far1.fills);
+  assert(far20.fills < mid.fills * 20,
+    'and far less than drawing each of them: ' + far20.fills + ' vs ' + (mid.fills * 20));
   assert(mid.fills < close.fills, 'the middle tier costs less than the full kit: ' + mid.fills + ' vs ' + close.fills);
   assert(mid.strokes < close.strokes, 'the middle tier strokes less: ' + mid.strokes + ' vs ' + close.strokes);
-  assert(!far.text && !mid.text, 'only the full kit prints the panic marker');
+  assert(!far20.text && !mid.text, 'only the full kit prints the panic marker');
   assert(close.text > 0, 'the full kit prints the panic marker');
 });
 
