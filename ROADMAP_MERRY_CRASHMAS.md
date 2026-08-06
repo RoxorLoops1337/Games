@@ -8,7 +8,7 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
-## CURRENT PHASE: E — three more critics, then back to C
+## CURRENT PHASE: D2 — execute plan 2
 
 The owner asked for 15 more levels, designed rather than generated, and then a
 critique cycle. Work the phases in order; when a phase's exit condition is met,
@@ -28,10 +28,18 @@ edit this block to name the next one.
   shipped, one per pass, each with assertions and a browser check. Three of them
   turned up cosmetic systems feeding on the simulation seed (see the note below);
   four deviated from the plan's specifics and say so in `.polish/crashmas-plan.md`.
-- **E — three more critics, then back to C.** Three fresh critiques (design, feel,
-  code) against the game as it stands after phase D, written to `.polish/`. Then
-  phase C again: one synthesis agent reads all three and writes the next ordered
-  plan. Exit: `.polish/crashmas-plan-2.md` exists and phase D restarts against it.
+- [x] **E — three more critics, then back to C.** Done: design, feel and code
+  critiques on disk as `.polish/crashmas-critique-*-2.md`, and
+  `.polish/crashmas-plan-2.md` — 15 items, six conflicts resolved, eight
+  proposals cut. Two of the critics' findings were regressions from phase D and
+  were hotfixed straight away (the rink's fence collider, and the shout guard
+  eating 63% of kill pops). The synthesis verified the load-bearing claims
+  first: `drawAim` moving the car is real and decides pass/fail on market 1,
+  and it turned up a fifth cosmetic system feeding on the simulation seed.
+- **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–2 are done. **Next:
+  item 3** (put the market on screen while you aim). Exit: all 15 ticked, then
+  phase E again.
 
 ## Working agreement for each pass
 
