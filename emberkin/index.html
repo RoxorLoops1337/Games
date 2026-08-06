@@ -3237,7 +3237,14 @@ const MOVES = {
   vineflick: { name: 'Vine Flick',    type: 'Verdant', pow: 45,  acc: 100, pp: 25 },
   seedspit:  { name: 'Seed Spit',     type: 'Verdant', pow: 40,  acc: 100, pp: 20, fx: { pri: 1 } },
   drainseed: { name: 'Drain Seed',    type: 'Verdant', pow: 60,  acc: 100, pp: 15, fx: { drain: .5 } },
-  leafblade: { name: 'Leaf Blade',    type: 'Verdant', pow: 70,  acc: 95,  pp: 15 },
+  // Level with Fang Fang and Tide Fang, which sit in the same slot of the other
+  // two starters' learnsets. It was 70 with no rider against their 80 with one,
+  // which is not a trade — it is the same move, worse, twice over. The probe
+  // caught it: a Sproutle run had 30% free fights against Cindercub's 40% and
+  // .338 lost-or-ran against .237, the largest difference in the game and one
+  // nobody chose. Verdant's real character is the route — Emberwood is Verdant,
+  // Ember and Gloom almost all the way down — and that stays.
+  leafblade: { name: 'Leaf Blade',    type: 'Verdant', pow: 80,  acc: 95,  pp: 15, fx: { st: ['snare', .2] } },
   rootsnare: { name: 'Root Snare',    type: 'Verdant', pow: 0,   acc: 90,  pp: 15, fx: { st: ['snare', 1] } },
   barkskin:  { name: 'Barkskin',      type: 'Verdant', pow: 0,   acc: 0,   pp: 20, fx: { self: [['def', 1]] } },
   thornmaul: { name: 'Thorn Maul',    type: 'Verdant', pow: 95,  acc: 85,  pp: 10 },

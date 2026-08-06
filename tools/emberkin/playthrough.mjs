@@ -36,6 +36,12 @@ const SOLO = argv.includes('--solo');
 // is the point: the difference between the two columns is how much of a
 // trainer's difficulty is the walk that came before it.
 const RESTED = argv.includes('--rested');
+// `--starter sproutle` runs every run on one starter. Rotating is right for a
+// headline number, but it means sixty runs is twenty per starter, and twenty is
+// not enough to tell the three apart: across three samples of builds that never
+// touched Ember, Cindercub's lost-or-ran read .237, .358 and .438 with intervals
+// of about ±.08. A per-starter claim needs a per-starter sample.
+const ONLY = argv.includes('--starter') ? argv[argv.indexOf('--starter') + 1] : null;
 
 /** The route a real player walks, in order. */
 const ROUTE = [
@@ -56,7 +62,7 @@ function playOne(runIdx) {
   // into every run. Dorn's Stone wall read as an eight-turn slog partly because
   // the probe never once walked in with a Tide kin.
   EK.G.mode = 'world';
-  EK.takeStarter(EK.STARTERS[runIdx % EK.STARTERS.length]);
+  EK.takeStarter(ONLY || EK.STARTERS[runIdx % EK.STARTERS.length]);
   EK.G.dialogue = null; EK.G.mode = 'world';
 
   const stat = {
@@ -232,8 +238,16 @@ function playOne(runIdx) {
         if (d.vt === 'heal') pts += Math.min(v, hurt);
         if (d.vt === 'maxhp') pts += Math.min(v, hurt) + v * .4;
         if (d.vt === 'draw') pts += v * 3;                    // a card is worth about a card
+        // An energy every turn is a card every turn, for the rest of the fight.
+        // Three legendaries scored zero for want of a branch here — Eternal Spark
+        // was taken 4 times and played 0 of 182 draws — which is the pass-12
+        // lesson repeating on the person who wrote it down: if a card looks dead,
+        // suspect the policy first.
+        if (d.vt === 'energy') pts += v * 6 * left;
         if (fx.def) pts += fx.def * left;
         if (fx.heal) pts += Math.min(fx.heal, hurt);
+        if (fx.healFull) pts += hurt;
+        if (fx.atk) pts += fx.atk * left;
         if (fx.energy) pts += 5;
         if (fx.hits) pts += swingDmg() * fx.hits * left;      // the answer to one swing a turn
         if (fx.mul) pts += swingDmg() * (fx.mul - 1) * left;
@@ -387,7 +401,12 @@ function playOne(runIdx) {
     if (over === 'caught') { stat.caught++; EK.addCaught(b.foe); }
     // Take the card the win offers, the way a run really does — otherwise the
     // deck never grows and "never drawn" only measures the starter deck.
-    if (over === 'win' && EK.G.battle && !duelId) {
+    // Trainers hand you a card too — `withReward` runs on both branches of the
+    // real win path — and the probe was skipping it. That is why the entire
+    // legendary tier read as "never drawn in any run": `REWARD_ODDS.wild` has
+    // legendary at 0, so a trainer win is the only place in a normal run one can
+    // come from, and the probe was throwing every one of them away.
+    if (over === 'win' && EK.G.battle) {
       const offer = EK.rollReward(EK.B());
       if (offer && offer.length) {
         // The best card on offer, not a coin toss between them. Picking at
@@ -477,7 +496,7 @@ function playOne(runIdx) {
   }
   stat.gems = EK.G.gems;
   stat.party = EK.G.party.length;
-  stat.starter = EK.STARTERS[runIdx % EK.STARTERS.length];
+  stat.starter = ONLY || EK.STARTERS[runIdx % EK.STARTERS.length];
   stat.top = Math.max(...EK.G.party.map((m) => m.lvl));
   stat.deck = EK.G.deck.length;
   return stat;
@@ -532,7 +551,8 @@ const perRun = () => 1;
 
 const fights = avg((r) => r.fights), steps = avg((r) => r.steps);
 console.log(`\nEMBERKIN — ${RUNS} run${RUNS > 1 ? 's' : ''} from the study to Crown Hollow`
-  + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}\n`);
+  + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}`
+  + `${ONLY ? `, ${ONLY} only` : ''}\n`);
 console.log(`  steps walked        ${steps.toFixed(0)}   per run, to reach level ${avg((r) => r.top).toFixed(0)}`);
 console.log(`  fights              ${fights.toFixed(0)}   per run;  one every ${show(rate((r) => r.steps, perFight), 1)} steps`);
 // Every rate carries a 95% interval. Two builds whose intervals overlap have
