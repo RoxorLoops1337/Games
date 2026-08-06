@@ -398,6 +398,15 @@ deal damage, and your support cards, which sharpen them. Switch kin and its move
 cards leave with it. Spend energy on whatever you like, then end the turn and
 take the foe's telegraphed hit.
 
+**One swing a turn.** Three energy and moves costing one or two meant the best
+line was to attack twice and never touch the deck, which is the exact opposite
+of "the kin brings the attacks, the deck makes them land harder" — and it is why
+a fight used to be over in a turn and a half. `b.swungTurn` is set by the first
+kin card played and cleared in `startPlayerTurn`. A card that cannot be played
+has to *look* unplayable, so `playableNow(b, c)` is the single predicate behind
+the `dead` class, the "▲ play" footer, the End-turn nag and `aimPlayable` — a
+key that silently does nothing is worse than a key that is greyed out.
+
 `playCard(i)`, `endTurn()` and `doAction()` each resolve immediately and return
 a list of log entries carrying HP/status snapshots. State is consistent the
 moment they return; the UI plays the list back at reading speed. That is why
@@ -507,6 +516,907 @@ see:
   the panel; a burn ticking away ought to be visible from the corner of your
   eye.
 
+### Is it any good to play?
+
+Eight passes went into how the game looks and none into whether it is any good
+to play, and "is it boring" is not a thing you can answer by reading the source.
+So there is a tool that plays it — the real game, loaded headless, a fresh save,
+the real encounter tables, all the way from Rowan's study to Crown Hollow:
+
+```bash
+node tools/emberkin/playthrough.mjs --runs 60          # a party of four, switching
+node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
+```
+
+**Its manual is [`tools/emberkin/README.md`](../tools/emberkin/README.md), and it
+is worth reading before you believe a number it prints.** That doc says what
+every printed line means, what each is divided by, which lines are comparable
+between the two modes and which are emphatically not — and it carries the ledger
+of all forty-one mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Thirty passes on this
+game produced about twelve changes to the game and forty-one fixes to the tool.
+
+The two modes are two different games, not a hard and an easy one. With a party
+you switch into every matchup and switching is close to a hard counter — it costs
+a turn and buys the whole fight — so a party number that looks too good usually
+is. Judge a change against both, and if it only moves one, say which.
+
+#### What a run accumulates, and the two economies nobody was measuring
+
+Might was found by suspecting it. Everything else a run carries is now read
+deliberately and printed, because the per-fight tables are structurally blind to
+anything that persists: card growth, money, gems, bag, deck, might. Two of those
+turned out to be zero at Crown Hollow in every run ever measured.
+
+**The probe was never collecting the win.** The real game hands over gems on
+every win and a trainer's prize on top of a duel; the probe drives combat
+directly and skipped both. A run started with 500 shards, spent them at the first
+restock and was **broke for the remaining hundred-odd fights** — so every salve,
+orb and walk-back number this project has reported was measured on a player with
+no income. With the win paying:
+
+| | before | after |
+| --- | --- | --- |
+| solo salves a fight | .086 | **.287** |
+| solo turns per fight | 3.60 ±0.19 | **4.08 ±0.25** |
+| solo over in one turn | 13% ±2 | **8% ±2** |
+| solo lost or ran | .239 ±.028 | .256 ±.034 |
+
+The fights got *longer*, not safer: a player who can afford salves survives
+instead of fleeing. Solo is back over four turns with one fight in twelve ending
+in a single turn, which is the best that metric has read.
+
+**Gems buy chests, and the probe walked past every one** with 237 in its pocket
+at Crown Hollow — the whole second half of the card economy, never measured. It
+buys the best chest it can afford on a town visit now.
+
+What is bounded, at Crown Hollow, per run:
+
+| | reaches | bound |
+| --- | --- | --- |
+| might | +109 ±15 | capped at 150 |
+| card growth in deck | +178 ±21 of a possible 562 | each card 4× its own value; the sum is not bounded, and does not need to be |
+| money | 1093-2027 | earned faster than the shop can absorb — **no sink** |
+| gems | 39 ±5 | spent on chests |
+| deck | 12 of 12 | `DECK_MAX` |
+
+Money is the one still unbounded and piling up. It is partly the probe's fault —
+it stocks to five orbs and four salves and stops — but a player capped at what
+they want to carry has the same problem: past the first hour, shards stop being a
+decision.
+
+#### A second body is the length lever
+
+Every number on both sides was tested and none of them moved fight length. The one
+structural thing never tried on the wild side was a second kin — a trainer's
+second body is an extra opening, an extra settle and a swap, and that is where a
+trainer's length comes from. So wild encounters are sometimes a **pair** now, with
+the pool held constant: each of a pair carries half the HP one would, so this is a
+structure test and not a difficulty test.
+
+Measured at full strength — every wild fight a pair, against none, 60 runs an arm,
+same seeds:
+
+| solo | pairs | no pairs | difference (95%) |
+| --- | --- | --- | --- |
+| **turns per fight** | **5.19** | 3.90 | **+1.30 ±0.28** |
+| no kin in doubt | **29.6%** | 39.4% | **−.098 ±.041** |
+| over in one turn | 1.6% | 2.8% | **−.012 ±.009** |
+| lost or ran | .376 | .270 | +.106 ±.049 |
+| wipes | .107 | .098 | −.009 ±.022 (nothing) |
+
+**A second body buys 1.3 turns where a quarter more HP bought nothing and a third
+more energy bought nothing.** It is the second structural lever this game has, and
+the first one found on purpose rather than by accident.
+
+And the extra turns are not padding. The two metrics that would say so both move
+the right way: **over-in-one falls and never-in-doubt falls to 29.6%** — the best
+that number has ever read, and the oldest complaint in the project. Longer *and*
+less often decided in advance is the combination every numeric dial failed to
+produce.
+
+It ships at `WILD_PAIR = .25`, not at full strength. At full strength every wild
+encounter is a two-body fight, which is what a trainer is — the thing worth having
+is a pair as a variation, not as the norm. At .25 the same effects appear at a
+quarter the size: turns +0.20 ±0.25 (which is not, on its own, a significant
+reading), never-in-doubt **−.058 ±.037**, and the danger cost stays modest at
++.033 ±.046 rather than the +.106 of full strength.
+
+**Worth recording as a method note:** measured only at its shipped rate, this
+mechanism reads as nothing. A quarter of fights being pairs dilutes a per-fight
+average fourfold, and ±0.25 on 60 runs cannot see +0.33. Testing the mechanism at
+full strength first, and choosing the rate second, is what separated "does a
+second body do anything" from "how often should it happen" — two questions that a
+single underpowered run answers wrongly as one.
+
+#### Nothing on either side's numbers moves fight length
+
+Three passes had said it from the foe's side. The player's side had never been
+varied — three energy, five cards, one swing, inherited rather than tuned. Paired,
+60 runs an arm:
+
+| | solo diff (95%) | party diff (95%) |
+| --- | --- | --- |
+| **`BASE_ENERGY` 3 → 4**, turns per fight | −0.12 ±0.26 | +0.13 ±0.20 |
+| — no kin in doubt | +.085 ±.043 | +.042 ±.027 |
+| — wipes | −.033 ±.020 | −.008 ±.005 |
+| — cost of a fight, in kin | −.035 ±.013 | −.108 ±.035 |
+| **`HAND_SIZE` 5 → 7**, turns per fight | −0.28 ±0.31 | — |
+| — every other headline | nothing | — |
+
+**A third more energy a turn does not change how long a fight takes.** It makes
+the player stronger and the fight safer, in both modes. And **two extra cards a
+turn do nothing at all** — not length, not danger, not cost. That is the same fact
+pass 25 found from the other side, that 85% of turns end out of energy rather than
+out of cards: the hand is not the constraint, so widening it is free and
+pointless.
+
+So the tally, on both sides of the fight:
+
+| lever | change | effect on fight length |
+| --- | --- | --- |
+| `MIGHT_CAP` (pass 26) | −90% | a tenth of a turn |
+| `FOE_HP_MUL` (pass 36) | +25% | nothing |
+| `BASE_ENERGY` | +33% | nothing |
+| `HAND_SIZE` | +40% | nothing |
+| **a rhythm for wild kin** (pass 33) | one beat in three | **over-in-one 28% → 4%** |
+
+**Every number in this game is a danger dial. Only structure is a length dial.**
+If fights should feel longer, the answer is to give somebody something to do with
+a turn — not to make anybody tougher, harder-hitting, richer in energy or better
+supplied with cards.
+
+The tuning comments have been corrected where they claimed otherwise: `FOE_HP_MUL`
+now says in the file that it is a danger dial and shows the numbers, and
+`BASE_ENERGY`/`HAND_SIZE` carry theirs. `TRAINER_HP_MUL`'s "ten-turn slog" note
+survives, and it is worth saying why — that length came from a trainer's *second
+kin*, which is an extra opening, an extra settle, an extra swap. A second body is
+structure. More HP on one body is not.
+
+#### Every dial is live, and the biggest one does not do what its name says
+
+Ledger 40 was a change that shipped and silently did nothing for a whole pass. The
+obvious question is how much else is like that, and with paired runs it is a
+two-minute check each: under seeding a dead dial gives *identical* results, so any
+metric moving at all proves the dial is wired.
+
+Fourteen combat constants — `MIGHT_CAP`, `RALLY_SHARE`, `RALLY_CAP`, `FOE_HP_MUL`,
+`WILD_DMG_MUL`, `WILD_PLAN_MUL`, `PLAN_CHIP`, `CORNER_AT`, `CORNER_EDGE`,
+`SETTLE_MUL`, `FOE_POTION`, `FOE_POTION_AT`, `STAT_CEIL`, `TRAINER_DMG_MUL` — and
+**all fourteen move all seven headline metrics.** No dead dials. `PLAN_CHIP` was
+the only one that ever lied and it is fixed.
+
+Then the one that has never been measured against itself. `FOE_HP_MUL` is 4.0, the
+biggest single number in the game, and the note beside it explains it as a length
+dial: *a foe wants a little more than its bare HP to be worth fighting*. Paired at
+5.0, 60 runs an arm:
+
+| | solo diff (95%) | party diff (95%) |
+| --- | --- | --- |
+| **turns per fight** | **+0.11 ±0.35** | **+0.07 ±0.18** |
+| lost or ran | **+.110 ±.060** | +.006 ±.011 |
+| wipes | **+.045 ±.028** | +.004 ±.006 |
+| no kin in doubt | **−.059 ±.039** | −.008 ±.022 |
+| cost of a fight, in kin | **+.032 ±.013** | **+.032 ±.032** |
+
+**A quarter more foe HP buys no extra turns at all** — nothing, in both modes.
+What it buys is danger: solo lost-or-ran .249 to .359, wipes .096 to .141.
+
+The reason is the deck. A longer fight is a fight with more turns of stacking in
+it, so the extra HP is met by higher damage rather than by more rounds; the player
+scales into the pool as fast as the pool grows. Which lines up with pass 26 from
+the other direction — cutting the biggest damage source by 90% moved fight length
+by a tenth of a turn — and with pass 33, where the one thing that *did* move
+length and shape was giving the foe a rhythm.
+
+**Fight length in this game is close to invariant in both sides' numbers.** It is
+set by structure. That is worth knowing before the next person reaches for
+`FOE_HP_MUL` to make fights feel longer: it will make them feel more dangerous
+instead, and the two are not the same complaint.
+
+Nothing was changed on the strength of this. 4.0 is a defensible danger setting
+and there is no case for moving it that this measurement makes.
+
+#### Two arms, one sitting — and the first paired run found a shipped bug
+
+Every comparison this project has made is "new build against a number from a
+previous pass", and pass 34 showed that is worth ±.05 on the danger line. So the
+probe now runs both arms itself:
+
+```bash
+node tools/emberkin/playthrough.mjs --runs 60 --solo --vs --set PLAN_CHIP=0.25
+```
+
+Everything before `--vs` is the baseline; everything after is the variant, which
+inherits the baseline's flags. `--set NAME=VALUE` rewrites a top-level constant in
+the game's own source before it is evalled, so a tuning dial can be compared
+against itself. `Math.random` is seeded per run, so **run 7 is the same run in
+both arms** and the interval is on the *difference* rather than on each arm
+separately. The only claim the tool now makes is that the paired interval excludes
+zero.
+
+Two consequences worth knowing. The report is **deterministic** now — the same
+build gives the same numbers. And because seeding changed the stream, absolute
+figures from before this pass are not directly comparable to figures after it;
+the paired differences are.
+
+**The first real paired run found a bug shipped in pass 34.** The party baseline
+read 20.6% over in one turn where pass 33 had measured 4%. `PLAN_CHIP = 0` did not
+turn the chip off: the block still ran a zero-damage attack, and `useMove` spends
+`b.foeEdge` on its way through, so the gather beat **threw away the sharpen it had
+just gained** and the whole plan quietly did nothing. Scaling a value to zero is
+not the same as skipping the block. Guarded on the dial now, and party over-in-one
+is back to 4%.
+
+#### PLAN_CHIP, decided
+
+With the baseline fixed and both arms measured together, 60 runs an arm:
+
+| | solo baseline | solo +chip .25 | difference (95%) |
+| --- | --- | --- | --- |
+| no kin in doubt | 41.2% | 34.3% | **−.070 ±.042** |
+| over in one turn | 2.5% | 5.9% | **+.034 ±.011** |
+| wipes | .096 | .125 | +.028 ±.027 |
+| lost or ran | .249 | .233 | −.016 ±.056 (nothing) |
+
+| | party baseline | party +chip .25 | difference (95%) |
+| --- | --- | --- | --- |
+| over in one turn | 4.0% | 24.4% | **+.204 ±.026** |
+| lost or ran | .057 | .041 | −.015 ±.007 |
+| no kin in doubt | 8.9% | 10.5% | +.016 ±.022 (nothing) |
+
+**Seven points of solo never-in-doubt for twenty of party over-in-one.** Pass 34
+reached the same conclusion from unpaired samples and guessed the size; the paired
+run says 4.0% → 24.4% where pass 34 said 4% → 24%, which is a nice check on both.
+`PLAN_CHIP` stays at 0, and this is the last time it needs deciding.
+
+#### The drift was mostly noise, and the chip that would have fixed it costs too much
+
+Pass 33 left one number going the wrong way: solo never-in-doubt 34% to 39%. The
+diagnosis was sound — the foe spends a turn gathering, and a turn it does not
+threaten is a turn you are safe in — so the fix was a chip: a gathering wild kin
+still swings, softly, through the normal damage path so shields, guard, thorns
+and the knockout all behave, with the chip on the telegraph so the line does not
+lie about the turn.
+
+It works, in solo, and it is not worth it:
+
+| solo, 60 runs | no chip | chip .25 | chip .45 |
+| --- | --- | --- | --- |
+| no kin in doubt | 39% ±3 | 35% ±3 | **30% ±4** |
+| over in one turn | 3% ±1 | 7% ±1 | 10% ±2 |
+| wipes | .104 ±.015 | .126 ±.020 | .163 ±.027 |
+
+30% never-in-doubt is the best that number has ever read. But party fights are the
+short ones, and a chip ends them sooner: **party over-in-one goes from 4% ±1 to
+24% ±3 at a chip of .25**, giving back almost the entire reason the plan was worth
+having. Four points of solo never-in-doubt for twenty of party over-in-one is a
+bad exchange. `PLAN_CHIP` is in the game and set to 0 — the machinery stays, the
+dial is off, and the numbers for turning it up are written next to it.
+
+**And then the premise turned out to be mostly noise.** Two 60-run samples of the
+identical shipped build:
+
+| solo, same build, twice | lost or ran | no kin in doubt | over in one |
+| --- | --- | --- | --- |
+| first sample | .273 ±.039 | 39% ±3 | 3% ±1 |
+| second sample | .223 ±.037 | 36% ±3 | 5% ±1 |
+
+36% against the 34% it drifted from is not a drift. The whole premise of this
+pass was one sample, and the number it was chasing moved half as far as the
+sampling error. Pass 33's headline should be read as **solo lost-or-ran .22-.27
+and never-in-doubt 36-39%**, not the single figures it reported.
+
+#### The deck still does not matter, even now fights have a shape
+
+The strongest available test of "the fights were the problem": re-run the ban
+spread now that a fight has a beat to build for. Against a baseline of .223 ±.037
+lost-or-ran and 36% ±3:
+
+| solo, 60 runs | lost or ran | no kin in doubt | wipes |
+| --- | --- | --- | --- |
+| baseline | .223 ±.037 | 36% ±3 | .103 ±.018 |
+| without Whetstone | .171 ±.023 | 40% ±3 | .084 ±.012 |
+| without Ward Stance | .206 ±.029 | 37% ±3 | .094 ±.015 |
+| without Second Wind | .204 ±.025 | 37% ±3 | .098 ±.013 |
+
+Everything overlaps. **Giving fights a shape did not make the deck matter** — and
+Whetstone, the one card that carried an 8-point never-in-doubt gap in pass 30, no
+longer carries one either. If anything the beat washes the deck out further: the
+fight's structure now comes from the foe, and the answer to it is the same
+whatever you are holding.
+
+That is worth saying plainly after four passes of looking for a load-bearing
+card. The deck is not where this game's decisions live, and no amount of card
+design has moved that. What did move a headline — twice, and by a lot — was
+changing what the *foe* does.
+
+#### A wild kin gets a rhythm, and one-turn fights collapse
+
+Pass 32 ended on "the flatness is in the fights, not the cards". So this reads
+the fight from the foe's side, and the asymmetry is the whole answer: a trainer
+brings a plan — a loop of beats, turn one sets up and turn three pays off — and a
+wild kin brought only itself.
+
+Not *quite* nothing. Wild kin have cornering, added in pass 18, and it had never
+been counted. Measured: **1.25 telegraphed beats per wild fight, and 23% of wild
+fights never get one at all.** But cornering fires off the foe's own HP falling,
+so it is reactive — it arrives late, it arrives because you were winning, and
+there is nothing to build a turn around in advance.
+
+So a wild kin gets a rhythm too: **swing, gather, swing.** Same machinery as the
+trainers, at 0.8 of their numbers (`WILD_PLAN_MUL`), announced a turn ahead. The
+beat costs the foe its attack, so a plan is *less* total damage — it just arrives
+in one lump you were told about.
+
+| 60 runs a side | solo before | solo after | party before | party after |
+| --- | --- | --- | --- | --- |
+| **over in one turn** | 14% ±2 | **3% ±1** | 28% ±3 | **4% ±1** |
+| lost or ran | .317 ±.041 | .273 ±.039 | .036 ±.005 | .054 ±.007 |
+| no kin in doubt | 34% ±3 | 39% ±3 | 11% ±1 | 10% ±1 |
+| wipes | .129 ±.016 | .104 ±.015 | .025 ±.004 | .019 ±.004 |
+| turns per fight | 3.72 ±0.20 | 4.04 ±0.29 | 3.05 ±0.16 | 3.31 ±0.12 |
+
+**Fights decided in a single turn have essentially stopped happening** — from a
+quarter of all party fights to one in twenty-five. That is the complaint passes 11
+to 14 spent four passes on, and none of those passes moved it, because all four
+were tuning damage. It was never a damage problem. It was that nothing on the
+foe's side took a turn to do anything.
+
+What it costs: party is meaningfully more dangerous (.036 to .054, outside its
+interval), which at .036 it could afford. Solo never-in-doubt drifts 34% to 39%,
+which is the wrong way and is the one number to watch next.
+
+The multiplier matters and was measured, not guessed. At a trainer's full numbers
+solo lost-or-ran went to **.389** — the lump kills a kin where two taps could be
+healed through. At 0.6 it went to **.223**, safer than no plan at all, because the
+foe spends a turn and the payoff is too small. 0.8 lands on the baseline.
+
+#### A new kind of card is not load-bearing either
+
+Pass 31 ended on "a fix is not a bigger number, it is a card that does something
+nothing else does". So the set got one. **Second Wind** clears `swungTurn`: your
+kin may move twice this turn. Every other card in the deck is a number on a
+swing, a shield or a heal — this is the only one that changes a rule, and it adds
+no number at all.
+
+It is playable, it is drawn constantly (2,280 draws over sixty runs), and it is
+worth nothing measurable:
+
+| solo, 60 runs each | with Second Wind | banned |
+| --- | --- | --- |
+| lost or ran | .317 ±.041 | .267 ±.028 |
+| no kin in doubt | 34% ±3 | 35% ±3 |
+| wipes | .129 ±.016 | .105 ±.015 |
+| turns per fight | 3.72 ±0.20 | 3.75 ±0.24 |
+| over in one turn | 14% ±2 | 12% ±2 |
+
+Every line overlaps. Take the only rule-bending card in the game out of the game
+and nothing moves. **So it is not that the cards are all the same shape — a
+genuinely different shape does not help either.**
+
+Which is the answer to the question pass 31 posed, and it points somewhere else:
+**the flatness is in the fights, not the cards.** A three-turn fight against a
+wild kin does not have enough structure for any card to be pivotal in. There is
+no phase to set up for, no window to hit, nothing that a second swing this
+particular turn rescues. Until a fight has shape, the deck cannot have shape
+either, and the next pass belongs to encounter design rather than the card list.
+
+Second Wind is kept. Not because it worked — it did not — but because it costs
+nothing measurable, and it is the one card that would have something to bite on
+if fights ever get the structure they lack.
+
+#### Four policy fixes to make one card playable
+
+Worth recording, because most of the pass went here. The probe's turn is *swing
+once, then spend what is left*, and a card that bends the one-swing rule read 1-3
+plays in 200-300 draws through four separate attempts:
+
+1. Nothing took the second swing, because the loop swung once by construction.
+2. The support pass spent the budget before the card's own condition was met, so
+   it was never affordable when it became wanted.
+3. Reserving the turn did not help, because the swing takes the *best* move and
+   ate the reserve.
+4. Capping the first swing to a cheap move starved it entirely — no swing at all,
+   4.60 turns a fight.
+
+None of those were the card. **The card's real problem was arithmetic**: a turn is
+three energy and kin moves cost one or two, so swing + card + swing at one energy
+is exactly three in the best case and impossible in every other. Free, it works.
+A policy is a model of the rules, and a card that changes the rules invalidates
+the model — four times over, the measurement was of the plumbing.
+
+#### The deck substitutes: a stronger card is not a more important one
+
+Pass 30's template said a card needs to compound on more than one axis. Grit was
+the clean test — measured worth nothing, and already carrying the run-long axis
+(`might` is saved with the save) — so it got exactly one more: `grow: 1`, each
+play permanently bigger, to the usual ceiling of four times base.
+
+It made the card bigger and it did not make the run need it.
+
+| solo, 60 runs each | Grit as it was | Grit with growth |
+| --- | --- | --- |
+| baseline turns per fight | 3.67 ±0.15 | 3.49 ±0.15 |
+| turns with Grit banned | 4.05 ±0.24 | 3.90 ±0.21 |
+| **the gap — what Grit is worth** | **+0.38** | **+0.41** |
+| permanent might it contributes | +19 | +34 |
+| played, of fights it could be paid for | 89% | 98% |
+
+The card nearly doubled its contribution and gained nine points of play rate. The
+gap between having it and not having it did not move. What did move was the whole
+baseline, 0.18 turns shorter — a cost with nothing bought. **Reverted.**
+
+The reason is the finding: **the deck substitutes.** Make one card stronger and
+whatever it displaces does the same job, so the run never comes to depend on it.
+That is a harder flatness than "the cards are weak" — these cards are
+*interchangeable*, and buffing one of them cannot change that. It also explains
+pass 29 in hindsight: a 75%-epic deck and a 66%-rare deck play the same because
+each is a different draw from one pool of near-equivalent cards.
+
+Which reframes what a fix would have to be. Not a bigger number on a card — a
+card that does something no other card does, so that nothing can stand in for it.
+Whetstone is the only one in the set that passes that test today, and it passes
+it by covering three axes at once rather than by being large.
+
+#### A correction to pass 30
+
+Pass 30 said "take Ward Stance, War Cry or Grit out of the game entirely and
+every line stays inside its interval". That was checked against the danger line,
+never-in-doubt and wipes — not against every line. **Grit moved turns per fight
+even then**, 3.67 ±0.15 to 4.05 ±0.24, which is outside by a hair. Ward Stance
+and War Cry hold up; Grit did not, and the sentence claimed more than it had
+looked at.
+
+#### How flat, exactly: one card in four is worth measuring
+
+Pass 29 deduced the flatness from two build policies tying. `--ban <id>` and
+`--force <id>` measure it directly: play the run with a card struck out of the
+offers and the starting deck, or with three copies pinned in that nothing may
+swap out. Sixty solo runs each.
+
+| | lost or ran | no kin in doubt | wipes |
+| --- | --- | --- | --- |
+| **baseline** | .268 ±.031 | 35% ±3 | .117 ±.015 |
+| without Ward Stance | .251 ±.026 | 35% ±3 | .105 ±.014 |
+| without War Cry | .274 ±.030 | 37% ±3 | .115 ±.014 |
+| without Grit | .270 ±.037 | 37% ±3 | .112 ±.017 |
+| **without Whetstone** | .223 ±.031 | **43% ±4** | .093 ±.012 |
+| **with 3× Whetstone** | **.326 ±.028** | **26% ±3** | .149 ±.013 |
+
+**Three of the four cards are worth nothing measurable.** Take Ward Stance, War
+Cry or Grit out of the game entirely and every line stays inside its interval.
+That is the flatness proven rather than inferred, and it is a stronger statement
+than the policy tie, because it is one card at a time against a fixed baseline.
+
+**Whetstone is the exception, and it is a big one.** Banning it takes
+no-kin-in-doubt from 35% to 43% — intervals nowhere near each other — and pinning
+three copies takes it to 26%. That is a **17-point span on the oldest metric in
+the project, from one card.** Its danger line spans .223 to .326 across the same
+two runs.
+
+A caveat that has to be said: `--force` pins three copies and therefore costs
+three deck slots, so it conflates a card's strength with the price of carrying
+it. Ward Stance forced is *worse* than baseline (.318) for exactly that reason.
+`--ban` is the clean half of the measurement; force is the confirmation.
+
+#### What "a card that matters" would have to be
+
+Whetstone is +3 to every attack for the rest of the battle, one energy, and it
+compounds three ways at once: **combo** adds 3 more when it follows another card,
+**grow** raises it permanently on every play toward a ceiling of five times base,
+and `atk` applies to every swing rather than the next one. It ends a run in the
+deck of nearly every build, drawn in most fights and played in 88% of the ones it
+could be paid for.
+
+That is the size a card has to be here. Below it, a card can be removed from the
+game without any headline noticing. So "make the good cards better" is not the
+lever it sounds like — the useful version is **make more cards compound**, on the
+Whetstone pattern: something that pays every swing, grows across the run, and
+rewards being played in sequence. One axis of those three is not enough; Grit
+grows and is worth nothing measurable, Ward Stance draws and is worth nothing
+measurable.
+
+**No card was changed.** Whetstone is already pulling the direction the design
+wants — its presence makes fights sharper, and removing it makes them longer and
+safer, which is the boring end. Changing the one card that works to prove a point
+about the twenty-odd that do not would be the wrong move.
+
+#### The card set is flat: two very different decks, the same run
+
+This has now been answered three times and the third answer is the one with
+evidence behind it.
+
+Pass 27 compared the best and worst thirds of sixty runs, found identical decks,
+and said the deck cannot matter — from a probe that always took the rarest card,
+so the decks were identical by construction. Pass 28 gave it a `value` policy,
+saw solo lost-or-ran fall from .246 to .162, and said the deck decides
+everything. Pass 29 found that `staticScore` and `worth()` scored neither `combo`
+nor `kill`, and that `worth()` docked combo cards 5% for carrying an upside it
+never counted. With those scored, sixty runs a side:
+
+| solo | build rarity | build value |
+| --- | --- | --- |
+| lost or ran | .256 ±.035 | .261 ±.022 |
+| wipes | .107 ±.015 | .121 ±.011 |
+| no kin in doubt | 37% ±4 | 38% ±3 |
+| turns per fight | 3.59 ±0.19 | 3.77 ±0.16 |
+| deck rarity mix | epic 75%, rare 19% | **rare 66%, epic 29%** |
+| the three cards it holds most of | 6.6 / 12 | **9.4 / 12** |
+
+Party is the same story: .036 ±.005 against .041 ±.006, with an 83%-epic deck
+against a 69%-rare one.
+
+**Two decks that could not look more different produce the same run.** One is
+three-quarters epic and spread across nine card types; the other is two-thirds
+rare and half of it is three cards. Every outcome line sits inside the other's
+interval. That is a much stronger version of pass 27's claim than pass 27 could
+make, because it is a between-policy comparison rather than a within-policy one.
+
+The reading is not "the deck does not matter" as a compliment. It is that **the
+card set is flat** — the good cards are not good enough, or the bad ones not bad
+enough, for a build to be worth having. If deckbuilding is meant to be half the
+game, that is the thing to fix, and it is a card-power question rather than a
+reward-screen question.
+
+It also dissolves the worry pass 28 left behind. "A well-built deck takes solo
+no-kin-in-doubt to 51%" was the same artefact: the value deck now reads 38% ±3
+against the rarity deck's 37% ±4.
+
+#### Rarity is not the wrong axis after all
+
+Pass 28 ranked the cards by value per energy and found four epics below five
+rares, and concluded the reward screen steers players wrong. Three of those four
+were the scorer: Berserk 13 → **28**, Reaper 16 → **32**, Bulwark 15 → **24**
+once combo and kill are counted. Berserk is a 6-value card that puts 11 on the
+board; Reaper grows +4 every time it finishes something.
+
+Only **Ward Stance** stayed at 15, and it is the one epic carrying no keyword at
+all — which is the same finding pass 24 reached from the other direction, and it
+has already had its change. **No card was touched this pass.** The ledger's own
+advice is *read `worth()` before reading the card*, and following it first
+prevented four card changes that would each have been wrong.
+
+#### How pass 28 read it, before the scorer was fixed
+
+Pass 27 split sixty runs by the danger line, found the best and worst thirds
+holding identical decks, and concluded the deck cannot be what makes a run good.
+That conclusion was drawn from a probe that always takes the rarest card on
+offer, which converges by construction. `--build` gives it other policies, and
+the answer reverses.
+
+Solo, sixty runs each:
+
+| | build rarity | **build value** |
+| --- | --- | --- |
+| lost or ran | .246 ±.027 | **.162 ±.023** |
+| wipes | .111 ±.013 | **.073 ±.011** |
+| turns per fight | 3.97 ±0.19 | 4.37 ±0.29 |
+| no kin in doubt | 39% ±3 | **51% ±3** |
+| deck rarity mix | epic 73%, rare 21% | **rare 60%, epic 34%** |
+| the three cards it holds most of | 6.6 / 12 | 8.9 / 12 |
+
+Party, same:
+
+| | rarity | value | grow |
+| --- | --- | --- | --- |
+| lost or ran | .038 ±.005 | .036 ±.008 | **.052 ±.008** |
+| wipes | .028 ±.005 | .028 ±.007 | **.042 ±.008** |
+| turns per fight | 3.02 ±0.14 | **3.42 ±0.24** | 3.01 ±0.18 |
+| rarity mix | epic 84% | rare 59% | rare 72% |
+
+**The deck decides the run.** A value-greedy player loses a third fewer solo runs
+than a rarity-greedy one, and builds a visibly different deck to do it — 60% rare
+where the rarity player is 73% epic, and concentrated harder (8.9 of 12 in three
+card types against 6.6). Building for permanence keywords is worse than either.
+
+Which makes the second finding the uncomfortable one: **rarity is anti-correlated
+with usefulness here, and rarity is the axis the reward screen presents.** Ranked
+by what a card does per point of energy, four epics — Berserk 13, Ward Stance 15,
+Bulwark 15, Reaper 16 — sit below five rares: Grit 36, Heartroot 29, Thornmail
+22, Surge 22, Ironhide 18. A player reading the reward screen the way the game
+sorts it is being steered into the worse half of its own card set.
+
+That is not fixed here. Demoting the four epics would make them *more* common,
+which is backwards for weak cards, and buffing four cards at once is exactly the
+move that went wrong with Ward Stance and Twin Strike. It is a card-at-a-time
+job, and `--build value` is now the instrument to check each one against.
+
+One thing to watch when it is done: the value deck takes solo no-kin-in-doubt to
+**51%**. A well-built deck currently makes half of all solo fights safe, which is
+the oldest complaint in the project reappearing from the other end.
+
+#### Money is not a hole, and it is not a decision either
+
+The report showed 1093-2995 shards unspent at Crown Hollow and called it a
+currency with no sink. The sink was there; the shopping list was not. The shop
+sells seven things and the probe bought the two cheapest — five bloom orbs and
+four salves — and stopped, which is a self-imposed poverty rather than an
+economy. Buying prism and gleam orbs and carrying ten salves when rich absorbs
+nearly all of it, 1165 → 530 in party and 1854 → 363 in solo.
+
+And it changes nothing: lost-or-ran .038 ±.005 → .045 ±.010, solo .246 ±.027 →
+.244 ±.032, every other line inside its interval. **Past the floor of "never out
+of orbs, never out of salves", money buys nothing measurable.** Shards are a
+tutorial-era currency — they matter for the first hour and then stop being a
+decision. That is a fair thing for a shop currency to be, and it is worth saying
+out loud rather than leaving the number looking like a bug.
+
+#### Is the reward system building a deck, or a pile?
+
+By Crown Hollow the deck is always full, always 12 of 12, **77% epic, 2% common**,
+and **half of it is three card types** (6.8 of 12). The reward system does
+upgrade — commons are gone by the end — but it converges.
+
+How much does the deck decide a run? Split sixty runs by the danger line and
+compare the thirds at each end:
+
+| | best third | worst third |
+| --- | --- | --- |
+| lost or ran (party) | .011 ±.004 | **.085 ±.020** |
+| might | +111 ±27 | +97 ±27 |
+| card growth | +174 ±40 | +161 ±34 |
+| top three cards | 6.6 / 12 | 6.8 / 12 |
+| rarity mix | epic 73%, rare 21% | epic 78%, rare 16% |
+
+**The outcome differs eightfold and the deck does not differ at all.** Every deck
+statistic overlaps; in solo the *worse* third even carries slightly more card
+growth. Whatever separates a good run from a bad one, it is not the cards.
+
+That is partly the probe: its swap rule keeps the highest rarity, which is
+deterministic, so of course it converges. But that is the honest finding rather
+than an excuse — **when rarity is the only axis the reward screen offers, a
+rarity-greedy player ends every run with the same pile**, and a deck that is the
+same every run cannot be the thing that makes a run good. If the deck is meant to
+be a build, the offer needs an axis other than "which of these is rarer".
+
+#### Might had no ceiling, and short fights are not a damage problem
+
+Card growth is capped at four times a card's own value, and the note beside
+`growCap` says why: *a card that grows forever eventually plays the game for
+you*. `G.might` is the pile those plays add up to — added to every attack from
+every kin, saved with the run — and it had no ceiling at all. Once the probe
+started playing the might cards, it measured **+499 damage on every attack by
+Crown Hollow, against a wild kin's 174 HP.** The back half of a run was one-shots.
+It is capped at 150 now, which is the same principle applied to the total rather
+than to each card.
+
+The interesting part is what capping it does *not* do. Party fights had fallen to
+2.96 turns and the obvious suspicion was that damage had run away. It has not:
+
+| | uncapped | cap 150 | cap 40 |
+| --- | --- | --- | --- |
+| party turns | 2.96 ±0.16 | 3.09 ±0.19 | 3.10 ±0.17 |
+| party over in one | 28% ±3 | 27% ±4 | 31% ±3 |
+| party lost or ran | .036 ±.006 | .047 ±.011 | .056 ±.012 |
+| solo turns | 3.64 ±0.20 | 3.60 ±0.19 | 3.60 ±0.15 |
+| solo lost or ran | .222 ±.025 | .239 ±.028 | **.348 ±.039** |
+| might at the end | +499 | +111 | +34 |
+
+Cutting the biggest damage source in the game by more than 90% moved the length
+of a fight by a tenth of a turn. What it moved was the danger — solo lost-or-ran
+went from .222 to .348, a third of all fights. **Short fights here are not a
+damage problem, and you cannot buy turns by taking damage away; you only buy
+losses.** A correctly-played deck is simply faster, and that is fine.
+
+So 150 is the cap that bounds the tail and changes nothing else: every headline
+sits inside the uncapped interval, and the one-shot endgame is gone.
+
+#### Are the one-cost damage cards underpriced?
+
+They are what Twin Strike loses to — Fang Hone 100%, Blooded Edge 96%, Whetstone
+93% when payable, all at one energy. Per energy they are not out of line:
+Whetstone grown is +15 an attack for the battle, about +45 over three turns;
+Blooded Edge grown is +56 on one attack with half of it back as healing; Twin
+Strike is an extra swing a turn, +80-100 over a fight, for two. Forty to fifty
+points an energy, all of them.
+
+The asymmetry is not price, it is **timing**. Twin Strike pays over the turns
+that remain; Blooded Edge pays now. In a game whose fights last three turns,
+immediate beats deferred, and that is the same fact as the paragraph above rather
+than a second problem. Slowing the one-costs down to rescue Twin Strike would
+slow the whole game, and the cap-40 row shows what that buys: lost runs, not
+longer fights. Left alone.
+
+#### The two-cost slot is fine; the might cards were mispriced
+
+The premise that a two-cost is structurally squeezed came from reading
+played/drawn, which slopes with price on its own. Once you divide by the fights
+a card could actually be paid for, price stops predicting play at all — the
+median `when payable` runs 100% at cost 0, 69-75% at cost 1, **76-78% at cost 2**
+and 88-89% at cost 3. Cost-1 cards span 18% to 100%. The buckets overlap almost
+completely.
+
+What predicts play is not price but **permanence**. Every card at the top of
+every bucket has grow, chain, retain or combo; the ones at the bottom have none.
+A one-shot has to beat cards that keep paying.
+
+Which is how the real finding turned up. `G.might` is saved with the run and
+added to every attack from every kin for the rest of it — eighty-odd fights — and
+the probe was pricing it over the current fight's runway, capped at four turns.
+Temper read 31%, Grit 44%, and six passes of reading the might cards went through
+that price. Scored as the permanent it is, **Temper is 96%, Grit 90%, War Cry
+100%** — Temper is now the second-best two-cost in the deck, not the second
+worst. Nothing about the cards changed.
+
+Playing them correctly makes the player stronger, so the run numbers moved with
+it: solo lost-or-ran .311 → .247, party turns 3.50 → 3.08. That is a re-baseline,
+not a regression — the old numbers described a player throwing away permanent
+damage every run.
+
+Twin Strike is the one card left at the bottom that is genuinely the card. It
+buys an extra swing a turn for the rest of the fight, scored at 32-48 points on a
+real turn, where a good one-energy card scores 28-57: two energy for what one
+buys elsewhere. **The obvious fix overshoots.** At cost 1 it went to 77-84% and
+took the game with it — party fights down to 2.86 turns, solo no-kin-in-doubt
+back up from 37% to 42%, Bulwark down to 55%, Ward Stance to 13%. An extra swing
+scales with the kin's damage, which grows all run, so halving the price makes it
+the best card in the deck at every level. Left at two. If it gets fixed it is by
+asking whether Whetstone, Blooded Edge and Fang Hone are the ones priced wrong.
+
+#### What a drawn card is worth
+
+The scorer pays a flat 3 points for a drawn card, which decides whether a draw
+effect is an effect or a decoration. Measured: the average non-kin card in hand
+is worth **25.5 points** (party) or 21.7 (solo) — but a drawn card only cashes in
+on a turn that ended with energy to spare, and **only 15-18% of turns end
+card-poor. The rest end out of energy, where an extra card buys nothing.**
+
+25.5 × 15% = **3.8**. Solo: 21.7 × 18% = **3.9**. So three is right, a shade low,
+and nowhere near enough to explain Ward Stance. The constant stays at 3: the
+gap is smaller than the precision this measurement has, and `worth()` feeds the
+average it would be tuned against, so chasing the fixed point would be tuning
+noise.
+
+The 85% is the more interesting half. **Energy, not cards, is what this game runs
+out of** — which is why a card's price is so much of its identity, and why draw
+effects are worth so much less here than they look.
+
+#### Ward Stance, Bulwark, and what a two-cost has to buy
+
+Two energy in a three-energy turn is a hard price: it buys one card where one
+energy buys two, so a two-cost has to beat the *pair* it displaces. The ones that
+do have something a pair cannot give — Bulwark grows permanently and retains,
+Soulfang chains and scales off kills. Ward Stance had neither, and against
+Bulwark at the same rarity and the same price it was smaller on every axis:
+15 shield to 18, guard 3 to 4, no grow, no retain. One drawn card was the whole
+difference between them.
+
+The probe read it exactly that way — played in **20%** of the fights it could be
+paid for, against Bulwark's 79% and Soulfang's 96%, the bottom of its own cost
+bucket. It now draws **two**, which is the axis the two cards actually differ on:
+Bulwark is the wall you invest in, Ward Stance is the smaller wall that refills
+your hand. That took it to 35% and left the run untouched — solo 36% ±3
+no-kin-in-doubt against 37% ±3 before, party 12% ±2 against 12% ±2.
+
+Chain was tried first and is the wrong lever. This deck is full of 0-cost cards,
+so a chain discount is live almost every turn: Ward Stance became a 1-energy
+13-shield card, beat Ironhide, pushed Bulwark from 79% to 70%, and bought enough
+safety that solo no-kin-in-doubt went from 37% to 44%. A card fix that moves the
+difficulty of the whole game is not a card fix.
+
+35% is still the lowest of the shield family. The probe's scorer values a drawn
+card at three points, so two cards is six against fifteen shield, and whether a
+person rates a full hand higher than that is a fair question this tool cannot
+answer. Tuning the scorer until the card looks good would be answering it the
+wrong way round.
+
+#### What the probe decides, that a player would decide differently
+
+Twice now a decision buried in this file has been quietly manufacturing the
+answer, and both times several passes of game tuning happened against it before
+anyone noticed — cheapest-first card play made every two-energy card look dead,
+and healing before every duel made every trainer look unloseable. So here is the
+list, kept honest on purpose. **A probe decision is a hypothesis about players.
+When a number will not move, suspect this table before the game.**
+
+| the probe | a player | biases | done |
+| --- | --- | --- | --- |
+| took the first starter every run | picks one of three | **everything** — the whole matchup cross-tab was measured with Ember's resistances baked in, part of why Dorn's Stone wall read as an eight-turn slog | rotates now |
+| never drank a salve | carries a bag | **the wipe rate**, the number three passes steered by: every wipe was one a player had an item to prevent | drinks once a fight, when the telegraph says the next hit kills *and* the salve stops it |
+| healed before every trainer | arrives having walked the route | trainer difficulty, wholly | fought as met; `--rested` keeps the old column |
+| played cards cheapest-first | learns to sequence | every card's played/drawn rate | scores by value now |
+| reads never-in-doubt off an absolute floor | asks "was that fight anything?" | conflates a dangerous fight with an already-hurt party | **cost of a fight** reports beside it |
+| carries exactly four kin | carries one to six | the party/solo split — but that split is the stated axis, not a hidden one | left, on purpose |
+| grinds to a fixed level per leg | moves on when it feels ready | the level-gap column, and every bucket downstream of it | left; documented |
+| fights each trainer after grinding that leg | fights them on the way past | trainers are always met at the top of a leg, i.e. at their easiest | left; documented |
+| never fled | runs when the next hit kills | **pushed wipes up** by counting losses nobody would have stood still for | flees now — and read `lost or ran`, not `wipes` |
+| took a random card from the reward offer | takes the best one | depressed played/drawn across the whole pool — the instrument the deck work in passes 9, 10 and 12 was steered by | takes the best now |
+| restocks only on a heal trip | shops when passing through | catch rate, salve supply | left; documented |
+| counted a card as drawn every turn it sat in hand | draws it once | **the whole played/drawn table**: a Retain card sits in hand all fight, so it was counted four times against the one time it can be played — the bottom of the table was Dewdrop, Hunker, Bulwark and Ward Stance, i.e. every card with Retain on it | counted once per card now |
+| never skips the reserved swing | takes a turn off to land something big | only Kinbond, the one 3-cost without Chain — Titanheart and Overkill are payable often and played 90% and 84% when they are | corrected: the row used to claim no 3-cost was ever affordable, which was never true. Letting it skip the swing was tried and was worse than the gap (kin play rates 62–98% → 24–42%) |
+| skipped the reward card after a trainer win | takes it — the real win path offers one on both branches | **the whole legendary tier**: `REWARD_ODDS.wild` has legendary at 0, so a trainer win is the only place in a normal run one can come from | takes it now |
+| rotates the starter, so 60 runs is 20 each | plays one | **any per-starter claim** — across three samples of builds that never touched Ember, Cindercub's lost-or-ran read .237, .358 and .438 at ±.08 | `--starter <name>` runs all sixty on one |
+
+**Two traps in reading the numbers, both found by falling into them.**
+
+*Fractions of a party are not comparable across party sizes.* `partyHp()` is a
+mean, so the very same swing reads as a quarter as much damage to a party of four
+as to one kin alone. "Party fights cost 7% and solo fights cost 25%" looked like a
+three-fold difficulty gap and was a denominator: **0.21 ±0.03 kin-bars against
+0.19 ±0.03**, the same number twice. The report prints both.
+
+*Two rules, from five passes of getting this wrong.* **Average the ratios, never
+ratio the averages** — `avg(x) / avg(fights)` lets a long run outvote a short
+one, which is not what "per fight" means; four lines were doing it. And **if a
+quantity divides by the party, it is not comparable between the modes** — those
+lines now say so in the report itself and print a party-free twin underneath.
+Every line in the report states what it is normalised by. That was meant to be
+the end of this class of bug.
+
+*A mean has a party size in it, and this is the third time.* "Never in doubt"
+reads the party mean, so with four kin one of them being taken to zero — a fight
+that genuinely went wrong — is 25% party damage and sails under the 30% bar.
+Party mode had read 37-40% never-in-doubt for four passes and looked immune to
+every fix; measured on **the worst-off kin**, which means the same thing whether
+you brought one or six, it is **11% ±2**. Nearly nine party fights in ten put a
+kin in trouble. Solo reads 39% either way, which is the sanity check. `no kin in
+doubt` is the line to compare across modes; `never in doubt` is the line for
+whether the *run* was ever at risk.
+
+*The widest interval in the report is not noise.* `turns per fight` sits at
+±0.25 across sixty runs and had drifted up three passes running. Split by
+starter it is Dewdrip 4.50 ±0.53, Cindercub 3.97 ±0.42, Sproutle 3.87 ±0.25 —
+a spread between the three larger than the headline's own interval, because the
+report is averaging three different games. More runs cannot narrow that; the
+per-starter table is printed instead. Sproutle is the outlier worth knowing
+about: fewest free fights (30% against 40/41%) and the most dangerous
+(0.338 lost-or-ran against 0.237/0.275).
+
+*Running away is not surviving.* Teaching the probe to flee moved fights out of
+the wipe column and into the run column and changed the danger not at all — solo
+went from .196 wipes to .063 wipes plus .123 runs. Read **`lost or ran`** when
+asking whether a fight can beat you.
+
+**Every rate carries a 95% interval, and you read the interval first.** One
+number standing in for thirty runs that disagree is how three passes' worth of
+claims about the wipe rate turned out to be noise wearing a decimal point — it
+came back anywhere from .155 to .364 on *identical* builds. The report prints
+`mean ±half-width` for every per-fight rate, and underneath the wipe line, how
+many runs a claim of a given size would actually need from the spread that
+sample just showed. At the time of writing that is **~32 runs to call a .05
+change in the solo wipe rate, and ~200 for a .02**. If two builds' intervals
+overlap, the tool has not told you which is better, and staring at the means will
+not change that.
+
+**The policy is the measurement, and cheapest-first was lying.** Every 2-cost card
+looked dead — Bulwark played 1% of the times it was drawn, Ward Stance 10% —
+and the reason was the ordering, not the cards: with three energy and the swing
+reserved out of it, a 2-cost card only got played when two 1-cost cards had not
+already eaten the budget. The probe scores cards now (damage added, damage
+prevented, health restored, per energy) and buys the best rate it can afford.
+Bulwark went to 52%, Ward Stance to 49%, Twin Strike to 58% — and the cards that
+*fell* were the ones cheapness had been flattering. Nothing about the cards
+changed. If a card looks dead, suspect the policy first.
+
+It reports **per trainer** as well as per run. Trainers are the hand-authored
+fights, and averaging them into the wild ones hides exactly the thing a scripted
+plan is meant to change; the line for each also counts how many plan beats were
+actually telegraphed before the fight ended, because a plan nobody sees is not a
+plan. It used to heal the party before every duel, on the grounds that a trainer
+measured on the fumes of the last wild kin measures the walk to town instead.
+**That was wrong, and it took four passes to notice.** Healing first meant every
+trainer was measured against four rested kin — a fight no trainer in the valley
+can win, and not a fight anybody actually has. A player arrives having walked the
+route; what the party has left when it gets there *is* the fight. `--rested`
+keeps the old behaviour, because the difference between the two columns is how
+much of a trainer's difficulty is the walk that came before it.
+
+**The policy is the measurement.** The version that played cheapest-first could
+not tell a good deck from a big one, because it never set anything up: it played
+the Chain card while the discount was still zero. It now plays a turn in two
+passes — enablers, then payoffs — around a reserved swing, because a policy that
+spends its last energy on a shield and then passes is measuring itself. The
+first attempt at that took thirty-seven turns a fight.
+
+Two more warnings from using it. **Runs vary a lot** — identical builds came back
+28 and 42 walks-to-heal — so anything under ten runs is noise, and every rate is
+reported per fight because absolute counts are dominated by how long a run
+happened to take. And **the probe's policy is part of the measurement**: the
+first version played whatever was leftmost in the hand, which cannot tell a good
+deck from a big one. It plays cheapest-first now, which is both what a person
+does and what the Chain and Combo cards are built to reward.
+
 ### Cards
 
 **The kin brings the attacks. The deck makes them land harder.** Nothing in your
@@ -515,6 +1425,19 @@ an accessory to the deck, and it is meant to be the other way round. Every point
 of damage in the game comes out of a move the active kin knows.
 
 A card has one growable number, `v`, and `vt` says what that number is:
+
+Three keywords make the *order* you play things in matter, which is the part a
+pool of "+N to a thing" cards cannot do:
+
+| keyword | what it does | why |
+|---|---|---|
+| **Retain** | the card stays in your hand at end of turn | a heal you are holding is a decision every turn; a heal you must spend now is a decision once |
+| **Combo +n** | worth n more if it is not the first card you played this turn | the cheapest way to make sequencing matter |
+| **Chain** | costs 1 less for every card played before it this turn | turns a finisher you could never afford into the reward for setting one up |
+
+They are keywords rather than sentences because a mechanic should be named once
+and learned once — and because the spelled-out versions did not fit on the card,
+which a screenshot caught immediately.
 
 | `vt` | what the number does |
 |------|----------------------|
@@ -555,9 +1478,239 @@ An `edge` survives a miss. Spending two turns setting up a Soulfang and losing
 it to a 5% accuracy roll is how you teach someone never to set anything up.
 
 Kin move cards are priced by weight (`moveCost`), so a turn is roughly one real
-move plus the support you stack onto it. Foes carry `FOE_HP_MUL` times their
-normal HP — only a little over 1, now that the deck sharpens attacks instead of
-adding its own.
+move plus the support you stack onto it.
+
+A fight is played over a pool of HP that is not the kin's own. Three dials set
+its shape, and they pull against each other:
+
+| dial | now | what it buys |
+| --- | --- | --- |
+| `FOE_HP_MUL` | 4.0 | wild HP. Turns. Raise it and fights get longer *and* more dangerous. |
+| `WILD_DMG_MUL` | .70 | how hard a wild kin hits. The damper that stops those extra turns being paid for in walks back to town. |
+| `TRAINER_HP_MUL` | 2.2 | trainer HP per kin. Far lower, because a trainer is already a two- or three-kin fight and hits at full strength. |
+
+Giving trainers the wild number was the mistake worth writing down: Wick's
+opening fight went to a 70% loss rate and Dorn's two kin became a ten-turn slog.
+`toughen(mon, mul)` takes the multiplier now; `startBattle` and `resolveFoeDown`
+both pick it off `b.wild`.
+
+### A trainer with a plan
+
+Every hand-authored fight in the game was "two kin, no plan": the foe scored its
+moves each turn and never built toward anything, so a trainer played exactly
+like a wild kin with more HP.
+
+A plan is a short loop of beats the opposing side works through — a loop rather
+than a script, so it survives a fight going long without needing an ending
+written for it. `PLANS` holds three:
+
+| beat | what it does |
+| --- | --- |
+| `sharpen` | banks `b.foeEdge`, added flat to the next foe attack |
+| `brace` | banks `b.foeShield`, eaten before their HP is |
+| `aim` | sets `b.foePierce`; the next hit goes straight past your shield |
+
+Each is worth `planScale(lvl)` times its base, so a plan keeps up with the
+valley. **A beat costs the foe its attack**, which is what makes it a decision on
+your side too: the turn it braces is the turn it does not hit you. And every
+beat is telegraphed a turn ahead through the intent line that was already there,
+so the point is never surprise — it is that you can see the big hit coming and
+get to decide what to do about it.
+
+`aim` exists because of what players do about `sharpen`: bank a shield and eat
+it. Only the late trainers know it, and it is the answer to that answer.
+
+**A plan has to keep its own promise, and it has to be seen.** Two bugs, both
+found by the per-trainer table rather than by reading the code:
+
+- A `sharpen` beat costs the foe its turn to bank an edge, so the beat after it
+  has to cash it in — and it did not. `foeChoose` would score a status move
+  higher, the edge would sit unspent, and a foe with a debuff to spam banked
+  edge after edge while grinding your attack down. Coll's three kin turned a
+  five-turn fight into a thirty-turn one that way, and nothing in it was a
+  decision. `foeChoose(mustAttack)` now forces an attack out of the foe whenever
+  an edge is banked.
+- Plans whose first beat was a `swing` were never seen: Pell telegraphed 0.9
+  beats a fight and Wick I 1.4, because the fight ended before the plan reached
+  the interesting part. Every plan front-loads now, and the early ones are short
+  (`['sharpen', 'swing']` rather than three or four beats) so a beat lands inside
+  the first two turns. Pell went to 1.6, Wick I to 2.1, Ivo to 2.4. A plan the
+  fight is too short to show is not a plan.
+
+The three Wick fights are the arc, and it is asserted as data in
+`emberkin_cards` — each plan is longer than the last, each knows a beat the one
+before it did not, and nobody gets two setup turns in a row:
+
+| | plan |
+| --- | --- |
+| Wick I | `swing, sharpen, swing` — one idea, and he does not lead with it |
+| Wick II | `sharpen, swing, brace, swing` — he opens with the setup now, and has learned to eat your turn |
+| Wick III | `sharpen, swing, aim, swing, brace, swing` — three tools, one of them the answer to how you beat him last time |
+
+Every other trainer carries one too, one idea each, in character: Dorn braces,
+Ivo sharpens, Coll does both, Hale opens on the back foot, Mio takes aim. Vespyr
+is the one wild fight that gets a plan, passed straight to `startBattle` rather
+than through an NPC.
+
+### The chart points the same way, but not as hard
+
+`effect(moveType, defTypes)` reads the chart; `EFF_DMG(e)` says what that entry is
+worth on the bar. They are separate on purpose.
+
+The chart says who beats whom, and that is knowledge worth having. What it must
+not do is decide the fight before a card is played — and at a straight 2× / 0.5×
+it did. Twelve runs with one kin, cross-tabbed by how the matchup read *before*
+the first turn:
+
+| your best element into theirs | share | never in doubt | lost |
+| --- | --- | --- | --- |
+| strong into weak | 16% | 69% | 6% |
+| even into even | 33% | 37% | 34% |
+| weak into strong | 32% | 7% | **57%** |
+
+A tenfold swing in whether you win, settled in advance, with the level gap
+identical in every bucket (0.6–1.8). It was never a level problem.
+
+So `EFF_DMG` softens: 2× lands as 1.6×, 0.5× as 0.65×, a stacked double weakness
+as 2.8× rather than 4×. `effect` still returns the chart value, because that is
+what the dex shows and what "It's brutally effective!" is about. After it, the
+same cross-tab runs 51% / 39% / 21% never-in-doubt and 6% / 25% / 41% lost. The
+headline average barely moved — that is the point. An average over a
+distribution whose two ends have walked toward each other looks identical to one
+that has not moved at all, which is why never-in-doubt is a poor number to steer
+by on its own and why the cross-tab is printed underneath it.
+
+Watch for compensations that go stale. `rival1` had been dropped a level because
+a type advantage plus one swing a turn made the opening fight unwinnable; with
+the chart softened that same drop had a bot winning 98 times in a hundred, so it
+came back off. `emberkin.test.mjs` asserts both ends of that fight.
+
+### A cornered wild kin
+
+Two fights in five were never in doubt, and it was not that they were easy — a
+wild fight was four identical small hits with no moment in it. `CORNER_AT` (.4)
+and `CORNER_EDGE` (14, through `planScale`) gather that damage instead: the first
+time a wild kin drops below the line it banks an edge, the intent line says
+`— cornered` with the bigger number on it, and the swing after that is the one
+that could lose you the fight. You get a full turn between the telegraph and the
+hit, which is the whole point.
+
+It is one swing, not a state of being, and only wild kin do it — a trainer's kin
+has a plan instead.
+
+**A kin you resist gets three of them, and gets them early.** The cross-tab
+named the bucket: 43% of one-kin fights are against something whose element you
+resist, and those ran 59% / 59% / 45% never-in-doubt against 29% for the fights
+you walk into at a disadvantage. A kin whose every blow bounces off you cannot
+threaten you by hitting harder — hitting is the thing the chart has taken away.
+So `cornerAt(foe, mine, done)` gives a blunted kin `CORNER_RESIST` = .78, .52 and
+.26 instead of one moment at .4. The edge is flat damage, which is the one thing
+the chart cannot blunt.
+
+Moving its single moment earlier, without adding the other two, shifted the
+bucket by six points and the run average by two — inside the interval, and
+therefore not a result. Three moments is the difference between a telegraph and
+a fight.
+
+**And it cannot fire if the kin never gets a turn.** Three in ten party fights
+ended in one swing — send in the right element, delete something that never acted
+— so the only readable thing a wild fight has was exactly the thing those fights
+skipped. A healthy wild kin now takes a killing blow and holds on by a point,
+once, and corners on the spot. It cannot save one that was already hurt below
+`CORNER_AT`, and it cannot happen twice.
+
+The other half of the same problem was the damper. `WILD_DMG_MUL` exists so a
+long fight is not paid for in walks back to town, and it had no business fully
+compounding with a resistance you already had: a wild kin you resist was hitting
+for .65 x .70 of normal, which is where the "nobody can hurt anybody" fights came
+from — three quarters of them never in doubt, none of them lost, and the longest
+in the game. Through a resistance the damper now applies at half strength.
+Dropping it entirely was worse than the disease (wipes .220 to .364 a fight,
+which is a walk to town every third fight); half is the corner.
+
+### Switching, and what it costs
+
+A switch used to cost one turn and buy the whole matchup. With a party of four
+that made it a reflex rather than a decision — send in the right element, delete
+the thing, never lose: 0.006 wipes per fight, and every trainer in the valley
+beaten first try. `SWITCH_PUNISH` (11, through `planScale`) is the price of being
+caught mid-change: the hit that lands while your kin is still finding its feet
+comes in harder. That took party losses from 0.006 a fight to 0.040 — nearly
+sevenfold — which is the first time a party has been able to lose at all.
+
+**A kin sent in is still finding its feet.** `SETTLE_MUL` (.6) is the other half:
+pricing the switch was not enough, because it still bought the whole matchup
+*immediately*. The payoff arrives a turn late now, and over a three-turn fight
+that late turn is most of the reason to switch at all — which is what makes it a
+decision rather than the obvious opening move.
+
+It did **not** stop the switch being the strongest button on the screen, and
+that is the honest state of it. Run the probe with a switch-happy policy instead
+of a human one and the rate goes 0.47 to 0.65 switches a fight, fights shorten
+from 2.9 turns to 2.4, and wipes fall back to .025. The gap between those two
+columns is the size of what is still on the table. The next thing worth attacking
+is the on-demand-ness — a party answers any matchup the moment it sees it — not
+the price of the answer.
+
+A switch already cost three things, none of which were worth thinking about next
+to buying the element outright: the turn, the hand (`b.disc.push(...b.hand)`),
+and everything the deck had stacked up (`clearMods`).
+
+### What a trainer gets, and when
+
+Three dials, and the third one is the lesson:
+
+| | | |
+| --- | --- | --- |
+| `trainerHp(n)` | `TRAINER_HP_MUL / n^.35` | the pool belongs to the trainer, not to each kin |
+| `trainerDmg(lvl)` | ramps to `TRAINER_DMG_MUL` (1.35) by level 14 | a trained kin is a better hitter, not a bigger bag of health |
+| `planScale(lvl)` | `(1 + lvl/22) * min(1, lvl/12)` | a plan beat is worth what its owner can make of it |
+
+The health share-out came first and was the wrong lever: a flat multiplier meant
+a trainer's fight got longer in proportion to their team, so Wick's one kin was
+three turns and Dorn's two were eight, with Coll's three the longest fight in the
+game and not one of those turns a decision. Sharing the pool out fixed the length
+(Dorn 8.1 turns to 4.5) and did nothing at all for the danger — which is what
+sent the danger into damage instead.
+
+**The ramp is the part worth remembering.** Wick's first fight is one kin against
+one kin at level five with the type advantage his way, and *every* global buff
+the trainers have ever been given lands on that fight first. It has been made
+unwinnable twice — a bot at 4% and at 8% — and caught both times by the "still a
+fight, not a formality" assertion rather than by anyone reading the code. So the
+buffs are not there on the first morning: a trainer at level five is a kid who
+was handed their first kin the same day you were, and the plans and the damage
+both ramp in over the walk north. With every trainer dial at full strength the
+opening now runs 68–79% for a greedy bot.
+
+If you add a trainer buff, ramp it, and run `emberkin.test.mjs` before believing
+it.
+
+### A trainer plays the same game you do
+
+Trainers could not win, and no constant fixed it, because the problem was never a
+number: the player arrives with four kin and rotates freshness in, while a
+trainer spent one to three, one at a time, with no way to put any of it back. So
+they got the two things you have.
+
+**A bench.** `b.roster` holds a trainer's whole team from the first turn rather
+than conjuring the next one as the last one falls. `foeBench()` scores what is on
+it the way a person would — what their element does to yours, weighted by how
+much of the kin is left — and `foeSwap()` sends it in on the same terms you swap
+on: it costs them the turn, the kin arriving swings soft once (`foeSettling`),
+everything the old one had banked is lost, and **you** get the `SWITCH_PUNISH`
+edge for catching them mid-change. They only reach for it when the kin on the
+field is the wrong one, never twice running, and never more times than they have
+kin — a three-kin trainer with no limit can stall a fight for ever.
+
+**A bag.** `POTIONS_FOR(team)` potions, each worth `FOE_POTION` (a third of the
+bar), reached for below `FOE_POTION_AT`. It costs them the turn, like everything
+else either side can do instead of swinging.
+
+The measurable difference is in what a trainer *costs* rather than in who wins:
+lowest party HP through a trainer fight went from 75–99% to 26–62%, Hale from 0%
+losses to 20%, Coll to 3%. Most trainers still do not beat a four-kin party
+outright, and that is worth being straight about — but they are no longer free.
 
 ### Elements
 
@@ -679,6 +1832,62 @@ you read "you lob a Prism Orb" and then watch it happen, not the reverse.
 A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
 a shower that takes its time — and hands you its papers afterwards. Any key
 skips the tail of the flourish; nobody should sit through it twice.
+
+### The valley keeps up
+
+The encounter bands used to be absolute: Route One spawned level 3 kin for ever
+while you climbed to twelve on them, and the measured share of fights the player
+was never in danger of losing sat at 45%. A fight you cannot lose is a cutscene
+you press buttons through, and the fix for that is not more foe HP — it is foes
+that are still worth fighting.
+
+A wild kin is rolled in its band as before, then brought up to within
+`WILD_TRAIL` levels of your best. Never below the band, so somewhere you have no
+business being is still dangerous; never above the band *or* your lead,
+whichever is higher, so the valley follows you rather than racing you.
+
+And **speed decides who opens**. The player used to move first always, which
+with fights running under two turns meant most foes got exactly one action and
+half of them never touched you. Something faster than you now lands the first
+blow — which is what makes SPD a stat rather than a number on a screen. Wild kin
+only: a trainer squares up with you, and the opening rival fight is meant to be
+winnable rather than a coin toss on speed.
+
+### A deck you can see through
+
+Twelve cards, not twenty-four. Fights run about two turns and you draw five a
+turn, so a twenty-four card deck meant you saw half of it once and your best
+card usually stayed in the draw pile.
+
+The half that makes it work is the **swap**: with the deck full, taking a card
+opens a screen that asks which one comes out. The old rule dropped the new card
+into the collection silently, so the offer stopped being a decision a third of
+the way through a run. Chests still make room on their own — they pull three or
+four at a time and being asked four times running is a form, not a decision — by
+putting out the weakest card, then the least played. Going by play count alone
+thrashes: a card you took last fight has been played nought times, so the next
+reward throws it straight back out.
+
+Measured over three samples of fourteen runs, against the same probe policy:
+fights the player was never in danger of losing fell from 45% to 34%, and the
+walking fell about a sixth, with the walks-back-to-heal and wipe rates unmoved.
+
+### The second wind
+
+A measured run walked back to the Wayhouse about five times before Crown Hollow,
+every trip down a corridor already cleared. Attrition with no recovery except
+the town turns exploring into errands, and the fix is structural rather than a
+number: **putting something down gives you back what the fight cost you**, up to
+a third of your health.
+
+Proportional, not flat. The first version handed over a flat 18% of max and the
+measured share of fights-you-could-not-lose went *up* — a walkover was suddenly
+free as well. Now a hard fight pays and a trivial one gives you nothing you did
+not already have.
+
+Across three samples of fourteen runs: walks back to heal fell from 0.346 to
+0.285 per fight, wipes from 0.303 to 0.283, at a cost of three points on the
+never-in-doubt share.
 
 ### Winning, and going down
 

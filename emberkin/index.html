@@ -17,8 +17,37 @@
     font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif; overflow:hidden; }
   body{ display:flex; align-items:center; justify-content:center; touch-action:none; }
 
-  #stage{ position:relative; image-rendering:pixelated; font-size:16px; }
-  #view{ display:block; image-rendering:pixelated; background:#0a070e; }
+  /* The valley is 256x208 of pixels on a black page, and a rectangle on black
+     reads as a screenshot rather than a made object. Three layers fix that and
+     none of them cost a frame: the page carries a slow warm bloom so the screen
+     is *in* somewhere, the stage has a bezel with light caught on its top edge,
+     and the glass over it has the faintest scanline and a corner darkening. */
+  body{ background:
+    radial-gradient(90% 70% at 50% 0%, #1d1430 0%, #0e0918 42%, #060409 100%); }
+  #stage{ position:relative; image-rendering:pixelated; font-size:16px;
+    border-radius:10px;
+    padding:6px;
+    background:linear-gradient(180deg, #2a1f3c, #150e20 46%, #0d0814);
+    box-shadow:
+      inset 0 1px 0 rgba(255,236,205,.16),
+      inset 0 -1px 0 rgba(0,0,0,.6),
+      0 0 0 1px #382a4e,
+      0 10px 30px rgba(0,0,0,.65),
+      0 0 60px 6px rgba(120,70,190,.20),
+      0 0 140px 30px rgba(255,170,90,.07); }
+  #view{ display:block; image-rendering:pixelated; background:#0a070e;
+    border-radius:4px; }
+  /* Glass: a scanline fine enough to be texture rather than pattern, and the
+     corners falling off so the picture has a middle. Pointer-events off so it
+     never eats a tap. */
+  #stage::after{
+    content:''; position:absolute; inset:6px; border-radius:4px;
+    pointer-events:none; z-index:40;
+    background:
+      radial-gradient(120% 100% at 50% 50%, transparent 58%, rgba(6,3,10,.34) 100%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay; }
+  @media (prefers-reduced-motion: reduce){ #stage{ box-shadow:0 0 0 1px #382a4e, 0 10px 30px rgba(0,0,0,.65); } }
 
   /* ---------------- shared panel look ---------------- */
   /* A panel is a lit object, not a rounded rectangle. Three things do the work
@@ -2760,6 +2789,27 @@ const ART_CARDS = {
 "....................",
 "....................",
 "...................."]},
+"secondwind":{n:"secondwind",p:{"K":"#1b1220","b":"#6fd0c8","d":"#2f7d78","h":"#cdfff8"},r:[
+"..............K.....",
+".............KhK....",
+"............KhhhK...",
+"........K..KhhhhhK..",
+"......KKK.KhhhhhhhK.",
+"....KKbbhK.KhhhhhK..",
+"....KbbbbK..KhhhK...",
+"...KbbbKK....KhhK...",
+"...KdbK.......KhK...",
+"..KdddK......KhhhK..",
+"..KddK........KhhK..",
+"..KddK........KhhK..",
+"..KdddK......KbhhK..",
+"...KddK......KbbK...",
+"...KdddKK..KKbbbK...",
+"....KddddKKdbbbK....",
+"....KKdddddddbKK....",
+"......KKddddKK......",
+"........KKKK........",
+"...................."]},
 "shieldwall":{n:"shieldwall",p:{"A":"#c08444","K":"#1b1220","a":"#7a4a20","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
 ".KKKKKKKK..KKKKKKKK.",
 "KhhbbbbmdKKhhbbbbmdK",
@@ -3174,6 +3224,26 @@ const CHART = {
 const effect = (moveType, defTypes) =>
   defTypes.reduce((m, t) => m * ((CHART[moveType] || {})[t] ?? 1), 1);
 
+/**
+ * What a chart entry is actually worth on the bar.
+ *
+ * The chart above says who beats whom, and that is knowledge worth having. What
+ * it must not do is decide the fight before a card is played — and at a straight
+ * 2× / 0.5× it did. Measured over twelve runs with one kin: a fight you went
+ * into with the element was lost 6% of the time and never in doubt 69% of the
+ * time; the same fight with the element against you was lost 57% of the time and
+ * never in doubt 7%. A tenfold swing in whether you win, settled before the
+ * first turn, with the level gap identical in both.
+ *
+ * So the chart still points the same way, it just points less hard: 2× lands as
+ * 1.6×, 0.5× as 0.65×, and a stacked double weakness is 2.8× rather than 4×.
+ * Enough that bringing the right kin is the best thing you can do, not enough
+ * that bringing the wrong one is the end of the run. `effect` keeps returning
+ * the chart value, because that is what the dex shows and what "It's brutally
+ * effective!" is about — this is only the damage.
+ */
+const EFF_DMG = (e) => e === 0 ? 0 : e > 1 ? 1 + (e - 1) * .6 : 1 - (1 - e) * .7;
+
 // ---- statuses ----------------------------------------------------------
 // burn  — chip damage, attack softened      shock — may lose the turn
 // snare — chip damage, cannot flee          chill — speed halved
@@ -3217,7 +3287,14 @@ const MOVES = {
   vineflick: { name: 'Vine Flick',    type: 'Verdant', pow: 45,  acc: 100, pp: 25 },
   seedspit:  { name: 'Seed Spit',     type: 'Verdant', pow: 40,  acc: 100, pp: 20, fx: { pri: 1 } },
   drainseed: { name: 'Drain Seed',    type: 'Verdant', pow: 60,  acc: 100, pp: 15, fx: { drain: .5 } },
-  leafblade: { name: 'Leaf Blade',    type: 'Verdant', pow: 70,  acc: 95,  pp: 15 },
+  // Level with Fang Fang and Tide Fang, which sit in the same slot of the other
+  // two starters' learnsets. It was 70 with no rider against their 80 with one,
+  // which is not a trade — it is the same move, worse, twice over. The probe
+  // caught it: a Sproutle run had 30% free fights against Cindercub's 40% and
+  // .338 lost-or-ran against .237, the largest difference in the game and one
+  // nobody chose. Verdant's real character is the route — Emberwood is Verdant,
+  // Ember and Gloom almost all the way down — and that stays.
+  leafblade: { name: 'Leaf Blade',    type: 'Verdant', pow: 80,  acc: 95,  pp: 15, fx: { st: ['snare', .2] } },
   rootsnare: { name: 'Root Snare',    type: 'Verdant', pow: 0,   acc: 90,  pp: 15, fx: { st: ['snare', 1] } },
   barkskin:  { name: 'Barkskin',      type: 'Verdant', pow: 0,   acc: 0,   pp: 20, fx: { self: [['def', 1]] } },
   thornmaul: { name: 'Thorn Maul',    type: 'Verdant', pow: 95,  acc: 85,  pp: 10 },
@@ -3397,8 +3474,8 @@ const CARDS = {
     txt: 'Every attack +{v} for this battle.' },
   guard:     { name: 'Guard',       r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'shield',
     txt: 'Gain {v} shield.' },
-  hunker:    { name: 'Hunker',      r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'def',
-    txt: 'Take {v} less from every hit this battle.' },
+  hunker:    { name: 'Hunker',      r: 'common', cost: 1, kind: 'skill', v: 2, vt: 'def', retain: true,
+    txt: 'Take {v} less from every hit this battle. Retain.' },
   vigor:     { name: 'Vigor',       r: 'common', cost: 1, kind: 'skill', v: 6, vt: 'maxhp', fx: { heal: 6 },
     txt: '+{v} max HP and heal 6.' },
   snack:     { name: 'Snack',       r: 'common', cost: 1, kind: 'skill', v: 12, vt: 'heal',
@@ -3409,56 +3486,99 @@ const CARDS = {
     txt: 'Next attack +{v} and 50% to burn.' },
   rootbind:  { name: 'Rootbind',    r: 'common', cost: 1, kind: 'skill', v: 3, vt: 'edge', fx: { st: ['snare', .5] },
     txt: 'Next attack +{v} and 50% to snare.' },
-  dewdrop:   { name: 'Dewdrop',     r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'heal', fx: { def: 1 },
-    txt: 'Heal {v} and take 1 less from every hit.' },
+  dewdrop:   { name: 'Dewdrop',     r: 'common', cost: 1, kind: 'skill', v: 8, vt: 'heal', fx: { def: 1 }, retain: true,
+    txt: 'Heal {v}, take 1 less from every hit. Retain.' },
 
   // ---- rare ------------------------------------------------------------
-  whetstone: { name: 'Whetstone',   r: 'rare', cost: 1, kind: 'skill', v: 3, vt: 'atk', grow: 1,
-    txt: 'Every attack +{v} this battle. Permanently +1 each play.' },
-  fanghone:  { name: 'Fang Hone',   r: 'rare', cost: 1, kind: 'skill', v: 4, vt: 'atk', bgrow: 1,
-    txt: 'Every attack +{v} this battle. +1 more each play this battle.' },
+  whetstone: { name: 'Whetstone',   r: 'rare', cost: 1, kind: 'skill', v: 3, vt: 'atk', grow: 1, combo: 3,
+    txt: 'Every attack +{v} this battle. Combo +3. Permanently +1 each play.' },
+  fanghone:  { name: 'Fang Hone',   r: 'rare', cost: 1, kind: 'skill', v: 4, vt: 'atk', bgrow: 1, chain: 1,
+    txt: 'Every attack +{v} this battle, +1 more each play. Chain.' },
   killedge:  { name: 'Killing Edge',r: 'rare', cost: 0, kind: 'skill', v: 7, vt: 'edge', kill: 3,
     txt: 'Next attack +{v}. If it kills, permanently +3.' },
   venomcoat: { name: 'Venom Coat',  r: 'rare', cost: 1, kind: 'power', v: 1, vt: 'none', fx: { st: ['snare', 1] },
     txt: 'Every attack you make also snares. Rest of the battle.' },
   emberoil:  { name: 'Ember Oil',   r: 'rare', cost: 1, kind: 'power', v: 1, vt: 'none', fx: { st: ['burn', .6] },
     txt: 'Every attack you make has a 60% to burn. Rest of the battle.' },
-  ironhide:  { name: 'Ironhide',    r: 'rare', cost: 1, kind: 'skill', v: 12, vt: 'shield', fx: { def: 2 },
-    txt: 'Gain {v} shield, take 2 less from every hit.' },
+  ironhide:  { name: 'Ironhide',    r: 'rare', cost: 1, kind: 'skill', v: 12, vt: 'shield', fx: { def: 2 }, retain: true,
+    txt: 'Gain {v} shield, take 2 less from every hit. Retain.' },
   surge:     { name: 'Surge',       r: 'rare', cost: 0, kind: 'skill', v: 2, vt: 'draw', fx: { energy: 1 },
     txt: 'Draw {v} and gain 1 energy.' },
-  heartroot: { name: 'Heartroot',   r: 'rare', cost: 2, kind: 'skill', v: 15, vt: 'maxhp', fx: { heal: 15 },
-    txt: '+{v} max HP and heal 15.' },
-  shieldwall:{ name: 'Shieldwall',  r: 'rare', cost: 2, kind: 'skill', v: 22, vt: 'shield',
-    txt: 'Gain {v} shield.' },
+  heartroot: { name: 'Heartroot',   r: 'rare', cost: 1, kind: 'skill', v: 12, vt: 'maxhp', fx: { heal: 12 }, exhaust: true,
+    txt: '+{v} max HP and heal 12. Exhaust.' },
+  shieldwall:{ name: 'Shieldwall',  r: 'rare', cost: 1, kind: 'skill', v: 14, vt: 'shield', combo: 10,
+    txt: 'Gain {v} shield. Combo +10.' },
   adrenaline:{ name: 'Adrenaline',  r: 'rare', cost: 0, kind: 'skill', v: 1, vt: 'draw', fx: { energy: 1 }, exhaust: true,
     txt: 'Draw {v}, gain 1 energy. Exhaust.' },
   thornmail: { name: 'Thornmail',   r: 'rare', cost: 1, kind: 'skill', v: 10, vt: 'shield', fx: { thorns: 4 },
     txt: 'Gain {v} shield. Attackers take 4.' },
+  // Grit was given `grow: 1` — a second compounding axis, on pass 30's template —
+  // and it is back off again, because the experiment answered no. It made the
+  // card bigger: 19 points of permanent might a run became 34, and its play rate
+  // went from 89% to 98%. It did not make the run depend on it. The gap between
+  // playing with Grit and banning it outright stayed where it was, +0.38 turns
+  // against +0.41, while the whole baseline slid 0.18 turns shorter.
+  //
+  // Which is the finding: the deck substitutes. Make one card stronger and
+  // whatever it displaces does the same job, so the run never comes to need it.
+  // That is a harder flatness than weak cards — these cards are interchangeable,
+  // and no amount of buffing one of them changes that.
   grit:      { name: 'Grit',        r: 'rare', cost: 1, kind: 'skill', v: 1, vt: 'might', exhaust: true,
     txt: '+{v} damage on every attack, for ever. Exhaust.' },
 
   // ---- epic ------------------------------------------------------------
-  berserk:   { name: 'Berserk',     r: 'epic', cost: 1, kind: 'skill', v: 6, vt: 'atk', fx: { selfdmg: 5 },
-    txt: 'Every attack +{v} this battle. Costs you 5 HP.' },
-  bulwark:   { name: 'Bulwark',     r: 'epic', cost: 2, kind: 'skill', v: 18, vt: 'shield', fx: { def: 4 }, grow: 2,
-    txt: 'Gain {v} shield, take 4 less from every hit. Permanently +2 each play.' },
+  berserk:   { name: 'Berserk',     r: 'epic', cost: 1, kind: 'skill', v: 6, vt: 'atk', fx: { selfdmg: 5 }, combo: 5,
+    txt: 'Every attack +{v} this battle. Combo +5. Costs you 5 HP.' },
+  bulwark:   { name: 'Bulwark',     r: 'epic', cost: 2, kind: 'skill', v: 18, vt: 'shield', fx: { def: 4 }, grow: 2, retain: true,
+    txt: 'Gain {v} shield, take 4 less from every hit. Permanently +2 each play. Retain.' },
   bloodedge: { name: 'Blooded Edge',r: 'epic', cost: 1, kind: 'skill', v: 14, vt: 'edge', fx: { drain: .5 }, grow: 1,
     txt: 'Next attack +{v} and heals you for half it deals. Permanently +1 each play.' },
+  // Twin Strike buys one extra swing a turn for the rest of the fight, worth
+  // about one swing times the turns left — 32-48 points on a real turn, where a
+  // good one-energy card scores 28-57. So it charges two for what one buys
+  // elsewhere, and it sits at 25% of the fights it could be paid for, second from
+  // bottom of the deck. That reading is solid; the obvious fix is not. At cost 1
+  // it went to 77-84% and took the game with it: party fights fell to 2.86 turns,
+  // solo no-kin-in-doubt went 37% to 42%, Bulwark fell to 55% and Ward Stance to
+  // 13%. An extra swing a turn scales with the kin's damage, which grows all run,
+  // so halving its price makes it the best card in the deck at every level.
+  // Left at two on purpose. If this gets fixed it is by looking at whether
+  // Whetstone, Blooded Edge and Fang Hone are the ones priced wrong.
+  // Costs nothing on purpose. A turn is three energy and kin moves cost one or
+  // two, so at one energy this card asks for swing + card + swing out of three —
+  // which is exactly three in the best case and impossible in every other. It is
+  // not a price, it is an arithmetic wall: the card read 2 plays in 306 draws
+  // until it was free. Free, it is pure tempo and adds no number at all, which is
+  // the point of it.
+  secondwind:{ name: 'Second Wind', r: 'epic', cost: 0, kind: 'skill', v: 1, vt: 'none', fx: { again: true }, exhaust: true,
+    txt: 'Your kin may move again this turn. Exhaust.' },
   twinstrike:{ name: 'Twin Strike', r: 'epic', cost: 2, kind: 'power', v: 1, vt: 'none', fx: { hits: 1 },
     txt: 'Every attack you make swings one extra time. Rest of the battle.' },
-  titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true,
-    txt: '+{v} max HP, heal 30. Exhaust.' },
-  wardstance:{ name: 'Ward Stance', r: 'epic', cost: 2, kind: 'skill', v: 15, vt: 'shield', fx: { def: 3, draw: 1 },
-    txt: 'Gain {v} shield, take 3 less from every hit, draw 1.' },
+  titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true, chain: 1,
+    txt: '+{v} max HP, heal 30. Chain. Exhaust.' },
+  // Ward Stance was a strictly worse Bulwark: same rarity, same price, smaller
+  // shield, smaller guard, and no grow or retain against Bulwark's both. Drawing
+  // one card was the whole difference, which is a rounding error next to fifteen
+  // shield, and the probe read it exactly that way — bottom of the two-cost
+  // bucket at 20% of the fights it could be paid for, against Bulwark's 79%.
+  //
+  // The fix is the draw, because that is the only axis the two cards differ on.
+  // Chain was tried first and is the wrong lever: this deck is full of 0-cost
+  // cards, so the discount is live almost every turn, which made this a 1-energy
+  // 13-shield card that beat Ironhide, took Bulwark from 79% to 70%, and bought
+  // so much safety that solo no-kin-in-doubt went 37% to 44% — a card fix that
+  // moved the difficulty of the game. Two cards instead of one costs nothing
+  // anybody else was using.
+  wardstance:{ name: 'Ward Stance', r: 'epic', cost: 2, kind: 'skill', v: 15, vt: 'shield', fx: { def: 3, draw: 2 },
+    txt: 'Gain {v} shield, take 3 less from every hit, draw 2.' },
   temper:    { name: 'Temper',      r: 'epic', cost: 2, kind: 'skill', v: 2, vt: 'might', exhaust: true, grow: 1,
     txt: '+{v} damage on every attack, for ever. Exhaust. Permanently +1 each play.' },
   reaper:    { name: 'Reaper',      r: 'epic', cost: 1, kind: 'skill', v: 16, vt: 'edge', kill: 4, exhaust: true,
     txt: 'Next attack +{v}. If it kills, permanently +4. Exhaust.' },
 
   // ---- legendary -------------------------------------------------------
-  overkill:  { name: 'Overkill',    r: 'legendary', cost: 3, kind: 'power', v: 1, vt: 'none', fx: { mul: 2 }, exhaust: true,
-    txt: 'Every attack you make deals double. Rest of the battle. Exhaust.' },
+  overkill:  { name: 'Overkill',    r: 'legendary', cost: 3, kind: 'power', v: 1, vt: 'none', fx: { mul: 2 }, exhaust: true, chain: 1,
+    txt: 'Every attack you make deals double, rest of the battle. Chain. Exhaust.' },
   dragonheart:{ name: 'Dragonheart', r: 'legendary', cost: 2, kind: 'skill', v: 25, vt: 'maxhp', fx: { atk: 5, heal: 25 }, grow: 2,
     txt: '+{v} max HP, heal 25, every attack +5. Permanently +2 each play.' },
   eternal:   { name: 'Eternal Spark', r: 'legendary', cost: 0, kind: 'power', v: 1, vt: 'energy', exhaust: true,
@@ -3467,8 +3587,8 @@ const CARDS = {
     txt: 'Heal to full, +{v} max HP. Exhaust. Permanently +2 each play.' },
   warcry:    { name: 'War Cry',     r: 'legendary', cost: 1, kind: 'skill', v: 3, vt: 'might', exhaust: true, grow: 1,
     txt: '+{v} damage on every attack, for ever. Draw 2. Exhaust. Permanently +1 each play.', fx: { draw: 2 } },
-  soulfang:  { name: 'Soulfang',    r: 'legendary', cost: 2, kind: 'skill', v: 24, vt: 'edge', kill: 5, exhaust: true,
-    txt: 'Next attack +{v}. If it kills, permanently +5. Exhaust.' },
+  soulfang:  { name: 'Soulfang',    r: 'legendary', cost: 2, kind: 'skill', v: 24, vt: 'edge', kill: 5, exhaust: true, chain: 1,
+    txt: 'Next attack +{v}. If it kills, permanently +5. Chain. Exhaust.' },
 };
 const CARD_IDS = Object.keys(CARDS);
 
@@ -3478,6 +3598,9 @@ const CARD_IDS = Object.keys(CARDS);
  * card that grows forever eventually plays the game for you.
  */
 const growCap = (id) => Math.round(CARDS[id].v * (CARDS[id].capMul || 4));
+
+/** The ceiling on run-long might. See the note where G.might is added to. */
+const MIGHT_CAP = 150;
 
 /** The live value of a card: its base, its permanent growth, its battle growth. */
 const cardValue = (inst) => {
@@ -3506,12 +3629,61 @@ const deckCards = () => G.deck.map(ownedCard).filter(Boolean);
 
 // All support: the kin brings the damage, the deck makes it hurt more.
 const STARTER_DECK = ['edge', 'edge', 'edge', 'guard', 'guard', 'guard', 'focus', 'snack', 'quickstep', 'whet'];
-const DECK_MIN = 8, DECK_MAX = 24;
+/**
+ * A deck you never see through is not a deck, it is a collection.
+ *
+ * Fights measured out at three and a half turns; five cards a turn against a
+ * twenty-four card deck meant you saw two thirds of it once and your best card
+ * usually stayed in the draw pile. Twelve is small enough that a fight cycles
+ * the whole thing, which is what makes each card you add a real decision — and
+ * what makes taking one out a decision too.
+ */
+/**
+ * A deck you never see through is a collection.
+ *
+ * Fights run about two and a half turns; five cards a turn against twenty-four
+ * meant you saw half of it once and your best card usually stayed in the draw
+ * pile. Twelve is small enough that a fight cycles the whole thing, which is
+ * what makes each card you put in worth putting in — and what makes taking one
+ * out a decision rather than a formality.
+ */
+const DECK_MIN = 6, DECK_MAX = 12;
+/**
+ * The second wind: you get back what the fight cost you, up to a third of your
+ * health. Earned rather than granted — a walkover took nothing off you, so it
+ * gives nothing back.
+ */
+const RALLY_SHARE = 1, RALLY_CAP = .5;
 
-function grantCard(id) {
+/**
+ * Take a card. It always reaches the deck.
+ *
+ * With a twelve-card deck, the old rule — "add it if there is room" — meant
+ * every reward after the twelfth was a card you owned and would never draw, so
+ * the offer stopped being a decision about a third of the way through a run. A
+ * full deck now makes room by putting out the copy you have played least, which
+ * is the closest thing to "the card you were not using" the game can work out on
+ * its own. Curating it properly is what the deck screen is for.
+ */
+function grantCard(id, ask) {
   const c = mkCard(id);
   G.cards.push(c);
-  if (G.deck.length < DECK_MAX) G.deck.push(c.u);
+  if (G.deck.length < DECK_MAX) { G.deck.push(c.u); return c; }
+  // The caller is going to ask which card comes out, so do not guess.
+  if (ask) return c;
+  const inDeck = G.deck.map(ownedCard).filter(Boolean);
+  if (!inDeck.length) { G.deck.push(c.u); return c; }
+  // Weakest first, then least used. Going by play count alone thrashes: a card
+  // you took last fight has been played nought times, so the next reward throws
+  // it straight back out again.
+  // A card whose definition has gone — an old save, a renamed id — is worth
+  // less than any real card, so it is the first thing out.
+  const worthOf = (o) => (CARDS[o.id] ? RARITY_ORDER.indexOf(CARDS[o.id].r) * 100 + (o.plays || 0) : -1);
+  let worst = inDeck[0];
+  for (const o of inDeck) if (worthOf(o) < worthOf(worst)) worst = o;
+  G.deck = G.deck.filter((u) => u !== worst.u);
+  G.deck.push(c.u);
+  c.replaced = (CARDS[worst.id] || { name: 'an old card' }).name;   // so the offer can say so
   return c;
 }
 
@@ -3720,6 +3892,9 @@ const MAPS = {
         lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
         dynamic: 'rival1',
         trainer: { team: [['dewdrip', 5]], prize: 300,
+          // One idea, and he opens with it every time — which is the only way
+          // you will ever see it, in a fight this short.
+          plan: ['sharpen', 'swing'],
           lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
         after: ['I am going north. Try to keep up.'] },
     ],
@@ -3825,10 +4000,12 @@ const MAPS = {
       { x: 13, y: 4, dir: 'down', sprite: 'npc_ranger', name: 'Forager Pell', id: 't_pell',
         lines: ['You have the look. Go on then — show me.'],
         trainer: { team: [['sproutle', 6], ['zaplet', 7]], prize: 240,
+          plan: ['sharpen', 'swing', 'swing'],
           lose: ['Ha! Keep at it.'], win: ['Told you the grass teaches you things.'] } },
       { x: 6, y: 15, dir: 'right', sprite: 'npc_rival', name: 'Hiker Dorn', id: 't_dorn',
         lines: ['Nothing gets past me on this stretch.'],
         trainer: { team: [['pebblet', 8], ['mothrix', 8]], prize: 300,
+          plan: ['brace', 'swing', 'swing'],
           lose: ['Something got past me.'], win: ['Ha! Stretch defended.'] } },
       { x: 18, y: 11, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Isa',
         lines: ['Kin get stronger where people do not go.', 'Emberwood, north of here — mind the roots.'] },
@@ -3869,20 +4046,25 @@ const MAPS = {
       { x: 4, y: 12, dir: 'right', sprite: 'npc_rival', name: 'Bramble Kid Ivo', id: 't_ivo',
         lines: ['I live here now. Ask the trees.'],
         trainer: { team: [['thornip', 14], ['lanterneel', 13]], prize: 620,
+          plan: ['sharpen', 'swing'],
           lose: ['The trees are disappointed.'], win: ['Told you. Ask them.'] } },
       { x: 12, y: 12, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick2', requires: 't_wick1',
         lines: ['Kept up, then.', 'Mine has changed since the study. Yours had better have.'],
         dynamic: 'rival2',
         trainer: { team: [['brookite', 16], ['kindlark', 15]], prize: 900,
+          // Two ideas now, and he has learned to eat your turn.
+          plan: ['sharpen', 'swing', 'brace', 'swing'],
           lose: ['…Right. North it is, for both of us.'], win: ['Still me. Go and train.'] },
         after: ['The Warden will not let either of us up. Not yet.'] },
       { x: 15, y: 6, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Coll', id: 't_coll',
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
+          plan: ['brace', 'swing', 'sharpen', 'swing'],
           lose: ['Fair. Well fought.'], win: ['Thorns win again.'] } },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_ranger', name: 'Warden Hale', id: 't_hale', block: true,
         lines: ['Crown Hollow is up this path. I do not open it for tourists.', 'Show me you can hold a kin together and I will step aside.'],
         trainer: { team: [['gargolem', 17], ['voltyx', 18], ['nocthorn', 19]], prize: 1800,
+          plan: ['brace', 'swing', 'aim', 'swing'],
           lose: ['Then it is yours to walk. Quietly, mind.'], win: ['Not yet. Come back when they trust you.'] },
         after: ['Quietly, up there. It knows when you are loud.'] },
     ],
@@ -3915,6 +4097,7 @@ const MAPS = {
       { x: 14, y: 3, dir: 'down', sprite: 'npc_rival', name: 'Tide-hand Mio', id: 't_mio',
         lines: ['Everything I have came out of that water.'],
         trainer: { team: [['dewdrip', 15], ['brookite', 16]], prize: 760,
+          plan: ['sharpen', 'swing', 'aim', 'swing'],
           lose: ['Take it. The water gives more.'], win: ['The water keeps it, then.'] } },
       { x: 6, y: 11, dir: 'up', sprite: 'npc_ranger', name: 'Sheller Ann',
         lines: ['Lanterneel come in at the shallows. Sweet little faces.', 'Do not put your hand near the light.'] },
@@ -3945,6 +4128,8 @@ const MAPS = {
         lines: ['You got it. Of course you did.', 'I have been up here three days waiting to lose to you properly. Go on.'],
         dynamic: 'rival3',
         trainer: { team: [['tsunaga', 30], ['nocthorn', 29], ['gargolem', 29]], prize: 3000,
+          // Three tools, and one of them is the answer to how you beat him last time.
+          plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'],
           lose: ['There. Now I can go home.', 'Rowan will want to hear it from you, not me.'],
           win: ['Ha! Not today.'] },
         after: ['Go and see Rowan. She has been pretending not to wait.'] },
@@ -3984,16 +4169,37 @@ function enterMap(id, x, y, dir) {
 }
 
 /** Roll the encounter table; returns a fresh wild creature or null. */
+/**
+ * How far behind your best kin the valley is allowed to fall.
+ *
+ * The bands used to be fixed, so Route One spawned level 3 kin for ever while
+ * you climbed to twelve on them: two fights in five were decided before they
+ * started, and the fix for that is not more foe HP, it is foes that are still
+ * worth fighting. A wild kin is rolled in its band as before and then brought
+ * up to within this many levels of your lead — never above it, so the valley
+ * follows you rather than racing you.
+ */
+const WILD_TRAIL = 3;
+
 function rollEncounter(map) {
   if (!map.enc) return null;
+  const lead = G.party.length ? Math.max(...G.party.map((m) => m.lvl)) : 1;
+  const scale = (lo, hi) => {
+    // Never below the band — walk somewhere you have no business being and it
+    // is still dangerous. Never above the band *or* your lead, whichever is
+    // higher, so the valley follows you without ever racing ahead.
+    const rolled = rrange(lo, hi);
+    const ceiling = Math.max(hi, lead);
+    return clamp(Math.max(rolled, lead - WILD_TRAIL), lo, ceiling);
+  };
   const total = map.enc.table.reduce((s, e) => s + e[3], 0);
   let r = Math.random() * total;
   for (const [id, lo, hi, w] of map.enc.table) {
     r -= w;
-    if (r <= 0) return mkMon(id, rrange(lo, hi));
+    if (r <= 0) return mkMon(id, scale(lo, hi));
   }
   const e = map.enc.table[0];
-  return mkMon(e[0], rrange(e[1], e[2]));
+  return mkMon(e[0], scale(e[1], e[2]));
 }
 /* =========================================================== §4 — sprites ==
    Art arrives as {p: palette, r: rows-of-chars}. Each sprite is painted once
@@ -4198,13 +4404,17 @@ function onArrive() {
       && G.steps > (G.flags.vespyrSeenAt || 0) + 25 && chance(.18)) {
     G.flags.vespyrSeenAt = G.steps;
     say('', ['The air goes thin and bright. Something old has noticed you.'], () => {
-      startBattle({ foe: mkMon('vespyr', 26), wild: true, legendary: true });
+      startBattle({ foe: mkMon('vespyr', 26), wild: true, legendary: true,
+        plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'] });
     });
     return;
   }
   if (chance(G.map.enc.rate)) {
     const foe = rollEncounter(G.map);
-    if (foe) startBattle({ foe, wild: true });
+    // Sometimes two of them. The partner comes off the same table, so a pair is
+    // whatever that patch of grass holds rather than a special encounter.
+    const pair = foe && chance(WILD_PAIR) ? rollEncounter(G.map) : null;
+    if (foe) startBattle({ foe, wild: true, pair });
   }
 }
 
@@ -4383,15 +4593,43 @@ function drawWorld(g) {
   const map = G.map;
   const x0 = Math.floor(cam.x / TILE), y0 = Math.floor(cam.y / TILE);
   const ox = -(cam.x % TILE), oy = -(cam.y % TILE);
-  g.fillStyle = map.kind === 'inside' ? '#2a2030' : '#14301f';
+  // What is behind the map, where the map runs out.
+  //
+  // This was a flat fill, and most rooms are smaller than the viewport, so a
+  // small map read as a picture pasted on a dead rectangle. It is a light now:
+  // the room sits in a glow of its own air, falling off to almost nothing at the
+  // corners, so the frame is somewhere rather than nowhere.
+  const air = AIR[G.mapId] || AIR_DEFAULT;
+  const base = map.kind === 'inside' ? [26, 18, 32] : [12, 26, 20];
+  if (g.createRadialGradient) {
+    const bg = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 8,
+      VIEW_W / 2, VIEW_H / 2, VIEW_W * .72);
+    const t = air.tint;
+    const mix = (c, k) => Math.round(base[c] + (t[c] - base[c]) * k);
+    bg.addColorStop(0, `rgb(${mix(0, .20)},${mix(1, .20)},${mix(2, .20)})`);
+    bg.addColorStop(.55, `rgb(${mix(0, .07)},${mix(1, .07)},${mix(2, .07)})`);
+    bg.addColorStop(1, `rgb(${Math.round(base[0] * .34)},${Math.round(base[1] * .34)},${Math.round(base[2] * .34)})`);
+    g.fillStyle = bg;
+  } else {
+    g.fillStyle = map.kind === 'inside' ? '#2a2030' : '#14301f';
+  }
   g.fillRect(0, 0, VIEW_W, VIEW_H);
 
+  // Anything in the valley that is lit from inside, and the pool it throws.
+  //
+  // A window was a picture of a window: a warm rectangle with the same dark
+  // floor under it as everywhere else. Light that leaves its own tile is what
+  // makes a room feel occupied and a street feel like evening, and it costs one
+  // additive gradient per source. The flicker is two sines beating against each
+  // other, so a row of windows never pulses in step.
+  const lit = [];
   for (let y = 0; y <= VIEW_H / TILE + 1; y++) {
     for (let x = 0; x <= VIEW_W / TILE + 1; x++) {
       const mx = x0 + x, my = y0 + y;
       if (my < 0 || my >= map.rows.length || mx < 0 || mx >= map.rows[0].length) continue;
       const ch = map.rows[my][mx];
       const sx = Math.round(x * TILE + ox), sy = Math.round(y * TILE + oy);
+      if (ch === 'n' || ch === 'D') lit.push([sx + TILE / 2, sy + TILE / 2, mx, my, ch]);
       // Buildings and props sit on ground, so paint grass under them first.
       if (ch === 'R' || ch === 'W' || ch === 'D' || ch === 'S' || ch === 'o' || ch === 'f' || ch === '|') drawTile(g, '.', sx, sy);
       if (ch === '~') {
@@ -4425,6 +4663,29 @@ function drawWorld(g) {
     }
   }
   drawEdges(g, map, x0, y0, ox, oy);
+
+  // The light the windows and doorways throw, over the ground and under
+  // everything that walks on it — so a lamp lights the street, not the player's
+  // hat. Additive, because light adds.
+  if (lit.length && g.createRadialGradient) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const [cx, cy, mx, my, ch] of lit) {
+      // Two sines that do not divide into each other, so a terrace of windows
+      // breathes out of step instead of blinking as one sign.
+      const f = .82 + .12 * Math.sin(G.t * 1.7 + mx * 1.9)
+        + .06 * Math.sin(G.t * 2.9 + my * 2.7);
+      const r = ch === 'D' ? 30 : 24;
+      const warm = ch === 'D' ? [255, 196, 116] : [255, 214, 150];
+      const gr = g.createRadialGradient(cx, cy + 4, 1, cx, cy + 4, r);
+      gr.addColorStop(0, `rgba(${warm[0]},${warm[1]},${warm[2]},${(.30 * f).toFixed(3)})`);
+      gr.addColorStop(.45, `rgba(${warm[0]},${warm[1]},${warm[2]},${(.11 * f).toFixed(3)})`);
+      gr.addColorStop(1, `rgba(${warm[0]},${warm[1]},${warm[2]},0)`);
+      g.fillStyle = gr;
+      g.fillRect(cx - r, cy + 4 - r, r * 2, r * 2);
+    }
+    g.restore();
+  }
 
   // Entities, back to front by tile row.
   const ents = [];
@@ -4842,18 +5103,45 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
-    downM: null, downF: null,
+    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, lastStand: 0, settling: 0, chipping: 0,
+    roster: null, foeSettling: 0, foeSwaps: 0, foeSwapT: 0, foePotions: 0, foeHeals: 0,
+    downM: null, downF: null, hpMark: mine.hp,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
     started: false, finishing: false, await: null,
     // the card game
     draw: [], hand: [], disc: [], exh: [],
-    energy: 0, phase: 'player', intent: null, powers: {},
+    energy: 0, phase: 'player', intent: null, powers: {}, playedTurn: 0, swungTurn: 0,
     mods: freshMods(), maxAdd: 0, maxAdds: new Map(), shield: 0,
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
-  toughen(opt.foe);
+  // A wild pair splits one kin's pool between two bodies, so the fight is the
+  // same size and a different shape.
+  const paired = !!(opt.wild && opt.pair);
+  toughen(opt.foe, opt.wild ? FOE_HP_MUL * (paired ? .5 : 1) : trainerHp((opt.team || [1]).length));
+  // A trainer's whole team exists from the start rather than being conjured as
+  // the last one falls, because a trainer who can only ever send the next kin
+  // in order is not playing the game you are playing. See `foeSwap`.
+  // The other half of playing the same game: a trainer carries a bag. You beat
+  // them by rotating fresh kin in, and they had no answer to that at all — a
+  // potion is the answer, and it costs them the turn to reach for it exactly as
+  // switching does.
+  if (opt.npc && !opt.wild) G.battle.foePotions = POTIONS_FOR(opt.team ? opt.team.length : 1);
+  if (paired) {
+    const mate = toughen(opt.pair, FOE_HP_MUL * .5);
+    mate.stages = { atk: 0, def: 0, spd: 0 };
+    G.battle.roster = [opt.foe, mate];
+  }
+  if (opt.team && !opt.wild) {
+    const mul = trainerHp(opt.team.length);
+    G.battle.roster = opt.team.map((e, i) => {
+      if (i === 0) return opt.foe;
+      const m = toughen(mkMon(e[0], e[1]), mul);
+      m.stages = { atk: 0, def: 0, spd: 0 };
+      return m;
+    });
+  }
   G.battle.dispF = G.battle.tgtF = opt.foe.hp;
   buildDeck(G.battle);
   G.wipe = WIPE_T;
@@ -4862,8 +5150,36 @@ function startBattle(opt) {
   const who = opt.npc ? `${opt.npc.name} wants to battle!` : `A wild ${opt.foe.name} bristles!`;
   playCue(opt.legendary ? 'shrine' : 'battle');
   const lines = [who, `Go, ${dispName(mine)}!`];
+  // Speed decides who opens. The player used to move first always, and with
+  // fights running under two turns that meant most foes got exactly one action
+  // and half of them never touched you — a fight decided before it started.
+  // Something faster than you now lands the first blow, which is what makes
+  // SPD a stat rather than a number on a screen, and what makes an ambush by
+  // something quick actually frightening.
+  // A trainer brings a plan; a wild kin used to bring only itself, and that
+  // asymmetry is the root of six passes of "wild fights have no shape". The one
+  // beat they had — cornering — fires off the foe's own HP falling, so it is
+  // reactive: it always arrives late, and there is nothing to build a turn
+  // around in advance. Measured, it is 1.25 beats a fight and 23% of wild fights
+  // never get one at all.
+  //
+  // So a wild kin gets a rhythm too: swing, gather, swing. It is the same
+  // damage, announced a turn ahead, on a cadence a player can plan for rather
+  // than one their own success triggers. `planScale` keeps it off the opening of
+  // the game the same way it does for trainers.
+  const plan = opt.plan || (opt.npc && opt.npc.trainer && opt.npc.trainer.plan)
+    || (opt.wild ? ['swing', 'sharpen', 'swing'] : null);
+  if (plan) G.battle.plan = { steps: plan.slice(), i: 0 };
+  const opener = [];
+  // Wild kin only: a trainer squares up with you, and the opening rival
+  // fight is meant to be winnable rather than a coin toss on speed.
+  if (opt.wild && effStat(opt.foe, 'spd') > effStat(mine, 'spd')) {
+    snap(opener, `${dispName(opt.foe)} is faster off the mark!`, 'use', 'foe');
+    foeTurn(opener);
+  }
   // The very first hand is dealt as the battle opens.
-  startPlayerTurn([]);
+  startPlayerTurn(opener);
+  if (opener.length) G.battle.log = opener;
   // One-time nudge, the first time a wild kin shows up with orbs in the bag.
   if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
     G.flags.taughtCatch = 1;
@@ -4890,7 +5206,7 @@ function damageOf(atkMon, defMon, move, opts = {}) {
   const a = effStat(atkMon, 'atk'), d = effStat(defMon, 'def');
   let base = Math.floor((((2 * atkMon.lvl / 5 + 2) * m.pow * a / Math.max(1, d)) / 50) + 2);
   const roll = opts.roll != null ? opts.roll : (.85 + Math.random() * .15);
-  let dmg = Math.floor(base * stab * eff * (crit ? 1.5 : 1) * roll);
+  let dmg = Math.floor(base * stab * EFF_DMG(eff) * (crit ? 1.5 : 1) * roll);
   return { dmg: Math.max(eff === 0 ? 0 : 1, dmg), eff, crit };
 }
 
@@ -4941,12 +5257,34 @@ function useMove(log, atkSide, moveId) {
     // Everything the deck stacked onto this swing rides here. Support cards
     // never touch the foe themselves; this is the only place their numbers turn
     // into damage, so a card that says "+4" is worth exactly 4 on the bar.
-    const bonus = atkSide === 'mine' ? attackBonus() : { flat: 0, mul: 1, hits: 1, drain: 0 };
+      // A wild kin is tougher and gentler than its level says: the toughness
+      // buys the turns a deck needs to matter, the damper stops those extra
+      // turns being paid for in walks back to town. A trainer's kin gets
+      // neither — they are trained, and their fights are supposed to hurt.
+    const bonus = atkSide === 'mine' ? attackBonus()
+      : { flat: b.foeEdge || 0, mul: (b.wild ? WILD_DMG_MUL : trainerDmg(b.foe.lvl)) * (b.chipping ? PLAN_CHIP : 1), hits: 1, drain: 0 };
+    if (atkSide === 'foe') b.foeEdge = 0;          // spent on this swing
+    // A kin that has just been sent in is still finding its feet.
+    const settling = atkSide === 'mine' ? b.settling : b.foeSettling;
+    if (settling) {
+      if (atkSide === 'mine') b.settling = 0; else b.foeSettling = 0;
+      snap(log, `${who} is still finding its feet.`, 'block', atkSide);
+    }
     let totalDealt = 0;
     for (let h = 0; h < bonus.hits && defender.hp > 0; h++) {
       const roll = damageOf(attacker, defender, moveId);
       const { eff, crit } = roll;
-      const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * bonus.mul));
+      // The wild damper is there so that a long fight is not paid for in walks
+      // back to town. It has no business fully compounding with a resistance you
+      // already have: a wild kin you resist was hitting for .65 x .70 of normal,
+      // which is where the "nobody can hurt anybody" fights came from — three
+      // quarters of them never in doubt, none of them lost, and the longest in
+      // the game. Against a resistance it applies at half strength. Dropping it
+      // altogether was worse than the disease: wipes went from .220 a fight to
+      // .364, which is a walk back to town every third fight.
+      let mul = atkSide === 'foe' && eff < 1 ? (1 + bonus.mul) / 2 : bonus.mul;
+      if (settling) mul *= SETTLE_MUL;
+      const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * mul));
       let dealt = dmg;
       if (atkSide === 'foe') {
         dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe', crit);  // shield first
@@ -4956,9 +5294,28 @@ function useMove(log, atkSide, moveId) {
         // as though it had dealt 300, or a heavy move kills its own user
         // finishing off something that was already beaten.
         const had = defender.hp;
-        defender.hp = clamp(defender.hp - dmg, 0, defender.max);
+        let through = dmg;
+        if (b.foeShield > 0) {
+          const eaten = Math.min(b.foeShield, through);
+          b.foeShield -= eaten; through -= eaten;
+          if (eaten > 0) snap(log, `${them}'s guard absorbs ${eaten}.`, 'block', 'foe');
+        }
+        // A wild kin does not go down without one moment of its own. Three in
+        // ten party fights ended in a single swing — you send in the right
+        // element and delete something that never got a turn — and the cornered
+        // telegraph, which is the only thing a wild fight has to read, can only
+        // fire if the kin lives long enough to be cornered. So a healthy one
+        // takes the blow and holds on by a point, once, and corners on the spot.
+        // It cannot save a kin that was already hurt, and it cannot happen twice.
+        if (b.wild && !b.lastStand && defender === b.foe
+          && defender.hp > defender.max * CORNER_AT && through >= defender.hp) {
+          b.lastStand = 1;
+          through = defender.hp - 1;
+          snap(log, `${them} will not go down yet!`, 'block', 'foe');
+        }
+        defender.hp = clamp(defender.hp - through, 0, defender.max);
         dealt = had - defender.hp;
-        snap(log, `${them} took ${dmg}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
+        if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
       }
       totalDealt += dealt;
       if (crit && eff !== 0) snap(log, 'A critical hit!');
@@ -5154,9 +5511,24 @@ function addCaught(mon) {
 
 // ---- foe AI ------------------------------------------------------------
 /** Picks the move with the best expected value, with a little noise. */
-function foeChoose() {
+/**
+ * What the foe reaches for.
+ *
+ * `mustAttack` is the plan keeping its own promise. A `sharpen` beat banks an
+ * edge and costs the foe its turn to do it, so the beat after it has to be the
+ * one that cashes it in — and it was not: the scorer would pick a status move,
+ * the edge would sit there unspent, and a foe with a debuff to spam would bank
+ * edge after edge while grinding your attack down. Coll's three kin turned a
+ * five-turn fight into a thirty-turn one that way, and nothing in it was a
+ * decision.
+ */
+function foeChoose(mustAttack) {
   const b = B();
-  const list = b.foe.moves.length ? b.foe.moves : [{ id: 'falter' }];
+  let list = b.foe.moves.length ? b.foe.moves : [{ id: 'falter' }];
+  if (mustAttack) {
+    const hits = list.filter((sl) => MOVES[sl.id] && MOVES[sl.id].pow);
+    if (hits.length) list = hits;
+  }
   let best = null, bestScore = -1;
   for (const slot of list) {
     const m = MOVES[slot.id];
@@ -5176,13 +5548,58 @@ function foeChoose() {
   return best;
 }
 
+/** Roughly what the foe's best swing would do, for telegraphing a chip. */
+function chipEstimate(b) {
+  let best = 0;
+  for (const slot of b.foe.moves) {
+    const m = MOVES[slot.id];
+    if (!m || !m.pow) continue;
+    best = Math.max(best, damageOf(b.foe, b.mine, slot.id, { crit: false, roll: .925 }).dmg);
+  }
+  return best;
+}
+
 /** What the foe is about to do, telegraphed so the hand can be played into it. */
 function readIntent() {
   const b = B();
-  const id = foeChoose();
+  // A plan beat is announced a turn ahead, in the same line the moves use, so
+  // the whole fight is readable from one place.
+  const step = b.plan ? b.plan.steps[b.plan.i % b.plan.steps.length] : 'swing';
+  if (step !== 'swing' && PLANS[step]) {
+    const p = PLANS[step];
+    // A wild kin works its beat smaller than a trainer does. The beat costs it
+    // its attack, so a plan is less total damage, not more — but it arrives in
+    // one lump, and a lump can take a kin out where two taps could be healed
+    // through. At a trainer's numbers that read .389 lost-or-ran in solo against
+    // .317 without, which is a bigger price than the moment is worth.
+    const n = Math.round((p.edge || p.shield || 0) * planScale(b.foe.lvl)
+      * (b.wild ? WILD_PLAN_MUL : 1));
+    const tell = p.edge ? `+${n} on the next hit` : p.shield ? `${n} guard` : 'a shield will not help';
+    // The chip has to be on the line, or the telegraph lies about the turn.
+    const chip = b.wild ? Math.round(chipEstimate(b) * PLAN_CHIP) : 0;
+    b.intent = { id: null, name: p.label, dmg: chip, kind: 'plan', step, n, tell };
+    return b.intent;
+  }
+  // A wild kin that is losing stops fighting carefully. Two fights in five were
+  // never in doubt, and the reason was not that they were easy — it was that a
+  // wild fight is four identical small hits with no moment in it. Same damage,
+  // gathered into one swing you are told about a turn ahead: the fight now has a
+  // point where it could go wrong, and something to do about it.
+  const nextCorner = b.wild ? cornerAt(b.foe, b.mine, b.cornered) : -1;
+  if (nextCorner > 0 && b.foe.hp > 0 && b.foe.hp / b.foe.max < nextCorner) {
+    b.cornered++;
+    b.foeEdge += Math.round(CORNER_EDGE * planScale(b.foe.lvl));
+  }
+  const id = foeChoose(b.foeEdge > 0);
   const m = MOVES[id];
-  const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg : 0;
+  const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg + (b.foeEdge || 0) : 0;
   b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
+  // Being cornered is the loudest thing on the line while it lasts, because it
+  // is the only part of a wild fight worth reading.
+  if (b.cornered > 0 && b.foeEdge > 0 && m.pow) {
+    b.intent.name = `${m.name} — cornered`;
+    b.intent.tell = null;
+  }
   return b.intent;
 }
 
@@ -5191,16 +5608,224 @@ function readIntent() {
    hit. The active kin's own moves are shuffled into the same deck as the
    cards you brought, so a fight is the two of them together.
    ------------------------------------------------------------------------ */
+// Three energy, five cards. Both measured against themselves, sixty runs an arm,
+// and neither is a length dial either:
+//
+//   BASE_ENERGY 3 -> 4   turns per fight -0.12 +/-0.26   (nothing)
+//                        never-in-doubt +.085 +/-.043, wipes -.033 +/-.020
+//   HAND_SIZE   5 -> 7   turns per fight -0.28 +/-0.31   (nothing)
+//                        and every other headline nothing as well
+//
+// A third more energy a turn does not shorten a fight; it makes the player
+// stronger and the fight safer. Two extra cards a turn do not do anything at all
+// — which is the same fact pass 25 found from the other side, that 85% of turns
+// end out of energy rather than out of cards. The hand is not the constraint, so
+// widening it changes nothing.
+//
+// Taken with FOE_HP_MUL and the damage work: nothing on either side's numbers
+// moves fight length. Only structure does. If you want longer fights, give
+// somebody something to do with a turn.
 const BASE_ENERGY = 3, HAND_SIZE = 5;
-// A turn is roughly one attack plus the support stacked onto it, so a foe wants
-// a little more than its bare HP to be worth fighting — but only a little, now
-// that the deck sharpens attacks rather than adding its own. Their stats are
-// untouched: this is only the pool of HP a fight is played over.
-const FOE_HP_MUL = 1.4;
+
+/**
+ * A trainer with a plan.
+ *
+ * Every hand-authored fight in the game was "two kin, no plan": the foe scored
+ * its moves each turn and never built toward anything, so a trainer played
+ * exactly like a wild kin with more HP. A plan is a short loop of beats the
+ * opposing side works through — and because it is a loop rather than a script,
+ * it survives a fight going long without needing an ending written for it.
+ *
+ * Every beat is telegraphed a turn ahead through the intent line that was
+ * already there, so the point is never surprise. It is that you can see the big
+ * hit coming and get to decide what to do about it.
+ */
+const PLANS = {
+  sharpen: { label: 'sharpening', line: (n) => `is sharpening — the next one will hurt (+${n}).`, edge: 13 },
+  brace:   { label: 'bracing',    line: (n) => `braces. ${n} of the next hit will go nowhere.`, shield: 20 },
+  // The answer to a sharpen you can see coming is to bank a shield and eat it.
+  // Aim is the answer to that answer, which is why only the late trainers know
+  // it: the fight stops being "read the beat" and becomes "read the player".
+  aim:     { label: 'taking aim',  line: () => 'takes aim. A shield will not be in the way.', pierce: 1 },
+  swing:   { label: null },
+};
+/**
+ * How much a plan beat is worth at a given level.
+ *
+ * It has to keep up with the valley, and it has to *not* be there at the start.
+ * Wick's first fight is one kin against one kin at level five with the type
+ * advantage his way; every global buff the trainers have ever been given has
+ * landed on that fight first and made the opening of the game unwinnable —
+ * twice now, caught both times by the "still a fight, not a formality"
+ * assertion. A trainer at level five is a kid who was handed their first kin the
+ * same morning you were. The plans are worth what they can make of them, and
+ * they get better as you go north.
+ */
+const planScale = (lvl) => (1 + lvl / 22) * Math.min(1, lvl / 12);
+// The pool of HP a fight is played over. Their stats are untouched.
+//
+// THIS IS A DANGER DIAL, NOT A LENGTH DIAL. It was written as the latter — "a foe
+// wants a little more than its bare HP to be worth fighting" — and measured
+// against itself at 4.0 against 5.0, sixty runs an arm, it moves turns per fight
+// by +0.11 ±0.35 in solo and +0.07 ±0.18 in party. Nothing, in both modes. What a
+// quarter more HP buys is danger: solo lost-or-ran .249 to .359, wipes .096 to
+// .141, never-in-doubt down .059 ±.039.
+//
+// The deck is why. A longer fight is a fight with more turns of stacking in it,
+// so a bigger pool is met by bigger hits rather than by more rounds — the player
+// scales into the pool about as fast as the pool grows. Reach for this when
+// fights feel *safe*. It will not make them feel *long*.
+const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
+// How hard a wild kin's plan beat lands, against a trainer's. See readIntent.
+const WILD_PLAN_MUL = .8;
+// How often a wild encounter is a pair rather than one kin.
+//
+// The only length lever this game has ever had is structure — every number on
+// both sides moves danger and leaves fight length where it was (see FOE_HP_MUL,
+// BASE_ENERGY, HAND_SIZE). The one structural thing never tried on the wild side
+// is a second body: a trainer's second kin is an extra opening, an extra settle
+// and a swap, and that is where a trainer's length comes from.
+//
+// The pool is held constant — each of a pair carries half the HP one would — so
+// this adds turns without adding difficulty, or it does nothing. It is a
+// structure test either way.
+const WILD_PAIR = .25;
+// A gathering wild kin can still lean on you, for this much of a normal hit.
+// Zero, because the cure costs more than the drift.
+//
+// Solo's never-in-doubt went 34% to 39% when wild kin got a plan: the beat costs
+// the foe its attack, and that free turn is where the pressure went. A chip puts
+// it back — at .45 solo reads 30% never-in-doubt, the best that number has ever
+// been. But the chip ends fights faster, and party fights are already the short
+// ones: over-in-one goes from 4% to 24%, giving back almost the whole reason the
+// plan was worth having. Four points of solo never-in-doubt for twenty of party
+// over-in-one is a bad exchange, so the machinery stays and the dial is off.
+const PLAN_CHIP = 0;
+// A trainer is already a two- or three-kin fight, so each of their kin needs a
+// far smaller pool than a lone wild one — and they hit at full strength, which
+// a wild kin does not. Giving them the wild number made the opening rival fight
+// a coin toss and turned Dorn's two kin into a ten-turn slog.
+//
+// That "ten-turn slog" is the one length claim in this file that survives, and it
+// survives because it is about the number of *kin*, not the size of the pool: a
+// trainer's extra kin is an extra opening, an extra settle, an extra swap. Adding
+// HP to one kin does not lengthen a fight (see FOE_HP_MUL); adding a kin does.
+// Length in this game comes from structure, and a second body is structure.
+const TRAINER_HP_MUL = 2.2;
+/**
+ * A trainer's kin carries less of the pool the more of them there are.
+ *
+ * A flat multiplier meant a trainer's fight got longer in proportion to their
+ * team: Wick's one kin was three turns and Dorn's two were eight, with Coll's
+ * three the longest fight in the game and not one of those turns a decision.
+ * The pool belongs to the trainer, so it is shared out — three kin at 1.5x each
+ * is a longer fight than one at 2.2x, but not three times longer.
+ */
+const trainerHp = (n) => TRAINER_HP_MUL / Math.pow(Math.max(1, n), .35);
+/**
+ * And they hit harder than anything in the grass.
+ *
+ * Trainers stopped winning: every one of them except the opening rival sat at
+ * 0% losses with the player's party still above three quarters health. Health
+ * was the wrong lever for that — more of it made the fights long rather than
+ * dangerous, and Coll's three kin were already the longest fight in the game.
+ * A trained kin is not a tougher wild kin, it is a better-hitting one, so the
+ * danger goes where you can see it coming instead of into the bar.
+ */
+const TRAINER_DMG_MUL = 1.35;
+/** The same ramp, for the same reason. */
+const trainerDmg = (lvl) => 1 + (TRAINER_DMG_MUL - 1) * Math.min(1, lvl / 14);
+// A wild kin fights for its life once it is losing: at this much health left it
+// gathers itself, and the swing after that is worth this much more.
+// CORNER_EDGE was 14 and drifted the solo danger line to .338 lost-or-ran across
+// three passes of cornering changes, which is a third of one-kin fights lost or
+// run from and higher than it has ever been. At 11 it is .288 ±.038 against
+// .338 ±.045 — the intervals overlap at the edges, so read it as direction
+// rather than proof — and the free-fight rate does not move at all (38% ±3
+// against 37% ±3). That is the trade: measurable danger back, nothing
+// measurable given up.
+const CORNER_AT = .4, CORNER_EDGE = 11;
+// Two moments even when it can hurt you. The single one at .4 left the even
+// matchups — where neither side has anything on the other, and which are a fifth
+// of one-kin fights — free 37% of the time, because one telegraphed swing across
+// four turns is a moment, not a fight. The doubly-lucky bucket, where you
+// brought the right kin *and* it cannot touch you, stays comfortable on purpose:
+// a free fight there is what good play is for.
+/**
+ * How hurt a wild kin has to be before it stops fighting carefully — and the
+ * answer depends on whether it can hurt you at all.
+ *
+ * Nearly half of one-kin fights were never in doubt, and the cross-tab says
+ * where they live: 43% of fights are ones whose element you resist, and those
+ * run 59%, 59% and 45% never-in-doubt against 29% for the fights you walk into
+ * at a disadvantage. A kin whose every blow bounces off you cannot threaten you
+ * by hitting harder, because hitting is the thing the chart has taken away.
+ *
+ * So it stops waiting. A resisted wild kin gathers itself while it still has
+ * most of its health, which is the one thing it has that the chart cannot blunt:
+ * a telegraphed swing carrying flat damage, on a turn you were not expecting to
+ * have to answer.
+ */
+const CORNER_RESIST = [.78, .52, .26];
+// Measured against [.62, .40, .22], which was the obvious trade-back when the
+// price of this looked too high: it gave two points of never-in-doubt back and
+// took .034 off lost-or-ran, and moved turns not at all. Neither clears its
+// interval, so it is a wash, and a wash is not a reason to change a shipped
+// number. What actually lengthened the fights was the probe running away more
+// and failing the roll, which costs a turn — not the cornering.
+/** Is every attack this kin has blunted by what the other one is made of? */
+const resistedBy = (foe, mine) => {
+  let best = 0;
+  for (const slot of foe.moves) {
+    const m = MOVES[slot.id];
+    if (m && m.pow) best = Math.max(best, effect(m.type, mine.types));
+  }
+  return best < 1;
+};
+/**
+ * The health at which it gathers itself for the nth time, or -1 for never.
+ *
+ * A kin that can hurt you gets one moment, late. A kin that cannot gets three,
+ * starting early — because one extra flat swing is not a fight. Moving a
+ * resisted foe's single moment earlier shifted the bucket it lives in by six
+ * points and the run average by two, which is inside the interval and therefore
+ * not a result. Three moments is the difference between a telegraph and a fight.
+ */
+const CORNER_PLAIN = [.55, .28];
+const cornerAt = (foe, mine, done) => {
+  const list = resistedBy(foe, mine) ? CORNER_RESIST : CORNER_PLAIN;
+  return done < list.length ? list[done] : -1;
+};
+// What it costs to be caught changing kin. Switching already cost a turn and
+// your hand and everything the deck had stacked up; none of that was a price
+// worth thinking about next to buying the element outright.
+const SWITCH_PUNISH = 11;
+// And what a kin can do on the turn it arrives. Pricing the switch was not
+// enough: it cost a turn and a harder hit, and still bought the whole matchup
+// immediately, so with a party of four every fight was send-in-the-right-element
+// and delete. The payoff arrives a turn late now. Over a three-turn fight that
+// is most of the reason to do it at all, which is what makes it a decision
+// rather than the obvious opening move.
+// (Length claim flagged: "over a three-turn fight that is most of the reason to
+// do it" is about the *value* of the delay, which stands. But nothing here buys
+// turns — see the note on FOE_HP_MUL.)
+const SETTLE_MUL = .6;
+/**
+ * What a trainer carries, and what it is worth.
+ *
+ * Trainers could not win, and no constant fixed it, because the problem was not
+ * a number: the player arrives with four rested kin and rotates freshness in
+ * while a trainer spends one to three, one at a time, with no way to put any of
+ * it back. One potion per kin on the team, worth a third of the bar, reached for
+ * when the kin on the field is nearly out. It costs them their turn, like every
+ * other thing either side can do instead of swinging.
+ */
+const POTIONS_FOR = (team) => Math.max(1, team);
+const FOE_POTION = .34, FOE_POTION_AT = .35;
 
 /** Give a foe its battle-sized health as it steps in. */
-function toughen(mon) {
-  mon.max = Math.round(mon.max * FOE_HP_MUL);
+function toughen(mon, mul) {
+  mon.max = Math.round(mon.max * (mul || FOE_HP_MUL));
   mon.hp = mon.max;
   return mon;
 }
@@ -5232,9 +5857,26 @@ const moveCost = (id) => {
   return m.pow >= 100 ? 3 : m.pow >= 45 ? 2 : 1;
 };
 
-const cardCost = (card) => card.src === 'kin' ? moveCost(card.id) : CARDS[card.id].cost;
-const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : CARDS[card.id].name;
-const cardRarity = (card) => card.src === 'kin' ? 'kin' : CARDS[card.id].r;
+/**
+ * What a card costs *right now*.
+ *
+ * `chain` is the one mechanic that reads the turn you are having: the card gets
+ * a discount for every card you have already played this turn, which turns a
+ * finisher you could never afford into the reward for setting one up. Every
+ * other cost in the game is fixed, so this is the only place a price moves.
+ */
+const cardCost = (card) => {
+  if (card.src === 'kin') return moveCost(card.id);
+  // A save can hold a card whose definition has gone — an id renamed between
+  // builds. It must not take the game down; it just costs nothing.
+  const def = CARDS[card.id];
+  if (!def) return 0;
+  const b = B();
+  const chain = def.chain && b ? def.chain * (b.playedTurn || 0) : 0;
+  return Math.max(0, def.cost - chain);
+};
+const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : (CARDS[card.id] || { name: '?' }).name;
+const cardRarity = (card) => card.src === 'kin' ? 'kin' : (CARDS[card.id] || { r: 'common' }).r;
 
 function shuffleInto(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -5310,6 +5952,8 @@ function clearMods(b) {
 function startPlayerTurn(log) {
   const b = B();
   b.turn++;
+  b.playedTurn = 0;                               // chain and combo read this
+  b.swungTurn = 0;                                // one attack a turn, no more
   b.shield = 0;                                   // shield is for one round only
   b.energy = BASE_ENERGY + (b.powers.energy || 0);
   if (b.mine.status === 'shock') {
@@ -5332,14 +5976,25 @@ function startPlayerTurn(log) {
  * Without it, confirm lands on a dead card and does nothing but toast at you
  * while three playable cards sit next to it.
  */
+/**
+ * Can this card be played right now? Energy is the obvious half; the other is
+ * the one-swing rule — a kin move you have already thrown this turn is as dead
+ * as one you cannot pay for, and the hand has to say so rather than quietly
+ * refusing the keypress.
+ */
+function playableNow(b, c) {
+  if (cardCost(c) > b.energy) return false;
+  return !(c.src === 'kin' && b.swungTurn);
+}
+
 function aimPlayable(b) {
   if (!b.hand.length) { b.sel = 0; return; }
   b.sel = clamp(b.sel || 0, 0, b.hand.length - 1);
-  if (cardCost(b.hand[b.sel]) <= b.energy) return;
+  if (playableNow(b, b.hand[b.sel])) return;
   // Nearest playable card, searching outward from where the aim already is.
   for (let d = 1; d < b.hand.length; d++) {
     for (const i of [b.sel + d, b.sel - d]) {
-      if (i >= 0 && i < b.hand.length && cardCost(b.hand[i]) <= b.energy) { b.sel = i; return; }
+      if (i >= 0 && i < b.hand.length && playableNow(b, b.hand[i])) { b.sel = i; return; }
     }
   }
 }
@@ -5350,6 +6005,15 @@ function hurtMine(log, amount, why, atk, crit) {
   // Guard is flat and honest too: "take 2 less" takes 2 off the number, and a
   // hit never falls below 1 so a stack of guard cannot make you untouchable.
   let dmg = Math.max(amount > 0 ? 1 : 0, amount - (b.mods.def || 0));
+  // A telegraphed aim goes straight past whatever you banked — and only past
+  // the shield, so guard and the rest of the deck still do their job.
+  if (b.foePierce && atk === 'foe') {
+    b.foePierce = 0;
+    if (b.shield > 0) snap(log, 'The shield is not where the hit lands.', 'block', 'mine');
+    b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', { atk, crit: !!crit });
+    return dmg;
+  }
   if (b.shield > 0) {
     const absorbed = Math.min(b.shield, dmg);
     b.shield -= absorbed; dmg -= absorbed;
@@ -5443,6 +6107,12 @@ function playCard(i) {
   b.energy -= cost;
 
   if (card.src === 'kin') {
+    // One swing a turn. With three energy and moves costing one or two, the
+    // best play was to attack twice and never touch the deck — which is the
+    // exact opposite of "your kin brings the attacks, your deck makes them
+    // land harder", and why a fight was over in a turn and a half.
+    if (b.swungTurn) { b.hand.splice(i, 0, card); b.energy += cost; snap(log, `${dispName(b.mine)} has already swung this turn.`); return log; }
+    b.swungTurn = 1;
     const before = b.foe.hp;
     snap(log, `${dispName(b.mine)} plays ${MOVES[card.id].name}.`, 'use', 'mine');
     useMove(log, 'mine', card.id);
@@ -5454,9 +6124,13 @@ function playCard(i) {
   const def = CARDS[card.id];
   const owned = ownedCard(card.u);
   const inst = { id: card.id, plus: owned ? owned.plus : 0, bg: card.bg || 0 };
-  const value = cardValue(inst);
+  // `combo` pays out only when this is not the first card of the turn. It is
+  // the cheapest way to make the *order* you play things in matter.
+  const combo = def.combo && (b.playedTurn || 0) > 0 ? def.combo : 0;
+  const value = cardValue(inst) + combo;
   const fx = def.fx || {};
-  snap(log, `You play ${def.name}.`, 'card', 'mine');
+  b.playedTurn = (b.playedTurn || 0) + 1;
+  snap(log, `You play ${def.name}.${combo ? ' It follows through.' : ''}`, 'card', 'mine');
 
   // Support only: a card in your deck never damages the foe itself, it makes
   // the kin's attacks do more. `vt` names whichever number the card grows.
@@ -5469,14 +6143,29 @@ function playCard(i) {
     snap(log, `The next attack will hit for +${b.mods.edge}.`, 'buff', 'mine');
   }
   if (amt('might')) {
-    G.might = (G.might || 0) + amt('might');
-    snap(log, `Every attack from now on hits for +${G.might}. For good.`, 'grow', 'mine');
+    // A card may grow to four times its own value and no further, because a card
+    // that grows forever eventually plays the game for you. G.might is the pile
+    // those plays add up to and it had no ceiling at all — by Crown Hollow it
+    // reached +499 on every attack, against a wild kin's 174 HP, which turned the
+    // back half of every run into one-shots. Same principle, same kind of
+    // ceiling: generous enough that a might build is worth building, bounded so
+    // it is a build and not an ending.
+    G.might = Math.min(MIGHT_CAP, (G.might || 0) + amt('might'));
+    snap(log, G.might >= MIGHT_CAP
+      ? `Every attack hits for +${G.might}. There is no more room to grow.`
+      : `Every attack from now on hits for +${G.might}. For good.`, 'grow', 'mine');
   }
   if (def.kind === 'power' && fx.st) {
     b.mods.riders.push(fx.st);
     snap(log, `Your attacks now ${fx.st[0] === 'snare' ? 'snare' : STATUS[fx.st[0]].name.toLowerCase() + ' on'} what they touch.`, 'buff', 'mine');
   }
   if (fx.hits) { b.mods.hits = (b.mods.hits || 0) + fx.hits; snap(log, 'Your attacks swing again.', 'buff', 'mine'); }
+  // The only card in the deck that changes a rule rather than a number. One swing
+  // a turn is the shape of every turn in this game; this clears that flag, so the
+  // kin may move twice. Everything else in the set adds to a swing, a shield or a
+  // heal, which is why every card can stand in for some other card — and a card
+  // nothing can stand in for is the thing the deck has never had.
+  if (fx.again) { b.swungTurn = 0; snap(log, `${dispName(b.mine)} finds another swing.`, 'buff', 'mine'); }
   if (fx.mul) { b.mods.mul = (b.mods.mul || 1) * fx.mul; snap(log, 'Everything you land hits twice as hard.', 'buff', 'mine'); }
   if (amt('shield')) { b.shield += amt('shield'); snap(log, `Shield up to ${b.shield}.`, 'block', 'mine'); }
   if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `Every attack now hits for +${b.mods.atk}.`, 'buff', 'mine'); }
@@ -5526,15 +6215,109 @@ function playCard(i) {
   return log;
 }
 
+/**
+ * The best kin a trainer has left for the fight in front of them, or -1.
+ *
+ * Scored the way a person scores it: what their element does to yours, weighted
+ * by how much of the kin is still there. A trainer only reaches for it when the
+ * one on the field is the wrong one — resisted, or nearly out — because it costs
+ * them the turn, exactly as it costs you.
+ */
+function foeBench(force) {
+  const b = B();
+  if (!b.roster || b.wild) return -1;
+  const best = (m, def) => {
+    let e = 0;
+    for (const slot of m.moves) {
+      const mv = MOVES[slot.id];
+      if (mv && mv.pow) e = Math.max(e, effect(mv.type, def.types));
+    }
+    return e;
+  };
+  const cur = b.foe;
+  const mine = best(cur, b.mine);
+  if (!force && !(mine < 1 || cur.hp / cur.max < .35)) return -1;
+  let pick = -1, top = mine * (cur.hp / cur.max);
+  b.roster.forEach((m, i) => {
+    if (m === cur || m.hp <= 0) return;
+    const score = best(m, b.mine) * (m.hp / m.max);
+    if (score > top * 1.6) { pick = i; top = score; }
+  });
+  return pick;
+}
+
+/**
+ * A trainer sends in somebody else. The same deal you get, mirrored: it costs
+ * them their turn, the kin arriving swings soft once, and you catch them
+ * changing — your next attack carries the edge theirs would have carried if you
+ * had been the one to blink.
+ */
+function foeSwap(log, idx) {
+  const b = B();
+  const next = b.roster[idx];
+  snap(log, `${b.npc ? b.npc.name : 'The challenger'} calls ${dispName(b.foe)} back!`, 'faint', 'foe');
+  b.foe.stages = { atk: 0, def: 0, spd: 0 };
+  b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.cornered = 0; b.chipping = 0;
+  b.foe = next;
+  b.teamIdx = idx;                       // whoever is out is who is out
+  next.stages = { atk: 0, def: 0, spd: 0 };
+  b.dispF = b.tgtF = next.hp;
+  b.foeSettling = 1;
+  b.foeSwaps++;
+  b.foeSwapT = b.turn;
+  b.mods.edge = (b.mods.edge || 0) + Math.round(SWITCH_PUNISH * planScale(next.lvl));
+  seeMon(next.species);
+  snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${next.name}!`, 'send', 'foe');
+  snap(log, `Caught mid-change — your next attack will land harder.`, 'buff', 'mine');
+}
+
 /** The foe is down: award XP and gems, or send out the next of a trainer's team. */
 function resolveFoeDown(log) {
   const b = B();
   snap(log, `${b.wild ? 'Wild ' : 'Foe '}${dispName(b.foe)} is down!`, 'faint', 'foe');
   if (b.mine.hp > 0) grantXP(log, b.mine, b.foe);
-  if (b.team && b.teamIdx < b.team.length - 1) {
+  // Beating something puts a little back. A measured run walked to the Wayhouse
+  // five times before Crown Hollow, every trip a corridor you had already
+  // cleared — attrition with no recovery except the town turns exploring into
+  // errands. Winning is now its own second wind, so the walk back is a choice
+  // rather than a tax, and a chain of fights is survivable on its own terms.
+  // …but only in proportion to what the fight cost. A flat slice made every
+  // walkover free as well, and a fight you cannot lose is a cutscene you have
+  // to press buttons through — the measured share of those went *up*. Half of
+  // what this fight took off you, capped, so a hard fight pays and a trivial
+  // one gives you nothing you did not already have.
+  if (b.mine.hp > 0 && b.mine.hp < b.mine.max) {
+    const mark = b.hpMark == null ? b.mine.max : b.hpMark;
+    const lost = Math.max(0, mark - b.mine.hp);
+    const back = Math.min(Math.round(lost * RALLY_SHARE), Math.round(b.mine.max * RALLY_CAP));
+    if (back > 0) {
+      const had = b.mine.hp;
+      b.mine.hp = clamp(b.mine.hp + back, 0, b.mine.max);
+      if (b.mine.hp > had) snap(log, `${dispName(b.mine)} catches its breath. +${b.mine.hp - had} HP.`, 'heal', 'mine');
+    }
+  }
+  b.hpMark = b.mine.hp;                      // the next foe is measured from here
+  // A trainer's team is a bench now, so "the next one" is the best one left
+  // rather than the one that happens to be written next in the list.
+  if (b.roster) {
+    b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.foeSettling = 0;
+    const idx = foeBench(true);
+    const nextIdx = idx >= 0 ? idx : b.roster.findIndex((m) => m.hp > 0);
+    if (nextIdx >= 0) {
+      b.foe = b.roster[nextIdx];
+      b.teamIdx = nextIdx;
+      b.foe.stages = { atk: 0, def: 0, spd: 0 };
+      b.dispF = b.tgtF = b.foe.hp;
+      seeMon(b.foe.species);
+      snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${b.foe.name}!`, 'send', 'foe');
+      readIntent();
+    } else {
+      b.over = 'win';
+    }
+  } else if (b.team && b.teamIdx < b.team.length - 1) {
     b.teamIdx++;
     const nxt = b.team[b.teamIdx];
-    b.foe = toughen(mkMon(nxt[0], nxt[1]));
+    b.foe = toughen(mkMon(nxt[0], nxt[1]), FOE_HP_MUL);
     b.foe.stages = { atk: 0, def: 0, spd: 0 };
     b.dispF = b.tgtF = b.foe.hp;
     seeMon(b.foe.species);
@@ -5550,7 +6333,65 @@ function foeTurn(log) {
   const b = B();
   if (b.over || b.foe.hp <= 0 || b.mine.hp <= 0) return;
   b.phase = 'foe';
-  const id = (b.intent && b.intent.id) || foeChoose();
+  // A potion, if the kin on the field is nearly out and there is one left. This
+  // comes before the bench because putting the kin you have back together beats
+  // sending in a fresh one that arrives swinging soft.
+  if (b.foePotions > 0 && !b.wild && b.foe.hp / b.foe.max < FOE_POTION_AT && b.foe.hp > 0) {
+    b.foePotions--;
+    b.foeHeals++;
+    const back = Math.max(1, Math.round(b.foe.max * FOE_POTION));
+    const had = b.foe.hp;
+    b.foe.hp = clamp(b.foe.hp + back, 0, b.foe.max);
+    snap(log, `${b.npc ? b.npc.name : 'The challenger'} uses a potion. ${dispName(b.foe)} recovers ${b.foe.hp - had}.`, 'heal', 'foe');
+    if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+    return;
+  }
+  // Somebody else's turn. A trainer with a bench uses it, at the same price you
+  // pay: the turn goes, the kin arriving swings soft once, and you get the edge
+  // for catching them mid-change. Once per fight per kin on the bench, and never
+  // twice running, or a three-kin trainer can stall a fight for ever.
+  if (b.roster && !b.wild && b.turn > b.foeSwapT + 1 && b.foeSwaps < b.roster.length) {
+    const idx = foeBench(false);
+    if (idx >= 0) {
+      foeSwap(log, idx);
+      if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+      return;
+    }
+  }
+  // Work the plan. A beat costs the foe its attack, which is what makes it a
+  // decision on your side too: the turn it braces is the turn it does not hit.
+  if (b.intent && b.intent.kind === 'plan') {
+    const p = PLANS[b.intent.step], n = b.intent.n;
+    if (p.edge) { b.foeEdge += n; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }
+    if (p.shield) { b.foeShield += n; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'block', 'foe'); }
+    if (p.pierce) { b.foePierce = 1; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }
+    if (b.plan) b.plan.i++;
+    // A wild kin gathering still swings, softly. Everything goes through the
+    // normal attack path so shields, guard, thorns and the knockout all behave —
+    // `chipping` only scales the number.
+    // Guarded on the dial, not just scaled by it. At PLAN_CHIP = 0 this block
+    // still ran a zero-damage attack — and `useMove` spends `b.foeEdge` on the
+    // way through, so the gather beat threw away the sharpen it had just gained
+    // and the whole plan quietly did nothing. Shipped that way in pass 34 and
+    // caught by the first paired run in pass 35: party over-in-one read 20.6%
+    // where pass 33 had measured 4%.
+    if (b.wild && PLAN_CHIP > 0) {
+      b.chipping = 1;
+      const cid = foeChoose(b.foeEdge > 0);
+      const hpWas = b.mine.hp;
+      useMove(log, 'foe', cid);
+      b.chipping = 0;
+      if (b.mods.thorns && b.mine.hp < hpWas && b.foe.hp > 0) {
+        b.foe.hp = clamp(b.foe.hp - b.mods.thorns, 0, b.foe.max);
+        snap(log, `Thorns bite back for ${b.mods.thorns}.`, 'hit', 'foe');
+        if (b.foe.hp <= 0) { resolveFoeDown(log); return; }
+      }
+    }
+    if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+    return;
+  }
+  if (b.plan) b.plan.i++;
+  const id = (b.intent && b.intent.id) || foeChoose(b.foeEdge > 0);
   const hpBefore = b.mine.hp;
   useMove(log, 'foe', id);
   // Thorns answer anything that actually connected.
@@ -5584,8 +6425,13 @@ function endTurn() {
   const b = B();
   const log = [];
   if (b.phase !== 'player' || b.over) return log;
-  b.disc.push(...b.hand);
-  b.hand = [];
+  // A retained card stays in your hand across the turn. It is the difference
+  // between a heal you must spend now and a heal you are holding — which is a
+  // decision every single turn rather than one.
+  const kept = b.hand.filter((c) => c.src !== 'kin' && CARDS[c.id].retain);
+  b.disc.push(...b.hand.filter((c) => !kept.includes(c)));
+  b.hand = kept;
+  if (kept.length) snap(log, `${kept.length === 1 ? cardName(kept[0]) + ' stays' : kept.length + ' cards stay'} in your hand.`, 'buff', 'mine');
   foeTurn(log);
   afterFoe(log);
   return log;
@@ -5613,13 +6459,21 @@ function doAction(action) {
   } else if (action.kind === 'switch') {
     const next = G.party[action.idx];
     if (!next || !alive(next) || next === b.mine) return log;
+    // A switch cost one turn and bought the whole matchup, which made it a
+    // reflex rather than a decision: send in the right element, delete the
+    // thing, never lose. It is now a moment you can be caught in — the hit that
+    // lands while your kin is still finding its feet comes in harder.
+    if (b.foe.hp > 0 && !b.over) b.foeEdge += Math.round(SWITCH_PUNISH * planScale(b.foe.lvl));
+    b.settling = 1;
     snap(log, `Come back, ${dispName(b.mine)}!`);
     clearMods(b);
     b.mine.stages = { atk: 0, def: 0, spd: 0 };
     b.mine = next;
+    b.hpMark = next.hp;                  // a fresh kin is measured from where it came in
     next.stages = { atk: 0, def: 0, spd: 0 };
     swapKinCards(b);
     snap(log, `Go, ${dispName(next)}!`, 'send', 'mine');
+    if (b.foeEdge > 0) snap(log, `${dispName(b.foe)} is already coming — this will hurt.`, 'buff', 'foe');
   }
 
   b.disc.push(...b.hand);
@@ -6105,9 +6959,13 @@ const RIVAL_PICK = { cindercub: 'dewdrip', dewdrip: 'sproutle', sproutle: 'cinde
 /** A trainer's team, resolved at challenge time so the rival can react to you. */
 function trainerTeam(npc) {
   const pick = RIVAL_PICK[G.flags.starter] || 'dewdrip';
-  // Same level as yours. He already has the type advantage and two levels on
-  // top of that made the first fight in the game unwinnable, which is a poor
-  // way to open — and he stands between the town and the only grass to grind in.
+  // Level with you. He has the type advantage and that used to be enough on its
+  // own — two levels on top made the first fight in the game unwinnable, and he
+  // stands between the town and the only grass to grind in. He was dropped a
+  // level when a kin went down to one swing a turn; now that a type advantage is
+  // a tilt rather than a verdict, that compensation had him losing 98 times in a
+  // hundred to a bot, so it comes back off. The opening fight has to be winnable
+  // on what the game has just handed you, and it also has to be a fight.
   if (npc.dynamic === 'rival1') return [[pick, 5]];
   if (npc.dynamic === 'rival2') {
     const evo = DEX[pick].evo ? DEX[pick].evo[0] : pick;
@@ -6366,14 +7224,14 @@ function renderHand() {
     + (b.exh.length ? pile('exh', b.exh.length, 'spent') : '')
     + (b.shield ? `<span id="shieldpip" class="shieldpip">${b.shield}</span>` : '');
   els.hand.innerHTML = b.hand.map((c, i) => cardHTML(c, {
-    cls: `${i === b.sel ? 'sel' : ''} ${cardCost(c) <= b.energy && playable ? '' : 'dead'}`,
+    cls: `${i === b.sel ? 'sel' : ''} ${playableNow(b, c) && playable ? '' : 'dead'}`,
     attr: `data-c="${i}"`, slot: i + 1,
     style: fanStyle(i, b.hand.length, i === b.sel),
-    foot: i === b.sel && cardCost(c) <= b.energy && playable ? '<div class="cp">▲ play</div>' : '',
+    foot: i === b.sel && playableNow(b, c) && playable ? '<div class="cp">▲ play</div>' : '',
   })).join('');
   paintCardArt(els.hand);
-  // When there is nothing left you can pay for, the End turn button says so.
-  const canPlay = b.hand.some((c) => cardCost(c) <= b.energy) && playable;
+  // When there is nothing left you can play, the End turn button says so.
+  const canPlay = b.hand.some((c) => playableNow(b, c)) && playable;
   els.acts.innerHTML = [
     ['end', `End turn <span class="key">E</span>`, !canPlay && playable],
     ['kin', 'Kin', false], ['bag', 'Bag', false],
@@ -6381,7 +7239,7 @@ function renderHand() {
   ].map(([a, label, nag]) => `<div class="abtn ${nag ? 'nag' : ''}" data-a="${a}">${label}</div>`).join('');
   const it = b.intent;
   els.intent.innerHTML = it
-    ? `Foe: <b>${it.name}</b>${it.kind === 'attack' ? ` · about ${it.dmg}` : ''}`
+    ? `Foe: <b>${it.name}</b>${it.kind === 'attack' ? ` · about ${it.dmg}` : it.tell ? ` · ${it.tell}` : ''}`
     : '';
   // The hand is too small to hold a card's whole rules text, so the line above
   // it spells out whichever card you are aiming at whenever it is otherwise idle.
@@ -6981,6 +7839,7 @@ function closeScreen() {
   playCue('back');
   if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
   if (s.kind === 'starter') return;                      // and one of these must be chosen
+  if (s.kind === 'swap') return;                         // something has to come out
   if (s.kind === 'profile') {
     commitNick(s);                                       // never lose what was typed
     if (s.opt.fresh) { screenSelect(); return; }          // a fresh catch has one way out
@@ -7007,6 +7866,9 @@ function screenList(s) {
   if (s.kind === 'reward') return (s.opt.offer || []).concat(['skip']);
   // Three kin and no way out: the first choice in the game is a choice.
   if (s.kind === 'starter') return STARTERS.slice();
+  // Which card comes out. The deck, and nothing else — there is no "keep it as
+  // it is", because you already chose to take the card.
+  if (s.kind === 'swap') return G.deck.map(ownedCard).filter(Boolean);
   // The profile is one creature and two buttons; the list is what you can press.
   if (s.kind === 'profile') return ['name', 'done'];
   if (s.kind === 'deck') {
@@ -7178,6 +8040,20 @@ function renderScreen() {
         </div>
         <div class="ptake">${i === s.i ? '▲ take it' : ''}</div></div>`;
     }).join('') + '</div>';
+  } else if (s.kind === 'swap') {
+    const coming = ownedCard(s.opt.newCard);
+    html = '';                                  // something has to come out
+    html += `<h2>What comes out?</h2>`;
+    html += `<p class="lede">A deck holds ${DECK_MAX}. ${coming ? CARDS[coming.id].name : 'The new card'} is going in — pick the one it replaces.</p>`;
+    if (coming) {
+      html += `<div class="cardrow">` + cardHTML({ src: 'deck', u: coming.u, id: coming.id, bg: 0 },
+        { cls: 'big', note: 'coming in' }) + '</div>';
+      html += `<h3 class="shelf">Your deck</h3>`;
+    }
+    html += `<div class="cardrow">` + s.list.map((c, i) => cardHTML(
+      { src: 'deck', u: c.u, id: c.id, bg: 0 },
+      { cls: `big ${i === s.i ? 'sel' : ''}`, attr: `data-i="${i}"`,
+        note: `played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}` })).join('') + '</div>';
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
@@ -7306,7 +8182,7 @@ function screenInput() {
     // back to. Back means "No thanks", which is a real option on the screen,
     // rather than a button that looks live and does nothing.
     if (s.kind === 'reward') { s.i = Math.max(0, (s.list || []).length - 1); screenSelect(); }
-    else if (s.kind !== 'starter') closeScreen();
+    else if (s.kind !== 'starter' && s.kind !== 'swap') closeScreen();
   }
 }
 
@@ -7373,15 +8249,35 @@ function screenSelect() {
     if (done) done();
     return;
   }
+  if (s.kind === 'swap') {
+    const out = s.list[s.i];
+    if (!out) return;
+    const done = s.opt.done, coming = s.opt.newCard;
+    G.deck = G.deck.filter((u) => u !== out.u);
+    if (!G.deck.includes(coming)) G.deck.push(coming);
+    const inc = ownedCard(coming);
+    G.screen = null; if (!HEADLESS) show(els.screen, false);
+    G.mode = G.battle ? 'battle' : 'world';
+    setToast(`${CARDS[out.id].name} out, ${inc ? CARDS[inc.id].name : 'the new card'} in.`);
+    saveGame();
+    if (done) done();
+    return;
+  }
   if (s.kind === 'reward') {
     const id = s.list[s.i];
     const done = s.opt.done;
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     if (id && id !== 'skip') {
-      const c = grantCard(id);
-      setToast(`${CARDS[id].name} joins the deck.`);
-      if (!G.deck.includes(c.u)) setToast(`${CARDS[id].name} — deck is full, it went to the collection.`);
+      const c = grantCard(id, true);
+      if (G.deck.includes(c.u)) setToast(`${CARDS[id].name} joins the deck.`);
+      else {
+        // A full deck makes taking a card the second half of a decision rather
+        // than the end of one: something has to come out, and it is your call
+        // which. The old rule picked for you, silently.
+        openScreen('swap', { newCard: c.u, done });
+        return;
+      }
     }
     if (done) done();
     return;
@@ -7728,6 +8624,81 @@ function drawGotcha(g) {
   g.restore();
 }
 
+/**
+ * The air in a place.
+ *
+ * Every map was drawn with the same light, which is why the valley reads as one
+ * tileset rather than eight places. This is the cheapest thing that fixes it: a
+ * colour poured over the finished frame, a vignette so the edges fall away, and
+ * a few motes drifting through the light. Nothing here touches the tiles — a map
+ * keeps its own art and gets its own weather.
+ *
+ *   tint/grade — the colour of the light and how much of it there is
+ *   vig        — how hard the corners close in
+ *   motes      — how many specks drift, and what colour, and which way
+ */
+const AIR = {
+  hollowbrook: { tint: [255, 208, 140], grade: .17, vig: .46, motes: 16, mc: [255, 226, 170], drift: [-4, -7] },
+  lab:         { tint: [150, 190, 255], grade: .20, vig: .56, motes: 12,  mc: [190, 220, 255], drift: [2, -5] },
+  wayhouse:    { tint: [255, 190, 120], grade: .22, vig: .54, motes: 14,  mc: [255, 214, 150], drift: [3, -6] },
+  shop:        { tint: [255, 200, 150], grade: .18, vig: .52, motes: 11,  mc: [255, 224, 176], drift: [-3, -5] },
+  route_one:   { tint: [180, 255, 190], grade: .14, vig: .40, motes: 22, mc: [214, 255, 200], drift: [7, -4] },
+  emberwood:   { tint: [255, 150, 90],  grade: .25, vig: .48, motes: 28, mc: [255, 180, 110], drift: [5, -9] },
+  stillmere:   { tint: [130, 205, 255], grade: .23, vig: .44, motes: 20, mc: [190, 235, 255], drift: [-6, -3] },
+  crown_hollow:{ tint: [190, 160, 255], grade: .28, vig: .60, motes: 26, mc: [225, 200, 255], drift: [3, -8] },
+};
+const AIR_DEFAULT = { tint: [255, 220, 180], grade: .14, vig: .42, motes: 14, mc: [255, 235, 200], drift: [4, -6] };
+
+/**
+ * Motes are deterministic: a fixed lattice of specks, each drifting on its own
+ * clock and wrapping. No allocation, no particle list, and the same frame every
+ * time for a given t — which the render suite needs and which costs nothing.
+ */
+function drawMotes(g, air, t) {
+  const n = air.motes | 0;
+  if (!n) return;
+  const [dx, dy] = air.drift;
+  g.save();
+  for (let i = 0; i < n; i++) {
+    // Cheap hash so the specks are scattered rather than gridded.
+    const h = Math.sin(i * 12.9898) * 43758.5453;
+    const fx = h - Math.floor(h);
+    const h2 = Math.sin(i * 78.233) * 22578.145;
+    const fy = h2 - Math.floor(h2);
+    const life = 6 + fx * 5;
+    const x = (fx * VIEW_W + t * dx) % (VIEW_W + 8);
+    const y = (fy * VIEW_H + t * dy) % (VIEW_H + 8);
+    // Breathing, out of phase, so the field never pulses as one.
+    const a = (.34 + .40 * (.5 + .5 * Math.sin(t * 1.6 + i * 2.1))) * (.55 + .45 * fy);
+    g.fillStyle = `rgba(${air.mc[0]},${air.mc[1]},${air.mc[2]},${a.toFixed(3)})`;
+    const sz = fx > .82 ? 2 : 1;
+    g.fillRect(Math.round((x + VIEW_W + 8) % (VIEW_W + 8)) - 4,
+      Math.round((y + VIEW_H + 8) % (VIEW_H + 8)) - 4, sz, sz);
+    void life;
+  }
+  g.restore();
+}
+
+/** The grade and the vignette, over whatever was drawn. */
+function drawAir(g, air, t) {
+  if (air.grade > 0) {
+    g.save();
+    g.globalCompositeOperation = 'overlay';
+    g.fillStyle = `rgba(${air.tint[0]},${air.tint[1]},${air.tint[2]},${air.grade})`;
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
+    g.restore();
+  }
+  if (air.vig > 0 && g.createRadialGradient) {
+    const gr = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .30,
+      VIEW_W / 2, VIEW_H / 2, VIEW_H * .82);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, `rgba(6,3,10,${air.vig})`);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
+  drawMotes(g, air, t);
+}
+
 function draw() {
   if (!ctx) return;
   ctx.imageSmoothingEnabled = false;
@@ -7736,6 +8707,15 @@ function draw() {
   if (G.evoAnim) drawEvolution(ctx);
   else if (G.battle) drawBattle(ctx);
   else if (G.map) drawWorld(ctx);
+  // The air goes on after the scene and before anything that is meant to sit on
+  // top of it — a flourish, a fade, a door closing. Those are punctuation, and
+  // punctuation should not be graded.
+  if (G.mode !== 'title') {
+    const air = (G.battle && G.battle.legendary)
+      ? { ...AIR_DEFAULT, tint: [230, 190, 255], grade: .22, vig: .52, motes: 22, mc: [240, 215, 255], drift: [2, -10] }
+      : (AIR[G.mapId] || AIR_DEFAULT);
+    drawAir(ctx, air, G.t);
+  }
   if (G.flourish) drawFlourish(ctx);
   if (G.gotcha) drawGotcha(ctx);
   if (G.fade > 0) {
@@ -8275,11 +9255,18 @@ if (typeof window !== 'undefined') {
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
     orbBeats, orbStep, orbPhase, commitNick, ORB, dispName,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
+    RALLY_SHARE, RALLY_CAP, resolveFoeDown,
     cardValue, cardText, cardCost, cardName, attackBonus, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
-    CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
+    CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX, MIGHT_CAP,
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
-    gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL,
+    gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
+    WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
+    CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
+    SWITCH_PUNISH, SETTLE_MUL,
+    trainerHp, TRAINER_DMG_MUL, trainerDmg,
+    foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
+    WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,

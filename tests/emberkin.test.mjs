@@ -99,7 +99,12 @@ eq(EK.effect('Wild', ['Aether']), 1, 'Wild is neutral');
 const atk = EK.mkMon('pyrelynx', 30), defV = EK.mkMon('sproutle', 30), defT = EK.mkMon('dewdrip', 30);
 const dv = EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg;
 const dt = EK.damageOf(atk, defT, 'cinder', { crit: false, roll: 1 }).dmg;
-ok(dv > dt * 2.5, 'super-effective hits far harder than resisted');
+// The chart points the same way, but not as hard: a 2x entry lands as 1.6x and
+// a 0.5x as 0.65x, so the right element is the best thing you can bring without
+// the wrong one deciding the fight before a card is played. The spread used to
+// be fourfold, which is what made half of every run a coin toss on the chart.
+ok(dv > dt * 2, `super-effective still hits far harder than resisted (${(dv / dt).toFixed(2)}x)`);
+ok(dv < dt * 3.2, 'but not so much that the matchup is the whole fight');
 // Same power, one with STAB and effectiveness behind it, one without.
 const noStab = EK.damageOf(atk, defV, 'brine', { crit: false, roll: 1 }).dmg;
 ok(EK.damageOf(atk, defV, 'cinder', { crit: false, roll: 1 }).dmg > noStab,
@@ -214,7 +219,9 @@ ok(noCatch.some((e) => /No\./.test(e.t)), 'you cannot catch a trainer kin');
 eq(G.bag.bloomorb, 5, 'the refused orb is not consumed');
 ok(autoFight(EK), 'the trainer battle resolved');
 eq(EK.B().over, 'win', 'beating the whole team wins');
-eq(EK.B().teamIdx, 1, 'the second team member was sent out');
+// A trainer has a bench now and may send its kin out in any order, so "the
+// second one was used" is the claim, not "the second one was last".
+ok(EK.B().roster.every((m) => m.hp <= 0), 'the whole team was sent out and beaten');
 ok(EK.gemReward(EK.B()) > 0, 'a trainer win is worth gems');
 
 // A foe can die on its own turn — burn or snare finishing it at end of turn, or
@@ -227,6 +234,7 @@ for (const how of ['burn', 'thorns']) {
   EK.G.battle = null;
   EK.startBattle({ foe: EK.mkMon('cindercub', 5), team: chain, npc: { name: 'Tester', id: 't_y', trainer: { team: chain, prize: 100 } }, wild: false });
   const bk = EK.B();
+  bk.foePotions = 0;                               // no reaching for the bag; we want it dead
   bk.foe.hp = 1;                                   // one point of anything finishes it
   if (how === 'burn') bk.foe.status = 'burn';
   else bk.mods.thorns = 40;
@@ -809,6 +817,10 @@ ok(!EK.G.battle, 'standing on the path never starts a fight');
 let started = 0;
 for (let i = 0; i < 400; i++) {
   EK.G.battle = null; EK.G.mode = 'world';
+  // Heal between rolls. A fast wild kin now opens the fight, so without this
+  // the party is on the floor after a dozen encounters and startBattle starts
+  // refusing — which measures the speed rule rather than the encounter rate.
+  EK.healParty();
   EK.G.player.x = 4; EK.G.player.y = 1;              // tall grass
   EK.onArrive();
   if (EK.G.battle) started++;
@@ -859,13 +871,29 @@ if (blockedAt) {
 }
 EK.G.flags = {}; EK.G.alert = null; EK.G.battle = null; EK.G.mode = 'world';
 
-section('encounter tables roll inside their level bands');
-for (let i = 0; i < 300; i++) {
-  const mon = EK.rollEncounter(MAPS.stillmere);
-  const row = MAPS.stillmere.enc.table.find((e) => e[0] === mon.species);
-  ok(!!row, 'rolled a species from the table');
-  ok(mon.lvl >= row[1] && mon.lvl <= row[2], `${mon.species} level ${mon.lvl} inside ${row[1]}-${row[2]}`);
+section('the valley keeps up with you, and never overtakes');
+// The bands used to be absolute, so a route you had outgrown kept sending
+// level-3 kin at a level-12 party and two fights in five were decided before
+// they started. A wild kin is rolled in its band and then brought up to within
+// WILD_TRAIL of your best — never above it.
+for (const lead of [1, 5, 12, 30]) {
+  EK.G.party = [EK.mkMon('pyrelynx', lead)];
+  for (let i = 0; i < 200; i++) {
+    const mon = EK.rollEncounter(MAPS.stillmere);
+    const row = MAPS.stillmere.enc.table.find((e) => e[0] === mon.species);
+    ok(!!row, 'rolled a species from the table');
+    ok(mon.lvl >= row[1], `${mon.species} ${mon.lvl} is not below its band floor ${row[1]} (lead ${lead})`);
+    ok(mon.lvl <= Math.max(row[2], lead), `${mon.species} ${mon.lvl} never outranks band or lead (${row[2]}/${lead})`);
+    // Once you are past the band, the valley closes to within WILD_TRAIL.
+    if (lead - EK.WILD_TRAIL > row[2]) {
+      ok(mon.lvl >= lead - EK.WILD_TRAIL, `${mon.species} ${mon.lvl} keeps up with a lead of ${lead}`);
+    }
+  }
 }
+// An empty party must not crash the roll — it happens on a fresh save.
+EK.G.party = [];
+ok(EK.rollEncounter(MAPS.stillmere), 'a party-less roll still produces something');
+EK.G.party = [EK.mkMon('pyrelynx', 22)];
 
 // --------------------------------------------------------------- save --
 section('save round-trips');

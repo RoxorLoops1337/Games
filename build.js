@@ -69,6 +69,7 @@ const STATIC_PATHS = [
   'joske_de_flosser',
   'donut_patrol',
   'merry_crashmas',
+  'world_choir_games',
   'tools',
 ];
 

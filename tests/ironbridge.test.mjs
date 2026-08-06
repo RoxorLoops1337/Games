@@ -12183,10 +12183,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(new RegExp("window\\.addEventListener\\('" + ev + "'[\\s\\S]{0,40}?uiDown = false").test(wiring),
       ev + ' on the window clears it, so a press that drifts off the button still counts');
 
-  // The thing that made this a bug in the first place: the dock really is
-  // rebuilt wholesale, so deferring is the fix rather than a nicety.
-  t.ok(/\$\('dock'\)\.innerHTML = dockHtml\(\)/.test(SRC),
-    'the dock is still rebuilt wholesale — which is exactly why the guard is needed');
+  // The thing that made this a bug in the first place: when the dock DOES
+  // change it is rebuilt wholesale, destroying every button. The write is now
+  // gated on the markup actually changing — most ticks skip it entirely — and
+  // the press-guard covers the ticks that still rebuild under a finger.
+  t.ok(/const html = dockHtml\(\);[\s\S]{0,400}?if \(html !== lastDockHtml\)/.test(SRC),
+    'the dock write is gated on the markup actually changing');
+  t.ok(/\$\('dock'\)\.innerHTML = html;/.test(SRC),
+    'and a change is still a wholesale innerHTML rebuild — which is why the press-guard stays');
 }
 
 /* ============================ the clock must survive being in the background
@@ -15578,7 +15582,7 @@ t.ok(true, 'a final draw on a live match is clean');
   // The columns have to be labelled for any of this to work, and syncUI has
   // to do the two halves either side of the rebuild rather than after it.
   t.ok(/data-col="/.test(SRC), 'the dock’s columns carry the key this is all hung on');
-  const sync = SRC.slice(SRC.indexOf('function syncUI'), SRC.indexOf('function syncUI') + 400);
+  const sync = SRC.slice(SRC.indexOf('function syncUI'), SRC.indexOf('let uiDown'));
   t.ok(sync.indexOf('dockScroll()') < sync.indexOf('innerHTML') &&
        sync.indexOf('innerHTML') < sync.indexOf('dockScrollTo'),
     'and the scroll is read before the rebuild and put back after it');
@@ -20685,6 +20689,181 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(rRising, 'its offsets only ever go down');
   t.ok(IB.RIVER_STOPS.every(s => /^#[0-9a-f]{6}$/i.test(s[1])),
     'and every band of it is a flat colour');
+}
+
+/* ================== a hostile opponent, and a full-audit sweep
+
+   The relay authenticates nothing — anyone who guesses a four-letter code holds
+   a seat — so every message the game adopts from a peer is attacker input. The
+   audit that produced this block found a working remote XSS (an opponent name
+   into innerHTML), two determinism desyncs in normal play, and a handful of
+   crash / resource holes. These hold each fix as a property, not a screenshot. */
+{
+  // --- XSS: a name the opponent chose must never reach innerHTML as markup.
+  // hero.name is copied verbatim out of a snapshot, and the opponent controls
+  // the snapshot, so a name is attacker input at three sheets and a timeline.
+  IB.newMatch({ diff:'veteran', seed:5150 });
+  IB.MY = 0;
+  const XSS = '<img src=x onerror=alert(1)>';
+  const h = IB.makeHero(0, 'fighter', XSS); h.pend.length = 0;
+  G.sides[0].heroes.push(h); IB.enterLane(h);
+  const bar = IB.heroBarHtml();
+  t.ok(!bar.includes('<img'), 'a hostile hero name is escaped in the hero bar, not injected as a tag');
+  t.ok(bar.includes('&lt;img'), 'and it is still shown, as text (' +
+    (bar.match(/&lt;img[^<]*/) || ['?'])[0].slice(0, 20) + '…)');
+  // the profile sheet and the end-of-match card read the same name
+  const sheet = IB.showHeroSheet ? (IB.showHeroSheet(h), G.sheet || '') : '';
+  if (sheet) t.ok(!sheet.includes('<img'), 'the hero profile sheet escapes it too');
+  // a timeline mark's tooltip is an attribute sink; a crafted structure name
+  // would break out of title="" without the escape
+  G.timeline.push({ t:10, side:0, key:'gate', n:'" onmouseover="alert(1)' });
+  const tl = IB.timelineHtml();
+  t.ok(!/title=""\s+onmouseover/.test(tl) && tl.includes('&quot;'),
+    'a timeline name cannot break out of its title attribute');
+
+  // --- #c1 (desync): newMatch resets the body-id counter, so two machines
+  // running the same match mint the same ids. Without the reset, the second
+  // match here would start its counter wherever the first left it.
+  IB.newMatch({ diff:'veteran', seed:900 });
+  const uidA = G.uid;
+  IB.makeHero(0, 'mage', 'A'); IB.makeHero(1, 'tank', 'B');
+  IB.newMatch({ diff:'veteran', seed:900 });
+  t.ok(G.uid === uidA, 'newMatch resets the body-id counter (' + uidA + ' both times), so ids agree across machines');
+  const id1 = IB.makeHero(0, 'mage', 'A').id;
+  IB.newMatch({ diff:'veteran', seed:900 });
+  const id2 = IB.makeHero(0, 'mage', 'A').id;
+  t.ok(id1 === id2, 'the first hero forged in a fresh match gets the same id every time (' + id1 + ')');
+
+  // --- #c2 (desync): markBy is a SIDE index, not a body, and must survive a
+  // snapshot round-trip as the number it is. Packed as a reference it collapsed
+  // to null and split Hunter's Mark damage between the two machines.
+  t.ok(!('markBy' in IB.NET_REFS), 'markBy is no longer treated as a body reference');
+  {
+    const S = loadGame({});                          // a second, independent machine to adopt into
+    S.newMatch({ diff:'veteran', seed:77 });
+    S.spawnWave(); S.update(1 / 30);
+    const victim = S.G.units.find(u => u.side === 1);
+    if (victim){
+      victim.markT = 6; victim.markBy = 1; victim.markAmp = .22;   // marked by side 1
+      const snap = S.netSnap();
+      const T = loadGame({});
+      T.newMatch({ diff:'veteran', seed:77 });
+      T.spawnWave(); T.update(1 / 30);
+      T.NET.on = true;
+      t.ok(T.netLoad(snap), 'a snapshot carrying a marked body loads');
+      const got = T.G.units.find(u => u.side === 1 && u.markT > 0);
+      t.ok(got && got.markBy === 1,
+        'and markBy survives as the side index 1, not corrupted to null (' +
+        (got ? JSON.stringify(got.markBy) : 'no marked body') + ')');
+    }
+  }
+
+  // --- seat authentication: the relay never proves who a peer is, so the game
+  // must. A batch may not claim our own seat, and no command inside it may
+  // claim a seat other than the one the batch arrived under.
+  IB.newMatch({ diff:'veteran', seed:44 });
+  IB.netStart({ me:0, seed:44, diff:'veteran' });    // we are seat 0
+  const at = IB.NET.tick + IB.NET.delay + 5;
+  const slotOf = (tick, side) => { const s = IB.NET.box.get(tick); return s && s[side]; };
+  IB.netRecv({ k:'cmd', tick:at, side:0, cmds:[{ k:'job', side:0, seq:0, node:'gold', d:1 }] });
+  t.ok(!slotOf(at, 0), 'a peer batch claiming OUR seat is dropped, so it cannot drive our hold or censor our orders');
+  IB.netRecv({ k:'cmd', tick:at, side:1, cmds:[
+    { k:'job', side:0, seq:0, node:'gold', d:1 },     // wrong seat: must be filtered out
+    { k:'job', side:1, seq:1, node:'gold', d:1 },     // right seat: kept
+  ] });
+  const kept = slotOf(at, 1);
+  t.ok(kept && kept.length === 1 && kept[0].side === 1,
+    'inside a valid batch, only commands owning that seat survive (' + (kept ? kept.length : 0) + ' of 2)');
+  // a prototype key is not a command
+  IB.netRecv({ k:'cmd', tick:at + 1, side:1, cmds:[{ k:'constructor', side:1, seq:0 }] });
+  const proto = slotOf(at + 1, 1);
+  t.ok(proto && proto.length === 0, 'a command whose key is a prototype method is not a command');
+
+  // --- snapshot buffering is bounded: a peer claiming a million parts cannot
+  // grow the reassembly buffer without limit.
+  IB.NET.rx = null;
+  IB.netRecv({ k:'sync', id:99, i:0, n:1e9, tick:0, part:'x' });
+  t.ok(IB.NET.rx === null, 'a snapshot claiming an absurd part count is refused before a byte is buffered');
+  IB.netRecv({ k:'sync', id:99, i:5, n:3, tick:0, part:'x' });
+  t.ok(IB.NET.rx === null, 'and a part index outside the claimed count is dropped');
+
+  // --- netLoad refuses malformed input rather than half-loading the board.
+  t.ok(IB.netLoad(null) === false, 'a null snapshot is refused');
+  t.ok(IB.netLoad({ bodies:[], sides:[{}] }) === false, 'a snapshot without exactly two sides is refused');
+  t.ok(IB.netLoad({ bodies:{}, sides:[{}, {}] }) === false, 'a snapshot whose bodies are not an array is refused');
+  {
+    // a __proto__ key in a body must not retarget anything, and a hostile class
+    // must not survive to crash the renderer
+    const poison = JSON.parse('{"bodies":[{"__proto__":{"pwned":1},"isHero":true,"cls":"nope","name":"x"}],' +
+      '"sides":[{"res":{},"workers":{},"nodeLvl":{},"towerUp":{},"troopUp":{},"plot":[],"trainQ":[],"structs":[]},' +
+      '{"res":{},"workers":{},"nodeLvl":{},"towerUp":{},"troopUp":{},"plot":[],"trainQ":[],"structs":[]}],' +
+      '"heroesOf":[[1],[]],"unitsOf":[],"timeline":[],"seed":1,"t":1,"wave":1}');
+    IB.newMatch({ diff:'veteran', seed:5 }); IB.NET.on = true;
+    let threw = false;
+    try { IB.netLoad(poison); } catch (e){ threw = true; }
+    t.ok(!threw, 'a snapshot with a __proto__ key and a bogus class loads without throwing');
+    t.ok(({}).pwned === undefined, 'and nothing on Object.prototype was touched');
+    const hero = G.sides[0].heroes[0];
+    if (hero) t.ok(IB.CLS[hero.cls], 'the injected hero was given a real class rather than a crashing one (' + hero.cls + ')');
+  }
+}
+
+/* ================== the second-pass correctness fixes
+
+   The audit's determinism desyncs shipped first; these are the rest — bugs
+   where both machines misbehave in lockstep (so no desync, but wrong), plus the
+   hash blind spots that let a REAL divergence in a next-tick field hide until it
+   surfaced somewhere else. */
+{
+  // --- a body killed inside statusTick takes no further action this tick.
+  // A lethal burn drops the hero to zero mid-step; without the guard heroStep
+  // fell through and healed the corpse off its own regen.
+  IB.newMatch({ diff:'veteran', seed:8321 });
+  IB.MY = 0;
+  const h = IB.makeHero(0, 'support', 'Ashwake'); h.pend.length = 0;
+  G.sides[0].heroes.push(h); IB.enterLane(h);
+  h.hp = 12; h.burn = { dps:100000, t:2, src:null };     // certain death this tick
+  IB.update(1 / 30);
+  t.ok(h.dead, 'a hero burned to death inside statusTick is dead after the step');
+  t.ok(h.hp <= 0, 'and did not heal itself back off regen after dying (' + h.hp.toFixed(1) + ')');
+
+  // --- separate() leaves the dead alone. It reads grid cells, which still hold
+  // a body that died earlier this tick, and every other grid reader checks dead.
+  const sepSrc = SRC.slice(SRC.indexOf('function separate'), SRC.indexOf('function separate') + 700);
+  t.ok(/if \(a\.dead\) continue;/.test(sepSrc) && /if \(b\.dead\) continue;/.test(sepSrc),
+    'separate() skips a body that died earlier in the tick rather than shoving it');
+
+  // --- bombSeen is cleared by newMatch, like every other per-match container.
+  IB.bombSeen[0].add(4242); IB.bombSeen[1].add(9);
+  IB.newMatch({ diff:'veteran', seed:5 });
+  t.ok(IB.bombSeen[0].size === 0 && IB.bombSeen[1].size === 0,
+    'the bombardment tally does not survive into the next match');
+
+  // --- the hash now catches the next-tick fields it used to miss. The test is
+  // the mirror of the desync bug: mutate one, and the fingerprint must move.
+  IB.newMatch({ diff:'veteran', seed:6161 });
+  IB.spawnWave(); step(2);
+  const u = G.units.find(x => !x.isHero);
+  t.ok(!!u, 'there is a minion to fingerprint');
+  if (u){
+    const base = IB.netHash();
+    u.mb = { t:3, ad:.2, ms:.1, as:.1 };
+    t.ok(IB.netHash() !== base, 'the drill buff moves the hash');
+    u.mb = null;
+    t.ok(IB.netHash() === base, 'and clearing it puts the hash back, so mb was the only thing that moved it');
+  }
+  const fBase = IB.netHash();
+  G.frame = (G.frame | 0) + 1;
+  t.ok(IB.netHash() !== fBase, 'the frame count — which decides side order — moves the hash');
+  G.frame = (G.frame | 0) - 1;
+  t.ok(IB.netHash() === fBase, 'and is the only change when restored');
+  const hero2 = G.sides[0].heroes[0] || (() => { const x = IB.makeHero(0, 'tank', 'Q'); x.pend.length = 0; G.sides[0].heroes.push(x); IB.enterLane(x); return x; })();
+  const rBase = IB.netHash();
+  hero2.retreat = !hero2.retreat;
+  t.ok(IB.netHash() !== rBase, 'a hero\'s retreat flag moves the hash');
+  hero2.retreat = !hero2.retreat;
+  hero2.lowT = (hero2.lowT || 0) + 5;
+  t.ok(IB.netHash() !== rBase, 'and so does the panic-shield gate');
 }
 
 t.done();

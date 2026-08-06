@@ -162,7 +162,7 @@ let guard = 0;
 while (fresh.G.battle && guard++ < 600) {
   const b = fresh.B();
   const stuck = b && b.phase === 'player' && !b.log && !b.over
-    && !b.hand.some((c) => fresh.cardCost(c) <= b.energy);
+    && !b.hand.some((c) => fresh.playableNow(b, c));
   const key = stuck ? 'e' : 'a';
   fresh.step(.12);
   fresh.pressKey(key); fresh.step(.02); fresh.releaseKey(key); fresh.fired.clear();
@@ -484,7 +484,7 @@ let popped = 0, frames = 0;
 while (played.G.battle && frames++ < 600) {
   const live = played.B();
   const stuck = live && live.phase === 'player' && !live.log && !live.over
-    && !live.hand.some((c) => played.cardCost(c) <= live.energy);
+    && !live.hand.some((c) => played.playableNow(live, c));
   const key = stuck ? 'e' : 'a';
   played.step(.12);
   played.pressKey(key); played.step(.02); played.releaseKey(key); played.fired.clear();
