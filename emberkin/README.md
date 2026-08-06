@@ -532,14 +532,43 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all twenty mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Fifteen passes on this
-game produced about six changes to the game and twenty fixes to the tool.
+of all twenty-two mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Sixteen passes on this
+game produced about seven changes to the game and twenty-two fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
 a turn and buys the whole fight — so a party number that looks too good usually
 is. Judge a change against both, and if it only moves one, say which.
+
+#### Ward Stance, Bulwark, and what a two-cost has to buy
+
+Two energy in a three-energy turn is a hard price: it buys one card where one
+energy buys two, so a two-cost has to beat the *pair* it displaces. The ones that
+do have something a pair cannot give — Bulwark grows permanently and retains,
+Soulfang chains and scales off kills. Ward Stance had neither, and against
+Bulwark at the same rarity and the same price it was smaller on every axis:
+15 shield to 18, guard 3 to 4, no grow, no retain. One drawn card was the whole
+difference between them.
+
+The probe read it exactly that way — played in **20%** of the fights it could be
+paid for, against Bulwark's 79% and Soulfang's 96%, the bottom of its own cost
+bucket. It now draws **two**, which is the axis the two cards actually differ on:
+Bulwark is the wall you invest in, Ward Stance is the smaller wall that refills
+your hand. That took it to 35% and left the run untouched — solo 36% ±3
+no-kin-in-doubt against 37% ±3 before, party 12% ±2 against 12% ±2.
+
+Chain was tried first and is the wrong lever. This deck is full of 0-cost cards,
+so a chain discount is live almost every turn: Ward Stance became a 1-energy
+13-shield card, beat Ironhide, pushed Bulwark from 79% to 70%, and bought enough
+safety that solo no-kin-in-doubt went from 37% to 44%. A card fix that moves the
+difficulty of the whole game is not a card fix.
+
+35% is still the lowest of the shield family. The probe's scorer values a drawn
+card at three points, so two cards is six against fifteen shield, and whether a
+person rates a full hand higher than that is a fair question this tool cannot
+answer. Tuning the scorer until the card looks good would be answering it the
+wrong way round.
 
 #### What the probe decides, that a player would decide differently
 
@@ -564,7 +593,7 @@ When a number will not move, suspect this table before the game.**
 | took a random card from the reward offer | takes the best one | depressed played/drawn across the whole pool — the instrument the deck work in passes 9, 10 and 12 was steered by | takes the best now |
 | restocks only on a heal trip | shops when passing through | catch rate, salve supply | left; documented |
 | counted a card as drawn every turn it sat in hand | draws it once | **the whole played/drawn table**: a Retain card sits in hand all fight, so it was counted four times against the one time it can be played — the bottom of the table was Dewdrop, Hunker, Bulwark and Ward Stance, i.e. every card with Retain on it | counted once per card now |
-| reserves the swing, so a 3-cost card is never affordable | skips the swing for a big enough card | Kinbond and Overkill read near-zero by construction | **known limitation** — letting it skip was tried and was worse than the gap (kin play rates 62–98% → 24–42%) |
+| never skips the reserved swing | takes a turn off to land something big | only Kinbond, the one 3-cost without Chain — Titanheart and Overkill are payable often and played 90% and 84% when they are | corrected: the row used to claim no 3-cost was ever affordable, which was never true. Letting it skip the swing was tried and was worse than the gap (kin play rates 62–98% → 24–42%) |
 | skipped the reward card after a trainer win | takes it — the real win path offers one on both branches | **the whole legendary tier**: `REWARD_ODDS.wild` has legendary at 0, so a trainer win is the only place in a normal run one can come from | takes it now |
 | rotates the starter, so 60 runs is 20 each | plays one | **any per-starter claim** — across three samples of builds that never touched Ember, Cindercub's lost-or-ran read .237, .358 and .438 at ±.08 | `--starter <name>` runs all sixty on one |
 

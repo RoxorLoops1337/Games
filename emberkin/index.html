@@ -3476,8 +3476,21 @@ const CARDS = {
     txt: 'Every attack you make swings one extra time. Rest of the battle.' },
   titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true, chain: 1,
     txt: '+{v} max HP, heal 30. Chain. Exhaust.' },
-  wardstance:{ name: 'Ward Stance', r: 'epic', cost: 2, kind: 'skill', v: 15, vt: 'shield', fx: { def: 3, draw: 1 },
-    txt: 'Gain {v} shield, take 3 less from every hit, draw 1.' },
+  // Ward Stance was a strictly worse Bulwark: same rarity, same price, smaller
+  // shield, smaller guard, and no grow or retain against Bulwark's both. Drawing
+  // one card was the whole difference, which is a rounding error next to fifteen
+  // shield, and the probe read it exactly that way — bottom of the two-cost
+  // bucket at 20% of the fights it could be paid for, against Bulwark's 79%.
+  //
+  // The fix is the draw, because that is the only axis the two cards differ on.
+  // Chain was tried first and is the wrong lever: this deck is full of 0-cost
+  // cards, so the discount is live almost every turn, which made this a 1-energy
+  // 13-shield card that beat Ironhide, took Bulwark from 79% to 70%, and bought
+  // so much safety that solo no-kin-in-doubt went 37% to 44% — a card fix that
+  // moved the difficulty of the game. Two cards instead of one costs nothing
+  // anybody else was using.
+  wardstance:{ name: 'Ward Stance', r: 'epic', cost: 2, kind: 'skill', v: 15, vt: 'shield', fx: { def: 3, draw: 2 },
+    txt: 'Gain {v} shield, take 3 less from every hit, draw 2.' },
   temper:    { name: 'Temper',      r: 'epic', cost: 2, kind: 'skill', v: 2, vt: 'might', exhaust: true, grow: 1,
     txt: '+{v} damage on every attack, for ever. Exhaust. Permanently +1 each play.' },
   reaper:    { name: 'Reaper',      r: 'epic', cost: 1, kind: 'skill', v: 16, vt: 'edge', kill: 4, exhaust: true,
