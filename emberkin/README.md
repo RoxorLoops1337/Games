@@ -169,6 +169,16 @@ vignette that darkens the corners and pulls the eye to the middle where the
 player is. Both are in the game's own gold and violet, which is what stops the
 world and the panels around it looking like two different pictures.
 
+`drawEdges()` handles everything that happens where one kind of ground stops
+and another starts. A tileset can only ever draw the *middle* of things, and the
+edges are where a map either reads as a place or as a spreadsheet with colours
+in it. Rather than author a transition tile for every pair — dozens of tiles,
+and still a corner missing — this pass looks at each cell's neighbours after the
+field is down and draws the joins: a bright shoreline where water meets land
+with the bank darkening into it, a lit ridge along the top of a roof, an eave
+that overhangs the wall below it, a base course where a wall meets the ground,
+and the shadow the whole building throws on the ground beside it.
+
 `castShadow()` puts a soft ellipse under everyone standing on the map. Without
 one, every actor looks pasted on top of the ground rather than standing in it —
 the cheapest single thing that makes a tile field read as a place.
@@ -212,6 +222,20 @@ And `frame()` catches. An exception used to escape, stop the
 `requestAnimationFrame` chain, and freeze the page on its last drawn frame with
 the buttons still labelled for a state the game had already left. A bug should
 cost a frame, not the save.
+
+### The arena
+
+`drawArena()` is the place a fight happens in. It used to be two flat gradient
+bands and four ellipses, which is a diagram of an arena rather than one. Depth
+in a 256-pixel-wide picture is layers: three rolling ridges, each one further
+back lighter, flatter and closer to the sky colour, standing against a low sun
+on the horizon behind the foe. The foe's element tints the whole stack rather
+than replacing it, so a fight against a Tide kin happens somewhere cold and one
+against an Ember kin does not — but both are recognisably the same valley.
+
+The stands each get a rim of light on top, a dark bed under, and a cast shadow
+offset away from that sun; the creatures throw their own shadow onto them, which
+is what stops them hovering.
 
 ### Cards
 

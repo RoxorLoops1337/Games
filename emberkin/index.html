@@ -3801,6 +3801,7 @@ function drawWorld(g) {
       drawTile(g, ch, sx, sy);
     }
   }
+  drawEdges(g, map, x0, y0, ox, oy);
 
   // Entities, back to front by tile row.
   const ents = [];
@@ -3856,6 +3857,78 @@ function drawWorld(g) {
  * game's own violet and gold, which is what stops the world and the panels
  * around it looking like two different pictures.
  */
+/**
+ * Everything that happens where one kind of ground stops and another starts.
+ *
+ * A tileset can only ever draw the middle of things; the edges are where a map
+ * either reads as a place or as a spreadsheet with colours in it. Rather than
+ * author a transition tile for every pair — which is dozens of tiles and still
+ * misses a corner — this pass looks at each cell's neighbours after the field
+ * is down and draws the joins: a shoreline where water meets land, an eave and
+ * a base course on a building, and the shadow a building throws on the ground
+ * beside it. All of it in the same violet-leaning dark the vignette uses.
+ */
+function drawEdges(g, map, x0, y0, ox, oy) {
+  const at = (mx, my) => (my < 0 || my >= map.rows.length || mx < 0 || mx >= map.rows[0].length)
+    ? null : map.rows[my][mx];
+  const BUILD = new Set(['R', 'W', 'D']);
+  const SHADE = 'rgba(14,8,20,.30)';
+
+  for (let y = -1; y <= VIEW_H / TILE + 1; y++) {
+    for (let x = -1; x <= VIEW_W / TILE + 1; x++) {
+      const mx = x0 + x, my = y0 + y;
+      const ch = at(mx, my);
+      if (!ch) continue;
+      const sx = Math.round(x * TILE + ox), sy = Math.round(y * TILE + oy);
+      const up = at(mx, my - 1), down = at(mx, my + 1);
+      const left = at(mx - 1, my), right = at(mx + 1, my);
+
+      // ---- water: a bright rim on the land side, dark under the bank
+      if (ch === '~') {
+        const foam = 'rgba(190,232,246,.45)';
+        const deep = 'rgba(10,26,44,.45)';
+        if (up && up !== '~') { g.fillStyle = deep; g.fillRect(sx, sy, TILE, 2); g.fillStyle = foam; g.fillRect(sx, sy + 2, TILE, 1); }
+        if (down && down !== '~') { g.fillStyle = foam; g.fillRect(sx, sy + TILE - 2, TILE, 1); }
+        if (left && left !== '~') { g.fillStyle = deep; g.fillRect(sx, sy, 2, TILE); g.fillStyle = foam; g.fillRect(sx + 2, sy, 1, TILE); }
+        if (right && right !== '~') { g.fillStyle = foam; g.fillRect(sx + TILE - 2, sy, 1, TILE); }
+        continue;
+      }
+      // ---- the bank itself darkens toward the water it runs into
+      if (!BUILD.has(ch)) {
+        g.fillStyle = 'rgba(14,8,20,.22)';
+        if (down === '~') g.fillRect(sx, sy + TILE - 3, TILE, 3);
+        if (up === '~') g.fillRect(sx, sy, TILE, 2);
+        if (right === '~') g.fillRect(sx + TILE - 3, sy, 3, TILE);
+        if (left === '~') g.fillRect(sx, sy, 2, TILE);
+      }
+
+      // ---- roofs: a lit ridge on top, an eave hanging over what is below
+      if (ch === 'R') {
+        if (up !== 'R') { g.fillStyle = 'rgba(255,214,160,.20)'; g.fillRect(sx, sy, TILE, 2); }
+        if (down !== 'R') {
+          g.fillStyle = 'rgba(14,8,20,.55)';
+          g.fillRect(sx - 1, sy + TILE - 3, TILE + 2, 3);          // the eave overhangs
+          g.fillStyle = 'rgba(255,214,160,.14)';
+          g.fillRect(sx - 1, sy + TILE - 4, TILE + 2, 1);
+        }
+      }
+      // ---- walls: shaded under the eave, with a base course on the ground
+      if (ch === 'W' || ch === 'D') {
+        if (up === 'R') { g.fillStyle = 'rgba(14,8,20,.34)'; g.fillRect(sx, sy, TILE, 4); }
+        if (!BUILD.has(down)) {
+          g.fillStyle = 'rgba(14,8,20,.45)';
+          g.fillRect(sx, sy + TILE - 2, TILE, 2);
+        }
+      }
+      // ---- and the shadow the whole building throws on the ground beside it
+      if (!BUILD.has(ch)) {
+        if (BUILD.has(up)) { g.fillStyle = SHADE; g.fillRect(sx, sy, TILE, 4); }
+        if (BUILD.has(left)) { g.fillStyle = SHADE; g.fillRect(sx, sy, 4, TILE); }
+      }
+    }
+  }
+}
+
 /**
  * A soft ellipse under whoever is standing there. Without one, everybody on
  * the map looks pasted on top of it rather than standing in it — the cheapest
@@ -4719,30 +4792,106 @@ function useItemInBattle(log, id, targetIdx) {
 }
 
 // ---- battle scene drawing ---------------------------------------------
+/**
+ * The place a fight happens in.
+ *
+ * It used to be two flat gradient bands and four ellipses, which is a diagram
+ * of an arena rather than one. What makes a backdrop read as somewhere is
+ * depth, and depth in a 256-pixel-wide picture is layers: things further away
+ * are lighter, lower in contrast and closer to the sky colour, and each layer
+ * sits on a horizon line you can point at. The foe's element tints the whole
+ * stack, so a fight against a Tide kin happens somewhere cold and a fight
+ * against an Ember one somewhere that is not.
+ */
+function drawArena(g, tint, b) {
+  const t = G.t;
+  const HORIZON = 58;
+
+  // Sky: darkest at the top, warming toward the horizon so the eye goes there.
+  const sky = g.createLinearGradient(0, 0, 0, HORIZON + 10);
+  sky.addColorStop(0, '#1a1128');
+  sky.addColorStop(.6, '#2c1c3a');
+  sky.addColorStop(1, '#432b47');
+  g.fillStyle = sky; g.fillRect(0, 0, VIEW_W, HORIZON + 10);
+  // The element sits over the sky rather than replacing it, so every arena is
+  // recognisably the same valley in a different light.
+  g.save(); g.globalAlpha = .16; g.fillStyle = tint;
+  g.fillRect(0, 0, VIEW_W, HORIZON + 10); g.restore();
+
+  // A low sun on the horizon behind the foe: something for the layers to sit against.
+  const glow = g.createRadialGradient(178, HORIZON, 4, 178, HORIZON, 74);
+  glow.addColorStop(0, 'rgba(255,214,160,.30)');
+  glow.addColorStop(1, 'rgba(255,214,160,0)');
+  g.fillStyle = glow; g.fillRect(0, 0, VIEW_W, HORIZON + 12);
+
+  /** One rolling ridge. Further back means lighter and flatter. */
+  const ridge = (baseY, amp, step, col, phase) => {
+    g.fillStyle = col;
+    g.beginPath();
+    g.moveTo(0, VIEW_H);
+    for (let x = 0; x <= VIEW_W; x += step) {
+      const h = Math.sin(x * .021 + phase) * amp + Math.sin(x * .053 + phase * 1.7) * amp * .4;
+      g.lineTo(x, Math.round(baseY - h));
+    }
+    g.lineTo(VIEW_W, VIEW_H);
+    g.closePath(); g.fill();
+  };
+  // Further back is lighter, flatter and closer to the sky; nearer is darker
+  // and rolls harder. Three is enough to read as distance.
+  ridge(HORIZON + 1, 13, 6, '#54406b', .8);
+  ridge(HORIZON + 11, 16, 5, '#3d2e55', 2.4);
+  ridge(HORIZON + 22, 13, 4, '#2a2039', 4.1);
+
+  // The field itself, running from the far ridge down under the player.
+  const field = g.createLinearGradient(0, HORIZON + 12, 0, VIEW_H);
+  field.addColorStop(0, '#2b4a38');
+  field.addColorStop(.5, '#24402f');
+  field.addColorStop(1, '#1a2f24');
+  g.fillStyle = field; g.fillRect(0, HORIZON + 12, VIEW_W, VIEW_H - HORIZON - 12);
+
+  /** A stand: a rim of light on top, a dark bed under it, the shadow beyond. */
+  const stand = (cx, cy, rx, ry) => {
+    const oval = (ox, oy, sx2, sy2, col) => {
+      g.save(); g.translate(cx + ox, cy + oy); g.scale(1, sy2 / sx2);
+      g.beginPath(); g.arc(0, 0, sx2, 0, Math.PI * 2); g.fillStyle = col; g.fill(); g.restore();
+    };
+    oval(2, 3, rx, ry, 'rgba(12,7,18,.45)');     // cast shadow, offset away from the light
+    oval(0, 0, rx, ry, '#22392b');
+    oval(0, -1, rx - 5, ry - 2, '#2f5138');
+    oval(0, -2, rx - 12, ry - 4, '#3a6442');
+  };
+  stand(178, 68, 48, 12);
+  stand(72, 111, 58, 14);
+
+  // Motes drifting in the light. Three of them, seeded so they disagree.
+  g.save();
+  for (let i = 0; i < 14; i++) {
+    const sp = .12 + (i % 4) * .05, seed = (i * 71 % 37) / 37;
+    const x = (seed * VIEW_W + t * 9 * sp * 10) % VIEW_W;
+    const y = 20 + ((seed * 61 % 1) * 60 + Math.sin(t * .8 + i) * 6);
+    g.globalAlpha = .10 + (i % 3) * .04;
+    g.fillStyle = '#ffe9c0';
+    g.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  g.restore();
+  void b;
+}
+
 function drawBattle(g) {
   const b = B();
   const t = G.t;
-  // Sky and ground bands, tinted by the foe's element.
   const tint = TYPES[b.foe.types[0]] || '#7a5fc4';
-  const sky = g.createLinearGradient(0, 0, 0, VIEW_H);
-  sky.addColorStop(0, '#231633'); sky.addColorStop(.55, '#39243f'); sky.addColorStop(1, '#1a1022');
-  g.fillStyle = sky; g.fillRect(0, 0, VIEW_W, VIEW_H);
-  g.globalAlpha = .10; g.fillStyle = tint; g.fillRect(0, 0, VIEW_W, VIEW_H * .6); g.globalAlpha = 1;
+  const FOE_GROUND = 66, MY_GROUND = 108;
+  drawArena(g, tint, b);
 
   const shake = b.shake > 0 ? Math.sin(t * 70) * b.shake * 3 : 0;
-  // Two ground discs — foe far, yours near.
-  const disc = (cx, cy, rx, ry, col) => {
-    g.save(); g.translate(cx, cy); g.scale(1, ry / rx);
-    g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fillStyle = col; g.fill(); g.restore();
-  };
-  // Ground lines: the foe stands high and far, yours low and near, with the
-  // text box below both — nothing may overlap the panels.
-  const FOE_GROUND = 66, MY_GROUND = 108;
-  disc(178, FOE_GROUND + 2, 50, 12, '#2e4a30');
-  disc(178, FOE_GROUND + 2, 42, 9, '#3c6136');
-  disc(72, MY_GROUND + 3, 60, 14, '#2e4a30');
-  disc(72, MY_GROUND + 3, 52, 11, '#3c6136');
 
+  /** What a creature throws on the stand it is standing on. */
+  const under = (cx, cy, r, alpha) => {
+    g.save(); g.globalAlpha = alpha; g.fillStyle = '#0d0716';
+    g.translate(cx, cy); g.scale(1, .32);
+    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill(); g.restore();
+  };
   const foeId = b.foe.species, myId = b.mine.species;
   const fs = 1.5, ms = 2;
   const fb = artBottom(foeId), mb = artBottom(myId);
@@ -4761,6 +4910,8 @@ function drawBattle(g) {
   // shell on the way in and comes back the same way if the shell gives.
   const held = orbPhase();
   const inOrb = held === 'fall' || held === 'wobble' || held === 'gap' || held === 'click';
+  if (!inOrb) under(178, FOE_GROUND + 3, 17, b.foe.hp <= 0 ? .12 : .34);
+  under(72, MY_GROUND + 4, 21, b.mine.hp <= 0 ? .12 : .34);
   if (!inOrb) {
     let alpha = b.foe.hp <= 0 ? .35 : 1;
     let scale = fs;
