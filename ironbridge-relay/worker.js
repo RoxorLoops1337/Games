@@ -356,9 +356,28 @@ export class Room {
   // says to itself. `"ping"` has worked that way since the first version.
   static HAVE = '"have:';
 
+  // A crude per-connection message-rate cap. A client at speed sends about one
+  // command batch a tick — thirty a second — plus the odd ping; a few hundred a
+  // second is already pathological. Inbound WS messages bill 20:1 on the free
+  // plan, so a tight send loop on one socket drains the daily allowance in
+  // seconds and takes multiplayer down for everyone. The relay authenticates
+  // nothing else, so this is the only backstop. In memory on purpose: a flood
+  // keeps the object alive, so the window persists for exactly as long as the
+  // object is under attack, and is correctly forgotten when it hibernates idle.
+  static MSG_PER_SEC = 240;              // 8x a fast client; only a flood trips it
+  rateOk(ws){
+    const now = Date.now();
+    if (!this._rate) this._rate = new Map();
+    let r = this._rate.get(ws);
+    if (!r || now - r.t >= 1000){ r = { t:now, n:0 }; this._rate.set(ws, r); }
+    r.n++;
+    return r.n <= Room.MSG_PER_SEC;
+  }
+
   async webSocketMessage(ws, raw){
     if (typeof raw !== 'string') return;
     if (raw.length > 16384) return;                 // nothing legitimate is this big
+    if (!this.rateOk(ws)) return;                   // over the per-second cap: drop, do not broadcast
     // This seat is answering. It is the only liveness signal there is — a
     // socket whose machine has gone stays OPEN until a TCP timeout expires,
     // measured at twenty-three seconds in the report that prompted all this —
