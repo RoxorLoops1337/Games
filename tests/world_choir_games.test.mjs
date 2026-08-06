@@ -39,10 +39,16 @@ requestAnimationFrame(loop);`;
 const EXPOSE = `__out.api = {
   G, PARTS, SING, CRITS, CRIT_BY_ID, FLAWS, FLAW_BY_ID, PART_DEFS, COUNTRIES, CATEGORIES,
   JURORS, BANDS, RANKS, STAGES, VENUES, SAVE_KEY, CARD_TOP, PHANTOM_COST, VW, VH, AUDIO,
+  REPERTOIRE, REP_BY_ID, CAT_MOODS, VOWELS, FORMANT_SCALE, MAJOR_STEPS, MINOR_STEPS,
+  SHARP_LETTER, SHARP_ALTER, FLAT_LETTER, FLAT_ALTER, SHARP_ORDER, FLAT_ORDER,
+  SCORE, LG, TREBLE_TOP, BASS_TOP, PLAYHEAD, PPB,
   get fx(){ return fx; },
-  reseed, rng, rnd, rint, pick, clamp, lerp, hash32,
+  reseed, rng, rnd, rint, pick, clamp, lerp, hash32, vowelOf,
   bandFor, rankFor, trimmedMean, jurorScore, overallScore, championOfTheGames, avg,
-  makePiece, noteAt, makeChoir, makeChoirName, buildCompetition, choirAt, totalChoirs,
+  tonicPc, scaleOf, triadsOf, moveCost, layMelody, spansOf, harmonise, voiceParts, tie,
+  nearestPc, buildPiece, noteOf, noteAt, barIndexAt, isBarLine, pickPiece,
+  diatonicIndex, keyAlterations, staffY, staffYFine, noteShape, drawScore,
+  makeChoir, makeChoirName, buildCompetition, choirAt, totalChoirs,
   startRun, startChoir, beginPerformance, perfTick, flagCrit, flawIntensity, endPerformance,
   submitScore, nextChoir, finishStage, setPhase, advance, nudgeScore,
   fmtFlaw, fmtNote, loadSave, writeSave, recordBest,
@@ -78,6 +84,7 @@ function makeSandbox(opts){
   });
   const nodes = {};
   const store = Object.assign({}, opts.store || {});
+  const audio = opts.audio ? makeAudioStub() : null;
   const sandbox = {
     document: {
       documentElement: mkEl(),
@@ -88,7 +95,8 @@ function makeSandbox(opts){
       querySelectorAll: () => [],
       addEventListener(){},
     },
-    window: { innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, addEventListener(){} },
+    window: { innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, addEventListener(){},
+              AudioContext: audio ? function(){ return audio.ac; } : undefined },
     localStorage: {
       getItem: (k) => (k in store ? store[k] : null),
       setItem: (k, v) => { store[k] = String(v); },
@@ -97,7 +105,63 @@ function makeSandbox(opts){
     requestAnimationFrame: () => {},
     __out: {},
   };
-  return { sandbox, store, counts, nodes };
+  return { sandbox, store, counts, nodes, audio };
+}
+
+/* A Web Audio stand-in that records the graph and the parameter values the
+   game asks for. It is deliberately dumb — setTargetAtTime just sets — because
+   what we want to assert is what the code INTENDS, and whether the signal can
+   actually reach the speakers. A summing gain left at 0.0001 makes a choir
+   that renders perfectly and is silent; that shipped once, hence this. */
+function makeAudioStub(){
+  const nodes = [], edges = [];
+  const param = (v) => ({
+    value: v,
+    setTargetAtTime(x){ this.value = x; return this; },
+    setValueAtTime(x){ this.value = x; return this; },
+    linearRampToValueAtTime(x){ this.value = x; return this; },
+    exponentialRampToValueAtTime(x){ this.value = x; return this; },
+    cancelScheduledValues(){ return this; },
+  });
+  const node = (kind, extra) => {
+    const n = Object.assign({
+      kind,
+      connect(t){ edges.push([n, t]); return t; },
+      disconnect(){}, start(){ n.started = true; }, stop(){},
+    }, extra || {});
+    nodes.push(n);
+    return n;
+  };
+  const ac = {
+    sampleRate: 44100, currentTime: 0, state: 'running',
+    destination: node('destination'),
+    resume(){ this.state = 'running'; },
+    createGain: () => node('gain', { gain: param(1) }),
+    createOscillator: () => node('osc', { frequency: param(440), detune: param(0), type:'sine' }),
+    createBiquadFilter: () => node('biquad', { frequency: param(350), Q: param(1), gain: param(0), type:'lowpass' }),
+    createConvolver: () => node('convolver', { buffer: null, normalize: true }),
+    createDynamicsCompressor: () => node('comp', {
+      threshold:param(-24), knee:param(30), ratio:param(12), attack:param(0.003), release:param(0.25) }),
+    createBufferSource: () => node('bufsrc', { buffer: null, loop: false }),
+    createBuffer: (ch, len) => ({
+      length: len, numberOfChannels: ch, sampleRate: 44100,
+      getChannelData: () => new Float32Array(len) }),
+  };
+  return { ac, nodes, edges };
+}
+/* Can signal get from `from` to the destination without passing through a gain
+   that has been turned all the way down? */
+function audiblePath(audio, from, floor){
+  const seen = new Set(), stack = [from];
+  while (stack.length){
+    const n = stack.pop();
+    if (seen.has(n)) continue;
+    seen.add(n);
+    if (n === audio.ac.destination) return true;
+    if (n.kind === 'gain' && n.gain.value <= (floor == null ? 1e-3 : floor)) continue;
+    for (const [a, b] of audio.edges) if (a === n) stack.push(b);
+  }
+  return false;
 }
 
 let SRC = null;
@@ -113,7 +177,7 @@ function source(){
 }
 
 function boot(opts){
-  const { sandbox, store, counts, nodes } = makeSandbox(opts);
+  const { sandbox, store, counts, nodes, audio } = makeSandbox(opts);
   new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out',
     source())(
     sandbox.window, sandbox.document, sandbox.localStorage, undefined,
@@ -122,6 +186,7 @@ function boot(opts){
   api._store = store;
   api._counts = counts;
   api._nodes = nodes;
+  api._audio = audio;
   api._resetCounts = () => { for (const k in counts) delete counts[k]; };
   api.reseed((opts && opts.seed) || 1234);
   return api;
@@ -202,13 +267,14 @@ test('every flaw names a real criterion and bends the choir when applied', () =>
 
     // Applying at full intensity must measurably change part state or the
     // ensemble state — a flaw nobody can hear is not a flaw.
-    const P = api.PART_DEFS.map(() => ({ cents:0, gain:1, bright:0, air:0, lag:0, rogue:0 }));
+    const P = api.PART_DEFS.map(() => ({ cents:0, gain:1, bright:0, air:0, lag:0, rogue:0, wrongBy:0 }));
     const S = { tempoMul:1, expression:1, phrasing:1, life:1 };
     const inst = { def:f, part:-1 };
     if (f.setup) f.setup(inst);
     f.apply(inst, P, 1, S);
     const partMoved = P.some((p) =>
-      p.cents !== 0 || p.gain !== 1 || p.bright !== 0 || p.air !== 0 || p.lag !== 0 || p.rogue !== 0);
+      p.cents !== 0 || p.gain !== 1 || p.bright !== 0 || p.air !== 0 || p.lag !== 0 ||
+      p.rogue !== 0 || p.wrongBy !== 0);
     const ensMoved = S.tempoMul !== 1 || S.expression !== 1 || S.phrasing !== 1 || S.life !== 1;
     assert(partMoved || ensMoved, f.id + ' applies but changes nothing');
   }
@@ -270,7 +336,8 @@ test('flags, countries and categories are all well formed', () => {
   }
   for (const cat of api.CATEGORIES){
     assert(cat.n && cat.flavour, 'category needs a name and a flavour');
-    assert(api.makePiece(cat.flavour).bars.length > 0, cat.flavour + ' has no music behind it');
+    assert(api.pickPiece(cat.flavour, new Set()).voices.length === 4,
+      cat.flavour + ' has no music behind it');
   }
 });
 
@@ -287,43 +354,355 @@ test('the diploma bands tile the card from top to bottom without a gap', () => {
 });
 
 /* ------------------------------------------------------------------- music */
-test('generated pieces keep every part inside its own range', () => {
+test('every piece in the repertoire is properly filled in', () => {
   const api = boot();
-  for (const cat of api.CATEGORIES){
-    const piece = api.makePiece(cat.flavour);
-    assert(piece.tempo > 30 && piece.tempo < 140, cat.flavour + ' tempo ' + piece.tempo);
-    assert(piece.beats === 4, 'four beats to a bar');
-    for (let b = 0; b < piece.bars.length; b++){
-      for (let beat = 0; beat < 4; beat++){
-        const notes = api.noteAt(piece, b, beat);
-        assert(notes.length === 4, 'four parts to a chord');
-        for (let i = 0; i < 4; i++){
-          const d = api.PART_DEFS[i];
-          assert(notes[i] >= d.lo && notes[i] <= d.hi,
-            cat.flavour + ' bar ' + b + ': ' + d.name + ' asked for ' + notes[i] +
-            ' outside ' + d.lo + '-' + d.hi);
-        }
+  assert(api.REPERTOIRE.length >= 6, 'a shelf worth drawing from');
+  const ids = new Set();
+  for (const r of api.REPERTOIRE){
+    assert(r.id && r.title && r.composer && r.origin, r.id + ' is missing its paperwork');
+    assert(!ids.has(r.id), 'duplicate piece id ' + r.id);
+    ids.add(r.id);
+    assert(r.meter === 3 || r.meter === 4, r.id + ' has an odd meter: ' + r.meter);
+    assert(r.mode === 'major' || r.mode === 'minor', r.id + ' mode');
+    assert(Math.abs(r.key) <= 7, r.id + ' key signature out of range');
+    assert(r.tempo >= 40 && r.tempo <= 160, r.id + ' tempo ' + r.tempo);
+    assert(r.mel.length >= 12, r.id + ' is too short to judge');
+    assert(r.moods && r.moods.length, r.id + ' needs at least one mood');
+    for (const [midi, dur] of r.mel){
+      assert(midi >= 36 && midi <= 84, r.id + ' has a note out of human range: ' + midi);
+      assert(dur > 0 && dur <= 6, r.id + ' has a note of ' + dur + ' beats');
+    }
+  }
+});
+
+test('every syllable of text lands on exactly one note', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const syl = r.text.split(/\s+/).filter(Boolean);
+    assert(syl.length === r.mel.length,
+      r.id + ': ' + syl.length + ' syllables for ' + r.mel.length + ' notes');
+  }
+});
+
+test('the melody bars add up to whole bars, allowing for the pickup', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const total = r.mel.reduce((a, n) => a + n[1], 0);
+    const after = total - (r.pickup || 0);
+    near(after % r.meter, 0, 1e-6,
+      r.id + ': ' + total + ' beats with a ' + (r.pickup || 0) + '-beat pickup in ' + r.meter + '/4');
+  }
+});
+
+test('every melody note belongs to the key it is written in', () => {
+  const api = boot();
+  // This is the test that caught the Ode being transcribed in whole tones.
+  for (const r of api.REPERTOIRE){
+    const scale = api.scaleOf(r);
+    const tonic = api.tonicPc(r.key, r.mode);
+    const allowed = new Set(scale);
+    if (r.mode === 'minor') allowed.add((tonic + 11) % 12);   // the raised leading note
+    for (const [midi] of r.mel){
+      const pc = (((midi % 12) + 12) % 12);
+      assert(allowed.has(pc),
+        r.id + ' has a note outside its key: pitch class ' + pc + ' in ' +
+        r.mode + ' on ' + tonic);
+    }
+  }
+});
+
+test('every melody sits where the part that sings it can sing it', () => {
+  const api = boot();
+  const d = api.PART_DEFS[0];
+  for (const r of api.REPERTOIRE){
+    const lo = Math.min(...r.mel.map((n) => n[0]));
+    const hi = Math.max(...r.mel.map((n) => n[0]));
+    assert(lo >= d.lo && hi <= d.hi,
+      r.id + ' spans ' + lo + '-' + hi + ', outside a soprano ' + d.lo + '-' + d.hi);
+    assert(hi - lo >= 7, r.id + ' barely moves — range of ' + (hi - lo) + ' semitones');
+    assert(hi - lo <= 19, r.id + ' spans ' + (hi - lo) + ' semitones, more than a choir line should');
+  }
+});
+
+test('a piece never asks for more accidentals than the gutter can hold', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE)
+    assert(Math.abs(r.key) <= 4, r.id + ' has ' + Math.abs(r.key) + ' accidentals in the signature');
+});
+
+test('key signatures resolve to the tonic they claim', () => {
+  const api = boot();
+  assert(api.tonicPc(0, 'major') === 0, 'no accidentals is C major');
+  assert(api.tonicPc(1, 'major') === 7, 'one sharp is G major');
+  assert(api.tonicPc(2, 'major') === 2, 'two sharps is D major');
+  assert(api.tonicPc(-1, 'major') === 5, 'one flat is F major');
+  assert(api.tonicPc(-2, 'major') === 10, 'two flats is B flat major');
+  assert(api.tonicPc(0, 'minor') === 9, 'no accidentals is also A minor');
+  assert(api.tonicPc(-1, 'minor') === 2, 'one flat is D minor');
+});
+
+test('the harmoniser opens and closes on the tonic and never writes V–IV', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    const degs = piece.chords.map((c) => c.deg);
+    assert(degs[0] === 0, r.id + ' does not open on the tonic: ' + degs[0]);
+    assert(degs[degs.length - 1] === 0, r.id + ' does not close on the tonic');
+    const pen = degs[degs.length - 2];
+    assert(pen === 4 || pen === 3 || pen === 0,
+      r.id + ' has a strange penultimate chord: ' + pen);
+    for (let i = 1; i < degs.length; i++)
+      assert(!(degs[i - 1] === 4 && degs[i] === 3), r.id + ' writes V to IV at span ' + i);
+  }
+});
+
+test('the harmony it picks actually fits the tune', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    let longNotes = 0, onChord = 0;
+    for (let i = 0; i < piece.spans.length; i++){
+      const sp = piece.spans[i], pcs = piece.chords[i].pcs;
+      for (const n of piece.voices[0]){
+        const ov = Math.min(n.at + n.dur, sp.at + sp.dur) - Math.max(n.at, sp.at);
+        if (ov <= 1e-9 || n.dur < 1.5) continue;      // only judge the notes that linger
+        longNotes++;
+        if (pcs.indexOf((((n.midi % 12) + 12) % 12)) >= 0) onChord++;
+      }
+    }
+    assert(longNotes > 0, r.id + ' has no sustained melody notes to check');
+    assert(onChord / longNotes >= 0.8,
+      r.id + ': only ' + onChord + '/' + longNotes + ' held melody notes are chord tones');
+  }
+});
+
+test('the voicing keeps every part in its own range and in order', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    for (let pi = 0; pi < 4; pi++){
+      const d = api.PART_DEFS[pi];
+      for (const n of piece.voices[pi]){
+        assert(n.midi >= d.lo && n.midi <= d.hi,
+          r.id + ': ' + d.name + ' asked for ' + n.midi + ' outside ' + d.lo + '-' + d.hi);
+        assert(n.dur > 0, r.id + ': a note of no length in the ' + d.name);
+      }
+    }
+    // and at every moment the parts stack in the right order
+    for (let b = 0; b < piece.totalBeats; b += 0.5){
+      const v = api.noteAt(piece, b);
+      assert(v[0] >= v[1] && v[1] >= v[2] && v[2] >= v[3],
+        r.id + ' at beat ' + b + ': parts cross — ' + v.join(','));
+    }
+  }
+});
+
+test('the inner parts do not leap about', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    for (let pi = 1; pi < 4; pi++){
+      const list = piece.voices[pi];
+      for (let i = 1; i < list.length; i++){
+        const leap = Math.abs(list[i].midi - list[i - 1].midi);
+        assert(leap <= 12, api.PART_DEFS[pi].name + ' in ' + r.id + ' leaps ' + leap + ' semitones');
       }
     }
   }
 });
 
-test('the soprano actually moves inside the bar', () => {
+test('a tie merges repeated notes instead of restriking them', () => {
   const api = boot();
-  const piece = api.makePiece('hymn');
-  let moved = 0;
-  for (let b = 0; b < piece.bars.length; b++)
-    if (api.noteAt(piece, b, 0)[0] !== api.noteAt(piece, b, 3)[0]) moved++;
-  assert(moved > 0, 'the top line should not just sit there for eight bars');
+  const merged = api.tie([{ midi:60, at:0, dur:2 }, { midi:60, at:2, dur:2 }, { midi:62, at:4, dur:2 }]);
+  assert(merged.length === 2, 'two notes, not three');
+  near(merged[0].dur, 4, 1e-9, 'the repeat became one long note');
+  const gapped = api.tie([{ midi:60, at:0, dur:2 }, { midi:60, at:6, dur:2 }]);
+  assert(gapped.length === 2, 'a gap is not tied over');
 });
 
-test('noteAt wraps round the piece instead of falling off it', () => {
+test('the voices cover the whole excerpt with no holes', () => {
   const api = boot();
-  const piece = api.makePiece('hymn');
-  const n = piece.bars.length;
-  assert(JSON.stringify(api.noteAt(piece, n, 0)) === JSON.stringify(api.noteAt(piece, 0, 0)),
-    'bar N wraps to bar 0');
-  assert(api.noteAt(piece, -1, 0).length === 4, 'a negative bar still returns a chord');
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    for (let pi = 0; pi < 4; pi++){
+      const list = piece.voices[pi];
+      near(list[0].at, 0, 1e-9, r.id + ' ' + pi + ' starts late');
+      const end = list[list.length - 1];
+      near(end.at + end.dur, piece.totalBeats, 1e-6, r.id + ' ' + pi + ' does not reach the end');
+      for (let i = 1; i < list.length; i++)
+        near(list[i].at, list[i - 1].at + list[i - 1].dur, 1e-6, r.id + ' ' + pi + ' has a hole');
+    }
+  }
+});
+
+test('note lookup wraps round the excerpt instead of falling off it', () => {
+  const api = boot();
+  const piece = api.buildPiece(api.REPERTOIRE[0].id);
+  const a = api.noteAt(piece, 0.25);
+  const b = api.noteAt(piece, piece.totalBeats + 0.25);
+  assert(JSON.stringify(a) === JSON.stringify(b), 'the second time through is the same music');
+  assert(api.noteAt(piece, -0.5).length === 4, 'and it copes with a negative beat');
+});
+
+test('bar lines fall where the pickup says they should', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    if (piece.pickup){
+      assert(api.isBarLine(piece, piece.pickup), r.id + ': no bar line after the pickup');
+      assert(!api.isBarLine(piece, 0), r.id + ': a pickup does not start a bar');
+    } else {
+      assert(api.isBarLine(piece, 0), r.id + ': the piece starts on a downbeat');
+    }
+    assert(api.isBarLine(piece, piece.pickup + piece.meter), r.id + ': second bar line');
+    assert(api.barIndexAt(piece, piece.pickup + piece.meter) ===
+           api.barIndexAt(piece, piece.pickup) + 1, r.id + ': bars count up');
+  }
+});
+
+test('every category can find a piece, and pickPiece avoids repeats', () => {
+  const api = boot();
+  for (const cat of api.CATEGORIES){
+    const p = api.pickPiece(cat.flavour, new Set());
+    assert(p && p.voices && p.voices.length === 4, cat.n + ' got no music');
+  }
+  const used = new Set();
+  const seen = [];
+  for (let i = 0; i < 3; i++){
+    const p = api.pickPiece('folk', used);
+    used.add(p.id); seen.push(p.id);
+  }
+  assert(new Set(seen).size === seen.length, 'three draws gave three different pieces: ' + seen);
+});
+
+/* ------------------------------------------------------------------ vowels */
+test('the vowel of a syllable is the one you would sing', () => {
+  const api = boot();
+  assert(api.vowelOf('Freu') === 'u', 'the last vowel wins in a diphthong: Freu');
+  assert(api.vowelOf('Nacht') === 'a', 'Nacht');
+  assert(api.vowelOf('li') === 'i', 'li');
+  assert(api.vowelOf('Gott') === 'o', 'Gott');
+  assert(api.vowelOf('schö') === 'o', 'an umlaut is still its own vowel');
+  assert(api.vowelOf('—') === 'a', 'a melisma keeps singing something');
+  assert(api.vowelOf('') === 'a', 'and so does an empty syllable');
+  for (const k in api.VOWELS){
+    const v = api.VOWELS[k];
+    assert(v.f.length === 5 && v.g.length === 5, k + ' needs five formants');
+    for (let i = 1; i < v.f.length; i++)
+      assert(v.f[i] > v.f[i - 1], k + ' formants must climb: ' + v.f.join(','));
+  }
+  assert(api.FORMANT_SCALE[0] > api.FORMANT_SCALE[3],
+    'a soprano is not built like a bass');
+});
+
+test('the sopranos choose the vowel the whole choir sings', () => {
+  const api = boot();
+  perform(api, 0, 0);
+  const seen = new Set();
+  for (let i = 0; i < 900; i++){ api.update(STEP); seen.add(api.SING.vowel); }
+  assert(seen.size >= 2, 'the vowel changes with the text, got ' + [...seen].join(','));
+  for (const v of seen) assert(api.VOWELS[v], 'sang an unknown vowel: ' + v);
+});
+
+/* ------------------------------------------------------------- the notation */
+test('a pitch lands on the staff line an engraver would use', () => {
+  const api = boot();
+  // treble: E4 is the bottom line, F5 the top
+  near(api.staffY(64, 'G', false), api.TREBLE_TOP + 4 * api.LG, 1e-9, 'E4 on the bottom line');
+  near(api.staffY(77, 'G', false), api.TREBLE_TOP, 1e-9, 'F5 on the top line');
+  near(api.staffY(71, 'G', false), api.TREBLE_TOP + 2 * api.LG, 1e-9, 'B4 on the middle line');
+  // bass: G2 bottom line, A3 top line
+  near(api.staffY(43, 'F', false), api.BASS_TOP + 4 * api.LG, 1e-9, 'G2 on the bottom line');
+  near(api.staffY(57, 'F', false), api.BASS_TOP, 1e-9, 'A3 on the top line');
+  // middle C is one ledger line below the treble and one above the bass
+  near(api.staffY(60, 'G', false), api.TREBLE_TOP + 5 * api.LG, 1e-9, 'middle C under the treble');
+  near(api.staffY(60, 'F', false), api.BASS_TOP - api.LG, 1e-9, 'middle C over the bass');
+});
+
+test('a sharp and its flat sit on different lines', () => {
+  const api = boot();
+  assert(api.staffY(61, 'G', false) === api.staffY(60, 'G', false),
+    'C sharp is a C: same line, with an accidental');
+  assert(api.staffY(61, 'G', true) === api.staffY(62, 'G', true),
+    'D flat is a D');
+  assert(api.staffY(61, 'G', false) !== api.staffY(61, 'G', true),
+    'the same key spelled two ways is not the same line');
+});
+
+test('a pitch between two notes lands between two lines', () => {
+  const api = boot();
+  const c = api.staffY(60, 'G', false), d = api.staffY(62, 'G', false);
+  near(api.staffYFine(60, 'G', false), c, 1e-9, 'a whole number is exactly on its line');
+  const flat = api.staffYFine(59.7, 'G', false);
+  assert(flat > c, 'a pitch under C sits lower on the page than C');
+  assert(Math.abs(flat - c) < Math.abs(d - c), 'but only a little lower');
+});
+
+test('key signatures put the right number of accidentals on the right letters', () => {
+  const api = boot();
+  assert(api.keyAlterations(0).every((v) => v === 0), 'C major has none');
+  const one = api.keyAlterations(1);
+  assert(one[3] === 1 && one.filter((v) => v).length === 1, 'one sharp, and it is F');
+  const two = api.keyAlterations(-2);
+  assert(two[6] === -1 && two[2] === -1 && two.filter((v) => v).length === 2,
+    'two flats, B and E');
+  assert(api.keyAlterations(7).filter((v) => v === 1).length === 7, 'seven sharps');
+  assert(api.keyAlterations(-7).filter((v) => v === -1).length === 7, 'seven flats');
+});
+
+test('note shapes read the way a musician expects', () => {
+  const api = boot();
+  assert(api.noteShape(4).stem === false, 'a semibreve has no stem');
+  assert(api.noteShape(2).fill === false && api.noteShape(2).stem, 'a minim is open with a stem');
+  assert(api.noteShape(3).dot, 'three beats is a dotted minim');
+  assert(api.noteShape(1).fill && !api.noteShape(1).dot, 'a crotchet is filled and plain');
+  assert(api.noteShape(1.5).dot && api.noteShape(1.5).fill, 'a dotted crotchet');
+  assert(api.noteShape(0.5).flags === 1, 'a quaver has a tail');
+});
+
+test('the live dot tells the truth about what is being sung', () => {
+  const api = boot();
+  const c = perform(api, 0, 0);
+  const flats = c.piece.key < 0;
+  const clef = api.PART_DEFS[1].clef;
+  const dotY = () => {
+    const p = api.PARTS[1];
+    const heard = p.midi + p.cents / 100;
+    const sung = Math.round(heard);
+    return api.staffY(sung, clef, flats) - (heard - sung) * api.LG * 1.5;
+  };
+  step(api, 3);
+  const p = api.PARTS[1];
+  p.midi = p.written; p.cents = 0;
+  const onNote = dotY();
+  near(onNote, api.staffY(p.written, clef, flats), 1e-9,
+    'in tune and on time, the dot sits exactly on the notehead');
+  p.cents = -34;
+  const flat = dotY();
+  assert(flat > onNote + 2,
+    'a third of a semitone flat has to be visible: moved ' + (flat - onNote).toFixed(2) + 'px');
+  assert(flat < onNote + api.LG,
+    'but not so far that it reads as a different note: ' + (flat - onNote).toFixed(2) + 'px');
+  p.cents = 0; p.midi = p.written + 2;
+  const wrong = dotY();
+  near(wrong, api.staffY(p.written + 2, clef, flats), 1e-9,
+    'a wrong note sits exactly on the line it is actually singing');
+  assert(Math.abs(wrong - onNote) > 2, 'and that is not where it should be');
+});
+
+test('every piece renders on the staff without running off the paper', () => {
+  const api = boot();
+  for (const r of api.REPERTOIRE){
+    const piece = api.buildPiece(r.id);
+    const flats = piece.key < 0;
+    for (let pi = 0; pi < 4; pi++){
+      for (const n of piece.voices[pi]){
+        const y = api.staffY(n.midi, api.PART_DEFS[pi].clef, flats);
+        assert(y > api.SCORE.y && y < api.SCORE.y + api.SCORE.h,
+          r.id + ' ' + api.PART_DEFS[pi].name + ' note ' + n.midi + ' draws at y=' + y.toFixed(1));
+      }
+    }
+  }
 });
 
 /* -------------------------------------------------------------- the choirs */
@@ -822,6 +1201,131 @@ test('a corrupt save never blocks the door', () => {
   const api = boot({ store: { wcg_adjudicator_v1: '{{{not json' } });
   assert(api.G.phase === 'title', 'the game still opened');
   assert(api.G.best === null, 'and simply has no best on record');
+});
+
+/* --------------------------------------------------------- the instrument */
+test('with an audio context the choir builds a complete signal path', () => {
+  const api = boot({ audio: true });
+  assert(!api.AUDIO.ok, 'nothing is built until the player actually starts something');
+  const audio = api._audio;
+  perform(api, 0, 0);            // beginPerformance resumes the context
+  step(api, 1);
+  assert(api.AUDIO.ok, 'the instrument came up');
+  assert(api.AUDIO.master.gain.value > 0.1,
+    'the master is turned up: ' + api.AUDIO.master.gain.value);
+  for (let i = 0; i < 4; i++){
+    const v = api.AUDIO.voices[i];
+    const name = api.PART_DEFS[i].name;
+    assert(v.singers.length === api.AUDIO.SINGERS, name + ' section is short of singers');
+    assert(v.out.gain.value > 0.1,
+      name + ' formant bus is turned down to ' + v.out.gain.value + ' — the section would be silent');
+    assert(v.gain.gain.value > 0.002,
+      name + ' is inaudible at ' + v.gain.gain.value);
+    for (const sg of v.singers){
+      assert(sg.o.started, name + ' has a singer who never started');
+      assert(sg.g.gain.value > 0.01, name + ' has a singer turned off');
+      assert(audiblePath(audio, sg.o),
+        'no audible path from a ' + name + ' to the destination');
+    }
+  }
+});
+
+test('every singer is tuned to their part, and no two exactly alike', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 1.5);
+  const hzOf = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  for (let i = 0; i < 4; i++){
+    const p = api.PARTS[i], v = api.AUDIO.voices[i];
+    const want = hzOf(p.midi + p.cents / 100);
+    for (const sg of v.singers)
+      near(sg.o.frequency.value, want, want * 0.01,
+        api.PART_DEFS[i].name + ' singer is on the wrong note');
+    const offs = v.singers.map((sg) => sg.off);
+    assert(new Set(offs).size === offs.length,
+      api.PART_DEFS[i].name + ' singers are all detuned identically: ' + offs.join(','));
+    assert(Math.max(...offs) - Math.min(...offs) > 4,
+      api.PART_DEFS[i].name + ' section is too perfectly in tune to be a section');
+  }
+  // and the parts are singing different notes from each other
+  const notes = new Set(api.PARTS.map((p) => Math.round(p.midi)));
+  assert(notes.size >= 3, 'the choir is singing a chord, not a unison: ' + [...notes]);
+});
+
+test('a flat section really is sent to the oscillators flat', () => {
+  const api = boot({ audio: true });
+  const c = perform(api, 0, 0);
+  c.flaws = [{ def:api.FLAW_BY_ID.flat_part, at:0.5, dur:6, sev:1.5, part:0,
+    caught:false, catchT:0, missed:false, sharp:0 }];
+  step(api, 0.4);
+  const before = api.AUDIO.voices[0].singers[0].o.frequency.value;
+  const wroteBefore = api.PARTS[0].written;
+  step(api, 2.4);
+  if (api.PARTS[0].written === wroteBefore){
+    const after = api.AUDIO.voices[0].singers[0].o.frequency.value;
+    assert(after < before * 0.995,
+      'same written note, but the oscillator did not go flat: ' + before + ' -> ' + after);
+  }
+  assert(api.PARTS[0].cents < -20, 'and the part state says flat: ' + api.PARTS[0].cents);
+});
+
+test('the formant bank follows the vowel the text is on', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 0.5);
+  for (const vowel of ['a', 'i', 'u']){
+    api.SING.vowel = vowel;
+    api.AUDIO.frame();
+    for (let i = 0; i < 4; i++){
+      const want = api.VOWELS[vowel].f[0] * api.FORMANT_SCALE[i] *
+                   (1 + 0.22 * Math.max(0, Math.min(2, api.PARTS[i].bright)));
+      near(api.AUDIO.voices[i].bank[0].bp.frequency.value, want, 1,
+        api.PART_DEFS[i].name + ' first formant on "' + vowel + '"');
+    }
+  }
+  // and the sopranos sit higher than the basses on the same vowel
+  api.SING.vowel = 'a'; api.AUDIO.frame();
+  assert(api.AUDIO.voices[0].bank[0].bp.frequency.value >
+         api.AUDIO.voices[3].bank[0].bp.frequency.value,
+    'a soprano and a bass are not built the same');
+});
+
+test('strain opens the upper formants, breath softens them', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 0.5);
+  const calmQ = api.AUDIO.voices[0].bank[2].bp.Q.value;
+  const calmG = api.AUDIO.voices[0].bank[3].g.gain.value;
+  api.PARTS[0].bright = 1.5; api.AUDIO.frame();
+  assert(api.AUDIO.voices[0].bank[3].g.gain.value > calmG,
+    'a pushed tone should put energy in the upper formants');
+  api.PARTS[0].bright = 0; api.PARTS[0].air = 0.9; api.AUDIO.frame();
+  assert(api.AUDIO.voices[0].bank[2].bp.Q.value < calmQ,
+    'breath should blur the formants, not sharpen them');
+});
+
+test('muting silences the master, and pausing silences the parts', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 1);
+  assert(api.AUDIO.voices[0].gain.gain.value > 0.002, 'singing');
+  api.G.paused = true; api.AUDIO.frame();
+  assert(api.AUDIO.voices[0].gain.gain.value <= 0.0002, 'a paused choir makes no sound');
+  api.G.paused = false;
+  api.toggleMute(); api.AUDIO.frame();
+  assert(api.AUDIO.master.gain.value <= 0.0002, 'mute closes the master');
+  api.toggleMute(); api.AUDIO.frame();
+  assert(api.AUDIO.master.gain.value > 0.1, 'and opens it again');
+});
+
+test('the hall has an impulse response with something in it', () => {
+  const api = boot({ audio: true });
+  api.AUDIO.resume();
+  assert(api.AUDIO.ok, 'the instrument came up');
+  assert(api.AUDIO.hall.buffer, 'no reverb buffer');
+  assert(api.AUDIO.hall.buffer.length > 44100, 'the hall is unrealistically small');
+  assert(api.AUDIO.wet.gain.value > 0.05 && api.AUDIO.dry.gain.value > 0.05,
+    'both the dry and the wet path have to be open');
 });
 
 /* ------------------------------------------------------------------ render */

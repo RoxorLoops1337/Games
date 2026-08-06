@@ -94,10 +94,10 @@ for (const c of CRITS) CRIT_BY_ID[c.id] = c;
 
 /* Voice parts, low index = highest voice. `state` is what audio and render share. */
 const PART_DEFS = [
-  { name:'Soprano', plural:'Sopranos', abbr:'S', lo:60, hi:79, col:'#ffd8ea' },
-  { name:'Alto',    plural:'Altos',    abbr:'A', lo:55, hi:72, col:'#cfe0ff' },
-  { name:'Tenor',   plural:'Tenors',   abbr:'T', lo:48, hi:64, col:'#d8ffd9' },
-  { name:'Bass',    plural:'Basses',   abbr:'B', lo:40, hi:57, col:'#ffe8c2' },
+  { name:'Soprano', plural:'Sopranos', abbr:'S', lo:60, hi:79, col:'#ffd8ea', ink:'#b0246a', clef:'G', up:true },
+  { name:'Alto',    plural:'Altos',    abbr:'A', lo:55, hi:72, col:'#cfe0ff', ink:'#1d5aa6', clef:'G', up:false },
+  { name:'Tenor',   plural:'Tenors',   abbr:'T', lo:48, hi:64, col:'#d8ffd9', ink:'#1c7038', clef:'F', up:true },
+  { name:'Bass',    plural:'Basses',   abbr:'B', lo:40, hi:57, col:'#ffe8c2', ink:'#8f5410', clef:'F', up:false },
 ];
 
 /* Every flaw names a criterion, a severity in card points, and how it bends
@@ -155,6 +155,10 @@ const FLAWS = [
     note:'the ensemble runs ahead of the conductor',
     setup:(f) => { f.part = -1; },
     apply:(f, P, k, S) => { S.tempoMul *= 1 + 0.16 * k; } },
+  { id:'wrong_note',  crit:'fid', sev:1.6, dur:3.4, label:'{part} sing a wrong note',
+    note:'the {part} are a step away from what is written',
+    setup:(f) => { f.part = rint(0, 3); f.by = rng() < 0.5 ? -1 : 2; },
+    apply:(f, P, k) => { if (k > 0.3) P[f.part].wrongBy = f.by; } },
   { id:'ragged',      crit:'fid', sev:1.3, dur:4.0, label:'Ragged ensemble',
     note:'entries and releases are untidy — no two parts agree where the bar ends',
     setup:(f) => { f.part = -1; },
@@ -321,11 +325,11 @@ const G = {
 /* Part state, rebuilt every frame from the base plus whatever flaws are live. */
 const PARTS = PART_DEFS.map((d) => ({
   def:d, name:d.name, abbr:d.abbr,
-  midi:d.lo, targetMidi:d.lo,
+  midi:d.lo, targetMidi:d.lo, written:d.lo, wrongBy:0,
   cents:0, gain:1, bright:0, air:0, lag:0, rogue:0,
-  mouth:0, sway:0,
+  mouth:0, sway:0, artic:1, since:0, at:0,
 }));
-const SING = { tempoMul:1, expression:1, phrasing:1, life:1, level:0 };
+const SING = { tempoMul:1, expression:1, phrasing:1, life:1, level:0, vowel:'a' };
 
 const fx = [];
 function spawnFx(o){ fx.push(Object.assign({ t:0, life:0.8 }, o)); }
@@ -338,92 +342,203 @@ function fxTick(dt){
 }
 
 /* ================================================================== audio */
-/* Four persistent part-voices. Each is three saw oscillators a few cents
-   apart, through two formant band-passes, into a part gain. Notes glide, so
-   the choir sounds legato and a cents offset is instantly audible. */
+/* Five formants make a vowel; five slightly disagreeing singers make a section;
+   a hall makes a choir. Each part is five sawtooth voices — every one with its
+   own vibrato rate, its own slow drift and its own tuning error — mixed into a
+   parallel bank of five band-passes whose centres are the formants of whatever
+   vowel the sopranos are currently on. The whole thing goes through a
+   convolution hall and a compressor.
+   Nothing here decides anything: AUDIO.frame() only reads PARTS and SING, so
+   the sound and the picture can never disagree about what the choir is doing. */
+const VOWELS = {
+  a: { f:[ 800, 1150, 2900, 3900, 4950], g:[1.00, 0.50, 0.36, 0.26, 0.10] },
+  e: { f:[ 400, 1620, 2700, 3300, 4950], g:[1.00, 0.46, 0.34, 0.20, 0.08] },
+  i: { f:[ 350, 2000, 2800, 3600, 4950], g:[1.00, 0.30, 0.26, 0.20, 0.08] },
+  o: { f:[ 450,  800, 2830, 3500, 4950], g:[1.00, 0.58, 0.20, 0.15, 0.06] },
+  u: { f:[ 325,  700, 2530, 3500, 4950], g:[1.00, 0.42, 0.14, 0.10, 0.04] },
+};
+const VOWEL_KEYS = ['a', 'e', 'i', 'o', 'u'];
+/* Sopranos have a longer vocal tract than nobody and a shorter one than a bass. */
+const FORMANT_SCALE = [1.16, 1.06, 0.97, 0.88];
+
+/* The vowel a sung syllable actually lands on. */
+function vowelOf(syl){
+  const t = String(syl || '').toLowerCase();
+  let last = 'a';
+  for (let i = 0; i < t.length; i++){
+    const ch = t[i];
+    if ('aáàâä'.indexOf(ch) >= 0) last = 'a';
+    else if ('eéèêë'.indexOf(ch) >= 0) last = 'e';
+    else if ('iíìîï'.indexOf(ch) >= 0) last = 'i';
+    else if ('oóòôöø'.indexOf(ch) >= 0) last = 'o';
+    else if ('uúùûüy'.indexOf(ch) >= 0) last = 'u';
+  }
+  return last;
+}
+
 const AUDIO = {
-  ac:null, ok:false, muted:false, master:null, voices:[], noise:null, noiseGain:null,
+  ac:null, ok:false, muted:false, master:null, comp:null, voices:[],
+  hall:null, wet:null, dry:null, noiseGain:null, noiseFilter:null, applause:0,
+  SINGERS:5,
+
+  /* A concert hall, made rather than recorded: noise under an exponential
+     decay, with a couple of early reflections so it has walls. */
+  makeIR(ac, seconds, decay){
+    const n = Math.floor(ac.sampleRate * seconds);
+    const buf = ac.createBuffer(2, n, ac.sampleRate);
+    for (let ch = 0; ch < 2; ch++){
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < n; i++){
+        const t = i / n;
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+      }
+      for (const [ms, amp] of [[19, 0.42], [31, 0.30], [47, 0.22]]){
+        const k = Math.floor((ms + ch * 3) * 0.001 * ac.sampleRate);
+        if (k < n) d[k] += amp;
+      }
+    }
+    return buf;
+  },
+
   init(){
     if (this.ac || this.ok) return;
     const AC = (typeof window !== 'undefined') && (window.AudioContext || window.webkitAudioContext);
     if (!AC) return;
     try {
       const ac = new AC();
-      const master = ac.createGain();
-      master.gain.value = 0.0001;
-      master.connect(ac.destination);
-      const voices = PART_DEFS.map((d, i) => {
-        const out = ac.createGain(); out.gain.value = 0.0001; out.connect(master);
-        const f1 = ac.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 4;
-        const f2 = ac.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1180; f2.Q.value = 6;
-        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 0.7;
-        f1.connect(out); f2.connect(out); lp.connect(out);
-        const oscs = [];
-        for (let k = 0; k < 3; k++){
-          const o = ac.createOscillator();
-          o.type = k === 1 ? 'triangle' : 'sawtooth';
-          o.frequency.value = 220;
-          o.detune.value = (k - 1) * 7;
-          const g = ac.createGain(); g.gain.value = k === 1 ? 0.20 : 0.13;
-          o.connect(g); g.connect(f1); g.connect(f2); g.connect(lp);
-          const lfo = ac.createOscillator(); lfo.frequency.value = 4.6 + k * 0.42 + i * 0.11;
-          const lg = ac.createGain(); lg.gain.value = 5;
-          lfo.connect(lg); lg.connect(o.detune);
-          try { o.start(); lfo.start(); } catch (e) { /* already running */ }
-          oscs.push({ o, g, lfo, lg, base:(k - 1) * 7 });
+
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -16; comp.knee.value = 22;
+      comp.ratio.value = 3.2; comp.attack.value = 0.012; comp.release.value = 0.28;
+      const master = ac.createGain(); master.gain.value = 0.0001;
+      comp.connect(master); master.connect(ac.destination);
+
+      const hall = ac.createConvolver();
+      hall.buffer = this.makeIR(ac, 2.6, 2.4);
+      const wet = ac.createGain(); wet.gain.value = 0.62;
+      const dry = ac.createGain(); dry.gain.value = 0.72;
+      hall.connect(wet); wet.connect(comp); dry.connect(comp);
+
+      const voices = PART_DEFS.map((d, pi) => {
+        const mix = ac.createGain(); mix.gain.value = 1;
+        // `out` only sums the formant bank — the part's dynamic level is set
+        // further down the chain, on `gain`. Leaving this near zero is how you
+        // build a choir that looks perfect and makes no sound.
+        const out = ac.createGain(); out.gain.value = 1;
+        // the formant bank — this is what turns a buzz into a voice
+        const bank = [];
+        for (let k = 0; k < 5; k++){
+          const bp = ac.createBiquadFilter();
+          bp.type = 'bandpass';
+          bp.frequency.value = VOWELS.a.f[k];
+          bp.Q.value = k === 0 ? 7 : 9 + k;
+          const g = ac.createGain(); g.gain.value = VOWELS.a.g[k];
+          mix.connect(bp); bp.connect(g); g.connect(out);
+          bank.push({ bp, g });
         }
-        return { out, f1, f2, lp, oscs };
+        // a little unfiltered body so the low parts do not vanish
+        const body = ac.createBiquadFilter();
+        body.type = 'lowpass'; body.frequency.value = 900; body.Q.value = 0.6;
+        const bodyG = ac.createGain(); bodyG.gain.value = 0.30;
+        mix.connect(body); body.connect(bodyG); bodyG.connect(out);
+
+        const gain = ac.createGain(); gain.gain.value = 0.0001;
+        out.connect(gain);
+        const send = ac.createGain(); send.gain.value = 0.55;
+        gain.connect(dry); gain.connect(send); send.connect(hall);
+
+        const singers = [];
+        for (let k = 0; k < AUDIO.SINGERS; k++){
+          const o = ac.createOscillator();
+          o.type = 'sawtooth';
+          o.frequency.value = 220;
+          // every singer is a little out, in their own fixed direction
+          const off = (k - (AUDIO.SINGERS - 1) / 2) * 5.5 + ((k * 37 + pi * 11) % 7) - 3;
+          o.detune.value = off;
+          const g = ac.createGain(); g.gain.value = 0.9 / AUDIO.SINGERS;
+          o.connect(g); g.connect(mix);
+          // vibrato, and a much slower wander underneath it
+          const vib = ac.createOscillator();
+          vib.frequency.value = 4.4 + k * 0.42 + pi * 0.13;
+          const vibG = ac.createGain(); vibG.gain.value = 11;
+          vib.connect(vibG); vibG.connect(o.detune);
+          const drift = ac.createOscillator();
+          drift.frequency.value = 0.17 + k * 0.031 + pi * 0.011;
+          const driftG = ac.createGain(); driftG.gain.value = 6;
+          drift.connect(driftG); driftG.connect(o.detune);
+          try { o.start(); vib.start(); drift.start(); } catch (e) { /* already going */ }
+          singers.push({ o, g, vibG, driftG, off });
+        }
+        return { mix, out, gain, send, bank, body, singers };
       });
-      // A breath/applause noise bed, used for `air` and for the hall.
-      const buf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
-      const ch = buf.getChannelData(0);
-      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+
+      // breath and applause share one noise bed
+      const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 2), ac.sampleRate);
+      const chd = buf.getChannelData(0);
+      for (let i = 0; i < chd.length; i++) chd[i] = Math.random() * 2 - 1;
       const noise = ac.createBufferSource(); noise.buffer = buf; noise.loop = true;
-      const nf = ac.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 2400; nf.Q.value = 0.8;
+      const nf = ac.createBiquadFilter(); nf.type = 'bandpass';
+      nf.frequency.value = 2400; nf.Q.value = 0.8;
       const ng = ac.createGain(); ng.gain.value = 0.0001;
-      noise.connect(nf); nf.connect(ng); ng.connect(master);
+      noise.connect(nf); nf.connect(ng); ng.connect(dry); ng.connect(hall);
       try { noise.start(); } catch (e) { /* noop */ }
-      this.ac = ac; this.master = master; this.voices = voices;
+
+      this.ac = ac; this.comp = comp; this.master = master; this.voices = voices;
+      this.hall = hall; this.wet = wet; this.dry = dry;
       this.noise = noise; this.noiseGain = ng; this.noiseFilter = nf;
       this.ok = true;
     } catch (e) { this.ok = false; }
   },
+
   resume(){
     this.init();
     if (this.ok && this.ac.state === 'suspended') { try { this.ac.resume(); } catch (e) { /* noop */ } }
   },
-  /* Reads PARTS + SING every frame. This is the whole instrument. */
+
+  /* Reads PARTS and SING. This is the whole instrument. */
   frame(){
     if (!this.ok) return;
-    const ac = this.ac, now = ac.currentTime, S = 0.06;
+    const ac = this.ac, now = ac.currentTime, SM = 0.05;
     const on = !this.muted && G.phase === 'perform' && !G.paused;
+    const vw = VOWELS[SING.vowel] || VOWELS.a;
     try {
-      this.master.gain.setTargetAtTime(this.muted ? 0.0001 : 0.30, now, 0.08);
+      this.master.gain.setTargetAtTime(this.muted ? 0.0001 : 1.9, now, 0.08);
       for (let i = 0; i < PARTS.length; i++){
         const p = PARTS[i], v = this.voices[i];
         const hz = 440 * Math.pow(2, (p.midi - 69) / 12 + p.cents / 1200);
-        for (const osc of v.oscs){
-          osc.o.frequency.setTargetAtTime(hz, now, 0.05);
-          osc.lg.gain.setTargetAtTime(4 + 7 * SING.expression, now, 0.1);
+        const expr = clamp(SING.expression, 0, 1);
+        for (const sg of v.singers){
+          sg.o.frequency.setTargetAtTime(hz, now, 0.045);
+          // a dead-eyed choir stops vibrating; a live one breathes
+          sg.vibG.gain.setTargetAtTime(4 + 9 * expr * clamp(SING.life, 0, 1), now, 0.12);
         }
-        const lvl = on ? clamp(p.gain, 0, 3) * (0.10 + 0.09 * SING.level) * (0.55 + 0.45 * SING.expression) : 0.0001;
-        v.out.gain.setTargetAtTime(Math.max(0.0001, lvl), now, S);
-        v.f1.frequency.setTargetAtTime(620 + 260 * p.bright, now, 0.1);
-        v.f2.frequency.setTargetAtTime(1120 + 900 * p.bright, now, 0.1);
-        v.lp.frequency.setTargetAtTime(2600 + 3400 * p.bright, now, 0.1);
-        v.f2.Q.setTargetAtTime(clamp(6 - 3 * p.air, 1, 8), now, 0.1);
+        const fs = FORMANT_SCALE[i] * (1 + 0.22 * clamp(p.bright, 0, 2));
+        for (let k = 0; k < 5; k++){
+          v.bank[k].bp.frequency.setTargetAtTime(vw.f[k] * fs, now, 0.07);
+          // strain pushes energy up into the higher formants
+          const lift = k >= 2 ? 1 + 0.9 * clamp(p.bright, 0, 2) : 1;
+          v.bank[k].g.gain.setTargetAtTime(vw.g[k] * lift, now, 0.07);
+          v.bank[k].bp.Q.setTargetAtTime(clamp((k === 0 ? 7 : 9 + k) - 3.5 * p.air, 1.2, 14), now, 0.09);
+        }
+        v.body.frequency.setTargetAtTime(760 + 340 * FORMANT_SCALE[i], now, 0.1);
+        const lvl = on
+          ? clamp(p.gain, 0, 3) * (0.16 + 0.14 * SING.level) * clamp(p.artic == null ? 1 : p.artic, 0.15, 1)
+          : 0.0001;
+        v.gain.gain.setTargetAtTime(Math.max(0.0001, lvl), now, SM);
       }
       let air = 0;
       for (const p of PARTS) air += p.air;
       const hall = (G.phase === 'panel' || G.phase === 'round') ? this.applause : 0;
-      this.noiseFilter.frequency.setTargetAtTime(hall > 0 ? 1600 : 2600, now, 0.1);
+      this.noiseFilter.frequency.setTargetAtTime(hall > 0 ? 1500 : 2700, now, 0.1);
       this.noiseGain.gain.setTargetAtTime(
-        Math.max(0.0001, this.muted ? 0.0001 : (on ? air * 0.016 : 0) + hall * 0.11), now, 0.12);
+        Math.max(0.0001, this.muted ? 0.0001 : (on ? air * 0.014 : 0) + hall * 0.10), now, 0.12);
+      this.wet.gain.setTargetAtTime(0.62, now, 0.2);
     } catch (e) { /* an audio hiccup must never stop the game */ }
   },
-  applause:0,
+
   cheer(amount){ this.applause = clamp(amount, 0, 1); },
   fadeCheer(dt){ this.applause = Math.max(0, this.applause - dt * 0.35); },
+
   /* Short UI blips — a marked card, a rejected one. */
   blip(freq, dur, type){
     if (!this.ok || this.muted) return;
@@ -431,9 +546,9 @@ const AUDIO = {
       const ac = this.ac, now = ac.currentTime;
       const o = ac.createOscillator(); o.type = type || 'sine'; o.frequency.value = freq;
       const g = ac.createGain(); g.gain.value = 0.0001;
-      o.connect(g); g.connect(this.master);
+      o.connect(g); g.connect(this.dry);
       g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.14, now + 0.012);
       g.gain.exponentialRampToValueAtTime(0.0001, now + (dur || 0.16));
       o.start(now); o.stop(now + (dur || 0.16) + 0.05);
     } catch (e) { /* noop */ }
@@ -441,63 +556,331 @@ const AUDIO = {
 };
 
 /* =========================================================== music engine */
-/* A short SATB piece, generated per choir. Bars of four beats; each bar is a
-   chord, the soprano gets a two-note figure over it. Flavour bends the mode,
-   the tempo and the register. */
-const DEGREES = {
-  hymn:   [[0,4,7],[7,11,14],[9,12,16],[5,9,12],[0,4,7],[5,9,12],[7,11,14],[0,4,7]],
-  sacred: [[0,3,7],[7,10,14],[8,12,15],[5,8,12],[0,3,7],[3,7,10],[7,11,14],[0,3,7]],
-  gospel: [[0,4,7],[5,9,12],[0,4,7],[7,10,14],[0,4,7],[5,9,12],[7,11,14],[0,4,7]],
-  jazz:   [[0,4,7,11],[2,5,9,12],[7,11,14,17],[0,4,7,11],[9,12,16,19],[2,5,9,12],[7,11,14,17],[0,4,7,11]],
-  folk:   [[0,3,7],[10,14,17],[0,3,7],[5,8,12],[10,14,17],[0,3,7],[7,10,14],[0,3,7]],
-  bright: [[0,4,7],[5,9,12],[7,11,14],[0,4,7],[9,12,16],[5,9,12],[7,11,14],[0,4,7]],
-  low:    [[0,4,7],[5,9,12],[0,4,7],[7,11,14],[3,7,10],[5,9,12],[7,11,14],[0,4,7]],
-};
-const FLAVOUR_SETUP = {
-  hymn:   { tempo:72,  shift:0,  spread:0 },
-  sacred: { tempo:54,  shift:-2, spread:1 },
-  gospel: { tempo:88,  shift:0,  spread:0 },
-  jazz:   { tempo:104, shift:0,  spread:-1 },
-  folk:   { tempo:96,  shift:-1, spread:0 },
-  bright: { tempo:84,  shift:5,  spread:-2 },
-  low:    { tempo:66,  shift:-7, spread:2 },
+/* Real repertoire, all of it long out of copyright. A piece carries only its
+   melody and its text; harmonise() works out the chords underneath it and
+   voiceParts() spreads them into SATB, so adding a piece to the games means
+   adding a tune and nothing else.
+   The transcriptions are our own arrangements of these melodies — the tune is
+   the tune, but phrasing and the harmony under it are this game's. */
+const REPERTOIRE = [
+  { id:'ode', title:'Ode an die Freude', composer:'Ludwig van Beethoven',
+    origin:'Symphony No. 9 in D minor, Op. 125 · 1824',
+    key:2, mode:'major', meter:4, tempo:104, pickup:0, moods:['hymn','bright','jubilant'],
+    mel:[[66,1],[66,1],[67,1],[69,1],  [69,1],[67,1],[66,1],[64,1],
+         [62,1],[62,1],[64,1],[66,1],  [66,1.5],[64,0.5],[64,2],
+         [66,1],[66,1],[67,1],[69,1],  [69,1],[67,1],[66,1],[64,1],
+         [62,1],[62,1],[64,1],[66,1],  [64,1.5],[62,0.5],[62,2]],
+    text:'Freu de schö ner Göt ter fun ken Toch ter aus E ly si um Wir be tre ten feu er trun ken Himm li sche dein Hei lig tum' },
+
+  { id:'stille', title:'Stille Nacht', composer:'Franz Xaver Gruber',
+    origin:'Oberndorf bei Salzburg · 1818',
+    key:0, mode:'major', meter:3, tempo:64, pickup:0, moods:['sacred','calm'],
+    mel:[[67,1.5],[69,0.5],[67,1],  [64,3],
+         [67,1.5],[69,0.5],[67,1],  [64,3],
+         [74,2],[74,1],             [71,3],
+         [72,2],[72,1],             [67,3],
+         [69,2],[69,1],             [72,1],[71,1],[69,1],
+         [67,1.5],[69,0.5],[67,1],  [64,3],
+         [74,2],[74,1],             [77,1],[74,1],[71,1],
+         [72,2],[76,1],             [72,3]],
+    text:'Stil le Nacht — hei li ge Nacht Al les schläft ein sam wacht nur das trau te hoch hei li ge Paar Hol der Kna be im lock i Haar' },
+
+  { id:'auld', title:'Auld Lang Syne', composer:'Traditional',
+    origin:'Scotland · text by Robert Burns, 1788',
+    key:-1, mode:'major', meter:4, tempo:80, pickup:1, moods:['folk','calm'],
+    mel:[[60,1],
+         [65,1.5],[65,0.5],[65,1],[69,1],  [67,1.5],[65,0.5],[67,1],[69,1],
+         [65,1.5],[65,0.5],[69,1],[72,1],  [74,4],
+         [77,1.5],[74,0.5],[74,1],[72,1],  [72,1.5],[69,0.5],[69,1],[65,1],
+         [65,1.5],[69,0.5],[67,1],[65,1],  [65,4]],
+    text:'Should auld ac quaint ance be for got and nev er brought to mind Should auld ac quaint ance be for got and days of auld syne' },
+
+  { id:'greensleeves', title:'Greensleeves', composer:'Traditional',
+    origin:'England · registered at Stationers’ Hall, 1580',
+    key:0, mode:'minor', meter:3, tempo:92, pickup:1, moods:['folk','calm'],
+    mel:[[69,1],
+         [72,2],[74,1],              [76,1.5],[77,0.5],[76,1],
+         [74,2],[71,1],              [67,1.5],[69,0.5],[71,1],
+         [72,2],[69,1],              [69,1.5],[68,0.5],[69,1],
+         [71,2],[68,1],              [64,3]],
+    text:'A las my love you do me wrong to cast me off dis cour teous ly — — —' },
+
+  { id:'ros', title:'Es ist ein Ros entsprungen', composer:'Michael Praetorius',
+    origin:'Musae Sioniae · 1609',
+    key:-1, mode:'major', meter:4, tempo:64, pickup:0, moods:['sacred','calm'],
+    mel:[[65,2],[65,2],  [67,2],[69,2],  [69,2],[67,2],  [65,4],
+         [62,2],[65,2],  [65,2],[64,2],  [62,4],         [60,4],
+         [69,2],[69,2],  [72,2],[70,2],  [69,2],[67,2],  [65,4]],
+    text:'Es ist ein Ros ent sprun gen aus ei ner Wur zel zart wie uns die Al ten sun gen' },
+
+  { id:'danket', title:'Nun danket alle Gott', composer:'Johann Crüger',
+    origin:'Praxis Pietatis Melica · 1647',
+    key:-1, mode:'major', meter:4, tempo:76, pickup:1, moods:['hymn','jubilant'],
+    mel:[[60,1],
+         [65,1],[65,1],[67,1],[69,1],  [69,1],[67,1],[69,1],[70,1],  [72,4],
+         [72,1],[72,1],[74,1],[70,1],  [70,1],[69,1],[70,1],[72,1],  [69,4],
+         [65,1],[65,1],[67,1],[69,1],  [69,1],[67,1],[65,1],[64,1],  [65,4]],
+    text:'Nun dan ket al le Gott mit Her zen Mund und Hän den der gros se Din ge tut an uns und al len En den bis tut' },
+
+  { id:'sakura', title:'Sakura', composer:'Traditional',
+    origin:'Japan · Edo period, in the miyako-bushi scale',
+    key:0, mode:'minor', meter:4, tempo:66, pickup:0, moods:['folk','calm'],
+    mel:[[69,2],[69,2],  [71,4],
+         [69,2],[69,2],  [71,4],
+         [69,2],[71,2],  [72,2],[71,1],[69,1],
+         [71,2],[69,2],  [65,4],
+         [64,2],[65,2],  [69,2],[65,1],[64,1],
+         [64,2],[65,2],  [69,4]],
+    text:'Sa ku ra Sa ku ra ya yo i no so ra wa mi wa ta su ka gi ri ka su' },
+];
+const REP_BY_ID = {};
+for (const r of REPERTOIRE) REP_BY_ID[r.id] = r;
+
+/* Which repertoire a competition category is likely to bring to the stage. */
+const CAT_MOODS = {
+  hymn:['hymn','jubilant'], sacred:['sacred','calm'], gospel:['jubilant','hymn'],
+  jazz:['folk','jubilant'], folk:['folk','calm'], bright:['bright','folk','calm'],
+  low:['hymn','sacred','calm'],
 };
 
-function makePiece(flavour){
-  const set = FLAVOUR_SETUP[flavour] || FLAVOUR_SETUP.hymn;
-  const prog = DEGREES[flavour] || DEGREES.hymn;
-  const root = 60 + set.shift + rint(-2, 2);
-  const bars = [];
-  for (let i = 0; i < prog.length; i++){
-    const ch = prog[i];
-    // Voice the chord: soprano top, then alto/tenor/bass down through the
-    // chord tones, each dropped into that part's comfortable octave.
-    const tones = ch.map((d) => root + d);
-    const sop = tones[tones.length - 1] + (rng() < 0.35 ? 12 : 0);
-    const alt = tones[Math.max(0, tones.length - 2)];
-    const ten = tones[Math.max(0, tones.length - 3)];
-    const bas = tones[0] - 12;
-    const voiced = [sop, alt, ten, bas].map((m, k) => {
-      const d = PART_DEFS[k];
-      let v = m + set.spread * (k === 3 ? -1 : k === 0 ? 1 : 0);
-      while (v < d.lo) v += 12;
-      while (v > d.hi) v -= 12;
-      return clamp(v, d.lo, d.hi);
-    });
-    // A little soprano movement in the second half of the bar.
-    const step = pick([0, 0, 2, -2, 1, -1]);
-    const sopB = clamp(voiced[0] + step, PART_DEFS[0].lo, PART_DEFS[0].hi);
-    bars.push({ chord:voiced, sopB, dyn: 0.55 + 0.45 * Math.sin((i / prog.length) * Math.PI) });
+/* ---------------------------------------------------------------- theory */
+const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11];
+const MINOR_STEPS = [0, 2, 3, 5, 7, 8, 10];
+/* How each pitch class is spelled, sharp-side and flat-side: letter 0..6 = C..B. */
+const SHARP_LETTER = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+const SHARP_ALTER  = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+const FLAT_LETTER  = [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6];
+const FLAT_ALTER   = [0, -1, 0, -1, 0, 0, -1, 0, -1, 0, -1, 0];
+/* The order sharps and flats appear in a key signature, as letter indices. */
+const SHARP_ORDER = [3, 0, 4, 1, 5, 2, 6];   // F C G D A E B
+const FLAT_ORDER  = [6, 2, 5, 1, 4, 0, 3];   // B E A D G C F
+
+function tonicPc(key, mode){
+  let pc = (((key * 7) % 12) + 12) % 12;
+  if (mode === 'minor') pc = (pc + 9) % 12;
+  return pc;
+}
+function scaleOf(def){
+  const t = tonicPc(def.key, def.mode);
+  const steps = def.mode === 'minor' ? MINOR_STEPS : MAJOR_STEPS;
+  return steps.map((s) => (t + s) % 12);
+}
+/* The diatonic triads worth writing, with the leading note raised for the
+   dominant of a minor key so the cadence actually cadences. */
+function triadsOf(def){
+  const sc = scaleOf(def);
+  const minor = def.mode === 'minor';
+  const out = [];
+  for (let d = 0; d < 7; d++){
+    if (d === 6) continue;                                   // no diminished triads
+    let pcs = [sc[d], sc[(d + 2) % 7], sc[(d + 4) % 7]];
+    if (minor && d === 4) pcs = [sc[4], (sc[4] + 4) % 12, sc[(d + 4) % 7]];
+    out.push({ deg:d, pcs });
   }
-  return { bars, tempo: set.tempo + rint(-6, 6), beats:4 };
+  return out;
+}
+/* Progressions a harmony teacher would not complain about cost nothing. */
+const GOOD_MOVES = new Set(['4>0','3>4','1>4','5>1','5>3','0>3','0>4','0>5','2>5',
+                            '3>0','0>1','4>5','5>4','2>4','3>1']);
+function moveCost(a, b){
+  if (a === b) return 0.22;                 // staying put is fine, just not free
+  if (GOOD_MOVES.has(a + '>' + b)) return 0;
+  if (a === 4 && b === 3) return 0.95;      // V back to IV is the one to avoid
+  return 0.5;
 }
 
-/* Which pitch each part is on, given the musical position. */
-function noteAt(piece, bar, beat){
-  const b = piece.bars[((bar % piece.bars.length) + piece.bars.length) % piece.bars.length];
-  const out = b.chord.slice();
-  if (beat >= 2) out[0] = b.sopB;
+/* Lay the melody out in absolute beats. */
+function layMelody(def){
+  const out = [];
+  const syl = def.text.split(/\s+/);
+  let at = 0;
+  for (let i = 0; i < def.mel.length; i++){
+    out.push({ midi:def.mel[i][0], at, dur:def.mel[i][1], lyric:syl[i] || '' });
+    at += def.mel[i][1];
+  }
   return out;
+}
+
+/* Chop the piece into harmonic spans: one chord per bar in triple time, one
+   per half bar in common time, with the pickup getting its own short span. */
+function spansOf(def, total){
+  const step = def.meter === 3 ? 3 : 2;
+  const spans = [];
+  let at = 0;
+  if (def.pickup){ spans.push({ at:0, dur:def.pickup }); at = def.pickup; }
+  while (at < total - 1e-9){
+    spans.push({ at, dur: Math.min(step, total - at) });
+    at += step;
+  }
+  return spans;
+}
+
+/* Viterbi over the spans: pick the chord sequence that best explains the tune. */
+function harmonise(def, melody, spans){
+  const triads = triadsOf(def);
+  const last = spans.length - 1;
+  const emit = (span, i, tri) => {
+    let cost = 0, weight = 0;
+    for (const n of melody){
+      const ov = Math.min(n.at + n.dur, span.at + span.dur) - Math.max(n.at, span.at);
+      if (ov <= 1e-9) continue;
+      weight += ov;
+      const pc = ((n.midi % 12) + 12) % 12;
+      if (tri.pcs.indexOf(pc) >= 0) continue;
+      cost += ov * (n.dur <= 1 ? 0.55 : 2.0);       // short notes may pass through
+    }
+    if (weight > 0) cost /= weight;
+    if (i === 0) cost += tri.deg === 0 ? 0 : 2.4;                    // open on the tonic
+    if (i === last) cost += tri.deg === 0 ? 0 : 3.0;                 // and close on it
+    if (i === last - 1) cost += (tri.deg === 4 || tri.deg === 3) ? 0 : 0.7;
+    return cost;
+  };
+  const N = triads.length;
+  let prev = triads.map((t, k) => ({ cost: emit(spans[0], 0, t), from: -1, k }));
+  const back = [prev.map(() => -1)];
+  for (let i = 1; i < spans.length; i++){
+    const cur = [];
+    const row = [];
+    for (let k = 0; k < N; k++){
+      let best = Infinity, bestFrom = 0;
+      for (let j = 0; j < N; j++){
+        const c = prev[j].cost + moveCost(triads[j].deg, triads[k].deg);
+        if (c < best){ best = c; bestFrom = j; }
+      }
+      cur.push({ cost: best + emit(spans[i], i, triads[k]), from: bestFrom, k });
+      row.push(bestFrom);
+    }
+    back.push(row);
+    prev = cur;
+  }
+  let k = 0;
+  for (let j = 1; j < N; j++) if (prev[j].cost < prev[k].cost) k = j;
+  const chosen = new Array(spans.length);
+  for (let i = spans.length - 1; i >= 0; i--){ chosen[i] = triads[k]; k = back[i][k]; }
+  return chosen;
+}
+
+/* The nearest midi with a given pitch class, inside a range and near a target. */
+function nearestPc(pc, target, lo, hi){
+  let best = null, bestD = Infinity;
+  for (let m = lo; m <= hi; m++){
+    if ((((m % 12) + 12) % 12) !== pc) continue;
+    const d = Math.abs(m - target);
+    if (d < bestD){ bestD = d; best = m; }
+  }
+  return best;
+}
+
+/* Alto, tenor and bass under the tune: chord tones, in range, moving as little
+   as they have to. Chosen strictly top down — each part's ceiling is the part
+   above it — so the voices can never cross, which no amount of luck in the
+   chord picker would otherwise guarantee. */
+function voiceParts(def, melody, spans, chords){
+  const A = [], T = [], B = [];
+  let pa = 67, pt = 55, pb = 48;
+  /* Nearest chord tone to `target`, inside [lo,hi]; widens rather than fail. */
+  const pickTone = (pcs, target, lo, hi, avoid) => {
+    let best = null, bestD = Infinity;
+    for (const pc of pcs){
+      const m = nearestPc(pc, target, lo, hi);
+      if (m == null) continue;
+      const d = Math.abs(m - target) + (avoid && avoid.indexOf(pc) >= 0 ? 5 : 0);
+      if (d < bestD){ bestD = d; best = m; }
+    }
+    return best;
+  };
+  for (let i = 0; i < spans.length; i++){
+    const sp = spans[i], ch = chords[i];
+    let sopLow = PART_DEFS[0].hi;
+    for (const n of melody){
+      const ov = Math.min(n.at + n.dur, sp.at + sp.dur) - Math.max(n.at, sp.at);
+      if (ov > 1e-9) sopLow = Math.min(sopLow, n.midi);
+    }
+    // alto: the highest chord tone that still sits at or under the sopranos
+    const aHi = clamp(sopLow, PART_DEFS[1].lo, PART_DEFS[1].hi);
+    let alto = pickTone(ch.pcs, Math.min(pa, aHi), PART_DEFS[1].lo, aHi);
+    if (alto == null) alto = pickTone(ch.pcs, aHi, 48, aHi);
+    if (alto == null) alto = aHi;
+    // tenor: under the alto, filling whatever tone of the triad is missing
+    const tHi = clamp(alto, PART_DEFS[2].lo, PART_DEFS[2].hi);
+    let tenor = pickTone(ch.pcs, Math.min(pt, tHi), PART_DEFS[2].lo, tHi,
+                         [(((alto % 12) + 12) % 12)]);
+    if (tenor == null) tenor = pickTone(ch.pcs, tHi, 40, tHi);
+    if (tenor == null) tenor = tHi;
+    // bass: the root, under the tenor
+    const bHi = clamp(tenor, PART_DEFS[3].lo, PART_DEFS[3].hi);
+    let bass = nearestPc(ch.pcs[0], Math.min(pb, bHi), PART_DEFS[3].lo, bHi);
+    if (bass == null) bass = nearestPc(ch.pcs[0], bHi, 28, bHi);
+    if (bass == null) bass = pickTone(ch.pcs, bHi, PART_DEFS[3].lo, bHi);
+    if (bass == null) bass = bHi;
+    A.push({ midi:alto, at:sp.at, dur:sp.dur });
+    T.push({ midi:tenor, at:sp.at, dur:sp.dur });
+    B.push({ midi:bass, at:sp.at, dur:sp.dur });
+    pa = alto; pt = tenor; pb = bass;
+  }
+  return [A, T, B].map(tie);
+}
+/* Two spans on the same note are one longer note, not two. */
+function tie(list){
+  const out = [];
+  for (const n of list){
+    const p = out[out.length - 1];
+    if (p && p.midi === n.midi && Math.abs(p.at + p.dur - n.at) < 1e-9) p.dur += n.dur;
+    else out.push({ midi:n.midi, at:n.at, dur:n.dur });
+  }
+  return out;
+}
+
+const PIECE_CACHE = {};
+function buildPiece(id){
+  if (PIECE_CACHE[id]) return PIECE_CACHE[id];
+  const def = REP_BY_ID[id];
+  if (!def) throw new Error('unknown piece ' + id);
+  const melody = layMelody(def);
+  const total = melody.reduce((a, n) => a + n.dur, 0);
+  const spans = spansOf(def, total);
+  const chords = harmonise(def, melody, spans);
+  const [A, T, B] = voiceParts(def, melody, spans, chords);
+  const piece = {
+    def, id, title:def.title, composer:def.composer, origin:def.origin,
+    key:def.key, mode:def.mode, meter:def.meter, tempo:def.tempo, pickup:def.pickup || 0,
+    totalBeats:total, chords, spans,
+    barOffset: ((def.meter - (def.pickup || 0)) % def.meter + def.meter) % def.meter,
+    voices:[melody, A, T, B],
+  };
+  PIECE_CACHE[id] = piece;
+  return piece;
+}
+
+/* Which note a part is on at a musical position, wrapping round the excerpt. */
+function noteOf(piece, part, beat){
+  const list = piece.voices[part];
+  let b = beat % piece.totalBeats;
+  if (b < 0) b += piece.totalBeats;
+  for (let i = 0; i < list.length; i++){
+    const n = list[i];
+    if (b >= n.at - 1e-9 && b < n.at + n.dur - 1e-9) return n;
+  }
+  return list[list.length - 1];
+}
+/* All four written pitches at a musical position. */
+function noteAt(piece, beat){
+  const out = [];
+  for (let i = 0; i < 4; i++) out.push(noteOf(piece, i, beat).midi);
+  return out;
+}
+/* Where the bar lines fall, allowing for a pickup. */
+const barIndexAt = (piece, beat) => Math.floor((beat + piece.barOffset) / piece.meter);
+const isBarLine = (piece, beat) =>
+  Math.abs(((beat + piece.barOffset) % piece.meter + piece.meter) % piece.meter) < 1e-6;
+
+/* Pick a piece for a category, without handing the same choir the same tune. */
+function pickPiece(flavour, used){
+  const want = CAT_MOODS[flavour] || ['hymn'];
+  const fits = REPERTOIRE.filter((r) => r.moods.some((m) => want.indexOf(m) >= 0));
+  const pool = (fits.length ? fits : REPERTOIRE).filter((r) => !used || !used.has(r.id));
+  const from = pool.length ? pool : (fits.length ? fits : REPERTOIRE);
+  return buildPiece(from[Math.floor(rng() * from.length)].id);
 }
 
 /* ============================================================ competition */
@@ -507,7 +890,7 @@ function makeChoirName(){
   return (a + ' ' + b + (c ? ' ' + c : '')).trim();
 }
 
-function makeChoir(stageIdx, seatIdx){
+function makeChoir(stageIdx, seatIdx, used){
   const st = STAGES[stageIdx];
   const cat = pick(CATEGORIES);
   const country = pick(COUNTRIES);
@@ -516,7 +899,12 @@ function makeChoir(stageIdx, seatIdx){
   // the top of the card, only what comes off it — so a player who hears
   // everything and marks it can land exactly on the truth.
   const nFlaws = clamp(3 + Math.round(st.diff * 3 - quality * 1.6) + rint(-1, 1), 2, 7);
-  const dur = 30 + st.diff * 6;
+  // The programme is however long the piece is: sing the excerpt, repeating it
+  // if it is short, so nobody is cut off mid-phrase.
+  const piece = pickPiece(cat.flavour, used);
+  const once = (piece.totalBeats / piece.tempo) * 60;
+  const repeats = Math.max(1, Math.ceil(30 / once));
+  const dur = Math.min(46, once * repeats);
 
   // Pick flaws, no two of the same criterion overlapping, spaced out in time.
   const chosen = [];
@@ -551,7 +939,7 @@ function makeChoir(stageIdx, seatIdx){
     stage: stageIdx, seat: seatIdx,
     name: makeChoirName(), country, cat,
     venue: pick(VENUES),
-    piece: makePiece(cat.flavour),
+    piece, repeats,
     flaws: chosen, dur, quality,
     truth: Math.round(truth * 10) / 10,
     favourite: rng() < (stageIdx === 0 ? 0.25 : 0.45),   // the hall already loves them
@@ -561,8 +949,15 @@ function makeChoir(stageIdx, seatIdx){
 
 function buildCompetition(){
   G.field = [];
-  for (let s = 0; s < STAGES.length; s++)
-    for (let i = 0; i < STAGES[s].choirs; i++) G.field.push(makeChoir(s, i));
+  // No two choirs in a round bring the same piece if the shelf can avoid it.
+  for (let s = 0; s < STAGES.length; s++){
+    const used = new Set();
+    for (let i = 0; i < STAGES[s].choirs; i++){
+      const c = makeChoir(s, i, used);
+      used.add(c.piece.id);
+      G.field.push(c);
+    }
+  }
 }
 const totalChoirs = () => STAGES.reduce((n, s) => n + s.choirs, 0);
 function choirAt(stage, idx){
@@ -647,7 +1042,7 @@ function perfTick(dt){
 
   // ---- reset part state, then let every live flaw bend it -----------------
   SING.tempoMul = 1; SING.expression = 1; SING.phrasing = 1; SING.life = 1;
-  for (const p of PARTS){ p.cents = 0; p.gain = 1; p.bright = 0; p.air = 0; p.lag = 0; p.rogue = 0; }
+  for (const p of PARTS){ p.cents = 0; p.gain = 1; p.bright = 0; p.air = 0; p.lag = 0; p.rogue = 0; p.wrongBy = 0; }
   P.active.length = 0;
   for (const f of c.flaws){
     const k = flawIntensity(f, P.t);
@@ -660,29 +1055,40 @@ function perfTick(dt){
   }
 
   // ---- musical clock ------------------------------------------------------
-  const bps = (c.piece.tempo / 60) * SING.tempoMul;
+  const piece = c.piece;
+  const bps = (piece.tempo / 60) * SING.tempoMul;
   P.musT += dt * bps;
-  const beatIdx = Math.floor(P.musT);
-  P.bar = Math.floor(beatIdx / c.piece.beats);
-  P.beat = beatIdx % c.piece.beats;
-  P.beatF = P.musT - beatIdx;
+  P.bar = barIndexAt(piece, P.musT);
+  P.beat = Math.floor(P.musT) % piece.meter;
+  P.beatF = P.musT - Math.floor(P.musT);
 
-  const dyn = c.piece.bars[P.bar % c.piece.bars.length].dyn;
-  const shaped = lerp(0.62, dyn, SING.phrasing);
-  SING.level = shaped * lerp(0.55, 1, SING.expression);
+  // The phrase shape: a slow arch across the excerpt, flattened when the
+  // artistry drains out of the singing.
+  const through = (P.musT % piece.totalBeats) / piece.totalBeats;
+  const dyn = 0.55 + 0.45 * Math.sin(through * Math.PI);
+  SING.level = lerp(0.62, dyn, SING.phrasing) * lerp(0.55, 1, SING.expression);
 
-  // Every part sits on the chord tone for its own (possibly lagged) position.
+  // Each part sits on its own written note, at its own (possibly lagged) place
+  // in the bar. `written` is what the score says; `midi` is what comes out.
   for (let i = 0; i < PARTS.length; i++){
     const p = PARTS[i];
-    const lagT = P.musT - p.lag * bps;
-    const bi = Math.floor(lagT), bar = Math.floor(bi / c.piece.beats), beat = bi % c.piece.beats;
-    const notes = noteAt(c.piece, bar, beat);
-    p.targetMidi = notes[i];
-    p.midi += (p.targetMidi - p.midi) * Math.min(1, dt * 11);
-    const ph = lagT - bi;
-    p.mouth = 0.35 + 0.55 * Math.max(0, Math.sin(ph * Math.PI)) * SING.level * lerp(0.5, 1, SING.life);
+    const lagB = P.musT - p.lag * bps;
+    const n = noteOf(piece, i, lagB);
+    p.written = n.midi;
+    p.targetMidi = n.midi + (p.wrongBy || 0);
+    p.midi += (p.targetMidi - p.midi) * Math.min(1, dt * 13);
+    p.at = lagB;
+    // Articulation: a fresh note starts with a consonant and blooms.
+    let into = (lagB % piece.totalBeats) - n.at;
+    if (into < 0) into += piece.totalBeats;
+    p.since = into;
+    p.artic = clamp(0.30 + into * 2.6, 0, 1) * (1 - 0.25 * Math.max(0, 1 - into * 3));
+    p.mouth = (0.30 + 0.55 * p.artic) * SING.level * lerp(0.5, 1, SING.life);
     p.sway = Math.sin(P.musT * 0.9 + i * 1.3) * lerp(0.25, 1, SING.life);
   }
+  // The vowel everybody is on comes from the syllable the sopranos are singing.
+  P.syllable = noteOf(piece, 0, P.musT).lyric || '';
+  SING.vowel = vowelOf(P.syllable);
 
   // ---- key cooldowns ------------------------------------------------------
   for (const k in P.cool) P.cool[k] = Math.max(0, P.cool[k] - dt);
@@ -998,11 +1404,11 @@ function drawHall(){
   }
 
   // the arch at the back of the platform, with an organ behind it
-  const archL = 168, archR = VW - 168, archTop = 104, archBase = 470;
+  const archL = 168, archR = VW - 168, archTop = 268, archBase = 470;
   const arch = () => {
     ctx.beginPath();
-    ctx.moveTo(archL, archBase); ctx.lineTo(archL, 300);
-    ctx.quadraticCurveTo(VW / 2, archTop, archR, 300);
+    ctx.moveTo(archL, archBase); ctx.lineTo(archL, 352);
+    ctx.quadraticCurveTo(VW / 2, archTop, archR, 352);
     ctx.lineTo(archR, archBase);
   };
   ctx.save();
@@ -1012,11 +1418,11 @@ function drawHall(){
   ctx.fillStyle = wg; ctx.fill();
   for (let i = 0; i < 28; i++){
     const px = 186 + i * 24;
-    const ph = 112 + Math.abs(Math.sin(i * 0.63)) * 104;
+    const ph = 46 + Math.abs(Math.sin(i * 0.63)) * 62;
     ctx.fillStyle = i % 2 ? 'rgba(255,235,200,.055)' : 'rgba(255,235,200,.028)';
-    ctx.fillRect(px, 316 - ph, 15, ph);
+    ctx.fillRect(px, 356 - ph, 15, ph);
     ctx.fillStyle = 'rgba(255,235,200,.08)';
-    ctx.fillRect(px, 316 - ph, 15, 3);
+    ctx.fillRect(px, 356 - ph, 15, 3);
   }
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,235,200,.09)'; ctx.lineWidth = 2;
@@ -1154,6 +1560,318 @@ function drawConductor(tell){
   ctx.beginPath(); ctx.moveTo(x - 12, y + 4); ctx.lineTo(x - 12 - bx * 0.7, y + 4 - 20 - by); ctx.stroke();
 }
 
+/* ------------------------------------------------------------------ score */
+/* The jury's copy, on the desk: a real grand staff that scrolls past a fixed
+   playhead. Sopranos and altos share the treble staff, tenors and basses the
+   bass staff, stems apart in the usual way.
+   The point of it is not decoration. Each part also gets a live dot at the
+   playhead drawn at the pitch it is ACTUALLY singing — so a section sitting
+   flat has its dot below the notehead, a late entry has its dot still on the
+   previous note, and a wrong note is simply on the wrong line. Fidelity to
+   the score stops being a matter of opinion. */
+const SCORE = { x:28, y:106, w:VW - 56, h:146 };
+const LG = 7;                       // gap between staff lines
+const TREBLE_TOP = 136;
+const BASS_TOP = 208;
+const LYRIC_Y = TREBLE_TOP + 4 * LG + 22;   // between the staves, as in a closed score
+const GUTTER = 148;                 // clefs, key and time signature live here
+const PPB = 42;                     // pixels per beat
+const PLAYHEAD = SCORE.x + GUTTER + 72;
+const PAPER = '#efe7d6', INK = '#241d14';
+
+/* Where a pitch sits on the staff. Diatonic, so C sharp and D flat are on
+   different lines even though they are the same key. */
+function diatonicIndex(midi, flats){
+  const pc = (((midi % 12) + 12) % 12);
+  const oct = Math.floor(midi / 12) - 1;
+  return oct * 7 + (flats ? FLAT_LETTER[pc] : SHARP_LETTER[pc]);
+}
+/* What the key signature already does to each letter, so we only draw the
+   accidentals a real engraver would draw. */
+function keyAlterations(key){
+  const alt = [0, 0, 0, 0, 0, 0, 0];
+  if (key > 0) for (let i = 0; i < Math.min(7, key); i++) alt[SHARP_ORDER[i]] = 1;
+  if (key < 0) for (let i = 0; i < Math.min(7, -key); i++) alt[FLAT_ORDER[i]] = -1;
+  return alt;
+}
+const TREBLE_BOTTOM_IDX = 30;       // E4 on the bottom line
+const BASS_BOTTOM_IDX = 18;         // G2 on the bottom line
+function staffY(midi, clef, flats){
+  const idx = diatonicIndex(midi, flats);
+  return clef === 'F'
+    ? (BASS_TOP + 4 * LG) - (idx - BASS_BOTTOM_IDX) * (LG / 2)
+    : (TREBLE_TOP + 4 * LG) - (idx - TREBLE_BOTTOM_IDX) * (LG / 2);
+}
+/* Exactly the same, for a pitch that is not a whole number of semitones —
+   which is how a section drifting flat shows up between two lines. */
+function staffYFine(midiFloat, clef, flats){
+  const lo = Math.floor(midiFloat), hi = lo + 1;
+  const a = staffY(lo, clef, flats), b = staffY(hi, clef, flats);
+  return a + (b - a) * (midiFloat - lo);
+}
+
+/* Note head shape from its length in beats. */
+function noteShape(dur){
+  if (dur >= 5.5) return { fill:false, stem:false, flags:0, dot:false };
+  if (dur >= 4)   return { fill:false, stem:false, flags:0, dot:false };
+  if (dur >= 3)   return { fill:false, stem:true,  flags:0, dot:true  };
+  if (dur >= 2)   return { fill:false, stem:true,  flags:0, dot:false };
+  if (dur >= 1.5) return { fill:true,  stem:true,  flags:0, dot:true  };
+  if (dur >= 1)   return { fill:true,  stem:true,  flags:0, dot:false };
+  if (dur >= 0.75)return { fill:true,  stem:true,  flags:1, dot:true  };
+  return { fill:true, stem:true, flags:1, dot:false };
+}
+
+function drawNoteHead(x, y, filled, col){
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(-0.32);
+  ctx.beginPath(); ctx.ellipse(0, 0, 5.0, 3.6, 0, 0, Math.PI * 2);
+  if (filled){ ctx.fillStyle = col; ctx.fill(); }
+  else { ctx.lineWidth = 1.6; ctx.strokeStyle = col; ctx.stroke(); }
+  ctx.restore();
+}
+function drawLedgers(x, y, clef){
+  const top = clef === 'F' ? BASS_TOP : TREBLE_TOP;
+  const bottom = top + 4 * LG;
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
+  for (let ly = top - LG; ly >= y - 1.5; ly -= LG){
+    ctx.beginPath(); ctx.moveTo(x - 8, ly); ctx.lineTo(x + 8, ly); ctx.stroke();
+  }
+  for (let ly = bottom + LG; ly <= y + 1.5; ly += LG){
+    ctx.beginPath(); ctx.moveTo(x - 8, ly); ctx.lineTo(x + 8, ly); ctx.stroke();
+  }
+}
+function drawAccidental(kind, x, y){
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.fillStyle = INK;
+  if (kind === 1){                       // sharp
+    ctx.beginPath();
+    ctx.moveTo(x - 2.6, y - 5); ctx.lineTo(x - 2.6, y + 5);
+    ctx.moveTo(x + 1.4, y - 6); ctx.lineTo(x + 1.4, y + 4);
+    ctx.moveTo(x - 4.6, y - 1.4); ctx.lineTo(x + 3.4, y - 2.8);
+    ctx.moveTo(x - 4.6, y + 2.4); ctx.lineTo(x + 3.4, y + 1.0);
+    ctx.stroke();
+  } else if (kind === -1){               // flat
+    ctx.beginPath();
+    ctx.moveTo(x - 2, y - 7); ctx.lineTo(x - 2, y + 4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 2, y + 4);
+    ctx.bezierCurveTo(x + 4, y + 1, x + 4, y - 3, x - 2, y - 0.5);
+    ctx.stroke();
+  } else {                               // natural
+    ctx.beginPath();
+    ctx.moveTo(x - 2.4, y - 6); ctx.lineTo(x - 2.4, y + 3);
+    ctx.moveTo(x + 2.0, y - 3); ctx.lineTo(x + 2.0, y + 6);
+    ctx.moveTo(x - 2.4, y - 1.6); ctx.lineTo(x + 2.0, y - 2.8);
+    ctx.moveTo(x - 2.4, y + 1.6); ctx.lineTo(x + 2.0, y + 0.4);
+    ctx.stroke();
+  }
+}
+/* The clefs, drawn to the proportions an engraver uses: the treble curls
+   around the G line and hangs a little below the staff, the bass puts its head
+   on the F line with its two dots either side of it. */
+function drawTrebleClef(x, top){
+  const u = LG, g = top + 3 * u;                 // G line: second from the bottom
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.7;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + 0.10 * u, g + 2.55 * u);
+  ctx.bezierCurveTo(x + 1.35 * u, g + 2.70 * u, x + 1.80 * u, g + 1.55 * u, x + 0.70 * u, g + 1.05 * u);
+  ctx.bezierCurveTo(x - 0.70 * u, g + 0.45 * u, x - 1.15 * u, g - 0.40 * u, x + 0.20 * u, g - 0.90 * u);
+  ctx.bezierCurveTo(x + 1.55 * u, g - 1.40 * u, x + 1.90 * u, g - 3.00 * u, x + 0.80 * u, g - 3.60 * u);
+  ctx.bezierCurveTo(x - 0.15 * u, g - 4.10 * u, x - 0.80 * u, g - 2.55 * u, x + 0.10 * u, g - 1.00 * u);
+  ctx.bezierCurveTo(x + 0.80 * u, g + 0.30 * u, x + 1.30 * u, g + 1.35 * u, x + 1.15 * u, g + 2.45 * u);
+  ctx.bezierCurveTo(x + 1.05 * u, g + 3.10 * u, x + 0.15 * u, g + 3.20 * u, x + 0.02 * u, g + 2.55 * u);
+  ctx.stroke();
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+}
+function drawBassClef(x, top){
+  const u = LG, f = top + u;                     // F line: second from the top
+  ctx.strokeStyle = INK; ctx.fillStyle = INK; ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(x + 0.45 * u, f, 0.48 * u, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + 0.80 * u, f - 0.40 * u);
+  ctx.bezierCurveTo(x + 2.00 * u, f - 0.85 * u, x + 2.55 * u, f + 1.10 * u, x + 1.45 * u, f + 2.20 * u);
+  ctx.bezierCurveTo(x + 0.75 * u, f + 2.90 * u, x - 0.20 * u, f + 3.05 * u, x - 0.85 * u, f + 2.75 * u);
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(x + 2.70 * u, f - 0.5 * u, 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 2.70 * u, f + 0.5 * u, 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.lineCap = 'butt';
+}
+/* Sharps and flats of the key signature, at the pitches an engraver uses. */
+const SIG_SHARP_MIDI = { G:[77, 72, 79, 74, 69, 76, 71], F:[53, 48, 55, 50, 45, 52, 47] };
+const SIG_FLAT_MIDI  = { G:[71, 76, 69, 74, 67, 72, 65], F:[47, 52, 45, 50, 43, 48, 41] };
+function drawKeySignature(x, key, clef, flats){
+  const n = Math.min(7, Math.abs(key));
+  const list = key >= 0 ? SIG_SHARP_MIDI[clef] : SIG_FLAT_MIDI[clef];
+  for (let i = 0; i < n; i++){
+    drawAccidental(key >= 0 ? 1 : -1, x + i * 9, staffY(list[i], clef, flats));
+  }
+  return n * 9;
+}
+function drawStaffLines(x0, x1, top){
+  ctx.strokeStyle = 'rgba(36,29,20,.55)'; ctx.lineWidth = 1;
+  for (let k = 0; k < 5; k++){
+    const y = top + k * LG + 0.5;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  }
+}
+
+function drawScore(){
+  const c = G.cur, P = G.perf;
+  if (!c || !P) return;
+  const piece = c.piece;
+  const flats = piece.key < 0;
+  const right = SCORE.x + SCORE.w;
+
+  // the paper
+  ctx.fillStyle = PAPER;
+  rr(SCORE.x, SCORE.y, SCORE.w, SCORE.h, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.stroke();
+
+  const cur = P.musT;
+  const beatFromX = (x) => cur + (x - PLAYHEAD) / PPB;
+  const xOfBeat = (b) => PLAYHEAD + (b - cur) * PPB;
+  const bLo = beatFromX(SCORE.x + GUTTER - 30), bHi = beatFromX(right + 30);
+
+  // --- scrolling music, clipped to the paper right of the gutter ----------
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(SCORE.x + GUTTER, SCORE.y + 2, SCORE.w - GUTTER - 4, SCORE.h - 4);
+  ctx.clip();
+
+  drawStaffLines(SCORE.x + GUTTER - 40, right, TREBLE_TOP);
+  drawStaffLines(SCORE.x + GUTTER - 40, right, BASS_TOP);
+
+  // bar lines
+  const firstBar = Math.floor((bLo + piece.barOffset) / piece.meter);
+  const lastBar = Math.ceil((bHi + piece.barOffset) / piece.meter);
+  ctx.strokeStyle = 'rgba(36,29,20,.65)'; ctx.lineWidth = 1.2;
+  for (let bi = firstBar; bi <= lastBar; bi++){
+    const bx = xOfBeat(bi * piece.meter - piece.barOffset);
+    ctx.beginPath();
+    ctx.moveTo(bx + 0.5, TREBLE_TOP); ctx.lineTo(bx + 0.5, TREBLE_TOP + 4 * LG);
+    ctx.moveTo(bx + 0.5, BASS_TOP); ctx.lineTo(bx + 0.5, BASS_TOP + 4 * LG);
+    ctx.stroke();
+  }
+
+  const alter = keyAlterations(piece.key);
+  const lapLo = Math.floor(bLo / piece.totalBeats) - 1;
+  const lapHi = Math.ceil(bHi / piece.totalBeats) + 1;
+
+  for (let pi = 0; pi < 4; pi++){
+    const def = PART_DEFS[pi];
+    const clef = def.clef;
+    for (const n of piece.voices[pi]){
+      for (let lap = lapLo; lap <= lapHi; lap++){
+        const at = n.at + lap * piece.totalBeats;
+        if (at < bLo - 2 || at > bHi + 2) continue;
+        const x = xOfBeat(at);
+        const y = staffY(n.midi, clef, flats);
+        const sh = noteShape(n.dur);
+        // accidental, only where the key signature does not already say it
+        const pc = (((n.midi % 12) + 12) % 12);
+        const letter = flats ? FLAT_LETTER[pc] : SHARP_LETTER[pc];
+        const a = flats ? FLAT_ALTER[pc] : SHARP_ALTER[pc];
+        if (a !== alter[letter]) drawAccidental(a, x - 12, y);
+        drawLedgers(x, y, clef);
+        drawNoteHead(x, y, sh.fill, INK);
+        if (sh.stem){
+          const up = def.up;
+          ctx.strokeStyle = def.ink; ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(x + (up ? 4.6 : -4.6), y + (up ? -0.6 : 0.6));
+          ctx.lineTo(x + (up ? 4.6 : -4.6), y + (up ? -3.4 * LG : 3.4 * LG));
+          ctx.stroke();
+          for (let f = 0; f < sh.flags; f++){
+            const fy = y + (up ? -3.4 * LG : 3.4 * LG) + (up ? f * 5 : -f * 5);
+            ctx.beginPath();
+            ctx.moveTo(x + (up ? 4.6 : -4.6), fy);
+            ctx.quadraticCurveTo(x + (up ? 12 : -12), fy + (up ? 4 : -4),
+                                 x + (up ? 8 : -8), fy + (up ? 11 : -11));
+            ctx.stroke();
+          }
+        }
+        if (sh.dot){
+          ctx.fillStyle = INK;
+          ctx.beginPath(); ctx.arc(x + 10, y - (Math.round(y / (LG / 2)) % 2 ? 0 : LG / 2), 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // the words, under the treble staff, from the soprano line
+        if (pi === 0 && n.lyric){
+          txt(n.lyric, x, LYRIC_Y, 11, 'rgba(36,29,20,.85)', 'center', 600);
+        }
+      }
+    }
+  }
+
+  // --- what the choir is actually doing, right now ------------------------
+  ctx.fillStyle = 'rgba(180,40,20,.13)';
+  ctx.fillRect(PLAYHEAD - 8, SCORE.y + 4, 16, SCORE.h - 8);
+  ctx.strokeStyle = 'rgba(180,40,20,.75)'; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(PLAYHEAD + 0.5, SCORE.y + 4); ctx.lineTo(PLAYHEAD + 0.5, SCORE.y + SCORE.h - 8);
+  ctx.stroke();
+
+  const tell = STAGES[G.stage].tell;
+  for (let pi = 0; pi < 4; pi++){
+    const p = PARTS[pi], def = PART_DEFS[pi];
+    // Where the sound really is. A wrong note lands exactly on the line it is
+    // actually singing; a section merely sitting flat is only a third of a
+    // semitone out, which on a real staff is a pixel — so the fractional part
+    // is drawn larger than life. Nothing is invented: the dot is off if and
+    // only if the pitch is.
+    const heard = p.midi + p.cents / 100;
+    const sung = Math.round(heard);
+    const frac = heard - sung;
+    const written = staffY(p.written, def.clef, flats);
+    const y = clamp(staffY(sung, def.clef, flats) - frac * LG * 1.5,
+                    SCORE.y + 6, SCORE.y + SCORE.h - 10);
+    const off = Math.abs(y - written) > 1.4;
+    ctx.globalAlpha = clamp(0.45 + 0.55 * clamp(p.gain, 0, 2) * tell, 0.15, 1);
+    if (off && tell > 0.05){
+      ctx.strokeStyle = def.ink; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(PLAYHEAD, written); ctx.lineTo(PLAYHEAD, y); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(PLAYHEAD, y, off ? 4.4 : 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = def.ink; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.1; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  // --- the fixed gutter, painted over the scroll --------------------------
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(SCORE.x + 1, SCORE.y + 1, GUTTER, SCORE.h - 2);
+  drawStaffLines(SCORE.x + 14, SCORE.x + GUTTER, TREBLE_TOP);
+  drawStaffLines(SCORE.x + 14, SCORE.x + GUTTER, BASS_TOP);
+  // the brace joining the two staves
+  ctx.strokeStyle = INK; ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(SCORE.x + 14, TREBLE_TOP);
+  ctx.bezierCurveTo(SCORE.x + 5, TREBLE_TOP + 22, SCORE.x + 5, BASS_TOP + 6, SCORE.x + 14, BASS_TOP + 4 * LG);
+  ctx.stroke();
+  drawTrebleClef(SCORE.x + 26, TREBLE_TOP);
+  drawBassClef(SCORE.x + 26, BASS_TOP);
+  const kw = Math.max(
+    drawKeySignature(SCORE.x + 58, piece.key, 'G', flats),
+    drawKeySignature(SCORE.x + 58, piece.key, 'F', flats));
+  const tsx = SCORE.x + 66 + kw;
+  txt(String(piece.meter), tsx, TREBLE_TOP + 2 * LG - 1, 15, INK, 'center', 800);
+  txt('4', tsx, TREBLE_TOP + 4 * LG + 1, 15, INK, 'center', 800);
+  txt(String(piece.meter), tsx, BASS_TOP + 2 * LG - 1, 15, INK, 'center', 800);
+  txt('4', tsx, BASS_TOP + 4 * LG + 1, 15, INK, 'center', 800);
+
+  // title of the piece, on the paper
+  txt(piece.title, right - 10, SCORE.y + 15, 11, 'rgba(36,29,20,.85)', 'right', 700);
+  txt(piece.composer, right - 10, SCORE.y + 28, 10, 'rgba(36,29,20,.55)', 'right', 500);
+  // which stem colour belongs to which part
+  for (let i = 0; i < 4; i++){
+    txt(PART_DEFS[i].abbr, SCORE.x + 40 + i * 13, SCORE.y + 14, 10, PART_DEFS[i].ink, 'center', 800);
+  }
+}
+
 /* ---------------------------------------------------------- the criterion bar */
 function drawCritBar(){
   const P = G.perf;
@@ -1219,14 +1937,14 @@ function drawChoirBanner(c, y){
 function drawProgress(){
   const P = G.perf, c = G.cur;
   if (!P || !c) return;
-  const x = 34, w = VW - 196, y = 92, h = 6;
+  const x = 34, w = VW - 130, y = 96, h = 5;
   ctx.fillStyle = 'rgba(255,255,255,.09)';
   rr(x, y, w, h, 3); ctx.fill();
   const u = clamp(P.t / c.dur, 0, 1);
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   rr(x, y, w * u, h, 3); ctx.fill();
   // bar lines, so the piece has a shape you can see
-  const barsTotal = Math.max(1, Math.round(c.dur * (c.piece.tempo / 60) / c.piece.beats));
+  const barsTotal = Math.max(1, Math.round(c.dur * (c.piece.tempo / 60) / c.piece.meter));
   for (let i = 1; i < barsTotal; i++){
     const bx = x + (w * i) / barsTotal;
     ctx.fillStyle = 'rgba(255,255,255,.14)';
@@ -1238,13 +1956,13 @@ function drawProgress(){
 function drawNotepad(){
   const P = G.perf;
   if (!P) return;
-  const w = 274, h = 132, x = VW - 300, y = 132;
+  const w = 320, h = 54, x = 26, y = VH - 86 - 62;
   ctx.fillStyle = 'rgba(10,7,18,.72)';
   rr(x, y, w, h, 10); ctx.fill();
   ctx.strokeStyle = 'rgba(120,110,160,.20)'; ctx.lineWidth = 1; ctx.stroke();
-  txt('YOUR NOTES', x + 14, y + 22, 11, '#6d6788', 'left', 700);
-  let yy = y + 44;
-  const rows = P.caught.slice(-4);
+  txt('YOUR NOTES', x + 14, y + 17, 10, '#6d6788', 'left', 700);
+  let yy = y + 34;
+  const rows = P.caught.slice(-2);
   if (!rows.length && !P.phantoms.length) txt('— nothing marked yet —', x + 14, yy, 12, '#4e4a63', 'left', 500);
   for (const f of rows){
     const col = CRIT_BY_ID[f.def.crit].col;
@@ -1253,8 +1971,7 @@ function drawNotepad(){
     yy += 21;
   }
   if (P.phantoms.length){
-    txt(P.phantoms.length + ' mark' + (P.phantoms.length > 1 ? 's' : '') + ' with nothing behind ' +
-        (P.phantoms.length > 1 ? 'them' : 'it'), x + 14, y + h - 12, 11, '#ff6b6b', 'left', 600);
+    txt(P.phantoms.length + ' phantom', x + w - 14, y + 17, 10, '#ff6b6b', 'right', 700);
   }
 }
 
@@ -1384,7 +2101,8 @@ function drawBrief(){
     ['Category', c.cat.n],
     ['Venue', c.venue],
     ['Singers on stage', String(c.singers)],
-    ['Programme', Math.round(c.dur) + ' seconds, a cappella'],
+    ['Programme', c.piece.title],
+    ['', c.piece.composer + ' · ' + c.piece.origin],
   ];
   let y = by + 146;
   for (const [k, v] of rows){
@@ -1406,17 +2124,18 @@ function drawPerform(){
   drawChoir(STAGES[G.stage].tell);
   drawFx();
 
-  const hg = ctx.createLinearGradient(0, 0, 0, 116);
-  hg.addColorStop(0, 'rgba(8,6,16,.86)'); hg.addColorStop(1, 'rgba(8,6,16,0)');
-  ctx.fillStyle = hg; ctx.fillRect(0, 0, VW, 116);
+  const hg = ctx.createLinearGradient(0, 0, 0, 110);
+  hg.addColorStop(0, 'rgba(8,6,16,.92)'); hg.addColorStop(1, 'rgba(8,6,16,.55)');
+  ctx.fillStyle = hg; ctx.fillRect(0, 0, VW, 110);
   drawChoirBanner(c, 46);
   drawProgress();
+  drawScore();
   drawNotepad();
   drawCritBar();
 
   // Timer sits below the SOUND / FULL buttons, clear of them.
   const left = Math.max(0, c.dur - P.t);
-  txt(left.toFixed(1) + 's', VW - 34, 100, 22, '#cfc8e4', 'right', 700);
+  txt(left.toFixed(1) + 's', VW - 34, 62, 21, '#cfc8e4', 'right', 700);
 
   if (G.paused){
     ctx.fillStyle = 'rgba(6,4,12,.8)'; ctx.fillRect(0, 0, VW, VH);
