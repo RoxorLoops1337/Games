@@ -8,14 +8,33 @@
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; padding:0; height:100%; background:#070c16; overflow:hidden;
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif; color:#f3f0e8; }
-  #wrap{ position:fixed; inset:0; }
+  #wrap{ position:fixed; inset:0; transform-origin:50% 50%; }
+  /* A phone held upright plays the game sideways rather than badly. Real
+     orientation lock only works on Android and only in fullscreen, and iOS
+     Safari has never supported it at all, so the reliable answer is to turn
+     the whole thing ourselves: #wrap takes the landscape dimensions and is
+     rotated a quarter turn into the portrait window. Everything inside it —
+     canvas, HUD, cards, buttons — comes along, and only the pointer mapping
+     has to know. */
+  /* Sized from JS, not from vh/vw: on a phone browser 100vh is the LARGE
+     viewport, which is taller than window.innerHeight by however much chrome
+     is showing, and the mismatch left a dead band of page background along one
+     edge of the game. */
+  body.rot #wrap{
+    inset:auto; top:50%; left:50%;
+    transform:translate(-50%,-50%) rotate(90deg);
+  }
+  body.rot .card{ width:min(580px,93vh); max-height:94vw; }
   canvas{ display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
 
   .ov{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     background:radial-gradient(920px 520px at 50% 42%, rgba(16,34,60,.74), rgba(4,7,14,.94));
     backdrop-filter:blur(3px); z-index:5; }
   .ov[hidden]{ display:none; }
-  .card{ width:min(580px,93vw); max-height:94vh; overflow:auto; padding:24px 28px 22px; border-radius:18px;
+  .card{ width:min(580px,93vw); max-height:94vh; overflow:auto;
+    /* rotated, vw and vh still mean the viewport, which is the game's frame
+       turned on its side — so they swap. Without this the menu card is 793px
+       tall inside a 390px-tall game and runs off both ends. */ padding:24px 28px 22px; border-radius:18px;
     text-align:center; background:linear-gradient(180deg,#13233d,#0a1322); border:3px solid #24406b;
     box-shadow:0 24px 60px rgba(0,0,0,.62), inset 0 0 44px rgba(255,190,80,.05); }
   .card h1{ margin:0 0 2px; font-size:clamp(30px,7.4vw,50px); letter-spacing:3px; font-weight:900;
@@ -90,9 +109,27 @@
     letter-spacing:1.6px; cursor:pointer; font-family:inherit; z-index:4; }
   /* On a phone the hint wraps to two lines and runs straight through the
      GAMES button, which sits over the canvas at z-index 4. Lift it clear. */
-  @media (max-width: 560px){
-    #hint{ left:12px; right:12px; bottom:58px; }
-  }
+  body.narrow #hint{ left:12px; right:12px; bottom:58px; }
+  /* A phone in landscape is 390px tall, and the menu card was laid out for a
+     desktop: START THE ENGINE landed at y=458 with nothing below y=390 on
+     screen. Everything on the card gets smaller rather than the card getting
+     a scrollbar nobody can see. */
+  /* A phone in landscape is 390px tall and the cards were laid out for a
+     desktop: START THE ENGINE landed at y=458 with nothing below 390 on
+     screen. Everything shrinks rather than the card growing a scrollbar
+     nobody can see. Set from fit(), not a media query, because once the game
+     is rotated the viewport's height is not the game's. */
+  body.short .card{ padding:12px 20px 12px; }
+  body.short .card h1{ font-size:30px; letter-spacing:2px; margin-bottom:0; }
+  body.short .card .sub{ font-size:11px; letter-spacing:2px; margin-bottom:6px; }
+  body.short .rules{ font-size:12px; line-height:1.42; margin-bottom:8px; max-width:520px; }
+  body.short .btn{ padding:9px 20px; font-size:14px; margin-top:2px; }
+  body.short .btn + .targetline{ margin-top:10px; }
+  body.short .pickline{ margin:8px 0 5px; }
+  body.short .lv{ padding:4px 8px; font-size:11px; }
+  body.short .stats{ margin:6px 0; }
+  body.short .goals{ margin:6px 0; }
+  body.short .garage{ margin-bottom:8px; }
 </style>
 </head>
 <body>
@@ -190,14 +227,74 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let DPR = 1, VW = 960, VH = 600;
 
+/* Turn the game sideways when the window is a phone stood on its end. Only
+   phones: a tall desktop window is still a window, and a tablet in portrait
+   has room to play as it is. */
+const ROT_MAX_SIDE = 820;
+let rotated = false;
+function wantRotate(){
+  const w = window.innerWidth || 960, h = window.innerHeight || 600;
+  return h > w && w < ROT_MAX_SIDE;
+}
+
 function fit(){
   DPR = Math.min(2, window.devicePixelRatio || 1);
-  VW = window.innerWidth || 960;
-  VH = window.innerHeight || 600;
+  rotated = wantRotate();
+  const w = window.innerWidth || 960, h = window.innerHeight || 600;
+  VW = rotated ? h : w;
+  VH = rotated ? w : h;
+  const cl = document.body && document.body.classList;
+  if (cl){
+    cl.toggle('rot', rotated);
+    cl.toggle('short', VH < 560);       // the GAME's height, not the window's
+    cl.toggle('narrow', VW < 560);
+  }
+  const wrap = $('wrap');
+  if (wrap && wrap.style){
+    wrap.style.width = rotated ? VW + 'px' : '';
+    wrap.style.height = rotated ? VH + 'px' : '';
+  }
   canvas.width = Math.round(VW * DPR);
   canvas.height = Math.round(VH * DPR);
   canvas.style.width = VW + 'px';
   canvas.style.height = VH + 'px';
+}
+
+/* Where a tap landed, in the game's own frame.
+
+   Unrotated that is just the offset into the canvas. Rotated, #wrap is turned
+   a quarter turn about the middle of the viewport, so screen = centre + R *
+   (local - localCentre) with R a 90-degree rotation; inverting it collapses to
+   this pair. Derived rather than fudged, and covered by a test. */
+function toCanvas(cx, cy){
+  if (!rotated){
+    const r = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+    return [cx - r.left, cy - r.top];
+  }
+  return [cy, (window.innerWidth || 960) - cx];
+}
+
+/* Fullscreen, and the real orientation lock where it exists. Both need a user
+   gesture, so this rides the first tap or key rather than firing on load. */
+let wentFull = false;
+function goFullscreen(){
+  // latched on success, not on the attempt: a refused request should leave the
+  // next gesture free to try again rather than giving up for the session
+  if (wentFull || document.fullscreenElement) return;
+  const el = document.documentElement;
+  try {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (!req) return;
+    const p = req.call(el);
+    if (p && p.then) p.then(() => { wentFull = true; lockLandscape(); }, () => {});
+    else { wentFull = true; lockLandscape(); }
+  } catch (_){}
+}
+function lockLandscape(){
+  try {
+    const o = window.screen && window.screen.orientation;
+    if (o && o.lock) { const p = o.lock('landscape'); if (p && p.catch) p.catch(() => {}); }
+  } catch (_){}
 }
 
 /* ---------- world constants ---------- */
@@ -4721,10 +4818,10 @@ function pointerUp(){
 }
 
 function bindInput(){
-  const rect = () => canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
-  const pt = e => { const r = rect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const pt = e => toCanvas(e.clientX, e.clientY);
   canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
+    goFullscreen();
     if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (_){} }
     pointerDown(...pt(e));
   });
@@ -4743,13 +4840,14 @@ function bindInput(){
     if (e.key === 'm' || e.key === 'M') toggleMute();
   });
   window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
   // coming back to the tab is where a suspended context has to be woken up,
   // otherwise the game is silent for the rest of the session
   window.addEventListener('visibilitychange', () => {
     if (!document.hidden && snd.on) audioInit();
   });
   const on = (id, fn) => { const e = $(id); if (e && e.addEventListener) e.addEventListener('click', fn); };
-  on('bStart', () => { audioInit(); startCampaign(); });
+  on('bStart', () => { goFullscreen(); audioInit(); startCampaign(); });
   on('bGo', () => { audioInit(); beginLevel(); });
   on('bNext', () => nextLevel());
   on('bRetry', () => retryLevel());

@@ -62,6 +62,9 @@ const EXPOSE = `__out.api = {
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
   _setHitstop: (v) => { hitstop = v; },
   setFlash: (v) => { flash = v; },
+  goFullscreen, getWentFull: () => wentFull,
+  getView: () => ({ w: VW, h: VH, rotated }),
+  toCanvas, wantRotate,
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
@@ -100,6 +103,10 @@ function boot(opts){
     classList: { add(){}, remove(){}, toggle(){} },
   });
   const canvas = el();
+  // a document element that can be asked for fullscreen, and can refuse
+  const fsEl = { _on: false, _calls: 0, _grant: true,
+    requestFullscreen(){ this._calls++;
+      return this._grant ? (this._on = true, Promise.resolve()) : Promise.reject(new Error('no')); } };
   const store = Object.assign({}, o.store || {});
   const nodes = {};
   const listeners = {};
@@ -107,6 +114,9 @@ function boot(opts){
     document: {
       getElementById: (id) => (id === 'c' ? canvas : (nodes[id] || (nodes[id] = el()))),
       createElement: () => el(),
+      documentElement: fsEl,
+      get fullscreenElement(){ return fsEl._on ? fsEl : null; },
+      body: { classList: { add(){}, remove(){}, toggle(){} }, className: '' },
     },
     window: {
       innerWidth: o.w || 1280, innerHeight: o.h || 720, devicePixelRatio: o.dpr || 1,
@@ -139,6 +149,7 @@ function boot(opts){
   api._nodes = nodes;
   api._listeners = listeners;
   api._window = sandbox.window;
+  api._fs = fsEl;
   return api;
 }
 
@@ -1184,6 +1195,92 @@ test('the launch note falls, the way the car goes away from you', () => {
   assert(to < from, 'the launch note should fall, got ' + from + ' -> ' + to);
 });
 
+/* -------------------------------------------------------------- rotation --- */
+
+/* A phone held upright plays the game sideways rather than badly. Real
+   orientation lock only works on Android and only in fullscreen, and iOS
+   Safari has never supported it, so the game turns itself. */
+test('a phone on its end plays landscape', () => {
+  const phone = boot({ w: 390, h: 844 });
+  const v = phone.getView();
+  assert(v.rotated, 'a 390x844 phone should rotate');
+  assert(v.w === 844 && v.h === 390, 'and get a landscape frame, got ' + v.w + 'x' + v.h);
+  assert(v.w > v.h, 'wider than it is tall, which is the whole point');
+});
+
+test('a window that is not a phone is left alone', () => {
+  for (const [w, h] of [[1280, 720], [1440, 900], [1024, 1366], [900, 1200]]){
+    const api = boot({ w, h });
+    const v = api.getView();
+    assert(!v.rotated, w + 'x' + h + ' should not be rotated');
+    assert(v.w === w && v.h === h, 'and keeps its own dimensions');
+  }
+});
+
+test('a tap lands where you put it, turned or not', () => {
+  const flat = boot({ w: 1280, h: 720 });
+  assert(!flat.getView().rotated, 'desktop is not rotated');
+  const [fx1, fy1] = flat.toCanvas(300, 200);
+  near(fx1, 300, 0.001, 'x passes through');
+  near(fy1, 200, 0.001, 'y passes through');
+
+  const phone = boot({ w: 390, h: 844 });
+  const v = phone.getView();
+  assert(v.rotated, 'the phone is rotated');
+  /* #wrap is turned a quarter turn about the middle of the viewport, so a tap
+     at the top-left of the phone is the BOTTOM-left of the game, and one at the
+     bottom-left of the phone is its top-left. */
+  const corners = [
+    [0, 0,              0, 390],          // phone top-left    -> game bottom-left
+    [0, 844,          844, 390],          // phone bottom-left -> game bottom-right
+    [390, 0,            0, 0],            // phone top-right   -> game top-left
+    [390, 844,        844, 0],            // phone bottom-right-> game top-right
+  ];
+  for (const [cx, cy, wx, wy] of corners){
+    const [gx, gy] = phone.toCanvas(cx, cy);
+    near(gx, wx, 0.001, 'tap at ' + cx + ',' + cy + ' should map to x ' + wx + ', got ' + gx);
+    near(gy, wy, 0.001, 'tap at ' + cx + ',' + cy + ' should map to y ' + wy + ', got ' + gy);
+  }
+  // and the whole game frame is reachable
+  const [mx, my] = phone.toCanvas(195, 422);
+  assert(mx > 0 && mx < v.w && my > 0 && my < v.h, 'the middle of the phone is inside the game');
+});
+
+test('a full pull is reachable on a phone', () => {
+  const api = boot({ w: 390, h: 844 });
+  api.startCampaign(); api.beginLevel();
+  // drag from the middle of the phone all the way to one end
+  api.pointerDown(...api.toCanvas(195, 700));
+  api.pointerMove(...api.toCanvas(195, 120));
+  const pull = Math.hypot(api.aim.x - api.C.ANCHOR.x, api.aim.y - api.C.ANCHOR.y);
+  assert(pull >= api.C.MAX_PULL,
+    'a drag down the long side of the phone should reach full power, got ' + Math.round(pull));
+  assert(api.launch(api.aim.x - api.C.ANCHOR.x, api.aim.y - api.C.ANCHOR.y),
+    'and the launch takes');
+});
+
+/* Fullscreen needs a user gesture, so it rides the first tap and the START
+   button rather than firing on load. A refusal must not burn the session. */
+test('a refused fullscreen leaves the next gesture free to try again', () => {
+  const api = boot();
+  api._fs._grant = false;
+  api.goFullscreen();
+  assert(api._fs._calls === 1, 'it should ask');
+  assert(!api.getWentFull(), 'and not latch on a refusal');
+  api.goFullscreen();
+  assert(api._fs._calls === 2, 'so the next gesture asks again');
+});
+
+test('fullscreen is asked for once, not on every tap', () => {
+  const api = boot();
+  api._fs._grant = true;
+  api.goFullscreen();
+  assert(api._fs._calls === 1 && api._fs._on, 'granted');
+  api.goFullscreen();
+  api.goFullscreen();
+  assert(api._fs._calls === 1, 'and not asked for again, got ' + api._fs._calls);
+});
+
 /* ----------------------------------------------------------------- menu --- */
 
 /* The 21-chip market grid used to sit above START THE ENGINE, which put the
@@ -1644,9 +1741,11 @@ test('the run readout never lands under the buttons in the corner', () => {
     { name: '#back', x: 10, y: h - 44, w: 100, h: 34 },
     { name: '#mute', x: w - 50, y: h - 50, w: 40, h: 40 },
   ];
-  for (const [w, h] of [[1280, 720], [390, 844], [1440, 600]]){
-    const api = boot({ w, h });
+  for (const [ww, hh] of [[1280, 720], [390, 844], [1440, 600]]){
+    const api = boot({ w: ww, h: hh });
     api.startCampaign(); api.beginLevel();
+    // a phone on its end plays sideways, so the game's frame is not the window's
+    const { w, h } = api.getView();
     const r = api.nitroRect();
     assert(r.x >= 0 && r.y >= 0 && r.x + r.w <= w && r.y + r.h <= h,
       'readout off screen at ' + w + 'x' + h + ': ' + JSON.stringify(r));
