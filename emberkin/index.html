@@ -17,8 +17,37 @@
     font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif; overflow:hidden; }
   body{ display:flex; align-items:center; justify-content:center; touch-action:none; }
 
-  #stage{ position:relative; image-rendering:pixelated; font-size:16px; }
-  #view{ display:block; image-rendering:pixelated; background:#0a070e; }
+  /* The valley is 256x208 of pixels on a black page, and a rectangle on black
+     reads as a screenshot rather than a made object. Three layers fix that and
+     none of them cost a frame: the page carries a slow warm bloom so the screen
+     is *in* somewhere, the stage has a bezel with light caught on its top edge,
+     and the glass over it has the faintest scanline and a corner darkening. */
+  body{ background:
+    radial-gradient(90% 70% at 50% 0%, #1d1430 0%, #0e0918 42%, #060409 100%); }
+  #stage{ position:relative; image-rendering:pixelated; font-size:16px;
+    border-radius:10px;
+    padding:6px;
+    background:linear-gradient(180deg, #2a1f3c, #150e20 46%, #0d0814);
+    box-shadow:
+      inset 0 1px 0 rgba(255,236,205,.16),
+      inset 0 -1px 0 rgba(0,0,0,.6),
+      0 0 0 1px #382a4e,
+      0 10px 30px rgba(0,0,0,.65),
+      0 0 60px 6px rgba(120,70,190,.20),
+      0 0 140px 30px rgba(255,170,90,.07); }
+  #view{ display:block; image-rendering:pixelated; background:#0a070e;
+    border-radius:4px; }
+  /* Glass: a scanline fine enough to be texture rather than pattern, and the
+     corners falling off so the picture has a middle. Pointer-events off so it
+     never eats a tap. */
+  #stage::after{
+    content:''; position:absolute; inset:6px; border-radius:4px;
+    pointer-events:none; z-index:40;
+    background:
+      radial-gradient(120% 100% at 50% 50%, transparent 58%, rgba(6,3,10,.34) 100%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay; }
+  @media (prefers-reduced-motion: reduce){ #stage{ box-shadow:0 0 0 1px #382a4e, 0 10px 30px rgba(0,0,0,.65); } }
 
   /* ---------------- shared panel look ---------------- */
   /* A panel is a lit object, not a rounded rectangle. Three things do the work
@@ -4564,7 +4593,26 @@ function drawWorld(g) {
   const map = G.map;
   const x0 = Math.floor(cam.x / TILE), y0 = Math.floor(cam.y / TILE);
   const ox = -(cam.x % TILE), oy = -(cam.y % TILE);
-  g.fillStyle = map.kind === 'inside' ? '#2a2030' : '#14301f';
+  // What is behind the map, where the map runs out.
+  //
+  // This was a flat fill, and most rooms are smaller than the viewport, so a
+  // small map read as a picture pasted on a dead rectangle. It is a light now:
+  // the room sits in a glow of its own air, falling off to almost nothing at the
+  // corners, so the frame is somewhere rather than nowhere.
+  const air = AIR[G.mapId] || AIR_DEFAULT;
+  const base = map.kind === 'inside' ? [26, 18, 32] : [12, 26, 20];
+  if (g.createRadialGradient) {
+    const bg = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 8,
+      VIEW_W / 2, VIEW_H / 2, VIEW_W * .72);
+    const t = air.tint;
+    const mix = (c, k) => Math.round(base[c] + (t[c] - base[c]) * k);
+    bg.addColorStop(0, `rgb(${mix(0, .20)},${mix(1, .20)},${mix(2, .20)})`);
+    bg.addColorStop(.55, `rgb(${mix(0, .07)},${mix(1, .07)},${mix(2, .07)})`);
+    bg.addColorStop(1, `rgb(${Math.round(base[0] * .34)},${Math.round(base[1] * .34)},${Math.round(base[2] * .34)})`);
+    g.fillStyle = bg;
+  } else {
+    g.fillStyle = map.kind === 'inside' ? '#2a2030' : '#14301f';
+  }
   g.fillRect(0, 0, VIEW_W, VIEW_H);
 
   for (let y = 0; y <= VIEW_H / TILE + 1; y++) {
@@ -8544,6 +8592,81 @@ function drawGotcha(g) {
   g.restore();
 }
 
+/**
+ * The air in a place.
+ *
+ * Every map was drawn with the same light, which is why the valley reads as one
+ * tileset rather than eight places. This is the cheapest thing that fixes it: a
+ * colour poured over the finished frame, a vignette so the edges fall away, and
+ * a few motes drifting through the light. Nothing here touches the tiles — a map
+ * keeps its own art and gets its own weather.
+ *
+ *   tint/grade — the colour of the light and how much of it there is
+ *   vig        — how hard the corners close in
+ *   motes      — how many specks drift, and what colour, and which way
+ */
+const AIR = {
+  hollowbrook: { tint: [255, 208, 140], grade: .17, vig: .46, motes: 16, mc: [255, 226, 170], drift: [-4, -7] },
+  lab:         { tint: [150, 190, 255], grade: .20, vig: .56, motes: 12,  mc: [190, 220, 255], drift: [2, -5] },
+  wayhouse:    { tint: [255, 190, 120], grade: .22, vig: .54, motes: 14,  mc: [255, 214, 150], drift: [3, -6] },
+  shop:        { tint: [255, 200, 150], grade: .18, vig: .52, motes: 11,  mc: [255, 224, 176], drift: [-3, -5] },
+  route_one:   { tint: [180, 255, 190], grade: .14, vig: .40, motes: 22, mc: [214, 255, 200], drift: [7, -4] },
+  emberwood:   { tint: [255, 150, 90],  grade: .25, vig: .48, motes: 28, mc: [255, 180, 110], drift: [5, -9] },
+  stillmere:   { tint: [130, 205, 255], grade: .23, vig: .44, motes: 20, mc: [190, 235, 255], drift: [-6, -3] },
+  crown_hollow:{ tint: [190, 160, 255], grade: .28, vig: .60, motes: 26, mc: [225, 200, 255], drift: [3, -8] },
+};
+const AIR_DEFAULT = { tint: [255, 220, 180], grade: .14, vig: .42, motes: 14, mc: [255, 235, 200], drift: [4, -6] };
+
+/**
+ * Motes are deterministic: a fixed lattice of specks, each drifting on its own
+ * clock and wrapping. No allocation, no particle list, and the same frame every
+ * time for a given t — which the render suite needs and which costs nothing.
+ */
+function drawMotes(g, air, t) {
+  const n = air.motes | 0;
+  if (!n) return;
+  const [dx, dy] = air.drift;
+  g.save();
+  for (let i = 0; i < n; i++) {
+    // Cheap hash so the specks are scattered rather than gridded.
+    const h = Math.sin(i * 12.9898) * 43758.5453;
+    const fx = h - Math.floor(h);
+    const h2 = Math.sin(i * 78.233) * 22578.145;
+    const fy = h2 - Math.floor(h2);
+    const life = 6 + fx * 5;
+    const x = (fx * VIEW_W + t * dx) % (VIEW_W + 8);
+    const y = (fy * VIEW_H + t * dy) % (VIEW_H + 8);
+    // Breathing, out of phase, so the field never pulses as one.
+    const a = (.34 + .40 * (.5 + .5 * Math.sin(t * 1.6 + i * 2.1))) * (.55 + .45 * fy);
+    g.fillStyle = `rgba(${air.mc[0]},${air.mc[1]},${air.mc[2]},${a.toFixed(3)})`;
+    const sz = fx > .82 ? 2 : 1;
+    g.fillRect(Math.round((x + VIEW_W + 8) % (VIEW_W + 8)) - 4,
+      Math.round((y + VIEW_H + 8) % (VIEW_H + 8)) - 4, sz, sz);
+    void life;
+  }
+  g.restore();
+}
+
+/** The grade and the vignette, over whatever was drawn. */
+function drawAir(g, air, t) {
+  if (air.grade > 0) {
+    g.save();
+    g.globalCompositeOperation = 'overlay';
+    g.fillStyle = `rgba(${air.tint[0]},${air.tint[1]},${air.tint[2]},${air.grade})`;
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
+    g.restore();
+  }
+  if (air.vig > 0 && g.createRadialGradient) {
+    const gr = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .30,
+      VIEW_W / 2, VIEW_H / 2, VIEW_H * .82);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, `rgba(6,3,10,${air.vig})`);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
+  drawMotes(g, air, t);
+}
+
 function draw() {
   if (!ctx) return;
   ctx.imageSmoothingEnabled = false;
@@ -8552,6 +8675,15 @@ function draw() {
   if (G.evoAnim) drawEvolution(ctx);
   else if (G.battle) drawBattle(ctx);
   else if (G.map) drawWorld(ctx);
+  // The air goes on after the scene and before anything that is meant to sit on
+  // top of it — a flourish, a fade, a door closing. Those are punctuation, and
+  // punctuation should not be graded.
+  if (G.mode !== 'title') {
+    const air = (G.battle && G.battle.legendary)
+      ? { ...AIR_DEFAULT, tint: [230, 190, 255], grade: .22, vig: .52, motes: 22, mc: [240, 215, 255], drift: [2, -10] }
+      : (AIR[G.mapId] || AIR_DEFAULT);
+    drawAir(ctx, air, G.t);
+  }
   if (G.flourish) drawFlourish(ctx);
   if (G.gotcha) drawGotcha(ctx);
   if (G.fade > 0) {
