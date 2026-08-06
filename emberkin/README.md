@@ -139,6 +139,22 @@ back from the door. The rug is one object, so it is a *seamless* weave and
 `drawEdges` puts the gold hem around wherever it happens to stop — the first
 version gave every rug tile its own frame and read as six coasters.
 
+### The title screen
+
+The first thing anyone sees, so it is a painting rather than a placeholder.
+`drawTitleArt(t)` runs per frame off the same clock as the game: a dusk sky
+falling from near-black violet to a warm horizon, a sun set off-centre so the
+kin standing in front of it are not eclipsing it, three ridges each darker and
+taller than the one behind, a treeline, and mist pooling where the trees meet
+the near ground — the cheapest way to tell the eye those are two different
+distances. Three of the roster stand on it and rotate every 2.4 seconds, each
+with a cast shadow and its own bob. The near ground is deliberately lighter than
+the ridge in front of it so the creatures keep their feet instead of dissolving
+into a black band.
+
+It takes an optional context, which is how the headless suite drives it without
+a canvas element.
+
 ## Controls
 
 | | keyboard | touch |
@@ -200,6 +216,26 @@ vignette that darkens the corners and pulls the eye to the middle where the
 player is. Both are in the game's own gold and violet, which is what stops the
 world and the panels around it looking like two different pictures.
 
+Every map is graded to its own weather. The tileset is shared, so without this
+the shore and the deep wood are the same picture with different props: the same
+grass, the same dirt, the same light. `GRADE` gives each map a top wash, a
+bottom wash, how hard the corners close in, and — the one that does the heavy
+lifting — a `hue`.
+
+The hue pass is painted in the canvas `'color'` blend mode. A wash laid over
+grass can only darken or lighten it; it can never make it stop being
+grass-green, which is why the first attempt at this had four maps that all read
+the same. Blending a colour keeps every value exactly where it was and moves
+only the hue and the saturation, which is what a colour grade actually is.
+Keep the alphas low — around `.15` — or the grade stops being light and starts
+being paint: at `.26` Stillmere's warm sand turned grey and the player's orange
+coat went with it.
+
+    route_one     gold, barely graded — the light the others are read against
+    emberwood     canopy: warm above, deep green shade below, corners closing in
+    stillmere     open water, cool and flat, almost no vignette so it reads wide
+    crown_hollow  high, thin and cold, a bruise-coloured sky pressing down
+
 `drawEdges()` handles everything that happens where one kind of ground stops
 and another starts. A tileset can only ever draw the *middle* of things, and the
 edges are where a map either reads as a place or as a spreadsheet with colours
@@ -209,6 +245,13 @@ field is down and draws the joins: a bright shoreline where water meets land
 with the bank darkening into it, a lit ridge along the top of a roof, an eave
 that overhangs the wall below it, a base course where a wall meets the ground,
 and the shadow the whole building throws on the ground beside it.
+
+Foam comes in dashes, not a frame. An unbroken bright line on all four sides of
+a pond is what makes it read as a swimming pool; the run is broken by a hash of
+the tile's map position, so the same tile always breaks the same way and no two
+neighbours break alike. Hollowbrook's pond has a sand shore around it for the
+same reason — a body of water that meets grass at a hard right angle is a
+rectangle, not a pond.
 
 `castShadow()` puts a soft ellipse under everyone standing on the map. Without
 one, every actor looks pasted on top of the ground rather than standing in it —
@@ -267,6 +310,20 @@ against an Ember kin does not — but both are recognisably the same valley.
 The stands each get a rim of light on top, a dark bed under, and a cast shadow
 offset away from that sun; the creatures throw their own shadow onto them, which
 is what stops them hovering.
+
+A hit has a fast half and a slow half. The bars are the slow truth — they slide,
+and they are still sliding when the next line of text arrives. The fast truth is
+`drawPops()`: the number that just came off the bar leaves the target, out
+quickly and then coasting, because a number rising at a constant speed reads as
+a balloon and one that decelerates reads as impact. Red off yours, gold off the
+foe's, green with a `+` when someone heals.
+
+`entryFx()` is the single place a log entry turns into picture, so playback and
+instant resolution behave identically. It also drives the lunge: whoever threw
+the swing leans into it, seven pixels out and back, integer offsets only. Burn,
+roots and recoil are all logged as `hit` too, but nobody threw those, so they
+flash and shake without anyone leaning — which is exactly the distinction the
+`atk` field on the entry exists to make.
 
 ### Cards
 
