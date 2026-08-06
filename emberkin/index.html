@@ -4615,12 +4615,21 @@ function drawWorld(g) {
   }
   g.fillRect(0, 0, VIEW_W, VIEW_H);
 
+  // Anything in the valley that is lit from inside, and the pool it throws.
+  //
+  // A window was a picture of a window: a warm rectangle with the same dark
+  // floor under it as everywhere else. Light that leaves its own tile is what
+  // makes a room feel occupied and a street feel like evening, and it costs one
+  // additive gradient per source. The flicker is two sines beating against each
+  // other, so a row of windows never pulses in step.
+  const lit = [];
   for (let y = 0; y <= VIEW_H / TILE + 1; y++) {
     for (let x = 0; x <= VIEW_W / TILE + 1; x++) {
       const mx = x0 + x, my = y0 + y;
       if (my < 0 || my >= map.rows.length || mx < 0 || mx >= map.rows[0].length) continue;
       const ch = map.rows[my][mx];
       const sx = Math.round(x * TILE + ox), sy = Math.round(y * TILE + oy);
+      if (ch === 'n' || ch === 'D') lit.push([sx + TILE / 2, sy + TILE / 2, mx, my, ch]);
       // Buildings and props sit on ground, so paint grass under them first.
       if (ch === 'R' || ch === 'W' || ch === 'D' || ch === 'S' || ch === 'o' || ch === 'f' || ch === '|') drawTile(g, '.', sx, sy);
       if (ch === '~') {
@@ -4654,6 +4663,29 @@ function drawWorld(g) {
     }
   }
   drawEdges(g, map, x0, y0, ox, oy);
+
+  // The light the windows and doorways throw, over the ground and under
+  // everything that walks on it — so a lamp lights the street, not the player's
+  // hat. Additive, because light adds.
+  if (lit.length && g.createRadialGradient) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const [cx, cy, mx, my, ch] of lit) {
+      // Two sines that do not divide into each other, so a terrace of windows
+      // breathes out of step instead of blinking as one sign.
+      const f = .82 + .12 * Math.sin(G.t * 1.7 + mx * 1.9)
+        + .06 * Math.sin(G.t * 2.9 + my * 2.7);
+      const r = ch === 'D' ? 30 : 24;
+      const warm = ch === 'D' ? [255, 196, 116] : [255, 214, 150];
+      const gr = g.createRadialGradient(cx, cy + 4, 1, cx, cy + 4, r);
+      gr.addColorStop(0, `rgba(${warm[0]},${warm[1]},${warm[2]},${(.30 * f).toFixed(3)})`);
+      gr.addColorStop(.45, `rgba(${warm[0]},${warm[1]},${warm[2]},${(.11 * f).toFixed(3)})`);
+      gr.addColorStop(1, `rgba(${warm[0]},${warm[1]},${warm[2]},0)`);
+      g.fillStyle = gr;
+      g.fillRect(cx - r, cy + 4 - r, r * 2, r * 2);
+    }
+    g.restore();
+  }
 
   // Entities, back to front by tile row.
   const ents = [];
