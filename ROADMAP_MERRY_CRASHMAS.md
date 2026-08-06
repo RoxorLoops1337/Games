@@ -37,8 +37,8 @@ edit this block to name the next one.
   first: `drawAim` moving the car is real and decides pass/fail on market 1,
   and it turned up a fifth cosmetic system feeding on the simulation seed.
 - **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]`. Items 1–9 are done. **Next:
-  item 10** (the replay opens on its subject). Exit: all 15 ticked, then
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–10 are done. **Next:
+  item 11** (the edge of town, not the edge of the canvas). Exit: all 15 ticked, then
   phase E again.
 
 ## Working agreement for each pass
