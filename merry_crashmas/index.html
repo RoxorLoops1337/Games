@@ -1491,7 +1491,10 @@ function stepPeople(dt){
       const a = rr(0, 6.283);
       addFx({ type:'drop', x: p.x, y: p.y, vx: Math.cos(a) * rr(60, 150), vy: Math.sin(a) * rr(60, 150),
         ttl: 1.2, size: rr(7, 12), rot: rr(0, 6.283), spin: rr(-9, 9),
-        col: ['#c8443a', '#e8b53a', '#8a5a2f', '#3f8a5c'][ri(0, 3)] });
+        // muted bag tones on purpose: the old palette was lifted straight off
+        // COATS and HATS, so a dropped bag in the far crowd read as another
+        // shopper lying down
+        col: ['#cfc6b4', '#8f7355', '#4a4038', '#a8b0bc'][ri(0, 3)] });
     }
   }
 }
@@ -2766,6 +2769,26 @@ function drawProp(o){
 }
 
 /* ---------- people ---------- */
+/* Level of detail is measured against a reference 720p-tall viewport, never
+   against the live cam.s. cam.s is VH/cam.tz, so the same world at the same
+   zoom hands out bigger shoppers on a bigger monitor and pushes far more of
+   them onto the expensive path: one frozen frame of the last market cost
+   1167 fills at 1280x720 and 4846 at 2560x1440, with 1 detailed shopper
+   against 149. The market is the same market; it gets the same tiers. */
+const LOD_REF = 720;
+const lodQ = (p) => p.r * LOD_REF / cam.tz;
+/* 10.5 is the number the old gate used, and at exactly 1280x720 lodQ and the
+   old p.r * cam.s are the same quantity — so 720p keeps the frame cost it
+   always had and every larger window comes down to meet it rather than the
+   other way round. Dropping it to 8.4 puts the whole near crowd on the middle
+   tier and costs 720p a fifth of its frame rate; not worth it. */
+const LOD_MID = 10.5;    // below this: a batched blob in the far crowd
+const LOD_FINE = 14;     // above this: the full kit, i.e. the replay close-up
+/* Two things are never blobs. Santa's r is 17, so on the market whose whole
+   goal is running him over he dissolved into the batch above walking pace;
+   and a pram is the one silhouette that has to read before you hit it. */
+const lodAlways = (p) => p.kind === 'santa' || !!p.pram;
+
 /* Seen from above: coat with shoulders, arms that swing (and fly up when they
    panic), legs that stride, a head with a hat on top. Dead ones sprawl with
    their limbs where the car left them. */
@@ -2818,8 +2841,10 @@ function drawPerson(p){
   const wob = Math.sin(p.bob) * (0.1 + p.panic * 0.28);
   ctx.rotate(p.ang + Math.PI / 2);
 
+  const q = lodQ(p), always = lodAlways(p);
+
   // zoomed out far enough and the limbs are sub-pixel anyway: coat, head, hat
-  if (p.r * cam.s < 10.5){
+  if (q < LOD_MID && !always){
     ctx.fillStyle = coat;
     ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.9, p.r * 0.75, 0, 0, 6.283); ctx.fill();
     ctx.fillStyle = p.hat ? HATS[p.hatCol % HATS.length] : skin;
@@ -2835,24 +2860,34 @@ function drawPerson(p){
     return;
   }
 
-  const fine = p.r * cam.s > 11;                  // close enough to see detail
+  /* The middle tier: coat, head, hat, arms, and the pram if there is one.
+     No face, no tears, no "!!", no scarf, no cane, no coat highlight — those
+     are three fills and four strokes each and none of them is legible until
+     the replay camera comes in. There used to be a half-pixel band between
+     "blob" and "everything", which is not a tier. */
+  const fine = q > LOD_FINE;                      // close enough to see detail
   if (fine) shadow(0, p.r * 0.55, p.r * 0.9, p.r * 0.42, 0.24);
   ctx.lineCap = 'round';
 
-  // a pram, pushed along in front
+  /* A pram, pushed along in front. There are up to seventy of these on screen
+     at once in a late market and none of them may batch, so the middle tier
+     gets the silhouette that makes you swerve — dark body, pale blanket — and
+     leaves the baby's face and the wheels to the replay. */
   if (p.pram && p.pramT > 0){
     ctx.save();
     ctx.translate(0, -p.r * 1.75);
-    shadow(0, p.r * 0.5, p.r * 0.72, p.r * 0.3, 0.2);
+    if (fine) shadow(0, p.r * 0.5, p.r * 0.72, p.r * 0.3, 0.2);
     ctx.fillStyle = '#22354f';
     roundRect(-p.r * 0.62, -p.r * 0.72, p.r * 1.24, p.r * 1.44, 6); ctx.fill();
     ctx.fillStyle = '#dfe8f6';
     roundRect(-p.r * 0.46, -p.r * 0.56, p.r * 0.92, p.r * 1.1, 5); ctx.fill();
-    ctx.fillStyle = '#f3c9a8';
-    circle(0, -p.r * 0.16, p.r * 0.24); ctx.fill();
-    ctx.fillStyle = '#101722';
-    circle(-p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
-    circle(p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
+    if (fine){
+      ctx.fillStyle = '#f3c9a8';
+      circle(0, -p.r * 0.16, p.r * 0.24); ctx.fill();
+      ctx.fillStyle = '#101722';
+      circle(-p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
+      circle(p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
+    }
     ctx.restore();
     // hands on the handle
     ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.3;
@@ -2863,7 +2898,7 @@ function drawPerson(p){
   }
 
   // legs, striding under the coat
-  if (fine || p.panic < 0.25){
+  if (fine){
     ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.38;
     ctx.beginPath();
     ctx.moveTo(-p.r * 0.32, p.r * 0.2); ctx.lineTo(-p.r * 0.36, p.r * (0.85 + stride * 0.45));
@@ -2883,7 +2918,7 @@ function drawPerson(p){
   }
   ctx.stroke();
 
-  if (p.kind === 'elder'){
+  if (p.kind === 'elder' && fine){
     ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = p.r * 0.2;
     ctx.beginPath();
     ctx.moveTo(p.r * 0.75, -p.r * 0.1);
@@ -2933,7 +2968,7 @@ function drawPerson(p){
   }
 
   // the face, once there is something to see on it
-  if (p.cry > 0.25 && Math.abs(p.x - car.x) < 640 && Math.abs(p.y - car.y) < 640){
+  if (fine && p.cry > 0.25 && Math.abs(p.x - car.x) < 640 && Math.abs(p.y - car.y) < 640){
     // squeezed-shut eyes, a wide-open mouth, and tears running off both sides
     const open = p.r * (0.13 + 0.12 * p.cry) * (1 + Math.sin(p.bob * 2.2) * 0.25);
     ctx.strokeStyle = 'rgba(24,32,50,.85)'; ctx.lineWidth = 2;
@@ -2952,7 +2987,7 @@ function drawPerson(p){
       ctx.fill();
     }
   }
-  if (p.panic > 0.5){
+  if (fine && p.panic > 0.5){
     ctx.fillStyle = 'rgba(255,255,255,.9)';
     ctx.font = '900 ' + Math.round(13 + p.r * 0.3) + 'px system-ui';
     ctx.textAlign = 'center';
@@ -2969,6 +3004,7 @@ function drawPerson(p){
    at that size nobody can tell. */
 const crowdBody = [], crowdHead = [];
 function drawCrowdBatch(list){
+  if (!list.length) return;
   for (const b of crowdBody) if (b) b.length = 0;
   for (const h of crowdHead) if (h) h.length = 0;
   for (const p of list){
@@ -2979,6 +3015,20 @@ function drawCrowdBatch(list){
     const hi = p.hat ? (p.hatCol % HATS.length) : HATS.length + (p.coat % SKIN.length);
     (crowdHead[hi] || (crowdHead[hi] = [])).push(p);
   }
+  /* One dark ellipse under the whole far crowd, offset the way every other
+     shadow in the game is. Without it a batched shopper is a flat coloured
+     blob at exactly the size of a gift box or a chunk of stall, and the crowd
+     stops reading as people the moment it stops being drawn as people. One
+     path for all of them, so it costs a single fill. */
+  ctx.fillStyle = 'rgba(8,16,32,.22)';
+  ctx.beginPath();
+  for (const p of list){
+    const a = p.ang + Math.PI / 2;
+    ctx.moveTo(p.x + 2 + Math.cos(a) * p.r * 0.8, p.y + 3 + Math.sin(a) * p.r * 0.8);
+    ctx.ellipse(p.x + 2, p.y + 3, p.r * 0.8, p.r * 0.62, a, 0, 6.283);
+  }
+  ctx.fill();
+
   for (let i = 0; i < crowdBody.length; i++){
     const bucket = crowdBody[i];
     if (!bucket || !bucket.length) continue;
@@ -3689,7 +3739,7 @@ function draw(){
   for (const o of props) if (!o.dead && near(o)) order.push(o);
   for (const p of people){
     if ((p.dead && p.fly <= 0) || !near(p)) continue;
-    if (!p.dead && p.r * cam.s < 10.5) far.push(p); else order.push(p);
+    if (!p.dead && lodQ(p) < LOD_MID && !lodAlways(p)) far.push(p); else order.push(p);
   }
   drawCrowdBatch(far);
   order.sort((a, b) => a.y - b.y);

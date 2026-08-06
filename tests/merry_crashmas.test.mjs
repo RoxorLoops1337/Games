@@ -47,7 +47,8 @@ const EXPOSE = `__out.api = {
   getCar: () => CAR, getDims: () => ({ l: CARL, w: CARW, r: CARR }),
   getTheme: () => TH,
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
-  drawCar, drawPerson, drawLens,
+  drawCar, drawPerson, drawLens, drawCrowdBatch,
+  lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
   draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
   SHOUTS, SHOUT_TIME,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
@@ -2269,8 +2270,12 @@ test('the sim survives a wildly variable frame rate', () => {
    the whole defence: a late market holds 700 shoppers, hundreds of blood
    decals and a debris field, and almost none of it is in shot. This counts the
    2d calls one frame actually issues so the culling cannot quietly rot. */
-test('one frame of the worst market stays inside its draw budget', () => {
-  const api = boot({ count: true, w: 1280, h: 720 });
+/* Sets up the most expensive frame the game can produce: the last market, every
+   buffer saturated, the camera at the zoom where the most people are on screen
+   at the most detail. Returns the counted frame plus how many of the people in
+   shot took a path more expensive than the batch. */
+function worstFrame(w, h){
+  const api = boot({ count: true, w, h });
   api.startLevel(api.LEVELS.length - 1);
   api.beginLevel();
   // saturate every buffer the way a finished run would
@@ -2289,15 +2294,93 @@ test('one frame of the worst market stays inside its draw budget', () => {
   api._resetCounts();
   api.draw();
 
-  const c = api._counts;
-  const fills = c.fill || 0, strokes = c.stroke || 0;
-  assert(fills > 200, 'the frame should actually be drawing something, got ' + fills);
-  console.log('    (worst-frame draw cost: ' + fills + ' fills, ' + strokes + ' strokes)');
-  assert(fills < 3400, 'fill budget blown: ' + fills);
-  assert(strokes < 1500, 'stroke budget blown: ' + strokes);
-  assert(!c.createRadialGradient, 'the vignette gradient should be cached, not rebuilt');
-  assert(!c.createLinearGradient, 'the floor gradient should be cached, not rebuilt');
-  assert(api.gore.length <= api.C.GORE_MAX, 'gore capped');
+  const halfW = w / api.cam.s / 2 + 220, halfH = h / api.cam.s / 2 + 220;
+  let detailed = 0, onCamera = 0;
+  for (const p of api.people){
+    if (Math.abs(p.x - api.cam.x) > halfW || Math.abs(p.y - api.cam.y) > halfH) continue;
+    onCamera++;
+    if (p.dead || api.lodAlways(p) || api.lodQ(p) >= api.LOD_MID) detailed++;
+  }
+  return { api, c: api._counts, fills: api._counts.fill || 0,
+    strokes: api._counts.stroke || 0, detailed, onCamera };
+}
+
+/* The same world at the same zoom on three monitors. cam.s is VH/cam.tz, so
+   before the LOD gate was made resolution-independent a 1440p window handed out
+   bigger shoppers and pushed 149 of them onto the full-detail path where 720p
+   pushed one — the identical frame cost 1167 fills at 720p and 4846 at 1440p,
+   which is how the budget got blown by nothing but a larger window. One budget
+   covers all three now because all three draw the same thing. */
+test('one frame of the worst market stays inside its draw budget at any resolution', () => {
+  const sizes = [[1280, 720], [1920, 1080], [2560, 1440]];
+  const runs = sizes.map(([w, h]) => Object.assign({ w, h }, worstFrame(w, h)));
+  for (const r of runs){
+    console.log('    (worst frame at ' + r.w + 'x' + r.h + ': ' + r.fills + ' fills, ' +
+      r.strokes + ' strokes, ' + r.detailed + '/' + r.onCamera + ' people past the batch)');
+    assert(r.fills > 200, 'the frame should actually be drawing something, got ' + r.fills);
+    assert(r.fills < 3400, 'fill budget blown at ' + r.w + 'x' + r.h + ': ' + r.fills);
+    assert(r.strokes < 1500, 'stroke budget blown at ' + r.w + 'x' + r.h + ': ' + r.strokes);
+    assert(!r.c.createRadialGradient, 'the vignette gradient should be cached, not rebuilt');
+    assert(!r.c.createLinearGradient, 'the floor gradient should be cached, not rebuilt');
+    assert(r.api.gore.length <= r.api.C.GORE_MAX, 'gore capped');
+  }
+  // and the detail handed out must not depend on the size of the window
+  const det = runs.map(r => r.detailed / r.onCamera);
+  const lo = Math.min(...det), hi = Math.max(...det);
+  assert(hi - lo < 0.1 * hi + 0.02,
+    'detail should not scale with resolution: ' + det.map(d => d.toFixed(3)).join(' vs '));
+});
+
+/* Santa is r 17 and a pram carrier is r 14, both under the batch line at any
+   driving zoom. Santa is the goal of two markets and the pram is the one
+   silhouette worth swerving for; neither may dissolve into a coloured blob. */
+test('santa and the prams are never batched, however fast the car is going', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startLevel(6);
+  api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.vx = 1900;
+  api.camSnap();
+  assert(api.cam.tz > 1250, 'full speed should be the widest zoom, got ' + api.cam.tz);
+  const santa = api.addPerson(2620, 1100, 'santa');
+  const parent = api.addPerson(2660, 1100, 'parent');
+  const shopper = api.addPerson(2700, 1100, 'shopper');
+  assert(api.lodQ(shopper) < api.LOD_MID, 'an ordinary shopper does batch at speed');
+  assert(api.lodAlways(santa), 'santa is never batched');
+  assert(api.lodAlways(parent) && parent.pram, 'a pram carrier is never batched');
+  assert(!api.lodAlways(shopper), 'an ordinary shopper is not exempt');
+});
+
+/* Three tiers, each actually reachable, each measurably cheaper than the next.
+   There used to be a half-pixel band between "coloured blob" and "squeezed
+   eyes, two tear ellipses and a fillText", which is not a middle tier. */
+test('the crowd has three distinct levels of detail', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0);
+  api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100;
+  api.camSnap();
+  const p = api.addPerson(2600, 1100, 'shopper');
+  p.panic = 1; p.cry = 1;
+
+  // a shopper's r is 13, so the tier is decided by the zoom alone
+  const cost = (tz) => {
+    api.cam.tz = tz;
+    api._resetCounts();
+    api.drawPerson(p);
+    return { q: api.lodQ(p), fills: api._counts.fill || 0,
+      strokes: api._counts.stroke || 0, text: api._counts.fillText || 0 };
+  };
+  const far = cost(1500), mid = cost(800), close = cost(470);
+  assert(far.q < api.LOD_MID, 'the wide zoom should batch, q was ' + far.q);
+  assert(mid.q >= api.LOD_MID && mid.q <= api.LOD_FINE, 'the middle tier should be reachable, q was ' + mid.q);
+  assert(close.q > api.LOD_FINE, 'the replay zoom should be the full kit, q was ' + close.q);
+  assert(far.fills < mid.fills, 'the blob costs less than the middle tier: ' + far.fills + ' vs ' + mid.fills);
+  assert(mid.fills < close.fills, 'the middle tier costs less than the full kit: ' + mid.fills + ' vs ' + close.fills);
+  assert(mid.strokes < close.strokes, 'the middle tier strokes less: ' + mid.strokes + ' vs ' + close.strokes);
+  assert(!far.text && !mid.text, 'only the full kit prints the panic marker');
+  assert(close.text > 0, 'the full kit prints the panic marker');
 });
 
 test('drawing scales with what is on camera, not with the whole market', () => {
