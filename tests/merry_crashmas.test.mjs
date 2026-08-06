@@ -897,6 +897,63 @@ test('a ramp on the line is called out before you let go', () => {
   assert(off.ramp && !api.previewPath(-1, 0, 1).ramp, 'a ramp off the line is not flagged');
 });
 
+/* The preview used to ignore the market entirely: its terminus sat a median
+   71% and up to 219% past where the car really stopped, drawn straight through
+   forty stalls. It cannot track a pinball run exactly — a 40px lateral
+   difference decides which stall you clip — so it draws what it knows and
+   stops. The property that matters is that the confident stretch is never a
+   promise the car does not keep. */
+test('the confident part of the line never runs past the car', () => {
+  let over = 0, n = 0, worst = -1e9;
+  for (const lv of [0, 2, 5, 10, 13, 19, 20]){
+    for (const dy of [-200, -70, 0, 70, 200]){
+      const api = boot();
+      api.startLevel(lv); api.beginLevel();
+      const len = Math.hypot(api.C.MAX_PULL, dy);
+      const pv = api.previewPath(-api.C.MAX_PULL / len, dy / len, 1);
+      const stop = Math.max(0, Math.min(pv.sure, pv.path.length) - 1);
+      const sureEnd = pv.path[stop] || pv.end;
+      api.launch(-api.C.MAX_PULL, dy);
+      for (let f = 0; f < 4000 && api.G.phase === 'drive'; f++) api.update(1 / 60);
+      const reach = Math.max(...api.tracks.map(t => t.x));
+      const d = sureEnd.x - reach;
+      n++; if (d > 1) over++;
+      worst = Math.max(worst, d);
+    }
+  }
+  console.log('    (confident line vs where the car got to: worst overshoot ' +
+    Math.round(worst) + 'px over ' + n + ' shots)');
+  assert(over === 0, 'the confident line ran past the car in ' + over + ' of ' + n + ' shots');
+});
+
+test('a stall on the line stops the line', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.props.length = 0; api.people.length = 0;
+  const open = api.previewPath(-1, 0, 1);
+  assert(open.sure >= open.path.length, 'an empty field is believed all the way');
+  const stall = api.addProp('hut', 1900, api.C.ANCHOR.y);
+  const blocked = api.previewPath(-1, 0, 1);
+  assert(blocked.sure < open.path.length, 'a stall should truncate the confident stretch');
+  const at = blocked.path[Math.max(0, blocked.sure - 1)];
+  assert(Math.abs(at.x - stall.x) < 200,
+    'and truncate it at the stall, not somewhere else: ' + Math.round(at.x) + ' vs ' + stall.x);
+});
+
+test('no JUMP is promised past the point the line stops meaning anything', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.props.length = 0; api.people.length = 0;
+  // a wall first, then a ramp well behind it
+  api.addProp('hut', 1500, api.C.ANCHOR.y);
+  const far = api.addProp('ramp', 2600, api.C.ANCHOR.y);
+  const pv = api.previewPath(-1, 0, 1);
+  assert(far.ramp, 'the fixture should be a ramp');
+  assert(!pv.ramp || pv.ramp.at <= pv.sure,
+    'a ramp past the horizon should not be flagged: ramp at ' +
+    (pv.ramp && pv.ramp.at) + ', horizon ' + pv.sure);
+});
+
 test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
   api.startCampaign(); api.beginLevel();

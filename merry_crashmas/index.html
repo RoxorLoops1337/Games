@@ -3673,12 +3673,40 @@ function drawSling(){
    This runs the same arithmetic stepCar does — the car's own launch and glide,
    ice underfoot, the fence throwing it back — until the car is below STOP_SPD,
    which is the same condition that ends the run. */
+/* A coarse grid over the props, rebuilt per preview. Testing every prop at
+   every step is 900 x 400 overlap tests a frame; three cells' worth is two or
+   three. */
+const PV_CELL = 320;
+function propGrid(){
+  const g = new Map();
+  for (const o of props){
+    if (o.dead) continue;
+    const key = ((o.x / PV_CELL) | 0) * 1000 + ((o.y / PV_CELL) | 0);
+    const c = g.get(key);
+    if (c) c.push(o); else g.set(key, [o]);
+  }
+  return g;
+}
+
 function previewPath(ux, uy, p){
   const dt = 0.05;
   const spd0 = MAX_LAUNCH * CAR.launch * p;
   let x = car.x, y = car.y, vx = -ux * spd0, vy = -uy * spd0, t = 0;
   const path = [];
-  const ramps = props.filter(o => o.ramp && !o.dead);
+  const grid = propGrid();
+  /* Local damage, not a hit-once set. stepCarCollisions calls hitProp every
+     substep the car overlaps a prop, so a stall that takes three touches to
+     break gets three; marking props as spent after one made the preview eat a
+     bounce where the real car goes through, and cost it a systematic 17%. */
+  const hp = new Map();
+  const gone = new Set();
+  /* How far the line is worth believing. Up to the first thing the car
+     touches, this is arithmetic. Past it, it is a guess: a 40px lateral
+     difference decides which stall you clip, and the guess was wrong by -61%
+     to +219% depending on the market. The dots fade out there and the
+     terminus ring is not drawn at all — drawing nothing beats drawing a
+     promise. */
+  let sure = -1;
   let ramp = null;
   for (let i = 0; i < 900; i++){
     const sp = Math.hypot(vx, vy);
@@ -3693,23 +3721,107 @@ function previewPath(ux, uy, p){
     const ns = Math.max(0, sp * Math.exp(-fr * dt) - (slick ? DRAG * 0.25 : DRAG) / CAR.glide * dt);
     const k = ns / sp;
     vx *= k; vy *= k;
-    x += vx * dt; y += vy * dt;
     t += dt;
+    /* Substepped like stepCar, and for the same reason: a 0.05s step at launch
+       speed is 95px, which is wider than most stalls. Advancing in one go
+       tunnelled straight through the market and the line under-promised by up
+       to 65% once it started colliding at all. */
+    const sub = clamp(Math.ceil(ns * dt / 20), 1, 8);
+    const sdt = dt / sub;
+    for (let sIdx = 0; sIdx < sub; sIdx++){
+    x += vx * sdt; y += vy * sdt;
     let hit = 0;
     if (x < bounds.x0){ x = bounds.x0; vx = Math.abs(vx) * REST; hit = 1; }
     else if (x > bounds.x1){ x = bounds.x1; vx = -Math.abs(vx) * REST; hit = 1; }
     if (y < bounds.y0){ y = bounds.y0; vy = Math.abs(vy) * REST; hit = 1; }
     else if (y > bounds.y1){ y = bounds.y1; vy = -Math.abs(vy) * REST; hit = 1; }
     if (hit){ vx *= 0.9; vy *= 0.9; }
-    if (!ramp && ns >= RAMP_MIN){
-      for (const o of ramps){
-        const reach = (o.shape === 'circ' ? o.r : Math.max(o.w, o.h) / 2) + CARR;
-        if (Math.abs(o.x - x) <= reach && Math.abs(o.y - y) <= reach){ ramp = { x, y, o }; break; }
+
+    /* The market is in the way, and it used to be invisible to this: the line
+       ran straight through forty stalls and put its terminus ring 3,400px past
+       where the car really stopped — a median 71% overshoot across the markets,
+       219% on GRAND MARKET. The same resolution stepCar's hitProp does, minus
+       the scoring and the noise: what breaks costs speed, what does not throws
+       the car off it. */
+    let jumped = false;
+    const gx = (x / PV_CELL) | 0, gy = (y / PV_CELL) | 0;
+    for (let cx = gx - 1; cx <= gx + 1 && !jumped; cx++){
+      for (let cy = gy - 1; cy <= gy + 1 && !jumped; cy++){
+        const cell = grid.get(cx * 1000 + cy);
+        if (!cell) continue;
+        for (const o of cell){
+          if (gone.has(o)) continue;
+          let nx, ny, pen;
+          if (o.shape === 'circ'){
+            const dx = x - o.x, dy = y - o.y;
+            const d = Math.hypot(dx, dy) || 0.001;
+            const rad = o.r + CARR;
+            if (d >= rad) continue;
+            nx = dx / d; ny = dy / d; pen = rad - d;
+          } else {
+            const hw = o.w / 2, hh = o.h / 2;
+            const dx = x - clamp(x, o.x - hw, o.x + hw), dy = y - clamp(y, o.y - hh, o.y + hh);
+            const d = Math.hypot(dx, dy);
+            if (d >= CARR) continue;
+            if (d > 0.001){ nx = dx / d; ny = dy / d; pen = CARR - d; }
+            else {
+              const ex = x - o.x, ey = y - o.y;
+              const ox = hw + CARR - Math.abs(ex), oy = hh + CARR - Math.abs(ey);
+              if (ox < oy){ nx = Math.sign(ex) || 1; ny = 0; pen = ox; }
+              else { nx = 0; ny = Math.sign(ey) || 1; pen = oy; }
+            }
+          }
+          /* A ramp at speed throws the car over everything after it. Truncating
+             the line there under-promised by up to 65%: the flight is the
+             cheapest part of this to predict, because nothing decelerates it.
+             vz, so airT, so a straight coast, then the landing's 0.86. */
+          if (o.ramp && Math.hypot(vx, vy) >= RAMP_MIN){
+            if (!ramp) ramp = { x, y, o, at: path.length };
+            if (sure < 0) sure = path.length;
+            const vz = Math.min(RAMP_MAX_VZ * CAR.ramp, Math.hypot(vx, vy) * RAMP_KICK * CAR.ramp);
+            const airT = 2 * vz / GRAV_Z;
+            vx *= 0.97; vy *= 0.97;
+            x += vx * airT; y += vy * airT;
+            t += airT;
+            vx *= 0.86; vy *= 0.86;         // the landing
+            jumped = true;
+            break;
+          }
+          if (o.ramp) continue;
+          if (sure < 0) sure = path.length;
+          const vn = vx * nx + vy * ny;
+          const impact = Math.max(0, -vn);
+          const dmg = impact * DMG_PER_SPD * CAR.dmg;
+          const left = hp.has(o) ? hp.get(o) : o.hp;
+          if (!o.hard && dmg >= left){
+            gone.add(o);
+            const loss = 1 - 0.34 * o.mass;
+            vx *= loss; vy *= loss;
+            x += nx * pen * 0.25; y += ny * pen * 0.25;
+          } else {
+            if (!o.hard) hp.set(o, left - dmg);
+            x += nx * pen; y += ny * pen;
+            if (vn < 0){
+              const rest = (o.hard ? REST_HARD : REST) * CAR.rest;
+              const tx = -ny, ty = nx;
+              const vt = vx * tx + vy * ty;
+              vx = nx * (-vn * rest) + tx * (vt * 0.86);
+              vy = ny * (-vn * rest) + ty * (vt * 0.86);
+            }
+            const loss = 1 - 0.16 * o.mass;
+            vx *= loss; vy *= loss;
+          }
+        }
       }
+    }
+    if (jumped) break;
     }
     path.push({ x, y });
   }
-  return { path, ramp, end: path.length ? path[path.length - 1] : { x, y } };
+  if (sure < 0) sure = path.length;
+  // a ramp behind something the car hits first is a ramp the car never reaches
+  if (ramp && ramp.at > sure) ramp = null;
+  return { path, ramp, sure, end: path.length ? path[path.length - 1] : { x, y } };
 }
 
 /* The things the checklist names are usually off the edge of the aim frame —
@@ -3791,35 +3903,62 @@ function drawAim(){
     const pv = previewPath(ux, uy, p);
     aimRamp = pv.ramp;
     const n = pv.path.length;
-    if (n){
+    /* The line is believed as far as the first thing the car touches, and
+       drawn as a guess for a short way past it. It used to be drawn solid the
+       whole way with a ring on the end, which sat a median 71% and up to 219%
+       past where the car really stopped — through forty stalls. */
+    const sure = Math.min(pv.sure, n);
+    const TAIL = 9;
+    const shown = Math.min(n, sure + TAIL);
+    if (shown){
       // a soft line under the dots: at full power the shot is thousands of px
       // long, and 34 dots spread over that much road do not read as a path
-      ctx.strokeStyle = 'rgba(13,26,46,.3)'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(13,26,46,.3)'; ctx.lineWidth = 4 / cam.s; ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(car.x, car.y);
-      for (let i = 0; i < n; i += 3) ctx.lineTo(pv.path[i].x, pv.path[i].y);
-      ctx.lineTo(pv.end.x, pv.end.y);
+      for (let i = 0; i < sure; i += 3) ctx.lineTo(pv.path[i].x, pv.path[i].y);
+      if (sure) ctx.lineTo(pv.path[sure - 1].x, pv.path[sure - 1].y);
       ctx.stroke();
     }
+    /* Sized in screen pixels, not world ones. The aim camera now stretches to
+       fit the market, so a fixed 11-unit dot is 5.3px at market 1's zoom and
+       1.7px at MIDNIGHT MASS's — the line disappeared on exactly the markets
+       that need it most. */
+    const u = 1 / cam.s;
     const DOTS = 34;
-    for (let i = 0; i < DOTS && n; i++){
-      const s = pv.path[Math.min(n - 1, Math.round(i * (n - 1) / (DOTS - 1)))];
+    const lastSure = Math.max(0, sure - 1);
+    for (let i = 0; i < DOTS && shown; i++){
+      // the confident stretch gets the dots; the tail is drawn on top of it
+      const idx = Math.round(i * lastSure / (DOTS - 1));
+      const s = pv.path[Math.min(n - 1, idx)];
       ctx.globalAlpha = 0.95 - i * 0.017;
       ctx.fillStyle = '#0d1a2e';
-      circle(s.x, s.y, 11 - i * 0.16); ctx.fill();
+      circle(s.x, s.y, (5.3 - i * 0.077) * u); ctx.fill();
       ctx.fillStyle = wrongWay ? '#ff6b5e' : '#ffd76e';
-      circle(s.x, s.y, 8.5 - i * 0.14); ctx.fill();
+      circle(s.x, s.y, (4.1 - i * 0.067) * u); ctx.fill();
+    }
+    // where the guess starts, it fades out instead of ending anywhere
+    for (let i = sure; i < shown; i++){
+      const s = pv.path[i];
+      ctx.globalAlpha = 0.55 * (1 - (i - sure) / TAIL);
+      ctx.fillStyle = '#0d1a2e';
+      circle(s.x, s.y, (3.4 - (i - sure) * 0.24) * u); ctx.fill();
+      ctx.fillStyle = wrongWay ? '#ff6b5e' : '#ffd76e';
+      circle(s.x, s.y, (2.5 - (i - sure) * 0.18) * u); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    // the line needs a terminus: this is where the car runs out of road
-    if (n){
-      ctx.strokeStyle = 'rgba(13,26,46,.5)'; ctx.lineWidth = 9;
-      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, 30, 0, 6.283); ctx.stroke();
-      ctx.strokeStyle = wrongWay ? '#ff6b5e' : '#ffd76e'; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, 30, 0, 6.283); ctx.stroke();
-      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, 13, 0, 6.283); ctx.stroke();
+    /* The terminus ring only when the whole line is arithmetic — an empty
+       approach, or a shot that runs out of speed before it reaches anything. */
+    if (n && sure >= n){
+      const rr2 = 15 / cam.s;
+      ctx.strokeStyle = 'rgba(13,26,46,.5)'; ctx.lineWidth = 4.5 / cam.s;
+      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, rr2, 0, 6.283); ctx.stroke();
+      ctx.strokeStyle = wrongWay ? '#ff6b5e' : '#ffd76e'; ctx.lineWidth = 2.5 / cam.s;
+      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, rr2, 0, 6.283); ctx.stroke();
+      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, rr2 * 0.43, 0, 6.283); ctx.stroke();
     }
-    // the single most consequential thing on the field was invisible to the aim
+    // the single most consequential thing on the field was invisible to the
+    // aim; previewPath only reports one the car actually gets to
     if (pv.ramp){
       ctx.strokeStyle = '#8ee06a'; ctx.lineWidth = 6; ctx.lineCap = 'round';
       const rx = pv.ramp.x, ry = pv.ramp.y;
