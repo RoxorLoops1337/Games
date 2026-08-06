@@ -5065,8 +5065,19 @@ function startBattle(opt) {
   // Something faster than you now lands the first blow, which is what makes
   // SPD a stat rather than a number on a screen, and what makes an ambush by
   // something quick actually frightening.
-  // A trainer brings a plan; a wild kin brings itself.
-  const plan = opt.plan || (opt.npc && opt.npc.trainer && opt.npc.trainer.plan);
+  // A trainer brings a plan; a wild kin used to bring only itself, and that
+  // asymmetry is the root of six passes of "wild fights have no shape". The one
+  // beat they had — cornering — fires off the foe's own HP falling, so it is
+  // reactive: it always arrives late, and there is nothing to build a turn
+  // around in advance. Measured, it is 1.25 beats a fight and 23% of wild fights
+  // never get one at all.
+  //
+  // So a wild kin gets a rhythm too: swing, gather, swing. It is the same
+  // damage, announced a turn ahead, on a cadence a player can plan for rather
+  // than one their own success triggers. `planScale` keeps it off the opening of
+  // the game the same way it does for trainers.
+  const plan = opt.plan || (opt.npc && opt.npc.trainer && opt.npc.trainer.plan)
+    || (opt.wild ? ['swing', 'sharpen', 'swing'] : null);
   if (plan) G.battle.plan = { steps: plan.slice(), i: 0 };
   const opener = [];
   // Wild kin only: a trainer squares up with you, and the opening rival
@@ -5454,7 +5465,13 @@ function readIntent() {
   const step = b.plan ? b.plan.steps[b.plan.i % b.plan.steps.length] : 'swing';
   if (step !== 'swing' && PLANS[step]) {
     const p = PLANS[step];
-    const n = Math.round((p.edge || p.shield || 0) * planScale(b.foe.lvl));
+    // A wild kin works its beat smaller than a trainer does. The beat costs it
+    // its attack, so a plan is less total damage, not more — but it arrives in
+    // one lump, and a lump can take a kin out where two taps could be healed
+    // through. At a trainer's numbers that read .389 lost-or-ran in solo against
+    // .317 without, which is a bigger price than the moment is worth.
+    const n = Math.round((p.edge || p.shield || 0) * planScale(b.foe.lvl)
+      * (b.wild ? WILD_PLAN_MUL : 1));
     const tell = p.edge ? `+${n} on the next hit` : p.shield ? `${n} guard` : 'a shield will not help';
     b.intent = { id: null, name: p.label, dmg: 0, kind: 'plan', step, n, tell };
     return b.intent;
@@ -5529,6 +5546,8 @@ const planScale = (lvl) => (1 + lvl / 22) * Math.min(1, lvl / 12);
 // that the deck sharpens attacks rather than adding its own. Their stats are
 // untouched: this is only the pool of HP a fight is played over.
 const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
+// How hard a wild kin's plan beat lands, against a trainer's. See readIntent.
+const WILD_PLAN_MUL = .8;
 // A trainer is already a two- or three-kin fight, so each of their kin needs a
 // far smaller pool than a lone wild one — and they hit at full strength, which
 // a wild kin does not. Giving them the wild number made the opening rival fight

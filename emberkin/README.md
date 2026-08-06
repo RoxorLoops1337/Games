@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all thirty-seven mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-four passes on this
-game produced about nine changes to the game and thirty-seven fixes to the tool.
+of all thirty-eight mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-five passes on this
+game produced about ten changes to the game and thirty-eight fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,47 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### A wild kin gets a rhythm, and one-turn fights collapse
+
+Pass 32 ended on "the flatness is in the fights, not the cards". So this reads
+the fight from the foe's side, and the asymmetry is the whole answer: a trainer
+brings a plan — a loop of beats, turn one sets up and turn three pays off — and a
+wild kin brought only itself.
+
+Not *quite* nothing. Wild kin have cornering, added in pass 18, and it had never
+been counted. Measured: **1.25 telegraphed beats per wild fight, and 23% of wild
+fights never get one at all.** But cornering fires off the foe's own HP falling,
+so it is reactive — it arrives late, it arrives because you were winning, and
+there is nothing to build a turn around in advance.
+
+So a wild kin gets a rhythm too: **swing, gather, swing.** Same machinery as the
+trainers, at 0.8 of their numbers (`WILD_PLAN_MUL`), announced a turn ahead. The
+beat costs the foe its attack, so a plan is *less* total damage — it just arrives
+in one lump you were told about.
+
+| 60 runs a side | solo before | solo after | party before | party after |
+| --- | --- | --- | --- | --- |
+| **over in one turn** | 14% ±2 | **3% ±1** | 28% ±3 | **4% ±1** |
+| lost or ran | .317 ±.041 | .273 ±.039 | .036 ±.005 | .054 ±.007 |
+| no kin in doubt | 34% ±3 | 39% ±3 | 11% ±1 | 10% ±1 |
+| wipes | .129 ±.016 | .104 ±.015 | .025 ±.004 | .019 ±.004 |
+| turns per fight | 3.72 ±0.20 | 4.04 ±0.29 | 3.05 ±0.16 | 3.31 ±0.12 |
+
+**Fights decided in a single turn have essentially stopped happening** — from a
+quarter of all party fights to one in twenty-five. That is the complaint passes 11
+to 14 spent four passes on, and none of those passes moved it, because all four
+were tuning damage. It was never a damage problem. It was that nothing on the
+foe's side took a turn to do anything.
+
+What it costs: party is meaningfully more dangerous (.036 to .054, outside its
+interval), which at .036 it could afford. Solo never-in-doubt drifts 34% to 39%,
+which is the wrong way and is the one number to watch next.
+
+The multiplier matters and was measured, not guessed. At a trainer's full numbers
+solo lost-or-ran went to **.389** — the lump kills a kin where two taps could be
+healed through. At 0.6 it went to **.223**, safer than no plan at all, because the
+foe spends a turn and the payoff is too small. 0.8 lands on the baseline.
 
 #### A new kind of card is not load-bearing either
 
