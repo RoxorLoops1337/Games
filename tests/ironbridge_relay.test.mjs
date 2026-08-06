@@ -185,6 +185,29 @@ const t = harness('ironbridge relay');
   t.ok(!!a.last('pong'), 'a ping comes back, so a client can tell a thinking peer from a dead link');
 }
 
+/* ---------------------------------------------- a flood cannot drain the wallet
+   Inbound WebSocket messages bill 20:1, and the relay authenticates nothing, so
+   one socket in a tight send loop would burn the day's free allowance in
+   seconds and take multiplayer down for everyone. A per-connection rate cap is
+   the only backstop. A fast-but-legitimate client sends about thirty a second;
+   the cap is well above that and only a flood reaches it. */
+{
+  const st = mkState();
+  const room = new Room(st, {});
+  await joinRoom(room); await joinRoom(room);
+  const [a, b] = st.__socks;
+  const cap = Room.MSG_PER_SEC;
+  t.ok(cap >= 120, 'the cap leaves generous headroom over a fast client (' + cap + '/s)');
+  const cmd = JSON.stringify({ k:'cmd', tick:1, side:0, cmds:[] });
+  const before = b.sent.length;
+  // Everything in this block runs inside one real-time second, so it all falls
+  // in the same window.
+  for (let i = 0; i < cap + 60; i++) await room.webSocketMessage(a, cmd);
+  const relayed = b.sent.length - before;
+  t.ok(relayed === cap,
+    'a flood is relayed up to the cap and no further (' + relayed + ' of ' + (cap + 60) + ' reached the peer)');
+}
+
 /* --------------------------------------------- leaving, and coming back */
 {
   const st = mkState();

@@ -2275,6 +2275,18 @@ function newMatch(opt){
   // side order on the tick after. Every before/after measurement this game has
   // ever been tuned with was quietly reading that as noise.
   G.frame = 0;
+  // The body-id counter is the same omission as G.frame, and in a network match
+  // it is worse than a measurement artefact — it is a desync. netStart runs
+  // newMatch, but the counter had already been walked by attract mode, which
+  // runs live and restarts on every win; two players who sat in the lobby for
+  // different lengths of time therefore start with different counters. Commands
+  // name a hero by its id (pick, cast, every targeted order), so the SAME hero
+  // is id 341 on one machine and 613 on the other, and the first skill-pick
+  // resolves on one board and no-ops on the other. Reset it, and both machines
+  // — running the identical command stream from the identical seed — mint the
+  // identical ids. (netLoad overwrites this from the snapshot on resync, which
+  // is how a rejoining player keeps ids that already agree.)
+  G.uid = 1;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
   G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
   // The log was cleared here and the strip the player actually reads was not,
@@ -7463,7 +7475,20 @@ function sunTint(){
   }
   return sunGain;
 }
+// shade() is pure in (hex, f) for a fixed illuminant, and the profiler puts it
+// at 800–1500 calls a frame — thirteen per unit, more per structure — each
+// building four throwaway strings, over a tiny set of base colours crossed with
+// a handful of constant factors. That is exactly the shape SH_PARTS and fxMix
+// already memoise; shade simply never got it. Keyed on the pair, capped like
+// its siblings, and dropped whole if the sun's own colour ever changes so a
+// future day/night cycle cannot be served a stale tone.
+const SHADE_CACHE = new Map();
+let shadeSun = null;
 const shade = (hex, f) => {
+  if (shadeSun !== SUN.warm){ shadeSun = SUN.warm; SHADE_CACHE.clear(); }
+  const key = hex + '|' + f;
+  const cached = SHADE_CACHE.get(key);
+  if (cached !== undefined) return cached;
   const n = parseInt(hex.slice(1), 16);
   const W = sunTint(), S = SHADE.sky, L = SHADE.lum;
   const r0 = (n >> 16) & 255, g0 = (n >> 8) & 255, b0 = n & 255;
@@ -7481,7 +7506,9 @@ const shade = (hex, f) => {
   const r = clamp(Math.round(r1 * k), 0, 255);
   const g = clamp(Math.round(g1 * k), 0, 255);
   const b = clamp(Math.round(b1 * k), 0, 255);
-  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+  const out = '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+  if (SHADE_CACHE.size < 4096) SHADE_CACHE.set(key, out);
+  return out;
 };
 /* THE CUT EDGE.
 
@@ -16859,7 +16886,7 @@ function heroBarHtml(){
     const need = xpNeed(hero.lvl);
     h += '<button class="hcard' + (hero.dead ? ' dead' : '') + '" data-hero="' + hero.id + '">' +
       (hero.pend.length ? '<span class="badge">' + hero.pend.length + '</span>' : '') +
-      '<div class="hn">' + hero.name + '<span class="hl">Lv ' + hero.lvl + '</span></div>' +
+      '<div class="hn">' + esc(hero.name) + '<span class="hl">Lv ' + hero.lvl + '</span></div>' +
       '<div class="hc">' + CLS[hero.cls].name + (hero.dead ? ' · down ' + Math.ceil(hero.respawnT) + 's' : '') + '</div>' +
       '<div class="bar hp"><i style="width:' + Math.round(clamp(hero.hp / hero.mhp, 0, 1) * 100) + '%"></i></div>' +
       '<div class="bar mp"><i style="width:' + Math.round(clamp(hero.mana / hero.mmana, 0, 1) * 100) + '%"></i></div>' +
@@ -18053,12 +18080,24 @@ function dockScrollTo(at){
     if (want) el.scrollTop = Math.min(want, Math.max(0, el.scrollHeight - el.clientHeight));
   }
 }
+let lastDockHtml = '';
 function syncUI(){
   if (HEADLESS || !G.sides.length) return;      // resize can fire before the first match exists
   syncHud();
-  const at = dockScroll();
-  $('dock').innerHTML = dockHtml();
-  dockScrollTo(at);
+  // Write the dock only when its markup actually changed. A wholesale rebuild
+  // re-parses ~500 lines and relays out the whole panel; on the 4.5Hz refresh
+  // clock most ticks produce a byte-identical string, so building it and
+  // comparing skips a real layout hitch on a phone for the price of a string
+  // compare. dockHtml is a pure function of game state, so any change that
+  // should touch the dock changes the string — and when it does not, the
+  // buttons are left alive, which is the very thing the press-guard papers over.
+  const html = dockHtml();
+  if (html !== lastDockHtml){
+    lastDockHtml = html;
+    const at = dockScroll();
+    $('dock').innerHTML = html;
+    dockScrollTo(at);
+  }
   syncAdvice();
 }
 // A click is a press AND a release on the same element. The dock throws away
@@ -18137,13 +18176,13 @@ function showMenu(){
     '<div class="picks">' + DIFFS.map((d, i) =>
       '<button class="pick" data-act="start" data-diff="' + d.id + '"><div class="pk">' + (i === 0 ? 'easy' : i === 1 ? 'even' : 'hard') + '</div>' +
       '<div class="pt">' + d.n + '</div><div class="pd">' + d.d + '</div></button>').join('') + '</div>' +
-    '<div class="statline"><span>Won <b>' + meta.wins + '</b></span><span>Lost <b>' + meta.losses + '</b></span>' +
+    '<div class="statline"><span>Won <b>' + (meta.wins | 0) + '</b></span><span>Lost <b>' + (meta.losses | 0) + '</b></span>' +
     '<span>Best <b>' + (meta.best ? mmss(meta.best) : '—') + '</b></span></div>' +
     '<div class="picks" style="margin-top:10px"><button class="pick" data-act="mp">' +
       '<div class="pk">two players</div><div class="pt">Play a friend</div>' +
       '<div class="pd">Both holds played by people, on one bridge. You get a four-letter code to send them.</div>' +
     '</button></div>' +
-    '<div class="statline"><span>Won <b>' + meta.wins + '</b></span><span>Lost <b>' + meta.losses + '</b></span>' +
+    '<div class="statline"><span>Won <b>' + (meta.wins | 0) + '</b></span><span>Lost <b>' + (meta.losses | 0) + '</b></span>' +
     '<span>Best <b>' + (meta.best ? mmss(meta.best) : '—') + '</b></span></div>' +
     '<div class="legend"><span>Workers gather · farms raise population · barracks arm workers into the wave</span>' +
     '<span>Heroes level from kills near them and pick a new skill at 3, 6, 9 and 12</span></div>'
@@ -18546,7 +18585,7 @@ function showHeroSheet(h){
     '<div class="hp-grid"><div class="hp-left">' +
     '<div class="portrait" data-cls="' + h.cls + '"><span>' + classGlyph(h.cls) + '</span>' +
     '<span class="pcls">' + CLS[h.cls].name + '</span></div>' +
-    '<div class="hp-name">' + h.name + '</div>' +
+    '<div class="hp-name">' + esc(h.name) + '</div>' +
     '<div class="hp-lvl">Level ' + h.lvl + ' · ' + CLS[h.cls].name + '</div>' +
     heroMeters(h) +
     // one column: two columns of 79px cut "2692 / 2692" in half
@@ -18578,7 +18617,7 @@ function timelineHtml(){
       const left = clamp(e.t / end, 0, 1) * 100;
       const cls = e.key === 'gate' ? ' gate' : e.key === 'inhib' ? ' inhib' : '';
       return '<i class="tl-m' + cls + '" style="left:' + left.toFixed(2) + '%" title="' +
-        e.n + ' — ' + mmss(e.t) + '"></i>';
+        esc(e.n) + ' — ' + mmss(e.t) + '"></i>';
     }).join('');
     // "Yours" read as "walls you broke"; the marks are walls that FELL, so it
     // has to say whose walls they were.
@@ -18684,7 +18723,7 @@ function heroCard(h, star){
   const p = PASS[h.passive];
   const skills = h.skills.slice().sort((a, b) => (a.ult ? 1 : 0) - (b.ult ? 1 : 0));
   return '<div class="hc"><div class="hc-top"><span class="hc-g">' + classGlyph(h.cls) + '</span>' +
-    '<b>' + (star ? '★ ' : '') + h.name + '</b>' +
+    '<b>' + (star ? '★ ' : '') + esc(h.name) + '</b>' +
     '<span class="hc-lv">Lv ' + h.lvl + ' · ' + CLS[h.cls].name + '</span>' +
     '<span class="hc-kd">' + h.kills + '/' + h.deaths + '</span></div>' +
     '<div class="hc-build">' + (p ? '<i>' + p.n + '</i>' : '') +
@@ -19598,6 +19637,13 @@ const CMD = {
   // enough to decide the match.
   hold:    (s, c) => setHoldUlt(s, !!c.on),
 };
+// A command key names an OWN entry of CMD, never an inherited one. `CMD[c.k]`
+// alone resolves `"constructor"`, `"__proto__"` and `"hasOwnProperty"` to
+// functions off Object.prototype — a peer-supplied key that passes a mere
+// truthiness gate and then either mis-dispatches or throws inside netStep,
+// killing the pump. hasOwnProperty.call closes that off at both the intake
+// filter and the dispatch.
+const hasCmd = (k) => Object.prototype.hasOwnProperty.call(CMD, k);
 
 /* Who this can possibly apply to. Asked by the tile that greys itself, by the
    refusal, and by the command — one answer, three readers, the same shape as
@@ -19978,16 +20024,28 @@ function netSnap(){
 }
 
 function netLoad(p){
-  if (!p || !p.bodies || !p.sides) return false;
+  // The snapshot is the one message a peer sends that this machine ADOPTS
+  // wholesale, so its shape is checked before a single field of the live board
+  // is touched. Exactly two sides, real arrays; anything else is refused here
+  // rather than throwing halfway through the mutation below and leaving the
+  // board neither the old one nor the new.
+  if (!p || !Array.isArray(p.bodies) || !Array.isArray(p.sides) || p.sides.length !== 2) return false;
   const bodies = p.bodies.map(b => {
     const o = {};
-    for (const k in b) o[k] = b[k];
+    // Skip __proto__: a JSON object can carry it as an own key, and o[k]=… for
+    // that key runs the prototype setter and retargets this body's prototype.
+    for (const k in b){ if (k === '__proto__') continue; o[k] = b[k]; }
     o.hitOnce = Array.isArray(b.hitOnce) ? new Set(b.hitOnce) : null;
-    o.buffs = (b.buffs || []).map(x => Object.assign({}, x));
+    o.buffs = Array.isArray(b.buffs) ? b.buffs.map(x => Object.assign({}, x)) : [];
     o.mb = b.mb ? Object.assign({}, b.mb) : null;
+    // A body that will be installed as a hero has to name a real class, or the
+    // first dockHtml/result-card render dereferences CLS[undefined].name and
+    // throws on every frame with no way back.
+    if (o.isHero && !CLS[o.cls]) o.cls = CLASSES[0].id;
     return o;
   });
-  const struct = (side, ord) => (G.sides[side].structs.find(x => x.ord === ord) || null);
+  const struct = (side, ord) => ((side === 0 || side === 1) && G.sides[side]
+    ? (G.sides[side].structs.find(x => x.ord === ord) || null) : null);
   const deref = (v) => {
     if (!v) return null;
     if (Array.isArray(v)) return struct(v[1], v[2]);
@@ -20164,16 +20222,35 @@ function netSendSnap(force){
   netResumeAt(at);                                 // the host restarts its own pipe too
 }
 
+// A real board is a few dozen bodies — at MAX_UNITS and 12KB a chunk a full
+// snapshot is well under twenty parts. 64 is far above that and far below the
+// point where buffering hurts.
+const SYNC_PARTS_MAX = 64;
 function netTakeSnap(m){
   if (!NET.on) return;
-  if (!NET.rx || NET.rx.id !== m.id) NET.rx = { id:m.id, n:m.n, parts:[], got:0 };
+  // n and i come off the wire. Without a bound a peer claims a million parts,
+  // streams a 12KB chunk for each, and the parts array grows until the tab is
+  // OOM-killed — the assembly never completes, so NET.rx is never cleared.
+  // Bound the count and reject any index outside it; the buffer can now hold at
+  // most SYNC_PARTS_MAX * SYNC_CHUNK bytes before it either completes or is
+  // dropped as unloadable.
+  const n = m.n | 0, i = m.i | 0;
+  if (!(n >= 1 && n <= SYNC_PARTS_MAX) || i < 0 || i >= n) return;
+  if (!NET.rx || NET.rx.id !== m.id) NET.rx = { id:m.id, n, parts:[], got:0 };
   const rx = NET.rx;
-  if (rx.parts[m.i] === undefined){ rx.parts[m.i] = m.part; rx.got++; }
+  if (i >= rx.n) return;                            // a later chunk that claims a smaller n
+  if (rx.parts[i] === undefined){ rx.parts[i] = m.part; rx.got++; }
   if (rx.got < rx.n) return;
   let snap = null;
   try { snap = JSON.parse(rx.parts.join('')); } catch (e){ NET.rx = null; return; }
   NET.rx = null;
-  if (!netLoad(snap)) { netDiary('sync in FAILED', 'snapshot would not load'); return; }
+  // netLoad validates shape up front and cannot reach the live board with a
+  // malformed one, but a field it does not police could still throw mid-load.
+  // Catch it here rather than let it escape into the socket handler: a resync
+  // that fails is a diary line and a wait, not an uncaught exception.
+  let ok = false;
+  try { ok = netLoad(snap); } catch (e){ ok = false; netDiary('sync in THREW', '' + (e && e.message)); }
+  if (!ok) { netDiary('sync in FAILED', 'snapshot would not load'); return; }
   NET.resyncs++;
   netDiary('sync in', 'adopted the other machine’s board at tick ' + (m.tick | 0) + ' (resync ' + NET.resyncs + ')');
   NET.awaitSync = false; NET.syncWait = 0; NET.syncGaveUp = false;
@@ -20214,7 +20291,7 @@ function netStep(){
   // Sorted by side then seq — never by arrival order, which differs per machine.
   const all = [...slot[0], ...slot[1]].sort((p, q) => p.side - q.side || p.seq - q.seq);
   for (const c of all){
-    const fn = CMD[c.k];
+    const fn = hasCmd(c.k) ? CMD[c.k] : null;
     if (fn) fn(G.sides[c.side], c);
   }
   G.paused = false; G.held = false;
@@ -20276,8 +20353,18 @@ function netEnd(){
 // the whole protocol without a WebSocket.
 function netRecv(m){
   if (!m || typeof m !== 'object') return;
-  if (m.k === 'cmd' && typeof m.tick === 'number' && (m.side === 0 || m.side === 1) && Array.isArray(m.cmds))
-    netDeliver(m.tick, m.side, m.cmds.filter(c => c && CMD[c.k] && (c.side === 0 || c.side === 1)));
+  if (m.k === 'cmd' && typeof m.tick === 'number' && (m.side === 0 || m.side === 1) && Array.isArray(m.cmds)){
+    // The seat a batch arrived under is the only seat it may drive. Two holes
+    // the relay cannot close, because it authenticates nothing: a peer that
+    // published as OUR seat could either run our hold by proxy, or — since
+    // netDeliver is first-write-wins — publish an empty batch for our seat one
+    // tick ahead of us and drop every order we give, on both machines. So a
+    // batch claiming our own seat is refused outright, and inside it every
+    // command must own the seat the batch came under, not merely be a valid
+    // side. hasCmd keeps a prototype key from passing the filter as a command.
+    if (m.side === NET.me) return;
+    netDeliver(m.tick, m.side, m.cmds.filter(c => c && hasCmd(c.k) && c.side === m.side));
+  }
   else if (m.k === 'hash' && typeof m.tick === 'number' && typeof m.h === 'number'){
     NET.peerHashes.set(m.tick, m.h);
     netCheckHash(m.tick);
