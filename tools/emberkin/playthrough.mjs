@@ -10,13 +10,14 @@
 //   node tools/emberkin/playthrough.mjs --runs 60 --starter sproutle
 //   node tools/emberkin/playthrough.mjs --runs 60 --rested # heal before each trainer
 //   node tools/emberkin/playthrough.mjs --runs 60 --build value  # deck by value, not rarity
+//   node tools/emberkin/playthrough.mjs --runs 60 --ban whetstone  # what is one card worth?
 //
 // >>> READ tools/emberkin/README.md BEFORE BELIEVING A NUMBER THIS PRINTS. <<<
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
 // which are emphatically not, and the ledger of all thirty-three mistakes this tool
-// has made. Twenty-one passes on this game produced about eight changes to the
+// has made. Twenty-two passes on this game produced about eight changes to the
 // game and thirty-three fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
@@ -44,6 +45,15 @@ const MIGHT_FIGHTS = 12;
 // when-payable table says are what separate a played card from an unplayed one.
 // Run them against each other before believing anything about the reward screen.
 const BUILD = argv.includes('--build') ? argv[argv.indexOf('--build') + 1] : 'rarity';
+// How much is one card worth? Two policies tying told us the card set is flat,
+// but that is deduced rather than measured. `--ban <id>` plays the run with a
+// card struck out of the offers and out of the starting deck; `--force <id>`
+// pins three copies into the deck that nothing may swap out. The gap between the
+// two, against the danger line, is what that card is worth — and if no card can
+// move it outside its interval, the flatness is measured rather than inferred.
+const BAN = argv.includes('--ban') ? argv[argv.indexOf('--ban') + 1] : null;
+const FORCE = argv.includes('--force') ? argv[argv.indexOf('--force') + 1] : null;
+const FORCE_N = 3;
 
 /**
  * What a card is worth outside a battle, per energy. `worth()` cannot be used
@@ -138,6 +148,26 @@ function playOne(runIdx) {
   EK.takeStarter(ONLY || EK.STARTERS[runIdx % EK.STARTERS.length]);
   EK.G.dialogue = null; EK.G.mode = 'world';
 
+  // The banned card leaves the starting deck too, or the run is measured with
+  // three copies of the thing it is supposed to be without.
+  const pinned = new Set();
+  if (BAN) EK.G.deck = EK.G.deck.filter((u) => (EK.ownedCard(u) || {}).id !== BAN);
+  if (FORCE) {
+    for (let i = 0; i < FORCE_N; i++) {
+      const c = EK.grantCard(FORCE, true);
+      if (!c) break;
+      pinned.add(c.u);
+      if (!EK.G.deck.includes(c.u)) {
+        // Make room by dropping the least wanted unpinned card.
+        const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean).filter((o) => !pinned.has(o.u));
+        let worst = inDeck[0];
+        for (const o of inDeck) if (cardRank(EK, o.id) < cardRank(EK, worst.id)) worst = o;
+        if (EK.G.deck.length >= EK.DECK_MAX && worst) EK.G.deck = EK.G.deck.filter((u) => u !== worst.u);
+        EK.G.deck.push(c.u);
+      }
+    }
+  }
+
   const stat = {
     steps: 0, fights: 0, noDoubt: 0, wipes: 0, healTrips: 0, turns: 0,
     played: new Map(), drawn: new Map(), afford: new Map(), taken: new Map(),
@@ -182,8 +212,8 @@ function playOne(runIdx) {
   const orbToThrow = () => ORBS.find((o) => (EK.G.bag[o] || 0) > 0) || null;
   /** A card into the deck if it beats the worst thing already in there. */
   const tryDeck = (c) => {
-    if (!c || EK.G.deck.includes(c.u)) return;
-    const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean);
+    if (!c || EK.G.deck.includes(c.u) || c.id === BAN) return;
+    const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean).filter((o) => !pinned.has(o.u));
     if (inDeck.length < EK.DECK_MAX) { EK.G.deck.push(c.u); return; }
     // A player drops a weak card, not an unused one, so play count only breaks
     // ties within the policy's own ranking.
@@ -208,6 +238,9 @@ function playOne(runIdx) {
     const kind = kinds.find((k) => (EK.G.gems || 0) >= EK.CHESTS[k].cost);
     if (!kind) return;
     const got = EK.openChest(kind);
+    // grantCard puts a pull straight into the deck whenever there is room, which
+    // is the one path a ban leaks through — early, before the deck fills.
+    if (BAN) EK.G.deck = EK.G.deck.filter((u) => (EK.ownedCard(u) || {}).id !== BAN);
     if (got) for (const c of got) tryDeck(c);
   };
 
@@ -649,7 +682,8 @@ function playOne(runIdx) {
       // could not see.
       EK.G.gems = (EK.G.gems || 0) + EK.gemReward(EK.B());
       if (EK.B().npc) EK.G.money += EK.B().npc.trainer.prize;
-      const offer = EK.rollReward(EK.B());
+      let offer = EK.rollReward(EK.B());
+      if (BAN && offer) offer = offer.filter((id) => id !== BAN);
       if (offer && offer.length) {
         // The best card on offer, not a coin toss between them. Picking at
         // random depressed played/drawn across the whole pool, which is the
@@ -664,7 +698,7 @@ function playOne(runIdx) {
         // tryDeck's is not.
         const c = EK.grantCard(pick, true);
         if (!EK.G.deck.includes(c.u)) {
-          const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean);
+          const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean).filter((o) => !pinned.has(o.u));
           const rank = (o) => cardRank(EK, o.id) + Math.min(0.9, (o.plays || 0) / 1000);
           let worst = inDeck[0];
           for (const o of inDeck) if (rank(o) < rank(worst)) worst = o;
@@ -816,6 +850,7 @@ const fights = avg((r) => r.fights), steps = avg((r) => r.steps);
 console.log(`\nEMBERKIN — ${RUNS} run${RUNS > 1 ? 's' : ''} from the study to Crown Hollow`
   + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}`
   + `${BUILD === 'rarity' ? '' : `, building for ${BUILD}`}`
+  + `${BAN ? `, without ${BAN}` : ''}${FORCE ? `, with ${FORCE_N}x ${FORCE}` : ''}`
   + `${ONLY ? `, ${ONLY} only` : ''}\n`);
 console.log(`  steps walked        ${steps.toFixed(0)}   per run, to reach level ${avg((r) => r.top).toFixed(0)}`);
 console.log(`  fights              ${fights.toFixed(0)}   per run;  one every ${show(rate((r) => r.steps, perFight), 1)} steps`);
