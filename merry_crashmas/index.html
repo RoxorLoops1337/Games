@@ -391,7 +391,7 @@ const LEVELS = [
     flavour:'Long straight aisles. Build the combo, do not stop.' },
   { name:'THE BIG TREE',         seed:4419, cars:4, rows:3, span:0.90, crowd:1.10, par:0.1705, theme:'nordic', shape:'plaza',
     flavour:'The town tree is worth a fortune. So is the crowd around it.' },
-  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.15, par:0.2291, theme:'blizzard', shape:'funnel',
+  { name:'SANTA’S GROTTO',  seed:5225, cars:4, rows:4, span:0.96, crowd:1.15, par:0.3637, theme:'blizzard', shape:'funnel',
     flavour:'Santa is in there somewhere, and he is worth twelve shoppers.' },
   { name:'CHRISTMAS EVE',        seed:6624, cars:5, rows:4, span:1.00, crowd:1.35, par:0.1823, theme:'eve', shape:'chevron',
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
@@ -403,21 +403,21 @@ const LEVELS = [
   { name:'THE GAUNTLET',         seed:7714, cars:4, rows:3, span:0.90, crowd:1.10, par:0.1138, theme:'night', shape:'rows',
     feature:['chicane'],
     flavour:'Nutcrackers in the way of every straight line. Find the angle.' },
-  { name:'CAROUSEL SQUARE',      seed:8120, cars:4, rows:3, span:0.88, crowd:1.20, par:0.2058, theme:'alpine', shape:'plaza',
+  { name:'CAROUSEL SQUARE',      seed:8120, cars:4, rows:3, span:0.88, crowd:1.20, par:0.2107, theme:'alpine', shape:'plaza',
     flavour:'The whole market rings the square. The carousel is the prize in the middle.' },
-  { name:'THE PARADE',           seed:8533, cars:4, rows:3, span:0.92, crowd:1.05, par:0.1308, theme:'dusk', shape:'rows',
+  { name:'THE PARADE',           seed:8533, cars:4, rows:3, span:0.92, crowd:1.05, par:0.2302, theme:'dusk', shape:'rows',
     feature:['parade'],
     flavour:'A column of carollers marching across your line. Time it.' },
-  { name:'NARROW ALLEYS',        seed:8946, cars:5, rows:5, span:0.84, crowd:1.10, par:0.2559, theme:'night', shape:'rows',
+  { name:'NARROW ALLEYS',        seed:8946, cars:5, rows:5, span:0.84, crowd:1.10, par:0.2913, theme:'night', shape:'rows',
     flavour:'Five rows, no room. You will be bouncing between the stalls the whole way.' },
-  { name:'THE LONG BOULEVARD',   seed:9352, cars:3, rows:2, span:1.00, crowd:1.30, par:0.1221, theme:'dusk', shape:'rows',
+  { name:'THE LONG BOULEVARD',   seed:9352, cars:3, rows:2, span:1.00, crowd:1.30, par:0.1784, theme:'dusk', shape:'rows',
     flavour:'One aisle, end to end. Nothing to hit but people, if you keep it straight.' },
   { name:'FROZEN LAKE',          seed:9765, cars:4, rows:2, span:0.94, crowd:1.00, par:0.4182, theme:'blizzard', shape:'wave',
     feature:['rink', 'ramps'],
     flavour:'Ice, snowbanks, and a market that made the wrong choice of venue.' },
   { name:'BONFIRE NIGHT',        seed:10178, cars:4, rows:3, span:0.90, crowd:1.15, par:0.3915, theme:'night', shape:'wave',
     flavour:'Glühwein on every corner. Break one and the spill does the rest.' },
-  { name:'THE CHOIR',            seed:10591, cars:4, rows:3, span:0.92, crowd:1.05, par:0.1324, theme:'nordic', shape:'funnel',
+  { name:'THE CHOIR',            seed:10591, cars:4, rows:3, span:0.92, crowd:1.05, par:0.1658, theme:'nordic', shape:'funnel',
     feature:['choir'],
     flavour:'Sixty of them on a stand, mid-verse, backs to the road.' },
   { name:'ROOFTOPS',             seed:11004, cars:4, rows:4, span:0.94, crowd:1.15, par:0.2139, theme:'alpine', shape:'chevron',
@@ -426,16 +426,16 @@ const LEVELS = [
   { name:'THE CROSSROADS',       seed:11417, cars:5, rows:4, span:0.96, crowd:1.20, par:0.1479, theme:'eve', shape:'spiral',
     feature:['chicane'],
     flavour:'Two markets crossing. Whichever way you go, something is in the way.' },
-  { name:'SANTA’S PARADE',  seed:11830, cars:5, rows:4, span:0.96, crowd:1.25, par:0.3377, theme:'dusk', shape:'wave',
+  { name:'SANTA’S PARADE',  seed:11830, cars:5, rows:4, span:0.96, crowd:1.25, par:0.4321, theme:'dusk', shape:'wave',
     feature:['parade'],
     flavour:'He is out front, walking. Everyone else is behind him.' },
   { name:'THE SPIRAL',           seed:12243, cars:5, rows:4, span:0.98, crowd:1.20, par:0.321, theme:'nordic', shape:'spiral',
     feature:['ramps'],
     flavour:'Stalls wound around the tree. There is a line through it. Find it.' },
-  { name:'GRAND MARKET',         seed:12656, cars:5, rows:5, span:1.00, crowd:1.30, par:0.2043, theme:'night', shape:'funnel',
+  { name:'GRAND MARKET',         seed:12656, cars:5, rows:5, span:1.00, crowd:1.30, par:0.1995, theme:'night', shape:'funnel',
     feature:['choir', 'chicane'],
     flavour:'Everything the town owns, in one place, on the busiest night of the year.' },
-  { name:'MIDNIGHT MASS',        seed:13069, cars:6, rows:5, span:1.00, crowd:1.40, par:0.3227, theme:'eve', shape:'chevron',
+  { name:'MIDNIGHT MASS',        seed:13069, cars:6, rows:5, span:1.00, crowd:1.40, par:0.3385, theme:'eve', shape:'chevron',
     feature:['parade', 'choir', 'ramps'],
     flavour:'The last one. Everyone in town is out, and the bells have just started.' },
 ];
@@ -459,7 +459,7 @@ const GOALS = [
   { id:'stalls',  text: n => 'Wreck ' + n + ' stalls',            gen: lv => Math.min(14, 4 + lv),
     test: (G2, n) => G2.bigWrecks >= n },
   { id:'roll',    text: n => 'Land ' + (n > 1 ? n + ' barrel rolls' : 'a barrel roll'), gen: lv => 1 + (lv > 6 ? 1 : 0),
-    test: (G2, n) => G2.rolls >= n, needs: 'ramps' },
+    test: (G2, n) => G2.rolls >= n, needs: 'rollramps' },
   { id:'air',     text: n => 'Take ' + n + (n > 1 ? ' jumps' : ' jump') + ' off a snowbank', gen: lv => 1 + Math.floor(lv / 4),
     test: (G2, n) => G2.jumps >= n, needs: 'ramps' },
   { id:'slam',    text: n => 'Flatten ' + n + ' at once with a landing', gen: lv => 2 + Math.floor(lv / 6),
@@ -488,16 +488,57 @@ const GOALS = [
    well-timed nitro, at 2700 the car never gets there at all. */
 const LANDMARK_REACH = 2650;
 
+/* The speed a barrel roll needs off a ramp. takeOff gives vz = sp * RAMP_KICK
+   * CAR.ramp and the roll only completes if the flight lasts past 0.3s, i.e.
+   vz > 0.15 * GRAV_Z — so for the starting car that is 787px/s at the ramp. */
+const ROLL_SPD = 0.15 * GRAV_Z / RAMP_KICK;
+
+/* Which ramps the STARTING car can actually get to, on this market, through
+   this market.
+
+   Straight-line distance says every snowbank on THE CHOIR is within reach and
+   the hatchback still landed zero rolls there across 825 shots, because there
+   are four rows of stalls in the way first. This asks the same predictor the
+   aim line uses, from the sling, at seven angles, in the hatchback — so the
+   answer accounts for what the market does to the car on the way. It draws no
+   random numbers, so it cannot move the simulation's stream. */
+function reachableRamps(){
+  const wasCar = CAR, wl = CARL, ww = CARW, wr = CARR;
+  const cx = car.x, cy = car.y;
+  CAR = CARS[0]; CARL = CAR.len; CARW = CAR.wid; CARR = CAR.rad;
+  car.x = ANCHOR.x - MAX_PULL; car.y = ANCHOR.y;
+  const jump = new Set(), roll = new Set();
+  // one probe per ramp, aimed straight at it, which is how a player goes for
+  // one. Sweeping fixed angles instead only ever finds whichever ramp happens
+  // to sit on the lane, and reported one where a market has six.
+  for (const o of props){
+    if (!o.ramp || o.dead) continue;
+    const dx = o.x - car.x, dy = o.y - car.y;
+    if (dx <= 40) continue;                       // you cannot fire backwards
+    const len = Math.hypot(dx, dy) || 1;
+    const pv = previewPath(-dx / len, -dy / len, 1);
+    if (!pv.ramp0 || pv.ramp0.o !== o) continue;
+    jump.add(o);
+    if (pv.ramp0.sp >= ROLL_SPD) roll.add(o);
+  }
+  CAR = wasCar; CARL = wl; CARW = ww; CARR = wr;
+  car.x = cx; car.y = cy;
+  return { jump: jump.size, roll: roll.size };
+}
+
 function rollGoals(lv, levelIdx){
-  const ramps = props.filter(o => o.kind === 'ramp').length;
+  const reach = reachableRamps();
   const reachable = o => o.x - ANCHOR.x <= LANDMARK_REACH;
+  // a stall goal cannot ask for more big props than the near market holds
+  const bigProps = props.filter(o => o.pts >= 260 && reachable(o)).length;
   // a market whose whole idea is that straight lines are denied should not also
   // ask you to hit one specific walking man
   const blocked = (lv.feature || []).indexOf('chicane') >= 0;
   const has = { santa: !blocked && people.some(p => p.kind === 'santa'),
                 bigtree: props.some(o => o.kind === 'bigtree' && reachable(o)),
                 carousel: props.some(o => o.kind === 'carousel' && reachable(o)),
-                ramps: ramps > 0 };
+                ramps: reach.jump > 0,
+                rollramps: reach.roll > 0 };
   const pool = GOALS.filter(g => !g.needs || has[g.needs]);
   const picked = [];
   const used = {};
@@ -506,9 +547,14 @@ function rollGoals(lv, levelIdx){
     const g = pool[ri(0, pool.length - 1)];
     if (used[g.id]) continue;
     used[g.id] = 1;
-    // never ask for more jumps than there are snowbanks to jump off
+    /* Never ask for more than the market can supply. `slam` used to be
+       excluded from this entirely, which is how GRAND MARKET came to ask for
+       five flattened at once on a market the hatchback takes no jumps at. */
     let n = g.gen(levelIdx);
-    if (g.needs === 'ramps' && g.id !== 'slam') n = Math.min(n, ramps);
+    if (g.id === 'air') n = Math.min(n, reach.jump);
+    else if (g.id === 'roll') n = Math.min(n, reach.roll);
+    else if (g.id === 'slam') n = Math.min(n, 2 + reach.jump);
+    else if (g.id === 'stalls') n = Math.min(n, Math.max(2, Math.floor(bigProps * 0.25)));
     picked.push({ id: g.id, n, text: g.text(n), done: false });
   }
   return picked;
@@ -1060,6 +1106,14 @@ function startLevel(i){
   G.rolls = 0; G.jumps = 0; G.bestSlam = 0; G.bestRun = 0; G.nitroKills = 0; G.bigWrecks = 0;
   G.byKind = {}; G.treeDown = false; G.carouselDown = false;
   G.goalsDone = 0;
+  /* Every market keeps one ramp the starting car can get to at speed. Without
+     this the reachability gate simply deletes barrel rolls and landing slams
+     from the second half of the campaign — six markets had ramps that only the
+     sleigh could ever reach, and gating alone would have answered that by
+     never asking. A snowbank on the near approach is the cheaper answer. */
+  if (props.some(o => o.ramp) && reachableRamps().jump === 0){
+    addProp('ramp', ANCHOR.x + 980, ANCHOR.y + (rnd() < 0.5 ? -1 : 1) * rr(60, 240), {});
+  }
   G.goals = rollGoals(lv, G.level);
   G.combo = 0; G.comboT = 0; G.mult = 1;
   G.stars = 0;
@@ -3776,7 +3830,7 @@ function previewPath(ux, uy, p){
              cheapest part of this to predict, because nothing decelerates it.
              vz, so airT, so a straight coast, then the landing's 0.86. */
           if (o.ramp && Math.hypot(vx, vy) >= RAMP_MIN){
-            if (!ramp) ramp = { x, y, o, at: path.length };
+            if (!ramp) ramp = { x, y, o, at: path.length, sp: Math.hypot(vx, vy) };
             if (sure < 0) sure = path.length;
             const vz = Math.min(RAMP_MAX_VZ * CAR.ramp, Math.hypot(vx, vy) * RAMP_KICK * CAR.ramp);
             const airT = 2 * vz / GRAV_Z;
@@ -3819,9 +3873,14 @@ function previewPath(ux, uy, p){
     path.push({ x, y });
   }
   if (sure < 0) sure = path.length;
-  // a ramp behind something the car hits first is a ramp the car never reaches
+  /* Two answers, deliberately. `ramp0` is the physics: the first ramp this
+     line actually takes off from. `ramp` is what the aim view is willing to
+     promise — a ramp behind something the car clips first is past the
+     confidence horizon and is not drawn. Reachability wants the first;
+     drawing wants the second. */
+  const ramp0 = ramp;
   if (ramp && ramp.at > sure) ramp = null;
-  return { path, ramp, sure, end: path.length ? path[path.length - 1] : { x, y } };
+  return { path, ramp, ramp0, sure, end: path.length ? path[path.length - 1] : { x, y } };
 }
 
 /* The things the checklist names are usually off the edge of the aim frame —
