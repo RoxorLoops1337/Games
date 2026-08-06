@@ -14,9 +14,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all twenty-two mistakes this tool
-// has made. Sixteen passes on this game produced about seven changes to the game
-// and twenty-two fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all twenty-six mistakes this tool
+// has made. Seventeen passes on this game produced about seven changes to the
+// game and twenty-six fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -33,6 +33,8 @@ const RUNS = Number(argv[argv.indexOf('--runs') + 1]) || (argv.includes('--runs'
 // chart decides the fight before a card is played. `--solo` measures the second
 // one, so a change can be judged against both instead of whichever is flattering.
 const SOLO = argv.includes('--solo');
+// How many fights a permanent is worth keeping, for scoring. See `worth()`.
+const MIGHT_FIGHTS = 12;
 // `--rested` heals the party before each trainer, which is how this used to
 // measure them and why they all read as unloseable. Kept because the comparison
 // is the point: the difference between the two columns is how much of a
@@ -69,7 +71,15 @@ function playOne(runIdx) {
 
   const stat = {
     steps: 0, fights: 0, noDoubt: 0, wipes: 0, healTrips: 0, turns: 0,
-    played: new Map(), drawn: new Map(), afford: new Map(), taken: new Map(), levels: 0, gems: 0,
+    played: new Map(), drawn: new Map(), afford: new Map(), taken: new Map(),
+    // What is a card actually worth? The scorer pays a flat 3 points for one,
+    // which is a number somebody typed. These measure it instead: the worth of
+    // an average non-kin card sitting in hand at a decision (what an extra card
+    // would be, if you could spend it), the worth of the ones actually played,
+    // and how often the support pass stops because there is nothing left to
+    // afford rather than nothing left worth playing. That last one is the
+    // discount: a card you cannot pay for is worth nothing at all.
+    handWorth: 0, handN: 0, playWorth: 0, playN: 0, stopBroke: 0, stopDone: 0, levels: 0, gems: 0,
     oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0, fled: 0,
     // What a fight took out of the party, as opposed to how close to death it
     // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
@@ -269,7 +279,19 @@ function playOne(runIdx) {
         if (d.vt === 'edge') pts += v;                        // one swing
         if (d.vt === 'atk') pts += v * left;
         if (d.vt === 'def') pts += v * left;                  // damage off every hit
-        if (d.vt === 'might') pts += v * left * 2;            // "for ever" outlives this fight
+        // `might` is not a buff, it is a purchase: G.might is saved with the run
+        // and added to every attack from every kin for the rest of it. This used
+        // to read `v * left * 2` — the fight's runway, capped at four turns, with
+        // a x2 fudge for "outlives this fight". A run has eighty-odd fights left
+        // at any point, so +2 damage a swing is worth several hundred points, not
+        // eight, and the probe was passing on it: Temper played 31% of the fights
+        // it could be paid for and Grit 44%, and every read of the might cards for
+        // six passes was taken through that.
+        //
+        // MIGHT_FIGHTS is a floor, not an estimate. The true horizon is the rest
+        // of the run; a dozen fights is the number that makes these rank like a
+        // permanent without making them the answer to every turn.
+        if (d.vt === 'might') pts += v * left * MIGHT_FIGHTS;
         if (d.vt === 'shield') pts += v;                      // damage it will eat
         if (d.vt === 'heal') pts += Math.min(v, hurt);
         if (d.vt === 'maxhp') pts += Math.min(v, hurt) + v * .4;
@@ -316,11 +338,13 @@ function playOne(runIdx) {
         for (let spun = 0; spun < 10; spun++) {
           if (cur.over) break;
           noteHand();                  // the last play may have drawn into the hand
-          let best = -1, bestRate = 0;
+          let best = -1, bestRate = 0, couldWant = 0;
           for (let i = 0; i < cur.hand.length; i++) {
             const c = cur.hand[i];
             if (c.src === 'kin') continue;
             const cost = EK.cardCost(c);
+            stat.handWorth += worth(c); stat.handN++;
+            if (wants(c)) couldWant++;
             // Could this card have been paid for at a moment the policy was
             // choosing? played/drawn cannot tell a bad card from an unaffordable
             // one, and the whole table slopes with price for that reason alone:
@@ -349,8 +373,12 @@ function playOne(runIdx) {
           // is worse than the gap it closes: at a bar of 1.5x the swing it ate
           // the swing constantly and kin move play rates fell from 62-98% to
           // 24-42%, which measures the escape hatch rather than the game.
-          if (best < 0) break;
+          // Why the turn stopped: out of energy with cards still worth playing,
+          // or out of cards worth playing. An extra card is only worth something
+          // in the second case.
+          if (best < 0) { if (couldWant) stat.stopBroke++; else stat.stopDone++; break; }
           const card = cur.hand[best];
+          stat.playWorth += worth(card); stat.playN++;
           if (!playedCards.has(card.id)) { playedCards.add(card.id); bump(stat.played, card.id); }
           EK.playCard(best);
         }
@@ -726,6 +754,28 @@ for (const [k, v] of [...mk].sort((a, b2) => b2[1].n - a[1].n)) {
     + `${pct(v.lost, v.n).padStart(5)} ${(v.turns / v.n).toFixed(1).padStart(6)} ${(v.gap / v.n).toFixed(1).padStart(7)}`);
 }
 console.log('');
+
+// What is a card worth? The scorer pays a flat 3 points for a drawn card, and
+// that number decides whether a draw effect is a real effect or a decoration —
+// Ward Stance's two cards are six points against fifteen shield. So measure it.
+//
+// An extra card is worth an average card ONLY on the turns you had energy left
+// and nothing worth spending it on. On the turns you stopped because you were
+// broke, an extra card is worth nothing: you could not have played it. So the
+// honest value of a draw is the average card discounted by how often the turn
+// ends card-poor rather than energy-poor.
+{
+  const sum = (k) => runs.reduce((a, r) => a + r[k], 0);
+  const avgHand = sum('handWorth') / Math.max(1, sum('handN'));
+  const avgPlay = sum('playWorth') / Math.max(1, sum('playN'));
+  const broke = sum('stopBroke'), done = sum('stopDone');
+  const cardPoor = done / Math.max(1, broke + done);
+  console.log('  what a card is worth');
+  console.log(`    average card in hand   ${avgHand.toFixed(1)} points`);
+  console.log(`    average card played    ${avgPlay.toFixed(1)} points   (the policy picks the best, so this is a ceiling)`);
+  console.log(`    turns that ended card-poor  ${(cardPoor * 100).toFixed(0)}%   (the rest ended out of energy, where a drawn card buys nothing)`);
+  console.log(`    so a drawn card is worth  ${(avgHand * cardPoor).toFixed(1)}  — the scorer pays 3\n`);
+}
 
 // Which cards actually got played, and which ones sat there.
 const all = new Map();

@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and twenty-two fixes to
+this game have produced roughly six changes to the game and twenty-six fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -33,7 +33,7 @@ if it only moves one, say which.
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 21.
+a sample — see mistake 25.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -178,19 +178,33 @@ and the family is more useful than the individual entry.
     payable` divides by the fights the card was affordable at a decision point, and
     a card that is never payable prints `never` rather than a percentage.
 
+23. **`might` was priced as a four-turn buff when it is a run-long purchase**
+    (pass 25). `G.might` is saved with the run and added to every attack from
+    every kin for the rest of it; the scorer read `v * left * 2`, where `left` is
+    the current fight's runway capped at four turns. A run has eighty-odd fights
+    left at any point, so +2 damage a swing is worth several hundred points, not
+    eight. The probe was declining them: **Temper 31% → 96%** of the fights it
+    could be paid for, **Grit 44% → 90%**, War Cry → 100%. Six passes of reading
+    the might cards went through that price, and it is the fourth time a
+    mis-scored effect has been mistaken for a weak card (see 17, 18).
+    Consequence worth stating: playing them correctly made the player stronger,
+    so the headline moved — solo lost-or-ran .311 → .247, party turns 3.50 →
+    3.08. **That is a re-baseline, not a regression.** The old numbers described a
+    player throwing away permanent damage.
+
 ### Sampling — a claim the sample could not carry
 
-20. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+24. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-21. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+25. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-22. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+26. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -202,7 +216,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of twenty-two are denominators.** If a number will not move, or moves the
+- **Nine of twenty-six are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

@@ -532,14 +532,68 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all twenty-two mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Sixteen passes on this
-game produced about seven changes to the game and twenty-two fixes to the tool.
+of all twenty-six mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Seventeen passes on this
+game produced about seven changes to the game and twenty-six fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
 a turn and buys the whole fight — so a party number that looks too good usually
 is. Judge a change against both, and if it only moves one, say which.
+
+#### The two-cost slot is fine; the might cards were mispriced
+
+The premise that a two-cost is structurally squeezed came from reading
+played/drawn, which slopes with price on its own. Once you divide by the fights
+a card could actually be paid for, price stops predicting play at all — the
+median `when payable` runs 100% at cost 0, 69-75% at cost 1, **76-78% at cost 2**
+and 88-89% at cost 3. Cost-1 cards span 18% to 100%. The buckets overlap almost
+completely.
+
+What predicts play is not price but **permanence**. Every card at the top of
+every bucket has grow, chain, retain or combo; the ones at the bottom have none.
+A one-shot has to beat cards that keep paying.
+
+Which is how the real finding turned up. `G.might` is saved with the run and
+added to every attack from every kin for the rest of it — eighty-odd fights — and
+the probe was pricing it over the current fight's runway, capped at four turns.
+Temper read 31%, Grit 44%, and six passes of reading the might cards went through
+that price. Scored as the permanent it is, **Temper is 96%, Grit 90%, War Cry
+100%** — Temper is now the second-best two-cost in the deck, not the second
+worst. Nothing about the cards changed.
+
+Playing them correctly makes the player stronger, so the run numbers moved with
+it: solo lost-or-ran .311 → .247, party turns 3.50 → 3.08. That is a re-baseline,
+not a regression — the old numbers described a player throwing away permanent
+damage every run.
+
+Twin Strike is the one card left at the bottom that is genuinely the card. It
+buys an extra swing a turn for the rest of the fight, scored at 32-48 points on a
+real turn, where a good one-energy card scores 28-57: two energy for what one
+buys elsewhere. **The obvious fix overshoots.** At cost 1 it went to 77-84% and
+took the game with it — party fights down to 2.86 turns, solo no-kin-in-doubt
+back up from 37% to 42%, Bulwark down to 55%, Ward Stance to 13%. An extra swing
+scales with the kin's damage, which grows all run, so halving the price makes it
+the best card in the deck at every level. Left at two. If it gets fixed it is by
+asking whether Whetstone, Blooded Edge and Fang Hone are the ones priced wrong.
+
+#### What a drawn card is worth
+
+The scorer pays a flat 3 points for a drawn card, which decides whether a draw
+effect is an effect or a decoration. Measured: the average non-kin card in hand
+is worth **25.5 points** (party) or 21.7 (solo) — but a drawn card only cashes in
+on a turn that ended with energy to spare, and **only 15-18% of turns end
+card-poor. The rest end out of energy, where an extra card buys nothing.**
+
+25.5 × 15% = **3.8**. Solo: 21.7 × 18% = **3.9**. So three is right, a shade low,
+and nowhere near enough to explain Ward Stance. The constant stays at 3: the
+gap is smaller than the precision this measurement has, and `worth()` feeds the
+average it would be tuned against, so chasing the fixed point would be tuning
+noise.
+
+The 85% is the more interesting half. **Energy, not cards, is what this game runs
+out of** — which is why a card's price is so much of its identity, and why draw
+effects are worth so much less here than they look.
 
 #### Ward Stance, Bulwark, and what a two-cost has to buy
 
