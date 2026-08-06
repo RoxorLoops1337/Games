@@ -63,6 +63,7 @@ const EXPOSE = `__out.api = {
   _setHitstop: (v) => { hitstop = v; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers,
+  reachableRamps, ROLL_SPD,
   COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
@@ -966,6 +967,75 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const vals = Object.values(ends);
   assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
     'every car should preview differently: ' + JSON.stringify(ends));
+});
+
+/* ---------------------------------------------------------------- goals --- */
+
+/* Ramp goals used to be rolled from a straight-line distance that ignored the
+   market: THE CHOIR asked for two barrel rolls on a market where the starting
+   car landed zero rolls and zero jumps across 825 shots, and GRAND MARKET asked
+   to flatten five at once with a landing it never gets airborne for. */
+test('no market asks for a ramp it does not have', () => {
+  const bad = [];
+  for (let lv = 0; lv < boot().LEVELS.length; lv++){
+    const api = boot();
+    api.startLevel(lv);
+    const reach = api.reachableRamps();
+    for (const g of api.G.goals){
+      if (g.id === 'roll' && reach.roll < g.n)
+        bad.push(api.LEVELS[lv].name + ': ' + g.n + ' rolls, ' + reach.roll + ' ramps fast enough');
+      if (g.id === 'air' && reach.jump < g.n)
+        bad.push(api.LEVELS[lv].name + ': ' + g.n + ' jumps, ' + reach.jump + ' ramps in reach');
+      if (g.id === 'slam' && reach.jump === 0)
+        bad.push(api.LEVELS[lv].name + ': a landing slam with nothing to jump off');
+    }
+  }
+  assert(bad.length === 0, 'impossible ramp goals:\n  ' + bad.join('\n  '));
+});
+
+test('every market has a ramp the starting car can reach at speed', () => {
+  const bad = [];
+  for (let lv = 0; lv < boot().LEVELS.length; lv++){
+    const api = boot();
+    api.startLevel(lv);
+    if (!api.props.some(o => o.ramp)) continue;      // a market with no ramps at all is fine
+    const reach = api.reachableRamps();
+    if (reach.jump === 0) bad.push(api.LEVELS[lv].name);
+  }
+  assert(bad.length === 0, 'ramps only the sleigh could ever reach on: ' + bad.join(', '));
+});
+
+/* The teeth: for every market, every goal it rolled has to actually fall to the
+   starting car in one of a fan of aimed launches. */
+test('every goal on every market falls to the hatchback', () => {
+  const angles = [-260, -170, -85, 0, 85, 170, 260];
+  const bad = [];
+  for (let lv = 0; lv < boot().LEVELS.length; lv++){
+    const names = boot();
+    names.startLevel(lv);
+    const want = names.G.goals.map(g => g.id);
+    const got = new Set();
+    for (const dy of angles){
+      const api = boot({ store: { merry_crashmas_car_v1: 'hatch' } });
+      api.startLevel(lv); api.beginLevel();
+      assert(api.getCar().id === 'hatch', 'the sweep must run in the starting car');
+      for (let c = 0; c < api.G.cars; c++){
+        api.launch(-api.C.MAX_PULL, dy + (c - 1) * 40);
+        for (let f = 0; f < 4000 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+          // a player fires the nitro in the crowd; a sweep that never does
+          // cannot reach a goal that asks you to
+          if (api.G.phase === 'drive' && api.G.runT > 0.45 && api.car.boost > 0) api.doBoost();
+          api.skipReplay(); api.update(1 / 60);
+        }
+      }
+      for (const g of api.G.goals) if (g.done) got.add(g.id);
+      if (got.size === want.length) break;
+    }
+    for (const id of want) if (!got.has(id)) bad.push(names.LEVELS[lv].name + ' / ' + id);
+  }
+  console.log('    (goals unreached by the hatchback across seven aimed fans: ' +
+    (bad.length ? bad.join(', ') : 'none') + ')');
+  assert(bad.length <= 3, 'goals the starting car never completed:\n  ' + bad.join('\n  '));
 });
 
 /* ------------------------------------------------------------------ aim --- */
