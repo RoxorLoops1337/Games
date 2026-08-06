@@ -287,12 +287,22 @@
   #title{ position:absolute; inset:0; z-index:12; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:14px; text-align:center; padding:20px;
     background:radial-gradient(120% 90% at 50% 20%,#3a1c3f,#0c0812 70%); }
+  /* The logo carries weight: a hard dark rim so it reads against the sunset,
+     a warm drop under it, and a glow that spills the way the sun does. */
   #title h1{ margin:0; font-size:clamp(30px,9vw,58px); letter-spacing:8px; color:var(--gold);
-    text-shadow:0 3px 0 #7a3f13, 0 0 26px rgba(255,201,77,.45); }
+    text-shadow:
+      -2px 0 0 #2a1b2e, 2px 0 0 #2a1b2e, 0 -2px 0 #2a1b2e, 0 2px 0 #2a1b2e,
+      0 5px 0 #7a3f13, 0 8px 14px rgba(0,0,0,.6), 0 0 34px rgba(255,201,77,.5); }
   #title p{ margin:0; color:var(--dim); font-size:13px; letter-spacing:2px; text-transform:uppercase; }
-  #title .btn{ padding:9px 20px; font-size:15px; cursor:pointer; letter-spacing:1px; }
-  #title .btn:hover{ background:rgba(255,201,77,.16); }
-  #titleArt{ image-rendering:pixelated; }
+  #title .btn{ padding:9px 22px; font-size:15px; cursor:pointer; letter-spacing:1px;
+    transition:transform .12s ease, box-shadow .12s ease, color .12s ease; }
+  #title .btn:hover{ color:var(--gold); border-color:var(--gold); transform:translateY(-2px);
+    box-shadow:0 6px 0 rgba(10,6,16,.6), 0 0 18px rgba(255,201,77,.35); }
+  /* The illustration is a framed thing on the wall, not a floating rectangle. */
+  #titleArt{ image-rendering:pixelated; border-radius:10px; border:2px solid var(--edge);
+    box-shadow:0 6px 0 rgba(10,6,16,.6), 0 10px 28px rgba(28,14,44,.6),
+      inset 0 0 0 1px rgba(255,236,205,.08);
+    max-width:94vw; height:auto; }
 
   /* ---------------- touch controls ---------------- */
   /* ---------------- touch controls ----------------
@@ -373,7 +383,7 @@
 
 
   <div id="title">
-    <canvas id="titleArt" width="372" height="128"></canvas>
+    <canvas id="titleArt" width="372" height="150"></canvas>
     <h1>EMBERKIN</h1>
     <p>cute enough to want one · armed enough to respect one</p>
     <div class="btn panel" data-act="new">New journey</div>
@@ -3250,22 +3260,26 @@ const interior = (w, h) => {
 const MAPS = {
   hollowbrook: {
     name: 'Hollowbrook', kind: 'town',
+    // Hollowbrook is meant to look lived in rather than laid out. Every door
+    // has a path that actually reaches the road; the pond has a shore instead
+    // of four straight banks; and somebody has fenced a patch of flowers and
+    // left the gate open.
     rows: [
       '#########==#############',
       '##.......==...........##',
       '##.RRRR..==..RRRRRR...##',
       '##.RRRR..==..RRRRRR...##',
       '##.WWDW..==..WWDWWW...##',
-      '##.......==...........##',
-      '##.f.....==......f....##',
-      '##S......==...........##',
-      '##.......==...........##',
-      '##..~~~..==...........##',
-      '##..~~~..==....RRRR...##',
-      '##..~~~..==....RRRR...##',
-      '##.......==....WWDW...##',
-      '##..ff...==...........##',
-      '##.......==...........##',
+      '##...===========......##',
+      '##.f.....==..||||||...##',
+      '##S......==..|ff.f|...##',
+      '##..ssss.==..|.f..|...##',
+      '##..s~~s.==..||.|||...##',
+      '##..~~~~.==....RRRR...##',
+      '##..s~~s.==....RRRR...##',
+      '##..ssss.==....WWDW...##',
+      '##..ff...=========....##',
+      '##....f..==...o.......##',
       '##.....o.==.o.....S...##',
       '##.......==...........##',
       '########################',
@@ -3914,7 +3928,7 @@ function drawWorld(g) {
     g.fillStyle = 'rgba(20,10,26,.25)';
     g.fillRect(0, 0, VIEW_W, VIEW_H);
   }
-  worldLight(g, map.kind);
+  worldLight(g, map.kind, G.mapId);
 }
 
 /**
@@ -3925,7 +3939,37 @@ function drawWorld(g) {
  * and pulls the eye to the middle where the player is. The colours are the
  * game's own violet and gold, which is what stops the world and the panels
  * around it looking like two different pictures.
+ *
+ * Every map gets its own grade. The tiles are shared, so without this the shore
+ * and the deep wood are the same picture with different props; with it, walking
+ * from one into the other is a change of weather. Each entry is a top wash, a
+ * bottom wash and how hard the corners close in — no new art, just light.
+ *
+ * `hue` is the one that does the heavy lifting. A wash painted over grass can
+ * only darken or lighten it; it can never make it stop being grass-green, which
+ * is why the first pass at this had four maps that all read the same. Painting
+ * a colour in the 'color' blend mode keeps every value exactly where it was and
+ * moves only the hue and the saturation — which is precisely what a colour
+ * grade is, and what a wash can never be.
  */
+const GRADE = {
+  town:   { top: 'rgba(255,201,77,.10)',  bot: 'rgba(58,36,86,.22)',   vig: .40 },
+  route:  { top: 'rgba(255,214,120,.09)', bot: 'rgba(46,40,92,.20)',   vig: .38 },
+  inside: { top: 'rgba(255,182,96,.14)',  bot: 'rgba(30,18,44,.30)',   vig: .55 },
+  // Late-afternoon gold on the first road out — the friendliest light in the
+  // game, and the one the others are read against, so it barely grades at all.
+  route_one:    { top: 'rgba(255,208,110,.12)', bot: 'rgba(58,42,92,.18)',  vig: .34,
+                  hue: ['#e8c070', .10] },
+  // Under a canopy: little sky, a lot of green shade, corners closing in.
+  emberwood:    { top: 'rgba(214,150,60,.17)',  bot: 'rgba(16,44,34,.34)',  vig: .56,
+                  hue: ['#7fa03c', .15] },
+  // Open water, flat cool light, almost no vignette so it reads as wide.
+  stillmere:    { top: 'rgba(150,220,255,.13)', bot: 'rgba(30,64,110,.24)', vig: .26,
+                  hue: ['#4fb4d6', .15] },
+  // High, thin and cold, with a bruise-coloured sky pressing down.
+  crown_hollow: { top: 'rgba(178,164,255,.17)', bot: 'rgba(52,26,86,.44)',  vig: .62,
+                  hue: ['#8a7fd0', .24] },
+};
 /**
  * Everything that happens where one kind of ground stops and another starts.
  *
@@ -3954,12 +3998,24 @@ function drawEdges(g, map, x0, y0, ox, oy) {
 
       // ---- water: a bright rim on the land side, dark under the bank
       if (ch === '~') {
-        const foam = 'rgba(190,232,246,.45)';
         const deep = 'rgba(10,26,44,.45)';
-        if (up && up !== '~') { g.fillStyle = deep; g.fillRect(sx, sy, TILE, 2); g.fillStyle = foam; g.fillRect(sx, sy + 2, TILE, 1); }
-        if (down && down !== '~') { g.fillStyle = foam; g.fillRect(sx, sy + TILE - 2, TILE, 1); }
-        if (left && left !== '~') { g.fillStyle = deep; g.fillRect(sx, sy, 2, TILE); g.fillStyle = foam; g.fillRect(sx + 2, sy, 1, TILE); }
-        if (right && right !== '~') { g.fillStyle = foam; g.fillRect(sx + TILE - 2, sy, 1, TILE); }
+        // Foam is what water does at an edge, not a frame around it. An
+        // unbroken bright line on all four sides is what makes a pond read as
+        // a swimming pool, so it comes in dashes whose lengths depend on where
+        // the tile is — the same tile always breaks the same way, and no two
+        // neighbours break alike.
+        const dash = (dx, dy, w, h, seed) => {
+          g.fillStyle = 'rgba(190,232,246,.34)';
+          const skip = (mx * 7 + my * 13 + seed) % 3;
+          if (skip === 2) return;                    // a third of the run is simply open
+          const a = skip === 0 ? 2 : 6, len = skip === 0 ? 9 : 8;
+          if (w > h) g.fillRect(sx + dx + a, sy + dy, Math.min(len, w - a), h);
+          else g.fillRect(sx + dx, sy + dy + a, w, Math.min(len, h - a));
+        };
+        if (up && up !== '~') { g.fillStyle = deep; g.fillRect(sx, sy, TILE, 2); dash(0, 2, TILE, 1, 0); }
+        if (down && down !== '~') dash(0, TILE - 2, TILE, 1, 1);
+        if (left && left !== '~') { g.fillStyle = deep; g.fillRect(sx, sy, 2, TILE); dash(2, 0, 1, TILE, 2); }
+        if (right && right !== '~') dash(TILE - 2, 0, 1, TILE, 3);
         continue;
       }
       // ---- the bank itself darkens toward the water it runs into
@@ -4023,18 +4079,37 @@ function castShadow(g, sx, sy, scale = 1) {
   g.restore();
 }
 
-function worldLight(g, kind) {
+function gradeFor(kind, id) {
+  return GRADE[id] || GRADE[kind] || GRADE.route;
+}
+
+function worldLight(g, kind, id) {
+  const gr = gradeFor(kind, id);
+
+  // Hue first, while the picture is still only art: grading the washes as well
+  // would just be grading a grade.
+  if (gr.hue) {
+    g.save();
+    g.globalCompositeOperation = 'color';
+    g.globalAlpha = gr.hue[1];
+    g.fillStyle = gr.hue[0];
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
+    g.restore();
+    g.globalAlpha = 1;
+  }
+
+  const fade = gr.top.replace(/[\d.]+\)$/, '0)');   // same hue, no alpha, at the meeting point
   const warm = g.createLinearGradient(0, 0, 0, VIEW_H);
-  warm.addColorStop(0, 'rgba(255,201,77,.10)');
-  warm.addColorStop(.45, 'rgba(255,201,77,0)');
-  warm.addColorStop(1, 'rgba(58,36,86,.22)');
+  warm.addColorStop(0, gr.top);
+  warm.addColorStop(.45, fade);
+  warm.addColorStop(1, gr.bot);
   g.fillStyle = warm;
   g.fillRect(0, 0, VIEW_W, VIEW_H);
 
   const vig = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .34,
     VIEW_W / 2, VIEW_H / 2, VIEW_H * .95);
   vig.addColorStop(0, 'rgba(12,7,18,0)');
-  vig.addColorStop(1, kind === 'inside' ? 'rgba(12,7,18,.55)' : 'rgba(12,7,18,.40)');
+  vig.addColorStop(1, `rgba(12,7,18,${gr.vig})`);
   g.fillStyle = vig;
   g.fillRect(0, 0, VIEW_W, VIEW_H);
 }
@@ -4054,6 +4129,7 @@ function startBattle(opt) {
     team: opt.team || null, teamIdx: 0,
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
+    pops: [], lungeM: 0, lungeF: 0,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
     started: false, finishing: false, await: null,
     // the card game
@@ -4107,10 +4183,10 @@ function damageOf(atkMon, defMon, move, opts = {}) {
 const effWord = (e) => e === 0 ? 'It does nothing at all…' : e >= 2 ? "It's brutally effective!" : e > 1 ? "It's effective!" : e < 1 ? 'It barely lands…' : '';
 
 // ---- log helpers -------------------------------------------------------
-function snap(log, t, fx, side) {
+function snap(log, t, fx, side, extra) {
   const b = B();
   log.push({ t, fx: fx || '', side: side || '', hpM: b.mine.hp, hpF: b.foe.hp,
-    sM: b.mine.status, sF: b.foe.status, lvM: b.mine.lvl, xpM: b.mine.xp });
+    sM: b.mine.status, sF: b.foe.status, lvM: b.mine.lvl, xpM: b.mine.xp, ...extra });
 }
 
 const STAT_WORD = { atk: 'attack', def: 'guard', spd: 'speed' };
@@ -4159,7 +4235,7 @@ function useMove(log, atkSide, moveId) {
       const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * bonus.mul));
       let dealt = dmg;
       if (atkSide === 'foe') {
-        dealt = hurtMine(log, dmg, `${them} took ${dmg}.`);        // shield first
+        dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe');  // shield first
       } else {
         // Recoil and drain are paid on what actually came off, not on the
         // number rolled: hitting a foe with 3 HP left for 300 must not recoil
@@ -4168,7 +4244,7 @@ function useMove(log, atkSide, moveId) {
         const had = defender.hp;
         defender.hp = clamp(defender.hp - dmg, 0, defender.max);
         dealt = had - defender.hp;
-        snap(log, `${them} took ${dmg}.`, 'hit', 'foe');
+        snap(log, `${them} took ${dmg}.`, 'hit', 'foe', { atk: 'mine' });
       }
       totalDealt += dealt;
       if (crit && eff !== 0) snap(log, 'A critical hit!');
@@ -4555,7 +4631,7 @@ function aimPlayable(b) {
 }
 
 /** Damage the player's side takes, shield first. */
-function hurtMine(log, amount, why) {
+function hurtMine(log, amount, why, atk) {
   const b = B();
   // Guard is flat and honest too: "take 2 less" takes 2 off the number, and a
   // hit never falls below 1 so a stack of guard cannot make you untouchable.
@@ -4567,7 +4643,7 @@ function hurtMine(log, amount, why) {
   }
   if (dmg > 0) {
     b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
-    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine');
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk } : null);
   }
   return dmg;
 }
@@ -4974,10 +5050,15 @@ function drawBattle(g) {
   const foeId = b.foe.species, myId = b.mine.species;
   const fs = 1.5, ms = 2;
   const fb = artBottom(foeId), mb = artBottom(myId);
-  const fx = 178 - 40 * fs / 2 + shake * (b.flashF > 0 ? 1 : 0);
-  const fy = FOE_GROUND - fb * fs + Math.sin(t * 1.7) * 1.5;
-  const mx = 72 - 40 * ms / 2 - shake * (b.flashM > 0 ? 1 : 0);
-  const my = MY_GROUND - mb * ms + Math.sin(t * 1.9 + 1) * 2;
+  // A swing is a lean: out fast, back slower. Integer pixels only — a sprite
+  // that lands between them at this scale shimmers.
+  const lunge = (v) => (v > 0 ? Math.round(Math.sin((1 - v / .26) * Math.PI) * 7) : 0);
+  const lm = lunge(b.lungeM || 0), lf = lunge(b.lungeF || 0);
+
+  const fx = 178 - 40 * fs / 2 + shake * (b.flashF > 0 ? 1 : 0) - lf;
+  const fy = FOE_GROUND - fb * fs + Math.sin(t * 1.7) * 1.5 + lf * .3;
+  const mx = 72 - 40 * ms / 2 - shake * (b.flashM > 0 ? 1 : 0) + lm;
+  const my = MY_GROUND - mb * ms + Math.sin(t * 1.9 + 1) * 2 - lm * .3;
 
   g.save(); g.globalAlpha = .3; g.fillStyle = '#000';
   if (g.ellipse) { g.beginPath(); g.ellipse(178, FOE_GROUND, 22, 5, 0, 0, Math.PI * 2); g.fill();
@@ -5004,6 +5085,7 @@ function drawBattle(g) {
   drawSpr(g, 'creature', myId, mx - (1 - entry) * 90, my, ms, { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: b.mine.hp <= 0 ? .35 : 1 });
 
   drawOrb(g, MY_GROUND, FOE_GROUND);
+  drawPops(g, MY_GROUND, FOE_GROUND);
 }
 
 /**
@@ -5535,12 +5617,11 @@ function submitLog(log, opts = {}) {
   b.armed = null;                       // a new hand is never pre-aimed
   if (opts.instant && log && log.length && !b.over) {
     for (const e of log) {
-      if (e.fx === 'hit') { if (e.side === 'mine') b.flashM = .8; else b.flashF = .8; b.shake = 1; playCue('hit'); }
-      else if (e.fx === 'grow' || e.fx === 'buff') playCue('level');
+      entryFx(b, e);
+      if (e.fx === 'grow' || e.fx === 'buff') playCue('level');
       else if (e.fx === 'heal' || e.fx === 'block') playCue('heal');
     }
     const last = log[log.length - 1];
-    b.tgtM = last.hpM; b.tgtF = last.hpF;
     b.log = null; b.li = 0; b.started = false;
     battleLine(last.t);
     renderHand();
@@ -5549,6 +5630,72 @@ function submitLog(log, opts = {}) {
   b.log = log && log.length ? log : null;
   b.li = 0; b.started = false; b.hold = 0;
   renderHand();
+}
+
+/**
+ * How long a damage number lives, and how far it drifts while it does.
+ */
+const POP_LIFE = .85;
+
+/** A number leaving whoever the HP came out of. */
+function pushPop(b, side, n, kind) {
+  if (!n) return;
+  // Two numbers in the same instant must not print on top of each other, so
+  // each one steps a little further out from the middle than the last.
+  b.pops.push({ side, n, kind, t: 0, dx: ((b.pops.length % 3) - 1) * 7 });
+  while (b.pops.length > 8) b.pops.shift();
+}
+
+/**
+ * Everything one log entry does to the picture.
+ *
+ * The bars are the slow truth — they slide, and they are still sliding when the
+ * next line comes. The fast truth is a number popping off the target and the
+ * attacker leaning into the swing, and a fight reads as a fight only when it
+ * has both. The HP that moved is measured against the snapshot the picture is
+ * currently heading for, which is what makes this work identically whether the
+ * turn is being played back line by line or resolved instantly under your hand.
+ */
+function entryFx(b, e) {
+  const dM = b.tgtM - e.hpM, dF = b.tgtF - e.hpF;
+  if (dM) pushPop(b, 'mine', Math.abs(dM), dM > 0 ? 'dmg' : 'heal');
+  if (dF) pushPop(b, 'foe', Math.abs(dF), dF > 0 ? 'dmg' : 'heal');
+  b.tgtM = e.hpM; b.tgtF = e.hpF;
+  if (e.fx === 'hit') {
+    if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
+    b.shake = 1;
+    // Only a swing lunges. Burn, roots and recoil are also 'hit', and nobody
+    // threw those, so nothing leans in for them.
+    if (e.atk === 'mine') b.lungeM = .26;
+    else if (e.atk === 'foe') b.lungeF = .26;
+    playCue('hit');
+  }
+}
+
+/** Damage and healing floating off the two stands. */
+function drawPops(g, myGround, foeGround) {
+  const b = B();
+  if (!b.pops || !b.pops.length) return;
+  g.save();
+  g.textAlign = 'center';
+  for (const p of b.pops) {
+    const k = clamp(p.t / POP_LIFE, 0, 1);
+    // Out fast, then coast — a number that rises at a constant speed reads as a
+    // balloon, one that decelerates reads as impact.
+    const rise = (1 - (1 - k) * (1 - k)) * 20;
+    const x = Math.round((p.side === 'mine' ? 72 : 178) + p.dx);
+    const y = Math.round((p.side === 'mine' ? myGround - 44 : foeGround - 34) - rise);
+    g.globalAlpha = k < .7 ? 1 : (1 - k) / .3;
+    g.font = `bold ${p.n >= 20 ? 13 : 11}px monospace`;
+    const text = (p.kind === 'heal' ? '+' : '') + p.n;
+    g.fillStyle = '#2a1b2e';
+    g.fillText(text, x + 1, y + 1);
+    g.fillStyle = p.kind === 'heal' ? '#8ce88c' : p.side === 'mine' ? '#ff8a7a' : '#ffc94d';
+    g.fillText(text, x, y);
+  }
+  g.restore();
+  g.globalAlpha = 1;
+  g.textAlign = 'left';
 }
 
 /** One line of battle text that fades on its own. */
@@ -5592,8 +5739,7 @@ function playbackStep() {
   const b = B();
   const e = b.log[b.li];
   if (!e) return;
-  b.tgtM = e.hpM; b.tgtF = e.hpF;
-  if (e.fx === 'hit') { if (e.side === 'mine') b.flashM = .8; else b.flashF = .8; b.shake = 1; playCue('hit'); }
+  entryFx(b, e);
   if (e.fx === 'faint') playCue('faint');
   if (e.fx === 'level' || e.fx === 'learn') playCue('level');
   if (e.fx === 'caught') playCue('catch');
@@ -5720,6 +5866,12 @@ function updateBattle(dt) {
   b.flashM = Math.max(0, b.flashM - dt * 3);
   b.flashF = Math.max(0, b.flashF - dt * 3);
   b.shake = Math.max(0, b.shake - dt * 4);
+  b.lungeM = Math.max(0, (b.lungeM || 0) - dt);
+  b.lungeF = Math.max(0, (b.lungeF || 0) - dt);
+  if (b.pops && b.pops.length) {
+    for (const p of b.pops) p.t += dt;
+    b.pops = b.pops.filter((p) => p.t < POP_LIFE);
+  }
   if (b.throwT > 0) b.throwT = Math.max(0, b.throwT - dt);
   // A throw in flight holds everything else: the line that says what happened
   // must not arrive before the orb has stopped moving.
@@ -6502,6 +6654,7 @@ function frame(now) {
   try {
     step(dt);
     draw();
+    if (G.mode === 'title') drawTitleArt(G.t);
   } catch (e) {
     frame.errs = (frame.errs || 0) + 1;
     if (frame.errs <= 3) {
@@ -6771,26 +6924,139 @@ function boot() {
   contBtn.addEventListener('click', startCont);
 
   // A parade of three kin on the title card, cycling through the roster.
-  const tg = els.titleArt.getContext('2d');
-  const stars = DEX_ORDER.filter((id) => ART_CREATURES[id]);
-  let ti = 0;
-  const spin = () => {
-    tg.clearRect(0, 0, 372, 128);
-    tg.imageSmoothingEnabled = false;
-    if (!stars.length) return;
-    for (let i = 0; i < 3; i++) {
-      const id = stars[(ti + i * 5) % stars.length];
-      const s = i === 1 ? 3 : 2;                         // integer scales only — centre stands forward
-      const bottom = artBottom(id) * s;
-      drawSpr(tg, 'creature', id, 12 + i * 124 + (i === 1 ? -8 : 0), 122 - bottom, s, { flip: i === 2 });
-    }
-    ti++;
-  };
-  spin();
-  setInterval(spin, 1600);
+  titleCtx = els.titleArt.getContext('2d');
 
   enterMap('hollowbrook', 9, 8, 'down');
   requestAnimationFrame(frame);
+}
+
+/**
+ * The title illustration.
+ *
+ * It was three sprites floating on a flat CSS gradient — the first thing anyone
+ * sees, and the only screen in the game with nothing behind it. It is a dusk in
+ * the valley now, built the way the arena is: layers, each further one lighter
+ * and closer to the sky, with a low sun for them to stand against. The three
+ * kin change every few seconds so the roster gets to introduce itself.
+ */
+const TITLE_W = 372, TITLE_H = 150;
+let titleCtx = null;
+
+function drawTitleArt(t, into) {
+  const g = into || titleCtx;
+  if (!g) return;
+  g.imageSmoothingEnabled = false;
+  const HORIZON = 96;
+
+  const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+  sky.addColorStop(0, '#160f26');
+  sky.addColorStop(.55, '#311c3c');
+  sky.addColorStop(1, '#6b3542');
+  g.fillStyle = sky; g.fillRect(0, 0, TITLE_W, HORIZON);
+
+  // A sun going down, off to one side so it is not hidden behind the middle
+  // of the roster, and low enough that the ridges eat its bottom edge.
+  const sunX = Math.round(TITLE_W * .3), sunY = HORIZON - 8;
+  const halo = g.createRadialGradient(sunX, sunY, 6, sunX, sunY, 104);
+  halo.addColorStop(0, 'rgba(255,196,120,.55)');
+  halo.addColorStop(1, 'rgba(255,196,120,0)');
+  g.fillStyle = halo; g.fillRect(0, 0, TITLE_W, HORIZON + 8);
+  g.fillStyle = '#ffd08a';
+  g.beginPath(); g.arc(sunX, sunY, 15, 0, Math.PI * 2); g.fill();
+
+  // Stars, only in the dark half, fading out as the sky warms.
+  for (let i = 0; i < 30; i++) {
+    const sx = (i * 97) % TITLE_W, sy = (i * 53) % 62;
+    g.globalAlpha = (1 - sy / 70) * (.25 + .35 * Math.abs(Math.sin(t * .9 + i)));
+    g.fillStyle = '#ffeccd';
+    g.fillRect(sx, sy, 1, 1);
+  }
+  g.globalAlpha = 1;
+
+  const ridge = (baseY, amp, col, phase) => {
+    g.fillStyle = col;
+    g.beginPath(); g.moveTo(0, TITLE_H);
+    for (let x = 0; x <= TITLE_W; x += 5) {
+      const h = Math.sin(x * .018 + phase) * amp + Math.sin(x * .047 + phase * 1.6) * amp * .4;
+      g.lineTo(x, Math.round(baseY - h));
+    }
+    g.lineTo(TITLE_W, TITLE_H); g.closePath(); g.fill();
+  };
+  // Three ridges, each darker and taller than the one behind it. Distance
+  // washes contrast out, so the far one is the palest thing on the ground.
+  ridge(HORIZON - 4, 9, '#7d4a5c', 1.7);
+  ridge(HORIZON + 4, 12, '#563150', .6);
+  ridge(HORIZON + 15, 14, '#3a2440', 2.2);
+
+  // A treeline on the nearest ridge, so the valley has something living in it.
+  g.fillStyle = '#241a2e';
+  for (let x = -6; x < TITLE_W + 6; x += 9) {
+    const h = 10 + ((x * 37) % 7);
+    const bx = x + ((x * 13) % 4);
+    g.beginPath();
+    g.moveTo(bx, HORIZON + 28);
+    g.lineTo(bx + 4, HORIZON + 28 - h);
+    g.lineTo(bx + 8, HORIZON + 28);
+    g.closePath(); g.fill();
+  }
+
+  // Mist pooling where the trees meet the near ground — the cheapest way to
+  // tell the eye that those are two different distances.
+  const GROUND_Y = HORIZON + 26;
+  const fog = g.createLinearGradient(0, GROUND_Y - 7, 0, GROUND_Y + 5);
+  fog.addColorStop(0, 'rgba(122,80,102,0)');
+  fog.addColorStop(.5, 'rgba(122,80,102,.5)');
+  fog.addColorStop(1, 'rgba(122,80,102,0)');
+  g.fillStyle = fog; g.fillRect(0, GROUND_Y - 7, TITLE_W, 12);
+
+  // Near ground: light enough that the kin standing on it keep their feet.
+  const soil = g.createLinearGradient(0, GROUND_Y, 0, TITLE_H);
+  soil.addColorStop(0, '#3b2740');
+  soil.addColorStop(1, '#241a2c');
+  g.fillStyle = soil; g.fillRect(0, GROUND_Y, TITLE_W, TITLE_H - GROUND_Y);
+  // Tufts, clustered rather than sprinkled, catching the sun from the left.
+  for (let i = 0; i < 54; i++) {
+    const gx = (i * 61 + (i % 5) * 3) % TITLE_W;
+    const gy = GROUND_Y + 2 + ((i * 29) % (TITLE_H - GROUND_Y - 3));
+    const lit = gx < TITLE_W * .5;
+    g.fillStyle = lit ? '#54354f' : '#2e2036';
+    g.fillRect(gx, gy, 1, 2);
+    if (i % 3 === 0) g.fillRect(gx + 2, gy + 1, 1, 1);
+  }
+
+  // The three of them, on the near ground, changing every few seconds.
+  const stars = DEX_ORDER.filter((id) => ART_CREATURES[id]);
+  if (stars.length) {
+    const step = Math.floor(t / 2.4);
+    const GROUND = TITLE_H - 13;
+    for (let i = 0; i < 3; i++) {
+      const id = stars[(step + i * 5) % stars.length];
+      const sc = i === 1 ? 3 : 2;                        // integer scales only
+      const cx = 62 + i * 124 + (i === 1 ? -0 : 0);
+      const bob = Math.sin(t * 1.6 + i * 2) * (i === 1 ? 2 : 1.4);
+      const bottom = artBottom(id) * sc;
+      g.save(); g.globalAlpha = .35; g.fillStyle = '#0d0716';
+      g.translate(cx, GROUND); g.scale(1, .3);
+      g.beginPath(); g.arc(0, 0, 15 * (sc / 2), 0, Math.PI * 2); g.fill(); g.restore();
+      drawSpr(g, 'creature', id, Math.round(cx - 20 * sc), Math.round(GROUND - bottom + bob), sc,
+        { flip: i === 2 });
+    }
+  }
+
+  // Motes rising through the whole picture, and a vignette to close it.
+  for (let i = 0; i < 22; i++) {
+    const seed = (i * 71 % 43) / 43;
+    const rise = (t * (.06 + (i % 4) * .03) + seed) % 1;
+    g.globalAlpha = (1 - rise) * .5;
+    g.fillStyle = i % 3 ? '#ffd08a' : '#fff4dc';
+    g.fillRect(Math.round(seed * TITLE_W + Math.sin(t + i) * 4), Math.round(TITLE_H - rise * TITLE_H), 1, 1);
+  }
+  g.globalAlpha = 1;
+  const vig = g.createRadialGradient(TITLE_W / 2, TITLE_H / 2, TITLE_H * .3,
+    TITLE_W / 2, TITLE_H / 2, TITLE_W * .62);
+  vig.addColorStop(0, 'rgba(10,6,16,0)');
+  vig.addColorStop(1, 'rgba(10,6,16,.6)');
+  g.fillStyle = vig; g.fillRect(0, 0, TITLE_W, TITLE_H);
 }
 
 if (!HEADLESS) boot();
@@ -6816,6 +7082,8 @@ if (typeof window !== 'undefined') {
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
+    GRADE, gradeFor, worldLight, drawTitleArt,
+    entryFx, pushPop, drawPops, POP_LIFE,
     renderHand, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral, cardHTML,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired, frame,

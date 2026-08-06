@@ -659,7 +659,14 @@ EK.enterMap('route_one', 9, 10, 'down');
 eq(EK.G.mapId, 'route_one', 'entered the route');
 ok(!EK.passable(MAPS.route_one, 0, 5, 5), 'trees block');
 ok(EK.passable(MAPS.route_one, 9, 5, 5), 'the path is walkable');
-ok(!EK.passable(MAPS.hollowbrook, 4, 9, 9), 'water blocks');
+// Found rather than hard-coded: the pond gets reshaped whenever the town does.
+const pond = (() => {
+  const rows = MAPS.hollowbrook.rows;
+  for (let y = 0; y < rows.length; y++) { const x = rows[y].indexOf('~'); if (x >= 0) return [x, y]; }
+  return null;
+})();
+ok(pond, 'Hollowbrook still has a pond');
+ok(!EK.passable(MAPS.hollowbrook, pond[0], pond[1], pond[1]), 'water blocks');
 // A ledge is one-way: you may drop down it, never climb it.
 const ledgeRow = MAPS.route_one.rows.findIndex((r) => r.includes('L'));
 const ledgeCol = MAPS.route_one.rows[ledgeRow].indexOf('L');

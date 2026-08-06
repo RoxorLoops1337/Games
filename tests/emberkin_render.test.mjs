@@ -375,6 +375,115 @@ ok(face.cardHTML(kinCard, {}).includes('elem_'), 'a kin move shows its element')
 ok(face.cardHTML(kinCard, {}).includes('kin'), 'and is marked as the creature\'s own');
 face.G.battle = null;
 
+section('every map is lit as its own place');
+// The tiles are shared between maps, so the grade is the only thing making the
+// shore and the deep wood different pictures. If two of them collapse onto the
+// same numbers, walking between them stops meaning anything.
+const OUTDOOR = Object.keys(EK.MAPS).filter((id) => EK.MAPS[id].kind !== 'inside');
+const seenGrade = new Set();
+for (const id of OUTDOOR) {
+  const gr = EK.gradeFor(EK.MAPS[id].kind, id);
+  const key = `${gr.top}|${gr.bot}|${gr.vig}`;
+  ok(!seenGrade.has(key), `${id} is not lit the same as another map`);
+  seenGrade.add(key);
+}
+for (const [id, gr] of Object.entries(EK.GRADE)) {
+  ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.top), `${id}: top wash is a usable colour`);
+  ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.bot), `${id}: bottom wash is a usable colour`);
+  ok(gr.vig > 0 && gr.vig < 1, `${id}: the vignette is a fraction`);
+}
+// An unknown map still gets light rather than a crash.
+ok(EK.gradeFor('route', 'nowhere_at_all') === EK.GRADE.route, 'an unknown route falls back to route light');
+ok(EK.gradeFor('inside', 'nowhere_at_all') === EK.GRADE.inside, 'an unknown interior falls back to interior light');
+ok(EK.gradeFor(undefined, undefined) === EK.GRADE.route, 'no map at all still gets light');
+// And every one of them survives a real paint.
+for (const id of Object.keys(EK.MAPS)) {
+  EK.enterMap(id, 3, 3, 'down');
+  EK.G.mode = 'world';
+  const since = drawCount();
+  EK.draw();
+  ok(since() > 20, `${id} still paints under its grade`);
+}
+
+section('the title screen is a picture');
+// The title canvas is its own element, so it gets its own stub.
+const titleCalls = [];
+const titleCtx = mkCtx(titleCalls);
+for (const t of [0, 1.3, 2.5, 7.9, 60]) {
+  const n = titleCalls.length;
+  EK.drawTitleArt(t, titleCtx);
+  ok(titleCalls.length - n > 30, `the title illustration paints at t=${t}`);
+}
+
+section('a hit throws a number and a lean');
+const fight = loadGame({});
+fight.setCtx(mkCtx());
+fight.newGame();
+fight.G.party = [fight.mkMon('cindercub', 30)];
+fight.startBattle({ foe: fight.mkMon('dewdrip', 30), wild: true });
+const bt = fight.B();
+ok(Array.isArray(bt.pops) && bt.pops.length === 0, 'a fight opens with nothing floating');
+
+// A swing that lands: the foe loses HP, a number leaves it, and the one who
+// threw it leans in.
+bt.pops = []; bt.lungeM = 0; bt.lungeF = 0;
+bt.tgtF = bt.foe.hp;
+fight.entryFx(bt, { fx: 'hit', side: 'foe', atk: 'mine', hpM: bt.mine.hp, hpF: bt.foe.hp - 12 });
+eq(bt.pops.length, 1, 'one number came off the foe');
+eq(bt.pops[0].n, 12, 'and it is what came off the bar');
+eq(bt.pops[0].kind, 'dmg', 'marked as damage');
+eq(bt.pops[0].side, 'foe', 'over the foe');
+ok(bt.lungeM > 0, 'the kin that swung leans in');
+ok(bt.lungeF === 0, 'the one that got hit does not');
+
+// Burn, roots and recoil are also 'hit', but nobody threw them, so nothing leans.
+bt.pops = []; bt.lungeM = 0; bt.lungeF = 0;
+bt.tgtM = bt.mine.hp; bt.tgtF = bt.foe.hp;
+fight.entryFx(bt, { fx: 'hit', side: 'mine', hpM: bt.mine.hp - 4, hpF: bt.foe.hp });
+eq(bt.pops.length, 1, 'a burn still throws its number');
+eq(bt.pops[0].side, 'mine', 'over whoever it burned');
+ok(bt.lungeM === 0 && bt.lungeF === 0, 'but nothing leans into a burn');
+
+// Healing reads as healing.
+bt.pops = [];
+bt.mine.hp = Math.max(1, bt.mine.hp - 20); bt.tgtM = bt.mine.hp;
+fight.entryFx(bt, { fx: 'heal', side: 'mine', hpM: bt.mine.hp + 9, hpF: bt.foe.hp });
+eq(bt.pops[0].kind, 'heal', 'a gain of HP pops as a heal');
+eq(bt.pops[0].n, 9, 'for what it gained');
+
+// Nothing moved, nothing pops — otherwise every line of text would throw a zero.
+bt.pops = [];
+fight.entryFx(bt, { fx: '', side: '', hpM: bt.tgtM, hpF: bt.tgtF });
+eq(bt.pops.length, 0, 'a line that changed no HP is silent');
+
+// They expire, and they never pile up without bound.
+for (let i = 0; i < 40; i++) fight.pushPop(bt, 'foe', 3, 'dmg');
+ok(bt.pops.length <= 8, `the pile is capped (${bt.pops.length})`);
+fight.G.mode = 'battle';
+for (let i = 0; i < 40; i++) { fight.step(.05); fight.draw(); }
+eq(bt.pops.length, 0, 'and they all clear on their own');
+
+// And the whole thing through the real path: a fight played out on the keys a
+// player uses, drawing every frame. Nothing here reaches into the effect system
+// — if numbers stop appearing over a real fight, this is what says so.
+const played = loadGame({});
+played.setCtx(mkCtx());
+played.STARTER_DECK.forEach(played.grantCard);
+played.G.party = [played.mkMon('pyrelynx', 30)];
+played.startBattle({ foe: played.mkMon('sproutle', 6), wild: true });
+let popped = 0, frames = 0;
+while (played.G.battle && frames++ < 600) {
+  const live = played.B();
+  const stuck = live && live.phase === 'player' && !live.log && !live.over
+    && !live.hand.some((c) => played.cardCost(c) <= live.energy);
+  const key = stuck ? 'e' : 'a';
+  played.step(.12);
+  played.pressKey(key); played.step(.02); played.releaseKey(key); played.fired.clear();
+  played.draw();
+  if (played.G.battle) popped = Math.max(popped, played.B().pops.length);
+}
+ok(popped > 0, `a fight played on the keys threw numbers (peak ${popped} on screen)`);
+
 section('a monkey on the keyboard cannot break it');
 // Random input for thousands of frames, drawing every one. This is the cheapest
 // way to find the state a hand-written test would never think to reach.
