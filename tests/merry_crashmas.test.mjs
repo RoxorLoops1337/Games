@@ -61,9 +61,10 @@ const EXPOSE = `__out.api = {
   getFlash: () => flash, getHitstop: () => hitstop,
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
   _setHitstop: (v) => { hitstop = v; },
+  setFlash: (v) => { flash = v; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers,
-  reachableRamps, ROLL_SPD, carCost, levelEnd,
+  reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
@@ -972,6 +973,118 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const vals = Object.values(ends);
   assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
     'every car should preview differently: ' + JSON.stringify(ends));
+});
+
+/* ----------------------------------------------------------------- feel --- */
+
+/* addShake was Math.max on both fields and update only decremented the timer,
+   so six kills in a row held 96 consecutive frames — 1.60s — at amplitude 12.5
+   to 13.6 with no dip, then dropped to zero in one frame. Kills two through six
+   added nothing you could see. */
+test('a shake decays, and a second hit re-punches it', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api._clearFeel();
+  api.addShake(0.4, 12);
+  const start = api.shake.a * api.shakeEnv();
+  near(start, 12, 0.01, 'full amplitude at the start');
+  step(api, 0.32);                                  // 80% of the way through
+  const late = api.shake.a * api.shakeEnv();
+  assert(late < start * 0.5,
+    'it should be under half by 80% through, got ' + late.toFixed(2) + ' of ' + start);
+  api.addShake(0.4, 12);
+  near(api.shake.a * api.shakeEnv(), 12, 0.5, 'a second hit restores the punch');
+  step(api, 0.5);
+  assert(api.shake.a * api.shakeEnv() === 0, 'and it ends');
+});
+
+test('six kills read as six punches, not one long rumble', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api._clearFeel();
+  const amps = [];
+  for (let i = 0; i < 60; i++){
+    if (i % 10 === 0) api.addShake(0.35, 12);       // a kill every 10 frames
+    api.update(1 / 60);
+    amps.push(api.shake.a * api.shakeEnv());
+  }
+  const peak = Math.max(...amps);
+  let run = 0, flat = 0;
+  for (const a of amps){ if (a > peak * 0.9){ run++; flat = Math.max(flat, run); } else run = 0; }
+  // a trough between each punch: the amplitude has to come down before it can
+  // go back up, or the sixth kill is indistinguishable from the first
+  let troughs = 0;
+  for (let i = 1; i < amps.length - 1; i++){
+    if (amps[i] < amps[i - 1] && amps[i] < amps[i + 1] && amps[i] < peak * 0.75) troughs++;
+  }
+  assert(flat <= 8, 'the shake sat at full amplitude for ' + flat + ' frames straight');
+  assert(troughs >= 4, 'each kill should be its own punch, counted ' + troughs +
+    ' troughs in ' + JSON.stringify(amps.map(a => +a.toFixed(1))));
+});
+
+/* drawFx ran entirely after drawCar and repainted 77-95% of the car's own
+   footprint for 49 of the 66 frames after the first kill. */
+test('the blood goes under the car and the limbs go over it', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.fx.length = 0;
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100;
+  api.camSnap();
+  api.fx.push({ type: 'blood', x: 2000, y: 1100, vx: 0, vy: 0, t: 0, ttl: 1, size: 6, col: '#b3201a', rot: 0, spin: 0 });
+  api.fx.push({ type: 'limb', part: 'arm', x: 2000, y: 1100, vx: 0, vy: 0, t: 0, ttl: 1,
+    size: 9, col: '#e05143', col2: '#f0c9a4', rot: 0, spin: 0 });
+  api._resetCounts();
+  api.drawFx(false);
+  const under = api._counts.fill || 0;
+  api._resetCounts();
+  api.drawFx(true);
+  const over = api._counts.fill || 0;
+  assert(under > 0 && over > 0, 'both halves should draw something: ' + under + ' / ' + over);
+  assert(over > under, 'the limb is the more expensive of the two, got ' + over + ' vs ' + under);
+  // and the call order in draw() is what makes the split mean anything
+  const src = fs.readFileSync(HTML, 'utf8');
+  const body = src.slice(src.indexOf('function draw(){'));
+  const groundFx = body.indexOf('drawFx(false)');
+  const theCar = body.indexOf('drawCar();');
+  const airFx = body.indexOf('drawFx(true)');
+  assert(groundFx > 0 && theCar > 0 && airFx > 0, 'draw() should call all three');
+  assert(groundFx < theCar && theCar < airFx,
+    'ground gore must be drawn before the car and airborne gore after it');
+});
+
+test('the car is traced on top of whatever is covering it', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100; api.car.air = 0; api.car.z = 0;
+  api.camSnap();
+  api._resetCounts();
+  api.drawCarRim();
+  assert(api._counts.stroke, 'the rim should draw while driving');
+  api.G.phase = 'aim';
+  api._resetCounts();
+  api.drawCarRim();
+  assert(!api._counts.stroke, 'and not while you are still aiming');
+});
+
+/* The flash was a cream wash over the whole frame, which on snow moved a pixel
+   by +11/+5/-2 of 255 — the biggest event in the game, under the threshold you
+   can see. It punches the vignette now. */
+test('the flash actually changes the frame', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.drawVignette();                       // warm the cached gradient
+  api._clearFeel();
+  api._resetCounts();
+  api.drawVignette();
+  const quiet = api._counts.fillRect || 0;
+  api.setFlash(0.35);
+  api._resetCounts();
+  api.drawVignette();
+  const lit = api._counts.fillRect || 0;
+  assert(lit > quiet, 'a flash should lay down more than a quiet frame: ' + lit + ' vs ' + quiet);
+  assert(!api._counts.createRadialGradient, 'and still not rebuild the gradient');
 });
 
 /* ----------------------------------------------------------------- menu --- */
