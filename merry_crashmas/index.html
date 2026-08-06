@@ -2334,9 +2334,19 @@ const REC_KEEP = 2.5;                   // how much history the ring holds
 const REC_RADIUS = 680;                 // only what is near the car is filmed
 const REC_ENTS = 96, REC_PROPS = 46;
 const REPLAY_SPEED = 0.52;              // slow motion factor
-const REPLAY_MIN_WORTH = 9;             // kills + 0.7 per wreck. At 5 this fired on 68% of
-                                        // runs, which is not a highlight; 9 is about one in
-                                        // three, which is what the number was always for
+/* Kills + 0.7 per wreck in the best two-second window of the run.
+
+   Measured across 450 runs — 21 markets x 5 angles x every car — with the gate
+   off, this is the fraction of runs that earn a highlight:
+
+       3 -> 80%    5 -> 65%    7 -> 48%    9 -> 35%
+
+   Plan 2 item 10 took it from 5 to 9 on the grounds that two runs in three is
+   not a highlight. That is a fair argument and it is wrong here: at 9 the
+   markets you actually start on are starved — OPENING NIGHT drops to 20% and
+   THE GAUNTLET to 10%, so you can play a whole level of four cars and be shown
+   nothing. The owner noticed inside one session, twice now. Back to 5. */
+const REPLAY_MIN_WORTH = 5;
 
 const rec = { frames: [], acc: 0, kills: 0, wrecks: 0, killed: [], lastCopy: -9 };
 const clip = { frames: [], kills: 0, wrecks: 0, worth: 0, cx: 0, cy: 0 };

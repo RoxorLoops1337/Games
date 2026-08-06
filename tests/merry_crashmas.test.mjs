@@ -2571,7 +2571,7 @@ test('the best two seconds beat a quieter window', () => {
       api.recStep(1 / 60);
     }
   };
-  for (let i = 0; i < 10; i++){
+  for (let i = 0; i < 6; i++){
     api.killPerson(api.addPerson(1700 + i * 40, 1100), 900, 0, 'car');
     tick(0.12);
   }
@@ -2586,7 +2586,7 @@ test('the best two seconds beat a quieter window', () => {
   }
   tick(0.3);
 
-  assert(quiet >= 9, 'the first group was captured while it was the best, got ' + quiet);
+  assert(quiet >= 5, 'the first group was captured while it was the best, got ' + quiet);
   assert(api.clip.kills > quiet, 'the busy stretch should win, got ' + api.clip.kills);
   assert(api.clip.cx > 3600, 'and the clip centres on it, got ' + Math.round(api.clip.cx));
   assert(api.clip.worth >= api.C.REPLAY_MIN_WORTH, 'worth ' + api.clip.worth);
@@ -2600,12 +2600,12 @@ test('a stretch of pure demolition is worth a replay too', () => {
   api.recReset();
   api.G.phase = 'drive';
   api.car.x = 2000; api.car.y = 1100;
-  for (let i = 0; i < 14; i++){
+  for (let i = 0; i < 8; i++){
     api.wreckProp(api.addProp('hut', 2000 + i * 200, 1100, {}), 800, 0);
     for (let k = 0; k < 6; k++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
   }
-  assert(api.clip.wrecks >= 13, 'the smashes were recorded, got ' + api.clip.wrecks);
-  assert(api.replayReady(), 'a wall of stalls in two seconds earns a replay');
+  assert(api.clip.wrecks >= 8, 'the smashes were recorded, got ' + api.clip.wrecks);
+  assert(api.replayReady(), 'eight stalls in two seconds earns a replay');
 });
 
 test('a quiet run is not worth a replay', () => {
@@ -2830,9 +2830,11 @@ test('a quiet run gets no replay, a busy one does', () => {
     }
     return api.replayReady();
   };
-  // the threshold is 9: at 5 this fired on 68% of runs, which is not a highlight
-  assert(!runWith(5), 'five kills is not a highlight');
-  assert(runWith(9), 'nine in two seconds is');
+  /* The bar is 5. Measured over 450 runs it lets 65% of them through, and the
+     markets you start on need that: at 9 it was 20% on market 1 and 10% on THE
+     GAUNTLET, which is a whole level of four cars showing you nothing. */
+  assert(!runWith(3), 'three kills is not a highlight');
+  assert(runWith(6), 'six in two seconds is');
 });
 
 test('the run summary sits at the top, not across the wreckage', () => {
@@ -3369,9 +3371,16 @@ test('a real run leaves wreckage, particles and tyre tracks behind', () => {
   const api = boot();
   api.startCampaign(); api.beginLevel();
   api.launch(-api.C.MAX_PULL, 0);
-  let peakFx = 0;
-  for (let i = 0; i < 360; i++){ api.update(1 / 60); peakFx = Math.max(peakFx, api.fx.length); }
-  assert(api.tracks.length > 5, 'tyre tracks laid, got ' + api.tracks.length);
+  let peakFx = 0, peakTracks = 0;
+  /* Measured while the car is driving, not at a fixed frame count: a run this
+     good now earns a replay, and the replay lifts the tyre tracks off the
+     ground for the length of the clip and puts them back after. */
+  for (let i = 0; i < 360; i++){
+    api.update(1 / 60);
+    peakFx = Math.max(peakFx, api.fx.length);
+    if (api.G.phase === 'drive') peakTracks = Math.max(peakTracks, api.tracks.length);
+  }
+  assert(peakTracks > 5, 'tyre tracks laid, got ' + peakTracks);
   assert(api.G.kills + api.G.wrecks > 0, 'a full-power run down the aisle should hit something');
   assert(peakFx > 20, 'the crash should throw particles, peak was ' + peakFx);
   assert(api.fx.length < peakFx, 'and they should clear up afterwards');
