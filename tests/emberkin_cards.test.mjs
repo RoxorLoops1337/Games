@@ -676,4 +676,93 @@ section('a reward always reaches the deck');
   ok(taken.replaced, `the offer can say what it replaced (${taken.replaced})`);
 }
 
+section('a full deck asks what comes out');
+// A twelve-card deck makes the offer the first half of a decision: something
+// has to go, and the game must not pick for you.
+{
+  const g = fresh();
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is full');
+  // Asked for: the card is yours but stays out of the deck until you choose.
+  const asked = g.grantCard('soulfang', true);
+  ok(g.G.cards.some((c) => c.u === asked.u), 'the card is owned');
+  ok(!g.G.deck.includes(asked.u), 'but it is not in the deck yet');
+  eq(g.G.deck.length, g.DECK_MAX, 'and nothing was silently thrown out');
+
+  // The swap screen lists the deck and nothing else, and has no way out.
+  g.openScreen('swap', { newCard: asked.u });
+  eq(g.G.screen.kind, 'swap', 'the swap screen opened');
+  eq(g.G.screen.list.length, g.DECK_MAX, 'it lists the whole deck');
+  g.closeScreen();
+  eq(g.G.screen && g.G.screen.kind, 'swap', 'and there is no way out but choosing');
+  g.renderScreen();
+  ok(true, 'it renders');
+
+  const out = g.G.screen.list[3];
+  g.G.screen.i = 3;
+  g.screenSelect();
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is still exactly full');
+  ok(g.G.deck.includes(asked.u), 'the new card went in');
+  ok(!g.G.deck.includes(out.u), 'the one you picked came out');
+  ok(g.G.cards.some((c) => c.u === out.u), 'and it is still yours');
+  eq(g.G.screen, null, 'the screen closed');
+}
+
+// Chests pull three or four at a time, so they still make room themselves —
+// being asked four times in a row is not a decision, it is a form.
+{
+  const g = fresh();
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  const auto = g.grantCard('soulfang');
+  ok(g.G.deck.includes(auto.u), 'an unasked grant lands in the deck');
+  eq(g.G.deck.length, g.DECK_MAX, 'and the deck stays its size');
+  ok(auto.replaced, `and it knows what it replaced (${auto.replaced})`);
+}
+
+// A card whose definition has gone — an old save, a renamed id — must not take
+// the game down, and should be the first thing evicted.
+{
+  const g = fresh();
+  g.CARDS.__gone = { name: 'Gone', r: 'legendary', cost: 1, kind: 'skill', v: 1, vt: 'shield', txt: '{v}' };
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  const ghost = g.grantCard('__gone');
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  delete g.CARDS.__gone;
+  eq(g.cardCost({ src: 'deck', u: ghost.u, id: '__gone' }), 0, 'a card with no definition costs nothing');
+  eq(g.cardName({ src: 'deck', u: ghost.u, id: '__gone' }), '?', 'and reads as unknown rather than throwing');
+  const fresher = g.grantCard('edge');
+  ok(!g.G.deck.includes(ghost.u), 'and it is the first thing out when room is needed');
+  ok(g.G.deck.includes(fresher.u), 'while the real card goes in');
+}
+
+section('speed decides who opens');
+// Fights ran under two turns, so a foe that always moved second often never
+// moved at all. Something faster than you now lands the first blow.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('gargolem', 20)];          // slow
+  const quick = g.mkMon('zaplet', 20);            // fast
+  ok(g.effStat(quick, 'spd') > g.effStat(g.G.party[0], 'spd'), 'the wild kin really is faster');
+  const full = g.G.party[0].hp;
+  g.startBattle({ foe: quick, wild: true });
+  ok(g.B().mine.hp <= full, 'a faster wild kin gets the first word');
+  ok(g.B().log && g.B().log.length, 'and the opening is played back rather than silent');
+
+  // A trainer squares up with you: the opening rival fight is meant to be
+  // winnable rather than a coin toss on speed.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('gargolem', 20)];
+  g.G.party[0].hp = g.G.party[0].max;
+  g.startBattle({ foe: g.mkMon('zaplet', 20), npc: { name: 'Wick', id: 't_x', trainer: { team: [], prize: 0 } } });
+  eq(g.B().mine.hp, g.B().mine.max, 'a trainer does not get a free hit in');
+
+  // And a slower foe never opens, however the fight starts.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('zaplet', 20)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  eq(g.B().mine.hp, g.B().mine.max, 'a slower wild kin waits its turn');
+}
+
 done('emberkin_cards');
