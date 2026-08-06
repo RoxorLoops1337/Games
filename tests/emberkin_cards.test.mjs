@@ -168,6 +168,7 @@ eq(EK.attackBonus().flat, EK.cardValue(edgeCard), 'the edge is waiting on the ne
 for (let i = 0; i < 30 && EK.attackBonus().flat > 0; i++) {
   b.hand = [{ src: 'kin', id: kinMove.id }];
   b.energy = 9;
+  b.swungTurn = 0;                                // each probe is a fresh turn
   EK.playCard(0);
 }
 eq(EK.attackBonus().flat, 0, 'and an attack that lands spends it');
@@ -461,6 +462,7 @@ const kinAtk = rb.mine.moves.find((m) => EKA.MOVES[m.id].pow);
 for (let i = 0; i < 30 && !rb.foe.status; i++) {
   rb.hand = [{ src: 'kin', id: kinAtk.id }];
   rb.energy = 99;
+  rb.swungTurn = 0;                               // each probe is a fresh turn
   EKA.playCard(0);
 }
 eq(rb.foe.status, 'snare', 'Venom Coat snares the foe through the kin\'s own attack');
@@ -846,7 +848,8 @@ section('a braced trainer eats a hit, and an aimed one goes round your shield');
 {
   const g = fresh();
   const npc = { name: 'Hale', id: 't_y', trainer: { team: [], prize: 0, plan: ['brace', 'swing'] } };
-  g.G.party = [g.mkMon('pyrelynx', 40)];
+  // A small attacker against a big guard, so the whole swing has somewhere to go.
+  g.G.party = [g.mkMon('pyrelynx', 5)];
   g.startBattle({ foe: g.mkMon('gargolem', 20), npc });
   const bb = g.B();
   bb.foe.hp = bb.foe.max = 99999;
@@ -857,11 +860,14 @@ section('a braced trainer eats a hit, and an aimed one goes round your shield');
   eq(bb.foeShield, guard, 'and banked when the turn ends');
   const before = bb.foe.hp;
   const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
-  bb.hand = [{ src: 'kin', id: move.id }];
-  bb.energy = 9; bb.swungTurn = 0;
-  g.playCard(0);
+  // Moves can miss, so swing until one actually connects with the guard.
+  for (let i = 0; i < 40 && bb.foeShield === guard; i++) {
+    bb.hand = [{ src: 'kin', id: move.id }];
+    bb.energy = 9; bb.swungTurn = 0;
+    g.playCard(0);
+  }
   ok(bb.foeShield < guard, 'the guard eats the swing before the health does');
-  ok(before - bb.foe.hp < guard + 1, 'so very little of it reaches the bar');
+  eq(bb.foe.hp, before, 'and none of it reaches the bar');
 
   // Aim: the answer to a shield you banked because you saw the sharpen coming.
   const h = fresh();
@@ -940,5 +946,80 @@ section('a trainer\'s kin is not a wild kin');
   g.G.battle = null;
   g.startBattle({ foe: g.mkMon('gargolem', 20), npc: { name: 'X', id: 't_w', trainer: { team: [], prize: 0 } } });
   ok(g.B().foe.max < wildMax, `the same kin is tougher in the grass (${wildMax} vs ${g.B().foe.max})`);
+}
+
+
+section('the chart points the same way, but not as hard');
+// The chart says who beats whom, and that is knowledge worth having. What it
+// must not do is decide the fight before a card is played — measured over twelve
+// runs with one kin, the element being with you or against you swung the loss
+// rate from 6% to 57% with the level gap identical in both.
+{
+  const g = fresh();
+  eq(g.EFF_DMG(1), 1, 'a neutral hit is untouched');
+  eq(g.EFF_DMG(0), 0, 'and immune still means immune');
+  ok(g.EFF_DMG(2) > 1 && g.EFF_DMG(2) < 2, `an advantage still helps, less (${g.EFF_DMG(2)}×)`);
+  ok(g.EFF_DMG(.5) > .5 && g.EFF_DMG(.5) < 1, `a resist still hurts, less (${g.EFF_DMG(.5)}×)`);
+  ok(g.EFF_DMG(4) > g.EFF_DMG(2), 'a stacked weakness is still worse than a single one');
+  ok(g.EFF_DMG(.25) < g.EFF_DMG(.5), 'and a stacked resist still better');
+  // Softening must never flip the direction — that would make the dex a lie.
+  for (const e of [.25, .5, 1, 2, 4]) {
+    const d = g.EFF_DMG(e);
+    ok(e > 1 ? d > 1 : e < 1 ? d < 1 : d === 1, `${e}× still reads as ${e > 1 ? 'good' : e < 1 ? 'bad' : 'neutral'}`);
+  }
+  // The chart itself is untouched, because that is what the dex shows and what
+  // "It's brutally effective!" is about.
+  eq(g.effect('Ember', ['Verdant']), 2, 'the chart still says 2×');
+
+  // And it shows up on the bar the way it says it does.
+  const one = g.mkMon('pyrelynx', 30);
+  const wet = g.mkMon('dewdrip', 30), dry = g.mkMon('sproutle', 30);
+  const roll = { crit: false, roll: 1 };
+  const good = g.damageOf(one, dry, 'cinder', roll).dmg;
+  const bad = g.damageOf(one, wet, 'cinder', roll).dmg;
+  ok(good > bad, 'the right element still hits harder');
+  ok(good < bad * 4, `but not four times as hard (${good} vs ${bad})`);
+}
+
+section('a cornered wild kin gathers itself, out loud');
+// Two fights in five were never in doubt, and the reason was not that they were
+// easy — a wild fight was four identical small hits with no moment in it. Same
+// damage, gathered into one swing you are told about a turn ahead.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('sproutle', 30), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  bb.foe.moves = bb.foe.moves.filter((m) => g.MOVES[m.id].pow).slice(0, 1);
+  eq(bb.cornered, 0, 'a healthy wild kin is not cornered');
+  eq(bb.foeEdge, 0, 'and has nothing banked');
+  const calm = bb.intent.dmg;
+  ok(!/cornered/.test(bb.intent.name), 'nor does the line say so');
+
+  // Hurt it past the line and read the intent again — the telegraph is the point.
+  bb.foe.hp = Math.floor(bb.foe.max * (g.CORNER_AT - .05));
+  g.readIntent();
+  eq(bb.cornered, 1, 'past the line it corners');
+  ok(bb.foeEdge > 0, `and gathers itself (+${bb.foeEdge})`);
+  ok(/cornered/.test(bb.intent.name), 'the line says so a turn ahead');
+  ok(bb.intent.dmg > calm, `and the number it shows goes up with it (${calm} → ${bb.intent.dmg})`);
+
+  // It is one swing, not a new state of being.
+  const hp = bb.mine.hp;
+  g.endTurn();
+  ok(bb.mine.hp < hp, 'the big one lands');
+  eq(bb.foeEdge, 0, 'and spends the whole of it');
+  g.readIntent();
+  ok(!/cornered/.test(bb.intent.name), 'it does not corner twice');
+
+  // A trainer's kin does not do this — they have plans instead.
+  const t = fresh();
+  t.G.party = [t.mkMon('gargolem', 40)];
+  t.startBattle({ foe: t.mkMon('sproutle', 30), npc: { name: 'X', id: 't_c', trainer: { team: [], prize: 0 } } });
+  const tb = t.B();
+  tb.foe.hp = 1;
+  t.readIntent();
+  eq(tb.cornered, 0, 'a trained kin does not corner');
 }
 done('emberkin_cards');
