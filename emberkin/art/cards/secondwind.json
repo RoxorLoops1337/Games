@@ -1,0 +1,34 @@
+{
+  "id": "secondwind",
+  "name": "secondwind",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "b": "#6fd0c8",
+    "d": "#2f7d78",
+    "h": "#cdfff8"
+  },
+  "rows": [
+    "..............K.....",
+    ".............KhK....",
+    "............KhhhK...",
+    "........K..KhhhhhK..",
+    "......KKK.KhhhhhhhK.",
+    "....KKbbhK.KhhhhhK..",
+    "....KbbbbK..KhhhK...",
+    "...KbbbKK....KhhK...",
+    "...KdbK.......KhK...",
+    "..KdddK......KhhhK..",
+    "..KddK........KhhK..",
+    "..KddK........KhhK..",
+    "..KdddK......KbhhK..",
+    "...KddK......KbbK...",
+    "...KdddKK..KKbbbK...",
+    "....KddddKKdbbbK....",
+    "....KKdddddddbKK....",
+    "......KKddddKK......",
+    "........KKKK........",
+    "...................."
+  ]
+}

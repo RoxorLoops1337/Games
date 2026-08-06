@@ -16,9 +16,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all thirty-five mistakes this tool
-// has made. Twenty-three passes on this game produced about eight changes to the
-// game and thirty-five fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all thirty-seven mistakes this tool
+// has made. Twenty-four passes on this game produced about nine changes to the
+// game and thirty-seven fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -100,6 +100,7 @@ const staticScore = (EK, id) => {
   if (fx.st) p += 3 * LEFT;
   if (fx.selfdmg) p -= fx.selfdmg;
   if (d.kill) p += d.kill * 4;              // permanent, every time it finishes one
+  if (fx.again) p += SWING;                 // a whole extra swing, once
   return p / Math.max(.5, d.cost);
 };
 
@@ -405,6 +406,13 @@ function playOne(runIdx) {
         if (def.retain && def.vt === 'heal' && cur.mine.hp > cur.mine.max * .6) return false;
         // A heal at full health is a wasted card whatever else it says.
         if (def.vt === 'heal' && !def.retain && cur.mine.hp > cur.mine.max * .85) return false;
+        // A second swing is worth nothing before the first one, and worth nothing
+        // if there is no kin move left in hand to spend it on.
+        if (def.fx && def.fx.again) {
+          if (!cur.swungTurn) return false;
+          const cheapest = Math.min(...cur.hand.filter((h) => h.src === 'kin').map((h) => EK.cardCost(h)), Infinity);
+          if (!(cheapest <= cur.energy - EK.cardCost(c))) return false;
+        }
         return true;
       };
       // What a card is worth, in points of HP, if it is played right now.
@@ -486,6 +494,7 @@ function playOne(runIdx) {
         if (fx.st) pts += 3 * left;
         if (fx.selfdmg) pts -= fx.selfdmg;
         if (d.kill) pts += d.kill * 4;                        // permanent, on every kill
+        if (fx.again) pts += swingDmg();                      // one more swing, this turn
         // A Combo or Chain card is worth more for having waited, so it goes last
         // among equals — that is the whole reason those keywords exist.
         if (d.combo || d.chain) pts *= .95;
@@ -498,7 +507,19 @@ function playOne(runIdx) {
       const kinCost = () => {
         let c = Infinity;
         for (const h of cur.hand) if (h.src === 'kin') c = Math.min(c, EK.cardCost(h));
-        return c === Infinity ? 0 : c;
+        if (c === Infinity) return 0;
+        // A card that buys a second swing needs the whole turn reserved for it —
+        // swing, card, swing — or the support pass spends the budget first and
+        // the card is unplayable by the time its own condition is met. It read 1
+        // play in 196 draws until this was here, which would have measured the
+        // one card in the set that changes a rule as worthless.
+        const again = cur.hand.find((h) => h.src !== 'kin' && EK.CARDS[h.id]
+          && EK.CARDS[h.id].fx && EK.CARDS[h.id].fx.again);
+        if (again) {
+          const whole = c * 2 + EK.cardCost(again);
+          if (whole <= cur.energy) return whole;
+        }
+        return c;
       };
       const support = (reserve) => {
         for (let spun = 0; spun < 10; spun++) {
@@ -574,22 +595,44 @@ function playOne(runIdx) {
       }
       support(kinCost());                       // set up, keeping the swing affordable
       // One swing a turn — take the best one you can pay for.
-      if (!cur.over && !cur.swungTurn) {
+      // When the turn is being held open for a second swing, the first one has to
+      // be the cheap move, not the big one. Swinging with the best move ate the
+      // reserve and left nothing to pay for the card — Second Wind read 2 plays
+      // in 306 draws until this was here, which is a policy measuring its own
+      // habits rather than the card.
+      const swing = (cap) => {
+        if (cur.over || cur.swungTurn) return false;
         noteHand();
         let pick = -1, bestDmg = -1;
         for (let i = 0; i < cur.hand.length; i++) {
           const c = cur.hand[i];
-          if (c.src !== 'kin' || EK.cardCost(c) > cur.energy) continue;
+          if (c.src !== 'kin' || EK.cardCost(c) > Math.min(cur.energy, cap == null ? Infinity : cap)) continue;
           const d = EK.MOVES[c.id].pow ? EK.damageOf(cur.mine, cur.foe, c.id, { crit: false, roll: .925 }).dmg : 1;
           if (d > bestDmg) { pick = i; bestDmg = d; }
         }
-        if (pick >= 0) {
-          const k = cardKey(cur.hand[pick]);
-          if (!playedCards.has(k)) { playedCards.add(k); bump(stat.played, k); }
-          EK.playCard(pick);
-        }
-      }
+        if (pick < 0) return false;
+        const k = cardKey(cur.hand[pick]);
+        if (!playedCards.has(k)) { playedCards.add(k); bump(stat.played, k); }
+        EK.playCard(pick);
+        return true;
+      };
+      // The budget for the first swing when a second one is planned: everything
+      // except the card and the cheapest move to spend it on.
+      const againCard = cur.hand.find((h) => h.src !== 'kin' && EK.CARDS[h.id]
+        && EK.CARDS[h.id].fx && EK.CARDS[h.id].fx.again);
+      const cheapKin = Math.min(...cur.hand.filter((h) => h.src === 'kin').map((h) => EK.cardCost(h)), Infinity);
+      const firstCap = againCard && cheapKin < Infinity
+        ? cur.energy - EK.cardCost(againCard) - cheapKin : null;
+      // ...but a cap that finds no move at all is worse than a big swing: it
+      // passes the turn. Fall back rather than starve — that read 0 plays and
+      // 4.60 turns a fight, the policy paying for its own plan.
+      if (!(firstCap != null && firstCap >= cheapKin && swing(firstCap))) swing();
       support(0);                               // then spend whatever is left
+      // A card that clears the one-swing flag is worth nothing unless somebody
+      // takes the extra swing. Second Wind is the first card in the set that
+      // changes a rule rather than a number, and a policy written around the old
+      // rule would have measured it at zero and called the card a failure.
+      if (swing()) support(0);
       // The turn you win on is still a turn. Breaking here without counting it
       // meant a fight where the player swung twice and the foe answered once
       // was filed under "over in one turn" — which is the metric party mode has

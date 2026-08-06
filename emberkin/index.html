@@ -2760,6 +2760,27 @@ const ART_CARDS = {
 "....................",
 "....................",
 "...................."]},
+"secondwind":{n:"secondwind",p:{"K":"#1b1220","b":"#6fd0c8","d":"#2f7d78","h":"#cdfff8"},r:[
+"..............K.....",
+".............KhK....",
+"............KhhhK...",
+"........K..KhhhhhK..",
+"......KKK.KhhhhhhhK.",
+"....KKbbhK.KhhhhhK..",
+"....KbbbbK..KhhhK...",
+"...KbbbKK....KhhK...",
+"...KdbK.......KhK...",
+"..KdddK......KhhhK..",
+"..KddK........KhhK..",
+"..KddK........KhhK..",
+"..KdddK......KbhhK..",
+"...KddK......KbbK...",
+"...KdddKK..KKbbbK...",
+"....KddddKKdbbbK....",
+"....KKdddddddbKK....",
+"......KKddddKK......",
+"........KKKK........",
+"...................."]},
 "shieldwall":{n:"shieldwall",p:{"A":"#c08444","K":"#1b1220","a":"#7a4a20","b":"#a8a5bd","d":"#33303f","h":"#e6e4f2","m":"#6f6c82"},r:[
 ".KKKKKKKK..KKKKKKKK.",
 "KhhbbbbmdKKhhbbbbmdK",
@@ -3494,6 +3515,14 @@ const CARDS = {
   // so halving its price makes it the best card in the deck at every level.
   // Left at two on purpose. If this gets fixed it is by looking at whether
   // Whetstone, Blooded Edge and Fang Hone are the ones priced wrong.
+  // Costs nothing on purpose. A turn is three energy and kin moves cost one or
+  // two, so at one energy this card asks for swing + card + swing out of three —
+  // which is exactly three in the best case and impossible in every other. It is
+  // not a price, it is an arithmetic wall: the card read 2 plays in 306 draws
+  // until it was free. Free, it is pure tempo and adds no number at all, which is
+  // the point of it.
+  secondwind:{ name: 'Second Wind', r: 'epic', cost: 0, kind: 'skill', v: 1, vt: 'none', fx: { again: true }, exhaust: true,
+    txt: 'Your kin may move again this turn. Exhaust.' },
   twinstrike:{ name: 'Twin Strike', r: 'epic', cost: 2, kind: 'power', v: 1, vt: 'none', fx: { hits: 1 },
     txt: 'Every attack you make swings one extra time. Rest of the battle.' },
   titanheart:{ name: 'Titanheart',  r: 'epic', cost: 3, kind: 'skill', v: 30, vt: 'maxhp', fx: { heal: 30 }, exhaust: true, chain: 1,
@@ -5950,6 +5979,12 @@ function playCard(i) {
     snap(log, `Your attacks now ${fx.st[0] === 'snare' ? 'snare' : STATUS[fx.st[0]].name.toLowerCase() + ' on'} what they touch.`, 'buff', 'mine');
   }
   if (fx.hits) { b.mods.hits = (b.mods.hits || 0) + fx.hits; snap(log, 'Your attacks swing again.', 'buff', 'mine'); }
+  // The only card in the deck that changes a rule rather than a number. One swing
+  // a turn is the shape of every turn in this game; this clears that flag, so the
+  // kin may move twice. Everything else in the set adds to a swing, a shield or a
+  // heal, which is why every card can stand in for some other card — and a card
+  // nothing can stand in for is the thing the deck has never had.
+  if (fx.again) { b.swungTurn = 0; snap(log, `${dispName(b.mine)} finds another swing.`, 'buff', 'mine'); }
   if (fx.mul) { b.mods.mul = (b.mods.mul || 1) * fx.mul; snap(log, 'Everything you land hits twice as hard.', 'buff', 'mine'); }
   if (amt('shield')) { b.shield += amt('shield'); snap(log, `Shield up to ${b.shield}.`, 'block', 'mine'); }
   if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `Every attack now hits for +${b.mods.atk}.`, 'buff', 'mine'); }
