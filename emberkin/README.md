@@ -520,40 +520,26 @@ see:
 
 Eight passes went into how the game looks and none into whether it is any good
 to play, and "is it boring" is not a thing you can answer by reading the source.
-So there is a tool that plays it:
+So there is a tool that plays it — the real game, loaded headless, a fresh save,
+the real encounter tables, all the way from Rowan's study to Crown Hollow:
 
 ```bash
-node tools/emberkin/playthrough.mjs --runs 14
+node tools/emberkin/playthrough.mjs --runs 60          # a party of four, switching
+node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 ```
 
-A fresh save, the real encounter tables, real fights, all the way from Rowan's
-study to Crown Hollow, and it counts the things that make a run tedious rather
-than describing them: steps per fight, fights where the player never dropped
-below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
-through), walks back to town to heal, wipes, turns per fight, and which cards
-were drawn and never worth playing.
+**Its manual is [`tools/emberkin/README.md`](../tools/emberkin/README.md), and it
+is worth reading before you believe a number it prints.** That doc says what
+every printed line means, what each is divided by, which lines are comparable
+between the two modes and which are emphatically not — and it carries the ledger
+of all twenty mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Fifteen passes on this
+game produced about six changes to the game and twenty fixes to the tool.
 
-It runs in two modes, and both are worth reading, because two very different
-games hide in one average:
-
-```bash
-node tools/emberkin/playthrough.mjs --runs 14          # a party of four, switching
-node tools/emberkin/playthrough.mjs --runs 14 --solo   # one kin, no switching
-```
-
-With a party you switch into every matchup and almost nothing can kill you
-(0.006 wipes per fight, and every trainer in the valley beaten first try); with
-one kin it is 0.220, and before the chart was softened it was 0.342. Judge a
-change against both, not against whichever is flattering. Switching is close to
-a hard counter — it costs a turn and buys the whole matchup — which is worth
-knowing when a party number looks too good.
-
-Two things the probe was measuring wrong, both of which flattered party mode:
-**a switch spends the turn and was not counted as one** (half the "over in one
-turn" fights were a switch and a swing), and **never-in-doubt watched the active
-kin rather than the party**, so a fight won by rotating through three hurt kin
-read as never in doubt because the one on the field kept being a fresh one. Both
-fixed; both moved the party numbers against the game.
+The two modes are two different games, not a hard and an easy one. With a party
+you switch into every matchup and switching is close to a hard counter — it costs
+a turn and buys the whole fight — so a party number that looks too good usually
+is. Judge a change against both, and if it only moves one, say which.
 
 #### What the probe decides, that a player would decide differently
 
