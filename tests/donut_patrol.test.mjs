@@ -35,7 +35,7 @@ requestAnimationFrame(loop);`;
 const EXPOSE = `__out.api = {
   G, cam, W, INPUT, KEYS, EDGE, TOUCH, STICK, COPS, FARMERS, FARMER_KEYS, ATK, WAVES, RANKS,
   VW, VH, STEP, GROUND_TOP, GROUND_BOT, GROUND_MID, BODY_H, SAVE_KEY, MAX_ACTIVE, ARENA_W, SEG_W,
-  FARM_SKINS, COP_SKIN, SLOGANS, FARMER_YELLS, COP_YELLS, INTRO, BACKUP, MUSIC, RIG, PALETTE,
+  BOERKES, BOERKE_KEYS, BOERKE_PALS, COP_SKIN, SLOGANS, FARMER_YELLS, COP_YELLS, INTRO, BACKUP, MUSIC, RIG, PALETTE,
   get fighters(){ return fighters; }, set fighters(v){ fighters = v; },
   get players(){ return players; },
   get items(){ return items; }, set items(v){ items = v; },
@@ -55,6 +55,7 @@ const EXPOSE = `__out.api = {
   attackTokens, drawPickers, TAP, KEYMAP, bindInput, get DOLLS(){ return DOLLS; },
   poseCough, poseCharge, legIK, footAt, advanceWalk, STRIDE, LIFT, blendPose, copyPose,
   springTick, squashHit, weaponTip, drawTrail, camKick, shake, smooth, easeOut, easeIn,
+  BANK, PERF, VIEW, bankDraw, bankBuild, bankReset, weaponAngle, roundPoly, ball, shadedShape, perfTick,
 };
 `;
 
@@ -739,6 +740,128 @@ test('a tap that starts and ends between two polls still swings', () => {
   api.pollInput();
   assert(api.EDGE.baton === false, 'and it only counts once');
   assert(api.TAP.baton === 0, 'the latch is cleared after it is read');
+});
+
+/* ------------------------------------------------------------- the cast */
+test('every boerke is a designed character, not a bag of random parts', () => {
+  const api = boot();
+  assert(api.BOERKE_KEYS.length >= 8, 'a cast worth casting: ' + api.BOERKE_KEYS.length);
+  const shapes = {};
+  for (const key of api.BOERKE_KEYS){
+    const a2 = api.BOERKES[key];
+    assert(a2.name && a2.name === a2.name.toUpperCase(), key + ' needs a name');
+    assert(['rond', 'vierkant', 'driehoek'].includes(a2.shape), key + ' needs a shape language: ' + a2.shape);
+    shapes[a2.shape] = (shapes[a2.shape] || 0) + 1;
+    assert(api.BOERKE_PALS[a2.pal], key + ' references a missing palette: ' + a2.pal);
+    const p2 = api.BOERKE_PALS[a2.pal];
+    for (const tone of ['skin', 'skinLo', 'shirt', 'shirtLo', 'deni', 'deniLo', 'boot', 'bootLo']){
+      assert(p2[tone], a2.pal + ' is missing its ' + tone + ' tone');
+    }
+    assert(a2.build && a2.build.size > 0.5 && a2.build.size < 1.6, key + ' has a sane size');
+    assert(a2.face && a2.face.brow != null && a2.face.mouth, key + ' needs a face');
+    assert(['pet', 'stro', 'tractorpet', 'hoofddoek', 'bandana', 'geen'].includes(a2.hat), key + ' hat: ' + a2.hat);
+  }
+  assert(shapes.rond && shapes.vierkant && shapes.driehoek, 'all three shapes are used: ' + JSON.stringify(shapes));
+  /* silhouettes have to differ: no two of the cast may share a build */
+  const seen = new Set();
+  for (const key of api.BOERKE_KEYS){
+    const b2 = api.BOERKES[key].build;
+    const sig = [b2.fat, b2.size, b2.torso, b2.head].join(',');
+    assert(!seen.has(sig), key + ' has the same body as somebody else');
+    seen.add(sig);
+  }
+});
+
+test('every farmer type casts from real archetypes', () => {
+  const api = boot();
+  play(api); clearField(api);
+  for (const k of api.FARMER_KEYS){
+    const d = api.FARMERS[k];
+    assert(d.cast && d.cast.length, k + ' needs a cast list');
+    for (const who of d.cast){
+      assert(api.BOERKES[who], k + ' casts a boerke that does not exist: ' + who);
+      const f = api.spawnFarmer(k, 100, api.GROUND_MID, { who });
+      assert(f.art === api.BOERKES[who], k + '/' + who + ' carries its archetype');
+      assert(f.artKey && f.artKey.indexOf(who) === 0, 'and a cache key: ' + f.artKey);
+      assert(f.pal.skinLo && f.pal.shirtLo, 'with a two-tone palette');
+    }
+  }
+});
+
+/* ------------------------------------------------------------ sprite bank */
+test('the crowd is blitted from the bank, and it matches the live painter', () => {
+  const api = boot();
+  const p = play(api, 5);
+  api.bankReset();
+  for (let i = 0; i < 12; i++){
+    const f = api.spawnFarmer('mob', p.x + 40 + i * 12, api.GROUND_MID, {});
+    f.entry = null; f.state = 'walk'; f._blend = 1;
+  }
+  api.BANK.blits = 0; api.BANK.live = 0;
+  api.draw();
+  assert(api.BANK.blits > 8, 'most of the crowd came out of the bank: ' + api.BANK.blits);
+  assert(Object.keys(api.BANK.sheets).length <= api.BOERKE_KEYS.length * 3,
+    'and the bank stays small: ' + Object.keys(api.BANK.sheets).length + ' sheets');
+});
+
+test('anyone doing something interesting is still painted by hand', () => {
+  const api = boot();
+  const p = play(api, 5); clearField(api);
+  const cases = [
+    ['attack', (f) => { api.startAttack(f, 'chop'); }],
+    ['hurt', (f) => { f.state = 'hurt'; f.stateT = 0.3; f.hurtLen = 0.3; }],
+    ['launch', (f) => { f.state = 'launch'; f.z = 30; }],
+    ['down', (f) => { f.state = 'down'; }],
+    ['cuffed', (f) => { f.state = 'cuffed'; }],
+    ['dizzy', (f) => { f.state = 'dizzy'; f.dizzyT = 2; }],
+  ];
+  for (const [name, setup] of cases){
+    const f = api.spawnFarmer('fork', p.x + 30, api.GROUND_MID, {});
+    f.entry = null; f._blend = 1;
+    setup(f);
+    assert(!api.bankDraw(f, 100, 100, 1), name + ' must be drawn live, not blitted');
+    api.fighters = api.fighters.filter((q) => q !== f);
+  }
+  /* and the officer is never canned */
+  p.state = 'walk'; p._blend = 1;
+  assert(!api.bankDraw(p, 100, 100, 1), 'the officer is always painted live');
+});
+
+test('the watchdog turns the resolution down, then gives it back', () => {
+  const api = boot();
+  play(api);
+  assert(api.VIEW.q === 1, 'full resolution to start with');
+  /* twenty slow frames in a row */
+  for (let i = 0; i < 200; i++) api.perfTick(0.05);
+  assert(api.VIEW.q < 1, 'a struggling device renders fewer pixels: q=' + api.VIEW.q);
+  assert(api.VIEW.q >= 0.65, 'but never fewer than two thirds: q=' + api.VIEW.q);
+  assert(api.PERF.simple === true, 'and the crowd loses its trim as well');
+  /* then it recovers */
+  for (let i = 0; i < 600; i++) api.perfTick(0.012);
+  assert(api.VIEW.q === 1, 'and it all comes back when the frames do: q=' + api.VIEW.q);
+  assert(api.PERF.simple === false, 'including the trim');
+});
+
+/* ------------------------------------------------------------ in het Vlaams */
+test('the whole game speaks Flemish', () => {
+  const api = boot();
+  const english = /\b(THE|AND|WITH|YOUR|WAVE|FARMER|POLICE|SCORE|BEST|LEFT|ARREST)\b/;
+  for (const w of api.WAVES){
+    assert(!english.test(w.name.toUpperCase()), 'wave name still in English: ' + w.name);
+    assert(w.sub && w.sub.length > 4, w.name + ' needs a subtitle');
+  }
+  for (const y of api.FARMER_YELLS) assert(!english.test(y.toUpperCase()), 'farmer yell: ' + y);
+  for (const y of api.COP_YELLS) assert(!english.test(y.toUpperCase()), 'cop yell: ' + y);
+  for (const y of api.SLOGANS) assert(!english.test(y.toUpperCase()), 'placard: ' + y);
+  for (const C of api.COPS){
+    assert(!english.test(C.name.toUpperCase()) && !english.test(C.tag.toUpperCase()), 'officer: ' + C.name);
+    assert(/[a-z]/.test(C.note), C.name + ' needs a description');
+  }
+  for (const r of api.RANKS) assert(!english.test(r[2].toUpperCase()), 'rank line: ' + r[2]);
+  /* and it is the right kind of Flemish */
+  const all = api.FARMER_YELLS.concat(api.COP_YELLS, api.SLOGANS).join(' ');
+  assert(/AMAI|ALLEE|ZENNE|AJUIN|GIJ|MENNE|DA\u2019S/.test(all), 'it should sound like Aalst, not like a textbook');
+  assert(api.WAVES.some((w) => /OILSJT|ERPE|VLAANDEREN|BOERENBOND/.test(w.name + w.sub)), 'and be local about it');
 });
 
 /* ------------------------------------------------------------ animation

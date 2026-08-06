@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Donut Patrol</title>
-<meta name="description" content="A cozy, silly beat-em-up. One officer, one baton, one highway full of very cross farmers.">
+<title>Smoutebol Patrouille</title>
+<meta name="description" content="Ne gezellige, zotte beat-em-up. Eenen agent, eene matrak, en heel den boerenbond op de baan naar Oilsjt.">
 <style>
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
   html,body{ margin:0; padding:0; height:100%; overflow:hidden; background:#191026;
@@ -20,12 +20,12 @@
   .card{ width:min(720px,96vw); max-height:94vh; overflow:auto; padding:22px 24px 20px; text-align:center;
     border-radius:18px; background:linear-gradient(180deg,#3b2447,#241531);
     border:3px solid #6b4470; box-shadow:0 0 0 4px #170e21, 0 22px 60px rgba(0,0,0,.6); }
-  h1{ margin:0 0 2px; font-size:clamp(34px,8.5vw,64px); font-weight:900; line-height:.98; letter-spacing:2px;
+  h1{ margin:0 0 2px; font-size:clamp(26px,6.4vw,52px); font-weight:900; line-height:.94; letter-spacing:1px;
     color:#ffd76b; text-shadow:0 4px 0 #b5561f, 0 8px 0 #6d2d12, 0 12px 26px rgba(0,0,0,.5); }
   h1 .blue{ color:#7fd2ff; text-shadow:0 4px 0 #1f5f9c, 0 8px 0 #123c66, 0 12px 26px rgba(0,0,0,.5); }
   h2{ margin:0 0 10px; font-size:clamp(20px,5vw,30px); color:#ffd76b; text-shadow:0 3px 0 #8d3f1a; letter-spacing:1px; }
-  .sub{ margin:6px 0 14px; color:#e6b6c8; font-size:13.5px; letter-spacing:2.5px; text-transform:uppercase; }
-  p.blurb{ margin:0 auto 16px; max-width:52ch; color:#e9d8c6; font-size:14px; line-height:1.65; }
+  .sub{ margin:5px 0 10px; color:#e6b6c8; font-size:12.5px; letter-spacing:2px; text-transform:uppercase; }
+  p.blurb{ margin:0 auto 12px; max-width:54ch; color:#e9d8c6; font-size:13.5px; line-height:1.55; }
   .btn{ display:inline-block; margin:6px 5px 0; padding:13px 26px; font-size:15px; font-weight:900; letter-spacing:2px;
     border:none; border-radius:12px; cursor:pointer; font-family:inherit; color:#43210b;
     background:linear-gradient(180deg,#ffd76b,#f0983a); box-shadow:0 5px 0 #a2521a, 0 12px 22px rgba(0,0,0,.45);
@@ -36,16 +36,17 @@
 
   /* cop picker */
   .cops{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:4px 0 12px; }
-  .cop{ width:min(300px,44vw); padding:12px 12px 14px; cursor:pointer; border-radius:16px; text-align:center;
+  .cop{ width:min(290px,44vw); padding:9px 10px 11px; cursor:pointer; border-radius:16px; text-align:center;
     background:linear-gradient(180deg,#2d1b3d,#1d1128); border:3px solid #4d3160; transition:all .14s ease; }
   .cop:hover{ border-color:#8f5fa8; transform:translateY(-3px); }
   .cop.on{ border-color:#ffd76b; background:linear-gradient(180deg,#4a2f52,#2a1a37);
     box-shadow:0 0 0 3px rgba(255,215,107,.25), 0 12px 26px rgba(0,0,0,.45); }
-  .cop canvas{ width:100%; height:120px; background:transparent; box-shadow:none; border-radius:10px; }
+  .cop canvas{ width:100%; height:104px; background:transparent; box-shadow:none; border-radius:10px; }
   .cop .nm{ font-size:17px; font-weight:900; letter-spacing:1.5px; color:#ffd76b; margin-top:4px; }
   .cop .tg{ font-size:11.5px; letter-spacing:1.5px; color:#e6b6c8; text-transform:uppercase; margin:2px 0 8px; }
   .cop .st{ font-size:12px; color:#dcc9b6; line-height:1.6; text-align:left; padding:0 6px; }
   .cop .st b{ color:#ffd76b; }
+  .cop .note{ font-size:11.5px; color:#c9b7a4; line-height:1.5; padding:6px 6px 0; text-align:left; }
   .bar{ height:7px; border-radius:4px; background:#170e21; margin:3px 0 6px; overflow:hidden; }
   .bar i{ display:block; height:100%; border-radius:4px; background:linear-gradient(90deg,#ff8b5e,#ffd76b); }
 
@@ -84,7 +85,10 @@
   #rotate.on{ display:flex; }
   #rotate div{ font-size:15px; letter-spacing:3px; color:#ffd76b; line-height:2; }
   #rotate .big{ font-size:44px; }
-  @media (max-height:520px){ .card{ padding:14px 16px 12px; } .cop canvas{ height:86px; } p.blurb{ display:none; } }
+  @media (max-height:700px){ p.blurb{ font-size:12.5px; margin-bottom:8px; } .cop canvas{ height:84px; }
+    .cop .st{ font-size:11px; } .cop .note{ display:none; } .card{ padding:14px 18px 12px; } }
+  @media (max-height:560px){ .card{ padding:12px 14px 10px; } .cop canvas{ height:70px; }
+    p.blurb{ display:none; } .cop .st{ display:none; } }
 </style>
 </head>
 <body>
@@ -94,14 +98,14 @@
   <!-- ------------------------------------------------ title / cop select -->
   <div class="ov" id="title">
     <div class="card">
-      <h1>DONUT <span class="blue">PATROL</span></h1>
-      <div class="sub">Highway 7 &middot; blocked since Tuesday</div>
-      <p class="blurb">Four hundred tractors. One angry countryside. One officer with a baton,
-        a belt of tear gas and a serious opinion about queue-jumping.
-        Go out there and <b>teach them a lesson</b>&hellip; politely.</p>
+      <h1>SMOUTEBOL <span class="blue">PATROUILLE</span></h1>
+      <div class="sub">E40 afrit Oilsjt &middot; geblokkeerd sinds dijsdag</div>
+      <p class="blurb">Vierhonderd tractors. Ne complete boerenbond. Eenen agent met een matrak,
+        ne riem vol traangas en ne zeer uitgesproken mening over voorsteken.
+        Gaat daar buiten en <b>leert hun ne keer iets</b>&hellip; beleefd, h&eacute;.</p>
       <div class="cops" id="copPick"></div>
-      <button class="btn" id="startBtn">CLOCK IN</button>
-      <button class="btn alt sm" id="howBtn">HOW TO PATROL</button>
+      <button class="btn" id="startBtn">AAN &rsquo;T WERK</button>
+      <button class="btn alt sm" id="howBtn">HOE WERKT DA?</button>
       <div class="tiny" id="bestLine"></div>
     </div>
   </div>
@@ -109,69 +113,73 @@
   <!-- ------------------------------------------------------------- help -->
   <div class="ov" id="help" hidden>
     <div class="card">
-      <h2>HOW TO PATROL</h2>
+      <h2>HOE WERKT DA?</h2>
       <div class="keys">
-        <div class="kbox"><div class="who">MOVE</div><div class="row">
-          <b>WASD</b> / arrows &mdash; walk the tarmac<br>up &amp; down steps into the crowd</div></div>
-        <div class="kbox"><div class="who">BATON</div><div class="row">
-          <b>J</b> or <b>Z</b> &mdash; tap tap tap<br>the last swing <b>launches</b> them</div></div>
-        <div class="kbox"><div class="who">TEAR GAS</div><div class="row">
-          <b>K</b> or <b>X</b> &mdash; lob a canister<br>the cloud makes a whole crowd cough</div></div>
-        <div class="kbox"><div class="who">SHOULDER CHARGE</div><div class="row">
-          <b>L</b> or <b>C</b> &mdash; barge through<br>bowls over everyone in the lane</div></div>
-        <div class="kbox"><div class="who">CUFF THEM</div><div class="row">
-          <b>I</b> or <b>V</b> &mdash; arrest a dizzy farmer<br>big points, fills the siren</div></div>
-        <div class="kbox"><div class="who">CALL BACKUP</div><div class="row">
-          <b>SPACE</b> when the siren is full<br>the whole shift arrives at once</div></div>
+        <div class="kbox"><div class="who">STAPPEN</div><div class="row">
+          <b>WASD</b> / pijltjes &mdash; over den asfalt<br>omhoog en omlaag, dieper in &rsquo;t volk</div></div>
+        <div class="kbox"><div class="who">MATRAK</div><div class="row">
+          <b>J</b> of <b>Z</b> &mdash; tik tik tik<br>de leste zwaai <b>lanceert</b> hem</div></div>
+        <div class="kbox"><div class="who">TRAANGAS</div><div class="row">
+          <b>K</b> of <b>X</b> &mdash; smijt e busken<br>heel &rsquo;t gebuurte staat te proesten</div></div>
+        <div class="kbox"><div class="who">SCHOUDERSTOOT</div><div class="row">
+          <b>L</b> of <b>C</b> &mdash; er dwars doorheen<br>ge maait heel die rij tegen den grond</div></div>
+        <div class="kbox"><div class="who">BOEIEN OM</div><div class="row">
+          <b>I</b> of <b>V</b> &mdash; pakt ne duizelige boer<br>veel punten, en de sirene vult</div></div>
+        <div class="kbox"><div class="who">VERSTERKING</div><div class="row">
+          <b>SPATIE</b> als de sirene vol staat<br>heel &rsquo;t korps komt in eenen keer af</div></div>
       </div>
-      <p class="blurb">Donuts heal. Coffee makes you quick. Launched farmers knock over their friends &mdash;
-        the bigger the crowd, the better that works.</p>
-      <button class="btn" id="helpBack">BACK</button>
+      <p class="blurb">Smoutebollen genezen. Koffie maakt u rap. Ne gelanceerde boer maait zijn maten om &mdash;
+        hoe dikker &rsquo;t volk, hoe beter da werkt.</p>
+      <button class="btn" id="helpBack">TERUG</button>
     </div>
   </div>
 
   <!-- ------------------------------------------------------------ pause -->
   <div class="ov" id="pause" hidden>
     <div class="card">
-      <h2>COFFEE BREAK</h2>
+      <h2>KOFFIEPAUZE</h2>
       <div class="sub" id="pauseSub"></div>
-      <button class="btn" id="resumeBtn">BACK TO WORK</button>
-      <button class="btn alt sm" id="muteBtn">SOUND: ON</button>
-      <button class="btn alt sm" id="quitBtn">CLOCK OUT</button>
+      <button class="btn" id="resumeBtn">VOORT DOEN</button>
+      <button class="btn alt sm" id="muteBtn">GELUID: AAN</button>
+      <button class="btn alt sm" id="quitBtn">NAAR HUIS</button>
     </div>
   </div>
 
   <!-- ------------------------------------------------------- end of shift -->
   <div class="ov" id="over" hidden>
     <div class="card">
-      <h2 id="overTitle">END OF SHIFT</h2>
+      <h2 id="overTitle">DIENST GEDAAN</h2>
       <div class="rank" id="overRank">C</div>
       <div class="sub" id="overSub"></div>
       <div class="rows" id="overRows"></div>
-      <button class="btn" id="againBtn">ANOTHER SHIFT</button>
+      <button class="btn" id="againBtn">NOG NE KEER</button>
       <button class="btn alt sm" id="menuBtn">MENU</button>
     </div>
   </div>
 
-  <button class="btn alt sm" id="fsBtn" hidden>FULLSCREEN</button>
+  <button class="btn alt sm" id="fsBtn" hidden>VOLLEDIG SCHERM</button>
 
-  <div id="rotate"><div><span class="big">📱↻</span><br>TURN YOUR PHONE SIDEWAYS<br>THE HIGHWAY IS VERY WIDE</div></div>
+  <div id="rotate"><div><span class="big">📱↻</span><br>DRAAIT UWEN TELEFOON EENS<br>DIE BAAN IS NOGAL BREED</div></div>
 
   <div id="touch">
     <div id="stick"><div id="knob"></div></div>
     <div class="pad">
-      <button class="tb" id="bA">BATON</button>
+      <button class="tb" id="bA">MATRAK</button>
       <button class="tb b2" id="bB">GAS</button>
-      <button class="tb b3" id="bC">CHARGE</button>
-      <button class="tb b4" id="bD">CUFF</button>
+      <button class="tb b3" id="bC">STOOT</button>
+      <button class="tb b4" id="bD">BOEIEN</button>
     </div>
   </div>
 </div>
 
 <script>
-/* ============================================================ DONUT PATROL
-   A belt-scrolling brawler on a blocked motorway.  Everything here is drawn
-   with paths — no image assets — so the whole game is this one file.
+/* ==================================================== SMOUTEBOL PATROUILLE
+   A belt-scrolling brawler on a motorway somewhere outside Aalst, in which
+   an officer of the law meets the entire Flemish farming community.
+   Everything here is drawn with paths — no image assets — so the whole game
+   is this one file.  (The folder is still donut_patrol/: the URL shipped
+   before the game learned Dutch, and links do not get to change their
+   minds.)
 
    Layout of the file:
      1. constants, maths, rng, save
@@ -195,7 +203,7 @@ const canvas = document.getElementById('c');
 /* `ctx` is a let so the cop-picker can borrow the painter for its own
    little canvases — everything below draws into whatever ctx points at. */
 let ctx = canvas.getContext('2d');
-const VIEW = { scale: 1, dpr: 1 };
+const VIEW = { scale: 1, dpr: 1, q: 1 };
 
 /* ------------------------------------------------------------------ maths */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -342,7 +350,10 @@ function fit(){
   const rot = document.getElementById('rotate');
   if (rot && rot.classList) rot.classList.toggle('on', h > w * 1.15 && w < 780);
   const s = Math.min(w / VW, h / VH);
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  /* q is the quality dial the frame-time watchdog turns down on a phone
+     that cannot keep up: fewer real pixels, same layout, and the browser
+     scales the result back up */
+  const dpr = Math.min(window.devicePixelRatio || 1, 2) * VIEW.q;
   VIEW.scale = s; VIEW.dpr = dpr;
   canvas.width = Math.round(VW * s * dpr);
   canvas.height = Math.round(VH * s * dpr);
@@ -377,7 +388,7 @@ function ensureAudio(){
 }
 function syncMute(){
   const b = document.getElementById('muteBtn');
-  if (b) b.textContent = 'SOUND: ' + (G.muted ? 'OFF' : 'ON');
+  if (b) b.textContent = 'GELUID: ' + (G.muted ? 'UIT' : 'AAN');
   if (AUD.ready) AUD.master.gain.value = G.muted ? 0 : 0.62;
 }
 
@@ -508,19 +519,25 @@ const TRACTOR_COLORS = [
 ];
 
 const SLOGANS = [
-  'NO FARMS NO FOOD', 'HANDS OFF MY COWS', 'DIESEL IS A FEELING',
-  'MY TRACTOR IS BIGGER', 'HONK IF YOU EAT', 'PAY THE FARMER',
-  'WE FEED YOU', 'MUD FOR THE MUD GODS', 'SUBSIDY? SUB-CIDY!',
-  'BEETS NOT BUREAUCRATS', 'FREE THE GOATS', 'HAY MEANS HAY',
+  'GEEN BOER GEEN ETEN', 'AF VAN MIJN KOEIEN', 'DIESEL IS E GEVOEL',
+  'MIJNEN TRACTOR IS GROTER', 'TOETERT ALS G\u2019EET', 'BETAALT DEN BOER',
+  'WIJ VOEDEN U', 'STIKSTOF? STIKT ZELF', 'SUBSIDIES ZENNE',
+  'AJUIN BOVEN', 'MEER MEST MINDER MAIL', '\u2019T HOOI IS VAN MIJ',
+  'OILSJT VOOR DE BOEREN', 'GEEN PAPIEREN MEER',
 ];
+/* Vlaams-Brabants met e vleugske Oilsjt: korte zinnen, veel gezever. */
 const FARMER_YELLS = [
-  'OI!', 'GET OFF MY ROAD', 'THAT IS MY HAY', 'MOOOO!', 'YOU CALL THAT A HAT?',
-  'MY NEPHEW IS A LAWYER', 'HONK HONK', 'I VOTED FOR THIS', 'NOT THE FACE',
-  'I HAVE 400 CHICKENS', 'THE MUD REMEMBERS',
+  'AMAI!', 'GAAT NAAR HUIS FLIK', 'DA HOOI IS VAN MIJ', 'MOOOO!',
+  'NOEMDE GIJ DA NEN HOED?', 'MENNE NEVEU IS ADVOCAAT', 'TOETER TOETER',
+  '\u2019T IS HIER AMBRAS', 'NI OP MENNE KOP!', 'K\u2019HEB 400 KIEKENS',
+  'ZWANZE ZEKER?', 'AJUIN!', 'DA\u2019S NI SCHOON', 'K\u2019ZEN NI ZAT',
+  'BLIJFT VAN MENNEN TRACTOR', 'ALLEE ZEG', 'GODVERDOMME MENNE RUG',
+  'IK HEB DA NI GEDAAN', 'MIJN MOEDER KOMT OOK',
 ];
 const COP_YELLS = [
-  'STOP RIGHT THERE', 'THAT IS A FINE', 'YOU ARE NICKED', 'PAPERS PLEASE',
-  'MOVE ALONG NOW', 'LESSON TIME', 'BAD FARMER', 'DO NOT MAKE ME WHISTLE',
+  'STAAN BLIJVEN!', 'DA\u2019S NE BOETE', 'GIJ ZIJT ERBIJ', 'PAPIEREN!',
+  'DOORLOPEN MANNEN', 'TIJD VOOR E LESKE', 'STOUTE BOER', 'NI DOEN H\u00c9',
+  'IK VRAAG DA MAAR EEN KEER', 'AMAI MENNE MATRAK',
 ];
 
 /* Everything standing on or beside the tarmac. Props with `solid` push
@@ -600,7 +617,7 @@ function mkProp(kind, x, y, o){
 function mkCrowd(x, y, seg){
   return {
     x, y, seg,
-    skin: rint(0, FARM_SKINS.length - 1),
+    who: BOERKE_KEYS[rint(0, BOERKE_KEYS.length - 1)],
     hat: rint(0, 3),
     sign: rng() < 0.42 ? pick(SLOGANS) : null,
     flag: rng() < 0.16,
@@ -628,17 +645,83 @@ const upx = (a) => Math.sin(a), upy = (a) => Math.cos(a);
 /* where the face points for a spine angle a */
 const facex = (a) => Math.cos(a), facey = (a) => -Math.sin(a);
 
-const FARM_SKINS = [
-  { skin: '#e8b48c', shirt: '#d95b42', shirt2: '#96331f', deni: '#4b6b9c', deniLo: '#33507a', hair: '#5a3a24', boot: '#5b4230' },
-  { skin: '#d69a6e', shirt: '#57a05c', shirt2: '#2f5f36', deni: '#5f7db0', deniLo: '#3f588a', hair: '#2f2620', boot: '#3f3228' },
-  { skin: '#f2c9a0', shirt: '#e8ae3c', shirt2: '#a5701f', deni: '#54688a', deniLo: '#3a4a66', hair: '#8a6a3a', boot: '#4a3a2c' },
-  { skin: '#c98f66', shirt: '#9a63ad', shirt2: '#5f3a70', deni: '#4f7a6a', deniLo: '#345244', hair: '#d8cfc0', boot: '#5b4230' },
-  { skin: '#eab894', shirt: '#3f93b5', shirt2: '#2a5a72', deni: '#8a6b45', deniLo: '#5f4a2f', hair: '#b04a2a', boot: '#463628' },
-];
+/* ------------------------------------------------------------ THE CAST
+   Nobody is assembled from random parts any more.  Every boerke is a drawn
+   character: one dominant shape (round = harmless, square = stubborn,
+   triangle = trouble), its own colours, its own hat, its own face, its own
+   attitude.  Shape language is doing the work here — you should be able to
+   name any of them from the silhouette alone, at thumb size, mid-brawl.
+
+   The cast is also what makes the sprite cache small: eleven looks instead
+   of a few hundred random ones, so the whole crowd can be pre-rendered. */
+
 const COP_SKIN = {
-  skin: '#f0c199', uni: '#2f3f6b', uniLo: '#1e2a4b', vest: '#20263c', shirt: '#7f9ac9',
-  boot: '#241d2c', cap: '#1b2340', badge: '#ffd76b', belt: '#2b2233', hi: '#4a5f96',
+  skin: '#f0c199', skinLo: '#d69a76', uni: '#33447a', uniLo: '#212e58', vest: '#242a44',
+  shirt: '#8fa9d6', boot: '#241d2c', bootLo: '#171220', cap: '#1e2748', capLo: '#141a33',
+  badge: '#ffd76b', belt: '#2b2233', hi: '#5a72ad',
 };
+
+/* Palettes are written light-first; the shade colour is the hard-edged
+   second tone every shape gets, cel-shading style. */
+const BOERKE_PALS = {
+  klei:  { skin: '#e8b48c', skinLo: '#c8916a', shirt: '#d95b42', shirtLo: '#a53b28', deni: '#4b6b9c', deniLo: '#334f78', hair: '#5a3a24', boot: '#5b4230', bootLo: '#3d2c1f' },
+  gras:  { skin: '#d69a6e', skinLo: '#b57a52', shirt: '#57a05c', shirtLo: '#3a7040', deni: '#5f7db0', deniLo: '#42598a', hair: '#2f2620', boot: '#3f3228', bootLo: '#2a2019' },
+  koren: { skin: '#f2c9a0', skinLo: '#d4a479', shirt: '#e8ae3c', shirtLo: '#b57c1c', deni: '#54688a', deniLo: '#3a4a66', hair: '#8a6a3a', boot: '#4a3a2c', bootLo: '#32271d' },
+  bier:  { skin: '#e0a882', skinLo: '#bd845f', shirt: '#7f5aa8', shirtLo: '#573a7a', deni: '#4f7a6a', deniLo: '#365446', hair: '#d8cfc0', boot: '#5b4230', bootLo: '#3d2c1f' },
+  lucht: { skin: '#eab894', skinLo: '#c8916d', shirt: '#3f93b5', shirtLo: '#2a6a88', deni: '#8a6b45', deniLo: '#5f4a2f', hair: '#b04a2a', boot: '#463628', bootLo: '#2f241a' },
+  aarde: { skin: '#c98f66', skinLo: '#a76e49', shirt: '#c96f2f', shirtLo: '#94491a', deni: '#6a6a72', deniLo: '#4a4a52', hair: '#3a2a1e', boot: '#4a3a2c', bootLo: '#32271d' },
+};
+
+/* build: fat = belly, size = overall, arm/leg/torso/head = limb scaling.
+   face: brow = eyebrow angle (down-inward is angry), eye = pupil size,
+   mouth = default expression, nose = size, extras = the drawn details. */
+const BOERKES = {
+  jef:    { name: 'JEF',      shape: 'rond',     pal: 'klei',
+            build: { fat: 0.72, size: 1.0,  arm: 0.96, leg: 0.88, torso: 1.0,  head: 1.06 },
+            hat: 'pet', hair: 'kort', beard: 'stoppels',
+            face: { brow: 0.35, eye: 1.0, mouth: 'grim', nose: 1.25, red: 0.45 } },
+  sooi:   { name: 'SOOI',     shape: 'vierkant', pal: 'gras',
+            build: { fat: 0.5,  size: 1.06, arm: 1.05, leg: 1.0,  torso: 1.08, head: 0.94 },
+            hat: 'stro', hair: 'kort', beard: 'vol',
+            face: { brow: 0.45, eye: 0.95, mouth: 'grit', nose: 1.0, red: 0.2 } },
+  rene:   { name: 'RENE',     shape: 'driehoek', pal: 'lucht',
+            build: { fat: 0.22, size: 1.02, arm: 1.18, leg: 1.16, torso: 0.96, head: 0.92 },
+            hat: 'bandana', hair: 'staart', beard: 'snor',
+            face: { brow: 0.6, eye: 0.85, mouth: 'snarl', nose: 0.9, red: 0.1 } },
+  mariette:{ name: 'MARIETTE', shape: 'rond',    pal: 'bier',
+            build: { fat: 0.6,  size: 0.94, arm: 0.95, leg: 0.92, torso: 1.0,  head: 1.1 },
+            hat: 'hoofddoek', hair: 'bol', beard: null,
+            face: { brow: 0.5, eye: 1.15, mouth: 'shout', nose: 0.95, red: 0.35 } },
+  gust:   { name: 'GUST',     shape: 'vierkant', pal: 'koren',
+            build: { fat: 0.55, size: 1.04, arm: 1.02, leg: 0.98, torso: 1.05, head: 1.0 },
+            hat: 'tractorpet', hair: 'kort', beard: 'kin',
+            face: { brow: 0.2, eye: 1.0, mouth: 'grim', nose: 1.1, red: 0.3 } },
+  fonske: { name: 'FONSKE',   shape: 'rond',     pal: 'aarde',
+            build: { fat: 0.9,  size: 0.9,  arm: 0.88, leg: 0.8,  torso: 0.94, head: 1.14 },
+            hat: 'geen', hair: 'kaal', beard: 'vol',
+            face: { brow: 0.15, eye: 1.2, mouth: 'oo', nose: 1.35, red: 0.6 } },
+  polle:  { name: 'POLLE',    shape: 'driehoek', pal: 'koren',
+            build: { fat: 0.3,  size: 0.98, arm: 1.12, leg: 1.1,  torso: 0.98, head: 0.96 },
+            hat: 'stro', hair: 'sluik', beard: null,
+            face: { brow: 0.55, eye: 0.9, mouth: 'grit', nose: 0.95, red: 0.15 } },
+  dikke:  { name: 'DEN DIKKE', shape: 'vierkant', pal: 'gras',
+            build: { fat: 0.95, size: 1.22, arm: 1.16, leg: 0.98, torso: 1.06, head: 1.08 },
+            hat: 'tractorpet', hair: 'kort', beard: 'vol',
+            face: { brow: 0.7, eye: 0.85, mouth: 'snarl', nose: 1.2, red: 0.4 } },
+  wiske:  { name: 'WISKE',    shape: 'rond',     pal: 'klei',
+            build: { fat: 0.42, size: 0.9,  arm: 0.98, leg: 1.0,  torso: 0.96, head: 1.08 },
+            hat: 'hoofddoek', hair: 'bol', beard: null,
+            face: { brow: 0.3, eye: 1.2, mouth: 'shout', nose: 0.85, red: 0.25 } },
+  cyriel: { name: 'CYRIEL',   shape: 'driehoek', pal: 'bier',
+            build: { fat: 0.35, size: 1.08, arm: 1.14, leg: 1.12, torso: 1.0,  head: 0.9 },
+            hat: 'pet', hair: 'sluik', beard: 'snor',
+            face: { brow: 0.5, eye: 0.9, mouth: 'grim', nose: 1.05, red: 0.2 } },
+  achiel: { name: 'ACHIEL',   shape: 'vierkant', pal: 'aarde',
+            build: { fat: 0.66, size: 1.0,  arm: 1.0,  leg: 0.94, torso: 1.04, head: 1.02 },
+            hat: 'stro', hair: 'kort', beard: 'kin',
+            face: { brow: 0.4, eye: 1.0, mouth: 'grit', nose: 1.15, red: 0.5 } },
+};
+const BOERKE_KEYS = Object.keys(BOERKES);
 
 /* ------------------------------------------------------------ geometry */
 function rigGeom(P, build){
@@ -682,7 +765,20 @@ function rigGeom(P, build){
   return out;
 }
 
-/* ------------------------------------------------------------- painting */
+/* ------------------------------------------------------------- painting
+   The house style, and the reason anybody reads at 60 pixels tall:
+     · one thick ink outline around every shape
+     · exactly two tones per material — a lit fill and a hard-edged shade,
+       never a gradient
+     · a warm rim on the sunset side to lift the body off the tarmac
+     · details kept few and big
+   Every shape goes through `ball` or `capsule2`, so the whole cast is
+   shaded the same way without a single per-character special case. */
+
+/* Light comes from up and behind the right shoulder, sunset-warm. */
+const LIGHT = [0.55, 0.84];
+const RIM = 'rgba(255,214,150,.85)';
+
 function capsule(a, b, w, col, ink){
   if (ink){
     ctx.strokeStyle = ink; ctx.lineWidth = w + 2.4; ctx.lineCap = 'round';
@@ -691,11 +787,103 @@ function capsule(a, b, w, col, ink){
   ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
 }
+
+/* A limb with its shaded underside.  The shade is a thinner stroke pushed
+   to the dark side and pulled in at both ends, so it stays inside the
+   parent capsule without needing a clip — clipping per limb costs more
+   than the whole rest of the body. */
+function capsule2(a, b, w, col, colLo, ink){
+  capsule(a, b, w, col, ink);
+  if (!colLo) return;
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const ox = -LIGHT[0] * w * 0.2, oy = LIGHT[1] * w * 0.2;
+  const trim = w * 0.22;
+  ctx.strokeStyle = colLo; ctx.lineWidth = w * 0.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(a[0] + ox + ux * trim, a[1] + oy + uy * trim);
+  ctx.lineTo(b[0] + ox - ux * trim, b[1] + oy - uy * trim);
+  ctx.stroke();
+}
+
 function blob(x, y, rx, ry, col, ink, rot){
   ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot);
   ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 6.2832);
   if (ink){ ctx.strokeStyle = ink; ctx.lineWidth = 2.2; ctx.stroke(); }
   ctx.fillStyle = col; ctx.fill(); ctx.restore();
+}
+
+/* A rounded polygon — the torso shape.  Four corners and one radius is
+   enough to cover the whole cast: round bodies use a radius as big as the
+   box (so it reads as a barrel), square ones a small one, and triangles get
+   there by being much wider at the shoulder than at the hip. */
+function roundPoly(pts, r, dx, dy){
+  dx = dx || 0; dy = dy || 0;
+  const n = pts.length;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++){
+    const p0 = pts[i], p1 = pts[(i + 1) % n];
+    const rr = Math.min(r, Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) / 2);
+    if (i === 0) ctx.moveTo((p0[0] + p1[0]) / 2 + dx, (p0[1] + p1[1]) / 2 + dy);
+    const p2 = pts[(i + 2) % n];
+    ctx.arcTo(p1[0] + dx, p1[1] + dy, (p1[0] + p2[0]) / 2 + dx, (p1[1] + p2[1]) / 2 + dy, rr);
+  }
+  ctx.closePath();
+}
+
+/* Any shape, cel-shaded: dark fill, then the same shape shoved toward the
+   light on top of it, and a rim along the lit edge. */
+function shadedShape(x, y, rot, build, col, colLo, ink, rim){
+  ctx.save();
+  ctx.translate(x, y);
+  if (rot) ctx.rotate(rot);
+  const cr = rot ? Math.cos(-rot) : 1, sr = rot ? Math.sin(-rot) : 0;
+  const lx = LIGHT[0] * cr + LIGHT[1] * sr;
+  const ly = LIGHT[0] * sr - LIGHT[1] * cr;
+  build(0, 0);
+  if (ink){ ctx.strokeStyle = ink; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.stroke(); }
+  ctx.fillStyle = colLo || col; ctx.fill();
+  if (colLo){
+    ctx.save();
+    ctx.clip();
+    build(lx * 2.6, ly * 2.6);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* The workhorse: an ellipse with a hard shadow crescent and an optional rim
+   light.  Two fills and one arc — cheap enough for a whole crowd. */
+function ball(x, y, rx, ry, rot, col, colLo, ink, rim){
+  ctx.save();
+  ctx.translate(x, y);
+  if (rot) ctx.rotate(rot);
+  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
+  if (ink){ ctx.strokeStyle = ink; ctx.lineWidth = 2.2; ctx.stroke(); }
+  ctx.fillStyle = colLo || col; ctx.fill();
+  /* the light direction is un-rotated back into the shape's own frame, so a
+     tilted torso is still lit from the sunset and not from its own armpit */
+  const cr = rot ? Math.cos(-rot) : 1, sr = rot ? Math.sin(-rot) : 0;
+  const lx = LIGHT[0] * cr - -LIGHT[1] * sr;
+  const ly = LIGHT[0] * sr + -LIGHT[1] * cr;
+  if (colLo){
+    ctx.save();
+    ctx.clip();
+    ctx.beginPath();
+    ctx.ellipse(lx * rx * 0.36, ly * ry * 0.36, rx, ry, 0, 0, TAU);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.restore();
+  }
+  if (rim){
+    const ra = Math.atan2(ly, lx);
+    ctx.strokeStyle = RIM; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx - 0.7, ry - 0.7, 0, ra - 0.9, ra + 0.9);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 const INK = 'rgba(28,18,34,.92)';
 
@@ -703,11 +891,18 @@ const INK = 'rgba(28,18,34,.92)';
    noses and hat brims come off the farmers at the back — and gets it all
    back the moment the frame recovers.  Nothing changes on a machine that
    is keeping up. */
-const PERF = { ms: 16, simple: false };
+const PERF = { ms: 16, simple: false, cool: 0 };
 function perfTick(dt){
   PERF.ms = lerp(PERF.ms, Math.min(dt * 1000, 90), 0.06);
   if (!PERF.simple && PERF.ms > 26) PERF.simple = true;
   else if (PERF.simple && PERF.ms < 20) PERF.simple = false;
+  /* second line of defence, and the one that actually saves a slow phone:
+     render fewer pixels.  Changed rarely, and never while it is still
+     settling after the last change. */
+  PERF.cool = Math.max(0, (PERF.cool || 0) - dt);
+  if (PERF.cool > 0) return;
+  if (PERF.ms > 30 && VIEW.q > 0.65){ VIEW.q = Math.max(0.66, VIEW.q - 0.17); PERF.cool = 3; fit(); }
+  else if (PERF.ms < 15 && VIEW.q < 0.999){ VIEW.q = Math.min(1, Math.round((VIEW.q + 0.17) * 100) / 100); PERF.cool = 4; fit(); }
 }
 
 /* --------------------------------------------------------------- poses
@@ -1232,56 +1427,92 @@ function paintBody(f, P, g){
   const ink = INK;
   const cop = f.kind === 'cop';
   const lite = f.lite;
-  const dim = (col) => shade(col, -0.22);
+  const art = f.art;
 
   const fat = f.build.fat || 0;
-  const bodyW = 7 + fat * 4.6;
-  const aw = 4.7 * f.build.arm, lw = 5.5 * f.build.leg;
+  const shape = art ? art.shape : 'rond';
+  /* shape language: round bodies are wide and soft, square ones are broad
+     and flat-shouldered, triangles are narrow at the hip and wide up top */
+  const bodyW = (cop ? 7.2 : 6.6) + fat * 3.7 + (shape === 'vierkant' ? 0.9 : 0);
+  const shoulderW = bodyW * (shape === 'driehoek' ? 1.3 : shape === 'vierkant' ? 1.15 : 0.95);
+  const hipW = bodyW * (shape === 'driehoek' ? 0.72 : shape === 'vierkant' ? 1.0 : 0.95);
+  const aw = 4.9 * f.build.arm, lw = 5.8 * f.build.leg;
   const inkW = Math.max(aw, lw) + 2.5;
-  const armC = cop ? c.uni : c.shirt, legC = cop ? c.uni : c.deni;
+  const armC = cop ? c.uni : c.shirt, armLo = cop ? c.uniLo : c.shirtLo;
+  const legC = cop ? c.uni : c.deni, legLo = cop ? c.uniLo : c.deniLo;
 
-  /* --- far side: outline once, then the two colours */
+  /* --- far side, darkened wholesale: it is in the body's own shadow */
   const farArm = [[g.sh, g.la.j], [g.la.j, g.la.e]];
   const farLeg = [[g.hip, g.ll.j], [g.ll.j, g.ll.e]];
   strokeSegs(farArm.concat(farLeg), inkW, ink);
-  strokeSegs(farArm, aw * 0.92, dim(armC));
-  strokeSegs(farLeg, lw * 0.92, dim(legC));
-  blob(g.ll.e[0] + 1.2, g.ll.e[1] - 1.2, 3.6, 2.6, dim(c.boot), null, 0);
+  strokeSegs(farArm, aw * 0.92, armLo);
+  strokeSegs(farLeg, lw * 0.92, legLo);
+  ball(g.ll.e[0] + 1.4, g.ll.e[1] - 1.3, 4.1, 2.9, 0, c.bootLo || c.boot, null, null, false);
 
-  /* --- pelvis and torso */
-  if (!lite) blob(g.hip[0], g.hip[1], bodyW * 0.72, bodyW * 0.55, legC, ink, 0);
+  /* --- hips and torso */
   const mid = [(g.hip[0] + g.sh[0]) / 2, (g.hip[1] + g.sh[1]) / 2];
   const ang = Math.atan2(g.sh[1] - g.hip[1], g.sh[0] - g.hip[0]) - Math.PI / 2;
-  const front = 1;
+  if (!lite) ball(g.hip[0], g.hip[1], hipW * 0.8, bodyW * 0.58, ang, legC, legLo, ink, false);
+  const th = g.tl * 0.62 + 1.5;
+  const corner = shape === 'rond' ? Math.min(bodyW, th) * 0.95 : shape === 'vierkant' ? bodyW * 0.4 : bodyW * 0.55;
+  const torso = (dx, dy) => roundPoly([
+    [-shoulderW, th], [shoulderW, th], [hipW, -th], [-hipW, -th],
+  ], corner, dx, dy);
   if (cop){
-    blob(mid[0], mid[1], bodyW, g.tl * 0.62 + 1.5, c.uni, ink, ang);
-    blob(mid[0], mid[1] + 1, bodyW * 0.84, g.tl * 0.5, c.vest, null, ang);
-    if (fat > 0.2) blob(mid[0] + front * (bodyW * 0.5), mid[1] - g.tl * 0.26, bodyW * 0.72, g.tl * 0.42, c.uni, ink, ang);
-    blob(mid[0] + front * (bodyW * 0.5) + 1.5, mid[1] + g.tl * 0.3, 1.6, 2, c.badge, null, ang);
-    capsule([g.hip[0] - bodyW * 0.9, g.hip[1] + 1.6], [g.hip[0] + bodyW * 0.9, g.hip[1] + 1.6], 3.4, c.belt, ink);
+    shadedShape(mid[0], mid[1], ang, torso, c.uni, c.uniLo, ink, true);
+    /* stab vest over the shirt, one flat darker slab */
+    ball(mid[0], mid[1] + 1, bodyW * 0.86, g.tl * 0.5, ang, c.vest, null, null, false);
+    if (fat > 0.2) ball(mid[0] + bodyW * 0.5, mid[1] - g.tl * 0.26, bodyW * 0.74, g.tl * 0.44, ang, c.uni, c.uniLo, ink, false);
+    /* collar, badge, belt, radio */
+    if (!lite){
+      capsule([g.sh[0] - shoulderW * 0.5, g.sh[1] - 1], [g.sh[0] + shoulderW * 0.5, g.sh[1] - 1], 3, c.shirt, null);
+      ball(mid[0] + bodyW * 0.52, mid[1] + g.tl * 0.3, 1.8, 2.2, ang, c.badge, shade(c.badge, -0.3), null, false);
+      capsule([g.sh[0] - shoulderW * 0.42, g.sh[1] - 2.5], [g.sh[0] + shoulderW * 0.42, g.sh[1] - 2.5], 2.2, c.hi, null);
+    }
+    capsule([g.hip[0] - hipW * 0.95, g.hip[1] + 1.6], [g.hip[0] + hipW * 0.95, g.hip[1] + 1.6], 3.6, c.belt, ink);
+    if (!lite) ball(g.hip[0] + hipW * 0.4, g.hip[1] + 1.6, 2.2, 2.6, 0, '#3a2f45', '#241d2c', null, false);
   } else {
-    blob(mid[0], mid[1], bodyW, g.tl * 0.6 + 1.4, c.shirt, ink, ang);
-    /* dungarees: bib plus a strap over the shoulder */
-    blob(mid[0], mid[1] + g.tl * 0.22, bodyW * 0.9, g.tl * 0.42, c.deni, null, ang);
-    if (!lite) capsule(g.sh, [mid[0] + dirx(ang) * -bodyW * 0.4, mid[1] + g.tl * 0.1], 2.2, c.deniLo, null);
+    shadedShape(mid[0], mid[1], ang, torso, c.shirt, c.shirtLo, ink, true);
+    /* the salopette: a proper square bib with two straps and a brass button */
+    const bw = bodyW * 0.66, bh = g.tl * 0.42;
+    ctx.save();
+    ctx.translate(mid[0], mid[1]); ctx.rotate(ang);
+    roundPoly([[-bw, bh * 0.2], [bw, bh * 0.2], [bw * 0.95, -bh * 1.5], [-bw * 0.95, -bh * 1.5]], bw * 0.28, 0, 0);
+    ctx.fillStyle = c.deni; ctx.fill();
+    ctx.strokeStyle = c.deniLo; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.restore();
+    if (!lite){
+      capsule([g.sh[0] - 1.5, g.sh[1] - 0.5], [mid[0] - bodyW * 0.3, mid[1] + g.tl * 0.06], 2.4, c.deni, null);
+      capsule([g.sh[0] + bodyW * 0.45, g.sh[1] - 0.5], [mid[0] + bodyW * 0.45, mid[1] + g.tl * 0.06], 2.4, c.deniLo, null);
+      ball(mid[0] + bodyW * 0.42, mid[1] + g.tl * 0.08, 1.2, 1.2, 0, '#e0b24a', null, null, false);
+      /* rolled sleeves */
+      capsule([g.sh[0] + 1, g.sh[1] - 2], [g.sh[0] + shoulderW * 0.42, g.sh[1] - 3.5], 3.4, shade(c.shirt, 0.14), null);
+    }
   }
-  if (!lite) blob(g.sh[0], g.sh[1], bodyW * 0.44, bodyW * 0.4, cop ? c.uni : c.shirt, null, 0);
+  /* shoulders: this is where the shape language lands hardest */
+  if (!lite){
+    ball(g.sh[0], g.sh[1], shoulderW * 0.46, bodyW * 0.42, ang, cop ? c.uni : c.shirt, cop ? c.uniLo : c.shirtLo, null, false);
+  }
 
-  /* --- near side, plus the neck, in one outline pass */
+  /* --- near side */
   const nearArm = [[g.sh, g.ra.j], [g.ra.j, g.ra.e]];
   const nearLeg = [[g.hip, g.rl.j], [g.rl.j, g.rl.e]];
   const neck = [[g.sh, g.head]];
   strokeSegs(nearArm.concat(nearLeg, neck), inkW, ink);
-  strokeSegs(neck, 4.2, c.skin);
-  strokeSegs(nearLeg, lw, legC);
-  strokeSegs(nearArm, aw, armC);
-  blob(g.rl.e[0] + 1.2, g.rl.e[1] - 1.2, 3.7, 2.7, c.boot, null, 0);
-  if (!lite) blob(g.ra.e[0], g.ra.e[1], 2.6, 2.6, cop ? '#1e2433' : c.skin, ink, 0);
+  strokeSegs(neck, 4.4, c.skin);
+  capsule2(g.hip, g.rl.j, lw, legC, legLo, null);
+  capsule2(g.rl.j, g.rl.e, lw * 0.94, legC, legLo, null);
+  capsule2(g.sh, g.ra.j, aw, armC, armLo, null);
+  capsule2(g.ra.j, g.ra.e, aw * 0.94, cop ? armC : c.skin, cop ? armLo : c.skinLo, null);
+  ball(g.rl.e[0] + 1.4, g.rl.e[1] - 1.3, 4.2, 3, 0, c.boot, c.bootLo, null, false);
+  if (!lite) ball(g.ra.e[0], g.ra.e[1], 2.8, 2.8, 0, cop ? '#2b3350' : c.skin, cop ? '#1b2133' : c.skinLo, ink, false);
 
   paintHead(f, P, g);
   if (f.weapon) paintWeapon(f, P, g);
 }
 
+/* Faces.  Eyebrows are doing most of the acting — an angry brow on a round
+   face is a whole character, and it costs two strokes. */
 function paintHead(f, P, g){
   const c = f.pal, ink = INK, r = RIG.headR * (f.build.head || 1);
   const a = P.lean + (P.head || 0);
@@ -1291,84 +1522,188 @@ function paintHead(f, P, g){
     g.head[0] + fwd[0] * r * fx + up[0] * r * uy,
     g.head[1] + fwd[1] * r * fx + up[1] * r * uy,
   ];
+  const art = f.art, face = (art && art.face) || { brow: 0.3, eye: 1, mouth: 'grim', nose: 1, red: 0.2 };
+  const cop = f.kind === 'cop';
   const lag = f.hatLag || 0;
+  const lite = f.lite;
 
-  /* head, then hair, THEN the face — hair painted last covers the eyes,
-     which is exactly how every farmer ended up faceless */
-  blob(g.head[0], g.head[1], r * 0.96, r, c.skin, ink, a);
-  if (!f.lite){
-    const ear = at(-0.8, 0);
-    blob(ear[0], ear[1], 1.3, 1.7, shade(c.skin, -0.2), null, a);
+  /* skull, jaw, ear */
+  ball(g.head[0], g.head[1], r * 0.97, r, a, c.skin, c.skinLo, ink, true);
+  if (!lite){
+    const ear = at(-0.78, -0.12);
+    ball(ear[0], ear[1], 1.4, 1.8, a, c.skin, c.skinLo, null, false);
   }
-  if (f.kind !== 'cop'){
-    const hair = at(-0.12, 0.66);
-    blob(hair[0], hair[1], r * 0.9, r * 0.5, c.hair, ink, a);
+  if (!cop){
+    const hair = at(-0.14, 0.66);
+    const style = art ? art.hair : 'kort';
+    if (style !== 'kaal') ball(hair[0], hair[1], r * (style === 'bol' ? 0.98 : 0.9), r * (style === 'bol' ? 0.62 : 0.48), a, c.hair, shade(c.hair, -0.25), ink, false);
+    else if (!lite){
+      /* a bald head needs a shine or it reads as a blank egg */
+      const sh = at(-0.1, 0.72);
+      ctx.globalAlpha = 0.35;
+      ball(sh[0], sh[1], r * 0.42, r * 0.2, a, '#fff6ea', null, null, false);
+      ctx.globalAlpha = 1;
+    }
+    if (style === 'staart'){
+      const tail = at(-0.9, 0.35);
+      ball(tail[0], tail[1], r * 0.4, r * 0.28, a, c.hair, shade(c.hair, -0.25), ink, false);
+    }
   }
 
-  /* eyes: two dots, or squeezed shut when they have had enough */
+  /* eyes: whites, pupils, and the brows that carry the attitude */
   const shut = f.state === 'down' || f.state === 'cuffed' || f.state === 'dizzy'
     || f.hurtT > 0.05 || f.blink > 0;
-  const e1 = at(0.34, 0.3), e2 = at(0.34, -0.16);
+  const wide = f.state === 'launch' || f.state === 'hurt';
+  const e1 = at(0.3, 0.16), e2 = at(0.34, -0.3);
+  const es = (face.eye || 1) * (wide ? 1.25 : 1);
   if (shut){
-    strokeSegs([[[e1[0] - 1.3, e1[1]], [e1[0] + 1.3, e1[1]]],
-      [[e2[0] - 1.3, e2[1]], [e2[0] + 1.3, e2[1]]]], 1.4, '#2a1c30');
+    strokeSegs([[[e1[0] - 1.4, e1[1]], [e1[0] + 1.4, e1[1]]],
+      [[e2[0] - 1.4, e2[1]], [e2[0] + 1.4, e2[1]]]], 1.5, '#2a1c30');
   } else {
+    if (!lite){
+      ctx.fillStyle = '#fff6ea';
+      ctx.beginPath();
+      ctx.ellipse(e1[0], e1[1], 1.9 * es, 2.1 * es, 0, 0, TAU);
+      ctx.ellipse(e2[0], e2[1], 1.9 * es, 2.1 * es, 0, 0, TAU);
+      ctx.fill();
+    }
     ctx.fillStyle = '#2a1c30';
     ctx.beginPath();
-    ctx.ellipse(e1[0], e1[1], 1.15, 1.5, 0, 0, TAU);
-    ctx.ellipse(e2[0], e2[1], 1.15, 1.5, 0, 0, TAU);
+    ctx.ellipse(e1[0] + fwd[0] * 0.5, e1[1] + fwd[1] * 0.5, 1.1 * es, 1.45 * es, 0, 0, TAU);
+    ctx.ellipse(e2[0] + fwd[0] * 0.5, e2[1] + fwd[1] * 0.5, 1.1 * es, 1.45 * es, 0, 0, TAU);
     ctx.fill();
   }
-  if (!f.lite){
-    const nose = at(0.88, -0.16);
-    blob(nose[0], nose[1], 1.7, 1.4, shade(c.skin, -0.14), null, a);
+  /* brows: inner ends dropped = cross.  This is the whole performance. */
+  const angry = (face.brow || 0) + (f.state === 'attack' ? 0.25 : 0) + (f.hurtT > 0 ? -0.3 : 0);
+  const browCol = cop ? '#2f2438' : shade(c.hair, -0.1);
+  const b1 = at(0.3, 0.5), b2 = at(0.34, 0.04);
+  const drop = angry * 2.4;
+  strokeSegs([
+    [[b1[0] - 1.6, b1[1] - drop * 0.3], [b1[0] + 1.5, b1[1] + drop * 0.45]],
+    [[b2[0] - 1.6, b2[1] - drop * 0.3], [b2[0] + 1.5, b2[1] + drop * 0.45]],
+  ], 1.35, browCol);
+
+  if (!lite){
+    const nose = at(0.92, -0.3);
+    const nr = 1.75 * (face.nose || 1);
+    ball(nose[0], nose[1], nr, nr * 0.82, a, face.red > 0.3 ? shade('#d98a72', 0.05) : c.skin, c.skinLo, null, false);
+    if (face.red > 0.35){
+      ctx.globalAlpha = 0.5;
+      ball(nose[0], nose[1], nr * 0.7, nr * 0.55, a, '#e0705a', null, null, false);
+      ctx.globalAlpha = 1;
+    }
   }
-  /* the grunt is only open while the blow is actually being thrown */
+
+  /* mouth: the archetype's default, overridden by what is happening */
   const el = f.atk ? f.atk.dur - f.stateT : 0;
   const swinging = f.state === 'attack' && f.atk && f.atk.dmg > 0
     && el > f.atk.dur * 0.26 && el < f.atk.dur * 0.78;
-  const openMouth = f.state === 'hurt' || swinging || f.state === 'cough' || f.state === 'launch';
-  const m = at(0.62, -0.46);
-  if (openMouth) blob(m[0], m[1], 1.8, 2.2, '#7a2a3a', null, a);
-  else if (!f.lite) capsule([m[0] - 1.2, m[1]], [m[0] + 1.4, m[1] - 0.6], 1.2, '#7a3a44', null);
+  const m = at(0.62, -0.66);
+  let mouth = face.mouth;
+  if (f.state === 'hurt' || swinging || f.state === 'cough' || f.state === 'launch') mouth = 'shout';
+  else if (f.state === 'down' || f.state === 'cuffed') mouth = 'oo';
+  if (mouth === 'shout'){
+    ball(m[0], m[1], 2.1, 2.5, a, '#7a2a3a', '#5a1c2a', null, false);
+    if (!lite) ball(m[0] + fwd[0] * 0.6, m[1] + fwd[1] * 0.6 + 1.2, 1.2, 0.8, a, '#e8907f', null, null, false);
+  } else if (mouth === 'oo'){
+    ball(m[0], m[1], 1.5, 1.7, a, '#7a2a3a', null, null, false);
+  } else if (mouth === 'snarl' && !lite){
+    capsule([m[0] - 1.6, m[1] + 0.6], [m[0] + 1.8, m[1] - 0.8], 1.6, '#6b2634', null);
+    ctx.fillStyle = '#fff6ea';
+    ctx.fillRect(m[0] - 0.4, m[1] - 1.2, 1.4, 1.4);
+  } else if (mouth === 'grit' && !lite){
+    capsule([m[0] - 1.8, m[1] + 0.2], [m[0] + 1.8, m[1] + 0.2], 2.2, '#6b2634', null);
+    ctx.fillStyle = '#fff6ea';
+    ctx.fillRect(m[0] - 1.5, m[1] - 0.5, 3, 1.2);
+  } else if (!lite){
+    capsule([m[0] - 1.3, m[1] + 0.3], [m[0] + 1.5, m[1] - 0.4], 1.3, '#7a3a44', null);
+  }
 
-  if (f.kind === 'cop'){
-    /* peaked cap: dome, band, peak, badge — set a touch behind the head so
-       it swings a beat after the head does */
-    const cap = at(-lag * 0.5, 0.9);
-    blob(cap[0], cap[1], r * 1.06, r * 0.62, c.cap, ink, a);
-    capsule([cap[0] - fwd[0] * r * 0.5 - up[0] * r * 0.2, cap[1] - fwd[1] * r * 0.5 - up[1] * r * 0.2],
-      [cap[0] + fwd[0] * r * 1.55 - up[0] * r * 0.25, cap[1] + fwd[1] * r * 1.55 - up[1] * r * 0.25],
-      2.6, shade(c.cap, -0.25), ink);
-    blob(cap[0] + fwd[0] * r * 0.55, cap[1] + fwd[1] * r * 0.55, 1.6, 1.4, c.badge, null, a);
-  } else {
-    const hat = at(-lag * 0.55, 0.72);
-    if (f.hat === 0){
-      /* straw hat: brim across, crown on top */
-      capsule([hat[0] - fwd[0] * r * 1.15, hat[1] - fwd[1] * r * 1.15],
-        [hat[0] + fwd[0] * r * 1.35, hat[1] + fwd[1] * r * 1.35], 2.4, '#e0c169', ink);
-      blob(hat[0] + up[0] * r * 0.22, hat[1] + up[1] * r * 0.22, r * 0.62, r * 0.46, '#e8cd7c', ink, a);
-    } else if (f.hat === 1){
-      blob(hat[0], hat[1], r * 0.82, r * 0.46, '#5a6b7a', ink, a);
-      capsule([hat[0], hat[1]], [hat[0] + fwd[0] * r * 1.1, hat[1] + fwd[1] * r * 1.1], 2, '#48596a', ink);
-    } else if (f.hat === 2){
-      blob(hat[0], hat[1], r * 0.78, r * 0.42, '#c9553f', ink, a);
+  /* --- headgear, the loudest half of every silhouette */
+  if (cop){
+    const cap = at(-lag * 0.5, 1.02);
+    ball(cap[0], cap[1], r * 1.08, r * 0.58, a, c.cap, c.capLo, ink, true);
+    capsule([cap[0] - fwd[0] * r * 0.4 - up[0] * r * 0.16, cap[1] - fwd[1] * r * 0.4 - up[1] * r * 0.16],
+      [cap[0] + fwd[0] * r * 1.55 - up[0] * r * 0.26, cap[1] + fwd[1] * r * 1.55 - up[1] * r * 0.26],
+      2.6, c.capLo, ink);
+    /* the band, tucked right on the lower edge of the cap */
+    if (!lite){
+      capsule([cap[0] - fwd[0] * r * 0.78 - up[0] * r * 0.32, cap[1] - fwd[1] * r * 0.78 - up[1] * r * 0.32],
+        [cap[0] + fwd[0] * r * 0.52 - up[0] * r * 0.32, cap[1] + fwd[1] * r * 0.52 - up[1] * r * 0.32],
+        1.7, '#cfd4e0', null);
     }
-    if (f.beard && !f.lite){
-      const bd = at(0.4, -0.85);
-      blob(bd[0], bd[1], r * 0.54, r * 0.4, c.hair, ink, a);
+    ball(cap[0] + fwd[0] * r * 0.5, cap[1] + fwd[1] * r * 0.5, 1.8, 1.6, a, c.badge, shade(c.badge, -0.32), null, false);
+  } else {
+    const hat = at(-lag * 0.55, 0.92);
+    const ht = f.hat;
+    if (ht === 'stro'){
+      /* straw hat: wide floppy brim, low crown, frayed edge */
+      capsule([hat[0] - fwd[0] * r * 1.25 - up[0] * r * 0.1, hat[1] - fwd[1] * r * 1.25 - up[1] * r * 0.1],
+        [hat[0] + fwd[0] * r * 1.45 - up[0] * r * 0.12, hat[1] + fwd[1] * r * 1.45 - up[1] * r * 0.12], 2.8, '#e0c169', ink);
+      ball(hat[0] + up[0] * r * 0.28, hat[1] + up[1] * r * 0.28, r * 0.66, r * 0.5, a, '#eed58a', '#c9a94f', ink, true);
+      if (!lite) capsule([hat[0] - fwd[0] * r * 0.55, hat[1] - fwd[1] * r * 0.55],
+        [hat[0] + fwd[0] * r * 0.55, hat[1] + fwd[1] * r * 0.55], 1.6, '#a5763a', null);
+    } else if (ht === 'pet'){
+      /* flat cap, pulled down over the brow */
+      ball(hat[0] - fwd[0] * r * 0.1, hat[1] - fwd[1] * r * 0.1, r * 0.96, r * 0.46, a, '#6b7c8c', '#4a5766', ink, true);
+      capsule([hat[0] + fwd[0] * r * 0.2, hat[1] + fwd[1] * r * 0.2],
+        [hat[0] + fwd[0] * r * 1.25, hat[1] + fwd[1] * r * 1.25], 2.2, '#4a5766', ink);
+    } else if (ht === 'tractorpet'){
+      /* trucker cap with a big flat peak */
+      ball(hat[0], hat[1], r * 0.86, r * 0.52, a, '#c14a3a', '#8f3227', ink, true);
+      capsule([hat[0] + fwd[0] * r * 0.3 - up[0] * r * 0.16, hat[1] + fwd[1] * r * 0.3 - up[1] * r * 0.16],
+        [hat[0] + fwd[0] * r * 1.45 - up[0] * r * 0.2, hat[1] + fwd[1] * r * 1.45 - up[1] * r * 0.2], 2.4, '#8f3227', ink);
+      if (!lite) ball(hat[0] + fwd[0] * r * 0.1, hat[1] + fwd[1] * r * 0.1, 1.5, 1.1, a, '#ffd76b', null, null, false);
+    } else if (ht === 'hoofddoek'){
+      /* headscarf with a knot at the back */
+      ball(hat[0] - fwd[0] * r * 0.08, hat[1] - fwd[1] * r * 0.08, r * 0.96, r * 0.6, a, '#d9628a', '#a8446a', ink, true);
+      if (!lite) ball(hat[0] - fwd[0] * r * 0.95, hat[1] - fwd[1] * r * 0.95, r * 0.3, r * 0.26, a, '#d9628a', '#a8446a', ink, false);
+    } else if (ht === 'bandana'){
+      ball(hat[0], hat[1], r * 0.9, r * 0.44, a, '#c9553f', '#94351f', ink, true);
+      if (!lite) capsule([hat[0] - fwd[0] * r * 0.7, hat[1] - fwd[1] * r * 0.7],
+        [hat[0] - fwd[0] * r * 1.5 - up[0] * r * 0.4, hat[1] - fwd[1] * r * 1.5 - up[1] * r * 0.4], 1.8, '#94351f', ink);
+    }
+    /* facial hair, cut to the archetype */
+    const bd = f.beard;
+    if (bd && !lite){
+      if (bd === 'snor'){
+        const p2 = at(0.78, -0.28);
+        ball(p2[0], p2[1], r * 0.42, r * 0.2, a, c.hair, shade(c.hair, -0.2), null, false);
+      } else if (bd === 'kin'){
+        const p2 = at(0.46, -1.06);
+        ball(p2[0], p2[1], r * 0.3, r * 0.3, a, c.hair, shade(c.hair, -0.2), null, false);
+      } else if (bd === 'stoppels'){
+        const p2 = at(0.42, -0.72);
+        ctx.globalAlpha = 0.45;
+        ball(p2[0], p2[1], r * 0.6, r * 0.42, a, c.hair, null, null, false);
+        ctx.globalAlpha = 1;
+      } else {
+        const p2 = at(0.36, -1.12);
+        ball(p2[0], p2[1], r * 0.58, r * 0.44, a, c.hair, shade(c.hair, -0.22), ink, false);
+      }
     }
   }
 }
 
 /* Whatever they are holding, drawn into the near hand. */
 const WEAPON_TILT = { baton: -0.35, pitchfork: -0.85, pickaxe: -0.7, rake: -0.85, sign: -1.15, shovel: -0.75 };
+/* carried, not swung: long tools go up over the shoulder, which is both how
+   people actually carry them and what keeps the silhouette clean */
+const WEAPON_CARRY = { pitchfork: -4.15, pickaxe: -4.1, rake: -4.15, shovel: -4.05, sign: 1.95 };
+/* Which way a held thing points: in line with the swing while swinging,
+   shouldered while walking around with it. */
+function weaponAngle(f, P){
+  const swung = f.state === 'attack' || f.state === 'launch' || f.state === 'hurt' || f.state === 'down';
+  const carry = WEAPON_CARRY[f.weapon];
+  const tilt = (!swung && carry != null) ? carry : (WEAPON_TILT[f.weapon] || 0);
+  return P.lean + P.ra[0] + P.ra[1] + tilt;
+}
 const WEAPON_LEN = { baton: 17, pitchfork: 27, pickaxe: 24, rake: 26, sign: 26, shovel: 26 };
 
 /* Where the tip of a held tool is, in rig space. */
 function weaponTip(f, P, g){
   const h = g.ra.e;
-  const a = P.lean + P.ra[0] + P.ra[1] + (WEAPON_TILT[f.weapon] || 0);
+  const a = weaponAngle(f, P);
   const len = WEAPON_LEN[f.weapon] || 16;
   return [h[0] + dirx(a) * len, h[1] + diry(a) * len];
 }
@@ -1416,7 +1751,7 @@ function paintWeapon(f, P, g){
   const h = g.ra.e, ink = INK;
   /* tools are carried tilted forward-up; without this everyone drags their
      pitchfork along the road like a sulking teenager */
-  const a = P.lean + P.ra[0] + P.ra[1] + (WEAPON_TILT[f.weapon] || 0);
+  const a = weaponAngle(f, P);
   const dx = dirx(a), dy = diry(a);
   const w = f.weapon;
   if (w === 'baton'){
@@ -1471,6 +1806,104 @@ function shade(hex, amt){
   return out;
 }
 
+/* ------------------------------------------------------------ SPRITE BANK
+   The crowd is the frame budget.  Forty bodies at twenty-odd paths each is
+   a thousand fills a frame, and that is what made fights stutter.
+
+   So every look in the cast gets its walk cycle and its standing pose baked
+   once into an offscreen canvas, and the crowd is blitted instead of drawn.
+   The rig still drives all of it — the bank is rendered *by* the same
+   painter, at the same poses — but a boerke walking up the road now costs
+   one drawImage.  That is also what pays for the drawing: the shading, the
+   bib buttons and the stubble are free at run time because they were paid
+   for once, on the first frame that look appeared.
+
+   Anyone doing something interesting — swinging, flying, being cuffed,
+   mid-transition — is still drawn the long way, and so is the officer, so
+   nothing looks canned where it counts. */
+const BANK = {
+  on: true, scale: 0, sheets: {}, built: 0, blits: 0, live: 0,
+  WALK: 12,                       // phases baked per walk cycle
+};
+
+function bankReset(){ BANK.sheets = {}; BANK.built = 0; }
+
+function bankBuild(key, f){
+  const size = f.build.size || 1;
+  const px = BANK.scale * size;
+  const W = Math.ceil(54 * px), H = Math.ceil(80 * px);
+  const ox = W * 0.5, oy = H - Math.ceil(3 * px);
+  const cv = document.createElement('canvas');
+  cv.width = W * (BANK.WALK + 1);
+  cv.height = H;
+  const c2d = cv.getContext('2d');
+  /* borrow the fighter to pose it, then hand it back exactly as found */
+  const keep = {
+    ctx, state: f.state, walk: f.walk, lite: f.lite, hatLag: f.hatLag, blink: f.blink,
+    sq: f.sq, ph: f.ph, pose: f._pose, from: f._from, blend: f._blend, st: f._state, T,
+  };
+  ctx = c2d;
+  if (ctx.imageSmoothingEnabled !== undefined) ctx.imageSmoothingEnabled = true;
+  f.lite = false; f.hatLag = 0; f.blink = 0; f.sq = 0; f.ph = 0;
+  const frame = (col) => {
+    f._from = null; f._blend = 1; f._pose = null; f._state = f.state;
+    const P = poseFor(f);
+    const g = rigGeom(P, f.build);
+    ctx.save();
+    ctx.translate(col * W + ox, oy);
+    ctx.scale(px, px);
+    ctx.scale(1, -1);
+    paintBody(f, P, g);
+    ctx.restore();
+  };
+  T = 0;
+  f.state = 'idle'; f.walk = 0;
+  frame(0);
+  f.state = 'walk';
+  for (let i = 0; i < BANK.WALK; i++){
+    f.walk = (i / BANK.WALK) * TAU;
+    frame(i + 1);
+  }
+  ctx = keep.ctx;
+  f.state = keep.state; f.walk = keep.walk; f.lite = keep.lite; f.hatLag = keep.hatLag;
+  f.blink = keep.blink; f.sq = keep.sq; f.ph = keep.ph;
+  f._pose = keep.pose; f._from = keep.from; f._blend = keep.blend; f._state = keep.st;
+  T = keep.T;
+  BANK.built++;
+  const sheet = { cv, W, H, ox, oy, px };
+  BANK.sheets[key] = sheet;
+  return sheet;
+}
+
+/* Blit a cached frame if this body has one, in screen space.  Returns false
+   when the body has to be painted the long way. */
+function bankDraw(f, sx, sy, s){
+  if (!BANK.on || f.kind !== 'farmer' || f.dead || !f.artKey) return false;
+  if (f.state !== 'idle' && f.state !== 'walk') return false;
+  if ((f._blend == null ? 1 : f._blend) < 1) return false;
+  if (Math.abs(f.sq || 0) > 0.02 || f.z > 0.5) return false;
+  const want = VIEW.scale * VIEW.dpr * 1.1;
+  if (Math.abs(BANK.scale - want) > 0.02){ bankReset(); BANK.scale = want; }
+  const sheet = BANK.sheets[f.artKey] || bankBuild(f.artKey, f);
+  let col = 0;
+  if (f.state === 'walk'){
+    const q = ((f.walk % TAU) + TAU) % TAU;
+    col = 1 + (Math.round(q / TAU * BANK.WALK) % BANK.WALK);
+  }
+  const k = s / sheet.px * (f.build.size || 1);
+  /* a standing body breathes by riding the blit up and down a pixel — six
+     baked idle frames would cost more and read the same */
+  const breathe = f.state === 'idle' ? Math.sin(T * 2.1 + f.ph) * 0.5 * s : 0;
+  const w = sheet.W * k, h = sheet.H * k;
+  const dx = sx - sheet.ox * k, dy = sy - sheet.oy * k + breathe;
+  ctx.save();
+  if (f.face < 0){ ctx.translate(2 * sx, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(sheet.cv, col * sheet.W, 0, sheet.W, sheet.H, dx, dy, w, h);
+  ctx.restore();
+  BANK.blits++;
+  return true;
+}
+
 /* Puts a body on the screen: shadow, transform, paint, then the extras
    that live in screen space (stars, gas mask, flash). */
 function drawFighter(f){
@@ -1501,15 +1934,19 @@ function drawFighter(f){
 
   const P = poseFor(f);
   const g = rigGeom(P, f.build);
-  ctx.save();
-  ctx.translate(sx, sy - f.z);
-  ctx.scale(s * (f.face < 0 ? -1 : 1), s);
-  ctx.scale(1, -1);                       // rig space is y-up from here on
-  if (P.rot) ctx.rotate(P.rot);           // +rot tips forward, -rot onto the back
-  const sq = clamp(f.sq || 0, -0.4, 0.4);
-  if (sq) ctx.scale(1 - sq * 0.9, 1 + sq);
-  paintBody(f, P, g);
-  ctx.restore();
+  const blitted = bankDraw(f, sx, sy - f.z, s);
+  if (!blitted){
+    BANK.live++;
+    ctx.save();
+    ctx.translate(sx, sy - f.z);
+    ctx.scale(s * (f.face < 0 ? -1 : 1), s);
+    ctx.scale(1, -1);                     // rig space is y-up from here on
+    if (P.rot) ctx.rotate(P.rot);         // +rot tips forward, -rot onto the back
+    const sq = clamp(f.sq || 0, -0.4, 0.4);
+    if (sq) ctx.scale(1 - sq * 0.9, 1 + sq);
+    paintBody(f, P, g);
+    ctx.restore();
+  }
 
   /* record the tool tip while swinging, and paint the arc it left */
   if (f.weapon && f.state === 'attack' && f.atk && f.atk.dmg > 0){
@@ -1577,32 +2014,32 @@ const MAX_ACTIVE = 40;             // farmers fighting at once; the rest queue
 
 const COPS = [
   {
-    id: 'glaze', name: 'SGT. GLAZE', tag: 'THIRTY YEARS, NO PAPERWORK',
+    id: 'glaze', name: 'BRIGADIER BOLLEKE', tag: 'DERTIG JAAR, NUL PAPIERWERK',
     hp: 150, spd: 92, dmg: 1.4, kb: 1.55, gas: 4, reach: 1.0, chain: 3,
     swing: 1.0, dash: 1.35, donut: 1.6, weight: 2.2,
     build: { fat: 0.85, size: 1.07, arm: 0.96, leg: 0.86, torso: 1.02, head: 1.08 },
-    note: 'Slow, wide, and hits like a filing cabinet. Heals more from donuts.',
+    note: 'Traag, breed, en slaat gelijk ne kast. Haalt meer uit e smoutebol.',
     bars: [0.95, 0.42, 1.0],
   },
   {
-    id: 'noodle', name: 'OFC. NOODLE', tag: 'ALL LEGS, NO LUNCH',
+    id: 'noodle', name: 'AGENT SPRIET', tag: 'AL BENEN, GEEN BOTERHAMMEN',
     hp: 104, spd: 122, dmg: 0.95, kb: 1.12, gas: 2, reach: 1.3, chain: 4,
     swing: 0.74, dash: 1.05, donut: 1.0, weight: 1.35,
     build: { fat: 0.1, size: 1.06, arm: 1.26, leg: 1.3, torso: 1.06, head: 0.92 },
-    note: 'Long arms, quick feet, four-hit combo. Made of pipe cleaners.',
+    note: 'Lange armen, rappe voeten, vier slagen na mekaar. Gemaakt van pijpenragers.',
     bars: [0.5, 1.0, 0.78],
   },
 ];
 
 /* Enemy roster.  `w` is the relative chance of showing up. */
 const FARMERS = {
-  mob:    { name: 'FARMHAND',   hp: 8,  dmg: 5,  spd: 44, weapon: null,       atk: 'shove', weight: 1,    size: 1.0,  w: 60, score: 40 },
-  sign:   { name: 'PLACARD',    hp: 9,  dmg: 6,  spd: 52, weapon: 'sign',     atk: 'chop',  weight: 0.95, size: 0.98, w: 24, score: 55 },
-  fork:   { name: 'PITCHFORK',  hp: 13, dmg: 9,  spd: 42, weapon: 'pitchfork',atk: 'poke',  weight: 1.1,  size: 1.02, w: 26, score: 70 },
-  rake:   { name: 'RAKER',      hp: 11, dmg: 7,  spd: 50, weapon: 'rake',     atk: 'chop',  weight: 1,    size: 1.0,  w: 18, score: 60 },
-  pick:   { name: 'PICKAXE',    hp: 20, dmg: 13, spd: 36, weapon: 'pickaxe',  atk: 'chop',  weight: 1.35, size: 1.06, w: 14, score: 110 },
-  boot:   { name: 'WELLY LOB',  hp: 9,  dmg: 6,  spd: 38, weapon: null,       atk: 'throw', weight: 0.95, size: 0.98, w: 12, score: 80, ranged: true },
-  big:    { name: 'BIG UNIT',   hp: 58, dmg: 16, spd: 32, weapon: 'shovel',   atk: 'chop',  weight: 2.6,  size: 1.24, w: 7,  score: 260, tough: true },
+  mob:    { name: 'BOERKE',      hp: 8,  dmg: 5,  spd: 44, weapon: null,       atk: 'shove', weight: 1,    w: 60, score: 40,  cast: ['jef', 'fonske', 'wiske', 'gust'] },
+  sign:   { name: 'PANCARTE',    hp: 9,  dmg: 6,  spd: 52, weapon: 'sign',     atk: 'chop',  weight: 0.95, w: 24, score: 55,  cast: ['mariette', 'wiske', 'jef'] },
+  fork:   { name: 'RIEK',        hp: 13, dmg: 9,  spd: 42, weapon: 'pitchfork',atk: 'poke',  weight: 1.1,  w: 26, score: 70,  cast: ['sooi', 'polle', 'cyriel'] },
+  rake:   { name: 'HARK',        hp: 11, dmg: 7,  spd: 50, weapon: 'rake',     atk: 'chop',  weight: 1,    w: 18, score: 60,  cast: ['rene', 'polle', 'achiel'] },
+  pick:   { name: 'PIKHOUWEEL',  hp: 20, dmg: 13, spd: 36, weapon: 'pickaxe',  atk: 'chop',  weight: 1.35, w: 14, score: 110, cast: ['achiel', 'gust', 'sooi'] },
+  boot:   { name: 'KLOMPGOOIER', hp: 9,  dmg: 6,  spd: 38, weapon: null,       atk: 'throw', weight: 0.95, w: 12, score: 80,  ranged: true, cast: ['fonske', 'mariette', 'cyriel'] },
+  big:    { name: 'DEN DIKKE',   hp: 58, dmg: 16, spd: 32, weapon: 'shovel',   atk: 'chop',  weight: 2.6,  w: 7,  score: 260, tough: true, cast: ['dikke'] },
 };
 const FARMER_KEYS = Object.keys(FARMERS);
 
@@ -1633,7 +2070,7 @@ function mkFighter(kind, x, y, o){
     state: 'idle', stateT: 0, walk: 0, spd: 0, ph: rng() * 6.28,
     flash: 0, hurtT: 0, hurtLen: 0.26, stun: 0, spin: 0, squash: 0,
     atk: null, atkName: '', didHit: null, chain: 0, chainT: 0, cd: 0,
-    weight: o.weight || 1, pal: o.pal || FARM_SKINS[0], build: o.build || { fat: 0.2, size: 1, arm: 1, leg: 1, torso: 1, head: 1 },
+    weight: o.weight || 1, pal: o.pal || BOERKE_PALS.klei, build: o.build || { fat: 0.2, size: 1, arm: 1, leg: 1, torso: 1, head: 1 },
     hat: o.hat == null ? rint(0, 3) : o.hat, beard: o.beard == null ? rng() < 0.55 : o.beard,
     weapon: o.weapon || null, alive: true, dead: false, fade: 0,
     downT: 0, dizzyT: 0, cuffing: 0, arrested: false, coughT: 0, invuln: 0,
@@ -1664,13 +2101,17 @@ function spawnFarmer(type, x, y, opts){
   const d = FARMERS[type] || FARMERS.mob;
   opts = opts || {};
   const hpScale = opts.hpScale == null ? 1 : opts.hpScale;
-  const pal = FARM_SKINS[rint(0, FARM_SKINS.length - 1)];
+  const who = opts.who || pick(d.cast);
+  const art = BOERKES[who];
   const f = mkFighter('farmer', x, y, {
-    type, hp: Math.max(3, Math.round(d.hp * hpScale)), weight: d.weight, pal, weapon: d.weapon,
-    build: { fat: rnd(0.28, 0.68) + (type === 'big' ? 0.45 : 0), size: d.size * rnd(0.95, 1.05),
-      arm: rnd(0.94, 1.06), leg: rnd(0.92, 1.08), torso: rnd(0.95, 1.06), head: rnd(0.94, 1.08) },
+    type, hp: Math.max(3, Math.round(d.hp * hpScale)), weight: d.weight,
+    pal: BOERKE_PALS[art.pal], weapon: d.weapon,
+    build: art.build,
     face: -1, tough: d.tough, ranged: d.ranged, score: d.score,
   });
+  f.art = art; f.who = who;
+  f.hat = art.hat; f.beard = art.beard;
+  f.artKey = who + '|' + (d.weapon || '-');
   f.atkName = d.atk;
   f.baseSpd = d.spd * (opts.spdScale || 1);
   f.dmgMul = opts.dmgMul || 1;
@@ -1719,7 +2160,7 @@ function attackTick(f, dt){
         o.vx += f.face * 190; o.stun = 0.2; o.flash = 0.1; pushed = true;
       }
       if (pushed){ snd('oof'); spawnFx('dust', f.x + f.face * 14, f.y, 0, { n: 3 }); }
-      else spawnFx('pop', f.x, f.y, f.z + 52, { txt: 'GRAB AIR', col: '#b0a0c0' });
+      else spawnFx('pop', f.x, f.y, f.z + 52, { txt: 'MIS!', col: '#b0a0c0' });
     }
   }
   /* melee farmers lunge into the strike, so a swing that started in range
@@ -1822,7 +2263,7 @@ function applyHit(src, tgt, a, opts){
     spawnFx('ring', hx, hy, hz, { pow });
     spawnFx('spark', hx, hy, hz, { n: 4 + Math.round(pow * 6), col: '#fff2c8', dir });
     if (G.blood && pow > 0.55) spawnFx('blood', hx, hy, hz, { n: 3 + Math.round(pow * 5), dir });
-    if (pow >= 0.85) spawnFx('pop', hx, hy, hz + 12, { txt: pick(pow > 1.2 ? ['KA-BONK!', 'WHUMP!', 'SPLAT!'] : ['BONK!', 'WHACK!', 'THWAP!', 'DOINK!']) });
+    if (pow >= 0.85) spawnFx('pop', hx, hy, hz + 12, { txt: pick(pow > 1.2 ? ['KABOEM!', 'WHOEMP!', 'PLETS!'] : ['BOEM!', 'PAF!', 'KLETS!', 'PATS!']) });
     G.flash = Math.max(G.flash, pow > 1.2 ? 0.22 : 0);
     addCombo();
     gainMeter(1.6 + pow * 2.4);
@@ -1852,7 +2293,7 @@ function knockOut(f, dir){
   addScore(f.score);
   gainMeter(3);
   W.down++;
-  if (rng() < 0.45) spawnFx('pop', f.x, f.y, f.z + 46, { txt: pick(['OOF!', 'OW!', 'ME BACK!', 'NOT AGAIN', 'MOOO']), col: '#ffd76b' });
+  if (rng() < 0.45) spawnFx('pop', f.x, f.y, f.z + 46, { txt: pick(['OEI!', 'AU!', 'MENNE RUG!', 'NI WEER', 'MOOO']), col: '#ffd76b' });
   if (rng() < 0.14) dropItem(f.x, f.y);
   if (f.state !== 'launch'){ f.state = 'down'; f.stateT = 99; f.downT = 0; }
 }
@@ -1878,7 +2319,7 @@ function bowlThrough(f, dt){
       { dmg: 10, kb: 150, pow: 1.0, up: 130, launch: true, sfx: 'crunch' }, { dir, powMul: 0.9 });
     f.vx *= 0.72;
     f.bowl = (f.bowl || 0) + 1;
-    if (f.bowl === 2) spawnFx('pop', f.x, f.y, f.z + 50, { txt: 'STRIKE!', col: '#8fd9ff' });
+    if (f.bowl === 2) spawnFx('pop', f.x, f.y, f.z + 50, { txt: 'ALLEMAAL OMVER!', col: '#8fd9ff' });
     if (f.bowl >= 2) addScore(25);
     if (Math.abs(f.vx) < 140) return;
   }
@@ -1986,7 +2427,7 @@ function takeItem(p, kind){
   } else if (kind === 'coffee'){
     p.speedT = 9;
     snd('coffee');
-    spawnFx('pop', p.x, p.y, p.z + 56, { txt: 'ZOOM', col: '#c9a06a' });
+    spawnFx('pop', p.x, p.y, p.z + 56, { txt: 'ZJOEM', col: '#c9a06a' });
   } else {
     p.gas = Math.min(p.gasMax, p.gas + 1);
     snd('pickup');
@@ -2177,7 +2618,7 @@ function squashHit(f, amount){
 function makeDizzy(f, dur){
   if (f.dead || f.state === 'cuffed') return;
   f.state = 'dizzy'; f.dizzyT = dur; f.stateT = 99;
-  spawnFx('pop', f.x, f.y, f.z + 46, { txt: pick(['?!', 'BIRDS', 'WOOZY']), col: '#ffd76b' });
+  spawnFx('pop', f.x, f.y, f.z + 46, { txt: pick(['?!', 'STERREKES', 'DUIZELIG']), col: '#ffd76b' });
 }
 
 /* Bodies do not stand inside each other. */
@@ -2269,7 +2710,7 @@ function playerTick(p, dt){
     if (rng() < 0.18) shout(p, pick(COP_YELLS), '#8fd9ff');
   } else if (EDGE.gas){
     if (p.gas > 0){ p.gas--; startAttack(p, 'lob'); }
-    else { snd('oof'); spawnFx('pop', p.x, p.y, p.z + 56, { txt: 'EMPTY', col: '#b0a0c0' }); }
+    else { snd('oof'); spawnFx('pop', p.x, p.y, p.z + 56, { txt: 'LEEG', col: '#b0a0c0' }); }
   } else if (EDGE.charge){
     if (p.dashCd <= 0){
       p.state = 'charge'; p.stateT = 99; p.dashT = 0.42; p.dashCd = 0.9;
@@ -2312,9 +2753,9 @@ function doArrest(p, o){
   gainMeter(14);
   addCombo();
   snd('cuff');
-  spawnFx('pop', o.x, o.y, o.z + 50, { txt: 'ARRESTED!', col: '#8fd9ff' });
+  spawnFx('pop', o.x, o.y, o.z + 50, { txt: 'GEBOEID!', col: '#8fd9ff' });
   spawnFx('spark', o.x, o.y, o.z + 30, { n: 10, col: '#8fd9ff' });
-  shout(o, pick(['I KNOW MY RIGHTS', 'CALL MY COW', 'THIS IS SO UNFAIR', 'FINE. FINE!']), '#ffd76b');
+  shout(o, pick(['K\u2019KEN MIJN RECHTEN', 'BELT MIJN KOE', 'DA\u2019S NI EERLIJK', 'ALLEE, VOORUIT DAN']), '#ffd76b');
   o.fade = 0; o.downT = 0;
   if (rng() < 0.34) dropItem(o.x + rnd(-10, 10), o.y);
   return true;
@@ -2327,9 +2768,9 @@ function callBackup(p){
   BACKUP.on = true; BACKUP.t = 0; BACKUP.hit = {};
   BACKUP.car = { x: cam.x - 90, y: GROUND_BOT - 12, vx: 470 };
   snd('siren'); snd('engine');
-  G.banner = 'BACKUP INBOUND'; G.bannerT = 2.2;
+  G.banner = 'VERSTERKING KOMT AF'; G.bannerT = 2.2;
   shake(6, 0.6);
-  shout(p, pick(['ALL UNITS!', 'SEND THE VAN!', 'CODE DONUT!']), '#8fd9ff');
+  shout(p, pick(['ALLE EENHEDEN!', 'STUURT DE COMBI!', 'CODE SMOUTEBOL!']), '#8fd9ff');
 }
 function backupTick(dt){
   if (!BACKUP.on) return;
@@ -2453,16 +2894,16 @@ function releaseToken(f, extra){
    Ten waves: one farmer, then three, then five, then it gets silly. */
 
 const WAVES = [
-  { n: 1,    name: 'ONE VERY CROSS FARMER', sub: 'he has been waiting since Tuesday', cap: 1,  gap: 1.0 },
-  { n: 3,    name: 'HE CALLED HIS COUSINS', sub: 'they came in one van',              cap: 3,  gap: 0.9 },
-  { n: 5,    name: 'THE ALLOTMENT COMMITTEE', sub: 'minutes will be taken',           cap: 5,  gap: 0.8 },
-  { n: 10,   name: 'THE MORNING SHIFT',     sub: 'milked, fed, furious',              cap: 8,  gap: 0.7 },
-  { n: 20,   name: 'THE WHOLE VILLAGE',     sub: 'including the vet',                 cap: 12, gap: 0.55 },
-  { n: 50,   name: 'TWO MORE VILLAGES',     sub: 'they carpooled',                    cap: 18, gap: 0.42 },
-  { n: 100,  name: 'THE CO-OPERATIVE',      sub: 'annual general meeting, outdoors',  cap: 24, gap: 0.3 },
-  { n: 200,  name: 'THE ENTIRE REGION',     sub: 'the tractors go back nine miles',   cap: 30, gap: 0.22 },
-  { n: 500,  name: 'THE COUNTRYSIDE',       sub: 'somebody brought a brass band',     cap: 36, gap: 0.16 },
-  { n: 1000, name: 'EVERY FARMER ALIVE',    sub: 'and their mothers. Good luck.',     cap: 40, gap: 0.1 },
+  { n: 1,    name: 'EENEN KWAAIE BOER',     sub: 'staat hier al te wachten sinds dijsdag', cap: 1,  gap: 1.0 },
+  { n: 3,    name: 'HIJ BELDE ZEN NEVEUS',  sub: 'ze kwamen met eenen bestelwagen',        cap: 3,  gap: 0.9 },
+  { n: 5,    name: 'HET BESTUUR VAN DE FANFARE', sub: 'er wordt verslag opgemaakt',        cap: 5,  gap: 0.8 },
+  { n: 10,   name: 'DE VROEGE PLOEG',       sub: 'gemolken, gevoederd, kwaad',             cap: 8,  gap: 0.7 },
+  { n: 20,   name: 'HEEL \u2019T DORP',        sub: 'den dierenarts is er ook bij',          cap: 12, gap: 0.55 },
+  { n: 50,   name: 'NOG TWEE DORPEN ERBIJ', sub: 'ze zijn samen gereden',                  cap: 18, gap: 0.42 },
+  { n: 100,  name: 'DEN BOERENBOND',        sub: 'algemene vergadering, buiten',           cap: 24, gap: 0.3 },
+  { n: 200,  name: 'HEEL DE STREEK',        sub: 'de file tractors staat tot in Erpe',     cap: 30, gap: 0.22 },
+  { n: 500,  name: 'HEEL VLAANDEREN',       sub: 'iemand heeft de fanfare meegebracht',    cap: 36, gap: 0.16 },
+  { n: 1000, name: 'ALLE BOEREN DIE BESTAAN', sub: 'en hunne moeders. Veel succes.',       cap: 40, gap: 0.1 },
 ];
 
 const W = {
@@ -2513,7 +2954,7 @@ function introTick(dt){
   } else if (!c.out){
     c.out = true;
     snd('siren');
-    G.banner = 'HIGHWAY 7 — TUESDAY'; G.bannerT = 2.4;
+    G.banner = 'E40 AFRIT OILSJT \u2014 DIJSDAG'; G.bannerT = 2.4;
   }
   if (c.out){
     p.hidden = false;
@@ -2524,7 +2965,7 @@ function introTick(dt){
   }
   if (INTRO.t > 4.0 && !INTRO.done){
     INTRO.done = true;
-    shout(p, 'RIGHT THEN.', '#8fd9ff');
+    shout(p, 'ALLEE, VOORUIT.', '#8fd9ff');
     startWave(0);
   }
 }
@@ -2540,7 +2981,7 @@ function startWave(i){
   W.dmgMul = 1 + i * 0.08;
   W.spdScale = 1 + i * 0.045;
   cam.lock = arenaX0(i);
-  G.banner = 'WAVE ' + (i + 1) + ' — ' + w.name;
+  G.banner = 'GOLF ' + (i + 1) + ' \u2014 ' + w.name;
   G.bannerT = 2.8;
   G.phase = 'play';
   snd('whistle');
@@ -2632,10 +3073,10 @@ function waveClear(){
   snd('fanfare');
   openGate(W.i);
   if (last){
-    G.banner = 'THE ROAD IS CLEAR'; G.bannerT = 3;
+    G.banner = 'DE BAAN IS VRIJ'; G.bannerT = 3;
     setTimeout2(2.2, () => setPhase('win'));
   } else {
-    G.banner = 'CLEAR! — MOVE UP THE ROAD →'; G.bannerT = 3.4;
+    G.banner = 'PROPER! \u2014 VOORT DE BAAN OP \u2192'; G.bannerT = 3.4;
     G.phase = 'between';
     cam.lock = null;
   }
@@ -2672,7 +3113,7 @@ function addCombo(){
   G.combo++; G.comboT = 2.2;
   if (G.combo > G.comboBest) G.comboBest = G.combo;
   if (G.combo % 25 === 0){
-    spawnFx('pop', players[0].x, players[0].y, players[0].z + 66, { txt: G.combo + ' HIT!', col: '#ffd76b' });
+    spawnFx('pop', players[0].x, players[0].y, players[0].z + 66, { txt: G.combo + ' RAAK!', col: '#ffd76b' });
     snd('pickup');
   }
 }
@@ -2683,16 +3124,16 @@ function gainMeter(n){
   p.meter = clamp(p.meter + n, 0, p.meterMax);
   if (was < p.meterMax && p.meter >= p.meterMax){
     snd('whistle');
-    spawnFx('pop', p.x, p.y, p.z + 62, { txt: 'BACKUP READY', col: '#8fd9ff' });
+    spawnFx('pop', p.x, p.y, p.z + 62, { txt: 'VERSTERKING KLAAR', col: '#8fd9ff' });
   }
 }
 
 const RANKS = [
-  [280000, 'S', 'The chief is naming a donut after you.'],
-  [170000, 'A', 'Exemplary policing. Terrifying, but exemplary.'],
-  [80000,  'B', 'Solid work. Mostly paperwork-free.'],
-  [30000,  'C', 'You survived. The hedge did not.'],
-  [0,      'D', 'You have been reassigned to school crossings.'],
+  [280000, 'S', 'De commissaris noemt e smoutebol naar u.'],
+  [170000, 'A', 'Voorbeeldig politiewerk. Schrikwekkend, maar voorbeeldig.'],
+  [80000,  'B', 'Straf gedaan. En bijna zonder papierwerk.'],
+  [30000,  'C', '\u2019T Is gedaan. Den haag ook.'],
+  [0,      'D', 'Ge moogt vanaf morgen aan \u2019t zebrapad staan.'],
 ];
 function rankFor(score){
   for (const r of RANKS) if (score >= r[0]) return r;
@@ -2949,10 +3390,14 @@ function drawCrowd(){
     if (x < -30 || x > VW + 30) continue;
     /* the verge crowd is drawn in the same proportions as the fighters —
        they are the same people, they just have not joined in yet */
-    const s = 0.94;
+    const art = BOERKES[c.who], pal = BOERKE_PALS[art.pal];
+    /* the verge is the same cast, so it gets the same shapes: a round one
+       is round from here too, and den dikke is unmistakable at any range */
+    const s = 0.94 * (art.build.size || 1);
     const t = T * c.bob + c.t;
     const bob = Math.sin(t * 2.2) * 1.6;
-    const pal = FARM_SKINS[c.skin];
+    const bw = 1 + (art.build.fat || 0.4) * 0.5;
+    const hw = (art.build.head || 1);
     const y = c.y + bob;
     ctx.save();
     ctx.translate(x, y);
@@ -2961,29 +3406,35 @@ function drawCrowd(){
     /* legs, hips, body */
     capsule([-3.5, 0], [-3.5, -22], 5.6, pal.deni, INK);
     capsule([3.5, 0], [3.5, -22], 5.6, pal.deni, INK);
-    blob(0, -24, 7.2, 5, pal.deni, INK, 0);
-    blob(0, -34, 9, 11.5, pal.shirt, INK, 0);
-    blob(0, -30, 8, 6, pal.deni, null, 0);
+    ball(0, -24, 7.2 * bw, 5, 0, pal.deni, pal.deniLo, INK, false);
+    ball(0, -34, 9 * bw, 11.5, 0, pal.shirt, pal.shirtLo, INK, true);
+    ball(0, -30, 7.4 * bw, 5.4, 0, pal.deni, pal.deniLo, null, false);
     /* the waving arm, and one holding whatever they brought */
     const a = Math.sin(t * 3.1) * 0.5;
     capsule([5.5, -41], [12 + a * 4, -52 - a * 6], 4.2, pal.shirt, INK);
     capsule([-6, -41], [-11.5, -31], 4.2, shade(pal.shirt, -0.22), INK);
     /* head */
     capsule([0, -43], [0, -50], 4.4, pal.skin, INK);
-    blob(0, -54, 7, 7.4, pal.skin, INK, 0);
-    blob(0, -57, 6.4, 4, pal.hair, INK, 0);
+    ball(0, -54, 7 * hw, 7.4 * hw, 0, pal.skin, pal.skinLo, INK, true);
+    if (art.hair !== 'kaal') ball(0, -57, 6.4 * hw, 4, 0, pal.hair, shade(pal.hair, -0.25), INK, false);
     ctx.fillStyle = '#2a1c30';
     ctx.beginPath();
     ctx.ellipse(2.4, -55, 1.1, 1.4, 0, 0, TAU);
     ctx.ellipse(5, -55, 1.1, 1.4, 0, 0, TAU);
     ctx.fill();
-    if (c.hat === 0){
+    const ht = art.hat;
+    if (ht === 'stro'){
       capsule([-9.5, -59.5], [9.5, -59.5], 2.6, '#e0c169', INK);
       blob(1, -61, 5.6, 4, '#e8cd7c', INK, 0);
-    } else if (c.hat === 1){
+    } else if (ht === 'pet'){
       blob(0.5, -60, 6.4, 3.6, '#5a6b7a', INK, 0);
       capsule([2, -60], [9, -59], 2.2, '#48596a', INK);
-    } else if (c.hat === 2){
+    } else if (ht === 'tractorpet'){
+      blob(0.5, -60, 6.4, 3.8, '#c14a3a', INK, 0);
+      capsule([2, -59.6], [10, -58.6], 2.2, '#8f3227', INK);
+    } else if (ht === 'hoofddoek'){
+      blob(0.5, -60, 6.8, 4.2, '#d9628a', INK, 0);
+    } else if (ht === 'bandana'){
       blob(0.5, -60, 6.6, 3.4, '#c9553f', INK, 0);
     }
     /* placard or flag, waving a beat behind the arm */
@@ -3207,18 +3658,19 @@ function drawItem(it){
   const bob = it.pickup ? Math.sin(T * 4 + it.t) * 1.4 : 0;
   ctx.translate(0, bob);
   if (it.kind === 'donut'){
-    ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU);
-    ctx.fillStyle = '#e8a86b'; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, -1, 6.4, 0, TAU);
-    ctx.fillStyle = '#ff9fc4'; ctx.fill();
-    ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, TAU);
-    ctx.fillStyle = '#4b3a52'; ctx.fill();
-    ctx.fillStyle = '#fff3dd';
-    for (let i = 0; i < 5; i++){
-      const a = i * 1.3 + it.t;
-      ctx.save(); ctx.translate(Math.cos(a) * 4.4, Math.sin(a) * 4.2 - 1); ctx.rotate(a);
-      ctx.fillRect(-1.4, -0.6, 2.8, 1.2); ctx.restore();
+    /* smoutebol: fried, lumpy, buried in icing sugar */
+    ball(0, 0, 7.4, 6.8, 0, '#d9924a', '#ab6a2c', ink, false);
+    ball(-2, -2, 3.2, 2.6, 0.4, '#e8a86b', null, null, false);
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    for (let i = 0; i < 7; i++){
+      const a = i * 0.9 + 0.4;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * 4.6, Math.sin(a) * 4 - 1.2, 1.1, 0, TAU);
+      ctx.fill();
     }
+    ctx.globalAlpha = 0.75;
+    ball(0, -4.6, 5.6, 2.2, 0, '#fff8ee', null, null, false);
+    ctx.globalAlpha = 1;
   } else if (it.kind === 'coffee'){
     roundRect(-4.5, -8, 9, 12, 2, '#f3ead8', ink, 2);
     ctx.fillStyle = '#8a5a3a'; ctx.fillRect(-4.5, -8, 9, 3);
@@ -3372,7 +3824,7 @@ function drawHUD(){
   roundRect(16, 42, mW, 7, 3, 'rgba(20,12,26,.9)', null);
   const full = mF >= 1;
   roundRect(16, 42, Math.max(2, mW * mF), 7, 3, full ? (Math.floor(T * 8) % 2 ? '#8fd9ff' : '#ffffff') : '#5a8fd9', null);
-  label(full ? 'BACKUP READY  [SPACE]' : 'SIREN', 16 + mW + 6, 49, 8.5, full ? '#8fd9ff' : '#b6a6c6', 'left');
+  label(full ? 'VERSTERKING KLAAR  [SPATIE]' : 'SIRENE', 16 + (full ? 0 : mW + 6), full ? 69 : 49, 8.5, full ? '#8fd9ff' : '#b6a6c6', 'left');
   /* gas belt */
   label('GAS', 16, 69, 9, '#b6a6c6', 'left');
   for (let i = 0; i < p.gasMax; i++){
@@ -3385,18 +3837,18 @@ function drawHUD(){
 
   /* centre: the wave */
   const left = Math.max(0, W.total - W.down);
-  label('WAVE ' + (G.wave + 1) + ' / ' + WAVES.length, VW / 2, 22, 13, '#ffd76b', 'center');
+  label('GOLF ' + (G.wave + 1) + ' / ' + WAVES.length, VW / 2, 22, 13, '#ffd76b', 'center');
   label(w.name, VW / 2, 36, 11, '#fff3dd', 'center');
   if (G.phase === 'play'){
     const barW = 190, f = clamp(W.down / Math.max(1, W.total), 0, 1);
     roundRect(VW / 2 - barW / 2, 42, barW, 7, 3, 'rgba(20,12,26,.75)', null);
     roundRect(VW / 2 - barW / 2, 42, Math.max(2, barW * f), 7, 3, '#ff9a5e', null);
-    label(left + ' LEFT', VW / 2, 60, 10, '#ffd0a0', 'center');
+    label(left + ' TE GAAN', VW / 2, 60, 10, '#ffd0a0', 'center');
   }
 
   /* right: the numbers */
   label(String(G.score).padStart(6, '0'), VW - 12, 26, 17, '#fff3dd', 'right');
-  label('BEST ' + Math.max(G.best, G.score), VW - 12, 40, 9, '#b6a6c6', 'right');
+  label('BESTE ' + Math.max(G.best, G.score), VW - 12, 40, 9, '#b6a6c6', 'right');
   if (G.combo > 1){
     const pulse = 1 + Math.max(0, G.comboT - 2) * 0.6;
     ctx.save();
@@ -3410,7 +3862,7 @@ function drawHUD(){
   if (G.phase === 'between'){
     const a = 0.65 + Math.sin(T * 5) * 0.35;
     ctx.save(); ctx.globalAlpha = a;
-    label('THIS WAY  →', VW - 90, VH - 26, 16, '#ffd76b', 'center');
+    label('DEZE KANT OP  \u2192', VW - 96, VH - 26, 15, '#ffd76b', 'center');
     ctx.restore();
   }
   if (G.banner && G.bannerT > 0){
@@ -3636,10 +4088,11 @@ function buildPicker(){
       <div class="nm">${C.name}</div>
       <div class="tg">${C.tag}</div>
       <div class="st">
-        MUSCLE<div class="bar"><i style="width:${C.bars[0] * 100}%"></i></div>
-        SPEED<div class="bar"><i style="width:${C.bars[1] * 100}%"></i></div>
-        REACH<div class="bar"><i style="width:${C.bars[2] * 100}%"></i></div>
-        ${C.note}
+        KRACHT<div class="bar"><i style="width:${C.bars[0] * 100}%"></i></div>
+        SNELHEID<div class="bar"><i style="width:${C.bars[1] * 100}%"></i></div>
+        BEREIK<div class="bar"><i style="width:${C.bars[2] * 100}%"></i></div>
+      </div>
+      <div class="note">${C.note}
       </div>
     </div>`).join('');
   const nodes = host.querySelectorAll('.cop');
@@ -3657,7 +4110,7 @@ function toTitle(){
   G.paused = false;
   show('title', true); show('help', false); show('pause', false); show('over', false);
   const b = el('bestLine');
-  if (b) b.textContent = G.best > 0 ? 'BEST SHIFT: ' + G.best + ' PTS' : 'PRESS CLOCK IN. THE ROAD IS NOT GOING TO CLEAR ITSELF.';
+  if (b) b.textContent = G.best > 0 ? 'BESTE DIENST: ' + G.best + ' PUNTEN' : 'DUWT OP AAN \u2019T WERK. DIE BAAN RUIMT ZICHZELF NI OP.';
   if (!fighters.length) buildWorld();
   cam.x = arenaX0(0) + 120;
 }
@@ -3674,24 +4127,24 @@ function togglePause(){
   G.paused = !G.paused;
   show('pause', G.paused);
   const s = el('pauseSub');
-  if (s) s.textContent = 'WAVE ' + (G.wave + 1) + ' · ' + G.score + ' PTS · ' + G.arrests + ' ARRESTS';
+  if (s) s.textContent = 'GOLF ' + (G.wave + 1) + ' \u00b7 ' + G.score + ' PUNTEN \u00b7 ' + G.arrests + ' AANHOUDINGEN';
   syncMute();
 }
 
 function showOver(win){
   const r = rankFor(G.score);
   const t = el('overTitle'), rk = el('overRank'), sb = el('overSub'), rows = el('overRows');
-  if (t) t.textContent = win ? 'ROAD CLEARED' : 'OFF DUTY';
+  if (t) t.textContent = win ? 'DE BAAN IS VRIJ' : 'DIENST GEDAAN';
   if (rk) rk.textContent = r[1];
-  if (sb) sb.textContent = win ? 'Highway 7 is open. The countryside is furious.' : r[2];
+  if (sb) sb.textContent = win ? 'De E40 is weer open. De buitengebieden zijn razend.' : r[2];
   if (rows) rows.innerHTML =
-    `SCORE <b>${G.score}</b><br>` +
-    `WAVE REACHED <b>${G.wave + 1} / ${WAVES.length}</b><br>` +
-    `FARMERS FLOORED <b>${G.kos}</b><br>` +
-    `ARRESTS MADE <b>${G.arrests}</b><br>` +
-    `BEST COMBO <b>${G.comboBest}x</b><br>` +
-    `TIME ON THE CLOCK <b>${Math.floor(G.shift / 60)}m ${Math.floor(G.shift % 60)}s</b><br>` +
-    `BEST EVER <b>${G.best}</b>`;
+    `PUNTEN <b>${G.score}</b><br>` +
+    `GOLF GEHAALD <b>${G.wave + 1} / ${WAVES.length}</b><br>` +
+    `BOERKES TEGEN DEN GROND <b>${G.kos}</b><br>` +
+    `AANHOUDINGEN <b>${G.arrests}</b><br>` +
+    `BESTE COMBO <b>${G.comboBest}x</b><br>` +
+    `TIJD OP DE KLOK <b>${Math.floor(G.shift / 60)}m ${Math.floor(G.shift % 60)}s</b><br>` +
+    `BESTE OOIT <b>${G.best}</b>`;
   show('over', true);
   snd(win ? 'fanfare' : 'fail');
 }
