@@ -4946,7 +4946,7 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
-    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, settling: 0,
+    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, lastStand: 0, settling: 0,
     roster: null, foeSettling: 0, foeSwaps: 0, foeSwapT: 0, foePotions: 0, foeHeals: 0,
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
@@ -5131,8 +5131,9 @@ function useMove(log, atkSide, moveId) {
         // fire if the kin lives long enough to be cornered. So a healthy one
         // takes the blow and holds on by a point, once, and corners on the spot.
         // It cannot save a kin that was already hurt, and it cannot happen twice.
-        if (b.wild && !b.cornered && defender === b.foe
+        if (b.wild && !b.lastStand && defender === b.foe
           && defender.hp > defender.max * CORNER_AT && through >= defender.hp) {
+          b.lastStand = 1;
           through = defender.hp - 1;
           snap(log, `${them} will not go down yet!`, 'block', 'foe');
         }
@@ -5389,8 +5390,9 @@ function readIntent() {
   // wild fight is four identical small hits with no moment in it. Same damage,
   // gathered into one swing you are told about a turn ahead: the fight now has a
   // point where it could go wrong, and something to do about it.
-  if (b.wild && !b.cornered && b.foe.hp > 0 && b.foe.hp / b.foe.max < CORNER_AT) {
-    b.cornered = 1;
+  const nextCorner = b.wild ? cornerAt(b.foe, b.mine, b.cornered) : -1;
+  if (nextCorner > 0 && b.foe.hp > 0 && b.foe.hp / b.foe.max < nextCorner) {
+    b.cornered++;
     b.foeEdge += Math.round(CORNER_EDGE * planScale(b.foe.lvl));
   }
   const id = foeChoose(b.foeEdge > 0);
@@ -5399,7 +5401,7 @@ function readIntent() {
   b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
   // Being cornered is the loudest thing on the line while it lasts, because it
   // is the only part of a wild fight worth reading.
-  if (b.cornered === 1 && b.foeEdge > 0 && m.pow) {
+  if (b.cornered > 0 && b.foeEdge > 0 && m.pow) {
     b.intent.name = `${m.name} — cornered`;
     b.intent.tell = null;
   }
@@ -5484,6 +5486,44 @@ const trainerDmg = (lvl) => 1 + (TRAINER_DMG_MUL - 1) * Math.min(1, lvl / 14);
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 const CORNER_AT = .4, CORNER_EDGE = 14;
+/**
+ * How hurt a wild kin has to be before it stops fighting carefully — and the
+ * answer depends on whether it can hurt you at all.
+ *
+ * Nearly half of one-kin fights were never in doubt, and the cross-tab says
+ * where they live: 43% of fights are ones whose element you resist, and those
+ * run 59%, 59% and 45% never-in-doubt against 29% for the fights you walk into
+ * at a disadvantage. A kin whose every blow bounces off you cannot threaten you
+ * by hitting harder, because hitting is the thing the chart has taken away.
+ *
+ * So it stops waiting. A resisted wild kin gathers itself while it still has
+ * most of its health, which is the one thing it has that the chart cannot blunt:
+ * a telegraphed swing carrying flat damage, on a turn you were not expecting to
+ * have to answer.
+ */
+const CORNER_RESIST = [.78, .52, .26];
+/** Is every attack this kin has blunted by what the other one is made of? */
+const resistedBy = (foe, mine) => {
+  let best = 0;
+  for (const slot of foe.moves) {
+    const m = MOVES[slot.id];
+    if (m && m.pow) best = Math.max(best, effect(m.type, mine.types));
+  }
+  return best < 1;
+};
+/**
+ * The health at which it gathers itself for the nth time, or -1 for never.
+ *
+ * A kin that can hurt you gets one moment, late. A kin that cannot gets three,
+ * starting early — because one extra flat swing is not a fight. Moving a
+ * resisted foe's single moment earlier shifted the bucket it lives in by six
+ * points and the run average by two, which is inside the interval and therefore
+ * not a result. Three moments is the difference between a telegraph and a fight.
+ */
+const cornerAt = (foe, mine, done) => {
+  if (resistedBy(foe, mine)) return done < CORNER_RESIST.length ? CORNER_RESIST[done] : -1;
+  return done ? -1 : CORNER_AT;
+};
 // What it costs to be caught changing kin. Switching already cost a turn and
 // your hand and everything the deck had stacked up; none of that was a price
 // worth thinking about next to buying the element outright.
@@ -8826,7 +8866,8 @@ if (typeof window !== 'undefined') {
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
-    CORNER_AT, CORNER_EDGE, SWITCH_PUNISH, SETTLE_MUL, trainerHp, TRAINER_DMG_MUL, trainerDmg,
+    CORNER_AT, CORNER_EDGE, CORNER_RESIST, cornerAt, resistedBy, SWITCH_PUNISH, SETTLE_MUL,
+    trainerHp, TRAINER_DMG_MUL, trainerDmg,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,

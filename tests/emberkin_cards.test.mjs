@@ -1402,4 +1402,61 @@ section('a wild kin does not go down without one moment of its own');
   }
   eq(tb.foe.hp, 0, 'a trained kin goes down when it is beaten');
 }
+
+
+section('a wild kin you resist fights dirtier, and does it more than once');
+// Nearly half of one-kin fights were never in doubt, and the cross-tab said
+// where they lived: 43% of fights are ones whose element you resist, and those
+// ran 59%, 59% and 45% never-in-doubt against 29% for the fights you walk into
+// at a disadvantage. A kin whose every blow bounces off you cannot threaten you
+// by hitting harder — hitting is the thing the chart has taken away.
+{
+  const g = fresh();
+  // Ember into Tide is resisted both ways round; pick a pair that is one-way.
+  const mine = g.mkMon('gargolem', 40);            // Stone
+  const soft = g.mkMon('sproutle', 30);            // Verdant: strong into Stone
+  const blunt = g.mkMon('cindercub', 30);          // Ember: blunted by Stone
+  ok(g.resistedBy(blunt, mine), 'the blunted one really is resisted');
+  ok(!g.resistedBy(soft, mine), 'and the other one is not');
+
+  // One moment, late, for a kin that can hurt you.
+  eq(g.cornerAt(soft, mine, 0), g.CORNER_AT, 'a kin that can hurt you waits');
+  eq(g.cornerAt(soft, mine, 1), -1, 'and only gets the one');
+  // Three, starting early, for one that cannot.
+  eq(g.cornerAt(blunt, mine, 0), g.CORNER_RESIST[0], 'a blunted kin gathers itself early');
+  ok(g.cornerAt(blunt, mine, 0) > g.CORNER_AT, 'earlier than a dangerous one does');
+  eq(g.cornerAt(blunt, mine, 1), g.CORNER_RESIST[1], 'and again');
+  eq(g.cornerAt(blunt, mine, 2), g.CORNER_RESIST[2], 'and again');
+  eq(g.cornerAt(blunt, mine, 3), -1, 'three times, not for ever');
+  for (let i = 1; i < g.CORNER_RESIST.length; i++) {
+    ok(g.CORNER_RESIST[i] < g.CORNER_RESIST[i - 1], 'the thresholds march down the bar');
+  }
+
+  // And it happens in a real fight.
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('cindercub', 30), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 999999;
+  bb.foe.hp = bb.foe.max = 400;
+  eq(bb.cornered, 0, 'it starts composed');
+  bb.foe.hp = Math.floor(bb.foe.max * (g.CORNER_RESIST[0] - .02));
+  g.readIntent();
+  eq(bb.cornered, 1, 'past the first line it gathers itself');
+  const first = bb.foeEdge;
+  ok(first > 0, `banking something (${first})`);
+  bb.foe.hp = Math.floor(bb.foe.max * (g.CORNER_RESIST[1] - .02));
+  g.readIntent();
+  eq(bb.cornered, 2, 'and past the second line it does it again');
+  ok(bb.foeEdge > first, 'stacking on what it had');
+
+  // A trainer's kin never does this, whatever it is made of.
+  const t = fresh();
+  t.G.party = [t.mkMon('gargolem', 40)];
+  t.startBattle({ foe: t.mkMon('cindercub', 30), team: [['cindercub', 30]],
+    npc: { name: 'X', id: 't_cr', trainer: { team: [], prize: 0 } } });
+  const tb = t.B();
+  tb.foe.hp = 1;
+  t.readIntent();
+  eq(tb.cornered, 0, 'a trained kin has a plan instead');
+}
 done('emberkin_cards');
