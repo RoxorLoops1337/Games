@@ -1243,4 +1243,95 @@ section('a trainer buff is not there on the first morning');
   ok(Math.abs(g.trainerDmg(30) - g.TRAINER_DMG_MUL) < 1e-9, 'and a late one gets all of it');
   ok(g.trainerDmg(1) >= 1, 'nobody hits softer than their level for being young');
 }
+
+
+section('a trainer plays the same game you do');
+// Trainers could not win, and pass 14 said no constant would fix it: the player
+// arrives with four rested kin and rotates freshness in while a trainer spends
+// one to three, one at a time, with no way to put any of it back. So they got
+// the two things you have — a bench and a bag.
+{
+  const g = fresh();
+  const npc = { name: 'Coll', id: 't_bench',
+    trainer: { team: [], prize: 0, plan: ['sharpen', 'swing'] } };
+  const team = [['gargolem', 20], ['brookite', 20], ['sproutle', 20]];
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon(team[0][0], team[0][1]), team, npc });
+  const bb = g.B();
+  ok(!!bb.roster, 'the whole team is on the field from the start, not conjured one at a time');
+  eq(bb.roster.length, 3, 'all three of them');
+  ok(bb.roster.every((m) => m.hp > 0), 'and all of them whole');
+  eq(bb.roster[0], bb.foe, 'the first one is the one out');
+  ok(bb.foePotions > 0, 'and the trainer brought a bag');
+
+  // A wild kin has neither.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  eq(g.B().roster, null, 'a wild kin has no bench');
+  eq(g.B().foePotions, 0, 'and no bag');
+}
+
+section('a trainer reaches for the bench when the one out is the wrong one');
+{
+  const g = fresh();
+  const npc = { name: 'X', id: 't_b2', trainer: { team: [], prize: 0 } };
+  // Out: something resisted. On the bench: something that is not.
+  const team = [['sproutle', 20], ['brookite', 20]];
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon(team[0][0], team[0][1]), team, npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  const was = bb.foe;
+  bb.turn = 9;                                    // past the no-swapping-twice window
+  const idx = g.foeBench(false);
+  ok(idx >= 0, 'a better kin is on the bench and the trainer can see it');
+  const log = [];
+  g.foeSwap(log, idx);
+  ok(bb.foe !== was, 'so it comes out');
+  eq(bb.foeSettling, 1, 'and it arrives still finding its feet');
+  ok(bb.mods.edge > 0, 'while you get the edge for catching them mid-change');
+  ok(log.some((e) => /sends out/.test(e.t || '')), 'and the swap is played back, not silent');
+  // Their banked plan does not survive the change.
+  eq(bb.foeShield, 0, 'the guard the last one banked goes with it');
+  eq(bb.foeEdge, 0, 'and so does its edge');
+
+  // A trainer whose kin is doing fine stays put.
+  g.G.battle = null;
+  g.G.party = [g.mkMon('sproutle', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), team: [['gargolem', 20], ['sproutle', 20]], npc });
+  const cb = g.B();
+  cb.foe.hp = cb.foe.max;
+  eq(g.foeBench(false), -1, 'a kin that is winning is not called back');
+}
+
+section('a trainer with a potion uses it');
+{
+  const g = fresh();
+  const npc = { name: 'X', id: 't_pot', trainer: { team: [], prize: 0 } };
+  g.G.party = [g.mkMon('pyrelynx', 40)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), team: [['gargolem', 20]], npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  const had = bb.foePotions;
+  ok(had > 0, 'the trainer has one');
+  bb.foe.hp = Math.floor(bb.foe.max * (g.FOE_POTION_AT - .05));
+  const low = bb.foe.hp;
+  const hp = bb.mine.hp;
+  g.endTurn();
+  ok(bb.foe.hp > low, `the potion goes in (${low} to ${bb.foe.hp})`);
+  eq(bb.foePotions, had - 1, 'and it is gone from the bag');
+  eq(bb.mine.hp, hp, 'reaching for it costs them the swing, exactly as it costs you');
+
+  // The bag runs out.
+  for (let i = 0; i < 20 && bb.foePotions > 0; i++) {
+    bb.foe.hp = 1;
+    g.endTurn();
+  }
+  eq(bb.foePotions, 0, 'a trainer cannot heal for ever');
+  bb.foe.hp = 1;
+  const before = bb.mine.hp;
+  for (let i = 0; i < 40 && bb.mine.hp === before; i++) { bb.foe.hp = 1; g.endTurn(); }
+  ok(bb.mine.hp < before, 'and once it is empty they go back to swinging');
+}
 done('emberkin_cards');

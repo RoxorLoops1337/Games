@@ -533,15 +533,6 @@ below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
 through), walks back to town to heal, wipes, turns per fight, and which cards
 were drawn and never worth playing.
 
-**Trainers still do not win, and the reason is not a dial.** Every trainer but
-the opening rival sits at 0% losses with the party above three quarters health,
-and neither health nor damage closed it: the player arrives with four rested kin
-and the trainer brings one to three, so the player rotates freshness in while the
-trainer spends its team one kin at a time. A buff big enough to beat four rested
-kin lands on the solo game first, where the same dials bite hardest. Closing it
-needs a design change — trainers that switch or heal, bigger teams, or a party
-the fight actually draws down — not another constant.
-
 It runs in two modes, and both are worth reading, because two very different
 games hide in one average:
 
@@ -564,6 +555,17 @@ kin rather than the party**, so a fight won by rotating through three hurt kin
 read as never in doubt because the one on the field kept being a fresh one. Both
 fixed; both moved the party numbers against the game.
 
+**Every rate carries a 95% interval, and you read the interval first.** One
+number standing in for thirty runs that disagree is how three passes' worth of
+claims about the wipe rate turned out to be noise wearing a decimal point — it
+came back anywhere from .155 to .364 on *identical* builds. The report prints
+`mean ±half-width` for every per-fight rate, and underneath the wipe line, how
+many runs a claim of a given size would actually need from the spread that
+sample just showed. At the time of writing that is **~32 runs to call a .05
+change in the solo wipe rate, and ~200 for a .02**. If two builds' intervals
+overlap, the tool has not told you which is better, and staring at the means will
+not change that.
+
 **The policy is the measurement, and cheapest-first was lying.** Every 2-cost card
 looked dead — Bulwark played 1% of the times it was drawn, Ward Stance 10% —
 and the reason was the ordering, not the cards: with three energy and the swing
@@ -578,8 +580,14 @@ It reports **per trainer** as well as per run. Trainers are the hand-authored
 fights, and averaging them into the wild ones hides exactly the thing a scripted
 plan is meant to change; the line for each also counts how many plan beats were
 actually telegraphed before the fight ended, because a plan nobody sees is not a
-plan. It heals before each duel — a trainer measured on the fumes of the last
-wild kin measures the walk to town instead.
+plan. It used to heal the party before every duel, on the grounds that a trainer
+measured on the fumes of the last wild kin measures the walk to town instead.
+**That was wrong, and it took four passes to notice.** Healing first meant every
+trainer was measured against four rested kin — a fight no trainer in the valley
+can win, and not a fight anybody actually has. A player arrives having walked the
+route; what the party has left when it gets there *is* the fight. `--rested`
+keeps the old behaviour, because the difference between the two columns is how
+much of a trainer's difficulty is the walk that came before it.
 
 **The policy is the measurement.** The version that played cheapest-first could
 not tell a good deck from a big one, because it never set anything up: it played
@@ -843,6 +851,32 @@ opening now runs 68–79% for a greedy bot.
 
 If you add a trainer buff, ramp it, and run `emberkin.test.mjs` before believing
 it.
+
+### A trainer plays the same game you do
+
+Trainers could not win, and no constant fixed it, because the problem was never a
+number: the player arrives with four kin and rotates freshness in, while a
+trainer spent one to three, one at a time, with no way to put any of it back. So
+they got the two things you have.
+
+**A bench.** `b.roster` holds a trainer's whole team from the first turn rather
+than conjuring the next one as the last one falls. `foeBench()` scores what is on
+it the way a person would — what their element does to yours, weighted by how
+much of the kin is left — and `foeSwap()` sends it in on the same terms you swap
+on: it costs them the turn, the kin arriving swings soft once (`foeSettling`),
+everything the old one had banked is lost, and **you** get the `SWITCH_PUNISH`
+edge for catching them mid-change. They only reach for it when the kin on the
+field is the wrong one, never twice running, and never more times than they have
+kin — a three-kin trainer with no limit can stall a fight for ever.
+
+**A bag.** `POTIONS_FOR(team)` potions, each worth `FOE_POTION` (a third of the
+bar), reached for below `FOE_POTION_AT`. It costs them the turn, like everything
+else either side can do instead of swinging.
+
+The measurable difference is in what a trainer *costs* rather than in who wins:
+lowest party HP through a trainer fight went from 75–99% to 26–62%, Hale from 0%
+losses to 20%, Coll to 3%. Most trainers still do not beat a four-kin party
+outright, and that is worth being straight about — but they are no longer free.
 
 ### Elements
 

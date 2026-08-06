@@ -219,7 +219,9 @@ ok(noCatch.some((e) => /No\./.test(e.t)), 'you cannot catch a trainer kin');
 eq(G.bag.bloomorb, 5, 'the refused orb is not consumed');
 ok(autoFight(EK), 'the trainer battle resolved');
 eq(EK.B().over, 'win', 'beating the whole team wins');
-eq(EK.B().teamIdx, 1, 'the second team member was sent out');
+// A trainer has a bench now and may send its kin out in any order, so "the
+// second one was used" is the claim, not "the second one was last".
+ok(EK.B().roster.every((m) => m.hp <= 0), 'the whole team was sent out and beaten');
 ok(EK.gemReward(EK.B()) > 0, 'a trainer win is worth gems');
 
 // A foe can die on its own turn — burn or snare finishing it at end of turn, or
@@ -232,6 +234,7 @@ for (const how of ['burn', 'thorns']) {
   EK.G.battle = null;
   EK.startBattle({ foe: EK.mkMon('cindercub', 5), team: chain, npc: { name: 'Tester', id: 't_y', trainer: { team: chain, prize: 100 } }, wild: false });
   const bk = EK.B();
+  bk.foePotions = 0;                               // no reaching for the bag; we want it dead
   bk.foe.hp = 1;                                   // one point of anything finishes it
   if (how === 'burn') bk.foe.status = 'burn';
   else bk.mods.thorns = 40;

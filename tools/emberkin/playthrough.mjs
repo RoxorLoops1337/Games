@@ -31,6 +31,11 @@ const RUNS = Number(argv[argv.indexOf('--runs') + 1]) || (argv.includes('--runs'
 // chart decides the fight before a card is played. `--solo` measures the second
 // one, so a change can be judged against both instead of whichever is flattering.
 const SOLO = argv.includes('--solo');
+// `--rested` heals the party before each trainer, which is how this used to
+// measure them and why they all read as unloseable. Kept because the comparison
+// is the point: the difference between the two columns is how much of a
+// trainer's difficulty is the walk that came before it.
+const RESTED = argv.includes('--rested');
 
 /** The route a real player walks, in order. */
 const ROUTE = [
@@ -270,8 +275,9 @@ function playOne() {
       low = Math.min(low, partyHp());
     }
     if (duelId) {
-      const d = stat.duels.get(duelId) || { n: 0, turns: 0, lost: 0, low: 0, telegraphs: 0 };
+      const d = stat.duels.get(duelId) || { n: 0, turns: 0, lost: 0, low: 0, telegraphs: 0, swaps: 0, heals: 0 };
       d.n++; d.turns += turns; d.low += low;
+      d.swaps += b.foeSwaps || 0; d.heals += b.foeHeals || 0;
       if (EK.B() && EK.B().over === 'lose') d.lost++;
       d.telegraphs += planBeats;
       stat.duels.set(duelId, d);
@@ -355,21 +361,27 @@ function playOne() {
   };
 
   /**
-   * Fight a named trainer at whatever level the run is actually at. The point
-   * is the shape of the fight, not whether the route order is respected, so
-   * this heals first: a trainer measured on the fumes of the last wild kin is
-   * measuring the walk to town instead.
+   * Fight a named trainer at whatever state the run is actually in.
+   *
+   * This used to heal first, on the grounds that a trainer measured on the fumes
+   * of the last wild kin is measuring the walk to town instead. That was the
+   * wrong call, and it took four passes to notice: healing first meant every
+   * trainer was measured against four rested kin, which is a fight no trainer in
+   * the valley can win and not a fight anybody actually has. A player arrives
+   * having walked the route. What the party has left when it gets there is the
+   * fight.
    */
   const duel = (mapId, npcId) => {
     const npc = (EK.MAPS[mapId].npcs || []).find((n) => n.id === npcId);
     if (!npc) return;
-    EK.healParty();
+    if (RESTED) EK.healParty();
     const team = EK.trainerTeam(npc);
     EK.startBattle({ foe: EK.mkMon(team[0][0], team[0][1]), team, npc, wild: false });
     fight(npcId);
     EK.G.battle = null; EK.G.battleMsg = null; EK.G.screen = null;
     EK.G.mode = 'world'; EK.G.flourish = null;
-    EK.healParty();
+    // Losing to a trainer sends you back to town, same as any other wipe.
+    if (EK.G.party.every((m) => m.hp <= 0)) { EK.healParty(); restock(); }
   };
 
   for (const leg of ROUTE) {
@@ -389,19 +401,56 @@ for (let i = 0; i < RUNS; i++) runs.push(playOne());
 const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
 const pct = (n, d) => `${((n / Math.max(1, d)) * 100).toFixed(0)}%`;
 
+/**
+ * A rate, with the room it has to be wrong in.
+ *
+ * Every per-fight rate in this report is one number standing in for a dozen
+ * runs that disagree with each other, and the disagreement is not small: the
+ * solo wipe rate came back anywhere from .155 to .364 on *identical* builds, so
+ * three passes' worth of claims about it were noise wearing a decimal point.
+ *
+ * `rate(f)` takes the per-run rate, then reports the mean and a 95% interval
+ * (1.96 standard errors of the mean). Read the interval first. If two builds'
+ * intervals overlap, the tool has not told you which is better, and no amount of
+ * staring at the means will change that — run more, or steer by something else.
+ */
+const rate = (f, per) => {
+  const xs = runs.map((r) => f(r) / Math.max(1, per(r)));
+  const n = xs.length;
+  const mean = xs.reduce((a, x) => a + x, 0) / n;
+  if (n < 2) return { mean, lo: mean, hi: mean, half: 0, n };
+  const varr = xs.reduce((a, x) => a + (x - mean) ** 2, 0) / (n - 1);
+  const half = 1.96 * Math.sqrt(varr / n);
+  return { mean, lo: Math.max(0, mean - half), hi: mean + half, half, n };
+};
+const show = (r, dp = 3) => `${r.mean.toFixed(dp)} ±${r.half.toFixed(dp)}`;
+const showPct = (r) => `${(r.mean * 100).toFixed(0)}% ±${(r.half * 100).toFixed(0)}`;
+const perFight = (r) => r.fights;
+
 const fights = avg((r) => r.fights), steps = avg((r) => r.steps);
 console.log(`\nEMBERKIN — ${RUNS} run${RUNS > 1 ? 's' : ''} from the study to Crown Hollow`
-  + `${SOLO ? ', one kin, no switching' : ''}\n`);
+  + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}\n`);
 console.log(`  steps walked        ${steps.toFixed(0)}`);
 console.log(`  fights              ${fights.toFixed(0)}   (one every ${(steps / Math.max(1, fights)).toFixed(1)} steps)`);
-console.log(`  never in doubt      ${avg((r) => r.noDoubt).toFixed(0)}   ${pct(avg((r) => r.noDoubt), fights)} of them`);
-console.log(`  turns per fight     ${(avg((r) => r.turns) / Math.max(1, fights)).toFixed(1)}`);
-console.log(`  over in one turn    ${avg((r) => r.oneTurn).toFixed(0)}   ${pct(avg((r) => r.oneTurn), fights)} of them`);
+// Every rate carries a 95% interval. Two builds whose intervals overlap have
+// not been told apart by this tool, however different their means look.
+console.log(`  never in doubt      ${showPct(rate((r) => r.noDoubt, perFight))} of fights`);
+console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}`);
+console.log(`  over in one turn    ${showPct(rate((r) => r.oneTurn, perFight))} of fights`);
 console.log(`  foe max HP          ${(avg((r) => r.foeHp) / Math.max(1, avg((r) => r.foeHpSeen))).toFixed(0)}`);
 // Absolute counts are dominated by how long a run happened to take, and runs
 // vary a lot — normalise, or you end up comparing two samples of noise.
-console.log(`  walks back to heal  ${avg((r) => r.healTrips).toFixed(1)}   ${(avg((r) => r.healTrips) / Math.max(1, fights)).toFixed(3)} per fight`);
-console.log(`  wipes               ${avg((r) => r.wipes).toFixed(1)}   ${(avg((r) => r.wipes) / Math.max(1, fights)).toFixed(3)} per fight`);
+console.log(`  walks back to heal  ${show(rate((r) => r.healTrips, perFight))} per fight`);
+console.log(`  wipes               ${show(rate((r) => r.wipes, perFight))} per fight`);
+// How many runs a claim of a given size would actually need, from the spread
+// this sample just showed. Printed so that "it moved" can be checked rather
+// than believed.
+{
+  const w = rate((r) => r.wipes, perFight);
+  const sd = w.half / 1.96 * Math.sqrt(w.n);
+  const need = (delta) => Math.max(2, Math.ceil(2 * (1.96 * sd / delta) ** 2));
+  console.log(`     to call a .05 change in that: ~${need(.05)} runs;  .02: ~${need(.02)}`);
+}
 console.log(`  party at the end    ${avg((r) => r.party).toFixed(1)}   ${avg((r) => r.caught).toFixed(1)} caught from ${avg((r) => r.thrown).toFixed(1)} throws`);
 console.log(`  switched mid-fight  ${avg((r) => r.switched).toFixed(1)}   ${(avg((r) => r.switched) / Math.max(1, fights)).toFixed(2)} per fight`);
 console.log(`  ended at level      ${avg((r) => r.top).toFixed(0)}\n`);
@@ -409,17 +458,19 @@ console.log(`  ended at level      ${avg((r) => r.top).toFixed(0)}\n`);
 // The trainers, one line each, in the order a run meets them. A plan that never
 // gets telegraphed before the fight ends is a plan nobody sees.
 const DUEL_ORDER = ['t_wick1', 't_pell', 't_dorn', 't_mio', 't_ivo', 't_wick2', 't_coll', 't_hale', 't_wick3'];
-console.log('  trainer            fights  turns  lost  lowest HP  plan beats seen');
+console.log('  trainer            fights  turns  lost  lowest HP  plan beats seen   swaps  potions');
 for (const id of DUEL_ORDER) {
-  let n = 0, turns = 0, lost = 0, low = 0, tel = 0;
+  let n = 0, turns = 0, lost = 0, low = 0, tel = 0, sw = 0, he = 0;
   for (const r of runs) {
     const d = r.duels.get(id);
     if (!d) continue;
     n += d.n; turns += d.turns; lost += d.lost; low += d.low; tel += d.telegraphs;
+    sw += d.swaps || 0; he += d.heals || 0;
   }
   if (!n) { console.log(`  ${id.padEnd(18)}      -`); continue; }
   console.log(`  ${id.padEnd(18)} ${String(n).padStart(6)} ${(turns / n).toFixed(1).padStart(6)} `
-    + `${pct(lost, n).padStart(5)} ${pct(low / n, 1).padStart(10)} ${(tel / n).toFixed(1).padStart(16)}`);
+    + `${pct(lost, n).padStart(5)} ${pct(low / n, 1).padStart(10)} ${(tel / n).toFixed(1).padStart(16)}`
+    + `${(sw / n).toFixed(1).padStart(8)}${(he / n).toFixed(1).padStart(8)}`);
 }
 console.log('');
 
