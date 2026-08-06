@@ -319,6 +319,57 @@ The suite enforces the shape rather than the taste: for each tile kind, the set
 of distinct row-signatures it makes has to be larger than one. A region whose
 every row is the same run *is* a rectangle, whatever it is made of.
 
+### Weather
+
+The grade says what colour a place is; `weather()` says what is moving in the
+air there. It belongs to the **map, not to a clock** — Stillmere is always wet,
+Emberwood is always misty — so a place feels like itself every time you walk
+into it rather than depending on when you happened to arrive.
+
+| map | weather |
+|---|---|
+| Hollowbrook, Route One | warm dust rising in the light — a nice day, not an event |
+| Emberwood | banks of mist drifting at three speeds, pooling on the ground |
+| Stillmere | slanted rain at three depths, and rings on the water it lands in |
+| Crown Hollow | a gale: long pale streaks crossing fast, nothing up here to stop it |
+
+All of it is procedural off fixed seeds — nothing is stored between frames and
+nothing pops when the camera moves. It draws over the grade, because weather is
+between you and the valley rather than part of it.
+
+Wind is separate and per-map, `[rate, pixels]`. It crosses a field as a
+travelling wave so the blades ripple in sequence instead of shivering all at
+once, and **only the top of the tile moves** — the roots stay put, which is the
+difference between grass bending and grass sliding.
+
+### Nothing cuts
+
+Everything in the game used to change on a single frame, which reads as a
+slideshow rather than a place.
+
+A door goes **through** black. The map used to change on the frame you stepped
+on the warp and then fade up, which is a cut with a stain on it: you see the new
+room before the old one has gone. Now the screen closes first, the map changes
+behind the curtain, and it opens again — same total time, and nothing moves
+while the curtain is down.
+
+A screen arrives rather than appearing: it slides up from under its own bottom
+edge. The reward screen is the one that *lands*, scaling down onto the page,
+because it is the only screen you actually chose to open.
+
+### Sound
+
+There is no sample in the game; everything is the same square-wave synth the
+music runs on.
+
+A footstep says what you are walking on — grass brushes, tall grass swishes, a
+path knocks, sand is soft and short, boards ring — and alternates between two
+pitches so a walk has a gait rather than a metronome. Opening a menu and
+confirming in one are deliberately *different* sounds: if they are the same, the
+ear stops using either. A door is a low knock with a fall under it, and an
+evolution opens on a swell rather than a chime, because something is coming
+rather than something having arrived.
+
 ## How a battle works
 
 Each turn you are dealt five cards and three energy. The deck has two halves
@@ -608,6 +659,30 @@ you read "you lob a Prism Orb" and then watch it happen, not the reverse.
 A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
 a shower that takes its time — and hands you its papers afterwards. Any key
 skips the tail of the flourish; nobody should sit through it twice.
+
+### Evolving
+
+The other moment the genre is built around, and it used to be two dialogue
+boxes with a spinning wheel behind them — which means the whole thing advanced
+at the speed you mashed A, and was over before you had read the first line. It
+runs on its own clock now, like the catch does:
+
+    hold · build · burst · settle · quiet
+
+The shape changes at the top of `burst`, **under the white-out**, so you never
+see the swap: you see what it was, then light, then what it is. `quiet` is the
+beat that does the most work and draws nothing at all — a second of the new
+creature standing there before anybody says its name.
+
+Going white is done by blitting the creature's own *silhouette* over itself
+additively, five times. A flat dark shape stacked on itself climbs to white,
+which is the only way to blow a sprite out without authoring a second set of
+art for it. The motes fall **inward** while the light builds, because the energy
+is arriving rather than leaving — that is the whole difference between evolving
+and burning.
+
+The suite asserts the beats play in order, that the species changes *during*
+`burst` and never in the open, and that mashing A does not skip it.
 
 ### A kin's papers
 
