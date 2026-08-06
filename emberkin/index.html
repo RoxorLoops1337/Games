@@ -5517,6 +5517,23 @@ function readIntent() {
    hit. The active kin's own moves are shuffled into the same deck as the
    cards you brought, so a fight is the two of them together.
    ------------------------------------------------------------------------ */
+// Three energy, five cards. Both measured against themselves, sixty runs an arm,
+// and neither is a length dial either:
+//
+//   BASE_ENERGY 3 -> 4   turns per fight -0.12 +/-0.26   (nothing)
+//                        never-in-doubt +.085 +/-.043, wipes -.033 +/-.020
+//   HAND_SIZE   5 -> 7   turns per fight -0.28 +/-0.31   (nothing)
+//                        and every other headline nothing as well
+//
+// A third more energy a turn does not shorten a fight; it makes the player
+// stronger and the fight safer. Two extra cards a turn do not do anything at all
+// — which is the same fact pass 25 found from the other side, that 85% of turns
+// end out of energy rather than out of cards. The hand is not the constraint, so
+// widening it changes nothing.
+//
+// Taken with FOE_HP_MUL and the damage work: nothing on either side's numbers
+// moves fight length. Only structure does. If you want longer fights, give
+// somebody something to do with a turn.
 const BASE_ENERGY = 3, HAND_SIZE = 5;
 
 /**
@@ -5554,10 +5571,19 @@ const PLANS = {
  * they get better as you go north.
  */
 const planScale = (lvl) => (1 + lvl / 22) * Math.min(1, lvl / 12);
-// A turn is roughly one attack plus the support stacked onto it, so a foe wants
-// a little more than its bare HP to be worth fighting — but only a little, now
-// that the deck sharpens attacks rather than adding its own. Their stats are
-// untouched: this is only the pool of HP a fight is played over.
+// The pool of HP a fight is played over. Their stats are untouched.
+//
+// THIS IS A DANGER DIAL, NOT A LENGTH DIAL. It was written as the latter — "a foe
+// wants a little more than its bare HP to be worth fighting" — and measured
+// against itself at 4.0 against 5.0, sixty runs an arm, it moves turns per fight
+// by +0.11 ±0.35 in solo and +0.07 ±0.18 in party. Nothing, in both modes. What a
+// quarter more HP buys is danger: solo lost-or-ran .249 to .359, wipes .096 to
+// .141, never-in-doubt down .059 ±.039.
+//
+// The deck is why. A longer fight is a fight with more turns of stacking in it,
+// so a bigger pool is met by bigger hits rather than by more rounds — the player
+// scales into the pool about as fast as the pool grows. Reach for this when
+// fights feel *safe*. It will not make them feel *long*.
 const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
 // How hard a wild kin's plan beat lands, against a trainer's. See readIntent.
 const WILD_PLAN_MUL = .8;
@@ -5576,6 +5602,12 @@ const PLAN_CHIP = 0;
 // far smaller pool than a lone wild one — and they hit at full strength, which
 // a wild kin does not. Giving them the wild number made the opening rival fight
 // a coin toss and turned Dorn's two kin into a ten-turn slog.
+//
+// That "ten-turn slog" is the one length claim in this file that survives, and it
+// survives because it is about the number of *kin*, not the size of the pool: a
+// trainer's extra kin is an extra opening, an extra settle, an extra swap. Adding
+// HP to one kin does not lengthen a fight (see FOE_HP_MUL); adding a kin does.
+// Length in this game comes from structure, and a second body is structure.
 const TRAINER_HP_MUL = 2.2;
 /**
  * A trainer's kin carries less of the pool the more of them there are.
@@ -5671,6 +5703,9 @@ const SWITCH_PUNISH = 11;
 // and delete. The payoff arrives a turn late now. Over a three-turn fight that
 // is most of the reason to do it at all, which is what makes it a decision
 // rather than the obvious opening move.
+// (Length claim flagged: "over a three-turn fight that is most of the reason to
+// do it" is about the *value* of the delay, which stands. But nothing here buys
+// turns — see the note on FOE_HP_MUL.)
 const SETTLE_MUL = .6;
 /**
  * What a trainer carries, and what it is worth.

@@ -533,7 +533,7 @@ is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
 of all forty-one mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-eight passes on this
+likely to be a variation on those than something new. Twenty-nine passes on this
 game produced about eleven changes to the game and forty-one fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
@@ -584,6 +584,50 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### Nothing on either side's numbers moves fight length
+
+Three passes had said it from the foe's side. The player's side had never been
+varied — three energy, five cards, one swing, inherited rather than tuned. Paired,
+60 runs an arm:
+
+| | solo diff (95%) | party diff (95%) |
+| --- | --- | --- |
+| **`BASE_ENERGY` 3 → 4**, turns per fight | −0.12 ±0.26 | +0.13 ±0.20 |
+| — no kin in doubt | +.085 ±.043 | +.042 ±.027 |
+| — wipes | −.033 ±.020 | −.008 ±.005 |
+| — cost of a fight, in kin | −.035 ±.013 | −.108 ±.035 |
+| **`HAND_SIZE` 5 → 7**, turns per fight | −0.28 ±0.31 | — |
+| — every other headline | nothing | — |
+
+**A third more energy a turn does not change how long a fight takes.** It makes
+the player stronger and the fight safer, in both modes. And **two extra cards a
+turn do nothing at all** — not length, not danger, not cost. That is the same fact
+pass 25 found from the other side, that 85% of turns end out of energy rather than
+out of cards: the hand is not the constraint, so widening it is free and
+pointless.
+
+So the tally, on both sides of the fight:
+
+| lever | change | effect on fight length |
+| --- | --- | --- |
+| `MIGHT_CAP` (pass 26) | −90% | a tenth of a turn |
+| `FOE_HP_MUL` (pass 36) | +25% | nothing |
+| `BASE_ENERGY` | +33% | nothing |
+| `HAND_SIZE` | +40% | nothing |
+| **a rhythm for wild kin** (pass 33) | one beat in three | **over-in-one 28% → 4%** |
+
+**Every number in this game is a danger dial. Only structure is a length dial.**
+If fights should feel longer, the answer is to give somebody something to do with
+a turn — not to make anybody tougher, harder-hitting, richer in energy or better
+supplied with cards.
+
+The tuning comments have been corrected where they claimed otherwise: `FOE_HP_MUL`
+now says in the file that it is a danger dial and shows the numbers, and
+`BASE_ENERGY`/`HAND_SIZE` carry theirs. `TRAINER_HP_MUL`'s "ten-turn slog" note
+survives, and it is worth saying why — that length came from a trainer's *second
+kin*, which is an extra opening, an extra settle, an extra swap. A second body is
+structure. More HP on one body is not.
 
 #### Every dial is live, and the biggest one does not do what its name says
 
