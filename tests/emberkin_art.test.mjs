@@ -86,6 +86,33 @@ for (const id of DEX_ORDER) {
   ok(b.h > a.h, `${evo[0]} (${b.h} rows) towers over ${id} (${a.h} rows)`);
 }
 
+section('the whole roster is drawn against one tone');
+// A set of sprites reads as a set when they share the colour they are outlined
+// in. Fourteen of the nineteen already did; the other five each had their own,
+// which is enough to make those five look like they wandered in from a
+// different game. Measured on the silhouette itself, not on the darkest entry
+// in the palette — on a dark creature the darkest entry is a body tone.
+const ROSTER_OUTLINE = '#2a1b2e';
+const isBlank2 = (ch) => ch === '.' || ch === ' ';
+for (const id of DEX_ORDER) {
+  const sp = ART_CREATURES[id];
+  if (!sp) continue;
+  const h = sp.r.length, w = sp.r[0].length;
+  const count = {};
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (isBlank2(sp.r[y][x])) continue;
+      const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+        const nx = x + dx, ny = y + dy;
+        return nx < 0 || nx >= w || ny < 0 || ny >= h || isBlank2(sp.r[ny][nx]);
+      });
+      if (open) count[sp.r[y][x]] = (count[sp.r[y][x]] || 0) + 1;
+    }
+  }
+  const [key] = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+  eq((sp.p[key] || '').toLowerCase(), ROSTER_OUTLINE, `${id} is outlined in the roster's tone`);
+}
+
 section('the roster reads as one world');
 // A shared outline family is what makes 19 separately drawn creatures cohere.
 const outlines = new Set();
