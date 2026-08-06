@@ -74,6 +74,9 @@ edit this block to name the next one.
 - [x] Car garage: five cars, own art and handling, unlocked by lifetime kills
 - [x] 21 markets: ice rink, gauntlet, parade, alleys, boulevard, frozen lake,
       bonfire, choir, rooftops, crossroads, spiral, grand market, midnight mass
+- [x] Lighting pass: darkness layer with the lamps cut out of it, warm glow
+      added over, one light direction for every shadow, shaded stalls, and a
+      grain on the snow floor
 
 ## Next
 
@@ -118,6 +121,16 @@ edit this block to name the next one.
 - Fullscreen rides the first tap and the START button (it needs a gesture), and
   latches only when the request resolves, so a refusal does not burn the
   session.
+- **The market is lit, not tinted.** `drawLights()` runs two passes: a darkness
+  layer (`darkLayer()`, deliberately half resolution — nothing on it has an edge)
+  filled at `TH.dark` with the lamps punched out by `destination-out`, then the
+  warm glow added over the scene with `lighter`. Both draw a 128px sprite baked
+  once by `bakeLight()`; **never build a gradient inside a frame**, the draw
+  budget test asserts `createRadialGradient` is never called. The whole scene
+  shares one light direction (`SUN_DX`/`SUN_DY`) and `shadow()` is the only thing
+  that should know it. The snow floor's grain (`snowPattern()`) is built from a
+  fixed integer hash, **not** `rnd()` or `vrnd()`: a texture that moves with the
+  seed is a texture you cannot screenshot twice.
 
 - The market generator is one function, `genMarket(lv)`, driven entirely by the
   level's seed. Everything about a market's look lives in `THEMES`; its shape in
