@@ -62,13 +62,13 @@ function playOne(runIdx) {
   const stat = {
     steps: 0, fights: 0, noDoubt: 0, wipes: 0, healTrips: 0, turns: 0,
     played: new Map(), drawn: new Map(), taken: new Map(), levels: 0, gems: 0,
-    oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0,
+    oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0, fled: 0,
     // What a fight took out of the party, as opposed to how close to death it
     // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
     // which a fight entered at half health flunks whatever happens in it. This
     // answers "was that fight anything" — and it is the one that is about the
     // fight rather than about the walk before it.
-    cost: 0, costN: 0,
+    cost: 0, costKin: 0, costN: 0,
     // Trainers are the hand-authored fights, and averaging them into the wild
     // ones hides exactly the thing a scripted plan is supposed to change. Keyed
     // by npc id so the three Wick fights can be read as a sequence.
@@ -112,7 +112,7 @@ function playOne(runIdx) {
       return live.reduce((a, m) => a + Math.max(0, m.hp) / Math.max(1, m.max), 0) / live.length;
     };
     const startHp = partyHp();
-    let low = startHp, turns = 0, guard = 0, planBeats = 0;
+    let low = startHp, turns = 0, guard = 0, planBeats = 0, drank = false;
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
     // decided in advance, this is where the deciding happens.
@@ -265,9 +265,18 @@ function playOne(runIdx) {
       // means every wipe it has ever reported was a wipe a player would have had
       // a bag to prevent — and the wipe rate is the number three passes of
       // tuning steered by. It costs the turn, the same as it does for a trainer.
-      if ((EK.G.bag.salve || 0) > 0 && cur.mine.hp / cur.mine.max < .3 && !cur.over
+      // A salve is for a hit the telegraph says will kill you, and only when it
+      // would actually stop it. Drinking on any dip below a third turned into a
+      // spiral — nearly three a fight, because a hurt kin is still hurt after one
+      // — and took the average fight to six turns. Once, and only if it works.
+      const incoming = cur.intent && cur.intent.kind === 'attack' ? (cur.intent.dmg || 0) : 0;
+      const salveAmt = EK.ITEMS.salve.amt;
+      if ((EK.G.bag.salve || 0) > 0 && !cur.over && !drank
+        && incoming >= cur.mine.hp                 // the telegraph says this one kills
+        && cur.mine.hp + salveAmt > incoming       // and this is enough to live through it
         && !cur.hand.some((c) => c.src !== 'kin' && EK.CARDS[c.id]
           && EK.CARDS[c.id].vt === 'heal' && EK.cardCost(c) <= cur.energy)) {
+        drank = true;
         EK.doAction({ kind: 'item', id: 'salve', target: EK.G.party.indexOf(cur.mine) });
         stat.salves++;
         turns++;
@@ -300,6 +309,19 @@ function playOne(runIdx) {
         turns++;
         continue;
       }
+      // A fight going badly is one a person runs from: the next hit kills, the
+      // bag has nothing that stops it, and there is nobody healthy to send.
+      // Never fleeing pushed the wipe rate up by counting losses nobody would
+      // have stood still for.
+      if (cur.wild && !cur.over && incoming >= cur.mine.hp
+        && !EK.G.party.some((m) => m !== cur.mine && m.hp > m.max * .5)) {
+        EK.doAction({ kind: 'run' });
+        stat.fled += EK.B() && EK.B().over === 'fled' ? 1 : 0;
+        turns++;
+        if (EK.B() && EK.B().over) break;
+        low = Math.min(low, partyHp());
+        continue;
+      }
       EK.endTurn();
       turns++;
       low = Math.min(low, partyHp());
@@ -323,7 +345,16 @@ function playOne(runIdx) {
     }
     // A fight you were never in danger of losing is a cutscene with buttons.
     if (low > .7 && !duelId) stat.noDoubt++;
-    if (!duelId) { stat.cost += Math.max(0, startHp - low); stat.costN++; }
+    if (!duelId) {
+      const drop = Math.max(0, startHp - low);
+      stat.cost += drop;
+      // …and the same thing again in kin, not in fractions of a party. `partyHp`
+      // is a mean, so the very same swing reads as a quarter as much damage to a
+      // party of four as to one kin alone. Reported both ways because comparing
+      // the raw percentages across the two modes compares denominators.
+      stat.costKin += drop * Math.max(1, EK.G.party.length);
+      stat.costN++;
+    }
     if (!duelId) {
       const m = stat.matchup.get(key) || { n: 0, free: 0, lost: 0, turns: 0, gap: 0 };
       m.n++; m.turns += turns; m.gap += gap;
@@ -341,7 +372,14 @@ function playOne(runIdx) {
     if (over === 'win' && EK.G.battle && !duelId) {
       const offer = EK.rollReward(EK.B());
       if (offer && offer.length) {
-        const pick = offer[Math.floor(Math.random() * offer.length)];
+        // The best card on offer, not a coin toss between them. Picking at
+        // random depressed played/drawn across the whole pool, which is the
+        // instrument the deck work in passes 9, 10 and 12 was steered by: a deck
+        // built out of random picks is worse than any deck a person would hold.
+        let pick = offer[0];
+        for (const id of offer) {
+          if (EK.RARITY_ORDER.indexOf(EK.CARDS[id].r) > EK.RARITY_ORDER.indexOf(EK.CARDS[pick].r)) pick = id;
+        }
         // The real reward screen asks which card comes out when the deck is
         // full. Answer it the way a player would: drop the one played least.
         const c = EK.grantCard(pick, true);
@@ -467,6 +505,7 @@ console.log(`  fights              ${fights.toFixed(0)}   (one every ${(steps / 
 // not been told apart by this tool, however different their means look.
 console.log(`  never in doubt      ${showPct(rate((r) => r.noDoubt, perFight))} of fights`);
 console.log(`  cost of a fight     ${showPct(rate((r) => r.cost, (r) => r.costN))} of the party`);
+console.log(`     the same, in kin  ${show(rate((r) => r.costKin, (r) => r.costN), 2)} kin-bars`);
 console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}`);
 console.log(`  over in one turn    ${showPct(rate((r) => r.oneTurn, perFight))} of fights`);
 console.log(`  foe max HP          ${(avg((r) => r.foeHp) / Math.max(1, avg((r) => r.foeHpSeen))).toFixed(0)}`);
@@ -485,6 +524,12 @@ console.log(`  wipes               ${show(rate((r) => r.wipes, perFight))} per f
 }
 console.log(`  party at the end    ${avg((r) => r.party).toFixed(1)}   ${avg((r) => r.caught).toFixed(1)} caught from ${avg((r) => r.thrown).toFixed(1)} throws`);
 console.log(`  salves drunk        ${avg((r) => r.salves).toFixed(1)}   ${(avg((r) => r.salves) / Math.max(1, fights)).toFixed(3)} per fight`);
+console.log(`  ran from a fight    ${avg((r) => r.fled).toFixed(1)}   ${(avg((r) => r.fled) / Math.max(1, fights)).toFixed(3)} per fight`);
+// Running away is not surviving, it is losing without the walk home. Teaching
+// the probe to flee moved fights out of the wipe column and into this one and
+// changed the danger not at all — solo went .196 wipes to .063 wipes plus .123
+// runs — so this is the line to read when asking whether a fight can beat you.
+console.log(`  lost or ran         ${show(rate((r) => r.wipes + r.fled, perFight))} per fight`);
 console.log(`  switched mid-fight  ${avg((r) => r.switched).toFixed(1)}   ${(avg((r) => r.switched) / Math.max(1, fights)).toFixed(2)} per fight`);
 console.log(`  ended at level      ${avg((r) => r.top).toFixed(0)}\n`);
 

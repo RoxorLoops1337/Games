@@ -567,16 +567,29 @@ When a number will not move, suspect this table before the game.**
 | the probe | a player | biases | done |
 | --- | --- | --- | --- |
 | took the first starter every run | picks one of three | **everything** — the whole matchup cross-tab was measured with Ember's resistances baked in, part of why Dorn's Stone wall read as an eight-turn slog | rotates now |
-| never drank a salve | carries a bag | **the wipe rate**, the number three passes steered by: every wipe was one a player had an item to prevent | drinks below 30% |
+| never drank a salve | carries a bag | **the wipe rate**, the number three passes steered by: every wipe was one a player had an item to prevent | drinks once a fight, when the telegraph says the next hit kills *and* the salve stops it |
 | healed before every trainer | arrives having walked the route | trainer difficulty, wholly | fought as met; `--rested` keeps the old column |
 | played cards cheapest-first | learns to sequence | every card's played/drawn rate | scores by value now |
 | reads never-in-doubt off an absolute floor | asks "was that fight anything?" | conflates a dangerous fight with an already-hurt party | **cost of a fight** reports beside it |
 | carries exactly four kin | carries one to six | the party/solo split — but that split is the stated axis, not a hidden one | left, on purpose |
 | grinds to a fixed level per leg | moves on when it feels ready | the level-gap column, and every bucket downstream of it | left; documented |
 | fights each trainer after grinding that leg | fights them on the way past | trainers are always met at the top of a leg, i.e. at their easiest | left; documented |
-| never flees | runs from a fight going badly | pushes wipes up | left; documented |
-| takes a random card from the reward offer | takes the best one | depresses played/drawn across the whole pool | left; documented |
+| never fled | runs when the next hit kills | **pushed wipes up** by counting losses nobody would have stood still for | flees now — and read `lost or ran`, not `wipes` |
+| took a random card from the reward offer | takes the best one | depressed played/drawn across the whole pool — the instrument the deck work in passes 9, 10 and 12 was steered by | takes the best now |
 | restocks only on a heal trip | shops when passing through | catch rate, salve supply | left; documented |
+
+**Two traps in reading the numbers, both found by falling into them.**
+
+*Fractions of a party are not comparable across party sizes.* `partyHp()` is a
+mean, so the very same swing reads as a quarter as much damage to a party of four
+as to one kin alone. "Party fights cost 7% and solo fights cost 25%" looked like a
+three-fold difficulty gap and was a denominator: **0.21 ±0.03 kin-bars against
+0.19 ±0.03**, the same number twice. The report prints both.
+
+*Running away is not surviving.* Teaching the probe to flee moved fights out of
+the wipe column and into the run column and changed the danger not at all — solo
+went from .196 wipes to .063 wipes plus .123 runs. Read **`lost or ran`** when
+asking whether a fight can beat you.
 
 **Every rate carries a 95% interval, and you read the interval first.** One
 number standing in for thirty runs that disagree is how three passes' worth of
