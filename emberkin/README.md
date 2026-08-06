@@ -169,7 +169,6 @@ vignette that darkens the corners and pulls the eye to the middle where the
 player is. Both are in the game's own gold and violet, which is what stops the
 world and the panels around it looking like two different pictures.
 
-<<<<<<< HEAD
 `drawEdges()` handles everything that happens where one kind of ground stops
 and another starts. A tileset can only ever draw the *middle* of things, and the
 edges are where a map either reads as a place or as a spreadsheet with colours
@@ -180,8 +179,6 @@ with the bank darkening into it, a lit ridge along the top of a roof, an eave
 that overhangs the wall below it, a base course where a wall meets the ground,
 and the shadow the whole building throws on the ground beside it.
 
-=======
->>>>>>> origin/main
 `castShadow()` puts a soft ellipse under everyone standing on the map. Without
 one, every actor looks pasted on top of the ground rather than standing in it —
 the cheapest single thing that makes a tile field read as a place.
