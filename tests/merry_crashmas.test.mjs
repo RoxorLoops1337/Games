@@ -891,6 +891,42 @@ test('a car buried in a hut leaves by the nearest wall, not northwards', () => {
   }
 });
 
+/* hitProp's box test is axis-aligned, so a box prop drawn at an arbitrary
+   angle is a wall you can drive through and an invisible one beside it. The
+   ice rink's barrier ring was briefly drawn along its tangent — 41 degrees off
+   the box that actually stopped the car. */
+test('every live prop is drawn where its collider is', () => {
+  const api = boot();
+  for (let lv = 0; lv < api.LEVELS.length; lv++){
+    api.startLevel(lv);
+    for (const o of api.props){
+      if (o.shape !== 'box' || o.dead) continue;
+      assert(!o.rot, api.LEVELS[lv].name + ': live ' + o.kind + ' has rot ' + o.rot +
+        ' but its collider is an axis-aligned ' + o.w + 'x' + o.h + ' box');
+    }
+  }
+});
+
+test('the rink’s barrier ring follows the circle without lying about it', () => {
+  const api = boot();
+  api.startLevel(6); api.beginLevel();          // THE ICE RINK
+  const ip = api.ice[0];
+  assert(ip, 'the rink should have a sheet of ice');
+  const ring = api.props.filter(o => o.kind === 'fence' &&
+    Math.abs(Math.hypot(o.x - ip.x, o.y - ip.y) - (ip.r + 26)) < 8);
+  assert(ring.length > 8, 'the ring should be a ring, got ' + ring.length);
+  const vert = ring.filter(o => o.h > o.w).length;
+  assert(vert > 0 && vert < ring.length,
+    'barriers should take both orientations around the circle, got ' + vert + '/' + ring.length);
+  for (const o of ring){
+    // the barrier's long axis should be the one closer to the tangent there
+    const a = Math.atan2(o.y - ip.y, o.x - ip.x);
+    const wantVert = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a));
+    assert((o.h > o.w) === wantVert,
+      'barrier at ' + a.toFixed(2) + 'rad points the wrong way');
+  }
+});
+
 /* Grep guards: these are the branches the pass deleted. They are cheap to
    reintroduce by accident and expensive to notice. */
 test('the code this pass deleted stays deleted', () => {
@@ -1088,14 +1124,27 @@ test('score pops do not stack on top of each other', () => {
   assert(api.popText(1020, 1010, 'D', '#fff'), 'and after the window it is fine again');
 });
 
-test('the driver is not talked over', () => {
+/* The bubble lives in a fixed screen corner, so it does not suppress the
+   world-space pops any more — a rule that did was swallowing 63% of kill pops,
+   and every single "NITRO!", which doBoost prints four lines after it arms the
+   shout. */
+test('the driver talking does not swallow the score', () => {
   const api = boot();
   api.startCampaign(); api.beginLevel();
   api.fx.length = 0;
   api.car.shoutT = api.SHOUT_TIME;
-  assert(!api.popText(1000, 1000, 'A', '#fff'), 'nothing pops while the bubble is up');
-  api.car.shoutT = 0;
-  assert(api.popText(1000, 1000, 'A', '#fff'), 'and it pops again once he is done');
+  assert(api.popText(1000, 1000, 'A', '#fff'), 'a kill still pops while the bubble is up');
+});
+
+test('firing the nitro says so', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  api.update(1 / 60);
+  api.fx.length = 0;
+  assert(api.doBoost(), 'the boost should fire');
+  assert(api.fx.some(f => f.type === 'txt' && f.text === 'NITRO!'),
+    'and print its own label, got ' + JSON.stringify(api.fx.map(f => f.text).filter(Boolean)));
 });
 
 /* Nobody reads a checklist at 1500px/s. */
