@@ -16,9 +16,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all thirty-three mistakes this tool
-// has made. Twenty-two passes on this game produced about eight changes to the
-// game and thirty-three fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all thirty-five mistakes this tool
+// has made. Twenty-three passes on this game produced about eight changes to the
+// game and thirty-five fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -51,7 +51,10 @@ const BUILD = argv.includes('--build') ? argv[argv.indexOf('--build') + 1] : 'ra
 // pins three copies into the deck that nothing may swap out. The gap between the
 // two, against the danger line, is what that card is worth — and if no card can
 // move it outside its interval, the flatness is measured rather than inferred.
-const BAN = argv.includes('--ban') ? argv[argv.indexOf('--ban') + 1] : null;
+// A comma-separated list, so two cards can be struck out together and asked
+// whether they add up or overlap. Two cards doing the same job is not depth.
+const BANS = argv.includes('--ban') ? argv[argv.indexOf('--ban') + 1].split(',') : [];
+const banned = (id) => BANS.includes(id);
 const FORCE = argv.includes('--force') ? argv[argv.indexOf('--force') + 1] : null;
 const FORCE_N = 3;
 
@@ -151,7 +154,7 @@ function playOne(runIdx) {
   // The banned card leaves the starting deck too, or the run is measured with
   // three copies of the thing it is supposed to be without.
   const pinned = new Set();
-  if (BAN) EK.G.deck = EK.G.deck.filter((u) => (EK.ownedCard(u) || {}).id !== BAN);
+  if (BANS.length) EK.G.deck = EK.G.deck.filter((u) => !banned((EK.ownedCard(u) || {}).id));
   if (FORCE) {
     for (let i = 0; i < FORCE_N; i++) {
       const c = EK.grantCard(FORCE, true);
@@ -212,7 +215,7 @@ function playOne(runIdx) {
   const orbToThrow = () => ORBS.find((o) => (EK.G.bag[o] || 0) > 0) || null;
   /** A card into the deck if it beats the worst thing already in there. */
   const tryDeck = (c) => {
-    if (!c || EK.G.deck.includes(c.u) || c.id === BAN) return;
+    if (!c || EK.G.deck.includes(c.u) || banned(c.id)) return;
     const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean).filter((o) => !pinned.has(o.u));
     if (inDeck.length < EK.DECK_MAX) { EK.G.deck.push(c.u); return; }
     // A player drops a weak card, not an unused one, so play count only breaks
@@ -240,7 +243,7 @@ function playOne(runIdx) {
     const got = EK.openChest(kind);
     // grantCard puts a pull straight into the deck whenever there is room, which
     // is the one path a ban leaks through — early, before the deck fills.
-    if (BAN) EK.G.deck = EK.G.deck.filter((u) => (EK.ownedCard(u) || {}).id !== BAN);
+    if (BANS.length) EK.G.deck = EK.G.deck.filter((u) => !banned((EK.ownedCard(u) || {}).id));
     if (got) for (const c of got) tryDeck(c);
   };
 
@@ -683,7 +686,7 @@ function playOne(runIdx) {
       EK.G.gems = (EK.G.gems || 0) + EK.gemReward(EK.B());
       if (EK.B().npc) EK.G.money += EK.B().npc.trainer.prize;
       let offer = EK.rollReward(EK.B());
-      if (BAN && offer) offer = offer.filter((id) => id !== BAN);
+      if (BANS.length && offer) offer = offer.filter((id) => !banned(id));
       if (offer && offer.length) {
         // The best card on offer, not a coin toss between them. Picking at
         // random depressed played/drawn across the whole pool, which is the
@@ -850,7 +853,7 @@ const fights = avg((r) => r.fights), steps = avg((r) => r.steps);
 console.log(`\nEMBERKIN — ${RUNS} run${RUNS > 1 ? 's' : ''} from the study to Crown Hollow`
   + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}`
   + `${BUILD === 'rarity' ? '' : `, building for ${BUILD}`}`
-  + `${BAN ? `, without ${BAN}` : ''}${FORCE ? `, with ${FORCE_N}x ${FORCE}` : ''}`
+  + `${BANS.length ? `, without ${BANS.join(' and ')}` : ''}${FORCE ? `, with ${FORCE_N}x ${FORCE}` : ''}`
   + `${ONLY ? `, ${ONLY} only` : ''}\n`);
 console.log(`  steps walked        ${steps.toFixed(0)}   per run, to reach level ${avg((r) => r.top).toFixed(0)}`);
 console.log(`  fights              ${fights.toFixed(0)}   per run;  one every ${show(rate((r) => r.steps, perFight), 1)} steps`);
