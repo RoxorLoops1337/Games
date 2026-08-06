@@ -3462,6 +3462,17 @@ const CARDS = {
     txt: 'Draw {v}, gain 1 energy. Exhaust.' },
   thornmail: { name: 'Thornmail',   r: 'rare', cost: 1, kind: 'skill', v: 10, vt: 'shield', fx: { thorns: 4 },
     txt: 'Gain {v} shield. Attackers take 4.' },
+  // Grit was given `grow: 1` — a second compounding axis, on pass 30's template —
+  // and it is back off again, because the experiment answered no. It made the
+  // card bigger: 19 points of permanent might a run became 34, and its play rate
+  // went from 89% to 98%. It did not make the run depend on it. The gap between
+  // playing with Grit and banning it outright stayed where it was, +0.38 turns
+  // against +0.41, while the whole baseline slid 0.18 turns shorter.
+  //
+  // Which is the finding: the deck substitutes. Make one card stronger and
+  // whatever it displaces does the same job, so the run never comes to need it.
+  // That is a harder flatness than weak cards — these cards are interchangeable,
+  // and no amount of buffing one of them changes that.
   grit:      { name: 'Grit',        r: 'rare', cost: 1, kind: 'skill', v: 1, vt: 'might', exhaust: true,
     txt: '+{v} damage on every attack, for ever. Exhaust.' },
 

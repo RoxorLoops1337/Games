@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all thirty-three mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-two passes on this
-game produced about eight changes to the game and thirty-three fixes to the tool.
+of all thirty-five mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-three passes on this
+game produced about eight changes to the game and thirty-five fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,48 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### The deck substitutes: a stronger card is not a more important one
+
+Pass 30's template said a card needs to compound on more than one axis. Grit was
+the clean test — measured worth nothing, and already carrying the run-long axis
+(`might` is saved with the save) — so it got exactly one more: `grow: 1`, each
+play permanently bigger, to the usual ceiling of four times base.
+
+It made the card bigger and it did not make the run need it.
+
+| solo, 60 runs each | Grit as it was | Grit with growth |
+| --- | --- | --- |
+| baseline turns per fight | 3.67 ±0.15 | 3.49 ±0.15 |
+| turns with Grit banned | 4.05 ±0.24 | 3.90 ±0.21 |
+| **the gap — what Grit is worth** | **+0.38** | **+0.41** |
+| permanent might it contributes | +19 | +34 |
+| played, of fights it could be paid for | 89% | 98% |
+
+The card nearly doubled its contribution and gained nine points of play rate. The
+gap between having it and not having it did not move. What did move was the whole
+baseline, 0.18 turns shorter — a cost with nothing bought. **Reverted.**
+
+The reason is the finding: **the deck substitutes.** Make one card stronger and
+whatever it displaces does the same job, so the run never comes to depend on it.
+That is a harder flatness than "the cards are weak" — these cards are
+*interchangeable*, and buffing one of them cannot change that. It also explains
+pass 29 in hindsight: a 75%-epic deck and a 66%-rare deck play the same because
+each is a different draw from one pool of near-equivalent cards.
+
+Which reframes what a fix would have to be. Not a bigger number on a card — a
+card that does something no other card does, so that nothing can stand in for it.
+Whetstone is the only one in the set that passes that test today, and it passes
+it by covering three axes at once rather than by being large.
+
+#### A correction to pass 30
+
+Pass 30 said "take Ward Stance, War Cry or Grit out of the game entirely and
+every line stays inside its interval". That was checked against the danger line,
+never-in-doubt and wipes — not against every line. **Grit moved turns per fight
+even then**, 3.67 ±0.15 to 4.05 ±0.24, which is outside by a hair. Ward Stance
+and War Cry hold up; Grit did not, and the sentence claimed more than it had
+looked at.
 
 #### How flat, exactly: one card in four is worth measuring
 

@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and thirty-three fixes to
+this game have produced roughly six changes to the game and thirty-five fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -31,6 +31,9 @@ harder-and-easier versions of one thing; they are different games, and a change
 that helps one can do nothing for the other. **Judge a change against both**, and
 if it only moves one, say which.
 
+`--ban a,b` takes a comma-separated list, so two cards can be struck out together
+and asked whether they add up or overlap.
+
 `--ban <id>` plays the run with a card struck out of the reward offers, the chest
 pulls and the starting deck. `--force <id>` pins three copies into the deck that
 nothing may swap out. The two together are what a single card is worth. Prefer
@@ -46,7 +49,7 @@ the rarest card converges".
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 35.
+a sample — see mistake 37.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -261,19 +264,33 @@ and the family is more useful than the individual entry.
     principle, and the first draft of the comment beside it claimed the numbers
     decided it. They did not.
 
+34. **"Every line stays inside its interval" was checked against three lines**
+    (pass 31, about pass 30). The flatness table read the danger line,
+    no-kin-in-doubt and wipes, and the sentence claimed all of them. Grit moved
+    **turns per fight** — 3.67 ±0.15 to 4.05 ±0.24 when banned — which is outside
+    by a hair. Ward Stance and War Cry hold up; the sentence did not. If a claim
+    says *every* line, read every line.
+35. **A ban-gap measures load-bearing, not strength** (pass 31). Grit was given a
+    second compounding axis; its contribution nearly doubled (19 points of
+    permanent might a run to 34) and its play rate went 89% to 98%, while the gap
+    between having it and banning it stayed at +0.38 → +0.41 turns. Both numbers
+    are true and they answer different questions. **The deck substitutes**, so a
+    stronger card is not a more important one — which is what the ban-gap is for,
+    and why the buff was reverted.
+
 ### Sampling — a claim the sample could not carry
 
-34. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+36. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-35. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+37. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-36. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+38. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -285,7 +302,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of thirty-three are denominators.** If a number will not move, or moves the
+- **Nine of thirty-five are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has
