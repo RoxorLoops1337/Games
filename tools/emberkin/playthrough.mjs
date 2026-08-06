@@ -68,7 +68,7 @@ function playOne(runIdx) {
     // which a fight entered at half health flunks whatever happens in it. This
     // answers "was that fight anything" — and it is the one that is about the
     // fight rather than about the walk before it.
-    cost: 0, costKin: 0, costN: 0,
+    cost: 0, costKin: 0, costN: 0, noDoubtKin: 0,
     // Trainers are the hand-authored fights, and averaging them into the wild
     // ones hides exactly the thing a scripted plan is supposed to change. Keyed
     // by npc id so the three Wick fights can be read as a sequence.
@@ -112,7 +112,20 @@ function playOne(runIdx) {
       return live.reduce((a, m) => a + Math.max(0, m.hp) / Math.max(1, m.max), 0) / live.length;
     };
     const startHp = partyHp();
-    let low = startHp, turns = 0, guard = 0, planBeats = 0, drank = false;
+    // How close the worst-off kin came to going down, watched all fight.
+    //
+    // "Never in doubt" reads the party mean, and a mean has a party size in it:
+    // with four kin, one of them being taken to zero — a fight that genuinely
+    // went wrong — is 25% party damage, which sails under the 30% bar. It is the
+    // same denominator that made `cost of a fight` look like a threefold gap
+    // between the modes when it was the same number twice. This one is about a
+    // kin, so it means the same thing whether you brought one or six.
+    const worstKin = () => {
+      const live = EK.G.party.length ? EK.G.party : [b.mine];
+      return Math.min(...live.map((m) => Math.max(0, m.hp) / Math.max(1, m.max)));
+    };
+    const startWorst = worstKin();
+    let low = startHp, worst = startWorst, turns = 0, guard = 0, planBeats = 0, drank = false;
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
     // decided in advance, this is where the deciding happens.
@@ -280,7 +293,7 @@ function playOne(runIdx) {
         EK.doAction({ kind: 'item', id: 'salve', target: EK.G.party.indexOf(cur.mine) });
         stat.salves++;
         turns++;
-        low = Math.min(low, partyHp());
+        low = Math.min(low, partyHp()); worst = Math.min(worst, worstKin());
         continue;
       }
       support(kinCost());                       // set up, keeping the swing affordable
@@ -323,12 +336,12 @@ function playOne(runIdx) {
         stat.fled += EK.B() && EK.B().over === 'fled' ? 1 : 0;
         turns++;
         if (EK.B() && EK.B().over) break;
-        low = Math.min(low, partyHp());
+        low = Math.min(low, partyHp()); worst = Math.min(worst, worstKin());
         continue;
       }
       EK.endTurn();
       turns++;
-      low = Math.min(low, partyHp());
+      low = Math.min(low, partyHp()); worst = Math.min(worst, worstKin());
     }
     if (duelId) {
       const d = stat.duels.get(duelId) || { n: 0, turns: 0, lost: 0, low: 0, telegraphs: 0, swaps: 0, heals: 0 };
@@ -349,6 +362,7 @@ function playOne(runIdx) {
     }
     // A fight you were never in danger of losing is a cutscene with buttons.
     if (low > .7 && !duelId) stat.noDoubt++;
+    if (worst > .7 && !duelId) stat.noDoubtKin++;
     if (!duelId) {
       const drop = Math.max(0, startHp - low);
       stat.cost += drop;
@@ -508,6 +522,7 @@ console.log(`  fights              ${fights.toFixed(0)}   (one every ${(steps / 
 // Every rate carries a 95% interval. Two builds whose intervals overlap have
 // not been told apart by this tool, however different their means look.
 console.log(`  never in doubt      ${showPct(rate((r) => r.noDoubt, perFight))} of fights`);
+console.log(`     no kin in doubt   ${showPct(rate((r) => r.noDoubtKin, perFight))} of fights`);
 console.log(`  cost of a fight     ${showPct(rate((r) => r.cost, (r) => r.costN))} of the party`);
 console.log(`     the same, in kin  ${show(rate((r) => r.costKin, (r) => r.costN), 2)} kin-bars`);
 console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}`);

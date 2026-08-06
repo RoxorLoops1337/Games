@@ -586,6 +586,16 @@ as to one kin alone. "Party fights cost 7% and solo fights cost 25%" looked like
 three-fold difficulty gap and was a denominator: **0.21 ±0.03 kin-bars against
 0.19 ±0.03**, the same number twice. The report prints both.
 
+*A mean has a party size in it, and this is the third time.* "Never in doubt"
+reads the party mean, so with four kin one of them being taken to zero — a fight
+that genuinely went wrong — is 25% party damage and sails under the 30% bar.
+Party mode had read 37-40% never-in-doubt for four passes and looked immune to
+every fix; measured on **the worst-off kin**, which means the same thing whether
+you brought one or six, it is **11% ±2**. Nearly nine party fights in ten put a
+kin in trouble. Solo reads 39% either way, which is the sanity check. `no kin in
+doubt` is the line to compare across modes; `never in doubt` is the line for
+whether the *run* was ever at risk.
+
 *Running away is not surviving.* Teaching the probe to flee moved fights out of
 the wipe column and into the run column and changed the danger not at all — solo
 went from .196 wipes to .063 wipes plus .123 runs. Read **`lost or ran`** when

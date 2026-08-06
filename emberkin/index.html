@@ -5502,6 +5502,12 @@ const CORNER_AT = .4, CORNER_EDGE = 14;
  * have to answer.
  */
 const CORNER_RESIST = [.78, .52, .26];
+// Measured against [.62, .40, .22], which was the obvious trade-back when the
+// price of this looked too high: it gave two points of never-in-doubt back and
+// took .034 off lost-or-ran, and moved turns not at all. Neither clears its
+// interval, so it is a wash, and a wash is not a reason to change a shipped
+// number. What actually lengthened the fights was the probe running away more
+// and failing the roll, which costs a turn — not the cornering.
 /** Is every attack this kin has blunted by what the other one is made of? */
 const resistedBy = (foe, mine) => {
   let best = 0;
