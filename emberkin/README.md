@@ -577,6 +577,8 @@ When a number will not move, suspect this table before the game.**
 | never fled | runs when the next hit kills | **pushed wipes up** by counting losses nobody would have stood still for | flees now — and read `lost or ran`, not `wipes` |
 | took a random card from the reward offer | takes the best one | depressed played/drawn across the whole pool — the instrument the deck work in passes 9, 10 and 12 was steered by | takes the best now |
 | restocks only on a heal trip | shops when passing through | catch rate, salve supply | left; documented |
+| counted a card as drawn every turn it sat in hand | draws it once | **the whole played/drawn table**: a Retain card sits in hand all fight, so it was counted four times against the one time it can be played — the bottom of the table was Dewdrop, Hunker, Bulwark and Ward Stance, i.e. every card with Retain on it | counted once per card now |
+| reserves the swing, so a 3-cost card is never affordable | skips the swing for a big enough card | Kinbond and Overkill read near-zero by construction | **known limitation** — letting it skip was tried and was worse than the gap (kin play rates 62–98% → 24–42%) |
 | skipped the reward card after a trainer win | takes it — the real win path offers one on both branches | **the whole legendary tier**: `REWARD_ODDS.wild` has legendary at 0, so a trainer win is the only place in a normal run one can come from | takes it now |
 | rotates the starter, so 60 runs is 20 each | plays one | **any per-starter claim** — across three samples of builds that never touched Ember, Cindercub's lost-or-ran read .237, .358 and .438 at ±.08 | `--starter <name>` runs all sixty on one |
 
