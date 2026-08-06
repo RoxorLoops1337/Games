@@ -1071,6 +1071,7 @@ const bestOn = i => (G.bestPer && G.bestPer[i]) || 0;
 const starsTotal = () => LEVELS.reduce((n, _, i) => n + starsOn(i), 0);
 
 function toMenu(){
+  engineStop();
   G.phase = 'menu';
   show('menu', true); show('brief', false); show('results', false); show('finale', false);
   show('hint', false);
@@ -1198,6 +1199,7 @@ function nextCar(){
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
   G.sling = null;
+  engineStart();                          // it idles while you line the shot up
   G.goalPops.length = 0;
   recentPops.length = 0;
   G.phase = 'aim';
@@ -1278,6 +1280,7 @@ function endRun(){
 }
 
 function levelEnd(){
+  engineStop();
   const lv = LEVELS[G.level];
   // one star for the target, then one per pair of goals on top
   const hit = G.levelScore >= G.target;
@@ -1740,9 +1743,21 @@ function wreckProp(o, vx, vy){
     spills.push({ x: o.x, y: o.y, r: 74, t: 0, ttl: 6.5 });
     sndCrunch(0.7);
   }
+  /* Everything the player's body registers used to be a constant here: the
+     same 0.22/6.0 shake and 0.030 hit-stop whether you took the stall at 400
+     or 1,600px/s — half the shake a single shopper gets at the same speed. The
+     landmark branch stays the ceiling; the rest scales with the hit. */
+  const k = Math.min(1, Math.hypot(vx || 0, vy || 0) / 1500);
   if (o.pts >= 900){ addShake(0.5, 16); flash = Math.max(flash, 0.55); hitstop = Math.max(hitstop, 0.07); }
-  else { addShake(0.22, 6); hitstop = Math.max(hitstop, 0.03); }
-  sndCrunch(o.mass);
+  else {
+    addShake(0.18 + 0.16 * k, 4 + 9 * k);
+    // hit-stop is NOT a feel channel: it scales dt for the whole update, so
+    // making it speed-dependent is a simulation change. Left at its constant
+    // rather than re-deriving all 21 pars for a fifth of a frame.
+    hitstop = Math.max(hitstop, 0.03);
+    if (k > 0.55) flash = Math.max(flash, 0.10 * k);
+  }
+  sndCrunch(Math.min(1.2, o.mass * (0.55 + 0.7 * k)));
   return pts;
 }
 
@@ -2117,10 +2132,22 @@ function bounceBounds(){
   if (car.y < bounds.y0){ car.y = bounds.y0; car.vy = Math.abs(car.vy) * REST; hit = 1; }
   else if (car.y > bounds.y1){ car.y = bounds.y1; car.vy = -Math.abs(car.vy) * REST; hit = 1; }
   if (hit){
+    /* The fence takes 525px/s out of the car in a single frame and used to
+       answer with a fixed six-particle puff and a fixed-level thud. */
+    const sp = carSpeed();
     car.spin += rr(-1.4, 1.4);
     car.vx *= 0.9; car.vy *= 0.9;
-    puff(car.x, car.y, 6, '#e6f0ff', 190);
-    if (carSpeed() > 150) sndThud(0.4);
+    /* Scaled by speed, but never by particle COUNT: puff and shards draw their
+       jitter from the simulation's generator, so changing how many there are
+       moves every market's score. Size, spread and volume are free; the count
+       is not. */
+    const k = Math.min(1, sp / 1200);
+    puff(car.x, car.y, 6, '#e6f0ff', 190 + 260 * k);
+    if (sp > 260){
+      addShake(0.14 + 0.16 * k, Math.min(12, sp / 90));
+      shards(car.x, car.y, 4, '#c8d6e8', 180 + 320 * k);
+    }
+    if (sp > 150) sndThud(clamp(sp / 1400, 0.25, 1));
   }
   return hit;
 }
@@ -2539,6 +2566,14 @@ function update(dt){
   stepLens(dt);
   stepCombo(dt);
   if (G.phase === 'drive') checkGoals();
+
+  /* The aim phase used to be three to six seconds of true silence. The engine
+     idles through it and revs with the pull, so the wind-up has a voice and
+     the release has something to release. */
+  if (G.phase === 'aim'){
+    const pull = aim.active ? Math.min(MAX_PULL, Math.hypot(aim.x - ANCHOR.x, aim.y - ANCHOR.y)) : 0;
+    engineSet(120 + pull * 1.6);
+  }
 
   if (G.phase === 'drive'){ stepCar(dt); recStep(rawDt); }
   else if (G.phase === 'settle'){
@@ -4566,7 +4601,10 @@ function noise(dur, vol, hp){
   } catch (_){}
 }
 
-const sndLaunch = p => { tone(120 + p * 90, 0.5, 'sawtooth', 0.22, 420 + p * 260); noise(0.25, 0.16, 500); };
+/* Falls, rather than climbing. This was the only sound in the game whose
+   contour contradicted its motion: the car leaves at 1,900px/s and the note
+   slid 120Hz up to 420. */
+const sndLaunch = p => { tone(300 + p * 320, 0.5, 'sawtooth', 0.22, 90 + p * 60); noise(0.25, 0.16, 500); };
 const sndThud   = k => { tone(90 + k * 40, 0.14, 'square', 0.12 + k * 0.1, 46); noise(0.12, 0.1 + k * 0.14, 380); };
 const sndCrunch = m => { noise(0.22 + m * 0.2, 0.2 + m * 0.2, 700 - m * 260); tone(70, 0.16, 'sawtooth', 0.12, 40); };
 /* Pitched by the chain, so a x6 run of kills sounds like one event climbing
