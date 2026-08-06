@@ -60,6 +60,7 @@ const EXPOSE = `__out.api = {
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
+  _setHitstop: (v) => { hitstop = v; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp,
   COATS, ELDER_COATS, KID_COATS, SKIN,
@@ -560,6 +561,110 @@ test('drawing a frame cannot change what the frame contains', () => {
   assert(undrawn.x === drawn.x && undrawn.y === drawn.y,
     'the car ends somewhere else: ' + JSON.stringify(undrawn) + ' vs ' + JSON.stringify(drawn));
   assert(undrawn.gore === drawn.gore, 'gore differs: ' + undrawn.gore + ' vs ' + drawn.gore);
+});
+
+/* The previous test starts at `launch()`. The leak was one phase earlier: the
+   last two lines of drawAim wrote car.x/car.y, so a gesture that had a frame
+   drawn during it launched from the pulled-back position and an identical
+   gesture that did not launched from the anchor, 430px downrange. Frame pacing
+   decided where the run started. */
+test('the drag, not the renderer, decides where the car is', () => {
+  const gesture = (drawDuringDrag) => {
+    const api = boot();
+    api.startCampaign(); api.beginLevel();
+    api.pointerDown(700, 430);
+    api.pointerMove(700 - api.C.MAX_PULL * api.cam.s, 430);
+    const pulledTo = Math.round(api.car.x);
+    if (drawDuringDrag) api.draw();
+    const afterDraw = Math.round(api.car.x);
+    api.pointerUp();
+    for (let f = 0; f < 2400 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+      api.skipReplay(); api.update(1 / 60);
+    }
+    return { pulledTo, afterDraw, score: api.G.levelScore, kills: api.G.kills };
+  };
+  const cold = gesture(false), warm = gesture(true);
+  assert(cold.pulledTo === Math.round(api0AnchorX() - api0MaxPull()),
+    'the drag should put the car at the pull position without any draw, got ' + cold.pulledTo);
+  assert(warm.afterDraw === warm.pulledTo, 'drawing must not move it: ' +
+    warm.pulledTo + ' -> ' + warm.afterDraw);
+  assert(cold.score === warm.score && cold.kills === warm.kills,
+    'the same gesture scored ' + cold.score + '/' + cold.kills +
+    ' undrawn and ' + warm.score + '/' + warm.kills + ' drawn');
+});
+function api0AnchorX(){ return boot().C.ANCHOR.x; }
+function api0MaxPull(){ return boot().C.MAX_PULL; }
+
+/* The replay is decoration. Watching one used to cost you score on the next
+   shot, because replayGore drew from the simulation's generator — in the one
+   system the game explicitly invites you to skip. */
+test('watching the replay costs nothing', () => {
+  const play = (lv, dy, skip) => {
+    const api = boot();
+    api.startLevel(lv); api.beginLevel();
+    for (let c = 0; c < api.G.cars; c++){
+      api.launch(-api.C.MAX_PULL, dy + (c - 1) * 40);
+      for (let f = 0; f < 4000 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+        if (skip) api.skipReplay();
+        api.update(1 / 60);
+      }
+    }
+    return api.G.levelScore + '/' + api.G.kills + '/' + api.G.stars;
+  };
+  const bad = [];
+  for (const lv of [0, 5, 10, 15, 20]){
+    for (const dy of [-200, 0, 200]){
+      const skipped = play(lv, dy, true), watched = play(lv, dy, false);
+      if (skipped !== watched) bad.push('lv' + lv + ' dy' + dy + ': ' + skipped + ' vs ' + watched);
+    }
+  }
+  assert(bad.length === 0, 'skipping changed the run:\n  ' + bad.join('\n  '));
+});
+
+/* `!== 'replay'` let the crowd walk behind the briefing card, so how long you
+   spent reading the briefing changed where every shopper stood: the same four
+   shots scored 17,275 after half a second and 21,715 after thirty. */
+test('a market you have not started yet does not move', () => {
+  const dwell = (frames) => {
+    const api = boot();
+    api.startCampaign();
+    assert(api.G.phase === 'brief', 'startCampaign should sit on the briefing card');
+    for (let i = 0; i < frames; i++) api.update(1 / 60);
+    api.beginLevel();
+    for (let c = 0; c < api.G.cars; c++){
+      api.launch(-api.C.MAX_PULL, (c - 1) * 40);
+      for (let f = 0; f < 2400 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+        api.skipReplay(); api.update(1 / 60);
+      }
+    }
+    return api.G.levelScore;
+  };
+  const quick = dwell(30), slow = dwell(1800);
+  assert(quick === slow, 'thirty seconds on the briefing card changed the market: ' +
+    quick + ' vs ' + slow);
+});
+
+/* The whole frame used to be scaled by 0.18, so the frame straddling the end of
+   a stop lost its remainder too and one hit-stop cost 76-96px of travel
+   depending on the frame rate. */
+test('a hit-stop costs the same wherever the frames fall', () => {
+  const travel = (dt, stop) => {
+    const api = boot();
+    api.startCampaign(); api.beginLevel();
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0;
+    api.G.phase = 'drive';
+    api.car.x = 1200; api.car.y = 1100; api.car.vx = 1500; api.car.vy = 0;
+    api.G.runT = 0;
+    if (stop) api._setHitstop(0.05);
+    const x0 = api.car.x;
+    for (let t = 0; t < 0.5; t += dt) api.update(dt);
+    return api.car.x - x0;
+  };
+  const costs = [1 / 30, 1 / 60, 1 / 144].map(dt => travel(dt, false) - travel(dt, true));
+  const lo = Math.min(...costs), hi = Math.max(...costs);
+  console.log('    (hit-stop costs ' + costs.map(c => c.toFixed(1)).join(' / ') + 'px at 30/60/144fps)');
+  assert(hi - lo < hi * 0.05,
+    'a hit-stop costs ' + costs.map(c => c.toFixed(1)).join(' vs ') + 'px depending on frame rate');
 });
 
 test('the recorder starts empty on every launch', () => {
