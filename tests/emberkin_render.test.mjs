@@ -484,6 +484,112 @@ while (played.G.battle && frames++ < 600) {
 }
 ok(popped > 0, `a fight played on the keys threw numbers (peak ${popped} on screen)`);
 
+section('a swing winds up, and a crit looks like one');
+const sw = loadGame({});
+sw.setCtx(mkCtx());
+sw.G.party = [sw.mkMon('pyrelynx', 30)];
+sw.startBattle({ foe: sw.mkMon('sproutle', 30), wild: true });
+const sb = sw.B();
+
+// The line that announces a move arrives before the line that lands it. That
+// gap is the wind-up — without it the lunge is a twitch with no preparation.
+sb.windM = 0; sb.windF = 0; sb.tgtM = sb.mine.hp; sb.tgtF = sb.foe.hp;
+sw.entryFx(sb, { fx: 'use', side: 'mine', hpM: sb.mine.hp, hpF: sb.foe.hp });
+eq(sb.windM, sw.WIND_UP, 'announcing your move pulls you back');
+eq(sb.windF, 0, 'and does not move the one about to be hit');
+// …and the hit cancels it, so the two never fight over the same sprite.
+sw.entryFx(sb, { fx: 'hit', side: 'foe', atk: 'mine', crit: false, hpM: sb.mine.hp, hpF: sb.foe.hp - 5 });
+eq(sb.windM, 0, 'the swing landing ends the wind-up');
+ok(sb.lungeM > 0, 'and starts the lunge');
+ok(sb.recoilF > 0, 'the one that took it is knocked back');
+eq(sb.recoilM, 0, 'the one that threw it is not');
+eq(sb.crit, null, 'an ordinary hit sets off no burst');
+
+// A crit shakes harder, bursts, and rewrites its own number.
+sb.pops = []; sb.tgtF = sb.foe.hp;
+sw.entryFx(sb, { fx: 'hit', side: 'foe', atk: 'mine', crit: true, hpM: sb.mine.hp, hpF: sb.foe.hp - 40 });
+ok(sb.crit && sb.crit.side === 'foe', 'a crit bursts over whoever took it');
+eq(sb.pops[sb.pops.length - 1].kind, 'crit', 'and its number is marked as one');
+ok(sb.shake > 1, `a crit shakes harder than a normal hit (${sb.shake})`);
+// It draws, and it expires rather than sticking to the screen.
+const critCalls = [];
+sw.setCtx(mkCtx(critCalls));
+const beforeCrit = critCalls.length;
+sw.drawBattle(mkCtx(critCalls));
+ok(critCalls.length - beforeCrit > 0, 'the burst paints');
+sw.G.mode = 'battle';
+for (let i = 0; i < 40; i++) { sw.step(.05); sw.draw(); }
+eq(sw.B().crit, null, 'and it clears itself');
+
+// Damage that nobody threw — burn, roots, recoil — knocks its victim back but
+// leaves everyone leaning nowhere.
+const sb2 = sw.B();
+sb2.lungeM = 0; sb2.lungeF = 0; sb2.recoilM = 0; sb2.recoilF = 0;
+sb2.tgtM = sb2.mine.hp; sb2.tgtF = sb2.foe.hp;
+sw.entryFx(sb2, { fx: 'hit', side: 'mine', hpM: sb2.mine.hp - 3, hpF: sb2.foe.hp });
+ok(sb2.recoilM > 0, 'a burn still shoves whoever it burned');
+ok(sb2.lungeM === 0 && sb2.lungeF === 0, 'but nobody leans into a burn');
+
+section('the hand is a fan, not a row');
+// The middle card is upright and the outer ones splay; the one you are aiming
+// at leaves the arc entirely.
+for (const n of [1, 2, 3, 4, 5, 6]) {
+  const styles = Array.from({ length: n }, (_, i) => sw.fanStyle(i, n, false));
+  const rots = styles.map((s) => parseFloat((s.match(/rotate\((-?[\d.]+)deg\)/) || [0, 0])[1]));
+  if (n > 1) {
+    ok(rots[0] < 0, `${n} cards: the leftmost leans left (${rots[0]}°)`);
+    ok(rots[n - 1] > 0, `${n} cards: the rightmost leans right (${rots[n - 1]}°)`);
+    // Monotonic across the hand — one card out of order and the fan reads as a
+    // shuffle rather than a hand.
+    ok(rots.every((r, i) => i === 0 || r > rots[i - 1]), `${n} cards: the angles run in order`);
+    // Symmetric, so the hand is not lopsided.
+    ok(Math.abs(rots[0] + rots[n - 1]) < 1e-6, `${n} cards: the fan is symmetric`);
+  }
+  // Every card is stacked, and every card is placed.
+  ok(styles.every((s) => /z-index:\d+/.test(s)), `${n} cards: each one has a place in the stack`);
+}
+// The selected card is the only upright one, and it is on top of everything.
+const picked = sw.fanStyle(2, 5, true);
+ok(!/rotate\(-?[1-9]/.test(picked), 'the aimed card comes upright');
+ok(/scale\(1\.0\d\)/.test(picked), 'and grows a little');
+ok(/z-index:20/.test(picked), 'and sits over the rest of the hand');
+// Scaling about the fan's pivot would throw it up over the dialogue; it pivots
+// about its own base instead.
+ok(picked.includes('transform-origin:50% 100%'), 'it lifts off its own base, not the fan\'s');
+
+section('three rooms, not one room three times');
+// The three interiors used to be the same generated box. What makes a room a
+// room is what is in it.
+const ROOMS = ['lab', 'wayhouse', 'shop'];
+const furnitureOf = (id) => new Set(EK.MAPS[id].rows.join('').split('').filter((c) => 'HCBxpn'.includes(c)));
+for (const id of ROOMS) {
+  const f = furnitureOf(id);
+  ok(f.size > 0, `${id} has furniture in it`);
+  ok(f.has('n'), `${id} has a window`);
+}
+for (let i = 0; i < ROOMS.length; i++) {
+  for (let j = i + 1; j < ROOMS.length; j++) {
+    const a = EK.MAPS[ROOMS[i]].rows.join(''), b = EK.MAPS[ROOMS[j]].rows.join('');
+    ok(a !== b, `${ROOMS[i]} and ${ROOMS[j]} are different rooms`);
+  }
+}
+ok(furnitureOf('wayhouse').has('B'), 'the Wayhouse has beds');
+ok(furnitureOf('shop').has('C'), 'the shop has a counter');
+ok(furnitureOf('lab').has('H'), 'the study has shelves');
+// Every piece of furniture is solid, or you walk through the bed.
+for (const c of 'HCBxpn') ok(EK.SOLID.has(c), `${EK.TILE_ART[c]} is something you cannot walk through`);
+// And every one of them has art, or a room is a field of fallback squares.
+for (const c of 'HCBxpn') ok(!!EK.sprite('tile', EK.TILE_ART[c]), `${EK.TILE_ART[c]} has art`);
+// The people in each room are still reachable from the door.
+for (const id of ROOMS) {
+  const m = EK.MAPS[id];
+  for (const npc of m.npcs || []) {
+    const around = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      .filter(([dx, dy]) => EK.passable(m, npc.x + dx, npc.y + dy, npc.y));
+    ok(around.length > 0, `${id}: ${npc.name} can be stood next to`);
+  }
+}
+
 section('a monkey on the keyboard cannot break it');
 // Random input for thousands of frames, drawing every one. This is the cheapest
 // way to find the state a hand-written test would never think to reach.

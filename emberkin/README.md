@@ -257,6 +257,22 @@ rectangle, not a pond.
 one, every actor looks pasted on top of the ground rather than standing in it —
 the cheapest single thing that makes a tile field read as a place.
 
+### Nothing outdoors is a rectangle
+
+The maps are char grids, so the temptation is to type rectangles: a 2×2 square
+of trees, a straight shoreline, a block of tall grass. All four routes started
+that way and all four read as a spreadsheet with colours in it. The rule now is
+the same one the tiles follow — clusters, not blocks:
+
+- copses are irregular and no two are the same shape
+- the shoreline steps in and out; the beach is never the same width twice
+- tall grass has ragged edges rather than square ones
+- every screenful carries scatter — a rock cluster, a flower clump, a ledge
+
+The suite enforces the shape rather than the taste: for each tile kind, the set
+of distinct row-signatures it makes has to be larger than one. A region whose
+every row is the same run *is* a rectangle, whatever it is made of.
+
 ## How a battle works
 
 Each turn you are dealt five cards and three energy. The deck has two halves
@@ -324,6 +340,39 @@ the swing leans into it, seven pixels out and back, integer offsets only. Burn,
 roots and recoil are all logged as `hit` too, but nobody threw those, so they
 flash and shake without anyone leaning — which is exactly the distinction the
 `atk` field on the entry exists to make.
+
+Four motions carry a swing, all measured along the line between the two of them
+and all in whole pixels, because a sprite that lands between them at this scale
+shimmers:
+
+| | when | what |
+|---|---|---|
+| **wind-up** | the `use` line, one line before the hit | the thrower pulls back four pixels |
+| **lunge** | the `hit` line | out seven fast, back slower |
+| **recoil** | the `hit` line | the one who took it is shoved six and returns |
+| **burst** | a crit only | a ring punching outward, four spokes on the diagonals |
+
+The wind-up is the whole reason a swing reads as a swing. Announcing a move and
+landing it are two separate log lines, and that gap is exactly long enough to
+pull back in, so the lunge arrives as a release instead of a twitch. The hit
+cancels the wind-up, so the two never fight over the same sprite.
+
+The crit burst uses the diagonals rather than the axes: a cross reads as a plus
+sign, a saltire reads as an impact. Its number comes in oversized and settles,
+and it carries a `!`. Before this the log said "A critical hit!" and the picture
+said nothing, so the biggest number in the fight arrived looking like every
+other number.
+
+The field itself is textured now, by the same rule as the terrain tiles —
+clusters, not pixels, thinning toward the horizon and thickening in the
+foreground, on fixed seeds so the grass does not crawl between frames. A bank
+darkens the very bottom, so the picture has a floor and not just a backdrop.
+
+Entering is a walk-on rather than a slide. Sliding in at a constant speed is a
+teleport with extra frames; what sells arrival is deceleration plus weight going
+down on every step, so the offset eases out, the body bobs while it is still
+covering ground, and dust kicks up behind. All three fall to nothing exactly
+when the entry finishes.
 
 ### Cards
 
@@ -430,6 +479,53 @@ Epic and legendary carry a slow sheen, because a card you were pleased to draw
 should look it. A kin's own move wears gold and its element instead of a
 rarity: it belongs to the creature, not to the deck, and should read that way
 from across the table.
+
+### The hand is a fan
+
+A hand held in front of you is an arc, not a row. `fanStyle(i, n, selected)`
+does the whole thing: the cards overlap, and rotation plus a drop both scale
+with distance from the middle, around a `transform-origin` *under* the card
+rather than through it. The drop goes as the square of that distance, so the
+outer cards sit further round a curve instead of on a straight tilt. A fuller
+hand fans tighter.
+
+The card you are aiming at leaves the arc entirely — upright, lifted, a little
+larger — because the card you are about to play should be the one card on screen
+that is not at an angle. It pivots about **its own base**, not the fan's: with
+the fan's pivot it grows from a point below the hand and throws itself up over
+the dialogue line. While a card is selected its rarity pip hides, because "▲
+play" and the pip both want the foot of the card and the prompt wins.
+
+The function is pure and exported, so the suite checks the shape of the fan
+without a browser: angles run in order, the fan is symmetric, every card has a
+place in the stack, and the selected one is upright and on top.
+
+What you cannot pay for goes cold — grayscale, darker, slightly transparent —
+so the hand is readable at a glance rather than after reading five cost pips.
+
+### Rooms
+
+Three interiors generated from one function, all with the same rug in the
+middle, is one room drawn three times. A room is what is in it, so there is
+furniture: `shelf`, `counter`, `bed`, `crate`, `pot` and `window`, authored in
+`tiles.mjs` alongside the terrain. They are objects rather than texture, so they
+follow the sprite rules — a silhouette that reads filled, an outline on the
+outside only, light from the upper left — and each sits on its own patch of
+floorboard so it drops into an interior without a seam. All of them are solid;
+a bed you can walk through is a rug.
+
+- **Rowan's Study** is walled in books, with a work bench and something green
+  where she can reach them without getting up.
+- **The Wayhouse** is a ward: beds down both walls, a bench across the back,
+  and a window over each row.
+- **Hollowbrook Supply** is a counter you talk across, running the width of the
+  room with a gap at each till — one in front of Bell, one in front of Vane —
+  and the stock stacked against the walls behind them.
+
+A window is a light source, and a light source that lights nothing is a picture
+of a window, so `drawEdges` throws a slab of daylight down the floor beneath it,
+leaning the way light does when it comes through a wall above you and fading out
+over three tiles.
 
 ### Catching one
 

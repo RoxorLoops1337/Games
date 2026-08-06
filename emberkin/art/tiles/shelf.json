@@ -1,0 +1,38 @@
+{
+  "id": "shelf",
+  "name": "Bookshelf",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "K": "#1b1220",
+    "d": "#48362f",
+    "m": "#5e483a",
+    "b": "#745b47",
+    "l": "#8c7159",
+    "r": "#8c4048",
+    "g": "#3f7852",
+    "c": "#2f74a3",
+    "y": "#c69320",
+    "w": "#5e483a",
+    "v": "#48362f"
+  },
+  "rows": [
+    "llllllllllllllll",
+    "KKKKKKKKKKKKKKKK",
+    "KrrgKbbyKccrKggK",
+    "KrrgKbbyKccrKggK",
+    "KrrgKbbyKccrKggK",
+    "KKKKKKKKKKKKKKKK",
+    "KggyKrrcKbbgKyyK",
+    "KggyKrrcKbbgKyyK",
+    "KggyKrrcKbbgKyyK",
+    "KKKKKKKKKKKKKKKK",
+    "KccbKyygKrrbKccK",
+    "KccbKyygKrrbKccK",
+    "KccbKyygKrrbKccK",
+    "KKKKKKKKKKKKKKKK",
+    "dddddddddddddddd",
+    "wwvwwwwwwwwvwwww"
+  ]
+}

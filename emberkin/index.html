@@ -73,7 +73,16 @@
   #battlebar{ position:absolute; inset:0; z-index:6; pointer-events:none; }
   #battlebar > *{ pointer-events:auto; }
   #hand{ position:absolute; left:1.5%; right:1.5%; bottom:1.5%; height:30%; touch-action:none;
-    display:flex; gap:1%; justify-content:center; align-items:flex-end; }
+    display:flex; justify-content:center; align-items:flex-end; }
+  /* The fan. Cards overlap and pivot around a point below the hand, the way a
+     hand of real cards splays from the heel of your thumb. The per-card angle
+     and drop are inline, from fanStyle(). */
+  #hand .cardel{ flex:0 0 20%; height:93%; margin:0 -1.3%; transform-origin:50% 165%;
+    transition:transform .14s cubic-bezier(.2,.9,.3,1.2), box-shadow .12s ease, filter .14s ease; }
+  #hand .cardel.sel{ box-shadow:0 0 0 .14em var(--gold), 0 .7em .5em rgba(0,0,0,.5); }
+  /* "▲ play" and the rarity pip both want the foot of the card; while a card is
+     the one you are aiming at, the prompt wins. */
+  #hand .cardel.sel .cpip{ visibility:hidden; }
 
   /* ---- the card face --------------------------------------------------
      Built the way a card game teaches you to scan one: cost on the frame,
@@ -150,7 +159,10 @@
   .cardel.kin .cname{ color:var(--gold); }
 
   .cardel.sel{ transform:translateY(-8%); box-shadow:0 0 0 .14em var(--gold), 0 .4em 0 rgba(0,0,0,.55); }
-  .cardel.dead{ filter:grayscale(.7) brightness(.62); }
+  /* What you cannot pay for goes cold and sits back in the fan, so the hand is
+     readable at a glance rather than after reading five cost pips. */
+  .cardel.dead{ filter:grayscale(.85) brightness(.5) contrast(.9); }
+  #hand .cardel.dead{ opacity:.75; }
   .cardel.willplay{ box-shadow:0 0 0 .2em var(--gold), 0 0 1.5em rgba(255,201,77,.5); }
 
   /* Off a hand the same card gets room: a wrapping shelf of full-size faces,
@@ -1184,6 +1196,57 @@ const ART_CREATURES = {
 "........................................"]}
 };
 const ART_TILES = {
+"bed":{n:"Bed",p:{"K":"#1b1220","d":"#48362f","l":"#e8dcc8","p":"#cfc3ae","b":"#4a5f8e","c":"#63799f","w":"#5e483a","v":"#48362f"},r:[
+"wwwwwwwwwwwwwwww",
+"wKKKKKKKKKKKKKKw",
+"wKllppppppppllKw",
+"wKlpppppppppplKw",
+"wKllppppppppllKw",
+"wKKKKKKKKKKKKKKw",
+"wKbbbbbbbbbbbbKw",
+"wKbccbbccbbccbKw",
+"wKbbbbbbbbbbbbKw",
+"wKbccbbccbbccbKw",
+"wKbbbbbbbbbbbbKw",
+"wKbccbbccbbccbKw",
+"wKbbbbbbbbbbbbKw",
+"wKKKKKKKKKKKKKKw",
+"wddddddddddddddw",
+"wwwwwwwvwwwwwwww"]},
+"counter":{n:"Counter",p:{"K":"#1b1220","d":"#48362f","m":"#5e483a","b":"#745b47","l":"#8c7159","w":"#5e483a","v":"#48362f"},r:[
+"wwwwwwwwwwwwwwww",
+"wwvwwwwwwwwwwwww",
+"KKKKKKKKKKKKKKKK",
+"KllllllllllllllK",
+"KlbbbbbbbbbbbblK",
+"KbmmmmmmmmmmmmbK",
+"KbmdmmmmdmmmmmbK",
+"KbmmmmmmmmmmmmbK",
+"KbdmmmdmmmmmdmbK",
+"KbmmmmmmmmmmmmbK",
+"KKKKKKKKKKKKKKKK",
+"KddddddddddddddK",
+"KKKKKKKKKKKKKKKK",
+"wwwwwwwwwwwvwwww",
+"wwwwwwwwwwwwwwww",
+"wwvwwwwwwwwwwwww"]},
+"crate":{n:"Crate",p:{"K":"#1b1220","d":"#48362f","m":"#5e483a","l":"#8c7159","w":"#5e483a","v":"#48362f"},r:[
+"wwwwwwwwwwwwwwww",
+"wwvwwwwwwwwwwwww",
+"wwKKKKKKKKKKKKww",
+"wwKllllllllllKww",
+"wwKlmmmmmmmmlKww",
+"wwKlmdmmmmdmlKww",
+"wwKlmmmmmmmmlKww",
+"wwKllllllllllKww",
+"wwKlmmmmmmmmlKww",
+"wwKlmdmmmmdmlKww",
+"wwKlmmmmmmmmlKww",
+"wwKllllllllllKww",
+"wwKKKKKKKKKKKKww",
+"wwddddddddddddww",
+"wwwwwwwwwwwvwwww",
+"wwwwwwwwwwwwwwww"]},
 "door":{n:"Door",p:{"K":"#1b1220","d":"#48362f","m":"#5e483a","b":"#745b47","l":"#8c7159","s":"#453f4f","y":"#ffc94d"},r:[
 "ssssssssssssssss",
 "sKKKKKKKKKKKKKKs",
@@ -1303,6 +1366,23 @@ const ART_TILES = {
 "mm++mmmmmmmmm-mm",
 "m+++mmmmmmmm--mm",
 "m++mmmmmmm--mmmm"]},
+"pot":{n:"Potted fern",p:{"K":"#1b1220","d":"#48362f","g":"#2a593c","G":"#488557","t":"#453531","r":"#7e4e57","b":"#96646a","w":"#5e483a","v":"#48362f"},r:[
+"wwwwwwwwwwwwwwww",
+"wwwwwwgGgwwwwwww",
+"wwwwggGGGggwwwww",
+"wwwgGGgGgGGgwwww",
+"wwgGGgGGGgGGgwww",
+"wgGGgGGGGGgGGgww",
+"wwgGGgGGGgGGgwww",
+"wwwgGGgGgGGgwwww",
+"wwwwggGtGggwwwww",
+"wwwwwwgtgwwwwwww",
+"wwwKKKKKKKKKwwww",
+"wwwKbbbbbbbKwwww",
+"wwwKbrrrrrbKwwww",
+"wwwKbrrrrrbKwwww",
+"wwwKKbbbbbKKwwww",
+"wwwwdddddddwwwww"]},
 "rock":{n:"Standing stone",p:{"K":"#241f2a","d":"#453f4f","m":"#575163","b":"#6d6779","l":"#888194","g":"#35684a","h":"#27503a","e":"#45805a"},r:[
 "gggggggggggggggg",
 "gggggKKKKKgggggg",
@@ -1371,6 +1451,23 @@ const ART_TILES = {
 "mm-mmmmmmmmmmmmm",
 "m--mmmm++mmmmmmm",
 "mm-mmm+++mmmmmmm"]},
+"shelf":{n:"Bookshelf",p:{"K":"#1b1220","d":"#48362f","m":"#5e483a","b":"#745b47","l":"#8c7159","r":"#8c4048","g":"#3f7852","c":"#2f74a3","y":"#c69320","w":"#5e483a","v":"#48362f"},r:[
+"llllllllllllllll",
+"KKKKKKKKKKKKKKKK",
+"KrrgKbbyKccrKggK",
+"KrrgKbbyKccrKggK",
+"KrrgKbbyKccrKggK",
+"KKKKKKKKKKKKKKKK",
+"KggyKrrcKbbgKyyK",
+"KggyKrrcKbbgKyyK",
+"KggyKrrcKbbgKyyK",
+"KKKKKKKKKKKKKKKK",
+"KccbKyygKrrbKccK",
+"KccbKyygKrrbKccK",
+"KccbKyygKrrbKccK",
+"KKKKKKKKKKKKKKKK",
+"dddddddddddddddd",
+"wwvwwwwwwwwvwwww"]},
 "sign":{n:"Signpost",p:{"K":"#1b1220","d":"#48362f","m":"#5e483a","b":"#745b47","l":"#8c7159","g":"#35684a","h":"#27503a","e":"#45805a"},r:[
 "gggggggggggggggg",
 "ggKKKKKKKKKKKggg",
@@ -1455,7 +1552,24 @@ const ART_TILES = {
 "mmmmmmmmmmmmmmmm",
 "+++mmmmm++++mmmm",
 "mmmmmmmmmmmmmmmm",
-"mm----mmmmmmm---"]}
+"mm----mmmmmmm---"]},
+"window":{n:"Window",p:{"K":"#221d29","d":"#453f4f","m":"#575163","b":"#6d6779","l":"#888194","t":"#48362f","y":"#ffe7b0","o":"#f7c979"},r:[
+"KKKKKKKKKKKKKKKK",
+"KmblllbmmKmbllbm",
+"KdmmbbmmdKdmmbbm",
+"KKKKKKKKKKKKKKKK",
+"tttttttttttttttt",
+"tyyyyyytyyyyyyot",
+"tyyyyyytyyyyyoot",
+"tyyyyyytyyyyooot",
+"tttttttttttttttt",
+"tyyyyyytyyyyyoot",
+"tyyyyyytyyyyooot",
+"tyyyyyytyyyoooot",
+"tttttttttttttttt",
+"KmblllbmmKmbllbm",
+"KdmmbbmmdKdmmbbm",
+"KKKKKKKKKKKKKKKK"]}
 };
 const ART_ACTORS = {
 "npc_elder":{n:"Professor Maren — the elder",p:{"K":"#2a1b2e","d":"#12463f","c":"#1d6b60","m":"#2f9384","w":"#f2eef5","W":"#ffffff","y":"#c6bcce","f":"#f2c396","g":"#c9885d","o":"#ffc21e","n":"#7a3f13","e":"#ffe45c"},r:[
@@ -3233,29 +3347,12 @@ const TILE_ART = {
   '.': 'grass', ',': 'tallgrass', '=': 'path', '~': 'water', '#': 'tree', 'o': 'rock',
   f: 'flowers', s: 'sand', '|': 'fence', W: 'wall', R: 'roof', D: 'door', S: 'sign', L: 'ledge',
   b: 'floor', r: 'rug',
+  // Furniture. A room is what is in it; three boxes with the same rug in each
+  // is one room drawn three times.
+  H: 'shelf', C: 'counter', B: 'bed', x: 'crate', p: 'pot', n: 'window',
 };
-const SOLID = new Set(['#', 'o', '~', 'W', 'R', '|', 'S']);
+const SOLID = new Set(['#', 'o', '~', 'W', 'R', '|', 'S', 'H', 'C', 'B', 'x', 'p', 'n']);
 const GRASSY = new Set([',']);
-
-// A room interior: plain walls, floor, and a door pair on the bottom wall.
-// A room is boards, not a dirt track indoors, and it has something on the
-// floor. The rug sits off-centre and away from the door, the way one would.
-const interior = (w, h) => {
-  const rows = [];
-  rows.push('W'.repeat(w));
-  for (let y = 1; y < h - 2; y++) rows.push('W' + 'b'.repeat(w - 2) + 'W');
-  const dx = (w >> 1) - 1;
-  rows.push('W' + 'b'.repeat(dx - 1) + 'DD' + 'b'.repeat(w - 3 - dx) + 'W');
-  rows.push('W'.repeat(w));
-  // Lay the rug: three by two, set back from the door and off the middle.
-  const rx = Math.max(1, (w >> 1) - 3), ry = Math.max(1, (h >> 1) - 1);
-  for (let y = ry; y < Math.min(ry + 2, h - 2); y++) {
-    const row = rows[y].split('');
-    for (let x = rx; x < Math.min(rx + 3, w - 1); x++) if (row[x] === 'b') row[x] = 'r';
-    rows[y] = row.join('');
-  }
-  return rows;
-};
 
 const MAPS = {
   hollowbrook: {
@@ -3309,20 +3406,58 @@ const MAPS = {
   },
 
   lab: {
-    name: 'Rowan\'s Study', kind: 'inside', rows: interior(12, 9),
+    // Rowan reads for a living, so the study is walled in books, and the two
+    // things she actually uses — a work bench and something green — sit where
+    // she can reach them without getting up.
+    name: 'Rowan\'s Study', kind: 'inside', rows: [
+      'WWWWnnWWnnWW',
+      'WHHHbbbbHHHW',
+      'WbbbbbbbbbbW',
+      'WHbbrrrbbbxW',
+      'WpbbrrrbbbbW',
+      'WbbbbbbbbppW',
+      'WxbbbbbbbbbW',
+      'WbbbbDDbbbbW',
+      'WWWWWWWWWWWW',
+    ],
     warps: [{ x: 5, y: 7, to: 'hollowbrook', tx: 5, ty: 5, dir: 'down' }, { x: 6, y: 7, to: 'hollowbrook', tx: 5, ty: 5, dir: 'down' }],
     npcs: [{ x: 5, y: 2, dir: 'down', sprite: 'npc_elder', name: 'Elder Rowan', script: 'rowan' }],
     enc: null,
   },
   wayhouse: {
-    name: 'The Wayhouse', kind: 'inside', rows: interior(12, 9),
+    // A ward: beds down both walls, a bench across the back for Sable to work
+    // at, and a window over each row because people heal better in daylight.
+    name: 'The Wayhouse', kind: 'inside', rows: [
+      'WWnnWWWWnnWW',
+      'WbbbbCCbbbbW',
+      'WbbbbbbbbbbW',
+      'WBbbbbbbbbBW',
+      'WBbbrrrbbbBW',
+      'WbbbrrrbbbbW',
+      'WBbbbbbbbbBW',
+      'WbbbbDDbbbbW',
+      'WWWWWWWWWWWW',
+    ],
     warps: [{ x: 5, y: 7, to: 'hollowbrook', tx: 15, ty: 5, dir: 'down' }, { x: 6, y: 7, to: 'hollowbrook', tx: 15, ty: 5, dir: 'down' }],
     npcs: [{ x: 5, y: 2, dir: 'down', sprite: 'npc_ranger', name: 'Sable', heal: true,
       lines: ['Put them on the bench. I will not be a moment.'] }],
     enc: null,
   },
+    // A shop is a counter you talk across, so the counter runs the width of the
+    // room with a gap at each till — one in front of Bell, one in front of
+    // Vane — and the stock is stacked against the walls behind them.
   shop: {
-    name: 'Hollowbrook Supply', kind: 'inside', rows: interior(12, 9),
+    name: 'Hollowbrook Supply', kind: 'inside', rows: [
+      'WWWWnnnnWWWW',
+      'WHHbbbbbbHHW',
+      'WbbbbbbbbbbW',
+      'WCCCbCCCbCCW',
+      'WbbbbbbbbbbW',
+      'WxbbrrrbbbxW',
+      'WbbbrrrbbbbW',
+      'WbbbbDDbbbbW',
+      'WWWWWWWWWWWW',
+    ],
     warps: [{ x: 5, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }, { x: 6, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }],
     npcs: [
       { x: 4, y: 2, dir: 'down', sprite: 'npc_rival', name: 'Bell', shop: true,
@@ -3339,23 +3474,23 @@ const MAPS = {
     rows: [
       '#########==#############',
       '##..,,,,.==.,,,,,,....##',
-      '##..,,,,.==.,,,,,,....##',
-      '##.......==...........##',
+      '##.,,,,,.==,,,,,,,,...##',
+      '##..,,...==.,,,,,.....##',
       '##...oo..==.....ff....##',
-      '##.......==...........##',
-      '##..,,,,,==,,,,.......##',
-      '##..,,,,,==,,,,...S...##',
-      '##.......==...........##',
+      '##..o....==.......##..##',
+      '##..,,,,,==,,,,...##..##',
+      '##.,,,,,,==,,,,...S...##',
+      '##..,,...==.,,........##',
       '##.......===============',
-      '##.......==.LLLLL.....##',
+      '##..f....==.LLLLL.....##',
       '##..,,,..==..,,,,.....##',
-      '##..,,,..==..,,,,.....##',
-      '##.......==.....oo....##',
-      '##...ff..==...........##',
+      '##.,,,,,.==.,,,,,,....##',
+      '##..,,...==...,,.oo...##',
+      '##...ff..==......o....##',
       '##.......==...........##',
       '##..,,,,,==,,,,,,.....##',
-      '##..,,,,,==,,,,,,.....##',
-      '##.......==...........##',
+      '##.,,,,,,==,,,,,,,....##',
+      '##..,,...==..,,,......##',
       '#########==#############',
     ],
     warps: [
@@ -3386,20 +3521,20 @@ const MAPS = {
       '########==############',
       '########=#############',
       '##......==..........##',
-      '##.####.==..####....##',
-      '##.####.==..####....##',
-      '##......==..........##',
+      '##.###..==...###....##',
+      '##..##..==..####....##',
+      '##......==..#.......##',
       '##,,,,..==....o.....##',
-      '##,,,,..==..........##',
-      '##......==...####...##',
-      '##.###..==...####...##',
-      '##.###..==..........##',
+      '##,,,,,.==....oo....##',
+      '##....#.==...####...##',
+      '##.###..==...###....##',
+      '##..#...==....#.....##',
       '##......==....,,,,..##',
-      '##..ff..==....,,,,..##',
-      '##......==..LLLL....##',
+      '##..ff..==...,,,,,..##',
+      '##.f....==..LLLL....##',
       '##,,,,,,==,,,,......##',
-      '##,,,,,,==,,,,......##',
-      '##......==.....S....##',
+      '##,,,,,,==,,,,,.....##',
+      '##...,..==.....S....##',
       '##......==..........##',
       '########==############',
     ],
@@ -3436,20 +3571,20 @@ const MAPS = {
     name: 'Stillmere Shore', kind: 'route',
     rows: [
       '########################',
-      '##...,,,,.......ss~~~~~#',
-      '##...,,,,......sss~~~~~#',
-      '##.............sss~~~~~#',
-      '##....oo......ssss~~~~~#',
-      '##...........sssss~~~~~#',
-      '##..,,,,,....sssss~~~~~#',
-      '##..,,,,,...ssssss~~~~~#',
-      '====........ssssss~~~~~#',
-      '##..........ssssss~~~~~#',
-      '##...ff.....sssss~~~~~~#',
-      '##..........sssss~~~~~~#',
-      '##...,,,,...ssss~~~~~~~#',
+      '##...,,,,......ss~~~~~~#',
+      '##...,,,,.....sss~~~~~~#',
+      '##..,,,......ssss~~~~~~#',
+      '##....oo.....sss~~~~~~~#',
+      '##..........ssss~~~~~~~#',
+      '##..,,,,,...sssss~~~~~~#',
+      '##..,,,,,..ssssss~~~~~~#',
+      '====.......sssss~~~~~~~#',
+      '##.......o.sssss~~~~~~~#',
+      '##...ff....ssssss~~~~~~#',
+      '##........sssssss~~~~~~#',
+      '##...,,,,..ssss~~~~~~~~#',
       '##...,,,,..S.ssss~~~~~~#',
-      '##....................##',
+      '##...o................##',
       '########################',
     ],
     warps: [{ x: 0, y: 8, to: 'route_one', tx: 22, ty: 9, dir: 'left' }],
@@ -3470,14 +3605,14 @@ const MAPS = {
     rows: [
       '####################',
       '####..........######',
-      '##....,,,,,,....####',
+      '##...,,,,,,.....####',
       '##..,,,,,,,,,,..####',
       '##.,,,,,oo,,,,,...##',
       '##.,,,,,oo,,,,,...##',
-      '##.,,,,,,,,,,,,...##',
+      '##.,,,,,,,,,,,,o..##',
       '##..,,,,,,,,,,....##',
-      '##....,,,,,,......##',
-      '##................##',
+      '##...o,,,,,,......##',
+      '##.....===........##',
       '##......==........##',
       '########==##########',
     ],
@@ -4027,6 +4162,28 @@ function drawEdges(g, map, x0, y0, ox, oy) {
         if (left === '~') g.fillRect(sx, sy, 2, TILE);
       }
 
+      // ---- a window is a light source, and a light source that lights nothing
+      // is a picture of a window. It throws a slab of daylight down the floor,
+      // leaning the way light does when it comes through a wall above you, and
+      // fading out as it goes.
+      if (ch === 'n') {
+        g.save();
+        for (let d = 1; d <= 3; d++) {
+          const below = at(mx, my + d);
+          if (!below || below === 'W' || below === 'n') break;
+          g.globalAlpha = .17 - (d - 1) * .05;
+          g.fillStyle = '#ffe7b0';
+          g.beginPath();
+          g.moveTo(sx + 1 + (d - 1) * 3, sy + d * TILE);
+          g.lineTo(sx + TILE - 1 + (d - 1) * 3, sy + d * TILE);
+          g.lineTo(sx + TILE + 2 + d * 3, sy + (d + 1) * TILE);
+          g.lineTo(sx + 2 + d * 3, sy + (d + 1) * TILE);
+          g.closePath(); g.fill();
+        }
+        g.restore();
+        g.globalAlpha = 1;
+      }
+
       // ---- a rug is one object, so it gets a hem, not sixteen little frames
       if (ch === 'r') {
         g.fillStyle = 'rgba(198,147,32,.85)';
@@ -4129,7 +4286,8 @@ function startBattle(opt) {
     team: opt.team || null, teamIdx: 0,
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
-    pops: [], lungeM: 0, lungeF: 0,
+    pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
+    crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
     started: false, finishing: false, await: null,
     // the card game
@@ -4235,7 +4393,7 @@ function useMove(log, atkSide, moveId) {
       const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * bonus.mul));
       let dealt = dmg;
       if (atkSide === 'foe') {
-        dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe');  // shield first
+        dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe', crit);  // shield first
       } else {
         // Recoil and drain are paid on what actually came off, not on the
         // number rolled: hitting a foe with 3 HP left for 300 must not recoil
@@ -4244,7 +4402,7 @@ function useMove(log, atkSide, moveId) {
         const had = defender.hp;
         defender.hp = clamp(defender.hp - dmg, 0, defender.max);
         dealt = had - defender.hp;
-        snap(log, `${them} took ${dmg}.`, 'hit', 'foe', { atk: 'mine' });
+        snap(log, `${them} took ${dmg}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
       }
       totalDealt += dealt;
       if (crit && eff !== 0) snap(log, 'A critical hit!');
@@ -4631,7 +4789,7 @@ function aimPlayable(b) {
 }
 
 /** Damage the player's side takes, shield first. */
-function hurtMine(log, amount, why, atk) {
+function hurtMine(log, amount, why, atk, crit) {
   const b = B();
   // Guard is flat and honest too: "take 2 less" takes 2 off the number, and a
   // hit never falls below 1 so a stack of guard cannot make you untouchable.
@@ -4643,7 +4801,7 @@ function hurtMine(log, amount, why, atk) {
   }
   if (dmg > 0) {
     b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
-    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk } : null);
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk, crit: !!crit } : null);
   }
   return dmg;
 }
@@ -5004,6 +5162,30 @@ function drawArena(g, tint, b) {
   field.addColorStop(1, '#1a2f24');
   g.fillStyle = field; g.fillRect(0, HORIZON + 12, VIEW_W, VIEW_H - HORIZON - 12);
 
+  // The field was one flat sweep of green, which is the arena equivalent of a
+  // grey box. Same rule as the terrain tiles: texture is clusters, not pixels,
+  // and it thins with distance. The seeds are fixed, so the grass does not
+  // crawl between frames — a field that shimmers reads as static, not as grass.
+  const FIELD_TOP = HORIZON + 12;
+  for (let i = 0; i < 150; i++) {
+    const seed = (i * 977) % 1009;
+    const gx = seed % VIEW_W;
+    // Squared distribution: sparse near the horizon, thick in the foreground.
+    const d = ((seed * 31) % 100) / 100;
+    const gy = FIELD_TOP + 2 + d * d * (VIEW_H - FIELD_TOP - 2);
+    const near = (gy - FIELD_TOP) / (VIEW_H - FIELD_TOP);
+    g.fillStyle = i % 5 === 0 ? '#3d6b4a' : near > .55 ? '#1b3427' : '#27452f';
+    const h = near > .5 ? 2 : 1;
+    g.fillRect(Math.round(gx), Math.round(gy), 1, h);
+    if (i % 3 === 0) g.fillRect(Math.round(gx) + 2, Math.round(gy) + (h - 1), 1, 1);
+  }
+  // A bank across the very bottom: the ground the player is standing on, in
+  // front of everything, so the picture has a floor and not just a backdrop.
+  const bank = g.createLinearGradient(0, VIEW_H - 26, 0, VIEW_H);
+  bank.addColorStop(0, 'rgba(10,22,17,0)');
+  bank.addColorStop(1, 'rgba(8,18,14,.72)');
+  g.fillStyle = bank; g.fillRect(0, VIEW_H - 26, VIEW_W, 26);
+
   /** A stand: a rim of light on top, a dark bed under it, the shadow beyond. */
   const stand = (cx, cy, rx, ry) => {
     const oval = (ox, oy, sx2, sy2, col) => {
@@ -5050,15 +5232,27 @@ function drawBattle(g) {
   const foeId = b.foe.species, myId = b.mine.species;
   const fs = 1.5, ms = 2;
   const fb = artBottom(foeId), mb = artBottom(myId);
-  // A swing is a lean: out fast, back slower. Integer pixels only — a sprite
-  // that lands between them at this scale shimmers.
+  // Three motions, all measured along the line between the two of them and all
+  // in whole pixels — a sprite that lands between them at this scale shimmers.
+  //
+  //   wind   pull back before the swing, so the lunge is a release
+  //   lunge  out fast, back slower
+  //   recoil the shove whoever took it goes through, and back
+  const wind = (v) => (v > 0 ? Math.round(Math.sin((1 - v / WIND_UP) * Math.PI) * 4) : 0);
   const lunge = (v) => (v > 0 ? Math.round(Math.sin((1 - v / .26) * Math.PI) * 7) : 0);
-  const lm = lunge(b.lungeM || 0), lf = lunge(b.lungeF || 0);
+  const recoil = (v) => {
+    if (v <= 0) return 0;
+    const k = 1 - v / RECOIL;                       // out in the first quarter…
+    return Math.round((k < .25 ? k / .25 : (1 - k) / .75) * 6);   // …back over the rest
+  };
+  // Positive is "toward the foe" for mine, and the mirror of that for the foe.
+  const pushM = lunge(b.lungeM || 0) - wind(b.windM || 0) - recoil(b.recoilM || 0);
+  const pushF = lunge(b.lungeF || 0) - wind(b.windF || 0) - recoil(b.recoilF || 0);
 
-  const fx = 178 - 40 * fs / 2 + shake * (b.flashF > 0 ? 1 : 0) - lf;
-  const fy = FOE_GROUND - fb * fs + Math.sin(t * 1.7) * 1.5 + lf * .3;
-  const mx = 72 - 40 * ms / 2 - shake * (b.flashM > 0 ? 1 : 0) + lm;
-  const my = MY_GROUND - mb * ms + Math.sin(t * 1.9 + 1) * 2 - lm * .3;
+  const fx = 178 - 40 * fs / 2 + shake * (b.flashF > 0 ? 1 : 0) - pushF;
+  const fy = FOE_GROUND - fb * fs + Math.sin(t * 1.7) * 1.5 + Math.abs(pushF) * .18;
+  const mx = 72 - 40 * ms / 2 - shake * (b.flashM > 0 ? 1 : 0) + pushM;
+  const my = MY_GROUND - mb * ms + Math.sin(t * 1.9 + 1) * 2 + Math.abs(pushM) * .18;
 
   g.save(); g.globalAlpha = .3; g.fillStyle = '#000';
   if (g.ellipse) { g.beginPath(); g.ellipse(178, FOE_GROUND, 22, 5, 0, 0, Math.PI * 2); g.fill();
@@ -5066,6 +5260,25 @@ function drawBattle(g) {
   g.restore();
 
   const entry = clamp(b.entry, 0, 1);
+  // A walk-on, not a slide. Sliding in at a constant speed is a teleport with
+  // extra frames; what sells arrival is deceleration plus weight going down on
+  // every step, so the offset eases out and the body bobs while it is still
+  // covering ground. Both fall to nothing exactly when the entry finishes.
+  const walkOff = Math.pow(1 - entry, 3) * 96;
+  const gait = Math.abs(Math.sin(entry * Math.PI * 4)) * 4 * (1 - entry);
+  // Dust kicked up behind whoever is still walking in.
+  if (entry < 1) {
+    g.save();
+    for (let i = 0; i < 5; i++) {
+      const age = (entry * 3 + i * .21) % 1;
+      g.globalAlpha = (1 - age) * .45 * (1 - entry);
+      g.fillStyle = '#cbb6d8';
+      g.fillRect(Math.round(178 + walkOff + 14 + age * 16), Math.round(FOE_GROUND + 1 - age * 5), 2, 1);
+      g.fillRect(Math.round(72 - walkOff - 16 - age * 18), Math.round(MY_GROUND + 2 - age * 6), 2, 1);
+    }
+    g.restore();
+    g.globalAlpha = 1;
+  }
   // While the orb has it, the foe is not on the field. It shrinks into the
   // shell on the way in and comes back the same way if the shell gives.
   const held = orbPhase();
@@ -5079,13 +5292,48 @@ function drawBattle(g) {
       const k = clamp(b.orb.t / ORB.suck, 0, 1);
       alpha *= 1 - k; scale = Math.max(1, Math.round(fs * (1 - k * .7)));
     }
-    drawSpr(g, 'creature', foeId, fx + (1 - entry) * 90, fy, scale,
+    drawSpr(g, 'creature', foeId, fx + walkOff, fy - gait, scale,
       { flash: b.flashF > 0 ? b.flashF : 0, alpha });
   }
-  drawSpr(g, 'creature', myId, mx - (1 - entry) * 90, my, ms, { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: b.mine.hp <= 0 ? .35 : 1 });
+  drawSpr(g, 'creature', myId, mx - walkOff, my - gait, ms, { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: b.mine.hp <= 0 ? .35 : 1 });
 
+  drawCrit(g, MY_GROUND, FOE_GROUND);
   drawOrb(g, MY_GROUND, FOE_GROUND);
   drawPops(g, MY_GROUND, FOE_GROUND);
+}
+
+/**
+ * What a critical hit looks like.
+ *
+ * The log has said "A critical hit!" since the first build and the picture said
+ * nothing, so the biggest number in the fight arrived looking like every other
+ * number. This is the whole difference: a ring that punches outward and thins
+ * as it goes, and four spokes on the diagonals — the diagonals rather than the
+ * axes, because a cross reads as a plus sign and a saltire reads as an impact.
+ */
+function drawCrit(g, myGround, foeGround) {
+  const b = B();
+  if (!b.crit) return;
+  const k = clamp(b.crit.t / CRIT_BURST, 0, 1);
+  const cx = b.crit.side === 'mine' ? 72 : 178;
+  const cy = (b.crit.side === 'mine' ? myGround : foeGround) - 22;
+  const r = 6 + k * 30;
+  g.save();
+  g.globalAlpha = (1 - k) * .9;
+  g.strokeStyle = '#fff4dc';
+  g.lineWidth = Math.max(1, 3 * (1 - k));
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = '#ffc94d';
+  g.lineWidth = 2;
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + i * Math.PI / 2;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a) * (r * .55), cy + Math.sin(a) * (r * .55));
+    g.lineTo(cx + Math.cos(a) * (r * 1.15), cy + Math.sin(a) * (r * 1.15));
+    g.stroke();
+  }
+  g.restore();
+  g.globalAlpha = 1;
 }
 
 /**
@@ -5456,7 +5704,7 @@ function cardHTML(c, opt = {}) {
   const artId = kin ? `elem_${String(def.type).toLowerCase()}` : c.id;
   const art = hasArt('card', artId) ? `<canvas width="20" height="20" data-card="${artId}"></canvas>` : '';
   return `<div class="cardel r-${rarity} ${kin ? 'kin' : ''} ${opt.cls || ''}" ${opt.attr || ''}
-      style="--tint:${tint}">
+      style="--tint:${tint}${opt.style ? ';' + opt.style : ''}">
     <div class="cframe"></div>
     <div class="ccost">${cardCost(c)}</div>
     ${opt.slot ? `<div class="cslot">${opt.slot}</div>` : ''}
@@ -5505,6 +5753,34 @@ function paintCardArt(root) {
   root.querySelectorAll('canvas[data-card]').forEach((c) => paintTo(c, 'card', c.dataset.card, 1, false));
 }
 
+/**
+ * Where a card sits in the fan.
+ *
+ * A hand held in front of you is an arc, not a row: the cards overlap, they
+ * splay from a point somewhere below your hand, and the outer ones sit lower
+ * than the middle because they are further round the curve. That is the whole
+ * trick — rotation and a drop that both scale with distance from the middle,
+ * around a transform-origin under the card rather than through it.
+ *
+ * The one you are aiming at leaves the arc entirely: it comes upright, lifts
+ * clear and grows, because the card you are about to play should be the one
+ * card on screen that is not at an angle.
+ *
+ * Exported and pure, so the render suite can check the shape of the fan
+ * without a browser.
+ */
+function fanStyle(i, n, selected) {
+  // The chosen card pivots about its own base rather than the fan's, or scaling
+  // it around a point below the hand throws it up over the dialogue line.
+  if (selected) return 'transform-origin:50% 100%;transform:translateY(-5%) rotate(0deg) scale(1.09);z-index:20';
+  if (n <= 1) return 'z-index:1';
+  const off = i - (n - 1) / 2;                    // -2, -1, 0, 1, 2 for five
+  const spread = n > 4 ? 5 : 6.5;                 // a fuller hand fans tighter
+  const rot = off * spread;
+  const drop = off * off * (n > 4 ? .9 : 1.2);    // the curve, not a straight tilt
+  return `transform:translateY(${drop.toFixed(2)}%) rotate(${rot.toFixed(2)}deg);z-index:${i + 1}`;
+}
+
 function renderHand() {
   if (HEADLESS) return;
   const b = B();
@@ -5514,14 +5790,12 @@ function renderHand() {
   els.piles.innerHTML = `draw ${b.draw.length} · used ${b.disc.length}` +
     (b.exh.length ? ` · spent ${b.exh.length}` : '') +
     (b.shield ? ` · <span id="shieldpip">shield ${b.shield}</span>` : '');
-  els.hand.innerHTML = b.hand.map((c, i) => {
-    const affordable = cardCost(c) <= b.energy && playable;
-    return cardHTML(c, {
-      cls: `${i === b.sel ? 'sel' : ''} ${affordable ? '' : 'dead'}`,
-      attr: `data-c="${i}"`, slot: i + 1,
-      foot: i === b.sel && affordable ? '<div class="cp">▲ play</div>' : '',
-    });
-  }).join('');
+  els.hand.innerHTML = b.hand.map((c, i) => cardHTML(c, {
+    cls: `${i === b.sel ? 'sel' : ''} ${cardCost(c) <= b.energy && playable ? '' : 'dead'}`,
+    attr: `data-c="${i}"`, slot: i + 1,
+    style: fanStyle(i, b.hand.length, i === b.sel),
+    foot: i === b.sel && cardCost(c) <= b.energy && playable ? '<div class="cp">▲ play</div>' : '',
+  })).join('');
   paintCardArt(els.hand);
   // When there is nothing left you can pay for, the End turn button says so.
   const canPlay = b.hand.some((c) => cardCost(c) <= b.energy) && playable;
@@ -5636,6 +5910,8 @@ function submitLog(log, opts = {}) {
  * How long a damage number lives, and how far it drifts while it does.
  */
 const POP_LIFE = .85;
+/** The pull back before a swing, and the shove the one on the end of it takes. */
+const WIND_UP = .42, RECOIL = .30, CRIT_BURST = .40;
 
 /** A number leaving whoever the HP came out of. */
 function pushPop(b, side, n, kind) {
@@ -5661,13 +5937,26 @@ function entryFx(b, e) {
   if (dM) pushPop(b, 'mine', Math.abs(dM), dM > 0 ? 'dmg' : 'heal');
   if (dF) pushPop(b, 'foe', Math.abs(dF), dF > 0 ? 'dmg' : 'heal');
   b.tgtM = e.hpM; b.tgtF = e.hpF;
+  // A swing is announced a line before it lands. That gap is the wind-up: the
+  // one about to throw it pulls back, so the lunge that follows is a release
+  // rather than a twitch.
+  if (e.fx === 'use') {
+    if (e.side === 'mine') b.windM = WIND_UP; else b.windF = WIND_UP;
+  }
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
-    b.shake = 1;
+    b.shake = e.crit ? 1.8 : 1;
     // Only a swing lunges. Burn, roots and recoil are also 'hit', and nobody
     // threw those, so nothing leans in for them.
-    if (e.atk === 'mine') b.lungeM = .26;
-    else if (e.atk === 'foe') b.lungeF = .26;
+    if (e.atk === 'mine') { b.lungeM = .26; b.windM = 0; }
+    else if (e.atk === 'foe') { b.lungeF = .26; b.windF = 0; }
+    // Whoever took it gets knocked back, whether or not anybody threw it.
+    if (e.side === 'mine') b.recoilM = RECOIL; else b.recoilF = RECOIL;
+    if (e.crit) {
+      b.crit = { side: e.side, t: 0 };
+      const last = b.pops[b.pops.length - 1];
+      if (last && last.side === e.side) last.kind = 'crit';
+    }
     playCue('hit');
   }
 }
@@ -5686,11 +5975,17 @@ function drawPops(g, myGround, foeGround) {
     const x = Math.round((p.side === 'mine' ? 72 : 178) + p.dx);
     const y = Math.round((p.side === 'mine' ? myGround - 44 : foeGround - 34) - rise);
     g.globalAlpha = k < .7 ? 1 : (1 - k) / .3;
-    g.font = `bold ${p.n >= 20 ? 13 : 11}px monospace`;
-    const text = (p.kind === 'heal' ? '+' : '') + p.n;
+    // A crit is the biggest number of the fight; it should not arrive in the
+    // same typeface as chip damage. It comes in oversized and settles.
+    const crit = p.kind === 'crit';
+    const size = (p.n >= 20 ? 13 : 11) + (crit ? 5 + Math.round((1 - Math.min(1, k * 5)) * 4) : 0);
+    g.font = `bold ${size}px monospace`;
+    const text = (p.kind === 'heal' ? '+' : '') + p.n + (crit ? '!' : '');
     g.fillStyle = '#2a1b2e';
     g.fillText(text, x + 1, y + 1);
-    g.fillStyle = p.kind === 'heal' ? '#8ce88c' : p.side === 'mine' ? '#ff8a7a' : '#ffc94d';
+    g.fillStyle = crit ? '#fff4dc'
+      : p.kind === 'heal' ? '#8ce88c'
+      : p.side === 'mine' ? '#ff8a7a' : '#ffc94d';
     g.fillText(text, x, y);
   }
   g.restore();
@@ -5862,12 +6157,17 @@ function runEvolution(m) {
 
 function updateBattle(dt) {
   const b = B();
-  b.entry = Math.min(1, b.entry + dt * 3);
+  b.entry = Math.min(1, b.entry + dt * 1.7);      // a walk-on, not a teleport
   b.flashM = Math.max(0, b.flashM - dt * 3);
   b.flashF = Math.max(0, b.flashF - dt * 3);
   b.shake = Math.max(0, b.shake - dt * 4);
   b.lungeM = Math.max(0, (b.lungeM || 0) - dt);
   b.lungeF = Math.max(0, (b.lungeF || 0) - dt);
+  b.windM = Math.max(0, (b.windM || 0) - dt);
+  b.windF = Math.max(0, (b.windF || 0) - dt);
+  b.recoilM = Math.max(0, (b.recoilM || 0) - dt);
+  b.recoilF = Math.max(0, (b.recoilF || 0) - dt);
+  if (b.crit) { b.crit.t += dt; if (b.crit.t >= CRIT_BURST) b.crit = null; }
   if (b.pops && b.pops.length) {
     for (const p of b.pops) p.t += dt;
     b.pops = b.pops.filter((p) => p.t < POP_LIFE);
@@ -7083,8 +7383,8 @@ if (typeof window !== 'undefined') {
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt,
-    entryFx, pushPop, drawPops, POP_LIFE,
-    renderHand, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral, cardHTML,
+    entryFx, pushPop, drawPops, drawCrit, POP_LIFE, WIND_UP, RECOIL, CRIT_BURST,
+    renderHand, fanStyle, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral, cardHTML,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired, frame,
     setCtx: (c) => { ctx = c; },

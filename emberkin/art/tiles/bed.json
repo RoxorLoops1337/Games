@@ -1,0 +1,35 @@
+{
+  "id": "bed",
+  "name": "Bed",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "K": "#1b1220",
+    "d": "#48362f",
+    "l": "#e8dcc8",
+    "p": "#cfc3ae",
+    "b": "#4a5f8e",
+    "c": "#63799f",
+    "w": "#5e483a",
+    "v": "#48362f"
+  },
+  "rows": [
+    "wwwwwwwwwwwwwwww",
+    "wKKKKKKKKKKKKKKw",
+    "wKllppppppppllKw",
+    "wKlpppppppppplKw",
+    "wKllppppppppllKw",
+    "wKKKKKKKKKKKKKKw",
+    "wKbbbbbbbbbbbbKw",
+    "wKbccbbccbbccbKw",
+    "wKbbbbbbbbbbbbKw",
+    "wKbccbbccbbccbKw",
+    "wKbbbbbbbbbbbbKw",
+    "wKbccbbccbbccbKw",
+    "wKbbbbbbbbbbbbKw",
+    "wKKKKKKKKKKKKKKw",
+    "wddddddddddddddw",
+    "wwwwwwwvwwwwwwww"
+  ]
+}
