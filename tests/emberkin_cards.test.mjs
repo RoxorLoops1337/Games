@@ -10,6 +10,8 @@
 import { loadGame, withDeck, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = withDeck(loadGame({}));
+/** A clean game with the starter deck, for probing one mechanic at a time. */
+const fresh = () => withDeck(loadGame({}));
 const { CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, G } = EK;
 
 // ------------------------------------------------------------------ data --
@@ -540,5 +542,138 @@ EK6.G.gems = 0;
 ok(EK6.gemReward({ wild: true }) > 0, 'a wild win pays something');
 ok(EK6.gemReward({ npc: { trainer: { prize: 900 } } }) > EK6.gemReward({ wild: true }), 'a trainer pays more');
 ok(EK6.gemReward({ wild: true, legendary: true }) > 20, 'and the legendary pays a lot');
+
+section('cards that are decisions rather than numbers');
+// Three mechanics went in because thirty of thirty-seven cards were "+N to a
+// thing" and a measured run used the same six of them. Each one is checked
+// here against the real playCard/endTurn, not a model of them.
+
+// ---- retain: it stays in your hand across the turn ----------------------
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 30), wild: true });
+  const b = g.B();
+  const held = g.mkCard('dewdrop');
+  g.G.cards.push(held);
+  b.hand = [{ src: 'deck', u: held.u, id: 'dewdrop' }, { src: 'deck', u: -1, id: 'guard' }];
+  ok(g.CARDS.dewdrop.retain, 'Dewdrop is a card you hold');
+  ok(!g.CARDS.guard.retain, 'Guard is not');
+  g.endTurn();
+  const ids = g.B().hand.filter((c) => c.src === 'deck').map((c) => c.id);
+  ok(ids.includes('dewdrop'), 'the retained card is still in hand next turn');
+  ok(!g.B().disc.some((c) => c.id === 'dewdrop'), 'and not in the discard');
+  ok(g.B().disc.some((c) => c.id === 'guard'), 'while the ordinary one went to the discard');
+}
+
+// ---- combo: worth more when it is not the first card of the turn --------
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  const solo = (first) => {
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('gargolem', 40), wild: true });
+    const b = g.B();
+    b.energy = 9;
+    const c = g.mkCard('shieldwall'); g.G.cards.push(c);
+    b.hand = first ? [{ src: 'deck', u: -2, id: 'quickstep' }, { src: 'deck', u: c.u, id: 'shieldwall' }]
+                   : [{ src: 'deck', u: c.u, id: 'shieldwall' }];
+    if (first) g.playCard(0);
+    g.playCard(b.hand.findIndex((h) => h.id === 'shieldwall'));
+    return b.shield;
+  };
+  const alone = solo(false), after = solo(true);
+  eq(g.CARDS.shieldwall.combo, 10, 'Shieldwall has a combo bonus');
+  eq(after - alone, 10, `it is worth ${after - alone} more played second (${alone} → ${after})`);
+}
+
+// ---- chain: it gets cheaper the more you have played --------------------
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 40), wild: true });
+  const b = g.B();
+  b.energy = 9;
+  const fang = { src: 'deck', u: -3, id: 'fanghone' };
+  eq(g.cardCost(fang), g.CARDS.fanghone.cost, 'a chain card is full price at the top of the turn');
+  b.hand = [{ src: 'deck', u: -4, id: 'quickstep' }, fang];
+  g.playCard(0);
+  eq(g.cardCost(fang), Math.max(0, g.CARDS.fanghone.cost - 1), 'and a pound cheaper after one card');
+  // Never free-and-then-negative.
+  for (let i = 0; i < 6; i++) { b.hand.unshift({ src: 'deck', u: -9, id: 'quickstep' }); g.playCard(0); }
+  ok(g.cardCost(fang) >= 0, 'a chain never goes below nothing');
+  // A fresh turn resets it: the discount is this turn's, not the fight's.
+  ok(b.playedTurn > 0, 'the count is up after a turn of playing');
+  g.startPlayerTurn([]);
+  eq(b.playedTurn, 0, 'and back to nothing at the top of the next turn');
+  eq(g.cardCost(fang), g.CARDS.fanghone.cost, 'so the chain card is full price again');
+}
+
+// ---- every mechanic is on a card, and every card says what it does -------
+for (const id of CARD_IDS) {
+  const c = CARDS[id];
+  // Keywords, not sentences: a mechanic is named once and learned once, which
+  // is also the only way the rules text fits on the card face.
+  if (c.retain) ok(/\bRetain\b/.test(c.txt), `${c.name} is keyworded Retain`);
+  if (c.combo) ok(new RegExp(`Combo \\+${c.combo}\\b`).test(c.txt), `${c.name} names its Combo value`);
+  if (c.chain) ok(/\bChain\b/.test(c.txt), `${c.name} is keyworded Chain`);
+  // …and no card claims a keyword it does not have.
+  if (/\bRetain\b/.test(c.txt)) ok(c.retain, `${c.name} says Retain and means it`);
+  if (/\bCombo\b/.test(c.txt)) ok(c.combo, `${c.name} says Combo and means it`);
+  if (/\bChain\b/.test(c.txt)) ok(c.chain, `${c.name} says Chain and means it`);
+}
+ok(CARD_IDS.filter((id) => CARDS[id].retain).length >= 3, 'more than one card is worth holding');
+ok(CARD_IDS.filter((id) => CARDS[id].combo).length >= 3, 'and more than one rewards sequencing');
+ok(CARD_IDS.filter((id) => CARDS[id].chain).length >= 3, 'and more than one rewards setting up');
+
+section('a win puts something back');
+// A measured run walked to the Wayhouse five times before Crown Hollow. The
+// second wind is proportional, so a hard fight pays and a walkover does not.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('sproutle', 2), wild: true });
+  const b = g.B();
+  // A fight that cost you nothing gives you nothing.
+  b.hpMark = b.mine.hp;
+  b.foe.hp = 0;
+  const log1 = [];
+  g.resolveFoeDown(log1);
+  eq(b.mine.hp, b.mine.max, 'an untouched kin is still untouched');
+
+  // A fight that hurt gives it back, up to the cap.
+  g.G.battle = null;
+  g.startBattle({ foe: g.mkMon('sproutle', 2), wild: true });
+  const b2 = g.B();
+  b2.hpMark = b2.mine.max;
+  b2.mine.hp = Math.round(b2.mine.max * .4);
+  const before = b2.mine.hp;
+  b2.foe.hp = 0;
+  g.resolveFoeDown([]);
+  ok(b2.mine.hp > before, `it got something back (${before} → ${b2.mine.hp})`);
+  ok(b2.mine.hp - before <= Math.round(b2.mine.max * g.RALLY_CAP) + 1,
+    'and never more than the cap');
+  ok(b2.mine.hp <= b2.mine.max, 'and never past full');
+  eq(b2.hpMark, b2.mine.hp, 'the next foe is measured from where this one left it');
+}
+
+section('a reward always reaches the deck');
+// With the deck full, taking a card used to put it somewhere you would never
+// draw it, so the offer stopped being a decision part-way through a run.
+{
+  const g = fresh();
+  g.G.cards = []; g.G.deck = []; g.G.nextUid = 0;
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard('guard');
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is full');
+  // Make one card obviously the least used.
+  const idle = g.ownedCard(g.G.deck[3]);
+  for (const u of g.G.deck) { const o = g.ownedCard(u); o.plays = o === idle ? 0 : 5; }
+  const taken = g.grantCard('soulfang');
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is still exactly full');
+  ok(g.G.deck.includes(taken.u), 'and the new card is in it');
+  ok(!g.G.deck.includes(idle.u), 'the copy you had played least came out');
+  ok(g.G.cards.some((c) => c.u === idle.u), 'and it is still yours, in the collection');
+  ok(taken.replaced, `the offer can say what it replaced (${taken.replaced})`);
+}
 
 done('emberkin_cards');
