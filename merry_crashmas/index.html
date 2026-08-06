@@ -72,8 +72,9 @@
   .lv.locked{ opacity:.45; cursor:not-allowed; }
   .lv:not(.locked):hover{ border-color:#e8a91f; }
 
-  #hint{ position:absolute; left:0; right:0; bottom:14px; text-align:center; pointer-events:none;
-    font-size:13px; letter-spacing:2.4px; color:#9fb6d4; text-shadow:0 2px 6px rgba(0,0,0,.8); z-index:3; }
+  #hint{ position:absolute; left:64px; right:64px; bottom:14px; text-align:center; pointer-events:none;
+    font-size:13px; letter-spacing:1.2px; color:#cfdcee;
+    text-shadow:0 0 8px rgba(4,8,16,.9), 0 2px 6px rgba(0,0,0,.85); z-index:3; }
   #hint[hidden]{ display:none; }
   #mute{ position:absolute; right:10px; bottom:10px; width:40px; height:40px; border-radius:10px;
     border:2px solid #24406b; background:rgba(10,18,32,.62); color:#ffd34d; font-size:17px;
@@ -81,6 +82,11 @@
   #back{ position:absolute; left:10px; bottom:10px; padding:8px 14px; border-radius:10px;
     border:2px solid #24406b; background:rgba(10,18,32,.62); color:#9fb6d4; font-size:12px;
     letter-spacing:1.6px; cursor:pointer; font-family:inherit; z-index:4; }
+  /* On a phone the hint wraps to two lines and runs straight through the
+     GAMES button, which sits over the canvas at z-index 4. Lift it clear. */
+  @media (max-width: 560px){
+    #hint{ left:12px; right:12px; bottom:58px; }
+  }
 </style>
 </head>
 <body>
@@ -503,9 +509,14 @@ function checkGoals(){
     if (goal.done || !goalTest(goal)) continue;
     goal.done = true;
     G.goalsDone++;
-    popText(car.x, car.y - 90, 'GOAL: ' + goal.text.toUpperCase(), '#8effb0', true);
-    G.banner = { text: 'GOAL DONE', t: 1.1 };
     if (typeof sndGoal === 'function') sndGoal();
+    // nobody reads a checklist at 1500px/s: the chime lands now, the words
+    // wait until the car has stopped and there is room on screen for them
+    if (G.phase === 'drive') G.goalPops.push(goal.text.toUpperCase());
+    else {
+      popText(car.x, car.y - 90, 'GOAL: ' + goal.text.toUpperCase(), '#8effb0', true);
+      G.banner = { text: 'GOAL DONE', t: 1.1 };
+    }
   }
 }
 
@@ -538,6 +549,7 @@ const G = {
   settleT: 0,
   runT: 0,
   sling: null,            // {t, ux, uy, len} — the band still snapping after a release
+  goalPops: [],           // goals ticked mid-run, announced once the car has stopped
   banner: null,           // {text, t}
   bannerAt: 0,
   runKills: 0, runWrecks: 0, runScore: 0, runBest: 0,
@@ -1079,6 +1091,8 @@ function nextCar(){
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
   G.sling = null;
+  G.goalPops.length = 0;
+  recentPops.length = 0;
   G.phase = 'aim';
   show('hint', true);
   setTxt('hint', 'DRAG BACK · RELEASE TO LAUNCH · SPACE = NITRO');
@@ -1146,6 +1160,12 @@ function endRun(){
   };
   show('hint', false);
   G.carsLeft--;
+  // the goals ticked off mid-run get their words now, stacked up the screen
+  // so they cannot land on top of each other
+  for (let i = 0; i < G.goalPops.length; i++){
+    popText(car.x, car.y - 90 - i * 46, 'GOAL: ' + G.goalPops[i], '#8effb0', true, true);
+  }
+  G.goalPops.length = 0;
 }
 
 function levelEnd(){
@@ -1231,11 +1251,30 @@ function addShake(t, a){ shake.t = Math.max(shake.t, t); shake.a = Math.max(shak
 
 function addFx(o){
   if (fx.length > 900) fx.splice(0, 200);
-  fx.push(Object.assign({ x:0, y:0, vx:0, vy:0, t:0, ttl:0.6, type:'puff', col:'#fff', size:6, rot:0, spin:0 }, o));
+  const e = Object.assign({ x:0, y:0, vx:0, vy:0, t:0, ttl:0.6, type:'puff', col:'#fff', size:6, rot:0, spin:0 }, o);
+  fx.push(e);
+  return e;
 }
 
-function popText(x, y, text, col, big){
-  addFx({ type:'txt', x, y, vx: rr(-12, 12), vy: -46, ttl: big ? 1.25 : 0.85, text, col: col || '#ffd34d', size: big ? 30 : 20 });
+/* Score pops used to stack: a single 640x420 crop 0.7s into a run held a 46px
+   banner, a 30px green pop, a 20px blue pop printed on top of it and the
+   shout bubble over the car. Two rules fix nearly all of it — nothing within
+   40px and 0.3s of a pop already on screen, and nothing at all while the
+   driver is mid-sentence, because the bubble is the loudest thing in frame. */
+const POP_MIN_D = 40, POP_MIN_T = 0.3;
+const recentPops = [];
+function popText(x, y, text, col, big, force){
+  if (car.shoutT > 0 && !force) return null;
+  for (let i = recentPops.length - 1; i >= 0; i--){
+    const r = recentPops[i];
+    if (T - r.t > POP_MIN_T){ recentPops.splice(i, 1); continue; }
+    if (!force && Math.abs(r.x - x) < POP_MIN_D && Math.abs(r.y - y) < POP_MIN_D) return null;
+  }
+  recentPops.push({ x, y, t: T });
+  // the sideways drift is scenery, so it draws from the cosmetic generator:
+  // with rr() here, suppressing one pop-up shifted the simulation's random
+  // stream and every market's score with it
+  return addFx({ type:'txt', x, y, vx: vrr(-12, 12), vy: -46, ttl: big ? 1.25 : 0.85, text, col: col || '#ffd34d', size: big ? 30 : 20 });
 }
 
 function puff(x, y, n, col, spd){
@@ -3130,7 +3169,6 @@ function drawCar(){
       circle(Math.cos(a) * CARL * 0.28, Math.sin(a) * CARW * 0.28, 4 + (i % 3) * 2); ctx.fill();
     }
     ctx.restore();
-    if (car.shoutT > 0) drawShout();
     return;
   }
   // snow plough
@@ -3227,8 +3265,6 @@ function drawCar(){
   }
   ctx.restore();
 
-  if (car.shoutT > 0) drawShout();
-
   // headlight wash while moving
   if (sp > 60){
     ctx.save();
@@ -3245,22 +3281,31 @@ function drawCar(){
   }
 }
 
-/* A comic speech bubble above the car. Drawn in world space so it rides
-   along with the wreck, and it wobbles because he is not calm. */
+/* A comic speech bubble for the driver.
+
+   It used to be drawn in world space at car.y - 86, which at drive zoom made
+   it roughly three times the car's own footprint, parked it between the player
+   and everything ahead, and let the screen edge chop it in half. It lives in a
+   fixed screen corner now, above the mute button, at a size that does not
+   depend on how far the camera has zoomed out. It still wobbles: he is not
+   calm. */
 function drawShout(){
   const k = clamp(car.shoutT / SHOUT_TIME, 0, 1);
   const wob = Math.sin(T * 22) * 3 * k;
   const txt = car.shout;
+  screenTransform();
   ctx.save();
   ctx.globalAlpha = Math.min(1, k * 2.6);
-  ctx.translate(car.x + wob, car.y - 86 - (1 - k) * 26);
+  ctx.font = '900 ' + (VW < 560 ? 22 : 28) + 'px system-ui';
+  const m = ctx.measureText ? ctx.measureText(txt) : null;
+  const w = clamp((m && m.width ? m.width : txt.length * 15) + 36, 150, VW - 44);
+  const h = VW < 560 ? 46 : 52;
+  // in portrait the hint sits higher to clear the GAMES button, so the
+  // bubble climbs above it rather than printing through it
+  ctx.translate(VW - w / 2 - 22 + wob, VH - h / 2 - (VW < 560 ? 128 : 74) - (1 - k) * 18);
   ctx.rotate(Math.sin(T * 13) * 0.045);
   const pop = 1 + (1 - k) * 0.18;
   ctx.scale(pop, pop);
-  ctx.font = '900 32px system-ui';
-  const m = ctx.measureText ? ctx.measureText(txt) : null;
-  const w = Math.max(170, (m && m.width ? m.width : txt.length * 17) + 40);
-  const h = 56;
   ctx.fillStyle = '#0d1a2e';
   roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 14); ctx.fill();
   ctx.fillStyle = '#fff8e8';
@@ -3275,7 +3320,7 @@ function drawShout(){
   ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#c8261c';
   ctx.textAlign = 'center';
-  ctx.fillText(txt, 0, 11);
+  ctx.fillText(txt, 0, VW < 560 ? 8 : 10);
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -3716,21 +3761,29 @@ function drawHUD(){
   }
   ctx.textAlign = 'left';
 
-  // combo meter
-  if (G.combo > 0){
+  /* Combo meter. Two kills minimum: "×1.0 / 1 IN A ROW" for a single shopper
+     is not a combo, and it was drawn in plain white with no plate over white
+     stall awnings, where it could not be read at all. */
+  if (G.combo >= 2){
     const t = clamp(G.comboT / COMBO_WIN, 0, 1);
     const cx = VW / 2;
+    // on a phone the top row is already full: score panel left, cars right.
+    // The combo drops below the goals rather than straddling both of them.
+    const cw = Math.min(208, VW - 28), cy = narrow ? 150 : 20;
+    ctx.fillStyle = 'rgba(8,14,26,.55)';
+    roundRect(cx - cw / 2, cy, cw, 84, 12); ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.font = '900 ' + (34 + Math.min(26, G.combo * 1.6)) + 'px system-ui';
-    ctx.fillText('×' + G.mult.toFixed(1), cx, 62);
+    ctx.font = '900 ' + (34 + Math.min(22, G.combo * 1.6)) + 'px system-ui';
+    ctx.fillText('×' + G.mult.toFixed(1), cx, cy + 42);
     ctx.fillStyle = '#8fa6c6';
     ctx.font = '700 13px system-ui';
-    ctx.fillText(G.combo + ' IN A ROW', cx, 82);
+    ctx.fillText(G.combo + ' IN A ROW', cx, cy + 62);
+    const mw = cw - 28;
     ctx.fillStyle = 'rgba(255,255,255,.14)';
-    roundRect(cx - 90, 92, 180, 6, 3); ctx.fill();
+    roundRect(cx - mw / 2, cy + 72, mw, 6, 3); ctx.fill();
     ctx.fillStyle = t > 0.35 ? '#8effb0' : '#ff6b5e';
-    roundRect(cx - 90, 92, 180 * t, 6, 3); ctx.fill();
+    roundRect(cx - mw / 2, cy + 72, mw * t, 6, 3); ctx.fill();
     ctx.textAlign = 'left';
   }
 
@@ -3742,7 +3795,9 @@ function drawHUD(){
     ctx.save();
     ctx.globalAlpha = Math.min(1, k * 2);
     ctx.textAlign = 'center';
-    ctx.translate(VW / 2, receipt ? VH * 0.115 : VH * 0.30);
+    // in portrait the combo plate has moved down under the goals, so the
+    // banner moves down with it rather than printing through it
+    ctx.translate(VW / 2, receipt ? VH * 0.115 : VH * (narrow ? 0.40 : 0.30));
     ctx.rotate(Math.sin(T * 9) * 0.03);
     const s = 1 + (1 - k) * 0.25;
     ctx.scale(s, s);
@@ -3753,16 +3808,38 @@ function drawHUD(){
     ctx.textAlign = 'left';
   }
 
-  // nitro pip
+  /* Run resources live top right with the cars, not in the bottom-left corner
+     where #back sits at z-index 4 over the canvas: "⚡ NITRO ×1" was drawn at
+     (30, VH-24) straight underneath a 100x34 button, and every screenshot read
+     "← GAMES ×1" with the word NITRO gone entirely. */
   if (G.phase === 'drive' || G.phase === 'aim'){
-    ctx.fillStyle = car.boost > 0 ? '#8effb0' : 'rgba(255,255,255,.18)';
-    ctx.font = '900 14px system-ui';
-    ctx.fillText(car.boost > 0 ? '⚡ NITRO ×' + car.boost : '⚡ SPENT', pad + 16, VH - 24);
+    const rw = narrow ? 118 : 190, rh = 26;
+    const rx = VW - pad - rw, ry = pad + (narrow ? 44 : 52);
+    ctx.fillStyle = 'rgba(8,14,26,.55)';
+    roundRect(rx, ry, rw, rh, 9); ctx.fill();
+    ctx.textAlign = 'right';
+    ctx.font = '900 ' + (narrow ? 12 : 14) + 'px system-ui';
     if (car.plowT > 0){
       ctx.fillStyle = '#7ec8ff';
-      ctx.fillText('❄ PLOUGH ' + car.plowT.toFixed(1) + 's', pad + 140, VH - 24);
+      ctx.fillText('❄ ' + car.plowT.toFixed(1) + 's', VW - pad - 12, ry + 18);
+      ctx.fillStyle = car.boost > 0 ? '#8effb0' : 'rgba(255,255,255,.28)';
+      ctx.textAlign = 'left';
+      ctx.fillText(car.boost > 0 ? '⚡ ×' + car.boost : '⚡ SPENT', rx + 12, ry + 18);
+    } else {
+      ctx.fillStyle = car.boost > 0 ? '#8effb0' : 'rgba(255,255,255,.28)';
+      ctx.fillText(car.boost > 0 ? '⚡ NITRO ×' + car.boost : '⚡ NITRO SPENT', VW - pad - 12, ry + 18);
     }
+    ctx.textAlign = 'left';
   }
+
+  if (car.shoutT > 0 && G.phase !== 'menu' && G.phase !== 'brief') drawShout();
+}
+
+/* Where the nitro readout is drawn, so a test can check it clears #back. */
+function nitroRect(){
+  const pad = 14, narrow = VW < 560;
+  const rw = narrow ? 118 : 190, rh = 26;
+  return { x: VW - pad - rw, y: pad + (narrow ? 44 : 52), w: rw, h: rh };
 }
 
 function drawSnow(){

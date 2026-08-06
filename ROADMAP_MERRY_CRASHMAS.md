@@ -25,8 +25,8 @@ edit this block to name the next one.
 - [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
   with five critic conflicts resolved and six proposals cut.
 - **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–15 are
-  done. **Next: item 16** (HUD legibility pass). Exit: all 19 ticked.
+  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–16 are
+  done. **Next: item 17** (sound pass). Exit: all 19 ticked.
 - **E — three more critics, then back to C.** Repeat the cycle.
 
 ## Working agreement for each pass
