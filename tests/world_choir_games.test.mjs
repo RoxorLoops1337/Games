@@ -39,7 +39,8 @@ requestAnimationFrame(loop);`;
 const EXPOSE = `__out.api = {
   G, PARTS, SING, CRITS, CRIT_BY_ID, FLAWS, FLAW_BY_ID, PART_DEFS, COUNTRIES, CATEGORIES,
   JURORS, BANDS, RANKS, STAGES, VENUES, SAVE_KEY, CARD_TOP, PHANTOM_COST, VW, VH, AUDIO,
-  REPERTOIRE, REP_BY_ID, CAT_MOODS, VOWELS, FORMANT_SCALE, MAJOR_STEPS, MINOR_STEPS,
+  REPERTOIRE, REP_BY_ID, CAT_MOODS, VOWELS, FORMANT_SCALE, MAJOR_STEPS, MINOR_STEPS, AUDIO_HZ, setP,
+  get perfTick(){ return perfTick; }, set perfTick(v){ perfTick = v || (() => {}); },
   SHARP_LETTER, SHARP_ALTER, FLAT_LETTER, FLAT_ALTER, SHARP_ORDER, FLAT_ORDER,
   SCORE, LG, TREBLE_TOP, BASS_TOP, PLAYHEAD, PPB,
   get fx(){ return fx; },
@@ -115,9 +116,10 @@ function makeSandbox(opts){
    that renders perfectly and is silent; that shipped once, hence this. */
 function makeAudioStub(){
   const nodes = [], edges = [];
+  let events = 0;
   const param = (v) => ({
     value: v,
-    setTargetAtTime(x){ this.value = x; return this; },
+    setTargetAtTime(x){ events++; this.value = x; return this; },
     setValueAtTime(x){ this.value = x; return this; },
     linearRampToValueAtTime(x){ this.value = x; return this; },
     exponentialRampToValueAtTime(x){ this.value = x; return this; },
@@ -143,11 +145,12 @@ function makeAudioStub(){
     createDynamicsCompressor: () => node('comp', {
       threshold:param(-24), knee:param(30), ratio:param(12), attack:param(0.003), release:param(0.25) }),
     createBufferSource: () => node('bufsrc', { buffer: null, loop: false }),
+    createWaveShaper: () => node('shaper', { curve: null, oversample: 'none' }),
     createBuffer: (ch, len) => ({
       length: len, numberOfChannels: ch, sampleRate: 44100,
       getChannelData: () => new Float32Array(len) }),
   };
-  return { ac, nodes, edges };
+  return { ac, nodes, edges, events: () => events, resetEvents: () => { events = 0; } };
 }
 /* Can signal get from `from` to the destination without passing through a gain
    that has been turned all the way down? */
@@ -1316,6 +1319,82 @@ test('muting silences the master, and pausing silences the parts', () => {
   assert(api.AUDIO.master.gain.value <= 0.0002, 'mute closes the master');
   api.toggleMute(); api.AUDIO.frame();
   assert(api.AUDIO.master.gain.value > 0.1, 'and opens it again');
+});
+
+test('the instrument does not flood the audio thread with automation', () => {
+  // 6,720 AudioParam writes a second starved the audio thread and came out of
+  // the speakers as crackle. Almost all of them re-sent a value that had not
+  // changed. This is the ceiling that keeps it from creeping back.
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 2);                       // settle, then measure a clean second
+  api._audio.resetEvents();
+  step(api, 1);
+  const perSecond = api._audio.events();
+  assert(perSecond < 1200,
+    'automation traffic is back up to ' + perSecond + ' writes a second');
+  assert(perSecond > 0, 'the instrument stopped talking to the audio graph entirely');
+});
+
+test('a value that has not changed is not written again', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 2);
+  // freeze the choir completely: nothing should be sent at all
+  api.perfTick = null;
+  api.G.paused = true;
+  api.AUDIO.frame();
+  api._audio.resetEvents();
+  for (let i = 0; i < 20; i++) api.AUDIO.frame();
+  assert(api._audio.events() === 0,
+    'a still choir still wrote ' + api._audio.events() + ' parameter changes');
+  // and a value that does change is still sent
+  api.SING.vowel = api.SING.vowel === 'a' ? 'i' : 'a';
+  api.AUDIO.frame();
+  assert(api._audio.events() > 0, 'a new vowel has to reach the formants');
+});
+
+test('the instrument runs on its own clock, slower than the renderer', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 1);
+  assert(api.AUDIO_HZ >= 20 && api.AUDIO_HZ <= 60,
+    'the audio clock is at ' + api.AUDIO_HZ + 'Hz');
+  // every parameter it writes must smooth over longer than one of its ticks,
+  // or the throttle would be audible as stepping
+  assert(1 / api.AUDIO_HZ < 0.045, 'the shortest time constant in frame() is 45ms');
+});
+
+test('the limiter is a straight wire below the knee and bends above it', () => {
+  const api = boot({ audio: true });
+  api.AUDIO.resume();
+  const curve = api.AUDIO.limiter.curve;
+  assert(curve && curve.length >= 512, 'no limiter curve');
+  const N = curve.length;
+  const at = (x) => curve[Math.round(((x + 1) / 2) * (N - 1))];
+  for (const x of [-0.6, -0.3, 0, 0.3, 0.6]){
+    near(at(x), x, 0.01, 'ordinary singing must pass through untouched at ' + x);
+  }
+  assert(at(1) < 1 && at(1) > 0.85, 'full scale bends to ' + at(1) + ', it should soften not fold');
+  assert(at(-1) > -1 && at(-1) < -0.85, 'and symmetrically on the way down');
+  for (let i = 1; i < N; i++)
+    assert(curve[i] >= curve[i - 1] - 1e-6, 'the curve has to stay monotonic at ' + i);
+  assert(api.AUDIO.limiter.oversample !== 'none', 'a shaper without oversampling aliases');
+});
+
+test('each section shares one drift oscillator instead of one per singer', () => {
+  const api = boot({ audio: true });
+  api.AUDIO.resume();
+  let oscillators = 0;
+  for (const v of api.AUDIO.voices){
+    assert(v.drift, 'a section with no wander at all');
+    oscillators += v.singers.length * 2 + 1;       // tone + vibrato each, one drift shared
+    const depths = v.singers.map((sg) => sg.driftG.gain.value);
+    assert(new Set(depths).size >= 3, 'the singers drift identically: ' + depths.join(','));
+    assert(depths.some((d) => d > 0) && depths.some((d) => d < 0),
+      'they should wander apart, not together: ' + depths.join(','));
+  }
+  assert(oscillators <= 48, 'the instrument is back up to ' + oscillators + ' oscillators');
 });
 
 test('the hall has an impulse response with something in it', () => {

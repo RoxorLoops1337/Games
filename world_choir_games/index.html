@@ -331,6 +331,12 @@ const PARTS = PART_DEFS.map((d) => ({
 }));
 const SING = { tempoMul:1, expression:1, phrasing:1, life:1, level:0, vowel:'a' };
 
+/* The instrument is refreshed on its own clock, not the renderer's. Every
+   parameter it writes has a 45–120ms time constant, so 32Hz is indistinguishable
+   from 60Hz and costs the audio thread half as much. */
+const AUDIO_HZ = 32;
+let audioAcc = 0;
+
 const fx = [];
 function spawnFx(o){ fx.push(Object.assign({ t:0, life:0.8 }, o)); }
 function fxTick(dt){
@@ -376,9 +382,23 @@ function vowelOf(syl){
   return last;
 }
 
+/* Every AudioParam write allocates a timeline event on the audio thread, and
+   frame() touches a few hundred of them sixty times a second. Nearly all of
+   those values are identical from one frame to the next — the formants only
+   move when the vowel changes — so re-sending them buys nothing and costs the
+   audio thread its deadline, which comes out of the speakers as crackle.
+   setP() drops any write that would not have been audible anyway. */
+function setP(param, value, now, tc, eps){
+  const last = param.__last;
+  if (last !== undefined && Math.abs(last - value) < (eps === undefined ? 1e-4 : eps)) return;
+  param.__last = value;
+  param.setTargetAtTime(value, now, tc);
+}
+
 const AUDIO = {
   ac:null, ok:false, muted:false, master:null, comp:null, voices:[],
   hall:null, wet:null, dry:null, noiseGain:null, noiseFilter:null, applause:0,
+  limiter:null,
   SINGERS:5,
 
   /* A concert hall, made rather than recorded: noise under an exponential
@@ -410,11 +430,24 @@ const AUDIO = {
       const comp = ac.createDynamicsCompressor();
       comp.threshold.value = -16; comp.knee.value = 22;
       comp.ratio.value = 3.2; comp.attack.value = 0.012; comp.release.value = 0.28;
+      // A choir, a hall, an applause bed and a UI blip can land on the same
+      // sample. tanh bends that peak instead of letting it hit the rails.
+      // Straight wire below the knee, so ordinary singing passes through
+      // untouched; above it the curve bends over towards 1 instead of folding.
+      const limiter = ac.createWaveShaper();
+      const N = 2048, KNEE = 0.7, curve = new Float32Array(N);
+      for (let i = 0; i < N; i++){
+        const x = (i / (N - 1)) * 2 - 1, a = Math.abs(x);
+        curve[i] = a <= KNEE
+          ? x
+          : Math.sign(x) * (KNEE + (1 - KNEE) * Math.tanh((a - KNEE) / (1 - KNEE)));
+      }
+      limiter.curve = curve; limiter.oversample = '2x';
       const master = ac.createGain(); master.gain.value = 0.0001;
-      comp.connect(master); master.connect(ac.destination);
+      comp.connect(limiter); limiter.connect(master); master.connect(ac.destination);
 
       const hall = ac.createConvolver();
-      hall.buffer = this.makeIR(ac, 2.6, 2.4);
+      hall.buffer = this.makeIR(ac, 1.9, 2.2);
       const wet = ac.createGain(); wet.gain.value = 0.62;
       const dry = ac.createGain(); dry.gain.value = 0.72;
       hall.connect(wet); wet.connect(comp); dry.connect(comp);
@@ -447,6 +480,13 @@ const AUDIO = {
         const send = ac.createGain(); send.gain.value = 0.55;
         gain.connect(dry); gain.connect(send); send.connect(hall);
 
+        // One slow wander per section, fanned out to its singers at different
+        // depths and signs. Twenty oscillators became four, and the section
+        // still drifts apart the way a real one does.
+        const drift = ac.createOscillator();
+        drift.frequency.value = 0.17 + pi * 0.023;
+        try { drift.start(); } catch (e) { /* already going */ }
+
         const singers = [];
         for (let k = 0; k < AUDIO.SINGERS; k++){
           const o = ac.createOscillator();
@@ -462,14 +502,13 @@ const AUDIO = {
           vib.frequency.value = 4.4 + k * 0.42 + pi * 0.13;
           const vibG = ac.createGain(); vibG.gain.value = 11;
           vib.connect(vibG); vibG.connect(o.detune);
-          const drift = ac.createOscillator();
-          drift.frequency.value = 0.17 + k * 0.031 + pi * 0.011;
-          const driftG = ac.createGain(); driftG.gain.value = 6;
+          const driftG = ac.createGain();
+          driftG.gain.value = (k % 2 ? -1 : 1) * (4 + (k % 3) * 2.5);
           drift.connect(driftG); driftG.connect(o.detune);
-          try { o.start(); vib.start(); drift.start(); } catch (e) { /* already going */ }
+          try { o.start(); vib.start(); } catch (e) { /* already going */ }
           singers.push({ o, g, vibG, driftG, off });
         }
-        return { mix, out, gain, send, bank, body, singers };
+        return { mix, out, gain, send, bank, body, singers, drift };
       });
 
       // breath and applause share one noise bed
@@ -486,6 +525,7 @@ const AUDIO = {
       this.ac = ac; this.comp = comp; this.master = master; this.voices = voices;
       this.hall = hall; this.wet = wet; this.dry = dry;
       this.noise = noise; this.noiseGain = ng; this.noiseFilter = nf;
+      this.limiter = limiter;
       this.ok = true;
     } catch (e) { this.ok = false; }
   },
@@ -502,37 +542,38 @@ const AUDIO = {
     const on = !this.muted && G.phase === 'perform' && !G.paused;
     const vw = VOWELS[SING.vowel] || VOWELS.a;
     try {
-      this.master.gain.setTargetAtTime(this.muted ? 0.0001 : 1.9, now, 0.08);
+      setP(this.master.gain, this.muted ? 0.0001 : 1.9, now, 0.08, 0.002);
       for (let i = 0; i < PARTS.length; i++){
         const p = PARTS[i], v = this.voices[i];
         const hz = 440 * Math.pow(2, (p.midi - 69) / 12 + p.cents / 1200);
         const expr = clamp(SING.expression, 0, 1);
+        // a dead-eyed choir stops vibrating; a live one breathes
+        const vibDepth = 4 + 9 * expr * clamp(SING.life, 0, 1);
         for (const sg of v.singers){
-          sg.o.frequency.setTargetAtTime(hz, now, 0.045);
-          // a dead-eyed choir stops vibrating; a live one breathes
-          sg.vibG.gain.setTargetAtTime(4 + 9 * expr * clamp(SING.life, 0, 1), now, 0.12);
+          setP(sg.o.frequency, hz, now, 0.045, 0.35);
+          setP(sg.vibG.gain, vibDepth, now, 0.12, 0.08);
         }
         const fs = FORMANT_SCALE[i] * (1 + 0.22 * clamp(p.bright, 0, 2));
         for (let k = 0; k < 5; k++){
-          v.bank[k].bp.frequency.setTargetAtTime(vw.f[k] * fs, now, 0.07);
+          setP(v.bank[k].bp.frequency, vw.f[k] * fs, now, 0.07, 0.5);
           // strain pushes energy up into the higher formants
           const lift = k >= 2 ? 1 + 0.9 * clamp(p.bright, 0, 2) : 1;
-          v.bank[k].g.gain.setTargetAtTime(vw.g[k] * lift, now, 0.07);
-          v.bank[k].bp.Q.setTargetAtTime(clamp((k === 0 ? 7 : 9 + k) - 3.5 * p.air, 1.2, 14), now, 0.09);
+          setP(v.bank[k].g.gain, vw.g[k] * lift, now, 0.07, 0.004);
+          setP(v.bank[k].bp.Q, clamp((k === 0 ? 7 : 9 + k) - 3.5 * p.air, 1.2, 14), now, 0.09, 0.05);
         }
-        v.body.frequency.setTargetAtTime(760 + 340 * FORMANT_SCALE[i], now, 0.1);
+        setP(v.body.frequency, 760 + 340 * FORMANT_SCALE[i], now, 0.1, 0.5);
         const lvl = on
           ? clamp(p.gain, 0, 3) * (0.16 + 0.14 * SING.level) * clamp(p.artic == null ? 1 : p.artic, 0.15, 1)
           : 0.0001;
-        v.gain.gain.setTargetAtTime(Math.max(0.0001, lvl), now, SM);
+        setP(v.gain.gain, Math.max(0.0001, lvl), now, SM, 0.0012);
       }
       let air = 0;
       for (const p of PARTS) air += p.air;
       const hall = (G.phase === 'panel' || G.phase === 'round') ? this.applause : 0;
-      this.noiseFilter.frequency.setTargetAtTime(hall > 0 ? 1500 : 2700, now, 0.1);
-      this.noiseGain.gain.setTargetAtTime(
-        Math.max(0.0001, this.muted ? 0.0001 : (on ? air * 0.014 : 0) + hall * 0.10), now, 0.12);
-      this.wet.gain.setTargetAtTime(0.62, now, 0.2);
+      setP(this.noiseFilter.frequency, hall > 0 ? 1500 : 2700, now, 0.1, 1);
+      setP(this.noiseGain.gain,
+        Math.max(0.0001, this.muted ? 0.0001 : (on ? air * 0.014 : 0) + hall * 0.10), now, 0.12, 0.0012);
+      setP(this.wet.gain, 0.62, now, 0.2, 0.002);
     } catch (e) { /* an audio hiccup must never stop the game */ }
   },
 
@@ -2405,7 +2446,8 @@ function update(dt){
     }
   }
   AUDIO.fadeCheer(dt);
-  AUDIO.frame();
+  audioAcc += dt;
+  if (audioAcc >= 1 / AUDIO_HZ){ audioAcc = 0; AUDIO.frame(); }
 }
 function loop(ts){
   const t = ts / 1000;
