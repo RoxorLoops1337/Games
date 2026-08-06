@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and thirty-nine fixes to
+this game have produced roughly six changes to the game and forty fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -30,6 +30,24 @@ catches, switches into matchups, restocks in town. These are not
 harder-and-easier versions of one thing; they are different games, and a change
 that helps one can do nothing for the other. **Judge a change against both**, and
 if it only moves one, say which.
+
+**`--vs` is the one to reach for.** Everything before it is the baseline arm,
+everything after is the variant, and both run in one invocation over the same
+seeds — `Math.random` is seeded per run, so run 7 is the same run in both arms and
+the printed interval is on the *difference*. `--set NAME=VALUE` rewrites a
+top-level constant in the game's source before it is evalled, so a tuning dial can
+be compared against itself:
+
+```bash
+node tools/emberkin/playthrough.mjs --runs 60 --solo --vs --set PLAN_CHIP=0.25
+node tools/emberkin/playthrough.mjs --runs 60 --vs --ban whetstone
+```
+
+Prefer it over comparing against a number from a previous pass — that is worth
+±.05 on the danger line (mistake 39), and it is how a shipped bug went unnoticed
+for a whole pass (mistake 40). The report is deterministic now; absolute figures
+from before pass 35 are not directly comparable to figures after it, because
+seeding changed the stream. The paired differences are.
 
 `--ban a,b` takes a comma-separated list, so two cards can be struck out together
 and asked whether they add up or overlap.
@@ -321,9 +339,18 @@ and the family is more useful than the individual entry.
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
+40. **"Off" that was not off** (pass 35, about pass 34). `PLAN_CHIP = 0` scaled
+    the chip's damage to zero but did not skip the block, and `useMove` spends
+    `b.foeEdge` on its way through — so a gathering wild kin threw away the
+    sharpen it had just gained and pass 33's whole result was silently reverted in
+    the act of shipping the dial "off". Party over-in-one read 20.6% against the
+    4% pass 33 measured. **Scaling a value to zero is not the same as skipping the
+    code.** Found by the first paired run, which is exactly the thing the paired
+    mode was built for.
+
 ### Documentation — a note that was wrong for longer than any bug
 
-42. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+43. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -335,7 +362,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of thirty-nine are denominators.** If a number will not move, or moves the
+- **Nine of forty are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

@@ -32,11 +32,16 @@ export function mkCtx(log) {
 }
 
 /** Fresh game instance. `store` is the localStorage backing object. */
-export function loadGame(store = {}) {
+export function loadGame(store = {}, patch = null) {
   const html = readFileSync(GAME, 'utf8');
   const m = html.match(/<script>([\s\S]*?)<\/script>/);
   if (!m) throw new Error('no inline <script> found in emberkin/index.html');
-  const code = m[1];
+  // `patch` rewrites the source before it is evalled, which is how the
+  // playthrough probe runs a baseline and a variant of a tuning constant in one
+  // sitting. Comparing a new build against a number from a previous pass is
+  // worth about +/-.05 on the danger line; comparing two arms measured together
+  // is not.
+  const code = patch ? patch(m[1]) : m[1];
 
   const ctx = mkCtx();
   const mkEl = () => new Proxy({
