@@ -49,7 +49,7 @@ const EXPOSE = `__out.api = {
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
-  draw, drawHUD, drawAim, drawSling, previewPath, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
+  draw, drawHUD, drawAim, drawSling, previewPath, drawShout, nitroRect, popText, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
   SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH_Z,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
@@ -792,6 +792,117 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const vals = Object.values(ends);
   assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
     'every car should preview differently: ' + JSON.stringify(ends));
+});
+
+/* ------------------------------------------------------------------ HUD --- */
+
+/* "⚡ NITRO ×1" was drawn at (30, VH-24), straight underneath #back, which is
+   a 100x34 button at z-index 4 over the canvas. Every screenshot read
+   "← GAMES ×1": the word NITRO was gone and the green count looked like part
+   of the button's label. */
+test('the run readout never lands under the buttons in the corner', () => {
+  // #back: left 10, bottom 10, ~100x34.  #mute: right 10, bottom 10, 40x40.
+  const dom = (w, h) => [
+    { name: '#back', x: 10, y: h - 44, w: 100, h: 34 },
+    { name: '#mute', x: w - 50, y: h - 50, w: 40, h: 40 },
+  ];
+  for (const [w, h] of [[1280, 720], [390, 844], [1440, 600]]){
+    const api = boot({ w, h });
+    api.startCampaign(); api.beginLevel();
+    const r = api.nitroRect();
+    assert(r.x >= 0 && r.y >= 0 && r.x + r.w <= w && r.y + r.h <= h,
+      'readout off screen at ' + w + 'x' + h + ': ' + JSON.stringify(r));
+    for (const d of dom(w, h)){
+      const clear = r.x + r.w <= d.x || d.x + d.w <= r.x || r.y + r.h <= d.y || d.y + d.h <= r.y;
+      assert(clear, 'readout overlaps ' + d.name + ' at ' + w + 'x' + h +
+        ': ' + JSON.stringify(r) + ' vs ' + JSON.stringify(d));
+    }
+  }
+});
+
+test('one kill is not a combo', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.G.combo = 1; api.G.mult = 1; api.G.comboT = api.C.COMBO_WIN;
+  api._resetCounts();
+  api.drawHUD();
+  const one = api._counts.fillText || 0;
+  api.G.combo = 2; api.G.mult = 1.5;
+  api._resetCounts();
+  api.drawHUD();
+  const two = api._counts.fillText || 0;
+  assert(two === one + 2, 'the combo block should add exactly its two lines, and only from x2: '
+    + one + ' vs ' + two);
+});
+
+test('score pops do not stack on top of each other', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.fx.length = 0;
+  assert(api.popText(1000, 1000, 'A', '#fff'), 'the first pop lands');
+  assert(!api.popText(1020, 1010, 'B', '#fff'), 'a second pop 22px away is dropped');
+  assert(api.popText(1000, 1100, 'C', '#fff'), 'one 100px away is fine');
+  api.setT(api.getT() + 0.4);
+  assert(api.popText(1020, 1010, 'D', '#fff'), 'and after the window it is fine again');
+});
+
+test('the driver is not talked over', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.fx.length = 0;
+  api.car.shoutT = api.SHOUT_TIME;
+  assert(!api.popText(1000, 1000, 'A', '#fff'), 'nothing pops while the bubble is up');
+  api.car.shoutT = 0;
+  assert(api.popText(1000, 1000, 'A', '#fff'), 'and it pops again once he is done');
+});
+
+/* Nobody reads a checklist at 1500px/s. */
+test('goals ticked mid-run are announced once the car has stopped', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  // a goal that is already satisfied, so checkGoals ticks it on the next frame
+  api.G.goals = [{ id: 'combo', text: 'chain a x2 combo', n: 2, done: false }];
+  api.G.goalsDone = 0;
+  api.G.bestCombo = 5;                    // already satisfied
+  api.G.goalPops.length = 0;
+  api.fx.length = 0;
+  api.checkGoals();
+  assert(api.G.goals[0].done, 'the goal should tick');
+  assert(api.G.goalPops.length === 1, 'and queue its words, got ' + api.G.goalPops.length);
+  assert(!api.fx.some(f => f.type === 'txt' && /GOAL/.test(f.text || '')),
+    'nothing is printed while the car is still moving');
+  assert(!/GOAL/.test((api.G.banner && api.G.banner.text) || ''), 'and no banner either');
+  api.endRun();
+  assert(api.fx.some(f => f.type === 'txt' && /GOAL: CHAIN A X2 COMBO/.test(f.text || '')),
+    'the goal is announced when the run ends');
+  assert(api.G.goalPops.length === 0, 'and the queue is drained');
+});
+
+test('the shout bubble is screen furniture, not a billboard in the market', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.shoutT = api.SHOUT_TIME; api.car.shout = 'HO HO HO';
+  // it must not care where the car is or how far out the camera has zoomed
+  api.car.x = 2600; api.car.y = 1100; api.cam.tz = 1300;
+  api._resetCounts();
+  api.drawHUD();
+  const far = api._counts.setTransform || 0;
+  assert(api._counts.fillText, 'the bubble should print its line');
+  api.car.x = 900; api.car.y = 300; api.cam.tz = 880;
+  api._resetCounts();
+  api.drawHUD();
+  assert((api._counts.setTransform || 0) === far, 'same work wherever the car is');
+  api.car.shoutT = 0;
+  api._resetCounts();
+  api.drawHUD();
+  const quiet = api._counts.fillText || 0;
+  api.car.shoutT = api.SHOUT_TIME;
+  api._resetCounts();
+  api.drawHUD();
+  assert((api._counts.fillText || 0) > quiet, 'the bubble is what adds the line');
 });
 
 test('the plough pickup arms the wide bumper for a while', () => {
@@ -2317,7 +2428,14 @@ test('every market asks for about three quarters of a blind run', () => {
     const target = api.G.target;
     const med = blindMedian(i, angles);
     const ratio = target / Math.max(1, med);
-    if (ratio < 0.35 || ratio > 1.05){
+    /* Market 1 sits deliberately below the curve: it is the tutorial, it gets
+       four cars, and its job is to open on the shot everyone takes first —
+       which the test below pins at 9 runs in 10. Holding it to the same floor
+       as the rest squeezes its par into a 0.4% window between "too hard for a
+       first-timer" and "out of band", which any change to the random stream
+       then breaks. */
+    const floor = i === 0 ? 0.25 : 0.35;
+    if (ratio < floor || ratio > 1.05){
       bad.push(api.LEVELS[i].name + ' ' + ratio.toFixed(2) + ' (target ' + target + ', median ' + med + ')');
     }
   }
