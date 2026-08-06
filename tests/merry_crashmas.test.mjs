@@ -63,7 +63,7 @@ const EXPOSE = `__out.api = {
   _setHitstop: (v) => { hitstop = v; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers,
-  reachableRamps, ROLL_SPD,
+  reachableRamps, ROLL_SPD, carCost, levelEnd,
   COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
@@ -140,6 +140,11 @@ function boot(opts){
   api._window = sandbox.window;
   return api;
 }
+
+/* Everything in the garage owned. Two of the cars cost stars now, so a big
+   kill count alone no longer buys them. */
+const ALL_CARS = { merry_crashmas_kills_v1: '999999',
+                   merry_crashmas_stars_v1: JSON.stringify(new Array(40).fill(3)) };
 
 const step = (api, secs, dt = 1 / 60) => { for (let i = 0; i < Math.round(secs / dt); i++) api.update(dt); };
 
@@ -839,7 +844,7 @@ test('a fresh car gets a fresh sling', () => {
 test('the aim preview ends where the car actually stops, in every car', () => {
   const worst = [];
   for (const c of boot().CARS){
-    const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
+    const api = boot({ store: ALL_CARS });
     api.startCampaign(); api.beginLevel();
     assert(api.selectCar(c.id), 'car should be unlocked: ' + c.id);
     // an empty field, so nothing but friction, ice and the fence is in play
@@ -862,7 +867,7 @@ test('the aim preview ends where the car actually stops, in every car', () => {
 });
 
 test('the sleigh previews the distance it really covers', () => {
-  const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
+  const api = boot({ store: ALL_CARS });
   api.startCampaign(); api.beginLevel();
   api.props.length = 0; api.people.length = 0;
   const road = (id) => {
@@ -956,7 +961,7 @@ test('no JUMP is promised past the point the line stops meaning anything', () =>
 });
 
 test('the preview follows the car it is drawn for, not a fixed curve', () => {
-  const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
+  const api = boot({ store: ALL_CARS });
   api.startCampaign(); api.beginLevel();
   api.props.length = 0; api.people.length = 0;
   const ends = {};
@@ -1639,7 +1644,7 @@ test('a worse run never takes a market star away', () => {
 test('stars are the target plus the goals', () => {
   const api = boot();
   api.startLevel(1); api.beginLevel();
-  const cases = [[false, 0, 0], [false, 3, 0], [true, 0, 1], [true, 1, 2], [true, 2, 2], [true, 3, 3]];
+  const cases = [[false, 0, 0], [false, 3, 0], [true, 0, 1], [true, 1, 1], [true, 2, 2], [true, 3, 3]];
   for (const [hit, goals, want] of cases){
     api.G.starsPer = [];
     api.G.carsLeft = 0;
@@ -1673,7 +1678,7 @@ test('a single market is scored on its own, and goes back to the menu', () => {
   assert(api.G.score === 0, 'and starts from zero, got ' + api.G.score);
   api.beginLevel();
   api.G.carsLeft = 0;
-  api.G.levelScore = api.G.target * 2; api.G.goalsDone = 1;
+  api.G.levelScore = api.G.target * 2; api.G.goalsDone = 2;
   api.levelEnd();
   api.nextLevel();
   assert(api.G.phase === 'menu', 'a cleared single market returns to the menu, got ' + api.G.phase);
@@ -1706,10 +1711,13 @@ test('the menu chips are buttons wired to the level select', () => {
 test('the garage unlocks in order and starts with the hatchback', () => {
   const api = boot();
   assert(api.CARS.length >= 5, 'five cars, got ' + api.CARS.length);
-  assert(api.CARS[0].unlock === 0, 'the first one is free');
-  for (let i = 1; i < api.CARS.length; i++){
-    assert(api.CARS[i].unlock > api.CARS[i - 1].unlock, 'unlocks climb: ' + api.CARS[i].id);
-  }
+  assert(api.CARS[0].unlock === 0 && !api.CARS[0].stars, 'the first one is free');
+  // the ladder climbs within each currency, and the star cars come last
+  const kills = api.CARS.filter(c => !c.stars).map(c => c.unlock);
+  const stars = api.CARS.filter(c => c.stars).map(c => c.stars);
+  for (let i = 1; i < kills.length; i++) assert(kills[i] > kills[i - 1], 'kill prices climb');
+  for (let i = 1; i < stars.length; i++) assert(stars[i] > stars[i - 1], 'star prices climb');
+  assert(api.CARS.slice(-2).every(c => c.stars), 'the last two cost stars');
   assert(api.getCar().id === 'hatch', 'the hatchback is the default');
   const ids = api.CARS.map(c => c.id);
   assert(new Set(ids).size === ids.length, 'no duplicate ids');
@@ -1720,17 +1728,21 @@ test('the garage unlocks in order and starts with the hatchback', () => {
    by which point every remaining market is a formality. The reference is a
    campaign played at the best of five launch angles per market, which is what
    you converge on after a retry or two — measured at 1008 kills. */
-test('the garage opens inside three campaigns', () => {
+/* The garage is bought with good play now, not long play. Measured: a blind
+   straight-line campaign banks 44 of the 63 stars on offer and a learned one
+   banks 61, so the monster truck lands about a third of the way through a
+   first campaign and the sleigh near the end of it — and stars only ever go
+   up, so neither is ever a wall. */
+test('the garage opens inside one good campaign, not three long ones', () => {
   const api = boot();
-  const learned = 1008;                    // kills in one campaign, best angle per market
-  assert(api.CARS.map(c => c.unlock).join() === '0,400,1100,2000,3000',
-    'unlock ladder moved: ' + api.CARS.map(c => c.unlock).join());
-  const last = api.CARS[api.CARS.length - 1];
-  assert(last.unlock / learned <= 3.05,
-    'the last car takes ' + (last.unlock / learned).toFixed(1) + ' campaigns');
-  const first = api.CARS[1];
-  assert(first.unlock / learned < 1,
-    'and the first unlock should land inside the first campaign, not after it');
+  const cap = api.LEVELS.length * 3;
+  const stars = api.CARS.filter(c => c.stars).map(c => c.stars);
+  assert(stars[stars.length - 1] < cap * 0.75,
+    'the last car should not need three quarters of every star in the game, wants ' +
+    stars[stars.length - 1] + ' of ' + cap);
+  assert(stars[0] <= 24, 'and the first star-priced car lands inside a first campaign');
+  const kills = api.CARS.filter(c => !c.stars);
+  assert(kills[1].unlock <= 500, 'the first unlock still arrives early on kills alone');
 });
 
 /* The reference above is a number in a test, so it has to be re-derived when
@@ -1759,6 +1771,73 @@ test('a campaign is still worth about a thousand kills to someone who has learne
     'the 1008-kill reference in the test above needs re-deriving: ' + learned);
 });
 
+/* starsTotal() had exactly one caller — a subtitle on the menu. The results
+   card's centrepiece bought nothing, and the garage was bought with time. */
+test('the two best cars are bought with stars, not with hours', () => {
+  const api = boot();
+  const byId = (id) => api.CARS.find(c => c.id === id);
+  const stars = api.CARS.filter(c => c.stars);
+  assert(stars.length === 2, 'two cars should cost stars, got ' + stars.length);
+  assert(stars.map(c => c.id).join() === 'monster,sleigh', 'and they are the best two');
+
+  api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
+  api.G.starsPer = [];
+  assert(!api.carUnlocked(byId('monster')),
+    'a million kills should not buy the monster truck');
+  assert(api.carUnlocked(byId('van')) && api.carUnlocked(byId('sport')),
+    'but they still buy the two that cost kills');
+
+  api.G.lifeKills = 0;
+  api.G.starsPer = api.LEVELS.map((_, i) => (i < 6 ? 3 : 0));   // 18 stars
+  assert(api.starsTotal() === 18, 'fixture should be 18 stars, got ' + api.starsTotal());
+  assert(!api.carUnlocked(byId('monster')), 'locked at 18');
+  api.G.starsPer[6] = 2;
+  assert(api.starsTotal() === 20 && api.carUnlocked(byId('monster')), 'open at 20');
+  assert(!api.carUnlocked(byId('sleigh')), 'the sleigh costs more');
+  api.G.starsPer = api.LEVELS.map((_, i) => (i < 14 ? 3 : 0));  // 42
+  assert(api.carUnlocked(byId('sleigh')), 'open at 42');
+});
+
+test('the coupe stops being the third most expensive thing in the garage', () => {
+  const api = boot();
+  const kills = api.CARS.filter(c => !c.stars);
+  const order = kills.map(c => c.unlock);
+  assert(order.join() === [0, 400, 600].join(),
+    'the kill-priced cars should climb 0/400/600, got ' + order.join('/'));
+});
+
+test('the second star costs a second goal', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  const rate = (hit, goalsDone) => {
+    api.G.levelScore = hit ? api.G.target : api.G.target - 1;
+    api.G.goalsDone = goalsDone;
+    api.levelEnd();
+    return api.G.stars;
+  };
+  assert(rate(false, 3) === 0, 'missing the target is no stars whatever else you did');
+  assert(rate(true, 0) === 1, 'the target alone is one');
+  assert(rate(true, 1) === 1, 'one goal is still one — it used to be two');
+  assert(rate(true, 2) === 2, 'two goals is two');
+  assert(rate(true, 3) === 3, 'all three is three');
+});
+
+test('a save from before the garage changed still boots', () => {
+  // a player who had unlocked the sleigh on kills alone, with no stars at all
+  const api = boot({ store: {
+    merry_crashmas_kills_v1: '99999',
+    merry_crashmas_car_v1: 'sleigh',
+    merry_crashmas_progress_v1: '12',
+  } });
+  assert(api.G.lifeKills === 99999, 'the kill count survives');
+  assert(api.getCar().id === 'hatch',
+    'a car they can no longer afford falls back to the hatchback, got ' + api.getCar().id);
+  assert(api.G.unlocked === 12, 'and their campaign progress is untouched');
+  // nothing is un-owned: the stars they earn from here still count
+  api.G.starsPer = api.LEVELS.map(() => 3);
+  assert(api.carUnlocked(api.CARS[4]), 'and the sleigh comes back once earned');
+});
+
 test('a locked car cannot be picked, an unlocked one can', () => {
   const api = boot();
   api.G.lifeKills = 0;
@@ -1766,8 +1845,8 @@ test('a locked car cannot be picked, an unlocked one can', () => {
   assert(!api.carUnlocked(locked), 'the last car starts locked');
   assert(api.selectCar(locked.id) === false, 'and cannot be selected');
   assert(api.getCar().id === 'hatch', 'so the hatchback stays');
-  api.G.lifeKills = locked.unlock;
-  assert(api.carUnlocked(locked), 'lifetime kills unlock it');
+  api.G.starsPer = api.LEVELS.map(() => 3);
+  assert(api.carUnlocked(locked), 'stars unlock it');
   assert(api.selectCar(locked.id) === true, 'and now it takes');
   assert(api.getCar().id === locked.id, 'selected');
   assert(api.selectCar('not-a-car') === false, 'nonsense ids are refused');
@@ -1775,7 +1854,7 @@ test('a locked car cannot be picked, an unlocked one can', () => {
 
 test('each car is a different size on the road', () => {
   const api = boot();
-  api.G.lifeKills = 999999;
+  api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
   const seen = new Set();
   for (const c of api.CARS){
     api.selectCar(c.id);
@@ -1788,7 +1867,7 @@ test('each car is a different size on the road', () => {
 
 test('the sports coupe launches harder than the van', () => {
   const api = boot();
-  api.G.lifeKills = 999999;
+  api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
   api.startCampaign(); api.beginLevel();
   api.selectCar('sport'); api.nextCar();
   api.launch(-api.C.MAX_PULL, 0);
@@ -1803,7 +1882,7 @@ test('the sports coupe launches harder than the van', () => {
 test('the sleigh slides far past where the hatchback stops', () => {
   const roll = (id) => {
     const api = boot();
-    api.G.lifeKills = 999999;
+    api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
     api.selectCar(id);
     api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
     api.bounds.x1 = 20000;
@@ -1819,7 +1898,7 @@ test('the sleigh slides far past where the hatchback stops', () => {
 test('the van ploughs a stall the hatchback only dents', () => {
   const hit = (id) => {
     const api = boot();
-    api.G.lifeKills = 999999;
+    api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
     api.selectCar(id);
     api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
     const hut = api.addProp('hut', 2000, 1100, {});
@@ -1834,7 +1913,7 @@ test('the van ploughs a stall the hatchback only dents', () => {
 test('the monster truck gets more air, the coupe carries two nitros', () => {
   const jump = (id) => {
     const api = boot();
-    api.G.lifeKills = 999999;
+    api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
     api.selectCar(id);
     api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
     drive(api, 1100, 0, 2000, 1100);
@@ -1846,7 +1925,7 @@ test('the monster truck gets more air, the coupe carries two nitros', () => {
   assert(jump('monster') > jump('hatch') * 1.4, 'the truck flies higher');
 
   const api = boot();
-  api.G.lifeKills = 999999;
+  api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
   api.selectCar('sport');
   api.startCampaign(); api.beginLevel();
   assert(api.car.boost === 2, 'the coupe starts with two nitros, got ' + api.car.boost);
@@ -1857,6 +1936,7 @@ test('the monster truck gets more air, the coupe carries two nitros', () => {
 test('the chosen car and the lifetime tally survive a reload', () => {
   const api = boot();
   api.G.lifeKills = 5000;
+  api.G.starsPer = api.LEVELS.map(() => 3);
   api.selectCar('monster');
   api.saveBest();
   assert(api._store[api.CAR_KEY] === 'monster', 'car written');
@@ -1867,7 +1947,8 @@ test('the chosen car and the lifetime tally survive a reload', () => {
 });
 
 test('a saved car that is no longer unlocked falls back to the hatchback', () => {
-  const api = boot({ store: { merry_crashmas_car_v1: 'sleigh', merry_crashmas_kills_v1: '0' } });
+  const api = boot({ store: { merry_crashmas_car_v1: 'sleigh', merry_crashmas_kills_v1: '0',
+    merry_crashmas_stars_v1: '[]' } });
   assert(api.getCar().id === 'hatch', 'fell back, got ' + api.getCar().id);
 });
 
@@ -1882,7 +1963,7 @@ test('kills add to the lifetime tally', () => {
 
 test('every car renders, on the ground and mid-roll', () => {
   const api = boot();
-  api.G.lifeKills = 999999;
+  api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
   api.startCampaign(); api.beginLevel();
   for (const c of api.CARS){
     api.selectCar(c.id);
@@ -2533,7 +2614,7 @@ test('one real jump is one barrel roll, in every car', () => {
   for (const car of ['hatch', 'van', 'sport', 'monster', 'sleigh']){
     for (const sp of [1400, 1900]){
       const api = boot();
-      api.G.lifeKills = 999999;
+      api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
       api.selectCar(car);
       api.props.length = 0; api.people.length = 0; api.pickups.length = 0; api.ice.length = 0;
       api.G.rolls = 0;

@@ -217,17 +217,17 @@ const CARS = [
     launch:0.88, glide:1.22, rest:0.55, dmg:1.8, ramp:0.75, boost:1, plow:9, slam:1.15,
     len:94, wid:44, rad:31,
     body:'#e6e0d2', body2:'#f5f1e6', roof:'#33507d', trim:'#33507d' },
-  { id:'sport', name:'THE SPORTS COUPE', unlock:1100,
+  { id:'sport', name:'THE SPORTS COUPE', unlock:600,
     blurb:'Quickest off the sling and bounces off everything. Two nitros.',
     launch:1.16, glide:0.9, rest:1.4, dmg:0.75, ramp:1.15, boost:2, plow:0, slam:0.9,
     len:74, wid:35, rad:25,
     body:'#ffcf3d', body2:'#ffe692', roof:'#22252e', trim:'#22252e' },
-  { id:'monster', name:'THE MONSTER TRUCK', unlock:2000,
+  { id:'monster', name:'THE MONSTER TRUCK', unlock:0, stars:20,
     blurb:'Leaves the ground off anything and lands like a dropped piano.',
     launch:0.92, glide:1.1, rest:0.85, dmg:1.4, ramp:1.75, boost:1, plow:5, slam:1.7,
     len:86, wid:52, rad:32, bigWheels:true,
     body:'#3f8a5c', body2:'#57a875', roof:'#1a2a1d', trim:'#ffd34d' },
-  { id:'sleigh', name:'SANTA’S SLEIGH', unlock:3000,
+  { id:'sleigh', name:'SANTA’S SLEIGH', unlock:0, stars:40,
     blurb:'No brakes, no grip, no mercy. It simply does not stop.',
     launch:1.06, glide:2.6, rest:1.45, dmg:0.95, ramp:1.3, boost:2, plow:0, slam:1,
     len:82, wid:40, rad:28, runners:true,
@@ -238,7 +238,18 @@ let CARL = CAR_L, CARW = CAR_W, CARR = CAR_R;
 const CAR_KEY = 'merry_crashmas_car_v1';
 const KILLS_KEY = 'merry_crashmas_kills_v1';
 
-function carUnlocked(c){ return G.lifeKills >= c.unlock; }
+/* Two currencies. Kills are "you played" — they accumulate whatever you do.
+   Stars are "you played well", and they were bought with nothing at all: the
+   results card's centrepiece was read once, for a subtitle on the menu. The
+   two best cars in the garage now cost stars, so the garage is earned rather
+   than waited out. */
+function carUnlocked(c){
+  return c.stars ? starsTotal() >= c.stars : G.lifeKills >= c.unlock;
+}
+function carCost(c){
+  return c.stars ? '★ ' + c.stars + ' (' + Math.max(0, c.stars - starsTotal()) + ' to go)'
+                 : fmt(c.unlock) + ' lifetime shoppers';
+}
 
 function selectCar(id){
   const c = CARS.find(x => x.id === id);
@@ -1146,7 +1157,7 @@ function renderGarage(){
     return '<button class="car' + (c === CAR ? ' on' : '') + (open ? '' : ' locked') +
       '" data-car="' + c.id + '"' + (open ? '' : ' disabled') + '>' +
       '<b>' + c.name + '</b>' +
-      '<i>' + (open ? c.blurb : 'Locked — ' + fmt(c.unlock) + ' lifetime shoppers') + '</i>' +
+      '<i>' + (open ? c.blurb : 'Locked — ' + carCost(c)) + '</i>' +
       '</button>';
   }).join('');
   if (el.querySelectorAll){
@@ -1156,7 +1167,8 @@ function renderGarage(){
       });
     });
   }
-  setTxt('brKills', fmt(G.lifeKills) + ' shoppers on the clock');
+  setTxt('brKills', fmt(G.lifeKills) + ' shoppers on the clock · ★ ' +
+    starsTotal() + '/' + (LEVELS.length * 3));
 }
 
 function beginLevel(){
@@ -1263,7 +1275,11 @@ function levelEnd(){
   // one star for the target, then one per pair of goals on top
   const hit = G.levelScore >= G.target;
   // the target opens the market; the goals are what the other two stars cost
-  G.stars = !hit ? 0 : G.goalsDone >= 3 ? 3 : G.goalsDone >= 1 ? 2 : 1;
+  /* The second star costs two goals, not one. On the old mapping a single
+     goal bought it and the second paid literally nothing, which is how a blind
+     campaign landed on exactly two stars in nineteen markets out of
+     twenty-one. */
+  G.stars = !hit ? 0 : G.goalsDone >= 3 ? 3 : G.goalsDone >= 2 ? 2 : 1;
   const passed = hit;
   if (!G.starsPer) G.starsPer = [];
   if (G.stars > starsOn(G.level)) G.starsPer[G.level] = G.stars;
