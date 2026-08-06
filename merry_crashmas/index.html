@@ -260,6 +260,13 @@ const STOP_SPD = 110;                         // below this the run is over — 
                                               // above KILL_SPD, so nothing is lost but
                                               // a second of watching a harmless roll
 const RUN_TIMEOUT = 26;                       // seconds, safety net
+
+/* How many shoppers can be heard crying at once. A 4.6s run on MIDNIGHT MASS
+   fired 933 tone() and 41 noise() calls — 212 oscillator spawns a second, from
+   218 shoppers with no cap, no falloff and no priority — all summing into a
+   0.32 master gain that clipped and buried the squish (vol 0.10) and the
+   crunch (0.2-0.4). The kills got quieter the more of them you made. */
+const WAIL_VOICES = 3, WAIL_LEN = 0.42, WAIL_RANGE = 900;
 const REST = 0.46, REST_HARD = 0.60;          // restitution: props vs statues
 const BONK_PTS = 140;                         // ricochet bonus off a statue
 const SHOUT_TIME = 1.4;
@@ -651,6 +658,7 @@ function addPerson(x, y, kind){
     cryK: d.cry, pram: !!d.pram, pramT: d.pram ? 1 : 0,
     side: rnd() < 0.5 ? -1 : 1,
     wt: rr(0, 2), panic: 0, cry: 0, dropped: 0, bob: rr(0, 6.28), march: null,
+    wailT: 0,               // declared here so a panicking shopper does not change shape
     dead: false, fly: 0, spin: 0, flat: 0, smear: 0,
     squash: 1, bleedT: 0, gib: 0,
     pts: d.pts,
@@ -1125,6 +1133,7 @@ function launch(px, py){
   G.runT = 0;
   addShake(0.28, 5);                      // the calmest event in the game should
   sndLaunch(p);                           // not out-punch running somebody over
+  engineStart();
 
   /* The release used to be the one moment in the game with no punch in it.
      drawAim() returns on anything but the aim phase, so the posts, the band
@@ -1146,6 +1155,7 @@ function launch(px, py){
 function endRun(){
   if (G.phase !== 'drive') return;
   if (G.runScore > G.bestRun) G.bestRun = G.runScore;
+  engineStop();
   checkGoals();
   G.phase = 'settle';
   // the pause exists to let the last bodies land; if a highlight is queued it
@@ -1248,6 +1258,18 @@ function finale(){
 /* ============================ SIMULATION ================================= */
 
 function addShake(t, a){ shake.t = Math.max(shake.t, t); shake.a = Math.max(shake.a, a); }
+
+/* Three wails in the air at once, and only from shoppers near enough to be
+   part of what you just did. Everyone else still cries, still drops their
+   shopping and still runs; they are simply not mixed in. */
+const wails = [];
+function wailSlot(p){
+  if (Math.abs(p.x - car.x) > WAIL_RANGE || Math.abs(p.y - car.y) > WAIL_RANGE) return false;
+  for (let i = wails.length - 1; i >= 0; i--) if (wails[i] <= T) wails.splice(i, 1);
+  if (wails.length >= WAIL_VOICES) return false;
+  wails.push(T + WAIL_LEN);
+  return true;
+}
 
 function addFx(o){
   if (fx.length > 900) fx.splice(0, 200);
@@ -1540,7 +1562,9 @@ function stepPeople(dt){
           vx: Math.cos(a) * rr(30, 90) + p.vx * 0.3, vy: Math.sin(a) * rr(30, 90) + p.vy * 0.3,
           ttl: rr(0.35, 0.7), size: rr(2.5, 4.5), col:'#bfe6ff' });
       }
-      if (!p.wailT || p.wailT <= 0){ p.wailT = rr(0.7, 2.2); if (typeof sndWail === 'function') sndWail(p.voice); }
+      // the timer is re-armed either way: whether a wail is audible must not
+      // move the simulation's random stream
+      if (!p.wailT || p.wailT <= 0){ p.wailT = rr(0.7, 2.2); if (wailSlot(p)) sndWail(p.voice); }
     }
     if (p.wailT > 0) p.wailT -= dt;
     if (!p.dropped && p.panic > 0.5){
@@ -1859,7 +1883,7 @@ function land(){
   addFx({ type:'ring', x: car.x, y: car.y, ttl: 0.45, size: r * 1.5, col:'#ffffff' });
   car.vx *= 0.86; car.vy *= 0.86;
   car.spin += rr(-1.2, 1.2);
-  sndThud(0.9);
+  sndLand(Math.min(1, squashed / 5));
 
   G.rolls += flips;
   if (squashed > G.bestSlam) G.bestSlam = squashed;
@@ -2029,6 +2053,8 @@ function stepCar(dt){
       ttl: 0.3, size: rr(9, 17), col: rnd() < 0.5 ? '#ffd34d' : '#ff7a3d' });
   }
   if (car.onIce && v > 120 && rnd() < 0.3) puff(car.x, car.y, 1, '#dff0ff', 90);
+
+  engineSet(car.air ? v * 1.25 : v);       // it revs when the wheels leave the ground
 
   const leaving = car.x < MARKET_X - 520 && car.vx < 0 && G.runT > 1.2;
   if (!car.air && (v < STOP_SPD || leaving)) endRun();
@@ -3990,10 +4016,34 @@ function draw(){
 'use strict';
 /* ====================== AUDIO, INPUT, BOOT =============================== */
 
-const snd = { on: true, ac: null, master: null };
+const snd = { on: true, ac: null, master: null, noises: null,
+  eng: null, engGain: null, engLevel: 0 };
+
+/* Four noise bursts, rendered once. noise() used to build a fresh AudioBuffer
+   and fill it sample by sample on the main thread, in the same frame as the
+   crash it belonged to. */
+const NOISE_LEN = 0.5, NOISE_BANK = 4;
+function bakeNoise(){
+  const out = [];
+  for (let b = 0; b < NOISE_BANK; b++){
+    const n = Math.floor(snd.ac.sampleRate * NOISE_LEN);
+    const buf = snd.ac.createBuffer(1, Math.max(1, n), snd.ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    out.push(buf);
+  }
+  return out;
+}
 
 function audioInit(){
-  if (snd.ac || !snd.on) return;
+  if (!snd.on) return;
+  /* Chrome suspends a backgrounded context and iOS hands one back suspended.
+     There was no resume() and no visibilitychange anywhere in the file, so the
+     game went permanently silent with the mute button still reading a note. */
+  if (snd.ac){
+    try { if (snd.ac.state === 'suspended' && snd.ac.resume) snd.ac.resume(); } catch (_){}
+    return;
+  }
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -4001,7 +4051,50 @@ function audioInit(){
     snd.master = snd.ac.createGain();
     snd.master.gain.value = 0.32;
     snd.master.connect(snd.ac.destination);
+    snd.noises = bakeNoise();
+    if (snd.ac.state === 'suspended' && snd.ac.resume) snd.ac.resume();
   } catch (_){ snd.ac = null; }
+}
+
+/* The engine. There was no continuous sound at all while driving, so speed
+   never reached your ears — the same failure as the release having no punch,
+   in a different channel. One sawtooth, started on launch, tracking speed. */
+function engineStart(){
+  snd.engLevel = 0;
+  if (!snd.on || !snd.ac || snd.eng) return;
+  try {
+    snd.eng = snd.ac.createOscillator();
+    snd.engGain = snd.ac.createGain();
+    snd.eng.type = 'sawtooth';
+    snd.eng.frequency.setValueAtTime(55, snd.ac.currentTime);
+    snd.engGain.gain.setValueAtTime(0.0001, snd.ac.currentTime);
+    snd.eng.connect(snd.engGain); snd.engGain.connect(snd.master);
+    snd.eng.start();
+  } catch (_){ snd.eng = null; snd.engGain = null; }
+}
+
+function engineSet(sp){
+  // tracked whether or not there is a context, so the mix is testable
+  snd.engLevel = Math.min(0.10, sp / 16000);
+  if (!snd.eng) return;
+  try {
+    const t0 = snd.ac.currentTime;
+    snd.eng.frequency.setTargetAtTime(55 + sp * 0.11, t0, 0.05);
+    snd.engGain.gain.setTargetAtTime(snd.engLevel, t0, 0.06);
+  } catch (_){}
+}
+
+function engineStop(){
+  snd.engLevel = 0;
+  if (!snd.eng) return;
+  const osc = snd.eng, g = snd.engGain;
+  snd.eng = null; snd.engGain = null;
+  try {
+    const t0 = snd.ac.currentTime;
+    g.gain.cancelScheduledValues(t0);
+    g.gain.setTargetAtTime(0.0001, t0, 0.08);
+    osc.stop(t0 + 0.25);
+  } catch (_){}
 }
 
 function tone(freq, dur, type, vol, slideTo){
@@ -4025,25 +4118,37 @@ function noise(dur, vol, hp){
   if (!snd.on || !snd.ac) return;
   try {
     const t0 = snd.ac.currentTime;
-    const n = Math.floor(snd.ac.sampleRate * dur);
-    const buf = snd.ac.createBuffer(1, Math.max(1, n), snd.ac.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    if (!snd.noises) snd.noises = bakeNoise();
     const src = snd.ac.createBufferSource();
-    src.buffer = buf;
+    src.buffer = snd.noises[(Math.random() * snd.noises.length) | 0];
     const f = snd.ac.createBiquadFilter();
     f.type = 'bandpass'; f.frequency.value = hp || 900; f.Q.value = 0.8;
     const g = snd.ac.createGain();
     g.gain.value = vol || 0.25;
+    // the decay the per-call buffer used to bake in, done on the gain instead
+    g.gain.setValueAtTime(vol || 0.25, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.max(0.02, dur));
     src.connect(f); f.connect(g); g.connect(snd.master);
     src.start(t0);
+    src.stop(t0 + Math.min(NOISE_LEN, Math.max(0.02, dur)));
   } catch (_){}
 }
 
 const sndLaunch = p => { tone(120 + p * 90, 0.5, 'sawtooth', 0.22, 420 + p * 260); noise(0.25, 0.16, 500); };
 const sndThud   = k => { tone(90 + k * 40, 0.14, 'square', 0.12 + k * 0.1, 46); noise(0.12, 0.1 + k * 0.14, 380); };
 const sndCrunch = m => { noise(0.22 + m * 0.2, 0.2 + m * 0.2, 700 - m * 260); tone(70, 0.16, 'sawtooth', 0.12, 40); };
-const sndSquish = () => { tone(420 + Math.random() * 260, 0.10, 'square', 0.10, 130); noise(0.07, 0.08, 1600); };
+/* Pitched by the chain, so a x6 run of kills sounds like one event climbing
+   rather than six unrelated squelches. */
+const sndSquish = () => {
+  tone(380 + Math.min(12, G.combo) * 55 + Math.random() * 60, 0.10, 'square', 0.12, 130);
+  noise(0.07, 0.09, 1600);
+};
+/* Landing had been borrowing sndThud(0.9) — the same sound as clipping a hut. */
+const sndLand = k => {
+  tone(150, 0.26, 'sawtooth', 0.16 + k * 0.08, 44);
+  noise(0.3, 0.2 + k * 0.12, 240);
+  tone(64, 0.34, 'sine', 0.2 + k * 0.1, 38);
+};
 const sndBoost  = () => { tone(220, 0.35, 'sawtooth', 0.2, 880); noise(0.3, 0.14, 1200); };
 const sndPickup = () => { tone(660, 0.09, 'triangle', 0.18); setTimeout(() => tone(990, 0.12, 'triangle', 0.16), 70); };
 const sndGoal = () => { [660, 880, 1180].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'triangle', 0.17), i * 80)); };
@@ -4072,7 +4177,9 @@ function toggleMute(){
   snd.on = !snd.on;
   const b = $('mute');
   if (b) b.textContent = snd.on ? '♫' : '✕';
-  if (snd.on) audioInit();
+  // the drone is a live oscillator, not a one-shot: muting has to reach it
+  if (!snd.on) engineStop();
+  else { audioInit(); if (G.phase === 'drive') engineStart(); }
   try { localStorage.setItem('merry_crashmas_mute', snd.on ? '0' : '1'); } catch (_){}
 }
 
@@ -4137,6 +4244,11 @@ function bindInput(){
     if (e.key === 'm' || e.key === 'M') toggleMute();
   });
   window.addEventListener('resize', fit);
+  // coming back to the tab is where a suspended context has to be woken up,
+  // otherwise the game is silent for the rest of the session
+  window.addEventListener('visibilitychange', () => {
+    if (!document.hidden && snd.on) audioInit();
+  });
   const on = (id, fn) => { const e = $(id); if (e && e.addEventListener) e.addEventListener('click', fn); };
   on('bStart', () => { audioInit(); startCampaign(); });
   on('bGo', () => { audioInit(); beginLevel(); });

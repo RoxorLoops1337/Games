@@ -60,6 +60,17 @@ const EXPOSE = `__out.api = {
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
+  audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
+  wailSlot, noise, toggleMute,
+  C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
+  // tone/noise are function declarations in the game's scope, so the suite can
+  // swap them out and count what a run actually asks the mixer for
+  _spyAudio: () => {
+    const c = { tone: 0, noise: 0, freqs: [] };
+    tone = (f) => { c.tone++; c.freqs.push(f); };
+    noise = () => { c.noise++; };
+    return c;
+  },
 };
 `;
 
@@ -792,6 +803,139 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const vals = Object.values(ends);
   assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
     'every car should preview differently: ' + JSON.stringify(ends));
+});
+
+/* ---------------------------------------------------------------- sound --- */
+
+/* A 4.6s run on the last market fired 933 tone() and 41 noise() calls — 212
+   oscillator spawns a second, from 218 shoppers crying with no voice cap, no
+   distance falloff and no priority, all summing into a 0.32 master gain that
+   clipped and buried the squish and the crunch. The kills got quieter the more
+   of them you made. */
+test('a market full of screaming does not drown out the kills', () => {
+  const api = boot();
+  api.startLevel(api.LEVELS.length - 1);
+  api.beginLevel();
+  const c = api._spyAudio();
+  api.launch(-api.C.MAX_PULL, -60);
+  let secs = 0;
+  for (let i = 0; i < 300 && api.G.phase === 'drive'; i++){ api.update(1 / 60); secs += 1 / 60; }
+  const perSec = (c.tone + c.noise) / Math.max(0.5, secs);
+  const crying = api.people.filter(p => p.cry > 0.45 && !p.dead).length;
+  console.log('    (mixer load: ' + Math.round(perSec) + ' voices/s over ' + secs.toFixed(1) +
+    's, ' + crying + ' shoppers crying)');
+  assert(crying > 20, 'the market should actually be in a panic, got ' + crying);
+  assert(perSec < 40, 'oscillator spawns per second: ' + perSec.toFixed(0));
+});
+
+test('only the shoppers you are near are mixed in', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100;
+  const near = api.addPerson(2100, 1100, 'shopper');
+  const far = api.addPerson(2000 + api.C2.WAIL_RANGE + 200, 1100, 'shopper');
+  assert(!api.wailSlot(far), 'a shopper two screens away is not audible');
+  assert(api.wailSlot(near), 'one right next to the car is');
+  assert(api.wailSlot(near) && api.wailSlot(near), 'up to three at once');
+  assert(!api.wailSlot(near), 'and no more than three');
+  api.setT(api.getT() + api.C2.WAIL_LEN + 0.01);
+  assert(api.wailSlot(near), 'the slots free up again');
+});
+
+test('the engine is only running while the car is', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  assert(api.snd.engLevel === 0, 'silent on the sling');
+  api.launch(-api.C.MAX_PULL, 0);
+  api.update(1 / 60);
+  assert(api.carSpeed() > 400, 'the car should be moving');
+  assert(api.snd.engLevel > 0, 'the engine should be audible while driving');
+  const fast = api.snd.engLevel;
+  api.car.vx = 300; api.car.vy = 0;
+  api.update(1 / 60);
+  assert(api.snd.engLevel < fast, 'and quieter when it slows: ' + api.snd.engLevel + ' vs ' + fast);
+  api.endRun();
+  assert(api.snd.engLevel === 0, 'and gone once the run is over');
+});
+
+test('muting reaches the drone, not just the one-shots', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  api.update(1 / 60);
+  assert(api.snd.engLevel > 0, 'the engine is running');
+  api.toggleMute();
+  assert(!api.snd.on && api.snd.engLevel === 0, 'muting silences it');
+  api.toggleMute();
+  api.update(1 / 60);
+  assert(api.snd.on && api.snd.engLevel > 0, 'unmuting mid-run brings it back');
+});
+
+test('a chain of kills climbs instead of repeating itself', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  const c = api._spyAudio();
+  api.G.combo = 1; api.sndSquish();
+  const one = c.freqs[0];
+  c.freqs.length = 0;
+  api.G.combo = 6; api.sndSquish();
+  const six = c.freqs[0];
+  // the jitter is +-60, the step is 55 per link, so five links clear it
+  assert(six > one + 200, 'the sixth kill should be well above the first: ' + one + ' vs ' + six);
+});
+
+test('landing is not the same sound as clipping a hut', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  const c = api._spyAudio();
+  api.sndThud(0.9);
+  const thud = c.freqs.slice();
+  c.freqs.length = 0;
+  api.sndLand(1);
+  assert(JSON.stringify(thud) !== JSON.stringify(c.freqs),
+    'landing should have its own voice, got ' + JSON.stringify(c.freqs));
+  assert(c.freqs.length >= 2, 'and more than one note in it');
+});
+
+/* Chrome suspends a backgrounded context and iOS hands one back suspended.
+   There was no resume() and no visibilitychange anywhere in the file, so the
+   game went permanently silent with the mute button still reading a note. */
+test('a suspended audio context gets woken back up', () => {
+  const api = boot();
+  let resumed = 0;
+  api.snd.ac = { state: 'suspended', resume: () => { resumed++; }, currentTime: 0 };
+  api.audioInit();
+  assert(resumed === 1, 'audioInit should resume a suspended context');
+  api.snd.ac.state = 'running';
+  api.audioInit();
+  assert(resumed === 1, 'and leave a running one alone');
+  const vis = api._listeners.visibilitychange;
+  assert(vis && vis.length, 'the game should listen for the tab coming back');
+  api.snd.ac.state = 'suspended';
+  vis[0]();
+  assert(resumed === 2, 'coming back to the tab resumes it');
+});
+
+test('the noise bank is baked once, not per bang', () => {
+  const api = boot();
+  let built = 0;
+  const buf = { getChannelData: () => new Float32Array(64) };
+  api.snd.ac = null;
+  api._window.AudioContext = function (){
+    return { sampleRate: 8000, currentTime: 0, state: 'running', destination: {},
+      createGain: () => ({ gain: { value: 0, setValueAtTime(){}, exponentialRampToValueAtTime(){},
+        setTargetAtTime(){}, cancelScheduledValues(){} }, connect(){} }),
+      createBuffer: () => { built++; return buf; },
+      createBufferSource: () => ({ buffer: null, connect(){}, start(){}, stop(){} }),
+      createBiquadFilter: () => ({ type: '', frequency: { value: 0 }, Q: { value: 0 }, connect(){} }),
+      resume(){} };
+  };
+  api.audioInit();
+  const afterInit = built;
+  assert(afterInit >= 1 && afterInit <= 8, 'the bank is a handful of buffers, got ' + afterInit);
+  for (let i = 0; i < 50; i++) api.noise(0.2, 0.2, 800);
+  assert(built === afterInit, 'no buffer should be built per bang, got ' + (built - afterInit));
 });
 
 /* ------------------------------------------------------------------ HUD --- */

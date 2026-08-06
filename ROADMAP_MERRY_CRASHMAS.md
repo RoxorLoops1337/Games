@@ -25,8 +25,8 @@ edit this block to name the next one.
 - [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
   with five critic conflicts resolved and six proposals cut.
 - **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–16 are
-  done. **Next: item 17** (sound pass). Exit: all 19 ticked.
+  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–17 are
+  done. **Next: item 18** (correctness and dead-code cleanup). Exit: all 19 ticked.
 - **E — three more critics, then back to C.** Repeat the cycle.
 
 ## Working agreement for each pass
@@ -83,9 +83,10 @@ edit this block to name the next one.
 - [ ] **Weather that bites.** Blizzard should actually reduce what you can see
       before launch; fog banks that hide a crowd until you are in it; wind that
       pushes the car mid-flight.
-- [ ] **Sound pass.** The synth is thin: engine note that tracks speed, crowd
-      panic layer that rises with how many are fleeing, a proper level-clear
-      jingle, a replay sting that is not two notes.
+- [x] **Sound pass.** Done in plan item 17: wails capped at three voices inside
+      900px, an engine drone that tracks speed, squish pitched by the combo, a
+      landing voice of its own, a resumable context and a baked noise bank —
+      211.8 oscillator spawns a second down to 24.
 - [ ] **Ragdoll pass.** Bodies currently slide and stop. Limbs that trail, bodies
       that fold over the bonnet and get carried, pile-ups against stalls.
 - [ ] **Menu cover.** `cover.webp` + `cover.webm` so the games index shows real
