@@ -4947,6 +4947,7 @@ function startBattle(opt) {
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
     foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, settling: 0,
+    roster: null, foeSettling: 0, foeSwaps: 0, foeSwapT: 0, foePotions: 0, foeHeals: 0,
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
@@ -4959,6 +4960,23 @@ function startBattle(opt) {
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
   toughen(opt.foe, opt.wild ? FOE_HP_MUL : trainerHp((opt.team || [1]).length));
+  // A trainer's whole team exists from the start rather than being conjured as
+  // the last one falls, because a trainer who can only ever send the next kin
+  // in order is not playing the game you are playing. See `foeSwap`.
+  // The other half of playing the same game: a trainer carries a bag. You beat
+  // them by rotating fresh kin in, and they had no answer to that at all — a
+  // potion is the answer, and it costs them the turn to reach for it exactly as
+  // switching does.
+  if (opt.npc && !opt.wild) G.battle.foePotions = POTIONS_FOR(opt.team ? opt.team.length : 1);
+  if (opt.team && !opt.wild) {
+    const mul = trainerHp(opt.team.length);
+    G.battle.roster = opt.team.map((e, i) => {
+      if (i === 0) return opt.foe;
+      const m = toughen(mkMon(e[0], e[1]), mul);
+      m.stages = { atk: 0, def: 0, spd: 0 };
+      return m;
+    });
+  }
   G.battle.dispF = G.battle.tgtF = opt.foe.hp;
   buildDeck(G.battle);
   G.wipe = WIPE_T;
@@ -5071,8 +5089,11 @@ function useMove(log, atkSide, moveId) {
       : { flat: b.foeEdge || 0, mul: b.wild ? WILD_DMG_MUL : trainerDmg(b.foe.lvl), hits: 1, drain: 0 };
     if (atkSide === 'foe') b.foeEdge = 0;          // spent on this swing
     // A kin that has just been sent in is still finding its feet.
-    const settling = atkSide === 'mine' && b.settling;
-    if (settling) { b.settling = 0; snap(log, `${who} is still finding its feet.`, 'block', 'mine'); }
+    const settling = atkSide === 'mine' ? b.settling : b.foeSettling;
+    if (settling) {
+      if (atkSide === 'mine') b.settling = 0; else b.foeSettling = 0;
+      snap(log, `${who} is still finding its feet.`, 'block', atkSide);
+    }
     let totalDealt = 0;
     for (let h = 0; h < bonus.hits && defender.hp > 0; h++) {
       const roll = damageOf(attacker, defender, moveId);
@@ -5462,6 +5483,18 @@ const SWITCH_PUNISH = 11;
 // is most of the reason to do it at all, which is what makes it a decision
 // rather than the obvious opening move.
 const SETTLE_MUL = .6;
+/**
+ * What a trainer carries, and what it is worth.
+ *
+ * Trainers could not win, and no constant fixed it, because the problem was not
+ * a number: the player arrives with four rested kin and rotates freshness in
+ * while a trainer spends one to three, one at a time, with no way to put any of
+ * it back. One potion per kin on the team, worth a third of the bar, reached for
+ * when the kin on the field is nearly out. It costs them their turn, like every
+ * other thing either side can do instead of swinging.
+ */
+const POTIONS_FOR = (team) => Math.max(1, team);
+const FOE_POTION = .34, FOE_POTION_AT = .35;
 
 /** Give a foe its battle-sized health as it steps in. */
 function toughen(mon, mul) {
@@ -5840,6 +5873,62 @@ function playCard(i) {
   return log;
 }
 
+/**
+ * The best kin a trainer has left for the fight in front of them, or -1.
+ *
+ * Scored the way a person scores it: what their element does to yours, weighted
+ * by how much of the kin is still there. A trainer only reaches for it when the
+ * one on the field is the wrong one — resisted, or nearly out — because it costs
+ * them the turn, exactly as it costs you.
+ */
+function foeBench(force) {
+  const b = B();
+  if (!b.roster || b.wild) return -1;
+  const best = (m, def) => {
+    let e = 0;
+    for (const slot of m.moves) {
+      const mv = MOVES[slot.id];
+      if (mv && mv.pow) e = Math.max(e, effect(mv.type, def.types));
+    }
+    return e;
+  };
+  const cur = b.foe;
+  const mine = best(cur, b.mine);
+  if (!force && !(mine < 1 || cur.hp / cur.max < .35)) return -1;
+  let pick = -1, top = mine * (cur.hp / cur.max);
+  b.roster.forEach((m, i) => {
+    if (m === cur || m.hp <= 0) return;
+    const score = best(m, b.mine) * (m.hp / m.max);
+    if (score > top * 1.6) { pick = i; top = score; }
+  });
+  return pick;
+}
+
+/**
+ * A trainer sends in somebody else. The same deal you get, mirrored: it costs
+ * them their turn, the kin arriving swings soft once, and you catch them
+ * changing — your next attack carries the edge theirs would have carried if you
+ * had been the one to blink.
+ */
+function foeSwap(log, idx) {
+  const b = B();
+  const next = b.roster[idx];
+  snap(log, `${b.npc ? b.npc.name : 'The challenger'} calls ${dispName(b.foe)} back!`, 'faint', 'foe');
+  b.foe.stages = { atk: 0, def: 0, spd: 0 };
+  b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.cornered = 0;
+  b.foe = next;
+  b.teamIdx = idx;                       // whoever is out is who is out
+  next.stages = { atk: 0, def: 0, spd: 0 };
+  b.dispF = b.tgtF = next.hp;
+  b.foeSettling = 1;
+  b.foeSwaps++;
+  b.foeSwapT = b.turn;
+  b.mods.edge = (b.mods.edge || 0) + Math.round(SWITCH_PUNISH * planScale(next.lvl));
+  seeMon(next.species);
+  snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${next.name}!`, 'send', 'foe');
+  snap(log, `Caught mid-change — your next attack will land harder.`, 'buff', 'mine');
+}
+
 /** The foe is down: award XP and gems, or send out the next of a trainer's team. */
 function resolveFoeDown(log) {
   const b = B();
@@ -5866,10 +5955,27 @@ function resolveFoeDown(log) {
     }
   }
   b.hpMark = b.mine.hp;                      // the next foe is measured from here
-  if (b.team && b.teamIdx < b.team.length - 1) {
+  // A trainer's team is a bench now, so "the next one" is the best one left
+  // rather than the one that happens to be written next in the list.
+  if (b.roster) {
+    b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.foeSettling = 0;
+    const idx = foeBench(true);
+    const nextIdx = idx >= 0 ? idx : b.roster.findIndex((m) => m.hp > 0);
+    if (nextIdx >= 0) {
+      b.foe = b.roster[nextIdx];
+      b.teamIdx = nextIdx;
+      b.foe.stages = { atk: 0, def: 0, spd: 0 };
+      b.dispF = b.tgtF = b.foe.hp;
+      seeMon(b.foe.species);
+      snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${b.foe.name}!`, 'send', 'foe');
+      readIntent();
+    } else {
+      b.over = 'win';
+    }
+  } else if (b.team && b.teamIdx < b.team.length - 1) {
     b.teamIdx++;
     const nxt = b.team[b.teamIdx];
-    b.foe = toughen(mkMon(nxt[0], nxt[1]), b.wild ? FOE_HP_MUL : trainerHp((b.team || [1]).length));
+    b.foe = toughen(mkMon(nxt[0], nxt[1]), FOE_HP_MUL);
     b.foe.stages = { atk: 0, def: 0, spd: 0 };
     b.dispF = b.tgtF = b.foe.hp;
     seeMon(b.foe.species);
@@ -5885,6 +5991,31 @@ function foeTurn(log) {
   const b = B();
   if (b.over || b.foe.hp <= 0 || b.mine.hp <= 0) return;
   b.phase = 'foe';
+  // A potion, if the kin on the field is nearly out and there is one left. This
+  // comes before the bench because putting the kin you have back together beats
+  // sending in a fresh one that arrives swinging soft.
+  if (b.foePotions > 0 && !b.wild && b.foe.hp / b.foe.max < FOE_POTION_AT && b.foe.hp > 0) {
+    b.foePotions--;
+    b.foeHeals++;
+    const back = Math.max(1, Math.round(b.foe.max * FOE_POTION));
+    const had = b.foe.hp;
+    b.foe.hp = clamp(b.foe.hp + back, 0, b.foe.max);
+    snap(log, `${b.npc ? b.npc.name : 'The challenger'} uses a potion. ${dispName(b.foe)} recovers ${b.foe.hp - had}.`, 'heal', 'foe');
+    if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+    return;
+  }
+  // Somebody else's turn. A trainer with a bench uses it, at the same price you
+  // pay: the turn goes, the kin arriving swings soft once, and you get the edge
+  // for catching them mid-change. Once per fight per kin on the bench, and never
+  // twice running, or a three-kin trainer can stall a fight for ever.
+  if (b.roster && !b.wild && b.turn > b.foeSwapT + 1 && b.foeSwaps < b.roster.length) {
+    const idx = foeBench(false);
+    if (idx >= 0) {
+      foeSwap(log, idx);
+      if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+      return;
+    }
+  }
   // Work the plan. A beat costs the foe its attack, which is what makes it a
   // decision on your side too: the turn it braces is the turn it does not hit.
   if (b.intent && b.intent.kind === 'plan') {
@@ -8684,6 +8815,7 @@ if (typeof window !== 'undefined') {
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
     CORNER_AT, CORNER_EDGE, SWITCH_PUNISH, SETTLE_MUL, trainerHp, TRAINER_DMG_MUL, trainerDmg,
+    foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
