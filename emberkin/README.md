@@ -139,6 +139,60 @@ back from the door. The rug is one object, so it is a *seamless* weave and
 `drawEdges` puts the gold hem around wherever it happens to stop — the first
 version gave every rug tile its own frame and read as six coasters.
 
+### The first choice
+
+Rowan hands you one of three kin, and for seven passes that was a three-line
+menu — the first decision in the game, made in the same widget as "Sound: on".
+It is a screen now, laid out the way the reward screen is, because that is the
+shape this game uses for *pick one of these and live with it*: three cards, each
+with a portrait lit in its own element, its dex line, and what it is strong into
+and soft against read straight off the type chart rather than written by hand.
+
+There is no way out of it but choosing. `closeScreen` refuses, and B does
+nothing — the same rule the reward screen follows.
+
+### The screens
+
+Party, dex, bag, shop, box, deck and chests were the last plain lists in the
+game: a grid of equal panels with all the text in them. A row of equal cards has
+no hierarchy — nothing on it says which one you are looking at, so every card
+has to carry every fact and none of them can be big.
+
+**The kin page** is two columns. The roster is a compact list on the left; the
+one you have picked opens on the right with a framed portrait, a stat block and
+its moves. Every stat gets a bar as well as a number, measured against the
+roster's own ceiling, because a bar answers "is this one fast?" before you have
+read the number. A move is a little card with its element down the left edge and
+a PP track under it that turns red near empty.
+
+`statBlock()` is pure and exported, so the suite checks the page without a
+browser — including the two ways a bar can lie: a save whose xp sits below its
+own level's floor must not print a negative, and one with absurd xp must not run
+past the end of the track.
+
+**The bag and the shop** are one renderer, priced or counted. Items are shelved
+by what they are for — Orbs, Salves, In a fight — because you go looking for "an
+orb", not for "the fourth row", and shelving is stable however the keys arrive
+so the cursor never jumps under you. Every item wears the same 20×20 glyph the
+cards use, generated in `cardicons.mjs` alongside them: an orb in the bag and an
+orb on a card are the same object rather than a name and a picture of one. The
+orbs' shading comes off the sphere's own normal — a linear ramp across a circle
+bands into stripes, which is what the first pass at them looked like.
+
+**The chest shop** was the one screen the other passes left behind, and reading
+the whole game back is what turned it up: every chest carried a full-strength
+coloured border, so all four glowed at once and the one the cursor was on was
+invisible. The tint belongs to the chest now and the gold ring belongs to the
+cursor, and only one thing at a time gets it. The four percentages became a
+single segmented **odds bar** — you are choosing between distributions, and a
+distribution is a shape.
+
+**The dex** has three states you can tell apart across the room: caught is the
+creature, lit, in a gold frame; seen is a silhouette *lifted* off the panel
+rather than painted in the outline tone, which is darker than the panel and made
+"seen" and "never met" look identical; never met is an empty hatched slot with a
+`?` and its number. A creature you have not met does not leak its silhouette.
+
 ### The title screen
 
 The first thing anyone sees, so it is a painting rather than a placeholder.
@@ -257,6 +311,18 @@ rectangle, not a pond.
 one, every actor looks pasted on top of the ground rather than standing in it —
 the cheapest single thing that makes a tile field read as a place.
 
+A town where nobody moves is a diorama. Everyone breathes — a one-pixel bob, on
+a phase seeded off the tile they stand on, so a street does not pulse in unison
+— and everyone turns to look at you when you come within two tiles. The NPC art
+faces the viewer, so a mirror is the only honest turn available: left and right
+are real, and up and down keep them facing forward rather than lying about the
+sprite. Standing next to somebody also quickens their bob, which is the whole of
+"they noticed you".
+
+The bob is rounded to whole pixels. At this scale a sprite landing between them
+shimmers, and the suite asserts that no actor is ever drawn at a fractional
+offset.
+
 ### Nothing outdoors is a rectangle
 
 The maps are char grids, so the temptation is to type rectangles: a 2×2 square
@@ -272,6 +338,57 @@ the same one the tiles follow — clusters, not blocks:
 The suite enforces the shape rather than the taste: for each tile kind, the set
 of distinct row-signatures it makes has to be larger than one. A region whose
 every row is the same run *is* a rectangle, whatever it is made of.
+
+### Weather
+
+The grade says what colour a place is; `weather()` says what is moving in the
+air there. It belongs to the **map, not to a clock** — Stillmere is always wet,
+Emberwood is always misty — so a place feels like itself every time you walk
+into it rather than depending on when you happened to arrive.
+
+| map | weather |
+|---|---|
+| Hollowbrook, Route One | warm dust rising in the light — a nice day, not an event |
+| Emberwood | banks of mist drifting at three speeds, pooling on the ground |
+| Stillmere | slanted rain at three depths, and rings on the water it lands in |
+| Crown Hollow | a gale: long pale streaks crossing fast, nothing up here to stop it |
+
+All of it is procedural off fixed seeds — nothing is stored between frames and
+nothing pops when the camera moves. It draws over the grade, because weather is
+between you and the valley rather than part of it.
+
+Wind is separate and per-map, `[rate, pixels]`. It crosses a field as a
+travelling wave so the blades ripple in sequence instead of shivering all at
+once, and **only the top of the tile moves** — the roots stay put, which is the
+difference between grass bending and grass sliding.
+
+### Nothing cuts
+
+Everything in the game used to change on a single frame, which reads as a
+slideshow rather than a place.
+
+A door goes **through** black. The map used to change on the frame you stepped
+on the warp and then fade up, which is a cut with a stain on it: you see the new
+room before the old one has gone. Now the screen closes first, the map changes
+behind the curtain, and it opens again — same total time, and nothing moves
+while the curtain is down.
+
+A screen arrives rather than appearing: it slides up from under its own bottom
+edge. The reward screen is the one that *lands*, scaling down onto the page,
+because it is the only screen you actually chose to open.
+
+### Sound
+
+There is no sample in the game; everything is the same square-wave synth the
+music runs on.
+
+A footstep says what you are walking on — grass brushes, tall grass swishes, a
+path knocks, sand is soft and short, boards ring — and alternates between two
+pitches so a walk has a gait rather than a metronome. Opening a menu and
+confirming in one are deliberately *different* sounds: if they are the same, the
+ear stops using either. A door is a low knock with a fall under it, and an
+evolution opens on a swell rather than a chime, because something is coming
+rather than something having arrived.
 
 ## How a battle works
 
@@ -373,6 +490,22 @@ teleport with extra frames; what sells arrival is deceleration plus weight going
 down on every step, so the offset eases out, the body bobs while it is still
 covering ground, and dust kicks up behind. All three fall to nothing exactly
 when the entry finishes.
+
+### The battle HUD
+
+Everything on the bar around the fight is an object rather than a printed
+number, because a number is something you read and an object is something you
+see:
+
+- **Energy** is a row of gems that go dark as you spend them. "2/3" tells you
+  the same thing but only after you have parsed it.
+- **The piles** are stacks of cards — three overlapping backs with the top one
+  lit, so a pile reads front to back — in the draw pile's blue and the used
+  pile's violet, with the count beside them.
+- **A status** is a chip in its own colour, pulsing gently, rather than three
+  grey letters. It is a state you are in, so it should be the loudest thing on
+  the panel; a burn ticking away ought to be visible from the corner of your
+  eye.
 
 ### Cards
 
@@ -546,6 +679,57 @@ you read "you lob a Prism Orb" and then watch it happen, not the reverse.
 A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
 a shower that takes its time — and hands you its papers afterwards. Any key
 skips the tail of the flourish; nobody should sit through it twice.
+
+### Winning, and going down
+
+A knockout used to be an alpha change on the next frame: the loser was suddenly
+translucent and still standing. It falls now — a slump and a fade over half a
+second, eased so it drops fast and settles.
+
+And a win used to be a line of text followed immediately by a card offer, which
+is a transaction rather than a victory. `winFlourish()` holds the arena for a
+beat first: the light comes up off the ground, gold rises through it, and the
+two numbers you actually won are on the canvas. The DOM panels around the fight
+hide while it runs, or the word lands behind your own HP bar — which is exactly
+what the first version did.
+
+It is skippable, and the frame that skips it **still belongs to the transition**.
+Without that, the very press that ended the flourish fell through to the reward
+screen it had just opened and took the first card for you.
+
+### Being ambushed
+
+A trainer spotting you was an exclamation mark and a dialogue box with an
+ellipsis in it. It is three beats now — `spot`, `walk`, `land`: they see you,
+the frame closes in with two bars and a darkening, and they walk over before
+anybody speaks. They slide across in *pixels*, so the tile they occupy never
+changes and nothing about collision or interaction has to know it is happening.
+
+Nothing you can do about any of it, which is the point of being ambushed.
+
+### Evolving
+
+The other moment the genre is built around, and it used to be two dialogue
+boxes with a spinning wheel behind them — which means the whole thing advanced
+at the speed you mashed A, and was over before you had read the first line. It
+runs on its own clock now, like the catch does:
+
+    hold · build · burst · settle · quiet
+
+The shape changes at the top of `burst`, **under the white-out**, so you never
+see the swap: you see what it was, then light, then what it is. `quiet` is the
+beat that does the most work and draws nothing at all — a second of the new
+creature standing there before anybody says its name.
+
+Going white is done by blitting the creature's own *silhouette* over itself
+additively, five times. A flat dark shape stacked on itself climbs to white,
+which is the only way to blow a sprite out without authoring a second set of
+art for it. The motes fall **inward** while the light builds, because the energy
+is arriving rather than leaving — that is the whole difference between evolving
+and burning.
+
+The suite asserts the beats play in order, that the species changes *during*
+`burst` and never in the open, and that mashing A does not skip it.
 
 ### A kin's papers
 

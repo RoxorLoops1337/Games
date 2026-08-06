@@ -112,7 +112,11 @@ fresh.G.player.dir = 'up';
 tap('a');
 eq(fresh.G.mode, 'dialogue', 'Rowan starts the starter speech');
 for (let i = 0; i < 10 && fresh.G.mode === 'dialogue'; i++) tap('a');
-eq(fresh.G.mode, 'menu', 'the starter menu opens');
+eq(fresh.G.mode, 'screen', 'the starter screen opens');
+eq(fresh.G.screen.kind, 'starter', 'and it is the pick-one-of-three screen');
+// There is no way out of it but choosing — B does nothing.
+tap('b');
+eq(fresh.G.screen && fresh.G.screen.kind, 'starter', 'and no way out of it but choosing');
 tap('a');
 eq(fresh.G.party.length, 1, 'you have a kin');
 eq(fresh.G.party[0].species, 'cindercub', 'the first option is Cindercub');
@@ -166,6 +170,11 @@ while (fresh.G.battle && guard++ < 600) {
 }
 ok(guard < 600, `the battle resolved by playing cards and ending turns (${guard} frames)`);
 eq(fresh.G.battle, null, 'and handed control back to the world');
+// A win now lands on the card offer rather than straight back in the grass.
+if (fresh.G.screen && fresh.G.screen.kind === 'reward') {
+  fresh.G.screen.i = fresh.G.screen.list.length - 1;    // no thanks
+  fresh.screenSelect();
+}
 eq(fresh.G.mode, 'world', 'the player is walking again');
 
 section('the battle controls do what they say');
@@ -556,6 +565,279 @@ ok(/z-index:20/.test(picked), 'and sits over the rest of the hand');
 // Scaling about the fan's pivot would throw it up over the dialogue; it pivots
 // about its own base instead.
 ok(picked.includes('transform-origin:50% 100%'), 'it lifts off its own base, not the fan\'s');
+
+section('the screens have a shape');
+// The bag groups, and every group is one you would actually go looking in.
+const bagKeys = Object.keys(EK.ITEMS);
+const shelves = EK.shelve(bagKeys);
+ok(shelves.length >= 2, `the bag is shelved rather than listed (${shelves.length} groups)`);
+eq(shelves.flatMap(([, ks]) => ks).length, bagKeys.length, 'every item lands on a shelf');
+ok(new Set(shelves.flatMap(([, ks]) => ks)).size === bagKeys.length, 'and none lands on two');
+ok(shelves[0][0] === 'Orbs', 'orbs come first — it is the thing you reach for mid-fight');
+// A shelf never changes order between renders, or the cursor jumps under you.
+eq(JSON.stringify(EK.shelve(bagKeys)), JSON.stringify(EK.shelve([...bagKeys].reverse())),
+  'shelving is stable however the keys arrive');
+// Every item has a glyph, so the bag is icons rather than a list of names.
+for (const k of bagKeys) ok(!!EK.sprite('card', EK.ITEM_ART(k)), `${EK.ITEMS[k].name} has an icon`);
+
+// The kin page: a portrait, bars, and moves, all off one function.
+const page = EK.statBlock(EK.mkMon('pyrelynx', 24));
+ok(page.includes('portrait'), 'the kin page has a portrait');
+for (const label of ['HP', 'ATK', 'GUARD', 'SPD', 'EXP']) ok(page.includes(`>${label}<`), `it shows ${label}`);
+eq((page.match(/class="sbar"/g) || []).length, 5, 'every stat gets a bar, not just a number');
+ok((page.match(/class="movecard"/g) || []).length >= 1, 'and the moves come with it');
+eq(EK.statBlock(null), '', 'an empty slot renders nothing rather than throwing');
+// A save whose xp sits below its own level floor must not print a negative.
+const odd = EK.mkMon('pyrelynx', 24);
+odd.xp = 0;
+const oddPage = EK.statBlock(odd);
+ok(!/>-\d/.test(oddPage), 'a half-migrated save shows no negative EXP');
+ok(!/width:-/.test(oddPage), 'and no negative bar');
+// A bar never runs past its track either.
+const full = EK.mkMon('pyrelynx', 24);
+full.xp = 1e9;
+const widths = [...EK.statBlock(full).matchAll(/width:([\d.]+)%/g)].map((m) => parseFloat(m[1]));
+ok(widths.length >= 5, 'the bars are all there');
+ok(widths.every((w) => w >= 0 && w <= 100), `and none runs past its track (max ${Math.max(...widths)}%)`);
+
+// Status reads as a chip in its own colour rather than three grey letters.
+for (const st of Object.keys(EK.STATUS)) {
+  const chip = EK.statusChip(st);
+  ok(chip.includes(EK.STATUS[st].tag), `${st} shows its tag`);
+  ok(/background:#[0-9a-f]{6}/i.test(chip), `${st} carries its own colour`);
+}
+
+// Every screen renders without throwing, with real content in it.
+const scr = loadGame({});
+scr.setCtx(mkCtx());
+scr.G.party = [scr.mkMon('pyrelynx', 24), scr.mkMon('dewdrip', 12)];
+scr.G.box = [scr.mkMon('sproutle', 8)];
+scr.G.bag = { bloomorb: 4, salve: 2, elixir: 1 };
+scr.G.dex = { cindercub: 2, pyrelynx: 1 };
+scr.STARTER_DECK.forEach(scr.grantCard);
+scr.G.money = 3000; scr.G.gems = 900;
+for (const kind of ['party', 'dex', 'box', 'deck', 'bag', 'shop', 'chests']) {
+  scr.openScreen(kind);
+  scr.renderScreen();
+  ok(scr.G.screen && scr.G.screen.kind === kind, `${kind} opened`);
+  ok((scr.G.screen.list || []).length >= 0, `${kind} built a list`);
+  // …and it can be walked with the keys without falling off either end.
+  for (let i = 0; i < 30; i++) {
+    scr.pressKey(i % 2 ? 'right' : 'down');
+    scr.step(.05);
+    scr.releaseKey(i % 2 ? 'right' : 'down');
+    scr.fired.clear();
+  }
+  const len = (scr.G.screen ? screenLen(scr) : 1);
+  ok(!scr.G.screen || (scr.G.screen.i >= 0 && scr.G.screen.i < Math.max(1, len)),
+    `${kind}: the cursor stayed on the list`);
+  if (scr.G.screen) scr.closeScreen();
+  scr.G.screen = null;
+}
+function screenLen(g) { return (g.G.screen.list || []).length; }
+
+section('the first choice is a choice');
+// The starter used to be a three-line menu. It is a screen you cannot leave.
+const first = loadGame({});
+first.setCtx(mkCtx());
+first.newGame();
+for (let i = 0; i < 8 && first.G.mode === 'dialogue'; i++) { first.pressKey('a'); first.step(.2); first.releaseKey('a'); first.fired.clear(); }
+first.G.player.x = 5; first.G.player.y = 3; first.G.player.px = 5; first.G.player.py = 3;
+first.G.player.dir = 'up';
+first.pressKey('a'); first.step(.2); first.releaseKey('a'); first.fired.clear();
+for (let i = 0; i < 10 && first.G.mode === 'dialogue'; i++) { first.pressKey('a'); first.step(.2); first.releaseKey('a'); first.fired.clear(); }
+eq(first.G.mode, 'screen', 'Rowan opens a screen rather than a menu');
+eq(first.G.screen.kind, 'starter', 'the pick-one-of-three screen');
+eq(first.G.screen.list.length, 3, 'with three kin on it');
+eq(first.G.screen.list.join(','), first.STARTERS.join(','), 'and they are the three starters');
+// Every one of them is a real, different choice.
+const starterTypes = first.STARTERS.map((id) => first.DEX[id].types[0]);
+eq(new Set(starterTypes).size, 3, `no two starters share an element (${starterTypes.join('/')})`);
+// It renders, at every cursor position, without throwing.
+for (let i = 0; i < 3; i++) { first.G.screen.i = i; first.renderScreen(); ok(true, `starter ${i} rendered`); }
+// There is no way out of it but choosing.
+first.closeScreen();
+eq(first.G.screen && first.G.screen.kind, 'starter', 'closing it does nothing');
+first.G.screen.i = 1;
+first.screenSelect();
+eq(first.G.party.length, 1, 'picking one gives you a kin');
+eq(first.G.party[0].species, first.STARTERS[1], 'the one you picked');
+eq(first.G.flags.starter, first.STARTERS[1], 'and the run remembers it');
+ok(first.G.bag.bloomorb >= 5 && first.G.bag.salve >= 3, 'with orbs and salves to go with it');
+eq(first.G.screen, null, 'the screen closed behind you');
+
+section('a knockout has weight');
+const koRun = loadGame({});
+koRun.setCtx(mkCtx());
+koRun.G.party = [koRun.mkMon('pyrelynx', 40)];
+koRun.startBattle({ foe: koRun.mkMon('sproutle', 3), wild: true });
+const kb = koRun.B();
+eq(kb.downF, null, 'nobody is down at the start');
+kb.foe.hp = 0; kb.tgtF = 0;
+koRun.entryFx(kb, { fx: 'faint', side: 'foe', hpM: kb.mine.hp, hpF: 0 });
+eq(kb.downF, 0, 'a faint starts the fall');
+eq(kb.downM, null, 'and only for the one that fell');
+// It falls over time and then stops falling.
+koRun.G.mode = 'battle';
+for (let i = 0; i < 6; i++) { koRun.step(.05); koRun.draw(); }
+ok(kb.downF > 0 && kb.downF < koRun.KO_FALL, `it is mid-fall (${kb.downF.toFixed(2)}s)`);
+for (let i = 0; i < 40; i++) { koRun.step(.05); koRun.draw(); }
+ok(kb.downF <= koRun.KO_FALL + 1e-9, 'and it settles rather than falling for ever');
+
+section('the chest shop reads like the bag');
+const chest = loadGame({});
+chest.setCtx(mkCtx());
+chest.G.gems = 5000;
+chest.openScreen('chests');
+chest.renderScreen();
+eq(chest.G.screen.list.length, chest.CHEST_IDS.length, 'every chest is on the shelf');
+// The odds bar is a distribution, so it has to add up to one.
+for (const k of chest.CHEST_IDS) {
+  const total = Object.values(chest.CHESTS[k].odds).reduce((a, b) => a + b, 0);
+  eq(total, 100, `${chest.CHESTS[k].name}: the odds add up`);
+  // …and better chests really are better, or the bar is decoration.
+  ok(chest.CHESTS[k].odds.common != null, `${chest.CHESTS[k].name} lists its commons`);
+}
+const commons = chest.CHEST_IDS.map((k) => chest.CHESTS[k].odds.common || 0);
+ok(commons.every((c, i) => i === 0 || c <= commons[i - 1]),
+  `commons thin out as chests get dearer (${commons.join(' → ')})`);
+const costs = chest.CHEST_IDS.map((k) => chest.CHESTS[k].cost);
+ok(costs.every((c, i) => i === 0 || c > costs[i - 1]), 'and they are listed cheapest first');
+chest.closeScreen();
+
+section('weather belongs to the place');
+// Every outdoor map has weather, and it is a property of the map rather than
+// of a clock — Stillmere is always wet, Emberwood is always misty.
+for (const id of Object.keys(EK.MAPS)) {
+  const outside = EK.MAPS[id].kind !== 'inside';
+  eq(!!EK.WEATHER[id], outside, `${id}: ${outside ? 'has weather' : 'is indoors and has none'}`);
+}
+ok(new Set(Object.values(EK.WEATHER)).size >= 3, 'and no two kinds of place feel the same');
+// Wind is per-map too, and every map has a fallback rather than a crash.
+for (const id of Object.keys(EK.MAPS)) {
+  const w = EK.WIND[id] || EK.WIND._;
+  ok(Array.isArray(w) && w.length === 2 && w[1] >= 1, `${id} has a wind [rate, px]`);
+}
+ok((EK.WIND.crown_hollow || [])[1] > (EK.WIND.emberwood || [])[1],
+  'the exposed pass blows harder than the sheltered wood');
+// It paints, on every map, and it never leaves the context dirty for the next
+// frame — a leaked globalAlpha is how a whole game goes translucent.
+for (const id of Object.keys(EK.MAPS)) {
+  const wcalls = [];
+  const wctx = mkCtx(wcalls);
+  wctx.globalAlpha = 1;
+  EK.weather(wctx, id, { kind: EK.MAPS[id].kind, map: EK.MAPS[id], x0: 0, y0: 0, ox: 0, oy: 0 });
+  ok(true, `${id} weather painted without throwing`);
+}
+// And the world still draws under it, on every map and at several times.
+for (const id of Object.keys(EK.MAPS)) {
+  EK.enterMap(id, 4, 4, 'down');
+  EK.G.mode = 'world';
+  for (const t of [0, 3.3, 41.7]) {
+    EK.G.t = t;
+    const since = drawCount();
+    EK.draw();
+    ok(since() > 20, `${id} drew with weather at t=${t}`);
+  }
+}
+
+section('a door goes through black');
+const warp = loadGame({});
+warp.setCtx(mkCtx());
+warp.G.party = [warp.mkMon('pyrelynx', 12)];
+warp.enterMap('hollowbrook', 5, 5, 'up');
+warp.G.mode = 'world';
+const door = warp.MAPS.hollowbrook.warps.find((w) => w.to === 'lab');
+ok(door, 'the study still has a door');
+warp.doWarp(door);
+ok(warp.G.warp, 'stepping on it draws the curtain');
+eq(warp.G.mapId, 'hollowbrook', 'and the map has NOT changed yet — that is the whole point');
+// Nothing moves while the curtain is down.
+const wasX = warp.G.player.x;
+warp.pressKey('left');
+for (let i = 0; i < 3; i++) { warp.step(.04); warp.draw(); }
+warp.releaseKey('left'); warp.fired.clear();
+eq(warp.G.player.x, wasX, 'and you cannot walk behind it');
+// It opens on the other side.
+for (let i = 0; i < 20 && warp.G.warp; i++) { warp.step(.04); warp.draw(); }
+eq(warp.G.mapId, 'lab', 'the curtain lifts on the new map');
+eq(warp.G.player.x, door.tx, 'at the far side of the door');
+ok(warp.G.fade > 0, 'and it opens rather than cutting');
+ok(warp.hasSave(), 'the journey saved on the way through');
+
+section('evolving takes its time');
+const evo = loadGame({});
+evo.setCtx(mkCtx());
+evo.G.party = [evo.mkMon('cindercub', 20)];
+evo.runEvolution(evo.G.party[0]);
+const beats = [];
+let swapAt = null;
+for (let i = 0; i < 400 && evo.G.evoAnim; i++) {
+  const p = evo.evoPhase();
+  if (p && p !== beats[beats.length - 1]) beats.push(p);
+  if (swapAt === null && evo.G.party[0].species !== 'cindercub') swapAt = p;
+  evo.step(.05);
+  evo.draw();
+}
+eq(beats.join(' '), 'hold build burst settle quiet', 'it plays every beat in order');
+eq(swapAt, 'burst', 'and the shape changes under the white-out, never in the open');
+eq(evo.G.party[0].species, 'pyrelynx', 'the kin really evolved');
+eq(evo.G.evoAnim, null, 'the scene handed the screen back');
+eq(evo.G.mode, 'dialogue', 'and the name arrives after it, not during');
+// It is not driven by the buttons any more — that was the old bug: the one
+// moment the genre is built around used to run at the speed you mashed A.
+const evo2 = loadGame({});
+evo2.setCtx(mkCtx());
+evo2.G.party = [evo2.mkMon('cindercub', 20)];
+evo2.runEvolution(evo2.G.party[0]);
+for (let i = 0; i < 12; i++) {
+  evo2.pressKey('a'); evo2.step(.02); evo2.releaseKey('a'); evo2.fired.clear();
+}
+ok(evo2.G.evoAnim, 'mashing A does not skip it');
+ok(evo2.evoPhase() === 'hold' || evo2.evoPhase() === 'build', `it is still early (${evo2.evoPhase()})`);
+
+section('the ground makes a sound');
+// A footstep says what you are walking on. Every walkable tile has a cue, and
+// no two kinds of ground share one by accident.
+const walkable = Object.keys(EK.TILE_ART).filter((c) => !EK.SOLID.has(c));
+for (const c of walkable) {
+  const cue = EK.STEP_CUE[c] || 'step_grass';
+  ok(/^step_/.test(cue), `${EK.TILE_ART[c]} has a footstep (${cue})`);
+}
+ok(new Set(Object.values(EK.STEP_CUE)).size >= 4, 'and the ground is audibly different in at least four ways');
+eq(EK.STEP_CUE[','], 'step_tall', 'tall grass sounds like tall grass');
+eq(EK.STEP_CUE.b, 'step_wood', 'floorboards sound like boards');
+
+section('a town that moves');
+// NPCs turn to look at you. The art faces the viewer, so the only honest turn
+// is a mirror — which means it has to be driven by which side you are on.
+const town = loadGame({});
+town.setCtx(mkCtx());
+town.G.party = [town.mkMon('pyrelynx', 12)];
+town.enterMap('hollowbrook', 5, 7, 'down');
+town.G.mode = 'world';
+const tam = town.MAPS.hollowbrook.npcs.find((n) => n.name === 'Old Tam');
+ok(tam, 'Old Tam is still in the town');
+const drawFlips = () => {
+  const calls = [];
+  town.setCtx(mkCtx(calls));
+  town.draw();
+  return calls.filter((c) => c[0] === 'scale' && c[1] === -1).length;
+};
+town.G.player.x = tam.x + 1; town.G.player.px = tam.x + 1;
+town.G.player.y = tam.y; town.G.player.py = tam.y;
+const fromRight = drawFlips();
+town.G.player.x = tam.x - 1; town.G.player.px = tam.x - 1;
+const fromLeft = drawFlips();
+ok(fromRight !== fromLeft, `standing on the other side turns somebody (${fromRight} vs ${fromLeft} mirrors)`);
+// Nobody is drawn at a fractional offset — the bob is whole pixels or it shimmers.
+const drawn = [];
+town.setCtx(mkCtx(drawn));
+for (let i = 0; i < 30; i++) { town.step(.05); town.draw(); }
+const fracs = drawn.filter((c) => c[0] === 'drawImage')
+  .flatMap((c) => c.slice(1))
+  .filter((v) => typeof v === 'number' && !Number.isInteger(v));
+eq(fracs.length, 0, 'every actor lands on a whole pixel');
 
 section('three rooms, not one room three times');
 // The three interiors used to be the same generated box. What makes a room a

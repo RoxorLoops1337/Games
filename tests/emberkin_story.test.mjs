@@ -85,6 +85,12 @@ const [wdx, wdy] = DIR[wick1.dir];
 EK.enterMap('hollowbrook', wick1.x + wdx * 2, wick1.y + wdy * 2, 'up');
 G.mode = 'world'; G.alert = null;
 ok(EK.trainerSight(), 'he calls you out');
+ok(!!G.alert, 'and the frame closes in on him');
+// The ambush is a beat, not a line: he walks over before anybody speaks.
+let approached = 0;
+for (let i = 0; i < 120 && G.alert; i++) { EK.step(.05); EK.fired.clear(); approached = Math.max(approached, Math.abs(wick1.ox || 0) + Math.abs(wick1.oy || 0)); }
+ok(approached > 0, `he closed the distance on his own (${approached}px)`);
+eq(wick1.ox || 0, 0, 'and ended up back on his own tile');
 clear();
 ok(!!G.battle, 'and the battle starts');
 eq(EK.B().foe.species, EK.RIVAL_PICK.cindercub, 'with the starter that beats yours');

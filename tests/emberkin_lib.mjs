@@ -21,7 +21,10 @@ export function mkCtx(log) {
       if (k === 'measureText') return () => ({ width: 10 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (k === 'canvas') return { width: 256, height: 208 };
-      if (log && (k === 'drawImage' || k === 'fillRect')) return (...a) => { log.push([k, ...a]); };
+      // Transforms are logged too: a mirrored sprite is a scale(-1,1), and
+      // that is the only way a suite can see which way somebody is facing.
+      if (log && (k === 'drawImage' || k === 'fillRect' || k === 'scale' || k === 'translate'))
+        return (...a) => { log.push([k, ...a]); };
       return noop;
     },
     set() { return true; },
