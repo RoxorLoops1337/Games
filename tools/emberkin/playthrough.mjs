@@ -132,6 +132,7 @@ function playOne(runIdx) {
     };
     const startWorst = worstKin();
     let low = startHp, worst = startWorst, turns = 0, guard = 0, planBeats = 0, drank = false;
+    const seenCards = new Set();
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
     // decided in advance, this is where the deciding happens.
@@ -183,7 +184,17 @@ function playOne(runIdx) {
       const cur = EK.B();
       if (cur.intent && cur.intent.kind === 'plan' && !counted) planBeats++;
       counted = false;
-      for (const c of cur.hand) bump(stat.drawn, c.src === 'kin' ? `kin:${c.id}` : c.id);
+      // Once per card, not once per turn it is sitting in your hand. A retained
+      // card stays in hand all fight, so counting the hand every turn counted it
+      // four times against the one time it can be played — which is why the
+      // bottom of the played/drawn table was Dewdrop, Hunker, Bulwark and Ward
+      // Stance, i.e. every card with Retain on it. The cards were fine; the
+      // denominator was counting the same card over and over.
+      for (const c of cur.hand) {
+        if (seenCards.has(c)) continue;
+        seenCards.add(c);
+        bump(stat.drawn, c.src === 'kin' ? `kin:${c.id}` : c.id);
+      }
       // The policy is part of the measurement. Cheapest-first cannot tell a
       // good deck from a big one, because it never sets anything up: it plays
       // the Chain card while the discount is still zero and the Combo card
@@ -281,6 +292,15 @@ function playOne(runIdx) {
             const rate = worth(c) / Math.max(.5, cost);       // free cards are not infinitely good
             if (rate > bestRate) { best = i; bestRate = rate; }
           }
+          // A three-energy card can never be afforded here, because the swing is
+          // always reserved out of three: Kinbond is drawn about a hundred times
+          // in twenty-four runs and played none of them. Letting the policy skip
+          // the swing for a big enough card was tried and is worse than the gap
+          // — at a bar of 1.5x the swing it ate the swing constantly and kin move
+          // play rates fell from 62-98% to 24-42%, which measures the escape
+          // hatch rather than the game. Left as a known limitation: three-cost
+          // cards are under-read here, and Kinbond and Overkill in particular
+          // should not be judged by this table.
           if (best < 0) break;
           const card = cur.hand[best];
           bump(stat.played, card.id);

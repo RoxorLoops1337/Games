@@ -5492,7 +5492,14 @@ const TRAINER_DMG_MUL = 1.35;
 const trainerDmg = (lvl) => 1 + (TRAINER_DMG_MUL - 1) * Math.min(1, lvl / 14);
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
-const CORNER_AT = .4, CORNER_EDGE = 14;
+// CORNER_EDGE was 14 and drifted the solo danger line to .338 lost-or-ran across
+// three passes of cornering changes, which is a third of one-kin fights lost or
+// run from and higher than it has ever been. At 11 it is .288 ±.038 against
+// .338 ±.045 — the intervals overlap at the edges, so read it as direction
+// rather than proof — and the free-fight rate does not move at all (38% ±3
+// against 37% ±3). That is the trade: measurable danger back, nothing
+// measurable given up.
+const CORNER_AT = .4, CORNER_EDGE = 11;
 // Two moments even when it can hurt you. The single one at .4 left the even
 // matchups — where neither side has anything on the other, and which are a fifth
 // of one-kin fights — free 37% of the time, because one telegraphed swing across
