@@ -2778,13 +2778,62 @@ function roundRect(x, y, w, h, r){
   ctx.closePath();
 }
 function circle(x, y, r){ ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.closePath(); }
+/* Every shadow in the market used to sit dead centre under the thing casting
+   it, which is the one arrangement that reads as "sticker on a background".
+   One light direction for the whole scene — high and to the upper left — and
+   two ellipses per caster: a wide soft one thrown away from the light, and a
+   tight dark one where the object actually meets the ground. */
+const SUN_DX = 0.26, SUN_DY = 0.62;
 function shadow(x, y, rx, ry, a){
-  ctx.fillStyle = 'rgba(8,16,32,' + (a || 0.24) + ')';
-  ctx.beginPath(); ctx.ellipse(x, y + ry * 0.5, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  const al = a || 0.24;
+  ctx.fillStyle = 'rgba(8,16,32,' + (al * 0.55).toFixed(3) + ')';
+  ctx.beginPath();
+  ctx.ellipse(x + rx * SUN_DX, y + ry * SUN_DY, rx * 1.16, ry * 1.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(8,16,32,' + al + ')';
+  ctx.beginPath();
+  ctx.ellipse(x + rx * SUN_DX * 0.4, y + ry * 0.42, rx * 0.82, ry * 0.72, 0, 0, Math.PI * 2); ctx.fill();
 }
 
 /* ---------- ground ---------- */
 let floorGrad = null;
+
+/* The market floor was one flat fill of TH.ground across four thousand world
+   units, and a flat fill is what made the whole thing look like a diagram: no
+   scale, no grain, nothing for the eye to measure speed against. This is a
+   256-unit tile of trodden snow — broad faint mottling plus crystals — baked
+   once into a pattern and laid over the ground. It is built from a fixed
+   integer hash rather than rnd() or vrnd(): a texture that changes with the
+   seed would be a texture you could not screenshot twice. */
+let snowPat = null;
+function snowPattern(){
+  if (snowPat !== null) return snowPat;
+  snowPat = false;
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const g = c.getContext && c.getContext('2d');
+  if (!g || !ctx.createPattern) return snowPat;
+  let s = 0x2f6e2b1;
+  const h = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  // each blob is drawn at all four wrap offsets so the tile has no seam
+  const blob = (x, y, r) => {
+    for (const [ox, oy] of [[0, 0], [-512, 0], [0, -512], [-512, -512]]){
+      if (!g.beginPath) return;
+      g.beginPath(); g.arc(x + ox, y + oy, r, 0, 6.283); g.fill();
+    }
+  };
+  for (let i = 0; i < 44; i++){
+    const x = h() * 512, y = h() * 512, r = 40 + h() * 130;
+    g.fillStyle = h() < 0.5 ? 'rgba(255,255,255,.045)' : 'rgba(58,86,132,.050)';
+    blob(x, y, r);
+  }
+  for (let i = 0; i < 760; i++){
+    const x = h() * 512, y = h() * 512, r = 0.7 + h() * 1.7;
+    g.fillStyle = h() < 0.62 ? 'rgba(255,255,255,.20)' : 'rgba(118,148,196,.17)';
+    blob(x, y, r);
+  }
+  snowPat = ctx.createPattern(c, 'repeat') || false;
+  return snowPat;
+}
 function drawGround(){
   const halfW = VW / cam.s / 2, halfH = VH / cam.s / 2;
   const x0 = cam.x - halfW - 60, x1 = cam.x + halfW + 60;
@@ -2805,6 +2854,13 @@ function drawGround(){
     }
     ctx.fillStyle = floorGrad || 'rgba(' + TH.floor + ',.5)';
     ctx.fillRect(gx0, Math.max(y0, 160), gx1 - gx0, Math.min(y1, WORLD_H - 160) - Math.max(y0, 160));
+  }
+
+  // trodden-snow grain over the lot, in world space so it pans with the camera
+  const pat = snowPattern();
+  if (pat){
+    ctx.fillStyle = pat;
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   }
 
   // launch lane markings
@@ -2946,11 +3002,17 @@ function drawHut(o){
   ctx.save(); ctx.translate(x + j, y);
   ctx.rotate(wear * 0.07 * (o.seed < 0.5 ? -1 : 1));
   shadow(0, h * 0.42, w * 0.54, h * 0.26, 0.3);
-  // hut body
+  // hut body: frame, panelling, then the light direction laid over it — a lit
+  // edge along the top-left and the floor's own shade pooling at the bottom.
+  // Two rects; it is what stops the stall being a brown sticker.
   ctx.fillStyle = TH.wood;
   roundRect(-w / 2, -h / 2, w, h, 8); ctx.fill();
   ctx.fillStyle = TH.wood2;
   roundRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,238,206,.10)';
+  ctx.fillRect(-w / 2 + 8, -h / 2 + 8, w - 16, h * 0.24);
+  ctx.fillStyle = 'rgba(12,20,38,.20)';
+  ctx.fillRect(-w / 2 + 8, h / 2 - 8 - h * 0.18, w - 16, h * 0.18);
   // striped awning on the customer side
   const fs = o.face || 1;
   const ay = fs > 0 ? h / 2 - 6 : -h / 2 - 26;
@@ -2963,9 +3025,14 @@ function drawHut(o){
   ctx.fill();
   ctx.fillStyle = 'rgba(10,20,36,.18)';
   ctx.fillRect(-w / 2, ay + 26, w, 6);
-  // snowy roof cap + goods
+  // snowy roof cap + goods. Snow has a lit crown and a blue underside; without
+  // the second band it is a white rectangle stuck to a brown one.
   ctx.fillStyle = '#eef4ff';
   roundRect(-w / 2 + 14, -h / 2 + 14, w - 28, h * 0.34, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.fillRect(-w / 2 + 18, -h / 2 + 16, w - 36, h * 0.07);
+  ctx.fillStyle = 'rgba(126,156,206,.34)';
+  ctx.fillRect(-w / 2 + 16, -h / 2 + 14 + h * 0.26, w - 32, h * 0.08);
   ctx.fillStyle = '#c9a24a';
   ctx.beginPath();
   for (let i = 0; i < 4; i++){
@@ -3883,8 +3950,73 @@ function drawFx(over){
 }
 
 /* ---------- warm lights, drawn additively over the scene ---------- */
-const MAX_LIGHTS = 11;
+const MAX_LIGHTS = 64;
 const lightBuf = [];
+/* ---------- light ----------
+
+   A Christmas market at night is made of light, and this drew none of it. The
+   lamps were flat discs of rgba(255,186,86,.1) — no falloff, no gradient, and
+   nothing dark anywhere for them to read against, so a stall lamp looked like
+   a patch of fog. The market was a diagram of a market.
+
+   Now it is lit the way 2D scenes are: one darkness layer over the whole
+   frame with holes punched in it where the lamps are, then the warm glow added
+   on top of that. Both use a light sprite baked once into a small offscreen
+   canvas rather than a gradient built per lamp per frame, so the cost is a
+   drawImage each and the vignette's cached-gradient guarantee still holds. */
+let bakeCount = 0;
+function bakeLight(rgb, peak){
+  bakeCount++;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext && c.getContext('2d');
+  if (!g) return null;
+  const col = (a) => 'rgba(' + rgb + ',' + a + ')';
+  const rad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  if (rad && rad.addColorStop){
+    // a lamp is bright and small with a long soft skirt, not a linear ramp
+    rad.addColorStop(0,    col(peak));
+    rad.addColorStop(0.18, col(peak * 0.74));
+    rad.addColorStop(0.45, col(peak * 0.30));
+    rad.addColorStop(0.75, col(peak * 0.08));
+    rad.addColorStop(1,    col(0));
+    g.fillStyle = rad;
+  } else {
+    g.fillStyle = col(peak * 0.5);
+  }
+  g.fillRect(0, 0, 128, 128);
+  return c;
+}
+/* The mask that cuts holes in the darkness is pure alpha, so one white sprite
+   serves every theme. The glow that goes on top carries the theme's own lamp
+   colour, so it is rebaked only when the theme changes. */
+let maskSprite = null, glowSprite = null, glowKey = '';
+function lightSprites(){
+  if (!maskSprite) maskSprite = bakeLight('255,255,255', 1);
+  if (glowKey !== TH.light){ glowSprite = bakeLight(TH.light, 0.62); glowKey = TH.light; }
+}
+
+/* The darkness layer is built at viewport size and reused; only its contents
+   are redrawn. */
+/* Half resolution on purpose. Nothing on this layer has an edge in it — it is
+   a flat wash with soft radial holes — so the only thing full resolution buys
+   is four times the fill. In software rendering that was the difference
+   between 4ms and 10ms a frame at 1080p. */
+const DARK_SCALE = 0.5;
+let darkCv = null, darkCtx = null, darkKey = '', darkW = 1, darkH = 1;
+function darkLayer(){
+  const key = VW + 'x' + VH + 'x' + DPR;
+  if (key !== darkKey || !darkCv){
+    darkCv = document.createElement('canvas');
+    darkW = Math.max(1, Math.round(VW * DPR * DARK_SCALE));
+    darkH = Math.max(1, Math.round(VH * DPR * DARK_SCALE));
+    darkCv.width = darkW; darkCv.height = darkH;
+    darkCtx = darkCv.getContext && darkCv.getContext('2d');
+    darkKey = key;
+  }
+  return darkCtx;
+}
+
 function drawLights(){
   const halfW = VW / cam.s / 2 + 120, halfH = VH / cam.s / 2 + 120;
   // big additive circles are the most expensive thing on screen, so only the
@@ -3905,12 +4037,62 @@ function drawLights(){
   }
   lightBuf.sort((a, b) => a.d - b.d);
   const lit = Math.min(lightBuf.length, MAX_LIGHTS);
+  lightSprites();
+
+  // each lamp's flicker, computed once and used by both passes so the hole and
+  // the glow breathe together
+  for (let i = 0; i < lit; i++){
+    const L = lightBuf[i];
+    L.k = 0.94 + 0.06 * Math.sin(T * 2 + L.o.seed * 6.28);
+  }
+
+  /* Pass one: night. A flat wash of the theme's dark over the whole frame,
+     then the lamps punched straight back out of it with destination-out. This
+     is what makes a lamp look like a lamp — there is finally something for it
+     to be brighter than. */
+  const dg = darkLayer();
+  const night = TH.dark || 0.55;
+  if (dg && maskSprite){
+    // source-over on a canvas we are about to cover entirely: no clearRect
+    dg.setTransform(1, 0, 0, 1, 0, 0);
+    dg.globalCompositeOperation = 'copy';
+    dg.fillStyle = 'rgba(6,11,28,' + (night * 0.72).toFixed(3) + ')';
+    dg.fillRect(0, 0, darkW, darkH);
+    dg.globalCompositeOperation = 'destination-out';
+    // world -> layer pixels. The shake offset is left out on purpose: it is a
+    // few pixels on a gradient with no edge in it, and matching it would mean
+    // drawing the same random numbers twice.
+    const sc = cam.s * DPR * DARK_SCALE;
+    const px = (wx) => (VW / 2 + (wx - cam.x) * cam.s) * DPR * DARK_SCALE;
+    const py = (wy) => (VH / 2 + (wy - cam.y) * cam.s) * DPR * DARK_SCALE;
+    for (let i = 0; i < lit; i++){
+      const L = lightBuf[i], r = L.r * L.k * 1.15 * sc;
+      dg.drawImage(maskSprite, px(L.o.x) - r, py(L.o.y) - r, r * 2, r * 2);
+    }
+    // and the car never drives into a pocket of gloom — a partial hole, so it
+    // carries its own pool of light rather than a bright disc
+    if (G.phase !== 'menu'){
+      const cr = (car.boostT > 0 ? 190 : 135) * sc;
+      dg.globalAlpha = 0.8;
+      dg.drawImage(maskSprite, px(car.x) - cr, py(car.y) - cr, cr * 2, cr * 2);
+      dg.globalAlpha = 1;
+    }
+    dg.globalCompositeOperation = 'source-over';
+    // save/restore rather than worldTransform() again: re-running it would roll
+    // a second set of shake offsets and slide the glow off the scene it lights
+    ctx.save();
+    screenTransform();
+    ctx.drawImage(darkCv, 0, 0, VW, VH);
+    ctx.restore();
+  }
+
+  /* Pass two: the glow itself, added on top of the night. */
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (let i = 0; i < lit; i++){
-    const L = lightBuf[i];
-    ctx.fillStyle = L.col;
-    circle(L.o.x, L.o.y, L.r * (0.94 + 0.06 * Math.sin(T * 2 + L.o.seed * 6.28))); ctx.fill();
+    const L = lightBuf[i], r = L.r * L.k * 1.35;
+    if (glowSprite) ctx.drawImage(glowSprite, L.o.x - r, L.o.y - r, r * 2, r * 2);
+    else { ctx.fillStyle = L.col; circle(L.o.x, L.o.y, L.r * L.k); ctx.fill(); }
   }
   if (car.boostT > 0){
     ctx.fillStyle = 'rgba(120,255,170,.16)';
