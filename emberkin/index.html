@@ -8683,18 +8683,29 @@ function drawMotes(g, air, t) {
 function drawAir(g, air, t) {
   if (air.grade > 0) {
     g.save();
-    g.globalCompositeOperation = 'overlay';
+    // Soft-light rather than overlay. Overlay pushes saturated pixels hard, which
+    // is fine for a sky and heavy-handed on a sprite; soft-light tints the air
+    // and leaves the art most of its own colour.
+    g.globalCompositeOperation = 'soft-light';
     g.fillStyle = `rgba(${air.tint[0]},${air.tint[1]},${air.tint[2]},${air.grade})`;
     g.fillRect(0, 0, VIEW_W, VIEW_H);
     g.restore();
   }
   if (air.vig > 0 && g.createRadialGradient) {
-    const gr = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .30,
-      VIEW_W / 2, VIEW_H / 2, VIEW_H * .82);
+    // Elliptical, not round. A circular vignette on a 256x208 frame closes
+    // hardest at the left and right edges, which is exactly where the two kin
+    // stand in a fight — so the darkest part of the frame was the part with the
+    // subjects in it. Widening the clear zone horizontally is the right shape
+    // for a landscape frame whether or not anything was visibly wrong.
+    g.save();
+    g.translate(VIEW_W / 2, VIEW_H / 2);
+    g.scale(1.5, 1);
+    const gr = g.createRadialGradient(0, 0, VIEW_H * .34, 0, 0, VIEW_H * .78);
     gr.addColorStop(0, 'rgba(0,0,0,0)');
     gr.addColorStop(1, `rgba(6,3,10,${air.vig})`);
     g.fillStyle = gr;
-    g.fillRect(0, 0, VIEW_W, VIEW_H);
+    g.fillRect(-VIEW_W, -VIEW_H, VIEW_W * 2, VIEW_H * 2);
+    g.restore();
   }
   drawMotes(g, air, t);
 }
@@ -8711,8 +8722,23 @@ function draw() {
   // top of it — a flourish, a fade, a door closing. Those are punctuation, and
   // punctuation should not be graded.
   if (G.mode !== 'title') {
-    const air = (G.battle && G.battle.legendary)
-      ? { ...AIR_DEFAULT, tint: [230, 190, 255], grade: .22, vig: .52, motes: 22, mc: [240, 215, 255], drift: [2, -10] }
+    // An arena already colours itself — drawArena washes the sky in the foe's
+    // element — so grading it again is grading it twice, and the second one is
+    // over the kin rather than behind them. Crown Hollow's violet is orange's
+    // complement, and at any strength worth having it turned Cindercub to brown
+    // mud while flattering the purple thing it was fighting: a grade that picks
+    // a side. So a battle gets the dark and the drifting and none of the wash.
+    // A fight is lit for the fight. The arena already colours itself — drawArena
+    // washes the sky in the foe's element and puts a sun behind them — so
+    // grading it again with the map's weather is grading it twice, and the
+    // second pass lands over the kin rather than behind them. So a battle takes
+    // the dark and the drifting and none of the wash, with the legendary getting
+    // more of both. Only the world gets weather.
+    const air = G.battle
+      ? { ...AIR_DEFAULT, grade: 0, vig: G.battle.legendary ? .40 : .30,
+        motes: G.battle.legendary ? 40 : 14,
+        mc: G.battle.legendary ? [240, 215, 255] : AIR_DEFAULT.mc,
+        drift: G.battle.legendary ? [2, -10] : AIR_DEFAULT.drift }
       : (AIR[G.mapId] || AIR_DEFAULT);
     drawAir(ctx, air, G.t);
   }
