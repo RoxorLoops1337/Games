@@ -2289,6 +2289,12 @@ function newMatch(opt){
   G.uid = 1;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
   G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
+  // The bombardment's "caught" tally rides in these sets and is the one
+  // per-match container that survived newMatch — a match that ended with a
+  // salvo still in the air handed its ids to the next match, whose first
+  // Bombard then reported an inflated count. Cosmetic, but it is the last
+  // thing here that outlived the match it belonged to.
+  bombSeen[0].clear(); bombSeen[1].clear();
   // The log was cleared here and the strip the player actually reads was not,
   // so a fresh match opened still showing the last one's obituary — measured,
   // two lines of the old match survived newMatch().
@@ -4650,6 +4656,12 @@ function acquire(u){
 
 function unitStep(u, dt){
   statusTick(u, dt);
+  // statusTick deals burn and pyre damage, and either can drop the body to
+  // zero — killThing then flags it dead and lifts it out of G.units. Without
+  // this the rest of the step ran on a corpse: it kept walking and could still
+  // reach a target. Both machines do it identically, so it never desynced, but
+  // a dead thing should not take another action.
+  if (u.dead) return;
   if (u.life > 0){
     u.life -= dt;
     if (u.life <= 0){ u.dead = true; const i = G.units.indexOf(u); if (i >= 0) G.units.splice(i, 1); return; }
@@ -4691,11 +4703,17 @@ function unitStep(u, dt){
 
 function separate(){
   // Cheap neighbour push so ranks look like ranks instead of one stacked dot.
+  // The grid was built at the top of update(); a body that died during a step
+  // since then is gone from G.units but still sits in its cell here. Every other
+  // reader checks dead — this one did not, so a corpse went on shoving the
+  // living for the one tick before the next rebuild dropped it.
   for (const [, arr] of grid){
     for (let i = 0; i < arr.length; i++){
       const a = arr[i];
+      if (a.dead) continue;
       for (let j = i + 1; j < arr.length; j++){
         const b = arr[j];
+        if (b.dead) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
         const rr2 = (a.r + b.r) * (a.r + b.r);
         const d2 = dx * dx + dy * dy;
@@ -5380,6 +5398,12 @@ function heroStep(h, dt){
     return;
   }
   statusTick(h, dt);
+  // A burn or a pyre brand can finish the hero inside statusTick — killThing
+  // sets the respawn clock and the top of this function will run it down from
+  // next tick. Falling through here instead healed the corpse off its own
+  // regen, granted it XP, and let castLoop spend its mana and drop a lingering
+  // zone whose source was a body already down. Stop at death.
+  if (h.dead) return;
   // Warp Banner: three seconds of standing still and then the hero is at its
   // own front structure, two units in front of it. Nothing else happens in
   // between — no walking, no swinging, no casting — and a blow puts it out
@@ -19814,6 +19838,16 @@ function mixTimers(mix, u){
   // Whose brand it is decides where the gold from it lands, so the two
   // machines have to agree about it exactly as they agree about the timer.
   mix(u.pyreSide);
+  // Three more that steer the next tick and were not hashed. `mb` is the drill
+  // buff — attack, move and attack speed off a kill — set constantly and read
+  // by attackDamage/attackSpeedOf/speedOf, so a one-tick disagreement in it
+  // changes damage output immediately. `retreat` flips a hero between fighting
+  // and walking home, and `lowT` gates the panic shield; both decide the whole
+  // plan of the next tick, not a detail of it. (undefined for a plain minion,
+  // which q30/q64 fold to 0, the same on both machines.)
+  mix(u.mb ? q30(u.mb.t) : 0);
+  mix(u.mb ? q64(u.mb.ad) : 0); mix(u.mb ? q64(u.mb.ms) : 0); mix(u.mb ? q64(u.mb.as) : 0);
+  mix(u.retreat ? 1 : 0); mix(q30(u.lowT));
 }
 
 function netHash(){
@@ -19821,6 +19855,11 @@ function netHash(){
   const mix = (n) => { a ^= n | 0; a = Math.imul(a, 16777619) >>> 0; };
   const mixs = (v) => { const t = '' + (v == null ? '' : v); for (let i = 0; i < t.length; i++) mix(t.charCodeAt(i)); mix(0); };
   mix(seedNow());
+  // update() alternates which hold acts first on the parity of G.frame, so a
+  // frame count that had drifted would swap the order of every paired action on
+  // one machine and nothing else — a divergence with no other tell. It is
+  // snapshotted and reset in newMatch; now it is checked too.
+  mix(G.frame | 0);
   mix(G.wave); mix(Math.round(G.t * 30)); mix(Math.round(G.waveT * 30));
   for (const u of G.units){
     mix(u.side); mix(Math.round(u.x * 4096)); mix(Math.round(u.y * 4096)); mix(Math.round(u.hp * 64));
