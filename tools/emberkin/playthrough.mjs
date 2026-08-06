@@ -11,14 +11,16 @@
 //   node tools/emberkin/playthrough.mjs --runs 60 --rested # heal before each trainer
 //   node tools/emberkin/playthrough.mjs --runs 60 --build value  # deck by value, not rarity
 //   node tools/emberkin/playthrough.mjs --runs 60 --ban whetstone  # what is one card worth?
+//   node tools/emberkin/playthrough.mjs --runs 60 --vs --set PLAN_CHIP=0.25
+//                                                    # both arms, same seeds, paired interval
 //
 // >>> READ tools/emberkin/README.md BEFORE BELIEVING A NUMBER THIS PRINTS. <<<
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all thirty-nine mistakes this tool
-// has made. Twenty-six passes on this game produced about ten changes to the
-// game and thirty-nine fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all forty mistakes this tool has
+// made. Twenty-seven passes on this game produced about eleven changes to the
+// game and forty fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -28,7 +30,16 @@
 //      modes. Those lines say so on the line and print a party-free twin.
 import { loadGame, mkCtx } from '../../tests/emberkin_lib.mjs';
 
-const argv = process.argv.slice(2);
+const argvAll = process.argv.slice(2);
+// Everything before `--vs` is the baseline arm; everything after is the variant,
+// which inherits the baseline's flags and adds its own. Both arms run in one
+// invocation over the same seeds, so the difference between them is measured
+// rather than remembered — see mistake 39, where a build was compared against a
+// number from the pass before and the two 60-run samples of the *same* build
+// differed by .05 on the danger line.
+const vsAt = argvAll.indexOf('--vs');
+const argv = vsAt < 0 ? argvAll : argvAll.slice(0, vsAt);
+const VS = vsAt < 0 ? null : argvAll.slice(vsAt + 1);
 const RUNS = Number(argv[argv.indexOf('--runs') + 1]) || (argv.includes('--runs') ? 10 : 5);
 // Two very different games are hiding in one average. With a party you switch
 // into every matchup and almost nothing can kill you; with one kin the element
@@ -53,8 +64,20 @@ const BUILD = argv.includes('--build') ? argv[argv.indexOf('--build') + 1] : 'ra
 // move it outside its interval, the flatness is measured rather than inferred.
 // A comma-separated list, so two cards can be struck out together and asked
 // whether they add up or overlap. Two cards doing the same job is not depth.
-const BANS = argv.includes('--ban') ? argv[argv.indexOf('--ban') + 1].split(',') : [];
+// Mutable, because an arm swaps them and puts them back. `--set NAME=VALUE`
+// rewrites a top-level constant in the game's own source before it is evalled,
+// which is the only way to compare two values of a tuning dial in one sitting.
+let BANS = argv.includes('--ban') ? argv[argv.indexOf('--ban') + 1].split(',') : [];
 const banned = (id) => BANS.includes(id);
+const readSets = (av) => av.flatMap((a, i) => (a === '--set' ? [av[i + 1]] : [])).filter(Boolean);
+let SETS = readSets(argv);
+/** Rewrite `const NAME = ...;` in the game source. Throws rather than silently missing. */
+const patchFor = (sets) => (sets.length ? (code) => sets.reduce((c, kv) => {
+  const [k, v] = kv.split('=');
+  const re = new RegExp(`(const ${k} = )[^;]+;`);
+  if (!re.test(c)) throw new Error(`--set ${k}: no top-level "const ${k} = ...;" in the game`);
+  return c.replace(re, `$1${v};`);
+}, code) : null);
 const FORCE = argv.includes('--force') ? argv[argv.indexOf('--force') + 1] : null;
 const FORCE_N = 3;
 
@@ -140,7 +163,7 @@ const ROUTE = [
 ];
 
 function playOne(runIdx) {
-  const EK = loadGame({});
+  const EK = loadGame({}, patchFor(SETS));
   EK.setCtx(mkCtx());
   EK.newGame();
   // Rotate the starter. Taking the first one every time meant every number in
@@ -857,8 +880,71 @@ function playOne(runIdx) {
   return stat;
 }
 
-const runs = [];
-for (let i = 0; i < RUNS; i++) runs.push(playOne(i));
+// A seeded generator over Math.random, reinstalled per run, so run i is the same
+// run in both arms. Without this the arms differ by whatever the RNG felt like
+// and a paired comparison is no better than two separate ones.
+const realRandom = Math.random;
+const seedRandom = (seed) => {
+  let a = (seed * 0x9e3779b9) >>> 0;
+  Math.random = () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const arm = (extra) => {
+  const keepBans = BANS, keepSets = SETS;
+  if (extra) {
+    if (extra.includes('--ban')) BANS = BANS.concat(extra[extra.indexOf('--ban') + 1].split(','));
+    SETS = SETS.concat(readSets(extra));
+  }
+  const out = [];
+  for (let i = 0; i < RUNS; i++) { seedRandom(i + 1); out.push(playOne(i)); }
+  Math.random = realRandom;
+  BANS = keepBans; SETS = keepSets;
+  return out;
+};
+
+const runs = arm(null);
+
+// Paired A/B. Both arms over the same seeds, so run i differs only by the
+// variant, and the interval is on the *difference* rather than on each arm.
+// That is the whole point: two 60-run samples of one build differ by .05 on the
+// danger line, so "outside its interval" against a remembered number means
+// nothing, while a paired difference of .05 means something.
+if (VS) {
+  const other = arm(VS);
+  const perFightOf = (r, f) => f(r) / Math.max(1, r.fights);
+  const METRICS = [
+    ['lost or ran', (r) => perFightOf(r, (x) => x.fled + x.wipes), 3],
+    ['wipes', (r) => perFightOf(r, (x) => x.wipes), 3],
+    ['no kin in doubt', (r) => perFightOf(r, (x) => x.noDoubtKin), 3],
+    ['over in one turn', (r) => perFightOf(r, (x) => x.oneTurn), 3],
+    ['turns per fight', (r) => r.turns / Math.max(1, r.fights), 2],
+    ['cost of a fight, in kin', (r) => r.costKin / Math.max(1, r.costN), 3],
+    ['might at the end', (r) => r.might, 0],
+  ];
+  console.log(`\n  PAIRED — ${RUNS} runs each arm, same seeds`);
+  console.log(`  baseline: ${argv.join(' ') || '(defaults)'}`);
+  console.log(`  variant:  + ${VS.join(' ')}\n`);
+  console.log('  metric                    baseline    variant     difference (95%)');
+  for (const [name, f, dp] of METRICS) {
+    const d = runs.map((r, i) => f(other[i]) - f(r));
+    const m = d.reduce((a, x) => a + x, 0) / d.length;
+    const v = d.length < 2 ? 0 : d.reduce((a, x) => a + (x - m) ** 2, 0) / (d.length - 1);
+    const half = 1.96 * Math.sqrt(v / d.length);
+    const mean = (rs) => rs.reduce((a, r) => a + f(r), 0) / rs.length;
+    // The only claim this tool is entitled to make: the interval on the
+    // difference excludes zero.
+    const called = Math.abs(m) > half ? (m > 0 ? '  UP' : '  DOWN') : '  —';
+    console.log(`  ${name.padEnd(24)}  ${mean(runs).toFixed(dp).padStart(8)}  ${mean(other).toFixed(dp).padStart(9)}`
+      + `   ${(m >= 0 ? '+' : '') + m.toFixed(dp)} ±${half.toFixed(dp)}${called}`);
+  }
+  console.log('');
+  process.exit(0);
+}
 
 const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
 const pct = (n, d) => `${((n / Math.max(1, d)) * 100).toFixed(0)}%`;

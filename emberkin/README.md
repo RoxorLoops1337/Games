@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all thirty-nine mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-six passes on this
-game produced about ten changes to the game and thirty-nine fixes to the tool.
+of all forty mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-seven passes on this
+game produced about eleven changes to the game and forty fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,59 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### Two arms, one sitting — and the first paired run found a shipped bug
+
+Every comparison this project has made is "new build against a number from a
+previous pass", and pass 34 showed that is worth ±.05 on the danger line. So the
+probe now runs both arms itself:
+
+```bash
+node tools/emberkin/playthrough.mjs --runs 60 --solo --vs --set PLAN_CHIP=0.25
+```
+
+Everything before `--vs` is the baseline; everything after is the variant, which
+inherits the baseline's flags. `--set NAME=VALUE` rewrites a top-level constant in
+the game's own source before it is evalled, so a tuning dial can be compared
+against itself. `Math.random` is seeded per run, so **run 7 is the same run in
+both arms** and the interval is on the *difference* rather than on each arm
+separately. The only claim the tool now makes is that the paired interval excludes
+zero.
+
+Two consequences worth knowing. The report is **deterministic** now — the same
+build gives the same numbers. And because seeding changed the stream, absolute
+figures from before this pass are not directly comparable to figures after it;
+the paired differences are.
+
+**The first real paired run found a bug shipped in pass 34.** The party baseline
+read 20.6% over in one turn where pass 33 had measured 4%. `PLAN_CHIP = 0` did not
+turn the chip off: the block still ran a zero-damage attack, and `useMove` spends
+`b.foeEdge` on its way through, so the gather beat **threw away the sharpen it had
+just gained** and the whole plan quietly did nothing. Scaling a value to zero is
+not the same as skipping the block. Guarded on the dial now, and party over-in-one
+is back to 4%.
+
+#### PLAN_CHIP, decided
+
+With the baseline fixed and both arms measured together, 60 runs an arm:
+
+| | solo baseline | solo +chip .25 | difference (95%) |
+| --- | --- | --- | --- |
+| no kin in doubt | 41.2% | 34.3% | **−.070 ±.042** |
+| over in one turn | 2.5% | 5.9% | **+.034 ±.011** |
+| wipes | .096 | .125 | +.028 ±.027 |
+| lost or ran | .249 | .233 | −.016 ±.056 (nothing) |
+
+| | party baseline | party +chip .25 | difference (95%) |
+| --- | --- | --- | --- |
+| over in one turn | 4.0% | 24.4% | **+.204 ±.026** |
+| lost or ran | .057 | .041 | −.015 ±.007 |
+| no kin in doubt | 8.9% | 10.5% | +.016 ±.022 (nothing) |
+
+**Seven points of solo never-in-doubt for twenty of party over-in-one.** Pass 34
+reached the same conclusion from unpaired samples and guessed the size; the paired
+run says 4.0% → 24.4% where pass 34 said 4% → 24%, which is a nice check on both.
+`PLAN_CHIP` stays at 0, and this is the last time it needs deciding.
 
 #### The drift was mostly noise, and the chip that would have fixed it costs too much
 

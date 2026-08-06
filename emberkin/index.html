@@ -6231,7 +6231,13 @@ function foeTurn(log) {
     // A wild kin gathering still swings, softly. Everything goes through the
     // normal attack path so shields, guard, thorns and the knockout all behave —
     // `chipping` only scales the number.
-    if (b.wild) {
+    // Guarded on the dial, not just scaled by it. At PLAN_CHIP = 0 this block
+    // still ran a zero-damage attack — and `useMove` spends `b.foeEdge` on the
+    // way through, so the gather beat threw away the sharpen it had just gained
+    // and the whole plan quietly did nothing. Shipped that way in pass 34 and
+    // caught by the first paired run in pass 35: party over-in-one read 20.6%
+    // where pass 33 had measured 4%.
+    if (b.wild && PLAN_CHIP > 0) {
       b.chipping = 1;
       const cid = foeChoose(b.foeEdge > 0);
       const hpWas = b.mine.hp;
