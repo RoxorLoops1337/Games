@@ -139,6 +139,40 @@ back from the door. The rug is one object, so it is a *seamless* weave and
 `drawEdges` puts the gold hem around wherever it happens to stop — the first
 version gave every rug tile its own frame and read as six coasters.
 
+### The screens
+
+Party, dex, bag, shop, box, deck and chests were the last plain lists in the
+game: a grid of equal panels with all the text in them. A row of equal cards has
+no hierarchy — nothing on it says which one you are looking at, so every card
+has to carry every fact and none of them can be big.
+
+**The kin page** is two columns. The roster is a compact list on the left; the
+one you have picked opens on the right with a framed portrait, a stat block and
+its moves. Every stat gets a bar as well as a number, measured against the
+roster's own ceiling, because a bar answers "is this one fast?" before you have
+read the number. A move is a little card with its element down the left edge and
+a PP track under it that turns red near empty.
+
+`statBlock()` is pure and exported, so the suite checks the page without a
+browser — including the two ways a bar can lie: a save whose xp sits below its
+own level's floor must not print a negative, and one with absurd xp must not run
+past the end of the track.
+
+**The bag and the shop** are one renderer, priced or counted. Items are shelved
+by what they are for — Orbs, Salves, In a fight — because you go looking for "an
+orb", not for "the fourth row", and shelving is stable however the keys arrive
+so the cursor never jumps under you. Every item wears the same 20×20 glyph the
+cards use, generated in `cardicons.mjs` alongside them: an orb in the bag and an
+orb on a card are the same object rather than a name and a picture of one. The
+orbs' shading comes off the sphere's own normal — a linear ramp across a circle
+bands into stripes, which is what the first pass at them looked like.
+
+**The dex** has three states you can tell apart across the room: caught is the
+creature, lit, in a gold frame; seen is a silhouette *lifted* off the panel
+rather than painted in the outline tone, which is darker than the panel and made
+"seen" and "never met" look identical; never met is an empty hatched slot with a
+`?` and its number. A creature you have not met does not leak its silhouette.
+
 ### The title screen
 
 The first thing anyone sees, so it is a painting rather than a placeholder.
@@ -257,6 +291,18 @@ rectangle, not a pond.
 one, every actor looks pasted on top of the ground rather than standing in it —
 the cheapest single thing that makes a tile field read as a place.
 
+A town where nobody moves is a diorama. Everyone breathes — a one-pixel bob, on
+a phase seeded off the tile they stand on, so a street does not pulse in unison
+— and everyone turns to look at you when you come within two tiles. The NPC art
+faces the viewer, so a mirror is the only honest turn available: left and right
+are real, and up and down keep them facing forward rather than lying about the
+sprite. Standing next to somebody also quickens their bob, which is the whole of
+"they noticed you".
+
+The bob is rounded to whole pixels. At this scale a sprite landing between them
+shimmers, and the suite asserts that no actor is ever drawn at a fractional
+offset.
+
 ### Nothing outdoors is a rectangle
 
 The maps are char grids, so the temptation is to type rectangles: a 2×2 square
@@ -373,6 +419,22 @@ teleport with extra frames; what sells arrival is deceleration plus weight going
 down on every step, so the offset eases out, the body bobs while it is still
 covering ground, and dust kicks up behind. All three fall to nothing exactly
 when the entry finishes.
+
+### The battle HUD
+
+Everything on the bar around the fight is an object rather than a printed
+number, because a number is something you read and an object is something you
+see:
+
+- **Energy** is a row of gems that go dark as you spend them. "2/3" tells you
+  the same thing but only after you have parsed it.
+- **The piles** are stacks of cards — three overlapping backs with the top one
+  lit, so a pile reads front to back — in the draw pile's blue and the used
+  pile's violet, with the count beside them.
+- **A status** is a chip in its own colour, pulsing gently, rather than three
+  grey letters. It is a state you are in, so it should be the loudest thing on
+  the panel; a burn ticking away ought to be visible from the corner of your
+  eye.
 
 ### Cards
 

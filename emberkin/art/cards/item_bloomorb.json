@@ -1,0 +1,36 @@
+{
+  "id": "item_bloomorb",
+  "name": "item_bloomorb",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "a": "#5d4436",
+    "b": "#63c14a",
+    "d": "#1c4a24",
+    "h": "#d2f5a0",
+    "m": "#2f8438"
+  },
+  "rows": [
+    ".......KKKKK........",
+    ".....KKKbbmKKK......",
+    "...KKhhbbbbmmmKK....",
+    "..KKhhhhbbbbmmmKK...",
+    "..KhhhhhbbbbmmmdK...",
+    ".KhhhhhhbbbbmmmddK..",
+    ".KhhhhhhbbbbmmmddK..",
+    "KKbhhhhbbbbmmmmddKK.",
+    "KbbbbbbbbbbmmmmdddK.",
+    "KKKKKKKKKKKKKKKKKKK.",
+    "KaaaaaaaaaaaaaaaaaK.",
+    "KKmbbbbmmmmmmddddKK.",
+    ".KmmmmmmmmmmdddddK..",
+    ".KmmmmmmmmmddddddK..",
+    "..KmmmmmmdddddddK...",
+    "..KKdddddddddddKK...",
+    "...KKdddddddddKK....",
+    ".....KKKdddKKK......",
+    ".......KKKKK........",
+    "...................."
+  ]
+}

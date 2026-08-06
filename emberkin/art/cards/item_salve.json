@@ -1,0 +1,36 @@
+{
+  "id": "item_salve",
+  "name": "item_salve",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "a": "#5d4436",
+    "b": "#63c14a",
+    "d": "#1c4a24",
+    "h": "#d2f5a0",
+    "m": "#2f8438"
+  },
+  "rows": [
+    ".......KKKKKK.......",
+    ".......KaaaaK.......",
+    ".......KaaaaK.......",
+    "......KKaaaaKK......",
+    "......KaaaaaaK......",
+    "......KKhbmmKK......",
+    ".....KhhbmmmmdK.....",
+    "....KhbbmmmmmmdK....",
+    "....KhbbmmmmmmdK....",
+    "...KhbbmmmmmmmmdK...",
+    "...KhbmmmmmmmmmdK...",
+    "...KhbmmmmmmmmmdK...",
+    "...KhbmmmmmmmmmdK...",
+    "....KhbmmmmmmmdK....",
+    "....KhbmmmmmmmdK....",
+    ".....KKdmmmmdKK.....",
+    ".......KKKKKK.......",
+    "....................",
+    "....................",
+    "...................."
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "item_greatsalve",
+  "name": "item_greatsalve",
+  "w": 20,
+  "h": 20,
+  "palette": {
+    "K": "#1b1220",
+    "a": "#3d3350",
+    "b": "#46b6e8",
+    "d": "#12406b",
+    "h": "#c8f2ff",
+    "m": "#1f74b0"
+  },
+  "rows": [
+    ".......KKKK.........",
+    ".......KaaK.........",
+    "......KKaaKK........",
+    "......KaaaaK........",
+    ".....KKhbmmKK.......",
+    "....KhhbmmmmdK......",
+    "...KhbbmmmmmmdK.....",
+    "..KhbbmmmmmmmmdK....",
+    "..KhbmmmmmmmmmmdK...",
+    ".KhbmmmmmmmmmmmmdK..",
+    ".KhbmmmmmmmmmmmmdK..",
+    ".KhbmmmmmmmmmmmmdK..",
+    ".KhbmmmmmmmmmmmmdK..",
+    ".KhbmmmmmmmmmmmmdK..",
+    "..KhbmmmmmmmmmmdK...",
+    "..KhbmmmmmmmmmmdK...",
+    "...KKdmmmmmmmdKK....",
+    ".....KKKKKKKKK......",
+    "....................",
+    "...................."
+  ]
+}

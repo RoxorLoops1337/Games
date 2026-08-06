@@ -209,9 +209,31 @@
   .cardel.skipcard{ flex:0 0 8em; height:11.4em; font-size:1.2em; justify-content:center; }
   .cardel.skipcard .cglyph{ font-size:2.4em; }
 
-  #energy{ position:absolute; left:1.5%; top:53%; padding:3px 9px; font-size:1em; color:var(--gold); }
-  #energy small{ color:var(--dim); font-size:.7em; }
-  #piles{ position:absolute; left:13%; top:54%; padding:3px 8px; font-size:.72em; color:var(--dim); }
+  /* Energy is a row of gems, not a fraction. "2/3" is a number you have to
+     read; three gems with one gone dark is a thing you can see. */
+  #energy{ position:absolute; left:1.5%; top:53%; padding:3px 7px; font-size:1em;
+    display:flex; align-items:center; gap:3px; }
+  #energy .gem{ width:.5em; height:.5em; border-radius:50%; flex:0 0 auto;
+    background:radial-gradient(60% 60% at 35% 30%,#fff2c4,var(--gold) 60%,#a86b12);
+    box-shadow:0 0 .35em rgba(255,201,77,.65), inset 0 -.08em .1em rgba(0,0,0,.35); }
+  #energy .gem.spent{ background:#241b2e; box-shadow:inset 0 0 0 .09em #3a2f47; }
+  #energy .ecount{ color:var(--gold); font-size:.72em; font-weight:700; margin-left:.15em; }
+  /* The piles are stacks of cards, so they look like stacks of cards. */
+  #piles{ position:absolute; left:13%; top:53%; padding:3px 8px; font-size:.82em; color:var(--dim);
+    display:flex; align-items:center; gap:.55em; }
+  #piles .pile{ display:inline-flex; align-items:center; gap:.32em; }
+  #piles .stk{ position:relative; display:block; width:1.25em; height:1.15em; flex:0 0 auto; }
+  #piles .stk i{ position:absolute; left:0; top:.14em; width:.6em; height:.9em; border-radius:.1em;
+    border:1px solid #6b5f7f; background:linear-gradient(180deg,#3a2c4a,#221a2d); }
+  #piles .stk i:nth-child(2){ left:.2em; top:.07em; }
+  /* The top of the stack is the lit one, so a pile reads front to back. */
+  #piles .stk i:nth-child(3){ left:.4em; top:0; background:linear-gradient(180deg,#57456e,#31253f); }
+  #piles .pile.draw .stk i{ background:linear-gradient(180deg,#3f6490,#22364f); border-color:#6f92b8; }
+  #piles .pile.exh .stk i{ background:linear-gradient(180deg,#6b3d59,#331d2c); border-color:#9c6a86; }
+  #piles .pile b{ color:#e8e2f0; font-size:.95em; font-variant-numeric:tabular-nums; }
+  #piles .pile.empty{ opacity:.4; }
+  #piles .shieldpip{ color:var(--xp); font-weight:700; }
+  #piles .shieldpip::before{ content:'◈'; margin-right:.15em; }
   #acts{ position:absolute; right:1.5%; top:54%; display:flex; gap:4px; }
   #acts .abtn{ padding:3px 9px; font-size:.72em; border-radius:5px; cursor:pointer;
     background:linear-gradient(180deg,var(--panel),var(--panel2)); border:2px solid var(--edge); }
@@ -251,8 +273,11 @@
   .hud .xp{ height:4px; margin-top:3px; }
   .hud .xp > i{ background:linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,0) 55%), var(--xp); }
   .hud .hpnum{ font-size:.7em; color:var(--dim); text-align:right; margin-top:2px; }
-  .hud .st{ font-size:.62em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px;
-    background:#000; color:var(--gold); margin-left:5px; }
+  /* A status is a state you are in, so it is the loudest thing on the panel:
+     its own colour, and a pulse so a burn ticking away is visible from the
+     corner of your eye rather than a word you have to notice. */
+  .tp.st{ margin-left:5px; color:#120d18; animation:stpulse 1.4s ease-in-out infinite; }
+  @keyframes stpulse{ 50%{ filter:brightness(1.45); } }
   .balls{ display:flex; gap:2px; margin-top:4px; }
   .balls i{ width:7px; height:7px; border-radius:50%; box-shadow:0 0 0 1px #05030a, 0 0 5px rgba(255,201,77,.5);
     background:radial-gradient(circle at 34% 30%, #fff2c4, var(--gold) 60%, #b07f1a); }
@@ -285,11 +310,96 @@
   .chest::after{ content:''; position:absolute; left:50%; top:5px; width:6px; height:9px;
     margin-left:-3px; border-radius:2px; background:var(--tint); box-shadow:0 0 0 2px #1a1222; }
   .dexgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:6px; }
-  .dexcell{ padding:5px; text-align:center; cursor:pointer; }
+  .dexcell{ padding:5px 5px 6px; text-align:center; cursor:pointer; position:relative; }
   .dexcell canvas{ image-rendering:pixelated; width:80px; height:80px; }
   .dexcell b{ display:block; font-size:.7em; margin-top:2px; }
-  .dexcell.unseen{ opacity:.35; }
+  /* Three states you can tell apart across the room. */
+  .dexcell .dexno{ position:absolute; left:6px; top:4px; font-size:.55em; letter-spacing:1px;
+    color:var(--dim); font-weight:700; }
+  .dexcell.caught{ border-color:color-mix(in srgb,var(--gold) 55%,var(--edge)); }
+  .dexcell.caught .dexno{ color:var(--gold); }
+  /* A silhouette painted in the outline tone is darker than the panel it sits
+     on, which makes "seen" and "never met" look the same. Lift it instead. */
+  .dexcell.seen canvas{ filter:brightness(2.6) saturate(.2); opacity:.62; }
+  .dexcell.seen b{ color:var(--dim); }
+  .dexcell.unseen{ opacity:.5; }
+  .dexcell .dexslot{ width:80px; height:80px; display:flex; align-items:center; justify-content:center;
+    margin:0 auto; font-size:1.6em; font-weight:700; color:#2f2740;
+    border-radius:.4em; background:repeating-linear-gradient(135deg,#171021 0 6px,#1c1428 6px 12px); }
+  .tp.blank{ background:#3a3245; color:var(--dim); }
   .dexcell small{ color:var(--dim); font-size:.65em; }
+
+  /* ---------------- the kin page ----------------
+     Roster on the left, whoever is picked on the right. A row of equal cards
+     has no hierarchy: nothing on it says which one you are looking at, so
+     every card has to carry every fact and none of them can be big. */
+  .kinview{ display:grid; grid-template-columns:minmax(14em,20em) minmax(0,1fr); gap:.7em; align-items:start; }
+  @media (max-width:640px){ .kinview{ grid-template-columns:1fr; } }
+  .kinlist{ display:flex; flex-direction:column; gap:.4em; }
+  .kinrow{ display:flex; gap:.5em; align-items:center; padding:.4em .5em; cursor:pointer; }
+  .kinrow canvas{ image-rendering:pixelated; flex:0 0 auto; width:44px; height:44px; }
+  .kinrow .info{ flex:1; min-width:0; }
+  .kinrow .info b{ display:block; font-size:.82em; }
+  .kinrow .sub{ display:flex; gap:.25em; align-items:center; margin:.2em 0 .25em; flex-wrap:wrap; }
+  .kinrow .lv{ font-size:.62em; color:var(--gold); font-weight:700; letter-spacing:.5px; }
+  .kinrow .bar{ height:4px; border-radius:2px; background:#0d0812; overflow:hidden; }
+  .kinrow .bar > i{ display:block; height:100%; }
+  .kinrow .hpn{ font-size:.72em; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .kinrow .hpn small{ font-size:.8em; opacity:.7; }
+  .kinrow.sel{ box-shadow:0 0 0 2px var(--gold), 0 4px 0 rgba(0,0,0,.5); }
+  .kinrow.down{ opacity:.5; }
+
+  .kindetail{ padding:.8em; }
+  .kindetail .portrait{ float:right; margin:0 0 .4em .6em; padding:.35em; border-radius:.4em;
+    background:radial-gradient(70% 70% at 40% 30%,#3a2b4a,#1a1222);
+    border:2px solid var(--edge); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); }
+  .kindetail .portrait canvas{ image-rendering:pixelated; width:120px; height:120px; display:block; }
+  .kindetail .pname{ display:flex; align-items:baseline; gap:.5em; }
+  .kindetail .pname b{ font-size:1.05em; }
+  .kindetail .pname .lv{ font-size:.72em; color:var(--gold); font-weight:700; }
+  .kindetail .sub{ display:flex; gap:.25em; margin:.35em 0 .7em; }
+  /* A bar answers "is this one fast?" before you have read the number. */
+  .statrow{ display:grid; grid-template-columns:4.6em minmax(0,1fr) 4.4em; gap:.6em;
+    align-items:center; margin:.25em 0; font-size:.72em; }
+  .statrow > span{ color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
+  .statrow > b{ text-align:right; font-variant-numeric:tabular-nums; }
+  .statrow > b small{ opacity:.6; font-size:.85em; }
+  .statrow.big{ font-size:.8em; }
+  .statrow.xp{ margin-top:.5em; }
+  .sbar{ height:.55em; border-radius:.3em; background:#0d0812; overflow:hidden;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.6); }
+  .sbar > i{ display:block; height:100%; border-radius:.3em;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28); }
+
+  .movelist{ display:grid; grid-template-columns:repeat(auto-fill,minmax(9.5em,1fr)); gap:.4em;
+    margin-top:.9em; clear:both; }
+  .movecard{ padding:.4em .5em; border-radius:.4em; border-left:.22em solid var(--tint);
+    background:linear-gradient(180deg,#241b30,#171021); }
+  .movecard .mtop{ display:flex; justify-content:space-between; align-items:baseline; gap:.4em; }
+  .movecard .mtop b{ font-size:.76em; color:var(--tint); }
+  .movecard .cost{ font-size:.62em; color:var(--gold); font-weight:700; }
+  .movecard .mbody{ display:flex; justify-content:space-between; gap:.4em;
+    font-size:.64em; color:var(--dim); margin-top:.1em; }
+  .movecard .pp.low{ color:var(--hp-bad); }
+  .movecard .mbar{ height:3px; border-radius:2px; background:#0d0812; margin-top:.3em; overflow:hidden; }
+  .movecard .mbar > i{ display:block; height:100%; background:var(--tint); opacity:.75; }
+
+  /* ---------------- the bag ----------------
+     Grouping is what turns a list into a bag: you go looking for "an orb",
+     not for "the fourth row". */
+  #screen h3.shelf{ margin:.9em 0 .35em; font-size:.68em; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--dim); font-weight:700; }
+  #screen h3.shelf:first-of-type{ margin-top:.2em; }
+  .items{ display:grid; grid-template-columns:repeat(auto-fill,minmax(15em,1fr)); gap:.4em; }
+  .item{ display:flex; gap:.55em; align-items:center; padding:.45em .55em; cursor:pointer; }
+  .item canvas{ image-rendering:pixelated; flex:0 0 auto; width:40px; height:40px; }
+  .item .info{ flex:1; min-width:0; }
+  .item .info b{ display:block; font-size:.8em; }
+  .item .info small{ display:block; color:var(--dim); font-size:.66em; line-height:1.25; }
+  .item .tally{ font-size:.86em; color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums; }
+  .item .tally small{ font-size:.6em; color:var(--dim); margin-left:.15em; }
+  .item.sel{ box-shadow:0 0 0 2px var(--gold), 0 4px 0 rgba(0,0,0,.5); }
+  .item.dead{ opacity:.45; }
   .types{ display:flex; gap:4px; justify-content:center; margin-top:3px; }
   .hud .types{ justify-content:flex-start; margin:3px 0 1px; }
   .hud .tp{ font-size:.55em; padding:0 4px; }
@@ -2310,6 +2420,153 @@ const ART_CARDS = {
 "....................",
 "....................",
 "...................."]},
+"item_bloomorb":{n:"item_bloomorb",p:{"K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+".......KKKKK........",
+".....KKKbbmKKK......",
+"...KKhhbbbbmmmKK....",
+"..KKhhhhbbbbmmmKK...",
+"..KhhhhhbbbbmmmdK...",
+".KhhhhhhbbbbmmmddK..",
+".KhhhhhhbbbbmmmddK..",
+"KKbhhhhbbbbmmmmddKK.",
+"KbbbbbbbbbbmmmmdddK.",
+"KKKKKKKKKKKKKKKKKKK.",
+"KaaaaaaaaaaaaaaaaaK.",
+"KKmbbbbmmmmmmddddKK.",
+".KmmmmmmmmmmdddddK..",
+".KmmmmmmmmmddddddK..",
+"..KmmmmmmdddddddK...",
+"..KKdddddddddddKK...",
+"...KKdddddddddKK....",
+".....KKKdddKKK......",
+".......KKKKK........",
+"...................."]},
+"item_elixir":{n:"item_elixir",p:{"K":"#1b1220","a":"#3a2a30","b":"#8f5fd0","d":"#2c1c46","h":"#d9b8ff","m":"#553087"},r:[
+".......KKKKKK.......",
+".......KaaaaK.......",
+"........KaaK........",
+"........KaaK........",
+".......KhbmmK.......",
+"......KhbmmmmK......",
+".....KhbmmmmmmK.....",
+"....KhbmmmmmmmmK....",
+"...KhbmmmmmmmmmmK...",
+"..KhbmmmhhmmmmmmdK..",
+"..KhbmmhhhhmmmmmdK..",
+"..KhbmmmhhmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"...KhbmmmmmmmmmdK...",
+"....KKdmmmmmmdKK....",
+"......KKKKKKKK......",
+"....................",
+"...................."]},
+"item_gleamorb":{n:"item_gleamorb",p:{"K":"#1b1220","a":"#3d3350","b":"#46b6e8","d":"#12406b","h":"#c8f2ff","m":"#1f74b0"},r:[
+".......KKKKK........",
+".....KKKbbmKKK......",
+"...KKhhbbbbmmmKK....",
+"..KKhhhhbbbbmmmKK...",
+"..KhhhhhbbbbmmmdK...",
+".KhhhhhhbbbbmmmddK..",
+".KhhhhhhbbbbmmmddK..",
+"KKbhhhhbbbbmmmmddKK.",
+"KbbbbbbbbbbmmmmdddK.",
+"KKKKKKKKKKKKKKKKKKK.",
+"KaaaaaaaaaaaaaaaaaK.",
+"KKmbbbbmmmmmmddddKK.",
+".KmmmmmmmmmmdddddK..",
+".KmmmmmmmmmddddddK..",
+"..KmmmmmmdddddddK...",
+"..KKdddddddddddKK...",
+"...KKdddddddddKK....",
+".....KKKdddKKK......",
+".......KKKKK........",
+"...................."]},
+"item_greatsalve":{n:"item_greatsalve",p:{"K":"#1b1220","a":"#3d3350","b":"#46b6e8","d":"#12406b","h":"#c8f2ff","m":"#1f74b0"},r:[
+".......KKKK.........",
+".......KaaK.........",
+"......KKaaKK........",
+"......KaaaaK........",
+".....KKhbmmKK.......",
+"....KhhbmmmmdK......",
+"...KhbbmmmmmmdK.....",
+"..KhbbmmmmmmmmdK....",
+"..KhbmmmmmmmmmmdK...",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+".KhbmmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmdK...",
+"..KhbmmmmmmmmmmdK...",
+"...KKdmmmmmmmdKK....",
+".....KKKKKKKKK......",
+"....................",
+"...................."]},
+"item_prismorb":{n:"item_prismorb",p:{"K":"#1b1220","a":"#3a2a30","b":"#8f5fd0","d":"#2c1c46","h":"#d9b8ff","m":"#553087"},r:[
+".......KKKKK........",
+".....KKKbbmKKK......",
+"...KKhhbbbbmmmKK....",
+"..KKhhhhbbbbmmmKK...",
+"..KhhhhhbbbbmmmdK...",
+".KhhhhhhbbbbmmmddK..",
+".KhhhhhhbbbbmmmddK..",
+"KKbhhhhbbbbmmmmddKK.",
+"KbbbbbbbbbbmmmmdddK.",
+"KKKKKKKKKKKKKKKKKKK.",
+"KaaaaaaaaaaaaaaaaaK.",
+"KKmbbbbmmmmmmddddKK.",
+".KmmmmmmmmmmdddddK..",
+".KmmmmmmmmmddddddK..",
+"..KmmmmmmdddddddK...",
+"..KKdddddddddddKK...",
+"...KKdddddddddKK....",
+".....KKKdddKKK......",
+".......KKKKK........",
+"...................."]},
+"item_revive":{n:"item_revive",p:{"A":"#ff8a2b","K":"#1b1220","a":"#c8451c","b":"#8f6a3f","d":"#4a3320","h":"#c49a63","m":"#6b4a2c"},r:[
+".........KK.........",
+"........KAAK........",
+".......KAAAAK.......",
+".......KAaaAK.......",
+"........KaaK........",
+"........KhbK........",
+".......KhbmdK.......",
+"......KhbbmmdK......",
+".....KhbbmmmmdK.....",
+"....KhbmmmmmmmdK....",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"..KhbmmmmmmmmmmmdK..",
+"..KhbmmmmmmmmmmmdK..",
+"...KhbmmmmmmmmmdK...",
+"....KhbmmmmmmmdK....",
+".....KKdmmmmmdKK....",
+".......KKKKKKK......",
+"....................",
+"...................."]},
+"item_salve":{n:"item_salve",p:{"K":"#1b1220","a":"#5d4436","b":"#63c14a","d":"#1c4a24","h":"#d2f5a0","m":"#2f8438"},r:[
+".......KKKKKK.......",
+".......KaaaaK.......",
+".......KaaaaK.......",
+"......KKaaaaKK......",
+"......KaaaaaaK......",
+"......KKhbmmKK......",
+".....KhhbmmmmdK.....",
+"....KhbbmmmmmmdK....",
+"....KhbbmmmmmmdK....",
+"...KhbbmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"...KhbmmmmmmmmmdK...",
+"....KhbmmmmmmmdK....",
+"....KhbmmmmmmmdK....",
+".....KKdmmmmdKK.....",
+".......KKKKKK.......",
+"....................",
+"....................",
+"...................."]},
 "killedge":{n:"killedge",p:{"A":"#8f7aa8","K":"#1b1220","a":"#4a3550","b":"#e8546a","d":"#6b1730","h":"#ffb3bd","m":"#b32a45"},r:[
 ".........KK.........",
 "........KhbK........",
@@ -3034,6 +3291,24 @@ const ITEMS = {
   revive:    { name: 'Emberroot',   cost: 900,  kind: 'revive',           desc: 'Wakes a fainted kin at half HP.' },
   elixir:    { name: 'Elixir',      cost: 700,  kind: 'draw',  amt: 2,   desc: 'Draw two cards in battle.' },
 };
+/**
+ * Items wear the same 20×20 glyphs the cards do, so an orb in the bag and an
+ * orb on a card are the same object rather than a name and a picture of one.
+ * Grouped by what they are for, because a bag sorted by nothing is a list.
+ */
+const ITEM_ART = (k) => `item_${k}`;
+const ITEM_GROUP = { orb: 'Orbs', heal: 'Salves', revive: 'Salves', draw: 'In a fight' };
+const GROUP_ORDER = ['Orbs', 'Salves', 'In a fight'];
+/** Items in shelf order: grouped, and in the order they are listed above. */
+function shelve(keys) {
+  const order = Object.keys(ITEMS);
+  const groups = new Map(GROUP_ORDER.map((g) => [g, []]));
+  for (const k of [...keys].sort((a, b) => order.indexOf(a) - order.indexOf(b))) {
+    const g = ITEM_GROUP[(ITEMS[k] || {}).kind] || 'In a fight';
+    groups.get(g).push(k);
+  }
+  return [...groups].filter(([, list]) => list.length);
+}
 
 /* ============================================================ §2b — cards ==
    A battle is played from a deck with two halves. The active kin contributes
@@ -4025,8 +4300,19 @@ function drawWorld(g) {
   const ents = [];
   for (const n of (map.npcs || [])) if (npcActive(n)) ents.push({ y: n.y, draw: () => {
     const sx = Math.round(n.x * TILE - cam.x), sy = Math.round(n.y * TILE - cam.y - 6);
+    // Everyone breathes, and everyone on their own phase — a town whose people
+    // bob in unison is a metronome, not a town. Seeded off the tile so it is
+    // stable across frames and different for each person standing in it.
+    const seed = (n.x * 7 + n.y * 13) % 11;
+    const p0 = G.player;
+    const near = Math.abs(p0.x - n.x) + Math.abs(p0.y - n.y) <= 2;
+    const bob = Math.round(Math.sin(G.t * (near ? 3.6 : 2.1) + seed) * (near ? 1.4 : .9));
+    // …and everyone turns to look at you. The NPC art faces the viewer, so a
+    // mirror is the only honest turn available: left and right are real, up
+    // and down keep them facing forward rather than lying about the sprite.
+    const flip = near ? p0.x < n.x : n.dir === 'left';
     castShadow(g, sx, sy);
-    drawSpr(g, 'actor', n.sprite, sx, sy, 1);
+    drawSpr(g, 'actor', n.sprite, sx, sy - bob, 1, { flip });
     if (n.trainer && !G.flags[n.id]) {
       // A quiet marker normally; a big jolt on the frame they spot you.
       const spotted = G.alert && G.alert.npc === n;
@@ -5643,7 +5929,7 @@ function renderHUD() {
   const box = (m, disp, mine) => {
     const f = clamp(disp / m.max, 0, 1);
     const xpNeed = Math.max(1, xpFor(m.lvl + 1) - xpFor(m.lvl));
-    return `<div class="nm"><span>${dispName(m)}${m.status ? `<span class="st">${STATUS[m.status].tag}</span>` : ''}</span><span class="lv">Lv${m.lvl}</span></div>
+    return `<div class="nm"><span>${dispName(m)}${m.status ? statusChip(m.status) : ''}</span><span class="lv">Lv${m.lvl}</span></div>
       <div class="types">${typeChips(m.types)}</div>
       <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div>
       ${mine ? `<div class="bar xp"><i style="width:${clamp((m.xp - xpFor(m.lvl)) / xpNeed, 0, 1) * 100}%"></i></div>
@@ -5786,10 +6072,19 @@ function renderHand() {
   const b = B();
   if (!b) { battleBar(false); return; }
   const playable = b.phase === 'player' && !b.over && !b.log;
-  els.energy.innerHTML = `<b>${b.energy}</b><small>/${BASE_ENERGY + (b.powers.energy || 0)}</small>`;
-  els.piles.innerHTML = `draw ${b.draw.length} · used ${b.disc.length}` +
-    (b.exh.length ? ` · spent ${b.exh.length}` : '') +
-    (b.shield ? ` · <span id="shieldpip">shield ${b.shield}</span>` : '');
+  // Energy is a row of gems that go out as you spend them. "2/3" is a number
+  // you have to read; three gems with one dark is a thing you can see.
+  const cap = BASE_ENERGY + (b.powers.energy || 0);
+  els.energy.innerHTML = Array.from({ length: cap }, (_, i) =>
+    `<span class="gem ${i < b.energy ? '' : 'spent'}"></span>`).join('')
+    + `<span class="ecount">${b.energy}</span>`;
+  // The piles are stacks of cards, so they are drawn as stacks of cards.
+  const pile = (cls, n, label) =>
+    `<span class="pile ${cls} ${n ? '' : 'empty'}" title="${label}"><span class="stk"><i></i><i></i><i></i></span><b>${n}</b></span>`;
+  els.piles.innerHTML = pile('draw', b.draw.length, 'draw pile')
+    + pile('disc', b.disc.length, 'used')
+    + (b.exh.length ? pile('exh', b.exh.length, 'spent') : '')
+    + (b.shield ? `<span id="shieldpip" class="shieldpip">${b.shield}</span>` : '');
   els.hand.innerHTML = b.hand.map((c, i) => cardHTML(c, {
     cls: `${i === b.sel ? 'sel' : ''} ${cardCost(c) <= b.energy && playable ? '' : 'dead'}`,
     attr: `data-c="${i}"`, slot: i + 1,
@@ -6302,6 +6597,52 @@ function screenList(s) {
 }
 
 const typeChips = (types) => types.map((t) => `<span class="tp" style="background:${TYPES[t]}">${t}</span>`).join('');
+const STATUS_TINT = { burn: '#ff8a2b', shock: '#ffe14d', snare: '#63c14a', chill: '#46b6e8' };
+const statusChip = (st) => `<span class="tp st" style="background:${STATUS_TINT[st] || '#8f7aa8'}">${STATUS[st].tag}</span>`;
+
+/**
+ * A kin's page: portrait, stats and moves.
+ *
+ * Numbers alone make you do arithmetic to answer "is this one fast?". A bar
+ * answers it before you have read the number, so every stat gets one, measured
+ * against the roster's own ceiling rather than an arbitrary 100 — the bars mean
+ * "compared with the best thing in the valley", which is the question you are
+ * actually asking.
+ */
+const STAT_CEIL = 130;
+function statBlock(m) {
+  if (!m) return '';
+  const f = m.hp / m.max;
+  // A hand-edited or half-migrated save can hold xp below its own level's
+  // floor; the bar clamps rather than printing a negative.
+  const floor = xpFor(m.lvl), span = Math.max(1, xpFor(m.lvl + 1) - floor);
+  const into = clamp(m.xp - floor, 0, span);
+  const bar = (label, v, tint) => `<div class="statrow"><span>${label}</span>
+    <div class="sbar"><i style="width:${clamp(v / STAT_CEIL, 0, 1) * 100}%;background:${tint}"></i></div>
+    <b>${v}</b></div>`;
+  return `<div class="kindetail panel">
+    <div class="portrait"><canvas width="40" height="40" data-mon="${m.species}"></canvas></div>
+    <div class="pname"><b>${dispName(m)}</b><span class="lv">Lv${m.lvl}</span></div>
+    <div class="sub">${typeChips(m.types)}${m.status ? statusChip(m.status) : ''}</div>
+    <div class="statrow big"><span>HP</span>
+      <div class="sbar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div>
+      <b>${m.hp}<small>/${m.max}</small></b></div>
+    ${bar('ATK', m.atk, '#ff8a2b')}
+    ${bar('GUARD', m.def, '#8f7aa8')}
+    ${bar('SPD', m.spd, '#46b6e8')}
+    <div class="statrow xp"><span>EXP</span>
+      <div class="sbar"><i style="width:${(into / span) * 100}%;background:var(--xp)"></i></div>
+      <b>${into}<small>/${span}</small></b></div>
+    <div class="movelist">` + m.moves.map((slot) => {
+      const mv = MOVES[slot.id];
+      const pp = slot.pp / Math.max(1, slot.max);
+      return `<div class="movecard" style="--tint:${TYPES[mv.type]}">
+        <div class="mtop"><b>${mv.name}</b><span class="cost">${moveCost(slot.id)}</span></div>
+        <div class="mbody">${mv.pow ? `~${moveDamageNeutral(m, slot.id)} dmg` : 'status'}
+          <span class="pp ${pp <= .25 ? 'low' : ''}">${slot.pp}/${slot.max} PP</span></div>
+        <div class="mbar"><i style="width:${pp * 100}%"></i></div></div>`;
+    }).join('') + `</div></div>`;
+}
 
 /** Where a species can be found — read straight off the encounter tables. */
 function habitat(id) {
@@ -6324,32 +6665,39 @@ function renderScreen() {
   const s = G.screen, el = els.screen;
   let html = '<div class="back">X — back</div>';
   if (s.kind === 'party') {
-    html += `<h2>Your kin</h2><div class="cards">` + G.party.map((m, i) => {
+    // Roster on the left, whoever is picked on the right. A row of equal cards
+    // has no hierarchy: there is nothing on it saying which one you are looking
+    // at, so every card has to carry every fact and none of them can be big.
+    html += `<h2>Your kin</h2><div class="kinview">`;
+    html += `<div class="kinlist">` + G.party.map((m, i) => {
       const f = m.hp / m.max;
-      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
+      return `<div class="kinrow panel ${i === s.i ? 'sel' : ''} ${m.hp <= 0 ? 'down' : ''}" data-i="${i}">
         <canvas width="40" height="40" data-mon="${m.species}"></canvas>
-        <div class="info"><b>${dispName(m)}</b><small>Lv${m.lvl} · ${m.types.join('/')}${m.status ? ' · ' + STATUS[m.status].tag : ''}</small>
-        <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div>
-        <small>${m.hp}/${m.max} HP</small></div></div>`;
+        <div class="info"><b>${dispName(m)}</b>
+        <div class="sub"><span class="lv">Lv${m.lvl}</span>${typeChips(m.types)}${m.status ? statusChip(m.status) : ''}</div>
+        <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div></div>
+        <div class="hpn">${m.hp}<small>/${m.max}</small></div></div>`;
     }).join('') + '</div>';
-    if (G.party[s.i]) {
-      const m = G.party[s.i];
-      html += `<h2 style="margin-top:12px">${dispName(m)}</h2><div class="cards">` + m.moves.map((slot) => {
-        const mv = MOVES[slot.id];
-        return `<div class="card panel"><div class="info"><b style="color:${TYPES[mv.type]}">${mv.name}</b>
-          <small>${mv.type} · ${mv.pow ? '~' + moveDamageNeutral(m, slot.id) + ' dmg' : 'status'} · costs ${moveCost(slot.id)} · ${slot.pp}/${slot.max} PP</small></div></div>`;
-      }).join('') + '</div>';
-      html += `<p style="font-size:12px;color:var(--dim)">ATK ${m.atk} · GUARD ${m.def} · SPD ${m.spd} · EXP ${m.xp - xpFor(m.lvl)}/${xpFor(m.lvl + 1) - xpFor(m.lvl)}</p>`;
-    }
+    html += statBlock(G.party[s.i]);
+    html += '</div>';
     if (s.opt.force) html += '<p style="color:var(--gold);font-size:13px">Choose who steps up.</p>';
   } else if (s.kind === 'dex') {
     html += `<h2>Dex — ${dexCount(2)} caught / ${dexCount(1)} seen / ${DEX_ORDER.length}</h2><div class="dexgrid">` +
       DEX_ORDER.map((id, i) => {
+        // Three states, and they have to be distinguishable across the room:
+        // caught is lit and framed in gold, seen is a silhouette, unseen is an
+        // empty slot with its number still in it.
+        // A creature you have never met should not leak its silhouette: an
+        // unseen slot is empty, a seen one is a shape lifted off the panel, and
+        // a caught one is the creature itself in a gold frame.
         const st = G.dex[id] || 0;
-        return `<div class="dexcell panel ${st ? '' : 'unseen'} ${i === s.i ? 'sel' : ''}" data-i="${i}">
-          <canvas width="40" height="40" data-mon="${id}" data-sil="${st ? '' : '1'}"></canvas>
+        const state = st > 1 ? 'caught' : st ? 'seen' : 'unseen';
+        return `<div class="dexcell panel ${state} ${i === s.i ? 'sel' : ''}" data-i="${i}">
+          <span class="dexno">${String(i + 1).padStart(2, '0')}</span>
+          ${st ? `<canvas width="40" height="40" data-mon="${id}" data-sil="${st > 1 ? '' : '1'}"></canvas>`
+               : '<div class="dexslot">?</div>'}
           <b>${st ? DEX[id].name : '???'}</b>
-          ${st ? `<div class="types">${typeChips(DEX[id].types)}</div>` : '<small>not seen</small>'}</div>`;
+          ${st ? `<div class="types">${typeChips(DEX[id].types)}</div>` : '<div class="types"><span class="tp blank">—</span></div>'}</div>`;
       }).join('') + '</div>';
     const id = DEX_ORDER[s.i];
     if ((G.dex[id] || 0) > 0) {
@@ -6453,18 +6801,24 @@ function renderScreen() {
           <small>${def.r} · ${def.cost} energy · ${cardText(c)}</small></div></div>`;
       }).join('') + '</div>';
     }
-  } else if (s.kind === 'bag') {
+  } else if (s.kind === 'bag' || s.kind === 'shop') {
+    // One renderer for both: the same shelf, priced or counted. Grouping is
+    // what turns a list into a bag — you go looking for "an orb", not for
+    // "the fourth row".
+    const shop = s.kind === 'shop';
     const list = s.list;
-    html += `<h2>Bag — ${G.money} shards</h2>`;
-    html += list.length ? `<div class="cards">` + list.map((k, i) => `
-      <div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
-        <div class="info"><b>${ITEMS[k].name} ×${G.bag[k]}</b><small>${ITEMS[k].desc}</small></div></div>`).join('') + '</div>'
-      : '<p style="color:var(--dim)">Empty. Even the lint.</p>';
-  } else if (s.kind === 'shop') {
-    const list = s.list;
-    html += `<h2>Supply — ${G.money} shards</h2><div class="cards">` + list.map((k, i) => `
-      <div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}">
-        <div class="info"><b>${ITEMS[k].name}</b><small>${ITEMS[k].cost} shards · ${ITEMS[k].desc}</small></div></div>`).join('') + '</div>';
+    html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards</h2>`;
+    if (!list.length) html += '<p style="color:var(--dim)">Empty. Even the lint.</p>';
+    for (const [group, keys] of shelve(list)) {
+      html += `<h3 class="shelf">${group}</h3><div class="items">` + keys.map((k) => {
+        const i = list.indexOf(k), it = ITEMS[k];
+        const afford = !shop || G.money >= it.cost;
+        return `<div class="item panel ${i === s.i ? 'sel' : ''} ${afford ? '' : 'dead'}" data-i="${i}">
+          <canvas width="20" height="20" data-card="${ITEM_ART(k)}"></canvas>
+          <div class="info"><b>${it.name}</b><small>${it.desc}</small></div>
+          <div class="tally">${shop ? `${it.cost}<small>sh</small>` : `×${G.bag[k]}`}</div></div>`;
+      }).join('') + '</div>';
+    }
   }
   el.innerHTML = html;
   show(el, true);
@@ -7380,6 +7734,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
+    ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt,
