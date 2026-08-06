@@ -54,6 +54,37 @@ node tools/spritegrid/embed.mjs --check  # CI: fail if index.html is stale
 
 Never hand-edit the generated block in `index.html` — edit the JSON and re-embed.
 
+Terrain is generated the same way, from `tools/spritegrid/tiles.mjs`:
+
+```bash
+node tools/spritegrid/tiles.mjs --sheet /tmp/tiles.png   # each tile drawn 3x3, so seams show
+node tools/spritegrid/embed.mjs
+```
+
+The first set of tiles was per-pixel noise — every pixel picked at random from
+a five-tone ramp — which is the textbook way to make a floor look like
+television static, and it is what the valley looked like. What replaced it
+follows what pixel artists actually teach:
+
+- **Texture is clusters, not pixels.** A few shapes two or three pixels across,
+  repeated with an uneven distribution. Never draw individual blades of grass;
+  never let one cluster touch another edge-on. Corner to corner is fine, and is
+  what stops a field looking like a grid.
+- **Clusters cross the seam.** A shape that runs off the right edge and back on
+  the left is what hides the fact that this is one tile repeated. The contact
+  sheet draws every tile 3×3 for exactly this reason: a tile that only looks
+  good alone is not a tile.
+- **Backgrounds hold less contrast than characters.** The ground shares its hues
+  with the creatures standing on it but keeps its values close together, so the
+  creature is what your eye lands on.
+- **Shadows cool and desaturate, highlights warm.** Every ramp shifts hue as well
+  as value — a green's shadow leans blue, its highlight leans yellow. Three or
+  four tones is plenty; more turns texture back into blur.
+
+Saturation across the whole set is deliberately lower than looks right in
+isolation, because the valley has to sit under a violet UI without the two
+looking like different pictures.
+
 Card faces are the exception to "one file per sprite": they live together in
 `tools/spritegrid/cardicons.mjs` because they share a construction and want to
 be compared side by side while you draw them.
@@ -128,6 +159,19 @@ in `side` and `below` they never cover a pixel of the game. Panel text is sized
 in `em` off one font-size on the stage, so the whole UI scales with it. Because
 the function is pure, the suite checks every phone and tablet viewport without a
 browser.
+
+### Light over the valley
+
+A flat field of tiles is a texture; a lit one is a place. `worldLight()` lays
+down two passes over the finished map — a warm wash across the top falling to a
+cool violet at the bottom, so the ground has a direction to it, and a soft
+vignette that darkens the corners and pulls the eye to the middle where the
+player is. Both are in the game's own gold and violet, which is what stops the
+world and the panels around it looking like two different pictures.
+
+`castShadow()` puts a soft ellipse under everyone standing on the map. Without
+one, every actor looks pasted on top of the ground rather than standing in it —
+the cheapest single thing that makes a tile field read as a place.
 
 ## How a battle works
 
