@@ -586,6 +586,14 @@ as to one kin alone. "Party fights cost 7% and solo fights cost 25%" looked like
 three-fold difficulty gap and was a denominator: **0.21 ±0.03 kin-bars against
 0.19 ±0.03**, the same number twice. The report prints both.
 
+*Two rules, from five passes of getting this wrong.* **Average the ratios, never
+ratio the averages** — `avg(x) / avg(fights)` lets a long run outvote a short
+one, which is not what "per fight" means; four lines were doing it. And **if a
+quantity divides by the party, it is not comparable between the modes** — those
+lines now say so in the report itself and print a party-free twin underneath.
+Every line in the report states what it is normalised by. That was meant to be
+the end of this class of bug.
+
 *A mean has a party size in it, and this is the third time.* "Never in doubt"
 reads the party mean, so with four kin one of them being taken to zero — a fight
 that genuinely went wrong — is 25% party damage and sails under the 30% bar.
@@ -595,6 +603,15 @@ you brought one or six, it is **11% ±2**. Nearly nine party fights in ten put a
 kin in trouble. Solo reads 39% either way, which is the sanity check. `no kin in
 doubt` is the line to compare across modes; `never in doubt` is the line for
 whether the *run* was ever at risk.
+
+*The widest interval in the report is not noise.* `turns per fight` sits at
+±0.25 across sixty runs and had drifted up three passes running. Split by
+starter it is Dewdrip 4.50 ±0.53, Cindercub 3.97 ±0.42, Sproutle 3.87 ±0.25 —
+a spread between the three larger than the headline's own interval, because the
+report is averaging three different games. More runs cannot narrow that; the
+per-starter table is printed instead. Sproutle is the outlier worth knowing
+about: fewest free fights (30% against 40/41%) and the most dangerous
+(0.338 lost-or-ran against 0.237/0.275).
 
 *Running away is not surviving.* Teaching the probe to flee moved fights out of
 the wipe column and into the run column and changed the danger not at all — solo

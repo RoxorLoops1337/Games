@@ -5486,6 +5486,12 @@ const trainerDmg = (lvl) => 1 + (TRAINER_DMG_MUL - 1) * Math.min(1, lvl / 14);
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 const CORNER_AT = .4, CORNER_EDGE = 14;
+// Two moments even when it can hurt you. The single one at .4 left the even
+// matchups — where neither side has anything on the other, and which are a fifth
+// of one-kin fights — free 37% of the time, because one telegraphed swing across
+// four turns is a moment, not a fight. The doubly-lucky bucket, where you
+// brought the right kin *and* it cannot touch you, stays comfortable on purpose:
+// a free fight there is what good play is for.
 /**
  * How hurt a wild kin has to be before it stops fighting carefully — and the
  * answer depends on whether it can hurt you at all.
@@ -5526,9 +5532,10 @@ const resistedBy = (foe, mine) => {
  * points and the run average by two, which is inside the interval and therefore
  * not a result. Three moments is the difference between a telegraph and a fight.
  */
+const CORNER_PLAIN = [.55, .28];
 const cornerAt = (foe, mine, done) => {
-  if (resistedBy(foe, mine)) return done < CORNER_RESIST.length ? CORNER_RESIST[done] : -1;
-  return done ? -1 : CORNER_AT;
+  const list = resistedBy(foe, mine) ? CORNER_RESIST : CORNER_PLAIN;
+  return done < list.length ? list[done] : -1;
 };
 // What it costs to be caught changing kin. Switching already cost a turn and
 // your hand and everything the deck had stacked up; none of that was a price
@@ -8872,7 +8879,8 @@ if (typeof window !== 'undefined') {
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
-    CORNER_AT, CORNER_EDGE, CORNER_RESIST, cornerAt, resistedBy, SWITCH_PUNISH, SETTLE_MUL,
+    CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
+    SWITCH_PUNISH, SETTLE_MUL,
     trainerHp, TRAINER_DMG_MUL, trainerDmg,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
