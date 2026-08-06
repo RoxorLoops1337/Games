@@ -2350,10 +2350,19 @@ function camTarget(){
     return { x: car.x * 0.68 + clip.cx * 0.32, y: car.y * 0.68 + clip.cy * 0.32, z: 470 };
   }
   if (G.phase === 'aim' || G.phase === 'menu' || G.phase === 'brief'){
-    // biased a little further downrange than the sling needs, so the ring at
-    // the end of the predicted line is in frame for a full-power straight shot
-    // rather than 40px past the right edge
-    return { x: ANCHOR.x + 430, y: ANCHOR.y, z: 1500 };
+    /* Frame the market, not the lane you launch from. At a fixed z of 1500 the
+       aim view showed 48% of the market's depth and 25-33% of its crowd, and
+       half the frame was the empty approach — you picked an angle without
+       being able to see what was down any of them. The zoom now stretches to
+       fit the far fence, clamped so market 1 does not pull back into sky, and
+       the sling sits a fixed 150 screen px from the left edge whatever the
+       zoom turns out to be. */
+    const want = (bounds.x1 + 240 - (ANCHOR.x - MAX_PULL - 120)) / Math.max(1.6, VW / VH);
+    const z = clamp(want, 1500, 2300);
+    const sc = Math.min(VH / z, VW / (z * 1.6));
+    // the anchor sits a full pull plus a margin in from the left edge, so the
+    // car is still on screen at 100% however far the zoom has stretched
+    return { x: ANCHOR.x + VW / sc / 2 - MAX_PULL - 70 / sc, y: ANCHOR.y, z };
   }
   // lead scales with speed: at 1900px/s the camera sits ~570px down the road
   // rather than 320, which is the difference between seeing what you are about
@@ -3161,6 +3170,33 @@ function drawCrowdBatch(list){
     const hi = p.hat ? (p.hatCol % HATS.length) : HATS.length + (p.coat % SKIN.length);
     (crowdHead[hi] || (crowdHead[hi] = [])).push(p);
   }
+  /* While you are choosing an angle, the people the checklist actually names
+     get a ring. Un-batching them was the other option and it buys nothing: at
+     the aim zoom a pensioner is four pixels, so the middle tier draws the same
+     four pixels for eight times the calls. A ring around the same dot is what
+     makes them findable, and it is one batched path per kind. */
+  if (G.phase === 'aim' && G.goals){
+    for (const g of G.goals){
+      if (g.done) continue;
+      const kind = g.id === 'elders' ? 'elder' : g.id === 'kids' ? 'kid'
+                 : g.id === 'prams' ? 'parent' : null;
+      if (!kind) continue;
+      ctx.beginPath();
+      let any = false;
+      for (const p of list){
+        if (p.kind !== kind) continue;
+        any = true;
+        ctx.moveTo(p.x + p.r * 2.4, p.y);
+        ctx.arc(p.x, p.y, p.r * 2.4, 0, 6.283);
+      }
+      if (!any) continue;
+      // dark backing first: a ring in market colours disappears into a market
+      ctx.strokeStyle = 'rgba(8,14,26,.75)'; ctx.lineWidth = 9 / cam.s; ctx.stroke();
+      ctx.strokeStyle = kind === 'elder' ? '#e6ecf6' : kind === 'kid' ? '#ffcf3d' : '#7ec8ff';
+      ctx.lineWidth = 4.5 / cam.s; ctx.stroke();
+    }
+  }
+
   /* One dark ellipse under the whole far crowd, offset the way every other
      shadow in the game is. Without it a batched shopper is a flat coloured
      blob at exactly the size of a gift box or a chunk of stall, and the crowd
@@ -3676,8 +3712,65 @@ function previewPath(ux, uy, p){
   return { path, ramp, end: path.length ? path[path.length - 1] : { x, y } };
 }
 
+/* The things the checklist names are usually off the edge of the aim frame —
+   before this the tree, the carousel, Santa and the first ramp on your line
+   sat between 2,288 and 2,940px out with the frame ending at 1,763, so the
+   goals told you what to hit and nothing told you where it was. Anything out
+   of shot gets an arrow on the edge it left by, with how far away it is. */
+function goalMarkers(){
+  const out = [];
+  if (!G.goals) return out;
+  for (const g of G.goals){
+    if (g.done) continue;
+    if (g.id === 'tree' || g.id === 'carousel'){
+      const kind = g.id === 'tree' ? 'bigtree' : 'carousel';
+      for (const o of props) if (o.kind === kind && !o.dead) out.push({ x: o.x, y: o.y, col: '#8ee06a', tag: g.id === 'tree' ? 'TREE' : 'CAROUSEL' });
+    } else if (g.id === 'santa'){
+      for (const p of people) if (p.kind === 'santa' && !p.dead) out.push({ x: p.x, y: p.y, col: '#ff6b5e', tag: 'SANTA' });
+    }
+  }
+  return out;
+}
+
+function drawEdgeMarkers(marks){
+  if (!marks.length) return;
+  screenTransform();
+  const pad = 34;
+  for (const m of marks){
+    const sx = VW / 2 + (m.x - cam.x) * cam.s, sy = VH / 2 + (m.y - cam.y) * cam.s;
+    if (sx > pad && sx < VW - pad && sy > pad && sy < VH - pad) continue;   // in shot
+    const cx = clamp(sx, pad, VW - pad), cy = clamp(sy, pad, VH - pad);
+    const a = Math.atan2(sy - cy, sx - cx);
+    const d = Math.round(Math.hypot(m.x - car.x, m.y - car.y));
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(a);
+    ctx.fillStyle = 'rgba(8,14,26,.6)';
+    ctx.beginPath();
+    ctx.moveTo(16, 0); ctx.lineTo(-10, -13); ctx.lineTo(-10, 13); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = m.col;
+    ctx.beginPath();
+    ctx.moveTo(11, 0); ctx.lineTo(-7, -9); ctx.lineTo(-7, 9); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.font = '900 12px system-ui';
+    ctx.textAlign = 'center';
+    const label = m.tag + ' ' + d;
+    // measured, not guessed: "CAROUSEL 2820" ran off a 390px-wide phone
+    const half = (ctx.measureText ? ctx.measureText(label).width : label.length * 7) / 2 + 6;
+    const tx = clamp(cx, half, VW - half), ty = clamp(cy + (cy < VH / 2 ? 30 : -22), 26, VH - 12);
+    ctx.fillStyle = 'rgba(8,14,26,.75)';
+    ctx.fillText(label, tx + 1, ty + 1);
+    ctx.fillStyle = m.col;
+    ctx.fillText(label, tx, ty);
+    ctx.textAlign = 'left';
+  }
+  worldTransform();
+}
+
+let aimRamp = null;               // the first ramp on the current line, for the edge markers
 function drawAim(){
   if (G.phase !== 'aim') return;
+  aimRamp = null;
   const pull = aim.active ? { x: aim.x - ANCHOR.x, y: aim.y - ANCHOR.y } : { x: 0, y: 0 };
   const len = Math.hypot(pull.x, pull.y);
   const clampedLen = Math.min(len, MAX_PULL);
@@ -3696,6 +3789,7 @@ function drawAim(){
     // spacing itself reads as speed and the sleigh does not become a hosepipe
     const p = clamp(clampedLen / MAX_PULL, MIN_POWER, 1);
     const pv = previewPath(ux, uy, p);
+    aimRamp = pv.ramp;
     const n = pv.path.length;
     if (n){
       // a soft line under the dots: at full power the shot is thousands of px
@@ -3770,6 +3864,9 @@ function drawAim(){
     ctx.moveTo(ANCHOR.x - 150 + w, ANCHOR.y); ctx.lineTo(ANCHOR.x - 120 + w, ANCHOR.y + 24);
     ctx.stroke();
   }
+  const marks = goalMarkers();
+  if (aimRamp) marks.push({ x: aimRamp.x, y: aimRamp.y, col: '#8ee06a', tag: 'JUMP' });
+  drawEdgeMarkers(marks);
 }
 
 /* Where the drag has pulled the car back to. This used to be the last two lines

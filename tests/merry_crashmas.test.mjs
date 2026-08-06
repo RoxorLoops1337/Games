@@ -62,7 +62,7 @@ const EXPOSE = `__out.api = {
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
   _setHitstop: (v) => { hitstop = v; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
-  wailSlot, noise, toggleMute, stepFx, hitProp,
+  wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers,
   COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
@@ -909,6 +909,102 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
   const vals = Object.values(ends);
   assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
     'every car should preview differently: ' + JSON.stringify(ends));
+});
+
+/* ------------------------------------------------------------------ aim --- */
+
+/* At a fixed aim zoom of 1500 you chose an angle without being able to see
+   what was down any of them: 48% of the market's depth, 25-33% of its crowd,
+   and half the frame was the empty approach. */
+test('the aim frame shows you the market you are aiming at', () => {
+  const rows = [];
+  for (const lv of [0, 5, 14, 19, 20]){
+    const api = boot({ w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    api.camSnap();
+    const halfW = 1280 / api.cam.s / 2, halfH = 720 / api.cam.s / 2;
+    const x0 = api.cam.x - halfW, x1 = api.cam.x + halfW;
+    const y0 = api.cam.y - halfH, y1 = api.cam.y + halfH;
+    const depth = (Math.min(x1, api.bounds.x1) - Math.max(x0, api.bounds.x0)) /
+      (api.bounds.x1 - api.bounds.x0);
+    const seen = api.people.filter(p => p.x > x0 && p.x < x1 && p.y > y0 && p.y < y1).length;
+    const crowd = seen / api.people.length;
+    const firstProp = Math.min(...api.props.map(o => o.x));
+    const lane = (Math.min(x1, firstProp) - x0) / (x1 - x0);
+    rows.push(api.LEVELS[lv].name + ' ' + (depth * 100).toFixed(0) + '% deep, ' +
+      (crowd * 100).toFixed(0) + '% of the crowd, ' + (lane * 100).toFixed(0) + '% empty lane');
+    assert(depth >= 0.70, api.LEVELS[lv].name + ': only ' + (depth * 100).toFixed(0) + '% of the depth');
+    assert(crowd >= 0.60, api.LEVELS[lv].name + ': only ' + (crowd * 100).toFixed(0) + '% of the crowd');
+    assert(lane <= 0.35, api.LEVELS[lv].name + ': ' + (lane * 100).toFixed(0) + '% of the frame is empty lane');
+    // and the sling still has to be on screen to aim with
+    assert(api.C.ANCHOR.x - api.C.MAX_PULL > x0,
+      api.LEVELS[lv].name + ': a full pull goes off the left edge');
+  }
+  console.log('    (aim frame: ' + rows.join(' | ') + ')');
+});
+
+test('the aim zoom stretches to the market and stops', () => {
+  const z = (lv) => { const a = boot({ w: 1280, h: 720 }); a.startLevel(lv); a.beginLevel(); a.camSnap(); return Math.round(a.cam.tz); };
+  const small = z(0), big = z(20);
+  assert(big > small, 'a bigger market should pull back further: ' + small + ' vs ' + big);
+  assert(small >= 1500, 'the smallest market should not pull back into sky, got ' + small);
+  assert(big <= 2300, 'and the biggest should stop somewhere, got ' + big);
+});
+
+/* The tree, the carousel, Santa and the first ramp on your line sat 2,288 to
+   2,940px out with the frame ending at 1,763: the checklist told you what to
+   hit and nothing told you where it was. */
+test('a goal object off the edge of the frame gets an arrow', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  // find a market whose checklist names a landmark
+  let found = null;
+  for (let lv = 0; lv < api.LEVELS.length && !found; lv++){
+    api.startLevel(lv); api.beginLevel();
+    if (api.G.goals.some(g => g.id === 'tree' || g.id === 'carousel' || g.id === 'santa')) found = lv;
+  }
+  assert(found !== null, 'some market should ask for a landmark');
+  api.startLevel(found); api.beginLevel(); api.camSnap();
+  const marks = api.goalMarkers();
+  assert(marks.length > 0, 'the landmark should be marked');
+  // push it far off screen and assert the pass draws something
+  api._resetCounts();
+  api.drawEdgeMarkers([{ x: api.cam.x + 9000, y: api.cam.y, col: '#8ee06a', tag: 'TREE' }]);
+  assert((api._counts.fill || 0) >= 2, 'an off-screen goal should draw an arrow');
+  assert(api._counts.fillText, 'and print how far away it is');
+  // one that is in shot draws nothing
+  api._resetCounts();
+  api.drawEdgeMarkers([{ x: api.cam.x, y: api.cam.y, col: '#8ee06a', tag: 'TREE' }]);
+  assert(!api._counts.fill, 'a landmark already in shot needs no arrow');
+  // and an empty market must not throw
+  api._resetCounts();
+  api.drawEdgeMarkers([]);
+});
+
+test('the checklist’s people are findable in the crowd while you aim', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  let lv = null;
+  for (let i = 0; i < api.LEVELS.length && lv === null; i++){
+    api.startLevel(i); api.beginLevel();
+    if (api.G.goals.some(g => g.id === 'elders' || g.id === 'kids' || g.id === 'prams')) lv = i;
+  }
+  assert(lv !== null, 'some market should ask for a kind of person');
+  api.startLevel(lv); api.beginLevel(); api.camSnap();
+  const crowd = api.people.slice(0, 200);
+  api.G.phase = 'aim';
+  api._resetCounts();
+  api.drawCrowdBatch(crowd);
+  const aiming = api._counts.stroke || 0;
+  api.G.phase = 'drive';
+  api._resetCounts();
+  api.drawCrowdBatch(crowd);
+  const driving = api._counts.stroke || 0;
+  assert(aiming > driving, 'aiming should ring the goal kinds: ' + aiming + ' vs ' + driving);
+  // and it stops once the goal is done
+  api.G.phase = 'aim';
+  for (const g of api.G.goals) g.done = true;
+  api._resetCounts();
+  api.drawCrowdBatch(crowd);
+  assert((api._counts.stroke || 0) === driving, 'a finished goal should stop ringing people');
 });
 
 /* ---------------------------------------------------------- correctness --- */
