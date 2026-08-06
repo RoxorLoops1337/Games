@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all forty mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-seven passes on this
-game produced about eleven changes to the game and forty fixes to the tool.
+of all forty-one mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-eight passes on this
+game produced about eleven changes to the game and forty-one fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,50 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### Every dial is live, and the biggest one does not do what its name says
+
+Ledger 40 was a change that shipped and silently did nothing for a whole pass. The
+obvious question is how much else is like that, and with paired runs it is a
+two-minute check each: under seeding a dead dial gives *identical* results, so any
+metric moving at all proves the dial is wired.
+
+Fourteen combat constants — `MIGHT_CAP`, `RALLY_SHARE`, `RALLY_CAP`, `FOE_HP_MUL`,
+`WILD_DMG_MUL`, `WILD_PLAN_MUL`, `PLAN_CHIP`, `CORNER_AT`, `CORNER_EDGE`,
+`SETTLE_MUL`, `FOE_POTION`, `FOE_POTION_AT`, `STAT_CEIL`, `TRAINER_DMG_MUL` — and
+**all fourteen move all seven headline metrics.** No dead dials. `PLAN_CHIP` was
+the only one that ever lied and it is fixed.
+
+Then the one that has never been measured against itself. `FOE_HP_MUL` is 4.0, the
+biggest single number in the game, and the note beside it explains it as a length
+dial: *a foe wants a little more than its bare HP to be worth fighting*. Paired at
+5.0, 60 runs an arm:
+
+| | solo diff (95%) | party diff (95%) |
+| --- | --- | --- |
+| **turns per fight** | **+0.11 ±0.35** | **+0.07 ±0.18** |
+| lost or ran | **+.110 ±.060** | +.006 ±.011 |
+| wipes | **+.045 ±.028** | +.004 ±.006 |
+| no kin in doubt | **−.059 ±.039** | −.008 ±.022 |
+| cost of a fight, in kin | **+.032 ±.013** | **+.032 ±.032** |
+
+**A quarter more foe HP buys no extra turns at all** — nothing, in both modes.
+What it buys is danger: solo lost-or-ran .249 to .359, wipes .096 to .141.
+
+The reason is the deck. A longer fight is a fight with more turns of stacking in
+it, so the extra HP is met by higher damage rather than by more rounds; the player
+scales into the pool as fast as the pool grows. Which lines up with pass 26 from
+the other direction — cutting the biggest damage source by 90% moved fight length
+by a tenth of a turn — and with pass 33, where the one thing that *did* move
+length and shape was giving the foe a rhythm.
+
+**Fight length in this game is close to invariant in both sides' numbers.** It is
+set by structure. That is worth knowing before the next person reaches for
+`FOE_HP_MUL` to make fights feel longer: it will make them feel more dangerous
+instead, and the two are not the same complaint.
+
+Nothing was changed on the strength of this. 4.0 is a defensible danger setting
+and there is no case for moving it that this measurement makes.
 
 #### Two arms, one sitting — and the first paired run found a shipped bug
 

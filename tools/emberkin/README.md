@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and forty fixes to
+this game have produced roughly six changes to the game and forty-one fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -348,9 +348,20 @@ and the family is more useful than the individual entry.
     code.** Found by the first paired run, which is exactly the thing the paired
     mode was built for.
 
+41. **`--set` swallowed to the semicolon** (pass 36). Half this game's dials are
+    declared two to a statement — `const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;` —
+    so rewriting to the `;` deleted the second one and the run threw on load. The
+    sweep that found this read a crash as *every metric identical*, which under
+    seeding is precisely what a dead dial looks like, so the first pass of it
+    reported `FOE_HP_MUL`, `WILD_DMG_MUL`, `CORNER_AT`, `CORNER_EDGE`,
+    `RALLY_SHARE`, `RALLY_CAP`, `FOE_POTION` and `FOE_POTION_AT` as doing nothing.
+    Two bugs stacked: the patch, and a screen that could not tell *no effect* from
+    *no output*. **A check for "did nothing" has to first check that something
+    ran.**
+
 ### Documentation — a note that was wrong for longer than any bug
 
-43. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+44. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -362,7 +373,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of forty are denominators.** If a number will not move, or moves the
+- **Nine of forty-one are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has
