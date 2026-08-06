@@ -59,25 +59,63 @@ function playOne() {
     while (EK.G.battle && !EK.B().over && guard++ < 300) {
       const cur = EK.B();
       for (const c of cur.hand) bump(stat.drawn, c.src === 'kin' ? `kin:${c.id}` : c.id);
-      // Cheapest first, which is both what a person does and what the chain
-      // and combo cards are built to reward. A policy that plays whatever is
-      // leftmost in the hand cannot tell a good deck from a big one.
-      for (let spun = 0; spun < 12; spun++) {
-        if (cur.over) break;
-        let best = -1, bestCost = Infinity;
-        for (let i = 0; i < cur.hand.length; i++) {
-          const c = cur.hand[i], cost = EK.cardCost(c);
-          if (cost > cur.energy) continue;
-          // Hold a retained heal while healthy — that is the whole point of it.
-          const def = c.src === 'kin' ? null : EK.CARDS[c.id];
-          if (def && def.retain && def.vt === 'heal' && cur.mine.hp > cur.mine.max * .6) continue;
-          if (cost < bestCost) { best = i; bestCost = cost; }
+      // The policy is part of the measurement. Cheapest-first cannot tell a
+      // good deck from a big one, because it never sets anything up: it plays
+      // the Chain card while the discount is still zero and the Combo card
+      // while the bonus is still nothing. So play the turn in two passes, the
+      // way a player learns to within about three fights:
+      //
+      //   1. enablers — cheap cards with no Combo or Chain on them
+      //   2. payoffs  — everything that is worth more for having waited
+      //
+      // Inside each pass, cheapest first.
+      const wants = (c) => {
+        if (c.src === 'kin') return true;
+        const def = EK.CARDS[c.id];
+        // Hold a retained heal while healthy — that is the whole point of it.
+        if (def.retain && def.vt === 'heal' && cur.mine.hp > cur.mine.max * .6) return false;
+        // A heal at full health is a wasted card whatever else it says.
+        if (def.vt === 'heal' && !def.retain && cur.mine.hp > cur.mine.max * .85) return false;
+        return true;
+      };
+      // Whatever else it does, a turn ends in a swing. Reserve the price of the
+      // cheapest kin move first — a policy that spends its last energy on a
+      // shield and then passes is not measuring the game, it is measuring
+      // itself, and the first version of this took thirty-seven turns a fight.
+      const kinCost = () => {
+        let c = Infinity;
+        for (const h of cur.hand) if (h.src === 'kin') c = Math.min(c, EK.cardCost(h));
+        return c === Infinity ? 0 : c;
+      };
+      const support = (reserve) => {
+        for (let spun = 0; spun < 10; spun++) {
+          if (cur.over) break;
+          let best = -1, bestKey = null;
+          for (let i = 0; i < cur.hand.length; i++) {
+            const c = cur.hand[i];
+            if (c.src === 'kin') continue;
+            const cost = EK.cardCost(c);
+            if (cost > cur.energy - reserve || !wants(c)) continue;
+            const def = EK.CARDS[c.id];
+            const key = [(def.combo || def.chain) ? 1 : 0, cost];
+            if (!bestKey || key[0] < bestKey[0] || (key[0] === bestKey[0] && key[1] < bestKey[1])) {
+              best = i; bestKey = key;
+            }
+          }
+          if (best < 0) break;
+          const card = cur.hand[best];
+          bump(stat.played, card.id);
+          EK.playCard(best);
         }
-        if (best < 0) break;
-        const card = cur.hand[best];
-        bump(stat.played, card.src === 'kin' ? `kin:${card.id}` : card.id);
-        EK.playCard(best);
+      };
+      support(kinCost());                       // set up, keeping the swing affordable
+      for (let spun = 0; spun < 4 && !cur.over; spun++) {
+        const i = cur.hand.findIndex((c) => c.src === 'kin' && EK.cardCost(c) <= cur.energy);
+        if (i < 0) break;
+        bump(stat.played, `kin:${cur.hand[i].id}`);
+        EK.playCard(i);
       }
+      support(0);                               // then spend whatever is left
       if (cur.over) break;
       EK.endTurn();
       turns++;
@@ -94,7 +132,18 @@ function playOne() {
       const offer = EK.rollReward(EK.B());
       if (offer && offer.length) {
         const pick = offer[Math.floor(Math.random() * offer.length)];
-        EK.grantCard(pick);          // grantCard makes room on its own now
+        // The real reward screen asks which card comes out when the deck is
+        // full. Answer it the way a player would: drop the one played least.
+        const c = EK.grantCard(pick, true);
+        if (!EK.G.deck.includes(c.u)) {
+          // A player drops a weak card, not an unused one — dropping by play
+          // count alone throws out whatever you took last fight.
+          const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean);
+          const worth = (o) => EK.RARITY_ORDER.indexOf(EK.CARDS[o.id].r) * 100 + (o.plays || 0);
+          let worst = inDeck[0];
+          for (const o of inDeck) if (worth(o) < worth(worst)) worst = o;
+          if (worst) { EK.G.deck = EK.G.deck.filter((u) => u !== worst.u); EK.G.deck.push(c.u); }
+        }
         bump(stat.taken, pick);
       }
     }

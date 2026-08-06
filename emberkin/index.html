@@ -3515,7 +3515,16 @@ const STARTER_DECK = ['edge', 'edge', 'edge', 'guard', 'guard', 'guard', 'focus'
  * the whole thing, which is what makes each card you add a real decision — and
  * what makes taking one out a decision too.
  */
-const DECK_MIN = 8, DECK_MAX = 24;
+/**
+ * A deck you never see through is a collection.
+ *
+ * Fights run about two and a half turns; five cards a turn against twenty-four
+ * meant you saw half of it once and your best card usually stayed in the draw
+ * pile. Twelve is small enough that a fight cycles the whole thing, which is
+ * what makes each card you put in worth putting in — and what makes taking one
+ * out a decision rather than a formality.
+ */
+const DECK_MIN = 6, DECK_MAX = 12;
 /**
  * The second wind: you get back what the fight cost you, up to a third of your
  * health. Earned rather than granted — a walkover took nothing off you, so it
@@ -3533,17 +3542,25 @@ const RALLY_SHARE = 1, RALLY_CAP = .34;
  * is the closest thing to "the card you were not using" the game can work out on
  * its own. Curating it properly is what the deck screen is for.
  */
-function grantCard(id) {
+function grantCard(id, ask) {
   const c = mkCard(id);
   G.cards.push(c);
   if (G.deck.length < DECK_MAX) { G.deck.push(c.u); return c; }
+  // The caller is going to ask which card comes out, so do not guess.
+  if (ask) return c;
   const inDeck = G.deck.map(ownedCard).filter(Boolean);
   if (!inDeck.length) { G.deck.push(c.u); return c; }
+  // Weakest first, then least used. Going by play count alone thrashes: a card
+  // you took last fight has been played nought times, so the next reward throws
+  // it straight back out again.
+  // A card whose definition has gone — an old save, a renamed id — is worth
+  // less than any real card, so it is the first thing out.
+  const worthOf = (o) => (CARDS[o.id] ? RARITY_ORDER.indexOf(CARDS[o.id].r) * 100 + (o.plays || 0) : -1);
   let worst = inDeck[0];
-  for (const o of inDeck) if ((o.plays || 0) < (worst.plays || 0)) worst = o;
+  for (const o of inDeck) if (worthOf(o) < worthOf(worst)) worst = o;
   G.deck = G.deck.filter((u) => u !== worst.u);
   G.deck.push(c.u);
-  c.replaced = CARDS[worst.id].name;              // so the offer can say so
+  c.replaced = (CARDS[worst.id] || { name: 'an old card' }).name;   // so the offer can say so
   return c;
 }
 
@@ -4016,16 +4033,37 @@ function enterMap(id, x, y, dir) {
 }
 
 /** Roll the encounter table; returns a fresh wild creature or null. */
+/**
+ * How far behind your best kin the valley is allowed to fall.
+ *
+ * The bands used to be fixed, so Route One spawned level 3 kin for ever while
+ * you climbed to twelve on them: two fights in five were decided before they
+ * started, and the fix for that is not more foe HP, it is foes that are still
+ * worth fighting. A wild kin is rolled in its band as before and then brought
+ * up to within this many levels of your lead — never above it, so the valley
+ * follows you rather than racing you.
+ */
+const WILD_TRAIL = 3;
+
 function rollEncounter(map) {
   if (!map.enc) return null;
+  const lead = G.party.length ? Math.max(...G.party.map((m) => m.lvl)) : 1;
+  const scale = (lo, hi) => {
+    // Never below the band — walk somewhere you have no business being and it
+    // is still dangerous. Never above the band *or* your lead, whichever is
+    // higher, so the valley follows you without ever racing ahead.
+    const rolled = rrange(lo, hi);
+    const ceiling = Math.max(hi, lead);
+    return clamp(Math.max(rolled, lead - WILD_TRAIL), lo, ceiling);
+  };
   const total = map.enc.table.reduce((s, e) => s + e[3], 0);
   let r = Math.random() * total;
   for (const [id, lo, hi, w] of map.enc.table) {
     r -= w;
-    if (r <= 0) return mkMon(id, rrange(lo, hi));
+    if (r <= 0) return mkMon(id, scale(lo, hi));
   }
   const e = map.enc.table[0];
-  return mkMon(e[0], rrange(e[1], e[2]));
+  return mkMon(e[0], scale(e[1], e[2]));
 }
 /* =========================================================== §4 — sprites ==
    Art arrives as {p: palette, r: rows-of-chars}. Each sprite is painted once
@@ -4894,8 +4932,22 @@ function startBattle(opt) {
   const who = opt.npc ? `${opt.npc.name} wants to battle!` : `A wild ${opt.foe.name} bristles!`;
   playCue(opt.legendary ? 'shrine' : 'battle');
   const lines = [who, `Go, ${dispName(mine)}!`];
+  // Speed decides who opens. The player used to move first always, and with
+  // fights running under two turns that meant most foes got exactly one action
+  // and half of them never touched you — a fight decided before it started.
+  // Something faster than you now lands the first blow, which is what makes
+  // SPD a stat rather than a number on a screen, and what makes an ambush by
+  // something quick actually frightening.
+  const opener = [];
+  // Wild kin only: a trainer squares up with you, and the opening rival
+  // fight is meant to be winnable rather than a coin toss on speed.
+  if (opt.wild && effStat(opt.foe, 'spd') > effStat(mine, 'spd')) {
+    snap(opener, `${dispName(opt.foe)} is faster off the mark!`, 'use', 'foe');
+    foeTurn(opener);
+  }
   // The very first hand is dealt as the battle opens.
-  startPlayerTurn([]);
+  startPlayerTurn(opener);
+  if (opener.length) G.battle.log = opener;
   // One-time nudge, the first time a wild kin shows up with orbs in the bag.
   if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
     G.flags.taughtCatch = 1;
@@ -5274,13 +5326,16 @@ const moveCost = (id) => {
  */
 const cardCost = (card) => {
   if (card.src === 'kin') return moveCost(card.id);
+  // A save can hold a card whose definition has gone — an id renamed between
+  // builds. It must not take the game down; it just costs nothing.
   const def = CARDS[card.id];
+  if (!def) return 0;
   const b = B();
   const chain = def.chain && b ? def.chain * (b.playedTurn || 0) : 0;
   return Math.max(0, def.cost - chain);
 };
-const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : CARDS[card.id].name;
-const cardRarity = (card) => card.src === 'kin' ? 'kin' : CARDS[card.id].r;
+const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : (CARDS[card.id] || { name: '?' }).name;
+const cardRarity = (card) => card.src === 'kin' ? 'kin' : (CARDS[card.id] || { r: 'common' }).r;
 
 function shuffleInto(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -7059,6 +7114,7 @@ function closeScreen() {
   playCue('back');
   if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
   if (s.kind === 'starter') return;                      // and one of these must be chosen
+  if (s.kind === 'swap') return;                         // something has to come out
   if (s.kind === 'profile') {
     commitNick(s);                                       // never lose what was typed
     if (s.opt.fresh) { screenSelect(); return; }          // a fresh catch has one way out
@@ -7085,6 +7141,9 @@ function screenList(s) {
   if (s.kind === 'reward') return (s.opt.offer || []).concat(['skip']);
   // Three kin and no way out: the first choice in the game is a choice.
   if (s.kind === 'starter') return STARTERS.slice();
+  // Which card comes out. The deck, and nothing else — there is no "keep it as
+  // it is", because you already chose to take the card.
+  if (s.kind === 'swap') return G.deck.map(ownedCard).filter(Boolean);
   // The profile is one creature and two buttons; the list is what you can press.
   if (s.kind === 'profile') return ['name', 'done'];
   if (s.kind === 'deck') {
@@ -7256,6 +7315,20 @@ function renderScreen() {
         </div>
         <div class="ptake">${i === s.i ? '▲ take it' : ''}</div></div>`;
     }).join('') + '</div>';
+  } else if (s.kind === 'swap') {
+    const coming = ownedCard(s.opt.newCard);
+    html = '';                                  // something has to come out
+    html += `<h2>What comes out?</h2>`;
+    html += `<p class="lede">A deck holds ${DECK_MAX}. ${coming ? CARDS[coming.id].name : 'The new card'} is going in — pick the one it replaces.</p>`;
+    if (coming) {
+      html += `<div class="cardrow">` + cardHTML({ src: 'deck', u: coming.u, id: coming.id, bg: 0 },
+        { cls: 'big', note: 'coming in' }) + '</div>';
+      html += `<h3 class="shelf">Your deck</h3>`;
+    }
+    html += `<div class="cardrow">` + s.list.map((c, i) => cardHTML(
+      { src: 'deck', u: c.u, id: c.id, bg: 0 },
+      { cls: `big ${i === s.i ? 'sel' : ''}`, attr: `data-i="${i}"`,
+        note: `played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}` })).join('') + '</div>';
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
@@ -7384,7 +7457,7 @@ function screenInput() {
     // back to. Back means "No thanks", which is a real option on the screen,
     // rather than a button that looks live and does nothing.
     if (s.kind === 'reward') { s.i = Math.max(0, (s.list || []).length - 1); screenSelect(); }
-    else if (s.kind !== 'starter') closeScreen();
+    else if (s.kind !== 'starter' && s.kind !== 'swap') closeScreen();
   }
 }
 
@@ -7451,15 +7524,35 @@ function screenSelect() {
     if (done) done();
     return;
   }
+  if (s.kind === 'swap') {
+    const out = s.list[s.i];
+    if (!out) return;
+    const done = s.opt.done, coming = s.opt.newCard;
+    G.deck = G.deck.filter((u) => u !== out.u);
+    if (!G.deck.includes(coming)) G.deck.push(coming);
+    const inc = ownedCard(coming);
+    G.screen = null; if (!HEADLESS) show(els.screen, false);
+    G.mode = G.battle ? 'battle' : 'world';
+    setToast(`${CARDS[out.id].name} out, ${inc ? CARDS[inc.id].name : 'the new card'} in.`);
+    saveGame();
+    if (done) done();
+    return;
+  }
   if (s.kind === 'reward') {
     const id = s.list[s.i];
     const done = s.opt.done;
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     if (id && id !== 'skip') {
-      const c = grantCard(id);
-      setToast(`${CARDS[id].name} joins the deck.`);
-      if (!G.deck.includes(c.u)) setToast(`${CARDS[id].name} — deck is full, it went to the collection.`);
+      const c = grantCard(id, true);
+      if (G.deck.includes(c.u)) setToast(`${CARDS[id].name} joins the deck.`);
+      else {
+        // A full deck makes taking a card the second half of a decision rather
+        // than the end of one: something has to come out, and it is your call
+        // which. The old rule picked for you, silently.
+        openScreen('swap', { newCard: c.u, done });
+        return;
+      }
     }
     if (done) done();
     return;
@@ -8359,6 +8452,7 @@ if (typeof window !== 'undefined') {
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
+    WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,

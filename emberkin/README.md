@@ -524,7 +524,14 @@ below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
 through), walks back to town to heal, wipes, turns per fight, and which cards
 were drawn and never worth playing.
 
-Two warnings from using it. **Runs vary a lot** — identical builds came back
+**The policy is the measurement.** The version that played cheapest-first could
+not tell a good deck from a big one, because it never set anything up: it played
+the Chain card while the discount was still zero. It now plays a turn in two
+passes — enablers, then payoffs — around a reserved swing, because a policy that
+spends its last energy on a shield and then passes is measuring itself. The
+first attempt at that took thirty-seven turns a fight.
+
+Two more warnings from using it. **Runs vary a lot** — identical builds came back
 28 and 42 walks-to-heal — so anything under ten runs is noise, and every rate is
 reported per fight because absolute counts are dominated by how long a run
 happened to take. And **the probe's policy is part of the measurement**: the
@@ -717,6 +724,45 @@ you read "you lob a Prism Orb" and then watch it happen, not the reverse.
 A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
 a shower that takes its time — and hands you its papers afterwards. Any key
 skips the tail of the flourish; nobody should sit through it twice.
+
+### The valley keeps up
+
+The encounter bands used to be absolute: Route One spawned level 3 kin for ever
+while you climbed to twelve on them, and the measured share of fights the player
+was never in danger of losing sat at 45%. A fight you cannot lose is a cutscene
+you press buttons through, and the fix for that is not more foe HP — it is foes
+that are still worth fighting.
+
+A wild kin is rolled in its band as before, then brought up to within
+`WILD_TRAIL` levels of your best. Never below the band, so somewhere you have no
+business being is still dangerous; never above the band *or* your lead,
+whichever is higher, so the valley follows you rather than racing you.
+
+And **speed decides who opens**. The player used to move first always, which
+with fights running under two turns meant most foes got exactly one action and
+half of them never touched you. Something faster than you now lands the first
+blow — which is what makes SPD a stat rather than a number on a screen. Wild kin
+only: a trainer squares up with you, and the opening rival fight is meant to be
+winnable rather than a coin toss on speed.
+
+### A deck you can see through
+
+Twelve cards, not twenty-four. Fights run about two turns and you draw five a
+turn, so a twenty-four card deck meant you saw half of it once and your best
+card usually stayed in the draw pile.
+
+The half that makes it work is the **swap**: with the deck full, taking a card
+opens a screen that asks which one comes out. The old rule dropped the new card
+into the collection silently, so the offer stopped being a decision a third of
+the way through a run. Chests still make room on their own — they pull three or
+four at a time and being asked four times running is a form, not a decision — by
+putting out the weakest card, then the least played. Going by play count alone
+thrashes: a card you took last fight has been played nought times, so the next
+reward throws it straight back out.
+
+Measured over three samples of fourteen runs, against the same probe policy:
+fights the player was never in danger of losing fell from 45% to 34%, and the
+walking fell about a sixth, with the walks-back-to-heal and wipe rates unmoved.
 
 ### The second wind
 
