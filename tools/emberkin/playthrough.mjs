@@ -14,9 +14,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all twenty-seven mistakes this tool
-// has made. Eighteen passes on this game produced about eight changes to the
-// game and twenty-seven fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all twenty-nine mistakes this tool
+// has made. Nineteen passes on this game produced about eight changes to the
+// game and twenty-nine fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -84,7 +84,11 @@ function playOne(runIdx) {
     // capped at anything: every might card played adds its whole current value
     // to a run-long total that rides on every attack from every kin. Worth
     // knowing what that total actually reaches now the probe plays the cards.
-    might: 0, mightMid: 0, levels: 0, gems: 0,
+    might: 0, mightMid: 0,
+    // Everything a run accumulates. Might was found by suspecting it; the point
+    // of this block is that the next one gets found by reading. For each: what
+    // it reaches by Crown Hollow, and whether anything bounds it.
+    money: 0, bagN: 0, deckN: 0, grown: 0, grownCap: 0, deckMix: null, deckTop: null, levels: 0, gems: 0,
     oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0, fled: 0,
     // What a fight took out of the party, as opposed to how close to death it
     // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
@@ -107,8 +111,38 @@ function playOne(runIdx) {
   const PARTY_WANT = SOLO ? 1 : 4;
   const ORBS = ['prismorb', 'gleamorb', 'bloomorb'];
   const orbToThrow = () => ORBS.find((o) => (EK.G.bag[o] || 0) > 0) || null;
+  /** A card into the deck if it beats the worst thing already in there. */
+  const tryDeck = (c) => {
+    if (!c || EK.G.deck.includes(c.u)) return;
+    const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean);
+    if (inDeck.length < EK.DECK_MAX) { EK.G.deck.push(c.u); return; }
+    const rank = (o) => EK.RARITY_ORDER.indexOf(EK.CARDS[o.id].r) * 100 + (o.plays || 0);
+    let worst = inDeck[0];
+    for (const o of inDeck) if (rank(o) < rank(worst)) worst = o;
+    if (worst && rank(worst) < EK.RARITY_ORDER.indexOf(EK.CARDS[c.id].r) * 100) {
+      EK.G.deck = EK.G.deck.filter((u) => u !== worst.u);
+      EK.G.deck.push(c.u);
+    }
+  };
+
+  /**
+   * Gems buy chests, and the probe was walking past them with 237 in its pocket
+   * at Crown Hollow — the whole second half of the card economy, unmeasured.
+   * A player buys the best chest they can afford when they are in town, so that
+   * is the rule: best affordable, once a visit, and anything better than the
+   * worst card in the deck goes in.
+   */
+  const buyChest = () => {
+    const kinds = EK.CHEST_IDS.slice().sort((a, b) => EK.CHESTS[b].cost - EK.CHESTS[a].cost);
+    const kind = kinds.find((k) => (EK.G.gems || 0) >= EK.CHESTS[k].cost);
+    if (!kind) return;
+    const got = EK.openChest(kind);
+    if (got) for (const c of got) tryDeck(c);
+  };
+
   /** Walking back to town is also when you restock — orbs first, then salves. */
   const restock = () => {
+    buyChest();
     while ((EK.G.bag.bloomorb || 0) < 5 && EK.G.money >= EK.ITEMS.bloomorb.cost) {
       EK.G.money -= EK.ITEMS.bloomorb.cost;
       EK.G.bag.bloomorb = (EK.G.bag.bloomorb || 0) + 1;
@@ -513,6 +547,17 @@ function playOne(runIdx) {
     // legendary at 0, so a trainer win is the only place in a normal run one can
     // come from, and the probe was throwing every one of them away.
     if (over === 'win' && EK.G.battle) {
+      // The win pays, and the probe was never collecting. `over === 'win'` in the
+      // real game hands over gems on every win and a trainer's prize on top of a
+      // duel, and this loop drives combat directly so it skipped both. The run
+      // started with 500 shards, spent them on the first restock and was broke
+      // for the remaining hundred-odd fights — so every salve, orb and walk-back
+      // number this tool has ever reported was measured on a player with no
+      // income. Gems are the chest currency and were sitting at exactly zero at
+      // Crown Hollow in every run, which is a whole reward economy the report
+      // could not see.
+      EK.G.gems = (EK.G.gems || 0) + EK.gemReward(EK.B());
+      if (EK.B().npc) EK.G.money += EK.B().npc.trainer.prize;
       const offer = EK.rollReward(EK.B());
       if (offer && offer.length) {
         // The best card on offer, not a coin toss between them. Picking at
@@ -606,6 +651,27 @@ function playOne(runIdx) {
   stat.top = Math.max(...EK.G.party.map((m) => m.lvl));
   stat.deck = EK.G.deck.length;
   stat.might = EK.G.might || 0;
+  stat.money = EK.G.money || 0;
+  stat.bagN = Object.values(EK.G.bag || {}).reduce((x, n) => x + (n || 0), 0);
+  {
+    const owned = new Map((EK.G.cards || []).map((c) => [c.u, c]));
+    const inDeck = (EK.G.deck || []).map((u) => owned.get(u)).filter(Boolean);
+    stat.deckN = inDeck.length;
+    // Card growth is capped per card at 4x its own value. Nothing caps the sum,
+    // and the sum is what a deck actually hits with.
+    stat.grown = inDeck.reduce((x, c) => x + (c.plus || 0), 0);
+    stat.grownCap = inDeck.reduce((x, c) => x + EK.growCap(c.id), 0);
+    stat.deckMix = {};
+    for (const c of inDeck) {
+      const r = EK.CARDS[c.id].r;
+      stat.deckMix[r] = (stat.deckMix[r] || 0) + 1;
+    }
+    // Is the reward system building a deck or a pile? Count how much of the deck
+    // is the three cards it holds most of.
+    const byId = new Map();
+    for (const c of inDeck) byId.set(c.id, (byId.get(c.id) || 0) + 1);
+    stat.deckTop = [...byId.values()].sort((a, b) => b - a).slice(0, 3).reduce((x, n) => x + n, 0);
+  }
   return stat;
 }
 
@@ -776,8 +842,58 @@ console.log('');
   const avgPlay = sum('playWorth') / Math.max(1, sum('playN'));
   const broke = sum('stopBroke'), done = sum('stopDone');
   const cardPoor = done / Math.max(1, broke + done);
-  const mightAvg = runs.reduce((a, r) => a + r.might, 0) / runs.length;
-  console.log(`  might at the end       +${mightAvg.toFixed(0)} damage on every attack, permanently\n`);
+const EK0 = loadGame({});
+  // What a run accumulates. Every other number in this report is per fight or
+  // per run, which is exactly why nothing in it ever said that might reached
+  // +499 against a 174 HP foe. If a quantity persists across fights, the
+  // per-fight tables cannot see it — so it has to be printed here.
+  {
+    const st = (k) => {
+      const xs = runs.map((r) => r[k]);
+      const m = xs.reduce((a, x) => a + x, 0) / xs.length;
+      const v = xs.length < 2 ? 0 : xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1);
+      return `${m.toFixed(m < 10 ? 1 : 0)} ±${(1.96 * Math.sqrt(v / xs.length)).toFixed(m < 10 ? 1 : 0)}`;
+    };
+    console.log('  what a run accumulates          (bound)');
+    console.log(`    might             +${st('might')}   damage on every attack   (capped ${EK0.MIGHT_CAP ?? '?'})`);
+    console.log(`    card growth in deck +${st('grown')} of a possible ${(runs.reduce((a, r) => a + r.grownCap, 0) / runs.length).toFixed(0)}   (each card 4x its own value; the sum is unbounded)`);
+    console.log(`    money             ${st('money')}   (spent on orbs and salves)`);
+    console.log(`    gems              ${st('gems')}`);
+    console.log(`    items in bag      ${st('bagN')}`);
+    console.log(`    deck              ${st('deckN')} of ${EK0.DECK_MAX} cards; ${st('deckTop')} of them are the three it holds most of`);
+    const mixOf = (rs) => {
+      const mix = {};
+      for (const r of rs) for (const [k, n] of Object.entries(r.deckMix || {})) mix[k] = (mix[k] || 0) + n;
+      const tot = Object.values(mix).reduce((a, n) => a + n, 0) || 1;
+      return EK0.RARITY_ORDER.filter((r) => mix[r]).map((r) => `${r} ${(100 * mix[r] / tot).toFixed(0)}%`).join(', ');
+    };
+    console.log(`    rarity mix        ${mixOf(runs)}`);
+
+    // A good run's deck against a bad one's. Split by the danger line, thirds at
+    // each end, so the question is what the decks of the runs that went well
+    // actually look like — not what the average deck looks like.
+    const byRisk = runs.slice().sort((a, b) =>
+      (a.fled + a.wipes) / Math.max(1, a.fights) - (b.fled + b.wipes) / Math.max(1, b.fights));
+    const k = Math.max(1, Math.floor(runs.length / 3));
+    const band = (rs, label) => {
+      const avg = (f) => rs.reduce((a, r) => a + f(r), 0) / rs.length;
+      const half = (f) => {
+        const m = avg(f), v = rs.length < 2 ? 0
+          : rs.reduce((a, r) => a + (f(r) - m) ** 2, 0) / (rs.length - 1);
+        return 1.96 * Math.sqrt(v / rs.length);
+      };
+      const lr = (r) => (r.fled + r.wipes) / Math.max(1, r.fights);
+      console.log(`    ${label.padEnd(16)} lost or ran ${avg(lr).toFixed(3)} ±${half(lr).toFixed(3)}`
+        + `   might +${avg((r) => r.might).toFixed(0)} ±${half((r) => r.might).toFixed(0)}`
+        + `   growth +${avg((r) => r.grown).toFixed(0)} ±${half((r) => r.grown).toFixed(0)}`
+        + `   top-3 ${avg((r) => r.deckTop).toFixed(1)}/12`);
+      console.log(`    ${' '.repeat(16)} ${mixOf(rs)}`);
+    };
+    console.log('\n  the decks of the runs that went best, against the ones that went worst');
+    band(byRisk.slice(0, k), 'best third');
+    band(byRisk.slice(-k), 'worst third');
+    console.log('');
+  }
   console.log('  what a card is worth');
   console.log(`    average card in hand   ${avgHand.toFixed(1)} points`);
   console.log(`    average card played    ${avgPlay.toFixed(1)} points   (the policy picks the best, so this is a ceiling)`);
