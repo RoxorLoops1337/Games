@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and twenty fixes to
+this game have produced roughly six changes to the game and twenty-two fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -33,7 +33,7 @@ if it only moves one, say which.
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 20.
+a sample — see mistake 21.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -61,7 +61,8 @@ came before it.
 | `by starter` | the headline split three ways | per fight, within starter | yes |
 | `trainer` table | per hand-authored fight | pooled across runs | yes |
 | `matchup` table | the cross-tab, by how the fight read before a blow was struck | pooled across runs | yes |
-| `played/drawn` | of the fights this card reached your hand, the share where it was worth playing at least once | once per card per fight, both halves | bounded by 100%; see mistakes 7-9, 18 and the 3-cost limitation |
+| `played/drawn` | of the fights this card reached your hand, the share where it was worth playing at least once | once per card per fight, both halves | bounded by 100%; see mistakes 7-9, 18 |
+| `when payable` | the same, over the fights the card could actually have been **paid for** at a moment the policy was choosing | once per card per fight | **this is the card-quality column** — see mistake 21 |
 
 Every rate carries a **95% interval** (`mean ±half-width`, 1.96 standard errors
 across runs). Under the wipe line the report prints how many runs a claim of a
@@ -171,19 +172,37 @@ and the family is more useful than the individual entry.
     branch in this function has been mistaken for a dead card. **When a card looks
     dead, read `worth()` before reading the card.**
 
+19. **Nobody checked whether a card could be paid for** (pass 23-24). played/drawn
+    slopes with price on its own: median 100% at cost 0, 69% at cost 1, 30% at
+    cost 2, 21% at cost 3. Reading it as card quality reads the price. `when
+    payable` divides by the fights the card was affordable at a decision point, and
+    a card that is never payable prints `never` rather than a percentage.
+
 ### Sampling — a claim the sample could not carry
 
-19. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+20. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-20. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+21. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
+### Documentation — a note that was wrong for longer than any bug
+
+22. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+    `playthrough.mjs` for two passes as a known limitation and was never true.
+    Chain discounts a card by one for every card already played that turn, which
+    is exactly the mechanic for this: Titanheart and Overkill are played **90%**
+    and **84%** of the fights they are payable in. Kinbond, the only three-cost
+    without Chain, is still payable in about two fights in five; it goes unplayed
+    because heal-to-full is worth only the HP you are missing. A limitation nobody
+    re-tests outranks a bug, because a bug eventually contradicts something and a
+    note like this just gets cited.
+
 ### What the pattern says
 
-- **Nine of twenty are denominators.** If a number will not move, or moves the
+- **Nine of twenty-two are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

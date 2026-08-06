@@ -14,9 +14,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all twenty mistakes this tool has
-// made. Fifteen passes on this game produced about six changes to the game and
-// twenty fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all twenty-two mistakes this tool
+// has made. Sixteen passes on this game produced about seven changes to the game
+// and twenty-two fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -69,7 +69,7 @@ function playOne(runIdx) {
 
   const stat = {
     steps: 0, fights: 0, noDoubt: 0, wipes: 0, healTrips: 0, turns: 0,
-    played: new Map(), drawn: new Map(), taken: new Map(), levels: 0, gems: 0,
+    played: new Map(), drawn: new Map(), afford: new Map(), taken: new Map(), levels: 0, gems: 0,
     oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0, fled: 0,
     // What a fight took out of the party, as opposed to how close to death it
     // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
@@ -137,7 +137,7 @@ function playOne(runIdx) {
     // Both halves of the played/drawn ratio, counted the same way: once per card
     // per fight. See the fix note at the loop below for why the numerator has to
     // match the denominator.
-    const seenCards = new Set(), playedCards = new Set();
+    const seenCards = new Set(), playedCards = new Set(), affordCards = new Set();
     const cardKey = (c) => (c.src === 'kin' ? `kin:${c.id}` : c.id);
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
@@ -321,19 +321,34 @@ function playOne(runIdx) {
             const c = cur.hand[i];
             if (c.src === 'kin') continue;
             const cost = EK.cardCost(c);
+            // Could this card have been paid for at a moment the policy was
+            // choosing? played/drawn cannot tell a bad card from an unaffordable
+            // one, and the whole table slopes with price for that reason alone:
+            // the median is 100% at cost 0, 69% at 1, 30% at 2, 21% at 3. This
+            // is the denominator that takes the price back out.
+            if (cost <= cur.energy - reserve) {
+              const ak = cardKey(c);
+              if (!affordCards.has(ak)) { affordCards.add(ak); bump(stat.afford, ak); }
+            }
             if (cost > cur.energy - reserve || !wants(c)) continue;
             const rate = worth(c) / Math.max(.5, cost);       // free cards are not infinitely good
             if (rate > bestRate) { best = i; bestRate = rate; }
           }
-          // A three-energy card can never be afforded here, because the swing is
-          // always reserved out of three: Kinbond is drawn about a hundred times
-          // in twenty-four runs and played none of them. Letting the policy skip
-          // the swing for a big enough card was tried and is worse than the gap
-          // — at a bar of 1.5x the swing it ate the swing constantly and kin move
-          // play rates fell from 62-98% to 24-42%, which measures the escape
-          // hatch rather than the game. Left as a known limitation: three-cost
-          // cards are under-read here, and Kinbond and Overkill in particular
-          // should not be judged by this table.
+          // This note used to say a three-energy card can never be afforded
+          // here, because the swing is always reserved out of three. That was
+          // never true, and the `when payable` column is what showed it: Chain
+          // discounts a card by one for every card already played this turn, so
+          // Titanheart and Overkill are payable often and played 90% and 84% of
+          // the times they are. Kinbond is the only three-cost without Chain, and
+          // even it is payable in about two fights in five — it goes unplayed
+          // because heal-to-full is worth only the HP you are missing, which is a
+          // reading of the card, not of the budget.
+          //
+          // What remains true is that the reserve is never skipped. Letting the
+          // policy skip the swing for a big enough card was tried in pass 22 and
+          // is worse than the gap it closes: at a bar of 1.5x the swing it ate
+          // the swing constantly and kin move play rates fell from 62-98% to
+          // 24-42%, which measures the escape hatch rather than the game.
           if (best < 0) break;
           const card = cur.hand[best];
           if (!playedCards.has(card.id)) { playedCards.add(card.id); bump(stat.played, card.id); }
@@ -714,20 +729,27 @@ console.log('');
 
 // Which cards actually got played, and which ones sat there.
 const all = new Map();
+const cell = (k) => { if (!all.has(k)) all.set(k, { drawn: 0, played: 0, afford: 0 }); return all.get(k); };
 for (const r of runs) {
-  for (const [k, n] of r.drawn) all.set(k, { ...(all.get(k) || { drawn: 0, played: 0 }), drawn: (all.get(k) || {}).drawn + n || n });
-  for (const [k, n] of r.played) {
-    const cur = all.get(k) || { drawn: 0, played: 0 };
-    all.set(k, { ...cur, played: (cur.played || 0) + n });
-  }
+  for (const [k, n] of r.drawn) cell(k).drawn += n;
+  for (const [k, n] of r.played) cell(k).played += n;
+  for (const [k, n] of r.afford) cell(k).afford += n;
 }
 const taken = new Map();
 for (const r of runs) for (const [k, n] of r.taken) taken.set(k, (taken.get(k) || 0) + n);
-const rows = [...all].map(([k, v]) => [k, v.drawn || 0, v.played || 0])
+// played/drawn slopes with price all on its own — a 2-cost is competing for a
+// budget of two, so it loses picks it deserved to lose. `when payable` divides
+// by the fights where the card could actually have been paid for at a moment the
+// policy was choosing, which takes the price back out and leaves the card. Read
+// that column for "is this card any good"; read played/drawn for "does it ever
+// get to happen". A card that is never payable prints `never` rather than a
+// percentage, because a percentage there is a number nobody should read.
+const rows = [...all].map(([k, v]) => [k, v.drawn || 0, v.played || 0, v.afford || 0])
   .sort((a, b) => (a[2] / Math.max(1, a[1])) - (b[2] / Math.max(1, b[1])));
-console.log('  card                 drawn  played  played/drawn');
-for (const [k, d, p] of rows) {
-  console.log(`  ${k.padEnd(20)} ${String(d).padStart(5)} ${String(p).padStart(7)}  ${pct(p, d)}`);
+console.log('  card                 drawn  played  played/drawn  when payable');
+for (const [k, d, p, af] of rows) {
+  const when = k.startsWith('kin:') ? '' : (af ? pct(p, af) : 'never');
+  console.log(`  ${k.padEnd(20)} ${String(d).padStart(5)} ${String(p).padStart(7)}  ${pct(p, d).padStart(12)}  ${when.padStart(12)}`);
 }
 
 // And the whole pool: anything never seen is a card no run ever built with.
@@ -736,7 +758,11 @@ const never = EK.CARD_IDS.filter((id) => !all.has(id));
 console.log(`\n  offered and taken but never worth playing:`);
 for (const [k, n] of [...taken].sort((a, b) => b[1] - a[1])) {
   const seen = all.get(k) || { drawn: 0, played: 0 };
-  if (seen.drawn && (seen.played || 0) / seen.drawn > .25) continue;
+  // Judge "not worth playing" on the fights it could be paid for. A card that is
+  // never payable is not a bad card, it is a card the budget never reaches, and
+  // the two want different fixes.
+  const base = seen.afford || seen.drawn;
+  if (base && (seen.played || 0) / base > .25) continue;
   console.log(`    ${k.padEnd(18)} taken ${String(n).padStart(3)}  drawn ${String(seen.drawn || 0).padStart(4)}  played ${String(seen.played || 0).padStart(4)}`);
 }
 console.log(`\n  never drawn in any run (${never.length}/${EK.CARD_IDS.length}): ${never.join(', ') || 'none'}\n`);
