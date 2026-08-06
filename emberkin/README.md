@@ -555,6 +555,29 @@ kin rather than the party**, so a fight won by rotating through three hurt kin
 read as never in doubt because the one on the field kept being a fresh one. Both
 fixed; both moved the party numbers against the game.
 
+#### What the probe decides, that a player would decide differently
+
+Twice now a decision buried in this file has been quietly manufacturing the
+answer, and both times several passes of game tuning happened against it before
+anyone noticed — cheapest-first card play made every two-energy card look dead,
+and healing before every duel made every trainer look unloseable. So here is the
+list, kept honest on purpose. **A probe decision is a hypothesis about players.
+When a number will not move, suspect this table before the game.**
+
+| the probe | a player | biases | done |
+| --- | --- | --- | --- |
+| took the first starter every run | picks one of three | **everything** — the whole matchup cross-tab was measured with Ember's resistances baked in, part of why Dorn's Stone wall read as an eight-turn slog | rotates now |
+| never drank a salve | carries a bag | **the wipe rate**, the number three passes steered by: every wipe was one a player had an item to prevent | drinks below 30% |
+| healed before every trainer | arrives having walked the route | trainer difficulty, wholly | fought as met; `--rested` keeps the old column |
+| played cards cheapest-first | learns to sequence | every card's played/drawn rate | scores by value now |
+| reads never-in-doubt off an absolute floor | asks "was that fight anything?" | conflates a dangerous fight with an already-hurt party | **cost of a fight** reports beside it |
+| carries exactly four kin | carries one to six | the party/solo split — but that split is the stated axis, not a hidden one | left, on purpose |
+| grinds to a fixed level per leg | moves on when it feels ready | the level-gap column, and every bucket downstream of it | left; documented |
+| fights each trainer after grinding that leg | fights them on the way past | trainers are always met at the top of a leg, i.e. at their easiest | left; documented |
+| never flees | runs from a fight going badly | pushes wipes up | left; documented |
+| takes a random card from the reward offer | takes the best one | depresses played/drawn across the whole pool | left; documented |
+| restocks only on a heal trip | shops when passing through | catch rate, salve supply | left; documented |
+
 **Every rate carries a 95% interval, and you read the interval first.** One
 number standing in for thirty runs that disagree is how three passes' worth of
 claims about the wipe rate turned out to be noise wearing a decimal point — it
@@ -784,6 +807,13 @@ hit, which is the whole point.
 
 It is one swing, not a state of being, and only wild kin do it — a trainer's kin
 has a plan instead.
+
+**And it cannot fire if the kin never gets a turn.** Three in ten party fights
+ended in one swing — send in the right element, delete something that never acted
+— so the only readable thing a wild fight has was exactly the thing those fights
+skipped. A healthy wild kin now takes a killing blow and holds on by a point,
+once, and corners on the spot. It cannot save one that was already hurt below
+`CORNER_AT`, and it cannot happen twice.
 
 The other half of the same problem was the damper. `WILD_DMG_MUL` exists so a
 long fight is not paid for in walks back to town, and it had no business fully

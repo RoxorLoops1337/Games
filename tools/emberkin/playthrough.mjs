@@ -46,19 +46,29 @@ const ROUTE = [
   { map: 'crown_hollow', target: 26, duels: ['t_wick3'] },
 ];
 
-function playOne() {
+function playOne(runIdx) {
   const EK = loadGame({});
   EK.setCtx(mkCtx());
   EK.newGame();
-  // Take the first starter, the way most players do.
+  // Rotate the starter. Taking the first one every time meant every number in
+  // this report — the whole matchup cross-tab that passes 12 and 13 were steered
+  // by — was measured on one third of the game, with Ember's resistances baked
+  // into every run. Dorn's Stone wall read as an eight-turn slog partly because
+  // the probe never once walked in with a Tide kin.
   EK.G.mode = 'world';
-  EK.takeStarter(EK.STARTERS[0]);
+  EK.takeStarter(EK.STARTERS[runIdx % EK.STARTERS.length]);
   EK.G.dialogue = null; EK.G.mode = 'world';
 
   const stat = {
     steps: 0, fights: 0, noDoubt: 0, wipes: 0, healTrips: 0, turns: 0,
     played: new Map(), drawn: new Map(), taken: new Map(), levels: 0, gems: 0,
-    oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0,
+    oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0,
+    // What a fight took out of the party, as opposed to how close to death it
+    // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
+    // which a fight entered at half health flunks whatever happens in it. This
+    // answers "was that fight anything" — and it is the one that is about the
+    // fight rather than about the walk before it.
+    cost: 0, costN: 0,
     // Trainers are the hand-authored fights, and averaging them into the wild
     // ones hides exactly the thing a scripted plan is supposed to change. Keyed
     // by npc id so the three Wick fights can be read as a sequence.
@@ -74,13 +84,18 @@ function playOne() {
   const PARTY_WANT = SOLO ? 1 : 4;
   const ORBS = ['prismorb', 'gleamorb', 'bloomorb'];
   const orbToThrow = () => ORBS.find((o) => (EK.G.bag[o] || 0) > 0) || null;
-  /** Walking back to town is also when you restock. */
+  /** Walking back to town is also when you restock — orbs first, then salves. */
   const restock = () => {
     while ((EK.G.bag.bloomorb || 0) < 5 && EK.G.money >= EK.ITEMS.bloomorb.cost) {
       EK.G.money -= EK.ITEMS.bloomorb.cost;
       EK.G.bag.bloomorb = (EK.G.bag.bloomorb || 0) + 1;
     }
+    while ((EK.G.bag.salve || 0) < 4 && EK.G.money >= EK.ITEMS.salve.cost) {
+      EK.G.money -= EK.ITEMS.salve.cost;
+      EK.G.bag.salve = (EK.G.bag.salve || 0) + 1;
+    }
   };
+  restock();
 
   /** Fight what is in front of us with a plain, honest policy. */
   const fight = (duelId) => {
@@ -96,7 +111,8 @@ function playOne() {
       const live = EK.G.party.length ? EK.G.party : [b.mine];
       return live.reduce((a, m) => a + Math.max(0, m.hp) / Math.max(1, m.max), 0) / live.length;
     };
-    let low = partyHp(), turns = 0, guard = 0, planBeats = 0;
+    const startHp = partyHp();
+    let low = startHp, turns = 0, guard = 0, planBeats = 0;
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
     // decided in advance, this is where the deciding happens.
@@ -244,6 +260,20 @@ function playOne() {
           EK.playCard(best);
         }
       };
+      // A salve, before anything else, if the kin on the field is nearly out and
+      // the deck has no answer in hand. The probe never once drank one, which
+      // means every wipe it has ever reported was a wipe a player would have had
+      // a bag to prevent — and the wipe rate is the number three passes of
+      // tuning steered by. It costs the turn, the same as it does for a trainer.
+      if ((EK.G.bag.salve || 0) > 0 && cur.mine.hp / cur.mine.max < .3 && !cur.over
+        && !cur.hand.some((c) => c.src !== 'kin' && EK.CARDS[c.id]
+          && EK.CARDS[c.id].vt === 'heal' && EK.cardCost(c) <= cur.energy)) {
+        EK.doAction({ kind: 'item', id: 'salve', target: EK.G.party.indexOf(cur.mine) });
+        stat.salves++;
+        turns++;
+        low = Math.min(low, partyHp());
+        continue;
+      }
       support(kinCost());                       // set up, keeping the swing affordable
       // One swing a turn — take the best one you can pay for.
       if (!cur.over && !cur.swungTurn) {
@@ -293,6 +323,7 @@ function playOne() {
     }
     // A fight you were never in danger of losing is a cutscene with buttons.
     if (low > .7 && !duelId) stat.noDoubt++;
+    if (!duelId) { stat.cost += Math.max(0, startHp - low); stat.costN++; }
     if (!duelId) {
       const m = stat.matchup.get(key) || { n: 0, free: 0, lost: 0, turns: 0, gap: 0 };
       m.n++; m.turns += turns; m.gap += gap;
@@ -396,7 +427,7 @@ function playOne() {
 }
 
 const runs = [];
-for (let i = 0; i < RUNS; i++) runs.push(playOne());
+for (let i = 0; i < RUNS; i++) runs.push(playOne(i));
 
 const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
 const pct = (n, d) => `${((n / Math.max(1, d)) * 100).toFixed(0)}%`;
@@ -435,6 +466,7 @@ console.log(`  fights              ${fights.toFixed(0)}   (one every ${(steps / 
 // Every rate carries a 95% interval. Two builds whose intervals overlap have
 // not been told apart by this tool, however different their means look.
 console.log(`  never in doubt      ${showPct(rate((r) => r.noDoubt, perFight))} of fights`);
+console.log(`  cost of a fight     ${showPct(rate((r) => r.cost, (r) => r.costN))} of the party`);
 console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}`);
 console.log(`  over in one turn    ${showPct(rate((r) => r.oneTurn, perFight))} of fights`);
 console.log(`  foe max HP          ${(avg((r) => r.foeHp) / Math.max(1, avg((r) => r.foeHpSeen))).toFixed(0)}`);
@@ -452,6 +484,7 @@ console.log(`  wipes               ${show(rate((r) => r.wipes, perFight))} per f
   console.log(`     to call a .05 change in that: ~${need(.05)} runs;  .02: ~${need(.02)}`);
 }
 console.log(`  party at the end    ${avg((r) => r.party).toFixed(1)}   ${avg((r) => r.caught).toFixed(1)} caught from ${avg((r) => r.thrown).toFixed(1)} throws`);
+console.log(`  salves drunk        ${avg((r) => r.salves).toFixed(1)}   ${(avg((r) => r.salves) / Math.max(1, fights)).toFixed(3)} per fight`);
 console.log(`  switched mid-fight  ${avg((r) => r.switched).toFixed(1)}   ${(avg((r) => r.switched) / Math.max(1, fights)).toFixed(2)} per fight`);
 console.log(`  ended at level      ${avg((r) => r.top).toFixed(0)}\n`);
 

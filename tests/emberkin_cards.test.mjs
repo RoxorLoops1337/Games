@@ -1334,4 +1334,72 @@ section('a trainer with a potion uses it');
   for (let i = 0; i < 40 && bb.mine.hp === before; i++) { bb.foe.hp = 1; g.endTurn(); }
   ok(bb.mine.hp < before, 'and once it is empty they go back to swinging');
 }
+
+
+section('a wild kin does not go down without one moment of its own');
+// Three in ten party fights ended in a single swing — you send in the right
+// element and delete something that never got a turn — and the cornered
+// telegraph, the only readable thing a wild fight has, can only fire if the kin
+// lives long enough to be cornered.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 60)];
+  g.startBattle({ foe: g.mkMon('sproutle', 5), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  const full = bb.foe.max;
+  ok(g.damageOf(bb.mine, bb.foe, move.id, { crit: false, roll: 1 }).dmg > full,
+    'the swing really would have killed it outright');
+  // Swing until one connects.
+  for (let i = 0; i < 40 && bb.foe.hp === full; i++) {
+    bb.hand = [{ src: 'kin', id: move.id }];
+    bb.energy = 9; bb.swungTurn = 0;
+    g.playCard(0);
+  }
+  eq(bb.foe.hp, 1, 'it holds on by a point');
+  ok(!bb.over, 'so the fight is still going');
+  g.readIntent();
+  eq(bb.cornered, 1, 'and it corners on the spot');
+  ok(bb.foeEdge > 0, 'with something banked for the swing it just bought itself');
+
+  // Once only: the next blow finishes it.
+  for (let i = 0; i < 40 && bb.foe.hp > 0; i++) {
+    bb.hand = [{ src: 'kin', id: move.id }];
+    bb.energy = 9; bb.swungTurn = 0;
+    g.playCard(0);
+  }
+  eq(bb.foe.hp, 0, 'it does not hold on twice');
+
+  // It cannot rescue a kin that was already hurt past the line.
+  const h = fresh();
+  h.G.party = [h.mkMon('pyrelynx', 60)];
+  h.startBattle({ foe: h.mkMon('sproutle', 5), wild: true });
+  const hb = h.B();
+  hb.mine.hp = hb.mine.max = 99999;
+  hb.foe.hp = Math.floor(hb.foe.max * (h.CORNER_AT - .05));
+  const mv2 = hb.mine.moves.find((m) => h.MOVES[m.id].pow);
+  for (let i = 0; i < 40 && hb.foe.hp > 0; i++) {
+    hb.hand = [{ src: 'kin', id: mv2.id }];
+    hb.energy = 9; hb.swungTurn = 0;
+    h.playCard(0);
+  }
+  eq(hb.foe.hp, 0, 'a kin already on its last legs just dies');
+
+  // And a trainer's kin never does it — they have a bench and a bag instead.
+  const t = fresh();
+  t.G.party = [t.mkMon('pyrelynx', 60)];
+  t.startBattle({ foe: t.mkMon('sproutle', 5), team: [['sproutle', 5]],
+    npc: { name: 'X', id: 't_ls', trainer: { team: [], prize: 0 } } });
+  const tb = t.B();
+  tb.mine.hp = tb.mine.max = 99999;
+  tb.foePotions = 0;
+  const mv3 = tb.mine.moves.find((m) => t.MOVES[m.id].pow);
+  for (let i = 0; i < 40 && !tb.over; i++) {
+    tb.hand = [{ src: 'kin', id: mv3.id }];
+    tb.energy = 9; tb.swungTurn = 0;
+    t.playCard(0);
+  }
+  eq(tb.foe.hp, 0, 'a trained kin goes down when it is beaten');
+}
 done('emberkin_cards');
