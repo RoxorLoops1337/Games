@@ -60,7 +60,13 @@
   .stars b{ color:#ffd34d; font-weight:400; text-shadow:0 0 16px rgba(255,205,70,.6); }
   .targetline{ margin:0 0 14px; font-size:14px; color:#a8bcd8; }
   .targetline b{ color:#ffd34d; }
-  .levels{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 14px; }
+  /* The 21-chip grid used to sit above START THE ENGINE, which put the only
+     thing a new player needs to press 237px below the fold at 1280x720 — with
+     overlay scrollbars, so there was no affordance either. The button is the
+     primary action; the grid is the secondary "or jump to one". */
+  .btn + .targetline{ margin-top:18px; }   /* the button's drop shadow needs the room */
+  .pickline{ margin:14px 0 8px; font-size:12px; letter-spacing:2px; color:#6b82a3; text-transform:uppercase; }
+  .levels{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 4px; }
   .lv{ display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:9px;
     font-size:13px; font-weight:800; letter-spacing:1px; font-family:inherit; cursor:pointer;
     background:#0b1524; border:2px solid #22395c; color:#6b82a3; }
@@ -108,9 +114,10 @@
         Grab <b>&#127881; nitro cans</b> and <b>&#128658; snow ploughs</b> on the way in.<br>
         Beat the <b>target</b> to open the next market.
       </div>
-      <div class="levels" id="mLevels"></div>
-      <div class="targetline" id="mBest"></div>
       <button class="btn gold" id="bStart">START THE ENGINE</button>
+      <div class="targetline" id="mBest"></div>
+      <div class="pickline">or pick a market</div>
+      <div class="levels" id="mLevels"></div>
     </div>
   </div>
 
