@@ -69,6 +69,8 @@ const EXPOSE = `__out.api = {
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
+  foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
+  getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
   COATS, ELDER_COATS, KID_COATS, SKIN,
@@ -3636,6 +3638,12 @@ function worstFrame(w, h){
   api.G.phase = 'drive';
   api.car.x = 2600; api.car.y = 1100; api.car.vx = 800;
   api.camSnap();
+  // a full boot-print buffer, all of it in shot and none of it faded
+  api.setT(500);
+  for (let i = 0; i < api.FOOT_MAX; i++){
+    api.foot[i] = { x: api.cam.x + ((i * 53) % 900) - 450,
+      y: api.cam.y + ((i * 71) % 600) - 300, rot: i, r: 16, t: 500 };
+  }
   api.draw();                       // warm the cached gradients
   api._resetCounts();
   api.draw();
@@ -3819,7 +3827,8 @@ test('the light sprites and the snow grain are baked once, not per frame', () =>
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
   api.draw();
   const after1 = api.getBakeCount();
-  assert(after1 === 2, 'the first frame bakes the mask and one themed glow, got ' + after1);
+  assert(after1 === 3,
+    'the first frame bakes the mask, the headlight and one themed glow, got ' + after1);
   for (let i = 0; i < 30; i++){ api.setT(api.getT() + 1 / 60); api.draw(); }
   assert(api.getBakeCount() === after1,
     'thirty more frames should bake nothing: ' + api.getBakeCount());
@@ -3880,6 +3889,127 @@ test('the snow floor carries a grain, laid down once per frame', () => {
     'snowPattern should return a pattern or a hard false, got ' + typeof pat);
   const fills = api._counts.fillRect || 0;
   assert(fills > 0, 'the ground should still be drawn without a pattern');
+});
+
+/* ---------------------------------------------------------------- crowd --- */
+
+/* Seven hundred shoppers walk across a field of untouched snow all run and
+   leave nothing behind. Boots go down now — but a ring buffer that grows, or
+   one that eats the simulation's random numbers, would be worse than none. */
+test('the crowd treads the snow, on a ring buffer that never grows', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2200; api.car.y = 1100; api.camSnap();
+  for (let i = 0; i < 900; i++) api.stepPeople(1 / 60);
+  const laid = api.foot.filter(Boolean).length;
+  console.log('    (prints after fifteen seconds of walking: ' + laid + '/' + api.FOOT_MAX + ')');
+  assert(laid > 20, 'a market of walking shoppers should leave prints, got ' + laid);
+  assert(api.foot.length <= api.FOOT_MAX,
+    'the buffer must not grow past its cap: ' + api.foot.length);
+  for (let i = 0; i < 3000; i++) api.stepPeople(1 / 60);
+  assert(api.foot.length <= api.FOOT_MAX,
+    'still capped after a minute: ' + api.foot.length);
+  // the two feet alternate rather than tracking one line down the middle
+  const walker = api.people.find(p => typeof p.footL === 'number');
+  assert(walker, 'somebody should have put a foot down');
+});
+
+/* Six cosmetic systems have shifted the simulation's random stream by drawing
+   from it, and each one changed every market's score. This compares a run with
+   the print code in against the same run with it cut out of the source. */
+test('laying footprints does not move the simulation', () => {
+  const CUT = 'if (sp > 12){';
+  const run = (tweak) => {
+    const api = boot({ w: 1280, h: 720, tweak });
+    api.startCampaign(); api.beginLevel();
+    api.G.phase = 'drive';
+    api.car.x = 2200; api.car.y = 1100; api.camSnap();
+    for (let i = 0; i < 600; i++) api.stepPeople(1 / 60);
+    return { pos: api.people.map(p => Math.round(p.x) + ',' + Math.round(p.y)).join('|'),
+      next: api.rnd(), prints: api.foot.filter(Boolean).length };
+  };
+  const withPrints = run(null);
+  const without = run((s) => {
+    assert(s.includes(CUT), 'the footprint gate moved; this test is checking nothing');
+    return s.replace(CUT, 'if (false){');
+  });
+  assert(withPrints.prints > 20, 'the control run should have laid prints, got ' + withPrints.prints);
+  assert(without.prints === 0, 'the cut run should have laid none, got ' + without.prints);
+  assert(withPrints.pos === without.pos, 'the crowd walked somewhere else once prints were on');
+  assert(withPrints.next === without.next,
+    'the simulation RNG advanced differently: ' + withPrints.next + ' vs ' + without.next);
+});
+
+test('a print fades on its own clock and is culled off camera', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2200; api.car.y = 1100; api.camSnap();
+  api.setT(100);
+  for (let i = 0; i < 8; i++){
+    api.foot[i] = { x: api.cam.x + i * 12, y: api.cam.y, rot: 0, r: 16, t: 100 };
+  }
+  api._resetCounts();
+  api.drawFootprints();
+  const fresh = api._counts.ellipse || 0;
+  assert(fresh === 16, 'eight fresh prints are eight dents and eight lips, got ' + fresh);
+  // wound past the ttl they cost nothing at all
+  api.setT(100 + api.FOOT_TTL + 1);
+  api._resetCounts();
+  api.drawFootprints();
+  assert(!(api._counts.ellipse || 0), 'an expired print should not be drawn');
+  // and neither should one on the far side of the market
+  api.setT(100);
+  for (let i = 0; i < 8; i++) api.foot[i].x = api.cam.x + 90000;
+  api._resetCounts();
+  api.drawFootprints();
+  assert(!(api._counts.ellipse || 0), 'an off-camera print should not be drawn');
+});
+
+/* The headlights were one trapezoid at alpha .10 — a grey wedge with a hard
+   edge, drawn over the scene and lighting nothing. */
+test('the headlights are a cone that overlaps itself, not a row of blobs', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100; api.car.ang = 0; api.car.vx = 900; api.car.vy = 0;
+  const spots = api.beamSpots();
+  assert(spots.length >= 5, 'a cone needs more than a couple of discs, got ' + spots.length);
+  for (let i = 1; i < spots.length; i++){
+    const a = spots[i - 1], b = spots[i];
+    const gap = Math.hypot(b.x - a.x, b.y - a.y);
+    assert(gap < a.r, 'disc ' + i + ' is further away than the last one is wide (' +
+      gap.toFixed(1) + ' vs ' + a.r.toFixed(1) + ') — the beam would read as blobs');
+    assert(b.r > a.r, 'the beam should widen with distance');
+    assert(b.a < a.a, 'and fade with distance');
+  }
+  assert(spots[0].x > api.car.x, 'the beam points where the car is pointing');
+  // and it reaches further the faster you are going
+  const slowReach = (() => { api.car.vx = 0; const s = api.beamSpots();
+    return Math.hypot(s[s.length - 1].x - api.car.x, s[s.length - 1].y - api.car.y); })();
+  api.car.vx = 1800;
+  const fast = api.beamSpots();
+  const fastReach = Math.hypot(fast[fast.length - 1].x - api.car.x,
+    fast[fast.length - 1].y - api.car.y);
+  console.log('    (beam reach parked / at 1800: ' + Math.round(slowReach) + ' / ' +
+    Math.round(fastReach) + ')');
+  assert(fastReach > slowReach * 1.5, 'the beam should stretch with speed: ' +
+    slowReach + ' -> ' + fastReach);
+});
+
+test('the beam cuts the darkness as well as adding its own glow', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.vx = 900; api.camSnap();
+  api.draw(); api._resetCounts(); api.draw();
+  const lamps = Math.min(api.lightBuf.length, api.MAX_LIGHTS);
+  const spots = api.beamSpots().length;
+  // holes: one per lamp + the car + the beam. glow: one per lamp + the beam.
+  const want = lamps * 2 + 1 + spots * 2 + 1;
+  assert((api._counts.drawImage || 0) >= want,
+    'the beam should be punched and drawn, expected at least ' + want +
+    ' drawImage calls, got ' + api._counts.drawImage);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

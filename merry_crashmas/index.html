@@ -747,6 +747,13 @@ const ice = [];         // slippery patches
 const spills = [];      // hot glühwein
 const fx = [];          // particles & floating text
 const tracks = [];      // tyre marks
+/* Boots in the snow. A ring buffer with no per-frame step: each print stores
+   the clock it was laid at and works its own age out when it is drawn, so
+   seven hundred shoppers walking around cost nothing between frames. Nothing
+   here touches either RNG — the foot that goes down is whichever one did not
+   go down last. */
+const FOOT_MAX = 180, FOOT_STRIDE = 26, FOOT_TTL = 16;
+const foot = []; let footI = 0;
 const gore = [];        // blood left on the snow — pools, spray, chunks, smears
 const debris = [];      // planks and panels left where a stall used to be
 const lens = [];        // droplets thrown at the camera itself
@@ -859,6 +866,7 @@ function genMarket(lv){
   props.length = 0; people.length = 0; pickups.length = 0;
   ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0;
   gore.length = 0; lens.length = 0; debris.length = 0;
+  foot.length = 0; footI = 0;
 
   const x0 = MARKET_X;
   const x1 = FENCE_PAD + (WORLD_W - FENCE_PAD * 2 - 120) * lv.span;
@@ -1776,6 +1784,23 @@ function stepPeople(dt){
     const sp = Math.hypot(p.vx, p.vy);
     if (sp > 4) p.ang = Math.atan2(p.vy, p.vx);
     p.bob += dt * (3 + sp * 0.06);
+
+    // a boot goes down every stride, alternating sides. Only for people near
+    // enough to be looked at: the buffer is small and a shopper three markets
+    // away must not push a print off it that you can actually see.
+    if (sp > 12){
+      p.step = (p.step || 0) + sp * dt;
+      if (p.step >= FOOT_STRIDE){
+        p.step = 0;
+        if (Math.abs(p.x - cam.x) < 1500 && Math.abs(p.y - cam.y) < 1100){
+          const s = (p.footL = -(p.footL || 1));
+          const nx = -p.vy / sp, ny = p.vx / sp;
+          foot[footI] = { x: p.x + nx * p.r * 0.34 * s, y: p.y + ny * p.r * 0.34 * s,
+            rot: p.ang, r: p.r, t: T };
+          footI = (footI + 1) % FOOT_MAX;
+        }
+      }
+    }
 
     // fear turns into tears, and whatever they were carrying hits the floor
     const wantCry = p.panic * p.cryK;
@@ -2757,6 +2782,7 @@ const ELDER_COATS = ['#6b6f7e', '#7a6a5e', '#5f6b7a', '#79697a'];
 const KID_COATS = ['#ff8a3d', '#3fc4d8', '#ffcf3d', '#8ee06a'];
 const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
+const HAIR = ['#3a2a20', '#6b4a2c', '#1d1a1c', '#8d6a3f', '#a8632c', '#c9b48a', '#4a3a34'];
 
 function worldTransform(){
   const amp = shake.a * shakeEnv();
@@ -3414,8 +3440,12 @@ function drawPerson(p){
   ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.86, p.r * 0.72, 0, 0, 6.283); ctx.fill();
   ctx.strokeStyle = 'rgba(18,28,48,.5)'; ctx.lineWidth = 2; ctx.stroke();
   if (fine){
-    ctx.fillStyle = 'rgba(255,255,255,.13)';
-    circle(-p.r * 0.3, -p.r * 0.15, p.r * 0.34); ctx.fill();
+    // the lit side of a coat belongs to the scene's light, not to whichever
+    // way the shopper happens to be walking — so it is un-rotated back out of
+    // the person's own frame
+    const la = Math.atan2(-SUN_DY, -SUN_DX) - (p.ang + Math.PI / 2);
+    ctx.fillStyle = 'rgba(255,247,228,.17)';
+    circle(Math.cos(la) * p.r * 0.32, Math.sin(la) * p.r * 0.32 + p.r * 0.1, p.r * 0.36); ctx.fill();
     // a scarf tail, because it is freezing
     ctx.strokeStyle = HATS[(p.coat + 3) % HATS.length]; ctx.lineWidth = p.r * 0.2;
     ctx.beginPath();
@@ -3434,20 +3464,49 @@ function drawPerson(p){
     ctx.fillStyle = '#f6f2ea';
     circle(0, p.r * 0.16, p.r * 0.22); ctx.fill();
   } else if (p.hat){
-    ctx.fillStyle = HATS[p.hatCol % HATS.length];
-    circle(0, -p.r * 0.22, p.r * 0.45); ctx.fill();
+    /* Seen from directly above, a bobble hat is a crown covering the whole
+       head with the bobble on top of it — not, as this drew, a flat disc with
+       a white dot trailing behind it like a collar. The lit side comes from
+       the scene's one light direction, the brim shadow from the back. */
+    const hc = HATS[p.hatCol % HATS.length];
+    ctx.fillStyle = hc;
+    circle(0, -p.r * 0.24, p.r * 0.5); ctx.fill();
     if (fine){
+      ctx.fillStyle = 'rgba(12,20,38,.18)';
+      ctx.beginPath();
+      ctx.ellipse(0, p.r * 0.04, p.r * 0.44, p.r * 0.17, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.20)';
+      circle(-p.r * 0.16, -p.r * 0.37, p.r * 0.26); ctx.fill();
       ctx.fillStyle = '#f6f2ea';
-      circle(0, p.r * 0.12, p.r * 0.18); ctx.fill();
+      circle(0, -p.r * 0.24, p.r * 0.16); ctx.fill();
     }
   } else {
-    ctx.fillStyle = 'rgba(40,30,26,.6)';
-    circle(0, -p.r * 0.2, p.r * 0.4); ctx.fill();
+    // hair, not a grey smudge: four heads of it across the crowd
+    ctx.fillStyle = HAIR[p.coat % HAIR.length];
+    circle(0, -p.r * 0.2, p.r * 0.42); ctx.fill();
+    if (fine){
+      ctx.fillStyle = 'rgba(255,255,255,.16)';
+      circle(-p.r * 0.12, -p.r * 0.3, p.r * 0.22); ctx.fill();
+    }
   }
   // grey hair on the pensioners, so they read as old from above
   if (p.kind === 'elder' && !p.hat){
     ctx.fillStyle = 'rgba(226,230,238,.9)';
     circle(0, -p.r * 0.2, p.r * 0.4); ctx.fill();
+  }
+
+  /* Breath, because it is freezing and they are running. Procedural rather
+     than a particle: seven hundred shoppers can all be breathing for the cost
+     of one fill each, and there is nothing to allocate, step or cap. */
+  if (fine){
+    const ph = (p.bob * (0.19 + p.panic * 0.30) + p.coat * 0.37) % 1;
+    if (ph < 0.4){
+      const k = ph / 0.4;
+      ctx.globalAlpha = (0.15 + p.panic * 0.22) * (1 - k);
+      ctx.fillStyle = '#e2effd';
+      circle(0, -p.r * (0.78 + k * 1.0), p.r * (0.15 + k * 0.42)); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // the face, once there is something to see on it
@@ -3585,7 +3644,6 @@ function drawCrowdBatch(list){
 
 /* ---------- car ---------- */
 function drawCar(){
-  const sp = carSpeed();
   const z = car.z || 0;
   // the shadow stays on the ground and shrinks away as the car climbs
   ctx.save();
@@ -3713,20 +3771,9 @@ function drawCar(){
   }
   ctx.restore();
 
-  // headlight wash while moving
-  if (sp > 60){
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.translate(car.x, car.y); ctx.rotate(car.ang);
-    ctx.fillStyle = 'rgba(255,206,120,.10)';
-    ctx.beginPath();
-    ctx.moveTo(CARL * 0.45, -CARW * 0.4);
-    ctx.lineTo(CARL * 0.45 + 150, -62);
-    ctx.lineTo(CARL * 0.45 + 150, 62);
-    ctx.lineTo(CARL * 0.45, CARW * 0.4);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
+  // the headlights are not drawn here any more: they belong to the light pass,
+  // where the beam can cut the darkness as well as add its own glow. This used
+  // to be one flat trapezoid at alpha .10 — a grey wedge with a hard edge.
 }
 
 /* A comic speech bubble for the driver.
@@ -3801,6 +3848,28 @@ function drawPickup(u){
 
 /* Wet blood, drawn with the ground rather than with the particles so bodies
    lie on top of it. */
+/* Boot prints, pressed into the snow. A print is a dent, so it is drawn as a
+   shadow with a lit lip on the side the scene's light comes from — the same
+   two-tone trick the stalls use, at a twentieth of the size. */
+function drawFootprints(){
+  if (!foot.length) return;
+  const halfW = VW / cam.s / 2 + 40, halfH = VH / cam.s / 2 + 40;
+  for (const f of foot){
+    if (!f) continue;
+    const age = T - f.t;
+    if (age < 0 || age > FOOT_TTL) continue;
+    if (Math.abs(f.x - cam.x) > halfW || Math.abs(f.y - cam.y) > halfH) continue;
+    const k = 1 - age / FOOT_TTL;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+    ctx.fillStyle = 'rgba(58,84,126,' + (0.3 * k).toFixed(3) + ')';
+    ctx.beginPath(); ctx.ellipse(0, 0, f.r * 0.3, f.r * 0.19, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.22 * k).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.ellipse(-f.r * 0.08, -f.r * 0.06, f.r * 0.2, f.r * 0.11, 0, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawStains(){
   for (const f of fx){
     if (f.type !== 'stain') continue;
@@ -3990,10 +4059,34 @@ function bakeLight(rgb, peak){
 /* The mask that cuts holes in the darkness is pure alpha, so one white sprite
    serves every theme. The glow that goes on top carries the theme's own lamp
    colour, so it is rebaked only when the theme changes. */
-let maskSprite = null, glowSprite = null, glowKey = '';
+let maskSprite = null, glowSprite = null, glowKey = '', beamSprite = null;
 function lightSprites(){
   if (!maskSprite) maskSprite = bakeLight('255,255,255', 1);
+  if (!beamSprite) beamSprite = bakeLight('255,236,198', 0.5);
   if (glowKey !== TH.light){ glowSprite = bakeLight(TH.light, 0.62); glowKey = TH.light; }
+}
+
+/* The headlights. Four soft discs walked down the bonnet line, widening and
+   fading — a cone with a real falloff, unlike the flat trapezoid at alpha .10
+   this replaces. The same four discs cut the darkness and add the glow, so
+   the snow in front of the car is genuinely brighter rather than tinted. */
+const beam = [{}, {}, {}, {}, {}, {}, {}, {}, {}];
+function beamSpots(){
+  const reach = 140 + Math.min(320, carSpeed() * 0.26);
+  const ca = Math.cos(car.ang), sa = Math.sin(car.ang);
+  const n = beam.length - 1;
+  for (let i = 0; i <= n; i++){
+    /* Every disc has to be wider than the gap to the next one or the beam
+       reads as a row of blobs rather than a cone. Both are fractions of the
+       same reach, so the overlap holds at any speed: the gap is reach/8 and
+       the narrowest disc is 0.22 of it. */
+    const t = i / n, d = CAR_L * 0.35 + reach * t;
+    const s = beam[i];
+    s.x = car.x + ca * d; s.y = car.y + sa * d;
+    s.r = reach * (0.22 + 0.40 * t);
+    s.a = 0.88 - t * 0.62;
+  }
+  return beam;
 }
 
 /* The darkness layer is built at viewport size and reused; only its contents
@@ -4070,11 +4163,16 @@ function drawLights(){
       dg.drawImage(maskSprite, px(L.o.x) - r, py(L.o.y) - r, r * 2, r * 2);
     }
     // and the car never drives into a pocket of gloom — a partial hole, so it
-    // carries its own pool of light rather than a bright disc
+    // carries its own pool of light rather than a bright disc, plus the beam
     if (G.phase !== 'menu'){
       const cr = (car.boostT > 0 ? 190 : 135) * sc;
       dg.globalAlpha = 0.8;
       dg.drawImage(maskSprite, px(car.x) - cr, py(car.y) - cr, cr * 2, cr * 2);
+      for (const s of beamSpots()){
+        dg.globalAlpha = s.a * 0.85;
+        const br = s.r * sc;
+        dg.drawImage(maskSprite, px(s.x) - br, py(s.y) - br, br * 2, br * 2);
+      }
       dg.globalAlpha = 1;
     }
     dg.globalCompositeOperation = 'source-over';
@@ -4093,6 +4191,13 @@ function drawLights(){
     const L = lightBuf[i], r = L.r * L.k * 1.35;
     if (glowSprite) ctx.drawImage(glowSprite, L.o.x - r, L.o.y - r, r * 2, r * 2);
     else { ctx.fillStyle = L.col; circle(L.o.x, L.o.y, L.r * L.k); ctx.fill(); }
+  }
+  if (G.phase !== 'menu' && beamSprite){
+    for (const s of beamSpots()){
+      ctx.globalAlpha = s.a * 0.62;
+      ctx.drawImage(beamSprite, s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+    }
+    ctx.globalAlpha = 1;
   }
   if (car.boostT > 0){
     ctx.fillStyle = 'rgba(120,255,170,.16)';
@@ -4757,6 +4862,7 @@ function draw(){
   const halfW = VW / cam.s / 2 + 220, halfH = VH / cam.s / 2 + 220;
   const near = (e) => Math.abs(e.x - cam.x) <= halfW && Math.abs(e.y - cam.y) <= halfH;
 
+  drawFootprints();
   drawStains();
 
   // dead bodies and wrecks sit on the ground, under everything else

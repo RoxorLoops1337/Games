@@ -77,6 +77,10 @@ edit this block to name the next one.
 - [x] Lighting pass: darkness layer with the lamps cut out of it, warm glow
       added over, one light direction for every shadow, shaded stalls, and a
       grain on the snow floor
+- [x] Crowd pass: boot prints in the snow, breath in the cold, bobble hats and
+      hair that read from above, coat highlights that follow the scene's light
+- [x] Headlights: a nine-disc cone that cuts the darkness and adds its own
+      glow, reaching further the faster you go
 
 ## Next
 
