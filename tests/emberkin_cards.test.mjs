@@ -1419,9 +1419,16 @@ section('a wild kin you resist fights dirtier, and does it more than once');
   ok(g.resistedBy(blunt, mine), 'the blunted one really is resisted');
   ok(!g.resistedBy(soft, mine), 'and the other one is not');
 
-  // One moment, late, for a kin that can hurt you.
-  eq(g.cornerAt(soft, mine, 0), g.CORNER_AT, 'a kin that can hurt you waits');
-  eq(g.cornerAt(soft, mine, 1), -1, 'and only gets the one');
+  // Two moments for a kin that can hurt you, three for one that cannot.
+  eq(g.cornerAt(soft, mine, 0), g.CORNER_PLAIN[0], 'a kin that can hurt you waits longer');
+  eq(g.cornerAt(soft, mine, 1), g.CORNER_PLAIN[1], 'and gets a second one');
+  eq(g.cornerAt(soft, mine, 2), -1, 'but not a third');
+  ok(g.CORNER_PLAIN.length < g.CORNER_RESIST.length,
+    'a kin that can hurt you needs fewer of them');
+  ok(g.CORNER_PLAIN[0] < g.CORNER_RESIST[0], 'and waits longer for the first');
+  for (let i = 1; i < g.CORNER_PLAIN.length; i++) {
+    ok(g.CORNER_PLAIN[i] < g.CORNER_PLAIN[i - 1], 'its thresholds march down too');
+  }
   // Three, starting early, for one that cannot.
   eq(g.cornerAt(blunt, mine, 0), g.CORNER_RESIST[0], 'a blunted kin gathers itself early');
   ok(g.cornerAt(blunt, mine, 0) > g.CORNER_AT, 'earlier than a dangerous one does');

@@ -477,6 +477,7 @@ function playOne(runIdx) {
   }
   stat.gems = EK.G.gems;
   stat.party = EK.G.party.length;
+  stat.starter = EK.STARTERS[runIdx % EK.STARTERS.length];
   stat.top = Math.max(...EK.G.party.map((m) => m.lvl));
   stat.deck = EK.G.deck.length;
   return stat;
@@ -513,25 +514,42 @@ const rate = (f, per) => {
 const show = (r, dp = 3) => `${r.mean.toFixed(dp)} ±${r.half.toFixed(dp)}`;
 const showPct = (r) => `${(r.mean * 100).toFixed(0)}% ±${(r.half * 100).toFixed(0)}`;
 const perFight = (r) => r.fights;
+const perRun = () => 1;
+/**
+ * Every number below says what it is divided by, because five passes running
+ * turned up a metric whose meaning changed with the party size, the run length
+ * or the fight count — and three of those were the same mistake.
+ *
+ * Two rules, learned the hard way:
+ *
+ *   1. Average the ratios, never ratio the averages. `avg(x) / avg(fights)`
+ *      lets a long run outvote a short one, which is not what "per fight" means.
+ *      Everything goes through `rate()`, which takes each run's own ratio.
+ *   2. If a quantity divides by the party, it is not comparable between the two
+ *      modes. Those lines have a party-free twin printed under them, and the
+ *      twin is the one to compare.
+ */
 
 const fights = avg((r) => r.fights), steps = avg((r) => r.steps);
 console.log(`\nEMBERKIN — ${RUNS} run${RUNS > 1 ? 's' : ''} from the study to Crown Hollow`
   + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}\n`);
-console.log(`  steps walked        ${steps.toFixed(0)}`);
-console.log(`  fights              ${fights.toFixed(0)}   (one every ${(steps / Math.max(1, fights)).toFixed(1)} steps)`);
+console.log(`  steps walked        ${steps.toFixed(0)}   per run, to reach level ${avg((r) => r.top).toFixed(0)}`);
+console.log(`  fights              ${fights.toFixed(0)}   per run;  one every ${show(rate((r) => r.steps, perFight), 1)} steps`);
 // Every rate carries a 95% interval. Two builds whose intervals overlap have
 // not been told apart by this tool, however different their means look.
-console.log(`  never in doubt      ${showPct(rate((r) => r.noDoubt, perFight))} of fights`);
-console.log(`     no kin in doubt   ${showPct(rate((r) => r.noDoubtKin, perFight))} of fights`);
-console.log(`  cost of a fight     ${showPct(rate((r) => r.cost, (r) => r.costN))} of the party`);
-console.log(`     the same, in kin  ${show(rate((r) => r.costKin, (r) => r.costN), 2)} kin-bars`);
-console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}`);
+console.log(`  never in doubt      ${showPct(rate((r) => r.noDoubt, perFight))} of fights   [party mean — NOT comparable across modes]`);
+console.log(`     no kin in doubt   ${showPct(rate((r) => r.noDoubtKin, perFight))} of fights   [worst kin — compare this one]`);
+console.log(`  cost of a fight     ${showPct(rate((r) => r.cost, (r) => r.costN))} of the party   [party mean — NOT comparable]`);
+console.log(`     the same, in kin  ${show(rate((r) => r.costKin, (r) => r.costN), 2)} kin-bars   [compare this one]`);
+console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}   per fight`);
 console.log(`  over in one turn    ${showPct(rate((r) => r.oneTurn, perFight))} of fights`);
-console.log(`  foe max HP          ${(avg((r) => r.foeHp) / Math.max(1, avg((r) => r.foeHpSeen))).toFixed(0)}`);
+console.log(`  foe max HP          ${show(rate((r) => r.foeHp, (r) => r.foeHpSeen), 0)}   per wild kin, at level ${avg((r) => r.top).toFixed(0)}`);
 // Absolute counts are dominated by how long a run happened to take, and runs
 // vary a lot — normalise, or you end up comparing two samples of noise.
-console.log(`  walks back to heal  ${show(rate((r) => r.healTrips, perFight))} per fight`);
-console.log(`  wipes               ${show(rate((r) => r.wipes, perFight))} per fight`);
+// The heal trip fires off a party mean too — four kin have to take four times
+// the damage to trigger it — so it is a within-mode number only.
+console.log(`  walks back to heal  ${show(rate((r) => r.healTrips, perFight))} per fight   [party mean trigger — within-mode only]`);
+console.log(`  wipes               ${show(rate((r) => r.wipes, perFight))} per fight   [a party is genuinely harder to wipe; that part is real]`);
 // How many runs a claim of a given size would actually need, from the spread
 // this sample just showed. Printed so that "it moved" can be checked rather
 // than believed.
@@ -541,16 +559,45 @@ console.log(`  wipes               ${show(rate((r) => r.wipes, perFight))} per f
   const need = (delta) => Math.max(2, Math.ceil(2 * (1.96 * sd / delta) ** 2));
   console.log(`     to call a .05 change in that: ~${need(.05)} runs;  .02: ~${need(.02)}`);
 }
-console.log(`  party at the end    ${avg((r) => r.party).toFixed(1)}   ${avg((r) => r.caught).toFixed(1)} caught from ${avg((r) => r.thrown).toFixed(1)} throws`);
-console.log(`  salves drunk        ${avg((r) => r.salves).toFixed(1)}   ${(avg((r) => r.salves) / Math.max(1, fights)).toFixed(3)} per fight`);
-console.log(`  ran from a fight    ${avg((r) => r.fled).toFixed(1)}   ${(avg((r) => r.fled) / Math.max(1, fights)).toFixed(3)} per fight`);
+console.log(`  party at the end    ${avg((r) => r.party).toFixed(1)}   per run;  ${avg((r) => r.caught).toFixed(1)} caught from ${avg((r) => r.thrown).toFixed(1)} throws`);
+console.log(`  salves drunk        ${show(rate((r) => r.salves, perFight))} per fight`);
+console.log(`  ran from a fight    ${show(rate((r) => r.fled, perFight))} per fight`);
 // Running away is not surviving, it is losing without the walk home. Teaching
 // the probe to flee moved fights out of the wipe column and into this one and
 // changed the danger not at all — solo went .196 wipes to .063 wipes plus .123
 // runs — so this is the line to read when asking whether a fight can beat you.
-console.log(`  lost or ran         ${show(rate((r) => r.wipes + r.fled, perFight))} per fight`);
-console.log(`  switched mid-fight  ${avg((r) => r.switched).toFixed(1)}   ${(avg((r) => r.switched) / Math.max(1, fights)).toFixed(2)} per fight`);
-console.log(`  ended at level      ${avg((r) => r.top).toFixed(0)}\n`);
+console.log(`  lost or ran         ${show(rate((r) => r.wipes + r.fled, perFight))} per fight   [the danger line]`);
+console.log(`  switched mid-fight  ${show(rate((r) => r.switched, perFight), 2)} per fight`);
+console.log(`  ended at level      ${show(rate((r) => r.top, perRun), 1)}   per run\n`);
+
+// Turns per fight has the widest interval in the report and has drifted up for
+// three passes. Split by starter: if the three disagree, the spread is the
+// element chart rather than noise, and no number of runs will narrow it.
+{
+  const byStarter = new Map();
+  for (const r of runs) {
+    const k = r.starter || '?';
+    const cur = byStarter.get(k) || [];
+    cur.push(r);
+    byStarter.set(k, cur);
+  }
+  if (byStarter.size > 1) {
+    console.log('  by starter          turns/fight   no kin in doubt   lost or ran');
+    for (const [k, rs] of byStarter) {
+      const sub = (f, per) => {
+        const xs = rs.map((r) => f(r) / Math.max(1, per(r)));
+        const m = xs.reduce((a, x) => a + x, 0) / xs.length;
+        const v = xs.length > 1 ? xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1) : 0;
+        return { mean: m, half: 1.96 * Math.sqrt(v / xs.length) };
+      };
+      const t = sub((r) => r.turns, perFight);
+      const d = sub((r) => r.noDoubtKin, perFight);
+      const l = sub((r) => r.wipes + r.fled, perFight);
+      console.log(`  ${k.padEnd(20)} ${show(t, 2).padStart(11)}   ${showPct(d).padStart(15)}   ${show(l).padStart(11)}`);
+    }
+    console.log('');
+  }
+}
 
 // The trainers, one line each, in the order a run meets them. A plan that never
 // gets telegraphed before the fight ends is a plan nobody sees.
