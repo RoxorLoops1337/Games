@@ -1,27 +1,29 @@
 // EMBERKIN — a run, measured.
 //
-// Eight passes went into how the game looks and almost none into whether it is
-// any good to play, and "is it boring" is not a thing you can answer by reading
-// the source. So this plays it: a fresh save, the real controls, the real
-// encounter tables, all the way from Rowan's study to Crown Hollow, and it
-// counts the things that make a run tedious rather than describing them.
+// This plays the game. Not a simulation of it: the real emberkin/index.html
+// loaded headless, a fresh save, the real encounter tables and card resolution,
+// all the way from Rowan's study to Crown Hollow. It counts the things that
+// make a run tedious rather than describing them.
 //
-// What it reports, and why each number is worth having:
+//   node tools/emberkin/playthrough.mjs --runs 60          # a party of four
+//   node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
+//   node tools/emberkin/playthrough.mjs --runs 60 --starter sproutle
+//   node tools/emberkin/playthrough.mjs --runs 60 --rested # heal before each trainer
 //
-//   steps / encounters      how much walking buys how much game
-//   never in doubt          fights where the player never dropped below 70% HP.
-//                           A fight you cannot lose is a cutscene you have to
-//                           press buttons through.
-//   heal trips              times the party was too hurt to go on and the only
-//                           cure was walking back to town
-//   dead cards              cards drawn and never worth playing, and cards that
-//                           were never even drawn because they are not in the
-//                           deck anybody builds
-//   turns per fight         a fight that takes twelve turns at level 5 is not
-//                           hard, it is slow
+// >>> READ tools/emberkin/README.md BEFORE BELIEVING A NUMBER THIS PRINTS. <<<
 //
-//   node tools/emberkin/playthrough.mjs            # one run
-//   node tools/emberkin/playthrough.mjs --runs 20  # twenty, averaged
+// That doc is the manual and the rap sheet: what every printed line means, what
+// it is divided by, which lines are comparable between --solo and party mode and
+// which are emphatically not, and the ledger of all twenty mistakes this tool has
+// made. Fifteen passes on this game produced about six changes to the game and
+// twenty fixes to the probe. When a number here looks wrong, the ledger is
+// the first place to look, not the game.
+//
+// Two rules that most of that ledger comes down to:
+//   1. Average the ratios, never ratio the averages — everything goes through
+//      rate(), which takes each run's own ratio and carries a 95% interval.
+//   2. If a quantity divides by the party, it is not comparable between the
+//      modes. Those lines say so on the line and print a party-free twin.
 import { loadGame, mkCtx } from '../../tests/emberkin_lib.mjs';
 
 const argv = process.argv.slice(2);
@@ -132,7 +134,11 @@ function playOne(runIdx) {
     };
     const startWorst = worstKin();
     let low = startHp, worst = startWorst, turns = 0, guard = 0, planBeats = 0, drank = false;
-    const seenCards = new Set();
+    // Both halves of the played/drawn ratio, counted the same way: once per card
+    // per fight. See the fix note at the loop below for why the numerator has to
+    // match the denominator.
+    const seenCards = new Set(), playedCards = new Set();
+    const cardKey = (c) => (c.src === 'kin' ? `kin:${c.id}` : c.id);
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
     // decided in advance, this is where the deciding happens.
@@ -190,11 +196,30 @@ function playOne(runIdx) {
       // bottom of the played/drawn table was Dewdrop, Hunker, Bulwark and Ward
       // Stance, i.e. every card with Retain on it. The cards were fine; the
       // denominator was counting the same card over and over.
-      for (const c of cur.hand) {
-        if (seenCards.has(c)) continue;
-        seenCards.add(c);
-        bump(stat.drawn, c.src === 'kin' ? `kin:${c.id}` : c.id);
-      }
+      //
+      // And that fix, made on its own, broke the other half: `drawn` became once
+      // per fight while `played` stayed once per play, so a kin move playable
+      // every turn scored 221%. Twenty-two rows of the table read over 100% — a
+      // number that cannot mean anything under the heading it is printed with.
+      // Both sides are counted the same way now, so the ratio reads: of the
+      // fights where this card reached your hand, the share where it was worth
+      // playing at least once.
+      //
+      // It also has to be read whenever the hand changes, not only at the top of
+      // the turn. Draw effects put cards into the hand mid-turn and the policy
+      // can play them in the same pass, so those cards were being played without
+      // ever being counted as drawn — eight rows still read over 100% after the
+      // first half of this fix, all of them cheap or free cards that come off a
+      // draw. `noteHand` is called before every decision that reads the hand.
+      const noteHand = () => {
+        for (const c of cur.hand) {
+          const k = cardKey(c);
+          if (seenCards.has(k)) continue;
+          seenCards.add(k);
+          bump(stat.drawn, k);
+        }
+      };
+      noteHand();
       // The policy is part of the measurement. Cheapest-first cannot tell a
       // good deck from a big one, because it never sets anything up: it plays
       // the Chain card while the discount is still zero and the Combo card
@@ -260,6 +285,13 @@ function playOne(runIdx) {
         if (fx.healFull) pts += hurt;
         if (fx.atk) pts += fx.atk * left;
         if (fx.energy) pts += 5;
+        // A card is worth about a card, whether the card says so in `vt` or in
+        // `fx`. Only the `vt` half was scored, so Ward Stance's draw and War
+        // Cry's two were free and invisible: Ward Stance is drawn 2,700 times in
+        // sixty runs and played 19% of them, the lowest rate of anything that is
+        // not a three-cost. Third time a missing branch in this function has been
+        // mistaken for a dead card. Look here first, every time.
+        if (fx.draw) pts += fx.draw * 3;
         if (fx.hits) pts += swingDmg() * fx.hits * left;      // the answer to one swing a turn
         if (fx.mul) pts += swingDmg() * (fx.mul - 1) * left;
         if (fx.drain) pts += swingDmg() * fx.drain;
@@ -283,6 +315,7 @@ function playOne(runIdx) {
       const support = (reserve) => {
         for (let spun = 0; spun < 10; spun++) {
           if (cur.over) break;
+          noteHand();                  // the last play may have drawn into the hand
           let best = -1, bestRate = 0;
           for (let i = 0; i < cur.hand.length; i++) {
             const c = cur.hand[i];
@@ -303,7 +336,7 @@ function playOne(runIdx) {
           // should not be judged by this table.
           if (best < 0) break;
           const card = cur.hand[best];
-          bump(stat.played, card.id);
+          if (!playedCards.has(card.id)) { playedCards.add(card.id); bump(stat.played, card.id); }
           EK.playCard(best);
         }
       };
@@ -333,6 +366,7 @@ function playOne(runIdx) {
       support(kinCost());                       // set up, keeping the swing affordable
       // One swing a turn — take the best one you can pay for.
       if (!cur.over && !cur.swungTurn) {
+        noteHand();
         let pick = -1, bestDmg = -1;
         for (let i = 0; i < cur.hand.length; i++) {
           const c = cur.hand[i];
@@ -340,7 +374,11 @@ function playOne(runIdx) {
           const d = EK.MOVES[c.id].pow ? EK.damageOf(cur.mine, cur.foe, c.id, { crit: false, roll: .925 }).dmg : 1;
           if (d > bestDmg) { pick = i; bestDmg = d; }
         }
-        if (pick >= 0) { bump(stat.played, `kin:${cur.hand[pick].id}`); EK.playCard(pick); }
+        if (pick >= 0) {
+          const k = cardKey(cur.hand[pick]);
+          if (!playedCards.has(k)) { playedCards.add(k); bump(stat.played, k); }
+          EK.playCard(pick);
+        }
       }
       support(0);                               // then spend whatever is left
       // The turn you win on is still a turn. Breaking here without counting it
