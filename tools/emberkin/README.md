@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and thirty-eight fixes to
+this game have produced roughly six changes to the game and thirty-nine fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -49,7 +49,7 @@ the rarest card converges".
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 40.
+a sample — see mistake 41.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -303,17 +303,27 @@ and the family is more useful than the individual entry.
 
 ### Sampling — a claim the sample could not carry
 
-39. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+39. **One 60-run sample is not a baseline for the danger line** (pass 34). Two
+    samples of the *identical* build read **.223 ±.037 and .273 ±.039** lost-or-ran,
+    and 36% against 39% never-in-doubt. A whole pass was aimed at a 5-point drift
+    that turned out to be about twice the sampling error — and against the high
+    sample, three separate ban runs all looked load-bearing when none was. This is
+    entry 36's shape recurring: two 30-run samples of one build read 36% and 41%
+    in pass 18, it was written down, and the lesson was applied to *rates* but not
+    to the **baseline a comparison is made against.** Re-measure the baseline in
+    the same sitting as the thing you are comparing to it.
+
+40. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-40. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+41. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-41. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+42. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -325,7 +335,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of thirty-eight are denominators.** If a number will not move, or moves the
+- **Nine of thirty-nine are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

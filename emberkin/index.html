@@ -5020,7 +5020,7 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
-    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, lastStand: 0, settling: 0,
+    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, lastStand: 0, settling: 0, chipping: 0,
     roster: null, foeSettling: 0, foeSwaps: 0, foeSwapT: 0, foePotions: 0, foeHeals: 0,
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
@@ -5171,7 +5171,7 @@ function useMove(log, atkSide, moveId) {
       // turns being paid for in walks back to town. A trainer's kin gets
       // neither — they are trained, and their fights are supposed to hurt.
     const bonus = atkSide === 'mine' ? attackBonus()
-      : { flat: b.foeEdge || 0, mul: b.wild ? WILD_DMG_MUL : trainerDmg(b.foe.lvl), hits: 1, drain: 0 };
+      : { flat: b.foeEdge || 0, mul: (b.wild ? WILD_DMG_MUL : trainerDmg(b.foe.lvl)) * (b.chipping ? PLAN_CHIP : 1), hits: 1, drain: 0 };
     if (atkSide === 'foe') b.foeEdge = 0;          // spent on this swing
     // A kin that has just been sent in is still finding its feet.
     const settling = atkSide === 'mine' ? b.settling : b.foeSettling;
@@ -5457,6 +5457,17 @@ function foeChoose(mustAttack) {
   return best;
 }
 
+/** Roughly what the foe's best swing would do, for telegraphing a chip. */
+function chipEstimate(b) {
+  let best = 0;
+  for (const slot of b.foe.moves) {
+    const m = MOVES[slot.id];
+    if (!m || !m.pow) continue;
+    best = Math.max(best, damageOf(b.foe, b.mine, slot.id, { crit: false, roll: .925 }).dmg);
+  }
+  return best;
+}
+
 /** What the foe is about to do, telegraphed so the hand can be played into it. */
 function readIntent() {
   const b = B();
@@ -5473,7 +5484,9 @@ function readIntent() {
     const n = Math.round((p.edge || p.shield || 0) * planScale(b.foe.lvl)
       * (b.wild ? WILD_PLAN_MUL : 1));
     const tell = p.edge ? `+${n} on the next hit` : p.shield ? `${n} guard` : 'a shield will not help';
-    b.intent = { id: null, name: p.label, dmg: 0, kind: 'plan', step, n, tell };
+    // The chip has to be on the line, or the telegraph lies about the turn.
+    const chip = b.wild ? Math.round(chipEstimate(b) * PLAN_CHIP) : 0;
+    b.intent = { id: null, name: p.label, dmg: chip, kind: 'plan', step, n, tell };
     return b.intent;
   }
   // A wild kin that is losing stops fighting carefully. Two fights in five were
@@ -5548,6 +5561,17 @@ const planScale = (lvl) => (1 + lvl / 22) * Math.min(1, lvl / 12);
 const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
 // How hard a wild kin's plan beat lands, against a trainer's. See readIntent.
 const WILD_PLAN_MUL = .8;
+// A gathering wild kin can still lean on you, for this much of a normal hit.
+// Zero, because the cure costs more than the drift.
+//
+// Solo's never-in-doubt went 34% to 39% when wild kin got a plan: the beat costs
+// the foe its attack, and that free turn is where the pressure went. A chip puts
+// it back — at .45 solo reads 30% never-in-doubt, the best that number has ever
+// been. But the chip ends fights faster, and party fights are already the short
+// ones: over-in-one goes from 4% to 24%, giving back almost the whole reason the
+// plan was worth having. Four points of solo never-in-doubt for twenty of party
+// over-in-one is a bad exchange, so the machinery stays and the dial is off.
+const PLAN_CHIP = 0;
 // A trainer is already a two- or three-kin fight, so each of their kin needs a
 // far smaller pool than a lone wild one — and they hit at full strength, which
 // a wild kin does not. Giving them the wild number made the opening rival fight
@@ -6095,7 +6119,7 @@ function foeSwap(log, idx) {
   const next = b.roster[idx];
   snap(log, `${b.npc ? b.npc.name : 'The challenger'} calls ${dispName(b.foe)} back!`, 'faint', 'foe');
   b.foe.stages = { atk: 0, def: 0, spd: 0 };
-  b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.cornered = 0;
+  b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.cornered = 0; b.chipping = 0;
   b.foe = next;
   b.teamIdx = idx;                       // whoever is out is who is out
   next.stages = { atk: 0, def: 0, spd: 0 };
@@ -6204,6 +6228,21 @@ function foeTurn(log) {
     if (p.shield) { b.foeShield += n; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'block', 'foe'); }
     if (p.pierce) { b.foePierce = 1; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }
     if (b.plan) b.plan.i++;
+    // A wild kin gathering still swings, softly. Everything goes through the
+    // normal attack path so shields, guard, thorns and the knockout all behave —
+    // `chipping` only scales the number.
+    if (b.wild) {
+      b.chipping = 1;
+      const cid = foeChoose(b.foeEdge > 0);
+      const hpWas = b.mine.hp;
+      useMove(log, 'foe', cid);
+      b.chipping = 0;
+      if (b.mods.thorns && b.mine.hp < hpWas && b.foe.hp > 0) {
+        b.foe.hp = clamp(b.foe.hp - b.mods.thorns, 0, b.foe.max);
+        snap(log, `Thorns bite back for ${b.mods.thorns}.`, 'hit', 'foe');
+        if (b.foe.hp <= 0) { resolveFoeDown(log); return; }
+      }
+    }
     if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
     return;
   }

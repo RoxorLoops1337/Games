@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all thirty-eight mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-five passes on this
-game produced about ten changes to the game and thirty-eight fixes to the tool.
+of all thirty-nine mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-six passes on this
+game produced about ten changes to the game and thirty-nine fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,67 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### The drift was mostly noise, and the chip that would have fixed it costs too much
+
+Pass 33 left one number going the wrong way: solo never-in-doubt 34% to 39%. The
+diagnosis was sound — the foe spends a turn gathering, and a turn it does not
+threaten is a turn you are safe in — so the fix was a chip: a gathering wild kin
+still swings, softly, through the normal damage path so shields, guard, thorns
+and the knockout all behave, with the chip on the telegraph so the line does not
+lie about the turn.
+
+It works, in solo, and it is not worth it:
+
+| solo, 60 runs | no chip | chip .25 | chip .45 |
+| --- | --- | --- | --- |
+| no kin in doubt | 39% ±3 | 35% ±3 | **30% ±4** |
+| over in one turn | 3% ±1 | 7% ±1 | 10% ±2 |
+| wipes | .104 ±.015 | .126 ±.020 | .163 ±.027 |
+
+30% never-in-doubt is the best that number has ever read. But party fights are the
+short ones, and a chip ends them sooner: **party over-in-one goes from 4% ±1 to
+24% ±3 at a chip of .25**, giving back almost the entire reason the plan was worth
+having. Four points of solo never-in-doubt for twenty of party over-in-one is a
+bad exchange. `PLAN_CHIP` is in the game and set to 0 — the machinery stays, the
+dial is off, and the numbers for turning it up are written next to it.
+
+**And then the premise turned out to be mostly noise.** Two 60-run samples of the
+identical shipped build:
+
+| solo, same build, twice | lost or ran | no kin in doubt | over in one |
+| --- | --- | --- | --- |
+| first sample | .273 ±.039 | 39% ±3 | 3% ±1 |
+| second sample | .223 ±.037 | 36% ±3 | 5% ±1 |
+
+36% against the 34% it drifted from is not a drift. The whole premise of this
+pass was one sample, and the number it was chasing moved half as far as the
+sampling error. Pass 33's headline should be read as **solo lost-or-ran .22-.27
+and never-in-doubt 36-39%**, not the single figures it reported.
+
+#### The deck still does not matter, even now fights have a shape
+
+The strongest available test of "the fights were the problem": re-run the ban
+spread now that a fight has a beat to build for. Against a baseline of .223 ±.037
+lost-or-ran and 36% ±3:
+
+| solo, 60 runs | lost or ran | no kin in doubt | wipes |
+| --- | --- | --- | --- |
+| baseline | .223 ±.037 | 36% ±3 | .103 ±.018 |
+| without Whetstone | .171 ±.023 | 40% ±3 | .084 ±.012 |
+| without Ward Stance | .206 ±.029 | 37% ±3 | .094 ±.015 |
+| without Second Wind | .204 ±.025 | 37% ±3 | .098 ±.013 |
+
+Everything overlaps. **Giving fights a shape did not make the deck matter** — and
+Whetstone, the one card that carried an 8-point never-in-doubt gap in pass 30, no
+longer carries one either. If anything the beat washes the deck out further: the
+fight's structure now comes from the foe, and the answer to it is the same
+whatever you are holding.
+
+That is worth saying plainly after four passes of looking for a load-bearing
+card. The deck is not where this game's decisions live, and no amount of card
+design has moved that. What did move a headline — twice, and by a lot — was
+changing what the *foe* does.
 
 #### A wild kin gets a rhythm, and one-turn fights collapse
 
