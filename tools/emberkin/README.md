@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and thirty-seven fixes to
+this game have produced roughly six changes to the game and thirty-eight fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -49,7 +49,7 @@ the rarest card converges".
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 39.
+a sample — see mistake 40.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -292,19 +292,28 @@ and the family is more useful than the individual entry.
     2 plays in 306 draws. That is not a card nobody wants, it is a card nobody
     *can* play, and the two look identical in the table.
 
+38. **The one beat a wild fight had was never counted** (pass 33). Cornering has
+    been in the game since pass 18, and six passes wrote "wild fights have no
+    shape" without ever measuring whether it fires. It does: **1.25 beats per wild
+    fight, 23% of wild fights with none.** The report is per-fight averages and
+    per-card tables, and a *structural* property of a fight fits in neither, so
+    nothing surfaced it. `cornered beats` and `telegraphed beats` are printed now.
+    Related to entry 27 and the same shape: if the report cannot see a kind of
+    quantity, no amount of staring at it will.
+
 ### Sampling — a claim the sample could not carry
 
-38. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+39. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-39. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+40. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-40. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+41. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -316,7 +325,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of thirty-seven are denominators.** If a number will not move, or moves the
+- **Nine of thirty-eight are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

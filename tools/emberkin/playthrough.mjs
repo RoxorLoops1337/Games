@@ -16,9 +16,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all thirty-seven mistakes this tool
-// has made. Twenty-four passes on this game produced about nine changes to the
-// game and thirty-seven fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all thirty-eight mistakes this tool
+// has made. Twenty-five passes on this game produced about ten changes to the
+// game and thirty-eight fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -192,6 +192,7 @@ function playOne(runIdx) {
     // of this block is that the next one gets found by reading. For each: what
     // it reaches by Crown Hollow, and whether anything bounds it.
     money: 0, bagN: 0, deckN: 0, grown: 0, grownCap: 0, deckMix: null, deckTop: null, levels: 0, gems: 0,
+    wildFights: 0, corners: 0, wildNoBeat: 0, wildBeats: 0,
     oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0, fled: 0,
     // What a fight took out of the party, as opposed to how close to death it
     // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
@@ -677,6 +678,17 @@ function playOne(runIdx) {
     }
     stat.turns += duelId ? 0 : turns;
     if (!duelId && turns <= 1) stat.oneTurn++;
+    // The one piece of structure a wild fight has, and nothing has ever counted
+    // it. A cornered wild kin gathers its damage into one telegraphed swing
+    // instead of four small ones — that is the only beat in the fight, and six
+    // passes of "wild fights have no shape" were written without knowing whether
+    // it ever fires or how late.
+    if (!duelId && b.wild) {
+      stat.wildFights++;
+      stat.corners += (EK.B() ? EK.B().cornered : b.cornered) || 0;
+      stat.wildBeats += planBeats;
+      if (!((EK.B() ? EK.B().cornered : b.cornered) || 0)) stat.wildNoBeat++;
+    }
     // How much of the foe's health a single player turn takes off, which is the
     // number that decides how long a fight is.
     if (b.foe.max > 0 && !duelId) {
@@ -908,6 +920,12 @@ console.log(`  cost of a fight     ${showPct(rate((r) => r.cost, (r) => r.costN)
 console.log(`     the same, in kin  ${show(rate((r) => r.costKin, (r) => r.costN), 2)} kin-bars   [compare this one]`);
 console.log(`  turns per fight     ${show(rate((r) => r.turns, perFight), 2)}   per fight`);
 console.log(`  over in one turn    ${showPct(rate((r) => r.oneTurn, perFight))} of fights`);
+// What the foe's side of a wild fight actually looks like: whether its one
+// telegraphed beat ever happens before the fight is over.
+console.log(`  wild fights with no beat at all  ${showPct(rate((r) => r.wildNoBeat, (r) => r.wildFights))} of wild fights`
+  + `   [the foe never got cornered]`);
+console.log(`  cornered beats      ${show(rate((r) => r.corners, (r) => r.wildFights))} per wild fight`);
+console.log(`  telegraphed beats   ${show(rate((r) => r.wildBeats, (r) => r.wildFights))} per wild fight   [the plan, not the cornering]`);
 console.log(`  foe max HP          ${show(rate((r) => r.foeHp, (r) => r.foeHpSeen), 0)}   per wild kin, at level ${avg((r) => r.top).toFixed(0)}`);
 // Absolute counts are dominated by how long a run happened to take, and runs
 // vary a lot — normalise, or you end up comparing two samples of noise.
