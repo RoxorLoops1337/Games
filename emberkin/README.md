@@ -139,6 +139,18 @@ back from the door. The rug is one object, so it is a *seamless* weave and
 `drawEdges` puts the gold hem around wherever it happens to stop — the first
 version gave every rug tile its own frame and read as six coasters.
 
+### The first choice
+
+Rowan hands you one of three kin, and for seven passes that was a three-line
+menu — the first decision in the game, made in the same widget as "Sound: on".
+It is a screen now, laid out the way the reward screen is, because that is the
+shape this game uses for *pick one of these and live with it*: three cards, each
+with a portrait lit in its own element, its dex line, and what it is strong into
+and soft against read straight off the type chart rather than written by hand.
+
+There is no way out of it but choosing. `closeScreen` refuses, and B does
+nothing — the same rule the reward screen follows.
+
 ### The screens
 
 Party, dex, bag, shop, box, deck and chests were the last plain lists in the
@@ -166,6 +178,14 @@ cards use, generated in `cardicons.mjs` alongside them: an orb in the bag and an
 orb on a card are the same object rather than a name and a picture of one. The
 orbs' shading comes off the sphere's own normal — a linear ramp across a circle
 bands into stripes, which is what the first pass at them looked like.
+
+**The chest shop** was the one screen the other passes left behind, and reading
+the whole game back is what turned it up: every chest carried a full-strength
+coloured border, so all four glowed at once and the one the cursor was on was
+invisible. The tint belongs to the chest now and the gold ring belongs to the
+cursor, and only one thing at a time gets it. The four percentages became a
+single segmented **odds bar** — you are choosing between distributions, and a
+distribution is a shape.
 
 **The dex** has three states you can tell apart across the room: caught is the
 creature, lit, in a gold frame; seen is a silhouette *lifted* off the panel
@@ -659,6 +679,33 @@ you read "you lob a Prism Orb" and then watch it happen, not the reverse.
 A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
 a shower that takes its time — and hands you its papers afterwards. Any key
 skips the tail of the flourish; nobody should sit through it twice.
+
+### Winning, and going down
+
+A knockout used to be an alpha change on the next frame: the loser was suddenly
+translucent and still standing. It falls now — a slump and a fade over half a
+second, eased so it drops fast and settles.
+
+And a win used to be a line of text followed immediately by a card offer, which
+is a transaction rather than a victory. `winFlourish()` holds the arena for a
+beat first: the light comes up off the ground, gold rises through it, and the
+two numbers you actually won are on the canvas. The DOM panels around the fight
+hide while it runs, or the word lands behind your own HP bar — which is exactly
+what the first version did.
+
+It is skippable, and the frame that skips it **still belongs to the transition**.
+Without that, the very press that ended the flourish fell through to the reward
+screen it had just opened and took the first card for you.
+
+### Being ambushed
+
+A trainer spotting you was an exclamation mark and a dialogue box with an
+ellipsis in it. It is three beats now — `spot`, `walk`, `land`: they see you,
+the frame closes in with two bars and a darkening, and they walk over before
+anybody speaks. They slide across in *pixels*, so the tile they occupy never
+changes and nothing about collision or interaction has to know it is happening.
+
+Nothing you can do about any of it, which is the point of being ambushed.
 
 ### Evolving
 

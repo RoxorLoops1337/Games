@@ -336,6 +336,37 @@
   .tp.blank{ background:#3a3245; color:var(--dim); }
   .dexcell small{ color:var(--dim); font-size:.65em; }
 
+  /* ---------------- the first choice ----------------
+     Three cards, laid out the way the reward screen is, because that is the
+     shape this game uses for "pick one of these and live with it". */
+  #screen .lede{ font-size:.78em; color:var(--dim); margin:-.3em 0 .9em; max-width:34em; }
+  /* Room above for the lift, or the chosen card climbs over the line of text
+     that told you to choose. */
+  .pickrow{ display:grid; grid-template-columns:repeat(auto-fit,minmax(11em,1fr)); gap:.7em;
+    max-width:44em; align-items:stretch; padding-top:1em; }
+  .pickcard{ padding:.7em .7em .5em; text-align:center; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center;
+    border-color:color-mix(in srgb,var(--tint) 45%,var(--edge));
+    transition:transform .14s cubic-bezier(.2,.9,.3,1.2), box-shadow .14s ease; }
+  .pickcard .pportrait{ padding:.35em; border-radius:.45em; margin-bottom:.45em;
+    background:radial-gradient(70% 70% at 40% 28%, color-mix(in srgb,var(--tint) 32%,#1a1222), #150e1d);
+    border:2px solid color-mix(in srgb,var(--tint) 40%,var(--edge));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); }
+  .pickcard .pportrait canvas{ image-rendering:pixelated; width:110px; height:110px; display:block; }
+  .pickcard .pname{ font-size:.95em; font-weight:700; color:var(--tint); letter-spacing:.04em; }
+  .pickcard .types{ margin:.3em 0 .5em; }
+  .pickcard .pdexline{ font-size:.66em; color:var(--dim); line-height:1.35; margin:0 0 .6em;
+    font-style:italic; }
+  .pickcard .matchup{ width:100%; margin-top:auto; display:flex; flex-direction:column; gap:.25em;
+    font-size:.58em; }
+  .pickcard .matchup > div{ display:flex; align-items:center; gap:.3em; justify-content:center;
+    flex-wrap:wrap; }
+  .pickcard .matchup span{ color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
+  .pickcard .matchup i{ color:var(--dim); }
+  .pickcard .ptake{ height:1.2em; margin-top:.5em; font-size:.66em; color:var(--gold); font-weight:700; }
+  .pickcard.sel{ transform:translateY(-5%) scale(1.03);
+    box-shadow:0 0 0 .16em var(--gold), 0 .5em .5em rgba(0,0,0,.5); }
+
   /* ---------------- the kin page ----------------
      Roster on the left, whoever is picked on the right. A row of equal cards
      has no hierarchy: nothing on it says which one you are looking at, so
@@ -407,6 +438,14 @@
   .item .tally small{ font-size:.6em; color:var(--dim); margin-left:.15em; }
   .item.sel{ box-shadow:0 0 0 2px var(--gold), 0 4px 0 rgba(0,0,0,.5); }
   .item.dead{ opacity:.45; }
+  /* A chest is a distribution you are buying, so the odds are a shape rather
+     than four percentages to compare in your head. */
+  .chestrow .oddsbar{ display:flex; height:.42em; border-radius:.21em; overflow:hidden;
+    margin:.3em 0 .25em; background:#0d0812; box-shadow:inset 0 1px 2px rgba(0,0,0,.6); }
+  .chestrow .oddsbar i{ display:block; height:100%; }
+  .chestrow .info small{ font-size:.6em; letter-spacing:.02em; white-space:nowrap; }
+  .items.wide{ grid-template-columns:repeat(auto-fill,minmax(18em,1fr)); }
+  .chestrow .chest{ box-shadow:inset 0 -6px 0 rgba(0,0,0,.35), 0 0 .7em color-mix(in srgb,var(--tint) 40%,transparent); }
   .types{ display:flex; gap:4px; justify-content:center; margin-top:3px; }
   .hud .types{ justify-content:flex-start; margin:3px 0 1px; }
   .hud .tp{ font-size:.55em; padding:0 4px; }
@@ -3035,7 +3074,7 @@ const G = {
   t: 0, dt: 0,
   map: null, mapId: '',
   player: { x: 5, y: 8, dir: 'down', px: 5, py: 8, moveT: 0, moveLen: 1, step: 0, bump: 0, hop: false },
-  fade: 0, wipe: 0, warp: null, evoAnim: null, alert: null, prevMode: 'world',
+  fade: 0, wipe: 0, warp: null, evoAnim: null, alert: null, flourish: null, prevMode: 'world',
   party: [], box: [], bag: {}, money: 500, gems: 0,
   cards: [], deck: [], nextUid: 0, chestsOpened: 0,
   dex: {},                 // id -> 1 seen, 2 caught
@@ -3116,6 +3155,8 @@ const TYPES = {
   Ember:   '#ef6a2b', Tide:  '#35a8dd', Verdant: '#5cb340', Spark: '#ffc21e',
   Gloom:   '#7a5fc4', Stone: '#93765f', Aether:  '#ffa8dd', Wild:  '#b9adc4',
 };
+/** Types a creature can actually be. Wild is a move type only. */
+const TYPE_ORDER = Object.keys(TYPES).filter((t) => t !== 'Wild');
 
 // CHART[attacker][defender] — anything unlisted is 1×. Wild exists only as a
 // move type: no creature has it, so its defensive row is never consulted.
@@ -4168,6 +4209,42 @@ function onArrive() {
 }
 
 const SIGHT = 4;                       // how far down their own line a trainer looks
+/** The three beats of being caught out: the look, the walk, and the pause. */
+const ALERT = { spot: .55, walk: .55, land: .25 };
+
+/** True while the ambush owns the screen. */
+function alertStep(dt) {
+  const a = G.alert;
+  if (!a || !a.beats) return false;
+  a.t += dt;
+  const beat = a.beats[a.i];
+  if (beat && beat[0] === 'walk') {
+    // Slide them across in pixels. The tile they occupy never changes, so
+    // nothing about collision or interaction has to know this is happening.
+    const k = clamp(a.t / beat[1], 0, 1);
+    const e = 1 - Math.pow(1 - k, 2);
+    a.npc.ox = Math.round((a.stop.x - a.from.x) * TILE * e);
+    a.npc.oy = Math.round((a.stop.y - a.from.y) * TILE * e);
+  }
+  if (beat && a.t < beat[1]) return true;
+  a.t = 0; a.i++;
+  if (a.beats[a.i]) return true;
+  const npc = a.npc;
+  npc.ox = 0; npc.oy = 0;
+  G.alert = null;
+  talkTo(npc);
+  return false;
+}
+
+/** How far the frame has closed in, 0–1. */
+const alertClose = () => {
+  const a = G.alert;
+  if (!a || !a.beats) return 0;
+  const beat = a.beats[a.i];
+  if (!beat) return 1;
+  if (beat[0] === 'spot') return clamp(a.t / beat[1], 0, 1);
+  return 1;
+};
 
 /**
  * A trainer only gets to ambush you once. Beat them and they are done; lose to
@@ -4194,8 +4271,14 @@ function trainerSight() {
         // Turn and face whoever just called you out.
         p.dir = dx ? (dx > 0 ? 'left' : 'right') : (dy > 0 ? 'up' : 'down');
         G.flags[sightSpent(n.id)] = 1;         // they got their ambush; that was it
-        G.alert = { npc: n, t: 0 };
-        say(n.name, ['…'], () => { G.alert = null; talkTo(n); });
+        // An ambush used to be an exclamation mark and a dialogue box with an
+        // ellipsis in it. It is a beat now: they see you, the frame closes in,
+        // and they walk over. Nothing you can do about any of it, which is the
+        // point of being ambushed.
+        const stop = { x: p.x + dx, y: p.y + dy };   // one tile short of you
+        G.alert = { npc: n, t: 0, i: 0, from: { x: n.x, y: n.y }, stop,
+          beats: [['spot', ALERT.spot], ['walk', ALERT.walk], ['land', ALERT.land]] };
+        playCue('spotted');
         return true;
       }
     }
@@ -4346,7 +4429,8 @@ function drawWorld(g) {
   // Entities, back to front by tile row.
   const ents = [];
   for (const n of (map.npcs || [])) if (npcActive(n)) ents.push({ y: n.y, draw: () => {
-    const sx = Math.round(n.x * TILE - cam.x), sy = Math.round(n.y * TILE - cam.y - 6);
+    const sx = Math.round(n.x * TILE - cam.x) + (n.ox || 0),
+          sy = Math.round(n.y * TILE - cam.y - 6) + (n.oy || 0);
     // Everyone breathes, and everyone on their own phase — a town whose people
     // bob in unison is a metronome, not a town. Seeded off the tile so it is
     // stable across frames and different for each person standing in it.
@@ -4398,6 +4482,17 @@ function drawWorld(g) {
   }
   worldLight(g, map.kind, G.mapId);
   weather(g, G.mapId, { kind: map.kind, map, x0, y0, ox, oy });
+  // Being spotted closes the frame in. Two bars and a darkening — the cheapest
+  // way to say "this is happening to you and you are not driving".
+  const close = alertClose();
+  if (close > 0) {
+    const h = Math.round(close * 22);
+    g.fillStyle = '#07050c';
+    g.fillRect(0, 0, VIEW_W, h);
+    g.fillRect(0, VIEW_H - h, VIEW_W, h);
+    g.fillStyle = `rgba(7,5,12,${close * .3})`;
+    g.fillRect(0, h, VIEW_W, VIEW_H - h * 2);
+  }
 }
 
 /**
@@ -4747,6 +4842,7 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
+    downM: null, downF: null,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
     started: false, finishing: false, await: null,
@@ -5745,17 +5841,27 @@ function drawBattle(g) {
   const inOrb = held === 'fall' || held === 'wobble' || held === 'gap' || held === 'click';
   if (!inOrb) under(178, FOE_GROUND + 3, 17, b.foe.hp <= 0 ? .12 : .34);
   under(72, MY_GROUND + 4, 21, b.mine.hp <= 0 ? .12 : .34);
+  // Going down: a slump and a fade rather than a creature that is suddenly
+  // translucent. Ease-out, so it drops fast and settles.
+  const ko = (v, has) => {
+    if (v == null) return has ? { dy: 10, a: .3 } : { dy: 0, a: 1 };
+    const k = clamp(v / KO_FALL, 0, 1), e = 1 - Math.pow(1 - k, 2);
+    return { dy: Math.round(e * 10), a: 1 - e * .7 };
+  };
+  const koF = ko(b.downF, b.foe.hp <= 0), koM = ko(b.downM, b.mine.hp <= 0);
+
   if (!inOrb) {
-    let alpha = b.foe.hp <= 0 ? .35 : 1;
+    let alpha = koF.a;
     let scale = fs;
     if (held === 'suck') {
       const k = clamp(b.orb.t / ORB.suck, 0, 1);
       alpha *= 1 - k; scale = Math.max(1, Math.round(fs * (1 - k * .7)));
     }
-    drawSpr(g, 'creature', foeId, fx + walkOff, fy - gait, scale,
+    drawSpr(g, 'creature', foeId, fx + walkOff, fy - gait + koF.dy, scale,
       { flash: b.flashF > 0 ? b.flashF : 0, alpha });
   }
-  drawSpr(g, 'creature', myId, mx - walkOff, my - gait, ms, { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: b.mine.hp <= 0 ? .35 : 1 });
+  drawSpr(g, 'creature', myId, mx - walkOff, my - gait + koM.dy, ms,
+    { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: koM.a });
 
   drawCrit(g, MY_GROUND, FOE_GROUND);
   drawOrb(g, MY_GROUND, FOE_GROUND);
@@ -6071,28 +6177,27 @@ function rowanScript() {
 }
 
 function chooseStarter() {
-  G.mode = 'menu';
-  openMenu('mainmenu', STARTERS.map((id) => ({
-    label: DEX[id].name, sub: DEX[id].types.join('/'),
-    fn: () => {
-      closeMenu();
-      const m = mkMon(id, 5);
-      G.party.push(m);
-      catchMon(id);
-      G.flags.gotStarter = 1;
-      G.flags.starter = id;
-      G.bag.bloomorb = (G.bag.bloomorb || 0) + 5;
-      G.bag.salve = (G.bag.salve || 0) + 3;
-      G.mode = 'world';
-      say('Elder Rowan', [
-        `${DEX[id].name}. Of course.`,
-        'Five orbs, three salves, and a deck. Ten cards — half of them nothing special.',
-        'Your kin brings its own moves to the fight. The deck is what you bring.',
-        'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
-        'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
-      ], () => { saveGame(); });
-    },
-  })), { title: 'Choose your kin', cancel: () => { closeMenu(); G.mode = 'world'; } });
+  openScreen('starter', { done: () => saveGame() });
+}
+
+/** Taking one. Everything the old menu did, minus the menu. */
+function takeStarter(id) {
+  const m = mkMon(id, 5);
+  G.party.push(m);
+  catchMon(id);
+  G.flags.gotStarter = 1;
+  G.flags.starter = id;
+  G.bag.bloomorb = (G.bag.bloomorb || 0) + 5;
+  G.bag.salve = (G.bag.salve || 0) + 3;
+  playCue('gotcha');
+  say('Elder Rowan', [
+    `${DEX[id].name}. Of course.`,
+    'Five orbs, three salves, and a deck. Ten cards — half of them nothing special.',
+    'Your kin brings its own moves to the fight. The deck is what you bring.',
+    'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
+    'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
+  ], () => { saveGame(); });
+  return m;
 }
 
 // ---- battle UI ---------------------------------------------------------
@@ -6382,6 +6487,8 @@ function submitLog(log, opts = {}) {
 const POP_LIFE = .85;
 /** The pull back before a swing, and the shove the one on the end of it takes. */
 const WIND_UP = .42, RECOIL = .30, CRIT_BURST = .40;
+/** How long a beaten kin takes to go down. */
+const KO_FALL = .55;
 
 /** A number leaving whoever the HP came out of. */
 function pushPop(b, side, n, kind) {
@@ -6412,6 +6519,11 @@ function entryFx(b, e) {
   // rather than a twitch.
   if (e.fx === 'use') {
     if (e.side === 'mine') b.windM = WIND_UP; else b.windF = WIND_UP;
+  }
+  // A knockout used to be an alpha change on the next frame. It falls now.
+  if (e.fx === 'faint') {
+    if (e.side === 'mine' || (e.side !== 'foe' && e.hpM <= 0)) b.downM = 0;
+    else b.downF = 0;
   }
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
@@ -6556,14 +6668,14 @@ function finishBattle() {
     const gems = gemReward(b);
     G.gems += gems;
     G.wins++;
-    if (!b.npc) { setToast(`+${gems} gems`); withReward(); return; }
+    if (!b.npc) { winFlourish(gems, withReward); return; }
     const lines = [`You pocket ${gems} rare gems.`];
     lines.push(...(b.npc.trainer.lose || []));
     G.flags[b.npc.id] = 1;
     G.money += b.npc.trainer.prize;
     lines.push(`You collected ${b.npc.trainer.prize} shards.`);
     if (b.npc.block) { b.npc.gone = true; lines.push(`${b.npc.name} steps off the path.`); }
-    say('', lines, withReward);
+    winFlourish(gems, () => say('', lines, withReward));
   } else if (over === 'caught') {
     const caught = b.foe;
     const where = addCaught(caught);
@@ -6665,6 +6777,78 @@ const evoPhase = () => {
   return a && a.beats[a.i] ? a.beats[a.i][0] : null;
 };
 
+/**
+ * A beat for winning.
+ *
+ * The foe went down and then a card offer appeared, which is a transaction
+ * rather than a victory. This holds the arena for a second: the light comes up,
+ * gold rises off the ground, and the two numbers you actually won are on
+ * screen. Any key skips the tail of it — nobody should sit through a flourish
+ * twice.
+ */
+const FLOURISH_T = 1.35;
+function winFlourish(gems, then) {
+  G.flourish = { t: 0, gems, done: then };
+  // The moment is on the canvas, so the panels around the fight get out of its
+  // way — otherwise the word lands behind your own HP bar.
+  if (!HEADLESS) {
+    show(els.hudFoe, false); show(els.hudMine, false);
+    show(els.dialogue, false); show(els.intent, false);
+    battleBar(false);
+  }
+  playCue('level');
+}
+
+/** True while the flourish owns the screen. */
+function flourishStep(dt) {
+  const f = G.flourish;
+  if (!f) return false;
+  f.t += dt;
+  if (f.t < FLOURISH_T && !justPressed('a') && !justPressed('b')) return true;
+  const done = f.done;
+  G.flourish = null;
+  if (done) done();
+  // This frame still belongs to the transition. Without that, the very press
+  // that skipped the flourish falls through to the screen it just opened and
+  // takes the first card for you.
+  return true;
+}
+
+/** Painted over the arena, so the fight you just won is still behind it. */
+function drawFlourish(g) {
+  const f = G.flourish;
+  if (!f) return;
+  const k = clamp(f.t / FLOURISH_T, 0, 1);
+  const fade = k < .82 ? 1 : (1 - k) / .18;
+  // The light comes up on the field rather than a curtain coming down.
+  const glow = g.createLinearGradient(0, VIEW_H, 0, VIEW_H * .3);
+  glow.addColorStop(0, `rgba(255,201,77,${.20 * fade})`);
+  glow.addColorStop(1, 'rgba(255,201,77,0)');
+  g.fillStyle = glow; g.fillRect(0, 0, VIEW_W, VIEW_H);
+  // Gold coming up off the ground.
+  for (let i = 0; i < 22; i++) {
+    const seed = (i * 71 % 43) / 43;
+    const rise = (f.t * (.55 + (i % 4) * .22) + seed) % 1;
+    g.globalAlpha = (1 - rise) * .85 * fade;
+    g.fillStyle = i % 3 ? '#ffc94d' : '#fff4dc';
+    g.fillRect(Math.round(seed * VIEW_W + Math.sin(f.t * 3 + i) * 5),
+      Math.round(VIEW_H - rise * VIEW_H), 1, 2);
+  }
+  g.globalAlpha = fade;
+  g.textAlign = 'center';
+  const pop = Math.min(1, k * 6);
+  g.font = `bold ${Math.round(15 + (1 - pop) * 6)}px monospace`;
+  g.fillStyle = '#2a1b2e';
+  g.fillText('WON', VIEW_W / 2 + 1, 119);
+  g.fillStyle = '#ffc94d';
+  g.fillText('WON', VIEW_W / 2, 118);
+  g.font = 'bold 9px monospace';
+  g.fillStyle = '#f3ecff';
+  g.fillText(`+${f.gems} ${f.gems === 1 ? 'gem' : 'gems'}`, VIEW_W / 2, 133);
+  g.textAlign = 'left';
+  g.globalAlpha = 1;
+}
+
 function updateBattle(dt) {
   const b = B();
   b.entry = Math.min(1, b.entry + dt * 1.7);      // a walk-on, not a teleport
@@ -6678,6 +6862,8 @@ function updateBattle(dt) {
   b.recoilM = Math.max(0, (b.recoilM || 0) - dt);
   b.recoilF = Math.max(0, (b.recoilF || 0) - dt);
   if (b.crit) { b.crit.t += dt; if (b.crit.t >= CRIT_BURST) b.crit = null; }
+  if (b.downM != null) b.downM = Math.min(KO_FALL, b.downM + dt);
+  if (b.downF != null) b.downF = Math.min(KO_FALL, b.downF + dt);
   if (b.pops && b.pops.length) {
     for (const p of b.pops) p.t += dt;
     b.pops = b.pops.filter((p) => p.t < POP_LIFE);
@@ -6794,6 +6980,7 @@ function closeScreen() {
   if (!s) return;
   playCue('back');
   if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
+  if (s.kind === 'starter') return;                      // and one of these must be chosen
   if (s.kind === 'profile') {
     commitNick(s);                                       // never lose what was typed
     if (s.opt.fresh) { screenSelect(); return; }          // a fresh catch has one way out
@@ -6818,6 +7005,8 @@ function screenList(s) {
   // The offer plus "no thanks" — a deck you cannot decline to grow is a deck
   // that fills up with cards you never wanted.
   if (s.kind === 'reward') return (s.opt.offer || []).concat(['skip']);
+  // Three kin and no way out: the first choice in the game is a choice.
+  if (s.kind === 'starter') return STARTERS.slice();
   // The profile is one creature and two buttons; the list is what you can press.
   if (s.kind === 'profile') return ['name', 'done'];
   if (s.kind === 'deck') {
@@ -6966,6 +7155,29 @@ function renderScreen() {
     html += `<h2 style="margin-top:12px">Collection — ${rest.length} spare</h2>`;
     html += rest.length ? `<div class="cardrow">` + rest.map((c, i) => shelf(c, inDeck.length + i, false)).join('') + '</div>'
       : '<p style="color:var(--dim)">Everything you own is in the deck.</p>';
+  } else if (s.kind === 'starter') {
+    // The first choice in the game, and it used to be a three-line menu. It is
+    // three cards now, laid out the way the reward screen is, because that is
+    // the shape this game uses for "pick one of these and live with it".
+    html = '';                                  // no way back out but choosing
+    html += `<h2>Choose your kin</h2>`;
+    html += `<p class="lede">One of them is yours from here on. Rowan will not be talked round.</p>`;
+    html += `<div class="pickrow">` + s.list.map((id, i) => {
+      const d = DEX[id];
+      const tint = TYPES[d.types[0]] || 'var(--gold)';
+      const beats = TYPE_ORDER.filter((t) => (CHART[d.types[0]] || {})[t] > 1);
+      const weak = TYPE_ORDER.filter((t) => (CHART[t] || {})[d.types[0]] > 1);
+      return `<div class="pickcard panel ${i === s.i ? 'sel' : ''}" data-i="${i}" style="--tint:${tint}">
+        <div class="pportrait"><canvas width="40" height="40" data-mon="${id}"></canvas></div>
+        <div class="pname">${d.name}</div>
+        <div class="types">${typeChips(d.types)}</div>
+        <p class="pdexline">${d.dex}</p>
+        <div class="matchup">
+          <div><span>strong into</span>${beats.length ? typeChips(beats) : '<i>nothing much</i>'}</div>
+          <div><span>soft against</span>${weak.length ? typeChips(weak) : '<i>nothing much</i>'}</div>
+        </div>
+        <div class="ptake">${i === s.i ? '▲ take it' : ''}</div></div>`;
+    }).join('') + '</div>';
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
@@ -7015,24 +7227,38 @@ function renderScreen() {
         </div>
       </div></div>`;
   } else if (s.kind === 'chests') {
+    // This screen never got the treatment the bag got: every chest carried a
+    // full-strength coloured border, so all four glowed at once and the one
+    // you had actually selected was invisible. The tint belongs to the chest;
+    // the gold ring belongs to the cursor, and only one thing at a time gets it.
     html += `<h2>Gem chests — ${G.gems} gems</h2>`;
-    html += `<div class="cards">` + CHEST_IDS.map((k, i) => {
+    html += `<p class="lede">Better chests do not hold more cards. They hold better odds.</p>`;
+    html += `<div class="items wide">` + CHEST_IDS.map((k, i) => {
       const ch = CHESTS[k];
-      const odds = RARITY_ORDER.filter((r) => ch.odds[r])
-        .map((r) => `<span style="color:${RARITY[r]}">${r} ${ch.odds[r]}%</span>`).join(' · ');
       const tint = { silver: '#c8ccd4', gold: '#ffc94d', diamond: '#7fe0f5', prism: '#c86bff' }[k];
-      return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}"
-        style="border-color:${tint}${G.gems < ch.cost ? ';opacity:.5' : ''}">
+      const afford = G.gems >= ch.cost;
+      // The odds as a bar rather than four percentages: you are choosing
+      // between distributions, and a distribution is a shape.
+      const bar = RARITY_ORDER.filter((r) => ch.odds[r]).map((r) =>
+        `<i style="width:${ch.odds[r]}%;background:${RARITY[r]}" title="${r} ${ch.odds[r]}%"></i>`).join('');
+      const key = RARITY_ORDER.filter((r) => ch.odds[r] && r !== 'common')
+        .map((r) => `<span style="color:${RARITY[r]}">${ch.odds[r]}% ${r}</span>`).join(' · ');
+      return `<div class="item chestrow panel ${i === s.i ? 'sel' : ''} ${afford ? '' : 'dead'}"
+        data-i="${i}" style="--tint:${tint}">
         <div class="chest" style="--tint:${tint}"></div>
-        <div class="info"><b style="color:${tint}">${ch.name}</b><small>${ch.cost} gems · ${ch.pulls} cards</small>
-        <small>${odds}</small></div></div>`;
+        <div class="info"><b style="color:${tint}">${ch.name}</b>
+          <div class="oddsbar">${bar}</div>
+          <small>${key || 'commons only'}</small></div>
+        <div class="tally">${ch.cost}<small>gems</small></div></div>`;
     }).join('') + '</div>';
     if (s.got) {
-      html += `<h2 style="margin-top:12px">You pulled</h2><div class="cards">` + s.got.map((c) => {
+      html += `<h3 class="shelf">You pulled</h3><div class="items">` + s.got.map((c) => {
         const def = CARDS[c.id];
-        return `<div class="card panel" style="border-color:${RARITY[def.r]}">
+        return `<div class="item panel" style="--tint:${RARITY[def.r]}">
+          <canvas width="20" height="20" data-card="${c.id}"></canvas>
           <div class="info"><b style="color:${RARITY[def.r]}">${def.name}</b>
-          <small>${def.r} · ${def.cost} energy · ${cardText(c)}</small></div></div>`;
+          <small>${cardText(c)}</small></div>
+          <div class="tally">${def.cost}<small>en</small></div></div>`;
       }).join('') + '</div>';
     }
   } else if (s.kind === 'bag' || s.kind === 'shop') {
@@ -7080,7 +7306,7 @@ function screenInput() {
     // back to. Back means "No thanks", which is a real option on the screen,
     // rather than a button that looks live and does nothing.
     if (s.kind === 'reward') { s.i = Math.max(0, (s.list || []).length - 1); screenSelect(); }
-    else closeScreen();
+    else if (s.kind !== 'starter') closeScreen();
   }
 }
 
@@ -7135,6 +7361,15 @@ function screenSelect() {
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     saveGame();
+    if (done) done();
+    return;
+  }
+  if (s.kind === 'starter') {
+    const id = s.list[s.i];
+    const done = s.opt.done;
+    G.screen = null; if (!HEADLESS) show(els.screen, false);
+    G.mode = 'world';
+    takeStarter(id);
     if (done) done();
     return;
   }
@@ -7359,6 +7594,8 @@ function playCue(kind) {
   else if (kind === 'step_wood') blip(300 + (G.steps % 2) * 40, .04, 'square', .02);
   // Evolution opens on a low swell rather than a chime — something is coming.
   else if (kind === 'evo') { [0, 3, 7].forEach((s2, i) => blip(note(s2), .9, 'sine', .04, t + i * .18)); }
+  // Being spotted: two hard notes, the second higher. Nothing friendly about it.
+  else if (kind === 'spotted') { blip(note(7), .09, 'square', .06); blip(note(14), .16, 'square', .055, t + .1); }
 }
 
 /** Which footstep the ground under you makes. */
@@ -7499,6 +7736,7 @@ function draw() {
   if (G.evoAnim) drawEvolution(ctx);
   else if (G.battle) drawBattle(ctx);
   else if (G.map) drawWorld(ctx);
+  if (G.flourish) drawFlourish(ctx);
   if (G.gotcha) drawGotcha(ctx);
   if (G.fade > 0) {
     ctx.fillStyle = `rgba(8,5,12,${clamp(G.fade * 2.4, 0, 1)})`;
@@ -7654,6 +7892,8 @@ function step(dt) {
   // the curtain over a door, and an evolution.
   if (G.warp && warpStep(dt)) return;
   if (G.evoAnim && evoStep(dt)) return;
+  if (G.alert && G.alert.beats && alertStep(dt)) return;
+  if (G.flourish && flourishStep(dt)) return;
   if (G.gotcha) {
     G.gotcha.t += dt;
     if (G.gotcha.t > 2 || justPressed('a') || justPressed('b')) {
@@ -8045,6 +8285,8 @@ if (typeof window !== 'undefined') {
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
+    alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
