@@ -2237,8 +2237,9 @@ const REC_KEEP = 2.5;                   // how much history the ring holds
 const REC_RADIUS = 680;                 // only what is near the car is filmed
 const REC_ENTS = 96, REC_PROPS = 46;
 const REPLAY_SPEED = 0.52;              // slow motion factor
-const REPLAY_MIN_WORTH = 5;             // kills + 0.7 per wreck: about one run in
-                                        // three earns a replay, not almost all of them
+const REPLAY_MIN_WORTH = 9;             // kills + 0.7 per wreck. At 5 this fired on 68% of
+                                        // runs, which is not a highlight; 9 is about one in
+                                        // three, which is what the number was always for
 
 const rec = { frames: [], acc: 0, kills: 0, wrecks: 0, killed: [], lastCopy: -9 };
 const clip = { frames: [], kills: 0, wrecks: 0, worth: 0, cx: 0, cy: 0 };
@@ -2324,13 +2325,26 @@ function startReplay(){
   const ents = [], pr = [];
   for (const p of people) ents.push([p.x, p.y, p.ang, p.dead, p.squash, p.panic, p.cry, p.fly]);
   for (const o of props) pr.push([o.x, o.y, o.dead, o.hp]);
+  /* The clip is two seconds out of the middle of the run, but the ground under
+     it carried the whole run's aftermath: 351 blood decals and 103 tyre-track
+     segments, 20 to 32 of them lying in FRONT of the replay car. The highlight
+     opened on its own ending. They are lifted for the duration and put back
+     exactly; replayGore lays down its own as the clip plays, and since item 1
+     those are cosmetic draws. */
   rp.restore = {
     ents, props: pr,
     car: [car.x, car.y, car.ang, car.z, car.roll, car.gore, car.plowT, car.boostT],
+    gore: gore.splice(0, gore.length),
+    tracks: tracks.splice(0, tracks.length),
+    debris: debris.splice(0, debris.length),
   };
   G.phase = 'replay';
   show('hint', true);
   setTxt('hint', 'REPLAY — TAP OR PRESS SPACE TO SKIP');
+  /* Put the car where the clip starts BEFORE framing it. camSnap used to run
+     against wherever the run happened to end, so the clip opened with the car
+     off screen — 15 of 135 frames on market 1, sliding in from x = -1498. */
+  replayApply();
   camSnap();
   if (typeof sndReplay === 'function') sndReplay();
 }
@@ -2454,6 +2468,10 @@ function endReplay(){
     }
     car.x = r.car[0]; car.y = r.car[1]; car.ang = r.car[2]; car.z = r.car[3];
     car.roll = r.car[4]; car.gore = r.car[5]; car.plowT = r.car[6]; car.boostT = r.car[7];
+    // the ground the clip was played on goes back exactly as it was
+    gore.length = 0; gore.push(...r.gore);
+    tracks.length = 0; tracks.push(...r.tracks);
+    debris.length = 0; debris.push(...r.debris);
   }
   rp.restore = null;
   Object.assign(clip, { frames: [], kills: 0, wrecks: 0, worth: 0, cx: 0, cy: 0 });
@@ -2517,6 +2535,15 @@ function camApply(t, k){
      view), but it may only trail far enough back to leave AHEAD_MIN screen px
      of road in front, which is what stops the car reaching the right edge at
      the fence. Beyond the fence is drawn as sky, which is a fair price. */
+  /* The replay camera blends 68% car and 32% bodies, which can push the car
+     off the edge on the frames the clip opens with — measured at x = -41 with
+     3 of 231 frames outside the frame even after snapping to the clip's first
+     position. The blend is a good bias; it just needs a leash. */
+  if (G.phase === 'replay'){
+    cam.x = clamp(cam.x, car.x - halfW * 0.62, car.x + halfW * 0.62);
+    cam.y = clamp(cam.y, car.y - halfH * 0.62, car.y + halfH * 0.62);
+  }
+
   if (G.phase === 'drive'){
     const aheadMin = Math.min(620, VW * 0.47);
     const maxTrail = Math.max(20, (VW / 2 - aheadMin) / cam.s);

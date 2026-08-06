@@ -975,6 +975,27 @@ test('the preview follows the car it is drawn for, not a fixed curve', () => {
     'every car should preview differently: ' + JSON.stringify(ends));
 });
 
+/* camSnap used to run against wherever the run happened to END, not where the
+   clip begins, so the highlight opened with the car off screen and slid in —
+   15 of 135 frames on market 1, from x = -1498. */
+test('the replay opens with its subject in shot', () => {
+  const bad = [];
+  for (const lv of [0, 5, 10, 19]){
+    const api = boot({ w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    api.launch(-api.C.MAX_PULL, 0);
+    for (let f = 0; f < 4000 && api.G.phase !== 'replay' && api.G.phase !== 'aim' &&
+      api.G.phase !== 'results'; f++) api.update(1 / 60);
+    if (api.G.phase !== 'replay') continue;               // that run did not earn one
+    const sx = 1280 / 2 + (api.car.x - api.cam.x) * api.cam.s;
+    const sy = 720 / 2 + (api.car.y - api.cam.y) * api.cam.s;
+    if (sx < 0 || sx > 1280 || sy < 0 || sy > 720){
+      bad.push(api.LEVELS[lv].name + ' at ' + Math.round(sx) + ',' + Math.round(sy));
+    }
+  }
+  assert(bad.length === 0, 'the clip opened with the car off screen on: ' + bad.join(', '));
+});
+
 /* ----------------------------------------------------------------- feel --- */
 
 /* addShake was Math.max on both fields and update only decremented the timer,
@@ -2451,7 +2472,7 @@ test('the best two seconds beat a quieter window', () => {
       api.recStep(1 / 60);
     }
   };
-  for (let i = 0; i < 5; i++){
+  for (let i = 0; i < 10; i++){
     api.killPerson(api.addPerson(1700 + i * 40, 1100), 900, 0, 'car');
     tick(0.12);
   }
@@ -2460,14 +2481,14 @@ test('the best two seconds beat a quieter window', () => {
 
   // ...then a far busier second, a long way away
   api.car.x = 3800;
-  for (let i = 0; i < 11; i++){
+  for (let i = 0; i < 16; i++){
     api.killPerson(api.addPerson(3800 + i * 40, 1100), 900, 0, 'car');
     tick(0.1);
   }
   tick(0.3);
 
-  assert(quiet === 5, 'the first group was captured while it was the best, got ' + quiet);
-  assert(api.clip.kills >= 9, 'the busy stretch should win, got ' + api.clip.kills);
+  assert(quiet >= 9, 'the first group was captured while it was the best, got ' + quiet);
+  assert(api.clip.kills > quiet, 'the busy stretch should win, got ' + api.clip.kills);
   assert(api.clip.cx > 3600, 'and the clip centres on it, got ' + Math.round(api.clip.cx));
   assert(api.clip.worth >= api.C.REPLAY_MIN_WORTH, 'worth ' + api.clip.worth);
   const span = api.clip.frames[api.clip.frames.length - 1].t - api.clip.frames[0].t;
@@ -2480,12 +2501,12 @@ test('a stretch of pure demolition is worth a replay too', () => {
   api.recReset();
   api.G.phase = 'drive';
   api.car.x = 2000; api.car.y = 1100;
-  for (let i = 0; i < 8; i++){
+  for (let i = 0; i < 14; i++){
     api.wreckProp(api.addProp('hut', 2000 + i * 200, 1100, {}), 800, 0);
     for (let k = 0; k < 6; k++){ api.setT(api.getT() + 1 / 60); api.recStep(1 / 60); }
   }
-  assert(api.clip.wrecks >= 8, 'the smashes were recorded, got ' + api.clip.wrecks);
-  assert(api.replayReady(), 'eight stalls in two seconds earns a replay');
+  assert(api.clip.wrecks >= 13, 'the smashes were recorded, got ' + api.clip.wrecks);
+  assert(api.replayReady(), 'a wall of stalls in two seconds earns a replay');
 });
 
 test('a quiet run is not worth a replay', () => {
@@ -2538,14 +2559,27 @@ test('the replay leaves the market exactly as it found it', () => {
   drive(api, 1500, 0, 1700, 1100);
   for (let i = 0; i < 900 && api.G.phase === 'drive'; i++) api.update(1 / 60);
   assert(api.replayReady(), 'the run earned a clip');
-  for (let i = 0; i < 200 && api.G.phase !== 'replay'; i++) api.update(1 / 60);
-  assert(api.G.phase === 'replay', 'in the replay');
+  /* Snapshot BEFORE the replay starts, not after. startReplay now puts the car
+     and the crowd where the clip begins so the camera can frame them, so by the
+     first replay frame the market is already scribbled on — which is exactly
+     the thing this test exists to prove gets put back. */
   const before = api.people.map(p => [p.x, p.y, p.dead, p.squash, p.ang, p.panic, p.cry, p.fly]);
   const propsBefore = api.props.map(o => [o.x, o.y, o.dead, o.hp]);
   const carBefore = [api.car.x, api.car.y, api.car.ang, api.car.z, api.car.roll, api.car.gore];
+  const groundBefore = [api.gore.length, api.tracks.length, api.debris.length];
+  for (let i = 0; i < 200 && api.G.phase !== 'replay'; i++) api.update(1 / 60);
+  assert(api.G.phase === 'replay', 'in the replay');
+  assert(api.gore.length === 0,
+    'the clip should not open on the run it is a highlight of, got ' + api.gore.length + ' decals');
   const kills = api.G.kills, score = api.G.levelScore;
   for (let i = 0; i < 1200 && api.G.phase === 'replay'; i++) api.update(1 / 60);
 
+  assert(api.gore.length === groundBefore[0] && api.debris.length === groundBefore[2],
+    'the ground should come back exactly: ' + [api.gore.length, api.debris.length] +
+    ' vs ' + [groundBefore[0], groundBefore[2]]);
+  // endReplay hands over to nextCar, which seeds one track under the new car
+  assert(api.tracks.length - groundBefore[1] <= 1,
+    'the tyre tracks should come back: ' + api.tracks.length + ' vs ' + groundBefore[1]);
   api.people.forEach((p, i) => {
     near(p.x, before[i][0], 0.001, 'person ' + i + ' moved during the replay');
     near(p.y, before[i][1], 0.001, 'person ' + i + ' moved in y');
@@ -2697,8 +2731,9 @@ test('a quiet run gets no replay, a busy one does', () => {
     }
     return api.replayReady();
   };
-  assert(!runWith(4), 'four kills is not a highlight');
-  assert(runWith(6), 'six in two seconds is');
+  // the threshold is 9: at 5 this fired on 68% of runs, which is not a highlight
+  assert(!runWith(5), 'five kills is not a highlight');
+  assert(runWith(9), 'nine in two seconds is');
 });
 
 test('the run summary sits at the top, not across the wreckage', () => {
