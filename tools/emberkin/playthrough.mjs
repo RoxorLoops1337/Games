@@ -18,9 +18,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all forty-one mistakes this tool
-// has made. Twenty-eight passes on this game produced about eleven changes to
-// the game and forty-one fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all forty-two mistakes this tool
+// has made. Thirty passes on this game produced about twelve changes to the game
+// and forty-two fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:

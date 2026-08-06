@@ -533,8 +533,8 @@ is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
 of all forty-one mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty-nine passes on this
-game produced about eleven changes to the game and forty-one fixes to the tool.
+likely to be a variation on those than something new. Thirty passes on this
+game produced about twelve changes to the game and forty-one fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,50 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### A second body is the length lever
+
+Every number on both sides was tested and none of them moved fight length. The one
+structural thing never tried on the wild side was a second kin — a trainer's
+second body is an extra opening, an extra settle and a swap, and that is where a
+trainer's length comes from. So wild encounters are sometimes a **pair** now, with
+the pool held constant: each of a pair carries half the HP one would, so this is a
+structure test and not a difficulty test.
+
+Measured at full strength — every wild fight a pair, against none, 60 runs an arm,
+same seeds:
+
+| solo | pairs | no pairs | difference (95%) |
+| --- | --- | --- | --- |
+| **turns per fight** | **5.19** | 3.90 | **+1.30 ±0.28** |
+| no kin in doubt | **29.6%** | 39.4% | **−.098 ±.041** |
+| over in one turn | 1.6% | 2.8% | **−.012 ±.009** |
+| lost or ran | .376 | .270 | +.106 ±.049 |
+| wipes | .107 | .098 | −.009 ±.022 (nothing) |
+
+**A second body buys 1.3 turns where a quarter more HP bought nothing and a third
+more energy bought nothing.** It is the second structural lever this game has, and
+the first one found on purpose rather than by accident.
+
+And the extra turns are not padding. The two metrics that would say so both move
+the right way: **over-in-one falls and never-in-doubt falls to 29.6%** — the best
+that number has ever read, and the oldest complaint in the project. Longer *and*
+less often decided in advance is the combination every numeric dial failed to
+produce.
+
+It ships at `WILD_PAIR = .25`, not at full strength. At full strength every wild
+encounter is a two-body fight, which is what a trainer is — the thing worth having
+is a pair as a variation, not as the norm. At .25 the same effects appear at a
+quarter the size: turns +0.20 ±0.25 (which is not, on its own, a significant
+reading), never-in-doubt **−.058 ±.037**, and the danger cost stays modest at
++.033 ±.046 rather than the +.106 of full strength.
+
+**Worth recording as a method note:** measured only at its shipped rate, this
+mechanism reads as nothing. A quarter of fights being pairs dilutes a per-fight
+average fourfold, and ±0.25 on 60 runs cannot see +0.33. Testing the mechanism at
+full strength first, and choosing the rate second, is what separated "does a
+second body do anything" from "how often should it happen" — two questions that a
+single underpowered run answers wrongly as one.
 
 #### Nothing on either side's numbers moves fight length
 
