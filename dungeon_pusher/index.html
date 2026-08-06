@@ -59,6 +59,11 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.21.0', notes: [
+    'THE UNDERLAKE OPENS \u{1F30A} \u2014 the fifth act\u2019s lairs were crashing on their first frame: THE DROWNED BANKER and THE SILT QUEEN ship without painted sheets, and the renderer was handed their bare names anyway. Floors 21\u201325 were unreachable past the lair door. They draw now \u2014 by their marks, like any foe the painter has not reached yet',
+    'THE FULL AUDIT \u{1F50D} \u2014 every relic, sigil, trait, mutator and boss hex was checked against what its card claims. Two effects were short: DEAD EYE\u2019s +1 never showed in the bag\u2019s effect sheet, and BLOOD SCENT skipped the Dire Rat. Both paid in full now. Five cards said more than the code does \u2014 the bloom, the gardener, the vault louse, the snatcher and the \u201ceverything you deal\u201d sigils \u2014 and now say exactly what happens',
+    'and the books balance \u{1F4D2} \u2014 a run\u2019s SOLD tally survives save and load, and posting a score can never nudge a shared-seed run\u2019s dice again. Forty chaos runs, two thousand audit spins and the whole suite say nothing else moved',
+  ] },
   { v: '1.20.0', notes: [
     'THE DEEP\u2019S BLADE GETS SHARPER, NOT JUST ITS HIDE \u{1F5E1}\u{FE0F} \u2014 foe damage never ramped per floor. It stepped only when the ACT did, so the same grunt hit for the same number on floor 1 and floor 5, and going deeper made the deep tougher only by taking longer to chew through. It climbs +5% a floor now: a floor-20 grunt swings for 14 where it used to swing for 7',
     'and the hide thickens faster too \u{1F6E1}\u{FE0F} \u2014 foe HP per floor goes from +6% to +7.5%. BOSSES are deliberately left off the new blade ramp: their own curve is already the wall, and ramping both halves on top of it turns the floor-20 lair into a brick',
@@ -1096,11 +1101,11 @@ function coinFx(k) {
     if (M('starmetal', '+2 dmg')) d += 2;
     if (M('horseshoe', '+1 dmg')) d += 1;
     if (M('assassin', '+2 dmg, pierces guards')) d += 2;
+    if (M('deadeye', '+1 dmg, pierces braced guards')) d += 1;
     main = d + ' dmg';
     M('luckystreak', '+1 dmg per lucky already fired');
     M('embershot', 'also applies 2 BURN');
     M('sniperlens', 'pierces braced guards');
-    M('deadeye', 'pierces braced guards');
     M('bloodthirst', 'heals 1 HP on strike');
     M('clover', 'minted twice as often');
   } else if (SPECIAL_COINS[k]) {
@@ -1609,13 +1614,13 @@ const TRAIT_TXT = {
   magnet: 'drags your pile away from the edge', bell: 'tolls every 10th piece: the pack shields',
   chrono: 'devours a TILT when hit for 8+', coward: 'hides behind its weakest ally when targeted',
   twin: 'raises its fallen twin — fell both in one round',
-  gardener: 'sows skulls — any left on the field SPROUT',
+  gardener: 'sows skulls — those on the field SPROUT (up to 6)',
   magarmor: 'magnetic armor — hoards block every turn, more each act',
   coinclone: 'clones pile coins into dead slugs each turn',
   jackthief: 'siphons your JACKPOT meter each turn, harder each act',
   // the Spire's schooling (v1.7.4)
   ritual: 'chants +3 attack per turn — then the knives come out',
-  curl: 'curls at first blood: +8 block (+2 per act)',
+  curl: 'curls at first blood: +8 block (+2 per act) for the round',
   split: 'tears in two at half health',
   thorns: 'every hit it takes pricks you for 1',
   malleable: 'hardens +1 block per hit taken; slumps on its turn',
@@ -1633,11 +1638,11 @@ const TRAIT_TXT = {
   charger: 'winds up 2 turns, then GORES for triple — a TILT staggers it',
   // the owner's own bestiary (v1.9.0)
   golem: 'gold MENDS it, silver ARMOURS it, sharp coins SHARPEN it for the round',
-  bloom: 'drinks every skull left on the bed (+3 HP each)',
+  bloom: 'drinks from the bed\u2019s skulls: +3 HP each, up to 18 a turn',
   sower: 'sows skulls onto the bed every turn — the bloom\u2019s gardener',
   hounds: 'looses a hound a turn: +2 attack for every one still breathing',
   tally: 'counts your TILTs — every third one bills you, harder each time',
-  snatch: 'steals a companion and fights beside it — cut it down to get them back',
+  snatch: 'steals a companion (+2 attack while it holds one) — cut it down to get them back',
   emberskin: 'live coal: every blow you land sets YOU alight (+2 burn)',
   mimicry: 'plays back the last LORD you felled — its trait, its guard, its name',
   ledger: 'holds your stolen coins — cut him down and every one comes back',
@@ -1991,8 +1996,9 @@ function load() {
         stats: (d.run.stats && typeof d.run.stats === 'object')
           ? { fired: d.run.stats.fired || 0, dealt: d.run.stats.dealt || 0,
               taken: d.run.stats.taken || 0, bestHit: d.run.stats.bestHit || 0,
-              t: d.run.stats.t || 0, bought: d.run.stats.bought || 0 }
-          : { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0, bought: 0 },
+              t: d.run.stats.t || 0, bought: d.run.stats.bought || 0,
+              sold: d.run.stats.sold || 0 }
+          : { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0, bought: 0, sold: 0 },
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
@@ -2566,7 +2572,8 @@ function petsAct() {
       }
       else if (p.iid === 'direrat') {
         if (S.enemy && S.enemy.hp > 0) {
-          dmgFoe(S.enemy, (3 + deepFang) * dmul);
+          const bonus = hasRelic('bloodscent') && S.enemy.bleed > 0 ? 1 : 0;
+          dmgFoe(S.enemy, (3 + deepFang) * dmul + bonus);
           if (S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
         }
       }
@@ -4450,7 +4457,7 @@ function enemyActFoe(e) {
           }
         }
         floatAnchor('PETRIFIED! ' + turned + ' pieces are dead stone now', 'hero', '#c8c8d6', true);
-      } else if (e.id === 'spinedrake') {
+      } else if (e.id === 'spinedrake') { // RESERVED: special + art manifest built, awaiting its boss entry
         // SPINE STORM: the whole bed is salted, and the tray is robbed
         let salted = 0;
         for (const c of S.coins) {
@@ -5510,7 +5517,7 @@ function sg(id, name, icon, desc, col, row, max, cost, eff, req, perFloor) {
   return { id, name, icon, desc, col, row, max, cost, eff, req: req || null, perFloor: !!perFloor };
 }
 const SIGILS = [
-  sg('root', 'The First Mark', '\u{1F4DC}', '+2% damage, everything you deal', 2.5, 0, 2, 1, { dmg: 0.02 }, null),
+  sg('root', 'The First Mark', '\u{1F4DC}', '+2% damage on every strike (dots keep their own maths)', 2.5, 0, 2, 1, { dmg: 0.02 }, null),
   // 🪙 THE PURSE — the deck you play with
   sg('p1', 'Seed Coins',   '\u{1FA99}', '+1 coin in the starting purse',  0, 1, 5, 1, { coin0: 1 }, 'root'),
   sg('p2', 'Prospector',   '\u{26CF}\u{FE0F}', '+1 gold for every foe felled', 0, 2, 5, 1, { goldKill: 1 }, 'p1'),
@@ -5527,8 +5534,8 @@ const SIGILS = [
   sg('e1', 'Whetstone',    '\u{1FAA8}', '+1 damage on every gold coin',   2, 1, 5, 1, { goldDmg: 1 }, 'root'),
   sg('e2', 'Venomcraft',   '\u{1F9EA}', '+1 poison from every venom coin', 2, 2, 3, 2, { pois: 1 }, 'e1'),
   sg('e3', 'Kindling',     '\u{1F525}', '+1 burn from every ember',       2, 3, 3, 2, { burn: 1 }, 'e2'),
-  sg('e4', 'Heavy Hands',  '\u{1F4AA}', '+4% damage, everything you deal', 2, 4, 5, 2, { dmg: 0.04 }, 'e3'),
-  sg('e5', 'Depth Charge', '\u{1F30A}', '+1.5% damage for every floor you have reached', 2, 5, 2, 5, { dmgFloor: 0.015 }, 'e4', true),
+  sg('e4', 'Heavy Hands',  '\u{1F4AA}', '+4% damage on every strike', 2, 4, 5, 2, { dmg: 0.04 }, 'e3'),
+  sg('e5', 'Depth Charge', '\u{1F30A}', '+1.5% strike damage for every floor you have reached', 2, 5, 2, 5, { dmgFloor: 0.015 }, 'e4', true),
   // 🎰 THE MACHINE — the table itself
   sg('m1', 'Iron Wrists',  '\u{1F91C}', '+1 TILT every round',            3, 1, 2, 2, { tilt: 1 }, 'root'),
   sg('m2', 'Long Arm',     '\u{1F9BE}', '+1 claw grab every round',       3, 2, 2, 2, { grab: 1 }, 'm1'),
@@ -5542,11 +5549,11 @@ const SIGILS = [
   sg('k4', 'Lockpick',     '\u{1F513}', '+8% chance a chest hides a key', 4, 4, 3, 2, { chestKey: 0.08 }, 'k3'),
   sg('k5', 'Warhorn',      '\u{1F4EF}', 'companions arrive with +1 HP per floor reached', 4, 5, 2, 4, { petHpFloor: 1 }, 'k4', true),
   // 🌑 THE DEEP — the marks that ask for everything
-  sg('d1', 'Delver',       '\u{1F56F}\u{FE0F}', '+2% damage and +2 max HP', 5, 1, 5, 2, { dmg: 0.02, hp0: 2 }, 'root'),
+  sg('d1', 'Delver',       '\u{1F56F}\u{FE0F}', '+2% strike damage and +2 max HP', 5, 1, 5, 2, { dmg: 0.02, hp0: 2 }, 'root'),
   sg('d2', 'Fortune',      '\u{1F340}', '+1 gold per kill and +1 starting coin', 5, 2, 5, 2, { goldKill: 1, coin0: 1 }, 'd1'),
   sg('d3', 'Heirloom',     '\u{1F4FF}', 'a common relic waits at every dungeon door', 5, 3, 1, 6, { heirloom: 1 }, 'd2'),
   sg('d4', 'Juggernaut',   '\u{1F98F}', '+15 max HP, and every blow is 1 lighter', 5, 4, 3, 4, { hp0: 15, dr: 1 }, 'd3'),
-  sg('d5', 'SOVEREIGN',    '\u{1F451}', '+10% damage, +30 max HP, +2 block, +1 TILT', 5, 5, 1, 10,
+  sg('d5', 'SOVEREIGN',    '\u{1F451}', '+10% strike damage, +30 max HP, +2 block, +1 TILT', 5, 5, 1, 10,
      { dmg: 0.10, hp0: 30, block0: 2, tilt: 1 }, 'd4'),
 ];
 const SIG_NODES = {};
@@ -7708,7 +7715,10 @@ if (!HEADLESS) (function browser() {
     const has = (k) => !!(SHEETS[k] || TIER_SKINS[k] || FRAME_ART[k]);
     if (typeof idOrEnt === 'string') return has(idOrEnt) ? idOrEnt : null;
     const e = idOrEnt;
-    if (e.mtype === 'boss' || e.boss) return bossFor(S.run.floor).id;
+    // bosses go through the same existence check as everyone else — THE
+    // UNDERLAKE's pair ship without sheets, and an unguarded id here made
+    // every act-5 lair throw on its first frame and soft-lock floors 21-25
+    if (e.mtype === 'boss' || e.boss) { const bid = bossFor(S.run.floor).id; return has(bid) ? bid : null; }
     return has(e.eid || e.id) ? (e.eid || e.id) : null;
   }
   // machine dressing cut from the owner's AI-rendered cabinet concept
@@ -14511,8 +14521,16 @@ if (!HEADLESS) (function browser() {
   function carveKey() {
     if (!S.carveKey) {
       const b = new Uint8Array(18);
-      if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(b);
-      else for (let i = 0; i < b.length; i++) b[i] = (rng() * 256) | 0;
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        crypto.getRandomValues(b);
+      } else {
+        // a side stream, like every other cosmetic draw — eating the rolls
+        // off the shared stream would desync a daily/shared-seed run
+        const keep = rngState;
+        rngState = ((Date.now() % 2147483646) + 1) | 0;
+        for (let i = 0; i < b.length; i++) b[i] = (rng() * 256) | 0;
+        rngState = keep;
+      }
       S.carveKey = Array.from(b).map(n => n.toString(36)).join('').slice(0, 32).replace(/[^\w-]/g, '') || 'k' + Date.now();
       save();
     }
