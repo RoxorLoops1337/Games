@@ -284,6 +284,13 @@
   .balls i.out{ background:radial-gradient(circle at 34% 30%, #6a5182, #362647 70%); box-shadow:0 0 0 1px #05030a; }
 
   /* ---------------- full-screen screens (party / dex / bag) ---------------- */
+  /* A screen arrives rather than appearing. Everything in this game used to
+     cut; the reward is the one that lands with weight, because it is the only
+     screen you actually chose to open. */
+  @keyframes screenRise{ from{ opacity:0; transform:translateY(6%); } to{ opacity:1; transform:none; } }
+  @keyframes screenLand{ 0%{ opacity:0; transform:scale(1.06); } 60%{ opacity:1; transform:scale(.995); } 100%{ transform:none; } }
+  #screen.rising{ animation:screenRise .17s cubic-bezier(.2,.8,.3,1) both; }
+  #screen.landing{ animation:screenLand .26s cubic-bezier(.2,.9,.25,1) both; }
   #screen{
     position:absolute; inset:0; z-index:9; padding:12px; overflow:auto;
     background:linear-gradient(180deg,#1a1222fa,#0d0913fd); backdrop-filter:blur(3px);
@@ -3028,7 +3035,7 @@ const G = {
   t: 0, dt: 0,
   map: null, mapId: '',
   player: { x: 5, y: 8, dir: 'down', px: 5, py: 8, moveT: 0, moveLen: 1, step: 0, bump: 0, hop: false },
-  fade: 0, wipe: 0, evoAnim: null, alert: null, prevMode: 'world',
+  fade: 0, wipe: 0, warp: null, evoAnim: null, alert: null, prevMode: 'world',
   party: [], box: [], bag: {}, money: 500, gems: 0,
   cards: [], deck: [], nextUid: 0, chestsOpened: 0,
   dex: {},                 // id -> 1 seen, 2 caught
@@ -4138,6 +4145,7 @@ function tryMove(dir) {
 function onArrive() {
   const p = G.player;
   G.steps++;
+  playCue(STEP_CUE[tileAt(G.map, p.x, p.y)] || 'step_grass');
   const w = warpAt(G.map, p.x, p.y);
   if (w) { doWarp(w); return; }
   if (trainerSight()) return;
@@ -4195,11 +4203,33 @@ function trainerSight() {
   return false;
 }
 
+/**
+ * A door goes *through* black, not straight to it.
+ *
+ * The map used to change on the frame you stepped on the warp and then fade up
+ * from black, which reads as a cut with a stain on it: you see the new room
+ * before the old one has gone. Now the screen closes first, the map changes
+ * behind the curtain, and it opens again — same total time, and the only frame
+ * either room is on screen at less than full brightness is one it earned.
+ */
+const WARP_SHUT = .17;
 function doWarp(w) {
+  G.warp = { to: w, t: WARP_SHUT };
+  playCue('door');
+}
+
+/** True while the curtain is down and nobody may move. */
+function warpStep(dt) {
+  if (!G.warp) return false;
+  G.warp.t -= dt;
+  if (G.warp.t > 0) return true;
+  const w = G.warp.to;
+  G.warp = null;
   enterMap(w.to, w.tx, w.ty, w.dir || G.player.dir);
-  G.fade = .35;
   updateCam();
   saveGame();
+  G.fade = .3;                     // …and open again
+  return true;                     // this frame still belongs to the transition
 }
 
 /** A-button: talk to whatever is in front, or read a sign. */
@@ -4291,6 +4321,23 @@ function drawWorld(g) {
         g.restore();
         continue;
       }
+      if (ch === ',') {
+        // Wind crosses a field as a travelling wave, so the blades ripple in
+        // sequence rather than shivering all at once. Only the top of the tile
+        // moves — the roots stay put, which is the difference between grass
+        // bending and grass sliding.
+        const w = WIND[G.mapId] || WIND._;
+        const sway = Math.round(Math.sin(G.t * w[0] + (mx + my * .35) * .55) * w[1]);
+        drawTile(g, ch, sx, sy);
+        if (sway) {
+          g.save();
+          g.beginPath(); g.rect(sx, sy, TILE, 9); g.clip();
+          drawTile(g, ch, sx + sway, sy);
+          drawTile(g, ch, sx + sway - TILE * (sway < 0 ? -1 : 1), sy);
+          g.restore();
+        }
+        continue;
+      }
       drawTile(g, ch, sx, sy);
     }
   }
@@ -4350,6 +4397,133 @@ function drawWorld(g) {
     g.fillRect(0, 0, VIEW_W, VIEW_H);
   }
   worldLight(g, map.kind, G.mapId);
+  weather(g, G.mapId, { kind: map.kind, map, x0, y0, ox, oy });
+}
+
+/**
+ * How hard the wind blows, per map: [rate, pixels]. Tied to the place rather
+ * than to a clock, so Crown Hollow is always the exposed one and Emberwood is
+ * always the sheltered one — a valley you can recognise by how its grass moves.
+ */
+const WIND = {
+  _: [1.6, 1],
+  hollowbrook: [1.3, 1],
+  route_one: [1.8, 1],
+  emberwood: [1.1, 1],           // under a canopy, almost nothing gets through
+  stillmere: [2.2, 1],
+  crown_hollow: [3.1, 2],        // nothing up here to stop it
+};
+
+/** Which weather a place has. A place, not a clock: Stillmere is always wet. */
+const WEATHER = {
+  hollowbrook: 'motes',
+  route_one: 'motes',
+  emberwood: 'fog',
+  stillmere: 'rain',
+  crown_hollow: 'gale',
+};
+
+/**
+ * Weather.
+ *
+ * The grade already says what colour a place is; this says what is moving in
+ * the air there. All of it is procedural and seeded off fixed numbers rather
+ * than randomness, so nothing is stored between frames and nothing pops when
+ * the camera moves. It draws over the grade, because weather is between you
+ * and the valley rather than part of it.
+ */
+function weather(g, id, ctx) {
+  const w = WEATHER[id];
+  if (!w || ctx.kind === 'inside') return;
+  const t = G.t;
+  g.save();
+
+  if (w === 'motes') {
+    // Dust in the light. Slow, warm, and few — this is a nice day, not an event.
+    for (let i = 0; i < 18; i++) {
+      const seed = (i * 71) % 37 / 37;
+      const rise = (t * (.05 + (i % 4) * .02) + seed) % 1;
+      g.globalAlpha = Math.sin(rise * Math.PI) * .45;
+      g.fillStyle = i % 3 ? '#ffe0a8' : '#fff4dc';
+      g.fillRect(Math.round(seed * VIEW_W + Math.sin(t * .7 + i) * 6),
+        Math.round(VIEW_H - rise * VIEW_H), 1, 1);
+    }
+  } else if (w === 'fog') {
+    // Banks of mist drifting at different speeds. Depth in a flat picture is
+    // parallax, so the near band moves twice as fast as the far one.
+    for (let i = 0; i < 11; i++) {
+      const seed = (i * 53) % 29;
+      const speed = 5 + (i % 3) * 7;
+      const x = ((t * speed + seed * 31) % (VIEW_W + 220)) - 110;
+      const y = 16 + (seed * 11) % (VIEW_H - 30);
+      const r = 54 + (seed % 5) * 12;
+      const blob = g.createRadialGradient(x, y, 0, x, y, r);
+      blob.addColorStop(0, `rgba(206,220,212,${.11 + (i % 3) * .035})`);
+      blob.addColorStop(1, 'rgba(206,220,212,0)');
+      g.fillStyle = blob;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    // …and it pools on the ground, which is where fog actually lives.
+    const pool = g.createLinearGradient(0, VIEW_H - 56, 0, VIEW_H);
+    pool.addColorStop(0, 'rgba(196,212,204,0)');
+    pool.addColorStop(1, 'rgba(196,212,204,.24)');
+    g.fillStyle = pool; g.fillRect(0, VIEW_H - 56, VIEW_W, 56);
+  } else if (w === 'rain') {
+    // Streaks, slanted, falling at three different speeds so the curtain has
+    // depth. The far ones are shorter, dimmer and slower.
+    for (let i = 0; i < 64; i++) {
+      const lane = i % 3;
+      const spd = 300 + lane * 200, len = 4 + lane * 3;
+      const x = ((i * 97) + t * spd * .35) % (VIEW_W + 60) - 30;
+      const y = ((i * 53) + t * spd) % (VIEW_H + 20) - 10;
+      g.globalAlpha = .18 + lane * .12;
+      g.strokeStyle = '#cfe8f5';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(Math.round(x), Math.round(y));
+      g.lineTo(Math.round(x - len * .45), Math.round(y + len));
+      g.stroke();
+    }
+    // The water has to notice. Rings on a rolling handful of the visible water
+    // tiles, each keyed off its own map position so they never all fire at once.
+    g.globalAlpha = 1;
+    g.strokeStyle = 'rgba(220,244,255,.45)';
+    const { map, x0, y0, ox, oy } = ctx;
+    for (let ty = -1; ty <= VIEW_H / TILE + 1; ty++) {
+      for (let tx = -1; tx <= VIEW_W / TILE + 1; tx++) {
+        const mx = x0 + tx, my = y0 + ty;
+        if (my < 0 || my >= map.rows.length || mx < 0 || mx >= map.rows[0].length) continue;
+        if (map.rows[my][mx] !== '~') continue;
+        const h = (mx * 7 + my * 13) % 11;
+        const k = (t * 1.6 + h / 11) % 1;
+        if (h % 3 !== Math.floor(t * 1.6 + h / 11) % 3) continue;   // only some, and not for long
+        const cx = tx * TILE + ox + 8, cy = ty * TILE + oy + 8;
+        g.globalAlpha = (1 - k) * .5;
+        g.lineWidth = 1;
+        g.beginPath(); g.arc(cx, cy, 1 + k * 6, 0, Math.PI * 2); g.stroke();
+      }
+    }
+  } else if (w === 'gale') {
+    // Nothing up here to stop it. Long pale streaks crossing fast, low enough
+    // in contrast that they read as moving air rather than as scratches.
+    for (let i = 0; i < 26; i++) {
+      const seed = (i * 61) % 23;
+      const spd = 150 + (i % 4) * 90;
+      const x = ((i * 113) + t * spd) % (VIEW_W + 90) - 45;
+      const y = (seed * 9) % VIEW_H;
+      const len = 10 + (i % 5) * 7;
+      g.globalAlpha = .10 + (i % 3) * .05;
+      g.strokeStyle = '#d8d0f5';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(Math.round(x), Math.round(y));
+      g.lineTo(Math.round(x + len), Math.round(y + 2));
+      g.stroke();
+    }
+  }
+
+  g.restore();
+  g.globalAlpha = 1;
 }
 
 /**
@@ -5803,6 +5977,7 @@ function menuInput() {
 // ---- world main menu ---------------------------------------------------
 function openMainMenu() {
   G.mode = 'menu';
+  playCue('menu');
   openMenu('mainmenu', [
     { label: 'Kin', sub: `${G.party.length}/6`, fn: () => openScreen('party') },
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
@@ -6434,21 +6609,61 @@ function finishBattle() {
   }
 }
 
+/**
+ * Evolution, beat by beat.
+ *
+ * It used to be two dialogue boxes with a spinning wheel behind them, which
+ * means the whole thing advanced at the speed you mashed A — and the one moment
+ * in the genre that is supposed to make you stop and watch was over before you
+ * had read the first line. It runs on its own clock now, like the catch does:
+ *
+ *   hold · build · burst · settle · quiet
+ *
+ * The shape changes at the top of `burst`, under a white-out, so you never see
+ * the swap — you see what it was, then light, then what it is. `quiet` is the
+ * beat that does the most work and draws nothing at all: a second of the new
+ * creature standing there before anybody says its name.
+ */
+const EVO = { hold: .9, build: 1.5, burst: .45, settle: 1.0, quiet: .6 };
+const evoBeats = () => [['hold', EVO.hold], ['build', EVO.build],
+  ['burst', EVO.burst], ['settle', EVO.settle], ['quiet', EVO.quiet]];
+
 function runEvolution(m) {
   const from = m.species;
-  G.evoAnim = { from, to: DEX[from].evo[0], t: 0, swapped: false };
-  say('', [`${dispName(m)} is changing shape!`], () => {
-    const r = evolveMon(m);
-    G.evoAnim.swapped = true; G.evoAnim.t = 0;
-    playCue('level');
-    say('', [`${r.oldName} became ${r.newName}!`], () => {
-      G.evoAnim = null;
-      const next = checkEvolve();
-      if (next) runEvolution(next);
-      else saveGame();
-    });
-  });
+  G.evoAnim = { mon: m, from, to: DEX[from].evo[0], beats: evoBeats(), i: 0, t: 0, swapped: false, res: null };
+  playCue('evo');
 }
+
+/** The scene owns the screen while this returns true. */
+function evoStep(dt) {
+  const a = G.evoAnim;
+  if (!a) return false;
+  a.t += dt;
+  const beat = a.beats[a.i];
+  if (!beat || a.t < beat[1]) return true;
+  a.t = 0; a.i++;
+  const next = a.beats[a.i];
+  if (next && next[0] === 'burst') {
+    a.res = evolveMon(a.mon);
+    a.swapped = true;
+    playCue('level');
+  }
+  if (next) return true;
+  const r = a.res;
+  G.evoAnim = null;
+  say('', [`${r.oldName} became ${r.newName}!`], () => {
+    const nxt = checkEvolve();
+    if (nxt) runEvolution(nxt);
+    else saveGame();
+  });
+  return false;
+}
+
+/** Which beat is on, for the renderer. */
+const evoPhase = () => {
+  const a = G.evoAnim;
+  return a && a.beats[a.i] ? a.beats[a.i][0] : null;
+};
 
 function updateBattle(dt) {
   const b = B();
@@ -6554,11 +6769,30 @@ function openScreen(kind, opt = {}) {
     : kind === 'profile' ? 1 : 0;
   G.screen = { kind, i, sel: null, opt, prev: G.mode };
   G.mode = 'screen';
+  playCue(kind === 'reward' ? 'level' : 'menu');
   renderScreen();
+  screenEntry(kind);
+}
+
+/**
+ * A screen arrives rather than appearing.
+ *
+ * Everything in this game used to cut, which makes a menu feel like a modal
+ * dialog rather than part of the world. A screen slides up from under its own
+ * bottom edge; the reward screen is the one thing that lands with weight,
+ * because it is the only screen you actually chose to open.
+ */
+function screenEntry(kind) {
+  if (HEADLESS || !els.screen) return;
+  const cls = kind === 'reward' ? 'landing' : 'rising';
+  els.screen.classList.remove('rising', 'landing');
+  void els.screen.offsetWidth;              // restart the animation
+  els.screen.classList.add(cls);
 }
 function closeScreen() {
   const s = G.screen;
   if (!s) return;
+  playCue('back');
   if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
   if (s.kind === 'profile') {
     commitNick(s);                                       // never lose what was typed
@@ -7109,7 +7343,26 @@ function playCue(kind) {
   }
   else if (kind === 'heal') { [0, 7, 12].forEach((s, i) => blip(note(12 + s), .2, 'sine', .05, t + i * .09)); }
   else if (kind === 'select') blip(660, .05, 'square', .04);
+  // ---- the world, which used to be silent ------------------------------
+  // A menu that opens and a menu that confirms must not be the same sound, or
+  // the ear stops using either of them. Open is low and short; confirm rises.
+  else if (kind === 'menu') blip(330, .05, 'square', .035);
+  else if (kind === 'back') blip(240, .06, 'square', .03);
+  else if (kind === 'door') { blip(140, .1, 'sawtooth', .05); blip(95, .18, 'sine', .045, t + .05); }
+  // Footsteps carry the ground under them: grass brushes, a path knocks, sand
+  // is soft and short, boards ring. Two alternating pitches so a walk has a
+  // gait instead of a metronome.
+  else if (kind === 'step_grass') blip(220 + (G.steps % 2) * 30, .045, 'triangle', .022);
+  else if (kind === 'step_tall') blip(180 + (G.steps % 2) * 26, .07, 'triangle', .028);
+  else if (kind === 'step_path') blip(120 + (G.steps % 2) * 18, .04, 'square', .022);
+  else if (kind === 'step_sand') blip(150 + (G.steps % 2) * 20, .05, 'sine', .02);
+  else if (kind === 'step_wood') blip(300 + (G.steps % 2) * 40, .04, 'square', .02);
+  // Evolution opens on a low swell rather than a chime — something is coming.
+  else if (kind === 'evo') { [0, 3, 7].forEach((s2, i) => blip(note(s2), .9, 'sine', .04, t + i * .18)); }
 }
+
+/** Which footstep the ground under you makes. */
+const STEP_CUE = { ',': 'step_tall', '=': 'step_path', s: 'step_sand', b: 'step_wood', r: 'step_wood' };
 
 function toggleMute() {
   muted = !muted;
@@ -7251,6 +7504,11 @@ function draw() {
     ctx.fillStyle = `rgba(8,5,12,${clamp(G.fade * 2.4, 0, 1)})`;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   }
+  // The closing half of a door. The map behind it is still the old one.
+  if (G.warp) {
+    ctx.fillStyle = `rgba(8,5,12,${clamp(1 - G.warp.t / WARP_SHUT, 0, 1)})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
   if (G.wipe > 0) {
     // Bars slide in from alternating sides, meet, then retract on the battle.
     const k = 1 - G.wipe / WIPE_T;
@@ -7266,31 +7524,79 @@ function draw() {
 
 /** The evolution payoff: spokes of light, a shimmer, then the new shape. */
 function drawEvolution(g) {
-  const a = G.evoAnim, t = a.t;
+  const a = G.evoAnim;
+  const phase = evoPhase();
+  if (!phase) return;
+  const t = a.t, dur = a.beats[a.i][1], k = clamp(t / dur, 0, 1);
+  // How far through the whole thing, for anything that ramps across beats.
+  const heat = phase === 'hold' ? k * .25
+    : phase === 'build' ? .25 + k * .75
+    : phase === 'burst' ? 1
+    : phase === 'settle' ? 1 - k
+    : 0;
+
   g.fillStyle = '#120b1a';
   g.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  // The wheel: twelve spokes turning behind it, faster the closer it gets.
   g.save();
   g.translate(VIEW_W / 2, 92);
-  g.rotate((a.swapped ? -t : t) * .6);          // the whole wheel spins…
-  g.globalAlpha = .16;
+  g.rotate(G.t * (.35 + heat * 2.6) * (a.swapped ? -1 : 1));
+  g.globalAlpha = .07 + heat * .22;
   g.fillStyle = '#ffc94d';
   for (let i = 0; i < 12; i++) {
-    g.rotate(Math.PI / 6);                      // …spokes stay 30° apart
+    g.rotate(Math.PI / 6);                      // spokes stay 30° apart
     g.beginPath(); g.moveTo(0, 0); g.lineTo(-10, -220); g.lineTo(10, -220); g.closePath(); g.fill();
   }
   g.restore();
 
+  // Motes falling *into* it while the light builds — the energy is arriving,
+  // not leaving, which is the whole difference between evolving and burning.
+  if (heat > .05) {
+    for (let i = 0; i < 26; i++) {
+      const seed = (i * 71 % 41) / 41;
+      const ang = seed * Math.PI * 2 + G.t * .4;
+      const pull = ((G.t * (.6 + (i % 4) * .25) + seed) % 1);
+      const r = 100 * (1 - pull);
+      g.globalAlpha = (1 - Math.abs(pull * 2 - 1)) * heat * .8;
+      g.fillStyle = i % 3 ? '#ffd98a' : '#fff4dc';
+      g.fillRect(Math.round(VIEW_W / 2 + Math.cos(ang) * r),
+        Math.round(92 + Math.sin(ang) * r * .7), 1, 1);
+    }
+    g.globalAlpha = 1;
+  }
+
   const id = a.swapped ? a.to : a.from;
   const s = 3;
   const bottom = artBottom(id) * s;
-  // Before the change it shivers and glows; after, it lands and the glow fades.
-  const flash = a.swapped ? Math.max(0, 1 - t * 1.4)
-    : Math.min(.85, t * .25 + (Math.sin(t * 16) * .5 + .5) * .4);
-  const jitter = a.swapped ? 0 : Math.round(Math.sin(t * 30) * 1.5);
-  drawSpr(g, 'creature', id, VIEW_W / 2 - 20 * s + jitter, 128 - bottom, s, { flash });
+  // It shivers harder the closer it gets, and holds perfectly still once it
+  // has landed. Whole pixels — a sprite between them at ×3 shimmers.
+  const jitter = phase === 'build' ? Math.round(Math.sin(G.t * 34) * (1 + k * 2))
+    : phase === 'hold' ? Math.round(Math.sin(G.t * 14) * .6) : 0;
+  const x = VIEW_W / 2 - 20 * s + jitter, y = 128 - bottom;
+  drawSpr(g, 'creature', id, x, y, s, {});
+  // …and it goes white as the light takes it. Additive blits of its own
+  // silhouette: a flat dark shape stacked on itself climbs to white, which is
+  // the only way to blow a sprite out without a second set of art for it.
+  const glow = phase === 'build' ? k : phase === 'burst' ? 1 : phase === 'settle' ? 1 - k : 0;
+  if (glow > .02) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 5; i++) {
+      g.globalAlpha = glow * .42;
+      drawSpr(g, 'creature', id, x, y, s, { sil: true });
+    }
+    g.restore();
+    g.globalAlpha = 1;
+  }
 
-  if (a.swapped && t < .45) {
-    g.fillStyle = `rgba(255,255,255,${(1 - t / .45) * .85})`;
+  // The burst itself: a white-out with a ring running out of it.
+  if (phase === 'burst') {
+    const b = 1 - Math.abs(k * 2 - 1);
+    g.strokeStyle = `rgba(255,236,190,${(1 - k) * .9})`;
+    g.lineWidth = Math.max(1, 4 * (1 - k));
+    g.beginPath(); g.arc(VIEW_W / 2, 92, 10 + k * 150, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = `rgba(255,255,255,${b * .95})`;
     g.fillRect(0, 0, VIEW_W, VIEW_H);
   }
 }
@@ -7325,7 +7631,6 @@ function step(dt) {
   G.t += dt; G.dt = dt; G.playtime += dt;
   if (G.fade > 0) G.fade = Math.max(0, G.fade - dt);
   if (G.wipe > 0) G.wipe = Math.max(0, G.wipe - dt);
-  if (G.evoAnim) G.evoAnim.t += dt;
   if (G.toastT > 0) {
     G.toastT -= dt;
     if (G.toastT <= 0 && !HEADLESS) els.toast.classList.remove('on');
@@ -7345,6 +7650,10 @@ function step(dt) {
 
   // The celebration owns the screen while it runs, and any key skips the tail
   // of it — nobody should have to sit through a flourish twice.
+  // Two things own the screen outright while they run, on their own clocks:
+  // the curtain over a door, and an evolution.
+  if (G.warp && warpStep(dt)) return;
+  if (G.evoAnim && evoStep(dt)) return;
   if (G.gotcha) {
     G.gotcha.t += dt;
     if (G.gotcha.t > 2 || justPressed('a') || justPressed('b')) {
@@ -7735,9 +8044,10 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,
+    doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
-    GRADE, gradeFor, worldLight, drawTitleArt,
+    GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
     entryFx, pushPop, drawPops, drawCrit, POP_LIFE, WIND_UP, RECOIL, CRIT_BURST,
     renderHand, fanStyle, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral, cardHTML,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,

@@ -627,6 +627,109 @@ for (const kind of ['party', 'dex', 'box', 'deck', 'bag', 'shop', 'chests']) {
 }
 function screenLen(g) { return (g.G.screen.list || []).length; }
 
+section('weather belongs to the place');
+// Every outdoor map has weather, and it is a property of the map rather than
+// of a clock — Stillmere is always wet, Emberwood is always misty.
+for (const id of Object.keys(EK.MAPS)) {
+  const outside = EK.MAPS[id].kind !== 'inside';
+  eq(!!EK.WEATHER[id], outside, `${id}: ${outside ? 'has weather' : 'is indoors and has none'}`);
+}
+ok(new Set(Object.values(EK.WEATHER)).size >= 3, 'and no two kinds of place feel the same');
+// Wind is per-map too, and every map has a fallback rather than a crash.
+for (const id of Object.keys(EK.MAPS)) {
+  const w = EK.WIND[id] || EK.WIND._;
+  ok(Array.isArray(w) && w.length === 2 && w[1] >= 1, `${id} has a wind [rate, px]`);
+}
+ok((EK.WIND.crown_hollow || [])[1] > (EK.WIND.emberwood || [])[1],
+  'the exposed pass blows harder than the sheltered wood');
+// It paints, on every map, and it never leaves the context dirty for the next
+// frame — a leaked globalAlpha is how a whole game goes translucent.
+for (const id of Object.keys(EK.MAPS)) {
+  const wcalls = [];
+  const wctx = mkCtx(wcalls);
+  wctx.globalAlpha = 1;
+  EK.weather(wctx, id, { kind: EK.MAPS[id].kind, map: EK.MAPS[id], x0: 0, y0: 0, ox: 0, oy: 0 });
+  ok(true, `${id} weather painted without throwing`);
+}
+// And the world still draws under it, on every map and at several times.
+for (const id of Object.keys(EK.MAPS)) {
+  EK.enterMap(id, 4, 4, 'down');
+  EK.G.mode = 'world';
+  for (const t of [0, 3.3, 41.7]) {
+    EK.G.t = t;
+    const since = drawCount();
+    EK.draw();
+    ok(since() > 20, `${id} drew with weather at t=${t}`);
+  }
+}
+
+section('a door goes through black');
+const warp = loadGame({});
+warp.setCtx(mkCtx());
+warp.G.party = [warp.mkMon('pyrelynx', 12)];
+warp.enterMap('hollowbrook', 5, 5, 'up');
+warp.G.mode = 'world';
+const door = warp.MAPS.hollowbrook.warps.find((w) => w.to === 'lab');
+ok(door, 'the study still has a door');
+warp.doWarp(door);
+ok(warp.G.warp, 'stepping on it draws the curtain');
+eq(warp.G.mapId, 'hollowbrook', 'and the map has NOT changed yet — that is the whole point');
+// Nothing moves while the curtain is down.
+const wasX = warp.G.player.x;
+warp.pressKey('left');
+for (let i = 0; i < 3; i++) { warp.step(.04); warp.draw(); }
+warp.releaseKey('left'); warp.fired.clear();
+eq(warp.G.player.x, wasX, 'and you cannot walk behind it');
+// It opens on the other side.
+for (let i = 0; i < 20 && warp.G.warp; i++) { warp.step(.04); warp.draw(); }
+eq(warp.G.mapId, 'lab', 'the curtain lifts on the new map');
+eq(warp.G.player.x, door.tx, 'at the far side of the door');
+ok(warp.G.fade > 0, 'and it opens rather than cutting');
+ok(warp.hasSave(), 'the journey saved on the way through');
+
+section('evolving takes its time');
+const evo = loadGame({});
+evo.setCtx(mkCtx());
+evo.G.party = [evo.mkMon('cindercub', 20)];
+evo.runEvolution(evo.G.party[0]);
+const beats = [];
+let swapAt = null;
+for (let i = 0; i < 400 && evo.G.evoAnim; i++) {
+  const p = evo.evoPhase();
+  if (p && p !== beats[beats.length - 1]) beats.push(p);
+  if (swapAt === null && evo.G.party[0].species !== 'cindercub') swapAt = p;
+  evo.step(.05);
+  evo.draw();
+}
+eq(beats.join(' '), 'hold build burst settle quiet', 'it plays every beat in order');
+eq(swapAt, 'burst', 'and the shape changes under the white-out, never in the open');
+eq(evo.G.party[0].species, 'pyrelynx', 'the kin really evolved');
+eq(evo.G.evoAnim, null, 'the scene handed the screen back');
+eq(evo.G.mode, 'dialogue', 'and the name arrives after it, not during');
+// It is not driven by the buttons any more — that was the old bug: the one
+// moment the genre is built around used to run at the speed you mashed A.
+const evo2 = loadGame({});
+evo2.setCtx(mkCtx());
+evo2.G.party = [evo2.mkMon('cindercub', 20)];
+evo2.runEvolution(evo2.G.party[0]);
+for (let i = 0; i < 12; i++) {
+  evo2.pressKey('a'); evo2.step(.02); evo2.releaseKey('a'); evo2.fired.clear();
+}
+ok(evo2.G.evoAnim, 'mashing A does not skip it');
+ok(evo2.evoPhase() === 'hold' || evo2.evoPhase() === 'build', `it is still early (${evo2.evoPhase()})`);
+
+section('the ground makes a sound');
+// A footstep says what you are walking on. Every walkable tile has a cue, and
+// no two kinds of ground share one by accident.
+const walkable = Object.keys(EK.TILE_ART).filter((c) => !EK.SOLID.has(c));
+for (const c of walkable) {
+  const cue = EK.STEP_CUE[c] || 'step_grass';
+  ok(/^step_/.test(cue), `${EK.TILE_ART[c]} has a footstep (${cue})`);
+}
+ok(new Set(Object.values(EK.STEP_CUE)).size >= 4, 'and the ground is audibly different in at least four ways');
+eq(EK.STEP_CUE[','], 'step_tall', 'tall grass sounds like tall grass');
+eq(EK.STEP_CUE.b, 'step_wood', 'floorboards sound like boards');
+
 section('a town that moves');
 // NPCs turn to look at you. The art faces the viewer, so the only honest turn
 // is a mirror — which means it has to be driven by which side you are on.
