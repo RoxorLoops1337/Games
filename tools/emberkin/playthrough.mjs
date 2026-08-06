@@ -18,9 +18,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all forty mistakes this tool has
-// made. Twenty-seven passes on this game produced about eleven changes to the
-// game and forty fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all forty-one mistakes this tool
+// has made. Twenty-eight passes on this game produced about eleven changes to
+// the game and forty-one fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -71,12 +71,24 @@ let BANS = argv.includes('--ban') ? argv[argv.indexOf('--ban') + 1].split(',') :
 const banned = (id) => BANS.includes(id);
 const readSets = (av) => av.flatMap((a, i) => (a === '--set' ? [av[i + 1]] : [])).filter(Boolean);
 let SETS = readSets(argv);
-/** Rewrite `const NAME = ...;` in the game source. Throws rather than silently missing. */
+/**
+ * Rewrite a top-level constant in the game source. Throws rather than silently
+ * missing, and stops the value at a comma, because half the dials in this game
+ * are declared two to a statement — `const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;`.
+ * Swallowing to the semicolon deleted the second one, and a run that cannot
+ * declare WILD_DMG_MUL throws on load. Screened at low run counts that read as
+ * "every metric identical", which under seeding looks exactly like a dial that
+ * does nothing — so the first sweep of this reported FOE_HP_MUL, the biggest
+ * number in the game, as dead.
+ */
 const patchFor = (sets) => (sets.length ? (code) => sets.reduce((c, kv) => {
-  const [k, v] = kv.split('=');
-  const re = new RegExp(`(const ${k} = )[^;]+;`);
-  if (!re.test(c)) throw new Error(`--set ${k}: no top-level "const ${k} = ...;" in the game`);
-  return c.replace(re, `$1${v};`);
+  const i = kv.indexOf('=');
+  const k = kv.slice(0, i), v = kv.slice(i + 1);
+  const re = new RegExp(`(\\b${k} = )[^,;]+`);
+  if (!re.test(c)) throw new Error(`--set ${k}: no top-level "${k} = ..." in the game`);
+  const out = c.replace(re, `$1${v}`);
+  if (out === c) throw new Error(`--set ${k}=${v}: rewrite changed nothing`);
+  return out;
 }, code) : null);
 const FORCE = argv.includes('--force') ? argv[argv.indexOf('--force') + 1] : null;
 const FORCE_N = 3;
