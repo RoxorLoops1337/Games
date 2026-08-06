@@ -49,8 +49,8 @@ const EXPOSE = `__out.api = {
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
-  draw, drawHUD, drawAim, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
-  SHOUTS, SHOUT_TIME,
+  draw, drawHUD, drawAim, drawSling, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
+  SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH_Z,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
@@ -672,6 +672,46 @@ test('the wind-up has real room behind the sling', () => {
   const room = api.C.ANCHOR.x - api.bounds.x0;
   assert(room > api.C.MAX_PULL, 'a full pull must fit inside the fence: ' + room + ' vs ' + api.C.MAX_PULL);
   assert(api.C.ANCHOR.x + 200 < api.C.MARKET_X, 'and the market still starts well downrange');
+});
+
+/* The release used to be the flattest moment in the game: drawAim() bails on
+   anything but the aim phase, so the posts, the band and the power arc vanished
+   on the exact frame you let go, and all that was left was a small shake. */
+test('letting go of the sling actually looks like something happened', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  const before = api.fx.length;
+  api.cam.tz = 1500;
+  assert(api.launch(-api.C.MAX_PULL, -80), 'the launch should take');
+
+  assert(api.G.sling && api.G.sling.t > 0, 'the sling outlives the release');
+  near(api.G.sling.t, api.SLING_RECOIL, 0.0001, 'the band snaps for the full recoil');
+  near(api.G.sling.len, api.C.MAX_PULL, 0.0001, 'the band starts at the pull it was released from');
+  assert(api.fx.length - before >= 12, 'the anchor throws up snow, got ' + (api.fx.length - before));
+  assert(api.fx.slice(before).every(f => f.type === 'puff'), 'and it is a puff, not debris');
+  assert(api.getFlash() > 0.2, 'the release flashes, got ' + api.getFlash());
+  assert(api.getHitstop() > 0.03, 'the release hit-stops, got ' + api.getHitstop());
+  assert(api.cam.tz <= 1200, 'the camera punches in on release, got ' + api.cam.tz);
+  near(api.cam.tz, api.LAUNCH_PUNCH_Z, 0.0001, 'to the punch zoom exactly');
+});
+
+test('the sling stops snapping, and the camera eases back out', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  const punched = api.cam.tz;
+  step(api, 0.4);
+  assert(!api.G.sling, 'the band is still by 0.4s');
+  assert(api.cam.tz > punched + 60, 'and the camera has eased back out: ' + punched + ' -> ' + api.cam.tz);
+  api.drawSling();                       // must be a no-op, not a throw
+});
+
+test('a fresh car gets a fresh sling', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  api.nextCar();
+  assert(!api.G.sling, 'the previous release does not snap over the new one');
 });
 
 test('the plough pickup arms the wide bumper for a while', () => {
