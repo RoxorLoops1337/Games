@@ -116,7 +116,7 @@
 
   <div class="ov" id="brief" hidden>
     <div class="card">
-      <p class="sub" id="brNo">Market 1 of 6</p>
+      <p class="sub" id="brNo">Market 1 of 21</p>
       <h2 id="brTitle">OPENING NIGHT</h2>
       <div class="stats">
         <div class="stat"><div class="k">Cars</div><div class="v" id="brCars">3</div></div>
@@ -153,7 +153,7 @@
   <div class="ov" id="finale" hidden>
     <div class="card">
       <h1>ALL <span class="g">WRECKED</span></h1>
-      <p class="sub">Six markets. No survivors&rsquo; committee.</p>
+      <p class="sub">Twenty-one markets. No survivors&rsquo; committee.</p>
       <div class="stats">
         <div class="stat"><div class="k">Total</div><div class="v" id="fnScore">0</div></div>
         <div class="stat"><div class="k">Best ever</div><div class="v" id="fnBest">0</div></div>
@@ -303,8 +303,17 @@ const GORE_MAX = 360;                         // ground decals kept around
 const DEBRIS_MAX = 300;
 
 const PERSON_PTS = 100, SANTA_PTS = 1200;
-const COATS_RT = ['#e05143', '#3f86c4', '#41a066', '#9a5cbe', '#e08a2e', '#6b7a94', '#cf4a80'];
-const SKIN_RT = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
+/* What colour a given shopper is, for the gib and pixel bursts and for the
+   replay's record of who died. This has to agree with drawPerson, which
+   branches three ways on p.kind; the simulation used to keep its own flat copy
+   of the shopper palette, so a grey-coated pensioner exploded into orange
+   sleeves and a lime-green child into purple ones. */
+function coatOf(p){
+  return p.kind === 'elder' ? ELDER_COATS[p.coat % ELDER_COATS.length]
+       : p.kind === 'kid' ? KID_COATS[p.coat % KID_COATS.length]
+       : COATS[p.coat % COATS.length];
+}
+function skinOf(p){ return SKIN[p.coat % SKIN.length]; }
 
 /* Who is out doing their Christmas shopping. Speed, size and payout differ,
    and each type panics in its own way. */
@@ -541,7 +550,6 @@ const G = {
   levelStart: 0,          // score at the top of this level (for retries)
   levelScore: 0,
   target: 0,
-  potential: 0,
   cars: 3, carsLeft: 3,
   combo: 0, comboT: 0, mult: 1, bestCombo: 0,
   kills: 0, wrecks: 0, totalKills: 0, lifeKills: 0,
@@ -934,7 +942,6 @@ function genMarket(lv){
   let pot = 0;
   for (const p of people) pot += p.pts;
   for (const o of props) pot += o.pts;
-  G.potential = pot;
   G.target = Math.max(1500, Math.round(pot * lv.par / 100) * 100);
 }
 
@@ -1317,7 +1324,10 @@ function shards(x, y, n, col, spd){
 /* ---------- blood on the snow ---------- */
 function addGore(x, y, r, kind, rot){
   if (gore.length >= GORE_MAX) gore.splice(0, 60);
-  gore.push({ x, y, r, kind: kind || 'splat', rot: rot || rr(0, 6.283), seed: rnd(), t: 0 });
+  // a decal's own angle and shape seed are scenery, so they come from the
+  // cosmetic generator: with rr()/rnd() here, dropping or adding a single
+  // splat shifted the simulation's random stream and every market's score
+  gore.push({ x, y, r, kind: kind || 'splat', rot: rot || vrr(0, 6.283), seed: vrnd(), t: 0 });
 }
 
 /* A kill throws blood the way the car was going and leaves a pool where the
@@ -1458,7 +1468,7 @@ function killPerson(p, vx, vy, cause){
   if (rec.killed.length < 24){
     // enough about the victim to re-stage the hit properly in the replay
     rec.killed.push({ x: p.x, y: p.y, vx: vx || 0, vy: vy || 0, kind: p.kind,
-      coat: COATS_RT[p.coat % COATS_RT.length], skin: SKIN_RT[p.coat % SKIN_RT.length],
+      coat: coatOf(p), skin: skinOf(p),
       cause: cause || 'car' });
   }
   popText(p.x, p.y - 18, '+' + pts, p.kind === 'santa' ? '#ff6b5e' : '#ffd34d', p.kind === 'santa');
@@ -1467,8 +1477,8 @@ function killPerson(p, vx, vy, cause){
     addShake(0.4, 12); flash = Math.max(flash, 0.5);
   }
   puff(p.x, p.y, 5, '#f2f7ff', 170);
-  bleedCoat = COATS_RT[p.coat % COATS_RT.length];
-  bleedSkin = SKIN_RT[p.coat % SKIN_RT.length];
+  bleedCoat = coatOf(p);
+  bleedSkin = skinOf(p);
   bleed(p.x, p.y, vx || rr(-40, 40), vy || rr(-40, 40), p.kind === 'santa' ? 1.6 : 1);
   bleedCoat = bleedSkin = null;
   if (p.pram && p.pramT > 0){
@@ -1679,24 +1689,33 @@ function stepSpills(dt){
   }
 }
 
+/* The permanent mark a chunk or a limb leaves where it comes to rest.
+
+   This used to fire from a "one frame before the end" test inside the step,
+   which drops the same chunk's decal 0, 1, 2 or 3 times depending on how frames
+   happen to fall: shrinking frame times gave 0, 10ms then 3ms gave 2, a 50ms
+   stall then 0.5ms gave 3. That is the frame after every hit-stop, and every
+   frame on a variable-refresh display. It belongs on the one event that
+   happens exactly once — the particle being removed. */
+function restFx(f){
+  if (f.type === 'chunk') addGore(f.x, f.y, f.size * 1.1, 'chunk');
+  else if (f.type === 'limb'){
+    addGore(f.x, f.y, f.size * 0.8, 'chunk');
+    addGore(f.x, f.y, f.size * 1.2, 'splat');
+  }
+}
+
 function stepFx(dt){
   for (let i = fx.length - 1; i >= 0; i--){
     const f = fx[i];
     f.t += dt;
-    if (f.t >= f.ttl){ fx.splice(i, 1); continue; }
+    if (f.t >= f.ttl){ restFx(f); fx.splice(i, 1); continue; }
     f.x += f.vx * dt; f.y += f.vy * dt;
     f.rot += f.spin * dt;
     const k = Math.exp((f.type === 'txt' ? -1.2 : -3.2) * dt);
     f.vx *= k; f.vy *= k;
     if (f.type === 'star' || f.type === 'hat' || f.type === 'drop' || f.type === 'pram') f.vy += 90 * dt;
-    if (f.type === 'chunk' && f.t >= f.ttl - dt) addGore(f.x, f.y, f.size * 1.1, 'chunk');
-    if (f.type === 'limb'){
-      f.vy += 40 * dt;
-      if (f.t >= f.ttl - dt){
-        addGore(f.x, f.y, f.size * 0.8, 'chunk');
-        addGore(f.x, f.y, f.size * 1.2, 'splat');
-      }
-    }
+    if (f.type === 'limb') f.vy += 40 * dt;
   }
   if (tracks.length > TRACK_MAX) tracks.splice(0, tracks.length - TRACK_MAX);
 }
@@ -1746,20 +1765,22 @@ function hitProp(o){
     const hw = o.w / 2, hh = o.h / 2;
     const cx = clamp(car.x, o.x - hw, o.x + hw);
     const cy = clamp(car.y, o.y - hh, o.y + hh);
-    let dx = car.x - cx, dy = car.y - cy;
-    let d = Math.hypot(dx, dy);
-    if (d >= CARR){
-      if (d > 0.001) return false;
-      // dead centre: push out the shortest way
-      dx = car.x - o.x; dy = car.y - o.y;
-      const ox = hw + CARR - Math.abs(dx), oy = hh + CARR - Math.abs(dy);
-      if (ox < oy){ nx = Math.sign(dx) || 1; ny = 0; pen = ox; }
-      else { nx = 0; ny = Math.sign(dy) || 1; pen = oy; }
-      d = 0;
-    }
-    if (pen === undefined){
-      if (d < 0.001){ nx = 0; ny = -1; pen = CARR; }
-      else { nx = dx / d; ny = dy / d; pen = CARR - d; }
+    const dx = car.x - cx, dy = car.y - cy;
+    const d = Math.hypot(dx, dy);
+    if (d >= CARR) return false;
+    if (d > 0.001){ nx = dx / d; ny = dy / d; pen = CARR - d; }
+    else {
+      /* The car's centre is inside the box, so the nearest point on it is the
+         car itself and there is no direction to push along. Leave by the
+         closest face. This branch used to be written above the `d >= CARR`
+         return, where `d > 0.001` is implied and it could never run; what
+         actually ran pushed the car one radius straight *up* whichever wall it
+         had come through, which parked it inside huts for three substeps at a
+         time, always ejecting northward. */
+      const ex = car.x - o.x, ey = car.y - o.y;
+      const ox = hw + CARR - Math.abs(ex), oy = hh + CARR - Math.abs(ey);
+      if (ox < oy){ nx = Math.sign(ex) || 1; ny = 0; pen = ox; }
+      else { nx = 0; ny = Math.sign(ey) || 1; pen = oy; }
     }
   }
   if (o.dead) return false;
@@ -2791,23 +2812,28 @@ function drawProp(o){
     case 'fence': {
       // a crowd barrier: long axis decides which way the slats run
       const vert = o.h > o.w;
-      const L = vert ? o.h : o.w, TH = vert ? o.w : o.h;
+      // THK, not TH: a local called TH here shadows the theme object for the
+      // whole block, and the first person to reach for TH.wood in it gets a
+      // silently invisible fence
+      const L = vert ? o.h : o.w, THK = vert ? o.w : o.h;
       ctx.save(); ctx.translate(o.x, o.y);
       if (vert) ctx.rotate(Math.PI / 2);
-      ctx.rotate(o.dead ? o.rot : 0);
-      shadow(0, TH * 0.6, L * 0.5, TH * 0.6, 0.2);
+      // live fences used to ignore o.rot, so the ice rink's barrier ring all
+      // drew in the same orientation instead of following the circle
+      ctx.rotate(o.rot);
+      shadow(0, THK * 0.6, L * 0.5, THK * 0.6, 0.2);
       if (o.dead){
         ctx.fillStyle = '#6a5138';
-        ctx.fillRect(-L * 0.44, -TH * 0.4, L * 0.3, TH * 0.8);
-        ctx.fillRect(L * 0.08, -TH * 0.2, L * 0.28, TH * 0.6);
+        ctx.fillRect(-L * 0.44, -THK * 0.4, L * 0.3, THK * 0.8);
+        ctx.fillRect(L * 0.08, -THK * 0.2, L * 0.28, THK * 0.6);
       } else {
         ctx.fillStyle = '#d8dee8';
-        ctx.fillRect(-L / 2, -TH / 2, L, TH);
+        ctx.fillRect(-L / 2, -THK / 2, L, THK);
         ctx.fillStyle = '#c8443a';
-        for (let i = 0; i < 4; i++) ctx.fillRect(-L / 2 + 8 + i * (L / 4), -TH / 2, L / 9, TH);
+        for (let i = 0; i < 4; i++) ctx.fillRect(-L / 2 + 8 + i * (L / 4), -THK / 2, L / 9, THK);
         ctx.fillStyle = '#8a94a6';
-        ctx.fillRect(-L / 2, -TH / 2 - 5, 9, TH + 10);
-        ctx.fillRect(L / 2 - 9, -TH / 2 - 5, 9, TH + 10);
+        ctx.fillRect(-L / 2, -THK / 2 - 5, 9, THK + 10);
+        ctx.fillRect(L / 2 - 9, -THK / 2 - 5, 9, THK + 10);
       }
       ctx.restore(); break;
     }
@@ -2929,24 +2955,12 @@ function drawPerson(p){
   const wob = Math.sin(p.bob) * (0.1 + p.panic * 0.28);
   ctx.rotate(p.ang + Math.PI / 2);
 
-  const q = lodQ(p), always = lodAlways(p);
-
-  // zoomed out far enough and the limbs are sub-pixel anyway: coat, head, hat
-  if (q < LOD_MID && !always){
-    ctx.fillStyle = coat;
-    ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.9, p.r * 0.75, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = p.hat ? HATS[p.hatCol % HATS.length] : skin;
-    circle(0, -p.r * 0.3, p.r * 0.5); ctx.fill();
-    if (p.panic > 0.5){
-      ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.3;
-      ctx.beginPath();
-      ctx.moveTo(-p.r * 0.6, 0); ctx.lineTo(-p.r * 1.2, -p.r * 0.7);
-      ctx.moveTo(p.r * 0.6, 0); ctx.lineTo(p.r * 1.2, -p.r * 0.7);
-      ctx.stroke();
-    }
-    ctx.restore();
-    return;
-  }
+  /* The far tier is not here: anyone below LOD_MID is picked off in draw() and
+     goes down as part of drawCrowdBatch's colour buckets. There used to be a
+     second copy of that blob in this function, measured at 0 of 204
+     living-person calls — only the test suite ever reached it, which meant the
+     suite was exercising code the game does not run. */
+  const q = lodQ(p);
 
   /* The middle tier: coat, head, hat, arms, and the pram if there is one.
      No face, no tears, no "!!", no scarf, no cane, no coat highlight — those
@@ -3451,25 +3465,7 @@ function drawFx(){
         circle(-f.size * 0.92, 0, f.size * 0.26); ctx.fill();
       }
       ctx.restore();
-    } else if (f.type === 'pixel'){
-      ctx.fillStyle = f.col;
-      ctx.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size);
-    } else if (f.type === 'limb'){
-      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
-      if (f.part === 'head'){
-        ctx.fillStyle = f.col2;
-        circle(0, 0, f.size); ctx.fill();
-        ctx.fillStyle = 'rgba(120,14,10,.85)';
-        circle(0, f.size * 0.6, f.size * 0.5); ctx.fill();
-      } else {
-        ctx.fillStyle = f.col;                       // sleeve or trouser leg
-        roundRect(-f.size, -f.size * 0.28, f.size * 1.7, f.size * 0.56, f.size * 0.28); ctx.fill();
-        ctx.fillStyle = f.col2;                      // the end that came off
-        circle(f.size * 0.7, 0, f.size * 0.3); ctx.fill();
-        ctx.fillStyle = 'rgba(120,14,10,.9)';
-        circle(-f.size * 0.92, 0, f.size * 0.26); ctx.fill();
-      }
-      ctx.restore();
+
     } else if (f.type === 'chunk'){
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
       ctx.fillStyle = f.col;
@@ -3779,7 +3775,6 @@ function drawHUD(){
   ctx.fillStyle = '#cfdcee';
   ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
   ctx.fillText('CARS LEFT', VW - pad - 12, pad + (narrow ? 16 : 19));
-  const live = Math.max(0, G.carsLeft - (G.phase === 'drive' || G.phase === 'aim' ? 1 : 0));
   for (let i = 0; i < G.cars; i++){
     const x = VW - pad - (narrow ? 12 : 20) - i * (narrow ? 17 : 24);
     ctx.fillStyle = i < (G.phase === 'results' ? 0 : Math.max(0, G.carsLeft)) ? '#e8463a' : 'rgba(255,255,255,.16)';
