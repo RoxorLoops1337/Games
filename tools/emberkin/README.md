@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and twenty-nine fixes to
+this game have produced roughly six changes to the game and thirty-one fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -31,9 +31,16 @@ harder-and-easier versions of one thing; they are different games, and a change
 that helps one can do nothing for the other. **Judge a change against both**, and
 if it only moves one, say which.
 
+`--build value|grow|rarity` changes how the run builds its deck — by what a card
+does per energy, by its permanence keywords, or by taking whichever card is
+rarest. `rarity` is the default and the baseline. The other two exist because a
+conclusion drawn under one policy is a conclusion about that policy: see mistake
+30, where "the deck does not decide the run" turned out to mean "always taking
+the rarest card converges".
+
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 31.
+a sample — see mistake 33.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -213,19 +220,36 @@ and the family is more useful than the individual entry.
     never once measured. It buys the best chest it can afford on a town visit
     now, and anything better than the worst card in the deck goes in.
 
+30. **"The deck does not decide the run" was a claim about the policy** (pass
+    28). Pass 27 measured the best and worst thirds of sixty runs, found the decks
+    identical, and concluded the deck cannot be what makes a run good — from a
+    probe that always took the rarest card, which of course converges. Given a
+    second policy (`--build value`, ranking by what a card does per energy) the
+    decks and the outcomes both move a long way: solo lost-or-ran **.246 ±.027 →
+    .162 ±.023**, wipes .111 → .073, and the deck goes from 73% epic to 60% rare.
+    **The deck decides the run; a rarity-greedy player is simply playing badly.**
+    A within-policy comparison cannot see a between-policy effect, and every
+    cross-tab in this report is within-policy.
+31. **"Money has no sink" was the shopping list** (pass 28). The report showed
+    1093-2995 shards unspent at Crown Hollow. The shop sells seven things and the
+    probe bought the two cheapest — five bloom orbs, four salves — then stopped.
+    Buying better orbs and more salves absorbs it (down to 363-530) and moves no
+    headline at all, which is the actual finding: past the floor, money buys
+    nothing measurable.
+
 ### Sampling — a claim the sample could not carry
 
-30. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+32. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-31. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+33. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-32. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+34. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -237,7 +261,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of twenty-nine are denominators.** If a number will not move, or moves the
+- **Nine of thirty-one are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

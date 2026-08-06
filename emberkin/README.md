@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all twenty-nine mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Nineteen passes on this
-game produced about eight changes to the game and twenty-nine fixes to the tool.
+of all thirty-one mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty passes on this
+game produced about eight changes to the game and thirty-one fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -584,6 +584,71 @@ Money is the one still unbounded and piling up. It is partly the probe's fault �
 it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
+
+#### The deck decides the run, and rarity is the wrong axis
+
+Pass 27 split sixty runs by the danger line, found the best and worst thirds
+holding identical decks, and concluded the deck cannot be what makes a run good.
+That conclusion was drawn from a probe that always takes the rarest card on
+offer, which converges by construction. `--build` gives it other policies, and
+the answer reverses.
+
+Solo, sixty runs each:
+
+| | build rarity | **build value** |
+| --- | --- | --- |
+| lost or ran | .246 ±.027 | **.162 ±.023** |
+| wipes | .111 ±.013 | **.073 ±.011** |
+| turns per fight | 3.97 ±0.19 | 4.37 ±0.29 |
+| no kin in doubt | 39% ±3 | **51% ±3** |
+| deck rarity mix | epic 73%, rare 21% | **rare 60%, epic 34%** |
+| the three cards it holds most of | 6.6 / 12 | 8.9 / 12 |
+
+Party, same:
+
+| | rarity | value | grow |
+| --- | --- | --- | --- |
+| lost or ran | .038 ±.005 | .036 ±.008 | **.052 ±.008** |
+| wipes | .028 ±.005 | .028 ±.007 | **.042 ±.008** |
+| turns per fight | 3.02 ±0.14 | **3.42 ±0.24** | 3.01 ±0.18 |
+| rarity mix | epic 84% | rare 59% | rare 72% |
+
+**The deck decides the run.** A value-greedy player loses a third fewer solo runs
+than a rarity-greedy one, and builds a visibly different deck to do it — 60% rare
+where the rarity player is 73% epic, and concentrated harder (8.9 of 12 in three
+card types against 6.6). Building for permanence keywords is worse than either.
+
+Which makes the second finding the uncomfortable one: **rarity is anti-correlated
+with usefulness here, and rarity is the axis the reward screen presents.** Ranked
+by what a card does per point of energy, four epics — Berserk 13, Ward Stance 15,
+Bulwark 15, Reaper 16 — sit below five rares: Grit 36, Heartroot 29, Thornmail
+22, Surge 22, Ironhide 18. A player reading the reward screen the way the game
+sorts it is being steered into the worse half of its own card set.
+
+That is not fixed here. Demoting the four epics would make them *more* common,
+which is backwards for weak cards, and buffing four cards at once is exactly the
+move that went wrong with Ward Stance and Twin Strike. It is a card-at-a-time
+job, and `--build value` is now the instrument to check each one against.
+
+One thing to watch when it is done: the value deck takes solo no-kin-in-doubt to
+**51%**. A well-built deck currently makes half of all solo fights safe, which is
+the oldest complaint in the project reappearing from the other end.
+
+#### Money is not a hole, and it is not a decision either
+
+The report showed 1093-2995 shards unspent at Crown Hollow and called it a
+currency with no sink. The sink was there; the shopping list was not. The shop
+sells seven things and the probe bought the two cheapest — five bloom orbs and
+four salves — and stopped, which is a self-imposed poverty rather than an
+economy. Buying prism and gleam orbs and carrying ten salves when rich absorbs
+nearly all of it, 1165 → 530 in party and 1854 → 363 in solo.
+
+And it changes nothing: lost-or-ran .038 ±.005 → .045 ±.010, solo .246 ±.027 →
+.244 ±.032, every other line inside its interval. **Past the floor of "never out
+of orbs, never out of salves", money buys nothing measurable.** Shards are a
+tutorial-era currency — they matter for the first hour and then stop being a
+decision. That is a fair thing for a shop currency to be, and it is worth saying
+out loud rather than leaving the number looking like a bug.
 
 #### Is the reward system building a deck, or a pile?
 
