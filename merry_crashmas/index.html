@@ -245,6 +245,8 @@ function selectCar(id){
 const MAX_PULL = 430;                         // world units of sling travel
 const MIN_POWER = 0.16;
 const MAX_LAUNCH = 1900;                      // world px/s at full pull
+const SLING_RECOIL = 0.25;                    // seconds the band keeps snapping after release
+const LAUNCH_PUNCH_Z = 1150;                  // camera punches to this, then eases to the drive zoom
 const FRICTION = 0.36;                        // exponential decay per second
 const DRAG = 52;                              // flat decel, px/s²
 const ICE_FRICTION = 0.09;
@@ -535,6 +537,7 @@ const G = {
   stars: 0,
   settleT: 0,
   runT: 0,
+  sling: null,            // {t, ux, uy, len} — the band still snapping after a release
   banner: null,           // {text, t}
   bannerAt: 0,
   runKills: 0, runWrecks: 0, runScore: 0, runBest: 0,
@@ -1075,6 +1078,7 @@ function nextCar(){
   G.combo = 0; G.comboT = 0; G.mult = 1;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
+  G.sling = null;
   G.phase = 'aim';
   show('hint', true);
   setTxt('hint', 'DRAG BACK · RELEASE TO LAUNCH · SPACE = NITRO');
@@ -1107,6 +1111,20 @@ function launch(px, py){
   G.runT = 0;
   addShake(0.28, 5);                      // the calmest event in the game should
   sndLaunch(p);                           // not out-punch running somebody over
+
+  /* The release used to be the one moment in the game with no punch in it.
+     drawAim() returns on anything but the aim phase, so the posts, the band
+     and the power arc were deleted on the exact frame you let go, and all
+     that was left was a small shake and a camera drifting from 1500 to 1336
+     over a fifth of a second. The sling now outlives the release and snaps
+     back through the anchor under its own damping, the anchor throws up the
+     snow the wheels just kicked out of it, and the camera punches in before
+     it eases back out to the driving zoom. */
+  G.sling = { t: SLING_RECOIL, ux: px / len, uy: py / len, len: clamp(len, 0, MAX_PULL) };
+  puff(ANCHOR.x, ANCHOR.y, 14, '#f4f9ff', 260);
+  hitstop = Math.max(hitstop, 0.04);
+  flash = Math.max(flash, 0.25);
+  cam.tz = Math.min(cam.tz, LAUNCH_PUNCH_Z);
   setTxt('hint', 'SPACE / TAP — NITRO');
   return true;
 }
@@ -2281,6 +2299,8 @@ function update(dt){
   if (hitstop > 0){ hitstop -= dt; dt *= 0.18; }   // in hit-stopped time
   if (shake.t > 0){ shake.t -= dt; if (shake.t <= 0) shake.a = 0; }
   if (flash > 0) flash = Math.max(0, flash - dt * 2.6);
+  // the band snaps in real time — hit-stopping the release would defeat it
+  if (G.sling){ G.sling.t -= rawDt; if (G.sling.t <= 0) G.sling = null; }
 
   if (G.phase !== 'replay'){
     stepPeople(dt);
@@ -3460,6 +3480,38 @@ function drawLights(){
 }
 
 /* ---------- aim UI, drawn in world space ---------- */
+function slingPosts(){
+  ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(ANCHOR.x - 30, ANCHOR.y - 40);
+  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y + 96); ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 40);
+  ctx.stroke();
+}
+
+/* The quarter second after you let go. The band whips back through the anchor
+   and wobbles itself still — cos under an exponential envelope, so the first
+   overshoot is the big one and the rest die off. Without this the sling simply
+   ceases to exist on the release frame, which is the frame the whole shot is
+   about. */
+function drawSling(){
+  const s = G.sling;
+  if (!s) return;
+  const k = 1 - clamp(s.t / SLING_RECOIL, 0, 1);      // 0 at release → 1 when still
+  // ~7Hz, hard damped: the band is through the anchor inside 40ms, overshoots
+  // to about a third of the pull, and is still by the time the recoil ends.
+  // Faster than this and at 60fps it is two frames of nothing in particular.
+  const d = s.len * Math.cos(k * 11) * Math.exp(-4.5 * k);
+  const bx = ANCHOR.x + s.ux * d, by = ANCHOR.y + s.uy * d;
+  slingPosts();
+  ctx.globalAlpha = 1 - k * 0.35;
+  ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(bx, by);
+  ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 96);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
 function drawAim(){
   if (G.phase !== 'aim') return;
   const pull = aim.active ? { x: aim.x - ANCHOR.x, y: aim.y - ANCHOR.y } : { x: 0, y: 0 };
@@ -3468,12 +3520,7 @@ function drawAim(){
   const ux = len > 0.01 ? pull.x / len : -1, uy = len > 0.01 ? pull.y / len : 0;
   const bx = ANCHOR.x + ux * clampedLen, by = ANCHOR.y + uy * clampedLen;
 
-  // sling posts
-  ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = 12; ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(ANCHOR.x - 30, ANCHOR.y - 40);
-  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y + 96); ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 40);
-  ctx.stroke();
+  slingPosts();
   const wrongWay = aim.active && pull.x > -20;
   if (aim.active && len > 20){
     ctx.strokeStyle = wrongWay ? '#8a2b22' : '#3a2a1e'; ctx.lineWidth = 7;
@@ -3747,7 +3794,7 @@ function draw(){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
   }
 
-  if (G.phase === 'aim') drawAim();
+  if (G.phase === 'aim') drawAim(); else drawSling();
   if (G.phase !== 'menu' && G.phase !== 'brief' && G.phase !== 'results' && G.phase !== 'finale') drawCar();
   else if (G.phase === 'menu' || G.phase === 'brief') drawCar();
 
