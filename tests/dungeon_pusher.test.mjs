@@ -7478,7 +7478,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.20.0', 'the cabinet ships as v1.20.0');
+  t.eq(D.VERSION, '1.21.0', 'the cabinet ships as v1.21.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -9133,6 +9133,39 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   Ds.S.shake = 8;
   for (let i = 0; i < 4; i++) { ts7 += 16.7; const cb = rafS(); if (cb) cb(ts7); }
   t.eq(globalThis.__ctxDepth, 0, 'and so does one mid-thump, when the reflection jolts');
+}
+
+// ========= THE UNDERLAKE'S LAIRS MUST DRAW (the act-5 crash) =========
+// The fifth act's bosses ship without art sheets, and foeArtKey used to hand
+// their bare ids straight to the renderer — sheetOf(id) came back null and
+// every lair frame threw, soft-locking floors 21-25. Bosses now go through
+// the same art-exists check as every other foe and fall back to their icon.
+for (const bside of [false, true]) {
+  const { DP: D5, raf: raf5 } = loadGame({}, true);
+  let ts5 = 0, err5 = null;
+  const fr5 = (n) => { for (let i = 0; i < n; i++) { ts5 += 16.7; const cb = raf5(); if (cb) { try { cb(ts5); } catch (e) { err5 = e.message; return; } } } };
+  D5.srand(7); D5.newRun('knight');
+  D5.S.run.floor = 21; D5.S.run.bside = bside;
+  D5.S.screen = 'dungeon';
+  fr5(4);
+  t.eq(err5, null, 'the act-5 lair room draws (bside=' + bside + ')');
+  D5.startBattle('boss');
+  const who = D5.S.enemy && D5.S.enemy.id;
+  t.eq(who, bside ? 'siltqueen' : 'drownedbanker', 'the right lair-holder answers');
+  fr5(4);
+  t.eq(err5, null, 'and its battle draws without a throw');
+  t.eq(globalThis.__ctxDepth, 0, 'with every save matched (' + who + ')');
+}
+
+// ===== THE LEDGER TELLS THE TRUTH ABOUT DEAD EYE =====
+// the bag's effect sheet claimed lucky damage one lower than applyLoot dealt
+{
+  const { DP: Dx } = loadGame({}, false);
+  Dx.srand(3); Dx.newRun('knight');
+  const base = parseInt(Dx.coinFx('lucky').main, 10);
+  Dx.S.run.relics.push('deadeye');
+  const withEye = parseInt(Dx.coinFx('lucky').main, 10);
+  t.eq(withEye, base + 1, 'Dead Eye shows its +1 in the bag, not just in the fight');
 }
 
 // ============== THE BLACK BOX: a bug report worth reading ==============
