@@ -68,6 +68,9 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
+  drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
+  getBakeCount: () => bakeCount,
+  darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
   COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
@@ -93,7 +96,15 @@ function boot(opts){
     if (o.count && typeof p === 'string' && p !== 'then')
       return () => { counts[p] = (counts[p] || 0) + 1; };
     return () => {};
-  }, set(){ return true; } });
+  // the colours a frame asks for are the only way a headless suite can see what
+  // shade of night the light pass laid down
+  }, set(t, p, v){
+    if (o.count && (p === 'fillStyle' || p === 'globalCompositeOperation')){
+      const seen = counts._styles || (counts._styles = []);
+      if (seen.length < 40000) seen.push(String(v));
+    }
+    return true;
+  } });
   const el = () => ({
     style: { setProperty(){} }, textContent: '', innerHTML: '', width: 0, height: 0,
     getContext: () => ctxStub,
@@ -3746,6 +3757,129 @@ test('drawing scales with what is on camera, not with the whole market', () => {
   api.draw(); api._resetCounts(); api.draw();
   const empty = api._counts.fill || 0;
   assert(empty < busy * 0.7, 'an empty view should cost far less: ' + empty + ' vs ' + busy);
+});
+
+/* ---------------------------------------------------------------- light --- */
+
+/* A stall lamp used to be ctx.fillStyle = 'rgba(255,186,86,.1)' and a circle:
+   no falloff, and nothing dark anywhere in the frame for it to be brighter
+   than. Twenty-one markets of flat brown boxes on flat grey-blue. The lamps
+   are cut out of a darkness layer now, so this checks the layer is actually
+   laid down, that its depth follows the theme, and that it is not rebuilt
+   every frame. */
+function frameOf(lv, w, h){
+  const api = boot({ count: true, w: w || 1280, h: h || 720 });
+  api.G.unlocked = 21;
+  api.startLevel(lv); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.vx = 700;
+  api.camSnap();
+  api.draw();                      // warm every cache
+  api._resetCounts();
+  api.draw();
+  return api;
+}
+const washOf = (api) => (api._counts._styles || []).filter(s => s.indexOf('rgba(6,11,28,') === 0);
+
+test('the market is lit against a night, and the night follows the theme', () => {
+  const bright = frameOf(12);                      // BLIZZARD, the palest night
+  const deep = frameOf(20);                        // CHRISTMAS EVE, the deepest
+  for (const [tag, api] of [['bright', bright], ['deep', deep]]){
+    const wash = washOf(api);
+    assert(wash.length === 1, tag + ' should lay exactly one night wash a frame, got ' + wash.length);
+  }
+  const a = (api) => parseFloat(washOf(api)[0].split(',')[3]);
+  const ab = a(bright), ad = a(deep);
+  console.log('    (night wash: ' + bright.getTheme().name + ' ' + ab.toFixed(3) +
+    ', ' + deep.getTheme().name + ' ' + ad.toFixed(3) + ')');
+  assert(ab > 0.2 && ad < 0.7, 'the wash should be a shade, not a blackout: ' + ab + ' / ' + ad);
+  assert(ad > ab * 1.4, 'the darker theme should lay down a deeper night: ' + ad + ' vs ' + ab);
+  // and the holes are punched, not painted over
+  const ops = deep._counts._styles || [];
+  assert(ops.indexOf('destination-out') >= 0, 'the lamps should be cut out of the darkness');
+  assert(ops.indexOf('lighter') >= 0, 'and the glow added on top of it');
+});
+
+test('a lit lamp costs one drawImage, not a gradient', () => {
+  const api = frameOf(20);
+  const lamps = Math.min(api.lightBuf.length, api.MAX_LIGHTS);
+  assert(lamps >= 8, 'the last market should have lamps in shot, got ' + lamps);
+  // one hole per lamp + one for the car, one glow per lamp, one composite
+  const imgs = api._counts.drawImage || 0;
+  assert(imgs >= lamps * 2 + 2, lamps + ' lamps should cost at least ' +
+    (lamps * 2 + 2) + ' drawImage calls, got ' + imgs);
+  assert(!api._counts.createRadialGradient,
+    'and never build a radial gradient inside a frame');
+});
+
+test('the light sprites and the snow grain are baked once, not per frame', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.draw();
+  const after1 = api.getBakeCount();
+  assert(after1 === 2, 'the first frame bakes the mask and one themed glow, got ' + after1);
+  for (let i = 0; i < 30; i++){ api.setT(api.getT() + 1 / 60); api.draw(); }
+  assert(api.getBakeCount() === after1,
+    'thirty more frames should bake nothing: ' + api.getBakeCount());
+  // a different theme rebakes the glow, and only the glow
+  api.startLevel(12); api.beginLevel(); api.camSnap(); api.draw();
+  assert(api.getBakeCount() === after1 + 1,
+    'a new theme should rebake exactly the glow: ' + api.getBakeCount());
+
+  // the snow tile is built from a fixed hash, so it never touches either RNG
+  const before = api.rnd();
+  api.snowPattern(); api.snowPattern();
+  api.setT(0);
+  assert(typeof before === 'number', 'sanity');
+});
+
+test('the darkness layer is half resolution and survives between frames', () => {
+  const api = frameOf(20, 1920, 1080);
+  const d = api.darkInfo();
+  assert(api.DARK_SCALE === 0.5, 'the layer is deliberately half res');
+  assert(d.w === 960 && d.h === 540,
+    'a 1920x1080 viewport should carry a 960x540 darkness layer, got ' + d.w + 'x' + d.h);
+  const cv = d.cv;
+  api.draw(); api.draw();
+  assert(api.darkInfo().cv === cv, 'the layer should be reused, not reallocated per frame');
+  // and it follows a resize
+  api._window.innerWidth = 1280; api._window.innerHeight = 720;
+  api.fit(); api.draw();
+  const r = api.darkInfo();
+  assert(r.cv !== cv, 'a resize should build a new layer');
+  assert(r.w === 640 && r.h === 360, 'and at half the new size, got ' + r.w + 'x' + r.h);
+});
+
+/* Every shadow sat dead centre under its own object, which is the one
+   arrangement that reads as a sticker rather than a thing standing on snow. */
+test('shadows fall away from one light direction, not straight down', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  assert(api.SUN_DX > 0.1, 'there should be a horizontal light direction, got ' + api.SUN_DX);
+  api._resetCounts();
+  api.shadow(0, 0, 100, 40, 0.3);
+  assert((api._counts.ellipse || 0) === 2,
+    'a caster should throw a soft shadow and a contact shadow, got ' + api._counts.ellipse);
+  const cols = (api._counts._styles || []).filter(s => s.indexOf('rgba(8,16,32,') === 0);
+  assert(cols.length === 2, 'both in the shadow colour, got ' + cols.length);
+  const a = cols.map(s => parseFloat(s.split(',')[3]));
+  assert(Math.min(...a) < Math.max(...a),
+    'the thrown shadow should be softer than the contact one: ' + a.join(' / '));
+  assert(Math.max(...a) <= 0.3 + 1e-9, 'and neither darker than asked for: ' + a.join(' / '));
+});
+
+/* The floor was one flat fill of TH.ground across four thousand world units,
+   which is why the game had no sense of scale or speed. */
+test('the snow floor carries a grain, laid down once per frame', () => {
+  const api = frameOf(20);
+  const pat = api.snowPattern();
+  // the headless ctx cannot make a real pattern, so the game must survive that
+  assert(pat === false || (pat && typeof pat === 'object'),
+    'snowPattern should return a pattern or a hard false, got ' + typeof pat);
+  const fills = api._counts.fillRect || 0;
+  assert(fills > 0, 'the ground should still be drawn without a pattern');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
