@@ -296,7 +296,11 @@ function playOne(runIdx) {
         if (pick >= 0) { bump(stat.played, `kin:${cur.hand[pick].id}`); EK.playCard(pick); }
       }
       support(0);                               // then spend whatever is left
-      if (cur.over) break;
+      // The turn you win on is still a turn. Breaking here without counting it
+      // meant a fight where the player swung twice and the foe answered once
+      // was filed under "over in one turn" — which is the metric party mode has
+      // been failing for four passes, and a third of it was this.
+      if (cur.over) { turns++; break; }
       // Softened up, room in the party, an orb in the bag, and not one of these
       // already: throw. A run that never catches anything is not a run.
       if (!duelId && cur.wild && !cur.legendary && orbToThrow()

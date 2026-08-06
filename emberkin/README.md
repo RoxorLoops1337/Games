@@ -821,6 +821,20 @@ hit, which is the whole point.
 It is one swing, not a state of being, and only wild kin do it — a trainer's kin
 has a plan instead.
 
+**A kin you resist gets three of them, and gets them early.** The cross-tab
+named the bucket: 43% of one-kin fights are against something whose element you
+resist, and those ran 59% / 59% / 45% never-in-doubt against 29% for the fights
+you walk into at a disadvantage. A kin whose every blow bounces off you cannot
+threaten you by hitting harder — hitting is the thing the chart has taken away.
+So `cornerAt(foe, mine, done)` gives a blunted kin `CORNER_RESIST` = .78, .52 and
+.26 instead of one moment at .4. The edge is flat damage, which is the one thing
+the chart cannot blunt.
+
+Moving its single moment earlier, without adding the other two, shifted the
+bucket by six points and the run average by two — inside the interval, and
+therefore not a result. Three moments is the difference between a telegraph and
+a fight.
+
 **And it cannot fire if the kin never gets a turn.** Three in ten party fights
 ended in one swing — send in the right element, delete something that never acted
 — so the only readable thing a wild fight has was exactly the thing those fights
