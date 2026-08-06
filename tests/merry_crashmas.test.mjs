@@ -1338,6 +1338,50 @@ test('the garage unlocks in order and starts with the hatchback', () => {
   assert(new Set(ids).size === ids.length, 'no duplicate ids');
 });
 
+/* The whole garage should be open inside three campaigns for a player who has
+   learned the markets. At 4000 and 9000 the sleigh landed around campaign ten,
+   by which point every remaining market is a formality. The reference is a
+   campaign played at the best of five launch angles per market, which is what
+   you converge on after a retry or two — measured at 1008 kills. */
+test('the garage opens inside three campaigns', () => {
+  const api = boot();
+  const learned = 1008;                    // kills in one campaign, best angle per market
+  assert(api.CARS.map(c => c.unlock).join() === '0,400,1100,2000,3000',
+    'unlock ladder moved: ' + api.CARS.map(c => c.unlock).join());
+  const last = api.CARS[api.CARS.length - 1];
+  assert(last.unlock / learned <= 3.05,
+    'the last car takes ' + (last.unlock / learned).toFixed(1) + ' campaigns');
+  const first = api.CARS[1];
+  assert(first.unlock / learned < 1,
+    'and the first unlock should land inside the first campaign, not after it');
+});
+
+/* The reference above is a number in a test, so it has to be re-derived when
+   the balance moves. This is the derivation, run for real. */
+test('a campaign is still worth about a thousand kills to someone who has learned it', () => {
+  let learned = 0;
+  const api0 = boot();
+  for (let lv = 0; lv < api0.LEVELS.length; lv++){
+    const runs = [];
+    for (const dy of [-200, -70, 0, 70, 200]){
+      const api = boot();
+      api.startLevel(lv); api.beginLevel();
+      for (let c = 0; c < api.G.cars; c++){
+        api.launch(-api.C.MAX_PULL, dy + (c - 1) * 40);
+        for (let f = 0; f < 2400 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+          api.skipReplay(); api.update(1 / 60);
+        }
+      }
+      runs.push(api.G.kills);
+    }
+    learned += Math.max(...runs);
+  }
+  console.log('    (one learned campaign: ' + learned + ' kills; the sleigh costs ' +
+    (api0.CARS[4].unlock / learned).toFixed(1) + ' of them)');
+  assert(learned > 700 && learned < 1500,
+    'the 1008-kill reference in the test above needs re-deriving: ' + learned);
+});
+
 test('a locked car cannot be picked, an unlocked one can', () => {
   const api = boot();
   api.G.lifeKills = 0;
