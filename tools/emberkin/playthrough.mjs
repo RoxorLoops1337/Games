@@ -15,9 +15,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all thirty-one mistakes this tool
-// has made. Twenty passes on this game produced about eight changes to the game
-// and thirty-one fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all thirty-three mistakes this tool
+// has made. Twenty-one passes on this game produced about eight changes to the
+// game and thirty-three fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -53,7 +53,19 @@ const BUILD = argv.includes('--build') ? argv[argv.indexOf('--build') + 1] : 'ra
 const staticScore = (EK, id) => {
   const d = EK.CARDS[id];
   if (!d) return 0;
-  const fx = d.fx || {}, v = d.v, LEFT = 3, SWING = 40;
+  const fx = d.fx || {}, LEFT = 3, SWING = 40;
+  // Combo is part of the number the card puts on the board — the game adds it to
+  // the card's value before any effect reads it — and it was not scored, which is
+  // most of why Berserk looked like the worst epic in the game.
+  //
+  // Grow is deliberately NOT scored here, on principle rather than on evidence:
+  // doubling a card's value for it prices the card at its endgame from the first
+  // offer, so the deck loads up on Whetstone (base value 3) for a ceiling it will
+  // not reach for another sixty fights. The measurement does not actually decide
+  // it — solo lost-or-ran was .276 ±.024 with the doubling and .261 ±.022 without,
+  // which overlap. Said plainly because the first draft of this comment claimed
+  // the numbers settled it and they do not.
+  const v = d.v + (d.combo || 0);
   let p = 0;
   if (d.vt === 'edge') p += v;
   if (d.vt === 'atk' || d.vt === 'def') p += v * LEFT;
@@ -74,6 +86,7 @@ const staticScore = (EK, id) => {
   if (fx.thorns) p += fx.thorns * LEFT;
   if (fx.st) p += 3 * LEFT;
   if (fx.selfdmg) p -= fx.selfdmg;
+  if (d.kill) p += d.kill * 4;              // permanent, every time it finishes one
   return p / Math.max(.5, d.cost);
 };
 
@@ -382,7 +395,14 @@ function playOne(runIdx) {
       const worth = (c) => {
         const d = EK.CARDS[c.id];
         if (!d) return 0;
-        const fx = d.fx || {}, v = EK.cardValue(EK.ownedCard(c.u) || { id: c.id, plus: 0 }) || d.v;
+        const fx = d.fx || {};
+        // Exactly what the game does when the card resolves: `value` is the
+        // card's grown value plus its combo bonus if anything has been played
+        // this turn. Only the 0.95 nudge below knew combo existed, and that is a
+        // penalty — so Berserk, Shieldwall and Whetstone were scored below their
+        // base value for carrying an upside.
+        const base = EK.cardValue(EK.ownedCard(c.u) || { id: c.id, plus: 0 }) || d.v;
+        const v = base + (d.combo && (cur.playedTurn || 0) > 0 ? d.combo : 0);
         const left = runway(), hurt = cur.mine.max - cur.mine.hp;
         let pts = 0;
         if (d.vt === 'edge') pts += v;                        // one swing
@@ -429,6 +449,7 @@ function playOne(runIdx) {
         if (fx.thorns) pts += fx.thorns * left;
         if (fx.st) pts += 3 * left;
         if (fx.selfdmg) pts -= fx.selfdmg;
+        if (d.kill) pts += d.kill * 4;                        // permanent, on every kill
         // A Combo or Chain card is worth more for having waited, so it goes last
         // among equals — that is the whole reason those keywords exist.
         if (d.combo || d.chain) pts *= .95;

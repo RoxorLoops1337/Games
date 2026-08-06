@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and thirty-one fixes to
+this game have produced roughly six changes to the game and thirty-three fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -40,7 +40,7 @@ the rarest card converges".
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 33.
+a sample — see mistake 35.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -237,19 +237,37 @@ and the family is more useful than the individual entry.
     headline at all, which is the actual finding: past the floor, money buys
     nothing measurable.
 
+32. **`combo` and `kill` were scored by neither scorer** (pass 29), and `worth()`
+    applied a **5% penalty** to combo cards for carrying the upside it never
+    counted. The game adds combo to a card's value before any effect reads it, so
+    Berserk is a 6-value card that puts 11 on the board. Fourteen cards carry
+    combo, kill or grow. Rescoring moved three of the four "underpowered epics"
+    that pass 28 named: **Berserk 13 → 28, Reaper 16 → 32, Bulwark 15 → 24.** Only
+    Ward Stance, the one with no keyword at all, stayed where it was. Fifth time a
+    mis-scored effect has been mistaken for a weak card — and the first time the
+    ledger's own advice (*read `worth()` before reading the card*) was followed
+    first and prevented four card changes.
+33. **Scoring `grow` overcorrected** (pass 29). Doubling a card's value for it
+    prices the card at its endgame from the first offer, so the value build loaded
+    up on Whetstone — base value 3, ceiling 15 — sixty fights before it gets
+    there. Dropped. Worth noting that the measurement did *not* settle this: .276
+    ±.024 with it against .261 ±.022 without, which overlap. It is out on
+    principle, and the first draft of the comment beside it claimed the numbers
+    decided it. They did not.
+
 ### Sampling — a claim the sample could not carry
 
-32. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+34. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-33. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+35. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-34. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+36. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -261,7 +279,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of thirty-one are denominators.** If a number will not move, or moves the
+- **Nine of thirty-three are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has
