@@ -3789,8 +3789,9 @@ const MAPS = {
         lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
         dynamic: 'rival1',
         trainer: { team: [['dewdrip', 5]], prize: 300,
-          // He has one idea and he does not lead with it.
-          plan: ['swing', 'sharpen', 'swing'],
+          // One idea, and he opens with it every time — which is the only way
+          // you will ever see it, in a fight this short.
+          plan: ['sharpen', 'swing'],
           lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
         after: ['I am going north. Try to keep up.'] },
     ],
@@ -3896,7 +3897,7 @@ const MAPS = {
       { x: 13, y: 4, dir: 'down', sprite: 'npc_ranger', name: 'Forager Pell', id: 't_pell',
         lines: ['You have the look. Go on then — show me.'],
         trainer: { team: [['sproutle', 6], ['zaplet', 7]], prize: 240,
-          plan: ['swing', 'swing', 'sharpen'],
+          plan: ['sharpen', 'swing', 'swing'],
           lose: ['Ha! Keep at it.'], win: ['Told you the grass teaches you things.'] } },
       { x: 6, y: 15, dir: 'right', sprite: 'npc_rival', name: 'Hiker Dorn', id: 't_dorn',
         lines: ['Nothing gets past me on this stretch.'],
@@ -3942,13 +3943,13 @@ const MAPS = {
       { x: 4, y: 12, dir: 'right', sprite: 'npc_rival', name: 'Bramble Kid Ivo', id: 't_ivo',
         lines: ['I live here now. Ask the trees.'],
         trainer: { team: [['thornip', 14], ['lanterneel', 13]], prize: 620,
-          plan: ['sharpen', 'swing', 'swing'],
+          plan: ['sharpen', 'swing'],
           lose: ['The trees are disappointed.'], win: ['Told you. Ask them.'] } },
       { x: 12, y: 12, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick2', requires: 't_wick1',
         lines: ['Kept up, then.', 'Mine has changed since the study. Yours had better have.'],
         dynamic: 'rival2',
         trainer: { team: [['brookite', 16], ['kindlark', 15]], prize: 900,
-          // He opens with the setup now, and he has learned to eat your turn.
+          // Two ideas now, and he has learned to eat your turn.
           plan: ['sharpen', 'swing', 'brace', 'swing'],
           lose: ['…Right. North it is, for both of us.'], win: ['Still me. Go and train.'] },
         after: ['The Warden will not let either of us up. Not yet.'] },
@@ -3960,7 +3961,7 @@ const MAPS = {
       { x: 8, y: 2, dir: 'down', sprite: 'npc_ranger', name: 'Warden Hale', id: 't_hale', block: true,
         lines: ['Crown Hollow is up this path. I do not open it for tourists.', 'Show me you can hold a kin together and I will step aside.'],
         trainer: { team: [['gargolem', 17], ['voltyx', 18], ['nocthorn', 19]], prize: 1800,
-          plan: ['brace', 'sharpen', 'swing', 'swing'],
+          plan: ['brace', 'swing', 'aim', 'swing'],
           lose: ['Then it is yours to walk. Quietly, mind.'], win: ['Not yet. Come back when they trust you.'] },
         after: ['Quietly, up there. It knows when you are loud.'] },
     ],
@@ -5073,7 +5074,16 @@ function useMove(log, atkSide, moveId) {
     for (let h = 0; h < bonus.hits && defender.hp > 0; h++) {
       const roll = damageOf(attacker, defender, moveId);
       const { eff, crit } = roll;
-      const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * bonus.mul));
+      // The wild damper is there so that a long fight is not paid for in walks
+      // back to town. It has no business fully compounding with a resistance you
+      // already have: a wild kin you resist was hitting for .65 x .70 of normal,
+      // which is where the "nobody can hurt anybody" fights came from — three
+      // quarters of them never in doubt, none of them lost, and the longest in
+      // the game. Against a resistance it applies at half strength. Dropping it
+      // altogether was worse than the disease: wipes went from .220 a fight to
+      // .364, which is a walk back to town every third fight.
+      const mul = atkSide === 'foe' && eff < 1 ? (1 + bonus.mul) / 2 : bonus.mul;
+      const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * mul));
       let dealt = dmg;
       if (atkSide === 'foe') {
         dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe', crit);  // shield first
@@ -5287,9 +5297,24 @@ function addCaught(mon) {
 
 // ---- foe AI ------------------------------------------------------------
 /** Picks the move with the best expected value, with a little noise. */
-function foeChoose() {
+/**
+ * What the foe reaches for.
+ *
+ * `mustAttack` is the plan keeping its own promise. A `sharpen` beat banks an
+ * edge and costs the foe its turn to do it, so the beat after it has to be the
+ * one that cashes it in — and it was not: the scorer would pick a status move,
+ * the edge would sit there unspent, and a foe with a debuff to spam would bank
+ * edge after edge while grinding your attack down. Coll's three kin turned a
+ * five-turn fight into a thirty-turn one that way, and nothing in it was a
+ * decision.
+ */
+function foeChoose(mustAttack) {
   const b = B();
-  const list = b.foe.moves.length ? b.foe.moves : [{ id: 'falter' }];
+  let list = b.foe.moves.length ? b.foe.moves : [{ id: 'falter' }];
+  if (mustAttack) {
+    const hits = list.filter((sl) => MOVES[sl.id] && MOVES[sl.id].pow);
+    if (hits.length) list = hits;
+  }
   let best = null, bestScore = -1;
   for (const slot of list) {
     const m = MOVES[slot.id];
@@ -5331,7 +5356,7 @@ function readIntent() {
     b.cornered = 1;
     b.foeEdge += Math.round(CORNER_EDGE * planScale(b.foe.lvl));
   }
-  const id = foeChoose();
+  const id = foeChoose(b.foeEdge > 0);
   const m = MOVES[id];
   const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg + (b.foeEdge || 0) : 0;
   b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
@@ -5388,6 +5413,10 @@ const TRAINER_HP_MUL = 2.2;
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 const CORNER_AT = .4, CORNER_EDGE = 14;
+// What it costs to be caught changing kin. Switching already cost a turn and
+// your hand and everything the deck had stacked up; none of that was a price
+// worth thinking about next to buying the element outright.
+const SWITCH_PUNISH = 11;
 
 /** Give a foe its battle-sized health as it steps in. */
 function toughen(mon, mul) {
@@ -5823,7 +5852,7 @@ function foeTurn(log) {
     return;
   }
   if (b.plan) b.plan.i++;
-  const id = (b.intent && b.intent.id) || foeChoose();
+  const id = (b.intent && b.intent.id) || foeChoose(b.foeEdge > 0);
   const hpBefore = b.mine.hp;
   useMove(log, 'foe', id);
   // Thorns answer anything that actually connected.
@@ -5891,6 +5920,11 @@ function doAction(action) {
   } else if (action.kind === 'switch') {
     const next = G.party[action.idx];
     if (!next || !alive(next) || next === b.mine) return log;
+    // A switch cost one turn and bought the whole matchup, which made it a
+    // reflex rather than a decision: send in the right element, delete the
+    // thing, never lose. It is now a moment you can be caught in — the hit that
+    // lands while your kin is still finding its feet comes in harder.
+    if (b.foe.hp > 0 && !b.over) b.foeEdge += Math.round(SWITCH_PUNISH * planScale(b.foe.lvl));
     snap(log, `Come back, ${dispName(b.mine)}!`);
     clearMods(b);
     b.mine.stages = { atk: 0, def: 0, spd: 0 };
@@ -5899,6 +5933,7 @@ function doAction(action) {
     next.stages = { atk: 0, def: 0, spd: 0 };
     swapKinCards(b);
     snap(log, `Go, ${dispName(next)}!`, 'send', 'mine');
+    if (b.foeEdge > 0) snap(log, `${dispName(b.foe)} is already coming — this will hurt.`, 'buff', 'foe');
   }
 
   b.disc.push(...b.hand);
@@ -8602,7 +8637,7 @@ if (typeof window !== 'undefined') {
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
-    CORNER_AT, CORNER_EDGE,
+    CORNER_AT, CORNER_EDGE, SWITCH_PUNISH,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
