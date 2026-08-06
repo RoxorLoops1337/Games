@@ -63,7 +63,7 @@ const EXPOSE = `__out.api = {
   _setHitstop: (v) => { hitstop = v; },
   setFlash: (v) => { flash = v; },
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
-  wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers,
+  wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   COATS, ELDER_COATS, KID_COATS, SKIN,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
@@ -1085,6 +1085,82 @@ test('the flash actually changes the frame', () => {
   const lit = api._counts.fillRect || 0;
   assert(lit > quiet, 'a flash should lay down more than a quiet frame: ' + lit + ' vs ' + quiet);
   assert(!api._counts.createRadialGradient, 'and still not rebuild the gradient');
+});
+
+/* Everything the player's body registered when a stall went down was a
+   constant: the same shake, hit-stop and flash at 400px/s as at 1,600 —
+   half the shake a single shopper gets at the same speed. */
+test('a stall taken at speed hits harder than one nudged over', () => {
+  const amp = (sp) => {
+    const api = boot();
+    api.startCampaign(); api.beginLevel();
+    api.props.length = 0; api.people.length = 0;
+    const o = api.addProp('hut', 2000, 1100);
+    api.G.phase = 'drive';
+    api._clearFeel();
+    api.wreckProp(o, sp, 0);
+    return { shake: api.shake.a, stop: api.getHitstop() };
+  };
+  const slow = amp(400), mid = amp(900), fast = amp(1600);
+  console.log('    (stall wreck shake at 400/900/1600: ' +
+    [slow, mid, fast].map(v => v.shake.toFixed(1)).join(' / ') + ')');
+  assert(slow.shake < mid.shake && mid.shake < fast.shake,
+    'shake should climb with the hit: ' + [slow, mid, fast].map(v => v.shake).join(' / '));
+  assert(fast.shake > slow.shake * 1.8, 'and climb by something you would notice');
+  // hit-stop stays a constant on purpose: it scales dt, so it is simulation
+  near(slow.stop, fast.stop, 0.0001, 'hit-stop must not vary with the hit');
+});
+
+/* The fence takes 525px/s out of the car in a single frame and answered with a
+   fixed six-particle puff and a fixed-level thud. */
+test('the fence answers for what it takes', () => {
+  const bounce = (sp) => {
+    const api = boot();
+    api.startCampaign(); api.beginLevel();
+    api.G.phase = 'drive';
+    api.car.x = api.bounds.x1 + 10; api.car.y = 1100;
+    api.car.vx = sp; api.car.vy = 0;
+    api._clearFeel();
+    assert(api.bounceBounds(), 'it should bounce');
+    return api.shake.a;
+  };
+  const gentle = bounce(200), hard = bounce(900);
+  assert(gentle === 0, 'a nudge into the fence should not shake the screen, got ' + gentle);
+  assert(hard > 0, 'a real hit should, got ' + hard);
+  console.log('    (fence bounce shake at 200/900: ' + gentle + ' / ' + hard.toFixed(1) + ')');
+});
+
+test('the wind-up is not silent, and revs with the pull', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  assert(api.G.phase === 'aim', 'we should be aiming');
+  api.update(1 / 60);
+  const idle = api.snd.engLevel;
+  assert(idle > 0, 'the engine idles while you aim, got ' + idle);
+  api.pointerDown(700, 430);
+  api.pointerMove(700 - api.C.MAX_PULL * api.cam.s, 430);
+  api.update(1 / 60);
+  const pulled = api.snd.engLevel;
+  assert(pulled > idle * 2, 'and revs with the pull: ' + idle + ' -> ' + pulled);
+  api.pointerUp();
+  api.update(1 / 60);
+  assert(api.snd.engLevel > pulled, 'and the launch is louder still than the wind-up');
+});
+
+test('the launch note falls, the way the car goes away from you', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  const c = api._spyAudio();
+  api.sndLaunch(1);
+  assert(c.freqs.length, 'the launch should make a sound');
+  const src = fs.readFileSync(HTML, 'utf8');
+  const line = src.split('\n').find(l => l.includes('const sndLaunch'));
+  assert(line, 'sndLaunch should be one line');
+  const m = line.match(/tone\(([^,]+), [^,]+, '[^']+', [^,]+, ([^)]+)\)/);
+  assert(m, 'could not read the launch tone: ' + line);
+  const from = Function('const p = 1; return ' + m[1])();
+  const to = Function('const p = 1; return ' + m[2])();
+  assert(to < from, 'the launch note should fall, got ' + from + ' -> ' + to);
 });
 
 /* ----------------------------------------------------------------- menu --- */
