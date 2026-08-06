@@ -8,7 +8,7 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
-## CURRENT PHASE: D — execute the plan
+## CURRENT PHASE: D2 — execute plan 2
 
 The owner asked for 15 more levels, designed rather than generated, and then a
 critique cycle. Work the phases in order; when a phase's exit condition is met,
@@ -24,10 +24,22 @@ edit this block to name the next one.
   market that scored itself between runs.
 - [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
   with five critic conflicts resolved and six proposals cut.
-- **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–3 are
-  done. **Next: item 4** (persist stars, level select). Exit: all 19 ticked.
-- **E — three more critics, then back to C.** Repeat the cycle.
+- [x] **D — execute the plan.** Done: all 19 items of `.polish/crashmas-plan.md`
+  shipped, one per pass, each with assertions and a browser check. Three of them
+  turned up cosmetic systems feeding on the simulation seed (see the note below);
+  four deviated from the plan's specifics and say so in `.polish/crashmas-plan.md`.
+- [x] **E — three more critics, then back to C.** Done: design, feel and code
+  critiques on disk as `.polish/crashmas-critique-*-2.md`, and
+  `.polish/crashmas-plan-2.md` — 15 items, six conflicts resolved, eight
+  proposals cut. Two of the critics' findings were regressions from phase D and
+  were hotfixed straight away (the rink's fence collider, and the shout guard
+  eating 63% of kill pops). The synthesis verified the load-bearing claims
+  first: `drawAim` moving the car is real and decides pass/fail on market 1,
+  and it turned up a fifth cosmetic system feeding on the simulation seed.
+- **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–10 are done. **Next:
+  item 11** (the edge of town, not the edge of the canvas). Exit: all 15 ticked, then
+  phase E again.
 
 ## Working agreement for each pass
 
@@ -83,9 +95,10 @@ edit this block to name the next one.
 - [ ] **Weather that bites.** Blizzard should actually reduce what you can see
       before launch; fog banks that hide a crowd until you are in it; wind that
       pushes the car mid-flight.
-- [ ] **Sound pass.** The synth is thin: engine note that tracks speed, crowd
-      panic layer that rises with how many are fleeing, a proper level-clear
-      jingle, a replay sting that is not two notes.
+- [x] **Sound pass.** Done in plan item 17: wails capped at three voices inside
+      900px, an engine drone that tracks speed, squish pitched by the combo, a
+      landing voice of its own, a resumable context and a baked noise bank —
+      211.8 oscillator spawns a second down to 24.
 - [ ] **Ragdoll pass.** Bodies currently slide and stop. Limbs that trail, bodies
       that fold over the bonnet and get carried, pile-ups against stalls.
 - [ ] **Menu cover.** `cover.webp` + `cover.webm` so the games index shows real
@@ -98,9 +111,18 @@ edit this block to name the next one.
   `lv.shape` and the `laneAt()` helper.
 - Goals live in `GOALS` with a `gen`/`test` pair each; adding one is a few lines.
   `needs` gates a goal on the market containing something (santa, carousel…).
+- Cosmetics must never draw from `rnd`/`rr`. Those are the simulation's seed:
+  anything that changes how many draws happen — a suppressed pop-up, one more
+  blood splat, an extra snowflake — moves every market's score. Scenery uses
+  `vrnd`/`vrr`. Already caught in `seedSnow`, `popText`, `addGore` and the
+  screen shake; grep for the rest before adding any.
 - The replay records people and props near the car at 30Hz and writes them back
   during playback, restoring afterwards — see the test that asserts the market is
   untouched. Anything new that moves during a run needs recording too, or it will
   sit still in the replay.
 - Frame cost is dominated by fill area, not call count. The far crowd is batched
-  by colour; the LOD line is `p.r * cam.s < 10.5`.
+  by colour. LOD is measured by `lodQ(p) = p.r * 720 / cam.tz` — a reference 720p
+  viewport, never the live `cam.s`, or a bigger monitor silently buys itself a
+  more expensive frame. Three tiers: batch below `LOD_MID` (10.5), coat/head/
+  hat/arms up to `LOD_FINE` (14), the full kit above it, which in practice means
+  the replay camera. Santa and pram carriers (`lodAlways`) never batch.
