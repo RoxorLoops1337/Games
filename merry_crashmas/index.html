@@ -2238,7 +2238,10 @@ function camTarget(){
     return { x: car.x * 0.68 + clip.cx * 0.32, y: car.y * 0.68 + clip.cy * 0.32, z: 470 };
   }
   if (G.phase === 'aim' || G.phase === 'menu' || G.phase === 'brief'){
-    return { x: ANCHOR.x + 330, y: ANCHOR.y, z: 1500 };
+    // biased a little further downrange than the sling needs, so the ring at
+    // the end of the predicted line is in frame for a full-power straight shot
+    // rather than 40px past the right edge
+    return { x: ANCHOR.x + 430, y: ANCHOR.y, z: 1500 };
   }
   // lead scales with speed: at 1900px/s the camera sits ~570px down the road
   // rather than 320, which is the difference between seeing what you are about
@@ -3512,6 +3515,56 @@ function drawSling(){
   ctx.globalAlpha = 1;
 }
 
+/* Where this shot actually ends up.
+
+   The old preview integrated bare MAX_LAUNCH, FRICTION and DRAG and stopped
+   after a fixed 34 steps, so every car in the garage got the same 2627-px
+   line. The hatchback saw 63% of its real range; Santa's sleigh, whose whole
+   selling point is glide 2.6, saw 23% of an 11,500-px run. You unlocked the
+   most interesting car in the game and the aiming UI silently stopped working.
+
+   This runs the same arithmetic stepCar does — the car's own launch and glide,
+   ice underfoot, the fence throwing it back — until the car is below STOP_SPD,
+   which is the same condition that ends the run. */
+function previewPath(ux, uy, p){
+  const dt = 0.05;
+  const spd0 = MAX_LAUNCH * CAR.launch * p;
+  let x = car.x, y = car.y, vx = -ux * spd0, vy = -uy * spd0, t = 0;
+  const path = [];
+  const ramps = props.filter(o => o.ramp && !o.dead);
+  let ramp = null;
+  for (let i = 0; i < 900; i++){
+    const sp = Math.hypot(vx, vy);
+    if (sp <= STOP_SPD) break;
+    if (t > RUN_TIMEOUT) break;
+    // driving back out of the market ends the run early, same as it does live
+    if (x < MARKET_X - 520 && vx < 0 && t > 1.2) break;
+    let slick = false;
+    for (const c of ice){ const dx = x - c.x, dy = y - c.y;
+      if (dx * dx + dy * dy < c.r * c.r){ slick = true; break; } }
+    const fr = (slick ? ICE_FRICTION : FRICTION) / CAR.glide;
+    const ns = Math.max(0, sp * Math.exp(-fr * dt) - (slick ? DRAG * 0.25 : DRAG) / CAR.glide * dt);
+    const k = ns / sp;
+    vx *= k; vy *= k;
+    x += vx * dt; y += vy * dt;
+    t += dt;
+    let hit = 0;
+    if (x < bounds.x0){ x = bounds.x0; vx = Math.abs(vx) * REST; hit = 1; }
+    else if (x > bounds.x1){ x = bounds.x1; vx = -Math.abs(vx) * REST; hit = 1; }
+    if (y < bounds.y0){ y = bounds.y0; vy = Math.abs(vy) * REST; hit = 1; }
+    else if (y > bounds.y1){ y = bounds.y1; vy = -Math.abs(vy) * REST; hit = 1; }
+    if (hit){ vx *= 0.9; vy *= 0.9; }
+    if (!ramp && ns >= RAMP_MIN){
+      for (const o of ramps){
+        const reach = (o.shape === 'circ' ? o.r : Math.max(o.w, o.h) / 2) + CARR;
+        if (Math.abs(o.x - x) <= reach && Math.abs(o.y - y) <= reach){ ramp = { x, y, o }; break; }
+      }
+    }
+    path.push({ x, y });
+  }
+  return { path, ramp, end: path.length ? path[path.length - 1] : { x, y } };
+}
+
 function drawAim(){
   if (G.phase !== 'aim') return;
   const pull = aim.active ? { x: aim.x - ANCHOR.x, y: aim.y - ANCHOR.y } : { x: 0, y: 0 };
@@ -3528,27 +3581,74 @@ function drawAim(){
     ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(car.x, car.y);
     ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 96);
     ctx.stroke();
-    // predicted line
+    // predicted line — always DOTS dots, however long the shot is, so the
+    // spacing itself reads as speed and the sleigh does not become a hosepipe
     const p = clamp(clampedLen / MAX_PULL, MIN_POWER, 1);
-    let sx = car.x, sy = car.y, vx = -ux * MAX_LAUNCH * p, vy = -uy * MAX_LAUNCH * p;
-    for (let i = 0; i < 34; i++){
-      const dt = 0.06;
-      const sp = Math.hypot(vx, vy);
-      const ns = Math.max(0, sp * Math.exp(-FRICTION * dt) - DRAG * dt);
-      const k = sp > 0 ? ns / sp : 0;
-      vx *= k; vy *= k;
-      sx += vx * dt; sy += vy * dt;
-      ctx.globalAlpha = 0.9 * (1 - i / 40);
+    const pv = previewPath(ux, uy, p);
+    const n = pv.path.length;
+    if (n){
+      // a soft line under the dots: at full power the shot is thousands of px
+      // long, and 34 dots spread over that much road do not read as a path
+      ctx.strokeStyle = 'rgba(13,26,46,.3)'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(car.x, car.y);
+      for (let i = 0; i < n; i += 3) ctx.lineTo(pv.path[i].x, pv.path[i].y);
+      ctx.lineTo(pv.end.x, pv.end.y);
+      ctx.stroke();
+    }
+    const DOTS = 34;
+    for (let i = 0; i < DOTS && n; i++){
+      const s = pv.path[Math.min(n - 1, Math.round(i * (n - 1) / (DOTS - 1)))];
+      ctx.globalAlpha = 0.95 - i * 0.017;
       ctx.fillStyle = '#0d1a2e';
-      circle(sx, sy, 10 - i * 0.12); ctx.fill();
+      circle(s.x, s.y, 11 - i * 0.16); ctx.fill();
       ctx.fillStyle = wrongWay ? '#ff6b5e' : '#ffd76e';
-      circle(sx, sy, 7.5 - i * 0.1); ctx.fill();
+      circle(s.x, s.y, 8.5 - i * 0.14); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    // power arc
-    const a = Math.atan2(-uy, -ux);
-    ctx.strokeStyle = 'rgba(255,90,74,.9)'; ctx.lineWidth = 9;
-    ctx.beginPath(); ctx.arc(ANCHOR.x, ANCHOR.y, 150, a - 0.5, a - 0.5 + p * 1.0); ctx.stroke();
+    // the line needs a terminus: this is where the car runs out of road
+    if (n){
+      ctx.strokeStyle = 'rgba(13,26,46,.5)'; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, 30, 0, 6.283); ctx.stroke();
+      ctx.strokeStyle = wrongWay ? '#ff6b5e' : '#ffd76e'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, 30, 0, 6.283); ctx.stroke();
+      ctx.beginPath(); ctx.arc(pv.end.x, pv.end.y, 13, 0, 6.283); ctx.stroke();
+    }
+    // the single most consequential thing on the field was invisible to the aim
+    if (pv.ramp){
+      ctx.strokeStyle = '#8ee06a'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      const rx = pv.ramp.x, ry = pv.ramp.y;
+      ctx.beginPath();
+      for (const o of [-16, 4]){
+        ctx.moveTo(rx - 22, ry + o + 12); ctx.lineTo(rx, ry + o - 10); ctx.lineTo(rx + 22, ry + o + 12);
+      }
+      ctx.stroke();
+      ctx.font = '900 22px system-ui'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#0d1a2e'; ctx.fillText('JUMP', rx + 2, ry + 48);
+      ctx.fillStyle = '#8ee06a'; ctx.fillText('JUMP', rx, ry + 46);
+      ctx.textAlign = 'left';
+    }
+    // power: a full-travel track with the pull filled into it, and the number.
+    // There used to be an 86px red crescent floating in space with nothing to
+    // read it against — half pull and full pull differed by about 40px of arc.
+    const a = Math.atan2(-uy, -ux), a0 = a - 0.5;
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = 'rgba(10,20,38,.35)'; ctx.lineWidth = 15;
+    ctx.beginPath(); ctx.arc(ANCHOR.x, ANCHOR.y, 150, a0, a0 + 1.0); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.arc(ANCHOR.x, ANCHOR.y, 150, a0, a0 + 1.0); ctx.stroke();
+    ctx.strokeStyle = wrongWay ? 'rgba(255,107,94,.95)' : 'rgba(255,90,74,.95)'; ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.arc(ANCHOR.x, ANCHOR.y, 150, a0, a0 + p * 1.0); ctx.stroke();
+    ctx.lineCap = 'round';
+    ctx.fillStyle = '#0d1a2e';
+    ctx.font = '900 26px system-ui'; ctx.textAlign = 'center';
+    // at the far end of the track, not the middle: the middle of the arc is
+    // exactly where the predicted line runs, and the number sat on top of it
+    const tx = ANCHOR.x + Math.cos(a0 + 1.16) * 176, ty = ANCHOR.y + Math.sin(a0 + 1.16) * 176 + 9;
+    ctx.fillText(Math.round(p * 100) + '%', tx + 2, ty + 2);
+    ctx.fillStyle = wrongWay ? '#ff6b5e' : '#ffd76e';
+    ctx.fillText(Math.round(p * 100) + '%', tx, ty);
+    ctx.textAlign = 'left';
   } else {
     // idle nudge arrow
     const w = Math.sin(T * 2.4) * 12;
