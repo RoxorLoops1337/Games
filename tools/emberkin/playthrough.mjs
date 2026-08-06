@@ -29,9 +29,11 @@ const RUNS = Number(argv[argv.indexOf('--runs') + 1]) || (argv.includes('--runs'
 
 /** The route a real player walks, in order. */
 const ROUTE = [
-  { map: 'route_one', target: 12 },
-  { map: 'emberwood', target: 18 },
-  { map: 'crown_hollow', target: 26 },
+  { map: 'hollowbrook', target: 0, duels: ['t_wick1'] },
+  { map: 'route_one', target: 12, duels: ['t_pell', 't_dorn'] },
+  { map: 'stillmere', target: 15, duels: ['t_mio'] },
+  { map: 'emberwood', target: 18, duels: ['t_ivo', 't_wick2', 't_coll', 't_hale'] },
+  { map: 'crown_hollow', target: 26, duels: ['t_wick3'] },
 ];
 
 function playOne() {
@@ -46,18 +48,24 @@ function playOne() {
   const stat = {
     steps: 0, fights: 0, noDoubt: 0, wipes: 0, healTrips: 0, turns: 0,
     played: new Map(), drawn: new Map(), taken: new Map(), levels: 0, gems: 0,
+    oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0,
+    // Trainers are the hand-authored fights, and averaging them into the wild
+    // ones hides exactly the thing a scripted plan is supposed to change. Keyed
+    // by npc id so the three Wick fights can be read as a sequence.
+    duels: new Map(),
   };
   const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
 
   /** Fight what is in front of us with a plain, honest policy. */
-  const fight = () => {
+  const fight = (duelId) => {
     const b = EK.B();
     if (!b) return;
-    stat.fights++;
+    if (!duelId) stat.fights++;
     const startHp = b.mine.hp / b.mine.max;
-    let low = startHp, turns = 0, guard = 0;
+    let low = startHp, turns = 0, guard = 0, planBeats = 0;
     while (EK.G.battle && !EK.B().over && guard++ < 300) {
       const cur = EK.B();
+      if (cur.intent && cur.intent.kind === 'plan') planBeats++;
       for (const c of cur.hand) bump(stat.drawn, c.src === 'kin' ? `kin:${c.id}` : c.id);
       // The policy is part of the measurement. Cheapest-first cannot tell a
       // good deck from a big one, because it never sets anything up: it plays
@@ -109,11 +117,16 @@ function playOne() {
         }
       };
       support(kinCost());                       // set up, keeping the swing affordable
-      for (let spun = 0; spun < 4 && !cur.over; spun++) {
-        const i = cur.hand.findIndex((c) => c.src === 'kin' && EK.cardCost(c) <= cur.energy);
-        if (i < 0) break;
-        bump(stat.played, `kin:${cur.hand[i].id}`);
-        EK.playCard(i);
+      // One swing a turn — take the best one you can pay for.
+      if (!cur.over && !cur.swungTurn) {
+        let pick = -1, bestDmg = -1;
+        for (let i = 0; i < cur.hand.length; i++) {
+          const c = cur.hand[i];
+          if (c.src !== 'kin' || EK.cardCost(c) > cur.energy) continue;
+          const d = EK.MOVES[c.id].pow ? EK.damageOf(cur.mine, cur.foe, c.id, { crit: false, roll: .925 }).dmg : 1;
+          if (d > bestDmg) { pick = i; bestDmg = d; }
+        }
+        if (pick >= 0) { bump(stat.played, `kin:${cur.hand[pick].id}`); EK.playCard(pick); }
       }
       support(0);                               // then spend whatever is left
       if (cur.over) break;
@@ -121,14 +134,29 @@ function playOne() {
       turns++;
       low = Math.min(low, cur.mine.hp / cur.mine.max);
     }
-    stat.turns += turns;
+    if (duelId) {
+      const d = stat.duels.get(duelId) || { n: 0, turns: 0, lost: 0, low: 0, telegraphs: 0 };
+      d.n++; d.turns += turns; d.low += low;
+      if (EK.B() && EK.B().over === 'lose') d.lost++;
+      d.telegraphs += planBeats;
+      stat.duels.set(duelId, d);
+    }
+    stat.turns += duelId ? 0 : turns;
+    if (!duelId && turns <= 1) stat.oneTurn++;
+    // How much of the foe's health a single player turn takes off, which is the
+    // number that decides how long a fight is.
+    if (b.foe.max > 0 && !duelId) {
+      stat.foeHp += b.foe.max;
+      stat.foeHpSeen++;
+      stat.dpt += (b.foe.max / Math.max(1, turns + 1)) / b.foe.max;
+    }
     // A fight you were never in danger of losing is a cutscene with buttons.
-    if (low > .7) stat.noDoubt++;
+    if (low > .7 && !duelId) stat.noDoubt++;
     const over = EK.B() ? EK.B().over : null;
-    if (over === 'lose') stat.wipes++;
+    if (over === 'lose' && !duelId) stat.wipes++;
     // Take the card the win offers, the way a run really does — otherwise the
     // deck never grows and "never drawn" only measures the starter deck.
-    if (over === 'win' && EK.G.battle) {
+    if (over === 'win' && EK.G.battle && !duelId) {
       const offer = EK.rollReward(EK.B());
       if (offer && offer.length) {
         const pick = offer[Math.floor(Math.random() * offer.length)];
@@ -154,6 +182,7 @@ function playOne() {
   /** Walk in the grass until the party hits a level, or we give up. */
   const grindTo = (mapId, level, cap = 4000) => {
     const grass = [];
+    if (!EK.MAPS[mapId] || !EK.MAPS[mapId].rows) return;
     const rows = EK.MAPS[mapId].rows;
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < rows[y].length; x++) if (rows[y][x] === ',') grass.push([x, y]);
@@ -180,7 +209,28 @@ function playOne() {
     }
   };
 
-  for (const leg of ROUTE) grindTo(leg.map, leg.target);
+  /**
+   * Fight a named trainer at whatever level the run is actually at. The point
+   * is the shape of the fight, not whether the route order is respected, so
+   * this heals first: a trainer measured on the fumes of the last wild kin is
+   * measuring the walk to town instead.
+   */
+  const duel = (mapId, npcId) => {
+    const npc = (EK.MAPS[mapId].npcs || []).find((n) => n.id === npcId);
+    if (!npc) return;
+    EK.healParty();
+    const team = EK.trainerTeam(npc);
+    EK.startBattle({ foe: EK.mkMon(team[0][0], team[0][1]), team, npc, wild: false });
+    fight(npcId);
+    EK.G.battle = null; EK.G.battleMsg = null; EK.G.screen = null;
+    EK.G.mode = 'world'; EK.G.flourish = null;
+    EK.healParty();
+  };
+
+  for (const leg of ROUTE) {
+    grindTo(leg.map, leg.target);
+    for (const id of leg.duels || []) duel(leg.map, id);
+  }
   stat.gems = EK.G.gems;
   stat.top = Math.max(...EK.G.party.map((m) => m.lvl));
   stat.deck = EK.G.deck.length;
@@ -199,11 +249,30 @@ console.log(`  steps walked        ${steps.toFixed(0)}`);
 console.log(`  fights              ${fights.toFixed(0)}   (one every ${(steps / Math.max(1, fights)).toFixed(1)} steps)`);
 console.log(`  never in doubt      ${avg((r) => r.noDoubt).toFixed(0)}   ${pct(avg((r) => r.noDoubt), fights)} of them`);
 console.log(`  turns per fight     ${(avg((r) => r.turns) / Math.max(1, fights)).toFixed(1)}`);
+console.log(`  over in one turn    ${avg((r) => r.oneTurn).toFixed(0)}   ${pct(avg((r) => r.oneTurn), fights)} of them`);
+console.log(`  foe max HP          ${(avg((r) => r.foeHp) / Math.max(1, avg((r) => r.foeHpSeen))).toFixed(0)}`);
 // Absolute counts are dominated by how long a run happened to take, and runs
 // vary a lot — normalise, or you end up comparing two samples of noise.
 console.log(`  walks back to heal  ${avg((r) => r.healTrips).toFixed(1)}   ${(avg((r) => r.healTrips) / Math.max(1, fights)).toFixed(3)} per fight`);
 console.log(`  wipes               ${avg((r) => r.wipes).toFixed(1)}   ${(avg((r) => r.wipes) / Math.max(1, fights)).toFixed(3)} per fight`);
 console.log(`  ended at level      ${avg((r) => r.top).toFixed(0)}\n`);
+
+// The trainers, one line each, in the order a run meets them. A plan that never
+// gets telegraphed before the fight ends is a plan nobody sees.
+const DUEL_ORDER = ['t_wick1', 't_pell', 't_dorn', 't_mio', 't_ivo', 't_wick2', 't_coll', 't_hale', 't_wick3'];
+console.log('  trainer            fights  turns  lost  lowest HP  plan beats seen');
+for (const id of DUEL_ORDER) {
+  let n = 0, turns = 0, lost = 0, low = 0, tel = 0;
+  for (const r of runs) {
+    const d = r.duels.get(id);
+    if (!d) continue;
+    n += d.n; turns += d.turns; lost += d.lost; low += d.low; tel += d.telegraphs;
+  }
+  if (!n) { console.log(`  ${id.padEnd(18)}      -`); continue; }
+  console.log(`  ${id.padEnd(18)} ${String(n).padStart(6)} ${(turns / n).toFixed(1).padStart(6)} `
+    + `${pct(lost, n).padStart(5)} ${pct(low / n, 1).padStart(10)} ${(tel / n).toFixed(1).padStart(16)}`);
+}
+console.log('');
 
 // Which cards actually got played, and which ones sat there.
 const all = new Map();

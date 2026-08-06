@@ -398,6 +398,15 @@ deal damage, and your support cards, which sharpen them. Switch kin and its move
 cards leave with it. Spend energy on whatever you like, then end the turn and
 take the foe's telegraphed hit.
 
+**One swing a turn.** Three energy and moves costing one or two meant the best
+line was to attack twice and never touch the deck, which is the exact opposite
+of "the kin brings the attacks, the deck makes them land harder" — and it is why
+a fight used to be over in a turn and a half. `b.swungTurn` is set by the first
+kin card played and cleared in `startPlayerTurn`. A card that cannot be played
+has to *look* unplayable, so `playableNow(b, c)` is the single predicate behind
+the `dead` class, the "▲ play" footer, the End-turn nag and `aimPlayable` — a
+key that silently does nothing is worse than a key that is greyed out.
+
 `playCard(i)`, `endTurn()` and `doAction()` each resolve immediately and return
 a list of log entries carrying HP/status snapshots. State is consistent the
 moment they return; the UI plays the list back at reading speed. That is why
@@ -524,6 +533,13 @@ below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
 through), walks back to town to heal, wipes, turns per fight, and which cards
 were drawn and never worth playing.
 
+It reports **per trainer** as well as per run. Trainers are the hand-authored
+fights, and averaging them into the wild ones hides exactly the thing a scripted
+plan is meant to change; the line for each also counts how many plan beats were
+actually telegraphed before the fight ended, because a plan nobody sees is not a
+plan. It heals before each duel — a trainer measured on the fumes of the last
+wild kin measures the walk to town instead.
+
 **The policy is the measurement.** The version that played cheapest-first could
 not tell a good deck from a big one, because it never set anything up: it played
 the Chain card while the discount was still zero. It now plays a turn in two
@@ -600,9 +616,62 @@ An `edge` survives a miss. Spending two turns setting up a Soulfang and losing
 it to a 5% accuracy roll is how you teach someone never to set anything up.
 
 Kin move cards are priced by weight (`moveCost`), so a turn is roughly one real
-move plus the support you stack onto it. Foes carry `FOE_HP_MUL` times their
-normal HP — only a little over 1, now that the deck sharpens attacks instead of
-adding its own.
+move plus the support you stack onto it.
+
+A fight is played over a pool of HP that is not the kin's own. Three dials set
+its shape, and they pull against each other:
+
+| dial | now | what it buys |
+| --- | --- | --- |
+| `FOE_HP_MUL` | 4.0 | wild HP. Turns. Raise it and fights get longer *and* more dangerous. |
+| `WILD_DMG_MUL` | .70 | how hard a wild kin hits. The damper that stops those extra turns being paid for in walks back to town. |
+| `TRAINER_HP_MUL` | 2.2 | trainer HP per kin. Far lower, because a trainer is already a two- or three-kin fight and hits at full strength. |
+
+Giving trainers the wild number was the mistake worth writing down: Wick's
+opening fight went to a 70% loss rate and Dorn's two kin became a ten-turn slog.
+`toughen(mon, mul)` takes the multiplier now; `startBattle` and `resolveFoeDown`
+both pick it off `b.wild`.
+
+### A trainer with a plan
+
+Every hand-authored fight in the game was "two kin, no plan": the foe scored its
+moves each turn and never built toward anything, so a trainer played exactly
+like a wild kin with more HP.
+
+A plan is a short loop of beats the opposing side works through — a loop rather
+than a script, so it survives a fight going long without needing an ending
+written for it. `PLANS` holds three:
+
+| beat | what it does |
+| --- | --- |
+| `sharpen` | banks `b.foeEdge`, added flat to the next foe attack |
+| `brace` | banks `b.foeShield`, eaten before their HP is |
+| `aim` | sets `b.foePierce`; the next hit goes straight past your shield |
+
+Each is worth `planScale(lvl)` times its base, so a plan keeps up with the
+valley. **A beat costs the foe its attack**, which is what makes it a decision on
+your side too: the turn it braces is the turn it does not hit you. And every
+beat is telegraphed a turn ahead through the intent line that was already there,
+so the point is never surprise — it is that you can see the big hit coming and
+get to decide what to do about it.
+
+`aim` exists because of what players do about `sharpen`: bank a shield and eat
+it. Only the late trainers know it, and it is the answer to that answer.
+
+The three Wick fights are the arc, and it is asserted as data in
+`emberkin_cards` — each plan is longer than the last, each knows a beat the one
+before it did not, and nobody gets two setup turns in a row:
+
+| | plan |
+| --- | --- |
+| Wick I | `swing, sharpen, swing` — one idea, and he does not lead with it |
+| Wick II | `sharpen, swing, brace, swing` — he opens with the setup now, and has learned to eat your turn |
+| Wick III | `sharpen, swing, aim, swing, brace, swing` — three tools, one of them the answer to how you beat him last time |
+
+Every other trainer carries one too, one idea each, in character: Dorn braces,
+Ivo sharpens, Coll does both, Hale opens on the back foot, Mio takes aim. Vespyr
+is the one wild fight that gets a plan, passed straight to `startBattle` rather
+than through an NPC.
 
 ### Elements
 
