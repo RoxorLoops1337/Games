@@ -975,7 +975,17 @@ const cardsBefore = winRun.G.cards.length;
 winRun.startBattle({ foe: winRun.mkMon('sproutle', 3), wild: true });
 ok(autoFight(winRun), 'the fight resolved');
 eq(winRun.B().over, 'win', 'and it was a win');
-for (let i = 0; i < 20 && winRun.G.battle; i++) { winRun.pressKey('a'); winRun.step(.2); winRun.releaseKey('a'); winRun.fired.clear(); }
+// A win holds the arena for a beat before the card offer — a fight you won
+// should not turn straight into a transaction. It is skippable, so the press
+// that ends it must not also confirm the screen behind it.
+let sawFlourish = false;
+for (let i = 0; i < 40 && !winRun.G.screen; i++) {
+  winRun.pressKey('a'); winRun.step(.2); winRun.releaseKey('a'); winRun.fired.clear();
+  winRun.draw();
+  sawFlourish = sawFlourish || !!winRun.G.flourish;
+}
+ok(sawFlourish, 'the win got a moment first');
+eq(winRun.G.flourish, null, 'and the moment ended');
 eq(winRun.G.battle, null, 'the battle is off the board');
 eq(winRun.G.mode, 'screen', 'and the card offer is up');
 eq(winRun.G.screen.kind, 'reward', 'it is the reward screen');

@@ -112,7 +112,11 @@ fresh.G.player.dir = 'up';
 tap('a');
 eq(fresh.G.mode, 'dialogue', 'Rowan starts the starter speech');
 for (let i = 0; i < 10 && fresh.G.mode === 'dialogue'; i++) tap('a');
-eq(fresh.G.mode, 'menu', 'the starter menu opens');
+eq(fresh.G.mode, 'screen', 'the starter screen opens');
+eq(fresh.G.screen.kind, 'starter', 'and it is the pick-one-of-three screen');
+// There is no way out of it but choosing — B does nothing.
+tap('b');
+eq(fresh.G.screen && fresh.G.screen.kind, 'starter', 'and no way out of it but choosing');
 tap('a');
 eq(fresh.G.party.length, 1, 'you have a kin');
 eq(fresh.G.party[0].species, 'cindercub', 'the first option is Cindercub');
@@ -166,6 +170,11 @@ while (fresh.G.battle && guard++ < 600) {
 }
 ok(guard < 600, `the battle resolved by playing cards and ending turns (${guard} frames)`);
 eq(fresh.G.battle, null, 'and handed control back to the world');
+// A win now lands on the card offer rather than straight back in the grass.
+if (fresh.G.screen && fresh.G.screen.kind === 'reward') {
+  fresh.G.screen.i = fresh.G.screen.list.length - 1;    // no thanks
+  fresh.screenSelect();
+}
 eq(fresh.G.mode, 'world', 'the player is walking again');
 
 section('the battle controls do what they say');
@@ -626,6 +635,75 @@ for (const kind of ['party', 'dex', 'box', 'deck', 'bag', 'shop', 'chests']) {
   scr.G.screen = null;
 }
 function screenLen(g) { return (g.G.screen.list || []).length; }
+
+section('the first choice is a choice');
+// The starter used to be a three-line menu. It is a screen you cannot leave.
+const first = loadGame({});
+first.setCtx(mkCtx());
+first.newGame();
+for (let i = 0; i < 8 && first.G.mode === 'dialogue'; i++) { first.pressKey('a'); first.step(.2); first.releaseKey('a'); first.fired.clear(); }
+first.G.player.x = 5; first.G.player.y = 3; first.G.player.px = 5; first.G.player.py = 3;
+first.G.player.dir = 'up';
+first.pressKey('a'); first.step(.2); first.releaseKey('a'); first.fired.clear();
+for (let i = 0; i < 10 && first.G.mode === 'dialogue'; i++) { first.pressKey('a'); first.step(.2); first.releaseKey('a'); first.fired.clear(); }
+eq(first.G.mode, 'screen', 'Rowan opens a screen rather than a menu');
+eq(first.G.screen.kind, 'starter', 'the pick-one-of-three screen');
+eq(first.G.screen.list.length, 3, 'with three kin on it');
+eq(first.G.screen.list.join(','), first.STARTERS.join(','), 'and they are the three starters');
+// Every one of them is a real, different choice.
+const starterTypes = first.STARTERS.map((id) => first.DEX[id].types[0]);
+eq(new Set(starterTypes).size, 3, `no two starters share an element (${starterTypes.join('/')})`);
+// It renders, at every cursor position, without throwing.
+for (let i = 0; i < 3; i++) { first.G.screen.i = i; first.renderScreen(); ok(true, `starter ${i} rendered`); }
+// There is no way out of it but choosing.
+first.closeScreen();
+eq(first.G.screen && first.G.screen.kind, 'starter', 'closing it does nothing');
+first.G.screen.i = 1;
+first.screenSelect();
+eq(first.G.party.length, 1, 'picking one gives you a kin');
+eq(first.G.party[0].species, first.STARTERS[1], 'the one you picked');
+eq(first.G.flags.starter, first.STARTERS[1], 'and the run remembers it');
+ok(first.G.bag.bloomorb >= 5 && first.G.bag.salve >= 3, 'with orbs and salves to go with it');
+eq(first.G.screen, null, 'the screen closed behind you');
+
+section('a knockout has weight');
+const koRun = loadGame({});
+koRun.setCtx(mkCtx());
+koRun.G.party = [koRun.mkMon('pyrelynx', 40)];
+koRun.startBattle({ foe: koRun.mkMon('sproutle', 3), wild: true });
+const kb = koRun.B();
+eq(kb.downF, null, 'nobody is down at the start');
+kb.foe.hp = 0; kb.tgtF = 0;
+koRun.entryFx(kb, { fx: 'faint', side: 'foe', hpM: kb.mine.hp, hpF: 0 });
+eq(kb.downF, 0, 'a faint starts the fall');
+eq(kb.downM, null, 'and only for the one that fell');
+// It falls over time and then stops falling.
+koRun.G.mode = 'battle';
+for (let i = 0; i < 6; i++) { koRun.step(.05); koRun.draw(); }
+ok(kb.downF > 0 && kb.downF < koRun.KO_FALL, `it is mid-fall (${kb.downF.toFixed(2)}s)`);
+for (let i = 0; i < 40; i++) { koRun.step(.05); koRun.draw(); }
+ok(kb.downF <= koRun.KO_FALL + 1e-9, 'and it settles rather than falling for ever');
+
+section('the chest shop reads like the bag');
+const chest = loadGame({});
+chest.setCtx(mkCtx());
+chest.G.gems = 5000;
+chest.openScreen('chests');
+chest.renderScreen();
+eq(chest.G.screen.list.length, chest.CHEST_IDS.length, 'every chest is on the shelf');
+// The odds bar is a distribution, so it has to add up to one.
+for (const k of chest.CHEST_IDS) {
+  const total = Object.values(chest.CHESTS[k].odds).reduce((a, b) => a + b, 0);
+  eq(total, 100, `${chest.CHESTS[k].name}: the odds add up`);
+  // …and better chests really are better, or the bar is decoration.
+  ok(chest.CHESTS[k].odds.common != null, `${chest.CHESTS[k].name} lists its commons`);
+}
+const commons = chest.CHEST_IDS.map((k) => chest.CHESTS[k].odds.common || 0);
+ok(commons.every((c, i) => i === 0 || c <= commons[i - 1]),
+  `commons thin out as chests get dearer (${commons.join(' → ')})`);
+const costs = chest.CHEST_IDS.map((k) => chest.CHESTS[k].cost);
+ok(costs.every((c, i) => i === 0 || c > costs[i - 1]), 'and they are listed cheapest first');
+chest.closeScreen();
 
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
