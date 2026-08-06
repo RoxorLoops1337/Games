@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and twenty-six fixes to
+this game have produced roughly six changes to the game and twenty-seven fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -192,6 +192,13 @@ and the family is more useful than the individual entry.
     3.08. **That is a re-baseline, not a regression.** The old numbers described a
     player throwing away permanent damage.
 
+27. **The report never showed what the run accumulates** (pass 26). Every number
+    was per fight or per run; nothing said what a run *builds*. `G.might` reached
+    **+499** on every attack by Crown Hollow — against a wild kin's 174 HP —
+    and no line in the report would ever have said so. `might at the end` is
+    printed now. If a quantity persists across fights, the per-fight table cannot
+    see it, and this tool is mostly per-fight tables.
+
 ### Sampling — a claim the sample could not carry
 
 24. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
@@ -216,7 +223,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of twenty-six are denominators.** If a number will not move, or moves the
+- **Nine of twenty-seven are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has

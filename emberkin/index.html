@@ -3530,6 +3530,9 @@ const CARD_IDS = Object.keys(CARDS);
  */
 const growCap = (id) => Math.round(CARDS[id].v * (CARDS[id].capMul || 4));
 
+/** The ceiling on run-long might. See the note where G.might is added to. */
+const MIGHT_CAP = 150;
+
 /** The live value of a card: its base, its permanent growth, its battle growth. */
 const cardValue = (inst) => {
   const c = CARDS[inst.id];
@@ -5919,8 +5922,17 @@ function playCard(i) {
     snap(log, `The next attack will hit for +${b.mods.edge}.`, 'buff', 'mine');
   }
   if (amt('might')) {
-    G.might = (G.might || 0) + amt('might');
-    snap(log, `Every attack from now on hits for +${G.might}. For good.`, 'grow', 'mine');
+    // A card may grow to four times its own value and no further, because a card
+    // that grows forever eventually plays the game for you. G.might is the pile
+    // those plays add up to and it had no ceiling at all — by Crown Hollow it
+    // reached +499 on every attack, against a wild kin's 174 HP, which turned the
+    // back half of every run into one-shots. Same principle, same kind of
+    // ceiling: generous enough that a might build is worth building, bounded so
+    // it is a build and not an ending.
+    G.might = Math.min(MIGHT_CAP, (G.might || 0) + amt('might'));
+    snap(log, G.might >= MIGHT_CAP
+      ? `Every attack hits for +${G.might}. There is no more room to grow.`
+      : `Every attack from now on hits for +${G.might}. For good.`, 'grow', 'mine');
   }
   if (def.kind === 'power' && fx.st) {
     b.mods.riders.push(fx.st);
