@@ -1022,4 +1022,109 @@ section('a cornered wild kin gathers itself, out loud');
   t.readIntent();
   eq(tb.cornered, 0, 'a trained kin does not corner');
 }
+
+
+section('a plan keeps its own promise');
+// A sharpen beat costs the foe its turn to bank an edge, so the beat after it
+// has to be the one that cashes it in. It was not: the scorer would pick a
+// status move, the edge would sit there unspent, and a foe with a debuff to
+// spam banked edge after edge while grinding your attack down. Coll's three kin
+// turned a five-turn fight into a thirty-turn one that way.
+{
+  const g = fresh();
+  const npc = { name: 'X', id: 't_p', trainer: { team: [], prize: 0, plan: ['sharpen', 'swing'] } };
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('mothrix', 30), npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  ok(bb.foe.moves.some((m) => !g.MOVES[m.id].pow), 'the foe has something that is not an attack');
+  ok(bb.foe.moves.some((m) => g.MOVES[m.id].pow), 'and something that is');
+  eq(bb.intent.step, 'sharpen', 'it sets up first');
+  g.endTurn();
+  ok(bb.foeEdge > 0, 'and banks the edge');
+  // Whatever the scorer would rather do, the payoff turn is an attack.
+  for (let i = 0; i < 30; i++) {
+    g.readIntent();
+    ok(g.MOVES[bb.intent.id].pow, 'a banked edge forces an attack out of the foe');
+  }
+  const hp = bb.mine.hp;
+  g.endTurn();
+  ok(bb.mine.hp < hp, 'so the setup is actually paid off');
+  eq(bb.foeEdge, 0, 'and the edge is spent');
+
+  // With nothing banked it is free to do whatever it likes again.
+  let sawIdle = false;
+  for (let i = 0; i < 60 && !sawIdle; i++) {
+    bb.foeEdge = 0;
+    if (!g.MOVES[g.foeChoose(false)].pow) sawIdle = true;
+  }
+  ok(sawIdle, 'with nothing banked it can still choose not to attack');
+  // And a foe with only status moves is not left with nothing to do.
+  bb.foe.moves = bb.foe.moves.filter((m) => !g.MOVES[m.id].pow);
+  ok(!!g.foeChoose(true), 'a foe with no attack at all still picks something');
+}
+
+section('a switch is a moment you can be caught in');
+// Switching cost one turn and bought the whole matchup, which made it a reflex
+// rather than a decision: send in the right element, delete the thing, never
+// lose. With a party of four the probe was losing 0.006 fights per fight.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 20), g.mkMon('brookite', 20)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;
+  g.G.party[1].hp = g.G.party[1].max = 99999;
+  eq(bb.foeEdge, 0, 'nothing is banked while you stand your ground');
+  const was = bb.mine;
+  g.doAction({ kind: 'switch', idx: 1 });
+  ok(bb.mine !== was, 'the switch happened');
+  // The punish is banked and spent by the hit that lands on the way in, so by
+  // the time control comes back it is already gone.
+  eq(bb.foeEdge, 0, 'and the edge it bought was spent on the way in');
+  ok(g.SWITCH_PUNISH > 0, 'a switch is not free');
+
+  // Switching into nothing, or into the kin already out, is not a switch.
+  const before = bb.mine;
+  g.doAction({ kind: 'switch', idx: 0 });
+  g.doAction({ kind: 'switch', idx: 9 });
+  ok(bb.mine === before || bb.mine === g.G.party[0], 'a no-op switch does not go wrong');
+}
+
+section('the wild damper does not compound with your own resistance');
+// A wild kin you resist was hitting for .65 x .70 of normal, which is where the
+// "nobody can hurt anybody" fights came from — three quarters never in doubt,
+// none of them lost, and the longest in the game.
+{
+  const g = fresh();
+  const roll = { crit: false, roll: 1 };
+  // Stone into Ember is resisted; Stone into Spark is not.
+  const foe = g.mkMon('gargolem', 30);
+  const resists = g.mkMon('pyrelynx', 30);         // Ember resists Stone? check the chart
+  const eff = g.effect('Stone', resists.types);
+  ok(eff !== 1, `the matchup is not neutral (${eff}x), or this measures nothing`);
+
+  const hitFor = (wild) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon(resists.species, 30)];
+    g.startBattle({ foe: g.mkMon('gargolem', 30), wild,
+      npc: wild ? null : { name: 'X', id: 't_d', trainer: { team: [], prize: 0 } } });
+    const b2 = g.B();
+    b2.mine.hp = b2.mine.max = 99999;
+    b2.foe.hp = b2.foe.max = 99999;
+    const move = b2.foe.moves.find((m) => g.MOVES[m.id].pow
+      && g.effect(g.MOVES[m.id].type, b2.mine.types) < 1);
+    if (!move) return null;
+    const hp = b2.mine.hp;
+    const log = [];
+    for (let i = 0; i < 60 && b2.mine.hp === hp; i++) g.useMove(log, 'foe', move.id);
+    return hp - b2.mine.hp;
+  };
+  const wildHit = hitFor(true), trainedHit = hitFor(false);
+  if (wildHit != null && trainedHit != null) {
+    ok(wildHit < trainedHit, `a wild kin still hits softer than a trained one (${wildHit} vs ${trainedHit})`);
+    ok(wildHit > trainedHit * g.WILD_DMG_MUL, 'but the damper only bites half as hard through a resistance');
+  }
+  ok(foe.lvl === 30, 'the fixture is what it says it is');
+}
 done('emberkin_cards');

@@ -82,8 +82,16 @@ function playOne() {
     const b = EK.B();
     if (!b) return;
     if (!duelId) stat.fights++;
-    const startHp = b.mine.hp / b.mine.max;
-    let low = startHp, turns = 0, guard = 0, planBeats = 0;
+
+    // How much of the whole party is still standing, not how much of whichever
+    // kin happens to be out. A fight you won by rotating through three hurt kin
+    // was reading as never in doubt, because the one on the field kept being a
+    // fresh one.
+    const partyHp = () => {
+      const live = EK.G.party.length ? EK.G.party : [b.mine];
+      return live.reduce((a, m) => a + Math.max(0, m.hp) / Math.max(1, m.max), 0) / live.length;
+    };
+    let low = partyHp(), turns = 0, guard = 0, planBeats = 0;
     // What the fight looks like before it starts: the best element multiplier
     // either side can bring, and the level gap. If two fights in five really are
     // decided in advance, this is where the deciding happens.
@@ -104,6 +112,13 @@ function playOne() {
       if (!live || live.over || live.phase !== 'player') return false;
       const cur2 = live.mine;
       const mineEff = bestEff(cur2, live.foe);
+      // Switch out of trouble, not into every edge. Switching on any upgrade at
+      // all is what a spreadsheet does; a player does it when the kin on the
+      // field is the wrong one — resisted, or nearly out — because it costs a
+      // turn, the hand, everything the deck has stacked up, and a hit that
+      // lands harder for catching you mid-change.
+      const inTrouble = mineEff < 1 || cur2.hp / cur2.max < .35;
+      if (!inTrouble) return false;
       let pick = -1, bestScore = mineEff * (cur2.hp / cur2.max);
       EK.G.party.forEach((m, i) => {
         if (m === cur2 || m.hp <= 0) return;
@@ -113,9 +128,12 @@ function playOne() {
       if (pick < 0) return false;
       EK.doAction({ kind: 'switch', idx: pick });
       stat.switched++;
-      return true;
+      return true;                                // the caller counts the turn
     };
-    if (!SOLO && EK.G.party.length > 1) swapIn();
+    // A switch spends the turn, so it has to be counted as one. It was not, and
+    // that is most of why party fights looked like they were over in one: half
+    // of those fights were a switch and a swing.
+    if (!SOLO && EK.G.party.length > 1 && swapIn()) turns++;
     while (EK.G.battle && !EK.B().over && guard++ < 300) {
       const cur = EK.B();
       if (cur.intent && cur.intent.kind === 'plan') planBeats++;
@@ -243,7 +261,7 @@ function playOne() {
       }
       EK.endTurn();
       turns++;
-      low = Math.min(low, cur.mine.hp / cur.mine.max);
+      low = Math.min(low, partyHp());
     }
     if (duelId) {
       const d = stat.duels.get(duelId) || { n: 0, turns: 0, lost: 0, low: 0, telegraphs: 0 };

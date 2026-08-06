@@ -548,6 +548,13 @@ change against both, not against whichever is flattering. Switching is close to
 a hard counter — it costs a turn and buys the whole matchup — which is worth
 knowing when a party number looks too good.
 
+Two things the probe was measuring wrong, both of which flattered party mode:
+**a switch spends the turn and was not counted as one** (half the "over in one
+turn" fights were a switch and a swing), and **never-in-doubt watched the active
+kin rather than the party**, so a fight won by rotating through three hurt kin
+read as never in doubt because the one on the field kept being a fresh one. Both
+fixed; both moved the party numbers against the game.
+
 **The policy is the measurement, and cheapest-first was lying.** Every 2-cost card
 looked dead — Bulwark played 1% of the times it was drawn, Ward Stance 10% —
 and the reason was the ordering, not the cards: with three energy and the swing
@@ -683,6 +690,23 @@ get to decide what to do about it.
 `aim` exists because of what players do about `sharpen`: bank a shield and eat
 it. Only the late trainers know it, and it is the answer to that answer.
 
+**A plan has to keep its own promise, and it has to be seen.** Two bugs, both
+found by the per-trainer table rather than by reading the code:
+
+- A `sharpen` beat costs the foe its turn to bank an edge, so the beat after it
+  has to cash it in — and it did not. `foeChoose` would score a status move
+  higher, the edge would sit unspent, and a foe with a debuff to spam banked
+  edge after edge while grinding your attack down. Coll's three kin turned a
+  five-turn fight into a thirty-turn one that way, and nothing in it was a
+  decision. `foeChoose(mustAttack)` now forces an attack out of the foe whenever
+  an edge is banked.
+- Plans whose first beat was a `swing` were never seen: Pell telegraphed 0.9
+  beats a fight and Wick I 1.4, because the fight ended before the plan reached
+  the interesting part. Every plan front-loads now, and the early ones are short
+  (`['sharpen', 'swing']` rather than three or four beats) so a beat lands inside
+  the first two turns. Pell went to 1.6, Wick I to 2.1, Ivo to 2.4. A plan the
+  fight is too short to show is not a plan.
+
 The three Wick fights are the arc, and it is asserted as data in
 `emberkin_cards` — each plan is longer than the last, each knows a beat the one
 before it did not, and nobody gets two setup turns in a row:
@@ -743,6 +767,37 @@ hit, which is the whole point.
 
 It is one swing, not a state of being, and only wild kin do it — a trainer's kin
 has a plan instead.
+
+The other half of the same problem was the damper. `WILD_DMG_MUL` exists so a
+long fight is not paid for in walks back to town, and it had no business fully
+compounding with a resistance you already had: a wild kin you resist was hitting
+for .65 x .70 of normal, which is where the "nobody can hurt anybody" fights came
+from — three quarters of them never in doubt, none of them lost, and the longest
+in the game. Through a resistance the damper now applies at half strength.
+Dropping it entirely was worse than the disease (wipes .220 to .364 a fight,
+which is a walk to town every third fight); half is the corner.
+
+### Switching, and what it costs
+
+A switch used to cost one turn and buy the whole matchup. With a party of four
+that made it a reflex rather than a decision — send in the right element, delete
+the thing, never lose: 0.006 wipes per fight, and every trainer in the valley
+beaten first try. `SWITCH_PUNISH` (11, through `planScale`) is the price of being
+caught mid-change: the hit that lands while your kin is still finding its feet
+comes in harder. That took party losses from 0.006 a fight to 0.040 — nearly
+sevenfold — which is the first time a party has been able to lose at all.
+
+It did **not** stop the switch being the strongest button on the screen, and
+that is the honest state of it. Run the probe with a switch-happy policy instead
+of a human one and the rate goes 0.47 to 0.65 switches a fight, fights shorten
+from 2.9 turns to 2.4, and wipes fall back to .025. The gap between those two
+columns is the size of what is still on the table. The next thing worth attacking
+is the on-demand-ness — a party answers any matchup the moment it sees it — not
+the price of the answer.
+
+A switch already cost three things, none of which were worth thinking about next
+to buying the element outright: the turn, the hand (`b.disc.push(...b.hand)`),
+and everything the deck had stacked up (`clearMods`).
 
 ### Elements
 
