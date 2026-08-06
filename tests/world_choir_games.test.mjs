@@ -40,6 +40,8 @@ const EXPOSE = `__out.api = {
   G, PARTS, SING, CRITS, CRIT_BY_ID, FLAWS, FLAW_BY_ID, PART_DEFS, COUNTRIES, CATEGORIES,
   JURORS, BANDS, RANKS, STAGES, VENUES, SAVE_KEY, CARD_TOP, PHANTOM_COST, VW, VH, AUDIO,
   REPERTOIRE, REP_BY_ID, CAT_MOODS, VOWELS, FORMANT_SCALE, MAJOR_STEPS, MINOR_STEPS, AUDIO_HZ, setP,
+  FORMANT_BW, SINGER_FORMANT, SF_BW, SF_GAIN, TRACT_SPREAD, CONSONANTS, consonantOf,
+  OUTFITS, CHOREO, OUTFIT_BY_ID, CHOREO_BY_ID, presentationOf,
   get perfTick(){ return perfTick; }, set perfTick(v){ perfTick = v || (() => {}); },
   SHARP_LETTER, SHARP_ALTER, FLAT_LETTER, FLAT_ALTER, SHARP_ORDER, FLAT_ORDER,
   SCORE, LG, TREBLE_TOP, BASS_TOP, PLAYHEAD, PPB,
@@ -117,13 +119,20 @@ function makeSandbox(opts){
 function makeAudioStub(){
   const nodes = [], edges = [];
   let events = 0;
+  /* Ramps are envelopes, not instantaneous values, so the stub keeps the
+     schedule as well as the endpoint — a test that only ever sees the last
+     value cannot tell an attack from a release. */
   const param = (v) => ({
     value: v,
-    setTargetAtTime(x){ events++; this.value = x; return this; },
-    setValueAtTime(x){ this.value = x; return this; },
-    linearRampToValueAtTime(x){ this.value = x; return this; },
-    exponentialRampToValueAtTime(x){ this.value = x; return this; },
-    cancelScheduledValues(){ return this; },
+    scheduled: [],
+    setTargetAtTime(x, t, tc){ events++; this.scheduled.push({ k:'target', v:x, t, tc });
+      this.value = x; return this; },
+    setValueAtTime(x, t){ this.scheduled.push({ k:'set', v:x, t }); this.value = x; return this; },
+    linearRampToValueAtTime(x, t){ this.scheduled.push({ k:'lin', v:x, t }); this.value = x; return this; },
+    exponentialRampToValueAtTime(x, t){ this.scheduled.push({ k:'exp', v:x, t }); this.value = x; return this; },
+    cancelScheduledValues(){ this.scheduled.length = 0; return this; },
+    peak(){ return this.scheduled.reduce((m, e) => Math.max(m, e.v), 0); },
+    startsAt(){ return this.scheduled.length ? this.scheduled[0].v : this.value; },
   });
   const node = (kind, extra) => {
     const n = Object.assign({
@@ -245,16 +254,19 @@ test('the sandbox has no audio and every audio path survives it', () => {
 });
 
 /* ------------------------------------------------------------- data tables */
-test('the five criteria are complete and uniquely keyed', () => {
+test('the four criteria are complete and uniquely keyed', () => {
   const api = boot();
-  assert(api.CRITS.length === 5, 'five lines on the card');
+  assert(api.CRITS.length === 4, 'four lines on the card, got ' + api.CRITS.length);
+  const order = api.CRITS.map((c) => c.id).join(',');
+  assert(order === 'int,snd,fid,art',
+    'intonation, overall sound, fidelity, artistry — got ' + order);
   const keys = new Set(), ids = new Set();
   for (const c of api.CRITS){
     assert(c.id && c.name && c.short && c.col && c.blurb, c.id + ' is missing a field');
     assert(!keys.has(c.key), 'duplicate key ' + c.key);
     assert(!ids.has(c.id), 'duplicate id ' + c.id);
     keys.add(c.key); ids.add(c.id);
-    assert(/^[1-5]$/.test(c.key), c.id + ' should be on a number row key');
+    assert(/^[1-4]$/.test(c.key), c.id + ' should be on a number row key');
   }
 });
 
@@ -281,6 +293,46 @@ test('every flaw names a real criterion and bends the choir when applied', () =>
     const ensMoved = S.tempoMul !== 1 || S.expression !== 1 || S.phrasing !== 1 || S.life !== 1;
     assert(partMoved || ensMoved, f.id + ' applies but changes nothing');
   }
+});
+
+test('a flaw is big enough that somebody could actually notice it', () => {
+  const api = boot();
+  // The whole game is spotting these. A third of a semitone and a 17% tempo
+  // sag were too polite; these are the floors now.
+  for (const f of api.FLAWS){
+    const P = api.PART_DEFS.map(() => ({ cents:0, gain:1, bright:0, air:0, lag:0, rogue:0, wrongBy:0 }));
+    const S = { tempoMul:1, expression:1, phrasing:1, life:1 };
+    const inst = { def:f, part:-1 };
+    if (f.setup) f.setup(inst);
+    f.apply(inst, P, 1, S);
+    const cents = Math.max(...P.map((p) => Math.abs(p.cents)));
+    const gain = Math.max(...P.map((p) => Math.abs(p.gain - 1)));
+    const lag = Math.max(...P.map((p) => Math.abs(p.lag)));
+    const tone = Math.max(...P.map((p) => p.bright + p.air));
+    const wrong = Math.max(...P.map((p) => Math.abs(p.wrongBy)));
+    const ens = Math.max(Math.abs(1 - S.tempoMul), 1 - S.expression, 1 - S.phrasing, 1 - S.life);
+    const loudest = Math.max(cents / 50, gain / 0.5, lag / 0.2, tone / 0.8, wrong, ens / 0.2);
+    assert(loudest >= 1,
+      f.id + ' is too subtle to be worth a point: ' +
+      JSON.stringify({ cents:+cents.toFixed(0), gain:+gain.toFixed(2), lag:+lag.toFixed(2),
+                       tone:+tone.toFixed(2), wrong, ens:+ens.toFixed(2) }));
+  }
+});
+
+test('an intonation flaw stays on its note instead of becoming a different one', () => {
+  const api = boot();
+  const c = perform(api, 0, 0);
+  c.flaws = [{ def:api.FLAW_BY_ID.flat_part, at:0.5, dur:8, sev:1.5, part:1,
+    caught:false, catchT:0, missed:false, sharp:0 }];
+  step(api, 3.5);
+  const p = api.PARTS[1];
+  assert(p.cents < -60, 'clearly flat, not politely flat: ' + p.cents.toFixed(0) + ' cents');
+  assert(p.cents > -100, 'but still the same note, not the one below: ' + p.cents.toFixed(0));
+  // p.midi glides between notes, so it can be mid-portamento at any instant;
+  // what matters is that it is aiming at the written note.
+  assert(p.targetMidi === p.written,
+    'the note being sung is still the written one — the error is in the tuning');
+  assert((p.wrongBy || 0) === 0, 'and it is not a wrong note');
 });
 
 test('every criterion has at least two flaws behind it', () => {
@@ -354,6 +406,68 @@ test('the diploma bands tile the card from top to bottom without a gap', () => {
   assert(api.bandFor(28.9).id === 'goldII', 'just under drops a level');
   assert(api.bandFor(9).id === 'part', 'a low card is still a participation');
   for (let s = 8; s <= 30; s += 0.1) assert(api.bandFor(s), 'no score falls through the bands at ' + s);
+});
+
+/* ----------------------------------------------------- what they bring on */
+test('every outfit and every piece of staging is properly described', () => {
+  const api = boot();
+  assert(api.OUTFITS.length >= 4 && api.CHOREO.length >= 3, 'a wardrobe worth having');
+  for (const o of api.OUTFITS){
+    assert(o.id && o.name, 'an outfit with no name');
+    assert(typeof o.pres === 'number' && o.pres >= -1 && o.pres <= 1, o.id + ' is worth ' + o.pres);
+    assert(o.robe === null || /^#[0-9a-f]{6}$/i.test(o.robe), o.id + ' robe colour: ' + o.robe);
+  }
+  for (const c of api.CHOREO){
+    assert(c.id && c.name, 'staging with no name');
+    assert(c.sway >= 0 && c.step >= 0, c.id + ' moves backwards');
+  }
+  // standing still in whatever you own must be worth less than staging it
+  const worst = Math.min(...api.OUTFITS.map((o) => o.pres)) + Math.min(...api.CHOREO.map((c) => c.pres));
+  const best = Math.max(...api.OUTFITS.map((o) => o.pres)) + Math.max(...api.CHOREO.map((c) => c.pres));
+  assert(best - worst >= 0.8, 'presentation barely matters: ' + worst + ' to ' + best);
+  assert(api.CARD_TOP + best <= 30.001, 'a fully staged choir can exceed the card: ' +
+    (api.CARD_TOP + best));
+});
+
+test('a staged choir in national dress starts above one that shuffled on', () => {
+  const api = boot();
+  const dressed = { outfit: api.OUTFIT_BY_ID.national, choreo: api.CHOREO_BY_ID.staged };
+  const shuffled = { outfit: api.OUTFIT_BY_ID.mixed, choreo: api.CHOREO_BY_ID.still };
+  assert(api.presentationOf(dressed) > api.presentationOf(shuffled) + 0.7,
+    'the gap is only ' + (api.presentationOf(dressed) - api.presentationOf(shuffled)));
+  assert(api.presentationOf(shuffled) < 0, 'turning up in your own clothes should cost something');
+});
+
+test('every choir is dressed and staged, and it shows up in the truth', () => {
+  const api = boot();
+  const seenOutfits = new Set(), seenChoreo = new Set();
+  for (let seed = 1; seed < 12; seed++){
+    api.reseed(seed * 613);
+    api.buildCompetition();
+    for (const c of api.G.field){
+      assert(c.outfit && c.choreo, c.name + ' turned up undressed');
+      seenOutfits.add(c.outfit.id); seenChoreo.add(c.choreo.id);
+      let t = api.CARD_TOP + api.presentationOf(c);
+      for (const f of c.flaws) t -= f.sev;
+      near(c.truth, Math.max(9, t), 0.06, c.name + ' truth');
+      assert(c.truth <= 30.001, c.name + ' scores ' + c.truth + ', off the top of the card');
+    }
+  }
+  assert(seenOutfits.size >= 4, 'the wardrobe barely varies: ' + [...seenOutfits]);
+  assert(seenChoreo.size >= 3, 'the staging barely varies: ' + [...seenChoreo]);
+});
+
+test('a perfect card on a staged choir still lands on the truth', () => {
+  const api = boot();
+  const c = perform(api, 0, 0);
+  c.outfit = api.OUTFIT_BY_ID.national; c.choreo = api.CHOREO_BY_ID.staged;
+  let t = api.CARD_TOP + api.presentationOf(c);
+  for (const f of c.flaws) t -= f.sev;
+  c.truth = Math.round(Math.max(9, t) * 10) / 10;
+  const card = playPerfect(api);
+  near(card.suggested, c.truth, 0.06,
+    'presentation has to be in the suggested score or the card can never be right');
+  near(card.pres, api.presentationOf(c), 1e-9, 'and it has to be shown to the player');
 });
 
 /* ------------------------------------------------------------------- music */
@@ -590,12 +704,22 @@ test('the vowel of a syllable is the one you would sing', () => {
   assert(api.vowelOf('') === 'a', 'and so does an empty syllable');
   for (const k in api.VOWELS){
     const v = api.VOWELS[k];
-    assert(v.f.length === 5 && v.g.length === 5, k + ' needs five formants');
+    assert(v.f.length === 4 && v.g.length === 4, k + ' needs four vowel formants');
     for (let i = 1; i < v.f.length; i++)
       assert(v.f[i] > v.f[i - 1], k + ' formants must climb: ' + v.f.join(','));
+    assert(v.f[0] >= 250 && v.f[0] <= 900, k + ' has an implausible F1: ' + v.f[0]);
+    assert(v.g[0] >= v.g[1], k + ' should have most of its energy in F1');
   }
+  // the vowels have to be distinguishable, or every syllable sounds the same
+  assert(api.VOWELS.i.f[1] > api.VOWELS.u.f[1] * 2,
+    'ee and oo differ mostly in F2 and here they barely do');
+  assert(api.VOWELS.a.f[0] > api.VOWELS.i.f[0] * 2, 'ah is an open vowel, ee is not');
   assert(api.FORMANT_SCALE[0] > api.FORMANT_SCALE[3],
     'a soprano is not built like a bass');
+  assert(api.FORMANT_BW.length === 4 && api.FORMANT_BW.every((b) => b >= 40 && b <= 350),
+    'formant bandwidths are 50-300Hz in a real voice: ' + api.FORMANT_BW);
+  for (let i = 1; i < api.FORMANT_BW.length; i++)
+    assert(api.FORMANT_BW[i] > api.FORMANT_BW[i - 1], 'higher formants are wider');
 });
 
 test('the sopranos choose the vowel the whole choir sings', () => {
@@ -715,9 +839,10 @@ test('a choir is fully specified and its truth matches its flaws exactly', () =>
     assert(c.name && c.country && c.cat && c.venue, c.id + ' is missing paperwork');
     assert(c.singers >= 18, c.name + ' brought ' + c.singers + ' singers');
     assert(c.flaws.length >= 2 && c.flaws.length <= 7, c.name + ' has ' + c.flaws.length + ' flaws');
-    let t = api.CARD_TOP;
+    let t = api.CARD_TOP + api.presentationOf(c);
     for (const f of c.flaws) t -= f.sev;
-    near(c.truth, Math.max(9, t), 0.06, c.name + ' truth does not equal the card minus its flaws');
+    near(c.truth, Math.max(9, t), 0.06,
+      c.name + ' truth is not the card, plus what they brought, minus what went wrong');
     assert(c.truth >= 9 && c.truth <= 30, c.name + ' truth out of range: ' + c.truth);
     assert(c.dur >= 30, c.name + ' programme is too short');
   }
@@ -878,7 +1003,8 @@ test('a listener who hears nothing scores the choir far too high', () => {
   assert(api.G.phase === 'deliberate', 'the piece ended and the card came up');
   assert(api.G.card.caught.length === 0, 'nothing marked');
   assert(api.G.card.missed.length === c.flaws.length, 'everything missed');
-  near(api.G.card.suggested, api.CARD_TOP, 0.001, 'an empty card suggests the top of the scale');
+  near(api.G.card.suggested, api.CARD_TOP + api.presentationOf(c), 0.001,
+    'an empty card suggests the top of the scale plus the presentation credit');
   assert(api.G.card.suggested > c.truth, 'which is too generous, because things did go wrong');
 });
 
@@ -1280,31 +1406,149 @@ test('the formant bank follows the vowel the text is on', () => {
     api.SING.vowel = vowel;
     api.AUDIO.frame();
     for (let i = 0; i < 4; i++){
-      const want = api.VOWELS[vowel].f[0] * api.FORMANT_SCALE[i] *
-                   (1 + 0.22 * Math.max(0, Math.min(2, api.PARTS[i].bright)));
-      near(api.AUDIO.voices[i].bank[0].bp.frequency.value, want, 1,
+      const tr = api.AUDIO.voices[i].tracts[0];
+      const want = api.VOWELS[vowel].f[0] * api.FORMANT_SCALE[i] * tr.scale;
+      near(tr.bank[0].bp.frequency.value, want, 1,
         api.PART_DEFS[i].name + ' first formant on "' + vowel + '"');
     }
   }
   // and the sopranos sit higher than the basses on the same vowel
   api.SING.vowel = 'a'; api.AUDIO.frame();
-  assert(api.AUDIO.voices[0].bank[0].bp.frequency.value >
-         api.AUDIO.voices[3].bank[0].bp.frequency.value,
+  assert(api.AUDIO.voices[0].tracts[0].bank[0].bp.frequency.value >
+         api.AUDIO.voices[3].tracts[0].bank[0].bp.frequency.value,
     'a soprano and a bass are not built the same');
 });
 
-test('strain opens the upper formants, breath softens them', () => {
+test('each formant is as wide as a real one, not as wide as a filter sweep', () => {
   const api = boot({ audio: true });
   perform(api, 0, 0);
   step(api, 0.5);
-  const calmQ = api.AUDIO.voices[0].bank[2].bp.Q.value;
-  const calmG = api.AUDIO.voices[0].bank[3].g.gain.value;
+  api.SING.vowel = 'a'; api.AUDIO.frame();
+  for (let i = 0; i < 4; i++){
+    for (const tr of api.AUDIO.voices[i].tracts){
+      for (let k = 0; k < 4; k++){
+        const bp = tr.bank[k].bp;
+        const bw = bp.frequency.value / bp.Q.value;
+        near(bw, api.FORMANT_BW[k], 2,
+          api.PART_DEFS[i].name + ' F' + (k + 1) + ' is ' + bw.toFixed(0) + 'Hz wide');
+      }
+    }
+  }
+});
+
+test('every part has a singer\'s formant where its voice type puts it', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 0.5);
+  api.AUDIO.frame();
+  // the peak that lets a trained voice carry: 2.4kHz for a bass, 3.1 for a soprano
+  const centres = [];
+  for (let i = 0; i < 4; i++){
+    const sf = api.AUDIO.voices[i].tracts[0].bank[4];
+    const f = sf.bp.frequency.value;
+    assert(f > 2200 && f < 3300, api.PART_DEFS[i].name + ' singer\'s formant at ' + f);
+    assert(sf.g.gain.value > 0.2, 'and it has to be loud enough to hear');
+    const bw = f / sf.bp.Q.value;
+    assert(bw > 200 && bw < 600, 'it is one broad peak, not a whistle: ' + bw.toFixed(0) + 'Hz');
+    centres.push(f);
+  }
+  assert(centres[0] > centres[3], 'a soprano carries higher than a bass');
+});
+
+test('a section is two vocal tracts, not one person turned up', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 0.5);
+  api.AUDIO.frame();
+  for (let i = 0; i < 4; i++){
+    const v = api.AUDIO.voices[i];
+    assert(v.tracts.length === 2, api.PART_DEFS[i].name + ' has one vocal tract');
+    const a = v.tracts[0].bank[0].bp.frequency.value;
+    const b = v.tracts[1].bank[0].bp.frequency.value;
+    assert(Math.abs(b - a) / a > 0.02,
+      'the two tracts are the same shape: ' + a.toFixed(0) + ' vs ' + b.toFixed(0));
+    // and the singers are split between them rather than piled into one
+    const perTract = [0, 0];
+    for (let k = 0; k < v.singers.length; k++) perTract[k % 2]++;
+    assert(perTract[0] > 0 && perTract[1] > 0, 'one tract got all the singers');
+  }
+});
+
+test('strain flattens the glottal tilt, breath widens the formants', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 0.5);
+  api.AUDIO.frame();
+  const tr = api.AUDIO.voices[0].tracts[0];
+  const calmTilt = tr.tilt.gain.value;
+  const calmBW = tr.bank[1].bp.frequency.value / tr.bank[1].bp.Q.value;
+  const calmSF = tr.bank[4].g.gain.value;
+  assert(calmTilt < -4, 'an unpushed voice rolls off above the first harmonics: ' + calmTilt);
   api.PARTS[0].bright = 1.5; api.AUDIO.frame();
-  assert(api.AUDIO.voices[0].bank[3].g.gain.value > calmG,
-    'a pushed tone should put energy in the upper formants');
+  assert(tr.tilt.gain.value > calmTilt + 5,
+    'strain buys volume with tension — the tilt should flatten: ' + tr.tilt.gain.value);
+  assert(tr.bank[4].g.gain.value > calmSF, 'and it pushes the singer\'s formant');
   api.PARTS[0].bright = 0; api.PARTS[0].air = 0.9; api.AUDIO.frame();
-  assert(api.AUDIO.voices[0].bank[2].bp.Q.value < calmQ,
-    'breath should blur the formants, not sharpen them');
+  const airyBW = tr.bank[1].bp.frequency.value / tr.bank[1].bp.Q.value;
+  assert(airyBW > calmBW * 1.5,
+    'breath blurs a formant: ' + calmBW.toFixed(0) + ' -> ' + airyBW.toFixed(0) + 'Hz');
+  assert(api.AUDIO.voices[0].bodyG.gain.value < 0.26, 'and takes core out of the tone');
+});
+
+test('every syllable gets a consonant, chosen by how it starts', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 0.5);
+  const seen = {};
+  for (const syl of ['Stil', 'ta', 'mein', 'freu', 'a', '—']){
+    api.AUDIO.noteOnset(0, syl, 0.5);
+    const g = api.AUDIO.voices[0].conGain.gain;
+    seen[syl] = { hz: api.AUDIO.voices[0].conFilter.frequency.value,
+                  level: g.peak(), ends: g.value, events: g.scheduled.length };
+  }
+  assert(seen.Stil.hz > 4000, 'an s is a sibilant, up at ' + seen.Stil.hz);
+  assert(seen.ta.hz < 2500 && seen.ta.hz > 1000, 'a t is a plosive: ' + seen.ta.hz);
+  assert(seen.mein.hz < 900, 'an m is a nasal: ' + seen.mein.hz);
+  assert(seen.freu.hz > 2500 && seen.freu.hz < 4500, 'an f is a fricative: ' + seen.freu.hz);
+  assert(seen['—'].level < seen.ta.level * 0.5, 'a melisma has no consonant to sing');
+  assert(seen.a.level > 0.01, 'but a vowel onset is still an onset');
+  for (const k in seen){
+    assert(seen[k].events >= 3, k + ' was not given an attack and a release');
+    assert(seen[k].ends <= 0.001, k + ' never releases — the noise would stay open on ' + k);
+  }
+});
+
+test('the consonant lands when the part enters, late entries included', () => {
+  const api = boot({ audio: true });
+  const c = perform(api, 0, 0);
+  c.flaws = [];
+  let onsets = 0;
+  const real = api.AUDIO.noteOnset.bind(api.AUDIO);
+  api.AUDIO.noteOnset = (i, syl, spb) => { if (i === 0) onsets++; return real(i, syl, spb); };
+  step(api, 6);
+  const notes = c.piece.voices[0].filter((n) => n.at < 6 * (c.piece.tempo / 60)).length;
+  assert(onsets >= 3, 'only ' + onsets + ' syllables articulated in six seconds');
+  assert(onsets <= notes + 2, 'more consonants (' + onsets + ') than notes (' + notes + ')');
+});
+
+test('vibrato blooms after the attack instead of being there from the first sample', () => {
+  const api = boot({ audio: true });
+  perform(api, 0, 0);
+  step(api, 1);
+  const v = api.AUDIO.voices[0];
+  assert(v.vibTarget > 4 && v.vibTarget < 20,
+    'a singer vibrates a few cents, not none and not a siren: ' + v.vibTarget);
+  api.AUDIO.noteOnset(0, 'la', 0.5);
+  const vib = v.singers[0].vibG.gain;
+  assert(vib.startsAt() < v.vibTarget * 0.5,
+    'vibrato should start small at the attack, got ' + vib.startsAt());
+  assert(vib.value >= v.vibTarget - 1e-6,
+    'and grow to full depth by the end of the ramp, got ' + vib.value);
+  // and a choir that has stopped caring stops vibrating
+  api.SING.life = 0; api.SING.expression = 0; api.AUDIO.frame();
+  const dead = v.vibTarget;
+  api.SING.life = 1; api.SING.expression = 1; api.AUDIO.frame();
+  assert(v.vibTarget > dead + 4, 'an expressive choir vibrates more than a dead one');
 });
 
 test('muting silences the master, and pausing silences the parts', () => {
