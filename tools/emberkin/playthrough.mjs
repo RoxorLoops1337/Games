@@ -14,9 +14,9 @@
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all twenty-six mistakes this tool
-// has made. Seventeen passes on this game produced about seven changes to the
-// game and twenty-six fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all twenty-seven mistakes this tool
+// has made. Eighteen passes on this game produced about eight changes to the
+// game and twenty-seven fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -79,7 +79,12 @@ function playOne(runIdx) {
     // and how often the support pass stops because there is nothing left to
     // afford rather than nothing left worth playing. That last one is the
     // discount: a card you cannot pay for is worth nothing at all.
-    handWorth: 0, handN: 0, playWorth: 0, playN: 0, stopBroke: 0, stopDone: 0, levels: 0, gems: 0,
+    handWorth: 0, handN: 0, playWorth: 0, playN: 0, stopBroke: 0, stopDone: 0,
+    // Card growth is capped at 4x the card's own value, but G.might is not
+    // capped at anything: every might card played adds its whole current value
+    // to a run-long total that rides on every attack from every kin. Worth
+    // knowing what that total actually reaches now the probe plays the cards.
+    might: 0, mightMid: 0, levels: 0, gems: 0,
     oneTurn: 0, foeHp: 0, foeHpSeen: 0, dpt: 0, caught: 0, thrown: 0, switched: 0, salves: 0, fled: 0,
     // What a fight took out of the party, as opposed to how close to death it
     // came. Never-in-doubt is an absolute floor, so it answers "was I worried",
@@ -600,6 +605,7 @@ function playOne(runIdx) {
   stat.starter = ONLY || EK.STARTERS[runIdx % EK.STARTERS.length];
   stat.top = Math.max(...EK.G.party.map((m) => m.lvl));
   stat.deck = EK.G.deck.length;
+  stat.might = EK.G.might || 0;
   return stat;
 }
 
@@ -770,6 +776,8 @@ console.log('');
   const avgPlay = sum('playWorth') / Math.max(1, sum('playN'));
   const broke = sum('stopBroke'), done = sum('stopDone');
   const cardPoor = done / Math.max(1, broke + done);
+  const mightAvg = runs.reduce((a, r) => a + r.might, 0) / runs.length;
+  console.log(`  might at the end       +${mightAvg.toFixed(0)} damage on every attack, permanently\n`);
   console.log('  what a card is worth');
   console.log(`    average card in hand   ${avgHand.toFixed(1)} points`);
   console.log(`    average card played    ${avgPlay.toFixed(1)} points   (the policy picks the best, so this is a ceiling)`);

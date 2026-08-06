@@ -532,14 +532,62 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all twenty-six mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Seventeen passes on this
-game produced about seven changes to the game and twenty-six fixes to the tool.
+of all twenty-seven mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Eighteen passes on this
+game produced about eight changes to the game and twenty-seven fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
 a turn and buys the whole fight — so a party number that looks too good usually
 is. Judge a change against both, and if it only moves one, say which.
+
+#### Might had no ceiling, and short fights are not a damage problem
+
+Card growth is capped at four times a card's own value, and the note beside
+`growCap` says why: *a card that grows forever eventually plays the game for
+you*. `G.might` is the pile those plays add up to — added to every attack from
+every kin, saved with the run — and it had no ceiling at all. Once the probe
+started playing the might cards, it measured **+499 damage on every attack by
+Crown Hollow, against a wild kin's 174 HP.** The back half of a run was one-shots.
+It is capped at 150 now, which is the same principle applied to the total rather
+than to each card.
+
+The interesting part is what capping it does *not* do. Party fights had fallen to
+2.96 turns and the obvious suspicion was that damage had run away. It has not:
+
+| | uncapped | cap 150 | cap 40 |
+| --- | --- | --- | --- |
+| party turns | 2.96 ±0.16 | 3.09 ±0.19 | 3.10 ±0.17 |
+| party over in one | 28% ±3 | 27% ±4 | 31% ±3 |
+| party lost or ran | .036 ±.006 | .047 ±.011 | .056 ±.012 |
+| solo turns | 3.64 ±0.20 | 3.60 ±0.19 | 3.60 ±0.15 |
+| solo lost or ran | .222 ±.025 | .239 ±.028 | **.348 ±.039** |
+| might at the end | +499 | +111 | +34 |
+
+Cutting the biggest damage source in the game by more than 90% moved the length
+of a fight by a tenth of a turn. What it moved was the danger — solo lost-or-ran
+went from .222 to .348, a third of all fights. **Short fights here are not a
+damage problem, and you cannot buy turns by taking damage away; you only buy
+losses.** A correctly-played deck is simply faster, and that is fine.
+
+So 150 is the cap that bounds the tail and changes nothing else: every headline
+sits inside the uncapped interval, and the one-shot endgame is gone.
+
+#### Are the one-cost damage cards underpriced?
+
+They are what Twin Strike loses to — Fang Hone 100%, Blooded Edge 96%, Whetstone
+93% when payable, all at one energy. Per energy they are not out of line:
+Whetstone grown is +15 an attack for the battle, about +45 over three turns;
+Blooded Edge grown is +56 on one attack with half of it back as healing; Twin
+Strike is an extra swing a turn, +80-100 over a fight, for two. Forty to fifty
+points an energy, all of them.
+
+The asymmetry is not price, it is **timing**. Twin Strike pays over the turns
+that remain; Blooded Edge pays now. In a game whose fights last three turns,
+immediate beats deferred, and that is the same fact as the paragraph above rather
+than a second problem. Slowing the one-costs down to rescue Twin Strike would
+slow the whole game, and the cap-40 row shows what that buys: lost runs, not
+longer fights. Left alone.
 
 #### The two-cost slot is fine; the might cards were mispriced
 
