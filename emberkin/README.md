@@ -507,6 +507,31 @@ see:
   the panel; a burn ticking away ought to be visible from the corner of your
   eye.
 
+### Is it any good to play?
+
+Eight passes went into how the game looks and none into whether it is any good
+to play, and "is it boring" is not a thing you can answer by reading the source.
+So there is a tool that plays it:
+
+```bash
+node tools/emberkin/playthrough.mjs --runs 14
+```
+
+A fresh save, the real encounter tables, real fights, all the way from Rowan's
+study to Crown Hollow, and it counts the things that make a run tedious rather
+than describing them: steps per fight, fights where the player never dropped
+below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
+through), walks back to town to heal, wipes, turns per fight, and which cards
+were drawn and never worth playing.
+
+Two warnings from using it. **Runs vary a lot** — identical builds came back
+28 and 42 walks-to-heal — so anything under ten runs is noise, and every rate is
+reported per fight because absolute counts are dominated by how long a run
+happened to take. And **the probe's policy is part of the measurement**: the
+first version played whatever was leftmost in the hand, which cannot tell a good
+deck from a big one. It plays cheapest-first now, which is both what a person
+does and what the Chain and Combo cards are built to reward.
+
 ### Cards
 
 **The kin brings the attacks. The deck makes them land harder.** Nothing in your
@@ -515,6 +540,19 @@ an accessory to the deck, and it is meant to be the other way round. Every point
 of damage in the game comes out of a move the active kin knows.
 
 A card has one growable number, `v`, and `vt` says what that number is:
+
+Three keywords make the *order* you play things in matter, which is the part a
+pool of "+N to a thing" cards cannot do:
+
+| keyword | what it does | why |
+|---|---|---|
+| **Retain** | the card stays in your hand at end of turn | a heal you are holding is a decision every turn; a heal you must spend now is a decision once |
+| **Combo +n** | worth n more if it is not the first card you played this turn | the cheapest way to make sequencing matter |
+| **Chain** | costs 1 less for every card played before it this turn | turns a finisher you could never afford into the reward for setting one up |
+
+They are keywords rather than sentences because a mechanic should be named once
+and learned once — and because the spelled-out versions did not fit on the card,
+which a screenshot caught immediately.
 
 | `vt` | what the number does |
 |------|----------------------|
@@ -679,6 +717,23 @@ you read "you lob a Prism Orb" and then watch it happen, not the reverse.
 A catch then stops everything for `G.gotcha` — rays, the new kin, its name, and
 a shower that takes its time — and hands you its papers afterwards. Any key
 skips the tail of the flourish; nobody should sit through it twice.
+
+### The second wind
+
+A measured run walked back to the Wayhouse about five times before Crown Hollow,
+every trip down a corridor already cleared. Attrition with no recovery except
+the town turns exploring into errands, and the fix is structural rather than a
+number: **putting something down gives you back what the fight cost you**, up to
+a third of your health.
+
+Proportional, not flat. The first version handed over a flat 18% of max and the
+measured share of fights-you-could-not-lose went *up* — a walkover was suddenly
+free as well. Now a hard fight pays and a trivial one gives you nothing you did
+not already have.
+
+Across three samples of fourteen runs: walks back to heal fell from 0.346 to
+0.285 per fight, wipes from 0.303 to 0.283, at a cost of three points on the
+never-in-doubt share.
 
 ### Winning, and going down
 
