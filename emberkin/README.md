@@ -532,9 +532,9 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all thirty-one mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Twenty passes on this
-game produced about eight changes to the game and thirty-one fixes to the tool.
+of all thirty-three mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Twenty-one passes on this
+game produced about eight changes to the game and thirty-three fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
@@ -585,7 +585,62 @@ it stocks to five orbs and four salves and stops — but a player capped at what
 they want to carry has the same problem: past the first hour, shards stop being a
 decision.
 
-#### The deck decides the run, and rarity is the wrong axis
+#### The card set is flat: two very different decks, the same run
+
+This has now been answered three times and the third answer is the one with
+evidence behind it.
+
+Pass 27 compared the best and worst thirds of sixty runs, found identical decks,
+and said the deck cannot matter — from a probe that always took the rarest card,
+so the decks were identical by construction. Pass 28 gave it a `value` policy,
+saw solo lost-or-ran fall from .246 to .162, and said the deck decides
+everything. Pass 29 found that `staticScore` and `worth()` scored neither `combo`
+nor `kill`, and that `worth()` docked combo cards 5% for carrying an upside it
+never counted. With those scored, sixty runs a side:
+
+| solo | build rarity | build value |
+| --- | --- | --- |
+| lost or ran | .256 ±.035 | .261 ±.022 |
+| wipes | .107 ±.015 | .121 ±.011 |
+| no kin in doubt | 37% ±4 | 38% ±3 |
+| turns per fight | 3.59 ±0.19 | 3.77 ±0.16 |
+| deck rarity mix | epic 75%, rare 19% | **rare 66%, epic 29%** |
+| the three cards it holds most of | 6.6 / 12 | **9.4 / 12** |
+
+Party is the same story: .036 ±.005 against .041 ±.006, with an 83%-epic deck
+against a 69%-rare one.
+
+**Two decks that could not look more different produce the same run.** One is
+three-quarters epic and spread across nine card types; the other is two-thirds
+rare and half of it is three cards. Every outcome line sits inside the other's
+interval. That is a much stronger version of pass 27's claim than pass 27 could
+make, because it is a between-policy comparison rather than a within-policy one.
+
+The reading is not "the deck does not matter" as a compliment. It is that **the
+card set is flat** — the good cards are not good enough, or the bad ones not bad
+enough, for a build to be worth having. If deckbuilding is meant to be half the
+game, that is the thing to fix, and it is a card-power question rather than a
+reward-screen question.
+
+It also dissolves the worry pass 28 left behind. "A well-built deck takes solo
+no-kin-in-doubt to 51%" was the same artefact: the value deck now reads 38% ±3
+against the rarity deck's 37% ±4.
+
+#### Rarity is not the wrong axis after all
+
+Pass 28 ranked the cards by value per energy and found four epics below five
+rares, and concluded the reward screen steers players wrong. Three of those four
+were the scorer: Berserk 13 → **28**, Reaper 16 → **32**, Bulwark 15 → **24**
+once combo and kill are counted. Berserk is a 6-value card that puts 11 on the
+board; Reaper grows +4 every time it finishes something.
+
+Only **Ward Stance** stayed at 15, and it is the one epic carrying no keyword at
+all — which is the same finding pass 24 reached from the other direction, and it
+has already had its change. **No card was touched this pass.** The ledger's own
+advice is *read `worth()` before reading the card*, and following it first
+prevented four card changes that would each have been wrong.
+
+#### How pass 28 read it, before the scorer was fixed
 
 Pass 27 split sixty runs by the danger line, found the best and worst thirds
 holding identical decks, and concluded the deck cannot be what makes a run good.
