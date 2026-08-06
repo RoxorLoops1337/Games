@@ -826,8 +826,15 @@ function genMarket(lv){
     for (let i = 0; i < 26; i++){
       const a = (i / 26) * Math.PI * 2;
       if (Math.abs(Math.cos(a)) > 0.86) continue;          // gaps at both ends
+      /* The barrier lies along the tangent, snapped to whichever axis is
+         closer. hitProp's box test is axis-aligned, so a barrier drawn at an
+         arbitrary angle is a barrier you can drive through — see the note on
+         o.rot in drawProp. Snapping keeps the ring reading as a ring while
+         the art and the collider stay the same shape. */
+      const upright = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a));
       addProp('fence', rx + Math.cos(a) * (R + 26), ry + Math.sin(a) * (R + 26),
-        { w: PROPS.fence.h, h: PROPS.fence.w, r: PROPS.fence.w / 2, rot: a });
+        upright ? { w: PROPS.fence.h, h: PROPS.fence.w, r: PROPS.fence.w / 2 }
+                : { w: PROPS.fence.w, h: PROPS.fence.h, r: PROPS.fence.w / 2 });
     }
     for (let i = 0; i < Math.round(30 * lv.crowd); i++){
       const a = rr(0, 6.283), d = R * Math.sqrt(rnd());
@@ -1286,14 +1293,19 @@ function addFx(o){
 }
 
 /* Score pops used to stack: a single 640x420 crop 0.7s into a run held a 46px
-   banner, a 30px green pop, a 20px blue pop printed on top of it and the
-   shout bubble over the car. Two rules fix nearly all of it — nothing within
-   40px and 0.3s of a pop already on screen, and nothing at all while the
-   driver is mid-sentence, because the bubble is the loudest thing in frame. */
+   banner, a 30px green pop, a 20px blue pop printed on top of it and the shout
+   bubble over the car. Nothing within 40px and 0.3s of a pop already on screen.
+
+   There was a second rule here — nothing at all while the driver was
+   mid-sentence — written when the bubble was still anchored over the car in
+   world space. The same pass moved the bubble to a fixed screen corner, which
+   is where it stopped overlapping anything, and left this rule swallowing 63%
+   of kill pops on a busy market. It also ate doBoost's own "NITRO!", which is
+   printed four lines after doBoost sets shoutT, so that label had never once
+   rendered. */
 const POP_MIN_D = 40, POP_MIN_T = 0.3;
 const recentPops = [];
 function popText(x, y, text, col, big, force){
-  if (car.shoutT > 0 && !force) return null;
   for (let i = recentPops.length - 1; i >= 0; i--){
     const r = recentPops[i];
     if (T - r.t > POP_MIN_T){ recentPops.splice(i, 1); continue; }
@@ -2818,9 +2830,14 @@ function drawProp(o){
       const L = vert ? o.h : o.w, THK = vert ? o.w : o.h;
       ctx.save(); ctx.translate(o.x, o.y);
       if (vert) ctx.rotate(Math.PI / 2);
-      // live fences used to ignore o.rot, so the ice rink's barrier ring all
-      // drew in the same orientation instead of following the circle
-      ctx.rotate(o.rot);
+      /* Only a wrecked fence is drawn rotated. hitProp's box test for a live
+         one is axis-aligned and cannot represent an arbitrary angle, so art
+         and collider have to agree on the two orientations the box has. This
+         line briefly read `ctx.rotate(o.rot)` to make the rink's ring follow
+         its circle, which drew sixteen barriers 41 degrees away from the walls
+         they actually were. The ring follows its circle by snapping each
+         barrier to the nearer axis instead — see genMarket. */
+      ctx.rotate(o.dead ? o.rot : 0);
       shadow(0, THK * 0.6, L * 0.5, THK * 0.6, 0.2);
       if (o.dead){
         ctx.fillStyle = '#6a5138';
