@@ -25,8 +25,8 @@ edit this block to name the next one.
 - [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
   with five critic conflicts resolved and six proposals cut.
 - **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–12 are
-  done. **Next: item 13** (crowd LOD: one resolution-independent gate). Exit: all 19 ticked.
+  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–13 are
+  done. **Next: item 14** (make the release feel like a release). Exit: all 19 ticked.
 - **E — three more critics, then back to C.** Repeat the cycle.
 
 ## Working agreement for each pass
@@ -103,4 +103,8 @@ edit this block to name the next one.
   untouched. Anything new that moves during a run needs recording too, or it will
   sit still in the replay.
 - Frame cost is dominated by fill area, not call count. The far crowd is batched
-  by colour; the LOD line is `p.r * cam.s < 10.5`.
+  by colour. LOD is measured by `lodQ(p) = p.r * 720 / cam.tz` — a reference 720p
+  viewport, never the live `cam.s`, or a bigger monitor silently buys itself a
+  more expensive frame. Three tiers: batch below `LOD_MID` (10.5), coat/head/
+  hat/arms up to `LOD_FINE` (14), the full kit above it, which in practice means
+  the replay camera. Santa and pram carriers (`lodAlways`) never batch.
