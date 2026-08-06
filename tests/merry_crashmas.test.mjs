@@ -49,7 +49,7 @@ const EXPOSE = `__out.api = {
   stepReplay, skipReplay, endReplay, replayApply, drawReplayFrame,
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
-  draw, drawHUD, drawAim, drawSling, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
+  draw, drawHUD, drawAim, drawSling, previewPath, drawShout, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
   SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH_Z,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
@@ -712,6 +712,86 @@ test('a fresh car gets a fresh sling', () => {
   api.launch(-api.C.MAX_PULL, 0);
   api.nextCar();
   assert(!api.G.sling, 'the previous release does not snap over the new one');
+});
+
+/* The dotted line used to integrate bare MAX_LAUNCH, FRICTION and DRAG for a
+   fixed 34 steps, so every car got the same 2627px preview: the hatchback saw
+   63% of its range and the sleigh, whose whole selling point is glide 2.6, saw
+   23% of an 11,500px run. Unlock the best car in the game, lose the aiming UI. */
+test('the aim preview ends where the car actually stops, in every car', () => {
+  const worst = [];
+  for (const c of boot().CARS){
+    const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
+    api.startCampaign(); api.beginLevel();
+    assert(api.selectCar(c.id), 'car should be unlocked: ' + c.id);
+    // an empty field, so nothing but friction, ice and the fence is in play
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0;
+
+    const pv = api.previewPath(-1, 0, 1);
+    assert(pv.path.length < 899, c.id + ' preview hit the iteration cap, not a stop');
+    assert(pv.path.length > 5, c.id + ' preview is empty');
+
+    api.launch(-api.C.MAX_PULL, 0);
+    for (let i = 0; i < 4000 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+    const actual = api.car.x - api.C.ANCHOR.x;
+    const shown = pv.end.x - api.C.ANCHOR.x;
+    const err = Math.abs(shown - actual) / Math.abs(actual);
+    worst.push(c.id + ' ' + (err * 100).toFixed(1) + '%');
+    assert(err < 0.10, c.id + ': preview says ' + Math.round(shown) +
+      'px, the car goes ' + Math.round(actual) + 'px (' + (err * 100).toFixed(1) + '% out)');
+  }
+  console.log('    (preview error per car: ' + worst.join(', ') + ')');
+});
+
+test('the sleigh previews the distance it really covers', () => {
+  const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
+  api.startCampaign(); api.beginLevel();
+  api.props.length = 0; api.people.length = 0;
+  const road = (id) => {
+    api.selectCar(id);
+    const pv = api.previewPath(-1, 0, 1);
+    let d = 0, px = api.C.ANCHOR.x, py = api.C.ANCHOR.y;
+    for (const s of pv.path){ d += Math.hypot(s.x - px, s.y - py); px = s.x; py = s.y; }
+    return d;
+  };
+  const hatch = road('hatch'), sleigh = road('sleigh');
+  /* The sleigh bounces off the fence and comes back, so it is the travelled
+     road that shows the glide, not the terminal x — and the fence is why it
+     covers 1.4x the hatchback here rather than the 4x an open field would give
+     it. The preview being honest about the fence is the point. */
+  assert(sleigh > hatch * 1.3,
+    'the sleigh should preview far more road: ' + Math.round(sleigh) + ' vs ' + Math.round(hatch));
+  assert(hatch > 2900, 'and even the hatchback outruns the old fixed 2627px line: ' + Math.round(hatch));
+});
+
+test('a ramp on the line is called out before you let go', () => {
+  const api = boot();
+  api.startCampaign(); api.beginLevel();
+  api.props.length = 0; api.people.length = 0;
+  assert(!api.previewPath(-1, 0, 1).ramp, 'an empty field has nothing to jump off');
+  const bank = api.addProp('ramp', 1900, api.C.ANCHOR.y);
+  assert(bank.ramp, 'a snowbank is a ramp');
+  const pv = api.previewPath(-1, 0, 1);
+  assert(pv.ramp && pv.ramp.o === bank, 'the snowbank on the line should be flagged');
+  assert(Math.abs(pv.ramp.x - 1900) < 120, 'and flagged where it is, got ' + pv.ramp.x);
+  // one well off the line is not
+  bank.dead = true;
+  const off = api.addProp('ramp', 1900, api.C.ANCHOR.y + 700);
+  assert(off.ramp && !api.previewPath(-1, 0, 1).ramp, 'a ramp off the line is not flagged');
+});
+
+test('the preview follows the car it is drawn for, not a fixed curve', () => {
+  const api = boot({ store: { merry_crashmas_kills_v1: '999999' } });
+  api.startCampaign(); api.beginLevel();
+  api.props.length = 0; api.people.length = 0;
+  const ends = {};
+  for (const c of api.CARS){
+    api.selectCar(c.id);
+    ends[c.id] = api.previewPath(-1, 0, 1).end.x;
+  }
+  const vals = Object.values(ends);
+  assert(new Set(vals.map(v => Math.round(v))).size === vals.length,
+    'every car should preview differently: ' + JSON.stringify(ends));
 });
 
 test('the plough pickup arms the wide bumper for a while', () => {
