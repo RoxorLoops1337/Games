@@ -37,8 +37,8 @@ edit this block to name the next one.
   first: `drawAim` moving the car is real and decides pass/fail on market 1,
   and it turned up a fifth cosmetic system feeding on the simulation seed.
 - **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]`. Items 1–7 are done. **Next:
-  item 8** (the three impact channels that fire and never land). Exit: all 15 ticked, then
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–8 are done. **Next:
+  item 9** (punctuation for stall wrecks and the fence). Exit: all 15 ticked, then
   phase E again.
 
 ## Working agreement for each pass

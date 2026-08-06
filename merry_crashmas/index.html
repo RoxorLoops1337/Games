@@ -653,7 +653,7 @@ const tracks = [];      // tyre marks
 const gore = [];        // blood left on the snow — pools, spray, chunks, smears
 const debris = [];      // planks and panels left where a stall used to be
 const lens = [];        // droplets thrown at the camera itself
-const shake = { t: 0, a: 0 };
+const shake = { t: 0, t0: 1, a: 0 };
 let hitstop = 0;
 let flash = 0;
 let T = 0;
@@ -1360,7 +1360,21 @@ function finale(){
 'use strict';
 /* ============================ SIMULATION ================================= */
 
-function addShake(t, a){ shake.t = Math.max(shake.t, t); shake.a = Math.max(shake.a, a); }
+/* A shake with an envelope, and one a new hit restarts.
+
+   Both fields used to be Math.max and update only decremented the timer, so
+   six kills in a row held 96 consecutive frames — 1.60s — at amplitude 12.5
+   to 13.6 with no dip at all, then dropped to zero in a single frame. Kills
+   two through six added nothing you could see. Now each call restarts the
+   envelope, and the amplitude falls off across it, so six punches read as six. */
+function addShake(t, a){
+  shake.a = Math.max(shake.a * shakeEnv(), a);
+  shake.t = Math.max(shake.t, t);
+  shake.t0 = shake.t;
+}
+function shakeEnv(){
+  return shake.t > 0 ? Math.pow(clamp(shake.t / Math.max(0.0001, shake.t0), 0, 1), 0.7) : 0;
+}
 
 /* Three wails in the air at once, and only from shoppers near enough to be
    part of what you just did. Everyone else still cries, still drops their
@@ -2576,8 +2590,9 @@ const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 
 function worldTransform(){
-  const sx = shake.t > 0 ? vrr(-1, 1) * shake.a : 0;
-  const sy = shake.t > 0 ? vrr(-1, 1) * shake.a : 0;
+  const amp = shake.a * shakeEnv();
+  const sx = amp > 0 ? vrr(-1, 1) * amp : 0;
+  const sy = amp > 0 ? vrr(-1, 1) * amp : 0;
   const s = cam.s * DPR;
   ctx.setTransform(s, 0, 0, s, (VW / 2 - cam.x * cam.s + sx) * DPR, (VH / 2 - cam.y * cam.s + sy) * DPR);
 }
@@ -3568,8 +3583,37 @@ function drawStains(){
   ctx.globalAlpha = 1;
 }
 
-function drawFx(){
+/* Splitting the effects gets the median repaint of the car's own footprint
+   from 70% down to 11%, but the worst frames still bury it: a landing throws
+   sixteen puffs from the car's own position, and a limb is meant to fly over
+   the bonnet. So the silhouette is traced once more on top of everything —
+   two pixels, no fill, enough to find what you are driving inside the mess
+   you just made. */
+function drawCarRim(){
+  if (G.phase !== 'drive' && G.phase !== 'replay') return;
+  if (car.z > 0 && car.air) return;                  // in the air it is already clear
+  worldTransform();
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.ang);
+  ctx.strokeStyle = 'rgba(255,244,220,.5)';
+  ctx.lineWidth = 2 / cam.s;
+  roundRect(-CARL / 2, -CARW / 2, CARL, CARW, 9); ctx.stroke();
+  ctx.restore();
+}
+
+/* Which effects belong under the car and which over it.
+
+   drawFx used to run entirely after drawCar, and it repainted 77-95% of the
+   car's own footprint for 49 of the 66 frames after the first kill: at the
+   biggest crash in the run you could not find the thing you were driving.
+   Blood, mist and stains are on the ground and belong under it; limbs, shards,
+   sparks and text are in the air and belong over it. */
+const FX_UNDER = { blood: 1, mist: 1, stain: 1, chunk: 1, tear: 1, pixel: 1 };
+
+function drawFx(over){
   for (const f of fx){
+    if (over !== undefined && !!FX_UNDER[f.type] === !!over) continue;
     if (f.type === 'stain') continue;          // already down, under the bodies
     const k = 1 - f.t / f.ttl;
     ctx.globalAlpha = clamp(k, 0, 1);
@@ -4329,9 +4373,21 @@ function drawVignette(){
   if (vigGrad){
     ctx.fillStyle = vigGrad;
     ctx.fillRect(0, 0, VW, VH);
+    /* The flash used to be a cream wash over the whole frame, which on snow
+       moved a pixel by +11/+5/-2 of 255 — the biggest event in the game, below
+       the threshold you can see. It punches the vignette instead: the same
+       cached gradient laid down again darkens the edges, which reads as an
+       iris closing whatever the background is doing. */
+    if (flash > 0){
+      ctx.globalAlpha = Math.min(1, flash * 1.2);
+      ctx.fillRect(0, 0, VW, VH);
+      ctx.fillRect(0, 0, VW, VH);
+      ctx.globalAlpha = 1;
+    }
   }
   if (flash > 0){
-    ctx.fillStyle = 'rgba(255,240,210,' + (flash * 0.25) + ')';
+    // a little warmth on top, well under what the wash used to try to do
+    ctx.fillStyle = 'rgba(255,240,210,' + (flash * 0.10) + ')';
     ctx.fillRect(0, 0, VW, VH);
   }
 }
@@ -4372,10 +4428,12 @@ function draw(){
   }
 
   if (G.phase === 'aim') drawAim(); else drawSling();
+
+  drawFx(false);                       // blood, mist, stains: on the ground
   if (G.phase !== 'menu' && G.phase !== 'brief' && G.phase !== 'results' && G.phase !== 'finale') drawCar();
   else if (G.phase === 'menu' || G.phase === 'brief') drawCar();
-
-  drawFx();
+  drawFx(true);                        // limbs, shards, sparks, text: in the air
+  drawCarRim();                        // and the car is findable through all of it
   drawLights();
 
   drawSnow();
