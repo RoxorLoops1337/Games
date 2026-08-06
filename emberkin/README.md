@@ -577,6 +577,8 @@ When a number will not move, suspect this table before the game.**
 | never fled | runs when the next hit kills | **pushed wipes up** by counting losses nobody would have stood still for | flees now — and read `lost or ran`, not `wipes` |
 | took a random card from the reward offer | takes the best one | depressed played/drawn across the whole pool — the instrument the deck work in passes 9, 10 and 12 was steered by | takes the best now |
 | restocks only on a heal trip | shops when passing through | catch rate, salve supply | left; documented |
+| skipped the reward card after a trainer win | takes it — the real win path offers one on both branches | **the whole legendary tier**: `REWARD_ODDS.wild` has legendary at 0, so a trainer win is the only place in a normal run one can come from | takes it now |
+| rotates the starter, so 60 runs is 20 each | plays one | **any per-starter claim** — across three samples of builds that never touched Ember, Cindercub's lost-or-ran read .237, .358 and .438 at ±.08 | `--starter <name>` runs all sixty on one |
 
 **Two traps in reading the numbers, both found by falling into them.**
 
