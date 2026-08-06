@@ -3530,7 +3530,7 @@ const DECK_MIN = 6, DECK_MAX = 12;
  * health. Earned rather than granted — a walkover took nothing off you, so it
  * gives nothing back.
  */
-const RALLY_SHARE = 1, RALLY_CAP = .34;
+const RALLY_SHARE = 1, RALLY_CAP = .5;
 
 /**
  * Take a card. It always reaches the deck.
@@ -3769,6 +3769,8 @@ const MAPS = {
         lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
         dynamic: 'rival1',
         trainer: { team: [['dewdrip', 5]], prize: 300,
+          // He has one idea and he does not lead with it.
+          plan: ['swing', 'sharpen', 'swing'],
           lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
         after: ['I am going north. Try to keep up.'] },
     ],
@@ -3874,10 +3876,12 @@ const MAPS = {
       { x: 13, y: 4, dir: 'down', sprite: 'npc_ranger', name: 'Forager Pell', id: 't_pell',
         lines: ['You have the look. Go on then — show me.'],
         trainer: { team: [['sproutle', 6], ['zaplet', 7]], prize: 240,
+          plan: ['swing', 'swing', 'sharpen'],
           lose: ['Ha! Keep at it.'], win: ['Told you the grass teaches you things.'] } },
       { x: 6, y: 15, dir: 'right', sprite: 'npc_rival', name: 'Hiker Dorn', id: 't_dorn',
         lines: ['Nothing gets past me on this stretch.'],
         trainer: { team: [['pebblet', 8], ['mothrix', 8]], prize: 300,
+          plan: ['brace', 'swing', 'swing'],
           lose: ['Something got past me.'], win: ['Ha! Stretch defended.'] } },
       { x: 18, y: 11, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Isa',
         lines: ['Kin get stronger where people do not go.', 'Emberwood, north of here — mind the roots.'] },
@@ -3918,20 +3922,25 @@ const MAPS = {
       { x: 4, y: 12, dir: 'right', sprite: 'npc_rival', name: 'Bramble Kid Ivo', id: 't_ivo',
         lines: ['I live here now. Ask the trees.'],
         trainer: { team: [['thornip', 14], ['lanterneel', 13]], prize: 620,
+          plan: ['sharpen', 'swing', 'swing'],
           lose: ['The trees are disappointed.'], win: ['Told you. Ask them.'] } },
       { x: 12, y: 12, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick2', requires: 't_wick1',
         lines: ['Kept up, then.', 'Mine has changed since the study. Yours had better have.'],
         dynamic: 'rival2',
         trainer: { team: [['brookite', 16], ['kindlark', 15]], prize: 900,
+          // He opens with the setup now, and he has learned to eat your turn.
+          plan: ['sharpen', 'swing', 'brace', 'swing'],
           lose: ['…Right. North it is, for both of us.'], win: ['Still me. Go and train.'] },
         after: ['The Warden will not let either of us up. Not yet.'] },
       { x: 15, y: 6, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Coll', id: 't_coll',
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
+          plan: ['brace', 'swing', 'sharpen', 'swing'],
           lose: ['Fair. Well fought.'], win: ['Thorns win again.'] } },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_ranger', name: 'Warden Hale', id: 't_hale', block: true,
         lines: ['Crown Hollow is up this path. I do not open it for tourists.', 'Show me you can hold a kin together and I will step aside.'],
         trainer: { team: [['gargolem', 17], ['voltyx', 18], ['nocthorn', 19]], prize: 1800,
+          plan: ['brace', 'sharpen', 'swing', 'swing'],
           lose: ['Then it is yours to walk. Quietly, mind.'], win: ['Not yet. Come back when they trust you.'] },
         after: ['Quietly, up there. It knows when you are loud.'] },
     ],
@@ -3964,6 +3973,7 @@ const MAPS = {
       { x: 14, y: 3, dir: 'down', sprite: 'npc_rival', name: 'Tide-hand Mio', id: 't_mio',
         lines: ['Everything I have came out of that water.'],
         trainer: { team: [['dewdrip', 15], ['brookite', 16]], prize: 760,
+          plan: ['sharpen', 'swing', 'aim', 'swing'],
           lose: ['Take it. The water gives more.'], win: ['The water keeps it, then.'] } },
       { x: 6, y: 11, dir: 'up', sprite: 'npc_ranger', name: 'Sheller Ann',
         lines: ['Lanterneel come in at the shallows. Sweet little faces.', 'Do not put your hand near the light.'] },
@@ -3994,6 +4004,8 @@ const MAPS = {
         lines: ['You got it. Of course you did.', 'I have been up here three days waiting to lose to you properly. Go on.'],
         dynamic: 'rival3',
         trainer: { team: [['tsunaga', 30], ['nocthorn', 29], ['gargolem', 29]], prize: 3000,
+          // Three tools, and one of them is the answer to how you beat him last time.
+          plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'],
           lose: ['There. Now I can go home.', 'Rowan will want to hear it from you, not me.'],
           win: ['Ha! Not today.'] },
         after: ['Go and see Rowan. She has been pretending not to wait.'] },
@@ -4268,7 +4280,8 @@ function onArrive() {
       && G.steps > (G.flags.vespyrSeenAt || 0) + 25 && chance(.18)) {
     G.flags.vespyrSeenAt = G.steps;
     say('', ['The air goes thin and bright. Something old has noticed you.'], () => {
-      startBattle({ foe: mkMon('vespyr', 26), wild: true, legendary: true });
+      startBattle({ foe: mkMon('vespyr', 26), wild: true, legendary: true,
+        plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'] });
     });
     return;
   }
@@ -4912,18 +4925,19 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
+    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null,
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
     started: false, finishing: false, await: null,
     // the card game
     draw: [], hand: [], disc: [], exh: [],
-    energy: 0, phase: 'player', intent: null, powers: {}, playedTurn: 0,
+    energy: 0, phase: 'player', intent: null, powers: {}, playedTurn: 0, swungTurn: 0,
     mods: freshMods(), maxAdd: 0, maxAdds: new Map(), shield: 0,
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
-  toughen(opt.foe);
+  toughen(opt.foe, opt.wild ? FOE_HP_MUL : TRAINER_HP_MUL);
   G.battle.dispF = G.battle.tgtF = opt.foe.hp;
   buildDeck(G.battle);
   G.wipe = WIPE_T;
@@ -4938,6 +4952,9 @@ function startBattle(opt) {
   // Something faster than you now lands the first blow, which is what makes
   // SPD a stat rather than a number on a screen, and what makes an ambush by
   // something quick actually frightening.
+  // A trainer brings a plan; a wild kin brings itself.
+  const plan = opt.plan || (opt.npc && opt.npc.trainer && opt.npc.trainer.plan);
+  if (plan) G.battle.plan = { steps: plan.slice(), i: 0 };
   const opener = [];
   // Wild kin only: a trainer squares up with you, and the opening rival
   // fight is meant to be winnable rather than a coin toss on speed.
@@ -5025,7 +5042,13 @@ function useMove(log, atkSide, moveId) {
     // Everything the deck stacked onto this swing rides here. Support cards
     // never touch the foe themselves; this is the only place their numbers turn
     // into damage, so a card that says "+4" is worth exactly 4 on the bar.
-    const bonus = atkSide === 'mine' ? attackBonus() : { flat: 0, mul: 1, hits: 1, drain: 0 };
+      // A wild kin is tougher and gentler than its level says: the toughness
+      // buys the turns a deck needs to matter, the damper stops those extra
+      // turns being paid for in walks back to town. A trainer's kin gets
+      // neither — they are trained, and their fights are supposed to hurt.
+    const bonus = atkSide === 'mine' ? attackBonus()
+      : { flat: b.foeEdge || 0, mul: b.wild ? WILD_DMG_MUL : 1, hits: 1, drain: 0 };
+    if (atkSide === 'foe') b.foeEdge = 0;          // spent on this swing
     let totalDealt = 0;
     for (let h = 0; h < bonus.hits && defender.hp > 0; h++) {
       const roll = damageOf(attacker, defender, moveId);
@@ -5040,9 +5063,15 @@ function useMove(log, atkSide, moveId) {
         // as though it had dealt 300, or a heavy move kills its own user
         // finishing off something that was already beaten.
         const had = defender.hp;
-        defender.hp = clamp(defender.hp - dmg, 0, defender.max);
+        let through = dmg;
+        if (b.foeShield > 0) {
+          const eaten = Math.min(b.foeShield, through);
+          b.foeShield -= eaten; through -= eaten;
+          if (eaten > 0) snap(log, `${them}'s guard absorbs ${eaten}.`, 'block', 'foe');
+        }
+        defender.hp = clamp(defender.hp - through, 0, defender.max);
         dealt = had - defender.hp;
-        snap(log, `${them} took ${dmg}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
+        if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
       }
       totalDealt += dealt;
       if (crit && eff !== 0) snap(log, 'A critical hit!');
@@ -5263,6 +5292,16 @@ function foeChoose() {
 /** What the foe is about to do, telegraphed so the hand can be played into it. */
 function readIntent() {
   const b = B();
+  // A plan beat is announced a turn ahead, in the same line the moves use, so
+  // the whole fight is readable from one place.
+  const step = b.plan ? b.plan.steps[b.plan.i % b.plan.steps.length] : 'swing';
+  if (step !== 'swing' && PLANS[step]) {
+    const p = PLANS[step];
+    const n = Math.round((p.edge || p.shield || 0) * planScale(b.foe.lvl));
+    const tell = p.edge ? `+${n} on the next hit` : p.shield ? `${n} guard` : 'a shield will not help';
+    b.intent = { id: null, name: p.label, dmg: 0, kind: 'plan', step, n, tell };
+    return b.intent;
+  }
   const id = foeChoose();
   const m = MOVES[id];
   const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg : 0;
@@ -5276,15 +5315,45 @@ function readIntent() {
    cards you brought, so a fight is the two of them together.
    ------------------------------------------------------------------------ */
 const BASE_ENERGY = 3, HAND_SIZE = 5;
+
+/**
+ * A trainer with a plan.
+ *
+ * Every hand-authored fight in the game was "two kin, no plan": the foe scored
+ * its moves each turn and never built toward anything, so a trainer played
+ * exactly like a wild kin with more HP. A plan is a short loop of beats the
+ * opposing side works through — and because it is a loop rather than a script,
+ * it survives a fight going long without needing an ending written for it.
+ *
+ * Every beat is telegraphed a turn ahead through the intent line that was
+ * already there, so the point is never surprise. It is that you can see the big
+ * hit coming and get to decide what to do about it.
+ */
+const PLANS = {
+  sharpen: { label: 'sharpening', line: (n) => `is sharpening — the next one will hurt (+${n}).`, edge: 8 },
+  brace:   { label: 'bracing',    line: (n) => `braces. ${n} of the next hit will go nowhere.`, shield: 14 },
+  // The answer to a sharpen you can see coming is to bank a shield and eat it.
+  // Aim is the answer to that answer, which is why only the late trainers know
+  // it: the fight stops being "read the beat" and becomes "read the player".
+  aim:     { label: 'taking aim',  line: () => 'takes aim. A shield will not be in the way.', pierce: 1 },
+  swing:   { label: null },
+};
+/** How much a plan beat is worth at a given level — it has to keep up. */
+const planScale = (lvl) => 1 + lvl / 22;
 // A turn is roughly one attack plus the support stacked onto it, so a foe wants
 // a little more than its bare HP to be worth fighting — but only a little, now
 // that the deck sharpens attacks rather than adding its own. Their stats are
 // untouched: this is only the pool of HP a fight is played over.
-const FOE_HP_MUL = 1.4;
+const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
+// A trainer is already a two- or three-kin fight, so each of their kin needs a
+// far smaller pool than a lone wild one — and they hit at full strength, which
+// a wild kin does not. Giving them the wild number made the opening rival fight
+// a coin toss and turned Dorn's two kin into a ten-turn slog.
+const TRAINER_HP_MUL = 2.2;
 
 /** Give a foe its battle-sized health as it steps in. */
-function toughen(mon) {
-  mon.max = Math.round(mon.max * FOE_HP_MUL);
+function toughen(mon, mul) {
+  mon.max = Math.round(mon.max * (mul || FOE_HP_MUL));
   mon.hp = mon.max;
   return mon;
 }
@@ -5412,6 +5481,7 @@ function startPlayerTurn(log) {
   const b = B();
   b.turn++;
   b.playedTurn = 0;                               // chain and combo read this
+  b.swungTurn = 0;                                // one attack a turn, no more
   b.shield = 0;                                   // shield is for one round only
   b.energy = BASE_ENERGY + (b.powers.energy || 0);
   if (b.mine.status === 'shock') {
@@ -5434,14 +5504,25 @@ function startPlayerTurn(log) {
  * Without it, confirm lands on a dead card and does nothing but toast at you
  * while three playable cards sit next to it.
  */
+/**
+ * Can this card be played right now? Energy is the obvious half; the other is
+ * the one-swing rule — a kin move you have already thrown this turn is as dead
+ * as one you cannot pay for, and the hand has to say so rather than quietly
+ * refusing the keypress.
+ */
+function playableNow(b, c) {
+  if (cardCost(c) > b.energy) return false;
+  return !(c.src === 'kin' && b.swungTurn);
+}
+
 function aimPlayable(b) {
   if (!b.hand.length) { b.sel = 0; return; }
   b.sel = clamp(b.sel || 0, 0, b.hand.length - 1);
-  if (cardCost(b.hand[b.sel]) <= b.energy) return;
+  if (playableNow(b, b.hand[b.sel])) return;
   // Nearest playable card, searching outward from where the aim already is.
   for (let d = 1; d < b.hand.length; d++) {
     for (const i of [b.sel + d, b.sel - d]) {
-      if (i >= 0 && i < b.hand.length && cardCost(b.hand[i]) <= b.energy) { b.sel = i; return; }
+      if (i >= 0 && i < b.hand.length && playableNow(b, b.hand[i])) { b.sel = i; return; }
     }
   }
 }
@@ -5452,6 +5533,15 @@ function hurtMine(log, amount, why, atk, crit) {
   // Guard is flat and honest too: "take 2 less" takes 2 off the number, and a
   // hit never falls below 1 so a stack of guard cannot make you untouchable.
   let dmg = Math.max(amount > 0 ? 1 : 0, amount - (b.mods.def || 0));
+  // A telegraphed aim goes straight past whatever you banked — and only past
+  // the shield, so guard and the rest of the deck still do their job.
+  if (b.foePierce && atk === 'foe') {
+    b.foePierce = 0;
+    if (b.shield > 0) snap(log, 'The shield is not where the hit lands.', 'block', 'mine');
+    b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', { atk, crit: !!crit });
+    return dmg;
+  }
   if (b.shield > 0) {
     const absorbed = Math.min(b.shield, dmg);
     b.shield -= absorbed; dmg -= absorbed;
@@ -5545,6 +5635,12 @@ function playCard(i) {
   b.energy -= cost;
 
   if (card.src === 'kin') {
+    // One swing a turn. With three energy and moves costing one or two, the
+    // best play was to attack twice and never touch the deck — which is the
+    // exact opposite of "your kin brings the attacks, your deck makes them
+    // land harder", and why a fight was over in a turn and a half.
+    if (b.swungTurn) { b.hand.splice(i, 0, card); b.energy += cost; snap(log, `${dispName(b.mine)} has already swung this turn.`); return log; }
+    b.swungTurn = 1;
     const before = b.foe.hp;
     snap(log, `${dispName(b.mine)} plays ${MOVES[card.id].name}.`, 'use', 'mine');
     useMove(log, 'mine', card.id);
@@ -5661,7 +5757,7 @@ function resolveFoeDown(log) {
   if (b.team && b.teamIdx < b.team.length - 1) {
     b.teamIdx++;
     const nxt = b.team[b.teamIdx];
-    b.foe = toughen(mkMon(nxt[0], nxt[1]));
+    b.foe = toughen(mkMon(nxt[0], nxt[1]), b.wild ? FOE_HP_MUL : TRAINER_HP_MUL);
     b.foe.stages = { atk: 0, def: 0, spd: 0 };
     b.dispF = b.tgtF = b.foe.hp;
     seeMon(b.foe.species);
@@ -5677,6 +5773,18 @@ function foeTurn(log) {
   const b = B();
   if (b.over || b.foe.hp <= 0 || b.mine.hp <= 0) return;
   b.phase = 'foe';
+  // Work the plan. A beat costs the foe its attack, which is what makes it a
+  // decision on your side too: the turn it braces is the turn it does not hit.
+  if (b.intent && b.intent.kind === 'plan') {
+    const p = PLANS[b.intent.step], n = b.intent.n;
+    if (p.edge) { b.foeEdge += n; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }
+    if (p.shield) { b.foeShield += n; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'block', 'foe'); }
+    if (p.pierce) { b.foePierce = 1; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }
+    if (b.plan) b.plan.i++;
+    if (b.foe.hp > 0 && b.mine.hp > 0) endOfTurn(log);
+    return;
+  }
+  if (b.plan) b.plan.i++;
   const id = (b.intent && b.intent.id) || foeChoose();
   const hpBefore = b.mine.hp;
   useMove(log, 'foe', id);
@@ -6241,7 +6349,11 @@ function trainerTeam(npc) {
   // Same level as yours. He already has the type advantage and two levels on
   // top of that made the first fight in the game unwinnable, which is a poor
   // way to open — and he stands between the town and the only grass to grind in.
-  if (npc.dynamic === 'rival1') return [[pick, 5]];
+  // A level under yours. He has the type advantage and, since a kin swings once
+  // a turn, your damage per turn is half what it used to be — at parity the
+  // opening fight stopped being winnable on what the game had just handed you,
+  // which is the one thing it has to be.
+  if (npc.dynamic === 'rival1') return [[pick, 4]];
   if (npc.dynamic === 'rival2') {
     const evo = DEX[pick].evo ? DEX[pick].evo[0] : pick;
     return [['kindlark', 15], [evo, 16]];
@@ -6499,14 +6611,14 @@ function renderHand() {
     + (b.exh.length ? pile('exh', b.exh.length, 'spent') : '')
     + (b.shield ? `<span id="shieldpip" class="shieldpip">${b.shield}</span>` : '');
   els.hand.innerHTML = b.hand.map((c, i) => cardHTML(c, {
-    cls: `${i === b.sel ? 'sel' : ''} ${cardCost(c) <= b.energy && playable ? '' : 'dead'}`,
+    cls: `${i === b.sel ? 'sel' : ''} ${playableNow(b, c) && playable ? '' : 'dead'}`,
     attr: `data-c="${i}"`, slot: i + 1,
     style: fanStyle(i, b.hand.length, i === b.sel),
-    foot: i === b.sel && cardCost(c) <= b.energy && playable ? '<div class="cp">▲ play</div>' : '',
+    foot: i === b.sel && playableNow(b, c) && playable ? '<div class="cp">▲ play</div>' : '',
   })).join('');
   paintCardArt(els.hand);
-  // When there is nothing left you can pay for, the End turn button says so.
-  const canPlay = b.hand.some((c) => cardCost(c) <= b.energy) && playable;
+  // When there is nothing left you can play, the End turn button says so.
+  const canPlay = b.hand.some((c) => playableNow(b, c)) && playable;
   els.acts.innerHTML = [
     ['end', `End turn <span class="key">E</span>`, !canPlay && playable],
     ['kin', 'Kin', false], ['bag', 'Bag', false],
@@ -6514,7 +6626,7 @@ function renderHand() {
   ].map(([a, label, nag]) => `<div class="abtn ${nag ? 'nag' : ''}" data-a="${a}">${label}</div>`).join('');
   const it = b.intent;
   els.intent.innerHTML = it
-    ? `Foe: <b>${it.name}</b>${it.kind === 'attack' ? ` · about ${it.dmg}` : ''}`
+    ? `Foe: <b>${it.name}</b>${it.kind === 'attack' ? ` · about ${it.dmg}` : it.tell ? ` · ${it.tell}` : ''}`
     : '';
   // The hand is too small to hold a card's whole rules text, so the line above
   // it spells out whichever card you are aiming at whenever it is otherwise idle.
@@ -8451,6 +8563,7 @@ if (typeof window !== 'undefined') {
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX,
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL,
+    WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,

@@ -78,15 +78,38 @@ export function loadGame(store = {}) {
  * Play the current battle to its end the way a player would: spend every card
  * you can afford, then end the turn. Returns false if it never resolved.
  */
+/**
+ * Fight to the end, greedily but not stupidly.
+ *
+ * A kin may swing once a turn, so a bot that plays whatever is leftmost burns
+ * its energy on the move and then has nothing to sharpen it with — which
+ * measures the bot, not the game. Support first, then the swing: still greedy
+ * (it spends an Edge whether or not the swing lands), but it no longer beats
+ * itself.
+ */
 export function autoFight(EK, limit = 300) {
   let guard = 0;
   while (EK.G.battle && !EK.B().over && guard++ < limit) {
     const b = EK.B();
-    for (let spun = 0; spun < 12; spun++) {
-      const i = b.hand.findIndex((c) => EK.cardCost(c) <= b.energy);
-      if (i < 0 || b.over) break;
-      EK.playCard(i);
+    const kinCost = () => {
+      let c = Infinity;
+      for (const h of b.hand) if (h.src === 'kin') c = Math.min(c, EK.cardCost(h));
+      return c === Infinity ? 0 : c;
+    };
+    const spend = (reserve) => {
+      for (let spun = 0; spun < 10; spun++) {
+        if (b.over) break;
+        const i = b.hand.findIndex((c) => c.src !== 'kin' && EK.cardCost(c) <= b.energy - reserve);
+        if (i < 0) break;
+        EK.playCard(i);
+      }
+    };
+    spend(kinCost());
+    if (!b.over) {
+      const i = b.hand.findIndex((c) => c.src === 'kin' && EK.cardCost(c) <= b.energy);
+      if (i >= 0) EK.playCard(i);
     }
+    spend(0);
     if (b.over) break;
     EK.endTurn();
   }

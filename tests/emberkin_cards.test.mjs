@@ -127,6 +127,7 @@ const swingWith = (cardId, foeHp) => {
   const owned = EK.grantCard(cardId);
   const bb = EK.B();
   bb.foe.hp = foeHp; bb.over = null;
+  bb.swungTurn = 0;                               // each probe is a fresh turn
   const move = bb.mine.moves.find((m) => EK.MOVES[m.id].pow);
   bb.hand = [{ src: 'deck', u: owned.u, id: cardId, bg: 0 }, { src: 'kin', id: move.id }];
   bb.energy = 9;
@@ -765,4 +766,179 @@ section('speed decides who opens');
   eq(g.B().mine.hp, g.B().mine.max, 'a slower wild kin waits its turn');
 }
 
+
+
+section('one swing a turn');
+// Three energy and moves costing one or two meant the best line was to attack
+// twice and never touch the deck — which is the exact opposite of "your kin
+// brings the attacks, your deck makes them land harder", and why a fight was
+// over in a turn and a half.
+{
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 30), wild: true });
+  const bb = g.B();
+  bb.foe.hp = bb.foe.max = 99999;                 // nothing dies, so we can count
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  bb.hand = [{ src: 'kin', id: move.id }, { src: 'kin', id: move.id }];
+  bb.energy = 9;
+  eq(bb.swungTurn, 0, 'a fresh turn has not swung yet');
+  ok(g.playableNow(bb, bb.hand[0]), 'and the swing is playable');
+  const hpBefore = bb.foe.hp;
+  g.playCard(0);
+  eq(bb.swungTurn, 1, 'swinging marks the turn');
+  ok(bb.foe.hp <= hpBefore, 'and the swing happened');
+  const energyAfter = bb.energy, handAfter = bb.hand.length, hpAfter = bb.foe.hp;
+  ok(!g.playableNow(bb, bb.hand[0]), 'the second kin card reads as unplayable');
+  g.playCard(0);
+  eq(bb.hand.length, handAfter, 'and playing it puts it straight back in hand');
+  eq(bb.energy, energyAfter, 'costs nothing');
+  eq(bb.foe.hp, hpAfter, 'and does no damage');
+
+  // A support card is still free to play — the limit is on the swing, not the turn.
+  const owned = g.grantCard('edge');
+  bb.hand.push({ src: 'deck', u: owned.u, id: 'edge', bg: 0 });
+  ok(g.playableNow(bb, bb.hand[bb.hand.length - 1]), 'support is unaffected');
+
+  // The aim never rests on a card that will refuse the keypress.
+  bb.sel = 0;
+  g.aimPlayable(bb);
+  ok(g.playableNow(bb, bb.hand[bb.sel]), 'the aim moves off a spent swing');
+
+  // And ending the turn hands the swing back.
+  g.endTurn();
+  eq(g.B().swungTurn, 0, 'a new turn swings again');
+}
+
+section('a trainer works a plan, and telegraphs every beat of it');
+// Every hand-authored fight was "two kin, no plan": the foe scored its moves
+// each turn and never built toward anything. A plan is a short loop of beats,
+// each announced a turn ahead through the intent line, so the point is never
+// surprise — it is that you can see the big hit coming.
+{
+  const g = fresh();
+  const npc = { name: 'Wick', id: 't_x', trainer: { team: [], prize: 0, plan: ['sharpen', 'swing'] } };
+  g.G.party = [g.mkMon('gargolem', 40)];
+  g.startBattle({ foe: g.mkMon('sproutle', 20), npc });
+  const bb = g.B();
+  bb.mine.hp = bb.mine.max = 99999;               // survive the payoff, so we can read it
+  // Leave it only one thing to do on a swing beat, so the payoff is readable.
+  bb.foe.moves = bb.foe.moves.filter((m) => g.MOVES[m.id].pow).slice(0, 1);
+  ok(bb.foe.moves.length, 'the foe has an attack to pay the plan off with');
+  ok(!!bb.plan, 'the trainer brought a plan');
+  eq(bb.intent.kind, 'plan', 'and the first beat is telegraphed before you act');
+  eq(bb.intent.name, g.PLANS.sharpen.label, 'by name');
+  ok(bb.intent.n > 0, `with the number on it (+${bb.intent.n})`);
+  ok(/\+/.test(bb.intent.tell), 'and a line the hand can print');
+  const edge = bb.intent.n;
+  eq(bb.foeEdge, 0, 'nothing is banked yet');
+  const hpBefore = bb.mine.hp;
+  g.endTurn();
+  eq(bb.foeEdge, edge, 'ending the turn is when the beat happens');
+  eq(bb.mine.hp, hpBefore, 'and a setup beat costs the foe its attack');
+  eq(bb.intent.kind, 'attack', 'the payoff is telegraphed in turn');
+  g.endTurn();
+  eq(bb.foeEdge, 0, 'the edge is spent on the swing it was saved for');
+  ok(bb.mine.hp < hpBefore, 'which lands');
+}
+
+section('a braced trainer eats a hit, and an aimed one goes round your shield');
+{
+  const g = fresh();
+  const npc = { name: 'Hale', id: 't_y', trainer: { team: [], prize: 0, plan: ['brace', 'swing'] } };
+  g.G.party = [g.mkMon('pyrelynx', 40)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), npc });
+  const bb = g.B();
+  bb.foe.hp = bb.foe.max = 99999;
+  bb.mine.hp = bb.mine.max = 99999;
+  eq(bb.intent.step, 'brace', 'the guard is announced first');
+  const guard = bb.intent.n;
+  g.endTurn();
+  eq(bb.foeShield, guard, 'and banked when the turn ends');
+  const before = bb.foe.hp;
+  const move = bb.mine.moves.find((m) => g.MOVES[m.id].pow);
+  bb.hand = [{ src: 'kin', id: move.id }];
+  bb.energy = 9; bb.swungTurn = 0;
+  g.playCard(0);
+  ok(bb.foeShield < guard, 'the guard eats the swing before the health does');
+  ok(before - bb.foe.hp < guard + 1, 'so very little of it reaches the bar');
+
+  // Aim: the answer to a shield you banked because you saw the sharpen coming.
+  const h = fresh();
+  h.G.party = [h.mkMon('gargolem', 40)];
+  h.startBattle({ foe: h.mkMon('sproutle', 30), npc: { name: 'Wick', id: 't_z', trainer: { team: [], prize: 0, plan: ['aim', 'swing'] } } });
+  const hb = h.B();
+  hb.mine.hp = hb.mine.max = 99999;
+  hb.foe.moves = hb.foe.moves.filter((m) => h.MOVES[m.id].pow).slice(0, 1);
+  eq(hb.intent.step, 'aim', 'taking aim is telegraphed like anything else');
+  eq(hb.intent.n, 0, 'and carries no number, because it is not a number');
+  h.endTurn();
+  eq(hb.foePierce, 1, 'the aim is held');
+  hb.shield = 9999;                               // everything you could possibly bank
+  const hp = hb.mine.hp;
+  h.endTurn();
+  ok(hb.mine.hp < hp, 'and the hit lands anyway');
+  ok(!(h.B().log || []).some((e) => /Shield absorbs/.test(e.msg || '')),
+    'without a point of it going through the shield');
+  eq(hb.foePierce, 0, 'the aim is spent on the one swing');
+}
+
+section('the three Wick fights are the same person getting better');
+// The arc is data, so it is worth asserting as data: every rival fight has a
+// plan, each one is longer than the last, and each knows a beat the one before
+// it did not.
+{
+  const g = fresh();
+  const wicks = ['t_wick1', 't_wick2', 't_wick3'].map((id) => {
+    for (const m of Object.values(g.MAPS)) {
+      const n = (m.npcs || []).find((x) => x.id === id);
+      if (n) return n;
+    }
+    return null;
+  });
+  ok(wicks.every(Boolean), 'all three Wick fights are on the map');
+  const plans = wicks.map((n) => n.trainer.plan);
+  ok(plans.every((p) => Array.isArray(p) && p.length), 'and every one of them has a plan');
+  ok(plans[0].length < plans[1].length && plans[1].length < plans[2].length,
+    `the plan gets longer each time (${plans.map((p) => p.length).join(' < ')})`);
+  const kinds = plans.map((p) => new Set(p.filter((s) => s !== 'swing')));
+  eq(kinds[0].size, 1, 'the first Wick has one idea');
+  ok(kinds[1].size > kinds[0].size, 'the second has learned another');
+  ok(kinds[2].size > kinds[1].size, 'and the third has learned a third');
+  for (const p of plans) for (const s of p) ok(!!g.PLANS[s], `${s} is a beat the game knows`);
+  // Nobody gets two setup turns in a row: that is a free turn, not a plan.
+  for (const p of plans) {
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], bnext = p[(i + 1) % p.length];
+      ok(a === 'swing' || bnext === 'swing', `${a} is paid off before the next beat`);
+    }
+  }
+  // And every trainer in the game has one, not just the rival.
+  let trainers = 0, planned = 0;
+  for (const m of Object.values(g.MAPS)) {
+    for (const n of m.npcs || []) {
+      if (!n.trainer) continue;
+      trainers++;
+      if (n.trainer.plan) planned++;
+    }
+  }
+  ok(trainers >= 8, `there are trainers to check (${trainers})`);
+  eq(planned, trainers, 'every trainer in the valley brings a plan');
+}
+
+section('a trainer\'s kin is not a wild kin');
+// Trainers hit at full strength and come in teams, so each of their kin needs a
+// far smaller pool than a lone wild one — giving them the wild number made the
+// opening rival fight a coin toss.
+{
+  ok(EK.TRAINER_HP_MUL < EK.FOE_HP_MUL, 'a trainer\'s kin carries less of the fight on its own');
+  ok(EK.WILD_DMG_MUL < 1, 'and a wild kin hits softer than a trained one');
+  const g = fresh();
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  g.startBattle({ foe: g.mkMon('gargolem', 20), wild: true });
+  const wildMax = g.B().foe.max;
+  g.G.battle = null;
+  g.startBattle({ foe: g.mkMon('gargolem', 20), npc: { name: 'X', id: 't_w', trainer: { team: [], prize: 0 } } });
+  ok(g.B().foe.max < wildMax, `the same kin is tougher in the grass (${wildMax} vs ${g.B().foe.max})`);
+}
 done('emberkin_cards');
