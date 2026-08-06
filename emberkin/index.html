@@ -4946,7 +4946,7 @@ function startBattle(opt) {
     escapes: 0, turn: 0, over: null, log: null, li: 0,
     shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
-    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0,
+    foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, settling: 0,
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
@@ -4958,7 +4958,7 @@ function startBattle(opt) {
   };
   mine.stages = { atk: 0, def: 0, spd: 0 };
   opt.foe.stages = { atk: 0, def: 0, spd: 0 };
-  toughen(opt.foe, opt.wild ? FOE_HP_MUL : TRAINER_HP_MUL);
+  toughen(opt.foe, opt.wild ? FOE_HP_MUL : trainerHp((opt.team || [1]).length));
   G.battle.dispF = G.battle.tgtF = opt.foe.hp;
   buildDeck(G.battle);
   G.wipe = WIPE_T;
@@ -5068,8 +5068,11 @@ function useMove(log, atkSide, moveId) {
       // turns being paid for in walks back to town. A trainer's kin gets
       // neither — they are trained, and their fights are supposed to hurt.
     const bonus = atkSide === 'mine' ? attackBonus()
-      : { flat: b.foeEdge || 0, mul: b.wild ? WILD_DMG_MUL : 1, hits: 1, drain: 0 };
+      : { flat: b.foeEdge || 0, mul: b.wild ? WILD_DMG_MUL : trainerDmg(b.foe.lvl), hits: 1, drain: 0 };
     if (atkSide === 'foe') b.foeEdge = 0;          // spent on this swing
+    // A kin that has just been sent in is still finding its feet.
+    const settling = atkSide === 'mine' && b.settling;
+    if (settling) { b.settling = 0; snap(log, `${who} is still finding its feet.`, 'block', 'mine'); }
     let totalDealt = 0;
     for (let h = 0; h < bonus.hits && defender.hp > 0; h++) {
       const roll = damageOf(attacker, defender, moveId);
@@ -5082,7 +5085,8 @@ function useMove(log, atkSide, moveId) {
       // the game. Against a resistance it applies at half strength. Dropping it
       // altogether was worse than the disease: wipes went from .220 a fight to
       // .364, which is a walk back to town every third fight.
-      const mul = atkSide === 'foe' && eff < 1 ? (1 + bonus.mul) / 2 : bonus.mul;
+      let mul = atkSide === 'foe' && eff < 1 ? (1 + bonus.mul) / 2 : bonus.mul;
+      if (settling) mul *= SETTLE_MUL;
       const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * mul));
       let dealt = dmg;
       if (atkSide === 'foe') {
@@ -5390,16 +5394,27 @@ const BASE_ENERGY = 3, HAND_SIZE = 5;
  * hit coming and get to decide what to do about it.
  */
 const PLANS = {
-  sharpen: { label: 'sharpening', line: (n) => `is sharpening — the next one will hurt (+${n}).`, edge: 8 },
-  brace:   { label: 'bracing',    line: (n) => `braces. ${n} of the next hit will go nowhere.`, shield: 14 },
+  sharpen: { label: 'sharpening', line: (n) => `is sharpening — the next one will hurt (+${n}).`, edge: 13 },
+  brace:   { label: 'bracing',    line: (n) => `braces. ${n} of the next hit will go nowhere.`, shield: 20 },
   // The answer to a sharpen you can see coming is to bank a shield and eat it.
   // Aim is the answer to that answer, which is why only the late trainers know
   // it: the fight stops being "read the beat" and becomes "read the player".
   aim:     { label: 'taking aim',  line: () => 'takes aim. A shield will not be in the way.', pierce: 1 },
   swing:   { label: null },
 };
-/** How much a plan beat is worth at a given level — it has to keep up. */
-const planScale = (lvl) => 1 + lvl / 22;
+/**
+ * How much a plan beat is worth at a given level.
+ *
+ * It has to keep up with the valley, and it has to *not* be there at the start.
+ * Wick's first fight is one kin against one kin at level five with the type
+ * advantage his way; every global buff the trainers have ever been given has
+ * landed on that fight first and made the opening of the game unwinnable —
+ * twice now, caught both times by the "still a fight, not a formality"
+ * assertion. A trainer at level five is a kid who was handed their first kin the
+ * same morning you were. The plans are worth what they can make of them, and
+ * they get better as you go north.
+ */
+const planScale = (lvl) => (1 + lvl / 22) * Math.min(1, lvl / 12);
 // A turn is roughly one attack plus the support stacked onto it, so a foe wants
 // a little more than its bare HP to be worth fighting — but only a little, now
 // that the deck sharpens attacks rather than adding its own. Their stats are
@@ -5410,6 +5425,29 @@ const FOE_HP_MUL = 4.0, WILD_DMG_MUL = .70;
 // a wild kin does not. Giving them the wild number made the opening rival fight
 // a coin toss and turned Dorn's two kin into a ten-turn slog.
 const TRAINER_HP_MUL = 2.2;
+/**
+ * A trainer's kin carries less of the pool the more of them there are.
+ *
+ * A flat multiplier meant a trainer's fight got longer in proportion to their
+ * team: Wick's one kin was three turns and Dorn's two were eight, with Coll's
+ * three the longest fight in the game and not one of those turns a decision.
+ * The pool belongs to the trainer, so it is shared out — three kin at 1.5x each
+ * is a longer fight than one at 2.2x, but not three times longer.
+ */
+const trainerHp = (n) => TRAINER_HP_MUL / Math.pow(Math.max(1, n), .35);
+/**
+ * And they hit harder than anything in the grass.
+ *
+ * Trainers stopped winning: every one of them except the opening rival sat at
+ * 0% losses with the player's party still above three quarters health. Health
+ * was the wrong lever for that — more of it made the fights long rather than
+ * dangerous, and Coll's three kin were already the longest fight in the game.
+ * A trained kin is not a tougher wild kin, it is a better-hitting one, so the
+ * danger goes where you can see it coming instead of into the bar.
+ */
+const TRAINER_DMG_MUL = 1.35;
+/** The same ramp, for the same reason. */
+const trainerDmg = (lvl) => 1 + (TRAINER_DMG_MUL - 1) * Math.min(1, lvl / 14);
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 const CORNER_AT = .4, CORNER_EDGE = 14;
@@ -5417,6 +5455,13 @@ const CORNER_AT = .4, CORNER_EDGE = 14;
 // your hand and everything the deck had stacked up; none of that was a price
 // worth thinking about next to buying the element outright.
 const SWITCH_PUNISH = 11;
+// And what a kin can do on the turn it arrives. Pricing the switch was not
+// enough: it cost a turn and a harder hit, and still bought the whole matchup
+// immediately, so with a party of four every fight was send-in-the-right-element
+// and delete. The payoff arrives a turn late now. Over a three-turn fight that
+// is most of the reason to do it at all, which is what makes it a decision
+// rather than the obvious opening move.
+const SETTLE_MUL = .6;
 
 /** Give a foe its battle-sized health as it steps in. */
 function toughen(mon, mul) {
@@ -5824,7 +5869,7 @@ function resolveFoeDown(log) {
   if (b.team && b.teamIdx < b.team.length - 1) {
     b.teamIdx++;
     const nxt = b.team[b.teamIdx];
-    b.foe = toughen(mkMon(nxt[0], nxt[1]), b.wild ? FOE_HP_MUL : TRAINER_HP_MUL);
+    b.foe = toughen(mkMon(nxt[0], nxt[1]), b.wild ? FOE_HP_MUL : trainerHp((b.team || [1]).length));
     b.foe.stages = { atk: 0, def: 0, spd: 0 };
     b.dispF = b.tgtF = b.foe.hp;
     seeMon(b.foe.species);
@@ -5925,6 +5970,7 @@ function doAction(action) {
     // thing, never lose. It is now a moment you can be caught in — the hit that
     // lands while your kin is still finding its feet comes in harder.
     if (b.foe.hp > 0 && !b.over) b.foeEdge += Math.round(SWITCH_PUNISH * planScale(b.foe.lvl));
+    b.settling = 1;
     snap(log, `Come back, ${dispName(b.mine)}!`);
     clearMods(b);
     b.mine.stages = { atk: 0, def: 0, spd: 0 };
@@ -8637,7 +8683,7 @@ if (typeof window !== 'undefined') {
     openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
-    CORNER_AT, CORNER_EDGE, SWITCH_PUNISH,
+    CORNER_AT, CORNER_EDGE, SWITCH_PUNISH, SETTLE_MUL, trainerHp, TRAINER_DMG_MUL, trainerDmg,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,

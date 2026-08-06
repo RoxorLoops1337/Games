@@ -533,6 +533,15 @@ below 70% HP (a fight you cannot lose is a cutscene you have to press buttons
 through), walks back to town to heal, wipes, turns per fight, and which cards
 were drawn and never worth playing.
 
+**Trainers still do not win, and the reason is not a dial.** Every trainer but
+the opening rival sits at 0% losses with the party above three quarters health,
+and neither health nor damage closed it: the player arrives with four rested kin
+and the trainer brings one to three, so the player rotates freshness in while the
+trainer spends its team one kin at a time. A buff big enough to beat four rested
+kin lands on the solo game first, where the same dials bite hardest. Closing it
+needs a design change — trainers that switch or heal, bigger teams, or a party
+the fight actually draws down — not another constant.
+
 It runs in two modes, and both are worth reading, because two very different
 games hide in one average:
 
@@ -787,6 +796,12 @@ caught mid-change: the hit that lands while your kin is still finding its feet
 comes in harder. That took party losses from 0.006 a fight to 0.040 — nearly
 sevenfold — which is the first time a party has been able to lose at all.
 
+**A kin sent in is still finding its feet.** `SETTLE_MUL` (.6) is the other half:
+pricing the switch was not enough, because it still bought the whole matchup
+*immediately*. The payoff arrives a turn late now, and over a three-turn fight
+that late turn is most of the reason to switch at all — which is what makes it a
+decision rather than the obvious opening move.
+
 It did **not** stop the switch being the strongest button on the screen, and
 that is the honest state of it. Run the probe with a switch-happy policy instead
 of a human one and the rate goes 0.47 to 0.65 switches a fight, fights shorten
@@ -798,6 +813,36 @@ the price of the answer.
 A switch already cost three things, none of which were worth thinking about next
 to buying the element outright: the turn, the hand (`b.disc.push(...b.hand)`),
 and everything the deck had stacked up (`clearMods`).
+
+### What a trainer gets, and when
+
+Three dials, and the third one is the lesson:
+
+| | | |
+| --- | --- | --- |
+| `trainerHp(n)` | `TRAINER_HP_MUL / n^.35` | the pool belongs to the trainer, not to each kin |
+| `trainerDmg(lvl)` | ramps to `TRAINER_DMG_MUL` (1.35) by level 14 | a trained kin is a better hitter, not a bigger bag of health |
+| `planScale(lvl)` | `(1 + lvl/22) * min(1, lvl/12)` | a plan beat is worth what its owner can make of it |
+
+The health share-out came first and was the wrong lever: a flat multiplier meant
+a trainer's fight got longer in proportion to their team, so Wick's one kin was
+three turns and Dorn's two were eight, with Coll's three the longest fight in the
+game and not one of those turns a decision. Sharing the pool out fixed the length
+(Dorn 8.1 turns to 4.5) and did nothing at all for the danger — which is what
+sent the danger into damage instead.
+
+**The ramp is the part worth remembering.** Wick's first fight is one kin against
+one kin at level five with the type advantage his way, and *every* global buff
+the trainers have ever been given lands on that fight first. It has been made
+unwinnable twice — a bot at 4% and at 8% — and caught both times by the "still a
+fight, not a formality" assertion rather than by anyone reading the code. So the
+buffs are not there on the first morning: a trainer at level five is a kid who
+was handed their first kin the same day you were, and the plans and the damage
+both ramp in over the walk north. With every trainer dial at full strength the
+opening now runs 68–79% for a greedy bot.
+
+If you add a trainer buff, ramp it, and run `emberkin.test.mjs` before believing
+it.
 
 ### Elements
 

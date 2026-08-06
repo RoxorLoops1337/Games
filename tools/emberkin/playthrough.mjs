@@ -133,10 +133,16 @@ function playOne() {
     // A switch spends the turn, so it has to be counted as one. It was not, and
     // that is most of why party fights looked like they were over in one: half
     // of those fights were a switch and a swing.
+    // Count the opening telegraph before anything is done about it: switching
+    // spends a turn, so the foe works a beat during it, and a fight that opened
+    // with a switch was reading as though its plan had never been shown.
+    if (b.intent && b.intent.kind === 'plan') planBeats++;
+    let counted = !!(b.intent && b.intent.kind === 'plan');
     if (!SOLO && EK.G.party.length > 1 && swapIn()) turns++;
     while (EK.G.battle && !EK.B().over && guard++ < 300) {
       const cur = EK.B();
-      if (cur.intent && cur.intent.kind === 'plan') planBeats++;
+      if (cur.intent && cur.intent.kind === 'plan' && !counted) planBeats++;
+      counted = false;
       for (const c of cur.hand) bump(stat.drawn, c.src === 'kin' ? `kin:${c.id}` : c.id);
       // The policy is part of the measurement. Cheapest-first cannot tell a
       // good deck from a big one, because it never sets anything up: it plays
