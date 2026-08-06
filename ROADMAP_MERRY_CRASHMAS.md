@@ -8,7 +8,7 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
-## CURRENT PHASE: D — execute the plan
+## CURRENT PHASE: E — three more critics, then back to C
 
 The owner asked for 15 more levels, designed rather than generated, and then a
 critique cycle. Work the phases in order; when a phase's exit condition is met,
@@ -24,10 +24,14 @@ edit this block to name the next one.
   market that scored itself between runs.
 - [x] **C — synthesis.** Done: `.polish/crashmas-plan.md`, 19 items, ordered,
   with five critic conflicts resolved and six proposals cut.
-- **D — execute the plan.** Work `.polish/crashmas-plan.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]` as each ships. Items 1–18 are
-  done. **Next: item 19** (re-cost the garage). Exit: all 19 ticked.
-- **E — three more critics, then back to C.** Repeat the cycle.
+- [x] **D — execute the plan.** Done: all 19 items of `.polish/crashmas-plan.md`
+  shipped, one per pass, each with assertions and a browser check. Three of them
+  turned up cosmetic systems feeding on the simulation seed (see the note below);
+  four deviated from the plan's specifics and say so in `.polish/crashmas-plan.md`.
+- **E — three more critics, then back to C.** Three fresh critiques (design, feel,
+  code) against the game as it stands after phase D, written to `.polish/`. Then
+  phase C again: one synthesis agent reads all three and writes the next ordered
+  plan. Exit: `.polish/crashmas-plan-2.md` exists and phase D restarts against it.
 
 ## Working agreement for each pass
 
