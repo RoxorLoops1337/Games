@@ -346,6 +346,133 @@ sKdmmmmmmmmmmdKs
 sKddddddddddddKs
 sKKKKKKKKKKKKKKs
 ssssssssssssssss`],
+  // ---- what makes a room a room -------------------------------------------
+  // Three interiors built from the same generated box, all with the same rug,
+  // is three copies of a room rather than three rooms. These are furniture:
+  // objects, so they follow the sprite rules rather than the texture rules —
+  // a silhouette that reads filled, an outline on the outside only, light from
+  // the upper left. Each sits on its own patch of floorboard so it drops into
+  // an interior without a seam.
+  shelf: ['Bookshelf', {
+    K: '#1b1220', d: RAMP.wood.d, m: RAMP.wood.m, b: RAMP.wood.b, l: RAMP.wood.l,
+    r: '#8c4048', g: '#3f7852', c: '#2f74a3', y: '#c69320', w: RAMP.wood.m, v: RAMP.wood.d,
+  }, `
+llllllllllllllll
+KKKKKKKKKKKKKKKK
+KrrgKbbyKccrKggK
+KrrgKbbyKccrKggK
+KrrgKbbyKccrKggK
+KKKKKKKKKKKKKKKK
+KggyKrrcKbbgKyyK
+KggyKrrcKbbgKyyK
+KggyKrrcKbbgKyyK
+KKKKKKKKKKKKKKKK
+KccbKyygKrrbKccK
+KccbKyygKrrbKccK
+KccbKyygKrrbKccK
+KKKKKKKKKKKKKKKK
+dddddddddddddddd
+wwvwwwwwwwwvwwww`],
+  counter: ['Counter', {
+    K: '#1b1220', d: RAMP.wood.d, m: RAMP.wood.m, b: RAMP.wood.b, l: RAMP.wood.l,
+    w: RAMP.wood.m, v: RAMP.wood.d,
+  }, `
+wwwwwwwwwwwwwwww
+wwvwwwwwwwwwwwww
+KKKKKKKKKKKKKKKK
+KllllllllllllllK
+KlbbbbbbbbbbbblK
+KbmmmmmmmmmmmmbK
+KbmdmmmmdmmmmmbK
+KbmmmmmmmmmmmmbK
+KbdmmmdmmmmmdmbK
+KbmmmmmmmmmmmmbK
+KKKKKKKKKKKKKKKK
+KddddddddddddddK
+KKKKKKKKKKKKKKKK
+wwwwwwwwwwwvwwww
+wwwwwwwwwwwwwwww
+wwvwwwwwwwwwwwww`],
+  bed: ['Bed', {
+    K: '#1b1220', d: RAMP.wood.d, l: '#e8dcc8', p: '#cfc3ae',
+    b: '#4a5f8e', c: '#63799f', w: RAMP.wood.m, v: RAMP.wood.d,
+  }, `
+wwwwwwwwwwwwwwww
+wKKKKKKKKKKKKKKw
+wKllppppppppllKw
+wKlpppppppppplKw
+wKllppppppppllKw
+wKKKKKKKKKKKKKKw
+wKbbbbbbbbbbbbKw
+wKbccbbccbbccbKw
+wKbbbbbbbbbbbbKw
+wKbccbbccbbccbKw
+wKbbbbbbbbbbbbKw
+wKbccbbccbbccbKw
+wKbbbbbbbbbbbbKw
+wKKKKKKKKKKKKKKw
+wddddddddddddddw
+wwwwwwwvwwwwwwww`],
+  crate: ['Crate', {
+    K: '#1b1220', d: RAMP.wood.d, m: RAMP.wood.m, l: RAMP.wood.l,
+    w: RAMP.wood.m, v: RAMP.wood.d,
+  }, `
+wwwwwwwwwwwwwwww
+wwvwwwwwwwwwwwww
+wwKKKKKKKKKKKKww
+wwKllllllllllKww
+wwKlmmmmmmmmlKww
+wwKlmdmmmmdmlKww
+wwKlmmmmmmmmlKww
+wwKllllllllllKww
+wwKlmmmmmmmmlKww
+wwKlmdmmmmdmlKww
+wwKlmmmmmmmmlKww
+wwKllllllllllKww
+wwKKKKKKKKKKKKww
+wwddddddddddddww
+wwwwwwwwwwwvwwww
+wwwwwwwwwwwwwwww`],
+  pot: ['Potted fern', {
+    K: '#1b1220', d: RAMP.wood.d, g: RAMP.leaf.m, G: RAMP.leaf.l, t: RAMP.bark.m,
+    r: '#7e4e57', b: '#96646a', w: RAMP.wood.m, v: RAMP.wood.d,
+  }, `
+wwwwwwwwwwwwwwww
+wwwwwwgGgwwwwwww
+wwwwggGGGggwwwww
+wwwgGGgGgGGgwwww
+wwgGGgGGGgGGgwww
+wgGGgGGGGGgGGgww
+wwgGGgGGGgGGgwww
+wwwgGGgGgGGgwwww
+wwwwggGtGggwwwww
+wwwwwwgtgwwwwwww
+wwwKKKKKKKKKwwww
+wwwKbbbbbbbKwwww
+wwwKbrrrrrbKwwww
+wwwKbrrrrrbKwwww
+wwwKKbbbbbKKwwww
+wwwwdddddddwwwww`],
+  window: ['Window', {
+    K: '#221d29', d: RAMP.stone.d, m: RAMP.stone.m, b: RAMP.stone.b, l: RAMP.stone.l,
+    t: RAMP.wood.d, y: '#ffe7b0', o: '#f7c979',
+  }, `
+KKKKKKKKKKKKKKKK
+KmblllbmmKmbllbm
+KdmmbbmmdKdmmbbm
+KKKKKKKKKKKKKKKK
+tttttttttttttttt
+tyyyyyytyyyyyyot
+tyyyyyytyyyyyoot
+tyyyyyytyyyyooot
+tttttttttttttttt
+tyyyyyytyyyyyoot
+tyyyyyytyyyyooot
+tyyyyyytyyyoooot
+tttttttttttttttt
+KmblllbmmKmbllbm
+KdmmbbmmdKdmmbbm
+KKKKKKKKKKKKKKKK`],
   sign: ['Signpost', {
     K: '#1b1220', d: RAMP.wood.d, m: RAMP.wood.m, b: RAMP.wood.b, l: RAMP.wood.l,
     g: RAMP.grass.m, h: RAMP.grass.d, e: RAMP.grass.b,

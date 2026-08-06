@@ -1,0 +1,36 @@
+{
+  "id": "pot",
+  "name": "Potted fern",
+  "tile": true,
+  "w": 16,
+  "h": 16,
+  "palette": {
+    "K": "#1b1220",
+    "d": "#48362f",
+    "g": "#2a593c",
+    "G": "#488557",
+    "t": "#453531",
+    "r": "#7e4e57",
+    "b": "#96646a",
+    "w": "#5e483a",
+    "v": "#48362f"
+  },
+  "rows": [
+    "wwwwwwwwwwwwwwww",
+    "wwwwwwgGgwwwwwww",
+    "wwwwggGGGggwwwww",
+    "wwwgGGgGgGGgwwww",
+    "wwgGGgGGGgGGgwww",
+    "wgGGgGGGGGgGGgww",
+    "wwgGGgGGGgGGgwww",
+    "wwwgGGgGgGGgwwww",
+    "wwwwggGtGggwwwww",
+    "wwwwwwgtgwwwwwww",
+    "wwwKKKKKKKKKwwww",
+    "wwwKbbbbbbbKwwww",
+    "wwwKbrrrrrbKwwww",
+    "wwwKbrrrrrbKwwww",
+    "wwwKKbbbbbKKwwww",
+    "wwwwdddddddwwwww"
+  ]
+}

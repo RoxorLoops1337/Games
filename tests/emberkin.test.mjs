@@ -540,6 +540,37 @@ for (let i = 0; i < 60; i++) { emberMon.hp = emberMon.max; EK.useMove([], 'foe',
 eq(emberMon.status, '', 'Ember kin never catch fire');
 
 // -------------------------------------------------------------- world --
+section('no map is a rectangle of one tile');
+// The valley used to be blocks: a 2×2 square of trees, a straight shoreline, a
+// rectangle of tall grass. Everything below is a shape test, not a taste test —
+// a region whose every row is the same run is a rectangle, and a rectangle is
+// what a map looks like before anybody has drawn it.
+const OUTSIDE = Object.keys(MAPS).filter((id) => MAPS[id].kind !== 'inside');
+/** For each tile kind, the set of distinct row-signatures it makes. */
+const shapesOf = (map, ch) => {
+  const runs = new Set();
+  for (const row of map.rows) {
+    const sig = [...row].map((c, i) => (c === ch ? i : -1)).filter((i) => i >= 0).join(',');
+    if (sig) runs.add(sig);
+  }
+  return runs;
+};
+for (const id of OUTSIDE) {
+  const map = MAPS[id];
+  for (const ch of [',', '#', 's']) {
+    const rows = map.rows.filter((r) => r.includes(ch)).length;
+    if (rows < 3) continue;                       // too little of it to have a shape
+    const shapes = shapesOf(map, ch);
+    ok(shapes.size > 1, `${id}: ${EK.TILE_ART[ch]} is not the same run on every row (${shapes.size} shapes over ${rows} rows)`);
+  }
+  // Something to look at: every outdoor map carries scatter of some kind.
+  const chars = new Set(map.rows.join(''));
+  ok([...'of~sL'].some((c) => chars.has(c)), `${id} has something in it besides ground and cover`);
+}
+// The shore in particular: a coast that steps in and out, not a wall of sand.
+const shoreWidths = new Set(MAPS.stillmere.rows.map((r) => (r.match(/s+/g) || ['']).join('').length));
+ok(shoreWidths.size >= 4, `Stillmere's beach varies in width (${[...shoreWidths].sort((a, b) => a - b).join(', ')})`);
+
 section('maps are well formed and connected');
 for (const [id, map] of Object.entries(MAPS)) {
   const w = map.rows[0].length;
