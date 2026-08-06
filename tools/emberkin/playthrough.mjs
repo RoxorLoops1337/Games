@@ -9,14 +9,15 @@
 //   node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 //   node tools/emberkin/playthrough.mjs --runs 60 --starter sproutle
 //   node tools/emberkin/playthrough.mjs --runs 60 --rested # heal before each trainer
+//   node tools/emberkin/playthrough.mjs --runs 60 --build value  # deck by value, not rarity
 //
 // >>> READ tools/emberkin/README.md BEFORE BELIEVING A NUMBER THIS PRINTS. <<<
 //
 // That doc is the manual and the rap sheet: what every printed line means, what
 // it is divided by, which lines are comparable between --solo and party mode and
-// which are emphatically not, and the ledger of all twenty-nine mistakes this tool
-// has made. Nineteen passes on this game produced about eight changes to the
-// game and twenty-nine fixes to the probe. When a number here looks wrong, the ledger is
+// which are emphatically not, and the ledger of all thirty-one mistakes this tool
+// has made. Twenty passes on this game produced about eight changes to the game
+// and thirty-one fixes to the probe. When a number here looks wrong, the ledger is
 // the first place to look, not the game.
 //
 // Two rules that most of that ledger comes down to:
@@ -35,6 +36,61 @@ const RUNS = Number(argv[argv.indexOf('--runs') + 1]) || (argv.includes('--runs'
 const SOLO = argv.includes('--solo');
 // How many fights a permanent is worth keeping, for scoring. See `worth()`.
 const MIGHT_FIGHTS = 12;
+// How the run builds its deck. `rarity` is what this tool has always done —
+// always take the rarer card — and pass 27 concluded from it that the deck does
+// not decide a run, which is a conclusion confounded with the policy that
+// produced it. `value` ranks by what a card does per point of energy; `grow`
+// builds toward the permanence keywords (grow/chain/retain/combo) that the
+// when-payable table says are what separate a played card from an unplayed one.
+// Run them against each other before believing anything about the reward screen.
+const BUILD = argv.includes('--build') ? argv[argv.indexOf('--build') + 1] : 'rarity';
+
+/**
+ * What a card is worth outside a battle, per energy. `worth()` cannot be used
+ * for this — it reads the kin on the field, the foe's HP and the turns left — so
+ * this is the same shape with a nominal three turns left and a nominal swing.
+ */
+const staticScore = (EK, id) => {
+  const d = EK.CARDS[id];
+  if (!d) return 0;
+  const fx = d.fx || {}, v = d.v, LEFT = 3, SWING = 40;
+  let p = 0;
+  if (d.vt === 'edge') p += v;
+  if (d.vt === 'atk' || d.vt === 'def') p += v * LEFT;
+  if (d.vt === 'might') p += v * LEFT * MIGHT_FIGHTS;
+  if (d.vt === 'shield' || d.vt === 'heal') p += v;
+  if (d.vt === 'maxhp') p += v * 1.4;
+  if (d.vt === 'draw') p += v * 3;
+  if (d.vt === 'energy') p += v * 6 * LEFT;
+  if (fx.def) p += fx.def * LEFT;
+  if (fx.heal) p += fx.heal;
+  if (fx.healFull) p += 40;
+  if (fx.atk) p += fx.atk * LEFT;
+  if (fx.energy) p += 5;
+  if (fx.draw) p += fx.draw * 3;
+  if (fx.hits) p += SWING * fx.hits * LEFT;
+  if (fx.mul) p += SWING * (fx.mul - 1) * LEFT;
+  if (fx.drain) p += SWING * fx.drain;
+  if (fx.thorns) p += fx.thorns * LEFT;
+  if (fx.st) p += 3 * LEFT;
+  if (fx.selfdmg) p -= fx.selfdmg;
+  return p / Math.max(.5, d.cost);
+};
+
+/** How much of a card keeps paying after the turn it is played on. */
+const permScore = (EK, id) => {
+  const d = EK.CARDS[id];
+  if (!d) return 0;
+  return (d.grow ? 2 : 0) + (d.chain ? 2 : 0) + (d.retain ? 1 : 0)
+    + (d.combo ? 1 : 0) + (d.bgrow ? 1 : 0);
+};
+
+/** One number a deck policy sorts on. Higher is more wanted. */
+const cardRank = (EK, id) => {
+  if (BUILD === 'value') return staticScore(EK, id);
+  if (BUILD === 'grow') return permScore(EK, id) * 100 + EK.RARITY_ORDER.indexOf(EK.CARDS[id].r);
+  return EK.RARITY_ORDER.indexOf(EK.CARDS[id].r) * 100;
+};
 // `--rested` heals the party before each trainer, which is how this used to
 // measure them and why they all read as unloseable. Kept because the comparison
 // is the point: the difference between the two columns is how much of a
@@ -116,10 +172,12 @@ function playOne(runIdx) {
     if (!c || EK.G.deck.includes(c.u)) return;
     const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean);
     if (inDeck.length < EK.DECK_MAX) { EK.G.deck.push(c.u); return; }
-    const rank = (o) => EK.RARITY_ORDER.indexOf(EK.CARDS[o.id].r) * 100 + (o.plays || 0);
+    // A player drops a weak card, not an unused one, so play count only breaks
+    // ties within the policy's own ranking.
+    const rank = (o) => cardRank(EK, o.id) + Math.min(0.9, (o.plays || 0) / 1000);
     let worst = inDeck[0];
     for (const o of inDeck) if (rank(o) < rank(worst)) worst = o;
-    if (worst && rank(worst) < EK.RARITY_ORDER.indexOf(EK.CARDS[c.id].r) * 100) {
+    if (worst && rank(worst) < cardRank(EK, c.id)) {
       EK.G.deck = EK.G.deck.filter((u) => u !== worst.u);
       EK.G.deck.push(c.u);
     }
@@ -140,17 +198,29 @@ function playOne(runIdx) {
     if (got) for (const c of got) tryDeck(c);
   };
 
-  /** Walking back to town is also when you restock — orbs first, then salves. */
+  /**
+   * Walking back to town is also when you restock.
+   *
+   * The shop sells seven things and this used to buy the two cheapest — five
+   * bloom orbs and four salves — then stop, which is why the report showed
+   * 1093-2995 shards sitting unspent at Crown Hollow and called it a currency
+   * with no sink. The sink was there; the shopping list was the problem. A
+   * player who is rich buys better orbs (`orbToThrow` already reaches for a
+   * prism orb before a bloom orb) and carries more salves, so that is the rule:
+   * top up the floor first, then spend what is left over on the good stuff.
+   */
+  const buy = (id, n) => {
+    while ((EK.G.bag[id] || 0) < n && EK.G.money >= EK.ITEMS[id].cost) {
+      EK.G.money -= EK.ITEMS[id].cost;
+      EK.G.bag[id] = (EK.G.bag[id] || 0) + 1;
+    }
+  };
   const restock = () => {
     buyChest();
-    while ((EK.G.bag.bloomorb || 0) < 5 && EK.G.money >= EK.ITEMS.bloomorb.cost) {
-      EK.G.money -= EK.ITEMS.bloomorb.cost;
-      EK.G.bag.bloomorb = (EK.G.bag.bloomorb || 0) + 1;
-    }
-    while ((EK.G.bag.salve || 0) < 4 && EK.G.money >= EK.ITEMS.salve.cost) {
-      EK.G.money -= EK.ITEMS.salve.cost;
-      EK.G.bag.salve = (EK.G.bag.salve || 0) + 1;
-    }
+    buy('bloomorb', 5);                       // the floor: never out of orbs
+    buy('salve', 4);                          // or out of salves
+    if (EK.G.money > 1500) { buy('prismorb', 3); buy('gleamorb', 4); }
+    if (EK.G.money > 800) buy('salve', 10);   // rich enough to stop rationing
   };
   restock();
 
@@ -565,19 +635,18 @@ function playOne(runIdx) {
         // instrument the deck work in passes 9, 10 and 12 was steered by: a deck
         // built out of random picks is worse than any deck a person would hold.
         let pick = offer[0];
-        for (const id of offer) {
-          if (EK.RARITY_ORDER.indexOf(EK.CARDS[id].r) > EK.RARITY_ORDER.indexOf(EK.CARDS[pick].r)) pick = id;
-        }
+        for (const id of offer) if (cardRank(EK, id) > cardRank(EK, pick)) pick = id;
         // The real reward screen asks which card comes out when the deck is
         // full. Answer it the way a player would: drop the one played least.
+        // The real reward screen asks which card comes out when the deck is
+        // full; the reward is always taken, so this swap is unconditional where
+        // tryDeck's is not.
         const c = EK.grantCard(pick, true);
         if (!EK.G.deck.includes(c.u)) {
-          // A player drops a weak card, not an unused one — dropping by play
-          // count alone throws out whatever you took last fight.
           const inDeck = EK.G.deck.map(EK.ownedCard).filter(Boolean);
-          const worth = (o) => EK.RARITY_ORDER.indexOf(EK.CARDS[o.id].r) * 100 + (o.plays || 0);
+          const rank = (o) => cardRank(EK, o.id) + Math.min(0.9, (o.plays || 0) / 1000);
           let worst = inDeck[0];
-          for (const o of inDeck) if (worth(o) < worth(worst)) worst = o;
+          for (const o of inDeck) if (rank(o) < rank(worst)) worst = o;
           if (worst) { EK.G.deck = EK.G.deck.filter((u) => u !== worst.u); EK.G.deck.push(c.u); }
         }
         bump(stat.taken, pick);
@@ -725,6 +794,7 @@ const perRun = () => 1;
 const fights = avg((r) => r.fights), steps = avg((r) => r.steps);
 console.log(`\nEMBERKIN — ${RUNS} run${RUNS > 1 ? 's' : ''} from the study to Crown Hollow`
   + `${SOLO ? ', one kin, no switching' : ''}${RESTED ? ', rested before every trainer' : ''}`
+  + `${BUILD === 'rarity' ? '' : `, building for ${BUILD}`}`
   + `${ONLY ? `, ${ONLY} only` : ''}\n`);
 console.log(`  steps walked        ${steps.toFixed(0)}   per run, to reach level ${avg((r) => r.top).toFixed(0)}`);
 console.log(`  fights              ${fights.toFixed(0)}   per run;  one every ${show(rate((r) => r.steps, perFight), 1)} steps`);
