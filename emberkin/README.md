@@ -532,14 +532,86 @@ node tools/emberkin/playthrough.mjs --runs 60 --solo   # one kin, no switching
 is worth reading before you believe a number it prints.** That doc says what
 every printed line means, what each is divided by, which lines are comparable
 between the two modes and which are emphatically not — and it carries the ledger
-of all twenty-seven mistakes this probe has made, because the next one is far more
-likely to be a variation on those than something new. Eighteen passes on this
-game produced about eight changes to the game and twenty-seven fixes to the tool.
+of all twenty-nine mistakes this probe has made, because the next one is far more
+likely to be a variation on those than something new. Nineteen passes on this
+game produced about eight changes to the game and twenty-nine fixes to the tool.
 
 The two modes are two different games, not a hard and an easy one. With a party
 you switch into every matchup and switching is close to a hard counter — it costs
 a turn and buys the whole fight — so a party number that looks too good usually
 is. Judge a change against both, and if it only moves one, say which.
+
+#### What a run accumulates, and the two economies nobody was measuring
+
+Might was found by suspecting it. Everything else a run carries is now read
+deliberately and printed, because the per-fight tables are structurally blind to
+anything that persists: card growth, money, gems, bag, deck, might. Two of those
+turned out to be zero at Crown Hollow in every run ever measured.
+
+**The probe was never collecting the win.** The real game hands over gems on
+every win and a trainer's prize on top of a duel; the probe drives combat
+directly and skipped both. A run started with 500 shards, spent them at the first
+restock and was **broke for the remaining hundred-odd fights** — so every salve,
+orb and walk-back number this project has reported was measured on a player with
+no income. With the win paying:
+
+| | before | after |
+| --- | --- | --- |
+| solo salves a fight | .086 | **.287** |
+| solo turns per fight | 3.60 ±0.19 | **4.08 ±0.25** |
+| solo over in one turn | 13% ±2 | **8% ±2** |
+| solo lost or ran | .239 ±.028 | .256 ±.034 |
+
+The fights got *longer*, not safer: a player who can afford salves survives
+instead of fleeing. Solo is back over four turns with one fight in twelve ending
+in a single turn, which is the best that metric has read.
+
+**Gems buy chests, and the probe walked past every one** with 237 in its pocket
+at Crown Hollow — the whole second half of the card economy, never measured. It
+buys the best chest it can afford on a town visit now.
+
+What is bounded, at Crown Hollow, per run:
+
+| | reaches | bound |
+| --- | --- | --- |
+| might | +109 ±15 | capped at 150 |
+| card growth in deck | +178 ±21 of a possible 562 | each card 4× its own value; the sum is not bounded, and does not need to be |
+| money | 1093-2027 | earned faster than the shop can absorb — **no sink** |
+| gems | 39 ±5 | spent on chests |
+| deck | 12 of 12 | `DECK_MAX` |
+
+Money is the one still unbounded and piling up. It is partly the probe's fault —
+it stocks to five orbs and four salves and stops — but a player capped at what
+they want to carry has the same problem: past the first hour, shards stop being a
+decision.
+
+#### Is the reward system building a deck, or a pile?
+
+By Crown Hollow the deck is always full, always 12 of 12, **77% epic, 2% common**,
+and **half of it is three card types** (6.8 of 12). The reward system does
+upgrade — commons are gone by the end — but it converges.
+
+How much does the deck decide a run? Split sixty runs by the danger line and
+compare the thirds at each end:
+
+| | best third | worst third |
+| --- | --- | --- |
+| lost or ran (party) | .011 ±.004 | **.085 ±.020** |
+| might | +111 ±27 | +97 ±27 |
+| card growth | +174 ±40 | +161 ±34 |
+| top three cards | 6.6 / 12 | 6.8 / 12 |
+| rarity mix | epic 73%, rare 21% | epic 78%, rare 16% |
+
+**The outcome differs eightfold and the deck does not differ at all.** Every deck
+statistic overlaps; in solo the *worse* third even carries slightly more card
+growth. Whatever separates a good run from a bad one, it is not the cards.
+
+That is partly the probe: its swap rule keeps the highest rarity, which is
+deterministic, so of course it converges. But that is the honest finding rather
+than an excuse — **when rarity is the only axis the reward screen offers, a
+rarity-greedy player ends every run with the same pile**, and a deck that is the
+same every run cannot be the thing that makes a run good. If the deck is meant to
+be a build, the offer needs an axis other than "which of these is rarer".
 
 #### Might had no ceiling, and short fights are not a damage problem
 

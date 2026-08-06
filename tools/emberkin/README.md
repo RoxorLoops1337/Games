@@ -11,7 +11,7 @@ the source, and because eight passes went into how the game looks before anybody
 asked whether it was any good to play.
 
 **Read this before believing a number it prints.** Fourteen passes of work on
-this game have produced roughly six changes to the game and twenty-seven fixes to
+this game have produced roughly six changes to the game and twenty-nine fixes to
 this tool. That ratio is not an accident and it is not over. The section at the
 bottom is the list of every mistake this probe has made, because the next one is
 much more likely to be a variation on those than something new.
@@ -33,7 +33,7 @@ if it only moves one, say which.
 
 `--starter <name>` runs every run on one starter. Rotating is right for a
 headline number, but sixty rotated runs is twenty per starter, and twenty is not
-a sample — see mistake 25.
+a sample — see mistake 31.
 
 `--rested` heals the party before each trainer. That was the default until pass
 15 and it made every trainer read as unloseable. It is kept because the gap
@@ -192,26 +192,40 @@ and the family is more useful than the individual entry.
     3.08. **That is a re-baseline, not a regression.** The old numbers described a
     player throwing away permanent damage.
 
-27. **The report never showed what the run accumulates** (pass 26). Every number
+27. **The report never showed what a run accumulates** (pass 26). Every number
     was per fight or per run; nothing said what a run *builds*. `G.might` reached
     **+499** on every attack by Crown Hollow — against a wild kin's 174 HP —
     and no line in the report would ever have said so. `might at the end` is
     printed now. If a quantity persists across fights, the per-fight table cannot
     see it, and this tool is mostly per-fight tables.
 
+28. **The probe never collected the win** (pass 27). The real game hands over
+    gems on every win and a trainer's prize on top of a duel; this loop drives
+    combat directly and skipped both. A run started with 500 shards, spent them
+    at the first restock, and was broke for the remaining hundred-odd fights.
+    **Every salve, orb and walk-back number this tool has ever reported was
+    measured on a player with no income.** With the win paying, salves went from
+    .086 to .287 a fight in solo, and the fights got *longer* — 3.60 to 4.08
+    turns, over-in-one 13% to 8% — because the player survives instead of
+    fleeing.
+29. **Gems buy chests, and the probe walked past every one** (pass 27) with 237
+    in its pocket at Crown Hollow — the entire second half of the card economy,
+    never once measured. It buys the best chest it can afford on a town visit
+    now, and anything better than the worst card in the deck goes in.
+
 ### Sampling — a claim the sample could not carry
 
-24. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
+30. **The wipe rate was reported at 14 runs for three passes** (pass 15). It
     ranged .155 to .364 on *identical* builds. Every wipe claim in passes 12-14
     was noise wearing a decimal point. Intervals were added; runs went to 30, then
     60.
-25. **Rotating starters means sixty runs is twenty per starter** (pass 21).
+31. **Rotating starters means sixty runs is twenty per starter** (pass 21).
     Cindercub's lost-or-ran read .237, .358 and .438 across three samples of
     builds that never touched Ember. A per-starter claim needs `--starter`.
 
 ### Documentation — a note that was wrong for longer than any bug
 
-26. **"A three-cost card can never be afforded here"** (pass 24). It sat in
+32. **"A three-cost card can never be afforded here"** (pass 24). It sat in
     `playthrough.mjs` for two passes as a known limitation and was never true.
     Chain discounts a card by one for every card already played that turn, which
     is exactly the mechanic for this: Titanheart and Overkill are played **90%**
@@ -223,7 +237,7 @@ and the family is more useful than the individual entry.
 
 ### What the pattern says
 
-- **Nine of twenty-seven are denominators.** If a number will not move, or moves the
+- **Nine of twenty-nine are denominators.** If a number will not move, or moves the
   wrong way, or differs between the modes by more than feels right, check what it
   divides by before touching the game.
 - **The same line has been wrong twice** (entries 2 and 3), **a fix has
