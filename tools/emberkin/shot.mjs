@@ -176,6 +176,34 @@ const SCENES = {
       EK.screenSelect();
     },
   },
+  // A trainer's ambush. ALERT is spot .55, walk .55, land .25 — film it at
+  // ~80ms against the LAND, not the 1.35s whole. Six passes have had this next
+  // in line and nobody has ever looked at it.
+  //
+  // UNFINISHED, and left here as the starting point rather than a conclusion.
+  // A film of this shows the exclamation mark and the camera closing in, but
+  // the trainer does not appear to walk across 640ms — which should cover all
+  // of `spot` and most of `walk`. Whether that is the game or this scene is NOT
+  // established: `G.alert` is built by hand here instead of by `trainerSight()`,
+  // and hand-built beat state is exactly what has produced false findings
+  // before. Drive it through a real step onto the sight line before believing
+  // anything the film says.
+  ambush: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world'; EK.enterMap('route_one', 9, 12, 'up');
+      const n = (EK.G.map.npcs || []).find((x) => x.trainer);
+      if (!n) return;
+      const p = EK.G.player;
+      p.x = n.x; p.y = n.y + 3; p.px = p.x; p.py = p.y; p.dir = 'up';
+      EK.G.alert = { npc: n, t: 0, i: 0, from: { x: n.x, y: n.y },
+        stop: { x: n.x, y: n.y + 1 },
+        beats: [['spot', .55], ['walk', .55], ['land', .25]] };
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
