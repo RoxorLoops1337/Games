@@ -1150,4 +1150,31 @@ section('walking into a new place says where you are');
   ok(!!g.G.place, 'so it names the town again on the second playthrough');
 }
 
+// The box screen's layout. There is no layout engine here, so the screenshot is
+// what actually verified this — these are a regression net, because a
+// squash-merge has resurrected old markup in this repo before and a grid
+// quietly going back to two columns looks like nothing in a diff.
+section('the box is at least as dense as the party above it');
+{
+  const boxScreen = SRC.slice(SRC.indexOf('const monCard = (m, i)'), SRC.indexOf('} else if (s.kind === \'deck\')'));
+  ok(boxScreen.length > 100, 'found the box screen markup');
+  const grids = boxScreen.match(/class="cards[^"]*"/g) || [];
+  eq(grids.length, 2, `the screen draws two grids (${grids.join(', ')})`);
+  // They must match, and not only for looks. `gridCols` counts the cells in the
+  // first row of everything the cursor can be in and uses that one number for
+  // the whole screen — so with the party three across and the box two, up and
+  // down moved by three inside a two-column box. One column basis, one grid
+  // class. The party is capped at six and the box is not, so the class they
+  // agree on has to be the dense one.
+  ok(grids.every((g) => /\bslim\b/.test(g)),
+    `both grids share the dense column basis gridCols assumes (${grids.join(', ')})`);
+
+  // The level and the types must stay separable units. Written as one string
+  // with a separator, a dual type wrapped and left the separator stranded at
+  // the end of the line.
+  ok(/<small class="meta"><span>Lv\$\{m\.lvl\}<\/span><span>/.test(boxScreen),
+    'the level and types are two spans, not one string with a dot in it');
+  ok(!/Lv\$\{m\.lvl\} · /.test(boxScreen), 'and no separator can be left hanging at a line end');
+}
+
 done('emberkin_render');
