@@ -2142,12 +2142,30 @@ travelling *upward*, since the direction is the entire reading.
 
 It is deliberately quiet. A rest should not out-shout an evolution.
 
-### The starter screen is right
+### The starter screen, and the one fault that mattered
 
-Photographed for the first time and needs nothing: each card tinted to its
-element, the art in a lit window of that colour, the name in the element's own
-colour, and STRONG INTO / SOFT AGAINST chips so an irreversible choice is made
-with the matchup visible. Recorded here so nobody goes looking for work in it.
+Photographed wide it needs nothing: each card tinted to its element, the art in
+a lit window of that colour, the name in the element's own colour, and STRONG
+INTO / SOFT AGAINST chips so an irreversible choice is made with the matchup
+visible.
+
+At a phone's size it had the worst fault this whole track has found — not an
+ugly one, a *consequential* one. The row is two cards wide there, so the third
+starter sat almost entirely below the fold with a sliver of its top edge
+showing, and **two cards that fill the row read as the whole set.** A player
+could make the one irreversible choice in the game without knowing a third
+option existed.
+
+Two fixes, because either alone leaves a gap. The count is in the sentence now —
+*"Three of them. One is yours from here on"* — so the words say how many there
+are at every size. And under `body.tight` the cards tighten enough to lift a
+real card top into the frame instead of an edge, so the scroll cue has something
+to point at.
+
+Three cards cannot be made to fit: at this stage height they would have to be a
+quarter of their size, and the flavour and the matchup chips are the reason the
+screen works. Scrolling is the right answer; being unaware there is anything to
+scroll to is not.
 
 ### Something in the grass
 

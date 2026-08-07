@@ -441,6 +441,14 @@
     border:2px solid color-mix(in srgb,var(--tint) 40%,var(--edge));
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); }
   .pickcard .pportrait canvas{ image-rendering:pixelated; width:110px; height:110px; display:block; }
+  /* Below a x2 stage the third starter sat almost entirely under the fold — a
+     sliver of its top edge, easy to miss. Smaller portraits and tighter padding
+     do not make all three fit (that would need cards a quarter of this height)
+     but they lift enough of the third card into the frame that it is obviously
+     a card rather than an edge. */
+  body.tight .pickcard{ padding:.45em .45em .35em; }
+  body.tight .pickcard .pportrait canvas{ width:74px; height:74px; }
+  body.tight .pickcard .pflavour{ font-size:.72em; }
   .pickcard .pname{ font-size:.95em; font-weight:700; color:var(--tint); letter-spacing:.04em; }
   .pickcard .types{ margin:.3em 0 .5em; }
   .pickcard .pdexline{ font-size:.66em; color:var(--dim); line-height:1.35; margin:0 0 .6em;
@@ -8584,7 +8592,12 @@ function renderScreen() {
     // the shape this game uses for "pick one of these and live with it".
     html = '';                                  // no way back out but choosing
     html += `<h2>Choose your kin</h2>`;
-    html += `<p class="lede">One of them is yours from here on. Rowan will not be talked round.</p>`;
+    // The count is in the sentence. On a phone the row is two cards wide and
+    // the third is below the fold — and two cards that fill the row read as the
+    // whole set, so a player could make the one irreversible choice in the game
+    // without knowing a third option existed. The scroll cue says there is more
+    // below; the words say how much more.
+    html += `<p class="lede">Three of them. One is yours from here on, and Rowan will not be talked round.</p>`;
     html += `<div class="pickrow">` + s.list.map((id, i) => {
       const d = DEX[id];
       const tint = TYPES[d.types[0]] || 'var(--gold)';
