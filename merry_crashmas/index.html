@@ -97,9 +97,15 @@
   .lv.locked{ opacity:.45; cursor:not-allowed; }
   .lv:not(.locked):hover{ border-color:#e8a91f; }
 
-  #hint{ position:absolute; left:64px; right:64px; bottom:14px; text-align:center; pointer-events:none;
+  /* The hint used to be bare letters on the market with nothing but a text
+     shadow under them, which over a lit stall is unreadable. It is a pill
+     now, sized to its own text and centred on the frame. */
+  #hint{ position:absolute; left:50%; transform:translateX(-50%); bottom:14px;
+    max-width:calc(100% - 128px); text-align:center; pointer-events:none;
     font-size:13px; letter-spacing:1.2px; color:#cfdcee;
-    text-shadow:0 0 8px rgba(4,8,16,.9), 0 2px 6px rgba(0,0,0,.85); z-index:3; }
+    background:rgba(7,12,24,.78); border:1px solid rgba(150,190,240,.22);
+    border-radius:999px; padding:7px 18px;
+    text-shadow:0 2px 6px rgba(0,0,0,.7); z-index:3; }
   #hint[hidden]{ display:none; }
   #mute{ position:absolute; right:10px; bottom:10px; width:40px; height:40px; border-radius:10px;
     border:2px solid #24406b; background:rgba(10,18,32,.62); color:#ffd34d; font-size:17px;
@@ -109,7 +115,7 @@
     letter-spacing:1.6px; cursor:pointer; font-family:inherit; z-index:4; }
   /* On a phone the hint wraps to two lines and runs straight through the
      GAMES button, which sits over the canvas at z-index 4. Lift it clear. */
-  body.narrow #hint{ left:12px; right:12px; bottom:58px; }
+  body.narrow #hint{ bottom:58px; max-width:calc(100% - 20px); padding:6px 12px; }
   /* A phone in landscape is 390px tall, and the menu card was laid out for a
      desktop: START THE ENGINE landed at y=458 with nothing below y=390 on
      screen. Everything on the card gets smaller rather than the card getting
@@ -3290,11 +3296,25 @@ function drawProp(o){
         ctx.fillStyle = '#ffd34d';
         ctx.fillRect(o.w * 0.05, -o.h * 0.35, o.w * 0.3, o.h * 0.2);
       } else {
+        /* A flat coloured square with a yellow cross on it. It is a box now:
+           a lit lid, a shaded lower face, snow along the top edge and an
+           actual bow where the ribbons cross. */
         ctx.fillStyle = c;
         roundRect(-o.w / 2, -o.h / 2, o.w, o.h, 6); ctx.fill();
+        ctx.fillStyle = 'rgba(255,246,225,.17)';
+        roundRect(-o.w / 2 + 2, -o.h / 2 + 2, o.w - 4, o.h * 0.34, 5); ctx.fill();
+        ctx.fillStyle = 'rgba(9,16,32,.22)';
+        roundRect(-o.w / 2 + 2, o.h * 0.14, o.w - 4, o.h * 0.34, 5); ctx.fill();
+        ctx.fillStyle = 'rgba(240,248,255,.5)';
+        roundRect(-o.w / 2 + 5, -o.h / 2 + 2, o.w - 10, 7, 4); ctx.fill();
         ctx.fillStyle = '#ffd34d';
         ctx.fillRect(-6, -o.h / 2, 12, o.h);
         ctx.fillRect(-o.w / 2, -6, o.w, 12);
+        ctx.fillStyle = '#ffe27a';
+        ctx.beginPath(); ctx.ellipse(-11, -4, 10, 7, -0.5, 0, 6.283); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(11, -4, 10, 7, 0.5, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#e8a91f';
+        circle(0, -1, 6); ctx.fill();
       }
       ctx.restore(); break;
     }
@@ -4707,6 +4727,36 @@ function aimCar(){
 }
 
 /* ---------- HUD ---------- */
+/* One plate behind every HUD panel: a dark base, a lit band along the top edge
+   and a hairline border. The four panels used to be four bare rgba(8,14,26,.55)
+   fills — no edge, no light, and thin enough that a bright stall behind them
+   came through the text. */
+function hudPlate(x, y, w, h){
+  ctx.fillStyle = 'rgba(7,12,24,.84)';
+  roundRect(x, y, w, h, 12); ctx.fill();
+  ctx.fillStyle = 'rgba(150,185,235,.10)';
+  roundRect(x + 1, y + 1, w - 2, Math.min(15, h / 3), 11); ctx.fill();
+  ctx.strokeStyle = 'rgba(150,190,240,.24)'; ctx.lineWidth = 1;
+  roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 12); ctx.stroke();
+}
+
+/* Where the score plate is and how tall it has to be. It used to be a fixed
+   74px while the goals were printed at pad+96 and down, so every goal line
+   landed outside the panel, on the raw market, in grey. The plate is measured
+   off its contents here and both the plate and the rows read the same numbers,
+   which is the only way they cannot drift apart again. */
+function hudScoreRect(){
+  const pad = 14, narrow = VW < 560;
+  const rowH = narrow ? 15 : 18, headH = narrow ? 64 : 80;
+  const goals = G.goals ? G.goals.length : 0;
+  return { x: pad, y: pad, w: narrow ? 168 : 250,
+    h: headH + (goals ? goals * rowH + 8 : 0), rowH, headH, goals, pad };
+}
+function goalRowY(i){
+  const r = hudScoreRect();
+  return r.y + r.headH + 4 + i * r.rowH;
+}
+
 function drawHUD(){
   if (G.phase === 'replay') return;
   screenTransform();
@@ -4714,40 +4764,55 @@ function drawHUD(){
   // a phone in portrait had the score panel and the car count on top of each
   // other — everything narrows rather than overlapping
   const narrow = VW < 560;
-  const panelW = narrow ? 168 : 250;
+  const sr = hudScoreRect();
+  const panelW = sr.w;
+  const rowH = sr.rowH, goalN = sr.goals;
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(8,14,26,.55)';
-  roundRect(pad, pad, panelW, narrow ? 62 : 74, 12); ctx.fill();
+  hudPlate(sr.x, sr.y, sr.w, sr.h);
   ctx.fillStyle = '#ffd34d';
   ctx.font = '900 ' + (narrow ? 24 : 32) + 'px system-ui';
   ctx.fillText(fmt(G.levelScore), pad + 12, pad + (narrow ? 32 : 42));
   ctx.fillStyle = '#8fa6c6';
   ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
-  ctx.fillText('TARGET ' + fmt(G.target), pad + 12, pad + (narrow ? 48 : 62));
+  ctx.fillText('TARGET ' + fmt(G.target), pad + 12, pad + (narrow ? 46 : 60));
 
   // target progress
-  const bw = panelW - 28, bh = 7, bx = pad + 12, by = pad + (narrow ? 52 : 68);
+  const bw = panelW - 28, bh = 7, bx = pad + 12, by = pad + (narrow ? 51 : 66);
   ctx.fillStyle = 'rgba(255,255,255,.12)';
   roundRect(bx, by, bw, bh, 4); ctx.fill();
   const prog = clamp(G.levelScore / Math.max(1, G.target), 0, 1);
   ctx.fillStyle = prog >= 1 ? '#8effb0' : '#e8a91f';
   roundRect(bx, by, bw * prog, bh, 4); ctx.fill();
 
-  // goals
+  // goals, each on its own row inside the plate with a tick box rather than a
+  // ○/✓ glyph, which is a different width in every font the browser might pick
   if (G.goals){
     ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
-    for (let i = 0; i < G.goals.length; i++){
-      const g = G.goals[i], gy = pad + (narrow ? 78 : 96) + i * (narrow ? 15 : 18);
-      ctx.fillStyle = g.done ? 'rgba(142,255,176,.95)' : 'rgba(190,205,228,.75)';
-      ctx.fillText((g.done ? '✓ ' : '○ ') + g.text, pad + 14, gy);
+    for (let i = 0; i < goalN; i++){
+      const g = G.goals[i], gy = goalRowY(i);
+      const bs = narrow ? 8 : 10;
+      if (g.done){
+        ctx.fillStyle = '#8effb0';
+        roundRect(pad + 12, gy - bs, bs, bs, 3); ctx.fill();
+        ctx.strokeStyle = '#0b1424'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pad + 14, gy - bs * 0.45);
+        ctx.lineTo(pad + 12 + bs * 0.42, gy - bs * 0.16);
+        ctx.lineTo(pad + 12 + bs * 0.85, gy - bs * 0.78);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(180,200,228,.55)'; ctx.lineWidth = 1.5;
+        roundRect(pad + 12.5, gy - bs + 0.5, bs - 1, bs - 1, 3); ctx.stroke();
+      }
+      ctx.fillStyle = g.done ? 'rgba(142,255,176,.95)' : 'rgba(214,226,244,.92)';
+      ctx.fillText(g.text, pad + 12 + bs + 7, gy);
     }
   }
 
   // cars remaining
   const carsW = narrow ? 118 : 190;
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(8,14,26,.55)';
-  roundRect(VW - pad - carsW, pad, carsW, narrow ? 40 : 48, 12); ctx.fill();
+  hudPlate(VW - pad - carsW, pad, carsW, narrow ? 40 : 48);
   ctx.fillStyle = '#cfdcee';
   ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
   ctx.fillText('CARS LEFT', VW - pad - 12, pad + (narrow ? 16 : 19));
@@ -4767,8 +4832,7 @@ function drawHUD(){
     // on a phone the top row is already full: score panel left, cars right.
     // The combo drops below the goals rather than straddling both of them.
     const cw = Math.min(208, VW - 28), cy = narrow ? 150 : 20;
-    ctx.fillStyle = 'rgba(8,14,26,.55)';
-    roundRect(cx - cw / 2, cy, cw, 84, 12); ctx.fill();
+    hudPlate(cx - cw / 2, cy, cw, 86);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
     ctx.font = '900 ' + (34 + Math.min(22, G.combo * 1.6)) + 'px system-ui';
@@ -4812,8 +4876,7 @@ function drawHUD(){
   if (G.phase === 'drive' || G.phase === 'aim'){
     const rw = narrow ? 118 : 190, rh = 26;
     const rx = VW - pad - rw, ry = pad + (narrow ? 44 : 52);
-    ctx.fillStyle = 'rgba(8,14,26,.55)';
-    roundRect(rx, ry, rw, rh, 9); ctx.fill();
+    hudPlate(rx, ry, rw, rh);
     ctx.textAlign = 'right';
     ctx.font = '900 ' + (narrow ? 12 : 14) + 'px system-ui';
     if (car.plowT > 0){

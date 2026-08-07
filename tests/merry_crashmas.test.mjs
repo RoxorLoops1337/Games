@@ -70,7 +70,7 @@ const EXPOSE = `__out.api = {
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
-  TRADES, tradeOf, drawGoods, drawHut,
+  TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4118,6 +4118,103 @@ test('a smoking stall costs the same on frame one and frame six hundred', () => 
   const dryFills = api._counts.fill || 0;
   assert(dryFills < first, 'a toy stall should cost less than a grill: ' +
     dryFills + ' vs ' + first);
+});
+
+/* ------------------------------------------------------------------- UI --- */
+
+/* The score plate was a fixed 74px tall while the goals were printed at pad+96
+   and down, so all three goal lines landed outside the panel, in grey, on a
+   lit market. You could not read a single one of them. */
+test('every goal line lands inside the plate that is meant to be behind it', () => {
+  for (const [w, h] of [[1280, 720], [390, 844], [844, 390], [2560, 1440]]){
+    const api = boot({ w, h });
+    api.G.unlocked = 21; api.startLevel(9); api.beginLevel();
+    const r = api.hudScoreRect();
+    assert(api.G.goals.length >= 3, 'a market should set three goals');
+    for (let i = 0; i < api.G.goals.length; i++){
+      const y = api.goalRowY(i);
+      assert(y > r.y, w + 'x' + h + ': goal ' + i + ' printed above the plate');
+      assert(y <= r.y + r.h - 3,
+        w + 'x' + h + ': goal ' + i + ' baseline ' + y +
+        ' falls outside a plate ending at ' + (r.y + r.h));
+    }
+    // and the plate is measured, not guessed: no goals, no room reserved
+    const tall = r.h;
+    api.G.goals = [];
+    assert(api.hudScoreRect().h < tall,
+      'a market with no goals should not reserve rows for them');
+  }
+});
+
+test('the plate grows a row at a time', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const hs = [];
+  for (let n = 0; n <= 4; n++){
+    api.G.goals = Array.from({ length: n }, () => ({ text: 'x', done: false }));
+    hs.push(api.hudScoreRect().h);
+  }
+  const step = hs[3] - hs[2];
+  assert(step === hs[4] - hs[3] && step === hs[2] - hs[1],
+    'each extra goal should add the same row height: ' + hs.join(','));
+  assert(step === api.hudScoreRect().rowH, 'and that height should be the row height');
+});
+
+/* Four HUD panels, four bare rgba fills, no edge and thin enough that a lit
+   stall came through the text. */
+test('every HUD panel sits on the same plate', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api._resetCounts();
+  api.hudPlate(10, 10, 200, 80);
+  assert((api._counts.fill || 0) === 2,
+    'a plate is a base and a lit band, got ' + api._counts.fill + ' fills');
+  assert((api._counts.stroke || 0) === 1,
+    'and one hairline border, got ' + api._counts.stroke + ' strokes');
+  const styles = (api._counts._styles || []).join('|');
+  assert(styles.includes('rgba(7,12,24,.84)'), 'the base should be near-opaque: ' + styles);
+
+  // a driving frame puts up the score plate, the cars plate, the nitro plate
+  // and, once a combo is running, the combo plate
+  api.G.phase = 'drive'; api.car.boost = 1;
+  api.G.combo = 5; api.G.comboT = 1; api.G.mult = 3;
+  api._resetCounts();
+  api.drawHUD();
+  const plates = (api._counts._styles || []).filter(s => s === 'rgba(7,12,24,.84)').length;
+  console.log('    (plates in a driving frame: ' + plates + ')');
+  assert(plates >= 4, 'score, cars, nitro and combo should all be plated, got ' + plates);
+});
+
+/* The hint was bare letters on the market under nothing but a text shadow. It
+   is a pill centred with left:50% + translateX(-50%), which a stray left/right
+   in the phone override would silently break. */
+test('the launch hint keeps its pill on every layout', () => {
+  const html = fs.readFileSync(HTML, "utf8");
+  const rule = html.match(/#hint\{[^}]*\}/);
+  assert(rule, 'the #hint rule went missing');
+  assert(/background:/.test(rule[0]), 'the hint lost its backing: ' + rule[0]);
+  assert(/border-radius:\s*999px/.test(rule[0]), 'the hint lost its pill shape');
+  assert(/left:\s*50%/.test(rule[0]) && /translateX\(-50%\)/.test(rule[0]),
+    'the hint should be centred on its own width');
+  const narrow = html.match(/body\.narrow #hint\{[^}]*\}/);
+  assert(narrow, 'the phone override went missing');
+  assert(!/(^|[;{\s])(left|right):/.test(narrow[0]),
+    'the phone override sets left/right again, which fights the centring: ' + narrow[0]);
+});
+
+/* A gift was a coloured square with a yellow cross painted on it. */
+test('a present is a box with a bow on it', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const g = api.addProp('gifts', 2000, 1100);
+  api._resetCounts(); api.drawProp(g);
+  const alive = (api._counts.fill || 0) + (api._counts.fillRect || 0);
+  g.dead = true; g.rot = 0.4;
+  api._resetCounts(); api.drawProp(g);
+  const wrecked = (api._counts.fill || 0) + (api._counts.fillRect || 0);
+  console.log('    (present: ' + alive + ' pieces wrapped, ' + wrecked + ' torn open)');
+  assert(alive >= 9, 'a wrapped present needs a lid, a shade, snow, ribbons and a bow, got ' + alive);
+  assert(wrecked < alive, 'a torn-open one should be simpler: ' + wrecked + ' vs ' + alive);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
