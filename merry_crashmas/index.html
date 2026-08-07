@@ -4445,7 +4445,12 @@ const lodAlways = (p) => p.kind === 'santa' || !!p.pram;
    panic), legs that stride, a head with a hat on top. Dead ones sprawl with
    their limbs where the car left them. */
 function drawPerson(p){
-  const coat = p.kind === 'elder' ? ELDER_COATS[p.coat % 4]
+  /* Santa is the most valuable thing in the market, has a goal named after
+     him and an edge marker that says SANTA in red — and he was wearing
+     whichever of the eight shopper coats his seed happened to roll. From above
+     he was a stranger with a small red hat. */
+  const coat = p.kind === 'santa' ? '#c22f28'
+             : p.kind === 'elder' ? ELDER_COATS[p.coat % 4]
              : p.kind === 'kid' ? KID_COATS[p.coat % 4]
              : COATS[p.coat % COATS.length];
   const skin = SKIN[p.coat % SKIN.length];
@@ -4567,9 +4572,21 @@ function drawPerson(p){
   }
 
   // coat: shoulders wider than deep
+  const santa = p.kind === 'santa';
   ctx.fillStyle = coat;
   ctx.beginPath(); ctx.ellipse(0, p.r * 0.1, p.r * 0.86, p.r * 0.72, 0, 0, 6.283); ctx.fill();
-  ctx.strokeStyle = 'rgba(18,28,48,.5)'; ctx.lineWidth = 2; ctx.stroke();
+  /* The fur trim is the coat's own outline in white rather than a second
+     shape: from above it is the whole silhouette that has to say Santa, and an
+     outline costs nothing on top of the stroke that was already there. */
+  ctx.strokeStyle = santa ? 'rgba(246,242,234,.92)' : 'rgba(18,28,48,.5)';
+  ctx.lineWidth = santa ? Math.max(2, p.r * 0.16) : 2;
+  ctx.stroke();
+  if (santa && fine){
+    ctx.fillStyle = '#2a2028';                     // the belt, and its buckle
+    ctx.fillRect(-p.r * 0.66, p.r * 0.28, p.r * 1.32, p.r * 0.16);
+    ctx.fillStyle = '#e8b53a';
+    ctx.fillRect(-p.r * 0.13, p.r * 0.24, p.r * 0.26, p.r * 0.24);
+  }
   if (fine){
     // the lit side of a coat belongs to the scene's light, not to whichever
     // way the shopper happens to be walking — so it is un-rotated back out of
@@ -4587,13 +4604,25 @@ function drawPerson(p){
   // head
   ctx.fillStyle = skin;
   circle(0, -p.r * 0.34, p.r * 0.5); ctx.fill();
-  if (p.kind === 'santa'){
-    ctx.fillStyle = '#f6f2ea';
-    circle(0, -p.r * 0.1, p.r * 0.44); ctx.fill();
-    ctx.fillStyle = '#e0483c';
-    circle(0, -p.r * 0.22, p.r * 0.5); ctx.fill();
-    ctx.fillStyle = '#f6f2ea';
-    circle(0, p.r * 0.16, p.r * 0.22); ctx.fill();
+  if (santa){
+    /* Beard first and behind the face, hat on the crown in front of it. The
+       old order put a full-size red disc between the two, which covered the
+       beard almost entirely and left him reading as a shopper in a red hat. */
+    /* Everything on this head has to miss the face the crying pass draws at
+       -0.48r and -0.26r: the beard sits behind the mouth rather than over it,
+       and the hat is pushed forward so its white fur band is what the squeezed
+       eyes land on. The old order put a full-size red disc between beard and
+       face, which covered the beard almost entirely and left the most valuable
+       target in the market reading as a shopper in a red hat. */
+    ctx.fillStyle = '#f3efe6';                     // the beard, below the chin
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.r * 0.38, p.r * 0.22, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#d8382c';                     // the hat, on the crown
+    circle(0, -p.r * 0.6, p.r * 0.4); ctx.fill();
+    ctx.fillStyle = '#f6f2ea';                     // its fur band
+    ctx.beginPath();
+    ctx.ellipse(0, -p.r * 0.44, p.r * 0.44, p.r * 0.09, 0, 0, 6.283); ctx.fill();
+    circle(0, -p.r * 0.86, p.r * 0.16); ctx.fill();       // and its bobble
   } else if (p.hat){
     /* Seen from directly above, a bobble hat is a crown covering the whole
        head with the bobble on top of it — not, as this drew, a flat disc with
