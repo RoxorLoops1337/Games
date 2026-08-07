@@ -377,6 +377,26 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+44. **The test agreed with the bug, so the bug shipped green** (pass 118, about
+    pass 117). The menu's new aim line read straight down `AIM_ORDER` and named
+    Wick's last fight in Crown Hollow as the thing to do next. It is not: that
+    npc carries `requires: 'beatVespyr'`, so the menu spent that whole stretch
+    of the game sending players up a mountain to fight a man who is not there
+    yet, past the shrine that puts him there. Nine assertions covered this and
+    every one passed, because the test set `t_wick3` before `beatVespyr` too —
+    I wrote the list and the check against the list in the same sitting, out of
+    the same wrong picture of the valley, and a check written from the same
+    head as the code confirms the head, not the game. What found it was reading
+    the npc data to write a *different* feature. The fix is not a reorder: the
+    gate column now mirrors each npc's own `requires`, gated trainers are
+    skipped rather than pointed at, and a new section compares that column
+    against the map data — an invariant tied to the source of truth, which is
+    the only kind of check that can disagree with me. It immediately found a
+    second drift I had not noticed (`t_wick1` needs `gotStarter`).
+    **A test that shares an assumption with the code under test proves the
+    assumption is consistent, not that it is true. Tie the check to the data
+    the feature copies from, not to the copy.**
+
 42. **A mechanism measured at its shipped rate reads as nothing** (pass 38). Wild
     pairs ship at a quarter of encounters, and paired at that rate the effect on
     fight length is +0.20 ±0.25 — a null result. At full strength it is

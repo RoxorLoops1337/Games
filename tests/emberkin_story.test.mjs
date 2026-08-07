@@ -323,18 +323,76 @@ section('the menu says what you are actually doing');
   g.takeStarter('cindercub');
   ok(/Wick/.test(g.nextAim()), `then at the first trainer — "${g.nextAim()}"`);
   // Beat them in order; the aim has to move each time, never repeat, never stall.
-  const seen = new Set(), lines = [];
-  for (const id of ['t_wick1', 't_pell', 't_dorn', 't_ivo', 't_wick2', 't_coll', 't_hale', 't_mio']) {
+  // Note what is NOT in this list: t_wick3 sits behind beatVespyr, so it cannot
+  // be the aim until the shrine is done. The first version of this test set it
+  // early and passed, because the code it was checking had the same order wrong.
+  const seen = new Set();
+  for (const id of ['t_wick1', 't_pell', 't_dorn', 't_ivo', 't_wick2', 't_coll', 't_mio', 't_hale']) {
     g.G.flags[id] = 1;
     const a = g.nextAim();
-    lines.push(a);
     ok(!seen.has(a), `the aim moved on after ${id} — "${a}"`);
+    // The shrine line names Crown Hollow too, and rightly — what must never
+    // appear yet is a TRAINER up there, which is the phrasing this checks.
+    ok(!/standing, in Crown Hollow/.test(a), `and never sends you to fight in Crown Hollow before the shrine — "${a}"`);
     seen.add(a);
   }
-  g.G.flags.t_wick3 = 1;
-  ok(/shrine/i.test(g.nextAim()), `with every trainer down it points at the shrine — "${g.nextAim()}"`);
+  ok(/shrine/i.test(g.nextAim()), `with every reachable trainer down it points at the shrine — "${g.nextAim()}"`);
   g.G.flags.beatVespyr = 1;
+  ok(/Wick/.test(g.nextAim()) && /Crown Hollow/.test(g.nextAim()),
+    `the shrine opens Wick's last fight, and only then — "${g.nextAim()}"`);
+  g.G.flags.t_wick3 = 1;
   ok(/unfound|valley is yours/.test(g.nextAim()), `and after that at the dex — "${g.nextAim()}"`);
+}
+
+// The gate column in AIM_ORDER is a copy of a fact the map data already owns.
+// Copies drift, and this one drifting is what sent players up an empty mountain,
+// so the copy gets compared against the original rather than trusted.
+section('the aim order agrees with the gates the map actually sets');
+{
+  const g = loadGame({});
+  const npcs = new Map();
+  for (const map of Object.values(g.MAPS)) for (const n of map.npcs || []) if (n.id) npcs.set(n.id, n);
+  for (const [id, who, where, gate] of g.AIM_ORDER) {
+    const npc = npcs.get(id);
+    ok(!!npc, `${id} is a trainer that exists on a map`);
+    if (!npc) continue;
+    eq(npc.name, who, `${id} is named the same in the aim as on the map`);
+    eq(gate || null, npc.requires || null, `${id}'s gate matches the map: aim says ${gate || 'none'}`);
+    ok(/./.test(where), `${id} says where it is`);
+  }
+  const listed = new Set(g.AIM_ORDER.map(([id]) => id));
+  for (const id of npcs.keys()) {
+    if (id.startsWith('t_')) ok(listed.has(id), `every trainer on a map is in the aim order (${id})`);
+  }
+}
+
+// Rowan hands you a kin and five lines of rules, and used to send you out the
+// door without once saying what the valley wanted. The menu carries the running
+// answer; this is the one said out loud, so it is driven through the real
+// hand-over rather than read out of the source.
+section('Rowan says what the journey is for');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.openScreen('starter');
+  g.screenSelect();                       // takes the aimed kin — raises the gotcha
+  ok(!!g.G.gotcha, 'the hand-over still opens with the celebration');
+  g.step(3);                              // the gotcha runs itself out into the papers
+  g.closeScreen();                        // a fresh profile has one way out, and it talks
+  ok(!!g.G.dialogue, 'and ends in Rowan talking');
+  const said = g.G.dialogue.lines.join(' ');
+  ok(/deck/i.test(said), `he still explains the deck — "${said.slice(0, 40)}…"`);
+  ok(said.includes(g.spell(g.AIM_ORDER.length)), `he counts the trainers, in words (${g.spell(g.AIM_ORDER.length)})`);
+  ok(/shrine/i.test(said), 'he mentions the thing on the shrine');
+  ok(said.includes(g.spell(g.DEX_ORDER.length)), `and the kin worth writing down (${g.spell(g.DEX_ORDER.length)})`);
+  ok(!/\b\d+ (trainers|kin)\b/.test(said), `and says them as a person, not a stat line — "${said.match(/\b\d+ (?:trainers|kin)\b/) || 'no digits'}"`);
+  // The aim is the last thing said, so it is what you are holding at the door.
+  const last = g.G.dialogue.lines[g.G.dialogue.lines.length - 1];
+  ok(/errand/i.test(last), `the errand is the closing line, not the chest shop — "${last}"`);
+  for (let i = 0; i < 20 && g.G.dialogue; i++) { g.G.dialogue.hold = 0; g.advanceDialogue(); }
+  ok(!g.G.dialogue, 'and the whole speech is dismissable');
+  eq(g.G.mode, 'world', 'leaving you stood in the world with a kin');
 }
 
 done('emberkin_story');

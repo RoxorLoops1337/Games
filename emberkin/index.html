@@ -3998,6 +3998,18 @@ function effStat(m, key) {
 const seeMon = (id) => { if ((G.dex[id] || 0) < 1) G.dex[id] = 1; };
 const catchMon = (id) => { G.dex[id] = 2; };
 const dexCount = (n) => DEX_ORDER.filter((id) => (G.dex[id] || 0) >= n).length;
+/**
+ * Numbers as a person says them. Tallies stay as digits — "13 caught" is a
+ * reading off a page and looks right — but a count inside a spoken sentence
+ * does not: "9 trainers between here and the top of Crown Hollow" reads as a
+ * stat line, and Rowan is talking. The point of routing it through here rather
+ * than typing the word is that these counts come out of DEX_ORDER and
+ * AIM_ORDER, so adding a kin or a trainer cannot leave her saying the old one.
+ */
+const NUMWORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+const spell = (n) => NUMWORD[n] || String(n);
+const Spell = (n) => spell(n).replace(/^./, (c) => c.toUpperCase());
 /* ============================================================ §3 — world ==
    Maps are character grids. One char per 16×16 tile, drawn with the art in
    ART_TILES. Warps, NPCs and encounter tables hang off the map object.
@@ -7572,17 +7584,25 @@ function menuInput() {
  * trainer you have not beaten, in the order the routes run, and the shrine
  * after them. Written in the register the legendary already uses — concrete,
  * unsentimental, tells you where to go without instructing you.
+ *
+ * The fourth column is the npc's own `requires` flag, and a trainer whose gate
+ * is shut is skipped rather than pointed at. That column is not decoration:
+ * Wick's last fight sits in Crown Hollow behind `beatVespyr`, so a version of
+ * this that read straight down the list sent you up the mountain to fight a
+ * man who is not there yet, past the shrine that unlocks him. If you add a
+ * gated trainer, put the gate here too — `emberkin_story` compares this column
+ * against the map data and will fail if they drift.
  */
 const AIM_ORDER = [
-  ['t_wick1', 'Wick', 'Hollowbrook'], ['t_pell', 'Forager Pell', 'Route One'],
+  ['t_wick1', 'Wick', 'Hollowbrook', 'gotStarter'], ['t_pell', 'Forager Pell', 'Route One'],
   ['t_dorn', 'Hiker Dorn', 'Route One'], ['t_ivo', 'Bramble Kid Ivo', 'the Emberwood'],
-  ['t_wick2', 'Wick', 'the Emberwood'], ['t_coll', 'Ranger Coll', 'the Emberwood'],
-  ['t_hale', 'Warden Hale', 'the Emberwood'], ['t_mio', 'Tide-hand Mio', 'Stillmere'],
-  ['t_wick3', 'Wick', 'Crown Hollow'],
+  ['t_wick2', 'Wick', 'the Emberwood', 't_wick1'], ['t_coll', 'Ranger Coll', 'the Emberwood'],
+  ['t_mio', 'Tide-hand Mio', 'Stillmere'], ['t_hale', 'Warden Hale', 'the Emberwood'],
+  ['t_wick3', 'Wick', 'Crown Hollow', 'beatVespyr'],
 ];
 function nextAim() {
   if (!G.flags.gotStarter) return 'Elder Rowan is waiting on you.';
-  const next = AIM_ORDER.find(([id]) => !G.flags[id]);
+  const next = AIM_ORDER.find(([id, , , gate]) => !G.flags[id] && (!gate || G.flags[gate]));
   if (next) return `${next[1]} is still standing, in ${next[2]}.`;
   if (!G.flags.beatVespyr) return 'Only the thing on the shrine is left, up in Crown Hollow.';
   const seen = dexCount(2);
@@ -7691,7 +7711,7 @@ function rowanScript() {
   if (G.flags.beatVespyr) {
     say('Elder Rowan', [
       'So it went with you.',
-      `Nineteen kin in this valley and you have ${dexCount(2)} of them written down in your own hand.`,
+      `${Spell(DEX_ORDER.length)} kin in this valley and you have ${dexCount(2)} of them written down in your own hand.`,
       'That is the work. There is no ceremony at the end of it — just more valley.',
       'Go on. Take them out again.',
     ]);
@@ -9248,6 +9268,12 @@ function screenSelect() {
             'Your kin brings its own moves to the fight. The deck is what you bring.',
             'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
             'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
+            // Five lines of rules and not one of them said why. The menu carries
+            // the running answer; this is the one that gets said out loud, and
+            // it is last so it is the thing you are still holding at the door.
+            `Now the part the rules do not cover. ${Spell(AIM_ORDER.length)} trainers between here and the top of Crown Hollow, and ${spell(AIM_ORDER.filter(([, who]) => who === 'Wick').length)} of them are Wick, so get used to him.`,
+            `Past the last one there is something sitting on the shrine that was here before I was. And there are ${spell(DEX_ORDER.length)} kin in this valley — I want every one of them written down.`,
+            'That is the errand. The door is behind you.',
           ], () => { saveGame(); if (done) done(); }),
         });
       },
@@ -10478,7 +10504,7 @@ if (!HEADLESS) boot();
 if (typeof window !== 'undefined') {
   window.EK = {
     G, DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART, STATUS, TILE_ART, SOLID,
-    advanceDialogue, renderDialogue, liveBattleMsg, nextAim,
+    advanceDialogue, renderDialogue, liveBattleMsg, nextAim, AIM_ORDER, spell,
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
