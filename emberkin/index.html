@@ -8709,7 +8709,22 @@ const statusChip = (st) => `<span class="tp st" style="background:${STATUS_TINT[
  * "compared with the best thing in the valley", which is the question you are
  * actually asking.
  */
-const STAT_CEIL = 130;
+/**
+ * What a full bar means, at the level the creature actually is.
+ *
+ * It was a flat 130, which is wrong at both ends of the game. Measured across
+ * the whole dex: a Lv30 kin's stats run 21..71, so every bar sat in the bottom
+ * half of its track and 29 was indistinguishable from 42 — the numbers did all
+ * the work and the bars were decoration. At Lv100 they reach 225 and clamp off
+ * the end instead, so the strongest creature in the valley looks identical to a
+ * merely good one.
+ *
+ * The question a player is actually asking is "is this one fast FOR ITS LEVEL",
+ * so the ceiling moves with the level. 110 is the highest base stat in the dex,
+ * which puts the best creature in the game at a full bar whatever level it is.
+ */
+const STAT_CEIL_BASE = 110;
+const statCeil = (lvl) => statAt(STAT_CEIL_BASE, lvl);
 function statBlock(m) {
   if (!m) return '';
   const f = m.hp / m.max;
@@ -8718,7 +8733,7 @@ function statBlock(m) {
   const floor = xpFor(m.lvl), span = Math.max(1, xpFor(m.lvl + 1) - floor);
   const into = clamp(m.xp - floor, 0, span);
   const bar = (label, v, tint) => `<div class="statrow"><span>${label}</span>
-    <div class="sbar"><i style="width:${clamp(v / STAT_CEIL, 0, 1) * 100}%;background:${tint}"></i></div>
+    <div class="sbar"><i style="width:${clamp(v / statCeil(m.lvl), 0, 1) * 100}%;background:${tint}"></i></div>
     <b>${v}</b></div>`;
   return `<div class="kindetail panel">
     <div class="portrait"><canvas width="40" height="40" data-mon="${m.species}"></canvas></div>
