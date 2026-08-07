@@ -180,14 +180,12 @@ const SCENES = {
   // ~80ms against the LAND, not the 1.35s whole. Six passes have had this next
   // in line and nobody has ever looked at it.
   //
-  // UNFINISHED, and left here as the starting point rather than a conclusion.
-  // A film of this shows the exclamation mark and the camera closing in, but
-  // the trainer does not appear to walk across 640ms — which should cover all
-  // of `spot` and most of `walk`. Whether that is the game or this scene is NOT
-  // established: `G.alert` is built by hand here instead of by `trainerSight()`,
-  // and hand-built beat state is exactly what has produced false findings
-  // before. Drive it through a real step onto the sight line before believing
-  // anything the film says.
+  // Pass 94 filmed this and reported the trainer never walking. That was the
+  // scene, not the game: `stop` was parked one tile from `from`, so the slide
+  // was a single tile and invisible at this zoom. `alertStep` moves the npc by
+  // (stop - from) * TILE in pixels, and it always did. Written down because a
+  // false alarm caught is worth as much as a bug caught, and the next person to
+  // film this should know it has already been doubted once.
   ambush: {
     w: 760, h: 900,
     go: (EK) => {
@@ -199,11 +197,43 @@ const SCENES = {
       if (!n) return;
       const p = EK.G.player;
       p.x = n.x; p.y = n.y + 3; p.px = p.x; p.py = p.y; p.dir = 'up';
+      // `stop` is computed the way `trainerSight()` computes it: p + the step
+      // direction from npc to player. The first version of this scene parked it
+      // one tile from `from`, so the npc slid a single tile over 550ms and the
+      // film looked as though the walk phase were dead. It is not — `alertStep`
+      // moves `npc.ox/oy` by (stop - from) * TILE — the scene was short.
+      const dy = 1;                       // the npc is above, facing down the line
       EK.G.alert = { npc: n, t: 0, i: 0, from: { x: n.x, y: n.y },
-        stop: { x: n.x, y: n.y + 1 },
+        stop: { x: p.x, y: p.y - dy },     // one tile short, as trainerSight now does
         beats: [['spot', .55], ['walk', .55], ['land', .25]] };
     },
   },
+  // Hour two. Everything in this file until now has photographed the first
+  // fifteen minutes — a Lv5 starter, a ten-card deck, one kin in the party. The
+  // screens were designed against that and have only ever been seen that way.
+  // Six kin, a full deck, and a dex with most of the valley in it.
+  midparty: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      const roster = ['pyrelynx', 'brookite', 'bramblor', 'gargolem', 'frillamb'];
+      EK.G.party = [EK.mkMon('kindlark', 31)];
+      roster.forEach((id, i) => EK.G.party.push(EK.mkMon(id, 24 + i * 3)));
+      EK.G.party.forEach((m) => { EK.seeMon(m.species); EK.catchMon(m.species); });
+      EK.G.party[2].hp = Math.round(EK.G.party[2].max * .28);
+      EK.G.party[4].status = 'burn';
+      EK.openScreen('party');
+    },
+  },
+  // Noted from the first `midparty` shot and NOT acted on: the detail panel's
+  // stat bars carry almost nothing at this scale. ATK 42, GUARD 29, SPD 58
+  // against STAT_CEIL 130 are three stubs in a ~45px track, and at that width
+  // 29 and 42 are indistinguishable — the numbers do all the work. Whether the
+  // bars want a shorter ceiling, a longer track, or to go away is a design call
+  // that wants its own pass rather than a guess at the end of this one.
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
