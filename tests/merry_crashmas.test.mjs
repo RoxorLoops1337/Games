@@ -5601,6 +5601,123 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
     ', bobble y' + bobble.y.toFixed(1) + ')');
 });
 
+/* --------------------------------------------------------- the dead --- */
+
+/* A corpse's four limbs were four fixed line segments in the body's own frame:
+   the same starfish at 400px/s mid-tumble as lying still, which is what
+   "bodies slide and stop" looked like up close. */
+function corpseLimbs(api, tweak){
+  api.people.length = 0;
+  const p = api.addPerson(api.cam.x, api.cam.y, 'shopper');
+  p.dead = true; p.fly = 0; p.squash = 0.9; p.ang = 0; p.side = 1;
+  p.vx = 0; p.vy = 0; p.spin = 0;
+  if (tweak) tweak(p);
+  api.cam.tz = 300; api.cam.s = 1;
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawPerson(p));
+  // every stroked path is moveTo, lineTo, lineTo — hinge, joint, tip
+  const limbs = [];
+  let cur = null;
+  for (const a of rec.all){
+    if (a[0] === 'm'){ cur = { style: a[3], pts: [[a[1], a[2]]] }; limbs.push(cur); }
+    else if (a[0] === 'l' && cur) cur.pts.push([a[1], a[2]]);
+    else cur = null;
+  }
+  return { p, rec, limbs: limbs.filter(l => l.pts.length === 3) };
+}
+
+test('a corpse has jointed limbs, not four sticks', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const c = corpseLimbs(api);
+  assert(c.limbs.length === 4, 'two arms and two legs, got ' + c.limbs.length);
+  for (const l of c.limbs){
+    const [h, j, t] = l.pts;
+    // the joint must be off the straight line from hinge to tip
+    const dx = t[0] - h[0], dy = t[1] - h[1], len = Math.hypot(dx, dy);
+    const off = Math.abs((j[0] - h[0]) * -dy + (j[1] - h[1]) * dx) / len;
+    assert(off > c.p.r * 0.05, 'a limb is straight: joint sits ' +
+      off.toFixed(2) + ' off the hinge-to-tip line on r' + c.p.r);
+    assert(len > c.p.r * 0.7 && len < c.p.r * 2,
+      'and it should be limb-length, got ' + len.toFixed(1) + ' on r' + c.p.r);
+  }
+});
+
+test('a corpse trails its limbs, then folds them out', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const tipX = (o) => o.limbs.reduce((a, l) => a + l.pts[2][0], 0) / o.limbs.length;
+  const armSpan = (o) => Math.max(...o.limbs.map(l => Math.abs(l.pts[2][1])));
+
+  const hit = corpseLimbs(api, (p) => { p.fly = 0.75; });
+  const half = corpseLimbs(api, (p) => { p.fly = 0.35; });
+  const rest = corpseLimbs(api, (p) => { p.fly = 0; });
+
+  // the car came from behind, so at the moment of impact everything trails
+  assert(tipX(hit) < tipX(half) && tipX(half) < tipX(rest),
+    'the limbs should sweep forward as the body settles: ' +
+    [hit, half, rest].map(o => tipX(o).toFixed(1)).join(' -> '));
+  // and settle out to the sides rather than reaching over the head
+  assert(armSpan(rest) > armSpan(hit),
+    'a settled body lies with its arms out: ' + armSpan(rest).toFixed(1) +
+    ' vs ' + armSpan(hit).toFixed(1));
+  // legs trailing back past -1.3r is the point; nothing reaches over the head
+  assert(rest.limbs.every(l => l.pts[2][0] < api.people[0].r * 0.9),
+    'a limb is reaching out past the head: ' +
+    Math.max(...rest.limbs.map(l => l.pts[2][0])).toFixed(1) +
+    ' on r' + api.people[0].r);
+
+  // a slam sweeps them further back than a nudge does
+  const slam = corpseLimbs(api, (p) => { p.fly = 0.75; p.squash = 0.34; });
+  const nudge = corpseLimbs(api, (p) => { p.fly = 0.75; p.squash = 0.95; });
+  assert(tipX(slam) < tipX(nudge), 'a slam should throw them further back: ' +
+    tipX(slam).toFixed(1) + ' vs ' + tipX(nudge).toFixed(1));
+});
+
+test('the ragdoll poses off state the replay puts back, and rolls nothing', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  /* The replay restores x, y, ang, dead, squash, panic, cry and fly — nothing
+     else. A pose that read p.vx or a stashed lag would come back wrong in the
+     clip, and one that rolled for its spread would move every market's score. */
+  // geometry only — the colours legitimately come off p.coat
+  const pose = (tweak) => JSON.stringify(corpseLimbs(api, tweak).limbs.map(l => l.pts));
+  const base = pose((p) => { p.fly = 0.4; p.squash = 0.6; });
+  const noisy = pose((p) => {
+    p.fly = 0.4; p.squash = 0.6;
+    p.vx = 900; p.vy = -400; p.spin = 12; p.coat = 5; p.bob = 3.1; p.bleedT = 1;
+  });
+  assert(base === noisy, 'the pose moved with state the replay does not restore');
+
+  // …but side, which the person carries from birth, is allowed to mirror it
+  const left = pose((p) => { p.fly = 0.4; p.squash = 0.6; p.side = -1; });
+  assert(left !== base, 'side should mirror the fold');
+
+  /* Not one draw from either stream. Two identical boots — the cosmetic
+     generator has its own seed, so it can only be compared run against run —
+     and one of them draws forty corpses in between. */
+  const streams = (draw) => {
+    const a = boot({ w: 1280, h: 720 });
+    a.startCampaign(); a.beginLevel();
+    a.G.phase = 'drive'; a.car.x = 2600; a.car.y = 1100; a.camSnap();
+    const q = a.addPerson(a.cam.x, a.cam.y, 'shopper');
+    q.dead = true; q.squash = 0.7; q.side = 1;
+    if (draw) for (let i = 0; i < 40; i++){
+      q.fly = (i % 8) / 10;
+      a.withCtx(carRec(), () => a.drawPerson(q));
+    }
+    return [a.rnd(), a.vrnd(), a.rnd(), a.vrnd()];
+  };
+  assert(JSON.stringify(streams(false)) === JSON.stringify(streams(true)),
+    'drawing forty corpses moved a random stream');
+});
+
 /* ------------------------------------------------------ the shopping --- */
 
 test('a shopper carries the bag they are about to drop', () => {
@@ -5757,8 +5874,10 @@ function carRec(){
   };
   const base = {
     shapes, order, rects, all, styles, polys, images: [],
-    moveTo: pt, lineTo: pt,
-    quadraticCurveTo(cx, cy, x, y){ pt(x, y); },
+    // raw path points too, so a jointed limb can be told from a straight one
+    moveTo(x, y){ pt(x, y); all.push(['m', x, y, line]); },
+    lineTo(x, y){ pt(x, y); all.push(['l', x, y, line]); },
+    quadraticCurveTo(cx, cy, x, y){ pt(x, y); all.push(['q', x, y, line]); },
     set fillStyle(v){ fill = String(v); order.push(String(v)); styles.push('f:' + v); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); styles.push('s:' + v); },

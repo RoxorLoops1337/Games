@@ -402,8 +402,18 @@ edit this block to name the next one.
       900px, an engine drone that tracks speed, squish pitched by the combo, a
       landing voice of its own, a resumable context and a baked noise bank —
       211.8 oscillator spawns a second down to 24.
-- [ ] **Ragdoll pass.** Bodies currently slide and stop. Limbs that trail, bodies
-      that fold over the bonnet and get carried, pile-ups against stalls.
+- [~] **Ragdoll pass.** Started: limbs done. A corpse's four limbs were four
+      fixed line segments in the body's own frame — the same starfish at
+      400px/s mid-tumble as lying still, which is exactly what "bodies slide
+      and stop" looked like up close. They are jointed now, with a knee and an
+      elbow, and they trail: swept hard behind at the moment of impact,
+      opening out as the body settles, arms lateral and legs trailing back
+      once it stops. A harder hit fans the pair wider. Every bit of it is a
+      pure function of `fly`, `squash` and `side` — the three things the
+      replay restores — so a corpse poses the same way in the clip as it did
+      live, and not one random draw is involved: a ragdoll that rolled for its
+      spread would move all twenty-one markets. Still to do: bodies that fold
+      over the bonnet and get carried, and pile-ups against stalls.
 - [x] **Menu cover.** Done: `cover.webp` + `cover.webm`, recorded by
       `tools/crashmas_cover.mjs` out of the browser itself (captureStream into
       a MediaRecorder — there is no ffmpeg here). Rerun it after anything that
