@@ -2206,28 +2206,29 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
-### Exhaust was defined only in a source comment
+### The deck's vocabulary, glossed where it appears
 
-`Exhaust.` is printed on some of the best cards in the game — Reaper, War Cry,
-Grit — and the only place it was ever explained is a comment above the card
-table: *one use, then out of the deck for the rest of the battle*. A player
-reads the word and has to guess, and the natural guess is the bad one: **gone
-for ever.** Somebody who believes that hoards their best cards and never plays
-them, which is the exact opposite of what they are for.
+Three words are printed on cards and were defined nowhere a player can read —
+only in comments above the card table. Each fails the same test: **a player can
+guess wrong in a way that changes what they do.**
 
-The reward screen says it, and only when a card that does it is on offer:
-*"Exhaust means one use per battle — it is back next fight."* Here rather than
-in the opening speech, because here is where the word first appears, on the card
-it appears on — and a rule explained fifty fights before you meet it is not
-explained.
+| | the guess that costs you |
+|---|---|
+| **Exhaust** | read as *gone for ever*, so the best cards get hoarded and never played — the exact opposite of what they are for |
+| **Chain** | the big one. It takes a point off the cost for every card already played this turn, so a 3-cost is free after three cheap ones. Not knowing makes Titanheart and Overkill look unaffordable, and sequencing a turn is the whole skill of the deck |
+| **Retain** | a kept card is a held resource; not knowing means playing it the moment it arrives |
 
-Verified by photograph both ways: the line is there with Reaper and War Cry on
-offer, and absent on an offer of Edge, Guard and Focus, because a screen should
-not explain a word it never used.
+They are glossed on the card offer, and **only for the words actually on the
+cards in front of you**. Two reasons, and both matter: a rule explained fifty
+fights before you meet it is not explained, and a screen should not define a
+word it never used.
 
-Two other candidates were checked and are already fine — a beaten trainer says
-*"go and ask for the rematch when you want it"*, and a boxed kin says it is
-*"resting in the box until you send for it"*. Recorded so nobody re-checks them.
+Verified by photograph in all three states — an offer using all three keywords
+(the longest the paragraph can ever get, and still readable), an offer with only
+Exhaust, and an offer of Edge, Guard and Focus with no gloss at all.
+
+`edge`, `might` and `veteran` were checked at the same time and need nothing:
+they are internal names and never appear in front of a player.
 
 ### Losing the legendary says so
 
