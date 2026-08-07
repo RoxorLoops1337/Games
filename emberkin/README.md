@@ -2719,6 +2719,32 @@ clips. Recorded because it is a null result and re-running it blind costs four
 shots. Every layout fault found so far has been at 390px or at a desktop width,
 not at a threshold: `--size 390x760` is the one that earns its keep.
 
+### Found, not yet built: nobody ever tells you what you are doing
+
+The game hands you a kin, explains how a deck works, and opens the door. From
+there it never states a goal. The menu tracks what you HAVE — `Kin 6/6`,
+`Dex 13/19`, `Deck 12/12` — and nothing anywhere says what any of it is FOR.
+There is no quest system: `quest`, `objective`, `goal`, `task` appear nowhere
+in the source (the only hits are `question`, `requestAnimationFrame` and
+`requestFullscreen`).
+
+A player who puts this down for a week has nothing to come back to except a
+map and a save file. The valley has a shape — six trainers, three Wick fights,
+a legendary on the shrine — and the game knows all of it in `G.flags`, and
+says none of it.
+
+This is the first genuinely MISSING thing found in many passes, and it is the
+kind a hundred passes of beat-polish would never surface, because every beat
+is individually fine. It wants a designer's judgement, not a checker's:
+a menu row reading the next unbeaten trainer out of `G.flags` is the cheap
+version; a stated aim at the start of the run is the honest one; the shrine
+line already in the legendary's copy ("it will gather on the shrine again")
+shows the register.
+
+Specced rather than half-built, the same way the chest beat was in #1680 —
+which was then built properly in #1682 and is one of the better things in
+here. A stated goal is worth more than a guessed one.
+
 ### Found, not yet built: the chest opens with no beat
 
 Every other reward in the game is an event. A catch is throw, wobble, gotcha,
