@@ -72,6 +72,7 @@ const EXPOSE = `__out.api = {
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
+  captionScrim, REPLAY_SPEED,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4353,6 +4354,93 @@ test('the gore field costs one fill a decal, not three', () => {
   // an empty field costs neither the halo nor the sheen
   const none = cost(0);
   assert(none.fills < a.fills, 'no blood, no halo: ' + none.fills + ' vs ' + a.fills);
+});
+
+/* --------------------------------------------------------------- replay --- */
+
+/* The replay caption was printed straight onto the market. A replay pauses
+   over the brightest thing in the game — a lit stall counter — and white 30px
+   text on that is unreadable, which is the caption gone. */
+function replayFrame(tweak){
+  const api = boot({ count: true, w: 1440, h: 810, tweak });
+  api.G.unlocked = 21; api.startLevel(5); api.beginLevel();
+  api.G.phase = 'replay';
+  api.rp.dur = 2; api.rp.t = 0.9; api.rp.caption = '6 AND 4 STALLS IN TWO SECONDS';
+  return api;
+}
+
+test('the replay caption is laid on something, not on the market', () => {
+  const CALL = 'const scrim = captionScrim();';
+  const on = replayFrame(null);
+  on.drawReplayFrame();                       // builds the gradient
+  on._resetCounts();
+  on.drawReplayFrame();
+  const off = replayFrame((s) => {
+    assert(s.includes(CALL), 'the scrim call moved; this test is checking nothing');
+    return s.replace(CALL, 'const scrim = null;');
+  });
+  off.drawReplayFrame();
+  off._resetCounts();
+  off.drawReplayFrame();
+  const withScrim = on._counts.fillRect || 0, without = off._counts.fillRect || 0;
+  console.log('    (replay frame: ' + withScrim + ' fillRects with the scrim, ' +
+    without + ' without)');
+  assert(withScrim === without + 1,
+    'the scrim should be exactly one more full-frame fill: ' + withScrim + ' vs ' + without);
+});
+
+test('the replay scrim is built once and never inside a frame', () => {
+  const api = replayFrame(null);
+  api._resetCounts();
+  api.drawReplayFrame();
+  assert((api._counts.createLinearGradient || 0) === 1,
+    'the first replay frame builds the scrim, got ' + api._counts.createLinearGradient);
+  for (let i = 0; i < 20; i++){
+    api.rp.t = 0.2 + i * 0.08;
+    api._resetCounts();
+    api.drawReplayFrame();
+    assert(!(api._counts.createLinearGradient || 0),
+      'frame ' + i + ' rebuilt the scrim gradient');
+  }
+  // a resize gets a new one, and only then
+  api._window.innerWidth = 1280; api._window.innerHeight = 720;
+  api.fit();
+  api._resetCounts();
+  api.drawReplayFrame();
+  assert((api._counts.createLinearGradient || 0) === 1,
+    'a resize should rebuild the scrim once, got ' + api._counts.createLinearGradient);
+});
+
+test('a frame that is not a replay pays nothing for the scrim', () => {
+  const api = replayFrame(null);
+  api.drawReplayFrame();
+  api.G.phase = 'drive';
+  api._resetCounts();
+  api.drawReplayFrame();
+  assert(!(api._counts.fillRect || 0), 'drawReplayFrame should do nothing outside a replay');
+});
+
+/* The carousel was a striped disc with six gold dots on it. */
+test('the carousel has a ride on it', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.setT(3);
+  const c = api.addProp('carousel', 2000, 1100);
+  api._resetCounts(); api.drawProp(c);
+  const live = { fills: api._counts.fill || 0, strokes: api._counts.stroke || 0 };
+  c.dead = true;
+  api._resetCounts(); api.drawProp(c);
+  const wrecked = { fills: api._counts.fill || 0, strokes: api._counts.stroke || 0 };
+  console.log('    (carousel: ' + live.fills + ' fills / ' + live.strokes +
+    ' strokes running, ' + wrecked.fills + ' / ' + wrecked.strokes + ' wrecked)');
+  assert(live.strokes >= 6, 'six horses need six poles, got ' + live.strokes + ' strokes');
+  assert(live.fills > wrecked.fills, 'a wrecked carousel is a simpler drawing');
+  assert(!wrecked.strokes, 'and it has no poles left standing');
+  // it turns: two clocks apart put the horses somewhere else
+  const at = (t) => { api.setT(t); api._resetCounts(); api.drawProp(c); return api._counts; };
+  c.dead = false;
+  const a = JSON.stringify(at(1)), b = JSON.stringify(at(9));
+  assert(a === b, 'the cost of a turning carousel should not depend on the clock');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
