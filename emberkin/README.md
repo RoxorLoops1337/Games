@@ -2705,6 +2705,20 @@ each to learn —
   key at all. Requiring a keypress to get past it is not needed; requiring
   `!G.battleMsg` as well waits for something that never clears.
 
+### Widths, and where they change
+
+The stage takes a scale of the 256x208 canvas and `fitStage` sets `body.tight`
+at `scale < 2`, so the layout changes shape at two places rather than
+continuously: around **512px**, where `tight` flips (type chips return, the HUD
+stops being 47% wide, the title's key hints appear), and around **768px**, where
+the scale steps again. Between those it is the same layout at a different size.
+
+Both boundaries have been swept with `firsthand` at 500/530 and 760/790, and
+both are clean — the hand fits, the chips come back without colliding, nothing
+clips. Recorded because it is a null result and re-running it blind costs four
+shots. Every layout fault found so far has been at 390px or at a desktop width,
+not at a threshold: `--size 390x760` is the one that earns its keep.
+
 ### Beats that own the screen
 
 `warp, evoAnim, alert, rustle, mend, blackout, flourish, gotcha`. `update` picks
