@@ -923,7 +923,7 @@ const MODES = new Set(['world', 'battle', 'dialogue', 'menu', 'screen', 'title']
 // stepped, frozen on top of or underneath the winner. Whether any pair is even
 // reachable has been an open question for several passes; this answers it by
 // watching for it rather than by reading the call sites and reasoning.
-const BEATS = ['warp', 'evoAnim', 'alert', 'rustle', 'mend', 'blackout', 'flourish', 'gotcha'];
+const BEATS = ['warp', 'evoAnim', 'alert', 'rustle', 'mend', 'blackout', 'flourish', 'gotcha', 'chestOpen'];
 let collided = null, beatsSeen = new Set();
 const watchBeats = (g, where) => {
   const live = BEATS.filter((k) => g.G[k]);
