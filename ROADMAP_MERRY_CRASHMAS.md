@@ -104,6 +104,10 @@ edit this block to name the next one.
       a fuse so you can see it coming. Wrecking one sends a volley streaking
       across the market that bursts into sparks. Cosmetic-stream only — a crate
       scores exactly what a barrel does.
+- [x] Cars: panel shading that follows the market's light rather than the
+      bodywork, glass with a glint, headlamps and brake lights, and five
+      silhouettes you can tell apart — van roof box, sports wing and stripes,
+      monster roll bars and stacks, a sack on the sleigh.
 
 ## Next
 

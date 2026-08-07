@@ -3984,8 +3984,22 @@ function drawCrowdBatch(list){
 }
 
 /* ---------- car ---------- */
+/* Which way the scene's light falls in the car's own frame. The car is the one
+   thing on screen that turns freely under a fixed light, so the lit side has to
+   be un-rotated back out of car.ang or it spins with the bodywork. */
+function carLitDir(){ return Math.atan2(-SUN_DY, -SUN_DX) - car.ang; }
+
 function drawCar(){
   const z = car.z || 0;
+  /* Brake lights. Worked out here rather than in stepCar on purpose: it is a
+     lamp, not a force, and nothing in the simulation may learn about it. The
+     smoothed speed lags the real one, so it lights up exactly when the car is
+     losing speed and goes out when it is not. The number of fills is the same
+     either way, so a counted frame does not depend on it. */
+  const spNow = carSpeed();
+  if (car.dispSp === undefined) car.dispSp = spNow;
+  car.brakeGlow = spNow < car.dispSp - 8 ? 1 : 0;
+  car.dispSp += (spNow - car.dispSp) * 0.25;
   // the shadow stays on the ground and shrinks away as the car climbs
   ctx.save();
   ctx.translate(car.x + z * 0.15, car.y + z * 0.24);
@@ -4055,6 +4069,18 @@ function drawCar(){
   roundRect(-CARL / 2, -CARW / 2, CARL, CARW, CAR.id === 'van' ? 7 : 11); ctx.fill();
   ctx.fillStyle = CAR.body2;
   roundRect(-CARL / 2 + 4, -CARW / 2 + 4, CARL - 8, CARW - 8, 9); ctx.fill();
+  /* The panel was two flat rects. The scene has one light direction, and the
+     car is the one thing on screen that turns freely under it, so the lit side
+     has to be un-rotated back out of the car's own frame — exactly what the
+     shoppers' coats do. Two fills on the one object that is always in shot. */
+  const la = carLitDir();
+  const lx = Math.cos(la), ly = Math.sin(la);
+  ctx.fillStyle = 'rgba(255,247,228,.16)';
+  ctx.beginPath();
+  ctx.ellipse(lx * CARL * 0.2, ly * CARW * 0.3, CARL * 0.46, CARW * 0.4, 0, 0, 6.283); ctx.fill();
+  ctx.fillStyle = 'rgba(9,16,32,.16)';
+  ctx.beginPath();
+  ctx.ellipse(-lx * CARL * 0.24, -ly * CARW * 0.34, CARL * 0.42, CARW * 0.36, 0, 0, 6.283); ctx.fill();
   // the stripe down the middle, or the van's side panel
   ctx.fillStyle = CAR.trim;
   ctx.fillRect(-CARL * 0.1, -CARW / 2 + 4, CARL * 0.2, CARW - 8);
@@ -4073,14 +4099,55 @@ function drawCar(){
   circle(CARL * 0.02, 0, CARW * (yell ? 0.11 : 0.05)); ctx.fill();
   ctx.fillStyle = '#4b6a9c';
   roundRect(CARL * 0.2, -CARW * 0.3, CARL * 0.14, CARW * 0.6, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(226,240,255,.4)';           // a glint, so it is glass
+  ctx.fillRect(CARL * 0.21, -CARW * 0.28, CARL * 0.05, CARW * 0.56);
   if (CAR.id === 'sport'){
-    ctx.fillStyle = CAR.roof;                       // rear wing
-    ctx.fillRect(-CARL * 0.52, -CARW * 0.44, 7, CARW * 0.88);
+    ctx.fillStyle = CAR.roof;                       // rear wing, on its stanchions
+    ctx.fillRect(-CARL * 0.58, -CARW * 0.5, 9, CARW);
+    ctx.fillRect(-CARL * 0.5, -CARW * 0.34, CARL * 0.1, 5);
+    ctx.fillRect(-CARL * 0.5, CARW * 0.29, CARL * 0.1, 5);
+    // twin racing stripes over the bonnet and the boot, but not over the
+    // driver: the first version ran them straight across his face
+    ctx.fillStyle = 'rgba(34,37,46,.85)';
+    for (const sy of [-CARW * 0.2, CARW * 0.14]){
+      ctx.fillRect(CARL * 0.3, sy, CARL * 0.16, 4);
+      ctx.fillRect(-CARL * 0.46, sy, CARL * 0.2, 4);
+    }
   }
   if (CAR.id === 'van'){
-    ctx.fillStyle = 'rgba(255,255,255,.75)';        // roof box
-    roundRect(-CARL * 0.06, -CARW * 0.3, CARL * 0.3, CARW * 0.6, 5); ctx.fill();
+    // a roof box in rgba(255,255,255,.75) on a cream van is a roof box you
+    // cannot see. It is the van's own trim colour with a strap over it.
+    ctx.fillStyle = CAR.trim;
+    roundRect(-CARL * 0.44, -CARW * 0.3, CARL * 0.3, CARW * 0.6, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.3)';
+    ctx.fillRect(-CARL * 0.32, -CARW * 0.3, 5, CARW * 0.6);
+    ctx.fillStyle = 'rgba(20,30,50,.45)';           // the rear doors split
+    ctx.fillRect(-CARL * 0.5 + 4, -1.5, 6, 3);
   }
+  if (CAR.id === 'monster'){
+    ctx.strokeStyle = CAR.trim; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath();                                // roll bars behind the cab
+    ctx.moveTo(-CARL * 0.42, -CARW * 0.42); ctx.lineTo(-CARL * 0.42, CARW * 0.42);
+    ctx.moveTo(-CARL * 0.28, -CARW * 0.42); ctx.lineTo(-CARL * 0.28, CARW * 0.42);
+    ctx.stroke();
+    ctx.fillStyle = '#2a3242';                      // exhaust stacks
+    roundRect(-CARL * 0.5, -CARW * 0.5, 9, 15, 4); ctx.fill();
+    roundRect(-CARL * 0.5, CARW * 0.5 - 15, 9, 15, 4); ctx.fill();
+  }
+  if (CAR.runners){
+    ctx.fillStyle = '#6b1a12';                      // a sack of presents aft
+    roundRect(-CARL * 0.48, -CARW * 0.3, CARL * 0.2, CARW * 0.6, 7); ctx.fill();
+    ctx.fillStyle = '#ffd34d';
+    circle(-CARL * 0.38, 0, 5); ctx.fill();
+  }
+  /* Headlamps and tail lights. The beam has had a source for a while and the
+     car it comes out of had nothing on the front of it at all. */
+  ctx.fillStyle = '#fff3c4';
+  circle(CARL * 0.44, -CARW * 0.3, 5); ctx.fill();
+  circle(CARL * 0.44, CARW * 0.3, 5); ctx.fill();
+  ctx.fillStyle = car.brakeGlow > 0 ? '#ff6b5e' : '#8e2a24';
+  ctx.fillRect(-CARL * 0.5, -CARW * 0.4, 5, CARW * 0.22);
+  ctx.fillRect(-CARL * 0.5, CARW * 0.18, 5, CARW * 0.22);
   // antlers + red nose, because it is that kind of game
   ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.beginPath();

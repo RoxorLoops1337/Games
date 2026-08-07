@@ -73,6 +73,7 @@ const EXPOSE = `__out.api = {
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
+  carLitDir, drawCar,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4563,6 +4564,83 @@ test('fireworks are drawn by the light pass, not under the night wash', () => {
   assert(inLight === n * 3,
     n + ' rockets are a tail and two dots each, got ' + inLight + ' pieces');
   assert(inFx === 0, 'drawFx should not draw a rocket, got ' + inFx + ' pieces');
+});
+
+/* ----------------------------------------------------------------- cars --- */
+
+/* Five cars, five sets of handling numbers, and one picture: a rounded rect
+   with a stripe. You could not tell which one you were driving. */
+test('the five cars are five different pictures', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100; api.car.ang = 0; api.car.z = 0;
+  api.car.vx = 0; api.car.vy = 0; api.car.roll = 0; api.car.plowT = 0;
+  const sigs = [];
+  api.G.starsPer = api.LEVELS.map(() => 3);    // everything on the forecourt
+  api.G.lifeKills = 99999;
+  for (const c of api.CARS){
+    assert(api.selectCar(c.id),
+      'could not select ' + c.id + ' — the test cannot see the car it is checking');
+    api._resetCounts();
+    api.drawCar();
+    sigs.push({ id: c.id, sig: (api._counts.fill || 0) + ':' + (api._counts.fillRect || 0) +
+      ':' + (api._counts.stroke || 0) });
+  }
+  console.log('    (car drawings: ' + sigs.map(s2 => s2.id + ' ' + s2.sig).join(', ') + ')');
+  const distinct = new Set(sigs.map(s2 => s2.sig));
+  assert(distinct.size >= 4,
+    'the cars should not collapse onto one drawing, got ' + distinct.size + ' of 5');
+});
+
+test('the lit side of the car belongs to the market, not to the car', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const norm = (a) => { while (a < -Math.PI) a += 6.283; while (a > Math.PI) a -= 6.283; return a; };
+  api.car.ang = 0;
+  const at0 = api.carLitDir();
+  api.car.ang = 1;
+  const at1 = api.carLitDir();
+  assert(Math.abs(norm(at0 - at1) - 1) < 1e-6,
+    'turning the car a radian should turn the highlight a radian the other way: ' +
+    at0.toFixed(3) + ' -> ' + at1.toFixed(3));
+  // and it points back at the light the whole scene uses
+  api.car.ang = 0;
+  const want = Math.atan2(-api.SUN_DY, -api.SUN_DX);
+  assert(Math.abs(norm(api.carLitDir() - want)) < 1e-6,
+    'a car pointing along +x should be lit from the scene light: ' +
+    api.carLitDir().toFixed(3) + ' vs ' + want.toFixed(3));
+});
+
+/* Brake lights are a lamp, not a force: nothing in the simulation may learn
+   about them, and a counted frame must not depend on whether they are lit. */
+test('the brake lights come on when the car is losing speed, and cost nothing', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100; api.car.ang = 0; api.car.z = 0;
+  api.car.vx = 900; api.car.vy = 0; api.car.dispSp = undefined;
+  api.drawCar();
+  assert(!api.car.brakeGlow, 'the first frame has nothing to compare against');
+  for (let i = 0; i < 6; i++) api.drawCar();
+  assert(!api.car.brakeGlow, 'holding a steady speed is not braking');
+  // the styles are deliberately left out: the whole point is that the same
+  // operations run either way and only the colour of the lamp changes
+  const ops = () => { const c = Object.assign({}, api._counts); delete c._styles;
+    return JSON.stringify(c); };
+  api._resetCounts(); api.drawCar();
+  const cruising = ops();
+  api.car.vx = 300;                                    // stamp on it
+  api.drawCar();
+  assert(api.car.brakeGlow, 'losing 600px/s in a frame should light the brakes');
+  api._resetCounts(); api.drawCar();
+  const braking = ops();
+  assert(cruising === braking,
+    'a braking frame costs something different from a cruising one, so the draw ' +
+    'budget now depends on how you are driving: ' + cruising + ' vs ' + braking);
+  // and they go out again once the speed settles
+  for (let i = 0; i < 30; i++) api.drawCar();
+  assert(!api.car.brakeGlow, 'the brakes should go out once the speed settles');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
