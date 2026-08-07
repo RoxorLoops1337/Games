@@ -61,6 +61,7 @@ const EXPOSE = `__out.api = {
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
   BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
   gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg, drawItem,
+  plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -4281,6 +4282,200 @@ test('the partner is spelled Smoske everywhere the player can read it', () => {
     bad.push(`${m[0]} at line ${line}`);
   }
   if (bad.length) throw new Error(bad.join(', '));
+});
+
+/* ------------------------------------------- the full-screen moments
+   The card, the tally and the continue count are all built on one plate.
+   These tests check the plate is an object (chamfered, lit on one side,
+   riveted) and that each screen actually animates rather than printing
+   itself all at once. */
+test('a plate is chamfered, lit along the top and dark underneath', () => {
+  const api = boot();
+  api._resetCounts();
+  api.plate(40, 60, 120, 50, {});
+  const r = api._rects;
+  const body = r.filter(q => q[3] === 1 && String(q[4]).startsWith('rgba(9,7,16'));
+  assert(body.length === 50, 'the plate is ' + body.length + ' rows, expected 50');
+  const widths = body.map(q => q[2]);
+  assert(Math.max(...widths) === 120, 'no row of the plate is full width');
+  assert(Math.min(...widths) < 110, 'every row is the same width — nothing is chamfered off');
+  // the narrow rows are at the ends, not scattered through the middle
+  const mid = body.filter(q => q[1] > 70 && q[1] < 100);
+  assert(mid.every(q => q[2] === 120), 'the middle of the plate is not square-sided');
+  assert(r.some(q => q[4] === '#6a5470' && q[2] > 100 && q[3] === 1 && q[1] === 60), 'no lit lip on top');
+  assert(r.some(q => q[4] === '#0a0712' && q[2] > 100 && q[3] === 1 && q[1] === 109), 'no dark edge underneath');
+  assert(r.some(q => q[4] === '#6a5470' && q[2] === 1 && q[3] > 30), 'the left side is not lit');
+  assert(r.some(q => q[4] === '#0a0712' && q[2] === 1 && q[3] > 30), 'the right side is not in shadow');
+  const rivets = r.filter(q => q[4] === '#3a3048' && q[2] === 2 && q[3] === 2);
+  assert(rivets.length === 4, 'the plate has ' + rivets.length + ' rivets, expected 4');
+  assert(new Set(rivets.map(q => q[0])).size === 2 && new Set(rivets.map(q => q[1])).size === 2,
+    'the rivets are not one to a corner');
+});
+
+test('a plate wears the accent it is given', () => {
+  const api = boot();
+  api._resetCounts();
+  api.plate(40, 60, 120, 50, {});
+  const plain = api._rects.filter(q => q[4] === '#4affaa').length;
+  api._resetCounts();
+  api.plate(40, 60, 120, 50, { accent: '#4affaa' });
+  const lit = api._rects.filter(q => q[4] === '#4affaa').length;
+  assert(plain === 0, 'a plate with no accent painted one anyway');
+  assert(lit >= 1, 'the accent stripe never reached the plate');
+});
+
+test('the stage card opens as a shutter before it says anything', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  const rows = () => api._rects.filter(q => q[3] === 1 && String(q[4]).startsWith('rgba(9,7,16')).length;
+  const glyphs = () => api._rects.filter(q => q[4] === '#ffe9b8' && q[2] === 1 && q[3] === 1).length;
+  api.G.phase = 'card'; api.G.cardT = api.CARD_T - 0.04;   // just opening
+  api._resetCounts(); api.drawCard();
+  const early = { h: rows(), g: glyphs() };
+  api.G.cardT = api.CARD_T - 1.0;                          // wide open
+  api._resetCounts(); api.drawCard();
+  const open = { h: rows(), g: glyphs() };
+  api.G.cardT = 0.04;                                      // closing again
+  api._resetCounts(); api.drawCard();
+  const late = rows(), lateG = glyphs();
+  assert(early.h > 2 && early.h < 30, 'the card opened at ' + early.h + 'px — it is not a shutter');
+  assert(early.g === 0, 'the card printed its name while it was still opening');
+  assert(open.h === 72, 'the open card is ' + open.h + 'px tall');
+  assert(open.g > 20, 'the open card printed no stage name');
+  assert(late < 30, 'the card is still ' + late + 'px tall as it closes');
+  // and it takes the words with it — a name printed on a 12px plate hangs in the air
+  assert(lateG === 0, 'the card is still printing its name on a plate ' + late + 'px tall');
+});
+
+test('the card counts the streets, and lights the one you are on', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.G.phase = 'card'; api.G.cardT = api.CARD_T - 1.0;
+  api._resetCounts(); api.drawCard();
+  const pips = api._rects.filter(q => q[2] === 9 && q[3] === 3);
+  assert(pips.length === api.STAGES.length,
+    pips.length + ' pips for ' + api.STAGES.length + ' stages');
+  const key = api.STAGES[2].key;
+  assert(pips.filter(q => q[4] === key).length === 1, 'the pip you are on is not lit in the stage key');
+  assert(pips.filter(q => q[4] === api.shade(key, -50)).length === 2, 'the two streets behind you are not dimmed');
+  assert(pips.filter(q => q[4] === '#241c30').length === api.STAGES.length - 3, 'the streets ahead are not dark');
+  // and it moves: a later stage lights a later pip
+  const lit = () => api._rects.filter(q => q[2] === 9 && q[3] === 3 && q[4] === api.STAGES[api.G.stage].key)[0][0];
+  const at2 = lit();
+  api.G.stage = 4;
+  api._resetCounts(); api.drawCard();
+  assert(lit() > at2, 'the lit pip does not travel with the stage');
+});
+
+test('the clear tally counts itself in one line at a time', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.G.phase = 'clear'; api.G.rank = 'A'; api.G.lastBonus = 4200; api.G.dmgTaken = 38;
+  const lines = () => {
+    const dots = api._rects.filter(q => q[2] === 1 && q[3] === 1 && q[4] === '#4a3c50');
+    return new Set(dots.map(q => q[1])).size;
+  };
+  const at = (el) => { api.W.clearT = api.CLEAR_T - el; api._resetCounts(); api.drawClear(); return lines(); };
+  assert(at(0.2) === 0, 'the tally printed a stat line before the plate had opened');
+  assert(at(0.6) === 1, 'at 0.6s the tally shows ' + at(0.6) + ' lines, expected 1');
+  assert(at(0.9) === 3, 'at 0.9s the tally shows ' + at(0.9) + ' lines, expected 3');
+  assert(at(1.4) === 4, 'the tally never reaches all four lines');
+  // the leaders join label to value rather than sitting against the number
+  api.W.clearT = api.CLEAR_T - 1.4; api._resetCounts(); api.drawClear();
+  const row = api._rects.filter(q => q[2] === 1 && q[3] === 1 && q[4] === '#4a3c50' && q[1] === api._rects
+    .filter(z => z[2] === 1 && z[3] === 1 && z[4] === '#4a3c50')[0][1]);
+  assert(row.length >= 8, 'the leader is ' + row.length + ' dots long');
+});
+
+test('the rank sits in a bezel and only throws rays when it earned them', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.G.phase = 'clear'; api.W.clearT = api.CLEAR_T - 1.4;
+  const shot = (rk) => {
+    api.G.rank = rk;
+    api._resetCounts(); api.drawClear();
+    const col = rk === 'S' ? '#7fe0ff' : rk === 'A' ? '#7fe07f' : rk === 'B' ? '#ffd23d' : '#e0a06a';
+    return {
+      glyph: api._rects.filter(q => q[2] === 4 && q[3] === 4 && q[4] === col).length,
+      rays: api._rects.filter(q => q[2] === 3 && q[3] === 3 && String(q[4]).startsWith('rgba(')),
+      bezel: api._rects.filter(q => q[2] === 42 && q[3] === 42).length,
+    };
+  };
+  const s = shot('S'), c = shot('C');
+  assert(s.bezel === 1, 'the rank has no bezel round it');
+  assert(s.glyph > 10, 'the rank glyph is not drawn big — ' + s.glyph + ' pixels');
+  assert(s.rays.length >= 3, 'an S rank threw ' + s.rays.length + ' rays');
+  assert(c.rays.length === 0, 'a C rank threw rays it did not earn');
+  assert(c.glyph > 10, 'the C rank glyph went missing');
+  // nothing lands below the badge, where RANK is printed
+  const cy = 58 + 32 + 21;
+  assert(s.rays.every(q => q[1] < cy + 10), 'a ray landed on the RANK label');
+});
+
+test('the continue count burns a fuse down, and reddens when it is short', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  const fuse = () => {
+    // the gauge fill: the widest run inside the 150px trough
+    const bar = api._rects.filter(q => q[3] === 4 && q[2] > 1 && q[2] <= 148);
+    return bar.length ? bar[0] : null;
+  };
+  api.G.contT = api.CONT_T; api._resetCounts(); api.drawContinue();
+  const full = fuse();
+  api.G.contT = 2.4; api._resetCounts(); api.drawContinue();
+  const low = fuse();
+  assert(full && low, 'the continue screen has no fuse on it');
+  assert(full[2] > low[2] * 3, `the fuse ran ${full[2]}px full and ${low[2]}px at 2.4s — it is not draining`);
+  assert(full[4] === '#ffa03a', 'a fresh fuse is not lit warm: ' + full[4]);
+  assert(low[4] === '#e84a3a', 'a nearly-spent fuse is not red: ' + low[4]);
+  // and the plate itself takes the warning tint only when it is short
+  const tint = () => api._rects.filter(q => q[2] === 202 && String(q[4]).startsWith('rgba(255,42,26')).length;
+  api.G.contT = api.CONT_T; api._resetCounts(); api.drawContinue();
+  assert(tint() === 0, 'the plate was already red with ten seconds left');
+  api.G.contT = 2.4; api._resetCounts(); api.drawContinue();
+  assert(tint() === 1, 'the plate never reddens as the count runs out');
+});
+
+test('the continue digit is big, and kicks on each new second', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  const digit = (t) => {
+    api.G.contT = t; api._resetCounts(); api.drawContinue();
+    const p = api._rects.filter(q => q[2] === 5 && q[3] === 5 && (q[4] === '#ffffff' || q[4] === '#ffe9c8'));
+    return { n: p.length, y: p.length ? Math.min(...p.map(q => q[1])) : 0, col: p.length ? p[0][4] : null };
+  };
+  const rest = digit(6.4), kick = digit(6.94);
+  assert(rest.n > 10, 'the digit is not drawn at five times size: ' + rest.n + ' pixels');
+  assert(kick.y === rest.y - 1, `the digit sits at ${kick.y} on the tick and ${rest.y} off it`);
+  assert(kick.col === '#ffffff' && rest.col === '#ffe9c8', 'the digit does not flash white on the tick');
+});
+
+test('the full-screen moments are cheap to draw', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  for (const [name, fn, set] of [
+    ['card', () => api.drawCard(), () => { api.G.phase = 'card'; api.G.cardT = api.CARD_T - 1; }],
+    ['clear', () => api.drawClear(), () => { api.G.phase = 'clear'; api.W.clearT = 1; api.G.rank = 'S'; }],
+    ['continue', () => api.drawContinue(), () => { api.G.contT = 3; }],
+  ]){
+    set();
+    api._resetCounts();
+    fn();
+    const n = api._counts.fillRect || 0;
+    assert(n > 120, `the ${name} screen drew almost nothing: ${n}`);
+    assert(n < 4200, `the ${name} screen cost ${n} fillRects`);
+  }
+});
+
+test('the screen timers are the ones the update loop counts down', () => {
+  const src = fs.readFileSync(HTML, 'utf8');
+  for (const k of ['CARD_T', 'CLEAR_T', 'CONT_T']){
+    const decl = new RegExp('const ' + k + ' = [0-9.]+;');
+    if (!decl.test(src)) throw new Error(k + ' is not declared as a constant');
+  }
+  if (!/G\.cardT = CARD_T;/.test(src)) throw new Error('the card is still started from a loose number');
+  if (!/W\.clearT = CLEAR_T;/.test(src)) throw new Error('the tally is still started from a loose number');
+  if (!/G\.contT = CONT_T;/.test(src)) throw new Error('the count is still started from a loose number');
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
