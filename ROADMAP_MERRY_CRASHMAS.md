@@ -136,6 +136,14 @@ edit this block to name the next one.
       do.
 - [x] The sling is a machine: a trodden pad with tyre scuff, posts with snow on
       the tops, and a band that thins from 8.5px to 5.6px as you stretch it.
+- [x] Blood is liquid, not fog. Every decal used to be its own translucent
+      ellipse, so three hundred of them stacked into a flat maroon haze with no
+      edge in it. They are stamped opaque into a half-res layer of their own —
+      where an overlap is a union, not a sum — and the finished silhouette goes
+      over the snow once at alpha .72, with a dark rim, a darker centre where
+      the pools are deep, and lobed blobs instead of ovals. The whole field is
+      four fills at any decal count (2748 → 2509 worst-frame fills), and the
+      trail through a flattened market finally reads from the wide camera.
 
 ## Next
 

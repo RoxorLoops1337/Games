@@ -80,6 +80,8 @@ const EXPOSE = `__out.api = {
   drawGate, drawGateBulbs, GATE_X, GATE_HALF,
   drawStallSigns, signMark, signAt, SIGN_W, SIGN_H,
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
+  paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
+  bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4340,7 +4342,10 @@ test('an ordinary pop is still swallowed by the one already there', () => {
 
 /* Three hundred and sixty decals cannot each afford a fill for their soak halo
    or their wet sheen, so both go down as one path for the whole field. */
-test('the gore field costs one fill a decal, not three', () => {
+/* The whole field is one shape now, so its cost stops depending on how much of
+   the market you flattened. Three hundred decals used to be three hundred
+   fills, which is also three hundred chances to stack alpha into fog. */
+test('the blood field costs the same at one decal or three hundred', () => {
   const cost = (n, kind) => {
     const api = boot({ count: true, w: 1280, h: 720 });
     api.startCampaign(); api.beginLevel();
@@ -4353,29 +4358,96 @@ test('the gore field costs one fill a decal, not three', () => {
     api.drawGround();                       // warm the cached gradients
     api._resetCounts();
     api.drawGround();
-    return { fills: api._counts.fill || 0, saves: api._counts.save || 0 };
+    return { api, fills: api._counts.fill || 0, saves: api._counts.save || 0,
+      images: api._counts.drawImage || 0 };
   };
-  // splats only, so the figure is the marginal cost of one decal with nothing
-  // else mixed in: a splat is one fill, and its halo and droplets are free
-  const a = cost(60, 'splat'), b = cost(180, 'splat');
-  const per = (b.fills - a.fills) / 120;
-  console.log('    (gore: ' + a.fills + ' fills for 60 splats, ' + b.fills + ' for 180 — ' +
-    per.toFixed(2) + ' a decal)');
-  assert(per > 0.5, 'the decals should actually be drawn, got ' + per + ' fills each');
-  assert(per <= 1.05,
-    'the halo and the droplets should be batched, not per decal: ' + per.toFixed(2) + ' each');
-  // a pool costs one more than a splat — its own inner highlight — and no more
-  const pools = cost(180, 'pool'), splats = cost(180, 'splat');
-  const extra = (pools.fills - splats.fills) / 180;
-  console.log('    (a pool costs ' + extra.toFixed(2) + ' fills more than a splat)');
-  assert(extra > 0.5 && extra <= 1.05,
-    'a pool should cost exactly one extra fill, got ' + extra.toFixed(2));
-  // and a decal no longer pushes and pops the canvas state to rotate itself
-  assert(b.saves - a.saves < 12,
-    'a decal should not save/restore to rotate: ' + a.saves + ' -> ' + b.saves);
-  // an empty field costs neither the halo nor the sheen
+  const a = cost(60), b = cost(300);
+  console.log('    (blood: ' + a.fills + ' fills for 60 decals, ' + b.fills + ' for 300)');
+  assert(a.fills === b.fills,
+    'the field should cost a constant: ' + a.fills + ' vs ' + b.fills);
+  // an empty field costs neither the halo, the mass, nor the composite
   const none = cost(0);
-  assert(none.fills < a.fills, 'no blood, no halo: ' + none.fills + ' vs ' + a.fills);
+  assert(none.fills < a.fills - 4, 'no blood, no field: ' + none.fills + ' vs ' + a.fills);
+  assert(a.images === none.images + 1,
+    'the field is laid over the snow in exactly one piece, got ' +
+    (a.images - none.images) + ' images');
+  // and a decal still does not push and pop the canvas state to rotate itself
+  assert(b.saves - a.saves < 4,
+    'a decal should not save/restore to rotate: ' + a.saves + ' -> ' + b.saves);
+  // the layer is half resolution, like the darkness it sits under
+  const info = a.api.bloodInfo();
+  const view = a.api.getView();
+  assert(info.w === Math.round(view.w * a.api.BLOOD_SCALE),
+    'blood layer should be half the viewport: ' + info.w + ' for a ' + view.w + ' view');
+});
+
+/* A recording context, so the shape of a decal can be measured rather than
+   counted. Only what paintGore actually uses. */
+function goreRec(){
+  const r = { fills: [] };
+  let cur = null, path = [];
+  return { rec: r,
+    set fillStyle(v){ cur = String(v); }, get fillStyle(){ return cur; },
+    beginPath(){ path = []; },
+    moveTo(){},
+    ellipse(x, y, rx, ry){ path.push({ x, y, rx, ry }); },
+    arc(x, y, rr){ path.push({ x, y, rx: rr, ry: rr }); },
+    fill(){ r.fills.push({ style: cur, shapes: path.slice() }); },
+  };
+}
+const lum = (hex) => parseInt(hex.slice(1, 3), 16) * 0.4 +
+                     parseInt(hex.slice(3, 5), 16) * 0.4 + parseInt(hex.slice(5, 7), 16) * 0.2;
+
+test('blood merges into one mass instead of stacking into fog', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const one = (kind) => ({ x: 0, y: 0, r: 20, kind, rot: 0.7, seed: 0.4, t: 0 });
+
+  const pool = goreRec();
+  api.paintGore(pool, [one('pool')]);
+  const f = pool.rec.fills;
+  assert(f.length === 4, 'rim, mass, depth and sheen: ' + f.length + ' passes');
+
+  /* The first three are stamps, and a stamp has to be opaque or the merge is
+     back to a sum: two pools that touch would darken where they overlap. */
+  for (let i = 0; i < 3; i++){
+    assert(/^#[0-9a-f]{6}$/i.test(f[i].style),
+      'blood pass ' + i + ' must be opaque on the layer, got ' + f[i].style);
+  }
+  assert(lum(f[0].style) < lum(f[1].style),
+    'the rim must be darker than the mass: ' + f[0].style + ' vs ' + f[1].style);
+  assert(lum(f[2].style) < lum(f[1].style),
+    'the deep part must be darker than the mass: ' + f[2].style + ' vs ' + f[1].style);
+  assert(/^rgba/.test(f[3].style), 'the wet sheen is a highlight, not a stamp');
+
+  // the rim is the same silhouette, bigger — that is what gives the merged
+  // mass an edge without outlining every ellipse inside it
+  assert(f[0].shapes.length === f[1].shapes.length,
+    'the rim should be the mass again: ' + f[0].shapes.length + ' vs ' + f[1].shapes.length);
+  const grow = f[0].shapes.map((s, i) => s.rx / f[1].shapes[i].rx);
+  assert(grow.every(g => g > 1.04 && g < 1.2),
+    'the rim should be about a tenth larger, got ' + grow.map(g => g.toFixed(2)).join('/'));
+
+  // a pool is lobed, not an oval: nothing that comes out of a person is round
+  assert(f[1].shapes.length === 3,
+    'a pool should be three merged blobs, got ' + f[1].shapes.length);
+  const rx = f[1].shapes.map(s => s.rx);
+  assert(Math.min(...rx) < Math.max(...rx) * 0.7, 'the lobes should be smaller than the body');
+
+  // spray is thin: it gets droplets and no deep centre
+  const spray = goreRec();
+  api.paintGore(spray, [one('splat')]);
+  const s = spray.rec.fills;
+  assert(s[1].shapes.length === 4, 'a splat is a body and three droplets, got ' + s[1].shapes.length);
+  assert(s[2].shapes.length === 0, 'spray has no depth to it, got ' + s[2].shapes.length);
+  assert(s[3].shapes.length === 0, 'and no wet sheen either');
+  console.log('    (blood: pool ' + f[1].shapes.length + ' blobs + ' + f[2].shapes.length +
+    ' deep + ' + f[3].shapes.length + ' sheen, splat ' + s[1].shapes.length + ' blobs)');
+
+  // the mass is laid over the snow at one alpha, so a hundred overlapping
+  // decals are exactly as dark as one
+  assert(api.BLOOD_A > 0.4 && api.BLOOD_A < 0.9,
+    'blood should read as a stain on snow, not paint: ' + api.BLOOD_A);
 });
 
 /* --------------------------------------------------------------- replay --- */
