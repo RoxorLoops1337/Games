@@ -110,6 +110,26 @@
      hand, so its rotation is mostly a sideways translation — the fifth card of
      a full hand was sliced by the stage edge, badly at a phone's width, in the
      first hand a player is ever dealt. Margin here, and a shorter lever below. */
+  /* MEASURED, NOT FIXED — see `handclip` in tools/emberkin/shot.mjs, which
+     reports both numbers and throws on either.
+     The outer cards of the fan rotate about a pivot below the row, so their
+     lower corners swing past its box and card five is clipped by the stage at
+     every layout: 4.3px on an overlay phone, 4.7 portrait, 5.8 in a landscape
+     gutter, 9.8 on a tablet — the same 1.5% of stage height each time, which is
+     exactly the clearance `bottom` gives them. Two passes ago this was recorded
+     as "cannot tell whether the overhang is the fan's design"; it is not, and
+     now there is a number instead of an impression.
+     It is left alone because the row is squeezed from both ends. Raising it
+     clears the floor and pushes the AIMED card — which lifts on its own — up
+     under the description bar, hiding the cost pip, and cost is the first thing
+     a player checks. At 264x760 the bar already eats 10.3px of the aimed card
+     before anything is changed, which is three times what it takes at 390 —
+     the narrow phone is much the worse end, and a sweep at one width never
+     says so. Every value tried moved the damage rather than removing
+     it: bottom 3.2% gave floor 0 / bar 8.4px at portrait, and 2.6% with a
+     shorter row gave floor 1.3 / bar 6.6 there and 12.6px under the bar at 264.
+     The fix is not a number, it is the fan's pivot or the bar's placement, and
+     that is a design decision rather than a tuning one. */
   #hand{ position:absolute; left:5%; right:5%; bottom:1.5%; height:30%; touch-action:none;
     display:flex; justify-content:center; align-items:flex-end; }
   /* The fan. Cards overlap and pivot around a point below the hand, the way a
