@@ -234,6 +234,26 @@ const SCENES = {
   // 29 and 42 are indistinguishable — the numbers do all the work. Whether the
   // bars want a shorter ceiling, a longer track, or to go away is a design call
   // that wants its own pass rather than a guess at the end of this one.
+  // The dex with the valley nearly filled in. It has only ever been shot sparse
+  // — a handful of entries in a grid built for nineteen — so the state a player
+  // spends most of the game looking at has never been seen.
+  middex: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      // Most of it caught, a few only seen, two never met — which is the mix a
+      // real dex holds and the one the grid has to tell apart.
+      EK.DEX_ORDER.forEach((id, i) => {
+        if (i % 7 === 3) return;                 // never met
+        EK.seeMon(id);
+        if (i % 5 !== 2) EK.catchMon(id);        // the rest only seen
+      });
+      EK.openScreen('dex');
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
