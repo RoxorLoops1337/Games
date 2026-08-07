@@ -1153,6 +1153,18 @@ function drawFighter(f){
   const lit = lightAt(sx);
   const shR = 9 * sc * clamp(1 - f.z / 90, 0.45, 1);
   const gy = Math.round(f.y + cam.shakeY) + 1;
+  if (f.boss && !f.dead){
+    /* A boss was an ordinary man drawn bigger.  A ring scuffed into the
+       ground under him in his own trim colour, turning slowly, so you know
+       what has just walked on before it hits you. */
+    const t = SKINS[f.skin] && SKINS[f.skin].trim || '#ffd23d';
+    const rr2 = 13 * sc;
+    ellipse(sx, gy + 1, rr2, rr2 * 0.36, rgba(t, 0.13));
+    for (let i = 0; i < 10; i++){
+      const a2 = i * TAU / 10 + T * 0.5;
+      px(sx + Math.cos(a2) * rr2, gy + 1 + Math.sin(a2) * rr2 * 0.36, 1, 1, rgba(t, 0.55));
+    }
+  }
   const shOff = lit ? -lit.dir * Math.round(shR * 0.5 * lit.k) : 0;
   ellipse(sx + shOff, gy, shR * (1.2 + (lit ? lit.k * 0.3 : 0)), Math.max(1, shR * 0.44), 'rgba(0,0,0,0.18)');
   ellipse(sx + shOff * 0.6, gy, shR * 0.82, Math.max(1, shR * 0.3), 'rgba(0,0,0,0.36)');
@@ -1293,6 +1305,41 @@ function drawFighter(f){
   }
   // a stripe across the chest reads as clothing rather than paint
   if (!lean) px(shX - thSh / 2, shY - 4 * sc, thSh, Math.max(1, sc), shade(shirtL, 20));
+
+  /* One piece of gear each, so a boss is not just a bigger shirt.  Drawn
+     over the body and under the hair, in his own trim colour. */
+  if (f.boss && !flash && !lean){
+    const t = s.trim || '#ffd23d', u = Math.max(1, Math.round(sc));
+    const P2 = (ox, oy, w, h, col) => px(shX + dir * ox * sc - (dir < 0 ? (w - 1) * u : 0), shY + oy * sc, w * u, h * u, col);
+    if (f.skin === 'rook'){                        // a studded pauldron
+      P2(-4, -5, 9, 4, shade(t, -30));
+      P2(-4, -5, 9, 1, t);
+      for (let k = 0; k < 3; k++) P2(-3 + k * 3, -4, 1, 1, '#fff2c8');
+    } else if (f.skin === 'vex'){                  // a scarf, trailing behind her
+      for (let k = 0; k < 4; k++){
+        const wob = Math.sin(T * 4 + k) * 1.4;
+        P2(-3 - k * 3, -2 + k * 0.8 + wob, 4, 2, k % 2 ? t : shade(t, -26));
+      }
+      P2(-2, -3, 5, 2, t);
+    } else if (f.skin === 'hammer'){               // a riveted plate and two spikes
+      P2(-5, -4, 11, 7, shade(t, -34));
+      P2(-5, -4, 11, 1, shade(t, 20));
+      for (let k = 0; k < 4; k++) P2(-4 + k * 3, -2, 1, 1, '#e8dcb0');
+      P2(-6, -7, 3, 3, t); P2(4, -7, 3, 3, t);
+    } else if (f.skin === 'nyx'){                  // a visor, and it is lit
+      px(headX - hr - sc, headY - 2 * sc, Math.max(4, hr * 2 + 2 * sc), Math.max(2, 3 * sc), '#1a1226');
+      px(headX - hr - sc, headY - 2 * sc, Math.max(4, hr * 2 + 2 * sc), Math.max(1, sc), t);
+      px(headX + dir * (hr - 3 * sc), headY - sc, Math.max(2, 4 * sc), Math.max(1, 2 * sc), t);
+      glow(headX + dir * sc, headY - sc, 10 * sc, 5 * sc, t, 0.5 + Math.sin(T * 5) * 0.18);
+    } else if (f.skin === 'warden'){               // epaulettes, and a crown he gave himself
+      P2(-5, -5, 5, 3, shade(t, -20)); P2(2, -5, 5, 3, shade(t, -20));
+      P2(-5, -5, 5, 1, t); P2(2, -5, 5, 1, t);
+      for (let k = 0; k < 4; k++)
+        px(headX - hr + k * Math.max(1, hr * 0.66), headY - hr - 3 * sc - (k % 2 ? sc : 2 * sc),
+          Math.max(1, sc), Math.max(2, 3 * sc), t);
+      px(headX - hr, headY - hr - sc, Math.max(3, hr * 2), Math.max(1, sc), t);
+    }
+  }
 
   drawHair(f, s, headX, headY, hr, sc, dir, hairL, hairD);
 
