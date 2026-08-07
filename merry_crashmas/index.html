@@ -2264,10 +2264,11 @@ function stepPeople(dt){
       const a = rr(0, 6.283);
       addFx({ type:'drop', x: p.x, y: p.y, vx: Math.cos(a) * rr(60, 150), vy: Math.sin(a) * rr(60, 150),
         ttl: 1.2, size: rr(7, 12), rot: rr(0, 6.283), spin: rr(-9, 9),
-        // muted bag tones on purpose: the old palette was lifted straight off
-        // COATS and HATS, so a dropped bag in the far crowd read as another
-        // shopper lying down
-        col: ['#cfc6b4', '#8f7355', '#4a4038', '#a8b0bc'][ri(0, 3)] });
+        /* The draw is kept and thrown away: the bag is now whichever one they
+           were visibly carrying, but ri() here has been in the simulation
+           stream since the first market was tuned, and dropping it would
+           renumber every roll after it and rescore all twenty-one. */
+        col: (ri(0, 3), BAG_COLS[p.coat % BAG_COLS.length]) });
     }
   }
 }
@@ -3568,6 +3569,11 @@ const COATS = ['#e05143', '#3f86c4', '#41a066', '#9a5cbe', '#e08a2e', '#6b7a94',
 const ELDER_COATS = ['#6b6f7e', '#7a6a5e', '#5f6b7a', '#79697a'];
 const KID_COATS = ['#ff8a3d', '#3fc4d8', '#ffcf3d', '#8ee06a'];
 const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
+/* What a shopper is carrying, and what they drop. Muted on purpose: an earlier
+   palette was lifted straight off COATS and HATS, so a bag on the ground read
+   as another shopper lying down. One list, so the bag in the hand and the bag
+   on the snow cannot drift apart. */
+const BAG_COLS = ['#cfc6b4', '#8f7355', '#4a4038', '#8a94a4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 const HAIR = ['#3a2a20', '#6b4a2c', '#1d1a1c', '#8d6a3f', '#a8632c', '#c9b48a', '#4a3a34'];
 
@@ -4769,6 +4775,35 @@ function drawPerson(p){
     ctx.moveTo(p.r * 0.62, -p.r * 0.1); ctx.lineTo(p.r * 0.9, p.r * (0.35 - stride * 0.4));
   }
   ctx.stroke();
+
+  /* The shopping they are about to drop. A panicking shopper threw a bag out
+     of hands that had never been holding one — the drop has been in the game
+     since the crowd was written and the bag itself never was. Shoppers and
+     pensioners carry one; a parent has both hands on the pram and Santa has a
+     sleigh for it. Which hand is p.coat, not a roll. */
+  const carries = fine && !p.dropped && (p.kind === 'shopper' || p.kind === 'elder');
+  if (carries){
+    // an elder's stick is always in the right hand, so the bag takes the left
+    const side = p.kind === 'elder' ? -1 : p.coat % 2 ? 1 : -1;
+    /* A raised arm reaches past the coat on its own; a swinging one ends at
+       0.9r, which is inside the 0.86r shoulder ellipse drawn over the top of
+       all this — the first bag was half-buried in the torso. So the walking
+       bag hangs outboard and low, from the hand rather than in it. */
+    const hx = p.panic > 0.25 ? side * p.r * 1.25 : side * p.r * 1.06;
+    const hy = p.panic > 0.25 ? -p.r * (0.75 + wob * side)
+                              : p.r * (0.5 + stride * 0.4 * side);
+    const bw = p.r * 0.34, bh = p.r * 0.4, by = hy + bh * 0.08;
+    ctx.strokeStyle = 'rgba(30,26,22,.7)'; ctx.lineWidth = Math.max(1, p.r * 0.07);
+    /* The body is stroked as well as filled: two of the four bag colours are
+       within a shade of lit snow, and a pale bag on a pale ground vanished. */
+    ctx.fillStyle = BAG_COLS[p.coat % BAG_COLS.length];
+    roundRect(hx - bw / 2, by, bw, bh, 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath();                                   // the handles
+    ctx.arc(hx, by + bh * 0.02, bw * 0.42, Math.PI, 0);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(12,20,38,.18)';              // the fold across the top
+    ctx.fillRect(hx - bw / 2, by, bw, bh * 0.2);
+  }
 
   if (p.kind === 'elder' && fine){
     ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = p.r * 0.2;
