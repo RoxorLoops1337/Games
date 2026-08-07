@@ -67,6 +67,7 @@ const EXPOSE = `__out.api = {
   slamShock, superStrike, breakItem,
   deadFade, deadLife, deadStart, knockOut, rgba, get fx(){ return fx; },
   GRADE, gradePass, get fighters(){ return fighters; }, set fighters(v){ fighters = v; },
+  CLOUD_SETS, propLight, mkItem,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
   GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
@@ -2982,7 +2983,8 @@ test('a crate is a box with a lid on it, not a rectangle with stripes', () => {
   // the lid rows sit above the body, each one further right and shorter
   const body = crate.parts.find(p => p.c === '#a97a42');
   assert(body, 'no crate body');
-  const lid = crate.parts.filter(p => p.r[1] < body.r[1] && p.r[3] === 1).sort((a, b) => b.r[1] - a.r[1]);
+  // the lid rows are the painted lid; the key light on top of it is not one
+  const lid = crate.parts.filter(p => p.r[1] < body.r[1] && p.r[3] === 1 && !String(p.c).startsWith('rgba(')).sort((a, b) => b.r[1] - a.r[1]);
   assert(lid.length >= 3, 'the crate has no lid: ' + lid.length + ' rows above the body');
   for (let i = 1; i < lid.length; i++){
     assert(lid[i].r[0] > lid[i - 1].r[0], 'lid row ' + i + ' does not step back');
@@ -5460,6 +5462,115 @@ test('a graded, backlit, dissolving street still fits the frame budget', () => {
   api._resetCounts();
   api.draw();
   assert((api._counts.fillRect || 0) < 7500, 'a backlit street costs ' + api._counts.fillRect + ' fillRects');
+});
+
+/* ------------------------------------------------- cloud over every sky */
+test('every sky that has one carries cloud, in its own light', () => {
+  const api = boot();
+  const sets = api.CLOUD_SETS;
+  const bgs = ['street', 'junk', 'docks', 'keep'];
+  for (const bg of bgs) assert(sets[bg] && sets[bg].length === 3, bg + ' has no cloud over it');
+  // no two skies share a bank, or one paint would serve two nights
+  const keys = new Set();
+  for (const bg of bgs) for (const b of sets[bg]){
+    assert(!keys.has(b.key), 'two skies bake under the key ' + b.key);
+    keys.add(b.key);
+  }
+  // the roof burns underneath and the harbour does not: that is the whole point
+  const warm = (c) => parseInt(c.slice(1, 3), 16) - parseInt(c.slice(5, 7), 16);
+  assert(warm(sets.keep[2].lip) > 120, 'the sunset does not light the cloud over the roof');
+  assert(warm(sets.docks[2].lip) < 0, 'the harbour lights the cloud warm, not cold');
+  assert(warm(sets.junk[2].lip) > 60, 'the yard fires do not reach the cloud');
+  for (const bg of bgs){
+    const s = sets[bg];
+    assert(s[0].y < s[1].y && s[1].y < s[2].y, bg + ' stacks its banks at one height');
+    assert(s[0].spd < s[2].spd, bg + ' drifts every bank at one speed');
+    for (const b of s) assert(warm(b.lip) !== warm(b.body) || b.lip !== b.body,
+      bg + ' has a bank with no lit underside');
+  }
+});
+
+test('each sky paints its own banks and blits every one of them twice', () => {
+  const api = boot();
+  for (const [st, bg] of [[0, 'street'], [1, 'junk'], [2, 'docks'], [4, 'keep']]){
+    play(api, { stage: st });
+    api.draw();                                     // warm the bakes
+    api._resetCounts();
+    api.drawBackground();
+    const blits = api._blits.filter(q => q[2] === api.VW);
+    const want = api.CLOUD_SETS[bg];
+    for (const b of want)
+      assert(blits.filter(q => q[3] === b.h).length >= 2,
+        bg + ' does not blit its ' + b.h + 'px bank twice');
+  }
+  // and a set that is not on screen is never painted
+  play(api, { stage: 3 });                          // the foundry is indoors
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const heights = new Set(api._blits.map(q => q[3]));
+  for (const b of api.CLOUD_SETS.keep)
+    assert(!heights.has(b.h) || b.h === 0, 'the foundry is painting the roof s sky');
+});
+
+/* ------------------------------------------------------------ lit props */
+test('a prop is lit by the street it is standing on', () => {
+  const api = boot();
+  const lit = (st, kind) => {
+    play(api, { stage: st });
+    const it = api.mkItem(kind, api.cam.x + 60, api.FLOOR_MID, 0);
+    api.draw();
+    api._resetCounts();
+    api.drawItem(it);
+    const s = api.STAGES[st];
+    return {
+      rim: api._rects.filter(q => String(q[4]) === api.rgba(s.key, s.back * 0.50)),
+      shade: api._rects.filter(q => String(q[4]) === api.rgba(api.GRADE[s.bg].lift, s.back * 0.30)),
+    };
+  };
+  for (const kind of ['crate', 'barrel', 'bat', 'pipe', 'knife']){
+    const r = lit(0, kind);
+    assert(r.rim.length >= 1, 'a ' + kind + ' catches nothing off the street');
+    assert(r.shade.length === 1, 'a ' + kind + ' has ' + r.shade.length + ' shadows down its front');
+  }
+  // the same crate is a different crate in a foundry and on a wet street
+  const a = lit(0, 'crate'), b = lit(3, 'crate');
+  assert(a.rim[0][4] !== b.rim[0][4], 'a crate is lit the same on every street');
+  // the rim sits above the box and the shadow below the middle of it
+  const box = lit(0, 'crate');
+  assert(box.rim[0][1] < box.shade[0][1], 'the light is under the shadow');
+  assert(box.rim[0][2] > 8, 'the rim is only ' + box.rim[0][2] + 'px of a crate');
+});
+
+test('the big props are rimmed down their sides, the small ones are not', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const s = api.stage();
+  const side = (kind) => {
+    const it = api.mkItem(kind, api.cam.x + 60, api.FLOOR_MID, 0);
+    api.draw();
+    api._resetCounts();
+    api.drawItem(it);
+    return api._rects.filter(q => String(q[4]) === api.rgba(s.key, s.back * 0.28) && q[2] === 1);
+  };
+  assert(side('crate').length === 2, 'a crate has no light down its sides');
+  assert(side('barrel').length === 2, 'a barrel has no light down its sides');
+  assert(side('bat').length === 0, 'a bat two pixels thick has light down its sides');
+});
+
+test('cloud and lit props are cheap enough to be free', () => {
+  const api = boot();
+  for (const st of [0, 1, 2, 4]){
+    play(api, { stage: st });
+    for (let i = 0; i < 6; i++) api.mkItem(i % 2 ? 'crate' : 'barrel', api.cam.x + i * 40, api.FLOOR_MID, 0);
+    for (let i = 0; i < 7; i++) api.spawnEnemy('punk', api.cam.x + 30 + i * 40, api.FLOOR_MID + (i % 3) * 8, -1);
+    api.draw();
+    api._resetCounts();
+    api.draw();
+    const fills = api._counts.fillRect || 0;
+    assert(fills < 7500, 'stage ' + (st + 1) + ' costs ' + fills + ' fillRects');
+    assert((api._counts.drawImage || 0) < 170, 'stage ' + (st + 1) + ' hangs ' + api._counts.drawImage + ' blits');
+  }
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
