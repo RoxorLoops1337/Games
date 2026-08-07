@@ -8923,6 +8923,7 @@ function screenSelect() {
     G.deck = G.deck.filter((u) => u !== out.u);
     if (!G.deck.includes(coming)) G.deck.push(coming);
     const inc = ownedCard(coming);
+    playCue('select');                      // giving one up is a commitment too
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     setToast(`${CARDS[out.id].name} out, ${inc ? CARDS[inc.id].name : 'the new card'} in.`);
@@ -8936,6 +8937,14 @@ function screenSelect() {
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     if (id && id !== 'skip') {
+      // The moment of commitment makes a sound.
+      //
+      // Listing what the SCREENS cue — the beats having been done — turned up
+      // the fanfare sitting on the wrong beat: `openScreen` plays 'level' when
+      // the offer appears, and taking the card was silent. The offer appearing
+      // is not the achievement; the card joining your deck is, and it is the
+      // most consequential thing you do outside a fight.
+      playCue('select');
       const c = grantCard(id, true);
       if (G.deck.includes(c.u)) setToast(`${CARDS[id].name} joins the deck.`);
       else {
