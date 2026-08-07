@@ -320,8 +320,14 @@
   @keyframes screenLand{ 0%{ opacity:0; transform:scale(1.06); } 60%{ opacity:1; transform:scale(.995); } 100%{ transform:none; } }
   #screen.rising{ animation:screenRise .17s cubic-bezier(.2,.8,.3,1) both; }
   #screen.landing{ animation:screenLand .26s cubic-bezier(.2,.9,.25,1) both; }
+  /* Screens flowed from the top, so a short one — the card offer is three cards
+     and a line of text — sat in the upper third with a dead half beneath it,
+     the same mistake as the flat surround around a small map. `safe center`
+     centres content that fits and falls back to flow-from-the-top when it does
+     not, so the deck and the box still scroll from their first row. */
   #screen{
     position:absolute; inset:0; z-index:9; padding:12px; overflow:auto;
+    display:flex; flex-direction:column; justify-content:safe center;
     background:linear-gradient(180deg,#1a1222fa,#0d0913fd); backdrop-filter:blur(3px);
     touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
   }
