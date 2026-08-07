@@ -134,6 +134,8 @@ edit this block to name the next one.
 - [x] A hanging sign on every stall with its trade's pictogram — the whole
       market's worth in eight draw calls, so a hundred stalls cost what eight
       do.
+- [x] The sling is a machine: a trodden pad with tyre scuff, posts with snow on
+      the tops, and a band that thins from 8.5px to 5.6px as you stretch it.
 
 ## Next
 
