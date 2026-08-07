@@ -2206,6 +2206,34 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### Does the game say anything that is no longer true?
+
+The reverse of the last three passes, and never asked before: every line of copy
+was written against an earlier balance, and **a stale explanation is worse than a
+missing one.** Audited against the code it describes:
+
+    Rowan: five orbs, three salves        bag +5, +3                     ✓
+    Rowan: ten cards, half nothing special STARTER_DECK is 10, 6 common  ✓
+    Rowan: three energy and five cards     BASE_ENERGY 3, HAND_SIZE 5    ✓
+    battle tutorial: five cards, three energy                            ✓
+    Emberroot: wakes a fainted kin at half HP  floor(max / 2)            ✓
+    Twin Strike: swings one extra time     fx.hits 1                     ✓
+    Overkill: deals double                 fx.mul 2                      ✓
+    Ward Stance: take 3 less, draw 2       fx.def 3, fx.draw 2           ✓
+    Second Wind: may move again this turn  fx.again                      ✓
+
+**Nothing is stale.** Ward Stance and Second Wind are the notable ones: both had
+their balance changed after their copy was written, and both were updated with
+it. Recorded so nobody audits this again.
+
+The audit did turn up a loose end elsewhere. A level clears the flash, the lunge
+and the recoil on your side so the ring owns the sprite — and missed the crit
+burst, which draws at exactly the same place. That is the third time a fix here
+has reached most of what it claimed to rather than all of it. It is cleared now,
+**as defence rather than as a symptom**: `BURST_T` is 0.26s and a level lands
+after the win lines, so the two very probably never overlap in play. What is
+certain is that they draw in the same place and one was not being cleared.
+
 ### The deck's vocabulary, glossed where it appears
 
 Three words are printed on cards and were defined nowhere a player can read —
