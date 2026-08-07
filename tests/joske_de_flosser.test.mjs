@@ -2462,6 +2462,104 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ------------------------------------------------------------- the rush */
+test('every tier of rush has a colour of its own', () => {
+  const api = boot();
+  assert(api.SUPER.tints.length === api.SUPER.tiers.length,
+    `${api.SUPER.tints.length} tints for ${api.SUPER.tiers.length} tiers`);
+  assert(new Set(api.SUPER.tints).size === api.SUPER.tints.length, 'two tiers share a colour');
+  for (const t of api.SUPER.tints) assert(/^#[0-9a-f]{6}$/i.test(t), 'not a colour: ' + t);
+});
+
+test('a rush stands in a column of light, in the colour of its tier', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0;
+  const shot = (state, tier) => {
+    f.state = state; f.anim = state === 'super' ? 'rise' : 'idle'; f.frame = 0;
+    f.tier = tier == null ? null : api.SUPER.tiers[tier];
+    api._resetCounts();
+    api.drawFighter(f);
+    return { n: api._rects.length, cols: new Set(api._rects.map(r => r[4])) };
+  };
+  const idle = shot('idle');
+  const one = shot('super', 0), three = shot('super', 2);
+  assert(one.n > idle.n + 60, `a rush is drawn in ${one.n} pieces against ${idle.n} standing still`);
+  const tinted = (sh, hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const want = `${n >> 16 & 255},${n >> 8 & 255},${n & 255}`;
+    return [...sh.cols].filter(c => String(c).replace(/\s/g, '').includes(want)).length;
+  };
+  assert(tinted(one, api.SUPER.tints[0]) >= 3, 'the column is not in the first tier colour');
+  assert(tinted(three, api.SUPER.tints[2]) >= 3, 'nor the third in its own');
+  assert(tinted(one, api.SUPER.tints[2]) === 0, 'tier one is drawn in tier three colours');
+  /* And the shaft specifically: a stack of three-pixel rows narrowing as it
+     goes up.  Without this the ring and the spokes alone satisfy everything
+     above, which is how the first version of this test passed with the
+     column deleted. */
+  f.state = 'super'; f.anim = 'rise'; f.frame = 0; f.tier = api.SUPER.tiers[0];
+  api._resetCounts();
+  api.drawFighter(f);
+  const n0 = parseInt(api.SUPER.tints[0].slice(1), 16);
+  const want = `${n0 >> 16 & 255},${n0 >> 8 & 255},${n0 & 255}`;
+  const rows = api._rects
+    .filter(r => r[3] === 3 && /^rgba\(/.test(String(r[4])) &&
+      (String(r[4]).replace(/\s/g, '').includes(want) || /^rgba\(255,255,255/.test(String(r[4]).replace(/\s/g, ''))))
+    .sort((a, b) => b[1] - a[1]);
+  assert(rows.length >= 15, 'the column is ' + rows.length + ' rows tall');
+  assert(rows[0][2] > rows[rows.length - 1][2] + 6,
+    `the column does not narrow as it rises: ${rows[0][2]} at the foot, ${rows[rows.length - 1][2]} at the top`);
+});
+
+test('a rush lights the street it is thrown on', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0; f.state = 'idle'; f.anim = 'idle';
+  api.draw();
+  /* Measured with the field cleared and only this man drawn into it: the
+     street's own neon saturates that column otherwise, and then nothing the
+     rush adds is visible in the number. */
+  const own = (dx) => {
+    api.lfReset();
+    api.drawFighter(f);
+    const l = api.lightAt(Math.round(f.x - api.cam.x + dx));
+    return l ? l.k : 0;
+  };
+  f.state = 'idle'; f.anim = 'idle'; f.tier = null;
+  const baseHere = own(0), baseFar = own(66);
+  f.state = 'super'; f.anim = 'rise'; f.tier = api.SUPER.tiers[0];
+  assert(own(0) > baseHere + 0.2, `the rush adds ${(own(0) - baseHere).toFixed(2)} where he stands`);
+  // the glows round him reach about forty pixels; sixty-six out is only the
+  // wide seed the rush puts into the field on purpose
+  // measured: 0.10 with the wide seed, 0.02 on the glows alone
+  assert(own(66) > baseFar + 0.06,
+    `the rush lights his own feet but not the street: ${own(66).toFixed(2)} sixty-six pixels out`);
+});
+
+test('the whole frame goes the colour of the rush, and only while it lasts', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0;
+  const frameTint = () => {
+    api._resetCounts();
+    api.draw();
+    return api._rects.filter(r => r[2] === api.VW && r[3] === api.VH && String(r[4]).startsWith('rgba('));
+  };
+  f.state = 'idle'; f.anim = 'idle'; f.tier = null;
+  assert(frameTint().length === 0, 'the street is tinted with nobody rushing');
+  f.state = 'super'; f.anim = 'rise'; f.tier = api.SUPER.tiers[0];
+  const gold = frameTint();
+  assert(gold.length >= 1, 'a rush does not colour the frame');
+  f.tier = api.SUPER.tiers[2];
+  const violet = frameTint();
+  assert(violet.length >= 1, 'the third tier does not colour the frame');
+  assert(String(gold[0][4]) !== String(violet[0][4]), 'both tiers tint the frame the same colour');
+});
+
 /* ----------------------------------------------------------- the bosses */
 function bossShape(api, skin, isBoss, opts){
   const f = api.mkFighter({ team: 'e', skin, x: api.cam.x + 190, y: api.FLOOR_MID, face: 1 });
