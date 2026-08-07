@@ -4558,8 +4558,42 @@ function drawProp(o){
       ctx.save(); ctx.translate(o.x, o.y);
       shadow(0, o.r * 0.35, o.r * 0.95, o.r * 0.4, 0.3);
       if (o.dead){
-        ctx.fillStyle = '#8a5f3c'; circle(0, 0, o.r * 0.8); ctx.fill();
-        ctx.fillStyle = 'rgba(190,60,50,.5)'; circle(0, 0, o.r * 0.42); ctx.fill();
+        /* Two concentric discs — a brown one and a translucent red one. The
+           carousel is the biggest thing in the market at r150 and worth 2,500;
+           flattening it produced a target. It collapses now: the canopy caved
+           in and split into fallen segments in the market's own awning
+           colours, the centre pole snapped and lying across, and the horses
+           thrown off the ring. Fourth wreck to be given back what it was,
+           after the snowman, the present and the tree. */
+        ctx.rotate(o.rot || 0);
+        const a0 = o.seed * 6.283;
+        // the canopy, caved in: five segments left, each at its own reach
+        for (let i = 0; i < 5; i++){
+          const b = a0 + i * 1.27, k = 0.5 + (i % 3) * 0.16;
+          ctx.fillStyle = i % 2 ? TH.awning : TH.awning2;
+          ctx.beginPath(); ctx.moveTo(0, 0);
+          ctx.arc(0, 0, o.r * k, b, b + 0.62); ctx.closePath(); ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(9,16,32,.28)';           // the hollow underneath
+        ctx.beginPath();
+        ctx.ellipse(0, 0, o.r * 0.34, o.r * 0.28, a0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#8a5f3c';                     // the centre pole, snapped
+        ctx.beginPath();
+        ctx.ellipse(o.r * 0.16, o.r * 0.1, o.r * 0.52, o.r * 0.06, a0 + 1.1, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#ffd34d';                     // its finial, come off
+        circle(o.r * 0.66 * Math.cos(a0 + 1.1), o.r * 0.66 * Math.sin(a0 + 1.1) + o.r * 0.1,
+          o.r * 0.07); ctx.fill();
+        // and the horses, thrown clear of the ring
+        for (let i = 0; i < 3; i++){
+          const a = a0 + 2 + i * 2.2, d = o.r * (0.72 + (i % 2) * 0.18);
+          const hx = Math.cos(a) * d, hy = Math.sin(a) * d;
+          ctx.fillStyle = i % 2 ? '#f6f2ea' : '#e0c9a4';
+          ctx.beginPath();
+          ctx.ellipse(hx, hy, 17, 8, a + 1.2, 0, 6.283); ctx.fill();
+          ctx.fillStyle = '#4a3524';
+          circle(hx + Math.cos(a + 1.2) * 14, hy + Math.sin(a + 1.2) * 14, 5); ctx.fill();
+        }
       } else {
         /* A striped disc with six gold dots on it. The dots are the ride —
            they read as horses now, each one a body turned along the ring with

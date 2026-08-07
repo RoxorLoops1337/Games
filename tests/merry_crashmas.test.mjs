@@ -1579,13 +1579,16 @@ test('the edge of town is drawn, not left as canvas', () => {
 
   /* Off a stateless hash, so a market's treeline is as fixed as its stalls and
      drawing it cannot move a score. */
-  const before = [api.rnd(), api.vrnd()];
+  const r0 = api.rnd();
+  api.reseed(4242);
+  const check = api.rnd();
+  api.reseed(4242);
   const a = carRec(); api.withCtx(a, api.drawGround);
   const b = carRec(); api.withCtx(b, api.drawGround);
   assert(JSON.stringify(a.polys) === JSON.stringify(b.polys),
     'the same frame drawn twice should give the same woods');
-  const after = [api.rnd(), api.vrnd()];
-  assert(before[0] !== after[0] || true, 'streams advance on their own');
+  assert(api.rnd() === check && typeof r0 === 'number',
+    'drawing the treeline moved the simulation stream');
   console.log('    (edge: ' + beyond[0].w.toFixed(0) + 'w fade, ' +
     (woods[woods.length - 1].x1 - woods[woods.length - 1].x0).toFixed(0) + 'w of near woods)');
 });
@@ -4089,7 +4092,13 @@ test('changing the weather does not rebuild the market', () => {
     assert(mutated.G.target === before[i][2], name + ': target moved with the snowfall');
     near(mutated.props[0].x, before[i][3], 1e-9, name + ': layout moved with the snowfall');
   }
-  assert(mutated.snow.length !== api.snow.length || true, 'the snowfall itself still follows the theme');
+  /* And the tweak really did change the snowfall — otherwise the four
+     assertions above are comparing a build against itself and prove nothing. */
+  const snowA = api.LEVELS.map((_, i) => { api.startLevel(i); return api.snow.length; });
+  const snowB = mutated.LEVELS.map((_, i) => { mutated.startLevel(i); return mutated.snow.length; });
+  assert(JSON.stringify(snowA) !== JSON.stringify(snowB),
+    'the snow constants were tweaked but no market\'s snowfall changed, so this ' +
+    'test was comparing a build against itself');
 });
 
 test('particle and track buffers stay bounded', () => {
@@ -5738,6 +5747,53 @@ test('a felled town tree drops its trimmings', () => {
     assert(Math.hypot(sh.x - dead.o.x, sh.y - dead.o.y) < r * 1.1,
       'a bauble rolled ' + Math.hypot(sh.x - dead.o.x, sh.y - dead.o.y).toFixed(0) +
       ' from a tree of r' + r);
+});
+
+test('a flattened carousel is a collapsed carousel', () => {
+  const rows = [];
+  for (const lv of [0, 3, 5]){
+    const api = boot({ count: true, w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+    const th = api.getTheme();
+    const dead = propArt(api, 'carousel', true);
+
+    /* Two concentric discs, one brown and one translucent red, on every market
+       — the same theme-blindness the felled tree had. The canopy is the
+       market's own awning now. */
+    assert(dead.has(th.awning) && dead.has(th.awning2),
+      api.LEVELS[lv].name + ': a wrecked carousel should keep this market’s ' +
+      'awning, ' + th.awning + '/' + th.awning2);
+    assert(!dead.cols.has('rgba(190,60,50,.5)'),
+      api.LEVELS[lv].name + ': still the hard-coded red disc');
+    rows.push(api.LEVELS[lv].name + ' ' + th.awning);
+  }
+
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const dead = propArt(api, 'carousel', true);
+  const r = dead.o.r;
+
+  // three horses thrown clear, each still a body and a head
+  const bodies = dead.rec.shapes.filter(s => !s.stroked &&
+    (s.style === '#f6f2ea' || s.style === '#e0c9a4'));
+  const heads = dead.rec.shapes.filter(s => !s.stroked && s.style === '#4a3524');
+  assert(bodies.length === 3, 'three horses off the ring, got ' + bodies.length);
+  assert(heads.length === 3, 'each with a head, got ' + heads.length);
+  assert(dead.has('#ffd34d'), 'and the finial come off the pole');
+
+  // nothing thrown outside the collider the car bounces off
+  for (const sh of dead.rec.shapes)
+    assert(Math.hypot(sh.x, sh.y) < r * 1.05,
+      'a piece landed ' + Math.hypot(sh.x, sh.y).toFixed(0) + ' from a carousel of r' + r);
+
+  // a wreck should cost less than the ride it replaced, not more
+  const live = propArt(api, 'carousel', false);
+  assert(dead.rec.fills < live.rec.fills,
+    'the wreck costs ' + dead.rec.fills + ' fills, the running ride ' + live.rec.fills);
+  console.log('    (collapsed carousel: ' + dead.rec.fills + ' fills vs ' +
+    live.rec.fills + ' running | ' + rows.join(' | ') + ')');
 });
 
 test('drawing a wreck rolls nothing', () => {

@@ -429,6 +429,25 @@ edit this block to name the next one.
       in the snow around it, off the prop's own seed. Third wreck in a row
       that had forgotten what it was, after the snowman and the present.
 
+- [x] A flattened carousel is a collapsed carousel — and the last three
+      tautologies leave the suite. The carousel is the biggest thing in the
+      market at r150 and worth 2,500, and wrecking it produced **two
+      concentric discs**, one brown and one translucent red, the same on all
+      twenty-one markets — the identical theme-blindness the felled tree had.
+      It collapses now: the canopy caved in as five fallen segments in the
+      market's own awning colours, the centre pole snapped and lying across,
+      the finial come off it, and three horses thrown clear of the ring, each
+      still a body and a head. Sixteen fills against the running ride's
+      twenty-nine, which is the right way round for a wreck. Fourth wreck in a
+      row to be given back what it was, after the snowman, the present and the
+      tree — **the pattern is that live art gets the attention and wrecked art
+      gets a two-line placeholder**, so it is worth checking the dead branch of
+      anything new. Along the way: `assert(x || true)` appeared three times in
+      the suite, once written by me two passes ago. All three are real
+      assertions now — including the snowfall-independence test, which was
+      tweaking two constants and never checking the tweak had any effect, so it
+      would have passed comparing a build against itself.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
