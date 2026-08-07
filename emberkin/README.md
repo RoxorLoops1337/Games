@@ -2077,6 +2077,34 @@ something good just happened to this creature — but quick and bright where a
 rest is slow and soft. Deliberately small: it happens after most fights and must
 not out-shout an evolution.
 
+### Two beats on one body
+
+Every beat in this game was designed and photographed **alone**. Filming a real
+level-up was the first time two were seen running at once, and they were
+illegible together: a level lands moments after the exchange that won the fight,
+so the kin is still carrying the white flash and the shove of whatever hit it
+last, and the frame holds the level ring and the hit flash on the same body with
+no way to tell them apart.
+
+A level now clears the flash, the lunge and the recoil on its own side. Clearing
+the flash rather than quietening the ring is the right way round: the hit has
+already been read — its number is on screen — and what has **not** been read yet
+is that you levelled. The good news takes the sprite from the bad news.
+
+### A pending fall outlived its map
+
+`enterMap` abandons a half-played rustle and a half-played mend, and the
+blackout was left out of that list when it was added. The omission is worse than
+the other two would have been: those only hold the screen, but the blackout
+carries a callback that **moves you to the Wayhouse** — so a map change from any
+other cause left a timer that would later yank you out of wherever you had gone.
+
+It surfaced as the story suite's rival rematch failing about one run in four,
+which had been read as ordinary flake and very nearly dismissed as one. Six
+consecutive green runs after the fix, against a baseline that fails one in four.
+Worth remembering: **a beat that owns the screen is a state, and every state
+needs somebody to clear it.**
+
 ### Being healed
 
 Every other thing that happens to you has a beat: an orb arcs and wobbles, an
