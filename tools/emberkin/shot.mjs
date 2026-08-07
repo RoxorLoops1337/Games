@@ -539,6 +539,28 @@ const SCENES = {
       EK.renderDialogue();
     },
   },
+  // The end of the game. Rowan's flags are set for real and the speech is then
+  // produced by the real rowanScript — nothing here writes a line. Held on the
+  // no-ceremony line, which is the one the whole ending turns on.
+  ending: {
+    w: 700, h: 480,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null;
+      for (const [id] of EK.AIM_ORDER) EK.G.flags[id] = 1;
+      EK.G.flags.beatVespyr = 1;
+      for (const id of EK.DEX_ORDER) EK.G.dex[id] = 2;      // the full-dex branch
+      EK.enterMap('lab', 5, 4, 'up');
+      EK.G.mode = 'world'; EK.G.place = null;
+      EK.rowanScript();
+      const d = EK.G.dialogue;
+      if (!d) throw new Error('ending: Rowan said nothing with every flag set');
+      if (!/ceremony/i.test(d.lines.join(' '))) throw new Error('ending: this is not the closing speech');
+      d.i = d.lines.findIndex((l) => /ceremony/i.test(l)); d.hold = 0;
+      EK.renderDialogue();
+    },
+  },
   // The longest line of the speech, held on its own, because a count of
   // trainers and a clause about Wick is the one that can outgrow the box.
   handoveraim: {

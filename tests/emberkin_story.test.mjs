@@ -241,15 +241,33 @@ ok(G.party.concat(G.box).some((m) => m.species === 'vespyr'), 'it is actually yo
 section('the last word');
 const wick3 = EK.MAPS.crown_hollow.npcs.find((n) => n.id === 't_wick3');
 ok(EK.npcActive(wick3), 'Wick is waiting at the shrine');
+
+// What Rowan says with the shrine down but Wick still standing, recorded now so
+// the ending can be compared against it. This used to assert the ending
+// contained "So it went with you" — which is the SHRINE speech, keyed on
+// beatVespyr, a flag set by the fight before the last one. The test agreed with
+// the game that the second-to-last beat was the end, so neither noticed that
+// finishing the game was acknowledged by nobody.
+const seeRowan = () => {
+  EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
+  G.mode = 'world'; G.dialogue = null;
+  EK.rowanScript();
+  ok(!!G.dialogue, 'Rowan has something to say');
+  const said = G.dialogue.lines.join(' ');
+  clear();
+  return said;
+};
+const atShrine = seeRowan();
+
 talkAndFight('crown_hollow', 't_wick3', 38);
 eq(G.flags.t_wick3, 1, 'the last rival battle is won');
+ok(/Rowan/.test((wick3.after || []).join(' ')), 'and Wick sends you down to Rowan');
 
-EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
-G.mode = 'world';
-EK.rowanScript();
-ok(!!G.dialogue, 'Rowan has something to say');
-ok(G.dialogue.lines.join(' ').includes('So it went with you'), 'and it is the ending, not the briefing');
-clear();
+const ending = seeRowan();
+ok(ending !== atShrine, 'and what she says is not the speech you already heard at the shrine');
+ok(/ceremony/i.test(ending), 'she keeps her word that there is none');
+ok(new RegExp(EK.spell(EK.AIM_ORDER.length)).test(ending),
+  `and counts the trainers you actually beat (${EK.spell(EK.AIM_ORDER.length)})`);
 
 section('the deck came along for the ride');
 ok(G.cards.length >= EK.STARTER_DECK.length, 'you still have your starting cards');
