@@ -99,6 +99,16 @@ const SCENES = {
       EK.openScreen('reward', { offer: ['reaper', 'bulwark', 'warcry'], done: () => {} });
     },
   },
+  // A long screen, to check that centring short ones did not break tall ones.
+  deck: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.openScreen('deck');
+    },
+  },
   legendary: {
     w: 760, h: 900,
     go: (EK) => {

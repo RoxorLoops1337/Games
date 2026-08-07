@@ -320,8 +320,14 @@
   @keyframes screenLand{ 0%{ opacity:0; transform:scale(1.06); } 60%{ opacity:1; transform:scale(.995); } 100%{ transform:none; } }
   #screen.rising{ animation:screenRise .17s cubic-bezier(.2,.8,.3,1) both; }
   #screen.landing{ animation:screenLand .26s cubic-bezier(.2,.9,.25,1) both; }
+  /* Screens flowed from the top, so a short one — the card offer is three cards
+     and a line of text — sat in the upper third with a dead half beneath it,
+     the same mistake as the flat surround around a small map. `safe center`
+     centres content that fits and falls back to flow-from-the-top when it does
+     not, so the deck and the box still scroll from their first row. */
   #screen{
     position:absolute; inset:0; z-index:9; padding:12px; overflow:auto;
+    display:flex; flex-direction:column; justify-content:safe center;
     background:linear-gradient(180deg,#1a1222fa,#0d0913fd); backdrop-filter:blur(3px);
     touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
   }
@@ -5287,6 +5293,7 @@ function useMove(log, atkSide, moveId) {
       const dmg = roll.eff === 0 ? 0 : Math.max(1, Math.floor((roll.dmg + bonus.flat) * mul));
       let dealt = dmg;
       if (atkSide === 'foe') {
+        b.hitEl = m.type;                       // for the impact burst
         dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe', crit);  // shield first
       } else {
         // Recoil and drain are paid on what actually came off, not on the
@@ -5315,7 +5322,7 @@ function useMove(log, atkSide, moveId) {
         }
         defender.hp = clamp(defender.hp - through, 0, defender.max);
         dealt = had - defender.hp;
-        if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit });
+        if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit, el: m.type });
       }
       totalDealt += dealt;
       if (crit && eff !== 0) snap(log, 'A critical hit!');
@@ -6011,7 +6018,7 @@ function hurtMine(log, amount, why, atk, crit) {
     b.foePierce = 0;
     if (b.shield > 0) snap(log, 'The shield is not where the hit lands.', 'block', 'mine');
     b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
-    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', { atk, crit: !!crit });
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', { atk, crit: !!crit, el: b.hitEl });
     return dmg;
   }
   if (b.shield > 0) {
@@ -6021,7 +6028,7 @@ function hurtMine(log, amount, why, atk, crit) {
   }
   if (dmg > 0) {
     b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
-    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk, crit: !!crit } : null);
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk, crit: !!crit, el: b.hitEl } : null);
   }
   return dmg;
 }
@@ -6717,6 +6724,7 @@ function drawBattle(g) {
   drawSpr(g, 'creature', myId, mx - walkOff, my - gait + koM.dy, ms,
     { flip: true, flash: b.flashM > 0 ? b.flashM : 0, alpha: koM.a });
 
+  drawBurst(g, MY_GROUND, FOE_GROUND);
   drawCrit(g, MY_GROUND, FOE_GROUND);
   drawOrb(g, MY_GROUND, FOE_GROUND);
   drawPops(g, MY_GROUND, FOE_GROUND);
@@ -6731,6 +6739,65 @@ function drawBattle(g) {
  * as it goes, and four spokes on the diagonals — the diagonals rather than the
  * axes, because a cross reads as a plus sign and a saltire reads as an impact.
  */
+/**
+ * The moment a hit lands, in the colour and the shape of what landed it.
+ *
+ * All in whole pixels and straight lines: at 256x208 a curve is three pixels
+ * that look like a mistake, and a piece that lands on a half-pixel shimmers.
+ * The whole thing is over in a quarter of a second — punctuation, not animation.
+ */
+function drawBurst(g, myGround, foeGround) {
+  const b = B();
+  if (!b.burst) return;
+  const k = clamp(b.burst.t / BURST_T, 0, 1);
+  const e = ELEM_BURST[b.burst.el] || ELEM_BURST.Wild;
+  const col = TYPES[b.burst.el] || '#ffe6bf';
+  const cx = b.burst.side === 'mine' ? 72 : 178;
+  const cy = (b.burst.side === 'mine' ? myGround : foeGround) - 20;
+  // Out fast, then hang: most of the reach is spent in the first third, which is
+  // what makes it read as an impact rather than an expanding circle.
+  const reach = (k < .34 ? k / .34 : 1) * (b.burst.crit ? 30 : 21) * e.len;
+  const fade = 1 - k * k;
+
+  g.save();
+  // The core: a hot bloom that is white at the centre whatever the element is,
+  // because a hit is bright before it is coloured.
+  g.globalAlpha = fade * .9;
+  g.fillStyle = '#fff6e4';
+  const core = Math.round((1 - k) * (b.burst.crit ? 7 : 5));
+  if (core > 0) g.fillRect(cx - core, cy - core, core * 2, core * 2);
+
+  if (e.ring) {
+    g.globalAlpha = fade * .55;
+    g.strokeStyle = col;
+    g.lineWidth = 1;
+    g.beginPath(); g.arc(cx, cy, Math.max(1, reach * .8), 0, Math.PI * 2); g.stroke();
+  }
+
+  // The pieces. A fixed fan rather than a random one, so the same hit looks the
+  // same every time and nothing crawls between frames.
+  g.globalAlpha = fade;
+  g.fillStyle = col;
+  const base = -Math.PI / 2 - e.up * Math.PI * .5;
+  for (let i = 0; i < e.n; i++) {
+    const f = e.n === 1 ? .5 : i / (e.n - 1) - .5;
+    const a = base + f * e.spread * Math.PI * 2;
+    const wob = 1 + ((i * 37) % 11) / 22;          // uneven lengths, fixed
+    const d = reach * wob;
+    const px = Math.round(cx + Math.cos(a) * d);
+    const py = Math.round(cy + Math.sin(a) * d * .8);
+    const w = Math.max(1, Math.round(e.wide * (1 - k) * 2));
+    g.fillRect(px - (w >> 1), py - (w >> 1), w, w);
+    // A tail back toward the centre, so a piece has a direction.
+    const tx = Math.round(cx + Math.cos(a) * d * .55);
+    const ty = Math.round(cy + Math.sin(a) * d * .8 * .55);
+    g.globalAlpha = fade * .5;
+    g.fillRect(tx, ty, 1, 1);
+    g.globalAlpha = fade;
+  }
+  g.restore();
+}
+
 function drawCrit(g, myGround, foeGround) {
   const b = B();
   if (!b.crit) return;
@@ -7345,6 +7412,28 @@ function submitLog(log, opts = {}) {
 const POP_LIFE = .85;
 /** The pull back before a swing, and the shove the one on the end of it takes. */
 const WIND_UP = .42, RECOIL = .30, CRIT_BURST = .40;
+// How long an impact holds. Short: this is punctuation, not an animation.
+const BURST_T = .26;
+/**
+ * What each element does when it lands.
+ *
+ *   n      how many pieces fly
+ *   spread how wide the fan is, in turns — 1 is the whole circle
+ *   up     how far the fan is biased upward, so fire goes up and stone does not
+ *   len    how far a piece travels, against the burst radius
+ *   wide   fat shards (stone, verdant) against thin ones (spark, tide)
+ *   ring   whether a shockwave ring goes with it
+ */
+const ELEM_BURST = {
+  Ember:   { n: 7, spread: .34, up: .78, len: 1.25, wide: 1.5, ring: false },
+  Tide:    { n: 9, spread: 1,   up: .30, len: .95,  wide: 1,   ring: true },
+  Verdant: { n: 6, spread: .70, up: .45, len: .90,  wide: 2.4, ring: false },
+  Spark:   { n: 8, spread: 1,   up: .20, len: 1.45, wide: .7,  ring: true },
+  Gloom:   { n: 5, spread: .55, up: -.35, len: .85, wide: 2,   ring: false },
+  Stone:   { n: 5, spread: .48, up: -.25, len: .75, wide: 3,   ring: false },
+  Aether:  { n: 10, spread: 1,  up: .35, len: 1.1,  wide: .9,  ring: true },
+  Wild:    { n: 6, spread: .8,  up: .35, len: 1,    wide: 1.4, ring: false },
+};
 /** How long a beaten kin takes to go down. */
 const KO_FALL = .55;
 
@@ -7386,6 +7475,11 @@ function entryFx(b, e) {
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
     b.shake = e.crit ? 1.8 : 1;
+    // Every landed hit gets a burst in the colour and the shape of whatever
+    // landed it. Before this only a crit had a moment, and a crit is one swing
+    // in sixteen — so fifteen hits in sixteen were a white flash and a shudder,
+    // which is the same feedback a miss gets with the numbers turned up.
+    b.burst = { t: 0, side: e.side, el: e.el || null, crit: !!e.crit };
     // Only a swing lunges. Burn, roots and recoil are also 'hit', and nobody
     // threw those, so nothing leans in for them.
     if (e.atk === 'mine') { b.lungeM = .26; b.windM = 0; }
@@ -7720,6 +7814,7 @@ function updateBattle(dt) {
   b.recoilM = Math.max(0, (b.recoilM || 0) - dt);
   b.recoilF = Math.max(0, (b.recoilF || 0) - dt);
   if (b.crit) { b.crit.t += dt; if (b.crit.t >= CRIT_BURST) b.crit = null; }
+  if (b.burst) { b.burst.t += dt; if (b.burst.t >= BURST_T) b.burst = null; }
   if (b.downM != null) b.downM = Math.min(KO_FALL, b.downM + dt);
   if (b.downF != null) b.downF = Math.min(KO_FALL, b.downF + dt);
   if (b.pops && b.pops.length) {
