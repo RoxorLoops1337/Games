@@ -760,8 +760,20 @@
   body.ctl-overlay #btns .rbtn[data-k="x"]{ left:28%; }
   /* And the pad's label sits at the foot of the pad, which in this layout is
      the middle of the hand — "move" was printed across the card you were
-     aiming at. It goes to the top of the pad instead. */
-  body.ctl-overlay #pad::after{ bottom:auto; top:6%; }
+     aiming at. Moving it to the top of the pad fixed the battle and only the
+     battle: a screen panel is inset:0 over the whole stage, so in overlay
+     there is no height at which the label is not sitting on somebody's kin.
+     It went from the aimed card to the middle of the party list.
+     This is the one layout where the pad has no band of its own, so the label
+     goes. The pad still works — it is a "stick lands where your thumb does"
+     zone, not a drawn control — and the two buttons are labelled in the open. */
+  body.ctl-overlay #pad::after{ display:none; }
+  /* The buttons are 34% of the height in the bottom-right corner and the pad
+     46% in the bottom-left, so on a full-screen panel the last row of whatever
+     you are choosing from sits underneath them. The scroller gets a floor deep
+     enough to lift that row clear — the usual answer to content under a fixed
+     bar, and the alternative is a card you can see and cannot press. */
+  body.ctl-overlay #screen{ padding-bottom:48%; }
   /* The buttons still sat on the last card of the fan — the one you would
      tap, with a control on top of it. The hand keeps clear of the button
      column instead: it is a fan, so it closes up rather than losing a card. */

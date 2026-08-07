@@ -1267,8 +1267,18 @@ section('the overlay layout keeps its controls off the cards');
     'the hand is held clear of the button column in overlay');
   // And the pad's label is anchored to the foot of the pad, which in this
   // layout is the middle of the hand.
-  ok(/body\.ctl-overlay #pad::after\{[^}]*top:/.test(SRC),
-    'the move label is moved off the cards');
+  // The label was first moved to the top of the pad, which fixed the battle and
+  // only the battle. A screen panel is inset:0 over the whole stage, so in this
+  // layout there is no height at which the label is not on somebody's kin — it
+  // went from the aimed card to the middle of the party list. This is the one
+  // layout where the pad has no band of its own, so the label goes entirely.
+  ok(/body\.ctl-overlay #pad::after\{[^}]*display:none/.test(SRC),
+    'the move label is gone in the one layout where the pad has no band of its own');
+  // And a screen's last row sits under the controls. The scroller gets a floor
+  // deep enough to lift it clear — verified by a shot of the panel scrolled to
+  // the bottom, which is the only thing that can show it.
+  ok(/body\.ctl-overlay #screen\{[^}]*padding-bottom/.test(SRC),
+    'and a full-screen panel can be scrolled clear of the controls');
 }
 
 // The title screen was wired to clicks on its two DOM buttons and nothing else.
