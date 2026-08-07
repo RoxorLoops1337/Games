@@ -8,7 +8,7 @@ The brief this roadmap serves, in the owner's words: **more gore detail in the
 replay, rounds that look different from each other, and more of a game — more
 addictive, more challenge, puzzles, cars that behave differently over time.**
 
-## CURRENT PHASE: D2 — execute plan 2
+## CURRENT PHASE: E2 — three more critics, then synthesis
 
 The owner asked for 15 more levels, designed rather than generated, and then a
 critique cycle. Work the phases in order; when a phase's exit condition is met,
@@ -36,10 +36,17 @@ edit this block to name the next one.
   eating 63% of kill pops). The synthesis verified the load-bearing claims
   first: `drawAim` moving the car is real and decides pass/fail on market 1,
   and it turned up a fifth cosmetic system feeding on the simulation seed.
-- **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]`. Items 1–14 are done. **Next:
-  item 15** (portrait stops being a 20-pixel car), the last one. Exit: all 15 ticked, then
-  phase E again.
+- [x] **D2 — execute plan 2.** Done: all 15 items of `.polish/crashmas-plan-2.md`
+  shipped, one per pass, each with assertions, a browser check and a regression
+  check that reverts the fix and watches the new assertion fail. Two of them
+  turned up further cosmetic systems feeding on the simulation seed (the tear
+  spawn, and the tear's own speed rolls); one needed `par` re-derived (market 1,
+  when run length changed); and three exposed harness gaps that had been making
+  measured layouts untestable — `measureText` answering a flat 30,
+  `createLinearGradient` returning undefined, and no way to read a `roundRect`.
+- **E2 — three more critics, then synthesis.** Next: design, feel and code
+  critiques of the game as it now stands, as `.polish/crashmas-critique-*-3.md`,
+  then a plan 3. Exit: plan 3 on disk, then D3.
 
 ## Working agreement for each pass
 
@@ -347,6 +354,27 @@ edit this block to name the next one.
       the first try, and skipping the rolls outright puts markets out of band.
       Fifth system in this family, after `seedSnow`, `popText`, `addGore` and
       the shake.
+
+- [x] Portrait stops being a 20-pixel car (plan 2 item 15) — the last item of
+      plan 2. `z` is world units down the frame, so one number is a 58px car on
+      a desktop and a **23px** one on a phone, with a 7px shopper under it.
+      Plan 1 item 6 made a market launchable in portrait by driving the zoom
+      off the width; this is what that cost on the other side. Two changes and
+      one consolidation. The drive zoom is capped by the thing that actually
+      matters — never let the car fall under `CAR_MIN_PX` (34) of screen —
+      which never binds at 720 high or above and holds a 390-high frame at
+      z 860 instead of stretching to 1300, road ahead traded for being able to
+      see what you are driving. And the width term may still pull the picture
+      back, but not past `MIN_FILL` (0.6) of the height-driven zoom: on a
+      tablet held upright (820×1180) it had shrunk the view to 43% of what the
+      height allowed and left **31% of the screen outside the playfield**.
+      Then the consolidation, which the first version needed and did not have:
+      `camTarget` frames the aim view by placing the sling a fixed distance in
+      from the left edge, so it has to know the scale `camApply` will use — it
+      had its own copy of the formula, and the moment `MIN_FILL` entered one
+      and not the other a full pull went off the left edge of a tall window.
+      One `camScale(z)` now. Phone: car 23→34px, shopper 7.9→11.6px. Tablet:
+      car 30→43px, frame filled 69%→98%. Desktop unchanged.
 
 ## Next
 
