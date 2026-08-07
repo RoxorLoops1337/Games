@@ -101,12 +101,16 @@
   /* ---------------- the hand ---------------- */
   #battlebar{ position:absolute; inset:0; z-index:6; pointer-events:none; }
   #battlebar > *{ pointer-events:auto; }
-  #hand{ position:absolute; left:1.5%; right:1.5%; bottom:1.5%; height:30%; touch-action:none;
+  /* The outer cards need room to swing. Each pivots about a point below the
+     hand, so its rotation is mostly a sideways translation — the fifth card of
+     a full hand was sliced by the stage edge, badly at a phone's width, in the
+     first hand a player is ever dealt. Margin here, and a shorter lever below. */
+  #hand{ position:absolute; left:5%; right:5%; bottom:1.5%; height:30%; touch-action:none;
     display:flex; justify-content:center; align-items:flex-end; }
   /* The fan. Cards overlap and pivot around a point below the hand, the way a
      hand of real cards splays from the heel of your thumb. The per-card angle
      and drop are inline, from fanStyle(). */
-  #hand .cardel{ flex:0 0 20%; height:93%; margin:0 -.7%; transform-origin:50% 165%;
+  #hand .cardel{ flex:0 0 20%; height:93%; margin:0 -.7%; transform-origin:50% 138%;
     transition:transform .14s cubic-bezier(.2,.9,.3,1.2), box-shadow .12s ease, filter .14s ease; }
   #hand .cardel.sel{ box-shadow:0 0 0 .14em var(--gold), 0 .7em .5em rgba(0,0,0,.5); }
   /* "▲ play" and the rarity pip both want the foot of the card; while a card is

@@ -149,6 +149,21 @@ const SCENES = {
       EK.startBattle({ foe: EK.mkMon('zaplet', 4), wild: true });
     },
   },
+  // The first hand a player is ever dealt: the Lv5 starter, the ten-card
+  // starting deck, and a real Route One foe. `turn` shows a Lv24 kin with a
+  // banked shield, which is a mid-game hand and reads nothing like this one.
+  firsthand: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({ foe: EK.mkMon('zaplet', 4), wild: true });
+      EK.G.wipe = 0;
+      EK.G.battleMsg = null;          // the intro holds the screen until dismissed
+      EK.readIntent();
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
