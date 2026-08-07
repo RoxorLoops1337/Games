@@ -1403,4 +1403,37 @@ section('the portrait buttons fit a narrow phone');
     'and the pressed state keeps the centring instead of dropping it');
 }
 
+// Sound cannot be photographed, and playCue returns immediately when headless,
+// so nothing here can hear anything. What CAN be checked is the wiring, and the
+// failure it catches is real: a cue fired under a name playCue does not handle
+// is silence that looks exactly like a cue nobody wrote. Both directions.
+section('every cue that is fired is a cue that exists');
+{
+  const body = (SRC.match(/function playCue\(kind\)[\s\S]*?\n\}/) || [''])[0];
+  ok(body.length > 200, 'found playCue');
+  const defined = new Set((body.match(/kind === '[a-z_]+'/g) || [])
+    .map((m) => m.replace(/kind === '|'/g, '')));
+  ok(defined.size > 15, `it handles a table of cues (${defined.size})`);
+
+  // Every literal name passed to playCue must be one of them.
+  const fired = new Set((SRC.match(/playCue\('[a-z_]+'\)/g) || [])
+    .map((m) => m.replace(/playCue\('|'\)/g, '')));
+  ok(fired.size > 10, `and a lot of them are fired by name (${fired.size})`);
+  for (const k of fired) ok(defined.has(k), `the cue "${k}" is one playCue handles`);
+
+  // And the other way: a cue in the table that nothing reaches is a sound
+  // nobody will hear. The ones fired through a variable or a ternary are named
+  // here so the check stays honest rather than being loosened to pass.
+  const indirect = new Set(['battle', 'shrine', 'crit', 'hit',
+    'step_grass', 'step_tall', 'step_path', 'step_sand', 'step_wood']);
+  for (const k of defined) {
+    ok(fired.has(k) || indirect.has(k), `the cue "${k}" is reachable`);
+  }
+
+  // The plaque that names a new place was the one beat in the game with no
+  // sound at all. It is fired where the beat is raised, not somewhere near it.
+  ok(/G\.place = \{ name: m\.name, t: 0 \};\s*\n\s*playCue\('place'\);/.test(SRC),
+    'arriving somewhere new makes a sound, raised with the plaque itself');
+}
+
 done('emberkin_render');

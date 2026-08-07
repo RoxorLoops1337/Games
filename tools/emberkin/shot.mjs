@@ -913,16 +913,15 @@ const SCENES = {
           if (r.left < br.right && r.right > br.left) under = Math.max(under, br.bottom - r.top);
         });
       }
-      // Both faults are known and recorded in index.html next to `#hand`, so
-      // this REPORTS rather than throwing on them — a scene that is red every
-      // run is a scene you stop reading. It throws only if either number gets
-      // worse than what was measured when they were found. The worst of each
-      // across the sizes swept: floor 9.8px at 768x1024, and 10.3px under the
-      // bar at 264x760 — the narrow phone is much the worse of the two ends,
-      // which a sweep at 390 alone would never have said. Those are the
-      // ceilings, with a pixel of slack.
+      // The floor is FIXED — 0px at every size swept — so its ceiling is tight
+      // and any return of the clip fails here. The bar is not: it eats 3.4px of
+      // the aimed card at 390 and 10.5px at 264, and that has nothing to do
+      // with the fan (centring the row changed it by 0.3px). That one is
+      // recorded rather than thrown on, because a scene that is red every run
+      // is a scene you stop reading — its ceiling is the measured worst plus
+      // slack, so it catches a regression without crying every time.
       const report = `floor ${worst > 0 ? worst.toFixed(1) : 0}px ${side || '-'} · under the bar ${under > 0 ? under.toFixed(1) : 0}px`;
-      if (worst > 11 || under > 12) throw new Error(`handclip: WORSE than recorded — ${report}`);
+      if (worst > 2 || under > 12) throw new Error(`handclip: WORSE than recorded — ${report}`);
       console.log(`handclip: ${report}`);
     },
   },

@@ -4567,6 +4567,7 @@ function enterMap(id, x, y, dir) {
   if (m.kind !== 'inside' && G.placeSeen !== G.mapId) {
     G.placeSeen = G.mapId;
     G.place = { name: m.name, t: 0 };
+    playCue('place');
   }
   return m;
 }
@@ -9814,6 +9815,18 @@ function playCue(kind) {
   else if (kind === 'chest') {
     blip(90, .28, 'sawtooth', .05);
     [0, 7, 12, 19, 24].forEach((s, i) => blip(note(s), .34, 'triangle', .055, t + .1 + i * .06));
+  }
+  // Arriving somewhere new. The plaque that names a place was the only beat in
+  // the game with no sound at all — every other one that asks for your
+  // attention has a cue, including the ones that do not own the screen. This
+  // one must not own it either: the card slides in while you keep walking, so
+  // the sound is two soft notes a fifth apart, quiet and short, opening rather
+  // than announcing. A fanfare here would stop a player who is not stopping.
+  // Written, not heard: sound cannot be photographed and nobody in this loop
+  // has ever listened to this game.
+  else if (kind === 'place') {
+    blip(note(0), .26, 'triangle', .035);
+    blip(note(7), .3, 'triangle', .03, t + .09);
   }
   else if (kind === 'throw') blip(500, .12, 'sine', .05);
   // A throw is three sounds: the effort, the verdict, and the disappointment.
