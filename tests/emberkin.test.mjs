@@ -1271,4 +1271,66 @@ EK.G.party[1].hp = 0;
 EK.healParty();
 ok(EK.G.party.every((m) => m.hp === m.max && !m.status && m.moves.every((mv) => mv.pp === mv.max)), 'everyone is whole again');
 
+// The XP bar is the one bar in a fight that only ever moves once, and it used to
+// move by teleporting: it read `m.xp` raw while the HP bar beside it glided to
+// its target. On a level-up it was worse than abrupt — the level increments
+// before the bar is next drawn, so the fill was measured against the NEW level's
+// floor and the bar jumped from part-full straight to a sliver of the next
+// level, never passing through full. The one thing an XP bar exists to show was
+// the one thing it never showed.
+section('the xp bar sweeps instead of teleporting');
+{
+  // Fought through real input on purpose. `autoFight` calls the raw playCard /
+  // endTurn and throws their logs away, so it never reaches submitLog — and the
+  // sweep lives entirely in the playback that submitLog drives. A test built on
+  // autoFight watched a bar that was never being animated and said it was fine.
+  const g = withDeck(loadGame());
+  g.G.party = [g.mkMon('cindercub', 5)];
+  // Parked just under the level-6 floor so the win is guaranteed to cross it.
+  // Without this the kin gains a dozen xp against a Lv4 foe, never reaches the
+  // boundary, and the fill has nowhere to sweep to — the first version of this
+  // asserted a wrap that the scenario could not produce.
+  g.G.party[0].xp = g.xpFor(6) - 2;
+  g.startBattle({ foe: g.mkMon('sproutle', 4), wild: true });
+  ok(g.B().dispXp === g.G.party[0].xp, 'a fight opens with the bar where the kin actually is');
+  ok(g.B().barLv === 5, 'and drawn against the level it is actually on');
+
+  const startXp = g.G.party[0].xp;
+  let guard = 0, lagged = false, sawFull = false;
+  while (g.G.battle && guard++ < 600) {
+    const b = g.B();
+    if (b) {
+      if (Math.abs(b.tgtXp - b.dispXp) > 0) lagged = true;
+      const fl = g.xpFor(b.barLv);
+      const span = Math.max(1, g.xpFor(b.barLv + 1) - fl);
+      if ((b.dispXp - fl) / span > .95) sawFull = true;
+    }
+    const stuck = b && b.phase === 'player' && !b.log && !b.over
+      && !b.hand.some((c) => g.playableNow(b, c));
+    const key = stuck ? 'e' : 'a';
+    g.step(.12);
+    g.pressKey(key); g.step(.02); g.releaseKey(key); g.fired.clear();
+  }
+  ok(guard < 600, `the fight resolved through input (${guard} frames)`);
+  const won = g.G.party[0].xp > startXp;
+  ok(g.G.party[0].lvl === 6, `and levelled across the boundary (Lv${g.G.party[0].lvl})`);
+  ok(won, `the kin actually earned xp (${startXp} -> ${g.G.party[0].xp})`);
+  if (won) {
+    ok(lagged, 'the bar was seen behind its target rather than snapping to it');
+    ok(sawFull, 'and it was seen at the top of a level rather than skipping the fill');
+  }
+}
+
+section('switching hands the xp bar to the kin that came in');
+{
+  const g = withDeck(loadGame());
+  g.G.party = [g.mkMon('cindercub', 5), g.mkMon('sproutle', 12)];
+  g.startBattle({ foe: g.mkMon('dewdrip', 5), wild: true });
+  const other = g.G.party[1];
+  g.G.battle.mine = other;
+  g.G.battle.dispXp = other.xp;
+  ok(g.B().dispXp === other.xp, 'the bar reads the incoming kin, not the outgoing one');
+  ok(other.xp !== g.G.party[0].xp, 'and those two totals really are different');
+}
+
 done('emberkin');

@@ -933,4 +933,20 @@ ok(monkey.G.party.every((m) => m.moves.every((mv) => mv.pp >= 0 && mv.pp <= mv.m
 ok(monkey.G.money >= 0, 'shards never went negative');
 ok(monkey.G.party.length <= 6, 'the party never overflowed');
 
+// The dialogue box is a DOM overlay that only redraws on a dialogue event, so
+// anything that changes G.dialogue from outside the game — the screenshot tool
+// does, in every scene — has to be able to make the panel catch up. It could
+// not: `renderDialogue` was not on the EK export, so clearing the state left
+// the box on screen with its last line in it, and Elder Rowan sat behind every
+// screen shot for passes. Keep the handle reachable.
+section('the dialogue panel can be made to agree with the state');
+{
+  const g = loadGame();
+  ok(typeof g.renderDialogue === 'function', 'renderDialogue is reachable from outside');
+  g.G.dialogue = null;
+  let threw = null;
+  try { g.renderDialogue(); } catch (e) { threw = e; }
+  ok(!threw, `it survives being called with no dialogue${threw ? ' — ' + threw : ''}`);
+}
+
 done('emberkin_render');

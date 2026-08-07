@@ -5512,6 +5512,7 @@ function startBattle(opt) {
     downM: null, downF: null, hpMark: mine.hp,
     crit: null,
     dispM: mine.hp, dispF: opt.foe.hp, tgtM: mine.hp, tgtF: opt.foe.hp,
+    dispXp: mine.xp, tgtXp: mine.xp, barLv: mine.lvl, barSlot: G.party.indexOf(mine),
     started: false, finishing: false, await: null,
     // the card game
     draw: [], hand: [], disc: [], exh: [],
@@ -5629,7 +5630,12 @@ const effWord = (e) => e === 0 ? 'It does nothing at all…' : e >= 2 ? "It's br
 function snap(log, t, fx, side, extra) {
   const b = B();
   log.push({ t, fx: fx || '', side: side || '', hpM: b.mine.hp, hpF: b.foe.hp,
-    sM: b.mine.status, sF: b.foe.status, lvM: b.mine.lvl, xpM: b.mine.xp, ...extra });
+    sM: b.mine.status, sF: b.foe.status, lvM: b.mine.lvl, xpM: b.mine.xp,
+    // Which kin is out. XP is per-creature, so a bar that glides across a
+    // switch would be animating between two unrelated totals; the reader needs
+    // to know the number changed hands rather than grew. Creatures carry no id
+    // of their own — `packMon` saves none — so the party slot is the identity.
+    miM: G.party.indexOf(b.mine), ...extra });
 }
 
 const STAT_WORD = { atk: 'attack', def: 'guard', spd: 'speed' };
@@ -7577,7 +7583,6 @@ function renderHUD() {
   if (!b) { show(els.hudFoe, false); show(els.hudMine, false); return; }
   const box = (m, disp, mine) => {
     const f = clamp(disp / m.max, 0, 1);
-    const xpNeed = Math.max(1, xpFor(m.lvl + 1) - xpFor(m.lvl));
     return `<div class="nm"><span>${dispName(m)}${m.status ? statusChip(m.status) : ''}</span><span class="lv">Lv${m.lvl}</span></div>
       <div class="types">${typeChips(m.types)}</div>
       <div class="bar">${(() => {
@@ -7603,7 +7608,15 @@ function renderHUD() {
         return `<i style="width:${(disp / span) * 100}%;background:${hpColor(f)}"></i>`
           + (sh > 0 ? `<u style="left:${(disp / span) * 100}%;width:${(sh / span) * 100}%"></u>` : '');
       })()}</div>
-      ${mine ? `<div class="bar xp"><i style="width:${clamp((m.xp - xpFor(m.lvl)) / xpNeed, 0, 1) * 100}%"></i></div>
+      ${mine ? `<div class="bar xp"><i style="width:${(() => {
+        // Draw the bar against the level the playback is currently ON, not the
+        // level the creature has already reached — the two differ for exactly
+        // as long as the fill is crossing a boundary, which is the whole beat.
+        // Reading it against `m.lvl` is what made a level-up skip the fill.
+        const dx = Number.isFinite(b.dispXp) ? b.dispXp : m.xp;
+        const lv = b.barLv || m.lvl, fl = xpFor(lv);
+        return clamp((dx - fl) / Math.max(1, xpFor(lv + 1) - fl), 0, 1) * 100;
+      })()}%"></i></div>
       <div class="hpnum">${Math.round(disp)}/${m.max}${b.shield > 0 ? ` <span class="shd">+${b.shield}</span>` : ''}</div>` : ''}`;
   };
   els.hudFoe.innerHTML = box(b.foe, b.dispF, false);
@@ -7952,6 +7965,25 @@ function entryFx(b, e) {
   if (dM) pushPop(b, 'mine', Math.abs(dM), dM > 0 ? 'dmg' : 'heal');
   if (dF) pushPop(b, 'foe', Math.abs(dF), dF > 0 ? 'dmg' : 'heal');
   b.tgtM = e.hpM; b.tgtF = e.hpF;
+  // XP rides the same snapshots as HP, for the same reason. Chasing the live
+  // `mine.xp` instead looked equivalent and was not: the turn resolves in full
+  // before any of it is played back, so a live target starts the bar climbing
+  // the moment the foe drops — under the "is down!" line, a beat before the one
+  // that says EXP was gained. And it swept between two unrelated totals when
+  // you switched kin, because the outgoing creature's number was where the bar
+  // happened to be standing.
+  //
+  // `lvM` is snapped too, which is what makes the level-up wrap fall out for
+  // free: the EXP line carries the OLD level with the new total, so the bar
+  // fills past the boundary and clamps to full, and the "grew to level" line
+  // that follows carries the new level, so it wraps to the start of it.
+  if (e.xpM !== undefined) {
+    // A different kin is out: hand the bar over rather than gliding to it.
+    if (e.miM !== undefined && e.miM !== b.barSlot) b.dispXp = e.xpM;
+    b.tgtXp = e.xpM;
+  }
+  if (e.lvM !== undefined) b.barLv = e.lvM;
+  if (e.miM !== undefined) b.barSlot = e.miM;
   // A swing is announced a line before it lands. That gap is the wind-up: the
   // one about to throw it pulls back, so the lunge that follows is a release
   // rather than a twitch.
@@ -8377,6 +8409,23 @@ function updateBattle(dt) {
   // HP bars chase their target so damage reads as motion, not a jump.
   const chase = (cur, tgt) => Math.abs(tgt - cur) < .6 ? tgt : cur + (tgt - cur) * Math.min(1, dt * 7);
   b.dispM = chase(b.dispM, b.tgtM); b.dispF = chase(b.dispF, b.tgtF);
+  // The XP bar chases too, and it is the one bar that only ever moves once.
+  // It read `m.xp` raw, so at the single instant it had anything to say — the
+  // foe going down — it teleported while the HP bar beside it glided. Worse on
+  // a level-up: the level increments before the bar is next drawn, so the fill
+  // was measured against the NEW level's floor and the bar went from part-full
+  // to a sliver without ever passing through full. The one thing an XP bar
+  // exists to show was the one thing it never showed.
+  //
+  // The span at level 20 is ~1000 XP against ~70 at level 5, so the epsilon
+  // scales with the span instead of the flat .6 the HP bars use.
+  if (!Number.isFinite(b.dispXp)) b.dispXp = b.tgtXp = b.mine.xp;
+  {
+    const lv = b.barLv || b.mine.lvl;
+    const eps = Math.max(1, (xpFor(lv + 1) - xpFor(lv)) * .01);
+    b.dispXp = Math.abs(b.tgtXp - b.dispXp) < eps
+      ? b.tgtXp : b.dispXp + (b.tgtXp - b.dispXp) * Math.min(1, dt * 4);
+  }
   renderHUD();
   if (b.lineT > 0 && !b.log) {
     b.lineT -= dt;
@@ -8399,7 +8448,11 @@ function updateBattle(dt) {
     // hang the fight with the bar on screen and no way out, so a bar that is not
     // a real number counts as settled rather than as a wall.
     const done = (cur, tgt) => !(Number.isFinite(cur) && Number.isFinite(tgt)) || Math.abs(cur - tgt) < 1;
-    const settled = done(b.dispM, b.tgtM) && done(b.dispF, b.tgtF);
+    // The XP bar gates the next line too, so "grew to level 6!" lands after the
+    // bar has actually reached the top rather than alongside it. Cause, then
+    // effect. Costs nothing in an ordinary turn: xp only moves on a foe going
+    // down, so every other line finds this already settled.
+    const settled = done(b.dispM, b.tgtM) && done(b.dispF, b.tgtF) && done(b.dispXp, b.tgtXp);
     if (b.li === 0 && !b.started) { b.started = true; playbackStep(); return; }
     if (orbBusy) return;                    // the orb is still in the air
     if ((justPressed('a') || b.hold <= 0) && settled) {
@@ -9063,6 +9116,8 @@ function screenSelect() {
       if (s.opt.force) {
         G.battle.mine = m; m.stages = { atk: 0, def: 0, spd: 0 };
         G.battle.dispM = m.hp; G.battle.tgtM = m.hp;
+        G.battle.dispXp = G.battle.tgtXp = m.xp; G.battle.barLv = m.lvl;
+        G.battle.barSlot = G.party.indexOf(m);
         G.battle.over = null; G.battle.finishing = false; G.battle.entry = 0;
         swapKinCards(G.battle);
         startPlayerTurn([]);
@@ -10092,7 +10147,7 @@ if (!HEADLESS) boot();
 if (typeof window !== 'undefined') {
   window.EK = {
     G, DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART, STATUS, TILE_ART, SOLID,
-    advanceDialogue, liveBattleMsg,
+    advanceDialogue, renderDialogue, liveBattleMsg,
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
