@@ -58,6 +58,7 @@ const EXPOSE = `__out.api = {
   attract, ATTRACT_CAST, drawAttract, logo, logoGlyphs, logoFeet, LOGO_BAND,
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
+  faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
@@ -2450,6 +2451,88 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ------------------------------------------------------------------ face */
+test('the head clears the collar, so there is somewhere to put a face', () => {
+  const api = boot();
+  assert(api.HEAD_LIFT > 0, 'the head is still buried in the shoulders');
+  const pose = api.A.idle[1];
+  const jt = api.poseGeom(pose);
+  const hr = 5.5, capH = 2.6;                     // what drawFighter and drawHair use at sc 1
+  const head = jt.head[1] + api.HEAD_LIFT;        // local y counts up from the feet
+  const collarTop = jt.sh[1] + 2.5;               // the shoulder cap sits on the joint
+  // the chin is allowed to meet the collar; the mouth is not
+  const mouth = head - 2.1;
+  assert(mouth > collarTop + 1.5,
+    `the collar would cover the mouth: mouth at ${mouth.toFixed(1)}, collar at ${collarTop.toFixed(1)}`);
+  const band = (head + hr - capH) - Math.max(head - hr, collarTop);
+  assert(band >= 5, 'not enough head showing to put a face on: ' + band.toFixed(1) + 'px');
+});
+
+test('the face reads the state machine — you can see him wince', () => {
+  const api = boot();
+  const f = api.mkFighter({ team: 'e' });
+  const mood = (st, extra) => { Object.assign(f, { state: st, dead: false, tell: 0, rage: false }, extra || {}); return api.faceMood(f); };
+  assert(mood('hurt') === 'hurt', 'a man being hit is not calm');
+  assert(mood('down') === 'hurt' && mood('lie') === 'hurt', 'nor one on the floor');
+  assert(mood('idle', { dead: true }) === 'hurt', 'nor a dead one');
+  assert(mood('attack') === 'grit' && mood('super') === 'grit', 'he grits through a punch');
+  assert(mood('block') === 'brace', 'and braces behind a guard');
+  assert(mood('idle', { tell: 0.3 }) === 'rage', 'a wind-up shows on the face');
+  assert(mood('idle', { rage: true }) === 'rage', 'and so does rage');
+  assert(['calm', 'blink'].includes(mood('idle')), 'otherwise he is just standing there');
+});
+
+test('they blink, and not all at the same instant', () => {
+  const api = boot();
+  const a = api.mkFighter({ team: 'e' }), b = api.mkFighter({ team: 'e' });
+  assert(a.id !== b.id, 'two fighters, two clocks');
+  const trace = (f) => {
+    const out = [];
+    for (let t = 0; t < 12; t += 0.04){ api.setT(t); out.push(api.faceMood(f) === 'blink'); }
+    return out;
+  };
+  const ta = trace(a), tb = trace(b);
+  const nA = ta.filter(Boolean).length, nB = tb.filter(Boolean).length;
+  assert(nA > 0 && nB > 0, 'nobody blinked in twelve seconds');
+  assert(nA < ta.length * 0.15, 'his eyes are shut more than they are open: ' + nA + '/' + ta.length);
+  let together = 0;
+  for (let i = 0; i < ta.length; i++) if (ta[i] && tb[i]) together++;
+  assert(together < Math.min(nA, nB), 'the whole crowd blinks in unison');
+});
+
+test('the eye is the only white on him, and it shuts when it should', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0; f.hitFlash = 0;
+  const whites = (st) => {
+    f.state = st; f.anim = st === 'attack' ? 'hook' : 'idle'; f.dead = false; f.tell = 0;
+    api.setT(0.5);                                // off the blink
+    api._resetCounts();
+    api.drawFighter(f);
+    return api._styles.filter(c => c === api.FACE_WHITE).length;
+  };
+  const inks = () => api._styles.filter(c => c === api.FACE_INK).length;
+  assert(whites('idle') >= 1, 'no eye at all');
+  assert(inks() >= 2, 'no brow and no pupil');
+  assert(whites('hurt') === 0, 'his eyes should be shut when he is being hit');
+  assert(whites('attack') > whites('idle'), 'gritted teeth are more white than an eye');
+  f.state = 'idle'; f.anim = 'idle'; f.hitFlash = 0.2;
+  api.setT(0.5); api._resetCounts(); api.drawFighter(f);
+  assert(api._styles.filter(c => c === api.FACE_WHITE).length === 0, 'a hit flash should not draw a face through itself');
+});
+
+test('the face goes on last, so nothing is drawn over it', () => {
+  const body = RAW.slice(RAW.indexOf('function drawFighter('));
+  const head = body.slice(0, body.indexOf('\n}\n'));
+  const lastPass = head.lastIndexOf('drawRigPass(');
+  const face = head.indexOf('drawFace(');
+  const hair = head.indexOf('drawHair(');
+  assert(lastPass >= 0 && face >= 0 && hair >= 0, 'drawFighter no longer looks the way this test expects');
+  assert(face > lastPass, 'a lighting pass runs after the face and would grey it out');
+  assert(face > hair, 'the hair is drawn over the face');
 });
 
 /* --------------------------------------------------------------- weather */
