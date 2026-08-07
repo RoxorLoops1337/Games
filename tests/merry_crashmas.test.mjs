@@ -74,7 +74,7 @@ const EXPOSE = `__out.api = {
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
-  finale, nextLevel, toMenu,
+  finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -3833,8 +3833,11 @@ test('the light sprites and the snow grain are baked once, not per frame', () =>
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
   api.draw();
   const after1 = api.getBakeCount();
-  assert(after1 === 3,
-    'the first frame bakes the mask, the headlight and one themed glow, got ' + after1);
+  // the mask, the headlight, one themed lamp glow, and one glow per pickup kind
+  const kinds = Object.keys(api.PICKUP_RGB).length;
+  assert(after1 === 3 + kinds,
+    'the first frame bakes the mask, the headlight, the themed glow and the ' +
+    kinds + ' pickup colours, got ' + after1);
   for (let i = 0; i < 30; i++){ api.setT(api.getT() + 1 / 60); api.draw(); }
   assert(api.getBakeCount() === after1,
     'thirty more frames should bake nothing: ' + api.getBakeCount());
@@ -4866,6 +4869,100 @@ test('the title screen shows a lit market and no HUD', () => {
   api.pickLevel(0);
   assert(api.getTheme().name === api.THEMES[api.LEVELS[0].theme].name,
     'the backdrop leaked into the market you picked: ' + api.getTheme().name);
+});
+
+/* -------------------------------------------------------------- pickups --- */
+
+/* The three things on the floor you are meant to steer into. They were 34px
+   icons under a flat alpha .18 disc, drawn before the darkness layer — so at
+   night the thing you were supposed to chase was dimmer than the snow. */
+function pickupRig(w, h){
+  const api = boot({ count: true, w: w || 1440, h: h || 810 });
+  api.G.unlocked = 21; api.startLevel(6); api.beginLevel();
+  api.G.phase = 'drive';
+  api.pickups.length = 0;
+  api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  ['nitro', 'plow', 'star'].forEach((k, i) => {
+    api.pickups.push({ x: api.cam.x + (i - 1) * 120, y: api.cam.y,
+      kind: k, taken: false, bob: i * 2, r: 34 });
+  });
+  api.setT(3);
+  return api;
+}
+
+test('a pickup is lit by the light pass, not painted under the night', () => {
+  const api = pickupRig();
+  api.drawPickupGlow();                         // bake the three sprites first
+  api._resetCounts();
+  for (const u of api.pickups) api.drawPickup(u);
+  const onGround = api._counts.drawImage || 0;
+  api._resetCounts();
+  api.drawPickupGlow();
+  const inLight = { img: api._counts.drawImage || 0, fill: api._counts.fill || 0,
+    stroke: api._counts.stroke || 0 };
+  console.log('    (pickups: ' + onGround + ' glow images from drawPickup, ' +
+    inLight.img + ' from the light pass, ' + inLight.stroke + ' rings)');
+  assert(onGround === 0, 'drawPickup should not lay down a glow: ' + onGround);
+  assert(inLight.img === 3, 'one glow sprite each, got ' + inLight.img);
+  assert(inLight.stroke === 3, 'and one breathing ring each, got ' + inLight.stroke);
+});
+
+test('each pickup carries its own colour', () => {
+  const api = pickupRig();
+  const cols = api.pickups.map(u => api.pickupCol(u));
+  assert(new Set(cols).size === 3, 'three kinds, three colours: ' + cols.join(' | '));
+  for (const c of cols) assert(/^\d+,\d+,\d+$/.test(c), 'not an rgb triple: ' + c);
+  api.drawPickupGlow();
+  const baked = api.getBakeCount();
+  for (let i = 0; i < 40; i++){ api.setT(3 + i * 0.05); api.drawPickupGlow(); }
+  assert(api.getBakeCount() === baked,
+    'forty frames rebaked the pickup glows: ' + baked + ' -> ' + api.getBakeCount());
+});
+
+test('a taken pickup and an off-camera one cost nothing', () => {
+  const api = pickupRig();
+  api.drawPickupGlow();
+  api._resetCounts();
+  api.drawPickupGlow();
+  const all = (api._counts.fill || 0) + (api._counts.stroke || 0) + (api._counts.drawImage || 0);
+  for (const u of api.pickups) u.taken = true;
+  api._resetCounts();
+  api.drawPickupGlow();
+  for (const u of api.pickups) api.drawPickup(u);
+  assert(!Object.keys(api._counts).length,
+    'a collected pickup is still being drawn: ' + JSON.stringify(api._counts));
+  // and one on the far side of the market is culled from the glow pass
+  for (const u of api.pickups){ u.taken = false; u.x = api.cam.x + 90000; }
+  api._resetCounts();
+  api.drawPickupGlow();
+  assert(!Object.keys(api._counts).length,
+    'an off-camera pickup is still being lit: ' + JSON.stringify(api._counts));
+  // three sprites and three rings — the control the two nothings are measured
+  // against, so a pass that quietly drew nothing at all would still fail
+  assert(all === 6, 'the control run should be three glows and three rings, got ' + all);
+});
+
+/* Ice is the one thing on the floor that changes how the car drives, and it
+   was a pale disc with three scratches on it. */
+test('a patch of ice is a cracked sheet, drawn in one stroke', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(6); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.ice.length = 0; api.spills.length = 0; api.gore.length = 0;
+  api.foot.length = 0; api.debris.length = 0; api.tracks.length = 0;
+  api.drawGround();
+  api._resetCounts();
+  api.drawGround();
+  const bare = { fill: api._counts.fill || 0, stroke: api._counts.stroke || 0 };
+  api.ice.push({ x: api.cam.x, y: api.cam.y, r: 150, seed: 0.3 });
+  api._resetCounts();
+  api.drawGround();
+  const iced = { fill: api._counts.fill || 0, stroke: api._counts.stroke || 0 };
+  const fills = iced.fill - bare.fill, strokes = iced.stroke - bare.stroke;
+  console.log('    (one patch of ice: ' + fills + ' fills, ' + strokes + ' strokes)');
+  assert(fills >= 3, 'a sheet, a facet and a specular: ' + fills + ' fills');
+  assert(strokes === 2,
+    'the rim and the cracks are one stroke each, not one a crack: ' + strokes);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

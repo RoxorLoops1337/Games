@@ -118,6 +118,9 @@ edit this block to name the next one.
 - [x] The title screen looks at a market: its own drifting camera on the last
       market rather than the aim framing's empty launch lane, no HUD, and an
       overlay you can see through.
+- [x] Pickups and ice: the three things you steer into get their own coloured
+      glow from the light pass and a breathing ring, and ice reads as a cracked
+      sheet with facets and a rim rather than a pale disc with three scratches.
 
 ## Next
 
