@@ -2101,6 +2101,31 @@ always has.
 "named after its own species" as no nickname at all. It runs on the way out as
 well as on the button, so a name you typed is never lost by closing the screen.
 
+### The papers
+
+The screen a catch hands you, and the only one in the game with a text input.
+Never photographed until now, which showed two things.
+
+The kin was a **fixed 150px** in a thousand-pixel panel — a passport photo one
+second after the gotcha had filled the frame with the same creature, so the
+drama fell off a cliff at exactly the moment the player got what they came for.
+It is em-based now, so it tracks the stage instead of staying 150px at every
+size, and the two columns centre on each other rather than hanging off a
+flex-start baseline with the portrait dangling below the text.
+
+### A screen that scrolls says so
+
+The deck is longer than the frame and its last row was cut clean off by the
+panel edge with nothing to suggest there was more below — which reads as a
+broken screen rather than a long one. The render suite checks the scroll
+affordances are *wired up*; it cannot check that they can be seen.
+
+`#screen` uses the `local`/`scroll` background trick: two cover layers scroll
+**with** the content and sit over two shadow layers pinned to the frame, so a
+shadow only appears at an edge you have actually scrolled away from. No JS, no
+extra element, and it disappears by itself on a screen that fits — verified by
+shooting the reward screen, which is short, and finding no cue on it.
+
 ### A card after every win
 
 The three cards on the reward screen used to sit in a fixed 14.6em box with the

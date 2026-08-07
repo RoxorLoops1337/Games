@@ -199,11 +199,22 @@
   .cardrow{ display:flex; flex-wrap:wrap; gap:.5em; margin-top:1.1em; }
 
   /* ---- a kin's papers -------------------------------------------------- */
-  .profile{ display:flex; gap:1em; align-items:flex-start; flex-wrap:wrap; margin-top:.6em; }
+  /* Centred, not flushed left. The panel is far wider than this content and the
+     old layout left a quarter of it empty down the right-hand side — the same
+     "content parked in a box it does not fill" as the title screen, the reward
+     cards and the interior maps. Fourth time. */
+  .profile{ display:flex; gap:1.2em; align-items:center; flex-wrap:wrap;
+    justify-content:center; margin-top:.6em; }
   .profile .pcard{ padding:.6em; display:flex; flex-direction:column; align-items:center; gap:.4em;
     background:radial-gradient(120% 80% at 50% 12%, rgba(255,201,77,.14), transparent 70%),
       linear-gradient(180deg,#2a2036,#150e1d); }
-  .profile .pcard canvas{ width:150px; height:150px; image-rendering:pixelated; }
+  /* The kin is the reason this screen exists. At a fixed 150px it was a
+     passport photo in a thousand-pixel panel, one second after the gotcha had
+     filled the frame with the same creature — the drama fell off a cliff at
+     exactly the moment the player got what they came for. Em-based so it tracks
+     the stage instead of staying 150px on every size. */
+  .profile .pcard canvas{ width:15em; height:15em; max-width:42vw; max-height:42vw;
+    image-rendering:pixelated; }
   .profile .ptypes{ display:flex; gap:.25em; }
   .profile .pbody{ flex:1 1 15em; min-width:13em; }
   .profile .prow{ display:flex; align-items:center; gap:.5em; }
@@ -336,10 +347,23 @@
      the same mistake as the flat surround around a small map. `safe center`
      centres content that fits and falls back to flow-from-the-top when it does
      not, so the deck and the box still scroll from their first row. */
+  /* A screen that scrolls says so. The deck is longer than the frame and its
+     last row was cut clean off by the panel edge with nothing to suggest there
+     was more — which reads as a broken screen, not a long one. These are the
+     `local`/`scroll` background layers: the two covers scroll WITH the content
+     and sit over the two shadows, which are pinned to the frame, so a shadow
+     only appears at an edge you have actually scrolled away from. No JS, no
+     element, and it disappears by itself on a screen that fits. */
   #screen{
     position:absolute; inset:0; z-index:9; padding:12px; overflow:auto;
     display:flex; flex-direction:column; justify-content:safe center;
-    background:linear-gradient(180deg,#1a1222fa,#0d0913fd); backdrop-filter:blur(3px);
+    background:
+      linear-gradient(180deg,#12101d 42%, #12101d00) top / 100% 26px local no-repeat,
+      linear-gradient(0deg,#0d0913 42%, #0d091300) bottom / 100% 26px local no-repeat,
+      linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,0)) top / 100% 18px scroll no-repeat,
+      linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0)) bottom / 100% 22px scroll no-repeat,
+      linear-gradient(180deg,#1a1222fa,#0d0913fd);
+    backdrop-filter:blur(3px);
     touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
   }
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
