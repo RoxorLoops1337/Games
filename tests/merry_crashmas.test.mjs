@@ -70,6 +70,7 @@ const EXPOSE = `__out.api = {
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
+  TRADES, tradeOf, drawGoods, drawHut,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4010,6 +4011,113 @@ test('the beam cuts the darkness as well as adding its own glow', () => {
   assert((api._counts.drawImage || 0) >= want,
     'the beam should be punched and drawn, expected at least ' + want +
     ' drawImage calls, got ' + api._counts.drawImage);
+});
+
+/* --------------------------------------------------------------- stalls --- */
+
+/* Twenty-one markets of the identical brown box with four gold dots on it.
+   Every hut picks a trade now — but out of the seed it already carries, never
+   a fresh rnd(), because a new draw in addProp would rescore every market. */
+test('a market sells six different things, and picks them without a dice roll', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  const huts = api.props.filter(o => o.kind === 'hut');
+  assert(huts.length > 30, 'the last market should be full of stalls, got ' + huts.length);
+  const seen = {};
+  for (const o of huts) seen[api.tradeOf(o).id] = (seen[api.tradeOf(o).id] || 0) + 1;
+  console.log('    (trades in the last market: ' +
+    Object.entries(seen).map(([k, v]) => k + ' ' + v).join(', ') + ')');
+  assert(Object.keys(seen).length === api.TRADES.length,
+    'every trade should turn up: ' + Object.keys(seen).join(','));
+  const least = Math.min(...Object.values(seen));
+  assert(least >= 2, 'no trade should be a one-off curiosity, rarest had ' + least);
+
+  // pure function of the seed: same seed in, same trade out, whatever else ran
+  const o = huts[0], id = api.tradeOf(o).id;
+  for (let i = 0; i < 50; i++) api.rnd();
+  assert(api.tradeOf(o).id === id, 'the trade moved when the RNG did');
+  const twin = { seed: o.seed };
+  assert(api.tradeOf(twin).id === id, 'the trade should depend on nothing but the seed');
+});
+
+test('drawing the stalls does not touch the simulation RNG', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.draw();                                  // warm every cache
+  // reseed, take a number; reseed, draw three frames, take a number. A draw
+  // that reads the simulation stream moves the second one.
+  api.reseed(1234);
+  const clean = api.rnd();
+  api.reseed(1234);
+  api.setT(0); api.draw();
+  api.setT(3); api.draw();
+  api.setT(6); api.draw();
+  assert(api.rnd() === clean,
+    'three frames of drawing moved the simulation RNG: ' + api.rnd() + ' vs ' + clean);
+
+  // and the same market laid out twice sells the same things in the same order
+  const first = api.props.filter(o => o.kind === 'hut').map(o => api.tradeOf(o).id).join(',');
+  api.startLevel(20); api.beginLevel();
+  const second = api.props.filter(o => o.kind === 'hut').map(o => api.tradeOf(o).id).join(',');
+  assert(first === second, 'the same market laid out two different sets of trades');
+});
+
+test('the six counters are six different drawings, not one with a palette', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.setT(2.5);
+  const costs = api.TRADES.map((t, i) => {
+    const o = { seed: (i + 0.5) / api.TRADES.length, w: 158, h: 112 };
+    assert(api.tradeOf(o).id === t.id, 'seed ' + o.seed + ' should pick ' + t.id);
+    api._resetCounts();
+    api.drawGoods(o, 158, 112, 13, 0);
+    return { id: t.id, fills: api._counts.fill || 0,
+      rects: api._counts.fillRect || 0, strokes: api._counts.stroke || 0 };
+  });
+  console.log('    (counter cost per trade: ' +
+    costs.map(c => c.id + ' ' + (c.fills + c.rects + c.strokes)).join(', ') + ')');
+  for (const c of costs) assert(c.fills + c.rects + c.strokes > 0, c.id + ' drew nothing');
+  const shapes = new Set(costs.map(c => c.fills + ':' + c.rects + ':' + c.strokes));
+  assert(shapes.size >= 4,
+    'the trades should not collapse onto one drawing, got ' + shapes.size + ' distinct');
+  // and a wrecked stall has sold or lost half its stock
+  const o = { seed: 0.4, w: 158, h: 112 };
+  api._resetCounts(); api.drawGoods(o, 158, 112, 13, 0);
+  const full = (api._counts.fill || 0) + (api._counts.fillRect || 0);
+  api._resetCounts(); api.drawGoods(o, 158, 112, 13, 0.9);
+  const half = (api._counts.fill || 0) + (api._counts.fillRect || 0);
+  assert(half < full, 'a half-wrecked stall should have lost stock: ' + half + ' vs ' + full);
+});
+
+/* A stall that has been smoking for six markets must not have six markets of
+   particles behind it — the plume is four puffs on a rolling phase. */
+test('a smoking stall costs the same on frame one and frame six hundred', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const smoker = api.TRADES.findIndex(t => t.smoke > 0);
+  assert(smoker >= 0, 'some trade should smoke');
+  const o = api.addProp('hut', 2000, 1100);
+  o.seed = (smoker + 0.5) / api.TRADES.length;
+  assert(api.tradeOf(o).smoke > 0, 'that seed should land on a smoking trade');
+  api.setT(0.4);
+  api._resetCounts(); api.drawHut(o);
+  const first = api._counts.fill || 0;
+  for (let i = 0; i < 600; i++){ api.setT(api.getT() + 1 / 60); api.drawHut(o); }
+  api._resetCounts(); api.drawHut(o);
+  const later = api._counts.fill || 0;
+  assert(later === first,
+    'ten seconds of smoke changed the frame cost: ' + first + ' -> ' + later);
+  assert(first > 4, 'a smoking stall should be drawing a plume, got ' + first + ' fills');
+  // a stall that does not smoke draws no plume and no chimney
+  const dry = api.addProp('hut', 2200, 1100);
+  const cold = api.TRADES.findIndex(t => !t.smoke);
+  dry.seed = (cold + 0.5) / api.TRADES.length;
+  api._resetCounts(); api.drawHut(dry);
+  const dryFills = api._counts.fill || 0;
+  assert(dryFills < first, 'a toy stall should cost less than a grill: ' +
+    dryFills + ' vs ' + first);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
