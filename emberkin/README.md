@@ -2037,6 +2037,39 @@ It is skippable, and the frame that skips it **still belongs to the transition**
 Without that, the very press that ended the flourish fell through to the reward
 screen it had just opened and took the first card for you.
 
+### Being healed
+
+Every other thing that happens to you has a beat: an orb arcs and wobbles, an
+evolution turns a wheel of light, the grass parts before a wild kin, a trainer
+looks and walks over. The Wayhouse — the place you go after every rough fight,
+and the only good thing that happens to you outside a win — restored the whole
+party **silently**, between two lines of dialogue.
+
+Listing what has a beat and what does not is what found it. Nothing in the code
+says a beat is missing; the heal works perfectly.
+
+`G.mend` is a warmth rising off the floor and closing over you, `MEND_T` 1.15s,
+owning the screen the way the rustle and the ambush do. It swells fast and lets
+go slowly — the fall is longer than the rise, which is the difference between
+being healed and being flashed at — and the line that says it worked arrives
+*after* you have watched it work.
+
+The first version was a warm glow and warm motes, and it was nearly invisible:
+the Wayhouse is the most golden interior in the game, which is exactly the wrong
+background for adding gold to. The same trap as green specks on green grass, one
+room over. What carries it now is a **change over time** rather than a
+difference in colour — the whole frame lifts a little and settles — plus motes
+travelling *upward*, since the direction is the entire reading.
+
+It is deliberately quiet. A rest should not out-shout an evolution.
+
+### The starter screen is right
+
+Photographed for the first time and needs nothing: each card tinted to its
+element, the art in a lit window of that colour, the name in the element's own
+colour, and STRONG INTO / SOFT AGAINST chips so an irreversible choice is made
+with the matchup visible. Recorded here so nobody goes looking for work in it.
+
 ### Something in the grass
 
 A trainer spotting you gets three beats — the look, the frame closing in, the
