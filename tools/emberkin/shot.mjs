@@ -11,11 +11,21 @@
 //   node tools/emberkin/shot.mjs --film evolve 9 450 # a scene as it plays, tiled
 //   node tools/emberkin/shot.mjs --at 45 deck        # a screen's entry, 45ms in
 //   node tools/emberkin/shot.mjs --size 390x760 title  # at somebody else's window
+//   node tools/emberkin/shot.mjs --touch --size 390x760 midbox  # as a phone
 //
 // `--size` matters because the stage picks an integer scale from the window and
 // then lays the touch controls out around it, so a screen can be right at one
 // size and broken at another — the title screen was composed at 900x800 and had
 // never been seen at a phone's aspect, where a different scale applies.
+//
+// `--touch` is NOT the same as a narrow `--size`, and this took the whole
+// project to notice. The game picks its layout from `pointer: coarse` /
+// maxTouchPoints, and a plain page has neither, so every narrow shot ever taken
+// was the desktop branch: stage centred, dead margins, no control band. The real
+// phone layout — stage top-aligned, dpad and buttons filling the space below —
+// had never been photographed once, and the first picture of it showed the box
+// screen telling the player to press A and X. Use --touch for anything about how
+// the game reads on a phone.
 //
 // `--size` and `--film` do not combine. A still screenshots the page, so it sees
 // the canvas AND the DOM panels laid out around it; a film grabs the 256x208
@@ -919,6 +929,16 @@ if (si >= 0) {
   argv.splice(si, 2);
 }
 
+// `--touch` is the difference between a narrow window and a phone, and the two
+// are not the same picture. The game decides at boot with `pointer: coarse` or
+// `maxTouchPoints > 0`, and a plain Playwright page has neither — so every
+// `--size 390x760` shot ever taken was the NON-touch branch of `layoutFor`: the
+// stage centred with dead margins above and below, no control band, no
+// top-align. The actual phone layout had never been photographed once, not
+// because nobody looked but because this tool could not produce it.
+const TOUCH = argv.includes('--touch');
+if (TOUCH) argv.splice(argv.indexOf('--touch'), 1);
+
 // `--stats` optionally takes a box: `--stats 35,100,55,45` measures only that
 // rectangle of the 256x208 canvas. Whole-frame numbers answer "is this frame
 // flat"; they cannot answer "is this creature drained", because the creature is
@@ -954,6 +974,7 @@ for (const name of list) {
   const page = await browser.newPage({
     viewport: { width: SIZE ? SIZE.w : sc.w, height: SIZE ? SIZE.h : sc.h },
     deviceScaleFactor: 2,                       // the art is 1x pixels; shoot it at 2x
+    ...(TOUCH ? { hasTouch: true, isMobile: true } : {}),
   });
   await page.goto(GAME);
   await page.waitForTimeout(900);
