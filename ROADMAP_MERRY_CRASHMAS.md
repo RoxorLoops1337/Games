@@ -242,6 +242,13 @@ edit this block to name the next one.
       travels along the scene's one light direction far enough to clear the
       grown body — 194px out at z=320 against a 100px half-length. Split into
       `carShadow(z)` so the separation is measured, not eyeballed.
+- [x] The nitro halo stops plating the frame. It was the last thing in the
+      light pass still drawn as a raw `circle()` — a flat 190-unit disc with a
+      hard edge at a constant .16 for the whole 0.55s, which at the drive
+      camera greys out two thirds of the screen at the exact moment the most is
+      happening in it. It is a baked sprite like every other light now, and it
+      burns down from 360px at α.30 to 270px at α.08 over the boost instead of
+      snapping off. The carnage under it reads again.
 
 ## Next
 

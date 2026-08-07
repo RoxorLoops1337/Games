@@ -5534,10 +5534,11 @@ function bakeLight(rgb, peak){
 /* The mask that cuts holes in the darkness is pure alpha, so one white sprite
    serves every theme. The glow that goes on top carries the theme's own lamp
    colour, so it is rebaked only when the theme changes. */
-let maskSprite = null, glowSprite = null, glowKey = '', beamSprite = null;
+let maskSprite = null, glowSprite = null, glowKey = '', beamSprite = null, boostSprite = null;
 function lightSprites(){
   if (!maskSprite) maskSprite = bakeLight('255,255,255', 1);
   if (!beamSprite) beamSprite = bakeLight('255,236,198', 0.5);
+  if (!boostSprite) boostSprite = bakeLight('120,255,170', 0.5);
   if (glowKey !== TH.light){ glowSprite = bakeLight(TH.light, 0.62); glowKey = TH.light; }
 }
 
@@ -5674,9 +5675,18 @@ function drawLights(){
     }
     ctx.globalAlpha = 1;
   }
-  if (car.boostT > 0){
-    ctx.fillStyle = 'rgba(120,255,170,.16)';
-    circle(car.x, car.y, 190); ctx.fill();
+  /* The nitro halo was the one thing in the light pass still drawn as a raw
+     circle: a flat 190-unit disc with a hard edge, at a constant alpha for the
+     whole 0.55s. At the drive camera that is a milky plate across two thirds
+     of the frame, greying out the market at the exact moment the most is
+     happening in it. It is a baked sprite like every other light now, and it
+     burns down over the boost rather than snapping off. */
+  if (car.boostT > 0 && boostSprite){
+    const k = clamp(car.boostT / 0.55, 0, 1);
+    const br = 118 + 62 * k;
+    ctx.globalAlpha = 0.3 * k;
+    ctx.drawImage(boostSprite, car.x - br, car.y - br, br * 2, br * 2);
+    ctx.globalAlpha = 1;
   }
   drawWireBulbs();
   drawGateBulbs();
