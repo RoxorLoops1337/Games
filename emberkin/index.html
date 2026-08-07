@@ -406,6 +406,13 @@
   }
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
+  /* In the portrait phone layout the stage is top-aligned at 4% of the window,
+     so the panel's top-right corner lands underneath #fsbtn — fixed at right:8
+     top:8, 34px square. The two were drawn on top of each other, which is only
+     visible in a shot taken as a touch device, and until this pass the tool
+     could not take one. Stepping left clears the button without pushing the
+     label down into the first row of cards. */
+  body.ctl-below #screen .back{ right:52px; }
   .cards{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
   /* The box screen's party is the list you swap OUT of, not the thing you came
      for. At 210px it is three tall rows and it ate the whole first screenful —
@@ -579,7 +586,18 @@
   .items{ display:grid; grid-template-columns:repeat(auto-fill,minmax(15em,1fr)); gap:.4em; }
   .item{ display:flex; gap:.55em; align-items:center; padding:.45em .55em; cursor:pointer; }
   .item canvas{ image-rendering:pixelated; flex:0 0 auto; width:40px; height:40px; }
-  .item .info{ flex:1; min-width:0; }
+  /* The row carries a name, a description and up to two tallies, and on a phone
+     the shelf is two columns of about 180px. The tallies do not shrink, so the
+     kin-and-HP one added with the field bag ate the description: "Wakes a
+     fainted kin at half HP." came out as a six-line column one word wide.
+     Letting the row wrap puts the tallies on their own line exactly when there
+     is no room for them beside the text, at whatever width that happens to be,
+     instead of guessing a breakpoint. The basis is the claim being made: give
+     the description about six characters' worth of room before giving up and
+     wrapping. Too greedy a basis (8em was the first try) wraps a desktop row
+     that had plenty of space, which the phone shot cannot show you. */
+  .item{ flex-wrap:wrap; }
+  .item .info{ flex:1 1 6em; min-width:0; }
   .item .info b{ display:block; font-size:.8em; }
   .item .info small{ display:block; color:var(--dim); font-size:.66em; line-height:1.25; }
   .item .tally{ font-size:.86em; color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums; }
@@ -7914,15 +7932,32 @@ function renderHUD() {
 
 /* ---- the hand ---------------------------------------------------------- */
 /** The two touch buttons say what they do right now, not "A" and "B". */
-function touchLabels() {
-  if (HEADLESS || !els.btnA) return;
+/** What the two buttons are called right now, for whatever they are driving. */
+function btnLabels() {
   const m = G.mode;
   const reward = m === 'screen' && G.screen && G.screen.kind === 'reward';
-  const [a, b] = reward ? ['Take', 'Skip']            // nothing behind it to go back to
+  return reward ? ['Take', 'Skip']                   // nothing behind it to go back to
     : m === 'battle' ? ['Play', 'Menu']
     : m === 'dialogue' ? ['Next', 'Next']
     : (m === 'menu' || m === 'screen') ? ['Pick', 'Back']
     : ['Talk', 'Menu'];
+}
+/**
+ * The names to write in the prose, which are not always the names of keys.
+ *
+ * Photographing the game as a phone for the first time — the shot tool could
+ * not produce that layout until this pass, so nobody had ever seen it — showed
+ * the box screen telling a player to press A, and "X — back" in the corner,
+ * three inches above two large circles labelled Pick and Back. Neither key
+ * exists on the device. The button labels were already computed here; the
+ * screens simply wrote their own copy of the keyboard's names beside them.
+ */
+const isTouch = () => !HEADLESS && document.body.classList.contains('touch');
+const pickName = () => (isTouch() ? btnLabels()[0] : 'A');
+const backName = () => (isTouch() ? btnLabels()[1] : 'X');
+function touchLabels() {
+  if (HEADLESS || !els.btnA) return;
+  const [a, b] = btnLabels();
   els.btnA.textContent = a;
   els.btnB.textContent = b;
 }
@@ -8974,7 +9009,10 @@ function renderScreen() {
   G.screen.list = screenList(G.screen);
   if (HEADLESS) return;
   const s = G.screen, el = els.screen;
-  let html = '<div class="back">X — back</div>';
+  // On a phone this is the only thing in the corner that closes a screen, so it
+  // is relabelled rather than hidden — but it stops naming a key that is not
+  // there. On a keyboard it still reads "X — back".
+  let html = `<div class="back">${isTouch() ? backName() : `${backName()} — back`}</div>`;
   if (s.kind === 'party') {
     // Roster on the left, whoever is picked on the right. A row of equal cards
     // has no hierarchy: there is nothing on it saying which one you are looking
@@ -9036,7 +9074,7 @@ function renderScreen() {
     html += `<h2 style="margin-top:12px">Box — ${G.box.length}</h2>`;
     html += G.box.length ? `<div class="cards slim">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
       : '<p style="color:var(--dim)">Nothing stored yet.</p>';
-    html += `<p style="font-size:12px;color:var(--dim)">A on a boxed kin withdraws it · A on a party kin stores it · with a full party, pick the newcomer then pick who it replaces.</p>`;
+    html += `<p style="font-size:12px;color:var(--dim)">${pickName()} on a boxed kin withdraws it · ${pickName()} on a party kin stores it · with a full party, pick the newcomer then pick who it replaces.</p>`;
   } else if (s.kind === 'deck') {
     // Owned cards, deck first. Selecting one moves it in or out.
     const inDeck = G.deck.map(ownedCard).filter(Boolean);
@@ -10709,6 +10747,7 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,
+    btnLabels, pickName, backName, isTouch,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL,
