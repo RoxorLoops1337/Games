@@ -626,8 +626,14 @@ for (const id of Object.keys(MAPS)) ok(seen.has(id), `${id} is reachable from Ho
 
 section('every species can actually be obtained');
 const spawnable = new Set();
-for (const map of Object.values(MAPS)) for (const e of ((map.enc && map.enc.table) || [])) spawnable.add(e[0]);
-spawnable.add('vespyr');                                   // scripted shrine encounter
+for (const map of Object.values(MAPS)) {
+  for (const e of ((map.enc && map.enc.table) || [])) spawnable.add(e[0]);
+  // Was `spawnable.add('vespyr')` with a comment reading "scripted shrine
+  // encounter" — the test asserting the encounter existed because nothing in
+  // the data said so. An exemption written into a net is the net agreeing with
+  // the gap. The shrine encounter is a map field now and this reads it.
+  if (map.legend) spawnable.add(map.legend.id);
+}
 for (const id of ['cindercub', 'dewdrip', 'sproutle']) spawnable.add(id);   // starters
 for (const id of DEX_ORDER) {
   const viaEvo = DEX_ORDER.some((p) => DEX[p].evo && DEX[p].evo[0] === id && spawnable.has(p));
@@ -698,11 +704,78 @@ section('the dex tells you where to look');
 for (const id of DEX_ORDER) {
   const h = EK.habitat(id);
   ok(h.length > 10, `${id} has a habitat line`);
+  // The claim this section exists to make, stated instead of assumed. It used
+  // to end `ok(id === 'vespyr' || /Rowan/.test(h))` — an exemption for the one
+  // kin the whole game is built toward, which was in fact the only one the
+  // screen was lying about: "Not found in the wild. Not anywhere, really.",
+  // printed about the thing with its own theme, its own opening line, its own
+  // reward, and a promise elsewhere that it gathers on the shrine again.
+  ok(!/Not anywhere, really/.test(h), `${id} has somewhere it can be found — "${h}"`);
   const wild = Object.values(MAPS).some((m) => ((m.enc && m.enc.table) || []).some((e) => e[0] === id));
+  const shrine = Object.values(MAPS).some((m) => m.legend && m.legend.id === id);
   const viaEvo = DEX_ORDER.some((p) => DEX[p].evo && DEX[p].evo[0] === id);
   if (wild) ok(h.startsWith('Found in'), `${id} lists where it spawns`);
+  else if (shrine) ok(/^Waits in /.test(h), `${id} names the ground it haunts`);
   else if (viaEvo) ok(/Evolves from/.test(h), `${id} points at its pre-evolution`);
-  else ok(id === 'vespyr' || /Rowan/.test(h), `${id} explains how else to get it`);
+  else ok(/Rowan/.test(h), `${id} explains how else to get it`);
+}
+
+// The screen and the world have to be reading the same field, or they will
+// drift the way they already had. Move the shrine and the dex must follow.
+section('the dex reads the shrine off the map the walk uses');
+{
+  const map = MAPS.crown_hollow;
+  ok(!!map.legend, 'the shrine encounter lives on the map');
+  eq(map.legend.id, 'vespyr', 'and names what waits there');
+  const was = map.legend.where;
+  map.legend.where = 'somewhere else entirely';
+  ok(/somewhere else entirely/.test(EK.habitat('vespyr')), 'the dex line follows the map data');
+  map.legend.where = was;
+}
+
+// And the walk reads it too. Being data is what makes this drivable at all —
+// the rate and the cooldown used to be numbers written inside tryMove, so the
+// only way to reach this branch in a test was to roll .18 and hope.
+section('the shrine encounter is driven by the map, not by the map id');
+{
+  const lg = MAPS.crown_hollow.legend;
+  const kept = { rate: lg.rate, gap: lg.gap };
+  lg.rate = 1; lg.gap = 0;                    // certainty, off the same field the game reads
+  const shrineWalk = () => {
+    EK.G.flags = { gotStarter: 1 };
+    EK.G.dialogue = null; EK.G.battle = null; EK.G.alert = null;
+    EK.G.party = [EK.mkMon('cindercub', 30)];
+    EK.enterMap('crown_hollow', 6, 3, 'down');   // shrine grass, above the line
+    EK.G.steps = 999;
+    EK.G.mode = 'world';
+    EK.tryMove('right');
+    EK.onArrive();                             // tryMove only STARTS the step
+    return EK.G.dialogue;
+  };
+
+  ok(!!shrineWalk(), 'walking the shrine grass wakes it');
+
+  // Below the line it does not live there, and that line is data now.
+  EK.G.flags = { gotStarter: 1 }; EK.G.dialogue = null;
+  EK.G.party = [EK.mkMon('cindercub', 30)];
+  EK.enterMap('crown_hollow', 6, 8, 'down');
+  EK.G.steps = 999; EK.G.mode = 'world';
+  const wasAbove = lg.above;
+  lg.above = 2;                                // pull the shrine up above where we stand
+  EK.tryMove('right'); EK.onArrive();
+  ok(!EK.G.dialogue, 'and it keeps to the ground the map gives it');
+  lg.above = wasAbove;
+
+  // Once it is beaten the hunt is over, and that gate is data too.
+  EK.G.flags = { gotStarter: 1, beatVespyr: 1 }; EK.G.dialogue = null;
+  EK.G.party = [EK.mkMon('cindercub', 30)];
+  EK.enterMap('crown_hollow', 6, 3, 'down');
+  EK.G.steps = 999; EK.G.mode = 'world';
+  EK.tryMove('right'); EK.onArrive();
+  ok(!EK.G.dialogue, 'and it stays gone once it has been taken');
+
+  lg.rate = kept.rate; lg.gap = kept.gap;
+  EK.G.flags = {}; EK.G.dialogue = null; EK.G.battle = null; EK.G.party = [];
 }
 
 section('movement, collision and warps');

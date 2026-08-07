@@ -4504,6 +4504,21 @@ const MAPS = {
           : ['Go and see Rowan. She has been pretending not to wait.']) },
     ],
     enc: { rate: .14, table: [['nocthorn', 20, 24, 20], ['voltyx', 20, 24, 20], ['thornip', 20, 24, 20], ['pyrelynx', 20, 24, 20], ['gargolem', 20, 24, 20]] },
+    // The shrine's own encounter, as DATA rather than a branch keyed on the map
+    // id. `habitat` answers "where is this found" by reading map data, and the
+    // one kin the entire game is built toward was invisible to it: the dex said
+    // "Not found in the wild. Not anywhere, really." about the thing with its
+    // own theme, its own opening line, its own reward and a whole reassurance
+    // elsewhere that it will gather on the shrine again. A rule written where
+    // nothing else can read it is a rule the rest of the game cannot agree with.
+    //
+    // `above` is a row index: the shrine grass is the top of the map, and the
+    // legendary has always been confined to it. That was a bare `p.y <= 8`.
+    legend: { id: 'vespyr', lvl: 26, above: 8, rate: .18, gap: 25,
+      gate: 'beatVespyr', mark: 'vespyrSeenAt',
+      where: 'the shrine grass at the top of Crown Hollow',
+      line: 'The air goes thin and bright. Something old has noticed you.',
+      plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'] },
   },
 };
 
@@ -4843,12 +4858,15 @@ function onArrive() {
 
   // The legendary haunts the shrine grass and gets first refusal. Losing it is
   // not permanent — it comes back around, so a wipe never ends the hunt.
-  if (G.mapId === 'crown_hollow' && !G.flags.beatVespyr && p.y <= 8
-      && G.steps > (G.flags.vespyrSeenAt || 0) + 25 && chance(.18)) {
-    G.flags.vespyrSeenAt = G.steps;
-    say('', ['The air goes thin and bright. Something old has noticed you.'], () => {
-      startBattle({ foe: mkMon('vespyr', 26), wild: true, legendary: true,
-        plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'] });
+  // Every number here now comes off the map (see crown_hollow.legend); this
+  // used to be the map id, the row, the rate and the cooldown all written out
+  // where nothing but this line could read them.
+  const lg = G.map.legend;
+  if (lg && !G.flags[lg.gate] && p.y <= lg.above
+      && G.steps > (G.flags[lg.mark] || 0) + lg.gap && chance(lg.rate)) {
+    G.flags[lg.mark] = G.steps;
+    say('', [lg.line], () => {
+      startBattle({ foe: mkMon(lg.id, lg.lvl), wild: true, legendary: true, plan: lg.plan });
     });
     return;
   }
@@ -9196,9 +9214,16 @@ function habitat(id) {
     if (row) where.push(`${map.name} (Lv${row[1]}–${row[2]})`);
   }
   if (where.length) return 'Found in ' + where.join(' · ');
+  // The one that does not live on a table. Read off the same map field the walk
+  // reads, so the screen and the world cannot disagree about where it is.
+  const shrine = Object.values(MAPS).find((m) => m.legend && m.legend.id === id);
+  if (shrine) return `Waits in ${shrine.legend.where}.`;
   const from = DEX_ORDER.find((p) => DEX[p].evo && DEX[p].evo[0] === id);
   if (from) return `Evolves from ${DEX[from].name} at level ${DEX[from].evo[1]}.`;
   if (STARTERS.includes(id)) return 'A kin Elder Rowan hands out.';
+  // Kept, but nothing in DEX_ORDER may reach it — the suite asserts that. This
+  // line is what a nineteenth kin added with no home would say, and the whole
+  // point of this pass is that it said it about the best one in the game.
   return 'Not found in the wild. Not anywhere, really.';
 }
 

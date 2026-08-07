@@ -377,6 +377,44 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+51. **Two nets had the bug written into them as an exemption** (pass 140). The
+    dex has a `habitat(id)` line whose whole job is to answer "where do I find
+    this". For eighteen of nineteen kin it does: *Found in Route One (Lv3–6)*,
+    *Evolves from Brookite at level 34*, *A kin Elder Rowan hands out*. For the
+    nineteenth — the legendary the entire game is built toward, with its own
+    theme, its own opening line, its own reward, and a promise elsewhere that
+    it *"will gather on the shrine again — bring more orbs"* — it printed
+    **"Not found in the wild. Not anywhere, really."**
+
+    The cause was structural, not a typo. `habitat` answers by reading map
+    data, and the shrine encounter was a hardcoded branch in `tryMove` keyed on
+    `G.mapId === 'crown_hollow' && p.y <= 8`, with the rate and the cooldown
+    written out inline. Nothing else in the program could see it, so nothing
+    else could agree with it.
+
+    The part worth the entry is what the suite was doing. TWO existing nets
+    already covered this ground and both had carved the gap out by name:
+
+        spawnable.add('vespyr');       // scripted shrine encounter
+        ok(id === 'vespyr' || /Rowan/.test(h), ...)
+
+    The first asserts the encounter exists by *being* the assertion. The second
+    excuses the one kin that was being lied about from having to explain
+    itself. Neither is a mistake at the time it was written — when the fact
+    lives nowhere readable, an exemption is the only thing a test CAN do. That
+    is the tell. Both exemptions disappeared the moment the encounter became a
+    field on the map, and the net that replaced them is the claim the section
+    was always trying to make: **no kin may return the fallback.**
+
+    Being data also made the branch drivable for the first time. The rate is
+    `.18` and the cooldown 25 steps, so reaching it in a test used to mean
+    rolling and hoping; the drive now sets `legend.rate = 1` on the same field
+    the game reads, and checks the row bound and the beaten-gate besides.
+
+    **An exemption in a test is a map of where the program keeps a fact
+    somewhere nothing can read it. Grep your own suite for the names it has to
+    special-case.**
+
 50. **The errand was the one thing that never announced itself** (pass 139).
     Rowan hands you the game with "there are nineteen kin in this valley — I
     want every one of them written down". The menu carries a running tally. The
