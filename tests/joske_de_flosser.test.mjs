@@ -59,7 +59,7 @@ const EXPOSE = `__out.api = {
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
-  BUILDS, buildOf,
+  BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -2459,6 +2459,91 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ---------------------------------------------------------------- weapon */
+test('every weapon has a length, a colour and a resting angle', () => {
+  const api = boot();
+  for (const k of Object.keys(api.WEAPON)){
+    assert(api.W_LEN[k] != null, k + ' has no length');
+    assert(api.W_REST[k] != null, k + ' has no resting angle');
+    if (k !== 'crate') assert(api.W_COL[k], k + ' has no colour');
+    assert(api.W_LEN[k] >= 0 && api.W_LEN[k] < 40, k + ' is ' + api.W_LEN[k] + ' long');
+  }
+});
+
+test('a weapon is a shape along its own axis, and the tip lands where it should', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api._resetCounts();
+  const tip = api.drawBlade(100, 100, 0, 20, 1, 'bat', 1, 1);
+  assert(Math.abs(tip[0] - 120) < 1.5 && Math.abs(tip[1] - 100) < 1.5,
+    'a blade at zero degrees should point straight along +x: ' + tip);
+  const up = api.drawBlade(100, 100, 90, 20, 1, 'bat', 1, 1);
+  assert(Math.abs(up[0] - 100) < 1.5 && Math.abs(up[1] - 80) < 1.5, 'and at ninety it should point up: ' + up);
+  const back = api.drawBlade(100, 100, 0, 20, -1, 'bat', 1, 1);
+  assert(back[0] < 100, 'facing left it should point left: ' + back);
+});
+
+test('each weapon is built from more than one flat bar', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const parts = (kind) => {
+    api._resetCounts();
+    api.drawBlade(120, 100, 30, api.W_LEN[kind], 1, kind, 1, 1);
+    const cols = new Set(api._styles.filter(c => /^#/.test(c)));
+    return { cols, rects: api._rects.length };
+  };
+  const bat = parts('bat'), pipe = parts('pipe'), knife = parts('knife');
+  for (const [name, p] of [['bat', bat], ['pipe', pipe], ['knife', knife]]){
+    assert(p.cols.size >= 4, `${name} is drawn in ${p.cols.size} colours — that is a bar, not a weapon`);
+    assert(p.cols.has('#140e1a'), name + ' has no ink outline');
+    assert(p.rects > 20, name + ' barely painted anything: ' + p.rects);
+  }
+  assert(bat.cols.has('#8a5620') && bat.cols.has('#b87c34'), 'the bat has no grip and no barrel');
+  assert(knife.cols.has('#ffffff'), 'the knife has no edge on it');
+  // a ghost is the same shape with no outline, laid down translucent
+  api._resetCounts();
+  api.drawBlade(120, 100, 30, 18, 1, 'bat', 1, 0.2);
+  const ghost = api._styles.filter(c => /^#/.test(c));
+  assert(ghost.length === 0, 'a motion ghost should not be drawn in flat colour');
+  assert(api._styles.some(c => /^rgba\(/.test(c)), 'and it should be drawn translucent');
+  assert(!api._styles.some(c => /^rgba\(20,14,26/.test(c)), 'a ghost should carry no outline');
+});
+
+test('a swing smears behind the weapon rather than teleporting it', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.weapon = 'bat';
+  const pose = api.A[api.ATK.bat.anim][2];
+  const X = (lx) => 100 + lx, Y = (ly) => 200 - ly;
+  const draw = (swinging) => {
+    f.atk = swinging ? api.ATK.bat : null;
+    f.atkT = swinging ? 0.22 : 0;
+    api._resetCounts();
+    api.drawHeldWeapon(f, X, Y, pose, 1);
+    return api._counts.fillRect || 0;
+  };
+  const still = draw(false), swung = draw(true);
+  assert(still > 10, 'a weapon at rest drew nothing');
+  assert(swung > still * 2, `a swing should trail: ${swung} against ${still} at rest`);
+});
+
+test('the swoosh widens and brightens toward the leading edge', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api._resetCounts();
+  api.drawSwoosh(100, 100, 20, 150, 0, 1, 1, '#a8702c');
+  const r = api._rects;
+  assert(r.length >= 16, 'the ribbon is ' + r.length + ' pixels long');
+  const head = r.slice(0, 4).reduce((a, q) => a + q[2], 0) / 4;
+  const tail = r.slice(-6).reduce((a, q) => a + q[2], 0) / 6;
+  assert(tail > head, `the leading edge should be the fat end: ${tail.toFixed(1)} against ${head.toFixed(1)}`);
+  const alpha = (c) => { const m = /rgba\([^)]*,\s*([0-9.]+)\)/.exec(c); return m ? +m[1] : 0; };
+  const al = api._styles.map(alpha).filter(a => a > 0);
+  assert(al[al.length - 1] > al[0], 'and the bright end: ' + al[0] + ' to ' + al[al.length - 1]);
+  assert(api._styles.some(c => /255,\s*255,\s*255/.test(c)), 'the leading edge has no highlight on it');
 });
 
 /* ----------------------------------------------------------------- build */
