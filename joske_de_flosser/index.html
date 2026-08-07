@@ -3813,10 +3813,42 @@ function bgStreet(c){
   for (let i = -1; i < 10; i++){
     const gx = Math.floor(c * 0.55 / 82) + i;
     const x = gx * 82 - c * 0.55, w = 74, h = 66 + hash(gx + 3) * 22;
-    px(x, 150 - h, w, h, '#241e33');
-    px(x, 150 - h, w, 3, '#3d3350');
-    px(x, 150 - h + 3, 1, h - 3, '#332b46');
-    px(x + w - 1, 150 - h + 3, 1, h - 3, '#191426');
+    // eleven blocks were being painted, windows and all, for the five you can
+    // see: the loop has to cover the parallax drift, the painting does not
+    if (x + w < -2 || x > VW + 2) continue;
+    const top = 150 - h;
+    px(x, top, w, h, '#241e33');
+    /* Every block on the street used to be the same slab with the same grid
+       of windows on it.  A cornice over the top, something on the roof, a
+       fire escape down the front of some of them and a lit shop under
+       others: the skyline has a shape now instead of a straight edge. */
+    px(x - 1, top - 3, w + 2, 4, '#3a3150');            // cornice
+    px(x - 1, top - 3, w + 2, 1, '#584a72');
+    px(x - 1, top + 1, w + 2, 1, '#171223');
+    px(x, top + 5, w, 1, '#2e2742');                    // a string course under it
+    px(x, top + 5 + 1, w, 1, '#1b1628');
+    px(x, top, 1, h, '#332b46');
+    px(x + w - 1, top, 1, h, '#191426');
+    const roof = hash(gx + 31);
+    if (roof > 0.66){                                   // a water tank up there
+      const tx = x + 12 + hash(gx + 3) * 34;
+      px(tx, top - 13, 16, 10, '#2a2338');
+      px(tx, top - 13, 16, 1, '#463b5c');
+      px(tx + 1, top - 15, 14, 2, '#352c48');
+      px(tx + 2, top - 3, 2, 3, '#221c30'); px(tx + 12, top - 3, 2, 3, '#221c30');
+    } else if (roof > 0.34){                            // or a mast with a light on it
+      const tx = Math.round(x + 18 + hash(gx + 5) * 38);
+      px(tx, top - 17, 1, 15, '#2e2742');
+      px(tx - 3, top - 13, 7, 1, '#2e2742');
+      px(tx - 2, top - 9, 5, 1, '#2e2742');
+      if (Math.sin(T * 2.1 + gx) > 0){
+        px(tx, top - 18, 1, 1, '#ff6a4a');
+        glow(tx, top - 18, 6, 5, '#ff6a4a', 0.5);
+      }
+    } else {                                            // or a stub of a stair head
+      px(x + 46, top - 8, 14, 6, '#2a2338');
+      px(x + 46, top - 8, 14, 1, '#463b5c');
+    }
     for (let wy = 6; wy < h - 12; wy += 12) for (let wx = 5; wx < w - 8; wx += 13){
       const wk = gx * 17 + wx * 3 + wy;
       let lit = hash(wk) > 0.5;
@@ -3830,6 +3862,18 @@ function bgStreet(c){
         if (hash(gx * 7 + wx + wy * 5) > 0.55) glow(x + wx + 3, 150 - h + wy + 4, 8, 7, '#ffbf62', 0.22);
       }
     }
+    if (hash(gx + 21) > 0.42){                          // a fire escape down the front, over the windows it hangs across
+      const fx0 = Math.round(x + 42);
+      for (let lv = 0; lv < 2; lv++){
+        const ly = Math.round(top + 22 + lv * 22);
+        if (ly > 132) break;
+        px(fx0, ly, 26, 1, '#2c2540');                  // platform
+        px(fx0, ly + 1, 26, 1, '#15111f');
+        px(fx0, ly - 5, 26, 1, '#3a3150');              // handrail
+        for (let r = 0; r < 26; r += 6) px(fx0 + r, ly - 5, 1, 5, '#251f33');
+        limb(fx0 + (lv % 2 ? 3 : 22), ly + 2, fx0 + (lv % 2 ? 20 : 5), ly + 15, 1, '#251f33');
+      }
+    }
     const neon = hash(gx + 11) > 0.5;
     const nc = neon ? '#ff2f7a' : '#2fc8e8', nc2 = neon ? '#ff9ec6' : '#a8f0ff';
     /* the sign burns its own halo into the brick, then washes the pavement
@@ -3838,8 +3882,20 @@ function bgStreet(c){
     glow(x + 37, 128, 34, 22, nc, 0.42 * hum);
     px(x + 22, 122, 30, 12, nc);
     px(x + 24, 124, 26, 8, nc2);
-    px(x + 6, 132, 12, 18, '#0f0b18');
-    px(x + 6, 132, 12, 1, '#2a2238');
+    if (hash(gx + 61) > 0.5){                           // a shop, still open
+      px(x + 4, 130, 22, 20, '#0f0b18');
+      px(x + 6, 132, 18, 12, hash(gx + 7) > 0.5 ? '#ffcf7a' : '#8fe0d0');
+      px(x + 6, 132, 18, 1, '#fff2c8');
+      px(x + 14, 132, 1, 12, '#0f0b18');
+      glow(x + 15, 138, 20, 14, hash(gx + 7) > 0.5 ? '#ffcf7a' : '#8fe0d0', 0.32);
+      px(x + 4, 128, 22, 3, '#3a2f4c');                 // the awning over it
+      px(x + 4, 128, 22, 1, '#544572');
+    } else {
+      px(x + 6, 132, 12, 18, '#0f0b18');                // or a doorway, shut
+      px(x + 6, 132, 12, 1, '#2a2238');
+      px(x + 7, 134, 10, 15, '#181322');
+      px(x + 11, 140, 2, 2, '#4a3f5e');
+    }
   }
 
   // a car goes by behind the fighting

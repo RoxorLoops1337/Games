@@ -2462,6 +2462,73 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ------------------------------------------------------------ the street */
+test('only the blocks you can see get painted', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const cornices = () => {
+    api._resetCounts();
+    api.drawBackground();
+    return api._rects.filter(r => r[2] === 76 && r[3] === 4).length;
+  };
+  const n = cornices();
+  assert(n >= 4, 'the street is only ' + n + ' blocks wide on screen');
+  assert(n <= 7, `${n} blocks painted for the ${Math.ceil(api.VW / 82) + 1} that fit — the loop is not culling`);
+  // and it stays that way wherever the camera is
+  for (const cx of [0, 41, 137, 400, 913]){
+    api.cam.x = cx;
+    const m = cornices();
+    assert(m >= 4 && m <= 7, `at camera ${cx} it painted ${m} blocks`);
+  }
+});
+
+test('a block has a top on it, and the roofs are not all the same', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const cols = new Set(api._rects.map(r => r[4]));
+  assert(cols.has('#584a72'), 'no lit edge on the cornice');
+  // full building width, not the one-pixel mast that shares its colour
+  assert(api._rects.some(r => r[4] === '#2e2742' && r[2] === 74 && r[3] === 1),
+    'no string course under the cornice');
+  // over a long run of street every kind of roof furniture should turn up
+  const kinds = { tank: 0, mast: 0, stair: 0 };
+  for (let gx = 0; gx < 200; gx++){
+    const roof = api.hash(gx + 31);
+    if (roof > 0.66) kinds.tank++; else if (roof > 0.34) kinds.mast++; else kinds.stair++;
+  }
+  for (const k of Object.keys(kinds)) assert(kinds[k] > 20, `only ${kinds[k]} of 200 blocks get a ${k}`);
+  // and the ground floor is a shop about half the time
+  let shops = 0;
+  for (let gx = 0; gx < 200; gx++) if (api.hash(gx + 61) > 0.5) shops++;
+  assert(shops > 60 && shops < 140, 'the shops are ' + shops + ' of 200 — that is not a mix');
+});
+
+test('the fire escape hangs in front of the windows, not behind them', () => {
+  const src = RAW.slice(RAW.indexOf('function bgStreet('));
+  const head = src.slice(0, src.indexOf('\n}\n'));
+  const windows = head.indexOf('somebody is still up in this one');
+  const escape = head.indexOf('a fire escape down the front');
+  const cornice = head.indexOf('// cornice');
+  assert(windows >= 0 && escape >= 0 && cornice >= 0, 'bgStreet no longer looks the way this test expects');
+  assert(cornice < windows, 'the cornice is painted over the windows');
+  assert(escape > windows, 'the fire escape is painted under the windows it hangs across');
+});
+
+test('the street frame is cheaper for being culled', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(fills > 1500, 'it drew a real street');
+  assert(fills < 9000, 'a street frame costs ' + fills + ' fillRects');
+});
+
 /* ----------------------------------------------------------------- props */
 function itemShape(api, kind){
   const it = api.mkItem(kind, api.cam.x + 190, api.FLOOR_MID, 0);
@@ -3151,13 +3218,18 @@ test('a hit lights the street without repainting the man taking it', () => {
   play(api, { stage: 0 });
   api.fx.length = 0;
   const x = api.cam.x + 180;
+  api.draw();
+  const before = api.lightAt(180);
+  const base = before ? before.k : 0;
   api.spawnFx('impact', x, api.FLOOR_MID, 24, '#ffffff', 1);
   api.draw();
   const here = api.lightAt(180);
   assert(here, 'the hit put no light on the street');
-  // the rig rim saturates at k=1; a transient white hit at full power left a
-  // man-shaped hole in the frame once the bloom pass went in
-  assert(here.k < 0.75, 'a single hit drives the light field to ' + here.k.toFixed(2) + ' — the rig will blow out');
+  /* What matters is the hit's own contribution, not the total: a lit shopfront
+     behind him is allowed to be bright.  A transient white hit at full power
+     is what left a man-shaped hole in the frame when the bloom went in. */
+  assert(here.k - base < 0.5,
+    `one hit adds ${(here.k - base).toFixed(2)} to the light field — the rig will blow out`);
   for (const k of Object.keys(api.FX_LIGHT))
     assert(api.FX_LIGHT[k][1] <= 0.6, k + ' is bright enough to white out a fighter: ' + api.FX_LIGHT[k][1]);
 });
@@ -3445,9 +3517,11 @@ test('the city is awake: the lit windows change over an evening', () => {
   const lo = Math.min(...seen), hi = Math.max(...seen);
   assert(lo > 10, 'the street should be full of lit windows, saw ' + lo);
   assert(hi > lo, `the same street has the same windows lit all night: ${lo}..${hi}`);
-  // but most of them stay put — a city where every window blinks is a disco.
-  // measured: ~13% on a cycle swings 144..156; every window on one swings 148..181
-  assert(hi - lo < lo * 0.15, `too many windows switching: ${lo}..${hi}`);
+  /* But most of them stay put — a city where every window blinks is a disco.
+     Measured with the block culled to what is on screen: ~13% on a cycle
+     swings 57..66 (ratio 0.16), every window on one swings 66..83 (0.26).
+     Both are exact — the sample times and the camera are pinned. */
+  assert(hi - lo < lo * 0.20, `too many windows switching: ${lo}..${hi}`);
 });
 
 test('every stage still draws with the weather on it', () => {
