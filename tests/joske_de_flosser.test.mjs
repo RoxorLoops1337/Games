@@ -2462,6 +2462,178 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* --------------------------------------------------------- the foundry */
+test('the furnaces are built into brick, with iron round the mouth', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  const courses = r.filter(q => q[4] === '#221718' && q[2] === 70 && q[3] === 1);
+  assert(courses.length >= 30, 'the wall has ' + courses.length + ' brick courses on it');
+  const joints = r.filter(q => q[4] === '#241a1a' && q[2] === 1 && q[3] === 5);
+  assert(joints.length >= 40, 'the courses have no vertical joints: ' + joints.length);
+  const bolts = r.filter(q => q[4] === '#7a5040' && q[2] === 2 && q[3] === 2);
+  assert(bolts.length >= 8, 'the iron frames have ' + bolts.length + ' bolts between them');
+  assert(bolts.length % 4 === 0, 'bolts come four to a frame, got ' + bolts.length);
+  // measured, exactly: 16 bolts (4 furnaces) with the cull, 36 (9) without
+  assert(bolts.length <= 28, `${bolts.length / 4} furnaces painted — the loop is not culling`);
+  assert(r.some(q => q[4] === '#503430' && q[2] === 58), 'no hearth apron under the mouth');
+  assert(r.some(q => /rgba\(255,\s*122,\s*30/.test(String(q[4]))), 'no slag left on the apron');
+});
+
+test('the walkway has a rail on it, and a ladder off some of them', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  assert(r.some(q => q[4] === '#6a5c74' && q[2] === 70), 'no handrail along the walkway');
+  const uprights = r.filter(q => q[4] === '#4a3f52' && q[2] === 1 && q[3] === 5);
+  assert(uprights.length >= 18, 'the handrail stands on ' + uprights.length + ' uprights');
+  const rungs = r.filter(q => q[4] === '#584a60' && q[2] === 8 && q[3] === 1);
+  assert(rungs.length >= 6, 'no ladders off the walkway: ' + rungs.length + ' rungs');
+  let ladders = 0;
+  for (let gx = 0; gx < 300; gx++) if (api.hash(gx + 9) > 0.62) ladders++;
+  assert(ladders > 70 && ladders < 170, 'ladders are on ' + ladders + ' of 300 — that is not a third');
+});
+
+test('the foundry stays cheap wherever the camera is', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  for (const cx of [0, 59, 240, 830, 1620]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const n = api._counts.fillRect || 0;
+    assert(n > 300, `at camera ${cx} it drew almost nothing: ${n}`);
+    assert(n < 3600, `at camera ${cx} it drew ${n} fillRects`);
+  }
+});
+
+/* ------------------------------------------------------------- the dock */
+test('a container is a box with corners on it, not a coloured bar', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  const castings = r.filter(q => q[4] === '#2a2c30' && q[2] === 7 && q[3] === 3);
+  assert(castings.length >= 8, 'the boxes have ' + castings.length + ' corner castings between them');
+  assert(castings.length % 2 === 0, 'castings come in pairs, one each end');
+  // measured, exactly: 28 top castings with the cull, 54 without
+  assert(castings.length <= 40, `${castings.length} castings painted — the loop is not culling`);
+  assert(r.some(q => q[4] === '#22242a'), 'no castings along the bottom rail');
+  assert(r.some(q => q[4] === '#0a1620' && q[2] === 58), 'stacked boxes run together with no line between them');
+  assert(r.some(q => /rgba\(138,\s*74,\s*34/.test(String(q[4]))), 'not a spot of rust in the whole yard');
+});
+
+test('some boxes are doors and some are corrugated', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  // a door has locking bars three wide and two tall; a corrugated side has
+  // ribs two wide and fifteen tall. Both shapes have to be on the wharf.
+  const bars = api._rects.filter(r => r[2] === 3 && r[3] === 2).length;
+  const ribs = api._rects.filter(r => r[2] === 2 && r[3] === 15).length;
+  assert(bars >= 4, 'no doors on any box: ' + bars + ' locking bars');
+  assert(ribs >= 8, 'no corrugated sides: ' + ribs + ' ribs');
+  let doors = 0;
+  for (let gx = 0; gx < 300; gx++) for (let sI = 0; sI < 3; sI++) if (api.hash(gx * 11 + sI) > 0.55) doors++;
+  assert(doors > 250 && doors < 650, 'the split is ' + doors + ' of 900 — that is not a mix');
+  let rusty = 0;
+  for (let gx = 0; gx < 300; gx++) for (let sI = 0; sI < 3; sI++) if (api.hash(gx * 3 + sI * 5) > 0.5) rusty++;
+  assert(rusty > 300 && rusty < 600, 'the rust is on ' + rusty + ' of 900');
+});
+
+test('the dock stays cheap wherever the camera is', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  for (const cx of [0, 61, 190, 640, 1310]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const n = api._counts.fillRect || 0;
+    assert(n > 300, `at camera ${cx} it drew almost nothing: ${n}`);
+    assert(n < 3200, `at camera ${cx} it drew ${n} fillRects`);
+  }
+});
+
+/* ------------------------------------------------------------- the yard */
+test('the stacks are wrecks, and no two rows are the same car', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const cols = new Set(api._rects.map(r => r[4]));
+  const lum = (c) => { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const bodies = [...cols].filter(c => /^#[0-9a-f]{6}$/.test(c)).map(c => ({ c, v: lum(c) }));
+  // the five wreck palettes: faded, and none of them the same hue
+  const wrecks = ['#4e2219', '#22364a', '#443c33', '#4a401b', '#2e402a'];
+  const seen = wrecks.filter(w => cols.has(w));
+  assert(seen.length >= 2, 'the whole yard is ' + seen.length + ' colour of car');
+  for (const w of wrecks) assert(Math.max(...lum(w)) < 120, w + ' is too bright for a wreck in a dark yard');
+  // two wheels a car, so this counts the cars actually painted
+  const wheels = api._rects.filter(r => r[4] === '#15100f').length;
+  // measured, exactly: 42 wheels (21 cars) with the cull, 64 (32) without
+  assert(wheels >= 30, 'the wrecks have lost their wheels: ' + wheels);
+  assert(wheels <= 52, `${wheels / 2} cars painted for the twenty-odd on screen — the loop is not culling`);
+  assert(bodies.length > 12, 'the yard is drawn in ' + bodies.length + ' colours');
+});
+
+test('the fence is a baked mesh, stamped rather than drawn', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  api.draw();                                     // bake it
+  api._resetCounts();
+  api.drawBackground();
+  const blits = api._counts.drawImage || 0;
+  assert(blits >= 5, 'only ' + blits + ' blits — the mesh is being drawn by hand');
+  // a hand-drawn weave is hundreds of pixels a tile; a stamped one is none
+  // hand-weaving the mesh took the yard from 1000 fills to 6760
+  const fills = api._counts.fillRect || 0;
+  assert(fills < 2500, 'a yard frame costs ' + fills + ' fillRects');
+});
+
+/* This bounds the whole yard rather than any one cull: the floor and fence
+   culls each save under a hundred fills, which no honest threshold separates.
+   What it does catch is a layer going quadratic wherever you stand. */
+test('the yard stays cheap wherever the camera is', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  api.draw();
+  for (const cx of [0, 63, 220, 705, 1490]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const n = api._counts.fillRect || 0;
+    assert(n > 300, `at camera ${cx} it drew almost nothing: ${n}`);
+    assert(n < 2500, `at camera ${cx} it drew ${n} fillRects`);
+  }
+});
+
+test('there is something on the floor of the yard, and it varies', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  const kinds = [0, 0, 0, 0, 0, 0];
+  for (let gx = 0; gx < 300; gx++) kinds[Math.floor(api.hash(gx * 7 + 3) * 6)]++;
+  for (let k = 0; k < 6; k++) assert(kinds[k] > 20, `only ${kinds[k]} of 300 patches get debris ${k}`);
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const cols = new Set(api._rects.map(r => r[4]));
+  const debris = ['#1d1817', '#736c60', '#5c5347', '#4a5330'].filter(c => cols.has(c));
+  assert(debris.length >= 2, 'the yard floor has ' + debris.length + ' kinds of rubbish on it');
+});
+
 /* ------------------------------------------------------------ the street */
 test('only the blocks you can see get painted', () => {
   const api = boot();

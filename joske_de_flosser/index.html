@@ -3963,16 +3963,36 @@ function bgJunk(c){
   glow(95, 61, 40, 38, '#c8b48c', 0.15);
   glow(95, 61, 17, 16, '#f4e8cc', 0.22);
 
+  /* The stacks were identical brown rectangles with two black slots in them
+     and read as a brick wall.  They are wrecks now: a body colour of their
+     own, a cabin crushed down at one end, glass gone out of the windows and
+     what is left of the wheels under the sills. */
+  // faded and filthy: these have been out in the yard a long time
+  const WRECK = [['#4e2219', '#663026', '#2a1210'], ['#22364a', '#2f4760', '#131d29'],
+                 ['#443c33', '#5a5147', '#241f1b'], ['#4a401b', '#63562a', '#282210'],
+                 ['#2e402a', '#3d5537', '#181f15']];
   for (let i = -1; i < 10; i++){
     const gx = Math.floor(c * 0.28 / 64) + i, x = gx * 64 - c * 0.28;
+    if (x + 60 < -2 || x > VW + 2) continue;
     const layers = 2 + Math.floor(hash(gx) * 3);
     for (let k = 0; k < layers; k++){
-      const y = 150 - (k + 1) * 13 - 22, w = 52 - k * 4, off = hash(gx * 9 + k) * 8;
-      px(x + off, y, w, 11, k % 2 ? '#3d2f2c' : '#463634');
-      px(x + off, y, w, 2, '#57443e');
-      px(x + off, y + 10, w, 1, '#241c1c');
-      px(x + off + 6, y + 3, 9, 4, '#241d20');
-      px(x + off + w - 16, y + 3, 9, 4, '#241d20');
+      const y = 150 - (k + 1) * 13 - 22, w = 52 - k * 4, off = Math.round(hash(gx * 9 + k) * 8);
+      const car = WRECK[Math.floor(hash(gx * 31 + k * 7) * WRECK.length) % WRECK.length];
+      const flip = hash(gx * 13 + k) > 0.5 ? 1 : -1;    // which end got crushed
+      const x0 = Math.round(x + off), cabH = 2 + Math.round(hash(gx * 5 + k) * 2);
+      px(x0 - 1, y - cabH - 1, w + 2, 12 + cabH, '#1a1416');
+      const cx0 = x0 + (flip > 0 ? 7 : 3), cw = w - 10;
+      px(cx0, y - cabH, cw, cabH + 3, car[0]);          // the cabin, what is left of it
+      px(cx0, y - cabH, cw, 1, car[1]);
+      px(cx0 + 2, y - cabH + 1, cw - 5, cabH, car[2]);  // glass, gone dark
+      px(cx0 + Math.round(cw * 0.5), y - cabH + 1, 1, cabH, car[0]);
+      px(x0, y + 2, w, 7, car[0]);                      // body
+      px(x0, y + 2, w, 1, car[1]);                      // waistline
+      px(x0, y + 8, w, 1, '#241c1c');
+      px(x0 + 2, y + 5, w - 4, 1, car[2]);              // a crease down the side
+      px(x0 + 4, y + 9, 6, 2, '#15100f');               // wheels, or what is under there
+      px(x0 + w - 10, y + 9, 6, 2, '#15100f');
+      if (hash(gx * 3 + k) > 0.6) px(x0 + Math.round(w * 0.6), y + 3, 2, 6, '#7a4a2a');   // rust down a panel
     }
   }
   ctx.fillStyle = 'rgba(74,46,36,0.4)'; ctx.fillRect(0, 100, VW, 26);
@@ -3991,13 +4011,32 @@ function bgJunk(c){
     px(x - 7, 122, 18, 2, '#7e8f84');
   }
 
+  /* Chain link, baked once as a 40x36 tile of mesh and blitted: a diagonal
+     weave costs about four hundred pixels to draw and one to stamp. */
+  const mesh = bake('fence_mesh', 40, 36, () => {
+    for (let d = -36; d < 40; d += 5)
+      for (let t = 0; t < 36; t++){
+        px(d + t, t, 1, 1, 'rgba(150,140,126,0.17)');
+        px(d + 36 - t, t, 1, 1, 'rgba(122,113,102,0.12)');
+      }
+  });
   for (let i = -1; i < 14; i++){
-    const gx = Math.floor(c * 0.62 / 40) + i, x = gx * 40 - c * 0.62;
-    px(x, 116, 3, 36, '#3b332e');
-    for (let y = 122; y < 150; y += 5) px(x + 3, y, 37, 1, 'rgba(126,116,104,0.32)');
-    px(x + 3, 116, 37, 1, '#4e453c');
-    px(x, 112, 3, 5, '#3b332e');
-    for (let k = 0; k < 4; k++) px(x + 4 + k * 10, 112, 6, 1, '#544a40');
+    const gx = Math.floor(c * 0.62 / 40) + i, x = Math.round(gx * 40 - c * 0.62);
+    if (x + 40 < -2 || x > VW + 2) continue;
+    const torn = hash(gx + 17) > 0.82;                  // somebody has been through this one
+    if (!torn) blit(mesh, x + 3, 116);
+    else {
+      blit(mesh, x + 3, 116);
+      px(x + 14, 126, 14, 18, '#2a1f1c');               // the hole, and the wire round it
+      px(x + 13, 125, 16, 1, '#6a5f52'); px(x + 13, 143, 16, 1, '#6a5f52');
+    }
+    px(x, 114, 3, 38, '#3b332e');                       // post
+    px(x, 114, 1, 38, '#544a40');
+    px(x + 3, 116, 37, 1, '#5e5346');                   // top rail
+    px(x + 3, 117, 37, 1, '#39312b');
+    px(x, 110, 3, 5, '#3b332e');                        // the arm, and barbed wire on it
+    for (let k = 0; k < 4; k++) px(x + 4 + k * 10, 110 + (k % 2), 6, 1, '#544a40');
+    px(x + 1, 108, 1, 3, '#544a40');
   }
 
   for (let i = -1; i < 8; i++){
@@ -4039,11 +4078,42 @@ function bgJunk(c){
     dgrad(0, 0, VW, 30, '#4d4132', '#453a2e');
     dgrad(0, 30, VW, 43, '#453a2e', '#33291f');
   }), 0, 151);
+  /* The yard floor was a tan slab with three smudges on it.  What ends up on
+     the ground of a scrapyard: shed tyres, hubcaps, a bumper somebody pulled
+     off, oil that soaked in years ago, and weeds through the dirt. */
   for (let i = -1; i < 26; i++){
-    const gx = Math.floor(c / 34) + i, x = gx * 34 - c;
-    px(x + hash(gx) * 20, 164 + hash(gx + 5) * 38, 7, 3, '#392f26');
-    if (hash(gx + 9) > 0.72) ellipse(x + 8, 190 + hash(gx) * 12, 9, 3, '#37302a');
-    if (hash(gx + 15) > 0.8) px(x + 3, 176 + hash(gx + 2) * 24, 13, 1, '#4e4234');
+    const gx = Math.floor(c / 34) + i, x = Math.round(gx * 34 - c);
+    if (x + 26 < -2 || x > VW + 2) continue;
+    px(x + Math.round(hash(gx) * 20), Math.round(164 + hash(gx + 5) * 38), 7, 3, '#392f26');
+    const y = Math.round(168 + hash(gx + 2) * 34);
+    switch (Math.floor(hash(gx * 7 + 3) * 6)){
+      case 0:                                          // a tyre on its side
+        ellipse(x + 9, y, 9, 4, '#1d1817');
+        ellipse(x + 9, y, 6, 2.4, '#332b28');
+        ellipse(x + 9, y - 1, 4, 1.4, '#241e1c');
+        break;
+      case 1:                                          // a hubcap, catching what light there is
+        ellipse(x + 8, y, 5, 2.4, '#4a453e');
+        ellipse(x + 8, y - 1, 3.4, 1.6, '#736c60');
+        px(x + 7, y - 1, 2, 1, '#a49a88');
+        break;
+      case 2:                                          // a bumper, bent
+        px(x + 2, y, 18, 2, '#5c5347');
+        px(x + 2, y, 18, 1, '#8a8072');
+        px(x, y + 1, 3, 2, '#4a4239'); px(x + 19, y - 1, 3, 2, '#4a4239');
+        break;
+      case 3:                                          // oil, gone into the dirt long ago
+        ellipse(x + 10, y + 1, 11, 3.4, 'rgba(20,15,14,0.42)');
+        ellipse(x + 7, y, 5, 1.8, 'rgba(12,9,9,0.5)');
+        break;
+      case 4:                                          // weeds
+        for (let wq = 0; wq < 4; wq++)
+          px(x + 4 + wq * 3, y - 1 - (wq % 2), 1, 3 + (wq % 2), '#4a5330');
+        px(x + 4, y + 1, 11, 1, '#3a4126');
+        break;
+      default:
+        if (hash(gx + 15) > 0.5) px(x + 3, y, 13, 1, '#4e4234');   // a scrape in the dirt
+    }
   }
   for (let i = -1; i < 8; i++){                       // what the barrel fires put on the dirt
     const gx = Math.floor(c * 0.82 / 96) + i, x = gx * 96 - c * 0.82;
@@ -4082,21 +4152,50 @@ function bgDocks(c){
   }
   ctx.fillStyle = 'rgba(30,74,99,0.35)'; ctx.fillRect(0, 96, VW, 20);
 
+  /* Containers were flat colour bars with stripes down them.  A box has
+     corner castings, a top edge that catches the light and an underside that
+     does not, rust coming down from the rails, and either a corrugated side
+     or a pair of doors with the locking bars still on them. */
   const COL = ['#6e2c1f', '#1f4a62', '#2a5433', '#785c1c', '#52264a'];
   for (let i = -1; i < 12; i++){
-    const gx = Math.floor(c * 0.62 / 62) + i, x = gx * 62 - c * 0.62;
+    const gx = Math.floor(c * 0.62 / 62) + i, x = Math.round(gx * 62 - c * 0.62);
+    if (x + 58 < -2 || x > VW + 2) continue;
     const stackH = 1 + Math.floor(hash(gx) * 3);
     for (let sI = 0; sI < stackH; sI++){
       const y = 141 - (sI + 1) * 22;
       const col = COL[Math.floor(hash(gx * 5 + sI) * COL.length) % COL.length];
       px(x, y, 58, 21, col);
-      px(x, y, 58, 2, shade(col, 30));
-      px(x, y + 19, 58, 2, shade(col, -38));
-      px(x, y, 1, 21, shade(col, 20));
-      px(x + 57, y, 1, 21, shade(col, -30));
-      for (let r = 4; r < 56; r += 6) px(x + r, y + 3, 2, 15, shade(col, -18));
+      px(x, y + 1, 58, 1, shade(col, 34));            // the top rail
+      px(x, y, 58, 1, shade(col, -20));
+      px(x, y + 19, 58, 2, shade(col, -40));          // and the sill under it
+      px(x, y + 21, 58, 1, '#0a1620');                // the dark line between one box and the next
+      px(x, y, 1, 21, shade(col, 18));
+      px(x + 57, y, 1, 21, shade(col, -32));
+      if (hash(gx * 11 + sI) > 0.55){                 // doors, with the bars on them
+        px(x + 28, y + 2, 1, 17, shade(col, -34));
+        for (const bx of [x + 9, x + 19, x + 38, x + 48]){
+          px(bx, y + 3, 1, 15, shade(col, 22));
+          px(bx - 1, y + 8, 3, 2, shade(col, -26));
+        }
+        px(x + 3, y + 4, 10, 3, shade(col, 40));      // the code stencilled on it
+      } else {
+        for (let r = 4; r < 56; r += 6) px(x + r, y + 3, 2, 15, shade(col, -18));
+        px(x + 40, y + 4, 12, 3, shade(col, 38));
+      }
+      for (const cx2 of [x, x + 51]){                 // corner castings
+        px(cx2, y, 7, 3, '#2a2c30'); px(cx2, y + 18, 7, 3, '#22242a');
+        px(cx2, y, 7, 1, '#4a4e56');
+      }
+      if (hash(gx * 3 + sI * 5) > 0.5)                // rust off the top rail
+        for (let rq = 0; rq < 3; rq++){
+          const rx = x + 10 + Math.round(hash(gx * 7 + sI + rq) * 38);
+          px(rx, y + 2, 1, 4 + Math.round(hash(gx + rq) * 7), rgba('#8a4a22', 0.5));
+        }
     }
   }
+  /* A reflection of the stacks on the water was drawn here and thrown away:
+     the water band runs 106 to 141 and the containers stand in front of all
+     but the top few pixels of it, so none of it was ever visible. */
 
   for (let i = -1; i < 5; i++){                            // the shafts, hanging in the sea air
     const gx = Math.floor(c * 0.22 / 190) + i, x = gx * 190 - c * 0.22;
@@ -4145,19 +4244,42 @@ function bgFoundry(c){
     dgrad(0, 74, VW, 76, '#20121a', '#2c1a1c');
   }), 0, 0);
 
+  /* The furnaces were a dark rectangle with a hot rectangle in it.  They are
+     built into brick now: courses across the wall with the joints staggered,
+     an arch stepping in over the mouth, an iron frame with bolts at the
+     corners, and a hearth apron underneath with the slag still on it. */
   for (let i = -1; i < 8; i++){
-    const gx = Math.floor(c * 0.4 / 118) + i, x = gx * 118 - c * 0.4;
+    const gx = Math.floor(c * 0.4 / 118) + i, x = Math.round(gx * 118 - c * 0.4);
+    if (x + 74 < -2 || x > VW + 2) continue;
     px(x, 52, 74, 98, '#2a1c1c');
     px(x, 52, 74, 2, '#3d2828');
     px(x, 52, 2, 98, '#352323');
+    for (let by = 56; by < 148; by += 7){              // brick courses
+      px(x + 2, by, 70, 1, '#221718');
+      const stagger = ((by / 7) | 0) % 2 ? 0 : 9;
+      for (let bx = 4 + stagger; bx < 70; bx += 18) px(x + bx, by - 5, 1, 5, '#241a1a');
+    }
+    for (let a2 = 0; a2 < 3; a2++)                     // the arch over the mouth
+      px(x + 10 + a2 * 3, 90 - a2 * 3, 54 - a2 * 6, 3, a2 === 2 ? '#4a3028' : '#3a2420');
     const heat = 0.55 + Math.sin(T * 3 + gx) * 0.25;
+    px(x + 12, 94, 50, 44, '#241412');                 // the iron frame round it
+    px(x + 12, 94, 50, 2, '#5a3a30');
+    px(x + 12, 94, 2, 44, '#4a3028');
+    px(x + 60, 94, 2, 44, '#1c1210');
+    for (const bx of [x + 14, x + 57]) for (const by of [96, 132]) px(bx, by, 2, 2, '#7a5040');
     px(x + 14, 96, 46, 40, '#3a1a10');
     ctx.fillStyle = 'rgba(255,120,30,' + heat.toFixed(2) + ')';
     ctx.fillRect(x + 18, 100, 38, 34);
     px(x + 24, 110, 26, 20, '#ffd06a');
     px(x + 28, 114, 18, 12, '#fff0c0');
     glow(x + 37, 117, 44, 32, '#ff6e14', 0.30 + heat * 0.22);
+    px(x + 8, 138, 58, 4, '#2e2020');                  // the hearth apron
+    px(x + 8, 138, 58, 1, '#503430');
+    for (let sq = 0; sq < 4; sq++)                     // slag left on it
+      px(x + 14 + sq * 13 + Math.round(hash(gx * 5 + sq) * 6), 139, 4, 2,
+        rgba('#ff7a1e', 0.3 + Math.sin(T * 2 + sq + gx) * 0.12));
     px(x + 6, 44, 12, 10, '#3a2c2c'); px(x + 56, 44, 12, 10, '#3a2c2c');
+    px(x + 6, 44, 12, 1, '#544242'); px(x + 56, 44, 12, 1, '#544242');
   }
 
   px(0, 30, VW, 8, '#2f2732'); px(0, 38, VW, 3, '#211b26'); px(0, 30, VW, 1, '#453a4a');
@@ -4167,11 +4289,23 @@ function bgFoundry(c){
     px(x, 64, 46, 4, '#3a2f40');
     px(x, 64, 46, 1, '#4d4054');
   }
+  /* The walkway was a bar with a peg under it.  A handrail on top, a kick
+     plate under that, and a ladder off every third one. */
   for (let i = -1; i < 10; i++){
-    const gx = Math.floor(c * 0.55 / 76) + i, x = gx * 76 - c * 0.55;
+    const gx = Math.floor(c * 0.55 / 76) + i, x = Math.round(gx * 76 - c * 0.55);
+    if (x + 70 < -2 || x > VW + 2) continue;
+    px(x, 68, 70, 1, '#6a5c74');                       // handrail
+    for (let u = 2; u < 70; u += 11) px(x + u, 69, 1, 5, '#4a3f52');
     px(x, 74, 70, 6, '#4a3f52'); px(x, 74, 70, 1, '#5f5268');
-    px(x + 30, 80, 6, 18, '#3f3547');
+    px(x, 79, 70, 1, '#2a2130');
+    px(x + 30, 80, 6, 18, '#3f3547');                  // the leg it hangs on
+    px(x + 30, 80, 1, 18, '#584a60');
     px(x + 28, 96, 10, 5, '#584a60');
+    if (hash(gx + 9) > 0.62){                          // a ladder down off it
+      const lx = x + 56;
+      px(lx, 80, 1, 30, '#4a3f52'); px(lx + 7, 80, 1, 30, '#4a3f52');
+      for (let r = 82; r < 110; r += 5) px(lx, r, 8, 1, '#584a60');
+    }
   }
 
   px(0, 148, VW, 2, '#4a4450');

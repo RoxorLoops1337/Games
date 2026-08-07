@@ -2228,6 +2228,64 @@ Same shape as the rustle one pass earlier, and the pair of them is the lesson:
 "where the voice is" catches things misplaced.** They are different questions
 and the second one is the harder to see.
 
+### Shield belongs on the health bar
+
+Continuing the numbers inventory, and the finding is the previous one's other
+half. The intent line now says how much gets **through** your shield — and the
+bar it gets through to did not know the shield existed.
+
+Your effective health is HP plus shield, and the two lived in different places:
+the bar reading `63/63` and looking untouched, the shield a pip across the
+screen next to the draw and discard counts, which is where *resources* live
+rather than where *survival* does.
+
+The first attempt drew a band behind the fill and it was **invisible at full
+HP** — which is exactly when a banked guard matters most — because the fill is
+100% wide and painted over it. Shield is health *beyond* your maximum, so the
+track scales to `max + shield`: the green runs to 82% and a pale blue tail fills
+the rest, and the bar visibly gets longer when you bank something. The number
+line carries `63/63 +14` in the same blue.
+
+Photographed both ways, and the unshielded case is untouched — full green edge
+to edge, no `+`, no tail.
+
+**The foe banks a shield too**, and its bar was as silent about that as yours
+was about yours. `brace` is worth 20 at scale, and it is announced once — on the
+turn it happens — after which you spend your next turn choosing a card against a
+wall you cannot see.
+
+That half is worse than an oversight. The line that put the shield on your bar
+read `mine ? b.shield : 0`: **the mirror of the fix, written out by hand while
+writing the fix.** Both bars carry a tail now. The foe gets no number, because
+its exact HP is deliberately not shown and a shield figure would leak it.
+
+Two passes running the find has been the other half of the previous one — the
+orb needing the foe's HP right after the salve got yours, then this. The
+question is worth asking on purpose rather than stumbling into: **what is the
+mirror of the thing I just fixed?**
+
+### The intent line said what the foe swings, not what lands
+
+The fourth inventory: **every number the game shows, and whether it is the
+number you need.** The orb odds replaced inputs with an answer, and that is the
+test to run everywhere else.
+
+`readIntent` takes its number straight from `damageOf`, which knows nothing
+about guard or shield. `hurtMine` subtracts `mods.def` and then the shield
+absorbs the rest. So the line read **"about 28"** while a banked 14 shield and
+3 guard meant **11** was actually going to land — and the entire reason that
+line exists is to answer *can I take this, or do I need to block?*
+
+Both numbers now, and only when you are holding something:
+`about 28 · 11 through`. The raw figure stays because it is what the foe is
+swinging and what a pierce will bypass your shield with; the one that lands is
+beside it, green when the shield eats it whole. Rendered at draw time rather
+than in `readIntent`, because shield changes as you play cards and the answer
+has to change with it.
+
+Photographed both ways — with 14 shield and 3 guard banked, and with nothing,
+where it prints one figure rather than the same figure twice.
+
 ### Two payoff screens, and only one of them landed
 
 The fourth inventory, and the second-order one: **not what has a signal, but
