@@ -2238,6 +2238,30 @@ The shop was photographed at the same time and needs nothing: grouped by kind,
 priced, and everything you cannot afford is dimmed, so what your shards will
 buy reads at a glance.
 
+#### The fix had to reach every grid, and did not
+
+`gridCols()` landed with a selector covering three grids — the dex, the card
+rows and the mon cards. The bag, the shop and the chest shelf use a fourth
+(`.items > .item`) and were not in it, so they fell to the "fewer than two
+cells" branch and returned **1**: up and down moved by a single cell in a grid
+two and three across.
+
+It was found by photographing each screen with a cursor actually in it, which is
+the only way to see whether a fix reaches everything it claims to. Measured
+against the rendered grid at three sizes, before and after:
+
+    box     phone 1 · x2 stage 2 · wide 4      (the old constant: 2)
+    deck    phone 3 · x2 stage 4 · wide 6      (the old constant: 2)
+    shop    phone 2 · x2 stage 2 · wide 3      (the old constant: 2)
+    chests  phone 1 · x2 stage 2 · wide 3      (the old constant: 2)
+
+Five of those twelve happened to be right. The chest shop was shot with the
+cursor **driven down** rather than set, so the picture shows the cursor landing
+one visible row lower — the only proof that matters.
+
+The chest shop itself needs nothing: gem prices, an odds bar per chest showing
+the rare/epic/legendary split, and everything you cannot afford dimmed.
+
 ### A card after every win
 
 The three cards on the reward screen used to sit in a fixed 14.6em box with the
