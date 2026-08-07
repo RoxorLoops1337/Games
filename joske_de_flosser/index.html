@@ -764,11 +764,21 @@ const A = {                                   // animation frame tables
     P({ hipY: 20, hipX: 0, lean: 0, aF: [3, 25, 4, 17], aB: [2, 24, 3, 16],
         lF: [3, 11, 4, 0], lB: [-3, 11, -4, 0] }),
   ],
+  /* Eight frames, and the two halves are not copies of each other: contact,
+     down, passing, up, then the same on the other leg.  The hip drops on the
+     down frame and rides highest through the passing and up frames, which is
+     the bob that makes a walk look like weight moving rather than legs
+     scissoring.  Both arms swing to the same side together while the hips go
+     the other way — that is the floss, and it is what the walk is for. */
   walk: [
-    P({ lF: [6, 11, 10, 0], lB: [-5, 9, -9, 0], aF: [4, 26, 3, 18], aB: [-6, 26, -4, 18] }),
-    P({ hipY: 20, lF: [2, 11, 2, 0], lB: [-2, 11, -2, 0], aF: [5, 26, 7, 19], aB: [-5, 26, -7, 19] }),
-    P({ lF: [-5, 9, -9, 0], lB: [6, 11, 10, 0], aF: [6, 26, 8, 20], aB: [-4, 26, -3, 18] }),
-    P({ hipY: 20, lF: [2, 11, 2, 0], lB: [-2, 11, -2, 0], aF: [5, 26, 7, 19], aB: [-5, 26, -7, 19] }),
+    P({ hipY: 19, hipX: 1, lean: -1, lF: [6, 11, 10, 0], lB: [-5, 9, -9, 0], aF: [-4, 25, -8, 17], aB: [-6, 24, -10, 16] }),
+    P({ hipY: 18, hipX: 1, lean: -1, lF: [4, 10, 7, 0], lB: [-4, 11, -6, 1], aF: [-2, 25, -4, 17], aB: [-4, 24, -6, 16] }),
+    P({ hipY: 20, hipX: 0, lean: 0, lF: [1, 11, 1, 0], lB: [-1, 12, -1, 2], aF: [2, 26, 2, 18], aB: [0, 25, 0, 17] }),
+    P({ hipY: 21, hipX: -1, lean: 1, lF: [-3, 10, -5, 0], lB: [4, 12, 7, 2], aF: [6, 26, 9, 19], aB: [4, 25, 7, 18] }),
+    P({ hipY: 19, hipX: -1, lean: 1, lF: [-5, 9, -9, 0], lB: [6, 11, 10, 0], aF: [7, 26, 11, 19], aB: [5, 25, 9, 18] }),
+    P({ hipY: 18, hipX: -1, lean: 1, lF: [-4, 11, -6, 1], lB: [4, 10, 7, 0], aF: [4, 26, 6, 18], aB: [2, 25, 4, 17] }),
+    P({ hipY: 20, hipX: 0, lean: 0, lF: [-1, 12, -1, 2], lB: [1, 11, 1, 0], aF: [0, 25, -1, 17], aB: [-2, 24, -3, 16] }),
+    P({ hipY: 21, hipX: 1, lean: -1, lF: [4, 12, 7, 2], lB: [-3, 10, -5, 0], aF: [-4, 25, -7, 17], aB: [-6, 24, -9, 16] }),
   ],
   run: [
     P({ hipY: 18, lean: 3, lF: [8, 12, 13, 2], lB: [-7, 9, -11, 0], aF: [7, 25, 11, 22], aB: [-8, 25, -10, 16] }),
@@ -776,8 +786,18 @@ const A = {                                   // animation frame tables
     P({ hipY: 18, lean: 3, lF: [-6, 9, -10, 0], lB: [8, 12, 13, 2], aF: [-8, 25, -10, 16], aB: [7, 25, 11, 22] }),
     P({ hipY: 17, lean: 3, lF: [3, 13, 6, 4], lB: [-4, 10, -6, 0], aF: [6, 26, 6, 20], aB: [-6, 26, -6, 20] }),
   ],
-  jump: [P({ hipY: 19, lean: 1, lF: [7, 13, 9, 6], lB: [-6, 12, -8, 5], aF: [7, 28, 10, 30], aB: [-7, 28, -10, 30] })],
-  fall: [P({ hipY: 19, lean: -1, lF: [8, 12, 12, 4], lB: [-7, 11, -9, 2], aF: [8, 27, 12, 26], aB: [-8, 27, -11, 26] })],
+  /* A jump held on one frame from the floor to the apex, which is the
+     stiffest thing a fighter can do.  Crouch, drive, tuck — and on the way
+     down, legs reaching for the ground before he touches it. */
+  jump: [
+    P({ hipY: 17, lean: 2, lF: [5, 10, 6, 1], lB: [-5, 10, -7, 1], aF: [4, 25, 6, 20], aB: [-4, 25, -6, 20] }),
+    P({ hipY: 19, lean: 1, lF: [7, 13, 9, 6], lB: [-6, 12, -8, 5], aF: [7, 28, 10, 30], aB: [-7, 28, -10, 30] }),
+    P({ hipY: 20, lean: 0, lF: [5, 15, 8, 13], lB: [-5, 14, -7, 12], aF: [6, 29, 8, 33], aB: [-6, 29, -8, 33] }),
+  ],
+  fall: [
+    P({ hipY: 19, lean: -1, lF: [8, 12, 12, 4], lB: [-7, 11, -9, 2], aF: [8, 27, 12, 26], aB: [-8, 27, -11, 26] }),
+    P({ hipY: 19, lean: -2, lF: [7, 11, 10, 1], lB: [-7, 10, -9, 0], aF: [8, 26, 13, 22], aB: [-8, 26, -12, 22] }),
+  ],
   punchA: [
     P({ hipY: 19, lean: -2, aF: [3, 26, 0, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 2, aF: [9, 26, 17, 26], aB: [-6, 25, -2, 21], lF: [5, 10, 8, 0], lB: [-5, 10, -7, 0] }),
@@ -827,7 +847,14 @@ const A = {                                   // animation frame tables
     P({ hipY: 19, lean: 2, aF: [3, 27, -3, 28], aB: [-5, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: -3, aF: [-8, 27, -15, 26], aB: [-4, 25, -1, 21], lF: [2, 10, 3, 0], lB: [-6, 10, -10, 0] }),
   ],
-  hurt: [P({ hipY: 18, lean: -4, headX: -3, aF: [2, 27, -2, 30], aB: [-8, 26, -12, 28], lF: [2, 10, 2, 0], lB: [-6, 10, -9, 0] })],
+  /* Taking one used to be a single frame held for the whole stun.  Snap,
+     hold, settle: the snap is only four frames long but it is the difference
+     between a man being hit and a man leaning. */
+  hurt: [
+    P({ hipY: 18, lean: -6, headX: -4, aF: [1, 27, -4, 31], aB: [-9, 26, -14, 29], lF: [3, 10, 3, 0], lB: [-6, 10, -10, 0] }),
+    P({ hipY: 18, lean: -4, headX: -3, aF: [2, 27, -2, 30], aB: [-8, 26, -12, 28], lF: [2, 10, 2, 0], lB: [-6, 10, -9, 0] }),
+    P({ hipY: 19, lean: -2, headX: -1, aF: [3, 26, 0, 27], aB: [-7, 26, -10, 26], lF: [2, 10, 2, 0], lB: [-5, 10, -7, 0] }),
+  ],
   air: [P({ hipY: 17, lean: -6, headX: -4, aF: [-2, 28, -8, 32], aB: [-9, 27, -15, 30], lF: [8, 12, 14, 8], lB: [-2, 11, -3, 4] })],
   lie: [P({ hipY: 4, sh: 0, lean: -13, headX: -7, headY: -1,
     aF: [-13, 1, -7, 0], aB: [-9, 7, -3, 9], lF: [8, 5, 15, 2], lB: [6, 2, 13, 1] })],
@@ -859,8 +886,17 @@ const A = {                                   // animation frame tables
   charge: [
     P({ hipY: 19, lean: 4, aF: [8, 28, 14, 30], aB: [-4, 27, -6, 30], lF: [7, 11, 12, 2], lB: [-6, 10, -10, 0] }),
     P({ hipY: 20, lean: 5, aF: [10, 29, 17, 31], aB: [-2, 28, -3, 31], lF: [4, 12, 6, 4], lB: [-7, 10, -12, 0] }),
+    P({ hipY: 19, lean: 7, aF: [12, 29, 19, 29], aB: [0, 28, 2, 30], lF: [8, 11, 13, 1], lB: [-8, 10, -13, 0] }),
+    P({ hipY: 19, lean: 3, aF: [8, 28, 12, 27], aB: [-4, 27, -6, 28], lF: [5, 11, 8, 0], lB: [-6, 10, -9, 0] }),
   ],
-  rise: [P({ hipY: 22, lean: 2, headY: 1, aF: [8, 32, 12, 39], aB: [-6, 29, -9, 34], lF: [4, 12, 6, 4], lB: [-4, 11, -7, 1] })],
+  /* The uppercut was one frame for half a second.  It is a whole move:
+     drop, drive off the back leg, full extension, then the arm comes down. */
+  rise: [
+    P({ hipY: 16, lean: -2, aF: [3, 22, 1, 17], aB: [-5, 23, -7, 18], lF: [3, 9, 4, 0], lB: [-4, 9, -6, 0] }),
+    P({ hipY: 20, lean: 0, aF: [6, 27, 9, 29], aB: [-6, 26, -8, 24], lF: [4, 11, 5, 1], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 22, lean: 2, headY: 1, aF: [8, 32, 12, 39], aB: [-6, 29, -9, 34], lF: [4, 12, 6, 4], lB: [-4, 11, -7, 1] }),
+    P({ hipY: 20, lean: 1, aF: [7, 29, 10, 33], aB: [-6, 27, -9, 28], lF: [4, 11, 6, 2], lB: [-4, 10, -7, 0] }),
+  ],
   block: [P({ hipY: 18, lean: -2, aF: [4, 28, 2, 33], aB: [-3, 28, -1, 32], lF: [3, 10, 4, 0], lB: [-5, 10, -8, 0] })],
   aim: [P({ hipY: 19, lean: 1, aF: [8, 28, 16, 28], aB: [2, 27, 8, 27], lF: [5, 10, 7, 0], lB: [-5, 10, -8, 0] })],
 };
@@ -1087,11 +1123,17 @@ function drawFighter(f){
   // the further back you stand the more of the night is between us
   const dk = Math.round(-15 + 15 * clamp((f.y - FLOOR_TOP) / (FLOOR_BOT - FLOOR_TOP), 0, 1));
   const flash = f.hitFlash > 0 && ((f.hitFlash * 60) | 0) % 2 === 0;
-  const shirtL = flash ? '#ffffff' : s.shirt,  shirtD = flash ? '#ffd0d0' : s.shirt2;
-  const skinL  = flash ? '#ffffff' : s.skin,   skinD  = flash ? '#ffdcdc' : s.skin2;
-  const pantsL = flash ? '#ffe8e8' : s.pants,  pantsD = flash ? '#ffc4c4' : shade(s.pants, -24);
-  const hairL  = flash ? '#ffffff' : s.hair,   hairD  = flash ? '#ffd8d8' : shade(s.hair, -26);
-  const ink = flash ? '#ff9090' : (s.ink || INK);
+  /* The hit flash used to be pure white with a pale outline.  Once the bloom
+     pass went in that stopped being a flash and became a hole in the frame:
+     five near-white frames on a man-sized silhouette bloom into a smear that
+     swallows the hit itself.  A saturated red instead — it reads as damage at
+     a glance, blooms a little rather than blowing out, and the ink stays dark
+     so the silhouette survives being lit up. */
+  const shirtL = flash ? '#ff5a6e' : s.shirt,  shirtD = flash ? '#a81c38' : s.shirt2;
+  const skinL  = flash ? '#ff7286' : s.skin,   skinD  = flash ? '#bc2c48' : s.skin2;
+  const pantsL = flash ? '#e04a62' : s.pants,  pantsD = flash ? '#8c1830' : shade(s.pants, -24);
+  const hairL  = flash ? '#ff6478' : s.hair,   hairD  = flash ? '#9c1c38' : shade(s.hair, -26);
+  const ink = flash ? '#380a18' : (s.ink || INK);
 
   // thigh is thicker than calf, upper arm than forearm — uniform tubes are
   // what made them read as mannequins
@@ -1268,7 +1310,7 @@ const ATK = {
   pipe:     { anim: 'swing',  dur: 0.38, hit: [0.13, 0.23], dmg: 14, reach: 31, kb: 160, lift: 100, down: true,  sfx: 'heavy', swoosh: 'weapon', arc: [140, -20], seq: [[0, 0.08], [1, 0.14], [2, 0.2], [3, 0.28], [4, 0.38]] },
   knife:    { anim: 'stab',   dur: 0.26, hit: [0.08, 0.16], dmg: 14, reach: 24, kb: 45,  lift: 0,   down: false, sfx: 'blade', thrust: 7, seq: [[0, 0.08], [1, 0.26]] },
   /* direction moves — always in the box */
-  uppercut: { anim: 'rise',    dur: 0.52, hit: [0.10, 0.24], dmg: 15, reach: 23, kb: 55,  lift: 215, down: true,  sfx: 'heavy', heavy: true, swoosh: 'hook', seq: [[0, 0.52]] },
+  uppercut: { anim: 'rise',    dur: 0.52, hit: [0.10, 0.24], dmg: 15, reach: 23, kb: 55,  lift: 215, down: true,  sfx: 'heavy', heavy: true, swoosh: 'hook', seq: [[0, 0.08], [1, 0.16], [2, 0.34], [3, 0.52]] },
   sweep:    { anim: 'lowkick', dur: 0.48, hit: [0.12, 0.28], dmg: 11, reach: 32, kb: 95,  lift: 60,  down: true,  sfx: 'heavy', all: true, swoosh: 'mid', seq: [[0, 0.1], [1, 0.32], [2, 0.48]] },
   slide:    { anim: 'lowkick', dur: 0.58, hit: [0.06, 0.44], dmg: 13, reach: 21, kb: 130, lift: 80,  down: true,  sfx: 'heavy', dash: true, multi: 0.2, seq: [[1, 0.46], [2, 0.58]] },
   /* the fourth hit of each chain, once you have earned it */
@@ -1292,6 +1334,11 @@ const ATK = {
 };
 
 const SEQ_END = (a) => a.seq[a.seq.length - 1][1];
+/* Frames per second, not frames per cycle.  These are tied to the walk
+   speed: a stride is four frames, and in that time the planted foot has to
+   travel about as far as the fighter does or he moonwalks. */
+const WALK_FPS = 16, RUN_FPS = 11;
+const cycleLen = (anim, fallback) => (A[anim] || A[fallback] || A.idle).length;
 function frameOf(atk, t){
   for (let i = 0; i < atk.seq.length; i++) if (t < atk.seq[i][1]) return atk.seq[i][0];
   return atk.seq[atk.seq.length - 1][0];
@@ -1497,14 +1544,18 @@ function applyHit(atk, def, a){
     return;
   }
   def.hp -= dmg;
-  def.hitFlash = 0.16;
+  def.hitFlash = 0.10;
   def.hitChain++;
   def.dazed = 1.2;
   def.holdT = 0;
   if (def.holding) releaseHold(def, false);
   G.hitStop = Math.max(G.hitStop, a.heavy ? 0.11 : a.down ? 0.07 : 0.045);
   shakeScreen(a.heavy ? 5 : a.down ? 3.4 : 1.6, a.heavy ? 0.26 : a.down ? 0.2 : 0.1);
-  spawnFx('impact', (def.x + atk.x) / 2 + atk.face * 5, def.y, def.z + 24 * def.sc, a.down ? '#fff0a0' : '#ffffff');
+  const ix = (def.x + atk.x) / 2 + atk.face * 5, iy = def.z + 24 * def.sc;
+  spawnFx('impact', ix, def.y, iy, a.down ? '#fff0a0' : '#ffffff', atk.face);
+  for (let i = 0; i < (a.heavy ? 6 : a.down ? 4 : 2); i++)   // chunks off the point of contact
+    spawnFx('shard', ix, def.y, iy + rr(-6, 6), a.down ? '#ffe8a0' : '#fff2d0', atk.face);
+  if (a.heavy || a.down) spawnFx('streak', ix, def.y, iy, '#fff4d8', atk.face);
   if (a.all){                       // something that hits everyone kicks up the floor
     spawnFx('ring', def.x, def.y, 2, '#cfc0a8');
     for (let i = 0; i < 3; i++) spawnFx('dust', def.x + rr(-9, 9), def.y, 2, '#a89880');
@@ -1889,7 +1940,9 @@ function superStrike(f, st){
     const inRange = st.all ? adx <= st.reach + 18 : (dx >= -8 && dx <= st.reach + 10);
     if (inRange && Math.abs(o.y - f.y) <= HIT_DEPTH + 7 && Math.abs(o.z - f.z) < 36) applyHit(f, o, def);
   }
-  spawnFx('impact', f.x + f.face * 16, f.y, f.z + 26, st.finisher ? '#ffffff' : '#ffe27a');
+  spawnFx('impact', f.x + f.face * 16, f.y, f.z + 26, st.finisher ? '#ffffff' : '#ffe27a', f.face);
+  spawnFx('streak', f.x + f.face * 16, f.y, f.z + 26, '#fff4d8', f.face);
+  for (let i = 0; i < 5; i++) spawnFx('shard', f.x + f.face * 16, f.y, f.z + 26 + rr(-6, 6), '#ffe9a0', f.face);
   if (st.finisher || st.all) spawnFx('burst', f.x + f.face * 10, f.y, f.z + 24, '#ffe27a');
   G.hitStop = Math.max(G.hitStop, st.finisher ? 0.15 : 0.035);
   shakeScreen(st.finisher ? 6 : 1.8, st.finisher ? 0.3 : 0.09);
@@ -2241,34 +2294,65 @@ function drawAttackSwoosh(f, X, Y, pose, sc){
 
 /* ------------------------------------------------------------------ fx */
 function spawnFx(kind, x, y, z, col, val){
+  const dir = val || 1;
   fx.push({ kind, x, y, z, col, val, t: 0,
     life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : kind === 'ring' ? 0.34
-      : kind === 'quake' ? 0.5 : kind === 'burst' ? 0.16 : 0.5,
-    vx: kind === 'chip' ? rr(-70, 70) : 0, vz: kind === 'chip' ? rr(40, 130) : 0, r: 0 });
+      : kind === 'quake' ? 0.5 : kind === 'burst' ? 0.16 : kind === 'streak' ? 0.13
+      : kind === 'shard' ? 0.36 : 0.5,
+    // shards leave along the punch, in a cone, and fall
+    vx: kind === 'chip' ? rr(-70, 70) : kind === 'shard' ? dir * rr(60, 190) + rr(-40, 40) : 0,
+    vz: kind === 'chip' ? rr(40, 130) : kind === 'shard' ? rr(-30, 150) : 0, r: 0 });
 }
 function updateFx(dt){
   for (const p of fx){
     p.t += dt;
     if (p.kind === 'chip'){ p.vz -= GRAV * dt; p.x += p.vx * dt; p.z += p.vz * dt; if (p.z < 0){ p.z = 0; p.vz *= -0.35; p.vx *= 0.6; } }
+    if (p.kind === 'shard'){ p.vz -= GRAV * 0.55 * dt; p.x += p.vx * dt; p.z += p.vz * dt; p.vx *= 1 - 2.2 * dt; }
     if (p.kind === 'score') p.z += 22 * dt;
     if (p.kind === 'dust'){ p.x += p.vx * dt; }
   }
   if (fx.length) fx = fx.filter(p => p.t < p.life);
 }
 /* how far each kind of hit throws light, and how hard */
-const FX_LIGHT = { impact: [26, 0.75], burst: [40, 1.0], ring: [30, 0.45], quake: [70, 0.8], spark: [14, 0.35] };
+/* A hit lights the street it lands on; it does not repaint the man taking
+   it.  These were tuned before the bloom pass existed, and at the old values
+   a white impact light drove the rig's rim to full and left a man-shaped
+   hole in the frame. */
+const FX_LIGHT = { impact: [26, 0.34], burst: [40, 0.55], ring: [30, 0.26], quake: [70, 0.45], spark: [14, 0.18] };
 function drawFx(p){
   const sx = Math.round(p.x - cam.x + cam.shakeX), sy = Math.round(p.y - p.z + cam.shakeY);
   const k = p.t / p.life;
   if (p.kind === 'impact'){
-    const r = 3 + k * 11;
-    ctx.fillStyle = p.col;
-    for (let i = 0; i < 6; i++){
-      const a = i * TAU / 6 + k * 1.2;
-      px(sx + Math.cos(a) * r, sy + Math.sin(a) * r * 0.6, 2, 2, p.col);
+    /* A punch landing is a star, not a ring of dots: a hot core and four
+       tapered spikes, longest along the line the fist came in on.  The
+       bloom pass turns the white core into the flash. */
+    /* Four points, hard edges, gone in a fifth of a second.  Everything
+       wider than this turned into a smear the moment the bloom got hold of
+       it — the star has to stay smaller than the man it is hitting. */
+    const dir = p.val || 1, e = 1 - k;
+    glow(sx, sy, 9 + k * 7, 7 + k * 6, p.col, 0.18 * e * e);   // the bloom pass does the rest
+    const L = 7 + k * 11, a = Math.max(0, 1 - k * 1.15);
+    const spike = (ux, uy, mul) => {
+      const ex = Math.round(sx + ux * L * mul), ey = Math.round(sy + uy * L * mul * 0.62);
+      limb(sx, sy, Math.round(sx + (ex - sx) * 0.45), Math.round(sy + (ey - sy) * 0.45), Math.max(1, 3 - k * 4), '#ffffff');
+      limb(Math.round(sx + (ex - sx) * 0.4), Math.round(sy + (ey - sy) * 0.4), ex, ey, 1, rgba(p.col, a));
+    };
+    spike(dir, 0, 1.35); spike(-dir, 0, 0.75); spike(0, -1, 1); spike(0, 1, 0.8);
+    if (k < 0.45) ellipse(sx, sy, 3 - k * 4, 3 - k * 4, '#ffffff');
+  } else if (p.kind === 'shard'){
+    // a chip of the moment, spinning away along the punch
+    const a = Math.min(1, (1 - k) * 2.2);
+    const w = k < 0.5 ? 2 : 1;
+    px(sx, sy, w, w, rgba(p.col, a));
+    px(sx - Math.sign(p.vx || 1) * 2, sy + 1, 1, 1, rgba(p.col, a * 0.5));
+  } else if (p.kind === 'streak'){
+    // speed lines trailing back down the line of the blow
+    const dir = p.val || 1, a = (1 - k) * (1 - k);
+    for (let i = 0; i < 3; i++){
+      const off = (i - 1) * 10, len = 11 + (1 - Math.abs(i - 1)) * 10;
+      px(sx - dir * (10 + k * 26) - (dir > 0 ? len : 0), sy + off, len, 1,
+        rgba('#fff4d8', a * (0.45 - Math.abs(i - 1) * 0.14)));
     }
-    glow(sx, sy, 20, 15, p.col, 0.5 * (1 - k) * (1 - k));
-    if (k < 0.5) px(sx - 2, sy - 2, 4, 4, '#ffffff');
   } else if (p.kind === 'spark'){
     px(sx - 1, sy - 1, 3, 3, p.col);
   } else if (p.kind === 'chip'){
@@ -2282,13 +2366,14 @@ function drawFx(p){
     glow(sx, sy, 15, 12, '#fff6d8', 0.55 * a);
     ellipse(sx, sy, 8 - k * 4, 7 - k * 3, rgba('#ffffff', 0.55 * a));
   } else if (p.kind === 'ring'){
-    const r = 4 + k * 26;
-    const n = 14;
+    // a shock ring on the floor: bright and thick at the front, gone behind it
+    const r = 4 + k * 30, a = (1 - k) * (1 - k), n = 22;
     for (let i = 0; i < n; i++){
-      const a2 = i * TAU / n;
-      px(sx + Math.cos(a2) * r, sy + Math.sin(a2) * r * 0.42, 2, 2,
-        k < 0.5 ? p.col : 'rgba(255,240,180,' + (1 - k).toFixed(2) + ')');
+      const a2 = i * TAU / n, w = k < 0.35 ? 2 : 1;
+      px(sx + Math.cos(a2) * r, sy + Math.sin(a2) * r * 0.4, w, w,
+        rgba(k < 0.45 ? '#fff4c8' : p.col, Math.min(1, a * 1.8)));
     }
+    if (k < 0.4) glow(sx, sy, r + 6, r * 0.5 + 4, p.col, 0.3 * (1 - k / 0.4));
   } else if (p.kind === 'quake'){
     const r = 10 + k * 150;
     for (let i = 0; i < 22; i++){
@@ -2336,6 +2421,7 @@ function updateFighter(f, dt){
       break;
     case 'hurt':
       f.stun -= dt;
+      f.frame = f.st < 0.07 ? 0 : f.st < 0.17 ? 1 : 2;
       if (f.stun <= 0){ f.state = 'idle'; setAnim(f, 'idle', 0); }
       break;
     case 'down': {
@@ -2392,7 +2478,9 @@ function updateFighter(f, dt){
     case 'jump': {
       f.vz -= GRAV * dt;
       f.z += f.vz * dt;
-      setAnim(f, f.vz > 0 ? 'jump' : 'fall', 0);
+      const rising = f.vz > 0;
+      setAnim(f, rising ? 'jump' : 'fall', 0);
+      f.frame = rising ? (f.z < 10 ? 0 : f.vz > 95 ? 1 : 2) : (f.z < 15 ? 1 : 0);
       if (f.z <= 0){ land(f); }
       break;
     }
@@ -2429,10 +2517,10 @@ function updateFighter(f, dt){
 
   /* walk animation cadence */
   if (f.state === 'walk' || f.state === 'run'){
-    const rate = f.state === 'run' ? 11 : 8;
-    f.frame = Math.floor(f.animT * rate) % 4;
+    const rate = f.state === 'run' ? RUN_FPS : WALK_FPS;
+    f.frame = Math.floor(f.animT * rate) % cycleLen(f.anim, 4);
   } else if (f.state === 'idle'){
-    f.frame = Math.floor(f.animT * 7) % 4;          // everybody flosses on the spot
+    f.frame = Math.floor(f.animT * 7) % cycleLen('idle', 4);   // everybody flosses on the spot
   }
 }
 

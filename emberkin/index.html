@@ -4275,8 +4275,28 @@ function enterMap(id, x, y, dir) {
   G.player.x = G.player.px = x; G.player.y = G.player.py = y;
   G.player.dir = dir || G.player.dir; G.player.moveT = 0;
   G.alert = null;
+  // Every beat that owns the screen is abandoned when the ground moves under
+  // it. Each of these is a state with a timer, and three of them — blackout,
+  // gotcha, flourish — carry a callback that changes the map or opens a screen
+  // when it expires, so a stranded one does not merely linger, it acts.
+  //
+  // Honest note on reachability, correcting an overstatement made when the
+  // blackout was added to this list: every one of these beats blocks input
+  // while it runs, so a player cannot walk into a warp during one, and the only
+  // code path that changes maps underneath a beat is the loss handler. What
+  // this list actually prevents is a whole class of "it fired later, somewhere
+  // else" rather than a bug anybody has been shown to hit. It earns its place
+  // as defence, not as a fix for a symptom in play — the symptom it did fix was
+  // the story suite's rival rematch failing about one run in four.
+  //
+  // `warp` is deliberately absent: warpStep is what calls this function, and
+  // clearing it here would cancel the door you are walking through.
   G.rustle = null;
   G.mend = null;
+  G.blackout = null;
+  G.gotcha = null;
+  G.flourish = null;
+  G.evoAnim = null;
   return m;
 }
 
@@ -7879,7 +7899,22 @@ function entryFx(b, e) {
   // Levelling had a cue and nothing to look at. It is the most repeated good
   // thing in the game — every fight you win ends with one — and it was the last
   // entry on the beat inventory with nothing on the canvas at all.
-  if (e.fx === 'level') b.lvT = LVL_T;
+  if (e.fx === 'level') {
+    b.lvT = LVL_T;
+    // The good news takes the sprite from the bad news.
+    //
+    // A level lands moments after the exchange that won the fight, so the kin
+    // is very often still carrying the white flash and the shove of whatever
+    // hit it last. Filmed, that frame holds the level ring and the hit flash on
+    // the same body and the two are genuinely indistinguishable — the first
+    // time two beats in this game have been seen running at once, because every
+    // one of them was designed and photographed alone.
+    //
+    // Clearing the flash rather than quietening the ring is the right way round:
+    // the hit has already been read (its number is on screen), and what has not
+    // been read yet is that you levelled.
+    b.flashM = 0; b.lungeM = 0; b.recoilM = 0;
+  }
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
     b.shake = e.crit ? 1.8 : 1;

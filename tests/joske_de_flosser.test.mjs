@@ -59,7 +59,7 @@ const EXPOSE = `__out.api = {
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
-  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC,
+  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
@@ -2452,6 +2452,192 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ------------------------------------------------------------- animation */
+test('every attack points at a frame that exists', () => {
+  const api = boot();
+  // the uppercut spent a version with seq [[0, 0.52]] against a one-frame
+  // table: half a second of heavy attack held on a single pose
+  for (const [key, a] of Object.entries(api.ATK)){
+    const table = api.A[a.anim];
+    assert(table, `${key} uses an animation that does not exist: ${a.anim}`);
+    for (const [frame, t] of a.seq){
+      assert(frame >= 0 && frame < table.length, `${key} asks for frame ${frame} of ${a.anim}, which has ${table.length}`);
+      assert(t > 0 && t <= a.dur + 0.001, `${key} has a beat at ${t} outside its ${a.dur}s`);
+    }
+    assert(a.seq[a.seq.length - 1][1] >= a.dur - 0.001, `${key} runs out of frames before it ends`);
+    if (a.heavy) assert(a.seq.length >= 3, `${key} is a heavy attack in ${a.seq.length} beats — no wind-up, no follow-through`);
+  }
+});
+
+test('the walk is eight frames and none of them are the same pose', () => {
+  const api = boot();
+  const w = api.A.walk;
+  assert(w.length === 8, 'the walk is ' + w.length + ' frames');
+  const key = (p) => JSON.stringify([p.hipY, p.hipX, p.lean, p.aF, p.aB, p.lF, p.lB]);
+  const seen = new Set(w.map(key));
+  assert(seen.size === 8, 'the walk repeats a pose: ' + seen.size + ' distinct of 8');
+  assert(api.cycleLen('walk', 4) === 8 && api.cycleLen('nonsense', 'walk') === 8, 'the cadence does not follow the table');
+});
+
+test('the hips bob, and they go the way the arms do not', () => {
+  const api = boot();
+  const w = api.A.walk;
+  const hips = w.map(p => p.hipY);
+  assert(Math.max(...hips) - Math.min(...hips) >= 3, 'the hip never rises: ' + hips.join(','));
+  // the passing frames carry the weight highest, the down frames lowest
+  assert(hips[1] === Math.min(...hips) && hips[5] === Math.min(...hips), 'the drop should land on the down frames');
+  assert(hips[3] === Math.max(...hips) && hips[7] === Math.max(...hips), 'the rise should land on the up frames');
+  // both arms swing to the same side together — that is the floss
+  for (let i = 0; i < w.length; i++){
+    const f = w[i].aF[2], b = w[i].aB[2];
+    assert(Math.sign(f) === Math.sign(b) || Math.abs(f) < 2 || Math.abs(b) < 2,
+      `frame ${i} has the arms on opposite sides: ${f} and ${b}`);
+    if (Math.abs(f) > 3) assert(Math.sign(w[i].hipX) !== Math.sign(f) || w[i].hipX === 0,
+      `frame ${i} swings the hips the same way as the arms`);
+  }
+});
+
+test('the legs alternate, and the feet do not slide', () => {
+  const api = boot();
+  const w = api.A.walk;
+  for (let i = 0; i < 4; i++){
+    const a = w[i], b = w[i + 4];
+    assert(Math.sign(a.lF[2] - a.lB[2]) === -Math.sign(b.lF[2] - b.lB[2]),
+      `frame ${i} and ${i + 4} lead with the same leg`);
+  }
+  // a stride is four frames; the planted foot has to travel about as far as
+  // the fighter does in that time, or he moonwalks
+  const stride = 4 / api.WALK_FPS;                // four frames to a stride
+  const travel = Math.max(...w.map(p => p.lF[2])) - Math.min(...w.map(p => p.lF[2]));
+  const spd = 82;                                 // spawnPlayer's walk speed
+  const covered = spd * stride;
+  assert(Math.abs(travel - covered) < covered * 0.35,
+    `the foot moves ${travel}px while the man moves ${covered.toFixed(1)}px — that is a moonwalk`);
+});
+
+test('a jump uses its whole arc, and taking one uses all three', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  assert(api.A.jump.length >= 3 && api.A.fall.length >= 2, 'the jump is still held on one pose');
+  f.state = 'jump'; f.z = 0.1; f.vz = 305; f.anim = 'jump';   // what a real jump leaves the floor at
+  const jumped = new Set(), fell = new Set();
+  for (let i = 0; i < 90 && f.state === 'jump'; i++){
+    api.updateFighter(f, 1 / 60);
+    (f.anim === 'jump' ? jumped : fell).add(f.frame);
+  }
+  assert(jumped.size >= 3, 'the way up only used ' + jumped.size + ' frames');
+  assert(fell.size >= 2, 'the way down only used ' + fell.size + ' frames');
+
+  assert(api.A.hurt.length === 3, 'taking a hit is ' + api.A.hurt.length + ' frames');
+  f.state = 'hurt'; f.st = 0; f.stun = 0.4; f.anim = 'hurt'; f.z = 0;
+  const hurt = new Set();
+  for (let i = 0; i < 30 && f.state === 'hurt'; i++){ api.updateFighter(f, 1 / 60); hurt.add(f.frame); }
+  assert(hurt.size === 3, 'the whole stun ran on ' + hurt.size + ' frames');
+  assert(hurt.has(0), 'the snap frame never showed');
+});
+
+/* ---------------------------------------------------------------- impact */
+test('a hit throws its debris along the punch, and only heavy hits streak', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const hit = (key, face) => {
+    api.fx.length = 0;
+    api.clearField && api.clearField();
+    const atk = api.players[0], def = api.spawnEnemy('punk', atk.x + face * 30, atk.y, -face);
+    atk.face = face;
+    api.applyHit(atk, def, api.ATK[key]);
+    return api.fx.slice();
+  };
+  const heavy = hit('hook', 1);
+  const impact = heavy.find(p => p.kind === 'impact');
+  assert(impact, 'no impact at all');
+  assert(impact.val === 1, 'the impact does not know which way the fist came in');
+  const shards = heavy.filter(p => p.kind === 'shard');
+  assert(shards.length >= 4, 'a heavy hit should throw chips: ' + shards.length);
+  assert(shards.filter(p => p.vx > 0).length > shards.length / 2, 'the chips should mostly go the way the punch went');
+  assert(heavy.some(p => p.kind === 'streak'), 'a heavy hit should leave speed lines');
+
+  const back = hit('hook', -1);
+  assert(back.find(p => p.kind === 'impact').val === -1, 'a punch thrown left is thrown left');
+  assert(back.filter(p => p.kind === 'shard').filter(p => p.vx < 0).length > 2, 'and its chips go left');
+
+  const light = hit('jab', 1);
+  assert(!light.some(p => p.kind === 'streak'), 'a jab is not a haymaker — no speed lines');
+  assert(light.filter(p => p.kind === 'shard').length < shards.length, 'and fewer chips than a hook');
+});
+
+test('the chips fall', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.spawnFx('shard', api.cam.x + 100, api.FLOOR_MID, 30, '#fff2d0', 1);
+  const p = api.fx[0];
+  const x0 = p.x, vx0 = p.vx;
+  for (let i = 0; i < 20; i++) api.updateFx(1 / 60);
+  assert(p.x > x0, 'it never moved');
+  assert(Math.abs(p.vx) < Math.abs(vx0), 'air should slow it down');
+  assert(p.vz < 0, 'it should be falling by now: vz ' + p.vz);
+  // they leave in a spray, not all on the same arc
+  api.fx.length = 0;
+  for (let i = 0; i < 24; i++) api.spawnFx('shard', 100, api.FLOOR_MID, 30, '#fff2d0', 1);
+  const up = api.fx.filter(q => q.vz > 0).length;
+  assert(up > 2 && up < 22, 'the chips should spray, not all go one way: ' + up + '/24');
+});
+
+test('a hit lights the street without repainting the man taking it', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  const x = api.cam.x + 180;
+  api.spawnFx('impact', x, api.FLOOR_MID, 24, '#ffffff', 1);
+  api.draw();
+  const here = api.lightAt(180);
+  assert(here, 'the hit put no light on the street');
+  // the rig rim saturates at k=1; a transient white hit at full power left a
+  // man-shaped hole in the frame once the bloom pass went in
+  assert(here.k < 0.75, 'a single hit drives the light field to ' + here.k.toFixed(2) + ' — the rig will blow out');
+  for (const k of Object.keys(api.FX_LIGHT))
+    assert(api.FX_LIGHT[k][1] <= 0.6, k + ' is bright enough to white out a fighter: ' + api.FX_LIGHT[k][1]);
+});
+
+test('the hit flash reads as damage instead of punching a hole in the bloom', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0; f.state = 'idle'; f.anim = 'idle';
+  f.hitFlash = 0.1;
+  api.setT(0);                                    // the flash alternates on frame parity
+  api._resetCounts();
+  api.drawFighter(f);
+  const hex = api._styles.filter(c => /^#[0-9a-f]{6}$/i.test(c));
+  assert(hex.length > 6, 'it did not draw a fighter');
+  const lum = (c) => (parseInt(c.slice(1, 3), 16) + parseInt(c.slice(3, 5), 16) + parseInt(c.slice(5, 7), 16)) / 3;
+  const hot = hex.filter(c => lum(c) > 225);
+  assert(hot.length === 0, 'the flash is still near-white and will bloom into a smear: ' + hot.slice(0, 3));
+  const red = hex.filter(c => {
+    const r = parseInt(c.slice(1, 3), 16), b = parseInt(c.slice(5, 7), 16);
+    return r > 150 && r > b + 50;
+  });
+  assert(red.length >= 3, 'a flashed fighter should read red: ' + hex.slice(0, 6));
+  // the ink is the first flat colour drawFighter asks for: the outline pass
+  // runs before anything else that is not an rgba() shadow
+  assert(lum(hex[0]) < 70, 'the outline went pale — the silhouette will dissolve: ' + hex[0]);
+});
+
+test('an impact frame is cheap enough to have several of', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.spawnFx('impact', api.cam.x + 100, api.FLOOR_MID, 24, '#ffffff', 1);
+  api.draw();                                     // warm the glow plate
+  api._resetCounts();
+  api.drawFx(api.fx[0]);
+  const one = api._counts.fillRect || 0;
+  assert(one > 4, 'the star drew nothing: ' + one);
+  assert(one < 140, 'one impact costs ' + one + ' fillRects — a crowd of them will not fit');
 });
 
 /* ----------------------------------------------------------------- bloom */

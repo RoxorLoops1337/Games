@@ -2077,6 +2077,45 @@ something good just happened to this creature — but quick and bright where a
 rest is slow and soft. Deliberately small: it happens after most fights and must
 not out-shout an evolution.
 
+### Two beats on one body
+
+Every beat in this game was designed and photographed **alone**. Filming a real
+level-up was the first time two were seen running at once, and they were
+illegible together: a level lands moments after the exchange that won the fight,
+so the kin is still carrying the white flash and the shove of whatever hit it
+last, and the frame holds the level ring and the hit flash on the same body with
+no way to tell them apart.
+
+A level now clears the flash, the lunge and the recoil on its own side. Clearing
+the flash rather than quietening the ring is the right way round: the hit has
+already been read — its number is on screen — and what has **not** been read yet
+is that you levelled. The good news takes the sprite from the bad news.
+
+### Beats that own the screen are states, and `enterMap` clears them
+
+`rustle`, `mend`, `blackout`, `gotcha`, `flourish` and `evoAnim` are all
+abandoned when the ground moves under them. Three of those — blackout, gotcha,
+flourish — carry a callback that changes the map or opens a screen when it
+expires, so a stranded one does not merely linger, it *acts*. `warp` is
+deliberately absent from the list: `warpStep` is what calls `enterMap`, and
+clearing it there would cancel the door you are walking through.
+
+**A correction, since the blackout half of this was written up too strongly.**
+It was described as a map change from any other cause leaving a timer that would
+later yank you out of wherever you had gone. Auditing the rest of the list
+showed that is not demonstrated: every one of these beats blocks input while it
+runs, so a player cannot walk into a warp during one, and the only code path
+that changes maps underneath a beat is the loss handler itself. What the list
+prevents is a whole class of "it fired later, somewhere else" — it earns its
+place as defence, not as a fix for anything a player has been shown to hit. The
+symptom it did fix was real: the story suite's rival rematch failing about one
+run in four, green since.
+
+The rule survives the correction, and is the reason the audit was worth doing:
+**a beat that owns the screen is a state, and every state needs somebody to
+clear it.** What does not survive is claiming a player-facing bug without a path
+to it.
+
 ### Being healed
 
 Every other thing that happens to you has a beat: an orb arcs and wobbles, an
