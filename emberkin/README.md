@@ -2719,6 +2719,21 @@ clips. Recorded because it is a null result and re-running it blind costs four
 shots. Every layout fault found so far has been at 390px or at a desktop width,
 not at a threshold: `--size 390x760` is the one that earns its keep.
 
+### A beat that fires when nothing happened
+
+Sable used to play the whole mend — offer, light, "right as rain" — over a
+party with nothing wrong with it, because `healParty()` ran unconditionally
+(#1677). A beat that fires on nothing is worth less the next time something
+does, so the rest were audited for the same shape and all three are clean:
+
+- the win flourish prints `+N gems`, and `gemReward` floors at 1, so it can
+  never announce nothing;
+- the card offer at `DECK_MAX` does not silently no-op — `grantCard` declines
+  the push and the swap screen asks which card comes out instead;
+- the box is uncapped, so `addCaught` has no full-box case to celebrate past.
+
+Sable was the only one. Recorded so the audit is not re-run blind.
+
 ### Beats that own the screen
 
 `warp, evoAnim, alert, rustle, mend, blackout, flourish, gotcha`. `update` picks
