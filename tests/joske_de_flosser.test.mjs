@@ -2462,6 +2462,240 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ------------------------------------------------------------- the rush */
+test('every tier of rush has a colour of its own', () => {
+  const api = boot();
+  assert(api.SUPER.tints.length === api.SUPER.tiers.length,
+    `${api.SUPER.tints.length} tints for ${api.SUPER.tiers.length} tiers`);
+  assert(new Set(api.SUPER.tints).size === api.SUPER.tints.length, 'two tiers share a colour');
+  for (const t of api.SUPER.tints) assert(/^#[0-9a-f]{6}$/i.test(t), 'not a colour: ' + t);
+});
+
+test('a rush stands in a column of light, in the colour of its tier', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0;
+  const shot = (state, tier) => {
+    f.state = state; f.anim = state === 'super' ? 'rise' : 'idle'; f.frame = 0;
+    f.tier = tier == null ? null : api.SUPER.tiers[tier];
+    api._resetCounts();
+    api.drawFighter(f);
+    return { n: api._rects.length, cols: new Set(api._rects.map(r => r[4])) };
+  };
+  const idle = shot('idle');
+  const one = shot('super', 0), three = shot('super', 2);
+  assert(one.n > idle.n + 60, `a rush is drawn in ${one.n} pieces against ${idle.n} standing still`);
+  const tinted = (sh, hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const want = `${n >> 16 & 255},${n >> 8 & 255},${n & 255}`;
+    return [...sh.cols].filter(c => String(c).replace(/\s/g, '').includes(want)).length;
+  };
+  assert(tinted(one, api.SUPER.tints[0]) >= 3, 'the column is not in the first tier colour');
+  assert(tinted(three, api.SUPER.tints[2]) >= 3, 'nor the third in its own');
+  assert(tinted(one, api.SUPER.tints[2]) === 0, 'tier one is drawn in tier three colours');
+  /* And the shaft specifically: a stack of three-pixel rows narrowing as it
+     goes up.  Without this the ring and the spokes alone satisfy everything
+     above, which is how the first version of this test passed with the
+     column deleted. */
+  f.state = 'super'; f.anim = 'rise'; f.frame = 0; f.tier = api.SUPER.tiers[0];
+  api._resetCounts();
+  api.drawFighter(f);
+  const n0 = parseInt(api.SUPER.tints[0].slice(1), 16);
+  const want = `${n0 >> 16 & 255},${n0 >> 8 & 255},${n0 & 255}`;
+  const rows = api._rects
+    .filter(r => r[3] === 3 && /^rgba\(/.test(String(r[4])) &&
+      (String(r[4]).replace(/\s/g, '').includes(want) || /^rgba\(255,255,255/.test(String(r[4]).replace(/\s/g, ''))))
+    .sort((a, b) => b[1] - a[1]);
+  assert(rows.length >= 15, 'the column is ' + rows.length + ' rows tall');
+  assert(rows[0][2] > rows[rows.length - 1][2] + 6,
+    `the column does not narrow as it rises: ${rows[0][2]} at the foot, ${rows[rows.length - 1][2]} at the top`);
+});
+
+test('a rush lights the street it is thrown on', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0; f.state = 'idle'; f.anim = 'idle';
+  api.draw();
+  /* Measured with the field cleared and only this man drawn into it: the
+     street's own neon saturates that column otherwise, and then nothing the
+     rush adds is visible in the number. */
+  const own = (dx) => {
+    api.lfReset();
+    api.drawFighter(f);
+    const l = api.lightAt(Math.round(f.x - api.cam.x + dx));
+    return l ? l.k : 0;
+  };
+  f.state = 'idle'; f.anim = 'idle'; f.tier = null;
+  const baseHere = own(0), baseFar = own(66);
+  f.state = 'super'; f.anim = 'rise'; f.tier = api.SUPER.tiers[0];
+  assert(own(0) > baseHere + 0.2, `the rush adds ${(own(0) - baseHere).toFixed(2)} where he stands`);
+  // the glows round him reach about forty pixels; sixty-six out is only the
+  // wide seed the rush puts into the field on purpose
+  // measured: 0.10 with the wide seed, 0.02 on the glows alone
+  assert(own(66) > baseFar + 0.06,
+    `the rush lights his own feet but not the street: ${own(66).toFixed(2)} sixty-six pixels out`);
+});
+
+test('the whole frame goes the colour of the rush, and only while it lasts', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0;
+  const frameTint = () => {
+    api._resetCounts();
+    api.draw();
+    return api._rects.filter(r => r[2] === api.VW && r[3] === api.VH && String(r[4]).startsWith('rgba('));
+  };
+  f.state = 'idle'; f.anim = 'idle'; f.tier = null;
+  assert(frameTint().length === 0, 'the street is tinted with nobody rushing');
+  f.state = 'super'; f.anim = 'rise'; f.tier = api.SUPER.tiers[0];
+  const gold = frameTint();
+  assert(gold.length >= 1, 'a rush does not colour the frame');
+  f.tier = api.SUPER.tiers[2];
+  const violet = frameTint();
+  assert(violet.length >= 1, 'the third tier does not colour the frame');
+  assert(String(gold[0][4]) !== String(violet[0][4]), 'both tiers tint the frame the same colour');
+});
+
+/* ----------------------------------------------------------- the bosses */
+function bossShape(api, skin, isBoss, opts){
+  const f = api.mkFighter({ team: 'e', skin, x: api.cam.x + 190, y: api.FLOOR_MID, face: 1 });
+  f.anim = 'idle'; f.frame = 1; f.state = 'idle'; f.boss = isBoss;
+  Object.assign(f, opts || {});
+  api._resetCounts();
+  api.drawFighter(f);
+  const trim = api.SKINS[skin].trim;
+  return {
+    n: api._rects.length,
+    cols: new Set(api._rects.map(r => r[4])),
+    // the belt is in the trim colour on every fighter, so presence proves
+    // nothing — what the gear adds is more of it
+    trim: api._rects.filter(r => r[4] === trim).length,
+    // the ring is ten single pixels in a translucent trim colour, and it is
+    // the only thing on a fighter drawn that way
+    ring: api._rects.filter(r => r[2] === 1 && r[3] === 1 && String(r[4]).startsWith('rgba(')).length,
+  };
+}
+
+test('a boss stands in a ring of his own colour', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  for (const [key, e] of Object.entries(api.ENEMY)){
+    if (!e.boss) continue;
+    const trim = api.SKINS[e.skin].trim;
+    assert(trim, key + ' has no trim colour to mark him with');
+    const on = bossShape(api, e.skin, true), off = bossShape(api, e.skin, false);
+    const ring = (sh) => [...sh.cols].filter(c => typeof c === 'string' && c.startsWith('rgba(') &&
+      c.includes(String(parseInt(trim.slice(1, 3), 16)))).length;
+    assert(ring(on) > ring(off), key + ' has no ring under him');
+    assert(on.n > off.n + 8, `${key} is drawn in ${on.n} pieces against ${off.n} for the same man unpromoted`);
+  }
+});
+
+test('every boss has a piece of gear of his own', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const skins = [...new Set(Object.values(api.ENEMY).filter(e => e.boss).map(e => e.skin))];
+  assert(skins.length === 5, 'there are ' + skins.length + ' boss skins');
+  const gearCost = {};
+  for (const sk of skins){
+    const on = bossShape(api, sk, true), off = bossShape(api, sk, false);
+    gearCost[sk] = on.n - off.n;
+    assert(gearCost[sk] > 8, `${sk} gets ${gearCost[sk]} pixels of gear — that is just the ring`);
+    assert(on.trim > off.trim, `${sk}'s gear adds nothing in his own trim colour: ${on.trim} against ${off.trim}`);
+  }
+  // and they are not all the same piece
+  const spread = Math.max(...Object.values(gearCost)) - Math.min(...Object.values(gearCost));
+  assert(spread > 4, 'every boss gets the same gear: ' + JSON.stringify(gearCost));
+});
+
+test('the ring goes out when he does, and the gear does not draw through a flash', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const alive = bossShape(api, 'hammer', true);
+  const dead = bossShape(api, 'hammer', true, { dead: true });
+  assert(alive.ring >= 8, 'the living one has no ring: ' + alive.ring);
+  assert(dead.ring === 0, 'a dead boss still stands in his ring: ' + dead.ring);
+  api.setT(0);                                    // the flash alternates on frame parity
+  const flashed = bossShape(api, 'hammer', true, { hitFlash: 0.1 });
+  const plain = bossShape(api, 'hammer', false);
+  assert(flashed.trim <= plain.trim, 'the gear is drawn through the hit flash');
+});
+
+/* --------------------------------------------------------- the rooftop */
+test('the skyline is two rows deep, and the far one is hazed', () => {
+  const api = boot();
+  play(api, { stage: 4 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  const near = r.filter(q => q[4] === '#33203a' && q[2] === 38);
+  const far = r.filter(q => q[4] === '#6f4a63' && q[2] === 30);
+  assert(near.length >= 5, 'the near skyline is ' + near.length + ' blocks');
+  assert(far.length >= 8, 'there is no second row behind it: ' + far.length);
+  const lum = (c) => { const n = parseInt(c.slice(1), 16); return ((n >> 16 & 255) + (n >> 8 & 255) + (n & 255)) / 3; };
+  assert(lum('#6f4a63') > lum('#33203a') * 1.5, 'the far row is not hazed toward the sky at all');
+  // measured, exactly: 9 near and 12 far with the cull, 17 and 21 without
+  assert(near.length <= 13, `${near.length} near blocks painted — the loop is not culling`);
+  assert(far.length <= 16, `${far.length} far blocks painted — the far loop is not culling`);
+});
+
+test('the sunset rims whichever edge is facing it', () => {
+  const api = boot();
+  play(api, { stage: 4 });
+  api.cam.x = 0;
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const sunX = api.VW - 92;
+  const rims = api._rects.filter(q => q[2] === 1 && q[3] > 20 && /rgba\(255,\s*176,\s*96/.test(String(q[4])));
+  assert(rims.length >= 5, 'nothing on the skyline catches the sun: ' + rims.length);
+  const alpha = (q) => +(/rgba\([^)]*,\s*([0-9.]+)\)/.exec(String(q[4])) || [0, 0])[1];
+  const byDist = rims.slice().sort((a, b) => Math.abs(a[0] - sunX) - Math.abs(b[0] - sunX));
+  assert(alpha(byDist[0]) > alpha(byDist[byDist.length - 1]) + 0.1,
+    `the rim should fade with distance from the sun: ${alpha(byDist[0])} nearest, ${alpha(byDist[byDist.length - 1])} furthest`);
+  // and it is on the side facing the sun, not the shaded one
+  // every rim has to sit on the edge of its block that faces the sun
+  const blocks = api._rects.filter(q => q[4] === '#33203a' && q[2] === 38);
+  let checked = 0;
+  for (const rim of rims){
+    const owner = blocks.find(q => rim[0] === q[0] || rim[0] === q[0] + 37);
+    if (!owner) continue;
+    checked++;
+    const want = owner[0] + 19 < sunX ? owner[0] + 37 : owner[0];
+    assert(rim[0] === want, `a rim at ${rim[0]} is down the shaded side of the block at ${owner[0]}`);
+  }
+  assert(checked >= 4, 'only ' + checked + ' rims could be matched to a block');
+});
+
+test('the roofs of the skyline are not all the same', () => {
+  const api = boot();
+  play(api, { stage: 4 });
+  let setbacks = 0, tanks = 0, masts = 0, plain = 0;
+  for (let gx = 0; gx < 300; gx++){
+    if (api.hash(gx + 41) > 0.55) setbacks++;
+    const roof = api.hash(gx + 29);
+    if (roof > 0.7) tanks++; else if (roof > 0.42) masts++; else plain++;
+  }
+  assert(setbacks > 90 && setbacks < 210, 'setbacks are on ' + setbacks + ' of 300');
+  for (const [n, v] of [['tank', tanks], ['mast', masts], ['plain', plain]])
+    assert(v > 40, `only ${v} of 300 blocks get a ${n} roof`);
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  assert(r.some(q => q[4] === '#33203a' && q[2] === 22), 'no setback storeys were drawn');
+  assert(r.some(q => q[4] === '#2b1b32' && q[2] === 10), 'no water tanks on the skyline');
+  assert(r.some(q => q[4] === '#2b1b32' && q[2] === 1 && q[3] === 13), 'no masts on the skyline');
+});
+
 /* --------------------------------------------------------- the foundry */
 test('the furnaces are built into brick, with iron round the mouth', () => {
   const api = boot();

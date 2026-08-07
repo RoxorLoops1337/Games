@@ -8722,7 +8722,14 @@ function renderScreen() {
     html += `<div class="cardrow">` + s.list.map((c, i) => cardHTML(
       { src: 'deck', u: c.u, id: c.id, bg: 0 },
       { cls: `big ${i === s.i ? 'sel' : ''}`, attr: `data-i="${i}"`,
-        note: `played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}` })).join('') + '</div>';
+        // The mirror of the offer's count, asked deliberately rather than found
+        // a pass later: the offer now says how many are in your deck, and this
+        // screen — which asks which one comes OUT — said only what that copy
+        // had done. Removing one of three Edges and removing your only Snack
+        // are different decisions and read identically without this.
+        note: `played ${c.plays || 0}${c.kills ? ` · ${c.kills} kills` : ''}`
+          + ((n) => n > 1 ? ` · ${n} in deck` : ' · your only one')(
+            s.list.filter((o) => o.id === c.id).length) })).join('') + '</div>';
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
@@ -8764,11 +8771,21 @@ function renderScreen() {
           <div class="ctext">Leave the deck as it is.</div>
           <div class="cfoot"><div class="cpip">skip</div></div></div>`;
       }
-      const owned = G.cards.filter((c) => c.id === id).length;
+      // How many are in the DECK, not how many you own.
+      //
+      // Only deck cards are drawn, and you can own more than the deck holds —
+      // the swap screen exists for exactly that. So "you own 3" covered three
+      // in your deck, or two and one set aside, or three set aside and none
+      // where they can ever be drawn, and the decision "should I take another
+      // Edge?" is entirely about the first number. Same fault as the intent
+      // line: true, and not the one you are deciding against.
+      const inDeck = deckCards().filter((c) => c.id === id).length;
+      const aside = G.cards.filter((c) => c.id === id).length - inDeck;
       return cardHTML({ src: 'deck', u: -1, id, bg: 0 }, {
         cls: `big ${i === s.i ? 'sel' : ''}`,
         attr: `data-i="${i}"`,
-        note: `${owned ? `you own ${owned}` : 'new to you'}${
+        note: `${inDeck ? `${inDeck} in your deck` : 'none in your deck'}${
+          aside > 0 ? ` · ${aside} set aside` : ''}${
           (CARDS[id].grow || CARDS[id].kill) ? ` · to +${growCap(id)}` : ''}`,
       });
     }).join('') + '</div>';

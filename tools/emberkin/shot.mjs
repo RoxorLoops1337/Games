@@ -449,7 +449,11 @@ const SCENES = {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
       EK.G.dialogue = null; EK.G.mode = 'world';
-      EK.openScreen('reward', { offer: ['titanheart', 'ironhide', 'warcry'], done: () => {} });
+      // Edge is in the deck three times; a fourth is set aside where it can
+      // never be drawn — the case the old "you own 4" hid completely.
+      EK.grantCard('edge');
+      EK.G.deck = EK.G.deck.filter((u) => u !== EK.G.cards[EK.G.cards.length - 1].u);
+      EK.openScreen('reward', { offer: ['edge', 'ironhide', 'warcry'], done: () => {} });
       // The worst case for the keyword glosses: Chain, Retain and Exhaust all on
       // offer at once, so the paragraph is as long as it can ever get.
     },
