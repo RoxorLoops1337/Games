@@ -377,6 +377,37 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+50. **The errand was the one thing that never announced itself** (pass 139).
+    Rowan hands you the game with "there are nineteen kin in this valley — I
+    want every one of them written down". The menu carries a running tally. The
+    ending counts what is still unwritten. Three separate pieces of prose agree
+    the dex is the point of playing — and both moments the dex actually MOVES
+    were silent. `seeMon` wrote a line and returned nothing; `catchMon` set a 2
+    and returned nothing. Meeting a species for the first time was pixel-for-
+    pixel the same event as meeting your fiftieth Emberpup, and catching the
+    nineteenth read exactly like catching a fourth.
+
+    Nothing was broken. The fact was sitting in `G.dex` the whole time and no
+    caller had ever been in a position to ask for it, because the two functions
+    that knew threw the answer away. Five sound passes in a row have now been
+    found the same way, and this one was not even about sound — the prose is
+    just where a game says out loud what it thinks matters, so anywhere the
+    words draw a distinction the feedback does not is a gap by definition.
+
+    Two things worth keeping from the shooting. The film mode CANNOT photograph
+    the description bar — `--film` grabs the canvas and the bar is a DOM
+    overlay, so nine frames came back as nine empty arenas. And a still cannot
+    be staged at the element either: this tool calls `renderDialogue()` after
+    `go()` to make the panel agree with `G`, so a line written straight at the
+    element is wiped a moment later and the shot comes back with no bar at all.
+    Both of those looked, at a glance, exactly like "the note is not being
+    made". Three cuts of one scene, and the game was right every time.
+
+    **When a function knows something and returns nothing, nobody downstream
+    can be blamed for not saying it. And a picture that shows nothing is a
+    claim about the instrument until you have proved it is a claim about the
+    game.**
+
 49. **Seven passes at one width** (pass 133). Every --touch shot in this
     project was taken at 390 wide. It is the width where the portrait buttons —
     82px placed at percentages of a band half the window across — just about

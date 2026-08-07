@@ -998,6 +998,101 @@ const SCENES = {
         where: 'joined your party', done: () => { EK.G.gotcha = null; } };
     },
   },
+  // The errand's counter on the payoff screen, driven through the REAL starter
+  // pick — openScreen + screenSelect — so `note` is whatever the game computed,
+  // not a string this scene handed it. The gotcha scene two above is the reason
+  // that distinction is written down: it fed a move id in as a species and the
+  // graceful fallback drew a convincing creature for four passes.
+  dexstarter: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.openScreen('starter');
+      EK.screenSelect();
+      if (!EK.G.gotcha) throw new Error('the starter pick produced no gotcha');
+      if (!EK.G.gotcha.note) throw new Error('the first kin written down carries no tally');
+      // t is left at 0 ON PURPOSE. The still waits 1200ms after go(), and the
+      // gotcha dismisses itself at t > 2 — so the .9 the scene above sets puts
+      // it at 2.1 by the time the shutter opens, i.e. gone. From 0 the wait
+      // lands at 1.2s: past the pop (ends .57), short of the fade (starts 1.63).
+    },
+  },
+  // The same line at its widest. A two-digit tally is wider than the "1 OF 19"
+  // the starter can ever show, and this is a layout question — so the string
+  // still comes from the game's own dexTally(), but the dex behind it is set up
+  // rather than played to. It proves the line FITS; whether it appears on the
+  // right catches is the suite's job, not this picture's.
+  dexcatch: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.DEX_ORDER.slice(0, 12).forEach((id) => EK.catchMon(id));
+      EK.G.gotcha = { t: 0, species: 'dewdrip', name: 'Dewdrip',
+        where: 'joined your party', note: EK.dexTally(), done: () => { EK.G.gotcha = null; } };
+    },
+  },
+  // A first sighting. Driven through the real startBattle against a kin this
+  // save has never met, so the toast is the game's decision — the wipe is .55s
+  // and the toast holds 2.2s, which is the whole claim being photographed.
+  dexsight: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world'; EK.enterMap('route_one', 9, 12, 'up');
+      EK.startBattle({ foe: EK.mkMon('zaplet', 6), wild: true });
+      // Walking in raises the place plaque, which is 17px of card sitting over
+      // the thing being photographed. The plaque is not what this scene is for.
+      EK.G.place = null;
+    },
+  },
+  // The other three sighting sites deliver through the battle LOG, so the mark
+  // arrives as a line in the description bar rather than a toast — a different
+  // picture from the toast above, and one that had not been looked at.
+  //
+  // It cannot be filmed: `--film` grabs the canvas and the bar is a DOM overlay,
+  // so nine frames of this came back as nine empty arenas. And a plain still
+  // lands wherever the 1200ms wait falls, which is somewhere in a queue of lines
+  // whose holds are .38s and .55s. So submit the log only as far as the dex
+  // entry and play it `instant` — the real machinery, stopped on the real line.
+  dexline: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      const bench = [EK.mkMon('zaplet', 8), EK.mkMon('dewdrip', 8)];
+      EK.startBattle({ foe: bench[0], wild: false, npc: { id: 't_pell', name: 'Forager Pell' } });
+      EK.G.dialogue = null;
+      // The opening "Forager Pell wants to battle!" is a battleMsg queue that
+      // keeps advancing on its own clock through the 1200ms wait, and it writes
+      // to the SAME element battleLine does. The first cut of this scene set the
+      // dex line and then the queue wrote over it — the shot came back with the
+      // opening line and looked, at a glance, like the note had not been made.
+      EK.G.battleMsg = null;
+      const b = EK.G.battle;
+      b.roster = bench; b.teamIdx = 0; bench[0].hp = 0;
+      const log = [];
+      EK.resolveFoeDown(log);
+      const at = log.findIndex((e) => e.fx === 'dex');
+      if (at < 0) throw new Error('the send-out log carries no dex note to photograph');
+      // The line is the game's — read straight off the entry resolveFoeDown just
+      // built — but it goes into the panel through the STATE, not through
+      // battleLine. This tool calls renderDialogue() after go() to make the box
+      // agree with G, so a string written at the element and not at G.battleMsg
+      // is wiped a moment later: the second cut of this scene came back with no
+      // description bar at all. Only the delivery is staged; the words are not.
+      EK.G.battleMsg = { lines: [log[at].t], i: 0, hold: .12 };
+      // And the toast is the other scene's picture. Clearing G.toast alone does
+      // nothing — the element keeps its class until toastT runs out, which is
+      // the tick's job, not the state's.
+      EK.G.toastT = 0; EK.G.toast = '';
+      document.getElementById('toast').classList.remove('on');
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
