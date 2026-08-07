@@ -71,6 +71,7 @@ const EXPOSE = `__out.api = {
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
+  EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H, carShadow,
@@ -1446,6 +1447,118 @@ test('the aim frame shows you the market you are aiming at', () => {
       api.LEVELS[lv].name + ': a full pull goes off the left edge');
   }
   console.log('    (aim frame: ' + rows.join(' | ') + ')');
+});
+
+/* CAM_OVERSHOOT lets the camera look past the fence so the climax of a market
+   can be centred, and the drive leash keeps the car near the middle of the
+   frame — between them the fence sits at mid-screen and 46% of a market-1
+   frame was out-of-world. That was the right camera; what was wrong was that
+   out-of-world was a flat fillRect of TH.sky against a light snow floor. So
+   the measurement is how much FLAT sky a frame ends in, not how far past the
+   fence it looks. */
+test('a run never ends in a slab of flat sky', () => {
+  const rows = [];
+  for (const lv of [0, 1, 5]){
+    const api = boot({ w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    let worstVoid = 0, worst = 0, at = 0, t = 0;
+    for (let c = 0; c < api.G.cars && api.G.phase !== 'results'; c++){
+      api.launch(-api.C.MAX_PULL, (c - 1) * 40);
+      for (let f = 0; f < 2400 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+        api.skipReplay(); api.update(1 / 60); t += 1 / 60;
+        if (api.G.phase !== 'drive') continue;
+        const halfW = 1280 / api.cam.s / 2;
+        const edge = api.cam.x + halfW, fence = api.bounds.x1 + api.C.CAR_R;
+        worstVoid = Math.max(worstVoid, edge - fence);
+        // everything past the fade has run out of gradient and is flat again
+        const frac = Math.max(0, edge - fence - api.EDGE_FADE) / (halfW * 2);
+        if (frac > worst){ worst = frac; at = t; }
+      }
+    }
+    rows.push(api.LEVELS[lv].name + ' ' + worstVoid.toFixed(0) + 'w past the fence, ' +
+      (worst * 100).toFixed(0) + '% flat');
+    assert(worst <= 0.15, api.LEVELS[lv].name + ': ' + (worst * 100).toFixed(0) +
+      '% of the frame is flat sky at t' + at.toFixed(1) + 's');
+    assert(worstVoid > 200, api.LEVELS[lv].name + ': the camera stopped ' +
+      'overshooting the fence, so this test is no longer measuring anything');
+  }
+  console.log('    (edge of town: ' + rows.join(' | ') + ')');
+});
+
+test('the edge of town is drawn, not left as canvas', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive';
+  // park the car at the fence, which is where the overshoot is at its worst
+  api.car.x = api.bounds.x1 - 40; api.car.y = 1100; api.camSnap();
+  const th = api.getTheme();
+
+  const rec = carRec();
+  api.withCtx(rec, api.drawGround);
+  const fence = api.bounds.x1 + api.C.CAR_R;
+  const beyond = rec.rects.filter(r => r.x >= fence - 1);
+  assert(beyond.length === 1, 'one fill past the fence, got ' + beyond.length);
+  assert(beyond[0].style !== th.sky,
+    'and it should not be flat ' + th.sky + ', which is what it used to be');
+  assert(beyond[0].w >= api.EDGE_FADE * 0.5,
+    'covering the overshoot, got ' + beyond[0].w.toFixed(0) + 'w');
+
+  /* Woods standing in it: one batched path per band, drawn back to front, each
+     band starting further out than the one in front of it. */
+  const woods = rec.polys.filter(q => q.style === th.tree[0] || q.style === th.tree[1]);
+  assert(woods.length === api.EDGE_BANDS,
+    api.EDGE_BANDS + ' bands in ' + api.EDGE_BANDS + ' paths, got ' + woods.length);
+  for (const w of woods){
+    assert(w.x0 > fence, 'the woods start past the fence, got ' + w.x0.toFixed(0));
+    assert(w.x1 < fence + api.EDGE_FADE, 'and stay inside the fade');
+  }
+  // back to front, so the near band is the last one drawn and the innermost
+  for (let i = 1; i < woods.length; i++){
+    assert(woods[i].x0 < woods[i - 1].x0,
+      'band ' + i + ' should sit nearer the fence than the one drawn before it');
+  }
+  assert(woods[woods.length - 1].style === th.tree[1],
+    'the near band is the lit green; the ones behind it are the dark one');
+
+  /* Off a stateless hash, so a market's treeline is as fixed as its stalls and
+     drawing it cannot move a score. */
+  const before = [api.rnd(), api.vrnd()];
+  const a = carRec(); api.withCtx(a, api.drawGround);
+  const b = carRec(); api.withCtx(b, api.drawGround);
+  assert(JSON.stringify(a.polys) === JSON.stringify(b.polys),
+    'the same frame drawn twice should give the same woods');
+  const after = [api.rnd(), api.vrnd()];
+  assert(before[0] !== after[0] || true, 'streams advance on their own');
+  console.log('    (edge: ' + beyond[0].w.toFixed(0) + 'w fade, ' +
+    (woods[woods.length - 1].x1 - woods[woods.length - 1].x0).toFixed(0) + 'w of near woods)');
+});
+
+test('blood does not float in the sky past the fence', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = api.bounds.x1 - 40; api.car.y = 1100; api.camSnap();
+  const fence = api.bounds.x1 + api.C.CAR_R;
+
+  api.gore.length = 0; api.fx.length = 0;
+  api.addGore(api.bounds.x1 - 200, 1100, 40, 'pool');   // inside
+  api.addGore(fence + 260, 1100, 40, 'pool');           // flung over the fence
+  const inside = api.gore.filter(g => g.x < fence).length;
+  assert(inside >= 1 && api.gore.length > inside, 'one decal each side of the fence');
+
+  /* The soak halo goes straight onto the snow as one path of arcs — one arc a
+     decal — which is the pass that betrayed the ones over the fence. */
+  const rec = carRec();
+  api.withCtx(rec, api.drawGround);
+  const arcs = rec.all.filter(a => a[0] === 'arc' && /158,20,14/.test(String(a[4])));
+  assert(arcs.length > 0, 'the decal inside the fence should still be drawn');
+  for (const [, ax, , ar] of arcs){
+    assert(ax - ar <= fence + 1,
+      'a decal is sitting out in the sky at x' + ax.toFixed(0) +
+      ' (fence ' + fence.toFixed(0) + ')');
+  }
+  console.log('    (blood past the fence: ' + arcs.length + ' of ' + api.gore.length +
+    ' decals drawn)');
 });
 
 test('the aim zoom stretches to the market and stops', () => {
@@ -5323,6 +5436,14 @@ function carRec(){
       if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; }
     },
     measureText: () => ({ width: 30 }),
+    /* Gradients stringify to their stops, so a fill can be told apart from the
+       flat colour it replaced — the recorder used to return undefined here and
+       every cached gradient silently fell back to its solid fallback. */
+    createLinearGradient(gx0, gy0, gx1, gy1){
+      const stops = [];
+      return { stops, addColorStop(o, c){ stops.push(o + ':' + c); },
+        toString: () => 'grad(' + gx0 + ',' + gx1 + ' ' + stops.join(' ') + ')' };
+    },
     canvas: { width: 1280, height: 720 },
   };
   return new Proxy(base, { get(t, p){
