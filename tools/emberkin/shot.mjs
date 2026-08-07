@@ -298,6 +298,37 @@ const SCENES = {
       EK.readIntent();
     },
   },
+  // The box with enough in it to scroll. It had only ever been shot holding a
+  // party of one and a handful boxed, which is the state of a game half an hour
+  // old — the screen exists for the other case, where you have caught more than
+  // you can carry and have to choose.
+  midbox: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      EK.G.party = ['pyrelynx', 'brookite', 'bramblor', 'gargolem', 'frillamb', 'kindlark']
+        .map((id, i) => EK.mkMon(id, 22 + i * 2));
+      // Two of everything the valley holds, boxed, which is what an hour of
+      // throwing orbs actually leaves behind.
+      EK.G.box = [];
+      EK.DEX_ORDER.forEach((id, i) => {
+        EK.G.box.push(EK.mkMon(id, 12 + (i % 9) * 2));
+        if (i % 3 === 0) EK.G.box.push(EK.mkMon(id, 8 + (i % 5) * 3));
+      });
+      EK.G.party.concat(EK.G.box).forEach((m) => { EK.seeMon(m.species); EK.catchMon(m.species); });
+      EK.openScreen('box');
+    },
+  },
+  // Noted from `midbox` and NOT acted on: with 26 boxed, the party fills the
+  // whole first screenful and the BOX heading sits at the very bottom edge, so
+  // the half of the screen you opened it for starts below the fold and the
+  // cursor starts six rows away from it. Whether that wants the box first, a
+  // denser party strip, or nothing at all is a design call — and the last time
+  // a screen looked wrong at this scale (the battle arena not matching the map)
+  // it turned out to be deliberate, so this wants reading before changing.
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
