@@ -5307,5 +5307,53 @@ test('a wrecked stall loses its sign, and so does one off camera', () => {
   assert(Math.abs(p.y - o.y) < o.h, 'and stay alongside it');
 });
 
+/* ---------------------------------------------------------------- cover --- */
+
+/* Every other entry on the games index has a cover.webp poster and a cover.webm
+   clip that plays on hover. This one had neither, so its card on the front page
+   of the site showed a broken image. Both are recorded by
+   tools/crashmas_cover.mjs — rerun it if this goes red because the game looks
+   different, not because the numbers below are inconvenient. */
+const COVER = path.join(__dirname, '..', 'merry_crashmas');
+
+test('the games index has a poster and a clip to show for this game', () => {
+  const webp = path.join(COVER, 'cover.webp'), webm = path.join(COVER, 'cover.webm');
+  assert(fs.existsSync(webp), 'no cover.webp — the index card shows a broken image');
+  assert(fs.existsSync(webm), 'no cover.webm — the card has nothing to play on hover');
+
+  // and the index is still asking for exactly those two names
+  const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert(index.includes('cover.webp') && index.includes('cover.webm'),
+    'the index stopped asking for cover.webp/cover.webm');
+  assert(/id:\s*'crashmas'[^}]*href:\s*'\/merry_crashmas\//.test(index),
+    'the index card no longer points at /merry_crashmas/');
+
+  const p = fs.readFileSync(webp), m = fs.readFileSync(webm);
+  assert(p.slice(0, 4).toString() === 'RIFF' && p.slice(8, 12).toString() === 'WEBP',
+    'cover.webp is not a WebP');
+  assert(m.slice(0, 4).toString('hex') === '1a45dfa3',
+    'cover.webm is not an EBML container');
+  assert(m.slice(0, 64).toString('latin1').includes('webm'),
+    'cover.webm does not declare itself WebM');
+
+  /* The poster is 480x270 like every other cover on the index, read out of the
+     VP8 bitstream rather than by decoding it: 14 bits of width and 14 of height
+     after the start code. */
+  const vp8 = p.indexOf(Buffer.from('VP8 '));
+  assert(vp8 > 0, 'cover.webp has no VP8 chunk');
+  const f = vp8 + 8 + 6;                       // chunk header, then the sync code
+  const w = p.readUInt16LE(f + 0) & 0x3fff, h = p.readUInt16LE(f + 2) & 0x3fff;
+  assert(w === 480 && h === 270,
+    'the poster should be 480x270 like the rest of the index, got ' + w + 'x' + h);
+
+  /* The other clips on the index run 70-150KB and the posters 2-14KB. Left at
+     the browser's default bitrate this clip came out at half a megabyte. */
+  console.log('    (cover: poster ' + p.length + ' bytes, clip ' + m.length + ' bytes)');
+  assert(p.length < 40 * 1024, 'the poster is ' + p.length + ' bytes, out of line with the index');
+  assert(m.length > 20 * 1024, 'the clip is ' + m.length + ' bytes — too small to be a clip');
+  assert(m.length < 260 * 1024,
+    'the clip is ' + m.length + ' bytes, well over the biggest cover on the index');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
