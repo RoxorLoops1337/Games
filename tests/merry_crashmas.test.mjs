@@ -3862,11 +3862,12 @@ test('the light sprites and the snow grain are baked once, not per frame', () =>
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
   api.draw();
   const after1 = api.getBakeCount();
-  // the mask, the headlight, one themed lamp glow, and one glow per pickup kind
+  // the mask, the headlight, the nitro halo, one themed lamp glow, and one
+  // glow per pickup kind
   const kinds = Object.keys(api.PICKUP_RGB).length;
-  assert(after1 === 3 + kinds,
-    'the first frame bakes the mask, the headlight, the themed glow and the ' +
-    kinds + ' pickup colours, got ' + after1);
+  assert(after1 === 4 + kinds,
+    'the first frame bakes the mask, the headlight, the nitro halo, the themed ' +
+    'glow and the ' + kinds + ' pickup colours, got ' + after1);
   for (let i = 0; i < 30; i++){ api.setT(api.getT() + 1 / 60); api.draw(); }
   assert(api.getBakeCount() === after1,
     'thirty more frames should bake nothing: ' + api.getBakeCount());
@@ -4462,6 +4463,51 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ---------------------------------------------------------- nitro --- */
+
+test('the nitro halo is a baked light, not a flat plate', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21; api.startLevel(2); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.z = 0;
+  api.car.vx = 600; api.car.vy = 0; api.camSnap();
+  api.drawLights();                                  // bake the sprites
+
+  const lightPass = (boostT) => {
+    api.car.boostT = boostT;
+    const rec = carRec();
+    api.withCtx(rec, api.drawLights);
+    return rec;
+  };
+  const off = lightPass(0), hot = lightPass(0.55), fading = lightPass(0.15);
+
+  // the boost adds a sprite, and does not add a fill
+  assert(hot.images.length === off.images.length + 1,
+    'the halo should be one more sprite: ' + off.images.length + ' -> ' + hot.images.length);
+  assert(hot.shapes.length <= off.shapes.length,
+    'and not a raw disc on top of it: ' + off.shapes.length + ' -> ' + hot.shapes.length);
+
+  /* It used to be a 190-unit circle at a flat .16 for the whole 0.55s, which
+     at the drive camera greys out two thirds of the frame at the exact moment
+     the most is happening in it. */
+  /* The halo is the one sprite centred exactly on the car: the headlight spots
+     are thrown ahead of it, the car's own hole in the darkness goes to the
+     dark layer's own context, and the night wash is the full frame. */
+  const halo = (rec) => rec.images.filter(i =>
+    Math.abs(i.x + i.w / 2 - api.car.x) < 1 && Math.abs(i.y + i.h / 2 - api.car.y) < 1);
+  assert(halo(off).length === 0, 'no boost, no halo: ' + halo(off).length);
+  assert(halo(hot).length === 1, 'one halo: ' + halo(hot).length);
+  const big = halo(hot)[0], small = halo(fading)[0];
+  assert(big.w > small.w, 'the halo should burn down: ' + big.w + ' -> ' + small.w);
+  assert(big.alpha > small.alpha, 'and fade with it: ' + big.alpha + ' -> ' + small.alpha);
+  assert(big.w < 380, 'and never plate the frame: ' + big.w + ' across');
+  // centred on the car, wherever it is
+  assert(Math.abs(big.x + big.w / 2 - api.car.x) < 1 &&
+         Math.abs(big.y + big.w / 2 - api.car.y) < 1, 'the halo rides the car');
+  console.log('    (nitro halo: ' + big.w.toFixed(0) + 'px at a' + big.alpha.toFixed(2) +
+    ', down to ' + small.w.toFixed(0) + 'px at a' + small.alpha.toFixed(2) + ')');
+});
+
 /* ------------------------------------------------------ in the air --- */
 
 test('the car’s shadow stays on the ground and pulls away from it', () => {
@@ -5014,15 +5060,20 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
    inside the bodywork. */
 function carRec(){
   const shapes = [], order = [], rects = [], all = [], styles = [];
-  let fill = '', line = '', lw = 0, pending = null;
+  let fill = '', line = '', lw = 0, alpha = 1, pending = null;
   const base = {
-    shapes, order, rects, all, styles,
+    shapes, order, rects, all, styles, images: [],
     set fillStyle(v){ fill = String(v); order.push(String(v)); styles.push('f:' + v); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); styles.push('s:' + v); },
     get strokeStyle(){ return line; },
     set lineWidth(v){ lw = +v; },
     get lineWidth(){ return lw; },
+    set globalAlpha(v){ alpha = +v; },
+    get globalAlpha(){ return alpha; },
+    // sprites are how every light in this game is drawn, so they get recorded
+    // with the alpha they went down at
+    drawImage(img, x, y, w, h){ base.images.push({ x, y, w, h, alpha }); },
     // a shape lasts until the next beginPath, so a fill and the stroke that
     // outlines it are both recorded against it
     beginPath(){ pending = null; },
