@@ -4427,6 +4427,7 @@ function paintTo(canvas, kind, id, scale, sil) {
 const VIEW_W = 256, VIEW_H = 208;
 const STEP_TIME = .15;
 const WIPE_T = .55;                    // battle-entry wipe, seconds
+const LVL_T = .8;                      // how long a level-up shows for
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
 const keys = new Set();       // held
@@ -5459,7 +5460,7 @@ function startBattle(opt) {
     npc: opt.npc || null,
     team: opt.team || null, teamIdx: 0,
     escapes: 0, turn: 0, over: null, log: null, li: 0,
-    shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0,
+    shake: 0, flashM: 0, flashF: 0, entry: 0, throwT: 0, hold: 0, lvT: 0,
     pops: [], lungeM: 0, lungeF: 0, windM: 0, windF: 0, recoilM: 0, recoilF: 0,
     foeEdge: 0, foeShield: 0, foePierce: 0, plan: null, cornered: 0, lastStand: 0, settling: 0, chipping: 0,
     roster: null, foeSettling: 0, foeSwaps: 0, foeSwapT: 0, foePotions: 0, foeHeals: 0,
@@ -7037,6 +7038,41 @@ function drawBattle(g) {
                    g.beginPath(); g.ellipse(72, MY_GROUND, 28, 6, 0, 0, Math.PI * 2); g.fill(); }
   g.restore();
 
+  // A level lands on your own kin: a ring going up off the ground and sparks
+  // with it. Upward, like the mend — it is the same claim, that something good
+  // just happened to this creature — but quick and bright where a rest is slow
+  // and soft.
+  if (b.lvT > 0) {
+    const k = 1 - b.lvT / LVL_T;
+    const cx = 72, cy = MY_GROUND;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (let r = 0; r < 3; r++) {
+      const rk = clamp(k * 1.3 - r * .16, 0, 1);
+      if (rk <= 0 || rk >= 1) continue;
+      g.globalAlpha = (1 - rk) * .5;
+      g.strokeStyle = r % 2 ? '#ffe9a8' : '#ffc94d';
+      g.lineWidth = 1;
+      g.beginPath();
+      if (g.ellipse) g.ellipse(cx, cy - rk * 26, 10 + rk * 16, (10 + rk * 16) * .34, 0, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.restore();
+    for (let i = 0; i < 12; i++) {
+      const a = (i * 2.39) % (Math.PI * 2);
+      const age = clamp(k * 1.5 - i * .04, 0, 1);
+      if (age <= 0 || age >= 1) continue;
+      const px = cx + Math.cos(a) * (5 + (i % 4) * 5);
+      const py = cy + 2 - age * (26 + (i % 3) * 9);
+      g.globalAlpha = Math.sin(age * Math.PI) * .95;
+      g.fillStyle = '#2a1b2e';
+      g.fillRect(Math.round(px) - 1, Math.round(py) - 1, 3, 3);
+      g.fillStyle = i % 3 ? '#ffd873' : '#fff6d8';
+      g.fillRect(Math.round(px), Math.round(py), 1, 1);
+    }
+    g.globalAlpha = 1;
+  }
+
   const entry = clamp(b.entry, 0, 1);
   // A walk-on, not a slide. Sliding in at a constant speed is a teleport with
   // extra frames; what sells arrival is deceleration plus weight going down on
@@ -7840,6 +7876,10 @@ function entryFx(b, e) {
     if (e.side === 'mine' || (e.side !== 'foe' && e.hpM <= 0)) b.downM = 0;
     else b.downF = 0;
   }
+  // Levelling had a cue and nothing to look at. It is the most repeated good
+  // thing in the game — every fight you win ends with one — and it was the last
+  // entry on the beat inventory with nothing on the canvas at all.
+  if (e.fx === 'level') b.lvT = LVL_T;
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
     b.shake = e.crit ? 1.8 : 1;
@@ -8186,6 +8226,7 @@ function updateBattle(dt) {
   // Holding it while the bars are fully closed costs nothing and the walk-on
   // now plays out into an opening frame, which is the shot it was written for.
   if (G.wipe <= WIPE_T * .5) b.entry = Math.min(1, b.entry + dt * 1.7);
+  b.lvT = Math.max(0, (b.lvT || 0) - dt);
   b.flashM = Math.max(0, b.flashM - dt * 3);
   b.flashF = Math.max(0, b.flashF - dt * 3);
   b.shake = Math.max(0, b.shake - dt * 4);
@@ -9842,7 +9883,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,

@@ -2050,16 +2050,32 @@ comes up, and the Wayhouse then opens out of it on `G.fade` rather than snapping
 in. It closes over three quarters of the beat and holds for the rest — the hold
 is the point, and it is the difference between being moved and being carried.
 
-**Verified by test rather than by photograph**, which is worth being straight
-about: the suite drives a real loss and asserts you are still where you fell
-while the dark closes, still there half way through, and in the Wayhouse only
-once it has. Three attempts to film it failed and each one taught something
-worth keeping — `over` is decided inside the damage path, so a kin set to 1 HP
-and then hit does **not** lose; the wild plan opens with a buff, so one ended
-turn is a foe sharpening its claws and nothing else; and the defeat lines come
-from a callback the frame loop drives, so they cannot be tapped through all at
-once. The fourth film caught the loss itself and ran out before the dark
-closed. A picture of it is still owed.
+It took five films to photograph, and the debt is paid: the dark closes over
+where you fell, the Wayhouse comes up out of it still deep in shadow, and the
+room brightens to full. It reads as being carried rather than teleported, and it
+does not stall — every frame of the transition is mid-motion.
+
+Each failed attempt taught something worth keeping. `over` is decided inside the
+damage path, so a kin set to 1 HP and then hit does **not** lose — the first
+version of the test made the identical wrong assumption independently. The wild
+plan opens with a buff, so one ended turn films a foe sharpening its claws and
+nothing else. And the defeat lines come from a callback the frame loop drives,
+so a loop that only dismisses text never reaches them; it has to step as well.
+
+The suite drives a real loss and asserts you are still where you fell while the
+dark closes, still there half way through, and in the Wayhouse only once it has.
+
+### Levelling
+
+The last entry on the beat inventory with nothing on the canvas at all: `fx:
+'level'` played a cue and printed a line, and that was the whole of it. It is
+the most repeated good thing in the game — every fight you win ends with one.
+
+`b.lvT` is a gold ring going up off the ground under your own kin with sparks
+carried on it, 0.8s. Upward like the mend, because it is the same claim — that
+something good just happened to this creature — but quick and bright where a
+rest is slow and soft. Deliberately small: it happens after most fights and must
+not out-shout an evolution.
 
 ### Being healed
 

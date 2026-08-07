@@ -356,6 +356,30 @@ const SCENES = {
       for (let t = 100; t <= 4000; t += 130) setTimeout(beat, t);
     },
   },
+  // A level-up. Won outright against something far too weak, so the win, the
+  // XP and the level all land in one played-back log — the way it happens after
+  // most fights.
+  levelup: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.G.party = [EK.mkMon('pyrelynx', 24)];
+      // One point short of the next level, so the win tips it over. A Lv24
+      // against a Lv3 gains almost nothing — the first film of this recorded a
+      // fight with no level-up in it at all.
+      EK.G.party[0].xp = EK.xpFor(EK.G.party[0].lvl + 1) - 1;
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 3), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      // Driving a real win to a real level-up took longer than the film window
+      // twice over, so the effect is held here instead: entryFx sets b.lvT and
+      // the arena reads it, so pinning lvT shows exactly what one frame of the
+      // real thing looks like. Weaker evidence than a film and said so.
+      EK.B().lvT = EK.LVL_T * .55;
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {
