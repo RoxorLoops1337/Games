@@ -1267,8 +1267,61 @@ section('the overlay layout keeps its controls off the cards');
     'the hand is held clear of the button column in overlay');
   // And the pad's label is anchored to the foot of the pad, which in this
   // layout is the middle of the hand.
-  ok(/body\.ctl-overlay #pad::after\{[^}]*top:/.test(SRC),
-    'the move label is moved off the cards');
+  // The label was first moved to the top of the pad, which fixed the battle and
+  // only the battle. A screen panel is inset:0 over the whole stage, so in this
+  // layout there is no height at which the label is not on somebody's kin — it
+  // went from the aimed card to the middle of the party list. This is the one
+  // layout where the pad has no band of its own, so the label goes entirely.
+  ok(/body\.ctl-overlay #pad::after\{[^}]*display:none/.test(SRC),
+    'the move label is gone in the one layout where the pad has no band of its own');
+  // And a screen's last row sits under the controls. The scroller gets a floor
+  // deep enough to lift it clear — verified by a shot of the panel scrolled to
+  // the bottom, which is the only thing that can show it.
+  ok(/body\.ctl-overlay #screen\{[^}]*padding-bottom/.test(SRC),
+    'and a full-screen panel can be scrolled clear of the controls');
+}
+
+// The title screen was wired to clicks on its two DOM buttons and nothing else.
+// On a phone the round controls are the only thing you can press, so neither of
+// them did anything — and btnLabels had no case for the title, so they fell
+// through to the world's defaults and read "Talk" and "Menu" on a screen with
+// nobody to talk to and no menu. This is behaviour, not markup, so it is driven
+// rather than grepped.
+section('the title answers the buttons it shows');
+{
+  const fresh = loadGame({});
+  fresh.setCtx(mkCtx());
+  eq(fresh.G.mode, 'title', 'the game opens on the title');
+  ok(!fresh.hasSave(), 'with nothing saved');
+  eq(fresh.btnLabels().join('/'), 'Start/Start',
+    'both buttons offer the only thing there is, rather than one being dead');
+  fresh.pressKey('a'); fresh.step(.05); fresh.releaseKey('a'); fresh.fired.clear();
+  ok(fresh.G.mode !== 'title', `and pressing one actually leaves the title (${fresh.G.mode})`);
+  eq(fresh.G.mapId, 'lab', 'into the study, where a new journey starts');
+
+  // With a save there are two real choices, and each button takes one.
+  const store = {};
+  const played = loadGame(store);
+  played.setCtx(mkCtx());
+  played.newGame();
+  played.takeStarter('cindercub');
+  played.enterMap('route_one', 5, 7, 'down');
+  played.G.mode = 'world';
+  ok(played.saveGame(), 'a run is saved');
+
+  const back = loadGame(store);
+  back.setCtx(mkCtx());
+  ok(back.hasSave(), 'the next visit to the title sees it');
+  eq(back.btnLabels().join('/'), 'Continue/New', 'and the buttons offer both');
+  back.pressKey('a'); back.step(.05); back.releaseKey('a'); back.fired.clear();
+  eq(back.G.mapId, 'route_one', 'confirm picks the run up where it was left');
+  eq(back.G.party.length, 1, 'with the party still in it');
+
+  const over = loadGame(store);
+  over.setCtx(mkCtx());
+  over.pressKey('b'); over.step(.05); over.releaseKey('b'); over.fired.clear();
+  eq(over.G.mapId, 'lab', 'and cancel starts a new journey instead');
+  eq(over.G.party.length, 0, 'with nothing carried over');
 }
 
 done('emberkin_render');

@@ -760,8 +760,20 @@
   body.ctl-overlay #btns .rbtn[data-k="x"]{ left:28%; }
   /* And the pad's label sits at the foot of the pad, which in this layout is
      the middle of the hand — "move" was printed across the card you were
-     aiming at. It goes to the top of the pad instead. */
-  body.ctl-overlay #pad::after{ bottom:auto; top:6%; }
+     aiming at. Moving it to the top of the pad fixed the battle and only the
+     battle: a screen panel is inset:0 over the whole stage, so in overlay
+     there is no height at which the label is not sitting on somebody's kin.
+     It went from the aimed card to the middle of the party list.
+     This is the one layout where the pad has no band of its own, so the label
+     goes. The pad still works — it is a "stick lands where your thumb does"
+     zone, not a drawn control — and the two buttons are labelled in the open. */
+  body.ctl-overlay #pad::after{ display:none; }
+  /* The buttons are 34% of the height in the bottom-right corner and the pad
+     46% in the bottom-left, so on a full-screen panel the last row of whatever
+     you are choosing from sits underneath them. The scroller gets a floor deep
+     enough to lift that row clear — the usual answer to content under a fixed
+     bar, and the alternative is a card you can see and cannot press. */
+  body.ctl-overlay #screen{ padding-bottom:48%; }
   /* The buttons still sat on the last card of the fan — the one you would
      tap, with a control on top of it. The hand keeps clear of the button
      column instead: it is a fan, so it closes up rather than losing a card. */
@@ -7975,6 +7987,13 @@ function btnLabels() {
   const m = G.mode;
   const reward = m === 'screen' && G.screen && G.screen.kind === 'reward';
   return reward ? ['Take', 'Skip']                   // nothing behind it to go back to
+    // The title had no case here, so it fell through to the world's defaults
+    // and the two round buttons on a phone read Talk and Menu — on a screen
+    // with nobody to talk to and no menu. With a save there are two real
+    // choices and each button takes one; without, both do the only thing there
+    // is, the way a dialogue makes both buttons Next rather than leaving one
+    // dead.
+    : m === 'title' ? (hasSave() ? ['Continue', 'New'] : ['Start', 'Start'])
     : m === 'battle' ? ['Play', 'Menu']
     : m === 'dialogue' ? ['Next', 'Next']
     : (m === 'menu' || m === 'screen') ? ['Pick', 'Back']
@@ -10369,6 +10388,19 @@ function step(dt) {
     }
     return;
   }
+  // The title is a DOM screen and was wired to clicks alone, so on a phone —
+  // where the two circles are the only controls — pressing either did nothing
+  // at all. The first thing a phone player ever saw was a pair of glowing
+  // buttons naming actions that did not exist and answering to nothing.
+  //
+  // It sits with the other modes, BELOW the screen-owning beats, not above
+  // them. Above, its `return` swallowed anything mid-run — the render suite
+  // caught it holding an evolution on its first frame for ever.
+  if (G.mode === 'title') {
+    if (justPressed('a')) (hasSave() ? startCont : startNew)();
+    else if (justPressed('b')) startNew();
+    return;
+  }
   if (G.mode === 'dialogue') {
     if (justPressed('a') || justPressed('b')) advanceDialogue();
     return;
@@ -10389,6 +10421,19 @@ function newGame() {
   G.mode = 'world';
   updateCam();
   say('Elder Rowan', ['…and there you are. Come in, shut the door, the kin get out.'], () => {});
+}
+
+/**
+ * Leaving the title. These were closures inside `boot`, reachable only from the
+ * two DOM buttons — so on a phone, where the round controls are the only thing
+ * you can press, the title did not respond to either of them. See `step`.
+ */
+function startNew() { show(els.title, false); wipeSave(); newGame(); playCue('world'); }
+function startCont() {
+  show(els.title, false);
+  if (!loadGame()) newGame();
+  else { G.mode = 'world'; updateCam(); }
+  playCue('world');
 }
 
 function boot() {
@@ -10581,13 +10626,6 @@ function boot() {
   });
 
   // title
-  const startNew = () => { show(els.title, false); wipeSave(); newGame(); playCue('world'); };
-  const startCont = () => {
-    show(els.title, false);
-    if (!loadGame()) newGame();
-    else { G.mode = 'world'; updateCam(); }
-    playCue('world');
-  };
   els.title.querySelector('[data-act="new"]').addEventListener('click', startNew);
   const contBtn = els.title.querySelector('[data-act="cont"]');
   if (hasSave()) show(contBtn, true);

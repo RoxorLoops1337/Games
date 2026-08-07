@@ -825,6 +825,27 @@ const SCENES = {
       for (let t = 100; t <= 3000; t += 160) setTimeout(beat, t);
     },
   },
+  // The foot of a long screen in the overlay layout, scrolled all the way down.
+  // The controls sit in the bottom corners there, so the question this answers
+  // is whether the last row of a list can be brought clear of them at all — a
+  // still of the TOP of the same screen cannot tell you.
+  boxfoot: {
+    w: 560, h: 390,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      EK.G.party = ['pyrelynx', 'brookite', 'bramblor', 'gargolem', 'frillamb', 'kindlark']
+        .map((id, i) => EK.mkMon(id, 22 + i * 2));
+      EK.G.box = EK.DEX_ORDER.map((id, i) => EK.mkMon(id, 12 + (i % 9) * 2));
+      EK.openScreen('box');
+      const el = document.getElementById('screen');
+      if (!el) throw new Error('boxfoot: no screen element');
+      el.scrollTop = el.scrollHeight;
+      if (el.scrollTop <= 0) throw new Error('boxfoot: the panel does not scroll — nothing to test');
+    },
+  },
   // The bag OUT of a fight, which is a different screen doing a different job:
   // in a battle every item acts on the kin that is out, and in the field a
   // salve has to pick somebody. Shot with a party where that choice is real —
