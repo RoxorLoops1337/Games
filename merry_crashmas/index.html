@@ -816,6 +816,10 @@ const FOOT_MAX = 120, FOOT_STRIDE = 26, FOOT_TTL = 16;
 const foot = []; let footI = 0;
 const gore = [];        // blood left on the snow — pools, spray, chunks, smears
 const debris = [];      // planks and panels left where a stall used to be
+/* Strings of lights slung between neighbouring stalls. Paired off the finished
+   prop list rather than during generation, so not one number here comes out of
+   either RNG — the same market always strings the same wires. */
+const wires = [];
 const lens = [];        // droplets thrown at the camera itself
 const shake = { t: 0, t0: 1, a: 0 };
 let hitstop = 0;
@@ -927,6 +931,7 @@ function genMarket(lv){
   ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0;
   gore.length = 0; lens.length = 0; debris.length = 0;
   foot.length = 0; footI = 0;
+  wires.length = 0;
 
   const x0 = MARKET_X;
   const x1 = FENCE_PAD + (WORLD_W - FENCE_PAD * 2 - 120) * lv.span;
@@ -1145,6 +1150,8 @@ function genMarket(lv){
       addProp('ramp', rr(x0 + 120, Math.max(x0 + 200, x1 - 200)), cy + (rnd() < 0.5 ? -1 : 1) * rowH * 0.42, {});
     }
   }
+
+  buildWires();
 
   const kinds = ['nitro', 'plow', 'star'];
   for (let i = 0; i < 3 + Math.round(lv.rows * 1.2); i++){
@@ -1949,6 +1956,94 @@ function stepPeople(dt){
         // COATS and HATS, so a dropped bag in the far crowd read as another
         // shopper lying down
         col: ['#cfc6b4', '#8f7355', '#4a4038', '#a8b0bc'][ri(0, 3)] });
+    }
+  }
+}
+
+/* Every stall looks for the nearest stall to its right, close enough to sling
+   a cable to and roughly level with it, and each end can only be used once.
+   Purely geometric: no rnd(), no vrnd(), so a market's lights are as fixed as
+   its stalls. */
+const WIRE_MIN = 150, WIRE_MAX = 460, WIRE_DY = 150;
+function buildWires(){
+  wires.length = 0;
+  const huts = props.filter(o => o.kind === 'hut').sort((a, b) => a.x - b.x);
+  const used = new Set();
+  for (let i = 0; i < huts.length; i++){
+    const a = huts[i];
+    if (used.has(a)) continue;
+    let best = null, bestD = Infinity;
+    for (let j = i + 1; j < huts.length; j++){
+      const b = huts[j];
+      const dx = b.x - a.x;
+      if (dx > WIRE_MAX) break;                 // sorted, so nothing further can win
+      if (used.has(b) || dx < WIRE_MIN) continue;
+      if (Math.abs(b.y - a.y) > WIRE_DY) continue;
+      const d = dx * dx + (b.y - a.y) * (b.y - a.y);
+      if (d < bestD){ bestD = d; best = b; }
+    }
+    if (best){ used.add(a); used.add(best); wires.push({ a, b: best }); }
+  }
+}
+
+/* The cable itself, dark, drawn over the stalls it hangs between. The bulbs on
+   it are light and belong to the light pass — a bulb laid down here would have
+   the night wash composited over the top of it. */
+function drawWires(){
+  if (!wires.length) return;
+  const halfW = VW / cam.s / 2 + 260, halfH = VH / cam.s / 2 + 260;
+  // every cable is the same colour and the same weight, so a market's worth of
+  // them is one path and one stroke rather than one stroke each
+  ctx.strokeStyle = 'rgba(24,32,48,.55)';
+  ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  let any = false;
+  for (const w of wires){
+    if (w.a.dead && w.b.dead) continue;
+    const mx = (w.a.x + w.b.x) / 2, my = (w.a.y + w.b.y) / 2;
+    if (Math.abs(mx - cam.x) > halfW || Math.abs(my - cam.y) > halfH) continue;
+    ctx.moveTo(w.a.x, w.a.y);
+    ctx.quadraticCurveTo(mx, my + wireSag(w), w.b.x, w.b.y);
+    any = true;
+  }
+  if (any) ctx.stroke();
+}
+/* A cable with a stall gone from one end hangs slack from the other. */
+function wireSag(w){
+  const span = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+  return span * (w.a.dead || w.b.dead ? 0.30 : 0.13);
+}
+
+/* The bulbs. Three colours, and every bulb of a colour goes down as one path,
+   so a market's worth of fairy lights is three fills however many there are. */
+const WIRE_COLS = ['255,140,110', '255,224,150', '150,225,255'];
+function drawWireBulbs(){
+  if (!wires.length) return;
+  const halfW = VW / cam.s / 2 + 260, halfH = VH / cam.s / 2 + 260;
+  for (let c = 0; c < WIRE_COLS.length; c++){
+    ctx.beginPath();
+    let any = false;
+    for (const w of wires){
+      if (w.a.dead && w.b.dead) continue;
+      const mx = (w.a.x + w.b.x) / 2, my = (w.a.y + w.b.y) / 2;
+      if (Math.abs(mx - cam.x) > halfW || Math.abs(my - cam.y) > halfH) continue;
+      const dark = w.a.dead || w.b.dead;
+      const sag = my + wireSag(w);
+      const n = 9;
+      for (let i = 1; i < n; i++){
+        if (i % WIRE_COLS.length !== c) continue;
+        const t = i / n, u = 1 - t;
+        const x = u * u * w.a.x + 2 * u * t * mx + t * t * w.b.x;
+        const y = u * u * w.a.y + 2 * u * t * sag + t * t * w.b.y;
+        const r = dark ? 2.2 : 3.4 + Math.sin(T * 3 + i * 1.7 + w.a.seed * 6.28) * 1.1;
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, 6.283);
+        any = true;
+      }
+    }
+    if (any){
+      ctx.fillStyle = 'rgba(' + WIRE_COLS[c] + ',.72)';
+      ctx.fill();
     }
   }
 }
@@ -4807,6 +4902,7 @@ function drawLights(){
     ctx.fillStyle = 'rgba(120,255,170,.16)';
     circle(car.x, car.y, 190); ctx.fill();
   }
+  drawWireBulbs();
   drawPickupGlow();
   drawFireworks();
   ctx.restore();
@@ -5583,6 +5679,7 @@ function draw(){
   for (const e of order){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
   }
+  drawWires();
 
   if (G.phase === 'aim') drawAim(); else drawSling();
 

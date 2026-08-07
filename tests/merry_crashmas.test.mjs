@@ -75,6 +75,7 @@ const EXPOSE = `__out.api = {
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
+  wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4963,6 +4964,97 @@ test('a patch of ice is a cracked sheet, drawn in one stroke', () => {
   assert(fills >= 3, 'a sheet, a facet and a specular: ' + fills + ' fills');
   assert(strokes === 2,
     'the rim and the cracks are one stroke each, not one a crack: ' + strokes);
+});
+
+/* ------------------------------------------------------------- garlands --- */
+
+/* A Christmas market has lights strung between the stalls and this one had
+   none. They are paired off the finished prop list rather than during
+   generation, so not one number in them comes out of either RNG. */
+test('every market strings its stalls together, once each', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.unlocked = 21;
+  const seen = [];
+  for (const lv of [0, 5, 12, 20]){
+    api.startLevel(lv); api.beginLevel();
+    const huts = api.props.filter(o => o.kind === 'hut');
+    assert(api.wires.length >= 2,
+      api.LEVELS[lv].name + ' strung ' + api.wires.length + ' wires between ' +
+      huts.length + ' stalls');
+    seen.push(api.LEVELS[lv].name + ' ' + api.wires.length + '/' + huts.length);
+    // one end each: no stall is on two cables
+    const ends = [];
+    for (const w of api.wires){ ends.push(w.a, w.b); }
+    assert(new Set(ends).size === ends.length,
+      'a stall is holding up two cables in ' + api.LEVELS[lv].name);
+    for (const w of api.wires){
+      assert(w.a !== w.b, 'a cable is strung to the stall it starts at');
+      assert(huts.indexOf(w.a) >= 0 && huts.indexOf(w.b) >= 0, 'a cable is tied to a tree');
+      const dx = w.b.x - w.a.x, dy = Math.abs(w.b.y - w.a.y);
+      assert(dx >= api.WIRE_MIN && dx <= api.WIRE_MAX,
+        'a cable spans ' + Math.round(dx) + ', outside ' + api.WIRE_MIN + '-' + api.WIRE_MAX);
+      assert(dy <= api.WIRE_DY, 'a cable climbs ' + Math.round(dy) + ', over ' + api.WIRE_DY);
+    }
+  }
+  console.log('    (wires per market: ' + seen.join(', ') + ')');
+});
+
+test('stringing the lights does not touch either generator', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  const key = () => api.wires.map(w => Math.round(w.a.x) + '>' + Math.round(w.b.x)).join('|');
+  const first = key();
+  assert(first.length > 10, 'there should be wires to compare');
+  api.reseed(4242);
+  const clean = api.rnd();
+  api.reseed(4242);
+  for (let i = 0; i < 20; i++) api.buildWires();
+  assert(api.rnd() === clean, 'buildWires pulled from the simulation RNG');
+  assert(key() === first, 'twenty rebuilds strung a different set of cables');
+  // and the same market laid out again strings the same ones
+  api.startLevel(20); api.beginLevel();
+  assert(key() === first, 'the same market strung a different set of cables');
+});
+
+test('a market of fairy lights costs three fills', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.setT(3);
+  api._resetCounts();
+  api.drawWireBulbs();
+  const bulbs = { fill: api._counts.fill || 0, arc: api._counts.arc || 0 };
+  console.log('    (bulbs on camera: ' + bulbs.arc + ' in ' + bulbs.fill + ' fills)');
+  assert(bulbs.arc > 20, 'there should be bulbs in shot, got ' + bulbs.arc);
+  assert(bulbs.fill === api.WIRE_COLS.length,
+    'one fill a colour, not one a bulb: ' + bulbs.fill + ' fills for ' + bulbs.arc + ' bulbs');
+  // the cables are dark and belong to the world pass, not the light pass
+  api._resetCounts();
+  api.drawWires();
+  assert(!(api._counts.fill || 0), 'a cable is a stroke, not a fill');
+  assert((api._counts.stroke || 0) === 1, 'and all of them go down in one stroke');
+});
+
+test('a cable with a stall gone from one end hangs slack, and with both gone is cut', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive';
+  const w = api.wires[0];
+  api.car.x = (w.a.x + w.b.x) / 2; api.car.y = (w.a.y + w.b.y) / 2; api.camSnap();
+  const taut = api.wireSag(w);
+  w.a.dead = true;
+  const slack = api.wireSag(w);
+  assert(slack > taut * 1.8, 'half a cable should hang: ' + taut.toFixed(1) + ' -> ' + slack.toFixed(1));
+  // with one end standing it still lights, dimmer
+  api.setT(3);
+  api._resetCounts(); api.drawWireBulbs();
+  const half = api._counts.arc || 0;
+  assert(half > 0, 'a half-standing cable still has bulbs on it');
+  w.b.dead = true;
+  api._resetCounts(); api.drawWireBulbs();
+  const gone = api._counts.arc || 0;
+  api._resetCounts(); api.drawWires();
+  assert(gone < half, 'a cable with both ends down should lose its bulbs: ' + gone + ' vs ' + half);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
