@@ -8158,7 +8158,7 @@ function entryFx(b, e) {
       const last = b.pops[b.pops.length - 1];
       if (last && last.side === e.side) last.kind = 'crit';
     }
-    playCue('hit');
+    playCue(e.crit ? 'crit' : 'hit');
   }
 }
 
@@ -8334,6 +8334,7 @@ function finishBattle() {
   } else if (over === 'lose') {
     say('', ['Everything you have is down.', 'You carry them back to the Wayhouse on instinct.'], () => {
       // The dark closes over the arena first, and the room comes up out of it.
+      playCue('blackout');
       G.blackout = { t: 0, go: () => {
       const lost = Math.floor(G.money * .25);
       G.money -= lost;
@@ -9446,6 +9447,12 @@ function playCue(kind) {
   if (!ac) return;
   const t = ac.currentTime;
   if (kind === 'hit') blip(150, .09, 'sawtooth', .07);
+  // A crit already looks different — its own burst, its own colour on the
+  // number — and sounded exactly like every other hit. Lower and longer than
+  // `hit`, with a second blip under it so it lands as one heavier impact
+  // rather than two taps. Written, not heard: sound cannot be photographed and
+  // nobody in this loop has ever listened to this game.
+  else if (kind === 'crit') { blip(96, .16, 'sawtooth', .085); blip(58, .22, 'square', .05, t + .02); }
   else if (kind === 'faint') { blip(220, .3, 'square', .05); blip(110, .45, 'square', .05, t + .12); }
   else if (kind === 'level') { [0, 4, 7, 12].forEach((s, i) => blip(note(12 + s), .16, 'square', .05, t + i * .07)); }
   else if (kind === 'catch') { [0, 5, 9, 14].forEach((s, i) => blip(note(12 + s), .2, 'triangle', .06, t + i * .1)); }
@@ -9476,6 +9483,14 @@ function playCue(kind) {
   else if (kind === 'menu') blip(330, .05, 'square', .035);
   else if (kind === 'back') blip(240, .06, 'square', .03);
   else if (kind === 'door') { blip(140, .1, 'sawtooth', .05); blip(95, .18, 'sine', .045, t + .05); }
+  // The dark closing over a wipe. A CHOICE rather than a gap: the beat was
+  // never silent — the last kin's `faint` runs just before it and `world` opens
+  // the Wayhouse after — but it borrowed both of those and had nothing of its
+  // own for the worst moment in the game. Two long notes falling a fifth, under
+  // everything else in the game's register, so it reads as the floor going out
+  // rather than another event happening.
+  // Written, not heard. Nothing in this repo can play it back.
+  else if (kind === 'blackout') { blip(70, .5, 'sine', .06); blip(47, .8, 'sine', .05, t + .18); }
   // Footsteps carry the ground under them: grass brushes, a path knocks, sand
   // is soft and short, boards ring. Two alternating pitches so a walk has a
   // gait instead of a metronome.

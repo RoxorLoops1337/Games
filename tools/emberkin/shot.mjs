@@ -322,13 +322,12 @@ const SCENES = {
       EK.openScreen('box');
     },
   },
-  // Noted from `midbox` and NOT acted on: with 26 boxed, the party fills the
-  // whole first screenful and the BOX heading sits at the very bottom edge, so
-  // the half of the screen you opened it for starts below the fold and the
-  // cursor starts six rows away from it. Whether that wants the box first, a
-  // denser party strip, or nothing at all is a design call — and the last time
-  // a screen looked wrong at this scale (the battle arena not matching the map)
-  // it turned out to be deliberate, so this wants reading before changing.
+  // That fold problem is FIXED (#1700): the party now takes `.cards.slim`, three
+  // columns instead of two, so the BOX heading and two rows of boxed kin land on
+  // the first screenful. Kept as a note because the scene exists to guard it —
+  // if the party ever goes back to three tall rows here, this shot is where it
+  // shows. Narrower rather than reordered, because `monCard` indexes party
+  // 0..n-1 then box n+i and the foot-of-screen help describes that order.
   // An evolution, at the moment the shape changes.
   //
   // EVO is hold .9, build 1.5, burst .45, settle 1.0, quiet .6 — 4.45s whole,
