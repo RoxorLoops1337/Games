@@ -5601,6 +5601,103 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
     ', bobble y' + bobble.y.toFixed(1) + ')');
 });
 
+/* ------------------------------------------------------ the barrier --- */
+
+/* A crowd barrier was five flat fillRects: a white bar, four upright red
+   blocks and two grey stubs. Every other prop got a lit face, a shaded face
+   and snow along its top edge — and this one is drawn in numbers, the rink
+   alone ringing itself with sixteen. */
+function barrier(api, tweak){
+  api.props.length = 0;
+  const o = api.addProp('fence', api.cam.x, api.cam.y, {});
+  if (tweak) tweak(o);
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawProp(o));
+  return { o, rec,
+    rails: rec.polys.filter(q => !q.stroked),
+    reds: rec.polys.filter(q => q.style === '#c8443a'),
+    feet: rec.polys.filter(q => q.style === '#8a94a6'),
+    lit: rec.polys.find(q => /255,250,238/.test(String(q.style))),
+    shade: rec.polys.find(q => /12,20,38/.test(String(q.style))) };
+}
+
+test('a crowd barrier is a barrier, with both its feet', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const b = barrier(api);
+  const L = b.o.w, THK = b.o.h;
+
+  /* roundRect opens its own path, so two of them cannot share a fill — the
+     first version stacked both feet into one and silently drew the far one
+     only. This is the assertion that says so. */
+  assert(b.feet.length === 2, 'a barrier stands on two feet, drew ' + b.feet.length);
+  const [f0, f1] = b.feet.sort((p, q) => p.x0 - q.x0);
+  assert(f0.x0 < -L * 0.4 && f1.x1 > L * 0.4,
+    'one foot at each end, got ' + f0.x0.toFixed(0) + ' and ' + f1.x1.toFixed(0));
+
+  assert(b.lit && b.shade, 'a lit top rail and a shaded lower one');
+  assert(b.lit.y0 < b.shade.y0, 'the lit rail is the one the light reaches first');
+
+  /* Four hazard stripes in one path, and each one leans — four upright blocks
+     read as a fence panel, not as a barrier. Every stripe is a four-point
+     parallelogram, so its top edge and its bottom edge start at different x. */
+  assert(b.reds.length === 1, 'the stripes should be one path, got ' + b.reds.length);
+  assert(b.reds[0].x1 - b.reds[0].x0 > L * 0.6, 'and run the length of it');
+  const pts = b.rec.all.filter(a => a[0] === 'm' || a[0] === 'l')
+    .filter(a => String(a[4]) === '#c8443a').map(a => [a[1], a[2]]);
+  assert(pts.length === 16, 'four stripes of four corners, got ' + pts.length);
+  for (let i = 0; i < 16; i += 4){
+    const top = pts[i], bot = pts[i + 3];
+    assert(Math.abs(top[0] - bot[0]) > THK * 0.3,
+      'stripe ' + (i / 4) + ' is upright, not slanted: ' +
+      top[0].toFixed(1) + ' over ' + bot[0].toFixed(1));
+  }
+
+  // everything inside the collider the market bounces the car off
+  for (const q of b.rails){
+    assert(q.x0 >= -L / 2 - 12 && q.x1 <= L / 2 + 12,
+      'a piece hangs off the end: ' + q.x0.toFixed(0) + '…' + q.x1.toFixed(0));
+    assert(q.y0 >= -THK / 2 - 7 && q.y1 <= THK / 2 + 7,
+      'a piece hangs off the side: ' + q.y0.toFixed(0) + '…' + q.y1.toFixed(0));
+  }
+  console.log('    (barrier: ' + b.rails.length + ' pieces on a ' + L + 'x' + THK + ' collider)');
+});
+
+test('a wrecked barrier is two pieces and a foot, under a smaller shadow', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const live = barrier(api);
+  const dead = barrier(api, (o) => { o.dead = true; o.rot = 0.5; });
+  assert(dead.reds.length === 0, 'a wreck keeps no hazard stripes');
+  assert(dead.rails.length >= 3, 'two rail pieces and a foot, got ' + dead.rails.length);
+  assert(dead.feet.length === 1, 'one foot, bent up out of the snow');
+
+  /* The shadow is the widest ellipse either draw puts down. A wreck is two
+     short pieces and was casting a whole barrier's shadow under a third of
+     one. */
+  const widest = (o) => Math.max(...o.rec.shapes.filter(s => !s.stroked).map(s => s.r));
+  assert(widest(dead) < widest(live) * 0.75,
+    'the wreck still casts a full-length shadow: ' + widest(dead).toFixed(0) +
+    ' vs ' + widest(live).toFixed(0));
+
+  /* It is scenery, so drawing one rolls nothing. The prop is built first —
+     addProp itself rolls — and only the drawing is measured. */
+  const one = api.props[0];
+  api.reseed(3);
+  const r0 = api.rnd();
+  api.reseed(3);
+  for (let i = 0; i < 20; i++){
+    one.dead = i % 2 === 0; one.rot = i * 0.3;
+    api.withCtx(carRec(), () => api.drawProp(one));
+  }
+  // reseed() resets the simulation stream only, so that is the one to compare
+  assert(api.rnd() === r0, 'drawing a barrier moved the simulation stream');
+});
+
 /* --------------------------------------------------------- the dead --- */
 
 /* A corpse's four limbs were four fixed line segments in the body's own frame:
@@ -5875,9 +5972,10 @@ function carRec(){
   const base = {
     shapes, order, rects, all, styles, polys, images: [], fills: 0,
     // raw path points too, so a jointed limb can be told from a straight one
-    moveTo(x, y){ pt(x, y); all.push(['m', x, y, line]); },
-    lineTo(x, y){ pt(x, y); all.push(['l', x, y, line]); },
-    quadraticCurveTo(cx, cy, x, y){ pt(x, y); all.push(['q', x, y, line]); },
+    // both styles, because a path may be on its way to a fill or to a stroke
+    moveTo(x, y){ pt(x, y); all.push(['m', x, y, line, fill]); },
+    lineTo(x, y){ pt(x, y); all.push(['l', x, y, line, fill]); },
+    quadraticCurveTo(cx, cy, x, y){ pt(x, y); all.push(['q', x, y, line, fill]); },
     set fillStyle(v){ fill = String(v); order.push(String(v)); styles.push('f:' + v); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); styles.push('s:' + v); },
@@ -5956,10 +6054,13 @@ function damaged(api, dents, gore, ang){
   const d = api.getDims();
   const marks = rec.all.filter(a => a[0] === 'arc' || a[0] === 'el')
     .filter(a => /26,14,12|255,247,232|126,14,10|168,26,20/.test(String(a[a.length - 1])));
+  // arcs and ellipses only: a lobe is a moveTo plus an arc, and the recorder
+  // now tags path points with the fill they are headed for as well
+  const shp = rec.all.filter(a => a[0] === 'arc' || a[0] === 'el');
   return { rec, d, marks,
-    pit: rec.all.filter(a => /26,14,12/.test(String(a[a.length - 1]))),
-    lip: rec.all.filter(a => /255,247,232/.test(String(a[a.length - 1]))),
-    blood: rec.all.filter(a => /126,14,10|168,26,20/.test(String(a[a.length - 1]))) };
+    pit: shp.filter(a => /26,14,12/.test(String(a[a.length - 1]))),
+    lip: shp.filter(a => /255,247,232/.test(String(a[a.length - 1]))),
+    blood: shp.filter(a => /126,14,10|168,26,20/.test(String(a[a.length - 1]))) };
 }
 
 test('a battered car looks battered, in four fills not sixteen', () => {
