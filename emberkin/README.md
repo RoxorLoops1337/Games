@@ -2719,6 +2719,23 @@ clips. Recorded because it is a null result and re-running it blind costs four
 shots. Every layout fault found so far has been at 390px or at a desktop width,
 not at a threshold: `--size 390x760` is the one that earns its keep.
 
+### Found, not yet built: the chest opens with no beat
+
+Every other reward in the game is an event. A catch is throw, wobble, gotcha,
+papers. A win is the flourish. A level-up is a ring and sparks. A card offer
+lands its screen.
+
+Opening a chest is `openChest()`, `playCue('catch')`, `renderScreen()` — the
+cards are simply there on the next frame. It is the largest purchase in the
+game (a Prism Chest is 1620 gems), the entire point of the gem economy, and it
+has less ceremony than picking up a salve. It also borrows the *catch* cue,
+so the biggest thing you can buy sounds like something else happening.
+
+Specced here rather than half-built: it wants a screen-owning beat, so it
+needs a draw function, an entry in the BEATS list that the render suite holds
+"at most one live" over, and a film at an interval matched to its shortest
+sub-beat. Worth a pass of its own.
+
 ### A beat that fires when nothing happened
 
 Sable used to play the whole mend — offer, light, "right as rain" — over a
