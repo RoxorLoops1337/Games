@@ -160,6 +160,15 @@ edit this block to name the next one.
       what the old figure was. The record quoted is read *after* the save is
       written, so a failed run that still set one no longer quotes a stale
       number.
+- [x] Spilt glühwein is a puddle. A wrecked stand drops a pot of scalding wine
+      that kills anything walking into it for `SPILL_HOT` = 3.5s, and it was
+      drawn as two concentric circles — at the drive camera, a screen-wide flat
+      red plate with nothing in it that said liquid, heat, or where the lethal
+      edge was. It is lobed now, with a dark rim where the wine meets the snow,
+      a wet sheen, a warm additive core and pale vapour rising off it in the
+      light pass — and it goes dull and stops steaming at exactly the moment it
+      stops killing, which the game had never signalled at all. The kill window
+      and the look read the same constant. Lobe seed off `vrnd()`.
 
 ## Next
 
