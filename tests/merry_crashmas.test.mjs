@@ -4461,6 +4461,91 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* --------------------------------------------------------- Santa --- */
+
+/* Draws one shopper into a recorder, close enough that the fine tier runs. */
+function shopper(api, kind, tweak){
+  api.people.length = 0;
+  const p = api.addPerson(api.cam.x, api.cam.y, kind);
+  p.ang = 0; p.bob = 0.4; p.panic = 0; p.cry = 0;
+  p.vx = 20; p.vy = 0;
+  if (tweak) tweak(p);
+  api.cam.tz = 300; api.cam.s = 1;
+  assert(api.lodQ(p) > api.LOD_FINE, kind + ' should be drawn at the fine tier');
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawPerson(p));
+  // the coat by its exact geometry — the drop shadow is a big ellipse too
+  const isCoat = (s) => Math.abs(s.r - p.r * 0.86) < 0.01 && Math.abs(s.y - p.r * 0.1) < 0.01;
+  return { p, rec,
+    coat: rec.shapes.find(s => !s.stroked && isCoat(s)),
+    trim: rec.shapes.find(s => s.stroked && isCoat(s)),
+    pale: rec.shapes.filter(s => !s.stroked && /^#f[36]/i.test(s.style)),
+    red: rec.shapes.filter(s => !s.stroked && s.style === '#d8382c'),
+    belt: rec.rects.find(r => r.style === '#2a2028'),
+    buckle: rec.rects.find(r => r.style === '#e8b53a') };
+}
+
+test('Santa is dressed as Santa, and nobody else is', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const s = shopper(api, 'santa');
+  assert(s.coat, 'he should have a coat');
+  assert(s.coat.style === '#c22f28', 'in Santa red, got ' + s.coat.style);
+  assert(s.trim, 'and a fur trim round it');
+  assert(/246,242,234|f6f2ea/i.test(s.trim.style), 'in white, got ' + s.trim.style);
+  assert(s.trim.lw > s.p.r * 0.1,
+    'thick enough to read from above: ' + s.trim.lw.toFixed(1) + ' on r' + s.p.r);
+  assert(s.belt && s.buckle, 'a belt and a buckle');
+
+  /* Nobody else wears it. He used to draw from the same eight shopper coats
+     his seed happened to roll, which on a market whose whole goal is running
+     him over made the jackpot look like everyone else. */
+  for (const kind of ['shopper', 'elder', 'kid', 'parent']){
+    for (let seed = 0; seed < 8; seed++){
+      const o = shopper(api, kind, (p) => { p.coat = seed; });
+      assert(o.coat.style !== '#c22f28', kind + ' seed ' + seed + ' is wearing Santa red');
+      assert(!o.trim || !/246,242,234/.test(o.trim.style),
+        kind + ' seed ' + seed + ' got the fur trim');
+      assert(!o.belt, kind + ' should not have Santa’s belt');
+    }
+  }
+  console.log('    (santa: coat ' + s.coat.style + ', trim ' + s.trim.lw.toFixed(1) +
+    'px on r' + s.p.r + ')');
+});
+
+test('Santa’s beard sits behind the face the crying pass draws', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const s = shopper(api, 'santa', (p) => { p.cry = 1; p.panic = 0.9; });
+  const r = s.p.r;
+  const beard = s.pale.find(x => x.r !== x.ry);       // the only pale ellipse
+  const bobble = s.pale.find(x => x.r === x.ry && x.y < -r * 0.6);
+  const band = s.pale.find(x => x.r !== x.ry && x !== beard);
+  const hat = s.red[0];
+  assert(beard && hat && bobble, 'beard, hat and bobble: ' +
+    [!!beard, !!hat, !!bobble].join('/'));
+
+  const mouthY = -r * 0.26;                            // where drawPerson cries
+  assert(beard.y > mouthY, 'the beard should sit behind the mouth');
+  assert(beard.y - beard.ry > mouthY,
+    'and not cover it: beard reaches ' + (beard.y - beard.ry).toFixed(1) +
+    ', mouth at ' + mouthY.toFixed(1));
+  assert(hat.y < -r * 0.34, 'the hat should be forward of the head');
+  assert(bobble.y < hat.y, 'and the bobble forward of the hat');
+  assert(Math.hypot(bobble.x - hat.x, bobble.y - hat.y) < hat.r + bobble.r,
+    'the bobble should be on the hat, not floating off it');
+  // the belt is on the coat, well clear of the beard
+  assert(s.belt.y > beard.y + beard.ry,
+    'the belt is at his waist, not in his beard: ' + s.belt.y.toFixed(1) +
+    ' vs ' + (beard.y + beard.ry).toFixed(1));
+  console.log('    (santa head: beard y' + beard.y.toFixed(1) + '±' + beard.ry.toFixed(1) +
+    ', mouth y' + mouthY.toFixed(1) + ', hat y' + hat.y.toFixed(1) +
+    ', bobble y' + bobble.y.toFixed(1) + ')');
+});
+
 /* ------------------------------------------------------- the driver --- */
 
 /* Records every disc and ellipse a draw puts down, with the colour it was
@@ -4468,18 +4553,24 @@ test('a plan costs a handful of fills however big the market is', () => {
    through ctx and the recorder ignores them, so what comes back is the layout
    inside the bodywork. */
 function carRec(){
-  const shapes = [], order = [];
-  let fill = '', line = '', pending = null;
+  const shapes = [], order = [], rects = [];
+  let fill = '', line = '', lw = 0, pending = null;
   const base = {
-    shapes, order,
+    shapes, order, rects,
     set fillStyle(v){ fill = String(v); order.push(String(v)); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); },
     get strokeStyle(){ return line; },
+    set lineWidth(v){ lw = +v; },
+    get lineWidth(){ return lw; },
+    // a shape lasts until the next beginPath, so a fill and the stroke that
+    // outlines it are both recorded against it
+    beginPath(){ pending = null; },
     arc(x, y, r){ pending = { x, y, r, ry: r }; },
     ellipse(x, y, rx, ry){ pending = { x, y, r: rx, ry }; },
-    fill(){ if (pending){ shapes.push(Object.assign(pending, { style: fill })); pending = null; } },
-    stroke(){ if (pending){ shapes.push(Object.assign(pending, { style: line, stroked: true })); pending = null; } },
+    fillRect(x, y, w, h){ rects.push({ x, y, w, h, style: fill }); },
+    fill(){ if (pending) shapes.push(Object.assign({}, pending, { style: fill })); },
+    stroke(){ if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; } },
     measureText: () => ({ width: 30 }),
     canvas: { width: 1280, height: 720 },
   };

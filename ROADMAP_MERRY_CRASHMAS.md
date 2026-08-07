@@ -186,6 +186,15 @@ edit this block to name the next one.
       snowman), gloves on a wheel ring between the beard and the windscreen,
       and the mouth that already opened when he shouts. Nine fills on the one
       object in every frame of the game.
+- [x] Santa looks like Santa. He is the most valuable target in the market,
+      has a goal named after him and an edge marker that says SANTA — and he
+      wore whichever of the eight shopper coats his seed rolled, identified
+      only by a small red disc that his own hat drew *over* his beard. Now a
+      red coat with a white fur trim (the coat's own outline, so it costs
+      nothing), a black belt and gold buckle at the waist, and a head laid out
+      around the face the crying pass draws: beard behind the mouth, hat
+      forward on the crown, fur band where the squeezed eyes land, bobble on
+      the hat. He reads as the jackpot from the drive camera now.
 
 ## Next
 
