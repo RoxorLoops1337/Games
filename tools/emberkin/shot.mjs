@@ -221,6 +221,21 @@ const SCENES = {
       EK.openScreen('reward', { offer: ['reaper', 'bulwark', 'warcry'], done: () => {} });
     },
   },
+  // The papers a catch hands you — the one screen where the name is yours, and
+  // the only one in the game with a text input. Never photographed at all.
+  // `fresh: true` is the state that follows the gotcha; `back: 'party'` is the
+  // same screen reached later from the menu, which has a way out and a title.
+  papers: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      const m = EK.mkMon('vespyr', 26);
+      EK.G.party.push(m);
+      EK.openScreen('profile', { mon: m, fresh: true, legendary: true, done: () => {} });
+    },
+  },
   // A long screen, to check that centring short ones did not break tall ones.
   deck: {
     w: 760, h: 760,
