@@ -65,6 +65,7 @@ const EXPOSE = `__out.api = {
   wetReflection, wetPower, REFL_BANDS, rigParts,
   marks, mark, clearMarks, updateMarks, drawMarks, MARK_MAX,
   slamShock, superStrike, breakItem,
+  deadFade, deadLife, deadStart, knockOut, rgba, get fx(){ return fx; },
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
   GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
@@ -83,6 +84,7 @@ function makeSandbox(opts){
   // Baked sprites are blitted, not painted, so where a blit lands is the only
   // way to measure anything drawn from a cache — text above all.
   const blits = [];
+  const alphas = [];
   const gradient = { addColorStop(){} };
   const ctxStub = new Proxy({}, {
     get(t, p){
@@ -101,7 +103,11 @@ function makeSandbox(opts){
         return (...args) => { counts[p] = (counts[p] || 0) + 1; };
       return t[p];
     },
-    set(t, p, v){ if (p === 'fillStyle') styles.push(String(v)); t[p] = v; return true; },
+    set(t, p, v){
+      if (p === 'fillStyle') styles.push(String(v));
+      if (p === 'globalAlpha') alphas.push(v);   // a fade is a property, not a rectangle
+      t[p] = v; return true;
+    },
   });
   const el = () => ({
     style: {}, textContent: '', innerHTML: '', width: 0, height: 0, className: '',
@@ -128,7 +134,7 @@ function makeSandbox(opts){
     requestAnimationFrame: () => {},
     __out: {},
   };
-  return { sandbox, store, counts, styles, rects, blits, nodes, canvas };
+  return { sandbox, store, counts, styles, rects, blits, alphas, nodes, canvas };
 }
 
 let SRC = null;
@@ -144,7 +150,7 @@ function source(){
 }
 
 function boot(opts){
-  const { sandbox, store, counts, styles, rects, blits } = makeSandbox(opts);
+  const { sandbox, store, counts, styles, rects, blits, alphas } = makeSandbox(opts);
   new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', source())(
     sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
   const api = sandbox.__out.api;
@@ -153,7 +159,8 @@ function boot(opts){
   api._styles = styles;
   api._rects = rects;
   api._blits = blits;
-  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; blits.length = 0; };
+  api._alphas = alphas;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; blits.length = 0; alphas.length = 0; };
   api.reseed(4242);
   return api;
 }
@@ -3836,14 +3843,19 @@ test('the eye is the only white on him, and it shuts when it should', () => {
 });
 
 test('the face goes on last, so nothing is drawn over it', () => {
-  const body = RAW.slice(RAW.indexOf('function drawFighter('));
+  const body = RAW.slice(RAW.indexOf('function drawFighterBody('));
   const head = body.slice(0, body.indexOf('\n}\n'));
-  const lastPass = head.lastIndexOf('drawRigPass(');
   const face = head.indexOf('drawFace(');
   const hair = head.indexOf('drawHair(');
-  assert(lastPass >= 0 && face >= 0 && hair >= 0, 'drawFighter no longer looks the way this test expects');
-  assert(face > lastPass, 'a lighting pass runs after the face and would grey it out');
+  const dissolve = head.indexOf('if (df > 0){');
+  assert(face >= 0 && hair >= 0 && dissolve >= 0, 'drawFighter no longer looks the way this test expects');
   assert(face > hair, 'the hair is drawn over the face');
+  // A living man's face is never painted over. A dying one is deliberately
+  // taken by the dissolve, face and all — so that block, and only that
+  // block, is allowed to run a pass after the face has gone on.
+  assert(dissolve > face, 'the dissolve runs before the face it is supposed to take');
+  for (let i = head.indexOf('drawRigPass(', face); i >= 0; i = head.indexOf('drawRigPass(', i + 1))
+    assert(i > dissolve, 'a lighting pass runs after the face and would grey it out');
 });
 
 /* --------------------------------------------------------------- weather */
@@ -5091,6 +5103,139 @@ test('a floor covered in marks still fits the frame budget', () => {
   api.draw();
   const fills = api._counts.fillRect || 0;
   assert(fills < 7500, 'a marked-up floor costs ' + fills + ' fillRects');
+});
+
+/* ------------------------------------------------------------ going out */
+const alphasIn = (api, fn) => {                        // every globalAlpha the frame asked for
+  api._resetCounts();
+  fn();
+  return api._alphas.slice();
+};
+
+test('a dying man fades out instead of blinking on and off', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.spawnEnemy('punk', api.cam.x + 60, api.FLOOR_MID, -1);
+  f.dead = true; f.state = 'lie'; f.z = 0;
+  const seen = [];
+  for (const t of [0.1, 0.5, 0.8, 1.0]){
+    f.deadT = t;
+    const df = api.deadFade(f);
+    // glow() moves globalAlpha about as well, so look for this exact value
+    const a = alphasIn(api, () => api.drawFighter(f));
+    seen.push(df);
+    if (df > 0) assert(a.includes(1 - df), 'at ' + t + 's he is not drawn at ' + (1 - df) + ': ' + a.join(', '));
+  }
+  assert(seen[0] === 0, 'he starts fading the instant he dies, with no beat to read the hit');
+  for (let i = 1; i < seen.length; i++)
+    assert(seen[i] > seen[i - 1], 'the fade does not run: ' + seen.join(', '));
+  assert(seen[seen.length - 1] > 0.85, 'he is still solid at the end of his own life');
+  // and the old strobe is gone: he is drawn on every frame of it
+  for (const t of [0.7, 0.74, 0.78, 0.82]){
+    f.deadT = t;
+    api.setT(t * 7);
+    api._resetCounts();
+    api.drawFighter(f);
+    assert((api._counts.fillRect || 0) > 40, 'he vanished for a frame at ' + t + 's — that is a strobe');
+  }
+  // the alpha is put back, so the next thing drawn is not faded with him
+  f.deadT = 0.9;
+  api._resetCounts();
+  api.drawFighter(f);
+  assert(api._alphas[api._alphas.length - 1] === 1, 'the fighter left globalAlpha turned down');
+});
+
+test('he goes out lit: his own trim takes the edge of him as he goes', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.spawnEnemy('punk', api.cam.x + 60, api.FLOOR_MID, -1);
+  const trim = api.SKINS.punk.trim;
+  f.dead = true; f.state = 'lie'; f.z = 0;
+  // the rim is a whole silhouette pass at one exact alpha; the wash over his
+  // head shares the colour, so match the alpha too or the two are the same test
+  const rim = (t) => {
+    f.deadT = t;
+    const want = api.rgba(trim, 0.18 + api.deadFade(f) * 0.52);
+    api._resetCounts();
+    api.drawFighter(f);
+    return api._rects.filter(q => String(q[4]) === want).length;
+  };
+  assert(rim(0.2) === 0, 'he is already burning before the dissolve starts');
+  const early = rim(0.5), late = rim(1.0);
+  assert(early > 50, 'only ' + early + ' pixels of him light up — that is not the whole edge');
+  assert(late > 50, 'the rim went missing by the end: ' + late);
+});
+
+test('a body coming apart throws embers, and a boss throws more', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  // updateFighter does not expire fx, so what is in the bag at the end is
+  // everything the dissolve threw
+  const burn = (kind) => {
+    const f = api.spawnEnemy(kind, api.cam.x + 60, api.FLOOR_MID, -1);
+    f.dead = true; f.state = 'lie'; f.z = 0; f.deadT = 0;
+    api.fx.length = 0;
+    for (let i = 0; i < Math.round(api.deadLife(f) / api.STEP) - 1; i++) api.updateFighter(f, api.STEP);
+    return api.fx.filter(p => p.kind === 'ember');
+  };
+  const punk = burn('punk');
+  assert(punk.length >= 6, 'a grunt came apart into ' + punk.length + ' embers');
+  assert(punk.every(p => p.vz > 0), 'the embers fall instead of lifting');
+  assert(punk.every(p => p.col === api.SKINS.punk.trim), 'the embers are not his colour');
+  // per second, not in total: a boss lies there more than twice as long, so
+  // an equal rate would still give him more embers
+  const boss = burn('rook');
+  const rate = (f, n) => n / (api.deadLife(f) - api.deadStart(f));
+  const rb = rate({ boss: true }, boss.length), rp = rate({}, punk.length);
+  assert(rb > rp * 1.8, 'a boss burns at ' + Math.round(rb) + '/s and a grunt at ' + Math.round(rp) + '/s');
+});
+
+test('an ember lifts, slows and dies out', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.spawnFx('ember', 100, 180, 4, '#ffd23d');
+  const p = api.fx[0];
+  assert(p.vz > 0, 'the ember starts falling');
+  const z0 = p.z, v0 = p.vz;
+  for (let i = 0; i < 12; i++) api.updateFx(api.STEP);
+  assert(p.z > z0, 'the ember never left the ground');
+  assert(p.vz < v0, 'the ember does not slow as it rises');
+  assert(p.life > 0.5 && p.life < 1.3, 'an ember lives ' + p.life + 's');
+  for (let i = 0; i < 120; i++) api.updateFx(api.STEP);
+  assert(api.fx.length === 0, 'the ember never dies out');
+});
+
+test('the moment of the kill lights the street in the dead man s colour', () => {
+  const api = boot();
+  const pl = play(api, { stage: 0 });
+  const f = api.spawnEnemy('punk', api.cam.x + 60, api.FLOOR_MID, -1);
+  api.fx.length = 0;
+  api.knockOut(f, pl, { kb: 100, lift: 80 });
+  const burst = api.fx.find(p => p.kind === 'burst');
+  assert(burst, 'nothing marks the kill itself');
+  assert(burst.col === api.SKINS.punk.trim, 'the burst is not his colour: ' + burst.col);
+  // a boss goes out louder than a grunt
+  const boss = api.spawnEnemy('rook', api.cam.x + 90, api.FLOOR_MID, -1);
+  api.fx.length = 0;
+  api.G.flash = 0;
+  api.knockOut(boss, pl, { kb: 100, lift: 80 });
+  assert(api.fx.some(p => p.kind === 'ring'), 'a boss goes down with no more than a grunt');
+  assert(api.G.flash > 0.3, 'the screen does not even blink when a boss goes down');
+  assert(api.deadLife(boss) > api.deadLife(f), 'a boss comes apart as fast as a grunt');
+});
+
+test('a street full of men coming apart still fits the frame budget', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  for (let i = 0; i < 8; i++) api.spawnEnemy('punk', api.cam.x + 30 + i * 40, api.FLOOR_MID + (i % 3) * 8, -1);
+  for (const f of api.fighters) if (f.team === 'e'){ f.dead = true; f.deadT = 0.8; f.state = 'lie'; f.z = 0; }
+  for (let i = 0; i < 60; i++) api.spawnFx('ember', api.cam.x + i * 6, api.FLOOR_MID, 8, '#ffd23d');
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(fills < 7500, 'a street of dissolving men costs ' + fills + ' fillRects');
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
