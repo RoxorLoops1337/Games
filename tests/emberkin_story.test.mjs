@@ -311,4 +311,30 @@ section('a chest opens as an event, not a re-render');
   ok(g.G.screen && g.G.screen.kind === 'chests', 'leaving you in the shop, to open another');
 }
 
+// The game never said what you were doing. It handed you a kin, explained the
+// deck, opened the door, and the menu counted what you HAD and never what it
+// was FOR. This reads the shape back out of G.flags rather than storing it
+// twice, so it cannot drift from the actual progression.
+section('the menu says what you are actually doing');
+{
+  const g = loadGame({});
+  g.newGame();
+  ok(/Rowan/.test(g.nextAim()), `before the starter it points at Rowan — "${g.nextAim()}"`);
+  g.takeStarter('cindercub');
+  ok(/Wick/.test(g.nextAim()), `then at the first trainer — "${g.nextAim()}"`);
+  // Beat them in order; the aim has to move each time, never repeat, never stall.
+  const seen = new Set(), lines = [];
+  for (const id of ['t_wick1', 't_pell', 't_dorn', 't_ivo', 't_wick2', 't_coll', 't_hale', 't_mio']) {
+    g.G.flags[id] = 1;
+    const a = g.nextAim();
+    lines.push(a);
+    ok(!seen.has(a), `the aim moved on after ${id} — "${a}"`);
+    seen.add(a);
+  }
+  g.G.flags.t_wick3 = 1;
+  ok(/shrine/i.test(g.nextAim()), `with every trainer down it points at the shrine — "${g.nextAim()}"`);
+  g.G.flags.beatVespyr = 1;
+  ok(/unfound|valley is yours/.test(g.nextAim()), `and after that at the dex — "${g.nextAim()}"`);
+}
+
 done('emberkin_story');

@@ -91,6 +91,11 @@
     display:flex; justify-content:space-between; gap:12px; align-items:center; white-space:nowrap;
   }
   .menu .row .sub{ color:var(--dim); font-size:.75em; }
+  /* The aim, under the where-and-what-you-have line. Its own line because it
+     is a sentence, not a stat, and quieter than the row labels so it reads as
+     the answer to a question rather than another thing to select. */
+  .menu .title .aim{ display:block; margin-top:.35em; font-weight:400;
+    font-size:.92em; color:var(--dim); letter-spacing:0; text-transform:none; }
   .menu .row.sel{ background:rgba(255,201,77,.16); box-shadow:inset 0 0 0 1px rgba(255,201,77,.5); }
   .menu .row.sel::before{ content:'▸'; color:var(--gold); margin-right:-4px; }
   .menu .row.off{ opacity:.4; }
@@ -7554,6 +7559,38 @@ function menuInput() {
   if (justPressed('b')) { if (m.cancel) m.cancel(); else closeMenu(); }
 }
 
+/**
+ * What you are actually doing here.
+ *
+ * The game handed you a kin, explained how a deck works, opened the door, and
+ * then never said what any of it was for. The menu counted what you HAD — six
+ * of six, thirteen of nineteen — and nothing anywhere said what it was FOR.
+ * A player who put this down for a week came back to a map and a save file.
+ *
+ * The valley has a shape and `G.flags` already knows all of it, so this reads
+ * the shape back out rather than storing a second copy of it: the first
+ * trainer you have not beaten, in the order the routes run, and the shrine
+ * after them. Written in the register the legendary already uses — concrete,
+ * unsentimental, tells you where to go without instructing you.
+ */
+const AIM_ORDER = [
+  ['t_wick1', 'Wick', 'Hollowbrook'], ['t_pell', 'Forager Pell', 'Route One'],
+  ['t_dorn', 'Hiker Dorn', 'Route One'], ['t_ivo', 'Bramble Kid Ivo', 'the Emberwood'],
+  ['t_wick2', 'Wick', 'the Emberwood'], ['t_coll', 'Ranger Coll', 'the Emberwood'],
+  ['t_hale', 'Warden Hale', 'the Emberwood'], ['t_mio', 'Tide-hand Mio', 'Stillmere'],
+  ['t_wick3', 'Wick', 'Crown Hollow'],
+];
+function nextAim() {
+  if (!G.flags.gotStarter) return 'Elder Rowan is waiting on you.';
+  const next = AIM_ORDER.find(([id]) => !G.flags[id]);
+  if (next) return `${next[1]} is still standing, in ${next[2]}.`;
+  if (!G.flags.beatVespyr) return 'Only the thing on the shrine is left, up in Crown Hollow.';
+  const seen = dexCount(2);
+  return seen < DEX_ORDER.length
+    ? `Nobody left to beat. ${DEX_ORDER.length - seen} kin still unfound.`
+    : 'Every trainer down, every kin found. The valley is yours.';
+}
+
 // ---- world main menu ---------------------------------------------------
 function openMainMenu() {
   G.mode = 'menu';
@@ -7568,7 +7605,7 @@ function openMainMenu() {
     { label: 'Fullscreen', fn: () => { toggleFullscreen(); closeWorldMenu(); } },
     { label: 'Save', fn: () => { setToast(saveGame() ? 'Journey saved.' : 'Could not save.'); } },
     { label: 'Close', fn: closeWorldMenu },
-  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems` });
+  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems<span class="aim">${nextAim()}</span>` });
 }
 function closeWorldMenu() { closeMenu(); G.mode = 'world'; }
 
@@ -10441,7 +10478,7 @@ if (!HEADLESS) boot();
 if (typeof window !== 'undefined') {
   window.EK = {
     G, DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART, STATUS, TILE_ART, SOLID,
-    advanceDialogue, renderDialogue, liveBattleMsg,
+    advanceDialogue, renderDialogue, liveBattleMsg, nextAim,
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
