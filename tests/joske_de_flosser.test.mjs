@@ -59,7 +59,7 @@ const EXPOSE = `__out.api = {
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
-  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC,
+  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
@@ -2452,6 +2452,107 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ---------------------------------------------------------------- impact */
+test('a hit throws its debris along the punch, and only heavy hits streak', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const hit = (key, face) => {
+    api.fx.length = 0;
+    api.clearField && api.clearField();
+    const atk = api.players[0], def = api.spawnEnemy('punk', atk.x + face * 30, atk.y, -face);
+    atk.face = face;
+    api.applyHit(atk, def, api.ATK[key]);
+    return api.fx.slice();
+  };
+  const heavy = hit('hook', 1);
+  const impact = heavy.find(p => p.kind === 'impact');
+  assert(impact, 'no impact at all');
+  assert(impact.val === 1, 'the impact does not know which way the fist came in');
+  const shards = heavy.filter(p => p.kind === 'shard');
+  assert(shards.length >= 4, 'a heavy hit should throw chips: ' + shards.length);
+  assert(shards.filter(p => p.vx > 0).length > shards.length / 2, 'the chips should mostly go the way the punch went');
+  assert(heavy.some(p => p.kind === 'streak'), 'a heavy hit should leave speed lines');
+
+  const back = hit('hook', -1);
+  assert(back.find(p => p.kind === 'impact').val === -1, 'a punch thrown left is thrown left');
+  assert(back.filter(p => p.kind === 'shard').filter(p => p.vx < 0).length > 2, 'and its chips go left');
+
+  const light = hit('jab', 1);
+  assert(!light.some(p => p.kind === 'streak'), 'a jab is not a haymaker — no speed lines');
+  assert(light.filter(p => p.kind === 'shard').length < shards.length, 'and fewer chips than a hook');
+});
+
+test('the chips fall', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.spawnFx('shard', api.cam.x + 100, api.FLOOR_MID, 30, '#fff2d0', 1);
+  const p = api.fx[0];
+  const x0 = p.x, vx0 = p.vx;
+  for (let i = 0; i < 20; i++) api.updateFx(1 / 60);
+  assert(p.x > x0, 'it never moved');
+  assert(Math.abs(p.vx) < Math.abs(vx0), 'air should slow it down');
+  assert(p.vz < 0, 'it should be falling by now: vz ' + p.vz);
+  // they leave in a spray, not all on the same arc
+  api.fx.length = 0;
+  for (let i = 0; i < 24; i++) api.spawnFx('shard', 100, api.FLOOR_MID, 30, '#fff2d0', 1);
+  const up = api.fx.filter(q => q.vz > 0).length;
+  assert(up > 2 && up < 22, 'the chips should spray, not all go one way: ' + up + '/24');
+});
+
+test('a hit lights the street without repainting the man taking it', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  const x = api.cam.x + 180;
+  api.spawnFx('impact', x, api.FLOOR_MID, 24, '#ffffff', 1);
+  api.draw();
+  const here = api.lightAt(180);
+  assert(here, 'the hit put no light on the street');
+  // the rig rim saturates at k=1; a transient white hit at full power left a
+  // man-shaped hole in the frame once the bloom pass went in
+  assert(here.k < 0.75, 'a single hit drives the light field to ' + here.k.toFixed(2) + ' — the rig will blow out');
+  for (const k of Object.keys(api.FX_LIGHT))
+    assert(api.FX_LIGHT[k][1] <= 0.6, k + ' is bright enough to white out a fighter: ' + api.FX_LIGHT[k][1]);
+});
+
+test('the hit flash reads as damage instead of punching a hole in the bloom', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0; f.state = 'idle'; f.anim = 'idle';
+  f.hitFlash = 0.1;
+  api.setT(0);                                    // the flash alternates on frame parity
+  api._resetCounts();
+  api.drawFighter(f);
+  const hex = api._styles.filter(c => /^#[0-9a-f]{6}$/i.test(c));
+  assert(hex.length > 6, 'it did not draw a fighter');
+  const lum = (c) => (parseInt(c.slice(1, 3), 16) + parseInt(c.slice(3, 5), 16) + parseInt(c.slice(5, 7), 16)) / 3;
+  const hot = hex.filter(c => lum(c) > 225);
+  assert(hot.length === 0, 'the flash is still near-white and will bloom into a smear: ' + hot.slice(0, 3));
+  const red = hex.filter(c => {
+    const r = parseInt(c.slice(1, 3), 16), b = parseInt(c.slice(5, 7), 16);
+    return r > 150 && r > b + 50;
+  });
+  assert(red.length >= 3, 'a flashed fighter should read red: ' + hex.slice(0, 6));
+  // the ink is the first flat colour drawFighter asks for: the outline pass
+  // runs before anything else that is not an rgba() shadow
+  assert(lum(hex[0]) < 70, 'the outline went pale — the silhouette will dissolve: ' + hex[0]);
+});
+
+test('an impact frame is cheap enough to have several of', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.spawnFx('impact', api.cam.x + 100, api.FLOOR_MID, 24, '#ffffff', 1);
+  api.draw();                                     // warm the glow plate
+  api._resetCounts();
+  api.drawFx(api.fx[0]);
+  const one = api._counts.fillRect || 0;
+  assert(one > 4, 'the star drew nothing: ' + one);
+  assert(one < 140, 'one impact costs ' + one + ' fillRects — a crowd of them will not fit');
 });
 
 /* ----------------------------------------------------------------- bloom */
