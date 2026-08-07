@@ -5601,6 +5601,94 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
     ', bobble y' + bobble.y.toFixed(1) + ')');
 });
 
+/* ------------------------------------------------------- the wrecks --- */
+
+/* Santa used to lose his hat, his beard and his belt the instant you hit him
+   and lie there as an anonymous red shopper; that was fixed earlier. The same
+   defect was still in two props: a smashed snowman was two plain white discs,
+   and a wrecked present two plain rectangles, one of them yellow. Everything
+   that told you what you had just flattened vanished on impact. */
+function propArt(api, kind, dead, tweak){
+  api.props.length = 0;
+  const o = api.addProp(kind, api.cam.x, api.cam.y, {});
+  o.dead = !!dead; o.rot = 0.4;
+  if (tweak) tweak(o);
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawProp(o));
+  const cols = new Set();
+  for (const a of rec.all) cols.add(String(a[a.length - 1]));
+  for (const q of rec.polys) cols.add(String(q.style));
+  for (const r of rec.rects) cols.add(String(r.style));
+  return { o, rec, cols, has: (c) => cols.has(c) };
+}
+
+test('a wrecked snowman is still a snowman', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const live = propArt(api, 'snowman', false);
+  const dead = propArt(api, 'snowman', true);
+  /* The four things that said "snowman". The old wreck kept none of them. */
+  for (const [col, what] of [['#e8862c', 'its carrot'], ['#1b2740', 'its coal'],
+                             ['#c8443a', 'its scarf'], ['#4a3524', 'its twigs']]){
+    assert(live.has(col), 'a live snowman should have ' + what);
+    assert(dead.has(col), 'a smashed snowman should keep ' + what + ' in the snow');
+  }
+  // and the pieces stay where the snowman was, not scattered off the market
+  const r = dead.o.r;
+  for (const sh of dead.rec.shapes){
+    assert(Math.hypot(sh.x, sh.y) < r * 2.2,
+      'a piece landed ' + Math.hypot(sh.x, sh.y).toFixed(0) + ' from a snowman of r' + r);
+  }
+});
+
+test('a wrecked present is still that present', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const GIFT = ['#c8443a', '#3f8a5c', '#2f6ea5'];
+  let seen = 0;
+  for (const seed of [0.1, 0.4, 0.8]){
+    const live = propArt(api, 'gifts', false, (o) => { o.seed = seed; });
+    const dead = propArt(api, 'gifts', true, (o) => { o.seed = seed; });
+    const col = GIFT.find(c => live.has(c));
+    assert(col, 'a present is wrapped in one of the three papers');
+    assert(dead.has(col), 'seed ' + seed + ': the wreck should keep its own paper, ' +
+      col + ' — otherwise you cannot tell which present it was');
+    assert(dead.has('#ffd34d'), 'and its snapped ribbon');
+    assert([...dead.cols].some(c => /12,20,38/.test(c)),
+      'and show the torn inside of the box');
+    seen++;
+  }
+  assert(seen === 3, 'all three papers checked');
+
+  // nothing flung off the tile the collider occupies
+  const dead = propArt(api, 'gifts', true);
+  for (const q of dead.rec.polys){
+    assert(q.x0 > -dead.o.w && q.x1 < dead.o.w && q.y0 > -dead.o.h && q.y1 < dead.o.h,
+      'a piece of the box is off its own footprint');
+  }
+});
+
+test('drawing a wreck rolls nothing', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.props.length = 0;
+  const sn = api.addProp('snowman', api.cam.x, api.cam.y, {});
+  const gf = api.addProp('gifts', api.cam.x, api.cam.y, {});
+  api.reseed(5);
+  const r0 = api.rnd();
+  api.reseed(5);
+  for (let i = 0; i < 20; i++){
+    sn.dead = gf.dead = i % 2 === 0; sn.rot = gf.rot = i * 0.3;
+    api.withCtx(carRec(), () => { api.drawProp(sn); api.drawProp(gf); });
+  }
+  assert(api.rnd() === r0, 'drawing wrecks moved the simulation stream');
+});
+
 /* ------------------------------------------------------ the barrier --- */
 
 /* A crowd barrier was five flat fillRects: a white bar, four upright red
