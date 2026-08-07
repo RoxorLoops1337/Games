@@ -1161,6 +1161,21 @@ function drawFighter(f){
   drawFighterBody(f);
   ctx.globalAlpha = 1;
 }
+/* ------------------------------------------------------ what is lighting it
+   A story beat and the title screen both paint a backdrop that has nothing
+   to do with whichever stage happens to be loaded behind them — the beat
+   after the first street is set on the dock, and the title is always the
+   street however far you got. Every pass that asks what is lighting a thing
+   asks this instead of asking the stage, so the men in a cutscene are lit by
+   the street they are actually standing on. */
+let litBg = null;
+const BG_STAGE = {};
+function litStage(){
+  if (!litBg) return stage();
+  if (!BG_STAGE[litBg]) for (const s of STAGES) if (s.bg === litBg && !BG_STAGE[s.bg]) BG_STAGE[s.bg] = s;
+  return BG_STAGE[litBg] || stage();
+}
+
 function drawFighterBody(f){
   const df = deadFade(f);
   const sx = Math.round(f.x - cam.x + cam.shakeX);
@@ -1300,7 +1315,7 @@ function drawFighterBody(f){
      the first three attempts at this turned every shirt in the game the
      colour of the stage. Under the body it can be as hot as it likes and
      still never touch his own colour. */
-  const stB = stage();
+  const stB = litStage();
   // a man coming apart makes his own light; he does not need the street's
   const bk = (lean || df > 0) ? 0 : (stB.back || 0);
   const bFlick = stB.flick ? 0.75 + Math.sin(T * stB.flick + f.id) * 0.25 : 1;
@@ -1313,7 +1328,7 @@ function drawFighterBody(f){
   if (!lean){
     // the street's own light, catching the edge that faces it, and the
     // ground throwing a little of itself back up under the chin
-    const st = stage();
+    const st = litStage();
     const flick = st.flick ? 0.75 + Math.sin(T * st.flick + f.id) * 0.25 : 1;
     if (st.key) drawRigPass(-3, rgba(st.key, 0.42 * flick), false, LIT_X * 2, LIT_Y * 2, 1);
     if (st.bounce) drawRigPass(-3, rgba(st.bounce, 0.5), false, 0, 2, 2);
@@ -1433,7 +1448,7 @@ function drawFighterBody(f){
   }
   // the crowd cull the old smear carried: in a real scrum the grunts give
   // their reflections up before the frame does
-  if (stage().wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss))
+  if (litStage().wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss))
     wetReflection(f, sx, gy, wetPower(f));
 }
 
@@ -1448,7 +1463,7 @@ function drawFighterBody(f){
    fourteen rectangles. He leaves the surface as he leaves the ground, so a
    jump takes it with him. */
 const REFL_BANDS = 7;
-const wetPower = (f) => clamp(stage().wet * (1 - f.z / 26), 0, 1);
+const wetPower = (f) => clamp(litStage().wet * (1 - f.z / 26), 0, 1);
 function wetReflection(f, sx, gy, power){
   if (power <= 0.02 || !rigParts.length) return;
   let top = 1e9;
@@ -2382,7 +2397,7 @@ function updateItems(dt){
    the sides where the light gets past, and the colour grade's own shadow
    tone down the front of them. */
 function propLight(x0, y0, w, h, edge){
-  const st = stage();
+  const st = litStage();
   const bk = st.back || 0;
   if (!bk) return;
   const cut = Math.round(h * 0.45);
@@ -4592,6 +4607,25 @@ function bgJunk(c){
 }
 
 /* ---------------------------------------------------------------- 3 */
+/* ------------------------------------------------------------ the water
+   A light over water is never just a light: it lays a column of itself
+   down the surface, broken into dashes by every ripple between it and you,
+   each one wandering a little further off the line the deeper it goes and
+   the last of them lost in the swell. */
+const WATER_TOP = 106;
+const WATER_COL_N = 11;
+function waterColumn(x, col, a0, seed){
+  if (x < -14 || x > VW + 14) return;
+  for (let i = 0; i < WATER_COL_N; i++){
+    const d = i / (WATER_COL_N - 1);
+    const w = Math.round(3 + d * 10);
+    const wob = Math.sin(T * 2.4 + i * 1.3 + seed) * (0.5 + d * 3.8);
+    const flick = 0.72 + Math.sin(T * 5.5 + i * 2.1 + seed) * 0.28;
+    px(Math.round(x - w / 2 + wob), WATER_TOP + 2 + Math.round(i * 2.9), w, 1,
+      rgba(col, a0 * (1 - d * 0.82) * flick));
+  }
+}
+
 function bgDocks(c){
   blit(bake('sky_docks', VW, 106, () => {
     dgrad(0, 0, VW, 46, '#050a14', '#0b2033');
@@ -4602,6 +4636,20 @@ function bgDocks(c){
 
   drawClouds(c, CLOUD_SETS.docks);
   blit(bake('water_docks', VW, 35, () => { dgrad(0, 0, VW, 35, '#0e3450', '#0a2b40'); }), 0, 106);
+  // the far edge of the water, so the surface starts somewhere
+  px(0, WATER_TOP, VW, 1, 'rgba(150,200,235,0.22)');
+  px(0, WATER_TOP + 1, VW, 1, 'rgba(6,16,26,0.40)');
+  /* The sky over the harbour is reflected in it, a long way down and much
+     dimmer: the underside of the lowest bank of cloud, smeared out by every
+     ripple between it and the quay. */
+  {
+    const b = CLOUD_SETS.docks[2];
+    const x0 = -(((T * b.spd + c * b.par) % VW) + VW) % VW;
+    for (let i = 0; i < 3; i++)
+      for (const ox of [x0, x0 + VW])
+        px(ox + Math.round(Math.sin(T * 0.9 + i) * 3), WATER_TOP + 3 + i * 4, VW, 2,
+          rgba(b.lip, 0.10 - i * 0.026));
+  }
   glow(VW * 0.72, 118, 60, 16, '#4aa8d0', 0.22);           // the harbour lights on the water
   for (let i = 0; i < 54; i++){
     const x = ((hash(i) * 2000 - c * 0.3) % (VW + 40) + VW + 40) % (VW + 40) - 20;
@@ -4610,15 +4658,20 @@ function bgDocks(c){
   }
   for (let i = -1; i < 5; i++){
     const gx = Math.floor(c * 0.22 / 190) + i, x = gx * 190 - c * 0.22;
+    if (x + 40 < -2 || x - 30 > VW + 2) continue;          // six gantries painted for the three on screen
     px(x, 62, 4, 48, '#2b3a46'); px(x - 24, 62, 60, 4, '#35444f');
     px(x + 20, 66, 3, 18, '#42525e');
-    if (Math.sin(T * 1.6 + gx) > 0.2){
+    const mast = Math.sin(T * 1.6 + gx) > 0.2;
+    if (mast){
       px(x + 1, 58, 3, 3, '#ff6a4a');
       glow(x + 2, 59, 9, 8, '#ff6a4a', 0.6);
     }
     px(x + 26, 66, 8, 4, '#4a5a66');                       // floodlight on the arm
     px(x + 27, 69, 6, 2, '#e8f4ff');
     glow(x + 30, 70, 9, 6, '#dff0ff', 0.45);
+    // and both of them lay a column of themselves down the water
+    waterColumn(x + 30, '#dff0ff', 0.50, gx);
+    if (mast) waterColumn(x + 2, '#ff6a4a', 0.34, gx + 7);
   }
   ctx.fillStyle = 'rgba(30,74,99,0.35)'; ctx.fillRect(0, 96, VW, 20);
 
@@ -5133,7 +5186,7 @@ const GRADE = {
 };
 function gradePass(){
   if (!G.grade) return;
-  const s = stage();
+  const s = litStage();
   const g = GRADE[s.bg];
   if (g){
     ctx.globalCompositeOperation = 'multiply';
@@ -5436,7 +5489,7 @@ function drawVan(x, y){
 function drawCut(){
   const sc = SCENES[cut.id];
   if (!sc){ ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, VH); return; }
-  const keep = stage;
+  litBg = sc.bg;                        // the beat is lit by its own street
   drawSceneBg(sc.bg);
   const list = [];
   if (cut.prop) list.push({ y: cut.prop.y + 22, d: () => drawVan(cut.prop.x, cut.prop.y + 22) });
@@ -5454,6 +5507,8 @@ function drawCut(){
   drawAmbient(sc.bg, sc.rain);
   drawForeground(sc.bg);
   drawVignette();
+  gradePass();                          // the beat is graded; the letterbox over it is not
+  litBg = null;
 
   // letterbox: bars with a lit lip and a shadow falling off them
   px(0, 0, VW, 22, '#000');
@@ -6018,6 +6073,7 @@ const ATTRACT_CAST = [
 ];
 function drawAttract(){
   lfReset();
+  litBg = 'street';                     // the title is always the street, whatever stage is loaded
   attract.t += 1 / 60;
   bgStreet(attract.t * 12);
   if (!attract.cast){
@@ -6065,6 +6121,8 @@ function drawAttract(){
   drawForeground('street');
   cam.x = oldCam; cam.shakeX = oldSX; cam.shakeY = oldSY;
   drawVignette();
+  gradePass();                          // the same street, so the same grade
+  litBg = null;
 
   /* The type used to be bought with a flat 0.78 wash across the whole sky,
      which paid for legibility with every cloud and star in the frame. The
