@@ -3309,6 +3309,110 @@ function snowPattern(){
   snowPat = ctx.createPattern(c, 'repeat') || false;
   return snowPat;
 }
+
+/* ---------- the blood layer ----------
+   Blood used to go onto the snow one translucent ellipse at a time. Three
+   hundred of those overlapping did not read as blood: each decal darkened
+   whatever was already under it, so a market with nineteen down was covered in
+   a flat maroon fog with no edge anywhere in it, and the bodies sat in a haze
+   that looked more like smoke than a spill. Liquid does not work that way —
+   two pools that touch make one larger pool of the same colour.
+   So the decals are stamped opaque into a layer of their own, where an overlap
+   is a union rather than a sum, and the finished silhouette goes over the snow
+   once at a single alpha. Same shade everywhere, a real edge where the mass
+   ends, and the whole field costs three fills instead of one per decal.
+   Half resolution, like the darkness layer: blood has no hard edge to lose. */
+const BLOOD_SCALE = 0.5;
+const BLOOD_A = 0.72;
+let bloodCv = null, bloodCtx = null, bloodKey = '', bloodW = 1, bloodH = 1;
+function bloodLayer(){
+  const key = VW + 'x' + VH + 'x' + DPR;
+  if (key !== bloodKey || !bloodCv){
+    bloodCv = document.createElement('canvas');
+    bloodW = Math.max(1, Math.round(VW * DPR * BLOOD_SCALE));
+    bloodH = Math.max(1, Math.round(VH * DPR * BLOOD_SCALE));
+    bloodCv.width = bloodW; bloodCv.height = bloodH;
+    bloodCtx = bloodCv.getContext && bloodCv.getContext('2d');
+    bloodKey = key;
+  }
+  return bloodCtx;
+}
+
+/* One rotated ellipse added to whatever path is already open. ctx.ellipse
+   draws a line from the current point to where it starts, so each one has to
+   be moved to first or the field grows spokes. */
+function goreBlob(g2, x, y, rx, ry, rot){
+  g2.moveTo(x + rx * Math.cos(rot), y + rx * Math.sin(rot));
+  g2.ellipse(x, y, rx, ry, rot, 0, 6.283);
+}
+
+/* The mass of one decal. A pool is three overlapping ellipses rather than one:
+   on the layer they merge into a lobed blob, and nothing that comes out of a
+   person lands in a perfect oval. */
+function gorePath(g2, g, k){
+  const R = g.r * (k || 1);
+  if (g.kind === 'chunk'){ goreBlob(g2, g.x, g.y, R, R * 0.7, g.rot); return; }
+  if (g.kind === 'pool'){
+    goreBlob(g2, g.x, g.y, R, R * (0.62 + g.seed * 0.34), g.rot);
+    for (let i = 0; i < 2; i++){
+      const a = g.rot + g.seed * 6.283 + i * 2.4;
+      const d = g.r * (0.46 + g.seed * 0.3);
+      goreBlob(g2, g.x + Math.cos(a) * d, g.y + Math.sin(a) * d * 0.7,
+        R * (0.5 - i * 0.11), R * (0.36 - i * 0.09), a);
+    }
+    return;
+  }
+  // a splat: a body, and a scatter of droplets thrown off one side of it
+  goreBlob(g2, g.x, g.y, R, R * 0.5, g.rot);
+  for (let d = 0; d < 3; d++){
+    const a = g.rot + g.seed * 6.283 + d * 1.35;
+    const dist = g.r * (1.5 + d * 0.55), dr = R * (0.3 - d * 0.07);
+    const dx = g.x + Math.cos(a) * dist, dy = g.y + Math.sin(a) * dist * 0.72;
+    g2.moveTo(dx + dr, dy);
+    g2.arc(dx, dy, dr, 0, 6.283);
+  }
+}
+
+/* Where the blood is deep. A uniform silhouette has no volume in it, so the
+   heavy decals get a darker centre; where pools overlap their centres overlap
+   too and the mass gets darker on its own. Spray is thin and gets none. */
+function goreCore(g2, g){
+  if (g.kind === 'chunk'){ goreBlob(g2, g.x, g.y, g.r * 0.78, g.r * 0.54, g.rot); return; }
+  if (g.kind !== 'pool') return;
+  goreBlob(g2, g.x + Math.cos(g.rot) * g.r * 0.16, g.y + Math.sin(g.rot) * g.r * 0.16,
+    g.r * 0.6, g.r * 0.42, g.rot);
+}
+
+/* Four passes over the field, four fills: the rim, the mass, the depth in it,
+   and the wet sheen that says a pool is fresh rather than a stain.
+   The rim is the same path a tenth larger and much darker, laid down first.
+   Stroking the mass instead would outline every ellipse in it, interior seams
+   and all; drawing the union slightly bigger underneath gives the merged
+   silhouette one edge and nothing inside it. */
+function paintGore(g2, list){
+  g2.fillStyle = '#480706';
+  g2.beginPath();
+  for (const g of list) gorePath(g2, g, 1.1);
+  g2.fill();
+  g2.fillStyle = '#99150f';
+  g2.beginPath();
+  for (const g of list) gorePath(g2, g, 1);
+  g2.fill();
+  g2.fillStyle = '#5b0a08';
+  g2.beginPath();
+  for (const g of list) goreCore(g2, g);
+  g2.fill();
+  g2.fillStyle = 'rgba(240,128,104,.30)';
+  g2.beginPath();
+  for (const g of list){
+    if (g.kind !== 'pool') continue;
+    const sx = g.x - Math.cos(g.rot) * g.r * 0.3, sy = g.y - Math.sin(g.rot) * g.r * 0.3;
+    g2.moveTo(sx + g.r * 0.26, sy);
+    g2.arc(sx, sy, g.r * 0.26, 0, 6.283);
+  }
+  g2.fill();
+}
+
 function drawGround(){
   const halfW = VW / cam.s / 2, halfH = VH / cam.s / 2;
   const x0 = cam.x - halfW - 60, x1 = cam.x + halfW + 60;
@@ -3396,20 +3500,17 @@ function drawGround(){
 
   // blood: pools and spray, laid down before the tyre marks so the car smears
   // through them
-  /* Blood on snow soaks in before it sits on top, so everything gets a wide
-     faint halo under it first. Three hundred and sixty decals cannot each
-     afford their own fill for that, so every halo goes down as one path — and
-     the same for the wet sheen on the pools afterwards. The decals themselves
-     no longer save/translate/rotate/restore either: ctx.ellipse takes the
-     rotation, so a full gore field costs 360 fewer state pushes a frame. */
   const onCam = [];
   for (const g of gore){
     if (g.x + g.r < x0 || g.x - g.r > x1 || g.y + g.r < y0 || g.y - g.r > y1) continue;
     onCam.push(g);
   }
   if (onCam.length){
-    // faint and tight on purpose: at .10 and 1.9x the halos read as a field of
-    // grey discs over blue snow rather than as blood soaking into it
+    /* Blood on snow soaks in before it sits on top, so everything gets a wide
+       faint halo under it first. This is the one part that *should* stack: more
+       blood in a place means more of the snow around it going pink. Faint and
+       tight on purpose — at .10 and 1.9x the halos read as a field of grey
+       discs over blue snow rather than as blood soaking into it. */
     ctx.fillStyle = 'rgba(158,20,14,.065)';
     ctx.beginPath();
     for (const g of onCam){
@@ -3418,47 +3519,33 @@ function drawGround(){
       ctx.arc(g.x, g.y, hr, 0, 6.283);
     }
     ctx.fill();
-  }
-  for (const g of onCam){
-    if (g.kind === 'pool'){
-      ctx.fillStyle = 'rgba(146,18,14,.52)';
-      ctx.beginPath();
-      ctx.ellipse(g.x, g.y, g.r, g.r * (0.62 + g.seed * 0.34), g.rot, 0, 6.283); ctx.fill();
-      ctx.fillStyle = 'rgba(182,32,24,.5)';
-      ctx.beginPath();
-      ctx.ellipse(g.x + Math.cos(g.rot) * g.r * 0.2, g.y + Math.sin(g.rot) * g.r * 0.2,
-        g.r * 0.55, g.r * 0.4, g.rot, 0, 6.283); ctx.fill();
-    } else if (g.kind === 'chunk'){
-      ctx.fillStyle = 'rgba(96,12,10,.8)';
-      ctx.beginPath();
-      ctx.ellipse(g.x, g.y, g.r, g.r * 0.7, g.rot, 0, 6.283); ctx.fill();
+
+    // and the mass itself, stamped opaque on its own layer so that overlapping
+    // decals merge instead of stacking, then laid over the snow in one piece
+    const bg = bloodLayer();
+    if (bg){
+      bg.setTransform(1, 0, 0, 1, 0, 0);
+      bg.clearRect(0, 0, bloodW, bloodH);
+      /* World -> layer pixels. The shake offset is left out for the same
+         reason the darkness layer leaves it out: matching it would mean
+         drawing the same random numbers twice, and the blood is under a
+         camera that is already shaking everything above it. */
+      const k = cam.s * DPR * BLOOD_SCALE;
+      bg.setTransform(k, 0, 0, k, (VW / 2 - cam.x * cam.s) * DPR * BLOOD_SCALE,
+        (VH / 2 - cam.y * cam.s) * DPR * BLOOD_SCALE);
+      paintGore(bg, onCam);
+      ctx.save();
+      screenTransform();
+      ctx.globalAlpha = BLOOD_A;
+      ctx.drawImage(bloodCv, 0, 0, VW, VH);
+      ctx.restore();
     } else {
-      // a splat is a body and a scatter of droplets thrown off one side of it
-      ctx.fillStyle = 'rgba(160,22,18,.56)';
-      ctx.beginPath();
-      ctx.ellipse(g.x, g.y, g.r, g.r * 0.5, g.rot, 0, 6.283);
-      for (let d = 0; d < 3; d++){
-        const a = g.rot + (g.seed * 6.283) + d * 1.35;
-        const dist = g.r * (1.5 + d * 0.55), dr = g.r * (0.3 - d * 0.07);
-        const dx = g.x + Math.cos(a) * dist, dy = g.y + Math.sin(a) * dist * 0.72;
-        ctx.moveTo(dx + dr, dy);
-        ctx.arc(dx, dy, dr, 0, 6.283);
-      }
-      ctx.fill();
+      // no offscreen canvas to be had: straight onto the snow, fog and all
+      ctx.save();
+      ctx.globalAlpha = BLOOD_A;
+      paintGore(ctx, onCam);
+      ctx.restore();
     }
-  }
-  // the wet sheen, which is what tells you a pool is fresh and not a stain
-  if (onCam.length){
-    ctx.fillStyle = 'rgba(236,104,84,.20)';
-    ctx.beginPath();
-    for (const g of onCam){
-      if (g.kind !== 'pool') continue;
-      const sx = g.x - Math.cos(g.rot) * g.r * 0.28 - g.r * 0.12;
-      const sy = g.y - Math.sin(g.rot) * g.r * 0.28 - g.r * 0.12;
-      ctx.moveTo(sx + g.r * 0.3, sy);
-      ctx.arc(sx, sy, g.r * 0.3, 0, 6.283);
-    }
-    ctx.fill();
   }
 
   // planks and panels, lying where they fell
