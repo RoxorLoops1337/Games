@@ -227,6 +227,34 @@ const SCENES = {
       setTimeout(() => EK.submitLog(EK.endTurn()), 1500);
     },
   },
+  // The field menu — the most-opened screen after the hand — and the box, which
+  // is the other long screen and has never been seen against the scroll cue.
+  menu: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('hollowbrook', 12, 10, 'down');
+      EK.G.mode = 'world';
+      // Open it the way a player does. Setting G.mode = 'menu' sets the state
+      // and leaves the DOM overlay unrendered — the menu is drawn by the code
+      // that opens it, not by the frame loop, so the first shot of this scene
+      // was a picture of the town with nothing on it.
+      EK.pressKey('b'); EK.step(.02); EK.releaseKey('b'); EK.fired.clear();
+    },
+  },
+  box: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      // A box worth scrolling: the whole roster that has art, so the screen is
+      // seen full rather than with the three kin a fresh run happens to hold.
+      EK.G.box = EK.DEX_ORDER.filter((id) => EK.ART_CREATURES[id])
+        .map((id, i) => EK.mkMon(id, 8 + i));
+      EK.openScreen('box');
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {
