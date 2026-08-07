@@ -94,6 +94,25 @@ const SCENES = {
       EK.G.mode = 'world';
     },
   },
+  // The plaque that names where you just walked in. Nothing is assembled here —
+  // enterMap raises it for real. Shot at the Emberwood because that is the
+  // biggest change of scene in the game and where the silence was loudest.
+  //
+  // FILM THIS ONE, do not still it: the plaque lives 2.4s and the still path
+  // waits 900ms after `go()` plus 1200ms before the shutter, so a still always
+  // arrives after it has gone — which is exactly what the first attempt caught,
+  // a picture of the Emberwood with an empty corner and a status line that said
+  // no plaque was up. `--film placecard 9 300` walks the whole life; PLACE_IN is
+  // .3s, so 300ms is the coarsest interval that still shows the slide arriving.
+  placecard: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('emberwood', 8, 12, 'up');
+      EK.G.mode = 'world';
+      if (!EK.G.place) throw new Error('placecard: entering the Emberwood raised no plaque');
+    },
+  },
   battle: {
     w: 760, h: 900,
     go: (EK) => {
@@ -1007,6 +1026,10 @@ for (const name of list) {
       EK.G.dialogue && `dialogue:${EK.G.dialogue.who}`,
       EK.G.screen && `screen:${EK.G.screen.kind || EK.G.screen}`,
       EK.G.gotcha && 'gotcha', EK.G.evoAnim && 'evo',
+      // The place card is not a beat and owns nothing, but it is 17px of plaque
+      // in the top-left corner and every scene that calls enterMap now raises
+      // one. If it is on screen the print has to say so.
+      EK.G.place && `place:${EK.G.place.name}`,
       EK.G.wipe > 0 && 'wipe',
       // A fainted kin is drawn dropped and at 30% alpha, which is easy to read
       // as a lighting problem. Say it out loud instead.
