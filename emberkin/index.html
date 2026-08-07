@@ -8645,7 +8645,17 @@ function renderScreen() {
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
-    html += `<p style="font-size:.8em;color:var(--dim);max-width:520px">Your kin brings the attacks. These make them land harder.</p>`;
+    // "Exhaust." is printed on some of the best cards in the game and is
+    // defined nowhere a player can read — only in a source comment. It means
+    // one use and then out of the deck FOR THIS BATTLE; the card is back next
+    // fight. A player who reads it as "gone for ever" hoards Reaper and War Cry
+    // and never plays them, which is the exact opposite of what they are for.
+    // Said here rather than in the opening speech because here is where the
+    // word first appears, on the card it appears on.
+    const anyExhaust = (s.list || []).some((id) => CARDS[id] && CARDS[id].exhaust);
+    html += `<p style="font-size:.8em;color:var(--dim);max-width:520px">Your kin brings the attacks. These make them land harder.`
+      + (anyExhaust ? ' <b style="color:var(--ink)">Exhaust</b> means one use per battle — it is back next fight.' : '')
+      + '</p>';
     html += `<div class="cardrow big">` + s.list.map((id, i) => {
       if (id === 'skip') {
         return `<div class="cardel skipcard ${i === s.i ? 'sel' : ''}" data-i="${i}" style="--tint:#6b6270">
