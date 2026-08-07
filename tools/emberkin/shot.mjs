@@ -9,6 +9,12 @@
 //   node tools/emberkin/shot.mjs                    # every scene, into /tmp
 //   node tools/emberkin/shot.mjs battle out.png     # one scene, somewhere
 //   node tools/emberkin/shot.mjs --film evolve 9 450 # a scene as it plays, tiled
+//   node tools/emberkin/shot.mjs --size 390x760 title  # at somebody else's window
+//
+// `--size` matters because the stage picks an integer scale from the window and
+// then lays the touch controls out around it, so a screen can be right at one
+// size and broken at another — the title screen was composed at 900x800 and had
+// never been seen at a phone's aspect, where a different scale applies.
 //
 // Scenes: title, study, town, battle, legendary.
 //
@@ -102,6 +108,25 @@ const SCENES = {
       EK.submitLog(EK.doAction({ kind: 'item', id: 'bloomorb', target: 'foe' }));
     },
   },
+  // A trainer calling you out: the look, the frame closing in, the walk over.
+  // Walked into rather than triggered, so the beat runs the way it does in play.
+  sight: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.enterMap('route_one', 5, 20, 'up');
+      // Stand in the first trainer's line of sight and let the game notice.
+      const n = (EK.G.map.npcs || []).find((m) => m.trainer);
+      if (n) {
+        const [dx, dy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[n.dir] || [0, 1];
+        EK.G.player.x = n.x + dx * 2; EK.G.player.y = n.y + dy * 2;
+        EK.G.player.px = EK.G.player.x; EK.G.player.py = EK.G.player.y;
+        EK.trainerSight();
+      }
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {
@@ -150,11 +175,21 @@ const SCENES = {
 // it turns, and accelerates as the beat builds, and none of that is visible if
 // you drive the animation's own timer while holding G.t still. If a beat has a
 // timeline, film it.
-const FILM = process.argv[2] === '--film';
-const want = FILM ? process.argv[3] : process.argv[2];
-const out = FILM ? null : process.argv[3];
-const FRAMES = FILM ? Number(process.argv[4] || 9) : 0;
-const EVERY = FILM ? Number(process.argv[5] || 450) : 0;
+const argv = process.argv.slice(2);
+let SIZE = null;
+const si = argv.indexOf('--size');
+if (si >= 0) {
+  const m = /^(\d+)x(\d+)$/.exec(argv[si + 1] || '');
+  if (!m) { console.error('--size wants WxH, e.g. 390x760'); process.exit(1); }
+  SIZE = { w: Number(m[1]), h: Number(m[2]) };
+  argv.splice(si, 2);
+}
+
+const FILM = argv[0] === '--film';
+const want = FILM ? argv[1] : argv[0];
+const out = FILM ? null : argv[1];
+const FRAMES = FILM ? Number(argv[2] || 9) : 0;
+const EVERY = FILM ? Number(argv[3] || 450) : 0;
 const list = want ? [want] : Object.keys(SCENES);
 if (want && !SCENES[want]) {
   console.error(`no scene "${want}". try: ${Object.keys(SCENES).join(', ')}`);
@@ -165,7 +200,7 @@ const browser = await chromium.launch({ executablePath: EXE });
 for (const name of list) {
   const sc = SCENES[name];
   const page = await browser.newPage({
-    viewport: { width: sc.w, height: sc.h },
+    viewport: { width: SIZE ? SIZE.w : sc.w, height: SIZE ? SIZE.h : sc.h },
     deviceScaleFactor: 2,                       // the art is 1x pixels; shoot it at 2x
   });
   await page.goto(GAME);
