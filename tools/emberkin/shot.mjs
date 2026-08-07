@@ -180,14 +180,12 @@ const SCENES = {
   // ~80ms against the LAND, not the 1.35s whole. Six passes have had this next
   // in line and nobody has ever looked at it.
   //
-  // UNFINISHED, and left here as the starting point rather than a conclusion.
-  // A film of this shows the exclamation mark and the camera closing in, but
-  // the trainer does not appear to walk across 640ms — which should cover all
-  // of `spot` and most of `walk`. Whether that is the game or this scene is NOT
-  // established: `G.alert` is built by hand here instead of by `trainerSight()`,
-  // and hand-built beat state is exactly what has produced false findings
-  // before. Drive it through a real step onto the sight line before believing
-  // anything the film says.
+  // Pass 94 filmed this and reported the trainer never walking. That was the
+  // scene, not the game: `stop` was parked one tile from `from`, so the slide
+  // was a single tile and invisible at this zoom. `alertStep` moves the npc by
+  // (stop - from) * TILE in pixels, and it always did. Written down because a
+  // false alarm caught is worth as much as a bug caught, and the next person to
+  // film this should know it has already been doubted once.
   ambush: {
     w: 760, h: 900,
     go: (EK) => {
@@ -199,8 +197,14 @@ const SCENES = {
       if (!n) return;
       const p = EK.G.player;
       p.x = n.x; p.y = n.y + 3; p.px = p.x; p.py = p.y; p.dir = 'up';
+      // `stop` is computed the way `trainerSight()` computes it: p + the step
+      // direction from npc to player. The first version of this scene parked it
+      // one tile from `from`, so the npc slid a single tile over 550ms and the
+      // film looked as though the walk phase were dead. It is not — `alertStep`
+      // moves `npc.ox/oy` by (stop - from) * TILE — the scene was short.
+      const dy = 1;                       // the npc is above, facing down the line
       EK.G.alert = { npc: n, t: 0, i: 0, from: { x: n.x, y: n.y },
-        stop: { x: n.x, y: n.y + 1 },
+        stop: { x: p.x, y: p.y - dy },     // one tile short, as trainerSight now does
         beats: [['spot', .55], ['walk', .55], ['land', .25]] };
     },
   },

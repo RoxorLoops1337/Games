@@ -4858,7 +4858,11 @@ function trainerSight() {
         // ellipsis in it. It is a beat now: they see you, the frame closes in,
         // and they walk over. Nothing you can do about any of it, which is the
         // point of being ambushed.
-        const stop = { x: p.x + dx, y: p.y + dy };   // one tile short of you
+        // One tile short of you — dx,dy points from them TOWARDS you, so the
+        // tile before you is p minus that step, not p plus it. Adding it walked
+        // them through you and left them addressing your back: filming the
+        // ambush showed the player above the trainer by the time it landed.
+        const stop = { x: p.x - dx, y: p.y - dy };
         G.alert = { npc: n, t: 0, i: 0, from: { x: n.x, y: n.y }, stop,
           beats: [['spot', ALERT.spot], ['walk', ALERT.walk], ['land', ALERT.land]] };
         playCue('spotted');
