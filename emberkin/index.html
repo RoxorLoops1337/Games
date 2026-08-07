@@ -746,7 +746,26 @@
   body.ctl-below #btns .rbtn[data-k="z"]{ left:68%; }
   body.ctl-below #btns .rbtn[data-k="x"]{ left:26%; }
   body.ctl-below #pad::after{ bottom:auto; top:calc(50% - 8px); }
-  body.ctl-overlay #btns .rbtn{ width:64px; height:64px; margin-left:-32px; font-size:12px; }
+  /* Overlay is the layout for a landscape phone too narrow to spare a gutter,
+     and it had never been photographed. The buttons were shrunk to 64px here
+     and given no vertical offsets of their own, so they kept the ones written
+     for an 82px pair in a full-height column: bottom:calc(50% - 96px) inside a
+     box 34% of 390px tall is -30px, and the Play button — the one you press
+     every turn — was hanging off the bottom of the screen.
+     Side by side, like the portrait band does it, because the box is wider
+     than it is tall. */
+  body.ctl-overlay #btns .rbtn{ width:64px; height:64px; margin-left:-32px; font-size:12px;
+    bottom:14px; }
+  body.ctl-overlay #btns .rbtn[data-k="z"]{ left:72%; }
+  body.ctl-overlay #btns .rbtn[data-k="x"]{ left:28%; }
+  /* And the pad's label sits at the foot of the pad, which in this layout is
+     the middle of the hand — "move" was printed across the card you were
+     aiming at. It goes to the top of the pad instead. */
+  body.ctl-overlay #pad::after{ bottom:auto; top:6%; }
+  /* The buttons still sat on the last card of the fan — the one you would
+     tap, with a control on top of it. The hand keeps clear of the button
+     column instead: it is a fan, so it closes up rather than losing a card. */
+  body.ctl-overlay #hand{ left:2%; right:26%; }
 
   /* Fullscreen: a corner button, out of the way until you want it. */
   #fsbtn{ position:fixed; right:8px; top:8px; z-index:22; width:34px; height:34px; border-radius:8px;
