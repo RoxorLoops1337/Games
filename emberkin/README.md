@@ -209,6 +209,32 @@ into a black band.
 It takes an optional context, which is how the headless suite drives it without
 a canvas element.
 
+It is the backdrop now, not a picture hung on the screen. It used to be a
+372×150 canvas in a rounded frame, centred in a stage three times its height —
+which read fine in isolation and, the first time anybody photographed it,
+turned out to be a small illustration adrift in a bezel that was two thirds
+empty. The same failure as the dead margin around the interior maps, and
+invisible for the same reason: nothing in the source says how much of the box
+the content fills.
+
+So it is 256×208 — the viewport's own size — pinned to the stage, and it scales
+by the same integer factor the valley does. The words live on it: the logo and
+the tagline against the sky, the three kin on the ground between, the button and
+the key hints on the near soil. Two gradient bands sit under the text and fall
+off before the kin, because the picture wins the contrast fight against its own
+text otherwise, and neither band is allowed to dim the thing you came to look
+at.
+
+The kin are all one scale. The middle one used to be drawn at ×3 to put it in
+front, which worked in a 372-wide picture and at 256 makes a 120-pixel sprite
+that eats the treeline behind it and runs off the frame — so the one in front
+earns its place by standing *nearer*, ten pixels lower on the ground, instead.
+
+Below a ×2 stage the picture and the words cannot both have the room: five lines
+of text wrap to eight and the button lands on a kin's belly. `fitStage` sets
+`body.tight` there and the key hints go, because they are the only part a player
+can find again in the field menu.
+
 ## Controls
 
 | | keyboard | touch |

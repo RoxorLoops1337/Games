@@ -487,25 +487,42 @@
   .tp{ font-size:.58em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px; color:#120d18; font-weight:700; }
 
   /* ---------------- title ---------------- */
+  /* The title used to be a small framed picture floating in the middle of the
+     stage, with a third of the bezel empty above it and a third empty below.
+     Nothing in a title screen should be a picture ON the screen — it should BE
+     the screen. The illustration is the backdrop now, at the game's own
+     resolution so it scales by the same integer factor as the valley does, and
+     the words sit on it: the logo against the sky, the kin on the ground
+     between, the button on the near soil. */
   #title{ position:absolute; inset:0; z-index:12; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:14px; text-align:center; padding:20px;
+    align-items:center; justify-content:space-between; text-align:center;
+    padding:5% 16px 5.5%; overflow:hidden; border-radius:4px;
     background:radial-gradient(120% 90% at 50% 20%,#3a1c3f,#0c0812 70%); }
+  #titleArt{ position:absolute; inset:0; width:100%; height:100%;
+    image-rendering:pixelated; z-index:0; }
+  #title .tgroup{ position:relative; z-index:1; display:flex; flex-direction:column;
+    align-items:center; gap:7px; }
   /* The logo carries weight: a hard dark rim so it reads against the sunset,
      a warm drop under it, and a glow that spills the way the sun does. */
-  #title h1{ margin:0; font-size:clamp(30px,9vw,58px); letter-spacing:8px; color:var(--gold);
+  #title h1{ margin:0; font-size:clamp(24px,3.7em,56px); letter-spacing:8px; color:var(--gold);
     text-shadow:
       -2px 0 0 #2a1b2e, 2px 0 0 #2a1b2e, 0 -2px 0 #2a1b2e, 0 2px 0 #2a1b2e,
       0 5px 0 #7a3f13, 0 8px 14px rgba(0,0,0,.6), 0 0 34px rgba(255,201,77,.5); }
-  #title p{ margin:0; color:var(--dim); font-size:13px; letter-spacing:2px; text-transform:uppercase; }
-  #title .btn{ padding:9px 22px; font-size:15px; cursor:pointer; letter-spacing:1px;
+  #title p{ margin:0; color:var(--dim); font-size:clamp(9px,1.05em,13px);
+    letter-spacing:2px; text-transform:uppercase;
+    text-shadow:0 1px 3px rgba(6,3,10,.9), 0 0 10px rgba(6,3,10,.8); }
+  #title p.keys{ font-size:clamp(8px,.85em,11px); letter-spacing:1px; text-transform:none; }
+  #title .btn{ padding:9px 22px; font-size:clamp(11px,1.25em,15px); cursor:pointer; letter-spacing:1px;
     transition:transform .12s ease, box-shadow .12s ease, color .12s ease; }
   #title .btn:hover{ color:var(--gold); border-color:var(--gold); transform:translateY(-2px);
     box-shadow:0 6px 0 rgba(10,6,16,.6), 0 0 18px rgba(255,201,77,.35); }
-  /* The illustration is a framed thing on the wall, not a floating rectangle. */
-  #titleArt{ image-rendering:pixelated; border-radius:10px; border:2px solid var(--edge);
-    box-shadow:0 6px 0 rgba(10,6,16,.6), 0 10px 28px rgba(28,14,44,.6),
-      inset 0 0 0 1px rgba(255,236,205,.08);
-    max-width:94vw; height:auto; }
+  /* Below a x2 stage the words and the picture cannot both have the room: five
+     lines of text wrap to eight and the button lands on the kin's belly. The
+     key hints are the part a player can find again in the menu, so they are the
+     part that goes. */
+  body.tight #title{ padding:3% 10px 4%; }
+  body.tight #title p{ letter-spacing:1px; }
+  body.tight #title p.keys{ display:none; }
 
   /* ---------------- touch controls ---------------- */
   /* ---------------- touch controls ----------------
@@ -586,13 +603,17 @@
 
 
   <div id="title">
-    <canvas id="titleArt" width="372" height="150"></canvas>
-    <h1>EMBERKIN</h1>
-    <p>cute enough to want one · armed enough to respect one</p>
-    <div class="btn panel" data-act="new">New journey</div>
-    <div class="btn panel hidden" data-act="cont">Continue</div>
-    <p style="font-size:11px;letter-spacing:1px;text-transform:none">arrows / WASD move · Z or Enter acts · X opens the menu · M mutes</p>
-    <p style="font-size:11px;letter-spacing:1px;text-transform:none">in a fight: ← → pick a card · ↑ or Z plays it · 1-5 plays one outright · E ends the turn</p>
+    <canvas id="titleArt" width="256" height="208"></canvas>
+    <div class="tgroup">
+      <h1>EMBERKIN</h1>
+      <p>cute enough to want one · armed enough to respect one</p>
+    </div>
+    <div class="tgroup">
+      <div class="btn panel" data-act="new">New journey</div>
+      <div class="btn panel hidden" data-act="cont">Continue</div>
+      <p class="keys">arrows / WASD move · Z or Enter acts · X opens the menu · M mutes</p>
+      <p class="keys">in a fight: ← → pick a card · ↑ or Z plays it · 1-5 plays one outright · E ends the turn</p>
+    </div>
   </div>
 </div>
 
@@ -8648,6 +8669,9 @@ function fitStage() {
   // Panel text is em-based, so one number scales the whole UI with the stage.
   st.style.fontSize = clamp(L.scale * 4.1, 11, 21) + 'px';
 
+  // Under a x2 stage the title screen sheds its key hints — see body.tight.
+  document.body.classList.toggle('tight', L.scale < 2);
+
   document.body.classList.remove('ctl-side', 'ctl-below', 'ctl-overlay');
   if (L.mode !== 'none') document.body.classList.add('ctl-' + L.mode);
   document.body.style.setProperty('--gutter', L.gutter + 'px');
@@ -9242,15 +9266,20 @@ function boot() {
  * the valley now, built the way the arena is: layers, each further one lighter
  * and closer to the sky, with a low sun for them to stand against. The three
  * kin change every few seconds so the roster gets to introduce itself.
+ *
+ * It is 256x208 — the viewport's own size — because it is the backdrop of the
+ * title screen rather than a framed picture hung on it, and at the game's
+ * resolution it scales by the same integer factor the valley does. The dusk
+ * fills the bezel; the words sit on top of it.
  */
-const TITLE_W = 372, TITLE_H = 150;
+const TITLE_W = 256, TITLE_H = 208;
 let titleCtx = null;
 
 function drawTitleArt(t, into) {
   const g = into || titleCtx;
   if (!g) return;
   g.imageSmoothingEnabled = false;
-  const HORIZON = 96;
+  const HORIZON = 104;
 
   const sky = g.createLinearGradient(0, 0, 0, HORIZON);
   sky.addColorStop(0, '#160f26');
@@ -9332,11 +9361,18 @@ function drawTitleArt(t, into) {
   const stars = DEX_ORDER.filter((id) => ART_CREATURES[id]);
   if (stars.length) {
     const step = Math.floor(t / 2.4);
-    const GROUND = TITLE_H - 13;
     for (let i = 0; i < 3; i++) {
       const id = stars[(step + i * 5) % stars.length];
-      const sc = i === 1 ? 3 : 2;                        // integer scales only
-      const cx = 62 + i * 124 + (i === 1 ? -0 : 0);
+      // All three at the same scale. The middle one used to be bigger, which
+      // worked when the picture was 372 wide; at the viewport's 256 a x3 sprite
+      // is 120 across, eats the treeline behind it and runs off the frame. The
+      // one in front earns its place by standing NEARER — lower on the ground —
+      // rather than by being drawn larger.
+      const sc = 2;
+      const cx = 46 + i * 82;
+      // They stand in the middle band, not at the bottom edge: the near soil
+      // below their feet is where the button and the key hints go.
+      const GROUND = i === 1 ? 158 : 148;
       const bob = Math.sin(t * 1.6 + i * 2) * (i === 1 ? 2 : 1.4);
       const bottom = artBottom(id) * sc;
       g.save(); g.globalAlpha = .35; g.fillStyle = '#0d0716';
@@ -9356,6 +9392,20 @@ function drawTitleArt(t, into) {
     g.fillRect(Math.round(seed * TITLE_W + Math.sin(t + i) * 4), Math.round(TITLE_H - rise * TITLE_H), 1, 1);
   }
   g.globalAlpha = 1;
+
+  // Two bands the words live in. Without them the tagline sits on the warmest
+  // part of the sky and the key hints sit on lit soil, and both go to mush —
+  // the picture wins the contrast fight against its own text. Each falls off
+  // well before the kin so nothing dims the thing you came to look at.
+  const top = g.createLinearGradient(0, 0, 0, 56);
+  top.addColorStop(0, 'rgba(8,5,14,.62)');
+  top.addColorStop(1, 'rgba(8,5,14,0)');
+  g.fillStyle = top; g.fillRect(0, 0, TITLE_W, 56);
+  const bot = g.createLinearGradient(0, 162, 0, TITLE_H);
+  bot.addColorStop(0, 'rgba(8,5,14,0)');
+  bot.addColorStop(1, 'rgba(8,5,14,.8)');
+  g.fillStyle = bot; g.fillRect(0, 162, TITLE_W, TITLE_H - 162);
+
   const vig = g.createRadialGradient(TITLE_W / 2, TITLE_H / 2, TITLE_H * .3,
     TITLE_W / 2, TITLE_H / 2, TITLE_W * .62);
   vig.addColorStop(0, 'rgba(10,6,16,0)');
