@@ -471,6 +471,23 @@ edit this block to name the next one.
       width cache is keyed on the progress as well as the text, or the plate
       would stop growing as a number got longer mid-run.
 
+- [x] A child carries a balloon. Every archetype carries the thing that says
+      what it is — the pensioner's stick, the parent's pram, Santa's fur and
+      beard, the shopper's bag — and the child had nothing at all, while being
+      the smallest person in the market at r9 and the subject of one of the
+      thirteen goals. The game asked you to hunt for the thing it had made
+      hardest to see. Three things had to be right. The balloon is **drawn
+      outside `drawPerson`**, batched by colour in world space, so a child who
+      has fallen to the batch tier still carries one: adding `kid` to
+      `lodAlways` instead cost **461 fills** on the worst frame, against six
+      for the batched pass. It is **sized in screen pixels** with a floor of
+      9, the same trick the drive camera uses for `CAR_MIN_PX` — at `p.r*0.5`
+      it came out under two pixels across at the drive zoom. And every ellipse
+      is opened by its own `moveTo`: without one, `ctx.ellipse` joins the
+      current point and a batch of them fills a polygon spanning every child
+      in the market. It did exactly that, in five colours, across the whole
+      screen — **and the suite was green**. There is an assertion for it now.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

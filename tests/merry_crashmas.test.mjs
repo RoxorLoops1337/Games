@@ -41,7 +41,8 @@ const EXPOSE = `__out.api = {
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
   takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
   gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
-  GOALS, THEMES, rollGoals, checkGoals, goalTest, goalProgress, replayGore, drawStains,
+  GOALS, THEMES, rollGoals, checkGoals, goalTest, goalProgress,
+  drawBalloons, balloonAt, BALLOONS, BALLOON_PX, replayGore, drawStains,
   CARS, CAR_KEY, KILLS_KEY, STARS_KEY, BESTPER_KEY, selectCar, carUnlocked, renderGarage,
   pickLevel, readStars, readBest, starsOn, bestOn, starsTotal,
   getCar: () => CAR, getDims: () => ({ l: CARL, w: CARW, r: CARR }),
@@ -6029,6 +6030,94 @@ test('a wrecked barrier is two pieces and a foot, under a smaller shadow', () =>
   }
   // reseed() resets the simulation stream only, so that is the one to compare
   assert(api.rnd() === r0, 'drawing a barrier moved the simulation stream');
+});
+
+/* ------------------------------------------------------ the children --- */
+
+/* Every archetype carries the thing that says what it is — the pensioner's
+   stick, the parent's pram, Santa's fur, the shopper's bag. The child had
+   nothing, is the smallest person in the market at r9, and one of the thirteen
+   goals is "Catch N children": the game asked you to hunt for the one thing it
+   had made hardest to see. */
+test('a child carries a balloon, and it is a balloon not a polygon', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(12); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2500; api.car.y = 1100; api.camSnap();
+
+  api.people.length = 0;
+  const kids = [];
+  for (let i = 0; i < 7; i++){
+    const p = api.addPerson(api.cam.x + i * 70, api.cam.y, 'kid');
+    p.coat = i; p.bob = i * 0.9; kids.push(p);
+  }
+  api.addPerson(api.cam.x, api.cam.y + 90, 'shopper');
+
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawBalloons(() => true));
+  const els = rec.all.filter(a => a[0] === 'el');
+  assert(els.length === 7, 'one balloon a child, got ' + els.length);
+
+  /* The bug this test exists for: ctx.ellipse joins the current point, so a
+     batch of them without a moveTo between draws a filled polygon spanning
+     every balloon in the market. It did exactly that, in five colours, across
+     the whole screen — and the suite was green. Every ellipse must be opened
+     by a moveTo. */
+  let open = 0;
+  for (let i = 0; i < rec.all.length; i++){
+    if (rec.all[i][0] !== 'el') continue;
+    assert(i > 0 && rec.all[i - 1][0] === 'm',
+      'a balloon is not opened by a moveTo — the fill will span the market');
+    open++;
+  }
+  assert(open === 7, 'seven opened balloons, got ' + open);
+
+  // one fill a colour, not one a child
+  assert(rec.fills <= api.BALLOONS.length + 1,
+    api.BALLOONS.length + ' colours plus the highlight, got ' + rec.fills + ' fills');
+
+  // a shopper does not get one
+  api.people.length = 0;
+  for (const k of ['shopper', 'elder', 'parent', 'santa'])
+    api.addPerson(api.cam.x, api.cam.y, k);
+  const none = carRec();
+  api.withCtx(none, () => api.drawBalloons(() => true));
+  assert(none.all.filter(a => a[0] === 'el').length === 0,
+    'only children carry balloons');
+});
+
+test('a balloon stays big enough to find, however far the camera is', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(12); api.beginLevel();
+  api.G.phase = 'drive';
+  api.people.length = 0;
+  const kid = api.addPerson(2500, 1100, 'kid');
+  kid.coat = 0; kid.bob = 0;
+
+  /* At p.r * 0.5 on an r9 child the balloon came out under two screen pixels
+     at the drive zoom — a balloon nobody can see is not a balloon. */
+  const rows = [];
+  for (const s of [1.2, 0.6, 0.37, 0.2]){
+    api.cam.s = s; api.cam.x = 2500; api.cam.y = 1100;
+    const b = api.balloonAt(kid);
+    assert(b.r * s >= api.BALLOON_PX - 0.01,
+      'at scale ' + s + ' the balloon is ' + (b.r * s).toFixed(1) +
+      ' screen px, floor is ' + api.BALLOON_PX);
+    // …and it floats clear of the child rather than sitting on them
+    assert(kid.y - b.y > b.r,
+      'at scale ' + s + ' the balloon is on top of the child');
+    rows.push(s + '→' + (b.r * s).toFixed(1) + 'px');
+  }
+  // close up it is sized off the child, not pinned to the floor
+  api.cam.s = 4;
+  assert(api.balloonAt(kid).r > api.BALLOON_PX / 4,
+    'close up it should grow with the child');
+  // and none of it is rolled
+  api.reseed(8);
+  const r0 = api.rnd();
+  api.reseed(8);
+  for (let i = 0; i < 20; i++) api.balloonAt(kid);
+  assert(api.rnd() === r0, 'a balloon moved the simulation stream');
+  console.log('    (balloon: ' + rows.join(' ') + ')');
 });
 
 /* --------------------------------------------------------- the dead --- */
