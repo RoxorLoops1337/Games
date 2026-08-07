@@ -30,6 +30,10 @@
   .ov{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     background:radial-gradient(920px 520px at 50% 42%, rgba(16,34,60,.74), rgba(4,7,14,.94));
     backdrop-filter:blur(3px); z-index:5; }
+  /* The finale sets off fireworks over the wreckage. At the standard overlay
+     the corners are rgba(4,7,14,.94) and you cannot see a single one of them. */
+  #finale{ background:radial-gradient(920px 520px at 50% 42%, rgba(14,28,52,.56), rgba(4,7,14,.78));
+    backdrop-filter:blur(2px); }
   .ov[hidden]{ display:none; }
   .card{ width:min(580px,93vw); max-height:94vh; overflow:auto;
     /* rotated, vw and vh still mean the viewport, which is the game's frame
@@ -87,7 +91,7 @@
   .goal.on{ color:#8effb0; border-color:#2c6b45; }
   .goal.on i{ background:#8effb0; border-color:#8effb0; color:#0b1524; font-weight:900; }
   .stats{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:4px 0 14px; }
-  .stat{ min-width:100px; padding:9px 8px; border-radius:12px; background:#0b1524; border:2px solid #22395c; }
+  .stat{ min-width:92px; padding:9px 7px; border-radius:12px; background:#0b1524; border:2px solid #22395c; }
   .stat .k{ font-size:11px; letter-spacing:2px; color:#7d92b2; text-transform:uppercase; }
   .stat .v{ font-size:25px; font-weight:900; color:#ffd34d; }
   .stars{ font-size:38px; letter-spacing:8px; margin:2px 0 8px; color:#2a3d5c; }
@@ -245,6 +249,8 @@
         <div class="stat"><div class="k">Total</div><div class="v" id="fnScore">0</div></div>
         <div class="stat"><div class="k">Best ever</div><div class="v" id="fnBest">0</div></div>
         <div class="stat"><div class="k">Shoppers</div><div class="v" id="fnKills">0</div></div>
+        <div class="stat"><div class="k">Wrecked</div><div class="v" id="fnWrecks">0</div></div>
+        <div class="stat"><div class="k">Stars</div><div class="v" id="fnStars">0</div></div>
       </div>
       <div class="targetline" id="fnLine"></div>
       <button class="btn gold" id="bAgain">DRIVE IT AGAIN</button>
@@ -764,7 +770,7 @@ const G = {
   target: 0,
   cars: 3, carsLeft: 3,
   combo: 0, comboT: 0, mult: 1, bestCombo: 0,
-  kills: 0, wrecks: 0, totalKills: 0, lifeKills: 0,
+  kills: 0, wrecks: 0, totalKills: 0, totalWrecks: 0, lifeKills: 0,
   goals: null, goalsDone: 0,
   starsPer: [],           // best stars ever earned on each market
   bestPer: [],            // best score ever posted on each market
@@ -1255,7 +1261,7 @@ function toMenu(){
 }
 
 function startCampaign(){
-  G.score = 0; G.totalKills = 0;
+  G.score = 0; G.totalKills = 0; G.totalWrecks = 0;
   G.campaign = true;
   startLevel(0);
 }
@@ -1264,7 +1270,7 @@ function startCampaign(){
    campaign total is what "START THE ENGINE" is for. */
 function pickLevel(i){
   if (!(i >= 0 && i < LEVELS.length) || i > G.unlocked) return false;
-  G.score = 0; G.totalKills = 0;
+  G.score = 0; G.totalKills = 0; G.totalWrecks = 0;
   G.campaign = false;
   startLevel(i);
   return true;
@@ -1553,6 +1559,8 @@ function finale(){
   setTxt('fnScore', fmt(G.score));
   setTxt('fnBest', fmt(G.best));
   setTxt('fnKills', fmt(G.totalKills));
+  setTxt('fnWrecks', fmt(G.totalWrecks));
+  setTxt('fnStars', '★ ' + starsTotal() + '/' + (LEVELS.length * 3));
   setTxt('fnLine', G.score >= G.best
     ? 'A new personal worst for the town of Christmas.'
     : 'Best run so far: ' + fmt(G.best) + '.');
@@ -1944,7 +1952,7 @@ function wreckProp(o, vx, vy){
   o.dead = true;
   o.rot = rr(-0.7, 0.7);
   o.vx = (vx || 0) * 0.18; o.vy = (vy || 0) * 0.18;
-  G.wrecks++; G.runWrecks++;
+  G.wrecks++; G.runWrecks++; G.totalWrecks++;
   rec.wrecks++;
   if (o.pts >= 260) G.bigWrecks++;        // a snowman is not a stall
   if (o.kind === 'bigtree') G.treeDown = true;
@@ -2068,7 +2076,7 @@ function stepSpills(dt){
    set off plays exactly like one that has not. */
 const FW_COLS = ['255,110,90', '255,214,110', '150,225,255', '190,140,255', '140,255,170'];
 function crateOf(o){ return o.kind === 'barrel' && (o.seed || 0) < 0.4; }
-function launchFireworks(o){
+function launchFireworks(o, vol){
   const n = 5 + Math.floor(vrnd() * 4);
   for (let i = 0; i < n; i++){
     const a = vrr(0, 6.283), s = vrr(340, 620);
@@ -2076,7 +2084,7 @@ function launchFireworks(o){
       ttl: vrr(0.42, 0.86), size: vrr(6, 10), rot: a,
       col: FW_COLS[Math.floor(vrnd() * FW_COLS.length) % FW_COLS.length] });
   }
-  sndCrunch(0.5);
+  sndCrunch(vol === undefined ? 0.5 : vol);
 }
 function burst(f){
   const n = 12 + Math.floor(vrnd() * 8);
@@ -2860,6 +2868,17 @@ function update(dt){
     stepPeople(dt);
     stepProps(dt);
     stepSpills(dt);
+  }
+  /* Twenty-one markets flattened deserves more than a card. The finale sets
+     off the same crates the barrels carry, over the wreckage behind it, on the
+     cosmetic generator like everything else about a firework. */
+  if (G.phase === 'finale'){
+    G.fwT = (G.fwT || 0) - dt;
+    if (G.fwT <= 0){
+      G.fwT = vrr(0.3, 0.75);
+      launchFireworks({ x: cam.x + vrr(-0.42, 0.42) * (VW / cam.s),
+                        y: cam.y + vrr(-0.42, 0.42) * (VH / cam.s) }, 0.3);
+    }
   }
   stepFx(dt);
   stepLens(dt);
