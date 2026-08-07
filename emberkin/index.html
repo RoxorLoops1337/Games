@@ -167,8 +167,13 @@
   /* The foot is in normal flow, not two absolute lines fighting for the same
      few pixels: the note sits on the pip, and the pip closes the card. */
   .cardel .cfoot{ width:100%; margin-top:auto; }
+  /* The note wraps rather than truncating. It carries the only numbers on the
+     offer — "3 in your deck · 1 set aside", "none in your deck · to +12" — and
+     they exist to answer take-or-skip. Held on one line with an ellipsis they
+     read "3 in your deck · 1…" at a phone's width, which is the half of the
+     sentence that does not decide anything. Two short lines beat one cut one. */
   .cardel .cnote{ font-size:.44em; color:var(--dim); line-height:1.15; text-align:center;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    overflow:hidden; }
   .cardel .cpip{ width:100%; text-align:center; padding-top:.15em;
     font-size:.44em; letter-spacing:.12em; text-transform:uppercase;
     color:color-mix(in srgb, var(--tint) 80%, #fff 20%); opacity:.85; }
