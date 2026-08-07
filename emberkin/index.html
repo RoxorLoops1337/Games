@@ -7922,6 +7922,16 @@ function entryFx(b, e) {
     // the hit has already been read (its number is on screen), and what has not
     // been read yet is that you levelled.
     b.flashM = 0; b.lungeM = 0; b.recoilM = 0;
+    // And the crit burst, if it was on your side. It draws at cx 72 — exactly
+    // where the level ring goes — and was missed when the other three were
+    // cleared, which is the third time a fix here has reached most of what it
+    // claimed to rather than all of it.
+    //
+    // Stated as defence, not as a symptom: BURST_T is 0.26s and a level lands
+    // after the win lines, so the two very probably never overlap in play. What
+    // is certain is that they are drawn in the same place and one of them was
+    // not being cleared, and completing the set costs nothing.
+    if (b.burst && b.burst.side === 'mine') b.burst = null;
   }
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
