@@ -4691,6 +4691,39 @@ function drawMend(g, cam) {
   g.globalAlpha = 1;
 }
 
+/**
+ * Going down.
+ *
+ * Losing the whole party said two lines and then teleported you to the
+ * Wayhouse on the same frame — a harder cut than walking through a door, which
+ * at least gets a curtain. The one moment in the game where you lose something
+ * was the only transition in it with no transition.
+ *
+ * The dark closes over the arena and holds a moment before the room comes up.
+ * The hold is the point: it is the difference between being moved and being
+ * carried.
+ */
+const BLACKOUT_T = 1.05;
+
+function blackoutStep(dt) {
+  const o = G.blackout;
+  if (!o) return false;
+  o.t += dt;
+  if (o.t < BLACKOUT_T) return true;
+  G.blackout = null;
+  o.go();
+  return true;
+}
+
+/** How black the screen is, 0 to 1, or 0 when nothing is going down. */
+function blackoutCover() {
+  const o = G.blackout;
+  if (!o) return 0;
+  // Closes over three quarters of the beat, then holds — so the last of it is
+  // silence rather than motion.
+  return clamp(o.t / (BLACKOUT_T * .72), 0, 1);
+}
+
 const SIGHT = 4;                       // how far down their own line a trainer looks
 /** The three beats of being caught out: the look, the walk, and the pause. */
 const ALERT = { spot: .55, walk: .55, land: .25 };
@@ -7988,6 +8021,8 @@ function finishBattle() {
     say('', ['You got away.'], done);
   } else if (over === 'lose') {
     say('', ['Everything you have is down.', 'You carry them back to the Wayhouse on instinct.'], () => {
+      // The dark closes over the arena first, and the room comes up out of it.
+      G.blackout = { t: 0, go: () => {
       const lost = Math.floor(G.money * .25);
       G.money -= lost;
       healParty();
@@ -7996,12 +8031,14 @@ function finishBattle() {
       if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); battleBar(false); }
       enterMap('wayhouse', 5, 5, 'down');
       G.mode = 'world';
+      G.fade = .5;                   // …and the Wayhouse opens out of it
       playCue('world');
       const after = [`Sable patched them up. It cost you ${lost} shards.`, 'Go easier out there.'];
       // Say it out loud, so nobody stands in front of a trainer wondering
       // whether the game has stopped letting them through.
       if (b.npc) after.push(`${b.npc.name} will not stop you again. Go and ask for the rematch when you want it.`);
       say('Sable', after, () => saveGame());
+      } };
     });
   } else {
     done();
@@ -9222,6 +9259,11 @@ function draw() {
   }
   if (G.flourish) drawFlourish(ctx);
   if (G.gotcha) drawGotcha(ctx);
+  const dark = blackoutCover();
+  if (dark > 0) {
+    ctx.fillStyle = `rgba(6,3,10,${dark.toFixed(3)})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
   if (G.fade > 0) {
     ctx.fillStyle = `rgba(8,5,12,${clamp(G.fade * 2.4, 0, 1)})`;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -9379,6 +9421,7 @@ function step(dt) {
   if (G.alert && G.alert.beats && alertStep(dt)) return;
   if (G.rustle && rustleStep(dt)) return;
   if (G.mend && mendStep(dt)) return;
+  if (G.blackout && blackoutStep(dt)) return;
   if (G.flourish && flourishStep(dt)) return;
   if (G.gotcha) {
     G.gotcha.t += dt;
@@ -9799,7 +9842,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,

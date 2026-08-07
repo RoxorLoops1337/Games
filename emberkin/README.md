@@ -2037,6 +2037,30 @@ It is skippable, and the frame that skips it **still belongs to the transition**
 Without that, the very press that ended the flourish fell through to the reward
 screen it had just opened and took the first card for you.
 
+### Going down
+
+Losing the whole party said two lines and then teleported you to the Wayhouse on
+the same frame — a harder cut than walking through a door, which at least gets a
+curtain. The one moment in the game where you lose something was the only
+transition in it with no transition. Found the same way the heal was: by
+listing what has a beat and what does not.
+
+`G.blackout` closes the dark over the arena and holds a moment before the room
+comes up, and the Wayhouse then opens out of it on `G.fade` rather than snapping
+in. It closes over three quarters of the beat and holds for the rest — the hold
+is the point, and it is the difference between being moved and being carried.
+
+**Verified by test rather than by photograph**, which is worth being straight
+about: the suite drives a real loss and asserts you are still where you fell
+while the dark closes, still there half way through, and in the Wayhouse only
+once it has. Three attempts to film it failed and each one taught something
+worth keeping — `over` is decided inside the damage path, so a kin set to 1 HP
+and then hit does **not** lose; the wild plan opens with a buff, so one ended
+turn is a foe sharpening its claws and nothing else; and the defeat lines come
+from a callback the frame loop drives, so they cannot be tapped through all at
+once. The fourth film caught the loss itself and ran out before the dark
+closed. A picture of it is still owed.
+
 ### Being healed
 
 Every other thing that happens to you has a beat: an orb arcs and wobbles, an

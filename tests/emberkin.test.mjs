@@ -855,6 +855,41 @@ ok(EK.rustleStep(EK.RUSTLE_T * .5) && !EK.G.battle, 'half way through, still no 
 EK.rustleStep(EK.RUSTLE_T);
 ok(!!EK.G.battle && !EK.G.rustle, 'when the grass settles, the fight is on');
 
+// Going down closes the dark over the arena before it moves you, rather than
+// teleporting you to the Wayhouse on the same frame the last kin falls.
+{
+  const lose = loadGame({});
+  lose.setCtx(mkCtx());
+  lose.newGame();
+  for (let i = 0; i < 12 && lose.G.mode === 'dialogue'; i++) lose.advanceDialogue();
+  lose.G.dialogue = null; lose.G.mode = 'world';
+  lose.takeStarter('cindercub'); lose.G.dialogue = null;
+  lose.G.mapId = 'route_one';
+  lose.startBattle({ foe: lose.mkMon('bramblor', 40), wild: true });
+  // Fought out rather than assigned: `over` is decided inside the damage path,
+  // so a party set to zero HP by hand never loses — which is what the first
+  // version of this test, and the film that went with it, both discovered.
+  autoFight(lose, 400);
+  eq(lose.B() && lose.B().over, 'lose', `a Lv5 starter loses to a Lv40 Bramblor (over=${lose.B() && lose.B().over}, hp=${lose.G.party.map((m) => m.hp)})`);
+  // Step as well as advance: the defeat lines are said from a callback that
+  // only runs once the battle log has finished playing back, and playback is
+  // driven by the frame loop rather than by dismissing text.
+  for (let i = 0; i < 200 && !lose.G.blackout; i++) {
+    lose.step(.2); lose.fired.clear();
+    const d = lose.G.dialogue || lose.liveBattleMsg();
+    if (d) { d.hold = 0; lose.advanceDialogue(); }
+  }
+  ok(!!lose.G.blackout, 'going down closes the dark before it moves you');
+  eq(lose.G.mapId, 'route_one', 'and you are still where you fell while it closes');
+  ok(lose.blackoutCover() >= 0, 'the dark has a cover value from the start');
+  lose.blackoutStep(lose.BLACKOUT_T * .5);
+  eq(lose.G.mapId, 'route_one', 'half way through, still there');
+  lose.blackoutStep(lose.BLACKOUT_T);
+  eq(lose.G.mapId, 'wayhouse', 'when it has closed, the Wayhouse');
+  ok(!lose.G.blackout, 'and the dark is done');
+  ok(lose.G.fade > 0, 'with the room opening out of it rather than snapping in');
+}
+
 // Being healed is a beat too, and the line that says it worked comes after it.
 EK.G.battle = null; EK.G.mend = null; EK.G.mode = 'world';
 EK.G.party.forEach((m) => { m.hp = 1; });
