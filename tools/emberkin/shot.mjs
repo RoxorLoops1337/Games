@@ -208,6 +208,32 @@ const SCENES = {
         beats: [['spot', .55], ['walk', .55], ['land', .25]] };
     },
   },
+  // Hour two. Everything in this file until now has photographed the first
+  // fifteen minutes — a Lv5 starter, a ten-card deck, one kin in the party. The
+  // screens were designed against that and have only ever been seen that way.
+  // Six kin, a full deck, and a dex with most of the valley in it.
+  midparty: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      const roster = ['pyrelynx', 'brookite', 'bramblor', 'gargolem', 'frillamb'];
+      EK.G.party = [EK.mkMon('kindlark', 31)];
+      roster.forEach((id, i) => EK.G.party.push(EK.mkMon(id, 24 + i * 3)));
+      EK.G.party.forEach((m) => { EK.seeMon(m.species); EK.catchMon(m.species); });
+      EK.G.party[2].hp = Math.round(EK.G.party[2].max * .28);
+      EK.G.party[4].status = 'burn';
+      EK.openScreen('party');
+    },
+  },
+  // Noted from the first `midparty` shot and NOT acted on: the detail panel's
+  // stat bars carry almost nothing at this scale. ATK 42, GUARD 29, SPD 58
+  // against STAT_CEIL 130 are three stubs in a ~45px track, and at that width
+  // 29 and 42 are indistinguishable — the numbers do all the work. Whether the
+  // bars want a shorter ceiling, a longer track, or to go away is a design call
+  // that wants its own pass rather than a guess at the end of this one.
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
