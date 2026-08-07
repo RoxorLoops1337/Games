@@ -16,6 +16,14 @@
 // size and broken at another — the title screen was composed at 900x800 and had
 // never been seen at a phone's aspect, where a different scale applies.
 //
+// `--size` and `--film` do not combine. A still screenshots the page, so it sees
+// the canvas AND the DOM panels laid out around it; a film grabs the 256x208
+// canvas, which is the same pixels at every window size and contains none of the
+// panels. So: anything drawn on the canvas needs no size check, and anything in
+// a panel can only be checked with a still. Filming the grass rustle at a
+// phone's aspect returned a picture identical to the desktop one, which is the
+// correct answer and not an obvious one.
+//
 // Scenes: title, study, town, battle, legendary.
 //
 // Chromium is pre-installed at /opt/pw-browsers/chromium in this environment.
@@ -195,7 +203,12 @@ const SCENES = {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
       EK.G.dialogue = null; EK.G.mode = 'world';
-      EK.G.gotcha = { t: .9, species: 'mistspray', name: 'Mistspray',
+      // 'mistspray' is a MOVE. This scene passed it as a species from the day
+      // it was written, and the screen dutifully drew the graceful fallback —
+      // a purple lozenge with two eyes — which is exactly what a real creature
+      // with no art would look like. It read as a finished design for four
+      // passes. The check below is why it does not happen again.
+      EK.G.gotcha = { t: .9, species: 'dewdrip', name: 'Dewdrip',
         where: 'joined your party', done: () => { EK.G.gotcha = null; } };
     },
   },
@@ -292,6 +305,20 @@ for (const name of list) {
       }
     });
     await page.evaluate(`(${sc.go.toString()})(window.EK)`);
+    // Check the scene names real creatures, NOW — a beat with its own clock has
+    // expired by the time the shot is taken, so this cannot wait for the status
+    // line. A species the dex does not have draws as a graceful fallback: a
+    // coloured lozenge with two eyes, indistinguishable from a real creature
+    // whose art is not in yet. The gotcha scene passed a MOVE id as a species
+    // for four passes and the screen looked like a finished design the whole
+    // time. Nothing else was ever going to catch it.
+    const bad = await page.evaluate(() => {
+      const b = window.EK.B && EK.B();
+      return [EK.G.gotcha?.species, EK.G.evoAnim?.from, EK.G.evoAnim?.to,
+        b?.foe?.species, b?.mine?.species, ...(EK.G.party || []).map((m) => m.species)]
+        .filter((sp) => sp && !EK.DEX[sp]);
+    });
+    if (bad.length) console.error(`  !! ${name}: no such species — ${[...new Set(bad)].join(', ')}`);
     // A still wants the entry animation over; a film wants to start at the
     // trigger, or the beat it came to record has already finished.
     await page.waitForTimeout(FILM ? 60 : 1200);
