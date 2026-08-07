@@ -377,6 +377,20 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+49. **Seven passes at one width** (pass 133). Every --touch shot in this
+    project was taken at 390 wide. It is the width where the portrait buttons —
+    82px placed at percentages of a band half the window across — just about
+    do not overlap; below about 390 they do, and an iPhone SE is 375. I had
+    been carefully enumerating the BRANCHES of `layoutFor` and had never
+    thought of it as having a continuous parameter as well.
+    Sweeping 264 / 375 / 390 / 560 / 768 / 1024 found a second thing the single
+    width had hidden: the aimed card sits 3.1px under the description bar at
+    390 and 10.3px under it at 264. The narrow phone is three times worse and a
+    sweep at one size cannot say so in either direction.
+    **A layout has a width as well as branches. One sample of a continuous
+    parameter is one sample, and the value you happen to have chosen is the one
+    the code was tuned against.**
+
 48. **A drive that skipped the frame proved the opposite of the truth** (pass
     131). Reading the click handler — `pressKey('a')` with no release — and
     `pressKey` — `if (!keys.has(k)) fired.add(k)` — says a tap advances a

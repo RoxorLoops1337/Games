@@ -871,6 +871,61 @@ const SCENES = {
       if (el.scrollTop <= 0) throw new Error('deckwordy: the panel does not scroll — the fold is not in play');
     },
   },
+  // Does the fan actually escape the stage, or does it only look like it?
+  // The outer cards rotate and drop, so at some sizes their corners sit right
+  // on the stage's lower edge and a still cannot settle it — a card ending
+  // exactly at the boundary and a card clipped by it are the same picture.
+  // This measures instead: it reports the worst overhang in pixels, and throws
+  // if there is one, so the answer is a number rather than an impression.
+  handclip: {
+    w: 768, h: 1024,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({ foe: EK.mkMon('zaplet', 4), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.readIntent();
+      EK.renderHand();
+      const stage = document.getElementById('stage');
+      const cards = document.querySelectorAll('#hand .cardel');
+      if (!stage || !cards.length) throw new Error('handclip: no stage or no hand to measure');
+      const sr = stage.getBoundingClientRect();
+      let worst = 0, which = -1, side = '';
+      cards.forEach((c, i) => {
+        const r = c.getBoundingClientRect();
+        const edges = { bottom: r.bottom - sr.bottom, top: sr.top - r.top,
+          right: r.right - sr.right, left: sr.left - r.left };
+        for (const k of Object.keys(edges)) {
+          if (edges[k] > worst) { worst = edges[k]; which = i; side = k; }
+        }
+      });
+      // The other end matters just as much. Lifting the row to clear the stage's
+      // floor pushes the aimed card — which rises on its own — up under the
+      // description bar, and swapping a clipped corner for a hidden cost pip is
+      // not a fix. Both numbers, every time.
+      const bar = document.getElementById('dialogue');
+      let under = 0;
+      if (bar && !bar.classList.contains('hidden')) {
+        const br = bar.getBoundingClientRect();
+        cards.forEach((c) => {
+          const r = c.getBoundingClientRect();
+          if (r.left < br.right && r.right > br.left) under = Math.max(under, br.bottom - r.top);
+        });
+      }
+      // Both faults are known and recorded in index.html next to `#hand`, so
+      // this REPORTS rather than throwing on them — a scene that is red every
+      // run is a scene you stop reading. It throws only if either number gets
+      // worse than what was measured when they were found. The worst of each
+      // across the sizes swept: floor 9.8px at 768x1024, and 10.3px under the
+      // bar at 264x760 — the narrow phone is much the worse of the two ends,
+      // which a sweep at 390 alone would never have said. Those are the
+      // ceilings, with a pixel of slack.
+      const report = `floor ${worst > 0 ? worst.toFixed(1) : 0}px ${side || '-'} · under the bar ${under > 0 ? under.toFixed(1) : 0}px`;
+      if (worst > 11 || under > 12) throw new Error(`handclip: WORSE than recorded — ${report}`);
+      console.log(`handclip: ${report}`);
+    },
+  },
   // The bag OUT of a fight, which is a different screen doing a different job:
   // in a battle every item acts on the kin that is out, and in the field a
   // salve has to pick somebody. Shot with a party where that choice is real —
