@@ -63,6 +63,8 @@ const EXPOSE = `__out.api = {
   gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg, drawItem,
   paintText, textSprite, clearTextCache, TEXT_CACHE_MAX,
   wetReflection, wetPower, REFL_BANDS, rigParts,
+  marks, mark, clearMarks, updateMarks, drawMarks, MARK_MAX,
+  slamShock, superStrike, breakItem,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
   GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
@@ -4971,6 +4973,124 @@ test('a frame costs a fraction of what it did before the strings were baked', ()
   const fills = api._counts.fillRect || 0;
   // 10843 with the same scene before the text cache
   assert(fills < 7500, 'a busy frame is back up to ' + fills + ' fillRects');
+});
+
+/* ---------------------------------------------------------- ground marks */
+test('a body coming down leaves the street knowing it was there', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.clearMarks();
+  const foe = api.spawnEnemy('punk', api.cam.x + 60, api.FLOOR_MID, -1);
+  api.knockDown(foe, 1, 120, 90, null);
+  for (let i = 0; i < 240 && !api.marks.length; i++) api.updateFighter(foe, api.STEP);
+  assert(api.marks.length === 1, 'he landed and left ' + api.marks.length + ' marks');
+  const m = api.marks[0];
+  assert(m.kind === 'scuff', 'he left a ' + m.kind);
+  assert(Math.abs(m.x - foe.x) < 30 && Math.abs(m.y - foe.y) < 3, 'the mark is not where he landed');
+  assert(m.life > 10, 'the mark is gone in ' + m.life + 's — that is an effect, not a mark');
+});
+
+test('a slam, a broken crate and the rush all sign the floor differently', () => {
+  const api = boot();
+  const p = play(api, { stage: 0 });
+  api.clearMarks();
+  api.slamShock(p);
+  api.breakItem(api.mkItem('crate', api.cam.x + 40, api.FLOOR_MID, 0), null);
+  api.superStrike(p, { t: 1.7, dmg: 18, reach: 34, finisher: true, down: true, all: true });
+  const kinds = api.marks.map(m => m.kind);
+  for (const k of ['dent', 'debris', 'scorch'])
+    assert(kinds.includes(k), 'nothing left a ' + k + ': ' + kinds.join(', '));
+  const scorch = api.marks.find(m => m.kind === 'scorch');
+  const debris = api.marks.find(m => m.kind === 'debris');
+  assert(scorch.life > debris.life, 'a burn should outlast splinters');
+});
+
+test('marks fade out and are never more than the ring can hold', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.clearMarks();
+  for (let i = 0; i < api.MARK_MAX * 3; i++) api.mark('scuff', i * 9, 180, {});
+  assert(api.marks.length === api.MARK_MAX, 'the buffer grew to ' + api.marks.length);
+  // every one it kept is recent — not one slot cycling while the rest sit
+  const oldest = (api.MARK_MAX * 3 - api.MARK_MAX) * 9;
+  assert(Math.min(...api.marks.map(m => m.x)) >= oldest,
+    'the ring is holding a mark from x=' + Math.min(...api.marks.map(m => m.x)) + ', older than x=' + oldest);
+  api.clearMarks();
+  api.mark('scuff', 100, 180, { life: 4 });
+  const fade = () => {
+    api._resetCounts();
+    api.drawMarks(0);
+    const r = api._rects.filter(q => String(q[4]).startsWith('rgba('));
+    return r.length ? Math.max(...r.map(q => parseFloat(String(q[4]).split(',')[3]))) : 0;
+  };
+  const fresh = fade();
+  api.updateMarks(2);
+  const old = fade();
+  assert(fresh > 0.1, 'a fresh mark is invisible at ' + fresh);
+  assert(old < fresh * 0.5, 'the mark does not fade: ' + fresh + ' then ' + old);
+  api.updateMarks(2.1);
+  assert(api.marks.length === 0, 'the mark outlived its own life');
+});
+
+test('a mark is two tones, so it reads on a dark floor as well as a pale one', () => {
+  const api = boot();
+  play(api, { stage: 0 });                            // the street is wet
+  api.clearMarks();
+  api.mark('scuff', 100, 180, {});
+  const wetLit = api.marks[0].lit;
+  api._resetCounts();
+  api.drawMarks(0);
+  const cols = new Set(api._rects.map(q => String(q[4]).slice(0, 14)));
+  assert(cols.size >= 2, 'the whole mark is one colour');
+  const hex = (c) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const [lr, lg, lb] = hex(wetLit);
+  assert(lb > lr, 'a wet street pushes water aside, not dust: ' + wetLit);
+  play(api, { stage: 1 });                            // the scrapyard is dry
+  api.clearMarks();
+  api.mark('scuff', 100, 180, {});
+  const [dr, dg, db] = hex(api.marks[0].lit);
+  assert(dr > db, 'a dry yard pushes dust aside, not water: ' + api.marks[0].lit);
+});
+
+test('the marks travel with the street and are not drawn off the edge of it', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.clearMarks();
+  api.mark('scuff', 200, 180, {});
+  const at = (c) => {
+    api._resetCounts();
+    api.drawMarks(c);
+    const r = api._rects.filter(q => String(q[4]).startsWith('rgba('));
+    return { n: r.length, x: r.length ? Math.round(r.map(q => q[0]).reduce((a, b) => a + b) / r.length) : 0 };
+  };
+  const near = at(150), far = at(100);
+  assert(near.n > 0 && far.n > 0, 'the mark vanished on screen');
+  assert(far.x > near.x, 'the mark does not move with the camera');
+  assert(at(900).n === 0, 'a mark far off the left is still being painted');
+  assert(at(-900).n === 0, 'a mark far off the right is still being painted');
+});
+
+test('a new street has not been fought on yet', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  for (let i = 0; i < 6; i++) api.mark('scuff', i * 30, 180, {});
+  assert(api.marks.length === 6, 'the marks did not stick');
+  api.resetStage();
+  assert(api.marks.length === 0, 'the next street opened with ' + api.marks.length + ' old marks on it');
+});
+
+test('a floor covered in marks still fits the frame budget', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  for (let i = 0; i < 8; i++) api.spawnEnemy('punk', api.cam.x + 30 + i * 40, api.FLOOR_MID + (i % 3) * 8, -1);
+  for (let i = 0; i < 30; i++) api.spawnFx('chip', api.cam.x + i * 8, api.FLOOR_MID, 10, '#fff');
+  for (let i = 0; i < api.MARK_MAX * 2; i++)          // every one of them on screen at once
+    api.mark(['scuff', 'scorch', 'debris', 'dent'][i % 4], api.cam.x + (i * 7) % 380, 170 + (i % 5) * 8, {});
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(fills < 7500, 'a marked-up floor costs ' + fills + ' fillRects');
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);

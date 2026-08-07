@@ -2118,6 +2118,7 @@ function superTick(f, dt){
 /* Hammer's slam lands on the floor, not on you — the shock carries. */
 function slamShock(f){
   spawnFx('quake', f.x + f.face * 14, f.y, 2, '#ffb060');
+  mark('dent', f.x + f.face * 14, f.y, { r: 15, a: 0.7, col: '#0e0912' });
   shakeScreen(7, 0.4);
   SFX.crunch();
   for (const o of players){
@@ -2153,6 +2154,8 @@ function superStrike(f, st){
   if (st.finisher){
     G.flash = 0.55; SFX.superHit();
     spawnFx(st.quake ? 'quake' : 'ring', f.x, f.y, st.quake ? 2 : f.z + 24, '#fff0b0');
+    // the rush burns its ring into the street, and the street keeps it
+    mark('scorch', f.x, f.y, { r: 22, a: 0.7, col: '#1a0d10' });
     if (st.quake) shakeScreen(9, 0.5);
   }
 }
@@ -2260,6 +2263,7 @@ function breakItem(it, by){
   for (let i = 0; i < 4; i++) spawnFx('chip', it.x, it.y, it.z + 8, '#c8a060');
   for (let i = 0; i < 4; i++) spawnFx('dust', it.x + rr(-9, 9), it.y, 2, '#a89880');
   spawnFx('ring', it.x, it.y, 2, plank);
+  mark('debris', it.x, it.y, { r: 11, a: 0.75, col: plank, life: 18 });
   if (by && by.team === 'p') addScore(by.pi, 20);
   const roll = rng();
   if (loosePickups() < LOOSE_MAX){
@@ -2731,6 +2735,9 @@ function updateFighter(f, dt){
           f.state = 'lie'; f.st = 0; setAnim(f, 'lie', 0);
           shakeScreen(2, 0.1);
           for (let i = 0; i < 4; i++) spawnFx('dust', f.x + rr(-8, 8), f.y, 2, '#a0958a');
+          // he leaves the floor knowing he was there
+          mark('scuff', f.x, f.y, { r: 8 * (f.sc || 1), dir: sign(f.vx) || f.face,
+            a: 0.66, col: '#120d16' });
           SFX.land();
         }
       }
@@ -3571,6 +3578,7 @@ const MAX_ON = () => (W.cap || 4 + G.players);
 
 function resetStage(){
   fighters = []; items = []; fx = [];
+  clearMarks();                                       // a new street has not been fought on yet
   W.gi = 0; W.active = false; W.queue = []; W.goT = 0; W.clearT = 0; W.gate = null; W.spawnedBoss = false;
   W.cap = 0;
   cam.x = 0; cam.targetX = 0; cam.lock = -1; cam.shakeX = 0; cam.shakeY = 0;
@@ -3970,6 +3978,85 @@ function groundPlane(c, m, s){
   for (let i = 0; i < 5; i++) px(0, y0 + i, VW, 1, 'rgba(6,4,10,' + (0.24 - i * 0.045).toFixed(3) + ')');
 }
 
+/* ---------------------------------------------------------- ground marks
+   Every hit in this game was gone in a fifth of a second, so a street you
+   had just cleared looked exactly like one nobody had ever fought on. A
+   mark is left in world coordinates where something actually happened — a
+   body landing, a slam, a crate coming apart, the rush scorching the floor
+   — and fades out over the best part of half a minute. The buffer is a
+   fixed ring: the oldest mark is overwritten, so a long fight cannot grow
+   it and a stage change starts the street clean. */
+const MARK_MAX = 32;
+const marks = [];
+let markN = 0;
+function clearMarks(){ marks.length = 0; markN = 0; }
+function mark(kind, x, y, o){
+  o = o || {};
+  /* A mark is two tones, never one. The floor is already dark and already
+     mottled, so a dark smear on it is a smear on a smear — what reads is
+     the pale of whatever got pushed aside, and on a wet street that is the
+     water itself catching the neon. */
+  const m = { kind, x, y, t: 0,
+    life: o.life || (kind === 'scorch' ? 26 : kind === 'scuff' ? 20 : 14),
+    r: o.r || 9, col: o.col || '#171018', a: o.a == null ? 0.5 : o.a,
+    lit: o.lit || (stage().wet ? '#a4c4ea' : '#cbbb9c'),
+    dir: o.dir || 1, seed: (markN * 37) % 97 };
+  if (marks.length < MARK_MAX) marks.push(m);
+  else marks[markN % MARK_MAX] = m;
+  markN++;
+}
+function updateMarks(dt){
+  for (let i = marks.length - 1; i >= 0; i--){
+    marks[i].t += dt;
+    if (marks[i].t >= marks[i].life) marks.splice(i, 1);
+  }
+}
+function drawMarks(c){
+  for (const m of marks){
+    const sx = Math.round(m.x - c);
+    if (sx + m.r * 2 < -2 || sx - m.r * 2 > VW + 2) continue;
+    const k = m.t / m.life;
+    const a = m.a * (1 - k) * (1 - k);               // they go quickly at first, then linger
+    if (a < 0.012) continue;
+    const sy = Math.round(m.y);
+    if (m.kind === 'scuff'){
+      // where a body slid: the ground opened up along the way he was going,
+      // and what he pushed aside piled up behind him
+      // long along the way he was going, so it reads as a slide and not a spot
+      ellipse(sx, sy, m.r * 2.3, Math.max(1, m.r * 0.34), rgba(m.col, a * 0.8));
+      ellipse(sx + m.dir * m.r * 1.1, sy, m.r * 0.9, Math.max(1, m.r * 0.24), rgba(m.col, a));
+      ellipse(sx - m.dir * m.r * 1.0, sy - 1, m.r * 1.3, Math.max(1, m.r * 0.2), rgba(m.lit, a * 0.5));
+      px(sx - m.r * 1.6, sy - Math.max(2, m.r * 0.34), m.r * 3.2, 1, rgba(m.lit, a * 0.4));
+    } else if (m.kind === 'scorch'){
+      // the rush burns a ring into the floor and the floor keeps it
+      ellipse(sx, sy, m.r, Math.max(1, m.r * 0.36), rgba(m.col, a * 0.75));
+      const hot = Math.max(0, 1 - k * 4);              // the embers cool long before the char goes
+      for (let i = 0; i < 10; i++){
+        const a2 = i * TAU / 10 + m.seed;
+        px(sx + Math.cos(a2) * m.r, sy + Math.sin(a2) * m.r * 0.36, 2, 1,
+          rgba(hot > 0.15 ? '#ff8a3a' : '#4a2a24', a * (0.9 + hot * 0.9)));
+      }
+      if (hot > 0.5) glow(sx, sy, m.r + 4, m.r * 0.4 + 3, '#ff6a2a', a * 0.5 * hot);
+    } else if (m.kind === 'debris'){
+      // splinters and chips that came to rest and were never swept up
+      for (let i = 0; i < 7; i++){
+        const dx = Math.round((hash(m.seed * 7 + i * 13) - 0.5) * m.r * 2.4);
+        const dy = Math.round((hash(m.seed + i * 5) - 0.5) * 6);
+        px(sx + dx, sy + dy, 1 + (i & 1), 1, rgba(m.col, Math.min(1, a * 1.7)));
+        if (i % 3 === 0) px(sx + dx, sy + dy - 1, 1, 1, rgba(m.lit, a * 0.8));
+      }
+    } else {                                          // 'dent': a slam driving the floor in
+      ellipse(sx, sy, m.r, Math.max(1, m.r * 0.36), rgba(m.col, a * 0.8));
+      ellipse(sx, sy - 1, m.r * 0.62, Math.max(1, m.r * 0.2), rgba(m.lit, a * 0.4));
+      for (let i = 0; i < 4; i++){                    // the floor split away from it
+        const a2 = (i / 4) * TAU + m.seed;
+        limb(sx + Math.cos(a2) * m.r * 0.5, sy + Math.sin(a2) * m.r * 0.18,
+          sx + Math.cos(a2) * m.r * 1.25, sy + Math.sin(a2) * m.r * 0.45, 1, rgba(m.col, a));
+      }
+    }
+  }
+}
+
 function drawBackground(){
   lfReset();
   const s = stage();
@@ -3983,6 +4070,7 @@ function drawBackground(){
     default: bgStreet(c);
   }
   groundPlane(c, GROUND[s.bg] || GROUND.street, s);
+  drawMarks(c);                                       // what the fight has already done to it
 }
 
 /* ---------------------------------------------------------------- 1 */
@@ -6286,6 +6374,7 @@ function update(dt){
   separate();
   updateItems(dt);
   updateFx(dt);
+  updateMarks(dt);
   updateWaves(dt);
   updateDeaths(dt);
   updateCamera(dt);
