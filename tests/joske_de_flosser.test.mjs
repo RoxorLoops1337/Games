@@ -68,6 +68,8 @@ const EXPOSE = `__out.api = {
   deadFade, deadLife, deadStart, knockOut, rgba, get fx(){ return fx; },
   GRADE, gradePass, get fighters(){ return fighters; }, set fighters(v){ fighters = v; },
   CLOUD_SETS, propLight, mkItem,
+  drawCut,
+  litStage, WATER_TOP, WATER_COL_N, waterColumn,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
   GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
@@ -5570,6 +5572,146 @@ test('cloud and lit props are cheap enough to be free', () => {
     const fills = api._counts.fillRect || 0;
     assert(fills < 7500, 'stage ' + (st + 1) + ' costs ' + fills + ' fillRects');
     assert((api._counts.drawImage || 0) < 170, 'stage ' + (st + 1) + ' hangs ' + api._counts.drawImage + ' blits');
+  }
+});
+
+/* ------------------------------------------ what is lighting a thing */
+// A cold frame bakes its whole sky, which is tens of thousands of rects and
+// overruns the recorder — every one of these warms the scene first.
+const fullFrames = (api) => {
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  return api._rects.filter(q => q[2] === api.VW && q[3] === api.VH).map(q => q[4]);
+};
+
+test('a story beat is lit by the street it is set on, not the one behind it', () => {
+  const api = boot();
+  play(api, { stage: 0 });                            // the street is loaded
+  api.G.story = true;
+  assert(api.startCut('after3'), 'the dock beat would not start');
+  const sc = api.SCENES.after3;
+  assert(sc.bg !== api.STAGES[0].bg, 'the beat and the loaded stage share a backdrop — pick another');
+  const painted = fullFrames(api);
+  assert(painted.includes(api.GRADE.docks.mul) && painted.includes(api.GRADE.docks.lift),
+    'the dock beat is graded by ' + painted.join(', ') + ', not by the dock');
+  assert(!painted.includes(api.GRADE.street.mul), 'the beat took the loaded street s grade');
+  // and the override is put back afterwards, or the next stage inherits it
+  api.cutEnd();
+  const after = fullFrames(api);
+  assert(after.includes(api.GRADE.street.mul), 'the beat kept the lights after it ended');
+});
+
+test('the title is always the street, whatever stage it is sitting on', () => {
+  const api = boot();
+  play(api, { stage: 3 });                            // a foundry run in progress
+  api.toTitle();
+  const painted = fullFrames(api);
+  assert(painted.includes(api.GRADE.street.mul),
+    'the title is graded by ' + painted.join(', ') + ', not by the street it paints');
+  assert(!painted.includes(api.GRADE.foundry.mul), 'the title took the loaded foundry s grade');
+});
+
+test('the men in a beat are backlit by the beat s own street', () => {
+  const api = boot();
+  play(api, { stage: 0 });                            // the street is loaded
+  api.G.story = true;
+  api.startCut('after3');                             // the beat is on the dock
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const docks = api.STAGES.find(q => q.bg === 'docks');
+  const street = api.STAGES[0];
+  const halo = (st) => api._rects.filter(q => String(q[4]) === api.rgba(st.key, st.back * 0.50)).length;
+  assert(halo(docks) > 30, 'the actors catch nothing off the harbour: ' + halo(docks) + ' pixels');
+  assert(halo(street) === 0, 'the actors are lit by the street the beat is not set on');
+});
+
+test('the beat and the title are graded, and the letterbox over them is not', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.G.story = true;
+  api.startCut('after5');                             // the roof, at sunset
+  const g = api.GRADE.keep;
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const painted = api._rects.filter(q => q[2] === api.VW && q[3] === api.VH).map(q => q[4]);
+  assert(painted.includes(g.mul) && painted.includes(g.lift), 'the roof beat is not graded by the roof');
+  // the bars go on after the grade, so they stay black
+  const bars = api._rects.filter(q => q[4] === '#000' && q[2] === api.VW && q[3] === 22);
+  assert(bars.length >= 1, 'the letterbox went missing');
+  const lastGrade = api._rects.findIndex(q => q[4] === g.lift);
+  assert(api._rects.indexOf(bars[0]) > lastGrade, 'the letterbox is graded along with the beat');
+  const src = fs.readFileSync(HTML, 'utf8');
+  const cut = src.slice(src.indexOf('function drawCut()'));
+  const head = cut.slice(0, cut.indexOf('\n}\n'));
+  assert(head.indexOf('gradePass();') < head.indexOf("px(0, 0, VW, 22, '#000')"),
+    'the grade runs after the bars are down');
+});
+
+test('a beat costs less than the stage it interrupts', () => {
+  const api = boot();
+  play(api, { players: 2, stage: 2 });
+  api.G.story = true;
+  api.startCut('after3');
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(fills > 400, 'the beat drew almost nothing: ' + fills);
+  assert(fills < 7500, 'a beat costs ' + fills + ' fillRects');
+});
+
+/* --------------------------------------------------------------- water */
+test('every light over the harbour lays a column of itself down it', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const dash = (col) => api._rects.filter(q => q[3] === 1 && q[1] > api.WATER_TOP &&
+    q[1] < api.WATER_TOP + 36 && String(q[4]).startsWith('rgba(' +
+      [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)).join(',')));
+  const flood = dash('#dff0ff');
+  assert(flood.length >= api.WATER_COL_N, 'the floodlights lay ' + flood.length + ' dashes on the water');
+  // the column widens and fades the further from the light it gets
+  const byY = flood.slice(0, api.WATER_COL_N).sort((a, b) => a[1] - b[1]);
+  assert(byY[byY.length - 1][2] > byY[0][2], 'the column does not spread as it comes toward you');
+  const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+  assert(alpha(byY[0]) > alpha(byY[byY.length - 1]), 'the column does not fade with distance');
+  // it wanders off the line rather than falling straight
+  const xs = byY.map(q => q[0] + q[2] / 2);
+  assert(new Set(xs.map(Math.round)).size > 2, 'the column is a straight bar, not a broken one');
+});
+
+test('the water has a far edge and the sky in it', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  assert(r.some(q => q[1] === api.WATER_TOP && q[2] === api.VW && /rgba\(150,\s*200,\s*235/.test(String(q[4]))),
+    'the water has no far edge');
+  const lip = api.CLOUD_SETS.docks[2].lip;
+  const want = 'rgba(' + [1, 3, 5].map(i => parseInt(lip.slice(i, i + 2), 16)).join(',');
+  const refl = r.filter(q => q[2] === api.VW && q[3] === 2 && String(q[4]).startsWith(want));
+  assert(refl.length === 6, 'the cloud lies in the water as ' + refl.length + ' bands (3 twice over)');
+  assert(Math.min(...refl.map(q => q[1])) > api.WATER_TOP, 'the reflection is above the water');
+});
+
+test('the harbour only paints the gantries you can see', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  for (const cx of [0, 400, 1500]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const legs = api._rects.filter(q => q[4] === '#2b3a46' && q[2] === 4 && q[3] === 48);
+    assert(legs.length >= 1, 'at camera ' + cx + ' the harbour has ' + legs.length + ' gantries');
+    assert(legs.length <= 4, 'at camera ' + cx + ' it painted ' + legs.length + ' gantries');
   }
 });
 
