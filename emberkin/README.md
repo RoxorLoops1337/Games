@@ -2206,6 +2206,32 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### Which beats make a sound
+
+The same method that worked on the words, turned on the audio: **list what has
+one and what does not.** Every beat added on the look track was designed as a
+picture, so the question was whether any of them were mute.
+
+    crit burst    playCue('crit')                     ok
+    level ring    playCue('level') at the fx site     ok
+    the mend      healParty() already cues 'heal'     ok — and at the right moment
+    the blackout  silent                              deliberate
+    the rustle    silent                              a gap, and my own doing
+
+Better covered than expected: three of five already had a voice, and the mend's
+fires exactly as the light starts because `healParty` cues it. **The blackout is
+left silent on purpose** — a fall to black is what silence is for, and adding a
+sound there would be filling in a table rather than serving the beat.
+
+The rustle was the real gap, and it is worth being precise about whose fault it
+is. Before that beat existed, stepping into grass played the battle sting
+immediately. Inserting half a second of thrashing blades in front of it **pushed
+the battle cue half a second later than it used to be, and nothing said so** —
+you only see that by listing what has a voice.
+
+It borrows the tall-grass step's own triangle and runs it three times, falling:
+the same material moving faster. `blip(196 - i*22, .09, 'triangle', .034)`.
+
 ### Does the game say anything that is no longer true?
 
 The reverse of the last three passes, and never asked before: every line of copy
