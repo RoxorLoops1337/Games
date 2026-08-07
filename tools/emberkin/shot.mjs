@@ -329,6 +329,37 @@ const SCENES = {
   // denser party strip, or nothing at all is a design call — and the last time
   // a screen looked wrong at this scale (the battle arena not matching the map)
   // it turned out to be deliberate, so this wants reading before changing.
+  // An evolution, at the moment the shape changes.
+  //
+  // EVO is hold .9, build 1.5, burst .45, settle 1.0, quiet .6 — 4.45s whole,
+  // and the burst is the shortest sub-beat AND the one that matters, because
+  // the swap happens under its white-out. Filming all 4.45s at any interval
+  // that fits a tile would alias the burst exactly the way a 260ms sample once
+  // made a 500ms orb wobble look like a dot sitting still.
+  //
+  // So the beat is built by the game (`checkEvolve` -> `runEvolution`) and only
+  // its CLOCK is wound forward to the end of `build`. That is a fast-forward of
+  // real state, not hand-assembled state — the distinction that cost two passes
+  // on the trainer ambush.
+  evolve2: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.G.mode = 'world'; EK.enterMap('route_one', 9, 10, 'down');
+      const m = EK.mkMon('cindercub', 15);
+      EK.G.party = [m];
+      m.lvl = 16; EK.refresh(m);
+      // `checkEvolve` ASKS who can evolve and returns the mon; `runEvolution`
+      // is what starts the beat. Calling the query and expecting the command
+      // filmed a quiet stretch of Route One, and the `if (a)` guard below
+      // swallowed it without a word — the same shape as a `||` default hiding
+      // a field that does not exist.
+      EK.runEvolution(m);
+      const a = EK.G.evoAnim;
+      if (!a) throw new Error('no evoAnim — runEvolution did not start the beat');
+      a.i = 1; a.t = 1.42;                 // the last breath of `build`
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
