@@ -522,6 +522,39 @@ function bake(key, w, h, painter){
 }
 function blit(c, x, y){ if (c) ctx.drawImage(c, x | 0, y | 0); }
 
+/* --------------------------------------------------------------- light
+   A light does not stop at the edge of a rectangle.  Every emitter in the
+   game — neon, windows, lamps, headlights, furnace mouths — hangs a bloom
+   like this one: a soft radial baked per colour and radius, blitted with
+   `lighter` so two lights that overlap get brighter instead of muddier.
+   The falloff is a stack of nested ellipses, because one ellipse at one
+   alpha has no falloff across its own width. */
+const GLOW_STEPS = 7;
+function glowSprite(col, rx, ry){
+  return bake('glow:' + col + ':' + rx + ':' + ry, rx * 2 + 2, ry * 2 + 2, () => {
+    for (let s = 0; s < GLOW_STEPS; s++){
+      /* squared, so the rings crowd the centre: a bright core with a fast
+         falloff reads as a light, an even stack reads as fog */
+      const t = 1 - s / (GLOW_STEPS + 1), k = t * t;
+      const ex = rx * k, ey = ry * k;
+      for (let y = -ey; y <= ey; y++){
+        const w = Math.floor(ex * Math.sqrt(Math.max(0, 1 - (y * y) / (ey * ey))));
+        if (w > 0) px(rx + 1 - w, Math.round(ry + 1 + y), w * 2, 1, rgba(col, 1 / GLOW_STEPS));
+      }
+    }
+  });
+}
+function glow(x, y, rx, ry, col, a){
+  rx = Math.max(1, rx | 0); ry = Math.max(1, ry | 0);
+  if (x + rx < 0 || x - rx > VW) return;
+  const oldA = ctx.globalAlpha;
+  ctx.globalAlpha = a == null ? 1 : a;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(glowSprite(col, rx, ry), Math.round(x - rx) - 1, Math.round(y - ry) - 1);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = oldA;
+}
+
 /* A 4x4 ordered dither, so two colours make eight. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 function dgrad(x0, y0, w, h, ca, cb){
@@ -3383,6 +3416,8 @@ function bgStreet(c){
     ellipse(289, 61, 9, 9, '#fffaf0');
     px(286, 60, 2, 2, '#ddd2b4'); px(295, 68, 3, 2, '#ddd2b4');
   }), 0, 0);
+  glow(291, 64, 44, 40, '#9fb4ff', 0.16);
+  glow(291, 64, 19, 18, '#e8eaff', 0.24);
 
   // far skyline, hazed toward the sky it stands in
   for (let i = -1; i < 14; i++){
@@ -3408,14 +3443,15 @@ function bgStreet(c){
       px(x + wx, 150 - h + wy, 7, 8, lit ? '#c99a3c' : '#15111f');
       if (lit){
         px(x + wx + 1, 150 - h + wy + 1, 5, 6, '#ffe8a0');
-        ctx.fillStyle = 'rgba(255,220,140,0.05)';
-        ctx.fillRect(x + wx - 3, 150 - h + wy - 3, 13, 14);
+        if (hash(gx * 7 + wx + wy * 5) > 0.55) glow(x + wx + 3, 150 - h + wy + 4, 8, 7, '#ffbf62', 0.22);
       }
     }
     const neon = hash(gx + 11) > 0.5;
     const nc = neon ? '#ff2f7a' : '#2fc8e8', nc2 = neon ? '#ff9ec6' : '#a8f0ff';
-    ctx.fillStyle = neon ? 'rgba(255,47,122,0.10)' : 'rgba(47,200,232,0.10)';
-    ctx.fillRect(x + 16, 116, 38, 20);
+    /* the sign burns its own halo into the brick, then washes the pavement
+       below it — a hum on the tube keeps the wash alive */
+    const hum = 0.86 + Math.sin(T * 2.3 + gx * 1.7) * 0.07 + (hash(gx + 40) > 0.94 && (T * 9 | 0) % 11 === 0 ? -0.5 : 0);
+    glow(x + 37, 128, 34, 22, nc, 0.42 * hum);
     px(x + 22, 122, 30, 12, nc);
     px(x + 24, 124, 26, 8, nc2);
     px(x + 6, 132, 12, 18, '#0f0b18');
@@ -3427,7 +3463,8 @@ function bgStreet(c){
   px(carX, 138, 44, 10, '#3a2038'); px(carX + 6, 132, 26, 7, '#4a2848');
   px(carX + 8, 133, 20, 4, '#6f4a6a');
   px(carX + 44, 140, 4, 3, '#ffe7b0');
-  ctx.fillStyle = 'rgba(255,220,150,0.07)'; ctx.fillRect(carX + 46, 132, 40, 18);
+  glow(carX + 58, 141, 24, 9, '#ffd28a', 0.4);
+  glow(carX + 46, 141, 9, 6, '#fff2c8', 0.6);
   ellipse(carX + 10, 148, 4, 3, '#15101a'); ellipse(carX + 34, 148, 4, 3, '#15101a');
 
   // pavement, then road, shaded front to back
@@ -3446,11 +3483,12 @@ function bgStreet(c){
     ellipse(x, 172 + hash(gx + 2) * 26, 14, 4, 'rgba(70,90,130,0.20)');
     px(x - 6, 172 + hash(gx + 2) * 26, 9, 1, 'rgba(150,190,255,0.14)');
   }
-  for (let i = 0; i < 6; i++){                        // the signs, smeared down the road
+  for (let i = -1; i < 7; i++){                       // the signs, smeared down the road
     const gx = Math.floor(c * 0.55 / 82) + i, x = gx * 82 - c * 0.55;
-    if (x < -40 || x > VW + 10) continue;
+    if (x < -60 || x > VW + 20) continue;
     const neon = hash(gx + 11) > 0.5;
     const nc = neon ? '#ff2f7a' : '#2fc8e8';
+    glow(x + 37, 174, 26, 15, nc, 0.24);              // the pool it lays on the wet road
     for (let r = 0; r < 5; r++){
       const wob = Math.round(Math.sin(T * 1.7 + gx + r * 0.6) * 1.6);
       px(x + 24 + wob, 158 + r * 6, 26 - r * 3, 3, rgba(nc, 0.11 - r * 0.017));
@@ -3458,11 +3496,17 @@ function bgStreet(c){
   }
   for (let i = -1; i < 5; i++){                       // lamps, with a cone
     const gx = Math.floor(c * 0.55 / 140) + i, x = gx * 140 - c * 0.55;
-    px(x + 6, 92, 3, 58, '#221d2e');
-    px(x, 88, 15, 5, '#332b42');
-    px(x + 3, 92, 9, 3, '#ffe8a0');
-    ctx.fillStyle = 'rgba(255,220,140,0.055)';
-    ctx.fillRect(x - 10, 92, 35, 60);
+    px(x + 6, 93, 3, 57, '#221d2e');                  // post
+    px(x + 1, 86, 14, 4, '#3a3150');                  // hood
+    px(x + 1, 86, 14, 1, '#4d4266');
+    px(x + 3, 90, 10, 3, '#ffeab4');                  // the lamp itself
+    px(x + 5, 90, 6, 2, '#fffbe8');
+    for (let r = 0; r < 24; r++){                     // the cone, widening as it falls
+      const k = r / 24;
+      px(x - 1 - k * 15, 93 + r * 2.5, 16 + k * 30, 3, rgba('#ffdc8c', 0.045 * (1 - k * 0.72)));
+    }
+    glow(x + 8, 92, 9, 6, '#ffe8ae', 0.42);
+    glow(x + 8, 160, 28, 10, '#ffd07a', 0.22);        // and the pool where it lands
   }
 }
 
@@ -3476,6 +3520,8 @@ function bgJunk(c){
     ellipse(96, 62, 11, 11, '#cdbb9a'); ellipse(93, 59, 8, 8, '#f0e4c8');
     px(91, 64, 3, 2, '#c6b48f');
   }), 0, 0);
+  glow(95, 61, 40, 38, '#c8b48c', 0.15);
+  glow(95, 61, 17, 16, '#f4e8cc', 0.22);
 
   for (let i = -1; i < 10; i++){
     const gx = Math.floor(c * 0.28 / 64) + i, x = gx * 64 - c * 0.28;
@@ -3539,8 +3585,12 @@ function bgJunk(c){
       ctx.fillStyle = 'rgba(255,140,40,' + fl.toFixed(2) + ')';
       ctx.fillRect(x - 5, 118, 10, 9);
       px(x - 2, 114, 4, 5, '#ffd06a');
-      ctx.fillStyle = 'rgba(255,120,30,0.06)';
-      ctx.fillRect(x - 26, 104, 52, 52);
+      glow(x, 118, 20, 16, '#ff7a1e', 0.34 + fl * 0.22);   // the fire itself
+      for (let e = 0; e < 3; e++){                         // embers going up
+        const t = (T * 0.5 + hash(gx * 13 + e)) % 1;
+        px(x - 4 + hash(gx + e) * 9 + Math.sin(T * 3 + e) * 2, 116 - t * 30, 1, 1,
+          rgba('#ffc060', 0.9 - t * 0.85));
+      }
     }
   }
 
@@ -3555,32 +3605,44 @@ function bgJunk(c){
     if (hash(gx + 9) > 0.72) ellipse(x + 8, 190 + hash(gx) * 12, 9, 3, '#37302a');
     if (hash(gx + 15) > 0.8) px(x + 3, 176 + hash(gx + 2) * 24, 13, 1, '#4e4234');
   }
+  for (let i = -1; i < 8; i++){                       // what the barrel fires put on the dirt
+    const gx = Math.floor(c * 0.82 / 96) + i, x = gx * 96 - c * 0.82;
+    if (Math.floor(hash(gx * 3) * 3) !== 2) continue;
+    glow(x, 158, 30, 12, '#ff8a2a', 0.22 + Math.sin(T * 9 + gx) * 0.05);
+  }
 }
 
 /* ---------------------------------------------------------------- 3 */
 function bgDocks(c){
   blit(bake('sky_docks', VW, 106, () => {
-    dgrad(0, 0, VW, 46, '#07101f', '#123048');
-    dgrad(0, 46, VW, 34, '#123048', '#1d4a63');
-    dgrad(0, 80, VW, 26, '#1d4a63', '#2a6076');
+    dgrad(0, 0, VW, 46, '#050a14', '#0b2033');
+    dgrad(0, 46, VW, 34, '#0b2033', '#123145');
+    dgrad(0, 80, VW, 26, '#123145', '#194255');
     for (let i = 0; i < 50; i++) px((hash(i) * VW) | 0, (hash(i + 12) * 44) | 0, 1, 1, i % 5 ? '#7f93b8' : '#dfe9ff');
   }), 0, 0);
 
-  blit(bake('water_docks', VW, 35, () => { dgrad(0, 0, VW, 35, '#17506e', '#12405c'); }), 0, 106);
+  blit(bake('water_docks', VW, 35, () => { dgrad(0, 0, VW, 35, '#0e3450', '#0a2b40'); }), 0, 106);
+  glow(VW * 0.72, 118, 60, 16, '#4aa8d0', 0.22);           // the harbour lights on the water
   for (let i = 0; i < 54; i++){
     const x = ((hash(i) * 2000 - c * 0.3) % (VW + 40) + VW + 40) % (VW + 40) - 20;
     const y = 108 + hash(i + 3) * 32;
-    px(x, y, 6 + hash(i + 8) * 10, 1, Math.sin(T * 2 + i) > 0 ? '#2f7ea0' : '#1d5c7e');
+    px(x, y, 6 + hash(i + 8) * 10, 1, Math.sin(T * 2 + i) > 0 ? '#215c78' : '#153f58');
   }
   for (let i = -1; i < 5; i++){
     const gx = Math.floor(c * 0.22 / 190) + i, x = gx * 190 - c * 0.22;
     px(x, 62, 4, 48, '#2b3a46'); px(x - 24, 62, 60, 4, '#35444f');
     px(x + 20, 66, 3, 18, '#42525e');
-    if (Math.sin(T * 1.6 + gx) > 0.2) px(x + 1, 58, 3, 3, '#ff6a4a');
+    if (Math.sin(T * 1.6 + gx) > 0.2){
+      px(x + 1, 58, 3, 3, '#ff6a4a');
+      glow(x + 2, 59, 9, 8, '#ff6a4a', 0.6);
+    }
+    px(x + 26, 66, 8, 4, '#4a5a66');                       // floodlight on the arm
+    px(x + 27, 69, 6, 2, '#e8f4ff');
+    glow(x + 30, 70, 9, 6, '#dff0ff', 0.45);
   }
   ctx.fillStyle = 'rgba(30,74,99,0.35)'; ctx.fillRect(0, 96, VW, 20);
 
-  const COL = ['#a8422e', '#2f6a8a', '#3f7a4a', '#b08a2a', '#7a3a6a'];
+  const COL = ['#6e2c1f', '#1f4a62', '#2a5433', '#785c1c', '#52264a'];
   for (let i = -1; i < 12; i++){
     const gx = Math.floor(c * 0.62 / 62) + i, x = gx * 62 - c * 0.62;
     const stackH = 1 + Math.floor(hash(gx) * 3);
@@ -3596,25 +3658,43 @@ function bgDocks(c){
     }
   }
 
-  px(0, 141, VW, 9, '#12405c');
+  for (let i = -1; i < 5; i++){                            // the shafts, hanging in the sea air
+    const gx = Math.floor(c * 0.22 / 190) + i, x = gx * 190 - c * 0.22;
+    if (x < -90 || x > VW + 40) continue;
+    const oldA = ctx.globalAlpha;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let r = 0; r < 26; r++){
+      const k = r / 26, w = 10 + k * 40;
+      ctx.globalAlpha = 0.15 * (1 - k) * (1 - k * 0.4) * (0.86 + Math.sin(T * 0.7 + gx) * 0.14);
+      px(x + 30 - w / 2 - k * 12, 71 + r * 3.2, w, 4, '#bcd8f0');
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = oldA;
+  }
+  ctx.fillStyle = 'rgba(20,52,72,0.22)'; ctx.fillRect(0, 104, VW, 40);   // haze, to push the yard back
+  px(0, 141, VW, 9, '#0a2b40');
   for (let i = 0; i < 22; i++){
     const x = ((hash(i + 60) * 1400 - c * 0.5) % (VW + 30) + VW + 30) % (VW + 30) - 15;
-    px(x, 142 + (i % 4) * 2, 7 + hash(i) * 8, 1, Math.sin(T * 3 + i) > 0 ? '#2f7ea0' : '#1d5c7e');
+    px(x, 142 + (i % 4) * 2, 7 + hash(i) * 8, 1, Math.sin(T * 3 + i) > 0 ? '#215c78' : '#153f58');
   }
-  px(0, 148, VW, 2, '#0d2f45');
-  px(0, 150, VW, 5, '#6a5238');
+  px(0, 148, VW, 2, '#081f2e');
+  px(0, 150, VW, 5, '#3e3020');
   blit(bake('floor_docks', VW, 69, () => {
-    dgrad(0, 0, VW, 32, '#5a4730', '#4d3d28');
-    dgrad(0, 32, VW, 37, '#4d3d28', '#382c1c');
+    dgrad(0, 0, VW, 32, '#332616', '#2b2012');
+    dgrad(0, 32, VW, 37, '#2b2012', '#1c150c');
   }), 0, 155);
   for (let i = -1; i < 20; i++){
     const gx = Math.floor(c / 26) + i, x = gx * 26 - c;
-    px(x, 155, 1, VH - 155, '#3f3020');
-    px(x + 1, 155, 1, VH - 155, 'rgba(140,110,70,0.10)');
+    px(x, 155, 1, VH - 155, '#241a0e');
+    px(x + 1, 155, 1, VH - 155, 'rgba(140,110,70,0.08)');
   }
   for (let i = 0; i < 3; i++){
     const x = 60 + i * 120 - (c % 360);
     px(x, 194, 9, 14, '#33333d'); px(x, 192, 9, 3, '#4b4b57');
+  }
+  for (let i = -1; i < 5; i++){                       // the floodlights, down on the boards
+    const gx = Math.floor(c * 0.22 / 190) + i, x = gx * 190 - c * 0.22;
+    glow(x + 14, 174, 52, 20, '#a8c8e8', 0.30);
   }
 }
 
@@ -3630,14 +3710,13 @@ function bgFoundry(c){
     px(x, 52, 74, 98, '#2a1c1c');
     px(x, 52, 74, 2, '#3d2828');
     px(x, 52, 2, 98, '#352323');
-    const glow = 0.55 + Math.sin(T * 3 + gx) * 0.25;
+    const heat = 0.55 + Math.sin(T * 3 + gx) * 0.25;
     px(x + 14, 96, 46, 40, '#3a1a10');
-    ctx.fillStyle = 'rgba(255,120,30,' + glow.toFixed(2) + ')';
+    ctx.fillStyle = 'rgba(255,120,30,' + heat.toFixed(2) + ')';
     ctx.fillRect(x + 18, 100, 38, 34);
     px(x + 24, 110, 26, 20, '#ffd06a');
     px(x + 28, 114, 18, 12, '#fff0c0');
-    ctx.fillStyle = 'rgba(255,110,20,0.05)';
-    ctx.fillRect(x - 6, 78, 86, 72);
+    glow(x + 37, 117, 44, 32, '#ff6e14', 0.30 + heat * 0.22);
     px(x + 6, 44, 12, 10, '#3a2c2c'); px(x + 56, 44, 12, 10, '#3a2c2c');
   }
 
@@ -3656,14 +3735,19 @@ function bgFoundry(c){
   }
 
   px(0, 148, VW, 2, '#4a4450');
-  blit(bake('floor_foundry', VW, 59, () => {
-    dgrad(0, 0, VW, 32, '#3a3440', '#332e38');
-    dgrad(0, 32, VW, 27, '#332e38', '#241f2a');
+  blit(bake('floor_foundry', VW, 59, () => {              // dark and warm, so the furnaces have somewhere to land
+    dgrad(0, 0, VW, 32, '#2b242c', '#241e26');
+    dgrad(0, 32, VW, 27, '#241e26', '#171319');
   }), 0, 150);
   for (let i = -1; i < 14; i++){
     const gx = Math.floor(c / 40) + i, x = gx * 40 - c;
     px(x, 168, 22, 2, '#413a48');
     px(x + 6, 194, 14, 2, '#2c2632');
+  }
+  for (let i = -1; i < 8; i++){                            // furnace light spilling across the floor
+    const gx = Math.floor(c * 0.4 / 118) + i, x = gx * 118 - c * 0.4;
+    const heat = 0.55 + Math.sin(T * 3 + gx) * 0.25;
+    glow(x + 37, 164, 62, 24, '#ff7a1e', 0.28 + heat * 0.14);
   }
   px(0, FLOOR_BOT + 1, VW, 3, '#1d161f');
   const g2 = 0.55 + Math.sin(T * 4) * 0.22;
@@ -3673,8 +3757,8 @@ function bgFoundry(c){
     const x = ((i * 47 + T * 26) % (VW + 40)) - 20;
     px(x, FLOOR_BOT + 5 + (i % 3), 14, 2, '#ffd06a');
   }
-  ctx.fillStyle = 'rgba(255,120,30,0.07)';
-  ctx.fillRect(0, FLOOR_BOT - 10, VW, 16);
+  for (let i = 0; i < 5; i++)                              // the channel of molten metal, burning up the floor
+    glow(i * 84 + 30, FLOOR_BOT + 2, 52, 15, '#ff7a1e', 0.26 + Math.sin(T * 4 + i) * 0.05);
   px(0, VH - 2, VW, 2, '#3a1e12');
 }
 
@@ -3689,9 +3773,9 @@ function bgKeep(c){
     dgrad(0, 124, VW, 26, '#6a4050', '#4a3040');
     for (let i = 0; i < 26; i++) px((hash(i + 5) * VW) | 0, (hash(i + 44) * 26) | 0, 1, 1, '#c8b8e0');
   }), 0, 0);
+  glow(VW - 92, 96, 62, 44, '#ffb04a', 0.42);
   ellipse(VW - 92, 96, 15, 15, '#fff0c0');
-  ctx.fillStyle = 'rgba(255,220,150,0.10)';
-  ctx.fillRect(VW - 126, 62, 68, 68);
+  glow(VW - 92, 96, 26, 22, '#ffe6a8', 0.55);
 
   for (let i = -1; i < 16; i++){
     const gx = Math.floor(c * 0.22 / 44) + i, x = gx * 44 - c * 0.22;
@@ -3700,15 +3784,21 @@ function bgKeep(c){
     px(x, 124 - h, 38, 2, '#4a3050');
     px(x, 124 - h, 1, h, '#412a48');
     for (let wy = 5; wy < h - 4; wy += 8) for (let wx = 4; wx < 34; wx += 9)
-      if (hash(gx * 23 + wx + wy) > 0.7) px(x + wx, 124 - h + wy, 3, 4, '#ffb066');
+      if (hash(gx * 23 + wx + wy) > 0.7){
+        px(x + wx, 124 - h + wy, 3, 4, '#ffb066');
+        if (hash(gx * 5 + wy) > 0.6) glow(x + wx + 1, 124 - h + wy + 2, 6, 6, '#ff9a4a', 0.24);
+      }
   }
   ctx.fillStyle = 'rgba(120,70,80,0.28)'; ctx.fillRect(0, 108, VW, 24);
 
-  px(0, 148, VW, 3, '#5a4e58');
-  blit(bake('floor_keep', VW, 60, () => {
-    dgrad(0, 0, VW, 30, '#463c46', '#3a3138');
-    dgrad(0, 30, VW, 30, '#3a3138', '#2b242a');
+  px(0, 148, VW, 3, '#6e4c46');                       // the parapet, catching the last of it
+  px(0, 148, VW, 1, '#a0664e');
+  blit(bake('floor_keep', VW, 60, () => {             // warm and dark, so the sunset has a roof to land on
+    dgrad(0, 0, VW, 30, '#3a2c30', '#2e2228');
+    dgrad(0, 30, VW, 30, '#2e2228', '#1f181d');
   }), 0, 151);
+  glow(VW - 92, 168, 130, 30, '#ff8a3a', 0.20);       // the sun, laid flat across the gravel
+  glow(VW - 92, 156, 90, 14, '#ffb060', 0.16);
   for (let i = -1; i < 8; i++){
     const gx = Math.floor(c * 0.62 / 130) + i, x = gx * 130 - c * 0.62;
     px(x, 118, 34, 32, '#2f2830'); px(x + 2, 120, 30, 5, '#4d4250');
