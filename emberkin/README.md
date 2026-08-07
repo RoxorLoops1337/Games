@@ -2206,6 +2206,29 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### Losing the legendary says so
+
+The code has always kept the hunt open — knock Vespyr down, run from it, or wipe
+against it and `beatVespyr` stays unset, so it gathers on the shrine again. That
+mechanic was tested from the first pass that wrote it. **Nothing ever told the
+player.**
+
+A wild win says nothing at all, which makes knocking it down the quietest of the
+three ways to lose it and the one most likely to read as *that was my only
+chance*. Someone who believes the only legendary in the game is gone stops going
+back to the shrine, and **no picture can tell them otherwise** — this is work
+only a sentence can do.
+
+All three paths say it now: knocked down (*"Not gone. It will gather on the
+shrine again — bring more orbs."*), fled (*"The light closes behind you. It will
+be up here again."*), and wiped (*"And the thing on the shrine is still up
+there. It always is."*). The suite reads the lines off `G.dialogue` as they
+arrive and checks the words are there, not just the flag.
+
+This is the same category as the starter screen's missing third card: not how
+something looks, but **what a player would believe**. Both were fixed by a
+sentence.
+
 ### The legendary opens with its own words
 
 Everything about the encounter is built up — its own cue, twice the motes, a

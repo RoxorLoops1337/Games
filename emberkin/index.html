@@ -8071,7 +8071,16 @@ function finishBattle() {
     const gems = gemReward(b);
     G.gems += gems;
     G.wins++;
-    if (!b.npc) { winFlourish(gems, withReward); return; }
+    if (!b.npc) {
+      // Knocking the legendary down instead of catching it is the quietest of
+      // the three ways to lose it — a wild win says nothing at all — and it is
+      // the one most likely to read as "that was my only chance". The code has
+      // always kept the hunt open (`beatVespyr` stays unset); nothing ever said
+      // so. A player who believes it is gone stops going back to the shrine,
+      // and no picture can tell them otherwise. This is the sentence's job.
+      if (b.legendary) { winFlourish(gems, () => say('', ['It comes apart into light and goes out.', 'Not gone. It will gather on the shrine again — bring more orbs.'], withReward)); return; }
+      winFlourish(gems, withReward); return;
+    }
     const lines = [`You pocket ${gems} rare gems.`];
     lines.push(...(b.npc.trainer.lose || []));
     G.flags[b.npc.id] = 1;
@@ -8101,7 +8110,11 @@ function finishBattle() {
     };
     playCue('gotcha');
   } else if (over === 'fled') {
-    say('', ['You got away.'], done);
+    // Running from the legendary does not end the hunt either, and a player who
+    // does not know that will not go back.
+    say('', b.legendary
+      ? ['You got away.', 'The light closes behind you. It will be up here again.']
+      : ['You got away.'], done);
   } else if (over === 'lose') {
     say('', ['Everything you have is down.', 'You carry them back to the Wayhouse on instinct.'], () => {
       // The dark closes over the arena first, and the room comes up out of it.
@@ -8120,6 +8133,7 @@ function finishBattle() {
       // Say it out loud, so nobody stands in front of a trainer wondering
       // whether the game has stopped letting them through.
       if (b.npc) after.push(`${b.npc.name} will not stop you again. Go and ask for the rematch when you want it.`);
+      if (b.legendary) after.push('And the thing on the shrine is still up there. It always is.');
       say('Sable', after, () => saveGame());
       } };
     });
