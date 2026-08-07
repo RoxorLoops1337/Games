@@ -204,6 +204,10 @@
         <button data-v="1" class="on">SCANLINES</button>
         <button data-v="0">CLEAN</button>
       </div>
+      <div class="seg" id="segBloom">
+        <button data-v="1" class="on">BLOOM</button>
+        <button data-v="0">NO BLOOM</button>
+      </div>
       <button class="btn" id="bResume">RESUME</button>
       <button class="btn alt" id="bQuit">QUIT</button>
     </div>
@@ -298,7 +302,7 @@ const G = {
   bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '', bestWave: 0,
   ups: [], picks: [], pick: 0,
   time: 0,                          // seconds spent in the current stage
-  sound: true, scan: true, story: true, mode: 'story',
+  sound: true, scan: true, bloom: true, story: true, mode: 'story',
 };
 
 const cam = { x: 0, lock: -1, targetX: 0, shakeX: 0, shakeY: 0 };
@@ -886,6 +890,7 @@ const SKINS = {
    offset toward the light for the lit edge.  Two tones and a hard outline
    is what separates a sprite from a stick figure. */
 const INK = '#140e1a';
+const HEAD_LIFT = 3.6;                    // how far the head rides above the collar
 const LIT_X = -1, LIT_Y = -1;             // the light sits up and to the left
 const rigParts = [];
 
@@ -909,13 +914,79 @@ function drawRigPass(grow, ink, lit, ox2, oy2, zone){
   }
 }
 
+/* A face on a head eleven pixels tall.  Everything here is one or two
+   pixels, so what carries it is contrast and placement: the eye is the only
+   pure white on the body and the brow is the only pure black, which is what
+   makes them read at arm's length.  The expression comes off the state
+   machine — you can see him wince. */
+const FACE_INK = '#160d14', FACE_WHITE = '#fff2dc';
+function faceMood(f){
+  if (f.state === 'hurt' || f.state === 'down' || f.state === 'lie' || f.dead) return 'hurt';
+  if (f.state === 'attack' || f.state === 'super') return 'grit';
+  if (f.state === 'block') return 'brace';
+  if (f.tell > 0 || f.rage) return 'rage';
+  // a blink every few seconds, on its own clock per fighter
+  const per = 3.4 + (f.id % 7) * 0.42;
+  return ((T + f.id * 0.73) % per) < 0.12 ? 'blink' : 'calm';
+}
+function drawFace(f, hx, hy, hr, sc, dir, skinL, skinD, L){
+  const mood = faceMood(f);
+  /* The coloured light pass grows inward by three pixels, which is a thin
+     edge on an arm and most of the face on a head this size — it turned every
+     head grey.  Give the face its skin back, keep a quarter of the light in
+     it, and put the rim back as an edge instead of a wash. */
+  ellipse(hx, hy + sc * 0.4, hr - sc, hr - sc * 0.7, skinL);
+  if (L){
+    ellipse(hx, hy + sc * 0.4, hr - sc, hr - sc * 0.7, rgba(L.col, Math.min(0.20, L.k * 0.22)));
+    px(hx + L.dir * (hr - sc * 1.6), hy - sc * 2, Math.max(1, sc), Math.max(2, 4 * sc), rgba(L.col, Math.min(0.6, L.k * 0.66)));
+  }
+  const u = Math.max(1, Math.round(sc));            // one pixel at this fighter's scale
+  const P = (ox, oy, w, h, c) => px(hx + dir * ox * sc - (dir < 0 ? (w - 1) * u : 0), hy + oy * sc, w * u, h * u, c);
+  const shut = mood === 'blink' || mood === 'hurt';
+  const browY = mood === 'grit' || mood === 'rage' ? -2.1 : mood === 'brace' ? -2.9 : -2.6;
+
+  P(-3.4, hr - 2.4, 6, 1, shade(skinD, -16));       // jaw, under everything
+  P(-3.0, -0.4, 1, 2, skinD);                       // ear on the far side
+  P(1.0, 0.1, 2, 1, shade(skinD, -8));              // cheekbone
+  P(1.1, browY, 3, 1, FACE_INK);                    // brow
+  if (mood === 'rage') P(0.8, browY + 1, 1, 1, FACE_INK);
+
+  if (shut){
+    P(1.5, -0.6, 2, 1, FACE_INK);                   // eyes shut
+    P(-0.9, -0.6, 1, 1, FACE_INK);
+  } else {
+    P(1.5, -1.2, 1, 2, FACE_WHITE);                 // the eye he is looking at you with
+    P(2.4, -1.2, 1, 2, FACE_INK);
+    P(-0.7, -1.2, 1, 2, FACE_INK);                  // and the far one, three quarters on
+  }
+
+  P(3.6, 0.0, 1, 2, skinL);                         // nose
+  P(3.4, 1.3, 1, 1, shade(skinD, -22));
+
+  if (mood === 'grit'){                             // teeth
+    P(1.2, 1.9, 3, 1, FACE_WHITE);
+    P(1.2, 2.8, 3, 1, FACE_INK);
+  } else if (mood === 'hurt'){
+    P(1.6, 1.8, 2, 2, FACE_INK);                    // mouth open
+  } else if (mood === 'rage'){
+    P(1.0, 2.0, 4, 1, FACE_INK);
+  } else {
+    P(1.5, 2.1, 2, 1, shade(skinD, -26));
+  }
+  ellipse(hx - dir * 0.5 * sc, hy + hr - sc, hr * 0.72, sc, shade(skinD, -10));   // chin shadow
+}
+
 /* Hair is where a crowd stops looking like one man in five shirts. */
 function drawHair(f, s, hx, hy, hr, sc, dir, cHair, cDark){
   const style = f.band ? 'band' : (s.hair2 || 'flat');
   const capH = Math.max(2, Math.round(2.6 * sc));
+  const u = Math.max(1, Math.round(sc));
   if (style !== 'bald'){
+    // a crown row inset a pixel each side, so the head is not a brick
+    px(hx - hr + u, hy - hr - 1 - u, hr * 2 - 2 * u, u, shade(cHair, 26));
     px(hx - hr, hy - hr - 1, hr * 2, capH, cHair);
-    px(hx - hr, hy - hr - 1, hr * 2, 1, shade(cHair, 26));
+    px(hx - hr, hy - hr - 1, hr * 2, 1, shade(cHair, 14));
+    px(hx + dir * (hr - u), hy - hr - 1 + capH, u, Math.max(1, 2 * u), cDark);   // sideburn
     // a fringe over the brow on the side you are facing, and bulk behind
     px(hx + dir * (hr - 2 * sc), hy - hr - 1 + capH, Math.max(1, 2 * sc), Math.max(1, 1.6 * sc), cHair);
     px(hx + dir * (hr - 0.4 * sc), hy - hr + sc, Math.max(1, sc), Math.max(1, 1.4 * sc), cDark);
@@ -993,7 +1064,11 @@ function drawFighter(f){
   const jt = poseGeom(pose);
   const hipX = X(jt.hip[0]), hipY = Y(jt.hip[1]);
   const shX = X(jt.sh[0]), shY = Y(jt.sh[1]);
-  const headX = X(jt.head[0]), headY = Y(jt.head[1]);
+  /* The head sat so deep in the shoulders that there was no room for a face:
+     four pixels of skin between the hair and the collar, and the shoulder cap
+     over half of that.  Lifted clear of the collar and grown to something
+     nearer arcade proportions, so there is a head to put a face on. */
+  const headX = X(jt.head[0]), headY = Y(jt.head[1] + HEAD_LIFT);
 
   if (f.state === 'super'){
     const k = 0.55 + Math.sin(T * 26) * 0.25;
@@ -1023,7 +1098,7 @@ function drawFighter(f){
   const lw = Math.max(3, Math.round(3.6 * sc)), lw2 = Math.max(2, Math.round(2.7 * sc));
   const aw = Math.max(3, Math.round(3.3 * sc)), aw2 = Math.max(2, Math.round(2.5 * sc));
   const th = Math.max(5, Math.round(9 * sc * (s.bulk || 1)));
-  const hr = Math.max(4, Math.round(4.7 * sc));
+  const hr = Math.max(5, Math.round(5.5 * sc));
 
   // Three passes each is what makes them read; with a horde on screen the
   // lit edge is the one you can least afford and least notice going.
@@ -1112,17 +1187,8 @@ function drawFighter(f){
 
   drawHair(f, s, headX, headY, hr, sc, dir, hairL, hairD);
 
-  if (!flash){                                    // face
-    const ex = headX + dir * (hr - 1.7 * sc);
-    px(ex, headY - sc, Math.max(1, sc), Math.max(1, 1.6 * sc), '#20131c');               // eye
-    px(ex - dir * 0.4 * sc, headY - 2.6 * sc, Math.max(1, 2.2 * sc), Math.max(1, sc), shade(skinD, -30)); // brow
-    px(headX + dir * (hr - 0.2 * sc), headY + 0.4 * sc, Math.max(1, 1.4 * sc), Math.max(1, 1.4 * sc), tint(skinL, dk)); // nose
-    px(headX + dir * (hr - 1.2 * sc), headY + 2.4 * sc, Math.max(1, 2 * sc), Math.max(1, sc), shade(skinD, -18)); // mouth
-    px(headX - dir * (hr - 0.6 * sc), headY - 0.4 * sc, Math.max(1, 1.4 * sc), Math.max(1, 2 * sc), tint(skinD, dk)); // ear
-    ellipse(headX - dir * 0.5 * sc, headY + hr - sc, hr * 0.8, sc, shade(skinD, -12));   // jaw shadow
-  } else {
-    px(headX - hr + sc, headY + sc, hr * 1.6, Math.max(1, sc), '#ff9a9a');               // a grimace
-  }
+  if (!flash) drawFace(f, headX, headY, hr, sc, dir, tint(skinL, dk), tint(skinD, dk), lit);
+  else px(headX - hr + sc, headY + sc, hr * 1.6, Math.max(1, sc), '#ff9a9a');            // a grimace
 
   // In a crowd you lose yourself, so put a marker over your own head
   if (f.team === 'p' && crowdCount > 10){
@@ -3425,6 +3491,7 @@ function loadMeta(){
     G.cleared = !!d.cleared;
     if (d.sound != null) snd.on = !!d.sound;
     if (d.scan != null) G.scan = !!d.scan;
+    if (d.bloom != null) G.bloom = !!d.bloom;
     if (d.diff != null) G.diff = clamp(d.diff | 0, 0, 2);
     if (d.story != null) G.story = !!d.story;
     G.bestWave = d.bestWave || 0;
@@ -3433,7 +3500,7 @@ function loadMeta(){
 function saveMeta(){
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, diff: G.diff, story: G.story,
+      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, bloom: G.bloom, diff: G.diff, story: G.story,
       bestWave: G.bestWave,
     }));
   } catch (e){ /* private mode */ }
@@ -4075,6 +4142,49 @@ function drawAmbient(){
 
 /* A soft darkening at the edges, so the middle of the screen is where the
    eye goes. */
+/* ---------------------------------------------------------------- bloom
+   Everything in the game that emits light already blooms locally, but the
+   frame as a whole was still flat: a neon sign and a white shirt came out
+   the same brightness on screen.  This is a real bloom done with three
+   drawImage calls and no pixel loops.
+
+   Downscale the finished frame to a quarter — that IS the blur, for free,
+   in the sampler.  Then draw the small canvas onto itself with `multiply`,
+   which squares every channel: 0.9 holds at 0.81, 0.2 falls to 0.04.  That
+   is a threshold you can afford, and it keeps the lights while the night
+   stays night.  Squaring twice was tried and is too clean — the haze it
+   throws away is most of what makes the frame feel lit.
+   Blit it back over the frame with `lighter` and smoothing on, so the halo
+   is soft against pixels that are not. */
+const BLOOM_DIV = 4, BLOOM_AMT = 0.70;
+let bloomC = null;
+function bloomPass(){
+  if (!G.bloom) return;
+  const w = Math.max(1, Math.ceil(VW / BLOOM_DIV)), h = Math.max(1, Math.ceil(VH / BLOOM_DIV));
+  if (!bloomC){
+    bloomC = document.createElement('canvas');
+    bloomC.width = w; bloomC.height = h;
+  }
+  const smooth = ctx.imageSmoothingEnabled;     // captured before anything is touched
+  const g = bloomC.getContext('2d');
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  g.clearRect(0, 0, w, h);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(ctx.canvas, 0, 0, VW, VH, 0, 0, w, h);
+  g.globalCompositeOperation = 'multiply';
+  g.drawImage(bloomC, 0, 0);                    // c squared
+  g.globalCompositeOperation = 'source-over';
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = BLOOM_AMT;
+  ctx.drawImage(bloomC, 0, 0, w, h, 0, 0, VW, VH);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.imageSmoothingEnabled = smooth;
+}
+
 function drawVignette(){
   for (let i = 0; i < 10; i++){
     const a = (0.045 * (10 - i) / 10).toFixed(3);
@@ -4349,8 +4459,8 @@ function drawSceneBg(bg){
 function draw(){
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, VW, VH);
-  if (G.phase === 'title' || G.phase === 'howto'){ drawAttract(); return; }
-  if (G.phase === 'cut'){ drawCut(); return; }
+  if (G.phase === 'title' || G.phase === 'howto'){ drawAttract(); bloomPass(); return; }
+  if (G.phase === 'cut'){ drawCut(); bloomPass(); return; }
   if (G.phase === 'upgrade'){ drawUpgrade(); return; }
 
   drawBackground();
@@ -4371,6 +4481,7 @@ function draw(){
   for (const p of fx) drawFx(p);
   drawAmbient();
   drawForeground();
+  bloomPass();                                  // the world glows; the HUD over it does not
   drawVignette();
   syncSpecialBtn();
 
@@ -4968,6 +5079,7 @@ function syncUI(){
   segSet('segStory', G.story ? 1 : 0);
   segSet('segSound', snd.on ? 1 : 0);
   segSet('segScan', G.scan ? 1 : 0);
+  segSet('segBloom', G.bloom ? 1 : 0);
   const sc = $('scan'); if (sc) sc.className = G.scan ? '' : 'off';
   const tb = $('tBest');
   if (tb) tb.textContent = 'BEST ' + G.best + (G.bestWave ? '   BEST WAVE ' + G.bestWave : '');
@@ -5093,6 +5205,7 @@ function bindUI(){
   segBind('segStory', (v) => { G.story = !!v; });
   segBind('segSound', (v) => { snd.on = !!v; if (!v) musicStop(); else if (G.phase === 'play') musicStart(stage().music); });
   segBind('segScan', (v) => { G.scan = !!v; });
+  segBind('segBloom', (v) => { G.bloom = !!v; });
 }
 
 /* =============================================================== update */

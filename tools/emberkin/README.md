@@ -447,6 +447,20 @@ Three things this has established, none of which were visible in the source:
   look*; it is not automatically right about *what is wrong*. Shoot to find the
   question, measure before answering it.
 
+### Two beats on one sprite in one frame
+
+Filming a real level-up finally worked — a Lv24 kin one XP short, the foe's HP
+set to 1 so a single ended turn wins, the whole thing inside the film window.
+The gold `63` leaves the foe and the ring fires on your own kin.
+
+But the foe retaliates in the same instant, so the frame carries the level ring
+*and* the hit flash on the same sprite, and the two cannot be told apart in a
+photograph. That is not a bug — it is the answer to a question that had not been
+asked yet: **beats can land on top of each other, and no beat has ever been
+judged with another one running.** A level-up during a win, a faint plus a wipe,
+an evolution straight after a gotcha. Every beat in this game has been designed
+and photographed alone.
+
 ### The legendary scene photographed a corpse for five passes
 
 Every shot of the climax of the game showed the player's kin as a flat brown
@@ -479,6 +493,23 @@ KO'd sprite is far too easy to read as a lighting problem. And the general rule,
 which has now cost four investigations: **before explaining what a frame looks
 like, check what the game thinks is in it.** Three of the four wrong theories
 here were about rendering; the answer was always state.
+
+### A screen opened with the wrong options renders its fallback, which looks finished
+
+The `swap` scene passed `{ mon }` where the screen wanted `{ newCard }`. So
+`ownedCard(s.opt.newCard)` came back empty, the "coming in" card and the "Your
+deck" heading were both skipped, and the photograph showed a wall of twelve
+cards asking **which one to discard with nothing shown to discard it for**. That
+reads as a serious design fault. It was entirely my own doing: passed the right
+option, the screen puts War Cry at the top, glowing, labelled *coming in ·
+LEGENDARY*, and both sides of the trade are visible.
+
+Third time a scene has photographed a fallback path and had it read as finished
+work — after the `mistspray` lozenge and the stale dialogue panel. The shape is
+always the same and worth stating once: **the paths a program takes when it is
+given something wrong are built to look unremarkable.** That is correct for
+players and actively hostile to review. Before believing a screen is badly
+designed, check that it was handed what it asks for.
 
 ### A graceful fallback hides a wrong id
 
