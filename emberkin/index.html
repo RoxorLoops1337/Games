@@ -3415,6 +3415,10 @@ const G = {
   party: [], box: [], bag: {}, money: 500, gems: 0,
   cards: [], deck: [], nextUid: 0, chestsOpened: 0,
   dex: {},                 // id -> 1 seen, 2 caught
+  // Where you have been. Four people in this valley exist to point somewhere,
+  // and a signpost that keeps pointing after you have arrived is worse than no
+  // signpost — see the npc lines that read this.
+  been: {},                // mapId -> 1 once you have stood in it
   flags: {},               // story progress
   battle: null,
   dialogue: null,
@@ -3445,7 +3449,7 @@ function saveGame() {
   const blob = {
     v: 2, map: G.mapId, x: G.player.x, y: G.player.y, dir: G.player.dir,
     party: G.party.map(packMon), box: G.box.map(packMon),
-    bag: G.bag, money: G.money, gems: G.gems, dex: G.dex, flags: G.flags,
+    bag: G.bag, money: G.money, gems: G.gems, dex: G.dex, been: G.been, flags: G.flags,
     cards: G.cards.map((c) => [c.u, c.id, c.plus, c.plays, c.kills]),
     deck: G.deck, uid: G.nextUid, chests: G.chestsOpened, might: G.might || 0,
     steps: G.steps, playtime: Math.round(G.playtime), wins: G.wins, caught: G.caught,
@@ -3488,7 +3492,11 @@ function loadGame() {
   G.chestsOpened = blob.chests || 0;
   G.might = blob.might || 0;                 // permanent damage, earned card by card
   if (!G.cards.length) { STARTER_DECK.forEach(grantCard); }
-  G.dex = blob.dex || {}; G.flags = blob.flags || {};
+  // A save written before anyone was keeping track loads with an empty `been`,
+  // and enterMap below immediately marks wherever that run is standing. So the
+  // worst an old save costs is a signpost or two offered again to somebody who
+  // has already been, and it heals itself the next time they walk there.
+  G.dex = blob.dex || {}; G.been = blob.been || {}; G.flags = blob.flags || {};
   G.steps = blob.steps || 0; G.playtime = blob.playtime || 0;
   G.wins = blob.wins || 0; G.caught = blob.caught || 0;
   enterMap(blob.map || 'hollowbrook', blob.x ?? 5, blob.y ?? 8, blob.dir || 'down');
@@ -4243,9 +4251,33 @@ const MAPS = {
     ],
     npcs: [
       { x: 3, y: 7, dir: 'down', sprite: 'npc_ranger', name: 'Old Tam',
-        lines: ['The tall grass out on the route is thick with kin.', 'Walk it long enough and something will jump you. That is the whole hobby, really.'] },
+        // He is the man who explains that things jump you in long grass. He was
+        // still explaining it to somebody with sixteen kinds written down.
+        lines: () => (dexCount(2) < 4
+          ? ['The tall grass out on the route is thick with kin.',
+            'Walk it long enough and something will jump you. That is the whole hobby, really.']
+          : dexCount(2) < DEX_ORDER.length
+            ? ['You have been walking it, then. I can tell from the boots.',
+              // His boast was a number, and the player's tally is a number, so
+              // at six they collided: "Six kinds in the book. I managed six."
+              // Comparative instead — it cannot collide at any count.
+              `${Spell(dexCount(2))} kinds in the book. I never managed half that, and one of mine was asleep when I got it.`]
+            : ['All of them. Every last one.',
+              'I am not going to pretend I am not put out about it. Sit down, tell me about the last one.']) },
       { x: 19, y: 15, dir: 'down', sprite: 'npc_ranger', name: 'Bly',
-        lines: ['The Wayhouse patches your kin up for free.', 'Elder Rowan says that is because she wants us out there getting hurt.'] },
+        // Directions to the Wayhouse are worth hearing once, and worth hearing
+        // again only at the moment they are urgent — which he can see, because
+        // the state that decides it is the same state Sable reads at the door.
+        lines: () => (G.party.some((m) => m.hp <= 0)
+          ? ['One of yours is down. Do not carry it around like that.',
+            'Wayhouse. Sable will not even look up from the bench.']
+          : G.party.some((m) => m.hp < m.max * .4)
+            ? ['That one is in a bad way.', 'Wayhouse is free and it is forty steps. Go on.']
+            : !G.been.wayhouse
+              ? ['The Wayhouse patches your kin up for free.',
+                'Elder Rowan says that is because she wants us out there getting hurt.']
+              : ['Still free, before you ask.',
+                'Sable has never once thanked me for sending people her way.']) },
       { x: 12, y: 5, dir: 'left', sprite: 'npc_rival', name: 'Wick', id: 't_wick1', requires: 'gotStarter',
         lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
         dynamic: 'rival1',
@@ -4366,7 +4398,18 @@ const MAPS = {
           plan: ['brace', 'swing', 'swing'],
           lose: ['Something got past me.'], win: ['Ha! Stretch defended.'] } },
       { x: 18, y: 11, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Isa',
-        lines: ['Kin get stronger where people do not go.', 'Emberwood, north of here — mind the roots.'] },
+        // She points north. She was still pointing north at somebody walking
+        // back DOWN from the top of the mountain — G.been is what she reads.
+        lines: () => (!G.been.emberwood
+          ? ['Kin get stronger where people do not go.', 'Emberwood, north of here — mind the roots.']
+          : !G.been.crown_hollow
+            ? ['You found the wood, then. Told you about the roots.',
+              'It keeps going up past that. Colder, and thinner, and worse.']
+            : G.flags.heardEnding
+              ? ['You have been to the top and come back down. Not many do the second part.',
+                'I am staying on this road. Somebody has to tell the next one which way is north.']
+              : ['The Hollow. You have stood in it.',
+                'Then you know I was underselling the roots.']) },
     ],
     signs: { '18,7': 'ROUTE ONE. North: Emberwood. East: Stillmere Shore. Ledges go down only.' },
     enc: { rate: .12, table: [['zaplet', 3, 6, 30], ['sproutle', 3, 6, 20], ['mothrix', 3, 6, 20], ['dewdrip', 4, 6, 15], ['pebblet', 3, 6, 15]] },
@@ -4462,7 +4505,15 @@ const MAPS = {
           plan: ['sharpen', 'swing', 'aim', 'swing'],
           lose: ['Take it. The water gives more.'], win: ['The water keeps it, then.'] } },
       { x: 6, y: 11, dir: 'up', sprite: 'npc_ranger', name: 'Sheller Ann',
-        lines: ['Lanterneel come in at the shallows. Sweet little faces.', 'Do not put your hand near the light.'] },
+        // A warning about a creature, delivered to somebody carrying one. The
+        // dex has known which of the three she is talking to all along.
+        lines: () => ((G.dex.lanterneel || 0) >= 2
+          ? ['You have got one. Of course you have.',
+            'Then I do not need to tell you about the light. Look at your hand.']
+          : G.dex.lanterneel
+            ? ['You have met one, then.', 'Sweet little face. Do not put your hand near the light.']
+            : ['Lanterneel come in at the shallows. Sweet little faces.',
+              'Do not put your hand near the light.']) },
     ],
     signs: { '11,13': 'STILLMERE SHORE. Do not swim after dusk. Nothing personal.' },
     enc: { rate: .13, table: [['dewdrip', 10, 14, 25], ['lanterneel', 11, 14, 20], ['frillamb', 10, 14, 18], ['pebblet', 10, 14, 15], ['zaplet', 10, 14, 12], ['brookite', 13, 15, 10]] },
@@ -4566,6 +4617,7 @@ function enterMap(id, x, y, dir) {
   const m = MAPS[id] || MAPS.hollowbrook;
   G.mapId = MAPS[id] ? id : 'hollowbrook';
   G.map = m;
+  G.been[G.mapId] = 1;
   G.player.x = G.player.px = x; G.player.y = G.player.py = y;
   G.player.dir = dir || G.player.dir; G.player.moveT = 0;
   G.alert = null;
@@ -7967,10 +8019,22 @@ function trainerTeam(npc) {
   return npc.trainer.team.map((e) => [e[0], e[1]]);
 }
 
+/**
+ * What somebody says, asked rather than read.
+ *
+ * Every path that speaks an npc goes through here — the challenge, the
+ * Wayhouse, both shops and the plain conversation — so a person who wants to
+ * notice something can, wherever they stand, and nobody has to remember which
+ * of the five call sites supports it.
+ */
+function talkLines(npc) {
+  return typeof npc.lines === 'function' ? npc.lines() : npc.lines;
+}
+
 function talkTo(npc) {
   if (npc.script === 'rowan') { rowanScript(); return; }
   if (npc.trainer && !G.flags[npc.id]) {
-    say(npc.name, npc.lines, () => {
+    say(npc.name, talkLines(npc), () => {
       const team = trainerTeam(npc);
       const foe = mkMon(team[0][0], team[0][1]);
       startBattle({ foe, team, npc, wild: false });
@@ -7989,7 +8053,7 @@ function talkTo(npc) {
       say(npc.name, ['They are all sound. Go on, then.'], () => { saveGame(); });
       return;
     }
-    say(npc.name, npc.lines, () => {
+    say(npc.name, talkLines(npc), () => {
       healParty();
       // The light happens between the offer and the reply, so the line that
       // says it worked arrives after you have watched it work.
@@ -7997,12 +8061,20 @@ function talkTo(npc) {
     });
     return;
   }
-  if (npc.shop) { say(npc.name, npc.lines, () => openScreen('shop')); return; }
-  if (npc.chests) { say(npc.name, npc.lines, () => openScreen('chests')); return; }
+  if (npc.shop) { say(npc.name, talkLines(npc), () => openScreen('shop')); return; }
+  if (npc.chests) { say(npc.name, talkLines(npc), () => openScreen('chests')); return; }
   // `after` may be a function, for a trainer whose parting line stops being
   // true once you have done what it told you to.
+  //
+  // And so may `lines`, which is the same idea for everybody who is not a
+  // trainer. It was a trainers-only privilege for no reason but that trainers
+  // were where it was first needed: the four people in this valley who exist to
+  // point at something — the grass, the Wayhouse, the road north, the thing in
+  // the shallows — went on pointing at it for the whole game, to a player who
+  // by the end had caught the grass, used the Wayhouse forty times, walked the
+  // road and had the thing in the shallows in their party.
   const after = typeof npc.after === 'function' ? npc.after() : npc.after;
-  say(npc.name, npc.trainer && G.flags[npc.id] ? (after || ['Good match. Go on.']) : npc.lines);
+  say(npc.name, npc.trainer && G.flags[npc.id] ? (after || ['Good match. Go on.']) : talkLines(npc));
 }
 
 function healParty() {
@@ -10710,7 +10782,7 @@ function step(dt) {
 }
 
 function newGame() {
-  G.party = []; G.box = []; G.bag = {}; G.money = 500; G.gems = 0; G.dex = {}; G.flags = {};
+  G.party = []; G.box = []; G.bag = {}; G.money = 500; G.gems = 0; G.dex = {}; G.been = {}; G.flags = {};
   G.cards = []; G.deck = []; G.nextUid = 0; G.chestsOpened = 0; G.might = 0;
   STARTER_DECK.forEach(grantCard);
   G.steps = 0; G.playtime = 0; G.wins = 0; G.caught = 0; G.battle = null;
@@ -11125,7 +11197,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,

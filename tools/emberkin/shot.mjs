@@ -1112,6 +1112,40 @@ const SCENES = {
       if (!/Waits in/.test(EK.habitat('vespyr'))) throw new Error('the shrine line is not the one on screen');
     },
   },
+  // The same person, the same tile, the same shot — before and after the dex
+  // knows. Ann exists to warn you about a creature and was still warning people
+  // who had one in the party. A dialogue is a DOM panel, so these are stills;
+  // the tool calls renderDialogue() after go(), which is what makes talkTo the
+  // right way to drive it.
+  annfresh: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      const ann = EK.MAPS.stillmere.npcs.find((n) => n.name === 'Sheller Ann');
+      EK.enterMap('stillmere', ann.x, ann.y - 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(ann);
+    },
+  },
+  annkin: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.party.push(EK.mkMon('lanterneel', 14));
+      EK.catchMon('lanterneel');
+      const ann = EK.MAPS.stillmere.npcs.find((n) => n.name === 'Sheller Ann');
+      EK.enterMap('stillmere', ann.x, ann.y - 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(ann);
+      if (!/Look at your hand/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('Ann did not notice the kin in the party');
+      }
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
