@@ -468,6 +468,15 @@ The general shape: *a fallback designed to be invisible in play is invisible to
 review as well.* Anywhere the game degrades gracefully, the tool has to be told
 the difference, because the picture cannot show it.
 
+### `--stats` cannot see a screen
+
+It reads the canvas. The reward screen, the deck screen and the study therefore
+all report the *same* numbers — 10..197, mean 51, sd 28.1 — because the DOM
+panels are not on the canvas and what is being measured is the study room behind
+all three. Same family as the limitation below, and the same rule: **know which
+layer an instrument is looking at before you believe a number from it.** Screens
+are judged by eye from a still; only canvas work can be measured.
+
 ### `--size` and `--film` do not combine
 
 A still screenshots the page — the canvas plus the DOM panels laid out around
