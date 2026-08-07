@@ -7591,6 +7591,17 @@ function talkTo(npc) {
     return;
   }
   if (npc.heal) {
+    // A whole party gets told so, and no light. The mend played every time you
+    // walked past, on a party that had nothing wrong with it — the lines, the
+    // light and "right as rain" for a heal that healed nothing. A beat that
+    // fires when nothing happened is worth less the next time something does,
+    // and this is the beat the Wayhouse exists for.
+    const hurt = G.party.some((m) => m.hp < m.max || m.status
+      || m.moves.some((mv) => mv.pp < mv.max));
+    if (!hurt) {
+      say(npc.name, ['They are all sound. Go on, then.'], () => { saveGame(); });
+      return;
+    }
     say(npc.name, npc.lines, () => {
       healParty();
       // The light happens between the offer and the reply, so the line that

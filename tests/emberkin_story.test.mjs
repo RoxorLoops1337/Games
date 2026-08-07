@@ -263,4 +263,30 @@ ok(EK.dexCount(1) >= 8, `you met most of the valley on the way (${EK.dexCount(1)
 EK.draw();
 ok(true, 'and it still renders');
 
+section('Sable does not perform a heal that heals nothing');
+{
+  const g = loadGame({});
+  g.newGame();
+  g.enterMap('wayhouse', 5, 5, 'down'); g.G.mode = 'world'; g.G.dialogue = null;
+  const sable = g.G.map.npcs.find((n) => n.heal);
+  ok(!!sable, 'the Wayhouse has someone who heals');
+
+  // A whole party: the short line, and no light.
+  g.G.party = [g.mkMon('cindercub', 8)];
+  g.talkTo(sable);
+  const whole = g.G.dialogue && g.G.dialogue.lines.join(' ');
+  ok(/all sound/i.test(whole || ''), `a whole party is told so — got "${whole}"`);
+  for (let i = 0; i < 12 && g.G.dialogue; i++) { g.G.dialogue.hold = 0; g.advanceDialogue(); }
+  ok(!g.G.mend, 'and the mend never runs, because nothing was mended');
+
+  // A hurt one: the offer, then the light, then the reply.
+  const m = g.G.party[0];
+  m.hp = 3;
+  g.G.dialogue = null; g.G.mend = null;
+  g.talkTo(sable);
+  for (let i = 0; i < 12 && g.G.dialogue; i++) { g.G.dialogue.hold = 0; g.advanceDialogue(); }
+  ok(!!g.G.mend, 'a hurt party gets the light');
+  eq(m.hp, m.max, 'and is actually put back together');
+}
+
 done('emberkin_story');
