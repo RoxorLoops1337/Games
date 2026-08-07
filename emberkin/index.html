@@ -5811,6 +5811,19 @@ function worldLight(g, kind, id) {
    while the underlying state is already consistent. Tests drive playCard(),
    endTurn() and doAction() directly and read the same log.
    ======================================================================== */
+/**
+ * Which theme a fight plays. The legendary has had its own since it was built;
+ * everything else shared one, so a rival showdown and a level-four Zaplet in
+ * the long grass were the same tune. Wick is the only person in the valley you
+ * meet more than once, and he is worth recognising before you have read his
+ * name.
+ */
+function battleTrack(opt) {
+  if (opt.legendary) return 'shrine';
+  if (!opt.npc) return 'battle';
+  return String(opt.npc.id || '').startsWith('t_wick') ? 'rival' : 'duel';
+}
+
 function startBattle(opt) {
   const mine = firstAlive();
   if (!mine) return false;
@@ -5875,7 +5888,7 @@ function startBattle(opt) {
   const who = opt.npc ? `${opt.npc.name} wants to battle!`
     : opt.legendary ? `${opt.foe.name} unfolds out of the light.`
     : `A wild ${opt.foe.name} bristles!`;
-  playCue(opt.legendary ? 'shrine' : 'battle');
+  playCue(battleTrack(opt));
   const lines = opt.legendary
     ? [who, 'Nothing in the valley moves. It is deciding about you.', `Go, ${dispName(mine)}!`]
     : [who, `Go, ${dispName(mine)}!`];
@@ -9732,6 +9745,32 @@ const THEMES = {
       [24, 0, 22, 19, 17, 0, 15, 12, 10, 0, 12, 15, 17, 19, 17, 15],
     ],
   },
+  // A trainer is not a Zaplet in the grass. The opening LINE has always known
+  // the difference — "Wick wants to battle!" against "A wild Zaplet bristles!"
+  // — and the music did not: nine hand-authored fights, three of them your
+  // rival, all playing the tune the long grass plays. Faster than the wild
+  // theme and squarer, and its bass walks instead of rocking between two
+  // chords, because somebody chose this fight.
+  duel: {
+    bpm: 158, order: [0, 1, 0, 2], bass: [0, 0, 7, 7, 3, 3, 5, 5],
+    lead: [
+      [12, 12, 14, 15, 17, 15, 14, 12, 10, 10, 12, 14, 15, 14, 12, 10],
+      [15, 15, 17, 19, 20, 19, 17, 15, 14, 14, 15, 17, 19, 17, 15, 14],
+      [24, 22, 20, 19, 17, 15, 14, 12, 10, 12, 14, 15, 17, 19, 20, 22],
+    ],
+  },
+  // And Wick is not a trainer either. He turns up three times across the whole
+  // valley and is the only person in it you meet more than once, so he gets
+  // something you recognise before you have read his name: the same drive as a
+  // duel with the rests left in, which is a swagger.
+  rival: {
+    bpm: 162, order: [0, 1, 0, 2], bass: [0, 0, 0, 7, 5, 5, 3, 3],
+    lead: [
+      [19, 0, 19, 17, 0, 19, 22, 0, 17, 0, 17, 15, 0, 17, 19, 0],
+      [24, 0, 22, 0, 19, 17, 0, 15, 17, 0, 19, 0, 22, 0, 24, 0],
+      [12, 15, 19, 24, 0, 22, 19, 15, 17, 20, 24, 0, 22, 0, 19, 0],
+    ],
+  },
   shrine: {                       // only the legendary gets to sound like this
     bpm: 84, order: [0, 1], bass: [0, 0, 5, 5, 8, 8, 3, 3],
     lead: [
@@ -9794,7 +9833,9 @@ function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer =
 function playCue(kind) {
   if (HEADLESS) return;
   const ac = audio();
-  if (kind === 'battle' || kind === 'shrine' || kind === 'world') { startMusic(kind); return; }
+  // Any theme is a cue. This used to name the three tracks a second time, so
+  // adding a fourth was two edits and one of them was easy to forget.
+  if (THEMES[kind]) { startMusic(kind); return; }
   if (!ac) return;
   const t = ac.currentTime;
   if (kind === 'hit') blip(150, .09, 'sawtooth', .07);
@@ -10904,7 +10945,7 @@ if (typeof window !== 'undefined') {
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
-    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, THEMES,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,

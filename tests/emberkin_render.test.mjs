@@ -1411,9 +1411,14 @@ section('every cue that is fired is a cue that exists');
 {
   const body = (SRC.match(/function playCue\(kind\)[\s\S]*?\n\}/) || [''])[0];
   ok(body.length > 200, 'found playCue');
-  const defined = new Set((body.match(/kind === '[a-z_]+'/g) || [])
-    .map((m) => m.replace(/kind === '|'/g, '')));
+  const g0 = loadGame({});
+  // Every theme is a cue: playCue hands anything in THEMES to startMusic rather
+  // than naming the tracks a second time, which is what made adding one two
+  // edits with an easy one to forget.
+  const defined = new Set([...(body.match(/kind === '[a-z_]+'/g) || [])
+    .map((m) => m.replace(/kind === '|'/g, '')), ...Object.keys(g0.THEMES)]);
   ok(defined.size > 15, `it handles a table of cues (${defined.size})`);
+  ok(/if \(THEMES\[kind\]\)/.test(body), 'and takes the track list from THEMES itself');
 
   // Every literal name passed to playCue must be one of them.
   const fired = new Set((SRC.match(/playCue\('[a-z_]+'\)/g) || [])
@@ -1425,6 +1430,10 @@ section('every cue that is fired is a cue that exists');
   // nobody will hear. The ones fired through a variable or a ternary are named
   // here so the check stays honest rather than being loosened to pass.
   const indirect = new Set(['battle', 'shrine', 'crit', 'hit',
+    // The four tracks a fight can choose come out of battleTrack, and the
+    // footsteps out of STEP_CUE. Naming them here is the point: the check made
+    // me declare the new two rather than quietly widening to let them through.
+    'duel', 'rival',
     'step_grass', 'step_tall', 'step_path', 'step_sand', 'step_wood']);
   for (const k of defined) {
     ok(fired.has(k) || indirect.has(k), `the cue "${k}" is reachable`);
@@ -1434,6 +1443,39 @@ section('every cue that is fired is a cue that exists');
   // sound at all. It is fired where the beat is raised, not somewhere near it.
   ok(/G\.place = \{ name: m\.name, t: 0 \};\s*\n\s*playCue\('place'\);/.test(SRC),
     'arriving somewhere new makes a sound, raised with the plaque itself');
+}
+
+// A trainer is not a Zaplet in the grass. The opening LINE has always made that
+// distinction and the music did not — nine hand-authored fights, three of them
+// the rival, all playing the tune the long grass plays. Driven off the map data
+// rather than a list of ids typed here, so a trainer added later is covered.
+section('a fight sounds like the fight it is');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const foe = g.mkMon('zaplet', 4);
+  eq(g.battleTrack({ foe, wild: true }), 'battle', 'the long grass keeps the old tune');
+  eq(g.battleTrack({ foe, legendary: true }), 'shrine', 'and the legendary keeps its own');
+
+  const trainers = Object.values(g.MAPS).flatMap((m) => m.npcs || []).filter((n) => n.trainer);
+  ok(trainers.length >= 9, `the valley holds its trainers (${trainers.length})`);
+  const wicks = trainers.filter((n) => g.battleTrack({ foe, npc: n }) === 'rival');
+  const rest = trainers.filter((n) => g.battleTrack({ foe, npc: n }) === 'duel');
+  eq(wicks.length + rest.length, trainers.length, 'every trainer gets a track of its own kind');
+  ok(rest.length > 0, `the ordinary ones duel (${rest.map((n) => n.name).join(', ')})`);
+  // The rival is whoever turns up more than once, which the data says rather
+  // than this test: he is the only name on more than one map.
+  const byName = {};
+  for (const n of trainers) byName[n.name] = (byName[n.name] || 0) + 1;
+  const recurring = Object.keys(byName).filter((k) => byName[k] > 1);
+  eq(recurring.length, 1, `exactly one person turns up more than once (${recurring.join(', ')})`);
+  eq(wicks.length, byName[recurring[0]],
+    `and every one of his fights is the one that sounds different (${wicks.length})`);
+  for (const n of rest) ok(n.name !== recurring[0], `${n.name} is not him`);
+  // And the fight actually asks. battleTrack being right is no use if
+  // startBattle still picks with the old two-way ternary.
+  ok(/playCue\(battleTrack\(opt\)\)/.test(SRC), 'and startBattle asks it rather than choosing for itself');
+  ok(!/playCue\(opt\.legendary \? 'shrine' : 'battle'\)/.test(SRC), 'the old two-way choice is gone');
 }
 
 done('emberkin_render');
