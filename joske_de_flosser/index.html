@@ -2116,7 +2116,13 @@ function throwItem(f){
 function breakItem(it, by){
   it.broken = true; it.gone = true;
   SFX.break();
-  for (let i = 0; i < 7; i++) spawnFx('chip', it.x, it.y, it.z + 8, '#c8a060');
+  /* A crate came apart into seven identical dots.  Planks off a crate, staves
+     off a barrel, and a puff of dust off the floor under both. */
+  const plank = it.kind === 'barrel' ? '#8a5630' : '#a97a42';
+  for (let i = 0; i < 9; i++) spawnFx('plank', it.x, it.y, it.z + 6 + rr(0, 12), i % 3 ? plank : '#d9a862');
+  for (let i = 0; i < 4; i++) spawnFx('chip', it.x, it.y, it.z + 8, '#c8a060');
+  for (let i = 0; i < 4; i++) spawnFx('dust', it.x + rr(-9, 9), it.y, 2, '#a89880');
+  spawnFx('ring', it.x, it.y, 2, plank);
   if (by && by.team === 'p') addScore(by.pi, 20);
   const roll = rng();
   if (loosePickups() < LOOSE_MAX){
@@ -2196,38 +2202,71 @@ function drawItem(it){
       limb(sx - 2, sy - 2, sx + 6, sy - 2 + tilt * 3, 2, '#d8e2ee');
       limb(sx - 2, sy - 3, sx + 6, sy - 3 + tilt * 3, 1, '#ffffff');
       px(sx - 8, sy - 3, 6, 3, '#5a3a20'); px(sx - 8, sy - 3, 6, 1, '#7d5530'); break;
-    case 'crate':
-      px(sx - 9, sy - 14, 18, 15, ink);
-      px(sx - 8, sy - 13, 16, 13, '#a97a42');
-      px(sx - 8, sy - 13, 16, 2, '#d9a862');
-      px(sx - 8, sy - 3, 16, 2, '#7d5629');
-      px(sx - 8, sy - 8, 16, 2, '#8c6234');
-      px(sx - 2, sy - 13, 2, 13, '#8c6234');
-      px(sx - 8, sy - 13, 1, 13, '#c69355'); break;
-    case 'barrel':
-      px(sx - 8, sy - 17, 16, 18, ink);
-      px(sx - 7, sy - 16, 14, 16, '#7a4a2a');
-      px(sx - 7, sy - 16, 3, 16, '#9a6238');
-      px(sx + 4, sy - 16, 3, 16, '#5c3620');
-      px(sx - 7, sy - 13, 14, 2, '#c8a060');
-      px(sx - 7, sy - 6, 14, 2, '#c8a060');
-      px(sx - 7, sy - 16, 14, 1, '#a8763e'); break;
+    /* A crate and a barrel are the two props you see on every street, and
+       both were flat rectangles with stripes on them.  The crate gets a lid
+       receding up and to the right so it has a top; the barrel gets shaded
+       across its width like the cylinder it is, with a rim you can see into. */
+    case 'crate': {
+      const w = 18, h = 14, x0 = sx - 9, y0 = sy - h;
+      // the lid: each row up steps right and narrows, so it recedes
+      for (let i = 0; i < 4; i++)
+        px(x0 + 1 + i, y0 - 1 - i, w - 2 - i, 1, i === 3 ? '#f2cf92' : i >= 2 ? '#d9a862' : '#bd8f52');
+      px(x0, y0, w, h, ink);
+      px(x0 + 1, y0 + 1, w - 2, h - 2, '#a97a42');
+      px(x0 + 1, y0 + 1, w - 2, 1, '#d9a862');
+      px(x0 + 1, y0 + h - 2, w - 2, 1, '#6d4a24');
+      px(x0 + 1, y0 + 1, 1, h - 2, '#c69355');
+      px(x0 + w - 2, y0 + 1, 1, h - 2, '#7d5629');
+      px(x0 + 1, y0 + 5, w - 2, 1, '#8c6234');          // planks
+      px(x0 + 1, y0 + 9, w - 2, 1, '#8c6234');
+      px(x0 + 2, y0 + h - 5, 6, 1, '#93683a');          // a brace, in two runs rather than
+      px(x0 + w - 8, y0 + 4, 6, 1, '#93683a');          // a diagonal line of fourteen pixels
+      for (const bx of [x0 + 1, x0 + w - 3])            // corner brackets
+        for (const by of [y0 + 1, y0 + h - 3]) px(bx, by, 2, 2, '#77655c');
+      break;
+    }
+    case 'barrel': {
+      const w = 16, h = 17, x0 = sx - 8, y0 = sy - h;
+      px(x0 - 1, y0 - 2, w + 2, h + 3, ink);
+      // five bands rather than sixteen columns: the same curve for a third of the pixels
+      const staves = [[0, 2, '#6a4024'], [2, 3, '#8a5630'], [5, 4, '#b8804c'], [9, 4, '#96603a'], [13, 3, '#5c3620']];
+      for (const [ox, bw, c] of staves) px(x0 + ox, y0, bw, h, c);
+      px(x0, y0 + 3, w, 2, '#c8a060'); px(x0, y0 + h - 6, w, 2, '#c8a060');   // hoops
+      px(x0, y0 + 3, w, 1, '#e8c88a'); px(x0, y0 + h - 6, w, 1, '#e8c88a');
+      ellipse(sx, y0 + 1, 8, 3, '#8a5630');             // the rim, and the dark inside it
+      ellipse(sx, y0 + 1, 6.4, 2, '#33200f');
+      ellipse(sx - 2, y0, 4, 1.2, '#4e3320');
+      break;
+    }
     case 'meat': {
       const bob = Math.round(Math.sin(it.life * 4) * 1);
-      px(sx - 7, sy - 9 + bob, 14, 10, ink);
-      px(sx - 6, sy - 8 + bob, 12, 8, '#b8543a');
-      px(sx - 6, sy - 8 + bob, 12, 2, '#e08a5a');
-      px(sx - 6, sy - 4 + bob, 8, 2, '#8e3a2a');
-      px(sx + 3, sy - 5 + bob, 5, 3, '#f0e0c0');
-      px(sx + 3, sy - 5 + bob, 5, 1, '#fff6e0'); break;
+      const y0 = sy - 9 + bob;
+      px(sx - 7, y0, 13, 10, ink);                      // a joint on the bone, not a red block
+      ellipse(sx - 1, y0 + 5, 6, 4.6, '#8e3a2a');
+      ellipse(sx - 2, y0 + 4, 5, 3.6, '#b8543a');
+      ellipse(sx - 3, y0 + 3, 3, 2, '#e08a5a');
+      px(sx - 4, y0 + 6, 5, 1, '#6e2a20');
+      px(sx + 3, y0 + 3, 6, 3, ink);                    // the bone sticking out of it
+      px(sx + 3, y0 + 4, 5, 2, '#f0e0c0');
+      px(sx + 3, y0 + 4, 5, 1, '#fff6e0');
+      px(sx + 7, y0 + 3, 2, 4, '#f0e0c0');
+      px(sx + 7, y0 + 3, 2, 1, '#fff6e0');
+      break;
     }
     case 'cash': {
       const bob = Math.round(Math.sin(it.life * 5) * 1);
-      px(sx - 8, sy - 7 + bob, 16, 8, ink);
-      px(sx - 7, sy - 6 + bob, 14, 6, '#3f8a52');
-      px(sx - 7, sy - 6 + bob, 14, 1, '#7fe07f');
-      px(sx - 3, sy - 5 + bob, 6, 4, '#8fe89a');
-      px(sx - 1, sy - 4 + bob, 2, 2, '#2a5a34'); break;
+      const y0 = sy - 9 + bob;
+      for (let i = 2; i >= 0; i--){                     // a wad, not one note
+        const ox = i, oy = i * 2;
+        px(sx - 8 + ox, y0 + oy, 16, 8, ink);
+        px(sx - 7 + ox, y0 + 1 + oy, 14, 6, i === 0 ? '#3f8a52' : '#356f45');
+        px(sx - 7 + ox, y0 + 1 + oy, 14, 1, i === 0 ? '#7fe07f' : '#5aa869');
+      }
+      px(sx - 4, y0 + 5, 6, 4, '#8fe89a');              // the face on the top note
+      px(sx - 2, y0 + 6, 2, 2, '#2a5a34');
+      px(sx - 1, y0 + 4, 5, 6, '#d8c8a0');              // and the paper strap round it
+      px(sx - 1, y0 + 4, 5, 1, '#fff4d8');
+      break;
     }
     case 'wave': {
       const h = 3 + Math.sin(it.life * 22) * 1.5;
@@ -2399,16 +2438,23 @@ function spawnFx(kind, x, y, z, col, val){
   fx.push({ kind, x, y, z, col, val, t: 0,
     life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : kind === 'ring' ? 0.34
       : kind === 'quake' ? 0.5 : kind === 'burst' ? 0.16 : kind === 'streak' ? 0.13
-      : kind === 'shard' ? 0.36 : 0.5,
+      : kind === 'shard' ? 0.36 : kind === 'plank' ? 0.62 : 0.5,
     // shards leave along the punch, in a cone, and fall
-    vx: kind === 'chip' ? rr(-70, 70) : kind === 'shard' ? dir * rr(60, 190) + rr(-40, 40) : 0,
-    vz: kind === 'chip' ? rr(40, 130) : kind === 'shard' ? rr(-30, 150) : 0, r: 0 });
+    vx: kind === 'chip' ? rr(-70, 70) : kind === 'shard' ? dir * rr(60, 190) + rr(-40, 40)
+      : kind === 'plank' ? rr(-120, 120) : 0,
+    vz: kind === 'chip' ? rr(40, 130) : kind === 'shard' ? rr(-30, 150)
+      : kind === 'plank' ? rr(60, 210) : 0,
+    spin: kind === 'plank' ? rr(-9, 9) : 0, r: 0 });
 }
 function updateFx(dt){
   for (const p of fx){
     p.t += dt;
     if (p.kind === 'chip'){ p.vz -= GRAV * dt; p.x += p.vx * dt; p.z += p.vz * dt; if (p.z < 0){ p.z = 0; p.vz *= -0.35; p.vx *= 0.6; } }
     if (p.kind === 'shard'){ p.vz -= GRAV * 0.55 * dt; p.x += p.vx * dt; p.z += p.vz * dt; p.vx *= 1 - 2.2 * dt; }
+    if (p.kind === 'plank'){
+      p.vz -= GRAV * 0.8 * dt; p.x += p.vx * dt; p.z += p.vz * dt; p.r += p.spin * dt;
+      if (p.z < 0){ p.z = 0; p.vz *= -0.3; p.vx *= 0.5; p.spin *= 0.4; }
+    }
     if (p.kind === 'score') p.z += 22 * dt;
     if (p.kind === 'dust'){ p.x += p.vx * dt; }
   }
@@ -2440,6 +2486,12 @@ function drawFx(p){
     };
     spike(dir, 0, 1.35); spike(-dir, 0, 0.75); spike(0, -1, 1); spike(0, 1, 0.8);
     if (k < 0.45) ellipse(sx, sy, 3 - k * 4, 3 - k * 4, '#ffffff');
+  } else if (p.kind === 'plank'){
+    // a splinter of the thing you just broke, end over end
+    const a = Math.min(1, (1 - k) * 3);
+    const c = Math.cos(p.r), s2 = Math.sin(p.r), L = 4;
+    limb(sx - c * L, sy - s2 * L * 0.6, sx + c * L, sy + s2 * L * 0.6, 2, rgba(p.col, a));
+    limb(sx - c * L, sy - s2 * L * 0.6 - 1, sx + c * L, sy + s2 * L * 0.6 - 1, 1, rgba('#e0b878', a * 0.8));
   } else if (p.kind === 'shard'){
     // a chip of the moment, spinning away along the punch
     const a = Math.min(1, (1 - k) * 2.2);
