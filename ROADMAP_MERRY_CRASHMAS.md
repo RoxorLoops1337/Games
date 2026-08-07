@@ -195,6 +195,14 @@ edit this block to name the next one.
       around the face the crying pass draws: beard behind the mouth, hat
       forward on the crown, fur band where the squeezed eyes land, bobble on
       the hat. He reads as the jackpot from the drive camera now.
+- [x] A wrecked stall is a wreck of *that* stall. Six trades left six identical
+      brown heaps flying the same scrap of the theme's awning — none of what
+      the stall sold, and not even the stripe it had been flying a second
+      earlier. The scrap now carries `tradeOf(o).stripe`, and the stock is
+      thrown out across the snow around it: sausages and charcoal, mulled-wine
+      cups, toy blocks, chestnuts, candles, lebkuchen. Nine items in one fill a
+      colour, positioned off the same integer hash the market plan uses, so a
+      wreck is identical every frame and rolls nothing.
 
 ## Next
 
