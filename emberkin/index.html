@@ -484,6 +484,22 @@
   .types{ display:flex; gap:4px; justify-content:center; margin-top:3px; }
   .hud .types{ justify-content:flex-start; margin:3px 0 1px; }
   .hud .tp{ font-size:.55em; padding:0 4px; }
+  /* Below a x2 stage the HUD stops being proportional to the arena. The panel
+     text is em-based off the stage font, which clamps at 11px for legibility, so
+     on a half-size stage the panels are getting on for twice the share of the
+     frame they take at x3 — and the pair of them plus the message box cover the
+     ground the fight is happening on. Photographed at a phone's aspect, it is
+     the same fault the title screen had: a composition that only worked at one
+     window.
+
+     The text does not shrink — that is what the clamp is protecting. The panel
+     gives up its padding and its type badges instead. An element's type is on
+     the creature and in the move menu; it is the one thing here that is said
+     twice. */
+  body.tight .hud{ padding:3px 5px 4px; width:47%; }
+  body.tight .hud .tp{ display:none; }
+  body.tight .hud .bar{ height:6px; margin-top:3px; }
+  body.tight #hudMine{ top:40%; }
   .tp{ font-size:.58em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px; color:#120d18; font-weight:700; }
 
   /* ---------------- title ---------------- */
@@ -4192,6 +4208,7 @@ function enterMap(id, x, y, dir) {
   G.player.x = G.player.px = x; G.player.y = G.player.py = y;
   G.player.dir = dir || G.player.dir; G.player.moveT = 0;
   G.alert = null;
+  G.rustle = null;
   return m;
 }
 
@@ -4441,8 +4458,94 @@ function onArrive() {
     // Sometimes two of them. The partner comes off the same table, so a pair is
     // whatever that patch of grass holds rather than a special encounter.
     const pair = foe && chance(WILD_PAIR) ? rollEncounter(G.map) : null;
-    if (foe) startBattle({ foe, wild: true, pair });
+    if (foe) G.rustle = { t: 0, x: p.x, y: p.y, go: () => startBattle({ foe, wild: true, pair }) };
   }
+}
+
+/**
+ * Something in the grass.
+ *
+ * A trainer spotting you gets three beats — the look, the walk, the pause — and
+ * a wild encounter got none: you took a step and the wipe was already closing.
+ * Filming it made the asymmetry obvious, and it is the beat the world plays most
+ * often. This is the half-second before the fight: the blades you are standing
+ * in thrash, leaves come off them, and only then does the screen close.
+ *
+ * It is deliberately shorter than the trainer's ambush. Being called out by a
+ * person is an event; grass moving is a warning, and a warning that outstays
+ * itself becomes a loading screen.
+ */
+const RUSTLE_T = .40;
+
+function rustleStep(dt) {
+  const r = G.rustle;
+  if (!r) return false;
+  r.t += dt;
+  if (r.t < RUSTLE_T) return true;
+  G.rustle = null;
+  r.go();
+  return true;
+}
+
+/** The blades thrashing, and what comes off them. */
+function drawRustle(g, cam) {
+  const r = G.rustle;
+  if (!r) return;
+  const k = clamp(r.t / RUSTLE_T, 0, 1);
+  const sx = Math.round(r.x * TILE - cam.x), sy = Math.round(r.y * TILE - cam.y);
+  const cx = sx + 8, cy = sy + 11;
+  // The thrash builds rather than starting at full tilt — grass does not snap
+  // to violent, and a shake that opens at maximum reads as a glitch.
+  const amp = Math.sin(k * Math.PI) ** .6;
+
+  // The grass parts: a dark hollow opening under the player.
+  //
+  // The first attempt shook the tall-grass tile itself, three offset copies of
+  // it, and was completely invisible — because the field tiles seamlessly, so
+  // sliding one tile sideways over identical neighbours changes nothing you can
+  // see. A texture that repeats cannot be shaken. What CAN be seen is a hole in
+  // it and something thrown out of it.
+  g.save();
+  g.globalAlpha = amp * .55;
+  g.fillStyle = '#101c14';
+  if (g.ellipse) {
+    g.beginPath(); g.ellipse(cx, cy, 7 * amp, 3 * amp, 0, 0, Math.PI * 2); g.fill();
+  } else g.fillRect(cx - 6, cy - 2, 12, 4);
+  g.restore();
+
+  // Blades flicking out of the hollow, alternating sides, in the pale green the
+  // tuft highlights already use so they sit in the palette without vanishing
+  // into the field the way a mid-green did.
+  g.fillStyle = '#b8e88a';
+  for (let i = 0; i < 5; i++) {
+    const side = i % 2 ? 1 : -1;
+    const lean = Math.round(Math.sin(G.t * 30 + i * 1.7) * 2 * amp);
+    const h = Math.round((5 + (i % 3) * 3) * amp);
+    const bx = cx + side * (2 + (i >> 1) * 3) + lean;
+    for (let y = 0; y < h; y++) {
+      g.fillRect(bx + Math.round(side * y * .25), cy - 2 - y, 1, 1);
+    }
+  }
+
+  // Leaves thrown clear and falling back. Warm and pale rather than
+  // grass-coloured: green specks on green grass is camouflage, which is exactly
+  // what the second attempt turned out to be. Fixed seeds, so the same step
+  // always throws the same spray and nothing pops between frames.
+  for (let i = 0; i < 12; i++) {
+    const a = (i * 2.39) % (Math.PI * 2);
+    const age = clamp(k * 1.7 - i * .035, 0, 1);
+    if (age <= 0 || age >= 1) continue;
+    const rad = age * (12 + (i % 4) * 6);
+    const lx = cx + Math.cos(a) * rad;
+    const ly = cy - 2 + Math.sin(a) * rad * .45 - (1 - (2 * age - 1) ** 2) * 12;
+    const sz = i % 3 ? 1 : 2;
+    g.globalAlpha = (1 - age * age) * .9;
+    g.fillStyle = '#0e1a12';                       // a rim, so it never dissolves
+    g.fillRect(Math.round(lx) - 1, Math.round(ly) - 1, sz + 2, sz + 2);
+    g.fillStyle = i % 4 ? '#d8f0a0' : '#fff4cf';
+    g.fillRect(Math.round(lx), Math.round(ly), sz, sz);
+  }
+  g.globalAlpha = 1;
 }
 
 const SIGHT = 4;                       // how far down their own line a trainer looks
@@ -4763,6 +4866,8 @@ function drawWorld(g) {
     drawTile(g, ',', sx + sway, sy);
     g.restore();
   }
+
+  drawRustle(g, cam);
 
   if (map.kind === 'inside') {                       // cosy interior vignette
     g.fillStyle = 'rgba(20,10,26,.25)';
@@ -7868,7 +7973,17 @@ function drawFlourish(g) {
 
 function updateBattle(dt) {
   const b = B();
-  b.entry = Math.min(1, b.entry + dt * 1.7);      // a walk-on, not a teleport
+  // A walk-on, not a teleport — but only once there is somebody to see it.
+  //
+  // The entry runs at 1.7/s, so it lands at 0.588s; the wipe is 0.55s. Filming
+  // a wild encounter showed what that means: the deceleration, the gait bob and
+  // the dust all play behind the wipe's black bars and finish 35 milliseconds
+  // after they clear, so the frame you actually get is two kin already planted.
+  // The most carefully built motion in the arena had never been seen.
+  //
+  // Holding it while the bars are fully closed costs nothing and the walk-on
+  // now plays out into an opening frame, which is the shot it was written for.
+  if (G.wipe <= WIPE_T * .5) b.entry = Math.min(1, b.entry + dt * 1.7);
   b.flashM = Math.max(0, b.flashM - dt * 3);
   b.flashF = Math.max(0, b.flashF - dt * 3);
   b.shake = Math.max(0, b.shake - dt * 4);
@@ -9062,6 +9177,7 @@ function step(dt) {
   if (G.warp && warpStep(dt)) return;
   if (G.evoAnim && evoStep(dt)) return;
   if (G.alert && G.alert.beats && alertStep(dt)) return;
+  if (G.rustle && rustleStep(dt)) return;
   if (G.flourish && flourishStep(dt)) return;
   if (G.gotcha) {
     G.gotcha.t += dt;
@@ -9482,7 +9598,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,

@@ -823,9 +823,25 @@ for (let i = 0; i < 400; i++) {
   EK.healParty();
   EK.G.player.x = 4; EK.G.player.y = 1;              // tall grass
   EK.onArrive();
+  // A roll no longer opens the fight on the spot: the grass moves first, and
+  // the encounter is the beat's payoff. Run the beat out so this still measures
+  // the encounter rate end to end rather than the moment it is scheduled.
+  if (EK.G.rustle) EK.rustleStep(EK.RUSTLE_T + .01);
   if (EK.G.battle) started++;
 }
 ok(started > 10, `tall grass produces encounters (${started}/400)`);
+// And the beat is what stands between the step and the fight.
+EK.G.battle = null; EK.G.rustle = null; EK.G.mode = 'world';
+EK.healParty();
+for (let i = 0; i < 400 && !EK.G.rustle; i++) {
+  EK.G.player.x = 4; EK.G.player.y = 1;
+  EK.onArrive();
+}
+ok(!!EK.G.rustle, 'a wild encounter opens with the grass moving, not with the fight');
+ok(!EK.G.battle, 'and the fight has not started while the grass is still moving');
+ok(EK.rustleStep(EK.RUSTLE_T * .5) && !EK.G.battle, 'half way through, still no fight');
+EK.rustleStep(EK.RUSTLE_T);
+ok(!!EK.G.battle && !EK.G.rustle, 'when the grass settles, the fight is on');
 EK.G.battle = null; EK.G.mode = 'world';
 
 section('trainers spot you down their own line');
