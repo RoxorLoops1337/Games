@@ -2462,6 +2462,58 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* --------------------------------------------------------- the foundry */
+test('the furnaces are built into brick, with iron round the mouth', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  const courses = r.filter(q => q[4] === '#221718' && q[2] === 70 && q[3] === 1);
+  assert(courses.length >= 30, 'the wall has ' + courses.length + ' brick courses on it');
+  const joints = r.filter(q => q[4] === '#241a1a' && q[2] === 1 && q[3] === 5);
+  assert(joints.length >= 40, 'the courses have no vertical joints: ' + joints.length);
+  const bolts = r.filter(q => q[4] === '#7a5040' && q[2] === 2 && q[3] === 2);
+  assert(bolts.length >= 8, 'the iron frames have ' + bolts.length + ' bolts between them');
+  assert(bolts.length % 4 === 0, 'bolts come four to a frame, got ' + bolts.length);
+  // measured, exactly: 16 bolts (4 furnaces) with the cull, 36 (9) without
+  assert(bolts.length <= 28, `${bolts.length / 4} furnaces painted — the loop is not culling`);
+  assert(r.some(q => q[4] === '#503430' && q[2] === 58), 'no hearth apron under the mouth');
+  assert(r.some(q => /rgba\(255,\s*122,\s*30/.test(String(q[4]))), 'no slag left on the apron');
+});
+
+test('the walkway has a rail on it, and a ladder off some of them', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  assert(r.some(q => q[4] === '#6a5c74' && q[2] === 70), 'no handrail along the walkway');
+  const uprights = r.filter(q => q[4] === '#4a3f52' && q[2] === 1 && q[3] === 5);
+  assert(uprights.length >= 18, 'the handrail stands on ' + uprights.length + ' uprights');
+  const rungs = r.filter(q => q[4] === '#584a60' && q[2] === 8 && q[3] === 1);
+  assert(rungs.length >= 6, 'no ladders off the walkway: ' + rungs.length + ' rungs');
+  let ladders = 0;
+  for (let gx = 0; gx < 300; gx++) if (api.hash(gx + 9) > 0.62) ladders++;
+  assert(ladders > 70 && ladders < 170, 'ladders are on ' + ladders + ' of 300 — that is not a third');
+});
+
+test('the foundry stays cheap wherever the camera is', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  for (const cx of [0, 59, 240, 830, 1620]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const n = api._counts.fillRect || 0;
+    assert(n > 300, `at camera ${cx} it drew almost nothing: ${n}`);
+    assert(n < 3600, `at camera ${cx} it drew ${n} fillRects`);
+  }
+});
+
 /* ------------------------------------------------------------- the dock */
 test('a container is a box with corners on it, not a coloured bar', () => {
   const api = boot();
