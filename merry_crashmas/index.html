@@ -4843,17 +4843,49 @@ function drawPerson(p){
     ctx.rotate(p.ang);
     ctx.scale(1, clamp(p.squash || 1, 0.3, 1));
     shadow(0, 3, p.r * 1.2, p.r * 0.5, 0.14);
-    // legs and arms thrown outward
+    /* Ragdoll. The four limbs used to be four fixed line segments in the body's
+       own frame — the same starfish at 400px/s mid-tumble as lying still, which
+       is what "bodies slide and stop" looked like up close. They are jointed
+       now, and they trail: flung out and back at the moment of impact, folding
+       in as the body comes to rest.
+
+       Everything is a pure function of `fly` (0.75 down to 0 after the kill),
+       `squash` (0.34 for a slam, 0.95 for a nudge) and `side` — all three of
+       which the replay restores, so a corpse poses the same way in the clip as
+       it did live. No new state on the person, and not one random draw: a
+       ragdoll that rolled for its pose would move every market's score. */
+    const fl = clamp(p.fly / 0.75, 0, 1);            // 1 at impact, 0 at rest
+    const hard = clamp((0.95 - (p.squash || 1)) / 0.53, 0, 1);
+    const sd = p.side || 1;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.42;
+    /* hinge, the settled angle, the angle it is flung to, and how far the
+       joint breaks the other way. Angles are body-frame: the head is at +x, so
+       "back" — where a limb trails to — is toward ±180°. */
+    const limb = (hx, hy, rest, flung, len, bend) => {
+      /* `hard` fans the pair apart rather than scaling the angle: a multiplier
+         pushed -2.86 past -π and wrapped a slammed leg round to the front, so
+         the harder hit came out *less* splayed than the gentle one. */
+      const a0 = rest + (flung - rest) * fl;
+      const a = clamp(a0 + Math.sign(a0) * hard * 0.30, -3.02, 3.02);
+      const j = len * 0.55;                          // knee / elbow
+      const jx = hx + Math.cos(a) * j, jy = hy + Math.sin(a) * j;
+      const b = a + bend * (0.35 + 0.65 * fl) * (1 + hard * 0.5);
+      ctx.moveTo(hx, hy); ctx.lineTo(jx, jy);
+      ctx.lineTo(jx + Math.cos(b) * (len - j), jy + Math.sin(b) * (len - j));
+    };
+    /* Settled is arms out to the sides and legs trailing back — a body face
+       down in the snow. Flung is everything swept behind it, because the car
+       came from behind. The first pass had the settled pose reaching forward
+       over the head, which is the shape a corpse never makes. */
+    ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.36;
     ctx.beginPath();
-    ctx.moveTo(-p.r * 0.4, -p.r * 0.25); ctx.lineTo(-p.r * 1.5, -p.r * 0.75);
-    ctx.moveTo(-p.r * 0.4, p.r * 0.25); ctx.lineTo(-p.r * 1.35, p.r * 0.9);
+    limb(-p.r * 0.34, -p.r * 0.26, -2.42, -2.80, p.r * 1.24, -0.62 * sd);
+    limb(-p.r * 0.34, p.r * 0.26, 2.30, 2.68, p.r * 1.20, 0.56 * sd);
     ctx.stroke();
-    ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.36;
+    ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.30;
     ctx.beginPath();
-    ctx.moveTo(p.r * 0.2, -p.r * 0.4); ctx.lineTo(p.r * 0.9, -p.r * 1.25);
-    ctx.moveTo(p.r * 0.2, p.r * 0.4); ctx.lineTo(p.r * 1.05, p.r * 1.15);
+    limb(p.r * 0.1, -p.r * 0.44, -1.45, -2.30, p.r * 1.16, 0.74 * sd);
+    limb(p.r * 0.1, p.r * 0.44, 1.38, 2.22, p.r * 1.19, -0.68 * sd);
     ctx.stroke();
     // torso
     const deadSanta = p.kind === 'santa';
