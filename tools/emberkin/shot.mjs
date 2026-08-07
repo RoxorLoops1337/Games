@@ -254,6 +254,50 @@ const SCENES = {
       EK.openScreen('dex');
     },
   },
+  // A full twelve-card deck. The deck screen is where a deck-builder lives and
+  // it had only ever been shot at ten starter commons — no rare, no epic, no
+  // legendary, no duplicates worth counting, and none of the long rules text
+  // the good cards carry. This is what the screen holds once somebody has been
+  // buying chests for an hour.
+  middeck: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      EK.G.cards = []; EK.G.deck = []; EK.G.nextUid = 0;
+      // Every rarity, a stack of the same common to see duplicates counted, and
+      // the wordiest legendaries — the ones most likely to overrun a card.
+      ['edge', 'edge', 'edge', 'guard', 'focus',
+        'whetstone', 'venomcoat', 'berserk', 'bloodedge',
+        'overkill', 'dragonheart', 'eternal'].forEach((id) => EK.grantCard(id));
+      EK.openScreen('deck');
+    },
+  },
+  // The legendary, with a party that can actually stand in front of it.
+  //
+  // Vespyr is Lv26 with the highest base attack in the game. It was once
+  // photographed against a Lv5 starter, which it one-shot, and the pass that
+  // followed spent itself deciding the creature looked "drained" — it was at
+  // 0 HP. The harness prints MINE-DOWN / FOE-DOWN for exactly this. Read that
+  // line before forming any opinion about how the fight looks.
+  legendaryfight: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world'; EK.G.mapId = 'crown_hollow';
+      EK.G.party = [EK.mkMon('pyrelynx', 30), EK.mkMon('gargolem', 28)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('vespyr', 26), wild: true, legendary: true,
+        plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'] });
+      EK.G.wipe = 0;
+      EK.G.battleMsg = null;
+      EK.readIntent();
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
