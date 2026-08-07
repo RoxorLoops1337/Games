@@ -886,6 +886,7 @@ const SKINS = {
    offset toward the light for the lit edge.  Two tones and a hard outline
    is what separates a sprite from a stick figure. */
 const INK = '#140e1a';
+const HEAD_LIFT = 3.6;                    // how far the head rides above the collar
 const LIT_X = -1, LIT_Y = -1;             // the light sits up and to the left
 const rigParts = [];
 
@@ -909,13 +910,79 @@ function drawRigPass(grow, ink, lit, ox2, oy2, zone){
   }
 }
 
+/* A face on a head eleven pixels tall.  Everything here is one or two
+   pixels, so what carries it is contrast and placement: the eye is the only
+   pure white on the body and the brow is the only pure black, which is what
+   makes them read at arm's length.  The expression comes off the state
+   machine — you can see him wince. */
+const FACE_INK = '#160d14', FACE_WHITE = '#fff2dc';
+function faceMood(f){
+  if (f.state === 'hurt' || f.state === 'down' || f.state === 'lie' || f.dead) return 'hurt';
+  if (f.state === 'attack' || f.state === 'super') return 'grit';
+  if (f.state === 'block') return 'brace';
+  if (f.tell > 0 || f.rage) return 'rage';
+  // a blink every few seconds, on its own clock per fighter
+  const per = 3.4 + (f.id % 7) * 0.42;
+  return ((T + f.id * 0.73) % per) < 0.12 ? 'blink' : 'calm';
+}
+function drawFace(f, hx, hy, hr, sc, dir, skinL, skinD, L){
+  const mood = faceMood(f);
+  /* The coloured light pass grows inward by three pixels, which is a thin
+     edge on an arm and most of the face on a head this size — it turned every
+     head grey.  Give the face its skin back, keep a quarter of the light in
+     it, and put the rim back as an edge instead of a wash. */
+  ellipse(hx, hy + sc * 0.4, hr - sc, hr - sc * 0.7, skinL);
+  if (L){
+    ellipse(hx, hy + sc * 0.4, hr - sc, hr - sc * 0.7, rgba(L.col, Math.min(0.20, L.k * 0.22)));
+    px(hx + L.dir * (hr - sc * 1.6), hy - sc * 2, Math.max(1, sc), Math.max(2, 4 * sc), rgba(L.col, Math.min(0.6, L.k * 0.66)));
+  }
+  const u = Math.max(1, Math.round(sc));            // one pixel at this fighter's scale
+  const P = (ox, oy, w, h, c) => px(hx + dir * ox * sc - (dir < 0 ? (w - 1) * u : 0), hy + oy * sc, w * u, h * u, c);
+  const shut = mood === 'blink' || mood === 'hurt';
+  const browY = mood === 'grit' || mood === 'rage' ? -2.1 : mood === 'brace' ? -2.9 : -2.6;
+
+  P(-3.4, hr - 2.4, 6, 1, shade(skinD, -16));       // jaw, under everything
+  P(-3.0, -0.4, 1, 2, skinD);                       // ear on the far side
+  P(1.0, 0.1, 2, 1, shade(skinD, -8));              // cheekbone
+  P(1.1, browY, 3, 1, FACE_INK);                    // brow
+  if (mood === 'rage') P(0.8, browY + 1, 1, 1, FACE_INK);
+
+  if (shut){
+    P(1.5, -0.6, 2, 1, FACE_INK);                   // eyes shut
+    P(-0.9, -0.6, 1, 1, FACE_INK);
+  } else {
+    P(1.5, -1.2, 1, 2, FACE_WHITE);                 // the eye he is looking at you with
+    P(2.4, -1.2, 1, 2, FACE_INK);
+    P(-0.7, -1.2, 1, 2, FACE_INK);                  // and the far one, three quarters on
+  }
+
+  P(3.6, 0.0, 1, 2, skinL);                         // nose
+  P(3.4, 1.3, 1, 1, shade(skinD, -22));
+
+  if (mood === 'grit'){                             // teeth
+    P(1.2, 1.9, 3, 1, FACE_WHITE);
+    P(1.2, 2.8, 3, 1, FACE_INK);
+  } else if (mood === 'hurt'){
+    P(1.6, 1.8, 2, 2, FACE_INK);                    // mouth open
+  } else if (mood === 'rage'){
+    P(1.0, 2.0, 4, 1, FACE_INK);
+  } else {
+    P(1.5, 2.1, 2, 1, shade(skinD, -26));
+  }
+  ellipse(hx - dir * 0.5 * sc, hy + hr - sc, hr * 0.72, sc, shade(skinD, -10));   // chin shadow
+}
+
 /* Hair is where a crowd stops looking like one man in five shirts. */
 function drawHair(f, s, hx, hy, hr, sc, dir, cHair, cDark){
   const style = f.band ? 'band' : (s.hair2 || 'flat');
   const capH = Math.max(2, Math.round(2.6 * sc));
+  const u = Math.max(1, Math.round(sc));
   if (style !== 'bald'){
+    // a crown row inset a pixel each side, so the head is not a brick
+    px(hx - hr + u, hy - hr - 1 - u, hr * 2 - 2 * u, u, shade(cHair, 26));
     px(hx - hr, hy - hr - 1, hr * 2, capH, cHair);
-    px(hx - hr, hy - hr - 1, hr * 2, 1, shade(cHair, 26));
+    px(hx - hr, hy - hr - 1, hr * 2, 1, shade(cHair, 14));
+    px(hx + dir * (hr - u), hy - hr - 1 + capH, u, Math.max(1, 2 * u), cDark);   // sideburn
     // a fringe over the brow on the side you are facing, and bulk behind
     px(hx + dir * (hr - 2 * sc), hy - hr - 1 + capH, Math.max(1, 2 * sc), Math.max(1, 1.6 * sc), cHair);
     px(hx + dir * (hr - 0.4 * sc), hy - hr + sc, Math.max(1, sc), Math.max(1, 1.4 * sc), cDark);
@@ -993,7 +1060,11 @@ function drawFighter(f){
   const jt = poseGeom(pose);
   const hipX = X(jt.hip[0]), hipY = Y(jt.hip[1]);
   const shX = X(jt.sh[0]), shY = Y(jt.sh[1]);
-  const headX = X(jt.head[0]), headY = Y(jt.head[1]);
+  /* The head sat so deep in the shoulders that there was no room for a face:
+     four pixels of skin between the hair and the collar, and the shoulder cap
+     over half of that.  Lifted clear of the collar and grown to something
+     nearer arcade proportions, so there is a head to put a face on. */
+  const headX = X(jt.head[0]), headY = Y(jt.head[1] + HEAD_LIFT);
 
   if (f.state === 'super'){
     const k = 0.55 + Math.sin(T * 26) * 0.25;
@@ -1023,7 +1094,7 @@ function drawFighter(f){
   const lw = Math.max(3, Math.round(3.6 * sc)), lw2 = Math.max(2, Math.round(2.7 * sc));
   const aw = Math.max(3, Math.round(3.3 * sc)), aw2 = Math.max(2, Math.round(2.5 * sc));
   const th = Math.max(5, Math.round(9 * sc * (s.bulk || 1)));
-  const hr = Math.max(4, Math.round(4.7 * sc));
+  const hr = Math.max(5, Math.round(5.5 * sc));
 
   // Three passes each is what makes them read; with a horde on screen the
   // lit edge is the one you can least afford and least notice going.
@@ -1112,17 +1183,8 @@ function drawFighter(f){
 
   drawHair(f, s, headX, headY, hr, sc, dir, hairL, hairD);
 
-  if (!flash){                                    // face
-    const ex = headX + dir * (hr - 1.7 * sc);
-    px(ex, headY - sc, Math.max(1, sc), Math.max(1, 1.6 * sc), '#20131c');               // eye
-    px(ex - dir * 0.4 * sc, headY - 2.6 * sc, Math.max(1, 2.2 * sc), Math.max(1, sc), shade(skinD, -30)); // brow
-    px(headX + dir * (hr - 0.2 * sc), headY + 0.4 * sc, Math.max(1, 1.4 * sc), Math.max(1, 1.4 * sc), tint(skinL, dk)); // nose
-    px(headX + dir * (hr - 1.2 * sc), headY + 2.4 * sc, Math.max(1, 2 * sc), Math.max(1, sc), shade(skinD, -18)); // mouth
-    px(headX - dir * (hr - 0.6 * sc), headY - 0.4 * sc, Math.max(1, 1.4 * sc), Math.max(1, 2 * sc), tint(skinD, dk)); // ear
-    ellipse(headX - dir * 0.5 * sc, headY + hr - sc, hr * 0.8, sc, shade(skinD, -12));   // jaw shadow
-  } else {
-    px(headX - hr + sc, headY + sc, hr * 1.6, Math.max(1, sc), '#ff9a9a');               // a grimace
-  }
+  if (!flash) drawFace(f, headX, headY, hr, sc, dir, tint(skinL, dk), tint(skinD, dk), lit);
+  else px(headX - hr + sc, headY + sc, hr * 1.6, Math.max(1, sc), '#ff9a9a');            // a grimace
 
   // In a crowd you lose yourself, so put a marker over your own head
   if (f.team === 'p' && crowdCount > 10){
