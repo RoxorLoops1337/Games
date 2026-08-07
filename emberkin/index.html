@@ -4569,6 +4569,7 @@ function enterMap(id, x, y, dir) {
     G.place = { name: m.name, t: 0 };
     playCue('place');
   }
+  followMap();
   return m;
 }
 
@@ -8617,7 +8618,9 @@ function finishBattle() {
     G.battle = null; G.battleMsg = null;
     if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); show(els.dialogue, false); battleBar(false); }
     G.mode = 'world';
-    playCue('world');
+    // The place you are standing in, not the valley's default: every fight used
+    // to hand you back the town's tune wherever you were.
+    playCue(placeTrack(G.mapId));
   };
   const settle = () => {
     const evo = checkEvolve();
@@ -9782,6 +9785,42 @@ const THEMES = {
       [12, 15, 19, 24, 0, 22, 19, 15, 17, 20, 24, 0, 22, 0, 19, 0],
     ],
   },
+  // AIR gives all eight maps their own light — tint, grade, vignette, motes,
+  // drift — and the music gave them one tune between them. Walking out of
+  // Hollowbrook into the Emberwood changed everything you could see and
+  // nothing you could hear, because nothing told the music the map had moved.
+  // The four places you TRAVEL get their own; the town and the rooms in it
+  // keep `world`, which is the tune the valley hums.
+  route: {                        // Route One: open, bright, walking pace
+    bpm: 116, order: [0, 1, 0, 2], bass: [0, 0, 5, 5, 7, 7, 5, 5],
+    lead: [
+      [12, 0, 14, 16, 0, 16, 14, 0, 12, 0, 9, 0, 12, 14, 16, 0],
+      [16, 0, 17, 19, 0, 17, 16, 0, 14, 0, 12, 0, 14, 0, 16, 0],
+      [19, 0, 16, 0, 14, 12, 0, 14, 16, 0, 19, 0, 21, 0, 19, 0],
+    ],
+  },
+  mere: {                         // Stillmere: wide and slow, water under it
+    bpm: 92, order: [0, 1], bass: [0, 0, 0, 7, 5, 5, 5, 0],
+    lead: [
+      [12, 0, 0, 16, 0, 0, 19, 0, 0, 16, 0, 0, 14, 0, 0, 0],
+      [17, 0, 0, 14, 0, 0, 12, 0, 0, 9, 0, 12, 0, 0, 7, 0],
+    ],
+  },
+  wood: {                         // the Emberwood: close, low, never quite still
+    bpm: 100, order: [0, 1, 0, 2], bass: [0, 0, 3, 3, 2, 2, 5, 5],
+    lead: [
+      [12, 0, 15, 0, 14, 0, 15, 0, 12, 0, 10, 0, 12, 0, 8, 0],
+      [15, 0, 17, 0, 15, 14, 0, 12, 10, 0, 12, 0, 14, 0, 15, 0],
+      [20, 0, 19, 0, 17, 0, 15, 14, 12, 0, 10, 0, 8, 0, 12, 0],
+    ],
+  },
+  hollow: {                       // Crown Hollow: thin air, and something above
+    bpm: 76, order: [0, 1], bass: [0, 0, 0, 0, 8, 8, 8, 8],
+    lead: [
+      [24, 0, 0, 0, 19, 0, 0, 0, 21, 0, 0, 0, 16, 0, 0, 0],
+      [26, 0, 0, 24, 0, 0, 0, 19, 0, 0, 21, 0, 0, 0, 12, 0],
+    ],
+  },
   shrine: {                       // only the legendary gets to sound like this
     bpm: 84, order: [0, 1], bass: [0, 0, 5, 5, 8, 8, 3, 3],
     lead: [
@@ -9828,6 +9867,28 @@ function musicTick() {
   const b = th.bass[musicStep % th.bass.length];
   if (musicStep % 2 === 0) blip(note(b - 24), .22, 'triangle', .05);
   musicStep++;
+}
+
+/**
+ * Which theme a place plays. The four you TRAVEL get their own; the town and
+ * the rooms inside it keep `world`, which is the tune the valley hums.
+ */
+const MAP_TRACK = { route_one: 'route', stillmere: 'mere', emberwood: 'wood', crown_hollow: 'hollow' };
+const placeTrack = (mapId) => MAP_TRACK[mapId] || 'world';
+
+/**
+ * Follow the map with the music, but only once music is already playing.
+ *
+ * enterMap runs at boot to put a world behind the title card, so STARTING a
+ * track here would play over the title, which has always been silent until you
+ * choose. And it must not restart a track that is already going: startMusic
+ * resets the step and the interval, so re-firing `world` at every doorway in
+ * Hollowbrook would stutter the same tune every few steps.
+ */
+function followMap() {
+  if (HEADLESS || !musicTimer) return;
+  const track = placeTrack(G.mapId);
+  if (track !== musicTrack) startMusic(track);
 }
 
 function startMusic(track) {
@@ -10563,7 +10624,8 @@ function startCont() {
   show(els.title, false);
   if (!loadGame()) newGame();
   else { G.mode = 'world'; updateCam(); }
-  playCue('world');
+  // A save picked up in the Emberwood should not open on the town's tune.
+  playCue(placeTrack(G.mapId));
 }
 
 function boot() {
@@ -10963,7 +11025,7 @@ if (typeof window !== 'undefined') {
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
-    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, THEMES,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, placeTrack, MAP_TRACK, THEMES,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
