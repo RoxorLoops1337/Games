@@ -93,6 +93,10 @@ edit this block to name the next one.
       snowmen with twig arms, a scarf and a face nothing covers; nutcrackers
       with shoulders, epaulettes and a beard; the big tree's hoops replaced by
       a string of twinkling bulbs.
+- [x] Effects: blood soaks into the snow before it sits on it, splats throw a
+      scatter of droplets, pools carry a wet sheen — all batched into one path
+      each so the field still costs one fill a decal. Forced pop-ups climb
+      clear of each other instead of printing through.
 
 ## Next
 
