@@ -3421,11 +3421,18 @@ const G = {
   screen: null,
   menu: null,
   toastT: 0,
+  toast: '',
   steps: 0, playtime: 0, wins: 0, caught: 0,
 };
 
+// The message is kept on G as well as pushed at the DOM, because until now the
+// only copy of it lived in an element the headless suites do not have — so a
+// toast could say anything at all and nothing outside a photograph could tell.
+// Four call sites share one wording here; that is exactly the kind of agreement
+// that drifts, and it needs to be readable to be checked.
 const setToast = (msg) => {
   G.toastT = 2.2;
+  G.toast = msg;
   if (!HEADLESS) { const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('on'); }
 };
 
@@ -4152,8 +4159,24 @@ function effStat(m, key) {
   return Math.max(1, Math.floor(v));
 }
 
-const seeMon = (id) => { if ((G.dex[id] || 0) < 1) G.dex[id] = 1; };
-const catchMon = (id) => { G.dex[id] = 2; };
+// Both of these SAY whether they wrote a new line, because the dex advancing is
+// the errand and it used to advance in total silence.
+//
+// Rowan hands you the game with "there are nineteen kin in this valley — I want
+// every one of them written down", the menu carries the tally, and the ending
+// counts what is still unwritten. Three pieces of prose agree the book is the
+// point. The two moments the book actually moves — meeting a species for the
+// first time, and being the one to write it down — were indistinguishable from
+// meeting your fiftieth Emberpup. The fact was there in `G.dex` all along; the
+// only thing missing was for these to hand it back.
+const seeMon = (id) => { if ((G.dex[id] || 0) >= 1) return false; G.dex[id] = 1; return true; };
+const catchMon = (id) => { const had = (G.dex[id] || 0) >= 2; G.dex[id] = 2; return !had; };
+// One wording for a first sighting, so four call sites cannot drift apart.
+const dexNew = (name) => `${name} — new to the dex.`;
+// And the other half, in Rowan's own words. He does not say "caught", he says
+// "written down in your own hand" — so the payoff screen quotes the errand back
+// at the one moment the errand actually moves, with the tally it moved to.
+const dexTally = () => `WRITTEN DOWN — ${dexCount(2)} OF ${DEX_ORDER.length}`;
 const dexCount = (n) => DEX_ORDER.filter((id) => (G.dex[id] || 0) >= n).length;
 /**
  * Numbers as a person says them. Tallies stay as digits — "13 caught" is a
@@ -5879,7 +5902,7 @@ function startBattle(opt) {
   G.battle.dispF = G.battle.tgtF = opt.foe.hp;
   buildDeck(G.battle);
   G.wipe = WIPE_T;
-  seeMon(opt.foe.species);
+  const firstSight = seeMon(opt.foe.species);
   G.mode = 'battle';
   // The legendary announced itself with the same line as a level-six Dewdrip.
   // Everything else about the encounter is built up — its own cue, twice the
@@ -5890,6 +5913,9 @@ function startBattle(opt) {
     : opt.legendary ? `${opt.foe.name} unfolds out of the light.`
     : `A wild ${opt.foe.name} bristles!`;
   playCue(battleTrack(opt));
+  // The toast outlives the wipe (2.2s against .55s), so it is still standing
+  // when the arena arrives — it marks the kin, not the transition.
+  if (firstSight) { setToast(dexNew(opt.foe.name)); playCue('dex'); }
   const lines = opt.legendary
     ? [who, 'Nothing in the valley moves. It is deciding about you.', `Go, ${dispName(mine)}!`]
     : [who, `Go, ${dispName(mine)}!`];
@@ -7045,8 +7071,12 @@ function foeSwap(log, idx) {
   b.foeSwaps++;
   b.foeSwapT = b.turn;
   b.mods.edge = (b.mods.edge || 0) + Math.round(SWITCH_PUNISH * planScale(next.lvl));
-  seeMon(next.species);
+  const fresh = seeMon(next.species);
   snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${next.name}!`, 'send', 'foe');
+  // Through the log, not straight out of here. A raw call only BUILDS the log;
+  // the state moves when submitLog plays it back, so a toast fired at this line
+  // would land a beat before the player is told anything came out at all.
+  if (fresh) snap(log, dexNew(next.name), 'dex', 'foe');
   snap(log, `Caught mid-change — your next attack will land harder.`, 'buff', 'mine');
 }
 
@@ -7087,8 +7117,9 @@ function resolveFoeDown(log) {
       b.teamIdx = nextIdx;
       b.foe.stages = { atk: 0, def: 0, spd: 0 };
       b.dispF = b.tgtF = b.foe.hp;
-      seeMon(b.foe.species);
+      const seen = seeMon(b.foe.species);
       snap(log, `${b.npc ? b.npc.name : 'The challenger'} sends out ${b.foe.name}!`, 'send', 'foe');
+      if (seen) snap(log, dexNew(b.foe.name), 'dex', 'foe');
       readIntent();
     } else {
       b.over = 'win';
@@ -8606,6 +8637,7 @@ function playbackStep() {
   entryFx(b, e);
   if (e.fx === 'faint') playCue(faintCue(e));
   if (e.fx === 'level' || e.fx === 'learn') playCue('level');
+  if (e.fx === 'dex') playCue('dex');
   if (e.fx === 'caught') playCue('catch');
   if (e.fx === 'throw') {
     playCue('throw');
@@ -8679,6 +8711,9 @@ function finishBattle() {
     winFlourish(gems, () => say('', lines, withReward));
   } else if (over === 'caught') {
     const caught = b.foe;
+    // Asked before `addCaught` writes it down, because after that the book
+    // cannot tell you whether this was the first of its kind or your fourth.
+    const written = (G.dex[caught.species] || 0) < 2;
     const where = addCaught(caught);
     if (b.legendary) G.flags.beatVespyr = 1;
     const gems = gemReward(b);
@@ -8689,6 +8724,7 @@ function finishBattle() {
     G.gotcha = {
       t: 0, species: caught.species, name: caught.name,
       where: where === 'party' ? 'joined your party' : 'was sent to the box',
+      note: written ? dexTally() : '',
       done: () => {
         G.gotcha = null;
         openScreen('profile', {
@@ -9593,7 +9629,10 @@ function screenSelect() {
     // longer than any of them, used to get the screen shut in its face and five
     // lines about energy and the chest shop. The rules can wait forty seconds.
     G.gotcha = {
-      t: 0, species: id, name: m.name, where: 'from here on', head: 'YOUR KIN',
+      // The tally starts in front of you, one line long, forty seconds before
+      // Rowan explains what the book is for. His speech lands on a page that
+      // already has something on it.
+      t: 0, species: id, name: m.name, where: 'from here on', head: 'YOUR KIN', note: dexTally(),
       done: () => {
         G.gotcha = null;
         openScreen('profile', {
@@ -9951,6 +9990,11 @@ function playCue(kind) {
   // like an achievement. Written, not heard: sound cannot be photographed and
   // nobody in this loop has listened to this game.
   else if (kind === 'downed') { blip(196, .1, 'square', .045); blip(294, .14, 'square', .04, t + .07); }
+  // A pen, not a fanfare. Two short high ticks, quiet enough to sit under a
+  // fight — this fires up to nineteen times in a run, and a note being made is
+  // bookkeeping that you notice, not an achievement that stops the room. The
+  // catch keeps the fanfare; the sighting only wants to be heard.
+  else if (kind === 'dex') { blip(1046, .04, 'square', .028); blip(1568, .06, 'square', .022, t + .05); }
   else if (kind === 'level') { [0, 4, 7, 12].forEach((s, i) => blip(note(12 + s), .16, 'square', .05, t + i * .07)); }
   else if (kind === 'catch') { [0, 5, 9, 14].forEach((s, i) => blip(note(12 + s), .2, 'triangle', .06, t + i * .1)); }
   // A chest borrowed the catch cue, which made the biggest purchase in the
@@ -10296,6 +10340,9 @@ function drawGotcha(g) {
   g.font = '8px monospace';
   g.fillStyle = '#b9adc4';
   g.fillText(a.where, cx, 164);
+  // The errand's counter, only on the ones that moved it. A fourth Emberpup
+  // gets the celebration and no tally, because nothing was written.
+  if (a.note) { g.fillStyle = '#ffc94d'; g.fillText(a.note, cx, 178); }
   g.textAlign = 'left';
   g.restore();
 }
@@ -10569,7 +10616,9 @@ function step(dt) {
   }
   if (G.toastT > 0) {
     G.toastT -= dt;
-    if (G.toastT <= 0 && !HEADLESS) els.toast.classList.remove('on');
+    // The string goes when the toast does. A message that outlives its own
+    // display reads as current to anything that asks G rather than the screen.
+    if (G.toastT <= 0) { G.toast = ''; if (!HEADLESS) els.toast.classList.remove('on'); }
   }
   if (justPressed('m')) toggleMute();
   // Keyed on the screen too, because the reward screen labels its buttons
@@ -11046,7 +11095,7 @@ if (typeof window !== 'undefined') {
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
-    saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
+    saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,

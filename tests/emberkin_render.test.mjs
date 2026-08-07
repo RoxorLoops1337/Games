@@ -1623,4 +1623,119 @@ section('every theme is shaped like something musicTick can play');
   }
 }
 
+// Rowan hands you the game with "there are nineteen kin in this valley — I want
+// every one of them written down", the menu carries the tally, and the ending
+// counts what is still unwritten. Three pieces of prose agree the dex is the
+// errand, and both moments it moves — first sighting, first catch — were
+// silent: meeting a species for the first time was indistinguishable from
+// meeting your fiftieth Emberpup.
+section('the dex says when it moves');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  // The two writers report what they wrote. Everything below rests on this.
+  ok(g.seeMon('zaplet'), 'a species never met is a new line');
+  ok(!g.seeMon('zaplet'), 'and meeting it again writes nothing');
+  ok(g.catchMon('zaplet'), 'catching one you had only seen is still the first time it is written down');
+  ok(!g.catchMon('zaplet'), 'catching a second of the same writes nothing');
+  ok(g.catchMon('dewdrip'), 'and one you never even saw counts too');
+
+  // The tally quotes the errand back with the number it moved to.
+  eq(g.dexTally(), `WRITTEN DOWN — 2 OF ${g.DEX_ORDER.length}`,
+    `the tally reads off the book (${g.dexTally()})`);
+  eq(g.dexNew('Zaplet'), 'Zaplet — new to the dex.', 'and one wording for a sighting');
+}
+
+// Walking into a fight is one of four places the game learns a species, and the
+// only one that is not inside a battle log — so it says so directly.
+section('a first sighting is announced when the fight opens');
+{
+  const g = withDeck(loadGame({}));
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+
+  g.startBattle({ foe: g.mkMon('zaplet', 6), wild: true });
+  eq(g.G.toast, 'Zaplet — new to the dex.', `the opening marks it (${g.G.toast || 'nothing'})`);
+  ok(g.G.toastT > 0, 'and the mark is standing');
+
+  // Now it is in the book. The second Zaplet is just a Zaplet.
+  g.G.battle = null; g.G.toast = ''; g.G.toastT = 0;
+  g.startBattle({ foe: g.mkMon('zaplet', 6), wild: true });
+  eq(g.G.toast, '', 'the second one of the same says nothing');
+}
+
+// The other three sites are mid-battle send-outs, which run inside a log
+// builder. A toast fired from there would land a beat before the player is told
+// anything came out at all — raw calls only BUILD the log; the state moves when
+// submitLog plays it back. So the note goes through the log, and the cue hangs
+// off the entry.
+section('a trainer leading with something new says so through the log');
+{
+  const g = withDeck(loadGame({}));
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+
+  const bench = [g.mkMon('zaplet', 8), g.mkMon('dewdrip', 8)];
+  g.startBattle({ foe: bench[0], wild: false, npc: { id: 't_pell', name: 'Forager Pell' } });
+  const b = g.G.battle;
+  b.roster = bench;
+  b.teamIdx = 0;
+  bench[0].hp = 0;                          // the one that is out has fallen
+
+  const log = [];
+  g.resolveFoeDown(log);
+  const notes = log.filter((e) => e.fx === 'dex');
+  eq(notes.length, 1, `the newcomer nobody has met is marked once (${notes.length})`);
+  eq(notes[0].t, 'Dewdrip — new to the dex.', 'in the same words the opening uses');
+  // Order matters: you are told something came out before you are told it is new.
+  const sent = log.findIndex((e) => e.fx === 'send');
+  const noted = log.findIndex((e) => e.fx === 'dex');
+  ok(sent >= 0 && sent < noted, 'and only after being told it came out at all');
+
+  // Same fight, same bench, second time round: nothing new to say.
+  bench[1].hp = 0;
+  bench[0].hp = 10;
+  b.teamIdx = 1;
+  const again = [];
+  g.resolveFoeDown(again);
+  eq(again.filter((e) => e.fx === 'dex').length, 0, 'a kin already in the book is sent out quietly');
+}
+
+// The gotcha is the one screen that already varies by context, and it read the
+// same for the nineteenth species as for your fourth Emberpup.
+section('the payoff screen counts the errand it just moved');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  // The ordering claim, which is the whole bug class: asked AFTER addCaught
+  // writes the line, "was this new?" is always no. Source, because the answer
+  // lives inside finishBattle's caught branch and nothing hands it back out.
+  const caughtBranch = SRC.slice(SRC.indexOf("} else if (over === 'caught') {"));
+  const askedAt = caughtBranch.indexOf('const written =');
+  const wroteAt = caughtBranch.indexOf('addCaught(caught)');
+  ok(askedAt >= 0 && wroteAt >= 0, 'the caught branch both asks and writes');
+  ok(askedAt < wroteAt, 'and it asks before it writes, or the answer is always no');
+  ok(/note: written \? dexTally\(\) : ''/.test(caughtBranch),
+    'a catch that moved the book carries the tally, and one that did not carries nothing');
+
+  // The starter is always the first line in an empty book, so it always counts.
+  ok(/head: 'YOUR KIN', note: dexTally\(\)/.test(SRC), 'the kin you are handed opens the book');
+
+  // And the screen draws what it is given, without falling over on a catch that
+  // wrote nothing. Both branches, through the real draw.
+  g.takeStarter('cindercub');
+  g.G.gotcha = { t: .9, species: 'cindercub', name: 'Cindercub', where: 'joined your party',
+    note: g.dexTally(), done: () => {} };
+  g.draw();
+  g.G.gotcha.note = '';
+  g.draw();
+  ok(true, 'the gotcha draws with a tally and without one');
+}
+
 done('emberkin_render');
