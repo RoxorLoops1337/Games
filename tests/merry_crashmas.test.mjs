@@ -89,7 +89,7 @@ const EXPOSE = `__out.api = {
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
-  COATS, ELDER_COATS, KID_COATS, SKIN,
+  COATS, ELDER_COATS, KID_COATS, SKIN, HATS,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
   // swap them out and count what a run actually asks the mixer for
@@ -4462,6 +4462,71 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ------------------------------------------------------- the fallen --- */
+
+function corpse(api, kind, tweak){
+  api.people.length = 0;
+  const p = api.addPerson(api.cam.x, api.cam.y, kind);
+  p.ang = 0; p.dead = true; p.squash = 0.85; p.fly = 0;
+  if (tweak) tweak(p);
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawPerson(p));
+  const isTorso = (s) => Math.abs(s.r - p.r * 0.95) < 0.01 && Math.abs(s.ry - p.r * 0.72) < 0.01;
+  return { p, rec,
+    torso: rec.shapes.find(s => !s.stroked && isTorso(s)),
+    trim: rec.shapes.find(s => s.stroked && isTorso(s)),
+    by: (c) => rec.shapes.filter(s => s.style === c),
+    rects: rec.rects };
+}
+
+test('a flattened Santa is still recognisably Santa', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const s = corpse(api, 'santa');
+  const r = s.p.r;
+
+  assert(s.torso && s.torso.style === '#c22f28', 'the red coat should survive: ' +
+    (s.torso && s.torso.style));
+  assert(s.trim && /246,242,234/.test(s.trim.style), 'and the fur trim with it');
+  assert(s.trim.lw > r * 0.1, 'thick enough to read: ' + s.trim.lw.toFixed(1));
+  assert(s.rects.some(x => x.style === '#2a2028') && s.rects.some(x => x.style === '#e8b53a'),
+    'belt and buckle should still be on him');
+  const beard = s.by('#f3efe6')[0];
+  assert(beard, 'the beard should still be there');
+  assert(beard.x > 0 && beard.x < r * 1.05,
+    'under his chin, between the torso and the head: x' + beard.x.toFixed(1));
+  const hat = s.by('#d8382c')[0], bob = s.by('#f6f2ea')[0];
+  assert(hat && bob, 'the hat and its bobble should have come off with him');
+  assert(hat.x > r * 1.05 && bob.x > hat.x, 'knocked forward past the head');
+  /* And he is still visibly dead: the X goes on after the hat, so nothing he
+     is now wearing can cover it. */
+  const st = s.rec.styles;
+  assert(st.indexOf('s:#2a1a16') > st.lastIndexOf('f:#d8382c'),
+    'the X should be struck over the hat, not under it');
+  console.log('    (dead santa: beard x' + beard.x.toFixed(1) + ', hat x' +
+    hat.x.toFixed(1) + ', bobble x' + bob.x.toFixed(1) + ' on r' + r + ')');
+});
+
+test('everyone else falls the way they always did', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  for (const kind of ['shopper', 'elder', 'kid', 'parent']){
+    const c = corpse(api, kind, (p) => { p.hat = true; p.hatCol = 0; });
+    assert(c.torso.style !== '#c22f28', kind + ' should not be wearing Santa red');
+    assert(/18,28,48/.test(c.trim.style), kind + ' should keep the plain outline');
+    assert(!c.rects.some(x => x.style === '#2a2028'), kind + ' should not have the belt');
+    assert(c.by('#f3efe6').length === 0, kind + ' should not have the beard');
+    // but their own bobble hat still comes down with them
+    assert(c.by(api.HATS[0]).length === 1,
+      kind + ' should keep its own hat: ' + c.by(api.HATS[0]).length);
+  }
+  // and a hatless one draws no hat at all
+  const bald = corpse(api, 'shopper', (p) => { p.hat = false; });
+  assert(bald.by(api.HATS[0]).length === 0, 'no hat, no hat');
+});
+
 /* ------------------------------------------------- wrecked set pieces --- */
 
 /* Draws one prop, live or wrecked, into the shape recorder. */
@@ -4806,13 +4871,13 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
    through ctx and the recorder ignores them, so what comes back is the layout
    inside the bodywork. */
 function carRec(){
-  const shapes = [], order = [], rects = [], all = [];
+  const shapes = [], order = [], rects = [], all = [], styles = [];
   let fill = '', line = '', lw = 0, pending = null;
   const base = {
-    shapes, order, rects, all,
-    set fillStyle(v){ fill = String(v); order.push(String(v)); },
+    shapes, order, rects, all, styles,
+    set fillStyle(v){ fill = String(v); order.push(String(v)); styles.push('f:' + v); },
     get fillStyle(){ return fill; },
-    set strokeStyle(v){ line = String(v); },
+    set strokeStyle(v){ line = String(v); styles.push('s:' + v); },
     get strokeStyle(){ return line; },
     set lineWidth(v){ lw = +v; },
     get lineWidth(){ return lw; },
