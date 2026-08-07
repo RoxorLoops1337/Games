@@ -103,6 +103,30 @@ const SCENES = {
       EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
     },
   },
+  // The XP bar one frame before a level lands. The bar chases `dispXp`, and the
+  // renderer draws it against the level that value is IN rather than the level
+  // the creature has already reached — so parking dispXp just under the
+  // boundary must read as a nearly-full bar of the old level, not as a sliver
+  // of the new one. That walk-back is the half of the fix the headless suite
+  // cannot see, because it lives in a closure inside renderHUD.
+  levelbar: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      const me = EK.G.party[0];
+      EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
+      // The kin has reached level 6; the bar is still finishing level 5. Every
+      // end is parked on the same value on purpose — the chase runs each frame
+      // in updateBattle, so any gap here would close during the still's settle
+      // time and photograph the settled bar instead of the one this scene came
+      // for. `barLv` stays 5 because that is the level the playback is on.
+      me.lvl = 6; EK.refresh(me); me.xp = EK.xpFor(6) - 1;
+      const b = EK.B();
+      b.dispXp = b.tgtXp = me.xp; b.barLv = 5;
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,
