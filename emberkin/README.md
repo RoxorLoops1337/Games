@@ -2091,19 +2091,30 @@ the flash rather than quietening the ring is the right way round: the hit has
 already been read — its number is on screen — and what has **not** been read yet
 is that you levelled. The good news takes the sprite from the bad news.
 
-### A pending fall outlived its map
+### Beats that own the screen are states, and `enterMap` clears them
 
-`enterMap` abandons a half-played rustle and a half-played mend, and the
-blackout was left out of that list when it was added. The omission is worse than
-the other two would have been: those only hold the screen, but the blackout
-carries a callback that **moves you to the Wayhouse** — so a map change from any
-other cause left a timer that would later yank you out of wherever you had gone.
+`rustle`, `mend`, `blackout`, `gotcha`, `flourish` and `evoAnim` are all
+abandoned when the ground moves under them. Three of those — blackout, gotcha,
+flourish — carry a callback that changes the map or opens a screen when it
+expires, so a stranded one does not merely linger, it *acts*. `warp` is
+deliberately absent from the list: `warpStep` is what calls `enterMap`, and
+clearing it there would cancel the door you are walking through.
 
-It surfaced as the story suite's rival rematch failing about one run in four,
-which had been read as ordinary flake and very nearly dismissed as one. Six
-consecutive green runs after the fix, against a baseline that fails one in four.
-Worth remembering: **a beat that owns the screen is a state, and every state
-needs somebody to clear it.**
+**A correction, since the blackout half of this was written up too strongly.**
+It was described as a map change from any other cause leaving a timer that would
+later yank you out of wherever you had gone. Auditing the rest of the list
+showed that is not demonstrated: every one of these beats blocks input while it
+runs, so a player cannot walk into a warp during one, and the only code path
+that changes maps underneath a beat is the loss handler itself. What the list
+prevents is a whole class of "it fired later, somewhere else" — it earns its
+place as defence, not as a fix for anything a player has been shown to hit. The
+symptom it did fix was real: the story suite's rival rematch failing about one
+run in four, green since.
+
+The rule survives the correction, and is the reason the audit was worth doing:
+**a beat that owns the screen is a state, and every state needs somebody to
+clear it.** What does not survive is claiming a player-facing bug without a path
+to it.
 
 ### Being healed
 
