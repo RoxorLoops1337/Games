@@ -3836,6 +3836,72 @@ function hash(i){
 }
 function band(y, h, col){ px(0, y, VW, h, col); }
 
+/* --------------------------------------------------------- the ground
+   Every stage stood its fight on a flat band with a two-stop gradient down
+   it: the largest surface in the frame and the least worked one. What makes
+   a 2.5D floor read as ground rather than as a wall behind the fighters is
+   that the courses across it crowd toward the back — a fixed number of
+   screen pixels is a longer stretch of ground the further away it lies. The
+   pass is drawn in alpha rather than in per-stage colours, so one set of
+   courses works over paving, dirt, plate, plank and tar alike; a stage only
+   says where its floor starts and how hard its light lands on it. */
+const GROUND = {
+  street:  { y0: 155, lit: 0.105, dark: 0.26, joint: 0.20, bounce: 0.13 },
+  junk:    { y0: 151, lit: 0.050, dark: 0.15, joint: 0.04, bounce: 0.15 },  // dirt has no courses cut into it
+  docks:   { y0: 151, lit: 0.095, dark: 0.24, joint: 0.18, bounce: 0.16 },
+  foundry: { y0: 151, lit: 0.075, dark: 0.20, joint: 0.14, bounce: 0.10 },
+  keep:    { y0: 151, lit: 0.095, dark: 0.24, joint: 0.17, bounce: 0.20 },
+};
+const GROUND_ROWS = 8;
+const GROUND_JOINT = 38;                              // world spacing of the cross joints
+function groundGrime(){
+  /* Blotches, baked once and tiled: a floor that has been walked on is
+     never one flat tone. Nothing is painted within 20px of either edge, so
+     no blob is cut in half where the two copies meet. */
+  return bake('grime', VW, 66, () => {
+    for (let i = 0; i < 15; i++)
+      ellipse(20 + hash(i * 5 + 2) * (VW - 40), hash(i * 7 + 11) * 62,
+        11 + hash(i * 3) * 26, 3 + hash(i * 11) * 6, 'rgba(10,8,16,0.11)');
+    for (let i = 0; i < 9; i++)
+      ellipse(20 + hash(i * 13 + 5) * (VW - 40), hash(i * 17 + 3) * 62,
+        8 + hash(i * 9) * 15, 2 + hash(i * 5) * 4, 'rgba(255,240,210,0.045)');
+  });
+}
+function groundPlane(c, m, s){
+  if (!m) return;
+  const y0 = m.y0, span = VH - y0;
+  const g = groundGrime(), gx0 = -(((c % VW) + VW) % VW);
+  blit(g, gx0, y0 + 5);
+  blit(g, gx0 + VW, y0 + 5);
+  /* What the stage is lit by lands on its floor too. The bounce colour each
+     stage already hands the fighters washes the back of the ground, where
+     the sky or the furnaces are, and dies out toward the front. The roof at
+     sunset used to be a grey slab under an orange sky. */
+  if (s && s.bounce)
+    for (let i = 0; i < 9; i++)
+      px(0, y0 + i * 4, VW, 4, rgba(s.bounce, (m.bounce == null ? 0.15 : m.bounce) * (1 - i / 9)));
+  let prev = y0 + 3;
+  for (let i = 1; i <= GROUND_ROWS; i++){
+    const t = i / GROUND_ROWS;
+    const y = Math.round(y0 + span * Math.pow(t, 1.35));
+    if (y >= VH - 1) break;
+    const k = 0.42 + t * 0.58;                        // the near courses take more light
+    px(0, y, VW, 1, 'rgba(255,244,222,' + (m.lit * k).toFixed(3) + ')');
+    px(0, y + 1, VW, 1, 'rgba(6,4,10,' + (m.dark * k).toFixed(3) + ')');
+    if (y - prev >= 8){                               // joints, once a course is deep enough to show them
+      // every other course is offset half a joint: courses that line up read
+      // as graph paper, a running bond reads as something that was laid
+      const h = y - prev - 1, sh = (i & 1) * (GROUND_JOINT >> 1);
+      const x0 = (((sh - c) % GROUND_JOINT) + GROUND_JOINT) % GROUND_JOINT;
+      for (let x = x0 - GROUND_JOINT; x < VW; x += GROUND_JOINT)
+        px(x, prev + 1, 1, h, 'rgba(6,4,10,' + m.joint.toFixed(3) + ')');
+    }
+    prev = y;
+  }
+  // and it goes into shadow where it meets whatever stands on it
+  for (let i = 0; i < 5; i++) px(0, y0 + i, VW, 1, 'rgba(6,4,10,' + (0.24 - i * 0.045).toFixed(3) + ')');
+}
+
 function drawBackground(){
   lfReset();
   const s = stage();
@@ -3848,6 +3914,7 @@ function drawBackground(){
     case 'keep': bgKeep(c); break;
     default: bgStreet(c);
   }
+  groundPlane(c, GROUND[s.bg] || GROUND.street, s);
 }
 
 /* ---------------------------------------------------------------- 1 */
@@ -4029,10 +4096,12 @@ function bgStreet(c){
   }), 0, 156);
   for (let i = -1; i < 12; i++){
     const gx = Math.floor(c / 60) + i, x = gx * 60 - c;
+    if (x + 26 < -2 || x > VW + 2) continue;
     px(x, 186, 26, 2, '#4a4a5c');
   }
   for (let i = -1; i < 8; i++){                       // wet patches catching the neon
     const gx = Math.floor(c / 130) + i, x = gx * 130 - c + hash(gx) * 40;
+    if (x + 14 < -2 || x - 14 > VW + 2) continue;
     ellipse(x, 172 + hash(gx + 2) * 26, 14, 4, 'rgba(70,90,130,0.20)');
     px(x - 6, 172 + hash(gx + 2) * 26, 9, 1, 'rgba(150,190,255,0.14)');
   }
@@ -4049,6 +4118,8 @@ function bgStreet(c){
   }
   for (let i = -1; i < 5; i++){                       // lamps, with a cone
     const gx = Math.floor(c * 0.55 / 140) + i, x = gx * 140 - c * 0.55;
+    // six lamps were painted, cone and all, for the three that are on screen
+    if (x + 32 < -2 || x - 20 > VW + 2) continue;
     px(x + 6, 93, 3, 57, '#221d2e');                  // post
     px(x + 1, 86, 14, 4, '#3a3150');                  // hood
     px(x + 1, 86, 14, 1, '#4d4266');

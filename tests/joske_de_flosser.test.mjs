@@ -63,6 +63,7 @@ const EXPOSE = `__out.api = {
   gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg, drawItem,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
+  GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -4633,6 +4634,131 @@ test('the far skyline only paints the towers you can see', () => {
     const caps = api._rects.filter(q => q[4] === '#262a4e' && q[3] === 1);
     assert(caps.length >= 6, 'at camera ' + cx + ' the far skyline is ' + caps.length + ' towers');
     assert(caps.length <= 11, 'at camera ' + cx + ' it painted ' + caps.length + ' towers for the nine on screen');
+  }
+});
+
+/* --------------------------------------------------------- the ground plane */
+const groundRows = (api) => api._rects
+  .filter(q => q[2] === api.VW && q[3] === 1 && String(q[4]).startsWith('rgba(255,244,222'))
+  .sort((a, b) => a[1] - b[1]);
+
+test('the floor recedes: its courses crowd toward the back', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.groundPlane(0, api.GROUND.street, api.stage());
+  const rows = groundRows(api);
+  assert(rows.length >= 5, 'the floor has ' + rows.length + ' courses across it');
+  const gaps = [];
+  for (let i = 1; i < rows.length; i++) gaps.push(rows[i][1] - rows[i - 1][1]);
+  assert(gaps[0] < gaps[gaps.length - 1],
+    'the courses are evenly spaced — that is a wall, not a floor: ' + gaps.join(', '));
+  for (let i = 1; i < gaps.length; i++)
+    assert(gaps[i] >= gaps[i - 1], 'the spacing does not open up all the way forward: ' + gaps.join(', '));
+  // and the near ones take more light than the far ones
+  const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+  assert(alpha(rows[rows.length - 1]) > alpha(rows[0]) * 1.5,
+    'the far courses are as bright as the near ones');
+  // each lit course has its own shadow directly under it
+  for (const q of rows)
+    assert(api._rects.some(z => z[1] === q[1] + 1 && z[2] === api.VW && String(z[4]).startsWith('rgba(6,4,10')),
+      'the course at ' + q[1] + ' casts no shadow under itself');
+});
+
+test('the joints are laid in a running bond and travel with the camera', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const joints = (c) => {
+    api._resetCounts();
+    api.groundPlane(c, api.GROUND.street, api.stage());
+    return api._rects.filter(q => q[2] === 1 && q[3] > 4 && String(q[4]).startsWith('rgba(6,4,10'));
+  };
+  const j = joints(0);
+  assert(j.length > 12, 'the floor has ' + j.length + ' joints in it');
+  const byRow = {};
+  for (const q of j) (byRow[q[1]] = byRow[q[1]] || []).push(q[0]);
+  const rows = Object.keys(byRow).sort((a, b) => a - b);
+  assert(rows.length >= 3, 'only ' + rows.length + ' courses carry joints');
+  // consecutive courses are offset half a joint against each other
+  const off = (r) => ((byRow[r][0] % api.GROUND_JOINT) + api.GROUND_JOINT) % api.GROUND_JOINT;
+  assert(Math.abs(off(rows[0]) - off(rows[1])) === api.GROUND_JOINT / 2,
+    'the courses line up: ' + rows.map(off).join(', ') + ' — that is graph paper, not a bond');
+  assert(off(rows[0]) === off(rows[2]), 'the bond does not alternate');
+  // and the whole lot slides with the world
+  const moved = joints(9);
+  assert(moved[0][0] !== j[0][0], 'the joints are painted to the screen, not to the ground');
+});
+
+test('every stage floor takes a wash of what lights it, back to front', () => {
+  const api = boot();
+  for (let st = 0; st < api.STAGES.length; st++){
+    play(api, { stage: st });
+    api.draw();
+    api._resetCounts();
+    api.draw();
+    const s = api.STAGES[st], m = api.GROUND[s.bg];
+    const bands = api._rects.filter(q => q[2] === api.VW && q[3] === 4 &&
+      String(q[4]).startsWith('rgba(' + [1, 3, 5].map(i => parseInt(s.bounce.slice(i, i + 2), 16)).join(',')));
+    assert(bands.length === 9, 'stage ' + st + ' floor takes ' + bands.length + ' bands of bounce');
+    const byY = bands.slice().sort((a, b) => a[1] - b[1]);
+    const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+    assert(alpha(byY[0]) > alpha(byY[8]), 'stage ' + st + ' bounce is not strongest at the back');
+    assert(alpha(byY[8]) < alpha(byY[0]) * 0.25, 'stage ' + st + ' bounce never dies out at the front');
+    assert(byY[0][1] === m.y0, 'stage ' + st + ' bounce does not start at its floor');
+  }
+});
+
+test('the floor goes into shadow where it meets what stands on it', () => {
+  const api = boot();
+  play(api, { stage: 3 });
+  api.draw();
+  api._resetCounts();
+  api.groundPlane(0, api.GROUND.foundry, api.stage());
+  const m = api.GROUND.foundry;
+  const contact = api._rects
+    .filter(q => q[2] === api.VW && q[3] === 1 && q[1] >= m.y0 && q[1] < m.y0 + 5 && String(q[4]).startsWith('rgba(6,4,10'))
+    .sort((a, b) => a[1] - b[1]);
+  assert(contact.length === 5, 'the wall junction is ' + contact.length + ' rows deep');
+  const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+  for (let i = 1; i < 5; i++)
+    assert(alpha(contact[i]) < alpha(contact[i - 1]), 'the contact shadow does not fall off away from the wall');
+});
+
+test('the grime is baked once, tiled twice, and never cut at the seam', () => {
+  const api = boot();
+  api._resetCounts();
+  api.groundGrime();
+  const blobs = api._rects;
+  assert(blobs.length > 200, 'the grime sheet is ' + blobs.length + ' rects — it is barely mottled');
+  assert(Math.min(...blobs.map(q => q[0])) >= 0, 'a blob runs off the left of the sheet');
+  assert(Math.max(...blobs.map(q => q[0] + q[2])) <= api.VW, 'a blob runs off the right of the sheet');
+  assert(new Set(blobs.map(q => q[4])).size === 2, 'the grime is not two tones (soil and wear)');
+  // warm, then check it costs nothing per frame beyond the two blits
+  play(api, { stage: 1 });
+  api.draw();
+  api._resetCounts();
+  api.groundPlane(120, api.GROUND.junk, api.stage());
+  assert((api._counts.drawImage || 0) === 2, 'the grime is blitted ' + (api._counts.drawImage || 0) + ' times');
+  assert((api._counts.fillRect || 0) < 90, 'the ground plane costs ' + api._counts.fillRect + ' fillRects');
+});
+
+test('the street only paints the lamps, dashes and wet patches on screen', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  for (const cx of [0, 240, 1450]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const r = api._rects;
+    const posts = r.filter(q => q[4] === '#221d2e' && q[2] === 3 && q[3] === 57);
+    assert(posts.length >= 2, 'at camera ' + cx + ' the street has ' + posts.length + ' lamps');
+    assert(posts.length <= 4, 'at camera ' + cx + ' it painted ' + posts.length + ' lamps for the three on screen');
+    const dashes = r.filter(q => q[4] === '#4a4a5c' && q[2] === 26);
+    assert(dashes.length <= 8, 'at camera ' + cx + ' it painted ' + dashes.length + ' road dashes');
+    assert(dashes.length >= 5, 'at camera ' + cx + ' the road has ' + dashes.length + ' dashes on it');
   }
 });
 
