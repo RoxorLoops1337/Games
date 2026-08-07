@@ -2228,6 +2228,32 @@ Same shape as the rustle one pass earlier, and the pair of them is the lesson:
 "where the voice is" catches things misplaced.** They are different questions
 and the second one is the harder to see.
 
+### Two payoff screens, and only one of them landed
+
+The fourth inventory, and the second-order one: **not what has a signal, but
+whether the signal is on the right moment.** The sound find generalises, and the
+other signals had never been checked for the same fault.
+
+The **toasts** are thorough — twenty-nine of them, covering refusals,
+confirmations and errors. Nothing missing.
+
+`screenEntry` was not. The reward drops in with weight and everything else
+slides up, which is right until you notice **the papers after a catch are the
+other payoff screen**: the gotcha turns its rays and sounds its fanfare, and
+then the thing you actually caught arrives on the same slide as the bag. Only a
+*fresh* catch lands — the same screen opened later from the party menu is a
+record, not a moment.
+
+#### The tool could not photograph an entry animation at all
+
+A film grabs the canvas, which has no panels on it. A still waits 1200ms, by
+which time every screen has finished arriving. So a DOM entry animation fell
+exactly between the two instruments and had never been looked at once.
+
+`--wait ms` overrides the settle time. At 150ms the papers are caught visibly
+mid-drop and the deck at the same instant is already settled, which is both the
+verification and the proof the two entries differ.
+
 ### Every decision, and whether its information is on screen
 
 The third inventory, after the beats and the sounds. Listed every choice the

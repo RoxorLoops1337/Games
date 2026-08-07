@@ -8416,7 +8416,19 @@ function openScreen(kind, opt = {}) {
  */
 function screenEntry(kind) {
   if (HEADLESS || !els.screen) return;
-  const cls = kind === 'reward' ? 'landing' : 'rising';
+  // Two payoff screens, and only one of them landed.
+  //
+  // The reward drops in with weight and everything else slides up, which is
+  // right — until you notice the papers after a catch are the *other* payoff
+  // screen. The gotcha turns its rays and sounds its fanfare, and then the
+  // thing you actually caught arrives on the same slide as the bag. Same shape
+  // as the cue that was on the wrong beat: the signal exists, it was on one of
+  // the two moments that deserve it.
+  //
+  // Only a fresh catch, not the same screen opened later from the party menu —
+  // that one is a record, not a moment.
+  const fresh = kind === 'profile' && G.screen && G.screen.opt && G.screen.opt.fresh;
+  const cls = (kind === 'reward' || fresh) ? 'landing' : 'rising';
   els.screen.classList.remove('rising', 'landing');
   void els.screen.offsetWidth;              // restart the animation
   els.screen.classList.add(cls);
