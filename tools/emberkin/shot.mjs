@@ -8,6 +8,7 @@
 //
 //   node tools/emberkin/shot.mjs                    # every scene, into /tmp
 //   node tools/emberkin/shot.mjs battle out.png     # one scene, somewhere
+//   node tools/emberkin/shot.mjs --film evolve 9 450 # a scene as it plays, tiled
 //
 // Scenes: title, study, town, battle, legendary.
 //
@@ -120,8 +121,19 @@ const SCENES = {
   },
 };
 
-const want = process.argv[2];
-const out = process.argv[3];
+// `--film <scene> [frames] [ms]` captures a scene as it actually plays and tiles
+// the frames into one picture.
+//
+// This exists because a frozen frame lies about anything keyed to the clock.
+// Stepping the evolution animation by hand made its light-wheel look painted on;
+// it turns, and accelerates as the beat builds, and none of that is visible if
+// you drive the animation's own timer while holding G.t still. If a beat has a
+// timeline, film it.
+const FILM = process.argv[2] === '--film';
+const want = FILM ? process.argv[3] : process.argv[2];
+const out = FILM ? null : process.argv[3];
+const FRAMES = FILM ? Number(process.argv[4] || 9) : 0;
+const EVERY = FILM ? Number(process.argv[5] || 450) : 0;
 const list = want ? [want] : Object.keys(SCENES);
 if (want && !SCENES[want]) {
   console.error(`no scene "${want}". try: ${Object.keys(SCENES).join(', ')}`);
@@ -146,10 +158,34 @@ for (const name of list) {
     });
     await page.waitForTimeout(700);
     await page.evaluate(`(${sc.go.toString()})(window.EK)`);
-    await page.waitForTimeout(1200);            // let the entry animation settle
+    // A still wants the entry animation over; a film wants to start at the
+    // trigger, or the beat it came to record has already finished.
+    await page.waitForTimeout(FILM ? 60 : 1200);
   }
-  const file = out || `/tmp/emberkin_${name}.png`;
-  await page.screenshot({ path: file });
+  const file = out || `/tmp/emberkin_${name}${FILM ? '_film' : ''}.png`;
+  if (FILM) {
+    const shots = [];
+    for (let i = 0; i < FRAMES; i++) {
+      await page.waitForTimeout(EVERY);
+      shots.push(await page.evaluate(() => {
+        const c = document.getElementById('view');
+        const cv = document.createElement('canvas');
+        cv.width = c.width; cv.height = c.height;
+        cv.getContext('2d').drawImage(c, 0, 0);
+        return cv.toDataURL();
+      }));
+    }
+    const strip = await browser.newPage({ viewport: { width: 788, height: 220 * Math.ceil(shots.length / 3) } });
+    await strip.setContent(`<body style="margin:0;background:#0a070e;display:grid;`
+      + `grid-template-columns:repeat(3,256px);gap:4px">`
+      + shots.map((u, i) => `<div style="position:relative"><img src="${u}" width="256">`
+        + `<span style="position:absolute;left:4px;top:2px;color:#ffc94d;`
+        + `font:11px monospace">${i}</span></div>`).join('') + '</body>');
+    await strip.screenshot({ path: file });
+    await strip.close();
+  } else {
+    await page.screenshot({ path: file });
+  }
   const where = await page.evaluate(() => (window.EK ? `${EK.G.mode}/${EK.G.mapId}` : '?'));
   console.log(`${name.padEnd(10)} ${where.padEnd(22)} ${file}`);
   await page.close();
