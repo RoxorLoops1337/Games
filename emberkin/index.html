@@ -3842,6 +3842,12 @@ const CHESTS = {
   prism:   { name: 'Prism Chest',   cost: 1620, pulls: 4, odds: { common: 5, rare: 30, epic: 45, legendary: 20 } },
 };
 const CHEST_IDS = Object.keys(CHESTS);
+// One source for a chest's colour. It lived as a literal inside the shop's
+// render, so the opening beat could not reach it and fell back to gold for all
+// four — a 1620-gem Prism burst exactly like a 60-gem Silver, which is most of
+// what you paid for. The beat asked for `ch.tint`, a field CHESTS never had,
+// and its own `|| gold` fallback hid that.
+const CHEST_TINT = { silver: '#c8ccd4', gold: '#ffc94d', diamond: '#7fe0f5', prism: '#c86bff' };
 
 function rollRarity(odds) {
   const total = RARITY_ORDER.reduce((s, r) => s + (odds[r] || 0), 0);
@@ -8974,7 +8980,7 @@ function renderScreen() {
     html += `<p class="lede">Better chests do not hold more cards. They hold better odds.</p>`;
     html += `<div class="items wide">` + CHEST_IDS.map((k, i) => {
       const ch = CHESTS[k];
-      const tint = { silver: '#c8ccd4', gold: '#ffc94d', diamond: '#7fe0f5', prism: '#c86bff' }[k];
+      const tint = CHEST_TINT[k];
       const afford = G.gems >= ch.cost;
       // The odds as a bar rather than four percentages: you are choosing
       // between distributions, and a distribution is a shape.
@@ -9284,7 +9290,7 @@ function screenSelect() {
     // The beat runs over the shop, and the screen is still behind it when it
     // ends — you came here to open several.
     G.chestOpen = {
-      t: 0, tint: ch.tint || '#ffc94d', label: `${ch.name.toUpperCase()} OPENED`,
+      t: 0, tint: CHEST_TINT[kind] || '#ffc94d', label: `${ch.name.toUpperCase()} OPENED`,
       names: (s.got || []).filter(Boolean).map((c) => cardName(c)),
     };
   } else if (s.kind === 'bag') {

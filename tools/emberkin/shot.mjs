@@ -172,7 +172,7 @@ const SCENES = {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.G.gems = 4000;
       EK.openScreen('chests');
-      EK.G.screen.i = 1;                  // a Gold Chest, so there is more to show
+      EK.G.screen.i = 3;                  // the Prism, whose colour is the thing being checked
       EK.screenSelect();
     },
   },
