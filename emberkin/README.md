@@ -2249,6 +2249,21 @@ line carries `63/63 +14` in the same blue.
 Photographed both ways, and the unshielded case is untouched — full green edge
 to edge, no `+`, no tail.
 
+**The foe banks a shield too**, and its bar was as silent about that as yours
+was about yours. `brace` is worth 20 at scale, and it is announced once — on the
+turn it happens — after which you spend your next turn choosing a card against a
+wall you cannot see.
+
+That half is worse than an oversight. The line that put the shield on your bar
+read `mine ? b.shield : 0`: **the mirror of the fix, written out by hand while
+writing the fix.** Both bars carry a tail now. The foe gets no number, because
+its exact HP is deliberately not shown and a shield figure would leak it.
+
+Two passes running the find has been the other half of the previous one — the
+orb needing the foe's HP right after the salve got yours, then this. The
+question is worth asking on purpose rather than stumbling into: **what is the
+mirror of the thing I just fixed?**
+
 ### The intent line said what the foe swings, not what lands
 
 The fourth inventory: **every number the game shows, and whether it is the
