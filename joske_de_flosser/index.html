@@ -208,6 +208,10 @@
         <button data-v="1" class="on">BLOOM</button>
         <button data-v="0">NO BLOOM</button>
       </div>
+      <div class="seg" id="segGrade">
+        <button data-v="1" class="on">GRADED</button>
+        <button data-v="0">FLAT</button>
+      </div>
       <button class="btn" id="bResume">RESUME</button>
       <button class="btn alt" id="bQuit">QUIT</button>
     </div>
@@ -302,7 +306,7 @@ const G = {
   bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '', bestWave: 0,
   ups: [], picks: [], pick: 0,
   time: 0,                          // seconds spent in the current stage
-  sound: true, scan: true, bloom: true, story: true, mode: 'story',
+  sound: true, scan: true, bloom: true, grade: true, story: true, mode: 'story',
 };
 
 const cam = { x: 0, lock: -1, targetX: 0, shakeX: 0, shakeY: 0 };
@@ -3945,6 +3949,7 @@ function loadMeta(){
     if (d.sound != null) snd.on = !!d.sound;
     if (d.scan != null) G.scan = !!d.scan;
     if (d.bloom != null) G.bloom = !!d.bloom;
+    if (d.grade != null) G.grade = !!d.grade;
     if (d.diff != null) G.diff = clamp(d.diff | 0, 0, 2);
     if (d.story != null) G.story = !!d.story;
     G.bestWave = d.bestWave || 0;
@@ -3953,7 +3958,7 @@ function loadMeta(){
 function saveMeta(){
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, bloom: G.bloom, diff: G.diff, story: G.story,
+      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, bloom: G.bloom, grade: G.grade, diff: G.diff, story: G.story,
       bestWave: G.bestWave,
     }));
   } catch (e){ /* private mode */ }
@@ -5040,6 +5045,50 @@ function drawAmbient(bgOver, rainOver){
    is soft against pixels that are not. */
 const BLOOM_DIV = 4, BLOOM_AMT = 0.70;
 let bloomC = null;
+/* ------------------------------------------------------------- the grade
+   Every part of this game was painted in its own palette and then stood on
+   the same street: a teal shirt in a foundry is still teal, which reads as
+   a sprite pasted onto a backdrop rather than a man standing in the light
+   of it. Two composited passes over the finished frame put every pixel in
+   the same room — a multiply toward what the highlights are lit by, and an
+   additive lift toward what fills the shadows. Between them that is a split
+   tone, and it costs two rectangles a frame.
+
+   The per-stage `grade` wash on top of it is what separates the two streets
+   that share a backdrop; it used to be painted over the background alone,
+   so the men standing on it were the one thing it never reached. */
+const GRADE = {
+  street:  { mul: '#e8eeff', mulA: 0.30, lift: '#0e1836', liftA: 0.26 },
+  junk:    { mul: '#fff2da', mulA: 0.30, lift: '#2a1209', liftA: 0.24 },
+  docks:   { mul: '#e2f4ff', mulA: 0.32, lift: '#08192a', liftA: 0.22 },
+  foundry: { mul: '#ffe6c4', mulA: 0.34, lift: '#2a0d04', liftA: 0.26 },
+  keep:    { mul: '#fff0dc', mulA: 0.30, lift: '#280d1e', liftA: 0.26 },
+};
+function gradePass(){
+  if (!G.grade) return;
+  const s = stage();
+  const g = GRADE[s.bg];
+  if (g){
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = g.mulA;
+    ctx.fillStyle = g.mul;
+    ctx.fillRect(0, 0, VW, VH);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = g.liftA;
+    ctx.fillStyle = g.lift;
+    ctx.fillRect(0, 0, VW, VH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+  if (s.grade){ ctx.fillStyle = s.grade; ctx.fillRect(0, 0, VW, VH); }
+  /* And the frame settles toward the front. Every light in every one of
+     these stages is behind the fight — the windows, the furnaces, the sun —
+     so the nearest ground is the furthest from all of it. Seven bands, and
+     the 2.5D floor stops reading as a wall lying down. */
+  for (let i = 0; i < 7; i++)
+    px(0, VH - (i + 1) * 9, VW, 9, 'rgba(6,4,10,' + (0.055 - i * 0.008).toFixed(3) + ')');
+}
+
 function bloomPass(){
   if (!G.bloom) return;
   const w = Math.max(1, Math.ceil(VW / BLOOM_DIV)), h = Math.max(1, Math.ceil(VH / BLOOM_DIV));
@@ -5382,9 +5431,6 @@ function draw(){
   if (G.phase === 'upgrade'){ drawUpgrade(); return; }
 
   drawBackground();
-  const grade = stage().grade;
-  if (grade){ ctx.fillStyle = grade; ctx.fillRect(0, 0, VW, VH); }
-
   for (const p of fx){                          // a hit is a light, not just a sprite
     const pw = FX_LIGHT[p.kind];
     if (!pw) continue;
@@ -5412,6 +5458,7 @@ function draw(){
       px(VW - 4 - i * 4, 0, 4, VH, 'rgba(6,4,10,' + a + ')');
     }
   }
+  gradePass();                                  // one room, then the lights in it
   bloomPass();                                  // the world glows; the HUD over it does not
   drawVignette();
   syncSpecialBtn();
@@ -6239,6 +6286,7 @@ function syncUI(){
   segSet('segSound', snd.on ? 1 : 0);
   segSet('segScan', G.scan ? 1 : 0);
   segSet('segBloom', G.bloom ? 1 : 0);
+  segSet('segGrade', G.grade ? 1 : 0);
   const sc = $('scan'); if (sc) sc.className = G.scan ? '' : 'off';
   const tb = $('tBest');
   if (tb) tb.textContent = 'BEST ' + G.best + (G.bestWave ? '   BEST WAVE ' + G.bestWave : '');
@@ -6365,6 +6413,7 @@ function bindUI(){
   segBind('segSound', (v) => { snd.on = !!v; if (!v) musicStop(); else if (G.phase === 'play') musicStart(stage().music); });
   segBind('segScan', (v) => { G.scan = !!v; });
   segBind('segBloom', (v) => { G.bloom = !!v; });
+  segBind('segGrade', (v) => { G.grade = !!v; });
 }
 
 /* =============================================================== update */

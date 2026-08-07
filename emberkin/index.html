@@ -622,6 +622,7 @@
     text-shadow:
       -2px 0 0 #2a1b2e, 2px 0 0 #2a1b2e, 0 -2px 0 #2a1b2e, 0 2px 0 #2a1b2e,
       0 5px 0 #7a3f13, 0 8px 14px rgba(0,0,0,.6), 0 0 34px rgba(255,201,77,.5); }
+  #title p > span{ white-space:nowrap; }
   #title p{ margin:0; color:var(--dim); font-size:clamp(9px,1.05em,13px);
     letter-spacing:2px; text-transform:uppercase;
     text-shadow:0 1px 3px rgba(6,3,10,.9), 0 0 10px rgba(6,3,10,.8); }
@@ -720,7 +721,11 @@
     <canvas id="titleArt" width="256" height="208"></canvas>
     <div class="tgroup">
       <h1>EMBERKIN</h1>
-      <p>cute enough to want one · armed enough to respect one</p>
+      <!-- The two halves are the line. Each is held together so the only place
+           it can break is the separator between them: at a phone's width it
+           wrapped as "armed enough to / respect one", which orphans half a
+           clause and loses the balance the line is made of. -->
+      <p><span>cute enough to want one</span> · <span>armed enough to respect one</span></p>
     </div>
     <div class="tgroup">
       <div class="btn panel" data-act="new">New journey</div>
