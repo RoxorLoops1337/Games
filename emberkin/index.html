@@ -7587,7 +7587,18 @@ function renderHUD() {
         // fill is 100% wide and drawn over it. Scaling the track to max+shield
         // shows both, correctly proportioned, and the bar visibly gets longer
         // when you bank something, which is the reading you want.
-        const sh = mine ? (b.shield || 0) : 0;
+        // Both sides. The foe banks a shield too — `brace` is worth 20 at scale
+        // — and its bar was as silent about that as yours was about yours.
+        //
+        // Worse than an oversight: the line that put the shield on your bar
+        // last pass read `mine ? b.shield : 0`, which is the mirror of the fix
+        // written out by hand while writing the fix. The foe's brace is
+        // announced once, on the turn it happens, and then you spend your next
+        // turn choosing a card against a wall you cannot see.
+        //
+        // A tail on the bar and no number, because the foe's exact HP is
+        // deliberately not shown and a shield figure would leak it.
+        const sh = mine ? (b.shield || 0) : (b.foeShield || 0);
         const span = m.max + sh;
         return `<i style="width:${(disp / span) * 100}%;background:${hpColor(f)}"></i>`
           + (sh > 0 ? `<u style="left:${(disp / span) * 100}%;width:${(sh / span) * 100}%"></u>` : '');
