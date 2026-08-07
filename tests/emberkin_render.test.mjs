@@ -1177,4 +1177,45 @@ section('the box is at least as dense as the party above it');
   ok(!/Lv\$\{m\.lvl\} · /.test(boxScreen), 'and no separator can be left hanging at a line end');
 }
 
+// The screens used to name keyboard keys in their prose — "X — back" in the
+// corner, "A on a boxed kin withdraws it" at the foot of the box — while three
+// inches below, on a phone, two large circles said Pick and Back. Neither key
+// exists on the device. The button labels were already computed in one place;
+// the screens wrote their own copy of the keyboard's names beside them.
+//
+// This was invisible for the whole project because the shot tool could not
+// produce a touch layout until this pass. `renderScreen` returns early when
+// headless, so there is no HTML here to read — what can be checked is that the
+// prose and the buttons draw on one source, and that the source is right.
+section('the screens name the controls the player actually has');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+
+  ok(!g.isTouch(), 'headless is not a touch device, so the prose is the keyboard one');
+  eq(g.pickName(), 'A', 'confirm is a key here');
+  eq(g.backName(), 'X', 'and so is cancel');
+
+  // The other half of the same fact: what a phone would be told instead. These
+  // are the strings the buttons themselves carry, so the prose cannot drift
+  // from the circles the player is looking at.
+  g.G.mode = 'screen'; g.G.screen = { kind: 'box', i: 0, opt: {} };
+  eq(g.btnLabels().join('/'), 'Pick/Back', 'on a screen the buttons are Pick and Back');
+  g.G.screen = { kind: 'reward', i: 0, opt: {} };
+  eq(g.btnLabels().join('/'), 'Take/Skip', 'an offer you can decline says so');
+  g.G.screen = null; g.G.mode = 'battle';
+  eq(g.btnLabels().join('/'), 'Play/Menu', 'in a fight they are Play and Menu');
+  g.G.mode = 'dialogue';
+  eq(g.btnLabels().join('/'), 'Next/Next', 'and mid-speech both mean Next');
+
+  // Regression net: the prose must interpolate the helpers rather than spell a
+  // key. A literal creeping back reads as nothing in a diff and is invisible in
+  // every desktop screenshot.
+  ok(/\$\{pickName\(\)\} on a boxed kin/.test(SRC), 'the box help asks for the control by name');
+  ok(!/>A on a boxed kin/.test(SRC), 'and does not hardcode the key');
+  ok(/class="back">\$\{/.test(SRC), 'the corner hint is built from the same source');
+}
+
 done('emberkin_render');
