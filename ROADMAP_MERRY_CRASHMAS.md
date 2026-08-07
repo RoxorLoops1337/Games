@@ -487,6 +487,12 @@ edit this block to name the next one.
       current point and a batch of them fills a polygon spanning every child
       in the market. It did exactly that, in five colours, across the whole
       screen — **and the suite was green**. There is an assertion for it now.
+      Finished the next pass: at the widest drive zoom a bare balloon was
+      merely present rather than findable, because a small bright object does
+      not separate from a market already full of baubles, lights and wrapped
+      presents on colour alone. A dark rim round the lot — one stroke for
+      every child on screen — and a floor of 11px instead of 9 is what makes
+      them pick out. Same lesson as the shopper's dropped bag, one scale down.
 
 ## Next
 

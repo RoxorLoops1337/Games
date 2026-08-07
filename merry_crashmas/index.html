@@ -3722,7 +3722,7 @@ const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
 /* Bright on purpose: this is the one thing in the market that has to be
    findable from across it. */
 const BALLOONS = ['#ff5a52', '#ffd34d', '#5ec8ff', '#9be86a', '#ff8ad6'];
-const BALLOON_PX = 9;      // never smaller than this on screen
+const BALLOON_PX = 11;     // never smaller than this on screen
 const BAG_COLS = ['#cfc6b4', '#8f7355', '#4a4038', '#8a94a4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 const HAIR = ['#3a2a20', '#6b4a2c', '#1d1a1c', '#8d6a3f', '#a8632c', '#c9b48a', '#4a3a34'];
@@ -5408,6 +5408,20 @@ function drawBalloons(near){
     }
     if (any){ ctx.fillStyle = BALLOONS[c]; ctx.fill(); }
   }
+  /* A dark rim round the lot, in one stroke. A small bright object in a market
+     already full of baubles, lights and wrapped presents does not separate
+     from the clutter on colour alone — the same thing the shopper's dropped
+     bag needed, one scale down. This is what makes a balloon findable at the
+     widest drive zoom rather than merely present. */
+  ctx.strokeStyle = 'rgba(14,22,40,.55)';
+  ctx.lineWidth = Math.max(1.2, 1.6 / Math.max(cam.s, 0.05));
+  ctx.beginPath();
+  for (const p of kids){
+    const b = balloonAt(p);
+    ctx.moveTo(b.x + b.r, b.y);
+    ctx.ellipse(b.x, b.y, b.r, b.r * 1.16, b.sw * 0.5, 0, 6.283);
+  }
+  ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,.34)';        // the highlight, in one path
   ctx.beginPath();
   for (const p of kids){

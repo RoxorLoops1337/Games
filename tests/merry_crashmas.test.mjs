@@ -6054,8 +6054,12 @@ test('a child carries a balloon, and it is a balloon not a polygon', () => {
 
   const rec = carRec();
   api.withCtx(rec, () => api.drawBalloons(() => true));
+  /* Each balloon is laid down twice: the colour fill, and the dark rim that
+     separates it from a market already full of baubles and wrapped presents. */
   const els = rec.all.filter(a => a[0] === 'el');
-  assert(els.length === 7, 'one balloon a child, got ' + els.length);
+  assert(els.length === 14, 'seven balloons, filled and rimmed, got ' + els.length);
+  const rim = rec.polys.filter(q => q.stroked && /14,22,40/.test(String(q.style)));
+  assert(rim.length === 1, 'the rim should be one stroke for the lot, got ' + rim.length);
 
   /* The bug this test exists for: ctx.ellipse joins the current point, so a
      batch of them without a moveTo between draws a filled polygon spanning
@@ -6069,7 +6073,7 @@ test('a child carries a balloon, and it is a balloon not a polygon', () => {
       'a balloon is not opened by a moveTo — the fill will span the market');
     open++;
   }
-  assert(open === 7, 'seven opened balloons, got ' + open);
+  assert(open === 14, 'every fill and every rim opened, got ' + open);
 
   // one fill a colour, not one a child
   assert(rec.fills <= api.BALLOONS.length + 1,
