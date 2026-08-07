@@ -5272,6 +5272,73 @@ function drawCrowdBatch(list){
    be un-rotated back out of car.ang or it spins with the bodywork. */
 function carLitDir(){ return Math.atan2(-SUN_DY, -SUN_DX) - car.ang; }
 
+/* What a market has done to the bodywork. Both counters have been kept since
+   the game was written — `dents` up to 6, `gore` up to 9 — and both were drawn
+   as flat discs at fixed angles: six mud-coloured dots and nine red ones, up
+   to sixteen fills of nothing that reads as damage.
+
+   A dent is a crumple, so it is a dark irregular pit with a bright lip on the
+   side the market's light comes from — the same light every shadow in the game
+   already follows. Blood arrives at the nose and gets dragged back over the
+   bonnet, so it streaks rather than spots. Everything is a function of `i`, so
+   a car looks the same every frame; and it is four fills instead of sixteen. */
+function carDamage(){
+  /* Damage lands on the bodywork, never on the glass. The first version spread
+     both over the whole plan and at six dents and nine hits it buried the
+     driver — who is the one thing on the car you are meant to be able to read. */
+  const CAB = CARL * 0.2;                        // the windscreen's half-length
+  // where dent i sits: out on the flanks and the nose, clear of the cabin
+  const dentAt = (i) => {
+    const a = i * 2.399;                         // ~137°, so they never stack
+    const x = Math.cos(a) * CARL * 0.34, y = Math.sin(a) * CARW * 0.36;
+    return { x, y: Math.abs(x) < CAB ? Math.sign(y || 1) * CARW * 0.36 : y,
+      r: 4 + (i % 3) * 1.2 };
+  };
+  if (car.gore > 0){
+    /* Blood arrives at the nose and gets dragged back over the bonnet, so it
+       streaks. Front third only, and off the centre line where the driver is. */
+    ctx.fillStyle = 'rgba(126,14,10,.6)';
+    ctx.beginPath();
+    for (let i = 0; i < car.gore; i++){
+      // inside the bodywork: the flanks are at 0.5, and blood is not paint
+      const y = (0.18 + (i % 3) * 0.09) * CARW * (i % 2 ? 1 : -1);
+      const x = CARL * (0.4 - (i % 4) * 0.05);
+      const len = CARL * (0.05 + (i % 3) * 0.025);
+      ctx.ellipse(x - len, y, len, 1.8 + (i % 3) * 0.9, 0, 0, 6.283);
+    }
+    ctx.fill();
+    // and the wet edge along the leading lip, where it keeps arriving
+    ctx.fillStyle = 'rgba(168,26,20,.42)';
+    ctx.beginPath();
+    ctx.ellipse(CARL * 0.44, 0, CARL * 0.03, CARW * 0.34, 0, 0, 6.283);
+    ctx.fill();
+  }
+  if (car.dents > 0){
+    const lit = carLitDir();
+    const px = Math.cos(lit), py = Math.sin(lit);
+    ctx.fillStyle = 'rgba(26,14,12,.38)';
+    ctx.beginPath();
+    for (let i = 0; i < car.dents; i++){
+      const d = dentAt(i);
+      // three overlapping lobes, so the pit has a torn edge rather than a rim
+      for (let k = 0; k < 3; k++){
+        const b = i * 1.7 + k * 2.09, o = d.r * 0.3;
+        ctx.moveTo(d.x + Math.cos(b) * o + d.r * 0.52, d.y + Math.sin(b) * o);
+        ctx.arc(d.x + Math.cos(b) * o, d.y + Math.sin(b) * o, d.r * 0.52, 0, 6.283);
+      }
+    }
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,247,232,.26)';        // the lip, on the lit side
+    ctx.beginPath();
+    for (let i = 0; i < car.dents; i++){
+      const d = dentAt(i);
+      ctx.ellipse(d.x + px * d.r * 0.55, d.y + py * d.r * 0.55, d.r * 0.44, d.r * 0.2,
+        lit + Math.PI / 2, 0, 6.283);
+    }
+    ctx.fill();
+  }
+}
+
 /* Where the car's shadow lands and how big it is, given its height. Split out
    from the drawing so the separation can be measured rather than eyeballed:
    this is the only altitude cue in a game seen from directly above. */
@@ -5477,25 +5544,7 @@ function drawCar(){
   ctx.stroke();
   ctx.fillStyle = '#ff4d4d';
   circle(CARL * 0.5, 0, 6); ctx.fill();
-  // whatever the wheels have been through
-  if (car.gore > 0){
-    ctx.fillStyle = 'rgba(126,14,10,.75)';
-    for (let i = 0; i < car.gore; i++){
-      const a = i * 2.3, d = 0.18 + (i % 4) * 0.09;
-      circle(CARL * (0.16 + d), Math.sin(a) * CARW * 0.36, 3.5 + (i % 3) * 2.2); ctx.fill();
-    }
-    ctx.fillStyle = 'rgba(150,20,16,.55)';
-    ctx.fillRect(CARL * 0.34, -CARW * 0.4, 7, CARW * 0.8);
-  }
-
-  // dents
-  if (car.dents > 0){
-    ctx.fillStyle = 'rgba(40,20,16,.35)';
-    for (let i = 0; i < car.dents; i++){
-      const a = i * 1.7;
-      circle(Math.cos(a) * CARL * 0.3, Math.sin(a) * CARW * 0.3, 5 + (i % 3)); ctx.fill();
-    }
-  }
+  carDamage();
   ctx.restore();
 
   // the headlights are not drawn here any more: they belong to the light pass,

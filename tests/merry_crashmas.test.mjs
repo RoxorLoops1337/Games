@@ -5873,7 +5873,7 @@ function carRec(){
     poly.x1 = Math.max(poly.x1, x); poly.y1 = Math.max(poly.y1, y);
   };
   const base = {
-    shapes, order, rects, all, styles, polys, images: [],
+    shapes, order, rects, all, styles, polys, images: [], fills: 0,
     // raw path points too, so a jointed limb can be told from a straight one
     moveTo(x, y){ pt(x, y); all.push(['m', x, y, line]); },
     lineTo(x, y){ pt(x, y); all.push(['l', x, y, line]); },
@@ -5899,6 +5899,7 @@ function carRec(){
     rect(x, y, w, h){ all.push(['rect', x, y, w, h, fill]); },
     fillRect(x, y, w, h){ rects.push({ x, y, w, h, style: fill }); all.push(['fr', x, y, w, h, fill]); },
     fill(){
+      base.fills++;
       if (pending) shapes.push(Object.assign({}, pending, { style: fill }));
       if (poly) polys.push(Object.assign({}, poly, { style: fill }));
     },
@@ -5940,6 +5941,98 @@ function driver(api, shouting){
     eyes, mouth: by(INK_C).find(s => Math.abs(s.y) <= 0.5),
     wheel: rec.shapes.find(s => s.stroked && s.ry && s.r !== s.ry) };
 }
+
+/* Both damage counters have been kept since the game was written — dents up to
+   6, gore up to 9 — and both drew as flat discs at fixed angles spread over the
+   whole plan: six mud-coloured dots and nine red ones, up to sixteen fills of
+   nothing that reads as damage, over the top of the driver. */
+function damaged(api, dents, gore, ang){
+  api.car.ang = ang || 0; api.car.z = 0; api.car.roll = 0;
+  api.car.vx = 0; api.car.vy = 0; api.car.dispSp = 0;
+  api.car.shoutT = 0; api.car.plowT = 0;
+  api.car.dents = dents; api.car.gore = gore;
+  const rec = carRec();
+  api.withCtx(rec, api.drawCar);
+  const d = api.getDims();
+  const marks = rec.all.filter(a => a[0] === 'arc' || a[0] === 'el')
+    .filter(a => /26,14,12|255,247,232|126,14,10|168,26,20/.test(String(a[a.length - 1])));
+  return { rec, d, marks,
+    pit: rec.all.filter(a => /26,14,12/.test(String(a[a.length - 1]))),
+    lip: rec.all.filter(a => /255,247,232/.test(String(a[a.length - 1]))),
+    blood: rec.all.filter(a => /126,14,10|168,26,20/.test(String(a[a.length - 1]))) };
+}
+
+test('a battered car looks battered, in four fills not sixteen', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+
+  const clean = damaged(api, 0, 0);
+  assert(clean.marks.length === 0, 'a fresh car carries no damage, got ' + clean.marks.length);
+
+  const worst = damaged(api, 6, 9);
+  assert(worst.pit.length === 18, 'six dents, three lobes each: ' + worst.pit.length);
+  assert(worst.lip.length === 6, 'and a lit lip on each: ' + worst.lip.length);
+  assert(worst.blood.length === 10, 'nine streaks and the wet nose: ' + worst.blood.length);
+
+  // …all of it in four fills, which is fewer than the sixteen discs it replaced
+  const cost = (d, g) => { const r = carRec(); api.car.dents = d; api.car.gore = g;
+    api.car.ang = 0; api.withCtx(r, api.drawCar); return r.fills; };
+  const extra = cost(6, 9) - cost(0, 0);
+  assert(extra === 4, 'damage should cost four fills, costs ' + extra);
+  console.log('    (car damage: ' + extra + ' fills for 6 dents + 9 hits)');
+});
+
+test('damage lands on the bodywork, never on the glass', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const o = damaged(api, 6, 9);
+  const halfL = o.d.l / 2, halfW = o.d.w / 2;
+
+  for (const m of o.marks){
+    const [, x, y, rx] = m;
+    const ry = m[0] === 'el' ? m[4] : rx;
+    assert(Math.abs(x) + rx <= halfL + 0.01,
+      'a mark hangs off the nose or tail at x' + x.toFixed(1) + '±' + rx.toFixed(1) +
+      ', the car is ' + o.d.l + ' long');
+    assert(Math.abs(y) + ry <= halfW + 0.01,
+      'a mark hangs off the flank at y' + y.toFixed(1) + '±' + ry.toFixed(1) +
+      ', the car is ' + o.d.w + ' wide');
+  }
+  /* The driver sits in the middle of the cabin and is the one thing on the car
+     you have to be able to read. The first version put six dents and nine hits
+     straight over him. */
+  for (const m of o.marks){
+    assert(Math.hypot(m[1], m[2]) > o.d.w * 0.28,
+      'a mark is on top of the driver at ' + m[1].toFixed(1) + ',' + m[2].toFixed(1));
+  }
+});
+
+test('a dent catches the light the rest of the market catches', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+
+  /* The lip is on the side the market's light comes from, so turning the car
+     moves it round the dent in the car's own frame — the same rule every
+     shadow and every coat highlight in the game already follows. */
+  const lipAt = (ang) => damaged(api, 3, 0, ang).lip.map(l => [l[1], l[2]]);
+  const east = JSON.stringify(lipAt(0));
+  const north = JSON.stringify(lipAt(Math.PI / 2));
+  assert(east !== north, 'the lip should follow the market light, not the bodywork');
+
+  // and it is the same car twice in a row: nothing here is rolled
+  const a = JSON.stringify(damaged(api, 4, 6, 0.4).marks.map(m => m.slice(1, 5)));
+  const b = JSON.stringify(damaged(api, 4, 6, 0.4).marks.map(m => m.slice(1, 5)));
+  assert(a === b, 'the same car drawn twice should be dented the same way');
+
+  api.reseed(11);
+  const r0 = api.rnd(), v0 = api.vrnd();
+  api.reseed(11);
+  for (let i = 0; i < 20; i++) damaged(api, 6, 9);
+  assert(api.rnd() === r0, 'drawing damage moved the simulation stream');
+});
 
 test('the driver is a man in a seat, not four discs', () => {
   const api = boot({ w: 1280, h: 720 });

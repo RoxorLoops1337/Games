@@ -376,6 +376,19 @@ edit this block to name the next one.
       One `camScale(z)` now. Phone: car 23→34px, shopper 7.9→11.6px. Tablet:
       car 30→43px, frame filled 69%→98%. Desktop unchanged.
 
+- [x] A battered car looks battered. `car.dents` (to 6) and `car.gore` (to 9)
+      have been counted since the game was written, and both drew as flat discs
+      at fixed angles spread over the whole plan: six mud-coloured dots and
+      nine red ones, up to **sixteen fills** of nothing that reads as damage,
+      over the top of the driver. A dent is a crumple now — a dark three-lobed
+      pit with a bright lip on the side the market's light comes from, the same
+      rule every shadow and every coat highlight already follows — and blood
+      arrives at the nose and streaks back over the bonnet instead of spotting.
+      All of it on the bodywork and clear of the cabin, and in **four fills**
+      rather than sixteen. Two retakes: the first version spread both over the
+      whole plan and buried the driver at full damage, and the second hung
+      marks off the flanks and the nose.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
