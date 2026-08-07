@@ -373,11 +373,55 @@ const SCENES = {
       EK.STARTER_DECK.forEach(EK.grantCard);
       EK.startBattle({ foe: EK.mkMon('dewdrip', 3), wild: true });
       EK.G.wipe = 0; EK.G.battleMsg = null;
-      // Driving a real win to a real level-up took longer than the film window
-      // twice over, so the effect is held here instead: entryFx sets b.lvT and
-      // the arena reads it, so pinning lvT shows exactly what one frame of the
-      // real thing looks like. Weaker evidence than a film and said so.
-      EK.B().lvT = EK.LVL_T * .55;
+      // A real win, driven properly. Two earlier attempts filmed fights that
+      // never finished: a Lv3 Dewdrip still has 64 HP under the wild multiplier
+      // and survives one swing, and the beat loop's "not while a log is
+      // playing" guard then skipped most of its windows. The foe's HP CAN be
+      // set directly — only the player's kin going down is decided inside the
+      // damage path — so one ended turn wins, the XP lands, and the level fires
+      // in among the win lines, which is where it has to be judged.
+      EK.B().foe.hp = 1;
+      const beat = () => {
+        const cur = EK.B();
+        if (cur && !cur.over && !cur.log) EK.submitLog(EK.endTurn());
+        const d = EK.G.dialogue || EK.liveBattleMsg();
+        if (d) { d.hold = 0; EK.advanceDialogue(); }
+      };
+      for (let t = 100; t <= 3000; t += 160) setTimeout(beat, t);
+    },
+  },
+  // The bag mid-fight, seen full rather than with the two items a fresh run
+  // carries, and the swap screen — the one screen that asks you to give
+  // something up. Neither had ever been shot.
+  bagfight: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      Object.keys(EK.ITEMS).forEach((k, i) => { EK.G.bag[k] = 2 + i; });
+      EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.openScreen('bag');
+    },
+  },
+  // The deck-limit screen: twelve cards in, one has to come out. It is about
+  // CARDS, not kin — the first version of this scene assumed a full party
+  // meeting a new catch and passed `mon`, so `ownedCard(s.opt.newCard)` came
+  // back empty and the screen rendered its no-incoming-card fallback: a wall of
+  // twelve cards asking which to discard, with nothing shown to discard them
+  // FOR. That looked like a real design fault and was entirely my own doing.
+  // Third time a scene has photographed a fallback path and had it read as
+  // finished work.
+  swap: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      const fresh = EK.grantCard('warcry') || EK.G.cards[EK.G.cards.length - 1];
+      EK.openScreen('swap', { newCard: fresh && fresh.u, done: () => {} });
     },
   },
   gotcha: {
