@@ -287,6 +287,34 @@ const SCENES = {
       EK.openScreen('dex');
     },
   },
+  // Three creatures and one irreversible choice — the third thing a new player
+  // sees, and no picture of it existed.
+  starter: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null; EK.G.mode = 'world';
+      EK.openScreen('starter');
+    },
+  },
+  // The Wayhouse heal. Talked into rather than triggered, so the beat runs the
+  // way it does in play: Sable's line, the light, then "right as rain".
+  mend: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.enterMap('wayhouse', 5, 3, 'up');
+      EK.G.party.forEach((m) => { m.hp = 1; });
+      const n = (EK.G.map.npcs || []).find((m) => m.heal);
+      setTimeout(() => {
+        EK.talkTo(n);
+        // Past Sable's offer the way a player taps through it; the light is
+        // what comes next.
+        for (let i = 0; i < 12 && EK.G.dialogue; i++) { EK.G.dialogue.hold = 0; EK.advanceDialogue(); }
+      }, 140);
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {

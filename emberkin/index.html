@@ -4276,6 +4276,7 @@ function enterMap(id, x, y, dir) {
   G.player.dir = dir || G.player.dir; G.player.moveT = 0;
   G.alert = null;
   G.rustle = null;
+  G.mend = null;
   return m;
 }
 
@@ -4615,6 +4616,81 @@ function drawRustle(g, cam) {
   g.globalAlpha = 1;
 }
 
+/**
+ * Being healed.
+ *
+ * Every other thing that happens to you has a beat: an orb arcs and wobbles, an
+ * evolution turns a wheel of light, the grass parts before a wild kin, a trainer
+ * looks and walks over. The Wayhouse — the place you go after every rough fight,
+ * and the only good thing that happens to you outside a win — restored the whole
+ * party silently between two lines of dialogue. Listing what has a beat and what
+ * does not is what found it; nothing about the code says it is missing.
+ *
+ * A warmth rising off the floor and closing over you, and it holds a moment
+ * after the light goes, because the pause is what makes it a rest rather than a
+ * transaction.
+ */
+const MEND_T = 1.15;
+
+function mendStep(dt) {
+  const m = G.mend;
+  if (!m) return false;
+  m.t += dt;
+  if (m.t < MEND_T) return true;
+  G.mend = null;
+  m.go();
+  return true;
+}
+
+function drawMend(g, cam) {
+  const m = G.mend;
+  if (!m) return;
+  const k = clamp(m.t / MEND_T, 0, 1);
+  const sx = Math.round(G.player.px * TILE - cam.x) + 8;
+  const sy = Math.round(G.player.py * TILE - cam.y) + 8;
+  // Swells and then lets go — the fall is longer than the rise, which is the
+  // difference between being healed and being flashed at.
+  const amp = k < .35 ? k / .35 : Math.pow(1 - (k - .35) / .65, 1.6);
+
+  // The whole room lifts and settles. A warm glow on a warm floor is
+  // camouflage — the Wayhouse is the most golden interior in the game, which is
+  // exactly the wrong background for adding gold to — so what carries the beat
+  // is a change over time rather than a difference in colour: the light comes
+  // up across the frame and goes again.
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  g.fillStyle = `rgba(96,150,110,${(amp * .16).toFixed(3)})`;
+  g.fillRect(0, 0, VIEW_W, VIEW_H);
+  g.restore();
+
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  const glow = g.createRadialGradient(sx, sy, 2, sx, sy, 26 + k * 34);
+  glow.addColorStop(0, `rgba(255,236,190,${(amp * .5).toFixed(3)})`);
+  glow.addColorStop(.55, `rgba(150,230,170,${(amp * .22).toFixed(3)})`);
+  glow.addColorStop(1, 'rgba(120,220,150,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, VIEW_W, VIEW_H);
+  g.restore();
+
+  // Motes lifting off the floor rather than falling onto it — the direction is
+  // the whole reading. Fixed seeds, so a rest always looks like the same rest.
+  for (let i = 0; i < 16; i++) {
+    const a = (i * 2.39) % (Math.PI * 2);
+    const age = clamp(k * 1.35 - i * .035, 0, 1);
+    if (age <= 0 || age >= 1) continue;
+    const rad = 4 + (i % 5) * 4;
+    const mx = sx + Math.cos(a) * rad;
+    const my = sy + 6 - age * (18 + (i % 4) * 7);
+    g.globalAlpha = Math.sin(age * Math.PI) * .95;
+    g.fillStyle = '#0e1a12';
+    g.fillRect(Math.round(mx) - 1, Math.round(my) - 1, 3, 3);
+    g.fillStyle = i % 3 ? '#bdf0c4' : '#fff4cf';
+    g.fillRect(Math.round(mx), Math.round(my), 1, 1);
+  }
+  g.globalAlpha = 1;
+}
+
 const SIGHT = 4;                       // how far down their own line a trainer looks
 /** The three beats of being caught out: the look, the walk, and the pause. */
 const ALERT = { spot: .55, walk: .55, land: .25 };
@@ -4935,6 +5011,7 @@ function drawWorld(g) {
   }
 
   drawRustle(g, cam);
+  drawMend(g, cam);
 
   if (map.kind === 'inside') {                       // cosy interior vignette
     g.fillStyle = 'rgba(20,10,26,.25)';
@@ -7311,7 +7388,9 @@ function talkTo(npc) {
   if (npc.heal) {
     say(npc.name, npc.lines, () => {
       healParty();
-      say(npc.name, ['There. Right as rain.'], () => { saveGame(); });
+      // The light happens between the offer and the reply, so the line that
+      // says it worked arrives after you have watched it work.
+      G.mend = { t: 0, go: () => say(npc.name, ['There. Right as rain.'], () => { saveGame(); }) };
     });
     return;
   }
@@ -9293,6 +9372,7 @@ function step(dt) {
   if (G.evoAnim && evoStep(dt)) return;
   if (G.alert && G.alert.beats && alertStep(dt)) return;
   if (G.rustle && rustleStep(dt)) return;
+  if (G.mend && mendStep(dt)) return;
   if (G.flourish && flourishStep(dt)) return;
   if (G.gotcha) {
     G.gotcha.t += dt;
@@ -9713,7 +9793,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,

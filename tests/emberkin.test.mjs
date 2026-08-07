@@ -854,6 +854,21 @@ ok(!EK.G.battle, 'and the fight has not started while the grass is still moving'
 ok(EK.rustleStep(EK.RUSTLE_T * .5) && !EK.G.battle, 'half way through, still no fight');
 EK.rustleStep(EK.RUSTLE_T);
 ok(!!EK.G.battle && !EK.G.rustle, 'when the grass settles, the fight is on');
+
+// Being healed is a beat too, and the line that says it worked comes after it.
+EK.G.battle = null; EK.G.mend = null; EK.G.mode = 'world';
+EK.G.party.forEach((m) => { m.hp = 1; });
+EK.enterMap('wayhouse', 5, 3, 'up');
+const sable = (EK.G.map.npcs || []).find((n) => n.heal);
+ok(!!sable, 'the Wayhouse has somebody who heals');
+EK.talkTo(sable);
+for (let i = 0; i < 12 && EK.G.dialogue; i++) { EK.G.dialogue.hold = 0; EK.advanceDialogue(); }
+ok(!!EK.G.mend, 'past the offer, the light happens');
+ok(EK.G.party.every((m) => m.hp === m.max), 'and the party is already whole behind it');
+ok(EK.mendStep(EK.MEND_T * .5) && !EK.G.dialogue, 'half way through, nobody has spoken yet');
+EK.mendStep(EK.MEND_T);
+ok(!EK.G.mend && !!EK.G.dialogue, 'when the light goes, the reply arrives');
+EK.G.dialogue = null; EK.G.mode = 'world';
 EK.G.battle = null; EK.G.mode = 'world';
 
 section('trainers spot you down their own line');
