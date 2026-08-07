@@ -645,6 +645,17 @@
   body.tight #hand .cardel:not(.sel) .ctext{ display:none; }
   body.tight #hand .cardel:not(.sel) .cname{ margin-top:.35em; }
   body.tight #hand .cardel .cpip{ font-size:.4em; }
+  /* The big cards — the deck screen, the reward, the swap — clip their own
+     rules text at a phone's scale. `.cardel.big` is 11.4em tall with the art
+     taking 40% of it plus a 1em margin, and at 11px there is not room left for
+     a second line: "Every attack +2 for this battle" came out with the word
+     "battle" sliced in half across the card's bottom edge.
+     The room comes off the picture rather than off the type, because the type
+     is already at .56em and the picture is the part that survives being
+     smaller. This is scoped to the CARD, not to a screen: the same component
+     is used on the deck, the reward and the swap, and the last two passes were
+     both about a fix that reached one place and not the others. */
+  body.tight .cardel.big .cart{ height:32%; margin-top:.5em; }
   /* The rule above hid the text on the four cards you are NOT aiming at, and
      left it on the one you are — which is the only card that also carries the
      "▲ play" badge. `.cp` is absolutely positioned at bottom:.9em, so on a
@@ -4716,6 +4727,20 @@ function toggleFullscreen() {
   return true;
 }
 function releaseKey(k) { keys.delete(k); }
+/**
+ * A tap is a press AND a release. A click has no keyup to end it, and
+ * `pressKey` only adds to `fired` when the key is not already held — so a bare
+ * `pressKey('a')` from a click worked exactly once and then never again: 'a'
+ * stayed in `keys` for the rest of the page's life and every later tap was a
+ * no-op. Tapping to advance a dialogue died after the first line, which is the
+ * whole of that affordance on a phone. A keyboard player never saw it, because
+ * the first Z they pressed released 'a' for them.
+ * Releasing immediately is safe: `fired` is what `justPressed` reads and it is
+ * cleared by the frame, not by this. It releases FIRST as well, so a tap always
+ * lands even if something else has left the key held — the test below asserts
+ * that, and the first version of this could not do it.
+ */
+function tapKey(k) { releaseKey(k); pressKey(k); releaseKey(k); }
 
 const cam = { x: 0, y: 0 };
 function updateCam() {
@@ -10494,6 +10519,13 @@ function boot() {
 
   padEl.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    // In a dialogue the stick has no job — arrows do nothing in that mode — and
+    // this preventDefault cancels the synthetic click, which is what the
+    // document handler uses to advance a line from a tap anywhere. In the
+    // overlay layout the pad lies directly over the left third of the dialogue
+    // box, so the most natural place on the screen to tap was the one place
+    // that did nothing at all.
+    if (G.mode === 'dialogue') { tapKey('a'); return; }
     const t = e.changedTouches[0];
     stick.id = t.identifier; stick.cx = t.clientX; stick.cy = t.clientY;
     stickPlace(t.clientX, t.clientY);
@@ -10622,7 +10654,7 @@ function boot() {
     const card = e.target.closest && e.target.closest('[data-i]');
     if (card && G.screen && els.screen.contains(card)) { G.screen.i = +card.dataset.i; renderScreen(); screenSelect(); return; }
     if (e.target.closest && e.target.closest('.back')) { closeScreen(); return; }
-    if (els.dialogue && !els.dialogue.classList.contains('hidden')) { pressKey('a'); return; }
+    if (els.dialogue && !els.dialogue.classList.contains('hidden')) { tapKey('a'); return; }
   });
 
   // title
@@ -10823,7 +10855,7 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,
-    btnLabels, pickName, backName, isTouch,
+    btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL,

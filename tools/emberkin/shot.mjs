@@ -846,6 +846,31 @@ const SCENES = {
       if (el.scrollTop <= 0) throw new Error('boxfoot: the panel does not scroll — nothing to test');
     },
   },
+  // The wordiest card in the game, scrolled clear of the panel's fold. A card
+  // cut off at the bottom of the viewport and a card whose own text overflows
+  // look identical in a still of the top of a list, and only one of them is a
+  // bug worth chasing.
+  deckwordy: {
+    w: 390, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      let wordy = null, len = -1;
+      for (const id of EK.CARD_IDS) {
+        const t = String(EK.cardText({ id, plus: 0, bg: 0 }) || '');
+        if (t.length > len) { len = t.length; wordy = id; }
+      }
+      if (!wordy) throw new Error('deckwordy: no cards to measure');
+      for (let i = 0; i < 6; i++) EK.grantCard(wordy);
+      EK.openScreen('deck');
+      const el = document.getElementById('screen');
+      if (!el) throw new Error('deckwordy: no screen element');
+      el.scrollTop = Math.round(el.scrollHeight * .35);
+      if (el.scrollTop <= 0) throw new Error('deckwordy: the panel does not scroll — the fold is not in play');
+    },
+  },
   // The bag OUT of a fight, which is a different screen doing a different job:
   // in a battle every item acts on the kin that is out, and in the field a
   // salve has to pick somebody. Shot with a party where that choice is real —

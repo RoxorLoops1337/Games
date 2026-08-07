@@ -1243,6 +1243,19 @@ section('the hand survives a phone');
     'the End turn key hint is hidden on touch');
   ok(/End turn <span class="key">E<\/span>/.test(SRC),
     'and still printed for a keyboard');
+
+  // The big card is the same component on the deck, the reward and the swap,
+  // and at a phone's scale its art left no room for a second line of rules
+  // text — "Every attack +2 for this battle" came out with "battle" sliced in
+  // half across the card's bottom edge. The room comes off the picture.
+  //
+  // The rule is scoped to the CARD and not to a screen on purpose: the last
+  // three passes were each about a fix that reached the one place that
+  // revealed it and none of the others.
+  const bigCard = SRC.match(/body\.tight [^{]*\.cardel\.big[^{]*\{/g) || [];
+  ok(bigCard.length > 0, `the big card has a rule at tight size (${bigCard.join(' ')})`);
+  ok(bigCard.every((r) => !/#hand|#screen/.test(r)),
+    `and none of them is scoped to a single screen (${bigCard.join(' ')})`);
 }
 
 // The overlay layout: what a landscape phone gets when the gutters come out
@@ -1322,6 +1335,50 @@ section('the title answers the buttons it shows');
   over.pressKey('b'); over.step(.05); over.releaseKey('b'); over.fired.clear();
   eq(over.G.mapId, 'lab', 'and cancel starts a new journey instead');
   eq(over.G.party.length, 0, 'with nothing carried over');
+}
+
+// Tapping anywhere advances a dialogue — that is the whole of the affordance on
+// a phone, where the alternative is finding a small round button. It worked
+// exactly once. The click handler pressed 'a' and nothing ever released it, and
+// `pressKey` only adds to `fired` when the key is not already held, so every
+// later tap was a no-op for the rest of the page's life. A keyboard player
+// never saw it: the first Z they pressed released 'a' for them.
+//
+// The frame clears `fired`, not `step`, so a drive that calls step alone shows
+// every tap working. That is exactly what my first attempt at this showed, and
+// it was measuring nothing. The clear belongs in the loop below.
+section('tapping advances a dialogue more than once');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null; g.G.mode = 'world';
+  g.say('Test', ['one', 'two', 'three', 'four', 'five']);
+  eq(g.G.dialogue.i, 0, 'a speech starts on its first line');
+
+  const tap = () => {
+    g.tapKey('a');                 // what the click handler and the pad both do
+    if (g.G.dialogue) g.G.dialogue.hold = 0;
+    g.step(.05);
+    g.fired.clear();               // what frame() does at the end of every frame
+  };
+  for (let n = 1; n <= 4; n++) {
+    tap();
+    eq(g.G.dialogue ? g.G.dialogue.i : 'closed', n, `tap ${n} moves the speech on`);
+  }
+
+  // The mechanism, stated on its own so a future bare pressKey is caught here
+  // rather than by somebody tapping a phone.
+  const g2 = loadGame({});
+  g2.setCtx(mkCtx());
+  g2.pressKey('a');
+  ok(g2.fired.has('a'), 'a press registers');
+  g2.fired.clear();
+  g2.pressKey('a');
+  ok(!g2.fired.has('a'), 'a second press with no release does NOT — this is the trap');
+  g2.fired.clear();
+  g2.tapKey('a');
+  ok(g2.fired.has('a'), 'and a tap, which releases, always does');
 }
 
 done('emberkin_render');
