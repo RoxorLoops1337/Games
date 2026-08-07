@@ -1291,8 +1291,24 @@ function drawFighterBody(f){
   rigBall(shX + dir * 0.5 * sc, shY, aw * 0.75 * B.sh, aw * 0.7 * B.sh, tint(shirtL, dk), tint(shirtD, dk), 1);
   rigBall(shX - dir * (thSh * 0.42), shY, aw * 0.62 * B.sh, aw * 0.58 * B.sh, tint(shirtD, dk), tint(shade(shirtD, -16), dk), 1);
 
+  /* Every light in all five of these stages is behind the fight — the lit
+     windows, the barrel fires, the floodlights, the furnace mouths, the sun
+     going down over the roof. So the light gets past him before it gets to
+     us: a fringe around his silhouette, brightest over the top of him.
+     Drawn UNDER the body rather than over it, which is the whole trick —
+     a rim painted over a man at this size is not an edge, it is a wash, and
+     the first three attempts at this turned every shirt in the game the
+     colour of the stage. Under the body it can be as hot as it likes and
+     still never touch his own colour. */
+  const stB = stage();
+  // a man coming apart makes his own light; he does not need the street's
+  const bk = (lean || df > 0) ? 0 : (stB.back || 0);
+  const bFlick = stB.flick ? 0.75 + Math.sin(T * stB.flick + f.id) * 0.25 : 1;
+  if (bk && stB.key) drawRigPass(4, rgba(stB.key, bk * 0.50 * bFlick), false, 0, -2);
   drawRigPass(2, ink, false);          // outline — never dropped, it is the read
   drawRigPass(0, null, false);         // shadow tone
+  // and his front drops into whatever fills the shadows on this street
+  if (bk) drawRigPass(0, rgba((GRADE[stB.bg] || {}).lift || '#0d0a16', bk * 0.34), false);
   if (!lean) drawRigPass(-2, null, true);   // lit edge
   if (!lean){
     // the street's own light, catching the edge that faces it, and the
@@ -3475,7 +3491,7 @@ function fireSlug(f){
    and it does not move again until everybody standing in it is not. */
 const STAGES = [
   {
-    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', wet: 0.5, rain: 1, bg: 'street', len: 1780, music: 0,
+    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', back: 0.55, wet: 0.5, rain: 1, bg: 'street', len: 1780, music: 0,
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
       { x: 400,  spawn: [['grunt', 24], ['punk', 2]], cap: 18, items: [['crate', 120], ['crate', 200]] },
@@ -3485,7 +3501,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE NEIGHBOURHOOD', sub: 'EVERY BACK YARD OF IT', key: '#ffb060', bounce: '#5a3a22', flick: 9, bg: 'junk', len: 1900, music: 1,
+    name: 'THE NEIGHBOURHOOD', sub: 'EVERY BACK YARD OF IT', key: '#ffb060', bounce: '#5a3a22', back: 0.60, flick: 9, bg: 'junk', len: 1900, music: 1,
     gates: [
       { x: 0,    spawn: [['punk', 2], ['chain', 1]] },
       { x: 430,  spawn: [['grunt', 30], ['chain', 1], ['runner', 2]], cap: 22, items: [['pipe', 60], ['crate', 170]] },
@@ -3495,7 +3511,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', wet: 0.42, rain: 0.75, bg: 'docks', len: 2000, music: 2,
+    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', back: 0.65, wet: 0.42, rain: 0.75, bg: 'docks', len: 2000, music: 2,
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
@@ -3506,7 +3522,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE STATE', sub: 'THE WHOLE WORKING END OF IT', key: '#ffd06a', bounce: '#ff6a1e', flick: 4, bg: 'foundry', len: 2100, music: 3,
+    name: 'THE STATE', sub: 'THE WHOLE WORKING END OF IT', key: '#ffd06a', bounce: '#ff6a1e', back: 0.85, flick: 4, bg: 'foundry', len: 2100, music: 3,
     hazard: { edge: 'front', kind: 'molten', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['punk', 2], ['bruiser', 1]] },
@@ -3518,7 +3534,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE NATION', sub: 'ON THE ROOF OF IT', key: '#ffc98a', bounce: '#8c4a3a', bg: 'keep', len: 2200, music: 4,
+    name: 'THE NATION', sub: 'ON THE ROOF OF IT', key: '#ffc98a', bounce: '#8c4a3a', back: 0.90, bg: 'keep', len: 2200, music: 4,
     hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
     gates: [
       { x: 0,    spawn: [['blade', 2], ['punk', 2]] },
@@ -3530,7 +3546,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', wet: 0.42, rain: 0.9, bg: 'docks', music: 2, len: 2200,
+    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', back: 0.65, wet: 0.42, rain: 0.9, bg: 'docks', music: 2, len: 2200,
     grade: 'rgba(60,20,90,0.22)',
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
@@ -3542,7 +3558,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE WORLD', sub: 'AND THEN THERE IS NOBODY LEFT', key: '#ffb0b0', bounce: '#7a2438', bg: 'keep', music: 4, len: 2400,
+    name: 'THE WORLD', sub: 'AND THEN THERE IS NOBODY LEFT', key: '#ffb0b0', bounce: '#7a2438', back: 0.85, bg: 'keep', music: 4, len: 2400,
     grade: 'rgba(90,20,40,0.20)',
     hazard: { edge: 'front', kind: 'fall', line: FLOOR_BOT + 4 },
     gates: [
