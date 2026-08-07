@@ -89,6 +89,10 @@ edit this block to name the next one.
       score plate measured off its own contents so the goals stop printing
       outside it, tick boxes instead of ○/✓ glyphs, and the launch hint in a
       pill. Presents got a lid, a shade, a snow cap and a bow.
+- [x] Set dressing: conifers with spiked tiers, glass baubles and a star;
+      snowmen with twig arms, a scarf and a face nothing covers; nutcrackers
+      with shoulders, epaulettes and a beard; the big tree's hoops replaced by
+      a string of twinkling bulbs.
 
 ## Next
 
