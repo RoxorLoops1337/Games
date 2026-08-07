@@ -2206,6 +2206,28 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### What the screens cue
+
+The beats were inventoried; the screens never had been. Twenty-one voices in the
+table and **none of them orphaned** — the five step cues fire through a
+`STEP_CUE` lookup rather than a literal, which is why a first grep said they were
+dead. Worth recording: the table is fully used.
+
+What the listing did find is the fanfare **sitting on the wrong beat**.
+`openScreen` plays `'level'` when the card offer appears and `'menu'` for
+everything else, and `screenSelect` fires nothing at all — so taking a card was
+**silent**. The offer appearing is not the achievement; the card joining your
+deck is, and it is the most consequential thing you do outside a fight. Giving
+one up on the swap screen was silent for the same reason.
+
+Both sound now, on the existing confirm voice. Nothing was moved and no new
+synthesis was written — the sound was already there, it was on the wrong moment.
+
+Same shape as the rustle one pass earlier, and the pair of them is the lesson:
+**an inventory of "what has a voice" catches things missing; an inventory of
+"where the voice is" catches things misplaced.** They are different questions
+and the second one is the harder to see.
+
 ### The bag in a fight says how hurt you are
 
 `#screen` is `inset:0` with a blur over it, so opening the bag mid-fight covers
