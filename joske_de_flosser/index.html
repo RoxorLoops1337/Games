@@ -4152,21 +4152,50 @@ function bgDocks(c){
   }
   ctx.fillStyle = 'rgba(30,74,99,0.35)'; ctx.fillRect(0, 96, VW, 20);
 
+  /* Containers were flat colour bars with stripes down them.  A box has
+     corner castings, a top edge that catches the light and an underside that
+     does not, rust coming down from the rails, and either a corrugated side
+     or a pair of doors with the locking bars still on them. */
   const COL = ['#6e2c1f', '#1f4a62', '#2a5433', '#785c1c', '#52264a'];
   for (let i = -1; i < 12; i++){
-    const gx = Math.floor(c * 0.62 / 62) + i, x = gx * 62 - c * 0.62;
+    const gx = Math.floor(c * 0.62 / 62) + i, x = Math.round(gx * 62 - c * 0.62);
+    if (x + 58 < -2 || x > VW + 2) continue;
     const stackH = 1 + Math.floor(hash(gx) * 3);
     for (let sI = 0; sI < stackH; sI++){
       const y = 141 - (sI + 1) * 22;
       const col = COL[Math.floor(hash(gx * 5 + sI) * COL.length) % COL.length];
       px(x, y, 58, 21, col);
-      px(x, y, 58, 2, shade(col, 30));
-      px(x, y + 19, 58, 2, shade(col, -38));
-      px(x, y, 1, 21, shade(col, 20));
-      px(x + 57, y, 1, 21, shade(col, -30));
-      for (let r = 4; r < 56; r += 6) px(x + r, y + 3, 2, 15, shade(col, -18));
+      px(x, y + 1, 58, 1, shade(col, 34));            // the top rail
+      px(x, y, 58, 1, shade(col, -20));
+      px(x, y + 19, 58, 2, shade(col, -40));          // and the sill under it
+      px(x, y + 21, 58, 1, '#0a1620');                // the dark line between one box and the next
+      px(x, y, 1, 21, shade(col, 18));
+      px(x + 57, y, 1, 21, shade(col, -32));
+      if (hash(gx * 11 + sI) > 0.55){                 // doors, with the bars on them
+        px(x + 28, y + 2, 1, 17, shade(col, -34));
+        for (const bx of [x + 9, x + 19, x + 38, x + 48]){
+          px(bx, y + 3, 1, 15, shade(col, 22));
+          px(bx - 1, y + 8, 3, 2, shade(col, -26));
+        }
+        px(x + 3, y + 4, 10, 3, shade(col, 40));      // the code stencilled on it
+      } else {
+        for (let r = 4; r < 56; r += 6) px(x + r, y + 3, 2, 15, shade(col, -18));
+        px(x + 40, y + 4, 12, 3, shade(col, 38));
+      }
+      for (const cx2 of [x, x + 51]){                 // corner castings
+        px(cx2, y, 7, 3, '#2a2c30'); px(cx2, y + 18, 7, 3, '#22242a');
+        px(cx2, y, 7, 1, '#4a4e56');
+      }
+      if (hash(gx * 3 + sI * 5) > 0.5)                // rust off the top rail
+        for (let rq = 0; rq < 3; rq++){
+          const rx = x + 10 + Math.round(hash(gx * 7 + sI + rq) * 38);
+          px(rx, y + 2, 1, 4 + Math.round(hash(gx + rq) * 7), rgba('#8a4a22', 0.5));
+        }
     }
   }
+  /* A reflection of the stacks on the water was drawn here and thrown away:
+     the water band runs 106 to 141 and the containers stand in front of all
+     but the top few pixels of it, so none of it was ever visible. */
 
   for (let i = -1; i < 5; i++){                            // the shafts, hanging in the sea air
     const gx = Math.floor(c * 0.22 / 190) + i, x = gx * 190 - c * 0.22;
