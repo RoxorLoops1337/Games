@@ -62,6 +62,7 @@ const EXPOSE = `__out.api = {
   BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
   gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg, drawItem,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
+  CLOUDS, cloudBand, drawClouds,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -4086,8 +4087,30 @@ test('the logo bakes once — only the shine costs anything per frame', () => {
   api._resetCounts();
   api.draw();
   const second = api._counts.fillRect || 0;
-  assert(second < 3000, 'a warm title frame is too expensive: ' + second + ' fillRects');
+  // 3000 when the title had no weather on it; the attract screen runs the
+  // street's own rain, kerb and lamp cones now, which is where the rest goes
+  assert(second < 3900, 'a warm title frame is too expensive: ' + second + ' fillRects');
   assert(Math.abs(second - first) < 400, 'the title frame cost should not wander: ' + first + ' vs ' + second);
+});
+
+test('the title is the same wet street the game opens on', () => {
+  const api = boot();
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const r = api._rects;
+  assert(r.some(q => q[4] === '#171420' && q[2] === 3 && q[3] === 12), 'no kerb railing in front of the title');
+  assert(r.some(q => String(q[4]).startsWith('rgba(255,220,140')), 'the lamp post throws no light on the title');
+  assert(r.some(q => q[2] === 1 && String(q[4]).startsWith('rgba(168,196,232')), 'it is not raining on the title');
+  assert(r.some(q => q[3] === 2 && q[2] === api.VW && String(q[4]).startsWith('rgba(6,4,10')), 'no vignette on the title');
+  // and the wash over the sky follows the logo instead of covering everything
+  const veil = r.filter(q => q[2] === api.VW && q[3] === 1 && String(q[4]).startsWith('rgba(6,4,10'));
+  assert(veil.length >= 30, 'the sky veil went missing: ' + veil.length + ' rows');
+  const worst = Math.max(...veil.map(q => parseFloat(String(q[4]).split(',')[3])));
+  assert(worst < 0.4, 'the sky is still being flattened by a ' + worst + ' wash');
+  const column = r.filter(q => q[3] === 62 && String(q[4]).startsWith('rgba(6,4,10'));
+  assert(column.length === 10, 'the logo has no wash column behind it: ' + column.length);
+  assert(new Set(column.map(q => q[2])).size === 10, 'the column does not taper — it is one hard-edged box');
 });
 
 test('the attract screen is a floss-off: two crews, facing each other, on the beat', () => {
@@ -4110,20 +4133,35 @@ test('the attract screen is a floss-off: two crews, facing each other, on the be
 test('every few seconds the floss-off turns into a punch, then resets', () => {
   const api = boot();
   const at = (t) => { api.attract.t = t; api.draw(); return api.attract.cast; };
-  at(0.4);
+  at(0.05);
   const joske = api.attract.cast[0], foe = api.attract.cast[2];
   const restX = joske.x, foeRest = foe.x;
+  at(2.6);
+  assert(foe.x < foeRest, 'the wannabees never close the street: ' + foe.x + ' from ' + foeRest);
+  const crept = foe.x;
   at(3.4);
   assert(joske.anim !== 'idle', 'Joske swings on the beat');
   assert(joske.x > restX, 'and steps in to do it');
   at(3.9);
   assert(foe.anim === 'hurt', 'the near wannabee wears it');
-  assert(foe.x > foeRest, 'and gets knocked back');
-  at(4.3);
-  assert(foe.anim === 'lie', 'and goes down');
-  at(4.5);                                      // the cycle is 4.4s long, so this is a fresh loop
+  assert(foe.x > crept, 'and gives the ground back');
+  at(4.45);                                     // the cycle is 4.4s long, so this is a fresh loop
   assert(joske.anim === 'idle' && joske.x === restX, 'everybody is back on the beat');
-  assert(foe.anim === 'idle' && foe.x === foeRest, 'including the man who just ate it');
+  assert(foe.anim === 'idle', 'including the man who just backed off');
+  assert(Math.abs(foe.x - foeRest) < 1, 'the wannabee did not give his ground back: ' + foe.x + ' vs ' + foeRest);
+});
+
+test('the two crews hold the kerbs, not the middle where the menu sits', () => {
+  const api = boot();
+  api.attract.t = 0.4;
+  api.draw();
+  // the menu card covers roughly the middle 45% of the canvas
+  const L = api.VW * 0.28, R = api.VW * 0.72;
+  for (const f of api.attract.cast)
+    assert(f.x < L || f.x > R, f.skin + ' stands at ' + f.x + ', behind the menu');
+  const heroes = api.attract.cast.filter(f => f.team === 'p');
+  assert(heroes.every(f => f.x < L), 'the heroes are not on the left kerb');
+  assert(api.attract.cast.filter(f => f.team === 'e').every(f => f.x > R), 'the gang is not on the right kerb');
 });
 
 test('the title screen carries the game name, and not the old one', () => {
@@ -4476,6 +4514,126 @@ test('the screen timers are the ones the update loop counts down', () => {
   if (!/G\.cardT = CARD_T;/.test(src)) throw new Error('the card is still started from a loose number');
   if (!/W\.clearT = CLEAR_T;/.test(src)) throw new Error('the tally is still started from a loose number');
   if (!/G\.contT = CONT_T;/.test(src)) throw new Error('the count is still started from a loose number');
+});
+
+/* ------------------------------------------------------- sky over the street */
+test('the sky carries cloud, lit from underneath by the town', () => {
+  const api = boot();                              // bands are baked on first use, so paint them here
+  for (const b of api.CLOUDS){
+    api._resetCounts();
+    api.cloudBand(b);
+    const r = api._rects;
+    const body = r.filter(q => q[4] === b.body && q[2] === 1);
+    assert(body.length > 60, 'cloud band ' + b.key + ' is ' + body.length + ' columns wide');
+    const lip = r.filter(q => q[4] === b.lip && q[2] === 1 && q[3] === 2);
+    assert(lip.length === body.length, 'cloud band ' + b.key + ' has no lit underside');
+    const crown = r.filter(q => q[4] === api.shade(b.body, 26));
+    assert(crown.length === body.length, 'the moon does not catch the crown of ' + b.key);
+    // the lip is under the cloud it belongs to, and the crown on top of it
+    for (const q of body.slice(0, 20)){
+      const l = lip.find(z => z[0] === q[0]), cr = crown.find(z => z[0] === q[0]);
+      assert(l[1] >= q[1] + q[3] - 2 - 1, 'the ' + b.key + ' lip floats above its cloud');
+      assert(cr[1] === q[1], 'the ' + b.key + ' crown is not on top');
+    }
+  }
+  // the three banks sit at three heights, so the sky has depth rather than one slab
+  const ys = api.CLOUDS.map(b => b.y);
+  assert(ys[0] < ys[1] && ys[1] < ys[2], 'the cloud banks are not stacked: ' + ys.join(', '));
+  assert(new Set(api.CLOUDS.map(b => b.spd)).size === 3, 'the banks all drift at the same speed');
+});
+
+test('the sky blits every cloud band twice, so it wraps', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();                                      // warm every bake first
+  api._resetCounts();
+  api.drawClouds(200);
+  assert((api._counts.drawImage || 0) === api.CLOUDS.length * 2,
+    'the sky blitted ' + (api._counts.drawImage || 0) + ' cloud copies');
+  assert((api._counts.fillRect || 0) === 0, 'the cloud bands are being repainted every frame');
+});
+
+test('a cloud band tiles without a seam and has gaps in it', () => {
+  const api = boot();
+  const b = api.CLOUDS[1];
+  api._resetCounts();
+  api.cloudBand(b);                              // painted into its own canvas, so this is the band alone
+  const cols = api._rects.filter(q => q[2] === 1 && q[4] === b.body);
+  const at = {};
+  for (const q of cols) at[q[0]] = q;
+  assert(Object.keys(at).length < api.VW, 'the band is solid from edge to edge — no gaps between banks');
+  assert(Object.keys(at).length > api.VW * 0.3, 'the band is barely there: ' + Object.keys(at).length + ' columns');
+  // Column 0 and column VW-1 are the join where the two copies meet. On a
+  // band that tiles, that join is just another step along the edge; on one
+  // that does not, it is the biggest step in the band by a mile.
+  const hOf = (x) => (at[x] ? at[x][3] : 0);
+  let worst = 0;
+  for (let x = 0; x < api.VW - 1; x++) worst = Math.max(worst, Math.abs(hOf(x + 1) - hOf(x)));
+  const seam = Math.abs(hOf(0) - hOf(api.VW - 1));
+  assert(seam <= worst, `the band does not tile: a ${seam}px step at the seam, ${worst}px anywhere else`);
+  // and the reason it tiles is that every frequency is a whole number of
+  // cycles across VW — a check the picture alone cannot make for you
+  const src = fs.readFileSync(HTML, 'utf8');
+  assert(/const f = \(k\) => 2 \* Math\.PI \* k \/ VW;/.test(src),
+    'the cloud frequencies are no longer whole multiples of 2*PI/VW');
+});
+
+test('the attract lays a light down on each crew before it draws them', () => {
+  const api = boot();
+  api.draw();
+  const warm = api.lightAt(54), cool = api.lightAt(300);
+  assert(warm && cool, 'one of the two crews is standing in the dark');
+  const hex = (c) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const [, wg, wb] = hex(warm.col), [, cg, cb] = hex(cool.col);
+  assert(wg > wb, 'the lamp over Joske is not warm: ' + warm.col);
+  assert(cb > cg, 'the wannabees are not standing in neon: ' + cool.col);
+  assert(warm.k > 0.4 && cool.k > 0.2, 'the pools are too weak to reach the crews');
+});
+
+test('the town throws an orange haze up over its own rooftops', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const dome = api._rects.filter(q => q[2] === api.VW && q[3] === 4 && String(q[4]).startsWith('rgba(255,120,54'));
+  assert(dome.length === 9, 'the sodium dome is ' + dome.length + ' bands');
+  const byY = dome.slice().sort((p, q) => p[1] - q[1]);
+  const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+  assert(alpha(byY[byY.length - 1]) > alpha(byY[0]), 'the haze is not brightest at the rooftops');
+  assert(byY[0][1] < byY[byY.length - 1][1], 'the haze does not climb');
+});
+
+test('the lamp light falls in a cone, not a pane of glass', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.drawForeground('street');
+  const bands = api._rects.filter(q => String(q[4]).startsWith('rgba(255,220,140') && q[3] === 13);
+  assert(bands.length >= 8, 'the lamp throws ' + bands.length + ' bands of light');
+  const one = bands.slice(0, 8).sort((p, q) => p[1] - q[1]);
+  for (let i = 1; i < 8; i++){
+    assert(one[i][2] > one[i - 1][2], 'the cone does not widen as it falls');
+    assert(parseFloat(String(one[i][4]).split(',')[3]) < parseFloat(String(one[i - 1][4]).split(',')[3]),
+      'the cone does not fade as it falls');
+  }
+  // and the lamps off screen are not painted at all
+  assert(bands.length <= 16, bands.length / 8 + ' lamps painted — the loop is not culling');
+});
+
+test('the far skyline only paints the towers you can see', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  for (const cx of [0, 300, 1100]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const caps = api._rects.filter(q => q[4] === '#262a4e' && q[3] === 1);
+    assert(caps.length >= 6, 'at camera ' + cx + ' the far skyline is ' + caps.length + ' towers');
+    assert(caps.length <= 11, 'at camera ' + cx + ' it painted ' + caps.length + ' towers for the nine on screen');
+  }
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
