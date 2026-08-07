@@ -128,6 +128,9 @@ edit this block to name the next one.
 - [x] Weather that reads: wind that gusts on a clock, snow that streaks in a
       blizzard and falls in dots on a still night, and fog as drifting banks
       rather than one flat wash.
+- [x] A gate across the launch lane with the market's name on it — scenery
+      only, no collider, so the empty third of every aim frame finally says
+      where you are about to drive.
 
 ## Next
 

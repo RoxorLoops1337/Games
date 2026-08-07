@@ -77,6 +77,7 @@ const EXPOSE = `__out.api = {
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   windNow, WIND_STREAK, drawSnow, seedSnow,
+  drawGate, drawGateBulbs, GATE_X, GATE_HALF,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -99,6 +100,12 @@ function boot(opts){
   const counts = {};
   const ctxStub = new Proxy({}, { get(t, p){
     if (p === 'measureText') return () => ({ width: 30 });
+    // the words a frame puts on screen, so a headless suite can read them
+    if (p === 'fillText') return (t) => {
+      if (!o.count) return;
+      counts.fillText = (counts.fillText || 0) + 1;
+      (counts._text || (counts._text = [])).push(String(t));
+    };
     if (p === 'createLinearGradient' || p === 'createRadialGradient')
       return () => { if (o.count) counts[p] = (counts[p] || 0) + 1; return gradient; };
     if (p === 'canvas') return { width: o.w || 960, height: o.h || 600 };
@@ -5153,6 +5160,73 @@ test('fog is banks drifting, not a flat wash', () => {
     (api._counts.drawImage || 0) + ' on ' + api.getTheme().name + ')');
   assert(!(api._counts.drawImage || 0),
     'a clear night is drawing fog banks: ' + api._counts.drawImage);
+});
+
+/* ----------------------------------------------------------------- gate --- */
+
+/* Every run starts on an empty white lane with two dashed lines on it and the
+   market somewhere off in the distance — a third of every aim frame was
+   nothing at all. There is a gate across it now with the market's name on it. */
+test('the gate names the market it stands in front of', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  for (const lv of [0, 9, 20]){
+    api.startLevel(lv); api.beginLevel();
+    api.G.phase = 'aim'; api.car.x = api.C.ANCHOR.x; api.camSnap();
+    api._resetCounts();
+    api.drawGate();
+    const words = (api._counts._text || []).join('|');
+    assert(words === api.LEVELS[lv].name,
+      'the gate to ' + api.LEVELS[lv].name + ' reads "' + words + '"');
+  }
+});
+
+test('the gate is scenery: you drive straight through it', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  // nothing in props sits on it, so hitProp can never find it
+  for (const o of api.props){
+    const near = Math.abs(o.x - api.GATE_X) < 60 &&
+      Math.abs(o.y - api.C.ANCHOR.y) < api.GATE_HALF;
+    assert(!near, 'a real prop is standing in the gateway at ' +
+      Math.round(o.x) + ',' + Math.round(o.y));
+  }
+  // and a car parked in the gateway hits nothing and scores nothing
+  api.G.phase = 'drive';
+  api.car.x = api.GATE_X; api.car.y = api.C.ANCHOR.y;
+  api.car.vx = 1400; api.car.vy = 0;
+  const score = api.G.levelScore, sp = api.carSpeed();
+  api.stepCarCollisions(1 / 60);
+  assert(api.G.levelScore === score, 'the gate scored ' + (api.G.levelScore - score));
+  assert(Math.abs(api.carSpeed() - sp) < 1e-6,
+    'the gate slowed the car from ' + sp.toFixed(1) + ' to ' + api.carSpeed().toFixed(1));
+});
+
+test('the gate is culled once you are past it, and its bulbs are three fills', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = api.GATE_X; api.car.y = api.C.ANCHOR.y; api.camSnap();
+  api.setT(2);
+  api._resetCounts();
+  api.drawGate();
+  const seen = (api._counts.fill || 0) + (api._counts.fillRect || 0);
+  api._resetCounts();
+  api.drawGateBulbs();
+  const bulbs = { fill: api._counts.fill || 0, arc: api._counts.arc || 0 };
+  console.log('    (gate: ' + seen + ' pieces, ' + bulbs.arc + ' bulbs in ' +
+    bulbs.fill + ' fills)');
+  assert(seen > 8, 'the gate should be drawn when it is in shot, got ' + seen);
+  assert(bulbs.arc >= 10, 'with bulbs on it, got ' + bulbs.arc);
+  assert(bulbs.fill === api.WIRE_COLS.length,
+    'one fill a colour, not one a bulb: ' + bulbs.fill);
+  // deep in the market it costs nothing at all
+  api.car.x = api.bounds.x1 - 200; api.camSnap();
+  api._resetCounts();
+  api.drawGate(); api.drawGateBulbs();
+  assert(!Object.keys(api._counts).length,
+    'the gate is still being drawn from the far end of the market: ' +
+    JSON.stringify(api._counts));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

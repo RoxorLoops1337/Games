@@ -1986,6 +1986,71 @@ function buildWires(){
   }
 }
 
+/* The way in. Every run starts on an empty white lane with two dashed lines
+   on it and the market somewhere off in the distance — a third of every aim
+   frame was nothing at all. There is a gate across it now with the market's
+   name on the banner, so you can see what you are about to drive into and the
+   approach belongs to the place.
+
+   Drawn only. It is not in `props`, so it has no collider and nothing about a
+   run changes: you go straight through it. */
+const GATE_X = MARKET_X - 210, GATE_HALF = 300;
+function drawGate(){
+  const lv = LEVELS[G.level];
+  if (!lv) return;
+  const halfW = VW / cam.s / 2 + 320;
+  if (Math.abs(GATE_X - cam.x) > halfW) return;
+  const y0 = ANCHOR.y - GATE_HALF, y1 = ANCHOR.y + GATE_HALF;
+  // posts
+  for (const py of [y0, y1]){
+    shadow(GATE_X, py + 10, 26, 12, 0.3);
+    ctx.fillStyle = '#4a3524'; circle(GATE_X, py, 21); ctx.fill();
+    ctx.fillStyle = '#6b4a2f'; circle(GATE_X, py, 16); ctx.fill();
+    ctx.fillStyle = 'rgba(255,247,228,.16)'; circle(GATE_X - 6, py - 6, 9); ctx.fill();
+    ctx.fillStyle = '#eef4ff'; circle(GATE_X - 2, py - 3, 7); ctx.fill();   // snow cap
+  }
+  // the banner between them
+  ctx.save();
+  ctx.translate(GATE_X, ANCHOR.y);
+  shadow(6, 14, 20, GATE_HALF * 0.94, 0.22);
+  ctx.fillStyle = TH.wood;
+  roundRect(-34, -GATE_HALF + 8, 68, GATE_HALF * 2 - 16, 12); ctx.fill();
+  ctx.fillStyle = TH.awning;
+  roundRect(-28, -GATE_HALF + 13, 56, GATE_HALF * 2 - 26, 9); ctx.fill();
+  ctx.fillStyle = 'rgba(255,247,228,.15)';
+  ctx.fillRect(-28, -GATE_HALF + 13, 18, GATE_HALF * 2 - 26);
+  ctx.fillStyle = 'rgba(9,16,32,.18)';
+  ctx.fillRect(13, -GATE_HALF + 13, 15, GATE_HALF * 2 - 26);
+  ctx.fillStyle = '#eef4ff';                                  // snow along the top
+  roundRect(-34, -GATE_HALF + 8, 68, 14, 7); ctx.fill();
+  // the name, reading up the banner
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffe9a8';
+  ctx.font = '900 44px system-ui';
+  ctx.fillText(lv.name, 0, 16);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+/* Its bulbs, on the light pass with every other light in the game. */
+function drawGateBulbs(){
+  const halfW = VW / cam.s / 2 + 320;
+  if (!LEVELS[G.level] || Math.abs(GATE_X - cam.x) > halfW) return;
+  for (let c = 0; c < WIRE_COLS.length; c++){
+    ctx.beginPath();
+    for (let i = 0; i <= 12; i++){
+      if (i % WIRE_COLS.length !== c) continue;
+      const y = ANCHOR.y - GATE_HALF + (i / 12) * GATE_HALF * 2;
+      const r = 5.5 + Math.sin(T * 3 + i * 1.4) * 1.6;
+      ctx.moveTo(GATE_X - 44 + r, y);
+      ctx.arc(GATE_X - 44, y, r, 0, 6.283);
+    }
+    ctx.fillStyle = 'rgba(' + WIRE_COLS[c] + ',.8)';
+    ctx.fill();
+  }
+}
+
 /* The cable itself, dark, drawn over the stalls it hangs between. The bulbs on
    it are light and belong to the light pass — a bulb laid down here would have
    the night wash composited over the top of it. */
@@ -4917,6 +4982,7 @@ function drawLights(){
     circle(car.x, car.y, 190); ctx.fill();
   }
   drawWireBulbs();
+  drawGateBulbs();
   drawPickupGlow();
   drawFireworks();
   ctx.restore();
@@ -5732,6 +5798,7 @@ function draw(){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
   }
   drawWires();
+  drawGate();
 
   if (G.phase === 'aim') drawAim(); else drawSling();
 
