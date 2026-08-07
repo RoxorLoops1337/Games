@@ -3719,6 +3719,10 @@ const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
    palette was lifted straight off COATS and HATS, so a bag on the ground read
    as another shopper lying down. One list, so the bag in the hand and the bag
    on the snow cannot drift apart. */
+/* Bright on purpose: this is the one thing in the market that has to be
+   findable from across it. */
+const BALLOONS = ['#ff5a52', '#ffd34d', '#5ec8ff', '#9be86a', '#ff8ad6'];
+const BALLOON_PX = 9;      // never smaller than this on screen
 const BAG_COLS = ['#cfc6b4', '#8f7355', '#4a4038', '#8a94a4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 const HAIR = ['#3a2a20', '#6b4a2c', '#1d1a1c', '#8d6a3f', '#a8632c', '#c9b48a', '#4a3a34'];
@@ -5014,6 +5018,11 @@ const LOD_FINE = 14;     // above this: the full kit, i.e. the replay close-up
 /* Two things are never blobs. Santa's r is 17, so on the market whose whole
    goal is running him over he dissolved into the batch above walking pace;
    and a pram is the one silhouette that has to read before you hit it. */
+/* Who never drops to a batched blob, however far away: Santa and the prams,
+   the two things a goal names. Children are the third thing a goal names and
+   are NOT on this list — pulling all ninety-odd of them out of the batch cost
+   461 fills on the worst frame. Their balloon is drawn separately instead, so
+   they stay findable for five fills rather than for a fifth of the budget. */
 const lodAlways = (p) => p.kind === 'santa' || !!p.pram;
 
 /* Seen from above: coat with shoulders, arms that swing (and fly up when they
@@ -5355,6 +5364,70 @@ function drawPerson(p){
     ctx.textAlign = 'left';
   }
   ctx.restore();
+}
+
+/* A balloon over every child, whatever tier they were drawn at.
+
+   Every other archetype carries the thing that says what it is — the
+   pensioner's stick, the parent's pram, Santa's fur and beard, the shopper's
+   bag. The child had nothing, and it is the smallest person in the market at
+   r9, and one of the thirteen goals is "Catch N children": the game asked you
+   to hunt for the one thing it had made hardest to see.
+
+   It lives out here rather than in drawPerson because a child that has fallen
+   to the batch tier still needs to be findable, and because five colours
+   batch into five fills for the whole market — against the 461 that dragging
+   every child up to the fine tier cost. World-space, no rotation: a balloon
+   floats the same way whichever way the child is walking. */
+function drawBalloons(near){
+  const kids = [];
+  for (const p of people) if (p.kind === 'kid' && !p.dead && near(p)) kids.push(p);
+  if (!kids.length) return;
+  ctx.strokeStyle = 'rgba(240,246,255,.45)';
+  ctx.lineWidth = Math.max(1, 1.2 / Math.max(cam.s, 0.05));
+  ctx.beginPath();
+  for (const p of kids){
+    const b = balloonAt(p);
+    ctx.moveTo(p.x, p.y);
+    ctx.quadraticCurveTo((p.x + b.x) / 2, (p.y + b.y) / 2 + p.r, b.x, b.y + b.r * 0.9);
+  }
+  ctx.stroke();
+  for (let c = 0; c < BALLOONS.length; c++){
+    let any = false;
+    ctx.beginPath();
+    for (const p of kids){
+      if (p.coat % BALLOONS.length !== c) continue;
+      const b = balloonAt(p);
+      /* moveTo first: ctx.ellipse joins the current point, so a batch of them
+         without one draws a filled polygon between every balloon in the
+         market — which is what it did, in five colours, across the whole
+         screen. The suite was green; the screenshot was not. */
+      ctx.moveTo(b.x + b.r, b.y);
+      ctx.ellipse(b.x, b.y, b.r, b.r * 1.16, b.sw * 0.5, 0, 6.283);
+      any = true;
+    }
+    if (any){ ctx.fillStyle = BALLOONS[c]; ctx.fill(); }
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.34)';        // the highlight, in one path
+  ctx.beginPath();
+  for (const p of kids){
+    const b = balloonAt(p);
+    ctx.moveTo(b.x - b.r * 0.3 + b.r * 0.3, b.y - b.r * 0.36);
+    ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.36, b.r * 0.3, 0, 6.283);
+  }
+  ctx.fill();
+}
+/* Where a child's balloon floats: a slow drift off their own walk cycle, so
+   no two are at the same angle and none of it is rolled. */
+function balloonAt(p){
+  const sw = Math.sin(p.bob * 0.7 + p.coat) * 0.5;
+  /* Sized in screen pixels, not off the child. At p.r * 0.5 on an r9 child it
+     came out under two pixels across at the drive zoom — a balloon nobody can
+     see is not a balloon, and being seen is the entire job. Same trick the
+     drive camera uses to stop the car shrinking below CAR_MIN_PX. */
+  const r = Math.max(p.r * 0.55, BALLOON_PX / Math.max(cam.s, 0.05));
+  return { sw, r, x: p.x + sw * r * 1.1,
+    y: p.y - p.r * 1.1 - r * (1.5 + Math.cos(p.bob * 0.9) * 0.12) };
 }
 
 /* At a wide zoom a shopper is a coloured blob with a hat on it, and there can
@@ -7241,6 +7314,7 @@ function draw(){
     if (!p.dead && lodQ(p) < LOD_MID && !lodAlways(p)) far.push(p); else order.push(p);
   }
   drawCrowdBatch(far);
+  drawBalloons(near);
   order.sort((a, b) => a.y - b.y);
   for (const e of order){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
