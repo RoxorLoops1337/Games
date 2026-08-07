@@ -56,6 +56,7 @@ const EXPOSE = `__out.api = {
   togglePause, showOver, loadMeta, saveMeta, stage, update, draw, drawHUD, drawFighter, drawBackground,
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
   attract, ATTRACT_CAST, drawAttract, logo, logoGlyphs, logoFeet, LOGO_BAND,
+  glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
 };
@@ -2360,6 +2361,91 @@ test('the title screen draws', () => {
   const api = boot();
   api.draw();
   assert(api._counts.fillRect > 50, 'the attract screen actually paints something');
+});
+
+/* ----------------------------------------------------------------- light */
+test('a glow is baked once per colour and radius, then reused', () => {
+  const api = boot();
+  api._resetCounts();
+  api.glow(100, 100, 20, 14, '#ff2f7a', 0.5);
+  const firstUse = api._counts.fillRect || 0;
+  assert(firstUse > 20, 'baking the sprite painted its rings: ' + firstUse);
+  api._resetCounts();
+  for (let i = 0; i < 30; i++) api.glow(100 + i, 100, 20, 14, '#ff2f7a', 0.5);
+  assert((api._counts.fillRect || 0) === 0, 'a warm glow should cost no fills, only a blit');
+  assert((api._counts.drawImage || 0) === 30, 'each one is a single blit');
+  api._resetCounts();
+  api.glow(100, 100, 20, 14, '#2fc8e8', 0.5);       // a different colour is a different sprite
+  assert((api._counts.fillRect || 0) > 20, 'a new colour has to be baked');
+});
+
+test('a glow puts light in and hands the context back the way it found it', () => {
+  const api = boot();
+  const ctx = api.getCtx();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  api.glow(100, 100, 18, 12, '#ffcc7a', 0.3);
+  assert(ctx.globalCompositeOperation === 'source-over', 'left the context in additive mode — everything after would blow out');
+  assert(ctx.globalAlpha === 1, 'left the context faded: ' + ctx.globalAlpha);
+  ctx.globalAlpha = 0.4;                            // and it restores whatever it was handed
+  api.glow(100, 100, 18, 12, '#ffcc7a', 0.3);
+  assert(ctx.globalAlpha === 0.4, 'clobbered an alpha it did not own');
+});
+
+test('a glow off the side of the screen is not drawn at all', () => {
+  const api = boot();
+  api.glow(-400, 100, 12, 9, '#ff2f7a', 0.5);       // bake it once so the counts are clean
+  api._resetCounts();
+  api.glow(-400, 100, 12, 9, '#ff2f7a', 0.5);
+  api.glow(api.VW + 400, 100, 12, 9, '#ff2f7a', 0.5);
+  assert((api._counts.drawImage || 0) === 0, 'offscreen lights should be skipped');
+  api.glow(api.VW / 2, 100, 12, 9, '#ff2f7a', 0.5);
+  assert((api._counts.drawImage || 0) === 1, 'and onscreen ones should not');
+});
+
+test('the glow falloff crowds the centre, so a light reads as a light', () => {
+  const api = boot();
+  assert(api.GLOW_STEPS >= 5, 'enough rings for a smooth falloff');
+  const sprite = api.glowSprite('#ffcc7a', 20, 14);
+  assert(sprite.width === 42 && sprite.height === 30, 'the plate is the radius plus its margin: ' + sprite.width + 'x' + sprite.height);
+  // the ring radii are rx*k^2, so ring n is always inside ring n-1 by a growing step
+  const r = [];
+  for (let s = 0; s < api.GLOW_STEPS; s++){ const t = 1 - s / (api.GLOW_STEPS + 1); r.push(20 * t * t); }
+  for (let i = 1; i < r.length; i++) assert(r[i] < r[i - 1], 'ring ' + i + ' is not inside the last');
+  for (let i = 2; i < r.length; i++)
+    assert(r[i - 1] - r[i] < r[i - 2] - r[i - 1] + 0.001, 'the steps should tighten toward the centre, not spread');
+});
+
+test('nothing shadows the light helper', () => {
+  // bgFoundry once had `const glow = 0.55 + ...` for its furnace flicker, which
+  // silently turned every glow() call in that function into a number call.
+  const bodies = RAW.split(/function bg[A-Z]/).slice(1);
+  assert(bodies.length >= 5, 'found the background painters');
+  for (const b of bodies){
+    const head = b.slice(0, b.indexOf('\n}\n'));
+    assert(!/\b(const|let|var|function)\s+glow\b/.test(head), 'a background shadows glow(): ' + head.slice(0, 40));
+  }
+  assert(!/\bctx\.fillStyle = 'rgba\(255,110,20,0\.05\)'/.test(RAW), 'a flat rectangle is still standing in for a light');
+});
+
+test('every stage lights up, and stays inside the frame budget', () => {
+  const api = boot();
+  for (let st = 0; st < api.STAGES.length; st++){
+    play(api, { stage: st });
+    api.draw();                                     // first frame bakes the sky and the glow plates
+    api._resetCounts();
+    api.draw();
+    const fills = api._counts.fillRect || 0, blits = api._counts.drawImage || 0;
+    assert(fills < 11000, `stage ${st + 1} costs ${fills} fillRects`);
+    assert(blits >= 2, `stage ${st + 1} draws ${blits} blits — the baked plates are not being reused`);
+    assert(blits < 150, `stage ${st + 1} hangs ${blits} lights, more than a scene needs`);
+  }
+  // and every painter actually hangs lights rather than flat rectangles
+  for (const fn of ['bgStreet', 'bgJunk', 'bgDocks', 'bgFoundry', 'bgKeep']){
+    const body = RAW.slice(RAW.indexOf('function ' + fn));
+    const head = body.slice(0, body.indexOf('\n}\n'));
+    assert(/\bglow\(/.test(head), fn + ' has no lights in it');
+  }
 });
 
 /* ------------------------------------------------------------------ logo */
