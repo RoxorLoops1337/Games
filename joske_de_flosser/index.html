@@ -3649,7 +3649,7 @@ function stageRank(dmg, time){
 const RANK_BONUS = { S: 5000, A: 3000, B: 1500, C: 500, D: 0 };
 
 function stageClear(){
-  W.clearT = 3.4;
+  W.clearT = CLEAR_T;
   G.phase = 'clear';
   G.rank = stageRank(G.dmgTaken, G.time);
   const bonus = 1000 * (G.stage + 1) + Math.max(0, 4000 - Math.round(G.time * 20)) + RANK_BONUS[G.rank];
@@ -3679,7 +3679,7 @@ function startStage(){
   reseed(9000 + G.stage * 77 + G.diff);
   resetStage();
   G.phase = 'card';
-  G.cardT = 2.4;
+  G.cardT = CARD_T;
   musicStart(stage().music);
 }
 
@@ -3733,7 +3733,7 @@ function updateDeaths(dt){
   /* everybody down and out of lives -> continue countdown */
   const anyUp = players.some((p, i) => p && (p.state !== 'out' || G.lives[i] > 0));
   if (!anyUp && G.phase === 'play' && G.contT <= 0){
-    G.contT = 10.99;
+    G.contT = CONT_T;
   }
   if (G.contT > 0 && G.phase === 'play'){
     G.contT -= dt;
@@ -5176,6 +5176,54 @@ function gauge(x, y, w, h, frac, col, opts){
   }
 }
 
+/* ------------------------------------------------------------- a plate
+   The full-screen moments used to be a flat band of ink with text sitting
+   on it — a letterbox, not an object. This is the same piece of hardware
+   the HUD is: chamfered corners, a lit lip along the top and left, dark
+   under the bottom and right, a stripe in the stage's own key light, and
+   rivets holding it down. Everything is straight runs, so a plate costs
+   about `h` fills plus a dozen. */
+function plate(x, y, w, h, o){
+  o = o || {};
+  if (w < 10 || h < 4) return;
+  const ch = Math.min(o.ch == null ? 7 : o.ch, h >> 1, w >> 1);
+  const body = o.body || 'rgba(9,7,16,0.90)';
+  const lip = o.lip || '#6a5470';
+  const dark = o.dark || '#0a0712';
+  for (let r = 0; r < h; r++){
+    const cut = r < ch ? ch - 1 - r : r >= h - ch ? ch - (h - r) : 0;
+    px(x + cut, y + r, w - cut * 2, 1, body);
+  }
+  const sx = x + ch - 1, sw = w - (ch - 1) * 2;
+  // a face that falls off downward, in four bands rather than a dither —
+  // a dithered gradient over a plate this size is twenty thousand fills
+  for (let b = 0; b < 4; b++)
+    px(sx, y + 2 + b * 3, sw, 3, rgba('#4a3a5e', 0.16 - b * 0.04));
+  px(sx, y, sw, 1, lip);
+  px(sx, y + h - 1, sw, 1, dark);
+  px(x, y + ch - 1, 1, h - (ch - 1) * 2, lip);
+  px(x + w - 1, y + ch - 1, 1, h - (ch - 1) * 2, dark);
+  for (let i = 0; i < ch - 1; i++){                   // the four corner cuts
+    px(x + ch - 2 - i, y + i, 1, 1, lip);
+    px(x + w - ch + 1 + i, y + i, 1, 1, lip);
+    px(x + ch - 2 - i, y + h - 1 - i, 1, 1, dark);
+    px(x + w - ch + 1 + i, y + h - 1 - i, 1, 1, dark);
+  }
+  const acc = o.accent;
+  if (acc){
+    px(sx, y + 1, sw, 1, acc);
+    px(sx, y + h - 2, sw, 1, shade(acc, -66));
+    glow(x + w / 2, y + 1, w >> 1, 6, acc, 0.20);
+  }
+  if (h > ch * 2 + 4){                                // rivets, in from each corner
+    const iy = y + ch - 2, jy = y + h - ch + 1;
+    for (const rx of [x + ch, x + w - ch - 2]) for (const ry of [iy, jy]){
+      px(rx, ry, 2, 2, '#3a3048');
+      px(rx, ry, 1, 1, '#8a7a9a');
+    }
+  }
+}
+
 function drawHUD(){
   px(0, 0, VW, 34, 'rgba(8,6,13,0.82)');
   px(0, 30, VW, 4, 'rgba(6,4,10,0.5)');               // the plate thickens toward its edge
@@ -5323,33 +5371,127 @@ function drawHUD(){
   }
 }
 
+const CARD_T = 2.4;                                   // how long the stage card holds
+const CLEAR_T = 3.4;                                  // and the tally after a stage
+const CONT_T = 10.99;                                 // and the count you have to beat
+
+/* The card is a shutter: it opens on a bright seam, the number lands from
+   the left, the name from the right, and a row of pips says which of the
+   five streets this is. */
 function drawCard(){
   const s = stage();
-  px(0, 78, VW, 62, 'rgba(8,6,12,0.86)');
-  px(0, 78, VW, 1, '#6a4a3a'); px(0, 139, VW, 1, '#6a4a3a');
-  textC('STAGE ' + (G.stage + 1), VW / 2, 86, '#ffd23d', 2, '#3a1408');
-  textC(s.name, VW / 2, 108, '#ffe9b8', 1, '#20101a');
-  textC(s.sub, VW / 2, 122, '#c08a6e', 1, '#20101a');
+  const acc = s.key || '#ffd23d';
+  const el = CARD_T - G.cardT;
+  const k = clamp(Math.min(el / 0.16, G.cardT / 0.16), 0, 1);
+  const PW = 264, PH = 72;
+  const h = Math.max(3, Math.round(PH * k));
+  const x = Math.round((VW - PW) / 2), y = Math.round(108 - h / 2);
+  plate(x, y, PW, h, { accent: acc });
+  if (k < 0.99){                                      // the seam light while it travels
+    px(x + 10, y + (h >> 1), PW - 20, 1, rgba(acc, 0.8));
+    glow(VW / 2, y + (h >> 1), 150, 5, acc, 0.34 * (1 - k));
+    return;
+  }
+  const t1 = clamp((el - 0.16) / 0.14, 0, 1);
+  const t2 = clamp((el - 0.28) / 0.14, 0, 1);
+  if (t1 > 0){
+    glow(VW / 2, y + 18, 84, 13, acc, 0.15 * t1);
+    textC('STAGE ' + (G.stage + 1), VW / 2 - Math.round((1 - t1) * 22), y + 11, '#ffd23d', 2, '#3a1408');
+  }
+  if (t2 > 0){
+    const dx = Math.round((1 - t2) * 22);
+    px(x + 34, y + 31, PW - 68, 1, rgba(acc, 0.30));  // a rule with two studs on it
+    px(x + 30, y + 30, 3, 3, rgba(acc, 0.55));
+    px(x + PW - 33, y + 30, 3, 3, rgba(acc, 0.55));
+    textC(s.name, VW / 2 + dx, y + 36, '#ffe9b8', 1, '#20101a');
+    textC(s.sub, VW / 2 + dx, y + 47, '#c08a6e', 1, '#20101a');
+  }
+  const n = STAGES.length, pw = 9, tot = n * pw + (n - 1) * 4;
+  for (let i = 0; i < n; i++){                        // which street of how many
+    const bx = Math.round((VW - tot) / 2) + i * (pw + 4), by = y + PH - 12;
+    const on = i === G.stage, done = i < G.stage;
+    px(bx, by, pw, 3, on ? acc : done ? shade(acc, -50) : '#241c30');
+    if (on){ px(bx, by, pw, 1, '#ffffff'); glow(bx + 4, by + 1, 8, 5, acc, 0.4 + Math.sin(T * 6) * 0.12); }
+  }
 }
 
+/* The tally counts itself in: header, then rank, then one stat line every
+   sixth of a second, which is the arcade rhythm that makes a score screen
+   feel earned rather than printed. */
 function drawClear(){
-  px(0, 70, VW, 82, 'rgba(8,6,12,0.88)');
-  px(0, 70, VW, 1, '#6a4a3a'); px(0, 151, VW, 1, '#6a4a3a');
-  textC('STAGE CLEAR', VW / 2, 76, '#ffd23d', 2, '#3a1408');
+  const s = stage();
+  const acc = s.key || '#ffd23d';
+  const el = CLEAR_T - (W.clearT || 0);
+  const PW = 318, PH = 98;
+  const x = Math.round((VW - PW) / 2), y = 58;
+  const k = clamp(el / 0.16, 0, 1);
+  const h = Math.max(3, Math.round(PH * k));
+  plate(x, y + Math.round((PH - h) / 2), PW, h, { accent: acc });
+  if (k < 0.99) return;
+  glow(VW / 2, y + 17, 96, 14, '#ffd23d', 0.14);
+  textC('STAGE CLEAR', VW / 2, y + 10, '#ffd23d', 2, '#3a1408');
   const rk = G.rank || 'C';
   const rcol = rk === 'S' ? '#7fe0ff' : rk === 'A' ? '#7fe07f' : rk === 'B' ? '#ffd23d' : '#e0a06a';
-  textC('RANK', VW / 2 - 20, 100, '#c08a6e', 1, '#20101a');
-  text(rk, Math.round(VW / 2 + 6), 96, rcol, 2, '#20101a');
-  textC('BONUS  ' + (G.lastBonus || 0), VW / 2, 116, '#ffe9b8', 1, '#20101a');
-  textC('TIME  ' + fmtTime(G.time) + '   HURT  ' + Math.round(G.dmgTaken), VW / 2, 128, '#c08a6e', 1, '#20101a');
-  textC('SCORE  ' + (G.score[0] + (G.players > 1 ? G.score[1] : 0)), VW / 2, 140, '#c08a6e', 1, '#20101a');
+  if (el > 0.30){                                     // the rank sits in its own bezel
+    const bw = 42, bx = x + 42, by = y + 32, cx = bx + bw / 2, cyy = by + bw / 2;
+    px(bx - 1, by - 1, bw + 2, bw + 2, '#0a0712');
+    px(bx, by, bw, bw, '#150f20');
+    px(bx, by, bw, 1, shade(rcol, -30)); px(bx, by + bw - 1, bw, 1, '#080610');
+    px(bx, by, 1, bw, shade(rcol, -40)); px(bx + bw - 1, by, 1, bw, '#080610');
+    if (rk === 'S' || rk === 'A')                     // and throws a few rays if it earned them
+      for (let i = 0; i < 8; i++){
+        const a = T * 0.7 + i * Math.PI / 4;
+        const sa = Math.sin(a);
+        if (sa > 0.3) continue;                       // nothing below — that is where RANK is printed
+        // just clear of the bezel whatever the angle, so no ray lands on the glyph
+        const r = (bw / 2 + 5) / Math.max(Math.abs(Math.cos(a)), Math.abs(sa)) + 2;
+        px(cx + Math.cos(a) * r - 1, cyy + sa * r - 1, 3, 3, rgba(rcol, 0.55));
+      }
+    glow(cx, cyy, 26, 24, rcol, 0.26 + Math.sin(T * 4) * 0.07);
+    textC(rk, cx, by + 7, rcol, 4, '#0d0a14');
+    textC('RANK', cx, by + bw + 3, '#8a7060', 1, '#20101a');
+  }
+  const rows = [
+    ['BONUS', String(G.lastBonus || 0), '#ffe9b8'],
+    ['TIME', fmtTime(G.time), '#c08a6e'],
+    ['HURT', String(Math.round(G.dmgTaken)), '#c08a6e'],
+    ['SCORE', String(G.score[0] + (G.players > 1 ? G.score[1] : 0)), '#ffd23d'],
+  ];
+  const vx = x + 200, lx = x + 118;
+  for (let i = 0; i < rows.length; i++){
+    if (el < 0.5 + i * 0.17) break;
+    const ry = y + 34 + i * 14;
+    text(rows[i][0], lx, ry, '#8a7060', 1, '#20101a');
+    for (let d = lx + textW(rows[i][0], 1) + 4; d < vx - 4; d += 3) px(d, ry + 6, 1, 1, '#4a3c50');
+    text(rows[i][1], vx, ry, rows[i][2], 1, '#20101a');
+  }
 }
 
+/* A countdown you feel: the digit pops on every tick, a ring of ten ticks
+   sweeps away under it, and the whole plate reddens as it runs out. */
 function drawContinue(){
-  px(0, 82, VW, 56, 'rgba(8,6,12,0.9)');
-  textC('CONTINUE?', VW / 2, 88, '#ffd23d', 2, '#3a1408');
-  textC(String(Math.ceil(G.contT)), VW / 2, 112, '#ffffff', 2, '#3a1408');
-  textC('PRESS PUNCH', VW / 2, 128, '#c08a6e', 1, '#20101a');
+  const t = G.contT;
+  const frac = t - Math.floor(t);
+  const urgent = clamp((5 - t) / 4, 0, 1);
+  const acc = urgent > 0.5 ? '#ff6a4a' : '#e0a06a';
+  const PW = 214, PH = 88;
+  const x = Math.round((VW - PW) / 2), y = 68;
+  plate(x, y, PW, PH, { accent: acc });
+  if (urgent > 0.2) px(x + 6, y + 3, PW - 12, PH - 6, rgba('#ff2a1a', 0.05 + urgent * 0.07));
+  textC('CONTINUE?', VW / 2, y + 6, '#ffd23d', 2, '#3a1408');
+  const pop = frac > 0.84 ? 1 : 0;                    // a kick on each new number
+  glow(VW / 2, y + 43, 30, 26, '#ff5a3a', 0.22 + urgent * 0.20 + pop * 0.3);
+  textC(String(Math.ceil(t)), VW / 2, y + 26 - pop, pop ? '#ffffff' : '#ffe9c8', 5, '#3a1408');
+  // A fuse, in the same hardware as the health bar, notched once per second.
+  // An elliptical ring of pips was tried here first and read as scatter at
+  // this resolution — a straight bar says "running out" at a glance.
+  const bw = 150, bx = Math.round(VW / 2 - bw / 2), by = y + 66;
+  const left = clamp(t / CONT_T, 0, 1);
+  gauge(bx, by, bw, 6, left, left > 0.35 ? '#ffa03a' : '#e84a3a');
+  for (let i = 1; i < 10; i++) px(bx + Math.round((bw - 2) * i / 10), by + 1, 1, 4, 'rgba(10,7,16,0.4)');
+  if (left < 0.35) glow(bx + bw * left / 2, by + 3, Math.max(4, (bw * left) >> 1), 7, '#ff3a2a', 0.3);
+  if (Math.floor(T * 3) % 2 === 0)
+    textC('PRESS PUNCH', VW / 2, y + PH - 12, '#ffd23d', 1, '#20101a');
 }
 
 function fmtTime(t){
