@@ -224,6 +224,8 @@ const SCENES = {
       // A player plays a card, watches it land, and then ends the turn.
       const i = b.hand.findIndex((c) => EK.playableNow(b, c));
       if (i >= 0) EK.playCard(i);
+      // Banked, so the intent line has something to subtract.
+      b.shield = 14; b.mods.def = 3; EK.readIntent();
       setTimeout(() => EK.submitLog(EK.endTurn()), 1500);
     },
   },

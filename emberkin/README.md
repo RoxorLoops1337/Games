@@ -2228,6 +2228,28 @@ Same shape as the rustle one pass earlier, and the pair of them is the lesson:
 "where the voice is" catches things misplaced.** They are different questions
 and the second one is the harder to see.
 
+### The intent line said what the foe swings, not what lands
+
+The fourth inventory: **every number the game shows, and whether it is the
+number you need.** The orb odds replaced inputs with an answer, and that is the
+test to run everywhere else.
+
+`readIntent` takes its number straight from `damageOf`, which knows nothing
+about guard or shield. `hurtMine` subtracts `mods.def` and then the shield
+absorbs the rest. So the line read **"about 28"** while a banked 14 shield and
+3 guard meant **11** was actually going to land — and the entire reason that
+line exists is to answer *can I take this, or do I need to block?*
+
+Both numbers now, and only when you are holding something:
+`about 28 · 11 through`. The raw figure stays because it is what the foe is
+swinging and what a pierce will bypass your shield with; the one that lands is
+beside it, green when the shield eats it whole. Rendered at draw time rather
+than in `readIntent`, because shield changes as you play cards and the answer
+has to change with it.
+
+Photographed both ways — with 14 shield and 3 guard banked, and with nothing,
+where it prints one figure rather than the same figure twice.
+
 ### Two payoff screens, and only one of them landed
 
 The fourth inventory, and the second-order one: **not what has a signal, but
