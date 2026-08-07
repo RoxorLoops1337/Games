@@ -528,6 +528,10 @@ const LAND_R = 52;                            // slam radius, grows with speed
 const FLIP_PTS = 450;
 const AIR_PTS = 300;
 const GORE_MAX = 360;                         // ground decals kept around
+/* How long spilt glühwein stays hot enough to kill. Both the rule in
+   stepSpills and the look in drawSpills read this, so the puddle cannot go on
+   steaming after it has stopped being dangerous. */
+const SPILL_HOT = 3.5;
 const DEBRIS_MAX = 300;
 
 const PERSON_PTS = 100, SANTA_PTS = 1200;
@@ -1518,6 +1522,86 @@ function paintMarketThumb(cv, lv){
   return { stalls: stalls.length, trees: trees.length, lamps: lamps.length };
 }
 
+/* ---------- spilt glühwein ----------
+   A wrecked glühwein stand puts a pot of scalding mulled wine on the snow, and
+   for its first three and a half seconds anything that walks into it goes
+   down. It was drawn as two concentric circles — a flat red disc with a hard
+   edge and an orange one inside it — which at the drive camera is a
+   screen-wide red plate with nothing in it that says liquid, or heat, or where
+   the lethal edge is.
+   It is a puddle now: lobed rather than round, with a dark rim where the wine
+   meets the snow and a wet sheen on it, and it goes dull at the moment it
+   stops killing people, which is the only cue the game ever gave for that. */
+function spillPath(g2, s, k){
+  const R = s.r * (k || 1), sd = s.seed || 0;
+  goreBlob(g2, s.x, s.y, R * 0.9, R * 0.78, sd * 6.283);
+  for (let i = 0; i < 3; i++){
+    const a = sd * 6.283 + i * 2.09;
+    const d = R * 0.5;
+    goreBlob(g2, s.x + Math.cos(a) * d, s.y + Math.sin(a) * d * 0.85,
+      R * (0.5 - i * 0.07), R * (0.42 - i * 0.06), a);
+  }
+}
+
+function drawSpills(){
+  if (!spills.length) return;
+  // where the wine meets the snow, batched: one colour, one path, one fill
+  ctx.fillStyle = 'rgba(52,8,12,.30)';
+  ctx.beginPath();
+  for (const s of spills) spillPath(ctx, s, 1.08);
+  ctx.fill();
+  for (const s of spills){
+    const a = clamp(1 - s.t / s.ttl, 0, 1);
+    const hot = clamp(1 - s.t / SPILL_HOT, 0, 1);
+    // still scalding: bright and red. Cooled: a dull stain that hurts nobody.
+    const r = Math.round(112 + hot * 84), g = Math.round(24 + hot * 30);
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',32,' + ((0.44 + 0.18 * hot) * a).toFixed(3) + ')';
+    ctx.beginPath(); spillPath(ctx, s, 1); ctx.fill();
+    if (hot > 0){
+      ctx.fillStyle = 'rgba(255,142,60,' +
+        (0.34 * a * hot * (0.6 + 0.4 * Math.sin(T * 7 + (s.seed || 0) * 6.283))).toFixed(3) + ')';
+      ctx.beginPath(); spillPath(ctx, s, 0.6); ctx.fill();
+    }
+    // and the sheen that says it is a liquid and not a stain
+    ctx.fillStyle = 'rgba(255,190,150,' + (0.16 * a).toFixed(3) + ')';
+    ctx.beginPath();
+    const sx = s.x - s.r * 0.3, sy = s.y - s.r * 0.28;
+    ctx.moveTo(sx + s.r * 0.2, sy);
+    ctx.arc(sx, sy, s.r * 0.2, 0, 6.283);
+    ctx.fill();
+  }
+}
+
+/* The heat coming off one. In the light pass rather than with the effects,
+   because anything bright drawn before drawLights is buried by the night wash
+   — which is exactly where a volley of fireworks went missing. */
+function drawSpillHeat(){
+  if (!glowSprite) return;
+  for (const s of spills){
+    const hot = clamp(1 - s.t / SPILL_HOT, 0, 1);
+    if (hot <= 0) continue;
+    const sd = s.seed || 0;
+    const gr = s.r * 0.95;
+    ctx.globalAlpha = 0.40 * hot;
+    ctx.drawImage(glowSprite, s.x - gr, s.y - gr, gr * 2, gr * 2);
+    // three wisps climbing off it, on a loop driven by the clock and the
+    // spill's own seed — no state, and nothing drawn from the generators
+    for (let i = 0; i < 3; i++){
+      const ph = (T * 0.4 + sd + i * 0.34) % 1;
+      const a = sd * 6.283 + i * 2.09;
+      const wr = s.r * (0.22 + ph * 0.46);
+      const wx = s.x + Math.cos(a) * s.r * 0.4 + Math.sin(T * 1.3 + i * 2) * s.r * 0.12;
+      const wy = s.y + Math.sin(a) * s.r * 0.4 - ph * s.r * 1.15;
+      /* Strongest halfway up: steam is nothing at the surface, thins out at
+         the top, and a linear fade put all of it where the puddle already is. */
+      ctx.globalAlpha = 0.34 * hot * Math.sin(ph * Math.PI);
+      // pale rather than the theme's lamp colour — it is vapour, not more fire
+      ctx.drawImage(beamSprite || glowSprite, wx - wr, wy - wr, wr * 2, wr * 2);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 /* The garage row on the briefing card. Locked cars show what they cost. */
 /* Paint one car into a card's own canvas, by borrowing drawCar. The picker
    used to be five paragraphs of text about five cars you could not see. */
@@ -2450,7 +2534,10 @@ function wreckProp(o, vx, vy){
   blast(o, big);
   if (crateOf(o)) launchFireworks(o);
   if (o.spill){
-    spills.push({ x: o.x, y: o.y, r: 74, t: 0, ttl: 6.5 });
+    // the seed only decides which way the puddle's lobes fall, so it comes off
+    // the cosmetic generator — a spill that rolled a simulation number would
+    // shift every score after it
+    spills.push({ x: o.x, y: o.y, r: 74, t: 0, ttl: 6.5, seed: vrnd() });
     sndCrunch(0.7);
   }
   /* Everything the player's body registers used to be a constant here: the
@@ -2519,7 +2606,7 @@ function stepSpills(dt){
     s.t += dt;
     s.r = Math.min(120, s.r + dt * 26);
     if (s.t > s.ttl){ spills.splice(i, 1); continue; }
-    if (s.t < 3.5 && G.phase === 'drive'){
+    if (s.t < SPILL_HOT && G.phase === 'drive'){
       for (const p of people){
         if (p.dead) continue;
         const dx = p.x - s.x, dy = p.y - s.y;
@@ -3696,13 +3783,7 @@ function drawGround(){
     ctx.stroke();
   }
 
-  for (const s of spills){
-    const a = clamp(1 - s.t / s.ttl, 0, 1);
-    ctx.fillStyle = 'rgba(150,32,26,' + (0.55 * a) + ')';
-    circle(s.x, s.y, s.r); ctx.fill();
-    ctx.fillStyle = 'rgba(255,140,60,' + (0.28 * a * (0.6 + 0.4 * Math.sin(T * 7))) + ')';
-    circle(s.x, s.y, s.r * 0.62); ctx.fill();
-  }
+  drawSpills();
 
   // blood: pools and spray, laid down before the tyre marks so the car smears
   // through them
@@ -5375,6 +5456,7 @@ function drawLights(){
   drawWireBulbs();
   drawGateBulbs();
   drawPickupGlow();
+  drawSpillHeat();
   drawFireworks();
   ctx.restore();
 }

@@ -81,6 +81,7 @@ const EXPOSE = `__out.api = {
   drawStallSigns, signMark, signAt, SIGN_W, SIGN_H,
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
   paintMarketThumb, mkLane, mkRand, MK_W, MK_H, THEMES,
+  drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
   bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
   getFootI: () => footI,
@@ -4457,6 +4458,106 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills - small.fills === 0,
     'the trees and lamps should batch: ' + small.fills + ' -> ' + big.fills);
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
+});
+
+/* --------------------------------------------- spilt glühwein --- */
+
+/* Records the shapes a path builder asks for, so a puddle can be measured
+   rather than counted. */
+function pathRec(){
+  const shapes = [];
+  return { shapes, moveTo(){}, beginPath(){}, fill(){},
+    ellipse(x, y, rx, ry){ shapes.push({ x, y, rx, ry }); },
+    arc(x, y, r){ shapes.push({ x, y, rx: r, ry: r }); },
+    set fillStyle(v){}, get fillStyle(){ return ''; } };
+}
+
+test('a spilt pot of glühwein is a puddle, not a circle', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const s = { x: 0, y: 0, r: 100, t: 0, ttl: 6.5, seed: 0.37 };
+  const rec = pathRec();
+  api.spillPath(rec, s, 1);
+  const sh = rec.shapes;
+  assert(sh.length === 4, 'a body and three lobes: ' + sh.length);
+  const body = sh[0];
+  assert(body.rx !== body.ry, 'even the body should not be a circle');
+  // the lobes have to break the outline, or the puddle is an ellipse again
+  const reach = sh.slice(1).map(l => Math.hypot(l.x, l.y) + Math.max(l.rx, l.ry));
+  assert(Math.max(...reach) > body.rx * 1.05,
+    'the lobes should push past the body: ' + Math.max(...reach).toFixed(1) +
+    ' vs ' + body.rx);
+  // and it is the seed that decides where they fall, so two spills differ
+  const other = pathRec();
+  api.spillPath(other, Object.assign({}, s, { seed: 0.82 }), 1);
+  assert(other.shapes[1].x !== sh[1].x, 'two spills should not be the same puddle');
+  // a spill with no seed at all still draws something finite
+  const bare = pathRec();
+  api.spillPath(bare, { x: 0, y: 0, r: 80 }, 1);
+  assert(bare.shapes.every(p => Number.isFinite(p.x) && Number.isFinite(p.rx)),
+    'a seedless spill should not produce NaN geometry');
+});
+
+test('a spill steams while it is lethal and goes dull when it is not', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.drawLights();                          // bakes the light sprites
+
+  const steam = (t) => {
+    api.spills.length = 0;
+    api.spills.push({ x: api.cam.x, y: api.cam.y, r: 110, t, ttl: 6.5, seed: 0.4 });
+    api._resetCounts();
+    api.drawSpillHeat();
+    return api._counts.drawImage || 0;
+  };
+  const hot = steam(0.2), warm = steam(api.SPILL_HOT * 0.7), cold = steam(api.SPILL_HOT + 0.5);
+  console.log('    (spill vapour: fresh ' + hot + ' images, warm ' + warm + ', cooled ' + cold + ')');
+  assert(hot > 0, 'a fresh spill should be steaming');
+  assert(cold === 0, 'a cooled spill should not, got ' + cold + ' images');
+
+  /* The look and the rule read the same constant. If they drift, a puddle goes
+     on steaming after it has stopped being dangerous — or worse, stops looking
+     dangerous while it still is. */
+  const src = fs.readFileSync(HTML, 'utf8');
+  const step = src.slice(src.indexOf('function stepSpills'), src.indexOf('function stepSpills') + 700);
+  assert(step.includes('s.t < SPILL_HOT'),
+    'the kill window should read the constant the drawing reads');
+  assert(!/s\.t < 3\.5/.test(step), 'and not a bare number');
+
+  // and the rule itself still holds at the boundary
+  api.people.length = 0; api.spills.length = 0;
+  api.spills.push({ x: 2000, y: 1100, r: 100, t: 0, ttl: 6.5, seed: 0.3 });
+  const inIt = api.addPerson(2020, 1110);
+  api.stepSpills(1 / 60);
+  assert(inIt.dead, 'a fresh spill kills what walks into it');
+  api.spills[0].t = api.SPILL_HOT + 0.1;
+  const later = api.addPerson(2020, 1110);
+  api.stepSpills(1 / 60);
+  assert(!later.dead, 'a cooled spill is a stain and nothing more');
+});
+
+test('the whole spill field is one rim and a few fills', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const cost = (n, t) => {
+    api.spills.length = 0;
+    for (let i = 0; i < n; i++){
+      api.spills.push({ x: api.cam.x + i * 40, y: api.cam.y, r: 100, t, ttl: 6.5, seed: i / n });
+    }
+    api._resetCounts();
+    api.drawSpills();
+    return api._counts.fill || 0;
+  };
+  const one = cost(1, 0.5), six = cost(6, 0.5);
+  console.log('    (spills: 1 puddle ' + one + ' fills, 6 puddles ' + six + ')');
+  assert(cost(0, 0.5) === 0, 'no spills, nothing drawn');
+  // the rim is shared; the wine, its heat and its sheen are per puddle
+  assert(six - one === (one - 1) * 5,
+    'only the per-puddle passes should scale: ' + one + ' -> ' + six);
+  assert(one <= 5, 'a puddle should not cost more than a handful: ' + one);
+  // a cooled puddle drops its heat pass
+  assert(cost(1, api.SPILL_HOT + 1) < one, 'a cooled puddle has no glow to draw');
 });
 
 /* ----------------------------------------------- the results card --- */
