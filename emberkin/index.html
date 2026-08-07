@@ -3604,6 +3604,31 @@ const ITEMS = {
 const ITEM_ART = (k) => `item_${k}`;
 const ITEM_GROUP = { orb: 'Orbs', heal: 'Salves', revive: 'Salves', draw: 'In a fight' };
 const GROUP_ORDER = ['Orbs', 'Salves', 'In a fight'];
+/**
+ * What a bag item would do if you picked it right now, standing in the field.
+ *
+ * Out of a fight an item has to find its own target, and the screen never said
+ * which — you pressed A on a Salve and a toast afterwards told you who had
+ * drunk it. Four of the seven things in a full bag cannot be used out here at
+ * all, and they were drawn exactly like the three that can, with the cursor
+ * parked on one of them.
+ *
+ * Both the row and `screenSelect` read this one function, so the row cannot
+ * promise something the button then refuses. They were two separate readings
+ * of the same rules, and the screen's reading was simply missing.
+ */
+function fieldItemUse(id) {
+  const it = ITEMS[id];
+  if (!it) return { ok: false, why: 'Nothing to use.', target: null };
+  if (it.kind === 'orb') return { ok: false, why: 'Save those for the wild.', target: null };
+  if (it.kind === 'draw') return { ok: false, why: 'Save that for a battle.', target: null };
+  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp < m.max)) || G.party[0];
+  if (!target) return { ok: false, why: 'Nobody to use it on.', target: null };
+  if (it.kind === 'heal' && target.hp >= target.max) return { ok: false, why: 'Nobody needs that.', target: null };
+  if (it.kind === 'revive' && target.hp > 0) return { ok: false, why: 'Nobody is down.', target: null };
+  return { ok: true, why: '', target };
+}
+
 /** Items in shelf order: grouped, and in the order they are listed above. */
 function shelve(keys) {
   const order = Object.keys(ITEMS);
@@ -8773,8 +8798,18 @@ function openScreen(kind, opt = {}) {
   // On a profile, start it on the way out: confirm should always mean "that
   // will do", and renaming is a thing you go and choose, not a wall you have
   // to get past to leave the screen.
+  // Same idea as the forced switch: out of a fight most of a full bag cannot be
+  // used at all, and the shelf opens with the orbs, so the cursor landed on
+  // something whose only possible answer is a refusal. The list comes from
+  // `screenList` rather than being rebuilt here — an index into a second copy
+  // of a list is an index into the wrong list the first time the copies drift.
+  const bagStart = () => {
+    const list = screenList({ kind: 'bag', opt });
+    return Math.max(0, list.findIndex((k) => fieldItemUse(k).ok));
+  };
   const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive))
-    : kind === 'profile' ? 1 : 0;
+    : kind === 'profile' ? 1
+    : kind === 'bag' && !G.battle ? bagStart() : 0;
   G.screen = { kind, i, sel: null, opt, prev: G.mode };
   G.mode = 'screen';
   playCue(kind === 'reward' ? 'level' : 'menu');
@@ -9219,10 +9254,17 @@ function renderScreen() {
         // shelf are this game's own idiom.
         const odds = inFight && it.kind === 'orb' && G.battle.wild && B().foe
           ? Math.round(captureChance(B().foe, it.mul) * 100) : null;
-        return `<div class="item panel ${i === s.i ? 'sel' : ''} ${afford ? '' : 'dead'}" data-i="${i}">
+        // The same row, out of a fight: who it would act on, or nothing and a
+        // dimmed frame if it would only produce a refusal. An orb has odds in a
+        // wild fight and no business at all on a footpath, and the shelf can
+        // say both without either being a special case.
+        const use = !shop && !inFight ? fieldItemUse(k) : null;
+        const dead = !afford || (use && !use.ok);
+        return `<div class="item panel ${i === s.i ? 'sel' : ''} ${dead ? 'dead' : ''}" data-i="${i}">
           <canvas width="20" height="20" data-card="${ITEM_ART(k)}"></canvas>
           <div class="info"><b>${it.name}</b><small>${it.desc}</small></div>
           ${odds !== null ? `<div class="tally" style="color:${odds >= 60 ? 'var(--hp-good)' : odds >= 30 ? 'var(--hp-warn)' : 'var(--hp-bad)'}">${odds}%<small>catch</small></div>` : ''}
+          ${use && use.ok ? `<div class="tally" style="color:${hpColor(use.target.hp / use.target.max)}">${dispName(use.target)}<small>${use.target.hp}/${use.target.max}</small></div>` : ''}
           <div class="tally">${shop ? `${it.cost}<small>sh</small>` : `×${G.bag[k]}`}</div></div>`;
       }).join('') + '</div>';
     }
@@ -9489,12 +9531,10 @@ function screenSelect() {
       return;
     }
     const it = ITEMS[id];
-    if (it.kind === 'orb') { setToast('Save those for the wild.'); return; }
-    if (it.kind === 'draw') { setToast('Save that for a battle.'); return; }
-    const target = G.party.find((m) => it.kind === 'revive' ? m.hp <= 0 : m.hp < m.max) || G.party[0];
-    if (!target) return;
-    if (it.kind === 'heal' && target.hp >= target.max) { setToast('Nobody needs that.'); return; }
-    if (it.kind === 'revive' && target.hp > 0) { setToast('Nobody is down.'); return; }
+    // Same reading the row drew itself from, so the refusal and the row agree.
+    const use = fieldItemUse(id);
+    if (!use.ok) { setToast(use.why); return; }
+    const target = use.target;
     G.bag[id]--; if (G.bag[id] <= 0) delete G.bag[id];
     if (it.kind === 'heal') target.hp = clamp(target.hp + it.amt, 0, target.max);
     if (it.kind === 'revive') target.hp = Math.floor(target.max / 2);
@@ -10668,7 +10708,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
-    ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,
+    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL,

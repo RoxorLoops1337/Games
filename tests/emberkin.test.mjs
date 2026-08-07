@@ -1368,4 +1368,64 @@ section('the stat bar ceiling covers the whole dex');
   ok(spread > .3, `two stats a creature really has read apart (${Math.round(spread * 100)}% of the track)`);
 }
 
+// The bag out of a fight. In a battle an item acts on the kin that is out; in
+// the field it has to find somebody, and the screen never said who — you
+// pressed A on a salve and a toast afterwards told you who had drunk it. Four
+// of the seven things in a full bag cannot be used out there at all, and they
+// were drawn exactly like the three that can.
+section('the bag says what it would do before you do it');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null; g.G.mode = 'world'; g.G.battle = null;
+  g.G.party = ['pyrelynx', 'brookite', 'bramblor'].map((id, i) => g.mkMon(id, 18 + i));
+  Object.keys(g.ITEMS).forEach((k) => { g.G.bag[k] = 3; });
+  const p = g.G.party;
+  p[0].hp = p[0].max;                       // the first one is FINE, so a target of
+  p[1].hp = Math.round(p[1].max * .4);      // party[0] would be visibly wrong
+  p[2].hp = 0;
+
+  const orb = Object.keys(g.ITEMS).find((k) => g.ITEMS[k].kind === 'orb');
+  const heal = Object.keys(g.ITEMS).find((k) => g.ITEMS[k].kind === 'heal');
+  const revive = Object.keys(g.ITEMS).find((k) => g.ITEMS[k].kind === 'revive');
+  ok(orb && heal && revive, 'the bag holds an orb, a salve and a revive to reason about');
+
+  ok(!g.fieldItemUse(orb).ok, 'an orb has nothing to do on a footpath');
+  ok(/wild/i.test(g.fieldItemUse(orb).why), `and says why — "${g.fieldItemUse(orb).why}"`);
+  eq(g.fieldItemUse(heal).target, p[1], 'a salve names the kin that is hurt, not the first in the party');
+  eq(g.fieldItemUse(revive).target, p[2], 'and a revive names the one that is down');
+
+  // The invariant, walked over the whole bag rather than over named items:
+  // nothing the screen dims can be spent, and nothing it names can fail. The
+  // row and the button read one function, so this is what that buys.
+  g.openScreen('bag');
+  const list = g.screenList(g.G.screen);
+  ok(list.length > 3, `the shelf has something on it (${list.length})`);
+  ok(g.fieldItemUse(list[g.G.screen.i]).ok,
+    `the cursor opens on something usable (${list[g.G.screen.i]})`);
+  for (const k of list) {
+    const before = g.G.bag[k];
+    const use = g.fieldItemUse(k);
+    const tgt = use.target, hpBefore = tgt ? tgt.hp : 0;
+    g.G.screen.i = list.indexOf(k);
+    g.screenSelect();
+    if (use.ok) {
+      eq(g.G.bag[k] || 0, before - 1, `${k} is spent when the row says it would work`);
+      ok(tgt.hp > hpBefore, `and the kin the row named is the one that got it (${g.dispName(tgt)})`);
+      g.G.bag[k] = before; tgt.hp = hpBefore;      // put it back for the next item
+    } else {
+      eq(g.G.bag[k], before, `${k} is not spent when the row is dimmed`);
+    }
+  }
+
+  // In a fight the shelf is a different question and the cursor stays put:
+  // orbs are the point there, and they lead the list.
+  g.G.mode = 'world'; g.G.screen = null;
+  g.startBattle({ foe: g.mkMon('kindlark', 12), wild: true });
+  g.openScreen('bag');
+  eq(g.G.screen.i, 0, 'in a fight it opens where it always did');
+}
+
 done('emberkin');
