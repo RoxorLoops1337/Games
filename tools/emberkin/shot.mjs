@@ -255,6 +255,38 @@ const SCENES = {
       EK.openScreen('box');
     },
   },
+  // The shop's buying screen and the dex — two screens never photographed. The
+  // shop is where money goes between fights; the dex is the collection payoff
+  // of a creature collector, and the one screen whose whole job is to look good
+  // full, so it is shot with the roster seen rather than empty.
+  shopping: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.G.money = 900;   // enough to afford some of it and not all of it
+      EK.openScreen('shop');
+    },
+  },
+  dex: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      // Most of the roster caught, a few only seen, the rest still blank —
+      // which is what a dex looks like in the middle of a run and the only
+      // state in which its three tiers of entry can be judged against each
+      // other at all.
+      EK.DEX_ORDER.forEach((id, i) => {
+        if (i % 4 === 3) return;                 // leave some unfound
+        EK.seeMon(id);
+        if (i % 3 !== 2) EK.catchMon(id);        // and some only seen
+      });
+      EK.openScreen('dex');
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {
