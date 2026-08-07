@@ -552,7 +552,21 @@
   body.tight .hud{ padding:3px 5px 4px; width:47%; }
   body.tight .hud .tp{ display:none; }
   body.tight .hud .bar{ height:6px; margin-top:3px; }
-  body.tight #hudMine{ top:40%; }
+  /* Clear of the action row, which is pinned at 54%. At 40% the panel's own
+     height — taller in proportion on a small stage, because the text clamps at
+     11px — ran its HP figure straight under the End turn button. */
+  body.tight #hudMine{ top:32%; }
+  /* The hand cannot hold four rules-text blocks at this size: at 30% of a
+     310px stage the cards are 86px tall and the text clipped into its own
+     rarity pip on every one of them. So a card you are not aiming at shows its
+     art, its name and its cost — which is what you choose between — and the
+     card you ARE aiming at keeps its text, with the full wording also sitting
+     in the description bar directly above the hand. Nothing is lost; it is
+     read one place instead of five. */
+  body.tight #hand{ height:28%; }
+  body.tight #hand .cardel:not(.sel) .ctext{ display:none; }
+  body.tight #hand .cardel:not(.sel) .cname{ margin-top:.35em; }
+  body.tight #hand .cardel .cpip{ font-size:.4em; }
   .tp{ font-size:.58em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px; color:#120d18; font-weight:700; }
 
   /* ---------------- title ---------------- */
@@ -8517,6 +8531,27 @@ function renderScreen() {
   paintCardArt(el);
 }
 
+/**
+ * How many columns the screen ACTUALLY has, counted off the rendered grid.
+ *
+ * These grids are `repeat(auto-fill, minmax(N, 1fr))`, so the column count is a
+ * function of the stage width — the dex is four across on a x2 stage and seven
+ * on a wide one. Up and down were hard-coded to five, which is right at exactly
+ * one window and wrong at every other: the cursor jumped a row and a bit, in a
+ * grid the player can see. Photographing the dex for the first time is what
+ * showed it, and no test could have — the affordance was wired up correctly, it
+ * was just wired to the wrong number.
+ */
+function gridCols(s) {
+  if (HEADLESS) return s.kind === 'dex' ? 5 : 2;
+  const cells = els.screen.querySelectorAll('.dexcell, .cards > .card, .cardrow > .cardel');
+  if (cells.length < 2) return 1;
+  const top = cells[0].offsetTop;
+  let n = 0;
+  for (const c of cells) { if (c.offsetTop !== top) break; n++; }
+  return Math.max(1, n);
+}
+
 function screenInput() {
   const s = G.screen;
   if (!s) return;
@@ -8525,7 +8560,7 @@ function screenInput() {
   const len = (s.list || []).length;
   if (s.kind === 'chests' && s.got && (justPressed('left') || justPressed('right') || justPressed('up') || justPressed('down'))) s.got = null;
   let moved = false;
-  const cols = s.kind === 'dex' ? 5 : 2;
+  const cols = gridCols(s);
   if (justPressed('left')) { s.i = (s.i + len - 1) % Math.max(1, len); moved = true; }
   if (justPressed('right')) { s.i = (s.i + 1) % Math.max(1, len); moved = true; }
   if (justPressed('up')) { s.i = clamp(s.i - cols, 0, Math.max(0, len - 1)); moved = true; }
@@ -9678,7 +9713,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     ITEM_ART, ITEM_GROUP, shelve, statBlock, statusChip, typeChips,

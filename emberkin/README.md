@@ -1862,6 +1862,28 @@ should look it. A kin's own move wears gold and its element instead of a
 rarity: it belongs to the creature, not to the deck, and should read that way
 from across the table.
 
+### The fight at a phone's size
+
+Everything about the fight had only ever been judged at 760x900. Swept at
+390x760 it was cramped in two ways, both of them the 11px text clamp making
+panels proportionally taller on a small stage — the same root cause as the HUD
+fix two passes ago, in two more places.
+
+`#hudMine` sat at 40% and its own height carried the HP figure straight under
+the End turn button, which is pinned at 54%. It sits at 32% under `body.tight`.
+
+The hand could not hold four rules-text blocks at all: at 30% of a 310px stage
+the cards are 86 pixels tall and the text clipped into its own rarity pip on
+every one of them. So under `body.tight` a card you are **not** aiming at shows
+its art, its name and its cost — which is what you choose between — and the card
+you **are** aiming at keeps its text, with the full wording also sitting in the
+description bar directly above the hand. Nothing is lost; it is read in one
+place instead of five.
+
+Growing the hand to fit was the first attempt and it pushed the cards' tops
+under that description bar. With the rules text gone the cards need *less*
+height, not more — 28%.
+
 ### The hand is a fan
 
 Photographing a real turn — the first time a whole one had been looked at
@@ -2159,6 +2181,29 @@ affordances are *wired up*; it cannot check that they can be seen.
 shadow only appears at an edge you have actually scrolled away from. No JS, no
 extra element, and it disappears by itself on a screen that fits — verified by
 shooting the reward screen, which is short, and finding no cue on it.
+
+### The dex, and a cursor that agreed with the grid
+
+The dex was never photographed until now, and it reads exactly as intended:
+caught is the creature in a gold frame, seen is a silhouette lifted off the
+panel, unfound is a hatched slot with its number still in it. Three tiers,
+distinguishable at a glance. No change to any of it.
+
+What the picture did show is that the cursor and the grid disagreed. These grids
+are `repeat(auto-fill, minmax(N, 1fr))`, so the column count is a function of the
+stage width — the dex is **three** across on a phone, **four** on a x2 stage and
+**nine** on a wide one. Up and down were hard-coded to **five**, which is right
+at exactly one window and wrong at every other: the cursor jumped a row and a
+bit, in a grid the player can see.
+
+`gridCols()` counts the first rendered row instead. No test could have caught
+this — the affordance was wired up correctly, it was just wired to the wrong
+number — and it was confirmed by measuring the rendered grid at three sizes
+against what the function returns (3/3, 4/4, 9/9).
+
+The shop was photographed at the same time and needs nothing: grouped by kind,
+priced, and everything you cannot afford is dimmed, so what your shards will
+buy reads at a glance.
 
 ### A card after every win
 
