@@ -4161,8 +4161,8 @@ function bgKeep(c){
    Things the camera passes in FRONT of.  A brawler is a flat picture until
    something crosses between you and the fight, so every street gets a layer
    at more-than-one parallax, kept low enough not to hide the floor. */
-function drawForeground(){
-  const bg = stage().bg;
+function drawForeground(bgOver){
+  const bg = bgOver || stage().bg;
   const c = cam.x * 1.18;
   switch (bg){
     case 'street': {
@@ -4281,9 +4281,11 @@ function drawRain(power){
   }
 }
 
-function drawAmbient(){
-  const st = stage(), bg = st.bg;
-  if (st.rain) drawRain(st.rain);
+function drawAmbient(bgOver, rainOver){
+  const st = stage();
+  const bg = bgOver || st.bg;
+  const rain = rainOver == null ? (bgOver ? 0 : st.rain) : rainOver;
+  if (rain) drawRain(rain);
   if (bg === 'foundry'){
     for (let i = 0; i < 9; i++){                     // smoke off the channel, lit from under
       const life = (T * 0.12 + hash(i * 31)) % 1;
@@ -4409,7 +4411,7 @@ const CUT_ACTORS = {
 };
 
 const SCENES = {
-  intro: { bg: 'street', cam: 60, music: 0, beats: [
+  intro: { bg: 'street', cam: 60, music: 0, rain: 1, beats: [
     { d: 3.0, cap: ['NOBODY FLOSSES LIKE JOSKE.', 'NOBODY EXCEPT SMOSKE, AND HE IS HALF A STEP BACK.'],
       act: { smoke: { x: 130, y: 190, anim: 'walk', face: 1 },
              joske: { x: 168, y: 178, anim: 'walk', face: -1 },
@@ -4444,7 +4446,7 @@ const SCENES = {
              joske: { x: 182, y: 176, anim: 'idle', face: 1 } } },
   ] },
 
-  after1: { bg: 'street', cam: 900, music: 0, beats: [
+  after1: { bg: 'street', cam: 900, music: 0, rain: 1, beats: [
     { d: 2.8, cap: ['THE STREET IS OUT-FLOSSED.', 'NOT ONE OF THEM LEFT STANDING ON THE BEAT.'],
       act: { joske: { x: 960, y: 184, anim: 'idle', face: 1 },
              g1: { x: 992, y: 190, anim: 'lie', face: -1 } } },
@@ -4465,7 +4467,7 @@ const SCENES = {
       prop: { van: { x: 880, y: 166 } } },
   ] },
 
-  after3: { bg: 'docks', cam: 800, music: 2, beats: [
+  after3: { bg: 'docks', cam: 800, music: 2, rain: 0.75, beats: [
     { d: 3.0, cap: ['THE CITY GOES DOWN BLOCK BY BLOCK.'],
       act: { mokske: { x: 900, y: 172, anim: 'held', face: -1 },
              g2: { x: 918, y: 172, anim: 'hold', face: -1 },
@@ -4497,7 +4499,7 @@ const SCENES = {
              g2: { x: 1500, y: 188, anim: 'lie', face: -1 } } },
   ] },
 
-  after6: { bg: 'docks', cam: 800, music: 2, beats: [
+  after6: { bg: 'docks', cam: 800, music: 2, rain: 0.9, beats: [
     { d: 3.0, cap: ['EVERY CAPITAL. ONE NIGHT EACH.'],
       act: { joske: { x: 880, y: 180, anim: 'idle', face: 1 },
              smoke: { x: 846, y: 190, anim: 'idle', face: 1 },
@@ -4537,6 +4539,7 @@ function mkCutActor(key, decl){
   f.z = decl.z || 0;
   f.weapon = decl.weapon || null;
   f.fx = decl.x; f.fy = decl.y; f.fz = f.z;
+  f.baseSc = f.sc;                            // depth scaling works off this
   return f;
 }
 
@@ -4588,8 +4591,23 @@ function cutTick(dt){
     a.x = lerp(a.fx, a.tx, ease);
     a.y = lerp(a.fy, a.ty, ease);
     a.z = lerp(a.fz, a.tz, ease);
-    if (a.anim === 'walk' || a.anim === 'run') a.frame = Math.floor(cut.beatT * 8) % 4;
+    /* This was `% 4` at 8fps, which was right when every cycle was four
+       frames.  Against the eight-frame walk it played the first half of the
+       cycle at half speed — a man shuffling on the spot in a scene that says
+       he is walking. */
+    if (a.anim === 'walk' || a.anim === 'run'){
+      const fps = a.anim === 'run' ? RUN_FPS : WALK_FPS;
+      a.frame = Math.floor(cut.beatT * fps) % cycleLen(a.anim, 'walk');
+    } else if (a.anim === 'idle'){
+      a.frame = Math.floor(cut.beatT * 7) % cycleLen('idle', 'idle');
+    }
+    // further up the street is further away
+    const depth = clamp((a.y - FLOOR_TOP) / Math.max(1, FLOOR_BOT - FLOOR_TOP), 0, 1);
+    a.sc = (a.baseSc || a.sc) * (0.9 + depth * 0.2);
   }
+  // and the shot breathes rather than sitting still for three seconds
+  const pan = beat.pan == null ? ((cut.bi % 2) ? -8 : 8) : beat.pan;
+  cam.x = (sc.cam || 0) + lerp(-pan * 0.5, pan * 0.5, ease);
   if (cut.prop) cut.prop.x = lerp(cut.prop.from, cut.prop.to, ease);
   if (cut.beatT >= beat.d){
     cut.bi++; cut.beatT = 0;
@@ -4630,13 +4648,33 @@ function drawCut(){
   }
   list.sort((a, b) => a.y - b.y);
   for (const e of list) e.d();
+  /* The story beats used to be the one part of the game with no weather in
+     them: no rain on a street that rains, no grit in the yard, no vignette.
+     They get the stage's air now, matched to the scene's own backdrop rather
+     than to whatever stage happens to be loaded. */
+  drawAmbient(sc.bg, sc.rain);
+  drawForeground(sc.bg);
+  drawVignette();
 
-  // letterbox and caption
+  // letterbox: bars with a lit lip and a shadow falling off them
   px(0, 0, VW, 22, '#000');
   px(0, VH - 34, VW, 34, '#000');
-  px(0, 22, VW, 1, '#2a2233'); px(0, VH - 35, VW, 1, '#2a2233');
+  px(0, 22, VW, 1, '#4a3d52'); px(0, VH - 35, VW, 1, '#4a3d52');
+  for (let i = 0; i < 6; i++){
+    const a = (0.26 - i * 0.042).toFixed(3);
+    px(0, 23 + i, VW, 1, 'rgba(4,3,7,' + a + ')');
+    px(0, VH - 36 - i, VW, 1, 'rgba(4,3,7,' + a + ')');
+  }
   const beat = sc.beats[cut.bi];
   const caps = (beat && beat.cap) || [];
+  if (caps.length){
+    const w = Math.max(...caps.map(c => textW(c, 1))) + 14;
+    const x0 = Math.round((VW - w) / 2), h = 6 + caps.length * 11;
+    px(x0, VH - 33, w, h, 'rgba(14,10,20,0.9)');
+    px(x0, VH - 33, w, 1, '#3d3348');
+    px(x0, VH - 34 + h, w, 1, '#241d2e');
+    px(x0 - 2, VH - 31, 2, h - 4, '#ffd23d');          // a bar down the speaking side
+  }
   for (let i = 0; i < caps.length; i++)
     textC(caps[i], VW / 2, VH - 29 + i * 11, i === 0 ? '#ffe9b8' : '#c08a6e', 1, '#100c18');
   if (Math.floor(T * 2) % 2 === 0) text('PUNCH TO SKIP', VW - 84, 8, '#6a5a66', 1);
