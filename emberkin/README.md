@@ -2228,6 +2228,33 @@ Same shape as the rustle one pass earlier, and the pair of them is the lesson:
 "where the voice is" catches things misplaced.** They are different questions
 and the second one is the harder to see.
 
+### Every decision, and whether its information is on screen
+
+The third inventory, after the beats and the sounds. Listed every choice the
+game asks you to make and checked whether what it depends on is visible when you
+make it:
+
+    which starter        matchup chips, and the count in the sentence   ok
+    which card to play   cost, text, energy, the foe's intent           ok
+    which card to take   "you own N" per card                           ok
+    which card comes out "played N · N kills" — the card's own history  ok
+    which chest          an odds bar per chest                          ok
+    which salve          the kin's HP, added last pass                  ok
+    **which orb**        **nothing at all**                             fixed
+
+The catch was the gap, and it is the exact mirror of the salve one. `captureChance`
+reads the **foe's** HP fraction and its status; last pass put **your** kin's HP
+in the heading because that is what a salve needs, and the screen covers the
+foe's bar just as thoroughly.
+
+So the orb rows carry the answer rather than the inputs — `50% catch`, `85%`,
+`100%`, coloured by likelihood. Odds on a shelf are already this game's idiom;
+the chest shop has done it from the start. Only in a wild fight: you cannot
+catch a trainer's kin, and offering a number there would be a lie.
+
+Photographed in three states — a wild fight with the foe at 22%, a trainer
+fight, and the shop.
+
 ### The bag in a fight says how hurt you are
 
 `#screen` is `inset:0` with a blur over it, so opening the bag mid-fight covers
