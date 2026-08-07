@@ -171,6 +171,24 @@ const SCENES = {
       }
     },
   },
+  // Something coming out of the tall grass: the step in, the trigger, the wipe,
+  // the fight. Driven through the real step handler with the encounter rate
+  // forced, so the beat runs exactly as it does in play. Film this one.
+  grass: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.enterMap('route_one', 13, 11, 'down');
+      EK.G.map.enc.rate = 1;                  // the next step into grass lands one
+      // A tick later, not in the same one. Arriving in the same evaluate as
+      // enterMap fires the beat before the camera has followed, and the whole
+      // rustle then plays at the bottom edge of the frame, half clipped — which
+      // read as "it is not drawing at all" for three films.
+      setTimeout(() => EK.onArrive(), 140);
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {
@@ -319,12 +337,18 @@ for (const name of list) {
         return cv.toDataURL();
       }));
     }
-    const strip = await browser.newPage({ viewport: { width: 788, height: 220 * Math.ceil(shots.length / 3) } });
+    // 384-wide tiles, not 256. At 1x the canvas the frames are legible as
+    // composition and useless as detail: a rustle in the grass and a player
+    // standing in it were both invisible in a strip, and the beat looked like
+    // it was not drawing at all. It was. The picture was too small to show it.
+    const COL = 384, ROWS = Math.ceil(shots.length / 3);
+    const strip = await browser.newPage({
+      viewport: { width: COL * 3 + 16, height: Math.round(COL * 208 / 256 + 8) * ROWS } });
     await strip.setContent(`<body style="margin:0;background:#0a070e;display:grid;`
-      + `grid-template-columns:repeat(3,256px);gap:4px">`
-      + shots.map((u, i) => `<div style="position:relative"><img src="${u}" width="256">`
+      + `grid-template-columns:repeat(3,${COL}px);gap:4px;image-rendering:pixelated">`
+      + shots.map((u, i) => `<div style="position:relative"><img src="${u}" width="${COL}">`
         + `<span style="position:absolute;left:4px;top:2px;color:#ffc94d;`
-        + `font:11px monospace">${i}</span></div>`).join('') + '</body>');
+        + `font:13px monospace;text-shadow:0 1px 2px #000">${i}</span></div>`).join('') + '</body>');
     await strip.screenshot({ path: file });
     await strip.close();
   } else {
