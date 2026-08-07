@@ -263,13 +263,34 @@ const atShrine = seeRowan();
 
 talkAndFight('crown_hollow', 't_wick3', 38);
 eq(G.flags.t_wick3, 1, 'the last rival battle is won');
-ok(/Rowan/.test((wick3.after || []).join(' ')), 'and Wick sends you down to Rowan');
+
+// What he says afterwards, read by talking to him rather than off the field —
+// it is a function now, and a test that reached for `.after.join` would only
+// have proved it could still reach a field.
+const askWick = () => {
+  EK.enterMap('crown_hollow', wick3.x, wick3.y + 1, 'up');
+  G.mode = 'world'; G.dialogue = null;
+  EK.talkTo(wick3);
+  const said = G.dialogue.lines.join(' ');
+  clear();
+  return said;
+};
+const sentDown = askWick();
+ok(/Rowan/.test(sentDown), `and Wick sends you down to Rowan — "${sentDown}"`);
 
 const ending = seeRowan();
 ok(ending !== atShrine, 'and what she says is not the speech you already heard at the shrine');
 ok(/ceremony/i.test(ending), 'she keeps her word that there is none');
 ok(new RegExp(EK.spell(EK.AIM_ORDER.length)).test(ending),
   `and counts the trainers you actually beat (${EK.spell(EK.AIM_ORDER.length)})`);
+
+// And the errand he gave you expires when you run it. Walking back up the
+// mountain used to get "Go and see Rowan" for ever, including on the trip
+// straight back from having gone and seen her.
+eq(G.flags.heardEnding, 1, 'hearing her out is recorded');
+const afterwards = askWick();
+ok(afterwards !== sentDown, `Wick stops sending you somewhere you have been — "${afterwards}"`);
+ok(!/Go and see Rowan/.test(afterwards), 'and does not repeat the errand');
 
 section('the deck came along for the ride');
 ok(G.cards.length >= EK.STARTER_DECK.length, 'you still have your starting cards');
