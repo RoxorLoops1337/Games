@@ -4586,13 +4586,35 @@ function drawPerson(p){
     ctx.moveTo(p.r * 0.2, -p.r * 0.4); ctx.lineTo(p.r * 0.9, -p.r * 1.25);
     ctx.moveTo(p.r * 0.2, p.r * 0.4); ctx.lineTo(p.r * 1.05, p.r * 1.15);
     ctx.stroke();
-    // torso, face down
+    // torso
+    const deadSanta = p.kind === 'santa';
     ctx.fillStyle = coat;
     ctx.beginPath(); ctx.ellipse(0, 0, p.r * 0.95, p.r * 0.72, 0, 0, 6.283); ctx.fill();
-    ctx.strokeStyle = 'rgba(18,28,48,.45)'; ctx.lineWidth = 2; ctx.stroke();
+    /* A shopper's bobble hat survives being run over, because the corpse draws
+       whatever p.hat says. Santa's hat is decided by his kind rather than that
+       flag, so the most valuable thing in the market lost its trim, its belt,
+       its beard and its hat the instant you hit it and lay there as an
+       anonymous red shopper. He keeps the lot now. */
+    ctx.strokeStyle = deadSanta ? 'rgba(246,242,234,.9)' : 'rgba(18,28,48,.45)';
+    ctx.lineWidth = deadSanta ? Math.max(2, p.r * 0.14) : 2;
+    ctx.stroke();
+    if (deadSanta){
+      ctx.fillStyle = '#2a2028';
+      ctx.fillRect(-p.r * 0.22, -p.r * 0.62, p.r * 0.16, p.r * 1.24);
+      ctx.fillStyle = '#e8b53a';
+      ctx.fillRect(-p.r * 0.26, -p.r * 0.13, p.r * 0.24, p.r * 0.26);
+    }
     ctx.fillStyle = skin;
     circle(p.r * 1.05, 0, p.r * 0.46); ctx.fill();
-    if (p.hat){
+    if (deadSanta){
+      ctx.fillStyle = '#f3efe6';                   // the beard, under his chin
+      ctx.beginPath();
+      ctx.ellipse(p.r * 0.66, 0, p.r * 0.3, p.r * 0.34, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#d8382c';                   // the hat, knocked forward
+      circle(p.r * 1.46, p.r * 0.1, p.r * 0.36); ctx.fill();
+      ctx.fillStyle = '#f6f2ea';
+      circle(p.r * 1.78, p.r * 0.16, p.r * 0.15); ctx.fill();
+    } else if (p.hat){
       ctx.fillStyle = HATS[p.hatCol % HATS.length];
       circle(p.r * 1.3, p.r * 0.18, p.r * 0.34); ctx.fill();
     }

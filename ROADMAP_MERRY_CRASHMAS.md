@@ -219,6 +219,14 @@ edit this block to name the next one.
       the counter; a wrecked barrel is five staves sprung out of a hoop — one
       rotated ellipse each, so the whole thing is a single path — and a crate
       that has gone off leaves its spent tubes, which a plain barrel does not.
+- [x] A flattened Santa is still Santa. A shopper's bobble hat survives being
+      run over because the corpse draws whatever `p.hat` says; Santa's hat is
+      decided by his *kind*, so the market's jackpot lost its fur trim, belt,
+      beard and hat the instant you hit it and lay there as an anonymous red
+      shopper. The corpse keeps the lot now — trim on the torso outline, belt
+      and buckle across it, beard under the chin, hat and bobble knocked
+      forward past the head — with the X struck over the hat rather than under
+      it.
 
 ## Next
 
