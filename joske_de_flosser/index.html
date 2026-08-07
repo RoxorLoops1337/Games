@@ -764,11 +764,21 @@ const A = {                                   // animation frame tables
     P({ hipY: 20, hipX: 0, lean: 0, aF: [3, 25, 4, 17], aB: [2, 24, 3, 16],
         lF: [3, 11, 4, 0], lB: [-3, 11, -4, 0] }),
   ],
+  /* Eight frames, and the two halves are not copies of each other: contact,
+     down, passing, up, then the same on the other leg.  The hip drops on the
+     down frame and rides highest through the passing and up frames, which is
+     the bob that makes a walk look like weight moving rather than legs
+     scissoring.  Both arms swing to the same side together while the hips go
+     the other way — that is the floss, and it is what the walk is for. */
   walk: [
-    P({ lF: [6, 11, 10, 0], lB: [-5, 9, -9, 0], aF: [4, 26, 3, 18], aB: [-6, 26, -4, 18] }),
-    P({ hipY: 20, lF: [2, 11, 2, 0], lB: [-2, 11, -2, 0], aF: [5, 26, 7, 19], aB: [-5, 26, -7, 19] }),
-    P({ lF: [-5, 9, -9, 0], lB: [6, 11, 10, 0], aF: [6, 26, 8, 20], aB: [-4, 26, -3, 18] }),
-    P({ hipY: 20, lF: [2, 11, 2, 0], lB: [-2, 11, -2, 0], aF: [5, 26, 7, 19], aB: [-5, 26, -7, 19] }),
+    P({ hipY: 19, hipX: 1, lean: -1, lF: [6, 11, 10, 0], lB: [-5, 9, -9, 0], aF: [-4, 25, -8, 17], aB: [-6, 24, -10, 16] }),
+    P({ hipY: 18, hipX: 1, lean: -1, lF: [4, 10, 7, 0], lB: [-4, 11, -6, 1], aF: [-2, 25, -4, 17], aB: [-4, 24, -6, 16] }),
+    P({ hipY: 20, hipX: 0, lean: 0, lF: [1, 11, 1, 0], lB: [-1, 12, -1, 2], aF: [2, 26, 2, 18], aB: [0, 25, 0, 17] }),
+    P({ hipY: 21, hipX: -1, lean: 1, lF: [-3, 10, -5, 0], lB: [4, 12, 7, 2], aF: [6, 26, 9, 19], aB: [4, 25, 7, 18] }),
+    P({ hipY: 19, hipX: -1, lean: 1, lF: [-5, 9, -9, 0], lB: [6, 11, 10, 0], aF: [7, 26, 11, 19], aB: [5, 25, 9, 18] }),
+    P({ hipY: 18, hipX: -1, lean: 1, lF: [-4, 11, -6, 1], lB: [4, 10, 7, 0], aF: [4, 26, 6, 18], aB: [2, 25, 4, 17] }),
+    P({ hipY: 20, hipX: 0, lean: 0, lF: [-1, 12, -1, 2], lB: [1, 11, 1, 0], aF: [0, 25, -1, 17], aB: [-2, 24, -3, 16] }),
+    P({ hipY: 21, hipX: 1, lean: -1, lF: [4, 12, 7, 2], lB: [-3, 10, -5, 0], aF: [-4, 25, -7, 17], aB: [-6, 24, -9, 16] }),
   ],
   run: [
     P({ hipY: 18, lean: 3, lF: [8, 12, 13, 2], lB: [-7, 9, -11, 0], aF: [7, 25, 11, 22], aB: [-8, 25, -10, 16] }),
@@ -776,8 +786,18 @@ const A = {                                   // animation frame tables
     P({ hipY: 18, lean: 3, lF: [-6, 9, -10, 0], lB: [8, 12, 13, 2], aF: [-8, 25, -10, 16], aB: [7, 25, 11, 22] }),
     P({ hipY: 17, lean: 3, lF: [3, 13, 6, 4], lB: [-4, 10, -6, 0], aF: [6, 26, 6, 20], aB: [-6, 26, -6, 20] }),
   ],
-  jump: [P({ hipY: 19, lean: 1, lF: [7, 13, 9, 6], lB: [-6, 12, -8, 5], aF: [7, 28, 10, 30], aB: [-7, 28, -10, 30] })],
-  fall: [P({ hipY: 19, lean: -1, lF: [8, 12, 12, 4], lB: [-7, 11, -9, 2], aF: [8, 27, 12, 26], aB: [-8, 27, -11, 26] })],
+  /* A jump held on one frame from the floor to the apex, which is the
+     stiffest thing a fighter can do.  Crouch, drive, tuck — and on the way
+     down, legs reaching for the ground before he touches it. */
+  jump: [
+    P({ hipY: 17, lean: 2, lF: [5, 10, 6, 1], lB: [-5, 10, -7, 1], aF: [4, 25, 6, 20], aB: [-4, 25, -6, 20] }),
+    P({ hipY: 19, lean: 1, lF: [7, 13, 9, 6], lB: [-6, 12, -8, 5], aF: [7, 28, 10, 30], aB: [-7, 28, -10, 30] }),
+    P({ hipY: 20, lean: 0, lF: [5, 15, 8, 13], lB: [-5, 14, -7, 12], aF: [6, 29, 8, 33], aB: [-6, 29, -8, 33] }),
+  ],
+  fall: [
+    P({ hipY: 19, lean: -1, lF: [8, 12, 12, 4], lB: [-7, 11, -9, 2], aF: [8, 27, 12, 26], aB: [-8, 27, -11, 26] }),
+    P({ hipY: 19, lean: -2, lF: [7, 11, 10, 1], lB: [-7, 10, -9, 0], aF: [8, 26, 13, 22], aB: [-8, 26, -12, 22] }),
+  ],
   punchA: [
     P({ hipY: 19, lean: -2, aF: [3, 26, 0, 24], aB: [-6, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 2, aF: [9, 26, 17, 26], aB: [-6, 25, -2, 21], lF: [5, 10, 8, 0], lB: [-5, 10, -7, 0] }),
@@ -827,7 +847,14 @@ const A = {                                   // animation frame tables
     P({ hipY: 19, lean: 2, aF: [3, 27, -3, 28], aB: [-5, 25, -3, 22], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: -3, aF: [-8, 27, -15, 26], aB: [-4, 25, -1, 21], lF: [2, 10, 3, 0], lB: [-6, 10, -10, 0] }),
   ],
-  hurt: [P({ hipY: 18, lean: -4, headX: -3, aF: [2, 27, -2, 30], aB: [-8, 26, -12, 28], lF: [2, 10, 2, 0], lB: [-6, 10, -9, 0] })],
+  /* Taking one used to be a single frame held for the whole stun.  Snap,
+     hold, settle: the snap is only four frames long but it is the difference
+     between a man being hit and a man leaning. */
+  hurt: [
+    P({ hipY: 18, lean: -6, headX: -4, aF: [1, 27, -4, 31], aB: [-9, 26, -14, 29], lF: [3, 10, 3, 0], lB: [-6, 10, -10, 0] }),
+    P({ hipY: 18, lean: -4, headX: -3, aF: [2, 27, -2, 30], aB: [-8, 26, -12, 28], lF: [2, 10, 2, 0], lB: [-6, 10, -9, 0] }),
+    P({ hipY: 19, lean: -2, headX: -1, aF: [3, 26, 0, 27], aB: [-7, 26, -10, 26], lF: [2, 10, 2, 0], lB: [-5, 10, -7, 0] }),
+  ],
   air: [P({ hipY: 17, lean: -6, headX: -4, aF: [-2, 28, -8, 32], aB: [-9, 27, -15, 30], lF: [8, 12, 14, 8], lB: [-2, 11, -3, 4] })],
   lie: [P({ hipY: 4, sh: 0, lean: -13, headX: -7, headY: -1,
     aF: [-13, 1, -7, 0], aB: [-9, 7, -3, 9], lF: [8, 5, 15, 2], lB: [6, 2, 13, 1] })],
@@ -859,8 +886,17 @@ const A = {                                   // animation frame tables
   charge: [
     P({ hipY: 19, lean: 4, aF: [8, 28, 14, 30], aB: [-4, 27, -6, 30], lF: [7, 11, 12, 2], lB: [-6, 10, -10, 0] }),
     P({ hipY: 20, lean: 5, aF: [10, 29, 17, 31], aB: [-2, 28, -3, 31], lF: [4, 12, 6, 4], lB: [-7, 10, -12, 0] }),
+    P({ hipY: 19, lean: 7, aF: [12, 29, 19, 29], aB: [0, 28, 2, 30], lF: [8, 11, 13, 1], lB: [-8, 10, -13, 0] }),
+    P({ hipY: 19, lean: 3, aF: [8, 28, 12, 27], aB: [-4, 27, -6, 28], lF: [5, 11, 8, 0], lB: [-6, 10, -9, 0] }),
   ],
-  rise: [P({ hipY: 22, lean: 2, headY: 1, aF: [8, 32, 12, 39], aB: [-6, 29, -9, 34], lF: [4, 12, 6, 4], lB: [-4, 11, -7, 1] })],
+  /* The uppercut was one frame for half a second.  It is a whole move:
+     drop, drive off the back leg, full extension, then the arm comes down. */
+  rise: [
+    P({ hipY: 16, lean: -2, aF: [3, 22, 1, 17], aB: [-5, 23, -7, 18], lF: [3, 9, 4, 0], lB: [-4, 9, -6, 0] }),
+    P({ hipY: 20, lean: 0, aF: [6, 27, 9, 29], aB: [-6, 26, -8, 24], lF: [4, 11, 5, 1], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 22, lean: 2, headY: 1, aF: [8, 32, 12, 39], aB: [-6, 29, -9, 34], lF: [4, 12, 6, 4], lB: [-4, 11, -7, 1] }),
+    P({ hipY: 20, lean: 1, aF: [7, 29, 10, 33], aB: [-6, 27, -9, 28], lF: [4, 11, 6, 2], lB: [-4, 10, -7, 0] }),
+  ],
   block: [P({ hipY: 18, lean: -2, aF: [4, 28, 2, 33], aB: [-3, 28, -1, 32], lF: [3, 10, 4, 0], lB: [-5, 10, -8, 0] })],
   aim: [P({ hipY: 19, lean: 1, aF: [8, 28, 16, 28], aB: [2, 27, 8, 27], lF: [5, 10, 7, 0], lB: [-5, 10, -8, 0] })],
 };
@@ -1274,7 +1310,7 @@ const ATK = {
   pipe:     { anim: 'swing',  dur: 0.38, hit: [0.13, 0.23], dmg: 14, reach: 31, kb: 160, lift: 100, down: true,  sfx: 'heavy', swoosh: 'weapon', arc: [140, -20], seq: [[0, 0.08], [1, 0.14], [2, 0.2], [3, 0.28], [4, 0.38]] },
   knife:    { anim: 'stab',   dur: 0.26, hit: [0.08, 0.16], dmg: 14, reach: 24, kb: 45,  lift: 0,   down: false, sfx: 'blade', thrust: 7, seq: [[0, 0.08], [1, 0.26]] },
   /* direction moves — always in the box */
-  uppercut: { anim: 'rise',    dur: 0.52, hit: [0.10, 0.24], dmg: 15, reach: 23, kb: 55,  lift: 215, down: true,  sfx: 'heavy', heavy: true, swoosh: 'hook', seq: [[0, 0.52]] },
+  uppercut: { anim: 'rise',    dur: 0.52, hit: [0.10, 0.24], dmg: 15, reach: 23, kb: 55,  lift: 215, down: true,  sfx: 'heavy', heavy: true, swoosh: 'hook', seq: [[0, 0.08], [1, 0.16], [2, 0.34], [3, 0.52]] },
   sweep:    { anim: 'lowkick', dur: 0.48, hit: [0.12, 0.28], dmg: 11, reach: 32, kb: 95,  lift: 60,  down: true,  sfx: 'heavy', all: true, swoosh: 'mid', seq: [[0, 0.1], [1, 0.32], [2, 0.48]] },
   slide:    { anim: 'lowkick', dur: 0.58, hit: [0.06, 0.44], dmg: 13, reach: 21, kb: 130, lift: 80,  down: true,  sfx: 'heavy', dash: true, multi: 0.2, seq: [[1, 0.46], [2, 0.58]] },
   /* the fourth hit of each chain, once you have earned it */
@@ -1298,6 +1334,11 @@ const ATK = {
 };
 
 const SEQ_END = (a) => a.seq[a.seq.length - 1][1];
+/* Frames per second, not frames per cycle.  These are tied to the walk
+   speed: a stride is four frames, and in that time the planted foot has to
+   travel about as far as the fighter does or he moonwalks. */
+const WALK_FPS = 16, RUN_FPS = 11;
+const cycleLen = (anim, fallback) => (A[anim] || A[fallback] || A.idle).length;
 function frameOf(atk, t){
   for (let i = 0; i < atk.seq.length; i++) if (t < atk.seq[i][1]) return atk.seq[i][0];
   return atk.seq[atk.seq.length - 1][0];
@@ -2380,6 +2421,7 @@ function updateFighter(f, dt){
       break;
     case 'hurt':
       f.stun -= dt;
+      f.frame = f.st < 0.07 ? 0 : f.st < 0.17 ? 1 : 2;
       if (f.stun <= 0){ f.state = 'idle'; setAnim(f, 'idle', 0); }
       break;
     case 'down': {
@@ -2436,7 +2478,9 @@ function updateFighter(f, dt){
     case 'jump': {
       f.vz -= GRAV * dt;
       f.z += f.vz * dt;
-      setAnim(f, f.vz > 0 ? 'jump' : 'fall', 0);
+      const rising = f.vz > 0;
+      setAnim(f, rising ? 'jump' : 'fall', 0);
+      f.frame = rising ? (f.z < 10 ? 0 : f.vz > 95 ? 1 : 2) : (f.z < 15 ? 1 : 0);
       if (f.z <= 0){ land(f); }
       break;
     }
@@ -2473,10 +2517,10 @@ function updateFighter(f, dt){
 
   /* walk animation cadence */
   if (f.state === 'walk' || f.state === 'run'){
-    const rate = f.state === 'run' ? 11 : 8;
-    f.frame = Math.floor(f.animT * rate) % 4;
+    const rate = f.state === 'run' ? RUN_FPS : WALK_FPS;
+    f.frame = Math.floor(f.animT * rate) % cycleLen(f.anim, 4);
   } else if (f.state === 'idle'){
-    f.frame = Math.floor(f.animT * 7) % 4;          // everybody flosses on the spot
+    f.frame = Math.floor(f.animT * 7) % cycleLen('idle', 4);   // everybody flosses on the spot
   }
 }
 

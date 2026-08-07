@@ -59,7 +59,7 @@ const EXPOSE = `__out.api = {
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
-  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx,
+  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
@@ -2452,6 +2452,91 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ------------------------------------------------------------- animation */
+test('every attack points at a frame that exists', () => {
+  const api = boot();
+  // the uppercut spent a version with seq [[0, 0.52]] against a one-frame
+  // table: half a second of heavy attack held on a single pose
+  for (const [key, a] of Object.entries(api.ATK)){
+    const table = api.A[a.anim];
+    assert(table, `${key} uses an animation that does not exist: ${a.anim}`);
+    for (const [frame, t] of a.seq){
+      assert(frame >= 0 && frame < table.length, `${key} asks for frame ${frame} of ${a.anim}, which has ${table.length}`);
+      assert(t > 0 && t <= a.dur + 0.001, `${key} has a beat at ${t} outside its ${a.dur}s`);
+    }
+    assert(a.seq[a.seq.length - 1][1] >= a.dur - 0.001, `${key} runs out of frames before it ends`);
+    if (a.heavy) assert(a.seq.length >= 3, `${key} is a heavy attack in ${a.seq.length} beats — no wind-up, no follow-through`);
+  }
+});
+
+test('the walk is eight frames and none of them are the same pose', () => {
+  const api = boot();
+  const w = api.A.walk;
+  assert(w.length === 8, 'the walk is ' + w.length + ' frames');
+  const key = (p) => JSON.stringify([p.hipY, p.hipX, p.lean, p.aF, p.aB, p.lF, p.lB]);
+  const seen = new Set(w.map(key));
+  assert(seen.size === 8, 'the walk repeats a pose: ' + seen.size + ' distinct of 8');
+  assert(api.cycleLen('walk', 4) === 8 && api.cycleLen('nonsense', 'walk') === 8, 'the cadence does not follow the table');
+});
+
+test('the hips bob, and they go the way the arms do not', () => {
+  const api = boot();
+  const w = api.A.walk;
+  const hips = w.map(p => p.hipY);
+  assert(Math.max(...hips) - Math.min(...hips) >= 3, 'the hip never rises: ' + hips.join(','));
+  // the passing frames carry the weight highest, the down frames lowest
+  assert(hips[1] === Math.min(...hips) && hips[5] === Math.min(...hips), 'the drop should land on the down frames');
+  assert(hips[3] === Math.max(...hips) && hips[7] === Math.max(...hips), 'the rise should land on the up frames');
+  // both arms swing to the same side together — that is the floss
+  for (let i = 0; i < w.length; i++){
+    const f = w[i].aF[2], b = w[i].aB[2];
+    assert(Math.sign(f) === Math.sign(b) || Math.abs(f) < 2 || Math.abs(b) < 2,
+      `frame ${i} has the arms on opposite sides: ${f} and ${b}`);
+    if (Math.abs(f) > 3) assert(Math.sign(w[i].hipX) !== Math.sign(f) || w[i].hipX === 0,
+      `frame ${i} swings the hips the same way as the arms`);
+  }
+});
+
+test('the legs alternate, and the feet do not slide', () => {
+  const api = boot();
+  const w = api.A.walk;
+  for (let i = 0; i < 4; i++){
+    const a = w[i], b = w[i + 4];
+    assert(Math.sign(a.lF[2] - a.lB[2]) === -Math.sign(b.lF[2] - b.lB[2]),
+      `frame ${i} and ${i + 4} lead with the same leg`);
+  }
+  // a stride is four frames; the planted foot has to travel about as far as
+  // the fighter does in that time, or he moonwalks
+  const stride = 4 / api.WALK_FPS;                // four frames to a stride
+  const travel = Math.max(...w.map(p => p.lF[2])) - Math.min(...w.map(p => p.lF[2]));
+  const spd = 82;                                 // spawnPlayer's walk speed
+  const covered = spd * stride;
+  assert(Math.abs(travel - covered) < covered * 0.35,
+    `the foot moves ${travel}px while the man moves ${covered.toFixed(1)}px — that is a moonwalk`);
+});
+
+test('a jump uses its whole arc, and taking one uses all three', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  assert(api.A.jump.length >= 3 && api.A.fall.length >= 2, 'the jump is still held on one pose');
+  f.state = 'jump'; f.z = 0.1; f.vz = 305; f.anim = 'jump';   // what a real jump leaves the floor at
+  const jumped = new Set(), fell = new Set();
+  for (let i = 0; i < 90 && f.state === 'jump'; i++){
+    api.updateFighter(f, 1 / 60);
+    (f.anim === 'jump' ? jumped : fell).add(f.frame);
+  }
+  assert(jumped.size >= 3, 'the way up only used ' + jumped.size + ' frames');
+  assert(fell.size >= 2, 'the way down only used ' + fell.size + ' frames');
+
+  assert(api.A.hurt.length === 3, 'taking a hit is ' + api.A.hurt.length + ' frames');
+  f.state = 'hurt'; f.st = 0; f.stun = 0.4; f.anim = 'hurt'; f.z = 0;
+  const hurt = new Set();
+  for (let i = 0; i < 30 && f.state === 'hurt'; i++){ api.updateFighter(f, 1 / 60); hurt.add(f.frame); }
+  assert(hurt.size === 3, 'the whole stun ran on ' + hurt.size + ' frames');
+  assert(hurt.has(0), 'the snap frame never showed');
 });
 
 /* ---------------------------------------------------------------- impact */
