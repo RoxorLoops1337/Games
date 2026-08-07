@@ -110,6 +110,9 @@
     background:#0b1524; border:2px solid #22395c; color:#b9cbe4; font-size:14px; font-weight:600; }
   .goal i{ display:inline-block; width:16px; height:16px; border-radius:5px; background:#1b2c47;
     border:1px solid #34537f; font-style:normal; font-size:11px; line-height:15px; text-align:center; color:#0b1524; }
+  /* how far a missed goal got, pushed to the right end of its own row */
+  .goal b{ margin-left:auto; padding:1px 7px; border-radius:7px; background:#16273f;
+    color:#e8a91f; font-size:12px; font-weight:900; letter-spacing:.5px; white-space:nowrap; }
   .goal.on{ color:#8effb0; border-color:#2c6b45; }
   .goal.on i{ background:#8effb0; border-color:#8effb0; color:#0b1524; font-weight:900; }
   .stats{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:4px 0 14px; }
@@ -739,31 +742,31 @@ const COMBO_BANNERS = [
    the same three things. */
 const GOALS = [
   { id:'combo',   text: n => 'Chain a ×' + n + ' combo',          gen: lv => Math.min(14, 4 + lv),
-    test: (G2, n) => G2.bestCombo >= n },
+    test: (G2, n) => G2.bestCombo >= n, val: (G2) => G2.bestCombo },
   { id:'stalls',  text: n => 'Wreck ' + n + ' stalls',            gen: lv => Math.min(14, 4 + lv),
-    test: (G2, n) => G2.bigWrecks >= n },
+    test: (G2, n) => G2.bigWrecks >= n, val: (G2) => G2.bigWrecks },
   { id:'roll',    text: n => 'Land ' + (n > 1 ? n + ' barrel rolls' : 'a barrel roll'), gen: lv => 1 + (lv > 6 ? 1 : 0),
-    test: (G2, n) => G2.rolls >= n, needs: 'rollramps' },
+    test: (G2, n) => G2.rolls >= n, val: (G2) => G2.rolls, needs: 'rollramps' },
   { id:'air',     text: n => 'Take ' + n + (n > 1 ? ' jumps' : ' jump') + ' off a snowbank', gen: lv => 1 + Math.floor(lv / 4),
-    test: (G2, n) => G2.jumps >= n, needs: 'ramps' },
+    test: (G2, n) => G2.jumps >= n, val: (G2) => G2.jumps, needs: 'ramps' },
   { id:'slam',    text: n => 'Flatten ' + n + ' at once with a landing', gen: lv => 2 + Math.floor(lv / 6),
-    test: (G2, n) => G2.bestSlam >= n, needs: 'ramps' },
+    test: (G2, n) => G2.bestSlam >= n, val: (G2) => G2.bestSlam, needs: 'ramps' },
   { id:'elders',  text: n => 'Catch ' + n + ' pensioners',        gen: lv => Math.min(6, 2 + Math.round(lv / 3)),
-    test: (G2, n) => (G2.byKind.elder || 0) >= n },
+    test: (G2, n) => (G2.byKind.elder || 0) >= n, val: (G2) => G2.byKind.elder || 0 },
   { id:'kids',    text: n => 'Catch ' + n + ' children',          gen: lv => Math.min(6, 2 + Math.round(lv / 3)),
-    test: (G2, n) => (G2.byKind.kid || 0) >= n },
+    test: (G2, n) => (G2.byKind.kid || 0) >= n, val: (G2) => G2.byKind.kid || 0 },
   { id:'prams',   text: n => 'Send ' + n + ' prams flying',       gen: lv => Math.min(8, 2 + Math.round(lv / 3)),
-    test: (G2, n) => (G2.byKind.parent || 0) >= n },
+    test: (G2, n) => (G2.byKind.parent || 0) >= n, val: (G2) => G2.byKind.parent || 0 },
   { id:'santa',   text: () => 'Run over Santa',                   gen: () => 1,
-    test: (G2) => (G2.byKind.santa || 0) >= 1, needs: 'santa' },
+    test: (G2) => (G2.byKind.santa || 0) >= 1, val: (G2) => G2.byKind.santa || 0, needs: 'santa' },
   { id:'tree',    text: () => 'Fell the town tree',               gen: () => 1,
-    test: (G2) => G2.treeDown, needs: 'bigtree' },
+    test: (G2) => G2.treeDown, val: (G2) => (G2.treeDown ? 1 : 0), needs: 'bigtree' },
   { id:'carousel',text: () => 'Wreck the carousel',               gen: () => 1,
-    test: (G2) => G2.carouselDown, needs: 'carousel' },
+    test: (G2) => G2.carouselDown, val: (G2) => (G2.carouselDown ? 1 : 0), needs: 'carousel' },
   { id:'onerun',  text: n => 'Score ' + fmt(n) + ' with one car',  gen: lv => 2200 + lv * 900,
-    test: (G2, n) => G2.bestRun >= n },
+    test: (G2, n) => G2.bestRun >= n, val: (G2) => G2.bestRun },
   { id:'nitro',   text: n => 'Catch ' + n + ' on the nitro',      gen: lv => Math.min(4, 2 + Math.round(lv / 5)),
-    test: (G2, n) => G2.nitroKills >= n },
+    test: (G2, n) => G2.nitroKills >= n, val: (G2) => G2.nitroKills },
 ];
 
 /* A landmark deeper than this cannot be reached with speed left to break it —
@@ -847,6 +850,15 @@ function rollGoals(lv, levelIdx){
 function goalTest(goal){
   const def = GOALS.find(g => g.id === goal.id);
   return def ? !!def.test(G, goal.n) : false;
+}
+
+/* How far a goal got, as "3 / 4". Blank for the one-shot goals, where the
+   text already says the whole story and "0 / 1" would be noise. */
+function goalProgress(g){
+  const def = GOALS.find(d => d.id === g.id);
+  if (!def || !def.val || g.n <= 1) return '';
+  const at = def.val(G);
+  return fmt(Math.min(at, g.n)) + ' / ' + fmt(g.n);
 }
 
 function checkGoals(){
@@ -1867,8 +1879,16 @@ function levelEnd(){
   setTxt('rsCombo', '×' + G.bestCombo);
   const rg = $('rsGoals');
   if (rg && G.goals){
-    rg.innerHTML = G.goals.map(g =>
-      '<div class="goal' + (g.done ? ' on' : '') + '"><i>' + (g.done ? '✓' : '') + '</i>' + g.text + '</div>').join('');
+    /* An unticked goal used to say only that you had not done it. On a card
+       that also shows "Wrecked 9" next to "Wreck 4 stalls" — two different
+       counters, everything against props worth 260 or more — that reads as a
+       broken goal rather than as one you missed. Every goal reports its own
+       progress now, so a miss says how close it came. */
+    rg.innerHTML = G.goals.map(g => {
+      const at = goalProgress(g);
+      return '<div class="goal' + (g.done ? ' on' : '') + '"><i>' + (g.done ? '✓' : '') +
+        '</i>' + g.text + (g.done || !at ? '' : '<b>' + at + '</b>') + '</div>';
+    }).join('');
   }
   setTxt('rsStarline', !passed ? 'Beat the target to clear the market.'
     : G.stars === 3 ? 'Three stars. Nothing left to prove here.'

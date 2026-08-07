@@ -448,6 +448,19 @@ edit this block to name the next one.
       tweaking two constants and never checking the tweak had any effect, so it
       would have passed comparing a build against itself.
 
+- [x] A missed goal says how close it came. The results card showed
+      **"WRECKED 9"** and, directly underneath, an unticked **"Wreck 4
+      stalls"** — which reads as a broken goal. They are two different
+      counters: `G.wrecks` is everything flattened, and the goal tests
+      `G.bigWrecks`, props worth 260 or more. An unticked goal said only that
+      you had not done it, so there was nothing on the card to resolve the
+      contradiction. All thirteen goals report their own progress now, shown
+      as a `1 / 4` chip on the right of any missed row; the one-shot goals
+      (Santa, the town tree, the carousel) stay silent, because "0 / 1" next
+      to "Run over Santa" is noise. Held together by a property test: for
+      every goal, at the `n` it actually asks for on each of the twenty-one
+      markets, **progress and pass/fail must agree** — 1,638 cases.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
