@@ -393,3 +393,43 @@ and the family is more useful than the individual entry.
 - **Two premises handed to this tool turned out to be artefacts of it** — the
   cost gap and the party-immunity — and in both cases the right move was to
   report that and change nothing. A pass that changes nothing is a real outcome.
+
+---
+
+## The other instrument: `shot.mjs`
+
+`playthrough.mjs` answers "is this any good to play". `shot.mjs` answers "is this
+any good to look at", and the two questions have turned out to have nothing to do
+with each other.
+
+```bash
+node tools/emberkin/shot.mjs                       # every scene, into /tmp
+node tools/emberkin/shot.mjs battle out.png        # one scene, somewhere
+node tools/emberkin/shot.mjs --film evolve 9 450   # a scene as it plays, tiled
+node tools/emberkin/shot.mjs --size 390x760 title  # at somebody else's window
+```
+
+Scenes: `title`, `study`, `town`, `battle`, `pair`, `duel`, `evolve`, `gotcha`,
+`reward`, `deck`, `catching`, `sight`, `legendary`. Each one says how big to
+shoot it and how to drive the game into that state; a still waits 1200ms for the
+entry animation to finish, a film waits 60ms so it starts at the trigger.
+
+Three things this has established, none of which were visible in the source:
+
+- **Film anything with a timeline.** A frozen frame lies about it. Stepping the
+  evolution's own timer by hand while holding `G.t` still made its rotating light
+  wheel look painted on; it turns, and accelerates as the beat builds, and none
+  of that survives a still.
+- **`--size` is not a nicety.** The stage picks an integer scale from the window
+  and lays itself out around it, so a screen can be right at one size and broken
+  at another. The title screen was composed at 900×800 and had never been seen at
+  a phone's, where a different scale applies and five lines of text wrap to
+  eight.
+- **Everything actually fixed on this track came from looking; everything planned
+  from reading the code alone turned out to be unnecessary.** Five beats
+  inspected on suspicion — the world's movement, the arena's layers, the
+  evolution, the catch, a trainer noticing you — were already right. Four faults
+  found were each invisible until photographed: the dead margin around small
+  maps, unlit windows, no impact frame on fifteen hits in sixteen, and screens
+  parked at the top of a box they did not fill. **Suspicion has a bad record here
+  and the camera has a good one.**
