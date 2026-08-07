@@ -179,11 +179,13 @@ eq(G.flags.t_wick2, 1, 'the rematch is won');
 
 section('the Warden opens the pass');
 const hale = EK.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
-ok(!hale.gone, 'the Warden is still standing in the corridor');
+ok(EK.npcActive(hale), 'the Warden is still standing in the corridor');
 ok(!EK.passable(EK.MAPS.emberwood, hale.x, hale.y, hale.y + 1), 'and blocks it');
 talkAndFight('emberwood', 't_hale', 30);
 eq(G.flags.t_hale, 1, 'the Warden is beaten');
-ok(hale.gone, 'and steps off the path');
+// Was `hale.gone` — a field on the shared MAPS object that the save never
+// carried. Asking npcActive instead asks the question the game asks.
+ok(!EK.npcActive(hale), 'and steps off the path');
 ok(EK.passable(EK.MAPS.emberwood, hale.x, hale.y, hale.y + 1), 'the corridor is walkable now');
 
 // -------------------------------------------------------------- the hunt --
@@ -411,6 +413,50 @@ section('Rowan says what the journey is for');
   for (let i = 0; i < 20 && g.G.dialogue; i++) { g.G.dialogue.hold = 0; g.advanceDialogue(); }
   ok(!g.G.dialogue, 'and the whole speech is dismissable');
   eq(g.G.mode, 'world', 'leaving you stood in the world with a kin');
+}
+
+// Warden Hale is the only npc who leaves the map, and he leaves the one tile
+// that matters. Run across TWO game instances over one store, because the fault
+// was invisible inside a single one: the field that removed him lived on the
+// module-level MAPS object, so it survived a save it was never part of, right
+// up until the tab closed.
+section('the Warden stays off the path across a reload');
+{
+  const store = {};
+  const a = loadGame(store);
+  a.setCtx(mkCtx());
+  a.newGame();
+  a.takeStarter('cindercub');
+  const hale = (g) => g.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
+  const h = hale(a);
+  const open = (g, n) => g.passable(g.MAPS.emberwood, n.x, n.y, n.y + 1);
+
+  ok(a.npcActive(h), 'he is on the path to start with');
+  ok(!open(a, h), 'and standing in it');
+  // If the neck ever stops being one tile wide he is decoration and every other
+  // assertion in this section is measuring nothing.
+  ok(!a.passable(a.MAPS.emberwood, h.x + 1, h.y, h.y + 1)
+    && !a.passable(a.MAPS.emberwood, h.x - 1, h.y, h.y + 1),
+    'the pass is one tile wide, so he is the gate and not a decoration in front of one');
+
+  a.G.flags.t_hale = 1;                      // exactly what winning records
+  ok(!a.npcActive(h), 'beating him takes him off it');
+  ok(open(a, h), 'and the pass opens');
+  ok(a.saveGame(), 'the run saves');
+
+  // A second instance is a second page load: fresh MAPS, same save.
+  const b = loadGame(store);
+  b.setCtx(mkCtx());
+  ok(b.loadGame(), 'the save comes back');
+  ok(!b.npcActive(hale(b)), 'and he is still off the path');
+  ok(open(b, hale(b)),
+    'so Crown Hollow, the shrine and the last fight are still reachable after a reload');
+
+  // The other direction, same root cause: a new run in the same tab must find
+  // him back, or the Warden never fights and the pass is open from minute one.
+  a.newGame();
+  ok(a.npcActive(h), 'and a fresh run finds him back on the path');
+  ok(!open(a, h), 'with the pass shut again');
 }
 
 done('emberkin_story');

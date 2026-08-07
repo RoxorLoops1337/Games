@@ -539,6 +539,22 @@ const SCENES = {
       EK.renderDialogue();
     },
   },
+  // Warden Hale in the neck of the pass. Worth a picture because everything
+  // about him rests on the geometry: the way up to Crown Hollow is two tiles
+  // wide and closes to one at (8,2), which is his tile, and npcs are
+  // impassable. He is the gate itself, not a doorman stood beside one.
+  warden: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.G.flags = { gotStarter: 1, t_wick1: 1 };
+      const h = EK.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
+      if (!h) throw new Error('warden: no Warden Hale on the Emberwood');
+      if (!EK.npcActive(h)) throw new Error('warden: he is not on the map to be photographed');
+      EK.enterMap('emberwood', h.x, h.y + 2, 'up');
+      EK.G.mode = 'world'; EK.G.place = null;
+    },
+  },
   // The end of the game. Rowan's flags are set for real and the speech is then
   // produced by the real rowanScript — nothing here writes a line. Held on the
   // no-ceremony line, which is the one the whole ending turns on.
