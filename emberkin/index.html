@@ -5967,6 +5967,24 @@ const effWord = (e) => e === 0 ? 'It does nothing at all…' : e >= 2 ? "It's br
  */
 const faintCue = (e) => (e && e.side === 'mine' ? 'faint' : 'downed');
 
+/**
+ * Which cue an impact plays. `effWord` gives the fight FIVE readings — "It's
+ * brutally effective!", "It's effective!", "It barely lands…", "It does nothing
+ * at all…", and nothing — and every one of them landed on the same blip. The
+ * words already tell you whether your type choice worked; the sound did not.
+ *
+ * A crit still wins: it has its own cue and it is the bigger fact about a hit.
+ * An immune hit deals no damage and so snaps no impact at all, which is why
+ * there is no cue for it — the line stands on its own.
+ */
+function hitCue(e) {
+  if (!e) return 'hit';
+  if (e.crit) return 'crit';
+  if (e.eff > 1) return 'strong';
+  if (e.eff > 0 && e.eff < 1) return 'weak';
+  return 'hit';
+}
+
 function snap(log, t, fx, side, extra) {
   const b = B();
   log.push({ t, fx: fx || '', side: side || '', hpM: b.mine.hp, hpF: b.foe.hp,
@@ -6047,6 +6065,7 @@ function useMove(log, atkSide, moveId) {
       let dealt = dmg;
       if (atkSide === 'foe') {
         b.hitEl = m.type;                       // for the impact burst
+        b.hitEff = eff;                         // …and for how it should sound
         dealt = hurtMine(log, dmg, `${them} took ${dmg}.`, 'foe', crit);  // shield first
       } else {
         // Recoil and drain are paid on what actually came off, not on the
@@ -6075,7 +6094,7 @@ function useMove(log, atkSide, moveId) {
         }
         defender.hp = clamp(defender.hp - through, 0, defender.max);
         dealt = had - defender.hp;
-        if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit, el: m.type });
+        if (through > 0) snap(log, `${them} took ${through}.`, 'hit', 'foe', { atk: 'mine', crit: !!crit, el: m.type, eff });
       }
       totalDealt += dealt;
       if (crit && eff !== 0) snap(log, 'A critical hit!');
@@ -6771,7 +6790,7 @@ function hurtMine(log, amount, why, atk, crit) {
     b.foePierce = 0;
     if (b.shield > 0) snap(log, 'The shield is not where the hit lands.', 'block', 'mine');
     b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
-    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', { atk, crit: !!crit, el: b.hitEl });
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', { atk, crit: !!crit, el: b.hitEl, eff: b.hitEff });
     return dmg;
   }
   if (b.shield > 0) {
@@ -6781,7 +6800,7 @@ function hurtMine(log, amount, why, atk, crit) {
   }
   if (dmg > 0) {
     b.mine.hp = clamp(b.mine.hp - dmg, 0, b.mine.max);
-    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk, crit: !!crit, el: b.hitEl } : null);
+    snap(log, why || `${dispName(b.mine)} took ${dmg}.`, 'hit', 'mine', atk ? { atk, crit: !!crit, el: b.hitEl, eff: b.hitEff } : null);
   }
   return dmg;
 }
@@ -8507,7 +8526,7 @@ function entryFx(b, e) {
       const last = b.pops[b.pops.length - 1];
       if (last && last.side === e.side) last.kind = 'crit';
     }
-    playCue(e.crit ? 'crit' : 'hit');
+    playCue(hitCue(e));
   }
 }
 
@@ -9911,6 +9930,13 @@ function playCue(kind) {
   if (!ac) return;
   const t = ac.currentTime;
   if (kind === 'hit') blip(150, .09, 'sawtooth', .07);
+  // The same impact, told twice more. `strong` is higher and cracks — a second
+  // shorter blip on top of the first, so it reads as edge rather than weight,
+  // which is what separates it from a crit's low double thud. `weak` loses the
+  // sawtooth's edge entirely and is shorter: a thud with nothing behind it.
+  // Both are written, not heard; sound cannot be photographed.
+  else if (kind === 'strong') { blip(190, .1, 'sawtooth', .08); blip(265, .06, 'square', .05, t + .04); }
+  else if (kind === 'weak') blip(110, .07, 'sine', .05);
   // A crit already looks different — its own burst, its own colour on the
   // number — and sounded exactly like every other hit. Lower and longer than
   // `hit`, with a second blip under it so it lands as one heavier impact
@@ -11025,7 +11051,7 @@ if (typeof window !== 'undefined') {
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
-    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, placeTrack, MAP_TRACK, THEMES,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
