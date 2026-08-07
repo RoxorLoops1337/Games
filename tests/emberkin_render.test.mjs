@@ -1072,4 +1072,82 @@ section('the dialogue panel can be made to agree with the state');
   ok(!threw, `it survives being called with no dialogue${threw ? ' — ' + threw : ''}`);
 }
 
+// The place card names the map you have just walked into. Everything about it
+// is defined by what it does NOT do: it is not in BEATS, it does not block
+// input, and it does not survive a mode that owns the screen. So this checks
+// those, not just that the state exists.
+section('walking into a new place says where you are');
+{
+  const g = loadGame();
+  g.setCtx(mkCtx());
+  g.newGame();
+  // The study is an interior; the game should not announce a room you are
+  // standing in when the story starts.
+  eq(g.G.map.kind, 'inside', 'a new journey starts indoors');
+  ok(!g.G.place, 'and no plaque comes down over the opening');
+
+  g.enterMap('hollowbrook', 12, 10, 'down');
+  ok(!!g.G.place, 'stepping outside names the town');
+  eq(g.G.place.name, g.MAPS.hollowbrook.name, 'with the map\'s own name, not a second copy of it');
+
+  // Ducking into a building and back out must not re-announce the town — the
+  // classic way a card like this turns from a flourish into a nuisance.
+  g.G.place = null;
+  g.enterMap('lab', 5, 4, 'up');
+  ok(!g.G.place, 'going indoors says nothing');
+  g.enterMap('hollowbrook', 12, 10, 'down');
+  ok(!g.G.place, 'and coming back out of the same door says nothing either');
+
+  // Somewhere genuinely new does announce.
+  g.enterMap('route_one', 4, 9, 'right');
+  ok(!!g.G.place, 'but a new route does');
+  eq(g.G.place.name, g.MAPS.route_one.name, 'and names that one');
+
+  // It owns nothing. The player walks through it.
+  //
+  // The direction is read off the map rather than guessed: the first version of
+  // this pressed 'right' at the entrance, the player did not move, and that
+  // proves nothing — a wall answers exactly like a blocked input. Pick a tile
+  // the map says is open, and a failure here can only mean input was eaten.
+  g.G.mode = 'world'; g.G.dialogue = null;
+  const rows = g.MAPS.route_one.rows;
+  const open = [['right', 1, 0], ['left', -1, 0], ['down', 0, 1], ['up', 0, -1]]
+    .find(([, dx, dy]) => !g.SOLID.has((rows[g.G.player.y + dy] || '')[g.G.player.x + dx]));
+  ok(!!open, 'the entrance to Route One has somewhere to walk');
+  const before = { x: g.G.player.x, y: g.G.player.y };
+  g.pressKey(open[0]);
+  for (let i = 0; i < 12; i++) { g.step(.05); g.fired.clear(); }
+  g.releaseKey(open[0]);
+  ok(!!g.G.place, 'the plaque is still up');
+  ok(g.G.player.x !== before.x || g.G.player.y !== before.y,
+    `and you walked ${open[0]} through it (${before.x},${before.y} → ${g.G.player.x},${g.G.player.y})`);
+
+  // Drawn at every point of its life, including the frame it is born on and
+  // the frame it dies on, because a slide that divides by its own duration is
+  // exactly where an off-by-one lands.
+  let threw = null;
+  try {
+    for (const t of [0, .01, g.PLACE_IN, g.PLACE_IN + g.PLACE_HOLD,
+      g.PLACE_IN + g.PLACE_HOLD + g.PLACE_OUT - .001]) {
+      g.G.place.t = t;
+      g.drawPlace(mkCtx());
+    }
+  } catch (e) { threw = e && e.stack ? e.stack.split('\n')[0] : e; }
+  ok(!threw, `it draws at every point of its life${threw ? ' — ' + threw : ''}`);
+
+  // And it clears itself rather than waiting for the next map.
+  g.G.place.t = 0;
+  for (let i = 0; i < 200 && g.G.place; i++) g.step(.05);
+  ok(!g.G.place, 'it takes itself off screen');
+
+  // Where you have been announced belongs to the run, not to the tab. Without
+  // this, a second playthrough in one sitting walks out of the study into a
+  // town it has already named once and says nothing — the first outdoor moment
+  // of the new run, silently skipped.
+  g.newGame();
+  ok(!g.G.placeSeen, 'a new run has been nowhere');
+  g.enterMap('hollowbrook', 12, 10, 'down');
+  ok(!!g.G.place, 'so it names the town again on the second playthrough');
+}
+
 done('emberkin_render');

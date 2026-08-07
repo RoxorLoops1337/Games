@@ -94,6 +94,25 @@ const SCENES = {
       EK.G.mode = 'world';
     },
   },
+  // The plaque that names where you just walked in. Nothing is assembled here —
+  // enterMap raises it for real. Shot at the Emberwood because that is the
+  // biggest change of scene in the game and where the silence was loudest.
+  //
+  // FILM THIS ONE, do not still it: the plaque lives 2.4s and the still path
+  // waits 900ms after `go()` plus 1200ms before the shutter, so a still always
+  // arrives after it has gone — which is exactly what the first attempt caught,
+  // a picture of the Emberwood with an empty corner and a status line that said
+  // no plaque was up. `--film placecard 9 300` walks the whole life; PLACE_IN is
+  // .3s, so 300ms is the coarsest interval that still shows the slide arriving.
+  placecard: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('emberwood', 8, 12, 'up');
+      EK.G.mode = 'world';
+      if (!EK.G.place) throw new Error('placecard: entering the Emberwood raised no plaque');
+    },
+  },
   battle: {
     w: 760, h: 900,
     go: (EK) => {
@@ -499,6 +518,83 @@ const SCENES = {
       // that opens it, not by the frame loop, so the first shot of this scene
       // was a picture of the town with nothing on it.
       EK.pressKey('b'); EK.step(.02); EK.releaseKey('b'); EK.fired.clear();
+    },
+  },
+  // The last thing Rowan says at the hand-over, which is now the errand rather
+  // than the chest shop. Driven through the real screens — starter, gotcha,
+  // papers — because the speech only exists as the tail of that chain.
+  handover: {
+    w: 700, h: 480,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('lab', 5, 4, 'up');
+      EK.G.mode = 'world';
+      EK.openScreen('starter');
+      EK.screenSelect();
+      EK.step(3);                       // the celebration runs itself out
+      EK.closeScreen();                 // a fresh set of papers has one way out
+      const d = EK.G.dialogue;
+      if (!d) throw new Error('handover: Rowan never spoke — the chain broke before the say');
+      d.i = d.lines.length - 1; d.hold = 0;   // hold on the closing line
+      EK.renderDialogue();
+    },
+  },
+  // Warden Hale in the neck of the pass. Worth a picture because everything
+  // about him rests on the geometry: the way up to Crown Hollow is two tiles
+  // wide and closes to one at (8,2), which is his tile, and npcs are
+  // impassable. He is the gate itself, not a doorman stood beside one.
+  warden: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.G.flags = { gotStarter: 1, t_wick1: 1 };
+      const h = EK.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
+      if (!h) throw new Error('warden: no Warden Hale on the Emberwood');
+      if (!EK.npcActive(h)) throw new Error('warden: he is not on the map to be photographed');
+      EK.enterMap('emberwood', h.x, h.y + 2, 'up');
+      EK.G.mode = 'world'; EK.G.place = null;
+    },
+  },
+  // The end of the game. Rowan's flags are set for real and the speech is then
+  // produced by the real rowanScript — nothing here writes a line. Held on the
+  // no-ceremony line, which is the one the whole ending turns on.
+  ending: {
+    w: 700, h: 480,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null;
+      for (const [id] of EK.AIM_ORDER) EK.G.flags[id] = 1;
+      EK.G.flags.beatVespyr = 1;
+      for (const id of EK.DEX_ORDER) EK.G.dex[id] = 2;      // the full-dex branch
+      EK.enterMap('lab', 5, 4, 'up');
+      EK.G.mode = 'world'; EK.G.place = null;
+      EK.rowanScript();
+      const d = EK.G.dialogue;
+      if (!d) throw new Error('ending: Rowan said nothing with every flag set');
+      if (!/ceremony/i.test(d.lines.join(' '))) throw new Error('ending: this is not the closing speech');
+      d.i = d.lines.findIndex((l) => /ceremony/i.test(l)); d.hold = 0;
+      EK.renderDialogue();
+    },
+  },
+  // The longest line of the speech, held on its own, because a count of
+  // trainers and a clause about Wick is the one that can outgrow the box.
+  handoveraim: {
+    w: 700, h: 480,
+    // Scene bodies are serialised into the page, so this cannot call the one
+    // above — SCENES does not exist in there. It repeats the drive instead.
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('lab', 5, 4, 'up');
+      EK.G.mode = 'world';
+      EK.openScreen('starter');
+      EK.screenSelect();
+      EK.step(3);
+      EK.closeScreen();
+      const d = EK.G.dialogue;
+      if (!d) throw new Error('handoveraim: Rowan never spoke — the chain broke before the say');
+      d.i = d.lines.length - 3; d.hold = 0;
+      EK.renderDialogue();
     },
   },
   box: {
@@ -968,6 +1064,10 @@ for (const name of list) {
       EK.G.dialogue && `dialogue:${EK.G.dialogue.who}`,
       EK.G.screen && `screen:${EK.G.screen.kind || EK.G.screen}`,
       EK.G.gotcha && 'gotcha', EK.G.evoAnim && 'evo',
+      // The place card is not a beat and owns nothing, but it is 17px of plaque
+      // in the top-left corner and every scene that calls enterMap now raises
+      // one. If it is on screen the print has to say so.
+      EK.G.place && `place:${EK.G.place.name}`,
       EK.G.wipe > 0 && 'wipe',
       // A fainted kin is drawn dropped and at 30% alpha, which is easy to read
       // as a lighting problem. Say it out loud instead.

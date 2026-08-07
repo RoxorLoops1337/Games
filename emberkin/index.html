@@ -3328,6 +3328,11 @@ function loadGame() {
   let blob;
   try { blob = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { blob = null; }
   if (!blob || !blob.party) return false;
+  // Where you were last announced is a fact about a run, not about the browser.
+  // It is deliberately not in the save blob — but it does have to be forgotten
+  // when one run is swapped for another, or picking up a save in the same place
+  // a previous run had already been arrives in silence.
+  G.placeSeen = null; G.place = null;
   const unpack = (p) => {
     const m = mkMon(p.s, p.l);
     if (!m) return null;
@@ -3998,6 +4003,18 @@ function effStat(m, key) {
 const seeMon = (id) => { if ((G.dex[id] || 0) < 1) G.dex[id] = 1; };
 const catchMon = (id) => { G.dex[id] = 2; };
 const dexCount = (n) => DEX_ORDER.filter((id) => (G.dex[id] || 0) >= n).length;
+/**
+ * Numbers as a person says them. Tallies stay as digits — "13 caught" is a
+ * reading off a page and looks right — but a count inside a spoken sentence
+ * does not: "9 trainers between here and the top of Crown Hollow" reads as a
+ * stat line, and Rowan is talking. The point of routing it through here rather
+ * than typing the word is that these counts come out of DEX_ORDER and
+ * AIM_ORDER, so adding a kin or a trainer cannot leave her saying the old one.
+ */
+const NUMWORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+const spell = (n) => NUMWORD[n] || String(n);
+const Spell = (n) => spell(n).replace(/^./, (c) => c.toUpperCase());
 /* ============================================================ §3 — world ==
    Maps are character grids. One char per 16×16 tile, drawn with the art in
    ART_TILES. Warps, NPCs and encounter tables hang off the map object.
@@ -4306,8 +4323,28 @@ const MAPS = {
 
 const tileAt = (map, x, y) => (x < 0 || y < 0 || y >= map.rows.length || x >= map.rows[0].length) ? '#' : map.rows[y][x];
 
-/** An NPC is on the map once its story beat is live and until it walks off. */
-const npcActive = (n) => !n.gone && (!n.requires || !!G.flags[n.requires]);
+/**
+ * An NPC is on the map once its story beat is live and until it walks off.
+ *
+ * Walking off is DERIVED from the save, never stored on the map. Warden Hale is
+ * the only npc who leaves, and he leaves from the one tile it matters on: the
+ * path up to Crown Hollow is two wide at the top of the Emberwood and narrows
+ * to a single tile at (8,2), which is where he stands, and npcs are impassable.
+ * He is the gate, not a decoration in front of one.
+ *
+ * Beating him used to set `n.gone = true` on the MAPS object. MAPS is a
+ * module-level const and the save blob has never carried npc state, so that
+ * flag lived exactly as long as the tab did — and it failed in both directions.
+ * Reload a save taken after beating him and he is standing in the neck again
+ * with `t_hale` already set, so talking to him gives his after-line instead of
+ * a rematch and there is no second way round: Crown Hollow, the shrine, the
+ * legendary and the last fight are unreachable for the rest of that save's
+ * life. Start a NEW run in the same tab and the opposite happens — he is still
+ * gone, the pass is open from the first minute, and the Warden never fights.
+ *
+ * `G.flags` is saved and is rebuilt per run, so reading it fixes both at once.
+ */
+const npcActive = (n) => !(n.block && G.flags[n.id]) && (!n.requires || !!G.flags[n.requires]);
 
 function npcAt(map, x, y) {
   return (map.npcs || []).find((n) => n.x === x && n.y === y && npcActive(n)) || null;
@@ -4354,6 +4391,20 @@ function enterMap(id, x, y, dir) {
   G.chestOpen = null;
   G.flourish = null;
   G.evoAnim = null;
+  // Say where you are. The map name was reachable in exactly two places — the
+  // field menu title and the dex habitat line — so walking out of town into the
+  // Emberwood, the biggest change of scene in the game, happened in silence.
+  //
+  // This is deliberately NOT one of the beats above: it owns nothing, blocks no
+  // input, and is not in the `update` early-return ladder. You keep walking and
+  // it slides away behind you. Interiors stay quiet, and `placeSeen` only moves
+  // when something is actually announced, so ducking into the study and back
+  // out does not re-announce Hollowbrook — while coming back outside somewhere
+  // else does, because that is a real change of place.
+  if (m.kind !== 'inside' && G.placeSeen !== G.mapId) {
+    G.placeSeen = G.mapId;
+    G.place = { name: m.name, t: 0 };
+  }
   return m;
 }
 
@@ -7572,17 +7623,25 @@ function menuInput() {
  * trainer you have not beaten, in the order the routes run, and the shrine
  * after them. Written in the register the legendary already uses — concrete,
  * unsentimental, tells you where to go without instructing you.
+ *
+ * The fourth column is the npc's own `requires` flag, and a trainer whose gate
+ * is shut is skipped rather than pointed at. That column is not decoration:
+ * Wick's last fight sits in Crown Hollow behind `beatVespyr`, so a version of
+ * this that read straight down the list sent you up the mountain to fight a
+ * man who is not there yet, past the shrine that unlocks him. If you add a
+ * gated trainer, put the gate here too — `emberkin_story` compares this column
+ * against the map data and will fail if they drift.
  */
 const AIM_ORDER = [
-  ['t_wick1', 'Wick', 'Hollowbrook'], ['t_pell', 'Forager Pell', 'Route One'],
+  ['t_wick1', 'Wick', 'Hollowbrook', 'gotStarter'], ['t_pell', 'Forager Pell', 'Route One'],
   ['t_dorn', 'Hiker Dorn', 'Route One'], ['t_ivo', 'Bramble Kid Ivo', 'the Emberwood'],
-  ['t_wick2', 'Wick', 'the Emberwood'], ['t_coll', 'Ranger Coll', 'the Emberwood'],
-  ['t_hale', 'Warden Hale', 'the Emberwood'], ['t_mio', 'Tide-hand Mio', 'Stillmere'],
-  ['t_wick3', 'Wick', 'Crown Hollow'],
+  ['t_wick2', 'Wick', 'the Emberwood', 't_wick1'], ['t_coll', 'Ranger Coll', 'the Emberwood'],
+  ['t_mio', 'Tide-hand Mio', 'Stillmere'], ['t_hale', 'Warden Hale', 'the Emberwood'],
+  ['t_wick3', 'Wick', 'Crown Hollow', 'beatVespyr'],
 ];
 function nextAim() {
   if (!G.flags.gotStarter) return 'Elder Rowan is waiting on you.';
-  const next = AIM_ORDER.find(([id]) => !G.flags[id]);
+  const next = AIM_ORDER.find(([id, , , gate]) => !G.flags[id] && (!gate || G.flags[gate]));
   if (next) return `${next[1]} is still standing, in ${next[2]}.`;
   if (!G.flags.beatVespyr) return 'Only the thing on the shrine is left, up in Crown Hollow.';
   const seen = dexCount(2);
@@ -7688,10 +7747,33 @@ function rowanScript() {
     ], () => chooseStarter());
     return;
   }
+  // The actual end of the game, which nobody used to mark. Wick's parting line
+  // after his last fight is "Go and see Rowan. She has been pretending not to
+  // wait" — and she then said the shrine speech, the one you already heard
+  // before climbing the mountain, because her closing branch keyed on
+  // `beatVespyr` and that flag is set by the fight BEFORE the final one. An npc
+  // pointing you at a conversation that does not exist is worse than silence.
+  //
+  // Her register does not change for it. She told you at the shrine that there
+  // is no ceremony at the end, so there is not one here either — the ending is
+  // that somebody noticed, and the last line puts you back outside.
+  if (G.flags.t_wick3) {
+    const left = DEX_ORDER.length - dexCount(2);
+    say('Elder Rowan', [
+      'He came down before you did. Sat in that chair a while. Did not say much.',
+      `That is all ${spell(AIM_ORDER.length)} of them, then, and the thing on the shrine.`,
+      left === 0
+        ? `And every one of the ${spell(DEX_ORDER.length)} written down in your own hand. I did not think anybody would.`
+        : `${Spell(left)} still unwritten, mind. The valley keeps some back for people who keep looking.`,
+      'I said there was no ceremony at the end of it. There is not. You are only somebody who has done it now.',
+      'Go on. It is all still out there.',
+    ]);
+    return;
+  }
   if (G.flags.beatVespyr) {
     say('Elder Rowan', [
       'So it went with you.',
-      `Nineteen kin in this valley and you have ${dexCount(2)} of them written down in your own hand.`,
+      `${Spell(DEX_ORDER.length)} kin in this valley and you have ${dexCount(2)} of them written down in your own hand.`,
       'That is the work. There is no ceremony at the end of it — just more valley.',
       'Go on. Take them out again.',
     ]);
@@ -8339,7 +8421,10 @@ function finishBattle() {
     G.flags[b.npc.id] = 1;
     G.money += b.npc.trainer.prize;
     lines.push(`You collected ${b.npc.trainer.prize} shards.`);
-    if (b.npc.block) { b.npc.gone = true; lines.push(`${b.npc.name} steps off the path.`); }
+    // The flag two lines up is what moves him; this only says so. Setting a
+    // `gone` field here as well would be a second copy of the same fact living
+    // on shared map data, which is the bug npcActive documents.
+    if (b.npc.block) lines.push(`${b.npc.name} steps off the path.`);
     winFlourish(gems, () => say('', lines, withReward));
   } else if (over === 'caught') {
     const caught = b.foe;
@@ -9248,6 +9333,12 @@ function screenSelect() {
             'Your kin brings its own moves to the fight. The deck is what you bring.',
             'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
             'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
+            // Five lines of rules and not one of them said why. The menu carries
+            // the running answer; this is the one that gets said out loud, and
+            // it is last so it is the thing you are still holding at the door.
+            `Now the part the rules do not cover. ${Spell(AIM_ORDER.length)} trainers between here and the top of Crown Hollow, and ${spell(AIM_ORDER.filter(([, who]) => who === 'Wick').length)} of them are Wick, so get used to him.`,
+            `Past the last one there is something sitting on the shrine that was here before I was. And there are ${spell(DEX_ORDER.length)} kin in this valley — I want every one of them written down.`,
+            'That is the errand. The door is behind you.',
           ], () => { saveGame(); if (done) done(); }),
         });
       },
@@ -9639,6 +9730,43 @@ function fitStage() {
  * Three sub-beats. The shortest is the burst at .35s, which is what a film of
  * this has to be sampled against — not the 1.6s whole.
  */
+const PLACE_IN = .3, PLACE_HOLD = 1.7, PLACE_OUT = .4;
+/**
+ * The name of the place you have just walked into, on a plaque that comes down
+ * out of the top edge and leaves the same way. Two seconds, top-left, out of
+ * the road you are walking on.
+ *
+ * It eases on the way in so it arrives rather than snaps, and goes out linearly
+ * because an overlay that lingers on its way off screen reads as a stutter. The
+ * gold rule underneath is the one the field menu title already sits on, so the
+ * card is recognisably the same furniture rather than a new kind of thing.
+ */
+function drawPlace(g) {
+  const p = G.place, T = p.t;
+  const raw = T < PLACE_IN ? T / PLACE_IN
+    : T < PLACE_IN + PLACE_HOLD ? 1
+    : 1 - (T - PLACE_IN - PLACE_HOLD) / PLACE_OUT;
+  const e = clamp(raw, 0, 1);
+  const slide = T < PLACE_IN ? 1 - (1 - e) * (1 - e) * (1 - e) : e;
+  const name = String(p.name).toUpperCase();
+  g.save();
+  g.font = 'bold 9px monospace';
+  const w = Math.ceil(g.measureText(name).width) + 16, h = 17;
+  const x = 8, y = Math.round(-h + (10 + h) * slide);
+  g.globalAlpha = e;
+  g.fillStyle = 'rgba(14,9,18,.86)';
+  g.fillRect(x, y, w, h);
+  g.fillStyle = '#ffc94d';
+  g.fillRect(x, y + h - 1, w, 1);
+  g.textAlign = 'left';
+  g.fillStyle = '#2a1b2e';
+  g.fillText(name, x + 9, y + 13);
+  g.fillStyle = '#f2e6d8';
+  g.fillText(name, x + 8, y + 12);
+  g.restore();
+  g.globalAlpha = 1;
+}
+
 const CHEST_SHAKE = .55, CHEST_BURST = .35, CHEST_SHOW = .7;
 const CHEST_T = CHEST_SHAKE + CHEST_BURST + CHEST_SHOW;
 
@@ -9909,6 +10037,9 @@ function draw() {
       : (AIR[G.mapId] || AIR_DEFAULT);
     drawAir(ctx, air, G.t);
   }
+  // Over the world and its weather, under everything that takes the screen —
+  // a plaque has no business sitting on top of a catch or a wipe.
+  if (G.place && !G.battle) drawPlace(ctx);
   if (G.flourish) drawFlourish(ctx);
   if (G.gotcha) drawGotcha(ctx);
   if (G.chestOpen) drawChest(ctx);
@@ -10048,6 +10179,13 @@ function step(dt) {
   G.t += dt; G.dt = dt; G.playtime += dt;
   if (G.fade > 0) G.fade = Math.max(0, G.fade - dt);
   if (G.wipe > 0) G.wipe = Math.max(0, G.wipe - dt);
+  // Ages here with the other passive overlays rather than inside a mode branch,
+  // for the reason spelled out below about message holds: a timer that only
+  // ticks while one branch is running is a timer that can stick for ever.
+  if (G.place) {
+    G.place.t += dt;
+    if (G.place.t > PLACE_IN + PLACE_HOLD + PLACE_OUT) G.place = null;
+  }
   if (G.toastT > 0) {
     G.toastT -= dt;
     if (G.toastT <= 0 && !HEADLESS) els.toast.classList.remove('on');
@@ -10101,6 +10239,7 @@ function newGame() {
   G.cards = []; G.deck = []; G.nextUid = 0; G.chestsOpened = 0; G.might = 0;
   STARTER_DECK.forEach(grantCard);
   G.steps = 0; G.playtime = 0; G.wins = 0; G.caught = 0; G.battle = null;
+  G.placeSeen = null; G.place = null;      // see loadGame — a new run has been nowhere
   enterMap('lab', 5, 5, 'up');
   G.mode = 'world';
   updateCam();
@@ -10478,7 +10617,8 @@ if (!HEADLESS) boot();
 if (typeof window !== 'undefined') {
   window.EK = {
     G, DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART, STATUS, TILE_ART, SOLID,
-    advanceDialogue, renderDialogue, liveBattleMsg, nextAim,
+    advanceDialogue, renderDialogue, liveBattleMsg, nextAim, AIM_ORDER, spell,
+    drawPlace, PLACE_IN, PLACE_HOLD, PLACE_OUT,
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,

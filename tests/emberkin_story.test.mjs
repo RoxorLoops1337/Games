@@ -179,11 +179,13 @@ eq(G.flags.t_wick2, 1, 'the rematch is won');
 
 section('the Warden opens the pass');
 const hale = EK.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
-ok(!hale.gone, 'the Warden is still standing in the corridor');
+ok(EK.npcActive(hale), 'the Warden is still standing in the corridor');
 ok(!EK.passable(EK.MAPS.emberwood, hale.x, hale.y, hale.y + 1), 'and blocks it');
 talkAndFight('emberwood', 't_hale', 30);
 eq(G.flags.t_hale, 1, 'the Warden is beaten');
-ok(hale.gone, 'and steps off the path');
+// Was `hale.gone` — a field on the shared MAPS object that the save never
+// carried. Asking npcActive instead asks the question the game asks.
+ok(!EK.npcActive(hale), 'and steps off the path');
 ok(EK.passable(EK.MAPS.emberwood, hale.x, hale.y, hale.y + 1), 'the corridor is walkable now');
 
 // -------------------------------------------------------------- the hunt --
@@ -241,15 +243,33 @@ ok(G.party.concat(G.box).some((m) => m.species === 'vespyr'), 'it is actually yo
 section('the last word');
 const wick3 = EK.MAPS.crown_hollow.npcs.find((n) => n.id === 't_wick3');
 ok(EK.npcActive(wick3), 'Wick is waiting at the shrine');
+
+// What Rowan says with the shrine down but Wick still standing, recorded now so
+// the ending can be compared against it. This used to assert the ending
+// contained "So it went with you" — which is the SHRINE speech, keyed on
+// beatVespyr, a flag set by the fight before the last one. The test agreed with
+// the game that the second-to-last beat was the end, so neither noticed that
+// finishing the game was acknowledged by nobody.
+const seeRowan = () => {
+  EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
+  G.mode = 'world'; G.dialogue = null;
+  EK.rowanScript();
+  ok(!!G.dialogue, 'Rowan has something to say');
+  const said = G.dialogue.lines.join(' ');
+  clear();
+  return said;
+};
+const atShrine = seeRowan();
+
 talkAndFight('crown_hollow', 't_wick3', 38);
 eq(G.flags.t_wick3, 1, 'the last rival battle is won');
+ok(/Rowan/.test((wick3.after || []).join(' ')), 'and Wick sends you down to Rowan');
 
-EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
-G.mode = 'world';
-EK.rowanScript();
-ok(!!G.dialogue, 'Rowan has something to say');
-ok(G.dialogue.lines.join(' ').includes('So it went with you'), 'and it is the ending, not the briefing');
-clear();
+const ending = seeRowan();
+ok(ending !== atShrine, 'and what she says is not the speech you already heard at the shrine');
+ok(/ceremony/i.test(ending), 'she keeps her word that there is none');
+ok(new RegExp(EK.spell(EK.AIM_ORDER.length)).test(ending),
+  `and counts the trainers you actually beat (${EK.spell(EK.AIM_ORDER.length)})`);
 
 section('the deck came along for the ride');
 ok(G.cards.length >= EK.STARTER_DECK.length, 'you still have your starting cards');
@@ -323,18 +343,120 @@ section('the menu says what you are actually doing');
   g.takeStarter('cindercub');
   ok(/Wick/.test(g.nextAim()), `then at the first trainer — "${g.nextAim()}"`);
   // Beat them in order; the aim has to move each time, never repeat, never stall.
-  const seen = new Set(), lines = [];
-  for (const id of ['t_wick1', 't_pell', 't_dorn', 't_ivo', 't_wick2', 't_coll', 't_hale', 't_mio']) {
+  // Note what is NOT in this list: t_wick3 sits behind beatVespyr, so it cannot
+  // be the aim until the shrine is done. The first version of this test set it
+  // early and passed, because the code it was checking had the same order wrong.
+  const seen = new Set();
+  for (const id of ['t_wick1', 't_pell', 't_dorn', 't_ivo', 't_wick2', 't_coll', 't_mio', 't_hale']) {
     g.G.flags[id] = 1;
     const a = g.nextAim();
-    lines.push(a);
     ok(!seen.has(a), `the aim moved on after ${id} — "${a}"`);
+    // The shrine line names Crown Hollow too, and rightly — what must never
+    // appear yet is a TRAINER up there, which is the phrasing this checks.
+    ok(!/standing, in Crown Hollow/.test(a), `and never sends you to fight in Crown Hollow before the shrine — "${a}"`);
     seen.add(a);
   }
-  g.G.flags.t_wick3 = 1;
-  ok(/shrine/i.test(g.nextAim()), `with every trainer down it points at the shrine — "${g.nextAim()}"`);
+  ok(/shrine/i.test(g.nextAim()), `with every reachable trainer down it points at the shrine — "${g.nextAim()}"`);
   g.G.flags.beatVespyr = 1;
+  ok(/Wick/.test(g.nextAim()) && /Crown Hollow/.test(g.nextAim()),
+    `the shrine opens Wick's last fight, and only then — "${g.nextAim()}"`);
+  g.G.flags.t_wick3 = 1;
   ok(/unfound|valley is yours/.test(g.nextAim()), `and after that at the dex — "${g.nextAim()}"`);
+}
+
+// The gate column in AIM_ORDER is a copy of a fact the map data already owns.
+// Copies drift, and this one drifting is what sent players up an empty mountain,
+// so the copy gets compared against the original rather than trusted.
+section('the aim order agrees with the gates the map actually sets');
+{
+  const g = loadGame({});
+  const npcs = new Map();
+  for (const map of Object.values(g.MAPS)) for (const n of map.npcs || []) if (n.id) npcs.set(n.id, n);
+  for (const [id, who, where, gate] of g.AIM_ORDER) {
+    const npc = npcs.get(id);
+    ok(!!npc, `${id} is a trainer that exists on a map`);
+    if (!npc) continue;
+    eq(npc.name, who, `${id} is named the same in the aim as on the map`);
+    eq(gate || null, npc.requires || null, `${id}'s gate matches the map: aim says ${gate || 'none'}`);
+    ok(/./.test(where), `${id} says where it is`);
+  }
+  const listed = new Set(g.AIM_ORDER.map(([id]) => id));
+  for (const id of npcs.keys()) {
+    if (id.startsWith('t_')) ok(listed.has(id), `every trainer on a map is in the aim order (${id})`);
+  }
+}
+
+// Rowan hands you a kin and five lines of rules, and used to send you out the
+// door without once saying what the valley wanted. The menu carries the running
+// answer; this is the one said out loud, so it is driven through the real
+// hand-over rather than read out of the source.
+section('Rowan says what the journey is for');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.openScreen('starter');
+  g.screenSelect();                       // takes the aimed kin — raises the gotcha
+  ok(!!g.G.gotcha, 'the hand-over still opens with the celebration');
+  g.step(3);                              // the gotcha runs itself out into the papers
+  g.closeScreen();                        // a fresh profile has one way out, and it talks
+  ok(!!g.G.dialogue, 'and ends in Rowan talking');
+  const said = g.G.dialogue.lines.join(' ');
+  ok(/deck/i.test(said), `he still explains the deck — "${said.slice(0, 40)}…"`);
+  ok(said.includes(g.spell(g.AIM_ORDER.length)), `he counts the trainers, in words (${g.spell(g.AIM_ORDER.length)})`);
+  ok(/shrine/i.test(said), 'he mentions the thing on the shrine');
+  ok(said.includes(g.spell(g.DEX_ORDER.length)), `and the kin worth writing down (${g.spell(g.DEX_ORDER.length)})`);
+  ok(!/\b\d+ (trainers|kin)\b/.test(said), `and says them as a person, not a stat line — "${said.match(/\b\d+ (?:trainers|kin)\b/) || 'no digits'}"`);
+  // The aim is the last thing said, so it is what you are holding at the door.
+  const last = g.G.dialogue.lines[g.G.dialogue.lines.length - 1];
+  ok(/errand/i.test(last), `the errand is the closing line, not the chest shop — "${last}"`);
+  for (let i = 0; i < 20 && g.G.dialogue; i++) { g.G.dialogue.hold = 0; g.advanceDialogue(); }
+  ok(!g.G.dialogue, 'and the whole speech is dismissable');
+  eq(g.G.mode, 'world', 'leaving you stood in the world with a kin');
+}
+
+// Warden Hale is the only npc who leaves the map, and he leaves the one tile
+// that matters. Run across TWO game instances over one store, because the fault
+// was invisible inside a single one: the field that removed him lived on the
+// module-level MAPS object, so it survived a save it was never part of, right
+// up until the tab closed.
+section('the Warden stays off the path across a reload');
+{
+  const store = {};
+  const a = loadGame(store);
+  a.setCtx(mkCtx());
+  a.newGame();
+  a.takeStarter('cindercub');
+  const hale = (g) => g.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
+  const h = hale(a);
+  const open = (g, n) => g.passable(g.MAPS.emberwood, n.x, n.y, n.y + 1);
+
+  ok(a.npcActive(h), 'he is on the path to start with');
+  ok(!open(a, h), 'and standing in it');
+  // If the neck ever stops being one tile wide he is decoration and every other
+  // assertion in this section is measuring nothing.
+  ok(!a.passable(a.MAPS.emberwood, h.x + 1, h.y, h.y + 1)
+    && !a.passable(a.MAPS.emberwood, h.x - 1, h.y, h.y + 1),
+    'the pass is one tile wide, so he is the gate and not a decoration in front of one');
+
+  a.G.flags.t_hale = 1;                      // exactly what winning records
+  ok(!a.npcActive(h), 'beating him takes him off it');
+  ok(open(a, h), 'and the pass opens');
+  ok(a.saveGame(), 'the run saves');
+
+  // A second instance is a second page load: fresh MAPS, same save.
+  const b = loadGame(store);
+  b.setCtx(mkCtx());
+  ok(b.loadGame(), 'the save comes back');
+  ok(!b.npcActive(hale(b)), 'and he is still off the path');
+  ok(open(b, hale(b)),
+    'so Crown Hollow, the shrine and the last fight are still reachable after a reload');
+
+  // The other direction, same root cause: a new run in the same tab must find
+  // him back, or the Warden never fights and the pass is open from minute one.
+  a.newGame();
+  ok(a.npcActive(h), 'and a fresh run finds him back on the path');
+  ok(!open(a, h), 'with the pass shut again');
 }
 
 done('emberkin_story');
