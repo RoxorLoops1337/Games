@@ -539,6 +539,31 @@ const SCENES = {
       EK.renderDialogue();
     },
   },
+  // Wick on the mountain after you have been down and heard Rowan out. His
+  // parting line used to be "Go and see Rowan" for ever, including on the walk
+  // straight back from having done it. Driven through the real talkTo, so what
+  // is on screen is whatever the after-function actually returns.
+  wickafter: {
+    w: 700, h: 480,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null;
+      for (const [id] of EK.AIM_ORDER) EK.G.flags[id] = 1;
+      EK.G.flags.beatVespyr = 1;
+      EK.G.flags.heardEnding = 1;
+      const w = EK.MAPS.crown_hollow.npcs.find((n) => n.id === 't_wick3');
+      if (!w) throw new Error('wickafter: no Wick on Crown Hollow');
+      EK.enterMap('crown_hollow', w.x, w.y + 1, 'up');
+      EK.G.mode = 'world'; EK.G.place = null;
+      EK.talkTo(w);
+      if (!EK.G.dialogue) throw new Error('wickafter: he said nothing');
+      if (/Go and see Rowan/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('wickafter: still sending you to a conversation you have had');
+      }
+      EK.renderDialogue();
+    },
+  },
   // Warden Hale in the neck of the pass. Worth a picture because everything
   // about him rests on the geometry: the way up to Crown Hollow is two tiles
   // wide and closes to one at (8,2), which is his tile, and npcs are

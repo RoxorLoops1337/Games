@@ -679,6 +679,9 @@ for (const b of blockers) {
   ok(EK.npcActive(b), `${b.name} is in the way while unbeaten`);
   EK.G.flags = { gotStarter: 1, [b.id]: 1 };
   ok(!EK.npcActive(b), `${b.name} steps off once beaten, and the save is what says so`);
+  // Which makes a parting line unreadable by construction: he is off the map
+  // the instant the flag that would show it is set.
+  ok(!b.after, `${b.name} carries no after-line, because nobody could ever read it`);
 }
 EK.G.flags = {};
 // Prerequisites: the rival must not challenge before Rowan hands out a starter.

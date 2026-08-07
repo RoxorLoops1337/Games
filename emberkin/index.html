@@ -4249,7 +4249,11 @@ const MAPS = {
         trainer: { team: [['gargolem', 17], ['voltyx', 18], ['nocthorn', 19]], prize: 1800,
           plan: ['brace', 'swing', 'aim', 'swing'],
           lose: ['Then it is yours to walk. Quietly, mind.'], win: ['Not yet. Come back when they trust you.'] },
-        after: ['Quietly, up there. It knows when you are loud.'] },
+        // No `after`. He is the only npc who leaves the map, and he leaves the
+        // moment he is beaten, so there is no version of the game in which you
+        // can walk up and talk to him again — a parting line here could never
+        // be read by anybody. `emberkin.test` holds every blocker to this.
+      },
     ],
     signs: { '15,17': 'EMBERWOOD. Roots move. Paths do not. Stay on the path.' },
     enc: { rate: .13, table: [['sproutle', 8, 12, 20], ['mothrix', 8, 12, 20], ['kindlark', 9, 12, 18], ['cindercub', 8, 12, 16], ['frillamb', 9, 12, 16], ['thornip', 11, 13, 10]] },
@@ -4315,7 +4319,14 @@ const MAPS = {
           plan: ['sharpen', 'swing', 'aim', 'swing', 'brace', 'swing'],
           lose: ['There. Now I can go home.', 'Rowan will want to hear it from you, not me.'],
           win: ['Ha! Not today.'] },
-        after: ['Go and see Rowan. She has been pretending not to wait.'] },
+        // He sends you down the mountain, and used to go on sending you for
+        // ever — including on the walk back up, after you had been and heard
+        // her. A parting line that outlives the errand it gave you is the same
+        // fault as an errand nobody acknowledges; this is the other end of it.
+        after: () => (G.flags.heardEnding
+          ? ['She told you, then. She has been rehearsing that since we were nine.',
+            'I am staying up here a while. It is quiet, and nothing on this mountain has beaten me yet.']
+          : ['Go and see Rowan. She has been pretending not to wait.']) },
     ],
     enc: { rate: .14, table: [['nocthorn', 20, 24, 20], ['voltyx', 20, 24, 20], ['thornip', 20, 24, 20], ['pyrelynx', 20, 24, 20], ['gargolem', 20, 24, 20]] },
   },
@@ -7728,7 +7739,10 @@ function talkTo(npc) {
   }
   if (npc.shop) { say(npc.name, npc.lines, () => openScreen('shop')); return; }
   if (npc.chests) { say(npc.name, npc.lines, () => openScreen('chests')); return; }
-  say(npc.name, npc.trainer && G.flags[npc.id] ? (npc.after || ['Good match. Go on.']) : npc.lines);
+  // `after` may be a function, for a trainer whose parting line stops being
+  // true once you have done what it told you to.
+  const after = typeof npc.after === 'function' ? npc.after() : npc.after;
+  say(npc.name, npc.trainer && G.flags[npc.id] ? (after || ['Good match. Go on.']) : npc.lines);
 }
 
 function healParty() {
@@ -7767,7 +7781,7 @@ function rowanScript() {
         : `${Spell(left)} still unwritten, mind. The valley keeps some back for people who keep looking.`,
       'I said there was no ceremony at the end of it. There is not. You are only somebody who has done it now.',
       'Go on. It is all still out there.',
-    ]);
+    ], () => { G.flags.heardEnding = 1; saveGame(); });
     return;
   }
   if (G.flags.beatVespyr) {
