@@ -203,6 +203,14 @@ edit this block to name the next one.
       cups, toy blocks, chestnuts, candles, lebkuchen. Nine items in one fill a
       colour, positioned off the same integer hash the market plan uses, so a
       wreck is identical every frame and rolls nothing.
+- [x] The brief shows the market. It is where you decide how to attack one, and
+      the market itself was a black smear behind the card — so the overlay came
+      down to the finale's .82, and the market's own plan (the picker's
+      `paintMarketThumb`) now sits beside the blurb in the row the blurb
+      already had. No extra card height: LET'S RUIN CHRISTMAS still lands on
+      screen at 1440×810, 1280×720, 1024×640 and two landscape phones, which
+      needed the plan trimmed after the first attempt pushed it 4px off a
+      1024×640 window.
 
 ## Next
 
