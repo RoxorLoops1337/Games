@@ -1183,16 +1183,35 @@ function drawFighter(f){
   const headX = X(jt.head[0]) + dir * B0.hunch * sc, headY = Y(jt.head[1] + HEAD_LIFT + B0.neck);
 
   if (f.state === 'super'){
-    const k = 0.55 + Math.sin(T * 26) * 0.25;
-    ellipse(sx, sy - 22 * sc, 18 * sc, 27 * sc, 'rgba(255,170,40,' + (k * 0.26).toFixed(2) + ')');
-    ellipse(sx, sy - 22 * sc, 12 * sc, 19 * sc, 'rgba(255,225,130,' + (k * 0.3).toFixed(2) + ')');
-    for (let i = 0; i < 7; i++){
-      const a2 = T * 11 + i * TAU / 7;
-      px(sx + Math.cos(a2) * 16 * sc, sy - 22 * sc + Math.sin(a2) * 21 * sc, 2, 2, i % 2 ? '#ffe27a' : '#fff6d0');
+    /* The biggest thing in the game was two ellipses and seven dots going
+       round.  It is a column of light standing on the floor now, in the
+       colour of the tier: a ring scorched into the ground, a shaft up
+       through him, spokes going out, embers coming up off it, and enough in
+       the light field that the whole street takes the colour. */
+    const tint = (SUPER.tints && SUPER.tints[Math.max(0, (f.tier ? SUPER.tiers.indexOf(f.tier) : 0))]) || '#ffc23a';
+    const k = 0.62 + Math.sin(T * 22) * 0.24;
+    const gy2 = Math.round(f.y + cam.shakeY) + 1;
+    lfAdd(sx, gy2 - 10, 84 * sc, tint, 0.55 * k);        // it lights the street he is standing in
+    glow(sx, gy2 - 4, 44 * sc, 14 * sc, tint, 0.85 * k);
+    for (let i = 0; i < 14; i++){                        // the ring it stands in
+      const a2 = i * TAU / 14 - T * 2.2;
+      px(sx + Math.cos(a2) * 22 * sc, gy2 + Math.sin(a2) * 8 * sc, 3, 2, rgba(tint, 0.95));
     }
-    for (let i = 0; i < 4; i++){
-      const yy = sy - (10 + i * 9) * sc - ((T * 90 + i * 13) % 12);
-      px(sx - f.face * (13 + i * 3) * sc, yy, 5, 1, 'rgba(255,225,150,0.5)');
+    for (let r = 0; r < 24; r++){                        // the shaft, wide at the foot
+      const q = r / 24, w = (22 - q * 13) * sc;
+      px(sx - w / 2, gy2 - 2 - r * 2.4 * sc, Math.max(1, w), 3,
+        rgba(r < 4 ? '#ffffff' : tint, (0.62 - q * 0.5) * k));
+    }
+    glow(sx, sy - 22 * sc, 26 * sc, 34 * sc, tint, 0.55 * k);
+    for (let i = 0; i < 6; i++){                         // spokes, turning the other way
+      const a2 = T * 7 + i * TAU / 6, L = (20 + Math.sin(T * 13 + i) * 6) * sc;
+      limb(sx, sy - 22 * sc, sx + Math.cos(a2) * L, sy - 22 * sc + Math.sin(a2) * L * 0.8, 2,
+        rgba(i % 2 ? '#fff6d0' : tint, 0.8 * k));
+    }
+    for (let i = 0; i < 9; i++){                         // embers off the floor
+      const life = (T * 1.5 + i * 0.31) % 1;
+      px(sx + Math.sin(T * 3 + i * 2) * 16 * sc, gy2 - life * 46 * sc, 1, 2,
+        rgba(life > 0.6 ? tint : '#fff6d0', 0.9 - life * 0.85));
     }
   }
 
@@ -1932,6 +1951,9 @@ const SUPER = {
 /* Tier two lengthens the flurry; tier three ends it with the floor coming
    up.  Every strike list is written out in full rather than spliced, so
    what a tier does is something you can read. */
+/* A colour a tier, so a Rush III does not look like a Rush I with more
+   punches in it. */
+SUPER.tints = ['#ffc23a', '#ff7a3a', '#c86aff'];
 SUPER.tiers = [
   { dur: 2.05, strikes: SUPER.strikes },
   { dur: 2.45, strikes: [
@@ -5040,6 +5062,19 @@ function draw(){
   for (const p of fx) drawFx(p);
   drawAmbient();
   drawForeground();
+  /* A rush takes the whole street over, not just the man throwing it: the
+     frame goes the colour of the tier and the edges close in on him. */
+  const rusher = players.find(p => p && p.state === 'super');
+  if (rusher){
+    const tint = SUPER.tints[Math.max(0, SUPER.tiers.indexOf(rusher.tier))] || '#ffc23a';
+    const k = 0.6 + Math.sin(T * 22) * 0.2;
+    px(0, 0, VW, VH, rgba(tint, 0.13 * k));
+    for (let i = 0; i < 14; i++){
+      const a = (0.055 * (14 - i) / 14).toFixed(3);
+      px(i * 4, 0, 4, VH, 'rgba(6,4,10,' + a + ')');
+      px(VW - 4 - i * 4, 0, 4, VH, 'rgba(6,4,10,' + a + ')');
+    }
+  }
   bloomPass();                                  // the world glows; the HUD over it does not
   drawVignette();
   syncSpecialBtn();
