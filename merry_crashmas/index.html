@@ -3958,6 +3958,41 @@ function drawGoods(o, w, h, gy, wear){
   }
 }
 
+/* What is left of the stock when a stall comes down. Six trades used to leave
+   six identical brown heaps flying the same blue scrap of awning: nothing of
+   what the stall sold, and not even the stripe it had been flying a second
+   earlier. Positions come off the same integer hash the market plan uses, so a
+   wreck looks the same every frame and no generator is touched. */
+const WRECK_SPILL = {
+  grill:   { cols: ['#c98f52', '#241c18'], r: [5, 3], round: true },
+  pots:    { cols: ['#8b2f22', '#3a2c22'], r: [5, 4], round: true },
+  blocks:  { cols: ['#e0483c', '#3f86c4', '#41a066', '#ffd34d'], r: [4], round: false },
+  brazier: { cols: ['#c98f52', '#3a2c22'], r: [4, 3], round: true },
+  flames:  { cols: ['#f6f2ea', '#c9a24a'], r: [4, 3], round: false },
+  hearts:  { cols: ['#a8452c', '#f3ece0'], r: [5, 3], round: true },
+};
+const WRECK_ITEMS = 9;
+function drawSpilledStock(o, w){
+  const sp = WRECK_SPILL[tradeOf(o).goods];
+  if (!sp) return 0;
+  let drawn = 0;
+  for (let c = 0; c < sp.cols.length; c++){
+    ctx.fillStyle = sp.cols[c];
+    const rad = sp.r[c % sp.r.length];
+    ctx.beginPath();
+    for (let i = c; i < WRECK_ITEMS; i += sp.cols.length){
+      const a = mkRand(o.seed * 9973 + i * 31) * 6.283;
+      const d = w * (0.26 + mkRand(o.seed * 7717 + i * 17) * 0.38);
+      const gx = Math.cos(a) * d, gy = Math.sin(a) * d * 0.6;
+      if (sp.round){ ctx.moveTo(gx + rad, gy); ctx.arc(gx, gy, rad, 0, 6.283); }
+      else ctx.rect(gx - rad, gy - rad, rad * 2, rad * 2);
+      drawn++;
+    }
+    ctx.fill();
+  }
+  return drawn;
+}
+
 function drawHut(o){
   const w = o.w, h = o.h, x = o.x, y = o.y;
   if (o.dead){
@@ -3977,15 +4012,17 @@ function drawHut(o){
       ctx.fillRect(-w * (0.2 + o.seed * 0.16), -6, w * (0.4 + o.seed * 0.3), 11);
       ctx.restore();
     }
-    // torn awning
+    // torn awning, in the stripe this stall was actually flying
     ctx.save(); ctx.rotate(0.5 + o.seed);
     for (let i = 0; i < 4; i++){
-      ctx.fillStyle = i % 2 ? TH.awning2 : TH.awning;
+      ctx.fillStyle = i % 2 ? TH.awning2 : (tradeOf(o).stripe || TH.awning);
       ctx.fillRect(-w * 0.22 + i * (w * 0.11), h * 0.08, w * 0.11, 20);
     }
     ctx.restore();
     ctx.fillStyle = 'rgba(30,22,16,.22)';
     circle(w * 0.1, -h * 0.08, w * 0.16); ctx.fill();
+    // and the stock, thrown out across the snow around it
+    drawSpilledStock(o, w);
     ctx.restore();
     return;
   }

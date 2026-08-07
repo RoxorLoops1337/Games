@@ -82,6 +82,7 @@ const EXPOSE = `__out.api = {
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
   paintMarketThumb, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
+  drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, drawHut,
   bannerBox, bannerFont, bannerLayout, bannerRibbon,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
   bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
@@ -4461,6 +4462,90 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ---------------------------------------------------- wrecked stalls --- */
+
+test('a wrecked stall is a wreck of that stall', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const wreck = (seed) => {
+    api.props.length = 0;
+    const o = api.addProp('hut', api.cam.x, api.cam.y, {});
+    o.seed = seed; o.dead = true; o.rot = 0.4;
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawProp(o));
+    return { o, trade: api.tradeOf(o), cols: rec.order };
+  };
+  const sets = [];
+  for (let i = 0; i < api.TRADES.length; i++){
+    const w = wreck((i + 0.5) / api.TRADES.length);
+    const t = w.trade;
+    // the scrap of awning is the stripe it was flying a second earlier
+    if (t.stripe){
+      assert(w.cols.includes(t.stripe),
+        t.id + ' lost its stripe when it fell: ' + t.stripe);
+    }
+    // and its stock is on the snow around it
+    const sp = api.WRECK_SPILL[t.goods];
+    assert(sp, t.id + ' has no spill defined for ' + t.goods);
+    for (const c of sp.cols){
+      assert(w.cols.includes(c), t.id + ' spilled nothing of its stock (' + c + ')');
+    }
+    sets.push(t.id + ':' + sp.cols.join(','));
+  }
+  // six trades, six different wrecks — they all used to be the same brown heap
+  assert(new Set(sets).size === sets.length,
+    'two trades leave the same wreck: ' + sets.join(' | '));
+  console.log('    (wrecks: ' + sets.map(s => s.split(':')[0]).join(', ') + ')');
+});
+
+test('the spilled stock is batched, and drawn from a hash not a generator', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const o = api.addProp('hut', api.cam.x, api.cam.y, {});
+  o.dead = true; o.rot = 0.4;
+
+  // one fill a colour, whatever the item count
+  for (let i = 0; i < api.TRADES.length; i++){
+    o.seed = (i + 0.5) / api.TRADES.length;
+    const sp = api.WRECK_SPILL[api.tradeOf(o).goods];
+    api._resetCounts();
+    const items = api.drawSpilledStock(o, 158);
+    assert(items === api.WRECK_ITEMS,
+      api.tradeOf(o).id + ' should scatter ' + api.WRECK_ITEMS + ' items, got ' + items);
+    assert((api._counts.fill || 0) === sp.cols.length,
+      api.tradeOf(o).id + ' should cost one fill a colour: ' +
+      api._counts.fill + ' for ' + sp.cols.length + ' colours');
+  }
+
+  /* Nothing here may roll a number. A wreck is drawn every frame it is on
+     camera, so a generator call in it would rescore the campaign continuously
+     — which is exactly how five earlier cosmetic systems went wrong. */
+  const draw5 = (fn) => {
+    api.reseed(1234);
+    if (fn) fn();
+    return [api.rnd(), api.rnd(), api.rnd(), api.rnd(), api.rnd()];
+  };
+  const clean = draw5(null);
+  const after = draw5(() => {
+    for (let i = 0; i < api.TRADES.length; i++){
+      o.seed = (i + 0.5) / api.TRADES.length;
+      api.drawSpilledStock(o, 158);
+      api.drawSpilledStock(o, 158);
+    }
+  });
+  assert(JSON.stringify(clean) === JSON.stringify(after),
+    'a wreck moved the simulation stream: ' + clean[0] + ' -> ' + after[0]);
+  // and it looks the same every frame
+  const shot = () => { const r = carRec(); api.withCtx(r, () => api.drawSpilledStock(o, 158));
+    return r.all; };
+  const a = shot(), b = shot();
+  assert(a.length >= api.WRECK_ITEMS, 'the recorder should see every item: ' + a.length);
+  assert(JSON.stringify(a) === JSON.stringify(b),
+    'a wreck should not shuffle itself between frames');
+});
+
 /* --------------------------------------------------------- Santa --- */
 
 /* Draws one shopper into a recorder, close enough that the fine tier runs. */
@@ -4553,10 +4638,10 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
    through ctx and the recorder ignores them, so what comes back is the layout
    inside the bodywork. */
 function carRec(){
-  const shapes = [], order = [], rects = [];
+  const shapes = [], order = [], rects = [], all = [];
   let fill = '', line = '', lw = 0, pending = null;
   const base = {
-    shapes, order, rects,
+    shapes, order, rects, all,
     set fillStyle(v){ fill = String(v); order.push(String(v)); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); },
@@ -4566,9 +4651,12 @@ function carRec(){
     // a shape lasts until the next beginPath, so a fill and the stroke that
     // outlines it are both recorded against it
     beginPath(){ pending = null; },
-    arc(x, y, r){ pending = { x, y, r, ry: r }; },
-    ellipse(x, y, rx, ry){ pending = { x, y, r: rx, ry }; },
-    fillRect(x, y, w, h){ rects.push({ x, y, w, h, style: fill }); },
+    // `all` is every primitive in order, for checking a draw repeats exactly;
+    // `shapes` keeps one per fill, which is what the layout tests read
+    arc(x, y, r){ pending = { x, y, r, ry: r }; all.push(['arc', x, y, r, fill]); },
+    ellipse(x, y, rx, ry){ pending = { x, y, r: rx, ry }; all.push(['el', x, y, rx, ry, fill]); },
+    rect(x, y, w, h){ all.push(['rect', x, y, w, h, fill]); },
+    fillRect(x, y, w, h){ rects.push({ x, y, w, h, style: fill }); all.push(['fr', x, y, w, h, fill]); },
     fill(){ if (pending) shapes.push(Object.assign({}, pending, { style: fill })); },
     stroke(){ if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; } },
     measureText: () => ({ width: 30 }),
