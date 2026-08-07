@@ -1952,6 +1952,8 @@ function shakeEnv(){
    part of what you just did. Everyone else still cries, still drops their
    shopping and still runs; they are simply not mixed in. */
 const wails = [];
+const FX_MAX = 900, FX_EVICT = 200;
+
 function wailSlot(p){
   if (Math.abs(p.x - car.x) > WAIL_RANGE || Math.abs(p.y - car.y) > WAIL_RANGE) return false;
   for (let i = wails.length - 1; i >= 0; i--) if (wails[i] <= T) wails.splice(i, 1);
@@ -1960,8 +1962,22 @@ function wailSlot(p){
   return true;
 }
 
+/* The buffer used to make room by taking the front 200 entries, whatever they
+   were. On MIDNIGHT MASS a run makes 1,186 tears out of 3,155 particles, sits
+   pinned at the 899 cap, and eight of the twelve score pops were deleted
+   mid-flight — the game throwing away the only thing on screen that says what
+   you just earned, to make room for crying. Text is now the last thing to go,
+   not the first. */
 function addFx(o){
-  if (fx.length > 900) fx.splice(0, 200);
+  if (fx.length > FX_MAX){
+    let drop = FX_EVICT;
+    const keep = [];
+    for (const e of fx){
+      if (drop > 0 && e.type !== 'txt'){ drop--; continue; }
+      keep.push(e);
+    }
+    fx.splice(0, fx.length, ...keep);
+  }
   const e = Object.assign({ x:0, y:0, vx:0, vy:0, t:0, ttl:0.6, type:'puff', col:'#fff', size:6, rot:0, spin:0 }, o);
   fx.push(e);
   return e;
@@ -2281,11 +2297,22 @@ function stepPeople(dt){
     const wantCry = p.panic * p.cryK;
     p.cry += (wantCry - p.cry) * Math.min(1, dt * 3);
     if (p.cry > 0.45){
+      /* Both rolls stay unconditional whether or not the tear is drawn. They
+         are simulation draws, and skipping them would renumber every roll
+         after them and rescore all twenty-one markets — the fifth system in
+         this family, after seedSnow, popText, addGore and the shake. Only the
+         addFx is skipped, the same way wailSlot already drops inaudible
+         wails. */
       if (rnd() < dt * (2.5 + p.cry * 5)){
         const a = p.ang + Math.PI + rr(-0.7, 0.7);
-        addFx({ type:'tear', x: p.x + Math.cos(p.ang) * p.r * 0.5, y: p.y + Math.sin(p.ang) * p.r * 0.5,
-          vx: Math.cos(a) * rr(30, 90) + p.vx * 0.3, vy: Math.sin(a) * rr(30, 90) + p.vy * 0.3,
-          ttl: rr(0.35, 0.7), size: rr(2.5, 4.5), col:'#bfe6ff' });
+        // four draws, in the order the object literal used to make them —
+        // vx and vy each rolled their own speed, and hoisting them into one
+        // cost a draw and moved every market's score
+        const sx = rr(30, 90), sy = rr(30, 90), ttl = rr(0.35, 0.7), sz = rr(2.5, 4.5);
+        if (onCamera(p.x, p.y, 60))
+          addFx({ type:'tear', x: p.x + Math.cos(p.ang) * p.r * 0.5, y: p.y + Math.sin(p.ang) * p.r * 0.5,
+            vx: Math.cos(a) * sx + p.vx * 0.3, vy: Math.sin(a) * sy + p.vy * 0.3,
+            ttl, size: sz, col:'#bfe6ff' });
       }
       // the timer is re-armed either way: whether a wail is audible must not
       // move the simulation's random stream
@@ -5607,10 +5634,21 @@ function drawCarRim(){
    sparks and text are in the air and belong over it. */
 const FX_UNDER = { blood: 1, mist: 1, stain: 1, chunk: 1, tear: 1, pixel: 1 };
 
+/* Is this world point on screen, with `pad` world units of slack? One place
+   for the question, so the tear that is not spawned and the particle that is
+   not drawn agree about where the frame ends. */
+function onCamera(x, y, pad){
+  const hw = VW / cam.s / 2 + (pad || 0), hh = VH / cam.s / 2 + (pad || 0);
+  return Math.abs(x - cam.x) < hw && Math.abs(y - cam.y) < hh;
+}
+
 function drawFx(over){
   for (const f of fx){
     if (over !== undefined && !!FX_UNDER[f.type] === !!over) continue;
     if (f.type === 'stain') continue;          // already down, under the bodies
+    /* drawGround culls its gore, debris and tracks against the frame; this
+       loop never did, so every off-screen tear still cost a fill. */
+    if (!onCamera(f.x, f.y, 120)) continue;
     const k = 1 - f.t / f.ttl;
     ctx.globalAlpha = clamp(k, 0, 1);
     if (f.type === 'txt'){

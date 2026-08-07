@@ -68,6 +68,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
+  addFx, onCamera, FX_MAX, FX_EVICT,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
@@ -3879,6 +3880,116 @@ test('the aim preview stops where the run stops', () => {
     assert(err < 140, name + ': the preview ends ' + err.toFixed(0) +
       'px from where the car stops');
   }
+});
+
+/* One MIDNIGHT MASS run makes 12,390 tears out of 19,707 particles, sits
+   pinned at the 899 cap, and the eviction took the front 200 entries whatever
+   they were — which deleted 8 of the 12 score pops mid-flight. The game was
+   throwing away the only thing on screen that says what you just earned, to
+   make room for crying. */
+test('the particle buffer never eats a score pop', () => {
+  const rows = [];
+  for (const lv of [20, 0, 10]){
+    const api = boot({ w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    const seen = new Map();
+    let evictions = 0, peak = 0;
+    for (let c = 0; c < api.G.cars && api.G.phase !== 'results'; c++){
+      api.launch(-api.C.MAX_PULL, (c - 1) * 40);
+      for (let f = 0; f < 3000 && api.G.phase === 'drive'; f++){
+        const before = api.fx.length;
+        api.update(1 / 60);
+        peak = Math.max(peak, api.fx.length);
+        if (before - api.fx.length >= api.FX_EVICT * 0.75) evictions++;
+        for (const e of api.fx) if (!seen.has(e)) seen.set(e, 1);
+      }
+      for (let f = 0; f < 900 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+        api.skipReplay(); api.update(1 / 60);
+      }
+    }
+    let txt = 0, lost = 0;
+    for (const [e] of seen){
+      if (e.type !== 'txt') continue;
+      txt++;
+      if (e.t < e.ttl && api.fx.indexOf(e) < 0) lost++;
+    }
+    assert(txt > 8, api.LEVELS[lv].name + ': only ' + txt + ' score pops to check');
+    assert(lost === 0, api.LEVELS[lv].name + ': ' + lost + ' of ' + txt +
+      ' score pops were deleted before their ttl');
+    assert(peak <= api.FX_MAX + api.FX_EVICT,
+      api.LEVELS[lv].name + ': the buffer ran to ' + peak);
+    rows.push(api.LEVELS[lv].name + ' ' + txt + ' pops, ' + evictions + ' evictions');
+  }
+  console.log('    (particles: ' + rows.join(' | ') + ')');
+});
+
+test('eviction takes the tears and leaves the text', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.fx.length = 0;
+  // a text pop at the very front, exactly where the old splice(0, 200) hit
+  const pop = api.addFx({ type: 'txt', text: '+1,000', ttl: 1, size: 20, col: '#8effb0' });
+  for (let i = 0; i < api.FX_MAX + 5; i++) api.addFx({ type: 'tear', ttl: 1 });
+  assert(api.fx.indexOf(pop) >= 0, 'the pop survived the eviction it used to be first in line for');
+  assert(api.fx.length <= api.FX_MAX + 6,
+    'and the buffer still shed its 200: ' + api.fx.length);
+  const tears = api.fx.filter(e => e.type === 'tear').length;
+  assert(tears === api.fx.length - 1, 'everything else is a tear');
+
+  // a buffer that is nothing but text cannot shed anything, and must not loop
+  api.fx.length = 0;
+  for (let i = 0; i < api.FX_MAX + 5; i++) api.addFx({ type: 'txt', text: 'x', ttl: 1 });
+  assert(api.fx.length === api.FX_MAX + 5, 'all text, nothing dropped: ' + api.fx.length);
+});
+
+test('a tear nobody can see costs a draw but not a particle', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  /* The rolls stay unconditional whether or not the tear is spawned. This is
+     the point of the item: four other cosmetic systems have fed on the
+     simulation seed, and culling a draw rescores all twenty-one markets. */
+  /* Only the camera moves between the two runs. The shopper stands in the same
+     place next to the same car both times, so every draw stepPeople makes is
+     the same draw — the only difference is whether anyone could have seen the
+     tear. */
+  const draws = (camX) => {
+    api.reseed(99); api.people.length = 0; api.fx.length = 0;
+    api.car.x = 2600; api.car.y = 1100;
+    const p = api.addPerson(2660, 1100, 'shopper');
+    p.cry = 1; p.panic = 1;
+    api.cam.x = camX; api.cam.y = 1100;
+    for (let i = 0; i < 40; i++) api.stepPeople(1 / 60);
+    return { after: api.rnd(), spawned: api.fx.filter(e => e.type === 'tear').length };
+  };
+  const near = draws(2600);
+  const far = draws(2600 + 9000);
+  assert(near.after === far.after,
+    'the stream moved when the tear was culled: ' + near.after + ' vs ' + far.after);
+  assert(near.spawned > 0, 'a shopper crying in shot should make tears');
+  assert(far.spawned === 0, 'one crying 9,000px away should not, got ' + far.spawned);
+
+  assert(api.onCamera(api.cam.x, api.cam.y, 0), 'the camera centre is on camera');
+  assert(!api.onCamera(api.cam.x + 9000, api.cam.y, 0), '9,000px away is not');
+});
+
+test('drawFx does not draw what the camera cannot see', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const cost = (dx) => {
+    api.fx.length = 0;
+    for (let i = 0; i < 60; i++)
+      api.addFx({ type: 'puff', x: api.cam.x + dx, y: api.cam.y, ttl: 1, size: 6 });
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawFx());
+    return rec.all.length;
+  };
+  const seen = cost(0), unseen = cost(5000);
+  assert(seen > 30, '60 puffs in shot should draw something, got ' + seen);
+  assert(unseen === 0, '60 puffs 5,000px off camera still cost ' + unseen + ' draw ops');
+  console.log('    (drawFx: ' + seen + ' ops in shot, ' + unseen + ' off it)');
 });
 
 test('the first market clears on the shot everyone takes first', () => {
