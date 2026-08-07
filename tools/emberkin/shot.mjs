@@ -403,6 +403,7 @@ const SCENES = {
       EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
       EK.G.wipe = 0; EK.G.battleMsg = null;
       EK.B().mine.hp = Math.round(EK.B().mine.max * .38);   // hurt enough for the choice to matter
+      EK.B().foe.hp = Math.round(EK.B().foe.max * .22);     // and the foe soft enough to be worth an orb
       EK.openScreen('bag');
     },
   },
