@@ -287,6 +287,75 @@ const SCENES = {
       EK.openScreen('dex');
     },
   },
+  // Three creatures and one irreversible choice — the third thing a new player
+  // sees, and no picture of it existed.
+  starter: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null; EK.G.mode = 'world';
+      EK.openScreen('starter');
+    },
+  },
+  // The Wayhouse heal. Talked into rather than triggered, so the beat runs the
+  // way it does in play: Sable's line, the light, then "right as rain".
+  mend: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.enterMap('wayhouse', 5, 3, 'up');
+      EK.G.party.forEach((m) => { m.hp = 1; });
+      const n = (EK.G.map.npcs || []).find((m) => m.heal);
+      setTimeout(() => {
+        EK.talkTo(n);
+        // Past Sable's offer the way a player taps through it; the light is
+        // what comes next.
+        for (let i = 0; i < 12 && EK.G.dialogue; i++) { EK.G.dialogue.hold = 0; EK.advanceDialogue(); }
+      }, 140);
+    },
+  },
+  // The chest shop — where gems go, and the only purchase in the game that is a
+  // gamble. Never shot. The cursor is driven DOWN rather than set, so the shot
+  // shows whether up/down agrees with the grid the player can see.
+  chests: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.G.gems = 260;
+      EK.openScreen('chests');
+      EK.pressKey('down'); EK.step(.02); EK.releaseKey('down'); EK.fired.clear();
+    },
+  },
+  // Going down. Driven through a real loss so the beat runs the way it does in
+  // play: the last kin falls, the two lines, the dark closing, the Wayhouse.
+  wipe: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({ foe: EK.mkMon('bramblor', 45), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      void b;
+      // Fought out, not assigned. `over` is decided inside the damage path, so
+      // a kin set to 1 HP and then hit still does not lose — three films and a
+      // test discovered that separately. Ending turns against something far too
+      // strong is what actually loses, and the defeat lines then come from a
+      // callback the frame loop drives, so they need tapping through as they
+      // arrive rather than all at once.
+      const beat = () => {
+        const cur = EK.B();
+        if (cur && !cur.over && !cur.log) EK.submitLog(EK.endTurn());
+        const d = EK.G.dialogue || EK.liveBattleMsg();
+        if (d) { d.hold = 0; EK.advanceDialogue(); }
+      };
+      for (let t = 100; t <= 4000; t += 130) setTimeout(beat, t);
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {

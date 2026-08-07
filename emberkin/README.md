@@ -2037,6 +2037,63 @@ It is skippable, and the frame that skips it **still belongs to the transition**
 Without that, the very press that ended the flourish fell through to the reward
 screen it had just opened and took the first card for you.
 
+### Going down
+
+Losing the whole party said two lines and then teleported you to the Wayhouse on
+the same frame — a harder cut than walking through a door, which at least gets a
+curtain. The one moment in the game where you lose something was the only
+transition in it with no transition. Found the same way the heal was: by
+listing what has a beat and what does not.
+
+`G.blackout` closes the dark over the arena and holds a moment before the room
+comes up, and the Wayhouse then opens out of it on `G.fade` rather than snapping
+in. It closes over three quarters of the beat and holds for the rest — the hold
+is the point, and it is the difference between being moved and being carried.
+
+**Verified by test rather than by photograph**, which is worth being straight
+about: the suite drives a real loss and asserts you are still where you fell
+while the dark closes, still there half way through, and in the Wayhouse only
+once it has. Three attempts to film it failed and each one taught something
+worth keeping — `over` is decided inside the damage path, so a kin set to 1 HP
+and then hit does **not** lose; the wild plan opens with a buff, so one ended
+turn is a foe sharpening its claws and nothing else; and the defeat lines come
+from a callback the frame loop drives, so they cannot be tapped through all at
+once. The fourth film caught the loss itself and ran out before the dark
+closed. A picture of it is still owed.
+
+### Being healed
+
+Every other thing that happens to you has a beat: an orb arcs and wobbles, an
+evolution turns a wheel of light, the grass parts before a wild kin, a trainer
+looks and walks over. The Wayhouse — the place you go after every rough fight,
+and the only good thing that happens to you outside a win — restored the whole
+party **silently**, between two lines of dialogue.
+
+Listing what has a beat and what does not is what found it. Nothing in the code
+says a beat is missing; the heal works perfectly.
+
+`G.mend` is a warmth rising off the floor and closing over you, `MEND_T` 1.15s,
+owning the screen the way the rustle and the ambush do. It swells fast and lets
+go slowly — the fall is longer than the rise, which is the difference between
+being healed and being flashed at — and the line that says it worked arrives
+*after* you have watched it work.
+
+The first version was a warm glow and warm motes, and it was nearly invisible:
+the Wayhouse is the most golden interior in the game, which is exactly the wrong
+background for adding gold to. The same trap as green specks on green grass, one
+room over. What carries it now is a **change over time** rather than a
+difference in colour — the whole frame lifts a little and settles — plus motes
+travelling *upward*, since the direction is the entire reading.
+
+It is deliberately quiet. A rest should not out-shout an evolution.
+
+### The starter screen is right
+
+Photographed for the first time and needs nothing: each card tinted to its
+element, the art in a lit window of that colour, the name in the element's own
+colour, and STRONG INTO / SOFT AGAINST chips so an irreversible choice is made
+with the matchup visible. Recorded here so nobody goes looking for work in it.
+
 ### Something in the grass
 
 A trainer spotting you gets three beats — the look, the frame closing in, the
@@ -2204,6 +2261,30 @@ against what the function returns (3/3, 4/4, 9/9).
 The shop was photographed at the same time and needs nothing: grouped by kind,
 priced, and everything you cannot afford is dimmed, so what your shards will
 buy reads at a glance.
+
+#### The fix had to reach every grid, and did not
+
+`gridCols()` landed with a selector covering three grids — the dex, the card
+rows and the mon cards. The bag, the shop and the chest shelf use a fourth
+(`.items > .item`) and were not in it, so they fell to the "fewer than two
+cells" branch and returned **1**: up and down moved by a single cell in a grid
+two and three across.
+
+It was found by photographing each screen with a cursor actually in it, which is
+the only way to see whether a fix reaches everything it claims to. Measured
+against the rendered grid at three sizes, before and after:
+
+    box     phone 1 · x2 stage 2 · wide 4      (the old constant: 2)
+    deck    phone 3 · x2 stage 4 · wide 6      (the old constant: 2)
+    shop    phone 2 · x2 stage 2 · wide 3      (the old constant: 2)
+    chests  phone 1 · x2 stage 2 · wide 3      (the old constant: 2)
+
+Five of those twelve happened to be right. The chest shop was shot with the
+cursor **driven down** rather than set, so the picture shows the cursor landing
+one visible row lower — the only proof that matters.
+
+The chest shop itself needs nothing: gem prices, an odds bar per chest showing
+the rare/epic/legendary split, and everything you cannot afford dimmed.
 
 ### A card after every win
 

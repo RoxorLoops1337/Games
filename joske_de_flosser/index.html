@@ -544,9 +544,56 @@ function glowSprite(col, rx, ry){
     }
   });
 }
+/* --------------------------------------------------------- light field
+   Every glow() the scene hangs is also recorded here, as a coarse strip of
+   buckets across the screen.  A fighter asks the strip what colour is
+   falling where he stands and takes an extra rim in it, from the side the
+   light is on — which is why the crowd changes colour as it moves down the
+   street instead of wearing one flat key light the whole stage. */
+const LF_W = 16, LF_N = Math.ceil(VW / LF_W) + 2;
+const LF = {
+  r: new Float32Array(LF_N), g: new Float32Array(LF_N), b: new Float32Array(LF_N),
+  w: new Float32Array(LF_N), dx: new Float32Array(LF_N),
+};
+function lfReset(){ LF.r.fill(0); LF.g.fill(0); LF.b.fill(0); LF.w.fill(0); LF.dx.fill(0); }
+function lfAdd(x, y, rx, col, a){
+  // a light hung high on a wall reaches the street, but not like one at your feet
+  const vw = clamp(1 - Math.abs(y - 176) / 110, 0.10, 1);
+  const p = a * vw;
+  if (p < 0.02) return;
+  const n = parseInt(col.slice(1), 16);
+  const cr = (n >> 16) & 255, cg = (n >> 8) & 255, cb = n & 255;
+  const reach = rx * 1.6;
+  const i0 = Math.max(0, Math.floor((x - reach) / LF_W));
+  const i1 = Math.min(LF_N - 1, Math.ceil((x + reach) / LF_W));
+  for (let i = i0; i <= i1; i++){
+    const bx = i * LF_W + LF_W / 2;
+    const k = 1 - Math.abs(bx - x) / reach;
+    if (k <= 0) continue;
+    const q = p * k * k;
+    LF.r[i] += cr * q; LF.g[i] += cg * q; LF.b[i] += cb * q; LF.w[i] += q;
+    LF.dx[i] += q * (x < bx ? -1 : 1);
+  }
+}
+/* Quantised to 24 levels a channel, so rgba()'s string cache stays small
+   instead of gaining a new entry every time somebody takes a step. */
+function lfHex(r, g, b){
+  const q = (v) => clamp(Math.round(v / 24) * 24, 0, 255).toString(16).padStart(2, '0');
+  return '#' + q(r) + q(g) + q(b);
+}
+function lightAt(sx){
+  const i = clamp(Math.round(sx / LF_W), 0, LF_N - 1);
+  const w = LF.w[i];
+  if (w < 0.04) return null;
+  const q = 1 / w;
+  return { col: lfHex(LF.r[i] * q, LF.g[i] * q, LF.b[i] * q),
+    k: Math.min(1, w * 1.3), dir: LF.dx[i] >= 0 ? 1 : -1 };
+}
+
 function glow(x, y, rx, ry, col, a){
   rx = Math.max(1, rx | 0); ry = Math.max(1, ry | 0);
   if (x + rx < 0 || x - rx > VW) return;
+  lfAdd(x, y, rx, col, a == null ? 1 : a);
   const oldA = ctx.globalAlpha;
   ctx.globalAlpha = a == null ? 1 : a;
   ctx.globalCompositeOperation = 'lighter';
@@ -931,11 +978,15 @@ function drawFighter(f){
     }
   }
 
-  // contact shadow, soft-edged and tighter the higher you are
+  // contact shadow, soft-edged and tighter the higher you are — and thrown
+  // away from whatever light he is standing in, which is the cheapest thing
+  // in the game that makes him look like he is actually there
+  const lit = lightAt(sx);
   const shR = 9 * sc * clamp(1 - f.z / 90, 0.45, 1);
   const gy = Math.round(f.y + cam.shakeY) + 1;
-  ellipse(sx, gy, shR * 1.2, Math.max(1, shR * 0.44), 'rgba(0,0,0,0.18)');
-  ellipse(sx, gy, shR * 0.82, Math.max(1, shR * 0.3), 'rgba(0,0,0,0.36)');
+  const shOff = lit ? -lit.dir * Math.round(shR * 0.5 * lit.k) : 0;
+  ellipse(sx + shOff, gy, shR * (1.2 + (lit ? lit.k * 0.3 : 0)), Math.max(1, shR * 0.44), 'rgba(0,0,0,0.18)');
+  ellipse(sx + shOff * 0.6, gy, shR * 0.82, Math.max(1, shR * 0.3), 'rgba(0,0,0,0.36)');
 
   const X = (lx) => sx + dir * lx * sc;
   const Y = (ly) => sy - ly * sc;
@@ -1012,6 +1063,14 @@ function drawFighter(f){
     const flick = st.flick ? 0.75 + Math.sin(T * st.flick + f.id) * 0.25 : 1;
     if (st.key) drawRigPass(-3, rgba(st.key, 0.42 * flick), false, LIT_X * 2, LIT_Y * 2, 1);
     if (st.bounce) drawRigPass(-3, rgba(st.bounce, 0.5), false, 0, 2, 2);
+    // and whatever the street itself is throwing at him, from the side it is on
+    const L = lit;
+    if (L){
+      // a wash over the whole silhouette, then a hot rim on the side facing it
+      drawRigPass(0, rgba(L.col, Math.min(0.13, L.k * 0.14)), false, 0, 0);
+      drawRigPass(-3, rgba(L.col, Math.min(0.66, L.k * 0.72)), false, L.dir * 2, -1, 1);
+      drawRigPass(-3, rgba(L.col, Math.min(0.46, L.k * 0.5)), false, L.dir * 2, 1, 2);
+    }
   }
 
   /* ---- detail, drawn over the top and never outlined ---- */
@@ -2130,6 +2189,8 @@ function updateFx(dt){
   }
   if (fx.length) fx = fx.filter(p => p.t < p.life);
 }
+/* how far each kind of hit throws light, and how hard */
+const FX_LIGHT = { impact: [26, 0.75], burst: [40, 1.0], ring: [30, 0.45], quake: [70, 0.8], spark: [14, 0.35] };
 function drawFx(p){
   const sx = Math.round(p.x - cam.x + cam.shakeX), sy = Math.round(p.y - p.z + cam.shakeY);
   const k = p.t / p.life;
@@ -2140,6 +2201,7 @@ function drawFx(p){
       const a = i * TAU / 6 + k * 1.2;
       px(sx + Math.cos(a) * r, sy + Math.sin(a) * r * 0.6, 2, 2, p.col);
     }
+    glow(sx, sy, 20, 15, p.col, 0.5 * (1 - k) * (1 - k));
     if (k < 0.5) px(sx - 2, sy - 2, 4, 4, '#ffffff');
   } else if (p.kind === 'spark'){
     px(sx - 1, sy - 1, 3, 3, p.col);
@@ -2150,8 +2212,8 @@ function drawFx(p){
   } else if (p.kind === 'burst'){
     // a hit that lights the street for a frame or two
     const a = (1 - k) * (1 - k);
-    ellipse(sx, sy, 30 * (0.5 + k), 22 * (0.5 + k), rgba(p.col, 0.16 * a));
-    ellipse(sx, sy, 17 * (0.5 + k), 13 * (0.5 + k), rgba(p.col, 0.26 * a));
+    glow(sx, sy, 44, 32, p.col, 0.42 * a);
+    glow(sx, sy, 15, 12, '#fff6d8', 0.55 * a);
     ellipse(sx, sy, 8 - k * 4, 7 - k * 3, rgba('#ffffff', 0.55 * a));
   } else if (p.kind === 'ring'){
     const r = 4 + k * 26;
@@ -2891,7 +2953,7 @@ function fireSlug(f){
    and it does not move again until everybody standing in it is not. */
 const STAGES = [
   {
-    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', wet: 0.5, bg: 'street', len: 1780, music: 0,
+    name: 'THE STREET', sub: 'WHERE THEY TOOK HER', key: '#7fb4ff', bounce: '#2b3a6a', wet: 0.5, rain: 1, bg: 'street', len: 1780, music: 0,
     gates: [
       { x: 0,    spawn: [['punk', 2]] },
       { x: 400,  spawn: [['grunt', 24], ['punk', 2]], cap: 18, items: [['crate', 120], ['crate', 200]] },
@@ -2911,7 +2973,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', wet: 0.42, bg: 'docks', len: 2000, music: 2,
+    name: 'THE CITY', sub: 'DOWN TO THE WATER', key: '#8fd8f0', bounce: '#1d4a63', wet: 0.42, rain: 0.75, bg: 'docks', len: 2000, music: 2,
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
       { x: 0,    spawn: [['blade', 1], ['punk', 2]] },
@@ -2946,7 +3008,7 @@ const STAGES = [
     ],
   },
   {
-    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', wet: 0.42, bg: 'docks', music: 2, len: 2200,
+    name: 'THE CONTINENT', sub: 'EVERY CAPITAL, ONE NIGHT', key: '#c88fff', bounce: '#3a1d5a', wet: 0.42, rain: 0.9, bg: 'docks', music: 2, len: 2200,
     grade: 'rgba(60,20,90,0.22)',
     hazard: { edge: 'back', kind: 'water', line: FLOOR_TOP - 5 },
     gates: [
@@ -3390,6 +3452,7 @@ function hash(i){
 function band(y, h, col){ px(0, y, VW, h, col); }
 
 function drawBackground(){
+  lfReset();
   const s = stage();
   const c = cam.x + cam.shakeX * 0.4;
   switch (s.bg){
@@ -3439,7 +3502,12 @@ function bgStreet(c){
     px(x, 150 - h + 3, 1, h - 3, '#332b46');
     px(x + w - 1, 150 - h + 3, 1, h - 3, '#191426');
     for (let wy = 6; wy < h - 12; wy += 12) for (let wx = 5; wx < w - 8; wx += 13){
-      const lit = hash(gx * 17 + wx * 3 + wy) > 0.5;
+      const wk = gx * 17 + wx * 3 + wy;
+      let lit = hash(wk) > 0.5;
+      if (hash(wk + 777) > 0.87){                     // somebody is still up in this one
+        const per = 9 + hash(wk + 55) * 21;
+        lit = ((T + hash(wk + 9) * per) % per) < per * 0.55;
+      }
       px(x + wx, 150 - h + wy, 7, 8, lit ? '#c99a3c' : '#15111f');
       if (lit){
         px(x + wx + 1, 150 - h + wy + 1, 5, 6, '#ffe8a0');
@@ -3904,9 +3972,68 @@ function drawForeground(){
 
 /* Weather, dust and embers — procedural from the clock, so they cost
    nothing to keep and never need clearing down. */
+/* ------------------------------------------------------------- weather
+   The wet stages had reflections and no rain, which is a street that dried
+   an hour ago.  Three depth layers of it, each a different speed, length
+   and slant, all derived from a hash of the drop's own index so a stage of
+   any length costs nothing to remember.  Every drop asks the light field
+   what colour is falling where it is — rain through a neon sign comes down
+   pink, which is the whole reason to draw rain over this game. */
+const RAIN = [
+  { n: 52, spd: 520, len: 11, slant: 0.36, a: 0.34 },
+  { n: 44, spd: 390, len: 7,  slant: 0.32, a: 0.21 },
+  { n: 36, spd: 265, len: 5,  slant: 0.28, a: 0.12 },
+];
+function drawRain(power){
+  const gust = 0.82 + Math.sin(T * 0.43) * 0.18;      // the shower comes in waves
+  for (let L = 0; L < RAIN.length; L++){
+    const r = RAIN[L], depth = 1 - L * 0.3;
+    for (let i = 0; i < r.n; i++){
+      const seed = hash(i * 7 + L * 131);
+      const y = ((T * r.spd + seed * 2000) % (VH + 40)) - 20;
+      const x = ((seed * VW * 2.2 + i * 37 - cam.x * 0.12 * depth) % (VW + 30) + VW + 30) % (VW + 30) - 15;
+      const lit = lightAt(x);
+      const col = lit ? lit.col : '#a8c4e8';
+      const a = r.a * power * gust * (lit ? 1 + lit.k * 1.1 : 1);
+      // a drop is a leaning streak, not a tick: it falls the way the wind blows
+      limb(x + r.len * r.slant, y, x, y + r.len, 1, rgba(col, Math.min(0.75, a)));
+    }
+  }
+  for (let i = 0; i < 30; i++){                        // and where it lands
+    const seed = hash(i * 13 + 401);
+    const cyc = (T * 2.2 + seed * 5) % 1;
+    if (cyc > 0.42) continue;
+    const x = ((seed * VW * 1.7 + i * 29 - cam.x * 0.4) % (VW + 20) + VW + 20) % (VW + 20) - 10;
+    const y = FLOOR_TOP + 4 + ((i * 23 + seed * 60) % (FLOOR_BOT - FLOOR_TOP + 14));
+    const k = cyc / 0.42, lit = lightAt(x);
+    const col = lit ? lit.col : '#cfe4ff';
+    const rad = 1 + k * 4.5;
+    const a = (1 - k) * power;
+    ellipse(x, y, rad, Math.max(1, rad * 0.38), rgba(col, 0.40 * a));
+    if (k < 0.45){                                     // the bounce off the stone
+      px(x - 1, y - 2 - k * 4, 1, 2, rgba(col, 0.5 * a));
+      px(x + 2, y - 1 - k * 3, 1, 2, rgba(col, 0.38 * a));
+    }
+  }
+}
+
 function drawAmbient(){
-  const bg = stage().bg;
+  const st = stage(), bg = st.bg;
+  if (st.rain) drawRain(st.rain);
   if (bg === 'foundry'){
+    for (let i = 0; i < 9; i++){                     // smoke off the channel, lit from under
+      const life = (T * 0.12 + hash(i * 31)) % 1;
+      const x = ((i * 47 + hash(i * 5) * 40 + Math.sin(T * 0.3 + i) * 18) % (VW + 60)) - 30 + life * 22;
+      const y = VH - 8 - life * 155;
+      const r = 8 + life * 30;
+      const fade = (life < 0.14 ? life / 0.14 : 1) * (1 - life) * (1 - life);
+      // dark smoke over a dark floor is nothing; this is smoke with the fire
+      // under it, so the body of it is warm grey and the belly is lit
+      ellipse(x, y, r, r * 0.72, rgba('#5e4a4e', 0.55 * fade));
+      ellipse(x - r * 0.28, y - r * 0.18, r * 0.62, r * 0.44, rgba('#7d666a', 0.40 * fade));
+      ellipse(x + r * 0.42, y + r * 0.16, r * 0.55, r * 0.40, rgba('#544245', 0.34 * fade));
+      if (life < 0.4) glow(x, y + r * 0.34, r * 1.1, r * 0.6, '#ff7a1e', 0.5 * (1 - life / 0.4));
+    }
     for (let i = 0; i < 26; i++){                    // embers off the channel
       const life = (T * (0.22 + (i % 5) * 0.05) + i * 0.37) % 1;
       const x = ((i * 61 + Math.sin(T * 0.7 + i) * 14) % (VW + 20)) - 10;
@@ -4230,6 +4357,14 @@ function draw(){
   const grade = stage().grade;
   if (grade){ ctx.fillStyle = grade; ctx.fillRect(0, 0, VW, VH); }
 
+  for (const p of fx){                          // a hit is a light, not just a sprite
+    const pw = FX_LIGHT[p.kind];
+    if (!pw) continue;
+    const k = 1 - p.t / p.life;
+    if (k <= 0) continue;
+    lfAdd(p.x - cam.x + cam.shakeX, p.y - p.z + cam.shakeY, pw[0], p.col, pw[1] * k * k);
+  }
+
   /* everything on the floor, painter-sorted back to front */
   const list = visibleList();
   for (const e of list) e.d();
@@ -4525,6 +4660,7 @@ const ATTRACT_CAST = [
   { skin: 'chain', x: 314, face: -1, off: 1, sc: 0.95 },
 ];
 function drawAttract(){
+  lfReset();
   attract.t += 1 / 60;
   bgStreet(attract.t * 12);
   if (!attract.cast){
