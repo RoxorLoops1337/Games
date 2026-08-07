@@ -780,11 +780,18 @@ const A = {                                   // animation frame tables
     P({ hipY: 20, hipX: 0, lean: 0, lF: [-1, 12, -1, 2], lB: [1, 11, 1, 0], aF: [0, 25, -1, 17], aB: [-2, 24, -3, 16] }),
     P({ hipY: 21, hipX: 1, lean: -1, lF: [4, 12, 7, 2], lB: [-3, 10, -5, 0], aF: [-4, 25, -7, 17], aB: [-6, 24, -9, 16] }),
   ],
+  /* Eight, like the walk, but leaning into it with a longer stride and a
+     frame in the air.  The arms are opposed here rather than swinging
+     together — a sprint is not a floss. */
   run: [
-    P({ hipY: 18, lean: 3, lF: [8, 12, 13, 2], lB: [-7, 9, -11, 0], aF: [7, 25, 11, 22], aB: [-8, 25, -10, 16] }),
-    P({ hipY: 17, lean: 3, lF: [3, 13, 6, 4], lB: [-4, 10, -6, 0], aF: [6, 26, 6, 20], aB: [-6, 26, -6, 20] }),
-    P({ hipY: 18, lean: 3, lF: [-6, 9, -10, 0], lB: [8, 12, 13, 2], aF: [-8, 25, -10, 16], aB: [7, 25, 11, 22] }),
-    P({ hipY: 17, lean: 3, lF: [3, 13, 6, 4], lB: [-4, 10, -6, 0], aF: [6, 26, 6, 20], aB: [-6, 26, -6, 20] }),
+    P({ hipY: 18, lean: 4, lF: [8, 12, 14, 2], lB: [-7, 9, -12, 0], aF: [7, 25, 12, 23], aB: [-8, 25, -11, 16] }),
+    P({ hipY: 16, lean: 5, lF: [5, 11, 8, 0], lB: [-6, 11, -9, 2], aF: [6, 26, 8, 20], aB: [-6, 26, -8, 19] }),
+    P({ hipY: 20, lean: 4, lF: [1, 14, 0, 6], lB: [-2, 12, -3, 3], aF: [3, 26, 2, 17], aB: [-3, 26, -2, 22] }),
+    P({ hipY: 19, lean: 3, lF: [-4, 10, -8, 0], lB: [6, 14, 10, 6], aF: [-4, 25, -8, 16], aB: [5, 25, 9, 23] }),
+    P({ hipY: 18, lean: 4, lF: [-7, 9, -12, 0], lB: [8, 12, 14, 2], aF: [-8, 25, -11, 16], aB: [7, 25, 12, 23] }),
+    P({ hipY: 16, lean: 5, lF: [-6, 11, -9, 2], lB: [5, 11, 8, 0], aF: [-6, 26, -8, 19], aB: [6, 26, 8, 20] }),
+    P({ hipY: 20, lean: 4, lF: [-2, 12, -3, 3], lB: [1, 14, 0, 6], aF: [-3, 26, -2, 22], aB: [3, 26, 2, 17] }),
+    P({ hipY: 19, lean: 3, lF: [6, 14, 10, 6], lB: [-4, 10, -8, 0], aF: [5, 25, 9, 23], aB: [-4, 25, -8, 16] }),
   ],
   /* A jump held on one frame from the floor to the apex, which is the
      stiffest thing a fighter can do.  Crouch, drive, tuck — and on the way
@@ -836,8 +843,18 @@ const A = {                                   // animation frame tables
     P({ hipY: 20, lean: -4, lF: [9, 19, 15, 22], lB: [-3, 10, -6, 0], aF: [2, 26, -2, 24], aB: [-8, 26, -12, 25] }),
     P({ hipY: 19, lean: -2, lF: [7, 14, 11, 8], lB: [-4, 10, -6, 0], aF: [4, 25, 1, 22], aB: [-7, 26, -10, 23] }),
   ],
-  jumpkick: [P({ hipY: 19, lean: -3, lF: [10, 16, 20, 15], lB: [-6, 12, -10, 8], aF: [4, 27, 0, 24], aB: [-8, 27, -12, 26] })],
-  jumppunch: [P({ hipY: 19, lean: 2, aF: [9, 27, 16, 28], aB: [-7, 27, -9, 30], lF: [7, 12, 9, 5], lB: [-6, 12, -9, 4] })],
+  /* The two moves you spend the most time in the air doing, both of them
+     held on one pose: chamber the knee, put the foot through it, hold. */
+  jumpkick: [
+    P({ hipY: 19, lean: -2, lF: [8, 16, 8, 14], lB: [-6, 12, -9, 7], aF: [4, 27, 1, 25], aB: [-8, 27, -11, 25] }),
+    P({ hipY: 19, lean: -3, lF: [10, 16, 20, 15], lB: [-6, 12, -10, 8], aF: [4, 27, 0, 24], aB: [-8, 27, -12, 26] }),
+    P({ hipY: 19, lean: -2, lF: [9, 15, 17, 11], lB: [-6, 12, -10, 7], aF: [5, 27, 2, 23], aB: [-8, 27, -12, 25] }),
+  ],
+  jumppunch: [
+    P({ hipY: 19, lean: -1, aF: [4, 27, 2, 31], aB: [-7, 27, -9, 30], lF: [7, 12, 9, 5], lB: [-6, 12, -9, 4] }),
+    P({ hipY: 19, lean: 2, aF: [9, 27, 16, 28], aB: [-7, 27, -9, 30], lF: [7, 12, 9, 5], lB: [-6, 12, -9, 4] }),
+    P({ hipY: 19, lean: 3, aF: [10, 26, 17, 24], aB: [-6, 27, -8, 29], lF: [7, 12, 10, 4], lB: [-6, 12, -9, 3] }),
+  ],
   whirl: [
     P({ hipY: 20, aF: [10, 28, 18, 28], aB: [-10, 28, -18, 28], lF: [3, 11, 4, 0], lB: [-3, 11, -4, 0] }),
     P({ hipY: 21, aF: [2, 30, 3, 34], aB: [-2, 30, -3, 34], lF: [3, 11, 4, 0], lB: [-3, 11, -4, 0] }),
@@ -862,8 +879,14 @@ const A = {                                   // animation frame tables
     P({ hipY: 9, sh: 6, lean: -5, headX: -2, headY: -1, aF: [2, 12, 5, 4], aB: [-6, 11, -8, 3], lF: [7, 7, 11, 0], lB: [-4, 5, -8, 0] }),
     P({ hipY: 15, sh: 8, lean: -2, aF: [4, 22, 7, 16], aB: [-6, 22, -8, 16], lF: [5, 9, 7, 0], lB: [-4, 9, -6, 0] }),
   ],
-  held: [P({ hipY: 19, lean: -2, headX: -1, aF: [4, 29, 6, 33], aB: [-6, 29, -8, 33], lF: [3, 10, 4, 0], lB: [-3, 10, -5, 0] })],
-  hold: [P({ hipY: 19, lean: 1, aF: [8, 27, 15, 27], aB: [6, 27, 13, 25], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] })],
+  held: [
+    P({ hipY: 19, lean: -2, headX: -1, aF: [4, 29, 6, 33], aB: [-6, 29, -8, 33], lF: [3, 10, 4, 0], lB: [-3, 10, -5, 0] }),
+    P({ hipY: 18, lean: -3, headX: -2, aF: [3, 29, 4, 34], aB: [-7, 29, -10, 33], lF: [4, 11, 5, 1], lB: [-3, 10, -4, 0] }),
+  ],
+  hold: [
+    P({ hipY: 19, lean: 1, aF: [8, 27, 15, 27], aB: [6, 27, 13, 25], lF: [4, 10, 6, 0], lB: [-4, 10, -6, 0] }),
+    P({ hipY: 20, lean: 2, aF: [9, 27, 16, 26], aB: [7, 27, 14, 24], lF: [4, 11, 6, 1], lB: [-4, 10, -6, 0] }),
+  ],
   knee: [
     P({ hipY: 20, lean: 1, aF: [9, 28, 15, 26], aB: [7, 28, 13, 25], lF: [7, 14, 11, 12], lB: [-4, 10, -6, 0] }),
     P({ hipY: 19, lean: 1, aF: [8, 27, 15, 27], aB: [6, 27, 13, 25], lF: [4, 11, 6, 2], lB: [-4, 10, -6, 0] }),
@@ -897,7 +920,10 @@ const A = {                                   // animation frame tables
     P({ hipY: 22, lean: 2, headY: 1, aF: [8, 32, 12, 39], aB: [-6, 29, -9, 34], lF: [4, 12, 6, 4], lB: [-4, 11, -7, 1] }),
     P({ hipY: 20, lean: 1, aF: [7, 29, 10, 33], aB: [-6, 27, -9, 28], lF: [4, 11, 6, 2], lB: [-4, 10, -7, 0] }),
   ],
-  block: [P({ hipY: 18, lean: -2, aF: [4, 28, 2, 33], aB: [-3, 28, -1, 32], lF: [3, 10, 4, 0], lB: [-5, 10, -8, 0] })],
+  block: [
+    P({ hipY: 18, lean: -2, aF: [4, 28, 2, 33], aB: [-3, 28, -1, 32], lF: [3, 10, 4, 0], lB: [-5, 10, -8, 0] }),
+    P({ hipY: 17, lean: -4, aF: [3, 28, 1, 32], aB: [-3, 28, -2, 31], lF: [2, 10, 3, 0], lB: [-6, 10, -10, 0] }),
+  ],
   aim: [P({ hipY: 19, lean: 1, aF: [8, 28, 16, 28], aB: [2, 27, 8, 27], lF: [5, 10, 7, 0], lB: [-5, 10, -8, 0] })],
 };
 
@@ -1340,8 +1366,8 @@ const ATK = {
   lowkick:  { anim: 'lowkick', dur: 0.30, hit: [0.09, 0.17], dmg: 7,  reach: 27, kb: 55,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.09], [1, 0.21], [2, 0.3]] },
   midkick:  { anim: 'midkick', dur: 0.40, hit: [0.13, 0.23], dmg: 11, reach: 30, kb: 115, lift: 28,  down: false, sfx: 'heavy', swoosh: 'mid', seq: [[0, 0.11], [1, 0.24], [2, 0.32], [3, 0.4]] },
   highkick: { anim: 'highkick', dur: 0.52, hit: [0.17, 0.29], dmg: 16, reach: 31, kb: 195, lift: 140, down: true, sfx: 'heavy', swoosh: 'high', heavy: true, seq: [[0, 0.14], [1, 0.3], [2, 0.4], [3, 0.52]] },
-  jumpkick: { anim: 'jumpkick', dur: 0.5, hit: [0.04, 0.42], dmg: 15, reach: 27, kb: 165, lift: 120, down: true, sfx: 'heavy', air: true, seq: [[0, 0.5]] },
-  jumppunch:{ anim: 'jumppunch', dur: 0.4, hit: [0.04, 0.3], dmg: 9, reach: 22, kb: 70,  lift: 20,  down: false, sfx: 'hit',   air: true, seq: [[0, 0.4]] },
+  jumpkick: { anim: 'jumpkick', dur: 0.5, hit: [0.04, 0.42], dmg: 15, reach: 27, kb: 165, lift: 120, down: true, sfx: 'heavy', air: true, seq: [[0, 0.09], [1, 0.34], [2, 0.5]] },
+  jumppunch:{ anim: 'jumppunch', dur: 0.4, hit: [0.04, 0.3], dmg: 9, reach: 22, kb: 70,  lift: 20,  down: false, sfx: 'hit',   air: true, seq: [[0, 0.07], [1, 0.26], [2, 0.4]] },
   whirl:    { anim: 'whirl',  dur: 0.58, hit: [0.12, 0.42], dmg: 10, reach: 27, kb: 150, lift: 110, down: true,  sfx: 'heavy', all: true, cost: 4, swoosh: 'spin', seq: [[0, 0.16], [1, 0.3], [2, 0.58]] },
   elbow:    { anim: 'elbow',  dur: 0.32, hit: [0.10, 0.19], dmg: 10, reach: 22, kb: 120, lift: 40,  down: false, sfx: 'heavy', back: true, seq: [[0, 0.1], [1, 0.32]] },
   charge:   { anim: 'charge', dur: 0.46, hit: [0.04, 0.34], dmg: 13, reach: 20, kb: 175, lift: 95,  down: true,  sfx: 'heavy', dash: true, seq: [[0, 0.12], [1, 0.24], [2, 0.36], [3, 0.46]] },
@@ -1360,7 +1386,7 @@ const ATK = {
   /* bought moves */
   cyclone:  { anim: 'whirl',   dur: 0.88, hit: [0.10, 0.74], dmg: 6,  reach: 29, kb: 34,  lift: 0,   down: false, sfx: 'hit', all: true, multi: 0.16, swoosh: 'spin', seq: [[0, 0.22], [1, 0.44], [2, 0.66], [0, 0.88]] },
   pound:    { anim: 'hook',    dur: 0.66, hit: [0.24, 0.36], dmg: 13, reach: 21, kb: 85,  lift: 65,  down: true,  sfx: 'heavy', heavy: true, wave: true, seq: [[0, 0.2], [1, 0.3], [2, 0.66]] },
-  meteor:   { anim: 'jumppunch', dur: 0.9, hit: [0.05, 0.8], dmg: 15, reach: 21, kb: 120, lift: 70, down: true,  sfx: 'heavy', air: true, slam: true, seq: [[0, 0.9]] },
+  meteor:   { anim: 'jumppunch', dur: 0.9, hit: [0.05, 0.8], dmg: 15, reach: 21, kb: 120, lift: 70, down: true,  sfx: 'heavy', air: true, slam: true, seq: [[0, 0.1], [1, 0.7], [2, 0.9]] },
   /* enemy-flavoured swings */
   swipe:    { anim: 'punchA', dur: 0.34, hit: [0.13, 0.21], dmg: 7,  reach: 21, kb: 60,  lift: 0,   down: false, sfx: 'hit',   seq: [[0, 0.13], [1, 0.34]] },
   boot:     { anim: 'kick',   dur: 0.5,  hit: [0.18, 0.29], dmg: 10, reach: 28, kb: 120, lift: 45,  down: false, sfx: 'heavy', seq: [[0, 0.16], [1, 0.32], [2, 0.5]] },
@@ -1371,14 +1397,14 @@ const ATK = {
   batcharge:{ anim: 'swing',  dur: 0.62, hit: [0.20, 0.44], dmg: 19, reach: 34, kb: 200, lift: 140, down: true,  sfx: 'heavy', heavy: true, swoosh: 'weapon', arc: [150, -30], dash: true, seq: [[0, 0.14], [1, 0.2], [2, 0.3], [3, 0.44], [4, 0.62]] },
   dashslash:{ anim: 'stab',   dur: 0.32, hit: [0.09, 0.19], dmg: 11, reach: 27, kb: 55,  lift: 0,   down: false, sfx: 'blade', dash: true, seq: [[0, 0.09], [1, 0.32]] },
   shoulder: { anim: 'charge', dur: 0.52, hit: [0.08, 0.34], dmg: 15, reach: 22, kb: 190, lift: 110, down: true,  sfx: 'heavy', heavy: true, dash: true, seq: [[0, 0.16], [1, 0.34], [1, 0.52]] },
-  flyknee:  { anim: 'jumpkick', dur: 0.6, hit: [0.06, 0.5], dmg: 14, reach: 26, kb: 160, lift: 110, down: true, sfx: 'heavy', air: true, seq: [[0, 0.6]] },
+  flyknee:  { anim: 'jumpkick', dur: 0.6, hit: [0.06, 0.5], dmg: 14, reach: 26, kb: 160, lift: 110, down: true, sfx: 'heavy', air: true, seq: [[0, 0.12], [1, 0.42], [2, 0.6]] },
 };
 
 const SEQ_END = (a) => a.seq[a.seq.length - 1][1];
 /* Frames per second, not frames per cycle.  These are tied to the walk
    speed: a stride is four frames, and in that time the planted foot has to
    travel about as far as the fighter does or he moonwalks. */
-const WALK_FPS = 16, RUN_FPS = 11;
+const WALK_FPS = 16, RUN_FPS = 23;
 const cycleLen = (anim, fallback) => (A[anim] || A[fallback] || A.idle).length;
 function frameOf(atk, t){
   for (let i = 0; i < atk.seq.length; i++) if (t < atk.seq[i][1]) return atk.seq[i][0];
@@ -2543,12 +2569,14 @@ function updateFighter(f, dt){
       f.z = 0;
       f.face = -h.face;
       setAnim(f, 'held', 0);
+      f.frame = Math.floor(T * 6) % cycleLen('held', 'idle');   // squirming
       f.mash += dt;
       if (f.mash > (f.team === 'p' ? 1.6 : 2.6)){ breakFree(f); f.state = 'idle'; f.grabCd = 1.0; setAnim(f, 'idle', 0); }
       break;
     }
     case 'hold': {
       f.holdT += dt;
+      f.frame = Math.floor(T * 3) % cycleLen('hold', 'idle');   // shifting his grip
       if (!f.holding || f.holding.gone){ f.holding = null; f.state = 'idle'; setAnim(f, 'idle', 0); break; }
       if (f.holdT > 3.2) releaseHold(f, true);
       break;
@@ -2565,7 +2593,10 @@ function updateFighter(f, dt){
     case 'super':
       superTick(f, dt);
       break;
-    case 'walk': case 'idle': case 'run': case 'block':
+    case 'block':
+      f.frame = f.hitFlash > 0 ? 1 : 0;             // braced when something lands on the guard
+      break;
+    case 'walk': case 'idle': case 'run':
       break;
   }
 
@@ -4130,8 +4161,8 @@ function bgKeep(c){
    Things the camera passes in FRONT of.  A brawler is a flat picture until
    something crosses between you and the fight, so every street gets a layer
    at more-than-one parallax, kept low enough not to hide the floor. */
-function drawForeground(){
-  const bg = stage().bg;
+function drawForeground(bgOver){
+  const bg = bgOver || stage().bg;
   const c = cam.x * 1.18;
   switch (bg){
     case 'street': {
@@ -4250,9 +4281,11 @@ function drawRain(power){
   }
 }
 
-function drawAmbient(){
-  const st = stage(), bg = st.bg;
-  if (st.rain) drawRain(st.rain);
+function drawAmbient(bgOver, rainOver){
+  const st = stage();
+  const bg = bgOver || st.bg;
+  const rain = rainOver == null ? (bgOver ? 0 : st.rain) : rainOver;
+  if (rain) drawRain(rain);
   if (bg === 'foundry'){
     for (let i = 0; i < 9; i++){                     // smoke off the channel, lit from under
       const life = (T * 0.12 + hash(i * 31)) % 1;
@@ -4378,7 +4411,7 @@ const CUT_ACTORS = {
 };
 
 const SCENES = {
-  intro: { bg: 'street', cam: 60, music: 0, beats: [
+  intro: { bg: 'street', cam: 60, music: 0, rain: 1, beats: [
     { d: 3.0, cap: ['NOBODY FLOSSES LIKE JOSKE.', 'NOBODY EXCEPT SMOSKE, AND HE IS HALF A STEP BACK.'],
       act: { smoke: { x: 130, y: 190, anim: 'walk', face: 1 },
              joske: { x: 168, y: 178, anim: 'walk', face: -1 },
@@ -4413,7 +4446,7 @@ const SCENES = {
              joske: { x: 182, y: 176, anim: 'idle', face: 1 } } },
   ] },
 
-  after1: { bg: 'street', cam: 900, music: 0, beats: [
+  after1: { bg: 'street', cam: 900, music: 0, rain: 1, beats: [
     { d: 2.8, cap: ['THE STREET IS OUT-FLOSSED.', 'NOT ONE OF THEM LEFT STANDING ON THE BEAT.'],
       act: { joske: { x: 960, y: 184, anim: 'idle', face: 1 },
              g1: { x: 992, y: 190, anim: 'lie', face: -1 } } },
@@ -4434,7 +4467,7 @@ const SCENES = {
       prop: { van: { x: 880, y: 166 } } },
   ] },
 
-  after3: { bg: 'docks', cam: 800, music: 2, beats: [
+  after3: { bg: 'docks', cam: 800, music: 2, rain: 0.75, beats: [
     { d: 3.0, cap: ['THE CITY GOES DOWN BLOCK BY BLOCK.'],
       act: { mokske: { x: 900, y: 172, anim: 'held', face: -1 },
              g2: { x: 918, y: 172, anim: 'hold', face: -1 },
@@ -4466,7 +4499,7 @@ const SCENES = {
              g2: { x: 1500, y: 188, anim: 'lie', face: -1 } } },
   ] },
 
-  after6: { bg: 'docks', cam: 800, music: 2, beats: [
+  after6: { bg: 'docks', cam: 800, music: 2, rain: 0.9, beats: [
     { d: 3.0, cap: ['EVERY CAPITAL. ONE NIGHT EACH.'],
       act: { joske: { x: 880, y: 180, anim: 'idle', face: 1 },
              smoke: { x: 846, y: 190, anim: 'idle', face: 1 },
@@ -4506,6 +4539,7 @@ function mkCutActor(key, decl){
   f.z = decl.z || 0;
   f.weapon = decl.weapon || null;
   f.fx = decl.x; f.fy = decl.y; f.fz = f.z;
+  f.baseSc = f.sc;                            // depth scaling works off this
   return f;
 }
 
@@ -4557,8 +4591,23 @@ function cutTick(dt){
     a.x = lerp(a.fx, a.tx, ease);
     a.y = lerp(a.fy, a.ty, ease);
     a.z = lerp(a.fz, a.tz, ease);
-    if (a.anim === 'walk' || a.anim === 'run') a.frame = Math.floor(cut.beatT * 8) % 4;
+    /* This was `% 4` at 8fps, which was right when every cycle was four
+       frames.  Against the eight-frame walk it played the first half of the
+       cycle at half speed — a man shuffling on the spot in a scene that says
+       he is walking. */
+    if (a.anim === 'walk' || a.anim === 'run'){
+      const fps = a.anim === 'run' ? RUN_FPS : WALK_FPS;
+      a.frame = Math.floor(cut.beatT * fps) % cycleLen(a.anim, 'walk');
+    } else if (a.anim === 'idle'){
+      a.frame = Math.floor(cut.beatT * 7) % cycleLen('idle', 'idle');
+    }
+    // further up the street is further away
+    const depth = clamp((a.y - FLOOR_TOP) / Math.max(1, FLOOR_BOT - FLOOR_TOP), 0, 1);
+    a.sc = (a.baseSc || a.sc) * (0.9 + depth * 0.2);
   }
+  // and the shot breathes rather than sitting still for three seconds
+  const pan = beat.pan == null ? ((cut.bi % 2) ? -8 : 8) : beat.pan;
+  cam.x = (sc.cam || 0) + lerp(-pan * 0.5, pan * 0.5, ease);
   if (cut.prop) cut.prop.x = lerp(cut.prop.from, cut.prop.to, ease);
   if (cut.beatT >= beat.d){
     cut.bi++; cut.beatT = 0;
@@ -4599,13 +4648,33 @@ function drawCut(){
   }
   list.sort((a, b) => a.y - b.y);
   for (const e of list) e.d();
+  /* The story beats used to be the one part of the game with no weather in
+     them: no rain on a street that rains, no grit in the yard, no vignette.
+     They get the stage's air now, matched to the scene's own backdrop rather
+     than to whatever stage happens to be loaded. */
+  drawAmbient(sc.bg, sc.rain);
+  drawForeground(sc.bg);
+  drawVignette();
 
-  // letterbox and caption
+  // letterbox: bars with a lit lip and a shadow falling off them
   px(0, 0, VW, 22, '#000');
   px(0, VH - 34, VW, 34, '#000');
-  px(0, 22, VW, 1, '#2a2233'); px(0, VH - 35, VW, 1, '#2a2233');
+  px(0, 22, VW, 1, '#4a3d52'); px(0, VH - 35, VW, 1, '#4a3d52');
+  for (let i = 0; i < 6; i++){
+    const a = (0.26 - i * 0.042).toFixed(3);
+    px(0, 23 + i, VW, 1, 'rgba(4,3,7,' + a + ')');
+    px(0, VH - 36 - i, VW, 1, 'rgba(4,3,7,' + a + ')');
+  }
   const beat = sc.beats[cut.bi];
   const caps = (beat && beat.cap) || [];
+  if (caps.length){
+    const w = Math.max(...caps.map(c => textW(c, 1))) + 14;
+    const x0 = Math.round((VW - w) / 2), h = 6 + caps.length * 11;
+    px(x0, VH - 33, w, h, 'rgba(14,10,20,0.9)');
+    px(x0, VH - 33, w, 1, '#3d3348');
+    px(x0, VH - 34 + h, w, 1, '#241d2e');
+    px(x0 - 2, VH - 31, 2, h - 4, '#ffd23d');          // a bar down the speaking side
+  }
   for (let i = 0; i < caps.length; i++)
     textC(caps[i], VW / 2, VH - 29 + i * 11, i === 0 ? '#ffe9b8' : '#c08a6e', 1, '#100c18');
   if (Math.floor(T * 2) % 2 === 0) text('PUNCH TO SKIP', VW - 84, 8, '#6a5a66', 1);

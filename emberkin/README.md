@@ -2206,6 +2206,77 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### The bag in a fight says how hurt you are
+
+`#screen` is `inset:0` with a blur over it, so opening the bag mid-fight covers
+the arena and both HP bars. Choosing between a Salve that restores 30 and a
+Great Salve that restores 90 is **the one decision in the game that needs the
+number the screen is hiding.**
+
+Rather than let a panel show through from underneath — which would have meant
+fighting the z-order and would still only work while the layout cooperated — the
+number goes where the decision is. The heading reads
+`Bag — 500 shards · Cindercub 7/19`, in the HP colour, so it reddens as things
+get worse.
+
+It only appears in a fight and never in the shop, which shares the same
+renderer. Same principle as the keyword glosses one screen over: **put what you
+need to decide next to the thing you are deciding.**
+
+### Which beats make a sound
+
+The same method that worked on the words, turned on the audio: **list what has
+one and what does not.** Every beat added on the look track was designed as a
+picture, so the question was whether any of them were mute.
+
+    crit burst    playCue('crit')                     ok
+    level ring    playCue('level') at the fx site     ok
+    the mend      healParty() already cues 'heal'     ok — and at the right moment
+    the blackout  silent                              deliberate
+    the rustle    silent                              a gap, and my own doing
+
+Better covered than expected: three of five already had a voice, and the mend's
+fires exactly as the light starts because `healParty` cues it. **The blackout is
+left silent on purpose** — a fall to black is what silence is for, and adding a
+sound there would be filling in a table rather than serving the beat.
+
+The rustle was the real gap, and it is worth being precise about whose fault it
+is. Before that beat existed, stepping into grass played the battle sting
+immediately. Inserting half a second of thrashing blades in front of it **pushed
+the battle cue half a second later than it used to be, and nothing said so** —
+you only see that by listing what has a voice.
+
+It borrows the tall-grass step's own triangle and runs it three times, falling:
+the same material moving faster. `blip(196 - i*22, .09, 'triangle', .034)`.
+
+### Does the game say anything that is no longer true?
+
+The reverse of the last three passes, and never asked before: every line of copy
+was written against an earlier balance, and **a stale explanation is worse than a
+missing one.** Audited against the code it describes:
+
+    Rowan: five orbs, three salves        bag +5, +3                     ✓
+    Rowan: ten cards, half nothing special STARTER_DECK is 10, 6 common  ✓
+    Rowan: three energy and five cards     BASE_ENERGY 3, HAND_SIZE 5    ✓
+    battle tutorial: five cards, three energy                            ✓
+    Emberroot: wakes a fainted kin at half HP  floor(max / 2)            ✓
+    Twin Strike: swings one extra time     fx.hits 1                     ✓
+    Overkill: deals double                 fx.mul 2                      ✓
+    Ward Stance: take 3 less, draw 2       fx.def 3, fx.draw 2           ✓
+    Second Wind: may move again this turn  fx.again                      ✓
+
+**Nothing is stale.** Ward Stance and Second Wind are the notable ones: both had
+their balance changed after their copy was written, and both were updated with
+it. Recorded so nobody audits this again.
+
+The audit did turn up a loose end elsewhere. A level clears the flash, the lunge
+and the recoil on your side so the ring owns the sprite — and missed the crit
+burst, which draws at exactly the same place. That is the third time a fix here
+has reached most of what it claimed to rather than all of it. It is cleared now,
+**as defence rather than as a symptom**: `BURST_T` is 0.26s and a level lands
+after the win lines, so the two very probably never overlap in play. What is
+certain is that they draw in the same place and one was not being cleared.
+
 ### The deck's vocabulary, glossed where it appears
 
 Three words are printed on cards and were defined nowhere a player can read —

@@ -4555,7 +4555,10 @@ function onArrive() {
     // Sometimes two of them. The partner comes off the same table, so a pair is
     // whatever that patch of grass holds rather than a special encounter.
     const pair = foe && chance(WILD_PAIR) ? rollEncounter(G.map) : null;
-    if (foe) G.rustle = { t: 0, x: p.x, y: p.y, go: () => startBattle({ foe, wild: true, pair }) };
+    if (foe) {
+      playCue('rustle');
+      G.rustle = { t: 0, x: p.x, y: p.y, go: () => startBattle({ foe, wild: true, pair }) };
+    }
   }
 }
 
@@ -7922,6 +7925,16 @@ function entryFx(b, e) {
     // the hit has already been read (its number is on screen), and what has not
     // been read yet is that you levelled.
     b.flashM = 0; b.lungeM = 0; b.recoilM = 0;
+    // And the crit burst, if it was on your side. It draws at cx 72 — exactly
+    // where the level ring goes — and was missed when the other three were
+    // cleared, which is the third time a fix here has reached most of what it
+    // claimed to rather than all of it.
+    //
+    // Stated as defence, not as a symptom: BURST_T is 0.26s and a level lands
+    // after the win lines, so the two very probably never overlap in play. What
+    // is certain is that they are drawn in the same place and one of them was
+    // not being cleared, and completing the set costs nothing.
+    if (b.burst && b.burst.side === 'mine') b.burst = null;
   }
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;
@@ -8759,7 +8772,18 @@ function renderScreen() {
     // "the fourth row".
     const shop = s.kind === 'shop';
     const list = s.list;
-    html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards</h2>`;
+    // In a fight, say how hurt you are.
+    //
+    // The screen is inset:0 with a blur over it, so opening the bag mid-fight
+    // covers the arena and both HP bars — and choosing between a Salve that
+    // restores 30 and a Great Salve that restores 90 is the one decision in the
+    // game that needs the number the screen is hiding. Rather than let a panel
+    // show through from underneath, the number goes where the decision is.
+    const inFight = !shop && G.battle && B() && B().mine;
+    const hurt = inFight ? B().mine : null;
+    html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards`
+      + (hurt ? ` <span style="color:${hpColor(hurt.hp / hurt.max)}">· ${dispName(hurt)} ${hurt.hp}/${hurt.max}</span>` : '')
+      + '</h2>';
     if (!list.length) html += '<p style="color:var(--dim)">Empty. Even the lint.</p>';
     for (const [group, keys] of shelve(list)) {
       html += `<h3 class="shelf">${group}</h3><div class="items">` + keys.map((k) => {
@@ -9131,6 +9155,14 @@ function playCue(kind) {
   else if (kind === 'step_path') blip(120 + (G.steps % 2) * 18, .04, 'square', .022);
   else if (kind === 'step_sand') blip(150 + (G.steps % 2) * 20, .05, 'sine', .02);
   else if (kind === 'step_wood') blip(300 + (G.steps % 2) * 40, .04, 'square', .02);
+  // The grass, harder. Inventorying which beats make a sound found the rustle
+  // silent: half a second of blades thrashing with nothing on it, and then the
+  // battle sting. Inserting that beat pushed the battle cue half a second later
+  // than it used to be without anybody noticing, which is a thing you only see
+  // by listing what has a voice and what does not. It borrows the tall-grass
+  // step's own triangle and runs it three times, falling — the same material
+  // moving faster.
+  else if (kind === 'rustle') { [0, 1, 2].forEach((i) => blip(196 - i * 22, .09, 'triangle', .034, t + i * .07)); }
   // Evolution opens on a low swell rather than a chime — something is coming.
   else if (kind === 'evo') { [0, 3, 7].forEach((s2, i) => blip(note(s2), .9, 'sine', .04, t + i * .18)); }
   // Being spotted: two hard notes, the second higher. Nothing friendly about it.
