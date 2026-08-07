@@ -8158,7 +8158,7 @@ function entryFx(b, e) {
       const last = b.pops[b.pops.length - 1];
       if (last && last.side === e.side) last.kind = 'crit';
     }
-    playCue('hit');
+    playCue(e.crit ? 'crit' : 'hit');
   }
 }
 
@@ -9446,6 +9446,12 @@ function playCue(kind) {
   if (!ac) return;
   const t = ac.currentTime;
   if (kind === 'hit') blip(150, .09, 'sawtooth', .07);
+  // A crit already looks different — its own burst, its own colour on the
+  // number — and sounded exactly like every other hit. Lower and longer than
+  // `hit`, with a second blip under it so it lands as one heavier impact
+  // rather than two taps. Written, not heard: sound cannot be photographed and
+  // nobody in this loop has ever listened to this game.
+  else if (kind === 'crit') { blip(96, .16, 'sawtooth', .085); blip(58, .22, 'square', .05, t + .02); }
   else if (kind === 'faint') { blip(220, .3, 'square', .05); blip(110, .45, 'square', .05, t + .12); }
   else if (kind === 'level') { [0, 4, 7, 12].forEach((s, i) => blip(note(12 + s), .16, 'square', .05, t + i * .07)); }
   else if (kind === 'catch') { [0, 5, 9, 14].forEach((s, i) => blip(note(12 + s), .2, 'triangle', .06, t + i * .1)); }
