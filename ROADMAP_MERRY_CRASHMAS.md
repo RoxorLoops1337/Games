@@ -163,8 +163,10 @@ edit this block to name the next one.
       211.8 oscillator spawns a second down to 24.
 - [ ] **Ragdoll pass.** Bodies currently slide and stop. Limbs that trail, bodies
       that fold over the bonnet and get carried, pile-ups against stalls.
-- [ ] **Menu cover.** `cover.webp` + `cover.webm` so the games index shows real
-      footage like the other entries.
+- [x] **Menu cover.** Done: `cover.webp` + `cover.webm`, recorded by
+      `tools/crashmas_cover.mjs` out of the browser itself (captureStream into
+      a MediaRecorder — there is no ffmpeg here). Rerun it after anything that
+      changes how the game looks.
 
 ## Notes for whoever picks this up
 
