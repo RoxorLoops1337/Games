@@ -3083,18 +3083,35 @@ function drawGround(){
 
   for (const p of ice){
     if (p.x + p.r < x0 || p.x - p.r > x1 || p.y + p.r < y0 || p.y - p.r > y1) continue;
-    ctx.fillStyle = 'rgba(150,205,240,.34)';
+    /* Ice is the one thing on the floor that changes how the car drives, and
+       it was a pale disc with three scratches on it. A frozen puddle from
+       above is a sheet with facets in it, a bright rim where it has cracked
+       away from the snow, and a hard specular streak. */
+    ctx.fillStyle = 'rgba(122,186,232,.30)';
     circle(p.x, p.y, p.r); ctx.fill();
-    ctx.strokeStyle = 'rgba(228,246,255,.75)'; ctx.lineWidth = 4;
+    ctx.fillStyle = 'rgba(196,232,255,.20)';
+    ctx.save(); ctx.translate(p.x, p.y);
+    spikeRing(p.r * 0.72, 7, 0.16, p.seed * 6.28); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(240,252,255,.16)';
+    ctx.beginPath();
+    ctx.ellipse(p.x - p.r * 0.24, p.y - p.r * 0.28, p.r * 0.5, p.r * 0.3,
+      p.seed * 3.1, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = 'rgba(232,248,255,.85)'; ctx.lineWidth = 4;
     circle(p.x, p.y, p.r - 2); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2;
-    for (let i = 0; i < 3; i++){
-      const a = p.seed * 6.28 + i * 2.1;
-      ctx.beginPath();
-      ctx.moveTo(p.x + Math.cos(a) * p.r * 0.2, p.y + Math.sin(a) * p.r * 0.2);
-      ctx.lineTo(p.x + Math.cos(a + 0.6) * p.r * 0.8, p.y + Math.sin(a + 0.6) * p.r * 0.8);
-      ctx.stroke();
+    // cracks: one path, one stroke, radiating from an off-centre nucleus
+    ctx.strokeStyle = 'rgba(255,255,255,.34)'; ctx.lineWidth = 2;
+    const nx = p.x + Math.cos(p.seed * 6.28) * p.r * 0.22;
+    const ny = p.y + Math.sin(p.seed * 6.28) * p.r * 0.22;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++){
+      const a = p.seed * 6.28 + i * 1.257;
+      const mx = nx + Math.cos(a) * p.r * 0.45, my = ny + Math.sin(a) * p.r * 0.45;
+      ctx.moveTo(nx, ny);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(nx + Math.cos(a + 0.35) * p.r * 0.9, ny + Math.sin(a + 0.35) * p.r * 0.9);
     }
+    ctx.stroke();
   }
 
   for (const s of spills){
@@ -4356,29 +4373,78 @@ function drawShout(){
 }
 
 /* ---------- pickups & fx ---------- */
+/* The three colours a pickup can be, in the form the light pass wants. */
+const PICKUP_RGB = { nitro: '120,255,170', plow: '140,210,255', star: '255,215,110' };
+function pickupCol(u){ return PICKUP_RGB[u.kind] || PICKUP_RGB.star; }
+const pickupGlows = {};
+function pickupSprite(kind, rgb){
+  if (!(kind in pickupGlows)) pickupGlows[kind] = bakeLight(rgb, 0.55);
+  return pickupGlows[kind];
+}
+
+/* These are the three things on the floor you are meant to steer *into*, and
+   they were 34px icons under a flat alpha .18 disc — drawn before the darkness
+   layer, so at night they were dimmer than the snow around them. The icon
+   stays here on the ground; the glow and the ring moved to the light pass. */
 function drawPickup(u){
   if (u.taken) return;
-  const b = Math.sin(T * 3 + u.bob) * 4;
+  const b = Math.sin(T * 3 + u.bob) * 5;
   ctx.save(); ctx.translate(u.x, u.y + b);
-  shadow(0, 16 - b, 22, 9, 0.22);
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = u.kind === 'nitro' ? 'rgba(90,255,150,.18)'
-                : u.kind === 'plow' ? 'rgba(120,200,255,.18)' : 'rgba(255,215,90,.18)';
-  circle(0, 0, 40); ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
+  shadow(0, 18 - b, 24, 10, 0.22);
+  ctx.rotate(Math.sin(T * 1.1 + u.bob) * 0.22);
   if (u.kind === 'nitro'){
-    ctx.fillStyle = '#2fae5f'; roundRect(-11, -20, 22, 40, 8); ctx.fill();
-    ctx.fillStyle = '#8effb0'; ctx.fillRect(-6, -14, 12, 20);
-    ctx.fillStyle = '#d8d8d8'; ctx.fillRect(-4, -26, 8, 8);
+    ctx.fillStyle = '#1d7a42'; roundRect(-13, -23, 26, 46, 9); ctx.fill();
+    ctx.fillStyle = '#2fae5f'; roundRect(-10, -20, 20, 40, 7); ctx.fill();
+    ctx.fillStyle = '#8effb0'; ctx.fillRect(-7, -15, 14, 22);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(-7, -15, 5, 22);
+    ctx.fillStyle = '#d8d8d8'; roundRect(-5, -30, 10, 9, 3); ctx.fill();
+    ctx.fillStyle = '#ffd34d';                       // the lightning mark
+    ctx.beginPath();
+    ctx.moveTo(2, -12); ctx.lineTo(-4, 1); ctx.lineTo(0, 1);
+    ctx.lineTo(-2, 12); ctx.lineTo(5, -3); ctx.lineTo(1, -3);
+    ctx.closePath(); ctx.fill();
   } else if (u.kind === 'plow'){
-    ctx.fillStyle = '#dfe8f6';
-    ctx.beginPath(); ctx.moveTo(-16, -18); ctx.lineTo(16, -10); ctx.lineTo(16, 10); ctx.lineTo(-16, 18); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#c8443a'; ctx.fillRect(10, -12, 7, 24);
+    ctx.fillStyle = '#9fb4cd';                       // the blade, edge on
+    ctx.beginPath();
+    ctx.moveTo(-18, -21); ctx.lineTo(18, -12); ctx.lineTo(18, 12); ctx.lineTo(-18, 21);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#eef5ff';
+    ctx.beginPath();
+    ctx.moveTo(-15, -17); ctx.lineTo(13, -9); ctx.lineTo(13, 3); ctx.lineTo(-15, 5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c8443a'; roundRect(11, -14, 8, 28, 3); ctx.fill();
   } else {
-    ctx.fillStyle = '#ffd34d'; roundRect(-17, -17, 34, 34, 7); ctx.fill();
-    ctx.fillStyle = '#e8a91f'; ctx.fillRect(-4, -17, 8, 34); ctx.fillRect(-17, -4, 34, 8);
+    ctx.fillStyle = '#e8a91f'; spikeRing(20, 5, 0.55, T * 0.6 + u.bob); ctx.fill();
+    ctx.fillStyle = '#ffd34d'; spikeRing(16, 5, 0.55, T * 0.6 + u.bob); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; circle(-3, -3, 5); ctx.fill();
   }
   ctx.restore();
+}
+
+/* The glow, the ring and the hole they cut in the night. Called from the light
+   pass, which has already set 'lighter'. */
+function drawPickupGlow(){
+  for (const u of pickups){
+    if (u.taken) continue;
+    if (Math.abs(u.x - cam.x) > VW / cam.s || Math.abs(u.y - cam.y) > VH / cam.s) continue;
+    const rgb = pickupCol(u);
+    const b = Math.sin(T * 3 + u.bob) * 5;
+    /* Its own colour, not the headlight's. The first version reused the cream
+       beam sprite for all three and the gold star came out muddy brown against
+       blue snow, while the green and the blue read fine. */
+    const sp = pickupSprite(u.kind, rgb);
+    if (sp){
+      ctx.globalAlpha = 0.62 + 0.18 * Math.sin(T * 3 + u.bob);
+      const gr = 78;
+      ctx.drawImage(sp, u.x - gr, u.y + b - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = 1;
+    }
+    // a ring that breathes outward, so the eye finds it in a busy market
+    const k = ((T * 0.7 + u.bob * 0.3) % 1);
+    ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.5 * (1 - k)).toFixed(2) + ')';
+    ctx.lineWidth = 3;
+    circle(u.x, u.y + b, 30 + k * 40); ctx.stroke();
+  }
 }
 
 /* Wet blood, drawn with the ground rather than with the particles so bodies
@@ -4741,6 +4807,7 @@ function drawLights(){
     ctx.fillStyle = 'rgba(120,255,170,.16)';
     circle(car.x, car.y, 190); ctx.fill();
   }
+  drawPickupGlow();
   drawFireworks();
   ctx.restore();
 }
