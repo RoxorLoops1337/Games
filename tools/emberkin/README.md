@@ -377,6 +377,27 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+48. **A drive that skipped the frame proved the opposite of the truth** (pass
+    131). Reading the click handler — `pressKey('a')` with no release — and
+    `pressKey` — `if (!keys.has(k)) fired.add(k)` — says a tap advances a
+    dialogue once and never again. So I drove it: press, step, press, step. It
+    advanced every time, and I wrote off the fault as a misreading.
+    It was the drive that was wrong. `fired.clear()` lives in `frame`, not in
+    `step`, so calling `step` directly never clears the pulse: `fired` still
+    held 'a' from the first press, `justPressed` stayed true for ever, and
+    every tap "worked" for a reason that has nothing to do with the game. Put
+    the clear in the loop and all four taps after the first do nothing, exactly
+    as the source said. On a phone that is the whole tap-to-advance affordance
+    dying after one line, and a keyboard player never sees it because their
+    first Z releases 'a' for them.
+    **When a drive contradicts a plain reading of the source, suspect the
+    drive. Ask which parts of the real loop it left out — the thing you did not
+    call is the thing that would have cleared the state you are measuring.**
+    Corollary, from the fix: `tapKey` releases BEFORE it presses as well as
+    after, so a tap lands even when something else has left the key held. The
+    first version only released after, and the test caught that it could not
+    recover from a stuck key.
+
 47. **The fallback layout was the least-looked-at code in the project** (pass
     127). `layoutFor` has four branches. Three of them get used by somebody
     obvious — a desktop window, a tablet in landscape, a phone held upright.
