@@ -2206,6 +2206,30 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### The deck's vocabulary, glossed where it appears
+
+Three words are printed on cards and were defined nowhere a player can read —
+only in comments above the card table. Each fails the same test: **a player can
+guess wrong in a way that changes what they do.**
+
+| | the guess that costs you |
+|---|---|
+| **Exhaust** | read as *gone for ever*, so the best cards get hoarded and never played — the exact opposite of what they are for |
+| **Chain** | the big one. It takes a point off the cost for every card already played this turn, so a 3-cost is free after three cheap ones. Not knowing makes Titanheart and Overkill look unaffordable, and sequencing a turn is the whole skill of the deck |
+| **Retain** | a kept card is a held resource; not knowing means playing it the moment it arrives |
+
+They are glossed on the card offer, and **only for the words actually on the
+cards in front of you**. Two reasons, and both matter: a rule explained fifty
+fights before you meet it is not explained, and a screen should not define a
+word it never used.
+
+Verified by photograph in all three states — an offer using all three keywords
+(the longest the paragraph can ever get, and still readable), an offer with only
+Exhaust, and an offer of Edge, Guard and Focus with no gloss at all.
+
+`edge`, `might` and `veteran` were checked at the same time and need nothing:
+they are internal names and never appear in front of a player.
+
 ### Losing the legendary says so
 
 The code has always kept the hunt open — knock Vespyr down, run from it, or wipe

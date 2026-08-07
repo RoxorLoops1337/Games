@@ -8645,7 +8645,35 @@ function renderScreen() {
   } else if (s.kind === 'reward') {
     html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
-    html += `<p style="font-size:.8em;color:var(--dim);max-width:520px">Your kin brings the attacks. These make them land harder.</p>`;
+    // The deck's vocabulary, glossed where it appears.
+    //
+    // Three words are printed on cards and were defined nowhere a player can
+    // read — only in comments above the card table. Each fails the same test:
+    // a player can guess wrong in a way that changes what they do.
+    //
+    //   Exhaust  guessed as "gone for ever", so the best cards get hoarded and
+    //            never played — the exact opposite of what they are for.
+    //   Chain    the big one. It takes a point off the cost for every card
+    //            already played this turn, so a 3-cost is free after three
+    //            cheap ones. Not knowing it makes Titanheart and Overkill look
+    //            unaffordable, and turn sequencing is the whole skill of the
+    //            deck.
+    //   Retain   a kept card is a held resource; not knowing means playing it
+    //            the moment it arrives.
+    //
+    // Glossed on the offer rather than in the opening speech, and only for the
+    // words actually on the cards in front of you: a rule explained fifty
+    // fights before you meet it is not explained, and a screen should not
+    // define a word it never used.
+    const GLOSS = [
+      ['exhaust', 'Exhaust', 'one use per battle — it is back next fight'],
+      ['chain', 'Chain', 'costs 1 less for every card you have already played this turn'],
+      ['retain', 'Retain', 'stays in your hand at the end of the turn'],
+    ];
+    const shown = GLOSS.filter(([k]) => (s.list || []).some((id) => CARDS[id] && CARDS[id][k]));
+    html += `<p style="font-size:.8em;color:var(--dim);max-width:520px">Your kin brings the attacks. These make them land harder.`
+      + shown.map(([, word, means]) => ` <b style="color:var(--ink)">${word}</b> — ${means}.`).join('')
+      + '</p>';
     html += `<div class="cardrow big">` + s.list.map((id, i) => {
       if (id === 'skip') {
         return `<div class="cardel skipcard ${i === s.i ? 'sel' : ''}" data-i="${i}" style="--tint:#6b6270">

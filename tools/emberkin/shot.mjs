@@ -445,7 +445,9 @@ const SCENES = {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
       EK.G.dialogue = null; EK.G.mode = 'world';
-      EK.openScreen('reward', { offer: ['reaper', 'bulwark', 'warcry'], done: () => {} });
+      EK.openScreen('reward', { offer: ['titanheart', 'ironhide', 'warcry'], done: () => {} });
+      // The worst case for the keyword glosses: Chain, Retain and Exhaust all on
+      // offer at once, so the paragraph is as long as it can ever get.
     },
   },
   // The papers a catch hands you — the one screen where the name is yours, and
