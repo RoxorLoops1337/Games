@@ -2462,6 +2462,74 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ----------------------------------------------------------- the bosses */
+function bossShape(api, skin, isBoss, opts){
+  const f = api.mkFighter({ team: 'e', skin, x: api.cam.x + 190, y: api.FLOOR_MID, face: 1 });
+  f.anim = 'idle'; f.frame = 1; f.state = 'idle'; f.boss = isBoss;
+  Object.assign(f, opts || {});
+  api._resetCounts();
+  api.drawFighter(f);
+  const trim = api.SKINS[skin].trim;
+  return {
+    n: api._rects.length,
+    cols: new Set(api._rects.map(r => r[4])),
+    // the belt is in the trim colour on every fighter, so presence proves
+    // nothing — what the gear adds is more of it
+    trim: api._rects.filter(r => r[4] === trim).length,
+    // the ring is ten single pixels in a translucent trim colour, and it is
+    // the only thing on a fighter drawn that way
+    ring: api._rects.filter(r => r[2] === 1 && r[3] === 1 && String(r[4]).startsWith('rgba(')).length,
+  };
+}
+
+test('a boss stands in a ring of his own colour', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  for (const [key, e] of Object.entries(api.ENEMY)){
+    if (!e.boss) continue;
+    const trim = api.SKINS[e.skin].trim;
+    assert(trim, key + ' has no trim colour to mark him with');
+    const on = bossShape(api, e.skin, true), off = bossShape(api, e.skin, false);
+    const ring = (sh) => [...sh.cols].filter(c => typeof c === 'string' && c.startsWith('rgba(') &&
+      c.includes(String(parseInt(trim.slice(1, 3), 16)))).length;
+    assert(ring(on) > ring(off), key + ' has no ring under him');
+    assert(on.n > off.n + 8, `${key} is drawn in ${on.n} pieces against ${off.n} for the same man unpromoted`);
+  }
+});
+
+test('every boss has a piece of gear of his own', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const skins = [...new Set(Object.values(api.ENEMY).filter(e => e.boss).map(e => e.skin))];
+  assert(skins.length === 5, 'there are ' + skins.length + ' boss skins');
+  const gearCost = {};
+  for (const sk of skins){
+    const on = bossShape(api, sk, true), off = bossShape(api, sk, false);
+    gearCost[sk] = on.n - off.n;
+    assert(gearCost[sk] > 8, `${sk} gets ${gearCost[sk]} pixels of gear — that is just the ring`);
+    assert(on.trim > off.trim, `${sk}'s gear adds nothing in his own trim colour: ${on.trim} against ${off.trim}`);
+  }
+  // and they are not all the same piece
+  const spread = Math.max(...Object.values(gearCost)) - Math.min(...Object.values(gearCost));
+  assert(spread > 4, 'every boss gets the same gear: ' + JSON.stringify(gearCost));
+});
+
+test('the ring goes out when he does, and the gear does not draw through a flash', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const alive = bossShape(api, 'hammer', true);
+  const dead = bossShape(api, 'hammer', true, { dead: true });
+  assert(alive.ring >= 8, 'the living one has no ring: ' + alive.ring);
+  assert(dead.ring === 0, 'a dead boss still stands in his ring: ' + dead.ring);
+  api.setT(0);                                    // the flash alternates on frame parity
+  const flashed = bossShape(api, 'hammer', true, { hitFlash: 0.1 });
+  const plain = bossShape(api, 'hammer', false);
+  assert(flashed.trim <= plain.trim, 'the gear is drawn through the hit flash');
+});
+
 /* --------------------------------------------------------- the rooftop */
 test('the skyline is two rows deep, and the far one is hazed', () => {
   const api = boot();
