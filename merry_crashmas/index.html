@@ -1986,6 +1986,104 @@ function buildWires(){
   }
 }
 
+/* A hanging sign on every stall saying what it sells. The trades landed a
+   while back and the only way to read one was to look at the counter, which
+   at driving speed you do not.
+
+   The whole market's worth of them is eight draw calls however many stalls
+   there are: every board is the same cream so they go down in one path, every
+   bracket is the same stroke, and each trade's pictogram is one more path —
+   six of those, not one per stall. A sign each for a hundred stalls would have
+   been three hundred fills, and the budget has 660 left in it. */
+const SIGN_W = 34, SIGN_H = 22;
+function signAt(o){
+  // out over the aisle, on the side the awning faces
+  return { x: o.x - o.w / 2 - 20, y: o.y - o.h * 0.24 };
+}
+function eachSign(fn){
+  const halfW = VW / cam.s / 2 + 200, halfH = VH / cam.s / 2 + 200;
+  for (const o of props){
+    if (o.kind !== 'hut' || o.dead) continue;
+    if (Math.abs(o.x - cam.x) > halfW || Math.abs(o.y - cam.y) > halfH) continue;
+    fn(o, signAt(o));
+  }
+}
+function drawStallSigns(){
+  // count before touching the canvas: a flattened market, or one you have
+  // driven out of, should not so much as open a path
+  let n = 0;
+  eachSign(() => n++);
+  if (!n) return;
+  // the brackets
+  ctx.strokeStyle = 'rgba(38,28,20,.8)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  eachSign((o, p) => { ctx.moveTo(o.x - o.w / 2, p.y); ctx.lineTo(p.x + SIGN_W / 2, p.y); });
+  ctx.stroke();
+  // the boards
+  ctx.fillStyle = '#e8dcc2';
+  ctx.beginPath();
+  eachSign((o, p) => ctx.rect(p.x - SIGN_W / 2, p.y - SIGN_H / 2, SIGN_W, SIGN_H));
+  ctx.fill();
+  ctx.fillStyle = 'rgba(9,16,32,.16)';
+  ctx.beginPath();
+  eachSign((o, p) => ctx.rect(p.x - SIGN_W / 2, p.y + SIGN_H * 0.22, SIGN_W, SIGN_H * 0.28));
+  ctx.fill();
+  // one pass per trade, so a market of signs is six fills of pictogram
+  for (const t of TRADES){
+    ctx.fillStyle = t.sign;
+    ctx.beginPath();
+    let drew = false;
+    eachSign((o, p) => {
+      if (tradeOf(o) !== t) return;
+      drew = true;
+      signMark(t.goods, p.x, p.y - 1);
+    });
+    if (drew) ctx.fill();
+  }
+}
+/* Every mark is added to a path the caller owns and filled by the caller —
+   nothing here may set a style or fill, or the batching is gone. */
+function signMark(goods, x, y){
+  switch (goods){
+    case 'grill':                                     // a sausage
+      ctx.moveTo(x - 10, y - 3);
+      ctx.arc(x, y, 5, 0, 6.283);
+      ctx.rect(x - 10, y - 3.5, 20, 7);
+      break;
+    case 'pots':                                      // a mug with a handle
+      ctx.moveTo(x + 5, y);
+      ctx.arc(x - 1, y, 6, 0, 6.283);
+      ctx.rect(x + 5, y - 3, 5, 6);
+      break;
+    case 'blocks':                                    // a stack of two bricks
+      ctx.rect(x - 8, y - 6, 9, 9);
+      ctx.rect(x - 1, y - 1, 9, 8);
+      break;
+    case 'brazier':                                   // three chestnuts
+      for (let i = 0; i < 3; i++){
+        ctx.moveTo(x - 7 + i * 7 + 4, y + (i % 2 ? 3 : -2));
+        ctx.arc(x - 7 + i * 7, y + (i % 2 ? 3 : -2), 4, 0, 6.283);
+      }
+      break;
+    case 'flames':                                    // a candle flame
+      ctx.moveTo(x, y - 8);
+      ctx.lineTo(x + 5, y + 2);
+      ctx.lineTo(x, y + 7);
+      ctx.lineTo(x - 5, y + 2);
+      ctx.closePath();
+      break;
+    default:                                          // a heart
+      ctx.moveTo(x - 3, y - 4);
+      ctx.arc(x - 3.5, y - 2, 4, 0, 6.283);
+      ctx.moveTo(x + 4.5, y - 2);
+      ctx.arc(x + 3.5, y - 2, 4, 0, 6.283);
+      ctx.moveTo(x - 8, y - 1);
+      ctx.lineTo(x + 8, y - 1);
+      ctx.lineTo(x, y + 8);
+      ctx.closePath();
+  }
+}
+
 /* The way in. Every run starts on an empty white lane with two dashed lines
    on it and the market somewhere off in the distance — a third of every aim
    frame was nothing at all. There is a gate across it now with the market's
@@ -3406,12 +3504,12 @@ function drawGround(){
    market — and the trade decides the awning colour, what is on the counter,
    and whether the stall smokes. */
 const TRADES = [
-  { id:'wurst',  goods:'grill',   stripe:'#b5342b', smoke:1.0 },
-  { id:'gluh',   goods:'pots',    stripe:null,      smoke:0.5 },
-  { id:'toys',   goods:'blocks',  stripe:'#2f7d54', smoke:0 },
-  { id:'nuts',   goods:'brazier', stripe:'#95602c', smoke:0.8 },
-  { id:'candle', goods:'flames',  stripe:'#c9a24a', smoke:0 },
-  { id:'bake',   goods:'hearts',  stripe:null,      smoke:0 },
+  { id:'wurst',  goods:'grill',   stripe:'#b5342b', smoke:1.0, sign:'#a3673a' },
+  { id:'gluh',   goods:'pots',    stripe:null,      smoke:0.5, sign:'#8b2f22' },
+  { id:'toys',   goods:'blocks',  stripe:'#2f7d54', smoke:0,   sign:'#2f6ea5' },
+  { id:'nuts',   goods:'brazier', stripe:'#95602c', smoke:0.8, sign:'#5c4126' },
+  { id:'candle', goods:'flames',  stripe:'#c9a24a', smoke:0,   sign:'#e8a91f' },
+  { id:'bake',   goods:'hearts',  stripe:null,      smoke:0,   sign:'#a8452c' },
 ];
 function tradeOf(o){
   return TRADES[Math.floor((o.seed || 0) * TRADES.length) % TRADES.length];
@@ -5797,6 +5895,7 @@ function draw(){
   for (const e of order){
     if (e.kind && PROPS[e.kind]) drawProp(e); else drawPerson(e);
   }
+  drawStallSigns();
   drawWires();
   drawGate();
 

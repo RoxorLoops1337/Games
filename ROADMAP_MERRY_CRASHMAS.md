@@ -131,6 +131,9 @@ edit this block to name the next one.
 - [x] A gate across the launch lane with the market's name on it — scenery
       only, no collider, so the empty third of every aim frame finally says
       where you are about to drive.
+- [x] A hanging sign on every stall with its trade's pictogram — the whole
+      market's worth in eight draw calls, so a hundred stalls cost what eight
+      do.
 
 ## Next
 

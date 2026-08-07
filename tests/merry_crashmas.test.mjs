@@ -78,6 +78,7 @@ const EXPOSE = `__out.api = {
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   windNow, WIND_STREAK, drawSnow, seedSnow,
   drawGate, drawGateBulbs, GATE_X, GATE_HALF,
+  drawStallSigns, signMark, signAt, SIGN_W, SIGN_H,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -5227,6 +5228,83 @@ test('the gate is culled once you are past it, and its bulbs are three fills', (
   assert(!Object.keys(api._counts).length,
     'the gate is still being drawn from the far end of the market: ' +
     JSON.stringify(api._counts));
+});
+
+/* ---------------------------------------------------------------- signs --- */
+
+/* The trades landed a while back and the only way to read one was to look at
+   the counter, which at driving speed you do not. Every stall has a hanging
+   sign now — and a sign each for a hundred stalls would have been three
+   hundred fills against a budget with 660 left in it, so the whole market's
+   worth of them is a fixed handful of draw calls. */
+function signCost(api, lv){
+  api.startLevel(lv); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api._resetCounts();
+  api.drawStallSigns();
+  const v = api.getView();
+  const inShot = api.props.filter(o => o.kind === 'hut' && !o.dead &&
+    Math.abs(o.x - api.cam.x) < v.w / api.cam.s / 2 + 200 &&
+    Math.abs(o.y - api.cam.y) < v.h / api.cam.s / 2 + 200).length;
+  return { fills: api._counts.fill || 0, strokes: api._counts.stroke || 0, inShot };
+}
+
+test('a market of signs costs the same however many stalls are in shot', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.G.unlocked = 21;
+  const small = signCost(api, 0), big = signCost(api, 20);
+  console.log('    (signs: ' + small.inShot + ' stalls -> ' + small.fills + ' fills, ' +
+    big.inShot + ' stalls -> ' + big.fills + ' fills)');
+  assert(big.inShot > small.inShot * 2,
+    'the two markets should differ a lot: ' + small.inShot + ' vs ' + big.inShot);
+  // two boards plus one pass per trade actually in shot, and one bracket stroke
+  assert(big.fills <= 2 + api.TRADES.length,
+    'a busy market should still be two boards and at most one fill a trade, got ' + big.fills);
+  assert(small.fills <= big.fills,
+    'a quiet market cannot cost more than a busy one: ' + small.fills + ' vs ' + big.fills);
+  assert(big.strokes === 1, 'every bracket in one stroke, got ' + big.strokes);
+  assert(big.fills >= 4, 'and it should actually be drawing signs, got ' + big.fills);
+});
+
+/* If anything inside signMark ever sets a style or fills, every sign in the
+   market becomes its own draw call and the guarantee above is gone. */
+test('a sign pictogram adds to the path and nothing else', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.startCampaign(); api.beginLevel();
+  for (const t of api.TRADES){
+    api._resetCounts();
+    api.signMark(t.goods, 100, 100);
+    const c = Object.assign({}, api._counts);
+    delete c.moveTo; delete c.lineTo; delete c.arc; delete c.rect; delete c.closePath;
+    assert(!Object.keys(c).length,
+      t.id + "'s mark does more than build a path: " + JSON.stringify(c));
+    const drew = (api._counts.moveTo || 0) + (api._counts.rect || 0) + (api._counts.arc || 0);
+    assert(drew > 0, t.id + "'s mark draws nothing at all");
+  }
+});
+
+test('a wrecked stall loses its sign, and so does one off camera', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const huts = api.props.filter(o => o.kind === 'hut');
+  api._resetCounts(); api.drawStallSigns();
+  const before = api._counts.rect || 0;
+  assert(before > 0, 'there should be signs to lose');
+  for (const o of huts) o.dead = true;
+  api._resetCounts(); api.drawStallSigns();
+  assert(!Object.keys(api._counts).length,
+    'a flattened market is still hanging signs: ' + JSON.stringify(api._counts));
+  for (const o of huts){ o.dead = false; o.x += 90000; }
+  api._resetCounts(); api.drawStallSigns();
+  assert(!Object.keys(api._counts).length,
+    'signs are being drawn from the far side of the world: ' + JSON.stringify(api._counts));
+  // the sign hangs off the stall, on the aisle side
+  const o = { x: 2000, y: 1100, w: 158, h: 112 };
+  const p = api.signAt(o);
+  assert(p.x < o.x - o.w / 2, 'the sign should hang clear of the stall it belongs to');
+  assert(Math.abs(p.y - o.y) < o.h, 'and stay alongside it');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
