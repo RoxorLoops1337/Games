@@ -121,6 +121,10 @@ edit this block to name the next one.
 - [x] Pickups and ice: the three things you steer into get their own coloured
       glow from the light pass and a breathing ring, and ice reads as a cracked
       sheet with facets and a rim rather than a pale disc with three scratches.
+- [x] Fairy lights strung between the stalls: sagging cables with coloured
+      bulbs, paired off the finished prop list with no RNG, one stroke for
+      every cable in shot and one fill per bulb colour. A cable with a stall
+      gone from one end hangs slack; with both gone it is cut.
 
 ## Next
 
