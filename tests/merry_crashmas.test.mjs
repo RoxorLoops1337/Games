@@ -70,7 +70,7 @@ const EXPOSE = `__out.api = {
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
-  TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
+  TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
@@ -103,12 +103,22 @@ const EXPOSE = `__out.api = {
 };
 `;
 
+/* Roughly what system-ui gives at these sizes. The harness cannot lay out
+   type, so this is the one approximation the layout tests are built on — and
+   it is also what the stubbed measureText answers with, so the game's own
+   measured layouts and the suite's expectations come from one formula. */
+const textW = (s, fs) => s.length * fs * 0.58;
+const fontPx = (f) => { const m = /(\d+(?:\.\d+)?)px/.exec(String(f || '')); return m ? +m[1] : 16; };
+
 function boot(opts){
   const o = opts || {};
   const gradient = { addColorStop(){} };
   const counts = {};
   const ctxStub = new Proxy({}, { get(t, p){
-    if (p === 'measureText') return () => ({ width: 30 });
+    /* A flat 30 made every measured layout in the game a lie under test: the
+       score plate is sized off its goal text now, and at width 30 it never
+       needed to grow. */
+    if (p === 'measureText') return (s) => ({ width: textW(String(s), fontPx(t.font)) });
     // the words a frame puts on screen, so a headless suite can read them
     if (p === 'fillText') return (t) => {
       if (!o.count) return;
@@ -328,17 +338,57 @@ test('a swipe launches the car on every viewport, phones included', () => {
   }
 });
 
+/* This used to assert `14 + 168 < 390 - 14 - 118` — three copies of drawHUD's
+   own numbers, so drawHUD could move either panel anywhere and it would still
+   pass. It reads the rectangles drawHUD actually draws now, and it has to,
+   because the score plate is no longer a fixed width. */
 test('the HUD panels do not sit on top of each other on a phone', () => {
   // the score panel and the car counter used to overlap by 78px at 390 wide
-  const api = boot({ w: 390, h: 844, count: true });
-  api.startCampaign(); api.beginLevel();
-  api.draw(); api._resetCounts(); api.draw();
-  assert((api._counts.fill || 0) > 10, 'the HUD drew something');
-  // measured from the same numbers drawHUD uses
-  const pad = 14, panelW = 168, carsW = 118;
-  assert(pad + panelW < 390 - pad - carsW,
-    'panels overlap at 390 wide: score ends ' + (pad + panelW) +
-    ', cars start ' + (390 - pad - carsW));
+  for (const [w, h] of [[390, 844], [520, 400], [1280, 720], [2560, 1440]]){
+    const api = boot({ w, h, count: true });
+    api.startCampaign(); api.beginLevel();
+    api.draw(); api._resetCounts(); api.draw();
+    assert((api._counts.fill || 0) > 10, w + 'x' + h + ': the HUD drew something');
+    const s = api.hudScoreRect(), c = api.hudCarsRect();
+    const view = api.getView();
+    assert(s.x + s.w < c.x, w + 'x' + h + ': panels overlap — score ends ' +
+      (s.x + s.w) + ', cars start ' + c.x);
+    assert(c.x + c.w <= view.w - 1, w + 'x' + h + ': the car counter is off the right edge');
+    assert(s.x >= 1, w + 'x' + h + ': the score plate is off the left edge');
+  }
+});
+
+/* The goal rows are the only thing telling you what the two extra stars cost.
+   The plate was sized off its contents vertically and off a hard-coded 168/250
+   horizontally, so thirteen of the sixty-three goal lines finished up to 45px
+   past it, on the raw market, in grey. */
+test('every goal line fits on the plate that is meant to carry it', () => {
+  const rows = [];
+  for (const [w, h] of [[1280, 720], [520, 400], [430, 320]]){
+    const api = boot({ w, h });
+    let worst = -999, worstAt = '';
+    for (let lv = 0; lv < api.LEVELS.length; lv++){
+      api.startLevel(lv); api.beginLevel();
+      const r = api.hudScoreRect(), narrow = api.getView().w < 560;
+      const lead = r.x + 12 + (narrow ? 8 : 10) + 7;
+      for (const g of api.G.goals){
+        const end = lead + textW(g.text, narrow ? 10 : 12);
+        const slack = (r.x + r.w) - end;
+        if (slack < worst || worst === -999){ worst = slack; worstAt = api.LEVELS[lv].name + ' “' + g.text + '”'; }
+        assert(slack >= 0, w + 'x' + h + ': ' + worstAt + ' runs ' +
+          (-slack).toFixed(0) + 'px past the plate');
+      }
+      // and every row's baseline is inside the plate it is drawn on
+      for (let i = 0; i < api.G.goals.length; i++){
+        const gy = api.goalRowY(i);
+        assert(gy > r.y && gy <= r.y + r.h,
+          w + 'x' + h + ': goal row ' + i + ' has its baseline at ' + gy +
+          ', plate is ' + r.y + '…' + (r.y + r.h));
+      }
+    }
+    rows.push(w + 'x' + h + ' ' + worst.toFixed(0) + 'px spare');
+  }
+  console.log('    (goal plate: ' + rows.join(' | ') + ')');
 });
 
 test('a swipe is measured from where it started, not from the car', () => {
@@ -2449,7 +2499,7 @@ test('kills add to the lifetime tally', () => {
   assert(api.G.lifeKills === before + 1, 'counted');
 });
 
-test('every car renders, on the ground and mid-roll', () => {
+test('drawing every car, on the ground and mid-roll, does not throw', () => {
   const api = boot();
   api.G.lifeKills = 999999; api.G.starsPer = api.LEVELS.map(() => 3);
   api.startCampaign(); api.beginLevel();
@@ -2631,7 +2681,7 @@ test('a market carries its own weather and palette', () => {
   assert(seen.size >= 5, 'the markets should not all look the same, got ' + seen.size);
 });
 
-test('the whole campaign renders, theme by theme', () => {
+test('drawing every market in the campaign does not throw', () => {
   const api = boot();
   for (let i = 0; i < api.LEVELS.length; i++){
     api.startLevel(i);
@@ -3003,8 +3053,21 @@ test('the run summary sits at the top, not across the wreckage', () => {
   api.startLevel(0); api.beginLevel();
   api.G.banner = { text: '9 DOWN · 3 WRECKED · 4,200', t: 1.2 };
   api.draw();
-  // drawHUD places the receipt at VH*0.115 and combo shouts at VH*0.30
-  assert(0.115 * 720 < 0.18 * 720, 'the receipt is inside the top strip');
+  /* This used to assert `0.115 * 720 < 0.18 * 720` — two constants, so drawHUD
+     could put the receipt at VH * 0.9 and it would still pass. It reads the
+     layout the banner actually uses now. */
+  const receipt = api.bannerLayout(textW('9 DOWN · 3 WRECKED · 4,200', 30), true, 1);
+  const shout = api.bannerLayout(textW('MARKET MAYHEM', 30), false, 1);
+  const sr = api.hudScoreRect();
+  assert(receipt.y + receipt.h / 2 < 720 * 0.30,
+    'the receipt should stay in the top strip, got ' + receipt.y.toFixed(0));
+  assert(receipt.y - receipt.h / 2 > sr.y + sr.h - 200,
+    'but below the score plate, not printed through it');
+  assert(shout.y > receipt.y,
+    'the loud banner belongs lower than the quiet one: ' +
+    shout.y.toFixed(0) + ' vs ' + receipt.y.toFixed(0));
+  assert(shout.y + shout.h / 2 < 720, 'and inside the frame');
+
   api.G.banner = { text: 'MARKET MAYHEM', t: 1.2 };
   api.draw();                                  // the loud one still renders centre
 });
@@ -3513,7 +3576,7 @@ test('the view zooms out with speed', () => {
 
 /* --------------------------------------------------------------- draw --- */
 
-test('the whole render path runs in every phase', () => {
+test('running the whole render path in every phase does not throw', () => {
   const api = boot();
   api.draw();                                   // menu
   api.startCampaign(); api.draw();              // brief
@@ -5435,7 +5498,7 @@ function carRec(){
       if (poly) polys.push(Object.assign({}, poly, { style: line, lw, stroked: true }));
       if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; }
     },
-    measureText: () => ({ width: 30 }),
+    measureText: (s) => ({ width: textW(String(s), fontPx(base.font)) }),
     /* Gradients stringify to their stops, so a fill can be told apart from the
        flat colour it replaced — the recorder used to return undefined here and
        every cached gradient silently fell back to its solid fallback. */
@@ -5545,10 +5608,6 @@ test('every car carries the same driver', () => {
 
 /* ------------------------------------------------ the combo banner --- */
 
-/* Real text widths, since the harness's measureText reports a flat 30 and the
-   whole point of the layout is what it does with a long banner. Roughly what
-   900-weight system-ui gives at these sizes. */
-const textW = (s, fs) => s.length * fs * 0.58;
 
 test('the combo banner is a ribbon, not bare text on the market', () => {
   const api = boot({ count: true, w: 1280, h: 720 });

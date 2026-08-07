@@ -863,7 +863,7 @@ const G = {
   goalPops: [],           // goals ticked mid-run, announced once the car has stopped
   banner: null,           // {text, t}
   bannerAt: 0,
-  runKills: 0, runWrecks: 0, runScore: 0, runBest: 0,
+  runKills: 0, runWrecks: 0, runScore: 0,
 };
 
 const car = {
@@ -1707,7 +1707,7 @@ function nextCar(){
   tracks.push({ x: car.x, y: car.y, a: 0, red: 0, ice: 0, gap: 1 });
   car.z = 0; car.vz = 0; car.roll = 0; car.rollV = 0; car.air = 0;
   car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0; car.nitroT = 0;
-  G.runKills = 0; G.runWrecks = 0; G.runScore = 0; G.runBest = 0;
+  G.runKills = 0; G.runWrecks = 0; G.runScore = 0;
   G.combo = 0; G.comboT = 0; G.mult = 1;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
@@ -2094,7 +2094,6 @@ function bumpCombo(){
   G.comboT = COMBO_WIN;
   G.mult = Math.min(MAX_MULT, 1 + (G.combo - 1) * 0.5);
   if (G.combo > G.bestCombo) G.bestCombo = G.combo;
-  if (G.combo > G.runBest) G.runBest = G.combo;
   for (const [n, text] of COMBO_BANNERS){
     if (G.combo === n){ G.banner = { text, t: 1.5 }; sndBanner(n); addShake(0.25, 7); flash = Math.max(flash, 0.35); }
   }
@@ -6411,12 +6410,42 @@ function bannerRibbon(w, h, warm){
    landed outside the panel, on the raw market, in grey. The plate is measured
    off its contents here and both the plate and the rows read the same numbers,
    which is the only way they cannot drift apart again. */
+/* …and how wide. The height was measured off the contents; the width was two
+   hard-coded numbers, so thirteen of the sixty-three goal lines ran up to 45px
+   off the right edge of the plate at a narrow window and finished on the raw
+   market in grey — the exact failure the plate was added to fix, one axis over.
+   Measured once per set of goal texts rather than per frame. */
+let goalW = 0, goalWKey = '';
+function goalTextW(narrow){
+  const goals = G.goals || [];
+  const key = (narrow ? 'n|' : 'w|') + goals.map(g => g.text).join('|');
+  if (key !== goalWKey){
+    goalWKey = key;
+    const keep = ctx.font;
+    ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
+    let m = 0;
+    for (const g of goals) m = Math.max(m, ctx.measureText(g.text).width);
+    ctx.font = keep;
+    // 12 in from the plate, the tick box, 7 of gap, and 12 of margin the far side
+    goals.length ? goalW = Math.ceil(12 + (narrow ? 8 : 10) + 7 + m + 12) : goalW = 0;
+  }
+  return goalW;
+}
 function hudScoreRect(){
   const pad = 14, narrow = VW < 560;
   const rowH = narrow ? 15 : 18, headH = narrow ? 64 : 80;
   const goals = G.goals ? G.goals.length : 0;
-  return { x: pad, y: pad, w: narrow ? 168 : 250,
+  // never far enough right to reach the car counter, however long a goal is
+  const room = VW - pad * 2 - (narrow ? 118 : 190) - 10;
+  const w = clamp(goalTextW(narrow), narrow ? 168 : 250, Math.max(narrow ? 168 : 250, room));
+  return { x: pad, y: pad, w,
     h: headH + (goals ? goals * rowH + 8 : 0), rowH, headH, goals, pad };
+}
+/* The car counter, so the suite can read where the two plates actually are
+   instead of asserting on its own copies of these numbers. */
+function hudCarsRect(){
+  const pad = 14, narrow = VW < 560, w = narrow ? 118 : 190;
+  return { x: VW - pad - w, y: pad, w, h: narrow ? 40 : 48, pad };
 }
 function goalRowY(i){
   const r = hudScoreRect();
@@ -6477,9 +6506,9 @@ function drawHUD(){
   }
 
   // cars remaining
-  const carsW = narrow ? 118 : 190;
+  const cr = hudCarsRect(), carsW = cr.w;
   ctx.textAlign = 'right';
-  hudPlate(VW - pad - carsW, pad, carsW, narrow ? 40 : 48);
+  hudPlate(cr.x, cr.y, cr.w, cr.h);
   ctx.fillStyle = '#cfdcee';
   ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
   ctx.fillText('CARS LEFT', VW - pad - 12, pad + (narrow ? 16 : 19));
