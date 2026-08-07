@@ -2462,6 +2462,58 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ------------------------------------------------------------- the dock */
+test('a container is a box with corners on it, not a coloured bar', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  const castings = r.filter(q => q[4] === '#2a2c30' && q[2] === 7 && q[3] === 3);
+  assert(castings.length >= 8, 'the boxes have ' + castings.length + ' corner castings between them');
+  assert(castings.length % 2 === 0, 'castings come in pairs, one each end');
+  // measured, exactly: 28 top castings with the cull, 54 without
+  assert(castings.length <= 40, `${castings.length} castings painted — the loop is not culling`);
+  assert(r.some(q => q[4] === '#22242a'), 'no castings along the bottom rail');
+  assert(r.some(q => q[4] === '#0a1620' && q[2] === 58), 'stacked boxes run together with no line between them');
+  assert(r.some(q => /rgba\(138,\s*74,\s*34/.test(String(q[4]))), 'not a spot of rust in the whole yard');
+});
+
+test('some boxes are doors and some are corrugated', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  // a door has locking bars three wide and two tall; a corrugated side has
+  // ribs two wide and fifteen tall. Both shapes have to be on the wharf.
+  const bars = api._rects.filter(r => r[2] === 3 && r[3] === 2).length;
+  const ribs = api._rects.filter(r => r[2] === 2 && r[3] === 15).length;
+  assert(bars >= 4, 'no doors on any box: ' + bars + ' locking bars');
+  assert(ribs >= 8, 'no corrugated sides: ' + ribs + ' ribs');
+  let doors = 0;
+  for (let gx = 0; gx < 300; gx++) for (let sI = 0; sI < 3; sI++) if (api.hash(gx * 11 + sI) > 0.55) doors++;
+  assert(doors > 250 && doors < 650, 'the split is ' + doors + ' of 900 — that is not a mix');
+  let rusty = 0;
+  for (let gx = 0; gx < 300; gx++) for (let sI = 0; sI < 3; sI++) if (api.hash(gx * 3 + sI * 5) > 0.5) rusty++;
+  assert(rusty > 300 && rusty < 600, 'the rust is on ' + rusty + ' of 900');
+});
+
+test('the dock stays cheap wherever the camera is', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api.draw();
+  for (const cx of [0, 61, 190, 640, 1310]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const n = api._counts.fillRect || 0;
+    assert(n > 300, `at camera ${cx} it drew almost nothing: ${n}`);
+    assert(n < 3200, `at camera ${cx} it drew ${n} fillRects`);
+  }
+});
+
 /* ------------------------------------------------------------- the yard */
 test('the stacks are wrecks, and no two rows are the same car', () => {
   const api = boot();
