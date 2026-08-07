@@ -461,6 +461,16 @@ edit this block to name the next one.
       every goal, at the `n` it actually asks for on each of the twenty-one
       markets, **progress and pass/fail must agree** — 1,638 cases.
 
+- [x] …and the live checklist shows it too. The results card gained per-goal
+      progress last pass and the checklist you actually play against did not,
+      which is the wrong way round: mid-run is when knowing you are on 3 of 4
+      changes what you aim at. Every unticked goal now carries its own count,
+      right-aligned at the plate's edge in amber, and the plate is measured
+      off the row **including** the number — so "Score 5,800 with one car
+      3,120 / 5,800" widens it rather than printing out over the market. The
+      width cache is keyed on the progress as well as the text, or the plate
+      would stop growing as a number got longer mid-run.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
