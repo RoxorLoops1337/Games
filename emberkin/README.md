@@ -2182,6 +2182,29 @@ shadow only appears at an edge you have actually scrolled away from. No JS, no
 extra element, and it disappears by itself on a screen that fits — verified by
 shooting the reward screen, which is short, and finding no cue on it.
 
+### The dex, and a cursor that agreed with the grid
+
+The dex was never photographed until now, and it reads exactly as intended:
+caught is the creature in a gold frame, seen is a silhouette lifted off the
+panel, unfound is a hatched slot with its number still in it. Three tiers,
+distinguishable at a glance. No change to any of it.
+
+What the picture did show is that the cursor and the grid disagreed. These grids
+are `repeat(auto-fill, minmax(N, 1fr))`, so the column count is a function of the
+stage width — the dex is **three** across on a phone, **four** on a x2 stage and
+**nine** on a wide one. Up and down were hard-coded to **five**, which is right
+at exactly one window and wrong at every other: the cursor jumped a row and a
+bit, in a grid the player can see.
+
+`gridCols()` counts the first rendered row instead. No test could have caught
+this — the affordance was wired up correctly, it was just wired to the wrong
+number — and it was confirmed by measuring the rendered grid at three sizes
+against what the function returns (3/3, 4/4, 9/9).
+
+The shop was photographed at the same time and needs nothing: grouped by kind,
+priced, and everything you cannot afford is dimmed, so what your shards will
+buy reads at a glance.
+
 ### A card after every win
 
 The three cards on the reward screen used to sit in a fixed 14.6em box with the
