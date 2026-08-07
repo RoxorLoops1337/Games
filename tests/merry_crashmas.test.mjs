@@ -80,6 +80,7 @@ const EXPOSE = `__out.api = {
   drawGate, drawGateBulbs, GATE_X, GATE_HALF,
   drawStallSigns, signMark, signAt, SIGN_W, SIGN_H,
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
+  paintMarketThumb, mkLane, mkRand, MK_W, MK_H, THEMES,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
   bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
   getFootI: () => footI,
@@ -4345,6 +4346,136 @@ test('an ordinary pop is still swallowed by the one already there', () => {
 /* The whole field is one shape now, so its cost stops depending on how much of
    the market you flattened. Three hundred decals used to be three hundred
    fills, which is also three hundred chances to stack alpha into fog. */
+/* ------------------------------------------------- the market picker --- */
+
+/* A canvas the plan can be painted into, counted by the shared stub. */
+const planCv = (api) => ({ width: api.MK_W * 2, height: api.MK_H * 2,
+  getContext: () => api._ctxStub });
+
+/* The plan walks its own copy of the generator's laneAt(). If the two ever
+   drift apart the picker starts advertising a market that is not there, so
+   this checks the copy against the real thing: generate the market, then find
+   every stall on the plan's lanes. */
+test('the plan on a tile is the market the generator builds', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const worst = [];
+  for (const lv of api.LEVELS){
+    if ((lv.shape || 'rows') === 'plaza') continue;      // the ring is not on a lane
+    api.genMarket(lv);
+    const x0 = api.C.MARKET_X;
+    const x1 = api.C.FENCE_PAD + (api.C.WORLD_W - api.C.FENCE_PAD * 2 - 120) * lv.span;
+    const huts = api.props.filter(o => o.kind === 'hut');
+    assert(huts.length > 8, lv.name + ' should have stalls, got ' + huts.length);
+    let off = 0;
+    for (const o of huts){
+      let best = Infinity;
+      for (let r = 0; r < lv.rows; r++){
+        for (let side = -1; side <= 1; side += 2){
+          best = Math.min(best, Math.abs(o.y - (api.mkLane(lv, r, o.x, x0, x1) + side * 108)));
+        }
+      }
+      if (best > 1) off++;
+    }
+    worst.push([lv.name, off / huts.length]);
+    assert(off / huts.length < 0.06,
+      lv.name + ': ' + Math.round(off / huts.length * 100) + '% of its stalls are not on a plan lane');
+  }
+  const bad = worst.sort((a, b) => b[1] - a[1])[0];
+  console.log('    (plan lanes: worst market is ' + bad[0] + ' at ' +
+    (bad[1] * 100).toFixed(1) + '% off-lane)');
+});
+
+test('a market plan shows its shape, not a generic street', () => {
+  const api = boot({ w: 1280, h: 720 });
+  // the y-spread of one row along the market: flat for rows, not for the rest
+  const spread = (lv) => {
+    const x0 = api.C.MARKET_X;
+    const x1 = api.C.FENCE_PAD + (api.C.WORLD_W - api.C.FENCE_PAD * 2 - 120) * lv.span;
+    const ys = [];
+    for (let i = 0; i <= 20; i++) ys.push(api.mkLane(lv, 0, x0 + (x1 - x0) * i / 20, x0, x1));
+    return Math.max(...ys) - Math.min(...ys);
+  };
+  const byShape = {};
+  for (const lv of api.LEVELS) (byShape[lv.shape || 'rows'] ||= []).push(spread(lv));
+  const shapes = Object.keys(byShape).sort();
+  console.log('    (lane spread by shape: ' + shapes.map(s =>
+    s + ' ' + Math.round(Math.max(...byShape[s]))).join(', ') + ')');
+  assert(shapes.length >= 5, 'the campaign should use at least five shapes, got ' + shapes);
+  assert(Math.max(...byShape.rows) < 1, 'straight rows should be straight');
+  for (const s of shapes){
+    if (s === 'rows' || s === 'plaza') continue;
+    assert(Math.min(...byShape[s]) > 60,
+      s + ' should bend its lane, spread was only ' + Math.round(Math.min(...byShape[s])));
+  }
+});
+
+/* The picker paints twenty-one pictures every time the menu opens. If any of
+   them drew a random number the whole campaign would rescore itself on the way
+   past the menu — five cosmetic systems have done exactly that before. */
+test('painting the picker does not touch either random stream', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const draw5 = (fn) => {
+    api.reseed(4242);
+    if (fn) fn();
+    return [api.rnd(), api.rnd(), api.rnd(), api.rnd(), api.rnd()];
+  };
+  const clean = draw5(null);
+  const painted = draw5(() => {
+    for (const lv of api.LEVELS) api.paintMarketThumb(planCv(api), lv);
+  });
+  assert(JSON.stringify(clean) === JSON.stringify(painted),
+    'the picker moved the simulation stream: ' + clean[0] + ' -> ' + painted[0]);
+  // and the same tile paints the same picture every time the menu opens
+  const a = api.paintMarketThumb(planCv(api), api.LEVELS[20]);
+  const b = api.paintMarketThumb(planCv(api), api.LEVELS[20]);
+  assert(JSON.stringify(a) === JSON.stringify(b),
+    'a plan should be stable: ' + JSON.stringify(a) + ' vs ' + JSON.stringify(b));
+  assert(a.stalls > 20 && a.trees > 0 && a.lamps > 0,
+    'the last market should be busy: ' + JSON.stringify(a));
+});
+
+test('a plan costs a handful of fills however big the market is', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  const cost = (lv) => {
+    api._resetCounts();
+    const out = api.paintMarketThumb(planCv(api), lv);
+    return { fills: api._counts.fill || 0, rects: api._counts.fillRect || 0, out };
+  };
+  const small = cost(api.LEVELS[0]), big = cost(api.LEVELS[20]);
+  console.log('    (plan: ' + api.LEVELS[0].name + ' ' + small.out.stalls + ' stalls in ' +
+    (small.fills + small.rects) + ' calls, ' + api.LEVELS[20].name + ' ' +
+    big.out.stalls + ' in ' + (big.fills + big.rects) + ')');
+  assert(big.out.stalls > small.out.stalls * 2, 'the last market is much bigger than the first');
+  // the greenery and the lamps are one path each, so only the stall rects scale
+  assert(big.fills - small.fills === 0,
+    'the trees and lamps should batch: ' + small.fills + ' -> ' + big.fills);
+  assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
+});
+
+test('every market gets a tile with its plan, its name and its stars', () => {
+  const api = boot({ w: 1280, h: 720, store: { merry_crashmas_stars_v1: JSON.stringify(
+    [3, 2, 1, 0].concat(new Array(17).fill(0))) } });
+  api.G.unlocked = 3;
+  api.toMenu();
+  const html = api._nodes.mLevels.innerHTML;
+  const tiles = html.split('<button').length - 1;
+  assert(tiles === api.LEVELS.length, 'one tile a market: ' + tiles + ' vs ' + api.LEVELS.length);
+  assert((html.match(/data-plan="/g) || []).length === api.LEVELS.length,
+    'every tile should carry a plan to paint');
+  // the full name, not a truncation — the number is a badge, not a prefix
+  for (const lv of api.LEVELS){
+    assert(html.includes('<b>' + lv.name + '</b>'), 'missing name: ' + lv.name);
+  }
+  assert(html.includes('<u>21</u>'), 'the last market should be numbered on its plan');
+  assert(!html.includes('21. MIDNIGHT'), 'the number should not be eating the name');
+  // stars read off the save, and locked markets say so instead
+  assert(html.includes('★★★☆'.slice(0, 3) + '</em>'), 'a three-star market shows three stars');
+  assert((html.match(/🔒/g) || []).length === api.LEVELS.length - 4,
+    'everything past the unlock should be locked');
+  assert((html.match(/disabled/g) || []).length === api.LEVELS.length - 4,
+    'and locked tiles should not be clickable');
+});
+
 test('the blood field costs the same at one decal or three hundred', () => {
   const cost = (n, kind) => {
     const api = boot({ count: true, w: 1280, h: 720 });
