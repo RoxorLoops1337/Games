@@ -1243,6 +1243,19 @@ section('the hand survives a phone');
     'the End turn key hint is hidden on touch');
   ok(/End turn <span class="key">E<\/span>/.test(SRC),
     'and still printed for a keyboard');
+
+  // The big card is the same component on the deck, the reward and the swap,
+  // and at a phone's scale its art left no room for a second line of rules
+  // text — "Every attack +2 for this battle" came out with "battle" sliced in
+  // half across the card's bottom edge. The room comes off the picture.
+  //
+  // The rule is scoped to the CARD and not to a screen on purpose: the last
+  // three passes were each about a fix that reached the one place that
+  // revealed it and none of the others.
+  const bigCard = SRC.match(/body\.tight [^{]*\.cardel\.big[^{]*\{/g) || [];
+  ok(bigCard.length > 0, `the big card has a rule at tight size (${bigCard.join(' ')})`);
+  ok(bigCard.every((r) => !/#hand|#screen/.test(r)),
+    `and none of them is scoped to a single screen (${bigCard.join(' ')})`);
 }
 
 // The overlay layout: what a landscape phone gets when the gutters come out

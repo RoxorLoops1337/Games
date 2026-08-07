@@ -645,6 +645,17 @@
   body.tight #hand .cardel:not(.sel) .ctext{ display:none; }
   body.tight #hand .cardel:not(.sel) .cname{ margin-top:.35em; }
   body.tight #hand .cardel .cpip{ font-size:.4em; }
+  /* The big cards — the deck screen, the reward, the swap — clip their own
+     rules text at a phone's scale. `.cardel.big` is 11.4em tall with the art
+     taking 40% of it plus a 1em margin, and at 11px there is not room left for
+     a second line: "Every attack +2 for this battle" came out with the word
+     "battle" sliced in half across the card's bottom edge.
+     The room comes off the picture rather than off the type, because the type
+     is already at .56em and the picture is the part that survives being
+     smaller. This is scoped to the CARD, not to a screen: the same component
+     is used on the deck, the reward and the swap, and the last two passes were
+     both about a fix that reached one place and not the others. */
+  body.tight .cardel.big .cart{ height:32%; margin-top:.5em; }
   /* The rule above hid the text on the four cards you are NOT aiming at, and
      left it on the one you are — which is the only card that also carries the
      "▲ play" badge. `.cp` is absolutely positioned at bottom:.9em, so on a
