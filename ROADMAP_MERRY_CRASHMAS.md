@@ -97,6 +97,9 @@ edit this block to name the next one.
       scatter of droplets, pools carry a wet sheen — all batched into one path
       each so the field still costs one fill a decal. Forced pop-ups climb
       clear of each other instead of printing through.
+- [x] Replay: the caption sits on a cached scrim that darkens both ends of the
+      frame into the letterbox bars, instead of being printed onto a lit stall.
+      The carousel got horses, a scalloped hem and a finial.
 
 ## Next
 

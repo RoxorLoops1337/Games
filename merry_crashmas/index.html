@@ -3350,20 +3350,40 @@ function drawProp(o){
         ctx.fillStyle = '#8a5f3c'; circle(0, 0, o.r * 0.8); ctx.fill();
         ctx.fillStyle = 'rgba(190,60,50,.5)'; circle(0, 0, o.r * 0.42); ctx.fill();
       } else {
+        /* A striped disc with six gold dots on it. The dots are the ride —
+           they read as horses now, each one a body turned along the ring with
+           a head and a barley-sugar pole — and the canopy gets a scalloped
+           hem, a lit side and a finial in the middle. */
         const spin = T * 0.5 + o.seed * 6.28;
-        ctx.fillStyle = '#e9eef8'; circle(0, 0, o.r); ctx.fill();
+        ctx.fillStyle = '#e9eef8';
+        spikeRing(o.r * 0.965, 10, 0.035, spin); ctx.fill();
         const seg = 10;
         for (let i = 0; i < seg; i++){
           const a0 = spin + i * (6.283 / seg), a1 = a0 + 6.283 / seg;
           ctx.fillStyle = i % 2 ? TH.awning : TH.awning2;
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, o.r, a0, a1); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, o.r * 0.94, a0, a1); ctx.closePath(); ctx.fill();
         }
-        ctx.fillStyle = '#2b3f63'; circle(0, 0, o.r * 0.3); ctx.fill();
-        ctx.fillStyle = '#ffd34d';
+        ctx.fillStyle = 'rgba(255,247,228,.13)';
+        ctx.beginPath();
+        ctx.ellipse(-o.r * 0.3, -o.r * 0.32, o.r * 0.66, o.r * 0.54, 0, 0, 6.283); ctx.fill();
+        // the ride, turning under the canopy
         for (let i = 0; i < 6; i++){
           const a = spin * 1.6 + i * 1.047;
-          circle(Math.cos(a) * o.r * 0.62, Math.sin(a) * o.r * 0.62, 13); ctx.fill();
+          const hx = Math.cos(a) * o.r * 0.62, hy = Math.sin(a) * o.r * 0.62;
+          ctx.strokeStyle = '#c9a24a'; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy); ctx.lineTo(Math.cos(a) * o.r * 0.34, Math.sin(a) * o.r * 0.34);
+          ctx.stroke();
+          ctx.fillStyle = i % 2 ? '#f6f2ea' : '#e0c9a4';
+          ctx.beginPath();
+          ctx.ellipse(hx, hy, 17, 8, a + Math.PI / 2, 0, 6.283); ctx.fill();
+          ctx.fillStyle = '#4a3524';
+          circle(hx + Math.cos(a + Math.PI / 2) * 14, hy + Math.sin(a + Math.PI / 2) * 14, 5); ctx.fill();
         }
+        ctx.fillStyle = '#2b3f63'; circle(0, 0, o.r * 0.3); ctx.fill();
+        ctx.fillStyle = 'rgba(255,247,228,.16)';
+        circle(-o.r * 0.08, -o.r * 0.09, o.r * 0.18); ctx.fill();
+        ctx.fillStyle = '#ffd34d'; circle(0, 0, o.r * 0.1); ctx.fill();
       }
       ctx.restore(); break;
     }
@@ -5094,6 +5114,22 @@ function drawLens(){
 let vigGrad = null, vigKey = '', vigTheme = '';
 /* Letterbox, caption and a progress bar, so the slow-motion reads as a
    replay rather than the game having gone wrong. */
+let capGrad = null, capKey = '';
+function captionScrim(){
+  const key = VW + 'x' + VH;
+  if (key !== capKey || !capGrad){
+    capKey = key;
+    capGrad = ctx.createLinearGradient(0, 0, 0, VH);
+    if (capGrad && capGrad.addColorStop){
+      capGrad.addColorStop(0, 'rgba(5,8,15,.88)');
+      capGrad.addColorStop(0.30, 'rgba(5,8,15,0)');
+      capGrad.addColorStop(0.86, 'rgba(5,8,15,0)');
+      capGrad.addColorStop(1, 'rgba(5,8,15,.55)');
+    } else capGrad = null;
+  }
+  return capGrad;
+}
+
 function drawReplayFrame(){
   if (G.phase !== 'replay') return;
   screenTransform();
@@ -5105,6 +5141,13 @@ function drawReplayFrame(){
   ctx.fillRect(0, VH - bar, VW, bar);
 
   ctx.globalAlpha = Math.min(inT, outT);
+  /* The caption used to be printed straight onto the market. A replay pauses
+     over the brightest thing in the game — a lit stall counter — and white
+     30px text on that is unreadable, which is the whole point of the caption
+     gone. One cached gradient darkens both ends of the frame into the
+     letterbox bars; it is built once per viewport, like the vignette. */
+  const scrim = captionScrim();
+  if (scrim){ ctx.fillStyle = scrim; ctx.fillRect(0, 0, VW, VH); }
   ctx.textAlign = 'left';
   ctx.fillStyle = '#ff5a4a';
   ctx.font = '900 15px system-ui';
