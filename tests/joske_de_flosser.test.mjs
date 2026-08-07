@@ -2758,6 +2758,11 @@ test('every attack points at a frame that exists', () => {
     }
     assert(a.seq[a.seq.length - 1][1] >= a.dur - 0.001, `${key} runs out of frames before it ends`);
     if (a.heavy) assert(a.seq.length >= 3, `${key} is a heavy attack in ${a.seq.length} beats — no wind-up, no follow-through`);
+    // an attack must not sit on frame zero of a multi-frame animation for its
+    // whole duration — that is a held pose wearing an animation's name
+    const used = new Set(a.seq.map(q => q[0]));
+    if (table.length > 1)
+      assert(used.size >= 2, `${key} runs for ${a.dur}s on frame ${[...used]} of a ${table.length}-frame ${a.anim}`);
   }
 });
 
@@ -2805,6 +2810,68 @@ test('the legs alternate, and the feet do not slide', () => {
   const covered = spd * stride;
   assert(Math.abs(travel - covered) < covered * 0.35,
     `the foot moves ${travel}px while the man moves ${covered.toFixed(1)}px — that is a moonwalk`);
+});
+
+test('no animation holds the same pose two frames running', () => {
+  const api = boot();
+  const key = (p) => JSON.stringify([p.hipY, p.hipX, p.lean, p.sh, p.headX, p.headY, p.aF, p.aB, p.lF, p.lB]);
+  for (const [name, table] of Object.entries(api.A)){
+    for (let i = 1; i < table.length; i++)
+      assert(key(table[i]) !== key(table[i - 1]), `${name} holds the same pose on frames ${i - 1} and ${i}`);
+    if (table.length >= 4){
+      const seen = new Set(table.map(key));
+      assert(seen.size >= table.length - 1, `${name} is ${table.length} frames but only ${seen.size} poses`);
+    }
+  }
+});
+
+test('the run is eight frames and its feet do not slide either', () => {
+  const api = boot();
+  const r = api.A.run;
+  assert(r.length === 8, 'the run is ' + r.length + ' frames');
+  for (let i = 0; i < 4; i++)
+    assert(Math.sign(r[i].lF[2] - r[i].lB[2]) === -Math.sign(r[i + 4].lF[2] - r[i + 4].lB[2]),
+      `run frames ${i} and ${i + 4} lead with the same leg`);
+  assert(Math.max(...r.map(p => p.lean)) >= 4, 'a sprint leans into it');
+  assert(Math.max(...r.map(p => p.hipY)) - Math.min(...r.map(p => p.hipY)) >= 3, 'and leaves the ground');
+  // a run stride against the running speed, the same sum as the walk
+  const stride = 4 / api.RUN_FPS;
+  const travel = Math.max(...r.map(p => p.lF[2])) - Math.min(...r.map(p => p.lF[2]));
+  const covered = 82 * 1.85 * stride;               // spawnPlayer's speed, running
+  assert(Math.abs(travel - covered) < covered * 0.35,
+    `running, the foot moves ${travel}px while the man moves ${covered.toFixed(1)}px`);
+  // the arms are opposed in a sprint, unlike the walk where they floss together
+  const opposed = r.filter(p => Math.sign(p.aF[2]) !== Math.sign(p.aB[2])).length;
+  assert(opposed >= 6, 'the run should pump its arms, not floss: ' + opposed + '/8');
+});
+
+test('the states that used to be one pose are driven now', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  // an enemy with no brain: nothing else will reach in and change its state
+  // an enemy with no brain, and a partner so the grab states have somebody
+  // to be held by — 'held' bails straight back to idle without one
+  const f = api.mkFighter({ team: 'e', skin: 'punk', x: api.cam.x + 100, y: api.FLOOR_MID });
+  const mate = api.mkFighter({ team: 'e', skin: 'punk', x: api.cam.x + 86, y: api.FLOOR_MID });
+  api.fighters = api.fighters.concat([f, mate]);
+  f.holder = mate; mate.holding = f;
+  const frames = (state, anim, ticks, before) => {
+    const seen = new Set();
+    for (let i = 0; i < ticks; i++){
+      f.state = state; f.anim = anim; f.stun = 9; f.holdT = 0; f.mash = 0; f.z = 0;
+      mate.state = 'hold'; mate.holding = f; f.holder = mate; f.holding = mate;
+      api.setT(i / 20);
+      if (before) before(f, i);
+      api.updateFighter(f, 1 / 60);
+      seen.add(f.frame);
+    }
+    return seen;
+  };
+  assert(api.A.block.length === 2 && api.A.held.length === 2 && api.A.hold.length === 2, 'they are still one pose each');
+  const blocked = frames('block', 'block', 20, (g, i) => { g.hitFlash = i % 6 < 3 ? 0.1 : 0; });
+  assert(blocked.size === 2, 'a guard should brace when something lands on it: ' + [...blocked]);
+  assert(frames('held', 'held', 60).size === 2, 'a man being held should squirm');
+  assert(frames('hold', 'hold', 60).size === 2, 'and the man holding him should shift his grip');
 });
 
 test('a jump uses its whole arc, and taking one uses all three', () => {
