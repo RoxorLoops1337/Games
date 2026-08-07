@@ -59,6 +59,7 @@ const EXPOSE = `__out.api = {
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
+  BUILDS, buildOf,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -70,12 +71,17 @@ function makeSandbox(opts){
   opts = opts || {};
   const counts = {};
   const styles = [];                  // every colour the game asks the canvas for
+  const rects = [];                   // and every rectangle, so a test can measure a shape
   const gradient = { addColorStop(){} };
   const ctxStub = new Proxy({}, {
     get(t, p){
       if (p === 'measureText') return () => ({ width: 30 });
       if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => gradient;
       if (p === 'canvas') return { width: 384, height: 224 };
+      if (p === 'fillRect') return (x, y, w, h) => {
+        counts.fillRect = (counts.fillRect || 0) + 1;
+        if (rects.length < 40000) rects.push([x, y, w, h]);
+      };
       if (typeof p === 'string' && p !== 'then' && !(p in t))
         return (...args) => { counts[p] = (counts[p] || 0) + 1; };
       return t[p];
@@ -107,7 +113,7 @@ function makeSandbox(opts){
     requestAnimationFrame: () => {},
     __out: {},
   };
-  return { sandbox, store, counts, styles, nodes, canvas };
+  return { sandbox, store, counts, styles, rects, nodes, canvas };
 }
 
 let SRC = null;
@@ -123,14 +129,15 @@ function source(){
 }
 
 function boot(opts){
-  const { sandbox, store, counts, styles } = makeSandbox(opts);
+  const { sandbox, store, counts, styles, rects } = makeSandbox(opts);
   new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', source())(
     sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
   const api = sandbox.__out.api;
   api._store = store;
   api._counts = counts;
   api._styles = styles;
-  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; };
+  api._rects = rects;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; };
   api.reseed(4242);
   return api;
 }
@@ -2452,6 +2459,107 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ----------------------------------------------------------------- build */
+test('every skin has a build, and every build is a sane set of numbers', () => {
+  const api = boot();
+  const keys = ['sh', 'waist', 'limb', 'stance', 'hunch', 'neck'];
+  for (const [name, b] of Object.entries(api.BUILDS)){
+    for (const k of keys) assert(typeof b[k] === 'number', `${name} is missing ${k}`);
+    for (const k of ['sh', 'waist', 'limb', 'stance'])
+      assert(b[k] > 0.5 && b[k] < 2.2, `${name}.${k} is out of range: ${b[k]}`);
+    assert(Math.abs(b.hunch) <= 3 && Math.abs(b.neck) <= 4, name + ' is bent out of shape');
+  }
+  for (const [name, s] of Object.entries(api.SKINS)){
+    assert(s.build, name + ' has no build');
+    assert(api.BUILDS[s.build], `${name} asks for a build that does not exist: ${s.build}`);
+  }
+  assert(api.buildOf({}) === api.BUILDS.normal || api.buildOf({}).sh === 1, 'an unbuilt skin should fall back, not throw');
+  const used = new Set(Object.values(api.SKINS).map(s => s.build));
+  assert(used.size >= 5, 'only ' + used.size + ' builds in use across the whole roster');
+});
+
+/* Measure what a fighter actually paints: the widest run of pixels at the
+   shoulders and at the hips, and the set of columns the whole body covers. */
+function shapeOf(api, skin){
+  const f = api.mkFighter({ team: 'e', skin, x: api.cam.x + 190, y: api.FLOOR_MID, face: 1 });
+  f.anim = 'idle'; f.frame = 1; f.state = 'idle';
+  api._resetCounts();
+  api.drawFighter(f);
+  const rows = new Map();
+  const cols = new Set();
+  for (const [x, y, w, h] of api._rects){
+    if (w > 60 || h > 60) continue;                // skip the wash rectangles, not the body
+    for (let yy = y; yy < y + h; yy++){
+      let r = rows.get(yy);
+      if (!r) rows.set(yy, r = [1e9, -1e9]);
+      if (x < r[0]) r[0] = x;
+      if (x + w > r[1]) r[1] = x + w;
+    }
+    for (let xx = x; xx < x + w; xx++) cols.add(xx);
+  }
+  const ys = [...rows.keys()].sort((a, b) => a - b);
+  const top = ys[0], bot = ys[ys.length - 1], span = bot - top;
+  const widthAt = (frac) => {
+    const y = Math.round(top + span * frac);
+    const r = rows.get(y) || rows.get(y + 1) || rows.get(y - 1);
+    return r ? r[1] - r[0] : 0;
+  };
+  // the head is the widest row in the top fifth, not one sampled row: a
+  // mohawk and a hood put their bulk at different heights
+  let head = 0;
+  for (const [y, r] of rows) if (y <= top + span * 0.2) head = Math.max(head, r[1] - r[0]);
+  return { head, shoulders: widthAt(0.34), hips: widthAt(0.55), height: span, cols: cols.size };
+}
+
+test('a heavy is a different shape from a runner, not the same shape scaled', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const wiry = shapeOf(api, 'runner'), heavy = shapeOf(api, 'hammer'), mid = shapeOf(api, 'punk');
+  assert(wiry.shoulders > 4 && heavy.shoulders > 4, 'nobody has any shoulders');
+  assert(heavy.shoulders > wiry.shoulders * 1.5,
+    `the barrel is ${heavy.shoulders}px across the shoulders and the sprinter is ${wiry.shoulders}`);
+  assert(mid.shoulders > wiry.shoulders && heavy.shoulders > mid.shoulders, 'the middle of the roster is not in the middle');
+  // and it is the build, not the scale: measured against his own height the
+  // barrel is a far wider man, which is what "different shape" means here
+  const stout = (s) => s.shoulders / s.height;
+  assert(stout(heavy) > stout(wiry) * 1.3,
+    `scaled for height the barrel is ${stout(heavy).toFixed(2)} wide and the sprinter ${stout(wiry).toFixed(2)}`);
+});
+
+test('the roster reads as more than one man in twelve palettes', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const skins = [...new Set(Object.values(api.ENEMY).map(e => e.skin))];
+  assert(skins.length >= 8, 'only ' + skins.length + ' enemy skins');
+  const shapes = skins.map(sk => shapeOf(api, sk));
+  const widths = new Set(shapes.map(s => s.shoulders));
+  assert(widths.size >= 4, 'the whole roster has ' + widths.size + ' shoulder widths between them');
+  const footprints = new Set(shapes.map(s => s.shoulders + ':' + s.hips + ':' + s.cols));
+  assert(footprints.size >= skins.length - 3,
+    `only ${footprints.size} distinct silhouettes across ${skins.length} enemies`);
+  const span = Math.max(...shapes.map(s => s.shoulders)) - Math.min(...shapes.map(s => s.shoulders));
+  assert(span >= 8, 'the widest and the narrowest are ' + span + 'px apart');
+});
+
+// The hood and cap also skip the generic hairline so there is not a second
+// head of hair under them, but that is a pixel of thickness the harness
+// cannot measure — it is checked by eye, not here.
+test('a hood is a wider shape than a head, and both head pieces are in use', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const styles = (skin) => {
+    const f = api.mkFighter({ team: 'e', skin, x: api.cam.x + 190, y: api.FLOOR_MID, face: 1 });
+    f.anim = 'idle'; f.frame = 1; f.state = 'idle';
+    api._resetCounts();
+    api.drawFighter(f);
+    return api._rects.length;
+  };
+  assert(api.SKINS.blade.hair2 === 'hood' && api.SKINS.chain.hair2 === 'cap', 'the two head shapes are not in use');
+  assert(styles('blade') > 40 && styles('chain') > 40, 'they draw something');
+  const hooded = shapeOf(api, 'blade'), bare = shapeOf(api, 'punk');
+  assert(hooded.head > bare.head, `a hood should be wider than a head: ${hooded.head} vs ${bare.head}`);
 });
 
 /* ------------------------------------------------------------- animation */
