@@ -43,6 +43,62 @@ const SCENES = {
       EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
     },
   },
+  // A wild pair, which pass 38 added and nobody has ever looked at.
+  pair: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'stillmere';
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 12), wild: true, pair: EK.mkMon('zaplet', 12) });
+    },
+  },
+  // A trainer duel: two bodies, a bench, and a plan.
+  duel: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({
+        foe: EK.mkMon('pebblet', 12), wild: false,
+        team: [['pebblet', 12], ['frillamb', 12]],
+        npc: { id: 'shot', name: 'Dorn', trainer: { prize: 300, plan: ['sharpen', 'swing', 'brace', 'swing'] } },
+      });
+    },
+  },
+  // The three payoff screens, each held at the frame worth looking at.
+  evolve: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      const m = EK.G.party[0];
+      EK.G.evoAnim = { mon: m, from: m.species, to: EK.DEX[m.species].evo[0],
+        beats: [['hold', .5], ['build', .9], ['burst', .5], ['settle', .6], ['quiet', .7]],
+        i: 2, t: .22, swapped: false, res: null };
+    },
+  },
+  gotcha: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.G.gotcha = { t: .9, species: 'mistspray', name: 'Mistspray',
+        where: 'joined your party', done: () => { EK.G.gotcha = null; } };
+    },
+  },
+  reward: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.openScreen('reward', { offer: ['reaper', 'bulwark', 'warcry'], done: () => {} });
+    },
+  },
   legendary: {
     w: 760, h: 900,
     go: (EK) => {
