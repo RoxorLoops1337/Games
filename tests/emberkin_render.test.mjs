@@ -405,7 +405,10 @@ for (const [id, gr] of Object.entries(EK.GRADE)) {
 // all eight maps turned up exactly one asymmetry: the interiors have a light
 // source (the window pools) and the outdoor maps had none. An interior that
 // grew a shaft would be daylight coming through a ceiling.
-const SKY = new Set(['route', 'route_one', 'emberwood', 'stillmere', 'crown_hollow']);
+// A town is outdoors too — it was the last map with a sky and no light source,
+// which only showed up when it was re-photographed after the routes got theirs.
+// `inside` is the one that must never have one: daylight through a ceiling.
+const SKY = new Set(['route', 'town', 'route_one', 'emberwood', 'stillmere', 'crown_hollow']);
 for (const [id, gr] of Object.entries(EK.GRADE)) {
   if (gr.shaft) {
     ok(SKY.has(id), `${id}: only a map with a sky gets shafts`);

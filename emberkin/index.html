@@ -231,9 +231,20 @@
      card that has fallen onto a second row reads as a different question.
      They share the width instead, and the lifted one has space to lift into. */
   .cardrow.big{ flex-wrap:nowrap; gap:.7em; margin-top:1.7em; align-items:stretch; }
-  .cardrow.big .cardel{ flex:1 1 0; min-width:0; max-width:11em; height:14.6em; font-size:1.4em; }
+  /* Height comes from the wordiest card, not from a number. At a fixed 14.6em
+     every card had a dead band between where its description stopped and the
+     footer pinned to the bottom — about a seventh of the card on the shortest
+     one, which is the same "content parked in a box it does not fill" the title
+     screen and the interior maps both had. align-items:stretch already keeps
+     the row level, so letting the tallest set the height costs nothing. */
+  .cardrow.big .cardel{ flex:1 1 0; min-width:0; max-width:11em;
+    height:auto; min-height:11.5em; font-size:1.4em; }
   .cardel.big .cart{ height:40%; margin-top:1em; }
-  .cardel.big .ctext{ font-size:.56em; flex:0 1 auto; }
+  /* flex:0 0 auto, not 0 1 auto. Shrinkable text plus overflow:hidden means the
+     wordiest card silently clips into its own footer rather than making the row
+     taller — which is exactly what happened the moment the row stopped being a
+     fixed height. The card grows; the text is never cut. */
+  .cardel.big .ctext{ font-size:.56em; flex:0 0 auto; padding-bottom:.5em; }
   .cardel.off{ opacity:.45; }
   .cardel.skipcard{ flex:0 0 8em; height:11.4em; font-size:1.2em; justify-content:center; }
   .cardel.skipcard .cglyph{ font-size:2.4em; }
@@ -5036,7 +5047,12 @@ function weather(g, id, ctx) {
  * grade is, and what a wash can never be.
  */
 const GRADE = {
-  town:   { top: 'rgba(255,201,77,.10)',  bot: 'rgba(58,36,86,.22)',   vig: .40 },
+  // A town is outdoors. It was the one map with a sky and no light source left
+  // after the routes got theirs — the same asymmetry one level down, found by
+  // re-photographing it once the shafts had landed. Weaker than a route's: the
+  // buildings break the light up, and Hollowbrook is meant to read as sheltered.
+  town:   { top: 'rgba(255,201,77,.10)',  bot: 'rgba(58,36,86,.22)',   vig: .40,
+            shaft: ['rgba(255,214,140,.10)', .07] },
   route:  { top: 'rgba(255,214,120,.09)', bot: 'rgba(46,40,92,.20)',   vig: .38 },
   inside: { top: 'rgba(255,182,96,.14)',  bot: 'rgba(30,18,44,.30)',   vig: .55 },
   // Late-afternoon gold on the first road out — the friendliest light in the
