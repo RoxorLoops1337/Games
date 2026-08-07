@@ -108,6 +108,10 @@ edit this block to name the next one.
       bodywork, glass with a glint, headlamps and brake lights, and five
       silhouettes you can tell apart — van roof box, sports wing and stripes,
       monster roll bars and stacks, a sack on the sleigh.
+- [x] The car picker shows the cars: each card paints its own vehicle by
+      borrowing drawCar, plus launch/bounce/damage bars. Five on one row, and
+      the brief now fits the frame at 810, 720 and on a landscape phone —
+      where LET'S RUIN CHRISTMAS was 193px below the fold before.
 
 ## Next
 

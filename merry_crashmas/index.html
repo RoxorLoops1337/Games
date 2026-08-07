@@ -57,13 +57,28 @@
   .btn.alt:active{ box-shadow:0 2px 0 #142640; }
   .btn.dim{ opacity:.45; }
   .garage{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:0 0 14px; }
-  .car{ flex:1 1 160px; max-width:190px; padding:8px 10px; border-radius:10px; cursor:pointer;
+  /* Five cars on one row, not three and two. With a picture on every card the
+     two-row garage pushed LET'S RUIN CHRISTMAS off the bottom of a 720p
+     window; one row of five is 130px shorter and reads as a forecourt. */
+  .car{ flex:1 1 0; min-width:0; max-width:none; padding:5px 6px 7px; border-radius:10px; cursor:pointer;
     background:#0b1524; border:2px solid #22395c; color:#cfdcee; font-family:inherit; text-align:left; }
-  .car b{ display:block; font-size:12px; letter-spacing:1.2px; color:#e8f0ff; }
-  .car i{ display:block; font-style:normal; font-size:11px; line-height:1.35; color:#8fa6c6; margin-top:3px; }
+  .car b{ display:block; font-size:11px; letter-spacing:.5px; color:#e8f0ff; }
+  /* three lines of blurb at most, so a long one cannot grow the card */
+  .car i{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+    font-style:normal; font-size:10px; line-height:1.3; color:#8fa6c6; margin-top:2px; }
   .car.on{ border-color:#e8a91f; background:#17233a; }
   .car.on b{ color:#ffd34d; }
   .car.locked{ opacity:.45; cursor:not-allowed; }
+  /* The picker used to be five paragraphs about five cars you could not see. */
+  /* The picture shrinks with the frame rather than pushing LET'S RUIN
+     CHRISTMAS off the bottom of a laptop: 88px at 810 tall, 40 at 500. */
+  .carpic{ display:block; width:auto; height:clamp(26px, 7vh, 57px); margin:0 auto 1px; }
+  body.rot .carpic{ height:clamp(26px, 7vw, 57px); }
+  .car u{ display:flex; gap:4px; text-decoration:none; margin:4px 0 1px; }
+  .car u s{ flex:1; height:5px; border-radius:3px; background:#16243c; text-decoration:none;
+    overflow:hidden; display:block; }
+  .car u s em{ display:block; height:100%; border-radius:3px; background:#e8a91f; }
+  .car.on u s em{ background:#ffd34d; }
   .goals{ text-align:left; max-width:400px; margin:0 auto 14px; }
   .goal{ display:flex; align-items:center; gap:9px; padding:6px 10px; margin:5px 0; border-radius:9px;
     background:#0b1524; border:2px solid #22395c; color:#b9cbe4; font-size:14px; font-weight:600; }
@@ -134,6 +149,28 @@
   body.short .pickline{ margin:8px 0 5px; }
   body.short .lv{ padding:4px 8px; font-size:11px; }
   body.short .stats{ margin:6px 0; }
+  /* On a landscape phone the whole brief has to fit in 390px. The pictures and
+     the bars say more about a car than the blurb does, so the blurb is what
+     goes: this was already off the bottom of the frame before the pictures
+     existed, by 193px. */
+  body.short .car i{ display:none; }
+  body.short #brFlavour, body.short #brKills{ display:none; }
+  body.short .stat{ min-width:76px; padding:3px 8px; }
+  body.short .stat .v{ font-size:17px; }
+  body.short .stat .k{ font-size:9px; letter-spacing:1.4px; }
+  body.short #brTheme{ font-size:10px; margin:1px 0; }
+  body.short #brTitle{ font-size:22px; letter-spacing:1.5px; margin:0 0 4px; }
+  body.short #brNo{ font-size:9px; margin-bottom:2px; }
+  body.short .goal{ padding:2px 8px; margin:2px 0; font-size:11px; }
+  body.short .goal i{ width:13px; height:13px; line-height:12px; }
+  body.short .stats{ margin:3px 0; gap:6px; }
+  body.short .car u{ margin:2px 0 0; }
+  body.short .btn{ margin-top:0; }
+  body.short .carpic{ margin-bottom:0; }
+  body.short .goals{ margin-bottom:6px; }
+  body.short .car{ flex:1 1 0; min-width:0; max-width:none; padding:4px 5px 5px; }
+  body.short .car b{ font-size:10px; letter-spacing:.6px; }
+  body.short .goal{ padding:3px 8px; margin:3px 0; font-size:12px; }
   body.short .goals{ margin:6px 0; }
   body.short .garage{ margin-bottom:8px; }
 </style>
@@ -230,7 +267,15 @@
 
 /* ---------- canvas & viewport ---------- */
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+let ctx = canvas.getContext('2d');
+/* Draw somewhere other than the game canvas for a moment. The car art has one
+   implementation, and the garage has to show the same picture the market does
+   rather than keeping a second copy of it that would drift apart. */
+function withCtx(g, fn){
+  const prev = ctx;
+  ctx = g;
+  try { fn(); } finally { ctx = prev; }
+}
 let DPR = 1, VW = 960, VH = 600;
 
 /* Turn the game sideways when the window is a phone stood on its end. Only
@@ -1268,6 +1313,44 @@ function startLevel(i){
 }
 
 /* The garage row on the briefing card. Locked cars show what they cost. */
+/* Paint one car into a card's own canvas, by borrowing drawCar. The picker
+   used to be five paragraphs of text about five cars you could not see. */
+const THUMB_W = 96, THUMB_H = 62;
+function paintCarThumb(cv, c){
+  const g = cv.getContext && cv.getContext('2d');
+  if (!g || !g.setTransform) return false;
+  const keep = { CAR, CARL, CARW, x: car.x, y: car.y, ang: car.ang, z: car.z,
+    roll: car.roll, plowT: car.plowT, gore: car.gore, dents: car.dents,
+    vx: car.vx, vy: car.vy, boostT: car.boostT, dispSp: car.dispSp, shoutT: car.shoutT };
+  CAR = c; CARL = c.len; CARW = c.wid;
+  car.x = 0; car.y = 0; car.ang = 0; car.z = 0; car.roll = 0; car.plowT = 0;
+  car.gore = 0; car.dents = 0; car.vx = 0; car.vy = 0; car.boostT = 0;
+  car.dispSp = 0; car.shoutT = 0;
+  const w = cv.width || THUMB_W * 2, h = cv.height || THUMB_H * 2;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, w, h);
+  // the art runs to about twice the body width once the antlers and wheels are
+  // on it, so that is what has to fit, not the body
+  const sc = Math.min(w / (c.len * 1.14), h / (c.wid * 2.05));
+  g.translate(w / 2, h / 2); g.scale(sc, sc);
+  withCtx(g, drawCar);
+  CAR = keep.CAR; CARL = keep.CARL; CARW = keep.CARW;
+  car.x = keep.x; car.y = keep.y; car.ang = keep.ang; car.z = keep.z;
+  car.roll = keep.roll; car.plowT = keep.plowT; car.gore = keep.gore;
+  car.dents = keep.dents; car.vx = keep.vx; car.vy = keep.vy;
+  car.boostT = keep.boostT; car.dispSp = keep.dispSp; car.shoutT = keep.shoutT;
+  return true;
+}
+
+/* Three bars a driver can actually compare: how hard it comes off the sling,
+   how much it bounces, and how much of a stall it takes with it. */
+const CAR_STATS = [['LAUNCH', 'launch', 1.2], ['BOUNCE', 'rest', 1.5], ['DAMAGE', 'dmg', 1.8]];
+function carBars(c){
+  return '<u>' + CAR_STATS.map(([label, key, max]) =>
+    '<s title="' + label + '"><em style="width:' +
+    Math.round(clamp((c[key] || 0) / max, 0.06, 1) * 100) + '%"></em></s>').join('') + '</u>';
+}
+
 function renderGarage(){
   const el = $('brGarage');
   if (!el) return;
@@ -1275,11 +1358,18 @@ function renderGarage(){
     const open = carUnlocked(c);
     return '<button class="car' + (c === CAR ? ' on' : '') + (open ? '' : ' locked') +
       '" data-car="' + c.id + '"' + (open ? '' : ' disabled') + '>' +
+      '<canvas class="carpic" data-pic="' + c.id + '" width="' + (THUMB_W * 2) +
+      '" height="' + (THUMB_H * 2) + '"></canvas>' +
       '<b>' + c.name + '</b>' +
+      (open ? carBars(c) : '') +
       '<i>' + (open ? c.blurb : 'Locked — ' + carCost(c)) + '</i>' +
       '</button>';
   }).join('');
   if (el.querySelectorAll){
+    el.querySelectorAll('canvas[data-pic]').forEach(cv => {
+      const c = CARS.find(x => x.id === cv.dataset.pic);
+      if (c) paintCarThumb(cv, c);
+    });
     el.querySelectorAll('button[data-car]').forEach(btn => {
       btn.addEventListener('click', () => {
         if (selectCar(btn.dataset.car)) renderGarage();
