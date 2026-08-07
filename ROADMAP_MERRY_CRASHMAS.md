@@ -144,6 +144,14 @@ edit this block to name the next one.
       the pools are deep, and lobed blobs instead of ovals. The whole field is
       four fills at any decal count (2748 → 2509 worst-frame fills), and the
       trail through a flattened market finally reads from the wide camera.
+- [x] The market picker shows the markets. Twenty-one identical mint pills
+      became twenty-one tiles, each painting the market's own plan — the same
+      `laneAt()` the generator walks, in the market's own theme colours — so
+      rows, wave, funnel, chevron, plaza ring and spiral are all told apart at
+      a glance, with the number as a badge on the plan, the full name on two
+      fixed lines, stars and your best score. No `genMarket` and no `rnd()`:
+      the jitter is an integer hash off the level seed, asserted not to move
+      either random stream.
 
 ## Next
 

@@ -107,16 +107,44 @@
      primary action; the grid is the secondary "or jump to one". */
   .btn + .targetline{ margin-top:18px; }   /* the button's drop shadow needs the room */
   .pickline{ margin:14px 0 8px; font-size:12px; letter-spacing:2px; color:#6b82a3; text-transform:uppercase; }
-  .levels{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:0 0 4px; }
-  .lv{ display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:9px;
-    font-size:13px; font-weight:800; letter-spacing:1px; font-family:inherit; cursor:pointer;
+  /* A grid rather than a wrapping flex row: with a picture on every tile the
+     ragged centred zig-zag the chips made had nothing to line up against. */
+  .levels{ display:grid; grid-template-columns:repeat(auto-fill, minmax(112px, 1fr));
+    gap:7px; margin:0 0 12px; }
+  .lv{ display:block; position:relative; padding:5px 6px 6px; border-radius:10px; text-align:left;
+    font-size:12px; font-weight:800; letter-spacing:.4px; font-family:inherit; cursor:pointer;
     background:#0b1524; border:2px solid #22395c; color:#6b82a3; }
-  .lv em{ font-style:normal; font-size:11px; letter-spacing:0; color:#e8a91f; }
+  /* The number rides on the plan instead of eating the name: "3. BRATWURS…"
+     became "BRATWURST BOULEVARD" over a corner badge. */
+  .lv u{ position:absolute; top:9px; left:10px; text-decoration:none;
+    min-width:15px; padding:0 4px; border-radius:5px; text-align:center;
+    font-size:10px; line-height:15px; color:#cfdcee; background:rgba(7,12,24,.72); }
+  /* The plan shrinks with the frame the way the car pictures do, so twenty-one
+     of them cannot push the markets off the bottom of a laptop. */
+  .lvpic{ display:block; width:100%; height:auto; border-radius:6px; margin-bottom:4px;
+    background:#060a14; }
+  /* Two lines, always: the tiles have to be the same height whether the market
+     is called ROOFTOPS or BRATWURST BOULEVARD. */
+  .lv b{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    height:28px; font-size:11px; line-height:14px; color:#cfdcee; font-weight:800; }
+  /* Stars and the score on one line, always. Floated, the score dropped to a
+     second line on the tiles whose best run had six digits, and a tile that
+     grows a line is a tile out of step with the twenty next to it. */
+  .lv s{ display:flex; justify-content:space-between; align-items:baseline; gap:4px;
+    text-decoration:none; line-height:15px; }
+  .lv em{ font-style:normal; font-size:11px; letter-spacing:1px; color:#e8a91f;
+    flex:0 0 auto; }
+  .lv i{ font-style:normal; font-size:9px; letter-spacing:.4px; color:#6b82a3;
+    flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; text-transform:uppercase; }
   .lv.on{ color:#ffd34d; border-color:#4a6a9c; }
+  .lv.on b{ color:#ffd34d; }
   .lv.done{ color:#8effb0; border-color:#2c6b45; }
-  .lv.full{ color:#0b1524; background:#8effb0; border-color:#8effb0; }
-  .lv.full em{ color:#0b1524; }
+  .lv.done b{ color:#8effb0; }
+  .lv.full{ border-color:#8effb0; background:#12301f; }
+  .lv.full b{ color:#8effb0; }
   .lv.locked{ opacity:.45; cursor:not-allowed; }
+  .lv.locked .lvpic{ filter:grayscale(1); }
   .lv:not(.locked):hover{ border-color:#e8a91f; }
 
   /* The hint used to be bare letters on the market with nothing but a text
@@ -154,7 +182,8 @@
   body.short .btn{ padding:9px 20px; font-size:14px; margin-top:2px; }
   body.short .btn + .targetline{ margin-top:10px; }
   body.short .pickline{ margin:8px 0 5px; }
-  body.short .lv{ padding:4px 8px; font-size:11px; }
+  body.short .lv{ padding:3px 5px 4px; font-size:11px; }
+  body.short .levels{ grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:5px; }
   body.short .stats{ margin:6px 0; }
   /* On a landscape phone the whole brief has to fit in 390px. The pictures and
      the bars say more about a car than the blurb does, so the blurb is what
@@ -1255,12 +1284,26 @@ function toMenu(){
     el.innerHTML = LEVELS.map((lv, i) => {
       const open = i <= G.unlocked;
       const st = starsOn(i);
-      const stars = open ? '<em>' + '★'.repeat(st) + '☆'.repeat(3 - st) + '</em>' : '<em>🔒</em>';
+      const best = bestOn(i);
+      const th = THEMES[lv.theme] || THEMES.dusk;
       return '<button class="lv' + (open ? (st === 3 ? ' full' : st > 0 ? ' done' : ' on') : ' locked') +
         '" data-lv="' + i + '"' + (open ? '' : ' disabled') + '>' +
-        (i + 1) + '. ' + lv.name + stars + '</button>';
+        '<canvas class="lvpic" data-plan="' + i + '" width="' + (MK_W * 2) +
+        '" height="' + (MK_H * 2) + '"></canvas>' +
+        '<u>' + (i + 1) + '</u>' +
+        '<b>' + lv.name + '</b>' +
+        '<s><em>' + (open ? '★'.repeat(st) + '☆'.repeat(3 - st) : '🔒') + '</em>' +
+        '<i>' + (open ? (best > 0 ? 'best ' + fmt(best) : th.name.toLowerCase())
+                      : 'locked') + '</i></s>' +
+        '</button>';
     }).join('');
     if (el.querySelectorAll){
+      // the plan is painted after the markup lands, the same way the garage
+      // paints its cars
+      el.querySelectorAll('canvas[data-plan]').forEach(cv => {
+        const lv = LEVELS[parseInt(cv.dataset.plan, 10)];
+        if (lv) paintMarketThumb(cv, lv);
+      });
       el.querySelectorAll('button[data-lv]').forEach(btn => {
         btn.addEventListener('click', () => pickLevel(parseInt(btn.dataset.lv, 10)));
       });
@@ -1330,6 +1373,125 @@ function startLevel(i){
   if (gl) gl.innerHTML = G.goals.map(g => '<div class="goal"><i></i>' + g.text + '</div>').join('');
   setTxt('brTheme', (TH.name || '') + (TH.fog > 0.1 ? ' · POOR VISIBILITY' : ''));
   camSnap();
+}
+
+/* ---------- the market plan ----------
+   Twenty-one identical mint pills told you a market's number, its name and its
+   stars, and nothing whatsoever about the market. Every one of them has a
+   shape the generator lays its stalls along — straight rows, a wave, a funnel,
+   a chevron, a ring around the tree, a spiral — and a theme with its own sky,
+   snow and awnings, and neither of those ever reached the screen.
+   So a tile paints the market's own plan, walking the same laneAt() the
+   generator walks, in the market's own colours. It calls neither genMarket nor
+   rnd(): the jitter is an integer hash keyed off the level's seed, so a tile
+   looks the same every time the menu opens and the simulation stream — which
+   decides every par in the campaign — never moves for a picture. */
+const MK_W = 148, MK_H = 84;
+/* An integer hash rather than a generator, for the same reason snowPattern
+   uses one: it is stateless, so nothing here depends on how many tiles were
+   painted before it. */
+function mkRand(n){
+  let h = (n * 374761393 + 668265263) | 0;
+  h = (h ^ (h >>> 13)) * 1274126177 | 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/* The generator's lane, lifted verbatim. If these ever drift apart the plan
+   starts lying about the market, so the suite checks them against each other. */
+function mkLane(lv, r, x, x0, x1){
+  const yTop = 300, yBot = WORLD_H - 300;
+  const rowH = (yBot - yTop) / lv.rows, midY = (yTop + yBot) / 2;
+  const cy = yTop + (r + 0.5) * rowH;
+  const k = (x - x0) / Math.max(1, x1 - x0);
+  const shape = lv.shape || 'rows';
+  if (shape === 'wave') return cy + Math.sin(k * 6.4 + r) * rowH * 0.3;
+  if (shape === 'funnel') return midY + (cy - midY) * (0.42 + k * 0.95);
+  if (shape === 'chevron') return cy + (0.5 - Math.abs(k - 0.5)) * rowH * 0.7 * (r % 2 ? 1 : -1);
+  if (shape === 'spiral') return midY + (cy - midY) * (0.3 + k * 0.8) + Math.sin(k * 4 + r * 1.6) * rowH * 0.35;
+  return cy;
+}
+
+function paintMarketThumb(cv, lv){
+  const g = cv.getContext && cv.getContext('2d');
+  if (!g || !g.setTransform) return false;
+  const th = THEMES[lv.theme] || THEMES.dusk;
+  const W = cv.width || MK_W * 2, H = cv.height || MK_H * 2;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  const x0 = MARKET_X;
+  const x1 = FENCE_PAD + (WORLD_W - FENCE_PAD * 2 - 120) * lv.span;
+  const yTop = 300, yBot = WORLD_H - 300;
+  const rowH = (yBot - yTop) / lv.rows, midY = (yTop + yBot) / 2;
+  // the launch lane on the left is a third of the frame, because that is what
+  // the market looks like from the sling
+  const vx0 = MARKET_X - 560, vx1 = x1 + 240, vy0 = 120, vy1 = WORLD_H - 120;
+  const kx = W / (vx1 - vx0), ky = H / (vy1 - vy0);
+  const px = (wx) => (wx - vx0) * kx, py = (wy) => (wy - vy0) * ky;
+
+  g.fillStyle = th.sky; g.fillRect(0, 0, W, H);
+  // the market floor: the packed snow the stalls stand on
+  g.fillStyle = 'rgba(' + th.floor + ',.5)';
+  g.fillRect(px(x0 - 500), 0, W - px(x0 - 500), H);
+  // the launch lane, dashed down the middle like the ground draws it
+  g.strokeStyle = 'rgba(150,175,215,.45)';
+  g.lineWidth = Math.max(1, H * 0.018);
+  g.beginPath(); g.moveTo(px(vx0), py(midY)); g.lineTo(px(x0), py(midY)); g.stroke();
+
+  /* One pass, one fill a colour: the stalls, then the greenery, then the
+     lights. A tile is 21 of these on a page, so it cannot cost what a market
+     costs. */
+  const stalls = [], trees = [], lamps = [];
+  const sw = Math.max(2, 158 * kx), sh = Math.max(1.5, 112 * ky);
+  let n = 0;
+  for (let r = 0; r < lv.rows; r++){
+    for (let side = -1; side <= 1; side += 2){
+      let x = x0 + mkRand(lv.seed + r * 31 + side) * 140;
+      while (x < x1){
+        const y = mkLane(lv, r, x, x0, x1) + side * 108;
+        const roll = mkRand(lv.seed + n * 17 + r);
+        if (roll < 0.62){ stalls.push([x, y]); x += 210 + mkRand(lv.seed + n) * 90; }
+        else if (roll < 0.80){ lamps.push([x, y]); x += 150 + mkRand(lv.seed + n) * 70; }
+        else { trees.push([x, y]); x += 140 + mkRand(lv.seed + n) * 60; }
+        n++;
+      }
+    }
+  }
+  const treeY = midY + (mkRand(lv.seed) < 0.5 ? -1 : 1) * rowH * 0.42;
+  const treeX = clamp(x0 + (x1 - x0) * 0.55, x0 + 300, x1 - 200);
+  if ((lv.shape || 'rows') === 'plaza'){
+    for (let i = 0; i < 14; i++){
+      const a = (i / 14) * Math.PI * 2, R = Math.min(560, rowH * 1.5);
+      stalls.push([treeX + Math.cos(a) * R, treeY + Math.sin(a) * R]);
+    }
+  }
+
+  g.fillStyle = th.wood;
+  for (const [x, y] of stalls) g.fillRect(px(x) - sw / 2, py(y) - sh / 2, sw, sh);
+  // the awning stripe on the market-facing edge, so a plan reads as stalls
+  g.fillStyle = th.awning;
+  for (const [x, y] of stalls) g.fillRect(px(x) - sw / 2, py(y) - sh / 2, sw, Math.max(1, sh * 0.34));
+  g.fillStyle = th.tree[1];
+  g.beginPath();
+  for (const [x, y] of trees){
+    const r = Math.max(1.2, 56 * kx);
+    g.moveTo(px(x) + r, py(y)); g.arc(px(x), py(y), r, 0, 6.283);
+  }
+  const bigR = Math.max(2.5, 132 * kx);
+  g.moveTo(px(treeX) + bigR, py(treeY)); g.arc(px(treeX), py(treeY), bigR, 0, 6.283);
+  g.fill();
+  // and the lamps the market is lit by, which is where the theme's colour lives
+  g.fillStyle = 'rgba(' + th.light + ',.85)';
+  g.beginPath();
+  for (const [x, y] of lamps){
+    const r = Math.max(1, 44 * kx);
+    g.moveTo(px(x) + r, py(y)); g.arc(px(x), py(y), r, 0, 6.283);
+  }
+  g.fill();
+  // the night this market is played in, laid over everything
+  g.fillStyle = 'rgba(6,11,28,' + ((th.dark || 0.55) * 0.5).toFixed(3) + ')';
+  g.fillRect(0, 0, W, H);
+  return { stalls: stalls.length, trees: trees.length, lamps: lamps.length };
 }
 
 /* The garage row on the briefing card. Locked cars show what they cost. */
