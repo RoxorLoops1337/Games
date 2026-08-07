@@ -8416,7 +8416,19 @@ function openScreen(kind, opt = {}) {
  */
 function screenEntry(kind) {
   if (HEADLESS || !els.screen) return;
-  const cls = kind === 'reward' ? 'landing' : 'rising';
+  // Two payoff screens, and only one of them landed.
+  //
+  // The reward drops in with weight and everything else slides up, which is
+  // right — until you notice the papers after a catch are the *other* payoff
+  // screen. The gotcha turns its rays and sounds its fanfare, and then the
+  // thing you actually caught arrives on the same slide as the bag. Same shape
+  // as the cue that was on the wrong beat: the signal exists, it was on one of
+  // the two moments that deserve it.
+  //
+  // Only a fresh catch, not the same screen opened later from the party menu —
+  // that one is a record, not a moment.
+  const fresh = kind === 'profile' && G.screen && G.screen.opt && G.screen.opt.fresh;
+  const cls = (kind === 'reward' || fresh) ? 'landing' : 'rising';
   els.screen.classList.remove('rising', 'landing');
   void els.screen.offsetWidth;              // restart the animation
   els.screen.classList.add(cls);
@@ -8789,9 +8801,20 @@ function renderScreen() {
       html += `<h3 class="shelf">${group}</h3><div class="items">` + keys.map((k) => {
         const i = list.indexOf(k), it = ITEMS[k];
         const afford = !shop || G.money >= it.cost;
+        // An orb in a wild fight says what it would actually do.
+        //
+        // Last pass put YOUR kin's HP here because choosing a salve needs it.
+        // The other decision this screen carries needs the opposite number:
+        // captureChance reads the FOE's HP fraction and its status, and the bag
+        // covers that bar too. So the orb rows carry the answer rather than the
+        // inputs — the chest shop already shows odds per chest, so odds on a
+        // shelf are this game's own idiom.
+        const odds = inFight && it.kind === 'orb' && G.battle.wild && B().foe
+          ? Math.round(captureChance(B().foe, it.mul) * 100) : null;
         return `<div class="item panel ${i === s.i ? 'sel' : ''} ${afford ? '' : 'dead'}" data-i="${i}">
           <canvas width="20" height="20" data-card="${ITEM_ART(k)}"></canvas>
           <div class="info"><b>${it.name}</b><small>${it.desc}</small></div>
+          ${odds !== null ? `<div class="tally" style="color:${odds >= 60 ? 'var(--hp-good)' : odds >= 30 ? 'var(--hp-warn)' : 'var(--hp-bad)'}">${odds}%<small>catch</small></div>` : ''}
           <div class="tally">${shop ? `${it.cost}<small>sh</small>` : `×${G.bag[k]}`}</div></div>`;
       }).join('') + '</div>';
     }
@@ -8923,6 +8946,7 @@ function screenSelect() {
     G.deck = G.deck.filter((u) => u !== out.u);
     if (!G.deck.includes(coming)) G.deck.push(coming);
     const inc = ownedCard(coming);
+    playCue('select');                      // giving one up is a commitment too
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     setToast(`${CARDS[out.id].name} out, ${inc ? CARDS[inc.id].name : 'the new card'} in.`);
@@ -8936,6 +8960,14 @@ function screenSelect() {
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = G.battle ? 'battle' : 'world';
     if (id && id !== 'skip') {
+      // The moment of commitment makes a sound.
+      //
+      // Listing what the SCREENS cue — the beats having been done — turned up
+      // the fanfare sitting on the wrong beat: `openScreen` plays 'level' when
+      // the offer appears, and taking the card was silent. The offer appearing
+      // is not the achievement; the card joining your deck is, and it is the
+      // most consequential thing you do outside a fight.
+      playCue('select');
       const c = grantCard(id, true);
       if (G.deck.includes(c.u)) setToast(`${CARDS[id].name} joins the deck.`);
       else {

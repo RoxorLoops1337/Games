@@ -2206,6 +2206,81 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### What the screens cue
+
+The beats were inventoried; the screens never had been. Twenty-one voices in the
+table and **none of them orphaned** — the five step cues fire through a
+`STEP_CUE` lookup rather than a literal, which is why a first grep said they were
+dead. Worth recording: the table is fully used.
+
+What the listing did find is the fanfare **sitting on the wrong beat**.
+`openScreen` plays `'level'` when the card offer appears and `'menu'` for
+everything else, and `screenSelect` fires nothing at all — so taking a card was
+**silent**. The offer appearing is not the achievement; the card joining your
+deck is, and it is the most consequential thing you do outside a fight. Giving
+one up on the swap screen was silent for the same reason.
+
+Both sound now, on the existing confirm voice. Nothing was moved and no new
+synthesis was written — the sound was already there, it was on the wrong moment.
+
+Same shape as the rustle one pass earlier, and the pair of them is the lesson:
+**an inventory of "what has a voice" catches things missing; an inventory of
+"where the voice is" catches things misplaced.** They are different questions
+and the second one is the harder to see.
+
+### Two payoff screens, and only one of them landed
+
+The fourth inventory, and the second-order one: **not what has a signal, but
+whether the signal is on the right moment.** The sound find generalises, and the
+other signals had never been checked for the same fault.
+
+The **toasts** are thorough — twenty-nine of them, covering refusals,
+confirmations and errors. Nothing missing.
+
+`screenEntry` was not. The reward drops in with weight and everything else
+slides up, which is right until you notice **the papers after a catch are the
+other payoff screen**: the gotcha turns its rays and sounds its fanfare, and
+then the thing you actually caught arrives on the same slide as the bag. Only a
+*fresh* catch lands — the same screen opened later from the party menu is a
+record, not a moment.
+
+#### The tool could not photograph an entry animation at all
+
+A film grabs the canvas, which has no panels on it. A still waits 1200ms, by
+which time every screen has finished arriving. So a DOM entry animation fell
+exactly between the two instruments and had never been looked at once.
+
+`--wait ms` overrides the settle time. At 150ms the papers are caught visibly
+mid-drop and the deck at the same instant is already settled, which is both the
+verification and the proof the two entries differ.
+
+### Every decision, and whether its information is on screen
+
+The third inventory, after the beats and the sounds. Listed every choice the
+game asks you to make and checked whether what it depends on is visible when you
+make it:
+
+    which starter        matchup chips, and the count in the sentence   ok
+    which card to play   cost, text, energy, the foe's intent           ok
+    which card to take   "you own N" per card                           ok
+    which card comes out "played N · N kills" — the card's own history  ok
+    which chest          an odds bar per chest                          ok
+    which salve          the kin's HP, added last pass                  ok
+    **which orb**        **nothing at all**                             fixed
+
+The catch was the gap, and it is the exact mirror of the salve one. `captureChance`
+reads the **foe's** HP fraction and its status; last pass put **your** kin's HP
+in the heading because that is what a salve needs, and the screen covers the
+foe's bar just as thoroughly.
+
+So the orb rows carry the answer rather than the inputs — `50% catch`, `85%`,
+`100%`, coloured by likelihood. Odds on a shelf are already this game's idiom;
+the chest shop has done it from the start. Only in a wild fight: you cannot
+catch a trainer's kin, and offering a number there would be a lie.
+
+Photographed in three states — a wild fight with the foe at 22%, a trainer
+fight, and the shop.
+
 ### The bag in a fight says how hurt you are
 
 `#screen` is `inset:0` with a blur over it, so opening the bag mid-fight covers

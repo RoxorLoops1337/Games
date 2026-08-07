@@ -60,7 +60,7 @@ const EXPOSE = `__out.api = {
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
   BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
-  gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg,
+  gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg, drawItem,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -81,7 +81,7 @@ function makeSandbox(opts){
       if (p === 'canvas') return { width: 384, height: 224 };
       if (p === 'fillRect') return (x, y, w, h) => {
         counts.fillRect = (counts.fillRect || 0) + 1;
-        if (rects.length < 40000) rects.push([x, y, w, h]);
+        if (rects.length < 40000) rects.push([x, y, w, h, t.fillStyle]);
       };
       if (typeof p === 'string' && p !== 'then' && !(p in t))
         return (...args) => { counts[p] = (counts[p] || 0) + 1; };
@@ -2462,6 +2462,183 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ------------------------------------------------------------ the street */
+test('only the blocks you can see get painted', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const cornices = () => {
+    api._resetCounts();
+    api.drawBackground();
+    return api._rects.filter(r => r[2] === 76 && r[3] === 4).length;
+  };
+  const n = cornices();
+  assert(n >= 4, 'the street is only ' + n + ' blocks wide on screen');
+  assert(n <= 7, `${n} blocks painted for the ${Math.ceil(api.VW / 82) + 1} that fit — the loop is not culling`);
+  // and it stays that way wherever the camera is
+  for (const cx of [0, 41, 137, 400, 913]){
+    api.cam.x = cx;
+    const m = cornices();
+    assert(m >= 4 && m <= 7, `at camera ${cx} it painted ${m} blocks`);
+  }
+});
+
+test('a block has a top on it, and the roofs are not all the same', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const cols = new Set(api._rects.map(r => r[4]));
+  assert(cols.has('#584a72'), 'no lit edge on the cornice');
+  // full building width, not the one-pixel mast that shares its colour
+  assert(api._rects.some(r => r[4] === '#2e2742' && r[2] === 74 && r[3] === 1),
+    'no string course under the cornice');
+  // over a long run of street every kind of roof furniture should turn up
+  const kinds = { tank: 0, mast: 0, stair: 0 };
+  for (let gx = 0; gx < 200; gx++){
+    const roof = api.hash(gx + 31);
+    if (roof > 0.66) kinds.tank++; else if (roof > 0.34) kinds.mast++; else kinds.stair++;
+  }
+  for (const k of Object.keys(kinds)) assert(kinds[k] > 20, `only ${kinds[k]} of 200 blocks get a ${k}`);
+  // and the ground floor is a shop about half the time
+  let shops = 0;
+  for (let gx = 0; gx < 200; gx++) if (api.hash(gx + 61) > 0.5) shops++;
+  assert(shops > 60 && shops < 140, 'the shops are ' + shops + ' of 200 — that is not a mix');
+});
+
+test('the fire escape hangs in front of the windows, not behind them', () => {
+  const src = RAW.slice(RAW.indexOf('function bgStreet('));
+  const head = src.slice(0, src.indexOf('\n}\n'));
+  const windows = head.indexOf('somebody is still up in this one');
+  const escape = head.indexOf('a fire escape down the front');
+  const cornice = head.indexOf('// cornice');
+  assert(windows >= 0 && escape >= 0 && cornice >= 0, 'bgStreet no longer looks the way this test expects');
+  assert(cornice < windows, 'the cornice is painted over the windows');
+  assert(escape > windows, 'the fire escape is painted under the windows it hangs across');
+});
+
+test('the street frame is cheaper for being culled', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  assert(fills > 1500, 'it drew a real street');
+  assert(fills < 9000, 'a street frame costs ' + fills + ' fillRects');
+});
+
+/* ----------------------------------------------------------------- props */
+function itemShape(api, kind){
+  const it = api.mkItem(kind, api.cam.x + 190, api.FLOOR_MID, 0);
+  it.life = 1.2;
+  api._resetCounts();
+  api.drawItem(it);
+  const parts = api._rects.map(r => ({ r, c: r[4] }));
+  api.items = api.items.filter(q => q !== it);
+  return { parts, cols: new Set(api._styles.filter(c => /^#/.test(c))), n: api._rects.length };
+}
+
+test('a crate is a box with a lid on it, not a rectangle with stripes', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const crate = itemShape(api, 'crate');
+  assert(crate.cols.size >= 7, 'a crate in ' + crate.cols.size + ' colours is still flat');
+  assert(crate.cols.has('#140e1a'), 'no ink round it');
+  // the lid rows sit above the body, each one further right and shorter
+  const body = crate.parts.find(p => p.c === '#a97a42');
+  assert(body, 'no crate body');
+  const lid = crate.parts.filter(p => p.r[1] < body.r[1] && p.r[3] === 1).sort((a, b) => b.r[1] - a.r[1]);
+  assert(lid.length >= 3, 'the crate has no lid: ' + lid.length + ' rows above the body');
+  for (let i = 1; i < lid.length; i++){
+    assert(lid[i].r[0] > lid[i - 1].r[0], 'lid row ' + i + ' does not step back');
+    assert(lid[i].r[2] < lid[i - 1].r[2], 'lid row ' + i + ' does not narrow as it recedes');
+  }
+});
+
+test('a barrel is shaded across its width, with a rim you can see into', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const bar = itemShape(api, 'barrel');
+  // the staves: full-height strips side by side, in more than one tone
+  const strips = bar.parts.filter(p => p.r[3] >= 15 && p.r[2] <= 5).sort((a, b) => a.r[0] - b.r[0]);
+  assert(strips.length >= 4, 'the barrel is ' + strips.length + ' bands wide — that is not a cylinder');
+  const tones = new Set(strips.map(p => p.c));
+  assert(tones.size === strips.length, 'the bands repeat a tone: ' + [...tones].join(' '));
+  const lum = (c) => { const n = parseInt(c.slice(1), 16); return ((n >> 16 & 255) + (n >> 8 & 255) + (n & 255)) / 3; };
+  const lums = strips.map(p => lum(p.c));
+  const peak = lums.indexOf(Math.max(...lums));
+  assert(peak > 0 && peak < strips.length - 1, 'the light on a cylinder is not at its edge: band ' + peak);
+  assert(bar.cols.has('#33200f'), 'the barrel has no dark inside its rim');
+});
+
+test('the small pickups are not single rectangles either', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  for (const k of ['meat', 'cash']){
+    const shape = itemShape(api, k);
+    assert(shape.cols.size >= 5, `${k} is drawn in ${shape.cols.size} colours`);
+    assert(shape.n >= 8, `${k} is ${shape.n} pieces`);
+  }
+  assert(itemShape(api, 'meat').cols.has('#fff6e0'), 'the joint has no bone in it');
+  assert(itemShape(api, 'cash').cols.has('#d8c8a0'), 'the wad has no strap round it');
+});
+
+test('a prop stays cheap enough to have a street full of them', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  for (const k of ['crate', 'barrel', 'meat', 'cash']){
+    const n = itemShape(api, k).n;
+    assert(n < 70, `${k} costs ${n} fillRects — ten of them will not fit in a frame`);
+  }
+});
+
+test('what breaks comes apart into what it was made of', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const debris = (kind) => {
+    api.fx.length = 0;
+    const it = api.mkItem(kind, api.cam.x + 120, api.FLOOR_MID, 0);
+    api.breakItem(it, null);
+    return api.fx.slice();
+  };
+  const crate = debris('crate');
+  const planks = crate.filter(p => p.kind === 'plank');
+  assert(planks.length >= 6, 'a crate came apart into ' + planks.length + ' planks');
+  assert(crate.some(p => p.kind === 'dust'), 'and kicked up no dust');
+  assert(crate.some(p => p.kind === 'ring'), 'and nothing went out along the floor');
+  assert(planks.filter(p => p.vx > 0).length > 1 && planks.filter(p => p.vx < 0).length > 1,
+    'the planks should go both ways');
+  assert(planks.every(p => p.vz > 0), 'they should be thrown up, not down');
+  assert(planks.some(p => p.spin > 0) && planks.some(p => p.spin < 0), 'and tumble both ways');
+  const barrel = debris('barrel').filter(p => p.kind === 'plank');
+  const cols = (list) => new Set(list.map(p => p.col));
+  assert([...cols(barrel)].some(c => !cols(planks).has(c)), 'a barrel should shed a different wood from a crate');
+});
+
+test('a plank tumbles, falls and settles', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.spawnFx('plank', api.cam.x + 100, api.FLOOR_MID, 20, '#a97a42');
+  const p = api.fx[0];
+  p.vx = 80; p.vz = 150; p.spin = 6;
+  const r0 = p.r, x0 = p.x;
+  for (let i = 0; i < 12; i++) api.updateFx(1 / 60);
+  assert(p.r !== r0, 'it never turned');
+  assert(p.x !== x0, 'it never moved');
+  const top = p.z;
+  for (let i = 0; i < 120; i++) api.updateFx(1 / 60);
+  assert(p.z < top, 'it never came down: ' + p.z);
+  assert(p.z >= 0, 'it went through the floor: ' + p.z);
+  assert(Math.abs(p.vx) < 80, 'it never lost any speed on the way');
+});
+
 /* -------------------------------------------------------------- cutscene */
 test('the ambient and foreground can be told which scene they are painting', () => {
   const api = boot();
@@ -2568,8 +2745,7 @@ test('a gauge is a piece of hardware, not a flat rectangle', () => {
   play(api, { stage: 0 });
   api._resetCounts();
   api.gauge(20, 40, 60, 8, 0.5, '#4ad06a');
-  // px() sets a fillStyle then fills one rect, so the two lists line up here
-  const parts = api._rects.map((r, i) => ({ r, c: api._styles[i] }));
+  const parts = api._rects.map(r => ({ r, c: r[4] }));
   assert(parts.length >= 6, 'a gauge in ' + parts.length + ' pieces is still a bar');
   const body = parts.find(p => p.c === '#4ad06a');
   assert(body, 'no fill in the colour it was asked for');
@@ -3042,13 +3218,18 @@ test('a hit lights the street without repainting the man taking it', () => {
   play(api, { stage: 0 });
   api.fx.length = 0;
   const x = api.cam.x + 180;
+  api.draw();
+  const before = api.lightAt(180);
+  const base = before ? before.k : 0;
   api.spawnFx('impact', x, api.FLOOR_MID, 24, '#ffffff', 1);
   api.draw();
   const here = api.lightAt(180);
   assert(here, 'the hit put no light on the street');
-  // the rig rim saturates at k=1; a transient white hit at full power left a
-  // man-shaped hole in the frame once the bloom pass went in
-  assert(here.k < 0.75, 'a single hit drives the light field to ' + here.k.toFixed(2) + ' — the rig will blow out');
+  /* What matters is the hit's own contribution, not the total: a lit shopfront
+     behind him is allowed to be bright.  A transient white hit at full power
+     is what left a man-shaped hole in the frame when the bloom went in. */
+  assert(here.k - base < 0.5,
+    `one hit adds ${(here.k - base).toFixed(2)} to the light field — the rig will blow out`);
   for (const k of Object.keys(api.FX_LIGHT))
     assert(api.FX_LIGHT[k][1] <= 0.6, k + ' is bright enough to white out a fighter: ' + api.FX_LIGHT[k][1]);
 });
@@ -3336,9 +3517,11 @@ test('the city is awake: the lit windows change over an evening', () => {
   const lo = Math.min(...seen), hi = Math.max(...seen);
   assert(lo > 10, 'the street should be full of lit windows, saw ' + lo);
   assert(hi > lo, `the same street has the same windows lit all night: ${lo}..${hi}`);
-  // but most of them stay put — a city where every window blinks is a disco.
-  // measured: ~13% on a cycle swings 144..156; every window on one swings 148..181
-  assert(hi - lo < lo * 0.15, `too many windows switching: ${lo}..${hi}`);
+  /* But most of them stay put — a city where every window blinks is a disco.
+     Measured with the block culled to what is on screen: ~13% on a cycle
+     swings 57..66 (ratio 0.16), every window on one swings 66..83 (0.26).
+     Both are exact — the sample times and the camera are pinned. */
+  assert(hi - lo < lo * 0.20, `too many windows switching: ${lo}..${hi}`);
 });
 
 test('every stage still draws with the weather on it', () => {

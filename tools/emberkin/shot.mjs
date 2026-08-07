@@ -403,6 +403,7 @@ const SCENES = {
       EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
       EK.G.wipe = 0; EK.G.battleMsg = null;
       EK.B().mine.hp = Math.round(EK.B().mine.max * .38);   // hurt enough for the choice to matter
+      EK.B().foe.hp = Math.round(EK.B().foe.max * .22);     // and the foe soft enough to be worth an orb
       EK.openScreen('bag');
     },
   },
@@ -517,6 +518,10 @@ if (si >= 0) {
 // flat"; they cannot answer "is this creature drained", because the creature is
 // a few hundred pixels out of fifty thousand. Three separate times an argument
 // about one sprite has been had with a number describing the whole picture.
+let WAIT = null;
+const wi = argv.indexOf('--wait');
+if (wi >= 0) { WAIT = Number(argv[wi + 1]); argv.splice(wi, 2); }
+
 let STATS = argv.includes('--stats');
 let BOX = null;
 if (STATS) {
@@ -584,7 +589,12 @@ for (const name of list) {
     if (bad.length) console.error(`  !! ${name}: no such species — ${[...new Set(bad)].join(', ')}`);
     // A still wants the entry animation over; a film wants to start at the
     // trigger, or the beat it came to record has already finished.
-    await page.waitForTimeout(FILM ? 60 : 1200);
+    // `--wait ms` overrides the still's settle time. A DOM entry animation is
+    // the one thing this tool could not photograph at all: a film grabs the
+    // canvas, which has no panels on it, and a still waits 1200ms by which time
+    // every screen has finished arriving. Catching one mid-flight needs a
+    // shorter wait, and nothing else does.
+    await page.waitForTimeout(FILM ? 60 : (WAIT !== null ? WAIT : 1200));
   }
   // `--stats` reads the frame back and reports what range it actually occupies.
   // Crown Hollow looked like fog and two plausible culprits — the AIR grade and
