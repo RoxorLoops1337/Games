@@ -227,6 +227,13 @@ edit this block to name the next one.
       and buckle across it, beard under the chin, hat and bobble knocked
       forward past the head — with the X struck over the hat rather than under
       it.
+- [x] A pram that was sent flying stays sent flying. There is a goal called
+      "send N prams flying" and the pram was an effect with a 1.6s life: it
+      tumbled out of the parent's hands and then evaporated, while everything
+      else you wreck in this market stays wrecked. It lands in `debris` now via
+      `restFx` — the hook that already decides what a limb or a chunk leaves
+      where it comes to rest — and is drawn on its side with the blanket half
+      out of it, one wheel still on and one off.
 
 ## Next
 
