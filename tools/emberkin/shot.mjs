@@ -501,6 +501,45 @@ const SCENES = {
       EK.pressKey('b'); EK.step(.02); EK.releaseKey('b'); EK.fired.clear();
     },
   },
+  // The last thing Rowan says at the hand-over, which is now the errand rather
+  // than the chest shop. Driven through the real screens — starter, gotcha,
+  // papers — because the speech only exists as the tail of that chain.
+  handover: {
+    w: 700, h: 480,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('lab', 5, 4, 'up');
+      EK.G.mode = 'world';
+      EK.openScreen('starter');
+      EK.screenSelect();
+      EK.step(3);                       // the celebration runs itself out
+      EK.closeScreen();                 // a fresh set of papers has one way out
+      const d = EK.G.dialogue;
+      if (!d) throw new Error('handover: Rowan never spoke — the chain broke before the say');
+      d.i = d.lines.length - 1; d.hold = 0;   // hold on the closing line
+      EK.renderDialogue();
+    },
+  },
+  // The longest line of the speech, held on its own, because a count of
+  // trainers and a clause about Wick is the one that can outgrow the box.
+  handoveraim: {
+    w: 700, h: 480,
+    // Scene bodies are serialised into the page, so this cannot call the one
+    // above — SCENES does not exist in there. It repeats the drive instead.
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('lab', 5, 4, 'up');
+      EK.G.mode = 'world';
+      EK.openScreen('starter');
+      EK.screenSelect();
+      EK.step(3);
+      EK.closeScreen();
+      const d = EK.G.dialogue;
+      if (!d) throw new Error('handoveraim: Rowan never spoke — the chain broke before the say');
+      d.i = d.lines.length - 3; d.hold = 0;
+      EK.renderDialogue();
+    },
+  },
   box: {
     w: 760, h: 760,
     go: (EK) => {
