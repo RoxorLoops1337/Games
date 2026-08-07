@@ -7975,6 +7975,13 @@ function btnLabels() {
   const m = G.mode;
   const reward = m === 'screen' && G.screen && G.screen.kind === 'reward';
   return reward ? ['Take', 'Skip']                   // nothing behind it to go back to
+    // The title had no case here, so it fell through to the world's defaults
+    // and the two round buttons on a phone read Talk and Menu — on a screen
+    // with nobody to talk to and no menu. With a save there are two real
+    // choices and each button takes one; without, both do the only thing there
+    // is, the way a dialogue makes both buttons Next rather than leaving one
+    // dead.
+    : m === 'title' ? (hasSave() ? ['Continue', 'New'] : ['Start', 'Start'])
     : m === 'battle' ? ['Play', 'Menu']
     : m === 'dialogue' ? ['Next', 'Next']
     : (m === 'menu' || m === 'screen') ? ['Pick', 'Back']
@@ -10369,6 +10376,19 @@ function step(dt) {
     }
     return;
   }
+  // The title is a DOM screen and was wired to clicks alone, so on a phone —
+  // where the two circles are the only controls — pressing either did nothing
+  // at all. The first thing a phone player ever saw was a pair of glowing
+  // buttons naming actions that did not exist and answering to nothing.
+  //
+  // It sits with the other modes, BELOW the screen-owning beats, not above
+  // them. Above, its `return` swallowed anything mid-run — the render suite
+  // caught it holding an evolution on its first frame for ever.
+  if (G.mode === 'title') {
+    if (justPressed('a')) (hasSave() ? startCont : startNew)();
+    else if (justPressed('b')) startNew();
+    return;
+  }
   if (G.mode === 'dialogue') {
     if (justPressed('a') || justPressed('b')) advanceDialogue();
     return;
@@ -10389,6 +10409,19 @@ function newGame() {
   G.mode = 'world';
   updateCam();
   say('Elder Rowan', ['…and there you are. Come in, shut the door, the kin get out.'], () => {});
+}
+
+/**
+ * Leaving the title. These were closures inside `boot`, reachable only from the
+ * two DOM buttons — so on a phone, where the round controls are the only thing
+ * you can press, the title did not respond to either of them. See `step`.
+ */
+function startNew() { show(els.title, false); wipeSave(); newGame(); playCue('world'); }
+function startCont() {
+  show(els.title, false);
+  if (!loadGame()) newGame();
+  else { G.mode = 'world'; updateCam(); }
+  playCue('world');
 }
 
 function boot() {
@@ -10581,13 +10614,6 @@ function boot() {
   });
 
   // title
-  const startNew = () => { show(els.title, false); wipeSave(); newGame(); playCue('world'); };
-  const startCont = () => {
-    show(els.title, false);
-    if (!loadGame()) newGame();
-    else { G.mode = 'world'; updateCam(); }
-    playCue('world');
-  };
   els.title.querySelector('[data-act="new"]').addEventListener('click', startNew);
   const contBtn = els.title.querySelector('[data-act="cont"]');
   if (hasSave()) show(contBtn, true);
