@@ -416,6 +416,19 @@ edit this block to name the next one.
       Both are deterministic off the prop's existing seed, and the worst frame
       did not move.
 
+- [x] A felled tree is a felled tree. It was one flat ellipse of hard-coded
+      `#2c6b40` and a brown rectangle — and that green was the same on all
+      twenty-one markets, while the standing tree has always taken its four
+      greens from the theme, so felling one erased the market it stood in. On
+      several markets "fell the town tree" **is the goal**, worth 3,000: the
+      climax of a run ended in a blob. A conifer on its side is a tapering
+      wedge of needles with the trunk out the other end, so that is what it is
+      now — the standing tiers unrolled along the fall, in the market's own
+      greens, out of a splintered stump, with the branches that came off it.
+      And the town tree drops its trimmings: five baubles and the star lying
+      in the snow around it, off the prop's own seed. Third wreck in a row
+      that had forgotten what it was, after the snowman and the present.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
