@@ -152,6 +152,14 @@ edit this block to name the next one.
       fixed lines, stars and your best score. No `genMarket` and no `rnd()`:
       the jitter is an integer hash off the level seed, asserted not to move
       either random stream.
+- [x] The results card is a scorecard for the wreckage, not a black screen with
+      numbers on it: the overlay comes down from .94 to .80 so the market you
+      just flattened shows through, the card names which market ("6 · CHRISTMAS
+      EVE"), the earned stars land one at a time at 0.20/0.48/0.76s, and a run
+      that beats your record on that market gets a NEW BEST badge and is told
+      what the old figure was. The record quoted is read *after* the save is
+      written, so a failed run that still set one no longer quotes a stale
+      number.
 
 ## Next
 

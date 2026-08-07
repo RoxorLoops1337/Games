@@ -135,7 +135,14 @@ function boot(opts){
     style: { setProperty(){} }, textContent: '', innerHTML: '', width: 0, height: 0,
     getContext: () => ctxStub,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 600 }),
-    addEventListener(){}, removeAttribute(){}, setAttribute(){},
+    addEventListener(){},
+    /* Attributes are remembered rather than dropped, so a suite can see which
+       elements show() has hidden — the results card's NEW BEST badge is a
+       hidden attribute and nothing else. */
+    _attrs: {},
+    removeAttribute(k){ delete this._attrs[k]; },
+    setAttribute(k, v){ this._attrs[k] = String(v); },
+    hasAttribute(k){ return k in this._attrs; },
     setPointerCapture(){}, querySelector: () => null,
     classList: { add(){}, remove(){}, toggle(){} },
   });
@@ -4450,6 +4457,99 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills - small.fills === 0,
     'the trees and lamps should batch: ' + small.fills + ' -> ' + big.fills);
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
+});
+
+/* ----------------------------------------------- the results card --- */
+
+/* Plays the card without playing the market: levelEnd reads G, so setting the
+   numbers and calling it is exactly what a finished run does. */
+function endedRun(api, level, score, goals){
+  api.G.unlocked = 21; api.startCampaign(); api.startLevel(level); api.beginLevel();
+  api.G.levelScore = score; api.G.score = score;
+  api.G.kills = 35; api.G.wrecks = 19; api.G.bestCombo = 21;
+  api.G.goalsDone = goals;
+  if (api.G.goals) api.G.goals.forEach((g, i) => { g.done = i < goals; });
+  api.levelEnd();
+  const n = api._nodes;
+  return { where: n.rsWhere.textContent, line: n.rsLine.textContent,
+    stars: n.rsStars.innerHTML, title: n.rsTitle.textContent,
+    pb: !n.rsPb.hasAttribute('hidden'), starline: n.rsStarline.textContent };
+}
+
+test('the results card says which market it is about', () => {
+  const api = boot({ w: 1280, h: 720 });
+  for (const i of [0, 5, 8, 20]){
+    const r = endedRun(api, i, 999999, 3);
+    assert(r.where === (i + 1) + ' · ' + api.LEVELS[i].name,
+      'market ' + i + ' card says "' + r.where + '"');
+  }
+  console.log('    (results heading: "' + endedRun(api, 8, 999999, 3).where + '")');
+});
+
+test('a new best on a market is flagged once, and only when it is one', () => {
+  const api = boot({ w: 1280, h: 720 });
+  // first run on the market: a record, but there is no old one to name
+  const first = endedRun(api, 5, 40000, 2);
+  assert(first.pb, 'the first clear of a market is a personal best');
+  assert(/first run here/i.test(first.line), 'and it should say so: ' + first.line);
+  assert(!/NaN|undefined/.test(first.line), 'no arithmetic leaking into the copy: ' + first.line);
+
+  // beating it names the old figure
+  const better = endedRun(api, 5, 52000, 3);
+  assert(better.pb, 'beating 40,000 with 52,000 is a new best');
+  assert(better.line.includes('40,000'), 'the old record should be named: ' + better.line);
+
+  // and falling short of it does not
+  const worse = endedRun(api, 5, 31000, 1);
+  assert(!worse.pb, 'a worse run is not a new best');
+  assert(worse.line.includes('52,000'), 'the standing record is still shown: ' + worse.line);
+  assert(!/old best/i.test(worse.line), 'nothing was beaten: ' + worse.line);
+
+  /* A run that misses the target still counts for the record, so the card has
+     to quote the record as it stands after the run rather than before it. */
+  const api2 = boot({ w: 1280, h: 720 });
+  const failed = endedRun(api2, 5, 12000, 0);
+  assert(failed.title === 'NOT ENOUGH DAMAGE', 'that run did not clear the market');
+  assert(!failed.pb, 'a failed run does not get a celebration');
+  assert(failed.line.includes(api2.fmt(api2.bestOn(5))),
+    'the failed card should quote the record as it now stands: ' + failed.line +
+    ' (record ' + api2.bestOn(5) + ')');
+});
+
+test('the stars on the results card land one at a time', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const delays = (html) => [...html.matchAll(/animation-delay:([\d.]+)s/g)].map(m => +m[1]);
+  const three = endedRun(api, 5, 999999, 3);
+  const d = delays(three.stars);
+  assert(d.length === 3, 'three earned stars, three entrances: ' + d.length);
+  assert(d[0] > 0 && d[1] > d[0] && d[2] > d[1],
+    'each star should land after the one before it: ' + d.join('/'));
+  assert(d[2] < 1.2, 'and the last one should not keep you waiting: ' + d[2]);
+  console.log('    (stars land at ' + d.join('s, ') + 's)');
+  // only the earned ones move; the empty sockets are just there
+  const one = endedRun(api, 5, 999999, 1);
+  assert(delays(one.stars).length === 1,
+    'one star earned, one animated: ' + delays(one.stars).length);
+  assert((one.stars.match(/★/g) || []).length === 3, 'three sockets either way');
+  const none = endedRun(boot({ w: 1280, h: 720 }), 5, 100, 0);
+  assert(delays(none.stars).length === 0, 'a failed run has nothing to celebrate');
+});
+
+test('the results overlay lets the wreckage through', () => {
+  const src = fs.readFileSync(HTML, 'utf8');
+  const alphaOf = (sel) => {
+    const block = src.slice(src.indexOf(sel + '{'));
+    const m = block.slice(0, 400).match(/rgba\(4,7,14,\.(\d+)\)/);
+    assert(m, 'no outer wash found for ' + sel);
+    return +('0.' + m[1]);
+  };
+  const std = alphaOf('.ov'), res = alphaOf('#results'), fin = alphaOf('#finale');
+  console.log('    (overlay wash: standard ' + std + ', results ' + res + ', finale ' + fin + ')');
+  assert(res < std - 0.08,
+    'the results card should sit on a lighter wash than a plain overlay: ' + res + ' vs ' + std);
+  assert(res <= fin + 0.06, 'and about as light as the finale, which shows the same market');
+  assert(/#results\{[^}]*backdrop-filter:blur\(2px\)/.test(src.replace(/\s+/g, ' ')),
+    'the results blur should be eased off too, not left at the overlay default');
 });
 
 test('every market gets a tile with its plan, its name and its stars', () => {
