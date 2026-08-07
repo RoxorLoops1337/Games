@@ -4462,6 +4462,89 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* --------------------------------------------------------- the pram --- */
+
+test('a pram that was sent flying lands and stays there', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.people.length = 0; api.fx.length = 0; api.debris.length = 0;
+  const p = api.addPerson(2600, 1100, 'parent');
+  assert(p.pram && p.pramT > 0, 'a parent should be pushing a pram');
+
+  api.killPerson(p, 300, -80);
+  const flying = api.fx.filter(f => f.type === 'pram');
+  assert(flying.length === 1, 'the pram should be thrown, got ' + flying.length);
+  assert(api.debris.some(d => d.kind === 'pram') === false,
+    'it should not have landed while it is still in the air');
+
+  step(api, 3);
+  assert(api.fx.filter(f => f.type === 'pram').length === 0, 'and it should come down');
+  const down = api.debris.filter(d => d.kind === 'pram');
+  assert(down.length === 1, 'one pram thrown, one pram on the snow: ' + down.length);
+  assert(Math.hypot(down[0].x - 2600, down[0].y - 1100) > 20,
+    'it should land where it was thrown to, not where it started');
+  assert(down[0].w > 0 && down[0].h > 0, 'and have a size to be drawn at');
+  console.log('    (pram landed ' +
+    Math.round(Math.hypot(down[0].x - 2600, down[0].y - 1100)) + 'px from the parent)');
+});
+
+test('a landed pram is drawn as a pram, not as a plank', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const cost = (kind) => {
+    api.debris.length = 0;
+    api.debris.push({ x: api.cam.x, y: api.cam.y, w: 24, h: 16, rot: 0.4,
+      col: '#22354f', kind });
+    api.drawGround();
+    api._resetCounts();
+    api.drawGround();
+    return { fills: api._counts.fill || 0, rects: api._counts.fillRect || 0,
+      styles: (api._counts._styles || []).slice() };
+  };
+  const plank = cost(undefined), pram = cost('pram');
+  console.log('    (plank ' + plank.rects + ' rects / ' + plank.fills + ' fills, pram ' +
+    pram.rects + ' / ' + pram.fills + ')');
+  assert(pram.fills > plank.fills + 2,
+    'a pram should be more than a rectangle: ' + plank.fills + ' -> ' + pram.fills);
+  // the blanket and the wheels are what make it read as a pram from above
+  assert(pram.styles.includes('#dfe8f6'), 'the blanket should be half out of it');
+  assert(pram.styles.includes('#101722') && pram.styles.includes('#3b4a63'),
+    'one wheel still on it and one that came off');
+  assert(!plank.styles.includes('#dfe8f6'), 'a plank has no blanket');
+});
+
+test('the prams you sent flying are still there when the run settles', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.people.length = 0; api.fx.length = 0; api.debris.length = 0;
+  for (let i = 0; i < 5; i++){
+    const p = api.addPerson(2500 + i * 60, 1100, 'parent');
+    api.killPerson(p, 260, -40);
+  }
+  const drive = () => { api.G.phase = 'drive'; };   // the run times out otherwise
+  drive(); step(api, 4);
+  const down = api.debris.filter(d => d.kind === 'pram');
+  assert(down.length === 5, 'five prams thrown, five on the snow: ' + down.length);
+  // ten more seconds of settling changes nothing — they are ground, not effects
+  drive(); step(api, 10);
+  assert(api.debris.filter(d => d.kind === 'pram').length === 5,
+    'a landed pram should not fade out like an effect does');
+  // and the field is still capped
+  for (let i = 0; i < api.C.DEBRIS_MAX + 50; i++){
+    api.debris.push({ x: 0, y: 0, w: 10, h: 4, rot: 0, col: '#000' });
+  }
+  drive();
+  const p2 = api.addPerson(2600, 1100, 'parent');
+  api.killPerson(p2, 200, 0);
+  assert(api.fx.some(f => f.type === 'pram'), 'that pram should be in the air');
+  step(api, 3);
+  assert(api.debris.length <= api.C.DEBRIS_MAX,
+    'the debris field should stay capped: ' + api.debris.length);
+});
+
 /* ------------------------------------------------------- the fallen --- */
 
 function corpse(api, kind, tweak){

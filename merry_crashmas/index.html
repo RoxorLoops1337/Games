@@ -2675,8 +2675,19 @@ function burst(f){
   }
 }
 
+/* A pram that was sent flying comes down somewhere. There is a goal called
+   "send N prams flying" and the evidence used to evaporate a second and a half
+   after it left the parent's hands — everything else you wreck in this market
+   stays wrecked. */
+function restPram(f){
+  debris.push({ x: f.x, y: f.y, w: f.size * 1.6, h: f.size * 1.1,
+    rot: f.rot, col: '#22354f', kind: 'pram' });
+  if (debris.length > DEBRIS_MAX) debris.splice(0, debris.length - DEBRIS_MAX);
+}
+
 function restFx(f){
   if (f.type === 'rocket') burst(f);
+  else if (f.type === 'pram') restPram(f);
   else if (f.type === 'chunk') addGore(f.x, f.y, f.size * 1.1, 'chunk');
   else if (f.type === 'limb'){
     addGore(f.x, f.y, f.size * 0.8, 'chunk');
@@ -3862,6 +3873,21 @@ function drawGround(){
     if (d.x < x0 - 60 || d.x > x1 + 60 || d.y < y0 - 60 || d.y > y1 + 60) continue;
     ctx.save();
     ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+    if (d.kind === 'pram'){
+      // on its side, blanket half out of it, one wheel off
+      const s = d.w / 2;
+      shadow(0, s * 0.5, s * 1.1, s * 0.5, 0.2);
+      ctx.fillStyle = '#22354f';
+      roundRect(-s, -s * 0.7, s * 2, s * 1.4, 6); ctx.fill();
+      ctx.fillStyle = '#dfe8f6';
+      roundRect(-s * 0.15, -s * 0.5, s * 1.5, s, 5); ctx.fill();
+      ctx.fillStyle = '#101722';
+      circle(-s * 0.6, s * 0.85, s * 0.34); ctx.fill();
+      ctx.fillStyle = '#3b4a63';
+      circle(s * 1.45, -s * 0.95, s * 0.3); ctx.fill();
+      ctx.restore();
+      continue;
+    }
     ctx.fillStyle = 'rgba(10,20,36,.16)';
     ctx.fillRect(-d.w / 2 + 3, -d.h / 2 + 4, d.w, d.h);
     ctx.fillStyle = d.col;
