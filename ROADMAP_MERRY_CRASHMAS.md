@@ -115,6 +115,9 @@ edit this block to name the next one.
 - [x] The finale is an ending: fireworks going off over the wreckage behind
       the card, a campaign-wide wreck count and the star total alongside the
       score, and an overlay you can actually see the market through.
+- [x] The title screen looks at a market: its own drifting camera on the last
+      market rather than the aim framing's empty launch lane, no HUD, and an
+      overlay you can see through.
 
 ## Next
 

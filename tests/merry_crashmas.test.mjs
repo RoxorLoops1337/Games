@@ -74,7 +74,7 @@ const EXPOSE = `__out.api = {
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
-  finale, nextLevel,
+  finale, nextLevel, toMenu,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4796,6 +4796,76 @@ test('the finale display does not move the simulation', () => {
   const on = run(true), off = run(false);
   assert(on.next === off.next,
     'ten seconds of fireworks advanced the simulation RNG: ' + on.next + ' vs ' + off.next);
+});
+
+/* ----------------------------------------------------------------- menu --- */
+
+/* The menu shared the aim camera, which deliberately centres the empty launch
+   lane so you can see your own car before you pull it back. On the title
+   screen that meant a black rectangle with a market off the right-hand edge. */
+test('the title screen looks at the market, not at the empty lane', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.toMenu();
+  api.setT(0);
+  const menu = api.camTarget();
+  const midX = (api.bounds.x0 + api.bounds.x1) / 2;
+  assert(api.G.phase === 'menu', 'toMenu should leave us on the menu');
+  assert(Math.abs(menu.x - midX) < (api.bounds.x1 - api.bounds.x0) * 0.25,
+    'the title camera should sit near the middle of the market: ' +
+    Math.round(menu.x) + ' vs a middle of ' + Math.round(midX));
+  assert(menu.x > api.C.ANCHOR.x + 400,
+    'and well clear of the sling at ' + api.C.ANCHOR.x + ', got ' + Math.round(menu.x));
+
+  // the aim camera still frames the lane, because there you need to see the car
+  api.G.phase = 'aim';
+  const aim = api.camTarget();
+  assert(aim.x < menu.x, 'the aim view should still sit further back than the title view: ' +
+    Math.round(aim.x) + ' vs ' + Math.round(menu.x));
+});
+
+test('the title camera drifts, and never off the market', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.toMenu();
+  const seen = [];
+  for (let i = 0; i < 200; i++){
+    api.setT(i * 0.5);
+    const c = api.camTarget();
+    seen.push(c);
+    assert(c.x > api.bounds.x0 && c.x < api.bounds.x1,
+      'the drift left the market at T=' + (i * 0.5) + ': x ' + Math.round(c.x));
+    assert(c.y > api.bounds.y0 && c.y < api.bounds.y1,
+      'the drift left the market at T=' + (i * 0.5) + ': y ' + Math.round(c.y));
+  }
+  const xs = seen.map(c => c.x), ys = seen.map(c => c.y);
+  const spanX = Math.max(...xs) - Math.min(...xs), spanY = Math.max(...ys) - Math.min(...ys);
+  console.log('    (title drift: ' + Math.round(spanX) + ' x ' + Math.round(spanY) + ')');
+  assert(spanX > 200 && spanY > 100, 'it should actually move: ' +
+    Math.round(spanX) + ' x ' + Math.round(spanY));
+  // and it is the clock, not a dice roll — same T, same place
+  api.setT(12.5);
+  const a = api.camTarget();
+  for (let i = 0; i < 20; i++) api.rnd();
+  api.setT(12.5);
+  const b2 = api.camTarget();
+  assert(a.x === b2.x && a.y === b2.y, 'the drift moved when the RNG did');
+});
+
+test('the title screen shows a lit market and no HUD', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.toMenu();
+  const last = api.LEVELS[api.LEVELS.length - 1];
+  assert(api.getTheme().name === api.THEMES[last.theme].name,
+    'the backdrop should be the last market: got ' + api.getTheme().name);
+  assert(api.props.length > 40, 'and it should be a full one, got ' + api.props.length);
+  // no score plate, no cars left, no nitro on a title screen
+  api._resetCounts();
+  api.drawHUD();
+  assert(!Object.keys(api._counts).length,
+    'the HUD drew on the menu: ' + JSON.stringify(api._counts));
+  // picking a market still builds that market, not the backdrop
+  api.pickLevel(0);
+  assert(api.getTheme().name === api.THEMES[api.LEVELS[0].theme].name,
+    'the backdrop leaked into the market you picked: ' + api.getTheme().name);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
