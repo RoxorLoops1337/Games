@@ -37,8 +37,8 @@ edit this block to name the next one.
   first: `drawAim` moving the car is real and decides pass/fail on market 1,
   and it turned up a fifth cosmetic system feeding on the simulation seed.
 - **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]`. Items 1–13 are done. **Next:
-  item 14** (the particle buffer stops eating the score pops). Exit: all 15 ticked, then
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–14 are done. **Next:
+  item 15** (portrait stops being a 20-pixel car), the last one. Exit: all 15 ticked, then
   phase E again.
 
 ## Working agreement for each pass
@@ -329,6 +329,24 @@ edit this block to name the next one.
       85, so the next notch starts eating kills, and there is a test for that.
       Run length moves scores: market 1's `par` re-derived 0.1241 → 0.1580
       (target 3,700 → 4,700), which is the only market that moved out of band.
+
+- [x] The particle buffer stops eating the score pops (plan 2 item 14). One
+      MIDNIGHT MASS run makes 12,390 tears out of 19,707 particles, sits
+      pinned at the 899 cap, and `addFx`'s eviction took the front 200 entries
+      whatever they were — which deleted **8 of the 12 score pops mid-flight**.
+      The game was throwing away the only thing on screen that says what you
+      just earned, to make room for crying. Three changes: text is now the
+      last thing evicted rather than the first; tears are not spawned for
+      anyone the camera cannot see (the same call `wailSlot` already makes for
+      audio); and `drawFx` finally culls against the frame the way
+      `drawGround`'s gore, debris and track loops always have. Zero pops lost
+      on markets 1, 11 and 21, and every score is byte-identical — **all four
+      `rr()` draws stay unconditional whether the tear is spawned or not**.
+      That last part is the whole item: hoisting `vx` and `vy` onto one shared
+      speed roll cost a draw and dropped the tutorial from 10/10 to 8/10 on
+      the first try, and skipping the rolls outright puts markets out of band.
+      Fifth system in this family, after `seedSnow`, `popText`, `addGore` and
+      the shake.
 
 ## Next
 
