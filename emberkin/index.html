@@ -4323,8 +4323,28 @@ const MAPS = {
 
 const tileAt = (map, x, y) => (x < 0 || y < 0 || y >= map.rows.length || x >= map.rows[0].length) ? '#' : map.rows[y][x];
 
-/** An NPC is on the map once its story beat is live and until it walks off. */
-const npcActive = (n) => !n.gone && (!n.requires || !!G.flags[n.requires]);
+/**
+ * An NPC is on the map once its story beat is live and until it walks off.
+ *
+ * Walking off is DERIVED from the save, never stored on the map. Warden Hale is
+ * the only npc who leaves, and he leaves from the one tile it matters on: the
+ * path up to Crown Hollow is two wide at the top of the Emberwood and narrows
+ * to a single tile at (8,2), which is where he stands, and npcs are impassable.
+ * He is the gate, not a decoration in front of one.
+ *
+ * Beating him used to set `n.gone = true` on the MAPS object. MAPS is a
+ * module-level const and the save blob has never carried npc state, so that
+ * flag lived exactly as long as the tab did — and it failed in both directions.
+ * Reload a save taken after beating him and he is standing in the neck again
+ * with `t_hale` already set, so talking to him gives his after-line instead of
+ * a rematch and there is no second way round: Crown Hollow, the shrine, the
+ * legendary and the last fight are unreachable for the rest of that save's
+ * life. Start a NEW run in the same tab and the opposite happens — he is still
+ * gone, the pass is open from the first minute, and the Warden never fights.
+ *
+ * `G.flags` is saved and is rebuilt per run, so reading it fixes both at once.
+ */
+const npcActive = (n) => !(n.block && G.flags[n.id]) && (!n.requires || !!G.flags[n.requires]);
 
 function npcAt(map, x, y) {
   return (map.npcs || []).find((n) => n.x === x && n.y === y && npcActive(n)) || null;
@@ -8401,7 +8421,10 @@ function finishBattle() {
     G.flags[b.npc.id] = 1;
     G.money += b.npc.trainer.prize;
     lines.push(`You collected ${b.npc.trainer.prize} shards.`);
-    if (b.npc.block) { b.npc.gone = true; lines.push(`${b.npc.name} steps off the path.`); }
+    // The flag two lines up is what moves him; this only says so. Setting a
+    // `gone` field here as well would be a second copy of the same fact living
+    // on shared map data, which is the bug npcActive documents.
+    if (b.npc.block) lines.push(`${b.npc.name} steps off the path.`);
     winFlourish(gems, () => say('', lines, withReward));
   } else if (over === 'caught') {
     const caught = b.foe;

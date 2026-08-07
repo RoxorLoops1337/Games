@@ -377,6 +377,28 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+46. **A save could reach a state the game could not get out of** (pass 121).
+    The worst thing found in this project, and found while reading npc data to
+    build something else. Warden Hale stands on (8,2) in the Emberwood — the
+    single-tile neck of the only path to Crown Hollow — and npcs are
+    impassable, so he is the gate itself. Beating him set `n.gone = true` on
+    the MAPS object. MAPS is a module-level const and the save blob has never
+    carried npc state, so that field lived exactly as long as the tab did.
+    Reload a save taken after beating him and he is back in the neck with
+    `t_hale` already set, which means his after-line instead of a rematch, and
+    there is no second route: Crown Hollow, the shrine, the legendary and the
+    last fight are unreachable for the rest of that save's life. The same
+    field failed the other way too — a new run in the same tab found him still
+    gone, the pass open from minute one, the Warden never fighting.
+    Two suites asserted this behaviour and both passed, because both read
+    `hale.gone` — the field, not the question the game asks. Reproduced against
+    the pre-fix source with the lib's `patch` hook before claiming it, which is
+    the step that turns "I think this was broken" into a fact.
+    **State that decides whether a path is open belongs in the save. A field on
+    shared module data is not state, it is a cache with the lifetime of a tab —
+    and a test that reads the field instead of asking the function will agree
+    with it right up to the reload.**
+
 44. **The test agreed with the bug, so the bug shipped green** (pass 118, about
     pass 117). The menu's new aim line read straight down `AIM_ORDER` and named
     Wick's last fight in Crown Hollow as the thing to do next. It is not: that

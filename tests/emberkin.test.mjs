@@ -668,9 +668,18 @@ ok(!EK.npcActive(wick3), 'the final rival is not on the mountain yet');
 EK.G.flags = { gotStarter: 1 };
 ok(EK.npcActive(wick1), 'once Rowan hands one over, he is there');
 ok(!!EK.npcAt(MAPS.hollowbrook, wick1.x, wick1.y), 'and stands in the way');
-wick1.gone = true;
-ok(!EK.npcActive(wick1), 'a departed NPC stays gone');
-wick1.gone = false;
+// Leaving the map is a property of beating a BLOCKING npc, and it is read out
+// of the flags rather than off a field on the map object — which is why this
+// sets the flag rather than the field. There is exactly one such npc, and if
+// that ever stops being true this finds the new one instead of testing nothing.
+const blockers = Object.values(MAPS).flatMap((m) => m.npcs || []).filter((n) => n.block);
+ok(blockers.length > 0, `somebody blocks a path (${blockers.map((n) => n.name).join(', ')})`);
+for (const b of blockers) {
+  EK.G.flags = { gotStarter: 1 };
+  ok(EK.npcActive(b), `${b.name} is in the way while unbeaten`);
+  EK.G.flags = { gotStarter: 1, [b.id]: 1 };
+  ok(!EK.npcActive(b), `${b.name} steps off once beaten, and the save is what says so`);
+}
 EK.G.flags = {};
 // Prerequisites: the rival must not challenge before Rowan hands out a starter.
 EK.enterMap('hollowbrook', wick1.x - 1, wick1.y, 'right');
