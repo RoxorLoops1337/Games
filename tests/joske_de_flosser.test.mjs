@@ -66,6 +66,7 @@ const EXPOSE = `__out.api = {
   marks, mark, clearMarks, updateMarks, drawMarks, MARK_MAX,
   slamShock, superStrike, breakItem,
   deadFade, deadLife, deadStart, knockOut, rgba, get fx(){ return fx; },
+  GRADE, gradePass,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
   GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
@@ -85,6 +86,7 @@ function makeSandbox(opts){
   // way to measure anything drawn from a cache — text above all.
   const blits = [];
   const alphas = [];
+  const ops = [];                     // and every composite mode — a grade is not a rectangle either
   const gradient = { addColorStop(){} };
   const ctxStub = new Proxy({}, {
     get(t, p){
@@ -106,6 +108,7 @@ function makeSandbox(opts){
     set(t, p, v){
       if (p === 'fillStyle') styles.push(String(v));
       if (p === 'globalAlpha') alphas.push(v);   // a fade is a property, not a rectangle
+      if (p === 'globalCompositeOperation') ops.push(String(v));
       t[p] = v; return true;
     },
   });
@@ -134,7 +137,7 @@ function makeSandbox(opts){
     requestAnimationFrame: () => {},
     __out: {},
   };
-  return { sandbox, store, counts, styles, rects, blits, alphas, nodes, canvas };
+  return { sandbox, store, counts, styles, rects, blits, alphas, ops, nodes, canvas };
 }
 
 let SRC = null;
@@ -150,7 +153,7 @@ function source(){
 }
 
 function boot(opts){
-  const { sandbox, store, counts, styles, rects, blits, alphas } = makeSandbox(opts);
+  const { sandbox, store, counts, styles, rects, blits, alphas, ops } = makeSandbox(opts);
   new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', source())(
     sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
   const api = sandbox.__out.api;
@@ -160,7 +163,8 @@ function boot(opts){
   api._rects = rects;
   api._blits = blits;
   api._alphas = alphas;
-  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; blits.length = 0; alphas.length = 0; };
+  api._ops = ops;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; blits.length = 0; alphas.length = 0; ops.length = 0; };
   api.reseed(4242);
   return api;
 }
@@ -5236,6 +5240,125 @@ test('a street full of men coming apart still fits the frame budget', () => {
   api.draw();
   const fills = api._counts.fillRect || 0;
   assert(fills < 7500, 'a street of dissolving men costs ' + fills + ' fillRects');
+});
+
+/* ------------------------------------------------------------- the grade */
+const gradeOf = (api) => {
+  api._resetCounts();
+  api.gradePass();
+  return api._rects.filter(q => q[2] === api.VW && q[3] === api.VH);
+};
+
+test('the grade is a split tone: highlights multiplied, shadows lifted', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const full = gradeOf(api);
+  const g = api.GRADE.street;
+  assert(full.length >= 2, 'the grade paints ' + full.length + ' full-frame passes');
+  assert(full[0][4] === g.mul && full[1][4] === g.lift, 'the two passes are not the stage grade');
+  // and they are composited, not painted flat over the top
+  const i = api._ops.indexOf('multiply');
+  assert(i >= 0, 'the highlight pass is not a multiply: ' + api._ops.join(', '));
+  assert(api._ops.indexOf('lighter') > i, 'the shadow lift does not follow it as an add');
+  assert(api._ops[api._ops.length - 1] === 'source-over', 'the grade left the canvas in a composite mode');
+  assert(api._alphas[api._alphas.length - 1] === 1, 'the grade left globalAlpha turned down');
+  // a lift that is not darker than the multiply is not a split tone at all
+  const lum = (c) => [1, 3, 5].map(k => parseInt(c.slice(k, k + 2), 16)).reduce((a, b) => a + b);
+  for (const k in api.GRADE){
+    const q = api.GRADE[k];
+    assert(lum(q.lift) < lum(q.mul) * 0.5, k + ' lifts its shadows to ' + q.lift + ', brighter than a shadow');
+    assert(q.mulA > 0.1 && q.mulA < 0.6, k + ' multiplies at ' + q.mulA);
+    assert(q.liftA > 0.1 && q.liftA < 0.6, k + ' lifts at ' + q.liftA);
+  }
+});
+
+test('every stage is graded, and no two the same', () => {
+  const api = boot();
+  const seen = new Set();
+  for (let st = 0; st < api.STAGES.length; st++){
+    play(api, { stage: st });
+    const full = gradeOf(api);
+    assert(full.length >= 2, 'stage ' + (st + 1) + ' is not graded');
+    seen.add(full.map(q => q[4]).join('|'));    // what was painted, not what was configured
+  }
+  // five backdrops carry seven stages, and the pairs that share one are told
+  // apart by a wash of their own — so every stage still has its own look
+  assert(seen.size === api.STAGES.length,
+    api.STAGES.length + ' stages come out as ' + seen.size + ' looks');
+  const shared = api.STAGES.filter(s => s.bg === 'docks');
+  assert(shared.length === 2 && shared.some(s => s.grade) && shared.some(s => !s.grade),
+    'the two dock stages are not told apart by a wash');
+  // and that wash is actually painted, over the whole frame
+  const washed = api.STAGES.findIndex(s => s.grade);
+  play(api, { stage: washed });
+  assert(gradeOf(api).some(q => q[4] === api.STAGES[washed].grade),
+    'stage ' + (washed + 1) + ' carries a wash that never reaches the frame');
+});
+
+test('the stage wash reaches the men standing on the street, not just the street', () => {
+  const src = fs.readFileSync(HTML, 'utf8');
+  const draw = src.slice(src.indexOf('\nfunction draw(){'));
+  const body = draw.slice(0, draw.indexOf('\n}\n'));
+  assert(!/const grade = stage\(\)\.grade;/.test(body),
+    'the per-stage wash is painted in draw() again, before the fighters go on');
+  const bg = body.indexOf('drawBackground();');
+  const grade = body.indexOf('gradePass();');
+  // draw() bails early for the title and the cutscenes, and each of those
+  // blooms on its way out, so it is the last one that follows the grade
+  const bloom = body.lastIndexOf('bloomPass();');
+  const hud = body.indexOf('drawHUD();');
+  assert(bg >= 0 && grade > bg, 'the grade runs before there is a frame to grade');
+  assert(bloom > grade, 'the bloom runs before the grade, so it blooms the wrong colours');
+  assert(hud > grade, 'the HUD is graded along with the world');
+});
+
+test('the frame settles toward the front, where none of the light is', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api._resetCounts();
+  api.gradePass();
+  const bands = api._rects
+    .filter(q => q[2] === api.VW && q[3] === 9 && String(q[4]).startsWith('rgba(6,4,10'))
+    .sort((a, b) => a[1] - b[1]);
+  assert(bands.length === 7, 'the settle is ' + bands.length + ' bands');
+  const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+  assert(alpha(bands[bands.length - 1]) > alpha(bands[0]), 'the settle is not darkest at the front');
+  assert(bands[bands.length - 1][1] + 9 === api.VH, 'the settle does not reach the bottom of the frame');
+});
+
+test('turning the grade off costs nothing and puts the frame back', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.G.grade = false;
+  api._resetCounts();
+  api.gradePass();
+  assert((api._counts.fillRect || 0) === 0, 'a flat frame still paid for ' + api._counts.fillRect + ' fills');
+  assert(api._ops.length === 0, 'a flat frame still touched the composite mode');
+  api.G.grade = true;
+  assert(gradeOf(api).length >= 2, 'turning it back on did nothing');
+  // and the choice is remembered
+  api.G.grade = false;
+  api.saveMeta();
+  api.G.grade = true;
+  api.loadMeta();
+  assert(api.G.grade === false, 'the grade setting is not saved');
+});
+
+test('the grade is cheap enough to be free', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  for (let i = 0; i < 8; i++) api.spawnEnemy('punk', api.cam.x + 30 + i * 40, api.FLOOR_MID + (i % 3) * 8, -1);
+  api.draw();
+  api.G.grade = false;
+  api._resetCounts();
+  api.draw();
+  const flat = api._counts.fillRect || 0;
+  api.G.grade = true;
+  api._resetCounts();
+  api.draw();
+  const graded = api._counts.fillRect || 0;
+  assert(graded - flat <= 12, 'the grade costs ' + (graded - flat) + ' fillRects a frame');
+  assert(graded < 7500, 'a graded frame costs ' + graded + ' fillRects');
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
