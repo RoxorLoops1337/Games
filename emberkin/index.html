@@ -552,7 +552,21 @@
   body.tight .hud{ padding:3px 5px 4px; width:47%; }
   body.tight .hud .tp{ display:none; }
   body.tight .hud .bar{ height:6px; margin-top:3px; }
-  body.tight #hudMine{ top:40%; }
+  /* Clear of the action row, which is pinned at 54%. At 40% the panel's own
+     height — taller in proportion on a small stage, because the text clamps at
+     11px — ran its HP figure straight under the End turn button. */
+  body.tight #hudMine{ top:32%; }
+  /* The hand cannot hold four rules-text blocks at this size: at 30% of a
+     310px stage the cards are 86px tall and the text clipped into its own
+     rarity pip on every one of them. So a card you are not aiming at shows its
+     art, its name and its cost — which is what you choose between — and the
+     card you ARE aiming at keeps its text, with the full wording also sitting
+     in the description bar directly above the hand. Nothing is lost; it is
+     read one place instead of five. */
+  body.tight #hand{ height:28%; }
+  body.tight #hand .cardel:not(.sel) .ctext{ display:none; }
+  body.tight #hand .cardel:not(.sel) .cname{ margin-top:.35em; }
+  body.tight #hand .cardel .cpip{ font-size:.4em; }
   .tp{ font-size:.58em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px; color:#120d18; font-weight:700; }
 
   /* ---------------- title ---------------- */
