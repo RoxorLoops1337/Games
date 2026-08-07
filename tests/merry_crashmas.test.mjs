@@ -41,7 +41,7 @@ const EXPOSE = `__out.api = {
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
   takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
   gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
-  GOALS, THEMES, rollGoals, checkGoals, goalTest, replayGore, drawStains,
+  GOALS, THEMES, rollGoals, checkGoals, goalTest, goalProgress, replayGore, drawStains,
   CARS, CAR_KEY, KILLS_KEY, STARS_KEY, BESTPER_KEY, selectCar, carUnlocked, renderGarage,
   pickLevel, readStars, readBest, starsOn, bestOn, starsTotal,
   getCar: () => CAR, getDims: () => ({ l: CARL, w: CARW, r: CARR }),
@@ -5608,6 +5608,91 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
   console.log('    (santa head: beard y' + beard.y.toFixed(1) + '±' + beard.ry.toFixed(1) +
     ', mouth y' + mouthY.toFixed(1) + ', hat y' + hat.y.toFixed(1) +
     ', bobble y' + bobble.y.toFixed(1) + ')');
+});
+
+/* --------------------------------------------------------- the goals --- */
+
+/* The results card shows "Wrecked 9" and, right underneath it, an unticked
+   "Wreck 4 stalls". They are two different counters — G.wrecks is everything
+   flattened, the goal tests G.bigWrecks, which is props worth 260 or more —
+   so the card read as a broken goal rather than as one you missed. */
+test('every goal can say how far it got, and agrees with itself', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+
+  assert(api.GOALS.length === 13, 'thirteen goals in the pool, got ' + api.GOALS.length);
+  for (const d of api.GOALS)
+    assert(typeof d.val === 'function', d.id + ' cannot report its progress');
+
+  /* The invariant that matters: progress and pass/fail are two readings of the
+     same thing and must never disagree. Swept across the whole state space
+     each goal cares about. */
+  const G = api.G;
+  const fields = ['bestCombo', 'bigWrecks', 'rolls', 'jumps', 'bestSlam',
+                  'nitroKills'];
+  let cases = 0;
+  for (const d of api.GOALS){
+    // the n the game actually asks for, market by market — a one-shot goal's
+    // gen always returns 1 and it ignores n entirely, so an invented n proves
+    // nothing about it
+    for (let lv = 0; lv < api.LEVELS.length; lv++){
+      const n = d.gen(lv);
+      for (const at of [0, 1, n - 1, n, n + 1, n * 3]){
+        if (at < 0) continue;
+        for (const f of fields) G[f] = at;
+        G.bestRun = at * 900;
+        G.byKind = { elder: at, kid: at, parent: at, santa: at };
+        G.treeDown = at > 0; G.carouselDown = at > 0;
+        const got = d.val(G);
+        assert(!!d.test(G, n) === (got >= n),
+          d.id + ' at market ' + (lv + 1) + ': test says ' + !!d.test(G, n) +
+          ' with progress ' + got + ' / ' + n + ' — the two disagree');
+        cases++;
+      }
+    }
+  }
+  console.log('    (goal progress: ' + cases + ' cases across 13 goals)');
+});
+
+test('a missed goal says how close it came', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.bigWrecks = 1;
+
+  const stalls = { id: 'stalls', n: 4, done: false, text: 'Wreck 4 stalls' };
+  assert(api.goalProgress(stalls) === '1 / 4',
+    'a missed goal should read 1 / 4, got "' + api.goalProgress(stalls) + '"');
+
+  // clamped: you cannot be 9 / 4 through a goal you have finished
+  api.G.bigWrecks = 9;
+  assert(api.goalProgress(stalls) === '4 / 4',
+    'progress should clamp at the target, got "' + api.goalProgress(stalls) + '"');
+
+  // one-shot goals say nothing — "0 / 1" is noise next to "Run over Santa"
+  for (const id of ['santa', 'tree', 'carousel'])
+    assert(api.goalProgress({ id, n: 1 }) === '',
+      id + ' should not print 0 / 1');
+
+  // big numbers keep their separators
+  api.G.bestRun = 12345;
+  assert(api.goalProgress({ id: 'onerun', n: 20000 }) === '12,345 / 20,000',
+    'got "' + api.goalProgress({ id: 'onerun', n: 20000 }) + '"');
+
+  /* …and the card actually prints it. Without this the chip could be deleted
+     from the render and every assertion above would still pass — which is
+     exactly what happened when the fix was reverted to check it. */
+  api.startLevel(0); api.beginLevel();
+  api.G.goals = [
+    { id: 'stalls', n: 4, done: false, text: 'Wreck 4 stalls' },
+    { id: 'combo', n: 6, done: true, text: 'Chain a ×6 combo' },
+    { id: 'santa', n: 1, done: false, text: 'Run over Santa' },
+  ];
+  api.G.bigWrecks = 2; api.G.bestCombo = 6;
+  api.levelEnd();
+  const html = api._nodes.rsGoals.innerHTML;
+  assert(/2 \/ 4/.test(html), 'the card should print 2 / 4 on the missed goal: ' + html);
+  assert(!/6 \/ 6/.test(html), 'and nothing on the one it ticked');
+  assert(!/0 \/ 1/.test(html), 'nor 0 / 1 on a one-shot goal');
 });
 
 /* ------------------------------------------------------- the wrecks --- */
