@@ -359,6 +359,24 @@ and the family is more useful than the individual entry.
     *no output*. **A check for "did nothing" has to first check that something
     ran.**
 
+43. **The trainer table was a cliff, and the cliff was ours** (pass 109). At
+    `--runs 40` the trainers read 15% and 25% lost for the first two and then
+    83-95% for every one after, with the later fights *shorter* — the shape of a
+    party being deleted rather than out-fought. It was not the game. `fights`
+    printed **0**, and `stat.fights++` fires only when `!duelId`, so the run was
+    duelling trainers without ever walking a route. Logging the party at the
+    moment `duel()` starts settled it in one run: level 6 against t_mio's 15/16,
+    level 9 against t_hale's 17/18/19, level 9 against t_wick3's **28/29/31** —
+    and 100% HP at every trainer, which also contradicts `duel()`'s own comment
+    that a player "arrives having walked the route. What the party has left when
+    it gets there is the fight." The harness's stated assumption was broken and
+    the number that showed it was sitting three lines above the table.
+    **A shocking number wants the harness checked before the game: `fights 0`
+    beside a difficulty cliff is the whole answer, printed in advance.**
+    Not fixed here — recorded, because four passes had gone into this and a
+    balance change made on it would have been the loudest wrong thing this
+    project has done.
+
 42. **A mechanism measured at its shipped rate reads as nothing** (pass 38). Wild
     pairs ship at a quarter of encounters, and paired at that rate the effect on
     fight length is +0.20 ±0.25 — a null result. At full strength it is
