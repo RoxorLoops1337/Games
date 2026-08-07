@@ -137,6 +137,18 @@ const SCENES = {
       EK.screenSelect();                    // take the first of the three
     },
   },
+  // The genuine first fight: a Lv5 starter against what Route One actually
+  // holds (Lv3-6), with the starting deck and nothing else. The `battle` scene
+  // shows a Lv12 foe, which is not what anybody's first fight looks like.
+  firstfight: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({ foe: EK.mkMon('zaplet', 4), wild: true });
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,

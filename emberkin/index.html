@@ -5016,6 +5016,53 @@ function drawWorld(g) {
   }
   drawEdges(g, map, x0, y0, ox, oy);
 
+  // What every standing thing throws on the ground in front of it.
+  //
+  // The player and the NPCs have cast a shadow all along (`castShadow`); the
+  // buildings, trees, rocks and fences they walk between never did. Hollowbrook
+  // is the first outdoors a player sees and it measured as the flattest bright
+  // map in the game — mean 86, sd 20.6, against the shore's 25.7 — and the
+  // grade was not the lever: pushing the town's washes and vignette moved sd by
+  // 0.1, because a grade is a wash over the whole frame and flatness is a want
+  // of LOCAL contrast. A wash cannot make one tile darker than its neighbour.
+  // This can.
+  //
+  // A second pass rather than a branch in the loop above, which already forks
+  // five ways for water and grass and props. Under the window pools on purpose:
+  // a lamp should wash its own shadows out.
+  //
+  // Indoors too. That started as an exclusion on the grounds that the study
+  // already reads best in the game, which is an assumption rather than a look —
+  // photographing it with interiors included put a band under the top wall and
+  // gave the room an edge, so the walls are enclosing something now instead of
+  // being drawn around it.
+  // Only things that fill their tile. A full-width shadow is right under a wall
+  // and badly wrong under a rock: the first version cast from rocks, fences and
+  // signs too, and a round rock a third of a tile across threw a hard-edged
+  // slab the full width of one — a floating rectangle, not a shadow. Town read
+  // well and Route One read broken, and the difference was entirely that a
+  // building fills its tile and a prop does not.
+  const CASTS = new Set(['#', 'W', 'R', 'D', 'n']);
+  if (g.createLinearGradient) {
+    g.save();
+    for (let y = 0; y <= VIEW_H / TILE + 1; y++) {
+      for (let x = 0; x <= VIEW_W / TILE + 1; x++) {
+        const mx = x0 + x, my = y0 + y;
+        if (my <= 0 || my >= map.rows.length || mx < 0 || mx >= map.rows[0].length) continue;
+        if (CASTS.has(map.rows[my][mx])) continue;          // a wall's own face, not ground
+        if (!CASTS.has(map.rows[my - 1][mx])) continue;      // nothing standing above it
+        const sx = Math.round(x * TILE + ox), sy = Math.round(y * TILE + oy);
+        const gr = g.createLinearGradient(0, sy, 0, sy + TILE * .75);
+        gr.addColorStop(0, 'rgba(14,10,26,.34)');
+        gr.addColorStop(1, 'rgba(14,10,26,0)');
+        g.fillStyle = gr;
+        // Offset a little with the light, which comes across rather than down.
+        g.fillRect(sx + 1, sy, TILE, TILE * .75);
+      }
+    }
+    g.restore();
+  }
+
   // The light the windows and doorways throw, over the ground and under
   // everything that walks on it — so a lamp lights the street, not the player's
   // hat. Additive, because light adds.

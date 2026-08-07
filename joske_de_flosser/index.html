@@ -701,11 +701,9 @@ for (const line of FONT_SRC){
 FONT[' '] = ['00000', '00000', '00000', '00000', '00000', '00000', '00000'];
 
 function textW(s, sc){ sc = sc || 1; return s.length * 6 * sc - sc; }
-function text(s, x, y, col, sc, shadow){
-  sc = sc || 1;
-  s = String(s).toUpperCase();
+function paintText(s, x, y, col, sc, shadow){
   if (shadow){
-    for (const [ox, oy] of [[sc, 0], [-sc, 0], [0, sc], [0, -sc]]) text(s, x + ox, y + oy, shadow, sc, null);
+    for (const [ox, oy] of [[sc, 0], [-sc, 0], [0, sc], [0, -sc]]) paintText(s, x + ox, y + oy, shadow, sc, null);
   }
   ctx.fillStyle = col;
   let cx = x;
@@ -719,6 +717,34 @@ function text(s, x, y, col, sc, shadow){
     }
     cx += 6 * sc;
   }
+}
+/* Every glyph pixel used to be its own fillRect, and a shadowed string paid
+   for five copies of itself: JOSKE cost 370 fills, and the HUD alone was
+   redrawing 5568 of them every frame — over half the whole budget, for a
+   layer that changes a digit at a time. A string is baked into its own
+   sprite now and blitted. Scores mint a new string every hit, so the cache
+   is dropped whole when it gets large rather than growing forever. */
+const TEXT_CACHE_MAX = 260;
+let textCacheN = 0;
+function clearTextCache(){
+  for (const k in baked) if (k.charCodeAt(0) === 116 && k.startsWith('txt:')) delete baked[k];
+  textCacheN = 0;
+}
+function textSprite(s, col, sc, shadow){
+  const key = 'txt:' + sc + '|' + col + '|' + (shadow || '') + '|' + s;
+  const hit = baked[key];
+  if (hit) return hit;
+  if (textCacheN >= TEXT_CACHE_MAX) clearTextCache();
+  textCacheN++;
+  // the shadow reaches one step outside the glyph box on every side
+  return bake(key, Math.max(1, textW(s, sc) + sc * 2), 9 * sc,
+    () => paintText(s, sc, sc, col, sc, shadow));
+}
+function text(s, x, y, col, sc, shadow){
+  sc = sc || 1;
+  s = String(s).toUpperCase();
+  if (!s) return;
+  blit(textSprite(s, col, sc, shadow), Math.round(x) - sc, Math.round(y) - sc);
 }
 function textC(s, cx, y, col, sc, shadow){ text(s, Math.round(cx - textW(s, sc) / 2), y, col, sc, shadow); }
 </script>
@@ -1128,25 +1154,6 @@ function drawFighter(f){
   const pose = currentPose(f);
   const dir = f.face;
 
-  // A reflection in the wet: not the rig again — a squashed smear of the
-   // colours it is made of, which is all you can read at this size anyway.
-  const wet = stage().wet;
-  if (wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss)){
-    const gy0 = Math.round(f.y + cam.shakeY) + 2;
-    const rx = Math.round(f.x - cam.x + cam.shakeX);
-    const w = Math.max(4, Math.round(9 * (f.sc || 1)));
-    const fade = wet * clamp(1 - f.z / 26, 0, 1);
-    const bands = [[s.pants, 4], [s.pants, 3], [s.shirt2, 3], [s.shirt, 3], [s.skin2, 2]];
-    let yy = gy0;
-    for (let i = 0; i < bands.length; i++){
-      const a = fade * (0.34 - i * 0.055);
-      if (a <= 0.01) break;
-      const wob = Math.round(Math.sin(T * 2.4 + f.id + i) * 1.2);
-      px(rx - w / 2 + wob, yy, w, bands[i][1], rgba(bands[i][0], a));
-      yy += bands[i][1];
-    }
-  }
-
   // contact shadow, soft-edged and tighter the higher you are — and thrown
   // away from whatever light he is standing in, which is the cheapest thing
   // in the game that makes him look like he is actually there
@@ -1381,6 +1388,67 @@ function drawFighter(f){
   }
   if (f.atk && f.atk.swoosh) drawAttackSwoosh(f, X, Y, pose, sc);
   if (f.weapon) drawHeldWeapon(f, X, Y, pose, sc);
+  // the crowd cull the old smear carried: in a real scrum the grunts give
+  // their reflections up before the frame does
+  if (stage().wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss))
+    wetReflection(f, sx, gy, wetPower(f));
+}
+
+/* ------------------------------------------------------- wet reflections
+   Three of the streets are wet, and the men standing in them used to throw
+   back five bars of flat colour off the palette: the same width whatever
+   the man, the same five bands whatever he was doing. It is built out of
+   what he is actually made of now — the rig's own parts, bucketed into
+   bands, each band mirrored under his feet, squashed toward the water line,
+   faded and wobbling the way the neon on the road already does. A second
+   mirrored rig pass would cost as much as the man himself; this costs
+   fourteen rectangles. He leaves the surface as he leaves the ground, so a
+   jump takes it with him. */
+const REFL_BANDS = 7;
+const wetPower = (f) => clamp(stage().wet * (1 - f.z / 26), 0, 1);
+function wetReflection(f, sx, gy, power){
+  if (power <= 0.02 || !rigParts.length) return;
+  let top = 1e9;
+  for (const p of rigParts)
+    top = Math.min(top, p.k === 'e' ? p.y - p.ry : Math.min(p.y1, p.y2) - p.w / 2);
+  const h = gy - top;
+  if (h < 10 || gy > VH) return;
+  const lo = [], hi = [], col = [];
+  for (let i = 0; i < REFL_BANDS; i++){ lo[i] = 1e9; hi[i] = -1e9; col[i] = null; }
+  for (const p of rigParts){
+    const ball = p.k === 'e';
+    const y0 = ball ? p.y - p.ry : Math.min(p.y1, p.y2) - p.w / 2;
+    const y1 = ball ? p.y + p.ry : Math.max(p.y1, p.y2) + p.w / 2;
+    const x0 = ball ? p.x - p.r : Math.min(p.x1, p.x2) - p.w / 2;
+    const x1 = ball ? p.x + p.r : Math.max(p.x1, p.x2) + p.w / 2;
+    const b0 = clamp(Math.floor((y0 - top) / h * REFL_BANDS), 0, REFL_BANDS - 1);
+    const b1 = clamp(Math.floor((y1 - top) / h * REFL_BANDS), 0, REFL_BANDS - 1);
+    for (let b = b0; b <= b1; b++){
+      if (x0 < lo[b]) lo[b] = x0;
+      if (x1 > hi[b]) hi[b] = x1;
+      // the lit tone, not the shadow one: a reflection on a dark wet road is
+      // brighter than the road, the way the neon smears already are
+      if (!col[b] || p.z >= 1) col[b] = p.c;          // and the trunk wins a band over an arm
+    }
+  }
+  const step = h / REFL_BANDS * 0.52, bh = Math.max(1, Math.round(step) + 1);
+  for (let b = REFL_BANDS - 1; b >= 0; b--){          // his boots sit nearest the water line
+    if (!col[b] || hi[b] <= lo[b]) continue;
+    const d = (REFL_BANDS - 1 - b) / (REFL_BANDS - 1);
+    const y = Math.round(gy + (REFL_BANDS - 1 - b) * step);
+    if (y >= VH) break;
+    /* Each band goes down as two halves on their own wobble. One rect per
+       band is a solid bar sliding about; two shear against each other, and
+       water does not hold a straight edge. */
+    const w = Math.max(2, Math.round((hi[b] - lo[b]) * (1 - d * 0.16)));
+    const cx2 = (lo[b] + hi[b]) / 2 - w / 2;
+    const a = rgba(col[b], power * 0.62 * (1 - d * 0.62));
+    const ph = T * 2.2 + f.id * 0.7 + b * 0.9, amp = 0.5 + d * 2.4;
+    px(Math.round(cx2 + Math.sin(ph) * amp), y, Math.ceil(w / 2), bh, a);
+    px(Math.round(cx2 + w / 2 + Math.sin(ph + 1.9) * amp), y, Math.ceil(w / 2), bh, a);
+  }
+  px(Math.round(lo[REFL_BANDS - 1]) - 1, gy, Math.max(3, Math.round(hi[REFL_BANDS - 1] - lo[REFL_BANDS - 1]) + 2), 1,
+    rgba('#ffffff', power * 0.16));                   // the sheen right at the water line
 }
 
 function currentPose(f){
