@@ -4462,6 +4462,119 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ------------------------------------------------- wrecked set pieces --- */
+
+/* Draws one prop, live or wrecked, into the shape recorder. */
+function propShot(api, kind, seed, dead){
+  api.props.length = 0;
+  const o = api.addProp(kind, api.cam.x, api.cam.y, {});
+  o.seed = seed; o.dead = !!dead; o.rot = 0.4;
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawProp(o));
+  return { o, rec, cols: rec.order,
+    by: (c) => rec.shapes.filter(s => s.style === c),
+    rects: rec.rects };
+}
+
+test('a wrecked glühwein stand is a pot on its side, not a brown disc', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const dead = propShot(api, 'gluh', 0.62, true);
+  const live = propShot(api, 'gluh', 0.62, false);
+
+  // the pot, still wearing the gold rim it had when it was standing
+  const rim = dead.by('#c9a24a').find(s => s.stroked);
+  assert(rim, 'the gold rim should survive the wreck');
+  assert(rim.r !== rim.ry, 'and be an ellipse, because the pot is on its side');
+  assert(live.by('#c9a24a').some(s => s.stroked), 'the live pot has the rim too');
+  // the trestle it stood on, snapped — two bars, which the live one has none of
+  assert(dead.rects.filter(r => r.style === '#5c4430').length === 2,
+    'the wreck should show a broken trestle: ' +
+    dead.rects.filter(r => r.style === '#5c4430').length + ' bars');
+  assert(live.rects.filter(r => r.style === '#5c4430').length === 0,
+    'a standing stand has no snapped trestle');
+  // and the cups off the counter
+  const cups = dead.by('#8b2f22');
+  assert(cups.length >= 1, 'the cups should be on the snow');
+  console.log('    (wrecked gluh: rim ' + rim.r.toFixed(0) + 'x' + rim.ry.toFixed(0) +
+    ', ' + dead.rects.filter(r => r.style === '#5c4430').length + ' trestle bars)');
+});
+
+test('a burst crate shows its spent tubes, a burst barrel does not', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  // find a seed either side of the crate line, whichever way round it runs
+  let crateSeed = null, plainSeed = null;
+  for (let i = 0; i <= 20; i++){
+    api.props.length = 0;
+    const o = api.addProp('barrel', api.cam.x, api.cam.y, {});
+    o.seed = i / 20;
+    if (api.crateOf(o) && crateSeed === null) crateSeed = o.seed;
+    if (!api.crateOf(o) && plainSeed === null) plainSeed = o.seed;
+  }
+  assert(crateSeed !== null && plainSeed !== null,
+    'the market should hold both crates and plain barrels');
+
+  const crate = propShot(api, 'barrel', crateSeed, true);
+  const plain = propShot(api, 'barrel', plainSeed, true);
+  // both burst into staves and a sprung hoop
+  for (const [name, w] of [['crate', crate], ['barrel', plain]]){
+    assert(w.by('#6b4e32').length >= 1, name + ' should burst into staves');
+    assert(w.by('#8d7a5c').some(s => s.stroked), name + ' should keep its hoop');
+    assert(w.by('#7a5836').length === 0, name + ' should not still be a whole barrel');
+  }
+  /* Only the crate leaves tubes. A crate is drawn differently from a barrel
+     while it is standing, and wrecked they were the same brown disc — the
+     thing that just launched a volley across the market looked like a barrel
+     that fell over. */
+  assert(crate.by('#3a1512').length >= 1, 'a spent crate should leave its tubes');
+  assert(plain.by('#3a1512').length === 0, 'a plain barrel has no tubes to leave');
+  // and a standing barrel is still a barrel
+  const upright = propShot(api, 'barrel', plainSeed, false);
+  assert(upright.by('#7a5836').length === 1, 'a standing barrel is a barrel');
+  assert(upright.by('#6b4e32').length === 0, 'and is not in pieces');
+  console.log('    (crate seed ' + crateSeed + ' leaves tubes, barrel seed ' +
+    plainSeed + ' does not)');
+});
+
+test('wrecked set pieces are drawn from a hash, not a generator', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const draw5 = (fn) => {
+    api.reseed(2468);
+    if (fn) fn();
+    return [api.rnd(), api.rnd(), api.rnd(), api.rnd(), api.rnd()];
+  };
+  /* The props are made first and only drawn inside the measured block —
+     addProp itself rolls numbers, and measuring the drawing means measuring
+     the drawing. */
+  const wrecks = [];
+  for (const k of ['gluh', 'barrel']){
+    for (let i = 0; i < 6; i++){
+      const o = api.addProp(k, api.cam.x, api.cam.y, {});
+      o.seed = i / 6; o.dead = true; o.rot = 0.4;
+      wrecks.push(o);
+    }
+  }
+  const clean = draw5(null);
+  const after = draw5(() => {
+    const rec = carRec();
+    api.withCtx(rec, () => { for (const o of wrecks) api.drawProp(o); });
+    assert(rec.all.length > 40, 'the wrecks should actually draw: ' + rec.all.length);
+  });
+  assert(JSON.stringify(clean) === JSON.stringify(after),
+    'a wreck moved the simulation stream: ' + clean[0] + ' -> ' + after[0]);
+  // and it looks the same every frame it is on camera
+  const a = propShot(api, 'gluh', 0.3, true).rec.all;
+  const b = propShot(api, 'gluh', 0.3, true).rec.all;
+  assert(a.length > 4 && JSON.stringify(a) === JSON.stringify(b),
+    'a wreck should not shuffle itself between frames');
+});
+
 /* ------------------------------------------------------- the brief --- */
 
 test('the brief shows the plan of the market it is briefing', () => {

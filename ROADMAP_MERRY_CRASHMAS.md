@@ -211,6 +211,14 @@ edit this block to name the next one.
       screen at 1440×810, 1280×720, 1024×640 and two landscape phones, which
       needed the plan trimmed after the first attempt pushed it 4px off a
       1024×640 window.
+- [x] Wrecked set pieces stop being brown discs. Lined up live against wrecked,
+      the glühwein stand and the barrel were each a single flat disc where the
+      live version had a glowing copper pot with a gold rim, or hoops and (for
+      a fireworks crate) three tubes and a fuse. A wrecked stand is now the pot
+      on its side with the rim still on it, a snapped trestle and the cups off
+      the counter; a wrecked barrel is five staves sprung out of a hoop — one
+      rotated ellipse each, so the whole thing is a single path — and a crate
+      that has gone off leaves its spent tubes, which a plain barrel does not.
 
 ## Next
 

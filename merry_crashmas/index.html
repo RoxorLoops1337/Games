@@ -4272,7 +4272,32 @@ function drawProp(o){
       ctx.save(); ctx.translate(o.x, o.y);
       shadow(0, o.r * 0.4, o.r * 0.9, o.r * 0.42, 0.28);
       if (o.dead){
-        ctx.fillStyle = '#5c4a3a'; circle(0, 0, o.r * 0.7); ctx.fill();
+        /* It was a copper pot on a trestle with wine glowing in it, and it
+           left a flat brown disc. Now the trestle is snapped, the pot is on
+           its side with its gold rim still on it, and the cups that were on
+           the counter are on the snow. */
+        ctx.rotate(o.rot || 0);
+        ctx.fillStyle = '#5c4430';
+        ctx.fillRect(-o.r * 1.15, -5, o.r * 1.35, 10);
+        ctx.fillRect(o.r * 0.1, -o.r * 0.52, 9, o.r * 0.95);
+        ctx.fillStyle = '#3a2c22';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, o.r * 0.72, o.r * 0.5, 0.3, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#241a14';                  // the empty mouth of it
+        ctx.beginPath();
+        ctx.ellipse(o.r * 0.2, -o.r * 0.06, o.r * 0.4, o.r * 0.28, 0.3, 0, 6.283); ctx.fill();
+        ctx.strokeStyle = '#c9a24a'; ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, o.r * 0.72, o.r * 0.5, 0.3, 0, 6.283); ctx.stroke();
+        ctx.fillStyle = '#8b2f22';                  // and the cups, thrown clear
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++){
+          const a = mkRand(o.seed * 811 + i * 29) * 6.283;
+          const d = o.r * (0.95 + mkRand(o.seed * 613 + i * 41) * 0.7);
+          const cx = Math.cos(a) * d, cy = Math.sin(a) * d * 0.6;
+          ctx.moveTo(cx + 5, cy); ctx.arc(cx, cy, 5, 0, 6.283);
+        }
+        ctx.fill();
       } else {
         ctx.fillStyle = '#4a3a2c'; circle(0, 0, o.r); ctx.fill();
         ctx.fillStyle = '#8b2f22'; circle(0, 0, o.r * 0.76); ctx.fill();
@@ -4364,8 +4389,36 @@ function drawProp(o){
     case 'barrel': {
       ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.dead ? o.rot : 0);
       shadow(0, o.r * 0.4, o.r * 0.9, o.r * 0.4, 0.22);
-      ctx.fillStyle = o.dead ? '#5e442c' : '#7a5836'; circle(0, 0, o.r * (o.dead ? 0.7 : 1)); ctx.fill();
+      if (o.dead){
+        /* A burst barrel: staves sprung out of their hoop. Each stave is one
+           rotated ellipse, so the whole thing is a single path — ctx.ellipse
+           takes the angle and nothing has to push the canvas state. */
+        ctx.fillStyle = '#6b4e32';
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++){
+          const a = (o.seed + i * 0.2) * 6.283;
+          const d = o.r * (0.35 + mkRand(o.seed * 457 + i * 23) * 0.55);
+          const px = Math.cos(a) * d, py = Math.sin(a) * d * 0.7;
+          ctx.moveTo(px + o.r * 0.5, py);
+          ctx.ellipse(px, py, o.r * 0.5, o.r * 0.13, a + 0.6, 0, 6.283);
+        }
+        ctx.fill();
+        ctx.strokeStyle = '#8d7a5c'; ctx.lineWidth = 3;   // the hoop, sprung open
+        ctx.beginPath(); ctx.arc(0, 0, o.r * 0.62, 0.5, 5.2); ctx.stroke();
+        // a crate that has gone off leaves its tubes behind, spent
+        if (crateOf(o)){
+          ctx.fillStyle = '#3a1512';
+          ctx.beginPath();
+          for (let i = 0; i < 3; i++){
+            const a = o.seed * 6.283 + i * 2.094;
+            const px = Math.cos(a) * o.r * 0.5, py = Math.sin(a) * o.r * 0.5;
+            ctx.moveTo(px + o.r * 0.2, py); ctx.arc(px, py, o.r * 0.2, 0, 6.283);
+          }
+          ctx.fill();
+        }
+      }
       if (!o.dead){
+        ctx.fillStyle = '#7a5836'; circle(0, 0, o.r); ctx.fill();
         ctx.strokeStyle = '#c9b28a'; ctx.lineWidth = 4;
         circle(0, 0, o.r * 0.66); ctx.stroke();
         ctx.fillStyle = 'rgba(255,247,228,.12)';
