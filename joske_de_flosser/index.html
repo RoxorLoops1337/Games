@@ -4244,19 +4244,42 @@ function bgFoundry(c){
     dgrad(0, 74, VW, 76, '#20121a', '#2c1a1c');
   }), 0, 0);
 
+  /* The furnaces were a dark rectangle with a hot rectangle in it.  They are
+     built into brick now: courses across the wall with the joints staggered,
+     an arch stepping in over the mouth, an iron frame with bolts at the
+     corners, and a hearth apron underneath with the slag still on it. */
   for (let i = -1; i < 8; i++){
-    const gx = Math.floor(c * 0.4 / 118) + i, x = gx * 118 - c * 0.4;
+    const gx = Math.floor(c * 0.4 / 118) + i, x = Math.round(gx * 118 - c * 0.4);
+    if (x + 74 < -2 || x > VW + 2) continue;
     px(x, 52, 74, 98, '#2a1c1c');
     px(x, 52, 74, 2, '#3d2828');
     px(x, 52, 2, 98, '#352323');
+    for (let by = 56; by < 148; by += 7){              // brick courses
+      px(x + 2, by, 70, 1, '#221718');
+      const stagger = ((by / 7) | 0) % 2 ? 0 : 9;
+      for (let bx = 4 + stagger; bx < 70; bx += 18) px(x + bx, by - 5, 1, 5, '#241a1a');
+    }
+    for (let a2 = 0; a2 < 3; a2++)                     // the arch over the mouth
+      px(x + 10 + a2 * 3, 90 - a2 * 3, 54 - a2 * 6, 3, a2 === 2 ? '#4a3028' : '#3a2420');
     const heat = 0.55 + Math.sin(T * 3 + gx) * 0.25;
+    px(x + 12, 94, 50, 44, '#241412');                 // the iron frame round it
+    px(x + 12, 94, 50, 2, '#5a3a30');
+    px(x + 12, 94, 2, 44, '#4a3028');
+    px(x + 60, 94, 2, 44, '#1c1210');
+    for (const bx of [x + 14, x + 57]) for (const by of [96, 132]) px(bx, by, 2, 2, '#7a5040');
     px(x + 14, 96, 46, 40, '#3a1a10');
     ctx.fillStyle = 'rgba(255,120,30,' + heat.toFixed(2) + ')';
     ctx.fillRect(x + 18, 100, 38, 34);
     px(x + 24, 110, 26, 20, '#ffd06a');
     px(x + 28, 114, 18, 12, '#fff0c0');
     glow(x + 37, 117, 44, 32, '#ff6e14', 0.30 + heat * 0.22);
+    px(x + 8, 138, 58, 4, '#2e2020');                  // the hearth apron
+    px(x + 8, 138, 58, 1, '#503430');
+    for (let sq = 0; sq < 4; sq++)                     // slag left on it
+      px(x + 14 + sq * 13 + Math.round(hash(gx * 5 + sq) * 6), 139, 4, 2,
+        rgba('#ff7a1e', 0.3 + Math.sin(T * 2 + sq + gx) * 0.12));
     px(x + 6, 44, 12, 10, '#3a2c2c'); px(x + 56, 44, 12, 10, '#3a2c2c');
+    px(x + 6, 44, 12, 1, '#544242'); px(x + 56, 44, 12, 1, '#544242');
   }
 
   px(0, 30, VW, 8, '#2f2732'); px(0, 38, VW, 3, '#211b26'); px(0, 30, VW, 1, '#453a4a');
@@ -4266,11 +4289,23 @@ function bgFoundry(c){
     px(x, 64, 46, 4, '#3a2f40');
     px(x, 64, 46, 1, '#4d4054');
   }
+  /* The walkway was a bar with a peg under it.  A handrail on top, a kick
+     plate under that, and a ladder off every third one. */
   for (let i = -1; i < 10; i++){
-    const gx = Math.floor(c * 0.55 / 76) + i, x = gx * 76 - c * 0.55;
+    const gx = Math.floor(c * 0.55 / 76) + i, x = Math.round(gx * 76 - c * 0.55);
+    if (x + 70 < -2 || x > VW + 2) continue;
+    px(x, 68, 70, 1, '#6a5c74');                       // handrail
+    for (let u = 2; u < 70; u += 11) px(x + u, 69, 1, 5, '#4a3f52');
     px(x, 74, 70, 6, '#4a3f52'); px(x, 74, 70, 1, '#5f5268');
-    px(x + 30, 80, 6, 18, '#3f3547');
+    px(x, 79, 70, 1, '#2a2130');
+    px(x + 30, 80, 6, 18, '#3f3547');                  // the leg it hangs on
+    px(x + 30, 80, 1, 18, '#584a60');
     px(x + 28, 96, 10, 5, '#584a60');
+    if (hash(gx + 9) > 0.62){                          // a ladder down off it
+      const lx = x + 56;
+      px(lx, 80, 1, 30, '#4a3f52'); px(lx + 7, 80, 1, 30, '#4a3f52');
+      for (let r = 82; r < 110; r += 5) px(lx, r, 8, 1, '#584a60');
+    }
   }
 
   px(0, 148, VW, 2, '#4a4450');
