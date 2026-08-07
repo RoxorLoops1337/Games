@@ -752,10 +752,23 @@
   #btns .rbtn:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.5); }
   #btns .rbtn[data-k="z"]{ bottom:calc(50% - 96px); border-color:var(--gold); color:var(--gold); }
   #btns .rbtn[data-k="x"]{ bottom:calc(50% + 10px); }
-  /* Portrait: put the controls in the middle of the band, not at its floor. */
-  body.ctl-below #btns .rbtn{ bottom:auto; top:50%; margin-top:-41px; }
-  body.ctl-below #btns .rbtn[data-k="z"]{ left:68%; }
-  body.ctl-below #btns .rbtn[data-k="x"]{ left:26%; }
+  /* Portrait: put the controls in the middle of the band, not at its floor.
+     The two buttons are 82px and were placed at 26% and 68% of a band that is
+     half the window wide, so their centres sit 0.21 * vw apart — which is less
+     than 82px on any window under about 390. They overlapped each other and
+     the outer one ran off the screen, and that is not an exotic size: an
+     iPhone SE is 375. Nobody had seen it because every phone shot so far was
+     taken at exactly 390.
+     Sized from the window instead, capped at the old 82px so nothing changes
+     on a roomy phone, and centred with a transform so the offsets cannot go
+     stale the way the overlay layout's did when its buttons were shrunk. */
+  body.ctl-below #btns .rbtn{
+    width:min(82px, 22vw); height:min(82px, 22vw);
+    bottom:auto; top:50%; margin-left:0; margin-top:0;
+    transform:translate(-50%, -50%); }
+  body.ctl-below #btns .rbtn:active{ transform:translate(-50%, calc(-50% + 2px)); }
+  body.ctl-below #btns .rbtn[data-k="z"]{ left:75%; }
+  body.ctl-below #btns .rbtn[data-k="x"]{ left:25%; }
   body.ctl-below #pad::after{ bottom:auto; top:calc(50% - 8px); }
   /* Overlay is the layout for a landscape phone too narrow to spare a gutter,
      and it had never been photographed. The buttons were shrunk to 64px here
