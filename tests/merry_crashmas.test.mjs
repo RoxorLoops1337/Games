@@ -50,7 +50,7 @@ const EXPOSE = `__out.api = {
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
   draw, drawHUD, drawAim, drawSling, previewPath, drawShout, nitroRect, popText, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
-  SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH_Z,
+  SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH_Z, CAR_MIN_PX, MIN_FILL, CAM_OVERSHOOT,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
@@ -1616,6 +1616,66 @@ test('blood does not float in the sky past the fence', () => {
   }
   console.log('    (blood past the fence: ' + arcs.length + ' of ' + api.gore.length +
     ' decals drawn)');
+});
+
+/* `z` is world units down the frame, so one number is a 58px car on a desktop
+   and a 23px one on a phone — and at 23px, with a 7px shopper under it, you are
+   steering a dash. Plan 1 item 6 made a market launchable in portrait by
+   driving the zoom off the width; this is what that cost, on the other side. */
+const VIEWPORTS = [[390, 844], [820, 1180], [1280, 720], [1440, 600]];
+
+test('the car is big enough to drive on every frame the game runs in', () => {
+  const rows = [];
+  for (const [w, h] of VIEWPORTS){
+    const api = boot({ w, h });
+    api.startLevel(0); api.beginLevel();
+    const view = api.getView();
+    // settle the drive camera rather than catching it mid-lerp off the aim zoom
+    api.G.phase = 'drive'; api.car.x = 2200; api.car.y = 1100;
+    api.car.vx = 0; api.car.vy = 0; api.camSnap();
+    const dims = api.getDims();
+    const carPx = dims.l * api.cam.s;
+    const shopPx = api.people[0].r * 2 * api.cam.s;
+    const worldH = (api.bounds.y1 - api.bounds.y0) * api.cam.s / view.h;
+
+    assert(Number.isFinite(api.cam.s) && api.cam.s > 0, w + 'x' + h + ': cam.s is ' + api.cam.s);
+    assert(Number.isFinite(api.cam.x) && Number.isFinite(api.cam.y),
+      w + 'x' + h + ': the camera left the world');
+    assert(carPx >= api.CAR_MIN_PX - 0.5, w + 'x' + h + ': the car is ' +
+      carPx.toFixed(0) + 'px long, floor is ' + api.CAR_MIN_PX);
+    assert(shopPx >= 5, w + 'x' + h + ': a shopper is ' + shopPx.toFixed(1) + 'px across');
+    assert(worldH >= 0.8, w + 'x' + h + ': the playfield fills ' +
+      (worldH * 100).toFixed(0) + '% of the frame height');
+    rows.push(w + 'x' + h + ' car ' + carPx.toFixed(0) + 'px, shopper ' +
+      shopPx.toFixed(1) + 'px, ' + (worldH * 100).toFixed(0) + '% high');
+
+    // …at full speed too, where the zoom stretches furthest out
+    api.car.vx = 1900; api.camSnap();
+    assert(dims.l * api.cam.s >= api.CAR_MIN_PX - 0.5, w + 'x' + h +
+      ': at speed the car drops to ' + (dims.l * api.cam.s).toFixed(0) + 'px');
+  }
+  console.log('    (drive framing: ' + rows.join(' | ') + ')');
+});
+
+test('the wide zoom may pull back but not empty the screen', () => {
+  for (const [w, h] of VIEWPORTS){
+    const api = boot({ w, h });
+    api.startLevel(0); api.beginLevel();
+    const view = api.getView();
+    for (const phase of ['aim', 'drive']){
+      api.G.phase = phase; api.camSnap();
+      const high = view.h / api.cam.tz;
+      assert(api.cam.s >= high * api.MIN_FILL - 1e-6, w + 'x' + h + ' ' + phase +
+        ': the width term shrank the picture to ' + (api.cam.s / high).toFixed(2) +
+        ' of the height zoom, floor is ' + api.MIN_FILL);
+      assert(api.cam.s <= high + 1e-6, w + 'x' + h + ' ' + phase +
+        ': the zoom went past what the frame height allows');
+    }
+    // and a full pull still fires at full power on the narrowest of them
+    api.G.phase = 'aim'; api.camSnap();
+    assert(api.C.ANCHOR.x - api.C.MAX_PULL > api.cam.x - view.w / api.cam.s / 2,
+      w + 'x' + h + ': a full pull goes off the left edge of the aim frame');
+  }
 });
 
 test('the aim zoom stretches to the market and stops', () => {

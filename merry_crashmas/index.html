@@ -3489,7 +3489,7 @@ function camTarget(){
        zoom turns out to be. */
     const want = (bounds.x1 + 240 - (ANCHOR.x - MAX_PULL - 120)) / Math.max(1.6, VW / VH);
     const z = clamp(want, 1500, 2300);
-    const sc = Math.min(VH / z, VW / (z * 1.6));
+    const sc = camScale(z);
     // the anchor sits a full pull plus a margin in from the left edge, so the
     // car is still on screen at 100% however far the zoom has stretched
     return { x: ANCHOR.x + VW / sc / 2 - MAX_PULL - 70 / sc, y: ANCHOR.y, z };
@@ -3499,7 +3499,17 @@ function camTarget(){
   // to hit and arriving at it
   const sp = carSpeed();
   const lead = 0.17 + sp / 9000;
-  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead, z: clamp(880 + sp * 0.24, 880, 1300) };
+  /* z is world units down the frame, so the same z is a 58px car on a desktop
+     and a 23px one on a phone — and at 23px, with a 7px shopper under it, you
+     are steering a dash. The cap is expressed as the thing that actually
+     matters: never let the car fall under CAR_MIN_PX of screen. On anything
+     from 720 up it never binds (it works out at z 1588 at 720 high, above the
+     1300 ceiling); on a 390-high frame it holds the drive zoom at 860 instead
+     of stretching to 1300, which is road ahead traded for being able to see
+     what you are driving. */
+  const zCap = CARL * VH / CAR_MIN_PX;      // VH is CSS px, and so is CAR_MIN_PX
+  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead,
+    z: Math.min(clamp(880 + sp * 0.24, 880, 1300), Math.max(600, zCap)) };
 }
 
 /* How far past the fence the camera may look. Hard-clamping to the fence meant
@@ -3508,11 +3518,28 @@ function camTarget(){
    car spent the climax pinned in the outer quarter of the frame and, at full
    power, went off the edge entirely. Beyond the fence is drawn as sky. */
 const CAM_OVERSHOOT = 0.55;
+/* How small the car is allowed to get, in CSS pixels, and how far the width
+   term may shrink the picture below what the frame's height would give. */
+const CAR_MIN_PX = 34, MIN_FILL = 0.6;
+
+/* One place for "how many screen pixels is a world unit at this z". camTarget
+   frames the aim view by placing the sling a fixed distance in from the left
+   edge, which means it has to know the scale camApply is going to use — it had
+   its own copy of the formula, and the moment MIN_FILL entered one and not the
+   other a full pull went off the left edge of a tall window. */
+function camScale(z){
+  return Math.max(VH / z * MIN_FILL, Math.min(VH / z, VW / (z * 1.6)));
+}
 
 function camApply(t, k){
   cam.tz = lerp(cam.tz, t.z, k);
   // a narrow window pulls back rather than cropping the market away
-  cam.s = Math.min(VH / cam.tz, VW / (cam.tz * 1.6));
+  /* The width term is what makes a market launchable on a narrow frame, but
+     on a tall one (820x1180, a tablet held upright) it shrank the picture to
+     54% of what the height allowed and left 31% of the screen outside the
+     playfield entirely. It may still pull back — just not past MIN_FILL of
+     the height-driven zoom. */
+  cam.s = camScale(cam.tz);
   const halfW = VW / cam.s / 2, halfH = VH / cam.s / 2;
   const bw = bounds.x1 - bounds.x0, bh = bounds.y1 - bounds.y0;
   const ovx = halfW * CAM_OVERSHOOT, ovy = halfH * CAM_OVERSHOOT;
