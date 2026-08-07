@@ -59,6 +59,7 @@ const EXPOSE = `__out.api = {
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
+  bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
@@ -2451,6 +2452,78 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ----------------------------------------------------------------- bloom */
+test('the bloom is three blits, and nothing at all when it is off', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.G.bloom = true;
+  api.bloomPass();                                // first call makes the plate
+  api._resetCounts();
+  api.bloomPass();
+  const blits = api._counts.drawImage || 0;
+  assert(blits === 3, 'expected downscale, threshold and blit: got ' + blits);
+  assert((api._counts.fillRect || 0) === 0, 'a post pass has no business painting rectangles');
+  api.G.bloom = false;
+  api._resetCounts();
+  api.bloomPass();
+  assert((api._counts.drawImage || 0) === 0, 'switching it off should cost nothing');
+});
+
+test('the bloom plate is made once and kept', () => {
+  const api = boot();
+  api.G.bloom = true;
+  api.bloomPass();
+  const first = api.getBloom();
+  api.bloomPass(); api.bloomPass();
+  assert(first, 'no plate at all');
+  assert(api.getBloom() === first, 'a new offscreen canvas every frame');
+  assert(first.width === Math.ceil(api.VW / api.BLOOM_DIV), 'the plate is the wrong width: ' + first.width);
+  assert(first.height === Math.ceil(api.VH / api.BLOOM_DIV), 'the plate is the wrong height: ' + first.height);
+  assert(api.BLOOM_DIV >= 2, 'a full-size plate is not a blur');
+  assert(api.BLOOM_AMT > 0 && api.BLOOM_AMT <= 1, 'nonsense bloom strength: ' + api.BLOOM_AMT);
+});
+
+test('the bloom hands the context back the way it found it', () => {
+  const api = boot();
+  const ctx = api.getCtx();
+  api.G.bloom = true;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.imageSmoothingEnabled = false;
+  api.bloomPass();
+  assert(ctx.globalCompositeOperation === 'source-over', 'left the frame in additive mode');
+  assert(ctx.globalAlpha === 1, 'left the frame faded: ' + ctx.globalAlpha);
+  assert(ctx.imageSmoothingEnabled === false, 'left smoothing on — the pixels would go soft');
+});
+
+test('the bloom goes over the world and under the HUD', () => {
+  const body = RAW.slice(RAW.indexOf('function draw(){'));
+  const head = body.slice(0, body.indexOf('\n}\n'));
+  const bloom = head.indexOf('bloomPass();', head.indexOf('drawForeground()'));
+  const world = head.indexOf('drawForeground()');
+  const hud = head.indexOf('drawHUD()');
+  assert(world >= 0 && bloom >= 0 && hud >= 0, 'draw() no longer looks the way this test expects');
+  assert(bloom > world, 'the bloom runs before the world is finished');
+  assert(bloom < hud, 'the HUD would go soft — it must be drawn over the bloom, not through it');
+  // the title screen and the cutscenes are frames too
+  assert(/drawAttract\(\); bloomPass\(\)/.test(head), 'the title screen misses the bloom');
+  assert(/drawCut\(\); bloomPass\(\)/.test(head), 'the cutscenes miss the bloom');
+});
+
+test('the bloom preference sticks', () => {
+  const api = boot();
+  api.G.bloom = false;
+  api.saveMeta();
+  const api2 = boot({ store: api._store });
+  assert(api2.G.bloom === false, 'turning it off did not survive a reload');
+  api2.G.bloom = true;
+  api2.saveMeta();
+  const api3 = boot({ store: api2._store });
+  assert(api3.G.bloom === true, 'turning it back on did not survive either');
+  const fresh = boot();
+  assert(fresh.G.bloom === true, 'it should be on out of the box');
 });
 
 /* ------------------------------------------------------------------ face */

@@ -204,6 +204,10 @@
         <button data-v="1" class="on">SCANLINES</button>
         <button data-v="0">CLEAN</button>
       </div>
+      <div class="seg" id="segBloom">
+        <button data-v="1" class="on">BLOOM</button>
+        <button data-v="0">NO BLOOM</button>
+      </div>
       <button class="btn" id="bResume">RESUME</button>
       <button class="btn alt" id="bQuit">QUIT</button>
     </div>
@@ -298,7 +302,7 @@ const G = {
   bossHp: 0, bossMax: 0, bossName: '', dmgTaken: 0, rank: '', bestWave: 0,
   ups: [], picks: [], pick: 0,
   time: 0,                          // seconds spent in the current stage
-  sound: true, scan: true, story: true, mode: 'story',
+  sound: true, scan: true, bloom: true, story: true, mode: 'story',
 };
 
 const cam = { x: 0, lock: -1, targetX: 0, shakeX: 0, shakeY: 0 };
@@ -3487,6 +3491,7 @@ function loadMeta(){
     G.cleared = !!d.cleared;
     if (d.sound != null) snd.on = !!d.sound;
     if (d.scan != null) G.scan = !!d.scan;
+    if (d.bloom != null) G.bloom = !!d.bloom;
     if (d.diff != null) G.diff = clamp(d.diff | 0, 0, 2);
     if (d.story != null) G.story = !!d.story;
     G.bestWave = d.bestWave || 0;
@@ -3495,7 +3500,7 @@ function loadMeta(){
 function saveMeta(){
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, diff: G.diff, story: G.story,
+      best: G.best, cleared: G.cleared, sound: snd.on, scan: G.scan, bloom: G.bloom, diff: G.diff, story: G.story,
       bestWave: G.bestWave,
     }));
   } catch (e){ /* private mode */ }
@@ -4137,6 +4142,49 @@ function drawAmbient(){
 
 /* A soft darkening at the edges, so the middle of the screen is where the
    eye goes. */
+/* ---------------------------------------------------------------- bloom
+   Everything in the game that emits light already blooms locally, but the
+   frame as a whole was still flat: a neon sign and a white shirt came out
+   the same brightness on screen.  This is a real bloom done with three
+   drawImage calls and no pixel loops.
+
+   Downscale the finished frame to a quarter — that IS the blur, for free,
+   in the sampler.  Then draw the small canvas onto itself with `multiply`,
+   which squares every channel: 0.9 holds at 0.81, 0.2 falls to 0.04.  That
+   is a threshold you can afford, and it keeps the lights while the night
+   stays night.  Squaring twice was tried and is too clean — the haze it
+   throws away is most of what makes the frame feel lit.
+   Blit it back over the frame with `lighter` and smoothing on, so the halo
+   is soft against pixels that are not. */
+const BLOOM_DIV = 4, BLOOM_AMT = 0.70;
+let bloomC = null;
+function bloomPass(){
+  if (!G.bloom) return;
+  const w = Math.max(1, Math.ceil(VW / BLOOM_DIV)), h = Math.max(1, Math.ceil(VH / BLOOM_DIV));
+  if (!bloomC){
+    bloomC = document.createElement('canvas');
+    bloomC.width = w; bloomC.height = h;
+  }
+  const smooth = ctx.imageSmoothingEnabled;     // captured before anything is touched
+  const g = bloomC.getContext('2d');
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  g.clearRect(0, 0, w, h);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(ctx.canvas, 0, 0, VW, VH, 0, 0, w, h);
+  g.globalCompositeOperation = 'multiply';
+  g.drawImage(bloomC, 0, 0);                    // c squared
+  g.globalCompositeOperation = 'source-over';
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = BLOOM_AMT;
+  ctx.drawImage(bloomC, 0, 0, w, h, 0, 0, VW, VH);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.imageSmoothingEnabled = smooth;
+}
+
 function drawVignette(){
   for (let i = 0; i < 10; i++){
     const a = (0.045 * (10 - i) / 10).toFixed(3);
@@ -4411,8 +4459,8 @@ function drawSceneBg(bg){
 function draw(){
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, VW, VH);
-  if (G.phase === 'title' || G.phase === 'howto'){ drawAttract(); return; }
-  if (G.phase === 'cut'){ drawCut(); return; }
+  if (G.phase === 'title' || G.phase === 'howto'){ drawAttract(); bloomPass(); return; }
+  if (G.phase === 'cut'){ drawCut(); bloomPass(); return; }
   if (G.phase === 'upgrade'){ drawUpgrade(); return; }
 
   drawBackground();
@@ -4433,6 +4481,7 @@ function draw(){
   for (const p of fx) drawFx(p);
   drawAmbient();
   drawForeground();
+  bloomPass();                                  // the world glows; the HUD over it does not
   drawVignette();
   syncSpecialBtn();
 
@@ -5030,6 +5079,7 @@ function syncUI(){
   segSet('segStory', G.story ? 1 : 0);
   segSet('segSound', snd.on ? 1 : 0);
   segSet('segScan', G.scan ? 1 : 0);
+  segSet('segBloom', G.bloom ? 1 : 0);
   const sc = $('scan'); if (sc) sc.className = G.scan ? '' : 'off';
   const tb = $('tBest');
   if (tb) tb.textContent = 'BEST ' + G.best + (G.bestWave ? '   BEST WAVE ' + G.bestWave : '');
@@ -5155,6 +5205,7 @@ function bindUI(){
   segBind('segStory', (v) => { G.story = !!v; });
   segBind('segSound', (v) => { snd.on = !!v; if (!v) musicStop(); else if (G.phase === 'play') musicStart(stage().music); });
   segBind('segScan', (v) => { G.scan = !!v; });
+  segBind('segBloom', (v) => { G.bloom = !!v; });
 }
 
 /* =============================================================== update */
