@@ -4462,6 +4462,61 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ------------------------------------------------------- the brief --- */
+
+test('the brief shows the plan of the market it is briefing', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  api.startCampaign();
+  api.startLevel(0);                          // so the node exists to spy on
+  const node = api._nodes.brPlan;
+  assert(node, 'the brief should have a plan canvas');
+
+  const painted = carRec();
+  node.getContext = () => painted;
+  api.startLevel(8);
+  assert(painted.all.length > 20,
+    'the brief should paint a plan, got ' + painted.all.length + ' primitives');
+
+  // and it is this market's plan, not some other market's
+  const want = carRec();
+  node.getContext = () => want;
+  api.paintMarketThumb(node, api.LEVELS[8]);
+  assert(JSON.stringify(painted.all) === JSON.stringify(want.all),
+    'the brief is painting the wrong market');
+  const other = carRec();
+  node.getContext = () => other;
+  api.paintMarketThumb(node, api.LEVELS[2]);
+  assert(JSON.stringify(painted.all) !== JSON.stringify(other.all),
+    'two different markets should not brief the same picture');
+
+  // the markup's canvas is sized off the same constants the picker uses, so
+  // the two cannot drift apart
+  const src = fs.readFileSync(HTML, 'utf8');
+  const m = src.match(/id="brPlan" width="(\d+)" height="(\d+)"/);
+  assert(m, 'the plan canvas should carry its own size');
+  assert(+m[1] === api.MK_W * 2 && +m[2] === api.MK_H * 2,
+    'the brief canvas is ' + m[1] + 'x' + m[2] + ', the picker paints ' +
+    (api.MK_W * 2) + 'x' + (api.MK_H * 2));
+  console.log('    (brief plan: ' + m[1] + 'x' + m[2] + ', ' + painted.all.length + ' primitives)');
+});
+
+test('the brief lets you see the market you are about to wreck', () => {
+  const src = fs.readFileSync(HTML, 'utf8');
+  const alphaOf = (sel) => {
+    const block = src.slice(src.indexOf(sel + '{'));
+    const m = block.slice(0, 400).match(/rgba\(4,7,14,\.(\d+)\)/);
+    assert(m, 'no outer wash found for ' + sel);
+    return +('0.' + m[1]);
+  };
+  const std = alphaOf('.ov'), br = alphaOf('#brief');
+  console.log('    (brief wash ' + br + ' vs standard ' + std + ')');
+  assert(br < std - 0.08,
+    'the brief should sit on a lighter wash than a plain overlay: ' + br + ' vs ' + std);
+  assert(/#brief\{[^}]*backdrop-filter:blur\(2px\)/.test(src.replace(/\s+/g, ' ')),
+    'and its blur eased off with it');
+});
+
 /* ---------------------------------------------------- wrecked stalls --- */
 
 test('a wrecked stall is a wreck of that stall', () => {

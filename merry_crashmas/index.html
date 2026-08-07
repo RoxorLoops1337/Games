@@ -43,6 +43,19 @@
      the numbers describing it. */
   #results{ background:radial-gradient(940px 540px at 50% 44%, rgba(14,28,52,.56), rgba(4,7,14,.80));
     backdrop-filter:blur(2px); }
+  /* And the brief, for the same reason again: it is where you decide how to
+     attack this market, and the market was a black smear behind the card. */
+  #brief{ background:radial-gradient(940px 540px at 50% 44%, rgba(14,28,52,.58), rgba(4,7,14,.82));
+    backdrop-filter:blur(2px); }
+  /* The market's plan beside its blurb — the same picture the picker paints,
+     in the row the blurb already had, so the card does not grow a line. */
+  .brmap{ display:flex; align-items:center; gap:12px; margin:0 0 8px; text-align:left; }
+  .brmap > div{ flex:1 1 0; min-width:0; }
+  .brmap .targetline, .brmap .sub{ margin:0; }
+  .brmap .sub{ margin-top:4px; }
+  .brplan{ flex:0 0 auto; display:block; border-radius:8px; background:#060a14;
+    height:clamp(48px, 10.6vh, 88px); width:auto; }
+  body.rot .brplan{ height:clamp(48px, 10.6vw, 88px); }
   .ov[hidden]{ display:none; }
   .card{ width:min(580px,93vw); max-height:94vh; overflow:auto;
     /* rotated, vw and vh still mean the viewport, which is the game's frame
@@ -268,8 +281,13 @@
         <div class="stat"><div class="k">Target</div><div class="v" id="brTarget">0</div></div>
         <div class="stat"><div class="k">Shoppers</div><div class="v" id="brPeople">0</div></div>
       </div>
-      <div class="targetline" id="brFlavour"></div>
-      <p class="sub" id="brTheme"></p>
+      <div class="brmap">
+        <canvas class="brplan" id="brPlan" width="296" height="168"></canvas>
+        <div>
+          <div class="targetline" id="brFlavour"></div>
+          <p class="sub" id="brTheme"></p>
+        </div>
+      </div>
       <div class="goals" id="brGoals"></div>
       <p class="sub" id="brKills"></p>
       <div class="garage" id="brGarage"></div>
@@ -1400,6 +1418,10 @@ function startLevel(i){
   const gl = $('brGoals');
   if (gl) gl.innerHTML = G.goals.map(g => '<div class="goal"><i></i>' + g.text + '</div>').join('');
   setTxt('brTheme', (TH.name || '') + (TH.fog > 0.1 ? ' · POOR VISIBILITY' : ''));
+  // the plan of the market you are about to drive into, painted the same way
+  // the picker paints its tiles
+  const plan = $('brPlan');
+  if (plan) paintMarketThumb(plan, lv);
   camSnap();
 }
 
