@@ -2228,6 +2228,27 @@ Same shape as the rustle one pass earlier, and the pair of them is the lesson:
 "where the voice is" catches things misplaced.** They are different questions
 and the second one is the harder to see.
 
+### Shield belongs on the health bar
+
+Continuing the numbers inventory, and the finding is the previous one's other
+half. The intent line now says how much gets **through** your shield — and the
+bar it gets through to did not know the shield existed.
+
+Your effective health is HP plus shield, and the two lived in different places:
+the bar reading `63/63` and looking untouched, the shield a pip across the
+screen next to the draw and discard counts, which is where *resources* live
+rather than where *survival* does.
+
+The first attempt drew a band behind the fill and it was **invisible at full
+HP** — which is exactly when a banked guard matters most — because the fill is
+100% wide and painted over it. Shield is health *beyond* your maximum, so the
+track scales to `max + shield`: the green runs to 82% and a pale blue tail fills
+the rest, and the bar visibly gets longer when you bank something. The number
+line carries `63/63 +14` in the same blue.
+
+Photographed both ways, and the unshielded case is untouched — full green edge
+to edge, no `+`, no tail.
+
 ### The intent line said what the foe swings, not what lands
 
 The fourth inventory: **every number the game shows, and whether it is the

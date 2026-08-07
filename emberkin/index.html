@@ -325,6 +325,20 @@
   .hud .bar{ height:8px; border-radius:4px; margin-top:4px; overflow:hidden;
     background:linear-gradient(180deg,#080510,#15101f);
     border:1px solid #05030a; box-shadow:inset 0 1px 2px rgba(0,0,0,.8); }
+  /* Shield on the health bar, because that is what it is.
+     Your effective health is HP plus shield, and the two numbers lived in
+     different places — the bar over here reading 63/63 and looking untouched,
+     the shield a pip across the screen next to the draw and discard counts,
+     which is where resources live rather than where survival does. The intent
+     line now says how much gets "through" your shield; the bar it gets through
+     to did not know the shield existed.
+     A band behind the fill, in the cool blue the shield pip already uses, so a
+     banked guard reads as extra bar rather than as a different statistic. */
+  .hud .bar > u{ position:absolute; left:0; top:0; height:100%; border-radius:3px;
+    background:linear-gradient(180deg, rgba(190,235,255,.55), rgba(95,201,255,.42));
+    box-shadow:inset 0 0 0 1px rgba(190,235,255,.35); }
+  .hud .hpnum .shd{ color:var(--xp); font-weight:700; }
+  .hud .bar{ position:relative; }
   .hud .bar > i{ display:block; height:100%; position:relative; border-radius:3px;
     background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0) 55%), var(--hp-good);
     box-shadow:0 0 6px -1px currentColor;
@@ -7566,9 +7580,20 @@ function renderHUD() {
     const xpNeed = Math.max(1, xpFor(m.lvl + 1) - xpFor(m.lvl));
     return `<div class="nm"><span>${dispName(m)}${m.status ? statusChip(m.status) : ''}</span><span class="lv">Lv${m.lvl}</span></div>
       <div class="types">${typeChips(m.types)}</div>
-      <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div>
+      <div class="bar">${(() => {
+        // Shield is health BEYOND your maximum, so the bar has to make room for
+        // it rather than hide it. A band behind the fill was invisible at full
+        // HP — which is exactly when a banked guard matters most — because the
+        // fill is 100% wide and drawn over it. Scaling the track to max+shield
+        // shows both, correctly proportioned, and the bar visibly gets longer
+        // when you bank something, which is the reading you want.
+        const sh = mine ? (b.shield || 0) : 0;
+        const span = m.max + sh;
+        return `<i style="width:${(disp / span) * 100}%;background:${hpColor(f)}"></i>`
+          + (sh > 0 ? `<u style="left:${(disp / span) * 100}%;width:${(sh / span) * 100}%"></u>` : '');
+      })()}</div>
       ${mine ? `<div class="bar xp"><i style="width:${clamp((m.xp - xpFor(m.lvl)) / xpNeed, 0, 1) * 100}%"></i></div>
-      <div class="hpnum">${Math.round(disp)}/${m.max}</div>` : ''}`;
+      <div class="hpnum">${Math.round(disp)}/${m.max}${b.shield > 0 ? ` <span class="shd">+${b.shield}</span>` : ''}</div>` : ''}`;
   };
   els.hudFoe.innerHTML = box(b.foe, b.dispF, false);
   els.hudMine.innerHTML = box(b.mine, b.dispM, true);
