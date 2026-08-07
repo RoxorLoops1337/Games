@@ -8772,7 +8772,18 @@ function renderScreen() {
     // "the fourth row".
     const shop = s.kind === 'shop';
     const list = s.list;
-    html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards</h2>`;
+    // In a fight, say how hurt you are.
+    //
+    // The screen is inset:0 with a blur over it, so opening the bag mid-fight
+    // covers the arena and both HP bars — and choosing between a Salve that
+    // restores 30 and a Great Salve that restores 90 is the one decision in the
+    // game that needs the number the screen is hiding. Rather than let a panel
+    // show through from underneath, the number goes where the decision is.
+    const inFight = !shop && G.battle && B() && B().mine;
+    const hurt = inFight ? B().mine : null;
+    html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards`
+      + (hurt ? ` <span style="color:${hpColor(hurt.hp / hurt.max)}">· ${dispName(hurt)} ${hurt.hp}/${hurt.max}</span>` : '')
+      + '</h2>';
     if (!list.length) html += '<p style="color:var(--dim)">Empty. Even the lint.</p>';
     for (const [group, keys] of shelve(list)) {
       html += `<h3 class="shelf">${group}</h3><div class="items">` + keys.map((k) => {

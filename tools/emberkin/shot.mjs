@@ -402,6 +402,7 @@ const SCENES = {
       Object.keys(EK.ITEMS).forEach((k, i) => { EK.G.bag[k] = 2 + i; });
       EK.startBattle({ foe: EK.mkMon('kindlark', 12), wild: true });
       EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.B().mine.hp = Math.round(EK.B().mine.max * .38);   // hurt enough for the choice to matter
       EK.openScreen('bag');
     },
   },

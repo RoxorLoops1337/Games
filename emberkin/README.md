@@ -2206,6 +2206,23 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### The bag in a fight says how hurt you are
+
+`#screen` is `inset:0` with a blur over it, so opening the bag mid-fight covers
+the arena and both HP bars. Choosing between a Salve that restores 30 and a
+Great Salve that restores 90 is **the one decision in the game that needs the
+number the screen is hiding.**
+
+Rather than let a panel show through from underneath — which would have meant
+fighting the z-order and would still only work while the layout cooperated — the
+number goes where the decision is. The heading reads
+`Bag — 500 shards · Cindercub 7/19`, in the HP colour, so it reddens as things
+get worse.
+
+It only appears in a fight and never in the shop, which shares the same
+renderer. Same principle as the keyword glosses one screen over: **put what you
+need to decide next to the thing you are deciding.**
+
 ### Which beats make a sound
 
 The same method that worked on the words, turned on the audio: **list what has
