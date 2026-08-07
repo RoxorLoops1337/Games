@@ -7727,6 +7727,29 @@ function rowanScript() {
     ], () => chooseStarter());
     return;
   }
+  // The actual end of the game, which nobody used to mark. Wick's parting line
+  // after his last fight is "Go and see Rowan. She has been pretending not to
+  // wait" — and she then said the shrine speech, the one you already heard
+  // before climbing the mountain, because her closing branch keyed on
+  // `beatVespyr` and that flag is set by the fight BEFORE the final one. An npc
+  // pointing you at a conversation that does not exist is worse than silence.
+  //
+  // Her register does not change for it. She told you at the shrine that there
+  // is no ceremony at the end, so there is not one here either — the ending is
+  // that somebody noticed, and the last line puts you back outside.
+  if (G.flags.t_wick3) {
+    const left = DEX_ORDER.length - dexCount(2);
+    say('Elder Rowan', [
+      'He came down before you did. Sat in that chair a while. Did not say much.',
+      `That is all ${spell(AIM_ORDER.length)} of them, then, and the thing on the shrine.`,
+      left === 0
+        ? `And every one of the ${spell(DEX_ORDER.length)} written down in your own hand. I did not think anybody would.`
+        : `${Spell(left)} still unwritten, mind. The valley keeps some back for people who keep looking.`,
+      'I said there was no ceremony at the end of it. There is not. You are only somebody who has done it now.',
+      'Go on. It is all still out there.',
+    ]);
+    return;
+  }
   if (G.flags.beatVespyr) {
     say('Elder Rowan', [
       'So it went with you.',
