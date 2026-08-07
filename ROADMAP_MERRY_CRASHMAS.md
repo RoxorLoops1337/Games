@@ -178,6 +178,14 @@ edit this block to name the next one.
       tall, 24px at 375, was 46 everywhere), shrunk to fit rather than running
       off the edge, and placed clear of the combo plate always and the score
       panel whenever it is wide enough to reach it.
+- [x] The driver is a man in a seat. He was four discs — face, hat, bobble and
+      one dark dot — which at the garage card's 170px and the replay's close-in
+      read as an egg with a bite out of it. Now shoulders in a red coat under
+      the head, a white beard hanging down his front, two eyes on the face
+      (*not* in the beard — the first attempt buried them and he read as a
+      snowman), gloves on a wheel ring between the beard and the windscreen,
+      and the mouth that already opened when he shouts. Nine fills on the one
+      object in every frame of the game.
 
 ## Next
 

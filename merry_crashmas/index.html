@@ -4876,17 +4876,37 @@ function drawCar(){
   ctx.fillRect(-CARL * 0.1, -CARW / 2 + 4, CARL * 0.2, CARW - 8);
   ctx.fillStyle = CAR.roof;
   roundRect(-CARL * 0.26, -CARW * 0.34, CARL * 0.42, CARW * 0.68, 6); ctx.fill();
-  // the driver, seen through the roof: santa hat, and a mouth that opens when
-  // he is shouting
+  /* The driver, seen through the roof. He was four discs — face, hat, bobble
+     and one dark dot — which at the garage's 170px card and the replay's
+     close-in read as an egg with a bite taken out of it. He is a man in a seat
+     now: shoulders under the head, a beard hanging down his front, two eyes,
+     gloves on a wheel, and a mouth that opens when he is shouting. Nine fills
+     on the one object that is in every single frame of the game. */
   const yell = car.shoutT > 0;
-  ctx.fillStyle = '#f0c9a4';
+  ctx.fillStyle = '#8e2a24';                        // shoulders, in a red coat
+  roundRect(-CARL * 0.2, -CARW * 0.3, CARL * 0.24, CARW * 0.6, 7); ctx.fill();
+  ctx.fillStyle = '#f0c9a4';                        // face
   circle(-CARL * 0.04, 0, CARW * 0.23); ctx.fill();
-  ctx.fillStyle = '#e0483c';
+  ctx.fillStyle = '#e0483c';                        // the hat, pushed back
   circle(-CARL * 0.11, 0, CARW * 0.2); ctx.fill();
   ctx.fillStyle = '#f6f2ea';
-  circle(-CARL * 0.2, 0, CARW * 0.09); ctx.fill();
+  circle(-CARL * 0.2, 0, CARW * 0.09); ctx.fill();  // its bobble
+  ctx.fillStyle = '#efe9dd';                        // the beard, down his front
+  circle(CARL * 0.075, 0, CARW * 0.155); ctx.fill();
+  /* Eyes above the beard, not on it. The first pass put the beard far enough
+     back that both eyes landed in the whiskers, which reads as a snowman. */
   ctx.fillStyle = '#2a1a16';
-  circle(CARL * 0.02, 0, CARW * (yell ? 0.11 : 0.05)); ctx.fill();
+  circle(-CARL * 0.085, -CARW * 0.095, CARW * 0.038); ctx.fill();
+  circle(-CARL * 0.085, CARW * 0.095, CARW * 0.038); ctx.fill();
+  circle(CARL * 0.055, 0, CARW * (yell ? 0.09 : 0.04)); ctx.fill();  // and a mouth
+  /* Hands on the wheel, between the beard and the windscreen. A ring rather
+     than a disc, so it reads as a wheel and not another hole in his face. */
+  ctx.strokeStyle = '#1c2331'; ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.ellipse(CARL * 0.155, 0, CARL * 0.042, CARW * 0.155, 0, 0, 6.283); ctx.stroke();
+  ctx.fillStyle = '#e8e3d8';
+  circle(CARL * 0.155, -CARW * 0.155, CARW * 0.05); ctx.fill();
+  circle(CARL * 0.155, CARW * 0.155, CARW * 0.05); ctx.fill();
   ctx.fillStyle = '#4b6a9c';
   roundRect(CARL * 0.2, -CARW * 0.3, CARL * 0.14, CARW * 0.6, 4); ctx.fill();
   ctx.fillStyle = 'rgba(226,240,255,.4)';           // a glint, so it is glass
