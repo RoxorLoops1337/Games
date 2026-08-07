@@ -349,6 +349,14 @@ The render suite locks the invariant: only a map with a sky carries a `shaft`,
 and its strength stays under a wash. An interior that grew one would be daylight
 coming through a ceiling.
 
+A town is outdoors too, and was the last map with a sky and no light source —
+found only by re-photographing it once the routes had theirs. Its shaft is the
+weakest in the table (`.07` against a route's `.10`): the buildings break the
+light up, Hollowbrook is meant to read as sheltered, and the town already had
+local light the routes lacked in its lit windows. The render suite's `SKY` set
+is the list of maps that must have one; `inside` is the one that must never,
+because that would be daylight through a ceiling.
+
 #### Crown Hollow is not broken, twice
 
 Crown Hollow *looks* like fog — one flat blue-grey, the player barely picking
@@ -2079,6 +2087,19 @@ always has.
 well as on the button, so a name you typed is never lost by closing the screen.
 
 ### A card after every win
+
+The three cards on the reward screen used to sit in a fixed 14.6em box with the
+footer pinned to the bottom, which left a dead band — about a seventh of the
+card on the shortest one — between where the description stopped and the rarity
+pip began. Same "content parked in a box it does not fill" as the title screen
+and the interior maps, at card scale, and it took a photograph to see.
+
+The row's height comes from the wordiest card now, and `align-items:stretch`
+keeps them level. The description is `flex:0 0 auto` rather than `0 1 auto`: a
+shrinkable text block plus `overflow:hidden` means the longest card silently
+clips into its own footer the moment the row stops being a fixed height, which
+is exactly what the first attempt did.
+
 
 Every win — wild, trainer, the legendary — offers three cards and a **No
 thanks**, and the deck grows one card at a time out of what you were actually
