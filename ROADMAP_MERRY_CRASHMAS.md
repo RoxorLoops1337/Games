@@ -81,6 +81,10 @@ edit this block to name the next one.
       hair that read from above, coat highlights that follow the scene's light
 - [x] Headlights: a nine-disc cone that cuts the darkness and adds its own
       glow, reaching further the faster you go
+- [x] Six stall trades — bratwurst grill, glühwein pots, toys, chestnut
+      brazier, candles, lebkuchen hearts — each with its own awning colour,
+      counter and (for the grills) a chimney and a plume. Picked from the
+      prop's existing seed, never a fresh `rnd()`.
 
 ## Next
 
