@@ -9,6 +9,7 @@
 //   node tools/emberkin/shot.mjs                    # every scene, into /tmp
 //   node tools/emberkin/shot.mjs battle out.png     # one scene, somewhere
 //   node tools/emberkin/shot.mjs --film evolve 9 450 # a scene as it plays, tiled
+//   node tools/emberkin/shot.mjs --at 45 deck        # a screen's entry, 45ms in
 //   node tools/emberkin/shot.mjs --size 390x760 title  # at somebody else's window
 //
 // `--size` matters because the stage picks an integer scale from the window and
@@ -524,9 +525,9 @@ if (si >= 0) {
 // flat"; they cannot answer "is this creature drained", because the creature is
 // a few hundred pixels out of fifty thousand. Three separate times an argument
 // about one sprite has been had with a number describing the whole picture.
-let WAIT = null;
-const wi = argv.indexOf('--wait');
-if (wi >= 0) { WAIT = Number(argv[wi + 1]); argv.splice(wi, 2); }
+let AT = null;
+const wi = argv.indexOf('--at');
+if (wi >= 0) { AT = Number(argv[wi + 1]); argv.splice(wi, 2); }
 
 let STATS = argv.includes('--stats');
 let BOX = null;
@@ -579,6 +580,20 @@ for (const name of list) {
       }
     });
     await page.evaluate(`(${sc.go.toString()})(window.EK)`);
+    // Make the dialogue panel agree with the dialogue state.
+    //
+    // Advancing the monologue before `go()` (above) fixed the opening only.
+    // Nearly every scene then sets `EK.G.dialogue = null` itself to clear
+    // whatever it walked into — and that is the same bug the comment above
+    // warns about, thirty times over: the panel is a DOM overlay that only
+    // redraws on a dialogue event, so nulling the state from outside leaves the
+    // box up with its last line still in it. Elder Rowan was sitting behind
+    // every screen shot at "Cindercub. Of course." and only turned up when the
+    // entry animation was seeked to t=0 and the screen was transparent.
+    // `renderDialogue` reads the state and shows or hides the box accordingly,
+    // so calling it unconditionally is right whether the scene wanted a line on
+    // screen or not.
+    await page.evaluate(() => window.EK.renderDialogue());
     // Check the scene names real creatures, NOW — a beat with its own clock has
     // expired by the time the shot is taken, so this cannot wait for the status
     // line. A species the dex does not have draws as a graceful fallback: a
@@ -595,12 +610,39 @@ for (const name of list) {
     if (bad.length) console.error(`  !! ${name}: no such species — ${[...new Set(bad)].join(', ')}`);
     // A still wants the entry animation over; a film wants to start at the
     // trigger, or the beat it came to record has already finished.
-    // `--wait ms` overrides the still's settle time. A DOM entry animation is
-    // the one thing this tool could not photograph at all: a film grabs the
-    // canvas, which has no panels on it, and a still waits 1200ms by which time
-    // every screen has finished arriving. Catching one mid-flight needs a
-    // shorter wait, and nothing else does.
-    await page.waitForTimeout(FILM ? 60 : (WAIT !== null ? WAIT : 1200));
+    //
+    // `--at ms` instead photographs the screen's entry animation AT a point in
+    // its own timeline. A DOM entry animation is the one thing this tool could
+    // not photograph at all: a film grabs the canvas, which has no panels on
+    // it, and a still waits 1200ms by which time every screen has arrived.
+    //
+    // Two attempts at this were wall-clock waits and both measured nothing.
+    // Waiting from `go()` cannot compare two screens, because scenes do
+    // different amounts of work after opening one — the reward scene grants a
+    // card and edits the deck first, the papers scene opens last. Waiting for
+    // the `.rising`/`.landing` class to appear looks like it fixes that and
+    // does not: the class is never removed when the animation ends, only when
+    // the next screen replaces it (index.html, screenEntry), so on an already
+    // open screen the wait resolves instantly and `--at 45` and `--at 110`
+    // returned the same settled picture. A signal that is still true long
+    // after the event is not a signal.
+    //
+    // So: don't race it. `getAnimations()` hands back the running CSSAnimation;
+    // pause it and set `currentTime`. That is the frame at 45ms, not a frame
+    // taken 45ms after something. If there is no animation to seek, say so
+    // rather than quietly shoot a settled screen — that silence is the whole
+    // bug being fixed here.
+    if (FILM) await page.waitForTimeout(60);
+    else if (AT !== null) {
+      const seeked = await page.evaluate((ms) => {
+        const el = document.getElementById('screen');
+        const an = el && el.getAnimations ? el.getAnimations() : [];
+        an.forEach((a) => { a.pause(); a.currentTime = ms; });
+        return an.map((a) => `${a.animationName}@${a.currentTime}/${a.effect.getTiming().duration}`);
+      }, AT);
+      if (!seeked.length) console.error(`  !! ${name}: nothing to seek — no animation on #screen`);
+      else console.error(`  ${name}: ${seeked.join(' ')}`);
+    } else await page.waitForTimeout(1200);
   }
   // `--stats` reads the frame back and reports what range it actually occupies.
   // Crown Hollow looked like fog and two plausible culprits — the AIR grade and
