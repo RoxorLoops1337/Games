@@ -100,6 +100,10 @@ edit this block to name the next one.
 - [x] Replay: the caption sits on a cached scrim that darkens both ends of the
       frame into the letterbox bars, instead of being printed onto a lit stall.
       The carousel got horses, a scalloped hem and a finial.
+- [x] Fireworks crates: two in five barrels carry rockets, drawn with tubes and
+      a fuse so you can see it coming. Wrecking one sends a volley streaking
+      across the market that bursts into sparks. Cosmetic-stream only — a crate
+      scores exactly what a barrel does.
 
 ## Next
 

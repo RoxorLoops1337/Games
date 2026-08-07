@@ -72,7 +72,7 @@ const EXPOSE = `__out.api = {
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
-  captionScrim, REPLAY_SPEED,
+  captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4441,6 +4441,128 @@ test('the carousel has a ride on it', () => {
   c.dead = false;
   const a = JSON.stringify(at(1)), b = JSON.stringify(at(9));
   assert(a === b, 'the cost of a turning carousel should not depend on the clock');
+});
+
+/* ------------------------------------------------------------ fireworks --- */
+
+/* Two in five barrels are a crate of rockets. The crate is picked out of the
+   seed the prop already carries — a fresh rnd() in addProp would rescore all
+   twenty-one markets — and nothing about the volley may reach the simulation. */
+test('a market has crates in it, chosen without a dice roll', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  const seen = [];
+  for (const lv of [0, 5, 12, 20]){
+    api.startLevel(lv); api.beginLevel();
+    const barrels = api.props.filter(o => o.kind === 'barrel');
+    const crates = barrels.filter(api.crateOf).length;
+    seen.push(api.LEVELS[lv].name + ' ' + crates + '/' + barrels.length);
+    assert(barrels.length >= 4, 'the market should have barrels, got ' + barrels.length);
+    assert(crates >= 1, 'and at least one crate among them, got ' + crates);
+    assert(crates < barrels.length, 'but not every barrel: ' + crates + '/' + barrels.length);
+  }
+  console.log('    (crates per market: ' + seen.join(', ') + ')');
+
+  // stable against everything else that pulls numbers, and against a rebuild
+  api.startLevel(20); api.beginLevel();
+  const first = api.props.map(o => (api.crateOf(o) ? 1 : 0)).join('');
+  for (let i = 0; i < 40; i++) api.rnd();
+  assert(api.props.map(o => (api.crateOf(o) ? 1 : 0)).join('') === first,
+    'the crates moved when the RNG did');
+  api.startLevel(20); api.beginLevel();
+  assert(api.props.map(o => (api.crateOf(o) ? 1 : 0)).join('') === first,
+    'the same market laid out a different set of crates');
+  assert(!api.crateOf({ kind: 'hut', seed: 0.1 }), 'only barrels are crates');
+});
+
+test('setting off a volley does not move the simulation', () => {
+  const CALL = 'if (crateOf(o)) launchFireworks(o);';
+  const run = (tweak) => {
+    const api = boot({ w: 1280, h: 720, tweak });
+    api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+    api.G.phase = 'drive';
+    const crates = api.props.filter(api.crateOf);
+    assert(crates.length >= 3, 'need crates to wreck, got ' + crates.length);
+    for (const c of crates.slice(0, 3)) api.wreckProp(c, 900, 120);
+    for (let i = 0; i < 240; i++) api.stepFx(1 / 60);
+    return { score: api.G.levelScore, next: api.rnd(),
+      rockets: api.fx.filter(f => f.type === 'rocket').length,
+      sparks: api.fx.filter(f => f.type === 'spark').length };
+  };
+  const withFw = run(null);
+  const without = run((s) => {
+    assert(s.includes(CALL), 'the launch call moved; this test is checking nothing');
+    return s.replace(CALL, '');
+  });
+  assert(withFw.score === without.score,
+    'a crate scored differently from a barrel: ' + withFw.score + ' vs ' + without.score);
+  assert(withFw.next === without.next,
+    'the volley advanced the simulation RNG: ' + withFw.next + ' vs ' + without.next);
+});
+
+test('a volley launches, bursts and clears up after itself', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.fx.length = 0;
+  const c = api.addProp('barrel', 2000, 1100);
+  c.seed = 0.1;
+  assert(api.crateOf(c), 'seed 0.1 should be a crate');
+  api.wreckProp(c, 800, 0);
+  const rockets = api.fx.filter(f => f.type === 'rocket');
+  assert(rockets.length >= 5, 'a crate should send up a volley, got ' + rockets.length);
+  for (const r of rockets){
+    const sp = Math.hypot(r.vx, r.vy);
+    assert(sp > 300, 'a rocket should actually go somewhere, got ' + sp.toFixed(0));
+    assert(api.FW_COLS.indexOf(r.col) >= 0, 'off the firework palette: ' + r.col);
+  }
+  // they burst rather than simply vanishing
+  let peakSparks = 0;
+  for (let i = 0; i < 60; i++){
+    api.stepFx(1 / 60);
+    peakSparks = Math.max(peakSparks, api.fx.filter(f => f.type === 'spark').length);
+  }
+  console.log('    (' + rockets.length + ' rockets burst into ' + peakSparks + ' sparks)');
+  assert(peakSparks >= rockets.length * 10,
+    'each rocket should burst, got ' + peakSparks + ' sparks from ' + rockets.length);
+  // and nothing is left behind
+  for (let i = 0; i < 240; i++) api.stepFx(1 / 60);
+  assert(!api.fx.some(f => f.type === 'rocket' || f.type === 'spark'),
+    'the volley left ' + api.fx.filter(f => f.type === 'rocket' || f.type === 'spark').length +
+    ' particles behind');
+  // a plain barrel sends up nothing at all
+  api.fx.length = 0;
+  const plain = api.addProp('barrel', 2200, 1100);
+  plain.seed = 0.9;
+  assert(!api.crateOf(plain), 'seed 0.9 is a plain barrel');
+  api.wreckProp(plain, 800, 0);
+  assert(!api.fx.some(f => f.type === 'rocket'), 'a plain barrel should not launch anything');
+});
+
+test('fireworks are drawn by the light pass, not under the night wash', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2000; api.car.y = 1100; api.camSnap();
+  // nothing in the buffer but the volley, so the counts are only the volley:
+  // wreckProp also throws shards, puffs and a ring, and the ring strokes
+  api.fx.length = 0;
+  const c = api.addProp('barrel', 2000, 1100); c.seed = 0.1;
+  api.launchFireworks(c);
+  for (const f of api.fx) assert(f.type === 'rocket', 'only rockets: ' + f.type);
+  const n = api.fx.length;
+  // drawFx must not touch them; the first attempt drew them there and the
+  // darkness layer went straight over the top of a whole volley
+  api._resetCounts();
+  api.drawFx(true); api.drawFx(false);
+  const inFx = (api._counts.stroke || 0) + (api._counts.fill || 0);
+  api._resetCounts();
+  api.drawFireworks();
+  const inLight = (api._counts.stroke || 0) + (api._counts.fill || 0);
+  console.log('    (volley of ' + n + ': ' + inFx + ' pieces from drawFx, ' +
+    inLight + ' from the light pass)');
+  assert(inLight === n * 3,
+    n + ' rockets are a tail and two dots each, got ' + inLight + ' pieces');
+  assert(inFx === 0, 'drawFx should not draw a rocket, got ' + inFx + ' pieces');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

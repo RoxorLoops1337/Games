@@ -1879,6 +1879,7 @@ function wreckProp(o, vx, vy){
   }
   if (debris.length > DEBRIS_MAX) debris.splice(0, debris.length - DEBRIS_MAX);
   blast(o, big);
+  if (crateOf(o)) launchFireworks(o);
   if (o.spill){
     spills.push({ x: o.x, y: o.y, r: 74, t: 0, ttl: 6.5 });
     sndCrunch(0.7);
@@ -1967,8 +1968,38 @@ function stepSpills(dt){
    stall then 0.5ms gave 3. That is the frame after every hit-stop, and every
    frame on a variable-refresh display. It belongs on the one event that
    happens exactly once — the particle being removed. */
+/* Fireworks. Two in five barrels are a crate of rockets rather than a barrel
+   of nothing — picked out of the seed the prop already carries, never a fresh
+   rnd(), which would rescore all twenty-one markets. Wrecking one sends a
+   volley streaking across the market that bursts a beat later.
+
+   None of it scores and none of it touches the simulation: every number here
+   comes from the cosmetic generator, so a market that has had its fireworks
+   set off plays exactly like one that has not. */
+const FW_COLS = ['255,110,90', '255,214,110', '150,225,255', '190,140,255', '140,255,170'];
+function crateOf(o){ return o.kind === 'barrel' && (o.seed || 0) < 0.4; }
+function launchFireworks(o){
+  const n = 5 + Math.floor(vrnd() * 4);
+  for (let i = 0; i < n; i++){
+    const a = vrr(0, 6.283), s = vrr(340, 620);
+    addFx({ type: 'rocket', x: o.x, y: o.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      ttl: vrr(0.42, 0.86), size: vrr(6, 10), rot: a,
+      col: FW_COLS[Math.floor(vrnd() * FW_COLS.length) % FW_COLS.length] });
+  }
+  sndCrunch(0.5);
+}
+function burst(f){
+  const n = 12 + Math.floor(vrnd() * 8);
+  for (let i = 0; i < n; i++){
+    const a = vrr(0, 6.283), s = vrr(70, 260);
+    addFx({ type: 'spark', x: f.x, y: f.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      ttl: vrr(0.4, 0.95), size: vrr(3, 6.5), col: f.col });
+  }
+}
+
 function restFx(f){
-  if (f.type === 'chunk') addGore(f.x, f.y, f.size * 1.1, 'chunk');
+  if (f.type === 'rocket') burst(f);
+  else if (f.type === 'chunk') addGore(f.x, f.y, f.size * 1.1, 'chunk');
   else if (f.type === 'limb'){
     addGore(f.x, f.y, f.size * 0.8, 'chunk');
     addGore(f.x, f.y, f.size * 1.2, 'splat');
@@ -1982,7 +2013,8 @@ function stepFx(dt){
     if (f.t >= f.ttl){ restFx(f); fx.splice(i, 1); continue; }
     f.x += f.vx * dt; f.y += f.vy * dt;
     f.rot += f.spin * dt;
-    const k = Math.exp((f.type === 'txt' ? -1.2 : -3.2) * dt);
+    // a rocket is under thrust, so it does not drag to a halt like debris does
+    const k = Math.exp((f.type === 'txt' ? -1.2 : f.type === 'rocket' ? -0.5 : -3.2) * dt);
     f.vx *= k; f.vy *= k;
     if (f.type === 'star' || f.type === 'hat' || f.type === 'drop' || f.type === 'pram') f.vy += 90 * dt;
     if (f.type === 'limb') f.vy += 40 * dt;
@@ -3487,6 +3519,22 @@ function drawProp(o){
       if (!o.dead){
         ctx.strokeStyle = '#c9b28a'; ctx.lineWidth = 4;
         circle(0, 0, o.r * 0.66); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,247,228,.12)';
+        circle(-o.r * 0.24, -o.r * 0.26, o.r * 0.5); ctx.fill();
+        if (crateOf(o)){
+          // a crate of rockets: three tubes and a fuse, so you can tell before
+          // you hit it that this one is going to go off
+          ctx.fillStyle = '#b5342b';
+          for (let i = 0; i < 3; i++){
+            const a = o.seed * 6.283 + i * 2.094;
+            circle(Math.cos(a) * o.r * 0.36, Math.sin(a) * o.r * 0.36, o.r * 0.22); ctx.fill();
+          }
+          ctx.fillStyle = '#ffd34d';
+          for (let i = 0; i < 3; i++){
+            const a = o.seed * 6.283 + i * 2.094;
+            circle(Math.cos(a) * o.r * 0.36, Math.sin(a) * o.r * 0.36, o.r * 0.08); ctx.fill();
+          }
+        }
       }
       ctx.restore(); break;
     }
@@ -4221,6 +4269,9 @@ function drawFx(over){
       ctx.textAlign = 'center';
       ctx.fillText(f.text, f.x, f.y);
       ctx.textAlign = 'left';
+    } else if (f.type === 'rocket' || f.type === 'spark'){
+      // drawn by the light pass instead: a firework laid down here would have
+      // the night wash composited straight over the top of it
     } else if (f.type === 'shard'){
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
       ctx.fillStyle = f.col; ctx.fillRect(-f.size / 2, -f.size / 5, f.size, f.size * 0.42);
@@ -4496,7 +4547,35 @@ function drawLights(){
     ctx.fillStyle = 'rgba(120,255,170,.16)';
     circle(car.x, car.y, 190); ctx.fill();
   }
+  drawFireworks();
   ctx.restore();
+}
+
+/* Rockets and their bursts. They live in the light pass rather than in drawFx
+   because a firework drawn with the rest of the effects has the night wash
+   composited straight over the top of it — which on a first attempt made a
+   whole volley invisible. Here they are added to the frame after the darkness,
+   which is where a light belongs. The caller has already set 'lighter'. */
+function drawFireworks(){
+  for (const f of fx){
+    const k = clamp(1 - f.t / f.ttl, 0, 1);
+    if (f.type === 'rocket'){
+      const sp = Math.hypot(f.vx, f.vy) || 1;
+      ctx.strokeStyle = 'rgba(' + f.col + ',.45)';
+      ctx.lineWidth = f.size * 1.1; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(f.x, f.y);
+      ctx.lineTo(f.x - (f.vx / sp) * f.size * 14, f.y - (f.vy / sp) * f.size * 14);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(' + f.col + ',.95)';
+      circle(f.x, f.y, f.size); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      circle(f.x, f.y, f.size * 0.5); ctx.fill();
+    } else if (f.type === 'spark'){
+      ctx.fillStyle = 'rgba(' + f.col + ',' + (0.85 * k).toFixed(2) + ')';
+      circle(f.x, f.y, f.size * (0.5 + k * 0.9)); ctx.fill();
+    }
+  }
 }
 
 /* ---------- aim UI, drawn in world space ---------- */
