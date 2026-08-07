@@ -1856,6 +1856,19 @@ from across the table.
 
 ### The hand is a fan
 
+Photographing a real turn — the first time a whole one had been looked at
+rather than a beat out of it — showed the aimed card swelling sideways into its
+neighbour and hiding the left half of that card's rules text. One of four cards
+in hand could not be read, on the most-used screen in the game.
+
+The aimed card lifts more and swells less now: `translateY(-9%) scale(1.045)`
+against `translateY(-5%) scale(1.09)`. **Height** is what marks the card you are
+aiming at; width only eats the ones you are choosing between. The fan's own
+overlap came in from `-1.3%` to `-0.7%` at the same time. The render suite
+asserts the range rather than the digits, because the number that matters is
+"not much", not "two decimal places".
+
+
 A hand held in front of you is an arc, not a row. `fanStyle(i, n, selected)`
 does the whole thing: the cards overlap, and rotation plus a drop both scale
 with distance from the middle, around a `transform-origin` *under* the card

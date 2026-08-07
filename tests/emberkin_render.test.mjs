@@ -577,7 +577,12 @@ for (const n of [1, 2, 3, 4, 5, 6]) {
 // The selected card is the only upright one, and it is on top of everything.
 const picked = sw.fanStyle(2, 5, true);
 ok(!/rotate\(-?[1-9]/.test(picked), 'the aimed card comes upright');
-ok(/scale\(1\.0\d\)/.test(picked), 'and grows a little');
+// Grows a little, and the range is the point rather than the digits: much past
+// a twentieth and the aimed card swells sideways into its neighbour and hides
+// that card's rules text, which a photograph of a real turn caught.
+const grew = Number((/scale\(([\d.]+)\)/.exec(picked) || [])[1]);
+ok(grew > 1 && grew <= 1.06, `and grows a little, not a lot (${grew})`);
+ok(/translateY\(-\d/.test(picked), 'and lifts, which is what marks it instead');
 ok(/z-index:20/.test(picked), 'and sits over the rest of the hand');
 // Scaling about the fan's pivot would throw it up over the dialogue; it pivots
 // about its own base instead.
