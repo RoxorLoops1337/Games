@@ -4275,16 +4275,28 @@ function enterMap(id, x, y, dir) {
   G.player.x = G.player.px = x; G.player.y = G.player.py = y;
   G.player.dir = dir || G.player.dir; G.player.moveT = 0;
   G.alert = null;
+  // Every beat that owns the screen is abandoned when the ground moves under
+  // it. Each of these is a state with a timer, and three of them — blackout,
+  // gotcha, flourish — carry a callback that changes the map or opens a screen
+  // when it expires, so a stranded one does not merely linger, it acts.
+  //
+  // Honest note on reachability, correcting an overstatement made when the
+  // blackout was added to this list: every one of these beats blocks input
+  // while it runs, so a player cannot walk into a warp during one, and the only
+  // code path that changes maps underneath a beat is the loss handler. What
+  // this list actually prevents is a whole class of "it fired later, somewhere
+  // else" rather than a bug anybody has been shown to hit. It earns its place
+  // as defence, not as a fix for a symptom in play — the symptom it did fix was
+  // the story suite's rival rematch failing about one run in four.
+  //
+  // `warp` is deliberately absent: warpStep is what calls this function, and
+  // clearing it here would cancel the door you are walking through.
   G.rustle = null;
   G.mend = null;
-  // A pending fall is abandoned too. It was left out when the blackout was
-  // added and the omission is worse than the other two: rustle and mend only
-  // hold the screen, but the blackout carries a callback that moves you to the
-  // Wayhouse — so a map change from any other cause left a timer that would
-  // later yank you out of wherever you had gone. It showed up as the story
-  // suite's rival rematch failing about one run in four, which had been read as
-  // ordinary flake.
   G.blackout = null;
+  G.gotcha = null;
+  G.flourish = null;
+  G.evoAnim = null;
   return m;
 }
 
