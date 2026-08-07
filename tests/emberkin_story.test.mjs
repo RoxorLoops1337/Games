@@ -8,7 +8,9 @@
 // never appears — this suite deadlocks and fails rather than quietly skipping.
 //
 // Run: node tests/emberkin_story.test.mjs
+import { readFileSync } from 'node:fs';
 import { loadGame, mkCtx, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
+const SRC = readFileSync(new URL('../emberkin/index.html', import.meta.url), 'utf8');
 
 const EK = loadGame({});
 EK.setCtx(mkCtx());
@@ -478,6 +480,117 @@ section('the Warden stays off the path across a reload');
   a.newGame();
   ok(a.npcActive(h), 'and a fresh run finds him back on the path');
   ok(!open(a, h), 'with the pass shut again');
+}
+
+// Four people in this valley exist to point at something: the grass, the
+// Wayhouse, the road north, the thing in the shallows. Every one of them went
+// on pointing at it for the whole game — to a player who by the end had caught
+// the grass, used the Wayhouse forty times, walked the road, and had the thing
+// in the shallows in their party. A signpost that keeps pointing after you have
+// arrived is worse than no signpost.
+section('the signposts stop pointing once you have arrived');
+{
+  const g = loadGame({});
+  const npc = (name) => {
+    for (const m of Object.values(g.MAPS)) for (const n of (m.npcs || [])) if (n.name === name) return n;
+    return null;
+  };
+  const fresh = (setup) => {
+    g.newGame(); g.G.dialogue = null;
+    g.takeStarter('cindercub');
+    if (setup) setup();
+  };
+  const said = (name) => g.talkLines(npc(name)).join(' ');
+
+  // The mechanism first: `lines` may be a function, the way `after` already
+  // could. It was a trainers-only privilege for no reason but that trainers
+  // were where it was first needed.
+  for (const name of ['Old Tam', 'Bly', 'Ranger Isa', 'Sheller Ann']) {
+    eq(typeof npc(name).lines, 'function', `${name} is allowed to notice things`);
+  }
+  // And every path that speaks goes through the one accessor, so a person who
+  // wants to notice something can wherever they stand — including behind a
+  // counter. Five call sites used to read `npc.lines` directly and only one of
+  // them would have honoured a function.
+  ok(!/say\(npc\.name, npc\.lines/.test(SRC), 'and no path reads the lines around it');
+
+  fresh();
+  ok(/thick with kin/.test(said('Old Tam')), 'Tam explains the grass to somebody who has not walked it');
+  fresh(() => g.DEX_ORDER.slice(0, 6).forEach((id) => g.catchMon(id)));
+  ok(!/thick with kin/.test(said('Old Tam')), 'and stops explaining it to somebody who has');
+  ok(/boots/.test(said('Old Tam')), 'noticing instead');
+  // His boast was a number and the tally is a number, and at six they collided:
+  // "Six kinds in the book. I managed six." Comparative now, so check no count
+  // can make him repeat himself.
+  for (let n = 4; n < g.DEX_ORDER.length; n++) {
+    fresh(() => g.DEX_ORDER.slice(0, n).forEach((id) => g.catchMon(id)));
+    const words = said('Old Tam').match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)\b/gi) || [];
+    eq(new Set(words.map((w) => w.toLowerCase())).size, words.length,
+      `at ${n} caught, Tam does not say the same number twice`);
+  }
+  fresh(() => g.DEX_ORDER.forEach((id) => g.catchMon(id)));
+  ok(/Every last one/.test(said('Old Tam')), 'and the full book gets its own answer');
+
+  // Bly's is the one that is urgent exactly when it is urgent — read off the
+  // same party state Sable reads at her door.
+  fresh();
+  ok(/patches your kin up for free/.test(said('Bly')), 'Bly gives directions once');
+  fresh(() => { g.G.been.wayhouse = 1; });
+  ok(!/patches your kin up for free/.test(said('Bly')), 'and not again to somebody who has been');
+  fresh(() => { g.G.been.wayhouse = 1; g.G.party[0].hp = 1; });
+  ok(/bad way/.test(said('Bly')), 'but says it again when it matters');
+  fresh(() => { g.G.been.wayhouse = 1; g.G.party[0].hp = 0; });
+  ok(/is down/.test(said('Bly')), 'and harder when it matters more');
+
+  // Isa points north. She was still pointing north at somebody walking back
+  // DOWN from the top of the mountain.
+  fresh();
+  ok(/north of here/.test(said('Ranger Isa')), 'Isa sends you to the wood');
+  fresh(() => { g.G.been.emberwood = 1; });
+  ok(!/north of here/.test(said('Ranger Isa')), 'and stops once you have found it');
+  fresh(() => { g.G.been.emberwood = 1; g.G.been.crown_hollow = 1; });
+  ok(/Hollow/.test(said('Ranger Isa')), 'she knows how far you got');
+  fresh(() => { g.G.been.emberwood = 1; g.G.been.crown_hollow = 1; g.G.flags.heardEnding = 1; });
+  ok(/come back down/.test(said('Ranger Isa')), 'and that you came back down');
+
+  // Ann warns you about a creature. The dex has always known which of the three
+  // people she is talking to.
+  fresh();
+  ok(/Sweet little faces/.test(said('Sheller Ann')), 'Ann warns a stranger');
+  fresh(() => g.seeMon('lanterneel'));
+  ok(/met one/.test(said('Sheller Ann')), 'greets somebody who has met one');
+  fresh(() => g.catchMon('lanterneel'));
+  ok(/Look at your hand/.test(said('Sheller Ann')), 'and needles somebody carrying one');
+}
+
+// `been` is state, and state that does not survive a reload is a signpost that
+// starts pointing again — the exact fault this pass exists to fix, one level
+// down. Same shape as the Warden, who lived on module data the save never
+// carried.
+section('where you have been survives the walk back');
+{
+  const store = {};
+  const a = loadGame(store);
+  a.newGame(); a.G.dialogue = null;
+  a.takeStarter('cindercub');
+  a.enterMap('route_one', 9, 10, 'down');
+  a.enterMap('emberwood', 8, 1, 'up');
+  a.enterMap('route_one', 9, 10, 'down');
+  ok(a.G.been.emberwood, 'walking into the wood is remembered');
+  a.saveGame();
+
+  const b = loadGame(store);
+  ok(b.hasSave(), 'the run was written down');
+  b.loadGame();
+  ok(b.G.been.emberwood, 'and the wood is still remembered after a reload');
+  ok(b.G.been.route_one, 'along with the road you reloaded onto');
+  const isa = b.MAPS.route_one.npcs.find((n) => n.name === 'Ranger Isa');
+  ok(!/north of here/.test(b.talkLines(isa).join(' ')),
+    'so Isa does not send you somewhere you have already been');
+
+  // And a new run has been nowhere, the same way it has caught nothing.
+  b.newGame();
+  eq(Object.keys(b.G.been).join(','), 'lab', 'a new run has been exactly where it is standing');
 }
 
 done('emberkin_story');
