@@ -402,6 +402,15 @@
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
   .cards{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
+  /* The box screen's party is the list you swap OUT of, not the thing you came
+     for. At 210px it is three tall rows and it ate the whole first screenful —
+     with twenty-six boxed, the half of the screen you opened it for started
+     below the fold with the cursor six rows away from it. Narrower here only:
+     the party still shows everything, and the box now starts on the same
+     screen as it. The cursor mapping is untouched, which is why this is the
+     fix rather than putting the box first — `monCard` indexes party 0..n-1
+     then box n+i, and the help text at the bottom describes that order. */
+  .cards.slim{ grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); }
   /* An empty party slot: the frame without the card. Dashed, unlit and quiet
      enough that six of them never compete with the one kin you do have. */
   .cards .slot{ display:flex; align-items:center; justify-content:center;
@@ -8834,7 +8843,7 @@ function renderScreen() {
     // here to find out. Photographing the box for the first time is what showed
     // it; a full party had always been what got looked at in a test.
     const slot = () => '<div class="card panel slot"><span>empty</span></div>';
-    html += `<h2>Party — ${G.party.length}/6</h2><div class="cards">`
+    html += `<h2>Party — ${G.party.length}/6</h2><div class="cards slim">`
       + G.party.map((m, i) => monCard(m, i)).join('')
       + Array.from({ length: Math.max(0, 6 - G.party.length) }, slot).join('') + '</div>';
     html += `<h2 style="margin-top:12px">Box — ${G.box.length}</h2>`;
