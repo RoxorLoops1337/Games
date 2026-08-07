@@ -1381,4 +1381,26 @@ section('tapping advances a dialogue more than once');
   ok(g2.fired.has('a'), 'and a tap, which releases, always does');
 }
 
+// The portrait band's two buttons were a fixed 82px placed at percentages of a
+// band half the window wide, so their centres sat 0.21 * vw apart — less than
+// 82px on any window under about 390. They overlapped, and the outer one ran
+// off the screen. Every phone shot until now was taken at exactly 390, which is
+// the one width where the old numbers just about worked.
+section('the portrait buttons fit a narrow phone');
+{
+  const rule = (SRC.match(/body\.ctl-below #btns \.rbtn\{[^}]*\}/) || [''])[0];
+  ok(rule, 'the portrait band sizes its own buttons');
+  // Sized from the window, capped so nothing changes on a roomy phone.
+  ok(/min\(\s*82px\s*,\s*[\d.]+vw\s*\)/.test(rule),
+    `the size comes off the window with the old 82px as a ceiling (${rule})`);
+  // Centred by transform, not by a margin equal to half a hardcoded width —
+  // that is what went stale in the overlay layout when its buttons shrank.
+  ok(/transform:translate\(-50%/.test(rule),
+    'and it is centred by transform, so the offset cannot go stale when the size changes');
+  ok(!/margin-left:-\d/.test(rule),
+    'rather than by a margin written for one particular width');
+  ok(/body\.ctl-below #btns \.rbtn:active\{[^}]*translate\(-50%/.test(SRC),
+    'and the pressed state keeps the centring instead of dropping it');
+}
+
 done('emberkin_render');
