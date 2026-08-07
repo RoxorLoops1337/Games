@@ -57,6 +57,7 @@ const EXPOSE = `__out.api = {
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
   attract, ATTRACT_CAST, drawAttract, logo, logoGlyphs, logoFeet, LOGO_BAND,
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
+  RAIN, drawRain, drawAmbient, hash,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
@@ -66,6 +67,7 @@ const EXPOSE = `__out.api = {
 function makeSandbox(opts){
   opts = opts || {};
   const counts = {};
+  const styles = [];                  // every colour the game asks the canvas for
   const gradient = { addColorStop(){} };
   const ctxStub = new Proxy({}, {
     get(t, p){
@@ -76,7 +78,7 @@ function makeSandbox(opts){
         return (...args) => { counts[p] = (counts[p] || 0) + 1; };
       return t[p];
     },
-    set(t, p, v){ t[p] = v; return true; },
+    set(t, p, v){ if (p === 'fillStyle') styles.push(String(v)); t[p] = v; return true; },
   });
   const el = () => ({
     style: {}, textContent: '', innerHTML: '', width: 0, height: 0, className: '',
@@ -103,7 +105,7 @@ function makeSandbox(opts){
     requestAnimationFrame: () => {},
     __out: {},
   };
-  return { sandbox, store, counts, nodes, canvas };
+  return { sandbox, store, counts, styles, nodes, canvas };
 }
 
 let SRC = null;
@@ -119,13 +121,14 @@ function source(){
 }
 
 function boot(opts){
-  const { sandbox, store, counts } = makeSandbox(opts);
+  const { sandbox, store, counts, styles } = makeSandbox(opts);
   new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', source())(
     sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
   const api = sandbox.__out.api;
   api._store = store;
   api._counts = counts;
-  api._resetCounts = () => { for (const k in counts) delete counts[k]; };
+  api._styles = styles;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; };
   api.reseed(4242);
   return api;
 }
@@ -2446,6 +2449,113 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const body = RAW.slice(RAW.indexOf('function ' + fn));
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
+  }
+});
+
+/* --------------------------------------------------------------- weather */
+test('the wet stages are the ones it rains on', () => {
+  const api = boot();
+  for (const st of api.STAGES){
+    if (st.rain) assert(st.wet, `${st.name} rains onto a dry street`);
+    assert(!st.rain || (st.rain > 0 && st.rain <= 1), `${st.name} has a nonsense rain power`);
+  }
+  const wet = api.STAGES.filter(st => st.rain);
+  assert(wet.length >= 2, 'more than one stage gets weather');
+  assert(api.STAGES.some(st => !st.rain), 'and not every stage does — the foundry is indoors');
+});
+
+test('rain falls in depth layers, near ones faster and heavier', () => {
+  const api = boot();
+  assert(api.RAIN.length >= 3, 'three layers of it at least');
+  for (let i = 1; i < api.RAIN.length; i++){
+    assert(api.RAIN[i].spd < api.RAIN[i - 1].spd, 'layer ' + i + ' should fall slower than the one in front');
+    assert(api.RAIN[i].a < api.RAIN[i - 1].a, 'layer ' + i + ' should be fainter than the one in front');
+    assert(api.RAIN[i].len < api.RAIN[i - 1].len, 'layer ' + i + ' should be shorter than the one in front');
+  }
+  for (const r of api.RAIN) assert(r.slant > 0, 'rain that falls straight down has no wind in it');
+});
+
+test('rain takes the colour of the light it falls through', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const pinkish = (list) => list.filter(c => {
+    const m = /rgba\((\d+),(\d+),(\d+)/.exec(c);
+    return m && +m[1] > 180 && +m[1] > +m[3] + 60;
+  }).length;
+
+  api.lfReset();                                  // nothing lighting the street
+  api._resetCounts();
+  api.drawRain(1);
+  const dark = api._styles.slice(), darkDrops = api._counts.fillRect || 0;
+
+  api.lfReset();                                  // the whole street under a pink sign
+  for (let x = 0; x < api.VW; x += 20) api.lfAdd(x, 176, 40, '#ff2f7a', 0.9);
+  api._resetCounts();
+  api.drawRain(1);
+  const lit = api._styles.slice(), litDrops = api._counts.fillRect || 0;
+
+  assert(darkDrops > 0 && litDrops > 0, 'it rained both times');
+  assert(Math.abs(litDrops - darkDrops) < darkDrops * 0.4,
+    `the drop count should not depend on the lighting: ${litDrops} vs ${darkDrops}`);
+  assert(pinkish(dark) === 0, 'rain in the dark should not already be pink');
+  // the streaks are the bulk of what rain paints — a few pink splashes is not enough
+  assert(pinkish(lit) > lit.length * 0.5,
+    `most of the rain should come down pink, only ${pinkish(lit)} of ${lit.length} did`);
+});
+
+test('the wet stage actually rains, and the dry one does not', () => {
+  const api = boot();
+  play(api, { stage: 0 });                        // the street
+  api.draw();                                     // warm the bakes
+  const cost = () => { api._resetCounts(); api.drawAmbient(); return api._counts.fillRect || 0; };
+  const rainy = cost();
+  const st = api.stage(), keep = st.rain;
+  st.rain = 0;
+  const stopped = cost();
+  st.rain = keep;
+  assert(rainy > stopped * 3, `the ambient pass should be mostly rain: ${rainy} with, ${stopped} without`);
+
+  play(api, { stage: 3 });                        // the foundry, indoors
+  api.draw(); api._resetCounts(); api.draw();
+  const dryFrame = api._counts.fillRect || 0;
+  play(api, { stage: 0 });
+  api.draw(); api._resetCounts(); api.draw();
+  const wetFrame = api._counts.fillRect || 0;
+  assert(dryFrame > 200 && wetFrame > 200, 'both stages drew a real frame');
+  assert(wetFrame < 11000, 'a rainy frame is too expensive: ' + wetFrame + ' fillRects');
+  assert(!api.STAGES[3].rain, 'the foundry stays dry');
+});
+
+test('the city is awake: the lit windows change over an evening', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.cam.x = 0;
+  api.draw();
+  const WINDOW = '#ffe8a0';                       // the inner pane of a lit window
+  const countAt = (t) => {
+    api.setT(t);
+    api._resetCounts();
+    api.drawBackground();
+    return api._styles.filter(c => c === WINDOW).length;
+  };
+  const seen = [];
+  for (let t = 0; t < 60; t += 3) seen.push(countAt(t));
+  const lo = Math.min(...seen), hi = Math.max(...seen);
+  assert(lo > 10, 'the street should be full of lit windows, saw ' + lo);
+  assert(hi > lo, `the same street has the same windows lit all night: ${lo}..${hi}`);
+  // but most of them stay put — a city where every window blinks is a disco.
+  // measured: ~13% on a cycle swings 144..156; every window on one swings 148..181
+  assert(hi - lo < lo * 0.15, `too many windows switching: ${lo}..${hi}`);
+});
+
+test('every stage still draws with the weather on it', () => {
+  const api = boot();
+  for (let st = 0; st < api.STAGES.length; st++){
+    play(api, { stage: st });
+    api._resetCounts();
+    api.draw();
+    assert((api._counts.fillRect || 0) > 200, `stage ${st + 1} drew nothing`);
   }
 });
 
