@@ -37,6 +37,12 @@
   /* Same reason on the menu: the card carries its own background, so the
      overlay only has to take the market down far enough to read against. */
   #menu{ background:radial-gradient(980px 560px at 50% 44%, rgba(12,26,48,.62), rgba(4,7,14,.84)); }
+  /* And the same for the results. The card is a scorecard for the wreckage you
+     just made, and at the standard overlay the wreckage was a black wash — a
+     market with thirty-five down and nineteen stalls flattened, hidden behind
+     the numbers describing it. */
+  #results{ background:radial-gradient(940px 540px at 50% 44%, rgba(14,28,52,.56), rgba(4,7,14,.80));
+    backdrop-filter:blur(2px); }
   .ov[hidden]{ display:none; }
   .card{ width:min(580px,93vw); max-height:94vh; overflow:auto;
     /* rotated, vw and vh still mean the viewport, which is the game's frame
@@ -98,7 +104,23 @@
   .stat .k{ font-size:11px; letter-spacing:2px; color:#7d92b2; text-transform:uppercase; }
   .stat .v{ font-size:25px; font-weight:900; color:#ffd34d; }
   .stars{ font-size:38px; letter-spacing:8px; margin:2px 0 8px; color:#2a3d5c; }
-  .stars b{ color:#ffd34d; font-weight:400; text-shadow:0 0 16px rgba(255,205,70,.6); }
+  /* The stars used to be three glyphs that were simply there. They land one at
+     a time now — the only moment on a card that is otherwise a table. */
+  @keyframes starpop{
+    0%{ transform:scale(0) rotate(-40deg); opacity:0; }
+    62%{ transform:scale(1.34) rotate(7deg); opacity:1; }
+    100%{ transform:scale(1) rotate(0deg); opacity:1; } }
+  .stars b{ display:inline-block; color:#ffd34d; font-weight:400;
+    text-shadow:0 0 16px rgba(255,205,70,.6);
+    animation:starpop .5s cubic-bezier(.22,1.2,.36,1) backwards; }
+  /* Beating your own best on a market is the only reason to play one twice. */
+  @keyframes pbin{ from{ transform:translateY(-6px) scale(.85); opacity:0; } }
+  .pb{ display:inline-block; margin:0 0 10px; padding:3px 12px; border-radius:999px;
+    font-size:12px; font-weight:900; letter-spacing:2.4px; color:#0b1524;
+    background:linear-gradient(180deg,#ffe27a,#e8a91f);
+    box-shadow:0 0 20px rgba(255,205,70,.45);
+    animation:pbin .45s cubic-bezier(.22,1.2,.36,1) 1.1s backwards; }
+  .pb[hidden]{ display:none; }
   .targetline{ margin:0 0 14px; font-size:14px; color:#a8bcd8; }
   .targetline b{ color:#ffd34d; }
   /* The 21-chip grid used to sit above START THE ENGINE, which put the only
@@ -258,7 +280,9 @@
   <div class="ov" id="results" hidden>
     <div class="card">
       <h2 id="rsTitle">MARKET CLEARED</h2>
+      <p class="sub" id="rsWhere"></p>
       <div class="stars" id="rsStars">&#9733;&#9733;&#9733;</div>
+      <div class="pb" id="rsPb" hidden>NEW BEST</div>
       <div class="stats">
         <div class="stat"><div class="k">Score</div><div class="v" id="rsScore">0</div></div>
         <div class="stat"><div class="k">Shoppers</div><div class="v" id="rsKills">0</div></div>
@@ -1676,6 +1700,10 @@ function levelEnd(){
   const passed = hit;
   if (!G.starsPer) G.starsPer = [];
   if (G.stars > starsOn(G.level)) G.starsPer[G.level] = G.stars;
+  /* Read before it is written: the card wants to say whether this run beat the
+     one before it, and bestOn() one line later is this run. */
+  const wasBest = bestOn(G.level);
+  const newBest = passed && G.levelScore > wasBest;
   if (G.levelScore > bestOn(G.level)) G.bestPer[G.level] = G.levelScore;
   if (passed && G.level + 1 > G.unlocked) G.unlocked = Math.min(LEVELS.length - 1, G.level + 1);
   G.phase = 'results';
@@ -1683,10 +1711,16 @@ function levelEnd(){
   show('hint', false);
   show('results', true);
   setTxt('rsTitle', passed ? 'MARKET CLEARED' : 'NOT ENOUGH DAMAGE');
+  // which market — "MARKET CLEARED" never said, and by the ninth one that
+  // matters
+  setTxt('rsWhere', (G.level + 1) + ' · ' + lv.name);
   const el = $('rsStars');
   if (el){
-    el.innerHTML = [0, 1, 2].map(i => i < G.stars ? '<b>★</b>' : '★').join('');
+    // each earned star lands a beat after the one before it
+    el.innerHTML = [0, 1, 2].map(i => i < G.stars
+      ? '<b style="animation-delay:' + (0.2 + i * 0.28).toFixed(2) + 's">★</b>' : '★').join('');
   }
+  show('rsPb', newBest);
   setTxt('rsScore', fmt(G.levelScore));
   setTxt('rsKills', fmt(G.kills));
   setTxt('rsWrecks', fmt(G.wrecks));
@@ -1700,9 +1734,19 @@ function levelEnd(){
     : G.stars === 3 ? 'Three stars. Nothing left to prove here.'
     : 'Target cleared. ' + (3 - G.goalsDone) + ' goal' + (3 - G.goalsDone === 1 ? '' : 's') +
       ' left for the last ' + (3 - G.stars === 1 ? 'star' : (3 - G.stars) + ' stars') + '.');
+  /* What the numbers are for: the target you cleared, what you have ever done
+     on this market, and where the campaign total stands. Before this the card
+     never mentioned your own record, which is the only reason to drive a
+     market you have already beaten. */
+  // read after the write, so a run that set the record reports the record
+  const rec = bestOn(G.level);
   setTxt('rsLine', passed
-    ? 'Target was ' + fmt(G.target) + '. Running total ' + fmt(G.score) + '.'
-    : 'You needed ' + fmt(G.target) + '. Have another go.');
+    ? 'Target was ' + fmt(G.target) + '. ' +
+      (!newBest ? 'Best here ' + fmt(rec) + '.'
+        : wasBest > 0 ? 'Old best here ' + fmt(wasBest) + '.' : 'First run here.') +
+      ' Running total ' + fmt(G.score) + '.'
+    : 'You needed ' + fmt(G.target) + '.' +
+      (rec > 0 ? ' Your best here is ' + fmt(rec) + '.' : '') + ' Have another go.');
   const nx = $('bNext'), rt = $('bRetry');
   if (nx){
     nx.textContent = !passed ? 'NEXT MARKET (LOCKED)'
