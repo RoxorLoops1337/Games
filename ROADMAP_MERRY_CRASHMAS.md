@@ -249,6 +249,13 @@ edit this block to name the next one.
       happening in it. It is a baked sprite like every other light now, and it
       burns down from 360px at α.30 to 270px at α.08 over the boost instead of
       snapping off. The carnage under it reads again.
+- [x] Two more trades, so a row of stalls stops repeating itself every sixth
+      one: **baubles** (purple awning, four glass balls on a rail with gold
+      caps and glints) and **woollens** (teal awning, stacks of folded hats and
+      scarves). Each carries the full kit the six had — stripe, counter,
+      hanging pictogram, and its own stock to throw across the snow when it is
+      wrecked — with a test that holds every trade to all four so a ninth
+      cannot be half-added.
 
 ## Next
 
