@@ -112,6 +112,9 @@ edit this block to name the next one.
       borrowing drawCar, plus launch/bounce/damage bars. Five on one row, and
       the brief now fits the frame at 810, 720 and on a landscape phone —
       where LET'S RUIN CHRISTMAS was 193px below the fold before.
+- [x] The finale is an ending: fireworks going off over the wreckage behind
+      the card, a campaign-wide wreck count and the star total alongside the
+      score, and an overlay you can actually see the market through.
 
 ## Next
 

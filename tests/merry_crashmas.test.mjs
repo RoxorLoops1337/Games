@@ -74,6 +74,7 @@ const EXPOSE = `__out.api = {
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
+  finale, nextLevel,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4714,6 +4715,87 @@ test('withCtx hands the game canvas back even when the drawing throws', () => {
   api.drawVignette();
   assert((api._counts.fillRect || 0) > 0,
     'a drawing that throws must still hand the canvas back');
+});
+
+/* --------------------------------------------------------------- finale --- */
+
+/* Twenty-one markets flattened and the end card said three numbers. */
+test('the finale counts the whole campaign, not just the last market', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.unlocked = 21; api.G.starsPer = api.LEVELS.map(() => 3);
+  api.startCampaign(); api.beginLevel();
+  assert(api.G.totalWrecks === 0, 'a fresh campaign has wrecked nothing');
+  api.G.phase = 'drive';
+  const first = api.props.filter(o => !o.dead).slice(0, 5);
+  for (const o of first) api.wreckProp(o, 900, 0);
+  assert(api.G.totalWrecks === 5, 'five wrecks, got ' + api.G.totalWrecks);
+  // and it carries across markets, where G.wrecks does not
+  api.startLevel(1); api.beginLevel();
+  api.G.phase = 'drive';
+  assert(api.G.wrecks === 0, 'the per-market count starts again');
+  assert(api.G.totalWrecks === 5, 'the campaign count does not: ' + api.G.totalWrecks);
+  for (const o of api.props.filter(o => !o.dead).slice(0, 3)) api.wreckProp(o, 900, 0);
+  assert(api.G.totalWrecks === 8, 'eight across two markets, got ' + api.G.totalWrecks);
+
+  api.G.score = 421700; api.G.totalKills = 3120;
+  api.finale();
+  const txt = (id) => String(api._nodes[id].textContent);
+  assert(txt('fnScore') === '421,700', 'total: ' + txt('fnScore'));
+  assert(txt('fnKills') === '3,120', 'shoppers: ' + txt('fnKills'));
+  assert(txt('fnWrecks') === '8', 'wrecked: ' + txt('fnWrecks'));
+  assert(txt('fnStars') === '★ 63/63', 'stars: ' + txt('fnStars'));
+  console.log('    (finale tiles: ' + ['fnScore', 'fnBest', 'fnKills', 'fnWrecks', 'fnStars']
+    .map(txt).join(' · ') + ')');
+  // a new campaign starts the counts again
+  api.startCampaign();
+  assert(api.G.totalWrecks === 0 && api.G.totalKills === 0,
+    'DRIVE IT AGAIN should start from nothing');
+});
+
+test('the finale sets off fireworks, and nothing else does', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.fx.length = 0;
+  // aiming at a market is not a celebration
+  api.G.phase = 'aim';
+  for (let i = 0; i < 180; i++) api.update(1 / 60);
+  assert(!api.fx.some(f => f.type === 'rocket'),
+    'the aim phase launched fireworks');
+
+  api.G.phase = 'finale'; api.G.fwT = 0;
+  let volleys = 0, peak = 0;
+  for (let i = 0; i < 600; i++){
+    const before = api.fx.filter(f => f.type === 'rocket').length;
+    api.update(1 / 60);
+    const after = api.fx.filter(f => f.type === 'rocket').length;
+    if (after > before) volleys++;
+    peak = Math.max(peak, api.fx.length);
+  }
+  console.log('    (ten seconds of finale: ' + volleys + ' volleys, ' + peak + ' particles at the peak)');
+  assert(volleys >= 8, 'ten seconds should be a display, got ' + volleys + ' volleys');
+  assert(peak < 900, 'and it must not pile up: ' + peak + ' particles');
+  // it stops when the card goes
+  api.G.phase = 'aim'; api.G.fwT = 0;
+  for (let i = 0; i < 300; i++) api.update(1 / 60);
+  assert(!api.fx.some(f => f.type === 'rocket'),
+    'the display kept going after the finale ended');
+});
+
+test('the finale display does not move the simulation', () => {
+  const run = (celebrate) => {
+    const api = boot({ w: 1440, h: 810 });
+    api.G.unlocked = 21; api.startLevel(20); api.beginLevel();
+    api.G.phase = celebrate ? 'finale' : 'results';
+    api.car.x = 2600; api.car.y = 1100; api.camSnap();
+    api.G.fwT = 0;
+    for (let i = 0; i < 600; i++) api.update(1 / 60);
+    return { next: api.rnd(),
+      rockets: api.fx.filter(f => f.type === 'rocket').length };
+  };
+  const on = run(true), off = run(false);
+  assert(on.next === off.next,
+    'ten seconds of fireworks advanced the simulation RNG: ' + on.next + ' vs ' + off.next);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
