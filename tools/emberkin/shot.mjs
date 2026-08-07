@@ -315,6 +315,20 @@ const SCENES = {
       }, 140);
     },
   },
+  // The chest shop — where gems go, and the only purchase in the game that is a
+  // gamble. Never shot. The cursor is driven DOWN rather than set, so the shot
+  // shows whether up/down agrees with the grid the player can see.
+  chests: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.G.gems = 260;
+      EK.openScreen('chests');
+      EK.pressKey('down'); EK.step(.02); EK.releaseKey('down'); EK.fired.clear();
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {

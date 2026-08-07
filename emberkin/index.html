@@ -8623,7 +8623,13 @@ function renderScreen() {
  */
 function gridCols(s) {
   if (HEADLESS) return s.kind === 'dex' ? 5 : 2;
-  const cells = els.screen.querySelectorAll('.dexcell, .cards > .card, .cardrow > .cardel');
+  // Every grid a cursor can be in. The bag, the shop and the chest shelf were
+  // missing from the first version of this list, so they fell to the `< 2`
+  // branch and returned 1 — up and down moved by a single cell in a grid two
+  // and three across. Found by photographing each screen with a cursor in it,
+  // which is the only way to see that a fix reaches everything it claims to.
+  const cells = els.screen.querySelectorAll(
+    '.dexcell, .cards > .card, .cardrow > .cardel, .items > .item');
   if (cells.length < 2) return 1;
   const top = cells[0].offsetTop;
   let n = 0;
