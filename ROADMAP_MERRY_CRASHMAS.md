@@ -37,8 +37,8 @@ edit this block to name the next one.
   first: `drawAim` moving the car is real and decides pass/fail on market 1,
   and it turned up a fifth cosmetic system feeding on the simulation seed.
 - **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]`. Items 1–10 are done. **Next:
-  item 12** (the goal checklist gets a plate). Exit: all 15 ticked, then
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–12 are done. **Next:
+  item 13** (the run ends when there is nothing left to hit). Exit: all 15 ticked, then
   phase E again.
 
 ## Working agreement for each pass
@@ -288,6 +288,25 @@ edit this block to name the next one.
       to the fence. Two dead ends on the way: a tree-coloured middle stop in
       the gradient turned the whole band green, and trees spread evenly across
       the fade read as scattered confetti rather than as a wood.
+
+- [x] The goal checklist gets a plate wide enough for it, and two tautological
+      tests get teeth (plan 2 item 12). The plate's *height* was measured off
+      its contents; its width was two hard-coded numbers, so thirteen of the
+      sixty-three goal lines finished up to 45px past the right edge — on the
+      raw market, in grey — which is the exact failure the plate was added to
+      fix, one axis over. It is measured off the widest goal it has to carry
+      now, once per set of goal texts, and clamped so it can never reach the
+      car counter. Zero lines overflow at 1280×720, 520×400 or 430×320.
+      Alongside: the suite stopped containing assertions that cannot fail.
+      `0.115 * 720 < 0.18 * 720` and `14 + 168 < 390 - 14 - 118` were three
+      copies of `drawHUD`'s own numbers; both now read the rectangles
+      `drawHUD` actually draws, via a new `hudCarsRect()` accessor. The
+      harness's `measureText` stopped answering a flat 30 for every string —
+      it derives from the live font, so a layout the game measures for itself
+      can be checked at all. Three zero-assertion smoke tests were renamed to
+      say "does not throw", which is what they do. `G.runBest` deleted:
+      written on every combo, never read, one character away from `G.bestRun`,
+      which is the one the goal pool actually tests.
 
 ## Next
 
