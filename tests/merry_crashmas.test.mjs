@@ -82,6 +82,7 @@ const EXPOSE = `__out.api = {
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
   paintMarketThumb, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
+  bannerBox, bannerFont, bannerLayout, bannerRibbon,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
   bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
   getFootI: () => footI,
@@ -4458,6 +4459,109 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills - small.fills === 0,
     'the trees and lamps should batch: ' + small.fills + ' -> ' + big.fills);
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
+});
+
+/* ------------------------------------------------ the combo banner --- */
+
+/* Real text widths, since the harness's measureText reports a flat 30 and the
+   whole point of the layout is what it does with a long banner. Roughly what
+   900-weight system-ui gives at these sizes. */
+const textW = (s, fs) => s.length * fs * 0.58;
+
+test('the combo banner is a ribbon, not bare text on the market', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const frame = (banner) => {
+    api.G.banner = banner;
+    api.drawHUD();                              // warm anything cached
+    api._resetCounts();
+    api.drawHUD();
+    return { fills: api._counts.fill || 0, strokes: api._counts.stroke || 0,
+      text: (api._counts._text || []).slice() };
+  };
+  const off = frame(null);
+  const on = frame({ text: 'DOUBLE PARKED', t: 1.2 });
+  console.log('    (banner: +' + (on.fills - off.fills) + ' fills, +' +
+    (on.strokes - off.strokes) + ' strokes)');
+  // the tails, the plate and the lit band, plus a hairline round the edge
+  assert(on.fills - off.fills === 3,
+    'the ribbon is three fills — tails, plate, lit band: +' + (on.fills - off.fills));
+  assert(on.strokes - off.strokes === 1, 'and one hairline, the HUD material');
+  /* Two passes at the same text, a dark copy under the colour. On a plate that
+     is belt and braces, but the banner is the one thing in the game that lands
+     on a lit stall counter, which is the brightest thing in it. */
+  const said = on.text.filter(t => t === 'DOUBLE PARKED').length;
+  assert(said === 2, 'the banner text should be drawn twice, got ' + said);
+  assert(!off.text.includes('DOUBLE PARKED'), 'and not at all when there is no banner');
+});
+
+test('a banner shrinks rather than running off the frame', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const fs = api.bannerFont(false);
+  const wide = api.bannerBox(2000, fs, 500);
+  assert(wide.fit < 1, 'a 2000px banner in a 500px frame has to shrink');
+  assert(wide.w * wide.fit <= 500 + 0.01,
+    'and it has to actually fit: ' + (wide.w * wide.fit).toFixed(1) + ' in 500');
+  const small = api.bannerBox(100, fs, 500);
+  assert(small.fit === 1, 'one that already fits should not be shrunk');
+  assert(small.w > 100, 'the plate is wider than its text');
+});
+
+test('the ribbon has tails, so it reads as a banner and not a box', () => {
+  const api = boot({ w: 1280, h: 720 });
+  /* Watch the path the ribbon builds. The tails go down as raw lines and the
+     plate through roundRect, so the two are told apart by which call made the
+     point. */
+  const line = [], plate = [];
+  let into = line;
+  const ctx = api._ctxStub;
+  const spy = {
+    beginPath(){ into = line; },
+    moveTo(x, y){ into.push(x); }, lineTo(x, y){ into.push(x); },
+    quadraticCurveTo(a, b, x){ into.push(x); },
+    closePath(){}, fill(){}, stroke(){},
+    fillStyle: '', strokeStyle: '', lineWidth: 0,
+  };
+  api.withCtx(spy, () => {
+    // roundRect writes through moveTo/lineTo too, so the plate's points are
+    // collected by watching which fill they land in
+    api.bannerRibbon(300, 60, false);
+  });
+  const reach = Math.max(...line.map(Math.abs));
+  assert(reach > 150, 'the ribbon should extend past its own plate: ' + reach + ' vs 150');
+  assert(reach < 150 + 40, 'but not sprout wings: ' + reach);
+  console.log('    (ribbon: 300px plate, ' + Math.round(reach * 2) + 'px across the tails)');
+});
+
+test('the banner never lands on the panels it shares the frame with', () => {
+  const COMBO_H = 86;
+  for (const [w, h] of [[1440, 810], [1280, 720], [844, 390], [667, 375], [520, 320]]){
+    const api = boot({ w, h });
+    api.startCampaign(); api.beginLevel();
+    const narrow = w < 560;
+    const fs = api.bannerFont(false);
+    const L = api.bannerLayout(textW('INSANE ROLL ×5', fs), false, 1);
+    const r = api.hudScoreRect();
+    const comboBottom = (narrow ? 150 : 20) + COMBO_H;
+    assert(L.y - L.h / 2 >= comboBottom,
+      w + 'x' + h + ': the banner overlaps the combo plate (' +
+      (L.y - L.h / 2).toFixed(0) + ' vs ' + comboBottom + ')');
+    // and if it is wide enough to reach the score panel, it clears that too
+    if (L.w / 2 > w / 2 - (r.x + r.w)){
+      assert(L.y - L.h / 2 >= r.y + r.h,
+        w + 'x' + h + ': a full-width banner printed over the goals (' +
+        (L.y - L.h / 2).toFixed(0) + ' vs ' + (r.y + r.h) + ')');
+    }
+    assert(L.y + L.h / 2 < h, w + 'x' + h + ': the banner runs off the bottom');
+    assert(L.w <= w - 40, w + 'x' + h + ': the banner is wider than the frame');
+  }
+  const big = boot({ w: 1440, h: 810 }), small = boot({ w: 667, h: 375 });
+  console.log('    (banner type: ' + big.bannerFont(false) + 'px at 810 tall, ' +
+    small.bannerFont(false) + 'px at 375)');
+  assert(big.bannerFont(false) > small.bannerFont(false) + 8,
+    'the banner should be sized off the frame, not off a desktop');
+  assert(small.bannerFont(false) >= 20, 'but still readable on a phone');
 });
 
 /* --------------------------------------------- spilt glühwein --- */

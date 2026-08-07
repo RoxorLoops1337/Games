@@ -169,6 +169,15 @@ edit this block to name the next one.
       light pass — and it goes dull and stops steaming at exactly the moment it
       stops killing, which the game had never signalled at all. The kill window
       and the look read the same constant. Lobe seed off `vrnd()`.
+- [x] The combo banner is a ribbon. It was 46px of bare red on whatever the
+      market happened to be under it — fine over snow, unreadable over a lit
+      stall counter, which is the brightest thing in the game and exactly where
+      a combo happens. Now a notched ribbon in the HUD's own materials (tails,
+      plate, lit band, hairline — three fills and one stroke) with the text
+      drawn twice, dark copy under colour. Sized off the frame (46px at 810
+      tall, 24px at 375, was 46 everywhere), shrunk to fit rather than running
+      off the edge, and placed clear of the combo plate always and the score
+      panel whenever it is wide enough to reach it.
 
 ## Next
 
