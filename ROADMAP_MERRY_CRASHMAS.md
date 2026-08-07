@@ -37,8 +37,8 @@ edit this block to name the next one.
   first: `drawAim` moving the car is real and decides pass/fail on market 1,
   and it turned up a fifth cosmetic system feeding on the simulation seed.
 - **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
-  item per pass, ticking `### [ ]` → `### [x]`. Items 1–12 are done. **Next:
-  item 13** (the run ends when there is nothing left to hit). Exit: all 15 ticked, then
+  item per pass, ticking `### [ ]` → `### [x]`. Items 1–13 are done. **Next:
+  item 14** (the particle buffer stops eating the score pops). Exit: all 15 ticked, then
   phase E again.
 
 ## Working agreement for each pass
@@ -307,6 +307,28 @@ edit this block to name the next one.
       say "does not throw", which is what they do. `G.runBest` deleted:
       written on every combo, never read, one character away from `G.bestRun`,
       which is the one the goal pool actually tests.
+
+- [x] The run ends when there is nothing left to hit (plan 2 item 13). Market 1
+      — the first market anyone plays — spent 2.0 to 3.3 seconds per car, ten
+      seconds a market, watching a car roll across empty snow with the score
+      frozen. A run now ends after 1.2s without a point if nothing live is
+      inside the corridor the car still has the speed to sweep. Two things had
+      to be right for that to work. The horizon is the car's **actual**
+      roll-out — the closed form of `stepCar`'s own decay down to `STOP_SPD` —
+      not a flat 700px: at 150px/s the car has ~180px left in it, and a fixed
+      radius kept the run alive on stalls it was never going to reach. And the
+      shape is the **corridor** the car sweeps, not a cone: at 75° either side
+      a cone is most of a half-plane, and market 1's tail was a car coasting
+      *past* stalls 110–310px off its shoulder. The fence counts as something
+      to hit — genmarket pulls it in so a long shot bounces back into the crowd
+      — but only while a bounce would leave the car above `STOP_SPD`. Dead time
+      on market 1: 10.4s → 5.5s, worst car 3.3s → 1.9s. `previewPath` shares
+      the same function, so the aim dot stops where the car stops; preview
+      error per car actually **improved** to 0.3–4.6%. Raising `STOP_SPD` was
+      the cheap fix and stayed rejected — it is at 110, just above `KILL_SPD`
+      85, so the next notch starts eating kills, and there is a test for that.
+      Run length moves scores: market 1's `par` re-derived 0.1241 → 0.1580
+      (target 3,700 → 4,700), which is the only market that moved out of band.
 
 ## Next
 
