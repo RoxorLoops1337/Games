@@ -1245,4 +1245,30 @@ section('the hand survives a phone');
     'and still printed for a keyboard');
 }
 
+// The overlay layout: what a landscape phone gets when the gutters come out
+// too narrow to hold the controls beside the stage. It is the branch of
+// layoutFor nobody pictures a player in, and it had never been photographed.
+// CSS only, and renderHand returns early headless, so these are source nets.
+section('the overlay layout keeps its controls off the cards');
+{
+  // The branch shrinks the buttons and must therefore re-place them. Without
+  // offsets of its own it inherits bottom:calc(50% - 96px) — written for an
+  // 82px pair in a full-height column — which lands below its own box.
+  ok(/body\.ctl-overlay #btns \.rbtn\[data-k="z"\]/.test(SRC),
+    'overlay places its own confirm button rather than inheriting the tall column\'s offset');
+  ok(/body\.ctl-overlay #btns \.rbtn\[data-k="x"\]/.test(SRC),
+    'and its own cancel button');
+  ok(!/body\.ctl-overlay #btns \.rbtn\{[^}]*bottom:calc/.test(SRC),
+    'and does not reach for the calc that put Play off the bottom of the screen');
+
+  // The hand is the row you tap. A control on top of a card is a card you
+  // cannot pick.
+  ok(/body\.ctl-overlay #hand\{[^}]*right:/.test(SRC),
+    'the hand is held clear of the button column in overlay');
+  // And the pad's label is anchored to the foot of the pad, which in this
+  // layout is the middle of the hand.
+  ok(/body\.ctl-overlay #pad::after\{[^}]*top:/.test(SRC),
+    'the move label is moved off the cards');
+}
+
 done('emberkin_render');

@@ -377,6 +377,25 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+47. **The fallback layout was the least-looked-at code in the project** (pass
+    127). `layoutFor` has four branches. Three of them get used by somebody
+    obvious — a desktop window, a tablet in landscape, a phone held upright.
+    The fourth, `overlay`, is what a landscape phone gets when the gutters come
+    out under 96px, and it is the one nobody chooses to test because nobody
+    pictures a player in it. The first photograph ever taken of it showed the
+    Play button — pressed every single turn — hanging off the bottom of the
+    screen, the Menu button sitting on top of the last card of the fan, and the
+    word "move" printed across the card you were aiming at. The button bug was
+    plain once seen: the branch shrinks the buttons to 64px and gives them no
+    vertical offsets of their own, so they keep `bottom:calc(50% - 96px)`,
+    written for an 82px pair in a full-height column, which inside a box 34% of
+    390px tall evaluates to -30px.
+    Two passes earlier the same tool could not produce ANY touch layout, and
+    that was invisible for the same reason: nothing failed, there was simply no
+    picture. **Enumerate the branches of a layout function and ask which of them
+    has a photograph. The one that has never had a player in your imagination is
+    the one that has never had a screenshot either.**
+
 46. **A save could reach a state the game could not get out of** (pass 121).
     The worst thing found in this project, and found while reading npc data to
     build something else. Warden Hale stands on (8,2) in the Emberwood — the
