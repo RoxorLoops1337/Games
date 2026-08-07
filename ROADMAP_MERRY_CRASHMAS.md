@@ -85,6 +85,10 @@ edit this block to name the next one.
       brazier, candles, lebkuchen hearts — each with its own awning colour,
       counter and (for the grills) a chimney and a plume. Picked from the
       prop's existing seed, never a fresh `rnd()`.
+- [x] HUD pass: one plate behind every panel (base, lit band, hairline), the
+      score plate measured off its own contents so the goals stop printing
+      outside it, tick boxes instead of ○/✓ glyphs, and the launch hint in a
+      pill. Presents got a lid, a shade, a snow cap and a bow.
 
 ## Next
 
