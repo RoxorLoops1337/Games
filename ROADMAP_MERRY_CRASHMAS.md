@@ -38,7 +38,7 @@ edit this block to name the next one.
   and it turned up a fifth cosmetic system feeding on the simulation seed.
 - **D2 — execute plan 2.** Work `.polish/crashmas-plan-2.md` top to bottom, one
   item per pass, ticking `### [ ]` → `### [x]`. Items 1–10 are done. **Next:
-  item 11** (the edge of town, not the edge of the canvas). Exit: all 15 ticked, then
+  item 12** (the goal checklist gets a plate). Exit: all 15 ticked, then
   phase E again.
 
 ## Working agreement for each pass
@@ -270,6 +270,24 @@ edit this block to name the next one.
       dead hold nothing up. The `ri(0, 3)` that used to pick the dropped
       colour is still rolled and thrown away — deleting it would renumber the
       simulation stream and rescore all twenty-one markets.
+
+- [x] The edge of town, not the edge of the canvas (plan 2 item 11). The
+      camera is allowed a long look past the fence — `CAM_OVERSHOOT` plus the
+      drive leash that keeps the car near the middle of the frame put the
+      fence at mid-screen, 924 world units of out-of-world on the shortest
+      market. That camera is right; what was wrong is that out-of-world was a
+      flat `fillRect` of `TH.sky` against a light snow floor, a seven-to-one
+      luminance step across a ten-pixel fence stroke, with blood decals from
+      bodies flung over the fence floating in it. Now the snow fades through
+      the floor tint into night over 980 units — a cached gradient, so no
+      frame builds one — with three bands of conifer silhouettes packed
+      against the fence and thinning outwards, each band smaller, further out
+      and more transparent than the one in front. Placed off a stateless hash
+      of the index, so neither random stream is touched and a market's
+      treeline is as fixed as its stalls. Blood and replay stains are clipped
+      to the fence. Two dead ends on the way: a tree-coloured middle stop in
+      the gradient turned the whole band green, and trees spread evenly across
+      the fade read as scattered confetti rather than as a wood.
 
 ## Next
 

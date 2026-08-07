@@ -1001,7 +1001,7 @@ function genMarket(lv){
   reseed(lv.seed);
   TH = THEMES[lv.theme] || THEMES.dusk;
   seedSnow();
-  floorGrad = null;                      // the tint changed, rebuild it
+  floorGrad = null; edgeGrad = null;     // the tint changed, rebuild them
   props.length = 0; people.length = 0; pickups.length = 0;
   ice.length = 0; spills.length = 0; fx.length = 0; tracks.length = 0;
   gore.length = 0; lens.length = 0; debris.length = 0;
@@ -3614,7 +3614,18 @@ function shadow(x, y, rx, ry, a){
 }
 
 /* ---------- ground ---------- */
-let floorGrad = null;
+let floorGrad = null, edgeGrad = null;
+
+/* How far past the fence the ground fades out. The camera is allowed to look a
+   long way past the last stall (see CAM_OVERSHOOT, and the drive leash that
+   keeps the car near the middle of the frame — between them the fence can sit
+   at mid-screen), and what it found there was a flat fillRect of TH.sky: a
+   seven-to-one luminance step across a ten-pixel fence stroke, 924 world units
+   of it on the shortest market. The fade is sized to cover that worst case, so
+   no frame of a run ends in a slab of flat colour. */
+const EDGE_FADE = 980;
+const EDGE_TREES = 30;          // silhouettes per band
+const EDGE_BANDS = 3;
 
 /* The market floor was one flat fill of TH.ground across four thousand world
    units, and a flat fill is what made the whole thing look like a diagram: no
@@ -3794,9 +3805,60 @@ function drawGround(){
     ctx.setLineDash([]);
   }
 
-  // playfield fence
-  ctx.fillStyle = TH.sky;
-  if (x1 > bounds.x1 + CAR_R) ctx.fillRect(bounds.x1 + CAR_R, y0, x1 - bounds.x1, y1 - y0);
+  // playfield fence, and the country the town stops at
+  const fx0 = bounds.x1 + CAR_R;
+  if (x1 > fx0){
+    if (!edgeGrad){
+      edgeGrad = ctx.createLinearGradient(fx0, 0, fx0 + EDGE_FADE, 0);
+      if (edgeGrad && edgeGrad.addColorStop){
+        /* Snow, then the shaded snow the floor tint is already made of, then
+           night. The middle stop is what stops a straight ground-to-sky ramp
+           reading as a grey wipe. A tree colour was tried here and turned the
+           whole band green — the woods are drawn as woods, not as a stop. */
+        edgeGrad.addColorStop(0, TH.ground);
+        edgeGrad.addColorStop(0.34, 'rgb(' + TH.floor + ')');
+        edgeGrad.addColorStop(1, TH.sky);
+      }
+    }
+    ctx.fillStyle = edgeGrad || TH.sky;
+    ctx.fillRect(fx0, y0, x1 - fx0, y1 - y0);
+    /* Woods, so the fade has something in it and the market reads as ending
+       rather than as running out of canvas. Placed off a stateless hash of the
+       index — neither random stream is touched, so a market's treeline is as
+       fixed as its stalls, and drawing it cannot move a score.
+
+       Three bands, one path and one fill each, packed against the fence and
+       thinning outwards: spread evenly they read as scattered confetti rather
+       than as a wood. Each band is smaller, further out and more transparent
+       than the one before, so the far edge dissolves into the sky instead of
+       ending on a line of trees. */
+    for (let band = EDGE_BANDS - 1; band >= 0; band--){
+      const f = band / (EDGE_BANDS - 1);              // 0 at the fence, 1 furthest
+      ctx.fillStyle = band ? TH.tree[0] : TH.tree[1];
+      ctx.globalAlpha = 1 - f * 0.5;
+      ctx.beginPath();
+      let drawn = 0;
+      for (let i = 0; i < EDGE_TREES; i++){
+        const n = i + band * 977;
+        const ty = 40 + (WORLD_H - 80) * ((i + 0.5) / EDGE_TREES) + (mkRand(n) - 0.5) * 80;
+        if (ty < y0 - 60 || ty > y1 + 60) continue;
+        // squared, so each band crowds its own inner edge
+        const tx = fx0 + 56 + f * 300 + mkRand(n + 311) ** 2 * (210 + f * 300);
+        if (tx > x1 + 60) continue;
+        const tr = (30 - f * 12) * (0.7 + mkRand(n + 733) * 0.6);
+        // spikeRing starts its own path, so the batch is spelled out here
+        const a0 = mkRand(n + 1201) * 6.283, nn = 14;
+        ctx.moveTo(tx + Math.cos(a0) * tr * 1.18, ty + Math.sin(a0) * tr * 1.18);
+        for (let k = 1; k < nn; k++){
+          const a = a0 + (k / nn) * 6.283, rr2 = tr * (k % 2 ? 0.82 : 1.18);
+          ctx.lineTo(tx + Math.cos(a) * rr2, ty + Math.sin(a) * rr2);
+        }
+        ctx.closePath(); drawn++;
+      }
+      if (drawn) ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
   ctx.strokeStyle = '#8fa2c0'; ctx.lineWidth = 10;
   ctx.strokeRect(bounds.x0 - CAR_R, bounds.y0 - CAR_R,
     bounds.x1 - bounds.x0 + CAR_R * 2, bounds.y1 - bounds.y0 + CAR_R * 2);
@@ -3841,6 +3903,8 @@ function drawGround(){
   const onCam = [];
   for (const g of gore){
     if (g.x + g.r < x0 || g.x - g.r > x1 || g.y + g.r < y0 || g.y - g.r > y1) continue;
+    // a body flung over the fence used to leave its pool out in the sky
+    if (g.x - g.r > bounds.x1 + CAR_R) continue;
     onCam.push(g);
   }
   if (onCam.length){
@@ -5427,6 +5491,7 @@ function drawFootprints(){
 function drawStains(){
   for (const f of fx){
     if (f.type !== 'stain') continue;
+    if (f.x - f.size > bounds.x1 + CAR_R) continue;   // not out in the sky
     const k = 1 - f.t / f.ttl;
     const grow = clamp(f.t / 0.5, 0, 1);
     ctx.globalAlpha = clamp(k * 1.6, 0, 0.78);
