@@ -2462,6 +2462,74 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* ------------------------------------------------------------- the yard */
+test('the stacks are wrecks, and no two rows are the same car', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const cols = new Set(api._rects.map(r => r[4]));
+  const lum = (c) => { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const bodies = [...cols].filter(c => /^#[0-9a-f]{6}$/.test(c)).map(c => ({ c, v: lum(c) }));
+  // the five wreck palettes: faded, and none of them the same hue
+  const wrecks = ['#4e2219', '#22364a', '#443c33', '#4a401b', '#2e402a'];
+  const seen = wrecks.filter(w => cols.has(w));
+  assert(seen.length >= 2, 'the whole yard is ' + seen.length + ' colour of car');
+  for (const w of wrecks) assert(Math.max(...lum(w)) < 120, w + ' is too bright for a wreck in a dark yard');
+  // two wheels a car, so this counts the cars actually painted
+  const wheels = api._rects.filter(r => r[4] === '#15100f').length;
+  // measured, exactly: 42 wheels (21 cars) with the cull, 64 (32) without
+  assert(wheels >= 30, 'the wrecks have lost their wheels: ' + wheels);
+  assert(wheels <= 52, `${wheels / 2} cars painted for the twenty-odd on screen — the loop is not culling`);
+  assert(bodies.length > 12, 'the yard is drawn in ' + bodies.length + ' colours');
+});
+
+test('the fence is a baked mesh, stamped rather than drawn', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  api.draw();                                     // bake it
+  api._resetCounts();
+  api.drawBackground();
+  const blits = api._counts.drawImage || 0;
+  assert(blits >= 5, 'only ' + blits + ' blits — the mesh is being drawn by hand');
+  // a hand-drawn weave is hundreds of pixels a tile; a stamped one is none
+  // hand-weaving the mesh took the yard from 1000 fills to 6760
+  const fills = api._counts.fillRect || 0;
+  assert(fills < 2500, 'a yard frame costs ' + fills + ' fillRects');
+});
+
+/* This bounds the whole yard rather than any one cull: the floor and fence
+   culls each save under a hundred fills, which no honest threshold separates.
+   What it does catch is a layer going quadratic wherever you stand. */
+test('the yard stays cheap wherever the camera is', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  api.draw();
+  for (const cx of [0, 63, 220, 705, 1490]){
+    api.cam.x = cx;
+    api._resetCounts();
+    api.drawBackground();
+    const n = api._counts.fillRect || 0;
+    assert(n > 300, `at camera ${cx} it drew almost nothing: ${n}`);
+    assert(n < 2500, `at camera ${cx} it drew ${n} fillRects`);
+  }
+});
+
+test('there is something on the floor of the yard, and it varies', () => {
+  const api = boot();
+  play(api, { stage: 1 });
+  const kinds = [0, 0, 0, 0, 0, 0];
+  for (let gx = 0; gx < 300; gx++) kinds[Math.floor(api.hash(gx * 7 + 3) * 6)]++;
+  for (let k = 0; k < 6; k++) assert(kinds[k] > 20, `only ${kinds[k]} of 300 patches get debris ${k}`);
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const cols = new Set(api._rects.map(r => r[4]));
+  const debris = ['#1d1817', '#736c60', '#5c5347', '#4a5330'].filter(c => cols.has(c));
+  assert(debris.length >= 2, 'the yard floor has ' + debris.length + ' kinds of rubbish on it');
+});
+
 /* ------------------------------------------------------------ the street */
 test('only the blocks you can see get painted', () => {
   const api = boot();
