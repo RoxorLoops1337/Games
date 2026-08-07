@@ -4351,16 +4351,51 @@ function bgKeep(c){
   ellipse(VW - 92, 96, 15, 15, '#fff0c0');
   glow(VW - 92, 96, 26, 22, '#ffe6a8', 0.55);
 
+  /* One row of identical purple slabs with dots on them.  Two rows now: a
+     far one hazed most of the way to the sky it stands in, and a near one
+     with setbacks, tanks and masts on the roofs — and a rim of the sunset
+     down whichever edge is facing it, which is the whole reason to put a
+     city in front of a sunset. */
+  const sunX = VW - 92;
+  for (let i = -1; i < 20; i++){                      // the far row, most of the way to the sky
+    const gx = Math.floor(c * 0.11 / 34) + i, x = Math.round(gx * 34 - c * 0.11);
+    if (x + 30 < -2 || x > VW + 2) continue;
+    const h = 12 + Math.round(hash(gx + 71) * 22);
+    px(x, 124 - h, 30, h + 6, '#6f4a63');
+    px(x, 124 - h, 30, 1, '#835a74');
+    if (hash(gx + 83) > 0.6) px(x + 20, 124 - h - 5, 6, 5, '#6f4a63');
+  }
   for (let i = -1; i < 16; i++){
-    const gx = Math.floor(c * 0.22 / 44) + i, x = gx * 44 - c * 0.22;
-    const h = 20 + hash(gx) * 34;
-    px(x, 124 - h, 38, h + 8, '#33203a');
-    px(x, 124 - h, 38, 2, '#4a3050');
-    px(x, 124 - h, 1, h, '#412a48');
+    const gx = Math.floor(c * 0.22 / 44) + i, x = Math.round(gx * 44 - c * 0.22);
+    if (x + 38 < -2 || x > VW + 2) continue;
+    const h = 20 + Math.round(hash(gx) * 34);
+    const top = 124 - h;
+    px(x, top, 38, h + 8, '#33203a');
+    px(x, top, 38, 2, '#4a3050');
+    const setback = hash(gx + 41) > 0.55;
+    if (setback){                                     // a narrower upper storey
+      const sw = 22, sx = x + (hash(gx + 13) > 0.5 ? 2 : 14);
+      px(sx, top - 12, sw, 13, '#33203a');
+      px(sx, top - 12, sw, 2, '#4a3050');
+    }
+    const roof = hash(gx + 29);
+    if (roof > 0.7){                                  // a tank up there
+      px(x + 24, top - 9, 10, 8, '#2b1b32');
+      px(x + 24, top - 9, 10, 1, '#4a3050');
+      px(x + 26, top - 11, 6, 2, '#2b1b32');
+    } else if (roof > 0.42){                          // or a mast
+      px(x + 8, top - 13, 1, 13, '#2b1b32');
+      px(x + 6, top - 9, 5, 1, '#2b1b32');
+    }
+    // the edge that faces the sun catches it
+    const lit = x + 19 < sunX ? x + 37 : x;
+    const near = clamp(1 - Math.abs(x + 19 - sunX) / 210, 0, 1);
+    px(lit, top, 1, h + 8, rgba('#ffb060', 0.26 + near * 0.7));
+    if (setback) px(x + 19 < sunX ? x + 35 : x + 2, top - 12, 1, 13, rgba('#ffb060', 0.25 + near * 0.45));
     for (let wy = 5; wy < h - 4; wy += 8) for (let wx = 4; wx < 34; wx += 9)
       if (hash(gx * 23 + wx + wy) > 0.7){
-        px(x + wx, 124 - h + wy, 3, 4, '#ffb066');
-        if (hash(gx * 5 + wy) > 0.6) glow(x + wx + 1, 124 - h + wy + 2, 6, 6, '#ff9a4a', 0.24);
+        px(x + wx, top + wy, 3, 4, '#ffb066');
+        if (hash(gx * 5 + wy) > 0.6) glow(x + wx + 1, top + wy + 2, 6, 6, '#ff9a4a', 0.24);
       }
   }
   ctx.fillStyle = 'rgba(120,70,80,0.28)'; ctx.fillRect(0, 108, VW, 24);

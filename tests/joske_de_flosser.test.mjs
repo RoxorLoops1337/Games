@@ -2462,6 +2462,74 @@ test('every stage lights up, and stays inside the frame budget', () => {
   }
 });
 
+/* --------------------------------------------------------- the rooftop */
+test('the skyline is two rows deep, and the far one is hazed', () => {
+  const api = boot();
+  play(api, { stage: 4 });
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  const near = r.filter(q => q[4] === '#33203a' && q[2] === 38);
+  const far = r.filter(q => q[4] === '#6f4a63' && q[2] === 30);
+  assert(near.length >= 5, 'the near skyline is ' + near.length + ' blocks');
+  assert(far.length >= 8, 'there is no second row behind it: ' + far.length);
+  const lum = (c) => { const n = parseInt(c.slice(1), 16); return ((n >> 16 & 255) + (n >> 8 & 255) + (n & 255)) / 3; };
+  assert(lum('#6f4a63') > lum('#33203a') * 1.5, 'the far row is not hazed toward the sky at all');
+  // measured, exactly: 9 near and 12 far with the cull, 17 and 21 without
+  assert(near.length <= 13, `${near.length} near blocks painted — the loop is not culling`);
+  assert(far.length <= 16, `${far.length} far blocks painted — the far loop is not culling`);
+});
+
+test('the sunset rims whichever edge is facing it', () => {
+  const api = boot();
+  play(api, { stage: 4 });
+  api.cam.x = 0;
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const sunX = api.VW - 92;
+  const rims = api._rects.filter(q => q[2] === 1 && q[3] > 20 && /rgba\(255,\s*176,\s*96/.test(String(q[4])));
+  assert(rims.length >= 5, 'nothing on the skyline catches the sun: ' + rims.length);
+  const alpha = (q) => +(/rgba\([^)]*,\s*([0-9.]+)\)/.exec(String(q[4])) || [0, 0])[1];
+  const byDist = rims.slice().sort((a, b) => Math.abs(a[0] - sunX) - Math.abs(b[0] - sunX));
+  assert(alpha(byDist[0]) > alpha(byDist[byDist.length - 1]) + 0.1,
+    `the rim should fade with distance from the sun: ${alpha(byDist[0])} nearest, ${alpha(byDist[byDist.length - 1])} furthest`);
+  // and it is on the side facing the sun, not the shaded one
+  // every rim has to sit on the edge of its block that faces the sun
+  const blocks = api._rects.filter(q => q[4] === '#33203a' && q[2] === 38);
+  let checked = 0;
+  for (const rim of rims){
+    const owner = blocks.find(q => rim[0] === q[0] || rim[0] === q[0] + 37);
+    if (!owner) continue;
+    checked++;
+    const want = owner[0] + 19 < sunX ? owner[0] + 37 : owner[0];
+    assert(rim[0] === want, `a rim at ${rim[0]} is down the shaded side of the block at ${owner[0]}`);
+  }
+  assert(checked >= 4, 'only ' + checked + ' rims could be matched to a block');
+});
+
+test('the roofs of the skyline are not all the same', () => {
+  const api = boot();
+  play(api, { stage: 4 });
+  let setbacks = 0, tanks = 0, masts = 0, plain = 0;
+  for (let gx = 0; gx < 300; gx++){
+    if (api.hash(gx + 41) > 0.55) setbacks++;
+    const roof = api.hash(gx + 29);
+    if (roof > 0.7) tanks++; else if (roof > 0.42) masts++; else plain++;
+  }
+  assert(setbacks > 90 && setbacks < 210, 'setbacks are on ' + setbacks + ' of 300');
+  for (const [n, v] of [['tank', tanks], ['mast', masts], ['plain', plain]])
+    assert(v > 40, `only ${v} of 300 blocks get a ${n} roof`);
+  api.draw();
+  api._resetCounts();
+  api.drawBackground();
+  const r = api._rects;
+  assert(r.some(q => q[4] === '#33203a' && q[2] === 22), 'no setback storeys were drawn');
+  assert(r.some(q => q[4] === '#2b1b32' && q[2] === 10), 'no water tanks on the skyline');
+  assert(r.some(q => q[4] === '#2b1b32' && q[2] === 1 && q[3] === 13), 'no masts on the skyline');
+});
+
 /* --------------------------------------------------------- the foundry */
 test('the furnaces are built into brick, with iron round the mouth', () => {
   const api = boot();
