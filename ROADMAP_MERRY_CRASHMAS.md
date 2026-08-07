@@ -389,6 +389,19 @@ edit this block to name the next one.
       whole plan and buried the driver at full damage, and the second hung
       marks off the flanks and the nose.
 
+- [x] The crowd barrier is a barrier. It was five flat `fillRect`s — a white
+      bar, four upright red blocks and two grey stubs — while every other prop
+      in the market had picked up a lit face, a shaded face and snow along its
+      top edge. It is drawn in numbers, too: the rink alone rings itself with
+      sixteen. Now it has slanted hazard stripes in one path (four upright
+      blocks read as a fence panel, not a barrier), a lit top rail, a shaded
+      lower one, and a foot at each end; wrecked, it is two snapped rail
+      pieces with a foot bent up out of the snow, under a shadow sized to the
+      wreck rather than to the whole rail it used to be. One trap worth
+      remembering: **`roundRect` opens its own path**, so two of them cannot
+      share a `fill()` — stacking both feet into one silently drew the far one
+      only, and there is now an assertion that counts feet.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

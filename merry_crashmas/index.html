@@ -4726,19 +4726,47 @@ function drawProp(o){
          they actually were. The ring follows its circle by snapping each
          barrier to the nearer axis instead — see genMarket. */
       ctx.rotate(o.dead ? o.rot : 0);
-      shadow(0, THK * 0.6, L * 0.5, THK * 0.6, 0.2);
+      // a wreck is two short pieces, not a full-length rail: it had been
+      // casting a whole barrier's shadow under a third of one
+      shadow(0, THK * 0.6, L * (o.dead ? 0.3 : 0.5), THK * 0.6, o.dead ? 0.16 : 0.2);
+      /* A crowd barrier was five flat fillRects: a white bar, four upright red
+         blocks and two grey stubs. Every other prop in the market got a lit
+         face, a shaded face and snow along its top edge; this one is drawn in
+         numbers — the rink alone rings itself with sixteen — and still read as
+         a diagram. Same five fills, spent differently. */
       if (o.dead){
-        ctx.fillStyle = '#6a5138';
-        ctx.fillRect(-L * 0.44, -THK * 0.4, L * 0.3, THK * 0.8);
-        ctx.fillRect(L * 0.08, -THK * 0.2, L * 0.28, THK * 0.6);
+        // snapped in two and dropped, with a foot bent up out of the snow
+        ctx.fillStyle = '#b9c2d0';
+        roundRect(-L * 0.46, -THK * 0.34, L * 0.34, THK * 0.68, 3); ctx.fill();
+        roundRect(L * 0.02, -THK * 0.12, L * 0.36, THK * 0.52, 3); ctx.fill();
+        ctx.fillStyle = '#8a94a6';                 // the foot, on its side
+        roundRect(L * 0.36, -THK * 0.5, THK * 0.34, THK, 2); ctx.fill();
+        ctx.fillStyle = 'rgba(9,16,32,.3)';        // the break, between them
+        ctx.fillRect(-L * 0.13, -THK * 0.3, L * 0.16, THK * 0.24);
       } else {
-        ctx.fillStyle = '#d8dee8';
-        ctx.fillRect(-L / 2, -THK / 2, L, THK);
+        ctx.fillStyle = '#cfd7e3';
+        roundRect(-L / 2, -THK / 2, L, THK, 3); ctx.fill();
+        /* Slanted, because that is what a hazard stripe is — four upright
+           blocks read as a fence panel, not as a barrier. One path. */
         ctx.fillStyle = '#c8443a';
-        for (let i = 0; i < 4; i++) ctx.fillRect(-L / 2 + 8 + i * (L / 4), -THK / 2, L / 9, THK);
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++){
+          const x = -L / 2 + 10 + i * (L / 4.4), w = L / 11, sl = THK * 0.55;
+          ctx.moveTo(x, -THK / 2); ctx.lineTo(x + w, -THK / 2);
+          ctx.lineTo(x + w - sl, THK / 2); ctx.lineTo(x - sl, THK / 2);
+          ctx.closePath();
+        }
+        ctx.fill();
+        // the lit lip along the top rail, and the snow that has settled on it
+        ctx.fillStyle = 'rgba(255,250,238,.4)';
+        roundRect(-L / 2 + 3, -THK / 2, L - 6, THK * 0.3, 2); ctx.fill();
+        ctx.fillStyle = 'rgba(12,20,38,.2)';
+        roundRect(-L / 2 + 3, THK * 0.2, L - 6, THK * 0.3, 2); ctx.fill();
+        // feet. roundRect opens its own path, so these cannot share one —
+        // stacking them silently drew the far foot only.
         ctx.fillStyle = '#8a94a6';
-        ctx.fillRect(-L / 2, -THK / 2 - 5, 9, THK + 10);
-        ctx.fillRect(L / 2 - 9, -THK / 2 - 5, 9, THK + 10);
+        roundRect(-L / 2 - 1, -THK / 2 - 5, 10, THK + 10, 3); ctx.fill();
+        roundRect(L / 2 - 9, -THK / 2 - 5, 10, THK + 10, 3); ctx.fill();
       }
       ctx.restore(); break;
     }
