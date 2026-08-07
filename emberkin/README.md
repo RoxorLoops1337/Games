@@ -2142,12 +2142,30 @@ travelling *upward*, since the direction is the entire reading.
 
 It is deliberately quiet. A rest should not out-shout an evolution.
 
-### The starter screen is right
+### The starter screen, and the one fault that mattered
 
-Photographed for the first time and needs nothing: each card tinted to its
-element, the art in a lit window of that colour, the name in the element's own
-colour, and STRONG INTO / SOFT AGAINST chips so an irreversible choice is made
-with the matchup visible. Recorded here so nobody goes looking for work in it.
+Photographed wide it needs nothing: each card tinted to its element, the art in
+a lit window of that colour, the name in the element's own colour, and STRONG
+INTO / SOFT AGAINST chips so an irreversible choice is made with the matchup
+visible.
+
+At a phone's size it had the worst fault this whole track has found — not an
+ugly one, a *consequential* one. The row is two cards wide there, so the third
+starter sat almost entirely below the fold with a sliver of its top edge
+showing, and **two cards that fill the row read as the whole set.** A player
+could make the one irreversible choice in the game without knowing a third
+option existed.
+
+Two fixes, because either alone leaves a gap. The count is in the sentence now —
+*"Three of them. One is yours from here on"* — so the words say how many there
+are at every size. And under `body.tight` the cards tighten enough to lift a
+real card top into the frame instead of an edge, so the scroll cue has something
+to point at.
+
+Three cards cannot be made to fit: at this stage height they would have to be a
+quarter of their size, and the flavour and the matchup chips are the reason the
+screen works. Scrolling is the right answer; being unaware there is anything to
+scroll to is not.
 
 ### Something in the grass
 
@@ -2187,6 +2205,29 @@ been on screen.
 `updateBattle` holds `b.entry` while the bars are fully closed. The walk-on now
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
+
+### Losing the legendary says so
+
+The code has always kept the hunt open — knock Vespyr down, run from it, or wipe
+against it and `beatVespyr` stays unset, so it gathers on the shrine again. That
+mechanic was tested from the first pass that wrote it. **Nothing ever told the
+player.**
+
+A wild win says nothing at all, which makes knocking it down the quietest of the
+three ways to lose it and the one most likely to read as *that was my only
+chance*. Someone who believes the only legendary in the game is gone stops going
+back to the shrine, and **no picture can tell them otherwise** — this is work
+only a sentence can do.
+
+All three paths say it now: knocked down (*"Not gone. It will gather on the
+shrine again — bring more orbs."*), fled (*"The light closes behind you. It will
+be up here again."*), and wiped (*"And the thing on the shrine is still up
+there. It always is."*). The suite reads the lines off `G.dialogue` as they
+arrive and checks the words are there, not just the flag.
+
+This is the same category as the starter screen's missing third card: not how
+something looks, but **what a player would believe**. Both were fixed by a
+sentence.
 
 ### The legendary opens with its own words
 

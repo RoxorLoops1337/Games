@@ -890,6 +890,46 @@ ok(!!EK.G.battle && !EK.G.rustle, 'when the grass settles, the fight is on');
   ok(lose.G.fade > 0, 'with the room opening out of it rather than snapping in');
 }
 
+// Losing the legendary without catching it never ends the hunt — and the game
+// says so. The mechanic was tested from the start; the telling was not, and a
+// player who believes it is gone stops going back to the shrine.
+{
+  const leg = loadGame({});
+  leg.setCtx(mkCtx());
+  leg.newGame();
+  for (let i = 0; i < 12 && leg.G.mode === 'dialogue'; i++) leg.advanceDialogue();
+  leg.G.dialogue = null; leg.G.mode = 'world';
+  leg.takeStarter('cindercub'); leg.G.dialogue = null;
+  // Collect every line the game puts on screen while the fight resolves. There
+  // is no hook for this — the lines have to be read off G.dialogue as they
+  // arrive, before they are dismissed.
+  const saidOn = (setup) => {
+    const said = [];
+    leg.G.battle = null; leg.G.dialogue = null; leg.G.battleMsg = null;
+    leg.G.mode = 'world'; leg.healParty();
+    leg.startBattle({ foe: leg.mkMon('vespyr', 26), wild: true, legendary: true });
+    setup(leg.B());
+    autoFight(leg, 400);                 // stepping alone never plays a card
+    // Keep going past the end of the battle: the win lines are said from
+    // winFlourish's callback, which runs on its own clock after G.battle is
+    // already gone. A loop that stops at "no battle" stops one beat too early
+    // and collects only the opening.
+    for (let i = 0; i < 400; i++) {
+      leg.step(.2); leg.fired.clear();
+      const d = leg.G.dialogue || leg.liveBattleMsg();
+      if (d) { said.push(...d.lines); d.hold = 0; leg.advanceDialogue(); }
+      if (leg.G.screen) leg.closeScreen();
+    }
+    return [...new Set(said)].join(' ');
+  };
+  // Knocked down rather than caught: the quietest path, and a wild win used to
+  // say nothing at all.
+  const beat = saidOn((b) => { b.foe.hp = 1; });
+  ok(/again|comes? back|still up|not gone/i.test(beat),
+    `knocking it down says the hunt is still open (${beat.slice(0, 80)})`);
+  ok(!leg.G.flags.beatVespyr, 'and the flag agrees — the hunt really is still open');
+}
+
 // Being healed is a beat too, and the line that says it worked comes after it.
 EK.G.battle = null; EK.G.mend = null; EK.G.mode = 'world';
 EK.G.party.forEach((m) => { m.hp = 1; });
