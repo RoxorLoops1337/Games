@@ -770,6 +770,28 @@ const SCENES = {
       for (let t = 100; t <= 3000; t += 160) setTimeout(beat, t);
     },
   },
+  // The bag OUT of a fight, which is a different screen doing a different job:
+  // in a battle every item acts on the kin that is out, and in the field a
+  // salve has to pick somebody. Shot with a party where that choice is real —
+  // several hurt, one down — because with one kin it cannot be got wrong.
+  bagfield: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.enterMap('route_one', 5, 7, 'down');
+      EK.G.mode = 'world'; EK.G.place = null;
+      EK.G.party = ['pyrelynx', 'brookite', 'bramblor', 'gargolem']
+        .map((id, i) => EK.mkMon(id, 18 + i * 2));
+      Object.keys(EK.ITEMS).forEach((k, i) => { EK.G.bag[k] = 2 + i; });
+      const p = EK.G.party;
+      p[0].hp = Math.round(p[0].max * .30);
+      p[1].hp = Math.round(p[1].max * .65);
+      p[2].hp = 0;                            // somebody is down, so revive has a job
+      EK.openScreen('bag');
+    },
+  },
   // The bag mid-fight, seen full rather than with the two items a fresh run
   // carries, and the swap screen — the one screen that asks you to give
   // something up. Neither had ever been shot.
