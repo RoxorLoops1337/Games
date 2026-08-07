@@ -67,6 +67,7 @@ const EXPOSE = `__out.api = {
   toCanvas, wantRotate,
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
+  somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
@@ -995,7 +996,12 @@ test('the sleigh previews the distance it really covers', () => {
      it. The preview being honest about the fence is the point. */
   assert(sleigh > hatch * 1.3,
     'the sleigh should preview far more road: ' + Math.round(sleigh) + ' vs ' + Math.round(hatch));
-  assert(hatch > 2900, 'and even the hatchback outruns the old fixed 2627px line: ' + Math.round(hatch));
+  /* 2,627px was what the old hard-coded line always drew, whatever car was on
+     the sling. The margin over it used to be 2,900; the preview stops where
+     the run stops now — it shares somethingAhead() with stepCar — so the tail
+     of empty road it used to draw past the last stall is gone, and the guard
+     is against the fixed line itself rather than against that tail. */
+  assert(hatch > 2627, 'and even the hatchback outruns the old fixed 2627px line: ' + Math.round(hatch));
 });
 
 test('a ramp on the line is called out before you let go', () => {
@@ -2873,11 +2879,20 @@ test('the replay leaves the market exactly as it found it', () => {
      and the crowd where the clip begins so the camera can frame them, so by the
      first replay frame the market is already scribbled on — which is exactly
      the thing this test exists to prove gets put back. */
-  const before = api.people.map(p => [p.x, p.y, p.dead, p.squash, p.ang, p.panic, p.cry, p.fly]);
-  const propsBefore = api.props.map(o => [o.x, o.y, o.dead, o.hp]);
-  const carBefore = [api.car.x, api.car.y, api.car.ang, api.car.z, api.car.roll, api.car.gore];
-  const groundBefore = [api.gore.length, api.tracks.length, api.debris.length];
-  for (let i = 0; i < 200 && api.G.phase !== 'replay'; i++) api.update(1 / 60);
+  /* Re-taken every frame of the settle, so it is the state on the frame the
+     replay actually starts from. Taken once when the drive loop ended, it was
+     a state the market had not finished arriving at — bodies were still in the
+     air, and the run now ends the moment there is nothing left to hit, which
+     leaves more of the settle to happen after the snapshot than before. */
+  let before, propsBefore, carBefore, groundBefore;
+  const snap = () => {
+    before = api.people.map(p => [p.x, p.y, p.dead, p.squash, p.ang, p.panic, p.cry, p.fly]);
+    propsBefore = api.props.map(o => [o.x, o.y, o.dead, o.hp]);
+    carBefore = [api.car.x, api.car.y, api.car.ang, api.car.z, api.car.roll, api.car.gore];
+    groundBefore = [api.gore.length, api.tracks.length, api.debris.length];
+  };
+  snap();
+  for (let i = 0; i < 200 && api.G.phase !== 'replay'; i++){ snap(); api.update(1 / 60); }
   assert(api.G.phase === 'replay', 'in the replay');
   assert(api.gore.length === 0,
     'the clip should not open on the run it is a highlight of, got ' + api.gore.length + ' decals');
@@ -3761,6 +3776,109 @@ test('every market asks for about three quarters of a blind run', () => {
     }
   }
   assert(bad.length === 0, 'markets out of band:\n  ' + bad.join('\n  '));
+});
+
+/* Market 1 — the first market anyone plays — spent 2.0 to 3.3 seconds per car,
+   ten seconds a market, watching a car roll across empty snow with the score
+   frozen. STOP_SPD alone could not fix that: it is at 110, just above KILL_SPD
+   85, so the next notch up starts eating kills. */
+test('a run ends when there is nothing left to hit', () => {
+  const rows = [];
+  for (const lv of [0, 5, 10]){
+    const api = boot({ w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    const tails = [];
+    for (let c = 0; c < api.G.cars && api.G.phase !== 'results'; c++){
+      api.launch(-api.C.MAX_PULL, (c - 1) * 40);
+      let lastT = 0, t = 0, sc = api.G.levelScore;
+      for (let f = 0; f < 3000 && api.G.phase === 'drive'; f++){
+        api.update(1 / 60); t += 1 / 60;
+        if (api.G.levelScore !== sc){ sc = api.G.levelScore; lastT = t; }
+      }
+      tails.push(t - lastT);
+      for (let f = 0; f < 900 && api.G.phase !== 'aim' && api.G.phase !== 'results'; f++){
+        api.skipReplay(); api.update(1 / 60);
+      }
+    }
+    const worst = Math.max(...tails), total = tails.reduce((a, b) => a + b, 0);
+    rows.push(api.LEVELS[lv].name + ' ' + tails.map(x => x.toFixed(1)).join('/') +
+      ' (' + total.toFixed(1) + 's)');
+    assert(worst <= 2.0, api.LEVELS[lv].name + ': ' + worst.toFixed(2) +
+      's of dead run on one car');
+    assert(total <= 6.5, api.LEVELS[lv].name + ': ' + total.toFixed(1) +
+      's of dead run over the market');
+  }
+  /* The cheap fix stayed rejected: raising STOP_SPD would have bought the same
+     seconds by quietly eating kills. */
+  const C = boot().C;
+  assert(C.STOP_SPD >= 110 && C.STOP_SPD > C.KILL_SPD,
+    'STOP_SPD ' + C.STOP_SPD + ' should still sit above KILL_SPD ' + C.KILL_SPD);
+  console.log('    (dead tail: ' + rows.join(' | ') + ')');
+});
+
+test('a car still rolling at a crowd is never cut short', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive';
+  api.props.length = 0; api.people.length = 0; api.pickups.length = 0;
+
+  const aim = (x, y, ang, v) => {
+    api.car.x = x; api.car.y = y; api.car.ang = ang;
+    return api.somethingAhead(v, x, y, ang);
+  };
+  // 120px/s toward a crowd 400px ahead: it will not get there, and the rule says so
+  // parked well clear of every fence, which is itself a thing worth hitting
+  const CX = 1400, CY = 1100;
+  const q = api.addPerson(CX + 400, CY, 'shopper');
+  assert(api.rollOut(120) < 400,
+    '120px/s does not carry 400px, it carries ' + api.rollOut(120).toFixed(0));
+  assert(!aim(CX, CY, 0, 120), 'a car that cannot reach them should not be kept alive');
+  // …but at speed it is squarely a run
+  assert(aim(CX, CY, 0, 700), 'at 700px/s that crowd is very much ahead');
+  assert(api.rollOut(700) > 400, 'because 700px/s does carry that far');
+
+  // dead ahead counts, ninety degrees off does not — the car sweeps a corridor,
+  // not the 150° cone the first version used
+  assert(!aim(CX, CY, Math.PI / 2, 700), 'square across the bow is not ahead');
+  assert(!aim(CX, CY, Math.PI, 700), 'and behind is not ahead');
+  q.y = CY + api.AHEAD_WIDE + api.C.CAR_R + q.r + 20;
+  assert(!aim(CX, CY, 0, 700), 'nor is one the car passes to the side of');
+  q.y = CY;
+
+  // a corpse is not a reason to keep driving
+  q.dead = true;
+  assert(!aim(CX, CY, 0, 700), 'the dead do not count');
+  q.dead = false;
+  assert(aim(CX, CY, 0, 700), 'the living do');
+  api.people.length = 0;
+
+  // the fence counts: it is how a long shot gets thrown back into the crowd
+  assert(aim(api.bounds.x1 - 300, 1100, 0, 700),
+    'a fence 300px ahead at speed is worth staying alive for');
+  assert(!aim(api.bounds.x1 - 300, 1100, 0, 150),
+    'but not at 150px/s, where the bounce leaves it under STOP_SPD');
+
+  // above IDLE_SPD the rule does not run at all
+  assert(api.IDLE_SPD > api.C.STOP_SPD,
+    'the rule stays clear of the speed the run already ends at');
+});
+
+test('the aim preview stops where the run stops', () => {
+  /* The preview models the roll-out; the run now ends on emptiness. They share
+     somethingAhead(), which is the only way the dot and the car can agree —
+     the first version did not, and the preview promised 566px of road the car
+     never drove. */
+  for (const [lv, name] of [[0, 'OPENING NIGHT'], [10, 'NARROW ALLEYS']]){
+    const api = boot({ w: 1280, h: 720, store: ALL_CARS });
+    api.startLevel(lv); api.beginLevel();
+    api.props.length = 0; api.people.length = 0; api.pickups.length = 0;
+    const pv = api.previewPath(-1, 0, 1);
+    api.launch(-api.C.MAX_PULL, 0);
+    for (let i = 0; i < 4000 && api.G.phase === 'drive'; i++) api.update(1 / 60);
+    const err = Math.hypot(pv.end.x - api.car.x, pv.end.y - api.car.y);
+    assert(err < 140, name + ': the preview ends ' + err.toFixed(0) +
+      'px from where the car stops');
+  }
 });
 
 test('the first market clears on the shot everyone takes first', () => {

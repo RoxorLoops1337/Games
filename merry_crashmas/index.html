@@ -507,6 +507,40 @@ const STOP_SPD = 110;                         // below this the run is over — 
                                               // a second of watching a harmless roll
 const RUN_TIMEOUT = 26;                       // seconds, safety net
 
+/* A car that has stopped scoring and has nothing left in front of it is not a
+   run any more, it is a car rolling across snow. STOP_SPD alone left market 1
+   — the first market anyone plays — with 2.0 to 3.3 seconds of that per car,
+   ten seconds a market. Raising STOP_SPD again would have been the cheap fix
+   and the wrong one: it is already at 110, just above KILL_SPD 85, so the next
+   notch starts eating kills. This ends on emptiness instead of on speed, so a
+   run that is still about to hit something is never cut short. */
+const IDLE_END = 1.2;                         // seconds without a point
+const AHEAD_R = 900;                          // cap, for a car still going fast
+const AHEAD_BACK = 40;                        // …and how far behind still counts
+/* A cone was the obvious shape and the wrong one: at 75° either side it is
+   most of a half-plane, and market 1's tail is a car coasting *past* stalls
+   110 to 310px off its shoulder that it was never going to touch — so the run
+   stayed alive for another two and a half seconds every time. What decides
+   whether the car hits something is the corridor it sweeps, which is as wide
+   as the car. */
+const AHEAD_WIDE = 60;                        // slack either side of the corridor
+/* It stays out of the way entirely above IDLE_SPD: up there the fence can
+   still throw the car back into the crowd. */
+const IDLE_SPD = STOP_SPD * 3;
+
+/* How far the car can still go before it drops under STOP_SPD and the run is
+   over anyway — which is the only honest horizon for "is there anything left
+   to hit". A flat 700px was not: at 150px/s the car has about 180px of roll
+   left in it, and market 1's tail was staying alive on stalls 400px away that
+   it was never going to reach. Closed form of the same decay stepCar applies,
+   v' = -(fr·v + drag), so it costs nothing to ask every frame. */
+function rollOut(v){
+  if (v <= STOP_SPD) return 0;
+  const fr = (car.onIce ? ICE_FRICTION : FRICTION) / CAR.glide;
+  const dg = (car.onIce ? DRAG * 0.25 : DRAG) / CAR.glide;
+  return ((v - STOP_SPD) - (dg / fr) * Math.log((fr * v + dg) / (fr * STOP_SPD + dg))) / fr;
+}
+
 /* How many shoppers can be heard crying at once. A 4.6s run on MIDNIGHT MASS
    fired 933 tone() and 41 noise() calls — 212 oscillator spawns a second, from
    218 shoppers with no cap, no falloff and no priority — all summing into a
@@ -633,7 +667,7 @@ const THEMES = {
 let TH = THEMES.dusk;
 
 const LEVELS = [
-  { name:'OPENING NIGHT',        seed:1207, cars:4, rows:2, span:0.48, crowd:1.05, par:0.1241, theme:'dusk', shape:'rows',
+  { name:'OPENING NIGHT',        seed:1207, cars:4, rows:2, span:0.48, crowd:1.05, par:0.1580, theme:'dusk', shape:'rows',
     flavour:'A quiet little market. Nobody is expecting a car.' },
   { name:'GLÜHWEIN ALLEY',  seed:2412, cars:3, rows:2, span:0.66, crowd:1.05, par:0.3754, theme:'alpine', shape:'wave',
     flavour:'Everyone is three mugs deep. Reaction times are excellent.' },
@@ -863,7 +897,7 @@ const G = {
   goalPops: [],           // goals ticked mid-run, announced once the car has stopped
   banner: null,           // {text, t}
   bannerAt: 0,
-  runKills: 0, runWrecks: 0, runScore: 0,
+  runKills: 0, runWrecks: 0, runScore: 0, idleT: 0, idleScore: 0,
 };
 
 const car = {
@@ -1707,7 +1741,7 @@ function nextCar(){
   tracks.push({ x: car.x, y: car.y, a: 0, red: 0, ice: 0, gap: 1 });
   car.z = 0; car.vz = 0; car.roll = 0; car.rollV = 0; car.air = 0;
   car.airT = 0; car.rollAcc = 0; car.gore = 0; car.bloody = 0; car.nitroT = 0;
-  G.runKills = 0; G.runWrecks = 0; G.runScore = 0;
+  G.runKills = 0; G.runWrecks = 0; G.runScore = 0; G.idleT = 0; G.idleScore = 0;
   G.combo = 0; G.comboT = 0; G.mult = 1;
   aim.active = false; aim.x = ANCHOR.x; aim.y = ANCHOR.y; aim.power = 0;
   G.runT = 0;
@@ -3092,9 +3126,48 @@ function stepCar(dt){
 
   engineSet(car.air ? v * 1.25 : v);       // it revs when the wheels leave the ground
 
+  // how long since this car last earned anything
+  if (G.runScore !== G.idleScore){ G.idleScore = G.runScore; G.idleT = 0; }
+  else G.idleT += dt;
+
   const leaving = car.x < MARKET_X - 520 && car.vx < 0 && G.runT > 1.2;
   if (!car.air && (v < STOP_SPD || leaving)) endRun();
   else if (G.runT > RUN_TIMEOUT) endRun();
+  else if (!car.air && v < IDLE_SPD && G.idleT > IDLE_END &&
+           !somethingAhead(v, car.x, car.y, car.ang)) endRun();
+}
+
+/* Is there anything left worth driving at? A cone ahead of the heading, plus a
+   short radius in every direction — the car bounces off the fence and off
+   statues, so something just behind the wing can still end up under it. Only
+   asked once a car has gone IDLE_END without a point, so the sweep over the
+   crowd costs nothing on a run that is still scoring. */
+function somethingAhead(v, ax, ay, ang){
+  const cx = Math.cos(ang), cy = Math.sin(ang);
+  const reach = Math.min(AHEAD_R, rollOut(v));   // what it can still cover
+  const live = (x, y, r) => {
+    const dx = x - ax, dy = y - ay;
+    const fwd = dx * cx + dy * cy;
+    if (fwd < -AHEAD_BACK || fwd > reach) return false;
+    return Math.abs(dx * -cy + dy * cx) < CAR_R + r + AHEAD_WIDE;
+  };
+  /* The fence counts as something to hit. genMarket pulls it in at the end of
+     a market precisely so a long shot bounces back into the crowd, and cutting
+     the run on the outbound leg would throw that away — and would stop the aim
+     preview, which rolls all the way down to STOP_SPD, describing where the car
+     ends up. Only while a bounce would leave it moving: REST is 0.46. */
+  if (v * REST > STOP_SPD){
+    let wall = Infinity;
+    if (cx > 0.001) wall = Math.min(wall, (bounds.x1 - ax) / cx);
+    else if (cx < -0.001) wall = Math.min(wall, (bounds.x0 - ax) / cx);
+    if (cy > 0.001) wall = Math.min(wall, (bounds.y1 - ay) / cy);
+    else if (cy < -0.001) wall = Math.min(wall, (bounds.y0 - ay) / cy);
+    if (wall < reach) return true;
+  }
+  for (const p of people) if (!p.dead && live(p.x, p.y, p.r)) return true;
+  for (const o of props) if (!o.dead && o.pts > 0 && live(o.x, o.y, o.r)) return true;
+  for (const p of pickups) if (!p.taken && live(p.x, p.y, p.r)) return true;
+  return false;
 }
 
 /* ============================ INSTANT REPLAY =============================
@@ -6014,6 +6087,11 @@ function previewPath(ux, uy, p){
     if (t > RUN_TIMEOUT) break;
     // driving back out of the market ends the run early, same as it does live
     if (x < MARKET_X - 520 && vx < 0 && t > 1.2) break;
+    /* …and so does running out of things to hit. The preview never scores, so
+       every second of it is an idle second — which is exactly right, because
+       the part of the line past the last stall is the part the live rule cuts.
+       Sharing one function is the only way the dot and the car agree. */
+    if (sp < IDLE_SPD && t > IDLE_END && !somethingAhead(sp, x, y, Math.atan2(vy, vx))) break;
     let slick = false;
     for (const c of ice){ const dx = x - c.x, dy = y - c.y;
       if (dx * dx + dy * dy < c.r * c.r){ slick = true; break; } }
