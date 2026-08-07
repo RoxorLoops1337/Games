@@ -758,7 +758,7 @@ const tracks = [];      // tyre marks
    seven hundred shoppers walking around cost nothing between frames. Nothing
    here touches either RNG — the foot that goes down is whichever one did not
    go down last. */
-const FOOT_MAX = 180, FOOT_STRIDE = 26, FOOT_TTL = 16;
+const FOOT_MAX = 120, FOOT_STRIDE = 26, FOOT_TTL = 16;
 const foot = []; let footI = 0;
 const gore = [];        // blood left on the snow — pools, spray, chunks, smears
 const debris = [];      // planks and panels left where a stall used to be
@@ -3202,19 +3202,67 @@ function drawTreeTop(x, y, r, dead, rot, seed){
     ctx.restore(); return;
   }
   shadow(0, r * 0.4, r * 0.95, r * 0.42, 0.3);
-  const rings = [[1, TH.tree[0]], [0.72, TH.tree[1]], [0.46, TH.tree[2]], [0.24, TH.tree[3]]];
-  for (const [k, col] of rings){
-    ctx.fillStyle = col; circle(0, 0, r * k); ctx.fill();
+  /* Four plain circles inside each other, in four greens a shade apart, read
+     as one flat disc with dots on it. A conifer from above is tiers of
+     branches: same four fills, but each tier is a spiked ring turned off the
+     last one, so the silhouette has needles in it. */
+  const rings = [[1, TH.tree[0], 14], [0.72, TH.tree[1], 12],
+                 [0.46, TH.tree[2], 10], [0.24, TH.tree[3], 8]];
+  for (let t = 0; t < rings.length; t++){
+    const [k, col, lobes] = rings[t];
+    ctx.fillStyle = col;
+    // shallow, and pulled in far enough that even the points of the outermost
+    // tier stay inside r: the collider is a circle of exactly r, and a
+    // silhouette that reaches past it promises a hit the physics will not give
+    spikeRing(r * k * TREE_TIER, lobes, TREE_SPIKE, seed * 6.28 + t * 0.7);
+    ctx.fill();
   }
-  // baubles
+  // the side the market's light falls on
+  ctx.fillStyle = 'rgba(255,247,228,.10)';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.26, -r * 0.3, r * 0.62, r * 0.5, 0, 0, 6.283); ctx.fill();
+  /* Baubles, with a highlight each so they read as glass rather than
+     confetti. The seven highlights are all the same white, so they go down as
+     one path and one fill — seven of them was 7 fills on every tree in shot,
+     and a busy market has fifteen trees in it. */
   for (let i = 0; i < 7; i++){
     const a = seed * 6.28 + i * 0.9, d = r * (0.38 + (i % 3) * 0.2);
     ctx.fillStyle = i % 3 === 0 ? '#ffd34d' : i % 3 === 1 ? '#e0483c' : '#7ec8ff';
     circle(Math.cos(a) * d, Math.sin(a) * d, r * 0.09); ctx.fill();
   }
-  ctx.fillStyle = '#ffeaa0';
-  circle(0, 0, r * 0.12); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.beginPath();
+  for (let i = 0; i < 7; i++){
+    const a = seed * 6.28 + i * 0.9, d = r * (0.38 + (i % 3) * 0.2);
+    const bx = Math.cos(a) * d - r * 0.03, by = Math.sin(a) * d - r * 0.03;
+    ctx.moveTo(bx + r * 0.032, by);
+    ctx.arc(bx, by, r * 0.032, 0, 6.283);
+  }
+  ctx.fill();
+  // and a star on top, which was a plain cream dot
+  ctx.fillStyle = 'rgba(255,236,160,.22)';
+  circle(0, 0, r * 0.22); ctx.fill();
+  ctx.fillStyle = '#fff3c4';
+  spikeRing(r * 0.115, 5, 0.75, T * 0.25 + seed); ctx.fill();
   ctx.restore();
+}
+
+/* Tier scale and spike depth, kept as constants because their product is what
+   has to stay under 1 — see the assertion in the suite. */
+const TREE_TIER = 0.945, TREE_SPIKE = 0.055;
+
+/* A closed path of `lobes` points alternating between r*(1+d) and r*(1-d).
+   One fill either way — the cost is in the path, which nothing budgets. */
+function spikeRing(r, lobes, d, rot){
+  ctx.beginPath();
+  const n = lobes * 2;
+  for (let i = 0; i < n; i++){
+    const a = rot + (i / n) * 6.283;
+    const rr2 = r * (i % 2 ? 1 - d : 1 + d);
+    const x = Math.cos(a) * rr2, y = Math.sin(a) * rr2;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
 }
 
 function drawProp(o){
@@ -3224,8 +3272,22 @@ function drawProp(o){
     case 'bigtree': {
       drawTreeTop(o.x, o.y, o.r, o.dead, o.rot, o.seed);
       if (!o.dead){
-        ctx.strokeStyle = 'rgba(255,214,110,.5)'; ctx.lineWidth = 4;
-        for (let i = 0; i < 3; i++){ circle(o.x, o.y, o.r * (0.4 + i * 0.26)); ctx.stroke(); }
+        /* Three concentric hoops read as hoops. A garland is a string of
+           bulbs, so this is the same three rings drawn as lights on a wire. */
+        for (let i = 0; i < 3; i++){
+          const rr2 = o.r * (0.42 + i * 0.25);
+          ctx.strokeStyle = 'rgba(255,214,110,.22)'; ctx.lineWidth = 2;
+          circle(o.x, o.y, rr2); ctx.stroke();
+          const n = 8 + i * 4;
+          for (let j = 0; j < n; j++){
+            const a = o.seed * 6.28 + i * 0.8 + j * (6.283 / n);
+            const f = 0.55 + 0.45 * Math.sin(T * 3 + j * 1.4 + i);
+            ctx.fillStyle = j % 3 === 0 ? 'rgba(255,120,90,' + f.toFixed(2) + ')'
+              : j % 3 === 1 ? 'rgba(255,226,140,' + f.toFixed(2) + ')'
+                            : 'rgba(150,225,255,' + f.toFixed(2) + ')';
+            circle(o.x + Math.cos(a) * rr2, o.y + Math.sin(a) * rr2, o.r * 0.035); ctx.fill();
+          }
+        }
       }
       break;
     }
@@ -3275,13 +3337,41 @@ function drawProp(o){
         ctx.fillStyle = '#e6eefb'; circle(0, 0, o.r * 0.55); ctx.fill();
         ctx.fillStyle = '#dbe5f5'; circle(o.r * 0.5, o.r * 0.3, o.r * 0.35); ctx.fill();
       } else {
+        /* A white disc with two dots and a carrot. It has twig arms, a scarf
+           and a hat now, and the two snowballs are lit on the same side as
+           everything else in the market. */
+        /* A white disc with two dots and a carrot. It keeps the face — you
+           are meant to see who you are about to flatten — and gains twig
+           arms, a scarf and coal buttons on the body ring. No hat: from
+           directly above a hat covers the face, and a snowman you cannot
+           read the face of is a snowball. */
+        ctx.strokeStyle = '#4a3524'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-o.r * 0.7, o.r * 0.12); ctx.lineTo(-o.r * 1.45, -o.r * 0.34);
+        ctx.moveTo(-o.r * 1.16, -o.r * 0.1); ctx.lineTo(-o.r * 1.36, o.r * 0.2);
+        ctx.moveTo(o.r * 0.7, o.r * 0.12); ctx.lineTo(o.r * 1.45, -o.r * 0.28);
+        ctx.moveTo(o.r * 1.18, -o.r * 0.14); ctx.lineTo(o.r * 1.38, o.r * 0.18);
+        ctx.stroke();
         ctx.fillStyle = '#f2f7ff'; circle(0, 0, o.r); ctx.fill();
-        ctx.fillStyle = '#e2ebf8'; circle(0, 0, o.r * 0.62); ctx.fill();
+        ctx.fillStyle = 'rgba(9,16,32,.13)';
+        ctx.beginPath();
+        ctx.ellipse(o.r * 0.24, o.r * 0.3, o.r * 0.8, o.r * 0.62, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#2b3550';                       // coal buttons
+        circle(-o.r * 0.52, o.r * 0.52, o.r * 0.09); ctx.fill();
+        circle(o.r * 0.14, o.r * 0.76, o.r * 0.09); ctx.fill();
+        ctx.fillStyle = '#c8443a';                       // scarf round the neck
+        ctx.beginPath();
+        ctx.ellipse(0, 0, o.r * 0.74, o.r * 0.74, 0, 0.55, 2.6); ctx.fill();
+        ctx.fillStyle = '#e2ebf8'; circle(0, -o.r * 0.05, o.r * 0.62); ctx.fill();
+        ctx.fillStyle = 'rgba(255,252,246,.65)';
+        circle(-o.r * 0.2, -o.r * 0.26, o.r * 0.32); ctx.fill();
         ctx.fillStyle = '#1b2740';
-        circle(-o.r * 0.2, -o.r * 0.18, 3.4); ctx.fill();
-        circle(o.r * 0.2, -o.r * 0.18, 3.4); ctx.fill();
+        circle(-o.r * 0.21, -o.r * 0.12, 3.4); ctx.fill();
+        circle(o.r * 0.21, -o.r * 0.12, 3.4); ctx.fill();
         ctx.fillStyle = '#e8862c';
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(o.r * 0.5, 5); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, -o.r * 0.02); ctx.lineTo(o.r * 0.56, o.r * 0.14);
+        ctx.lineTo(0, o.r * 0.2); ctx.closePath(); ctx.fill();
       }
       ctx.restore(); break;
     }
@@ -3396,11 +3486,25 @@ function drawProp(o){
       const j = o.shakeT > 0 ? Math.sin(T * 50) * o.shakeT * 6 : 0;
       ctx.translate(j, 0);
       shadow(0, o.r * 0.4, o.r * 0.85, o.r * 0.4, 0.3);
-      ctx.fillStyle = '#28406b'; circle(0, 0, o.r); ctx.fill();
-      ctx.fillStyle = '#c8443a'; circle(0, 0, o.r * 0.66); ctx.fill();
-      ctx.fillStyle = '#f0c9a4'; circle(0, 0, o.r * 0.36); ctx.fill();
-      ctx.fillStyle = '#f3ece0';
-      ctx.fillRect(-o.r * 0.3, o.r * 0.1, o.r * 0.6, o.r * 0.16);
+      /* Three circles inside each other in navy, red and skin. He is the one
+         thing in the market that will not move when you hit him, so he had
+         better look like a soldier standing his ground: shoulder boards, a
+         busby with a plume, a beard and the moustache. */
+      ctx.fillStyle = '#1e3154';                          // shoulders
+      ctx.beginPath();
+      ctx.ellipse(0, o.r * 0.12, o.r * 1.02, o.r * 0.78, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#c9a24a';                          // gold epaulettes
+      circle(-o.r * 0.78, o.r * 0.16, o.r * 0.26); ctx.fill();
+      circle(o.r * 0.78, o.r * 0.16, o.r * 0.26); ctx.fill();
+      ctx.fillStyle = '#28406b'; circle(0, -o.r * 0.06, o.r * 0.82); ctx.fill();
+      ctx.fillStyle = 'rgba(255,247,228,.13)';
+      circle(-o.r * 0.24, -o.r * 0.3, o.r * 0.46); ctx.fill();
+      ctx.fillStyle = '#c8443a'; circle(0, -o.r * 0.1, o.r * 0.6); ctx.fill();
+      ctx.fillStyle = '#f0c9a4'; circle(0, -o.r * 0.02, o.r * 0.34); ctx.fill();
+      ctx.fillStyle = '#f3ece0';                          // beard, then tache
+      ctx.beginPath();
+      ctx.ellipse(0, o.r * 0.26, o.r * 0.34, o.r * 0.2, 0, 0, 6.283); ctx.fill();
+      ctx.fillRect(-o.r * 0.3, o.r * 0.06, o.r * 0.6, o.r * 0.12);
       ctx.restore(); break;
     }
   }

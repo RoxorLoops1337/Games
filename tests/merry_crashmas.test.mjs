@@ -71,6 +71,7 @@ const EXPOSE = `__out.api = {
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
+  drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4215,6 +4216,64 @@ test('a present is a box with a bow on it', () => {
   console.log('    (present: ' + alive + ' pieces wrapped, ' + wrecked + ' torn open)');
   assert(alive >= 9, 'a wrapped present needs a lid, a shade, snow, ribbons and a bow, got ' + alive);
   assert(wrecked < alive, 'a torn-open one should be simpler: ' + wrecked + ' vs ' + alive);
+});
+
+/* ------------------------------------------------------------------ set --- */
+
+/* A conifer from above was four plain circles inside each other in four greens
+   a shade apart: one flat disc with dots on it. The tiers have needles now —
+   but a silhouette that reaches past the collider promises a hit the physics
+   will not give you, and the collider is a circle of exactly r. */
+test('a tree never draws past the circle you can actually hit', () => {
+  const api = boot({ w: 1280, h: 720 });
+  assert(api.TREE_SPIKE > 0.02, 'the tiers should actually be spiked, got ' + api.TREE_SPIKE);
+  const peak = api.TREE_TIER * (1 + api.TREE_SPIKE);
+  console.log('    (outermost tier reaches ' + (peak * 100).toFixed(1) + '% of the collider)');
+  assert(peak <= 1,
+    'the outermost tier reaches ' + peak.toFixed(4) + ' of r, past the collider');
+  assert(peak > 0.9, 'and it should not be a shrunken disc either: ' + peak.toFixed(4));
+});
+
+test('a tree costs a flat handful of fills however many baubles it has', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.setT(2);
+  api._resetCounts();
+  api.drawTreeTop(2000, 1100, 56, false, 0, 0.3);
+  const fills = api._counts.fill || 0;
+  console.log('    (one tree: ' + fills + ' fills)');
+  assert(fills >= 12, 'a tree needs tiers, baubles and a star, got ' + fills);
+  /* Seven baubles used to mean seven highlight fills on top of seven bauble
+     fills, on every tree in a market that holds fifteen of them. The
+     highlights are one path now. */
+  assert(fills <= 18, 'the ornaments should be batched, got ' + fills + ' fills');
+  // a felled tree is a cheaper drawing than a standing one
+  api._resetCounts();
+  api.drawTreeTop(2000, 1100, 56, true, 0.6, 0.3);
+  const dead = api._counts.fill || 0;
+  assert(dead < fills, 'a felled tree should cost less: ' + dead + ' vs ' + fills);
+});
+
+/* The first attempt gave the snowman a top hat, which from directly above is a
+   dark disc sitting exactly where the face is. A snowman whose face you cannot
+   read is a snowball. */
+test('nothing is painted over the snowman face', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const s = api.addProp('snowman', 2000, 1100);
+  api._resetCounts();
+  api.drawProp(s);
+  const st = api._counts._styles || [];
+  const head = st.lastIndexOf('#e2ebf8'), eyes = st.lastIndexOf('#1b2740');
+  const nose = st.lastIndexOf('#e8862c');
+  assert(head >= 0 && eyes >= 0 && nose >= 0,
+    'head, eyes and carrot should all be drawn: ' + st.join('|'));
+  assert(eyes > head, 'the eyes go on after the head, not under it');
+  assert(nose > eyes, 'and the carrot last of all');
+  assert(nose === st.length - 1 || st.slice(nose + 1).every(c => c === '#e8862c'),
+    'something is drawn over the face: ' + st.slice(nose + 1).join('|'));
+  // the arms are strokes, and there are two of them with two twigs each
+  assert((api._counts.stroke || 0) >= 1, 'a snowman should have twig arms');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
