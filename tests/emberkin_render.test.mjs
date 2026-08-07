@@ -6,7 +6,7 @@
 // plays the opening beat-by-beat through the same input the player uses.
 //
 // Run: node tests/emberkin_render.test.mjs
-import { loadGame, mkCtx, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = loadGame();
 const calls = [];
@@ -907,6 +907,21 @@ monkey.enterMap('route_one', 9, 10, 'down');   // drop it where there is grass t
 monkey.G.mode = 'world'; monkey.G.dialogue = null;
 const KEYS = ['up', 'down', 'left', 'right', 'a', 'b', 'a', 'a'];
 const MODES = new Set(['world', 'battle', 'dialogue', 'menu', 'screen', 'title']);
+// Beats that own the screen. `update` picks between them with a precedence
+// ladder of early returns, but `draw` does NOT — drawEvolution, drawFlourish,
+// drawGotcha and the warp each draw on their own `if`. So two live at once is
+// not a tie the ladder settles: the loser goes on being drawn while never being
+// stepped, frozen on top of or underneath the winner. Whether any pair is even
+// reachable has been an open question for several passes; this answers it by
+// watching for it rather than by reading the call sites and reasoning.
+const BEATS = ['warp', 'evoAnim', 'alert', 'rustle', 'mend', 'blackout', 'flourish', 'gotcha'];
+let collided = null, beatsSeen = new Set();
+const watchBeats = (g, where) => {
+  const live = BEATS.filter((k) => g.G[k]);
+  for (const k of live) beatsSeen.add(k);
+  if (live.length > 1 && !collided) collided = `${where}: ${live.join(' + ')}`;
+};
+
 let crashed = null, modesSeen = new Set(), battles = 0, wasBattle = false;
 for (let i = 0; i < 6000 && !crashed; i++) {
   const k = KEYS[Math.floor(Math.random() * KEYS.length)];
@@ -918,12 +933,111 @@ for (let i = 0; i < 6000 && !crashed; i++) {
     monkey.draw();
   } catch (e) { crashed = `frame ${i}, key ${k}: ${e && e.stack ? e.stack.split('\n')[0] : e}`; }
   modesSeen.add(monkey.G.mode);
+  watchBeats(monkey, `frame ${i}`);
   if (monkey.G.battle && !wasBattle) battles++;
   wasBattle = !!monkey.G.battle;
   // Keep it alive so it goes on finding new states rather than sitting in a wipe.
   if (!monkey.G.party.some((m) => m.hp > 0)) monkey.healParty();
 }
 ok(!crashed, `6000 random frames survived${crashed ? ' — ' + crashed : ''}`);
+ok(!collided, `no two screen-owning beats were ever live together${collided ? ' — ' + collided : ''}`);
+// The monkey only ever reaches rustle, gotcha and alert — never warp, evoAnim,
+// mend, blackout or flourish, which is both halves of both collisions anyone
+// actually cared about. Left in as a regression net, but it answers nothing on
+// its own, and a passing run of it must never be read as the pairs being clear.
+// The scripted drives below are what answer that.
+ok(beatsSeen.size > 0, `and it actually reached some (${[...beatsSeen].join(', ')})`);
+
+section('no two screen-owning beats can be live at once');
+{
+  const BEAT_LIST = BEATS;
+  const liveNow = (g) => BEAT_LIST.filter((k) => g.G[k]);
+  // Step frames, watching between each. Returns the first collision seen.
+  const run = (g, frames) => {
+    let bad = null, reached = new Set();
+    for (let i = 0; i < frames; i++) {
+      // 'a' advances everything; 'e' ends a turn that has nothing left to play.
+      // Holding 'a' alone stalls the fight in the player phase for ever, which
+      // is how the first version of this reached no beats at all and reported
+      // the collisions clear on the strength of it.
+      const b = g.G.battle && g.B();
+      const stuck = b && b.phase === 'player' && !b.log && !b.over
+        && !b.hand.some((c) => g.playableNow(b, c));
+      const k = stuck ? 'e' : 'a';
+      g.pressKey(k); g.step(.04); g.releaseKey(k); g.fired.clear();
+      g.draw();
+      const live = liveNow(g);
+      live.forEach((k) => reached.add(k));
+      if (live.length > 1 && !bad) bad = live.join(' + ');
+    }
+    return { bad, reached };
+  };
+
+  // ---- losing: the say, then the blackout that closes over the arena
+  {
+    const g = withDeck(loadGame({}));
+    g.setCtx(mkCtx());
+    g.G.party = [g.mkMon('cindercub', 3)];
+    g.enterMap('route_one', 9, 10, 'down'); g.G.mode = 'world'; g.G.dialogue = null;
+    g.startBattle({ foe: g.mkMon('magmane', 40), wild: true });
+    const r = run(g, 900);
+    ok(r.reached.has('blackout'), `the loss actually reached the blackout (${[...r.reached].join(', ') || 'nothing'})`);
+    ok(!r.bad, `and nothing was live alongside it${r.bad ? ' — ' + r.bad : ''}`);
+  }
+
+  // ---- evolving off the back of a win, which is where flourish and evoAnim meet
+  {
+    const g = withDeck(loadGame({}));
+    g.setCtx(mkCtx());
+    const me = g.mkMon('cindercub', 15);
+    me.xp = g.xpFor(16) - 2;              // the win tips it over, and cindercub evolves
+    g.G.party = [me];
+    g.enterMap('route_one', 9, 10, 'down'); g.G.mode = 'world'; g.G.dialogue = null;
+    g.startBattle({ foe: g.mkMon('sproutle', 4), wild: true });
+    const r = run(g, 900);
+    ok(!r.bad, `a win that evolves keeps its beats apart${r.bad ? ' — ' + r.bad : ''}`);
+    ok(r.reached.has('evoAnim'), `and the evolution really ran (${[...r.reached].join(', ') || 'nothing'})`);
+  }
+
+  // ---- catching, which ends in the gotcha and then the papers screen
+  {
+    const g = withDeck(loadGame({}));
+    g.setCtx(mkCtx());
+    g.G.party = [g.mkMon('cindercub', 20)];
+    g.G.bag = { prismorb: 30 };
+    g.enterMap('route_one', 9, 10, 'down'); g.G.mode = 'world'; g.G.dialogue = null;
+    g.startBattle({ foe: g.mkMon('dewdrip', 3), wild: true });
+    // `tryCatch(log, orbId)` — it fills a log it is handed, and the caller is
+    // meant to pass that to submitLog. Calling it raw sets `over` and nothing
+    // else: the gotcha is raised by finishBattle, which the update loop only
+    // reaches once the battle message in front of it has been dismissed. So the
+    // catch is thrown here and then driven with the same keys a player uses.
+    // Throw the orb with NO keys down. 'a' in a fight plays the aimed card, so
+    // a version of this that pressed keys while catching quietly fought the
+    // battle instead: a Lv20 kin killed the Lv3 foe, levelled, and evolved, and
+    // the test that thought it was watching a catch was watching a win. (The
+    // invariant held through that pile-up too, which is worth more than the
+    // scenario it was supposed to be running.)
+    // No keys at all. Playback advances on its own `hold` timer, so the opener
+    // clears without help — and 'a' in a clean player phase plays the aimed
+    // card, which turned an earlier version of this into a win with a level-up
+    // and an evolution while it believed it was watching a catch. (The
+    // invariant held through that pile-up too, which is worth more than the
+    // scenario it was meant to run.)
+    let thrown = 0, landed = false;
+    for (let i = 0; i < 500; i++) {
+      const b = g.G.battle && g.B();
+      if (!b) break;
+      if (b.over) { landed = b.over === 'caught'; break; }
+      if (!b.log) { g.tryCatch([], 'prismorb'); thrown++; }
+      g.step(.04); g.fired.clear(); g.draw();
+    }
+    ok(thrown > 0 && landed, `the orb landed (${thrown} throws)`);
+    const r = run(g, 600);
+    ok(r.reached.has('gotcha'), `the catch reaches the gotcha (${[...r.reached].join(', ') || 'nothing'})`);
+    ok(!r.bad, `and nothing rides along with it${r.bad ? ' — ' + r.bad : ''}`);
+  }
+}
 ok([...modesSeen].every((m) => MODES.has(m)), `only valid modes reached (${[...modesSeen].join(', ')})`);
 ok(modesSeen.has('world'), 'it walked around');
 ok(battles > 0, `it stumbled into ${battles} battles`);

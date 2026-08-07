@@ -2684,6 +2684,39 @@ kin that beats yours; two levels on top of that made the opening fight
 unwinnable, which the story suite missed for a while because it fought that
 battle with a stacked party. It fights it with the level-5 starter now.
 
+## Testing anything you can see
+
+The raw functions on `EK` and the presentation layer are two different games.
+`playCard`, `endTurn` and `tryCatch` **return** a log; `submitLog` is what plays
+it back, and every animated thing — HP and XP bars chasing their targets, the
+level-up ring, the gotcha, the flourish, `finishBattle` raising any of them —
+hangs off that playback. `autoFight` calls the raw functions and throws their
+logs away, so a test built on it exercises the rules and none of the show. Two
+separate tests have now watched a bar that was never being animated and
+pronounced it fine.
+
+So: anything visible is driven through real input. Two things that cost an hour
+each to learn —
+
+- `'a'` in a clean player phase **plays the aimed card**. Pressing it throughout
+  a "catch" test fights the battle instead: a Lv20 kin killed the Lv3 foe,
+  levelled and evolved while the test believed it was watching an orb.
+- Playback advances on its own `hold` timer, so the opening log clears with no
+  key at all. Requiring a keypress to get past it is not needed; requiring
+  `!G.battleMsg` as well waits for something that never clears.
+
+### Beats that own the screen
+
+`warp, evoAnim, alert, rustle, mend, blackout, flourish, gotcha`. `update` picks
+between them with a ladder of early returns; `draw` does **not** — each draws on
+its own `if`. Two live at once would therefore not be a tie the ladder settles:
+the loser goes on being drawn while never being stepped. No pair is reachable
+today, and `emberkin_render` holds that as an invariant, driving the loss, the
+evolving win and the catch and watching every frame. The monkey watches too, but
+it only ever reaches `rustle`, `gotcha` and `alert` — never `blackout`, `evoAnim`,
+`flourish`, `mend` or `warp` — so a green monkey run proves nothing here on its
+own. `enterMap` clears all of them except `warp`, which is deliberate.
+
 ## Tests
 
 ```bash
