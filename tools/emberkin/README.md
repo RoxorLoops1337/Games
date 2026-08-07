@@ -377,6 +377,50 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+52. **The exemption list was a to-do list, and I had been adding to it** (pass
+    141). Acting on 51 directly: grep your own suite for the names it has to
+    special-case. Three came back, and the biggest was mine.
+
+    The cue invariant carried nineteen hand-written names under a comment
+    saying that declaring each new one was the point — *"the check made me
+    declare the new two rather than quietly widening to let them through"*.
+    That was true four times running and it was still the wrong shape. Every
+    one of those nineteen came out of a pure function or a table sitting right
+    there: `hitCue`, `faintCue`, `battleTrack`, `placeTrack`, `STEP_CUE`. The
+    list was not knowledge the suite lacked. It was knowledge it declined to
+    ask for.
+
+    Asking is stronger in both directions, and the proof is that the rewrite
+    catches two classes the old shape could not detect **at all**: a `hitCue`
+    branch returning a name `playCue` never defined, and a tile mapped to a
+    footstep that was never written. The old form only checked *literals*
+    against the table, so anything reached through a variable was exempt from
+    both directions rather than one. Meanwhile a theme nothing points at still
+    fails, which is the true claim — a sound nobody can reach.
+
+    One cue could not be asked for: `step_grass` lived as `|| 'step_grass'` at
+    the single call site, so neither the table nor the regex could see it. That
+    is the same fault one level down — a fact parked where nothing can read it —
+    and the fix is the same one: `stepCue(tile)` makes the default part of the
+    answer. The invariant now puts **every tile character in every map** through
+    the game's own choice.
+
+    The other two: the sky check hand-listed six `GRADE` keys, when `GRADE` is
+    keyed by map kind and map id and both already say whether they are indoors —
+    and it carried a *second* exemption inside the first (`|| id === 'route'`)
+    for the generic route grade, which has no shaft because it is not a place.
+    Asking the MAPS instead of the table removes both, and covers `hollowbrook`,
+    which is not a `GRADE` key at all and so had never been checked. Proven:
+    delete the town's shaft and hollowbrook is now flagged; under the old list
+    nothing happened. And the "every species can actually be obtained" net —
+    the same one that had carved out the shrine — hand-copied `STARTERS`.
+    Proven: drop a kin from `STARTERS` and from the grass and the hand-copy
+    still vouches for it.
+
+    **A list of names in a test is a claim you are making on the program's
+    behalf. Ask the program instead — it is usually one function call away, and
+    the answer covers the cases you did not think to write down.**
+
 51. **Two nets had the bug written into them as an exemption** (pass 140). The
     dex has a `habitat(id)` line whose whole job is to answer "where do I find
     this". For eighteen of nineteen kin it does: *Found in Route One (Lv3–6)*,
