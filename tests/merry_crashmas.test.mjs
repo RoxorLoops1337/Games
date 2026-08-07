@@ -31,7 +31,7 @@ requestAnimationFrame(loop);`;
 const EXPOSE = `__out.api = {
   G, car, aim, props, people, pickups, ice, spills, fx, tracks, gore, lens, debris, snow, snd, cam, shake, bounds,
   LEVELS, PROPS, COMBO_BANNERS, BEST_KEY, PROG_KEY,
-  reseed, rnd, rr, ri, clamp, lerp, angLerp, fmt,
+  reseed, rnd, rr, ri, vrnd, vrr, clamp, lerp, angLerp, fmt,
   genMarket, addProp, addPerson,
   toMenu, startCampaign, startLevel, beginLevel, nextCar, launch, endRun,
   levelEnd, nextLevel, retryLevel, finale, loadBest, saveBest,
@@ -76,6 +76,7 @@ const EXPOSE = `__out.api = {
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
+  windNow, WIND_STREAK, drawSnow, seedSnow,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -5055,6 +5056,103 @@ test('a cable with a stall gone from one end hangs slack, and with both gone is 
   const gone = api._counts.arc || 0;
   api._resetCounts(); api.drawWires();
   assert(gone < half, 'a cable with both ends down should lose its bulbs: ' + gone + ' vs ' + half);
+});
+
+/* -------------------------------------------------------------- weather --- */
+
+/* Snow fell straight down at a fixed drift whatever the weather was doing: a
+   blizzard and a still night moved the same way. */
+function windOver(api, n){
+  const w = [];
+  for (let i = 0; i < n; i++){ api.setT(i * 0.37); w.push(api.windNow()); }
+  return w;
+}
+
+test('the wind swells and drops, and a blizzard blows harder than a still night', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.unlocked = 21;
+  api.startLevel(20); api.beginLevel();                 // a calm theme
+  const calm = windOver(api, 400).map(Math.abs);
+  api.startLevel(12); api.beginLevel();                 // BLIZZARD
+  const hard = windOver(api, 400).map(Math.abs);
+  const span = (a) => Math.max(...a) - Math.min(...a);
+  console.log('    (wind: calm ' + Math.min(...calm).toFixed(3) + '-' +
+    Math.max(...calm).toFixed(3) + ', blizzard ' + Math.min(...hard).toFixed(3) + '-' +
+    Math.max(...hard).toFixed(3) + ')');
+  assert(span(calm) > 0.01 && span(hard) > 0.05,
+    'the wind should gust, not sit still: ' + span(calm).toFixed(3) + ' / ' + span(hard).toFixed(3));
+  assert(Math.min(...hard) > Math.max(...calm),
+    'the quietest moment of a blizzard should still beat the windiest calm night: ' +
+    Math.min(...hard).toFixed(3) + ' vs ' + Math.max(...calm).toFixed(3));
+  assert(Math.max(...hard) < 0.5, 'and it must not run away: ' + Math.max(...hard).toFixed(3));
+  // it is the clock, not the generator
+  api.setT(9.5);
+  const a = api.windNow();
+  for (let i = 0; i < 30; i++){ api.rnd(); api.vrnd(); }
+  api.setT(9.5);
+  assert(api.windNow() === a, 'the wind moved when a generator did');
+});
+
+test('a calm night falls in dots and a blizzard blows in streaks', () => {
+  const cost = (lv) => {
+    const api = boot({ count: true, w: 1440, h: 810 });
+    api.G.unlocked = 21; api.startLevel(lv); api.beginLevel();
+    let strokes = 0, fills = 0, lit = 0;
+    for (let i = 0; i < 120; i++){
+      api.setT(i * 0.37);
+      api._resetCounts();
+      api.drawSnow();
+      strokes += api._counts.stroke || 0;
+      fills += api._counts.fill || 0;
+      if ((api._counts.stroke || 0) > 1) lit++;
+    }
+    return { strokes, fills, frames: 120, over: lit };
+  };
+  const calm = cost(20), hard = cost(12);
+  console.log('    (snow over 120 frames: calm ' + calm.strokes + ' strokes, blizzard ' +
+    hard.strokes + ')');
+  assert(calm.fills === 120 && hard.fills === 120,
+    'every frame lays the heads down in exactly one fill');
+  assert(calm.strokes === 0, 'a calm night should draw no streaks at all, got ' + calm.strokes);
+  assert(hard.strokes > 100, 'a blizzard should streak nearly every frame, got ' + hard.strokes);
+  assert(!hard.over, 'and all of the tails in a frame go down in one stroke');
+});
+
+test('the weather does not touch the simulation', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.unlocked = 21; api.startLevel(12); api.beginLevel();
+  api.reseed(777);
+  const clean = api.rnd();
+  api.reseed(777);
+  for (let i = 0; i < 900; i++){ api.setT(i / 60); api.stepSnow(1 / 60); }
+  assert(api.rnd() === clean,
+    'fifteen seconds of blizzard moved the simulation RNG: ' + api.rnd() + ' vs ' + clean);
+});
+
+/* Fog was one flat rgba(214,228,246,TH.fog) over the whole frame — the same
+   value in every corner, which is the one thing fog never is. */
+test('fog is banks drifting, not a flat wash', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.G.unlocked = 21;
+  api.startLevel(12); api.beginLevel();                  // BLIZZARD, the foggiest
+  assert(api.getTheme().fog > 0, 'this theme should have fog on it');
+  api.drawVignette();                                    // warm the gradient
+  api._resetCounts();
+  api.drawVignette();
+  const foggy = { img: api._counts.drawImage || 0, rect: api._counts.fillRect || 0 };
+  assert(foggy.img >= 4, 'fog should be drifting banks, got ' + foggy.img + ' of them');
+  assert(foggy.rect >= 1, 'with a wash under them so a heavy theme still reads');
+  // a theme with no fog pays for none of it
+  const clear = api.LEVELS.findIndex(lv => api.THEMES[lv.theme].fog === 0);
+  assert(clear >= 0, 'some theme should be clear');
+  api.startLevel(clear); api.beginLevel();
+  api.drawVignette();
+  api._resetCounts();
+  api.drawVignette();
+  console.log('    (fog: ' + foggy.img + ' banks on the blizzard, ' +
+    (api._counts.drawImage || 0) + ' on ' + api.getTheme().name + ')');
+  assert(!(api._counts.drawImage || 0),
+    'a clear night is drawing fog banks: ' + api._counts.drawImage);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

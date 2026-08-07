@@ -125,6 +125,9 @@ edit this block to name the next one.
       bulbs, paired off the finished prop list with no RNG, one stroke for
       every cable in shot and one fill per bulb colour. A cable with a stall
       gone from one end hangs slack; with both gone it is cut.
+- [x] Weather that reads: wind that gusts on a clock, snow that streaks in a
+      blizzard and falls in dots on a still night, and fog as drifting banks
+      rather than one flat wash.
 
 ## Next
 
@@ -143,9 +146,11 @@ edit this block to name the next one.
       leaderboard (`functions/api/board.js`). Compare against yesterday.
 - [ ] **Endless mode.** Markets keep generating, targets ramp, one car at a time,
       run ends when a market is missed.
-- [ ] **Weather that bites.** Blizzard should actually reduce what you can see
-      before launch; fog banks that hide a crowd until you are in it; wind that
-      pushes the car mid-flight.
+- [ ] **Weather that bites.** The *look* is done — gusting wind, streaking
+      snow, drifting fog banks. What is left is the part that changes play:
+      fog that actually hides a crowd until you are in it, and wind that
+      pushes the car mid-flight. Both move the simulation, so both need the
+      21 pars re-derived.
 - [x] **Sound pass.** Done in plan item 17: wails capped at three voices inside
       900px, an engine drone that tracks speed, squish pitched by the combo, a
       landing voice of its own, a resumable context and a baked noise bank —

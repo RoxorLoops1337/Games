@@ -3035,10 +3035,24 @@ function seedSnow(){
       d: vrr(-0.02, 0.02) - (hard ? 0.09 : 0), p: vrr(0, 6.28) });
   }
 }
+/* The wind, in screen-widths per second. Snow fell straight down at a fixed
+   drift whatever the weather was doing: a blizzard and a still night moved the
+   same way. Two sines that never line up, so it swells and drops without ever
+   repeating on a beat you can hear — and off the clock, not the generator, so
+   every machine gets the same weather at the same moment of a run. */
+const WIND_STREAK = 0.06;      // below this the snow is falling, not blowing
+function windNow(){
+  const hard = (TH && TH.snow) > 150;
+  const base = hard ? -0.20 : -0.03;
+  const gust = Math.sin(T * 0.23) * 0.62 + Math.sin(T * 0.61 + 1.7) * 0.31;
+  return base + gust * (hard ? 0.11 : 0.028);
+}
 function stepSnow(dt){
+  const w = windNow();
   for (const f of snow){
     f.y += f.v * dt;
-    f.x += (f.d + Math.sin(T * 0.7 + f.p) * 0.01) * dt;
+    // the big flakes are nearer, so the gust takes them further
+    f.x += (f.d + w * (0.55 + f.s * 0.3) + Math.sin(T * 0.7 + f.p) * 0.01) * dt;
     if (f.y > 1.05){ f.y -= 1.1; f.x = vrnd(); }
     if (f.x > 1.05) f.x -= 1.1; else if (f.x < -0.05) f.x += 1.1;
   }
@@ -5517,6 +5531,25 @@ function nitroRect(){
 
 function drawSnow(){
   screenTransform();
+  const w = windNow();
+  /* Hard enough and a flake is a streak, not a dot — but only hard enough.
+     The first version scaled the tail straight off the wind and a calm night
+     came out as 40px diagonal streaks, which reads as rain. Nothing under
+     WIND_STREAK gets a tail at all, and above it the tail grows with the gust,
+     so a blizzard breathes between 23 and 117px. One stroke for every tail on
+     screen and one fill for every head, whatever the weather. */
+  const tail = Math.max(0, Math.abs(w) - WIND_STREAK) * VW * 0.35;
+  if (tail > 6){
+    ctx.strokeStyle = 'rgba(255,255,255,.34)';
+    ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const f of snow){
+      const x = f.x * VW, y = f.y * VH, t = tail * (0.55 + f.s * 0.3);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - w / Math.abs(w) * t, y - f.v * VH * 0.22);
+    }
+    ctx.stroke();
+  }
   ctx.fillStyle = 'rgba(255,255,255,.7)';
   ctx.beginPath();
   for (const f of snow){
@@ -5607,9 +5640,28 @@ function drawReplayFrame(){
 
 function drawVignette(){
   screenTransform();
+  /* Fog was one flat rgba(214,228,246,TH.fog) over the whole frame — the same
+     value in every corner, which is the one thing fog never is. Half of it
+     stays as a wash so a heavy theme still reads, and the rest is five banks
+     drifting across on the wind, drawn with the light sprite so they have an
+     edge that falls off. */
   if (TH.fog > 0){
-    ctx.fillStyle = 'rgba(214,228,246,' + TH.fog + ')';
+    ctx.fillStyle = 'rgba(214,228,246,' + (TH.fog * 0.45).toFixed(3) + ')';
     ctx.fillRect(0, 0, VW, VH);
+    lightSprites();
+    if (maskSprite){
+      const drift = windNow() * 0.35;
+      ctx.save();
+      ctx.globalAlpha = TH.fog * 0.8;
+      for (let i = 0; i < 5; i++){
+        const span = VW * 1.5, r = VW * (0.32 + (i % 3) * 0.1);
+        let bx = ((i * 0.37 + T * drift) % 1 + 1) % 1;
+        const x = bx * (span + r * 2) - r;
+        const y = VH * (0.18 + (i * 0.19) % 0.7) + Math.sin(T * 0.09 + i) * VH * 0.06;
+        ctx.drawImage(maskSprite, x - r, y - r * 0.55, r * 2, r * 1.1);
+      }
+      ctx.restore();
+    }
   }
   const key = VW + 'x' + VH;
   if (key !== vigKey || TH.name !== vigTheme){
