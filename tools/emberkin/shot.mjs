@@ -81,6 +81,27 @@ const SCENES = {
         i: 2, t: .22, swapped: false, res: null };
     },
   },
+  // The throw itself, end to end: out of the hand, the suck, the fall, three
+  // wobbles with dead air between them, and the click. Film this one.
+  catching: {
+    w: 300, h: 260,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+      EK.G.wipe = 0;
+      const b = EK.B();
+      b.foe.hp = Math.max(1, Math.round(b.foe.max * .12));   // softened up, as you would
+      EK.G.bag.bloomorb = 5;
+      EK.G.battleMsg = null;      // the intro line holds the screen until dismissed
+      // doAction only builds the log; submitLog is what plays it back, and the
+      // orb animation lives in the playback. Filming the return value of
+      // doAction films two kin standing still, which is what the first attempt
+      // at this scene recorded.
+      EK.submitLog(EK.doAction({ kind: 'item', id: 'bloomorb', target: 'foe' }));
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {
