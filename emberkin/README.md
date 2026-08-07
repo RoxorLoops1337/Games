@@ -2033,6 +2033,21 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### The legendary opens with its own words
+
+Everything about the encounter is built up — its own cue, twice the motes, a
+heavier vignette, forty gems, a shrine to find it at — and then it announced
+itself with `A wild Vespyr bristles!`, word for word what a level-six Dewdrip
+gets. It was photographed five passes running without anyone reading the text.
+
+It gets three lines of its own now. That is a real consequence and not only a
+cosmetic one: it is one more dismissal before the fight, and the story suite's
+driver counted taps rather than draining the queue, so it broke immediately.
+`clear()` cannot drain a battle message — in a fight `G.mode` is `'battle'`, so
+it returns straight away and the intro lines were only ever being dismissed
+incidentally by whatever tapped next. That held for exactly as long as every
+fight opened with the same two lines. The suite drains properly now.
+
 ### Being ambushed
 
 A trainer spotting you was an exclamation mark and a dialogue box with an
@@ -2085,6 +2100,31 @@ always has.
 `commitNick` trims, squashes runs of spaces, caps at 12 characters, and treats
 "named after its own species" as no nickname at all. It runs on the way out as
 well as on the button, so a name you typed is never lost by closing the screen.
+
+### The papers
+
+The screen a catch hands you, and the only one in the game with a text input.
+Never photographed until now, which showed two things.
+
+The kin was a **fixed 150px** in a thousand-pixel panel — a passport photo one
+second after the gotcha had filled the frame with the same creature, so the
+drama fell off a cliff at exactly the moment the player got what they came for.
+It is em-based now, so it tracks the stage instead of staying 150px at every
+size, and the two columns centre on each other rather than hanging off a
+flex-start baseline with the portrait dangling below the text.
+
+### A screen that scrolls says so
+
+The deck is longer than the frame and its last row was cut clean off by the
+panel edge with nothing to suggest there was more below — which reads as a
+broken screen rather than a long one. The render suite checks the scroll
+affordances are *wired up*; it cannot check that they can be seen.
+
+`#screen` uses the `local`/`scroll` background trick: two cover layers scroll
+**with** the content and sit over two shadow layers pinned to the frame, so a
+shadow only appears at an edge you have actually scrolled away from. No JS, no
+extra element, and it disappears by itself on a screen that fits — verified by
+shooting the reward screen, which is short, and finding no cue on it.
 
 ### A card after every win
 

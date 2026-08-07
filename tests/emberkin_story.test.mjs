@@ -25,6 +25,16 @@ const clear = (limit = 40) => {
   for (let i = 0; i < limit && G.mode !== 'world' && G.mode !== 'battle'; i++) tap('a');
   return G.mode;
 };
+/**
+ * Drain the battle's own message queue. `clear()` cannot: in a fight G.mode is
+ * 'battle', so it returns straight away and the intro lines were only ever
+ * dismissed incidentally by whatever tapped next. That held while every fight
+ * opened with exactly two lines. The legendary opens with three, and counting
+ * taps instead of draining is what broke here first.
+ */
+const drainMsg = (limit = 12) => {
+  for (let i = 0; i < limit && EK.liveBattleMsg(); i++) tap('a');
+};
 /** Fight the current battle to the end, sending out the next kin when one falls. */
 function fightToEnd(limit = 40) {
   for (let round = 0; round < limit; round++) {
@@ -198,6 +208,7 @@ for (let i = 0; i < 400 && !appeared; i++) {
   EK.onArrive();
   clear();
   appeared = !!G.battle && G.battle.foe.species === 'vespyr';
+  if (appeared) drainMsg();
   if (G.battle && !appeared) { G.battle = null; G.mode = 'world'; }
 }
 ok(appeared, 'Vespyr turns up on the shrine grass');
@@ -211,10 +222,11 @@ for (let round = 0; round < 120 && !caught; round++) {
     ok(!G.flags.beatVespyr, 'losing it is not permanent');
     G.flags.vespyrSeenAt = -100;
     EK.startBattle({ foe: EK.mkMon('vespyr', 26), wild: true, legendary: true });
-    clear();
+    clear(); drainMsg();
   }
   const b = EK.B();
   if (!b) break;
+  drainMsg();
   b.foe.hp = 1;                                    // stand in for whittling it down
   EK.doAction({ kind: 'item', id: 'prismorb' });
   if (EK.B() && EK.B().over === 'caught') { tap('a', 8); caught = G.dex.vespyr === 2; }

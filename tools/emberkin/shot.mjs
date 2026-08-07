@@ -221,6 +221,21 @@ const SCENES = {
       EK.openScreen('reward', { offer: ['reaper', 'bulwark', 'warcry'], done: () => {} });
     },
   },
+  // The papers a catch hands you — the one screen where the name is yours, and
+  // the only one in the game with a text input. Never photographed at all.
+  // `fresh: true` is the state that follows the gotcha; `back: 'party'` is the
+  // same screen reached later from the menu, which has a way out and a title.
+  papers: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      const m = EK.mkMon('vespyr', 26);
+      EK.G.party.push(m);
+      EK.openScreen('profile', { mon: m, fresh: true, legendary: true, done: () => {} });
+    },
+  },
   // A long screen, to check that centring short ones did not break tall ones.
   deck: {
     w: 760, h: 760,
@@ -237,6 +252,13 @@ const SCENES = {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
       EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'crown_hollow';
+      // A party that can survive the opening. The scene used to send the Lv5
+      // starter, and a Lv26 legendary moves first and one-shots it before the
+      // player ever acts — so every photograph of the climax of the game for
+      // five passes was of a corpse: dropped ten pixels and faded to 30%, which
+      // reads exactly like a creature drained of its colour by the foe's
+      // element. That reading was argued three separate times.
+      EK.G.party = [EK.mkMon('pyrelynx', 30)];
       EK.startBattle({ foe: EK.mkMon('vespyr', 26), wild: true, legendary: true });
     },
   },
@@ -260,8 +282,19 @@ if (si >= 0) {
   argv.splice(si, 2);
 }
 
-const STATS = argv.includes('--stats');
-if (STATS) argv.splice(argv.indexOf('--stats'), 1);
+// `--stats` optionally takes a box: `--stats 35,100,55,45` measures only that
+// rectangle of the 256x208 canvas. Whole-frame numbers answer "is this frame
+// flat"; they cannot answer "is this creature drained", because the creature is
+// a few hundred pixels out of fifty thousand. Three separate times an argument
+// about one sprite has been had with a number describing the whole picture.
+let STATS = argv.includes('--stats');
+let BOX = null;
+if (STATS) {
+  const i = argv.indexOf('--stats');
+  const m = /^(\d+),(\d+),(\d+),(\d+)$/.exec(argv[i + 1] || '');
+  argv.splice(i, m ? 2 : 1);
+  if (m) BOX = m.slice(1).map(Number);
+}
 
 const FILM = argv[0] === '--film';
 const want = FILM ? argv[1] : argv[0];
@@ -329,9 +362,10 @@ for (const name of list) {
   // which of five stacked wash layers flattened a map does not work; measuring
   // the frame and comparing it against a map that reads well does.
   if (STATS) {
-    const s = await page.evaluate(() => {
+    const s = await page.evaluate((box) => {
       const c = document.getElementById('view');
-      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const [bx, by, bw, bh] = box || [0, 0, c.width, c.height];
+      const d = c.getContext('2d').getImageData(bx, by, bw, bh).data;
       let lo = 255, hi = 0, sum = 0, n = 0, sat = 0;
       for (let i = 0; i < d.length; i += 4) {
         const r = d[i], g2 = d[i + 1], b = d[i + 2];
@@ -347,7 +381,7 @@ for (const name of list) {
       }
       return { lo: lo | 0, hi: hi | 0, mean: mean | 0,
         sd: Math.sqrt(vr / n).toFixed(1), sat: (sat / n).toFixed(3) };
-    });
+    }, BOX);
     console.log(`${name.padEnd(10)} lum ${String(s.lo).padStart(3)}..${String(s.hi).padStart(3)}`
       + `  mean ${String(s.mean).padStart(3)}  sd ${String(s.sd).padStart(5)}  sat ${s.sat}`);
   }
@@ -391,6 +425,10 @@ for (const name of list) {
       EK.G.screen && `screen:${EK.G.screen.kind || EK.G.screen}`,
       EK.G.gotcha && 'gotcha', EK.G.evoAnim && 'evo',
       EK.G.wipe > 0 && 'wipe',
+      // A fainted kin is drawn dropped and at 30% alpha, which is easy to read
+      // as a lighting problem. Say it out loud instead.
+      EK.B?.()?.mine?.hp === 0 && 'MINE-DOWN',
+      EK.B?.()?.foe?.hp === 0 && 'FOE-DOWN',
     ].filter(Boolean);
     return `${EK.G.mode}/${EK.G.mapId}${over.length ? ` +${over.join('+')}` : ''}`;
   });
