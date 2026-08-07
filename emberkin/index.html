@@ -8334,6 +8334,7 @@ function finishBattle() {
   } else if (over === 'lose') {
     say('', ['Everything you have is down.', 'You carry them back to the Wayhouse on instinct.'], () => {
       // The dark closes over the arena first, and the room comes up out of it.
+      playCue('blackout');
       G.blackout = { t: 0, go: () => {
       const lost = Math.floor(G.money * .25);
       G.money -= lost;
@@ -9482,6 +9483,14 @@ function playCue(kind) {
   else if (kind === 'menu') blip(330, .05, 'square', .035);
   else if (kind === 'back') blip(240, .06, 'square', .03);
   else if (kind === 'door') { blip(140, .1, 'sawtooth', .05); blip(95, .18, 'sine', .045, t + .05); }
+  // The dark closing over a wipe. A CHOICE rather than a gap: the beat was
+  // never silent — the last kin's `faint` runs just before it and `world` opens
+  // the Wayhouse after — but it borrowed both of those and had nothing of its
+  // own for the worst moment in the game. Two long notes falling a fifth, under
+  // everything else in the game's register, so it reads as the floor going out
+  // rather than another event happening.
+  // Written, not heard. Nothing in this repo can play it back.
+  else if (kind === 'blackout') { blip(70, .5, 'sine', .06); blip(47, .8, 'sine', .05, t + .18); }
   // Footsteps carry the ground under them: grass brushes, a path knocks, sand
   // is soft and short, boards ring. Two alternating pitches so a walk has a
   // gait instead of a metronome.
