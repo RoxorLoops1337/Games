@@ -73,7 +73,7 @@ const EXPOSE = `__out.api = {
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
-  carLitDir, drawCar,
+  carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -162,6 +162,7 @@ function boot(opts){
   const api = sandbox.__out.api;
   api._store = store;
   api._counts = counts;
+  api._ctxStub = ctxStub;
   api._resetCounts = () => { for (const k in counts) delete counts[k]; };
   api._nodes = nodes;
   api._listeners = listeners;
@@ -4641,6 +4642,78 @@ test('the brake lights come on when the car is losing speed, and cost nothing', 
   // and they go out again once the speed settles
   for (let i = 0; i < 30; i++) api.drawCar();
   assert(!api.car.brakeGlow, 'the brakes should go out once the speed settles');
+});
+
+/* -------------------------------------------------------------- garage --- */
+
+/* The picker was five paragraphs of text about five cars you could not see —
+   on the same screen that had just told you they handle differently. Each card
+   carries the car's own picture now, painted by borrowing drawCar rather than
+   keeping a second copy of the art that would drift. */
+test('every unlocked car card carries its own picture and its bars', () => {
+  const api = boot({ w: 1440, h: 810 });
+  api.G.starsPer = api.LEVELS.map(() => 0);
+  api.G.lifeKills = 0;                       // only the hatchback is open
+  api.G.unlocked = 21; api.startLevel(9);
+  const html = api._nodes.brGarage.innerHTML;
+  for (const c of api.CARS){
+    assert(html.includes('data-pic="' + c.id + '"'),
+      c.id + ' has no picture on its card');
+  }
+  const open = api.CARS.filter(c => api.carUnlocked(c));
+  const shut = api.CARS.filter(c => !api.carUnlocked(c));
+  assert(open.length >= 1 && shut.length >= 1,
+    'this test needs one of each: ' + open.length + ' open, ' + shut.length + ' locked');
+  const bars = (html.match(/<s title=/g) || []).length;
+  assert(bars === open.length * api.CAR_STATS.length,
+    'an unlocked car gets ' + api.CAR_STATS.length + ' bars and a locked one none: got ' +
+    bars + ' for ' + open.length + ' unlocked');
+  assert(html.includes('Locked — '), 'a locked card still says what it costs');
+  // the bars are a real reading of the car, not decoration
+  const hatch = api.CARS[0], sleigh = api.CARS.find(c => c.id === 'sleigh');
+  assert(api.carBars(hatch) !== api.carBars(sleigh),
+    'two cars that handle differently should not show the same bars');
+});
+
+/* paintCarThumb borrows CAR, CARL, CARW and the live car object to draw a
+   different car for a moment. If any of it leaked, the market would be drawing
+   the wrong vehicle. */
+test('painting the forecourt puts everything back where it found it', () => {
+  const api = boot({ count: true, w: 1440, h: 810 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2345; api.car.y = 1234; api.car.ang = 0.7; api.car.z = 40;
+  api.car.vx = 800; api.car.vy = -120; api.car.gore = 3; api.car.dents = 2;
+  const before = { id: api.getCar().id, dims: JSON.stringify(api.getDims()),
+    car: JSON.stringify([api.car.x, api.car.y, api.car.ang, api.car.z,
+      api.car.vx, api.car.vy, api.car.gore, api.car.dents]) };
+  const cv = api._nodes.__thumb || (api._nodes.__thumb =
+    { width: api.THUMB_W * 2, height: api.THUMB_H * 2, getContext: () => api._ctxStub });
+  for (const c of api.CARS) api.paintCarThumb(cv, c);
+  assert(api.getCar().id === before.id, 'the market is now driving a ' + api.getCar().id);
+  assert(JSON.stringify(api.getDims()) === before.dims,
+    'the car dimensions were left as the last thumbnail: ' + JSON.stringify(api.getDims()));
+  assert(JSON.stringify([api.car.x, api.car.y, api.car.ang, api.car.z,
+    api.car.vx, api.car.vy, api.car.gore, api.car.dents]) === before.car,
+    'the live car was left where the thumbnail put it');
+});
+
+test('withCtx hands the game canvas back even when the drawing throws', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const other = { calls: 0, fill(){ this.calls++; } };
+  api.withCtx(other, () => {});
+  api._resetCounts();
+  api.drawVignette();
+  assert((api._counts.fillRect || 0) > 0,
+    'the game canvas should be back after a borrow');
+  let threw = false;
+  try { api.withCtx(other, () => { throw new Error('boom'); }); } catch (_){ threw = true; }
+  assert(threw, 'the error should come back out');
+  api._resetCounts();
+  api.drawVignette();
+  assert((api._counts.fillRect || 0) > 0,
+    'a drawing that throws must still hand the canvas back');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
