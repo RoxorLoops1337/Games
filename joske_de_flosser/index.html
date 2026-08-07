@@ -1147,6 +1147,18 @@ function drawHair(f, s, hx, hy, hr, sc, dir, cHair, cDark){
 }
 
 function drawFighter(f){
+  /* A body coming apart fades out for real rather than blinking on and off.
+     One property, no extra rectangles, and it holds for every pass and every
+     detail drawn under it — glow() saves and restores this itself, so the
+     lights he is standing in still land at their own strength. */
+  const df = deadFade(f);
+  if (df >= 1) return;
+  if (df > 0) ctx.globalAlpha = 1 - df;
+  drawFighterBody(f);
+  ctx.globalAlpha = 1;
+}
+function drawFighterBody(f){
+  const df = deadFade(f);
   const sx = Math.round(f.x - cam.x + cam.shakeX);
   const sy = Math.round(f.y - f.z + cam.shakeY);
   const sc = f.sc || 1;
@@ -1388,6 +1400,17 @@ function drawFighter(f){
   }
   if (f.atk && f.atk.swoosh) drawAttackSwoosh(f, X, Y, pose, sc);
   if (f.weapon) drawHeldWeapon(f, X, Y, pose, sc);
+  /* Going out lit rather than just going out: the edge of him takes his own
+     trim colour harder the further through the dissolve he is, so what is
+     left reading at the end is an outline of light, not a grey man. */
+  if (df > 0){
+    const tc = s.trim || '#ffd23d';
+    drawRigPass(-2, rgba(tc, 0.18 + df * 0.52), false, 0, -1);
+    drawRigPass(-3, rgba('#fff2d0', df * 0.30), false, 0, -1);
+    // the head takes it too, or a solid hat floats over a body made of light
+    ellipse(headX, headY - sc, hr + sc, hr + sc, rgba(tc, df * 0.42));
+    glow(sx, Math.round(f.y - f.z + cam.shakeY) - 6 * sc, 16 * sc, 11 * sc, tc, 0.06 + df * 0.20);
+  }
   // the crowd cull the old smear carried: in a real scrum the grunts give
   // their reflections up before the frame does
   if (stage().wet && f.z < 26 && !(crowdCount > 15 && f.team === 'e' && !f.boss))
@@ -1813,11 +1836,25 @@ function knockDown(f, dir, kb, lift, by){
   if (f.weapon && f.team === 'p'){ dropWeapon(f); }
 }
 
+/* ------------------------------------------------------------ dying
+   How long a body lies there, when it starts coming apart, and how far
+   through that it is. A boss takes his time over all three. */
+const deadLife = (f) => (f.boss ? 2.6 : 1.1);
+const deadStart = (f) => deadLife(f) * 0.35;
+const deadFade = (f) => (f.dead && f.deadT > 0
+  ? clamp((f.deadT - deadStart(f)) / (deadLife(f) - deadStart(f)), 0, 1) : 0);
+
 function knockOut(f, killer, a){
   f.hp = 0;
   f.dead = true;
   knockDown(f, killer ? killer.face : 1, (a && a.kb) || 150, (a && a.lift) || 120, killer);
   f.deadT = 0;
+  // the moment itself: a hit that lights the street, in the man's own colour
+  {
+    const tc = (SKINS[f.skin] && SKINS[f.skin].trim) || '#ffd23d';
+    spawnFx('burst', f.x, f.y, f.z + 20, tc);
+    if (f.boss){ spawnFx('ring', f.x, f.y, 2, tc); shakeScreen(6, 0.3); G.flash = Math.max(G.flash, 0.4); }
+  }
   SFX.ko();
   if (f.team === 'e'){
     if (killer && killer.team === 'p'){
@@ -2118,6 +2155,7 @@ function superTick(f, dt){
 /* Hammer's slam lands on the floor, not on you — the shock carries. */
 function slamShock(f){
   spawnFx('quake', f.x + f.face * 14, f.y, 2, '#ffb060');
+  mark('dent', f.x + f.face * 14, f.y, { r: 15, a: 0.7, col: '#0e0912' });
   shakeScreen(7, 0.4);
   SFX.crunch();
   for (const o of players){
@@ -2153,6 +2191,8 @@ function superStrike(f, st){
   if (st.finisher){
     G.flash = 0.55; SFX.superHit();
     spawnFx(st.quake ? 'quake' : 'ring', f.x, f.y, st.quake ? 2 : f.z + 24, '#fff0b0');
+    // the rush burns its ring into the street, and the street keeps it
+    mark('scorch', f.x, f.y, { r: 22, a: 0.7, col: '#1a0d10' });
     if (st.quake) shakeScreen(9, 0.5);
   }
 }
@@ -2260,6 +2300,7 @@ function breakItem(it, by){
   for (let i = 0; i < 4; i++) spawnFx('chip', it.x, it.y, it.z + 8, '#c8a060');
   for (let i = 0; i < 4; i++) spawnFx('dust', it.x + rr(-9, 9), it.y, 2, '#a89880');
   spawnFx('ring', it.x, it.y, 2, plank);
+  mark('debris', it.x, it.y, { r: 11, a: 0.75, col: plank, life: 18 });
   if (by && by.team === 'p') addScore(by.pi, 20);
   const roll = rng();
   if (loosePickups() < LOOSE_MAX){
@@ -2575,12 +2616,12 @@ function spawnFx(kind, x, y, z, col, val){
   fx.push({ kind, x, y, z, col, val, t: 0,
     life: kind === 'score' ? 1.0 : kind === 'impact' ? 0.22 : kind === 'ring' ? 0.34
       : kind === 'quake' ? 0.5 : kind === 'burst' ? 0.16 : kind === 'streak' ? 0.13
-      : kind === 'shard' ? 0.36 : kind === 'plank' ? 0.62 : 0.5,
+      : kind === 'shard' ? 0.36 : kind === 'plank' ? 0.62 : kind === 'ember' ? rr(0.6, 1.15) : 0.5,
     // shards leave along the punch, in a cone, and fall
     vx: kind === 'chip' ? rr(-70, 70) : kind === 'shard' ? dir * rr(60, 190) + rr(-40, 40)
-      : kind === 'plank' ? rr(-120, 120) : 0,
+      : kind === 'plank' ? rr(-120, 120) : kind === 'ember' ? rr(-11, 11) : 0,
     vz: kind === 'chip' ? rr(40, 130) : kind === 'shard' ? rr(-30, 150)
-      : kind === 'plank' ? rr(60, 210) : 0,
+      : kind === 'plank' ? rr(60, 210) : kind === 'ember' ? rr(16, 42) : 0,
     spin: kind === 'plank' ? rr(-9, 9) : 0, r: 0 });
 }
 function updateFx(dt){
@@ -2593,6 +2634,8 @@ function updateFx(dt){
       if (p.z < 0){ p.z = 0; p.vz *= -0.3; p.vx *= 0.5; p.spin *= 0.4; }
     }
     if (p.kind === 'score') p.z += 22 * dt;
+    // an ember off a body coming apart: it lifts, wanders, and slows as it goes
+    if (p.kind === 'ember'){ p.x += p.vx * dt; p.z += p.vz * dt; p.vz *= 1 - 0.55 * dt; p.vx *= 1 - 1.1 * dt; }
     if (p.kind === 'dust'){ p.x += p.vx * dt; }
   }
   if (fx.length) fx = fx.filter(p => p.t < p.life);
@@ -2645,6 +2688,12 @@ function drawFx(p){
     }
   } else if (p.kind === 'spark'){
     px(sx - 1, sy - 1, 3, 3, p.col);
+  } else if (p.kind === 'ember'){
+    // a mote of him going up: a hot core with a cooler tail, both dying out
+    const a = (1 - k) * (1 - k);
+    px(sx, sy, 1, 2, rgba(p.col, Math.min(1, a * 1.7)));
+    px(sx, sy - 1, 1, 1, rgba('#fff6dc', Math.min(1, a * 1.3)));
+    if (k < 0.5) glow(sx, sy, 5, 5, p.col, a * 0.45);
   } else if (p.kind === 'chip'){
     px(sx, sy, 2, 2, p.col);
   } else if (p.kind === 'dust'){
@@ -2731,6 +2780,9 @@ function updateFighter(f, dt){
           f.state = 'lie'; f.st = 0; setAnim(f, 'lie', 0);
           shakeScreen(2, 0.1);
           for (let i = 0; i < 4; i++) spawnFx('dust', f.x + rr(-8, 8), f.y, 2, '#a0958a');
+          // he leaves the floor knowing he was there
+          mark('scuff', f.x, f.y, { r: 8 * (f.sc || 1), dir: sign(f.vx) || f.face,
+            a: 0.66, col: '#120d16' });
           SFX.land();
         }
       }
@@ -2738,8 +2790,22 @@ function updateFighter(f, dt){
     }
     case 'lie': {
       if (f.dead){
+        const was = f.deadT;
         f.deadT += dt;
-        if (f.deadT > (f.boss ? 2.6 : 1.1)) f.gone = true;
+        /* He used to strobe at 14Hz for the last half-second and then stop
+           existing. He comes apart instead: once the dissolve starts, embers
+           lift off him at a steady rate in his own trim colour while the body
+           behind them fades out. A boss goes up in twice as many. */
+        const per = f.boss ? 0.018 : 0.045;
+        const t0 = deadStart(f);
+        if (f.deadT > t0){
+          const n = Math.floor((f.deadT - t0) / per) - Math.floor((Math.max(was, t0) - t0) / per);
+          const tc = (SKINS[f.skin] && SKINS[f.skin].trim) || '#ffd23d';
+          const sp = 9 * (f.sc || 1);
+          for (let i = 0; i < Math.min(4, n); i++)
+            spawnFx('ember', f.x + rr(-sp, sp), f.y + rr(-3, 3), rr(1, 9), tc);
+        }
+        if (f.deadT > deadLife(f)) f.gone = true;
       } else if (f.st > (f.team === 'p' ? 0.55 : 0.85)){
         f.state = 'getup'; f.st = 0; f.invuln = Math.max(f.invuln, 0.45);
         setAnim(f, 'getup', 0);
@@ -3571,6 +3637,7 @@ const MAX_ON = () => (W.cap || 4 + G.players);
 
 function resetStage(){
   fighters = []; items = []; fx = [];
+  clearMarks();                                       // a new street has not been fought on yet
   W.gi = 0; W.active = false; W.queue = []; W.goT = 0; W.clearT = 0; W.gate = null; W.spawnedBoss = false;
   W.cap = 0;
   cam.x = 0; cam.targetX = 0; cam.lock = -1; cam.shakeX = 0; cam.shakeY = 0;
@@ -3970,6 +4037,85 @@ function groundPlane(c, m, s){
   for (let i = 0; i < 5; i++) px(0, y0 + i, VW, 1, 'rgba(6,4,10,' + (0.24 - i * 0.045).toFixed(3) + ')');
 }
 
+/* ---------------------------------------------------------- ground marks
+   Every hit in this game was gone in a fifth of a second, so a street you
+   had just cleared looked exactly like one nobody had ever fought on. A
+   mark is left in world coordinates where something actually happened — a
+   body landing, a slam, a crate coming apart, the rush scorching the floor
+   — and fades out over the best part of half a minute. The buffer is a
+   fixed ring: the oldest mark is overwritten, so a long fight cannot grow
+   it and a stage change starts the street clean. */
+const MARK_MAX = 32;
+const marks = [];
+let markN = 0;
+function clearMarks(){ marks.length = 0; markN = 0; }
+function mark(kind, x, y, o){
+  o = o || {};
+  /* A mark is two tones, never one. The floor is already dark and already
+     mottled, so a dark smear on it is a smear on a smear — what reads is
+     the pale of whatever got pushed aside, and on a wet street that is the
+     water itself catching the neon. */
+  const m = { kind, x, y, t: 0,
+    life: o.life || (kind === 'scorch' ? 26 : kind === 'scuff' ? 20 : 14),
+    r: o.r || 9, col: o.col || '#171018', a: o.a == null ? 0.5 : o.a,
+    lit: o.lit || (stage().wet ? '#a4c4ea' : '#cbbb9c'),
+    dir: o.dir || 1, seed: (markN * 37) % 97 };
+  if (marks.length < MARK_MAX) marks.push(m);
+  else marks[markN % MARK_MAX] = m;
+  markN++;
+}
+function updateMarks(dt){
+  for (let i = marks.length - 1; i >= 0; i--){
+    marks[i].t += dt;
+    if (marks[i].t >= marks[i].life) marks.splice(i, 1);
+  }
+}
+function drawMarks(c){
+  for (const m of marks){
+    const sx = Math.round(m.x - c);
+    if (sx + m.r * 2 < -2 || sx - m.r * 2 > VW + 2) continue;
+    const k = m.t / m.life;
+    const a = m.a * (1 - k) * (1 - k);               // they go quickly at first, then linger
+    if (a < 0.012) continue;
+    const sy = Math.round(m.y);
+    if (m.kind === 'scuff'){
+      // where a body slid: the ground opened up along the way he was going,
+      // and what he pushed aside piled up behind him
+      // long along the way he was going, so it reads as a slide and not a spot
+      ellipse(sx, sy, m.r * 2.3, Math.max(1, m.r * 0.34), rgba(m.col, a * 0.8));
+      ellipse(sx + m.dir * m.r * 1.1, sy, m.r * 0.9, Math.max(1, m.r * 0.24), rgba(m.col, a));
+      ellipse(sx - m.dir * m.r * 1.0, sy - 1, m.r * 1.3, Math.max(1, m.r * 0.2), rgba(m.lit, a * 0.5));
+      px(sx - m.r * 1.6, sy - Math.max(2, m.r * 0.34), m.r * 3.2, 1, rgba(m.lit, a * 0.4));
+    } else if (m.kind === 'scorch'){
+      // the rush burns a ring into the floor and the floor keeps it
+      ellipse(sx, sy, m.r, Math.max(1, m.r * 0.36), rgba(m.col, a * 0.75));
+      const hot = Math.max(0, 1 - k * 4);              // the embers cool long before the char goes
+      for (let i = 0; i < 10; i++){
+        const a2 = i * TAU / 10 + m.seed;
+        px(sx + Math.cos(a2) * m.r, sy + Math.sin(a2) * m.r * 0.36, 2, 1,
+          rgba(hot > 0.15 ? '#ff8a3a' : '#4a2a24', a * (0.9 + hot * 0.9)));
+      }
+      if (hot > 0.5) glow(sx, sy, m.r + 4, m.r * 0.4 + 3, '#ff6a2a', a * 0.5 * hot);
+    } else if (m.kind === 'debris'){
+      // splinters and chips that came to rest and were never swept up
+      for (let i = 0; i < 7; i++){
+        const dx = Math.round((hash(m.seed * 7 + i * 13) - 0.5) * m.r * 2.4);
+        const dy = Math.round((hash(m.seed + i * 5) - 0.5) * 6);
+        px(sx + dx, sy + dy, 1 + (i & 1), 1, rgba(m.col, Math.min(1, a * 1.7)));
+        if (i % 3 === 0) px(sx + dx, sy + dy - 1, 1, 1, rgba(m.lit, a * 0.8));
+      }
+    } else {                                          // 'dent': a slam driving the floor in
+      ellipse(sx, sy, m.r, Math.max(1, m.r * 0.36), rgba(m.col, a * 0.8));
+      ellipse(sx, sy - 1, m.r * 0.62, Math.max(1, m.r * 0.2), rgba(m.lit, a * 0.4));
+      for (let i = 0; i < 4; i++){                    // the floor split away from it
+        const a2 = (i / 4) * TAU + m.seed;
+        limb(sx + Math.cos(a2) * m.r * 0.5, sy + Math.sin(a2) * m.r * 0.18,
+          sx + Math.cos(a2) * m.r * 1.25, sy + Math.sin(a2) * m.r * 0.45, 1, rgba(m.col, a));
+      }
+    }
+  }
+}
+
 function drawBackground(){
   lfReset();
   const s = stage();
@@ -3983,6 +4129,7 @@ function drawBackground(){
     default: bgStreet(c);
   }
   groundPlane(c, GROUND[s.bg] || GROUND.street, s);
+  drawMarks(c);                                       // what the fight has already done to it
 }
 
 /* ---------------------------------------------------------------- 1 */
@@ -5288,10 +5435,7 @@ function visibleList(){
   crowdCount = 0;
   for (const it of items) if (!it.gone) list.push({ y: it.y - (it.thrown ? 40 : 0), it, d: () => drawItem(it) });
   for (const f of fighters) if (!f.gone && f.state !== 'out'){
-    if (f.dead && f.deadT > 0){
-      const fade = f.boss ? f.deadT / 2.6 : f.deadT / 1.1;
-      if (fade > 0.55 && Math.floor(f.deadT * 14) % 2 === 0) continue;   // fading out
-    }
+    // a dying man used to blink on and off at 14Hz; he fades now, in drawFighter
     // mercy blink after a respawn — never during a rush, which must read
     if (f.invuln > 0 && f.team === 'p' && f.state !== 'super' && f.state !== 'jump' &&
         Math.floor(f.invuln * 12) % 2 === 0) continue;
@@ -6286,6 +6430,7 @@ function update(dt){
   separate();
   updateItems(dt);
   updateFx(dt);
+  updateMarks(dt);
   updateWaves(dt);
   updateDeaths(dt);
   updateCamera(dt);
