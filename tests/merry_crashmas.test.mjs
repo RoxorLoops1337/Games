@@ -89,7 +89,7 @@ const EXPOSE = `__out.api = {
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
-  COATS, ELDER_COATS, KID_COATS, SKIN, HATS,
+  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, BAG_COLS,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
   // swap them out and count what a run actually asks the mixer for
@@ -5056,7 +5056,17 @@ function shopper(api, kind, tweak){
   api.withCtx(rec, () => api.drawPerson(p));
   // the coat by its exact geometry — the drop shadow is a big ellipse too
   const isCoat = (s) => Math.abs(s.r - p.r * 0.86) < 0.01 && Math.abs(s.y - p.r * 0.1) < 0.01;
-  return { p, rec,
+  // the shopping: a filled box in one of the bag colours, its dark rim, the
+  // handle arc over it and the shading fold across the top
+  const bagCol = api.BAG_COLS[p.coat % api.BAG_COLS.length];
+  const bags = rec.polys.filter(q => !q.stroked && q.style === bagCol);
+  const bag = bags[0];
+  const near = (q) => bag && Math.abs(q.x0 - bag.x0) < 0.01 && Math.abs(q.y0 - bag.y0) < 0.01;
+  return { p, rec, bag, bags, bagCol,
+    bagRim: rec.polys.find(q => q.stroked && near(q)),
+    handle: bag && rec.shapes.find(s => s.stroked && s.r === s.ry &&
+      s.x > bag.x0 - 0.01 && s.x < bag.x1 + 0.01 && s.y < bag.y1),
+    fold: rec.rects.find(r => near({ x0: r.x, y0: r.y })),
     coat: rec.shapes.find(s => !s.stroked && isCoat(s)),
     trim: rec.shapes.find(s => s.stroked && isCoat(s)),
     pale: rec.shapes.filter(s => !s.stroked && /^#f[36]/i.test(s.style)),
@@ -5126,6 +5136,142 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
     ', bobble y' + bobble.y.toFixed(1) + ')');
 });
 
+/* ------------------------------------------------------ the shopping --- */
+
+test('a shopper carries the bag they are about to drop', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  for (const kind of ['shopper', 'elder']){
+    for (let seed = 0; seed < 4; seed++){
+      const s = shopper(api, kind, (p) => { p.coat = seed; });
+      assert(s.bag, kind + ' seed ' + seed + ' is walking a market empty-handed');
+      assert(s.bags.length === 1,
+        'and carrying exactly one, got ' + s.bags.length);
+      assert(s.bagRim, 'the bag needs its dark rim: two of the four colours are ' +
+        'a shade off lit snow and vanished without one');
+      assert(s.handle, 'and a handle to hold it by');
+      assert(s.fold, 'and the fold across the top');
+      const w = s.bag.x1 - s.bag.x0, h = s.bag.y1 - s.bag.y0;
+      assert(Math.abs(w - s.p.r * 0.34) < 0.01 && Math.abs(h - s.p.r * 0.4) < 0.01,
+        'sized against the person, got ' + w.toFixed(2) + '×' + h.toFixed(2) +
+        ' on r' + s.p.r);
+    }
+  }
+
+  /* The defect the first pass shipped: the coat ellipse is drawn AFTER the
+     bag, so any part of the bag inside the shoulder line is simply painted
+     over. The arm swings, so this has to hold at every phase of the walk —
+     the first version only looked wrong on the forward half of the stride. */
+  let worst = 99;
+  for (const kind of ['shopper', 'elder']){
+    for (const panic of [0, 0.9]){
+      for (let seed = 0; seed < 4; seed++){
+        for (let ph = 0; ph < 8; ph++){
+          const s = shopper(api, kind, (p) => {
+            p.coat = seed; p.panic = panic; p.bob = ph * Math.PI / 4;
+          });
+          const r = s.p.r;
+          const inner = Math.min(Math.abs(s.bag.x0), Math.abs(s.bag.x1));
+          const dy = (s.bag.y0 + s.bag.y1) / 2 - r * 0.1;   // the coat's own centre
+          const coatAt = Math.abs(dy) >= r * 0.72 ? 0
+            : r * 0.86 * Math.sqrt(1 - (dy / (r * 0.72)) ** 2);
+          assert(inner >= coatAt,
+            kind + ' seed ' + seed + ' panic ' + panic + ' phase ' + ph +
+            ': the bag starts at ' + inner.toFixed(2) +
+            ' but the coat covers to ' + coatAt.toFixed(2));
+          /* …and it still has to be in a hand rather than floating alongside:
+             the arm ends at 0.9r walking, 1.25r with both arms up, and that
+             point has to fall inside the bag. */
+          const hand = (panic ? 1.25 : 0.9) * r * (kind === 'elder' ? -1 : seed % 2 ? 1 : -1);
+          assert(hand >= s.bag.x0 - 0.01 && hand <= s.bag.x1 + 0.01,
+            kind + ' seed ' + seed + ' panic ' + panic + ' phase ' + ph +
+            ': the hand is at ' + hand.toFixed(2) + ', the bag spans ' +
+            s.bag.x0.toFixed(2) + '…' + s.bag.x1.toFixed(2));
+          worst = Math.min(worst, (inner - coatAt) / r);
+        }
+      }
+    }
+  }
+  console.log('    (bag clears the coat by ' + worst.toFixed(2) + 'r at its worst)');
+
+  // a pensioner's stick is in the right hand, so the bag has to take the left
+  for (let seed = 0; seed < 4; seed++){
+    const s = shopper(api, 'elder', (p) => { p.coat = seed; });
+    const cane = s.rec.shapes.find(x => x.stroked && x.style === '#6b4a2f');
+    assert(s.bag.x1 < 0, 'elder seed ' + seed + ' should carry on the left, got ' +
+      s.bag.x1.toFixed(2));
+    if (cane) assert(cane.x > 0, 'and the stick stays on the right');
+  }
+  console.log('    (bags: ' + api.BAG_COLS.join(' ') + ')');
+});
+
+test('nobody carries shopping they have already thrown away', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  for (const kind of ['shopper', 'elder']){
+    for (let seed = 0; seed < 4; seed++){
+      const s = shopper(api, kind, (p) => { p.coat = seed; p.panic = 0.9; p.dropped = 1; });
+      assert(!s.bag, kind + ' seed ' + seed + ' still has the bag it threw');
+    }
+  }
+  // hands full, or no hands at all
+  for (const kind of ['parent', 'kid', 'santa']){
+    for (let seed = 0; seed < 4; seed++){
+      const s = shopper(api, kind, (p) => { p.coat = seed; });
+      assert(!s.bag, kind + ' seed ' + seed + ' should not be carrying shopping');
+    }
+  }
+  // and a corpse does not hold anything up either
+  for (let seed = 0; seed < 4; seed++){
+    const s = shopper(api, 'shopper', (p) => { p.coat = seed; p.dead = 1; p.deadT = 1; });
+    assert(!s.bag, 'a dead shopper seed ' + seed + ' is still holding its shopping');
+  }
+});
+
+test('the bag in the hand is the bag that lands in the snow', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  for (let seed = 0; seed < 8; seed++){
+    const held = shopper(api, 'shopper', (p) => { p.coat = seed; });
+    assert(held.bag.style === held.bagCol, 'the held bag is a bag colour');
+
+    // now scare that same person into dropping it
+    api.fx.length = 0;
+    const p = api.people[0];
+    p.panic = 0.9; p.dropped = 0;
+    api.stepPeople(0.016);
+    const drop = api.fx.find(f => f.type === 'drop');
+    assert(drop, 'seed ' + seed + ' should have dropped something');
+    assert(drop.col === held.bag.style,
+      'seed ' + seed + ' dropped a ' + drop.col + ' bag but was holding a ' +
+      held.bag.style);
+  }
+
+  /* Choosing the colour off the coat instead of rolling for it must not move
+     the simulation stream — every one of the twenty-one markets is scored
+     against the sequence that was there when its par was tuned. */
+  const roll = () => {
+    api.reseed(4242);
+    api.people.length = 0; api.fx.length = 0;
+    for (let i = 0; i < 6; i++){
+      const q = api.addPerson(2600 + i * 40, 1100, 'shopper');
+      q.panic = 0.9; q.dropped = 0;
+    }
+    api.stepPeople(0.016);
+    return [api.rnd(), api.rnd(), api.rnd(), api.rnd()];
+  };
+  const a = roll(), b = roll();
+  assert(JSON.stringify(a) === JSON.stringify(b), 'the stream should be repeatable');
+  assert(api.fx.filter(f => f.type === 'drop').length === 6, 'six bags, six droppers');
+  console.log('    (stream after six drops: ' + a.map(v => v.toFixed(4)).join(' ') + ')');
+});
+
 /* ------------------------------------------------------- the driver --- */
 
 /* Records every disc and ellipse a draw puts down, with the colour it was
@@ -5133,10 +5279,21 @@ test('Santa’s beard sits behind the face the crying pass draws', () => {
    through ctx and the recorder ignores them, so what comes back is the layout
    inside the bodywork. */
 function carRec(){
-  const shapes = [], order = [], rects = [], all = [], styles = [];
-  let fill = '', line = '', lw = 0, alpha = 1, pending = null;
+  const shapes = [], order = [], rects = [], all = [], styles = [], polys = [];
+  let fill = '', line = '', lw = 0, alpha = 1, pending = null, poly = null;
+  /* roundRect is moveTo/lineTo/quadraticCurveTo, so nothing about it reaches
+     `shapes`. Its bounding box goes in `polys` instead of `shapes`, because the
+     layout tests read `shapes` by colour and a box sharing a coat's colour
+     would quietly become that coat. */
+  const pt = (x, y) => {
+    if (!poly) poly = { x0: x, y0: y, x1: x, y1: y };
+    poly.x0 = Math.min(poly.x0, x); poly.y0 = Math.min(poly.y0, y);
+    poly.x1 = Math.max(poly.x1, x); poly.y1 = Math.max(poly.y1, y);
+  };
   const base = {
-    shapes, order, rects, all, styles, images: [],
+    shapes, order, rects, all, styles, polys, images: [],
+    moveTo: pt, lineTo: pt,
+    quadraticCurveTo(cx, cy, x, y){ pt(x, y); },
     set fillStyle(v){ fill = String(v); order.push(String(v)); styles.push('f:' + v); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); styles.push('s:' + v); },
@@ -5150,15 +5307,21 @@ function carRec(){
     drawImage(img, x, y, w, h){ base.images.push({ x, y, w, h, alpha }); },
     // a shape lasts until the next beginPath, so a fill and the stroke that
     // outlines it are both recorded against it
-    beginPath(){ pending = null; },
+    beginPath(){ pending = null; poly = null; },
     // `all` is every primitive in order, for checking a draw repeats exactly;
     // `shapes` keeps one per fill, which is what the layout tests read
     arc(x, y, r){ pending = { x, y, r, ry: r }; all.push(['arc', x, y, r, fill]); },
     ellipse(x, y, rx, ry){ pending = { x, y, r: rx, ry }; all.push(['el', x, y, rx, ry, fill]); },
     rect(x, y, w, h){ all.push(['rect', x, y, w, h, fill]); },
     fillRect(x, y, w, h){ rects.push({ x, y, w, h, style: fill }); all.push(['fr', x, y, w, h, fill]); },
-    fill(){ if (pending) shapes.push(Object.assign({}, pending, { style: fill })); },
-    stroke(){ if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; } },
+    fill(){
+      if (pending) shapes.push(Object.assign({}, pending, { style: fill }));
+      if (poly) polys.push(Object.assign({}, poly, { style: fill }));
+    },
+    stroke(){
+      if (poly) polys.push(Object.assign({}, poly, { style: line, lw, stroked: true }));
+      if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; }
+    },
     measureText: () => ({ width: 30 }),
     canvas: { width: 1280, height: 720 },
   };

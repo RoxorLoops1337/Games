@@ -256,6 +256,20 @@ edit this block to name the next one.
       hanging pictogram, and its own stock to throw across the snow when it is
       wrecked — with a test that holds every trade to all four so a ninth
       cannot be half-added.
+- [x] Shoppers carry the shopping they drop. A panicking shopper has thrown a
+      bag into the snow since the crowd was first written, out of hands that
+      had never been holding one. Now shoppers and pensioners walk the market
+      with a bag — handles, a dark rim and a fold across the top — and the
+      colour in the hand is the colour that lands, off a single `BAG_COLS`
+      list so the two cannot drift apart. Three details cost a retake each:
+      the coat ellipse is drawn *after* the arms, so the first bag at the
+      hand's 0.9r was half-buried and now hangs outboard and low; two of the
+      four colours were a shade off lit snow and needed the rim; and a
+      pensioner's stick is always in the right hand, so the bag takes the
+      left. Parents have both hands on a pram, Santa has a sleigh, and the
+      dead hold nothing up. The `ri(0, 3)` that used to pick the dropped
+      colour is still rolled and thrown away — deleting it would renumber the
+      simulation stream and rescore all twenty-one markets.
 
 ## Next
 
