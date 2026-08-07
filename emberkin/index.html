@@ -7382,10 +7382,34 @@ function drawOrb(g, myGround, foeGround) {
     return;
   }
   if (phase === 'wobble' || phase === 'gap') {
-    const w = phase === 'wobble' ? Math.sin(k * Math.PI * 2) * .55 : 0;
-    shell(rest.x + w * 5, rest.y - Math.abs(w) * 2, 4, w);
-    // A tick of light on each swing, so the wobble reads as an effort.
-    if (phase === 'wobble') ring(rest.x, rest.y, 6 + k * 8, (1 - k) * .5, '#ffc94d');
+    // The orb tips about the point it is resting on, rather than sliding along
+    // the ground with a tilt applied on top. A ball settling pivots at its
+    // contact — anchoring the rock there is both what it looks like and what
+    // makes a small angle read as a big movement, because the top of the shell
+    // travels while the base stays put.
+    //
+    // It was worth the change because this is the beat the whole throw is for
+    // and it was the quietest thing on screen: the swing moved the orb 2.75px,
+    // about a third of its own width, while the throw beside it arcs 106px and
+    // the click ring opens to 44. An order of magnitude under its neighbours,
+    // and the first film of it looked like a dot sitting still.
+    const w = phase === 'wobble' ? Math.sin(k * Math.PI * 2) * .95 : 0;
+    const R = 4;
+    shell(rest.x + Math.sin(w) * R, rest.y + R - Math.cos(w) * R, R, w);
+    // A tick of light on each swing, so the wobble reads as an effort, and a
+    // scuff under it so the ground knows the orb is working against it.
+    if (phase === 'wobble') {
+      ring(rest.x, rest.y, 6 + k * 8, (1 - k) * .5, '#ffc94d');
+      g.save();
+      g.globalAlpha = Math.abs(w) * .5;
+      g.fillStyle = '#2a1b2e';
+      if (g.ellipse) {
+        g.beginPath();
+        g.ellipse(rest.x + Math.sin(w) * R * .6, rest.y + 3, 5, 1.4, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
+    }
     return;
   }
   if (phase === 'click') {
