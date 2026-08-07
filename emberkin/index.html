@@ -416,10 +416,25 @@
      fix rather than putting the box first — `monCard` indexes party 0..n-1
      then box n+i, and the help text at the bottom describes that order. */
   .cards.slim{ grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); }
+  /* The level and the types are two units, not one sentence. Written as
+     "Lv26 · Verdant/Gloom" they were one string, and at slim width there is
+     about 86px beside a 40px sprite, so a dual type wrapped — leaving the
+     separator stranded at the end of the line ("Lv26 ·") and making that card
+     a line taller than its single-typed neighbours, which left every row that
+     mixed them visibly ragged. Two nowrap spans in a flex break between
+     themselves instead. The gap does the separating, so nothing can be left
+     hanging at the end of a line. */
+  .card .info small.meta{ display:flex; flex-wrap:wrap; column-gap:.55em; }
+  .card .info small.meta > span{ white-space:nowrap; }
   /* An empty party slot: the frame without the card. Dashed, unlit and quiet
      enough that six of them never compete with the one kin you do have. */
   .cards .slot{ display:flex; align-items:center; justify-content:center;
-    min-height:2.4em; background:none; border-style:dashed;
+    /* A card is a 40px sprite plus 7px of padding either side. Matching that
+       here keeps all six slots one shape: without it a slot sharing a row with
+       a real kin stretched to its height while a slot on a row of its own
+       collapsed to the text, so a party of one drew three tall frames and
+       three short ones. */
+    min-height:54px; background:none; border-style:dashed;
     border-color:color-mix(in srgb, var(--edge) 55%, transparent);
     box-shadow:none; }
   .cards .slot span{ font-size:.7em; letter-spacing:.16em; text-transform:uppercase;
@@ -8971,7 +8986,7 @@ function renderScreen() {
       const f = m.hp / m.max;
       return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}" ${i === s.pick ? 'style="box-shadow:0 0 0 2px var(--xp)"' : ''}>
         <canvas width="40" height="40" data-mon="${m.species}"></canvas>
-        <div class="info"><b>${dispName(m)}</b><small>Lv${m.lvl} · ${m.types.join('/')}</small>
+        <div class="info"><b>${dispName(m)}</b><small class="meta"><span>Lv${m.lvl}</span><span>${m.types.join('/')}</span></small>
         <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div></div></div>`;
     };
     // The empty slots are drawn. A party of one used to be a single card with
@@ -8984,7 +8999,7 @@ function renderScreen() {
       + G.party.map((m, i) => monCard(m, i)).join('')
       + Array.from({ length: Math.max(0, 6 - G.party.length) }, slot).join('') + '</div>';
     html += `<h2 style="margin-top:12px">Box — ${G.box.length}</h2>`;
-    html += G.box.length ? `<div class="cards">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
+    html += G.box.length ? `<div class="cards slim">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
       : '<p style="color:var(--dim)">Nothing stored yet.</p>';
     html += `<p style="font-size:12px;color:var(--dim)">A on a boxed kin withdraws it · A on a party kin stores it · with a full party, pick the newcomer then pick who it replaces.</p>`;
   } else if (s.kind === 'deck') {
