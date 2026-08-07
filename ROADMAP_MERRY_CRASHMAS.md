@@ -402,6 +402,20 @@ edit this block to name the next one.
       share a `fill()` — stacking both feet into one silently drew the far one
       only, and there is now an assertion that counts feet.
 
+- [x] Wrecks remember what they were. Santa used to lose his hat, his beard
+      and his belt the instant you hit him and lie there as an anonymous red
+      shopper; that was fixed earlier in the session, but the same defect was
+      still in two props. A smashed **snowman** was two plain white discs —
+      the carrot, the coal, the scarf and the twigs all vanished on impact.
+      It now bursts: body lumps and the head knocked off, the scarf lying
+      limp, the carrot in the snow, coal scattered and the twigs snapped flat.
+      A wrecked **present** was two plain rectangles, one of them yellow; it
+      is a burst box now, with a dark torn interior, the base split into two
+      pieces **in its own wrapping paper** so you can still tell which present
+      it was, the ribbon snapped into curls, and its contents out on the snow.
+      Both are deterministic off the prop's existing seed, and the worst frame
+      did not move.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

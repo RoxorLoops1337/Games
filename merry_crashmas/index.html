@@ -4581,8 +4581,42 @@ function drawProp(o){
       ctx.save(); ctx.translate(o.x, o.y);
       shadow(0, o.r * 0.4, o.r * 0.9, o.r * 0.4, 0.24);
       if (o.dead){
-        ctx.fillStyle = '#e6eefb'; circle(0, 0, o.r * 0.55); ctx.fill();
-        ctx.fillStyle = '#dbe5f5'; circle(o.r * 0.5, o.r * 0.3, o.r * 0.35); ctx.fill();
+        /* Two plain white discs. Everything that told you it was a snowman —
+           the carrot, the coal, the twigs, the scarf — vanished the instant
+           you hit it, which is the same defect Santa had when he lost his hat
+           and his beard on impact. A smashed snowman keeps its bits; they are
+           just lying in the snow now. */
+        const sd = o.seed || 0, a0 = sd * 6.283;
+        ctx.fillStyle = '#4a3524';                       // the twigs, snapped
+        ctx.strokeStyle = '#4a3524'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-o.r * 1.2, o.r * 0.5); ctx.lineTo(-o.r * 0.55, o.r * 0.86);
+        ctx.moveTo(o.r * 0.9, -o.r * 0.75); ctx.lineTo(o.r * 1.3, -o.r * 0.2);
+        ctx.stroke();
+        ctx.fillStyle = '#c8443a';                       // the scarf, limp
+        ctx.beginPath();
+        ctx.ellipse(-o.r * 0.15, o.r * 0.62, o.r * 0.62, o.r * 0.16, 0.5, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#e6eefb';                       // the body, burst open
+        ctx.beginPath();
+        ctx.ellipse(0, 0, o.r * 0.62, o.r * 0.5, a0, 0, 6.283);
+        ctx.ellipse(-o.r * 0.7, -o.r * 0.35, o.r * 0.26, o.r * 0.2, a0 + 1, 0, 6.283);
+        ctx.ellipse(o.r * 0.62, o.r * 0.55, o.r * 0.22, o.r * 0.17, a0 + 2, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#dbe5f5';                       // the head, knocked off
+        ctx.beginPath();
+        ctx.ellipse(o.r * 0.62, o.r * 0.1, o.r * 0.38, o.r * 0.32, a0 + 0.6, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#e8862c';                       // the carrot, in the snow
+        ctx.beginPath();
+        ctx.moveTo(o.r * 0.95, o.r * 0.42); ctx.lineTo(o.r * 1.42, o.r * 0.66);
+        ctx.lineTo(o.r * 0.99, o.r * 0.6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#1b2740';                       // and the coal, scattered
+        ctx.beginPath();
+        ctx.moveTo(o.r * 0.5 + 3.2, o.r * 0.05); ctx.arc(o.r * 0.5, o.r * 0.05, 3.2, 0, 6.283);
+        ctx.moveTo(-o.r * 0.34 + 3, -o.r * 0.5); ctx.arc(-o.r * 0.34, -o.r * 0.5, 3, 0, 6.283);
+        ctx.moveTo(o.r * 0.1 + 2.6, o.r * 0.8); ctx.arc(o.r * 0.1, o.r * 0.8, 2.6, 0, 6.283);
+        ctx.fill();
       } else {
         /* A white disc with two dots and a carrot. It has twig arms, a scarf
            and a hat now, and the two snowballs are lit on the same side as
@@ -4628,10 +4662,27 @@ function drawProp(o){
       const cols = ['#c8443a', '#3f8a5c', '#2f6ea5'];
       const c = cols[Math.floor(o.seed * 3) % 3];
       if (o.dead){
-        ctx.fillStyle = c;
-        ctx.fillRect(-o.w * 0.4, -o.h * 0.2, o.w * 0.5, o.h * 0.3);
-        ctx.fillStyle = '#ffd34d';
-        ctx.fillRect(o.w * 0.05, -o.h * 0.35, o.w * 0.3, o.h * 0.2);
+        /* Two plain rectangles, one of them yellow. A present that has been
+           driven over is a burst box: the lid off to one side, a dark torn
+           interior, the ribbon snapped, and whatever was in it out on the
+           snow. It keeps its colour, so you can still tell which one it was. */
+        ctx.fillStyle = 'rgba(12,20,38,.55)';            // the inside, now open
+        roundRect(-o.w * 0.34, -o.h * 0.26, o.w * 0.6, o.h * 0.52, 4); ctx.fill();
+        ctx.fillStyle = c;                               // the base, split
+        roundRect(-o.w * 0.42, -o.h * 0.3, o.w * 0.34, o.h * 0.6, 4); ctx.fill();
+        roundRect(o.w * 0.06, -o.h * 0.16, o.w * 0.3, o.h * 0.4, 4); ctx.fill();
+        ctx.fillStyle = 'rgba(255,246,225,.2)';          // the lit edge of the lid
+        roundRect(o.w * 0.08, -o.h * 0.14, o.w * 0.26, o.h * 0.12, 3); ctx.fill();
+        ctx.fillStyle = '#ffd34d';                       // the ribbon, snapped
+        ctx.beginPath();
+        ctx.ellipse(-o.w * 0.12, o.h * 0.34, o.w * 0.26, 3.5, 0.4, 0, 6.283);
+        ctx.ellipse(o.w * 0.3, -o.h * 0.38, o.w * 0.16, 3, -0.8, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#e8ecf6';                       // and what was inside
+        ctx.beginPath();
+        ctx.moveTo(-o.w * 0.5 + 5, o.h * 0.42); ctx.arc(-o.w * 0.5, o.h * 0.42, 5, 0, 6.283);
+        ctx.moveTo(o.w * 0.44 + 4, o.h * 0.3); ctx.arc(o.w * 0.44, o.h * 0.3, 4, 0, 6.283);
+        ctx.fill();
       } else {
         /* A flat coloured square with a yellow cross on it. It is a box now:
            a lit lid, a shaded lower face, snow along the top edge and an
