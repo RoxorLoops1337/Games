@@ -57,6 +57,7 @@ const EXPOSE = `__out.api = {
   pollInput, fit, fmtTime, text, textW, spawnFx, useWeapon, shakeScreen, visibleList,
   attract, ATTRACT_CAST, drawAttract, logo, logoGlyphs, logoFeet, LOGO_BAND,
   glow, glowSprite, GLOW_STEPS, bake, blit, getCtx: () => ctx,
+  LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
   _ctxCounts: null,
 };
@@ -2445,6 +2446,114 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const body = RAW.slice(RAW.indexOf('function ' + fn));
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
+  }
+});
+
+/* ----------------------------------------------------------- light field */
+test('the field takes the colour of whatever light is over it', () => {
+  const api = boot();
+  api.lfReset();
+  assert(api.lightAt(100) === null, 'an unlit street is unlit');
+  api.lfAdd(100, 174, 30, '#ff2f7a', 0.6);
+  const pink = api.lightAt(100);
+  assert(pink, 'the light registered');
+  const n = parseInt(pink.col.slice(1), 16);
+  assert(((n >> 16) & 255) > (n & 255), 'a pink sign should read pink, got ' + pink.col);
+  assert(api.lightAt(340) === null, 'and it does not reach the far end of the street');
+  api.lfReset();
+  api.lfAdd(100, 174, 30, '#2fc8e8', 0.6);
+  const cyan = api.lightAt(100);
+  assert(cyan.col !== pink.col, 'a cyan sign reads differently from a pink one');
+});
+
+test('the field knows which side the light is on', () => {
+  const api = boot();
+  api.lfReset();
+  api.lfAdd(200, 174, 60, '#ffcc7a', 0.6);
+  assert(api.lightAt(160).dir === 1, 'a light to the right is to the right');
+  assert(api.lightAt(240).dir === -1, 'and a light to the left is to the left');
+});
+
+test('a light at your feet counts for more than the same one up a wall', () => {
+  const api = boot();
+  api.lfReset(); api.lfAdd(100, 176, 30, '#ffcc7a', 0.6);
+  const low = api.lightAt(100).k;
+  api.lfReset(); api.lfAdd(100, 90, 30, '#ffcc7a', 0.6);
+  const high = api.lightAt(100).k;
+  assert(low > high * 1.5, `a pool at the feet (${low}) should beat a sign up the wall (${high})`);
+  assert(high > 0, 'but the sign still reaches the street');
+});
+
+test('the sampled colour is quantised, so rgba never gains a string per step', () => {
+  const api = boot();
+  const seen = new Set();
+  for (let i = 0; i < 255; i++) seen.add(api.lfHex(i, 128, 40));
+  assert(seen.size <= 12, 'too many distinct colours out of one channel: ' + seen.size);
+  assert(/^#[0-9a-f]{6}$/.test(api.lfHex(255, 255, 255)), 'still a hex colour: ' + api.lfHex(255, 255, 255));
+  assert(api.lfHex(300, -20, 128).length === 7, 'out-of-range channels stay in range');
+});
+
+test('the field is rebuilt every frame, not accumulated', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.draw();
+  const once = Array.from(api.LF.w);
+  for (let i = 0; i < 5; i++) api.draw();
+  const later = Array.from(api.LF.w);
+  const lit = once.filter(v => v > 0.05).length;
+  assert(lit > 0, 'the street is lit at all');
+  for (let i = 0; i < once.length; i++)
+    assert(later[i] < once[i] * 3 + 0.2, 'bucket ' + i + ' is piling up frame on frame');
+});
+
+test('a fighter standing in the light is drawn differently from one in the dark', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fighters = api.fighters.filter(f => f.team === 'p');
+  const f = api.players[0];
+  f.y = api.FLOOR_MID; f.z = 0; f.state = 'idle'; f.anim = 'idle';
+  const cost = (bright) => {
+    api.draw();                                   // build the frame's field first
+    api.lfReset();
+    if (bright) api.lfAdd(f.x - api.cam.x, 176, 40, '#ff2f7a', 0.9);
+    api._resetCounts();
+    api.drawFighter(f);
+    return api._counts.fillRect || 0;
+  };
+  const dark = cost(false), lit = cost(true);
+  assert(lit > dark, `a lit fighter should take extra passes: ${lit} vs ${dark}`);
+  assert(lit < dark * 3, `but not three times the work: ${lit} vs ${dark}`);
+});
+
+test('a hit throws light before the man taking it is drawn', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.fx.length = 0;
+  api.draw();
+  const before = api.lightAt(180);            // whatever the street was already throwing
+  const baseK = before ? before.k : 0;
+  api.spawnFx('burst', api.cam.x + 180, api.FLOOR_MID, 24, '#ffe9a0');
+  api.draw();
+  const here = api.lightAt(180);
+  assert(here, 'the burst put light on the street');
+  assert(here.k > baseK + 0.15, `the hit should light the street it lands on: ${baseK} -> ${here.k}`);
+  const n = parseInt(here.col.slice(1), 16);
+  assert(((n >> 16) & 255) >= (n & 255), 'and it is warm, not cold: ' + here.col);
+  api.fx.length = 0;
+  api.draw();
+  assert((api.lightAt(180) ? api.lightAt(180).k : 0) <= baseK + 0.02, 'and the light goes out with the hit');
+  assert(api.FX_LIGHT.burst && api.FX_LIGHT.impact, 'the hits that light the street are declared in one place');
+  // and it has to happen before the fighters run, or the man taking the punch
+  // is drawn a frame before the punch lights him
+  const body = RAW.slice(RAW.indexOf('function draw(){'));
+  const head = body.slice(0, body.indexOf('\n}\n'));
+  const seed = head.indexOf('lfAdd('), crowd = head.indexOf('visibleList()');
+  assert(seed >= 0, 'draw() never seeds the field with the hits');
+  assert(crowd >= 0, 'draw() no longer builds its draw list where this test can see it');
+  assert(seed < crowd, 'the hits must light the field before the fighters are drawn');
+  for (const k of Object.keys(api.FX_LIGHT)){
+    const [r, p] = api.FX_LIGHT[k];
+    assert(r > 0 && p > 0 && p <= 1, k + ' has a nonsense light: ' + r + ',' + p);
   }
 });
 
