@@ -5114,12 +5114,78 @@ function drawFireworks(){
 }
 
 /* ---------- aim UI, drawn in world space ---------- */
+/* The sling is the thing you look at on every shot of the game, and it was two
+   bare brown L-strokes on empty snow while every stall around it got a lit
+   side and a snow cap. It is a machine now: a pad trodden into the ground, two
+   posts with tops you can see, and the ground scuffed where the tyres spin. */
+const POST_Y = 96, POST_X = ANCHOR.x - 30;
 function slingPosts(){
-  ctx.strokeStyle = '#6b4a2f'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+  // the pad: packed snow and two arcs of tyre scuff, one path each
+  ctx.fillStyle = 'rgba(70,96,140,.16)';
   ctx.beginPath();
-  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(ANCHOR.x - 30, ANCHOR.y - 40);
-  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y + 96); ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 40);
+  ctx.ellipse(ANCHOR.x - 10, ANCHOR.y, 132, 118, 0, 0, 6.283); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.10)';
+  ctx.beginPath();
+  ctx.ellipse(ANCHOR.x - 24, ANCHOR.y - 14, 96, 82, 0, 0, 6.283); ctx.fill();
+  /* Tyre scuff, along the way out. The first version drew these as arcs around
+     the anchor and they read as three grey curves floating in the middle of an
+     empty lane — a rendering glitch, not a mark on the ground. */
+  ctx.strokeStyle = 'rgba(52,72,108,.22)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++){
+    const sy = ANCHOR.y + (i - 1.5) * 17;
+    const x0 = ANCHOR.x + 14 + (i % 2) * 16;
+    ctx.moveTo(x0, sy); ctx.lineTo(x0 + 52 + (i % 3) * 20, sy);
+  }
   ctx.stroke();
+
+  // the arms, thick, with a lit edge and a cap of snow on each top
+  ctx.strokeStyle = '#4a3524'; ctx.lineWidth = 16; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(POST_X, ANCHOR.y - POST_Y); ctx.lineTo(POST_X, ANCHOR.y - 40);
+  ctx.moveTo(POST_X, ANCHOR.y + POST_Y); ctx.lineTo(POST_X, ANCHOR.y + 40);
+  ctx.stroke();
+  ctx.strokeStyle = '#7d5838'; ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(POST_X, ANCHOR.y - POST_Y); ctx.lineTo(POST_X, ANCHOR.y - 40);
+  ctx.moveTo(POST_X, ANCHOR.y + POST_Y); ctx.lineTo(POST_X, ANCHOR.y + 40);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,247,228,.18)'; ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(POST_X - 3, ANCHOR.y - POST_Y + 4); ctx.lineTo(POST_X - 3, ANCHOR.y - 44);
+  ctx.moveTo(POST_X - 3, ANCHOR.y + POST_Y - 4); ctx.lineTo(POST_X - 3, ANCHOR.y + 44);
+  ctx.stroke();
+  ctx.fillStyle = '#eef4ff';
+  for (const sy of [-1, 1]){
+    circle(POST_X, ANCHOR.y + sy * POST_Y, 11); ctx.fill();
+  }
+  ctx.fillStyle = '#c4d2e8';
+  for (const sy of [-1, 1]){
+    circle(POST_X + 3, ANCHOR.y + sy * POST_Y + 3, 6); ctx.fill();
+  }
+}
+
+/* The band, from both post tops to wherever the car is. Thick and dark at the
+   posts, thinner and paler the further it is stretched, with a highlight down
+   it — a rubber band under load rather than two lines of constant weight. */
+function slingBand(bx, by, alpha, wrong){
+  const stretch = clamp(Math.hypot(bx - ANCHOR.x, by - ANCHOR.y) / MAX_PULL, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = wrong ? '#8a2b22' : '#2c1f16';
+  ctx.lineWidth = 9 - stretch * 3.4;
+  ctx.beginPath();
+  ctx.moveTo(POST_X, ANCHOR.y - POST_Y); ctx.lineTo(bx, by);
+  ctx.lineTo(POST_X, ANCHOR.y + POST_Y);
+  ctx.stroke();
+  ctx.strokeStyle = wrong ? 'rgba(255,150,140,.45)' : 'rgba(228,214,196,.32)';
+  ctx.lineWidth = 2.4 - stretch * 0.9;
+  ctx.beginPath();
+  ctx.moveTo(POST_X, ANCHOR.y - POST_Y); ctx.lineTo(bx, by);
+  ctx.lineTo(POST_X, ANCHOR.y + POST_Y);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /* The quarter second after you let go. The band whips back through the anchor
@@ -5137,13 +5203,7 @@ function drawSling(){
   const d = s.len * Math.cos(k * 11) * Math.exp(-4.5 * k);
   const bx = ANCHOR.x + s.ux * d, by = ANCHOR.y + s.uy * d;
   slingPosts();
-  ctx.globalAlpha = 1 - k * 0.35;
-  ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(bx, by);
-  ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 96);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  slingBand(bx, by, 1 - k * 0.35, false);
 }
 
 /* Where this shot actually ends up.
@@ -5381,11 +5441,7 @@ function drawAim(){
   slingPosts();
   const wrongWay = aim.active && pull.x > -20;
   if (aim.active && len > 20){
-    ctx.strokeStyle = wrongWay ? '#8a2b22' : '#3a2a1e'; ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(ANCHOR.x - 30, ANCHOR.y - 96); ctx.lineTo(car.x, car.y);
-    ctx.lineTo(ANCHOR.x - 30, ANCHOR.y + 96);
-    ctx.stroke();
+    slingBand(car.x, car.y, 1, wrongWay);
     // predicted line — always DOTS dots, however long the shot is, so the
     // spacing itself reads as speed and the sleigh does not become a hosepipe
     const p = clamp(clampedLen / MAX_PULL, MIN_POWER, 1);

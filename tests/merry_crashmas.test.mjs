@@ -79,6 +79,7 @@ const EXPOSE = `__out.api = {
   windNow, WIND_STREAK, drawSnow, seedSnow,
   drawGate, drawGateBulbs, GATE_X, GATE_HALF,
   drawStallSigns, signMark, signAt, SIGN_W, SIGN_H,
+  slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -116,9 +117,14 @@ function boot(opts){
   // the colours a frame asks for are the only way a headless suite can see what
   // shade of night the light pass laid down
   }, set(t, p, v){
-    if (o.count && (p === 'fillStyle' || p === 'globalCompositeOperation')){
+    if (o.count && (p === 'fillStyle' || p === 'strokeStyle' || p === 'globalCompositeOperation')){
       const seen = counts._styles || (counts._styles = []);
       if (seen.length < 40000) seen.push(String(v));
+    }
+    // how heavy a line is, so a band under tension can be measured
+    if (o.count && p === 'lineWidth'){
+      const w = counts._widths || (counts._widths = []);
+      if (w.length < 40000) w.push(+v);
     }
     return true;
   } });
@@ -5353,6 +5359,72 @@ test('the games index has a poster and a clip to show for this game', () => {
   assert(m.length > 20 * 1024, 'the clip is ' + m.length + ' bytes — too small to be a clip');
   assert(m.length < 260 * 1024,
     'the clip is ' + m.length + ' bytes, well over the biggest cover on the index');
+});
+
+/* ---------------------------------------------------------------- sling --- */
+
+/* The sling is what you look at on every shot of the game, and it was two bare
+   brown L-strokes on empty snow while every stall around it had a lit side and
+   a snow cap. */
+test('the band tightens as you pull, and goes red the wrong way', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const A = api.C.ANCHOR;
+  const band = (frac, wrong) => {
+    api._resetCounts();
+    api.slingBand(A.x - api.C.MAX_PULL * frac, A.y, 1, !!wrong);
+    return { widths: (api._counts._widths || []).slice(),
+      styles: (api._counts._styles || []).slice(),
+      strokes: api._counts.stroke || 0 };
+  };
+  const slack = band(0.15), taut = band(1);
+  const heaviest = (b) => Math.max(...b.widths);
+  console.log('    (band: ' + heaviest(slack).toFixed(1) + 'px slack, ' +
+    heaviest(taut).toFixed(1) + 'px at full pull)');
+  assert(heaviest(taut) < heaviest(slack) * 0.8,
+    'the band should thin as it stretches: ' + heaviest(slack) + ' -> ' + heaviest(taut));
+  assert(heaviest(taut) > 3, 'but it must still be a band, not a hair: ' + heaviest(taut));
+  assert(slack.strokes === 2, 'a band is its body and its highlight, got ' + slack.strokes);
+  // pulling forwards is a mistake and the band says so
+  const bad = band(1, true);
+  assert(bad.styles.some(c => c === '#8a2b22'),
+    'dragging the wrong way should turn the band red: ' + bad.styles.join('|'));
+  assert(!taut.styles.some(c => c === '#8a2b22'), 'and a good pull should not');
+});
+
+test('the sling stands on a pad, in the aim and in the recoil alike', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api._resetCounts();
+  api.slingPosts();
+  const st = api._counts._styles || [];
+  const pad = st.indexOf('rgba(70,96,140,.16)');
+  const arm = st.indexOf('#4a3524');
+  const cap = st.indexOf('#eef4ff');
+  assert(pad >= 0 && arm >= 0 && cap >= 0,
+    'the sling should have a pad, arms and snow on the tops: ' + st.join('|'));
+  assert(pad < arm && arm < cap,
+    'the pad goes down first and the snow last: ' + st.join('|'));
+  assert((api._counts.stroke || 0) >= 3, 'the arms and the scuff are strokes');
+
+  // both the aim frame and the quarter second after release put it up
+  const drew = (fn) => { api._resetCounts(); fn(); return api._counts._styles || []; };
+  api.G.phase = 'aim';
+  api.aim.active = true;
+  api.aim.x = api.C.ANCHOR.x - api.C.MAX_PULL; api.aim.y = api.C.ANCHOR.y;
+  api.aimCar();
+  const aimed = drew(() => api.drawAim());
+  assert(aimed.includes('rgba(70,96,140,.16)'), 'the aim frame should show the pad');
+  api.G.phase = 'drive';
+  api.G.sling = { t: 0.05, len: api.C.MAX_PULL, ux: -1, uy: 0 };
+  const recoil = drew(() => api.drawSling());
+  assert(recoil.includes('rgba(70,96,140,.16)'), 'so should the recoil frame');
+  assert(recoil.includes('#2c1f16'), 'and the band should whip back through it');
+  // and nothing at all once the sling is gone
+  api.G.sling = null;
+  api._resetCounts(); api.drawSling();
+  assert(!Object.keys(api._counts).length,
+    'the sling is still being drawn after the recoil: ' + JSON.stringify(api._counts));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
