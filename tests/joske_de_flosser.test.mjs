@@ -61,6 +61,8 @@ const EXPOSE = `__out.api = {
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
   BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
   gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg, drawItem,
+  paintText, textSprite, clearTextCache, TEXT_CACHE_MAX,
+  wetReflection, wetPower, REFL_BANDS, rigParts,
   plate, drawCard, drawClear, drawContinue, CARD_T, CLEAR_T, CONT_T,
   CLOUDS, cloudBand, drawClouds,
   GROUND, GROUND_ROWS, GROUND_JOINT, groundPlane, groundGrime,
@@ -76,12 +78,19 @@ function makeSandbox(opts){
   const counts = {};
   const styles = [];                  // every colour the game asks the canvas for
   const rects = [];                   // and every rectangle, so a test can measure a shape
+  // Baked sprites are blitted, not painted, so where a blit lands is the only
+  // way to measure anything drawn from a cache — text above all.
+  const blits = [];
   const gradient = { addColorStop(){} };
   const ctxStub = new Proxy({}, {
     get(t, p){
       if (p === 'measureText') return () => ({ width: 30 });
       if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => gradient;
       if (p === 'canvas') return { width: 384, height: 224 };
+      if (p === 'drawImage') return (img, x, y) => {
+        counts.drawImage = (counts.drawImage || 0) + 1;
+        if (blits.length < 20000) blits.push([x, y, img && img.width, img && img.height]);
+      };
       if (p === 'fillRect') return (x, y, w, h) => {
         counts.fillRect = (counts.fillRect || 0) + 1;
         if (rects.length < 40000) rects.push([x, y, w, h, t.fillStyle]);
@@ -117,7 +126,7 @@ function makeSandbox(opts){
     requestAnimationFrame: () => {},
     __out: {},
   };
-  return { sandbox, store, counts, styles, rects, nodes, canvas };
+  return { sandbox, store, counts, styles, rects, blits, nodes, canvas };
 }
 
 let SRC = null;
@@ -133,7 +142,7 @@ function source(){
 }
 
 function boot(opts){
-  const { sandbox, store, counts, styles, rects } = makeSandbox(opts);
+  const { sandbox, store, counts, styles, rects, blits } = makeSandbox(opts);
   new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', source())(
     sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
   const api = sandbox.__out.api;
@@ -141,7 +150,8 @@ function boot(opts){
   api._counts = counts;
   api._styles = styles;
   api._rects = rects;
-  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; };
+  api._blits = blits;
+  api._resetCounts = () => { for (const k in counts) delete counts[k]; styles.length = 0; rects.length = 0; blits.length = 0; };
   api.reseed(4242);
   return api;
 }
@@ -2453,7 +2463,7 @@ test('every stage lights up, and stays inside the frame budget', () => {
     api._resetCounts();
     api.draw();
     const fills = api._counts.fillRect || 0, blits = api._counts.drawImage || 0;
-    assert(fills < 11000, `stage ${st + 1} costs ${fills} fillRects`);
+    assert(fills < 7500, `stage ${st + 1} costs ${fills} fillRects`);
     assert(blits >= 2, `stage ${st + 1} draws ${blits} blits — the baked plates are not being reused`);
     assert(blits < 150, `stage ${st + 1} hangs ${blits} lights, more than a scene needs`);
   }
@@ -4221,7 +4231,9 @@ test('a busy frame stays inside a sane draw budget', () => {
   // This guard exists to catch a whole layer being redrawn every frame — the
   // dithered sky once cost 45k here. It is not a pixel budget: a browser frame
   // with 31 enemies, wet reflections and fx measures 8.7ms, well inside 16.7.
-  assert(fills < 11000, 'frame is too expensive: ' + fills + ' fillRects');
+  // It was 11000 while the HUD repainted every glyph it owns; with the strings
+  // baked the same scene costs 5663, so the guard is pulled in behind it.
+  assert(fills < 7500, 'frame is too expensive: ' + fills + ' fillRects');
   assert(firstFrame > fills * 2, 'the dithered sky should be baked once, not every frame');
   // and every other stage should be just as cheap on a warm cache
   for (let st = 1; st < api.STAGES.length; st++){
@@ -4230,7 +4242,7 @@ test('a busy frame stays inside a sane draw budget', () => {
     api._resetCounts();
     api.draw();
     const n = api._counts.fillRect || 0;
-    assert(n < 11000, `stage ${st + 1} frame is too expensive: ${n} fillRects`);
+    assert(n < 7500, `stage ${st + 1} frame is too expensive: ${n} fillRects`);
   }
 });
 
@@ -4478,10 +4490,16 @@ test('the continue count burns a fuse down, and reddens when it is short', () =>
 test('the continue digit is big, and kicks on each new second', () => {
   const api = boot();
   play(api, { stage: 2 });
+  // text is baked and blitted, so its glyphs are counted on a cold cache and
+  // its position is read off where the sprite landed
   const digit = (t) => {
-    api.G.contT = t; api._resetCounts(); api.drawContinue();
+    api.G.contT = t;
+    api.clearTextCache();
+    api._resetCounts();
+    api.drawContinue();
     const p = api._rects.filter(q => q[2] === 5 && q[3] === 5 && (q[4] === '#ffffff' || q[4] === '#ffe9c8'));
-    return { n: p.length, y: p.length ? Math.min(...p.map(q => q[1])) : 0, col: p.length ? p[0][4] : null };
+    const spr = api._blits.filter(q => q[3] === 45);       // 9 * scale 5 tall: the digit's own sprite
+    return { n: p.length, y: spr.length ? spr[0][1] : 0, col: p.length ? p[0][4] : null };
   };
   const rest = digit(6.4), kick = digit(6.94);
   assert(rest.n > 10, 'the digit is not drawn at five times size: ' + rest.n + ' pixels');
@@ -4760,6 +4778,199 @@ test('the street only paints the lamps, dashes and wet patches on screen', () =>
     assert(dashes.length <= 8, 'at camera ' + cx + ' it painted ' + dashes.length + ' road dashes');
     assert(dashes.length >= 5, 'at camera ' + cx + ' the road has ' + dashes.length + ' dashes on it');
   }
+});
+
+/* ------------------------------------------------------------ baked text */
+test('a string is painted once and blitted after that', () => {
+  const api = boot();
+  api.clearTextCache();
+  api._resetCounts();
+  api.text('JOSKE', 10, 10, '#ffffff', 1, '#000000');
+  const cold = api._counts.fillRect || 0;
+  assert(cold > 300, 'a shadowed string paints ' + cold + ' pixels — that is not five copies of it');
+  assert((api._counts.drawImage || 0) === 1, 'the sprite was not blitted');
+  api._resetCounts();
+  api.text('JOSKE', 40, 10, '#ffffff', 1, '#000000');
+  assert((api._counts.fillRect || 0) === 0, 'the same string was painted again: ' + api._counts.fillRect);
+  assert((api._counts.drawImage || 0) === 1, 'the warm string is not one blit');
+  // colour, scale and shadow are all part of what a sprite is
+  for (const [args, why] of [
+    [['JOSKE', 40, 10, '#ff0000', 1, '#000000'], 'colour'],
+    [['JOSKE', 40, 10, '#ffffff', 2, '#000000'], 'scale'],
+    [['JOSKE', 40, 10, '#ffffff', 1, null], 'shadow'],
+  ]){
+    api._resetCounts();
+    api.text(...args);
+    assert((api._counts.fillRect || 0) > 0, 'a different ' + why + ' reused the wrong sprite');
+  }
+});
+
+test('the text sprite carries its shadow, and lands where it was asked to', () => {
+  const api = boot();
+  api.clearTextCache();
+  api._resetCounts();
+  api.text('AB', 100, 50, '#ffffff', 2, '#000000');
+  const [x, y, w, h] = api._blits[0];
+  assert(w === api.textW('AB', 2) + 4, 'the sprite is ' + w + 'px wide, no room for the shadow');
+  assert(h === 18, 'the sprite is ' + h + 'px tall, no room for the shadow');
+  assert(x === 98 && y === 48, 'the sprite landed at ' + x + ',' + y + ' — the margin is not backed out');
+  // the shadow really is on all four sides of the glyphs
+  const ink = api._rects.filter(q => q[4] === '#000000');
+  const lit = api._rects.filter(q => q[4] === '#ffffff');
+  assert(ink.length === lit.length * 4, 'the shadow is ' + ink.length + ' pixels to ' + lit.length + ' lit');
+  assert(Math.min(...ink.map(q => q[0])) < Math.min(...lit.map(q => q[0])), 'nothing to the left');
+  assert(Math.max(...ink.map(q => q[1])) > Math.max(...lit.map(q => q[1])), 'nothing underneath');
+  // and none of it is painted outside the sprite, where the canvas would eat it
+  for (const q of api._rects){
+    assert(q[0] >= 0 && q[1] >= 0, 'a glyph pixel is painted at ' + q[0] + ',' + q[1] + ', off the sprite');
+    assert(q[0] + q[2] <= w && q[1] + q[3] <= h, 'a glyph pixel runs off the far edge of the sprite');
+  }
+});
+
+test('the text cache is dropped whole rather than growing forever', () => {
+  const api = boot();
+  api.clearTextCache();
+  for (let i = 0; i < api.TEXT_CACHE_MAX; i++) api.text('S' + i, 0, 0, '#fff', 1, null);
+  api._resetCounts();
+  api.text('S0', 0, 0, '#fff', 1, null);              // still in there, one below the line
+  assert((api._counts.fillRect || 0) === 0, 'the cache dropped early');
+  api.text('OVERFLOW', 0, 0, '#fff', 1, null);        // this one tips it over
+  api._resetCounts();
+  api.text('S0', 0, 0, '#fff', 1, null);
+  assert((api._counts.fillRect || 0) > 0, 'the cache grew past its limit instead of being dropped');
+});
+
+test('the HUD stopped repainting every glyph it owns, every frame', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  api.draw();
+  api._resetCounts();
+  api.drawHUD();
+  const fills = api._counts.fillRect || 0;
+  // 5568 before the text cache — over half the whole frame budget, for a
+  // layer that changes one digit at a time
+  assert(fills < 800, 'the HUD costs ' + fills + ' fillRects a frame');
+  assert(fills > 60, 'the HUD drew almost nothing: ' + fills);
+  assert((api._counts.drawImage || 0) >= 6, 'the HUD is not blitting its strings');
+});
+
+/* ------------------------------------------------------- wet reflections */
+// The reflection bands are the only rects under his feet that are several
+// rows deep and tinted: the contact shadow under him is flat black ellipses,
+// one row at a time.
+const reflOf = (api, f) => {
+  api._resetCounts();
+  api.drawFighter(f);
+  const gy = Math.round(f.y + api.cam.shakeY) + 1;
+  return api._rects.filter(q => q[1] >= gy && q[3] >= 2 && q[3] <= 8 &&
+    String(q[4]).startsWith('rgba(') && !String(q[4]).startsWith('rgba(0,0,0'));
+};
+const sheenOf = (api, f) => {
+  api._resetCounts();
+  api.drawFighter(f);
+  const gy = Math.round(f.y + api.cam.shakeY) + 1;
+  return api._rects.filter(q => q[1] === gy && q[3] === 1 && /rgba\(255,\s*255,\s*255/.test(String(q[4])));
+};
+
+test('a wet street throws the man standing in it back up', () => {
+  const api = boot();
+  const p = play(api, { stage: 0 });                  // the street is wet
+  api.draw();
+  const wet = reflOf(api, p);
+  assert(wet.length >= api.REFL_BANDS, 'the wet street reflects ' + wet.length + ' bands of him');
+  play(api, { stage: 1 });                            // the scrapyard is not
+  api.draw();
+  const dry = reflOf(api, api.players[0]);
+  assert(dry.length < 4, 'a dry yard reflected ' + dry.length + ' bands');
+});
+
+test('the reflection is him upside down: boots at the water line, head deepest', () => {
+  const api = boot();
+  const p = play(api, { stage: 0 });
+  api.draw();
+  const gy = Math.round(p.y + api.cam.shakeY) + 1;
+  const bands = reflOf(api, p).filter(q => q[1] > gy).sort((a, b) => a[1] - b[1]);
+  assert(bands.length >= 8, 'only ' + bands.length + ' bands under him');
+  const alpha = (q) => parseFloat(String(q[4]).split(',')[3]);
+  assert(alpha(bands[0]) > alpha(bands[bands.length - 1]) * 1.6,
+    'the reflection does not fade with depth: ' + alpha(bands[0]) + ' to ' + alpha(bands[bands.length - 1]));
+  // it narrows as it goes down, the way something going away from you does
+  const wAt = (y) => Math.max(...bands.filter(q => q[1] === y).map(q => q[2]));
+  const ys = [...new Set(bands.map(q => q[1]))].sort((a, b) => a - b);
+  assert(wAt(ys[ys.length - 1]) <= wAt(ys[0]), 'the reflection does not narrow with depth');
+  // and every course of it goes down as two halves, so the edge is not straight
+  for (const y of ys.slice(0, 4))
+    assert(bands.filter(q => q[1] === y).length === 2, 'the band at ' + y + ' is one solid bar');
+  // a sheen sits on the surface itself
+  assert(sheenOf(api, p).length === 1, 'nothing catches the light at the water line');
+});
+
+test('he takes the reflection with him when he leaves the ground', () => {
+  const api = boot();
+  const p = play(api, { stage: 0 });
+  api.draw();
+  p.z = 0;
+  const low = api.wetPower(p);
+  p.z = 14;
+  const mid = api.wetPower(p);
+  p.z = 40;
+  const high = api.wetPower(p);
+  assert(low > mid && mid > 0, 'the reflection does not weaken as he rises: ' + low + ' then ' + mid);
+  assert(high === 0, 'he still reflects from ' + p.z + 'px up');
+  p.z = 40;
+  assert(reflOf(api, p).length < 4, 'a man in the air still has a reflection under him');
+});
+
+test('in a real scrum the grunts give their reflections up first', () => {
+  const api = boot();
+  const p = play(api, { stage: 0 });
+  for (let i = 0; i < 22; i++) api.spawnEnemy('punk', api.cam.x + 20 + i * 14, api.FLOOR_MID + (i % 3) * 6, -1);
+  api.draw();                                        // draw() is what counts the crowd
+  const foe = api.fighters.find(f => f.team === 'e' && !f.gone && !f.boss);
+  assert(reflOf(api, foe).length < 4, 'a grunt in a crowd of 22 still reflects');
+  assert(reflOf(api, p).length >= api.REFL_BANDS, 'the player lost his reflection with them');
+});
+
+test('the reflection is built from the rig, not from a fixed palette', () => {
+  const api = boot();
+  const p = play(api, { stage: 0 });
+  api.draw();
+  // A man of constant width, so any narrowing further down is the taper and
+  // not his own shape; and a trunk band with a thin arm laid over it after.
+  api.rigParts.length = 0;
+  for (let i = 0; i < api.REFL_BANDS; i++)
+    api.rigParts.push({ k: 'l', x1: 90, y1: 150 + i * 7, x2: 110, y2: 152 + i * 7, w: 6,
+      c: '#ff0000', cs: '#111111', z: 0 });
+  // the trunk reaches the topmost band, and an arm is laid over it afterwards
+  api.rigParts.push({ k: 'l', x1: 100, y1: 150, x2: 100, y2: 151, w: 2, c: '#00ff00', cs: '#111111', z: 1 });
+  api.rigParts.push({ k: 'l', x1: 100, y1: 150, x2: 100, y2: 151, w: 2, c: '#0000ff', cs: '#111111', z: 0 });
+  api._resetCounts();
+  api.wetReflection(p, 100, 170, 1);
+  const bands = api._rects.filter(q => q[3] >= 2 && String(q[4]).startsWith('rgba('));
+  const ys = [...new Set(bands.map(q => q[1]))].sort((a, b) => a - b);
+  assert(ys.length >= 5, 'the reflection is ' + ys.length + ' courses deep');
+  const wAt = (y) => bands.filter(q => q[1] === y)[0][2];
+  assert(wAt(ys[ys.length - 1]) < wAt(ys[0]),
+    'a man of one width reflects at one width — nothing is tapering: ' + ys.map(wAt).join(', '));
+  // the top of him lands deepest, and it is the trunk's colour there, not the
+  // arm that was laid over it afterwards
+  const deepest = bands.filter(q => q[1] === ys[ys.length - 1])[0][4];
+  assert(/rgba\(0,\s*255,\s*0/.test(String(deepest)),
+    'the band took ' + deepest + ' — an arm beat the trunk to it');
+  assert(new Set(bands.map(q => String(q[4]).slice(0, 12))).size > 1, 'the whole reflection is one colour');
+});
+
+test('a frame costs a fraction of what it did before the strings were baked', () => {
+  const api = boot();
+  play(api, { players: 2 });
+  for (let i = 0; i < 8; i++) api.spawnEnemy('punk', api.cam.x + 30 + i * 40, api.FLOOR_MID + (i % 3) * 8, -1);
+  for (let i = 0; i < 30; i++) api.spawnFx('chip', api.cam.x + i * 8, api.FLOOR_MID, 10, '#fff');
+  api.draw();
+  api._resetCounts();
+  api.draw();
+  const fills = api._counts.fillRect || 0;
+  // 10843 with the same scene before the text cache
+  assert(fills < 7500, 'a busy frame is back up to ' + fills + ' fillRects');
 });
 
 console.log(`\njoske: ${passed} passed, ${failed} failed`);
