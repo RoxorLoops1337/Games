@@ -60,6 +60,7 @@ const EXPOSE = `__out.api = {
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
   BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
+  gauge, drawPortrait, shade,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -2459,6 +2460,102 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* ------------------------------------------------------------------- hud */
+const lumOf = (c) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(c);
+  if (!m) return -1;
+  const n = parseInt(m[1], 16);
+  return (((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255)) / 3;
+};
+
+test('a gauge is a piece of hardware, not a flat rectangle', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api._resetCounts();
+  api.gauge(20, 40, 60, 8, 0.5, '#4ad06a');
+  // px() sets a fillStyle then fills one rect, so the two lists line up here
+  const parts = api._rects.map((r, i) => ({ r, c: api._styles[i] }));
+  assert(parts.length >= 6, 'a gauge in ' + parts.length + ' pieces is still a bar');
+  const body = parts.find(p => p.c === '#4ad06a');
+  assert(body, 'no fill in the colour it was asked for');
+  const fw = body.r[2];
+  assert(fw > 20 && fw < 40, 'half of 58 inner pixels should be about 29, got ' + fw);
+  // the top row of the fill is lighter than the body and the bottom is darker
+  const top = parts.find(p => p.r[1] === 41 && p.r[3] === 1 && p.r[2] === fw && lumOf(p.c) > lumOf('#4ad06a'));
+  const bot = parts.find(p => p.r[3] === 1 && p.r[2] === fw && lumOf(p.c) >= 0 && lumOf(p.c) < lumOf('#4ad06a'));
+  assert(top, 'the fill has no lit top edge');
+  assert(bot, 'the fill has no shadow under it');
+  // and the leading pixel is the brightest thing on it
+  const edge = parts.filter(p => p.r[2] === 1 && p.r[3] === 6);
+  assert(edge.length >= 1, 'no leading edge on the fill');
+  assert(lumOf(edge[edge.length - 1].c) > lumOf(top.c), 'the leading edge should out-shine the top row');
+});
+
+test('an empty gauge draws the trough and nothing else', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api._resetCounts();
+  api.gauge(20, 40, 60, 8, 0, '#4ad06a');
+  assert(!api._styles.includes('#4ad06a'), 'an empty bar should not be filled');
+  assert((api._counts.fillRect || 0) >= 4, 'but it should still draw its trough');
+  api._resetCounts();
+  api.gauge(20, 40, 60, 8, 1, '#4ad06a');
+  const full = api._rects.find(r => r[2] === 58);
+  assert(full, 'a full bar should fill its whole inside');
+});
+
+test('the health bar leaves a ghost of what you just lost', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  const f = api.players[0];
+  f.hp = f.hpMax;
+  api.updateFighter(f, 1 / 60);
+  assert(f.hpGhost === f.hpMax, 'the ghost starts level with the bar');
+  f.hp = f.hpMax * 0.4;
+  api.updateFighter(f, 1 / 60);
+  assert(f.hpGhost > f.hp, 'the ghost should hang back after a hit: ' + f.hpGhost + ' vs ' + f.hp);
+  const before = f.hpGhost;
+  for (let i = 0; i < 30; i++) api.updateFighter(f, 1 / 60);
+  assert(f.hpGhost < before, 'and then drain');
+  assert(f.hpGhost >= f.hp, 'but never below the bar itself');
+  for (let i = 0; i < 200; i++) api.updateFighter(f, 1 / 60);
+  assert(Math.abs(f.hpGhost - f.hp) < 0.01, 'it should catch up in the end: ' + f.hpGhost);
+  f.hp = f.hpMax;                                   // and a heal snaps it straight up
+  api.updateFighter(f, 1 / 60);
+  assert(f.hpGhost === f.hpMax, 'healing should not leave a ghost behind');
+});
+
+test('the ghost is drawn behind the fill, and only when there is one', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api._resetCounts();
+  api.gauge(20, 40, 60, 8, 0.4, '#4ad06a', { ghost: 0.9, ghostCol: '#8c3050' });
+  const gi = api._styles.indexOf('#8c3050'), fi = api._styles.indexOf('#4ad06a');
+  assert(gi >= 0, 'the ghost never drew');
+  assert(fi > gi, 'the fill has to go over the ghost, not under it');
+  assert(api._rects[gi][2] > api._rects[fi][2], 'the ghost should be the wider of the two');
+  api._resetCounts();
+  api.gauge(20, 40, 60, 8, 0.4, '#4ad06a', { ghost: null });
+  assert(!api._styles.includes('#8c3050'), 'no ghost should be drawn when there is nothing to show');
+});
+
+test('the HUD frames itself: a portrait plate, a stage plate and a lip', () => {
+  const api = boot();
+  play(api, { stage: 2 });
+  api._resetCounts();
+  api.drawHUD();
+  const cols = new Set(api._styles);
+  assert(cols.has('#5a4258'), 'the plate has no lit edge along the bottom');
+  assert(cols.has('#4a3a58'), 'the portrait has no bevel');
+  assert(cols.has('#0a0710'), 'nothing is framed in ink');
+  const wide = api._rects.filter(r => r[2] >= api.VW && r[3] === 1);
+  assert(wide.length >= 3, 'the plate edge is ' + wide.length + ' lines — it needs a lip, not a hairline');
+  api._resetCounts();
+  api.drawPortrait('joske', 4, 4, 24, 26, false);
+  assert((api._counts.fillRect || 0) > 25, 'the portrait is barely drawn: ' + api._counts.fillRect);
+  assert(api._styles.includes('#4a3a58'), 'the portrait frame is missing its light side');
 });
 
 /* ---------------------------------------------------------------- weapon */
