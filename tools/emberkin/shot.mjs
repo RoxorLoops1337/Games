@@ -164,6 +164,18 @@ const SCENES = {
       EK.readIntent();
     },
   },
+  // A chest coming open. Film it at ~90ms: the burst is .35s, and the sampling
+  // has to match the shortest sub-beat rather than the 1.6s whole.
+  chestopen: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.G.gems = 4000;
+      EK.openScreen('chests');
+      EK.G.screen.i = 3;                  // the Prism, whose colour is the thing being checked
+      EK.screenSelect();
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,

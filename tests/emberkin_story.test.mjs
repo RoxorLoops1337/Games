@@ -289,4 +289,26 @@ section('Sable does not perform a heal that heals nothing');
   eq(m.hp, m.max, 'and is actually put back together');
 }
 
+section('a chest opens as an event, not a re-render');
+{
+  const g = loadGame({});
+  g.newGame();
+  g.G.gems = 4000;
+  g.openScreen('chests');
+  const s2 = g.G.screen;
+  ok(s2 && s2.kind === 'chests', 'the chest shop opens');
+  const before = g.G.deck.length + g.G.cards.length;
+  g.screenSelect();
+  ok(!!g.G.chestOpen, 'buying one starts the beat rather than just re-rendering');
+  ok((g.G.chestOpen.names || []).length > 0, 'and it names what you actually got');
+  ok(g.G.gems < 4000, 'the gems were spent');
+  ok(g.G.cards.length + g.G.deck.length > before, 'and the cards really arrived');
+  // It ends on its own clock and hands the screen back.
+  let guard = 0;
+  while (g.G.chestOpen && guard++ < 400) { g.step(.02); g.fired.clear(); }
+  ok(guard < 400, 'the beat ends rather than holding the screen for ever');
+  ok(!g.G.chestOpen, 'and clears itself');
+  ok(g.G.screen && g.G.screen.kind === 'chests', 'leaving you in the shop, to open another');
+}
+
 done('emberkin_story');
