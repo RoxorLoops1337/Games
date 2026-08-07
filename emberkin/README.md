@@ -243,6 +243,14 @@ happening on. The text does not shrink; the panels give up their padding and
 their type badges instead. An element's type is on the creature and in the move
 menu, so it is the one thing in there that is said twice.
 
+And it does the same job on the papers. Enlarging the portrait — the previous
+pass's fix, judged at 760x760 only — pushed the dex line and both buttons under
+the fold at a phone's size, including **Take it along**, which is how you leave
+the screen. The scroll cue made that recoverable rather than broken, but the one
+action a player must find should not have to be looked for. The portrait is
+smaller under `body.tight`. Committing the exactly-one-window fault one pass
+after fixing it is the reason `--size` gets used on everything now.
+
 ## Controls
 
 | | keyboard | touch |
@@ -1856,6 +1864,19 @@ from across the table.
 
 ### The hand is a fan
 
+Photographing a real turn — the first time a whole one had been looked at
+rather than a beat out of it — showed the aimed card swelling sideways into its
+neighbour and hiding the left half of that card's rules text. One of four cards
+in hand could not be read, on the most-used screen in the game.
+
+The aimed card lifts more and swells less now: `translateY(-9%) scale(1.045)`
+against `translateY(-5%) scale(1.09)`. **Height** is what marks the card you are
+aiming at; width only eats the ones you are choosing between. The fan's own
+overlap came in from `-1.3%` to `-0.7%` at the same time. The render suite
+asserts the range rather than the digits, because the number that matters is
+"not much", not "two decimal places".
+
+
 A hand held in front of you is an arc, not a row. `fanStyle(i, n, selected)`
 does the whole thing: the cards overlap, and rotation plus a drop both scale
 with distance from the middle, around a `transform-origin` *under* the card
@@ -2100,6 +2121,19 @@ always has.
 `commitNick` trims, squashes runs of spaces, caps at 12 characters, and treats
 "named after its own species" as no nickname at all. It runs on the way out as
 well as on the button, so a name you typed is never lost by closing the screen.
+
+### The box, and the party's empty slots
+
+A party of one used to be a single card with half the row blank beside it,
+which says nothing. The six slots are the shape of the thing, and how many are
+free is what a player is standing here to find out — so the empty ones are
+drawn, dashed and unlit.
+
+The first version drew them at full card height and pushed the box off the
+bottom of the screen: five empty frames dominating a screen whose subject is the
+nineteen kin below them. Rows made only of slots are compact now, so the party
+still reads as six and the box keeps two rows. A fix that costs the thing it
+sits above is not a fix.
 
 ### The papers
 

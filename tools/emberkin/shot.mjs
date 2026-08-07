@@ -197,6 +197,64 @@ const SCENES = {
       setTimeout(() => EK.onArrive(), 140);
     },
   },
+  // A whole turn, end to end. Every beat in a fight has been filmed on its own
+  // — the walk-on, the catch, the evolution, the rustle — and the turn they all
+  // live inside never had been. Card played, wind-up, lunge, burst, the number
+  // off the bar, the bar sliding, the foe's answer, the intent for next turn.
+  // Driven through playCard and endTurn, the two things a player actually does.
+  turn: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 22), wild: true });
+      EK.G.wipe = 0;
+      EK.G.battleMsg = null;          // the intro holds the screen until dismissed
+      const b = EK.B();
+      // Play whatever the hand can afford, then end the turn — the log that
+      // comes back is the whole exchange, and submitLog is what plays it.
+      // playCard resolves and animates on its own; endTurn returns ONLY the
+      // foe's answer. Calling both in the same tick threw the player's half of
+      // the exchange away — the first film of this showed a number leaving the
+      // player's kin and nothing ever leaving the foe, which reads as "my
+      // attack has no beat" and is really "my attack was never in the log".
+      // A player plays a card, watches it land, and then ends the turn.
+      const i = b.hand.findIndex((c) => EK.playableNow(b, c));
+      if (i >= 0) EK.playCard(i);
+      setTimeout(() => EK.submitLog(EK.endTurn()), 1500);
+    },
+  },
+  // The field menu — the most-opened screen after the hand — and the box, which
+  // is the other long screen and has never been seen against the scroll cue.
+  menu: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('hollowbrook', 12, 10, 'down');
+      EK.G.mode = 'world';
+      // Open it the way a player does. Setting G.mode = 'menu' sets the state
+      // and leaves the DOM overlay unrendered — the menu is drawn by the code
+      // that opens it, not by the frame loop, so the first shot of this scene
+      // was a picture of the town with nothing on it.
+      EK.pressKey('b'); EK.step(.02); EK.releaseKey('b'); EK.fired.clear();
+    },
+  },
+  box: {
+    w: 760, h: 760,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      // A box worth scrolling: the whole roster that has art, so the screen is
+      // seen full rather than with the three kin a fresh run happens to hold.
+      EK.G.box = EK.DEX_ORDER.filter((id) => EK.ART_CREATURES[id])
+        .map((id, i) => EK.mkMon(id, 8 + i));
+      EK.openScreen('box');
+    },
+  },
   gotcha: {
     w: 760, h: 760,
     go: (EK) => {

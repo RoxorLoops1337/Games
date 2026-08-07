@@ -501,6 +501,25 @@ The general shape: *a fallback designed to be invisible in play is invisible to
 review as well.* Anywhere the game degrades gracefully, the tool has to be told
 the difference, because the picture cannot show it.
 
+### Half a turn is not a turn
+
+The `turn` scene plays a card and ends the turn — the two things a player does —
+and getting it to record a whole exchange took three goes, none of them about
+rendering:
+
+- **`playCard` resolves and animates on its own; `endTurn` returns only the
+  foe's answer.** Calling both in one tick threw the player's half away. The
+  first film showed a number leaving the player's kin and nothing ever leaving
+  the foe, which reads as "my attack has no beat" and is really "my attack was
+  never in the log".
+- **Most cards are support and have no arena beat, correctly.** The second film
+  spent 1.6 seconds on nothing because the card drawn was Focus: it costs
+  energy and buffs, and both of those are DOM. Nothing was wrong.
+- **Which means a film is structurally blind to half a fight.** Energy, the
+  hand, the intent line and the aimed-card description are all panels. The fault
+  that was actually there — a card in hand you cannot read — only appeared in a
+  still.
+
 ### `--stats` cannot see a screen
 
 It reads the canvas. The reward screen, the deck screen and the study therefore

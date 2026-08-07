@@ -106,7 +106,7 @@
   /* The fan. Cards overlap and pivot around a point below the hand, the way a
      hand of real cards splays from the heel of your thumb. The per-card angle
      and drop are inline, from fanStyle(). */
-  #hand .cardel{ flex:0 0 20%; height:93%; margin:0 -1.3%; transform-origin:50% 165%;
+  #hand .cardel{ flex:0 0 20%; height:93%; margin:0 -.7%; transform-origin:50% 165%;
     transition:transform .14s cubic-bezier(.2,.9,.3,1.2), box-shadow .12s ease, filter .14s ease; }
   #hand .cardel.sel{ box-shadow:0 0 0 .14em var(--gold), 0 .7em .5em rgba(0,0,0,.5); }
   /* "▲ play" and the rarity pip both want the foot of the card; while a card is
@@ -216,6 +216,16 @@
   .profile .pcard canvas{ width:15em; height:15em; max-width:42vw; max-height:42vw;
     image-rendering:pixelated; }
   .profile .ptypes{ display:flex; gap:.25em; }
+  /* Below a x2 stage the enlarged portrait pushed the dex line and both buttons
+     under the fold — including "Take it along", which is how you leave this
+     screen. The scroll cue makes that recoverable rather than broken, but the
+     one action a player must find should not need to be looked for. Exactly the
+     fault the bigger portrait was meant to fix, at the other end of the range,
+     committed one pass after fixing it: a composition judged at one window. */
+  body.tight .profile{ gap:.6em; }
+  body.tight .profile .pcard{ padding:.35em; }
+  body.tight .profile .pcard canvas{ width:8.5em; height:8.5em; max-width:34vw; max-height:34vw; }
+  body.tight .profile .pdex{ margin:.45em 0; }
   .profile .pbody{ flex:1 1 15em; min-width:13em; }
   .profile .prow{ display:flex; align-items:center; gap:.5em; }
   .profile .prow label{ font-size:.72em; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
@@ -369,6 +379,14 @@
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
   .cards{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
+  /* An empty party slot: the frame without the card. Dashed, unlit and quiet
+     enough that six of them never compete with the one kin you do have. */
+  .cards .slot{ display:flex; align-items:center; justify-content:center;
+    min-height:2.4em; background:none; border-style:dashed;
+    border-color:color-mix(in srgb, var(--edge) 55%, transparent);
+    box-shadow:none; }
+  .cards .slot span{ font-size:.7em; letter-spacing:.16em; text-transform:uppercase;
+    color:color-mix(in srgb, var(--dim) 45%, transparent); }
   .card{ display:flex; gap:8px; padding:7px; align-items:center; cursor:pointer; }
   .card.sel{ box-shadow:0 0 0 2px var(--gold), 0 4px 0 rgba(0,0,0,.5); }
   /* Canvases are authored at 1:1 and blown up by an integer factor in CSS so
@@ -7482,7 +7500,12 @@ function paintCardArt(root) {
 function fanStyle(i, n, selected) {
   // The chosen card pivots about its own base rather than the fan's, or scaling
   // it around a point below the hand throws it up over the dialogue line.
-  if (selected) return 'transform-origin:50% 100%;transform:translateY(-5%) rotate(0deg) scale(1.09);z-index:20';
+  // Lift more, swell less. At scale 1.09 the aimed card grew sideways into its
+  // neighbour and hid the left half of that card's rules text — photographing a
+  // real turn showed a hand where one of four cards could not be read. Height
+  // is what marks the card you are aiming at; width only eats the ones you are
+  // choosing between.
+  if (selected) return 'transform-origin:50% 100%;transform:translateY(-9%) rotate(0deg) scale(1.045);z-index:20';
   if (n <= 1) return 'z-index:1';
   const off = i - (n - 1) / 2;                    // -2, -1, 0, 1, 2 for five
   const spread = n > 4 ? 5 : 6.5;                 // a fuller hand fans tighter
@@ -8322,7 +8345,15 @@ function renderScreen() {
         <div class="info"><b>${dispName(m)}</b><small>Lv${m.lvl} · ${m.types.join('/')}</small>
         <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div></div></div>`;
     };
-    html += `<h2>Party — ${G.party.length}/6</h2><div class="cards">` + G.party.map((m, i) => monCard(m, i)).join('') + '</div>';
+    // The empty slots are drawn. A party of one used to be a single card with
+    // half the row blank beside it, which says nothing — the six slots are the
+    // shape of the thing, and how many are free is what a player is standing
+    // here to find out. Photographing the box for the first time is what showed
+    // it; a full party had always been what got looked at in a test.
+    const slot = () => '<div class="card panel slot"><span>empty</span></div>';
+    html += `<h2>Party — ${G.party.length}/6</h2><div class="cards">`
+      + G.party.map((m, i) => monCard(m, i)).join('')
+      + Array.from({ length: Math.max(0, 6 - G.party.length) }, slot).join('') + '</div>';
     html += `<h2 style="margin-top:12px">Box — ${G.box.length}</h2>`;
     html += G.box.length ? `<div class="cards">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
       : '<p style="color:var(--dim)">Nothing stored yet.</p>';
