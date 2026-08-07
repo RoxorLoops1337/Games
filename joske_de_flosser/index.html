@@ -3836,6 +3836,72 @@ function hash(i){
 }
 function band(y, h, col){ px(0, y, VW, h, col); }
 
+/* --------------------------------------------------------- the ground
+   Every stage stood its fight on a flat band with a two-stop gradient down
+   it: the largest surface in the frame and the least worked one. What makes
+   a 2.5D floor read as ground rather than as a wall behind the fighters is
+   that the courses across it crowd toward the back — a fixed number of
+   screen pixels is a longer stretch of ground the further away it lies. The
+   pass is drawn in alpha rather than in per-stage colours, so one set of
+   courses works over paving, dirt, plate, plank and tar alike; a stage only
+   says where its floor starts and how hard its light lands on it. */
+const GROUND = {
+  street:  { y0: 155, lit: 0.105, dark: 0.26, joint: 0.20, bounce: 0.13 },
+  junk:    { y0: 151, lit: 0.050, dark: 0.15, joint: 0.04, bounce: 0.15 },  // dirt has no courses cut into it
+  docks:   { y0: 151, lit: 0.095, dark: 0.24, joint: 0.18, bounce: 0.16 },
+  foundry: { y0: 151, lit: 0.075, dark: 0.20, joint: 0.14, bounce: 0.10 },
+  keep:    { y0: 151, lit: 0.095, dark: 0.24, joint: 0.17, bounce: 0.20 },
+};
+const GROUND_ROWS = 8;
+const GROUND_JOINT = 38;                              // world spacing of the cross joints
+function groundGrime(){
+  /* Blotches, baked once and tiled: a floor that has been walked on is
+     never one flat tone. Nothing is painted within 20px of either edge, so
+     no blob is cut in half where the two copies meet. */
+  return bake('grime', VW, 66, () => {
+    for (let i = 0; i < 15; i++)
+      ellipse(20 + hash(i * 5 + 2) * (VW - 40), hash(i * 7 + 11) * 62,
+        11 + hash(i * 3) * 26, 3 + hash(i * 11) * 6, 'rgba(10,8,16,0.11)');
+    for (let i = 0; i < 9; i++)
+      ellipse(20 + hash(i * 13 + 5) * (VW - 40), hash(i * 17 + 3) * 62,
+        8 + hash(i * 9) * 15, 2 + hash(i * 5) * 4, 'rgba(255,240,210,0.045)');
+  });
+}
+function groundPlane(c, m, s){
+  if (!m) return;
+  const y0 = m.y0, span = VH - y0;
+  const g = groundGrime(), gx0 = -(((c % VW) + VW) % VW);
+  blit(g, gx0, y0 + 5);
+  blit(g, gx0 + VW, y0 + 5);
+  /* What the stage is lit by lands on its floor too. The bounce colour each
+     stage already hands the fighters washes the back of the ground, where
+     the sky or the furnaces are, and dies out toward the front. The roof at
+     sunset used to be a grey slab under an orange sky. */
+  if (s && s.bounce)
+    for (let i = 0; i < 9; i++)
+      px(0, y0 + i * 4, VW, 4, rgba(s.bounce, (m.bounce == null ? 0.15 : m.bounce) * (1 - i / 9)));
+  let prev = y0 + 3;
+  for (let i = 1; i <= GROUND_ROWS; i++){
+    const t = i / GROUND_ROWS;
+    const y = Math.round(y0 + span * Math.pow(t, 1.35));
+    if (y >= VH - 1) break;
+    const k = 0.42 + t * 0.58;                        // the near courses take more light
+    px(0, y, VW, 1, 'rgba(255,244,222,' + (m.lit * k).toFixed(3) + ')');
+    px(0, y + 1, VW, 1, 'rgba(6,4,10,' + (m.dark * k).toFixed(3) + ')');
+    if (y - prev >= 8){                               // joints, once a course is deep enough to show them
+      // every other course is offset half a joint: courses that line up read
+      // as graph paper, a running bond reads as something that was laid
+      const h = y - prev - 1, sh = (i & 1) * (GROUND_JOINT >> 1);
+      const x0 = (((sh - c) % GROUND_JOINT) + GROUND_JOINT) % GROUND_JOINT;
+      for (let x = x0 - GROUND_JOINT; x < VW; x += GROUND_JOINT)
+        px(x, prev + 1, 1, h, 'rgba(6,4,10,' + m.joint.toFixed(3) + ')');
+    }
+    prev = y;
+  }
+  // and it goes into shadow where it meets whatever stands on it
+  for (let i = 0; i < 5; i++) px(0, y0 + i, VW, 1, 'rgba(6,4,10,' + (0.24 - i * 0.045).toFixed(3) + ')');
+}
+
 function drawBackground(){
   lfReset();
   const s = stage();
@@ -3848,9 +3914,46 @@ function drawBackground(){
     case 'keep': bgKeep(c); break;
     default: bgStreet(c);
   }
+  groundPlane(c, GROUND[s.bg] || GROUND.street, s);
 }
 
 /* ---------------------------------------------------------------- 1 */
+/* ------------------------------------------------------------- clouds
+   The sky over the street was a gradient and ninety stars. A city at night
+   is never that empty: there is always cloud over it, dark on top where
+   only the moon reaches and burning underneath where the town throws its
+   own light back up. Each band is baked once at exactly VW wide, with
+   frequencies that are whole multiples of 2*PI/VW so the two copies tile
+   without a seam, and drifts on its own at its own speed. */
+const CLOUDS = [
+  { key: 'c0', y: 12, h: 15, spd: 1.3, par: 0.05, cut: 0.34, body: '#161a32', lip: '#3a2440' },
+  { key: 'c1', y: 34, h: 21, spd: 2.4, par: 0.10, cut: 0.26, body: '#1b1b38', lip: '#5c3040' },
+  { key: 'c2', y: 60, h: 26, spd: 4.1, par: 0.17, cut: 0.20, body: '#221f42', lip: '#8a4038' },
+];
+function cloudBand(b){
+  return bake('cloud:' + b.key, VW, b.h, () => {
+    const f = (k) => 2 * Math.PI * k / VW;
+    for (let x = 0; x < VW; x++){
+      const n = Math.sin(x * f(2) + 1.7) * 0.55 + Math.sin(x * f(5) + 4.1) * 0.30 + Math.sin(x * f(9)) * 0.15;
+      const thick = Math.round((n + 1) / 2 * b.h * 1.5 - b.cut * b.h);
+      if (thick < 3) continue;                          // the gaps between one bank and the next
+      const bot = b.h - 1 - Math.round(Math.max(0, Math.sin(x * f(7) + 1.1)) * 2);
+      const top = Math.max(0, bot - thick);
+      px(x, top, 1, bot - top + 1, b.body);
+      px(x, top, 1, 1, shade(b.body, 26));              // the moon catches the crown
+      px(x, bot - 1, 1, 2, b.lip);                      // the town burns underneath
+    }
+  });
+}
+function drawClouds(c){
+  for (const b of CLOUDS){
+    const img = cloudBand(b);
+    const x0 = -(((T * b.spd + c * b.par) % VW) + VW) % VW;
+    blit(img, x0, b.y);
+    blit(img, x0 + VW, b.y);
+  }
+}
+
 function bgStreet(c){
   blit(bake('sky_street', VW, 150, () => {
     dgrad(0, 0, VW, 62, '#080a18', '#141833');
@@ -3866,17 +3969,25 @@ function bgStreet(c){
   }), 0, 0);
   glow(291, 64, 44, 40, '#9fb4ff', 0.16);
   glow(291, 64, 19, 18, '#e8eaff', 0.24);
+  drawClouds(c);
 
   // far skyline, hazed toward the sky it stands in
   for (let i = -1; i < 14; i++){
     const gx = Math.floor(c * 0.18 / 46) + i;
     const x = gx * 46 - c * 0.18, w = 34 + hash(gx) * 16, h = 34 + hash(gx + 7) * 42;
+    // fifteen towers were being painted, window grids and all, for the nine
+    // you can see: the loop covers the parallax drift, the painting does not
+    if (x + w < -2 || x > VW + 2) continue;
     px(x, 110 - h, w, h + 8, '#1b1c3a');
     px(x, 110 - h, w, 1, '#262a4e');
     for (let wy = 0; wy < h - 8; wy += 7) for (let wx = 3; wx < w - 4; wx += 7)
       if (hash(gx * 31 + wx + wy) > 0.66) px(x + wx, 110 - h + 4 + wy, 2, 3, '#4c5286');
   }
   ctx.fillStyle = 'rgba(58,48,85,0.45)'; ctx.fillRect(0, 96, VW, 22);
+  // the sodium dome — a town this size throws an orange haze up over itself,
+  // and it is what the undersides of the cloud are lit by
+  for (let i = 0; i < 9; i++)
+    px(0, 108 - i * 4, VW, 4, 'rgba(255,120,54,' + (0.030 - i * 0.003).toFixed(3) + ')');
 
   // near block: brick, lit windows, neon with a glow around it
   for (let i = -1; i < 10; i++){
@@ -3985,10 +4096,12 @@ function bgStreet(c){
   }), 0, 156);
   for (let i = -1; i < 12; i++){
     const gx = Math.floor(c / 60) + i, x = gx * 60 - c;
+    if (x + 26 < -2 || x > VW + 2) continue;
     px(x, 186, 26, 2, '#4a4a5c');
   }
   for (let i = -1; i < 8; i++){                       // wet patches catching the neon
     const gx = Math.floor(c / 130) + i, x = gx * 130 - c + hash(gx) * 40;
+    if (x + 14 < -2 || x - 14 > VW + 2) continue;
     ellipse(x, 172 + hash(gx + 2) * 26, 14, 4, 'rgba(70,90,130,0.20)');
     px(x - 6, 172 + hash(gx + 2) * 26, 9, 1, 'rgba(150,190,255,0.14)');
   }
@@ -4005,6 +4118,8 @@ function bgStreet(c){
   }
   for (let i = -1; i < 5; i++){                       // lamps, with a cone
     const gx = Math.floor(c * 0.55 / 140) + i, x = gx * 140 - c * 0.55;
+    // six lamps were painted, cone and all, for the three that are on screen
+    if (x + 32 < -2 || x - 20 > VW + 2) continue;
     px(x + 6, 93, 3, 57, '#221d2e');                  // post
     px(x + 1, 86, 14, 4, '#3a3150');                  // hood
     px(x + 1, 86, 14, 1, '#4d4266');
@@ -4521,10 +4636,17 @@ function drawForeground(bgOver){
       px(0, 216, VW, 2, '#141220');
       for (let i = -1; i < 3; i++){                  // a lamp post now and then
         const gx = Math.floor(c / 330) + i, x = gx * 330 - c + 60;
+        if (x < -30 || x > VW + 30) continue;
         px(x, 120, 5, 104, '#0f0d16');
         px(x - 7, 118, 19, 4, '#0f0d16');
-        ctx.fillStyle = 'rgba(255,220,140,0.05)';
-        ctx.fillRect(x - 16, 122, 37, 102);
+        /* The light under it was one flat rectangle, which reads as a pane
+           of glass leaning on the post rather than as a lamp. It falls in a
+           cone now: wider and fainter the further it gets from the bulb. */
+        for (let s = 0; s < 8; s++){
+          const w = 13 + s * 6, ly = 122 + s * 13;
+          px(x + 2 - (w >> 1), ly, w, 13, 'rgba(255,220,140,' + (0.050 - s * 0.005).toFixed(3) + ')');
+        }
+        glow(x + 2, 122, 15, 9, '#ffdc8c', 0.26);
       }
       break;
     }
@@ -5555,12 +5677,18 @@ function logo(s, cx, y, sc, shine){
    Smoske hold the beat on the left, the wannabees answer on the right,
    and every few seconds the answer turns into a punch. */
 const attract = { t: 0, cast: null };
+/* The menu sits over the middle of the canvas, which is exactly where the
+   floss-off used to happen: Joske and Smoske were behind the FIGHT button
+   and two of the three wannabees with them. The cast is blocked to the
+   flanks now — heroes down the left kerb, the gang coming the other way up
+   the right — so the stand-off frames the menu instead of hiding behind
+   it. `creep` is how far each wannabee closes over one loop. */
 const ATTRACT_CAST = [
-  { skin: 'joske', x: 150, face: 1, hero: true, tail: true, lunge: 58 },
-  { skin: 'smoke', x: 116, face: 1, hero: true, off: 2, lunge: 30 },
-  { skin: 'punk', x: 238, face: -1 },
-  { skin: 'runner', x: 280, face: -1, off: 2, sc: 0.95 },
-  { skin: 'chain', x: 314, face: -1, off: 1, sc: 0.95 },
+  { skin: 'joske', x: 62, face: 1, hero: true, tail: true, lunge: 28 },
+  { skin: 'smoke', x: 26, face: 1, hero: true, off: 2, lunge: 20 },
+  { skin: 'punk', x: 302, face: -1, creep: 12 },
+  { skin: 'runner', x: 336, face: -1, off: 2, sc: 0.95, creep: 18 },
+  { skin: 'chain', x: 366, face: -1, off: 1, sc: 0.95, creep: 22 },
 ];
 function drawAttract(){
   lfReset();
@@ -5585,17 +5713,44 @@ function drawAttract(){
       f.frame = cyc % 0.3 > 0.11 ? 1 : 0;
       f.x = c.x + Math.min(c.lunge, (cyc - 3.0) * c.lunge * 1.7);
     }
-    if (!c.hero && i === 2 && cyc > 3.55){
-      f.anim = cyc < 4.1 ? 'hurt' : 'lie';
-      f.x = c.x + Math.min(16, (cyc - 3.55) * 40);
+    if (!c.hero){                                   // the gang comes up the street at them
+      f.x = c.x - Math.min(c.creep, cyc * 5);
+      if (i === 2 && cyc > 3.4){                    // and the front one thinks better of it
+        f.anim = 'hurt';
+        f.x += Math.min(15, (cyc - 3.4) * 42);
+      }
     }
   }
+  /* Two pools of light, laid before the cast so the rig picks them up as a
+     rim and the rain over each takes their colour: the lamp on the corner
+     the heroes are standing under, and the neon the gang came out of. */
+  glow(54, 186, 62, 26, '#ffb45a', 0.40);
+  glow(336, 194, 68, 27, '#ff2f7a', 0.30);
   for (const f of attract.cast) if (f.team === 'e') drawFighter(f);
   for (const f of attract.cast) if (f.team === 'p') drawFighter(f);
+  /* The title used to be the only place in the game with no weather: bare
+     backdrop, bare fighters, nothing in front of them. It is the same wet
+     street as stage one, so it gets stage one's stack — lamp posts and the
+     kerb railing in front, rain through the lot, and the vignette. The
+     camera is borrowed for the length of it because the parallax in both
+     reads off cam.x. */
+  cam.x = attract.t * 12;
+  drawAmbient('street', 1);                         // rain first, then what stands in front of it
+  drawForeground('street');
   cam.x = oldCam; cam.shakeX = oldSX; cam.shakeY = oldSY;
+  drawVignette();
 
-  for (let i = 0; i < 34; i++) px(0, i, VW, 1, 'rgba(6,4,10,' + (0.78 - i * 0.006).toFixed(3) + ')');
-  px(0, 34, VW, 26, 'rgba(6,4,10,0.58)');
+  /* The type used to be bought with a flat 0.78 wash across the whole sky,
+     which paid for legibility with every cloud and star in the frame. The
+     wash follows the logo now: a thin veil everywhere, and a soft column
+     behind the letters themselves — nested rectangles, so the darkening
+     crowds the middle instead of ending on a visible edge. */
+  for (let i = 0; i < 34; i++) px(0, i, VW, 1, 'rgba(6,4,10,' + (0.34 - i * 0.004).toFixed(3) + ')');
+  px(0, 34, VW, 26, 'rgba(6,4,10,0.22)');
+  for (let s = 0; s < 10; s++){
+    const w = 150 + s * 16;
+    px(Math.round((VW - w) / 2), 0, w, 62, 'rgba(6,4,10,0.048)');
+  }
   /* A warm halo so the type lifts off the skyline.  Nine nested ellipses at
      a whisper of alpha each: the overlap gives a falloff on both axes that a
      single shape cannot.  Baked once — it never changes. */

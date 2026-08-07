@@ -121,7 +121,16 @@ tap('a');
 eq(fresh.G.party.length, 1, 'you have a kin');
 eq(fresh.G.party[0].species, 'cindercub', 'the first option is Cindercub');
 ok(fresh.G.bag.bloomorb >= 5, 'and a handful of orbs');
-for (let i = 0; i < 10 && fresh.G.mode === 'dialogue'; i++) tap('a');
+// The kin you are handed takes the same road as one you catch: it is
+// celebrated, and then you get its papers with the name still yours to set.
+// It used to have the screen shut in its face and five lines of rules read
+// over it, which is a strange way to treat the creature you keep longest.
+ok(fresh.G.gotcha, 'the kin is celebrated rather than just handed over');
+for (let i = 0; i < 12 && fresh.G.gotcha; i++) tap('a');
+eq(fresh.G.screen && fresh.G.screen.kind, 'profile', 'and then you get its papers');
+ok(fresh.G.screen.opt.fresh, 'opened fresh, so the name is still yours to set');
+for (let i = 0; i < 12 && fresh.G.mode === 'screen'; i++) tap('a');
+for (let i = 0; i < 12 && fresh.G.mode === 'dialogue'; i++) tap('a');
 eq(fresh.G.mode, 'world', 'back to walking');
 ok(fresh.hasSave(), 'the game saved itself after the gift');
 

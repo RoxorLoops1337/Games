@@ -127,6 +127,16 @@ const SCENES = {
       b.dispXp = b.tgtXp = me.xp; b.barLv = 5;
     },
   },
+  // The moment the starter is chosen, which now takes the same road as a catch:
+  // a celebration, then the kin's papers with the name still yours to set.
+  starterjoy: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.openScreen('starter', { done: () => {} });
+      EK.screenSelect();                    // take the first of the three
+    },
+  },
   // A wild pair, which pass 38 added and nobody has ever looked at.
   pair: {
     w: 760, h: 900,

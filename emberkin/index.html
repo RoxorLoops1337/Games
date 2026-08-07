@@ -7556,6 +7556,13 @@ function chooseStarter() {
 }
 
 /** Taking one. Everything the old menu did, minus the menu. */
+/**
+ * Grant the starter. State only — no ceremony, the same way `addCaught` puts a
+ * caught kin somewhere and `finishBattle` is what makes anything of it. The
+ * choosing is what deserves the beat, so that lives in `screenSelect`, and
+ * everything that just wants a party to exist (the shot scenes, the
+ * playthrough probe) can call this and get on with it.
+ */
 function takeStarter(id) {
   const m = mkMon(id, 5);
   G.party.push(m);
@@ -7564,14 +7571,6 @@ function takeStarter(id) {
   G.flags.starter = id;
   G.bag.bloomorb = (G.bag.bloomorb || 0) + 5;
   G.bag.salve = (G.bag.salve || 0) + 3;
-  playCue('gotcha');
-  say('Elder Rowan', [
-    `${DEX[id].name}. Of course.`,
-    'Five orbs, three salves, and a deck. Ten cards — half of them nothing special.',
-    'Your kin brings its own moves to the fight. The deck is what you bring.',
-    'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
-    'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
-  ], () => { saveGame(); });
   return m;
 }
 
@@ -9061,8 +9060,30 @@ function screenSelect() {
     const done = s.opt.done;
     G.screen = null; if (!HEADLESS) show(els.screen, false);
     G.mode = 'world';
-    takeStarter(id);
-    if (done) done();
+    const m = takeStarter(id);
+    // The starter takes the same road as a catch, because it is the same moment
+    // and the bigger one. Every kin you take off the grass gets a celebration
+    // and then its papers — the screen the source elsewhere calls the one place
+    // the name is still yours to choose. The kin you are handed here, and keep
+    // longer than any of them, used to get the screen shut in its face and five
+    // lines about energy and the chest shop. The rules can wait forty seconds.
+    G.gotcha = {
+      t: 0, species: id, name: m.name, where: 'from here on', head: 'YOUR KIN',
+      done: () => {
+        G.gotcha = null;
+        openScreen('profile', {
+          mon: m, fresh: true,
+          done: () => say('Elder Rowan', [
+            `${DEX[id].name}. Of course.`,
+            'Five orbs, three salves, and a deck. Ten cards — half of them nothing special.',
+            'Your kin brings its own moves to the fight. The deck is what you bring.',
+            'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
+            'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
+          ], () => { saveGame(); if (done) done(); }),
+        });
+      },
+    };
+    playCue('gotcha');
     return;
   }
   if (s.kind === 'swap') {
@@ -9448,10 +9469,13 @@ function drawGotcha(g) {
   g.globalAlpha = fade;
   g.textAlign = 'center';
   g.font = 'bold 22px monospace';
+  // The starter borrows this beat, and it was not caught — it was handed over.
+  // A gift that shouts GOTCHA! is claiming something that did not happen.
+  const head = a.head || 'GOTCHA!';
   g.fillStyle = '#2a1b2e';
-  g.fillText('GOTCHA!', cx + 1, 36);
+  g.fillText(head, cx + 1, 36);
   g.fillStyle = '#ffc94d';
-  g.fillText('GOTCHA!', cx, 35);
+  g.fillText(head, cx, 35);
   g.font = 'bold 11px monospace';
   g.fillStyle = '#f3ecff';
   g.fillText(a.name, cx, 150);
