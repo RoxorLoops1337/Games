@@ -1524,9 +1524,21 @@ const POP_MIN_D = 40, POP_MIN_T = 0.3;
 const recentPops = [];
 function popText(x, y, text, col, big, force){
   for (let i = recentPops.length - 1; i >= 0; i--){
-    const r = recentPops[i];
-    if (T - r.t > POP_MIN_T){ recentPops.splice(i, 1); continue; }
-    if (!force && Math.abs(r.x - x) < POP_MIN_D && Math.abs(r.y - y) < POP_MIN_D) return null;
+    if (T - recentPops[i].t > POP_MIN_T) recentPops.splice(i, 1);
+  }
+  /* A forced pop is one the run is not allowed to lose — a ticked goal. It
+     used to skip the proximity check entirely, which is how "GOAL: CHAIN A ×9
+     COMBO" and "COMBO ×10 BANKED" ended up printed through each other in the
+     middle of the screen: both land at car.y - 90 in the same frame. It
+     climbs clear instead of being dropped. */
+  for (let guard = 0; guard < 8; guard++){
+    let hit = null;
+    for (const r of recentPops){
+      if (Math.abs(r.x - x) < POP_MIN_D && Math.abs(r.y - y) < POP_MIN_D){ hit = r; break; }
+    }
+    if (!hit) break;
+    if (!force) return null;
+    y = hit.y - POP_MIN_D - 8;
   }
   recentPops.push({ x, y, t: T });
   // the sideways drift is scenery, so it draws from the cosmetic generator:
@@ -2936,29 +2948,69 @@ function drawGround(){
 
   // blood: pools and spray, laid down before the tyre marks so the car smears
   // through them
+  /* Blood on snow soaks in before it sits on top, so everything gets a wide
+     faint halo under it first. Three hundred and sixty decals cannot each
+     afford their own fill for that, so every halo goes down as one path — and
+     the same for the wet sheen on the pools afterwards. The decals themselves
+     no longer save/translate/rotate/restore either: ctx.ellipse takes the
+     rotation, so a full gore field costs 360 fewer state pushes a frame. */
+  const onCam = [];
   for (const g of gore){
     if (g.x + g.r < x0 || g.x - g.r > x1 || g.y + g.r < y0 || g.y - g.r > y1) continue;
-    ctx.save();
-    ctx.translate(g.x, g.y);
-    ctx.rotate(g.rot);
+    onCam.push(g);
+  }
+  if (onCam.length){
+    // faint and tight on purpose: at .10 and 1.9x the halos read as a field of
+    // grey discs over blue snow rather than as blood soaking into it
+    ctx.fillStyle = 'rgba(158,20,14,.065)';
+    ctx.beginPath();
+    for (const g of onCam){
+      const hr = g.r * (g.kind === 'pool' ? 1.3 : 1.5);
+      ctx.moveTo(g.x + hr, g.y);
+      ctx.arc(g.x, g.y, hr, 0, 6.283);
+    }
+    ctx.fill();
+  }
+  for (const g of onCam){
     if (g.kind === 'pool'){
       ctx.fillStyle = 'rgba(146,18,14,.52)';
-      ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * (0.62 + g.seed * 0.34), 0, 0, 6.283); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(g.x, g.y, g.r, g.r * (0.62 + g.seed * 0.34), g.rot, 0, 6.283); ctx.fill();
       ctx.fillStyle = 'rgba(182,32,24,.5)';
-      ctx.beginPath(); ctx.ellipse(g.r * 0.2, 0, g.r * 0.55, g.r * 0.4, 0, 0, 6.283); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(g.x + Math.cos(g.rot) * g.r * 0.2, g.y + Math.sin(g.rot) * g.r * 0.2,
+        g.r * 0.55, g.r * 0.4, g.rot, 0, 6.283); ctx.fill();
     } else if (g.kind === 'chunk'){
       ctx.fillStyle = 'rgba(96,12,10,.8)';
-      ctx.beginPath(); ctx.ellipse(0, 0, g.r, g.r * 0.7, 0, 0, 6.283); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(g.x, g.y, g.r, g.r * 0.7, g.rot, 0, 6.283); ctx.fill();
     } else {
+      // a splat is a body and a scatter of droplets thrown off one side of it
       ctx.fillStyle = 'rgba(160,22,18,.56)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, g.r, g.r * 0.5, 0, 0, 6.283);
-      const a = g.seed * 6.283;
-      ctx.moveTo(Math.cos(a) * g.r * 1.8 + g.r * 0.3, Math.sin(a) * g.r * 1.3);
-      ctx.arc(Math.cos(a) * g.r * 1.8, Math.sin(a) * g.r * 1.3, g.r * 0.3, 0, 6.283);
+      ctx.ellipse(g.x, g.y, g.r, g.r * 0.5, g.rot, 0, 6.283);
+      for (let d = 0; d < 3; d++){
+        const a = g.rot + (g.seed * 6.283) + d * 1.35;
+        const dist = g.r * (1.5 + d * 0.55), dr = g.r * (0.3 - d * 0.07);
+        const dx = g.x + Math.cos(a) * dist, dy = g.y + Math.sin(a) * dist * 0.72;
+        ctx.moveTo(dx + dr, dy);
+        ctx.arc(dx, dy, dr, 0, 6.283);
+      }
       ctx.fill();
     }
-    ctx.restore();
+  }
+  // the wet sheen, which is what tells you a pool is fresh and not a stain
+  if (onCam.length){
+    ctx.fillStyle = 'rgba(236,104,84,.20)';
+    ctx.beginPath();
+    for (const g of onCam){
+      if (g.kind !== 'pool') continue;
+      const sx = g.x - Math.cos(g.rot) * g.r * 0.28 - g.r * 0.12;
+      const sy = g.y - Math.sin(g.rot) * g.r * 0.28 - g.r * 0.12;
+      ctx.moveTo(sx + g.r * 0.3, sy);
+      ctx.arc(sx, sy, g.r * 0.3, 0, 6.283);
+    }
+    ctx.fill();
   }
 
   // planks and panels, lying where they fell

@@ -71,7 +71,7 @@ const EXPOSE = `__out.api = {
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
-  drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE,
+  drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
@@ -4274,6 +4274,85 @@ test('nothing is painted over the snowman face', () => {
     'something is drawn over the face: ' + st.slice(nose + 1).join('|'));
   // the arms are strokes, and there are two of them with two twigs each
   assert((api._counts.stroke || 0) >= 1, 'a snowman should have twig arms');
+});
+
+/* -------------------------------------------------------------- effects --- */
+
+/* A forced pop is one the run is not allowed to lose — a ticked goal. It used
+   to skip the proximity check entirely, which is how "GOAL: CHAIN A x9 COMBO"
+   and "COMBO x10 BANKED" ended up printed through each other in the middle of
+   the screen: both land at car.y - 90 in the same frame. */
+test('two pops the run must not lose still do not land on each other', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.fx.length = 0; api.recentPops.length = 0;
+  api.setT(10);
+  const ys = [];
+  for (let i = 0; i < 4; i++){
+    const p = api.popText(2000, 1100, 'GOAL ' + i, '#8effb0', true, true);
+    assert(p, 'a forced pop must never be dropped, lost number ' + i);
+    ys.push(p.y);
+  }
+  ys.sort((a, b) => a - b);
+  for (let i = 1; i < ys.length; i++){
+    assert(Math.abs(ys[i] - ys[i - 1]) >= api.POP_MIN_D,
+      'forced pops ' + (i - 1) + ' and ' + i + ' are ' +
+      Math.abs(ys[i] - ys[i - 1]).toFixed(0) + 'px apart, under the ' +
+      api.POP_MIN_D + 'px guard: ' + ys.join(', '));
+  }
+  console.log('    (four forced pops stacked at ' + ys.map(y => Math.round(y)).join(', ') + ')');
+});
+
+test('an ordinary pop is still swallowed by the one already there', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.fx.length = 0; api.recentPops.length = 0;
+  api.setT(10);
+  assert(api.popText(2000, 1100, '+100', '#ffd34d'), 'the first pop shows');
+  assert(!api.popText(2010, 1105, '+100', '#ffd34d'), 'a second one on top of it does not');
+  // and once the guard window has passed it shows again
+  api.setT(10 + api.POP_MIN_T + 0.1);
+  assert(api.popText(2010, 1105, '+100', '#ffd34d'), 'after the window it shows again');
+});
+
+/* Three hundred and sixty decals cannot each afford a fill for their soak halo
+   or their wet sheen, so both go down as one path for the whole field. */
+test('the gore field costs one fill a decal, not three', () => {
+  const cost = (n, kind) => {
+    const api = boot({ count: true, w: 1280, h: 720 });
+    api.startCampaign(); api.beginLevel();
+    api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+    api.gore.length = 0;
+    for (let i = 0; i < n; i++){
+      api.addGore(api.cam.x + ((i * 37) % 700) - 350, api.cam.y + ((i * 53) % 500) - 250,
+        18, kind || (i % 3 ? 'splat' : 'pool'));
+    }
+    api.drawGround();                       // warm the cached gradients
+    api._resetCounts();
+    api.drawGround();
+    return { fills: api._counts.fill || 0, saves: api._counts.save || 0 };
+  };
+  // splats only, so the figure is the marginal cost of one decal with nothing
+  // else mixed in: a splat is one fill, and its halo and droplets are free
+  const a = cost(60, 'splat'), b = cost(180, 'splat');
+  const per = (b.fills - a.fills) / 120;
+  console.log('    (gore: ' + a.fills + ' fills for 60 splats, ' + b.fills + ' for 180 — ' +
+    per.toFixed(2) + ' a decal)');
+  assert(per > 0.5, 'the decals should actually be drawn, got ' + per + ' fills each');
+  assert(per <= 1.05,
+    'the halo and the droplets should be batched, not per decal: ' + per.toFixed(2) + ' each');
+  // a pool costs one more than a splat — its own inner highlight — and no more
+  const pools = cost(180, 'pool'), splats = cost(180, 'splat');
+  const extra = (pools.fills - splats.fills) / 180;
+  console.log('    (a pool costs ' + extra.toFixed(2) + ' fills more than a splat)');
+  assert(extra > 0.5 && extra <= 1.05,
+    'a pool should cost exactly one extra fill, got ' + extra.toFixed(2));
+  // and a decal no longer pushes and pops the canvas state to rotate itself
+  assert(b.saves - a.saves < 12,
+    'a decal should not save/restore to rotate: ' + a.saves + ' -> ' + b.saves);
+  // an empty field costs neither the halo nor the sheen
+  const none = cost(0);
+  assert(none.fills < a.fills, 'no blood, no halo: ' + none.fills + ' vs ' + a.fills);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
