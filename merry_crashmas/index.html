@@ -5961,6 +5961,69 @@ function hudPlate(x, y, w, h){
   roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 12); ctx.stroke();
 }
 
+/* ---------- the combo banner ----------
+   It used to be forty-six pixels of bare red on whatever the market happened to
+   be under it. Over snow that reads; over a lit stall counter — the brightest
+   thing in the game, and exactly where a combo happens — it does not. It is a
+   ribbon now, in the HUD's own materials, with its ends notched so it reads as
+   a banner rather than a box. */
+/* How big the ribbon has to be, and how much the whole thing has to shrink to
+   stay inside the frame. Split out from the drawing so the fit can be checked
+   against real text widths rather than whatever a headless stub reports. */
+function bannerBox(tw, fs, maxW){
+  const w = tw + fs * 1.5, h = fs * 1.6;
+  return { w, h, fit: Math.min(1, maxW / w) };
+}
+
+/* Sized off the frame, not off a desktop. Forty-six pixels is a fifth of a
+   landscape phone's height, and a ribbon that big landed square on the score
+   panel and the combo plate at once. */
+function bannerFont(receipt){
+  return Math.round(receipt ? clamp(VH * 0.034, 15, 26) : clamp(VH * 0.062, 24, 46));
+}
+
+/* Where the ribbon goes and how big it ends up, given the width the frame's
+   own font measured for the text. Kept apart from the drawing so the placement
+   can be checked against real text widths at real viewport sizes rather than
+   whatever a headless stub reports for measureText. */
+function bannerLayout(tw, receipt, k){
+  const narrow = VW < 560;
+  const fs = bannerFont(receipt);
+  const s = 1 + (1 - clamp(k, 0, 1)) * 0.25;
+  const box = bannerBox(tw, fs, (VW - 48) / s);
+  const w = box.w * box.fit * s, h = box.h * box.fit * s;
+  /* Clear of the panels it shares the frame with: the combo plate for a shout,
+     and — only when the ribbon is wide enough to reach it — the score panel.
+     In portrait the combo plate has already dropped under the goals, so this
+     follows it down. */
+  const r = hudScoreRect();
+  const overPanel = w / 2 > VW / 2 - (r.x + r.w) ? r.y + r.h + h / 2 + 10 : 0;
+  const y = Math.max(overPanel, receipt ? VH * 0.115
+    : Math.max(VH * (narrow ? 0.40 : 0.30), (narrow ? 150 : 20) + 86 + h / 2 + 14));
+  return { fs, s, box, w, h, y };
+}
+
+function bannerRibbon(w, h, warm){
+  const half = w / 2, tail = Math.min(26, h * 0.6), notch = tail * 0.42;
+  // the tails, behind the plate and darker, one path for the pair
+  ctx.fillStyle = warm ? '#6b4a0d' : '#5c1810';
+  ctx.beginPath();
+  for (const side of [-1, 1]){
+    const e = side * (half + tail), i = side * (half - 6);
+    ctx.moveTo(i, -h / 2 - 3); ctx.lineTo(e, -h / 2 - 3);
+    ctx.lineTo(e - side * notch, 0); ctx.lineTo(e, h / 2 + 3);
+    ctx.lineTo(i, h / 2 + 3); ctx.closePath();
+  }
+  ctx.fill();
+  ctx.fillStyle = 'rgba(7,12,24,.88)';
+  roundRect(-half, -h / 2, w, h, 9); ctx.fill();
+  ctx.fillStyle = warm ? 'rgba(255,211,77,.13)' : 'rgba(255,130,110,.13)';
+  roundRect(-half + 3, -h / 2 + 3, w - 6, h * 0.4, 7); ctx.fill();
+  ctx.strokeStyle = warm ? 'rgba(255,211,77,.46)' : 'rgba(255,130,110,.46)';
+  ctx.lineWidth = 2;
+  roundRect(-half, -h / 2, w, h, 9); ctx.stroke();
+}
+
 /* Where the score plate is and how tall it has to be. It used to be a fixed
    74px while the goals were printed at pad+96 and down, so every goal line
    landed outside the panel, on the raw market, in grey. The plate is measured
@@ -6078,15 +6141,25 @@ function drawHUD(){
     ctx.save();
     ctx.globalAlpha = Math.min(1, k * 2);
     ctx.textAlign = 'center';
-    // in portrait the combo plate has moved down under the goals, so the
-    // banner moves down with it rather than printing through it
-    ctx.translate(VW / 2, receipt ? VH * 0.115 : VH * (narrow ? 0.40 : 0.30));
+    const fs = bannerFont(receipt);
+    ctx.font = '900 ' + fs + 'px system-ui';
+    const m = ctx.measureText ? ctx.measureText(G.banner.text) : null;
+    const tw = (m && m.width) ? m.width : G.banner.text.length * fs * 0.58;
+    const L = bannerLayout(tw, receipt, k);
+    ctx.translate(VW / 2, L.y);
     ctx.rotate(Math.sin(T * 9) * 0.03);
-    const s = 1 + (1 - k) * 0.25;
-    ctx.scale(s, s);
-    ctx.fillStyle = receipt ? '#ffd34d' : '#ff5a4a';
-    ctx.font = '900 ' + (receipt ? 26 : 46) + 'px system-ui';
+    ctx.scale(L.s * L.box.fit, L.s * L.box.fit);
+    bannerRibbon(L.box.w, L.box.h, receipt);
+    /* Two passes at the same text: a dark copy a couple of pixels down, then
+       the colour on top. On a plate that is belt and braces, but the banner is
+       the one thing in the game that lands on a lit stall counter — which is
+       the brightest thing in it and exactly where a combo happens. */
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(5,9,18,.8)';
+    ctx.fillText(G.banner.text, 0, 3);
+    ctx.fillStyle = receipt ? '#ffd34d' : '#ff6a58';
     ctx.fillText(G.banner.text, 0, 0);
+    ctx.textBaseline = 'alphabetic';
     ctx.restore();
     ctx.textAlign = 'left';
   }
