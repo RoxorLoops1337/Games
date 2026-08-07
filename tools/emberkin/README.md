@@ -447,6 +447,39 @@ Three things this has established, none of which were visible in the source:
   look*; it is not automatically right about *what is wrong*. Shoot to find the
   question, measure before answering it.
 
+### The legendary scene photographed a corpse for five passes
+
+Every shot of the climax of the game showed the player's kin as a flat brown
+shape with almost no colour in it. Read as a lighting fault three separate
+times, most memorably as "Crown Hollow drains the kin".
+
+`--stats` gained a box — `--stats 62,86,16,14` measures that rectangle of the
+canvas rather than the whole frame — because a whole-frame number cannot answer
+a question about one sprite: the creature is a few hundred pixels out of fifty
+thousand, and the first attempt at this measured a box that mostly contained
+the *stand* the kin was standing on, which is washed in the foe's element.
+
+Tight on the body it was unmistakable: sat 0.312 in an ordinary fight against
+0.105 in the legendary, and the highlight ceiling more than halved. Then the
+isolation: same fight, same foe, only `b.foe.types` changed.
+
+    Ember    lum  31..254  mean 164  sd 81.2  sat 0.312
+    Aether   lum  31..254  mean 164  sd 81.2  sat 0.312
+    Tide     lum  31..254  mean 164  sd 81.2  sat 0.312
+
+Byte-identical. The foe's element does not touch the player's kin at all; the
+`grade: 0` on battle air does exactly what its comment claims. Printing the
+state gave the answer in one line: **`mineHp: 0`.** The scene sent the Lv5
+starter against a Lv26 legendary, which moves first and one-shots it, and a
+fainted kin is drawn dropped ten pixels and at 30% alpha — which is precisely
+what "drained of colour" looks like.
+
+Two things follow. The status line now says `MINE-DOWN` / `FOE-DOWN`, because a
+KO'd sprite is far too easy to read as a lighting problem. And the general rule,
+which has now cost four investigations: **before explaining what a frame looks
+like, check what the game thinks is in it.** Three of the four wrong theories
+here were about rendering; the answer was always state.
+
 ### A graceful fallback hides a wrong id
 
 The `gotcha` scene passed **`mistspray`** as a species for four passes.

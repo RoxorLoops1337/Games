@@ -2033,6 +2033,21 @@ been on screen.
 plays out into an opening frame, which is the shot it was written for, and it
 costs nothing.
 
+### The legendary opens with its own words
+
+Everything about the encounter is built up — its own cue, twice the motes, a
+heavier vignette, forty gems, a shrine to find it at — and then it announced
+itself with `A wild Vespyr bristles!`, word for word what a level-six Dewdrip
+gets. It was photographed five passes running without anyone reading the text.
+
+It gets three lines of its own now. That is a real consequence and not only a
+cosmetic one: it is one more dismissal before the fight, and the story suite's
+driver counted taps rather than draining the queue, so it broke immediately.
+`clear()` cannot drain a battle message — in a fight `G.mode` is `'battle'`, so
+it returns straight away and the intro lines were only ever being dismissed
+incidentally by whatever tapped next. That held for exactly as long as every
+fight opened with the same two lines. The suite drains properly now.
+
 ### Being ambushed
 
 A trainer spotting you was an exclamation mark and a dialogue box with an

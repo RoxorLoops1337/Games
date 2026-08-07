@@ -830,6 +830,18 @@ for (let i = 0; i < 400; i++) {
   if (EK.G.battle) started++;
 }
 ok(started > 10, `tall grass produces encounters (${started}/400)`);
+
+// The climax does not open with the same words as a level-six Dewdrip.
+EK.G.battle = null; EK.G.rustle = null; EK.G.mode = 'world'; EK.healParty();
+EK.startBattle({ foe: EK.mkMon('vespyr', 26), wild: true, legendary: true });
+const legLines = (EK.G.battleMsg || {}).lines || [];
+ok(legLines.length > 2, 'a legendary gets more than the two-line wild opening');
+ok(!legLines.some((l) => /bristles/.test(l)), 'and none of it is the wild line');
+EK.G.battle = null; EK.G.battleMsg = null; EK.G.mode = 'world'; EK.healParty();
+EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+ok(((EK.G.battleMsg || {}).lines || []).some((l) => /bristles/.test(l)),
+  'while an ordinary wild fight still bristles');
+EK.G.battle = null; EK.G.battleMsg = null; EK.G.mode = 'world';
 // And the beat is what stands between the step and the fight.
 EK.G.battle = null; EK.G.rustle = null; EK.G.mode = 'world';
 EK.healParty();

@@ -5339,9 +5339,18 @@ function startBattle(opt) {
   G.wipe = WIPE_T;
   seeMon(opt.foe.species);
   G.mode = 'battle';
-  const who = opt.npc ? `${opt.npc.name} wants to battle!` : `A wild ${opt.foe.name} bristles!`;
+  // The legendary announced itself with the same line as a level-six Dewdrip.
+  // Everything else about the encounter is built up — its own cue, twice the
+  // motes, a heavier vignette, forty gems, a shrine to find it at — and then it
+  // opened with "A wild Vespyr bristles!". The climax of the game gets its own
+  // words. Photographed five passes in a row without anyone reading the text.
+  const who = opt.npc ? `${opt.npc.name} wants to battle!`
+    : opt.legendary ? `${opt.foe.name} unfolds out of the light.`
+    : `A wild ${opt.foe.name} bristles!`;
   playCue(opt.legendary ? 'shrine' : 'battle');
-  const lines = [who, `Go, ${dispName(mine)}!`];
+  const lines = opt.legendary
+    ? [who, 'Nothing in the valley moves. It is deciding about you.', `Go, ${dispName(mine)}!`]
+    : [who, `Go, ${dispName(mine)}!`];
   // Speed decides who opens. The player used to move first always, and with
   // fights running under two turns that meant most foes got exactly one action
   // and half of them never touched you — a fight decided before it started.
