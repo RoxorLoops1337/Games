@@ -374,7 +374,10 @@ test('every goal line fits on the plate that is meant to carry it', () => {
       const r = api.hudScoreRect(), narrow = api.getView().w < 560;
       const lead = r.x + 12 + (narrow ? 8 : 10) + 7;
       for (const g of api.G.goals){
-        const end = lead + textW(g.text, narrow ? 10 : 12);
+        // the row is the text AND, on the same line, its own "3,120 / 5,800"
+        const at = api.goalProgress(g);
+        const end = lead + textW(g.text, narrow ? 10 : 12) +
+          (at ? textW(at, narrow ? 10 : 12) + 14 : 0);
         const slack = (r.x + r.w) - end;
         if (slack < worst || worst === -999){ worst = slack; worstAt = api.LEVELS[lv].name + ' “' + g.text + '”'; }
         assert(slack >= 0, w + 'x' + h + ': ' + worstAt + ' runs ' +
@@ -1679,6 +1682,39 @@ test('the wide zoom may pull back but not empty the screen', () => {
     assert(api.C.ANCHOR.x - api.C.MAX_PULL > api.cam.x - view.w / api.cam.s / 2,
       w + 'x' + h + ': a full pull goes off the left edge of the aim frame');
   }
+});
+
+/* The results card gained per-goal progress; the checklist you actually play
+   against did not, which is the wrong way round — mid-run is when knowing you
+   are on 3 of 4 changes what you aim at. */
+test('the live checklist shows how far each goal has got', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(4); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2200; api.car.y = 1100; api.camSnap();
+  api.G.goals = [
+    { id: 'stalls', n: 4, done: false, text: 'Wreck 4 stalls' },
+    { id: 'kids', n: 3, done: false, text: 'Catch 3 children' },
+    { id: 'santa', n: 1, done: false, text: 'Run over Santa' },
+  ];
+  api.G.bigWrecks = 2; api.G.byKind = { kid: 1 };
+  api._resetCounts(); api.drawHUD();
+  let words = (api._counts._text || []).map(String);
+  assert(words.includes('2 / 4'), 'the checklist should print 2 / 4: ' + words.join(' | '));
+  assert(words.includes('1 / 3'), 'and 1 / 3');
+  assert(!words.includes('0 / 1'), 'but nothing on a one-shot goal');
+
+  // a goal that is done shows its tick, not a number
+  api.G.goals[0].done = true; api.G.bigWrecks = 4;
+  api._resetCounts(); api.drawHUD();
+  words = (api._counts._text || []).map(String);
+  assert(!words.includes('4 / 4'), 'a ticked goal should not still be counting');
+
+  /* Right-aligned inside the plate — and the plate is measured off the row
+     including the number, so a long one cannot push it out over the market. */
+  const r = api.hudScoreRect();
+  const rec = carRec();
+  api.withCtx(rec, api.drawHUD);
+  assert(r.x + r.w < api.hudCarsRect().x, 'the plate still clears the car counter');
 });
 
 test('the aim zoom stretches to the market and stops', () => {

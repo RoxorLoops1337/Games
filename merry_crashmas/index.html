@@ -6836,13 +6836,19 @@ function bannerRibbon(w, h, warm){
 let goalW = 0, goalWKey = '';
 function goalTextW(narrow){
   const goals = G.goals || [];
-  const key = (narrow ? 'n|' : 'w|') + goals.map(g => g.text).join('|');
+  const key = (narrow ? 'n|' : 'w|') +
+    goals.map(g => g.text + '\u0001' + (g.done ? '' : goalProgress(g))).join('|');
   if (key !== goalWKey){
     goalWKey = key;
     const keep = ctx.font;
     ctx.font = '700 ' + (narrow ? 10 : 12) + 'px system-ui';
     let m = 0;
-    for (const g of goals) m = Math.max(m, ctx.measureText(g.text).width);
+    for (const g of goals){
+      // room for the row and, on the same line, its own "12 / 14"
+      const at = goalProgress(g);
+      m = Math.max(m, ctx.measureText(g.text).width +
+        (at ? ctx.measureText(at).width + 14 : 0));
+    }
     ctx.font = keep;
     // 12 in from the plate, the tick box, 7 of gap, and 12 of margin the far side
     goals.length ? goalW = Math.ceil(12 + (narrow ? 8 : 10) + 7 + m + 12) : goalW = 0;
@@ -6920,6 +6926,17 @@ function drawHUD(){
       }
       ctx.fillStyle = g.done ? 'rgba(142,255,176,.95)' : 'rgba(214,226,244,.92)';
       ctx.fillText(g.text, pad + 12 + bs + 7, gy);
+      /* …and how far it has got, right-aligned at the plate's edge. The
+         results card gained this and the checklist you actually play against
+         did not, which is the wrong way round: mid-run is when knowing you
+         are on 3 of 4 changes what you aim at. */
+      const at = goalProgress(g);
+      if (at && !g.done){
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(232,169,31,.95)';
+        ctx.fillText(at, sr.x + sr.w - 10, gy);
+        ctx.textAlign = 'left';
+      }
     }
   }
 
