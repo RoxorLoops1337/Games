@@ -73,7 +73,7 @@ const EXPOSE = `__out.api = {
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, goalRowY, drawProp,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
-  carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H,
+  carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H, carShadow,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   windNow, WIND_STREAK, drawSnow, seedSnow,
@@ -4460,6 +4460,65 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills - small.fills === 0,
     'the trees and lamps should batch: ' + small.fills + ' -> ' + big.fills);
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
+});
+
+/* ------------------------------------------------------ in the air --- */
+
+test('the car’s shadow stays on the ground and pulls away from it', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const L = api.getDims().l;
+  const g = api.carShadow(0), mid = api.carShadow(160), high = api.carShadow(320);
+
+  // on the ground the shadow is under the car
+  assert(Math.hypot(g.dx, g.dy) < 1, 'a parked car sits on its own shadow');
+  // and it travels along the scene's one light direction, not straight down
+  const along = (s) => (s.dx * api.SUN_DX + s.dy * api.SUN_DY) /
+    (Math.hypot(s.dx, s.dy) * Math.hypot(api.SUN_DX, api.SUN_DY));
+  assert(along(high) > 0.999, 'the shadow should fall along the light, got ' + along(high));
+  assert(Math.hypot(high.dx, high.dy) > Math.hypot(mid.dx, mid.dy),
+    'higher car, further shadow');
+  /* Far enough to be clear of the car. The car is drawn at 1 + z/380 scale, so
+     at the top of a ramp jump it is nearly twice its size — a shadow that only
+     slid a ninetieth of the height stayed underneath it and the one moment in
+     the game with altitude in it read as a car that had got bigger. */
+  const grown = L / 2 * (1 + 320 / 380);
+  assert(Math.hypot(high.dx, high.dy) > grown,
+    'at 320 up the shadow should clear the car body: ' +
+    Math.hypot(high.dx, high.dy).toFixed(0) + ' vs ' + grown.toFixed(0));
+
+  // it does not shrink away — a shadow keeps its size and softens
+  assert(high.rx >= g.rx && high.ry >= g.ry,
+    'the shadow should not shrink with height: ' + g.rx.toFixed(1) + ' -> ' + high.rx.toFixed(1));
+  assert(high.rx < g.rx * 1.3, 'nor balloon: ' + high.rx.toFixed(1));
+  assert(high.a < g.a, 'but it should soften');
+  assert(high.a > 0.1, 'without disappearing: ' + high.a.toFixed(2));
+  // and it never inverts, however high a monster truck gets
+  assert(api.carShadow(2000).a > 0,
+    'the shadow must not go negative at any height: ' + api.carShadow(2000).a);
+  console.log('    (shadow at z320: ' + Math.hypot(high.dx, high.dy).toFixed(0) +
+    'px out, rx ' + g.rx.toFixed(0) + ' -> ' + high.rx.toFixed(0) +
+    ', alpha ' + g.a.toFixed(2) + ' -> ' + high.a.toFixed(2) + ')');
+});
+
+test('a car in the air draws its shadow apart from itself', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.ang = 0; api.car.roll = 0;
+  api.car.vx = 0; api.car.vy = 0; api.car.dispSp = 0; api.camSnap();
+  const at = (z) => {
+    api.car.z = z;
+    const rec = carRec();
+    api.withCtx(rec, api.drawCar);
+    // the shadow is the only thing drawn in the shadow ink
+    return rec.shapes.filter(s => /rgba\(9,16,32|rgba\(10,20,36|rgba\(8,16,32/.test(s.style));
+  };
+  const onGround = at(0), aloft = at(320);
+  assert(onGround.length >= 1 && aloft.length >= 1,
+    'the car should cast a shadow at any height: ' + onGround.length + ' / ' + aloft.length);
+  assert(aloft.length === onGround.length,
+    'the same shadow, in a different place: ' + onGround.length + ' vs ' + aloft.length);
 });
 
 /* --------------------------------------------------------- the pram --- */

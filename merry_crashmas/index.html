@@ -4968,6 +4968,15 @@ function drawCrowdBatch(list){
    be un-rotated back out of car.ang or it spins with the bodywork. */
 function carLitDir(){ return Math.atan2(-SUN_DY, -SUN_DX) - car.ang; }
 
+/* Where the car's shadow lands and how big it is, given its height. Split out
+   from the drawing so the separation can be measured rather than eyeballed:
+   this is the only altitude cue in a game seen from directly above. */
+function carShadow(z){
+  return { dx: z * SUN_DX * 0.9, dy: z * SUN_DY * 0.9,
+    rx: CARL * 0.52 * (1 + z / 2200), ry: CARW * 0.5 * (1 + z / 2200),
+    a: 0.32 * (1 - clamp(z, 0, 1200) / 1400) };
+}
+
 function drawCar(){
   const z = car.z || 0;
   /* Brake lights. Worked out here rather than in stepCar on purpose: it is a
@@ -4979,10 +4988,17 @@ function drawCar(){
   if (car.dispSp === undefined) car.dispSp = spNow;
   car.brakeGlow = spNow < car.dispSp - 8 ? 1 : 0;
   car.dispSp += (spNow - car.dispSp) * 0.25;
-  // the shadow stays on the ground and shrinks away as the car climbs
+  /* The shadow stays on the ground while the car climbs. It used to shrink as
+     it rose and slide only a ninetieth of the height sideways, so by the top
+     of a ramp jump the car had grown to nearly twice its size and its shadow
+     had shrunk to nothing underneath it — the one moment in the game with any
+     altitude in it read as a car that had simply got bigger.
+     A real shadow keeps its size, softens, and travels away from its caster
+     along the light — which this scene has exactly one of. */
+  const sh = carShadow(z);
   ctx.save();
-  ctx.translate(car.x + z * 0.15, car.y + z * 0.24);
-  shadow(0, 8, CARL * 0.52 * (1 - z / 1400), CARW * 0.5 * (1 - z / 1400), 0.32 * (1 - z / 900));
+  ctx.translate(car.x + sh.dx, car.y + sh.dy);
+  shadow(0, 8, sh.rx, sh.ry, sh.a);
   ctx.restore();
 
   const hs = 1 + z / 380;                     // bigger = higher off the snow

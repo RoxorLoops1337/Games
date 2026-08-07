@@ -234,6 +234,14 @@ edit this block to name the next one.
       `restFx` — the hook that already decides what a limb or a chunk leaves
       where it comes to rest — and is drawn on its side with the blanket half
       out of it, one wheel still on and one off.
+- [x] Height reads. Seen from directly above, the only cue that the car is in
+      the air is its shadow — and the shadow *shrank* as the car climbed while
+      the car grew to `1 + z/380`, so at the top of a ramp jump the shadow had
+      vanished underneath a car that had merely got bigger. It keeps its size
+      now (+15% at 320 up), softens rather than disappearing (.32 → .25), and
+      travels along the scene's one light direction far enough to clear the
+      grown body — 194px out at z=320 against a 100px half-length. Split into
+      `carShadow(z)` so the separation is measured, not eyeballed.
 
 ## Next
 
