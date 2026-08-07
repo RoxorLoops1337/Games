@@ -1862,6 +1862,28 @@ should look it. A kin's own move wears gold and its element instead of a
 rarity: it belongs to the creature, not to the deck, and should read that way
 from across the table.
 
+### The fight at a phone's size
+
+Everything about the fight had only ever been judged at 760x900. Swept at
+390x760 it was cramped in two ways, both of them the 11px text clamp making
+panels proportionally taller on a small stage — the same root cause as the HUD
+fix two passes ago, in two more places.
+
+`#hudMine` sat at 40% and its own height carried the HP figure straight under
+the End turn button, which is pinned at 54%. It sits at 32% under `body.tight`.
+
+The hand could not hold four rules-text blocks at all: at 30% of a 310px stage
+the cards are 86 pixels tall and the text clipped into its own rarity pip on
+every one of them. So under `body.tight` a card you are **not** aiming at shows
+its art, its name and its cost — which is what you choose between — and the card
+you **are** aiming at keeps its text, with the full wording also sitting in the
+description bar directly above the hand. Nothing is lost; it is read in one
+place instead of five.
+
+Growing the hand to fit was the first attempt and it pushed the cards' tops
+under that description bar. With the rules text gone the cards need *less*
+height, not more — 28%.
+
 ### The hand is a fan
 
 Photographing a real turn — the first time a whole one had been looked at
