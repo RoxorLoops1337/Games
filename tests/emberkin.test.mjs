@@ -1333,4 +1333,27 @@ section('switching hands the xp bar to the kin that came in');
   ok(other.xp !== g.G.party[0].xp, 'and those two totals really are different');
 }
 
+// The stat bars are read against what a creature of THIS level can be, not a
+// flat number. It was a flat 130, which put a Lv30 kin's 21..71 in the bottom
+// half of the track (29 and 42 indistinguishable) and let a Lv100's 225 clamp
+// off the end. The ceiling is the dex's highest base stat carried to the same
+// level, so a full bar means "as strong as the strongest thing in the valley".
+// If somebody adds a creature above that base, every bar silently starts
+// clamping and nothing else would say so.
+section('the stat bar ceiling covers the whole dex');
+{
+  const g = loadGame();
+  let hi = 0, who = '';
+  for (const id of g.DEX_ORDER) {
+    const b = g.DEX[id].base;
+    for (const i of [1, 2, 3]) if (b[i] > hi) { hi = b[i]; who = id; }
+  }
+  ok(hi <= 110, `no creature out-bases the ceiling (highest is ${who} at ${hi})`);
+  // And it has to actually discriminate at a level people play at.
+  const m = g.mkMon('kindlark', 31);
+  const ceil = g.statAt(110, 31);
+  const spread = Math.abs(m.spd - m.def) / ceil;
+  ok(spread > .3, `two stats a creature really has read apart (${Math.round(spread * 100)}% of the track)`);
+}
+
 done('emberkin');
