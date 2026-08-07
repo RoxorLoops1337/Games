@@ -34,6 +34,9 @@
      the corners are rgba(4,7,14,.94) and you cannot see a single one of them. */
   #finale{ background:radial-gradient(920px 520px at 50% 42%, rgba(14,28,52,.56), rgba(4,7,14,.78));
     backdrop-filter:blur(2px); }
+  /* Same reason on the menu: the card carries its own background, so the
+     overlay only has to take the market down far enough to read against. */
+  #menu{ background:radial-gradient(980px 560px at 50% 44%, rgba(12,26,48,.62), rgba(4,7,14,.84)); }
   .ov[hidden]{ display:none; }
   .card{ width:min(580px,93vw); max-height:94vh; overflow:auto;
     /* rotated, vw and vh still mean the viewport, which is the game's frame
@@ -1256,7 +1259,11 @@ function toMenu(){
       });
     }
   }
-  genMarket(LEVELS[0]);
+  /* The backdrop is the last market, not the first: twenty-one markets of
+     work went into the lit ones and the title card may as well stand in front
+     of the best of them. Nothing depends on it — startLevel regenerates
+     whichever market you actually pick. */
+  genMarket(LEVELS[LEVELS.length - 1]);
   camSnap();
 }
 
@@ -2765,7 +2772,18 @@ function camTarget(){
     // close in on the car, biased toward where the bodies are
     return { x: car.x * 0.68 + clip.cx * 0.32, y: car.y * 0.68 + clip.cy * 0.32, z: 470 };
   }
-  if (G.phase === 'aim' || G.phase === 'menu' || G.phase === 'brief'){
+  if (G.phase === 'menu'){
+    /* A title card, not an aim view. The menu used to share the aim framing,
+       which deliberately centres the empty launch lane so you can see your own
+       car — so the front door of the game was a black rectangle with a market
+       somewhere off the right-hand edge. This looks at the middle of the
+       market and drifts slowly across it. Clock-driven, so it is the same
+       drift on every machine and it costs the simulation nothing. */
+    const midX = (bounds.x0 + bounds.x1) / 2, midY = (bounds.y0 + bounds.y1) / 2;
+    const z = clamp((bounds.y1 - bounds.y0) * 0.82, 1150, 1900);
+    return { x: midX + Math.sin(T * 0.055) * 360, y: midY + Math.cos(T * 0.041) * 180, z };
+  }
+  if (G.phase === 'aim' || G.phase === 'brief'){
     /* Frame the market, not the lane you launch from. At a fixed z of 1500 the
        aim view showed 48% of the market's depth and 25-33% of its crowd, and
        half the frame was the empty approach — you picked an angle without
@@ -5189,7 +5207,8 @@ function goalRowY(i){
 }
 
 function drawHUD(){
-  if (G.phase === 'replay') return;
+  // the title screen is not a run: no score plate, no cars left, no nitro
+  if (G.phase === 'replay' || G.phase === 'menu') return;
   screenTransform();
   const pad = 14;
   // a phone in portrait had the score panel and the car count on top of each
