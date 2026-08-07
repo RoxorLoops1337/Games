@@ -1093,6 +1093,25 @@ const SCENES = {
       document.getElementById('toast').classList.remove('on');
     },
   },
+  // The dex entry for the one kin the game is built toward. Its habitat line
+  // used to read "Not found in the wild. Not anywhere, really." — printed about
+  // the thing with its own theme, its own opening line, its own reward, and a
+  // promise elsewhere that it gathers on the shrine again. Seen-but-not-caught
+  // is the state where the player most needs that line to be true.
+  dexvespyr: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.DEX_ORDER.forEach((id, i) => { EK.seeMon(id); if (i % 3) EK.catchMon(id); });
+      EK.G.dex.vespyr = 1;
+      EK.openScreen('dex');
+      EK.G.screen.i = EK.DEX_ORDER.indexOf('vespyr');
+      EK.renderScreen();
+      if (!/Waits in/.test(EK.habitat('vespyr'))) throw new Error('the shrine line is not the one on screen');
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
