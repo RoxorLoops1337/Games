@@ -2228,6 +2228,34 @@ Same shape as the rustle one pass earlier, and the pair of them is the lesson:
 "where the voice is" catches things misplaced.** They are different questions
 and the second one is the harder to see.
 
+### "You own 3" was not the number
+
+Finishing the numbers inventory. The card offer counted `G.cards` — **everything
+you own, including copies sitting outside the deck.** Only deck cards are drawn,
+and you can own more than the deck holds; the swap screen exists for exactly
+that. So "you own 3" covered three in your deck, or two and one set aside, or
+three set aside and none where they could ever be drawn — and *should I take
+another Edge?* is entirely about the first number.
+
+It reads `3 in your deck · 1 set aside` now, and `none in your deck` where it
+used to say "new to you", which was also not quite true of a card you own and
+have benched.
+
+**And its mirror, in the same pass rather than the next one.** The swap screen
+asks which card comes *out* and said only what that copy had done (`played 0 · 2
+kills`). Removing one of four Edges and removing your only Snack are different
+decisions and read identically without a count. It carries `· 4 in deck` or
+`· your only one`.
+
+Three passes running the find had been the other half of the previous fix
+(salve→orb, intent→bar, my bar→foe bar), so the mirror question became a
+standing step before closing a pass. This is the first time it caught something
+in time.
+
+`to +64` was checked at the same time and is fine: it is the growth ceiling and
+the card's own text carries the rate, so both halves of "how far, and how fast"
+are present.
+
 ### Shield belongs on the health bar
 
 Continuing the numbers inventory, and the finding is the previous one's other
