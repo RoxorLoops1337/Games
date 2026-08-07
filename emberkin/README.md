@@ -235,6 +235,14 @@ of text wrap to eight and the button lands on a kin's belly. `fitStage` sets
 `body.tight` there and the key hints go, because they are the only part a player
 can find again in the field menu.
 
+`body.tight` does the same job in a fight. Panel text is em-based off the stage
+font, which clamps at 11px so it stays legible — which means that on a half-size
+stage the HUD panels take getting on for twice the share of the frame they take
+at ×3, and the pair of them plus the message box cover the ground the fight is
+happening on. The text does not shrink; the panels give up their padding and
+their type badges instead. An element's type is on the creature and in the move
+menu, so it is the one thing in there that is said twice.
+
 ## Controls
 
 | | keyboard | touch |
@@ -1977,6 +1985,45 @@ what the first version did.
 It is skippable, and the frame that skips it **still belongs to the transition**.
 Without that, the very press that ended the flourish fell through to the reward
 screen it had just opened and took the first card for you.
+
+### Something in the grass
+
+A trainer spotting you gets three beats — the look, the frame closing in, the
+walk over. A wild encounter got none: you took a step and the wipe was already
+closing. Filming it is what made the asymmetry obvious, and it is the beat the
+world plays most often.
+
+`G.rustle` is the half-second before the fight, and it owns the screen the same
+way the ambush does. The grass parts into a dark hollow, blades flick out of it,
+and a spray of pale leaves is thrown clear and falls back. Then the wipe. It is
+deliberately shorter than the trainer's ambush (`RUSTLE_T` 0.40 against 1.35):
+being called out by a person is an event, grass moving is a warning, and a
+warning that outstays itself becomes a loading screen.
+
+Two dead ends, both only visible in a film:
+
+- **Shaking the grass tile does nothing.** The first version slid the tall-grass
+  tile back and forth, three offset copies of it, and was completely invisible —
+  the field tiles seamlessly, so moving one tile over identical neighbours
+  changes no pixel you can find. A texture that repeats cannot be shaken. What
+  can be seen is a *hole* in it and something thrown *out* of it.
+- **Green leaves on green grass is camouflage.** The second version threw
+  grass-coloured specks into a grass field. They were drawing correctly and
+  could not be read. They are pale warm now, with a dark rim, like every other
+  speck in the game that has to survive a busy background.
+
+### The walk-on nobody had seen
+
+`b.entry` runs at 1.7/s, so the arena's walk-on lands at 0.588s. `WIPE_T` is
+0.55. Every frame of the deceleration, the gait bob and the dust therefore
+played behind the wipe's black bars and finished thirty-five milliseconds after
+they cleared — so the first thing you actually saw of a fight was two kin
+already planted. The most carefully built motion in the arena had never once
+been on screen.
+
+`updateBattle` holds `b.entry` while the bars are fully closed. The walk-on now
+plays out into an opening frame, which is the shot it was written for, and it
+costs nothing.
 
 ### Being ambushed
 

@@ -447,6 +447,36 @@ Three things this has established, none of which were visible in the source:
   look*; it is not automatically right about *what is wrong*. Shoot to find the
   question, measure before answering it.
 
+### A graceful fallback hides a wrong id
+
+The `gotcha` scene passed **`mistspray`** as a species for four passes.
+`mistspray` is a *move*. The screen drew the art system's graceful fallback — a
+coloured lozenge with two eyes — and it looked like a finished design every time
+it was photographed: it is exactly what a real creature whose art is not in yet
+would look like, and the repo's whole art policy is that a missing asset must
+never break anything.
+
+That policy is right for players and blind for an instrument. So the harness now
+checks, immediately after `go()` and never later, that every species the scene
+has put on screen is in the dex — the gotcha's, the evolution's two ends, both
+sides of a fight, and the party. **Immediately** matters: a beat with its own
+clock has expired by the time the shot is taken, and the first version of this
+check ran with the status line and never fired once. It was only caught by
+re-introducing the original bug and confirming the guard printed.
+
+The general shape: *a fallback designed to be invisible in play is invisible to
+review as well.* Anywhere the game degrades gracefully, the tool has to be told
+the difference, because the picture cannot show it.
+
+### `--size` and `--film` do not combine
+
+A still screenshots the page — the canvas plus the DOM panels laid out around
+it. A film grabs the 256x208 canvas, which is the same pixels at every window
+size and contains none of the panels. So anything drawn on the canvas needs no
+size check at all, and anything in a panel can only be checked with a still.
+Filming the grass rustle at a phone's aspect returned a picture identical to the
+desktop one. That is the correct answer and not an obvious one.
+
 ### Two hazards in driving the game from outside
 
 - **`G.dialogue = null` does not close the dialogue.** The box is a DOM overlay
