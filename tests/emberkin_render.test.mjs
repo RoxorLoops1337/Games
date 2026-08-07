@@ -1218,4 +1218,31 @@ section('the screens name the controls the player actually has');
   ok(/class="back">\$\{/.test(SRC), 'the corner hint is built from the same source');
 }
 
+// The hand at phone size. `renderHand` returns early when headless, so as with
+// the screens there is no markup here to read — these hold the two rules that
+// only exist because a --touch shot showed them, and that no desktop shot can
+// ever show.
+section('the hand survives a phone');
+{
+  // The aimed card is the only one carrying the "▲ play" badge, and the badge
+  // is absolutely positioned. The rule that hid the text on the OTHER four
+  // cards left this one to collide with it.
+  ok(/body\.tight #hand \.cardel\.sel \.ctext\{/.test(SRC),
+    'the aimed card has a rule of its own at tight size');
+  ok(/body\.tight #hand \.cardel\.sel \.ctext\{[^}]*margin-bottom/.test(SRC),
+    'and it reserves room by MARGIN — padding is inside the overflow clip and reserves nothing');
+  // Hiding it outright was tried and rejected: renderHand only fills the
+  // description bar while the battle's line timer is at zero, so during an
+  // action line the wording would have been nowhere at all.
+  ok(!/body\.tight #hand \.cardel \.ctext\{\s*display:none/.test(SRC),
+    'and the wording is still on the card, not only in a bar that comes and goes');
+
+  // The E hint is a key, and a phone has no keys. It stays in the markup for
+  // everyone who does.
+  ok(/body\.touch #acts \.abtn \.key\{[^}]*display:none/.test(SRC),
+    'the End turn key hint is hidden on touch');
+  ok(/End turn <span class="key">E<\/span>/.test(SRC),
+    'and still printed for a keyboard');
+}
+
 done('emberkin_render');
