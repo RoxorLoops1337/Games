@@ -4395,12 +4395,54 @@ function drawHut(o){
 function drawTreeTop(x, y, r, dead, rot, seed){
   ctx.save(); ctx.translate(x, y);
   if (dead){
+    /* One flat green ellipse and a brown rectangle. On several markets the
+       goal is "fell the town tree" and it is worth 3,000 — the climax of a run
+       ended in a blob. A conifer on its side is a tapering wedge of needles
+       with the trunk out the other end, so that is what it is now: same idea
+       as the standing tiers, unrolled along the fall. */
     ctx.rotate(rot);
-    shadow(0, r * 0.2, r * 1.05, r * 0.4, 0.2);
-    ctx.fillStyle = '#2c6b40';
-    ctx.beginPath(); ctx.ellipse(r * 0.4, 0, r * 1.1, r * 0.5, 0, 0, 6.283); ctx.fill();
+    shadow(r * 0.5, r * 0.2, r * 1.3, r * 0.34, 0.2);
+    // the trunk, tapering out of a splintered stump
     ctx.fillStyle = '#6b4a2f';
-    ctx.fillRect(-r * 0.7, -8, r * 0.7, 16);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.78, -r * 0.15); ctx.lineTo(-r * 0.1, -r * 0.11);
+    ctx.lineTo(-r * 0.1, r * 0.11); ctx.lineTo(-r * 0.78, r * 0.15);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3d2a19';                    // the break, splintered
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.78, -r * 0.15); ctx.lineTo(-r * 0.92, -r * 0.05);
+    ctx.lineTo(-r * 0.7, 0); ctx.lineTo(-r * 0.95, r * 0.09);
+    ctx.lineTo(-r * 0.78, r * 0.15);
+    ctx.closePath(); ctx.fill();
+    /* The crown: a wedge whose edges zigzag, so the silhouette has needles in
+       it the same way the standing tiers do. Two tones, the lighter one laid
+       over the side the market's light reaches. */
+    const wedge = (k, w0) => {
+      const x0 = -r * 0.14, L = r * 1.78 * k, n = 9;
+      ctx.beginPath();
+      ctx.moveTo(x0, -w0 * 0.5);
+      for (let i = 1; i <= n; i++){
+        const t = i / n;
+        ctx.lineTo(x0 + L * t, -w0 * (1 - t) * (i % 2 ? 1 : 0.56));
+      }
+      for (let i = n; i >= 1; i--){
+        const t = i / n;
+        ctx.lineTo(x0 + L * t, w0 * (1 - t) * (i % 2 ? 0.56 : 1));
+      }
+      ctx.lineTo(x0, w0 * 0.5);
+      ctx.closePath();
+    };
+    ctx.fillStyle = TH.tree[0];
+    wedge(1, r * 0.6); ctx.fill();
+    ctx.fillStyle = TH.tree[2];
+    wedge(0.74, r * 0.36); ctx.fill();
+    // and the branches that came off it
+    ctx.strokeStyle = '#2f4a33'; ctx.lineWidth = Math.max(2, r * 0.05);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.25, -r * 0.62); ctx.lineTo(r * 0.72, -r * 0.86);
+    ctx.moveTo(r * 0.5, r * 0.6); ctx.lineTo(r * 0.2, r * 0.9);
+    ctx.stroke();
     ctx.restore(); return;
   }
   shadow(0, r * 0.4, r * 0.95, r * 0.42, 0.3);
@@ -4473,6 +4515,25 @@ function drawProp(o){
     case 'tree': drawTreeTop(o.x, o.y, o.r, o.dead, o.rot, o.seed); break;
     case 'bigtree': {
       drawTreeTop(o.x, o.y, o.r, o.dead, o.rot, o.seed);
+      if (o.dead){
+        /* A felled town tree kept nothing that made it the town tree — no
+           star, no baubles — which is the same thing the smashed snowman and
+           the wrecked present used to do. They are in the snow around it now,
+           off the prop's own seed so the scatter is fixed. */
+        const a0 = o.seed * 6.283;
+        for (const [k, col] of [[0, '#ff7a5e'], [1, '#ffe28c'], [2, '#96e1ff'],
+                                [3, '#ff7a5e'], [4, '#ffe28c']]){
+          const a = a0 + k * 1.9, d = o.r * (0.5 + (k % 3) * 0.24);
+          ctx.fillStyle = col;
+          circle(o.x + Math.cos(a) * d, o.y + Math.sin(a) * d, o.r * 0.055); ctx.fill();
+        }
+        ctx.fillStyle = '#ffeaa0';                   // the star, face down
+        ctx.save(); ctx.translate(o.x + Math.cos(a0 + 2.6) * o.r * 0.95,
+                                  o.y + Math.sin(a0 + 2.6) * o.r * 0.95);
+        ctx.rotate(o.rot * 0.7);
+        spikeRing(o.r * 0.14, 5, 0.62, 0.4); ctx.fill();
+        ctx.restore();
+      }
       if (!o.dead){
         /* Three concentric hoops read as hoops. A garland is a string of
            bulbs, so this is the same three rings drawn as lights on a wire. */

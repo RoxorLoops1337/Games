@@ -5672,6 +5672,74 @@ test('a wrecked present is still that present', () => {
   }
 });
 
+test('a felled tree is a felled tree, in the market’s own greens', () => {
+  const rows = [];
+  for (const lv of [0, 3, 5]){
+    const api = boot({ count: true, w: 1280, h: 720 });
+    api.startLevel(lv); api.beginLevel();
+    api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+    const th = api.getTheme();
+
+    const dead = propArt(api, 'tree', true);
+    /* The old felled tree was one ellipse of hard-coded #2c6b40 — the same
+       green on every market, while the standing one has always taken its four
+       greens from the theme. Two markets should never read the same. */
+    assert(!dead.has('#2c6b40'), api.LEVELS[lv].name + ': still the hard-coded green');
+    assert(dead.has(th.tree[0]) && dead.has(th.tree[2]),
+      api.LEVELS[lv].name + ': a felled tree should be this market’s greens, ' +
+      th.tree[0] + '/' + th.tree[2]);
+    assert(dead.has('#6b4a2f'), 'and keep its trunk');
+    assert(dead.has('#3d2a19'), 'with a splintered break where it came down');
+    rows.push(api.LEVELS[lv].name + ' ' + th.tree[0]);
+  }
+
+  // the crown tapers: a conifer on its side is a wedge, not a disc
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const th = api.getTheme();
+  const dead = propArt(api, 'tree', true, (o) => { o.rot = 0; });
+  const pts = dead.rec.all.filter(a => (a[0] === 'm' || a[0] === 'l') &&
+    String(a[4]) === th.tree[0]).map(a => [a[1], a[2]]);
+  assert(pts.length > 12, 'the crown should be a needled outline, got ' + pts.length);
+  const spanAt = (lo, hi) => {
+    const ys = pts.filter(p => p[0] >= lo && p[0] < hi).map(p => Math.abs(p[1]));
+    return ys.length ? Math.max(...ys) : 0;
+  };
+  const xs = pts.map(p => p[0]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), third = (x1 - x0) / 3;
+  assert(spanAt(x0, x0 + third) > spanAt(x1 - third, x1) * 1.8,
+    'the crown should taper toward the tip: ' + spanAt(x0, x0 + third).toFixed(1) +
+    ' at the butt, ' + spanAt(x1 - third, x1).toFixed(1) + ' at the tip');
+  console.log('    (felled trees: ' + rows.join(' | ') + ')');
+});
+
+test('a felled town tree drops its trimmings', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startLevel(0); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const live = propArt(api, 'bigtree', false);
+  const dead = propArt(api, 'bigtree', true);
+  /* The town tree is worth 3,000 and is the goal on several markets. Felling
+     it used to leave a green blob with no star and no baubles on it — the same
+     thing the smashed snowman and the wrecked present used to do. */
+  assert(dead.has('#ffeaa0'), 'the star should be in the snow beside it');
+  for (const col of ['#ff7a5e', '#ffe28c', '#96e1ff'])
+    assert(dead.has(col), 'and its baubles, including ' + col);
+  assert(live.cols.size > 4, 'a standing town tree is trimmed too');
+
+  // the trimmings land around the tree, not on the far side of the market
+  const r = dead.o.r;
+  const loose = dead.rec.shapes.filter(sh => !sh.stroked &&
+    /ff7a5e|ffe28c|96e1ff/.test(String(sh.style)));
+  assert(loose.length === 5, 'five baubles, got ' + loose.length);
+  for (const sh of loose)
+    assert(Math.hypot(sh.x - dead.o.x, sh.y - dead.o.y) < r * 1.1,
+      'a bauble rolled ' + Math.hypot(sh.x - dead.o.x, sh.y - dead.o.y).toFixed(0) +
+      ' from a tree of r' + r);
+});
+
 test('drawing a wreck rolls nothing', () => {
   const api = boot({ count: true, w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
