@@ -193,6 +193,51 @@ const SCENES = {
       EK.readIntent();
     },
   },
+  // The aimed card with the WORDIEST text in the hand. `firsthand` draws at
+  // random, and a two-word card proves nothing about a badge that is drawn over
+  // the third line — the phone fix has to be checked against the case that
+  // actually collided, not against whatever the shuffle happened to deal.
+  handlong: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      // The starting deck does not always deal a wordy card, so this deals again
+      // rather than throwing on an unlucky shuffle — a scene that fails every
+      // other run teaches you to ignore it, which is worse than no guard at all.
+      let b = null, best = 0, len = -1;
+      for (let tries = 0; tries < 40 && len < 20; tries++) {
+        EK.startBattle({ foe: EK.mkMon('zaplet', 4), wild: true });
+        b = EK.B();
+        if (!b || !b.hand || !b.hand.length) throw new Error('handlong: no hand was dealt');
+        len = -1;
+        // A hand holds the kin's own moves as well as deck cards, and their ids
+        // are MOVES — cardText looks them up in CARDS, finds nothing and throws
+        // on `.txt`. renderHand branches on src === 'kin'; reading it any other
+        // way is reading it wrongly, which is what the first version did.
+        b.hand.forEach((c, i) => {
+          const t = String(c.src === 'kin'
+            ? EK.moveCardText(c.id)
+            : EK.cardText({ id: c.id, plus: 0, bg: c.bg || 0 }) || '');
+          if (t.length > len) { len = t.length; best = i; }
+        });
+      }
+      if (len < 20) throw new Error('handlong: forty deals and never a wordy card — nothing to collide with');
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      b.sel = best;
+      // renderHand only fills the description bar when the battle's own line
+      // timer has run out, so whether the bar is up in a still is otherwise a
+      // matter of when the shutter fell. Running the timer down is
+      // fast-forwarding real state, and it is the whole point of this scene:
+      // the aimed card no longer carries its wording at phone size, so the bar
+      // is the thing that has to be carrying it.
+      b.lineT = 0;
+      EK.readIntent();
+      EK.renderHand();
+      if (!EK.G.dialogue && !(EK.els && EK.els.dialogue)) { /* nothing to assert against */ }
+    },
+  },
   // A chest coming open. Film it at ~90ms: the burst is .35s, and the sampling
   // has to match the shortest sub-beat rather than the 1.6s whole.
   chestopen: {

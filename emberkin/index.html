@@ -645,6 +645,25 @@
   body.tight #hand .cardel:not(.sel) .ctext{ display:none; }
   body.tight #hand .cardel:not(.sel) .cname{ margin-top:.35em; }
   body.tight #hand .cardel .cpip{ font-size:.4em; }
+  /* The rule above hid the text on the four cards you are NOT aiming at, and
+     left it on the one you are — which is the only card that also carries the
+     "▲ play" badge. `.cp` is absolutely positioned at bottom:.9em, so on a
+     phone, where the aimed card's wording runs to three lines, the badge was
+     drawn straight through the last of them. Four cards out of five had been
+     fixed and the fifth kept the collision, invisible because no phone shot
+     existed to show it.
+     Three attempts, and the two failures are the useful part. padding-bottom
+     reserved nothing — `.ctext` clips with overflow:hidden and overflow clips
+     at the PADDING edge, so the text painted through it and the picture came
+     back identical. Hiding the text outright looked best of all, and was
+     wrong: the description bar above the hand is the stated fallback, but
+     renderHand only fills it while the battle's own line timer is at zero, so
+     during any action line the wording would have been nowhere at all.
+     Smaller type in reserved space keeps it on the card at every moment. */
+  body.tight #hand .cardel.sel .ctext{ font-size:.5em; line-height:1.15; margin-bottom:1.1em; }
+  /* No E key on a phone, and the button is a button there. Same fault as the
+     screens naming A and X, in the one place that is not a screen. */
+  body.touch #acts .abtn .key{ display:none; }
   .tp{ font-size:.58em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px; color:#120d18; font-weight:700; }
 
   /* ---------------- title ---------------- */
