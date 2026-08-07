@@ -4937,16 +4937,16 @@ const GRADE = {
   // Late-afternoon gold on the first road out — the friendliest light in the
   // game, and the one the others are read against, so it barely grades at all.
   route_one:    { top: 'rgba(255,208,110,.12)', bot: 'rgba(58,42,92,.18)',  vig: .34,
-                  hue: ['#e8c070', .10] },
+                  hue: ['#e8c070', .10], shaft: ['rgba(255,214,140,.10)', .10] },
   // Under a canopy: little sky, a lot of green shade, corners closing in.
   emberwood:    { top: 'rgba(214,150,60,.17)',  bot: 'rgba(16,44,34,.34)',  vig: .56,
-                  hue: ['#7fa03c', .15] },
+                  hue: ['#7fa03c', .15], shaft: ['rgba(240,214,120,.10)', .13] },
   // Open water, flat cool light, almost no vignette so it reads as wide.
   stillmere:    { top: 'rgba(150,220,255,.13)', bot: 'rgba(30,64,110,.24)', vig: .26,
-                  hue: ['#4fb4d6', .15] },
+                  hue: ['#4fb4d6', .15], shaft: ['rgba(190,236,255,.10)', .08] },
   // High, thin and cold, with a bruise-coloured sky pressing down.
   crown_hollow: { top: 'rgba(178,164,255,.17)', bot: 'rgba(52,26,86,.44)',  vig: .62,
-                  hue: ['#8a7fd0', .24] },
+                  hue: ['#8a7fd0', .24], shaft: ['rgba(214,200,255,.10)', .12] },
 };
 /**
  * Everything that happens where one kind of ground stops and another starts.
@@ -5105,6 +5105,50 @@ function worldLight(g, kind, id) {
   warm.addColorStop(1, gr.bot);
   g.fillStyle = warm;
   g.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  // Shafts, on the maps that have a sky.
+  //
+  // Photographing all eight maps turned up one asymmetry and no bugs: the three
+  // interiors have somewhere the light comes FROM — the window pools throw a
+  // slab of daylight across the floor and it is the best-looking thing in the
+  // game — and the three outdoor maps have no light source at all, only a wash
+  // top and bottom and a vignette closing the corners. Flat light is what makes
+  // an outdoor tile field read as a field of tiles.
+  //
+  // So: a few wide, low, slanted columns coming down from the top of the frame
+  // in the map's own warm colour. Screen space, not world space, because the
+  // sun does not move when you take a step, and additive so they lift the
+  // ground rather than fogging it. They breathe slightly, out of phase, which
+  // is the difference between light through moving leaves and a painted-on
+  // triangle.
+  if (gr.shaft) {
+    const [col, amp] = gr.shaft;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const LEAN = VIEW_H * .55, BOT = VIEW_H * .92, SLICES = 7;
+    for (let i = 0; i < 4; i++) {
+      const x = -30 + i * 78 + Math.sin(i * 2.7) * 12;
+      const w = 26 + (i % 3) * 11;
+      const a = amp * (.62 + .38 * (.5 + .5 * Math.sin(G.t * .5 + i * 1.9)));
+      // Sliced across its width with a bell-shaped alpha, because a shaft with
+      // hard sides is a parallelogram. One fill each, and the first version —
+      // a single polygon with only a vertical fade — read as geometry laid over
+      // the grass rather than as light coming through it.
+      for (let s = 0; s < SLICES; s++) {
+        const t0 = s / SLICES, t1 = (s + 1) / SLICES;
+        const bell = Math.sin(((t0 + t1) / 2) * Math.PI) ** 1.6;
+        const sh = g.createLinearGradient(0, 0, 0, BOT);
+        sh.addColorStop(0, col.replace(/[\d.]+\)$/, `${(a * bell).toFixed(3)})`));
+        sh.addColorStop(1, col.replace(/[\d.]+\)$/, '0)'));
+        g.fillStyle = sh;
+        g.beginPath();
+        g.moveTo(x + w * t0, 0); g.lineTo(x + w * t1, 0);
+        g.lineTo(x + w * t1 + LEAN, BOT); g.lineTo(x + w * t0 + LEAN, BOT);
+        g.closePath(); g.fill();
+      }
+    }
+    g.restore();
+  }
 
   const vig = g.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .34,
     VIEW_W / 2, VIEW_H / 2, VIEW_H * .95);

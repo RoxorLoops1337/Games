@@ -409,8 +409,16 @@ node tools/emberkin/shot.mjs --film evolve 9 450   # a scene as it plays, tiled
 node tools/emberkin/shot.mjs --size 390x760 title  # at somebody else's window
 ```
 
-Scenes: `title`, `study`, `town`, `battle`, `pair`, `duel`, `evolve`, `gotcha`,
-`reward`, `deck`, `catching`, `sight`, `legendary`. Each one says how big to
+Scenes: `title`, `study`, `town`, `wayhouse`, `shop`, `route`, `shore`,
+`hollow`, `battle`, `pair`, `duel`, `evolve`, `gotcha`, `reward`, `deck`,
+`catching`, `sight`, `legendary`.
+
+`--stats` reads the frame back and reports the range it actually occupies —
+luminance min/max, mean, standard deviation, mean saturation. It exists because
+Crown Hollow looked like fog and the two plausible culprits each changed nothing
+when dialled back; guessing which of five stacked wash layers flattened a map
+does not work, and the numbers said the map was not flat at all. Use it whenever
+an impression of a frame is about to become a change to the game. Each one says how big to
 shoot it and how to drive the game into that state; a still waits 1200ms for the
 entry animation to finish, a film waits 60ms so it starts at the trigger.
 
@@ -433,3 +441,23 @@ Three things this has established, none of which were visible in the source:
   maps, unlit windows, no impact frame on fifteen hits in sixteen, and screens
   parked at the top of a box they did not fill. **Suspicion has a bad record here
   and the camera has a good one.**
+- **But a photograph is an impression, and an impression is not a measurement.**
+  Crown Hollow read as fog in the picture and measured as having more tonal range
+  than the map it was being compared against. The camera is right about *where to
+  look*; it is not automatically right about *what is wrong*. Shoot to find the
+  question, measure before answering it.
+
+### Two hazards in driving the game from outside
+
+- **`G.dialogue = null` does not close the dialogue.** The box is a DOM overlay
+  hidden by `renderDialogue`, which only runs on a dialogue event — so clearing
+  the state from outside leaves the panel on screen with its last line still in
+  it. Three shots of the shore came back with Elder Rowan talking over the water
+  while the state print said no dialogue was up. Scenes now dismiss the opening
+  monologue the way a player does, by advancing it, before `go()` runs. (The game
+  itself is fine: every path that clears a dialogue in play also hides the panel,
+  which is why there are four separate `show(els.dialogue, false)` calls at those
+  sites.)
+- **The status line prints what is *covering* the scene**, not just the mode and
+  map — dialogue, screen, gotcha, evolution, wipe. That line is the only reason
+  the hazard above was found rather than worked around.

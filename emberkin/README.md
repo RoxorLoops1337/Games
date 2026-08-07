@@ -316,6 +316,52 @@ coat went with it.
     stillmere     open water, cool and flat, almost no vignette so it reads wide
     crown_hollow  high, thin and cold, a bruise-coloured sky pressing down
 
+#### Shafts, on the maps that have a sky
+
+Photographing all eight maps — five of them for the first time — turned up one
+asymmetry and, more usefully, no bugs. The three interiors have somewhere the
+light comes *from*: the window pools throw a slab of daylight across the floor,
+and the Wayhouse and the shop are the two best-looking screens in the game
+because of it. The three outdoor maps had no light source at all — a wash top
+and bottom, a vignette, and nothing with a direction.
+
+So `GRADE` gains an optional `shaft: [colour, strength]`, and `worldLight` draws
+four wide slanted columns down from the top of the frame in the map's own light.
+Screen space, not world space, because the sun does not move when you take a
+step; additive, so they lift the ground instead of fogging it; and breathing
+slightly out of phase, which is the difference between light through moving
+leaves and a triangle painted on the grass.
+
+Each shaft is sliced across its width with a bell-shaped alpha. The first
+version was one polygon with only a vertical fade, and it read as *geometry laid
+over* the field rather than as light coming through it — a shaft with hard sides
+is a parallelogram. Seven slices each, four shafts, and the shape disappears.
+
+The render suite locks the invariant: only a map with a sky carries a `shaft`,
+and its strength stays under a wash. An interior that grew one would be daylight
+coming through a ceiling.
+
+#### Crown Hollow is not broken, twice
+
+Crown Hollow *looks* like fog — one flat blue-grey, the player barely picking
+out against it — and the obvious culprits were the two heaviest numbers in the
+game: `AIR.grade .28` with `vig .60`, and the `hue` push at `.24`, more than
+twice Route One's. Dialling each back and re-shooting changed almost nothing.
+
+Measuring the frame settled it. Against Route One, which reads well:
+
+    route    lum  25..220  mean 83  sd 17.9  sat 0.141
+    hollow   lum  17..195  mean 70  sd 21.0  sat 0.145
+
+Crown Hollow has **more** tonal variation than Route One and the same
+saturation. It is darker and it is blue; it is not flatter and it is not greyer.
+What the eye was reading as fog is hue *uniformity* — everything in one cold
+family — which is what the map is for. Nothing was changed. This is the second
+time a strong visual impression of this particular map has failed to survive a
+measurement (the first was "Crown Hollow drains the kin", which turned out to be
+two scenes with different foe levels). The fix it actually wanted was a light
+source, which is the shafts above.
+
 `drawEdges()` handles everything that happens where one kind of ground stops
 and another starts. A tileset can only ever draw the *middle* of things, and the
 edges are where a map either reads as a place or as a spreadsheet with colours

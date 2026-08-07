@@ -401,6 +401,20 @@ for (const [id, gr] of Object.entries(EK.GRADE)) {
   ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.bot), `${id}: bottom wash is a usable colour`);
   ok(gr.vig > 0 && gr.vig < 1, `${id}: the vignette is a fraction`);
 }
+// Shafts belong to the maps that have a sky, and to no others. Photographing
+// all eight maps turned up exactly one asymmetry: the interiors have a light
+// source (the window pools) and the outdoor maps had none. An interior that
+// grew a shaft would be daylight coming through a ceiling.
+const SKY = new Set(['route', 'route_one', 'emberwood', 'stillmere', 'crown_hollow']);
+for (const [id, gr] of Object.entries(EK.GRADE)) {
+  if (gr.shaft) {
+    ok(SKY.has(id), `${id}: only a map with a sky gets shafts`);
+    ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.shaft[0]), `${id}: shaft colour is usable`);
+    ok(gr.shaft[1] > 0 && gr.shaft[1] < .3, `${id}: shaft strength stays under a wash`);
+  } else {
+    ok(!SKY.has(id) || id === 'route', `${id}: an outdoor map is lit from somewhere`);
+  }
+}
 // An unknown map still gets light rather than a crash.
 ok(EK.gradeFor('route', 'nowhere_at_all') === EK.GRADE.route, 'an unknown route falls back to route light');
 ok(EK.gradeFor('inside', 'nowhere_at_all') === EK.GRADE.inside, 'an unknown interior falls back to interior light');

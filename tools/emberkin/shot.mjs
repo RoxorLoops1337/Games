@@ -41,6 +41,50 @@ const SCENES = {
       EK.G.mode = 'world';
     },
   },
+  // AIR gives eight maps eight different lights — tint, grade, vignette, mote
+  // count and drift. Three of the eight had ever been looked at. These are the
+  // other five, each stood somewhere the map's own light has something to do:
+  // by a window indoors, at the water, under the pass.
+  wayhouse: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('wayhouse', 5, 5, 'up');
+      EK.G.mode = 'world';
+    },
+  },
+  shop: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('shop', 6, 5, 'up');
+      EK.G.mode = 'world';
+    },
+  },
+  route: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('route_one', 5, 7, 'down');
+      EK.G.mode = 'world';
+    },
+  },
+  shore: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('stillmere', 12, 7, 'right');   // at the sand, facing the water
+      EK.G.mode = 'world';
+    },
+  },
+  hollow: {
+    w: 700, h: 620,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.enterMap('crown_hollow', 9, 7, 'up');
+      EK.G.mode = 'world';
+    },
+  },
   battle: {
     w: 760, h: 900,
     go: (EK) => {
@@ -185,6 +229,9 @@ if (si >= 0) {
   argv.splice(si, 2);
 }
 
+const STATS = argv.includes('--stats');
+if (STATS) argv.splice(argv.indexOf('--stats'), 1);
+
 const FILM = argv[0] === '--film';
 const want = FILM ? argv[1] : argv[0];
 const out = FILM ? null : argv[1];
@@ -213,10 +260,51 @@ for (const name of list) {
       if (b) b.click();
     });
     await page.waitForTimeout(700);
+    // Dismiss the opening monologue the way a player does, before the scene
+    // runs. Setting `G.dialogue = null` is NOT the same thing: the panel is a
+    // DOM overlay hidden by `renderDialogue`, which only runs on a dialogue
+    // event, so clearing the state from outside leaves the box on screen with
+    // its last line still in it. Three shots of the shore came back with Elder
+    // Rowan talking over the water, and the state print said no dialogue —
+    // which is how it was found at all.
+    await page.evaluate(() => {
+      for (let i = 0; i < 40 && EK.G.dialogue; i++) {
+        EK.G.dialogue.hold = 0;
+        EK.advanceDialogue();
+      }
+    });
     await page.evaluate(`(${sc.go.toString()})(window.EK)`);
     // A still wants the entry animation over; a film wants to start at the
     // trigger, or the beat it came to record has already finished.
     await page.waitForTimeout(FILM ? 60 : 1200);
+  }
+  // `--stats` reads the frame back and reports what range it actually occupies.
+  // Crown Hollow looked like fog and two plausible culprits — the AIR grade and
+  // the map's hue push — each changed almost nothing when dialled back. Guessing
+  // which of five stacked wash layers flattened a map does not work; measuring
+  // the frame and comparing it against a map that reads well does.
+  if (STATS) {
+    const s = await page.evaluate(() => {
+      const c = document.getElementById('view');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let lo = 255, hi = 0, sum = 0, n = 0, sat = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g2 = d[i + 1], b = d[i + 2];
+        const l = .2126 * r + .7152 * g2 + .0722 * b;
+        lo = Math.min(lo, l); hi = Math.max(hi, l); sum += l; n++;
+        sat += (Math.max(r, g2, b) - Math.min(r, g2, b)) / 255;
+      }
+      const mean = sum / n;
+      let vr = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const l = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2];
+        vr += (l - mean) ** 2;
+      }
+      return { lo: lo | 0, hi: hi | 0, mean: mean | 0,
+        sd: Math.sqrt(vr / n).toFixed(1), sat: (sat / n).toFixed(3) };
+    });
+    console.log(`${name.padEnd(10)} lum ${String(s.lo).padStart(3)}..${String(s.hi).padStart(3)}`
+      + `  mean ${String(s.mean).padStart(3)}  sd ${String(s.sd).padStart(5)}  sat ${s.sat}`);
   }
   const file = out || `/tmp/emberkin_${name}${FILM ? '_film' : ''}.png`;
   if (FILM) {
@@ -242,8 +330,20 @@ for (const name of list) {
   } else {
     await page.screenshot({ path: file });
   }
-  const where = await page.evaluate(() => (window.EK ? `${EK.G.mode}/${EK.G.mapId}` : '?'));
-  console.log(`${name.padEnd(10)} ${where.padEnd(22)} ${file}`);
+  // Say what is actually on screen, not just what was asked for. Two shots of
+  // the shore were wasted on a starter dialogue the scene thought it had
+  // cleared, and the picture is the only place that showed up.
+  const where = await page.evaluate(() => {
+    if (!window.EK) return '?';
+    const over = [
+      EK.G.dialogue && `dialogue:${EK.G.dialogue.who}`,
+      EK.G.screen && `screen:${EK.G.screen.kind || EK.G.screen}`,
+      EK.G.gotcha && 'gotcha', EK.G.evoAnim && 'evo',
+      EK.G.wipe > 0 && 'wipe',
+    ].filter(Boolean);
+    return `${EK.G.mode}/${EK.G.mapId}${over.length ? ` +${over.join('+')}` : ''}`;
+  });
+  console.log(`${name.padEnd(10)} ${where.padEnd(34)} ${file}`);
   await page.close();
 }
 await browser.close();
