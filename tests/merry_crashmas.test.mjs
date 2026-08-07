@@ -4461,6 +4461,125 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ------------------------------------------------------- the driver --- */
+
+/* Records every disc and ellipse a draw puts down, with the colour it was
+   painted in, in the car's own coordinates — drawCar's translate and rotate go
+   through ctx and the recorder ignores them, so what comes back is the layout
+   inside the bodywork. */
+function carRec(){
+  const shapes = [], order = [];
+  let fill = '', line = '', pending = null;
+  const base = {
+    shapes, order,
+    set fillStyle(v){ fill = String(v); order.push(String(v)); },
+    get fillStyle(){ return fill; },
+    set strokeStyle(v){ line = String(v); },
+    get strokeStyle(){ return line; },
+    arc(x, y, r){ pending = { x, y, r, ry: r }; },
+    ellipse(x, y, rx, ry){ pending = { x, y, r: rx, ry }; },
+    fill(){ if (pending){ shapes.push(Object.assign(pending, { style: fill })); pending = null; } },
+    stroke(){ if (pending){ shapes.push(Object.assign(pending, { style: line, stroked: true })); pending = null; } },
+    measureText: () => ({ width: 30 }),
+    canvas: { width: 1280, height: 720 },
+  };
+  return new Proxy(base, { get(t, p){
+    if (p in t) return t[p];
+    return () => {};
+  }, set(t, p, v){ t[p] = v; return true; } });
+}
+
+// the driver's palette, which is how his parts are told apart in the recording
+const FACE_C = '#f0c9a4', BEARD_C = '#efe9dd', INK_C = '#2a1a16', GLOVE_C = '#e8e3d8';
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function driver(api, shouting){
+  api.car.ang = 0; api.car.z = 0; api.car.roll = 0;
+  api.car.vx = 0; api.car.vy = 0; api.car.dispSp = 0;
+  api.car.gore = 0; api.car.plowT = 0;
+  api.car.shoutT = shouting ? 0.3 : 0;
+  const rec = carRec();
+  api.withCtx(rec, api.drawCar);
+  const by = (c) => rec.shapes.filter(s => s.style === c);
+  const eyes = by(INK_C).filter(s => Math.abs(s.y) > 0.5);
+  return { rec, face: by(FACE_C)[0], beard: by(BEARD_C)[0], gloves: by(GLOVE_C),
+    eyes, mouth: by(INK_C).find(s => Math.abs(s.y) <= 0.5),
+    wheel: rec.shapes.find(s => s.stroked && s.ry && s.r !== s.ry) };
+}
+
+test('the driver is a man in a seat, not four discs', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const d = driver(api, false);
+  const dims = api.getDims();
+
+  assert(d.face && d.beard, 'he should have a face and a beard');
+  assert(d.eyes.length === 2, 'two eyes, got ' + d.eyes.length);
+  assert(Math.abs(d.eyes[0].y + d.eyes[1].y) < 0.01, 'and they should be level');
+  assert(d.gloves.length === 2, 'two gloves on the wheel, got ' + d.gloves.length);
+  assert(d.wheel, 'and a wheel for them to be on');
+
+  // the eyes are on the face
+  for (const e of d.eyes){
+    assert(dist(e, d.face) + e.r <= d.face.r + 0.01,
+      'an eye is off the face: ' + dist(e, d.face).toFixed(1) + ' + ' + e.r.toFixed(1) +
+      ' vs ' + d.face.r.toFixed(1));
+  }
+  /* And not in the beard. The first pass had the beard far enough back that
+     both eyes landed in the whiskers, which reads as a snowman. */
+  for (const e of d.eyes){
+    assert(dist(e, d.beard) > d.beard.r,
+      'an eye is buried in the beard: ' + dist(e, d.beard).toFixed(1) +
+      ' vs ' + d.beard.r.toFixed(1));
+  }
+  // the mouth is in the beard, where a mouth is
+  assert(dist(d.mouth, d.beard) < d.beard.r, 'the mouth should be in the beard');
+  // the beard hangs forward of the face, and the wheel is forward of the beard
+  assert(d.beard.x > d.face.x, 'the beard hangs down his front');
+  assert(d.wheel.x > d.beard.x, 'the wheel is ahead of him');
+  assert(d.wheel.x + d.wheel.r <= dims.l * 0.2 + 0.01,
+    'the wheel should stay behind the windscreen: ' + (d.wheel.x + d.wheel.r).toFixed(1) +
+    ' vs ' + (dims.l * 0.2).toFixed(1));
+  for (const g of d.gloves) assert(Math.abs(dist(g, d.wheel) - 0) > 0, 'gloves placed');
+
+  // he is painted over the bodywork, not under it
+  const car = api.getCar();
+  assert(d.rec.order.indexOf(car.body) < d.rec.order.indexOf(FACE_C),
+    'the driver should be drawn on top of the body');
+  assert(d.rec.order.indexOf('#8e2a24') < d.rec.order.indexOf(FACE_C),
+    'shoulders first, then the head on top of them');
+  console.log('    (driver: face r' + d.face.r.toFixed(1) + ', beard r' +
+    d.beard.r.toFixed(1) + ' at x' + d.beard.x.toFixed(1) + ', wheel at x' +
+    d.wheel.x.toFixed(1) + ')');
+});
+
+test('the driver opens his mouth when he shouts', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const quiet = driver(api, false).mouth, loud = driver(api, true).mouth;
+  assert(loud.r > quiet.r * 1.5,
+    'the mouth should open: ' + quiet.r.toFixed(2) + ' -> ' + loud.r.toFixed(2));
+  // and nothing else about him moves
+  assert(driver(api, true).eyes.length === 2, 'he keeps both eyes while shouting');
+});
+
+test('every car carries the same driver', () => {
+  const api = boot({ w: 1280, h: 720, store: ALL_CARS });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const seen = [];
+  for (const c of api.CARS){
+    assert(api.selectCar(c.id), 'should be able to pick ' + c.id);
+    const d = driver(api, false);
+    assert(d.face && d.beard && d.eyes.length === 2 && d.gloves.length === 2,
+      c.id + ' lost part of its driver');
+    seen.push(c.id + ' ' + d.rec.shapes.length);
+  }
+  console.log('    (driver on ' + seen.join(', ') + ' shapes)');
+});
+
 /* ------------------------------------------------ the combo banner --- */
 
 /* Real text widths, since the harness's measureText reports a flat 30 and the
