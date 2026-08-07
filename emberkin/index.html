@@ -4850,7 +4850,7 @@ function tryMove(dir) {
 function onArrive() {
   const p = G.player;
   G.steps++;
-  playCue(STEP_CUE[tileAt(G.map, p.x, p.y)] || 'step_grass');
+  playCue(stepCue(tileAt(G.map, p.x, p.y)));
   const w = warpAt(G.map, p.x, p.y);
   if (w) { doWarp(w); return; }
   if (trainerSight()) return;
@@ -10093,6 +10093,13 @@ function playCue(kind) {
 
 /** Which footstep the ground under you makes. */
 const STEP_CUE = { ',': 'step_tall', '=': 'step_path', s: 'step_sand', b: 'step_wood', r: 'step_wood' };
+// The surface underfoot, as a function rather than a bare lookup, so the
+// default — grass, meaning everything not named above — is part of the ANSWER
+// instead of living at the one call site as `|| 'step_grass'`. The cue
+// invariant asks this for every tile character that appears in any map; it
+// could not see a fallback parked next to the caller, and step_grass was the
+// one cue in the game that nothing could prove was reachable.
+const stepCue = (tile) => STEP_CUE[tile] || 'step_grass';
 
 function toggleMute() {
   muted = !muted;
@@ -11118,12 +11125,12 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,
     btnLabels, pickName, backName, isTouch, tapKey,
-    doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
+    doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,

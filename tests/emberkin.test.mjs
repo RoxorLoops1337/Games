@@ -634,7 +634,10 @@ for (const map of Object.values(MAPS)) {
   // the gap. The shrine encounter is a map field now and this reads it.
   if (map.legend) spawnable.add(map.legend.id);
 }
-for (const id of ['cindercub', 'dewdrip', 'sproutle']) spawnable.add(id);   // starters
+// The game's own list, not a copy of it. This net is the one that already
+// had the shrine encounter carved out by name; a fourth starter added to
+// STARTERS would have quietly stopped being covered here.
+for (const id of EK.STARTERS) spawnable.add(id);
 for (const id of DEX_ORDER) {
   const viaEvo = DEX_ORDER.some((p) => DEX[p].evo && DEX[p].evo[0] === id && spawnable.has(p));
   ok(spawnable.has(id) || viaEvo, `${id} is catchable or evolvable`);
@@ -873,7 +876,7 @@ ok(26 <= Math.max(...MAPS.crown_hollow.enc.table.map((e) => e[2])) + 8, 'Vespyr 
 // most of the time; a careful player does better than this bot.
 const firstRival = MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
 const opening = loadGame({});
-for (const starter of ['cindercub', 'dewdrip', 'sproutle']) {
+for (const starter of EK.STARTERS) {
   const foe = opening.RIVAL_PICK[starter];
   const lvl = opening.trainerTeam(firstRival)[0][1];
   let wins = 0;

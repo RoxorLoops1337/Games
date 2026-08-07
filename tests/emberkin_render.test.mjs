@@ -417,15 +417,26 @@ for (const [id, gr] of Object.entries(EK.GRADE)) {
 // A town is outdoors too — it was the last map with a sky and no light source,
 // which only showed up when it was re-photographed after the routes got theirs.
 // `inside` is the one that must never have one: daylight through a ceiling.
-const SKY = new Set(['route', 'town', 'route_one', 'emberwood', 'stillmere', 'crown_hollow']);
+// GRADE is keyed by BOTH map kind and map id, and both of those already say
+// whether they are indoors — so this was a hand-list of six names for a fact
+// the suite could have asked for. Same fault as the cue list two sections down.
+const hasSky = (id) => (EK.MAPS[id] ? EK.MAPS[id].kind !== 'inside' : id !== 'inside');
 for (const [id, gr] of Object.entries(EK.GRADE)) {
-  if (gr.shaft) {
-    ok(SKY.has(id), `${id}: only a map with a sky gets shafts`);
-    ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.shaft[0]), `${id}: shaft colour is usable`);
-    ok(gr.shaft[1] > 0 && gr.shaft[1] < .3, `${id}: shaft strength stays under a wash`);
-  } else {
-    ok(!SKY.has(id) || id === 'route', `${id}: an outdoor map is lit from somewhere`);
-  }
+  if (!gr.shaft) continue;
+  ok(hasSky(id), `${id}: only a map with a sky gets shafts`);
+  ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.shaft[0]), `${id}: shaft colour is usable`);
+  ok(gr.shaft[1] > 0 && gr.shaft[1] < .3, `${id}: shaft strength stays under a wash`);
+}
+// And the other half asked of the MAPS rather than of the table, which is what
+// removes the second exemption — the old form read `!SKY.has(id) || id ===
+// 'route'`, carving out the generic route grade because it has no shaft. It has
+// no shaft because it is not a place: nothing resolves to it, every route map
+// carries its own entry. Ask which maps you can stand in, resolve their light
+// the way the game resolves it, and there is nothing left to excuse. This also
+// covers hollowbrook, which is not a GRADE key at all and so was never checked.
+for (const id of OUTDOOR) {
+  const gr = EK.gradeFor(EK.MAPS[id].kind, id);
+  ok(!!gr.shaft, `${id}: an outdoor map is lit from somewhere`);
 }
 // An unknown map still gets light rather than a crash.
 ok(EK.gradeFor('route', 'nowhere_at_all') === EK.GRADE.route, 'an unknown route falls back to route light');
@@ -1414,6 +1425,12 @@ section('the portrait buttons fit a narrow phone');
 // so nothing here can hear anything. What CAN be checked is the wiring, and the
 // failure it catches is real: a cue fired under a name playCue does not handle
 // is silence that looks exactly like a cue nobody wrote. Both directions.
+const mapTiles = (g) => {
+  const t = new Set();
+  for (const m of Object.values(g.MAPS)) for (const row of m.rows) for (const ch of row) t.add(ch);
+  return t;
+};
+
 section('every cue that is fired is a cue that exists');
 {
   const body = (SRC.match(/function playCue\(kind\)[\s\S]*?\n\}/) || [''])[0];
@@ -1427,31 +1444,56 @@ section('every cue that is fired is a cue that exists');
   ok(defined.size > 15, `it handles a table of cues (${defined.size})`);
   ok(/if \(THEMES\[kind\]\)/.test(body), 'and takes the track list from THEMES itself');
 
-  // Every literal name passed to playCue must be one of them.
   const fired = new Set((SRC.match(/playCue\('[a-z_]+'\)/g) || [])
     .map((m) => m.replace(/playCue\('|'\)/g, '')));
   ok(fired.size > 10, `and a lot of them are fired by name (${fired.size})`);
-  for (const k of fired) ok(defined.has(k), `the cue "${k}" is one playCue handles`);
 
-  // And the other way: a cue in the table that nothing reaches is a sound
-  // nobody will hear. The ones fired through a variable or a ternary are named
-  // here so the check stays honest rather than being loosened to pass.
-  const indirect = new Set(['battle', 'shrine', 'crit', 'hit',
-    // The four tracks a fight can choose come out of battleTrack, and the
-    // footsteps out of STEP_CUE. Naming them here is the point: the check made
-    // me declare the new two rather than quietly widening to let them through.
-    'duel', 'rival',
-    // `faint` moved from a literal to a ternary when the foe's knockout got a
-    // cue of its own, so it belongs here now too.
-    'faint', 'downed',
-    // The place themes come out of placeTrack, one per map you travel.
-    'route', 'mere', 'wood', 'hollow',
-    // And the impacts, which come out of hitCue.
-    'strong', 'weak',
-    'step_grass', 'step_tall', 'step_path', 'step_sand', 'step_wood']);
-  for (const k of defined) {
-    ok(fired.has(k) || indirect.has(k), `the cue "${k}" is reachable`);
+  // The cues that are NOT fired by name — ASKED FOR rather than listed.
+  //
+  // This used to be nineteen names written out by hand, with a comment saying
+  // that declaring each new one was the point. It was, four times running. But
+  // an exemption list is a map of facts the test cannot read, and every one of
+  // these nineteen came out of a pure function or a table that was sitting
+  // right there: hitCue, faintCue, battleTrack, placeTrack, STEP_CUE. The list
+  // was not knowledge the suite lacked. It was knowledge it declined to ask
+  // for.
+  //
+  // Asking is strictly stronger in both directions. Add a theme and point a map
+  // at it and placeTrack now yields it here on its own — where the hand-list
+  // would have gone red and invited the next person to widen it, which is the
+  // failure mode the old comment was trying to prevent and could not. And a
+  // theme NOTHING points at still fails, because that is the true claim: a
+  // sound nobody can reach.
+  const hits = [{ eff: 2, crit: true }, { eff: 2 }, { eff: 1 }, { eff: .5 }, { eff: 0 }, null];
+  const faints = [{ side: 'mine' }, { side: 'foe' }, null];
+  const fights = [{ legendary: true }, { npc: { id: 't_wick2' } }, { npc: { id: 't_pell' } }, {}];
+  const asked = new Set([
+    ...hits.map((e) => g0.hitCue(e)),
+    ...faints.map((e) => g0.faintCue(e)),
+    ...fights.map((o) => g0.battleTrack(o)),
+    ...Object.keys(g0.MAPS).map((id) => g0.placeTrack(id)),
+    // Every tile character that appears in any map, put through the game's own
+    // step-cue choice. Stronger than reading STEP_CUE's values: it covers the
+    // grass default, and a tile added tomorrow with a footstep playCue does not
+    // handle now fails here rather than being silence nobody notices.
+    ...[...mapTiles(g0)].map((t) => g0.stepCue(t)),
+  ]);
+  ok(asked.size > 12, `and the rest are asked for rather than listed (${asked.size})`);
+
+  // Two tables that had never been asked about each other: GRASSY is what
+  // rollEncounter gates on, STEP_CUE is what you hear underfoot. The surface
+  // that hides things has to be the one that sounds deep, or the game tells
+  // your ear one thing about a tile and your odds another.
+  for (const t of g0.GRASSY) {
+    eq(g0.stepCue(t), 'step_tall', `the grass that hides things sounds deep ("${t}")`);
   }
+
+  const reachable = new Set([...fired, ...asked]);
+  // Both directions, and the indirect ones are now inside BOTH of them — the
+  // old shape only checked literals against the table, so a hitCue branch
+  // returning a name playCue does not handle was silence nothing would catch.
+  for (const k of reachable) ok(defined.has(k), `the cue "${k}" is one playCue handles`);
+  for (const k of defined) ok(reachable.has(k), `the cue "${k}" is reachable`);
 
   // The plaque that names a new place was the one beat in the game with no
   // sound at all. It is fired where the beat is raised, not somewhere near it.
