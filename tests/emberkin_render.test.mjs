@@ -1437,6 +1437,8 @@ section('every cue that is fired is a cue that exists');
     // `faint` moved from a literal to a ternary when the foe's knockout got a
     // cue of its own, so it belongs here now too.
     'faint', 'downed',
+    // The place themes come out of placeTrack, one per map you travel.
+    'route', 'mere', 'wood', 'hollow',
     'step_grass', 'step_tall', 'step_path', 'step_sand', 'step_wood']);
   for (const k of defined) {
     ok(fired.has(k) || indirect.has(k), `the cue "${k}" is reachable`);
@@ -1514,6 +1516,45 @@ section('losing a kin does not sound like winning');
   eq(g.faintCue({ side: 'mine' }), 'faint', 'yours is the falling one');
   eq(g.faintCue({ side: 'foe' }), 'downed', 'theirs is not');
   eq(g.faintCue(undefined), 'downed', 'and a missing side never claims to be yours');
+}
+
+// AIR gives all eight maps their own light and the music gave them one tune
+// between them — and nothing told the music the map had moved at all, so the
+// world theme started once and played everywhere. Driven off the MAPS list
+// rather than a table typed here, so a ninth map is covered.
+section('the music follows the map');
+{
+  const g = loadGame({});
+  const maps = Object.keys(g.MAPS);
+  ok(maps.length >= 8, `the valley has its maps (${maps.length})`);
+
+  // Every map resolves to a real theme. A typo in the table would otherwise be
+  // silence, and silence is what this whole seam keeps turning out to be.
+  for (const id of maps) {
+    const track = g.placeTrack(id);
+    ok(g.THEMES[track], `${id} plays a theme that exists (${track})`);
+  }
+  // And every entry in the table names a map that is really there.
+  for (const id of Object.keys(g.MAP_TRACK)) ok(maps.includes(id), `${id} is a real map`);
+
+  // The places you travel each sound like themselves; the town and the rooms
+  // in it share the valley's tune.
+  const travel = Object.keys(g.MAP_TRACK);
+  const tracks = new Set(travel.map((id) => g.placeTrack(id)));
+  eq(tracks.size, travel.length, `no two places you travel share a tune (${[...tracks].join(', ')})`);
+  const rest = maps.filter((id) => !travel.includes(id));
+  for (const id of rest) eq(g.placeTrack(id), 'world', `${id} keeps the valley's tune`);
+  ok(rest.length > 0, `and some places do (${rest.join(', ')})`);
+
+  // The wiring: walking somewhere follows it, and coming out of a fight or a
+  // save resumes where you ARE rather than always the town.
+  ok(/followMap\(\);\s*\n\s*return m;/.test(SRC), 'entering a map follows it');
+  ok(/if \(HEADLESS \|\| !musicTimer\) return;/.test(SRC),
+    'but only switches music already playing — the title has always been silent');
+  ok(/if \(track !== musicTrack\) startMusic\(track\)/.test(SRC),
+    'and never restarts the tune it is already on, which would stutter at every doorway');
+  eq((SRC.match(/playCue\(placeTrack\(G\.mapId\)\)/g) || []).length, 2,
+    'a fight and a loaded save both resume the place you are in');
 }
 
 done('emberkin_render');
