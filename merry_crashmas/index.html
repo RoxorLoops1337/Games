@@ -2384,6 +2384,18 @@ function signMark(goods, x, y){
       ctx.lineTo(x - 5, y + 2);
       ctx.closePath();
       break;
+    case 'baubles':                                   // a bauble on its cap
+      ctx.moveTo(x + 6, y + 1);
+      ctx.arc(x, y + 1, 6, 0, 6.283);
+      ctx.rect(x - 2, y - 8, 4, 4);
+      break;
+    case 'wool':                                      // a bobble hat
+      ctx.moveTo(x + 7, y + 1);
+      ctx.arc(x, y + 1, 7, Math.PI, 0);
+      ctx.rect(x - 9, y + 1, 18, 4);
+      ctx.moveTo(x + 3, y - 8);
+      ctx.arc(x, y - 8, 3, 0, 6.283);
+      break;
     default:                                          // a heart
       ctx.moveTo(x - 3, y - 4);
       ctx.arc(x - 3.5, y - 2, 4, 0, 6.283);
@@ -3932,6 +3944,12 @@ const TRADES = [
   { id:'nuts',   goods:'brazier', stripe:'#95602c', smoke:0.8, sign:'#5c4126' },
   { id:'candle', goods:'flames',  stripe:'#c9a24a', smoke:0,   sign:'#e8a91f' },
   { id:'bake',   goods:'hearts',  stripe:null,      smoke:0,   sign:'#a8452c' },
+  /* Two more, so a row of stalls stops repeating itself every sixth one. Both
+     are cosmetic all the way down — a trade decides an awning stripe, what is
+     laid out on the counter, a hanging pictogram and what spills when the
+     stall comes down, and nothing else. A hut is worth what a hut is worth. */
+  { id:'baubles',goods:'baubles', stripe:'#7a4a9c', smoke:0,   sign:'#5c3a7a' },
+  { id:'wool',   goods:'wool',    stripe:'#2f8f9c', smoke:0,   sign:'#26707a' },
 ];
 function tradeOf(o){
   return TRADES[Math.floor((o.seed || 0) * TRADES.length) % TRADES.length];
@@ -3989,6 +4007,33 @@ function drawGoods(o, w, h, gy, wear){
       }
       break;
     }
+    case 'baubles': {                              // glass balls on a rail
+      ctx.strokeStyle = '#8d7a5c'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.34, gy - 9); ctx.lineTo(w * 0.34, gy - 9); ctx.stroke();
+      const cols = ['#e0483c', '#3f86c4', '#41a066', '#c9a24a'];
+      for (let i = 0; i < n; i++){
+        ctx.fillStyle = cols[i % 4];
+        circle(gx(i), gy + 1, 8); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.45)';   // the glint that says glass
+        circle(gx(i) - 3, gy - 2, 3); ctx.fill();
+        ctx.fillStyle = '#c9a24a';                 // the cap it hangs from
+        ctx.fillRect(gx(i) - 2.5, gy - 11, 5, 4);
+      }
+      break;
+    }
+    case 'wool': {                                 // folded hats and scarves
+      const cols = ['#e0483c', '#3f86c4', '#41a066', '#f6f2ea'];
+      for (let i = 0; i < n; i++){
+        ctx.fillStyle = cols[i % 4];
+        roundRect(gx(i) - 9, gy - 7, 18, 8, 3); ctx.fill();
+        ctx.fillStyle = cols[(i + 2) % 4];
+        roundRect(gx(i) - 8, gy + 1, 16, 7, 3); ctx.fill();
+        ctx.fillStyle = 'rgba(12,20,38,.16)';      // the shade between folds
+        ctx.fillRect(gx(i) - 9, gy - 1, 18, 2);
+      }
+      break;
+    }
     default: {                                     // lebkuchen hearts on ribbons
       for (let i = 0; i < n; i++){
         ctx.fillStyle = '#a8452c';
@@ -4018,6 +4063,8 @@ const WRECK_SPILL = {
   brazier: { cols: ['#c98f52', '#3a2c22'], r: [4, 3], round: true },
   flames:  { cols: ['#f6f2ea', '#c9a24a'], r: [4, 3], round: false },
   hearts:  { cols: ['#a8452c', '#f3ece0'], r: [5, 3], round: true },
+  baubles: { cols: ['#e0483c', '#3f86c4', '#41a066', '#c9a24a'], r: [3], round: false },
+  wool:    { cols: ['#e0483c', '#3f86c4', '#41a066', '#f6f2ea'], r: [5], round: false },
 };
 const WRECK_ITEMS = 9;
 function drawSpilledStock(o, w){

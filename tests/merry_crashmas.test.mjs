@@ -4463,6 +4463,80 @@ test('a plan costs a handful of fills however big the market is', () => {
   assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
 });
 
+/* ---------------------------------------------------------- trades --- */
+
+/* A trade is four things: an awning stripe, what is laid out on the counter, a
+   pictogram on the hanging sign, and what spills when the stall comes down.
+   Adding one and forgetting the fourth is the obvious way to get this wrong,
+   and it would not show up until you happened to wreck that stall. */
+test('every trade is fully dressed', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  assert(api.TRADES.length >= 8, 'the market should sell more than six things');
+
+  const counters = new Set(), stripes = new Set(), goods = new Set();
+  for (let i = 0; i < api.TRADES.length; i++){
+    const o = { x: 0, y: 0, w: 158, h: 112, seed: (i + 0.5) / api.TRADES.length };
+    const t = api.tradeOf(o);
+    assert(t === api.TRADES[i], 'seed should land on trade ' + i + ', got ' + t.id);
+    assert(!goods.has(t.goods), 'two trades sell the same goods: ' + t.goods);
+    goods.add(t.goods);
+
+    // something on the counter, and not the same something as anyone else
+    api._resetCounts();
+    api.drawGoods(o, 158, 112, 0, 0);
+    const drew = (api._counts.fill || 0) + (api._counts.fillRect || 0) +
+      (api._counts.stroke || 0);
+    assert(drew > 0, t.id + ' lays nothing out on its counter');
+    const sig = (api._counts._styles || []).join('|');
+    assert(!counters.has(sig), t.id + ' has the same counter as another trade');
+    counters.add(sig);
+
+    // a pictogram for the hanging sign
+    api._resetCounts();
+    api.signMark(t.goods, 0, 0);
+    const marks = (api._counts.arc || 0) + (api._counts.rect || 0) +
+      (api._counts.lineTo || 0);
+    assert(marks > 0, t.id + ' has no pictogram for its sign');
+
+    // and stock to throw across the snow when it goes down
+    assert(api.WRECK_SPILL[t.goods],
+      t.id + ' leaves nothing of itself when wrecked');
+    assert(api.WRECK_SPILL[t.goods].cols.length > 0, t.id + ' spills no colours');
+
+    // no two trades fly the same stripe (a null one takes the theme's)
+    if (t.stripe){
+      assert(!stripes.has(t.stripe), 'two trades fly the same stripe: ' + t.stripe);
+      stripes.add(t.stripe);
+    }
+  }
+  console.log('    (trades: ' + api.TRADES.map(t => t.id).join(', ') + ')');
+});
+
+test('adding trades did not change what a market is made of', () => {
+  /* tradeOf is a pure function of a prop's existing seed, so a trade cannot
+     reach the simulation — but that is exactly the claim five earlier cosmetic
+     systems in this game got wrong, so it is worth holding down. */
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  const draw5 = (fn) => {
+    api.reseed(9876);
+    if (fn) fn();
+    return [api.rnd(), api.rnd(), api.rnd(), api.rnd(), api.rnd()];
+  };
+  api.startLevel(20); api.beginLevel();
+  const huts = api.props.filter(o => o.kind === 'hut');
+  assert(huts.length > 20, 'the last market should be full of stalls');
+  const clean = draw5(null);
+  const after = draw5(() => { for (const o of huts) api.tradeOf(o); });
+  assert(JSON.stringify(clean) === JSON.stringify(after),
+    'picking a trade moved the simulation stream');
+  // and every stall in the market gets one of the trades, none falls through
+  for (const o of huts){
+    assert(api.TRADES.indexOf(api.tradeOf(o)) >= 0, 'a stall with no trade at ' + o.x);
+  }
+});
+
 /* ---------------------------------------------------------- nitro --- */
 
 test('the nitro halo is a baked light, not a flat plate', () => {
