@@ -60,7 +60,7 @@ const EXPOSE = `__out.api = {
   RAIN, drawRain, drawAmbient, hash,
   faceMood, drawFace, drawHair, FACE_INK, FACE_WHITE, HEAD_LIFT, poseGeom, A,
   BUILDS, buildOf, drawBlade, drawHeldWeapon, W_LEN, W_COL, W_REST,
-  gauge, drawPortrait, shade,
+  gauge, drawPortrait, shade, drawForeground, drawVignette, drawSceneBg,
   bloomPass, BLOOM_AMT, BLOOM_DIV, getBloom: () => bloomC, drawFx, updateFx, cycleLen, WALK_FPS, RUN_FPS,
   LF, LF_W, LF_N, lfReset, lfAdd, lfHex, lightAt, FX_LIGHT,
   stickVector, stickRecentre, STICK_DEAD, STICK_MAX, fullscreenSupported, isFullscreen, toggleFullscreen,
@@ -2460,6 +2460,99 @@ test('every stage lights up, and stays inside the frame budget', () => {
     const head = body.slice(0, body.indexOf('\n}\n'));
     assert(/\bglow\(/.test(head), fn + ' has no lights in it');
   }
+});
+
+/* -------------------------------------------------------------- cutscene */
+test('the ambient and foreground can be told which scene they are painting', () => {
+  const api = boot();
+  play(api, { stage: 0 });                        // a street, which rains
+  api.draw();
+  // fill counts are no use here - foundry smoke costs more than rain does.
+  // Rain has a signature instead: the colour a drop takes with no light on it.
+  const rained = (fn) => {
+    api._resetCounts();
+    fn();
+    return api._styles.some(c => c === '#a8c4e8' || c === '#cfe4ff' || /rgba\(168,\s*196,\s*232/.test(c));
+  };
+  assert(rained(() => api.drawAmbient()), 'the street stage rains and its ambient should say so');
+  assert(!rained(() => api.drawAmbient('street')), 'a scene backdrop with no rain given should stay dry');
+  assert(rained(() => api.drawAmbient('street', 1)), 'and told to rain, it should');
+  assert(!rained(() => api.drawAmbient('foundry')), 'it does not rain indoors');
+  const cost = (fn) => { api._resetCounts(); fn(); return api._counts.fillRect || 0; };
+  assert(cost(() => api.drawForeground('street')) !== cost(() => api.drawForeground('foundry')),
+    'the foreground override does nothing');
+});
+
+test('a story beat gets the same weather its stage does', () => {
+  const api = boot();
+  const wetBg = new Set(api.STAGES.filter(st => st.rain).map(st => st.bg));
+  for (const [name, sc] of Object.entries(api.SCENES)){
+    if (sc.rain != null) assert(sc.rain > 0 && sc.rain <= 1, name + ' has a nonsense rain power');
+    if (wetBg.has(sc.bg)) assert(sc.rain, `${name} stands on a ${sc.bg} that rains and stays dry`);
+  }
+  assert(api.SCENES.intro.rain, 'the opening beat is the first thing anybody sees');
+});
+
+test('a walking actor in a cutscene walks', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.startCut('intro', () => {});
+  const beat = api.SCENES.intro.beats[0];
+  const walker = Object.keys(api.cut.actors).find(k => api.cut.actors[k].anim === 'walk');
+  assert(walker, 'the opening beat has nobody walking in it');
+  const seen = new Set();
+  for (let i = 0; i < Math.round(beat.d * 60); i++){
+    api.cutTick(1 / 60);
+    if (api.cut.actors[walker] && api.cut.actors[walker].anim === 'walk') seen.add(api.cut.actors[walker].frame);
+  }
+  // this was `% 4` at 8fps against an eight-frame walk: half the cycle, half speed
+  assert(seen.size === api.A.walk.length, `a cutscene walk used ${seen.size} of ${api.A.walk.length} frames`);
+});
+
+test('the shot breathes, and the far side of the street is further away', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.startCut('intro', () => {});
+  const base = api.SCENES.intro.cam || 0;
+  const seen = [];
+  for (let i = 0; i < 60; i++){ api.cutTick(1 / 60); seen.push(api.cam.x); }
+  const lo = Math.min(...seen), hi = Math.max(...seen);
+  assert(hi - lo > 1, 'the camera sat still for a whole second: ' + lo + '..' + hi);
+  assert(Math.abs((lo + hi) / 2 - base) < 3, 'and it should drift about the scene mark, not away from it');
+
+  const acts = Object.values(api.cut.actors).filter(a => a.inBeat);
+  assert(acts.length >= 2, 'not enough actors to stage');
+  const near = acts.reduce((m, a) => (a.y > m.y ? a : m));
+  const far = acts.reduce((m, a) => (a.y < m.y ? a : m));
+  assert(near.y > far.y, 'they are all standing on one line');
+  assert(near.sc > far.sc, `the one at the front should be the bigger: ${near.sc.toFixed(2)} vs ${far.sc.toFixed(2)}`);
+});
+
+test('a story beat is framed: letterbox, caption plate, vignette', () => {
+  const api = boot();
+  play(api, { stage: 0 });
+  api.startCut('intro', () => {});
+  api.cutTick(0.2);
+  api.drawCut();                                  // warm the baked plates first: a cold
+  api._resetCounts();                             // sky is 45k rects and buries the letterbox
+  api.drawCut();
+  const cols = new Set(api._styles);
+  assert(cols.has('#4a3d52'), 'the letterbox has no lit lip');
+  assert(cols.has('#ffd23d'), 'the caption has no bar down its speaking side');
+  assert(cols.has('rgba(14,10,20,0.9)'), 'the caption is not sitting on anything');
+  const bars = api._rects.filter(r => r[2] >= api.VW && r[3] >= 20);
+  assert(bars.length >= 2, 'both letterbox bars should be there, saw ' + bars.length);
+  /* And the beat has to ask for its weather, not merely declare it.  The
+     colour signature that works on drawAmbient in isolation is no use here:
+     on a lit street every drop takes a colour off the light field, so the
+     unlit fallback never appears.  The order in drawCut is the invariant. */
+  const body = RAW.slice(RAW.indexOf('function drawCut('));
+  const head = body.slice(0, body.indexOf('\n}\n'));
+  assert(/drawAmbient\(sc\.bg, sc\.rain\)/.test(head), 'the beat never asks for its own weather');
+  assert(/drawForeground\(sc\.bg\)/.test(head), 'nor its own foreground');
+  assert(/drawVignette\(\)/.test(head), 'and there is no vignette on it');
+  assert(head.indexOf('drawAmbient') < head.indexOf('letterbox'), 'the weather has to go under the letterbox');
+  assert((api._counts.fillRect || 0) > 400, 'the beat barely painted: ' + api._counts.fillRect);
 });
 
 /* ------------------------------------------------------------------- hud */
