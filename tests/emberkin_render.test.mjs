@@ -6,7 +6,7 @@
 // plays the opening beat-by-beat through the same input the player uses.
 //
 // Run: node tests/emberkin_render.test.mjs
-import { loadGame, mkCtx, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, withDeck, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
 
 const EK = loadGame();
 const calls = [];
@@ -1434,6 +1434,9 @@ section('every cue that is fired is a cue that exists');
     // footsteps out of STEP_CUE. Naming them here is the point: the check made
     // me declare the new two rather than quietly widening to let them through.
     'duel', 'rival',
+    // `faint` moved from a literal to a ternary when the foe's knockout got a
+    // cue of its own, so it belongs here now too.
+    'faint', 'downed',
     'step_grass', 'step_tall', 'step_path', 'step_sand', 'step_wood']);
   for (const k of defined) {
     ok(fired.has(k) || indirect.has(k), `the cue "${k}" is reachable`);
@@ -1476,6 +1479,41 @@ section('a fight sounds like the fight it is');
   // startBattle still picks with the old two-way ternary.
   ok(/playCue\(battleTrack\(opt\)\)/.test(SRC), 'and startBattle asks it rather than choosing for itself');
   ok(!/playCue\(opt\.legendary \? 'shrine' : 'battle'\)/.test(SRC), 'the old two-way choice is gone');
+}
+
+// A knockout on your side and one on theirs are opposite events and made the
+// same sound. The log has carried the side all along and the prose already says
+// it; only the cue was deaf. Driven through a real fight so the sides come out
+// of the game rather than out of this test.
+section('losing a kin does not sound like winning');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null; g.G.mode = 'world';
+  g.G.party = [g.mkMon('pyrelynx', 30)];
+  // Driving a real knockout here was tried and thrown away: the raw calls
+  // RETURN a log and the state only advances when submitLog plays it back, so a
+  // loop of playCard alone never actually finishes the foe — it failed three
+  // runs in five, and a test that flaky is worse than none.
+  // What the fight was there to prove is that the game emits both sides at all,
+  // and the source says that outright: three knockouts are recorded, and they
+  // are not all the same side.
+  const sides = (SRC.match(/snap\(log, [^;]*?'faint', '(mine|foe)'\)/g) || [])
+    .map((m) => (/'mine'\)/.test(m) ? 'mine' : 'foe'));
+  ok(sides.length >= 3, `the game records knockouts (${sides.length})`);
+  ok(sides.includes('mine'), 'at least one of them is yours');
+  ok(sides.includes('foe'), 'and at least one is theirs');
+  for (const side of new Set(sides)) {
+    eq(g.faintCue({ side }), side === 'mine' ? 'faint' : 'downed',
+      `a ${side} knockout plays its own cue`);
+  }
+
+  // A level-30 Pyrelynx against a level-3 Zaplet only knocks out one way, so
+  // the other side is asserted directly rather than pretended to be covered.
+  eq(g.faintCue({ side: 'mine' }), 'faint', 'yours is the falling one');
+  eq(g.faintCue({ side: 'foe' }), 'downed', 'theirs is not');
+  eq(g.faintCue(undefined), 'downed', 'and a missing side never claims to be yours');
 }
 
 done('emberkin_render');

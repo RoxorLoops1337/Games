@@ -5955,6 +5955,17 @@ function damageOf(atkMon, defMon, move, opts = {}) {
 const effWord = (e) => e === 0 ? 'It does nothing at all…' : e >= 2 ? "It's brutally effective!" : e > 1 ? "It's effective!" : e < 1 ? 'It barely lands…' : '';
 
 // ---- log helpers -------------------------------------------------------
+/**
+ * Which cue a knockout plays. Your kin going down and the foe's going down are
+ * opposite events and made exactly the same sound. The log has carried the side
+ * all along, and the WORDS already say it — "Wild Zaplet is down!" against
+ * "Cindercub has fainted." Only the cue was deaf to it.
+ *
+ * A function rather than a ternary at the call site so it can be driven: the
+ * cue itself cannot be heard from a test, but the choice can be.
+ */
+const faintCue = (e) => (e && e.side === 'mine' ? 'faint' : 'downed');
+
 function snap(log, t, fx, side, extra) {
   const b = B();
   log.push({ t, fx: fx || '', side: side || '', hpM: b.mine.hp, hpF: b.foe.hp,
@@ -8573,7 +8584,7 @@ function playbackStep() {
   const e = b.log[b.li];
   if (!e) return;
   entryFx(b, e);
-  if (e.fx === 'faint') playCue('faint');
+  if (e.fx === 'faint') playCue(faintCue(e));
   if (e.fx === 'level' || e.fx === 'learn') playCue('level');
   if (e.fx === 'caught') playCue('catch');
   if (e.fx === 'throw') {
@@ -9845,7 +9856,14 @@ function playCue(kind) {
   // rather than two taps. Written, not heard: sound cannot be photographed and
   // nobody in this loop has ever listened to this game.
   else if (kind === 'crit') { blip(96, .16, 'sawtooth', .085); blip(58, .22, 'square', .05, t + .02); }
+  // Yours: a fall. Two notes an octave apart going down, the second longer, so
+  // it sags rather than lands.
   else if (kind === 'faint') { blip(220, .3, 'square', .05); blip(110, .45, 'square', .05, t + .12); }
+  // Theirs: the same shape refused. It goes UP and stops short — a snap rather
+  // than a sag, and quieter than a level-up so beating a Zaplet does not sound
+  // like an achievement. Written, not heard: sound cannot be photographed and
+  // nobody in this loop has listened to this game.
+  else if (kind === 'downed') { blip(196, .1, 'square', .045); blip(294, .14, 'square', .04, t + .07); }
   else if (kind === 'level') { [0, 4, 7, 12].forEach((s, i) => blip(note(12 + s), .16, 'square', .05, t + i * .07)); }
   else if (kind === 'catch') { [0, 5, 9, 14].forEach((s, i) => blip(note(12 + s), .2, 'triangle', .06, t + i * .1)); }
   // A chest borrowed the catch cue, which made the biggest purchase in the
@@ -10945,7 +10963,7 @@ if (typeof window !== 'undefined') {
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
-    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, THEMES,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, THEMES,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
