@@ -1211,6 +1211,42 @@ edit this block to name the next one.
       sits at 109% and keeping one worst-per-kind would have parked it in front
       of anything worse behind it.
 
+- [x] The crowd's arms. Went looking at the thing the brief names first and
+      nobody had put under a lens — a shopper's arms — and found two defects in
+      the same fifteen lines, both of the family this project keeps meeting:
+      **one thing, drawn twice, drifted apart.**
+  - **The pose popped.** The arms were a hard branch on `panic > 0.25`, and each
+      side of the branch was written out as a pair of *endpoints* — so the limb
+      was 0.53r long walking and 0.98r long panicking and swapped between them
+      in a single frame. Panic is not a flag: it ramps in at 5/s and bleeds off
+      at 0.35/s, so **a crowd calming down after a near miss snapped its arms
+      back mid-stride**, every shopper at their own moment. It is one arm of one
+      length now, swung about the shoulder, with `raise` crossfading the angle
+      *the short way round* — out through the side, not forward across the
+      chest, which is what a naive lerp of 2.13 → −2.34 rad does.
+  - **Every pram in the market was pushed by somebody with four arms.** The
+      handle bar draws its own two, up to the hands already reaching for it, and
+      the generic swinging pair went straight over the top. Gated on the same
+      `pramT` the pram is drawn from, so the arms come back the instant it is
+      knocked out of their hands.
+  - `handAt(side)` is now the only place a hand is, and the shopping bag hangs
+      off it. It used to carry its own pair of hardcoded positions — and the
+      walking one was already **0.16r adrift** of the hand it was supposed to be
+      in, papered over by a comment explaining the offset.
+  - Three new assertions. The ramp is walked in steps of 0.005 of panic: the arm
+      is one length end to end (0.78r, spread < 0.005r), the hand never moves
+      more than 0.08r between neighbouring samples, and it always clears the
+      coat drawn over the top of it (worst 1.34 coat radii out). Four
+      revert-variants fire, each naming the actual defect: the hard step →
+      *hand jumps 1.27r*, a panic-scaled arm → *0.530r to 0.980r*, the gate
+      removed → *2 free arms as well as the two on the bar*, the bag back on its
+      own number → *carried 0.41r from the nearest hand*.
+  - The old bag test had **re-derived the hand from the same two hardcoded
+      poses**, so it agreed with the drawing by copying it and could not have
+      caught the 0.16r drift. It reads the arm that was actually drawn now — and
+      that is the general lesson: an assertion that recomputes what the code
+      computes is measuring itself.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

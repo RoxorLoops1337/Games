@@ -5866,17 +5866,40 @@ function drawPerson(p){
     ctx.stroke();
   }
 
-  // arms: swinging when walking, straight up when running for their life
-  ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.34;
-  ctx.beginPath();
-  if (p.panic > 0.25){
-    ctx.moveTo(-p.r * 0.62, 0); ctx.lineTo(-p.r * 1.25, -p.r * (0.75 + wob));
-    ctx.moveTo(p.r * 0.62, 0); ctx.lineTo(p.r * 1.25, -p.r * (0.75 - wob));
-  } else {
-    ctx.moveTo(-p.r * 0.62, -p.r * 0.1); ctx.lineTo(-p.r * 0.9, p.r * (0.35 + stride * 0.4));
-    ctx.moveTo(p.r * 0.62, -p.r * 0.1); ctx.lineTo(p.r * 0.9, p.r * (0.35 - stride * 0.4));
+  /* Arms: one limb of one length, swung about the shoulder. The pose used to
+     be a hard branch on `panic > 0.25` — a walking swing one frame and a
+     straight-up panic the next — and the two were written out as endpoints, so
+     the arm also grew from 0.53r to 0.98r across the switch. Panic is a
+     continuous value (it ramps in at 5/s and bleeds off at 0.35/s), so a crowd
+     calming down after a near miss snapped its arms back mid-stride, each at
+     its own moment. `raise` crossfades the shoulder angle the short way round
+     instead — out through the side, not forward across the chest.
+
+     `handAt` is now the only place a hand is, which is what the shopping bag
+     hangs from: two hardcoded hand positions were two things to keep in
+     agreement, and the walking one was already 0.16r adrift. */
+  const SHY = -p.r * 0.1, ARM = p.r * 0.78;
+  const rEase = (t => t * t * (3 - 2 * t))(clamp((p.panic - 0.08) / 0.34, 0, 1));
+  const handAt = (side) => {
+    const wa = Math.atan2(0.45 - side * stride * 0.4, side * 0.28);
+    const pa = Math.atan2(-0.65 + side * wob, side * 0.63);
+    const a = wa + ((pa - wa + Math.PI * 3) % (Math.PI * 2) - Math.PI) * rEase;
+    return { x: side * p.r * 0.62 + Math.cos(a) * ARM, y: SHY + Math.sin(a) * ARM };
+  };
+  /* Both hands are on the bar, so there are no free arms to swing. The bar
+     draws its own two above; these were drawn on top of them, and every pram
+     in the market was being pushed by somebody with four arms. Gated on the
+     same pramT the pram itself is drawn from, so the arms come back the
+     instant it is knocked out of their hands. */
+  if (!(p.pram && p.pramT > 0)){
+    ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.34;
+    ctx.beginPath();
+    for (const side of [-1, 1]){
+      const h = handAt(side);
+      ctx.moveTo(side * p.r * 0.62, SHY); ctx.lineTo(h.x, h.y);
+    }
+    ctx.stroke();
   }
-  ctx.stroke();
 
   /* The shopping they are about to drop. A panicking shopper threw a bag out
      of hands that had never been holding one — the drop has been in the game
@@ -5887,13 +5910,12 @@ function drawPerson(p){
   if (carries){
     // an elder's stick is always in the right hand, so the bag takes the left
     const side = p.kind === 'elder' ? -1 : p.coat % 2 ? 1 : -1;
-    /* A raised arm reaches past the coat on its own; a swinging one ends at
-       0.9r, which is inside the 0.86r shoulder ellipse drawn over the top of
-       all this — the first bag was half-buried in the torso. So the walking
-       bag hangs outboard and low, from the hand rather than in it. */
-    const hx = p.panic > 0.25 ? side * p.r * 1.25 : side * p.r * 1.06;
-    const hy = p.panic > 0.25 ? -p.r * (0.75 + wob * side)
-                              : p.r * (0.5 + stride * 0.4 * side);
+    /* It hangs off the hand, wherever the arm has swung it to. It used to be
+       its own pair of positions, nudged outboard because a swinging hand at
+       0.9r sat inside the 0.86r shoulder ellipse drawn over the top of all
+       this and buried the bag in the torso. The arm reaches past the coat at
+       either end of its swing now, so the bag can just be where the hand is. */
+    const hand = handAt(side), hx = hand.x, hy = hand.y;
     const bw = p.r * 0.34, bh = p.r * 0.4, by = hy + bh * 0.08;
     ctx.strokeStyle = 'rgba(30,26,22,.7)'; ctx.lineWidth = Math.max(1, p.r * 0.07);
     /* The body is stroked as well as filled: two of the four bag colours are
