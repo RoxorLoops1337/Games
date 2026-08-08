@@ -1146,6 +1146,41 @@ const SCENES = {
       }
     },
   },
+  // Dorn guards a stretch of Route One. He loses, stays standing on it, and
+  // watches you walk past it for the rest of the game — and used to say "Good
+  // match. Go on." every single time. Two stills, same tile, same frame.
+  // (Written out twice rather than shared: scene bodies are serialised into the
+  // page, so there is no outer scope for a helper to live in.)
+  dornheld: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.flags.t_dorn = 1;
+      const dorn = EK.MAPS.route_one.npcs.find((n) => n.id === 't_dorn');
+      EK.enterMap('route_one', dorn.x, dorn.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(dorn);
+    },
+  },
+  dornpast: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.flags.t_dorn = 1;
+      EK.G.been.emberwood = 1; EK.G.been.crown_hollow = 1;
+      const dorn = EK.MAPS.route_one.npcs.find((n) => n.id === 't_dorn');
+      EK.enterMap('route_one', dorn.x, dorn.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(dorn);
+      if (!/something else/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('Dorn did not notice how far you got');
+      }
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {

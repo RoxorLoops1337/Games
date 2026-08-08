@@ -377,6 +377,51 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+54. **Nine voices, one shared sentence** (pass 143). The same method as 142,
+    pointed at the dialogue 142 did not touch: dump the nine trainers' intro,
+    lose, win and `after` in one go and read them together.
+
+    All nine have a voice. Dorn guards a stretch — *"Nothing gets past me on
+    this stretch"* / *"Something got past me."* Ivo lives in the trees and the
+    trees are disappointed. Mio got everything she has out of that water. Pell's
+    whole idea is that the grass teaches you things. Then six of the nine said
+    one shared sentence for the rest of the game:
+
+        Good match. Go on.
+
+    Only the three Wicks had ever been given a parting line, and only because
+    the rival is the one the story keeps returning to. The other six lost once
+    and stopped being people.
+
+    Six, except the sixth is right. Warden Hale had a comment on him explaining
+    that he is the only npc who LEAVES the map when beaten, so a parting line
+    could never be read by anybody — and a net already held every blocker to it.
+    The codebase knew, and I nearly wrote him one anyway. So the set is five,
+    and the invariant that replaces the exception asks `npcActive` rather than
+    naming him: a trainer still standing there once beaten must have something
+    to say, and one who is gone must not.
+
+    All five read state that already existed except one. Pell reads the dex,
+    Ivo and Coll read each other's flags — the two Emberwood rangers, who have
+    always both been in the save and were never allowed to mention it — and Mio
+    reads your party for anything of the Tide type. Only Dorn needed `G.been`,
+    added the pass before for Isa, which is what makes his running joke work:
+    beaten, still on his stretch, watching you walk past it to the wood and then
+    to the top of the mountain.
+
+    Two drives were wrong before the game was. `npcActive` gates on `requires`
+    as well as `block`, so setting one trainer's flag at a time silently skipped
+    the two later Wicks — a loop testing six of nine and saying so only in a
+    number I had guessed wrong. And a regex meant to strip the five new `after`
+    blocks matched three of them, because two end on a different line than I
+    assumed; the net fired correctly on the three, which is exactly how a
+    half-applied patch disguises itself as a passing check. Delete the property
+    off the object instead of pattern-matching the source when you can.
+
+    **When one member of a set is legitimately exempt, find the property that
+    makes it exempt and ask for THAT. "All except Hale" is a note about today;
+    "all that are still on the map" is the rule.**
+
 53. **Four signposts that kept pointing after you had arrived** (pass 142).
     Seventeen people live in this valley. Nine are trainers and get a second
     line once beaten; Rowan has a script; Sable, Bell and Vane have jobs. That

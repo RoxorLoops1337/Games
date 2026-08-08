@@ -4391,12 +4391,28 @@ const MAPS = {
         lines: ['You have the look. Go on then — show me.'],
         trainer: { team: [['sproutle', 6], ['zaplet', 7]], prize: 240,
           plan: ['sharpen', 'swing', 'swing'],
-          lose: ['Ha! Keep at it.'], win: ['Told you the grass teaches you things.'] } },
+          lose: ['Ha! Keep at it.'], win: ['Told you the grass teaches you things.'] },
+        after: () => (dexCount(2) >= DEX_ORDER.length
+          ? [`All ${spell(DEX_ORDER.length)} of them. The grass has nothing left to teach you.`,
+            'Come and stand in it anyway. It is good grass.']
+          : dexCount(2) >= 10
+            ? [`${Spell(dexCount(2))} of them written down, I hear.`,
+              'The grass taught you that. I am taking some of the credit.']
+            : ['Still at it. Good.',
+              'The grass does not care how many you have. That is what I like about it.']) },
       { x: 6, y: 15, dir: 'right', sprite: 'npc_rival', name: 'Hiker Dorn', id: 't_dorn',
         lines: ['Nothing gets past me on this stretch.'],
         trainer: { team: [['pebblet', 8], ['mothrix', 8]], prize: 300,
           plan: ['brace', 'swing', 'swing'],
-          lose: ['Something got past me.'], win: ['Ha! Stretch defended.'] } },
+          lose: ['Something got past me.'], win: ['Ha! Stretch defended.'] },
+        after: () => (G.been.crown_hollow
+          ? ['This stretch, the wood, and the top of the mountain. Past me every time.',
+            'I am going to have to start calling myself something else.']
+          : G.been.emberwood
+            ? ['You went north, then. Past me.',
+              'I have decided the stretch is more of a suggestion.']
+            : ['I am still on this stretch. Do not read anything into it.',
+              'One thing got past me. One.']) },
       { x: 18, y: 11, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Isa',
         // She points north. She was still pointing north at somebody walking
         // back DOWN from the top of the mountain — G.been is what she reads.
@@ -4448,7 +4464,11 @@ const MAPS = {
         lines: ['I live here now. Ask the trees.'],
         trainer: { team: [['thornip', 14], ['lanterneel', 13]], prize: 620,
           plan: ['sharpen', 'swing'],
-          lose: ['The trees are disappointed.'], win: ['Told you. Ask them.'] } },
+          lose: ['The trees are disappointed.'], win: ['Told you. Ask them.'] },
+        after: () => (G.flags.t_coll
+          ? ['You got Coll as well. He told you about the thorns, I expect.',
+            'The trees have started taking your side. It is very annoying.']
+          : ['The trees have got over it.', 'Mostly.']) },
       { x: 12, y: 12, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick2', requires: 't_wick1',
         lines: ['Kept up, then.', 'Mine has changed since the study. Yours had better have.'],
         dynamic: 'rival2',
@@ -4461,7 +4481,11 @@ const MAPS = {
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
           plan: ['brace', 'swing', 'sharpen', 'swing'],
-          lose: ['Fair. Well fought.'], win: ['Thorns win again.'] } },
+          lose: ['Fair. Well fought.'], win: ['Thorns win again.'] },
+        after: () => (G.flags.t_ivo
+          ? ['The kid says the trees are on your side now. He says it a lot.',
+            'Still thorns in here. Just fewer of them in your way.']
+          : ['Still thorny.', 'Just less of an obstacle than I was on Tuesday.']) },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_ranger', name: 'Warden Hale', id: 't_hale', block: true,
         lines: ['Crown Hollow is up this path. I do not open it for tourists.', 'Show me you can hold a kin together and I will step aside.'],
         trainer: { team: [['gargolem', 17], ['voltyx', 18], ['nocthorn', 19]], prize: 1800,
@@ -4503,7 +4527,12 @@ const MAPS = {
         lines: ['Everything I have came out of that water.'],
         trainer: { team: [['dewdrip', 15], ['brookite', 16]], prize: 760,
           plan: ['sharpen', 'swing', 'aim', 'swing'],
-          lose: ['Take it. The water gives more.'], win: ['The water keeps it, then.'] } },
+          lose: ['Take it. The water gives more.'], win: ['The water keeps it, then.'] },
+        after: () => (G.party.some((m) => m.types.includes('Tide'))
+          ? ['That one of yours came out of water like this. I can tell.',
+            'They are all cousins in the end. Do not tell it I said so.']
+          : ['The water gave me another one the same week. It always does.',
+            'You should get one out of it. Everybody should have something from a lake.']) },
       { x: 6, y: 11, dir: 'up', sprite: 'npc_ranger', name: 'Sheller Ann',
         // A warning about a creature, delivered to somebody carrying one. The
         // dex has known which of the three she is talking to all along.

@@ -593,4 +593,55 @@ section('where you have been survives the walk back');
   eq(Object.keys(b.G.been).join(','), 'lab', 'a new run has been exactly where it is standing');
 }
 
+// Having a parting line is not the same as the line being worth reading. Each
+// of the five reads a different thing the game already knew, and each one is
+// driven both ways here — a static `after` would satisfy every check in the
+// core suite and none of these.
+section('the people you beat notice what you did next');
+{
+  const g = loadGame({});
+  const find = (id) => {
+    for (const m of Object.values(g.MAPS)) for (const n of (m.npcs || [])) if (n.id === id) return n;
+    return null;
+  };
+  const after = (id, setup) => {
+    g.newGame(); g.G.dialogue = null;
+    g.takeStarter('cindercub');
+    g.G.flags[id] = 1;
+    if (setup) setup(g);
+    const n = find(id);
+    return (typeof n.after === 'function' ? n.after() : n.after).join(' ');
+  };
+  const differs = (id, label, a, b) => {
+    ok(after(id, a) !== after(id, b), `${find(id).name} ${label}`);
+  };
+
+  // Pell's whole idea is that the grass teaches you things.
+  ok(/does not care how many/.test(after('t_pell')), 'Pell shrugs at a fresh dex');
+  ok(/taking some of the credit/.test(after('t_pell', (g) => g.DEX_ORDER.slice(0, 12).forEach((i) => g.catchMon(i)))),
+    'and claims credit once the book fills');
+  ok(/nothing left to teach/.test(after('t_pell', (g) => g.DEX_ORDER.forEach((i) => g.catchMon(i)))),
+    'and gives up teaching when it is full');
+
+  // Dorn guards a stretch that you then walk past for the rest of the game.
+  ok(/still on this stretch/.test(after('t_dorn')), 'Dorn holds the line');
+  differs('t_dorn', 'notices you went north', null, (g) => { g.G.been.emberwood = 1; });
+  ok(/calling myself something else/.test(after('t_dorn', (g) => { g.G.been.emberwood = 1; g.G.been.crown_hollow = 1; })),
+    'and gives up the bit entirely once you have been to the top');
+
+  // The two Emberwood rangers, each noticing you beat the other. The game has
+  // always known; neither of them was allowed to say so.
+  differs('t_ivo', 'notices you beat Coll too', null, (g) => { g.G.flags.t_coll = 1; });
+  differs('t_coll', 'notices you beat Ivo too', null, (g) => { g.G.flags.t_ivo = 1; });
+  ok(/Coll/.test(after('t_ivo', (g) => { g.G.flags.t_coll = 1; })), 'and says his name');
+  ok(/kid/.test(after('t_coll', (g) => { g.G.flags.t_ivo = 1; })), 'and he says the kid');
+
+  // Mio got everything she has out of that water, and should know one of her
+  // own when it is standing next to you.
+  differs('t_mio', 'recognises a kin out of the water', null,
+    (g) => g.G.party.push(g.mkMon('brookite', 18)));
+  ok(/cousins/.test(after('t_mio', (g) => g.G.party.push(g.mkMon('brookite', 18)))),
+    'and claims it as family');
+}
+
 done('emberkin_story');
