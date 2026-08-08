@@ -1389,6 +1389,55 @@ section('the party is called the same thing wherever it is counted');
   }
 }
 
+// The box is where you decide who to bring, and it was the one screen that
+// could not answer the question that decision turns on. The party screen puts a
+// stat block beside its list and the dex puts a detail pane under its grid; the
+// box had neither, so "what does this one know" meant withdrawing it, opening
+// the party screen, and putting it back.
+section('the box shows what the kin under the cursor can do');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+  g.G.party = [g.mkMon('pyrelynx', 22), g.mkMon('brookite', 24)];
+  g.G.box = [g.mkMon('gargolem', 28), g.mkMon('kindlark', 30)];
+
+  // The cursor runs party-then-box as one list, which is what makes a swap two
+  // indices — so the pane has to read off that same concatenation or it will
+  // describe the wrong creature the moment the cursor crosses into the box.
+  const all = g.G.party.concat(g.G.box);
+  eq(all.length, 4, 'party and box are one list to the cursor');
+  for (let i = 0; i < all.length; i++) {
+    const block = g.statBlock(all[i]);
+    ok(new RegExp(g.dispName(all[i])).test(block), `${i}: the pane names the kin at that index`);
+    // The thing the decision is actually about.
+    for (const slot of all[i].moves) {
+      ok(new RegExp(g.MOVES[slot.id].name).test(block), `${i}: and lists ${g.MOVES[slot.id].name}`);
+    }
+  }
+
+  // Source: the box asks for it, off the same concatenation, and only when the
+  // cursor is on something — an empty box with the cursor past the party must
+  // not throw.
+  ok(/const under = G\.party\.concat\(G\.box\)\[s\.i\];/.test(SRC),
+    'the box reads the kin under the cursor off the one list');
+  ok(/if \(under\) html \+= statBlock\(under\);/.test(SRC),
+    'and shows the same block the party screen does, guarded');
+  ok((SRC.match(/statBlock\(/g) || []).length >= 3, 'one function serves both screens');
+
+  // The chip floats over everything at a fixed corner, so a full-width panel
+  // that LEADS a screen drew straight through the only way off it. Every other
+  // screen opens with a short <h2> that sits to its left. The corner is
+  // reserved rather than the chip moved — the chip being in the same place on
+  // every screen is the point of it.
+  ok(/#screen > \.kindetail\{ margin-top:20px; \}/.test(SRC),
+    'a panel leading a screen leaves the back chip its corner');
+  // …and the party screen must NOT inherit that, because its block is nested
+  // inside .kinview rather than sitting at the top level.
+  ok(/<div class="kinview">/.test(SRC), 'the party screen keeps its block beside the list');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can
