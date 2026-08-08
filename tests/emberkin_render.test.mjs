@@ -4537,6 +4537,131 @@ section('a shelf where nothing can be taken says so');
   ]) ok(body.includes(needle), `${what} still has its own line for a list with nothing in it`);
 }
 
+// Every place a screen takes something, and what it says before you press.
+// Eight commit points, driven through their real entry points and diffed:
+//
+//   buy from the shop     row says "200sh"          -> shards 5000->4800
+//   open a gem chest      row says "60gems"         -> gems 9999->9939
+//   use a salve           row says "x2" and who     -> bag x2->x1, hp 1->31
+//   store a kin           panel says what a pick does -> party 2->1, box 0->1
+//   take a reward card    row says "none in your deck" -> deck +1
+//   swap a card out       "pick the one it replaces"  -> deck 11->10
+//   take a starter        "Rowan will not be talked round" -> irreversible
+//   switch a kin in a fight  "KIN — 2/6" and a roster -> foeEdge, settling, the turn
+//
+// Seven price themselves on the row you are about to press. The eighth took a
+// flat opening for the foe AND the settling damper on your own next swing, and
+// said neither — the log says "this will hurt" afterwards, which is not the
+// same as being told.
+section('the screen that takes something says what it costs');
+{
+  const mk = (patch) => {
+    const g = withDeck(loadGame({}, patch));
+    g.setCtx(mkCtx());
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    return g;
+  };
+  const fight = (g, lvl) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('cindercub', 16), g.mkMon('pyrelynx', 16)];
+    g.startBattle({ foe: g.mkMon('kindlark', lvl), wild: true });
+    return g.B();
+  };
+
+  // The price, and that it is the foe's level that sets it.
+  {
+    const g = mk();
+    const seen = [];
+    for (const lvl of [4, 16, 40]) {
+      const b = fight(g, lvl);
+      const c = g.switchCost(b);
+      eq(c.edge, Math.round(g.SWITCH_PUNISH * g.planScale(b.foe.lvl)), `lv${lvl}: the price is the punish scaled to the foe`);
+      eq(c.damp, g.SETTLE_MUL, `lv${lvl}: and the other half is the settling damper itself`);
+      ok(c.edge > 0, `lv${lvl}: it is a real number, not a rounding to nothing`);
+      seen.push(c.edge);
+    }
+    ok(seen[0] < seen[1] && seen[1] < seen[2], `it escalates with the foe (${seen.join(' < ')})`);
+    eq(g.switchCost(null).edge, 0, 'and out of a fight there is nothing to price');
+    eq(g.switchCost({}).edge, 0, 'nor with no foe on the field');
+  }
+
+  // The number SHOWN is the number CHARGED — measured at the instant the switch
+  // charges it. A delta read across the whole of `doAction` is the whole turn:
+  // the foe's plan can add edge of its own and its swing spends it, which read
+  // as 0, 37 and 60 against a price of 4, 19 and 31.
+  {
+    const spy = (src) => src.replace(
+      'if (b.foe.hp > 0 && !b.over) b.foeEdge += switchCost(b).edge;',
+      'if (b.foe.hp > 0 && !b.over) { const __was = b.foeEdge || 0; b.foeEdge += switchCost(b).edge; globalThis.__charged = (b.foeEdge || 0) - __was; }');
+    const g = mk(spy);
+    for (const lvl of [4, 16, 40]) {
+      const b = fight(g, lvl);
+      const shown = g.switchCost(b).edge;
+      globalThis.__charged = null;
+      g.doAction({ kind: 'switch', idx: 1 });
+      // The spy is anchored to the very line under test, so a mutation to that
+      // line kills the SPY rather than being caught by it. Say which happened.
+      ok(globalThis.__charged !== null, `lv${lvl}: the spy fired (if not, the charging line has moved, not misbehaved)`);
+      eq(globalThis.__charged, shown, `lv${lvl}: the switch charges exactly what the screen showed`);
+      eq(b.settling, 1, `lv${lvl}: and leaves the newcomer finding its feet`);
+    }
+    delete globalThis.__charged;
+  }
+
+  // A forced switch is FREE — your kin is already down and the punish is never
+  // charged — so the line belongs to the choice, not to the screen.
+  {
+    const g = mk();
+    const b = fight(g, 16);
+    const was = b.foeEdge || 0;
+    g.G.party[0].hp = 0;
+    g.openScreen('party', { force: true });
+    g.G.screen.i = 1;
+    g.screenSelect();
+    eq(b.foeEdge || 0, was, 'stepping up after a faint costs no opening');
+    eq(b.settling || 0, 0, 'and no damper either');
+  }
+
+  // One reading of the rule: the line reads what the action spends.
+  const body = SRC.match(/<script>([\s\S]*?)<\/script>/)[1];
+  ok(/const switchCost = \(b\) => \(\{/.test(body), 'the price is a value, computed in one place');
+  ok(body.includes('if (b.foe.hp > 0 && !b.over) b.foeEdge += switchCost(b).edge;'),
+    'the action spends it');
+  ok(/const c = switchCost\(b\);/.test(body), 'and the screen reads the same function');
+  // Two CALLS — the charge and the line. The definition reads `switchCost = (b)`
+  // and does not match this, and the export and the doc comment carry no paren.
+  eq((body.match(/switchCost\(/g) || []).length, 2, 'the charge and the line call it, and nothing else does');
+  ok(/Stepping out costs the turn\./.test(body), 'the line names the turn');
+  ok(/gets a \+\$\{c\.edge\} opening/.test(body), '…the opening, off the price itself');
+  ok(/swings at \$\{Math\.round\(c\.damp \* 100\)\}%/.test(body), '…and the damper, off the same');
+  // The branch it lives in: not on a forced switch, not with the foe already down.
+  ok(body.includes("} else if (G.battle && B() && B().foe && B().foe.hp > 0 && !B().over) {"),
+    'and it is drawn only when a switch would actually be charged');
+
+  // …and ABOVE the list, not under it. Both lines used to sit after the roster
+  // and the stat block, which on a phone is below the fold: photographed at
+  // 390x760 the sentence was in the DOM and off the screen, and a price nobody
+  // can see is not a price that was named.
+  {
+    const party = body.slice(body.indexOf("if (s.kind === 'party') {"));
+    const at = (needle) => party.indexOf(needle);
+    ok(at('Stepping out costs the turn') > -1 && at('class="kinview"') > -1, 'both landmarks are in the party branch');
+    ok(at('Stepping out costs the turn') < at('class="kinview"'), 'the price is built before the roster');
+    ok(at('Choose who steps up') < at('class="kinview"'), 'and so is the forced prompt, which had the same fault');
+    ok(at(`<h2>\${kinHeading()}</h2>`) < at('Stepping out costs the turn'), 'both still sit under the heading');
+  }
+
+  // The seven that already priced themselves keep doing it.
+  for (const [needle, what] of [
+    ['${it.cost}<small>sh</small>', 'the shop row prices itself in shards'],
+    ['${ch.cost}<small>gems</small>', 'the chest row prices itself in gems'],
+    ['Rowan will not be talked round', 'the starter says it is for keeps'],
+    ['pick the one it replaces', 'the swap says what comes out'],
+  ]) ok(body.includes(needle), what);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

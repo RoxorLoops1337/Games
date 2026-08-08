@@ -7137,6 +7137,27 @@ const cornerAt = (foe, mine, done) => {
 // your hand and everything the deck had stacked up; none of that was a price
 // worth thinking about next to buying the element outright.
 const SWITCH_PUNISH = 11;
+/**
+ * What choosing to step out costs you, in ONE place.
+ *
+ * Every other screen in this game names its price on the row you are about to
+ * press: the shop row says `200sh`, the chest says `60gems`, a salve says `×2`
+ * and who would drink it, the swap says which card comes out, the starter says
+ * Rowan will not be talked round. The party screen mid-fight said nothing —
+ * measured, the press moved `foe edge 0 -> 37`, `settling 0 -> 1` and the turn,
+ * and the panel above it read "KIN — 2/6" and a roster. The log tells you
+ * afterwards ("this will hurt"), which is not the same as being told.
+ *
+ * Both halves are real and both are invisible: the flat opening the foe gets,
+ * and `SETTLE_MUL` on the swing of whoever comes in — the damper pass 191 put
+ * on the card in your hand, which by then you are already committed to. The
+ * action charges this and the line reads it, so the price shown is the price
+ * paid.
+ */
+const switchCost = (b) => ({
+  edge: b && b.foe ? Math.round(SWITCH_PUNISH * planScale(b.foe.lvl)) : 0,
+  damp: SETTLE_MUL,
+});
 // And what a kin can do on the turn it arrives. Pricing the switch was not
 // enough: it cost a turn and a harder hit, and still bought the whole matchup
 // immediately, so with a party of four every fight was send-in-the-right-element
@@ -7805,7 +7826,7 @@ function doAction(action) {
     // reflex rather than a decision: send in the right element, delete the
     // thing, never lose. It is now a moment you can be caught in — the hit that
     // lands while your kin is still finding its feet comes in harder.
-    if (b.foe.hp > 0 && !b.over) b.foeEdge += Math.round(SWITCH_PUNISH * planScale(b.foe.lvl));
+    if (b.foe.hp > 0 && !b.over) b.foeEdge += switchCost(b).edge;
     b.settling = 1;
     snap(log, `Come back, ${dispName(b.mine)}!`);
     clearMods(b);
@@ -10335,7 +10356,40 @@ function renderScreen() {
     // Roster on the left, whoever is picked on the right. A row of equal cards
     // has no hierarchy: there is nothing on it saying which one you are looking
     // at, so every card has to carry every fact and none of them can be big.
-    html += `<h2>${kinHeading()}</h2><div class="kinview">`;
+    html += `<h2>${kinHeading()}</h2>`;
+    // What this screen is FOR, above the list rather than under it.
+    //
+    // Both of these lines used to sit after the roster and the stat block. On a
+    // phone that is below the fold: photographed at 390x760, the panel showed
+    // the heading, two kin and a stat block, and the sentence was in the DOM and
+    // off the screen. It is the same fault the starter screen's own comment
+    // records — "a player could make the one irreversible choice in the game
+    // without knowing a third option existed" — and a price nobody can see is
+    // not a price that was named.
+    //
+    // Who they are stepping up AGAINST. The prompt asked for a choice and hid
+    // the only thing the choice is about: the screen covers the arena, so the
+    // foe's name, level and types are behind it at the exact moment they decide
+    // everything. The marks on the moves below answer "how well"; this answers
+    // "against what", and a player who knows the chart needs only this.
+    if (s.opt.force) {
+      const b = B();
+      const foe = b && b.foe;
+      html += `<p style="color:var(--gold);font-size:13px">Choose who steps up.${foe
+        ? ` <span style="color:var(--dim)">${dispName(foe)} is out there — Lv${foe.lvl} ${foe.types.join('/')}.</span>`
+        : ''}</p>`;
+    } else if (G.battle && B() && B().foe && B().foe.hp > 0 && !B().over) {
+      // …and the price, on the one screen that took something without naming
+      // it. A forced switch above is free — your kin is already down and the
+      // punish is never charged — so the line belongs to the choice, not to
+      // the screen. `switchCost` is what `doAction` then spends.
+      const b = B();
+      const c = switchCost(b);
+      html += `<p style="color:var(--hp-warn);font-size:13px">Stepping out costs the turn.`
+        + ` <span style="color:var(--dim)">${dispName(b.foe)} gets a +${c.edge} opening,`
+        + ` and whoever comes in swings at ${Math.round(c.damp * 100)}% until they find their feet.</span></p>`;
+    }
+    html += `<div class="kinview">`;
     html += `<div class="kinlist">` + G.party.map((m, i) => {
       const f = m.hp / m.max;
       return `<div class="kinrow panel ${i === s.i ? 'sel' : ''} ${m.hp <= 0 ? 'down' : ''}" data-i="${i}">
@@ -10347,18 +10401,6 @@ function renderScreen() {
     }).join('') + '</div>';
     html += statBlock(G.party[s.i]);
     html += '</div>';
-    // Who they are stepping up AGAINST. The prompt asked for a choice and hid
-    // the only thing the choice is about: the screen covers the arena, so the
-    // foe's name, level and types are behind it at the exact moment they decide
-    // everything. The marks on the moves above answer "how well"; this answers
-    // "against what", and a player who knows the chart needs only this.
-    if (s.opt.force) {
-      const b = B();
-      const foe = b && b.foe;
-      html += `<p style="color:var(--gold);font-size:13px">Choose who steps up.${foe
-        ? ` <span style="color:var(--dim)">${dispName(foe)} is out there — Lv${foe.lvl} ${foe.types.join('/')}.</span>`
-        : ''}</p>`;
-    }
   } else if (s.kind === 'dex') {
     html += `<h2>Dex — ${dexCount(2)} caught / ${dexCount(1)} seen / ${DEX_ORDER.length}</h2><div class="dexgrid">` +
       DEX_ORDER.map((id, i) => {
@@ -12394,7 +12436,7 @@ if (typeof window !== 'undefined') {
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
     CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
-    SWITCH_PUNISH, SETTLE_MUL,
+    SWITCH_PUNISH, SETTLE_MUL, switchCost,
     trainerHp, TRAINER_DMG_MUL, trainerDmg,
     foeSwingMul, mineSwingMul,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
