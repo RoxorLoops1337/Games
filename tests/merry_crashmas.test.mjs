@@ -84,7 +84,7 @@ const EXPOSE = `__out.api = {
   drawGate, drawGateBulbs, GATE_X, GATE_HALF,
   drawStallSigns, signMark, signAt, SIGN_W, SIGN_H,
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
-  paintMarketThumb, mkLane, mkRand, MK_W, MK_H, THEMES,
+  paintMarketThumb, paintShutTile, SHUT_SLATS, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
   drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, drawHut,
   drawCounter, goodsN, goodsX,
@@ -5035,6 +5035,104 @@ test('painting the picker does not touch either random stream', () => {
     'a plan should be stable: ' + JSON.stringify(a) + ' vs ' + JSON.stringify(b));
   assert(a.stalls > 20 && a.trees > 0 && a.lamps > 0,
     'the last market should be busy: ' + JSON.stringify(a));
+});
+
+/* A market you have not reached used to paint its entire plan and then have
+   `grayscale(1)` thrown over it: every stall, lane and lamp of a market you
+   have never seen, still legible through the wash. */
+test('a locked tile is a shuttered stall, not a smudged plan', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const recCv = (rec) => ({ width: api.MK_W * 2, height: api.MK_H * 2, getContext: () => rec });
+  const paint = (lv, locked) => {
+    const rec = carRec();
+    const out = api.paintMarketThumb(recCv(rec), lv, locked);
+    return { rec, out, sig: JSON.stringify(rec.rects) };
+  };
+
+  // two markets that share a theme but nothing else about their layout
+  let pair = null;
+  for (let i = 0; i < api.LEVELS.length && !pair; i++){
+    for (let j = i + 1; j < api.LEVELS.length && !pair; j++){
+      const a = api.LEVELS[i], b = api.LEVELS[j];
+      if (a.theme === b.theme && (a.shape || 'rows') !== (b.shape || 'rows')) pair = [a, b];
+    }
+  }
+  assert(pair, 'the campaign should reuse a theme across two different shapes');
+  const [A, B] = pair;
+
+  const lockA = paint(A, true), lockB = paint(B, true);
+  assert(lockA.sig === lockB.sig,
+    'shuttered ' + A.name + ' and ' + B.name + ' should be the same drawing — ' +
+    'a locked tile must not leak the market behind it');
+  assert(lockA.out.shut === true && lockA.out.stalls === 0,
+    'a shuttered tile should report itself shut, got ' + JSON.stringify(lockA.out));
+  const openA = paint(A, false), openB = paint(B, false);
+  assert(openA.sig !== openB.sig,
+    'unlocked, those two markets should look nothing alike — otherwise the ' +
+    'check above proves nothing');
+  assert(openA.out.shut === false && openA.out.stalls > 0, 'an open tile draws its plan');
+
+  // it still says which market it is: the theme's own timber and awning
+  const th = api.THEMES[A.theme];
+  const cols = new Set(lockA.rec.rects.map(r => r.style));
+  for (const c of [th.sky, th.wood, th.awning, th.awning2])
+    assert(cols.has(c), 'the shuttered stall drops the theme colour ' + c);
+  const other = api.LEVELS.find(lv => api.THEMES[lv.theme].awning !== th.awning);
+  assert(paint(other, true).sig !== lockA.sig,
+    'two themes shuttered should not look identical');
+
+  // a shutter is down over the whole front, in slats
+  const wood = lockA.rec.rects.filter(r => r.style === th.wood)[0];
+  assert(wood, 'no stall frame');
+  const slats = lockA.rec.rects.filter(r => r.style === 'rgba(255,240,212,.10)');
+  assert(slats.length === api.SHUT_SLATS,
+    api.SHUT_SLATS + ' slats expected, got ' + slats.length);
+  for (const s of slats){
+    assert(s.x >= wood.x && s.x + s.w <= wood.x + wood.w + 0.01,
+      'a slat hangs outside the frame');
+    assert(s.y > wood.y && s.y + s.h < wood.y + wood.h,
+      'a slat outside the shutter opening');
+  }
+  // and snow sits above the awning, not under it
+  const snow = lockA.rec.rects.filter(r => r.style === '#eef4ff')[0];
+  const awn = lockA.rec.rects.filter(r => r.style === th.awning2)[0];
+  assert(snow && awn && snow.y + snow.h <= awn.y + 0.01,
+    'the snow should settle on top of the furled awning');
+
+  // cheaper than the plan it replaces — this is 7+ tiles on the first menu
+  const big = paint(api.LEVELS[api.LEVELS.length - 1], false);
+  assert(lockA.rec.rects.length < big.rec.rects.length / 3,
+    'a shuttered tile should be far cheaper than a plan: ' +
+    lockA.rec.rects.length + ' vs ' + big.rec.rects.length);
+  console.log('    (locked tile: ' + lockA.rec.rects.length + ' rects vs ' +
+    big.rec.rects.length + ' for ' + api.LEVELS[api.LEVELS.length - 1].name + ')');
+
+  // the picture is not greyed out any more — the whole point is the theme colour
+  const src = fs.readFileSync(HTML, 'utf8');
+  assert(!/\.lv\.locked\s+\.lvpic\s*\{[^}]*grayscale/.test(src),
+    'the locked tile still has grayscale over its picture');
+  // and the menu shutters exactly the tiles it locks
+  assert(/paintMarketThumb\(cv, lv, i > G\.unlocked\)/.test(src),
+    'the picker should shutter a tile on the same test that locks it');
+  api.G.unlocked = 12;
+  api.toMenu();
+  const tiles = [...String(api._nodes.mLevels.innerHTML)
+    .matchAll(/class="(lv[^"]*)" data-lv="(\d+)"/g)];
+  assert(tiles.length === api.LEVELS.length,
+    'the picker should list every market, got ' + tiles.length);
+  for (const [, cls, n] of tiles){
+    const locked = /\blocked\b/.test(cls);
+    assert(locked === (+n > 12),
+      'market ' + (+n + 1) + ' is ' + (locked ? '' : 'not ') + 'locked at unlocked=12');
+  }
+
+  // nothing about any of it touches a random stream
+  api.reseed(777);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(777);
+  for (const lv of api.LEVELS) api.paintMarketThumb(recCv(carRec()), lv, true);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'shuttering the picker moved the simulation stream');
 });
 
 test('a plan costs a handful of fills however big the market is', () => {

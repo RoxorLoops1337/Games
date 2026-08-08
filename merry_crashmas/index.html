@@ -181,8 +181,11 @@
   .lv.done b{ color:#8effb0; }
   .lv.full{ border-color:#8effb0; background:#12301f; }
   .lv.full b{ color:#8effb0; }
-  .lv.locked{ opacity:.45; cursor:not-allowed; }
-  .lv.locked .lvpic{ filter:grayscale(1); }
+  /* No grayscale on the picture any more — the tile paints a shuttered stall
+     rather than a smudged plan, and the whole point of it is the theme colour
+     it is shuttered in. The tile still reads as unavailable: dimmer, a padlock,
+     LOCKED where the best score goes, and `disabled` on the button. */
+  .lv.locked{ opacity:.66; cursor:not-allowed; }
   .lv:not(.locked):hover{ border-color:#e8a91f; }
 
   /* The hint used to be bare letters on the market with nothing but a text
@@ -1393,8 +1396,9 @@ function toMenu(){
       // the plan is painted after the markup lands, the same way the garage
       // paints its cars
       el.querySelectorAll('canvas[data-plan]').forEach(cv => {
-        const lv = LEVELS[parseInt(cv.dataset.plan, 10)];
-        if (lv) paintMarketThumb(cv, lv);
+        const i = parseInt(cv.dataset.plan, 10);
+        const lv = LEVELS[i];
+        if (lv) paintMarketThumb(cv, lv, i > G.unlocked);
       });
       el.querySelectorAll('button[data-lv]').forEach(btn => {
         btn.addEventListener('click', () => pickLevel(parseInt(btn.dataset.lv, 10)));
@@ -1507,13 +1511,47 @@ function mkLane(lv, r, x, x0, x1){
   return cy;
 }
 
-function paintMarketThumb(cv, lv){
+/* A market you have not reached yet used to paint its whole plan and then get
+   a `grayscale(1)` thrown over it: every stall, lane and lamp of a market you
+   have never seen, legible through the wash, on a tile that looks like a
+   rendering fault. It gets a closed stall instead — shutter down, awning rolled
+   away, snow settling on the roof — in the theme's own colours, because which
+   market it is is not a secret and where its stalls stand is. It is also the
+   same drawing for all of them: nothing about a locked tile is derived from the
+   market behind it, which is the property the suite holds down. */
+const SHUT_SLATS = 5;
+function paintShutTile(g, th, W, H){
+  g.fillStyle = th.sky; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(' + th.floor + ',.5)';           // the snow it stands on
+  g.fillRect(0, H * 0.72, W, H * 0.28);
+  const bw = W * 0.62, bh = H * 0.5, bx = (W - bw) / 2, by = H * 0.28;
+  g.fillStyle = 'rgba(6,11,28,.30)';                   // the stall's own shade
+  g.fillRect(bx + bw * 0.06, by + bh, bw, H * 0.06);
+  g.fillStyle = th.wood; g.fillRect(bx, by, bw, bh);   // the frame
+  g.fillStyle = 'rgba(8,14,30,.42)';                   // the shutter inside it
+  g.fillRect(bx + bw * 0.08, by + bh * 0.2, bw * 0.84, bh * 0.72);
+  g.fillStyle = 'rgba(255,240,212,.10)';               // slats catching the lamp
+  for (let i = 0; i < SHUT_SLATS; i++){
+    g.fillRect(bx + bw * 0.08, by + bh * (0.26 + i * 0.13), bw * 0.84, bh * 0.05);
+  }
+  const aw = bw * 1.1, ax = (W - aw) / 2, ay = by - H * 0.055;
+  g.fillStyle = th.awning2; g.fillRect(ax, ay, aw, H * 0.055);
+  g.fillStyle = th.awning;                             // the awning, rolled away
+  for (let i = 0; i < 7; i += 2) g.fillRect(ax + i * (aw / 7), ay, aw / 7, H * 0.055);
+  g.fillStyle = '#eef4ff';                             // snow settling on it
+  g.fillRect(ax - 2, ay - H * 0.05, aw + 4, H * 0.05);
+  g.fillStyle = 'rgba(6,11,28,' + ((th.dark || 0.55) * 0.62).toFixed(3) + ')';
+  g.fillRect(0, 0, W, H);                              // and the lights are off
+}
+
+function paintMarketThumb(cv, lv, locked){
   const g = cv.getContext && cv.getContext('2d');
   if (!g || !g.setTransform) return false;
   const th = THEMES[lv.theme] || THEMES.dusk;
   const W = cv.width || MK_W * 2, H = cv.height || MK_H * 2;
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, W, H);
+  if (locked){ paintShutTile(g, th, W, H); return { stalls: 0, trees: 0, lamps: 0, shut: true }; }
 
   const x0 = MARKET_X;
   const x1 = FENCE_PAD + (WORLD_W - FENCE_PAD * 2 - 120) * lv.span;
@@ -1587,7 +1625,7 @@ function paintMarketThumb(cv, lv){
   // the night this market is played in, laid over everything
   g.fillStyle = 'rgba(6,11,28,' + ((th.dark || 0.55) * 0.5).toFixed(3) + ')';
   g.fillRect(0, 0, W, H);
-  return { stalls: stalls.length, trees: trees.length, lamps: lamps.length };
+  return { stalls: stalls.length, trees: trees.length, lamps: lamps.length, shut: false };
 }
 
 /* ---------- spilt glühwein ----------
