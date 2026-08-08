@@ -10240,6 +10240,29 @@ function habitat(id) {
   return 'Not found in the wild. Not anywhere, really.';
 }
 
+/**
+ * Where a list has to sit so the thing under the cursor is on screen.
+ *
+ * The screen panel is `overflow: auto`, so it CAN be scrolled — and nothing
+ * ever scrolled it. Walking the cursor down on a phone, measured: the deck put
+ * the selection 357px below the visible box, the box 456px, and the swap screen
+ * 392px, with scrollTop sitting at 0 the whole way. The swap screen is one you
+ * are not allowed to leave without choosing, so you were picking a card you
+ * could not see.
+ *
+ * A value rather than a DOM call, because the panel is markup the headless
+ * suite cannot measure: given where the selection sits in the content and where
+ * the window is, this says where the window goes. It moves the least it can — a
+ * selection already in view does not shift the list under your thumb.
+ */
+const scrollFor = (sel, box) => {
+  if (!sel || !box || !(box.height > 0)) return (box && box.scrollTop) || 0;
+  if (sel.top < box.scrollTop) return Math.max(0, sel.top);
+  const bottom = sel.top + (sel.height || 0);
+  if (bottom > box.scrollTop + box.height) return Math.max(0, bottom - box.height);
+  return box.scrollTop;
+};
+
 function renderScreen() {
   if (!G.screen) return;
   G.screen.list = screenList(G.screen);
@@ -10583,6 +10606,13 @@ function renderScreen() {
   show(el, true);
   el.querySelectorAll('canvas[data-mon]').forEach((c) => paintTo(c, 'creature', c.dataset.mon, 1, !!c.dataset.sil));
   paintCardArt(el);
+  // …and then put the window where the cursor is. After the markup, because the
+  // element under the cursor does not exist until the markup does.
+  const cur = el.querySelector('.sel');
+  if (cur) {
+    el.scrollTop = scrollFor({ top: cur.offsetTop, height: cur.offsetHeight },
+      { scrollTop: el.scrollTop, height: el.clientHeight });
+  }
 }
 
 /**
@@ -12299,7 +12329,7 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
-    btnLabels, pickName, backName, isTouch, tapKey, screenCue,
+    btnLabels, pickName, backName, isTouch, tapKey, screenCue, scrollFor,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,

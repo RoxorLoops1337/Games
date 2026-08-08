@@ -4167,6 +4167,84 @@ section('the suite reads the game it runs');
   }
 }
 
+// The screen panel is `overflow: auto`, so it CAN be scrolled — and nothing
+// ever scrolled it. Walking the cursor down on a phone at 390x760, measured:
+//
+//     swap   worst selection 392px outside the box   scrollTop stayed 0
+//     deck   worst selection 357px outside the box   scrollTop stayed 0
+//     box    worst selection 456px outside the box   scrollTop stayed 0
+//     party  worst selection   0px                   (it fits)
+//
+// The swap screen is LOCKED — `screenLocked` refuses to close it — so you were
+// choosing a card you could not see, on a screen you were not allowed to leave.
+//
+// The panel is markup the headless suite cannot measure, so the decision is a
+// value and these nets read the value.
+section('the list follows the cursor');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const box = (scrollTop, height) => ({ scrollTop, height });
+
+  // Already in view: the list must not shift under your thumb.
+  eq(g.scrollFor({ top: 40, height: 50 }, box(0, 310)), 0, 'a selection in view does not move the list');
+  eq(g.scrollFor({ top: 400, height: 50 }, box(380, 310)), 380, 'nor one in view further down');
+
+  // Below the fold: bring its BOTTOM to the bottom of the window, no further.
+  eq(g.scrollFor({ top: 400, height: 100 }, box(0, 310)), 190, 'a selection below the fold is scrolled to');
+  eq(g.scrollFor({ top: 310, height: 0 }, box(0, 310)), 0, 'one exactly at the edge is already in');
+
+  // Above: bring its TOP to the top.
+  eq(g.scrollFor({ top: 20, height: 50 }, box(200, 310)), 20, 'a selection above the window is scrolled back to');
+  eq(g.scrollFor({ top: 0, height: 50 }, box(200, 310)), 0, 'and the first row goes to the very top');
+
+  // Never off the top of the content.
+  ok(g.scrollFor({ top: -50, height: 20 }, box(0, 310)) >= 0, 'the list never scrolls above itself');
+  ok(g.scrollFor({ top: 5, height: 400 }, box(0, 310)) >= 0, 'nor for a selection taller than the window');
+
+  // A box with no height cannot be scrolled into anything — leave it alone.
+  eq(g.scrollFor({ top: 900, height: 50 }, box(77, 0)), 77, 'an unmeasured box is left where it is');
+  eq(g.scrollFor(null, box(77, 310)), 77, 'and so is one with nothing selected');
+
+  // By difference, over a whole list: walk a cursor down rows taller than the
+  // window and the selection must be inside the window at every step. This is
+  // the phone measurement, in arithmetic.
+  {
+    const ROW = 150, N = 8, H = 310;
+    let top = 0, worst = 0;
+    for (let i = 0; i < N; i++) {
+      const sel = { top: i * ROW, height: ROW };
+      top = g.scrollFor(sel, box(top, H));
+      const above = top - sel.top, below = (sel.top + sel.height) - (top + H);
+      worst = Math.max(worst, Math.max(0, above), Math.max(0, below));
+    }
+    eq(worst, 0, `walking ${N} rows of ${ROW}px through a ${H}px window never leaves the selection outside`);
+    ok(top > 0, `and the list actually moved (scrollTop ${top})`);
+  }
+  // …and a list that FITS never moves at all, which is what `party` does.
+  {
+    const ROW = 60, N = 4, H = 310;
+    let top = 0;
+    for (let i = 0; i < N; i++) top = g.scrollFor({ top: i * ROW, height: ROW }, box(top, H));
+    eq(top, 0, 'a list shorter than the window is never scrolled');
+  }
+
+  // Wiring: renderScreen spends it, once, for every screen — not per kind.
+  ok(/el\.scrollTop = scrollFor\(\{ top: cur\.offsetTop, height: cur\.offsetHeight \}/.test(SRC),
+    'renderScreen puts the window where the cursor is');
+  // Counted, not guessed: the definition is an arrow (`const scrollFor =`), so
+  // there is exactly ONE `scrollFor(` call in the file — the call site.
+  ok(/const scrollFor = \(sel, box\) =>/.test(SRC), 'the value is defined once');
+  eq((SRC.match(/scrollFor\(/g) || []).length, 1,
+    'and spent in one place — every screen goes through renderScreen');
+  // After the markup: the element under the cursor does not exist before it.
+  const rs = SRC.indexOf('function renderScreen()');
+  const body = SRC.slice(rs, SRC.indexOf('\n}', SRC.indexOf('paintCardArt(el);', rs)));
+  ok(body.includes('scrollFor('), 'the call is inside renderScreen');
+  ok(body.indexOf('el.innerHTML = html;') < body.indexOf('scrollFor('),
+    'and after the markup, or there is nothing under the cursor to find');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
