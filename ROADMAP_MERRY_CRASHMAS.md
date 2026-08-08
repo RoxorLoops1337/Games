@@ -582,6 +582,23 @@ edit this block to name the next one.
       which is exactly what the first screenshot showed. 2625 → 2802 fills at
       the worst frame against a 3400 budget.
 
+- [x] The snow on a stall roof drifted. It was the biggest patch of snow in the
+      frame and the only one in the game with no shape to it — a rounded
+      rectangle with a lit band across the top and a blue band across the
+      bottom, four straight edges on something that is supposed to have settled
+      there. `snowCapPath` now sags the lower edge in `SNOW_LOBES` lobes off
+      `mkRand` and the stall's own seed, and the blue underside is the *same
+      path* dropped six pixels, so the shade follows every lobe instead of
+      cutting across them — one function, so the two are provably the same
+      shape. Two soft banks sit on top of it. Every roof in a market drifts
+      differently and every roof drifts the same way on every frame. Two harness
+      notes: a curve's bulge is in the control point, not the endpoint, so
+      `carRec` collects control points in a new `ctrls` array (not in `all` —
+      appending there turns four unrelated tests red, as the ellipse-rotation
+      pass already found); and an RNG-purity check that builds its fixture with
+      `addProp` is measuring the fixture, since `addProp` rolls its own seed.
+      2802 → 2914 fills at the worst frame against a 3400 budget.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

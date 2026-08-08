@@ -87,7 +87,7 @@ const EXPOSE = `__out.api = {
   paintMarketThumb, paintShutTile, SHUT_SLATS, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
   drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, GLUH_CUPS, drawHut,
-  drawCounter, goodsN, goodsX,
+  drawCounter, goodsN, goodsX, snowCapPath, SNOW_LOBES,
   bannerBox, bannerFont, bannerLayout, bannerRibbon,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
   bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
@@ -4809,6 +4809,91 @@ test('the stock stands on a counter instead of floating on the stall face', () =
     ' snapped, ' + back.fills + ' facing away)');
 });
 
+/* The biggest patch of snow in the frame was the only one in the game with no
+   shape to it: a rounded rectangle with a lit band across the top and a blue
+   band across the bottom. Four straight edges on something that is supposed to
+   have settled there. */
+test('the snow on a stall roof has drifted, it is not a painted panel', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const SHADE = 'rgba(126,156,206,.34)', WHITE = '#eef4ff';
+
+  const cap = (seed) => {
+    api.props.length = 0;
+    const o = api.addProp('hut', api.cam.x, api.cam.y, {});
+    o.seed = seed; o.face = 1;
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawHut(o));
+    const run = (col) => rec.all.filter(e =>
+      (e[0] === 'm' || e[0] === 'l' || e[0] === 'q') && e[4] === col);
+    return { o, rec, white: run(WHITE), shade: run(SHADE) };
+  };
+
+  const a = cap(0.31);
+  assert(a.white.length > 8, 'the cap should be a real outline, got ' + a.white.length + ' points');
+  assert(a.shade.length === a.white.length,
+    'the shade should be the same outline: ' + a.shade.length + ' vs ' + a.white.length);
+
+  /* The same path, dropped. A shade drawn as a straight band across a wavy
+     edge is exactly what it looked like before, so this is the claim. */
+  let dy = null;
+  for (let i = 0; i < a.white.length; i++){
+    assert(Math.abs(a.white[i][1] - a.shade[i][1]) < 1e-9,
+      'point ' + i + ' of the shade is not under the white');
+    const d = a.shade[i][2] - a.white[i][2];
+    if (dy === null) dy = d;
+    assert(Math.abs(d - dy) < 1e-9,
+      'the shade is not a clean offset: ' + d.toFixed(2) + ' vs ' + dy.toFixed(2));
+  }
+  assert(dy > 2, 'the shade should sit below the drift, got ' + dy);
+
+  // the lower edge sags in lobes, and no two lobes sag the same
+  const lobes = a.white.filter(e => e[0] === 'q');
+  assert(lobes.length >= api.SNOW_LOBES,
+    api.SNOW_LOBES + ' lobes expected along the lip, got ' + lobes.length);
+  const flat = Math.max(...a.white.filter(e => e[0] === 'l').map(e => e[2]));
+  // the bulge is in the control point, not the endpoint — the endpoints all sit
+  // on the lip, which is exactly why this looked flat before
+  const pull = a.rec.ctrls.filter(c => c.style === WHITE);
+  const deepest = Math.max(...pull.map(c => c.cy));
+  assert(deepest > flat + 3,
+    'the lip should sag past the corners: ' + deepest.toFixed(1) + ' vs ' + flat.toFixed(1));
+  const sags = new Set(pull.filter(c => c.cy > flat).map(c => c.cy.toFixed(3)));
+  assert(sags.size > 1, 'every lobe sags by the same amount — that is a straight edge');
+
+  // the shade goes down first, or it would sit on top of the snow
+  const order = a.rec.order.filter(c => c === SHADE || c === WHITE);
+  assert(order[0] === SHADE, 'the shade should be under the cap, got ' + order[0]);
+
+  // stable frame to frame, and different from stall to stall
+  const again = cap(0.31), other = cap(0.77);
+  // the control points too: the endpoints are identical whatever the seed, so a
+  // signature built only from them would call every roof the same
+  const sig = (c) => JSON.stringify([c.white, c.rec.ctrls.filter(q => q.style === WHITE)]);
+  assert(sig(a) === sig(again), 'a roof should drift the same way every frame');
+  assert(sig(a) !== sig(other), 'two stalls should not wear the same drift');
+
+  // banks blown up onto it, batched into one fill
+  const banks = a.rec.all.filter(e => e[0] === 'el' && e[5] === 'rgba(255,255,255,.34)');
+  assert(banks.length === 2, 'two banks expected, got ' + banks.length);
+  for (let i = 0; i < banks.length; i++)
+    assert((a.rec.all[a.rec.all.indexOf(banks[i]) - 1] || [])[0] === 'm',
+      'a bank ellipse with no moveTo joins the path across the roof');
+
+  // and none of it reaches the simulation
+  api.reseed(2024);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(2024);
+  // draw, do not build — addProp rolls its own seed and would measure the
+  // fixture instead of the drift
+  for (let i = 0; i < 20; i++){ a.o.seed = i / 20; api.drawHut(a.o); }
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drifting the roofs moved the simulation stream');
+  console.log('    (roof drift: ' + api.SNOW_LOBES + ' lobes, sag ' +
+    (deepest - flat).toFixed(0) + 'px, shade dropped ' + dy.toFixed(0) + 'px)');
+});
+
 /* A stall that has been smoking for six markets must not have six markets of
    particles behind it — the plume is four puffs on a rolling phase. */
 test('a smoking stall costs the same on frame one and frame six hundred', () => {
@@ -6892,7 +6977,7 @@ test('the bag in the hand is the bag that lands in the snow', () => {
    through ctx and the recorder ignores them, so what comes back is the layout
    inside the bodywork. */
 function carRec(){
-  const shapes = [], order = [], rects = [], all = [], styles = [], polys = [];
+  const shapes = [], order = [], rects = [], all = [], styles = [], polys = [], ctrls = [];
   let fill = '', line = '', lw = 0, alpha = 1, op = 'source-over', pending = null, poly = null;
   /* roundRect is moveTo/lineTo/quadraticCurveTo, so nothing about it reaches
      `shapes`. Its bounding box goes in `polys` instead of `shapes`, because the
@@ -6904,12 +6989,18 @@ function carRec(){
     poly.x1 = Math.max(poly.x1, x); poly.y1 = Math.max(poly.y1, y);
   };
   const base = {
-    shapes, order, rects, all, styles, polys, images: [], fills: 0,
+    shapes, order, rects, all, styles, polys, ctrls, images: [], fills: 0,
     // raw path points too, so a jointed limb can be told from a straight one
     // both styles, because a path may be on its way to a fill or to a stroke
     moveTo(x, y){ pt(x, y); all.push(['m', x, y, line, fill]); },
     lineTo(x, y){ pt(x, y); all.push(['l', x, y, line, fill]); },
-    quadraticCurveTo(cx, cy, x, y){ pt(x, y); all.push(['q', x, y, line, fill]); },
+    /* Control points go in their own array rather than into `all` — several
+       tests read the last slot of an `all` entry as its colour, and a curve's
+       bulge lives in the control point, not the endpoint. */
+    quadraticCurveTo(cx, cy, x, y){
+      pt(x, y); all.push(['q', x, y, line, fill]);
+      ctrls.push({ cx, cy, x, y, style: fill, line });
+    },
     set fillStyle(v){ fill = String(v); order.push(String(v)); styles.push('f:' + v); },
     get fillStyle(){ return fill; },
     set strokeStyle(v){ line = String(v); styles.push('s:' + v); },

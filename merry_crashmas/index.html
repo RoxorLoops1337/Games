@@ -4435,6 +4435,29 @@ function drawSpilledStock(o, w){
   return drawn;
 }
 
+/* The outline of a stall's snow cap: square across the top where it meets the
+   ridge, and sagging in lobes along the bottom where it has drifted over the
+   edge. One function, so the white and the blue shade under it are provably the
+   same shape — a shade drawn as a straight band across a wavy edge is how it
+   looked before. `dy` drops the whole path for that shade. */
+const SNOW_LOBES = 3;
+function snowCapPath(x0, y0, w, h, seed, dy){
+  const r = 6, lip = y0 + h - 4 + dy;
+  ctx.beginPath();
+  ctx.moveTo(x0 + r, y0 + dy);
+  ctx.lineTo(x0 + w - r, y0 + dy);
+  ctx.quadraticCurveTo(x0 + w, y0 + dy, x0 + w, y0 + r + dy);
+  ctx.lineTo(x0 + w, lip);
+  for (let i = SNOW_LOBES - 1; i >= 0; i--){
+    const bx1 = x0 + i * (w / SNOW_LOBES), bx0 = bx1 + w / SNOW_LOBES;
+    const sag = 5 + mkRand(seed * 3301 + i * 47) * 8;
+    ctx.quadraticCurveTo((bx0 + bx1) / 2, y0 + h + sag + dy, bx1, lip);
+  }
+  ctx.lineTo(x0, y0 + r + dy);
+  ctx.quadraticCurveTo(x0, y0 + dy, x0 + r, y0 + dy);
+  ctx.closePath();
+}
+
 function drawHut(o){
   const w = o.w, h = o.h, x = o.x, y = o.y;
   if (o.dead){
@@ -4496,14 +4519,30 @@ function drawHut(o){
   ctx.fill();
   ctx.fillStyle = 'rgba(10,20,36,.18)';
   ctx.fillRect(-w / 2, ay + 26, w, 6);
-  // snowy roof cap + goods. Snow has a lit crown and a blue underside; without
-  // the second band it is a white rectangle stuck to a brown one.
+  /* The snow on the roof. It was a rounded rectangle with a lit band across
+     the top and a blue band across the bottom — the biggest patch of snow in
+     the frame and the only one in the game with no shape to it, four straight
+     edges on something that is supposed to have settled there. It drifts now:
+     the lower edge sags in lobes, the blue underside is the same path dropped a
+     few pixels so the shade follows every lobe instead of cutting across them,
+     and two soft banks sit on top of it. All of it off `mkRand` and the stall's
+     own seed, so a roof looks the same every frame and no stream is touched. */
+  const cx0 = -w / 2 + 10, cw = w - 20, cy0 = -h / 2 + 14, ch = h * 0.34;
+  ctx.fillStyle = 'rgba(126,156,206,.34)';       // the shade under the drift
+  snowCapPath(cx0, cy0, cw, ch, o.seed, 6); ctx.fill();
   ctx.fillStyle = '#eef4ff';
-  roundRect(-w / 2 + 14, -h / 2 + 14, w - 28, h * 0.34, 6); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.55)';
-  ctx.fillRect(-w / 2 + 18, -h / 2 + 16, w - 36, h * 0.07);
-  ctx.fillStyle = 'rgba(126,156,206,.34)';
-  ctx.fillRect(-w / 2 + 16, -h / 2 + 14 + h * 0.26, w - 32, h * 0.08);
+  snowCapPath(cx0, cy0, cw, ch, o.seed, 0); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)';       // the crown, catching the light
+  ctx.fillRect(cx0 + 4, cy0 + 2, cw - 8, h * 0.07);
+  ctx.fillStyle = 'rgba(255,255,255,.34)';       // banks blown up against it
+  ctx.beginPath();
+  for (let i = 0; i < 2; i++){
+    const bx = cx0 + cw * (0.28 + i * 0.4 + mkRand(o.seed * 5171 + i * 61) * 0.12);
+    const by = cy0 + ch * (0.42 + mkRand(o.seed * 4409 + i * 37) * 0.22);
+    ctx.moveTo(bx + cw * 0.17, by);
+    ctx.ellipse(bx, by, cw * 0.17, ch * 0.2, 0, 0, 6.283);
+  }
+  ctx.fill();
   const gy = fs > 0 ? h * 0.12 : -h * 0.12;
   drawCounter(o, w, gy, wear, fs);
   drawGoods(o, w, h, gy, wear);
