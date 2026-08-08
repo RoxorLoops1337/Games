@@ -69,7 +69,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
-  addFx, onCamera, FX_MAX, FX_EVICT,
+  addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
@@ -5229,6 +5229,94 @@ test('adding trades did not change what a market is made of', () => {
 
 /* ---------------------------------------------------------- nitro --- */
 
+/* The one power move in the game, and its exhaust was `circle(x, y, size * k)`
+   under `lighter` — a row of round dots trailing off the back bumper with no
+   direction, no taper and no heat in it. */
+test('the nitro exhaust is a jet, not a row of dots', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21; api.startLevel(2); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.z = 0; api.camSnap();
+
+  /* One flame, thrown at a chosen angle, drawn at a chosen point in its life.
+     `k = 1 - t/ttl`, so t is what picks hot or cold. */
+  const flame = (ang, k) => {
+    api.fx.length = 0;
+    api.addFx({ type: 'flame', x: api.car.x, y: api.car.y,
+      vx: Math.cos(ang) * 120, vy: Math.sin(ang) * 120,
+      ttl: 1, t: 1 - k, size: 14, col: '#ffd34d' });
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawFx(true));
+    return rec;
+  };
+  // rotation lives on `shapes`, not `all` — several tests read the last slot
+  // of an `all` entry as its colour, so nothing may be appended there
+  const els = (rec) => rec.shapes;
+
+  // it lies along the way it was thrown, at whatever angle that is
+  for (const ang of [0, 1.1, -2.4, 3.0]){
+    const e = els(flame(ang, 0.9));
+    assert(e.length >= 2, 'a burning flame should be a body and a hot heart, got ' + e.length);
+    for (const one of e){
+      const d = Math.atan2(Math.sin(one.rot - ang), Math.cos(one.rot - ang));
+      assert(Math.abs(d) < 1e-6,
+        'a flame thrown at ' + ang.toFixed(2) + ' was drawn at ' + Number(one.rot).toFixed(2));
+    }
+    assert(e[0].r > e[0].ry * 2,
+      'a jet is stretched, got ' + e[0].r.toFixed(1) + ' by ' + e[0].ry.toFixed(1));
+    // the white heart sits back towards the pipe it came out of, never ahead
+    const dx = e[1].x - e[0].x, dy = e[1].y - e[0].y;
+    assert(dx * Math.cos(ang) + dy * Math.sin(ang) < -1,
+      'the hot end should be behind the flame, not out in front of it');
+    assert(e[1].r < e[0].r, 'the heart should be smaller than the body it sits in');
+  }
+
+  // burning is additive; smoke is not, or the night would glow where it drifts
+  const hot = flame(0, 0.9), cold = flame(0, api.FLAME_SMOKE * 0.3);
+  assert(hot.styles.includes('op:lighter'), 'a burning flame should add light');
+  assert(hot.styles.includes('op:source-over'), 'and put the mode back afterwards');
+  assert(!cold.styles.includes('op:lighter'), 'smoke should not add light');
+  assert(els(cold).length === 1, 'smoke is one puff, got ' + els(cold).length);
+  assert(!cold.order.includes('#ffd34d'), 'cold smoke should have lost the flame colour');
+  assert(hot.order.includes('#ffd34d'), 'a burning flame should be its own colour');
+
+  // it burns down and then the smoke opens out
+  const wid = (k) => els(flame(0, k))[0].r;
+  assert(wid(0.95) > wid(api.FLAME_SMOKE + 0.02),
+    'the flame should burn down: ' + wid(0.95).toFixed(1) + ' -> ' +
+    wid(api.FLAME_SMOKE + 0.02).toFixed(1));
+  assert(wid(0.02) > wid(api.FLAME_SMOKE - 0.02) * 1.4,
+    'the smoke should open out as it dies: ' + wid(api.FLAME_SMOKE - 0.02).toFixed(1) +
+    ' -> ' + wid(0.02).toFixed(1));
+  console.log('    (nitro flame: ' + wid(0.95).toFixed(0) + 'px hot, ' +
+    wid(0.02).toFixed(0) + 'px of smoke at the end)');
+
+  /* And the shape is read off the velocity the spawn already rolled — a flame
+     that reached for one more random number would rescore all 21 markets. */
+  api.reseed(31337);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(31337);
+  for (let i = 0; i < 40; i++) flame(i * 0.3, (i % 10) / 10);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the exhaust moved the simulation stream');
+
+  // a real nitro on a real run puts a plume behind the car and nothing in front
+  api.startLevel(11); api.beginLevel();
+  api.launch(-api.C.MAX_PULL, 0);
+  for (let f = 0; f < 40; f++) api.update(1 / 60);
+  assert(api.carSpeed() > 100, 'the car should be moving, got ' + api.carSpeed());
+  assert(api.doBoost(), 'the nitro should fire');
+  for (let f = 0; f < 14; f++) api.update(1 / 60);
+  const plume = api.fx.filter(e => e.type === 'flame');
+  assert(plume.length > 6, 'a plume, got ' + plume.length + ' flames');
+  const back = Math.atan2(api.car.vy, api.car.vx) + Math.PI;
+  for (const p of plume){
+    const dx = p.x - api.car.x, dy = p.y - api.car.y;
+    assert(dx * Math.cos(back) + dy * Math.sin(back) > -30,
+      'a flame came out of the front of the car');
+  }
+});
+
 test('the nitro halo is a baked light, not a flat plate', () => {
   const api = boot({ w: 1280, h: 720 });
   api.G.unlocked = 21; api.startLevel(2); api.beginLevel();
@@ -6614,7 +6702,7 @@ test('the bag in the hand is the bag that lands in the snow', () => {
    inside the bodywork. */
 function carRec(){
   const shapes = [], order = [], rects = [], all = [], styles = [], polys = [];
-  let fill = '', line = '', lw = 0, alpha = 1, pending = null, poly = null;
+  let fill = '', line = '', lw = 0, alpha = 1, op = 'source-over', pending = null, poly = null;
   /* roundRect is moveTo/lineTo/quadraticCurveTo, so nothing about it reaches
      `shapes`. Its bounding box goes in `polys` instead of `shapes`, because the
      layout tests read `shapes` by colour and a box sharing a coat's colour
@@ -6639,6 +6727,9 @@ function carRec(){
     get lineWidth(){ return lw; },
     set globalAlpha(v){ alpha = +v; },
     get globalAlpha(){ return alpha; },
+    // additive vs normal, so "this burns" can be told from "this is smoke"
+    set globalCompositeOperation(v){ op = String(v); styles.push('op:' + v); },
+    get globalCompositeOperation(){ return op; },
     // sprites are how every light in this game is drawn, so they get recorded
     // with the alpha they went down at
     drawImage(img, x, y, w, h){ base.images.push({ x, y, w, h, alpha }); },
@@ -6648,7 +6739,13 @@ function carRec(){
     // `all` is every primitive in order, for checking a draw repeats exactly;
     // `shapes` keeps one per fill, which is what the layout tests read
     arc(x, y, r){ pending = { x, y, r, ry: r }; all.push(['arc', x, y, r, fill]); },
-    ellipse(x, y, rx, ry){ pending = { x, y, r: rx, ry }; all.push(['el', x, y, rx, ry, fill]); },
+    /* the rotation too, appended after the fill so every existing index-based
+       assertion still reads the same slot — a flame is only a flame because it
+       is turned to lie along the way it was thrown */
+    ellipse(x, y, rx, ry, rot){
+      pending = { x, y, r: rx, ry, rot };
+      all.push(['el', x, y, rx, ry, fill]);
+    },
     rect(x, y, w, h){ all.push(['rect', x, y, w, h, fill]); },
     fillRect(x, y, w, h){ rects.push({ x, y, w, h, style: fill }); all.push(['fr', x, y, w, h, fill]); },
     fill(){

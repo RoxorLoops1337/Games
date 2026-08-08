@@ -6130,6 +6130,9 @@ function drawCarRim(){
    Blood, mist and stains are on the ground and belong under it; limbs, shards,
    sparks and text are in the air and belong over it. */
 const FX_UNDER = { blood: 1, mist: 1, stain: 1, chunk: 1, tear: 1, pixel: 1 };
+// where a nitro flame stops burning and starts being smoke, as a fraction of
+// its life remaining
+const FLAME_SMOKE = 0.42;
 
 /* Is this world point on screen, with `pad` world units of slack? One place
    for the question, so the tear that is not spawned and the particle that is
@@ -6254,9 +6257,33 @@ function drawFx(over){
       ctx.ellipse(f.x, f.y, f.size * (0.6 + k * 0.6), f.size * 0.55, Math.atan2(f.vy, f.vx), 0, 6.283);
       ctx.fill();
     } else if (f.type === 'flame'){
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = f.col; circle(f.x, f.y, f.size * k); ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
+      /* The one power move in the game, and its exhaust was a row of round
+         dots trailing off the back bumper — a bubble trail, not a flame. A
+         flame has a direction: stretched along the way it was thrown, hottest
+         at the nozzle end it came out of, and fraying into smoke as it cools.
+         Every bit of it comes off the velocity the spawn already rolled, so
+         the shape costs the simulation nothing. */
+      const ang = Math.atan2(f.vy, f.vx);
+      if (k > FLAME_SMOKE){
+        const r = f.size * (0.55 + k * 0.75);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = f.col;
+        ctx.beginPath();
+        ctx.ellipse(f.x, f.y, r * 1.7, r * 0.62, ang, 0, 6.283); ctx.fill();
+        // the white heart, back towards the pipe it was thrown out of
+        ctx.fillStyle = 'rgba(255,247,222,.5)';
+        ctx.beginPath();
+        ctx.ellipse(f.x - Math.cos(ang) * r * 0.62, f.y - Math.sin(ang) * r * 0.62,
+          r * 0.66, r * 0.4, ang, 0, 6.283); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      } else {
+        // cooled: what is left is smoke, and smoke does not add light
+        const grow = 1 + (FLAME_SMOKE - k) * 1.8;
+        ctx.fillStyle = 'rgba(206,214,228,.34)';
+        ctx.beginPath();
+        ctx.ellipse(f.x, f.y, f.size * 0.9 * grow, f.size * 0.7 * grow, ang, 0, 6.283);
+        ctx.fill();
+      }
     } else {
       ctx.fillStyle = f.col;
       circle(f.x, f.y, f.size * (0.5 + k * 0.7)); ctx.fill();
