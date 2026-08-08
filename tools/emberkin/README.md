@@ -2560,3 +2560,46 @@ desktop one. That is the correct answer and not an obvious one.
     `b.maxAdd` and the battle log's `sM`/`sF` are still written and still read
     by nothing. They cost the player nothing, so cutting them is weight, not a
     fix, and this pass measured one fault and fixed that one.
+
+92. **The rule reached one menu because it was keyed on the mode** (pass 181).
+    Took job (g): drive the battle's Actions menu the way 180 drove the pause
+    menu. 180 gave the pause menu its way back with `s.prev === 'menu'` — which
+    reads the MODE. `openBattleActions` never sets a mode, so the rule could not
+    reach it, and in a fight:
+
+        row   screen   prev recorded   mode after back   menu after back
+        Kin   party    battle          battle            gone
+        Bag   bag      battle          battle            gone
+
+    Checking a kin and then an item meant opening Actions twice. **A fix applied
+    to one of its cases, one pass after writing the fix.**
+
+    Keyed on the MENU now — `prevMenu` — so both are one sentence: a screen goes
+    back to whatever was on screen before it. And the same ordering trap as 180,
+    one level up: the battle rows read `closeMenu(); openScreen(…)`, so the
+    provenance was thrown away by the CALLER a line before openScreen could read
+    it. openScreen closes the menu itself; the redundant call is gone.
+
+    Also: the doc comment said *"Up opens the non-card actions"* for as long as
+    this menu has existed. **B** opens it; Up plays the card you are on.
+
+    **FIVE scene errors before one measurement was worth anything**, and the
+    biggest is a fact about the harness worth writing down:
+
+    - `pressKey('x')` does nothing — `x` is a raw key, the action is `b` (180).
+    - Pressing on frame one measures the entry animation, not the menu.
+    - `advanceDialogue()` refuses while `hold > 0`, and hold only decays inside
+      `step()` — so calling it in a loop advances nothing, 600 times.
+    - **`frame(now)` takes a WALL-CLOCK TIMESTAMP in ms, not a dt.** It computes
+      `dt` from `now - frame.last`. Feeding it the same number twice advances
+      ZERO time while input still fires: every timer stands still and the
+      opening log sat at `hold 0.38` forever. Pass 180's probe had this too —
+      its conclusions survive only because they were input-driven, not clocked.
+    - `G.bag = { orb: 3 }` — no such item. The shelf threw on `it.kind` and the
+      game showed "Something went wrong", **which only turned up because I
+      looked at the screenshot.** A bag holding an id ITEMS does not have will
+      crash the shelf; that can only come from a corrupted save, so it is
+      recorded here and not fixed on the way past.
+
+    Six planted faults, all six bite — including putting `closeMenu()` back in
+    front of `openScreen`, and removing 180's pause-menu return.
