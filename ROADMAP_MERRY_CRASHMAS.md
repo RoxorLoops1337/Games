@@ -1008,6 +1008,27 @@ edit this block to name the next one.
       Dropping the clamp puts the plate at x 1202–1290 in a 1280-wide view,
       which is what that assertion catches.
 
+- [x] An upside-down car is that car upside down. Two goals name the barrel
+      roll and nothing had ever looked at the car mid-flip, so I put all four
+      of its states side by side. **The underside was one chassis for all five
+      cars.** Flip Santa's sleigh — which rides on runners and has no wheels at
+      all — and four wheels appeared under it; flip the monster truck and its
+      huge ones shrank to a hatchback's. A fitted plough fell off on the way
+      over, which is not a thing a bolted-on blade does. And the comment on
+      that branch had said *"chassis, axles, spinning wheels"* since it was
+      written, with no axles in the code under it.
+  - **Fifth object in this run with two drawings that had drifted apart**,
+      after the pram, the hat, the driver and the plough pickup — and the only
+      one you see for half a second at a time, which is exactly why it lasted.
+      The wheels underneath are now the same four, the same size, in the same
+      places as the ones on top; the sleigh keeps its runners; the plough stays
+      bolted on; the axles exist.
+  - The assertion that carries it compares the upright wheels against the
+      upside-down ones **position by position and size by size, for every car
+      in the garage**, rather than checking that some wheels are present. That
+      is the difference between this test and the one it sits next to, which
+      passed the whole time the defect was there.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

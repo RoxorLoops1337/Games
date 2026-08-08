@@ -8253,6 +8253,63 @@ test('the plough you pick up is the plough you get', () => {
     span(1).toFixed(0) + ' long by ' + span(2).toFixed(0) + ' wide)');
 });
 
+/* Fifth object in this run of passes with two drawings that had drifted apart,
+   after the pram, the hat, the driver and the plough pickup — and the only one
+   you see for half a second at a time, which is why it lasted. The underside
+   was one chassis for all five cars: flip the sleigh, which rides on runners
+   and has no wheels at all, and four wheels appeared under it. */
+test('an upside-down car is that car upside down', () => {
+  const api = boot({ w: 1280, h: 720, store: ALL_CARS });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.ang = 0; api.camSnap();
+  const side = (id, roll, plowT) => {
+    assert(api.selectCar(id), 'should be able to pick ' + id);
+    api.car.roll = roll; api.car.z = 30; api.car.plowT = plowT || 0;
+    api.car.gore = 0; api.car.bloody = 0; api.car.dents = 0; api.car.boostT = 0;
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawCar());
+    const box = (c) => rec.polys.filter(q => q.style === c && !q.stroked)
+      .map(q => ({ x: (q.x0 + q.x1) / 2, y: (q.y0 + q.y1) / 2,
+                   w: q.x1 - q.x0, h: q.y1 - q.y0 }));
+    return { rec, box, car: api.getCar(), dims: api.getDims() };
+  };
+
+  for (const c of api.CARS){
+    const up = side(c.id, 0), down = side(c.id, Math.PI);
+    assert(down.box('#2a3242').length === 1, c.id + ' should show a chassis on its roof');
+
+    if (c.runners){
+      /* A sleigh has no wheels the right way up and must have none the wrong
+         way up either. Its runners are the two things it actually lands on. */
+      assert(down.box('#141a26').length === 0,
+        'the sleigh grew ' + down.box('#141a26').length + ' wheels when it flipped');
+      assert(down.box(c.trim).length >= 2,
+        'and it should still be on its runners, got ' + down.box(c.trim).length);
+      continue;
+    }
+    const uw = up.box('#1a2030'), dw = down.box('#141a26');
+    assert(uw.length === 4 && dw.length === 4,
+      c.id + ' has ' + uw.length + ' wheels upright and ' + dw.length + ' on its roof');
+    const key = (a) => a.map(w => [w.x, w.y, w.w, w.h].map(v => v.toFixed(1)).join(','))
+      .sort().join(' | ');
+    assert(key(uw) === key(dw),
+      c.id + '\'s wheels change when it flips:\n    upright ' + key(uw) +
+      '\n    on its roof ' + key(dw));
+    // and the axles the comment has always promised
+    assert(down.rec.polys.some(q => q.stroked && q.style === '#141a26'),
+      c.id + ' has wheels with nothing joining them');
+  }
+
+  /* A bolted-on plough does not fall off on the way over. */
+  const bare = side('hatch', Math.PI, 0), fitted = side('hatch', Math.PI, 5);
+  const blade = (s) => s.rec.order.filter(x => x === '#dfe8f6').length;
+  assert(blade(bare) === 0, 'no plough, no blade');
+  assert(blade(fitted) === 1, 'a fitted plough should survive the flip');
+  console.log('    (undersides: ' + api.CARS.map(c => c.id + (c.runners ? ' runners' : ' wheels'))
+    .join(', ') + ')');
+});
+
 /* The blade is one shape at any size, which is the whole reason the car and
    the pickup can share it. Doubling every input has to double every point. */
 test('a blade drawn twice the size is twice the blade', () => {
