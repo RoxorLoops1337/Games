@@ -601,6 +601,11 @@
   .movecard .mbody{ display:flex; justify-content:space-between; gap:.4em;
     font-size:.64em; color:var(--dim); margin-top:.1em; }
   .movecard .pp.low{ color:var(--hp-bad); }
+  .movecard .eff{ font-size:.85em; letter-spacing:.06em; }
+  .movecard.eff-good{ border-left-color:var(--hp-good); }
+  .movecard.eff-good .eff{ color:var(--hp-good); }
+  .movecard.eff-bad .eff, .movecard.eff-none .eff{ color:var(--hp-bad); }
+  .movecard.eff-none{ opacity:.6; }
   .movecard .mbar{ height:3px; border-radius:2px; background:#0d0812; margin-top:.3em; overflow:hidden; }
   .movecard .mbar > i{ display:block; height:100%; background:var(--tint); opacity:.75; }
 
@@ -8631,6 +8636,23 @@ function moveDamage(id) {
  * read as feeble. In a fight the card shows the real number against the real
  * foe; this is the yardstick for choosing between moves out of one.
  */
+/**
+ * The same reading against whoever is actually out there, or null out of a
+ * fight. Returns `eff` too, because "how much" and "how well" are one answer.
+ */
+const EFF_MARK = {
+  '2': { tag: 'STRONG', cls: 'eff-good' },
+  '0.5': { tag: 'RESISTED', cls: 'eff-bad' },
+  '0': { tag: 'NOTHING', cls: 'eff-none' },
+};
+function moveVersusFoe(mon, id) {
+  const b = B();
+  const mv = MOVES[id];
+  if (!b || !b.foe || !mv || !mv.pow) return null;
+  const { dmg, eff } = damageOf(mon, b.foe, id, { crit: false, roll: 1 });
+  return { dmg: eff === 0 ? 0 : Math.max(1, dmg), eff };
+}
+
 function moveDamageNeutral(mon, id) {
   const m = MOVES[id];
   if (!m || !m.pow) return 0;
@@ -9423,9 +9445,17 @@ function statBlock(m) {
     <div class="movelist">` + m.moves.map((slot) => {
       const mv = MOVES[slot.id];
       const pp = slot.pp / Math.max(1, slot.max);
-      return `<div class="movecard" style="--tint:${TYPES[mv.type]}">
+      // These numbers were computed against a dummy with NO TYPES — foe-
+      // agnostic by design, which is right in the town menu and exactly wrong
+      // on the forced switch, where the screen is asking you to pick somebody
+      // to send into a specific creature and the matchup is the whole decision.
+      // `damageOf` takes any attacker, so the real answer was one call away.
+      const vs = mv.pow ? moveVersusFoe(m, slot.id) : null;
+      const dmg = vs ? vs.dmg : (mv.pow ? moveDamageNeutral(m, slot.id) : 0);
+      const mark = vs ? EFF_MARK[String(vs.eff)] : null;
+      return `<div class="${mark ? `movecard ${mark.cls}` : 'movecard'}" style="--tint:${TYPES[mv.type]}">
         <div class="mtop"><b>${mv.name}</b><span class="cost">${moveCost(slot.id)}</span></div>
-        <div class="mbody">${mv.pow ? `~${moveDamageNeutral(m, slot.id)} dmg` : 'status'}
+        <div class="mbody">${mv.pow ? `~${dmg} dmg${mark ? ` <b class="eff">${mark.tag}</b>` : ''}` : 'status'}
           <span class="pp ${pp <= .25 ? 'low' : ''}">${slot.pp}/${slot.max} PP</span></div>
         <div class="mbar"><i style="width:${pp * 100}%"></i></div></div>`;
     }).join('') + `</div></div>`;
@@ -9477,7 +9507,18 @@ function renderScreen() {
     }).join('') + '</div>';
     html += statBlock(G.party[s.i]);
     html += '</div>';
-    if (s.opt.force) html += '<p style="color:var(--gold);font-size:13px">Choose who steps up.</p>';
+    // Who they are stepping up AGAINST. The prompt asked for a choice and hid
+    // the only thing the choice is about: the screen covers the arena, so the
+    // foe's name, level and types are behind it at the exact moment they decide
+    // everything. The marks on the moves above answer "how well"; this answers
+    // "against what", and a player who knows the chart needs only this.
+    if (s.opt.force) {
+      const b = B();
+      const foe = b && b.foe;
+      html += `<p style="color:var(--gold);font-size:13px">Choose who steps up.${foe
+        ? ` <span style="color:var(--dim)">${dispName(foe)} is out there — Lv${foe.lvl} ${foe.types.join('/')}.</span>`
+        : ''}</p>`;
+    }
   } else if (s.kind === 'dex') {
     html += `<h2>Dex — ${dexCount(2)} caught / ${dexCount(1)} seen / ${DEX_ORDER.length}</h2><div class="dexgrid">` +
       DEX_ORDER.map((id, i) => {
@@ -11358,7 +11399,7 @@ if (typeof window !== 'undefined') {
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
-    intentThrough, intentLethal,
+    intentThrough, intentLethal, moveVersusFoe, EFF_MARK,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,

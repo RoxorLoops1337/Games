@@ -377,6 +377,47 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+58. **The screen that asks the question covers the answer** (pass 147). Second
+    column of battle states. The forced switch — your kin is down, the fight is
+    still running, pick somebody to send out — is a good screen: the downed kin
+    greyed at 0/63, stats, moves with damage and PP, *"Choose who steps up."*
+
+    And the foe is not on it. The screen covers the arena, so the creature you
+    are choosing somebody to face is behind the thing asking you to choose. The
+    matchup IS the decision and the screen showed everything except it.
+
+    Worse, quietly: the move list printed damage from `moveDamageNeutral`, which
+    computes against a dummy with NO TYPES. Foe-agnostic by design — right in
+    the town menu, exactly wrong here. Brookite's Tide moves read 16/22/27 into
+    a Verdant/Gloom foe that resists all three; the real numbers are 7/10/12.
+    The screen was not merely silent about the matchup, it was printing
+    confident numbers that were wrong by half at the moment they mattered most.
+
+    `damageOf` takes any attacker, so the true reading was one call away.
+    `moveVersusFoe(mon, id)` returns `{dmg, eff}` or null out of a fight, and
+    the cards carry STRONG / RESISTED / NOTHING. Nothing is marked at 1× — a
+    mark on everything marks nothing. The prompt names what is out there, with
+    its level and its types, for a player who knows the chart and needs only
+    that.
+
+    Three things checked and dropped cheaply, which is most of what a sweep is
+    for. `m.status` is a single string, so status STACKING does not exist here
+    and the tiny-chips worry was about a different game's dials that had leaked
+    into my own brief. The failed-catch prose is already four distinct lines
+    scaled to shakes — *"Three shakes. You had it."* And `dec_broke` was clean
+    the pass before.
+
+    Two drive faults, both mine. A break script whose party held only the kin it
+    was asking about cannot tell "reads the kin you are looking at" from "reads
+    the kin on the field" — the two are the same object. And adding a class
+    conditionally emitted `class="movecard "` with a trailing space, which broke
+    a pre-existing net matching the exact string; the sloppiness was in the
+    source, so that is where it was fixed.
+
+    **A screen that overlays the thing it is asking about has to bring the thing
+    with it. And a number computed for the general case becomes a lie the moment
+    the screen is shown for a specific one.**
+
 57. **The line said what it was for, and did half of it** (pass 146). The cast
     sweep's method, pointed at a screen instead of a script: shoot the battle in
     four states — fresh, nearly dead, out of energy, endgame — and read them

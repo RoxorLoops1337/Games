@@ -1314,6 +1314,26 @@ const SCENES = {
       EK.readIntent();
     },
   },
+  // The forced switch: your kin is down, the fight is still running, and you
+  // must send somebody out. A decision made under pressure with the arena
+  // hidden behind the screen.
+  dec_forced: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24), EK.mkMon('brookite', 22), EK.mkMon('kindlark', 20)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 25), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.mine.hp = 0; b.dispM = b.tgtM = 0;
+      EK.G.party[1].hp = Math.round(EK.G.party[1].max * .3);
+      EK.openScreen('party', { force: true });
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
