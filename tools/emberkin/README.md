@@ -377,6 +377,93 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+54. **Nine voices, one shared sentence** (pass 143). The same method as 142,
+    pointed at the dialogue 142 did not touch: dump the nine trainers' intro,
+    lose, win and `after` in one go and read them together.
+
+    All nine have a voice. Dorn guards a stretch — *"Nothing gets past me on
+    this stretch"* / *"Something got past me."* Ivo lives in the trees and the
+    trees are disappointed. Mio got everything she has out of that water. Pell's
+    whole idea is that the grass teaches you things. Then six of the nine said
+    one shared sentence for the rest of the game:
+
+        Good match. Go on.
+
+    Only the three Wicks had ever been given a parting line, and only because
+    the rival is the one the story keeps returning to. The other six lost once
+    and stopped being people.
+
+    Six, except the sixth is right. Warden Hale had a comment on him explaining
+    that he is the only npc who LEAVES the map when beaten, so a parting line
+    could never be read by anybody — and a net already held every blocker to it.
+    The codebase knew, and I nearly wrote him one anyway. So the set is five,
+    and the invariant that replaces the exception asks `npcActive` rather than
+    naming him: a trainer still standing there once beaten must have something
+    to say, and one who is gone must not.
+
+    All five read state that already existed except one. Pell reads the dex,
+    Ivo and Coll read each other's flags — the two Emberwood rangers, who have
+    always both been in the save and were never allowed to mention it — and Mio
+    reads your party for anything of the Tide type. Only Dorn needed `G.been`,
+    added the pass before for Isa, which is what makes his running joke work:
+    beaten, still on his stretch, watching you walk past it to the wood and then
+    to the top of the mountain.
+
+    Two drives were wrong before the game was. `npcActive` gates on `requires`
+    as well as `block`, so setting one trainer's flag at a time silently skipped
+    the two later Wicks — a loop testing six of nine and saying so only in a
+    number I had guessed wrong. And a regex meant to strip the five new `after`
+    blocks matched three of them, because two end on a different line than I
+    assumed; the net fired correctly on the three, which is exactly how a
+    half-applied patch disguises itself as a passing check. Delete the property
+    off the object instead of pattern-matching the source when you can.
+
+    **When one member of a set is legitimately exempt, find the property that
+    makes it exempt and ask for THAT. "All except Hale" is a note about today;
+    "all that are still on the map" is the rule.**
+
+53. **Four signposts that kept pointing after you had arrived** (pass 142).
+    Seventeen people live in this valley. Nine are trainers and get a second
+    line once beaten; Rowan has a script; Sable, Bell and Vane have jobs. That
+    leaves exactly four with nothing at all — Old Tam, Bly, Ranger Isa, Sheller
+    Ann — and reading their lines together, every one of them turned out to be
+    the same kind of thing:
+
+        Tam  the tall grass is thick with kin, something will jump you
+        Bly  the Wayhouse patches your kin up for free
+        Isa  Emberwood, north of here — mind the roots
+        Ann  Lanterneel come in at the shallows. Do not put your hand near the light
+
+    Four signposts. Every one is advice for somebody who has just arrived, and
+    every one was still being given at the end of the game — to a player who had
+    caught the grass, used the Wayhouse forty times, walked the road north and
+    come back down, and had the thing in the shallows in their party.
+
+    And the game already knew, in three cases out of four, without anything
+    being added: `dexCount(2)` for Tam, live party HP for Bly, `G.dex.lanterneel`
+    for Ann — the dex has always known which of the three people Ann is talking
+    to. Only Isa needed new state, and needing it is itself the finding: nothing
+    anywhere recorded which maps you had stood in.
+
+    The mechanism was half-built too. `after` had been allowed to be a function
+    since pass 113, so a trainer's parting line could stop being true — but
+    `lines` could not, for no reason except that trainers were where it was
+    first needed. Five separate call sites read `npc.lines` directly and only
+    one of them would have honoured a function. One accessor now, so a person
+    who wants to notice something can do it wherever they stand, including from
+    behind a counter.
+
+    One writing note worth keeping. Tam's boast was a number and the player's
+    tally is a number, and at six they collided: *"Six kinds in the book. I
+    managed six."* Driving all fourteen readings and READING them is what caught
+    it — a test asserting "Tam mentions the count" would have passed. It is
+    comparative now, and there is a check that no count makes him say the same
+    number twice.
+
+    **Read a game's incidental dialogue together rather than one line at a time.
+    Lines written at different moments for different reasons turn out to share a
+    job, and the job is usually one the game has since outgrown.**
+
 52. **The exemption list was a to-do list, and I had been adding to it** (pass
     141). Acting on 51 directly: grep your own suite for the names it has to
     special-case. Three came back, and the biggest was mine.

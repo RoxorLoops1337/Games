@@ -1112,6 +1112,75 @@ const SCENES = {
       if (!/Waits in/.test(EK.habitat('vespyr'))) throw new Error('the shrine line is not the one on screen');
     },
   },
+  // The same person, the same tile, the same shot — before and after the dex
+  // knows. Ann exists to warn you about a creature and was still warning people
+  // who had one in the party. A dialogue is a DOM panel, so these are stills;
+  // the tool calls renderDialogue() after go(), which is what makes talkTo the
+  // right way to drive it.
+  annfresh: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      const ann = EK.MAPS.stillmere.npcs.find((n) => n.name === 'Sheller Ann');
+      EK.enterMap('stillmere', ann.x, ann.y - 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(ann);
+    },
+  },
+  annkin: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.party.push(EK.mkMon('lanterneel', 14));
+      EK.catchMon('lanterneel');
+      const ann = EK.MAPS.stillmere.npcs.find((n) => n.name === 'Sheller Ann');
+      EK.enterMap('stillmere', ann.x, ann.y - 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(ann);
+      if (!/Look at your hand/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('Ann did not notice the kin in the party');
+      }
+    },
+  },
+  // Dorn guards a stretch of Route One. He loses, stays standing on it, and
+  // watches you walk past it for the rest of the game — and used to say "Good
+  // match. Go on." every single time. Two stills, same tile, same frame.
+  // (Written out twice rather than shared: scene bodies are serialised into the
+  // page, so there is no outer scope for a helper to live in.)
+  dornheld: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.flags.t_dorn = 1;
+      const dorn = EK.MAPS.route_one.npcs.find((n) => n.id === 't_dorn');
+      EK.enterMap('route_one', dorn.x, dorn.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(dorn);
+    },
+  },
+  dornpast: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.flags.t_dorn = 1;
+      EK.G.been.emberwood = 1; EK.G.been.crown_hollow = 1;
+      const dorn = EK.MAPS.route_one.npcs.find((n) => n.id === 't_dorn');
+      EK.enterMap('route_one', dorn.x, dorn.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      EK.talkTo(dorn);
+      if (!/something else/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('Dorn did not notice how far you got');
+      }
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
