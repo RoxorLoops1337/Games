@@ -786,6 +786,42 @@ section('a row that runs out of room wraps rather than painting over its neighbo
     `and its leading space is unbreakable, so the dot cannot open a line (joined with "${join && join[1]}")`);
 }
 
+section('a phone is driven with a thumb, not a pointer');
+{
+  // Targets mode of the survey opened eleven screens at 390x760 and measured,
+  // for every tappable element, not its border box but how far from its centre
+  // a tap can land and still resolve to it. Three sets came back under a 44px
+  // thumb: the way out of every screen at 8px tall, the four buttons pressed
+  // every turn of a fight at 24, and the two that end the profile at 18.
+  //
+  // A CSS fault has only CSS to state it in. What is netted here is not four
+  // selectors but the thing that keeps them honest: the size a thumb needs has
+  // a NAME, and the touch rules ask for it instead of each repeating a 44.
+  const root = SRC.match(/:root\{([\s\S]*?)\}/);
+  ok(root && /--tap:\s*44px/.test(root[1]), 'how big a thumb is has a name');
+
+  // Every rule that sizes a touch target asks for it. Four today — the fight's
+  // action row, the back chip's spacer, the profile's two buttons, and any list
+  // row — and a fifth gets it for free by asking.
+  const uses = (SRC.match(/var\(--tap\)/g) || []).length;
+  ok(uses >= 4, `and the touch rules ask for it by name (${uses} sites)`);
+
+  // …and nobody states it a second time. This is the check that would have
+  // caught the version of this pass where the number was written into each
+  // rule: they agreed on the day and would not have stayed agreed.
+  const bare = SRC.match(/body\.touch[^{]*\{[^}]*(?:min-height|height):\s*44px/g) || [];
+  eq(bare.length, 0, 'and none of them writes the number out again');
+
+  // The one rule that is a POSITION rather than a size, and the reason it
+  // exists: `#acts` is anchored by its top, so a taller button grows downward
+  // into the panel carrying the selected card's text. Growing a target into
+  // whatever sits below it is not growing it — the box read 44 and the
+  // reachable area stayed at 24 until the row moved up by what it gained.
+  const acts = SRC.match(/body\.touch #acts\{([^}]*)\}/);
+  ok(acts && /margin-top:\s*-\d+px/.test(acts[1]),
+    'the fight\'s action row moves up by what it grew, rather than into the panel below it');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.

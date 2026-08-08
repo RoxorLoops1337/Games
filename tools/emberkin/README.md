@@ -377,6 +377,77 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+77. **Measuring the thing instead of a proxy for it** (pass 166). 165's survey
+    grew a second mode — `node tools/emberkin/survey.mjs targets` — that opens
+    eleven screens at 390x760 and measures every tappable element against a 44px
+    thumb. Three real sets came back, and **the number that mattered was never
+    the border box**.
+
+    **What a thumb gets is not `getBoundingClientRect`.** It is the region where
+    a tap still resolves to the element: padding counts, a `::after` spacer
+    counts, and a sibling painted on top takes it away again — and none of those
+    three move the rect. The probe walks outward from the centre a pixel at a
+    time and asks the browser's own hit test where the target stops. Measuring
+    the proxy would have made one of the three repairs literally unverifiable,
+    and an unverifiable repair is a guess.
+
+    - **The way out of every screen was the smallest target in the game.** The
+      back chip is 21x10 of text with no padding, on all eight screens that have
+      one — an **8px** tall hit area. It keeps its size; a transparent spacer
+      gives the thumb something to land on, so nothing moves by a pixel.
+    - **The four buttons pressed every turn of every fight**: 24px. And the
+      first repair *did not work* — the box went to 44 and the reachable area
+      stayed at 24, because `#acts` is anchored by its top and the button grew
+      straight down into the panel that carries the selected card's text.
+      **Growing a target into whatever sits below it is not growing it.** The
+      row now moves up by exactly what it gained.
+    - **Rename and Done**, at 18px, and the chest shelf at 43. The chest fix is
+      written as a rule about list rows rather than about chests, so the next
+      list gets it for free.
+
+    **Size is only half the question.** Two targets can each clear 44px and
+    still sit close enough that one fingertip covers both, which a size check
+    cannot see at all — so the survey also reports centre-to-centre distance,
+    and separately asks of every target *what does a tap at your own centre
+    actually hit*. The game is clean on both. The proximity check was still
+    proved by shrinking a row until it fired, because **a check that has never
+    said anything and a check that cannot say anything look identical.**
+
+    **Five errors in the instrument, and it reported the game clean twice more
+    than it should have:**
+    1. **A phantom on all eleven screens.** The setup drove `takeStarter` from
+       outside and so never hid the title, which stays laid out underneath
+       everything: "New journey" measured as a live 145x38 button on every
+       screen, and `elementFromPoint` confirmed a tap really would have hit it.
+       `shot.mjs` clicks past the title exactly like a player and says why; the
+       survey now does too.
+    2. **21 ordinary list rows called unreachable**, because the bound used was
+       the window. On a phone `#screen` is a 310px panel holding 1004px of dex,
+       so a scrolled-out cell still reports a rect inside a 760px window. The
+       bound is the SCROLLER.
+    3. **An ancestor counted as a hit.** `at.contains(el)` was in the
+       reachability test, so a tap landing on `#screen` counted as reaching the
+       back chip — and the chip measured 44px tall when its box is 10. *The
+       instrument agreed with a fix that had not been made yet.* A descendant is
+       a hit (the click bubbles up); an ancestor is a miss.
+    4. **A 2px probe step reported 40 for a box that is exactly 44.** The
+       tempting repair is to relax the threshold, which is 164's mistake in a
+       new costume. A 44px box spans 44 integer rows: measure in 1px steps and
+       count the centre pixel.
+    5. **A stray `*/` left the back-chip rule outside its comment**, and CSS
+       error recovery swallowed it as part of an invalid selector. The survey
+       dutifully reported the chip unchanged at 8px — which is the one case in
+       this list where the instrument was right and I was wrong to doubt it.
+
+    And the pair-dedupe key was built from one end of the pair plus the other's
+    text, so it differed depending on which end you started from and deduped
+    nothing. It only showed up **because the check was being proved** — the real
+    game has no near-pairs, so the bug would have sat there indefinitely.
+
+    The size a thumb needs is now `--tap: 44px`, named once, asked for by every
+    touch rule. Same move as `PARTY_MAX` in 163, same reason: four rules that
+    agree on a number today are four rules that will disagree later.
+
 76. **Asking all ten screens at once instead of aiming a camera** (pass 165).
     164 found a real fault by measuring the DOM after the pixels had lied, so
     165 stopped aiming: a **survey** — `tools/emberkin/survey.mjs`, alongside
