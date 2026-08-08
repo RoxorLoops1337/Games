@@ -8458,9 +8458,11 @@ function nextAim() {
 }
 
 // ---- world main menu ---------------------------------------------------
-function openMainMenu() {
+function openMainMenu(opt = {}) {
   G.mode = 'menu';
-  playCue('menu');
+  // Coming back from a screen has already played its own note; a second one on
+  // top of it is the menu announcing itself for something you did not do.
+  if (!opt.quiet) playCue('menu');
   openMenu('mainmenu', [
     { label: 'Kin', sub: partyTally(), fn: () => openScreen('party') },
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
@@ -8471,7 +8473,7 @@ function openMainMenu() {
     { label: 'Fullscreen', fn: () => { toggleFullscreen(); closeWorldMenu(); } },
     { label: 'Save', fn: () => { setToast(saveGame() ? 'Journey saved.' : 'Could not save.'); } },
     { label: 'Close', fn: closeWorldMenu },
-  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems<span class="aim">${nextAim()}</span>` });
+  ], { i: opt.i || 0, cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems<span class="aim">${nextAim()}</span>` });
 }
 function closeWorldMenu() { closeMenu(); G.mode = 'world'; }
 
@@ -9890,6 +9892,13 @@ function openBattleActions() {
 
 // ---- full screens ------------------------------------------------------
 function openScreen(kind, opt = {}) {
+  // Where you came from, taken before closeMenu throws it away. `prev` was
+  // already being recorded here and read by nothing: every row of the pause
+  // menu — Kin, Dex, Bag, Box, Deck — dropped you into the grass when you
+  // pressed back, so checking two of them meant opening the menu twice. The
+  // row goes with it, because coming back to the menu with the cursor at the
+  // top is only most of the way back.
+  const from = G.mode, fromRow = G.menu ? G.menu.i : 0;
   closeMenu();
   // When you must send someone out, start the cursor on someone who can go.
   // On a profile, start it on the way out: confirm should always mean "that
@@ -9907,7 +9916,7 @@ function openScreen(kind, opt = {}) {
   const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive))
     : kind === 'profile' ? 1
     : kind === 'bag' && !G.battle ? bagStart() : 0;
-  G.screen = { kind, i, sel: null, opt, prev: G.mode };
+  G.screen = { kind, i, sel: null, opt, prev: from, prevRow: fromRow };
   G.mode = 'screen';
   playCue(kind === 'reward' ? 'level' : 'menu');
   renderScreen();
@@ -9973,6 +9982,9 @@ function closeScreen() {
   G.screen = null;
   if (!HEADLESS) show(els.screen, false);
   if (G.battle) { G.mode = 'battle'; if (!G.battle.over) renderHand(); }
+  // Back to the menu you came out of, on the row you came out of. Spending
+  // `prev`, which openScreen has always written and nothing has ever read.
+  else if (s.prev === 'menu' && G.map) openMainMenu({ i: s.prevRow || 0, quiet: true });
   else { G.mode = 'world'; }
 }
 
