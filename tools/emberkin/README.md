@@ -377,6 +377,49 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+56. **The line was never wrong. He was** (pass 145). A closing sweep of the
+    dialogue seam: dump what all seventeen npcs say at four points in the story
+    — fresh, mid-route, post-Warden, post-ending — and read the four columns
+    side by side rather than each person in turn.
+
+    Everybody came back reactive except Bell, who is deliberately need-driven
+    rather than progress-driven. What the LAST column showed instead was a
+    continuity fault no amount of reading one character at a time would find:
+
+        Wick (hollowbrook)   I am going north. Try to keep up.
+        Wick (emberwood)     You went up without me. I heard.
+        Wick (crown_hollow)  I am staying up here a while.
+
+    Three copies of one man, on screen at once, the first of them still promising
+    to set off. And the Emberwood Wick `requires: 't_wick1'`, so there had been
+    two of him from the instant the first fight was won — the whole game.
+
+    The fix is not a rewrite. His line is the best line he has; he simply never
+    did it. `leaves: '<flag>'` generalises what `block` already did to an npc's
+    presence — gone once some flag is set — and `block` turns out to be the
+    special case where that flag is the npc's own id, plus "stands in a path".
+    Town Wick `leaves: 't_wick1'` and goes when he says he will; wood Wick
+    `leaves: 'beatVespyr'`, the exact flag that puts the summit Wick on the
+    mountain. His parting line moves into `lose`, where it is heard at the
+    moment he says it.
+
+    Three drives were wrong before the game was, all the same shape — a filter
+    that could not tell two reasons apart:
+
+    - `npcActive` is false for a GATED npc as well as a departed one, so a
+      "who leaves when beaten?" filter that sets only `{gotStarter, ownId}`
+      collects the two later Wicks, who have not arrived.
+    - A hand-written progression that forced `beatVespyr` on from the start put
+      the summit Wick on the mountain before the first fight in the game and
+      reported a double the drive had invented. Walk `AIM_ORDER` — the game's
+      own ordered trainer list, gates included.
+    - And `stayed >= 8` went stale twice inside one pass as each Wick learned to
+      leave. Derived now: every trainer is either still standing or gone.
+
+    **A character who is in two places is not a dialogue bug, and you will not
+    find it by reading dialogue. It only shows up when you lay the whole cast
+    out at one moment in the story and look down the column.**
+
 55. **The gate was on a proxy, and the net took three goes to say why** (pass
     144). Elder Rowan is the character the whole game says is paying attention,
     and she had one piece of navigation: *"Crown Hollow, past the Warden."* It

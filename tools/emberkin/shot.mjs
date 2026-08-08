@@ -1217,6 +1217,35 @@ const SCENES = {
       EK.talkTo(vane);
     },
   },
+  // Wick's parting line in town is "I am going north. Try to keep up." He then
+  // did not go: the Emberwood Wick appears the instant this fight is won, so
+  // from that moment there were two of him, and at the end of a run three. Same
+  // tile, same frame, before and after — the town has one fewer person in it.
+  townwick: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      const wick = EK.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+      EK.enterMap('hollowbrook', wick.x, wick.y + 3, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      if (!EK.npcActive(wick)) throw new Error('Wick is not in town before the fight');
+    },
+  },
+  towngone: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.flags.t_wick1 = 1;
+      const wick = EK.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+      EK.enterMap('hollowbrook', wick.x, wick.y + 3, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      if (EK.npcActive(wick)) throw new Error('Wick said he was going north and did not');
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
