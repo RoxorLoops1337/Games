@@ -377,6 +377,40 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+64. **The same fault, in the function I wrote to fix the last one** (pass 153).
+    Asking 152's question of every other number the game shows a player: freeze
+    the randomness, compare shown against resolved.
+
+    The card's own range came back CLEAN — 29 of 29 dealt inside it, because
+    `moveDamage` has always folded `attackBonus()` in. That is the control, and
+    it is what made the other reading legible.
+
+    `moveVersusFoe` did not. It is the figure on the switch screen, added in
+    pass 147 to stop that screen printing foe-agnostic numbers — and it applied
+    the type matchup while ignoring the banked bonus the swing spends. With an
+    edge up it understated a replacement by up to a quarter: 17 of 29 exact,
+    p90 1.24. After: 28 of 30 exact, p90 1.00.
+
+    Worth being plain about. This is the identical class of fault as the
+    telegraph's, in a function written SIX PASSES LATER, by the same hand, in
+    the pass whose entire point was that a screen must show what the resolution
+    will do. Knowing the shape of a mistake is not the same as not making it. The
+    only thing that caught it was running the same measurement again on a
+    different number.
+
+    `attackBonus()` reads only `b.mods` and `G.might` — nothing about which kin
+    is holding it — so it belongs to whoever swings, including somebody still on
+    the bench. That is why the switch screen was entitled to it.
+
+    A drive fault too, small and worth the line: the new test set `b.mods.edge`
+    where `b` in that scope was not the battle, so it silently set a property on
+    the wrong object and reported no change. The measurement script had already
+    proved the fix; the test was lying about it. Bind `g.B()` explicitly.
+
+    **Ask the question again on the next number. A rule you have just written
+    down protects the code you write while you are thinking about it, and
+    nothing after that.**
+
 63. **The telegraph named a number the foe was never going to deal** (pass 152).
     The measurement 151 recorded and refused to act on, isolated.
 

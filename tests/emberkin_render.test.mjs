@@ -1877,6 +1877,23 @@ section('the switch screen knows who you are choosing against');
   eq(g.EFF_MARK[String(b2.eff)].tag, 'STRONG', 'both ways');
   ok(!g.EFF_MARK['1'], 'a neutral hit is not labelled at all — a mark on everything marks nothing');
 
+  // And the number folds in what the SWING folds in. `moveDamage` has always
+  // applied attackBonus(); this did not, so with an edge banked the switch
+  // screen understated a replacement by up to a quarter — the telegraph's fault
+  // exactly, in a function written two passes after it fixed.
+  const hitId = (m) => m.moves.find((sl) => g.MOVES[sl.id].pow).id;
+  const fight = g.B();                       // `b` in this scope is not the battle
+  const bare = g.moveVersusFoe(wet, hitId(wet)).dmg;
+  fight.mods.edge = 9;
+  const banked = g.moveVersusFoe(wet, hitId(wet)).dmg;
+  ok(banked > bare, `a banked edge raises the figure (${bare} -> ${banked})`);
+  eq(banked - bare, 9, 'by exactly what was banked, the way the swing spends it');
+  fight.mods.mul = 2;
+  ok(g.moveVersusFoe(wet, hitId(wet)).dmg > banked, 'and a multiplier multiplies it');
+  fight.mods.edge = 0; fight.mods.mul = 1;
+  ok(/const bonus = attackBonus\(\);/.test(SRC.slice(SRC.indexOf('function moveVersusFoe'), SRC.indexOf('function moveDamageNeutral'))),
+    'read off attackBonus rather than a second copy of what it does');
+
   // It reads the kin being ASKED ABOUT, not whoever happens to be out. The
   // whole point is choosing a replacement while somebody else is on the field.
   ok(g.moveVersusFoe(hot, swing(hot)).dmg !== g.moveVersusFoe(wet, swing(wet)).dmg,
