@@ -377,6 +377,78 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+70. **Four asked, three clean, one shipped** (pass 159). The set-level sweep
+    had four open questions and the rule is fix ONE per pass, so all four were
+    checked and only the last was touched. **Reporting the clean ones is half
+    the pass** — a question answered "no fault here" is answered.
+    - **The "X — back" chip.** One CSS rule (`right:12px; top:10px`), one render
+      line, one phone adjustment for the control band. Same corner, size and
+      colour everywhere by construction. **Clean.**
+    - **Where the panel starts.** `#screen` is a single rule every screen shares
+      and so is `#screen h2`. The top and left edges cannot drift. **Clean.**
+    - **Gold.** Real dilution: `--gold` is the h2 on every screen, the level in
+      a kin row, the dex number of a caught kin, the item tally, the energy
+      cost, the selection ring on five different card types, and the kin card's
+      border. At least four meanings — heading, level, selection, "this is a kin
+      thing". But it is also the game's accent, and repainting a project's
+      identity colour on a consistency argument is a taste call I do not get to
+      make unilaterally. **Recorded, not changed.**
+    - **The box had no detail pane.** Shipped.
+
+    The box is the screen you stand in to decide who to bring, and it was the
+    one screen that could not answer the question that decision turns on. The
+    party screen puts a stat block beside its list; the dex puts a detail pane
+    under its grid; the box had neither, so "what does this one know" meant
+    withdrawing it, opening the party screen, and putting it back. Third
+    instalment of the same fault: 157 found the box row dropped the status chip,
+    158 found it used a different noun for the collection, and this is the box
+    dropping the whole answer.
+
+    **The picture rejected two placements before it kept one.**
+    - *Under the grids*, the way the dex does it — the dex's grid is nineteen
+      cells and fits, this one is a party plus a box that runs to thirty-odd
+      cards, so the pane landed below every one of them and off the bottom of
+      the screen. **It was there and it was invisible**, which is worse than
+      absent because a source net can see it and be satisfied.
+    - *Above the grids*, which is right — except a full-width panel leading a
+      screen draws straight through the `.back` chip, since the chip is
+      absolutely positioned and every other screen opens with a short `<h2>`
+      that sits to its left. Reserved the corner rather than moving the chip:
+      the chip being in the same place on every screen is the whole point of it.
+    - And the first attempt at reserving it used `:first-child`, which is the
+      BACK CHIP — the panel is the second child. **A selector that matches
+      nothing fails exactly like a rule that does nothing.** The shot caught it.
+
+    **The cost, stated rather than skipped:** on a phone the pane fills most of
+    the viewport and leaves a sliver of the grid, so browsing means scrolling
+    down and inspecting means scrolling back up. Checked with `--touch --size
+    390x760`; the chip is clear and the block reads, but this is a real trade
+    and not a free one. The desktop case is unambiguously better and the dex
+    already asks for the same scroll, which is why it was kept.
+
+69. **One collection, three screens, three names for it** (pass 158). Asked of
+    the SET rather than of any one screen, which is the only way this was ever
+    going to be visible. Every inventory in the game heads itself
+    `Name — count`: `Dex — 13 caught / 16 seen / 19`, `Box — 26`,
+    `Deck — 8/12 (min 5)`, `Collection — 4 spare`, `Bag — 500 shards`,
+    `Gem chests — 260 gems`. The party broke that pattern in both of the ways
+    available at once:
+    - the pause menu said `Kin  6/6`,
+    - the party screen said `Your kin` — **a different noun and no number**,
+    - and the box screen, listing the SAME six creatures, headed them
+      `Party — 6/6`.
+    The one you open most was the odd one out, and `6/6` is the fact that
+    matters — a full party is why a new catch goes to the box instead.
+    `kin` is the game's own word (the battle button, `Choose your kin`, the card
+    text); `Party` was the outlier. One `kinHeading()` now writes it for both
+    screens and the menu takes its count from the same `partyTally()`.
+    On the way: the cap was a bare `6` in four places, one of which draws the
+    EMPTY SLOTS and one of which decides whether a catch joins you — two numbers
+    that must agree and had no reason to. `PARTY_MAX` now.
+    **The screens that are NOT in this family are prompts** — "Choose your kin",
+    "What comes out?", "Take a card" — which ask a question rather than report
+    an inventory. That is the property that exempts them, and the net says so.
+
 68. **The same kin, two screens, two descriptions — and one of them dropped the
     thing you came to find out** (pass 157). Found by laying the world screens
     out side by side, which had never been done. The dex draws types as coloured

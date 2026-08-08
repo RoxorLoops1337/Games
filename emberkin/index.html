@@ -433,6 +433,13 @@
   }
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
+  /* The chip floats over everything, so anything that LEADS a screen has to
+     leave its corner alone. Every screen used to open with an <h2>, which is
+     short and sits to the left of it; the box now opens with a full-width
+     detail panel, and that panel drew straight through the only way off the
+     screen. Reserve the corner rather than moving the chip — the chip being in
+     the same place on every screen is the point of it. */
+  #screen > .kindetail{ margin-top:20px; }
   /* In the portrait phone layout the stage is top-aligned at 4% of the window,
      so the panel's top-right corner lands underneath #fsbtn — fixed at right:8
      top:8, 34px square. The two were drawn on top of each other, which is only
@@ -6499,7 +6506,7 @@ function addCaught(mon) {
   G.caught++;
   mon.stages = { atk: 0, def: 0, spd: 0 };
   untoughen(mon);
-  if (G.party.length < 6) { G.party.push(mon); return 'party'; }
+  if (G.party.length < PARTY_MAX) { G.party.push(mon); return 'party'; }
   G.box.push(mon); return 'box';
 }
 
@@ -8137,7 +8144,7 @@ function openMainMenu() {
   G.mode = 'menu';
   playCue('menu');
   openMenu('mainmenu', [
-    { label: 'Kin', sub: `${G.party.length}/6`, fn: () => openScreen('party') },
+    { label: 'Kin', sub: partyTally(), fn: () => openScreen('party') },
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
     { label: 'Bag', fn: () => openScreen('bag') },
     { label: 'Box', sub: '' + G.box.length, fn: () => openScreen('box') },
@@ -9524,6 +9531,24 @@ const kinSub = (m) => `<div class="kinsub"><span class="lv">Lv${m.lvl}</span>`
   + `${typeChips(m.types)}${m.status ? statusChip(m.status) : ''}</div>`;
 
 /**
+ * How many kin you are carrying, and what they are called, in one place.
+ *
+ * Three screens named the same set three different ways: the pause menu said
+ * `Kin  6/6`, the party screen said `Your kin` with no number on it at all, and
+ * the box screen — listing the SAME six creatures — headed them `Party — 6/6`.
+ * Every other collection in the game reads `Name — count`: `Dex — 13 caught /
+ * 16 seen / 19`, `Box — 26`, `Deck — 8/12 (min 5)`, `Bag — 500 shards`. The one
+ * you open most was the one that broke the pattern, and it broke it in the two
+ * ways available: a different noun and a missing number.
+ *
+ * `kin` is the game's own word — the battle button, `Choose your kin`, every
+ * card that mentions one. `Party` was the outlier.
+ */
+const PARTY_MAX = 6;
+const partyTally = () => `${G.party.length}/${PARTY_MAX}`;
+const kinHeading = () => `Kin — ${partyTally()}`;
+
+/**
  * A kin's page: portrait, stats and moves.
  *
  * Numbers alone make you do arithmetic to answer "is this one fast?". A bar
@@ -9625,7 +9650,7 @@ function renderScreen() {
     // Roster on the left, whoever is picked on the right. A row of equal cards
     // has no hierarchy: there is nothing on it saying which one you are looking
     // at, so every card has to carry every fact and none of them can be big.
-    html += `<h2>Your kin</h2><div class="kinview">`;
+    html += `<h2>${kinHeading()}</h2><div class="kinview">`;
     html += `<div class="kinlist">` + G.party.map((m, i) => {
       const f = m.hp / m.max;
       return `<div class="kinrow panel ${i === s.i ? 'sel' : ''} ${m.hp <= 0 ? 'down' : ''}" data-i="${i}">
@@ -9687,9 +9712,25 @@ function renderScreen() {
     // here to find out. Photographing the box for the first time is what showed
     // it; a full party had always been what got looked at in a test.
     const slot = () => '<div class="card panel slot"><span>empty</span></div>';
-    html += `<h2>Party — ${G.party.length}/6</h2><div class="cards slim">`
+    // What the kin under the cursor can actually DO, before either grid.
+    //
+    // This screen is where you decide who to bring, and it was the one screen
+    // that could not answer the question that decision turns on: the party
+    // screen puts a stat block beside its list, the dex puts a detail pane
+    // under its grid, and the box had neither — so "what does this one know"
+    // meant withdrawing it, opening the party screen, and putting it back.
+    //
+    // Tried under the grids first, the way the dex does it. The dex's grid is
+    // nineteen cells and fits; this one is a party plus a box that runs to
+    // thirty-odd cards, so the pane landed below every one of them and off the
+    // bottom of the screen. It was there and it was invisible — which is worse
+    // than absent, because a test can see it. Above, it is the first thing on
+    // the screen and it moves with the cursor.
+    const under = G.party.concat(G.box)[s.i];
+    if (under) html += statBlock(under);
+    html += `<h2>${kinHeading()}</h2><div class="cards slim">`
       + G.party.map((m, i) => monCard(m, i)).join('')
-      + Array.from({ length: Math.max(0, 6 - G.party.length) }, slot).join('') + '</div>';
+      + Array.from({ length: Math.max(0, PARTY_MAX - G.party.length) }, slot).join('') + '</div>';
     html += `<h2 style="margin-top:12px">Box — ${G.box.length}</h2>`;
     html += G.box.length ? `<div class="cards slim">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
       : '<p style="color:var(--dim)">Nothing stored yet.</p>';
@@ -10018,7 +10059,7 @@ function boxSelect(s) {
   } else {
     const m = G.box[boxIdx];
     if (!m) return;
-    if (G.party.length < 6) {
+    if (G.party.length < PARTY_MAX) {
       G.box.splice(boxIdx, 1);
       G.party.push(m);
       setToast(`${dispName(m)} joins you.`);
@@ -11531,7 +11572,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub,
+    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
