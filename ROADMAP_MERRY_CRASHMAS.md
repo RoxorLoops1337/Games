@@ -535,6 +535,22 @@ edit this block to name the next one.
       must be byte-identical shuttered and must not be unshuttered, or the
       check proves nothing. 17 rects against 197 for MIDNIGHT MASS's plan.
 
+- [x] The nitro exhaust is a jet, not a row of dots. The one power move in the
+      game drew `circle(x, y, size * k)` under `lighter` — a string of round
+      bubbles trailing off the back bumper with no direction, no taper and no
+      heat. A flame has a direction: it is stretched along the way it was
+      thrown, white-hot at the pipe end it came out of, and it frays into
+      smoke as it cools (`FLAME_SMOKE`, and smoke is drawn `source-over`
+      because smoke does not add light to a night market). Every bit of the
+      shape is read off the velocity the spawn had already rolled — the spawn
+      itself is untouched, so no market is rescored. Two harness notes:
+      `carRec` records an ellipse's rotation now, but on `shapes` only, because
+      several tests read the *last* slot of an `all` entry as its colour and
+      appending there silently turned four of them red. And `api.MAX_PULL` does
+      not exist (it is `api.C.MAX_PULL`): `-undefined` is NaN, NaN sails
+      through `doBoost`'s `sp < 25` gate, and the nitro fires on a car that is
+      not moving.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
