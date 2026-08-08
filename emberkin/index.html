@@ -11648,11 +11648,34 @@ function newGame() {
  * two DOM buttons — so on a phone, where the round controls are the only thing
  * you can press, the title did not respond to either of them. See `step`.
  */
-function startNew() { show(els.title, false); wipeSave(); newGame(); playCue('world'); }
+/**
+ * How long the world takes to come up under the title. A door goes through
+ * black at .3 and waking up after a loss at .5, and this is the only cut in the
+ * game that had NEITHER: photographed end to end, the title was replaced by the
+ * study 120ms after the click, mid-sentence, with `fade` and `wipe` both zero
+ * at every sample. The most careful transition in the file, skipped at the one
+ * cut every player sees first.
+ *
+ * Between the two: longer than a door because there is nothing behind it, no
+ * longer than waking up because you are not meant to have lost anything.
+ *
+ * The panels come with it for free — `screenCovered()` is true while a fade
+ * runs, and the class it drives already takes the dialogue box out of the way
+ * (173). Without that, opening through black would have shown Elder Rowan
+ * talking over an empty screen, which is worse than the cut.
+ */
+const OPEN_FADE = .45;
+
+function startNew() {
+  show(els.title, false); wipeSave(); newGame();
+  G.fade = OPEN_FADE;
+  playCue('world');
+}
 function startCont() {
   show(els.title, false);
   if (!loadGame()) newGame();
   else { G.mode = 'world'; updateCam(); }
+  G.fade = OPEN_FADE;
   // A save picked up in the Emberwood should not open on the town's tune.
   playCue(placeTrack(G.mapId));
 }
@@ -12056,7 +12079,7 @@ if (typeof window !== 'undefined') {
     renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
-    alertStep, alertClose, ALERT, BUMP_T, bumpOffset, takeStarter, STARTERS, TYPE_ORDER,
+    alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,

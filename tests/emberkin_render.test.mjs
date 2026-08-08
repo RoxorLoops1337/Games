@@ -1439,6 +1439,44 @@ section('being called out happens to you as well as to them');
   eq(g.G.player.bump, 0, 'and it is spent by the time the beat ends');
 }
 
+section('the game opens the way it changes any other scene');
+{
+  // Photographed end to end for the first time: the title was replaced by the
+  // study 120ms after the click, mid-sentence, with `fade` and `wipe` both zero
+  // at every sample. A door goes through black at .3 and waking up after a loss
+  // at .5 — the most careful transition in the file, skipped at the one cut
+  // every player sees first.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  ok(g.OPEN_FADE > 0, `the opening has a length (${g.OPEN_FADE}s)`);
+
+  g.startNew();
+  eq(g.G.fade, g.OPEN_FADE, 'and starting a journey goes through it');
+  ok(g.screenCovered(), 'so the screen is covered while the world comes up');
+
+  // Waiting is not starving (170): a cover that never lifts is worse than no
+  // cover. Driven, not reasoned.
+  let frames = 0;
+  while (g.G.fade > 0 && frames < 300) { g.step(1 / 60); g.draw(); frames++; }
+  eq(g.G.fade, 0, 'and the world does arrive');
+  ok(frames > 10 && frames < 120,
+    `taking about as long as it says (${frames} frames for ${g.OPEN_FADE}s)`);
+  ok(!g.screenCovered(), 'and the screen is its own again');
+
+  // …and the same for picking up a save, which is the other way in. The rule
+  // this pass is about is a rule applied to SOME of its cases; netting one door
+  // and not the other is how that happens.
+  const g2 = loadGame({});
+  g2.setCtx(mkCtx());
+  g2.startNew();
+  for (let n = 0; n < 300 && g2.G.fade > 0; n++) g2.step(1 / 60);
+  g2.saveGame();
+  const g3 = loadGame(g2.__store || {});
+  g3.setCtx(mkCtx());
+  g3.startCont();
+  eq(g3.G.fade, g3.OPEN_FADE, 'and so does picking one up again');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
@@ -2152,8 +2190,13 @@ section('the title leads with the run you already have');
   // A is already the safe one. This is the fact the layout was contradicting.
   ok(/\(hasSave\(\) \? startCont : startNew\)\(\)/.test(SRC),
     'pressing A on the title continues when there is a run to continue');
-  ok(/function startNew\(\) \{ show\(els\.title, false\); wipeSave\(\)/.test(SRC),
-    'and New journey really does destroy it — this is not a cosmetic ordering');
+  // Netted as the CLAIM, not the line. This assertion used to be a regex over
+  // `function startNew() { show(els.title, false); wipeSave()` — one physical
+  // line — and reformatting startNew to open through a fade broke it while the
+  // claim stayed exactly as true. Rule 68, caught by the suite doing its job.
+  ok(g.hasSave(), 'a run exists to be destroyed');
+  g.startNew();
+  ok(!g.hasSave(), 'and New journey really does destroy it — this is not a cosmetic ordering');
 
   // One flag drives the button AND the order, so the screen cannot reveal
   // Continue while still leading with the button that wipes the save.
