@@ -1342,6 +1342,53 @@ section('a kin is described the same way wherever it is listed');
     'in the narrow card the level takes a line of its own, so every card is one shape');
 }
 
+// One collection, three screens, three names for it. Asked of the SET rather
+// than of any one screen: every inventory in this game heads itself
+// `Name — count` — "Dex — 13 caught / 16 seen / 19", "Box — 26",
+// "Deck — 8/12 (min 5)", "Bag — 500 shards". The party broke that pattern in
+// both ways available at once. The pause menu said `Kin  6/6`, the party screen
+// said `Your kin` with no number on it at all, and the box screen — listing the
+// SAME six creatures — headed them `Party — 6/6`. The one you open most was the
+// odd one out.
+section('the party is called the same thing wherever it is counted');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+  g.G.party = [g.mkMon('cindercub', 8), g.mkMon('dewdrip', 9)];
+
+  eq(g.partyTally(), `2/${g.PARTY_MAX}`, 'the tally is how many you carry over the cap');
+  eq(g.kinHeading(), `Kin — 2/${g.PARTY_MAX}`, 'and the heading is that tally, named');
+  g.G.party.push(g.mkMon('sproutle', 7));
+  eq(g.kinHeading(), `Kin — 3/${g.PARTY_MAX}`, 'and it moves when the party does');
+
+  // `kin` is the game's own word for these creatures — the battle button, the
+  // starter prompt, the cards. `Party` was the outlier, and it was the label on
+  // the screen that lists them beside the box.
+  ok(/^Kin — /.test(g.kinHeading()), 'the noun is the one the rest of the game uses');
+
+  // Every screen that names this collection asks the same function for it.
+  eq((SRC.match(/kinHeading\(\)/g) || []).length, 2,
+    'the party screen and the box screen take their header from one place');
+  ok(/sub: partyTally\(\)/.test(SRC), 'and the pause menu takes its count from the same one');
+  ok(!/<h2>Your kin<\/h2>/.test(SRC), 'no screen still calls it something else');
+  ok(!/Party — \$\{G\.party\.length\}/.test(SRC), 'and none spells the count out beside a second noun');
+
+  // The cap is a constant now, not a 6 written into four places — one of which
+  // draws the empty slots and would have disagreed with the one that fills them.
+  eq(g.PARTY_MAX, 6, 'the cap has a name');
+  ok(!/G\.party\.length < 6\b/.test(SRC), 'and nothing compares against a bare six');
+
+  // The pattern this joins, so a future screen has something to match. Each of
+  // these is `Name — count`; the ones NOT in this list are prompts that ask a
+  // question rather than inventories that report one, which is the property
+  // that exempts them.
+  for (const head of ['Dex — ', 'Box — ', 'Deck — ', 'Collection — ', 'Gem chests — ']) {
+    ok(SRC.includes(head), `the family still contains "${head.trim()}"`);
+  }
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can
