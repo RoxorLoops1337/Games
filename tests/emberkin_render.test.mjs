@@ -1480,6 +1480,94 @@ section('the title leads with the run you already have');
     'the markup order still reads new-then-continue; only the returning view reorders');
 }
 
+// The losing beat's one piece of kindness, and the state nobody had reached.
+//
+// Sable's fee is a quarter of your shards, FLOORED — so anybody holding fewer
+// than four was told "It cost you 0 shards" in the single line the game writes
+// to soften a wipe. That is precisely the player most likely to be broke: they
+// have just lost everything. A number that is always zero reads as a bug, and
+// it turned the only mercy in the beat into a clerical error.
+section('when there was nothing to take, Sable says so');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+
+  // The arithmetic that produces the empty state, stated rather than assumed.
+  const fee = (money) => Math.floor(money * .25);
+  eq(fee(0), 0, 'nothing to take from nothing');
+  eq(fee(3), 0, 'nor from three — the floor eats it');
+  ok(fee(4) > 0, 'four is the first amount that costs anything');
+
+  // Both branches exist, and the charged one still names the number.
+  // This named the MARKUP — `It cost you ${lost} shards.` — and the markup
+  // changed for a good reason one pass later: the count now goes through
+  // countOf so that "1 shards" cannot happen either. The CLAIM is that a real
+  // charge still names its amount; assert that.
+  ok(/lost > 0\n\s*\? `Sable patched them up\. It cost you \$\{countOf\(lost, 'shard'\)\}\.`/.test(SRC),
+    'a real charge still says what it was, through the one that agrees with its noun');
+  ok(/: 'Sable patched them up\. She did not ask for anything, and did not say why\.'/.test(SRC),
+    'and nothing taken is said as nothing taken, not as zero');
+  ok(!/`Sable patched them up\. It cost you \$\{[^}]*\} shards\.`, 'Go easier/.test(SRC),
+    'the unconditional line is gone');
+
+  // The half that must not change: she is not suddenly explaining herself.
+  ok(/'Go easier out there\.'/.test(SRC), 'the second line is the same either way');
+
+  // …and the fee is still actually charged, so this is a wording fix and not a
+  // quiet removal of the loss.
+  ok(/G\.money -= lost;/.test(SRC), 'the shards still go');
+}
+
+// A count and its noun, everywhere they meet.
+//
+// The win flourish already got this right ON THE CANVAS — `+1 gem`, `+2 gems`
+// — and the TOAST for the same win, fired in the same moment two inches away,
+// said `+1 gems`. One number, one event, two places, disagreeing. And the line
+// pass 161 rewrote for ZERO still read "It cost you 1 shards" for anybody
+// holding four to seven shards: the zero was fixed and the one was walked past,
+// in the same sentence.
+section('a count and its noun agree');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  eq(g.countOf(1, 'gem'), '1 gem', 'one takes the singular');
+  eq(g.countOf(2, 'gem'), '2 gems', 'two takes the plural');
+  eq(g.countOf(0, 'gem'), '0 gems', 'and so does none');
+  eq(g.countOf(1, 'shard'), '1 shard', 'the noun is the caller\'s');
+  eq(g.countOf(3, 'shard'), '3 shards', 'pluralised by default with an s');
+  eq(g.countOf(1, 'kin', 'kin'), '1 kin', 'an irregular plural can be given');
+  eq(g.countOf(9, 'kin', 'kin'), '9 kin', 'and is used for every other count');
+
+  // The degenerate value of every site that prints one of these. 161's rule:
+  // compute the expression over a range and read the sentence.
+  const fee = (m) => Math.floor(m * .25);
+  eq(g.countOf(fee(4), 'shard'), '1 shard', 'four shards costs one shard, not "1 shards"');
+  eq(g.countOf(fee(40), 'shard'), '10 shards', 'and forty costs ten');
+
+  // Source: every site goes through it, and none spells a plural itself.
+  ok(/countOf\(f\.gems, 'gem'\)/.test(SRC), 'the win flourish on the canvas');
+  ok(/setToast\(`\+\$\{countOf\(gems, 'gem'\)\}`\)/.test(SRC), 'the toast for the same win');
+  ok(/countOf\(ch\.cost - G\.gems, 'gem'\)\} short/.test(SRC), 'the chest shortfall');
+  ok(/countOf\(lost, 'shard'\)/.test(SRC), "Sable's fee");
+  ok(/countOf\(b\.npc\.trainer\.prize, 'shard'\)/.test(SRC), 'and a trainer prize');
+  ok(!/\$\{f\.gems === 1 \? 'gem' : 'gems'\}/.test(SRC),
+    'the one place that had its own copy of the rule no longer does');
+
+  // The exemptions, named rather than left as survivors.
+  //
+  //  - `Collection — N spare` works at every count: "spare" is an adjective.
+  //  - `Nobody left to beat. N kin still unfound.` cannot reach zero — the
+  //    ternary above it takes the other branch when nothing is left, and `kin`
+  //    is invariant in this game's usage anyway.
+  ok(/Collection — \$\{rest\.length\} spare/.test(SRC), 'a spare count needs no plural');
+  ok(/seen < DEX_ORDER\.length\n\s*\? `Nobody left to beat\./.test(SRC),
+    'and the unfound count is guarded from zero by the branch above it');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can
