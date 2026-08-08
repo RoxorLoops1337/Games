@@ -1057,6 +1057,28 @@ edit this block to name the next one.
       of pixels off screen and the pop can never be seen. Fading it would have
       been a fix to nothing.
 
+- [x] A boot print is lit by the scene, not by the way the walker was facing.
+      Second pass on the ground, and this one was found by reading a comment
+      rather than by staring: `drawFootprints` has said since it was written
+      that a print is *"a dent, drawn as a shadow with a lit lip on the side the
+      scene's light comes from"*, and the lip was a **fixed offset inside the
+      print's own rotated frame**. Sixteen prints laid in a ring, one per
+      heading, came out lit from sixteen different directions — a shopper
+      walking a circle carried the sun round with them. Every other lit side in
+      this game is un-rotated back out of its object's frame against
+      `SUN_DX`/`SUN_DY` — the coats do it, the car's panels do it — and this
+      one was not. It is now, on the far wall of the dent, the side the light
+      reaches over the near rim, which is where `shadow()` throws to.
+  - Third time in a handful of passes that a **comment promising something the
+      code under it did not do** was the whole finding: the carousel's axles,
+      the tyre trail's `ice`, and now this. Worth saying out loud as a way of
+      looking: read what the file claims about itself and check it.
+  - The assertion is the geometry, not a colour: rotate each recorded lip back
+      by its own print's rotation and every one must land on the same world
+      heading — and that heading must be the light's, to a millionth of a
+      radian. It fails at −143° for the old fixed offset, 0° for a centred lip
+      and −113° for one lit from the wrong side.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
