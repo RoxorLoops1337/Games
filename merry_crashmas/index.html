@@ -578,6 +578,12 @@ const WAIL_VOICES = 3, WAIL_LEN = 0.42, WAIL_RANGE = 900;
 const REST = 0.46, REST_HARD = 0.60;          // restitution: props vs statues
 const BONK_PTS = 140;                         // ricochet bonus off a statue
 const SHOUT_TIME = 1.4;
+/* What the driver yells. Six was one per nitro for six runs and then it
+   started repeating inside a single market; twelve gets you through a
+   campaign. Every one of them has to fit the bubble at the narrowest viewport
+   the game supports — `drawShout` clamps the plate to the screen but centres
+   the text inside it, so a line too long for the plate prints straight out
+   through both ends. The suite measures them. */
 const SHOUTS = [
   'MERRY CRASHMAS!!',
   'HOLD MY GLÜHWEIN!',
@@ -585,6 +591,12 @@ const SHOUTS = [
   'YEEEHAAAA!',
   'HO HO HOOOO!',
   'SHOPPING TIME!',
+  'COMING THROUGH!',
+  'MIND THE STALL!',
+  'BAH! HUMBUG!',
+  'SORRY! NOT SORRY!',
+  'ON DASHER! ON DENT!',
+  'DECK THE HALLS!',
 ];
 const KILL_SPD = 85;                          // slower than this and you just nudge them
 const DMG_PER_SPD = 0.115;
@@ -770,6 +782,18 @@ const LEVELS = [
     flavour:'The last one. Everyone in town is out, and the bells have just started.' },
 ];
 
+/* The chain the banner reads off is `G.combo`, the uncapped kill count — not
+   `G.mult`, which stops climbing at MAX_MULT — so the ladder can go as high as
+   the crowd does. It stopped at 22, and a full-power run down MIDNIGHT MASS
+   chains past that comfortably: past the top rung the game had nothing left to
+   say. Two more, and the carol keeps going as the market runs out of people. */
+/* How high the banner chime can climb, in rungs of four. It was 6, which every
+   rung from 24 up shared — the two new top banners would have sounded exactly
+   like CRASHMAS MIRACLE. The suite ties the two together: a ladder that runs
+   past what the chime can say is a ladder whose top rungs are audible twins,
+   so this has to be at least the top rung over four. It caught the first
+   attempt at it, which was 9 against a top rung of 40. */
+const BANNER_PITCH_CAP = 10;
 const COMBO_BANNERS = [
   [3,  'DOUBLE PARKED'],
   [5,  'JINGLE KILLS'],
@@ -777,6 +801,8 @@ const COMBO_BANNERS = [
   [12, 'YULE LOG'],
   [16, 'MARKET MAYHEM'],
   [22, 'CRASHMAS MIRACLE'],
+  [30, 'SILENT NIGHT'],
+  [40, 'ALL IS CALM'],
 ];
 
 /* Three things to go after in every market, on top of the score target. They
@@ -8358,7 +8384,7 @@ const sndWail = v => {
 };
 const sndFail   = () => { tone(300, 0.3, 'square', 0.16, 120); };
 function sndBanner(n){
-  const base = 520 + Math.min(6, n / 4) * 60;
+  const base = 520 + Math.min(BANNER_PITCH_CAP, n / 4) * 60;
   [0, 90, 180].forEach((d, i) => setTimeout(() => tone(base * (1 + i * 0.26), 0.14, 'triangle', 0.18), d));
 }
 /* Two notes dropping — the sound of everything slowing down. */

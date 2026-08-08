@@ -1137,6 +1137,34 @@ edit this block to name the next one.
       of the line never runs past the car* and *a stall on the line stops the
       line*. The other side of this was already bounded.
 
+- [x] Twelve shouts, eight banner rungs, and the guard that makes adding more
+      safe. Content pass. Six shouts is one per nitro for six runs and then the
+      driver starts repeating himself inside a single market — twelve gets you
+      through a campaign. The combo ladder stopped at a **22 chain**, and a
+      full-power run down MIDNIGHT MASS goes past that comfortably: beyond the
+      top rung the game had nothing left to say. `SILENT NIGHT` at 30 and `ALL
+      IS CALM` at 40 keep the carol going as the market runs out of people.
+  - The ladder reads `G.combo`, the **uncapped** chain, not `G.mult`, which
+      stops at `MAX_MULT` — so the new rungs are reachable. Pinned, because
+      keying it on the multiplier instead is a one-word edit that would silently
+      kill every rung above 19.
+  - The guard is the point of the pass. Both lists are the kind of thing that
+      gets appended to without measuring, so the suite now holds what a new line
+      has to fit inside: every shout against the bubble at the narrowest frame
+      the game will ever draw (widest is 278px of 436), the ladder strictly
+      climbing with no repeated wording, and — the coupling nobody would think
+      of — **the ladder must not run past what the chime can say**. `sndBanner`
+      climbs in rungs of four and stops at `BANNER_PITCH_CAP`, which was 6:
+      everything from a 24 chain up shared one pitch, so my two new banners
+      would have been audible twins of CRASHMAS MIRACLE. That assertion then
+      caught my own first fix, which raised the cap to 9 against a top rung of
+      40. It is 10.
+  - Found by the same comment sweep as the last two passes, which this time
+      turned up nothing: the footprint buffer's "a shopper three markets away
+      must not push a print off it" is conservative but honoured, and the goal
+      pops' "so they cannot land on top of each other" is honoured by a
+      climb-clear loop. Two claims checked and left alone.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
