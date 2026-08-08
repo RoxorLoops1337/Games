@@ -644,4 +644,131 @@ section('the people you beat notice what you did next');
     'and claims it as family');
 }
 
+// Rowan's one piece of navigation was gated on `dexCount(2) >= 8` — a PROXY for
+// "far enough along", when the game has the actual fact one flag away. It was
+// wrong in both directions at once.
+section('Rowan points at the road that is actually open');
+{
+  const g = loadGame({});
+  const ask = (setup) => {
+    g.newGame(); g.G.dialogue = null;
+    g.takeStarter('cindercub');
+    g.G.dialogue = null;
+    if (setup) setup(g);
+    g.enterMap('lab', 5, 5, 'up'); g.G.mode = 'world'; g.G.dialogue = null;
+    g.talkTo(g.MAPS.lab.npcs[0]);
+    return g.G.dialogue.lines.join(' ');
+  };
+  const caught = (n) => (g) => g.DEX_ORDER.slice(0, n).forEach((i) => g.catchMon(i));
+
+  ok(/paperwork/.test(ask(caught(3))), 'early on she just keeps the book');
+  ok(/will not let you by/.test(ask(caught(9))),
+    'with a full-ish book and the Warden in place, she names him as the obstacle');
+
+  // The direction that was silent: the path is open and she never said so,
+  // because the count had not reached eight.
+  ok(/stepped aside/.test(ask((g) => { caught(3)(g); g.G.flags.t_hale = 1; })),
+    'a thin dex and a beaten Warden still gets told the path opened');
+
+  // And the direction that was wrong: sent past a man who is not there.
+  const been = ask((g) => { caught(9)(g); g.G.flags.t_hale = 1; g.G.been.crown_hollow = 1; });
+  ok(!/past the Warden/.test(been), 'somebody who has stood on the mountain is not sent past him again');
+  ok(/air go thin/.test(been), 'they get pointed at what is actually still up there');
+}
+
+// The general form of that, which is what found the second one. Rowan was the
+// instance I read; Wick had been saying "The Warden will not let either of us
+// up" for the whole rest of the game, including on the way back down.
+//
+// Stating it took three goes, and the two failures are the interesting part.
+// Reading `talkLines`/`after` off the fields cannot see Rowan at all — she is a
+// `script` npc, so her words never touch either — and it reported the sweep
+// clean on the exact fault it was written for. And "nobody may NAME a departed
+// blocker" is the wrong claim: "Hale stepped aside for you" names him, and is
+// the fix rather than the bug.
+//
+// What is actually wrong is a line that does not MOVE. If somebody mentions the
+// blocker while the blocker is in the way, they have to say something different
+// once he has stepped off it.
+section('a line about a blocked path changes when the path opens');
+{
+  const g = loadGame({});
+  const all = Object.entries(g.MAPS).flatMap(([mid, m]) => (m.npcs || []).map((n) => [mid, n]));
+  const blockers = all.map(([, n]) => n).filter((n) => n.block);
+  ok(blockers.length > 0, `somebody blocks a path (${blockers.map((n) => n.name).join(', ')})`);
+
+  // Mid-game on purpose: far enough that everyone has been met, not so far that
+  // the ending branches take over and nobody is talking about paths any more.
+  const midGame = (g, open) => {
+    g.newGame(); g.G.dialogue = null;
+    g.takeStarter('cindercub');
+    g.G.dialogue = null;
+    ['t_wick1', 't_pell', 't_dorn', 't_ivo', 't_coll', 't_wick2', 't_mio'].forEach((f) => { g.G.flags[f] = 1; });
+    g.DEX_ORDER.slice(0, 9).forEach((id) => g.catchMon(id));
+    g.G.been.route_one = 1; g.G.been.emberwood = 1; g.G.been.stillmere = 1;
+    if (open) blockers.forEach((b) => { g.G.flags[b.id] = 1; });
+  };
+  const askAll = (open) => {
+    midGame(g, open);
+    const out = new Map();
+    for (const [mid, n] of all) {
+      if (!g.npcActive(n)) continue;
+      g.G.dialogue = null; g.G.screen = null; g.G.battle = null;
+      g.enterMap(mid, n.x, n.y + 1, 'up');
+      g.G.mode = 'world'; g.G.dialogue = null;
+      g.talkTo(n);
+      out.set(`${n.name} (${mid})`, (g.G.dialogue ? g.G.dialogue.lines : []).join(' '));
+    }
+    return out;
+  };
+
+  const shut = askAll(false);
+  const open = askAll(true);
+  ok(shut.size >= 10, `everybody still standing was asked (${shut.size})`);
+  for (const [who, said] of shut) {
+    ok(said.length > 0, `${who} says something at all`);
+    for (const b of blockers) {
+      const bare = b.name.replace(/^\w+\s+/, '');
+      if (!new RegExp(`\\b(${b.name}|${bare}|Warden)\\b`).test(said)) continue;
+      // They brought him up while he was in the way. They may not say the same
+      // thing once he is not.
+      ok(open.get(who) !== said,
+        `${who} talks about ${b.name} and stops saying the same thing once he steps aside`);
+    }
+  }
+}
+
+// The two behind the counter in Hollowbrook Supply. Both of them talk about
+// money and neither had ever looked at yours.
+section('the shop notices what you can afford');
+{
+  const g = loadGame({});
+  const npc = (name) => {
+    for (const m of Object.values(g.MAPS)) for (const n of (m.npcs || [])) if (n.name === name) return n;
+    return null;
+  };
+  const said = (name, setup) => {
+    g.newGame(); g.G.dialogue = null;
+    g.takeStarter('cindercub');
+    if (setup) setup(g);
+    return g.talkLines(npc(name)).join(' ');
+  };
+
+  ok(/no credit/.test(said('Bell', (g) => { g.G.money = 5000; })), 'Bell always states the rule');
+  ok(/not got a single orb/.test(said('Bell', (g) => { g.G.bag = {}; })), 'and says when you have no orbs');
+  ok(/short for a salve/.test(said('Bell', (g) => { g.G.money = 10; })), 'and when you cannot afford one');
+  // The orb list is asked of ITEMS, not written out — a fourth orb must count.
+  ok(!/bloomorb.*gleamorb.*prismorb/s.test(SRC.slice(SRC.indexOf("name: 'Bell'"), SRC.indexOf("name: 'Vane'"))),
+    'and she counts orbs by kind rather than by a list of three names');
+
+  ok(/short of the smallest one/.test(said('Vane', (g) => { g.G.gems = 0; })),
+    'Vane says how far off the cheapest chest you are');
+  ok(/nibble/.test(said('Vane', (g) => { g.G.gems = 300; })), 'gives the ladder to a newcomer who can buy');
+  ok(/keep coming back/.test(said('Vane', (g) => { g.G.gems = 300; g.G.chestsOpened = 14; })),
+    'and greets a regular as one');
+  ok(/cover a Prism/.test(said('Vane', (g) => { g.G.gems = 5000; })), 'and notices when you can cover the top of it');
+  // The floor comes off CHESTS rather than repeating a price.
+  ok(/Math\.min\(\.\.\.CHEST_IDS/.test(SRC), 'reading the cheapest chest off the prices themselves');
+}
+
 done('emberkin_story');

@@ -681,18 +681,73 @@ ok(!!EK.npcAt(MAPS.hollowbrook, wick1.x, wick1.y), 'and stands in the way');
 // of the flags rather than off a field on the map object — which is why this
 // sets the flag rather than the field. There is exactly one such npc, and if
 // that ever stops being true this finds the new one instead of testing nothing.
-const blockers = Object.values(MAPS).flatMap((m) => m.npcs || []).filter((n) => n.block);
-ok(blockers.length > 0, `somebody blocks a path (${blockers.map((n) => n.name).join(', ')})`);
-for (const b of blockers) {
-  EK.G.flags = { gotStarter: 1 };
-  ok(EK.npcActive(b), `${b.name} is in the way while unbeaten`);
-  EK.G.flags = { gotStarter: 1, [b.id]: 1 };
-  ok(!EK.npcActive(b), `${b.name} steps off once beaten, and the save is what says so`);
-  // Which makes a parting line unreadable by construction: he is off the map
-  // the instant the flag that would show it is set.
+// Asked for the PROPERTY rather than the field. This filtered on `n.block`,
+// which is one of two reasons an npc stops being on the map — the Warden steps
+// off a path he was guarding, and Wick simply goes north, which is what he says
+// he is doing. What both have in common is the thing the rule is about: beat
+// them and they are gone, so a parting line is unreadable by construction.
+// Measured with their prerequisites satisfied. The first cut set only
+// `{gotStarter, ownId}`, which makes the two later Wicks look like they leave
+// when in fact they have not arrived — `npcActive` is false for a gated npc for
+// an entirely different reason, and the filter could not tell the two apart.
+const departs = Object.values(MAPS).flatMap((m) => m.npcs || []).filter((n) => {
+  if (!n.id || !n.trainer) return false;
+  const base = { gotStarter: 1 };
+  if (n.requires) base[n.requires] = 1;
+  EK.G.flags = { ...base };
+  if (!EK.npcActive(n)) return false;                // never there in the first place
+  EK.G.flags = { ...base, [n.id]: 1 };
+  return !EK.npcActive(n);
+});
+ok(departs.length > 0, `somebody leaves once beaten (${departs.map((n) => n.name).join(', ')})`);
+for (const b of departs) {
+  const base = { gotStarter: 1 };
+  if (b.requires) base[b.requires] = 1;
+  EK.G.flags = { ...base };
+  ok(EK.npcActive(b), `${b.name} is there while unbeaten`);
+  EK.G.flags = { ...base, [b.id]: 1 };
+  ok(!EK.npcActive(b), `${b.name} is gone once beaten, and the save is what says so`);
   ok(!b.after, `${b.name} carries no after-line, because nobody could ever read it`);
+  // Whatever he had to say on the way out has to be said on the way out.
+  ok((b.trainer.lose || []).length > 0, `${b.name} says his piece as he loses`);
 }
 EK.G.flags = {};
+
+// Nobody may be in two places at once. Three npcs share the name Wick and the
+// story moves him up the mountain; at the end of a run he was standing in
+// Hollowbrook saying "I am going north" while his other two selves were already
+// in the wood and on the summit.
+{
+  const byName = new Map();
+  for (const [mid, m] of Object.entries(MAPS)) {
+    for (const n of (m.npcs || [])) {
+      if (!byName.has(n.name)) byName.set(n.name, []);
+      byName.get(n.name).push([mid, n]);
+    }
+  }
+  const doubled = [...byName].filter(([, list]) => list.length > 1);
+  ok(doubled.length > 0, `somebody appears more than once (${doubled.map(([n]) => n).join(', ')})`);
+
+  // Walked along the game's OWN ordered trainer list rather than a progression
+  // I invented. The first cut forced `beatVespyr` on from the start, which puts
+  // the summit Wick on the mountain before the first fight in the game and
+  // reports a double that only the drive had created.
+  const step = (label) => {
+    for (const [name, list] of doubled) {
+      const here = list.filter(([, n]) => EK.npcActive(n)).map(([mid]) => mid);
+      ok(here.length <= 1, `${name} is in one place at a time (${label}: ${here.join(', ') || 'nowhere'})`);
+    }
+  };
+  EK.G.flags = { gotStarter: 1 };
+  step('just handed a kin');
+  for (const [id, who, , gate] of EK.AIM_ORDER) {
+    if (gate) EK.G.flags[gate] = 1;              // the gate opens…
+    step(`${who} reachable`);                     // …and he is standing there
+    EK.G.flags[id] = 1;                           // …and then beaten
+    step(`${who} beaten`);
+  }
+  EK.G.flags = {};
+}
 
 // And the other side of that, which is the claim rather than the exception.
 //
@@ -722,7 +777,12 @@ section('a trainer you beat still has something to say');
     ok(!(after || []).join(' ').includes('Good match'),
       `${n.name} does not fall back to the sentence everybody shared`);
   }
-  ok(stayed >= 8, `and most of them are still standing there (${stayed})`);
+  // Derived, not guessed. This was `stayed >= 8`, a number I had counted once
+  // and which then went stale twice in one pass as two Wicks learned to leave.
+  // Every trainer is either still standing or accounted for by having gone.
+  const gone = trainers.length - stayed;
+  ok(stayed > 0, `somebody is still standing there (${stayed})`);
+  eq(stayed + gone, trainers.length, `and every trainer is one or the other (${stayed} stayed, ${gone} gone)`);
   EK.G.flags = {};
 }
 

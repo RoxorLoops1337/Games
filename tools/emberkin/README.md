@@ -377,6 +377,136 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+57. **The line said what it was for, and did half of it** (pass 146). The cast
+    sweep's method, pointed at a screen instead of a script: shoot the battle in
+    four states — fresh, nearly dead, out of energy, endgame — and read them
+    side by side rather than admiring each one.
+
+    The second frame is the finding. Nine HP out of sixty-three, burning, and
+    the foe telegraphing `about 30`. The player is dead next turn and the screen
+    says so nowhere. It reads in exactly the same colour, in exactly the same
+    place, as it does at full health — while `9/63` sits on the other side of
+    the arena for the player to hold in their head.
+
+    And the chip was already doing arithmetic. It subtracts guard and shield to
+    print what LANDS beside what is swung, and colours that green or amber. Its
+    own comment says why it exists:
+
+        the whole reason that line exists is to answer
+        "can I take this, or do I need to block?"
+
+    It answers the first half. "How much lands" has no meaning without "how much
+    is left", and both numbers were already on screen. So the chip finishes the
+    sentence now: at 9 against 30 it reads `· enough to finish you` and the
+    FRAME goes red and pulses.
+
+    The frame, not the words, because `#intent b` was already `--hp-bad` — the
+    move's name is red every turn of the game. A warning written in more red
+    reads as more chip. When a colour is already spent on ordinary state, it
+    cannot also be the alarm.
+
+    The comparison is against what LANDS, not what is swung, which is what makes
+    blocking answer the warning — put up enough shield and it goes away. A net
+    that read the raw number would have passed every other check and quietly
+    broken that.
+
+    Two things looked at and deliberately left. The foe's bar carries no number
+    while yours does; that asymmetry is the genre's, and this game answers it
+    with the telegraph rather than with a number, which is the deck-builder's
+    answer and a coherent one. And a kin at 14% looks identical to one at full —
+    only the bar and a chip change. That is an art question, not a correctness
+    one, and it is the owner's call.
+
+    **When a comment says what a line is for, read the line against the comment.
+    This one had been telling anybody who looked that it was half-finished.**
+
+56. **The line was never wrong. He was** (pass 145). A closing sweep of the
+    dialogue seam: dump what all seventeen npcs say at four points in the story
+    — fresh, mid-route, post-Warden, post-ending — and read the four columns
+    side by side rather than each person in turn.
+
+    Everybody came back reactive except Bell, who is deliberately need-driven
+    rather than progress-driven. What the LAST column showed instead was a
+    continuity fault no amount of reading one character at a time would find:
+
+        Wick (hollowbrook)   I am going north. Try to keep up.
+        Wick (emberwood)     You went up without me. I heard.
+        Wick (crown_hollow)  I am staying up here a while.
+
+    Three copies of one man, on screen at once, the first of them still promising
+    to set off. And the Emberwood Wick `requires: 't_wick1'`, so there had been
+    two of him from the instant the first fight was won — the whole game.
+
+    The fix is not a rewrite. His line is the best line he has; he simply never
+    did it. `leaves: '<flag>'` generalises what `block` already did to an npc's
+    presence — gone once some flag is set — and `block` turns out to be the
+    special case where that flag is the npc's own id, plus "stands in a path".
+    Town Wick `leaves: 't_wick1'` and goes when he says he will; wood Wick
+    `leaves: 'beatVespyr'`, the exact flag that puts the summit Wick on the
+    mountain. His parting line moves into `lose`, where it is heard at the
+    moment he says it.
+
+    Three drives were wrong before the game was, all the same shape — a filter
+    that could not tell two reasons apart:
+
+    - `npcActive` is false for a GATED npc as well as a departed one, so a
+      "who leaves when beaten?" filter that sets only `{gotStarter, ownId}`
+      collects the two later Wicks, who have not arrived.
+    - A hand-written progression that forced `beatVespyr` on from the start put
+      the summit Wick on the mountain before the first fight in the game and
+      reported a double the drive had invented. Walk `AIM_ORDER` — the game's
+      own ordered trainer list, gates included.
+    - And `stayed >= 8` went stale twice inside one pass as each Wick learned to
+      leave. Derived now: every trainer is either still standing or gone.
+
+    **A character who is in two places is not a dialogue bug, and you will not
+    find it by reading dialogue. It only shows up when you lay the whole cast
+    out at one moment in the story and look down the column.**
+
+55. **The gate was on a proxy, and the net took three goes to say why** (pass
+    144). Elder Rowan is the character the whole game says is paying attention,
+    and she had one piece of navigation: *"Crown Hollow, past the Warden."* It
+    was gated on `dexCount(2) >= 8` — a PROXY for "far enough along", when the
+    game has the actual fact one flag away. Wrong in both directions at once:
+    somebody who had beaten the Warden with a thin dex was never told the path
+    had opened, and somebody who had already stood on the mountain was still
+    being sent past a man who is not on the map any more.
+
+    Then the mirror question, generalised rather than repeated: *once a blocking
+    npc steps off the path, is anybody ELSE still sending you past them?* That
+    swept up a second instance I had not read — Wick's Emberwood parting line,
+    *"The Warden will not let either of us up. Not yet."*, said for the whole
+    rest of the game including on the walk back down.
+
+    The net for it took three formulations, and the two failures are the entry:
+
+    1. Reading `talkLines` and `after` off the fields **cannot see Rowan at
+       all** — she is a `script` npc and her words never touch either. It found
+       Wick, reported the sweep clean, and would have shipped as a net for a
+       fault it structurally could not observe. Drive `talkTo` and read
+       `G.dialogue`: that covers script, lines, after and the trainer fallback
+       in one shape.
+    2. "Nobody may NAME a departed blocker" is the wrong claim. *"Hale stepped
+       aside for you"* names him, and is the fix rather than the bug.
+    3. And the sweep state was too late: with every flag set Rowan gives the
+       ENDING speech, so her mid-game branch never ran. A sweep needs to happen
+       at the point in the story the fault lives at.
+
+    What is actually wrong is a line that does not MOVE. If somebody mentions
+    the blocker while the blocker is in the way, they must say something
+    different once he has stepped off it. One check, both instances caught,
+    nothing named.
+
+    Also this pass: Bell and Vane, who both talk about money and had never
+    looked at yours. Vane names a price ladder — *"Silver is a nibble, Prism is
+    a mortgage, everything between is a decision"* — without ever checking which
+    rung you are on. Bell's orb count is asked of `ITEMS` by kind and Vane's
+    floor comes off `CHESTS`, so neither repeats a list or a price.
+
+    **A gate on a proxy fails in BOTH directions, and only one of them looks
+    like a bug. The silent direction — the player who qualified by the real fact
+    and was never told — leaves no trace at all.**
+
 54. **Nine voices, one shared sentence** (pass 143). The same method as 142,
     pointed at the dialogue 142 did not touch: dump the nine trainers' intro,
     lose, win and `after` in one go and read them together.

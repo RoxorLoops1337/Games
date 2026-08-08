@@ -1181,6 +1181,139 @@ const SCENES = {
       }
     },
   },
+  // Rowan in the state that used to be wrong. Her one piece of navigation was
+  // gated on dexCount(2) >= 8, so somebody who had already stood on the
+  // mountain was still being sent "Crown Hollow, past the Warden" — past a man
+  // who is not on the map any more.
+  rowanback: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.DEX_ORDER.slice(0, 9).forEach((id) => EK.catchMon(id));
+      EK.G.flags.t_hale = 1;
+      EK.G.been.crown_hollow = 1;
+      const rowan = EK.MAPS.lab.npcs[0];
+      EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world'; EK.G.dialogue = null;
+      EK.talkTo(rowan);
+      if (/past the Warden/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('Rowan is still sending you past a man who has left');
+      }
+    },
+  },
+  // Vane names a price ladder and had never checked which rung you are on.
+  vaneprism: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.gems = 5000;
+      const vane = EK.MAPS.shop.npcs.find((n) => n.name === 'Vane');
+      EK.enterMap('shop', vane.x, vane.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world'; EK.G.dialogue = null;
+      EK.talkTo(vane);
+    },
+  },
+  // Wick's parting line in town is "I am going north. Try to keep up." He then
+  // did not go: the Emberwood Wick appears the instant this fight is won, so
+  // from that moment there were two of him, and at the end of a run three. Same
+  // tile, same frame, before and after — the town has one fewer person in it.
+  townwick: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      const wick = EK.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+      EK.enterMap('hollowbrook', wick.x, wick.y + 3, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      if (!EK.npcActive(wick)) throw new Error('Wick is not in town before the fight');
+    },
+  },
+  towngone: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.flags.t_wick1 = 1;
+      const wick = EK.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+      EK.enterMap('hollowbrook', wick.x, wick.y + 3, 'up');
+      EK.G.place = null; EK.G.mode = 'world';
+      if (EK.npcActive(wick)) throw new Error('Wick said he was going north and did not');
+    },
+  },
+  // ---- the moment of deciding -------------------------------------------
+  // Four states of the same screen, shot to be read side by side. The question
+  // is not "does it draw" — it is what a player's eye actually has to collect
+  // before choosing a card, and whether the screen weights those things the way
+  // the decision does.
+  dec_fresh: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24), EK.mkMon('brookite', 22)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.readIntent();
+    },
+  },
+  dec_hurt: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24), EK.mkMon('brookite', 22)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.mine.hp = Math.max(1, Math.round(b.mine.max * .14));
+      b.mine.status = 'burn';
+      b.dispM = b.tgtM = b.mine.hp;
+      EK.readIntent();
+    },
+  },
+  dec_broke: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.energy = 0;                       // spent: nothing in hand is playable
+      EK.renderHand();
+      EK.readIntent();
+    },
+  },
+  dec_late: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'crown_hollow';
+      EK.G.party = [EK.mkMon('magmane', 36), EK.mkMon('tsunaga', 34)];
+      EK.G.cards = []; EK.G.deck = [];
+      ['ember_spit', 'edge', 'whet', 'guard', 'focus', 'quickstep'].forEach((id) => {
+        const c = EK.grantCard(id, true);
+        if (c) { c.plus = 4; c.plays = 22; }
+      });
+      EK.startBattle({ foe: EK.mkMon('vespyr', 30), wild: true, legendary: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.readIntent();
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {

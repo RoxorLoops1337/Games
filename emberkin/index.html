@@ -341,6 +341,13 @@
   body.touch #acts{ gap:7px; }
   #intent{ position:absolute; left:3%; top:14%; padding:3px 9px; font-size:.72em; z-index:6; }
   #intent b{ color:var(--hp-bad); }
+  /* The move name in this chip is already red, so a lethal warning written in
+     more red does not read as an alarm — it reads as more chip. The frame is
+     what changes. */
+  #intent.lethal{ border-color:var(--hp-bad);
+    box-shadow:0 0 0 1px var(--hp-bad), 0 0 14px rgba(255,90,90,.4);
+    animation:intentpulse 1.1s ease-in-out infinite; }
+  @keyframes intentpulse{ 50%{ box-shadow:0 0 0 1px var(--hp-bad), 0 0 6px rgba(255,90,90,.2); } }
   #shieldpip{ color:var(--xp); }
 
   #battlemenu{ right:2.5%; top:54%; }
@@ -4285,8 +4292,16 @@ const MAPS = {
           // One idea, and he opens with it every time — which is the only way
           // you will ever see it, in a fight this short.
           plan: ['sharpen', 'swing'],
-          lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
-        after: ['I am going north. Try to keep up.'] },
+          // "I am going north" moved here from `after`, because he then did not
+          // go. The Emberwood Wick appears the instant this fight is won, so
+          // from that moment there were two of him — one on the mountain road
+          // and one still in town promising to set off. Reading the whole cast
+          // at four points in the story is what showed it: at the very end he
+          // was in three places at once, the last of them saying he was about
+          // to leave. The line was never wrong. He was.
+          lose: ['Fine. First one is free.', 'I am going north. Try to keep up.'],
+          win: ['Told you. It was just there.'] },
+        leaves: 't_wick1' },
     ],
     signs: { '2,7': 'HOLLOWBROOK — where the valley narrows and the kin come down to drink.',
              '18,15': 'Rowan\'s Study, north end. Knock loudly. She is always mid-thought.' },
@@ -4349,10 +4364,38 @@ const MAPS = {
     warps: [{ x: 5, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }, { x: 6, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }],
     npcs: [
       { x: 4, y: 2, dir: 'down', sprite: 'npc_rival', name: 'Bell', shop: true,
-        lines: ['Orbs, salves, and no credit. Mother\'s rule, not mine.'] },
+        // She sells the two things that keep a run going and had never once
+        // looked at whether you have either. "No credit" is a rebuke to somebody
+        // who is short and noise to somebody who is not. The orb list is asked
+        // of ITEMS rather than written out — a hand-copy here would stop
+        // counting the day a fourth orb is added.
+        lines: () => {
+          const rule = 'Orbs, salves, and no credit. Mother\'s rule, not mine.';
+          const orbs = Object.keys(ITEMS)
+            .filter((k) => ITEMS[k].kind === 'orb')
+            .reduce((n, id) => n + (G.bag[id] || 0), 0);
+          if (!orbs) return [rule,
+            'You have not got a single orb on you. Whatever you meet out there, all you can do is hit it.'];
+          if (G.money < ITEMS.salve.cost) return [rule,
+            'And you are short for a salve. I am not going to make a thing of it.'];
+          return [rule];
+        } },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_elder', name: 'Vane', chests: true,
-        lines: ['Gems only. Shards are for people who buy salves.',
-          'Silver is a nibble. Prism is a mortgage. Everything between is a decision.'] },
+        // He names a price ladder — a nibble, a mortgage, and a decision in
+        // between — and had never checked which rung you are standing on. The
+        // floor comes off CHESTS, so it follows the prices rather than repeating
+        // one of them.
+        lines: () => {
+          const floor = Math.min(...CHEST_IDS.map((k) => CHESTS[k].cost));
+          if (G.gems < floor) return ['Gems only. Shards are for people who buy salves.',
+            `And you are ${floor - G.gems} short of the smallest one. Go and win something.`];
+          if (G.gems >= CHESTS.prism.cost) return ['Gems only, as ever.',
+            'You can cover a Prism. I want you to know I noticed, and that I am being very calm about it.'];
+          if (!G.chestsOpened) return ['Gems only. Shards are for people who buy salves.',
+            'Silver is a nibble. Prism is a mortgage. Everything between is a decision.'];
+          return [`${G.chestsOpened} opened and you keep coming back. Good.`,
+            'Silver is still a nibble. Prism is still a mortgage.'];
+        } },
     ],
     enc: null,
   },
@@ -4476,7 +4519,21 @@ const MAPS = {
           // Two ideas now, and he has learned to eat your turn.
           plan: ['sharpen', 'swing', 'brace', 'swing'],
           lose: ['…Right. North it is, for both of us.'], win: ['Still me. Go and train.'] },
-        after: ['The Warden will not let either of us up. Not yet.'] },
+        // Found by generalising Rowan's fault rather than by reading him: once
+        // a blocking npc steps off the path, NOBODY may still be sending you
+        // past them. He went on saying the Warden would not let either of us up
+        // for the whole rest of the game, including on the way back down.
+        after: () => (G.been.crown_hollow
+          ? ['You went up without me. I heard.', 'I will be up there. Do not make it easy.']
+          : G.flags.t_hale
+            ? ['Hale let you through? He would not even look at me.',
+              'Go on, then. I will find my own way up.']
+            : ['The Warden will not let either of us up. Not yet.']) ,
+        // And then he goes, at the exact moment the summit Wick appears —
+        // `t_wick3` requires `beatVespyr`, so this is the one flag that puts one
+        // of him in the wood and the other on the mountain at once. His own
+        // line says "I will be up there"; this is him being up there.
+        leaves: 'beatVespyr' },
       { x: 15, y: 6, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Coll', id: 't_coll',
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
@@ -4625,7 +4682,12 @@ const tileAt = (map, x, y) => (x < 0 || y < 0 || y >= map.rows.length || x >= ma
  *
  * `G.flags` is saved and is rebuilt per run, so reading it fixes both at once.
  */
-const npcActive = (n) => !(n.block && G.flags[n.id]) && (!n.requires || !!G.flags[n.requires]);
+// `leaves` is the general form of what `block` does to an npc's presence: gone
+// once some flag is set. `block` uses the npc's OWN id and also means "stands in
+// a path", which is why both exist — Wick is not in anybody's way, he simply
+// stops being in town.
+const npcActive = (n) => !(n.block && G.flags[n.id]) && !(n.leaves && G.flags[n.leaves])
+  && (!n.requires || !!G.flags[n.requires]);
 
 function npcAt(map, x, y) {
   return (map.npcs || []).find((n) => n.x === x && n.y === y && npcActive(n)) || null;
@@ -8154,8 +8216,36 @@ function rowanScript() {
     ]);
     return;
   }
+  // Her one piece of navigation was gated on `dexCount(2) >= 8`, which is a
+  // PROXY for "far enough along" — and the game has the actual fact one flag
+  // away. It was wrong in both directions at once. Somebody who had beaten the
+  // Warden with a thin dex was never told the path had opened; somebody who had
+  // already stood on the mountain was still being sent "past the Warden", who
+  // is not on the map any more. That is the signpost fault of the four in town,
+  // in the mouth of the one character the whole game says is paying attention.
+  //
+  // Most progressed first. Being up the mountain implies Hale stepped aside,
+  // and both of those are facts rather than counts.
+  if (G.been.crown_hollow) {
+    say('Elder Rowan', [
+      `Seen ${dexCount(1)}, caught ${dexCount(2)} — and you have stood on the mountain.`,
+      'Then you have felt the air go thin up there. That is not weather.',
+      'Take orbs when you go back. Take all of them.',
+    ]);
+    return;
+  }
+  if (G.flags.t_hale) {
+    say('Elder Rowan', [
+      'Hale stepped aside for you. He does not do that often.',
+      'Crown Hollow is open, then. Something up there is worth the walk.',
+    ]);
+    return;
+  }
   if (dexCount(2) >= 8) {
-    say('Elder Rowan', [`${dexCount(2)} caught. You are doing better than I did.`, 'Crown Hollow, past the Warden. Something up there is worth the walk.']);
+    say('Elder Rowan', [
+      `${dexCount(2)} caught. You are doing better than I did.`,
+      'Crown Hollow is up past the Emberwood, and Warden Hale will not let you by until he is satisfied.',
+    ]);
     return;
   }
   say('Elder Rowan', [`Seen ${dexCount(1)}, caught ${dexCount(2)}. Keep at it.`, 'The grass does the teaching. I only do the paperwork.']);
@@ -8389,6 +8479,27 @@ function fanStyle(i, n, selected) {
   return `transform:translateY(${drop.toFixed(2)}%) rotate(${rot.toFixed(2)}deg);z-index:${i + 1}`;
 }
 
+/**
+ * What the telegraphed swing actually LANDS, after guard and shield — the
+ * number the chip prints beside the raw one. Lifted out of renderHand, which
+ * returns early with no DOM, so both of these can be driven headlessly.
+ */
+function intentThrough(b, it) {
+  if (!b || !it || it.kind !== 'attack') return null;
+  return Math.max(0, Math.max(it.dmg > 0 ? 1 : 0, it.dmg - (b.mods.def || 0)) - (b.shield || 0));
+}
+/**
+ * …and whether that is more than the kin has left, which is the half of the
+ * question the chip never finished. It is a warning rather than a verdict:
+ * `it.dmg` is an estimate and the line says "about". Burn ticking at the end of
+ * the turn is a second source and deliberately not counted here.
+ */
+function intentLethal(b, it) {
+  const through = intentThrough(b, it);
+  if (through == null || !b.mine || b.mine.hp <= 0) return false;
+  return through >= b.mine.hp;
+}
+
 function renderHand() {
   if (HEADLESS) return;
   const b = B();
@@ -8436,13 +8547,26 @@ function renderHand() {
   // the same figure printed twice. Rendered here rather than in readIntent
   // because shield changes as you play cards, and the answer has to change
   // with it.
-  const through = it && it.kind === 'attack'
-    ? Math.max(0, Math.max(it.dmg > 0 ? 1 : 0, it.dmg - (b.mods.def || 0)) - (b.shield || 0))
-    : null;
+  const through = intentThrough(b, it);
   const banked = (b.mods.def || 0) + (b.shield || 0) > 0;
+  // And the other half of the question the comment above says this line exists
+  // to answer. "How much lands" has no meaning without "how much is left", and
+  // the chip had every number it needed: at 9 HP against about 30 it read
+  // exactly as it does at full health, in the same colour, while the screen
+  // printed 9/63 on the other side of the arena for the player to hold in their
+  // head. It already does the shield subtraction; this is the one that decides
+  // whether the turn is a choice or a mistake.
+  //
+  // `it.dmg` is an estimate and says so — "about" — so this is a warning rather
+  // than a verdict, and it is worded as one. It does not count a burn ticking
+  // at the end of the turn; that is a second source and this line is about the
+  // swing.
+  const lethal = intentLethal(b, it);
+  els.intent.classList.toggle('lethal', lethal);
   els.intent.innerHTML = it
     ? `Foe: <b>${it.name}</b>${it.kind === 'attack'
         ? ` · about ${it.dmg}${banked ? ` · <b style="color:${through > 0 ? 'var(--hp-warn)' : 'var(--hp-good)'}">${through} through</b>` : ''}`
+          + (lethal ? ' · <b>enough to finish you</b>' : '')
         : it.tell ? ` · ${it.tell}` : ''}`
     : '';
   // The hand is too small to hold a card's whole rules text, so the line above
@@ -11234,6 +11358,7 @@ if (typeof window !== 'undefined') {
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
+    intentThrough, intentLethal,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
