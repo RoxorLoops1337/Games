@@ -10626,6 +10626,15 @@ function renderScreen() {
  * showed it, and no test could have — the affordance was wired up correctly, it
  * was just wired to the wrong number.
  */
+/** How many of these cells share the first one's row. */
+const colsFrom = (tops) => {
+  if (!tops || tops.length < 2) return 1;
+  const top = tops[0];
+  let n = 0;
+  for (const t of tops) { if (t !== top) break; n++; }
+  return Math.max(1, n);
+};
+
 function gridCols(s) {
   if (HEADLESS) return s.kind === 'dex' ? 5 : 2;
   // Every grid a cursor can be in. The bag, the shop and the chest shelf were
@@ -10633,13 +10642,18 @@ function gridCols(s) {
   // branch and returned 1 — up and down moved by a single cell in a grid two
   // and three across. Found by photographing each screen with a cursor in it,
   // which is the only way to see that a fix reaches everything it claims to.
-  const cells = els.screen.querySelectorAll(
-    '.dexcell, .cards > .card, .cardrow > .cardel, .items > .item');
-  if (cells.length < 2) return 1;
-  const top = cells[0].offsetTop;
-  let n = 0;
-  for (const c of cells) { if (c.offsetTop !== top) break; n++; }
-  return Math.max(1, n);
+  const SEL = '.dexcell, .cards > .card, .cardrow > .cardel, .items > .item';
+  // …and then it counted the first row IN THE DOCUMENT, which is not always the
+  // grid the cursor is in. The swap screen shows the card coming in above the
+  // deck you are choosing from, in a row of its own: measured at 390px, cells
+  // sat 1 / 3 / 3 / 3 / 2 down the panel and this returned 1, so up and down
+  // moved a single card at a time through a grid three across — on the one
+  // screen `screenLocked` will not let you leave. Count the row the CURSOR is
+  // in, which is the grid being navigated by definition.
+  const cur = els.screen.querySelector('.sel');
+  const scope = cur && cur.parentElement && cur.parentElement.querySelector(SEL)
+    ? cur.parentElement : els.screen;
+  return colsFrom([...scope.querySelectorAll(SEL)].map((c) => c.offsetTop));
 }
 
 function screenInput() {
@@ -12325,7 +12339,7 @@ if (typeof window !== 'undefined') {
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO, statSnap, gainLine,
     WILD_TRAIL,
-    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, colsFrom, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
