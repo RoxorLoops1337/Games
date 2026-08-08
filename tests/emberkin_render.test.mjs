@@ -4299,6 +4299,134 @@ section('the cursor moves by the grid it is in');
   }
 }
 
+// Every number the player is SHOWN against the number the game USES. Nine
+// cases were swept — a plain swing, an edge banked, might, a multiplier, two
+// hits, an attack stage, a resistance, and the two after a switch — and eight
+// agreed to the hit point. The ninth: switch a kin in and the card in your hand
+// promised the whole number while `useMove` took 0.6 of it. Driven through a
+// real switch, a card reading "deal 11-13" landed for 7, and all 300 swings
+// fell outside the range they were shown. The damper is the foe's rule too and
+// the foe's TELEGRAPH already folds it in — the same asymmetry, on the side
+// nobody had measured.
+section('the card in your hand does not promise what the swing will not pay');
+{
+  // Crits off: a range that says 8-11 is not lying when a crit lands 16.
+  const noCrit = (src) => src.replace(
+    'const crit = opts.crit != null ? opts.crit : critRoll();',
+    'const crit = opts.crit != null ? opts.crit : false;');
+  const mk = () => {
+    const g = withDeck(loadGame({}, noCrit));
+    g.setCtx(mkCtx());
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 16), g.mkMon('pyrelynx', 16)];
+    return g;
+  };
+  const range = (txt) => {
+    const m = txt.match(/deal (\d+)(?:-(\d+))?(?: ×(\d+))?/);
+    return m ? { lo: +m[1], hi: m[2] ? +m[2] : +m[1], hits: m[3] ? +m[3] : 1 } : null;
+  };
+
+  // Both sides of the rule, side by side. This is the pair the game states in
+  // one place and has to apply in two.
+  ok(EK.SETTLE_MUL < 1, 'a kin still finding its feet swings for less');
+  {
+    const g = mk();
+    g.startBattle({ foe: g.mkMon('kindlark', 16), wild: true });
+    const b = g.B();
+    b.foeSettling = 0; const settled = g.foeSwingMul(b, 1);
+    b.foeSettling = 1; const fresh = g.foeSwingMul(b, 1);
+    ok(Math.abs(fresh - settled * g.SETTLE_MUL) < 1e-9, 'the foe telegraph folds the damper in');
+    b.settling = 0; eq(g.mineSwingMul(b), 1, 'and yours is 1 when you have been out a while');
+    b.settling = 1; eq(g.mineSwingMul(b), g.SETTLE_MUL, '…and the same damper on the turn you switch in');
+    eq(g.mineSwingMul(null), 1, 'out of a fight there is nothing to damp');
+  }
+
+  // The cases. Each one sets the fight up, reads what the card SAYS, then makes
+  // that swing forty times and asks whether the number ever left the range.
+  const CASES = [
+    ['a plain swing', null],
+    ['an edge banked', (g, b) => { b.mods.edge = 6; }],
+    ['might', (g) => { g.G.might = 3; }],
+    ['a multiplier', (g, b) => { b.mods.mul = 1.5; }],
+    ['two hits', (g, b) => { b.mods.hits = 1; }],
+    ['an attack stage', (g, b) => { b.mine.stages.atk = 2; }],
+    ['just switched in', (g, b) => { b.settling = 1; }],
+    ['switched in with an edge banked', (g, b) => { b.settling = 1; b.mods.edge = 6; }],
+  ];
+  for (const [label, setup] of CASES) {
+    const g = mk();
+    g.startBattle({ foe: g.mkMon('kindlark', 16), wild: true });
+    const b = g.B();
+    b.foe.max = 99999; b.foe.hp = 99999;
+    if (setup) setup(g, b);
+    const shown = range(g.moveCardText('ember'));
+    ok(shown, `${label}: the card names a number`);
+    const bench = g.moveVersusFoe(b.mine, 'ember');
+    let out = 0, worst = null;
+    for (let i = 0; i < 40; i++) {
+      b.foe.hp = 99999;
+      // A shocked kin is jolted stiff one swing in four and deals nothing. That
+      // is not the card lying — but it made this section fail one run in three,
+      // on whichever case the roll happened to land in, because the foe of a
+      // fight that starts with the foe faster can land shock before turn one.
+      b.mine.status = '';
+      // Restore only what the swing SPENDS, and only if it was set: writing
+      // `b.mods.hits = undefined` back makes bonus.hits NaN, the hit loop runs
+      // zero times, and a swing that dealt 0 reads as the card lying.
+      const keep = { settling: b.settling, edge: b.mods.edge, hits: b.mods.hits };
+      const before = b.foe.hp;
+      g.useMove([], 'mine', 'ember');
+      const dealt = before - b.foe.hp;
+      b.settling = keep.settling;
+      if (keep.edge != null) b.mods.edge = keep.edge;
+      if (keep.hits != null) b.mods.hits = keep.hits;
+      const lo = shown.lo * shown.hits, hi = shown.hi * shown.hits;
+      if (dealt < lo || dealt > hi) { out++; worst = dealt; }
+    }
+    eq(out, 0, `${label}: every swing landed inside "${shown.lo}-${shown.hi}${shown.hits > 1 ? `×${shown.hits}` : ''}"` +
+      (worst == null ? '' : ` (saw ${worst})`));
+    ok(bench && bench.lo === shown.lo && bench.hi === shown.hi,
+      `${label}: the bench screen reads the same number as the hand`);
+  }
+
+  // And the one that matters, driven through the real switch rather than posed:
+  // doAction sets the flag, the hand is redrawn, and the card has to know.
+  {
+    const g = mk();
+    g.startBattle({ foe: g.mkMon('kindlark', 16), wild: true });
+    const b = g.B();
+    b.foe.max = 99999; b.foe.hp = 99999;
+    g.doAction({ kind: 'switch', idx: 1 });
+    eq(b.settling, 1, 'a switch you chose leaves the new kin finding its feet');
+    const damped = range(g.moveCardText('ember'));
+    // The full number for WHOEVER IS OUT NOW. Reading it before the switch
+    // measured the kin that just left, and two different creatures swinging the
+    // same move is not a comparison — that is what failed here first.
+    b.settling = 0;
+    const full = range(g.moveCardText('ember'));
+    b.settling = 1;
+    ok(damped.hi < full.hi, `the card drops on the turn you switch in (${full.lo}-${full.hi} -> ${damped.lo}-${damped.hi})`);
+    const before = b.foe.hp;
+    g.useMove([], 'mine', 'ember');
+    const dealt = before - b.foe.hp;
+    ok(dealt >= damped.lo && dealt <= damped.hi, `and the swing pays what it promised (${dealt} in ${damped.lo}-${damped.hi})`);
+    ok(dealt < full.lo, 'which is less than the card used to say');
+    eq(b.settling, 0, 'the swing spends the settling');
+    const back = range(g.moveCardText('ember'));
+    ok(back.hi === full.hi, 'and the next card is back to the full number');
+  }
+
+  // The source, so the two previews cannot drift apart again: both build their
+  // swing through the same helper.
+  const body = SRC.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const mults = [...body.matchAll(/bonus\.flat\) \* bonus\.mul \* mineSwingMul\(b\)/g)];
+  eq(mults.length, 2, 'both previews damp their swing through the one helper');
+  ok(/const mineSwingMul = \(b\) => \(b && b\.settling \? SETTLE_MUL : 1\);/.test(body),
+    'and the helper is one line beside the foe’s');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

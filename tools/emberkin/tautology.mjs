@@ -125,6 +125,13 @@ const MUTANTS = [
   { name: 'grid: colsFrom counts every cell', aims: ['the cursor moves by the grid it is in'],
     find: '  for (const t of tops) { if (t !== top) break; n++; }', to: '  for (const t of tops) { void t; n++; }' },
 
+  { name: 'settle: the hand forgets the damper', aims: ['the card in your hand does not promise what the swing will not pay'],
+    find: '    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul * mineSwingMul(b)));\n  };\n  return { lo: swing(.85), hi: swing(1), hits: bonus.hits };',
+    to: '    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul));\n  };\n  return { lo: swing(.85), hi: swing(1), hits: bonus.hits };' },
+  { name: 'settle: the damper applies to every swing', aims: ['the card in your hand does not promise what the swing will not pay'],
+    find: 'const mineSwingMul = (b) => (b && b.settling ? SETTLE_MUL : 1);',
+    to: 'const mineSwingMul = () => SETTLE_MUL;' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
