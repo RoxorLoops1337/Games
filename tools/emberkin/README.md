@@ -2369,3 +2369,48 @@ desktop one. That is the correct answer and not an obvious one.
 - **The status line prints what is *covering* the scene**, not just the mode and
   map — dialogue, screen, gotcha, evolution, wipe. That line is the only reason
   the hazard above was found rather than worked around.
+
+88. **Eight elements, one place, and a rule the arena states and then stops at
+    the horizon** (pass 177). The arena's own comment says what makes a backdrop
+    read as somewhere: *"things further away are lighter, lower in contrast and
+    closer to the sky colour."* It applies that to three ridges and stops. The
+    element — the only thing that distinguishes a fight against a Tide kin from
+    a fight against an Ember one — was a `.16` wash over the top 68 pixels and
+    nothing under it.
+
+    Rendered on a real canvas, all eight, and read the pixels back:
+
+        SPREAD across the eight (max - min)
+        sky    luminance  12.19   hue  332.0
+        ridge  luminance   0.12   hue    1.2      <- sky bleed into the box
+        field  luminance   0.00   hue    0.0      <- bit-identical, all eight
+
+    Seven eighths of the picture said *the same field* while the top 58 pixels
+    said *somewhere cold*. That is a filter over one place, not eight places.
+
+    Fixed with the arena's own rule extended past the horizon: `GROUND_HAZE
+    = .12`, a gradient of the element falling from the far edge of the field to
+    nothing at the bank — light, strongest where the air between you and the
+    ground is thickest. `.08` was too faint to see and `.18` swung the ridges
+    141° of hue, which is the ground becoming the element rather than taking it.
+    At `.12` the field moves 16.2° of hue and 1.77 of luminance across the eight.
+
+    It goes over the scenery and **under the kin**, which is the line `draw()`
+    already holds the map's weather to — a wash over the finished frame lands on
+    the kin, and Crown Hollow's violet once turned Cindercub to mud. Verified
+    with the same Cindercub in four fights from one page: bit-identical orange.
+
+    **Two instrument failures, both the scene.** Shooting the four fights from
+    four fresh pages gave a brown Cindercub in the Tide one — which is exactly
+    what the mud comment describes, so it read as the fix failing. It was art
+    that had not finished loading. Sampled in a controlled page with only the
+    foe changed: `(163, 98.9, 80.5)` against Ember and `(162.8, 99, 80.6)`
+    against Tide. Not the game. And the first grid drew both stands empty,
+    because it rendered into a fresh canvas before the sprites existed.
+
+    **And a tautology of my own.** The wiring net had `ok(at < arena.length)`
+    under a comment claiming it proved the haze sits under the kin. That is true
+    of any index `findIndex` can return — no break can make it fail. Replaced
+    with the claim it was pretending to make: the haze must come after the last
+    transform in the arena, which is the stands, so the ground the kin stand ON
+    is lit too. Seven planted faults, all seven bite.

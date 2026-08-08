@@ -3161,4 +3161,109 @@ section('the bag brings both operands into the fight');
   ok((SRC.match(/rangeText\(/g) || []).length >= 4, 'and every one of them goes through the one formatter');
 }
 
+// Eight elements, and measured with a real canvas, seven eighths of the arena
+// was one place: the field came back 0.00 luminance and 0.00 hue apart between
+// an Ember fight and a Tide one, and so did the ridges. The whole difference
+// lived in the top 58 pixels of sky. The arena's own comment states the rule it
+// then stops at the horizon — further away is closer to the sky colour — so the
+// element now falls on the ground as light, strongest along the far edge.
+//
+// The colour of a fill is the one thing the headless context cannot see, so the
+// band is a value (`groundHaze`) and these nets read the value and then check
+// the drawing spends exactly it.
+section('the element reaches the ground, not just the sky');
+{
+  const g = loadGame();
+  const log = [];
+  g.setCtx(mkCtx(log));
+
+  // By difference: two opposed elements must not describe the same ground.
+  const emb = g.groundHaze(g.TYPES.Ember), tid = g.groundHaze(g.TYPES.Tide);
+  ok(emb.top !== tid.top, `an Ember fight and a Tide one are lit differently (${emb.top} vs ${tid.top})`);
+  ok(emb.top === g.TYPES.Ember, 'and the light is the element, not a colour of its own');
+  ok(emb.a > 0, 'the ground takes some of it');
+
+  // Further away is closer to the sky colour. The ground is lit BY the sky, so
+  // it cannot take more of the element than the sky itself does.
+  ok(g.GROUND_HAZE < g.SKY_WASH, `the ground takes less than the sky (${g.GROUND_HAZE} < ${g.SKY_WASH})`);
+
+  // It has to cover the ground the fight actually happens on — both stands, not
+  // a decorative strip under the far ridge. FOE_GROUND 66 and MY_GROUND 108 are
+  // where drawBattle stands them.
+  const inside = (y) => y >= emb.y && y < emb.y + emb.h;
+  ok(inside(66), 'the far stand is inside the band');
+  ok(inside(108), 'and so is the one you are standing on');
+  ok(emb.y + emb.h === g.VIEW_H, 'the band runs to the bottom of the frame');
+  ok(emb.y > g.HORIZON, 'and starts below the horizon — the sky already has its own wash');
+
+  // Wiring, by difference: the drawing must spend the value it was handed. A
+  // hardcoded rect passes the value nets above and fails this one.
+  const arenaLog = [];
+  g.setCtx(mkCtx(arenaLog));
+  g.drawArena(mkCtx(arenaLog), g.TYPES.Ember, null);
+  const band = arenaLog.filter((c) => c[0] === 'fillRect'
+    && c[1] === 0 && c[2] === emb.y && c[3] === g.VIEW_W && c[4] === emb.h);
+  eq(band.length, 1, 'the arena fills exactly the band the value names');
+
+  // …and nothing else in the arena happens to have those coordinates, or the
+  // net above would pass with the haze deleted.
+  const other = arenaLog.filter((c) => c[0] === 'fillRect' && c[2] === emb.y);
+  eq(other.length, 1, 'and that rect is the only thing starting at the band top');
+}
+
+// The reason a battle takes no map weather is written in draw(): a wash over
+// the finished frame lands on the kin rather than behind them, and Crown
+// Hollow's violet turned Cindercub to mud. The ground haze is held to the same
+// line — it is inside drawArena, which drawBattle calls before it draws anybody.
+// Netted by difference rather than by reading the source: everything the arena
+// draws must be a PREFIX of what the battle draws.
+section('the light is under the kin, not over them');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+  g.G.party = [g.mkMon('pyrelynx', 24)];
+  g.startBattle({ foe: g.mkMon('brookite', 22), wild: true });
+  const b = g.B();
+  b.entry = 1;
+
+  const arena = [];
+  g.drawArena(mkCtx(arena), g.TYPES.Tide, b);
+  const fight = [];
+  g.setCtx(mkCtx(fight));
+  g.drawBattle(mkCtx(fight));
+
+  ok(arena.length > 0 && fight.length > arena.length,
+    `the fight draws more than the arena (${arena.length} then ${fight.length})`);
+  // Reported as the first index that disagrees rather than as two logs: a
+  // failure a reader cannot read is only half an instrument.
+  let split = -1;
+  for (let i = 0; i < arena.length; i++) {
+    if (JSON.stringify(fight[i]) !== JSON.stringify(arena[i])) { split = i; break; }
+  }
+  ok(split < 0, split < 0
+    ? 'and every stroke of the arena lands before the first stroke of the fight'
+    : `the fight diverges from the arena at stroke ${split}: ${JSON.stringify(fight[split])} where the arena drew ${JSON.stringify(arena[split])}`);
+
+  // Inside the arena, and so inside the prefix — which is what puts it under
+  // the kin. The first draft asserted `at < arena.length`, which is true of any
+  // index findIndex can return: a sentence, not a net.
+  const hz = g.groundHaze(g.TYPES.Tide);
+  const at = arena.findIndex((c) => c[0] === 'fillRect' && c[2] === hz.y && c[4] === hz.h);
+  ok(at >= 0, 'the haze is in the arena');
+
+  // Light falls on the scenery. The stands are the last scenery the arena
+  // draws — they are the only thing in it that transforms — so the haze has to
+  // come after them, or the ground both kin stand on is lit and the ground they
+  // stand ON is not.
+  const lastStand = arena.map((c) => c[0]).lastIndexOf('translate');
+  ok(lastStand >= 0, 'the stands are in the arena');
+  ok(at > lastStand, `the haze falls on the stands too (stroke ${at}, stands end at ${lastStand})`);
+
+  // …and the motes are the light itself, so they stay out of it.
+  ok(arena.length > at + 1, 'and something still comes after it — the motes are not tinted by it');
+}
+
 done('emberkin_render');
