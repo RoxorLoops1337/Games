@@ -1165,6 +1165,27 @@ edit this block to name the next one.
       pops' "so they cannot land on top of each other" is honoured by a
       climb-clear loop. Two claims checked and left alone.
 
+- [x] Every snowbank is not the same snowbank. The tree varies with its seed,
+      the barrel varies, a hut picks its whole **trade** out of `o.seed` — and
+      the ramp branch never read it. Every snowbank in all twenty-one markets
+      was the same snowbank, up to five to a market, with two goals sending you
+      over one. Its crest now moves across the bank and changes size with the
+      seed, and the ends square off with it. The same branch's comment has
+      promised *"dirty at the foot"* since it was written while the darkest
+      colour in the whole prop was a pale blue: the low edge carries what the
+      plough scraped off the market floor now. **Sixth comment-versus-code find
+      in eight passes.**
+  - The assertion worth keeping is the third one. The kit-wide collider sweep
+      reads path **endpoints**, and a snowbank's outer edge is a quadratic — its
+      bulge is halfway along, where the sweep cannot see it. So this test works
+      the midpoint out itself (`0.25·P0 + 0.5·C + 0.25·P2`) for every seed, and
+      that is what the `- 2` in `RAMP_SHOULDER + s * 8` is protecting. Breaking
+      it puts the bank at −109 in a box of half-height 95, and **only this
+      assertion catches it**: the sweep stays green.
+  - Worth writing down as a limit of the sweep: it has caught six props reaching
+      past their colliders, and it is blind to curved overhang. Anything drawn
+      with `quadraticCurveTo` needs its own midpoint check.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
