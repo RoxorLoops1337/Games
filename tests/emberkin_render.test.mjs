@@ -1072,6 +1072,58 @@ section('the screen stops promising a swing from a creature that cannot take one
   ok(calls >= 3, `and it is redrawn at each moment the answer changes (${calls} sites)`);
 }
 
+section('a level gets the screen to itself, the way it already gets the sprite');
+{
+  // The game clears the hit flash, the lunge, the recoil and the crit burst
+  // when a level lands, under a comment saying why: two beats running at once
+  // are indistinguishable and the one not yet read wins. The rule was written
+  // and applied to everything BEFORE the level and nothing after. Measured, the
+  // rings run 3.50s to 4.30s and the victory flourish started at 3.90s — half
+  // the beat drawn under a field of gold motes rising in the same colour.
+  const win = (levels) => {
+    const g = loadGame({});
+    g.setCtx(mkCtx());
+    g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+    g.G.mapId = 'route_one';
+    const roll = Math.random;
+    Math.random = () => .999;              // same deal, top of every range
+    try {
+      g.startBattle({ foe: g.mkMon('dewdrip', 6), wild: true });
+      const b = g.B(); b.foe.hp = 1; g.G.battleMsg = null;
+      // One point short of the boundary, or a long way from it.
+      b.mine.xp = levels ? g.xpFor(b.mine.lvl + 1) - 1 : g.xpFor(b.mine.lvl);
+      b.dispXp = b.tgtXp = b.mine.xp; b.barLv = b.mine.lvl;
+      const i = b.hand.findIndex((c) => c.src === 'kin' && g.cardCost(c) <= b.energy);
+      g.submitLog(g.playCard(i >= 0 ? i : 0));
+    } finally { Math.random = roll; }
+    let both = 0, levelFrames = 0, flourishFrames = 0, frames = 0;
+    for (let n = 0; n < 900 && !g.G.screen; n++) {
+      const b = g.B();
+      const lv = !!(b && b.lvT > 0), fl = !!g.G.flourish;
+      if (lv && fl) both++;
+      if (lv) levelFrames++;
+      if (fl) flourishFrames++;
+      g.step(1 / 60); g.draw(); frames++;
+    }
+    return { both, levelFrames, flourishFrames, frames, lvl: g.G.party[0].lvl };
+  };
+
+  const up = win(true);
+  ok(up.frames > 120, `the winning fight was driven frame by frame (${up.frames} frames)`);
+  eq(up.lvl, 6, 'and the win crossed a level');
+  ok(up.levelFrames > 30, `the level was on screen (${up.levelFrames} frames)`);
+  eq(up.both, 0, 'and the victory never came up over it');
+  ok(up.flourishFrames > 0,
+    `…while still arriving afterwards (${up.flourishFrames} frames) — waiting is not starving`);
+
+  // A win with no level is untouched: the gate reads `lvT`, which is zero, so
+  // the far commoner fight pays nothing for this.
+  const flat = win(false);
+  eq(flat.levelFrames, 0, 'a win with no level shows no level');
+  ok(flat.flourishFrames > 0, 'and its victory arrives as it always did');
+  eq(flat.both, 0, 'with nothing to overlap');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
