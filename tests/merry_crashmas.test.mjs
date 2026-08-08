@@ -69,7 +69,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
-  EDGE_PILL,
+  EDGE_PILL, TRACK_ICE, TRACK_MAX,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
@@ -8251,6 +8251,95 @@ test('the plough you pick up is the plough you get', () => {
   console.log('    (plough: bow ' + bw.bow.toFixed(3) + ' at th ' + bw.th.toFixed(0) +
     ' worn / ' + bh.bow.toFixed(3) + ' at th ' + bh.th.toFixed(0) + ' held, pickup ' +
     span(1).toFixed(0) + ' long by ' + span(2).toFixed(0) + ' wide)');
+});
+
+/* A whole run came out as two painted stripes laid down the market at one
+   width and one alpha from the first metre to the last. The trail already knew
+   two things it never drew: how sideways the car was when it laid each segment,
+   and whether that segment was on ice — which has been recorded on every one
+   since tracks were written and read by nothing at all. */
+test('a tyre mark says what the car was doing', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.ice.length = 0; api.props.length = 0; api.people.length = 0;
+
+  const lay = (slip, red, ice) => {
+    api.tracks.length = 0;
+    for (let i = 0; i < 4; i++)
+      api.tracks.push({ x: api.cam.x - 200 + i * 40, y: api.cam.y, a: 0,
+        red, ice, gap: i === 0, slip });
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawGround());
+    const seg = rec.polys.filter(q => q.stroked && /^rgba\((122,14,10|96,110,134)/.test(String(q.style)));
+    assert(seg.length >= 2, 'the trail should stroke, got ' + seg.length);
+    return { w: seg[0].lw, a: +/,\s*([\d.]+)\)$/.exec(seg[0].style)[1], style: seg[0].style };
+  };
+
+  const straight = lay(0, 0, 0), sideways = lay(1, 0, 0);
+  assert(sideways.w > straight.w * 1.6,
+    'a car dragged sideways should cut a wider mark: ' + straight.w.toFixed(1) +
+    ' rolling against ' + sideways.w.toFixed(1) + ' scrubbing');
+  assert(sideways.a > straight.a * 2.5,
+    'and a darker one: ' + straight.a + ' against ' + sideways.a);
+  assert(straight.a < 0.15,
+    'a tyre rolling along its own axis barely marks packed snow, got ' + straight.a);
+
+  // ice does not take a mark
+  const onIce = lay(1, 0, 1);
+  assert(Math.abs(onIce.a - sideways.a * api.TRACK_ICE) < 0.002,
+    'ice should take ' + api.TRACK_ICE + ' of the mark, got ' +
+    (onIce.a / sideways.a).toFixed(2));
+
+  /* Blood is the exception and stays flat: a wet tyre prints whether it is
+     sliding or not, so only the width follows the slip. */
+  const wet = lay(0, 1, 0), wetSlide = lay(1, 1, 0);
+  assert(/^rgba\(122,14,10/.test(wet.style), 'a wet tyre prints red');
+  assert(Math.abs(wet.a - wetSlide.a) < 0.002,
+    'blood should print the same rolling or sliding: ' + wet.a + ' vs ' + wetSlide.a);
+  assert(wetSlide.w > wet.w * 1.6, 'but still wider when scrubbed');
+
+  /* And the slip is geometry off state that already exists. `stepCar` as a
+     whole legitimately draws from the generator — the boost throws flames — so
+     the claim worth pinning is the narrow one: DRAWING the trail touches
+     neither stream, and the same car state twice lays the same slip. A trail
+     that rolled for its own shape would move every market's score. */
+  api.reseed(7717);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(7717);
+  for (let i = 0; i < 12; i++) api.withCtx(carRec(), () => api.drawGround());
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the tyre marks moved the simulation stream');
+
+  /* One step at a time from a state written out in full. A sixty-step drive
+     would also have to hold the market bounds still — the first draft of this
+     ran the car into them and got twelve identical segments and a thirteenth
+     that was not, which is a bounce, not a trail that rolls. */
+  const lays = (vx, vy, ang, spin) => {
+    api.tracks.length = 0;
+    api.car.x = 2600; api.car.y = 1100; api.car.z = 0; api.car.air = 0;
+    api.car.ang = ang; api.car.vx = vx; api.car.vy = vy; api.car.spin = spin;
+    api.car.boostT = 0; api.car.bloody = 0; api.car.onIce = 0;
+    api.stepCar(1 / 60);
+    api.car.x += 40;
+    api.stepCar(1 / 60);
+    return api.tracks.map(t => t.slip.toFixed(9)).join(',');
+  };
+  const shape = [900, 300, 0.2, 2];
+  assert(lays(...shape) === lays(...shape),
+    'the same car state laid a different mark twice');
+  assert(api.tracks.length >= 1, 'a moving car should lay a trail');
+  // and it is the geometry, not a constant: sideways marks differ from straight
+  assert(lays(900, 0, 0, 0) !== lays(0, 900, 0, 0),
+    'the mark should follow the car\'s heading against its travel');
+  for (const t of api.tracks)
+    assert(t.slip >= 0 && t.slip <= 1, 'slip out of range: ' + t.slip);
+  const spread = Math.max(...api.tracks.map(t => t.slip)) -
+                 Math.min(...api.tracks.map(t => t.slip));
+  assert(spread > 0.02, 'a spinning car should lay a varying mark, spread ' + spread.toFixed(3));
+  console.log('    (tyre mark: ' + straight.w.toFixed(1) + 'px at ' + straight.a +
+    ' rolling, ' + sideways.w.toFixed(1) + 'px at ' + sideways.a + ' scrubbing, ' +
+    onIce.a + ' on ice)');
 });
 
 /* Fifth object in this run of passes with two drawings that had drifted apart,
