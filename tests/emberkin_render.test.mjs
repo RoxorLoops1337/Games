@@ -2637,6 +2637,12 @@ section('every cue that is fired is a cue that exists');
     // grass default, and a tile added tomorrow with a footstep playCue does not
     // handle now fails here rather than being silence nobody notices.
     ...[...mapTiles(g0)].map((t) => g0.stepCue(t)),
+    // Every screen the game opens, put through its own choice of note. The
+    // kinds are harvested from the openScreen call sites rather than typed
+    // here, so a screen added tomorrow is covered — and a cue that only ever
+    // appears inside an expression stops being unreachable.
+    ...[...new Set((SRC.match(/openScreen\('([a-z]+)'/g) || [])
+      .map((m) => m.replace(/openScreen\('|'/g, '')))].map((k) => g0.screenCue(k)),
   ]);
   ok(asked.size > 12, `and the rest are asked for rather than listed (${asked.size})`);
 
@@ -3742,6 +3748,115 @@ section('a fight hands the map back the way everything else does');
   h.G.fade = .5;
   h.backToWorld();
   ok(h.G.fade >= .5, `a longer cover already up is not shortened (${h.G.fade})`);
+}
+
+// This file says three times that two beats must not make the same sound: a
+// menu that opens and one that confirms, the chest that borrowed the catch, the
+// crit that arrived as an ordinary hit. Then the victory flourish played
+// `level`, and so did the card offer behind it. Measured on one win that
+// levelled, dice pinned, the level-up's climb was heard THREE times:
+//
+//     before   weak, weak, weak, downed, level, level, world, level, select
+//     after    weak, weak, weak, downed, level, win,   world, offer, select
+//
+// Cues are unhearable from here, so they are recorded rather than played, and
+// the claim is netted on the NOTES — two names with the same body would still
+// be the same sound.
+section('two different beats do not make the same sound');
+{
+  // playCue returns early when HEADLESS and blip needs an AudioContext, so both
+  // are made to record instead. This is the only way the suite can hear.
+  const spy = (src) => src
+    // Record the cue and DO NOT return, so the notes underneath it run…
+    .replace('function playCue(kind) {\n  if (HEADLESS) return;',
+      'function playCue(kind) {\n  if (HEADLESS) (globalThis.__cues = globalThis.__cues || []).push(kind);')
+    // …past the AudioContext, which does not exist here and made playCue return
+    // before a single note. Anchored on playCue's OWN line: `const ac =
+    // audio();` appears twice in the file and String.replace takes the first,
+    // so the first attempt stubbed a different function and recorded nothing.
+    .replace(/function playCue\(kind\) \{([\s\S]*?)const ac = audio\(\);/,
+      (m, mid) => `function playCue(kind) {${mid}const ac = { currentTime: 0 };`)
+    // And blip writes down what it was asked for instead of playing it.
+    .replace('function blip(freq, dur, type, gain, when) {',
+      'function blip(freq, dur, type, gain, when) {\n  (globalThis.__blips = globalThis.__blips || []).push([Math.round(freq), dur, type, gain || 0, when || 0]);\n  if (HEADLESS) return;');
+  const g = withDeck(loadGame({}, spy));
+  g.setCtx(mkCtx());
+
+  // What a cue SOUNDS like, as a value: the notes it makes.
+  const notesOf = (kind) => {
+    globalThis.__blips = [];
+    g.playCue(kind);
+    return JSON.stringify(globalThis.__blips);
+  };
+  ok(notesOf('level') !== '[]', 'a cue can be heard from here at all');
+
+  // By difference, on the sound and not the name: every beat that used to share
+  // `level` now has its own.
+  const lvl = notesOf('level'), win = notesOf('win'), offer = notesOf('offer'), menu = notesOf('menu');
+  ok(win !== '[]', 'a win has a sound');
+  ok(offer !== '[]', 'an offer has a sound');
+  ok(win !== lvl, 'a win does not sound like a level');
+  ok(offer !== lvl, 'an offer does not sound like a level');
+  ok(offer !== menu, 'nor like opening a menu');
+  ok(win !== offer, 'and a win does not sound like the offer behind it');
+
+  // …and the whole table, so a future cue cannot be added as a duplicate of one
+  // already there. Read out of playCue, not listed here.
+  const body = (SRC.match(/function playCue\(kind\)[\s\S]*?\n\}\n/) || [''])[0];
+  const kinds = [...new Set((body.match(/kind === '[a-z_]+'/g) || []).map((m) => m.replace(/kind === '|'/g, '')))];
+  ok(kinds.length > 20, `the table has ${kinds.length} sounds in it`);
+  const bySound = new Map();
+  const twins = [];
+  for (const k of kinds) {
+    const n = notesOf(k);
+    if (n === '[]') continue;                       // themes and the like
+    if (bySound.has(n)) twins.push(`${bySound.get(n)} and ${k}`);
+    else bySound.set(n, k);
+  }
+  eq(twins.length, 0, `no two cues make the same noise${twins.length ? ': ' + twins.join(', ') : ''}`);
+
+  // The beats themselves, driven: a win that also levels must not say the same
+  // thing twice. The state is DIRTIED — a kin one point of XP under a level —
+  // or the collision cannot happen at all.
+  const rnd = Math.random;
+  Math.random = () => 0.5;                          // pinned everywhere, scene and suite
+  try {
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.mode = 'world';
+    const mine = g.mkMon('cindercub', 8);
+    mine.xp = g.xpFor(9) - 1;
+    g.G.party = [mine];
+    g.startBattle({ foe: g.mkMon('kindlark', 3), wild: true });
+    globalThis.__cues = [];
+    let ms = 0;
+    const step = (n = 50) => { ms += n; g.frame(ms); };
+    for (let k = 0; k < 80 && g.G.battle && !g.B().over; k++) {
+      const b = g.B();
+      const i = b.hand.findIndex((c) => g.cardCost(c) <= b.energy);
+      // submitLog only QUEUES the log; the cues fire as playbackStep walks it.
+      if (i >= 0) g.submitLog(g.playCard(i)); else g.submitLog(g.endTurn());
+      for (let f = 0; f < 200 && g.G.battle && g.B().log && g.B().li < g.B().log.length; f++) {
+        if (g.G.battleMsg) { g.G.battleMsg.hold = 0; g.advanceDialogue(); continue; }
+        step();
+      }
+    }
+    ok(g.G.battle && g.B().over === 'win', `the fight was won (${g.G.battle && g.B().over})`);
+    for (let i = 0; i < 900 && (g.G.battle || g.G.mode !== 'world' || g.screenCovered()); i++) {
+      if (g.G.battleMsg) { g.G.battleMsg.hold = 0; g.advanceDialogue(); continue; }
+      if (g.G.dialogue) { g.G.dialogue.hold = 0; g.advanceDialogue(); continue; }
+      if (g.G.screen) { if (g.screenLocked(g.G.screen)) g.screenSelect(); else g.closeScreen(); continue; }
+      step();
+    }
+    const heard = (globalThis.__cues || []).slice();
+    eq(g.G.party[0].lvl, 9, 'the kin levelled during the fight');
+    ok(heard.includes('win'), `the win was announced (${heard.join(', ')})`);
+    ok(heard.includes('offer'), 'and the offer asked');
+    eq(heard.filter((c) => c === 'level').length, 1,
+      `the level-up's sound is heard once, for the level (${heard.join(', ')})`);
+  } finally {
+    Math.random = rnd;
+  }
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.

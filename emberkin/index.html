@@ -9708,7 +9708,7 @@ function winFlourish(gems, then) {
     show(els.dialogue, false); show(els.intent, false);
     battleBar(false);
   }
-  playCue('level');
+  playCue('win');
 }
 
 /** True while the flourish owns the screen. */
@@ -9912,6 +9912,21 @@ function openBattleActions(i = 0) {
 }
 
 // ---- full screens ------------------------------------------------------
+/**
+ * Which note a screen opens on.
+ *
+ * A ternary inside the playCue call meant the cue existed and nothing could
+ * reach it: the suite harvests cue names from literal calls and ASKS the pure
+ * cue functions for the rest, and a name buried in an expression is in neither.
+ * So it is a function, like hitCue and placeTrack — the offer is a question
+ * rather than an event, and everything else is a panel opening.
+ *
+ * The first draft of this comment spelled a literal call out as an example and
+ * the harvester read it: a cue named nowhere in the game turned up as fired,
+ * because that sweep reads comments too.
+ */
+const screenCue = (kind) => (kind === 'reward' ? 'offer' : 'menu');
+
 function openScreen(kind, opt = {}) {
   // Where you came from, taken before closeMenu throws it away. `prev` was
   // already being recorded here and read by nothing: every row of the pause
@@ -9939,7 +9954,7 @@ function openScreen(kind, opt = {}) {
     : kind === 'bag' && !G.battle ? bagStart() : 0;
   G.screen = { kind, i, sel: null, opt, prev: from, prevRow: fromRow, prevMenu: fromMenu };
   G.mode = 'screen';
-  playCue(kind === 'reward' ? 'level' : 'menu');
+  playCue(screenCue(kind));
   renderScreen();
   screenEntry(kind);
 }
@@ -11002,6 +11017,37 @@ function playCue(kind) {
   // catch keeps the fanfare; the sighting only wants to be heard.
   else if (kind === 'dex') { blip(1046, .04, 'square', .028); blip(1568, .06, 'square', .022, t + .05); }
   else if (kind === 'level') { [0, 4, 7, 12].forEach((s, i) => blip(note(12 + s), .16, 'square', .05, t + i * .07)); }
+  // Winning a fight and gaining a level were the same sound.
+  //
+  // This file says three times that two beats must not share one — a menu that
+  // opens and a menu that confirms, the chest that borrowed the catch, the crit
+  // that arrived as an ordinary hit — and then the flourish, which ends every
+  // fight you win, played `level`. Measured on a win that levelled: the same
+  // climb twice, for two different things, back to back.
+  //
+  // `level` CLIMBS (0-4-7-12) because something grew. A win RESOLVES: a fifth
+  // falling onto the root, with an octave under it so it lands with weight.
+  // Opposite motion, so the ear can separate them even when they arrive
+  // together — which is exactly how they arrive. Written, not heard; nothing in
+  // this repo can play it back.
+  else if (kind === 'win') {
+    blip(note(19), .14, 'triangle', .055);
+    blip(note(12), .26, 'triangle', .06, t + .1);
+    blip(note(0), .34, 'sine', .05, t + .1);
+  }
+  // …and the card offer that follows it borrowed `level` too. Measured on one
+  // win that levelled, the climb was heard THREE times: the level itself, the
+  // flourish, and the offer. Fixing only the flourish would have left the same
+  // fault one call site over, which is how 180's fix reached one menu and not
+  // the other.
+  //
+  // An offer is a question, not an event: two notes lifting a fourth and
+  // stopping there, unresolved, so it asks rather than announces. Quieter than
+  // `win`, higher than `menu`, and it does not climb.
+  else if (kind === 'offer') {
+    blip(note(12), .1, 'triangle', .045);
+    blip(note(17), .17, 'triangle', .05, t + .07);
+  }
   else if (kind === 'catch') { [0, 5, 9, 14].forEach((s, i) => blip(note(12 + s), .2, 'triangle', .06, t + i * .1)); }
   // A chest borrowed the catch cue, which made the biggest purchase in the
   // game sound like a creature going into an orb. Lower, wider, and it opens
@@ -12201,11 +12247,11 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
-    btnLabels, pickName, backName, isTouch, tapKey,
+    btnLabels, pickName, backName, isTouch, tapKey, screenCue,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
-    winFlourish, flourishStep, drawFlourish, FLOURISH_T, BATTLE_OUT, backToWorld, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, BATTLE_OUT, backToWorld, playCue, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,
     newGame, boot, say, openScreen, closeScreen, screenLocked, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
