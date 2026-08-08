@@ -7845,14 +7845,40 @@ function drawBattle(g) {
   if (b.lvT > 0) {
     const k = 1 - b.lvT / LVL_T;
     const cx = 72, cy = MY_GROUND;
+    // …and the ground under it lights up, because a level is something that
+    // happens TO this creature and nothing on the field said so.
+    //
+    // Measured in the 68x52 box these rings and sparks live in: the whole beat
+    // added 0.48 to the mean luminance. The victory flourish that follows it
+    // adds 4.92 to the same box — TEN TIMES more — so the most repeated good
+    // thing in the game was an order of magnitude quieter than the thing that
+    // comes after it. Three one-pixel rings at half alpha cannot carry a beat;
+    // a ring is an outline and what was missing was light.
+    //
+    // Up and out with the rings, and gone before they are: the glow peaks early
+    // and is out by the time the last ring reaches its edge, so the beat ends
+    // on the outline rather than on a smear.
+    {
+      const gk = Math.sin(clamp(k * 1.35, 0, 1) * Math.PI);
+      if (gk > .01) {
+        const gr = g.createRadialGradient(cx, cy - 6, 2, cx, cy - 6, 34);
+        gr.addColorStop(0, `rgba(255,233,168,${(gk * .22).toFixed(3)})`);
+        gr.addColorStop(1, 'rgba(255,201,77,0)');
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.fillStyle = gr;
+        g.fillRect(cx - 36, cy - 42, 72, 50);
+        g.restore();
+      }
+    }
     g.save();
     g.globalCompositeOperation = 'lighter';
     for (let r = 0; r < 3; r++) {
       const rk = clamp(k * 1.3 - r * .16, 0, 1);
       if (rk <= 0 || rk >= 1) continue;
-      g.globalAlpha = (1 - rk) * .5;
+      g.globalAlpha = (1 - rk) * .9;
       g.strokeStyle = r % 2 ? '#ffe9a8' : '#ffc94d';
-      g.lineWidth = 1;
+      g.lineWidth = 2;
       g.beginPath();
       if (g.ellipse) g.ellipse(cx, cy - rk * 26, 10 + rk * 16, (10 + rk * 16) * .34, 0, 0, Math.PI * 2);
       g.stroke();
@@ -9673,7 +9699,26 @@ function updateBattle(dt) {
   }
   if (b.log) { b.log = null; b.started = false; renderHand(); }
 
-  if (b.over) { if (!b.finishing) { b.finishing = true; finishBattle(); } return; }
+  // The level gets the screen to itself, the same way it already gets the
+  // sprite to itself.
+  //
+  // `b.flashM = 0; b.lungeM = 0; b.recoilM = 0` and the crit burst are cleared
+  // when a level lands, under a comment that says why: two beats running at
+  // once are indistinguishable, and the one that has not been read yet wins.
+  // The rule was written and then applied to everything that came BEFORE the
+  // level and to nothing that comes after. Measured: the rings run 3.50s to
+  // 4.30s and the victory flourish started at 3.90s — so half the beat was
+  // drawn underneath a field of gold motes rising in the same colour, which on
+  // film is not a level-up at all.
+  //
+  // Waiting costs at most LVL_T (0.8s) and only on the fights that levelled,
+  // which is the one case where the player has something extra to look at.
+  // `lvT` decays every frame unconditionally, so this cannot stall.
+  if (b.over) {
+    if (b.lvT > 0) return;
+    if (!b.finishing) { b.finishing = true; finishBattle(); }
+    return;
+  }
   if (G.dialogue) return;
 
   // ---- the player's turn: pick a card, play it, or end the turn

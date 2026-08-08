@@ -377,6 +377,59 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+81. **The most repeated good thing in the game was ten times quieter than the
+    thing that follows it** (pass 170). The level-up, filmed and then measured
+    twice — once for timing, once for light — and both numbers said the same
+    thing from different directions.
+
+    **Timing.** Driven through a real winning fight: fall 1.97s, XP bar filling
+    2.53s, level rings 3.50s (LVL_T is .8s, so to 4.30s), **victory flourish
+    3.90s**. Half the level is drawn underneath a field of gold motes rising in
+    the same colour. On film it is not a level-up at all.
+
+    The fix is one line, and the rule for it was already written down. The game
+    clears `flashM`, `lungeM`, `recoilM` and the crit burst when a level lands,
+    under a comment explaining why: *two beats running at once are
+    indistinguishable and the one not yet read wins.* **The rule was applied to
+    everything that comes BEFORE the level and to nothing that comes after.**
+    That is the third pass running that this shape has turned up — 168's plaque
+    guard, 169's foe-cannot-act, and now this. It is worth going looking for.
+
+    Waiting costs at most 0.8s and only on fights that levelled, which is the
+    one case where there is something extra to look at. `lvT` decays every
+    frame unconditionally, so it cannot stall — and the net proves that
+    separately, because *waiting is not starving* is a different claim from
+    *they do not overlap* and freezing `lvT` satisfies the second while
+    destroying the first.
+
+    **Light.** Then the harder question: with the screen to itself, does the
+    beat actually read? Not by eye — by pixels. Draw the frame, set `lvT = 0`,
+    draw again, difference the mean luminance over the 68x52 box the rings and
+    sparks live in:
+
+        the level beat adds   0.48
+        the flourish adds     4.92     to the same box
+
+    **Ten times.** Three one-pixel rings at half alpha cannot carry a beat: a
+    ring is an outline, and what was missing was light. A short warm glow on the
+    ground under the creature — the same device the flourish already uses,
+    scoped to the one who earned it — plus thicker, brighter rings.
+
+    **And then it overshot, which the same measurement caught.** First attempt:
+    **8.81 against the flourish's 4.59**, nearly twice as loud — a local event
+    shouting down a field-wide one. Dialled the glow alpha .5 → .22 and
+    re-measured: **4.52 against 4.59.** Parity, not dominance. *A number that
+    can tell you a thing is too quiet can tell you it is too loud, and tuning by
+    eye would have kept whichever version I looked at last.*
+
+    Two smaller notes. `wait` delays a FILM's start as well as a still's, so
+    `levelup` (wait 4500) cannot film the beat it is named for; `levelwin` walks
+    the simulation forward in sixtieths inside `go()` instead — a film cannot be
+    given a start offset, so the scene has to seek itself. And a measurement
+    that runs a loop until `lvT` hits zero then reads the flourish is measuring
+    a different picture: the new gate lets the battle finish at that exact
+    instant, so the arena is gone. The 0.059 it printed was true and meaningless.
+
 80. **The screen kept promising a swing from a creature lying on its side**
     (pass 169). Filmed the kill, and the brief's question — are the foe's death
     and your victory two beats or one mush? — came back **two beats, cleanly
