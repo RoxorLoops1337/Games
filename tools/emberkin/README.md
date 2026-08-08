@@ -377,6 +377,44 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+63. **The telegraph named a number the foe was never going to deal** (pass 152).
+    The measurement 151 recorded and refused to act on, isolated.
+
+    Eliminated in order. My own drive first, because RAW EK CALLS RETURN A LOG
+    and that shape has misled this project repeatedly — the drive called
+    `readIntent()` a second time each turn, which is a real fault (it MUTATES
+    `b.cornered` and `b.foeEdge`) but changed the measurement not at all: median
+    1.11x either way. Then roll and crit, by freezing the roll at the .925 the
+    estimate assumes and turning crits off: the bias was UNCHANGED, median 1.11,
+    42 swings over against 17 under. Only the tail moved, which is what a crit
+    is.
+
+    So it was structural, and it was one line. The swing computes
+
+        dmg = floor((roll.dmg + bonus.flat) * mul)
+
+    where `mul` is the wild damper or the trainer ramp, halved against a
+    resistance, times the settling penalty. The telegraph computed
+    `damageOf(...).dmg + foeEdge` and applied NONE of it. The chip named the raw
+    number and the foe then multiplied it.
+
+    That is why the error looked like noise: the factor differs by
+    wild-vs-trainer and by the foe's level, so it ran 0.50 to 1.35 with no
+    single value to notice. And it is why it mattered — two passes had built a
+    lethal warning and the in-fight bag's incoming figure on that number, so the
+    warning stayed silent in cases where the player died.
+
+    `foeSwingMul(b, eff)` now, read by the swing and by the telegraph, which is
+    the rule this project keeps relearning: two things about the same fact share
+    the function or they drift. With the roll frozen: 48 of 61 exact, ZERO over.
+    With real rolls and crits: median 1.00, 21 over against 31 under — balanced
+    around the mean roll, which is what an honest estimate looks like.
+
+    **A measurement you cannot explain is worth recording and worth NOT acting
+    on. It survived a pass in the ledger, and the pass that picked it up spent
+    its whole budget eliminating candidates in order rather than guessing. The
+    guess would have been the roll.**
+
 62. **The placeholder was guarding the number two passes had been built on**
     (pass 151). Acting on 150 deliberately: grep the suites for assertions that
     are placeholders rather than claims. Most `!!` checks turned out to be

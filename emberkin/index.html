@@ -6541,7 +6541,8 @@ function chipEstimate(b) {
   for (const slot of b.foe.moves) {
     const m = MOVES[slot.id];
     if (!m || !m.pow) continue;
-    best = Math.max(best, damageOf(b.foe, b.mine, slot.id, { crit: false, roll: .925 }).dmg);
+    const r = damageOf(b.foe, b.mine, slot.id, { crit: false, roll: .925 });
+    best = Math.max(best, r.eff === 0 ? 0 : Math.floor(r.dmg * foeSwingMul(b, r.eff)));
   }
   return best;
 }
@@ -6579,7 +6580,11 @@ function readIntent() {
   }
   const id = foeChoose(b.foeEdge > 0);
   const m = MOVES[id];
-  const est = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }).dmg + (b.foeEdge || 0) : 0;
+  // The same scaling the swing applies. Without it the chip named a number the
+  // foe was never going to deal.
+  const raw = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }) : null;
+  const est = raw ? (raw.eff === 0 ? 0
+    : Math.max(1, Math.floor((raw.dmg + (b.foeEdge || 0)) * foeSwingMul(b, raw.eff)))) : 0;
   b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
   // Being cornered is the loudest thing on the line while it lasts, because it
   // is the only part of a wild fight worth reading.
@@ -6722,6 +6727,24 @@ const trainerHp = (n) => TRAINER_HP_MUL / Math.pow(Math.max(1, n), .35);
 const TRAINER_DMG_MUL = 1.35;
 /** The same ramp, for the same reason. */
 const trainerDmg = (lvl) => 1 + (TRAINER_DMG_MUL - 1) * Math.min(1, lvl / 14);
+/**
+ * What the foe's swing is scaled by — the wild damper or the trainer ramp, the
+ * chip if a plan beat is being paid for, the half-strength blend against a
+ * resistance, and the settling penalty.
+ *
+ * Lifted out because the TELEGRAPH did not apply any of it. `readIntent`
+ * estimated `damageOf(...) + foeEdge` and the swing then multiplied that whole
+ * thing, so the chip was systematically wrong — measured over sixty runs with
+ * the roll frozen and crits off, the foe dealt more than told in 42 swings of
+ * 59, median 1.11x, and the spread ran 0.50 to 1.35 because the factor differs
+ * by wild-vs-trainer and by level. Two passes had built a lethal warning and an
+ * in-fight bag figure on that number. Shared now, so they cannot disagree.
+ */
+function foeSwingMul(b, eff) {
+  const base = (b.wild ? WILD_DMG_MUL : trainerDmg(b.foe.lvl)) * (b.chipping ? PLAN_CHIP : 1);
+  const mul = eff < 1 ? (1 + base) / 2 : base;
+  return b.foeSettling ? mul * SETTLE_MUL : mul;
+}
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 // CORNER_EDGE was 14 and drifted the solo danger line to .338 lost-or-ran across
@@ -11425,6 +11448,7 @@ if (typeof window !== 'undefined') {
     CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
     SWITCH_PUNISH, SETTLE_MUL,
     trainerHp, TRAINER_DMG_MUL, trainerDmg,
+    foeSwingMul,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
