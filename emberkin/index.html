@@ -9135,7 +9135,18 @@ function finishBattle() {
       G.mode = 'world';
       G.fade = .5;                   // …and the Wayhouse opens out of it
       playCue('world');
-      const after = [`Sable patched them up. It cost you ${lost} shards.`, 'Go easier out there.'];
+      // …and when there was nothing to take, she says so.
+      //
+      // The fee is a quarter of your shards, floored — so anybody holding fewer
+      // than four was told "It cost you 0 shards" in the one line the game
+      // writes to soften a loss. That is the player most likely to be broke:
+      // they have just lost everything. A number that is always zero reads as a
+      // bug, and it turned the only mercy in the beat into a clerical error.
+      // She does not explain herself anywhere else either.
+      const after = [lost > 0
+        ? `Sable patched them up. It cost you ${lost} shards.`
+        : 'Sable patched them up. She did not ask for anything, and did not say why.',
+        'Go easier out there.'];
       // Say it out loud, so nobody stands in front of a trainer wondering
       // whether the game has stopped letting them through.
       if (b.npc) after.push(`${b.npc.name} will not stop you again. Go and ask for the rematch when you want it.`);
