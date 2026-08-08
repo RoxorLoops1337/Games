@@ -6565,7 +6565,7 @@ function readIntent() {
     const tell = p.edge ? `+${n} on the next hit` : p.shield ? `${n} guard` : 'a shield will not help';
     // The chip has to be on the line, or the telegraph lies about the turn.
     const chip = b.wild ? Math.round(chipEstimate(b) * PLAN_CHIP) : 0;
-    b.intent = { id: null, name: p.label, dmg: chip, kind: 'plan', step, n, tell };
+    b.intent = { id: null, name: p.label, dmg: chip, hi: chip, kind: 'plan', step, n, tell };
     return b.intent;
   }
   // A wild kin that is losing stops fighting carefully. Two fights in five were
@@ -6582,10 +6582,15 @@ function readIntent() {
   const m = MOVES[id];
   // The same scaling the swing applies. Without it the chip named a number the
   // foe was never going to deal.
-  const raw = m.pow ? damageOf(b.foe, b.mine, id, { crit: false, roll: .925 }) : null;
-  const est = raw ? (raw.eff === 0 ? 0
-    : Math.max(1, Math.floor((raw.dmg + (b.foeEdge || 0)) * foeSwingMul(b, raw.eff)))) : 0;
-  b.intent = { id, name: m.name, dmg: est, kind: m.pow ? 'attack' : 'buff' };
+  // Both ends of the roll, not just its middle. The middle is what the line
+  // prints; the top is what the lethal alarm has to be measured against.
+  const swing = (roll) => {
+    const r = damageOf(b.foe, b.mine, id, { crit: false, roll });
+    return r.eff === 0 ? 0 : Math.max(1, Math.floor((r.dmg + (b.foeEdge || 0)) * foeSwingMul(b, r.eff)));
+  };
+  const est = m.pow ? swing(.925) : 0;
+  const hi = m.pow ? swing(1) : 0;
+  b.intent = { id, name: m.name, dmg: est, hi, kind: m.pow ? 'attack' : 'buff' };
   // Being cornered is the loudest thing on the line while it lasts, because it
   // is the only part of a wild fight worth reading.
   if (b.cornered > 0 && b.foeEdge > 0 && m.pow) {
@@ -8537,24 +8542,37 @@ function fanStyle(i, n, selected) {
 
 /**
  * What the telegraphed swing actually LANDS, after guard and shield — the
- * number the chip prints beside the raw one. Lifted out of renderHand, which
+ * numbers the chip prints beside the raw one. Lifted out of renderHand, which
  * returns early with no DOM, so both of these can be driven headlessly.
+ *
+ * A RANGE, because the swing rolls [.85, 1] and a single figure cannot be both
+ * things the screen needs it to be. This returned the estimate at the middle of
+ * that roll and the lethal alarm below was computed off it, which meant the
+ * alarm answered "will this kill me on average" — a question nobody has ever
+ * asked. Sat at one HP above what the chip said was coming, in the strongest
+ * terms the screen has, the swing killed you 31% of the time and the alarm was
+ * silent in every one of fifty measured matchups.
  */
 function intentThrough(b, it) {
   if (!b || !it || it.kind !== 'attack') return null;
-  return Math.max(0, Math.max(it.dmg > 0 ? 1 : 0, it.dmg - (b.mods.def || 0)) - (b.shield || 0));
+  const cut = (d) => Math.max(0, Math.max(d > 0 ? 1 : 0, d - (b.mods.def || 0)) - (b.shield || 0));
+  return { lo: cut(it.dmg), hi: cut(it.hi != null ? it.hi : it.dmg) };
 }
 /**
  * …and whether that is more than the kin has left, which is the half of the
- * question the chip never finished. It is a warning rather than a verdict:
- * `it.dmg` is an estimate and the line says "about". Burn ticking at the end of
- * the turn is a second source and deliberately not counted here.
+ * question the chip never finished. Read off the TOP of the range: a warning
+ * exists for the turn that can go wrong, not the turn that usually does. Burn
+ * ticking at the end of the turn is a second source and deliberately not
+ * counted here, and neither is a crit — the chip warns about the swing it is
+ * showing you.
  */
 function intentLethal(b, it) {
   const through = intentThrough(b, it);
-  if (through == null || !b.mine || b.mine.hp <= 0) return false;
-  return through >= b.mine.hp;
+  if (!through || !b.mine || b.mine.hp <= 0) return false;
+  return through.hi >= b.mine.hp;
 }
+/** One number when the roll cannot spread it, two when it can. */
+const rangeText = (lo, hi) => (lo === hi ? `${lo}` : `${lo}-${hi}`);
 
 function renderHand() {
   if (HEADLESS) return;
@@ -8613,15 +8631,17 @@ function renderHand() {
   // head. It already does the shield subtraction; this is the one that decides
   // whether the turn is a choice or a mistake.
   //
-  // `it.dmg` is an estimate and says so — "about" — so this is a warning rather
-  // than a verdict, and it is worded as one. It does not count a burn ticking
-  // at the end of the turn; that is a second source and this line is about the
-  // swing.
+  // It said "about N" and meant the middle of the roll, which made the alarm
+  // below fire on the average turn instead of the bad one. Both ends are on the
+  // line now, so the word "about" is not doing work a number can do, and the
+  // figure the alarm is reading is the figure the player can see. It still does
+  // not count a burn ticking at the end of the turn; that is a second source
+  // and this line is about the swing.
   const lethal = intentLethal(b, it);
   els.intent.classList.toggle('lethal', lethal);
   els.intent.innerHTML = it
     ? `Foe: <b>${it.name}</b>${it.kind === 'attack'
-        ? ` · about ${it.dmg}${banked ? ` · <b style="color:${through > 0 ? 'var(--hp-warn)' : 'var(--hp-good)'}">${through} through</b>` : ''}`
+        ? ` · hits ${rangeText(it.dmg, it.hi != null ? it.hi : it.dmg)}${banked ? ` · <b style="color:${through.hi > 0 ? 'var(--hp-warn)' : 'var(--hp-good)'}">${rangeText(through.lo, through.hi)} through</b>` : ''}`
           + (lethal ? ' · <b>enough to finish you</b>' : '')
         : it.tell ? ` · ${it.tell}` : ''}`
     : '';
@@ -8690,6 +8710,11 @@ function moveDamage(id) {
 /**
  * The same reading against whoever is actually out there, or null out of a
  * fight. Returns `eff` too, because "how much" and "how well" are one answer.
+ *
+ * A range, in the same shape and by the same call as the card in hand. This
+ * showed one number at roll 1 behind a `~`: "about 8" for a move that deals
+ * 7 or 8 and never once 9. A tilde promises the middle and this was the
+ * ceiling — the one figure on the screen it could not have been.
  */
 const EFF_MARK = {
   '2': { tag: 'STRONG', cls: 'eff-good' },
@@ -8700,7 +8725,7 @@ function moveVersusFoe(mon, id) {
   const b = B();
   const mv = MOVES[id];
   if (!b || !b.foe || !mv || !mv.pow) return null;
-  const { dmg, eff } = damageOf(mon, b.foe, id, { crit: false, roll: 1 });
+  const eff = damageOf(mon, b.foe, id, { crit: false, roll: 1 }).eff;
   // …and the banked bonus, which the swing applies and this did not.
   //
   // The same fault as the telegraph's, in a function written two passes after
@@ -8710,14 +8735,20 @@ function moveVersusFoe(mon, id) {
   // `b.mods` and `G.might` — nothing about which kin is holding it — so it
   // belongs to whoever swings, including somebody still on the bench.
   const bonus = attackBonus();
-  return { dmg: eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul)), eff };
+  const swing = (roll) => {
+    const { dmg } = damageOf(mon, b.foe, id, { crit: false, roll });
+    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul));
+  };
+  return { lo: swing(.85), hi: swing(1), eff };
 }
 
+/** The same range, foe-agnostic, for the town menu. */
 function moveDamageNeutral(mon, id) {
   const m = MOVES[id];
-  if (!m || !m.pow) return 0;
+  if (!m || !m.pow) return null;
   const dummy = { types: [], def: mon.def, stages: { atk: 0, def: 0, spd: 0 }, status: '', lvl: mon.lvl };
-  return damageOf(mon, dummy, id, { crit: false, roll: 1 }).dmg;
+  const swing = (roll) => damageOf(mon, dummy, id, { crit: false, roll }).dmg;
+  return { lo: swing(.85), hi: swing(1) };
 }
 
 /**
@@ -9510,12 +9541,11 @@ function statBlock(m) {
       // on the forced switch, where the screen is asking you to pick somebody
       // to send into a specific creature and the matchup is the whole decision.
       // `damageOf` takes any attacker, so the real answer was one call away.
-      const vs = mv.pow ? moveVersusFoe(m, slot.id) : null;
-      const dmg = vs ? vs.dmg : (mv.pow ? moveDamageNeutral(m, slot.id) : 0);
-      const mark = vs ? EFF_MARK[String(vs.eff)] : null;
+      const vs = mv.pow ? (moveVersusFoe(m, slot.id) || moveDamageNeutral(m, slot.id)) : null;
+      const mark = vs && vs.eff !== undefined ? EFF_MARK[String(vs.eff)] : null;
       return `<div class="${mark ? `movecard ${mark.cls}` : 'movecard'}" style="--tint:${TYPES[mv.type]}">
         <div class="mtop"><b>${mv.name}</b><span class="cost">${moveCost(slot.id)}</span></div>
-        <div class="mbody">${mv.pow ? `~${dmg} dmg${mark ? ` <b class="eff">${mark.tag}</b>` : ''}` : 'status'}
+        <div class="mbody">${vs ? `${rangeText(vs.lo, vs.hi)} dmg${mark ? ` <b class="eff">${mark.tag}</b>` : ''}` : 'status'}
           <span class="pp ${pp <= .25 ? 'low' : ''}">${slot.pp}/${slot.max} PP</span></div>
         <div class="mbar"><i style="width:${pp * 100}%"></i></div></div>`;
     }).join('') + `</div></div>`;
@@ -9834,7 +9864,7 @@ function renderScreen() {
     const doomed = inFight && intentLethal(B(), B().intent);
     html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards`
       + (hurt ? ` <span style="color:${hpColor(hurt.hp / hurt.max)}">· ${dispName(hurt)} ${hurt.hp}/${hurt.max}</span>` : '')
-      + (inc != null ? ` <span style="color:${doomed ? 'var(--hp-bad)' : 'var(--dim)'}">· about ${inc} coming${doomed ? ', enough to finish you' : ''}</span>` : '')
+      + (inc ? ` <span style="color:${doomed ? 'var(--hp-bad)' : 'var(--dim)'}">· ${rangeText(inc.lo, inc.hi)} coming${doomed ? ', enough to finish you' : ''}</span>` : '')
       + '</h2>';
     if (!list.length) html += '<p style="color:var(--dim)">Empty. Even the lint.</p>';
     for (const [group, keys] of shelve(list)) {
@@ -11470,7 +11500,7 @@ if (typeof window !== 'undefined') {
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
-    intentThrough, intentLethal, moveVersusFoe, EFF_MARK,
+    intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,

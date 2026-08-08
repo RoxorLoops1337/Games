@@ -377,6 +377,45 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+65. **The alarm was reading the middle of a roll it should have read the top of**
+    (pass 154). Fourth pass of the shown-against-resolved sweep, and the first
+    where the fault was not a wrong number but a wrong *statistic*. Every damage
+    figure in the game comes from one roll, uniform [.85, 1]. Three screens each
+    picked a single point off that roll and each picked a different one, which
+    was fine until something started making a decision out of one.
+    - **Capture came back clean, and had to be measured to know it.** The bag
+      prints `captureChance` as "6% catch"; `tryCatch` never uses that number, it
+      uses `p^(1/4)` four times. Four quarter-powers compose back to `p` on
+      paper, and on paper is exactly where this drifts. 162 configurations across
+      the dex, 40,000 throws each: worst row **0.7 points** out, which is
+      sampling noise at that count. The line is honest. The XP line is honest by
+      construction — `gained N EXP` prints the same `gain` it adds. **Two of the
+      three answers this pass were "nothing is wrong", and both took the full
+      measurement to reach. That is the cost of knowing rather than assuming.**
+    - **The one that was wrong.** `readIntent` estimates at `roll: .925` — the
+      mean — and stored one number. `intentLethal`, built two passes earlier on
+      top of it, then answered *"will this kill me on average"*, a question no
+      player has ever asked. Sat at exactly one HP above what the chip said was
+      coming — the strongest statement of safety the screen has — the swing
+      killed you in **31.2% of 20,000 measured swings**, and the alarm was silent
+      in **all fifty** matchups. Not a rounding error: a band, several HP wide at
+      every level, where the game said you live and the dice said otherwise.
+      The intent now carries both ends; the line prints the middle-to-top range
+      and the alarm reads the top. Re-measured: **0.0%**, with a 5.8% residual
+      that is exactly the 1/16 crit the chip has always said it does not cover.
+    - **And the mirror of it.** `moveVersusFoe` and `moveDamageNeutral` used
+      `roll: 1` — the *ceiling* — and the switch screen printed it as `~8 dmg`.
+      A tilde promises the middle; this was the one figure on the screen it could
+      not have been. Both now return the range the card in hand has always shown,
+      through one shared `rangeText`, so every damage figure in the game is said
+      the same way.
+
+    **Which point of a distribution a number is, is part of what the number
+    means.** A mean is right for "what will this cost me", a ceiling is right for
+    "can this kill me", and a range is right for anything a player reads before
+    committing — but a single field cannot be more than one of them, and the
+    place that discovers this is the feature built on top two passes later.
+
 64. **The same fault, in the function I wrote to fix the last one** (pass 153).
     Asking 152's question of every other number the game shows a player: freeze
     the randomness, compare shown against resolved.

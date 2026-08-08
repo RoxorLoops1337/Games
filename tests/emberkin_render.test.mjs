@@ -1796,15 +1796,19 @@ section('the telegraph finishes its own question');
   g.G.party = [g.mkMon('pyrelynx', 24)];
   g.startBattle({ foe: g.mkMon('bramblor', 23), wild: true });
   const b = g.B();
-  const swing = { kind: 'attack', name: 'Thorn Maul', dmg: 30 };
+  const swing = { kind: 'attack', name: 'Thorn Maul', dmg: 30, hi: 33 };
 
-  // The half that already worked: guard comes off, then shield absorbs.
+  // The half that already worked: guard comes off, then shield absorbs — and
+  // both ends of the roll go through the same subtraction.
   b.mods.def = 0; b.shield = 0;
-  eq(g.intentThrough(b, swing), 30, 'bare, the whole swing lands');
+  eq(g.intentThrough(b, swing).lo, 30, 'bare, the whole swing lands');
+  eq(g.intentThrough(b, swing).hi, 33, 'and the top of the roll lands too');
   b.mods.def = 4;
-  eq(g.intentThrough(b, swing), 26, 'guard comes off the top');
+  eq(g.intentThrough(b, swing).lo, 26, 'guard comes off the top');
+  eq(g.intentThrough(b, swing).hi, 29, 'off both ends of it');
   b.shield = 10;
-  eq(g.intentThrough(b, swing), 16, 'and shield absorbs the rest');
+  eq(g.intentThrough(b, swing).lo, 16, 'and shield absorbs the rest');
+  eq(g.intentThrough(b, swing).hi, 19, 'from both again');
   b.mods.def = 0; b.shield = 0;
 
   // A telegraph that is not an attack has nothing to land.
@@ -1816,10 +1820,30 @@ section('the telegraph finishes its own question');
   ok(!g.intentLethal(b, swing), 'at full health the swing is survivable and says nothing');
   b.mine.hp = 30;
   ok(g.intentLethal(b, swing), 'at exactly the incoming number it is called');
-  b.mine.hp = 31;
-  ok(!g.intentLethal(b, swing), 'and one point above it is not');
   b.mine.hp = 9;
   ok(g.intentLethal(b, swing), 'at nine against about thirty it is called');
+
+  // The reason this pass exists. The roll spreads [.85, 1] and the alarm used
+  // to be measured against the middle of it, so between the middle and the top
+  // sat a band where the chip said you live and the swing killed you. Measured
+  // at one HP above the shown figure it killed you 31% of the time, silently.
+  // The alarm reads the ceiling now, and the band is empty.
+  for (let hp = swing.dmg + 1; hp <= swing.hi; hp++) {
+    b.mine.hp = hp;
+    ok(g.intentLethal(b, swing), `at ${hp} against a swing that can reach ${swing.hi} it is called`);
+  }
+  b.mine.hp = swing.hi + 1;
+  ok(!g.intentLethal(b, swing), 'and one point above what it can reach is not');
+
+  // What the telegraph itself puts in that field: the middle AND the top, from
+  // the same swing the foe is about to take.
+  {
+    const it = g.readIntent();
+    if (it.kind === 'attack') {
+      ok(it.hi != null, 'the telegraph carries the top of its own roll');
+      ok(it.hi >= it.dmg, `and the top is not below the middle (${it.dmg} then ${it.hi})`);
+    }
+  }
 
   // It reads what LANDS, not what is swung — so blocking has to answer it. This
   // is the whole point of the two halves being the same number.
@@ -1861,7 +1885,7 @@ section('the switch screen knows who you are choosing against');
 
   // Out of a fight there is nobody to aim at, and the neutral figure stands.
   eq(g.moveVersusFoe(wet, swing(wet)), null, 'out of a fight the reading is refused');
-  ok(g.moveDamageNeutral(wet, swing(wet)) > 0, 'and the foe-agnostic number is still there for the town menu');
+  ok(g.moveDamageNeutral(wet, swing(wet)).hi > 0, 'and the foe-agnostic number is still there for the town menu');
 
   g.G.party = [wet];
   g.startBattle({ foe: g.mkMon('bramblor', 25), wild: true });
@@ -1871,8 +1895,8 @@ section('the switch screen knows who you are choosing against');
   ok(a && b2, 'in a fight both readings resolve');
   eq(a.eff, .5, 'Tide into Verdant is resisted');
   eq(b2.eff, 2, 'and Ember doubles');
-  ok(a.dmg < g.moveDamageNeutral(wet, swing(wet)),
-    `the real number is lower than the neutral one (${a.dmg} vs ${g.moveDamageNeutral(wet, swing(wet))})`);
+  ok(a.hi < g.moveDamageNeutral(wet, swing(wet)).hi,
+    `the real number is lower than the neutral one (${a.hi} vs ${g.moveDamageNeutral(wet, swing(wet)).hi})`);
   eq(g.EFF_MARK[String(a.eff)].tag, 'RESISTED', 'and it is labelled');
   eq(g.EFF_MARK[String(b2.eff)].tag, 'STRONG', 'both ways');
   ok(!g.EFF_MARK['1'], 'a neutral hit is not labelled at all — a mark on everything marks nothing');
@@ -1883,21 +1907,40 @@ section('the switch screen knows who you are choosing against');
   // exactly, in a function written two passes after it fixed.
   const hitId = (m) => m.moves.find((sl) => g.MOVES[sl.id].pow).id;
   const fight = g.B();                       // `b` in this scope is not the battle
-  const bare = g.moveVersusFoe(wet, hitId(wet)).dmg;
+  const bare = g.moveVersusFoe(wet, hitId(wet)).hi;
   fight.mods.edge = 9;
-  const banked = g.moveVersusFoe(wet, hitId(wet)).dmg;
+  const banked = g.moveVersusFoe(wet, hitId(wet)).hi;
   ok(banked > bare, `a banked edge raises the figure (${bare} -> ${banked})`);
   eq(banked - bare, 9, 'by exactly what was banked, the way the swing spends it');
   fight.mods.mul = 2;
-  ok(g.moveVersusFoe(wet, hitId(wet)).dmg > banked, 'and a multiplier multiplies it');
+  ok(g.moveVersusFoe(wet, hitId(wet)).hi > banked, 'and a multiplier multiplies it');
   fight.mods.edge = 0; fight.mods.mul = 1;
   ok(/const bonus = attackBonus\(\);/.test(SRC.slice(SRC.indexOf('function moveVersusFoe'), SRC.indexOf('function moveDamageNeutral'))),
     'read off attackBonus rather than a second copy of what it does');
 
   // It reads the kin being ASKED ABOUT, not whoever happens to be out. The
   // whole point is choosing a replacement while somebody else is on the field.
-  ok(g.moveVersusFoe(hot, swing(hot)).dmg !== g.moveVersusFoe(wet, swing(wet)).dmg,
+  ok(g.moveVersusFoe(hot, swing(hot)).hi !== g.moveVersusFoe(wet, swing(wet)).hi,
     'and it answers for the kin you are looking at, not the one on the field');
+
+  // A range, not one number behind a tilde. This showed the swing at roll 1 —
+  // the CEILING — and wrote "~8" in front of it, so the one figure the screen
+  // could not have meant was the one it printed. The card in hand has always
+  // shown "deal 7-8"; the screen that asks the same question now says it the
+  // same way.
+  let spread = 0;
+  for (const m of [wet, hot]) {
+    const r = g.moveVersusFoe(m, swing(m));
+    ok(r.lo <= r.hi, `${m.species}: the range does not run backwards (${r.lo}-${r.hi})`);
+    ok(r.hi > 0 && r.lo > 0, `${m.species}: and neither end is empty`);
+    // The bottom is the bottom of the roll, not the top printed twice.
+    if (r.lo < r.hi) spread++;
+    ok(r.lo >= Math.floor(r.hi * .8), `${m.species}: and the bottom is the roll's floor, not a guess (${r.lo}-${r.hi})`);
+  }
+  ok(spread > 0, 'a hit big enough to spread reads as two numbers, not one twice');
+  eq(g.rangeText(7, 8), '7-8', 'two numbers when the roll can spread them');
+  eq(g.rangeText(7, 7), '7', 'and one when it cannot');
+  ok(!/~\$\{dmg\} dmg/.test(SRC), 'no tilde is left standing in front of a ceiling');
 
   // A move that cannot land at all reads as nothing rather than as 1.
   eq(g.EFF_MARK['0'].tag, 'NOTHING', 'an immune matchup has its own mark');
@@ -1906,7 +1949,7 @@ section('the switch screen knows who you are choosing against');
   // the marks have to be asserted here.
   ok(/Choose who steps up\.\$\{foe/.test(SRC), 'the prompt names what is out there');
   ok(/Lv\$\{foe\.lvl\} \$\{foe\.types\.join\('\/'\)\}/.test(SRC), 'with its level and its types');
-  ok(/const vs = mv\.pow \? moveVersusFoe\(m, slot\.id\) : null;/.test(SRC),
+  ok(/const vs = mv\.pow \? \(moveVersusFoe\(m, slot\.id\) \|\| moveDamageNeutral\(m, slot\.id\)\) : null;/.test(SRC),
     'and the move list asks for the real reading');
   ok(/\.movecard\.eff-good\{ border-left-color:var\(--hp-good\)/.test(SRC),
     'a strong move is marked on the card, not only in the text');
@@ -1937,8 +1980,8 @@ section('the bag brings both operands into the fight');
   // disagree about the same swing.
   b.mine.hp = 11;
   const inc = g.intentThrough(b, b.intent);
-  ok(inc != null && inc > 0, `there is an incoming number to bring (${inc})`);
-  ok(g.intentLethal(b, b.intent) === (inc >= 11), 'and the bag would mark it exactly as the chip does');
+  ok(inc && inc.hi > 0, `there is an incoming number to bring (${inc && inc.lo}-${inc && inc.hi})`);
+  ok(g.intentLethal(b, b.intent) === (inc.hi >= 11), 'and the bag would mark it exactly as the chip does');
 
   b.mine.hp = b.mine.max;
   ok(!g.intentLethal(b, b.intent), 'at full health it is not marked');
@@ -1950,9 +1993,12 @@ section('the bag brings both operands into the fight');
   // Source: the header carries it, in the chip's own words, and only in a fight.
   ok(/const inc = inFight \? intentThrough\(B\(\), B\(\)\.intent\) : null;/.test(SRC),
     'the bag asks for the incoming number only while a fight is running');
-  ok(/about \$\{inc\} coming\$\{doomed \? ', enough to finish you' : ''\}/.test(SRC),
+  ok(/\$\{rangeText\(inc\.lo, inc\.hi\)\} coming\$\{doomed \? ', enough to finish you' : ''\}/.test(SRC),
     'and says it in the same words the chip uses, so one teaches the other');
-  ok(/inc != null \?/.test(SRC), 'nothing is printed when there is nothing to print');
+  ok(/\+ \(inc \?/.test(SRC), 'nothing is printed when there is nothing to print');
+  // Both screens print the same two numbers through the same formatter, which
+  // is the only reason a player who has learned one can read the other.
+  ok((SRC.match(/rangeText\(/g) || []).length >= 4, 'and every one of them goes through the one formatter');
 }
 
 done('emberkin_render');

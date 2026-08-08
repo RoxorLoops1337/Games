@@ -1314,6 +1314,27 @@ const SCENES = {
       EK.readIntent();
     },
   },
+  // Sitting in the band the chip used to hide: above the middle of the foe's
+  // roll and at or under its top. The old line said "about N coming" and stayed
+  // quiet; the swing killed you here 31% of the time.
+  dec_band: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24), EK.mkMon('brookite', 22)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 25), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      const it = EK.readIntent();
+      b.mine.hp = Math.max(1, (it.hi != null ? it.hi : it.dmg));
+      b.dispM = b.tgtM = b.mine.hp;
+      EK.readIntent();
+      EK.renderHand();
+    },
+  },
   // The forced switch: your kin is down, the fight is still running, and you
   // must send somebody out. A decision made under pressure with the arena
   // hidden behind the screen.
