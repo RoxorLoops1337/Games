@@ -1079,6 +1079,31 @@ edit this block to name the next one.
       radian. It fails at −143° for the old fixed offset, 0° for a centred lip
       and −113° for one lit from the wrong side.
 
+- [x] A dent lands on the bodywork, never on the glass. Ran the
+      read-the-comments method deliberately this time rather than by accident,
+      starting with a mechanical sweep for constants defined and never read
+      (one: `PERSON_PTS`, a dead duplicate of a literal — noted, not worth a
+      pass) and then every comment in the file containing *never*. `carDamage`
+      opens with **"Damage lands on the bodywork, never on the glass"**, and
+      the constant right under it — `CAB = CARL * 0.2`, the guard a dent has to
+      clear — is **exactly where the windscreen starts**. Dents sit on an
+      ellipse of radius `CARL * 0.34`; the far end of that ellipse is the far
+      end of the glass, and **three of the first nine landed square on it**,
+      including the very first dent any car takes. The cabin and the glass are
+      one test now and a dent that fouls either slides to the flank the way it
+      always did.
+  - **Fourth comment-versus-code find in five passes** — the carousel's axles,
+      the tyre trail's `ice`, the boot print's light, and now this. The method
+      is worth stating as a method: the file is unusually well commented, which
+      means it is full of falsifiable claims, and a claim nobody has checked
+      since it was written is exactly where a defect hides.
+  - The test reads the **windscreen's own rect out of the recorded frame**
+      rather than writing the geometry down, so if the glass moves the test
+      moves with it, and it recovers each dent's centre by averaging its three
+      lobes (evenly spaced at 120°, so they average back exactly). It also
+      pins the other side of the fix: a variant that shoves *every* dent onto
+      the flanks to satisfy the first assertion fails the second.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

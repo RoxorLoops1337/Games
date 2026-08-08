@@ -6190,12 +6190,22 @@ function carDamage(){
   /* Damage lands on the bodywork, never on the glass. The first version spread
      both over the whole plan and at six dents and nine hits it buried the
      driver — who is the one thing on the car you are meant to be able to read. */
-  const CAB = CARL * 0.2;                        // the windscreen's half-length
-  // where dent i sits: out on the flanks and the nose, clear of the cabin
+  /* `CAB` guards the cabin the driver is read through. It did not guard the
+     glass, which is the other half of what the line above claims: the
+     windscreen is a rect from `CARL*0.2` to `CARL*0.34`, and `CAB` is
+     `CARL*0.2` — it stops exactly where the glass starts. Dents sit on an
+     ellipse of radius `CARL*0.34`, so the far end of that ellipse is the far
+     end of the windscreen, and three of the first nine landed square on it.
+     Both are one test now, and a dent that fouls either slides out to the
+     flank the way it always did. */
+  const CAB = CARL * 0.2;                        // the cabin's half-length
+  const onGlass = (x, y) =>
+    x > CARL * 0.2 && x < CARL * 0.35 && Math.abs(y) < CARW * 0.3;
+  // where dent i sits: out on the flanks and the nose, clear of both
   const dentAt = (i) => {
     const a = i * 2.399;                         // ~137°, so they never stack
     const x = Math.cos(a) * CARL * 0.34, y = Math.sin(a) * CARW * 0.36;
-    return { x, y: Math.abs(x) < CAB ? Math.sign(y || 1) * CARW * 0.36 : y,
+    return { x, y: (Math.abs(x) < CAB || onGlass(x, y)) ? Math.sign(y || 1) * CARW * 0.36 : y,
       r: 4 + (i % 3) * 1.2 };
   };
   if (car.gore > 0){
