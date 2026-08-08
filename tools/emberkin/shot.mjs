@@ -496,6 +496,29 @@ const SCENES = {
       });
     },
   },
+  // The same twelve characters where the room is smallest: a 256px-wide arena.
+  // 163 looked at the party screen and the stat block and stopped there; the
+  // battle HUD, the foe plate and the forced-switch prompt all take dispName()
+  // too and none of them had ever seen a nickname at all.
+  nickfight: {
+    w: 900, h: 1000,
+    needs: (EK) => !!EK.B() && (EK.B().mine.nick || '').length === 12,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      const mine = EK.mkMon('pyrelynx', 24);
+      mine.nick = 'MMMMMMMMMMMM';           // the widest twelve there are
+      EK.G.party = [mine, EK.mkMon('brookite', 22)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.G.toast = null; EK.G.dialogue = null; EK.G.battleMsg = null;
+      EK.readIntent();
+      EK.renderHand();     // draws the HUD, the chip and the hand together
+      EK.renderDialogue(); // …and takes the dex toast off the plate
+    },
+  },
   // The one thing in this game a PLAYER TYPES, at its maximum length, in the
   // three places it is drawn. `maxlength="12"` caps it; nobody had ever looked
   // at what twelve characters do to a kin row beside a 44px sprite, to the
@@ -510,12 +533,12 @@ const SCENES = {
       EK.G.mode = 'world';
       EK.G.party = ['pyrelynx', 'brookite', 'bramblor', 'gargolem']
         .map((id, i) => { const m = EK.mkMon(id, 22 + i * 2); m.nick = 'Wwwwwwwwwwww'.slice(0, 12); return m; });
+      EK.G.box = ['kindlark', 'magmane'].map((id) => { const m = EK.mkMon(id, 18); m.nick = 'MMMMMMMMMMMM'; return m; });
       EK.G.party[1].nick = 'Ashling the';        // a real one, spaces and all
       EK.G.party[1].nick = 'Ashling them';
       EK.G.party[2].nick = 'MMMMMMMMMMMM';       // the widest twelve there are
       EK.G.party[3].nick = 'iiiiiiiiiiii';       // and the narrowest
-      EK.openScreen('party');
-      EK.G.screen.i = 1;                   // a realistic twelve, not twelve W's
+      EK.openScreen('box');                // the narrowest card that takes a name
       EK.renderScreen();
     },
   },
