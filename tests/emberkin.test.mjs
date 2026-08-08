@@ -150,7 +150,31 @@ ok(!!b0.intent && !!b0.intent.name, 'the foe telegraphs something');
 // never going to deal. Measured with the roll frozen and crits off, it dealt
 // more than told in 42 swings of 59, median 1.11x. Two passes had built a
 // lethal warning and the bag's incoming figure on that number.
-ok(/foeSwingMul\(b, raw\.eff\)/.test(SRC), 'the telegraph scales its estimate the way the swing does');
+ok(/foeSwingMul\(b, r\.eff\)/.test(SRC), 'the telegraph scales its estimate the way the swing does');
+// …and it names BOTH ends of the roll, because the lethal alarm is measured
+// against the top and the line prints the middle. One figure served neither:
+// sat at one HP above what the chip said was coming, the swing killed you in
+// 31% of 20,000 measured swings and the alarm never once fired.
+ok(/const est = m\.pow \? swing\(\.925\) : 0;/.test(SRC), 'the telegraph shows the middle of its roll');
+ok(/const hi = m\.pow \? swing\(1\) : 0;/.test(SRC), 'and carries the top of it for the alarm');
+{
+  // A second instance, so scanning the dex does not disturb the fight above.
+  const lz = withDeck(loadGame({}));
+  let band = 0, caught = 0;
+  for (let i = 0; i < lz.DEX_ORDER.length; i++) {
+    lz.G.party = [lz.mkMon(lz.DEX_ORDER[(i + 3) % lz.DEX_ORDER.length], 20)];
+    if (!lz.startBattle({ foe: lz.mkMon(lz.DEX_ORDER[i], 20), wild: true })) continue;
+    const bb = lz.B(), it = lz.readIntent();
+    if (!it || it.kind !== 'attack' || it.hi <= it.dmg) continue;
+    // Every point between the middle and the top used to read as survivable.
+    for (let hp = it.dmg + 1; hp <= it.hi; hp++) {
+      bb.mine.hp = hp; band++;
+      if (lz.intentLethal(bb, it)) caught++;
+    }
+  }
+  ok(band > 0, `there is a band between the shown figure and the reachable one (${band} points across the dex)`);
+  eq(caught, band, 'and every point in it is warned about');
+}
 ok(/function foeSwingMul/.test(SRC), 'off one shared function, so the two cannot disagree');
 {
   // The multiplier itself, both branches, since it decides the whole number.
@@ -362,6 +386,59 @@ const statused = EK.mkMon('zaplet', 5); statused.hp = 1; statused.status = 'shoc
 ok(EK.captureChance(statused, 1) > EK.captureChance(weak, 1), 'status helps');
 ok(EK.captureChance(EK.mkMon('vespyr', 40), 2.6) < EK.captureChance(fresh, 1), 'the legendary resists the best orb');
 ok(EK.captureChance(weak, 1) <= 1 && EK.captureChance(weak, 1) >= 0, 'chance stays a probability');
+
+// The bag prints this number as "N% catch", and the throw does not use it: it
+// uses p^(1/4), four times. Four quarter-powers compose back to p on paper, and
+// on paper is exactly where this kind of algebra drifts — so the claim is
+// measured rather than reasoned about. Both ways: the composition exactly, and
+// the loop end to end.
+{
+  const cz = withDeck(loadGame({}));
+  cz.G.party = [cz.mkMon('tsunaga', 50)];
+  cz.G.bag = { bloomorb: 9, gleamorb: 9, prismorb: 9 };
+  const orbs = Object.keys(cz.ITEMS).filter((k) => cz.ITEMS[k].kind === 'orb');
+  const real = Math.random;
+  let cfgs = 0, agree = 0;
+  for (let i = 0; i < cz.DEX_ORDER.length; i += 3) {
+    for (const orb of orbs) {
+      for (const frac of [1, .35]) {
+        Math.random = real;                    // the setup gets its own rolls back
+        if (!cz.startBattle({ foe: cz.mkMon(cz.DEX_ORDER[i], 14), wild: true })) continue;
+        const bb = cz.B();
+        bb.foe.hp = Math.max(1, Math.round(bb.foe.max * frac));
+        const p = cz.captureChance(bb.foe, cz.ITEMS[orb].mul);
+        // Every shake reads the same frozen roll, so the orb holds four times
+        // exactly when u^4 lands under the shown chance.
+        for (const u of [.05, .3, .5, .72, .9, .99]) {
+          Math.random = () => u;
+          bb.over = null;
+          const caught = cz.tryCatch([], orb);
+          cfgs++;
+          if (caught === (Math.pow(u, 4) < p)) agree++;
+        }
+        Math.random = real;
+      }
+    }
+  }
+  Math.random = real;
+  ok(cfgs > 100, `the sweep covers real ground (${cfgs} frozen throws)`);
+  eq(agree, cfgs, 'a throw holds exactly when the shown chance says it should');
+
+  // And live, with the real roll: the rate the orb achieves is the rate the bag
+  // printed. 40,000 throws per row over the whole dex put the worst row 0.7
+  // points out, which is sampling noise at that count; this is the same check
+  // at a size a suite can afford.
+  cz.startBattle({ foe: cz.mkMon('brookite', 14), wild: true });
+  const bb2 = cz.B();
+  bb2.foe.hp = Math.max(1, Math.round(bb2.foe.max * .4));
+  const p2 = cz.captureChance(bb2.foe, cz.ITEMS.gleamorb.mul);
+  let hit = 0;
+  const N = 20000;
+  for (let n = 0; n < N; n++) { bb2.over = null; if (cz.tryCatch([], 'gleamorb')) hit++; }
+  const got = hit / N;
+  ok(Math.abs(got - p2) < .02,
+    `the orb catches at the rate the bag printed (shown ${Math.round(p2 * 100)}%, got ${(got * 100).toFixed(1)}%)`);
+}
 
 section('catching a wild kin actually catches it');
 G.party = [EK.mkMon('tsunaga', 50)];
@@ -581,12 +658,12 @@ ok(vsResist.hi < vsWeak.lo, `the same move reads lower against something that re
 // stated yardstick: a same-level target that neither resists nor is weak to it.
 const shelf = dt2.mkMon('cindercub', 14);
 const emberN = dt2.moveDamageNeutral(shelf, emberMove.id);
-ok(emberN > 0, `the party screen shows a real number (~${emberN})`);
+ok(emberN.lo > 0 && emberN.hi >= emberN.lo, `the party screen shows a real range (${emberN.lo}-${emberN.hi})`);
 const byPow = shelf.moves.filter((m) => MOVES[m.id].pow).sort((a, c) => MOVES[c.id].pow - MOVES[a.id].pow);
-ok(dt2.moveDamageNeutral(shelf, byPow[0].id) >= dt2.moveDamageNeutral(shelf, byPow[byPow.length - 1].id),
+ok(dt2.moveDamageNeutral(shelf, byPow[0].id).hi >= dt2.moveDamageNeutral(shelf, byPow[byPow.length - 1].id).hi,
   'and the heavier move reads heavier');
 const statusMove = shelf.moves.find((m) => !MOVES[m.id].pow);
-if (statusMove) eq(dt2.moveDamageNeutral(shelf, statusMove.id), 0, 'a status move reads as no damage at all');
+if (statusMove) eq(dt2.moveDamageNeutral(shelf, statusMove.id), null, 'a status move reads as no damage at all');
 dt2.G.battle = null;
 
 section('status effects tick and expire sensibly');
