@@ -522,6 +522,19 @@ edit this block to name the next one.
       which is now an assertion. 2487 → 2625 fills at the worst frame, against
       a 3400 budget.
 
+- [x] A market you have not reached is shuttered, not smudged. The picker used
+      to paint every locked tile's full plan — stalls, lanes, lamps, the lot —
+      and then throw `filter:grayscale(1)` over it. On a first-run menu that is
+      twenty of twenty-one tiles rendered as grey mush that still, if you look,
+      shows you the layout of every market you have not earned. Locked tiles
+      now paint a closed stall instead: shutter down in slats, awning furled to
+      a striped bar, snow settling on the roof, lights off — in the theme's own
+      colours, because which market it is was never the secret and where its
+      stalls stand is. It is one fixed drawing for all of them, which is the
+      property the suite holds: two markets that share a theme but not a shape
+      must be byte-identical shuttered and must not be unshuttered, or the
+      check proves nothing. 17 rects against 197 for MIDNIGHT MASS's plan.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
