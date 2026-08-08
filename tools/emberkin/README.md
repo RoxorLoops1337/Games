@@ -377,6 +377,36 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+59. **Generalising the last pass found two screens already right and one half
+    done** (pass 148). The question, asked of every overlay rather than of the
+    one I had just fixed: which screens cover something they are asking about?
+
+    The swap screen and the reward offer both came back CLEAN, and that is the
+    result. Each already shows the card coming in and how many of each you hold,
+    with a comment recording that it was asked deliberately — *"Removing one of
+    three Edges and removing your only Snack are different decisions and read
+    identically without this."* Two-thirds of a generalisation being already
+    handled is what it looks like when earlier passes did their job.
+
+    The bag was half done, and its own comment said what it was for: *"opening
+    the bag mid-fight covers the arena and both HP bars… the number goes where
+    the decision is."* It brought your HP. It did not bring what was coming at
+    it — and the decision the comment names, a Salve that restores 30 against a
+    Great Salve that restores 90, is a decision about surviving the next swing.
+    One side of a subtraction: the intent chip's exact old fault, one screen
+    over, written by the same hand that had just fixed it.
+
+    It reads `intentThrough`/`intentLethal` — the functions extracted last pass —
+    so the two screens cannot disagree about the same swing, and says it in the
+    chip's own words so one teaches the other. The net that matters proves it:
+    a version reading the RAW swing instead of what lands has the bag saying 35
+    while the chip says 0, with forty shield up. Same moment, same fight, two
+    screens differing by the whole swing.
+
+    **Generalising a fix is worth doing even when most of it comes back clean.
+    The clean answers are evidence, and the one that is not clean is usually the
+    same mistake you have just learned to see.**
+
 58. **The screen that asks the question covers the answer** (pass 147). Second
     column of battle states. The forced switch — your kin is down, the fight is
     still running, pick somebody to send out — is a good screen: the downed kin

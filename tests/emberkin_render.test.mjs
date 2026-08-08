@@ -1895,4 +1895,47 @@ section('the switch screen knows who you are choosing against');
     'a strong move is marked on the card, not only in the text');
 }
 
+// Generalising the last pass rather than repeating it: which OTHER overlay
+// screens cover something they are asking about? The swap screen and the reward
+// offer both came back clean — each already shows the card coming in and how
+// many of each you hold, with a comment saying it was asked deliberately. The
+// bag was half-done, and its own comment said what it was for: "opening the bag
+// mid-fight covers the arena and both HP bars… the number goes where the
+// decision is." It brought your HP and not what was coming at it, which is one
+// side of a subtraction — the intent chip's exact old fault.
+section('the bag brings both operands into the fight');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+  g.G.party = [g.mkMon('pyrelynx', 24)];
+  g.G.bag = { salve: 3, greatsalve: 1 };
+  g.startBattle({ foe: g.mkMon('bramblor', 25), wild: true });
+  const b = g.B();
+  g.readIntent();
+
+  // It reads the same two functions the chip does, so the two screens cannot
+  // disagree about the same swing.
+  b.mine.hp = 11;
+  const inc = g.intentThrough(b, b.intent);
+  ok(inc != null && inc > 0, `there is an incoming number to bring (${inc})`);
+  ok(g.intentLethal(b, b.intent) === (inc >= 11), 'and the bag would mark it exactly as the chip does');
+
+  b.mine.hp = b.mine.max;
+  ok(!g.intentLethal(b, b.intent), 'at full health it is not marked');
+
+  // Out of a fight there is nothing to bring, and the header must not invent it.
+  g.G.battle = null;
+  eq(g.intentThrough(null, null), null, 'with no fight there is no incoming number');
+
+  // Source: the header carries it, in the chip's own words, and only in a fight.
+  ok(/const inc = inFight \? intentThrough\(B\(\), B\(\)\.intent\) : null;/.test(SRC),
+    'the bag asks for the incoming number only while a fight is running');
+  ok(/about \$\{inc\} coming\$\{doomed \? ', enough to finish you' : ''\}/.test(SRC),
+    'and says it in the same words the chip uses, so one teaches the other');
+  ok(/inc != null \?/.test(SRC), 'nothing is printed when there is nothing to print');
+}
+
 done('emberkin_render');
