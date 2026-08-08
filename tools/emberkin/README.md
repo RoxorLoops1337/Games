@@ -377,6 +377,58 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+84. **A beat spent behind a curtain has not been shown, it has been consumed**
+    (pass 173). Two transitions that had scenes and had never been interrogated:
+    the door, and the wipe into a fight. Both looked fine on film. Both were
+    hiding something a film cannot see.
+
+    **The door, timed.** The curtain shuts over 0.17s, the map swaps at 0.183s,
+    `G.fade` opens the far side over **0.300s** — and `PLACE_IN` is **0.300s,
+    starting at that same instant**. All of the ease that `drawPlace`'s own
+    comment describes — *"it eases on the way in so it arrives rather than
+    snaps"* — was spent underneath the fade. The world appeared with the name
+    already fully in place. A comment describing a quality nobody could see.
+
+    **The wipe, shot rather than filmed.** Every battle panel is up at full
+    strength **one frame into the wipe — 0.53s of the 0.55s**. Both HUDs, the
+    intent chip, the whole card row, the action buttons and the aimed-card line,
+    sitting over the closing bars and the map you were still walking on. The
+    bars exist to hide a transition and hid the world and nothing else.
+
+    **A film could not have found either.** A film grabs the canvas and the
+    panels are DOM — the same blindness that let the intent chip outlive its foe
+    until 169. The wipe needed a *still*, at peak cover, with the DOM in frame.
+
+    **And the fix found its own second case, twice.** First attempt named six
+    panels and missed `#dialogue`; shot again, it was the only thing left on
+    screen. Named it, shot again — and `#toast` was still there at **0.99
+    opacity over a picture that was 97% black**, saying "Dewdrip — new to the
+    dex" about a fight nobody had been shown. Which is when the two halves
+    joined up: the toast's clock was burning behind the bars exactly as the
+    plaque's ease was burning behind the fade. **One rule, two beats, found
+    ninety minutes apart.**
+
+    So the condition has a name — `screenCovered()` — and three callers: the
+    plaque's clock, the toast's clock, and the class that takes the panels out
+    of the wipe. Holding the clock rather than delaying the raise self-corrects
+    for every entrance: a warp's .3, the loss handler's .5, the bars' .55, and
+    the paths with no cover at all.
+
+    **Waiting is not starving, netted separately** (170's rule, now twice
+    useful): the plaque still arrives at full and still leaves; the toast still
+    runs out. Break the fade's decay and both fail — *it still arrives at full*
+    and *and still leaves (cleared at frame -1)*.
+
+    Two instrument notes, both mine:
+    - **My probe read `hand@1.00` inside a parent at `opacity:0`.** Opacity does
+      not inherit — a child of a transparent parent still computes 1. The same
+      ancestor blindness as 166's hit test, in a new costume. The picture
+      settled it.
+    - **A one-frame leak that was not there.** The net sampled `screenCovered()`
+      BEFORE stepping, and the game's toast tick runs after the wipe decays in
+      the same frame — so on the frame the bars finish, the screen is already
+      open. Sampling after the step is the value the game actually used.
+
 83. **Doing on purpose what 171 found by accident** (pass 172). 171's lesson —
     *a comment that claims a fix is a testable assertion* — as a job.
 
