@@ -8253,6 +8253,52 @@ test('the plough you pick up is the plough you get', () => {
     span(1).toFixed(0) + ' long by ' + span(2).toFixed(0) + ' wide)');
 });
 
+/* The comment over `drawFootprints` has said since it was written that a print
+   is "a dent, drawn as a shadow with a lit lip on the side the scene's light
+   comes from". The lip was a fixed offset inside the print's own rotated frame,
+   so a shopper walking in a circle left sixteen prints lit from sixteen
+   different directions. Every other lit side in this game — the coats, the
+   car's panels — is un-rotated back out of its object's frame against
+   SUN_DX/SUN_DY, and this one was not. */
+test('a boot print is lit by the scene, not by the way the walker was facing', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.foot.length = 0;
+  api.setT(5);
+  const N = 16;
+  for (let i = 0; i < N; i++){
+    const a = (i / N) * Math.PI * 2;
+    api.foot.push({ x: api.cam.x + Math.cos(a) * 150, y: api.cam.y + Math.sin(a) * 150,
+      rot: a, r: 42, t: api.getT() - 0.2 });
+  }
+  const rec = carRec();
+  api.withCtx(rec, api.drawFootprints);
+  const lips = rec.shapes.filter(s => /^rgba\(255,255,255/.test(String(s.style)));
+  const dents = rec.shapes.filter(s => /^rgba\(58,84,126/.test(String(s.style)));
+  assert(lips.length === N && dents.length === N,
+    'one dent and one lip a print: ' + dents.length + ' / ' + lips.length);
+
+  /* The recorder keeps the print's own frame, so rotating each lip back by the
+     print's rotation has to land every one of them on the same world heading —
+     and that heading has to be the light's. */
+  const sun = Math.atan2(api.SUN_DY, api.SUN_DX);
+  const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const world = lips.map((s, i) => norm(Math.atan2(s.y, s.x) + (i / N) * Math.PI * 2));
+  for (let i = 0; i < N; i++){
+    assert(Math.abs(norm(world[i] - sun)) < 1e-6,
+      'print ' + i + ' is lit from ' + (world[i] * 180 / Math.PI).toFixed(0) +
+      '° while the market\'s light comes from ' + (sun * 180 / Math.PI).toFixed(0) + '°');
+  }
+  // and the lip is offset from the dent's middle, or it is not a lip
+  assert(lips.every(s => Math.hypot(s.x, s.y) > 1),
+    'the lip should sit on one wall of the dent, not in the middle of it');
+  // the dent itself stays centred: it is the hole, not the highlight
+  assert(dents.every(s => Math.hypot(s.x, s.y) < 1e-6), 'the dent is the print');
+  console.log('    (boot prints: ' + N + ' headings, all lit from ' +
+    (sun * 180 / Math.PI).toFixed(0) + '°)');
+});
+
 /* A whole run came out as two painted stripes laid down the market at one
    width and one alpha from the first metre to the last. The trail already knew
    two things it never drew: how sideways the car was when it laid each segment,

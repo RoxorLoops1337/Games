@@ -6667,9 +6667,19 @@ function drawFootprints(){
     ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
     ctx.fillStyle = 'rgba(58,84,126,' + (0.3 * k).toFixed(3) + ')';
     ctx.beginPath(); ctx.ellipse(0, 0, f.r * 0.3, f.r * 0.19, 0, 0, 6.283); ctx.fill();
+    /* The lit lip belongs to the scene's one light, not to the way the walker
+       happened to be facing. It was a fixed offset inside the print's own
+       rotated frame, so a shopper walking in a circle left sixteen prints lit
+       from sixteen different directions — and the comment above this function
+       has claimed otherwise since it was written. Un-rotated back out of the
+       print's frame, exactly the way the coats and the car's panels do it. The
+       lip is on the far wall of the dent, the side the light reaches over the
+       near rim, which is the same side `shadow()` throws to. */
+    const la = Math.atan2(SUN_DY, SUN_DX) - f.rot;
     ctx.fillStyle = 'rgba(255,255,255,' + (0.22 * k).toFixed(3) + ')';
     ctx.beginPath();
-    ctx.ellipse(-f.r * 0.08, -f.r * 0.06, f.r * 0.2, f.r * 0.11, 0, 0, 6.283); ctx.fill();
+    ctx.ellipse(Math.cos(la) * f.r * 0.1, Math.sin(la) * f.r * 0.1,
+      f.r * 0.2, f.r * 0.11, 0, 0, 6.283); ctx.fill();
     ctx.restore();
   }
 }
