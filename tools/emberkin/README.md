@@ -2927,3 +2927,42 @@ desktop one. That is the correct answer and not an obvious one.
     sweep does not run. **The sweep drives one suite of five, so a check living
     in another suite reads as absent.** Named here rather than mistaken for a
     hole next time.
+
+100. **Choosing a card you cannot see, on a screen you cannot leave**
+    (pass 189). Took job (n), offered five times and never taken: every beat
+    that owns the screen, shot at 390x760 with `pointer:coarse` — which is not
+    the same as a narrow window, because the game branches on it.
+
+    Nine beats, and eight of them sat identically inside the stage. One did not:
+    the swap screen's card row ran **141px off the bottom**. `#view` 2px and
+    `#knob` 26px turned up on every beat AND on a plain world screen with no
+    beat at all, so they are the layout, not a finding.
+
+    Then the sharper question, because the panel is `overflow: auto` and CAN be
+    scrolled: does moving the cursor bring the selection into view? Walking it
+    down, on a phone:
+
+        swap   worst selection 392px outside the box   scrollTop stayed 0
+        deck   worst selection 357px outside the box   scrollTop stayed 0
+        box    worst selection 456px outside the box   scrollTop stayed 0
+        party  worst selection   0px                   (it fits)
+
+    **Nothing ever scrolled it.** Three screens put the thing under your cursor
+    hundreds of pixels below the visible box — and `swap` is LOCKED, so you were
+    picking a card you could not see on a screen you were not allowed to leave.
+
+    `scrollFor(sel, box)` is a value, because the panel is markup the headless
+    suite cannot measure: given where the selection sits and where the window
+    is, it says where the window goes, and it moves the LEAST it can so a list
+    already in view does not shift under your thumb. Spent once, in
+    `renderScreen`, after the markup — the element under the cursor does not
+    exist before it — so every screen gets it rather than one kind.
+
+        after:  every worst selection 0px outside the box
+                swap 92/248/404   deck 0/57/213/369   box 89/155/350/456
+                party never moves at all
+
+    Five planted faults, all five bite; two sweep mutants kill five checks each.
+    One break's anchor also caught unrelated code — the claim it was meant to
+    prove is covered by another break, and that is said here rather than
+    counted as a clean proof.
