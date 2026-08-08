@@ -1124,6 +1124,59 @@ section('a level gets the screen to itself, the way it already gets the sprite')
   eq(flat.both, 0, 'with nothing to overlap');
 }
 
+section('when a level lands, nothing else is still shoving the sprite it draws around');
+{
+  // The game clears the hit flash, the lunge, the recoil and the bursts when a
+  // level lands, under a comment saying two beats at once are
+  // indistinguishable. `mx` is `72 - shake - wind(windM) + lunge(lungeM) -
+  // recoil(recoilM)`: FOUR ways the player's sprite can be displaced, and the
+  // list named three. Swept for deliberately after the same shape turned up in
+  // 168, 169 and 170 — and it found a fifth thing nobody was looking for, which
+  // is in the source comment at that site.
+  //
+  // Netted as the CLAIM — every beat that draws on or shoves this sprite is
+  // zero — rather than as the line, so the next term added to `mx` has
+  // somewhere to fail.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.G.mapId = 'route_one';
+  const roll = Math.random;
+  Math.random = () => .999;
+  try {
+    g.startBattle({ foe: g.mkMon('dewdrip', 6), wild: true });
+    const b = g.B(); b.foe.hp = 1; g.G.battleMsg = null;
+    b.mine.xp = g.xpFor(b.mine.lvl + 1) - 1;
+    b.dispXp = b.tgtXp = b.mine.xp; b.barLv = b.mine.lvl;
+    const i = b.hand.findIndex((c) => c.src === 'kin' && g.cardCost(c) <= b.energy);
+    g.submitLog(g.playCard(i >= 0 ? i : 0));
+  } finally { Math.random = roll; }
+
+  // Shove the sprite every way it can be shoved, right up to the level landing,
+  // so the clear has something to clear. WITHOUT THIS THE NET PASSES ON A
+  // BATTLE WHERE THEY WERE ALL ZERO ANYWAY — proved by deleting the whole
+  // clear-list and this dirtying together and watching the suite stay green.
+  let dirty = 0, live = null, frames = 0;
+  for (let n = 0; n < 900 && g.B() && !g.G.screen; n++) {
+    const bb = g.B();
+    if (bb.lvT <= 0) {
+      bb.flashM = .8; bb.lungeM = .2; bb.recoilM = .2; bb.windM = .3;
+      bb.crit = { side: 'mine', t: .1 };
+      dirty++;
+    } else if (!live) {
+      live = { flashM: bb.flashM || 0, lungeM: bb.lungeM || 0,
+        recoilM: bb.recoilM || 0, windM: bb.windM || 0, crit: bb.crit ? 1 : 0 };
+    }
+    g.step(1 / 60); g.draw(); frames++;
+  }
+  ok(frames > 120, `the levelling fight was driven (${frames} frames)`);
+  ok(dirty > 20, `and the sprite was being shoved right up to it (${dirty} frames)`);
+  ok(!!live, 'the level landed');
+  for (const k of ['flashM', 'lungeM', 'recoilM', 'windM', 'crit']) {
+    eq(live[k], 0, `${k} is not still running under the level`);
+  }
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
