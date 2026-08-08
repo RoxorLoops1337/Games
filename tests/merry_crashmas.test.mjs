@@ -72,6 +72,7 @@ const EXPOSE = `__out.api = {
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
+  lightGain, LIT_REF,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
@@ -4541,6 +4542,127 @@ test('the market is lit against a night, and the night follows the theme', () =>
   const ops = deep._counts._styles || [];
   assert(ops.indexOf('destination-out') >= 0, 'the lamps should be cut out of the darkness');
   assert(ops.indexOf('lighter') >= 0, 'and the glow added on top of it');
+});
+
+/* Twenty-one markets and every one of them happened after sunset: `dark` ran
+   0.42 to 0.78 across the six themes and never lower, so the only thing that
+   changed from market to market was how far into the evening it was. FIRST
+   LIGHT happens before sunrise instead — the one bright market in the game. */
+test('a market can happen before sunrise', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  const T = api.THEMES, dawn = T.dawn;
+  assert(dawn, 'there should be a first-light theme');
+
+  // a half-filled theme is the failure mode here: every key the others have
+  const keys = Object.keys(T.night).sort().join(',');
+  for (const id of Object.keys(T))
+    assert(Object.keys(T[id]).sort().join(',') === keys,
+      'theme ' + id + ' is missing something the others have');
+
+  const others = Object.keys(T).filter(id => id !== 'dawn');
+  const darkest = Math.min(...others.map(id => T[id].dark));
+  assert(dawn.dark < darkest * 0.6,
+    'first light should be plainly brighter than any night: ' + dawn.dark +
+    ' against the palest of the rest at ' + darkest);
+  // and it is a different market, not the same one turned up
+  for (const id of others){
+    assert(T[id].ground !== dawn.ground && T[id].awning !== dawn.awning,
+      'first light shares a palette with ' + id);
+  }
+
+  /* Spread. The point of a seventh theme is that a round can look unlike the
+     others at a glance, and that only works if no one look is worn out. */
+  const used = {};
+  for (const lv of api.LEVELS) used[lv.theme] = (used[lv.theme] || 0) + 1;
+  assert(Object.keys(used).length === Object.keys(T).length,
+    'every theme should be on a market: ' + JSON.stringify(used));
+  for (const id of Object.keys(used))
+    assert(used[id] >= 2 && used[id] <= 4,
+      id + ' is on ' + used[id] + ' of ' + api.LEVELS.length + ' markets');
+
+  /* And a theme is cosmetic all the way down. Generate one market under two
+     different themes and the market has to come out identical — otherwise
+     moving three markets onto a new theme rescores them, which is the whole
+     reason this could not just be done. */
+  const snap = (lv, theme) => {
+    const keep = api.LEVELS[lv].theme;
+    api.LEVELS[lv].theme = theme;
+    api.startLevel(lv); api.beginLevel();
+    const s = JSON.stringify({
+      props: api.props.map(o => [o.kind, Math.round(o.x), Math.round(o.y), o.hp]),
+      people: api.people.map(p => [p.kind, Math.round(p.x), Math.round(p.y)]),
+      target: api.G.target, goals: api.G.goals.map(g => g.id + g.n) });
+    api.LEVELS[lv].theme = keep;
+    return s;
+  };
+  for (const lv of [6, 10, 11]){                 // the three that moved
+    assert(snap(lv, 'dawn') === snap(lv, 'night'),
+      'market ' + lv + ' (' + api.LEVELS[lv].name + ') generates differently ' +
+      'under a different theme — a theme is not allowed to move the seed');
+  }
+  console.log('    (themes: ' + Object.keys(used).sort()
+    .map(k => k + '×' + used[k]).join(' ') + ', first light at dark ' + dawn.dark + ')');
+});
+
+/* The night wash has always scaled with the theme's darkness and the glow
+   added over the top of it never did, so a lamp put the same light into the
+   frame whether it was cutting a 0.78 midnight or nothing at all. Invisible
+   while every theme sat between 0.42 and 0.78 — and the first bright market
+   blew the stalls out to solid white, goods gone, glows blooming into each
+   other because there was no darkness left for them to eat. */
+test('the glow is scaled to the night it has to cut', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  const gainOn = (theme) => {
+    const lv = api.LEVELS.findIndex(l => l.theme === theme);
+    assert(lv >= 0, 'no market uses ' + theme);
+    api.startLevel(lv); api.beginLevel();
+    return api.lightGain();
+  };
+  /* Every theme that existed before this changes by exactly nothing: LIT_REF
+     is the darkest of them, so all six sit at full gain. */
+  const before = Object.keys(api.THEMES).filter(id => id !== 'dawn');
+  assert(before.length === 6, 'six night themes, got ' + before.length);
+  for (const id of before)
+    assert(gainOn(id) === 1,
+      id + ' should be unchanged by this, got a gain of ' + gainOn(id));
+  assert(api.LIT_REF === Math.min(...before.map(id => api.THEMES[id].dark)),
+    'LIT_REF should be the darkest night theme, so none of them move');
+
+  const dg = gainOn('dawn');
+  assert(dg < 0.55, 'a first-light market should get much less added light, got ' + dg);
+
+  // and it is the drawn alpha that changes, not just the number
+  const alphas = (theme) => {
+    const lv = api.LEVELS.findIndex(l => l.theme === theme);
+    api.startLevel(lv); api.beginLevel();
+    api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.car.vx = 700;
+    api.camSnap();
+    api.draw();                                  // bake the sprites
+    const rec = carRec();
+    api.withCtx(rec, api.drawLights);
+    /* By position, not by size. The frame's first image is the night composite
+       and the next `lamps` are the glows; everything after them is bulbs,
+       beams, pickups and spill heat, which carry alphas of their own and have
+       nothing to do with how dark the market is. A size filter caught one of
+       those and reported 0.80 for a market whose lamps were correctly at
+       0.48. */
+    const lamps = Math.min(api.lightBuf.length, api.MAX_LIGHTS);
+    assert(rec.images[0] && rec.images[0].w > 1000,
+      'the first image of the frame should be the night composite');
+    return { lamps, a: rec.images.slice(1, 1 + lamps).map(i => i.alpha) };
+  };
+  const night = alphas('night'), first = alphas('dawn');
+  assert(night.lamps >= 4 && first.lamps >= 4,
+    'both markets should have lamps in shot: ' + night.lamps + ' / ' + first.lamps);
+  assert(Math.max(...night.a) === 1,
+    'a night market\'s lamps go down at full strength, got ' + Math.max(...night.a));
+  assert(Math.abs(Math.max(...first.a) - dg) < 0.001,
+    'a first-light market\'s lamps should be turned down to ' + dg.toFixed(2) +
+    ', got ' + Math.max(...first.a));
+  console.log('    (light gain: night 1.00 over ' + night.lamps + ' lamps, first ' +
+    'light ' + dg.toFixed(2) + ' over ' + first.lamps + ')');
 });
 
 test('a lit lamp costs one drawImage, not a gradient', () => {

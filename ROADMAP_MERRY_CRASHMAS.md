@@ -833,6 +833,40 @@ edit this block to name the next one.
       would fit is the snowman test's ad-hoc 2.2r, and nothing in the kit comes
       near it, so the sweep would have been a test that cannot fail. Not added.
 
+- [x] A market can happen before sunrise, and the glow learned to scale with
+      the night it is cutting. Content pass rather than a defect hunt, and the
+      content turned one up anyway. Twenty-one markets, six themes, and every
+      one of them happened **after sunset**: `dark` ran 0.42 to 0.78 and never
+      lower, so the only thing that changed market to market was how far into
+      the evening it was, and `night` was carrying five of the twenty-one.
+      **FIRST LIGHT** is the seventh — the one bright market in the game, snow
+      gone lilac in the shadow, lamps still on and doing almost nothing, the
+      least snowfall in the set. It is on THE ICE RINK, NARROW ALLEYS and THE
+      LONG BOULEVARD, which takes the spread to a flat 2–4 markets per theme.
+  - The defect it exposed the moment it was on screen: **the night wash has
+      always scaled with `TH.dark` and the glow added over the top of it never
+      did.** A lamp put the same light into the frame whether it was cutting a
+      0.78 midnight or nothing at all, which is invisible while every theme
+      sits between 0.42 and 0.78 — and on a bright one the stalls blew out to
+      solid white, the goods vanished off the counters and the glows bloomed
+      into each other because there was no darkness left for them to eat.
+      `lightGain()` scales the lamp glows, the headlight beams and the nitro
+      halo by `TH.dark / LIT_REF`, and `LIT_REF` is deliberately the darkest of
+      the six night themes, so **all six get exactly the gain they had** and
+      this changes not one pixel of any market that existed before it. The
+      suite pins that: gain is exactly 1 on every pre-existing theme, and
+      `LIT_REF === min(dark)` so nobody can quietly move them.
+  - The load-bearing assertion for the content half is that **a theme is
+      cosmetic all the way down**: generate the same market under two different
+      themes and it has to come out identical — props, people, target, goals.
+      Without that, moving three markets onto a new theme would rescore them,
+      and re-deriving three pars is the thing that makes theme work expensive.
+  - Measurement note, third pass running: my first version of the drawn-alpha
+      check picked the lamp glows out of the frame **by sprite size**, caught a
+      pickup glow instead, and reported 0.80 for a market whose lamps were
+      correctly at 0.48. It takes them by position now — the frame's first
+      image is the night composite and the next `lamps` are the glows.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
