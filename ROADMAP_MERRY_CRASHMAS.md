@@ -494,6 +494,16 @@ edit this block to name the next one.
       every child on screen — and a floor of 11px instead of 9 is what makes
       them pick out. Same lesson as the shopper's dropped bag, one scale down.
 
+- [x] A child's balloon is let go, not deleted. It vanished the frame they
+      were hit — the same thing the smashed snowman and the wrecked present
+      used to do with everything that said what they were, except this one
+      gets to float away. It is released from where it was floating rather
+      than from the body, in the colour the child was carrying, and it keeps
+      climbing: everything else in `stepFx` falls, and drag alone would stall
+      a balloon in mid-air a few frames after the child let go. Not one roll —
+      the drift comes off the child's own coat and walk phase, so a beat added
+      inside `killPerson` cannot move a market's score.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

@@ -2226,6 +2226,21 @@ function killPerson(p, vx, vy, cause){
     addFx({ type:'hat', x: p.x, y: p.y, vx: (vx || 0) * 0.35 + rr(-60, 60), vy: (vy || 0) * 0.35 + rr(-90, 30),
       ttl: 1.1, size: 11, col:'#e33', rot: rr(0, 6.28), spin: rr(-10, 10) });
   }
+  /* The balloon is let go rather than deleted. A child's balloon simply
+     vanished the frame they were hit, which is the same thing the smashed
+     snowman and the wrecked present used to do with everything that said what
+     they were — except this one floats away, which is the better beat.
+
+     Not one roll: the drift comes off the child's own coat and walk phase, so
+     adding this cannot move a market's score. */
+  if (p.kind === 'kid'){
+    const b = balloonAt(p);
+    const a = p.coat * 1.31 + p.bob * 0.4;
+    addFx({ type:'balloon', x: b.x, y: b.y, r: b.r,
+      vx: Math.cos(a) * 26 + (vx || 0) * 0.06, vy: Math.sin(a) * 22 - 44,
+      ttl: 2.6, size: b.r, rot: b.sw * 0.5, spin: (p.coat % 2 ? 1 : -1) * 0.5,
+      col: BALLOONS[p.coat % BALLOONS.length] });
+  }
   if (cause !== 'spill'){
     // everything the player's body registers was a constant before this: the
     // same shake, stop and flash at 100px/s as at 1900. The only variable was
@@ -2796,10 +2811,14 @@ function stepFx(dt){
     f.x += f.vx * dt; f.y += f.vy * dt;
     f.rot += f.spin * dt;
     // a rocket is under thrust, so it does not drag to a halt like debris does
-    const k = Math.exp((f.type === 'txt' ? -1.2 : f.type === 'rocket' ? -0.5 : -3.2) * dt);
+    const k = Math.exp((f.type === 'txt' ? -1.2 : f.type === 'rocket' ? -0.5 : f.type === 'balloon' ? -0.8 : -3.2) * dt);
     f.vx *= k; f.vy *= k;
     if (f.type === 'star' || f.type === 'hat' || f.type === 'drop' || f.type === 'pram') f.vy += 90 * dt;
     if (f.type === 'limb') f.vy += 40 * dt;
+    /* Everything else in this list falls. A released balloon is the one thing
+       in the market that leaves upward, and it keeps going: the drag alone
+       would stall it in mid-air a few frames after the child let go. */
+    if (f.type === 'balloon') f.vy -= 34 * dt;
   }
   if (tracks.length > TRACK_MAX) tracks.splice(0, tracks.length - TRACK_MAX);
 }
@@ -6053,6 +6072,24 @@ function drawFx(over){
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
       ctx.fillStyle = f.col; ctx.fillRect(-f.size / 2, -f.size / 5, f.size, f.size * 0.42);
       ctx.restore();
+    } else if (f.type === 'balloon'){
+      /* It keeps rising and shrinking as it gets away — the only thing in the
+         game that leaves upward, so it does not need to look like debris. */
+      const up = 1 - k;
+      const r = f.size * (1 - up * 0.34);
+      ctx.fillStyle = f.col;
+      ctx.beginPath();
+      ctx.ellipse(f.x, f.y, r, r * 1.16, f.rot, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = 'rgba(14,22,40,.5)'; ctx.lineWidth = Math.max(1, r * 0.14);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.34)';
+      circle(f.x - r * 0.3, f.y - r * 0.36, r * 0.3); ctx.fill();
+      ctx.strokeStyle = 'rgba(240,246,255,.35)';   // the string, trailing
+      ctx.lineWidth = Math.max(1, r * 0.1);
+      ctx.beginPath();
+      ctx.moveTo(f.x, f.y + r);
+      ctx.quadraticCurveTo(f.x + Math.sin(f.rot * 3) * r, f.y + r * 2.2, f.x, f.y + r * 3.2);
+      ctx.stroke();
     } else if (f.type === 'hat'){
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
       ctx.fillStyle = '#d34036'; circle(0, 0, f.size); ctx.fill();
