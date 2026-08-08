@@ -496,6 +496,29 @@ const SCENES = {
       });
     },
   },
+  // The one thing in this game a PLAYER TYPES, at its maximum length, in the
+  // three places it is drawn. `maxlength="12"` caps it; nobody had ever looked
+  // at what twelve characters do to a kin row beside a 44px sprite, to the
+  // battle HUD, or to the box card the same name has to fit in.
+  nicklong: {
+    w: 760, h: 900,
+    needs: (EK) => EK.G.party.every((m) => (m.nick || '').length === 12),
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mode = 'world';
+      EK.G.party = ['pyrelynx', 'brookite', 'bramblor', 'gargolem']
+        .map((id, i) => { const m = EK.mkMon(id, 22 + i * 2); m.nick = 'Wwwwwwwwwwww'.slice(0, 12); return m; });
+      EK.G.party[1].nick = 'Ashling the';        // a real one, spaces and all
+      EK.G.party[1].nick = 'Ashling them';
+      EK.G.party[2].nick = 'MMMMMMMMMMMM';       // the widest twelve there are
+      EK.G.party[3].nick = 'iiiiiiiiiiii';       // and the narrowest
+      EK.openScreen('party');
+      EK.G.screen.i = 1;                   // a realistic twelve, not twelve W's
+      EK.renderScreen();
+    },
+  },
   // The three payoff screens, each held at the frame worth looking at.
   // This scene used to hand-build `G.evoAnim` — beat 2, its own durations, and
   // `swapped: false`. That is a state the game cannot produce: `evoStep` flips

@@ -588,8 +588,16 @@
     background:radial-gradient(70% 70% at 40% 30%,#3a2b4a,#1a1222);
     border:2px solid var(--edge); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); }
   .kindetail .portrait canvas{ image-rendering:pixelated; width:120px; height:120px; display:block; }
-  .kindetail .pname{ display:flex; align-items:baseline; gap:.5em; }
-  .kindetail .pname b{ font-size:1.05em; }
+  /* The portrait is float:right, and a FLEX container's contents are not line
+     boxes — so nothing in here wrapped around it. At a twelve-character
+     nickname (the most the field accepts) the level chip was drawn on top of
+     the portrait frame. `overflow:hidden` makes this a formatting context of
+     its own, which does keep clear of the float, and the ellipsis catches a
+     name still too wide for whatever is left. */
+  .kindetail .pname{ display:flex; flex-wrap:wrap; align-items:baseline; gap:.5em;
+    overflow:hidden; }
+  .kindetail .pname b{ font-size:1.05em; min-width:0; overflow-wrap:anywhere; }
+  .kindetail .pname .lv{ flex:0 0 auto; }
   .kindetail .pname .lv{ font-size:.72em; color:var(--gold); font-weight:700; }
   .kindetail .sub{ display:flex; gap:.25em; margin:.35em 0 .7em; }
   /* A bar answers "is this one fast?" before you have read the number. */
@@ -8528,13 +8536,34 @@ function focusNick() {
   el.select();
 }
 
-/** Take whatever is in the field. Blank, or its own name, means no nickname. */
+/**
+ * Take whatever is in the field. Blank, or its own name, means no nickname.
+ *
+ * The player types this, and `dispName()` — which is `nick || name` — lands in
+ * `innerHTML` at fifty-five sites: kin rows, box cards, the stat block, the
+ * battle HUD, toasts. A nickname of `A<B` therefore opened a `<b>` element in
+ * the middle of a name, and the `</b>` that followed closed the wrong one, so
+ * the rest of the screen went bold and the DOM was corrupt from that row down.
+ * The nickname is SAVED, so it stayed corrupt for the rest of the run.
+ *
+ * Fixed at the boundary rather than at the fifty-five: angle brackets are the
+ * only characters that can start an element, they are the last thing anybody
+ * wants in a name, and one gate cannot drift out of step with itself the way
+ * fifty-five escapes would. `&` is deliberately left alone — a bare ampersand
+ * renders as itself, and stripping it would turn "Bo & Ed" into "Bo  Ed" for
+ * no gain. (`<3` was already safe: `<` before a digit is not a tag start, so a
+ * parser emits it as text. That is luck, not design, and it is not what this
+ * relies on.)
+ *
+ * The trim runs twice on purpose: once before the slice and once after, because
+ * cutting at twelve can land mid-space and "Ashling the " is not a name either.
+ */
 function commitNick(s) {
   const m = s && s.opt && s.opt.mon;
   if (!m) return '';
   const el = nickEl();
   const raw = el ? el.value : (m.nick || '');
-  const name = String(raw).replace(/\s+/g, ' ').trim().slice(0, 12);
+  const name = String(raw).replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 12).trim();
   m.nick = (!name || name === m.name) ? '' : name;
   return m.nick;
 }
