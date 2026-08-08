@@ -1606,6 +1606,33 @@ function paintMarketThumb(cv, lv, locked){
   g.lineWidth = Math.max(1, H * 0.018);
   g.beginPath(); g.moveTo(px(vx0), py(midY)); g.lineTo(px(x0), py(midY)); g.stroke();
 
+  /* What the market is actually about.
+
+     The plan drew stalls, greenery and lamps — the three things every one of
+     the twenty-one has — and nothing at all of `lv.feature`, which is the one
+     thing that makes each of them its own idea. Nine markets have a feature and
+     THE ICE RINK's tile had no rink on it. You pick a market off this tile;
+     what it is for is telling them apart.
+
+     The generator's x for each feature is deterministic and copied exactly.
+     Which side of the aisle it lands on is a live `rnd()` at generation time,
+     so the plan rolls it the way it already rolls the town tree's — off
+     `mkRand`, the stateless hash. This is a plan, not a mirror. */
+  const feats = lv.feature || [];
+  const fside = (salt) => (mkRand(lv.seed + salt) < 0.5 ? -1 : 1);
+  const drawn = [];
+  // the ice goes down with the ground, because that is what it is
+  if (feats.indexOf('rink') >= 0){
+    const rx = clamp(x0 + (x1 - x0) * 0.42, x0 + 420, x1 - 420);
+    const ry = midY + fside(7) * rowH * 0.5;
+    const R = Math.min(470, rowH * 1.35);
+    g.fillStyle = 'rgba(206,232,255,.5)';
+    g.beginPath();
+    g.ellipse(px(rx), py(ry), Math.max(3, R * kx), Math.max(3, R * ky), 0, 0, 6.283);
+    g.fill();
+    drawn.push('rink');
+  }
+
   /* One pass, one fill a colour: the stalls, then the greenery, then the
      lights. A tile is 21 of these on a page, so it cannot cost what a market
      costs. */
@@ -1656,10 +1683,69 @@ function paintMarketThumb(cv, lv, locked){
     g.moveTo(px(x) + r, py(y)); g.arc(px(x), py(y), r, 0, 6.283);
   }
   g.fill();
+  /* The rest of the features, over the stalls: a marching column, a block of
+     carollers behind its rail, the bollards that make the straight line the
+     wrong line, and the snowbanks put there to be flown off. One batched fill
+     each — a tile is one of twenty-one on a page. */
+  const CROWD_C = 'rgba(246,238,222,.82)';
+  if (feats.indexOf('parade') >= 0){
+    const cx3 = clamp(x0 + (x1 - x0) * 0.6, x0 + 300, x1 - 300);
+    const pr = Math.max(1, 26 * kx);
+    g.fillStyle = CROWD_C; g.beginPath();
+    for (let i = 0; i < 22; i++){
+      const y = yTop + (i / 21) * (yBot - yTop), x = cx3 + ((i % 5) - 2) * 26;
+      g.moveTo(px(x) + pr, py(y)); g.arc(px(x), py(y), pr, 0, 6.283);
+    }
+    g.fill();
+    drawn.push('parade');
+  }
+  /* Sixty people shoulder to shoulder, at the size the generator packs them
+     into. Drawn as one block on purpose: sixty dots at this scale overlap into
+     exactly this rectangle, so they would cost sixty arcs a tile — twenty-one
+     tiles a page — for pixels that are already identical. Its rail is left off
+     for the same reason: five fences come out a hairline nobody sees. */
+  if (feats.indexOf('choir') >= 0){
+    const cx4 = clamp(x0 + (x1 - x0) * 0.78, x0 + 300, x1 - 220);
+    const cy4 = midY + fside(13) * rowH * 0.35;
+    g.fillStyle = CROWD_C;
+    g.fillRect(px(cx4 - 143), py(cy4 - 91), Math.max(2, 286 * kx), Math.max(2, 182 * ky));
+    drawn.push('choir');
+  }
+  /* The bollards, in the nutcracker's own navy with his red tunic on top. Dark
+     alone does not read: the first version was one navy square each and on THE
+     GAUNTLET — a night market, on a dark floor — the one thing that market is
+     built around was invisible on its own tile. */
+  if (feats.indexOf('chicane') >= 0){
+    const br = Math.max(1.5, 40 * kx);
+    const gate = (i) => x0 + (i + 0.5) * ((x1 - x0) / 5);
+    const gy = (i, j) => midY + (i % 2 ? -1 : 1) * rowH * 0.55 + j * 96;
+    for (const [col, k] of [['#1e3154', 1], ['#c8443a', 0.52]]){
+      g.fillStyle = col; g.beginPath();
+      for (let i = 0; i < 5; i++) for (const j of [-3, -2, 2, 3])
+        g.rect(px(gate(i)) - br * k, py(gy(i, j)) - br * k, br * k * 2, br * k * 2);
+      g.fill();
+    }
+    drawn.push('chicane');
+  }
+  if (feats.indexOf('ramps') >= 0){
+    const rw = Math.max(2, 130 * kx), rh = Math.max(2, 190 * ky);
+    g.fillStyle = 'rgba(228,240,255,.7)'; g.beginPath();
+    for (let i = 0; i < 5; i++){
+      const bx = x0 - 200 + mkRand(lv.seed + 100 + i) * (x1 - 100 - x0);
+      const by = yTop + mkRand(lv.seed + 200 + i) * (yBot - yTop);
+      g.moveTo(px(bx) - rw / 2, py(by) + rh / 2);   // a wedge, pointing the way up it
+      g.lineTo(px(bx) + rw / 2, py(by));
+      g.lineTo(px(bx) - rw / 2, py(by) - rh / 2);
+      g.closePath();
+    }
+    g.fill();
+    drawn.push('ramps');
+  }
   // the night this market is played in, laid over everything
   g.fillStyle = 'rgba(6,11,28,' + ((th.dark || 0.55) * 0.5).toFixed(3) + ')';
   g.fillRect(0, 0, W, H);
-  return { stalls: stalls.length, trees: trees.length, lamps: lamps.length, shut: false };
+  return { stalls: stalls.length, trees: trees.length, lamps: lamps.length,
+    feats: drawn, shut: false };
 }
 
 /* ---------- spilt glühwein ----------

@@ -867,6 +867,38 @@ edit this block to name the next one.
       correctly at 0.48. It takes them by position now — the frame's first
       image is the night composite and the next `lamps` are the glows.
 
+- [x] A plan shows the thing the market is named for. The picker paints
+      twenty-one tiles and each drew stalls, greenery and lamps — **the three
+      things every market has** — and nothing at all of `lv.feature`, which is
+      the one thing that makes each of the twenty-one its own idea. Eleven
+      markets have a feature and **THE ICE RINK's tile had no rink on it**. You
+      pick a market off that tile; telling them apart is what it is for. The
+      rink is a sheet of ice laid with the ground, the parade a column of
+      marchers crossing the aisles, the choir a block of people, the chicane
+      five gates of nutcrackers, and the snowbanks wedges pointing the way up
+      them. The generator's x for each is deterministic and copied exactly;
+      which side of the aisle it lands on is a live `rnd()` at generation time,
+      so the plan rolls it the way it already rolls the town tree's — off
+      `mkRand`. A plan, not a mirror.
+  - The first version had the bollards as one navy square each, and on THE
+      GAUNTLET — a night market, dark floor — **the one thing that market is
+      built around was invisible on its own tile**. They carry the nutcracker's
+      red tunic inside the navy now, which is both honest and legible. Found by
+      blowing four tiles up to 4× and looking, which is the only way a 2px mark
+      can be judged.
+  - Two things were tried and taken back out on the evidence. The choir as
+      sixty dots: at tile scale they overlap into exactly the rectangle they
+      replaced, so it was sixty arcs a tile, twenty-one tiles a page, for
+      identical pixels. And its rail: five fences come out a hairline nobody
+      sees.
+  - An existing test had to be re-scoped rather than inverted. `a plan costs a
+      handful of fills however big the market is` compared market 1 against
+      market 21 and asserted the fill delta was **exactly zero** — a real claim
+      about the greenery and lamps batching, but it read a feature's fixed
+      two-fill cost as a batching failure. It compares the smallest and largest
+      **featureless** markets now, so it measures what its name says, with a
+      separate ceiling across all twenty-one (worst tile: 4 fills).
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
