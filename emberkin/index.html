@@ -4234,6 +4234,20 @@ const NUMWORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 
   'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
 const spell = (n) => NUMWORD[n] || String(n);
 const Spell = (n) => spell(n).replace(/^./, (c) => c.toUpperCase());
+
+/**
+ * A count and its noun, agreeing.
+ *
+ * The win flourish already got this right on the canvas — `+1 gem`, `+2 gems`
+ * — and the TOAST for the same win, fired in the same moment two inches away,
+ * said `+1 gems`. One number, one event, two places, disagreeing.
+ *
+ * And the line pass 161 rewrote for zero still read "It cost you 1 shards" for
+ * anybody holding four to seven: the zero was fixed and the one was walked
+ * straight past, in the same sentence. Both go through here now, so a count
+ * cannot meet a noun in this game without them agreeing.
+ */
+const countOf = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
 /* ============================================================ §3 — world ==
    Maps are character grids. One char per 16×16 tile, drawn with the art in
    ART_TILES. Warps, NPCs and encounter tables hang off the map object.
@@ -9083,7 +9097,7 @@ function finishBattle() {
     lines.push(...(b.npc.trainer.lose || []));
     G.flags[b.npc.id] = 1;
     G.money += b.npc.trainer.prize;
-    lines.push(`You collected ${b.npc.trainer.prize} shards.`);
+    lines.push(`You collected ${countOf(b.npc.trainer.prize, 'shard')}.`);
     // The flag two lines up is what moves him; this only says so. Setting a
     // `gone` field here as well would be a second copy of the same fact living
     // on shared map data, which is the bug npcActive documents.
@@ -9109,7 +9123,7 @@ function finishBattle() {
         G.gotcha = null;
         openScreen('profile', {
           mon: caught, fresh: true, legendary: !!b.legendary,
-          done: () => { setToast(`+${gems} gems`); settle(); },
+          done: () => { setToast(`+${countOf(gems, 'gem')}`); settle(); },
         });
       },
     };
@@ -9144,7 +9158,7 @@ function finishBattle() {
       // bug, and it turned the only mercy in the beat into a clerical error.
       // She does not explain herself anywhere else either.
       const after = [lost > 0
-        ? `Sable patched them up. It cost you ${lost} shards.`
+        ? `Sable patched them up. It cost you ${countOf(lost, 'shard')}.`
         : 'Sable patched them up. She did not ask for anything, and did not say why.',
         'Go easier out there.'];
       // Say it out loud, so nobody stands in front of a trainer wondering
@@ -9282,7 +9296,7 @@ function drawFlourish(g) {
   g.fillText('WON', VIEW_W / 2, 118);
   g.font = 'bold 9px monospace';
   g.fillStyle = '#f3ecff';
-  g.fillText(`+${f.gems} ${f.gems === 1 ? 'gem' : 'gems'}`, VIEW_W / 2, 133);
+  g.fillText(`+${countOf(f.gems, 'gem')}`, VIEW_W / 2, 133);
   g.textAlign = 'left';
   g.globalAlpha = 1;
 }
@@ -10236,7 +10250,7 @@ function screenSelect() {
     const kind = (s.list || [])[s.i];
     const ch = CHESTS[kind];
     if (!ch) return;
-    if (G.gems < ch.cost) { setToast(`${ch.cost - G.gems} gems short.`); return; }
+    if (G.gems < ch.cost) { setToast(`${countOf(ch.cost - G.gems, 'gem')} short.`); return; }
     s.got = openChest(kind);
     // Its own sound. It borrowed the catch cue, so the biggest thing you can
     // buy announced itself as something else happening.
@@ -11575,7 +11589,7 @@ if (typeof window !== 'undefined') {
     advanceDialogue, renderDialogue, liveBattleMsg, nextAim, AIM_ORDER, spell,
     drawPlace, PLACE_IN, PLACE_HOLD, PLACE_OUT,
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
-    mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
+    mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf, countOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
     orbBeats, orbStep, orbPhase, commitNick, ORB, dispName,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
