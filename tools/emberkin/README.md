@@ -3004,3 +3004,61 @@ desktop one. That is the correct answer and not an obvious one.
     A planted break also missed on indentation — four spaces where the file has
     two — and read exactly like a net that could not fail, until the anchor was
     checked. With the right anchor it kills four.
+
+102. **The card in your hand promised what the swing would not pay** (pass 191).
+    One property, every case: does every number the player is SHOWN agree with
+    the number the game USES? The pairs were harvested out of the code, not out
+    of memory, and swept with crits off — a range saying 8-11 is not lying when a
+    crit lands 16.
+
+        case                          shown        used         bench screen
+        a plain swing                 9-10         9-10         9-10      ok
+        with an edge banked (+6)      15-16        15-16        15-16     ok
+        with might                    12-13        12-13        12-13     ok
+        with a multiplier             13-15        13-15        13-15     ok
+        with two hits                 9-10 x2      18-20        9-10      ok
+        with the atk stage up         17-20        17-20        17-20     ok
+        against something that resists 6-7         6-7          6-7       ok
+        just switched in              9-10         5-6          9-10      <-
+        switched in, edge banked      15-16        9-9          15-16     <-
+
+    Eight agreed to the hit point. The ninth: `b.settling` is set when you choose
+    to switch, and `useMove` multiplies that turn's swing by `SETTLE_MUL` = .6 —
+    the price of the switch, and the whole reason a switch is a moment you can be
+    caught in. Neither preview knew. Driven through a REAL switch rather than a
+    posed flag, a card reading "deal 11-13" landed for **7**, and all 300 swings
+    fell outside the range they were shown.
+
+    The rule is the foe's too, and the foe's TELEGRAPH already folds it in —
+    `foeSwingMul` ends `return b.foeSettling ? mul * SETTLE_MUL : mul;`, added by
+    the pass that found the telegraph understating the foe by a median 1.11x.
+    Same rule, same file, one side measured. Fixed with `mineSwingMul(b)` on the
+    line beside it, used by both previews; a helper rather than a term inside
+    `attackBonus`, because the swing applies the damper itself from a flag it has
+    already cleared and folding it in would charge it twice.
+
+        after: shown 5-6 / used 5-6, bench 6-7 / swing 7,
+               and the next card back to the full 11-13
+
+    **Also measured, all honest:** the shelf price against the shards taken (7 of
+    7), the energy drawn on a card against the energy the play takes (5 of 5),
+    the HP bar and the EXP bar against their own fractions (36.59% / 41.90%, to
+    the second decimal), the level printed against `mon.lvl`, the dex tally
+    against the dex.
+
+    **Two instrument over-reports, both checked before being believed.** "Great
+    Salve: says 90, gave 40" was a level-16 Cindercub with a 41 HP maximum — on a
+    kin with room it gives exactly 90. And a swing dealing 0 in whichever case
+    the roll landed in was `b.mods.hits` being written back as `undefined`,
+    making `bonus.hits` NaN so the hit loop ran zero times; then, once that was
+    fixed, a shocked kin jolted stiff one swing in four — the suite failed one
+    run in three until each trial cleared the status it never meant to measure.
+
+    **Recorded, not fixed:** the profile prints ATK 22 for a kin swinging at 44
+    with the stage up. The stat block is the creature's stats, and stages are a
+    battle-only thing it has no chip for; changing that is a second change.
+
+    Four planted faults, all four bite (one of them also trips an older
+    section's "by exactly what was banked"). Two sweep mutants aimed here; the
+    section reports 17 of 37 checks killed, and the sweep's three self-proofs
+    held — it refuses to report at all if they do not.

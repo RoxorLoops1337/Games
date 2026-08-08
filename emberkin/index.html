@@ -7015,6 +7015,21 @@ function foeSwingMul(b, eff) {
   const mul = eff < 1 ? (1 + base) / 2 : base;
   return b.foeSettling ? mul * SETTLE_MUL : mul;
 }
+/**
+ * …and your side of the same rule, which only the swing knew.
+ *
+ * The damper above was written for the foe and the foe's telegraph learned it.
+ * Yours did not: switch a kin in and the card in your hand promised the whole
+ * number while `useMove` quietly took 0.6 of it — driven through a real switch,
+ * a card reading "deal 11-13" landed for 7, and every one of 300 swings fell
+ * outside the range it was shown. The bench screen said the same thing, because
+ * both previews build their swing the same way.
+ *
+ * A separate function rather than a term inside `attackBonus`, because the
+ * swing applies this itself from a flag it has already cleared — folding it
+ * into the bonus would charge the penalty twice.
+ */
+const mineSwingMul = (b) => (b && b.settling ? SETTLE_MUL : 1);
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 // CORNER_EDGE was 14 and drifted the solo danger line to .338 lost-or-ran across
@@ -9149,7 +9164,7 @@ function moveDamage(id) {
   const bonus = attackBonus();
   const swing = (roll) => {
     const { dmg, eff } = damageOf(b.mine, b.foe, id, { crit: false, roll });
-    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul));
+    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul * mineSwingMul(b)));
   };
   return { lo: swing(.85), hi: swing(1), hits: bonus.hits };
 }
@@ -9192,7 +9207,7 @@ function moveVersusFoe(mon, id) {
   const bonus = attackBonus();
   const swing = (roll) => {
     const { dmg } = damageOf(mon, b.foe, id, { crit: false, roll });
-    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul));
+    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul * mineSwingMul(b)));
   };
   return { lo: swing(.85), hi: swing(1), eff };
 }
@@ -12335,7 +12350,7 @@ if (typeof window !== 'undefined') {
     CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
     SWITCH_PUNISH, SETTLE_MUL,
     trainerHp, TRAINER_DMG_MUL, trainerDmg,
-    foeSwingMul,
+    foeSwingMul, mineSwingMul,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO, statSnap, gainLine,
     WILD_TRAIL,
