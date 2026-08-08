@@ -6711,9 +6711,14 @@ function drawFx(over){
       ctx.ellipse(f.x, f.y, f.size * 0.7, f.size, Math.atan2(f.vy, f.vx) + Math.PI / 2, 0, 6.283);
       ctx.fill();
     } else if (f.type === 'mist'){
-      ctx.globalAlpha = clamp(k, 0, 1) * 0.3;
-      ctx.fillStyle = f.col;
-      circle(f.x, f.y, f.size * (1.2 - k * 0.5)); ctx.fill();
+      /* Soft-edged, so a hundred of them make a cloud rather than a slab.
+         The sprite is baked once — see `lightSprites` — and the fallback is
+         the old flat disc, because the art system is graceful everywhere. */
+      const mr = f.size * (1.2 - k * 0.5);
+      ctx.globalAlpha = clamp(k, 0, 1) * 0.42;
+      lightSprites();
+      if (mistSprite) ctx.drawImage(mistSprite, f.x - mr, f.y - mr, mr * 2, mr * 2);
+      else { ctx.fillStyle = f.col; circle(f.x, f.y, mr); ctx.fill(); }
     } else if (f.type === 'pixel'){
       ctx.fillStyle = f.col;
       ctx.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size);
@@ -6859,10 +6864,21 @@ function bakeLight(rgb, peak){
    serves every theme. The glow that goes on top carries the theme's own lamp
    colour, so it is rebaked only when the theme changes. */
 let maskSprite = null, glowSprite = null, glowKey = '', beamSprite = null, boostSprite = null;
+/* Blood mist is baked the same way, and for the same reason a lamp is. Six
+   puffs go up per kill and the replay camera sits at tz 470 over the thickest
+   part of a fifteen-kill run — so ninety of them land in the same few hundred
+   pixels. Each was a `circle().fill()`: a hard-edged disc at one flat alpha
+   across its whole area, which stacks into a single lumpy red slab with a
+   visible outline, the largest object on screen during the one shot the game
+   makes of its own gore, and the only thing in it with no structure at all.
+   With a falloff they read as a cloud that thins at the edges however many of
+   them overlap, and each puff costs one drawImage instead of a fill. */
+let mistSprite = null;
 function lightSprites(){
   if (!maskSprite) maskSprite = bakeLight('255,255,255', 1);
   if (!beamSprite) beamSprite = bakeLight('255,236,198', 0.5);
   if (!boostSprite) boostSprite = bakeLight('120,255,170', 0.5);
+  if (!mistSprite) mistSprite = bakeLight('142,20,16', 0.95);
   if (glowKey !== TH.light){ glowSprite = bakeLight(TH.light, 0.62); glowKey = TH.light; }
 }
 

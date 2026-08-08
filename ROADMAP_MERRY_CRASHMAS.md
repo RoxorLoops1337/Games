@@ -899,6 +899,35 @@ edit this block to name the next one.
       **featureless** markets now, so it measures what its name says, with a
       separate ceiling across all twenty-one (worst tile: 4 fills).
 
+- [x] Blood mist has an edge that falls off. The owner's brief opens with *more
+      gore detail in the replay*, so I drove a real run, let the game hand over
+      to its own replay, and looked at it. Six puffs of mist go up per kill and
+      the replay camera sits at **tz 470** over the thickest part of the run —
+      so a fifteen-kill clip puts about **ninety** of them in the same few
+      hundred pixels. Each was a `circle().fill()`: a hard-edged disc at one
+      flat alpha the whole way across. Ninety of those stack into a single
+      lumpy red slab with a visible outline — the largest object on screen
+      during the one shot the game makes of its own gore, and the only thing in
+      it with no structure at all. It is a baked radial sprite now, the same
+      way every lamp in this game is, so a hundred of them read as a cloud that
+      thins at its edges; and a puff costs one `drawImage` instead of a fill.
+  - **The defect I nearly filed was a capture artifact.** My first replay
+      screenshot had the caption washed out and unreadable over a lit stall,
+      which looked exactly like a real bug — the letterbox bars were thin in
+      the same frame, which is the tell: `bar` and the caption's alpha are the
+      same `min(inT, outT)`, so the replay was simply fading out when the
+      screenshot fired. I had left the game's own loop running instead of
+      stubbing `update`. Frozen properly, the caption is solid white and
+      perfectly legible. Second time this session that checking rather than
+      assuming saved a wrong entry in this file.
+  - The mist sprite is its own bake, not the white light mask — a hundred puffs
+      of that would fog the market pale instead of red — and not the themed
+      glow either, or the gore would change colour with the market. The suite
+      asserts all three, plus one `drawImage` and **zero fills** for ninety
+      puffs, and that nothing is rebaked per frame. An existing assertion moved
+      with it: `the light sprites are baked once` counts the bakery, so it went
+      from `4 + kinds` to `5 + kinds` with the reason written next to it.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

@@ -73,6 +73,7 @@ const EXPOSE = `__out.api = {
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   lightGain, LIT_REF,
+  lightSprites, mistInfo: () => mistSprite, maskInfo: () => maskSprite,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
@@ -720,6 +721,65 @@ test('the drag, not the renderer, decides where the car is', () => {
 });
 function api0AnchorX(){ return boot().C.ANCHOR.x; }
 function api0MaxPull(){ return boot().C.MAX_PULL; }
+
+/* Six puffs of mist go up per kill, and the replay camera sits at tz 470 over
+   the thickest part of the run — so on a fifteen-kill clip about ninety of them
+   land in the same few hundred pixels. Each was a `circle().fill()`: a hard
+   disc at one flat alpha the whole way across, which stacks into a single
+   lumpy red slab with a visible outline. The largest object on screen during
+   the one shot the game makes of its own gore, and the only thing in it with
+   no structure at all. */
+test('blood mist has an edge that falls off', () => {
+  const api = boot({ count: true, w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.fx.length = 0;
+  api.addFx({ type: 'mist', x: api.cam.x, y: api.cam.y, ttl: 1.6, size: 30, col: '#8e1410' });
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawFx(false));
+
+  assert(rec.images.length === 1,
+    'a puff should be one soft sprite, got ' + rec.images.length + ' images and ' +
+    rec.fills + ' flat fills');
+  assert(!rec.shapes.some(s => /142,20,16|#8e1410/.test(String(s.style))),
+    'and nothing left drawing it as a hard disc');
+  const puff = rec.images[0];
+  assert(puff.w > 30 && puff.w < 200, 'sized off the puff, got ' + puff.w);
+  assert(puff.alpha > 0.05 && puff.alpha < 0.7,
+    'and laid on thin enough to stack: ' + puff.alpha);
+
+  /* The sprite is blood, not a lamp. If it were the white mask a hundred puffs
+     would fog the market pale instead of red, and if it were the themed glow
+     the gore would change colour with the market. */
+  assert(api.mistInfo() && api.mistInfo() !== api.maskInfo(),
+    'the mist should be a bake of its own, not the white light mask — a hundred ' +
+    'puffs of that would fog the market pale instead of red');
+
+  /* Baked once, like every other radial in this game. Counted from AFTER the
+     first frame: that one legitimately bakes, and the claim is about the
+     nineteen behind it. */
+  const before = api.getBakeCount();
+  api._resetCounts();
+  for (let i = 0; i < 20; i++) api.withCtx(carRec(), () => api.drawFx(false));
+  assert(api.getBakeCount() === before,
+    'twenty more frames should bake nothing: ' + api.getBakeCount() + ' vs ' + before);
+  assert(!api._counts.createRadialGradient,
+    'and never build a gradient inside a frame');
+
+  /* Ninety of them is the real case, and the cost has to stay flat: one
+     drawImage each, no fill, no gradient. */
+  api.fx.length = 0;
+  for (let i = 0; i < 90; i++)
+    api.addFx({ type: 'mist', x: api.cam.x + (i % 9) * 12, y: api.cam.y + (i / 9) * 11,
+      ttl: 1.6, size: 30, col: '#8e1410' });
+  const many = carRec();
+  api.withCtx(many, () => api.drawFx(false));
+  assert(many.images.length === 90 && many.fills === 0,
+    'ninety puffs should be ninety sprites and no fills, got ' +
+    many.images.length + ' / ' + many.fills);
+  console.log('    (mist: 1 sprite a puff at alpha ' + puff.alpha.toFixed(2) +
+    ', 90 puffs in ' + many.images.length + ' draws and ' + many.fills + ' fills)');
+});
 
 /* The replay is decoration. Watching one used to cost you score on the next
    shot, because replayGore drew from the simulation's generator — in the one
@@ -4684,12 +4744,15 @@ test('the light sprites and the snow grain are baked once, not per frame', () =>
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
   api.draw();
   const after1 = api.getBakeCount();
-  // the mask, the headlight, the nitro halo, one themed lamp glow, and one
-  // glow per pickup kind
+  /* the mask, the headlight, the nitro halo, the blood mist, one themed lamp
+     glow, and one glow per pickup kind. The mist is in this list for the same
+     reason as the rest: it is a radial falloff, and this game builds those
+     once — see the note about `createRadialGradient` never running inside a
+     frame. */
   const kinds = Object.keys(api.PICKUP_RGB).length;
-  assert(after1 === 4 + kinds,
-    'the first frame bakes the mask, the headlight, the nitro halo, the themed ' +
-    'glow and the ' + kinds + ' pickup colours, got ' + after1);
+  assert(after1 === 5 + kinds,
+    'the first frame bakes the mask, the headlight, the nitro halo, the blood ' +
+    'mist, the themed glow and the ' + kinds + ' pickup colours, got ' + after1);
   for (let i = 0; i < 30; i++){ api.setT(api.getT() + 1 / 60); api.draw(); }
   assert(api.getBakeCount() === after1,
     'thirty more frames should bake nothing: ' + api.getBakeCount());
