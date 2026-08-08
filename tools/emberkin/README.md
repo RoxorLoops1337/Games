@@ -377,6 +377,39 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+60. **The lesson was gated on the wrong kind of fight** (pass 149). The first
+    sixty seconds, driven beat by beat and COUNTED rather than admired. Title to
+    walking out of the study: seventeen presses, of which eight were a lecture
+    delivered after the celebration and before the player had taken a step.
+
+    One of those eight is the tell. *"Each turn you get three energy and five
+    cards. Spend it however you like, then end the turn and take what comes."* —
+    said to somebody holding no cards, looking at no hand. And the game already
+    teaches that properly, in a one-time nudge that names the actual keys and
+    the actual button:
+
+        Five cards, three energy. Left and right pick one, up plays it…
+        When you have spent what you can, end the turn: E, or the button…
+
+    Gated on `opt.wild`. **The first fight in the game is the rival**, a trainer,
+    standing on the only road out of town before any grass — so the place that
+    teaches the hand properly could not fire until after the fight a new player
+    has already had to win. Rowan was covering for a lesson that arrived late.
+
+    The two control lines fire on the first fight of any kind now; the orb line
+    stays gated on wild, because it needs something catchable to be about. Each
+    lesson at the moment it is usable, and the study is a line shorter.
+
+    Note the shape, which is not the one the last four passes trained me for.
+    Nothing here was missing and nothing was wrong. The teaching existed, was
+    better than the alternative, and was simply wired to a condition one step
+    off the one that mattered — `wild` instead of `first`. A grep for "is this
+    taught" answers yes. Only walking the opening in order shows that it is
+    taught second.
+
+    **Count the presses. An experience is a sequence, and a sequence has an
+    order that reading the source in any other order will not show you.**
+
 59. **Generalising the last pass found two screens already right and one half
     done** (pass 148). The question, asked of every overlay rather than of the
     one I had just fixed: which screens cover something they are asking about?
