@@ -105,6 +105,13 @@
     overflow:hidden; display:block; }
   .car u s em{ display:block; height:100%; border-radius:3px; background:#e8a91f; }
   .car.on u s em{ background:#ffd34d; }
+  /* A car you have not earned shows the same three bars, in slate rather than
+     gold — you are looking at what it would be, not at what you have. */
+  .car.locked u s em{ background:#5f7699; }
+  /* and how close you are to it, on the same bar language as the stats */
+  .car o{ display:block; height:5px; border-radius:3px; background:#16243c;
+    overflow:hidden; margin:4px 0 0; }
+  .car o em{ display:block; height:100%; border-radius:3px; background:#8effb0; }
   .goals{ text-align:left; max-width:400px; margin:0 auto 14px; }
   .goal{ display:flex; align-items:center; gap:9px; padding:6px 10px; margin:5px 0; border-radius:9px;
     background:#0b1524; border:2px solid #22395c; color:#b9cbe4; font-size:14px; font-weight:600; }
@@ -487,9 +494,19 @@ const KILLS_KEY = 'merry_crashmas_kills_v1';
 function carUnlocked(c){
   return c.stars ? starsTotal() >= c.stars : G.lifeKills >= c.unlock;
 }
+/* What a locked car costs, and how far in you already are. The two unlock
+   currencies used to be told completely differently: a star car said
+   "★ 20 (2 to go)" and a shopper car said "4,000 lifetime shoppers" — a flat
+   wall with no way to tell whether you were at twelve or at 3,999. Both read
+   as progress now, and `carProgress` puts the same number on a bar. */
+function carProgress(c){
+  if (carUnlocked(c)) return 1;                 // the starter car costs nothing
+  return c.stars ? clamp(starsTotal() / c.stars, 0, 1)
+                 : clamp(G.lifeKills / Math.max(1, c.unlock), 0, 1);
+}
 function carCost(c){
-  return c.stars ? '★ ' + c.stars + ' (' + Math.max(0, c.stars - starsTotal()) + ' to go)'
-                 : fmt(c.unlock) + ' lifetime shoppers';
+  return c.stars ? '★ ' + starsTotal() + ' / ' + c.stars + ' stars'
+                 : fmt(G.lifeKills) + ' / ' + fmt(c.unlock) + ' shoppers';
 }
 
 function selectCar(id){
@@ -1757,8 +1774,10 @@ function renderGarage(){
       '<canvas class="carpic" data-pic="' + c.id + '" width="' + (THUMB_W * 2) +
       '" height="' + (THUMB_H * 2) + '"></canvas>' +
       '<b>' + c.name + '</b>' +
-      (open ? carBars(c) : '') +
+      carBars(c) +                                  // what it is, earned or not
       '<i>' + (open ? c.blurb : 'Locked — ' + carCost(c)) + '</i>' +
+      (open ? '' : '<o><em style="width:' +
+        Math.round(carProgress(c) * 100) + '%"></em></o>') +
       '</button>';
   }).join('');
   if (el.querySelectorAll){

@@ -77,7 +77,7 @@ const EXPOSE = `__out.api = {
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
-  carLitDir, drawCar, paintCarThumb, withCtx, carBars, CAR_STATS, THUMB_W, THUMB_H, carShadow,
+  carLitDir, drawCar, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   windNow, WIND_STREAK, drawSnow, seedSnow,
@@ -2496,6 +2496,94 @@ test('a locked car cannot be picked, an unlocked one can', () => {
   assert(api.selectCar(locked.id) === true, 'and now it takes');
   assert(api.getCar().id === locked.id, 'selected');
   assert(api.selectCar('not-a-car') === false, 'nonsense ids are refused');
+});
+
+/* The garage told you nothing about a car you had not earned. A locked card
+   was a picture, a name and a wall — no stat bars at all, so you could not see
+   what you were grinding towards; and the two unlock currencies were told
+   completely differently, a star car counting down ("★ 20 (2 to go)") and a
+   shopper car quoting a flat total ("4,000 lifetime shoppers") with no way to
+   tell whether you were at twelve or at 3,999. */
+test('a locked car shows what it is and how close you are to it', () => {
+  const api = boot();
+  api.G.lifeKills = 268; api.G.starsPer = api.LEVELS.map((_, i) => i < 9 ? 2 : 0);
+  api.renderGarage();
+  const html = String(api._nodes.brGarage.innerHTML);
+  const cards = html.split('<button ').slice(1);
+  assert(cards.length === api.CARS.length,
+    'the garage should show every car, got ' + cards.length);
+
+  let lockedSeen = 0;
+  for (let i = 0; i < api.CARS.length; i++){
+    const c = api.CARS[i], card = cards[i], open = api.carUnlocked(c);
+    assert(card.includes(c.name), 'card ' + i + ' should be ' + c.name);
+    // three stat bars on every card, earned or not
+    const bars = [...card.matchAll(/<s title="([^"]+)"><em style="width:(\d+)%/g)];
+    assert(bars.length === api.CAR_STATS.length,
+      c.id + ' shows ' + bars.length + ' bars, expected ' + api.CAR_STATS.length +
+      (open ? '' : ' — a locked car should still say what it is'));
+    for (const [, label] of bars)
+      assert(api.CAR_STATS.some(s => s[0] === label), c.id + ' bar labelled ' + label);
+
+    const prog = /<o><em style="width:(\d+)%"><\/em><\/o>/.exec(card);
+    if (open){
+      assert(!prog, c.id + ' is unlocked and should not carry a progress bar');
+      assert(card.includes(c.blurb), c.id + ' should read its blurb');
+    } else {
+      lockedSeen++;
+      assert(prog, c.id + ' is locked and should show how close you are');
+      assert(+prog[1] === Math.round(api.carProgress(c) * 100),
+        c.id + ' bar says ' + prog[1] + '% for progress ' + api.carProgress(c).toFixed(3));
+      assert(+prog[1] < 100, c.id + ' is locked, so the bar must not be full');
+      // and the line above it counts the same way whichever currency it is
+      const cost = api.carCost(c);
+      assert(/\d\s*\/\s*[\d,]+/.test(cost),
+        c.id + ' should read as progress, got "' + cost + '"');
+      assert(card.includes(cost), c.id + ' should print its cost line');
+    }
+  }
+  assert(lockedSeen >= 2, 'this fixture should have locked cars, got ' + lockedSeen);
+  console.log('    (garage at 268 shoppers / 18 stars: ' + api.CARS.map(c =>
+    c.id + ' ' + Math.round(api.carProgress(c) * 100) + '%').join(', ') + ')');
+
+  /* The bar and the gate are the same question asked twice, so they must never
+     disagree — and the interesting place for that is the last step before the
+     car opens, not the middle of the grind. */
+  const setTo = (c, n) => {
+    if (c.stars) api.G.starsPer = api.LEVELS.map((_, i) => i * 3 < n ? Math.min(3, n - i * 3) : 0);
+    else api.G.lifeKills = n;
+    return c.stars ? api.starsTotal() : api.G.lifeKills;
+  };
+  for (const c of api.CARS){
+    const cost = c.stars || c.unlock;
+    if (cost <= 0){                              // the starter car costs nothing
+      api.G.lifeKills = 0; api.G.starsPer = api.LEVELS.map(() => 0);
+      assert(api.carUnlocked(c) && api.carProgress(c) === 1,
+        c.id + ' is the car you start with and should read full');
+      continue;
+    }
+    assert(setTo(c, cost - 1) === cost - 1, 'fixture should sit one short for ' + c.id);
+    assert(!api.carUnlocked(c), c.id + ' should still be shut one short of its cost');
+    assert(api.carProgress(c) < 1 && api.carProgress(c) > 0.5,
+      c.id + ' should read nearly full one short, got ' + api.carProgress(c).toFixed(3));
+    setTo(c, cost);
+    assert(api.carUnlocked(c) && api.carProgress(c) === 1,
+      c.id + ' should be full and open at exactly its cost');
+    setTo(c, cost * 40);
+    assert(api.carProgress(c) === 1, c.id + ' progress should clamp, got ' + api.carProgress(c));
+  }
+
+  /* On a short screen the blurb line is hidden outright, which is where the
+     bar earns its keep: it must be the one thing left that still says
+     "you are getting closer". */
+  const src = fs.readFileSync(HTML, 'utf8');
+  assert(/body\.short \.car i\{ display:none; \}/.test(src),
+    'the short layout is expected to hide the blurb line');
+  assert(!/body\.short \.car o\s*\{[^}]*display:\s*none/.test(src),
+    'it must not hide the progress bar as well');
+  assert(/\.car o em\{[^}]*background:/.test(src), 'the progress bar needs a fill colour');
+  assert(/\.car\.locked u s em\{[^}]*background:/.test(src),
+    'a locked stat bar should be its own colour, not gold');
 });
 
 test('each car is a different size on the road', () => {
@@ -7688,9 +7776,12 @@ test('every unlocked car card carries its own picture and its bars', () => {
   assert(open.length >= 1 && shut.length >= 1,
     'this test needs one of each: ' + open.length + ' open, ' + shut.length + ' locked');
   const bars = (html.match(/<s title=/g) || []).length;
-  assert(bars === open.length * api.CAR_STATS.length,
-    'an unlocked car gets ' + api.CAR_STATS.length + ' bars and a locked one none: got ' +
-    bars + ' for ' + open.length + ' unlocked');
+  /* Every card carries its bars now, locked or not — a car you have not earned
+     was a picture and a wall, with no way to see what you were grinding for.
+     See "a locked car shows what it is and how close you are to it". */
+  assert(bars === api.CARS.length * api.CAR_STATS.length,
+    'every car gets ' + api.CAR_STATS.length + ' bars: got ' +
+    bars + ' for ' + api.CARS.length + ' cars');
   assert(html.includes('Locked — '), 'a locked card still says what it costs');
   // the bars are a real reading of the car, not decoration
   const hatch = api.CARS[0], sleigh = api.CARS.find(c => c.id === 'sleigh');

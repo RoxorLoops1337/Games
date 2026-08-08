@@ -551,6 +551,21 @@ edit this block to name the next one.
       through `doBoost`'s `sp < 25` gate, and the nitro fires on a car that is
       not moving.
 
+- [x] The garage says what a car you have not earned actually is. A locked card
+      was a picture, a name and a wall — no stat bars at all, so nothing on the
+      screen told you what you were grinding towards; and the two unlock
+      currencies were told completely differently, a star car counting down
+      ("★ 20 (2 to go)") and a shopper car quoting a flat total ("4,000 lifetime
+      shoppers") that never said whether you were at twelve or at 3,999. Every
+      card carries its three bars now, slate instead of gold when the car is not
+      yours, and a locked one gets a green progress bar under a line that reads
+      the same way whichever currency it is: "268 / 400 shoppers", "★ 18 / 20
+      stars". `carProgress` returns 1 the moment `carUnlocked` does, so the bar
+      and the gate cannot drift. It matters most on a phone, where
+      `body.short .car i{display:none}` hides the lock line outright — the bar
+      is then the only thing left saying you are getting closer, and there was
+      nothing there before.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
