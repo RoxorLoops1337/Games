@@ -175,6 +175,45 @@ const SCENES = {
   // boundary must read as a nearly-full bar of the old level, not as a sliver
   // of the new one. That walk-back is the half of the fix the headless suite
   // cannot see, because it lives in a closure inside renderHUD.
+  // The kill, from the blow that lands it. Two beats back to back — the foe's
+  // KO fall (KO_FALL .55s) and then the victory flourish (FLOURISH_T 1.35s) —
+  // and the question is whether they read as two or as one mush.
+  //
+  // The dice are pinned: damage rolls, so an unpinned scene can leave the foe
+  // on 1 HP and film a fight that does not end. 167 learned this on the throw.
+  kill: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      // The DECK IS SHUFFLED, so pinning the damage roll alone is not enough:
+      // two probes of the same setup dealt two different hands, and which card
+      // is played decides what the frames contain. The pin has to cover
+      // `startBattle` as well.
+      const roll = Math.random;
+      Math.random = () => .999;        // same deal every time, top of every range
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+      EK.G.wipe = 0;
+      const b = EK.B();
+      b.foe.hp = 1;                    // one hit from going down
+      EK.G.battleMsg = null;
+      // The kin card is the creature's own move and is always an attack; the
+      // starting deck is skills. `cardText` is a DECK-card function — it reads
+      // `CARDS[id].txt`, and a kin card's move lives in MOVES, so asking it for
+      // a kin card's text throws. The game branches on `src === 'kin'` at every
+      // live call site; this scene did not.
+      const i = b.hand.findIndex((c) => c.src === 'kin' && EK.cardCost(c) <= b.energy);
+      // `playCard` BUILDS a log and returns it; `submitLog` is what plays it
+      // back, and the knockout's fall is set by a `faint` entry DURING that
+      // playback. Calling playCard alone put the foe on 0 HP with `downF` never
+      // set at all — measured, the flourish began 0.02s after the hit and the
+      // fall never happened. The ledger already records this exact trap for the
+      // catching scene ("doAction only builds the log"), one scene earlier.
+      EK.submitLog(EK.playCard(i >= 0 ? i : 0));
+      Math.random = roll;
+    },
+  },
   levelbar: {
     w: 760, h: 900,
     go: (EK) => {
@@ -1006,6 +1045,37 @@ const SCENES = {
   // A level-up. Won outright against something far too weak, so the win, the
   // XP and the level all land in one played-back log — the way it happens after
   // most fights.
+  // The level and the win, in the order a player gets them. `levelup` above is
+  // a STILL — `wait: 4500` — and `wait` delays a film's start too, so filming
+  // it begins after the beat is over. Measured, the sequence is: fall 1.97s,
+  // bar filling 2.53s, level rings 3.50s (LVL_T .8s, so to 4.30), flourish
+  // 3.90s. The last 0.4s of the level is drawn underneath the victory.
+  levelwin: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      const roll = Math.random;
+      Math.random = () => .999;          // same deal, top of every range
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+      EK.G.wipe = 0;
+      const b = EK.B();
+      b.foe.hp = 1;
+      EK.G.battleMsg = null;
+      // One point short, so this win must cross the boundary.
+      b.mine.xp = EK.xpFor(b.mine.lvl + 1) - 1;
+      b.dispXp = b.tgtXp = b.mine.xp; b.barLv = b.mine.lvl;
+      const i = b.hand.findIndex((c) => c.src === 'kin' && EK.cardCost(c) <= b.energy);
+      EK.submitLog(EK.playCard(i >= 0 ? i : 0));
+      Math.random = roll;
+      // Seek to just before the rings. A film cannot be given a start offset —
+      // `wait` delays it rather than skipping into it — so the scene walks the
+      // simulation forward itself, in sixtieths, to 3.3s. Filming from zero
+      // spent all twenty frames on the exchange and reached the beat on none.
+      for (let n = 0; n < 198; n++) EK.step(1 / 60);
+    },
+  },
   levelup: {
     w: 300, h: 260,
     wait: 4500,

@@ -973,6 +973,157 @@ section('a plaque does not draw over the thing that has taken the screen');
   ok(bare > 0, 'and the frame drew something at all');
 }
 
+section('the screen stops promising a swing from a creature that cannot take one');
+{
+  // Filmed the kill. The foe fell and faded and the chip went on reading
+  // "Foe: Mist Spray · hits 9" for the whole of the next two seconds —
+  // measured, from the faint at 1.97s until the flourish hid the panels at
+  // 3.52s. A chip that says what the foe will do NEXT is a promise about a next
+  // turn, and there is no next turn.
+  //
+  // Two ways a foe stops being able to act, and they had to be found
+  // separately: it falls, or an orb takes it. The second is not a variant of
+  // the first — the creature is alive and about to be yours.
+  const g = loadGame({});
+  const { intentLine } = g;
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+
+  eq(g.foeAfield(null), false, 'no fight, nothing to promise');
+  eq(g.foeAfield({ downF: null }), true, 'a foe standing on the field can act');
+  eq(g.foeAfield({ downF: 0 }), false, 'one that has started to fall cannot');
+
+  // The kill, driven, with the dice pinned. `playCard` BUILDS a log; `submitLog`
+  // plays it back, and the fall is set by a `faint` entry DURING that playback.
+  const kill = (() => {
+    g.G.mapId = 'route_one';
+    const roll = Math.random;
+    Math.random = () => .999;
+    try {
+      g.startBattle({ foe: g.mkMon('dewdrip', 6), wild: true });
+      const b = g.B(); b.foe.hp = 1; g.G.battleMsg = null;
+      const i = b.hand.findIndex((c) => c.src === 'kin' && g.cardCost(c) <= b.energy);
+      g.submitLog(g.playCard(i >= 0 ? i : 0));
+      return b;
+    } finally { Math.random = roll; }
+  })();
+  let sawStanding = false, fellAt = -1, promisedAfter = 0, frames = 0;
+  for (let n = 0; n < 600 && g.B() && !g.G.screen; n++) {
+    const b = g.B();
+    if (b.downF == null && g.foeAfield(b)) sawStanding = true;
+    if (b.downF != null) {
+      if (fellAt < 0) fellAt = n;
+      if (g.foeAfield(b)) promisedAfter++;
+    }
+    g.step(1 / 60); g.draw(); frames++;
+  }
+  ok(frames > 60, `the kill was driven frame by frame (${frames} frames)`);
+  ok(sawStanding, 'the foe was promising a swing while it stood');
+  ok(fellAt > 0, `and it was seen to fall (frame ${fellAt})`);
+  eq(promisedAfter, 0, 'and promised nothing once it had');
+
+  // …and the chip itself, not just the decision behind it. The first version of
+  // this section netted `foeAfield` and the call sites and NOT the wiring
+  // between them: breaking the gate on purpose changed nothing and nothing
+  // failed. `intentLine` is a value so a suite can read what the chip would
+  // say.
+  const standing = g.B() || kill;
+  eq(intentLine({ downF: 0, intent: { name: 'Mist Spray', kind: 'attack', dmg: 9 },
+    mods: {}, shield: 0, mine: { hp: 19, max: 19 } }).html, '',
+    'a fallen foe says nothing');
+  ok(/Mist Spray/.test(intentLine({ downF: null, intent: { name: 'Mist Spray', kind: 'attack', dmg: 9 },
+    mods: {}, shield: 0, mine: { hp: 19, max: 19 } }).html),
+    'and a standing one still says what it will do');
+
+  // …and the other way. Through the throw the foe is still standing and the
+  // chip is honest; from the moment the orb takes it, it is not on the field.
+  const g2 = loadGame({});
+  g2.setCtx(mkCtx());
+  g2.newGame(); g2.takeStarter('cindercub'); g2.G.dialogue = null;
+  g2.G.mapId = 'route_one';
+  const roll2 = Math.random;
+  Math.random = () => .001;                  // three holds and a click
+  try {
+    g2.startBattle({ foe: g2.mkMon('dewdrip', 6), wild: true });
+    const b2 = g2.B();
+    b2.foe.hp = Math.max(1, Math.round(b2.foe.max * .12));
+    g2.G.bag.bloomorb = 5; g2.G.battleMsg = null;
+    g2.submitLog(g2.doAction({ kind: 'item', id: 'bloomorb', target: 'foe' }));
+  } finally { Math.random = roll2; }
+  const seen = {};
+  for (let n = 0; n < 600 && g2.B() && !g2.G.screen; n++) {
+    const b2 = g2.B();
+    const p = g2.orbPhase();
+    if (p) (seen[p] = seen[p] || []).push(g2.foeAfield(b2));
+    g2.step(1 / 60); g2.draw();
+  }
+  ok(seen.throw && seen.throw.every(Boolean),
+    'the orb is in the air and the foe is still standing');
+  for (const p of ['suck', 'fall', 'wobble', 'gap', 'click']) {
+    if (!seen[p]) continue;
+    ok(seen[p].every((v) => v === false), `${p}: the orb has it, so it promises nothing`);
+  }
+  ok(Object.keys(seen).length >= 4, `the throw played its beats (${Object.keys(seen).join(', ')})`);
+
+  // The chip lives in `renderHand`, which runs when the PLAYBACK ends — about a
+  // second and a half after the foe falls. Knowing the right answer is no use
+  // if nothing asks at the moment it changes, so it is redrawn at both.
+  const calls = (SRC.match(/renderIntent\(/g) || []).length;
+  ok(calls >= 3, `and it is redrawn at each moment the answer changes (${calls} sites)`);
+}
+
+section('a level gets the screen to itself, the way it already gets the sprite');
+{
+  // The game clears the hit flash, the lunge, the recoil and the crit burst
+  // when a level lands, under a comment saying why: two beats running at once
+  // are indistinguishable and the one not yet read wins. The rule was written
+  // and applied to everything BEFORE the level and nothing after. Measured, the
+  // rings run 3.50s to 4.30s and the victory flourish started at 3.90s — half
+  // the beat drawn under a field of gold motes rising in the same colour.
+  const win = (levels) => {
+    const g = loadGame({});
+    g.setCtx(mkCtx());
+    g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+    g.G.mapId = 'route_one';
+    const roll = Math.random;
+    Math.random = () => .999;              // same deal, top of every range
+    try {
+      g.startBattle({ foe: g.mkMon('dewdrip', 6), wild: true });
+      const b = g.B(); b.foe.hp = 1; g.G.battleMsg = null;
+      // One point short of the boundary, or a long way from it.
+      b.mine.xp = levels ? g.xpFor(b.mine.lvl + 1) - 1 : g.xpFor(b.mine.lvl);
+      b.dispXp = b.tgtXp = b.mine.xp; b.barLv = b.mine.lvl;
+      const i = b.hand.findIndex((c) => c.src === 'kin' && g.cardCost(c) <= b.energy);
+      g.submitLog(g.playCard(i >= 0 ? i : 0));
+    } finally { Math.random = roll; }
+    let both = 0, levelFrames = 0, flourishFrames = 0, frames = 0;
+    for (let n = 0; n < 900 && !g.G.screen; n++) {
+      const b = g.B();
+      const lv = !!(b && b.lvT > 0), fl = !!g.G.flourish;
+      if (lv && fl) both++;
+      if (lv) levelFrames++;
+      if (fl) flourishFrames++;
+      g.step(1 / 60); g.draw(); frames++;
+    }
+    return { both, levelFrames, flourishFrames, frames, lvl: g.G.party[0].lvl };
+  };
+
+  const up = win(true);
+  ok(up.frames > 120, `the winning fight was driven frame by frame (${up.frames} frames)`);
+  eq(up.lvl, 6, 'and the win crossed a level');
+  ok(up.levelFrames > 30, `the level was on screen (${up.levelFrames} frames)`);
+  eq(up.both, 0, 'and the victory never came up over it');
+  ok(up.flourishFrames > 0,
+    `…while still arriving afterwards (${up.flourishFrames} frames) — waiting is not starving`);
+
+  // A win with no level is untouched: the gate reads `lvT`, which is zero, so
+  // the far commoner fight pays nothing for this.
+  const flat = win(false);
+  eq(flat.levelFrames, 0, 'a win with no level shows no level');
+  ok(flat.flourishFrames > 0, 'and its victory arrives as it always did');
+  eq(flat.both, 0, 'with nothing to overlap');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.

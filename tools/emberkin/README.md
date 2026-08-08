@@ -377,6 +377,127 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+81. **The most repeated good thing in the game was ten times quieter than the
+    thing that follows it** (pass 170). The level-up, filmed and then measured
+    twice — once for timing, once for light — and both numbers said the same
+    thing from different directions.
+
+    **Timing.** Driven through a real winning fight: fall 1.97s, XP bar filling
+    2.53s, level rings 3.50s (LVL_T is .8s, so to 4.30s), **victory flourish
+    3.90s**. Half the level is drawn underneath a field of gold motes rising in
+    the same colour. On film it is not a level-up at all.
+
+    The fix is one line, and the rule for it was already written down. The game
+    clears `flashM`, `lungeM`, `recoilM` and the crit burst when a level lands,
+    under a comment explaining why: *two beats running at once are
+    indistinguishable and the one not yet read wins.* **The rule was applied to
+    everything that comes BEFORE the level and to nothing that comes after.**
+    That is the third pass running that this shape has turned up — 168's plaque
+    guard, 169's foe-cannot-act, and now this. It is worth going looking for.
+
+    Waiting costs at most 0.8s and only on fights that levelled, which is the
+    one case where there is something extra to look at. `lvT` decays every
+    frame unconditionally, so it cannot stall — and the net proves that
+    separately, because *waiting is not starving* is a different claim from
+    *they do not overlap* and freezing `lvT` satisfies the second while
+    destroying the first.
+
+    **Light.** Then the harder question: with the screen to itself, does the
+    beat actually read? Not by eye — by pixels. Draw the frame, set `lvT = 0`,
+    draw again, difference the mean luminance over the 68x52 box the rings and
+    sparks live in:
+
+        the level beat adds   0.48
+        the flourish adds     4.92     to the same box
+
+    **Ten times.** Three one-pixel rings at half alpha cannot carry a beat: a
+    ring is an outline, and what was missing was light. A short warm glow on the
+    ground under the creature — the same device the flourish already uses,
+    scoped to the one who earned it — plus thicker, brighter rings.
+
+    **And then it overshot, which the same measurement caught.** First attempt:
+    **8.81 against the flourish's 4.59**, nearly twice as loud — a local event
+    shouting down a field-wide one. Dialled the glow alpha .5 → .22 and
+    re-measured: **4.52 against 4.59.** Parity, not dominance. *A number that
+    can tell you a thing is too quiet can tell you it is too loud, and tuning by
+    eye would have kept whichever version I looked at last.*
+
+    Two smaller notes. `wait` delays a FILM's start as well as a still's, so
+    `levelup` (wait 4500) cannot film the beat it is named for; `levelwin` walks
+    the simulation forward in sixtieths inside `go()` instead — a film cannot be
+    given a start offset, so the scene has to seek itself. And a measurement
+    that runs a loop until `lvT` hits zero then reads the flourish is measuring
+    a different picture: the new gate lets the battle finish at that exact
+    instant, so the arena is gone. The 0.059 it printed was true and meaningless.
+
+80. **The screen kept promising a swing from a creature lying on its side**
+    (pass 169). Filmed the kill, and the brief's question — are the foe's death
+    and your victory two beats or one mush? — came back **two beats, cleanly
+    separated**, with numbers: the `faint` plays at 1.97s, the fall runs 0.55s,
+    and the flourish starts at 3.52s. Nothing to fix there.
+
+    What the measurement found instead was a **falsehood on screen for a second
+    and a half**. The intent chip — "Foe: Mist Spray · hits 9" — is a promise
+    about a NEXT TURN, and it went on saying it over a foe that had fallen and
+    faded, right up until the flourish hid the panels.
+
+    **The film could not have found this and neither could the eye.** A film
+    grabs the canvas; the chip is DOM. It took probing the DOM on a timer
+    through the same driven kill — the 167 move, applied to the moment rather
+    than to a layout.
+
+    - **Gated on the PICTURE, not the state.** The outcome is settled the
+      instant the card resolves, about two seconds before the creature is seen
+      to fall. Clearing on `foe.hp` or `b.over` would take the foe's intent off
+      the screen while it is still standing there mid-exchange. Same reason the
+      bar follows `dispF`.
+    - **Knowing the answer is no use if nothing asks.** The chip lives in
+      `renderHand`, which runs when the PLAYBACK ends — a second and a half
+      after the fall — so the first fix changed the condition and the screen
+      did not change at all. It is redrawn at the faint now, and redrawing the
+      chip alone rather than the whole hand, because rebuilding the row
+      mid-playback would reset the cards' transitions under a running beat.
+    - **Two ways a foe stops being able to act, and they had to be found
+      separately.** It falls, or an orb takes it — and the second is not a
+      variant of the first, because the creature is alive and about to be
+      yours. Measured through a successful catch, the chip promised
+      "Foe: Rip Curl · hits 7-8" from the suck all the way to the click. That
+      is 168's lesson (*a rule applied to one of its cases*) arriving one pass
+      later, in my own fix.
+    - And `foeAfield` is deliberately **not** `inOrb`, which the draw already
+      has: `inOrb` asks "should I skip the normal sprite draw" and excludes the
+      suck, where the creature is still drawn, shrinking. Two conditions that
+      overlap are still two questions — the same trap 167 hit from the other
+      side.
+
+    **The net that could not say anything.** The first version tested
+    `foeAfield` and counted the redraw sites, and *not the wiring between them*.
+    Reverting the gate — putting `const it = b.intent` straight back — broke the
+    game and **nothing failed**, because `renderIntent` returns early when
+    headless and the DOM stub hands back a fresh element each call, so no suite
+    could ever read the chip. Extracting `intentLine(b)` as a **value** made the
+    break bite on the first try: *a fallen foe says nothing (got "Foe: <b>Mist
+    Spray</b> · hits 9", want "")*. **If a break does not bite, the net is not a
+    net — and "I planted a fault and nothing happened" is a result about the
+    test, never about the code.**
+
+    **And the scene walked into a trap the ledger already records.** `playCard`
+    BUILDS a log and returns it; `submitLog` plays it back, and the fall is set
+    by a `faint` entry during that playback. Calling `playCard` alone left the
+    foe on 0 HP with `downF` never set and the flourish starting 0.02s after the
+    hit — a timeline I nearly wrote up as a finding. Entry 78 records this exact
+    trap for `doAction` in the catching scene, one scene earlier. Two smaller
+    ones in the same setup: **the deck is shuffled**, so pinning the damage roll
+    alone still dealt a different hand each run and pinning had to cover
+    `startBattle`; and `cardText` is a DECK-card function that reads
+    `CARDS[id].txt`, so asking it for a kin card's text throws — the game
+    branches on `src === 'kin'` at every live call site, and I checked all three
+    before believing it was mine.
+
+    One thing measured and left alone: the second between the fall finishing and
+    the flourish starting is **not dead air**. The DOM is showing "Cindercub
+    gained 53 EXP." and the XP bar is filling. The measurement stopped a fix.
+
 79. **A wind-up that never wound up** (pass 168). The evolution, filmed. And the
     thing worth carrying out of this one is that **the eye could not have called
     it** — the fault was in the arithmetic of a rotation, and it took a number.

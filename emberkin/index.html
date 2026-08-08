@@ -6604,6 +6604,10 @@ function orbStep(dt) {
   o.i++;
   const next = o.beats[o.i];
   if (!next) { o.done = true; return false; }
+  // The orb taking the foe is not a log entry, so nothing else redraws the
+  // chip that promises its next swing — it read "Foe: Rip Curl · hits 7-8" all
+  // the way through a successful catch, over a creature already in the ball.
+  if (!HEADLESS) renderIntent(b);
   if (next[0] === 'wobble') playCue('wobble');
   if (next[0] === 'click') playCue('click');
   if (next[0] === 'burst') { playCue('burst'); b.entry = .35; }
@@ -7841,14 +7845,40 @@ function drawBattle(g) {
   if (b.lvT > 0) {
     const k = 1 - b.lvT / LVL_T;
     const cx = 72, cy = MY_GROUND;
+    // …and the ground under it lights up, because a level is something that
+    // happens TO this creature and nothing on the field said so.
+    //
+    // Measured in the 68x52 box these rings and sparks live in: the whole beat
+    // added 0.48 to the mean luminance. The victory flourish that follows it
+    // adds 4.92 to the same box — TEN TIMES more — so the most repeated good
+    // thing in the game was an order of magnitude quieter than the thing that
+    // comes after it. Three one-pixel rings at half alpha cannot carry a beat;
+    // a ring is an outline and what was missing was light.
+    //
+    // Up and out with the rings, and gone before they are: the glow peaks early
+    // and is out by the time the last ring reaches its edge, so the beat ends
+    // on the outline rather than on a smear.
+    {
+      const gk = Math.sin(clamp(k * 1.35, 0, 1) * Math.PI);
+      if (gk > .01) {
+        const gr = g.createRadialGradient(cx, cy - 6, 2, cx, cy - 6, 34);
+        gr.addColorStop(0, `rgba(255,233,168,${(gk * .22).toFixed(3)})`);
+        gr.addColorStop(1, 'rgba(255,201,77,0)');
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.fillStyle = gr;
+        g.fillRect(cx - 36, cy - 42, 72, 50);
+        g.restore();
+      }
+    }
     g.save();
     g.globalCompositeOperation = 'lighter';
     for (let r = 0; r < 3; r++) {
       const rk = clamp(k * 1.3 - r * .16, 0, 1);
       if (rk <= 0 || rk >= 1) continue;
-      g.globalAlpha = (1 - rk) * .5;
+      g.globalAlpha = (1 - rk) * .9;
       g.strokeStyle = r % 2 ? '#ffe9a8' : '#ffc94d';
-      g.lineWidth = 1;
+      g.lineWidth = 2;
       g.beginPath();
       if (g.ellipse) g.ellipse(cx, cy - rk * 26, 10 + rk * 16, (10 + rk * 16) * .34, 0, 0, Math.PI * 2);
       g.stroke();
@@ -8792,6 +8822,96 @@ function intentLethal(b, it) {
 /** One number when the roll cannot spread it, two when it can. */
 const rangeText = (lo, hi) => (lo === hi ? `${lo}` : `${lo}-${hi}`);
 
+/**
+ * The foe's next move, as a chip. Its own function because it has to be
+ * redrawn at a moment `renderHand` does not run: `renderHand` fires when the
+ * playback ENDS, and the foe falls about a second and a half before that.
+ */
+/**
+ * Whether the foe is standing on the field, able to take a turn. Two ways it
+ * stops being so and both had to be found separately: it falls, or an orb takes
+ * it. The second is not a variant of the first — the creature is alive and
+ * about to be yours — and the chip promising its next swing read the same
+ * either way.
+ *
+ * NOT the same question as `inOrb` in the draw, which asks "should I skip the
+ * normal sprite draw" and deliberately excludes the suck, where the creature is
+ * still drawn, shrinking. Two conditions that overlap are still two questions.
+ */
+const foeAfield = (b) => {
+  if (!b || b.downF != null) return false;
+  const p = orbPhase();
+  return !(p && p !== 'throw');
+};
+
+/**
+ * The chip's contents, as a value. A pure function because the DOM write is not
+ * observable from a suite — `renderIntent` returns early when headless and the
+ * stub hands back a fresh element each call — so a net written against the
+ * panel could not tell whether the chip was gated on anything at all. Breaking
+ * the gate on purpose changed nothing and no test failed, which is the same
+ * shape as a check that has never said anything.
+ */
+function intentLine(b) {
+  // A chip that says what the foe will do next is a promise about a NEXT TURN.
+  // Filmed, the foe fell and faded and this line went on reading
+  // "Foe: Mist Spray · hits 9" for the whole of the next two seconds —
+  // measured, from the faint at 1.97s until the flourish hid the panels at
+  // 3.52s. There is no next turn and there is no foe.
+  //
+  // Gated on the PICTURE rather than on `foe.hp` or `b.over`, which are the
+  // STATE. The outcome is settled the instant the card
+  // resolves, about two seconds before the creature is seen to fall; clearing
+  // the chip then would take the foe's intent off the screen while it is still
+  // standing there, mid-exchange. Same reason the bar follows `dispF`.
+  const it = foeAfield(b) ? b.intent : null;
+  // What actually reaches you, not what the foe swings.
+  //
+  // `readIntent` takes its number straight from `damageOf`, which knows nothing
+  // about guard or shield — but `hurtMine` subtracts `mods.def` and then the
+  // shield absorbs the rest. So the line said "about 28" while a banked 18
+  // shield and 3 guard meant 7 was going to land, and the whole reason that
+  // line exists is to answer "can I take this, or do I need to block?"
+  //
+  // The raw number stays: it is what the foe is swinging, and it is what a
+  // pierce will bypass your shield with. The number that lands is added beside
+  // it, and only when you are actually holding something — otherwise they are
+  // the same figure printed twice. Rendered here rather than in readIntent
+  // because shield changes as you play cards, and the answer has to change
+  // with it.
+  const through = intentThrough(b, it);
+  const banked = (b.mods.def || 0) + (b.shield || 0) > 0;
+  // And the other half of the question the comment above says this line exists
+  // to answer. "How much lands" has no meaning without "how much is left", and
+  // the chip had every number it needed: at 9 HP against about 30 it read
+  // exactly as it does at full health, in the same colour, while the screen
+  // printed 9/63 on the other side of the arena for the player to hold in their
+  // head. It already does the shield subtraction; this is the one that decides
+  // whether the turn is a choice or a mistake.
+  //
+  // It said "about N" and meant the middle of the roll, which made the alarm
+  // below fire on the average turn instead of the bad one. Both ends are on the
+  // line now, so the word "about" is not doing work a number can do, and the
+  // figure the alarm is reading is the figure the player can see. It still does
+  // not count a burn ticking at the end of the turn; that is a second source
+  // and this line is about the swing.
+  const lethal = intentLethal(b, it);
+  const html = it
+    ? `Foe: <b>${it.name}</b>${it.kind === 'attack'
+        ? ` · hits ${rangeText(it.dmg, it.hi != null ? it.hi : it.dmg)}${banked ? ` · <b style="color:${through.hi > 0 ? 'var(--hp-warn)' : 'var(--hp-good)'}">${rangeText(through.lo, through.hi)} through</b>` : ''}`
+          + (lethal ? ' · <b>enough to finish you</b>' : '')
+        : it.tell ? ` · ${it.tell}` : ''}`
+    : '';
+  return { html, lethal };
+}
+
+function renderIntent(b) {
+  if (HEADLESS) return;
+  const { html, lethal } = intentLine(b);
+  els.intent.classList.toggle('lethal', lethal);
+  els.intent.innerHTML = html;
+}
+
 function renderHand() {
   if (HEADLESS) return;
   const b = B();
@@ -8824,45 +8944,7 @@ function renderHand() {
     ['kin', 'Kin', false], ['bag', 'Bag', false],
     [b.wild ? 'run' : 'forfeit', b.wild ? 'Run' : 'Forfeit', false],
   ].map(([a, label, nag]) => `<div class="abtn ${nag ? 'nag' : ''}" data-a="${a}">${label}</div>`).join('');
-  const it = b.intent;
-  // What actually reaches you, not what the foe swings.
-  //
-  // `readIntent` takes its number straight from `damageOf`, which knows nothing
-  // about guard or shield — but `hurtMine` subtracts `mods.def` and then the
-  // shield absorbs the rest. So the line said "about 28" while a banked 18
-  // shield and 3 guard meant 7 was going to land, and the whole reason that
-  // line exists is to answer "can I take this, or do I need to block?"
-  //
-  // The raw number stays: it is what the foe is swinging, and it is what a
-  // pierce will bypass your shield with. The number that lands is added beside
-  // it, and only when you are actually holding something — otherwise they are
-  // the same figure printed twice. Rendered here rather than in readIntent
-  // because shield changes as you play cards, and the answer has to change
-  // with it.
-  const through = intentThrough(b, it);
-  const banked = (b.mods.def || 0) + (b.shield || 0) > 0;
-  // And the other half of the question the comment above says this line exists
-  // to answer. "How much lands" has no meaning without "how much is left", and
-  // the chip had every number it needed: at 9 HP against about 30 it read
-  // exactly as it does at full health, in the same colour, while the screen
-  // printed 9/63 on the other side of the arena for the player to hold in their
-  // head. It already does the shield subtraction; this is the one that decides
-  // whether the turn is a choice or a mistake.
-  //
-  // It said "about N" and meant the middle of the roll, which made the alarm
-  // below fire on the average turn instead of the bad one. Both ends are on the
-  // line now, so the word "about" is not doing work a number can do, and the
-  // figure the alarm is reading is the figure the player can see. It still does
-  // not count a burn ticking at the end of the turn; that is a second source
-  // and this line is about the swing.
-  const lethal = intentLethal(b, it);
-  els.intent.classList.toggle('lethal', lethal);
-  els.intent.innerHTML = it
-    ? `Foe: <b>${it.name}</b>${it.kind === 'attack'
-        ? ` · hits ${rangeText(it.dmg, it.hi != null ? it.hi : it.dmg)}${banked ? ` · <b style="color:${through.hi > 0 ? 'var(--hp-warn)' : 'var(--hp-good)'}">${rangeText(through.lo, through.hi)} through</b>` : ''}`
-          + (lethal ? ' · <b>enough to finish you</b>' : '')
-        : it.tell ? ` · ${it.tell}` : ''}`
-    : '';
+  renderIntent(b);
   // The hand is too small to hold a card's whole rules text, so the line above
   // it spells out whichever card you are aiming at whenever it is otherwise idle.
   const aimed = b.hand[b.sel];
@@ -9082,6 +9164,14 @@ function entryFx(b, e) {
   if (e.fx === 'faint') {
     if (e.side === 'mine' || (e.side !== 'foe' && e.hpM <= 0)) b.downM = 0;
     else b.downF = 0;
+    // The chip that promises the foe's next move has to go when the foe does.
+    // It lives in `renderHand`, which runs when the PLAYBACK ends — about a
+    // second and a half after this — so without a refresh here the screen goes
+    // on offering "Foe: Mist Spray · hits 9" over a creature lying on its side,
+    // right up until the flourish covers the panels. Redrawing the chip alone
+    // rather than the whole hand: rebuilding the row mid-playback would reset
+    // the cards' transitions under a beat that is still running.
+    renderIntent(b);
   }
   // Levelling had a cue and nothing to look at. It is the most repeated good
   // thing in the game — every fight you win ends with one — and it was the last
@@ -9609,7 +9699,26 @@ function updateBattle(dt) {
   }
   if (b.log) { b.log = null; b.started = false; renderHand(); }
 
-  if (b.over) { if (!b.finishing) { b.finishing = true; finishBattle(); } return; }
+  // The level gets the screen to itself, the same way it already gets the
+  // sprite to itself.
+  //
+  // `b.flashM = 0; b.lungeM = 0; b.recoilM = 0` and the crit burst are cleared
+  // when a level lands, under a comment that says why: two beats running at
+  // once are indistinguishable, and the one that has not been read yet wins.
+  // The rule was written and then applied to everything that came BEFORE the
+  // level and to nothing that comes after. Measured: the rings run 3.50s to
+  // 4.30s and the victory flourish started at 3.90s — so half the beat was
+  // drawn underneath a field of gold motes rising in the same colour, which on
+  // film is not a level-up at all.
+  //
+  // Waiting costs at most LVL_T (0.8s) and only on the fights that levelled,
+  // which is the one case where the player has something extra to look at.
+  // `lvT` decays every frame unconditionally, so this cannot stall.
+  if (b.over) {
+    if (b.lvT > 0) return;
+    if (!b.finishing) { b.finishing = true; finishBattle(); }
+    return;
+  }
   if (G.dialogue) return;
 
   // ---- the player's turn: pick a card, play it, or end the turn
@@ -11826,7 +11935,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
+    renderIntent, intentLine, foeAfield, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
