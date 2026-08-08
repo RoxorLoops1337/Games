@@ -377,6 +377,62 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+78. **The moment was happening behind a health bar** (pass 167). Two surveys
+    clean, so: stop surveying, film something. The catch — 24 frames at 150ms —
+    and **seventeen of them are the wait**, which is the point of a catch. What
+    the film said, in one sentence: *the two and a half seconds of dead air has
+    no escalation, because every wobble looks exactly like the last one.*
+
+    - **The shake now knows which shake it is.** The game already counts the
+      holds and already says so afterwards — "Three shakes. You had it." — but
+      the picture said the same thing three times. The third rock is the one
+      that nearly held.
+    - **The hush.** Escalating the rock made the ORB louder without making the
+      MOMENT bigger: an 8px object on a 256px canvas is still the only thing
+      moving while the kin, the ground and the sky carry on as though nothing
+      were being decided. Everything that is not the orb steps back, further
+      with each hold, and is released on the click — a resolution delivered
+      under a vignette reads as a continuation rather than an answer.
+    - **…and then the measurement that reframed the whole pass.** The orb rests
+      at canvas (178, 70). Measured against the DOM, that is **inside the
+      player's HUD plate on a phone** and two pixels above it on a desktop.
+      Every bit of work on this beat was happening behind a health bar on the
+      layout most people will play on — and a canvas vignette cannot dim a DOM
+      panel. Only the panel can. The hush now reaches the panels too.
+      **166 had quietly made this worse**: moving the action row up by 20px for
+      the thumb moved it toward the orb.
+
+    **A moment you are photographing to judge a change to it has to pose the
+    same way twice.** The throw is a dice roll, and three films taken to judge
+    one change came back as a three-shake catch, a three-shake catch, and a
+    one-shake break — and the third was not comparable to either, which is a
+    quiet way to conclude anything you like. The scene pins the roll now.
+    A second scene (`hush`) exists because `wait` delays the FILM's start as
+    well as the still's, so a 3s wait on `catching` would begin recording after
+    the throw had finished. Two questions, two scenes.
+
+    **And the nets caught me twice, in opposite directions.**
+    - `b.orb` does not exist after `submitLog`: `tryCatch` leaves an `orbPlan`
+      and the log PLAYBACK turns it into a live throw. The first version
+      asserted on the wrong instant and reported "no throw is playing" about a
+      throw that was about to play.
+    - The first "one condition, not two" net counted inline copies by regex and
+      also matched `inOrb` — which asks a genuinely DIFFERENT question (is the
+      creature inside the orb, true through the click). **A net that cannot tell
+      two conditions apart is naming markup**, which is rule 68 arriving from a
+      new angle. Replaced with the claim: both layers CALL the named one.
+    - **And I pinned the scene's dice and not the suite's, one file later.**
+      The net went green sixteen times and then failed under `npm run check`:
+      two runs in fourteen roll a zero-shake break — correctly played, and it
+      simply never reaches the beats being tested. Caught only because the full
+      check disagreed with the suite run alone, which is the one signal that
+      distinguishes a flaky net from a passing one. **A flaky net is worse than
+      no net: it teaches you to re-run.**
+    - And a false alarm of my own making: planting a throw inside `drawOrb`
+      appeared not to bite, which would have meant the draw-coverage check was
+      vacuous. It bit perfectly — `grep -E "✗|Error" | head -2` had eaten the
+      stack trace. **The filter on the evidence is part of the instrument.**
+
 77. **Measuring the thing instead of a proxy for it** (pass 166). 165's survey
     grew a second mode — `node tools/emberkin/survey.mjs targets` — that opens
     eleven screens at 390x760 and measures every tappable element against a 44px

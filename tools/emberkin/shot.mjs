@@ -612,7 +612,43 @@ const SCENES = {
       // orb animation lives in the playback. Filming the return value of
       // doAction films two kin standing still, which is what the first attempt
       // at this scene recorded.
+      //
+      // …and the throw is a DICE ROLL, so this scene posed differently every
+      // time it was run: three films taken to judge one change to the wobble
+      // came back as a three-shake catch, a three-shake catch and a one-shake
+      // break, and the third was not comparable to either. A moment you are
+      // photographing to judge a change to it has to pose the same way twice.
+      // Pinned to the best case — three holds and a click — because that is the
+      // version of the beat the wait exists for; the break is a shorter cut of
+      // the same animation.
+      const roll = Math.random;
+      Math.random = () => .001;
       EK.submitLog(EK.doAction({ kind: 'item', id: 'bloomorb', target: 'foe' }));
+      Math.random = roll;
+    },
+  },
+  // The deepest hold, as a still: the last moment before it resolves, with the
+  // hush at full and the HUD in frame. `catching` cannot do this job — `wait`
+  // delays the FILM's start as well, so a 3s wait there would begin recording
+  // after the throw had finished. Two questions, two scenes.
+  hush: {
+    w: 300, h: 260,
+    wait: 3050,      // throw .55 + suck .34 + fall .34 + (wobble .5 + gap .22)x3
+    needs: (EK) => !!(EK.B() && EK.B().orb && !EK.B().orb.done),
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+      EK.G.wipe = 0;
+      const b = EK.B();
+      b.foe.hp = Math.max(1, Math.round(b.foe.max * .12));
+      EK.G.bag.bloomorb = 5;
+      EK.G.battleMsg = null;
+      const roll = Math.random;
+      Math.random = () => .001;    // three holds and a click, every time
+      EK.submitLog(EK.doAction({ kind: 'item', id: 'bloomorb', target: 'foe' }));
+      Math.random = roll;
     },
   },
   // A trainer calling you out: the look, the frame closing in, the walk over.
