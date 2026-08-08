@@ -6089,6 +6089,56 @@ test('a child carries a balloon, and it is a balloon not a polygon', () => {
     'only children carry balloons');
 });
 
+/* A child's balloon vanished the frame they were hit — the same thing the
+   smashed snowman and the wrecked present used to do with everything that said
+   what they were, except this one gets to float away. */
+test('a child’s balloon is let go, not deleted', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startLevel(12); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2500; api.car.y = 1100; api.camSnap();
+
+  const kill = (kind, coat) => {
+    api.people.length = 0; api.fx.length = 0;
+    const p = api.addPerson(api.cam.x, api.cam.y, kind);
+    p.coat = coat || 0; p.bob = 0.4;
+    const before = api.balloonAt(p);
+    api.killPerson(p, 300, -100, 'car');
+    return { p, before, loose: api.fx.filter(f => f.type === 'balloon') };
+  };
+
+  const k = kill('kid', 2);
+  assert(k.loose.length === 1, 'one balloon let go, got ' + k.loose.length);
+  assert(k.loose[0].col === api.BALLOONS[2 % api.BALLOONS.length],
+    'and it is the one they were carrying, got ' + k.loose[0].col);
+  assert(Math.abs(k.loose[0].x - k.before.x) < 1 && Math.abs(k.loose[0].y - k.before.y) < 1,
+    'let go from where it was floating, not from the body');
+  assert(k.loose[0].vy < 0, 'and it leaves upward, got vy ' + k.loose[0].vy.toFixed(0));
+
+  for (const kind of ['shopper', 'elder', 'parent', 'santa'])
+    assert(kill(kind).loose.length === 0, kind + ' should not release a balloon');
+
+  /* It keeps going up. Everything else in stepFx falls, and drag alone would
+     stall a balloon in mid-air a few frames after the child let go. */
+  api.people.length = 0; api.fx.length = 0;
+  const kid = api.addPerson(api.cam.x, api.cam.y, 'kid');
+  kid.coat = 1; kid.bob = 0.4;
+  api.killPerson(kid, 300, -100, 'car');
+  const b = api.fx.find(f => f.type === 'balloon');
+  const y0 = b.y;
+  for (let f = 0; f < 152; f++) api.stepFx(1 / 60);
+  /* Measured both ways: with the lift it climbs 86px and is still going at
+     -40px/s; with drag alone it drifts 24px and stalls at -3, which is a
+     balloon hanging in the sky rather than getting away. A "y goes down each
+     step" assertion passes either way — it has to be the speed it is still
+     doing when its life runs out. */
+  assert(y0 - b.y > 60, 'it should get away, climbed only ' + (y0 - b.y).toFixed(0) + 'px');
+  assert(b.vy < -25, 'and still be climbing at the end, got vy ' + b.vy.toFixed(1));
+
+  // …and it is gone by its ttl rather than hanging in the sky
+  for (let f = 0; f < 60 * 3; f++) api.stepFx(1 / 60);
+  assert(api.fx.filter(f => f.type === 'balloon').length === 0, 'it should expire');
+});
+
 test('a balloon stays big enough to find, however far the camera is', () => {
   const api = boot({ count: true, w: 1280, h: 720 });
   api.startLevel(12); api.beginLevel();
