@@ -3266,4 +3266,109 @@ section('the light is under the kin, not over them');
   ok(arena.length > at + 1, 'and something still comes after it — the motes are not tinted by it');
 }
 
+// The valley's air had a lifetime written for it and never spent: drawMotes
+// computed `life = 6 + fx * 5` for every speck on every frame and threw it away
+// with `void life` on the next line. Without it a mote's position wrapped
+// modulo the frame, so a speck running off one edge reappeared at the other AT
+// WHATEVER BRIGHTNESS IT WAS. Measured over thirty seconds at 60fps on all
+// eight maps, counting only arrivals with nothing lit within 2px of them last
+// frame — a speck out of nowhere rather than one that moved:
+//
+//     baseline   mean brightness at birth 102.9, 100% arrived visible, peak 182
+//     with life  mean brightness at birth   1.0,   0% arrived visible, peak   2
+//
+// Alpha is invisible to the headless context — it records the rectangle, not
+// the colour — so the speck is a value now and these nets read it.
+section('no speck of air is ever born visible');
+{
+  const g = loadGame();
+  g.setCtx(mkCtx());
+
+  // A mote goes fully out and fully in over its own life, or the fade is not a
+  // fade. Sampled from the game's own function, not a copy of its arithmetic.
+  const air = g.AIR.emberwood;
+  let lo = 1, hi = 0;
+  for (let k = 0; k < 900; k++) {
+    const a = g.moteAt(0, k / 60, air).a;
+    if (a < lo) lo = a;
+    if (a > hi) hi = a;
+  }
+  ok(lo < .01, `a speck goes all the way out (dimmest ${lo.toFixed(4)})`);
+  ok(hi > .15, `and all the way back in (brightest ${hi.toFixed(3)})`);
+
+  // `life` is READ, by difference: two specks with different fx have different
+  // lives, so they cannot be on the same clock. A fade driven off one shared
+  // period would make these equal.
+  const lifeOf = (i) => g.moteAt(i, 0, air).life;
+  const lives = [];
+  for (let i = 0; i < air.motes; i++) lives.push(+lifeOf(i).toFixed(4));
+  ok(new Set(lives).size > air.motes * .5,
+    `the specks are on their own clocks (${new Set(lives).size} distinct lives among ${air.motes})`);
+  ok(Math.min(...lives) >= 6 && Math.max(...lives) <= 11,
+    `and each lasts between six and eleven seconds (${Math.min(...lives).toFixed(2)}-${Math.max(...lives).toFixed(2)})`);
+
+  // The claim itself, on every map: a speck that was off the frame last sample
+  // and on it now has to arrive dark. This is the pixel measurement above,
+  // written down.
+  let worst = 0, worstAt = '', arrivals = 0;
+  for (const [id, a] of Object.entries(g.AIR)) {
+    for (let i = 0; i < (a.motes | 0); i++) {
+      let wasIn = null;
+      for (let k = 0; k < 1800; k++) {
+        const m = g.moteAt(i, k / 60, a);
+        const isIn = m.x >= 0 && m.y >= 0 && m.x < g.VIEW_W && m.y < g.VIEW_H;
+        if (wasIn === false && isIn) {
+          arrivals++;
+          if (m.a > worst) { worst = m.a; worstAt = `${id} speck ${i}`; }
+        }
+        wasIn = isIn;
+      }
+    }
+  }
+  ok(arrivals > 0, `specks do cross onto the frame (${arrivals} arrivals seen)`);
+  ok(worst < .05, `and the brightest arrival across every map is invisible (${worst.toFixed(4)}, ${worstAt})`);
+
+  // Same t, same frame — the suite and the shot tool both depend on it.
+  const one = JSON.stringify(g.moteAt(3, 7.5, air));
+  eq(JSON.stringify(g.moteAt(3, 7.5, air)), one, 'and a speck is the same speck at the same moment');
+
+  // Wiring, by difference: drawMotes draws the specks the value says are worth
+  // drawing and skips the ones it does not. The first draft of this net counted
+  // at an arbitrary moment, where every speck is above the threshold — so both
+  // sides were `air.motes` and no break could move them. It has to be netted at
+  // a moment when the threshold actually fires, so the moment is SEARCHED for.
+  const lit = (tt) => {
+    let n = 0;
+    for (let i = 0; i < air.motes; i++) if (g.moteAt(i, tt, air).a >= 1 / 255) n++;
+    return n;
+  };
+  let t = -1;
+  for (let k = 0; k < 4000 && t < 0; k++) if (lit(k / 60) < air.motes) t = k / 60;
+  ok(t >= 0, `there is a moment when a speck is too faint to draw (t=${t.toFixed(3)})`);
+  const log = [];
+  g.drawMotes(mkCtx(log), air, t);
+  eq(log.filter((c) => c[0] === 'fillRect').length, lit(t),
+    `the drawing spends the value: ${lit(t)} specks lit of ${air.motes}`);
+
+  // …and it puts them where the value says, not somewhere of its own.
+  // …at the coordinates the value names. Asked of a speck that is actually
+  // drawn at this moment — the searched t is a moment when one of them is not.
+  let mi = 0;
+  while (mi < air.motes && g.moteAt(mi, t, air).a < 1 / 255) mi++;
+  const m0 = g.moteAt(mi, t, air);
+  ok(log.some((c) => c[0] === 'fillRect' && c[1] === m0.x && c[2] === m0.y && c[3] === m0.sz),
+    `and at the coordinates the value names (speck ${mi} at ${m0.x},${m0.y})`);
+
+  // The air is still air: turning the dial off empties it, and every map still
+  // has specks in it.
+  const off = [];
+  g.drawMotes(mkCtx(off), { ...air, motes: 0 }, t);
+  eq(off.length, 0, 'no motes means no motes');
+  for (const [id, a] of Object.entries(g.AIR)) {
+    const l = [];
+    g.drawMotes(mkCtx(l), a, t);
+    ok(l.length > 0, `${id} has air in it`);
+  }
+}
+
 done('emberkin_render');
