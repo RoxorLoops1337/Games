@@ -358,6 +358,12 @@
   .hud{ position:absolute; z-index:5; width:44%; padding:6px 8px 7px; }
   #hudFoe{ left:3%; top:2%; }
   #hudMine{ right:3%; top:35%; }
+  /* MEASURED, not guessed: a twelve-character nickname — the most the field
+     accepts — is 108px inside a 180px plate at phone size and 120px inside a
+     338px plate on a desktop, with scrollWidth === clientWidth at both. This
+     needs no min-width:0 and no ellipsis. A screenshot appeared to show the
+     name spilling out of the plate's left edge; that was the dialogue box drawn
+     OVER the plate, and a fix was written for it before the DOM was measured. */
   .hud .nm{ font-size:.82em; font-weight:700; display:flex; justify-content:space-between; gap:8px; }
   .hud .nm .lv{ color:var(--gold); font-size:.75em; }
   /* The bar is a track with something in it, not a coloured div: a recessed
@@ -490,7 +496,15 @@
      the pixels stay square — never resize the backing store to a fraction. */
   .card canvas{ image-rendering:pixelated; flex:0 0 auto; width:80px; height:80px; }
   .card .info{ flex:1; min-width:0; }
-  .card .info b{ display:block; font-size:.82em; }
+  /* The box card is the narrowest thing in the game that takes a name: 74px of
+     text beside a 40px sprite on a desktop, 69px on a phone. A twelve-character
+     nickname measures 120px, so it ran 46px past its own card — measured with
+     scrollWidth against clientWidth rather than judged from a screenshot.
+     Ellipsis here, where the stat block wraps: these are grid cells and a name
+     that wrapped would make its card a line taller than the five beside it,
+     which is the ragged row pass 157 spent three attempts removing. */
+  .card .info b{ display:block; font-size:.82em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card .info small{ color:var(--dim); font-size:.7em; }
   .card .bar{ height:5px; border-radius:3px; background:#0d0812; margin-top:4px; overflow:hidden; }
   .card .bar > i{ display:block; height:100%; background:var(--hp-good); }

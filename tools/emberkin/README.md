@@ -377,6 +377,49 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+75. **I wrote a fix for a fault that was not there** (pass 164). Finishing 74's
+    question — the nickname in the OTHER places `dispName` lands. Four sites,
+    three clean, one real. And the interesting part is the one I got wrong.
+
+    **The battle HUD looked broken and was not.** The phone screenshot appeared
+    to show a twelve-character nickname spilling out of the left edge of its
+    plate, over the arena. It is a flex item with no `min-width:0`, which is
+    EXACTLY the root cause found in 74, so the diagnosis fitted perfectly. I
+    wrote the rule, shot it again, and the picture looked unchanged — which is
+    what finally made me measure the DOM instead of the pixels:
+    **108px name inside a 180px plate, `scrollWidth === clientWidth`, at both
+    sizes.** Nothing was overflowing. What I had been reading as spill was the
+    DIALOGUE BOX drawn over the plate.
+    The rule was reverted. Shipping it would have been harmless CSS carrying a
+    comment that described a fault the game never had — a false story in the
+    source, which is worse than the dead rule.
+    **"When a shot looks wrong, suspect the scene first" is written in this file
+    three times and I still needed the measurement to believe it.** The pixels
+    are an instrument with a known failure mode; `getBoundingClientRect` is not.
+
+    **The one that was real, found by the same measurement.** The box card is
+    the narrowest thing in the game that takes a name — 74px of text beside a
+    40px sprite on a desktop, 69px on a phone — and a twelve-character nickname
+    measures 120px. It ran **46px past its own card**. Clipped now.
+    It ELLIPSES where the stat block WRAPS, and the difference is the room:
+    these are grid cells, and a name that wrapped would make one card a line
+    taller than the five beside it — the ragged row 157 spent three attempts
+    removing. The detail pane above shows the name in full, so nothing is lost.
+
+    **Clean, with the property named:**
+    - **The nickname is the only typed input in the game.** One `<input>`, one
+      `.value` read, no `prompt()`, no `contenteditable`.
+    - **The gotcha card** names `caught.name` — the SPECIES — and fires before
+      the profile screen where naming happens. It can never show a nickname.
+    - **The forced-switch prompt** names the FOE, and a foe is built by `mkMon`
+      without one.
+
+    And a smaller lesson inside the net: my first two assertions counted `<input`
+    (2 — one is prose in a comment) and `/\\.value/` (3 — `Object.values` matches
+    it). **A regex that is nearly right gives a number that is confidently
+    wrong**, and the fix is to count the real thing, not to adjust the expected
+    number until it passes.
+
 74. **The one thing in this game a player types** (pass 163). No pass had ever
     driven that input. The profile screen lets you nickname a kin, and
     `dispName()` — `nick || name` — lands in `innerHTML` at **fifty-five sites**.
