@@ -2696,3 +2696,59 @@ desktop one. That is the correct answer and not an obvious one.
 
     Five planted faults, all five bite, and `tools/emberkin/tautology.mjs` now
     aims two mutants at the new section: 4 of its 12 checks die.
+
+95. **Winning a fight and gaining a level were the same sound** (pass 184).
+    183's shape again — one property, every case. The property: does this beat
+    have a voice of its own? Every beat that takes the screen, driven through
+    its real entry point and with `playCue` recording instead of returning:
+
+        a door                     door
+        the opening                world
+        arriving somewhere         place
+        a fight starting           battle, dex
+        blows landing              weak / crit / strong
+        throwing an orb            throw, wobble, click, catch, gotcha
+        an evolution               evo … level
+        a chest                    chest
+        blacking out               blackout, heal, world
+        being spotted              spotted
+
+    All of them speak. The fault was one level finer: **the victory flourish
+    played `level`, and so did the card offer behind it.** This file argues the
+    rule three times — a menu that opens and one that confirms, the chest that
+    borrowed the catch, the crit that arrived as an ordinary hit — and then the
+    beat that ends every fight you win borrowed the level-up's climb. Measured
+    on one win that levelled, dice pinned, one sitting:
+
+        before   weak, weak, weak, downed, level, level, world, level, select
+        after    weak, weak, weak, downed, level, win,   world, offer, select
+
+    The offer was found in the same measurement and fixed at the same time —
+    fixing only the flourish is exactly how 180's fix reached one menu and not
+    the other. `level` CLIMBS because something grew; `win` RESOLVES (a fifth
+    falling onto the root, octave under); `offer` LIFTS and stops, unresolved,
+    because an offer is a question. Written, not heard: nothing in this repo
+    can play them back, so the net compares NOTES — two names with the same body
+    would still be one sound, and the suite now refuses any duplicate in the
+    whole table.
+
+    **Five scene errors, and the last one is a new kind.**
+    - `openChest()` is not the chest beat; the cue lives in the shelf's select
+      handler. `healParty()` is not a loss. Setting `G.alert` by hand is not
+      being spotted. All three read as SILENT.
+    - `autoFight` never submits a log, and `submitLog` only QUEUES one — the
+      cues fire as `playbackStep` walks it, a frame at a time. Every blow in the
+      game read as silent until the loop stepped.
+    - A trainer looks the way it FACES; standing behind one is not being seen.
+    - `String.replace` with a string patches the FIRST occurrence only, and
+      `const ac = audio();` appears twice — the spy stubbed a different function
+      and recorded nothing.
+    - **And a comment created a call site.** The doc comment for `screenCue`
+      spelled out a literal `playCue` example, and the suite's harvester reads
+      comments as source: a cue named nowhere in the game turned up as fired.
+
+    `screenCue` exists because a cue named inside a ternary is unreachable to a
+    suite that harvests literals and ASKS pure functions for the rest — the
+    existing cue net caught that immediately, and the fix is the one its own
+    comment argues for. Five planted faults, all five bite; two sweep mutants
+    aim here and 2 of the section's 14 checks die.
