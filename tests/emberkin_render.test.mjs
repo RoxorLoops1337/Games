@@ -1568,6 +1568,99 @@ section('a count and its noun agree');
     'and the unfound count is guarded from zero by the branch above it');
 }
 
+// The one thing in this game a PLAYER TYPES. No pass had ever driven that input.
+//
+// `dispName()` is `nick || name` and it lands in innerHTML at fifty-five sites.
+// A nickname of `A<B` therefore opened a <b> element in the middle of a name,
+// and the </b> that followed closed the wrong one — so the rest of the screen
+// went bold and the DOM was corrupt from that row down. The nickname is SAVED,
+// so it stayed corrupt for the rest of the run.
+section('a nickname cannot open an element');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  const m = g.mkMon('cindercub', 12);
+  const take = (raw) => { m.nick = raw; return g.commitNick({ opt: { mon: m } }); };
+
+  eq(take('A<B'), 'AB', 'an angle bracket cannot start an element');
+  eq(take('<s>Ash'), 'sAsh', 'nor a whole tag');
+  eq(take('<<<>>>'), '', 'and a name of nothing but brackets is no name');
+  // `&` is deliberately left: a bare ampersand renders as itself, and stripping
+  // it would turn "Bo & Ed" into "Bo  Ed" for no gain.
+  eq(take('R&B'), 'R&B', 'an ampersand is a legitimate character in a name');
+  // …and the rest of the gate still does what it did.
+  eq(take('  Bo   Ed  '), 'Bo Ed', 'whitespace is collapsed and trimmed');
+  eq(take('Ashling the Third'), 'Ashling the', 'twelve characters, and no trailing space');
+  eq(take('   '), '', 'blank is no nickname');
+  eq(take('Cindercub'), '', 'and its own name is no nickname either');
+
+  // The trim runs twice on purpose — cutting at twelve can land mid-space.
+  ok(/\.slice\(0, 12\)\.trim\(\)/.test(SRC), 'the slice is trimmed after, not only before');
+  ok(/replace\(\/\[<>\]\/g, ''\)/.test(SRC), 'and the gate is at the boundary, not at the fifty-five');
+
+  // The layout half: the portrait is float:right and .pname is a FLEX
+  // container, whose contents are not line boxes — so nothing in it wrapped
+  // around the float, and at twelve characters the level chip was drawn on top
+  // of the portrait frame.
+  ok(/\.kindetail \.pname\{ display:flex; flex-wrap:wrap;[^}]*overflow:hidden/.test(SRC),
+    'the name line is a formatting context of its own, and wraps');
+  ok(/\.kindetail \.pname b\{[^}]*overflow-wrap:anywhere/.test(SRC),
+    'a twelve-letter word that will not break on its own still breaks');
+  // It must NOT truncate: the first attempt clipped "Ashling them" to
+  // "Ashling t…" while the kin row beside it showed the whole thing.
+  ok(!/\.kindetail \.pname b\{[^}]*text-overflow:ellipsis/.test(SRC),
+    'and a name the player chose is not cut for space the panel has going spare');
+}
+
+// Finishing 163's question: the nickname in the OTHER places dispName lands.
+// Three of four came back clean and the reason is nameable in each; the fourth
+// was measured overflowing and is fixed.
+section('a twelve-character nickname fits everywhere it is drawn');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  // 1. THE ONLY TYPED INPUT. One <input>, one .value read, no prompt(), no
+  //    contenteditable. Worth asserting so a second one cannot appear quietly.
+  // `<input` also appears in a COMMENT above commitNick ("A real <input>
+  // rather than a letter-picker"), and a bare /\.value/ matches Object.values —
+  // both counts were wrong the first time. Match the element and the word.
+  eq((SRC.match(/<input /g) || []).length, 1, 'the nickname field is the only input in the game');
+  eq((SRC.match(/\.value\b/g) || []).length, 1, 'and it is read in exactly one place');
+  ok(!/prompt\(/.test(SRC) && !/contenteditable/.test(SRC), 'nothing else takes typing');
+
+  // 2. THE GOTCHA CARD names `caught.name` — the SPECIES — not dispName, and it
+  //    fires before the profile screen where naming happens. It can never show
+  //    a nickname at all. The widest species name is ten characters.
+  ok(/name: caught\.name,/.test(SRC), 'the gotcha card names the species, not the kin');
+  const longest = g.DEX_ORDER.map((id) => g.DEX[id].name).sort((a, b) => b.length - a.length)[0];
+  ok(longest.length <= 12, `and the widest species name is ${longest} at ${longest.length} characters`);
+
+  // 3. THE FORCED-SWITCH PROMPT names the FOE, and a foe has no nickname — wild
+  //    kin and trainer teams are built by mkMon, which takes one only from opts.
+  ok(/\$\{dispName\(foe\)\} is out there/.test(SRC), 'the prompt names the foe');
+  eq(g.mkMon('bramblor', 20).nick, '', 'and a foe is born without a nickname');
+
+  // 4. THE BATTLE HUD: measured, not judged. A twelve-character nickname is
+  //    108px inside a 180px plate at phone size. It needs no rule, and the
+  //    comment says so rather than leaving a mystery.
+  ok(/MEASURED, not guessed/.test(SRC), 'the HUD is documented as measured rather than fixed');
+  ok(!/\.hud \.nm > span:first-child\{/.test(SRC), 'and carries no rule it does not need');
+
+  // …and the one that WAS overflowing. The box card is the narrowest thing in
+  // the game that takes a name — 74px of text beside a 40px sprite — and a
+  // twelve-character nickname measures 120px, so it ran 46px past its card.
+  ok(/\.card \.info b\{[^}]*text-overflow:ellipsis/.test(SRC),
+    'the box card clips a name to its own width');
+  ok(/\.card \.info b\{[^}]*white-space:nowrap/.test(SRC),
+    'on one line, because these are grid cells and a wrap makes one card taller');
+  // It ELLIPSES where the stat block WRAPS, and the difference is the room.
+  ok(/\.kindetail \.pname\{[^}]*flex-wrap:wrap/.test(SRC),
+    'while the stat block, which has room and is a heading, still wraps');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can
