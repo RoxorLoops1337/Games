@@ -3446,6 +3446,11 @@ section('a pull that costs you a card says which card');
 // back, so looking at two of them meant opening the menu twice. Meanwhile the
 // profile screen, opened with an explicit `back: 'party'`, returned properly:
 // the rule was written and applied to exactly one case.
+// Every read of G.menu/G.screen below goes through a guard rather than off a
+// bare `.i`. A net that THROWS takes every check after it off the board, and
+// pass 182's mutation sweep counted those as survivors — deleting the pause
+// menu's return threw here, cost 90 checks, and read back as "not one of them
+// died". A break has to produce a failure, not silence.
 section('back out of a menu row goes back to the menu');
 {
   const g = loadGame({});
@@ -3471,17 +3476,17 @@ section('back out of a menu row goes back to the menu');
     fresh();
     tap('b');
     for (let i = 0; i < row; i++) tap('down');
-    eq(g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
+    eq(g.G.menu && g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
     tap('a');
     if (!g.G.screen) continue;                       // Sound, Save, Close, Fullscreen
     opens.push(rows[row]);
-    eq(g.G.screen.prev, 'menu', `${rows[row]} remembers it came from the menu`);
-    eq(g.G.screen.prevRow, row, 'and which row of it');
+    eq(g.G.screen && g.G.screen.prev, 'menu', `${rows[row]} remembers it came from the menu`);
+    eq(g.G.screen && g.G.screen.prevRow, row, 'and which row of it');
     tap('b');
     ok(!g.G.screen, `${rows[row]} closes`);
     ok(!!g.G.menu, `and puts the menu back (${rows[row]})`);
     eq(g.G.mode, 'menu', 'in menu mode, not out in the grass');
-    eq(g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
+    eq(g.G.menu && g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
     // …and one more back is the way out, or the menu is a trap.
     tap('b');
     ok(!g.G.menu && g.G.mode === 'world', `and a second back leaves (${rows[row]})`);
@@ -3493,8 +3498,10 @@ section('back out of a menu row goes back to the menu');
   tap('b');
   const seen = [];
   for (const row of [0, 2]) {
-    while (g.G.menu.i > row) tap('up');
-    while (g.G.menu.i < row) tap('down');
+    // Guarded for the same reason as above: with no menu this walked off a null
+    // and took the rest of the suite with it.
+    while (g.G.menu && g.G.menu.i > row) tap('up');
+    while (g.G.menu && g.G.menu.i < row) tap('down');
     tap('a');
     if (g.G.screen) seen.push(g.G.screen.kind);
     tap('b');
@@ -3506,7 +3513,7 @@ section('back out of a menu row goes back to the menu');
   // world, and one opened in a fight still leaves to the fight.
   fresh();
   g.openScreen('party');
-  eq(g.G.screen.prev, 'world', 'a screen opened from the world remembers the world');
+  eq(g.G.screen && g.G.screen.prev, 'world', 'a screen opened from the world remembers the world');
   g.closeScreen();
   eq(g.G.mode, 'world', 'and goes back to it');
   ok(!g.G.menu, 'without conjuring a menu that was never open');
@@ -3514,7 +3521,7 @@ section('back out of a menu row goes back to the menu');
   fresh();
   g.startBattle({ foe: g.mkMon('kindlark', 8), wild: true });
   g.openScreen('bag');
-  eq(g.G.screen.prev, 'battle', 'a bag opened in a fight remembers the fight');
+  eq(g.G.screen && g.G.screen.prev, 'battle', 'a bag opened in a fight remembers the fight');
   g.closeScreen();
   eq(g.G.mode, 'battle', 'and goes back to it');
 
@@ -3584,16 +3591,16 @@ section('back out of a battle menu row goes back to the battle menu');
     fresh();
     tap('b');
     for (let i = 0; i < row; i++) tap('down');
-    eq(g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
+    eq(g.G.menu && g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
     tap('a');
     if (!g.G.screen) continue;                       // Run, End turn, Back
     opened.push(rows[row]);
-    eq(g.G.screen.prevMenu, 'battlemenu', `${rows[row]} remembers which menu it came out of`);
-    eq(g.G.screen.prevRow, row, 'and which row of it');
+    eq(g.G.screen && g.G.screen.prevMenu, 'battlemenu', `${rows[row]} remembers which menu it came out of`);
+    eq(g.G.screen && g.G.screen.prevRow, row, 'and which row of it');
     tap('b');
     ok(!g.G.screen, `${rows[row]} closes`);
     ok(!!g.G.menu, `and puts the actions back (${rows[row]})`);
-    eq(g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
+    eq(g.G.menu && g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
     eq(g.G.mode, 'battle', 'still in the fight');
     tap('b');
     ok(!g.G.menu, `and a second back returns to the hand (${rows[row]})`);
@@ -3617,7 +3624,7 @@ section('back out of a battle menu row goes back to the battle menu');
   // A screen opened in a fight WITHOUT the menu must not conjure one.
   fresh();
   g.openScreen('bag');
-  eq(g.G.screen.prevMenu, null, 'a bag opened straight from the fight came from no menu');
+  eq(g.G.screen ? g.G.screen.prevMenu : 'no screen at all', null, 'a bag opened straight from the fight came from no menu');
   g.closeScreen();
   ok(!g.G.menu, 'and closing it does not invent the actions menu');
   eq(g.G.mode, 'battle', 'it goes back to the fight');
@@ -3643,9 +3650,28 @@ section('and the pause menu still goes back the same way');
   tap('b');
   ok(g.G.menu && g.G.menu.elId === 'mainmenu', 'the pause menu is the main menu');
   tap('a');
-  eq(g.G.screen.prevMenu, 'mainmenu', 'and a row remembers it');
+  eq(g.G.screen && g.G.screen.prevMenu, 'mainmenu', 'and a row remembers it');
   tap('b');
   ok(!!g.G.menu && g.G.mode === 'menu', 'back puts it up again');
+}
+
+// KEEP THIS SECTION. It is deliberately half-broken.
+//
+// The first check below is a SENTENCE: an index returned by findIndex is always
+// smaller than the length it came from, so no change to this game can ever make
+// it fail. That is the exact shape pass 177 shipped by accident. It is here so
+// tools/emberkin/tautology.mjs can prove, on every run, that it can still tell
+// a sentence from a check — it kills the real one beside it and leaves this one
+// standing, and refuses to report anything if it cannot. Deleting it does not
+// tidy the suite; it blinds the sweep.
+section('PLANTED — a sentence and a real check, to prove the sweep bites');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const arr = [1, 2, 3];
+  const at = arr.findIndex((x) => x === 2);
+  ok(at < arr.length, 'PLANTED SENTENCE: an index is smaller than the length it came from');
+  ok(g.GROUND_HAZE > 0, 'PLANTED REAL: the ground takes some of the element');
 }
 
 done('emberkin_render');
