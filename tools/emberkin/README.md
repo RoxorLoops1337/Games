@@ -2603,3 +2603,56 @@ desktop one. That is the correct answer and not an obvious one.
 
     Six planted faults, all six bite — including putting `closeMenu()` back in
     front of `openScreen`, and removing 180's pause-menu return.
+
+93. **A check that never ran is not a check that survived** (pass 182). Took job
+    (e), the tautology sweep, deferred since 179. Five passes had produced a
+    check or an instrument that could not fail, and reading the suite does not
+    find them — 177's sat under a comment claiming it proved something. So:
+    `tools/emberkin/tautology.mjs`, which runs the render suite against 17
+    mutants and asks which checks ever died.
+
+    First it needed the suite to say what PASSED. `EK_TRACE=1` prints every
+    check with its section; `EK_GAME` points the loader at a mutant so nothing
+    in the working tree is edited.
+
+    **The sweep's first two findings were its own.**
+
+    (1) Aims written from memory. Three mutations named the sections they should
+    reach, and `'the opening'` matched a section from an older pass while the
+    real failures landed in `'the game opens the way it changes any other
+    scene'`. It reported 0/15 and 0/2 — two confident false accusations. Aims
+    are checked against the section names the suite actually printed now, and an
+    aim naming no section (or two) stops the sweep.
+
+    (2) **The one that matters.** Four mutations made the suite THROW, so every
+    check after the throw never ran — and the sweep counted all of them as
+    survivors. Deleting the pause menu's return cost 90 checks and read back as
+    *"not one of them died"*, which is the loudest thing this tool can say. It
+    was 179's crash-that-read-as-clean, in the instrument built to catch exactly
+    that.
+
+        pause menu return deleted   1257/1347 ran, 2 failures   <- crash
+        after hardening the nets    1347/1347 ran, 22 failures
+
+    The throws were mine: `g.G.menu.i` in the nets written in 180 and 181. A net
+    that dies takes every check behind it off the board, so those reads go
+    through a guard now and a break produces a failure instead of silence. The
+    four menu mutants went from 10/54 and 4/38 to 25/54 and 10/38.
+
+    The sweep proves itself before it accuses anything, and refuses to report if
+    it cannot:
+    - a **planted sentence** — `ok(at < arr.length)` after a findIndex, 177's
+      exact shape — sits in the suite beside a real check on the same subject.
+      A working sweep kills the real one and leaves the sentence standing.
+      **KEEP IT.** Deleting it does not tidy the suite; it blinds the sweep.
+    - a **planted crash** mutant that must be reported as a crash, because
+      hardening the suite left the crash detector with no live case, and an
+      unexercised guard is not a proven one.
+    - every aim must name exactly one real section.
+
+    Five faults planted against the sweep, all five bite. After the fixes every
+    aimed section has checks that die; the false flags are gone.
+
+    Also measured, in one grep: **`#movemenu` is dead markup** — a div, two CSS
+    rules and an entry in the panel-hiding sweep, opened by nothing. Named here
+    rather than cut; it costs the player nothing.
