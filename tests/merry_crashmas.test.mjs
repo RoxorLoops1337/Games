@@ -5521,6 +5521,93 @@ test('painting the picker does not touch either random stream', () => {
     'the last market should be busy: ' + JSON.stringify(a));
 });
 
+/* The plan drew the three things every market has — stalls, greenery, lamps —
+   and nothing of `lv.feature`, which is the one thing that makes each of the
+   twenty-one its own idea. Nine markets have one and THE ICE RINK's tile had
+   no rink on it. You pick a market off this tile. */
+test('a plan shows the thing the market is named for', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const recCv = (rec) => ({ width: api.MK_W * 2, height: api.MK_H * 2, getContext: () => rec });
+  const plan = (lv) => {
+    const rec = carRec();
+    const out = api.paintMarketThumb(recCv(rec), lv, false);
+    const cols = new Set();
+    for (const q of rec.polys) cols.add(String(q.style));
+    for (const r of rec.rects) cols.add(String(r.style));
+    for (const s of rec.shapes) cols.add(String(s.style));
+    return { out, rec, cols };
+  };
+  const featured = api.LEVELS.filter(lv => (lv.feature || []).length);
+  assert(featured.length >= 8,
+    'the campaign should be built on features, got ' + featured.length + ' markets with one');
+
+  // every feature a market declares is on its plan, and none it does not
+  for (const lv of api.LEVELS){
+    const p = plan(lv);
+    const want = (lv.feature || []).filter(f => f !== 'ramps' || true).sort().join(',');
+    assert(p.out.feats.sort().join(',') === want,
+      lv.name + ' declares [' + want + '] and its plan draws [' + p.out.feats + ']');
+  }
+
+  /* And each of them is actually a mark on the tile, in a colour nothing else
+     on the plan uses — a feature drawn in the floor's own grey is a feature
+     that is not there. The bollards were exactly that on the first pass: one
+     navy square each, invisible on THE GAUNTLET, which is a night market whose
+     whole idea is the bollards. */
+  const RINK = 'rgba(206,232,255,.5)', CROWD = 'rgba(246,238,222,.82)';
+  const BOLLARD = '#1e3154', CAP = '#c8443a', BANK = 'rgba(228,240,255,.7)';
+  const withFeat = (f) => api.LEVELS.find(lv => (lv.feature || []).indexOf(f) >= 0);
+  const rink = plan(withFeat('rink'));
+  assert(rink.cols.has(RINK), 'a rink market should have ice on its plan');
+  const ice = rink.rec.shapes.find(s => s.style === RINK);
+  assert(ice && ice.r > 4 && ice.ry > 4,
+    'and the ice should be a sheet, not a dot: ' + JSON.stringify(ice));
+
+  /* The bollards are built out of `rect()` inside a batched path, which lands
+     in `all` and nowhere else — a rect never touches `polys` or `shapes`. */
+  const gaunt = plan(withFeat('chicane'));
+  const boll = (c) => gaunt.rec.all.filter(e => e[0] === 'rect' && e[5] === c);
+  assert(boll(BOLLARD).length === 20 && boll(CAP).length === 20,
+    'a chicane should be five gates of four nutcrackers, navy with the red ' +
+    'tunic that makes them read on a dark floor: ' + boll(BOLLARD).length +
+    ' bodies, ' + boll(CAP).length + ' tunics');
+  const cap0 = boll(CAP)[0], body0 = boll(BOLLARD)[0];
+  assert(cap0[3] < body0[3] && cap0[3] > body0[3] * 0.3,
+    'the tunic sits inside the body and is still visible: ' + cap0[3].toFixed(1) +
+    ' in ' + body0[3].toFixed(1));
+
+  /* Out of `all` again: the column is one batched path, so `shapes` keeps only
+     the last arc of it — which is the whole point of batching it. */
+  const par = plan(withFeat('parade'));
+  const marchers = par.rec.all.filter(e => e[0] === 'arc' && e[4] === CROWD);
+  assert(marchers.length >= 12, 'a parade should be a column, got ' + marchers.length);
+  assert(par.rec.fills <= 5, 'and one fill, not one a marcher: ' + par.rec.fills);
+  const xs = marchers.map(m => m[1]), ys = marchers.map(m => m[2]);
+  assert(Math.max(...ys) - Math.min(...ys) > (Math.max(...xs) - Math.min(...xs)) * 3,
+    'and it should cross the aisles, not run down one: ' +
+    (Math.max(...ys) - Math.min(...ys)).toFixed(0) + ' tall by ' +
+    (Math.max(...xs) - Math.min(...xs)).toFixed(0) + ' wide');
+
+  const ch = plan(withFeat('choir'));
+  assert(ch.cols.has(CROWD), 'a choir stand should be a block of people');
+  const banks = plan(withFeat('ramps'));
+  assert(banks.cols.has(BANK), 'a ramps market should show its snowbanks');
+
+  /* A market with no feature stays clean — otherwise every tile grows a rink
+     and the whole point of the mark is gone. */
+  const plain = api.LEVELS.find(lv => !(lv.feature || []).length);
+  const none = plan(plain);
+  assert(none.out.feats.length === 0 &&
+    !none.cols.has(RINK) && !none.cols.has(BOLLARD) && !none.cols.has(CROWD),
+    plain.name + ' has no feature and should not grow one: ' + none.out.feats);
+
+  // it is still a tile, not a market: the cost has to stay in tile territory
+  const worst = Math.max(...api.LEVELS.map(lv => plan(lv).rec.fills));
+  assert(worst <= 5, 'a plan should stay cheap, worst is ' + worst + ' fills');
+  console.log('    (plans: ' + featured.length + '/' + api.LEVELS.length +
+    ' markets marked, worst tile ' + worst + ' fills)');
+});
+
 /* A market you have not reached used to paint its entire plan and then have
    `grayscale(1)` thrown over it: every stall, lane and lamp of a market you
    have never seen, still legible through the wash. */
@@ -5626,15 +5713,25 @@ test('a plan costs a handful of fills however big the market is', () => {
     const out = api.paintMarketThumb(planCv(api), lv);
     return { fills: api._counts.fill || 0, rects: api._counts.fillRect || 0, out };
   };
-  const small = cost(api.LEVELS[0]), big = cost(api.LEVELS[20]);
-  console.log('    (plan: ' + api.LEVELS[0].name + ' ' + small.out.stalls + ' stalls in ' +
-    (small.fills + small.rects) + ' calls, ' + api.LEVELS[20].name + ' ' +
+  /* Between two markets with the SAME features, so this measures what it says
+     it measures. A market's features cost a fixed two or three fills on top —
+     see 'a plan shows the thing the market is named for' — and comparing a
+     featureless market against a chicane one would read that fixed cost as
+     the greenery failing to batch. */
+  const bare = api.LEVELS.filter(lv => !(lv.feature || []).length)
+    .map(lv => ({ lv, c: cost(lv) }))
+    .sort((a, b) => a.c.out.stalls - b.c.out.stalls);
+  assert(bare.length >= 4, 'there should be plain markets to compare, got ' + bare.length);
+  const small = bare[0].c, big = bare[bare.length - 1].c;
+  console.log('    (plan: ' + bare[0].lv.name + ' ' + small.out.stalls + ' stalls in ' +
+    (small.fills + small.rects) + ' calls, ' + bare[bare.length - 1].lv.name + ' ' +
     big.out.stalls + ' in ' + (big.fills + big.rects) + ')');
-  assert(big.out.stalls > small.out.stalls * 2, 'the last market is much bigger than the first');
+  assert(big.out.stalls > small.out.stalls * 2, 'the biggest plain market is much bigger than the smallest');
   // the greenery and the lamps are one path each, so only the stall rects scale
   assert(big.fills - small.fills === 0,
     'the trees and lamps should batch: ' + small.fills + ' -> ' + big.fills);
-  assert(big.fills <= 6, 'a plan should be a handful of fills, got ' + big.fills);
+  const worst = Math.max(...api.LEVELS.map(lv => cost(lv).fills));
+  assert(worst <= 6, 'a plan should be a handful of fills, got ' + worst);
 });
 
 /* ---------------------------------------------------------- trades --- */
