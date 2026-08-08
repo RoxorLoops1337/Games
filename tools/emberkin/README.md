@@ -377,6 +377,89 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+68. **The same kin, two screens, two descriptions — and one of them dropped the
+    thing you came to find out** (pass 157). Found by laying the world screens
+    out side by side, which had never been done. The dex draws types as coloured
+    chips and so does the party stat block and the party list row; the BOX card
+    printed `Lv26 Verdant/Gloom` in plain grey text. Same fact, two idioms.
+    Worse than cosmetic: the box row also carried **no status chip at all**, so
+    a kin with BURN on it looked exactly like a healthy one — on the screen you
+    stand in to decide who to bring, which is the one place that matters.
+    Found all the readers first: eight sites call `typeChips`, and only two
+    spelled a type out. One `kinSub(m)` now writes the list line for both rows.
+    **The other plain-text reader was left alone on purpose** — the forced-switch
+    prompt is a SENTENCE about the foe out there ("Bramblor is out there —
+    Lv25 Verdant/Gloom") and chips inside prose read as a rash. That is the
+    property that exempts it: it is not a list row, and the net says so.
+
+    **The picture disagreed with me twice before it agreed.** Chips are wider
+    than the text they replaced, and the CSS comment above the old rule warned
+    that at slim width there is only ~86px beside a 40px sprite:
+    - *First try* — chips at full size. Dual types stacked, so those cards ran a
+      line taller than their neighbours.
+    - *Second try* — shrink the chip so a dual type fits inline. **Worse.** Now
+      SHORT names fit level+chip on one line and long ones did not: three
+      different bar heights in one row of three cards, two of them the same
+      species at different levels.
+    - *Third* — stop letting it flow. `flex-basis:100%` on the level, so it
+      takes a whole line always and the chips share the next one. Every card in
+      the grid is the same shape whatever is on it.
+    **A layout that depends on how long a name happens to be is not a layout.**
+    Only the third of these was shippable and only the pictures could say which.
+
+    One more, on a pre-existing net: it asserted the exact markup
+    (`<small class="meta"><span>Lv…`) rather than the claim it was written for,
+    which was that the level and the types stay separable units so a separator
+    cannot be stranded. The claim survived this change; the spelling did not.
+    Rewritten to assert the claim. **A net that names the markup fails when the
+    markup changes for a good reason, and passes when it changes for a bad one.**
+
+67. **A tool that cannot fail is not reporting on anything** (pass 156). Three
+    scenes in one sitting had handed back a photograph of the room a beat
+    happens in with no beat in it — and every one was reported as a successful
+    shot, and two of them were looked at and believed. So the sweep, and then
+    the guard.
+
+    **The sweep.** Grepping every scene for a hand-assigned `G.*` beat object
+    and for beat loops that only call `endTurn` came back with three posed
+    scenes and two endTurn loops, and **most of them were fine**:
+    - `ambush` poses `G.alert`, but derives `stop` the way `trainerSight()`
+      does and its beats match `ALERT`. Verified, and already carrying a note
+      saying it had been doubted once.
+    - `dexcatch` poses a gotcha, says so in its own comment, and takes the
+      string from the game's `dexTally()`. It proves the line FITS; whether it
+      appears on the right catches is the suite's job.
+    - `wipe`'s endTurn-only loop is CORRECT — the scene's whole subject is
+      losing, and ending turns against something far too strong is exactly how
+      you lose. Its comment says so and is right.
+    Only `gotcha` was rotten. **A rate is not a disease; check each one.**
+
+    **The one that was rotten** had two faults stacked. It posed the card, and
+    the posed card carried `t: .9` while a still waits 1200ms and the gotcha
+    dismisses itself at `t > 2`. So it photographed an empty room. The comment
+    on `dexstarter`, twenty lines below, has spelled out that exact arithmetic
+    about that exact number for several passes — **the scene it describes was
+    never fixed**. FIRST CATCH had therefore never been looked at once.
+    Caught for real now: a knocked-down wild kin, an orb thrown through
+    `doAction` (not `tryCatch` — go through the bag's own path or the orb
+    animation that holds the log never runs), and the card the game makes.
+    One more, found on the way: `G.mapId = 'route_one'` does NOT load
+    route_one — `enterMap` does. Set alone it left Rowan's lab drawn behind the
+    card, so the first catch appeared to happen indoors.
+
+    **The guard**, which is the durable half. A scene may now declare `wait`
+    (ms to hold the shutter — the orb throw is ~3.5s of deliberate dead air and
+    1200ms photographs the middle of it) and `needs` — a predicate checked AT
+    the shutter. If it comes back false the tool says the shot does not contain
+    its subject instead of quietly writing the file. Declared on all seven beat
+    scenes, it immediately failed two of them, which is the entire point.
+    And a second lesson inside the first: the first `needs` written for
+    `levelup` was `lvl > 24 || !!G.flourish || !!G.screen`, and the reward
+    screen satisfied it. **A check with an escape hatch in it is a check that
+    cannot fail.** Tightened to name the subject alone, all seven pass.
+    Broken on purpose: dropping `gotcha`'s `wait` reproduces the original
+    silent-empty-room exactly.
+
 66. **The instrument had never photographed the thing it was named after**
     (pass 155). The `evolve` scene HAND-BUILT `G.evoAnim` — beat index 2, its
     own durations, `swapped: false`, `res: null`. `evoStep` flips `swapped` on
