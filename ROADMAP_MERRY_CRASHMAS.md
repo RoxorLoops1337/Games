@@ -1029,6 +1029,34 @@ edit this block to name the next one.
       is the difference between this test and the one it sits next to, which
       passed the whole time the defect was there.
 
+- [x] A tyre mark says what the car was doing. Drove a real run, then cleared
+      the props and the crowd out of the frame so the **ground** was what you
+      looked at — the record of what you just did, which nothing had ever
+      examined. A whole run came out as **two painted stripes**: one stroke,
+      width 7, alpha .3, from the first metre to the last. The trail already
+      knew two things and drew neither. `slip` is new — how sideways the car
+      was when it laid a segment, pure geometry off `vx/vy/ang/spin`, no roll —
+      and a tyre rolling along its own axis now barely marks packed snow (4.5px
+      at .09) while one dragged across it cuts a black scrub (9.5px at .41).
+      **`ice` is not new**: it has been recorded on every segment since tracks
+      were written and read by nothing at all. Ice takes 30% of a mark now.
+      Blood is the deliberate exception and stays flat — a wet tyre prints
+      whether it is sliding or not — so only its width follows the slip.
+  - Two assertions I wrote had to be narrowed because they claimed more than
+      the change does. The first asserted `stepCar` touches no RNG: it
+      legitimately does, the boost throws flames, so what is pinned is that
+      **drawing** the trail touches neither stream. The second ran a sixty-step
+      drive twice and compared the trails — it got twelve identical segments
+      and a thirteenth that was not, because the car had reached the market
+      bounds and bounced. That is a bounce, not a trail that rolls for its own
+      shape. It steps twice from a state written out in full now.
+  - One line of work abandoned before it started: the trail is capped at
+      `TRACK_MAX = 460` and the oldest segment is spliced off at full opacity,
+      which is a pop — except 460 segments at 16px spacing is 7,360 world units
+      of trail and the drive camera sees about 1,900, so the tail is thousands
+      of pixels off screen and the pop can never be seen. Fading it would have
+      been a fix to nothing.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

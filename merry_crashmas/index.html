@@ -595,6 +595,8 @@ const FLEE_SPD = 132;
 const BOOST_KICK = 560;
 const PLOW_TIME = 7;                          // seconds of extra-wide bumper
 const TRACK_MAX = 460;
+// how much of a mark a tyre leaves on ice, against packed snow
+const TRACK_ICE = 0.3;
 
 /* Air. Hit a snowbank at speed and the car leaves the ground: it flies over
    whatever is in the way, barrel-rolls, and everything under the landing is
@@ -3347,7 +3349,15 @@ function stepCar(dt){
   const last = tracks[tracks.length - 1];
   if (!car.air && v > 40 && (!last || Math.hypot(car.x - last.x, car.y - last.y) > 16)){
     const gap = !last || Math.hypot(car.x - last.x, car.y - last.y) > 90;
-    tracks.push({ x: car.x, y: car.y, a: car.ang, red: car.bloody, ice: car.onIce, gap });
+    /* How sideways the car was when it laid this one. A tyre rolling along its
+       own axis barely marks packed snow; one dragged across it cuts. The trail
+       drew the same stroke either way, which is why a run came out as two
+       painted stripes instead of a record of what you did. Pure geometry off
+       state that already exists — nothing rolled, nothing new stepped. */
+    const slip = clamp(Math.abs(Math.sin(Math.atan2(car.vy, car.vx) - car.ang)) +
+      Math.abs(car.spin) * 0.12, 0, 1);
+    tracks.push({ x: car.x, y: car.y, a: car.ang, red: car.bloody, ice: car.onIce,
+      gap, slip });
   }
   if (car.boostT > 0 && v > 60){
     const a = car.ang + Math.PI;
@@ -4354,17 +4364,29 @@ function drawGround(){
     ctx.restore();
   }
 
-  // tyre marks: two continuous lines, red for as long as the tyres are wet
+  /* Tyre marks: two continuous lines, red for as long as the tyres are wet.
+
+     They used to be one stroke — width 7, alpha .3 — from the first metre to
+     the last, so a whole run came out as two painted stripes laid down the
+     market at a constant weight. Two things the trail already knew and never
+     drew: how sideways the car was (`slip`, see where they are pushed) and
+     whether it was on ice, which has been recorded on every segment since
+     tracks were written and read by nothing. A tyre rolling along its own axis
+     leaves almost nothing on packed snow; one dragged across it cuts a black
+     scrub; and ice does not take a mark at all. Blood is different and stays
+     mostly flat — a wet tyre prints whether it is sliding or not — so only its
+     width follows the slip. */
   ctx.lineCap = 'round';
-  ctx.lineWidth = 7;
   for (let i = 1; i < tracks.length; i++){
     const a = tracks[i - 1], t = tracks[i];
     if (t.gap) continue;
     if (Math.max(a.x, t.x) < x0 || Math.min(a.x, t.x) > x1) continue;
     if (Math.max(a.y, t.y) < y0 || Math.min(a.y, t.y) > y1) continue;
+    const slip = t.slip || 0, ice = t.ice ? TRACK_ICE : 1;
+    ctx.lineWidth = 4.5 + 5 * slip;
     ctx.strokeStyle = t.red > 0.05
-      ? 'rgba(122,14,10,' + (0.2 + 0.34 * t.red) + ')'
-      : 'rgba(96,110,134,.3)';
+      ? 'rgba(122,14,10,' + ((0.2 + 0.34 * t.red) * ice).toFixed(3) + ')'
+      : 'rgba(96,110,134,' + ((0.09 + 0.32 * slip) * ice).toFixed(3) + ')';
     const n1x = Math.cos(a.a + Math.PI / 2) * 12, n1y = Math.sin(a.a + Math.PI / 2) * 12;
     const n2x = Math.cos(t.a + Math.PI / 2) * 12, n2y = Math.sin(t.a + Math.PI / 2) * 12;
     ctx.beginPath();
