@@ -722,6 +722,53 @@ test('the drag, not the renderer, decides where the car is', () => {
 function api0AnchorX(){ return boot().C.ANCHOR.x; }
 function api0MaxPull(){ return boot().C.MAX_PULL; }
 
+/* A pickup's glow is how you find one from across a market, and finding it
+   means telling it apart — not just noticing that something over there is
+   bright. The plough's was a pale blue, which is the snow's own hue: rendered
+   in a real browser over bare snow it moved the luminance 112 → 157 and left
+   the saturation where it started, so the glow was a highlight and nothing
+   else. The other two shift the hue and read as "a green one" / "a gold one"
+   at a glance. This is that measurement in a form the suite can hold: a glow
+   has to point somewhere other than the snow it is lying on. */
+const unit = (rgb) => {
+  const v = String(rgb).split(',').map(Number);
+  const m = Math.hypot(v[0], v[1], v[2]) || 1;
+  return v.map(x => x / m);
+};
+const degrees = (a, b) => {
+  const u = unit(a), w = unit(b);
+  return Math.acos(Math.min(1, u[0] * w[0] + u[1] * w[1] + u[2] * w[2])) * 180 / Math.PI;
+};
+test('every pickup is found by its colour, not just by being bright', () => {
+  const api = boot({ w: 1280, h: 720 });
+  const kinds = Object.keys(api.PICKUP_RGB);
+  assert(kinds.length === 3, 'three things to steer into, got ' + kinds.length);
+
+  /* Against every market's snow, not just one: a glow that reads on a night
+     market and vanishes on FIRST LIGHT is still a glow you cannot find. */
+  const MIN = 15;
+  const worst = {};
+  for (const k of kinds){
+    worst[k] = Math.min(...Object.keys(api.THEMES)
+      .map(id => degrees(api.PICKUP_RGB[k], api.THEMES[id].floor)));
+    assert(worst[k] > MIN,
+      k + '\'s glow is the snow\'s own hue — ' + worst[k].toFixed(0) + '° off it at ' +
+      'the closest theme, so it can only ever read as a bright patch');
+  }
+  // and no two of them are the same light either
+  for (let i = 0; i < kinds.length; i++) for (let j = i + 1; j < kinds.length; j++){
+    const d = degrees(api.PICKUP_RGB[kinds[i]], api.PICKUP_RGB[kinds[j]]);
+    assert(d > MIN, kinds[i] + ' and ' + kinds[j] + ' glow the same colour, ' +
+      d.toFixed(0) + '° apart');
+  }
+  /* The plough's is the red off its own hitch, so the light and the art agree
+     — the ring in the light pass takes the same colour. */
+  assert(degrees(api.PICKUP_RGB.plow, '200,68,58') < 12,
+    'the plough should glow the red of its hitch, got ' + api.PICKUP_RGB.plow);
+  console.log('    (pickup glows vs snow: ' +
+    kinds.map(k => k + ' ' + worst[k].toFixed(0) + '°').join(', ') + ')');
+});
+
 /* Six puffs of mist go up per kill, and the replay camera sits at tz 470 over
    the thickest part of the run — so on a fifteen-kill clip about ninety of them
    land in the same few hundred pixels. Each was a `circle().fill()`: a hard

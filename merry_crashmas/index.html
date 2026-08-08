@@ -6512,7 +6512,15 @@ function drawShout(){
 
 /* ---------- pickups & fx ---------- */
 /* The three colours a pickup can be, in the form the light pass wants. */
-const PICKUP_RGB = { nitro: '120,255,170', plow: '140,210,255', star: '255,215,110' };
+/* A pickup's glow is how you find it from across a market, and finding it means
+   telling it apart, not just noticing that something over there is bright. The
+   plough's used to be a pale blue — which is the snow's own hue, so adding it
+   lifted all three channels by about the same 1.4× and left the saturation
+   where it started. Measured against bare snow it moved the luminance 112 → 157
+   and the hue not at all: the one pickup you could only find by brightness.
+   It wears the red off its own hitch now, the single thing on a steel blade
+   that is not steel, and the ring in the light pass takes the same colour. */
+const PICKUP_RGB = { nitro: '120,255,170', plow: '236,96,80', star: '255,215,110' };
 function pickupCol(u){ return PICKUP_RGB[u.kind] || PICKUP_RGB.star; }
 const pickupGlows = {};
 function pickupSprite(kind, rgb){
