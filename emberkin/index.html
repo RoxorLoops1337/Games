@@ -3906,6 +3906,48 @@ function fieldItemUse(id) {
   return { ok: true, why: '', target };
 }
 
+/**
+ * Whether one row of a shelf would refuse you, in ONE place.
+ *
+ * The row draws its dimmed frame from this and so does the line that speaks for
+ * the whole shelf — two readings of the same rule is the fault this file keeps
+ * finding in itself.
+ */
+function rowDead(kind, k, inFight) {
+  const it = ITEMS[k];
+  if (!it) return true;
+  if (kind === 'shop') return G.money < it.cost;
+  if (inFight) return false;
+  return !fieldItemUse(k).ok;
+}
+/**
+ * What a shelf says about ITSELF, above the rows.
+ *
+ * The bag has had a line for a shelf with nothing on it since the day it was
+ * written — "Empty. Even the lint." The other empty had no words at all: a shop
+ * with no shards, the chest wall with no gems, a bag holding only orbs while
+ * you are stood on a footpath are FULL shelves where every single row is
+ * refused. Measured at 390x760: 7 of 7 dead, 4 of 4 dead, 3 of 3 dead, and the
+ * panel said nothing above any of them. To the player that is the same screen
+ * as the empty one, and every press on it is a refusal.
+ *
+ * Out of a fight the refusals are already written, one per row, and
+ * `screenSelect` toasts them when you press. If the whole shelf agrees on why,
+ * it says so in the game's own words rather than inventing a second sentence
+ * about the same fact.
+ */
+function shelfNote(kind, list, inFight) {
+  if (kind === 'chests') {
+    return CHEST_IDS.some((k) => G.gems >= CHESTS[k].cost) ? ''
+      : 'Not enough gems for any of them yet. Gems come off every fight you win.';
+  }
+  if (!list.length) return kind === 'shop' ? 'The shelves are bare.' : 'Empty. Even the lint.';
+  if (!list.every((k) => rowDead(kind, k, inFight))) return '';
+  if (kind === 'shop') return 'Nothing here you can afford yet. Shards come off beaten trainers.';
+  const whys = [...new Set(list.map((k) => fieldItemUse(k).why))];
+  return whys.length === 1 ? whys[0] : 'Nothing in here is any use out on the path.';
+}
+
 /** Items in shelf order: grouped, and in the order they are listed above. */
 function shelve(keys) {
   const order = Object.keys(ITEMS);
@@ -7015,6 +7057,21 @@ function foeSwingMul(b, eff) {
   const mul = eff < 1 ? (1 + base) / 2 : base;
   return b.foeSettling ? mul * SETTLE_MUL : mul;
 }
+/**
+ * …and your side of the same rule, which only the swing knew.
+ *
+ * The damper above was written for the foe and the foe's telegraph learned it.
+ * Yours did not: switch a kin in and the card in your hand promised the whole
+ * number while `useMove` quietly took 0.6 of it — driven through a real switch,
+ * a card reading "deal 11-13" landed for 7, and every one of 300 swings fell
+ * outside the range it was shown. The bench screen said the same thing, because
+ * both previews build their swing the same way.
+ *
+ * A separate function rather than a term inside `attackBonus`, because the
+ * swing applies this itself from a flag it has already cleared — folding it
+ * into the bonus would charge the penalty twice.
+ */
+const mineSwingMul = (b) => (b && b.settling ? SETTLE_MUL : 1);
 // A wild kin fights for its life once it is losing: at this much health left it
 // gathers itself, and the swing after that is worth this much more.
 // CORNER_EDGE was 14 and drifted the solo danger line to .338 lost-or-ran across
@@ -9149,7 +9206,7 @@ function moveDamage(id) {
   const bonus = attackBonus();
   const swing = (roll) => {
     const { dmg, eff } = damageOf(b.mine, b.foe, id, { crit: false, roll });
-    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul));
+    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul * mineSwingMul(b)));
   };
   return { lo: swing(.85), hi: swing(1), hits: bonus.hits };
 }
@@ -9192,7 +9249,7 @@ function moveVersusFoe(mon, id) {
   const bonus = attackBonus();
   const swing = (roll) => {
     const { dmg } = damageOf(mon, b.foe, id, { crit: false, roll });
-    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul));
+    return eff === 0 ? 0 : Math.max(1, Math.floor((dmg + bonus.flat) * bonus.mul * mineSwingMul(b)));
   };
   return { lo: swing(.85), hi: swing(1), eff };
 }
@@ -10516,6 +10573,10 @@ function renderScreen() {
     // the gold ring belongs to the cursor, and only one thing at a time gets it.
     html += `<h2>Gem chests — ${G.gems} gems</h2>`;
     html += `<p class="lede">Better chests do not hold more cards. They hold better odds.</p>`;
+    // The same silence as the shop's, on the wall four rows wide, answered off
+    // the same helper.
+    const chestNote = shelfNote('chests', CHEST_IDS, false);
+    if (chestNote) html += `<p style="color:var(--dim)">${chestNote}</p>`;
     html += `<div class="items wide">` + CHEST_IDS.map((k, i) => {
       const ch = CHESTS[k];
       const tint = CHEST_TINT[k];
@@ -10572,11 +10633,11 @@ function renderScreen() {
       + (hurt ? ` <span style="color:${hpColor(hurt.hp / hurt.max)}">· ${dispName(hurt)} ${hurt.hp}/${hurt.max}</span>` : '')
       + (inc ? ` <span style="color:${doomed ? 'var(--hp-bad)' : 'var(--dim)'}">· ${rangeText(inc.lo, inc.hi)} coming${doomed ? ', enough to finish you' : ''}</span>` : '')
       + '</h2>';
-    if (!list.length) html += '<p style="color:var(--dim)">Empty. Even the lint.</p>';
+    const note = shelfNote(s.kind, list, !!inFight);
+    if (note) html += `<p style="color:var(--dim)">${note}</p>`;
     for (const [group, keys] of shelve(list)) {
       html += `<h3 class="shelf">${group}</h3><div class="items">` + keys.map((k) => {
         const i = list.indexOf(k), it = ITEMS[k];
-        const afford = !shop || G.money >= it.cost;
         // An orb in a wild fight says what it would actually do.
         //
         // Last pass put YOUR kin's HP here because choosing a salve needs it.
@@ -10592,7 +10653,7 @@ function renderScreen() {
         // wild fight and no business at all on a footpath, and the shelf can
         // say both without either being a special case.
         const use = !shop && !inFight ? fieldItemUse(k) : null;
-        const dead = !afford || (use && !use.ok);
+        const dead = rowDead(s.kind, k, !!inFight);
         return `<div class="item panel ${i === s.i ? 'sel' : ''} ${dead ? 'dead' : ''}" data-i="${i}">
           <canvas width="20" height="20" data-card="${ITEM_ART(k)}"></canvas>
           <div class="info"><b>${it.name}</b><small>${it.desc}</small></div>
@@ -12335,14 +12396,14 @@ if (typeof window !== 'undefined') {
     CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
     SWITCH_PUNISH, SETTLE_MUL,
     trainerHp, TRAINER_DMG_MUL, trainerDmg,
-    foeSwingMul,
+    foeSwingMul, mineSwingMul,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO, statSnap, gainLine,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, colsFrom, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
+    renderIntent, intentLine, rowDead, shelfNote, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey, screenCue, scrollFor,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,

@@ -4299,6 +4299,244 @@ section('the cursor moves by the grid it is in');
   }
 }
 
+// Every number the player is SHOWN against the number the game USES. Nine
+// cases were swept — a plain swing, an edge banked, might, a multiplier, two
+// hits, an attack stage, a resistance, and the two after a switch — and eight
+// agreed to the hit point. The ninth: switch a kin in and the card in your hand
+// promised the whole number while `useMove` took 0.6 of it. Driven through a
+// real switch, a card reading "deal 11-13" landed for 7, and all 300 swings
+// fell outside the range they were shown. The damper is the foe's rule too and
+// the foe's TELEGRAPH already folds it in — the same asymmetry, on the side
+// nobody had measured.
+section('the card in your hand does not promise what the swing will not pay');
+{
+  // Crits off: a range that says 8-11 is not lying when a crit lands 16.
+  const noCrit = (src) => src.replace(
+    'const crit = opts.crit != null ? opts.crit : critRoll();',
+    'const crit = opts.crit != null ? opts.crit : false;');
+  const mk = () => {
+    const g = withDeck(loadGame({}, noCrit));
+    g.setCtx(mkCtx());
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 16), g.mkMon('pyrelynx', 16)];
+    return g;
+  };
+  const range = (txt) => {
+    const m = txt.match(/deal (\d+)(?:-(\d+))?(?: ×(\d+))?/);
+    return m ? { lo: +m[1], hi: m[2] ? +m[2] : +m[1], hits: m[3] ? +m[3] : 1 } : null;
+  };
+
+  // Both sides of the rule, side by side. This is the pair the game states in
+  // one place and has to apply in two.
+  ok(EK.SETTLE_MUL < 1, 'a kin still finding its feet swings for less');
+  {
+    const g = mk();
+    g.startBattle({ foe: g.mkMon('kindlark', 16), wild: true });
+    const b = g.B();
+    b.foeSettling = 0; const settled = g.foeSwingMul(b, 1);
+    b.foeSettling = 1; const fresh = g.foeSwingMul(b, 1);
+    ok(Math.abs(fresh - settled * g.SETTLE_MUL) < 1e-9, 'the foe telegraph folds the damper in');
+    b.settling = 0; eq(g.mineSwingMul(b), 1, 'and yours is 1 when you have been out a while');
+    b.settling = 1; eq(g.mineSwingMul(b), g.SETTLE_MUL, '…and the same damper on the turn you switch in');
+    eq(g.mineSwingMul(null), 1, 'out of a fight there is nothing to damp');
+  }
+
+  // The cases. Each one sets the fight up, reads what the card SAYS, then makes
+  // that swing forty times and asks whether the number ever left the range.
+  const CASES = [
+    ['a plain swing', null],
+    ['an edge banked', (g, b) => { b.mods.edge = 6; }],
+    ['might', (g) => { g.G.might = 3; }],
+    ['a multiplier', (g, b) => { b.mods.mul = 1.5; }],
+    ['two hits', (g, b) => { b.mods.hits = 1; }],
+    ['an attack stage', (g, b) => { b.mine.stages.atk = 2; }],
+    ['just switched in', (g, b) => { b.settling = 1; }],
+    ['switched in with an edge banked', (g, b) => { b.settling = 1; b.mods.edge = 6; }],
+  ];
+  for (const [label, setup] of CASES) {
+    const g = mk();
+    g.startBattle({ foe: g.mkMon('kindlark', 16), wild: true });
+    const b = g.B();
+    b.foe.max = 99999; b.foe.hp = 99999;
+    if (setup) setup(g, b);
+    const shown = range(g.moveCardText('ember'));
+    ok(shown, `${label}: the card names a number`);
+    const bench = g.moveVersusFoe(b.mine, 'ember');
+    let out = 0, worst = null;
+    for (let i = 0; i < 40; i++) {
+      b.foe.hp = 99999;
+      // A shocked kin is jolted stiff one swing in four and deals nothing. That
+      // is not the card lying — but it made this section fail one run in three,
+      // on whichever case the roll happened to land in, because the foe of a
+      // fight that starts with the foe faster can land shock before turn one.
+      b.mine.status = '';
+      // Restore only what the swing SPENDS, and only if it was set: writing
+      // `b.mods.hits = undefined` back makes bonus.hits NaN, the hit loop runs
+      // zero times, and a swing that dealt 0 reads as the card lying.
+      const keep = { settling: b.settling, edge: b.mods.edge, hits: b.mods.hits };
+      const before = b.foe.hp;
+      g.useMove([], 'mine', 'ember');
+      const dealt = before - b.foe.hp;
+      b.settling = keep.settling;
+      if (keep.edge != null) b.mods.edge = keep.edge;
+      if (keep.hits != null) b.mods.hits = keep.hits;
+      const lo = shown.lo * shown.hits, hi = shown.hi * shown.hits;
+      if (dealt < lo || dealt > hi) { out++; worst = dealt; }
+    }
+    eq(out, 0, `${label}: every swing landed inside "${shown.lo}-${shown.hi}${shown.hits > 1 ? `×${shown.hits}` : ''}"` +
+      (worst == null ? '' : ` (saw ${worst})`));
+    ok(bench && bench.lo === shown.lo && bench.hi === shown.hi,
+      `${label}: the bench screen reads the same number as the hand`);
+  }
+
+  // And the one that matters, driven through the real switch rather than posed:
+  // doAction sets the flag, the hand is redrawn, and the card has to know.
+  {
+    const g = mk();
+    g.startBattle({ foe: g.mkMon('kindlark', 16), wild: true });
+    const b = g.B();
+    b.foe.max = 99999; b.foe.hp = 99999;
+    g.doAction({ kind: 'switch', idx: 1 });
+    eq(b.settling, 1, 'a switch you chose leaves the new kin finding its feet');
+    const damped = range(g.moveCardText('ember'));
+    // The full number for WHOEVER IS OUT NOW. Reading it before the switch
+    // measured the kin that just left, and two different creatures swinging the
+    // same move is not a comparison — that is what failed here first.
+    b.settling = 0;
+    const full = range(g.moveCardText('ember'));
+    b.settling = 1;
+    ok(damped.hi < full.hi, `the card drops on the turn you switch in (${full.lo}-${full.hi} -> ${damped.lo}-${damped.hi})`);
+    const before = b.foe.hp;
+    g.useMove([], 'mine', 'ember');
+    const dealt = before - b.foe.hp;
+    ok(dealt >= damped.lo && dealt <= damped.hi, `and the swing pays what it promised (${dealt} in ${damped.lo}-${damped.hi})`);
+    ok(dealt < full.lo, 'which is less than the card used to say');
+    eq(b.settling, 0, 'the swing spends the settling');
+    const back = range(g.moveCardText('ember'));
+    ok(back.hi === full.hi, 'and the next card is back to the full number');
+  }
+
+  // The source, so the two previews cannot drift apart again: both build their
+  // swing through the same helper.
+  const body = SRC.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const mults = [...body.matchAll(/bonus\.flat\) \* bonus\.mul \* mineSwingMul\(b\)/g)];
+  eq(mults.length, 2, 'both previews damp their swing through the one helper');
+  ok(/const mineSwingMul = \(b\) => \(b && b\.settling \? SETTLE_MUL : 1\);/.test(body),
+    'and the helper is one line beside the foe’s');
+}
+
+// Every screen, emptied out: does the panel say anything? Eleven kinds were
+// swept at 390x760, the list harvested from the game's own openScreen call
+// sites. The three that can hold nothing all had a line — "Empty. Even the
+// lint.", "Nothing stored yet.", "Everything you own is in the deck." The other
+// empty had no words at all: a shop with no shards, the chest wall with no
+// gems, a bag of orbs while you are stood on a footpath are FULL shelves where
+// every single row is refused. Measured: 7 of 7 dead, 4 of 4, 3 of 3, and
+// nothing above any of them.
+section('a shelf where nothing can be taken says so');
+{
+  const mk = () => {
+    const g = withDeck(loadGame({}));
+    g.setCtx(mkCtx());
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 12), g.mkMon('pyrelynx', 12)];
+    return g;
+  };
+  const bag = (g) => Object.keys(g.G.bag).filter((k) => g.G.bag[k] > 0);
+
+  // The empty shelf, which has always spoken.
+  {
+    const g = mk();
+    g.G.bag = {};
+    eq(g.shelfNote('bag', [], false), 'Empty. Even the lint.', 'a bag with nothing in it says so');
+  }
+  // The other empty: rows on the shelf, every one refused.
+  {
+    const g = mk();
+    g.G.bag = { bloomorb: 3, gleamorb: 1 };
+    const list = bag(g);
+    ok(list.every((k) => g.rowDead('bag', k, false)), 'orbs on a footpath: every row is refused');
+    eq(g.shelfNote('bag', list, false), 'Save those for the wild.',
+      'and when the whole shelf agrees on why, it says the reason the row would give');
+    eq(g.shelfNote('bag', list, false), g.fieldItemUse('bloomorb').why,
+      'in the game’s own words, not a second sentence about the same fact');
+  }
+  {
+    const g = mk();
+    g.G.bag = { salve: 2, greatsalve: 1 };
+    for (const m of g.G.party) m.hp = m.max;
+    eq(g.shelfNote('bag', bag(g), false), 'Nobody needs that.', 'salves with nobody hurt say the other reason');
+  }
+  {
+    const g = mk();
+    g.G.bag = { bloomorb: 1, salve: 1 };
+    for (const m of g.G.party) m.hp = m.max;
+    const whys = new Set(bag(g).map((k) => g.fieldItemUse(k).why));
+    eq(whys.size, 2, 'a mixed bag has two different reasons');
+    eq(g.shelfNote('bag', bag(g), false), 'Nothing in here is any use out on the path.',
+      'so the shelf speaks for itself instead of picking one of them');
+  }
+  // …and the cases that must stay quiet.
+  {
+    const g = mk();
+    g.G.bag = { salve: 2, bloomorb: 1 };
+    g.G.party[0].hp = 1;
+    eq(g.shelfNote('bag', bag(g), false), '', 'one usable row and the shelf says nothing');
+    eq(g.shelfNote('bag', bag(g), true), '', 'and in a fight it says nothing either');
+    ok(!g.rowDead('bag', 'bloomorb', true), 'because in a fight nothing on the shelf is refused');
+    ok(g.rowDead('bag', 'bloomorb', false), 'while on the path an orb is');
+  }
+  // The shop, off the same helper.
+  {
+    const g = mk();
+    const list = Object.keys(g.ITEMS);
+    const cheapest = Math.min(...list.map((k) => g.ITEMS[k].cost));
+    g.G.money = 0;
+    ok(list.every((k) => g.rowDead('shop', k, false)), 'with no shards every row is refused');
+    eq(g.shelfNote('shop', list, false), 'Nothing here you can afford yet. Shards come off beaten trainers.',
+      'and the shelf says so');
+    g.G.money = cheapest - 1;
+    eq(g.shelfNote('shop', list, false), 'Nothing here you can afford yet. Shards come off beaten trainers.',
+      'one shard short is still nothing you can afford');
+    g.G.money = cheapest;
+    eq(g.shelfNote('shop', list, false), '', 'and the moment one row is takeable the line goes');
+    ok(g.rowDead('shop', list.find((k) => g.ITEMS[k].cost > cheapest), false),
+      'while the dearer rows are still refused');
+  }
+  // The chest wall, which reads its own prices rather than a list.
+  {
+    const g = mk();
+    const cheapest = Math.min(...g.CHEST_IDS.map((k) => g.CHESTS[k].cost));
+    g.G.gems = 0;
+    eq(g.shelfNote('chests', g.CHEST_IDS, false),
+      'Not enough gems for any of them yet. Gems come off every fight you win.',
+      'no gems, and the wall says so');
+    g.G.gems = cheapest - 1;
+    ok(g.shelfNote('chests', g.CHEST_IDS, false), 'one gem short still says so');
+    g.G.gems = cheapest;
+    eq(g.shelfNote('chests', g.CHEST_IDS, false), '', 'and it goes the moment one chest is affordable');
+  }
+  // One reading of the rule: the row's dimmed frame and the line above it come
+  // from the same function.
+  const body = SRC.match(/<script>([\s\S]*?)<\/script>/)[1];
+  ok(/const dead = rowDead\(s\.kind, k, !!inFight\);/.test(body), 'the row asks rowDead whether it is refused');
+  ok(/const note = shelfNote\(s\.kind, list, !!inFight\);/.test(body), 'and the shelf asks shelfNote what to say');
+  eq((body.match(/shelfNote\(/g) || []).length, 3, 'its own definition and the two shelf screens, and nowhere else');
+  ok(/if \(!list\.every\(\(k\) => rowDead\(kind, k, inFight\)\)\) return '';/.test(body),
+    'and the line only appears when every row is refused');
+
+  // The three screens that CAN hold nothing still say what they always said.
+  for (const [needle, what] of [
+    ['Nothing stored yet.', 'the box'],
+    ['Everything you own is in the deck.', 'the deck'],
+    ['Empty. Even the lint.', 'the bag'],
+  ]) ok(body.includes(needle), `${what} still has its own line for a list with nothing in it`);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
