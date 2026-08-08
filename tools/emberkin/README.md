@@ -377,6 +377,58 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+83. **Doing on purpose what 171 found by accident** (pass 172). 171's lesson —
+    *a comment that claims a fix is a testable assertion* — as a job.
+
+    **The sweep, mechanically.** Every backtick-quoted identifier a comment
+    names, checked against the file with all comments stripped out, so "does the
+    code do what the comment says" is asked of code and not of other comments.
+    **104 identifiers. Clean.** No comment names a field the game does not have;
+    the `b.burst`-vs-`b.crit` shape does not recur. One genuinely stale name: a
+    comment called the early-return ladder `update` and the function is `step`.
+
+    **The detector was wrong before the game was.** Its first version forbade a
+    preceding dot — meant to catch a wrong owner, and it rejected every ordinary
+    property access instead. **Six of its nine findings were that flaw**, not
+    the game's. A detector whose false-positive rate is two thirds teaches you
+    to skim its output, which is how a real one gets skimmed too.
+
+    **Then the claim worth netting.** `enterMap` clears seven beats under a
+    comment making two claims: that every beat owning the screen is abandoned
+    when the map moves, and that every one of them blocks input while it runs.
+    Both check out by hand — the `step` ladder gates on nine, `enterMap` clears
+    seven, `alert` is cleared just above, and `warp` is deliberately excluded
+    because `warpStep` is what calls `enterMap`. So: no bug, and a claim that
+    will rot the moment somebody adds a beat.
+
+    It is a net now, and **the list of beats is read out of the ladder** rather
+    than written into the test.
+
+    **And I wrote the same fault into it on the first attempt.** The section's
+    own comment said *"a beat added to `step` and forgotten in `enterMap` fails
+    this"* — while the behavioural half iterated a hardcoded list, so it would
+    have done nothing of the kind. Caught by planting exactly that: a `newbeat`
+    line in the ladder, no clear in `enterMap`. Now:
+
+        ✗ newbeat was abandoned
+
+    **A comment in a test is a claim like any other.** This pass was sent to
+    find prose that overstates its code, and produced some.
+
+    Two smaller ones. The ladder writes `return;`, not `return true;` — the
+    first parser required the latter and found **two of nine** guarded beats,
+    reporting a clean parse. *A parser that silently under-reads is the same
+    fault as a net that cannot fail: it agrees with you.* And `gotcha` gates the
+    frame from an inline block rather than a `…Step(dt)` call, so no pattern
+    over that shape can see it; it is named explicitly, with the reason, rather
+    than quietly missing from a list that claims to be complete.
+
+    Finally, two beats that had never been filmed: the wipe into a fight
+    (`wipein`) and a door (`door`). Both read correctly — bars close over the
+    overworld, the arena swaps underneath, bars retract on the fight; the
+    curtain shuts, the map changes, the fade opens it. Scenes added so the next
+    pass can ask the six questions of them without building the rig again.
+
 82. **A fix that named the wrong field, and said otherwise in prose** (pass 171).
     Sent to hunt the shape that had paid off three passes running — *a rule
     written down and applied to one of its cases*. The sweep came back mostly
