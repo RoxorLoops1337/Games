@@ -842,6 +842,33 @@ const SCENES = {
       EK.pressKey('down'); EK.step(.02); EK.releaseKey('down'); EK.fired.clear();
     },
   },
+  // The Wayhouse LANDING, held on Sable's line — the losing beat's one piece of
+  // kindness, which no shot had ever contained because `wipe` below mashes A
+  // through everything to reach the room. Seeded broke on purpose: the fee is a
+  // quarter of your shards floored, so this is the state a player who has just
+  // lost everything actually arrives in.
+  wipeland: {
+    w: 300, h: 260,
+    wait: 6000,
+    needs: (EK) => EK.G.mapId === 'wayhouse' && !!EK.G.dialogue,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.G.money = 2;                      // broke: a quarter of two is zero
+      EK.startBattle({ foe: EK.mkMon('bramblor', 45), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const beat = () => {
+        const cur = EK.B();
+        if (cur && !cur.over && !cur.log) EK.submitLog(EK.endTurn());
+        // Stop advancing the moment the room comes up — that line is the point.
+        if (EK.G.mapId === 'wayhouse') return;
+        const d = EK.G.dialogue || EK.liveBattleMsg();
+        if (d) { d.hold = 0; EK.advanceDialogue(); }
+      };
+      for (let t = 100; t <= 5000; t += 130) setTimeout(beat, t);
+    },
+  },
   // Going down. Driven through a real loss so the beat runs the way it does in
   // play: the last kin falls, the two lines, the dark closing, the Wayhouse.
   wipe: {

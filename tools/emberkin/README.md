@@ -377,6 +377,42 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+72. **"It cost you 0 shards."** (pass 161). Generalising 70's blind spot —
+    what else does the game show only to somebody who has been here before? —
+    across the states no scene had ever produced. **Most came back clean, and
+    the clean ones are half the entry.**
+    - **The pause menu.** Kin, Dex, Box, Deck and Sound carry a sub; **Bag does
+      not**, which looks exactly like the 158 fault one level up. It is not.
+      The menu's own title reads `Hollowbrook · 500 shards · 260 gems` — Bag is
+      the one row whose number is already on the screen, one line above it, and
+      putting it on the row would print it twice. The rule holds: collections
+      carry their count, actions (Fullscreen, Save, Close) carry none, and
+      Bag's lives in the title. **Clean, and the property that exempts it is
+      nameable.**
+    - **The Wayhouse landing after a wipe.** My first shot of it showed a silent
+      room and I nearly wrote that down as the fault. It is not — `finishBattle`
+      says two lines, blacks out, opens the room and has Sable speak. The
+      `wipe` scene mashes A through everything to reach the Wayhouse, so the
+      line it exists to deliver had never been in a picture. **The instrument,
+      again, not the game** — and the third time this exact shape has appeared
+      (levelup in 65, gotcha in 67). A `wipeland` scene now stops advancing the
+      moment the map becomes the Wayhouse.
+
+    **The fault, once the line was finally on screen.** Sable's fee is a quarter
+    of your shards, FLOORED. Anybody holding fewer than four is told *"It cost
+    you 0 shards"* — and that is precisely the player most likely to be broke,
+    because they have just lost everything they had. A number that is always
+    zero reads as a bug, and it turned the only piece of kindness in the losing
+    beat into a clerical error. She says nothing was asked for now, and does not
+    explain why, which is how she talks everywhere else.
+    The net checks BOTH branches and that `G.money -= lost` survives, so the
+    wording fix cannot be mistaken for a quiet removal of the loss — breaking
+    that line is one of the two on-purpose breaks.
+
+    **An edge state is not always rare.** The zero-shard branch is not an
+    unlikely corner; it is the DEFAULT for the player the beat is written for.
+    Ask who actually arrives in a state before deciding it is an edge.
+
 71. **Played the first twenty minutes, and the fault was on the screen before
     them** (pass 160). Nine passes of consistency work; this one went back to
     driving the game. Most of what the drive measured came back healthy, and

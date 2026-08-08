@@ -1480,6 +1480,42 @@ section('the title leads with the run you already have');
     'the markup order still reads new-then-continue; only the returning view reorders');
 }
 
+// The losing beat's one piece of kindness, and the state nobody had reached.
+//
+// Sable's fee is a quarter of your shards, FLOORED — so anybody holding fewer
+// than four was told "It cost you 0 shards" in the single line the game writes
+// to soften a wipe. That is precisely the player most likely to be broke: they
+// have just lost everything. A number that is always zero reads as a bug, and
+// it turned the only mercy in the beat into a clerical error.
+section('when there was nothing to take, Sable says so');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+
+  // The arithmetic that produces the empty state, stated rather than assumed.
+  const fee = (money) => Math.floor(money * .25);
+  eq(fee(0), 0, 'nothing to take from nothing');
+  eq(fee(3), 0, 'nor from three — the floor eats it');
+  ok(fee(4) > 0, 'four is the first amount that costs anything');
+
+  // Both branches exist, and the charged one still names the number.
+  ok(/lost > 0\n\s*\? `Sable patched them up\. It cost you \$\{lost\} shards\.`/.test(SRC),
+    'a real charge still says what it was');
+  ok(/: 'Sable patched them up\. She did not ask for anything, and did not say why\.'/.test(SRC),
+    'and nothing taken is said as nothing taken, not as zero');
+  ok(!/`Sable patched them up\. It cost you \$\{lost\} shards\.`, 'Go easier/.test(SRC),
+    'the unconditional line is gone');
+
+  // The half that must not change: she is not suddenly explaining herself.
+  ok(/'Go easier out there\.'/.test(SRC), 'the second line is the same either way');
+
+  // …and the fee is still actually charged, so this is a wording fix and not a
+  // quiet removal of the loss.
+  ok(/G\.money -= lost;/.test(SRC), 'the shards still go');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can
