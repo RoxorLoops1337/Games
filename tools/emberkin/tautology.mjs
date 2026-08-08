@@ -139,6 +139,13 @@ const MUTANTS = [
     find: "  if (kind === 'shop') return G.money < it.cost;",
     to: "  if (kind === 'shop') return false;" },
 
+  { name: 'cost: the switch price stops scaling', aims: ['the screen that takes something says what it costs'],
+    find: '  edge: b && b.foe ? Math.round(SWITCH_PUNISH * planScale(b.foe.lvl)) : 0,',
+    to: '  edge: b && b.foe ? SWITCH_PUNISH : 0,' },
+  { name: 'cost: the party screen never names the price', aims: ['the screen that takes something says what it costs'],
+    find: '    } else if (G.battle && B() && B().foe && B().foe.hp > 0 && !B().over) {',
+    to: '    } else if (false) {' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

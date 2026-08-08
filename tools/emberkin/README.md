@@ -3115,3 +3115,69 @@ desktop one. That is the correct answer and not an obvious one.
 
     Four planted faults, all four bite; two sweep mutants aimed at the new
     section.
+
+104. **Seven screens name their price; the eighth took two things silently** (pass 193).
+    One property, every case: does every screen say what it will cost BEFORE you
+    commit? The commit points were harvested out of `screenSelect` and the
+    battle's own actions — every place something is spent or taken away — then
+    each was driven through its real entry point and the state diffed across the
+    press.
+
+        commit point           what the row says before      what it cost
+        buy from the shop      "200sh"                       shards 5000->4800
+        open a gem chest       "60gems"                      gems 9999->9939
+        use a salve            "x2" and who would drink it   bag x2->x1, hp 1->31
+        store a kin            "Pick on a party kin stores it" party 2->1, box 0->1
+        take a reward card     "none in your deck"           deck +1, owned +1
+        swap a card out        "pick the one it replaces"    deck 11->10
+        take a starter         "Rowan will not be talked round"  irreversible
+        switch a kin           "KIN — 2/6" and a roster      <- NOTHING
+
+    Seven price themselves on the row you are about to press. The eighth is the
+    one place the game charges you twice and says neither: the switch hands the
+    foe a flat opening (`SWITCH_PUNISH` scaled to its level — 4, 19, 31 at levels
+    4, 16, 40) AND sets `b.settling`, which is the .6 damper pass 191 put on the
+    card in your hand. By the time the card shows the damped number you are
+    already committed. The log says "this will hurt" AFTER the press, which is
+    not the same as being told.
+
+    Fixed with `switchCost(b)` beside `SWITCH_PUNISH`, returning both halves as a
+    value. `doAction` spends it and the party screen reads it, so the price shown
+    is the price paid:
+
+        Stepping out costs the turn. Kindlark gets a +19 opening, and whoever
+        comes in swings at 60% until they find their feet.
+
+    Drawn only where a switch would actually be charged — a FORCED switch after a
+    faint is free (measured: `foeEdge` unchanged, `settling` 0), so the line
+    belongs to the choice rather than to the screen, and the forced branch keeps
+    its own "Choose who steps up" prompt.
+
+    **The instrument over-report, and it was a big one.** Reading `b.foeEdge`
+    before and after `doAction` gave 0, 37 and 60 against a price of 4, 19 and
+    31 — because `doAction` plays the foe's whole answer: a foe PLAN can add edge
+    of its own (`if (p.edge) b.foeEdge += n`) and its swing SPENDS the lot
+    (`if (atkSide === 'foe') b.foeEdge = 0`). A delta measured across the action
+    is the whole turn, not the act. Patching the source to record the charge at
+    the instant it happens showed shown and charged agreeing exactly at every
+    level. The suite keeps that spy — and a check beside it saying so, because
+    the spy is anchored to the very line under test, so a mutation there kills
+    the spy rather than being caught by it.
+
+    A count of `switchCost(` came back 2, not the 3 that was written first: the
+    definition reads `switchCost = (b)`, and neither the export nor the doc
+    comment carries a paren. Counted rather than assumed, which is the same rule
+    that caught a doc comment inventing a call site in pass 184.
+
+    **And then the line was invisible.** Photographed at 390x760 it was not on
+    the screen: both this line and the forced switch's "Choose who steps up"
+    prompt were built AFTER the roster and the stat block, which on a phone is
+    below the fold — in the DOM, off the screen, `scrollTop` 0. A price nobody
+    can see is not a price that was named, and it is the same fault the starter
+    screen's own comment records ("a player could make the one irreversible
+    choice in the game without knowing a third option existed"). Both lines now
+    sit directly under the heading, above the list: measured again, top 111 in a
+    panel whose bottom is 359, visible with no scrolling.
+
+    Four planted faults, all four bite; two sweep mutants aimed at the new
+    section, which reports 7 of 35 killed.
