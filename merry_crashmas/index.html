@@ -483,6 +483,11 @@ const CARS = [
 ];
 let CAR = CARS[0];
 let CARL = CAR_L, CARW = CAR_W, CARR = CAR_R;
+/* The man behind the wheel is the same man in all five. His own unit, so that
+   nothing about him is measured in the vehicle: see the driver block in
+   `drawCar`. 38 is the hatchback's width, which is the car he was drawn for,
+   so the reference car comes out pixel-for-pixel as it was. */
+const DRIVER = 38;
 const CAR_KEY = 'merry_crashmas_car_v1';
 const KILLS_KEY = 'merry_crashmas_kills_v1';
 
@@ -6192,32 +6197,57 @@ function drawCar(){
      close-in read as an egg with a bite taken out of it. He is a man in a seat
      now: shoulders under the head, a beard hanging down his front, two eyes,
      gloves on a wheel, and a mouth that opens when he is shouting. Nine fills
-     on the one object that is in every single frame of the game. */
+     on the one object that is in every single frame of the game.
+
+     He is also ONE man, which he was not. Every part of him used to be
+     measured in the car — width in `CARL`, depth in `CARW` — and those two
+     vary independently across the garage, so the same Santa came out a
+     different size *and a different build* in all five: a face half again as
+     wide in the truck as in the coupe, shoulders that went from 0.85 deep-to-
+     wide to 0.66, stretched fore-and-aft in the van and squashed broad in the
+     truck. Nobody catches it because you only ever see one car at a time.
+
+     He is built in his own units now (`DRIVER`), anchored so his hands stay at
+     the windscreen whatever the car is long — which is the one relationship
+     that has to hold. The cabin around him still scales, so a truck cab
+     dwarfing its driver is exactly what you get, and that is correct. */
   const yell = car.shoutT > 0;
+  const D = DRIVER, sx = CARL * 0.155 - D * 0.39;   // the seat, at the wheel
   ctx.fillStyle = '#8e2a24';                        // shoulders, in a red coat
-  roundRect(-CARL * 0.2, -CARW * 0.3, CARL * 0.24, CARW * 0.6, 7); ctx.fill();
+  roundRect(sx - D * 0.32, -D * 0.3, D * 0.48, D * 0.6, 7); ctx.fill();
   ctx.fillStyle = '#f0c9a4';                        // face
-  circle(-CARL * 0.04, 0, CARW * 0.23); ctx.fill();
+  circle(sx, 0, D * 0.23); ctx.fill();
   ctx.fillStyle = '#e0483c';                        // the hat, pushed back
-  circle(-CARL * 0.11, 0, CARW * 0.2); ctx.fill();
+  circle(sx - D * 0.24, 0, D * 0.17); ctx.fill();
   ctx.fillStyle = '#f6f2ea';
-  circle(-CARL * 0.2, 0, CARW * 0.09); ctx.fill();  // its bobble
+  circle(sx - D * 0.4, 0, D * 0.085); ctx.fill();   // its bobble
+  /* The beard is a shallow ellipse across the chin, not a disc pushed out in
+     front of the face. As a disc it was 0.31D long, which is most of the room
+     between the hat and the wheel, and there was nowhere left to put a face:
+     see below. */
   ctx.fillStyle = '#efe9dd';                        // the beard, down his front
-  circle(CARL * 0.075, 0, CARW * 0.155); ctx.fill();
-  /* Eyes above the beard, not on it. The first pass put the beard far enough
-     back that both eyes landed in the whiskers, which reads as a snowman. */
+  ctx.beginPath();
+  ctx.ellipse(sx + D * 0.235, 0, D * 0.115, D * 0.15, 0, 0, 6.283); ctx.fill();
+  /* Eyes and mouth on the FACE. An earlier pass moved the eyes off the beard
+     and put them squarely on the hat instead — both discs, drawn over the
+     skin, so the only skin left showing was a 0.6px crescent between them.
+     Two dark dots on a red field and a dark hole in the whiskers is what that
+     reads as up close, which is where you see him: the garage card and the
+     replay. The hat covers the crown and stops short of the eyes, the beard
+     starts in front of the mouth, and there is a band of face between them
+     wide enough to carry both. */
   ctx.fillStyle = '#2a1a16';
-  circle(-CARL * 0.085, -CARW * 0.095, CARW * 0.038); ctx.fill();
-  circle(-CARL * 0.085, CARW * 0.095, CARW * 0.038); ctx.fill();
-  circle(CARL * 0.055, 0, CARW * (yell ? 0.09 : 0.04)); ctx.fill();  // and a mouth
+  circle(sx - D * 0.005, -D * 0.095, D * 0.038); ctx.fill();
+  circle(sx - D * 0.005, D * 0.095, D * 0.038); ctx.fill();
+  circle(sx + D * 0.09, 0, D * (yell ? 0.075 : 0.035)); ctx.fill();  // and a mouth
   /* Hands on the wheel, between the beard and the windscreen. A ring rather
      than a disc, so it reads as a wheel and not another hole in his face. */
   ctx.strokeStyle = '#1c2331'; ctx.lineWidth = 2.4;
   ctx.beginPath();
-  ctx.ellipse(CARL * 0.155, 0, CARL * 0.042, CARW * 0.155, 0, 0, 6.283); ctx.stroke();
+  ctx.ellipse(sx + D * 0.39, 0, D * 0.084, D * 0.155, 0, 0, 6.283); ctx.stroke();
   ctx.fillStyle = '#e8e3d8';
-  circle(CARL * 0.155, -CARW * 0.155, CARW * 0.05); ctx.fill();
-  circle(CARL * 0.155, CARW * 0.155, CARW * 0.05); ctx.fill();
+  circle(sx + D * 0.39, -D * 0.155, D * 0.05); ctx.fill();
+  circle(sx + D * 0.39, D * 0.155, D * 0.05); ctx.fill();
   ctx.fillStyle = '#4b6a9c';
   roundRect(CARL * 0.2, -CARW * 0.3, CARL * 0.14, CARW * 0.6, 4); ctx.fill();
   ctx.fillStyle = 'rgba(226,240,255,.4)';           // a glint, so it is glass

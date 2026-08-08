@@ -7650,6 +7650,11 @@ function carRec(){
 
 // the driver's palette, which is how his parts are told apart in the recording
 const FACE_C = '#f0c9a4', BEARD_C = '#efe9dd', INK_C = '#2a1a16', GLOVE_C = '#e8e3d8';
+/* His hat and its bobble. Both colours also appear on bodywork — '#e0483c' is
+   the sleigh's `body2` and '#f6f2ea' the hatchback's `trim` — but bodywork is
+   drawn with roundRect and fillRect, which land in `polys` and `rects`, so a
+   `shapes` lookup can only ever find the two discs on his head. */
+const HAT_C = '#e0483c', BOBBLE_C = '#f6f2ea', COAT_C = '#8e2a24';
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function driver(api, shouting){
@@ -7663,6 +7668,8 @@ function driver(api, shouting){
   const eyes = by(INK_C).filter(s => Math.abs(s.y) > 0.5);
   return { rec, face: by(FACE_C)[0], beard: by(BEARD_C)[0], gloves: by(GLOVE_C),
     eyes, mouth: by(INK_C).find(s => Math.abs(s.y) <= 0.5),
+    hat: by(HAT_C)[0], bobble: by(BOBBLE_C)[0],
+    shoulders: rec.polys.find(p => p.style === COAT_C && !p.stroked),
     wheel: rec.shapes.find(s => s.stroked && s.ry && s.r !== s.ry) };
 }
 
@@ -7871,8 +7878,17 @@ test('the driver is a man in a seat, not four discs', () => {
       'an eye is buried in the beard: ' + dist(e, d.beard).toFixed(1) +
       ' vs ' + d.beard.r.toFixed(1));
   }
-  // the mouth is in the beard, where a mouth is
-  assert(dist(d.mouth, d.beard) < d.beard.r, 'the mouth should be in the beard');
+  /* The mouth sits on skin at the beard's edge, NOT buried in it. This used to
+     assert the opposite — "the mouth is in the beard, where a mouth is" — and
+     that is how a mouth wholly inside the whiskers got signed off as correct:
+     see 'his eyes are on his face, not on his hat' below for the whole shape
+     of that defect. It may touch the beard; its centre may not be in it. */
+  const inBeard = (p) => ((p.x - d.beard.x) / d.beard.r) ** 2 +
+                         ((p.y - d.beard.y) / d.beard.ry) ** 2 < 1;
+  assert(!inBeard(d.mouth), 'the mouth should be on his face, not in the whiskers');
+  assert(d.mouth.x + d.mouth.r > d.beard.x - d.beard.r,
+    'but right up against it: ' + d.mouth.x.toFixed(1) + ' vs ' +
+    (d.beard.x - d.beard.r).toFixed(1));
   // the beard hangs forward of the face, and the wheel is forward of the beard
   assert(d.beard.x > d.face.x, 'the beard hangs down his front');
   assert(d.wheel.x > d.beard.x, 'the wheel is ahead of him');
@@ -7916,6 +7932,111 @@ test('every car carries the same driver', () => {
     seen.push(c.id + ' ' + d.rec.shapes.length);
   }
   console.log('    (driver on ' + seen.join(', ') + ' shapes)');
+});
+
+/* The test above says "the same driver" and only ever checked that his parts
+   were all still there. They were: every one of them was a different size in
+   every car, because he was measured in the vehicle — his width in `CARL` and
+   his depth in `CARW`, two numbers that vary independently across the garage.
+   So he was not five sizes of one man, he was five different builds. */
+test('the same driver is the same size in every car', () => {
+  const api = boot({ w: 1280, h: 720, store: ALL_CARS });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const men = api.CARS.map(c => {
+    assert(api.selectCar(c.id), 'should be able to pick ' + c.id);
+    const d = driver(api, false);
+    const dims = api.getDims();
+    assert(d.face && d.beard && d.hat && d.bobble && d.shoulders,
+      c.id + ' lost part of its driver');
+    return { id: c.id, len: dims.l, wid: dims.w,
+      face: d.face.r, hat: d.hat.r, bobble: d.bobble.r,
+      beardX: d.beard.r, beardY: d.beard.ry, glove: d.gloves[0].r,
+      eyeR: d.eyes[0].r, eyeY: Math.abs(d.eyes[0].y),
+      shW: d.shoulders.x1 - d.shoulders.x0, shH: d.shoulders.y1 - d.shoulders.y0 };
+  });
+
+  // the cars really are different, or this test proves nothing
+  const lens = men.map(m => m.len), wids = men.map(m => m.wid);
+  assert(Math.max(...lens) / Math.min(...lens) > 1.15 &&
+         Math.max(...wids) / Math.min(...wids) > 1.4,
+    'the garage should hold genuinely different cars: ' + lens + ' by ' + wids);
+
+  const spread = (k) => {
+    const v = men.map(m => m[k]);
+    return { lo: Math.min(...v), hi: Math.max(...v) };
+  };
+  for (const k of ['face', 'hat', 'bobble', 'beardX', 'beardY', 'glove', 'eyeR',
+                   'eyeY', 'shW', 'shH']){
+    const s = spread(k);
+    assert(s.hi - s.lo < 0.01,
+      'the driver\'s ' + k + ' changes with the car: ' + s.lo.toFixed(2) + ' in ' +
+      men.find(m => m[k] === s.lo).id + ' to ' + s.hi.toFixed(2) + ' in ' +
+      men.find(m => m[k] === s.hi).id + ' (' +
+      ((s.hi / s.lo - 1) * 100).toFixed(0) + '% bigger)');
+  }
+  /* `shW` and `shH` are both in that list on purpose, and it is not belt and
+     braces: his shoulders were as wide as a fraction of the car's LENGTH and
+     as deep as a fraction of its WIDTH, so a scale check on either one alone
+     would have missed that his BUILD changed too — 0.85 wide-to-deep in the
+     coupe against 0.66 in the truck. Pinning both pins the shape. */
+
+  /* And he still fits the smallest cabin he has to sit in — a fixed-size man
+     in a shrinking box is the failure mode this fix could have introduced. */
+  for (const c of api.CARS){
+    api.selectCar(c.id);
+    const d = driver(api, false); const dims = api.getDims();
+    const cab = { x0: -dims.l * 0.26, y0: -dims.w * 0.34,
+                  x1: dims.l * 0.16, y1: dims.w * 0.34 };
+    assert(d.shoulders.x0 >= cab.x0 - 0.01 && d.shoulders.x1 <= cab.x1 + 0.01 &&
+           d.shoulders.y0 >= cab.y0 - 0.01 && d.shoulders.y1 <= cab.y1 + 0.01,
+      'the driver is wearing the ' + c.id + ' rather than sitting in it: ' +
+      [d.shoulders.x0, d.shoulders.y0, d.shoulders.x1, d.shoulders.y1]
+        .map(v => v.toFixed(1)).join(',') + ' in ' +
+      [cab.x0, cab.y0, cab.x1, cab.y1].map(v => v.toFixed(1)).join(','));
+  }
+  console.log('    (one driver: face r' + men[0].face.toFixed(2) + ', shoulders ' +
+    men[0].shW.toFixed(1) + '×' + men[0].shH.toFixed(1) + ' in all ' + men.length +
+    ' cars, ' + Math.min(...lens) + '–' + Math.max(...lens) + ' long)');
+});
+
+/* Found by putting all five cars in one picture at four times size, which
+   nothing had done: two dark dots on a red field, and a dark hole in a white
+   blob. The hat and the beard are both drawn over the face, and between them
+   they had covered all but a 0.6px crescent of it — so the eyes were on the
+   hat and the mouth was inside the whiskers, and there was no face left. */
+test('his eyes are on his face, not on his hat', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  const d = driver(api, false);
+  const st = d.rec.styles;
+
+  // the order is what makes this a covering problem rather than a placing one
+  assert(st.indexOf('f:' + HAT_C) > st.indexOf('f:' + FACE_C) &&
+         st.indexOf('f:' + INK_C) > st.indexOf('f:' + HAT_C),
+    'hat over face, eyes over hat — that is the order that hides them');
+
+  for (const e of d.eyes){
+    assert(dist(e, d.hat) - e.r > d.hat.r,
+      'an eye is on the hat, not on his face: ' + (dist(e, d.hat) - e.r).toFixed(2) +
+      ' from the crown, which reaches ' + d.hat.r.toFixed(2));
+  }
+  // there is a band of face between the hat and the beard wide enough to use
+  const band = (d.beard.x - d.beard.r) - (d.hat.x + d.hat.r);
+  assert(band > 4, 'no face left between hat and beard: ' + band.toFixed(2) + 'px');
+  // the bobble is behind the crown, not sitting in the middle of it
+  assert(d.bobble.x < d.hat.x - d.hat.r * 0.5,
+    'the bobble is sitting in the middle of the crown rather than capping its ' +
+    'back: x' + d.bobble.x.toFixed(1) + ', needs to be behind x' +
+    (d.hat.x - d.hat.r * 0.5).toFixed(1));
+  // and the beard is a beard shape — wider across than it is long
+  assert(d.beard.ry > d.beard.r * 1.15,
+    'the beard should be shallow across the chin, not a disc pushed out in ' +
+    'front of him: ' + d.beard.r.toFixed(1) + ' long by ' + d.beard.ry.toFixed(1));
+  console.log('    (face band ' + band.toFixed(1) + 'px between a crown to x' +
+    (d.hat.x + d.hat.r).toFixed(1) + ' and whiskers from x' +
+    (d.beard.x - d.beard.r).toFixed(1) + ')');
 });
 
 /* ------------------------------------------------ the combo banner --- */

@@ -760,6 +760,42 @@ edit this block to name the next one.
       it went from `n * 3` to `n * 4` and had to be updated with a pointer to
       why.
 
+- [x] The man behind the wheel is one man. Found by putting all five cars in
+      one picture, which nothing had ever done — you only ever see one car at a
+      time, so five drawings of the same thing can drift apart forever. Every
+      part of him was measured in the *vehicle*: his width in `CARL` and his
+      depth in `CARW`, two numbers that vary independently across the garage.
+      So he came out not five sizes of one man but five different **builds** —
+      a face 49% wider in the truck than in the coupe, shoulders 0.85
+      wide-to-deep in the coupe against 0.66 in the truck, stretched fore-and-
+      aft in the van. He is built in his own unit now (`DRIVER = 38`, the
+      hatchback's width, so the reference car comes out pixel-identical),
+      anchored so his hands stay at the windscreen whatever the car is long.
+      The cabin around him still scales, so a truck cab dwarfing its driver is
+      what you get, which is correct. The test that should have caught this was
+      **called** `every car carries the same driver` and only ever checked that
+      his parts were all still present — the fourth time a measurement gap has
+      hidden a regression behind a test that looked like it covered it.
+  - The same picture, at four times size, turned up a second one in the same
+      object: **the eyes were on the hat and the mouth was inside the beard.**
+      Both are drawn over the face, and between them they covered all but a
+      **0.6px** crescent of it, so the only skin showing was a sliver and what
+      you actually saw was two dark dots on a red field and a dark hole in a
+      white blob. An earlier pass has a comment about moving the eyes off the
+      beard — it moved them onto the hat instead. The hat covers the crown and
+      stops short of the eyes now, the beard is a shallow ellipse across the
+      chin rather than a disc shoved out in front of the face, and there is a
+      **7.2px** band of face between them carrying both eyes and the mouth. The
+      old assertion said `the mouth should be in the beard, where a mouth is`,
+      which is exactly how a mouth wholly buried in whiskers got signed off;
+      it now asserts the opposite, with a pointer to the new test. Five
+      revert-variants, each failing on its own assertion: the driver in car
+      units (49% spread), eyes back on the hat, the beard back to a disc (fires
+      twice — the mouth *and* the beard shape), a driver too big for the coupe's
+      cabin, and the bobble back inside the crown. One assertion was dropped
+      for being unfalsifiable: a shoulders-aspect check that could not fail
+      while both shoulder dimensions were already pinned.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
