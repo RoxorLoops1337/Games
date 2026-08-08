@@ -4963,27 +4963,30 @@ function drawProp(o){
            system, the same way the grills smoke. */
         ctx.fillStyle = '#5c4430';                  // the trestle it stands on
         ctx.beginPath();
-        ctx.rect(-o.r * 1.34, -7, o.r * 2.68, 14);
-        ctx.rect(-7, -o.r * 1.34, 14, o.r * 2.68);
+        /* The trestle reaches to the edge of the collider and the pot sits
+           inside it — the other way round drew planks 34% past the circle you
+           can actually hit. Same total footprint, honest silhouette. */
+        ctx.rect(-o.r * 0.99, -7, o.r * 1.98, 14);
+        ctx.rect(-7, -o.r * 0.99, 14, o.r * 1.98);
         ctx.fill();
-        ctx.fillStyle = '#4a3a2c'; circle(0, 0, o.r); ctx.fill();
+        ctx.fillStyle = '#4a3a2c'; circle(0, 0, o.r * 0.8); ctx.fill();
         ctx.fillStyle = '#7a5a3c';                  // copper, lit up its own side
-        circle(-o.r * 0.13 * SUN_DX * 4, -o.r * 0.13 * SUN_DY * 4, o.r * 0.94); ctx.fill();
-        ctx.fillStyle = '#8b2f22'; circle(0, 0, o.r * 0.76); ctx.fill();
+        circle(-o.r * 0.08 * SUN_DX * 4, -o.r * 0.08 * SUN_DY * 4, o.r * 0.72); ctx.fill();
+        ctx.fillStyle = '#8b2f22'; circle(0, 0, o.r * 0.61); ctx.fill();
         const heat = 0.35 + 0.2 * Math.sin(T * 3 + o.seed * 6);
         ctx.fillStyle = 'rgba(255,150,90,' + heat.toFixed(3) + ')';
-        circle(0, 0, o.r * 0.55); ctx.fill();
+        circle(0, 0, o.r * 0.44); ctx.fill();
         if (!fine){ ctx.restore(); break; }         // the rest is under a pixel far off
         ctx.fillStyle = 'rgba(255,228,190,.30)';    // the sheen off the surface
         ctx.beginPath();
-        ctx.ellipse(-o.r * 0.22, -o.r * 0.26, o.r * 0.3, o.r * 0.16, -0.5, 0, 6.283); ctx.fill();
+        ctx.ellipse(-o.r * 0.18, -o.r * 0.21, o.r * 0.24, o.r * 0.13, -0.5, 0, 6.283); ctx.fill();
         ctx.fillStyle = '#8d7a5c';                  // a ladle left standing in it
         ctx.beginPath();
-        ctx.rect(-o.r * 0.045, -o.r * 0.62, o.r * 0.09, o.r * 0.46);
-        ctx.moveTo(o.r * 0.13, -o.r * 0.16); ctx.arc(0, -o.r * 0.16, o.r * 0.13, 0, 6.283);
+        ctx.rect(-o.r * 0.045, -o.r * 0.5, o.r * 0.09, o.r * 0.37);
+        ctx.moveTo(o.r * 0.11, -o.r * 0.13); ctx.arc(0, -o.r * 0.13, o.r * 0.11, 0, 6.283);
         ctx.fill();
         ctx.strokeStyle = '#c9a24a'; ctx.lineWidth = 5;
-        circle(0, 0, o.r * 0.92); ctx.stroke();
+        circle(0, 0, o.r * 0.735); ctx.stroke();
         /* The cups that the wreck throws across the snow, before it throws
            them: four on the rim, off the same hash the wreck uses. */
         /* Spread round the rim rather than rolled independently — four random
@@ -4991,7 +4994,7 @@ function drawProp(o){
            odd blob. The stand's own seed turns the whole set instead. */
         const cupAt = (i) => {
           const a = (i / GLUH_CUPS + o.seed) * 6.283;
-          return [Math.cos(a) * o.r * 0.82, Math.sin(a) * o.r * 0.82 * 0.66];
+          return [Math.cos(a) * o.r * 0.66, Math.sin(a) * o.r * 0.66 * 0.66];
         };
         const cups = (rad, col) => {                // three passes, one fill each
           ctx.fillStyle = col;
@@ -5268,7 +5271,7 @@ function drawProp(o){
         ctx.fillStyle = '#c8443a';
         ctx.beginPath();
         for (let i = 0; i < 4; i++){
-          const x = -L / 2 + 10 + i * (L / 4.4), w = L / 11, sl = THK * 0.55;
+          const x = -L / 2 + 14 + i * (L / 4.4), w = L / 11, sl = THK * 0.55;
           ctx.moveTo(x, -THK / 2); ctx.lineTo(x + w, -THK / 2);
           ctx.lineTo(x + w - sl, THK / 2); ctx.lineTo(x - sl, THK / 2);
           ctx.closePath();
@@ -5282,8 +5285,8 @@ function drawProp(o){
         // feet. roundRect opens its own path, so these cannot share one —
         // stacking them silently drew the far foot only.
         ctx.fillStyle = '#8a94a6';
-        roundRect(-L / 2 - 1, -THK / 2 - 5, 10, THK + 10, 3); ctx.fill();
-        roundRect(L / 2 - 9, -THK / 2 - 5, 10, THK + 10, 3); ctx.fill();
+        roundRect(-L / 2, -THK / 2, 10, THK, 3); ctx.fill();
+        roundRect(L / 2 - 10, -THK / 2, 10, THK, 3); ctx.fill();
       }
       ctx.restore(); break;
     }
@@ -5328,10 +5331,10 @@ function drawProp(o){
          busby with a plume, a beard and the moustache. */
       ctx.fillStyle = '#1e3154';                          // shoulders
       ctx.beginPath();
-      ctx.ellipse(0, o.r * 0.12, o.r * 1.02, o.r * 0.78, 0, 0, 6.283); ctx.fill();
+      ctx.ellipse(0, o.r * 0.12, o.r * 0.86, o.r * 0.74, 0, 0, 6.283); ctx.fill();
       ctx.fillStyle = '#c9a24a';                          // gold epaulettes
-      circle(-o.r * 0.78, o.r * 0.16, o.r * 0.26); ctx.fill();
-      circle(o.r * 0.78, o.r * 0.16, o.r * 0.26); ctx.fill();
+      circle(-o.r * 0.66, o.r * 0.16, o.r * 0.22); ctx.fill();
+      circle(o.r * 0.66, o.r * 0.16, o.r * 0.22); ctx.fill();
       ctx.fillStyle = '#28406b'; circle(0, -o.r * 0.06, o.r * 0.82); ctx.fill();
       ctx.fillStyle = 'rgba(255,247,228,.13)';
       circle(-o.r * 0.24, -o.r * 0.3, o.r * 0.46); ctx.fill();

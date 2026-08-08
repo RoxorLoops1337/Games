@@ -73,7 +73,7 @@ const EXPOSE = `__out.api = {
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
-  TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
+  PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
@@ -6409,7 +6409,11 @@ test('the glühwein stand is a pot on a trestle, not a pink plate', () => {
   assert(legs.length === 2, 'the trestle is two crossed planks, got ' + legs.length);
   for (const l of legs){
     const long = Math.max(l[3], l[4]);
-    assert(long > r * 2.1, 'a plank only ' + long.toFixed(0) + ' across a pot of r' + r);
+    /* Across the whole collider, and not past it: the first version reached
+       2.68r and drew planks 34% outside the circle you can actually hit. The
+       pot sits inside the trestle rather than the trestle round the pot. */
+    assert(long > r * 1.9, 'a plank only ' + long.toFixed(0) + ' across a pot of r' + r);
+    assert(long <= r * 2 + 0.01, 'a plank reaches ' + long.toFixed(0) + ' past a pot of r' + r);
   }
 
   /* Four mugs, spread round the rim rather than rolled independently — four
@@ -6440,8 +6444,9 @@ test('the glühwein stand is a pot on a trestle, not a pink plate', () => {
   assert(worst > 6.283 / api.GLUH_CUPS - 0.01,
     'the mugs should be evenly spread, closest pair ' + worst.toFixed(2) +
     ' rad apart for ' + api.GLUH_CUPS);
+  // the rim moved in with the pot when the trestle stopped overhanging
   for (const e of cup)
-    assert(Math.abs(Math.hypot(e[1], e[2] / 0.66) - r * 0.82) < 0.5,
+    assert(Math.abs(Math.hypot(e[1], e[2] / 0.66) - r * 0.66) < 0.5,
       'a mug is off the rim at ' + Math.hypot(e[1], e[2] / 0.66).toFixed(1));
 
   // what it carries is what the wreck throws across the snow
@@ -6575,6 +6580,91 @@ test('a barrel lid is staves and banked snow, not a biscuit', () => {
   for (let i = 0; i < 30; i++){ live.o.seed = i / 30; api.drawProp(live.o); }
   assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
     'drawing the barrels moved the simulation stream');
+});
+
+/* Four passes running turned up a silhouette drawn past the circle or box the
+   car can actually hit — the tree's snow at 1.11r, the barrel's snow bank, the
+   plough's blade and its wings. Each was found by looking at one prop. This
+   looks at all of them at once: for every live prop kind, nothing it draws may
+   reach past its own collider.
+
+   Three things are allowed out, and each is a thing you cannot hit: the shadow
+   it casts on the ground, and the plumes off the grills and the glühwein pots,
+   which are meant to be bigger than the thing making them. */
+const NOT_SOLID = [
+  /^rgba\(8,16,32/,          // the shadow it casts on the ground
+  /^rgba\(228,238,252/,      // a grill's plume, which is meant to be bigger
+  /^rgba\(238,244,255/,      // and a glühwein pot's steam
+];
+/* A silhouette is what is opaque. The lit-side wash every round prop carries
+   is a translucent ellipse at a tenth alpha laid across the whole top of it —
+   it softens an edge, it does not make one, and holding it to the collider
+   would mean shrinking the light rather than the art. */
+const SOLID_A = 0.5;
+const translucent = (col) => {
+  const m = /^rgba\([^)]*,\s*([\d.]+)\)/.exec(String(col));
+  return !!m && +m[1] < SOLID_A;
+};
+/* A stall's awning is a canopy: it hangs over the counter, past the front of
+   the hut's box, and you drive under it. It is the one piece of art in the
+   market that is deliberately not where the collider is. */
+const CANOPY = { hut: 1.5 };
+test('no prop draws past the shape the car can hit', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  /* At the origin, and the camera with it: some prop branches translate to the
+     prop and draw in local coordinates, others draw at o.x/o.y outright. With
+     everything at zero the two are the same frame. */
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.cam.x = 0; api.cam.y = 0;
+  api.setT(2.2);
+  const kinds = Object.keys(api.PROPS);
+  assert(kinds.length >= 10, 'the sweep should cover the whole kit, got ' + kinds.length);
+  const worst = [];
+  for (const kind of kinds){
+    // three seeds, because a trade or a wreck pattern can change the drawing
+    for (const seed of [0.12, 0.47, 0.83]){
+      const art = propArt(api, kind, false, (o) => {
+        o.x = 0; o.y = 0; o.seed = seed; o.face = 1;
+      });
+      const o = art.o;
+      const box = o.shape !== 'circ';
+      // a point, and a radius around it if the primitive has one
+      const over = (x, y, rx, ry) => box
+        ? Math.max((Math.abs(x) + (rx || 0)) / (o.w / 2),
+                   (Math.abs(y) + (ry || rx || 0)) / (o.h / 2))
+        : (Math.hypot(x, y) + Math.max(rx || 0, ry || rx || 0)) / o.r;
+      let peak = 0, at = null;
+      for (const e of art.rec.all){
+        const col = String(e[e.length - 1]);
+        if (NOT_SOLID.some(rx => rx.test(col)) || translucent(col)) continue;
+        let f = 0;
+        if (e[0] === 'arc') f = over(e[1], e[2], e[3]);
+        else if (e[0] === 'el') f = over(e[1], e[2], e[3], e[4]);
+        else if (e[0] === 'rect' || e[0] === 'fr'){
+          for (const cx of [e[1], e[1] + e[3]]) for (const cy of [e[2], e[2] + e[4]])
+            f = Math.max(f, over(cx, cy));
+        } else f = over(e[1], e[2]);
+        if (f > peak){ peak = f; at = [e[0], col]; }
+      }
+      if (peak > 0) worst.push({ kind, seed, peak, at, box });
+    }
+  }
+  const byKind = {};
+  for (const w of worst) if (!byKind[w.kind] || w.peak > byKind[w.kind].peak) byKind[w.kind] = w;
+  const lines = Object.keys(byKind).sort()
+    .map(k => k + ' ' + (byKind[k].peak * 100).toFixed(0) + '% ' + byKind[k].at.join(':'));
+  console.log('    (silhouette against collider: ' + lines.join(', ') + ')');
+  for (const k of Object.keys(byKind)){
+    const w = byKind[k];
+    assert(w.peak <= (CANOPY[k] || 1.001),
+      k + ' draws to ' + (w.peak * 100).toFixed(0) + '% of the ' +
+      (w.box ? 'box' : 'circle') + ' you can hit, in a ' + w.at[0] + ' of ' + w.at[1]);
+  }
+  /* And it must not be a kit of shrunken stickers either: something in the
+     market has to actually fill the shape it promises. */
+  const fills = Object.values(byKind).filter(w => w.peak > 0.9).length;
+  assert(fills >= 3, 'only ' + fills + ' props fill their collider — the art has shrunk');
 });
 
 test('a wrecked snowman is still a snowman', () => {

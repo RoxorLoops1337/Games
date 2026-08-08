@@ -673,6 +673,25 @@ edit this block to name the next one.
       on "the arriving swing is the weaker one (622 vs 608)" and passed five
       times out of five when run alone. It is a randomised suite; not ours.
 
+- [x] Every prop is now inside the shape you can hit, and one test says so.
+      Four passes running had turned up a silhouette drawn past its own
+      collider — the tree's snow at 111%, the barrel's bank, the plough's blade
+      and its wings — each found by happening to look at that one prop. So the
+      sweep exists: for every kind in `PROPS`, at three seeds, nothing it draws
+      may reach past its circle or its box. It found three more straight away,
+      one of them mine from two passes ago: **the glühwein trestle at 135%**
+      (the pot sits inside the trestle now rather than the trestle round the
+      pot — same footprint, honest silhouette), **the crowd barrier's end feet
+      at 150%**, and **the nutcracker's shoulders at 114%**. Two rules make the
+      sweep mean something rather than fire on everything: only *opaque* art
+      counts as silhouette, because the lit-side wash every round prop carries
+      is a tenth-alpha ellipse that softens an edge rather than making one; and
+      a stall's awning is a named exception with a reason — it is a canopy over
+      the counter and you drive under it. Both rules are load-bearing: dropping
+      either makes the sweep red. It also refuses to pass if the art has gone
+      the other way and shrunk, so this cannot be satisfied by making
+      everything smaller.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
