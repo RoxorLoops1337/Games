@@ -87,6 +87,7 @@ const EXPOSE = `__out.api = {
   paintMarketThumb, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
   drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, drawHut,
+  drawCounter, goodsN, goodsX,
   bannerBox, bannerFont, bannerLayout, bannerRibbon,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
   bloodInfo: () => ({ w: bloodW, h: bloodH, key: bloodKey, cv: bloodCv }),
@@ -4638,6 +4639,86 @@ test('the six counters are six different drawings, not one with a palette', () =
   api._resetCounts(); api.drawGoods(o, 158, 112, 13, 0.9);
   const half = (api._counts.fill || 0) + (api._counts.fillRect || 0);
   assert(half < full, 'a half-wrecked stall should have lost stock: ' + half + ' vs ' + full);
+});
+
+/* Eight trades laid their stock out "on the counter" and there was no counter:
+   goods floating on a flat wooden face, touching nothing. */
+test('the stock stands on a counter instead of floating on the stall face', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const w = 158, gy = 13, th = api.getTheme();
+
+  for (let i = 0; i < api.TRADES.length; i++){
+    const o = { x: 0, y: 0, w, h: 112, seed: (i + 0.5) / api.TRADES.length };
+    const id = api.tradeOf(o).id;
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawCounter(o, w, gy, 0, 1));
+
+    // a plank, wide enough to carry the whole row and sitting under it
+    const plank = rec.polys.filter(q => q.style === th.wood2);
+    assert(plank.length === 1, id + ': expected one plank, got ' + plank.length);
+    const p = plank[0];
+    assert(p.x0 <= api.goodsX(w, 0) - 6 && p.x1 >= api.goodsX(w, 3) + 6,
+      id + ': the plank does not reach under the whole row, ' +
+      p.x0.toFixed(0) + '..' + p.x1.toFixed(0) + ' for goods at ' +
+      api.goodsX(w, 0).toFixed(0) + '..' + api.goodsX(w, 3).toFixed(0));
+    assert(p.y0 > gy && p.y0 < gy + 16,
+      id + ': the plank should meet the stock, top at ' + p.y0.toFixed(1) +
+      ' for stock at ' + gy);
+
+    // every item resting on it casts a shadow, below it and pushed with the sun
+    const shad = rec.all.filter(e => e[0] === 'el');
+    assert(shad.length === api.goodsN(0),
+      id + ': ' + shad.length + ' shadows for ' + api.goodsN(0) + ' items');
+    for (let k = 0; k < shad.length; k++){
+      assert(shad[k][2] > gy, id + ': a shadow above the thing casting it');
+      assert(shad[k][1] > api.goodsX(w, k),
+        id + ': shadow ' + k + ' is not pushed with the light');
+      assert(shad[k][4] < shad[k][3], id + ': the shadow is not flattened');
+    }
+    /* Every ellipse in one path needs its own moveTo, or canvas joins them into
+       a polygon spanning the whole row. It stays green either way; it is only
+       visible in a screenshot, so it gets held down here. */
+    const before = rec.all.filter((e, k) => e[0] === 'el' && (rec.all[k - 1] || [])[0] !== 'm');
+    assert(before.length === 0, id + ': ' + before.length + ' ellipses not opened by a moveTo');
+  }
+
+  /* The stock has always halved at wear > 0.5 with nothing to show for it.
+     The plank snaps at the middle now, and the splintered stub is why. */
+  const o = { x: 0, y: 0, w, h: 112, seed: 0.4 };
+  const whole = carRec(); api.withCtx(whole, () => api.drawCounter(o, w, gy, 0, 1));
+  const half  = carRec(); api.withCtx(half,  () => api.drawCounter(o, w, gy, 0.9, 1));
+  const span = (r) => { const q = r.polys.filter(x => x.style === th.wood2)[0]; return q.x1 - q.x0; };
+  assert(span(half) < span(whole) * 0.7,
+    'a half-wrecked counter should be a stub: ' + span(half).toFixed(0) +
+    ' vs ' + span(whole).toFixed(0));
+  assert(half.polys.some(q => q.style === th.wood) && !whole.polys.some(q => q.style === th.wood),
+    'the snapped end should be splintered, and only when it has snapped');
+  assert(half.all.filter(e => e[0] === 'el').length === api.goodsN(0.9),
+    'and carry only the stock that is left');
+
+  // legs, two of them, and only on the side you can see
+  const front = carRec(); api.withCtx(front, () => api.drawCounter(o, w, gy, 0, 1));
+  const back  = carRec(); api.withCtx(back,  () => api.drawCounter(o, w, gy, 0, -1));
+  const legs = (r) => r.all.filter(e => e[0] === 'rect');
+  assert(legs(front).length === 2, 'a counter stands on two legs, got ' + legs(front).length);
+  for (const l of legs(front)) assert(l[2] > gy + 16, 'a leg should hang below the plank');
+  assert(legs(back).length === 0, 'a stall facing away should not draw legs you cannot see');
+  // and the plank moves to the far side of the stock when the stall turns round
+  const py = (r) => r.polys.filter(x => x.style === th.wood2)[0].y0;
+  assert(py(back) < gy && py(front) > gy,
+    'the counter should follow the face: back ' + py(back).toFixed(0) +
+    ', front ' + py(front).toFixed(0));
+
+  // none of it reaches the simulation
+  api.reseed(4242);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(4242);
+  for (const hut of api.props.filter(x => x.kind === 'hut')) api.drawHut(hut);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the counters moved the simulation stream');
+  console.log('    (counter: ' + whole.fills + ' fills whole, ' + half.fills +
+    ' snapped, ' + back.fills + ' facing away)');
 });
 
 /* A stall that has been smoking for six markets must not have six markets of
