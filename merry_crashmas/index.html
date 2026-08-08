@@ -4569,6 +4569,64 @@ const BARREL_STAVES = 7, BARREL_SNOW = 0.15;
    a promise the physics does not keep, and the old art overhung by five. */
 const PLOW_PAD = 12, PLOW_T = 9, PLOW_GORE = 5;
 const plowReach = () => CARL / 2 + PLOW_PAD + CAR.plow;
+
+/* The blade, drawn once and worn twice: bolted to the front of the car for the
+   eight seconds you have it, and lying in the snow as the pickup that gives it
+   to you. Those were two different objects. The car's was rebuilt into a
+   curved band with a steel cutting edge and a lit lip; the pickup was left as
+   what the car used to be — a flat white trapezoid with a red bar — so the
+   thing you drove over promised something the thing you got was not. Fourth
+   time in this run of passes that one object had two drawings that had drifted
+   apart, after the pram, the hat and the driver.
+
+   Every offset is a multiple of the blade's own thickness, so the same
+   silhouette comes out at any size. At `th = PLOW_T` it reproduces the car's
+   blade to the pixel, which is the point: the car does not move, the pickup
+   comes to meet it. */
+function plowBlade(tip, wing, bx, th, bloody){
+  const k = th / PLOW_T, c = 4 * k, s = 3 * k;
+  const arc = (out, dir) => {
+    ctx.quadraticCurveTo(tip - out - c, dir * wing * 0.55, bx - out, dir * wing);
+  };
+  const face = (out) => {
+    ctx.moveTo(bx - out, -wing);
+    ctx.quadraticCurveTo(tip - out - c, -wing * 0.55, tip - out, 0);
+    ctx.quadraticCurveTo(tip - out - c, wing * 0.55, bx - out, wing);
+  };
+  ctx.fillStyle = bloody > 0.02 ? '#c9cfd8' : '#dfe8f6';
+  ctx.beginPath();
+  face(0);
+  ctx.lineTo(bx - th, wing);
+  ctx.quadraticCurveTo(tip - th - c, wing * 0.55, tip - th, 0);
+  arc(th, -1);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#8d97a8';                       // the steel that does the work
+  ctx.beginPath();
+  face(0);
+  ctx.lineTo(bx - s, wing);
+  ctx.quadraticCurveTo(tip - s - c, wing * 0.55, tip - s, 0);
+  arc(s, -1);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,252,244,.5)';          // the lip catching the light
+  ctx.beginPath();
+  ctx.moveTo(bx - th, -wing);
+  ctx.quadraticCurveTo(tip - th - c, -wing * 0.55, tip - th, 0);
+  ctx.lineTo(tip - th + 3.5 * k, 0);
+  ctx.quadraticCurveTo(tip - th - k, -wing * 0.55, bx - th + 3.5 * k, -wing);
+  ctx.closePath(); ctx.fill();
+  if (bloody > 0.02){                              // what it has been through
+    ctx.fillStyle = 'rgba(150,20,16,' + (0.7 * clamp(bloody, 0, 1)).toFixed(3) + ')';
+    ctx.beginPath();
+    for (let i = 0; i < PLOW_GORE; i++){
+      const t = (i + 0.5) / PLOW_GORE * 2 - 1;
+      const gy = t * wing * 0.86;
+      const gx = tip - 5 * k - Math.abs(t) * (tip - bx) * 0.72;
+      const gr = (4 + (i % 3) * 2.5) * k;
+      ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, 6.283);
+    }
+    ctx.fill();
+  }
+}
 function drawSpilledStock(o, w){
   const sp = WRECK_SPILL[tradeOf(o).goods];
   if (!sp) return 0;
@@ -6238,47 +6296,8 @@ function drawCar(){
     /* Wide and shallow, which is what a plough is: the pickup widens the hit
        box sideways by `PLOW_PAD` as well as lengthening it, so the wings reach
        exactly as far out as the collider does and sweep back past the front
-       wheels where you can see them. A curved band of constant thickness, not
-       a filled wedge — the old trapezoid had no back to it. */
-    const tip = plowReach(), wing = CARW / 2 + PLOW_PAD, bx = CARL * 0.26;
-    const face = (out) => {
-      ctx.moveTo(bx - out, -wing);
-      ctx.quadraticCurveTo(tip - out - 4, -wing * 0.55, tip - out, 0);
-      ctx.quadraticCurveTo(tip - out - 4, wing * 0.55, bx - out, wing);
-    };
-    ctx.fillStyle = car.bloody > 0.02 ? '#c9cfd8' : '#dfe8f6';
-    ctx.beginPath();
-    face(0);
-    ctx.lineTo(bx - PLOW_T, wing);
-    ctx.quadraticCurveTo(tip - PLOW_T - 4, wing * 0.55, tip - PLOW_T, 0);
-    ctx.quadraticCurveTo(tip - PLOW_T - 4, -wing * 0.55, bx - PLOW_T, -wing);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#8d97a8';                     // the steel that does the work
-    ctx.beginPath();
-    face(0);
-    ctx.lineTo(bx - 3, wing);
-    ctx.quadraticCurveTo(tip - 7, wing * 0.55, tip - 3, 0);
-    ctx.quadraticCurveTo(tip - 7, -wing * 0.55, bx - 3, -wing);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(255,252,244,.5)';        // the lip catching the light
-    ctx.beginPath();
-    ctx.moveTo(bx - PLOW_T, -wing);
-    ctx.quadraticCurveTo(tip - PLOW_T - 4, -wing * 0.55, tip - PLOW_T, 0);
-    ctx.lineTo(tip - PLOW_T + 3.5, 0);
-    ctx.quadraticCurveTo(tip - PLOW_T - 1, -wing * 0.55, bx - PLOW_T + 3.5, -wing);
-    ctx.closePath(); ctx.fill();
-    if (car.bloody > 0.02){                        // what it has been through
-      ctx.fillStyle = 'rgba(150,20,16,' + (0.7 * clamp(car.bloody, 0, 1)).toFixed(3) + ')';
-      ctx.beginPath();
-      for (let i = 0; i < PLOW_GORE; i++){
-        const t = (i + 0.5) / PLOW_GORE * 2 - 1;
-        const gy = t * wing * 0.86;
-        const gx = tip - 5 - (1 - Math.abs(t)) * 0 - Math.abs(t) * (tip - bx) * 0.72;
-        const gr = 4 + (i % 3) * 2.5;
-        ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, 6.283);
-      }
-      ctx.fill();
-    }
+       wheels where you can see them. */
+    plowBlade(plowReach(), CARW / 2 + PLOW_PAD, CARL * 0.26, PLOW_T, car.bloody);
   }
   // wheels — the monster truck's are twice the size and stick right out
   const ww = CAR.bigWheels ? 30 : 22, wh = CAR.bigWheels ? 18 : 12;
@@ -6523,15 +6542,24 @@ function drawPickup(u){
     ctx.lineTo(-2, 12); ctx.lineTo(5, -3); ctx.lineTo(1, -3);
     ctx.closePath(); ctx.fill();
   } else if (u.kind === 'plow'){
-    ctx.fillStyle = '#9fb4cd';                       // the blade, edge on
+    /* The blade itself, lying in the snow — the same drawing the car wears,
+       at pickup size. See `plowBlade`. The two arms behind it are the frame it
+       bolts on by, which is what says "this comes off a vehicle" rather than
+       "this is a snowdrift", and they are the reason it is not simply the car's
+       blade shrunk. */
+    ctx.strokeStyle = '#5a6577'; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(-18, -21); ctx.lineTo(18, -12); ctx.lineTo(18, 12); ctx.lineTo(-18, 21);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#eef5ff';
-    ctx.beginPath();
-    ctx.moveTo(-15, -17); ctx.lineTo(13, -9); ctx.lineTo(13, 3); ctx.lineTo(-15, 5);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#c8443a'; roundRect(11, -14, 8, 28, 3); ctx.fill();
+    for (const sy of [-1, 1]){
+      ctx.moveTo(-15, sy * 15); ctx.lineTo(-25, sy * 5);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#c8443a';                       // the hitch, in pickup red
+    roundRect(-30, -6, 8, 12, 3); ctx.fill();
+    /* Thicker than the car's for its span, and that is not a cheat: bolted on,
+       the back two thirds of the blade sit over the bumper and all you see is
+       its front edge, so a band that matched the car's proportions read as a
+       piece of wire lying in the snow. Face and curve are the shared ones. */
+    plowBlade(14, 19, -8, 11, 0);
   } else {
     ctx.fillStyle = '#e8a91f'; spikeRing(20, 5, 0.55, T * 0.6 + u.bob); ctx.fill();
     ctx.fillStyle = '#ffd34d'; spikeRing(16, 5, 0.55, T * 0.6 + u.bob); ctx.fill();
