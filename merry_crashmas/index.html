@@ -2819,6 +2819,8 @@ function stepSpills(dt){
    None of it scores and none of it touches the simulation: every number here
    comes from the cosmetic generator, so a market that has had its fireworks
    set off plays exactly like one that has not. */
+// how far a rocket's trail reaches behind it, in head widths
+const FW_TRAIL = 14;
 const FW_COLS = ['255,110,90', '255,214,110', '150,225,255', '190,140,255', '140,255,170'];
 function crateOf(o){ return o.kind === 'barrel' && (o.seed || 0) < 0.4; }
 function launchFireworks(o, vol){
@@ -6867,13 +6869,24 @@ function drawFireworks(){
   for (const f of fx){
     const k = clamp(1 - f.t / f.ttl, 0, 1);
     if (f.type === 'rocket'){
+      /* The trail was a round-capped stroke of constant width and constant
+         alpha — a matchstick with a bright dot on the end, and a hard rounded
+         cap at the *back* of it, where a rocket is supposed to be thinning
+         into nothing. It is a tapered wedge now: full width at the head,
+         a point at the tail, with a shorter and brighter one inside it, so
+         the trail reads as burning down rather than as a drawn line. */
       const sp = Math.hypot(f.vx, f.vy) || 1;
-      ctx.strokeStyle = 'rgba(' + f.col + ',.45)';
-      ctx.lineWidth = f.size * 1.1; ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(f.x, f.y);
-      ctx.lineTo(f.x - (f.vx / sp) * f.size * 14, f.y - (f.vy / sp) * f.size * 14);
-      ctx.stroke();
+      const ux = f.vx / sp, uy = f.vy / sp, nx = -uy, ny = ux;
+      const wedge = (len, w, a) => {
+        ctx.fillStyle = 'rgba(' + f.col + ',' + a + ')';
+        ctx.beginPath();
+        ctx.moveTo(f.x + nx * w, f.y + ny * w);
+        ctx.lineTo(f.x - ux * len, f.y - uy * len);
+        ctx.lineTo(f.x - nx * w, f.y - ny * w);
+        ctx.closePath(); ctx.fill();
+      };
+      wedge(f.size * FW_TRAIL, f.size * 0.95, '.34');
+      wedge(f.size * FW_TRAIL * 0.42, f.size * 0.6, '.5');
       ctx.fillStyle = 'rgba(' + f.col + ',.95)';
       circle(f.x, f.y, f.size); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.85)';

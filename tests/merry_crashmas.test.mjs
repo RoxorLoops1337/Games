@@ -76,7 +76,7 @@ const EXPOSE = `__out.api = {
   PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
-  captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
+  captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS, FW_TRAIL,
   carLitDir, drawCar, plowReach, PLOW_PAD, PLOW_T, PLOW_GORE, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
@@ -8522,6 +8522,77 @@ test('a volley launches, bursts and clears up after itself', () => {
   assert(!api.fx.some(f => f.type === 'rocket'), 'a plain barrel should not launch anything');
 });
 
+/* A rocket's trail was a round-capped stroke of constant width and constant
+   alpha: a matchstick with a bright dot on the end, and a hard rounded cap at
+   the *back* of it, where a rocket is supposed to be thinning into nothing. */
+test('a rocket burns down behind itself instead of towing a matchstick', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const shot = (ang) => {
+    api.fx.length = 0;
+    api.addFx({ type: 'rocket', x: api.cam.x, y: api.cam.y,
+      vx: Math.cos(ang) * 400, vy: Math.sin(ang) * 400,
+      ttl: 2, size: 4, col: '255,120,90' });
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawFireworks());
+    return rec;
+  };
+
+  for (const ang of [0, 1.2, -2.1, 2.9]){
+    const rec = shot(ang);
+    // no stroke anywhere: that round cap at the tail was the whole problem
+    /* Not `all[3]`: for an arc that slot is the radius, not the stroke style.
+       carRec flags a stroked shape outright. */
+    assert(!rec.shapes.some(sh => sh.stroked) && !rec.polys.some(q => q.stroked),
+      'a rocket should not be stroked at ' + ang.toFixed(1));
+    const pts = rec.all.filter(e =>
+      (e[0] === 'm' || e[0] === 'l') && /^rgba\(255,120,90/.test(String(e[4])));
+    assert(pts.length === 6, 'two wedges of three corners, got ' + pts.length);
+    for (const w of [pts.slice(0, 3), pts.slice(3)]){
+      // the apex is the one behind the head, along -velocity
+      const d = w.map(e => (e[1] - api.cam.x) * -Math.cos(ang) +
+                           (e[2] - api.cam.y) * -Math.sin(ang));
+      const apex = d.indexOf(Math.max(...d));
+      assert(d[apex] > 4, 'the tail should reach back, got ' + d[apex].toFixed(1));
+      const base = w.filter((_, i) => i !== apex);
+      for (const bp of base)
+        assert(Math.hypot(bp[1] - api.cam.x, bp[2] - api.cam.y) < 5,
+          'the wide end should be at the head, not out along the trail');
+      // and the base straddles the head rather than sitting on one side
+      const side = base.map(e => (e[1] - api.cam.x) * -Math.sin(ang) +
+                                 (e[2] - api.cam.y) * Math.cos(ang));
+      assert(side[0] * side[1] < 0, 'the trail is not centred on the rocket');
+    }
+  }
+
+  /* Two of them: a long faint one and a short bright one inside it, which is
+     what makes it read as burning down rather than as a drawn line. */
+  const rec = shot(0);
+  const alphas = rec.order.filter(c => /^rgba\(255,120,90/.test(String(c)))
+    .map(c => +/,([\d.]+)\)$/.exec(c)[1]);
+  assert(alphas.length === 3, 'two wedges and a head, got ' + alphas.length + ' passes');
+  assert(alphas[1] > alphas[0], 'the inner wedge should be the brighter: ' + alphas.join(' '));
+  const reach = (i) => {
+    const w = rec.all.filter(e => (e[0] === 'm' || e[0] === 'l') &&
+      /^rgba\(255,120,90/.test(String(e[4]))).slice(i * 3, i * 3 + 3);
+    return Math.max(...w.map(e => api.cam.x - e[1]));
+  };
+  assert(reach(0) > reach(1) * 1.5,
+    'the inner wedge should be the shorter: ' + reach(0).toFixed(1) + ' vs ' + reach(1).toFixed(1));
+  assert(Math.abs(reach(0) - 4 * api.FW_TRAIL) < 0.01,
+    'the trail should be FW_TRAIL head-widths, got ' + reach(0).toFixed(1));
+
+  api.reseed(1789);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(1789);
+  for (let i = 0; i < 30; i++) shot(i * 0.2);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing a rocket moved the simulation stream');
+  console.log('    (rocket trail: ' + reach(0).toFixed(0) + 'px behind a ' +
+    '4px head, inner ' + reach(1).toFixed(0) + ')');
+});
+
 test('fireworks are drawn by the light pass, not under the night wash', () => {
   const api = boot({ count: true, w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
@@ -8543,8 +8614,10 @@ test('fireworks are drawn by the light pass, not under the night wash', () => {
   const inLight = (api._counts.stroke || 0) + (api._counts.fill || 0);
   console.log('    (volley of ' + n + ': ' + inFx + ' pieces from drawFx, ' +
     inLight + ' from the light pass)');
-  assert(inLight === n * 3,
-    n + ' rockets are a tail and two dots each, got ' + inLight + ' pieces');
+  /* Four pieces each since the trail became two tapered wedges instead of one
+     round-capped stroke — see "a rocket burns down behind itself". */
+  assert(inLight === n * 4,
+    n + ' rockets are two wedges and two dots each, got ' + inLight + ' pieces');
   assert(inFx === 0, 'drawFx should not draw a rocket, got ' + inFx + ' pieces');
 });
 
