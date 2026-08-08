@@ -51,7 +51,7 @@ const EXPOSE = `__out.api = {
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
   draw, drawHUD, drawAim, drawSling, previewPath, drawShout, nitroRect, popText, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
-  SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH_Z, CAR_MIN_PX, MIN_FILL, CAM_OVERSHOOT,
+  SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH, LAUNCH_PUNCH_T, CAR_MIN_PX, MIN_FILL, CAM_OVERSHOOT,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
@@ -76,7 +76,7 @@ const EXPOSE = `__out.api = {
   lightGain, LIT_REF,
   lightSprites, mistInfo: () => mistSprite, maskInfo: () => maskSprite,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
-  PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
+  PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, comboRect, topStackBottom, shoutRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS, FW_TRAIL,
@@ -1042,18 +1042,83 @@ test('letting go of the sling actually looks like something happened', () => {
   assert(api.fx.slice(before).every(f => f.type === 'puff'), 'and it is a puff, not debris');
   assert(api.getFlash() > 0.2, 'the release flashes, got ' + api.getFlash());
   assert(api.getHitstop() > 0.03, 'the release hit-stops, got ' + api.getHitstop());
-  assert(api.cam.tz <= 1200, 'the camera punches in on release, got ' + api.cam.tz);
-  near(api.cam.tz, api.LAUNCH_PUNCH_Z, 0.0001, 'to the punch zoom exactly');
+  near(api.G.punchT, api.LAUNCH_PUNCH_T, 0.0001, 'the release arms the zoom punch');
+  /* …and does not *take* it. The punch used to be an assignment to cam.tz on
+     this very frame, from the aim zoom straight to 1150. */
+  near(api.cam.tz, 1500, 0.0001,
+    'the camera should not have moved on the release frame, got ' + api.cam.tz);
 });
 
-test('the sling stops snapping, and the camera eases back out', () => {
+/* A cut is what this was: one frame at the aim zoom, the next at 1150, with
+   nothing in between. Measured as the largest single-frame change in how big
+   the world is drawn — cam.s, not cam.tz, because that is the number the
+   picture is scaled by. */
+test('the launch zooms in, it does not cut', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.camSnap();
+  const aimS = api.cam.s;
+  assert(api.launch(-api.C.MAX_PULL, -80), 'the launch should take');
+
+  let worst = 0, atFrame = 0, prev = aimS, tightest = 0;
+  for (let i = 0; i < 90; i++){
+    step(api, 1 / 60);
+    const r = api.cam.s / prev;
+    if (r > worst){ worst = r; atFrame = i; }
+    prev = api.cam.s;
+    tightest = Math.max(tightest, api.cam.s);
+  }
+  assert(worst < 1.20, 'the world jumps ' + ((worst - 1) * 100).toFixed(0) +
+    '% bigger in one frame at frame ' + atFrame + ' — that is a cut, not a zoom');
+  // it does still arrive: the drive view is meaningfully tighter than the aim
+  assert(api.cam.s > aimS * 1.25, 'the camera should end up closer in than the aim view');
+  console.log('    (launch zoom: aim s ' + aimS.toFixed(3) + ' -> drive s ' +
+    api.cam.s.toFixed(3) + ', worst single frame +' +
+    ((worst - 1) * 100).toFixed(1) + '%)');
+});
+
+/* The drive view used to run 880-1300 against an aim view of 1500-2300, so the
+   market was up to 2.6x bigger the moment you were driving through it. */
+test('the drive view is not a different market from the one you aimed at', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  /* One market proves nothing: the aim zoom is fitted to the market's own
+     depth and only the big ones reach its 2300 ceiling, so market 1 came out
+     at 1.41x on the tight old drive view too. This is the worst of all 21, at
+     both ends of the drive zoom — full speed, and coasting to a halt, which is
+     where the old floor of 880 made a stall a fifth of the screen. */
+  let worst = 0, where = '';
+  for (let i = 0; i < 21; i++){
+    api.startLevel(i); api.beginLevel(); api.camSnap();
+    const aimZ = api.cam.tz;
+    api.launch(-api.C.MAX_PULL, 0);
+    api.G.punchT = 0;                     // the settled view, not the punch
+    for (const [label, sp] of [['at speed', 1900], ['coasting', 140]]){
+      api.car.vx = sp; api.car.vy = 0;
+      const z = api.camTarget().z;
+      if (aimZ / z > worst){ worst = aimZ / z; where = 'market ' + (i + 1) + ' ' + label; }
+    }
+  }
+  assert(worst < 2.4, 'the drive view is ' + worst.toFixed(2) +
+    'x tighter than the aim view (' + where + ')');
+  // …and the car is still big enough to steer at the widest of them
+  api.startLevel(20); api.beginLevel(); api.launch(-api.C.MAX_PULL, 0);
+  api.G.punchT = 0; step(api, 2.0);
+  const px = api.getDims().l * api.cam.s;
+  assert(px >= api.CAR_MIN_PX, 'the car is only ' + px.toFixed(0) + 'px long');
+  console.log('    (aim vs drive: worst ' + worst.toFixed(2) + 'x at ' + where +
+    ', car ' + px.toFixed(0) + 'px)');
+});
+
+test('the sling stops snapping, and the camera has arrived at the drive view', () => {
   const api = boot();
   api.startCampaign(); api.beginLevel();
+  api.camSnap();
+  const aimed = api.cam.tz;
   api.launch(-api.C.MAX_PULL, 0);
-  const punched = api.cam.tz;
   step(api, 0.4);
   assert(!api.G.sling, 'the band is still by 0.4s');
-  assert(api.cam.tz > punched + 60, 'and the camera has eased back out: ' + punched + ' -> ' + api.cam.tz);
+  assert(api.cam.tz < aimed - 200, 'and the camera has come in: ' + aimed + ' -> ' + api.cam.tz);
   api.drawSling();                       // must be a no-op, not a throw
 });
 
@@ -3430,10 +3495,17 @@ test('the run summary sits at the top, not across the wreckage', () => {
     'the receipt should stay in the top strip, got ' + receipt.y.toFixed(0));
   assert(receipt.y - receipt.h / 2 > sr.y + sr.h - 200,
     'but below the score plate, not printed through it');
-  assert(shout.y > receipt.y,
-    'the loud banner belongs lower than the quiet one: ' +
-    shout.y.toFixed(0) + ' vs ' + receipt.y.toFixed(0));
-  assert(shout.y + shout.h / 2 < 720, 'and inside the frame');
+  /* Both of them are captions, and a caption that covers the thing it is
+     captioning is not one. This used to assert `shout.y > receipt.y` — which
+     was satisfied by the loud banner sitting at VH * 0.30, i.e. 216px down a
+     720 frame, which is exactly the band the car and the wreck it has just
+     made are in. "YULE LOG" landed square on the stall it named. */
+  const BAND = 720 * 0.25;
+  assert(shout.y + shout.h / 2 < BAND, 'the loud banner reaches ' +
+    (shout.y + shout.h / 2).toFixed(0) + 'px down, into the action band at ' + BAND);
+  assert(receipt.y + receipt.h / 2 < BAND, 'and so does the quiet one, at ' +
+    (receipt.y + receipt.h / 2).toFixed(0));
+  assert(shout.y - shout.h / 2 > 0, 'and inside the frame');
 
   api.G.banner = { text: 'MARKET MAYHEM', t: 1.2 };
   api.draw();                                  // the loud one still renders centre
@@ -8013,6 +8085,11 @@ function corpseLimbs(api, tweak){
   const p = api.addPerson(api.cam.x, api.cam.y, 'shopper');
   p.dead = true; p.fly = 0; p.squash = 0.9; p.ang = 0; p.side = 1;
   p.vx = 0; p.vy = 0; p.spin = 0;
+  /* Birth state pinned, because addPerson rolls it: `bob` and `coat` are what
+     stop every corpse in the market lying in the same pose, so two calls to
+     this helper were two different bodies and no two poses could be compared
+     to each other at all. */
+  p.bob = 1.7; p.coat = 3;
   if (tweak) tweak(p);
   api.cam.tz = 300; api.cam.s = 1;
   const rec = carRec();
@@ -8053,7 +8130,10 @@ test('a corpse trails its limbs, then folds them out', () => {
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
 
   const tipX = (o) => o.limbs.reduce((a, l) => a + l.pts[2][0], 0) / o.limbs.length;
-  const armSpan = (o) => Math.max(...o.limbs.map(l => Math.abs(l.pts[2][1])));
+  /* How splayed the body is: the mean of the four tips' distance off the
+     spine, not the single furthest one. Each limb carries its own settled
+     offset now, so one tip is a sample of the jitter and four is the pose. */
+  const armSpan = (o) => o.limbs.reduce((a, l) => a + Math.abs(l.pts[2][1]), 0) / o.limbs.length;
 
   const hit = corpseLimbs(api, (p) => { p.fly = 0.75; });
   const half = corpseLimbs(api, (p) => { p.fly = 0.35; });
@@ -8080,26 +8160,120 @@ test('a corpse trails its limbs, then folds them out', () => {
     tipX(slam).toFixed(1) + ' vs ' + tipX(nudge).toFixed(1));
 });
 
+/* `bleed` throws splats along the direction of the impact, so a body that was
+   hit hard and slid came to rest in clean snow with the mess it made a car's
+   length behind it. Nothing was ever anchored to the body. */
+test('a body that was hit hard lies in a pool of its own', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const POOL = /rgba\(72,6,8/;
+  const pools = (o) => o.rec.all.filter(e => e[0] === 'el' && POOL.test(String(e[5])));
+  const slam = corpseLimbs(api, (p) => { p.fly = 0; p.squash = 0.34; });
+  const nudge = corpseLimbs(api, (p) => { p.fly = 0; p.squash = 0.95; });
+  const air = corpseLimbs(api, (p) => { p.fly = 0.75; p.squash = 0.34; });
+
+  assert(pools(slam).length >= 3, 'a slammed body should be lying in one, got ' +
+    pools(slam).length + ' lobes');
+  assert(pools(nudge).length === 0, 'a nudge does not open anyone up');
+  assert(pools(air).length === 0, 'and nothing pools while the body is still in the air');
+
+  /* Under the body, not a halo round it: the first pass drew one flat disc
+     two and a half times the corpse's own width, which read as a mauve circle
+     somebody had been placed on top of. */
+  const r = slam.p.r;
+  const reach = Math.max(...pools(slam).map(e =>
+    Math.max(Math.abs(e[1]) + e[3], Math.abs(e[2]) + e[4])));
+  assert(reach < r * 1.05, 'the pool reaches ' + (reach / r).toFixed(2) +
+    'r, past the body it is supposed to be under');
+  assert(reach > r * 0.5, 'and it should actually be visible, got ' +
+    (reach / r).toFixed(2) + 'r');
+  // three lobes, not three copies of the same ellipse
+  const key = (e) => e[1].toFixed(2) + ',' + e[2].toFixed(2) + ',' + e[3].toFixed(2);
+  assert(new Set(pools(slam).map(key)).size === pools(slam).length,
+    'the lobes are all the same ellipse — that is one disc drawn three times');
+  console.log('    (blood: ' + pools(slam).length + ' lobes reaching ' +
+    (reach / r).toFixed(2) + 'r on a corpse of r' + r + ')');
+});
+
+/* A limb that ends in a rounded stroke cap ends in nothing: the same width all
+   the way out, and then stopping. At the replay tier that is where the eye
+   goes. */
+test('a corpse has boots on its feet and hands on its arms', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const c = corpseLimbs(api, (p) => { p.fly = 0; p.squash = 0.6; });
+  const r = c.p.r;
+  const caps = c.rec.all.filter(e => e[0] === 'arc');
+  const boots = caps.filter(e => String(e[4]) === '#23262f');
+  // by size as well as colour: the head is drawn in the same skin tone at
+  // 0.46r, and taking hands by colour alone caught it as a third one
+  const hands = caps.filter(e => api.SKIN.includes(String(e[4])) && e[3] < r * 0.3);
+  assert(boots.length === 2, 'two boots, got ' + boots.length);
+  assert(hands.length === 2, 'two hands, got ' + hands.length);
+
+  // and each one is on the end of a limb, not floating near it
+  const tips = c.limbs.map(l => l.pts[2]);
+  for (const e of boots.concat(hands)){
+    const d = Math.min(...tips.map(t => Math.hypot(t[0] - e[1], t[1] - e[2])));
+    assert(d < 0.01, 'a cap sits ' + d.toFixed(2) + ' from the nearest limb tip');
+    assert(e[3] > r * 0.1 && e[3] < r * 0.3,
+      'and it should be foot-sized, got ' + (e[3] / r).toFixed(2) + 'r');
+  }
+  /* Only where they can be seen. Corpses pile up — the budget test counts a
+     frame of them — and four extra fills each at the driving zoom is four
+     fills nobody is looking at. */
+  api.cam.tz = 3000; api.cam.s = api.camScale(3000);
+  const far = carRec();
+  api.withCtx(far, () => api.drawPerson(c.p));
+  assert(far.all.filter(e => e[0] === 'arc' && String(e[4]) === '#23262f').length === 0,
+    'the boots are drawn at a zoom that cannot see them');
+  console.log('    (corpse: ' + boots.length + ' boots, ' + hands.length +
+    ' hands, none at the wide zoom)');
+});
+
 test('the ragdoll poses off state the replay puts back, and rolls nothing', () => {
   const api = boot({ w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
 
-  /* The replay restores x, y, ang, dead, squash, panic, cry and fly — nothing
-     else. A pose that read p.vx or a stashed lag would come back wrong in the
-     clip, and one that rolled for its spread would move every market's score. */
-  // geometry only — the colours legitimately come off p.coat
+  /* The replay restores x, y, ang, dead, squash, panic, cry and fly, and it
+     restores them onto the same person objects — so the pose may read those,
+     and it may read anything the person has carried unchanged since it
+     spawned. What it may never read is state that moves while the body is in
+     the air: a pose off p.vx or a stashed lag comes back wrong in the clip,
+     and one that rolled for its spread would move every market's score.
+
+     `side` was already in the birth category. `bob` and `coat` join it, which
+     is what breaks the four-fixed-angles starfish — so the category is
+     asserted below rather than taken on trust. */
   const pose = (tweak) => JSON.stringify(corpseLimbs(api, tweak).limbs.map(l => l.pts));
   const base = pose((p) => { p.fly = 0.4; p.squash = 0.6; });
   const noisy = pose((p) => {
     p.fly = 0.4; p.squash = 0.6;
-    p.vx = 900; p.vy = -400; p.spin = 12; p.coat = 5; p.bob = 3.1; p.bleedT = 1;
+    p.vx = 900; p.vy = -400; p.spin = 12; p.bleedT = 1; p.flat = 1; p.panic = 1;
   });
   assert(base === noisy, 'the pose moved with state the replay does not restore');
 
-  // …but side, which the person carries from birth, is allowed to mirror it
-  const left = pose((p) => { p.fly = 0.4; p.squash = 0.6; p.side = -1; });
-  assert(left !== base, 'side should mirror the fold');
+  /* Birth state: it may pose the body, precisely because nothing moves it. A
+     dead person is `continue`d at the top of stepPeople, so `bob` stops
+     advancing the moment they go down — which is what makes it safe to read. */
+  for (const [name, set] of [['side', (p) => { p.side = -1; }],
+                             ['bob', (p) => { p.bob = 3.1; }],
+                             ['coat', (p) => { p.coat = 5; }]]){
+    const other = pose((p) => { p.fly = 0.4; p.squash = 0.6; set(p); });
+    assert(other !== base, name + ' should change how the body lies');
+  }
+  const p0 = api.people.find(p => p.dead) || api.people[0];
+  p0.dead = true; p0.fly = 0; p0.vx = 300; p0.vy = 0;
+  const before = [p0.bob, p0.coat, p0.side];
+  for (let i = 0; i < 120; i++) api.update(1 / 60);
+  assert(p0.bob === before[0] && p0.coat === before[1] && p0.side === before[2],
+    'the pose reads birth state, so nothing may move it once they are down: ' +
+    [p0.bob, p0.coat, p0.side] + ' vs ' + before);
 
   /* Not one draw from either stream. Two identical boots — the cosmetic
      generator has its own seed, so it can only be compared run against run —
@@ -9357,16 +9531,97 @@ test('the ribbon has tails, so it reads as a banner and not a box', () => {
   console.log('    (ribbon: 300px plate, ' + Math.round(reach * 2) + 'px across the tails)');
 });
 
+/* Everything the HUD can have on screen at the same moment: the score panel
+   and the goals, the car counter, the nitro readout, the combo meter, the
+   banner and the driver's shout. Mid-run they can and do all appear at once,
+   and nobody had ever added them up. At 1280x720 that came to 16.4% of the
+   frame with the combo plate and the banner between them owning the whole
+   middle of the top half. */
+test('the HUD does not cover the market you are driving through', () => {
+  for (const [ww, wh] of [[1280, 720], [1440, 810], [844, 390], [390, 844]]){
+    const api = boot({ w: ww, h: wh });
+    api.startCampaign(); api.beginLevel();
+    api.G.phase = 'drive';
+    // a portrait phone is rotated: the HUD lives in the game's frame, not the
+    // window's, and the two are transposed
+    const v = api.getView(), w = v.w, h = v.h;
+    api.G.combo = 12; api.G.mult = 6.5; api.G.comboT = 1;
+    const fs = api.bannerFont(false);
+    const L = api.bannerLayout(textW('INSANE ROLL ×5', fs), false, 1);
+    const S = api.shoutRect(textW('ON DASHER! ON DENT!', api.shoutRect(0).fs));
+    const sc = api.hudScoreRect(), ca = api.hudCarsRect(), co = api.comboRect();
+    const ni = api.nitroRect();
+    const rects = [
+      { n: 'score', x: sc.x, y: sc.y, w: sc.w, h: sc.h },
+      { n: 'cars', x: ca.x, y: ca.y, w: ca.w, h: ca.h },
+      { n: 'nitro', x: ni.x, y: ni.y, w: ni.w, h: ni.h },
+      { n: 'combo', x: co.x, y: co.y, w: co.w, h: co.h },
+      { n: 'banner', x: w / 2 - L.w / 2, y: L.y - L.h / 2, w: L.w, h: L.h },
+      { n: 'shout', x: w - S.w - 22, y: h - S.h - (w < 560 ? 128 : 74), w: S.w, h: S.h },
+    ];
+    for (const r of rects){
+      assert(r.x >= -1 && r.y >= -1 && r.x + r.w <= w + 1 && r.y + r.h <= h + 1,
+        w + 'x' + h + ': the ' + r.n + ' plate is outside the frame at ' +
+        [r.x, r.y, r.w, r.h].map(Math.round).join(','));
+    }
+    const share = (ns) => rects.filter(r => ns.includes(r.n))
+      .reduce((a, r) => a + r.w * r.h, 0) / (w * h);
+    const area = share(rects.map(r => r.n));
+    /* Two budgets, because a small frame legitimately spends a bigger fraction
+       of itself on type that still has to be readable — and because the score
+       panel is a corner you learn to ignore, while the transients land in the
+       middle of the picture while you are steering. */
+    const cap = h >= 600 ? 0.135 : 0.24;
+    assert(area < cap, w + 'x' + h + ': the HUD covers ' +
+      (area * 100).toFixed(1) + '% of the frame, over ' + (cap * 100) + '%');
+    assert(share(['combo', 'banner', 'shout']) < (h >= 600 ? 0.05 : 0.08),
+      w + 'x' + h + ': the transient text alone covers ' +
+      (share(['combo', 'banner', 'shout']) * 100).toFixed(1) + '%');
+
+    /* The band the car and the wreck it just made are in. Nothing transient
+       may reach into it — the banner used to sit at VH * 0.30, dead centre of
+       it, and the combo plate was 86 tall on top of that.
+
+       Checked only where it can be met: on a landscape phone the top row is
+       already score-panel-to-car-counter and the combo has nowhere to go but
+       under the goals. That is a real constraint rather than something this
+       rule should pretend away, so the phone case is left to the overlap and
+       budget rules above. */
+    for (const r of h >= 600 ? rects : []){
+      if (r.n === 'score' || r.n === 'shout') continue;
+      assert(r.y + r.h <= h * 0.25 + 1, w + 'x' + h + ': the ' + r.n +
+        ' plate reaches ' + (r.y + r.h).toFixed(0) + 'px down, past the top strip at ' +
+        (h * 0.25).toFixed(0));
+    }
+    // and none of them lands on another
+    for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++){
+      const a = rects[i], b = rects[j];
+      const ov = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) *
+                 Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      assert(ov < 1, w + 'x' + h + ': the ' + a.n + ' plate is printed over the ' + b.n);
+    }
+    console.log('    (HUD at ' + ww + 'x' + wh + (v.rotated ? ' rotated' : '') +
+      ': ' + (area * 100).toFixed(1) +
+      '% of the frame, ' + (share(['combo', 'banner', 'shout']) * 100).toFixed(1) +
+      '% of it transient, banner ' + fs + 'px)');
+  }
+});
+
 test('the banner never lands on the panels it shares the frame with', () => {
-  const COMBO_H = 86;
   for (const [w, h] of [[1440, 810], [1280, 720], [844, 390], [667, 375], [520, 320]]){
     const api = boot({ w, h });
     api.startCampaign(); api.beginLevel();
-    const narrow = w < 560;
+    /* A combo has to actually be running for the plate to be on screen — and
+       the test used to carry its own copy of the plate's height and origin, so
+       shrinking the plate broke it while the drawing and the banner agreed
+       with each other perfectly. It reads comboRect() now, the same one both
+       of them read. */
+    api.G.combo = 6; api.G.mult = 3;
     const fs = api.bannerFont(false);
     const L = api.bannerLayout(textW('INSANE ROLL ×5', fs), false, 1);
     const r = api.hudScoreRect();
-    const comboBottom = (narrow ? 150 : 20) + COMBO_H;
+    const C = api.comboRect();
+    const comboBottom = C.y + C.h;
     assert(L.y - L.h / 2 >= comboBottom,
       w + 'x' + h + ': the banner overlaps the combo plate (' +
       (L.y - L.h / 2).toFixed(0) + ' vs ' + comboBottom + ')');

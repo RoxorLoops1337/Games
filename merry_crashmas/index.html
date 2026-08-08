@@ -391,7 +391,7 @@ function fit(){
   if (cl){
     cl.toggle('rot', rotated);
     cl.toggle('short', VH < 560);       // the GAME's height, not the window's
-    cl.toggle('narrow', VW < 560);
+    cl.toggle('narrow', hudTight());
   }
   const wrap = $('wrap');
   if (wrap && wrap.style){
@@ -526,7 +526,15 @@ const MAX_PULL = 430;                         // world units of sling travel
 const MIN_POWER = 0.16;
 const MAX_LAUNCH = 1900;                      // world px/s at full pull
 const SLING_RECOIL = 0.25;                    // seconds the band keeps snapping after release
-const LAUNCH_PUNCH_Z = 1150;                  // camera punches to this, then eases to the drive zoom
+/* The release punch. It used to be `cam.tz = min(cam.tz, 1150)` — an
+   assignment, on the frame you let go, from the aim zoom of 2300 straight to
+   1150. That is a 1.93x jump in the size of the world in a single frame, with
+   nothing between the two pictures: you let go of the band and the market you
+   had just spent ten seconds reading was replaced. It is a fraction the drive
+   zoom dips by, easing out over LAUNCH_PUNCH_T, and the camera's own lerp
+   carries it — so the punch is something the picture does, not something that
+   happens to it. */
+const LAUNCH_PUNCH = 0.09, LAUNCH_PUNCH_T = 0.34;
 const FRICTION = 0.36;                        // exponential decay per second
 const DRAG = 52;                              // flat decel, px/s²
 const ICE_FRICTION = 0.09;
@@ -981,6 +989,7 @@ const G = {
   sling: null,            // {t, ux, uy, len} — the band still snapping after a release
   goalPops: [],           // goals ticked mid-run, announced once the car has stopped
   banner: null,           // {text, t}
+  punchT: 0,              // seconds left of the release zoom punch
   bannerAt: 0,
   runKills: 0, runWrecks: 0, runScore: 0, idleT: 0, idleScore: 0,
 };
@@ -2003,7 +2012,7 @@ function launch(px, py){
   puff(ANCHOR.x, ANCHOR.y, 14, '#f4f9ff', 260);
   hitstop = Math.max(hitstop, 0.04);
   flash = Math.max(flash, 0.25);
-  cam.tz = Math.min(cam.tz, LAUNCH_PUNCH_Z);
+  G.punchT = LAUNCH_PUNCH_T;
   setTxt('hint', 'SPACE / TAP — NITRO');
   return true;
 }
@@ -2376,6 +2385,7 @@ function stepCombo(dt){
     if (G.comboT <= 0) breakCombo();
   }
   if (G.banner){ G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
+  if (G.punchT > 0) G.punchT = Math.max(0, G.punchT - dt);
 }
 
 /* ---------- crowd ---------- */
@@ -3758,8 +3768,20 @@ function camTarget(){
      of stretching to 1300, which is road ahead traded for being able to see
      what you are driving. */
   const zCap = CARL * VH / CAR_MIN_PX;      // VH is CSS px, and so is CAR_MIN_PX
-  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead,
-    z: Math.min(clamp(880 + sp * 0.24, 880, 1300), Math.max(600, zCap)) };
+  /* How wide the drive view is. It used to run 880 to 1300, against an aim
+     view of 1500 to 2300 — so the market you picked your line across was
+     between 1.8x and 2.6x bigger the moment you were driving through it, and
+     at the low end a stall was a fifth of the screen. Widened to 1020-1320,
+     which is 1.74x the aim view at speed rather than 2.6x, and still leaves
+     the car 40px long on a 720-high frame — over CAR_MIN_PX, and the zCap
+     below still holds the line on a phone. The ceiling is where it is because
+     the draw budget is: a frame costs props times detail, and 1440 put 236
+     props on camera for 3,864 fills against a hard ceiling of 3,700. 1360 came
+     in at 3,699 — one fill of margin is not a margin. */
+  const z = Math.min(clamp(1020 + sp * 0.22, 1020, 1320), Math.max(600, zCap));
+  // …and the release punch dips it, easing out, rather than teleporting to it
+  const punch = 1 - LAUNCH_PUNCH * clamp(G.punchT / LAUNCH_PUNCH_T, 0, 1);
+  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead, z: z * punch };
 }
 
 /* How far past the fence the camera may look. Hard-clamping to the fence meant
@@ -5694,6 +5716,35 @@ function drawPerson(p){
 
   if (p.dead){
     ctx.rotate(p.ang);
+    const dfine = lodQ(p) > LOD_FINE;               // the replay camera's tier
+    /* What is left on the snow. `bleed` throws splats along the direction of
+       the impact and nothing was ever anchored to the body itself, so a corpse
+       at rest lay in clean snow with the mess it made a car's length behind
+       it. The pool grows as the body settles (fl → 0) and with how hard it was
+       hit, and it is drawn outside the squash on purpose: a flattened body
+       spreads more, not less. */
+    const flP = clamp(p.fly / 0.75, 0, 1);
+    const pool = (1 - flP) * clamp((0.95 - (p.squash || 1)) / 0.53, 0, 1);
+    if (pool > 0.03){
+      /* Three overlapping ellipses in one path and one fill: a single disc is
+         a coloured circle, and the first pass at this was a flat mauve one
+         two and a half times the body's own width. Blood spreads unevenly and
+         it spreads under a body, not around it — so the lobes are seeded off
+         the same birth state as the pose and the whole thing stays inside the
+         corpse's footprint. */
+      // it spreads with the body: a flattened one leaks along the ground, but
+      // the stain still lies under the shape, not in a halo around it
+      const sq = clamp(p.squash || 1, 0.3, 1);
+      const rw = p.r * (0.34 + 0.26 * pool), rh = rw * 0.68 * (0.55 + 0.45 * sq);
+      ctx.fillStyle = 'rgba(72,6,8,' + (0.40 + 0.34 * pool).toFixed(3) + ')';
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++){
+        const a = p.bob * 1.7 + i * 2.1 + p.coat;
+        ctx.ellipse(-p.r * 0.12 + Math.cos(a) * rw * 0.55, Math.sin(a) * rh * 0.5,
+          rw * (0.70 + 0.30 * Math.abs(Math.sin(a * 1.3))), rh, a * 0.4, 0, 6.283);
+      }
+      ctx.fill();
+    }
     ctx.scale(1, clamp(p.squash || 1, 0.3, 1));
     shadow(0, 3, p.r * 1.2, p.r * 0.5, 0.14);
     /* Ragdoll. The four limbs used to be four fixed line segments in the body's
@@ -5714,17 +5765,37 @@ function drawPerson(p){
     /* hinge, the settled angle, the angle it is flung to, and how far the
        joint breaks the other way. Angles are body-frame: the head is at +x, so
        "back" — where a limb trails to — is toward ±180°. */
-    const limb = (hx, hy, rest, flung, len, bend) => {
+    /* Nobody lands the same way twice. Four fixed angles, mirrored across the
+       spine, is a starfish: the pose was identical for every body in the market
+       and symmetric within each one, which is what a heap of them looked like
+       when the replay came in close. `lay` breaks both symmetries — it is read
+       off `bob` and `coat`, which the person has carried since it spawned and
+       which the replay does not rewrite, so a corpse lies exactly as it lay
+       without a single random draw. A ragdoll that rolled for its pose would
+       move every market's score. */
+    const lay = (n) => Math.sin(p.bob * 3.1 + n * 2.3 + p.coat * 1.7);
+    const ends = [];
+    const limb = (n, hx, hy, rest, flung, len, bend) => {
       /* `hard` fans the pair apart rather than scaling the angle: a multiplier
          pushed -2.86 past -π and wrapped a slammed leg round to the front, so
          the harder hit came out *less* splayed than the gentle one. */
-      const a0 = rest + (flung - rest) * fl;
+      const a0 = rest + (flung - rest) * fl + lay(n) * 0.34 * (1 - fl * 0.5);
       const a = clamp(a0 + Math.sign(a0) * hard * 0.30, -3.02, 3.02);
-      const j = len * 0.55;                          // knee / elbow
+      const L = len * (1 + lay(n + 4) * 0.09);
+      const j = L * 0.55;                            // knee / elbow
       const jx = hx + Math.cos(a) * j, jy = hy + Math.sin(a) * j;
-      const b = a + bend * (0.35 + 0.65 * fl) * (1 + hard * 0.5);
-      ctx.moveTo(hx, hy); ctx.lineTo(jx, jy);
-      ctx.lineTo(jx + Math.cos(b) * (len - j), jy + Math.sin(b) * (len - j));
+      /* The joint used to break by 0.35 of `bend` once the body was at rest —
+         about twelve degrees, which no stroke that thick can show. A limb that
+         cannot be seen to have a knee is a stick, and four sticks off an oval
+         is the starfish this was meant to stop being. */
+      /* `hard` used to add half again to the break. That was compensation for
+         a base of 0.35 — with a base of 0.85 it curled a slammed limb's tip
+         forward faster than the fan above swept it back, and a slam came out
+         *less* thrown than a nudge. */
+      const b = a + bend * (0.85 + 0.35 * fl) * (1 + hard * 0.16);
+      const ex = jx + Math.cos(b) * (L - j), ey = jy + Math.sin(b) * (L - j);
+      ctx.moveTo(hx, hy); ctx.lineTo(jx, jy); ctx.lineTo(ex, ey);
+      ends.push({ x: ex, y: ey, boot: n < 2 });
     };
     /* Settled is arms out to the sides and legs trailing back — a body face
        down in the snow. Flung is everything swept behind it, because the car
@@ -5732,14 +5803,32 @@ function drawPerson(p){
        over the head, which is the shape a corpse never makes. */
     ctx.strokeStyle = trous; ctx.lineWidth = p.r * 0.36;
     ctx.beginPath();
-    limb(-p.r * 0.34, -p.r * 0.26, -2.42, -2.80, p.r * 1.24, -0.62 * sd);
-    limb(-p.r * 0.34, p.r * 0.26, 2.30, 2.68, p.r * 1.20, 0.56 * sd);
+    limb(0, -p.r * 0.34, -p.r * 0.26, -2.42, -2.80, p.r * 1.24, -0.62 * sd);
+    limb(1, -p.r * 0.34, p.r * 0.26, 2.30, 2.68, p.r * 1.20, 0.56 * sd);
     ctx.stroke();
     ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.30;
     ctx.beginPath();
-    limb(p.r * 0.1, -p.r * 0.44, -1.45, -2.30, p.r * 1.16, 0.74 * sd);
-    limb(p.r * 0.1, p.r * 0.44, 1.38, 2.22, p.r * 1.19, -0.68 * sd);
+    /* The forearms fold *back*, toward the feet. They used to break toward the
+       head, which at a break of 12 degrees was invisible and at a real one put
+       a hand out past the crown — a corpse reaching forward over its own head,
+       which is the shape this whole pose exists to avoid. */
+    limb(2, p.r * 0.1, -p.r * 0.44, -1.45, -2.30, p.r * 1.16, -0.74 * sd);
+    limb(3, p.r * 0.1, p.r * 0.44, 1.38, 2.22, p.r * 1.19, 0.68 * sd);
     ctx.stroke();
+    /* Boots and hands. A limb that ends in a rounded stroke cap ends in
+       nothing — the same width all the way out and then simply stopping, which
+       at the replay tier is where the eye goes. Two batched fills for the four
+       of them, and only at the tier that can see them. */
+    if (dfine){
+      for (const [col, boot, rad] of [['#23262f', true, 0.21], [skin, false, 0.17]]){
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        for (const e of ends) if (e.boot === boot){
+          ctx.moveTo(e.x + p.r * rad, e.y); ctx.arc(e.x, e.y, p.r * rad, 0, 6.283);
+        }
+        ctx.fill();
+      }
+    }
     // torso
     const deadSanta = p.kind === 'santa';
     ctx.fillStyle = coat;
@@ -6608,6 +6697,18 @@ function drawCar(){
    fixed screen corner now, above the mute button, at a size that does not
    depend on how far the camera has zoomed out. It still wobbles: he is not
    calm. */
+/* The bubble's own size, kept out of the drawing so the frame can be asked how
+   much of itself the text is covering. `fit` is what stops a long shout from
+   overflowing the plate it is printed on: the width used to be clamped and the
+   type was not, so "ON DASHER! ON DENT!" ran out over the market at both ends
+   of a plate that had stopped growing. */
+function shoutRect(tw){
+  const narrow = hudTight();
+  const fs = narrow ? 18 : 22, h = narrow ? 38 : 42;
+  const max = Math.min(VW - 44, VW * 0.46);
+  const want = tw + 30;
+  return { fs, h, w: Math.min(want, max), fit: Math.min(1, max / want), max };
+}
 function drawShout(){
   const k = clamp(car.shoutT / SHOUT_TIME, 0, 1);
   const wob = Math.sin(T * 22) * 3 * k;
@@ -6615,13 +6716,14 @@ function drawShout(){
   screenTransform();
   ctx.save();
   ctx.globalAlpha = Math.min(1, k * 2.6);
-  ctx.font = '900 ' + (VW < 560 ? 22 : 28) + 'px system-ui';
+  const R0 = shoutRect(0);
+  ctx.font = '900 ' + R0.fs + 'px system-ui';
   const m = ctx.measureText ? ctx.measureText(txt) : null;
-  const w = clamp((m && m.width ? m.width : txt.length * 15) + 36, 150, VW - 44);
-  const h = VW < 560 ? 46 : 52;
+  const R = shoutRect(m && m.width ? m.width : txt.length * 11);
+  const w = R.w, h = R.h;
   // in portrait the hint sits higher to clear the GAMES button, so the
   // bubble climbs above it rather than printing through it
-  ctx.translate(VW - w / 2 - 22 + wob, VH - h / 2 - (VW < 560 ? 128 : 74) - (1 - k) * 18);
+  ctx.translate(VW - w / 2 - 22 + wob, VH - h / 2 - (hudTight() ? 128 : 74) - (1 - k) * 18);
   ctx.rotate(Math.sin(T * 13) * 0.045);
   const pop = 1 + (1 - k) * 0.18;
   ctx.scale(pop, pop);
@@ -6639,7 +6741,9 @@ function drawShout(){
   ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#c8261c';
   ctx.textAlign = 'center';
-  ctx.fillText(txt, 0, VW < 560 ? 8 : 10);
+  // shrunk to fit rather than allowed to run out over the market
+  if (R.fit < 1) ctx.font = '900 ' + Math.round(R.fs * R.fit) + 'px system-ui';
+  ctx.fillText(txt, 0, Math.round(R.fs * 0.35));
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -7763,6 +7867,13 @@ function aimCar(){
    and a hairline border. The four panels used to be four bare rgba(8,14,26,.55)
    fills — no edge, no light, and thin enough that a bright stall behind them
    came through the text. */
+/* "This frame is too small for the desktop HUD." It used to be nine separate
+   copies of `VW < 560` — a width test only, so a landscape phone at 844x390
+   got the full desktop panel: 142px of score plate down a 390px frame, and the
+   HUD as a whole covering 27.8% of the picture against 11% on a desktop. A
+   frame that short is a phone whatever its width says. */
+function hudTight(){ return VW < 560 || VH < 460; }
+
 function hudPlate(x, y, w, h){
   ctx.fillStyle = 'rgba(7,12,24,.84)';
   roundRect(x, y, w, h, 12); ctx.fill();
@@ -7790,7 +7901,7 @@ function bannerBox(tw, fs, maxW){
    landscape phone's height, and a ribbon that big landed square on the score
    panel and the combo plate at once. */
 function bannerFont(receipt){
-  return Math.round(receipt ? clamp(VH * 0.034, 15, 26) : clamp(VH * 0.062, 24, 46));
+  return Math.round(receipt ? clamp(VH * 0.030, 14, 22) : clamp(VH * 0.046, 20, 34));
 }
 
 /* Where the ribbon goes and how big it ends up, given the width the frame's
@@ -7798,7 +7909,7 @@ function bannerFont(receipt){
    can be checked against real text widths at real viewport sizes rather than
    whatever a headless stub reports for measureText. */
 function bannerLayout(tw, receipt, k){
-  const narrow = VW < 560;
+  const narrow = hudTight();
   const fs = bannerFont(receipt);
   const s = 1 + (1 - clamp(k, 0, 1)) * 0.25;
   const box = bannerBox(tw, fs, (VW - 48) / s);
@@ -7809,8 +7920,13 @@ function bannerLayout(tw, receipt, k){
      follows it down. */
   const r = hudScoreRect();
   const overPanel = w / 2 > VW / 2 - (r.x + r.w) ? r.y + r.h + h / 2 + 10 : 0;
-  const y = Math.max(overPanel, receipt ? VH * 0.115
-    : Math.max(VH * (narrow ? 0.40 : 0.30), (narrow ? 150 : 20) + 86 + h / 2 + 14));
+  /* It used to sit at VH * 0.30 — 216px down a 720 frame, which is the band the
+     car and the wreck it just made are in. "YULE LOG" landed square on top of
+     the stall it named. It stacks under whatever is already at the top middle
+     now (the combo plate, or nothing) rather than reaching down for the middle
+     of the picture: the banner is a caption, and the thing it captions is what
+     you want to be looking at. */
+  const y = Math.max(overPanel, receipt ? VH * 0.115 : topStackBottom() + h / 2 + 12);
   return { fs, s, box, w, h, y };
 }
 
@@ -7868,7 +7984,7 @@ function goalTextW(narrow){
   return goalW;
 }
 function hudScoreRect(){
-  const pad = 14, narrow = VW < 560;
+  const pad = 14, narrow = hudTight();
   const rowH = narrow ? 15 : 18, headH = narrow ? 64 : 80;
   const goals = G.goals ? G.goals.length : 0;
   // never far enough right to reach the car counter, however long a goal is
@@ -7880,12 +7996,27 @@ function hudScoreRect(){
 /* The car counter, so the suite can read where the two plates actually are
    instead of asserting on its own copies of these numbers. */
 function hudCarsRect(){
-  const pad = 14, narrow = VW < 560, w = narrow ? 118 : 190;
+  const pad = 14, narrow = hudTight(), w = narrow ? 118 : 190;
   return { x: VW - pad - w, y: pad, w, h: narrow ? 40 : 48, pad };
 }
 function goalRowY(i){
   const r = hudScoreRect();
   return r.y + r.headH + 4 + i * r.rowH;
+}
+
+/* Where the combo meter goes. It used to be 208x86 with a number that grew to
+   56px — a plate a fifth of the frame wide, parked dead centre-top, on top of
+   the market you are steering through. The number is the thing you read; the
+   plate around it was mostly air. */
+function comboRect(){
+  const narrow = hudTight();
+  const w = Math.min(158, VW - 28);
+  return { x: VW / 2 - w / 2, y: narrow ? 150 : 14, w, h: 54 };
+}
+/* The bottom of whatever is already stacked at the top middle, which is what
+   the banner has to clear. */
+function topStackBottom(){
+  return G.combo >= 2 ? comboRect().y + comboRect().h : (hudTight() ? 150 : 14);
 }
 
 function drawHUD(){
@@ -7895,7 +8026,7 @@ function drawHUD(){
   const pad = 14;
   // a phone in portrait had the score panel and the car count on top of each
   // other — everything narrows rather than overlapping
-  const narrow = VW < 560;
+  const narrow = hudTight();
   const sr = hudScoreRect();
   const panelW = sr.w;
   const rowH = sr.rowH, goalN = sr.goals;
@@ -7971,23 +8102,28 @@ function drawHUD(){
      stall awnings, where it could not be read at all. */
   if (G.combo >= 2){
     const t = clamp(G.comboT / COMBO_WIN, 0, 1);
-    const cx = VW / 2;
     // on a phone the top row is already full: score panel left, cars right.
     // The combo drops below the goals rather than straddling both of them.
-    const cw = Math.min(208, VW - 28), cy = narrow ? 150 : 20;
-    hudPlate(cx - cw / 2, cy, cw, 86);
+    const R = comboRect(), cx = VW / 2;
+    hudPlate(R.x, R.y, R.w, R.h);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.font = '900 ' + (34 + Math.min(22, G.combo * 1.6)) + 'px system-ui';
-    ctx.fillText('×' + G.mult.toFixed(1), cx, cy + 42);
+    /* The multiplier grew 1.6px a kill off a 34px base, so a ×20 chain — the
+       one you are trying to hold together — printed at 56px and needed the
+       biggest plate in the game to sit on. It grows a third as fast off a
+       smaller base now: still visibly bigger as the chain runs, 34px at its
+       loudest instead of 56. */
+    ctx.font = '900 ' + (26 + Math.min(8, G.combo * 0.55)) + 'px system-ui';
+    ctx.fillText('×' + G.mult.toFixed(1), cx, R.y + 28);
     ctx.fillStyle = '#8fa6c6';
-    ctx.font = '700 13px system-ui';
-    ctx.fillText(G.combo + ' IN A ROW', cx, cy + 62);
-    const mw = cw - 28;
+    ctx.font = '700 11px system-ui';
+    // the label's descenders and the meter were sharing a pixel row
+    ctx.fillText(G.combo + ' IN A ROW', cx, R.y + 40);
+    const mw = R.w - 24, my = R.y + R.h - 9;
     ctx.fillStyle = 'rgba(255,255,255,.14)';
-    roundRect(cx - mw / 2, cy + 72, mw, 6, 3); ctx.fill();
+    roundRect(cx - mw / 2, my, mw, 5, 3); ctx.fill();
     ctx.fillStyle = t > 0.35 ? '#8effb0' : '#ff6b5e';
-    roundRect(cx - mw / 2, cy + 72, mw * t, 6, 3); ctx.fill();
+    roundRect(cx - mw / 2, my, mw * t, 5, 3); ctx.fill();
     ctx.textAlign = 'left';
   }
 
@@ -8050,7 +8186,7 @@ function drawHUD(){
 
 /* Where the nitro readout is drawn, so a test can check it clears #back. */
 function nitroRect(){
-  const pad = 14, narrow = VW < 560;
+  const pad = 14, narrow = hudTight();
   const rw = narrow ? 118 : 190, rh = 26;
   return { x: VW - pad - rw, y: pad + (narrow ? 44 : 52), w: rw, h: rh };
 }

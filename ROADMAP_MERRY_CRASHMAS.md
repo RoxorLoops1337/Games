@@ -1247,6 +1247,67 @@ edit this block to name the next one.
       that is the general lesson: an assertion that recomputes what the code
       computes is measuring itself.
 
+- [x] **Three things the owner said, in one pass**: the launch zoom, the text
+      covering the screen, and the replay's dead bodies. Player report, not a
+      sweep — worth recording that all three were sitting in code that had
+      tests around it and none of the tests were asking the question the player
+      was asking.
+  - **The launch was a cut, not a zoom.** `cam.tz = Math.min(cam.tz, 1150)` — an
+      *assignment*, on the frame you let go, from an aim zoom of 2300. Measured:
+      the world got **1.93× bigger in a single frame** with nothing in between.
+      It is a fraction the drive zoom dips by now (`LAUNCH_PUNCH`, easing out
+      over 0.34s) and the camera's own lerp carries it: worst single frame +3.5%.
+      The two tests that covered the release *asserted the defect* — one of them
+      literally read `near(cam.tz, LAUNCH_PUNCH_Z, 0.0001, 'to the punch zoom
+      exactly')`.
+  - **And it arrived somewhere too tight.** The drive view ran 880–1300 against
+      an aim view of 1500–2300 — up to **2.6× tighter**, and at the low end a
+      stall was a fifth of the screen. Now 1020–1320 (worst 2.19×). The ceiling
+      is where it is because the **draw budget** is: 1440 put 236 props on
+      camera for 3,864 fills against a hard ceiling of 3,700, and 1360 came in
+      at 3,699 — one fill of margin is not a margin.
+  - **Nobody had ever added the HUD up.** Score panel, cars, nitro, combo meter,
+      banner and shout can all be on screen at once mid-run, and at 1280x720 that
+      was **16.4% of the frame** with the combo plate (208×86) and the banner
+      (46px type at `VH * 0.30` — dead centre of the action) owning the whole
+      middle of the top half. "YULE LOG" landed square on the stall it named.
+      Now 11.1%, 4.0% of it transient, and the banner **stacks under whatever is
+      already at the top** instead of reaching down for the middle of the
+      picture. A caption that covers the thing it captions is not one.
+  - **`VW < 560`, nine times over.** The HUD decided it was on a phone by width
+      alone, so a landscape phone at 844×390 got the full desktop panel — 142px
+      of score plate down a 390px frame, 27.8% of the picture. One `hudTight()`
+      that also asks about height: 22.3%.
+  - **The corpses were a starfish.** Four fixed limb angles, mirrored across the
+      spine, so every body in the market lay in the same pose and each one was
+      symmetric within itself. The joint the code computed broke by `0.35 × bend`
+      at rest — about twelve degrees, which no stroke that thick can show. Now:
+      `lay()` off `bob` and `coat` breaks both symmetries, the knee breaks at
+      0.85, the forearms fold **back** (breaking them toward the head at a real
+      angle put a hand out past the crown), and each limb ends in a boot or a
+      hand instead of a rounded stroke cap.
+  - **And they lay in clean snow.** `bleed` throws splats along the impact, so a
+      body that slid came to rest with the mess it made a car's length behind
+      it — nothing was ever anchored to the body. Three seeded lobes in one path
+      and one fill, growing with how hard it was hit and how far it has settled.
+      The first attempt was one flat disc **2.5× the corpse's width**, which read
+      as a mauve circle somebody had been placed on top of; the screenshot
+      caught that, the test now bounds it at 1.05r.
+  - Four tests had **their own copy of the layout they were checking** and broke
+      on contact: the banner-vs-combo test carried `COMBO_H = 86`, the coverage
+      of the phone case carried `VW < 560`, and `corpseLimbs` let `addPerson`
+      roll fresh `bob`/`coat` per call — so two poses from it were two different
+      bodies and no two could be compared at all. Same lesson as last pass, from
+      the other direction: **an assertion that copies the code's numbers agrees
+      with the code by construction.**
+  - Seven revert-variants, each naming the real defect: the teleport → *the world
+      jumps 45% bigger in one frame*; the old tight zoom → *2.52x tighter (market
+      3 coasting)*; the banner back at `VH * 0.30` → *reaches 242px down, into
+      the action band at 180*; the fat plate and 46px type → *13.7% of the frame*;
+      width-only `hudTight` → *27.8%*; no pool → *got 0 lobes*; ungated boots →
+      *drawn at a zoom that cannot see them*; symmetric `lay` → *bob should change
+      how the body lies*.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
