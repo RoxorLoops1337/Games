@@ -62,6 +62,32 @@ const EXE = process.env.CHROMIUM || '/opt/pw-browsers/chromium';
  */
 const SCENES = {
   title: { w: 900, h: 800, go: null },
+  // The title as a RETURNING player sees it, which had never been photographed:
+  // every shot of this screen has been taken from a fresh state, and the
+  // Continue button only exists when there is a save to continue. Seeded
+  // through saveGame() so the button appears for the reason it appears in play.
+  titleback: {
+    w: 900, h: 800,
+    needs: () => !document.querySelector('#title [data-act="cont"]').classList.contains('hidden'),
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.G.party = [EK.mkMon('pyrelynx', 22), EK.mkMon('brookite', 20)];
+      EK.enterMap('emberwood', 8, 10, 'down');
+      EK.saveGame();
+      // …and then back to the title. `boot()` wires the page and does not
+      // return here — the title is a DOM panel, so put it back up and reveal
+      // Continue the way boot's own hasSave() branch does.
+      EK.G.mode = 'title';
+      const t = document.getElementById('title');
+      t.classList.remove('hidden');
+      if (EK.hasSave()) {
+        t.querySelector('[data-act="cont"]').classList.remove('hidden');
+        t.classList.add('returning');       // the same flag boot() sets
+      }
+    },
+  },
   study: { w: 700, h: 620, go: (EK) => { EK.G.dialogue = null; EK.G.mode = 'world'; } },
   town: {
     w: 700, h: 620,
