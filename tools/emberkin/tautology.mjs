@@ -72,6 +72,14 @@ const MUTANTS = [
     find: 'const BATTLE_OUT = .22;', to: 'const BATTLE_OUT = 0;' },
   { name: 'exit: the evolution keeps its hard cut', aims: ['a fight hands the map back the way everything else does'],
     find: '    if (nxt) runEvolution(nxt);\n    else backToWorld();', to: '    if (nxt) runEvolution(nxt);\n    else saveGame();' },
+  { name: 'sound: the flourish borrows the level cue', aims: ['two different beats do not make the same sound'],
+    find: "    battleBar(false);\n  }\n  playCue('win');", to: "    battleBar(false);\n  }\n  playCue('level');" },
+  // A partial edit here is not a duplicate at all — the first version of this
+  // mutant changed one of the three notes and killed nothing, which the sweep
+  // correctly reported as a mutation that missed rather than as a sentence.
+  { name: 'sound: win defined as a copy of level', aims: ['two different beats do not make the same sound'],
+    find: "    blip(note(19), .14, 'triangle', .055);\n    blip(note(12), .26, 'triangle', .06, t + .1);\n    blip(note(0), .34, 'sine', .05, t + .1);",
+    to: "    [0, 4, 7, 12].forEach((s2, i) => blip(note(12 + s2), .16, 'square', .05, t + i * .07));" },
   // A mutant that is MEANT to bring the suite down, so the crash detector has a
   // live case. Without it that detector is unexercised — and it is the one that
   // found pass 182's fault, where 90 unrun checks read back as 90 survivors.
