@@ -6567,14 +6567,48 @@ function endOfTurn(log) {
 }
 
 // ---- experience --------------------------------------------------------
+/**
+ * What a kin's numbers just did, in words.
+ *
+ * Every other line in this game names its number — "Shield up to 8", "hit for
+ * +4", "took 43", "gained 385 EXP", "It cost you 12 shards" — and the two beats
+ * that permanently change what a creature IS named only the name. Measured: a
+ * level took hp 25->29, atk 13->16, def 12->13, spd 13->15 and said "grew to
+ * level 9!"; an evolution took atk 27->36 and spd 25->37 and said "Cindercub
+ * became Pyrelynx!". Four numbers moved and the player had to go and look.
+ *
+ * One helper because there are two cases and fixing one of them is how 180's
+ * fix reached one menu and not the other. Only what MOVED is named, so nothing
+ * says "+0", and it returns '' when nothing moved at all — a caller can then
+ * leave the sentence off rather than print an empty pair of brackets.
+ */
+const statSnap = (m) => ({ max: m.max, atk: m.atk, def: m.def, spd: m.spd });
+const gainLine = (before, after) => {
+  const parts = [];
+  // The game already names these on the profile and in the switch list: ATK,
+  // GUARD, SPD. The first draft of this said "attack, defence, speed" — a
+  // second vocabulary for stats that already have names, and longer: at the
+  // worst case (an eleven-letter nickname, level 99, all four moving) it came
+  // to 368px in a 367px bar on a phone and lost its tail to the ellipsis.
+  for (const [k, label] of [['max', 'HP'], ['atk', 'ATK'], ['def', 'GUARD'], ['spd', 'SPD']]) {
+    const d = (after[k] || 0) - (before[k] || 0);
+    if (d) parts.push(`${d > 0 ? '+' : ''}${d} ${label}`);
+  }
+  return parts.join(', ');
+};
+
 function grantXP(log, winner, loser) {
   const gain = Math.max(1, Math.floor(DEX[loser.species].xp * loser.lvl / 7));
   winner.xp += gain;
   snap(log, `${dispName(winner)} gained ${gain} EXP.`, 'xp', 'mine');
   while (winner.lvl < 100 && winner.xp >= xpFor(winner.lvl + 1)) {
+    const was = statSnap(winner);
     winner.lvl++;
     refresh(winner);
-    snap(log, `${dispName(winner)} grew to level ${winner.lvl}!`, 'level', 'mine');
+    // Per level, not once at the end: the log already gives each level its own
+    // line, and the gain belongs to the level that bought it.
+    const grew = gainLine(was, statSnap(winner));
+    snap(log, `${dispName(winner)} grew to level ${winner.lvl}!${grew ? ` ${grew}.` : ''}`, 'level', 'mine');
     for (const [lv, mv] of DEX[winner.species].learn) {
       if (lv !== winner.lvl) continue;
       if (winner.moves.some((x) => x.id === mv)) continue;
@@ -6605,6 +6639,7 @@ function checkEvolve() {
 function evolveMon(m) {
   const [to] = DEX[m.species].evo;
   const oldName = dispName(m);
+  const was = statSnap(m);
   m.species = to; m.name = DEX[to].name;
   refresh(m);
   catchMon(to);
@@ -6614,7 +6649,7 @@ function evolveMon(m) {
       m.moves.push({ id: mv, pp: MOVES[mv].pp, max: MOVES[mv].pp });
     }
   }
-  return { oldName, newName: DEX[to].name };
+  return { oldName, newName: DEX[to].name, gained: gainLine(was, statSnap(m)) };
 }
 
 // ---- capture -----------------------------------------------------------
@@ -9675,7 +9710,7 @@ function evoStep(dt) {
   if (next) return true;
   const r = a.res;
   G.evoAnim = null;
-  say('', [`${r.oldName} became ${r.newName}!`], () => {
+  say('', [`${r.oldName} became ${r.newName}!${r.gained ? ` ${r.gained}.` : ''}`], () => {
     const nxt = checkEvolve();
     if (nxt) runEvolution(nxt);
     else backToWorld();
@@ -12241,7 +12276,7 @@ if (typeof window !== 'undefined') {
     trainerHp, TRAINER_DMG_MUL, trainerDmg,
     foeSwingMul,
     foeBench, foeSwap, POTIONS_FOR, FOE_POTION, FOE_POTION_AT,
-    grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
+    grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO, statSnap, gainLine,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
