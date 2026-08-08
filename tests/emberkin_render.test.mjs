@@ -3859,6 +3859,102 @@ section('two different beats do not make the same sound');
   }
 }
 
+// Every other line in this game names its number — "Shield up to 8", "hit for
+// +4", "took 43", "gained 385 EXP", "It cost you 12 shards" — and the two beats
+// that permanently change what a creature IS named only the name. Measured:
+//
+//     a level (8->10)   hp 25->29  atk 13->16  def 12->13  spd 13->15
+//                       said "grew to level 9!"  twice, naming none of it
+//     an evolution      hp 49->54  atk 27->36  def 22->28  spd 25->37
+//                       said "Cindercub became Pyrelynx!"
+//
+// One helper for both, because fixing one is how 180's fix reached one menu and
+// not the other.
+section('a beat that changes your numbers says which ones');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+
+  // The value on its own, by difference.
+  const was = { max: 20, atk: 10, def: 10, spd: 10 };
+  eq(g.gainLine(was, was), '', 'a change of nothing says nothing');
+  eq(g.gainLine(was, { ...was, max: 22 }), '+2 HP', 'one number moving names one number');
+  eq(g.gainLine(was, { ...was, atk: 13, spd: 11 }), '+3 ATK, +1 SPD', 'and only the ones that moved');
+  ok(!/\+0/.test(g.gainLine(was, { ...was, def: 10, max: 21 })), 'nothing is ever named as +0');
+  eq(g.gainLine(was, { ...was, max: 18 }), '-2 HP', 'and a number going down is named too');
+
+  // The words are the game's OWN. Read out of the profile markup rather than
+  // typed here: the first draft invented "attack, defence, speed" for stats the
+  // screens already call ATK, GUARD and SPD — a second vocabulary, and long
+  // enough that the worst-case line ran 368px into a 367px bar on a phone.
+  const labels = g.gainLine(was, { max: 21, atk: 11, def: 11, spd: 11 })
+    .split(', ').map((p) => p.split(' ')[1]).filter(Boolean);
+  eq(labels.length, 4, `all four numbers are named (${labels.join(', ')})`);
+  const profile = SRC.match(/statBlock\(m\)[\s\S]*?\n\}/)[0];
+  // A fixed number of checks: this loop walks the WORDS THE PROFILE USES, not
+  // the words gainLine produced, so a mutant that empties gainLine fails these
+  // rather than quietly asserting fewer times — the sweep read that as a crash.
+  for (const L of ['ATK', 'GUARD', 'SPD']) {
+    ok(new RegExp(`\\b${L}\\b`).test(profile), `the profile screen says "${L}"`);
+    ok(labels.includes(L), `and so does a gain line ("${L}")`);
+  }
+
+  // A LEVEL, driven — the state is dirtied to one point under the boundary or
+  // no level can happen at all.
+  const m = g.mkMon('cindercub', 8);
+  g.G.party = [m];
+  g.startBattle({ foe: g.mkMon('kindlark', 30), wild: true });
+  g.B().mine = m;
+  m.xp = g.xpFor(9) - 1;
+  const before = g.statSnap(m);
+  const log = [];
+  g.grantXP(log, m, g.mkMon('kindlark', 30));
+  const after = g.statSnap(m);
+  const lvLines = log.filter((e) => e.fx === 'level').map((e) => e.t);
+  ok(lvLines.length > 0, `the level was announced (${lvLines.join(' | ')})`);
+  ok(after.max > before.max, `and the numbers really moved (hp ${before.max}->${after.max})`);
+  // By difference: the deltas the lines name must add up to the deltas that
+  // happened. A line that names a plausible number rather than the real one
+  // fails here.
+  const summed = { max: 0, atk: 0, def: 0, spd: 0 };
+  const KEY = { HP: 'max', ATK: 'atk', GUARD: 'def', SPD: 'spd' };
+  for (const t of lvLines) {
+    for (const [, d, L] of t.matchAll(/([+-]\d+) (HP|ATK|GUARD|SPD)/g)) summed[KEY[L]] += +d;
+  }
+  for (const k of ['max', 'atk', 'def', 'spd']) {
+    eq(summed[k], after[k] - before[k], `the level's lines account for every point of ${k}`);
+  }
+
+  // AN EVOLUTION — the same helper, so the same claim.
+  const e = g.mkMon('cindercub', 20);
+  g.G.party = [e];
+  const eBefore = g.statSnap(e);
+  const r = g.evolveMon(e);
+  const eAfter = g.statSnap(e);
+  ok(r && r.gained, `the evolution names what it changed (${r && r.gained})`);
+  const eSum = { max: 0, atk: 0, def: 0, spd: 0 };
+  for (const [, d, L] of String(r.gained).matchAll(/([+-]\d+) (HP|ATK|GUARD|SPD)/g)) eSum[KEY[L]] += +d;
+  for (const k of ['max', 'atk', 'def', 'spd']) {
+    eq(eSum[k], eAfter[k] - eBefore[k], `the evolution accounts for every point of ${k}`);
+  }
+
+  // …and it reaches the sentence the player actually reads. The line is built
+  // in a template, so it is asked for as a value.
+  ok(/\$\{r\.gained \? ` \$\{r\.gained\}\.` : ''\}/.test(SRC),
+    'and the line the player reads carries it');
+  ok(/grew to level \$\{winner\.lvl\}!\$\{grew \? ` \$\{grew\}\.` : ''\}/.test(SRC),
+    'as does the level line');
+
+  // The worst case still fits the battle bar. Measured in a browser at 367px;
+  // netted here as the length that bought it, because a headless box has no
+  // pixels — an eleven-letter nickname at level 99 with all four moving.
+  const worst = `Bartholomew grew to level 99! ${g.gainLine({ max: 0, atk: 0, def: 0, spd: 0 }, { max: 12, atk: 9, def: 6, spd: 12 })}.`;
+  ok(worst.length <= 64, `the longest line this can produce is ${worst.length} chars`);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
