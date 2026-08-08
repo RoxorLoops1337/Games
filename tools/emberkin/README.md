@@ -377,6 +377,41 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+61. **Two copies and a preposition** (pass 150). Sequence as the instrument
+    again: walk the first hour in order and print what the game says at each
+    beat. The gate sweep the last pass suggested came back thin — there are
+    exactly two one-time teaching gates in the game and 149 fixed one of them.
+    What the walk turned up instead was in the menu's running answer to "what am
+    I doing now":
+
+        Forager Pell is still standing, in Route One.
+
+    You are not in a route. You are OUT ON one, and the game's own voice says so
+    elsewhere — *"The tall grass out on the route"*. It read wrong every time the
+    aim pointed at Route One, which is two of the nine trainers and the whole
+    first half-hour.
+
+    The cause is the same one this project keeps finding: `AIM_ORDER` carried a
+    fourth column saying where each trainer stands, a THIRD hand-written copy of
+    a fact the map data already owns. And the net for it — written by me, in the
+    pass that added the gate column precisely because a copy had drifted — said:
+
+        ok(/./.test(where), `${id} says where it is`)
+
+    "Says something." The weakest assertion in the suite, guarding the one
+    column that had nobody checking it, in a section whose own comment is about
+    copies drifting.
+
+    Both die together. Each map carries `at` — how the place is said inside a
+    sentence, *in Hollowbrook*, *out on Route One*, *down on the Stillmere
+    shore*, *up in Crown Hollow* — and the aim asks the map the trainer actually
+    stands on. Move a trainer to another map and the line follows him; the
+    hand-written column would have gone on naming the old one.
+
+    **The assertion you write for a column you are not worried about is the
+    assertion that will be guarding it when it breaks. `/./` is not a check, it
+    is a placeholder that passes.**
+
 60. **The lesson was gated on the wrong kind of fight** (pass 149). The first
     sixty seconds, driven beat by beat and COUNTED rather than admired. Title to
     walking out of the study: seventeen presses, of which eight were a lecture

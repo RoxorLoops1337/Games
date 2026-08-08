@@ -4229,6 +4229,7 @@ const GRASSY = new Set([',']);
 
 const MAPS = {
   hollowbrook: {
+    at: 'in Hollowbrook',                    // how the place is said inside a sentence
     name: 'Hollowbrook', kind: 'town',
     // Hollowbrook is meant to look lived in rather than laid out. Every door
     // has a path that actually reaches the road; the pond has a shore instead
@@ -4406,6 +4407,7 @@ const MAPS = {
   },
 
   route_one: {
+    at: 'out on Route One',                    // how the place is said inside a sentence
     name: 'Route One', kind: 'route',
     rows: [
       '#########==#############',
@@ -4480,6 +4482,7 @@ const MAPS = {
   },
 
   emberwood: {
+    at: 'in the Emberwood',                    // how the place is said inside a sentence
     name: 'Emberwood', kind: 'route',
     rows: [
       '########==############',
@@ -4564,6 +4567,7 @@ const MAPS = {
   },
 
   stillmere: {
+    at: 'down on the Stillmere shore',                    // how the place is said inside a sentence
     name: 'Stillmere Shore', kind: 'route',
     rows: [
       '########################',
@@ -4611,6 +4615,7 @@ const MAPS = {
   },
 
   crown_hollow: {
+    at: 'up in Crown Hollow',                    // how the place is said inside a sentence
     name: 'Crown Hollow', kind: 'route',
     rows: [
       '####################',
@@ -8062,17 +8067,29 @@ function menuInput() {
  * gated trainer, put the gate here too — `emberkin_story` compares this column
  * against the map data and will fail if they drift.
  */
+// [id, name, gate]. There used to be a fourth column saying WHERE each one
+// stands — a third hand-written copy of a fact the map data already owns, and
+// the net for it only asked that it "says something". It also produced "in
+// Route One", which is not English; you are OUT ON a route. Both die together:
+// the place is asked of the map the trainer is actually standing on.
 const AIM_ORDER = [
-  ['t_wick1', 'Wick', 'Hollowbrook', 'gotStarter'], ['t_pell', 'Forager Pell', 'Route One'],
-  ['t_dorn', 'Hiker Dorn', 'Route One'], ['t_ivo', 'Bramble Kid Ivo', 'the Emberwood'],
-  ['t_wick2', 'Wick', 'the Emberwood', 't_wick1'], ['t_coll', 'Ranger Coll', 'the Emberwood'],
-  ['t_mio', 'Tide-hand Mio', 'Stillmere'], ['t_hale', 'Warden Hale', 'the Emberwood'],
-  ['t_wick3', 'Wick', 'Crown Hollow', 'beatVespyr'],
+  ['t_wick1', 'Wick', 'gotStarter'], ['t_pell', 'Forager Pell'],
+  ['t_dorn', 'Hiker Dorn'], ['t_ivo', 'Bramble Kid Ivo'],
+  ['t_wick2', 'Wick', 't_wick1'], ['t_coll', 'Ranger Coll'],
+  ['t_mio', 'Tide-hand Mio'], ['t_hale', 'Warden Hale'],
+  ['t_wick3', 'Wick', 'beatVespyr'],
 ];
+/** Where a trainer actually stands, said the way the map says it. */
+function aimPlace(id) {
+  for (const map of Object.values(MAPS)) {
+    if ((map.npcs || []).some((n) => n.id === id)) return map.at || `in ${map.name}`;
+  }
+  return 'somewhere out there';
+}
 function nextAim() {
   if (!G.flags.gotStarter) return 'Elder Rowan is waiting on you.';
-  const next = AIM_ORDER.find(([id, , , gate]) => !G.flags[id] && (!gate || G.flags[gate]));
-  if (next) return `${next[1]} is still standing, in ${next[2]}.`;
+  const next = AIM_ORDER.find(([id, , gate]) => !G.flags[id] && (!gate || G.flags[gate]));
+  if (next) return `${next[1]} is still standing, ${aimPlace(next[0])}.`;
   if (!G.flags.beatVespyr) return 'Only the thing on the shrine is left, up in Crown Hollow.';
   const seen = dexCount(2);
   return seen < DEX_ORDER.length
@@ -11418,6 +11435,7 @@ if (typeof window !== 'undefined') {
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
+    aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,

@@ -740,7 +740,7 @@ EK.G.flags = {};
   };
   EK.G.flags = { gotStarter: 1 };
   step('just handed a kin');
-  for (const [id, who, , gate] of EK.AIM_ORDER) {
+  for (const [id, who, gate] of EK.AIM_ORDER) {
     if (gate) EK.G.flags[gate] = 1;              // the gate opens…
     step(`${who} reachable`);                     // …and he is standing there
     EK.G.flags[id] = 1;                           // …and then beaten
