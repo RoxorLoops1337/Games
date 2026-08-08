@@ -3371,4 +3371,73 @@ section('no speck of air is ever born visible');
   }
 }
 
+// A dead-field sweep of the whole file turned up five values the game computes
+// and never reads. Four are dead weight; this one was a player-visible gap with
+// its own comment on it. `grantCard` ends:
+//
+//     c.replaced = (CARDS[worst.id] || …).name;   // so the offer can say so
+//
+// and nothing read `c.replaced`. Driven with the deck at DECK_MAX, a three-pull
+// silver chest removed three cards and named none of them: you lose a card per
+// pull and are never told which. The note is a value because the shelf is a
+// template, which the headless suite cannot see.
+section('a pull that costs you a card says which card');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+
+  // Room in the deck: nothing is thrown away, so there is nothing to say.
+  const roomy = g.grantCard('edge');
+  eq(g.swapNote(roomy), '', 'a pull into a deck with room replaced nothing');
+
+  // …and the state has to be DIRTIED before the claim can be checked: fill the
+  // deck to its ceiling, which is the only condition under which a card goes.
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard(g.CARD_IDS[g.G.deck.length % g.CARD_IDS.length]);
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is at its ceiling');
+
+  const before = g.G.deck.slice();
+  g.G.gems = 9999;
+  const got = g.openChest('silver');
+  ok(got && got.length === 3, `the chest pulled ${got && got.length}`);
+  const after = g.G.deck.slice();
+  const lost = before.filter((u) => !after.includes(u));
+
+  // The claim, by difference: as many cards left as arrived, and every one of
+  // them is named. A pull that takes something and says nothing fails here.
+  eq(lost.length, got.length, `${got.length} cards in, ${lost.length} out`);
+  for (const c of got) {
+    ok(g.swapNote(c) !== '', `the pull says what it cost (${g.swapNote(c)})`);
+    ok(/^replaced /.test(g.swapNote(c)), 'and says it in words, not as a bare name');
+  }
+
+  // The name in the note is the name of a card that actually left, not a
+  // plausible-looking string. Read out of the deck diff, not typed in here.
+  const lostNames = new Set(lost.map((u) => {
+    const o = g.G.cards.find((x) => x.u === u);
+    return o && g.CARDS[o.id] ? g.CARDS[o.id].name : null;
+  }).filter(Boolean));
+  ok(lostNames.size > 0, `something identifiable left the deck (${[...lostNames].join(', ')})`);
+  for (const c of got) {
+    ok(lostNames.has(g.swapNote(c).replace(/^replaced /, '')),
+      `and the note names a card that really went (${g.swapNote(c)})`);
+  }
+
+  // The deck did not grow: a chest with a full deck is a swap, not an add.
+  eq(after.length, g.DECK_MAX, 'the deck is still at its ceiling');
+
+  // A card whose definition has gone still gets a sentence rather than nothing —
+  // that branch is the one an old save walks into.
+  const orphan = { u: 999, id: 'no_such_card', replaced: 'an old card' };
+  eq(g.swapNote(orphan), 'replaced an old card', 'a card from an old save is still named');
+
+  // Wiring: the shelf spends the value. The panel is a template, so this is the
+  // one thing here that has to be asked of the source.
+  ok(/swapNote\(c\)/.test(SRC), 'the pulled shelf asks for the note');
+  ok(/small class="swapped"/.test(SRC), 'and gives it a line of its own');
+  ok(/\.item \.info small\.swapped\{/.test(SRC), 'which is styled apart from the description');
+}
+
 done('emberkin_render');

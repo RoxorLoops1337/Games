@@ -2468,3 +2468,56 @@ desktop one. That is the correct answer and not an obvious one.
     guard has a real threshold now (below `1/255` the fill changes nothing) and
     the net SEARCHES for a moment when it fires. Five planted faults, all five
     bite, including putting `void life` back.
+
+90. **The sweep, and the one dead value that was costing the player something**
+    (pass 179). Took job (c), deferred since 176: fields written in one place and
+    read in none. `void life` (178) and `p.bump` (175) were both found by
+    accident; this looked on purpose.
+
+    **Four instruments before one worked, and every one of them agreed with me
+    in a different way.**
+    - v1 counted only `obj.name` reads, so every top-level const and function
+      came back dead. 771 names written, 514 read.
+    - v2 blanked comments with `[^:]`, which matches a newline — so it ate one
+      line per comment and every line number it printed was a lie. Then `blank`
+      replaced newlines with spaces: 11,125 lines became 10,136. Then `lineAt`
+      counted inside the script body while the script starts partway down the
+      HTML. Three separate off-by-a-lot bugs in one number. **I read the wrong
+      code for a full round because of it.**
+    - v3 blanked whole template literals — and `${r.newName}` is a read, so it
+      reported `newName` dead when line 9639 reads it. **One more step and I
+      would have deleted live code.**
+    - v4 hand-paired the backticks instead: nested templates mis-nested and it
+      called `toastT`, `chestOpen` and `spin` dead, all three plainly alive.
+    - v5 left templates as code, so an apostrophe in template prose opened a
+      fake string and blanked the real code after it.
+    - v6 is a one-pass scanner. It still cannot tell a regex literal from a
+      division, and that is printed rather than hidden.
+
+    And **the sweep reported four clean runs that were the script crashing** —
+    a splice had deleted the line that defines `OFFSET`. Only insisting the
+    planted faults BITE caught it. That rule was written down one pass earlier.
+
+    Four faults, kept permanently: a battle field written and never read (must
+    be found), an unused const (must be found), a field read only through a
+    computed key (must NOT be found), and a field read only inside a template
+    (must NOT be found).
+
+    **Five dead values confirmed by hand**, not just by the sweep:
+
+        c.replaced       written, comment says why, read by nothing
+        b.foeHeals       b.foeHeals++ and nothing reads it
+        b.maxAdd         zeroed, accumulated, read by nothing (b.maxAdds IS read)
+        log sM / sF      both kin's status recorded per beat, read by nothing
+        G.screen.prev    the mode a screen was opened from, read by nothing
+
+    Four are dead weight. The fifth was a hole in the game, with its own comment
+    sitting on it:
+
+        c.replaced = (CARDS[worst.id] || …).name;   // so the offer can say so
+
+    A deck at `DECK_MAX` makes room by throwing out your weakest card. Driven
+    with a full deck, a three-pull silver chest removed three cards and named
+    none of them — **you lose a card per pull and are never told which.** The
+    shelf says it now, in gold, under each card it gave you. Five planted
+    faults, all five bite.
