@@ -377,6 +377,41 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+74. **The one thing in this game a player types** (pass 163). No pass had ever
+    driven that input. The profile screen lets you nickname a kin, and
+    `dispName()` — `nick || name` — lands in `innerHTML` at **fifty-five sites**.
+    - **A nickname of `A<B` opened a `<b>` element in the middle of a name**, and
+      the `</b>` that followed closed the wrong one, so the rest of the screen
+      went bold and the DOM was corrupt from that row down. `m.nick` is SAVED,
+      so it stayed corrupt for the rest of the run.
+    - **`<3` was already safe, and that is luck, not design.** `<` before a
+      DIGIT is not a tag start, so a parser emits it as text. The breaking case
+      is `<` before a letter. Worth writing down because my first instinct was
+      to claim `<3` as the realistic exploit, and reading the actual parse rule
+      is what stopped me overstating it.
+    - Fixed **at the boundary, not at the fifty-five**: `commitNick` strips
+      angle brackets. One gate cannot drift out of step with itself the way
+      fifty-five escapes would. `&` is deliberately kept — a bare ampersand
+      renders as itself and stripping it would turn "Bo & Ed" into "Bo  Ed".
+    - And in the same line: `.trim()` ran BEFORE `.slice(0, 12)`, so cutting at
+      twelve could land mid-space and produce `"Ashling the "`. It trims twice
+      now. Same shape as 73 — the degenerate output of a computed value.
+
+    **Then the layout half, which only the picture could find.** `.kindetail
+    .portrait` is `float:right` and `.pname` is a FLEX container — and a flex
+    container's contents are not line boxes, so nothing in it wrapped around the
+    float. At twelve characters the level chip was drawn **on top of the
+    portrait frame**.
+
+    **And my first fix was wrong, which the next shot said immediately.**
+    `overflow:hidden` + `text-overflow:ellipsis` cleared the float but clipped
+    `Ashling them` to `Ashling t…` — a name the player chose, cut for space the
+    panel had going spare underneath, while the kin row three inches to its left
+    showed the whole thing. It **wraps** now: the level drops to the next line
+    and `overflow-wrap:anywhere` handles a twelve-letter word.
+    **Clearing a collision is not the same as solving it.** The first fix made
+    the overlap go away and made the screen worse.
+
 73. **"It cost you 1 shards." — the same sentence, one pass later** (pass 162).
     Swept every computed number the game prints beside a noun, by the method
     that worked last time: compute the expression over a range and READ THE

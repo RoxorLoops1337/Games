@@ -1568,6 +1568,51 @@ section('a count and its noun agree');
     'and the unfound count is guarded from zero by the branch above it');
 }
 
+// The one thing in this game a PLAYER TYPES. No pass had ever driven that input.
+//
+// `dispName()` is `nick || name` and it lands in innerHTML at fifty-five sites.
+// A nickname of `A<B` therefore opened a <b> element in the middle of a name,
+// and the </b> that followed closed the wrong one — so the rest of the screen
+// went bold and the DOM was corrupt from that row down. The nickname is SAVED,
+// so it stayed corrupt for the rest of the run.
+section('a nickname cannot open an element');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  const m = g.mkMon('cindercub', 12);
+  const take = (raw) => { m.nick = raw; return g.commitNick({ opt: { mon: m } }); };
+
+  eq(take('A<B'), 'AB', 'an angle bracket cannot start an element');
+  eq(take('<s>Ash'), 'sAsh', 'nor a whole tag');
+  eq(take('<<<>>>'), '', 'and a name of nothing but brackets is no name');
+  // `&` is deliberately left: a bare ampersand renders as itself, and stripping
+  // it would turn "Bo & Ed" into "Bo  Ed" for no gain.
+  eq(take('R&B'), 'R&B', 'an ampersand is a legitimate character in a name');
+  // …and the rest of the gate still does what it did.
+  eq(take('  Bo   Ed  '), 'Bo Ed', 'whitespace is collapsed and trimmed');
+  eq(take('Ashling the Third'), 'Ashling the', 'twelve characters, and no trailing space');
+  eq(take('   '), '', 'blank is no nickname');
+  eq(take('Cindercub'), '', 'and its own name is no nickname either');
+
+  // The trim runs twice on purpose — cutting at twelve can land mid-space.
+  ok(/\.slice\(0, 12\)\.trim\(\)/.test(SRC), 'the slice is trimmed after, not only before');
+  ok(/replace\(\/\[<>\]\/g, ''\)/.test(SRC), 'and the gate is at the boundary, not at the fifty-five');
+
+  // The layout half: the portrait is float:right and .pname is a FLEX
+  // container, whose contents are not line boxes — so nothing in it wrapped
+  // around the float, and at twelve characters the level chip was drawn on top
+  // of the portrait frame.
+  ok(/\.kindetail \.pname\{ display:flex; flex-wrap:wrap;[^}]*overflow:hidden/.test(SRC),
+    'the name line is a formatting context of its own, and wraps');
+  ok(/\.kindetail \.pname b\{[^}]*overflow-wrap:anywhere/.test(SRC),
+    'a twelve-letter word that will not break on its own still breaks');
+  // It must NOT truncate: the first attempt clipped "Ashling them" to
+  // "Ashling t…" while the kin row beside it showed the whole thing.
+  ok(!/\.kindetail \.pname b\{[^}]*text-overflow:ellipsis/.test(SRC),
+    'and a name the player chose is not cut for space the panel has going spare');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can
