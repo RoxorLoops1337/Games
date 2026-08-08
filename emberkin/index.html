@@ -4349,10 +4349,38 @@ const MAPS = {
     warps: [{ x: 5, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }, { x: 6, y: 7, to: 'hollowbrook', tx: 17, ty: 13, dir: 'down' }],
     npcs: [
       { x: 4, y: 2, dir: 'down', sprite: 'npc_rival', name: 'Bell', shop: true,
-        lines: ['Orbs, salves, and no credit. Mother\'s rule, not mine.'] },
+        // She sells the two things that keep a run going and had never once
+        // looked at whether you have either. "No credit" is a rebuke to somebody
+        // who is short and noise to somebody who is not. The orb list is asked
+        // of ITEMS rather than written out — a hand-copy here would stop
+        // counting the day a fourth orb is added.
+        lines: () => {
+          const rule = 'Orbs, salves, and no credit. Mother\'s rule, not mine.';
+          const orbs = Object.keys(ITEMS)
+            .filter((k) => ITEMS[k].kind === 'orb')
+            .reduce((n, id) => n + (G.bag[id] || 0), 0);
+          if (!orbs) return [rule,
+            'You have not got a single orb on you. Whatever you meet out there, all you can do is hit it.'];
+          if (G.money < ITEMS.salve.cost) return [rule,
+            'And you are short for a salve. I am not going to make a thing of it.'];
+          return [rule];
+        } },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_elder', name: 'Vane', chests: true,
-        lines: ['Gems only. Shards are for people who buy salves.',
-          'Silver is a nibble. Prism is a mortgage. Everything between is a decision.'] },
+        // He names a price ladder — a nibble, a mortgage, and a decision in
+        // between — and had never checked which rung you are standing on. The
+        // floor comes off CHESTS, so it follows the prices rather than repeating
+        // one of them.
+        lines: () => {
+          const floor = Math.min(...CHEST_IDS.map((k) => CHESTS[k].cost));
+          if (G.gems < floor) return ['Gems only. Shards are for people who buy salves.',
+            `And you are ${floor - G.gems} short of the smallest one. Go and win something.`];
+          if (G.gems >= CHESTS.prism.cost) return ['Gems only, as ever.',
+            'You can cover a Prism. I want you to know I noticed, and that I am being very calm about it.'];
+          if (!G.chestsOpened) return ['Gems only. Shards are for people who buy salves.',
+            'Silver is a nibble. Prism is a mortgage. Everything between is a decision.'];
+          return [`${G.chestsOpened} opened and you keep coming back. Good.`,
+            'Silver is still a nibble. Prism is still a mortgage.'];
+        } },
     ],
     enc: null,
   },
@@ -4476,7 +4504,16 @@ const MAPS = {
           // Two ideas now, and he has learned to eat your turn.
           plan: ['sharpen', 'swing', 'brace', 'swing'],
           lose: ['…Right. North it is, for both of us.'], win: ['Still me. Go and train.'] },
-        after: ['The Warden will not let either of us up. Not yet.'] },
+        // Found by generalising Rowan's fault rather than by reading him: once
+        // a blocking npc steps off the path, NOBODY may still be sending you
+        // past them. He went on saying the Warden would not let either of us up
+        // for the whole rest of the game, including on the way back down.
+        after: () => (G.been.crown_hollow
+          ? ['You went up without me. I heard.', 'I will be up there. Do not make it easy.']
+          : G.flags.t_hale
+            ? ['Hale let you through? He would not even look at me.',
+              'Go on, then. I will find my own way up.']
+            : ['The Warden will not let either of us up. Not yet.']) },
       { x: 15, y: 6, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Coll', id: 't_coll',
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
@@ -8154,8 +8191,36 @@ function rowanScript() {
     ]);
     return;
   }
+  // Her one piece of navigation was gated on `dexCount(2) >= 8`, which is a
+  // PROXY for "far enough along" — and the game has the actual fact one flag
+  // away. It was wrong in both directions at once. Somebody who had beaten the
+  // Warden with a thin dex was never told the path had opened; somebody who had
+  // already stood on the mountain was still being sent "past the Warden", who
+  // is not on the map any more. That is the signpost fault of the four in town,
+  // in the mouth of the one character the whole game says is paying attention.
+  //
+  // Most progressed first. Being up the mountain implies Hale stepped aside,
+  // and both of those are facts rather than counts.
+  if (G.been.crown_hollow) {
+    say('Elder Rowan', [
+      `Seen ${dexCount(1)}, caught ${dexCount(2)} — and you have stood on the mountain.`,
+      'Then you have felt the air go thin up there. That is not weather.',
+      'Take orbs when you go back. Take all of them.',
+    ]);
+    return;
+  }
+  if (G.flags.t_hale) {
+    say('Elder Rowan', [
+      'Hale stepped aside for you. He does not do that often.',
+      'Crown Hollow is open, then. Something up there is worth the walk.',
+    ]);
+    return;
+  }
   if (dexCount(2) >= 8) {
-    say('Elder Rowan', [`${dexCount(2)} caught. You are doing better than I did.`, 'Crown Hollow, past the Warden. Something up there is worth the walk.']);
+    say('Elder Rowan', [
+      `${dexCount(2)} caught. You are doing better than I did.`,
+      'Crown Hollow is up past the Emberwood, and Warden Hale will not let you by until he is satisfied.',
+    ]);
     return;
   }
   say('Elder Rowan', [`Seen ${dexCount(1)}, caught ${dexCount(2)}. Keep at it.`, 'The grass does the teaching. I only do the paperwork.']);
