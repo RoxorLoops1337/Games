@@ -69,6 +69,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
+  EDGE_PILL,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
@@ -1863,6 +1864,58 @@ test('a goal object off the edge of the frame gets an arrow', () => {
   // and an empty market must not throw
   api._resetCounts();
   api.drawEdgeMarkers([]);
+});
+
+/* This was the one piece of text in the whole game printed straight onto the
+   market: red SANTA over red awnings and red presents, with a one-pixel dark
+   copy behind it and nothing else. Every other word you read — the score, the
+   checklist, CARS LEFT, the shout, the hint along the bottom — sits on a dark
+   rounded plate, and this is the one that says where the most valuable target
+   in the market is. */
+test('a marker\'s label sits on a plate, like every other word in the game', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel(); api.camSnap();
+  const shot = (dx, dy, tag) => {
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawEdgeMarkers(
+      [{ x: api.cam.x + dx, y: api.cam.y + dy, col: '#ff6b5e', tag }]));
+    const plate = rec.polys.filter(q => q.style === 'rgba(7,12,24,.84)' && !q.stroked);
+    return { rec, plate };
+  };
+  const s = shot(9000, 0, 'SANTA');
+  assert(s.plate.length === 1, 'the label should get one plate, got ' + s.plate.length);
+  const p = s.plate[0];
+  assert(Math.abs((p.y1 - p.y0) - api.EDGE_PILL) < 0.01,
+    'a pill the height of the type, got ' + (p.y1 - p.y0).toFixed(1));
+  assert(p.x1 - p.x0 > 40, 'and wide enough to hold "SANTA 9000": ' +
+    (p.x1 - p.x0).toFixed(0));
+
+  // behind the text, not over it
+  const st = s.rec.styles;
+  assert(st.lastIndexOf('f:rgba(7,12,24,.84)') < st.lastIndexOf('f:#ff6b5e'),
+    'the plate should go down before the word');
+
+  /* And it must not hang off the frame — this is drawn at the edge by
+     definition, which is the one place a plate can be clipped. Both edges,
+     and the top and bottom, because a marker can leave by any of them. */
+  const view = api.getView();
+  for (const [dx, dy, tag] of [[9000, 0, 'SANTA'], [-9000, 0, 'CAROUSEL'],
+                               [0, 9000, 'TREE'], [0, -9000, 'CAROUSEL'],
+                               [9000, 9000, 'CAROUSEL']]){
+    const q = shot(dx, dy, tag).plate[0];
+    assert(q, tag + ' at ' + dx + ',' + dy + ' lost its plate');
+    assert(q.x0 >= -0.01 && q.x1 <= view.w + 0.01 &&
+           q.y0 >= -0.01 && q.y1 <= view.h + 0.01,
+      tag + ' leaving by ' + dx + ',' + dy + ' hangs its plate off the frame: ' +
+      [q.x0, q.y0, q.x1, q.y1].map(v => v.toFixed(0)).join(',') +
+      ' in ' + view.w + 'x' + view.h);
+  }
+
+  // the arrow keeps its own dark backing, which is a different shape
+  assert(s.rec.polys.some(q => q.style === 'rgba(8,14,26,.6)'),
+    'the arrowhead should still be backed');
+  console.log('    (marker pill: ' + (p.x1 - p.x0).toFixed(0) + '×' +
+    (p.y1 - p.y0).toFixed(0) + ' behind the label)');
 });
 
 test('the checklist’s people are findable in the crowd while you aim', () => {
