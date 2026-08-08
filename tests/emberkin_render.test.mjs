@@ -1236,6 +1236,57 @@ section('the screens name the controls the player actually has');
   ok(/class="back">\$\{/.test(SRC), 'the corner hint is built from the same source');
 }
 
+// …and the corner hint must not appear on a screen that refuses to close.
+//
+// The chip was emitted unconditionally at the top of renderScreen and three
+// branches blanked it by rewriting `html`. The forced party screen — kin down,
+// pick a replacement — locks on `opt.force` rather than on its kind, so it kept
+// the chip: on a phone, the only affordance that closes a screen, sitting in
+// the corner of the one screen that will not close, playing the back sound and
+// doing nothing. One predicate now answers for both the chip and the refusal.
+section('a screen that will not close does not offer a way out');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+  g.G.party = [g.mkMon('cindercub', 12), g.mkMon('brookite', 12)];
+
+  const LOCKED = [
+    ['party', { force: true }, 'the forced switch demands a replacement'],
+    ['starter', {}, 'the first choice in the game must be made'],
+    ['swap', {}, 'something has to come out'],
+    ['reward', {}, 'an offer is taken or declined, not dismissed'],
+  ];
+  for (const [kind, opt, why] of LOCKED) {
+    const s = { kind, i: 0, opt };
+    ok(g.screenLocked(s), `${kind}: ${why}`);
+    g.G.screen = s;
+    g.closeScreen();
+    ok(g.G.screen === s, `${kind}: and closing it does nothing`);
+  }
+  // The ordinary ones still close, or the guard is a wall rather than a lock.
+  for (const kind of ['party', 'dex', 'box', 'deck', 'bag']) {
+    const s = { kind, i: 0, opt: {} };
+    ok(!g.screenLocked(s), `${kind} is not locked`);
+    g.G.screen = s;
+    g.closeScreen();
+    eq(g.G.screen, null, `and ${kind} closes`);
+  }
+  // The same party screen, twice, differing only in the flag: this is the case
+  // the two copies of the list disagreed about.
+  ok(g.screenLocked({ kind: 'party', i: 0, opt: { force: true } })
+    && !g.screenLocked({ kind: 'party', i: 0, opt: {} }),
+    'the party screen is locked by the flag, not by its kind');
+
+  // Source: one predicate feeds the chip and the refusal, the refusal happens
+  // before the sound, and no branch blanks the chip a second way.
+  ok(/let html = screenLocked\(s\) \? ''/.test(SRC), 'the chip is withheld from a locked screen');
+  ok(/if \(screenLocked\(s\)\) return;\n  playCue\('back'\);/.test(SRC),
+    'and the refusal comes before the back sound, not after it');
+  ok(!/html = '';/.test(SRC), 'with no second mechanism left to disagree with the first');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can

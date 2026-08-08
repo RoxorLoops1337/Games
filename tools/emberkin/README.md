@@ -377,6 +377,55 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+66. **The instrument had never photographed the thing it was named after**
+    (pass 155). The `evolve` scene HAND-BUILT `G.evoAnim` — beat index 2, its
+    own durations, `swapped: false`, `res: null`. `evoStep` flips `swapped` on
+    the way INTO the burst, so that combination is a state the game cannot
+    reach: every picture ever taken of the evolution showed the OLD creature
+    inside a white-out whose entire purpose is to reveal the new one, and the
+    scene could never reach its own last line. Driven properly — a win that tips
+    a Cindercub over Lv16 — the beats are `hold/old build/old burst/new
+    settle/new quiet/new`, and the reveal lands where it should.
+    Two drive faults on the way, both worth keeping: **ending the turn is not
+    attacking** (the first film ran a loop of nothing but `endTurn` against a
+    foe on 1 HP and recorded twelve frames of the Cindercub being chewed on —
+    the player's swing comes out of a CARD), and **the card offer stands between
+    the win and the evolution** (`settle` is the reward screen's `done`, so a
+    film that stopped at "WON +1 gem" was stopping one screen short of its
+    subject).
+    **A scene that constructs its own state photographs a state the game cannot
+    produce. Drive it to the moment; do not pose it.**
+    The endTurn loop was COPIED FROM `levelup`, whose own comment ends "so one
+    ended turn wins, the XP lands, and the level fires in among the win lines,
+    which is where it has to be judged" — and its film was six frames of two
+    creatures standing still, the fight never resolving. Same fix, same scene
+    family. **A comment describing a fix is not evidence the fix is in; the
+    picture is.**
+    Not solved and recorded rather than claimed: holding the film ON the
+    "grew to level 25" line. The win lines play back through the LOG, not
+    through `battleMsg`, so a hold that reads `d.lines[d.i]` never matches. The
+    beat mashes A every 120ms, which is not a player, so the film also cannot
+    say whether the level-up reads as a moment at a human pace. That needs a
+    beat the tool does not have.
+
+    And what the drive found on the way, which is the actual fix in this pass:
+    **the list of screens that refuse to close lived twice, and the copies
+    disagreed.** `renderScreen` puts an "X — back" chip in the corner of every
+    screen; three branches blanked it by rewriting `html`. The forced party
+    screen — your kin is down, the game is demanding a replacement — locks on
+    `opt.force` rather than on its kind, so it kept the chip. On a phone that
+    chip is the ONLY thing that closes a screen. Worse, `closeScreen` played the
+    back blip BEFORE its guards returned, so the game made the sound of closing
+    and stayed put. `reward` was in `renderScreen`'s copy and not in
+    `closeScreen`'s, and closing a reward screen drops `s.opt.done` — which is
+    `settle`: the evolution waiting on that win, and the save.
+    One `screenLocked(s)` now answers for the chip and the refusal, and the
+    refusal comes before the sound.
+    **I photographed this screen an hour earlier, for a different pass, and the
+    words "X — back" are legible in that shot.** Looking at a picture is not the
+    same as reading it; what made it visible was tracing a different question
+    through the same function.
+
 65. **The alarm was reading the middle of a roll it should have read the top of**
     (pass 154). Fourth pass of the shown-against-resolved sweep, and the first
     where the fault was not a wrong number but a wrong *statistic*. Every damage
