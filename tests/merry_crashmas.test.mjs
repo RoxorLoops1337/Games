@@ -71,7 +71,7 @@ const EXPOSE = `__out.api = {
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
-  drawLights, shadow, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
+  drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
@@ -4258,7 +4258,7 @@ test('the sim survives a wildly variable frame rate', () => {
    buffer saturated, the camera at the zoom where the most people are on screen
    at the most detail. Returns the counted frame plus how many of the people in
    shot took a path more expensive than the batch. */
-function worstFrame(w, h){
+function worstFrame(w, h, shot){
   const api = boot({ count: true, w, h });
   api.startLevel(api.LEVELS.length - 1);
   api.beginLevel();
@@ -4272,8 +4272,9 @@ function worstFrame(w, h){
   }
   for (let i = 0; i < 140; i++) api.people[i % api.people.length].panic = 1;
   api.G.phase = 'drive';
-  api.car.x = 2600; api.car.y = 1100; api.car.vx = 800;
+  api.car.x = 2600; api.car.y = 1100; api.car.vx = (shot || {}).vx || 800;
   api.camSnap();
+  if ((shot || {}).aim){ api.G.phase = 'aim'; api.camSnap(); }
   // a full boot-print buffer, all of it in shot and none of it faded
   api.setT(500);
   for (let i = 0; i < api.FOOT_MAX; i++){
@@ -4291,8 +4292,13 @@ function worstFrame(w, h){
     onCamera++;
     if (p.dead || api.lodAlways(p) || api.lodQ(p) >= api.LOD_MID) detailed++;
   }
+  let propsOn = 0;
+  for (const o of api.props){
+    if (Math.abs(o.x - api.cam.x) <= halfW && Math.abs(o.y - api.cam.y) <= halfH) propsOn++;
+  }
   return { api, c: api._counts, fills: api._counts.fill || 0,
-    strokes: api._counts.stroke || 0, detailed, onCamera };
+    strokes: api._counts.stroke || 0, detailed, onCamera, propsOn,
+    tz: Math.round(api.cam.tz) };
 }
 
 /* The same world at the same zoom on three monitors. cam.s is VH/cam.tz, so
@@ -4319,6 +4325,99 @@ test('one frame of the worst market stays inside its draw budget at any resoluti
   const lo = Math.min(...det), hi = Math.max(...det);
   assert(hi - lo < 0.1 * hi + 0.02,
     'detail should not scale with resolution: ' + det.map(d => d.toFixed(3)).join(' vs '));
+});
+
+/* A shadow is two ellipses — a soft outer one and a tighter core — which is
+   how it gets an edge that is not a hard line. That pair only reads while the
+   shadow is big enough to have an edge at all, and on a frame holding two
+   hundred props the second ellipse was two hundred fills nobody could see. */
+test('a distant shadow is one blob, a near one has an edge', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  const cast = (rx) => {
+    const rec = carRec();
+    api.withCtx(rec, () => api.shadow(0, 0, rx, rx * 0.4, 0.3));
+    return rec;
+  };
+  const q = (rx) => rx * api.LOD_REF / api.cam.tz;
+  // pick two radii either side of the line at this camera
+  const big = api.SHADOW_FINE * api.cam.tz / api.LOD_REF * 1.6;
+  const small = api.SHADOW_FINE * api.cam.tz / api.LOD_REF * 0.5;
+  assert(q(big) > api.SHADOW_FINE && q(small) < api.SHADOW_FINE, 'fixture straddles the line');
+  const near = cast(big), far = cast(small);
+  assert(near.all.filter(e => e[0] === 'el').length === 2,
+    'a near shadow is two ellipses, got ' + near.all.filter(e => e[0] === 'el').length);
+  assert(far.all.filter(e => e[0] === 'el').length === 1,
+    'a far shadow should be one blob, got ' + far.all.filter(e => e[0] === 'el').length);
+  assert(far.fills === 1 && near.fills === 2,
+    'fills: far ' + far.fills + ', near ' + near.fills);
+
+  // the blob still lands under the thing casting it, and is not a hard disc
+  const blob = far.all.filter(e => e[0] === 'el')[0];
+  assert(Math.hypot(blob[1], blob[2]) < small * 0.75,
+    'the blob drifted off its prop by ' + Math.hypot(blob[1], blob[2]).toFixed(1));
+  assert(blob[4] < blob[3], 'a shadow lies flat, got ' + blob[3] + ' by ' + blob[4]);
+  assert(String(far.order[0]).startsWith('rgba(8,16,32'), 'and it is still a shadow colour');
+
+  /* Measured on the reference 720p frame like every other LOD gate in this
+     game — a bigger window must not buy itself softer shadows. */
+  const at = (h) => {
+    const a2 = boot({ w: h * 16 / 9, h });
+    a2.startCampaign(); a2.beginLevel();
+    a2.G.phase = 'drive'; a2.car.x = 2600; a2.car.y = 1100; a2.camSnap();
+    const rec = carRec();
+    a2.withCtx(rec, () => a2.shadow(0, 0, small, small * 0.4, 0.3));
+    return rec.fills;
+  };
+  assert(at(720) === at(1440), 'a 1440p window got a different shadow: ' +
+    at(720) + ' vs ' + at(1440));
+});
+
+/* This budget was only ever checked against one camera — the car at 800px/s,
+   tz 1072. Two cameras are wider and cost more, and neither had ever been
+   counted: the aim frame, which holds the entire market and which you look at
+   before every single launch, and the frame right after the launch, where the
+   car is doing 2,000 and the camera has pulled out to keep it in shot. The aim
+   frame was at 3,913 fills against a 3,400 budget when this was written — 15%
+   over, on the screen the game opens on. */
+test('the frames the budget never looked at are inside it too', () => {
+  const shots = [{ name: 'aim (whole market)', aim: true },
+                 { name: 'launch speed', vx: 2200 },
+                 { name: 'driving', vx: 800 }];
+  const runs = shots.map(sh => Object.assign({ sh }, worstFrame(1280, 720, sh)));
+  for (const r of runs){
+    r.props = r.propsOn;
+    console.log('    (' + r.sh.name + ': ' + r.fills + ' fills at tz ' + r.tz +
+      ' over ' + r.props + ' props, ' + (r.fills / r.props).toFixed(1) + ' each)');
+    assert(r.fills > 200, r.sh.name + ' drew nothing: ' + r.fills);
+    assert(r.strokes < 1500, 'stroke budget blown on ' + r.sh.name + ': ' + r.strokes);
+  }
+  const near = runs.find(r => r.sh.vx === 800);
+  const wide = runs.find(r => r.sh.aim);
+  const fast = runs.find(r => r.sh.vx === 2200);
+  assert(wide.tz > near.tz * 1.5,
+    'the aim camera should be much the wider: ' + wide.tz + ' vs ' + near.tz);
+
+  /* The whole market in shot must not cost more than a corner of it. This is
+     the claim the flat 3,400 could never make: the aim frame holds 40% more
+     props than the driving frame and used to cost 3,913 against it, because
+     nothing about a prop got cheaper when you pulled the camera back. */
+  assert(wide.fills < near.fills,
+    'the widest frame in the game is the dearest: ' + wide.fills + ' vs ' + near.fills);
+  assert(wide.fills < 3400, 'the aim frame is over the driving budget: ' + wide.fills);
+
+  /* The launch frame is a third more market than the driving frame, at a zoom
+     where a stall is still 87px across and you can read the stock on its
+     counter — so it legitimately costs more in total. What must not grow is
+     what it costs *per prop*: that is the number a new bit of art with no LOD
+     on it moves, and a flat total would let it hide behind the wider shot. */
+  for (const r of [wide, fast])
+    assert(r.fills / r.props <= near.fills / near.props,
+      r.sh.name + ' costs ' + (r.fills / r.props).toFixed(1) + ' a prop against ' +
+      (near.fills / near.props).toFixed(1) + ' driving — new detail with no LOD on it');
+  // and a hard ceiling so nothing runs away between passes
+  for (const r of runs) assert(r.fills < 3700, r.sh.name + ' blew the ceiling: ' + r.fills);
 });
 
 /* Santa is r 17 and a pram carrier is r 14, both under the batch line at any
