@@ -4194,13 +4194,62 @@ function tradeOf(o){
   return TRADES[Math.floor((o.seed || 0) * TRADES.length) % TRADES.length];
 }
 
+/* The counter itself. Every trade's stock was drawn "on the counter" and there
+   was no counter: eight different sets of goods floating on a flat wooden face,
+   each one a sticker with nothing under it and no contact with anything. It is
+   a plank now, lit along its top edge and shaded down its apron, standing on
+   two legs, with the stock casting a short shadow onto it. The broken half also
+   finally explains itself — the stock has always halved at `wear > 0.5` for no
+   visible reason, so at that point the plank snaps at the middle and the right
+   half is a splintered stub with nothing left on it. */
+const goodsN = (wear) => wear > 0.5 ? 2 : 4;       // half wrecked, half the stock
+const goodsX = (w, i) => -w * 0.28 + i * (w * 0.19);
+function drawCounter(o, w, gy, wear, fs){
+  const broke = wear > 0.5;
+  const x0 = -w * 0.4, x1 = broke ? -w * 0.005 : w * 0.4;
+  const top = gy + fs * 9 - (fs > 0 ? 0 : 13);     // the plank reads the same
+  const H = 13;                                    // way whichever side it faces
+  // stock resting on it, before the plank so the shadow lies on the top surface.
+  // Always below the stock whichever way the stall faces — the light is
+  // overhead, and a shadow that flips with `face` is a shadow you notice.
+  ctx.fillStyle = 'rgba(10,18,34,.30)';
+  ctx.beginPath();
+  for (let i = 0, n = goodsN(wear); i < n; i++){
+    const gx = goodsX(w, i) + 2.6;                 // pushed with the light
+    ctx.moveTo(gx + 11, gy + 8);
+    ctx.ellipse(gx, gy + 8, 11, 3.2, 0, 0, 6.283);
+  }
+  ctx.fill();
+  if (fs > 0){                                     // legs, only where you'd see them
+    ctx.fillStyle = 'rgba(14,22,38,.42)';
+    ctx.beginPath();
+    ctx.rect(x0 + 7, top + H, 7, 12);
+    ctx.rect(x1 - 14, top + H, 7, 12);
+    ctx.fill();
+  }
+  ctx.fillStyle = TH.wood2;
+  roundRect(x0, top, x1 - x0, H, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(255,240,212,.22)';         // lit lip along the top
+  ctx.fillRect(x0 + 2, top + 1, x1 - x0 - 4, 3.5);
+  ctx.fillStyle = 'rgba(12,20,38,.30)';            // apron falling into shade
+  ctx.fillRect(x0 + 1, top + H - 5.5, x1 - x0 - 2, 5);
+  if (broke){                                      // the snapped end, splintered
+    ctx.fillStyle = TH.wood;
+    ctx.beginPath();
+    ctx.moveTo(x1 - 1, top);
+    ctx.lineTo(x1 + w * 0.075, top + H * 0.42);
+    ctx.lineTo(x1 - 1, top + H);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
 /* What is actually laid out on the counter. Each of these is a handful of
    fills — the old version was one path of four circles, so the whole market
    sold the same anonymous gold thing. */
 function drawGoods(o, w, h, gy, wear){
-  const t = tradeOf(o), gone = wear > 0.5;         // half wrecked, half the stock
-  const n = gone ? 2 : 4;
-  const gx = (i) => -w * 0.28 + i * (w * 0.19);
+  const t = tradeOf(o);
+  const n = goodsN(wear);
+  const gx = (i) => goodsX(w, i);
   switch (t.goods){
     case 'grill': {
       ctx.fillStyle = '#241c18';
@@ -4396,7 +4445,9 @@ function drawHut(o){
   ctx.fillRect(-w / 2 + 18, -h / 2 + 16, w - 36, h * 0.07);
   ctx.fillStyle = 'rgba(126,156,206,.34)';
   ctx.fillRect(-w / 2 + 16, -h / 2 + 14 + h * 0.26, w - 32, h * 0.08);
-  drawGoods(o, w, h, fs > 0 ? h * 0.12 : -h * 0.12, wear);
+  const gy = fs > 0 ? h * 0.12 : -h * 0.12;
+  drawCounter(o, w, gy, wear, fs);
+  drawGoods(o, w, h, gy, wear);
   // splits in the panelling once it has taken a hit
   if (wear > 0.28){
     ctx.strokeStyle = 'rgba(30,20,14,.5)'; ctx.lineWidth = 3;

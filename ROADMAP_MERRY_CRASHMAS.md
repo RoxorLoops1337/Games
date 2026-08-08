@@ -504,6 +504,24 @@ edit this block to name the next one.
       the drift comes off the child's own coat and walk phase, so a beat added
       inside `killPerson` cannot move a market's score.
 
+- [x] The stalls got the counter they were always described as having. Eight
+      trades lay their stock out and the code that draws it is called "what is
+      actually laid out on the counter" — there was no counter. Bratwurst,
+      baubles, wool and the rest floated on a flat wooden face, touching
+      nothing, eight stickers in a row. There is a plank now: lit along its top
+      lip, falling into shade down its apron, standing on two legs, and every
+      item on it drops a short flattened shadow pushed the way the market's one
+      light points. The stock has always halved at `wear > 0.5` with nothing to
+      show for why, so that is where the plank snaps: past half wrecked it is a
+      stub with a splintered end and the right half of the stall is bare. The
+      whole thing follows `face`, so a stall turned away shows the plank behind
+      its stock as a back shelf and skips the legs you could not see anyway.
+      One trap on the way: batching the contact shadows into a single path
+      without a `moveTo` between the ellipses joins them into one polygon
+      across the whole row — the suite stayed green and the screenshot did not,
+      which is now an assertion. 2487 → 2625 fills at the worst frame, against
+      a 3400 budget.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
