@@ -2888,3 +2888,42 @@ desktop one. That is the correct answer and not an obvious one.
 
     **A rule this project already had, applied to itself:** read the list out of
     the code. The suite was reading the code out of the wrong file.
+
+99. **A section that asserted difference and never checked it** (pass 188).
+    Spent the instrument. 75 of ~88 sections had never had a mutant aimed at
+    them; 187 was what made a 0 from the sweep mean anything. Eight new mutants,
+    aimed at the largest of those sections:
+
+        wide: two maps lit the same way            0 killed  <-
+        wide: a place loses its weather            1
+        wide: a theme loses its lead               3
+        wide: the hand is a row, not a fan        25
+        wide: a card face says nothing            25
+        wide: a count never pluralises             4
+        wide: the stats block goes blank          29
+        wide: a screen lists nothing               0 killed  <-
+
+    Both zeroes checked by hand — anchors present, runs reaching the end — as
+    184 and 186 taught. One was mine and one was real.
+
+    **The real one.** `every map is lit as its own place` carries 57 checks, and
+    giving the lab hollowbrook's exact weather row killed none of them. The
+    section DOES check for collapse — of `GRADE`, the older per-map wash — and
+    never of `AIR`, the six-dial table (tint, grade, vig, motes, mc, drift)
+    added later, which is what pass 178 measured when it asked whether the
+    valley reads as eight places. **The rule was stated and asked of one of its
+    two tables.** Netted now, by difference and read out of MAPS: no two maps
+    share a row, no row is the fallback wearing a name, every map has one, and
+    no row names a map that does not exist. Three breaks bite; changing a single
+    channel of one map correctly stays quiet.
+
+    **The one that was mine.** `a screen lists nothing` broke `screenList`, and
+    that section tests `shelve` — a different function it never calls. The
+    mutation MISSED, which reads exactly like a section that cannot fail. Re-
+    aimed at `shelve`, it kills three.
+
+    And an honest limitation of the tool, found on the way: an empty
+    `screenList('bag')` IS caught — by the `emberkin` logic suite, which this
+    sweep does not run. **The sweep drives one suite of five, so a check living
+    in another suite reads as absent.** Named here rather than mistaken for a
+    hole next time.

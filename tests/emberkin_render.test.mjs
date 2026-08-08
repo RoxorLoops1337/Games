@@ -412,6 +412,34 @@ for (const id of OUTDOOR) {
   ok(!seenGrade.has(key), `${id} is not lit the same as another map`);
   seenGrade.add(key);
 }
+// The same claim, asked of the table that actually paints the frame.
+//
+// This section has always checked GRADE for collapse and never AIR — the
+// six-dial per-map weather (tint, grade, vig, motes, mc, drift) added later,
+// which is what pass 178 measured when it asked whether the valley reads as
+// eight places. Giving the lab hollowbrook's exact AIR row killed NONE of this
+// section's 57 checks. The rule was stated and asked of one of its two tables.
+{
+  const seenAir = new Set();
+  for (const [id, air] of Object.entries(EK.AIR)) {
+    const key = JSON.stringify([air.tint, air.grade, air.vig, air.motes, air.mc, air.drift]);
+    ok(!seenAir.has(key), `${id} does not share another map's weather`);
+    seenAir.add(key);
+    // …and it is not simply the fallback wearing a name, which is the other way
+    // a place stops being its own.
+    const dflt = EK.AIR_DEFAULT;
+    ok(JSON.stringify([air.tint, air.grade, air.vig, air.motes, air.mc, air.drift])
+      !== JSON.stringify([dflt.tint, dflt.grade, dflt.vig, dflt.motes, dflt.mc, dflt.drift]),
+      `${id} is not just the default air under a map's name`);
+  }
+  // Every map has one — the list read out of MAPS, so a map added tomorrow is
+  // asked the same question rather than quietly falling back.
+  for (const id of Object.keys(EK.MAPS)) {
+    ok(!!EK.AIR[id], `${id} has weather of its own`);
+  }
+  eq(Object.keys(EK.AIR).length, Object.keys(EK.MAPS).length,
+    'and no weather is written for a map that does not exist');
+}
 for (const [id, gr] of Object.entries(EK.GRADE)) {
   ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.top), `${id}: top wash is a usable colour`);
   ok(/^rgba\(\d+,\s*\d+,\s*\d+,\s*\.?\d+\)$/.test(gr.bot), `${id}: bottom wash is a usable colour`);

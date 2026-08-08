@@ -88,6 +88,32 @@ const MUTANTS = [
     find: "  if (bi > 0 && a.i < bi && (justPressed('a') || justPressed('b'))) {", to: '  if (false) {' },
   { name: 'skip: the flourish stops answering', aims: ['every beat that can be pressed past still can'],
     find: "  if (f.t < FLOURISH_T && !justPressed('a') && !justPressed('b')) return true;", to: '  if (f.t < FLOURISH_T) return true;' },
+  // ---- pass 188: aimed at the OLDEST sections, none of which had ever had a
+  // mutant pointed at them. 75 of ~88 sections were unswept, and a 0 from this
+  // tool only started meaning something once 187 made source checks visible.
+  { name: 'wide: two maps lit the same way', aims: ['every map is lit as its own place'],
+    find: "  lab:         { tint: [150, 190, 255], grade: .20, vig: .56, motes: 12,  mc: [190, 220, 255], drift: [2, -5] },",
+    to:   "  lab:         { tint: [255, 208, 140], grade: .17, vig: .46, motes: 16, mc: [255, 226, 170], drift: [-4, -7] }," },
+  { name: 'wide: a place loses its weather', aims: ['weather belongs to the place'],
+    find: "  route_one: 'motes',", to: '' },
+  { name: 'wide: a theme loses its lead', aims: ['every theme is shaped like something musicTick can play'],
+    find: '  route: {                        // Route One: open, bright, walking pace',
+    to:   '  route: { lead: [], bpm: 116, order: [0], bass: [0] }, routeOld: {' },
+  { name: 'wide: the hand is a row, not a fan', aims: ['the hand is a fan, not a row'],
+    find: 'function fanStyle(i, n, selected) {', to: 'function fanStyle(i, n, selected) { return \'\';' },
+  { name: 'wide: a card face says nothing', aims: ['a card face carries everything you need to read it'],
+    find: 'function cardHTML(c, opt = {}) {', to: 'function cardHTML(c, opt = {}) { if (c) return \'<div></div>\';' },
+  { name: 'wide: a count never pluralises', aims: ['a count and its noun agree'],
+    find: 'const countOf = (n, one, many) => `${n} ${n === 1 ? one : (many || one + \'s\')}`;',
+    to:   'const countOf = (n, one, many) => `${n} ${one}`;' },
+  { name: 'wide: the stats block goes blank', aims: ['the box shows what the kin under the cursor can do'],
+    find: 'function statBlock(m) {\n  if (!m) return \'\';', to: 'function statBlock(m) {\n  return \'\';' },
+  // Aimed at `shelve`, which is what that section actually tests. The first
+  // version broke `screenList` — a different function the section never calls —
+  // and reported 0 killed, which reads exactly like a section that cannot fail.
+  { name: 'wide: the bag stops being shelved', aims: ['the screens have a shape'],
+    find: 'function shelve(', to: 'function shelve(keys) { return [[\'All\', keys]]; }\nfunction shelveOld(' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
