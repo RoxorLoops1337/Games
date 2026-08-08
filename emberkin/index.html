@@ -7757,9 +7757,24 @@ function useItemInBattle(log, id, targetIdx) {
  * stack, so a fight against a Tide kin happens somewhere cold and a fight
  * against an Ember one somewhere that is not.
  */
+const HORIZON = 58;
+/** How much of the element the sky takes, and how much reaches the ground. */
+const SKY_WASH = .16, GROUND_HAZE = .12;
+
+/**
+ * The element's light on the ground, as a value.
+ *
+ * The colour of a fill is the one thing the headless canvas cannot see — it
+ * records where you drew and not what with — so the band lives out here where a
+ * suite can read it, and drawArena spends it. `top` is the far edge, where the
+ * air between you and the field is thickest; it is gone by the bank.
+ */
+const groundHaze = (tint) => ({
+  y: HORIZON + 6, h: VIEW_H - HORIZON - 6, a: GROUND_HAZE, top: tint, bot: 'rgba(0,0,0,0)',
+});
+
 function drawArena(g, tint, b) {
   const t = G.t;
-  const HORIZON = 58;
 
   // Sky: darkest at the top, warming toward the horizon so the eye goes there.
   const sky = g.createLinearGradient(0, 0, 0, HORIZON + 10);
@@ -7769,7 +7784,7 @@ function drawArena(g, tint, b) {
   g.fillStyle = sky; g.fillRect(0, 0, VIEW_W, HORIZON + 10);
   // The element sits over the sky rather than replacing it, so every arena is
   // recognisably the same valley in a different light.
-  g.save(); g.globalAlpha = .16; g.fillStyle = tint;
+  g.save(); g.globalAlpha = SKY_WASH; g.fillStyle = tint;
   g.fillRect(0, 0, VIEW_W, HORIZON + 10); g.restore();
 
   // A low sun on the horizon behind the foe: something for the layers to sit against.
@@ -7840,6 +7855,28 @@ function drawArena(g, tint, b) {
   };
   stand(178, 68, 48, 12);
   stand(72, 111, 58, 14);
+
+  // The light on the ground.
+  //
+  // The element used to reach exactly as far as the horizon: a .16 wash over
+  // the sky and nothing under it. Measured, the field came back pixel-identical
+  // across all eight — 0.00 luminance and 0.00 hue between an Ember fight and a
+  // Tide one — so seven eighths of the picture said "the same field" while the
+  // top 58 pixels said "somewhere cold". That is a filter over one place, not
+  // eight places.
+  //
+  // The rule for the fix is the one the ridges are already built on and which
+  // stops at the horizon: further away is closer to the sky colour. So the
+  // element falls on the ground as LIGHT, strongest along the far edge where
+  // the air between you and it is thickest, gone by the bank you are standing
+  // behind. It goes over the scenery and under the kin — drawBattle draws them
+  // after this returns — which is the same line the map's weather is held to.
+  const hz = groundHaze(tint);
+  const haze = g.createLinearGradient(0, hz.y, 0, VIEW_H - 18);
+  haze.addColorStop(0, hz.top);
+  haze.addColorStop(1, hz.bot);
+  g.save(); g.globalAlpha = hz.a; g.fillStyle = haze;
+  g.fillRect(0, hz.y, VIEW_W, hz.h); g.restore();
 
   // Motes drifting in the light. Three of them, seeded so they disagree.
   g.save();
@@ -12074,7 +12111,7 @@ if (typeof window !== 'undefined') {
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn, IMMUNE_TO,
     WILD_TRAIL,
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
-    updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
+    updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
