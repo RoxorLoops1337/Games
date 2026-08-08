@@ -692,6 +692,25 @@ edit this block to name the next one.
       the other way and shrunk, so this cannot be satisfied by making
       everything smaller.
 
+- [x] The pram reads as a pram at the tier that has to swerve for it. It is the
+      one silhouette a goal names — "send 3 prams flying" — and the one thing
+      `lodAlways` keeps out of the batch *precisely because it has to read
+      before you hit it*, and up close it was a phone: a rounded rectangle, a
+      pale rectangle inside it, and two near-black wheels drawn only at the
+      replay tier and drawn *inside* the dark body where nothing could see
+      them. Four wheels now, outside the body at four corners in one path; a
+      hood over the head end in a colour deliberately outside `COATS`, because
+      a hood the same red as the coat pushing it merges into one shape; and a
+      handle bar for the hands that were already reaching for one. The tiering
+      is the interesting half: the hood *replaced* the blanket as the middle
+      tier's second colour rather than joining it, and the bar rides on the
+      arms' own stroke. A pram is never batched, so at launch speed ninety-odd
+      are in shot and one extra fill each is 194 off the budget — the ceiling
+      added two passes ago caught exactly that (3,571 → 3,765) the first time
+      the bar was a fill. Ends up better at every tier for the same 5 fills
+      driving, and the suite now pins that number exactly rather than roomily,
+      because it caught nothing at 7.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

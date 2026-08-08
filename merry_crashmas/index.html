@@ -3797,6 +3797,10 @@ const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
    on the snow cannot drift apart. */
 /* Bright on purpose: this is the one thing in the market that has to be
    findable from across it. */
+/* The pram's hood. Deliberately outside COATS: at a glance a hood in the same
+   red as the coat pushing it merges into one shape, and the whole point of the
+   pram is that it reads as a separate thing to swerve for. */
+const PRAM_HOOD = '#1f6b6e';
 const BALLOONS = ['#ff5a52', '#ffd34d', '#5ec8ff', '#9be86a', '#ff8ad6'];
 const BALLOON_PX = 11;     // never smaller than this on screen
 const BAG_COLS = ['#cfc6b4', '#8f7355', '#4a4038', '#8a94a4'];
@@ -5507,26 +5511,53 @@ function drawPerson(p){
      gets the silhouette that makes you swerve — dark body, pale blanket — and
      leaves the baby's face and the wheels to the replay. */
   if (p.pram && p.pramT > 0){
+    /* It was a rounded rectangle with a pale rectangle inside it and, only at
+       the replay tier, two near-black circles drawn *inside* the dark body
+       where nothing could see them. This is the one silhouette a goal names —
+       "send 3 prams flying" — and the one thing `lodAlways` keeps out of the
+       batch precisely because it has to read before you hit it, and it read as
+       a phone.
+
+       Four wheels outside the body where a wheel goes, a hood over the head
+       end, and a handle bar for the hands that were already reaching for one.
+       The hood and the bar are silhouette, so they are drawn at every tier;
+       the wheels and the baby stay in `fine`. */
     ctx.save();
     ctx.translate(0, -p.r * 1.75);
     if (fine) shadow(0, p.r * 0.5, p.r * 0.72, p.r * 0.3, 0.2);
+    if (fine){                                   // wheels, one path, outside it
+      ctx.fillStyle = '#101722';
+      ctx.beginPath();
+      for (const wx of [-1, 1]) for (const wy of [-0.52, 0.62]){
+        const cx = wx * p.r * 0.68, cy = wy * p.r;
+        ctx.moveTo(cx + p.r * 0.19, cy); ctx.arc(cx, cy, p.r * 0.19, 0, 6.283);
+      }
+      ctx.fill();
+    }
     ctx.fillStyle = '#22354f';
     roundRect(-p.r * 0.62, -p.r * 0.72, p.r * 1.24, p.r * 1.44, 6); ctx.fill();
-    ctx.fillStyle = '#dfe8f6';
-    roundRect(-p.r * 0.46, -p.r * 0.56, p.r * 0.92, p.r * 1.1, 5); ctx.fill();
+    ctx.fillStyle = PRAM_HOOD;                   // the hood over the head end
+    ctx.beginPath();
+    ctx.moveTo(-p.r * 0.62, -p.r * 0.18);
+    ctx.quadraticCurveTo(-p.r * 0.62, -p.r * 0.78, 0, -p.r * 0.78);
+    ctx.quadraticCurveTo(p.r * 0.62, -p.r * 0.78, p.r * 0.62, -p.r * 0.18);
+    ctx.closePath(); ctx.fill();
     if (fine){
-      ctx.fillStyle = '#f3c9a8';
-      circle(0, -p.r * 0.16, p.r * 0.24); ctx.fill();
-      ctx.fillStyle = '#101722';
-      circle(-p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
-      circle(p.r * 0.5, p.r * 0.62, p.r * 0.2); ctx.fill();
+      ctx.fillStyle = '#dfe8f6';                 // the blanket, turned down
+      roundRect(-p.r * 0.46, -p.r * 0.2, p.r * 0.92, p.r * 0.78, 5); ctx.fill();
+      ctx.fillStyle = '#f3c9a8';                 // and who is under it
+      circle(0, -p.r * 0.3, p.r * 0.24); ctx.fill();
     }
     ctx.restore();
-    // hands on the handle
+    /* The bar goes on the arms' own path and their own stroke — a pram is
+       never batched, so at launch speed there are ninety-odd of them in shot
+       and one extra fill each is two hundred off the budget. Two more line
+       segments cost nothing at all. */
     ctx.strokeStyle = coat; ctx.lineWidth = p.r * 0.3;
     ctx.beginPath();
     ctx.moveTo(-p.r * 0.5, -p.r * 0.2); ctx.lineTo(-p.r * 0.45, -p.r * 1.05);
     ctx.moveTo(p.r * 0.5, -p.r * 0.2); ctx.lineTo(p.r * 0.45, -p.r * 1.05);
+    ctx.moveTo(-p.r * 0.52, -p.r * 1.06); ctx.lineTo(p.r * 0.52, -p.r * 1.06);
     ctx.stroke();
   }
 
