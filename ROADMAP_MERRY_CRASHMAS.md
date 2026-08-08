@@ -614,6 +614,21 @@ edit this block to name the next one.
       size on screen and now ends in white. 2914 → 2982 fills at the worst
       frame against a 3400 budget.
 
+- [x] A barrel lid is staves and banked snow, not a biscuit. 633 barrels across
+      the campaign — the second most common thing in the game after the stalls —
+      and the top of one was a flat brown disc with a hoop drawn on it. It is a
+      lid now: `BARREL_STAVES` seams running from inside the rim out to just
+      short of it, and snow drifted against one side of that rim. The snow disc
+      is barely wider than the lid that covers its middle, so the dark side is
+      buried entirely and only the part the offset pushes clear survives —
+      banked, not ringed, which is the difference between a crescent and a
+      halo. Reaching exactly 100% of the collider and not a pixel more: this is
+      the third pass in a row where the new silhouette wanted to spill past `r`,
+      so the assertion now measures the recorded path rather than the
+      arithmetic, and excludes the ground shadow, which is not something you
+      can hit. 2982 → 3036 fills at the worst frame — 89% of the 3400 budget,
+      which is the first number in a while worth watching.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
