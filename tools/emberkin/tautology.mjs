@@ -68,6 +68,10 @@ const MUTANTS = [
     to: 'const screenCovered = () => false;' },
   { name: 'ambush: the recoil never moves you', aims: ['being called out happens to you as well as to them'],
     find: 'const BUMP_T = .18;', to: 'const BUMP_T = 0;' },
+  { name: 'exit: no cover handing the map back', aims: ['a fight hands the map back the way everything else does'],
+    find: 'const BATTLE_OUT = .22;', to: 'const BATTLE_OUT = 0;' },
+  { name: 'exit: the evolution keeps its hard cut', aims: ['a fight hands the map back the way everything else does'],
+    find: '    if (nxt) runEvolution(nxt);\n    else backToWorld();', to: '    if (nxt) runEvolution(nxt);\n    else saveGame();' },
   // A mutant that is MEANT to bring the suite down, so the crash detector has a
   // live case. Without it that detector is unexercised — and it is the one that
   // found pass 182's fault, where 90 unrun checks read back as 90 survivors.

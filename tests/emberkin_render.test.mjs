@@ -3655,6 +3655,95 @@ section('and the pause menu still goes back the same way');
   ok(!!g.G.menu && g.G.mode === 'menu', 'back puts it up again');
 }
 
+// A fight opens through closing bars; a door goes through black at .3; waking
+// after a loss at .5; the title at .45. Measured across every cut in the game,
+// the way OUT of a fight was the only one with nothing over it:
+//
+//     world -> battle          wipe 0.550    35/36 frames covered
+//     world -> world (door)    fade 0.300    30/31 frames covered
+//     battle -> world (a win)  nothing        0/86 frames covered
+//     evolution -> world       nothing        0/282 frames covered
+//
+// Both paths already met at the same saveGame(), so they take the same way back.
+section('a fight hands the map back the way everything else does');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  let ms = 0;
+  const step = (n = 16) => { ms += n; g.frame(ms); };
+  const fresh = () => {
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 14), g.mkMon('pyrelynx', 14)];
+    g.G.bag = { salve: 2, bloomorb: 3 };
+  };
+
+  ok(g.BATTLE_OUT > 0, `the way out has a length (${g.BATTLE_OUT}s)`);
+
+  // The claim, by difference: from the blow that ends a fight to the frame you
+  // can move again, the screen is covered for some of it. Driven, not posed —
+  // and the window has to run past mode 'world', because the cover is what
+  // stands between mode 'world' and being able to move.
+  fresh();
+  g.startBattle({ foe: g.mkMon('kindlark', 4), wild: true });
+  autoFight(g);
+  ok(g.G.battle && g.B().over === 'win', `the fight was won (${g.G.battle && g.B().over})`);
+  g.G.fade = 0; g.G.wipe = 0;                       // the entry's cover is not the exit's
+  let covered = 0, frames = 0;
+  for (let i = 0; i < 600 && (g.G.battle || g.G.mode !== 'world' || g.screenCovered()); i++) {
+    if (g.G.battleMsg) { g.G.battleMsg.hold = 0; g.advanceDialogue(); continue; }
+    if (g.G.dialogue) { g.G.dialogue.hold = 0; g.advanceDialogue(); continue; }
+    if (g.G.screen) { if (g.screenLocked(g.G.screen)) g.screenSelect(); else g.closeScreen(); continue; }
+    step();
+    if (g.screenCovered()) covered++;
+    frames++;
+  }
+  ok(!g.G.battle && g.G.mode === 'world', 'the fight let go of the map');
+  ok(covered > 0, `and covered the cut on the way out (${covered} of ${frames} frames)`);
+  ok(!g.screenCovered(), 'and cleared, so the map is not left under a veil');
+
+  // The same for an evolution, which ends at the same saveGame() and had the
+  // same nothing over it.
+  fresh();
+  g.G.party = [g.mkMon('cindercub', 20)];
+  const evo = g.checkEvolve();
+  ok(!!evo, 'a kin is ready to evolve');
+  if (evo) {
+    g.runEvolution(evo);
+    let cov2 = 0, n2 = 0;
+    for (let i = 0; i < 900 && (g.G.evoAnim || g.G.dialogue || g.screenCovered()); i++) {
+      if (g.G.dialogue) { g.G.dialogue.hold = 0; g.advanceDialogue(); continue; }
+      step();
+      if (g.screenCovered()) cov2++;
+      n2++;
+    }
+    ok(!g.G.evoAnim, 'the evolution finished');
+    ok(cov2 > 0, `and covered its cut too (${cov2} of ${n2} frames)`);
+  }
+
+  // When a fix is "put a cover up", net separately that the thing the cover was
+  // hiding still HAPPENS: backToWorld saves.
+  fresh();
+  const store = {};
+  const h = withDeck(loadGame(store));
+  h.setCtx(mkCtx());
+  h.newGame();
+  h.takeStarter('cindercub');
+  h.G.dialogue = null;
+  h.G.party = [h.mkMon('cindercub', 9)];
+  h.wipeSave();
+  ok(!h.hasSave(), 'no save to begin with');
+  h.backToWorld();
+  ok(h.hasSave(), 'and handing the map back still writes one');
+  ok(h.G.fade > 0, 'with the cover up');
+
+  // A cover already running is never cut short — `max`, not assignment.
+  h.G.fade = .5;
+  h.backToWorld();
+  ok(h.G.fade >= .5, `a longer cover already up is not shortened (${h.G.fade})`);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
