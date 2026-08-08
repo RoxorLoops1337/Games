@@ -1334,6 +1334,28 @@ const SCENES = {
       EK.openScreen('party', { force: true });
     },
   },
+  // The bag opened mid-fight, which covers the arena and both HP bars. It has
+  // always brought your HP down with it; it had not brought what is coming at
+  // it, which is the other half of "will a Salve do, or do I need the big one".
+  dec_bag: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24)];
+      EK.G.bag = { salve: 3, greatsalve: 1, bloomorb: 4, revive: 1 };
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 25), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.mine.hp = Math.max(1, Math.round(b.mine.max * .18));
+      b.dispM = b.tgtM = b.mine.hp;
+      EK.readIntent();
+      EK.openScreen('bag');
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {

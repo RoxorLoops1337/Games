@@ -9763,8 +9763,18 @@ function renderScreen() {
     // show through from underneath, the number goes where the decision is.
     const inFight = !shop && G.battle && B() && B().mine;
     const hurt = inFight ? B().mine : null;
+    // …and the other operand, which this had been half of. The decision the
+    // comment above names — a Salve that restores 30 against a Great Salve that
+    // restores 90 — is a decision about surviving the next swing, and the swing
+    // is telegraphed on the chip that this screen is covering. Bringing your HP
+    // and not what is coming at it is the intent chip's own old fault: one side
+    // of a subtraction. Same numbers, same words as the chip, so a player who
+    // has learned to read one reads the other.
+    const inc = inFight ? intentThrough(B(), B().intent) : null;
+    const doomed = inFight && intentLethal(B(), B().intent);
     html += `<h2>${shop ? 'Supply' : 'Bag'} — ${G.money} shards`
       + (hurt ? ` <span style="color:${hpColor(hurt.hp / hurt.max)}">· ${dispName(hurt)} ${hurt.hp}/${hurt.max}</span>` : '')
+      + (inc != null ? ` <span style="color:${doomed ? 'var(--hp-bad)' : 'var(--dim)'}">· about ${inc} coming${doomed ? ', enough to finish you' : ''}</span>` : '')
       + '</h2>';
     if (!list.length) html += '<p style="color:var(--dim)">Empty. Even the lint.</p>';
     for (const [group, keys] of shelve(list)) {
