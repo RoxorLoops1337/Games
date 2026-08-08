@@ -6163,6 +6163,94 @@ test('a car in the air draws its shadow apart from itself', () => {
     'the same shadow, in a different place: ' + onGround.length + ' vs ' + aloft.length);
 });
 
+/* --------------------------------------------------------- arms --- */
+
+/* Every free arm in the crowd: the coat-coloured segments that leave a
+   shoulder. A pram's handle bar is stroked in the coat colour too, so they are
+   taken by where they start rather than by their colour alone. */
+function armsOf(rec, p){
+  const out = [];
+  for (let i = 0; i < rec.all.length - 1; i++){
+    const m = rec.all[i], l = rec.all[i + 1];
+    if (m[0] !== 'm' || l[0] !== 'l') continue;
+    if (Math.abs(Math.abs(m[1]) - p.r * 0.62) > 0.01 || Math.abs(m[2] + p.r * 0.1) > 0.01) continue;
+    out.push({ side: Math.sign(m[1]), sx: m[1], sy: m[2], x: l[1], y: l[2],
+      len: Math.hypot(l[1] - m[1], l[2] - m[2]), style: String(m[3]) });
+  }
+  return out;
+}
+
+/* The pose used to be a hard branch on `panic > 0.25`, written out as two
+   pairs of endpoints — so the arm was 0.53r long walking and 0.98r long
+   panicking, and it swapped between them in one frame. Panic is continuous:
+   it ramps in at 5/s and bleeds off at 0.35/s, so a crowd calming down after a
+   near miss snapped its arms back mid-stride, each at its own moment. */
+test('an arm is one arm all the way up the panic ramp', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  let prev = null, worstJump = 0, lens = [], reach = 1e9;
+  const STEP = 0.005;
+  for (let panic = 0; panic <= 1.0001; panic += STEP){
+    const s = shopper(api, 'shopper', (p) => { p.panic = panic; });
+    const arms = armsOf(s.rec, s.p);
+    assert(arms.length === 2, 'a shopper has two arms, got ' + arms.length +
+      ' at panic ' + panic.toFixed(3));
+    const r = s.p.r;
+    for (const a of arms){
+      lens.push(a.len / r);
+      // it has to clear the 0.86 x 0.72 coat drawn over the top of it, or the
+      // hand — and the shopping hanging off it — is buried in the torso
+      reach = Math.min(reach, Math.hypot(a.x / (r * 0.86), (a.y - r * 0.1) / (r * 0.72)));
+    }
+    const now = arms.sort((a, b) => a.side - b.side).map(a => [a.x / r, a.y / r]);
+    if (prev) for (let k = 0; k < 2; k++)
+      worstJump = Math.max(worstJump, Math.hypot(now[k][0] - prev[k][0], now[k][1] - prev[k][1]));
+    prev = now;
+  }
+  const lo = Math.min(...lens), hi = Math.max(...lens);
+  assert(hi - lo < 0.005, 'the arm changes length as it swings: ' +
+    lo.toFixed(3) + 'r to ' + hi.toFixed(3) + 'r');
+  assert(lo > 0.6, 'an arm that short is a stub: ' + lo.toFixed(3) + 'r');
+  /* 0.005 of panic moves the hand about 0.03r through the steepest part of the
+     crossfade. The old branch moved it 1.4r in the single step across 0.25. */
+  assert(worstJump < 0.08, 'the arms pop somewhere on the panic ramp: the hand ' +
+    'jumps ' + worstJump.toFixed(2) + 'r between two neighbouring panic values');
+  assert(reach > 1.06, 'a hand ends up inside the coat, at ' +
+    reach.toFixed(2) + ' of its radius');
+  console.log('    (arms: ' + lo.toFixed(2) + 'r long, hand moves at most ' +
+    worstJump.toFixed(3) + 'r per 0.005 of panic, closest hand ' +
+    reach.toFixed(2) + ' coat radii out)');
+});
+
+/* Two hardcoded hand positions were two things to keep in agreement, and the
+   walking one was already 0.16r adrift of the hand it was supposed to be
+   hanging from. */
+test('the shopping hangs off the hand, at every point of the swing', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  let worst = 0, at = 0;
+  for (const panic of [0, 0.1, 0.2, 0.25, 0.3, 0.4, 0.6, 0.8, 1]){
+    const s = shopper(api, 'shopper', (p) => { p.panic = panic; });
+    assert(s.bag, 'a shopper carries their shopping at panic ' + panic);
+    const r = s.p.r, bx = (s.bag.x0 + s.bag.x1) / 2, by = (s.bag.y0 + s.bag.y1) / 2;
+    // whichever hand is nearer — the bag is in one of them, and which one is
+    // the shopper's seed rather than something this test should re-derive
+    const d = Math.min(...armsOf(s.rec, s.p).map(a =>
+      Math.hypot(a.x - bx, a.y - by) / r));
+    if (d > worst){ worst = d; at = panic; }
+    assert(s.handle, 'and the bag has its handles at panic ' + panic);
+    assert(s.handle.x > s.bag.x0 - 0.01 && s.handle.x < s.bag.x1 + 0.01,
+      'the handles are off the bag at panic ' + panic);
+  }
+  assert(worst < 0.25, 'the shopping is carried ' + worst.toFixed(2) +
+    'r from the nearest hand at panic ' + at);
+  console.log('    (shopping: at most ' + worst.toFixed(2) + 'r from the hand)');
+});
+
 /* --------------------------------------------------------- the pram --- */
 
 /* The one silhouette a goal names — "send 3 prams flying" — and the one thing
@@ -6320,6 +6408,42 @@ test('the hat that comes off is the hat they were wearing', () => {
   for (const stale of ['#d34036', "'#e33'"])
     assert(src.indexOf(stale) < 0, 'a hat colour is still hardcoded: ' + stale);
   console.log('    (hats: ' + api.HATS.join(' ') + ' + santa ' + api.SANTA_HAT + ')');
+});
+
+/* The handle bar draws its own two arms up to the hands already reaching for
+   it, and the generic swinging pair was drawn straight over the top of them:
+   every pram in every market was being pushed by somebody with four arms, two
+   of them swinging free of a bar their hands were on. */
+test('both hands are on the pram, so there are only two arms', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  const pushing = shopper(api, 'parent', (p) => { p.panic = 0.4; });
+  assert(pushing.p.pram && pushing.p.pramT > 0, 'a parent comes with a pram');
+  assert(armsOf(pushing.rec, pushing.p).length === 0,
+    'a parent pushing a pram has ' + armsOf(pushing.rec, pushing.p).length +
+    ' free arms as well as the two on the bar');
+
+  // the two that are on the bar, and the bar, are still there
+  const coat = pushing.coat.style, r = pushing.p.r;
+  const seg = (x0, y0, x1, y1) => pushing.rec.all.some((e, i) => {
+    const m = pushing.rec.all[i - 1];
+    return e[0] === 'l' && m && m[0] === 'm' && String(e[3]) === coat &&
+      Math.abs(m[1] - x0 * r) < 0.01 && Math.abs(m[2] - y0 * r) < 0.01 &&
+      Math.abs(e[1] - x1 * r) < 0.01 && Math.abs(e[2] - y1 * r) < 0.01;
+  });
+  assert(seg(-0.5, -0.2, -0.45, -1.05) && seg(0.5, -0.2, 0.45, -1.05),
+    'the hands that are on the bar should still be drawn reaching for it');
+  assert(seg(-0.52, -1.06, 0.52, -1.06), 'and the bar itself');
+
+  /* and they come back the moment it is knocked out of their hands — the arms
+     are gated on the same pramT the pram itself is drawn from */
+  const loose = shopper(api, 'parent', (p) => { p.panic = 0.4; p.pramT = 0; });
+  const back = armsOf(loose.rec, loose.p);
+  assert(back.length === 2, 'a parent whose pram is gone has two arms again, got ' + back.length);
+  assert(back.every(a => a.style === coat), 'in the coat colour');
+  console.log('    (pram: 0 free arms while pushing, 2 once it is gone)');
 });
 
 test('the pram you send flying is the pram you were looking at', () => {
@@ -8041,10 +8165,14 @@ test('a shopper carries the bag they are about to drop', () => {
             kind + ' seed ' + seed + ' panic ' + panic + ' phase ' + ph +
             ': the bag starts at ' + inner.toFixed(2) +
             ' but the coat covers to ' + coatAt.toFixed(2));
-          /* …and it still has to be in a hand rather than floating alongside:
-             the arm ends at 0.9r walking, 1.25r with both arms up, and that
-             point has to fall inside the bag. */
-          const hand = (panic ? 1.25 : 0.9) * r * (kind === 'elder' ? -1 : seed % 2 ? 1 : -1);
+          /* …and it still has to be in a hand rather than floating alongside.
+             The hand comes off the arm that was actually drawn: this used to
+             re-derive it from the two hardcoded poses, which is exactly the
+             second copy of those numbers the drawing itself kept. */
+          const side = kind === 'elder' ? -1 : seed % 2 ? 1 : -1;
+          const arm = armsOf(s.rec, s.p).find(a => a.side === side);
+          assert(arm, kind + ' seed ' + seed + ' has no arm on the bag side');
+          const hand = arm.x;
           assert(hand >= s.bag.x0 - 0.01 && hand <= s.bag.x1 + 0.01,
             kind + ' seed ' + seed + ' panic ' + panic + ' phase ' + ph +
             ': the hand is at ' + hand.toFixed(2) + ', the bag spans ' +
