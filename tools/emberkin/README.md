@@ -2752,3 +2752,48 @@ desktop one. That is the correct answer and not an obvious one.
     existing cue net caught that immediately, and the fix is the one its own
     comment argues for. Five planted faults, all five bite; two sweep mutants
     aim here and 2 of the section's 14 checks die.
+
+96. **The two beats that change what your kin IS named only the name**
+    (pass 185). Job (p), 183's shape again: one property, every case. The
+    property — does a beat that changes something NAME its consequence? Driven
+    with say/setToast/snap/flourish all recorded, most of them do: the blackout
+    says what it cost, the gotcha says where the kin went, the chest says what
+    it replaced (179), the flourish says the gems. Two did not:
+
+        a level (8->10)   hp 25->29  atk 13->16  def 12->13  spd 13->15
+                          said "grew to level 9!" twice, naming none of it
+        an evolution      hp 49->54  atk 27->36  def 22->28  spd 25->37
+                          said "Cindercub became Pyrelynx!"
+
+    **Every other line in this game names its number** — "Shield up to 8", "hit
+    for +4", "took 43", "gained 385 EXP", "It cost you 12 shards". One helper
+    (`gainLine`) for both beats, because fixing one is how 180's fix reached one
+    menu and not the other. Only what MOVED is named, so nothing reads "+0".
+
+        Cindercub grew to level 9! +2 HP, +2 ATK, +1 SPD.
+        Cindercub became Pyrelynx! +5 HP, +9 ATK, +6 GUARD, +12 SPD.
+
+    **The words are the game's own.** The first draft said "attack, defence,
+    speed" — a second vocabulary for stats the profile already calls ATK, GUARD
+    and SPD, and long enough that the worst case (an eleven-letter nickname,
+    level 99, all four moving) ran 368px into a 367px bar on a phone. The
+    game's own words fit at 367.
+
+    **Two instruments were blind before one saw.** Spying on say() and setToast
+    reported a level, a catch and a trainer win as saying NOTHING — the game
+    speaks mostly through `snap`, the battle log, which was not being watched.
+    Then the overflow check used scrollWidth on a box that WRAPS, where
+    scrollWidth always equals clientWidth: a control line four times too long
+    also reported "fits". In a fight the log is `#dialogue.narrow` — nowrap,
+    overflow hidden, ellipsis — and only with that class on does scrollWidth
+    mean anything. The control now spills 955px and reads ELLIPSISED, so "fits"
+    is worth something.
+
+    **And the sweep learned to tell a crash from a shorter run.** A mutant that
+    emptied `gainLine` made a section assert fewer times — it was reading its
+    labels out of the game's own output — and 182's crash detector called that a
+    crash. A crash is the suite never reaching its summary line; that is what it
+    looks for now. The net was fixed too, so its check count no longer depends
+    on the thing under test.
+
+    Five planted faults, all five bite. Two sweep mutants aim here.

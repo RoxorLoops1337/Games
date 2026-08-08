@@ -80,6 +80,10 @@ const MUTANTS = [
   { name: 'sound: win defined as a copy of level', aims: ['two different beats do not make the same sound'],
     find: "    blip(note(19), .14, 'triangle', .055);\n    blip(note(12), .26, 'triangle', .06, t + .1);\n    blip(note(0), .34, 'sine', .05, t + .1);",
     to: "    [0, 4, 7, 12].forEach((s2, i) => blip(note(12 + s2), .16, 'square', .05, t + i * .07));" },
+  { name: 'said: the level names nothing', aims: ['a beat that changes your numbers says which ones'],
+    find: "    const d = (after[k] || 0) - (before[k] || 0);\n    if (d) parts.push", to: "    const d = 0;\n    if (d) parts.push" },
+  { name: 'said: zeroes named too', aims: ['a beat that changes your numbers says which ones'],
+    find: "    if (d) parts.push(`${d > 0 ? '+' : ''}${d} ${label}`);", to: "    parts.push(`${d > 0 ? '+' : ''}${d} ${label}`);" },
   // A mutant that is MEANT to bring the suite down, so the crash detector has a
   // live case. Without it that detector is unexercised — and it is the one that
   // found pass 182's fault, where 90 unrun checks read back as 90 survivors.
@@ -88,6 +92,13 @@ const MUTANTS = [
     to: 'function drawArena(g, tint, b) { throw new Error("planted crash");' },
 ];
 
+// A run that ENDED is not a run that crashed.
+//
+// The first version called any short run a crash, and a mutant that merely made
+// a section assert fewer times — because the section reads a list out of the
+// game's own output — was reported as taking checks off the board. A crash is
+// the suite not reaching its own summary line; that is what to look for.
+const ENDED = /emberkin_render: (\d+ checks passed|\d+ FAILED)/;
 const run = (path) => {
   try {
     const out = execFileSync('node', [SUITE], {
@@ -154,11 +165,11 @@ for (const m of MUTANTS) {
   if (!SRC.includes(m.find)) { missed.push(`${m.name} — its anchor is not in the file`); continue; }
   const path = join(TMP, m.name.replace(/[^a-z0-9]+/gi, '_') + '.html');
   writeFileSync(path, SRC.replace(m.find, m.to));
-  const rows = parse(run(path));
+  const out = run(path);
+  const rows = parse(out);
   const keys = keyOf(rows);
   let n = 0;
   rows.forEach((r, idx) => { if (!r.ok) { n++; if (!m.crashes) killed.add(keys[idx]); } });
-  if (!m.crashes) rows.forEach((r, idx) => ran.add(keys[idx]));
   // A check that never RAN is not a check that survived.
   //
   // A mutant that makes the suite throw takes every check after the throw off
@@ -168,10 +179,13 @@ for (const m of MUTANTS) {
   // sentence on that basis. Deleting the pause menu's return threw at
   // `g.G.menu.i` and cost 90 checks.
   const short = base.length - rows.length;
-  if (short > 0) crashed.add(m.name);
+  const ended = ENDED.test(out);
+  if (!m.crashes && ended) rows.forEach((r, idx) => ran.add(keys[idx]));
+  if (!ended) crashed.add(m.name);
   console.log(`  ${n === 0 && !short ? '!!' : '  '} ${String(n).padStart(4)} killed   ${m.name}` +
-    (short > 0 ? `   <- CRASHED: ${short} checks never ran and are not evidence` : '') +
-    (n === 0 && !short ? '   <- KILLED NOTHING: the mutation missed, or the section is a sentence' : ''));
+    (!ended ? `   <- CRASHED: ${short} checks never ran and are not evidence` : '') +
+    (ended && short > 0 ? `   (${short} fewer checks ran — a section that reads its own list)` : '') +
+    (n === 0 && ended ? '   <- KILLED NOTHING: the mutation missed, or the section is a sentence' : ''));
 }
 
 // Only sections a mutation actually aimed at can be judged; the rest are simply
