@@ -711,6 +711,20 @@ edit this block to name the next one.
       driving, and the suite now pins that number exactly rather than roomily,
       because it caught nothing at 7.
 
+- [x] The pram you send flying is the pram you were looking at. Last pass gave
+      the pushed pram a hood and four wheels and left its other two drawings
+      alone, so the game had one object in three states that had drifted apart:
+      the one in the air had no hood and two wheels both at the same end, and
+      the three were three different **sizes** — 1.24r while pushed, 2 × 15 in
+      the air whatever the parent's size, 1.6 × that again once landed. It grew
+      by three quarters on the way up and shrank by a fifth on touchdown, and
+      nobody had noticed because you never see two of the three at once.
+      `PRAM_W` is now the one number all three read, off the pushing parent's
+      own `r`; the flying pram carries the hood and four wheels; and the landed
+      one keeps its "one wheel came off" beat while wearing the same crumpled
+      hood. Screenshotting the three side by side is the only way this shows —
+      which is why it lasted a whole pass.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

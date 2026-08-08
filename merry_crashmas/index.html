@@ -2277,7 +2277,7 @@ function killPerson(p, vx, vy, cause){
     const a = Math.atan2(vy || 0, vx || 0) + rr(-0.5, 0.5);
     addFx({ type:'pram', x: p.x + Math.cos(p.ang) * 22, y: p.y + Math.sin(p.ang) * 22,
       vx: Math.cos(a) * rr(180, 420), vy: Math.sin(a) * rr(180, 420),
-      ttl: 1.6, size: 15, rot: p.ang, spin: rr(-12, 12), col:'#e8eef8' });
+      ttl: 1.6, size: p.r * PRAM_W / 2, rot: p.ang, spin: rr(-12, 12), col:'#e8eef8' });
   }
   if (p.hat){
     addFx({ type:'hat', x: p.x, y: p.y, vx: (vx || 0) * 0.35 + rr(-60, 60), vy: (vy || 0) * 0.35 + rr(-90, 30),
@@ -2844,8 +2844,13 @@ function burst(f){
    "send N prams flying" and the evidence used to evaporate a second and a half
    after it left the parent's hands — everything else you wreck in this market
    stays wrecked. */
+/* A pram is `PRAM_W` across whoever is looking at it. It used to be three
+   different objects: 1.24r wide while it was pushed, 2 x 15 while it was in
+   the air whatever the parent's size, and 1.6 x that again once it landed —
+   so it grew by three quarters on the way up and shrank by a fifth on
+   touchdown. All three read off the parent's own r now. */
 function restPram(f){
-  debris.push({ x: f.x, y: f.y, w: f.size * 1.6, h: f.size * 1.1,
+  debris.push({ x: f.x, y: f.y, w: f.size * 2, h: f.size * 1.4,
     rot: f.rot, col: '#22354f', kind: 'pram' });
   if (debris.length > DEBRIS_MAX) debris.splice(0, debris.length - DEBRIS_MAX);
 }
@@ -3801,6 +3806,8 @@ const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
    red as the coat pushing it merges into one shape, and the whole point of the
    pram is that it reads as a separate thing to swerve for. */
 const PRAM_HOOD = '#1f6b6e';
+// how wide a pram is, in the pushing parent's own radius
+const PRAM_W = 1.24;
 const BALLOONS = ['#ff5a52', '#ffd34d', '#5ec8ff', '#9be86a', '#ff8ad6'];
 const BALLOON_PX = 11;     // never smaller than this on screen
 const BAG_COLS = ['#cfc6b4', '#8f7355', '#4a4038', '#8a94a4'];
@@ -4199,16 +4206,26 @@ function drawGround(){
     ctx.save();
     ctx.translate(d.x, d.y); ctx.rotate(d.rot);
     if (d.kind === 'pram'){
-      // on its side, blanket half out of it, one wheel off
+      // on its side, blanket half out of it, hood crumpled, one wheel off
       const s = d.w / 2;
       shadow(0, s * 0.5, s * 1.1, s * 0.5, 0.2);
+      ctx.fillStyle = '#101722';                   // the three still on it
+      ctx.beginPath();
+      for (const [wx, wy] of [[-0.68, -0.62], [-0.68, 0.85], [0.68, 0.85]]){
+        ctx.moveTo(wx * s + s * 0.3, wy * s); ctx.arc(wx * s, wy * s, s * 0.3, 0, 6.283);
+      }
+      ctx.fill();
       ctx.fillStyle = '#22354f';
       roundRect(-s, -s * 0.7, s * 2, s * 1.4, 6); ctx.fill();
+      ctx.fillStyle = PRAM_HOOD;                   // squashed flat on one side
+      ctx.beginPath();
+      ctx.moveTo(-s, -s * 0.2);
+      ctx.quadraticCurveTo(-s * 0.7, -s * 0.62, s * 0.1, -s * 0.5);
+      ctx.lineTo(s * 0.1, -s * 0.2);
+      ctx.closePath(); ctx.fill();
       ctx.fillStyle = '#dfe8f6';
       roundRect(-s * 0.15, -s * 0.5, s * 1.5, s, 5); ctx.fill();
-      ctx.fillStyle = '#101722';
-      circle(-s * 0.6, s * 0.85, s * 0.34); ctx.fill();
-      ctx.fillStyle = '#3b4a63';
+      ctx.fillStyle = '#3b4a63';                   // and the one that came off
       circle(s * 1.45, -s * 0.95, s * 0.3); ctx.fill();
       ctx.restore();
       continue;
@@ -6556,14 +6573,27 @@ function drawFx(over){
       ctx.fillRect(-f.size / 2, -f.size * 0.6, f.size, 3);
       ctx.restore();
     } else if (f.type === 'pram'){
+      /* The pram you were looking at a frame ago. It used to lose its hood on
+         the way up and land on two wheels both at the same end — you sent a
+         hooded four-wheeled pram flying and a different object came down. */
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      ctx.fillStyle = '#101722';
+      ctx.beginPath();
+      for (const wx of [-0.62, 0.62]) for (const wy of [-0.62, 0.8]){
+        const cx = wx * f.size * 1.1, cy = wy * f.size;
+        ctx.moveTo(cx + f.size * 0.3, cy); ctx.arc(cx, cy, f.size * 0.3, 0, 6.283);
+      }
+      ctx.fill();
       ctx.fillStyle = '#22354f';
       roundRect(-f.size, -f.size * 0.7, f.size * 2, f.size * 1.4, 6); ctx.fill();
-      ctx.fillStyle = f.col;
-      roundRect(-f.size * 0.8, -f.size * 0.5, f.size * 1.6, f.size, 5); ctx.fill();
-      ctx.fillStyle = '#101722';
-      circle(-f.size * 0.6, f.size * 0.8, f.size * 0.34); ctx.fill();
-      circle(f.size * 0.6, f.size * 0.8, f.size * 0.34); ctx.fill();
+      ctx.fillStyle = PRAM_HOOD;
+      ctx.beginPath();
+      ctx.moveTo(-f.size, -f.size * 0.1);
+      ctx.quadraticCurveTo(-f.size, -f.size * 0.78, 0, -f.size * 0.78);
+      ctx.quadraticCurveTo(f.size, -f.size * 0.78, f.size, -f.size * 0.1);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = f.col;                       // the blanket, coming out
+      roundRect(-f.size * 0.8, -f.size * 0.1, f.size * 1.6, f.size * 0.9, 5); ctx.fill();
       ctx.restore();
     } else if (f.type === 'ring'){
       ctx.strokeStyle = f.col;
