@@ -747,6 +747,45 @@ const costs = chest.CHEST_IDS.map((k) => chest.CHESTS[k].cost);
 ok(costs.every((c, i) => i === 0 || c > costs[i - 1]), 'and they are listed cheapest first');
 chest.closeScreen();
 
+// A survey measured every element on ten screens at two window sizes and asked
+// one question: is this text wider than the box it is drawn in, with nothing
+// above it clipping? Two answers came back. Both were rows that had been told
+// not to wrap and given nowhere to go.
+//
+// These are CSS faults, and CSS is the only vocabulary that states them. The
+// claim is not "this selector exists" — it is that a row of separable items
+// must be free to break between them and forbidden to break inside one, which
+// is exactly two rules and cannot be said in fewer.
+section('a row that runs out of room wraps rather than painting over its neighbour');
+{
+  // A dual-typed creature in a dex cell laid its second chip 8px past the cell
+  // and over the one beside it: VERDANT + GLOOM does not fit a 96px column, and
+  // the row had no wrap rule at all. A chip is a word — it may move to the next
+  // line, it may not be halved, and it may never be read as belonging to the
+  // creature next door.
+  const types = SRC.match(/\n\s*\.types\{([^}]*)\}/);
+  ok(types, 'the type row has a rule');
+  ok(/flex-wrap:\s*wrap/.test(types[1]),
+    'and it says what happens when the chips do not fit');
+
+  // The chest odds line said the second half of the claim and forgot the first.
+  // nowrap on the whole line keeps "45%" with "epic" — and also forbids the
+  // break between "45% epic" and "20% legendary", which is the one break that
+  // was wanted. At 980px the Prism row (dearest chest, so widest price, so
+  // narrowest description) ran 13px past its card with nowhere legal to break.
+  const line = SRC.match(/\.chestrow \.info small\{([^}]*)\}/);
+  const item = SRC.match(/\.chestrow \.info small span\{([^}]*)\}/);
+  ok(line && !/nowrap/.test(line[1]), 'the odds line may break between its items');
+  ok(item && /white-space:\s*nowrap/.test(item[1]), 'and never inside one');
+
+  // …and the separator belongs to the item before it, so a line that does wrap
+  // opens with a percentage rather than a stray dot.
+  const join = SRC.match(/\$\{ch\.odds\[r\]\}% \$\{r\}<\/span>`\)\s*\.join\('([^']*)'\)/);
+  ok(join, 'the odds are joined with a separator');
+  ok(/^(&nbsp;|&#160;|\u00a0)/.test(join[1]),
+    `and its leading space is unbreakable, so the dot cannot open a line (joined with "${join && join[1]}")`);
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.

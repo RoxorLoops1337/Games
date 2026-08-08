@@ -677,10 +677,23 @@
   .chestrow .oddsbar{ display:flex; height:.42em; border-radius:.21em; overflow:hidden;
     margin:.3em 0 .25em; background:#0d0812; box-shadow:inset 0 1px 2px rgba(0,0,0,.6); }
   .chestrow .oddsbar i{ display:block; height:100%; }
-  .chestrow .info small{ font-size:.6em; letter-spacing:.02em; white-space:nowrap; }
+  /* The odds line is a list, so it must break BETWEEN its items and never
+     inside one — "45%" on one line and "epic" on the next is a different claim.
+     nowrap on the whole line stated the second half and forgot the first: at
+     980px the Prism row (widest price, so narrowest info column) ran its odds
+     13px past the card edge with nowhere legal to break. Per-item nowrap plus a
+     separator glued to the item before it wraps only where it should, and a
+     wrapped line still opens with a number rather than a stray dot. */
+  .chestrow .info small{ font-size:.6em; letter-spacing:.02em; }
+  .chestrow .info small span{ white-space:nowrap; }
   .items.wide{ grid-template-columns:repeat(auto-fill,minmax(18em,1fr)); }
   .chestrow .chest{ box-shadow:inset 0 -6px 0 rgba(0,0,0,.35), 0 0 .7em color-mix(in srgb,var(--tint) 40%,transparent); }
-  .types{ display:flex; gap:4px; justify-content:center; margin-top:3px; }
+  /* A type row had no wrap rule, so at a dex cell's width the longest pair —
+     VERDANT + GLOOM — laid its second chip 8px past the cell and painted over
+     the neighbour's. A chip is a word: it can move to the next line but it
+     cannot be cut in half, and nothing in this row should ever be read as
+     belonging to the creature beside it. */
+  .types{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; margin-top:3px; }
   .hud .types{ justify-content:flex-start; margin:3px 0 1px; }
   .hud .tp{ font-size:.55em; padding:0 4px; }
   /* Below a x2 stage the HUD stops being proportional to the arena. The panel
@@ -9975,7 +9988,7 @@ function renderScreen() {
       const bar = RARITY_ORDER.filter((r) => ch.odds[r]).map((r) =>
         `<i style="width:${ch.odds[r]}%;background:${RARITY[r]}" title="${r} ${ch.odds[r]}%"></i>`).join('');
       const key = RARITY_ORDER.filter((r) => ch.odds[r] && r !== 'common')
-        .map((r) => `<span style="color:${RARITY[r]}">${ch.odds[r]}% ${r}</span>`).join(' · ');
+        .map((r) => `<span style="color:${RARITY[r]}">${ch.odds[r]}% ${r}</span>`).join('&nbsp;· ');
       return `<div class="item chestrow panel ${i === s.i ? 'sel' : ''} ${afford ? '' : 'dead'}"
         data-i="${i}" style="--tint:${tint}">
         <div class="chest" style="--tint:${tint}"></div>
