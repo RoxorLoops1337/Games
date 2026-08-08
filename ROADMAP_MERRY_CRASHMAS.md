@@ -629,6 +629,33 @@ edit this block to name the next one.
       can hit. 2982 → 3036 fills at the worst frame — 89% of the 3400 budget,
       which is the first number in a while worth watching.
 
+- [x] Props got LOD, and the budget started measuring the frames that were
+      actually the expensive ones. I flagged last pass that the worst frame was
+      at 89% of budget; measuring properly turned up something worse. **The
+      draw-budget test only ever checked one camera** — the car at 800px/s,
+      tz 1072. Two cameras are wider: the aim frame, which holds the whole
+      market and which you look at before every single launch, and the frame
+      right after the launch at 2,000px/s. The aim frame was at **3,913 fills
+      against a 3,400 budget** — 15% over, on the screen the game opens on, and
+      nothing had ever counted it. Props had no LOD at all, which was fine when
+      a stall was a brown box and is not fine now that it carries a counter,
+      stock, a drifted roof and a plume. `PROP_FINE` is per kind, not one
+      number — a stall's collider is 97 and a barrel's is 27, so a single
+      threshold either strips a stall you can still read or keeps a stave seam
+      one pixel wide; each threshold sits between what that prop measures on
+      the drive camera and on the aim camera. Distant shadows collapse from two
+      ellipses to one (that second ellipse was ~200 fills a frame nobody could
+      see), and the seven tree baubles batch into three colour passes the way
+      their highlights already did. Aim frame **3,913 → 2,759 fills** and about
+      20% faster in a real browser, measured interleaved over three runs;
+      the drive and launch cameras are unchanged in time, because fill *area*
+      dominates and everything dropped is tiny. The budget is no longer one
+      flat number: a wider shot legitimately costs more in total, so what is
+      pinned is **fills per prop on camera** — 11.9 wide, 16.8 at launch, 18.0
+      driving, and it must never rise as the camera pulls back. That is the
+      number a new piece of art with no LOD on it moves, and a flat total let
+      it hide behind the wider shot for six passes.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

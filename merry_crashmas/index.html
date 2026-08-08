@@ -3829,8 +3829,21 @@ function circle(x, y, r){ ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx
    two ellipses per caster: a wide soft one thrown away from the light, and a
    tight dark one where the object actually meets the ground. */
 const SUN_DX = 0.26, SUN_DY = 0.62;
+/* Two ellipses: a soft outer one and a tighter core, which is how a shadow
+   gets an edge that is not a hard line. The pair is only legible while the
+   shadow is big enough to have an edge at all — below `SHADOW_FINE` reference
+   pixels it is one blob, and on a frame holding two hundred props that second
+   ellipse was two hundred fills nobody could see. */
+const SHADOW_FINE = 26;
 function shadow(x, y, rx, ry, a){
   const al = a || 0.24;
+  if (rx * LOD_REF / cam.tz < SHADOW_FINE){
+    ctx.fillStyle = 'rgba(8,16,32,' + (al * 0.82).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.ellipse(x + rx * SUN_DX * 0.7, y + ry * 0.5, rx, ry * 0.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   ctx.fillStyle = 'rgba(8,16,32,' + (al * 0.55).toFixed(3) + ')';
   ctx.beginPath();
   ctx.ellipse(x + rx * SUN_DX, y + ry * SUN_DY, rx * 1.16, ry * 1.1, 0, 0, Math.PI * 2); ctx.fill();
@@ -4461,7 +4474,7 @@ function snowCapPath(x0, y0, w, h, seed, dy){
 }
 
 function drawHut(o){
-  const w = o.w, h = o.h, x = o.x, y = o.y;
+  const w = o.w, h = o.h, x = o.x, y = o.y, fine = propFine(o), tr = tradeOf(o);
   if (o.dead){
     // a heap: the frame came down roughly the way it was hit, the canvas
     // crumpled on top of it
@@ -4536,6 +4549,10 @@ function drawHut(o){
   snowCapPath(cx0, cy0, cw, ch, o.seed, 0); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,.55)';       // the crown, catching the light
   ctx.fillRect(cx0 + 4, cy0 + 2, cw - 8, h * 0.07);
+  if (!fine){                                    // far off, the rest is a pixel
+    if (tr.smoke > 0) drawSmoke(o, w, h, tr);
+    ctx.restore(); return;
+  }
   ctx.fillStyle = 'rgba(255,255,255,.34)';       // banks blown up against it
   ctx.beginPath();
   for (let i = 0; i < 2; i++){
@@ -4565,28 +4582,33 @@ function drawHut(o){
     roundRect(-w * 0.34, -h * 0.2, w * 0.5, h * 0.34, 6); ctx.fill();
   }
 
-  /* Smoke off the grills and the braziers. Four puffs on a rolling phase
-     rather than a particle system: a stall that has been smoking for six
-     markets must not have six markets of particles behind it. */
-  const tr = tradeOf(o);
-  if (tr.smoke > 0){
-    // the pipe the smoke comes out of, so the plume has somewhere to come from
-    ctx.fillStyle = '#3f3630';
-    roundRect(-w * 0.02, -h * 0.5 - 6, 13, 22, 4); ctx.fill();
-    ctx.fillStyle = 'rgba(255,238,206,.16)';
-    ctx.fillRect(-w * 0.02, -h * 0.5 - 6, 5, 22);
-    for (let i = 0; i < 4; i++){
-      const ph = (T * 0.4 + o.seed + i * 0.25) % 1;
-      const a = (1 - ph) * 0.17 * tr.smoke;
-      if (a < 0.006) continue;
-      ctx.fillStyle = 'rgba(228,238,252,' + a.toFixed(3) + ')';
-      circle(w * 0.02 + ph * 24, -h * 0.5 - ph * 66, 7 + ph * 26); ctx.fill();
-    }
-  }
+  if (tr.smoke > 0) drawSmoke(o, w, h, tr);
   ctx.restore();
 }
 
+/* Smoke off the grills and the braziers. Four puffs on a rolling phase rather
+   than a particle system: a stall that has been smoking for six markets must
+   not have six markets of particles behind it. A plume is the one piece of a
+   stall that is *bigger* than the stall, so it survives the LOD cut — a market
+   that stopped smoking when you pulled the camera back would be the change you
+   noticed. */
+function drawSmoke(o, w, h, tr){
+  // the pipe the smoke comes out of, so the plume has somewhere to come from
+  ctx.fillStyle = '#3f3630';
+  roundRect(-w * 0.02, -h * 0.5 - 6, 13, 22, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(255,238,206,.16)';
+  ctx.fillRect(-w * 0.02, -h * 0.5 - 6, 5, 22);
+  for (let i = 0; i < 4; i++){
+    const ph = (T * 0.4 + o.seed + i * 0.25) % 1;
+    const a = (1 - ph) * 0.17 * tr.smoke;
+    if (a < 0.006) continue;
+    ctx.fillStyle = 'rgba(228,238,252,' + a.toFixed(3) + ')';
+    circle(w * 0.02 + ph * 24, -h * 0.5 - ph * 66, 7 + ph * 26); ctx.fill();
+  }
+}
+
 function drawTreeTop(x, y, r, dead, rot, seed){
+  const snowy = r * LOD_REF / cam.tz >= PROP_FINE.tree;
   ctx.save(); ctx.translate(x, y);
   if (dead){
     /* One flat green ellipse and a brown rectangle. On several markets the
@@ -4660,9 +4682,11 @@ function drawTreeTop(x, y, r, dead, rot, seed){
        light, and the tier itself covers all but the edge of it — that is what
        leaves a crescent along the branches rather than a halo round them.
        Drawing it after instead buries the tree in white. */
-    ctx.fillStyle = TREE_SNOW_C;
-    treeSnow(r * k * TREE_TIER, lobes, seed * 6.28 + t * 0.7);
-    ctx.fill();
+    if (snowy){
+      ctx.fillStyle = TREE_SNOW_C;
+      treeSnow(r * k * TREE_TIER, lobes, seed * 6.28 + t * 0.7);
+      ctx.fill();
+    }
     ctx.fillStyle = col;
     // shallow, and pulled in far enough that even the points of the outermost
     // tier stay inside r: the collider is a circle of exactly r, and a
@@ -4678,10 +4702,18 @@ function drawTreeTop(x, y, r, dead, rot, seed){
      confetti. The seven highlights are all the same white, so they go down as
      one path and one fill — seven of them was 7 fills on every tree in shot,
      and a busy market has fifteen trees in it. */
-  for (let i = 0; i < 7; i++){
-    const a = seed * 6.28 + i * 0.9, d = r * (0.38 + (i % 3) * 0.2);
-    ctx.fillStyle = i % 3 === 0 ? '#ffd34d' : i % 3 === 1 ? '#e0483c' : '#7ec8ff';
-    circle(Math.cos(a) * d, Math.sin(a) * d, r * 0.09); ctx.fill();
+  /* Three colours, three paths — not seven fills. The highlights over them
+     were batched long ago for exactly this reason; the baubles under them were
+     not, and a market holds fifteen trees. */
+  for (let c = 0; c < 3; c++){
+    ctx.fillStyle = c === 0 ? '#ffd34d' : c === 1 ? '#e0483c' : '#7ec8ff';
+    ctx.beginPath();
+    for (let i = c; i < 7; i += 3){
+      const a = seed * 6.28 + i * 0.9, d = r * (0.38 + (i % 3) * 0.2);
+      const bx = Math.cos(a) * d, by = Math.sin(a) * d;
+      ctx.moveTo(bx + r * 0.09, by); ctx.arc(bx, by, r * 0.09, 0, 6.283);
+    }
+    ctx.fill();
   }
   ctx.fillStyle = 'rgba(255,255,255,.55)';
   ctx.beginPath();
@@ -4737,7 +4769,30 @@ function treeSnow(rr, lobes, rot){
   spikeRing(rr, lobes, TREE_SPIKE, rot, -s * SUN_DX / SUN_LEN, -s * SUN_DY / SUN_LEN);
 }
 
+/* How big a prop is on a reference 720p frame — the same rule the crowd uses,
+   and for the same reason: never the live `cam.s`, or a bigger monitor
+   silently buys itself a more expensive frame.
+
+   Props had no LOD at all. That was fine when a stall was a brown box; it is
+   not fine now that it carries a counter, stock, a drifted roof and a plume,
+   a barrel carries staves and a snow bank, and every conifer carries a load.
+   On the aim camera the whole market is in shot — 232 props at tz 2300, where
+   a stall is 49px wide, a barrel is 17px across and a stave seam is one pixel
+   — and that frame cost 3,913 fills against a 3,400 budget. The budget test
+   only ever measured the drive camera, so the most expensive frame in the
+   game, the one you look at before every single launch, was never counted. */
+const propQ = (o) => (o.r || (o.w || 0) / 2) * LOD_REF / cam.tz;
+/* Per kind, not one number over all of them: a stall's collider is 97 and a
+   barrel's is 27, so a single threshold either strips a stall you can still
+   read or keeps a stave seam one pixel wide. Each of these sits between what
+   the prop measures on the drive camera and what it measures on the aim
+   camera — fine while you are in the market, coarse when the whole market is
+   in the frame. The suite pins exactly that. */
+const PROP_FINE = { hut: 34, gluh: 20, barrel: 16, tree: 22 };
+const propFine = (o) => propQ(o) >= (PROP_FINE[o.kind] || 0);
+
 function drawProp(o){
+  const fine = propFine(o);
   switch (o.kind){
     case 'hut': drawHut(o); break;
     case 'tree': drawTreeTop(o.x, o.y, o.r, o.dead, o.rot, o.seed); break;
@@ -4912,6 +4967,7 @@ function drawProp(o){
         const heat = 0.35 + 0.2 * Math.sin(T * 3 + o.seed * 6);
         ctx.fillStyle = 'rgba(255,150,90,' + heat.toFixed(3) + ')';
         circle(0, 0, o.r * 0.55); ctx.fill();
+        if (!fine){ ctx.restore(); break; }         // the rest is under a pixel far off
         ctx.fillStyle = 'rgba(255,228,190,.30)';    // the sheen off the surface
         ctx.beginPath();
         ctx.ellipse(-o.r * 0.22, -o.r * 0.26, o.r * 0.3, o.r * 0.16, -0.5, 0, 6.283); ctx.fill();
@@ -5122,6 +5178,7 @@ function drawProp(o){
            rim. The snow sits at 0.94r at its furthest: the collider is a circle
            of exactly r, and nothing here may promise a hit past it. */
         ctx.fillStyle = '#7a5836'; circle(0, 0, o.r); ctx.fill();
+        if (fine){
         ctx.fillStyle = '#5f4326';                   // the seams between staves
         ctx.beginPath();
         for (let i = 0; i < BARREL_STAVES; i++){
@@ -5143,6 +5200,7 @@ function drawProp(o){
           o.r * 0.78); ctx.fill();
         ctx.fillStyle = '#8a6540';                   // the lid it drifted against
         circle(0, 0, o.r * 0.7); ctx.fill();
+        }
         ctx.strokeStyle = '#c9b28a'; ctx.lineWidth = 4;
         circle(0, 0, o.r * 0.66); ctx.stroke();
         if (crateOf(o)){
