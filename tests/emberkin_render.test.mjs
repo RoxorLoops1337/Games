@@ -4427,6 +4427,116 @@ section('the card in your hand does not promise what the swing will not pay');
     'and the helper is one line beside the foe’s');
 }
 
+// Every screen, emptied out: does the panel say anything? Eleven kinds were
+// swept at 390x760, the list harvested from the game's own openScreen call
+// sites. The three that can hold nothing all had a line — "Empty. Even the
+// lint.", "Nothing stored yet.", "Everything you own is in the deck." The other
+// empty had no words at all: a shop with no shards, the chest wall with no
+// gems, a bag of orbs while you are stood on a footpath are FULL shelves where
+// every single row is refused. Measured: 7 of 7 dead, 4 of 4, 3 of 3, and
+// nothing above any of them.
+section('a shelf where nothing can be taken says so');
+{
+  const mk = () => {
+    const g = withDeck(loadGame({}));
+    g.setCtx(mkCtx());
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 12), g.mkMon('pyrelynx', 12)];
+    return g;
+  };
+  const bag = (g) => Object.keys(g.G.bag).filter((k) => g.G.bag[k] > 0);
+
+  // The empty shelf, which has always spoken.
+  {
+    const g = mk();
+    g.G.bag = {};
+    eq(g.shelfNote('bag', [], false), 'Empty. Even the lint.', 'a bag with nothing in it says so');
+  }
+  // The other empty: rows on the shelf, every one refused.
+  {
+    const g = mk();
+    g.G.bag = { bloomorb: 3, gleamorb: 1 };
+    const list = bag(g);
+    ok(list.every((k) => g.rowDead('bag', k, false)), 'orbs on a footpath: every row is refused');
+    eq(g.shelfNote('bag', list, false), 'Save those for the wild.',
+      'and when the whole shelf agrees on why, it says the reason the row would give');
+    eq(g.shelfNote('bag', list, false), g.fieldItemUse('bloomorb').why,
+      'in the game’s own words, not a second sentence about the same fact');
+  }
+  {
+    const g = mk();
+    g.G.bag = { salve: 2, greatsalve: 1 };
+    for (const m of g.G.party) m.hp = m.max;
+    eq(g.shelfNote('bag', bag(g), false), 'Nobody needs that.', 'salves with nobody hurt say the other reason');
+  }
+  {
+    const g = mk();
+    g.G.bag = { bloomorb: 1, salve: 1 };
+    for (const m of g.G.party) m.hp = m.max;
+    const whys = new Set(bag(g).map((k) => g.fieldItemUse(k).why));
+    eq(whys.size, 2, 'a mixed bag has two different reasons');
+    eq(g.shelfNote('bag', bag(g), false), 'Nothing in here is any use out on the path.',
+      'so the shelf speaks for itself instead of picking one of them');
+  }
+  // …and the cases that must stay quiet.
+  {
+    const g = mk();
+    g.G.bag = { salve: 2, bloomorb: 1 };
+    g.G.party[0].hp = 1;
+    eq(g.shelfNote('bag', bag(g), false), '', 'one usable row and the shelf says nothing');
+    eq(g.shelfNote('bag', bag(g), true), '', 'and in a fight it says nothing either');
+    ok(!g.rowDead('bag', 'bloomorb', true), 'because in a fight nothing on the shelf is refused');
+    ok(g.rowDead('bag', 'bloomorb', false), 'while on the path an orb is');
+  }
+  // The shop, off the same helper.
+  {
+    const g = mk();
+    const list = Object.keys(g.ITEMS);
+    const cheapest = Math.min(...list.map((k) => g.ITEMS[k].cost));
+    g.G.money = 0;
+    ok(list.every((k) => g.rowDead('shop', k, false)), 'with no shards every row is refused');
+    eq(g.shelfNote('shop', list, false), 'Nothing here you can afford yet. Shards come off beaten trainers.',
+      'and the shelf says so');
+    g.G.money = cheapest - 1;
+    eq(g.shelfNote('shop', list, false), 'Nothing here you can afford yet. Shards come off beaten trainers.',
+      'one shard short is still nothing you can afford');
+    g.G.money = cheapest;
+    eq(g.shelfNote('shop', list, false), '', 'and the moment one row is takeable the line goes');
+    ok(g.rowDead('shop', list.find((k) => g.ITEMS[k].cost > cheapest), false),
+      'while the dearer rows are still refused');
+  }
+  // The chest wall, which reads its own prices rather than a list.
+  {
+    const g = mk();
+    const cheapest = Math.min(...g.CHEST_IDS.map((k) => g.CHESTS[k].cost));
+    g.G.gems = 0;
+    eq(g.shelfNote('chests', g.CHEST_IDS, false),
+      'Not enough gems for any of them yet. Gems come off every fight you win.',
+      'no gems, and the wall says so');
+    g.G.gems = cheapest - 1;
+    ok(g.shelfNote('chests', g.CHEST_IDS, false), 'one gem short still says so');
+    g.G.gems = cheapest;
+    eq(g.shelfNote('chests', g.CHEST_IDS, false), '', 'and it goes the moment one chest is affordable');
+  }
+  // One reading of the rule: the row's dimmed frame and the line above it come
+  // from the same function.
+  const body = SRC.match(/<script>([\s\S]*?)<\/script>/)[1];
+  ok(/const dead = rowDead\(s\.kind, k, !!inFight\);/.test(body), 'the row asks rowDead whether it is refused');
+  ok(/const note = shelfNote\(s\.kind, list, !!inFight\);/.test(body), 'and the shelf asks shelfNote what to say');
+  eq((body.match(/shelfNote\(/g) || []).length, 3, 'its own definition and the two shelf screens, and nowhere else');
+  ok(/if \(!list\.every\(\(k\) => rowDead\(kind, k, inFight\)\)\) return '';/.test(body),
+    'and the line only appears when every row is refused');
+
+  // The three screens that CAN hold nothing still say what they always said.
+  for (const [needle, what] of [
+    ['Nothing stored yet.', 'the box'],
+    ['Everything you own is in the deck.', 'the deck'],
+    ['Empty. Even the lint.', 'the bag'],
+  ]) ok(body.includes(needle), `${what} still has its own line for a list with nothing in it`);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

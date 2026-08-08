@@ -132,6 +132,13 @@ const MUTANTS = [
     find: 'const mineSwingMul = (b) => (b && b.settling ? SETTLE_MUL : 1);',
     to: 'const mineSwingMul = () => SETTLE_MUL;' },
 
+  { name: 'shelf: a full shelf of refusals says nothing', aims: ['a shelf where nothing can be taken says so'],
+    find: "  if (!list.every((k) => rowDead(kind, k, inFight))) return '';",
+    to: "  if (list.length) return '';" },
+  { name: 'shelf: the shop stops reading its own prices', aims: ['a shelf where nothing can be taken says so'],
+    find: "  if (kind === 'shop') return G.money < it.cost;",
+    to: "  if (kind === 'shop') return false;" },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
