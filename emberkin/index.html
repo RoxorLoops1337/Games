@@ -8,6 +8,10 @@
 <meta name="theme-color" content="#120d18">
 <style>
   :root{
+    /* How big a thumb is. Every touch-only target rule below is written in
+       terms of this rather than repeating 44 in four places, so the next list
+       or button someone adds gets a finger-sized box by asking for one. */
+    --tap:44px;
     --ink:#f5ecdd; --dim:#a99cb4; --panel:#241a2e; --panel2:#170f1f; --edge:#4a3560;
     --gold:#ffc94d; --hp-good:#5fd77a; --hp-warn:#ffcf4d; --hp-bad:#ff5a5a;
     --xp:#5fc9ff;
@@ -336,9 +340,52 @@
   /* Nothing left you can pay for — say so rather than let the player hunt. */
   #acts .abtn.nag{ border-color:var(--gold); color:var(--gold); animation:nag 1s ease-in-out infinite; }
   @keyframes nag{ 50%{ box-shadow:0 0 10px rgba(255,201,77,.5); } }
-  /* Fingers need more to hit than a mouse does. */
-  body.touch #acts .abtn{ padding:7px 14px; font-size:.8em; }
-  body.touch #acts{ gap:7px; }
+  /* Fingers need more to hit than a mouse does — and a survey of every tappable
+     thing at 390x760 put a number on "more" for the first time. A thumb is
+     about 44px across. These four are pressed every single turn of every fight
+     and their hit area measured 24px tall. `#acts` is absolutely positioned, so
+     the taller button covers a little more arena and pushes nothing.
+
+     The measurement that matters is not the border box: it is how far from the
+     centre a tap can land and still resolve to this element. Padding, a
+     pseudo-element and a sibling painted on top all move that number and none
+     of them move the rect. */
+  body.touch #acts .abtn{ min-height:var(--tap); box-sizing:border-box; padding:0 14px;
+    display:flex; align-items:center; font-size:.8em; }
+  /* `#acts` is anchored by its TOP, so the taller button grew entirely
+     downward — straight under the panel that carries the selected card's text,
+     which left the box 44px and the reachable area still 24. Above the row is
+     open arena, so the row moves up by exactly what it gained. Growing a target
+     into whatever is below it is not growing it. */
+  body.touch #acts{ gap:7px; margin-top:-20px; }
+  /* The way out of every screen was the smallest target in the game: an 8px
+     tall hit area in the corner, on all eight screens that have one. It is a
+     text chip and making it a block would make the corner shout, so the chip
+     keeps its size and a transparent spacer gives the thumb something to land
+     on. Nothing moves by a pixel; only the hit test changes.
+
+     The spacer reaches down and left, not outward from the centre: the chip
+     lives in the panel's top-right corner and `#screen` is a scroller, so a
+     centred box is clipped by the panel's own top edge — measured 44 wide and
+     30 tall for exactly that reason. Down and left is where the room is. */
+  body.touch #screen .back::after{ content:''; position:absolute;
+    top:-14px; height:calc(var(--tap) + 4px); left:-32px; right:-12px; }
+  /* …and the room has to exist before the spacer can use it. On the party, box
+     and dex the first row of content sits directly under the chip and, being
+     positioned and later in the document, paints over it: the spacer reached 35
+     of its 46px there and the full 46 on the five screens with a looser header.
+     Twelve pixels of header on a touch layout is the whole difference, and it
+     buys a little air above every screen title as well. */
+  body.touch #screen{ padding-top:24px; }
+  /* A list row is a thing you tap, so on a phone it is at least a finger tall.
+     Every row in the game already cleared this except the chest shelf, which
+     came in at 43 — but stating it as a rule about rows is worth more than two
+     pixels on one screen, because the next list added gets it for free. */
+  body.touch .items .item{ min-height:var(--tap); }
+  /* Rename and Done end the profile screen, at 18px. These sit in the flow, so
+     they grow the screen a little rather than covering it. */
+  body.touch .profile .pacts .abtn{ min-height:var(--tap); display:flex;
+    align-items:center; justify-content:center; }
   #intent{ position:absolute; left:3%; top:14%; padding:3px 9px; font-size:.72em; z-index:6; }
   #intent b{ color:var(--hp-bad); }
   /* The move name in this chip is already red, so a lethal warning written in
