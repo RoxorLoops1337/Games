@@ -10,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
-export const GAME = join(HERE, '..', 'emberkin', 'index.html');
+// EK_GAME points the loader at a copy — mutation sweeps need to load a mutant
+// without editing the file in the working tree.
+export const GAME = process.env.EK_GAME || join(HERE, '..', 'emberkin', 'index.html');
 
 const noop = () => {};
 
@@ -131,7 +133,17 @@ export function withDeck(EK) {
 // ---- tiny assert kit ---------------------------------------------------
 let pass = 0;
 const fails = [];
+// EK_TRACE prints EVERY check, passing ones included.
+//
+// A suite that only prints its failures cannot tell you which of its checks are
+// incapable of failing — five passes running produced one that was. The sweep
+// in tools/emberkin/tautology.mjs runs the suite against mutants and asks which
+// checks never once died; that question needs the whole roll call, not the
+// exceptions to it.
+const TRACE = !!process.env.EK_TRACE;
+let ordinal = 0;
 export function ok(cond, label) {
+  if (TRACE) console.log(`@CHECK\t${ordinal++}\t${cond ? 'pass' : 'FAIL'}\t${sectionNow}\t${label}`);
   if (cond) { pass++; return; }
   fails.push(label);
   console.error('  ✗ ' + label);
@@ -145,4 +157,5 @@ export function done(name) {
   }
   console.log(`${name}: ${pass} checks passed`);
 }
-export const section = (s) => console.log('  · ' + s);
+let sectionNow = '(none)';
+export const section = (s) => { sectionNow = s; console.log('  · ' + s); };
