@@ -1438,6 +1438,48 @@ section('the box shows what the kin under the cursor can do');
   ok(/<div class="kinview">/.test(SRC), 'the party screen keeps its block beside the list');
 }
 
+// The title screen had only ever been photographed by a first-time player.
+// `Continue` exists only when there is a save, so every shot ever taken of this
+// screen showed one button — and the one it showed was `New journey`, which
+// calls wipeSave(). On the screen a returning player sees every session that
+// button sat ABOVE Continue, in identical weight and colour, while the KEYBOARD
+// already disagreed: pressing A on the title runs startCont whenever a save
+// exists. The layout follows the key now.
+section('the title leads with the run you already have');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+
+  // The predicate both halves hang off.
+  ok(!g.hasSave(), 'a fresh store has nothing to come back to');
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.saveGame();
+  ok(g.hasSave(), 'and a saved run does');
+
+  // A is already the safe one. This is the fact the layout was contradicting.
+  ok(/\(hasSave\(\) \? startCont : startNew\)\(\)/.test(SRC),
+    'pressing A on the title continues when there is a run to continue');
+  ok(/function startNew\(\) \{ show\(els\.title, false\); wipeSave\(\)/.test(SRC),
+    'and New journey really does destroy it — this is not a cosmetic ordering');
+
+  // One flag drives the button AND the order, so the screen cannot reveal
+  // Continue while still leading with the button that wipes the save.
+  ok(/if \(hasSave\(\)\) \{ show\(contBtn, true\); els\.title\.classList\.add\('returning'\); \}/.test(SRC),
+    'one flag reveals Continue and marks the screen returning');
+  ok(/#title\.returning \[data-act="cont"\]\{ order:-1; \}/.test(SRC),
+    'and on a returning title Continue comes first');
+  ok(/#title\.returning \[data-act="new"\]\{ opacity:/.test(SRC),
+    'while the destructive one stops presenting itself as the thing you came for');
+
+  // …and a FIRST-TIME title is untouched: no flag, so no reorder and no
+  // dimming — there is nothing to protect and nothing to demote.
+  ok(/#title\.returning/.test(SRC) && !/#title \[data-act="new"\]\{ opacity:/.test(SRC),
+    'a first-time title dims nothing, because both of those rules are gated');
+  ok(/<div class="btn panel" data-act="new">New journey<\/div>/.test(SRC),
+    'the markup order still reads new-then-continue; only the returning view reorders');
+}
+
 // The hand at phone size. `renderHand` returns early when headless, so as with
 // the screens there is no markup here to read — these hold the two rules that
 // only exist because a --touch shot showed them, and that no desktop shot can

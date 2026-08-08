@@ -739,6 +739,16 @@
     image-rendering:pixelated; z-index:0; }
   #title .tgroup{ position:relative; z-index:1; display:flex; flex-direction:column;
     align-items:center; gap:7px; }
+  /* When there is a run to come back to, Continue leads.
+     `New journey` calls wipeSave(). It sat ABOVE Continue in reading order, in
+     identical weight and colour, on the screen a returning player sees every
+     session — and the keyboard already disagreed with the layout, because
+     pressing A on the title runs startCont whenever a save exists. The order
+     follows the key now, and the button that destroys a run stops presenting
+     itself as the thing you came here to do. */
+  #title.returning [data-act="cont"]{ order:-1; }
+  #title.returning [data-act="new"]{ opacity:.55; font-size:clamp(10px,1.05em,13px); }
+  #title.returning [data-act="new"]:hover{ opacity:1; }
   /* The logo carries weight: a hard dark rim so it reads against the sunset,
      a warm drop under it, and a glow that spills the way the sun does. */
   #title h1{ margin:0; font-size:clamp(24px,3.7em,56px); letter-spacing:8px; color:var(--gold);
@@ -11377,7 +11387,9 @@ function boot() {
   // title
   els.title.querySelector('[data-act="new"]').addEventListener('click', startNew);
   const contBtn = els.title.querySelector('[data-act="cont"]');
-  if (hasSave()) show(contBtn, true);
+  // One flag for both the button and the ordering, so the screen cannot show
+  // Continue while still leading with the button that wipes the save.
+  if (hasSave()) { show(contBtn, true); els.title.classList.add('returning'); }
   contBtn.addEventListener('click', startCont);
 
   // A parade of three kin on the title card, cycling through the roster.

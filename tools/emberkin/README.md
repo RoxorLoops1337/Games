@@ -377,6 +377,51 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+71. **Played the first twenty minutes, and the fault was on the screen before
+    them** (pass 160). Nine passes of consistency work; this one went back to
+    driving the game. Most of what the drive measured came back healthy, and
+    **the healthy numbers are the finding as much as the fault is**:
+    - **The opening is six presses.** Three lines of Rowan, one real choice, the
+      gotcha, and you are walking. Nothing to trim.
+    - **The early fights have no dead turns.** Over 60 Route One fights at the
+      starting level: **0%** of turns had nothing affordable, **0%** had exactly
+      one play, **100%** offered two or more. The hand always poses a question.
+    - **The starter choice is fair.** Cindercub / Dewdrip / Sproutle run 5.1 /
+      5.8 / 5.5 turns per fight and finish at a median low of 0.90 / 0.88 / 0.93
+      HP. The first decision in the game does not decide the first hour's pace.
+    - **First level after three fights.**
+    - **What the drive DID find, and did not act on:** the opening has decisions
+      but no stakes. 60 fights, 60 wins, median lowest HP **0.82**, and only 8%
+      ever dropped below half. That is a balance judgement and the standing rule
+      is no balance change without a PAIRED measurement — this is a single arm.
+      Recorded for a pass that can run both.
+
+    **And then the screen before the game.** The title had only ever been
+    photographed by a first-time player, because `Continue` only exists when
+    there is a save — so every shot of it ever taken showed one button, and that
+    button was `New journey`, which calls `wipeSave()`. Seeded a save and looked
+    at what a returning player actually sees:
+    - `New journey` **above** `Continue`, identical weight, identical colour,
+      nothing marking one as destructive;
+    - while the KEYBOARD already disagreed — `justPressed('a')` on the title
+      runs `startCont` whenever a save exists.
+    The layout follows the key now: one `returning` flag, set in the same line
+    that reveals the button, drives `order:-1` on Continue and demotes the one
+    that wipes a run. A first-time title is untouched — both rules are gated, so
+    there is nothing to protect and nothing to demote.
+
+    The PHONE layout confirmed it harder than the desktop one did: the touch
+    buttons are labelled from `btnLabels()`, which on the title already reads
+    `['Continue', 'New']` when a save exists — so the gold A button said
+    Continue while the panel two inches above it led with New journey. The
+    screen was contradicting itself in one picture.
+
+    **A screen with a conditional element has a state your instrument has never
+    seen, and the condition is usually "the player has been here before".**
+    Every scene in this library starts from a fresh store. That is the blind
+    spot, and it is not the same blind spot as a posed state (entry 67) — the
+    scene was honest, the STARTING CONDITION was narrow.
+
 70. **Four asked, three clean, one shipped** (pass 159). The set-level sweep
     had four open questions and the rule is fix ONE per pass, so all four were
     checked and only the last was touched. **Reporting the clean ones is half
