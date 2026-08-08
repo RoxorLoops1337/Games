@@ -95,7 +95,7 @@ const EXPOSE = `__out.api = {
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
-  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, BAG_COLS, PRAM_HOOD, drawPerson, camScale,
+  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, BAG_COLS, PRAM_HOOD, PRAM_W, restPram, drawPerson, camScale,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
   // swap them out and count what a run actually asks the mixer for
@@ -5869,6 +5869,76 @@ test('a pushed pram reads as a pram, at the tier that has to swerve for it', () 
     'drawing the pram moved the simulation stream');
   console.log('    (pram: ' + near.rec.fills + ' fills at the replay, ' +
     mid.rec.fills + ' driving)');
+});
+
+/* One object, three drawings — pushed, in the air, on its side — and they had
+   drifted apart. The one in the air had no hood and two wheels both at the
+   same end; and the three were three different sizes: 1.24r while pushed,
+   2 x 15 in the air whatever the parent's size, and 1.6 x that again once
+   landed. It grew by three quarters on the way up and shrank by a fifth on
+   touchdown. */
+test('the pram you send flying is the pram you were looking at', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100;
+  api.people.length = 0; api.fx.length = 0; api.debris.length = 0;
+  const p = api.addPerson(api.car.x + 40, api.car.y, 'parent');
+  p.ang = -Math.PI / 2; p.wt = 0.4; p.bob = 1;
+  api.cam.x = p.x; api.cam.y = p.y; api.cam.tz = 150; api.cam.s = api.camScale(150);
+
+  const pushed = carRec();
+  api.withCtx(pushed, () => api.drawPerson(p));
+
+  api.killPerson(p, 400, 0, 'car');
+  const air = api.fx.filter(f => f.type === 'pram');
+  assert(air.length === 1, 'a pram should break loose, got ' + air.length);
+  const f = air[0];
+  assert(Math.abs(f.size * 2 - p.r * api.PRAM_W) < 0.001,
+    'the pram in the air is ' + (f.size * 2).toFixed(1) + ' across a pushed one of ' +
+    (p.r * api.PRAM_W).toFixed(1));
+  f.x = api.cam.x; f.y = api.cam.y; f.rot = 0.4;
+  const flying = carRec();
+  api.withCtx(flying, () => api.drawFx(true));   // a pram is over the ground, not under it
+
+  api.fx.length = 0;
+  api.restPram(f);
+  const d = api.debris[api.debris.length - 1];
+  assert(Math.abs(d.w - p.r * api.PRAM_W) < 0.001,
+    'the landed pram is ' + d.w.toFixed(1) + ' across one that was ' +
+    (p.r * api.PRAM_W).toFixed(1));
+  d.x = api.cam.x; d.y = api.cam.y;
+  const landed = carRec();
+  api.withCtx(landed, () => api.drawGround());
+
+  // the same object in all three, and the hood is what says so
+  for (const [name, rec] of [['pushed', pushed], ['flying', flying], ['landed', landed]]){
+    assert(rec.order.includes(api.PRAM_HOOD), name + ' has no hood on it');
+    assert(rec.order.includes('#22354f'), name + ' is not the pram body colour');
+  }
+
+  // four wheels in the air; three still on once it is down, and one that came off
+  const wheels = (rec) => rec.all.filter(e => e[0] === 'arc' && e[4] === '#101722');
+  assert(wheels(flying).length === 4,
+    'four wheels in the air, got ' + wheels(flying).length);
+  assert(wheels(landed).length === 3,
+    'three still on it once down, got ' + wheels(landed).length);
+  const off = landed.all.filter(e => e[0] === 'arc' && e[4] === '#3b4a63');
+  assert(off.length === 1, 'and one lying beside it, got ' + off.length);
+  assert(Math.hypot(off[0][1] - api.cam.x, off[0][2] - api.cam.y) > d.w * 0.6,
+    'the wheel that came off should be clear of the pram');
+
+  /* The size is read off the parent rather than being a literal 15, and that
+     must not have cost a roll: `addFx` is not allowed near either stream. */
+  api.reseed(2718);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(2718);
+  for (let i = 0; i < 50; i++)
+    api.addFx({ type: 'pram', x: 0, y: 0, vx: 0, vy: 0, ttl: 1, size: 9,
+      rot: 0, spin: 0, col: '#e8eef8' });
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'spawning a pram moved the simulation stream');
+  console.log('    (pram width: pushed ' + (p.r * api.PRAM_W).toFixed(1) +
+    ', flying ' + (f.size * 2).toFixed(1) + ', landed ' + d.w.toFixed(1) + ')');
 });
 
 test('a pram that was sent flying lands and stays there', () => {
