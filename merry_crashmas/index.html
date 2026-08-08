@@ -609,6 +609,10 @@ const PLOW_TIME = 7;                          // seconds of extra-wide bumper
 const TRACK_MAX = 460;
 // how much of a mark a tyre leaves on ice, against packed snow
 const TRACK_ICE = 0.3;
+// how far in from the ends a snowbank's outer curve starts, before the seed
+// widens it. The curve's control point is this minus 2, which is what keeps
+// the bank inside its own collider — see the ramp branch in drawProp.
+const RAMP_SHOULDER = 14;
 /* How much speed a smash has to cost before the aim line stops promising.
    A fence is mass .08, so it takes 2.7% and the line carries on; a hut is .46
    and takes 15.6%, which is a shot that has genuinely changed. */
@@ -5572,11 +5576,30 @@ function drawProp(o){
       // a wedge of ploughed snow, low at the near edge and high at the crest
       // a heap of ploughed snow: dirty at the foot, bright along the crest,
       // with the ramp chevrons pointing the way over
-      const hw = o.w / 2, hh = o.h / 2;
+      /* Off its own seed, like every other prop in the market. This was the
+         one that ignored it: the tree varies, the barrel varies, a hut picks
+         its whole trade out of `o.seed`, and every snowbank in all twenty-one
+         markets was the same snowbank. Up to five of them stand in a market
+         and two goals send you over one.
+
+         `RAMP_SHOULDER` and its `- 2` keep the outer curve inside the box: a
+         quadratic peaks at a/2 - b/2 off the ends, so the shoulder has to be
+         the taller of the two or the bank bulges past the collider. */
+      const hw = o.w / 2, hh = o.h / 2, s = o.seed || 0;
+      const sh = RAMP_SHOULDER + s * 8;            // how square the ends sit
       ctx.fillStyle = '#aebfd8';
       ctx.beginPath();
-      ctx.moveTo(-hw, -hh + 18); ctx.quadraticCurveTo(0, -hh - 16, hw, -hh + 18);
-      ctx.lineTo(hw, hh - 18); ctx.quadraticCurveTo(0, hh + 16, -hw, hh - 18);
+      ctx.moveTo(-hw, -hh + sh); ctx.quadraticCurveTo(0, -hh - sh + 2, hw, -hh + sh);
+      ctx.lineTo(hw, hh - sh); ctx.quadraticCurveTo(0, hh + sh - 2, -hw, hh - sh);
+      ctx.closePath(); ctx.fill();
+      /* Dirty at the foot, which the comment above has promised since it was
+         written while the palest colour in the whole prop was `#aebfd8`. This
+         is a heap the plough pushed up: the low edge carries what it scraped
+         off the market floor. */
+      ctx.fillStyle = 'rgba(96,112,140,.34)';
+      ctx.beginPath();
+      ctx.moveTo(-hw, -hh + sh); ctx.quadraticCurveTo(-hw * 0.42, 0, -hw, hh - sh);
+      ctx.quadraticCurveTo(-hw * 0.86, 0, -hw, -hh + sh);
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = '#d3e0f2';
       ctx.beginPath();
@@ -5584,9 +5607,10 @@ function drawProp(o){
       ctx.quadraticCurveTo(hw * 0.5, hh + 4, -hw * 0.55, hh - 14);
       ctx.quadraticCurveTo(-hw * 0.2, 0, -hw * 0.55, -hh + 14);
       ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#f7fbff';
+      ctx.fillStyle = '#f7fbff';                   // the crest, where it is highest
       ctx.beginPath();
-      ctx.ellipse(hw * 0.36, 0, hw * 0.42, hh * 0.74, 0, 0, 6.283); ctx.fill();
+      ctx.ellipse(hw * (0.24 + s * 0.26), 0, hw * (0.34 + s * 0.16),
+        hh * (0.62 + s * 0.22), 0, 0, 6.283); ctx.fill();
       ctx.strokeStyle = 'rgba(90,130,180,.45)'; ctx.lineWidth = 5;
       for (let i = 0; i < 3; i++){
         const cx2 = -hw * 0.42 + i * hw * 0.42;

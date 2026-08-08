@@ -69,7 +69,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
-  EDGE_PILL, TRACK_ICE, TRACK_MAX, SURE_LOSS, BANNER_PITCH_CAP,
+  EDGE_PILL, TRACK_ICE, TRACK_MAX, SURE_LOSS, BANNER_PITCH_CAP, RAMP_SHOULDER,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
@@ -8386,6 +8386,62 @@ test('a tyre mark says what the car was doing', () => {
   console.log('    (tyre mark: ' + straight.w.toFixed(1) + 'px at ' + straight.a +
     ' rolling, ' + sideways.w.toFixed(1) + 'px at ' + sideways.a + ' scrubbing, ' +
     onIce.a + ' on ice)');
+});
+
+/* The tree varies with its seed, the barrel varies, a hut picks its whole trade
+   out of `o.seed` — and the snowbank ignored it. Every one in all twenty-one
+   markets was the same snowbank, up to five to a market, with two goals sending
+   you over one. Its comment also promised "dirty at the foot" while the darkest
+   colour in the prop was a pale blue. */
+test('every snowbank is not the same snowbank', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.setT(2.2);
+  const CREST = '#f7fbff', GRIT = 'rgba(96,112,140,.34)';
+  const bank = (seed) => {
+    const art = propArt(api, 'ramp', false, (o) => { o.x = 0; o.y = 0; o.seed = seed; });
+    const crest = art.rec.shapes.find(s => s.style === CREST);
+    assert(crest, 'a snowbank should have a crest at seed ' + seed);
+    return { art, crest, o: art.o,
+      grit: art.rec.all.filter(e => e[0] === 'q' && e[4] === GRIT) };
+  };
+  const seeds = [0.05, 0.3, 0.55, 0.8, 0.99];
+  const banks = seeds.map(bank);
+  for (const key of ['x', 'r', 'ry']){
+    const v = banks.map(b2 => b2.crest[key]);
+    assert(Math.max(...v) - Math.min(...v) > 4,
+      'the crest\'s ' + key + ' is the same on every seed: ' + v.map(n => n.toFixed(1)));
+  }
+
+  // dirty at the foot, and on the low side of the bank, not the crest side
+  assert(banks[0].grit.length >= 2, 'the foot should carry what the plough scraped up');
+  assert(banks[0].grit.every(e => e[1] < 0),
+    'the grit belongs on the low edge, away from the crest');
+  assert(banks[0].crest.x > 0, 'and the crest on the far side of it');
+
+  /* And every one of them stays inside the box the car can hit — which the
+     kit-wide sweep cannot check here, because it reads path ENDPOINTS and a
+     quadratic's bulge is halfway along. A snowbank's outer curve is exactly
+     that shape, so its midpoint is worked out here: 0.25·P0 + 0.5·C + 0.25·P2.
+     That is what `RAMP_SHOULDER`'s "- 2" is protecting. */
+  for (const b2 of banks){
+    const hh = b2.o.h / 2;
+    const cs = b2.art.rec.ctrls.filter(c => c.style === '#aebfd8');
+    assert(cs.length === 2, 'the outer shape is two curves, got ' + cs.length);
+    for (const c of cs){
+      const p0 = { x: -b2.o.w / 2, y: Math.sign(c.cy) * (hh - Math.abs(c.cy) - 2) };
+      const mid = 0.25 * c.y + 0.5 * c.cy + 0.25 * c.y;   // both ends share a y
+      assert(Math.abs(mid) <= hh + 0.01,
+        'seed ' + b2.o.seed.toFixed(2) + ': the bank bulges to ' + mid.toFixed(1) +
+        ' out of a box half-height of ' + hh + ' — mid-curve, where the sweep ' +
+        'cannot see it');
+      assert(p0.x <= 0, 'sanity');
+    }
+  }
+  console.log('    (snowbanks: crest x ' +
+    banks.map(b2 => b2.crest.x.toFixed(0)).join('/') + ', ry ' +
+    banks.map(b2 => b2.crest.ry.toFixed(0)).join('/') + ')');
 });
 
 /* Content, and the guard that makes adding more of it safe. Six shouts is one
