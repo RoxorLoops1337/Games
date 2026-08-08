@@ -2656,3 +2656,43 @@ desktop one. That is the correct answer and not an obvious one.
     Also measured, in one grep: **`#movemenu` is dead markup** — a div, two CSS
     rules and an entry in the panel-hiding sweep, opened by nothing. Named here
     rather than cut; it costs the player nothing.
+
+94. **A fight opened through closing bars and ended on a hard cut** (pass 183).
+    Back to looking, after six passes of instruments. 176 found the title->world
+    cut had nothing over it; this asked the same of every OTHER change of scene,
+    by driving each one and sampling the covers across it:
+
+        world -> battle          wipe 0.550    35/36 frames covered
+        world -> world (door)    fade 0.300    30/31 frames covered
+        battle -> world (a win)  nothing        0/86 frames covered
+        evolution -> world       nothing        0/282 frames covered
+
+    **The way out of the game's central activity was the one cut with nothing
+    over it** — the arena simply gone, the map simply there. And the same for an
+    evolution's 282 frames.
+
+    Both paths already met at the same `saveGame()`, so they take the same way
+    back: `backToWorld()`, `BATTLE_OUT = .22`. Shorter than a door because you
+    are being put somewhere you already were, and `max` so a cover already
+    running is never cut short. Timed from inside the page, the map is fully lit
+    229ms after the fight lets go. Measured after: 13/100 and 13/296 frames
+    covered, both ending on a clear screen.
+
+    **Four scene errors, and one instrument that changed meaning under its own
+    fix.**
+    - Posing `b.over = 'win'` does not end a fight: the flourish and the offer
+      go unplayed and it never finishes. Driven with the suite's `autoFight`.
+    - The reward offer is a LOCKED screen — `closeScreen` refuses it on purpose,
+      so it has to be answered with `screenSelect()`, not dismissed. Dismissing
+      it parked the fight in mode 'screen' for ever.
+    - `warpAt` takes the MAP first; scanning coordinates with the wrong
+      signature found no doors on a map that has them.
+    - The exit window opened at the fight's START, so the ENTRY wipe's 35
+      covered frames were counted as the exit's.
+    - And after the fix, the window closed the instant mode became 'world' —
+      one frame before the cover it was built to measure — and reported 0
+      covered frames for a cover that was up. **The window has to run to the
+      point the player can MOVE.**
+
+    Five planted faults, all five bite, and `tools/emberkin/tautology.mjs` now
+    aims two mutants at the new section: 4 of its 12 checks die.
