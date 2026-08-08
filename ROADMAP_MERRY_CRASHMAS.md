@@ -566,6 +566,22 @@ edit this block to name the next one.
       is then the only thing left saying you are getting closer, and there was
       nothing there before.
 
+- [x] The glühwein stand is a pot on a trestle, not a pink plate. Fifteen of
+      these stand in a market and the live one was four concentric circles — a
+      brown disc, a red disc, a pulsing orange disc and a gold ring — the exact
+      flat-plate-with-a-hard-edge shape this codebase has fixed everywhere else.
+      The funny part is that the pattern ran backwards here: the *wreck* was
+      already detailed, and it is the wreck that says what the thing is (a
+      copper pot on a trestle, wine in it, cups that had been on the counter).
+      So the live one is built out of the wreck's own vocabulary: crossed
+      planks reaching past the pot, a lit side on the copper, the wine catching
+      the light, a ladle standing in it, four mugs round the rim and steam off
+      the top on a rolling phase rather than a particle system. The mugs are
+      spread evenly and turned by the stand's seed — four independent `mkRand`
+      angles clump, and two mugs on top of each other read as one odd blob,
+      which is exactly what the first screenshot showed. 2625 → 2802 fills at
+      the worst frame against a 3400 budget.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
