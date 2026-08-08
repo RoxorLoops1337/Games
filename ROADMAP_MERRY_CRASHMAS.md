@@ -1104,6 +1104,39 @@ edit this block to name the next one.
       pins the other side of the fix: a variant that shoves *every* dent onto
       the flanks to satisfy the first assertion fails the second.
 
+- [x] The aim line survives the gate. Fifth comment-versus-code find, and the
+      biggest: `drawAim` says the predicted line is *"always DOTS dots, however
+      long the shot is, so the spacing itself reads as speed"*. The dots are
+      spread across the **confident** stretch, and confidence ended at the
+      first thing the car touched, whatever it was — and every market has a
+      barrier across its gate. Measured over 48 aims (4 markets × 4 powers × 3
+      angles): **47 collapsed**, median 13 distinct positions of 34, and at
+      **full power — the pull the game tells you to make — 34 dots landed on 4
+      positions** and the line stopped before the market it was aimed at.
+      A prop the car goes straight through, without a bounce and without losing
+      much speed, does not make the rest of the prediction less true, so it no
+      longer ends it (`SURE_LOSS`: a fence costs 2.7%, a hut 15.6%). Median
+      horizon across the 21 markets **5 → 11 steps**; the empty-approach market
+      it was found on runs 15 dots over half the shot. A bonus fell out: the
+      JUMP edge marker is nulled when its ramp is past the horizon, so it now
+      appears on shots where it used to be suppressed.
+  - Drawing only — reachability reads `ramp0`, the physics answer, set before
+      any of this, so no market's goals reroll. Asserted, not assumed.
+  - **Two of my assertions had to be cut back to what the change guarantees,
+      and a third was rewritten because a revert-variant proved it could not
+      fail.** I first asserted every market's line reaches deep into the market:
+      false, because a market with a stall four steps off the sling is *right*
+      to stop there, and asserting otherwise asserts the crowd away. It is a
+      median across all 21 now. And the bounce case used a nutcracker — against
+      the immovable one the car stops dead, the path ends where confidence
+      does, and the assertion had nothing to bite on; it uses a hut the car
+      cannot flatten but does carry on past. Third pass running where a
+      revert-variant caught a test that looked fine and proved nothing.
+  - The over-permissive variant (`SURE_LOSS` low enough to let a hut through)
+      failed **three** assertions, two of them pre-existing: *the confident part
+      of the line never runs past the car* and *a stall on the line stops the
+      line*. The other side of this was already bounded.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
