@@ -1780,4 +1780,67 @@ section('the payoff screen counts the errand it just moved');
   ok(true, 'the gotcha draws with a tally and without one');
 }
 
+// The intent chip's own comment says it exists to answer "can I take this, or
+// do I need to block?" — and it answered half of it. It already subtracted
+// guard and shield to print what LANDS; it never compared that to what was
+// LEFT. At 9 HP against "about 30" it read exactly as it does at full health,
+// in the same colour, while 9/63 sat on the other side of the arena for the
+// player to hold in their head.
+section('the telegraph finishes its own question');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+  g.G.party = [g.mkMon('pyrelynx', 24)];
+  g.startBattle({ foe: g.mkMon('bramblor', 23), wild: true });
+  const b = g.B();
+  const swing = { kind: 'attack', name: 'Thorn Maul', dmg: 30 };
+
+  // The half that already worked: guard comes off, then shield absorbs.
+  b.mods.def = 0; b.shield = 0;
+  eq(g.intentThrough(b, swing), 30, 'bare, the whole swing lands');
+  b.mods.def = 4;
+  eq(g.intentThrough(b, swing), 26, 'guard comes off the top');
+  b.shield = 10;
+  eq(g.intentThrough(b, swing), 16, 'and shield absorbs the rest');
+  b.mods.def = 0; b.shield = 0;
+
+  // A telegraph that is not an attack has nothing to land.
+  eq(g.intentThrough(b, { kind: 'plan', name: 'Sharpen' }), null, 'a plan lands nothing');
+  eq(g.intentThrough(b, null), null, 'and neither does no telegraph at all');
+
+  // The half that did not exist.
+  b.mine.hp = b.mine.max;
+  ok(!g.intentLethal(b, swing), 'at full health the swing is survivable and says nothing');
+  b.mine.hp = 30;
+  ok(g.intentLethal(b, swing), 'at exactly the incoming number it is called');
+  b.mine.hp = 31;
+  ok(!g.intentLethal(b, swing), 'and one point above it is not');
+  b.mine.hp = 9;
+  ok(g.intentLethal(b, swing), 'at nine against about thirty it is called');
+
+  // It reads what LANDS, not what is swung — so blocking has to answer it. This
+  // is the whole point of the two halves being the same number.
+  b.shield = 40;
+  ok(!g.intentLethal(b, swing), 'and enough shield takes the warning away');
+  b.shield = 0;
+
+  // A kin already down is not about to be finished again.
+  b.mine.hp = 0;
+  ok(!g.intentLethal(b, swing), 'a kin already down is not warned about');
+  b.mine.hp = b.mine.max;
+
+  // And the chip must actually wear it. renderHand returns early when HEADLESS,
+  // so this is a source net — the class and the phrase both have to be there.
+  ok(/els\.intent\.classList\.toggle\('lethal', lethal\)/.test(SRC),
+    'the chip is marked when the swing would finish you');
+  ok(/lethal \? ' · <b>enough to finish you<\/b>' : ''/.test(SRC), 'and says so in words');
+  ok(/#intent\.lethal\{[^}]*--hp-bad/.test(SRC), 'and the frame carries the alarm');
+  // The move name in this chip is already red, so the warning cannot be red
+  // text alone — that reads as more chip rather than as an alarm.
+  ok(/#intent b\{ color:var\(--hp-bad\); \}/.test(SRC), 'the name was already red, which is why the frame changes');
+}
+
 done('emberkin_render');

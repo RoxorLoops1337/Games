@@ -1246,6 +1246,74 @@ const SCENES = {
       if (EK.npcActive(wick)) throw new Error('Wick said he was going north and did not');
     },
   },
+  // ---- the moment of deciding -------------------------------------------
+  // Four states of the same screen, shot to be read side by side. The question
+  // is not "does it draw" — it is what a player's eye actually has to collect
+  // before choosing a card, and whether the screen weights those things the way
+  // the decision does.
+  dec_fresh: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24), EK.mkMon('brookite', 22)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.readIntent();
+    },
+  },
+  dec_hurt: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24), EK.mkMon('brookite', 22)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.mine.hp = Math.max(1, Math.round(b.mine.max * .14));
+      b.mine.status = 'burn';
+      b.dispM = b.tgtM = b.mine.hp;
+      EK.readIntent();
+    },
+  },
+  dec_broke: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'emberwood';
+      EK.G.party = [EK.mkMon('pyrelynx', 24)];
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('bramblor', 23), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.energy = 0;                       // spent: nothing in hand is playable
+      EK.renderHand();
+      EK.readIntent();
+    },
+  },
+  dec_late: {
+    w: 900, h: 1000,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'crown_hollow';
+      EK.G.party = [EK.mkMon('magmane', 36), EK.mkMon('tsunaga', 34)];
+      EK.G.cards = []; EK.G.deck = [];
+      ['ember_spit', 'edge', 'whet', 'guard', 'focus', 'quickstep'].forEach((id) => {
+        const c = EK.grantCard(id, true);
+        if (c) { c.plus = 4; c.plays = 22; }
+      });
+      EK.startBattle({ foe: EK.mkMon('vespyr', 30), wild: true, legendary: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.readIntent();
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {
