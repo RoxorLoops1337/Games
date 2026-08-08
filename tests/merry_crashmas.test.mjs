@@ -95,7 +95,7 @@ const EXPOSE = `__out.api = {
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
-  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, BAG_COLS, PRAM_HOOD, PRAM_W, restPram, drawPerson, camScale,
+  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, hatOf, SANTA_HAT, BAG_COLS, PRAM_HOOD, PRAM_W, restPram, drawPerson, camScale,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
   // swap them out and count what a run actually asks the mixer for
@@ -5877,6 +5877,69 @@ test('a pushed pram reads as a pram, at the tier that has to swerve for it', () 
    2 x 15 in the air whatever the parent's size, and 1.6 x that again once
    landed. It grew by three quarters on the way up and shrank by a fifth on
    touchdown. */
+/* Two drawings of one object again: the hat that comes off was `#e33` at the
+   spawn and `#d34036` at the draw, so whichever of the five a shopper had on,
+   the one that flew off was red — and its bobble trailed behind the crown like
+   a collar, which is the exact fault the worn hat had fixed and this one kept. */
+test('the hat that comes off is the hat they were wearing', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  for (let i = 0; i < api.HATS.length; i++){
+    api.people.length = 0; api.fx.length = 0;
+    const p = api.addPerson(api.car.x + 40, api.car.y, 'shopper');
+    p.hat = true; p.hatCol = i;
+    assert(api.hatOf(p) === api.HATS[i], 'hatOf should read the shopper’s own hat');
+    api.killPerson(p, 300, 0, 'car');
+    const hats = api.fx.filter(f => f.type === 'hat');
+    assert(hats.length === 1, 'one hat should come off, got ' + hats.length);
+    assert(hats[0].col === api.HATS[i],
+      'a ' + api.HATS[i] + ' hat came off as ' + hats[0].col);
+  }
+
+  // santa's is his own, and never one of the shoppers'
+  api.people.length = 0; api.fx.length = 0;
+  const santa = api.addPerson(api.car.x + 40, api.car.y, 'santa');
+  santa.hat = true; santa.hatCol = 1;
+  assert(api.hatOf(santa) === api.SANTA_HAT, 'santa wears his own red');
+  assert(api.HATS.indexOf(api.SANTA_HAT) < 0, 'and it is not in the shopper set');
+  api.killPerson(santa, 300, 0, 'car');
+  assert(api.fx.filter(f => f.type === 'hat')[0].col === api.SANTA_HAT,
+    'santa’s hat should come off red');
+
+  /* The draw reads f.col rather than a colour of its own — the bug was that
+     it did not, so the spawn could be right and nothing would change. */
+  const shot = (col) => {
+    api.fx.length = 0;
+    api.addFx({ type: 'hat', x: api.cam.x, y: api.cam.y, vx: 0, vy: 0,
+      ttl: 9, size: 11, col, rot: 0, spin: 0 });
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawFx(true));
+    return rec;
+  };
+  const green = shot('#2f8a52'), blue = shot('#3f86c4');
+  assert(green.order.includes('#2f8a52') && !green.order.includes('#3f86c4'),
+    'the drawing ignores f.col: ' + green.order.join(' '));
+  assert(blue.order.includes('#3f86c4'), 'and the other way round');
+
+  /* The bobble sits on the crown, not off the edge of it — same proportion as
+     the one still on someone's head. */
+  const crown = green.all.filter(e => e[0] === 'arc' && e[4] === '#2f8a52')[0];
+  const bob = green.all.filter(e => e[0] === 'arc' && e[4] === '#f6f2ea')[0];
+  assert(crown && bob, 'a hat is a crown and a bobble');
+  assert(Math.hypot(bob[1] - crown[1], bob[2] - crown[2]) < crown[3] * 0.1,
+    'the bobble trails ' + Math.hypot(bob[1] - crown[1], bob[2] - crown[2]).toFixed(1) +
+    ' off a crown of ' + crown[3]);
+  assert(bob[3] < crown[3] * 0.5, 'and it should be a bobble, not a second crown');
+
+  // one source for the colour, nowhere else
+  const src = fs.readFileSync(HTML, 'utf8');
+  for (const stale of ['#d34036', "'#e33'"])
+    assert(src.indexOf(stale) < 0, 'a hat colour is still hardcoded: ' + stale);
+  console.log('    (hats: ' + api.HATS.join(' ') + ' + santa ' + api.SANTA_HAT + ')');
+});
+
 test('the pram you send flying is the pram you were looking at', () => {
   const api = boot({ w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
