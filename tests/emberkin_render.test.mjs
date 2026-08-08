@@ -3371,4 +3371,160 @@ section('no speck of air is ever born visible');
   }
 }
 
+// A dead-field sweep of the whole file turned up five values the game computes
+// and never reads. Four are dead weight; this one was a player-visible gap with
+// its own comment on it. `grantCard` ends:
+//
+//     c.replaced = (CARDS[worst.id] || …).name;   // so the offer can say so
+//
+// and nothing read `c.replaced`. Driven with the deck at DECK_MAX, a three-pull
+// silver chest removed three cards and named none of them: you lose a card per
+// pull and are never told which. The note is a value because the shelf is a
+// template, which the headless suite cannot see.
+section('a pull that costs you a card says which card');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+
+  // Room in the deck: nothing is thrown away, so there is nothing to say.
+  const roomy = g.grantCard('edge');
+  eq(g.swapNote(roomy), '', 'a pull into a deck with room replaced nothing');
+
+  // …and the state has to be DIRTIED before the claim can be checked: fill the
+  // deck to its ceiling, which is the only condition under which a card goes.
+  while (g.G.deck.length < g.DECK_MAX) g.grantCard(g.CARD_IDS[g.G.deck.length % g.CARD_IDS.length]);
+  eq(g.G.deck.length, g.DECK_MAX, 'the deck is at its ceiling');
+
+  const before = g.G.deck.slice();
+  g.G.gems = 9999;
+  const got = g.openChest('silver');
+  ok(got && got.length === 3, `the chest pulled ${got && got.length}`);
+  const after = g.G.deck.slice();
+  const lost = before.filter((u) => !after.includes(u));
+
+  // The claim, by difference: as many cards left as arrived, and every one of
+  // them is named. A pull that takes something and says nothing fails here.
+  eq(lost.length, got.length, `${got.length} cards in, ${lost.length} out`);
+  for (const c of got) {
+    ok(g.swapNote(c) !== '', `the pull says what it cost (${g.swapNote(c)})`);
+    ok(/^replaced /.test(g.swapNote(c)), 'and says it in words, not as a bare name');
+  }
+
+  // The name in the note is the name of a card that actually left, not a
+  // plausible-looking string. Read out of the deck diff, not typed in here.
+  const lostNames = new Set(lost.map((u) => {
+    const o = g.G.cards.find((x) => x.u === u);
+    return o && g.CARDS[o.id] ? g.CARDS[o.id].name : null;
+  }).filter(Boolean));
+  ok(lostNames.size > 0, `something identifiable left the deck (${[...lostNames].join(', ')})`);
+  for (const c of got) {
+    ok(lostNames.has(g.swapNote(c).replace(/^replaced /, '')),
+      `and the note names a card that really went (${g.swapNote(c)})`);
+  }
+
+  // The deck did not grow: a chest with a full deck is a swap, not an add.
+  eq(after.length, g.DECK_MAX, 'the deck is still at its ceiling');
+
+  // A card whose definition has gone still gets a sentence rather than nothing —
+  // that branch is the one an old save walks into.
+  const orphan = { u: 999, id: 'no_such_card', replaced: 'an old card' };
+  eq(g.swapNote(orphan), 'replaced an old card', 'a card from an old save is still named');
+
+  // Wiring: the shelf spends the value. The panel is a template, so this is the
+  // one thing here that has to be asked of the source.
+  ok(/swapNote\(c\)/.test(SRC), 'the pulled shelf asks for the note');
+  ok(/small class="swapped"/.test(SRC), 'and gives it a line of its own');
+  ok(/\.item \.info small\.swapped\{/.test(SRC), 'which is styled apart from the description');
+}
+
+// 179 found `G.screen.prev` written by openScreen and read by nothing. Driven
+// rather than read: every row of the pause menu — Kin, Dex, Bag, Box, Deck —
+// recorded prev='menu' and then dropped you into the world when you pressed
+// back, so looking at two of them meant opening the menu twice. Meanwhile the
+// profile screen, opened with an explicit `back: 'party'`, returned properly:
+// the rule was written and applied to exactly one case.
+section('back out of a menu row goes back to the menu');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const tap = (k) => { g.pressKey(k); g.frame(.016); g.releaseKey(k); g.frame(.016); };
+  const fresh = () => {
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 8), g.mkMon('pyrelynx', 9)];
+    g.G.bag = { salve: 2, orb: 3 };
+    g.G.box = [g.mkMon('brookite', 5)];
+  };
+
+  // The rows are read OUT of the menu the game builds, not listed here — a row
+  // added or renamed must not quietly fall outside this net.
+  fresh();
+  tap('b');
+  ok(g.G.menu && g.G.mode === 'menu', 'the pause menu opens');
+  const rows = g.G.menu.rows.map((r) => r.label);
+  const opens = [];
+  for (let row = 0; row < rows.length; row++) {
+    fresh();
+    tap('b');
+    for (let i = 0; i < row; i++) tap('down');
+    eq(g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
+    tap('a');
+    if (!g.G.screen) continue;                       // Sound, Save, Close, Fullscreen
+    opens.push(rows[row]);
+    eq(g.G.screen.prev, 'menu', `${rows[row]} remembers it came from the menu`);
+    eq(g.G.screen.prevRow, row, 'and which row of it');
+    tap('b');
+    ok(!g.G.screen, `${rows[row]} closes`);
+    ok(!!g.G.menu, `and puts the menu back (${rows[row]})`);
+    eq(g.G.mode, 'menu', 'in menu mode, not out in the grass');
+    eq(g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
+    // …and one more back is the way out, or the menu is a trap.
+    tap('b');
+    ok(!g.G.menu && g.G.mode === 'world', `and a second back leaves (${rows[row]})`);
+  }
+  ok(opens.length >= 5, `every row that opens a screen was walked (${opens.join(', ')})`);
+
+  // Two screens in one visit — the whole point of the change.
+  fresh();
+  tap('b');
+  const seen = [];
+  for (const row of [0, 2]) {
+    while (g.G.menu.i > row) tap('up');
+    while (g.G.menu.i < row) tap('down');
+    tap('a');
+    if (g.G.screen) seen.push(g.G.screen.kind);
+    tap('b');
+  }
+  eq(seen.length, 2, `two screens visited without reopening the menu (${seen.join(', ')})`);
+  ok(!!g.G.menu, 'and the menu is still up at the end of it');
+
+  // Nothing else moved. A screen opened from the world still leaves to the
+  // world, and one opened in a fight still leaves to the fight.
+  fresh();
+  g.openScreen('party');
+  eq(g.G.screen.prev, 'world', 'a screen opened from the world remembers the world');
+  g.closeScreen();
+  eq(g.G.mode, 'world', 'and goes back to it');
+  ok(!g.G.menu, 'without conjuring a menu that was never open');
+
+  fresh();
+  g.startBattle({ foe: g.mkMon('kindlark', 8), wild: true });
+  g.openScreen('bag');
+  eq(g.G.screen.prev, 'battle', 'a bag opened in a fight remembers the fight');
+  g.closeScreen();
+  eq(g.G.mode, 'battle', 'and goes back to it');
+
+  // The path that already worked still works: a profile named its own way back
+  // before this pass and must not have been overtaken by prev.
+  fresh();
+  g.openScreen('party');
+  g.openScreen('profile', { mon: g.G.party[0], back: 'party' });
+  g.closeScreen();
+  ok(g.G.screen && g.G.screen.kind === 'party', 'a profile still returns to the list it names');
+}
+
 done('emberkin_render');

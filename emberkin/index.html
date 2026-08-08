@@ -715,6 +715,9 @@
   .item .info{ flex:1 1 6em; min-width:0; }
   .item .info b{ display:block; font-size:.8em; }
   .item .info small{ display:block; color:var(--dim); font-size:.66em; line-height:1.25; }
+  /* What a pull cost you. Gold because it is a consequence, not a description —
+     the line above it says what the card does, this says what it took. */
+  .item .info small.swapped{ color:var(--gold); opacity:.9; margin-top:.15em; }
   .item .tally{ font-size:.86em; color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums; }
   .item .tally small{ font-size:.6em; color:var(--dim); margin-left:.15em; }
   .item.sel{ box-shadow:0 0 0 2px var(--gold), 0 4px 0 rgba(0,0,0,.5); }
@@ -4165,6 +4168,22 @@ function grantCard(id, ask) {
   c.replaced = (CARDS[worst.id] || { name: 'an old card' }).name;   // so the offer can say so
   return c;
 }
+
+/**
+ * What a pull cost you, if it cost anything.
+ *
+ * `c.replaced` was written on the line above and read by nothing: a full deck
+ * quietly threw a card out for every card a chest gave you, the code recorded
+ * exactly which one so it could be said, and then no screen said it. Driven
+ * with the deck at its ceiling, a three-pull silver chest removed three cards
+ * and named none of them.
+ *
+ * The text is a value because the panel is a template — HTML the headless
+ * suite cannot see. Only the pull that did the replacing carries it: the field
+ * stays on the card for ever, so this belongs on the "You pulled" shelf and
+ * nowhere a card is merely listed.
+ */
+const swapNote = (c) => (c && c.replaced ? `replaced ${c.replaced}` : '');
 
 // ---- chests ------------------------------------------------------------
 // Costs climb steeply; odds shift toward the top of the table as they do.
@@ -8439,9 +8458,11 @@ function nextAim() {
 }
 
 // ---- world main menu ---------------------------------------------------
-function openMainMenu() {
+function openMainMenu(opt = {}) {
   G.mode = 'menu';
-  playCue('menu');
+  // Coming back from a screen has already played its own note; a second one on
+  // top of it is the menu announcing itself for something you did not do.
+  if (!opt.quiet) playCue('menu');
   openMenu('mainmenu', [
     { label: 'Kin', sub: partyTally(), fn: () => openScreen('party') },
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
@@ -8452,7 +8473,7 @@ function openMainMenu() {
     { label: 'Fullscreen', fn: () => { toggleFullscreen(); closeWorldMenu(); } },
     { label: 'Save', fn: () => { setToast(saveGame() ? 'Journey saved.' : 'Could not save.'); } },
     { label: 'Close', fn: closeWorldMenu },
-  ], { cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems<span class="aim">${nextAim()}</span>` });
+  ], { i: opt.i || 0, cancel: closeWorldMenu, title: `${G.map.name} · ${G.money} shards · ${G.gems} gems<span class="aim">${nextAim()}</span>` });
 }
 function closeWorldMenu() { closeMenu(); G.mode = 'world'; }
 
@@ -9871,6 +9892,13 @@ function openBattleActions() {
 
 // ---- full screens ------------------------------------------------------
 function openScreen(kind, opt = {}) {
+  // Where you came from, taken before closeMenu throws it away. `prev` was
+  // already being recorded here and read by nothing: every row of the pause
+  // menu — Kin, Dex, Bag, Box, Deck — dropped you into the grass when you
+  // pressed back, so checking two of them meant opening the menu twice. The
+  // row goes with it, because coming back to the menu with the cursor at the
+  // top is only most of the way back.
+  const from = G.mode, fromRow = G.menu ? G.menu.i : 0;
   closeMenu();
   // When you must send someone out, start the cursor on someone who can go.
   // On a profile, start it on the way out: confirm should always mean "that
@@ -9888,7 +9916,7 @@ function openScreen(kind, opt = {}) {
   const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive))
     : kind === 'profile' ? 1
     : kind === 'bag' && !G.battle ? bagStart() : 0;
-  G.screen = { kind, i, sel: null, opt, prev: G.mode };
+  G.screen = { kind, i, sel: null, opt, prev: from, prevRow: fromRow };
   G.mode = 'screen';
   playCue(kind === 'reward' ? 'level' : 'menu');
   renderScreen();
@@ -9954,6 +9982,9 @@ function closeScreen() {
   G.screen = null;
   if (!HEADLESS) show(els.screen, false);
   if (G.battle) { G.mode = 'battle'; if (!G.battle.over) renderHand(); }
+  // Back to the menu you came out of, on the row you came out of. Spending
+  // `prev`, which openScreen has always written and nothing has ever read.
+  else if (s.prev === 'menu' && G.map) openMainMenu({ i: s.prevRow || 0, quiet: true });
   else { G.mode = 'world'; }
 }
 
@@ -10387,7 +10418,7 @@ function renderScreen() {
         return `<div class="item panel" style="--tint:${RARITY[def.r]}">
           <canvas width="20" height="20" data-card="${c.id}"></canvas>
           <div class="info"><b style="color:${RARITY[def.r]}">${def.name}</b>
-          <small>${cardText(c)}</small></div>
+          <small>${cardText(c)}</small>${swapNote(c) ? `<small class="swapped">${swapNote(c)}</small>` : ''}</div>
           <div class="tally">${def.cost}<small>en</small></div></div>`;
       }).join('') + '</div>';
     }
@@ -12124,7 +12155,7 @@ if (typeof window !== 'undefined') {
     RALLY_SHARE, RALLY_CAP, resolveFoeDown,
     cardValue, cardText, cardCost, cardName, attackBonus, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,
     CARDS, CARD_IDS, CHESTS, CHEST_IDS, RARITY, RARITY_ORDER, STARTER_DECK, DECK_MIN, DECK_MAX, MIGHT_CAP,
-    openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS,
+    openChest, rollRarity, cardsOfRarity, rollReward, rewardOdds, REWARD_ODDS, REWARD_PICKS, swapNote,
     gemReward, moveCost, clearMods, freshMods, hurtMine, toughen, untoughen, FOE_HP_MUL, EFF_DMG,
     WILD_DMG_MUL, TRAINER_HP_MUL, PLANS, planScale, playableNow, aimPlayable,
     CORNER_AT, CORNER_EDGE, CORNER_RESIST, CORNER_PLAIN, cornerAt, resistedBy,
