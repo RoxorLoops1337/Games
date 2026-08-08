@@ -377,6 +377,29 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+69. **One collection, three screens, three names for it** (pass 158). Asked of
+    the SET rather than of any one screen, which is the only way this was ever
+    going to be visible. Every inventory in the game heads itself
+    `Name — count`: `Dex — 13 caught / 16 seen / 19`, `Box — 26`,
+    `Deck — 8/12 (min 5)`, `Collection — 4 spare`, `Bag — 500 shards`,
+    `Gem chests — 260 gems`. The party broke that pattern in both of the ways
+    available at once:
+    - the pause menu said `Kin  6/6`,
+    - the party screen said `Your kin` — **a different noun and no number**,
+    - and the box screen, listing the SAME six creatures, headed them
+      `Party — 6/6`.
+    The one you open most was the odd one out, and `6/6` is the fact that
+    matters — a full party is why a new catch goes to the box instead.
+    `kin` is the game's own word (the battle button, `Choose your kin`, the card
+    text); `Party` was the outlier. One `kinHeading()` now writes it for both
+    screens and the menu takes its count from the same `partyTally()`.
+    On the way: the cap was a bare `6` in four places, one of which draws the
+    EMPTY SLOTS and one of which decides whether a catch joins you — two numbers
+    that must agree and had no reason to. `PARTY_MAX` now.
+    **The screens that are NOT in this family are prompts** — "Choose your kin",
+    "What comes out?", "Take a card" — which ask a question rather than report
+    an inventory. That is the property that exempts them, and the net says so.
+
 68. **The same kin, two screens, two descriptions — and one of them dropped the
     thing you came to find out** (pass 157). Found by laying the world screens
     out side by side, which had never been done. The dex draws types as coloured

@@ -6499,7 +6499,7 @@ function addCaught(mon) {
   G.caught++;
   mon.stages = { atk: 0, def: 0, spd: 0 };
   untoughen(mon);
-  if (G.party.length < 6) { G.party.push(mon); return 'party'; }
+  if (G.party.length < PARTY_MAX) { G.party.push(mon); return 'party'; }
   G.box.push(mon); return 'box';
 }
 
@@ -8137,7 +8137,7 @@ function openMainMenu() {
   G.mode = 'menu';
   playCue('menu');
   openMenu('mainmenu', [
-    { label: 'Kin', sub: `${G.party.length}/6`, fn: () => openScreen('party') },
+    { label: 'Kin', sub: partyTally(), fn: () => openScreen('party') },
     { label: 'Dex', sub: `${dexCount(2)}/${DEX_ORDER.length}`, fn: () => openScreen('dex') },
     { label: 'Bag', fn: () => openScreen('bag') },
     { label: 'Box', sub: '' + G.box.length, fn: () => openScreen('box') },
@@ -9524,6 +9524,24 @@ const kinSub = (m) => `<div class="kinsub"><span class="lv">Lv${m.lvl}</span>`
   + `${typeChips(m.types)}${m.status ? statusChip(m.status) : ''}</div>`;
 
 /**
+ * How many kin you are carrying, and what they are called, in one place.
+ *
+ * Three screens named the same set three different ways: the pause menu said
+ * `Kin  6/6`, the party screen said `Your kin` with no number on it at all, and
+ * the box screen — listing the SAME six creatures — headed them `Party — 6/6`.
+ * Every other collection in the game reads `Name — count`: `Dex — 13 caught /
+ * 16 seen / 19`, `Box — 26`, `Deck — 8/12 (min 5)`, `Bag — 500 shards`. The one
+ * you open most was the one that broke the pattern, and it broke it in the two
+ * ways available: a different noun and a missing number.
+ *
+ * `kin` is the game's own word — the battle button, `Choose your kin`, every
+ * card that mentions one. `Party` was the outlier.
+ */
+const PARTY_MAX = 6;
+const partyTally = () => `${G.party.length}/${PARTY_MAX}`;
+const kinHeading = () => `Kin — ${partyTally()}`;
+
+/**
  * A kin's page: portrait, stats and moves.
  *
  * Numbers alone make you do arithmetic to answer "is this one fast?". A bar
@@ -9625,7 +9643,7 @@ function renderScreen() {
     // Roster on the left, whoever is picked on the right. A row of equal cards
     // has no hierarchy: there is nothing on it saying which one you are looking
     // at, so every card has to carry every fact and none of them can be big.
-    html += `<h2>Your kin</h2><div class="kinview">`;
+    html += `<h2>${kinHeading()}</h2><div class="kinview">`;
     html += `<div class="kinlist">` + G.party.map((m, i) => {
       const f = m.hp / m.max;
       return `<div class="kinrow panel ${i === s.i ? 'sel' : ''} ${m.hp <= 0 ? 'down' : ''}" data-i="${i}">
@@ -9687,9 +9705,9 @@ function renderScreen() {
     // here to find out. Photographing the box for the first time is what showed
     // it; a full party had always been what got looked at in a test.
     const slot = () => '<div class="card panel slot"><span>empty</span></div>';
-    html += `<h2>Party — ${G.party.length}/6</h2><div class="cards slim">`
+    html += `<h2>${kinHeading()}</h2><div class="cards slim">`
       + G.party.map((m, i) => monCard(m, i)).join('')
-      + Array.from({ length: Math.max(0, 6 - G.party.length) }, slot).join('') + '</div>';
+      + Array.from({ length: Math.max(0, PARTY_MAX - G.party.length) }, slot).join('') + '</div>';
     html += `<h2 style="margin-top:12px">Box — ${G.box.length}</h2>`;
     html += G.box.length ? `<div class="cards slim">` + G.box.map((m, i) => monCard(m, G.party.length + i)).join('') + '</div>'
       : '<p style="color:var(--dim)">Nothing stored yet.</p>';
@@ -10018,7 +10036,7 @@ function boxSelect(s) {
   } else {
     const m = G.box[boxIdx];
     if (!m) return;
-    if (G.party.length < 6) {
+    if (G.party.length < PARTY_MAX) {
       G.box.splice(boxIdx, 1);
       G.party.push(m);
       setToast(`${dispName(m)} joins you.`);
@@ -11531,7 +11549,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub,
+    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
