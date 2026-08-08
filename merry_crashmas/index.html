@@ -691,6 +691,18 @@ const THEMES = {
               awning:'#b8302a', awning2:'#f0e6d2', wood:'#513a26', wood2:'#63472e',
               tree:['#173f2a','#1f5236','#286542','#33794f'], light:'255,170,90',
               snow:150, fog:0.14, dark:0.72, sky:'#080e1c' },
+  /* Every one of the six above is somewhere between dusk and midnight —
+     `dark` runs 0.42 to 0.78 and never lower — so twenty-one markets all
+     happen after sunset and the only thing that changes is how far after.
+     This one happens before it: a market opening in the cold hour, lamps
+     still on and doing almost nothing, snow gone lilac in the shadow and
+     gold where the light reaches it. It is the one bright market in the
+     game, which is the point — a round has to be able to look unlike the
+     others at a glance. */
+  dawn:     { name:'FIRST LIGHT',  ground:'#dfd9e8', floor:'186,178,204', ink:'#2a2440',
+              awning:'#c85a3a', awning2:'#fdf3e2', wood:'#7a5a3e', wood2:'#916d4c',
+              tree:['#2c6349','#377559','#428868','#4f9c79'], light:'255,214,150',
+              snow:45, fog:0.08, dark:0.2, sky:'#2a2440' },
 };
 let TH = THEMES.dusk;
 
@@ -709,7 +721,7 @@ const LEVELS = [
     flavour:'Peak market. Peak crowd. Peak bad idea.' },
 
   /* ---- markets 7 to 21: each one designed around a single idea ---------- */
-  { name:'THE ICE RINK',         seed:7301, cars:4, rows:3, span:0.86, crowd:1.05, par:0.2438, theme:'nordic', shape:'rows',
+  { name:'THE ICE RINK',         seed:7301, cars:4, rows:3, span:0.86, crowd:1.05, par:0.2438, theme:'dawn', shape:'rows',
     feature:['rink'],
     flavour:'A sheet of ice in the middle of it. Once you are on it, you are a passenger.' },
   { name:'THE GAUNTLET',         seed:7714, cars:4, rows:3, span:0.90, crowd:1.10, par:0.1138, theme:'night', shape:'rows',
@@ -720,9 +732,9 @@ const LEVELS = [
   { name:'THE PARADE',           seed:8533, cars:4, rows:3, span:0.92, crowd:1.05, par:0.2302, theme:'dusk', shape:'rows',
     feature:['parade'],
     flavour:'A column of carollers marching across your line. Time it.' },
-  { name:'NARROW ALLEYS',        seed:8946, cars:5, rows:5, span:0.84, crowd:1.10, par:0.2913, theme:'night', shape:'rows',
+  { name:'NARROW ALLEYS',        seed:8946, cars:5, rows:5, span:0.84, crowd:1.10, par:0.2913, theme:'dawn', shape:'rows',
     flavour:'Five rows, no room. You will be bouncing between the stalls the whole way.' },
-  { name:'THE LONG BOULEVARD',   seed:9352, cars:3, rows:2, span:1.00, crowd:1.30, par:0.1784, theme:'dusk', shape:'rows',
+  { name:'THE LONG BOULEVARD',   seed:9352, cars:3, rows:2, span:1.00, crowd:1.30, par:0.1784, theme:'dawn', shape:'rows',
     flavour:'One aisle, end to end. Nothing to hit but people, if you keep it straight.' },
   { name:'FROZEN LAKE',          seed:9765, cars:4, rows:2, span:0.94, crowd:1.00, par:0.4182, theme:'blizzard', shape:'wave',
     feature:['rink', 'ramps'],
@@ -6812,6 +6824,21 @@ function darkLayer(){
   return darkCtx;
 }
 
+/* How much the added light is worth on this market.
+
+   The night wash has always scaled with `TH.dark`, and the glow added over the
+   top of it never did — a lamp put the same amount of light into the frame
+   whether it was cutting a 0.78 midnight or nothing at all. That was invisible
+   while every theme sat between 0.42 and 0.78, and the moment a bright one
+   existed the stalls blew out: solid white counters, goods gone, the glows
+   blooming into each other because there was no darkness left for them to eat.
+
+   `LIT_REF` is the darkest of the six night themes, so all six get exactly the
+   gain they had — this changes not one pixel of any market that existed before
+   it — and anything brighter gets proportionally less light thrown at it. */
+const LIT_REF = 0.42;
+const lightGain = () => clamp((TH.dark || 0.55) / LIT_REF, 0.4, 1);
+
 function drawLights(){
   const halfW = VW / cam.s / 2 + 120, halfH = VH / cam.s / 2 + 120;
   // big additive circles are the most expensive thing on screen, so only the
@@ -6886,17 +6913,21 @@ function drawLights(){
     ctx.restore();
   }
 
-  /* Pass two: the glow itself, added on top of the night. */
+  /* Pass two: the glow itself, added on top of the night. Scaled by how much
+     night there actually is — see `lightGain`. */
+  const gain = lightGain();
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = gain;
   for (let i = 0; i < lit; i++){
     const L = lightBuf[i], r = L.r * L.k * 1.35;
     if (glowSprite) ctx.drawImage(glowSprite, L.o.x - r, L.o.y - r, r * 2, r * 2);
     else { ctx.fillStyle = L.col; circle(L.o.x, L.o.y, L.r * L.k); ctx.fill(); }
   }
+  ctx.globalAlpha = 1;
   if (G.phase !== 'menu' && beamSprite){
     for (const s of beamSpots()){
-      ctx.globalAlpha = s.a * 0.62;
+      ctx.globalAlpha = s.a * 0.62 * gain;
       ctx.drawImage(beamSprite, s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
     }
     ctx.globalAlpha = 1;
@@ -6910,7 +6941,7 @@ function drawLights(){
   if (car.boostT > 0 && boostSprite){
     const k = clamp(car.boostT / 0.55, 0, 1);
     const br = 118 + 62 * k;
-    ctx.globalAlpha = 0.3 * k;
+    ctx.globalAlpha = 0.3 * k * gain;
     ctx.drawImage(boostSprite, car.x - br, car.y - br, br * 2, br * 2);
     ctx.globalAlpha = 1;
   }
