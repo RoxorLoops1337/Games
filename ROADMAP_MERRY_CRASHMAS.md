@@ -958,6 +958,31 @@ edit this block to name the next one.
       for it would have been asserting something untrue. Only `#9fb4cd` is
       pinned.
 
+- [x] Every pickup is found by its colour, not just by being bright. Follow-on
+      from the plough pass — I noticed at drive zoom that the plough sat under
+      a white smear where the other two sat under a green and a gold one, and
+      came back to measure it instead of guessing. Sampled out of a real
+      browser frame against bare snow: the plough's glow moved the luminance
+      **112 → 157 and the saturation 0.256 → 0.284**, which is to say not at
+      all. Its colour was `140,210,255`, a pale blue — **the snow's own hue**,
+      so adding it lifted all three channels by about the same 1.4× and the
+      only signal left was "something over there is bright". The nitro's green
+      and the star's gold both swing the hue and read as *a green one* and *a
+      gold one* from across a market. The plough wears the red off its own
+      hitch now — the single thing on a steel blade that is not steel — and the
+      ring in the light pass takes the same colour, so the light and the art
+      agree.
+  - The suite holds the measurement as an angle: a glow's colour must point
+      more than 15° away from the snow it lies on, **on every one of the seven
+      themes**, and no two pickups may point within 15° of each other. The old
+      plough blue comes out at 4°; the shipped set is nitro 16°, plough 28°,
+      star 20°.
+  - The seven-theme sweep earned its keep immediately. One of the revert
+      variants tried a violet glow, which looks obviously distinct on the six
+      night markets and lands **14° from FIRST LIGHT's lilac snow** — it would
+      have shipped looking fine and disappeared on three markets. A
+      single-theme check would have passed it.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
