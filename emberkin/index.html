@@ -762,6 +762,14 @@
      height — taller in proportion on a small stage, because the text clamps at
      11px — ran its HP figure straight under the End turn button. */
   body.tight #hudMine{ top:32%; }
+  /* While the orb is deciding, the panels step back with the world. They are
+     the layer a canvas vignette cannot touch, and on a phone the player's own
+     plate sits exactly over where the orb rests. Not hidden — a fight whose
+     state you cannot read is a different kind of wrong — and back at full by
+     the time it clicks. */
+  #hudFoe, #hudMine, #acts, #intent, #piles, #energy{ transition:opacity .3s ease; }
+  body.hushing #hudFoe, body.hushing #hudMine, body.hushing #acts,
+  body.hushing #intent, body.hushing #piles, body.hushing #energy{ opacity:.18; }
   /* The hand cannot hold four rules-text blocks at this size: at 30% of a
      310px stage the cards are 86px tall and the text clipped into its own
      rarity pip on every one of them. So a card you are not aiming at shows its
@@ -6602,6 +6610,23 @@ function orbStep(dt) {
   return true;
 }
 
+/**
+ * The beats the world holds its breath through: after the orb lands, until it
+ * resolves. Named because two layers ask the same question — the canvas dims
+ * the arena and the DOM dims the panels — and two copies of a condition are two
+ * copies that will disagree. Neither the throw nor the resolution is hushed:
+ * the arc has to be visible arriving and the answer has to be visible landing.
+ */
+const orbHush = (p) => p === 'fall' || p === 'wobble' || p === 'gap';
+
+/**
+ * How hard the orb rocks on its nth hold. The game already counts the holds and
+ * already says so afterwards — "Three shakes. You had it." — but for a long
+ * time the picture said the same thing three times over, so the two and a half
+ * seconds of dead air had nothing tightening inside it.
+ */
+const orbRock = (holds) => .58 + .36 * Math.max(0, holds - 1);
+
 const orbPhase = () => {
   const b = B();
   return b && b.orb && !b.orb.done ? b.orb.beats[b.orb.i][0] : null;
@@ -8022,6 +8047,37 @@ function drawOrb(g, myGround, foeGround) {
     g.save(); g.globalAlpha = a; g.strokeStyle = col; g.lineWidth = 1;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); g.restore();
   };
+  // How many holds have happened, counting the one being drawn. Two things
+  // need it, and both for the same reason.
+  let holds = 0;
+  if (o && phase) for (let i = 0; i <= o.i && i < o.beats.length; i++) {
+    if (o.beats[i][0] === 'wobble') holds++;
+  }
+
+  // THE HUSH. Escalating the rock made the orb louder without making the moment
+  // bigger: filmed, the wait is still two and a half seconds in which an 8px
+  // object on a 256px canvas is the only thing that moves, and everything else
+  // — the kin, the ground, the sky — carries on as if nothing were being
+  // decided. So everything that is not the orb steps back, and steps back
+  // further with each hold. It is not a fade to black; it is a frame closing
+  // in, which is what the wait has been asking for.
+  //
+  // It arrives on the fall, so the world dims as the orb lands rather than
+  // snapping dark, and it is gone by the click and the burst — those want the
+  // whole screen back at full strength, and a resolution under a vignette
+  // reads as a continuation rather than an answer.
+  if (orbHush(phase)) {
+    // Shot at the deepest hold, the first numbers put roughly half a black
+    // frame over the player's own kin — which reads as the lights going out
+    // rather than as a frame closing in, and the difference is whether you can
+    // still see who is waiting. The lit core is wide enough to hold the ground
+    // the orb is resting on, and the far corners stop well short of black.
+    const close = phase === 'fall' ? k * .38 : Math.min(.86, .38 + holds * .19);
+    const gr = g.createRadialGradient(rest.x, rest.y - 4, 22, rest.x, rest.y - 4, 152);
+    gr.addColorStop(0, 'rgba(9,6,13,0)');
+    gr.addColorStop(1, `rgba(9,6,13,${(close * .5).toFixed(3)})`);
+    g.save(); g.fillStyle = gr; g.fillRect(0, 0, VIEW_W, VIEW_H); g.restore();
+  }
 
   if (phase === 'throw' || (!phase && b.throwT > 0)) {
     const t = phase ? k : 1 - b.throwT / .6;
@@ -8052,13 +8108,21 @@ function drawOrb(g, myGround, foeGround) {
     // about a third of its own width, while the throw beside it arcs 106px and
     // the click ring opens to 44. An order of magnitude under its neighbours,
     // and the first film of it looked like a dot sitting still.
-    const w = phase === 'wobble' ? Math.sin(k * Math.PI * 2) * .95 : 0;
+    // …and the shake knows WHICH shake it is. Filmed, the wait was seventeen
+    // frames in which every wobble looked exactly like the last one, so the two
+    // and a half seconds of dead air had nothing tightening inside it. The game
+    // already counts the holds and already says so afterwards — "Three shakes.
+    // You had it." — but the picture said the same thing three times. The
+    // third rock is the one that nearly held, and now it looks like it.
+    const amp = orbRock(holds);
+    const w = phase === 'wobble' ? Math.sin(k * Math.PI * 2) * amp : 0;
     const R = 4;
     shell(rest.x + Math.sin(w) * R, rest.y + R - Math.cos(w) * R, R, w);
     // A tick of light on each swing, so the wobble reads as an effort, and a
-    // scuff under it so the ground knows the orb is working against it.
+    // scuff under it so the ground knows the orb is working against it. The
+    // light escalates with the rock for the same reason it does.
     if (phase === 'wobble') {
-      ring(rest.x, rest.y, 6 + k * 8, (1 - k) * .5, '#ffc94d');
+      ring(rest.x, rest.y, 6 + k * (6 + holds * 3), (1 - k) * (.34 + holds * .12), '#ffc94d');
       g.save();
       g.globalAlpha = Math.abs(w) * .5;
       g.fillStyle = '#2a1b2e';
@@ -8460,6 +8524,19 @@ function hpColor(f) { return f > .5 ? 'var(--hp-good)' : f > .22 ? 'var(--hp-war
 function renderHUD() {
   if (HEADLESS) return;
   const b = B();
+  // The hush reaches the panels too, and it has to: the orb rests at canvas
+  // (178, 70), and measured against the DOM that is INSIDE the player's HUD
+  // plate on a phone and two pixels above it on a desktop. Every bit of work
+  // on this beat — the escalating rock, the frame closing in — was happening
+  // behind a health bar on the layout most people will play on. A canvas
+  // vignette cannot dim a DOM panel; only the panel can.
+  //
+  // They fade rather than vanish, because a fight you cannot see the state of
+  // is a different kind of wrong, and they are back by the click.
+  if (!HEADLESS) {
+    const held = orbPhase();
+    document.body.classList.toggle('hushing', orbHush(held));
+  }
   if (!b) { show(els.hudFoe, false); show(els.hudMine, false); return; }
   const box = (m, disp, mine) => {
     const f = clamp(disp / m.max, 0, 1);
@@ -11694,7 +11771,7 @@ if (typeof window !== 'undefined') {
     ART_CREATURES, ART_TILES, ART_ACTORS, ART_CARDS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf, countOf,
     startBattle, foeChoose, captureChance, tryCatch, addCaught, readIntent,
-    orbBeats, orbStep, orbPhase, commitNick, ORB, dispName,
+    orbBeats, orbStep, orbPhase, orbHush, orbRock, commitNick, ORB, dispName,
     playCard, endTurn, doAction, drawCards, startPlayerTurn, buildDeck, swapKinCards,
     RALLY_SHARE, RALLY_CAP, resolveFoeDown,
     cardValue, cardText, cardCost, cardName, attackBonus, mkCard, grantCard, ownedCard, deckCards, growCap, growCard,

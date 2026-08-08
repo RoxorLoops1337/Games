@@ -822,6 +822,79 @@ section('a phone is driven with a thumb, not a pointer');
     'the fight\'s action row moves up by what it grew, rather than into the panel below it');
 }
 
+section('the wait before a catch resolves has something tightening inside it');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+
+  // Filmed, the wait was seventeen frames in which every wobble looked exactly
+  // like the last one. The game already counts the holds and already says so
+  // afterwards — "Three shakes. You had it." — so the picture agreeing with the
+  // text is the claim, and it is a claim about a number, not about a drawing.
+  const rock = [1, 2, 3].map((n) => g.orbRock(n));
+  ok(rock.every((r, i) => i === 0 || r > rock[i - 1]),
+    `each hold rocks harder than the last (${rock.map((r) => r.toFixed(2)).join(' → ')})`);
+  ok(rock[0] > 0, 'and the first one still moves');
+
+  // The hush covers the waiting and NOTHING else. The throw has to be visible
+  // arriving — it is the only part the player caused — and the resolution has
+  // to be visible landing, because an answer delivered under a vignette reads
+  // as a continuation rather than an answer.
+  const beats = g.orbBeats(3, true).map((b) => b[0]);
+  eq(beats[0], 'throw', 'a throw opens with the throw');
+  eq(beats[beats.length - 1], 'click', 'and a caught one ends on the click');
+  ok(!g.orbHush('throw') && !g.orbHush('suck'), 'the arc is not hushed');
+  ok(!g.orbHush('click') && !g.orbHush('burst'), 'and neither is the answer');
+  const held = beats.filter((p) => g.orbHush(p));
+  eq(held.length, beats.length - 3,
+    `everything between them is (${held.length} of ${beats.length} beats — all but throw, suck and click)`);
+
+  // …and one condition, not two. The canvas dims the arena and the DOM dims the
+  // panels off the same question; written out twice they would drift, and the
+  // drift would be a frame where the world is dark and the panels are not.
+  // Counting inline copies of the condition was the first attempt and it was a
+  // bad net: it also matched `inOrb`, which asks a DIFFERENT question — is the
+  // creature inside the orb, which stays true through the click. A net that
+  // cannot tell two conditions apart is naming markup rather than the claim.
+  // What is true and worth holding is that both layers CALL the named one.
+  const calls = (SRC.match(/orbHush\(/g) || []).length;
+  ok(calls >= 2, `and both layers call it rather than restating it (${calls} sites)`);
+
+  // Every beat of a throw draws. The hush is a radial gradient and the rock is
+  // a transform, and neither had ever been driven by a suite — a throw that
+  // threw would have shipped and only shown up as a black screen mid-catch.
+  const b = (() => {
+    g.G.mapId = 'route_one';
+    g.startBattle({ foe: g.mkMon('dewdrip', 6), wild: true });
+    const bb = g.B(); bb.foe.hp = 2; g.G.bag.bloomorb = 5; g.G.battleMsg = null;
+    // The throw is a DICE ROLL. `shot.mjs` pins it so two films of the same
+    // moment are comparable; this suite did not, and two runs in fourteen came
+    // back "through its beats (throw, suck, fall, burst)" — a real zero-shake
+    // break, correctly played, that simply never reaches the beats being
+    // tested. A flaky net is worse than no net: it teaches you to re-run.
+    const roll = Math.random;
+    Math.random = () => .001;                 // three holds and a click
+    try { g.submitLog(g.doAction({ kind: 'item', id: 'bloomorb', target: 'foe' })); }
+    finally { Math.random = roll; }
+    return bb;
+  })();
+  // `b.orb` does not exist yet: `tryCatch` leaves an `orbPlan`, and the log
+  // playback turns it into a live throw. Asserting on it straight after
+  // `submitLog` tests the wrong instant.
+  for (let i = 0; i < 200 && !b.orb; i++) { g.step(.02); g.draw(); }
+  ok(!!b.orb, 'a throw is playing');
+  const seen = new Set();
+  let frames = 0;
+  for (let i = 0; i < 400 && b.orb && !b.orb.done; i++) {
+    const p = g.orbPhase();
+    if (p) seen.add(p);
+    g.step(.02); g.draw(); frames++;
+  }
+  ok(frames > 20, `and it was driven frame by frame (${frames} frames)`);
+  ok(seen.has('wobble'), `through its beats (${[...seen].join(', ')})`);
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
