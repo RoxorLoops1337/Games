@@ -377,6 +377,43 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+68. **The same kin, two screens, two descriptions — and one of them dropped the
+    thing you came to find out** (pass 157). Found by laying the world screens
+    out side by side, which had never been done. The dex draws types as coloured
+    chips and so does the party stat block and the party list row; the BOX card
+    printed `Lv26 Verdant/Gloom` in plain grey text. Same fact, two idioms.
+    Worse than cosmetic: the box row also carried **no status chip at all**, so
+    a kin with BURN on it looked exactly like a healthy one — on the screen you
+    stand in to decide who to bring, which is the one place that matters.
+    Found all the readers first: eight sites call `typeChips`, and only two
+    spelled a type out. One `kinSub(m)` now writes the list line for both rows.
+    **The other plain-text reader was left alone on purpose** — the forced-switch
+    prompt is a SENTENCE about the foe out there ("Bramblor is out there —
+    Lv25 Verdant/Gloom") and chips inside prose read as a rash. That is the
+    property that exempts it: it is not a list row, and the net says so.
+
+    **The picture disagreed with me twice before it agreed.** Chips are wider
+    than the text they replaced, and the CSS comment above the old rule warned
+    that at slim width there is only ~86px beside a 40px sprite:
+    - *First try* — chips at full size. Dual types stacked, so those cards ran a
+      line taller than their neighbours.
+    - *Second try* — shrink the chip so a dual type fits inline. **Worse.** Now
+      SHORT names fit level+chip on one line and long ones did not: three
+      different bar heights in one row of three cards, two of them the same
+      species at different levels.
+    - *Third* — stop letting it flow. `flex-basis:100%` on the level, so it
+      takes a whole line always and the chips share the next one. Every card in
+      the grid is the same shape whatever is on it.
+    **A layout that depends on how long a name happens to be is not a layout.**
+    Only the third of these was shippable and only the pictures could say which.
+
+    One more, on a pre-existing net: it asserted the exact markup
+    (`<small class="meta"><span>Lv…`) rather than the claim it was written for,
+    which was that the level and the types stay separable units so a separator
+    cannot be stranded. The claim survived this change; the spelling did not.
+    Rewritten to assert the claim. **A net that names the markup fails when the
+    markup changes for a good reason, and passes when it changes for a bad one.**
+
 67. **A tool that cannot fail is not reporting on anything** (pass 156). Three
     scenes in one sitting had handed back a photograph of the room a beat
     happens in with no beat in it — and every one was reported as a successful
