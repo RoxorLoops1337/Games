@@ -1843,4 +1843,56 @@ section('the telegraph finishes its own question');
   ok(/#intent b\{ color:var\(--hp-bad\); \}/.test(SRC), 'the name was already red, which is why the frame changes');
 }
 
+// The forced switch: your kin is down, the fight is still running, and the
+// screen asks you to pick somebody to send out — while covering the arena. The
+// foe's name, level and types were behind it at the exact moment they decide
+// everything, and the move list printed damage computed against a DUMMY WITH NO
+// TYPES. Right in the town menu, exactly wrong here.
+section('the switch screen knows who you are choosing against');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null;
+  const wet = g.mkMon('brookite', 22);          // Tide, into Verdant/Gloom
+  const hot = g.mkMon('magmane', 30);           // Ember, into the same
+  const swing = (m) => m.moves.find((s) => g.MOVES[s.id].pow).id;
+
+  // Out of a fight there is nobody to aim at, and the neutral figure stands.
+  eq(g.moveVersusFoe(wet, swing(wet)), null, 'out of a fight the reading is refused');
+  ok(g.moveDamageNeutral(wet, swing(wet)) > 0, 'and the foe-agnostic number is still there for the town menu');
+
+  g.G.party = [wet];
+  g.startBattle({ foe: g.mkMon('bramblor', 25), wild: true });
+
+  const a = g.moveVersusFoe(wet, swing(wet));
+  const b2 = g.moveVersusFoe(hot, swing(hot));
+  ok(a && b2, 'in a fight both readings resolve');
+  eq(a.eff, .5, 'Tide into Verdant is resisted');
+  eq(b2.eff, 2, 'and Ember doubles');
+  ok(a.dmg < g.moveDamageNeutral(wet, swing(wet)),
+    `the real number is lower than the neutral one (${a.dmg} vs ${g.moveDamageNeutral(wet, swing(wet))})`);
+  eq(g.EFF_MARK[String(a.eff)].tag, 'RESISTED', 'and it is labelled');
+  eq(g.EFF_MARK[String(b2.eff)].tag, 'STRONG', 'both ways');
+  ok(!g.EFF_MARK['1'], 'a neutral hit is not labelled at all — a mark on everything marks nothing');
+
+  // It reads the kin being ASKED ABOUT, not whoever happens to be out. The
+  // whole point is choosing a replacement while somebody else is on the field.
+  ok(g.moveVersusFoe(hot, swing(hot)).dmg !== g.moveVersusFoe(wet, swing(wet)).dmg,
+    'and it answers for the kin you are looking at, not the one on the field');
+
+  // A move that cannot land at all reads as nothing rather than as 1.
+  eq(g.EFF_MARK['0'].tag, 'NOTHING', 'an immune matchup has its own mark');
+
+  // Source nets: renderScreen returns early when HEADLESS, so the prompt and
+  // the marks have to be asserted here.
+  ok(/Choose who steps up\.\$\{foe/.test(SRC), 'the prompt names what is out there');
+  ok(/Lv\$\{foe\.lvl\} \$\{foe\.types\.join\('\/'\)\}/.test(SRC), 'with its level and its types');
+  ok(/const vs = mv\.pow \? moveVersusFoe\(m, slot\.id\) : null;/.test(SRC),
+    'and the move list asks for the real reading');
+  ok(/\.movecard\.eff-good\{ border-left-color:var\(--hp-good\)/.test(SRC),
+    'a strong move is marked on the card, not only in the text');
+}
+
 done('emberkin_render');
