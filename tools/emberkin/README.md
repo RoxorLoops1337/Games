@@ -377,6 +377,68 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+79. **A wind-up that never wound up** (pass 168). The evolution, filmed. And the
+    thing worth carrying out of this one is that **the eye could not have called
+    it** — the fault was in the arithmetic of a rotation, and it took a number.
+
+    The wheel behind the creature is twelve spokes with a comment that says
+    "turning behind it, faster the closer it gets". It rotated by
+    `G.t * (.35 + heat * 2.6)` — **a product of absolute time and a rate that
+    changes**, which is not the angle a thing turning at that rate would be at.
+    The derivative of `t·r(t)` carries a `t·r'(t)` term, so every time the rate
+    moved, the wheel teleported.
+
+    Driven headlessly and differenced frame by frame:
+
+        phase     vel first -> last     min      max   reverses?
+        hold          0.4 ->     1.6                      no
+        build         1.0 ->     6.0                      no
+        burst      -424.6 ->    -3.0  -424.6              YES
+        settle       -3.0 ->     9.7    -3.0      9.7     YES
+        quiet        -0.3 ->    -0.3                      YES
+
+    **Three sign flips in four and a half seconds**, where the intent was one
+    wind-up and one release. The 425 rad/s reversal at the burst only goes
+    unnoticed because the white-out happens to cover it — luck, not design — and
+    the settle's reversal is in plain view for a full second. Integrating the
+    angle in `evoStep`, where `dt` is, gives 0.4 → 2.9 climbing, one flip at the
+    moment the creature changes, and −3.0 → −0.3 unwinding. Peak 425 → 3.0.
+
+    **The direction flip survives, and works properly for the first time.** With
+    an accumulated angle, flipping the sign of the RATE reverses the spin
+    without moving the wheel. Flipping the sign of an ANGLE teleports it. That
+    was the whole bug in one sentence.
+
+    **Anything that turns and is drawn from `t * rate` has this bug** the moment
+    `rate` stops being constant — so I grepped every `rotate(` in the game
+    rather than leaving that as a remark. There is one other spoked wheel, on
+    the win flourish, and it turns at `a.t * .5`: a CONSTANT rate, where the
+    product is exactly the integral and there is nothing to fix. Two wheels, one
+    bug, and the difference between them is the whole rule.
+
+    **Then the scene found a real one by misbehaving.** `evolving` enters a map
+    and evolves in the same breath, so every frame of the first film carried a
+    ROUTE ONE plaque in the corner. Scene artefact — and then both: the plaque
+    really was drawing over the evolution. The call site already said *"a plaque
+    has no business sitting on top of a catch or a wipe"* and then named one
+    screen-taker (`!G.battle`). An evolution replaces the world exactly as a
+    battle does. **A rule written down and then applied to one of its cases.**
+    Latent rather than live — a level comes from a fight, and a fight cannot
+    start and finish inside the plaque's two seconds — but one token, against an
+    intent already spelled out on the line above it.
+
+    **Three scenes for one moment, and that is correct.** `evolve` drives a real
+    battle first, so nineteen frames of any film of it are the fight and the
+    change falls off the end of the strip. `evolve2` seeks to the last breath of
+    `build` for a still. Neither can film the arc, so `evolving` starts the beat
+    from nothing. One scene per question, not one scene per subject.
+
+    And the question that paid off in 167 — measure the subject against the DOM
+    — came back **genuinely clean** here: five probe points across the creature,
+    both window sizes, nothing but `#view`. Worth reporting as a number rather
+    than as silence, because "I checked and it was fine" and "I forgot to check"
+    read identically in a commit.
+
 78. **The moment was happening behind a health bar** (pass 167). Two surveys
     clean, so: stop surveying, film something. The catch — 24 frames at 150ms —
     and **seventeen of them are the wait**, which is the point of a catch. What

@@ -453,6 +453,29 @@ const SCENES = {
   // its CLOCK is wound forward to the end of `build`. That is a fast-forward of
   // real state, not hand-assembled state — the distinction that cost two passes
   // on the trainer ambush.
+  // The WHOLE beat, from nothing: hold .9 + build 1.5 + burst .45 + settle 1.0
+  // + quiet .6 = 4.45s. `evolve` drives a real battle first, so nineteen frames
+  // of any film of it are the fight and the change falls off the end of the
+  // strip; `evolve2` seeks to the last breath of `build` for a still. Neither
+  // can film the arc. Three questions, three scenes.
+  evolving: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.G.mode = 'world'; EK.enterMap('route_one', 9, 10, 'down');
+      const m = EK.mkMon('cindercub', 15);
+      EK.G.party = [m];
+      m.lvl = 16; EK.refresh(m);
+      EK.runEvolution(m);
+      if (!EK.G.evoAnim) throw new Error('no evoAnim — runEvolution did not start the beat');
+      // `enterMap` raises the place plaque, and this scene evolves in the same
+      // breath — so every frame of the first film carried a ROUTE ONE card in
+      // the corner. That was the scene, not the game… and then it was both: the
+      // plaque was genuinely drawing over the evolution. The game is fixed; the
+      // scene still has no business photographing a plaque it summoned itself.
+      EK.G.place = null;
+    },
+  },
   evolve2: {
     w: 760, h: 900,
     go: (EK) => {
