@@ -119,6 +119,12 @@ const MUTANTS = [
   { name: 'phone: the list shifts under an in-view selection', aims: ['the list follows the cursor'],
     find: '  if (sel.top < box.scrollTop) return Math.max(0, sel.top);\n  const bottom', to: '  return Math.max(0, sel.top);\n  const bottom' },
 
+  { name: 'grid: counts the document, not the cursor row', aims: ['the cursor moves by the grid it is in'],
+    find: "  const scope = cur && cur.parentElement && cur.parentElement.querySelector(SEL)\n    ? cur.parentElement : els.screen;",
+    to: '  const scope = els.screen;' },
+  { name: 'grid: colsFrom counts every cell', aims: ['the cursor moves by the grid it is in'],
+    find: '  for (const t of tops) { if (t !== top) break; n++; }', to: '  for (const t of tops) { void t; n++; }' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
