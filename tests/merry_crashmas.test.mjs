@@ -95,7 +95,7 @@ const EXPOSE = `__out.api = {
   getFootI: () => footI,
   getBakeCount: () => bakeCount,
   darkInfo: () => ({ w: darkW, h: darkH, key: darkKey, cv: darkCv }),
-  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, BAG_COLS,
+  COATS, ELDER_COATS, KID_COATS, SKIN, HATS, BAG_COLS, PRAM_HOOD, drawPerson, camScale,
   C2: { WAIL_VOICES, WAIL_LEN, WAIL_RANGE },
   // tone/noise are function declarations in the game's scope, so the suite can
   // swap them out and count what a run actually asks the mixer for
@@ -5782,6 +5782,94 @@ test('a car in the air draws its shadow apart from itself', () => {
 });
 
 /* --------------------------------------------------------- the pram --- */
+
+/* The one silhouette a goal names — "send 3 prams flying" — and the one thing
+   `lodAlways` keeps out of the batch precisely because it has to read before
+   you hit it. It read as a phone: a rounded rectangle, a pale rectangle inside
+   it, and (only at the replay tier) two near-black circles drawn *inside* the
+   dark body where nothing could see them. */
+/* Exact, not roomy. A pram is never batched, so at launch speed ninety-odd of
+   them are in shot and one more fill each is two hundred off the budget — the
+   ceiling caught exactly that when the handle bar was first drawn as a fill.
+   Adding one here is meant to be a deliberate act, so the number is the number. */
+const PRAM_MID_FILLS = 5;
+test('a pushed pram reads as a pram, at the tier that has to swerve for it', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100;
+  const shot = (tz) => {
+    api.people.length = 0;
+    const p = api.addPerson(api.car.x + 40, api.car.y, 'parent');
+    p.ang = -Math.PI / 2; p.wt = 0.4; p.bob = 1;
+    api.cam.x = p.x; api.cam.y = p.y; api.cam.tz = tz; api.cam.s = api.camScale(tz);
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawPerson(p));
+    return { p, rec, q: api.lodQ(p) };
+  };
+  const near = shot(150), mid = shot(900);
+  assert(near.q > api.LOD_FINE, 'the close camera should be the fine tier, q ' + near.q.toFixed(1));
+  assert(mid.q < api.LOD_FINE && mid.q >= api.LOD_MID,
+    'the driving camera should be the middle tier, q ' + mid.q.toFixed(1));
+  const r = near.p.r;
+
+  // four wheels, outside the body, in one path
+  const wheels = near.rec.all.filter(e => e[0] === 'arc' && e[4] === '#101722');
+  assert(wheels.length === 4, 'a pram has four wheels, got ' + wheels.length);
+  for (const w of wheels)
+    assert(Math.abs(w[1]) > r * 0.62,
+      'a wheel at ' + Math.abs(w[1]).toFixed(1) + ' is inside a body of ' + (r * 0.62).toFixed(1));
+  assert(new Set(wheels.map(w => (w[1] > 0) + ':' + (w[2] > 0))).size === 4,
+    'the four wheels should be at four corners');
+
+  /* The hood and the handle bar are silhouette, so they are drawn at every
+     tier; the wheels and the baby's face are detail and stay in `fine`. That
+     split is the whole point — the middle tier is the one that has to make you
+     swerve, and it is the one the old drawing served worst. */
+  for (const [name, rec] of [['fine', near.rec], ['middle', mid.rec]])
+    assert(rec.order.includes(api.PRAM_HOOD), name + ' tier lost the hood');
+  assert(!mid.rec.all.some(e => e[0] === 'arc' && e[4] === '#101722'),
+    'the middle tier should not be paying for wheels');
+  assert(near.rec.order.includes('#f3c9a8') && !mid.rec.order.includes('#f3c9a8'),
+    'the baby belongs to the replay');
+  assert(near.rec.order.includes('#dfe8f6') && !mid.rec.order.includes('#dfe8f6'),
+    'the blanket is interior detail; the hood is the silhouette');
+  /* The hood replaced the blanket as the middle tier's second colour rather
+     than joining it. A pram is never batched, so at launch speed ninety-odd
+     are in shot and one extra fill each is two hundred off the budget — the
+     ceiling caught exactly that when this was first written. */
+  assert(mid.rec.fills <= PRAM_MID_FILLS,
+    'the driving tier costs ' + mid.rec.fills + ' fills, budget ' + PRAM_MID_FILLS);
+
+  /* The hood is deliberately no coat's colour: a hood in the same red as the
+     coat pushing it merges into one shape, which is the opposite of what a
+     thing you are meant to swerve for should do. */
+  for (const list of [api.COATS, api.ELDER_COATS, api.KID_COATS, api.HATS])
+    assert(list.indexOf(api.PRAM_HOOD) < 0,
+      'the hood shares a colour with a coat or hat: ' + api.PRAM_HOOD);
+
+  // the hood covers the head end, and the handle is where the hands reach
+  const hoodPts = near.rec.all.filter(e => e[4] === api.PRAM_HOOD &&
+    (e[0] === 'm' || e[0] === 'q'));
+  assert(hoodPts.length >= 3, 'the hood should be an arc, got ' + hoodPts.length);
+  /* The bar rides on the arms' own stroke, so it is free — and it has to be
+     where the hands stop, or they are reaching for nothing. */
+  const line = near.rec.all.filter(e => e[0] === 'm' || e[0] === 'l');
+  const reach = Math.min(...line.map(e => e[2]));
+  const across = line.filter(e => Math.abs(e[2] - reach) < r * 0.1);
+  assert(across.length >= 2, 'nothing spans the top of the arms');
+  const span = Math.max(...across.map(e => e[1])) - Math.min(...across.map(e => e[1]));
+  assert(span > r * 0.9,
+    'the handle bar spans only ' + span.toFixed(1) + ' across a pram of ' + (r * 1.24).toFixed(1));
+
+  api.reseed(3141);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(3141);
+  for (let i = 0; i < 20; i++) api.drawPerson(near.p);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the pram moved the simulation stream');
+  console.log('    (pram: ' + near.rec.fills + ' fills at the replay, ' +
+    mid.rec.fills + ' driving)');
+});
 
 test('a pram that was sent flying lands and stays there', () => {
   const api = boot({ w: 1280, h: 720 });
