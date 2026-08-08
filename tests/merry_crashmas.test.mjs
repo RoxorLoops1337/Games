@@ -69,7 +69,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
-  EDGE_PILL, TRACK_ICE, TRACK_MAX,
+  EDGE_PILL, TRACK_ICE, TRACK_MAX, SURE_LOSS,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
@@ -8386,6 +8386,102 @@ test('a tyre mark says what the car was doing', () => {
   console.log('    (tyre mark: ' + straight.w.toFixed(1) + 'px at ' + straight.a +
     ' rolling, ' + sideways.w.toFixed(1) + 'px at ' + sideways.a + ' scrubbing, ' +
     onIce.a + ' on ice)');
+});
+
+/* `drawAim`'s comment says the predicted line is "always DOTS dots, however
+   long the shot is, so the spacing itself reads as speed". The dots are placed
+   across the CONFIDENT stretch, and confidence used to end at the first thing
+   the car touched — whatever it was. Every market has a barrier across its
+   gate, so a full-power shot down an empty approach had a horizon of four
+   steps: thirty-four dots piled onto four positions, and a line that stopped
+   before the market it was aimed at. */
+const aimDots = (api, ux, uy, p) => {
+  const pv = api.previewPath(ux, uy, p);
+  const sure = Math.min(pv.sure, pv.path.length), last = Math.max(0, sure - 1);
+  const seen = new Set();
+  for (let i = 0; i < 34; i++) seen.add(Math.round(i * last / 33));
+  return { pv, sure, distinct: seen.size };
+};
+test('the aim line reaches the market it is aimed at', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  /* Every market, not a sample: the gate barrier is on all of them, and the old
+     horizon was four or five steps on all of them. What is claimed here is only
+     what the fix guarantees — the line survives the gate. How far it runs after
+     that is the market's business: on a dense one it legitimately stops at the
+     first stall, and asserting otherwise would be asserting the crowd away. */
+  const seen = [];
+  for (let lv = 0; lv < api.LEVELS.length; lv++){
+    api.startLevel(lv); api.beginLevel();
+    const d = aimDots(api, -1, 0.02, 1);
+    seen.push(d.sure);
+  }
+  /* A median, not a floor. Some markets genuinely have a stall four steps off
+     the sling and the line is right to stop there — asserting a floor would be
+     asserting the crowd away, which is the second time in this pass a claim
+     had to be cut back to what the change actually guarantees. At full power
+     the old horizon was four or five steps on every one of the twenty-one. */
+  const mid = seen.slice().sort((x, y) => x - y)[Math.floor(seen.length / 2)];
+  assert(mid >= 8, 'the median market still gives up after ' + mid +
+    ' steps: ' + seen.join(','));
+  /* And on the market the defect was found on — an empty approach, where the
+     only thing between the sling and the stalls IS the gate — it has to run
+     most of the way. 4 dots over 13% of the shot before. */
+  api.startLevel(0); api.beginLevel();
+  const one = aimDots(api, -1, 0.02, 1);
+  assert(one.sure / one.pv.path.length > 0.4 && one.distinct >= 12,
+    'OPENING NIGHT draws 34 dots on ' + one.distinct + ' positions over ' +
+    (one.sure / one.pv.path.length * 100).toFixed(0) + '% of the shot');
+  const worst = ['min ' + Math.min(...seen) + ', median ' +
+    seen.slice().sort((x, y) => x - y)[Math.floor(seen.length / 2)] +
+    ', OPENING NIGHT ' + one.distinct + ' dots'];
+
+  /* The rule, stated on two props. A fence is mass .08: the car goes through
+     it without a bounce and keeps 97% of its speed, so the rest of the line is
+     no less true. A hut is mass .46 and takes 16%, which is a shot that has
+     genuinely changed. */
+  api.startLevel(0); api.beginLevel();
+  const lane = (kind) => {
+    api.props.length = 0; api.people.length = 0; api.ice.length = 0;
+    const o = api.addProp(kind, api.C.ANCHOR.x + 900, api.C.ANCHOR.y, {});
+    o.hp = 1; o.maxHp = 1;                       // flattened either way
+    return aimDots(api, -1, 0, 1);
+  };
+  const fence = lane('fence'), hut = lane('hut');
+  assert(fence.sure > hut.sure * 1.5,
+    'a fence should not end the line where a hut does: ' + fence.sure +
+    ' against ' + hut.sure);
+  assert(1 - 0.34 * api.PROPS.fence.mass > api.SURE_LOSS,
+    'a fence costs less than SURE_LOSS, or this rule says nothing');
+  assert(1 - 0.34 * api.PROPS.hut.mass < api.SURE_LOSS,
+    'and a hut costs more');
+
+  /* A prop that SURVIVES bounces the car, and the line after a deflection is a
+     guess whatever the prop's mass. It has to be a survivor the car carries on
+     past, not a nutcracker: against the immovable one the car stops dead, the
+     path ends at the same step confidence does, and the assertion has nothing
+     to bite on — which is exactly what the revert-variant showed on the first
+     draft of this test. */
+  api.props.length = 0; api.people.length = 0;
+  const tough = api.addProp('hut', api.C.ANCHOR.x + 900, api.C.ANCHOR.y, {});
+  tough.hp = 5000; tough.maxHp = 5000;
+  const off = aimDots(api, -1, 0, 1);
+  assert(off.sure < off.pv.path.length,
+    'a bounce should stop the promise before the line ends: ' + off.sure +
+    ' of ' + off.pv.path.length);
+  assert(off.sure < fence.sure,
+    'and sooner than a prop it goes straight through: ' + off.sure +
+    ' against ' + fence.sure);
+
+  /* And reachability is untouched: it reads `ramp0`, the physics answer, which
+     is set before any of this. Moving the drawing horizon must not change
+     which ramps a market counts — that would reroll its goals. */
+  api.startLevel(12); api.beginLevel();
+  const a = api.reachableRamps(), b2 = api.reachableRamps();
+  assert(a.jump === b2.jump && a.roll === b2.roll, 'reachability should be stable');
+  assert(a.jump > 0, 'FROZEN LAKE should have reachable ramps, got ' + a.jump);
+  console.log('    (aim dots of 34: ' + worst.join(', ') + '; fence ' + fence.sure +
+    ', hut ' + hut.sure + ', bounce ' + off.sure + ')');
 });
 
 /* `carDamage` opens with "Damage lands on the bodywork, never on the glass",

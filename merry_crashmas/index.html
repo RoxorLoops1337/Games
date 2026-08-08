@@ -597,6 +597,10 @@ const PLOW_TIME = 7;                          // seconds of extra-wide bumper
 const TRACK_MAX = 460;
 // how much of a mark a tyre leaves on ice, against packed snow
 const TRACK_ICE = 0.3;
+/* How much speed a smash has to cost before the aim line stops promising.
+   A fence is mass .08, so it takes 2.7% and the line carries on; a hut is .46
+   and takes 15.6%, which is a shot that has genuinely changed. */
+const SURE_LOSS = 0.9;
 
 /* Air. Hit a snowbank at speed and the car leaves the ground: it flies over
    whatever is in the way, barrel-rolls, and everything under the landing is
@@ -7421,17 +7425,28 @@ function previewPath(ux, uy, p){
             break;
           }
           if (o.ramp) continue;
-          if (sure < 0) sure = path.length;
           const vn = vx * nx + vy * ny;
           const impact = Math.max(0, -vn);
           const dmg = impact * DMG_PER_SPD * CAR.dmg;
           const left = hp.has(o) ? hp.get(o) : o.hp;
           if (!o.hard && dmg >= left){
+            /* Flattened it. The line used to stop being believed at the FIRST
+               thing the car touched, whatever that was — and every market has
+               a barrier across its gate, so a full-power shot down an empty
+               approach had a confidence horizon of four steps: thirty-four
+               dots piled onto four positions, and a line that died before the
+               market it was aimed at. A prop the car goes straight through
+               without a bounce and without losing much speed does not make the
+               rest of the prediction any less true, so it does not end it.
+               `SURE_LOSS` is the speed a smash has to cost before the line
+               stops promising. Drawing only: reachability reads `ramp0`. */
             gone.add(o);
             const loss = 1 - 0.34 * o.mass;
+            if (sure < 0 && loss < SURE_LOSS) sure = path.length;
             vx *= loss; vy *= loss;
             x += nx * pen * 0.25; y += ny * pen * 0.25;
           } else {
+            if (sure < 0) sure = path.length;      // a bounce: all bets off
             if (!o.hard) hp.set(o, left - dmg);
             x += nx * pen; y += ny * pen;
             if (vn < 0){
