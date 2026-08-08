@@ -9477,7 +9477,7 @@ function finishBattle() {
   const settle = () => {
     const evo = checkEvolve();
     if (evo) { runEvolution(evo); return; }
-    saveGame();
+    backToWorld();
   };
   const done = () => { teardown(); settle(); };
   /** Every win grows the deck by one card of your choosing — or by none. */
@@ -9630,6 +9630,24 @@ const evoHeat = (phase, k) => phase === 'hold' ? k * .25
 const evoSpin = (phase, k, swapped) =>
   (.35 + evoHeat(phase, k) * 2.6) * (swapped ? -1 : 1);
 
+/**
+ * Back onto the map, out of black.
+ *
+ * A fight OPENS through closing bars and a door goes through black at .3.
+ * Measured, the way OUT was the one cut in this game with nothing over it: from
+ * the blow that ends a fight to standing in the grass, 0 of 86 frames were
+ * covered, and an evolution's 282 frames ended the same way. Both paths already
+ * met at the same saveGame(), so they take the same way back.
+ *
+ * Shorter than a door because you are being put back somewhere you already
+ * were, and `max` so a cover already running is never cut short.
+ */
+const BATTLE_OUT = .22;
+function backToWorld() {
+  G.fade = Math.max(G.fade || 0, BATTLE_OUT);
+  saveGame();
+}
+
 function runEvolution(m) {
   const from = m.species;
   G.evoAnim = { mon: m, from, to: DEX[from].evo[0], beats: evoBeats(),
@@ -9660,7 +9678,7 @@ function evoStep(dt) {
   say('', [`${r.oldName} became ${r.newName}!`], () => {
     const nxt = checkEvolve();
     if (nxt) runEvolution(nxt);
-    else saveGame();
+    else backToWorld();
   });
   return false;
 }
@@ -12187,7 +12205,7 @@ if (typeof window !== 'undefined') {
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
-    winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
+    winFlourish, flourishStep, drawFlourish, FLOURISH_T, BATTLE_OUT, backToWorld, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,
     newGame, boot, say, openScreen, closeScreen, screenLocked, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
