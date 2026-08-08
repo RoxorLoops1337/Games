@@ -9878,16 +9878,19 @@ function updateBattle(dt) {
   else if (!b.barShown) { b.barShown = true; renderHand(); }
 }
 
-/** Up opens the non-card actions, so the whole fight is reachable by keyboard. */
-function openBattleActions() {
+/** B opens the non-card actions, so the whole fight is reachable by keyboard. */
+function openBattleActions(i = 0) {
   const b = B();
   openMenu('battlemenu', [
-    { label: 'Kin', fn: () => { closeMenu(); openScreen('party'); } },
-    { label: 'Bag', fn: () => { closeMenu(); openScreen('bag'); } },
+    // No closeMenu() before openScreen: openScreen closes it itself, and it
+    // reads which menu it came out of first. Closing it here threw that away a
+    // line early — the same ordering that made the pause menu forget its row.
+    { label: 'Kin', fn: () => openScreen('party') },
+    { label: 'Bag', fn: () => openScreen('bag') },
     { label: b.wild ? 'Run' : 'Forfeit', fn: () => { closeMenu(); submitLog(doAction({ kind: 'run' })); } },
     { label: 'End turn', fn: () => { closeMenu(); doEndTurn(); } },
     { label: 'Back', fn: () => { closeMenu(); renderHand(); } },
-  ], { cancel: () => { closeMenu(); renderHand(); }, title: 'Actions' });
+  ], { i, cancel: () => { closeMenu(); renderHand(); }, title: 'Actions' });
 }
 
 // ---- full screens ------------------------------------------------------
@@ -9898,7 +9901,7 @@ function openScreen(kind, opt = {}) {
   // pressed back, so checking two of them meant opening the menu twice. The
   // row goes with it, because coming back to the menu with the cursor at the
   // top is only most of the way back.
-  const from = G.mode, fromRow = G.menu ? G.menu.i : 0;
+  const from = G.mode, fromRow = G.menu ? G.menu.i : 0, fromMenu = G.menu ? G.menu.elId : null;
   closeMenu();
   // When you must send someone out, start the cursor on someone who can go.
   // On a profile, start it on the way out: confirm should always mean "that
@@ -9916,7 +9919,7 @@ function openScreen(kind, opt = {}) {
   const i = opt.force && kind === 'party' ? Math.max(0, G.party.findIndex(alive))
     : kind === 'profile' ? 1
     : kind === 'bag' && !G.battle ? bagStart() : 0;
-  G.screen = { kind, i, sel: null, opt, prev: from, prevRow: fromRow };
+  G.screen = { kind, i, sel: null, opt, prev: from, prevRow: fromRow, prevMenu: fromMenu };
   G.mode = 'screen';
   playCue(kind === 'reward' ? 'level' : 'menu');
   renderScreen();
@@ -9981,11 +9984,22 @@ function closeScreen() {
   }
   G.screen = null;
   if (!HEADLESS) show(els.screen, false);
-  if (G.battle) { G.mode = 'battle'; if (!G.battle.over) renderHand(); }
-  // Back to the menu you came out of, on the row you came out of. Spending
-  // `prev`, which openScreen has always written and nothing has ever read.
-  else if (s.prev === 'menu' && G.map) openMainMenu({ i: s.prevRow || 0, quiet: true });
-  else { G.mode = 'world'; }
+  // Back to the menu you came out of, on the row you came out of.
+  //
+  // 180 gave this to the pause menu by testing `prev === 'menu'`, which reads
+  // the MODE — and the battle's Actions menu never sets a mode, so the rule
+  // could not reach it and a fight still dropped you at your hand. Keyed on
+  // the menu itself now, so both cases are the same sentence: a screen goes
+  // back to whatever was on screen before it.
+  if (G.battle) {
+    G.mode = 'battle';
+    if (G.battle.over) return;
+    renderHand();
+    if (s.prevMenu === 'battlemenu') openBattleActions(s.prevRow || 0);
+    return;
+  }
+  if (s.prevMenu === 'mainmenu' && G.map) { openMainMenu({ i: s.prevRow || 0, quiet: true }); return; }
+  G.mode = 'world';
 }
 
 /**

@@ -3527,4 +3527,125 @@ section('back out of a menu row goes back to the menu');
   ok(g.G.screen && g.G.screen.kind === 'party', 'a profile still returns to the list it names');
 }
 
+// 180 gave the pause menu its way back by testing `s.prev === 'menu'`, which
+// reads the MODE — and the battle's Actions menu never sets a mode, so the rule
+// could not reach it. Driven through the real input ladder, a fight still
+// dropped you at your hand: checking a kin and then an item meant opening
+// Actions twice. Keyed on the menu itself now, so both are one sentence.
+//
+// Reaching this at all took four goes. `frame()` takes a wall-clock TIMESTAMP,
+// not a dt — feeding it the same number twice advances zero time while input
+// still fires, so the opening log sat at hold 0.38 for six hundred iterations
+// and the probe reported "menu none" as if it were a finding.
+section('back out of a battle menu row goes back to the battle menu');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  let ms = 0;
+  const step = (n = 16) => { ms += n; g.frame(ms); };
+  const tap = (k) => { g.pressKey(k); step(); g.releaseKey(k); step(); };
+  const fresh = () => {
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 12), g.mkMon('pyrelynx', 12)];
+    g.G.bag = { salve: 2, bloomorb: 3 };
+    g.startBattle({ foe: g.mkMon('kindlark', 10), wild: true });
+    const b = g.B();
+    b.entry = 1;
+    // Each blocker has its own way out; a battle message will not advance while
+    // its hold is up, and the hold only decays inside step().
+    const ready = () => !g.G.dialogue && !g.G.battleMsg && !b.over
+      && !(b.log && b.li < b.log.length) && b.hand.length > 0;
+    for (let i = 0; i < 600 && !ready(); i++) {
+      if (g.G.battleMsg) { g.G.battleMsg.hold = 0; g.advanceDialogue(); continue; }
+      if (g.G.dialogue) { g.G.dialogue.hold = 0; g.advanceDialogue(); continue; }
+      step(50);
+    }
+    ok(ready(), 'the fight is taking input');
+    return b;
+  };
+
+  // B opens it, not Up — Up plays the card you are on. The doc comment said Up
+  // for as long as this menu has existed.
+  fresh();
+  tap('up');
+  ok(!g.G.menu, 'up does not open the actions menu');
+  fresh();
+  tap('b');
+  ok(g.G.menu && g.G.menu.elId === 'battlemenu', 'B opens the actions menu');
+
+  // Rows read OUT of the menu the game builds, so one added or renamed cannot
+  // fall outside this net.
+  const rows = g.G.menu.rows.map((r) => r.label);
+  ok(rows.length >= 5, `the actions are ${rows.join(', ')}`);
+  const opened = [];
+  for (let row = 0; row < rows.length; row++) {
+    fresh();
+    tap('b');
+    for (let i = 0; i < row; i++) tap('down');
+    eq(g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
+    tap('a');
+    if (!g.G.screen) continue;                       // Run, End turn, Back
+    opened.push(rows[row]);
+    eq(g.G.screen.prevMenu, 'battlemenu', `${rows[row]} remembers which menu it came out of`);
+    eq(g.G.screen.prevRow, row, 'and which row of it');
+    tap('b');
+    ok(!g.G.screen, `${rows[row]} closes`);
+    ok(!!g.G.menu, `and puts the actions back (${rows[row]})`);
+    eq(g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
+    eq(g.G.mode, 'battle', 'still in the fight');
+    tap('b');
+    ok(!g.G.menu, `and a second back returns to the hand (${rows[row]})`);
+  }
+  eq(opened.length, 2, `both screen rows were walked (${opened.join(', ')})`);
+
+  // Two rows in one visit, which is the point.
+  fresh();
+  tap('b');
+  const seen = [];
+  for (const row of [0, 1]) {
+    while (g.G.menu && g.G.menu.i > row) tap('up');
+    while (g.G.menu && g.G.menu.i < row) tap('down');
+    tap('a');
+    if (g.G.screen) seen.push(g.G.screen.kind);
+    tap('b');
+  }
+  eq(seen.length, 2, `two screens without reopening the actions (${seen.join(', ')})`);
+  ok(!!g.G.menu, 'and the actions are still up at the end of it');
+
+  // A screen opened in a fight WITHOUT the menu must not conjure one.
+  fresh();
+  g.openScreen('bag');
+  eq(g.G.screen.prevMenu, null, 'a bag opened straight from the fight came from no menu');
+  g.closeScreen();
+  ok(!g.G.menu, 'and closing it does not invent the actions menu');
+  eq(g.G.mode, 'battle', 'it goes back to the fight');
+
+  // And the fight not being interrupted by any of this: no frame threw.
+  eq(g.frame.errs || 0, 0, 'nothing threw while driving the fight');
+}
+
+// The pause menu's return, re-netted after 180's `prev === 'menu'` was replaced
+// by the menu-id test — the same claim, so it must survive the generalisation.
+section('and the pause menu still goes back the same way');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  let ms = 0;
+  const step = (n = 16) => { ms += n; g.frame(ms); };
+  const tap = (k) => { g.pressKey(k); step(); g.releaseKey(k); step(); };
+  g.newGame();
+  g.takeStarter('cindercub');
+  g.G.dialogue = null; g.G.mode = 'world';
+  g.G.party = [g.mkMon('cindercub', 8)];
+  g.G.bag = { salve: 2 };
+  tap('b');
+  ok(g.G.menu && g.G.menu.elId === 'mainmenu', 'the pause menu is the main menu');
+  tap('a');
+  eq(g.G.screen.prevMenu, 'mainmenu', 'and a row remembers it');
+  tap('b');
+  ok(!!g.G.menu && g.G.mode === 'menu', 'back puts it up again');
+}
+
 done('emberkin_render');
