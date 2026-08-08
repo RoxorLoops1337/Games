@@ -87,6 +87,7 @@ const EXPOSE = `__out.api = {
   paintMarketThumb, paintShutTile, SHUT_SLATS, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
   drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, GLUH_CUPS, drawHut,
+  BARREL_STAVES, BARREL_SNOW,
   drawCounter, goodsN, goodsX, snowCapPath, SNOW_LOBES,
   bannerBox, bannerFont, bannerLayout, bannerRibbon,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
@@ -6383,6 +6384,98 @@ test('the glühwein stand is a pot on a trestle, not a pink plate', () => {
   for (let i = 0; i < 30; i++){ api.setT(i * 0.2); api.drawProp(live.o); api.drawProp(dead.o); }
   assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
     'drawing the stands moved the simulation stream');
+});
+
+/* 633 barrels across the campaign, the second most common thing in the game,
+   and the top of one was a flat brown disc with a hoop drawn on it. */
+test('a barrel lid is staves and banked snow, not a biscuit', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+
+  // a plain barrel, not a fireworks crate
+  let live = null;
+  for (let i = 0; i < 20 && !live; i++){
+    const c = propArt(api, 'barrel', false, (o) => { o.seed = 0.4 + i * 0.03; });
+    if (!api.crateOf(c.o)) live = c;
+  }
+  assert(live, 'could not find a seed that is a plain barrel');
+  const r = live.o.r;
+
+  // seams between the staves, evenly round the lid and out to the rim
+  const seams = live.rec.all.filter(e =>
+    (e[0] === 'm' || e[0] === 'l') && e[4] === '#5f4326');
+  assert(seams.length === api.BARREL_STAVES * 4,
+    api.BARREL_STAVES + ' seams of four corners expected, got ' + seams.length);
+  const angs = [];
+  for (let i = 0; i < seams.length; i += 4){
+    const q = seams.slice(i, i + 4);
+    const inner = Math.min(...q.map(e => Math.hypot(e[1], e[2])));
+    const outer = Math.max(...q.map(e => Math.hypot(e[1], e[2])));
+    assert(inner < r * 0.7 && outer > r * 0.9,
+      'a seam should cross the rim, it runs ' + inner.toFixed(0) + '..' + outer.toFixed(0));
+    angs.push(Math.atan2(q[0][2] + q[3][2], q[0][1] + q[3][1]));
+  }
+  angs.sort((a, b) => a - b);
+  let worst = 6.283;
+  for (let i = 0; i < angs.length; i++)
+    worst = Math.min(worst, i ? angs[i] - angs[i - 1]
+                              : angs[0] + 6.283 - angs[angs.length - 1]);
+  assert(worst > 6.283 / api.BARREL_STAVES - 0.01,
+    'the staves should be even, closest pair ' + worst.toFixed(2) + ' rad');
+
+  /* Banked against one side, not ringed round: the snow disc is barely wider
+     than the lid that covers its middle, so on the dark side it is buried
+     entirely and only the offset survives. */
+  const arcs = live.rec.all.filter(e => e[0] === 'arc');
+  const snow = arcs.filter(e => String(e[4]).startsWith('rgba(232,242,255'))[0];
+  const lid = arcs.filter(e => e[4] === '#8a6540')[0];
+  assert(snow && lid, 'a lid needs snow on it and a lid under the snow');
+  const off = Math.hypot(snow[1], snow[2]);
+  assert(off > 1, 'the snow should be pushed off centre, got ' + off.toFixed(2));
+  assert(snow[3] - lid[3] < off,
+    'the snow rings the lid instead of banking: it is ' + (snow[3] - lid[3]).toFixed(1) +
+    ' wider than the lid but only offset ' + off.toFixed(1));
+  const sun = Math.hypot(api.SUN_DX, api.SUN_DY);
+  assert((snow[1] * -api.SUN_DX + snow[2] * -api.SUN_DY) / (off * sun) > 0.999,
+    'the snow should bank towards the light');
+
+  /* Nothing may promise a hit the physics will not give: the collider is a
+     circle of exactly r. The shadow is on the ground, not on the barrel. */
+  const reach = (rec) => Math.max(...rec.all
+    .filter(e => !String(e[e.length - 1]).startsWith('rgba(8,16,32'))
+    .map(e => e[0] === 'arc' ? Math.hypot(e[1], e[2]) + e[3]
+            : e[0] === 'el'  ? Math.hypot(e[1], e[2]) + Math.max(e[3], e[4])
+            : Math.hypot(e[1], e[2])));
+  assert(reach(live.rec) <= r + 0.001,
+    'a barrel drew ' + reach(live.rec).toFixed(1) + ' out from a collider of ' + r);
+
+  // a crate still shows what is in it, a plain barrel does not
+  let crate = null;
+  for (let i = 0; i < 20 && !crate; i++){
+    const c = propArt(api, 'barrel', false, (o) => { o.seed = i * 0.02; });
+    if (api.crateOf(c.o)) crate = c;
+  }
+  assert(crate, 'could not find a seed that is a crate');
+  assert(crate.has('#b5342b') && crate.has('#ffd34d'), 'a crate shows its tubes and fuses');
+  assert(!live.has('#b5342b'), 'a plain barrel should not');
+
+  // the wreck is untouched: sprung staves and an open hoop, no lid, no snow
+  const dead = propArt(api, 'barrel', true);
+  assert(dead.has('#6b4e32') && dead.rec.shapes.some(s => s.stroked && s.style === '#8d7a5c'),
+    'a burst barrel is sprung staves and a hoop');
+  assert(!dead.has('#8a6540'), 'a burst barrel has no lid left on it');
+
+  console.log('    (barrel: ' + live.rec.fills + ' fills live, ' + dead.rec.fills +
+    ' burst, reaching ' + (reach(live.rec) / r * 100).toFixed(0) + '% of the collider)');
+
+  // and none of it reaches the simulation
+  api.reseed(1863);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(1863);
+  for (let i = 0; i < 30; i++){ live.o.seed = i / 30; api.drawProp(live.o); }
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the barrels moved the simulation stream');
 });
 
 test('a wrecked snowman is still a snowman', () => {

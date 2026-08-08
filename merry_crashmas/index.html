@@ -4414,6 +4414,8 @@ const WRECK_SPILL = {
 const WRECK_ITEMS = 9;
 // cups on the glühwein stand's rim — the same four the wreck throws clear
 const GLUH_CUPS = 4;
+// staves in a barrel lid, seen from above
+const BARREL_STAVES = 7, BARREL_SNOW = 0.15;
 function drawSpilledStock(o, w){
   const sp = WRECK_SPILL[tradeOf(o).goods];
   if (!sp) return 0;
@@ -5112,11 +5114,37 @@ function drawProp(o){
         }
       }
       if (!o.dead){
+        /* 633 of these across the campaign, the second most common thing in
+           the game, and the top of one was a flat brown disc with a hoop drawn
+           on it — a biscuit. A barrel from above is a lid made of staves, with
+           the seams between them running out to the rim, and after a night in
+           a Christmas market there is snow drifted against the inside of that
+           rim. The snow sits at 0.94r at its furthest: the collider is a circle
+           of exactly r, and nothing here may promise a hit past it. */
         ctx.fillStyle = '#7a5836'; circle(0, 0, o.r); ctx.fill();
+        ctx.fillStyle = '#5f4326';                   // the seams between staves
+        ctx.beginPath();
+        for (let i = 0; i < BARREL_STAVES; i++){
+          const a = (i / BARREL_STAVES + o.seed) * 6.283;
+          const c = Math.cos(a), s2 = Math.sin(a);
+          const nx = -s2 * 1.7, ny = c * 1.7;
+          ctx.moveTo(c * o.r * 0.6 + nx, s2 * o.r * 0.6 + ny);
+          ctx.lineTo(c * o.r * 0.99 + nx, s2 * o.r * 0.99 + ny);
+          ctx.lineTo(c * o.r * 0.99 - nx, s2 * o.r * 0.99 - ny);
+          ctx.lineTo(c * o.r * 0.6 - nx, s2 * o.r * 0.6 - ny);
+          ctx.closePath();
+        }
+        ctx.fill();
+        /* Banked against one side of the rim, not ringed round it: the disc is
+           barely wider than the lid that covers its middle, so only the part
+           the offset pushes clear survives. It reaches 0.93r at its furthest. */
+        ctx.fillStyle = 'rgba(232,242,255,.78)';
+        circle(-o.r * BARREL_SNOW * SUN_DX / SUN_LEN, -o.r * BARREL_SNOW * SUN_DY / SUN_LEN,
+          o.r * 0.78); ctx.fill();
+        ctx.fillStyle = '#8a6540';                   // the lid it drifted against
+        circle(0, 0, o.r * 0.7); ctx.fill();
         ctx.strokeStyle = '#c9b28a'; ctx.lineWidth = 4;
         circle(0, 0, o.r * 0.66); ctx.stroke();
-        ctx.fillStyle = 'rgba(255,247,228,.12)';
-        circle(-o.r * 0.24, -o.r * 0.26, o.r * 0.5); ctx.fill();
         if (crateOf(o)){
           // a crate of rockets: three tubes and a fuse, so you can tell before
           // you hit it that this one is going to go off
