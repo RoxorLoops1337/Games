@@ -48,7 +48,18 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const GAME = `file://${join(REPO, 'emberkin', 'index.html')}`;
 const EXE = process.env.CHROMIUM || '/opt/pw-browsers/chromium';
 
-/** Each scene says how big to shoot it and how to get the game into that state. */
+/**
+ * Each scene says how big to shoot it and how to get the game into that state.
+ *
+ * Optional per scene:
+ *   wait   ms to hold before a still's shutter (default 1200). A beat with its
+ *          own clock needs the shutter opened when the beat is on screen — the
+ *          orb throw runs ~3.5s and 1200ms photographs the middle of it.
+ *   needs  (EK) => boolean, checked AT the shutter. If it comes back false the
+ *          tool says so loudly instead of handing back a picture of an empty
+ *          room. See the note at the call site: three scenes have done exactly
+ *          that and two of them were believed.
+ */
 const SCENES = {
   title: { w: 900, h: 800, go: null },
   study: { w: 700, h: 620, go: (EK) => { EK.G.dialogue = null; EK.G.mode = 'world'; } },
@@ -241,6 +252,7 @@ const SCENES = {
   // A chest coming open. Film it at ~90ms: the burst is .35s, and the sampling
   // has to match the shortest sub-beat rather than the 1.6s whole.
   chestopen: {
+    needs: (EK) => !!EK.G.chestOpen,
     w: 760, h: 900,
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
@@ -262,6 +274,7 @@ const SCENES = {
   // film this should know it has already been doubted once.
   ambush: {
     w: 760, h: 900,
+    needs: (EK) => !!EK.G.alert,
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
@@ -470,6 +483,8 @@ const SCENES = {
   // beats, and a still of it looks painted on.
   evolve: {
     w: 760, h: 760,
+    wait: 6400,
+    needs: (EK) => !!EK.G.evoAnim || EK.G.party[0].species === 'pyrelynx',
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
@@ -510,6 +525,7 @@ const SCENES = {
   // wobbles with dead air between them, and the click. Film this one.
   catching: {
     w: 300, h: 260,
+    needs: (EK) => !!(EK.B() && EK.B().orb) || !!EK.G.gotcha,
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
@@ -804,6 +820,8 @@ const SCENES = {
   // play: the last kin falls, the two lines, the dark closing, the Wayhouse.
   wipe: {
     w: 300, h: 260,
+    wait: 4500,
+    needs: (EK) => EK.G.wipe > 0 || EK.G.mapId === 'wayhouse',
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
@@ -832,6 +850,11 @@ const SCENES = {
   // most fights.
   levelup: {
     w: 300, h: 260,
+    wait: 4500,
+    // The level itself, not "some screen is up" — a `needs` with an escape
+    // hatch in it is a check that cannot fail. This still proves the level was
+    // GAINED; the moment it is gained is a log line, so film that.
+    needs: (EK) => EK.G.party[0].lvl > 24,
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
@@ -1034,17 +1057,49 @@ const SCENES = {
   },
   gotcha: {
     w: 760, h: 760,
+    // The throw is ~3.5s of deliberate dead air — that is the point of it — so
+    // the shutter has to wait for the card rather than for the default 1200ms.
+    wait: 5200,
+    needs: (EK) => !!EK.G.gotcha && !!EK.DEX[EK.G.gotcha.species],
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
-      EK.G.dialogue = null; EK.G.mode = 'world';
+      // `G.mapId = 'route_one'` alone does NOT load route_one — `enterMap`
+      // does. Set on its own it leaves Rowan's lab drawn behind the card, so
+      // the first catch appeared to happen indoors.
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.enterMap('route_one', 9, 12, 'up');
       // 'mistspray' is a MOVE. This scene passed it as a species from the day
       // it was written, and the screen dutifully drew the graceful fallback —
       // a purple lozenge with two eyes — which is exactly what a real creature
       // with no art would look like. It read as a finished design for four
-      // passes. The check below is why it does not happen again.
-      EK.G.gotcha = { t: .9, species: 'dewdrip', name: 'Dewdrip',
-        where: 'joined your party', done: () => { EK.G.gotcha = null; } };
+      // passes.
+      //
+      // …and posing it was the deeper fault, which took two more passes to see.
+      // The hand-built object also carried `t: .9`, and a still waits 1200ms
+      // after go() while the card dismisses itself at t > 2 — so this scene
+      // photographed an empty room. The comment on `dexstarter` below has said
+      // exactly that, about exactly this number, for several passes; the scene
+      // it describes was never fixed. FIRST CATCH had therefore never been
+      // looked at once.
+      //
+      // Caught for real now: a knocked-down wild kin, an orb with the odds the
+      // bag prints, and whatever card the game makes out of that.
+      EK.G.party = [EK.mkMon('cindercub', 12)];
+      EK.G.bag = { prismorb: 40 };
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      const b = EK.B();
+      b.foe.hp = 1; b.foe.status = 'shock';   // hurt and held: the shown odds hit 100%
+      const beat = () => {
+        const cur = EK.B();
+        // Through `doAction`, the way the bag throws it — not `tryCatch`
+        // directly, or the orb animation that holds the log never runs.
+        if (cur && !cur.over && !cur.log) EK.submitLog(EK.doAction({ kind: 'item', id: 'prismorb' }));
+        const d = EK.G.dialogue || EK.liveBattleMsg();
+        if (d && !EK.G.gotcha) { d.hold = 0; EK.advanceDialogue(); }
+      };
+      for (let t = 60; t <= 6000; t += 120) setTimeout(beat, t);
     },
   },
   // The errand's counter on the payoff screen, driven through the REAL starter
@@ -1073,6 +1128,10 @@ const SCENES = {
   // right catches is the suite's job, not this picture's.
   dexcatch: {
     w: 760, h: 760,
+    // Posed on purpose, and it says so above — but it still has to come back
+    // with a card in it. The scene this one is modelled on posed a card that
+    // dismissed itself before the shutter and reported success for passes.
+    needs: (EK) => !!EK.G.gotcha && !!EK.DEX[EK.G.gotcha.species] && !!EK.G.gotcha.note,
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
@@ -1635,7 +1694,25 @@ for (const name of list) {
       }, AT);
       if (!seeked.length) console.error(`  !! ${name}: nothing to seek — no animation on #screen`);
       else console.error(`  ${name}: ${seeked.join(' ')}`);
-    } else await page.waitForTimeout(1200);
+    } else await page.waitForTimeout(sc.wait || 1200);
+
+    // Did the picture end up containing its subject?
+    //
+    // This is the generalisation of the worst class of fault this tool has
+    // produced. Three separate scenes have handed back a photograph of the room
+    // the beat happens in, with no beat in it: `gotcha` posed a card carrying
+    // `t: .9` and a still waits long enough for it to dismiss itself, `levelup`
+    // ran a beat loop that never resolved the fight, and `evolve` built a state
+    // the game cannot reach. Every one of them was reported as a successful
+    // shot, and two of them were looked at and believed.
+    //
+    // A scene may now declare what has to be true when the shutter opens. The
+    // tool cannot know what a scene is for — but the scene does, and saying so
+    // costs one line.
+    if (sc.needs) {
+      const held = await page.evaluate(`(${sc.needs.toString()})(window.EK)`);
+      if (!held) console.error(`  !! ${name}: the shot does not contain its subject — ${sc.needs}`);
+    }
   }
   // `--stats` reads the frame back and reports what range it actually occupies.
   // Crown Hollow looked like fog and two plausible culprits — the AIR grade and
