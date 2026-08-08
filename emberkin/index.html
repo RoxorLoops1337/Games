@@ -9372,9 +9372,41 @@ const EVO = { hold: .9, build: 1.5, burst: .45, settle: 1.0, quiet: .6 };
 const evoBeats = () => [['hold', EVO.hold], ['build', EVO.build],
   ['burst', EVO.burst], ['settle', EVO.settle], ['quiet', EVO.quiet]];
 
+/**
+ * How hot the light is, 0 to 1, across the whole beat. Named because the wheel,
+ * the motes and the blow-out all ramp off it and three copies would drift.
+ */
+const evoHeat = (phase, k) => phase === 'hold' ? k * .25
+  : phase === 'build' ? .25 + k * .75
+  : phase === 'burst' ? 1
+  : phase === 'settle' ? 1 - k
+  : 0;
+
+/**
+ * How fast the wheel is turning right now, in radians a second. This is a
+ * VELOCITY and it has to be integrated — the draw used to rotate by
+ * `G.t * (.35 + heat * 2.6)`, which is a product of time and a rate that
+ * changes, not the angle a thing turning at that rate would be at.
+ *
+ * Measured across a whole evolution the difference is not subtle: the wheel
+ * snapped backwards at 425 rad/s at the burst and reversed a second time in
+ * plain view during the settle — three sign flips in four and a half seconds,
+ * where the intent was one long wind-up and a release. The first reversal only
+ * went unnoticed because the white-out happens to cover it, which is luck
+ * rather than design, and the second is visible for a full second.
+ *
+ * The direction flip after the change is deliberate and survives: with an
+ * angle that accumulates, flipping the SIGN OF THE RATE reverses the spin
+ * without moving the wheel, which reads as the light unwinding. Flipping the
+ * sign of an angle teleports it.
+ */
+const evoSpin = (phase, k, swapped) =>
+  (.35 + evoHeat(phase, k) * 2.6) * (swapped ? -1 : 1);
+
 function runEvolution(m) {
   const from = m.species;
-  G.evoAnim = { mon: m, from, to: DEX[from].evo[0], beats: evoBeats(), i: 0, t: 0, swapped: false, res: null };
+  G.evoAnim = { mon: m, from, to: DEX[from].evo[0], beats: evoBeats(),
+    i: 0, t: 0, spin: 0, swapped: false, res: null };
   playCue('evo');
 }
 
@@ -9384,6 +9416,9 @@ function evoStep(dt) {
   if (!a) return false;
   a.t += dt;
   const beat = a.beats[a.i];
+  // The wheel's angle accumulates here, where dt is. Nothing that turns should
+  // be drawn from absolute time multiplied by a rate that moves.
+  if (beat) a.spin += dt * evoSpin(beat[0], clamp(a.t / beat[1], 0, 1), a.swapped);
   if (!beat || a.t < beat[1]) return true;
   a.t = 0; a.i++;
   const next = a.beats[a.i];
@@ -11156,8 +11191,14 @@ function draw() {
     drawAir(ctx, air, G.t);
   }
   // Over the world and its weather, under everything that takes the screen —
-  // a plaque has no business sitting on top of a catch or a wipe.
-  if (G.place && !G.battle) drawPlace(ctx);
+  // a plaque has no business sitting on top of a catch or a wipe. The rule was
+  // written and then named one screen-taker: an evolution replaces the world
+  // exactly as a battle does, and the plaque was drawing straight over it.
+  // Provoked by a scene that enters a map and evolves in the same breath; I
+  // could not reach it in play, because a level comes from a fight and a fight
+  // cannot start and finish inside the plaque's two seconds. Latent, not live —
+  // and one token, against an intent already spelled out on the line above.
+  if (G.place && !G.battle && !G.evoAnim) drawPlace(ctx);
   if (G.flourish) drawFlourish(ctx);
   if (G.gotcha) drawGotcha(ctx);
   if (G.chestOpen) drawChest(ctx);
@@ -11195,11 +11236,7 @@ function drawEvolution(g) {
   if (!phase) return;
   const t = a.t, dur = a.beats[a.i][1], k = clamp(t / dur, 0, 1);
   // How far through the whole thing, for anything that ramps across beats.
-  const heat = phase === 'hold' ? k * .25
-    : phase === 'build' ? .25 + k * .75
-    : phase === 'burst' ? 1
-    : phase === 'settle' ? 1 - k
-    : 0;
+  const heat = evoHeat(phase, k);
 
   g.fillStyle = '#120b1a';
   g.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -11207,7 +11244,7 @@ function drawEvolution(g) {
   // The wheel: twelve spokes turning behind it, faster the closer it gets.
   g.save();
   g.translate(VIEW_W / 2, 92);
-  g.rotate(G.t * (.35 + heat * 2.6) * (a.swapped ? -1 : 1));
+  g.rotate(a.spin);
   g.globalAlpha = .07 + heat * .22;
   g.fillStyle = '#ffc94d';
   for (let i = 0; i < 12; i++) {
@@ -11791,7 +11828,7 @@ if (typeof window !== 'undefined') {
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
     ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
-    doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
+    doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
