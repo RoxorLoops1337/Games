@@ -1186,6 +1186,31 @@ edit this block to name the next one.
       past their colliders, and it is blind to curved overhang. Anything drawn
       with `quadraticCurveTo` needs its own midpoint check.
 
+- [x] The collider sweep can see round corners now. Straight follow-on from the
+      note the last pass left: the kit-wide sweep reads path **endpoints**, and
+      thirty of this kit's edges are quadratics whose bulge is halfway along.
+      The snowbank found that the hard way — breaking its shoulder rule put the
+      bank 15% outside its box with the sweep still green. So the same rules
+      again over the part of the drawing the other sweep cannot see, walking
+      `all` and `ctrls` together to reconstruct P0, C and P2 and evaluating
+      `0.25·P0 + 0.5·C + 0.25·P2`. **324 curves across every kind, live and
+      wrecked, at three seeds.**
+  - **The kit came back clean** — fence 99%, gifts 96%, hut 97%, ramp 99%, none
+      of them shrunken either. A sweep that finds nothing is still worth having
+      when the gap it closes was demonstrated two passes ago, but only if it can
+      fail, so three revert-variants prove it: the snowbank shoulder (122%), an
+      inner face bulged (168%), and the chimney pushed off the roof (205%).
+  - It is **stricter than the endpoint sweep on the one prop with an
+      exemption.** That sweep lets a hut reach 1.5 *in any colour*, because its
+      awning does. Here the exemption is named per colour — the awning you drive
+      under and the chimney, both of which are over your head — so the rest of
+      the stall is held to the box like everything else, and its worst
+      non-exempt curve is 97%. Two things had to be got right for that to mean
+      anything: the exempt curves are still bounded (a canopy is a canopy, not a
+      licence), and they are tracked in a **separate** bag, because the chimney
+      sits at 109% and keeping one worst-per-kind would have parked it in front
+      of anything worse behind it.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

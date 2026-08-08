@@ -7270,6 +7270,90 @@ test('no prop draws past the shape the car can hit', () => {
   assert(fills >= 3, 'only ' + fills + ' props fill their collider — the art has shrunk');
 });
 
+/* The sweep above reads path ENDPOINTS, and thirty of this kit's edges are
+   quadratics, whose bulge is halfway along — invisible to it. The snowbank
+   pass found that the hard way: breaking its shoulder rule put the bank 15%
+   outside its box with the sweep still green. So the same rules again, over the
+   part of the drawing the other one cannot see.
+
+   `all` records a curve's endpoint and `ctrls` its control point, in the same
+   order, so walking the two together reconstructs P0, C and P2 — and a
+   quadratic's furthest point from the chord is at t = 0.5:
+   0.25·P0 + 0.5·C + 0.25·P2. */
+const curveMids = (rec) => {
+  const out = [];
+  let cx = 0, cy = 0, ci = 0;
+  for (const e of rec.all){
+    if (e[0] === 'm' || e[0] === 'l'){ cx = e[1]; cy = e[2]; continue; }
+    if (e[0] !== 'q') continue;
+    const c = rec.ctrls[ci++];
+    if (c) out.push({ x: 0.25 * cx + 0.5 * c.cx + 0.25 * e[1],
+                      y: 0.25 * cy + 0.5 * c.cy + 0.25 * e[2], style: String(e[4]) });
+    cx = e[1]; cy = e[2];
+  }
+  return out;
+};
+test('no prop bulges past the shape the car can hit, mid-curve', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.cam.x = 0; api.cam.y = 0;
+  api.setT(2.2);
+  /* Two things on a stall are legitimately outside its box and both are over
+     your head: the awning you drive under, and the chimney. Named per colour,
+     because the endpoint sweep's exemption is per KIND — it lets a hut reach
+     1.5 in any colour at all, and the rest of the stall should be held to the
+     box like everything else. */
+  const th = api.getTheme();
+  const OVERHEAD = new Set([th.awning, th.awning2, '#3f3630']
+    .concat(api.TRADES.map(t => t.stripe).filter(Boolean)));
+  /* Worst NON-exempt curve per kind, not worst overall: the chimney sits at
+     109% and would otherwise stand in front of anything worse behind it. */
+  const worst = {}, over = {};
+  let curves = 0;
+  for (const kind of Object.keys(api.PROPS)){
+    for (const dead of [false, true]){
+      for (const seed of [0.12, 0.47, 0.83]){
+        const art = propArt(api, kind, dead, (o) => {
+          o.x = 0; o.y = 0; o.seed = seed; o.face = 1;
+        });
+        const o = art.o, box = o.shape !== 'circ';
+        for (const m of curveMids(art.rec)){
+          curves++;
+          if (NOT_SOLID.some(rx => rx.test(m.style)) || translucent(m.style)) continue;
+          const f = box ? Math.max(Math.abs(m.x) / (o.w / 2), Math.abs(m.y) / (o.h / 2))
+                        : Math.hypot(m.x, m.y) / o.r;
+          /* A wreck is debris and is allowed to scatter — the live art is what
+             promises a hit. Dead props are swept only to keep the walk honest
+             about how much of the kit it covers. */
+          if (dead) continue;
+          const bag = OVERHEAD.has(m.style) ? over : worst;
+          if (!bag[kind] || f > bag[kind].f) bag[kind] = { f, at: m.style, box };
+        }
+      }
+    }
+  }
+  assert(curves > 200, 'the walk should reach most of the kit, got ' + curves + ' curves');
+  const kinds = Object.keys(worst);
+  assert(kinds.length >= 4, 'and several kinds should draw curves at all, got ' + kinds);
+  /* The exempt ones are still bounded — a canopy is a canopy, not a licence. */
+  for (const k of Object.keys(over))
+    assert(over[k].f <= (CANOPY[k] || 1.6),
+      k + '\'s overhead art reaches ' + (over[k].f * 100).toFixed(0) + '% in ' + over[k].at);
+  for (const k of kinds){
+    const w = worst[k];
+    assert(w.f <= 1.001,
+      k + ' bulges to ' + (w.f * 100).toFixed(0) + '% of the ' + (w.box ? 'box' : 'circle') +
+      ' you can hit, halfway along a curve of ' + w.at + ' — where the endpoint ' +
+      'sweep cannot see it');
+  }
+  console.log('    (mid-curve against collider: ' + kinds.sort()
+    .map(k => k + ' ' + (worst[k].f * 100).toFixed(0) + '% ' + worst[k].at).join(', ') +
+    ' | overhead ' + Object.keys(over).sort()
+      .map(k => k + ' ' + (over[k].f * 100).toFixed(0) + '%').join(', ') +
+    ' over ' + curves + ' curves)');
+});
+
 /* The biggest thing in the market at r150, worth 2,500, and the only prop with
    a goal that names it — "Wreck the carousel" — so its wreck is the payoff for
    an objective, not just debris. Screenshotting it beside the live one is how
