@@ -2966,3 +2966,41 @@ desktop one. That is the correct answer and not an obvious one.
     One break's anchor also caught unrelated code — the claim it was meant to
     prove is covered by another break, and that is said here rather than
     counted as a clean proof.
+
+101. **The cursor counted a row that was not the grid it was in** (pass 190).
+    189 shot the beats on a phone; this walked the cursor through every SCREEN
+    at 390x760, the list of kinds harvested from the game's own openScreen call
+    sites.
+
+        screen    gridCols said   really across   down moved by
+        dex             3               3               3
+        box             2               2               2
+        deck            3               3               3
+        shop            2               2               2
+        swap            1               3               1     <-
+
+    `gridCols` counts a row off the rendered grid — and it counted the first row
+    IN THE DOCUMENT. The swap screen shows the card coming in ABOVE the deck you
+    are choosing from, in a `.cardrow` of its own. Measured, its cells sat
+    **1 / 3 / 3 / 3 / 2** down the panel, so the first row was that lone card and
+    the answer was 1: up and down moved a single card at a time through a grid
+    three across, on the one screen `screenLocked` will not let you leave.
+
+    This is the same fault its own comment already records once — "they fell to
+    the `< 2` branch and returned 1 — up and down moved by a single cell in a
+    grid two and three across" — arriving by a different route. Fixed by
+    counting the row the CURSOR is in, which is the grid being navigated by
+    definition, with the panel as the fallback when there is no cursor.
+    `colsFrom(tops)` is the counting, as a value. After: swap reads 3, moves 3,
+    and lands in the same column a row down; every other screen is unchanged.
+
+    **Two instrument over-reports, both mine, both checked before being
+    believed.** The bag read "changed column" because `offsetLeft` is relative to
+    each shelf's own container — driven, the cursor goes from Salves to Orbs at
+    offsetLeft 12 both times, which is the same column of the next shelf. And
+    starter / reward / profile read "stayed on the same row" because a single-row
+    grid has nowhere to go down to; the clamp is correct.
+
+    A planted break also missed on indentation — four spaces where the file has
+    two — and read exactly like a net that could not fail, until the anchor was
+    checked. With the right anchor it kills four.

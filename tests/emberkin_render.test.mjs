@@ -4245,6 +4245,60 @@ section('the list follows the cursor');
     'and after the markup, or there is nothing under the cursor to find');
 }
 
+// gridCols counts a row off the RENDERED grid, and its own comment records that
+// the bag, the shop and the chest shelf were once missing from its selector and
+// fell to the `< 2` branch: "up and down moved by a single cell in a grid two
+// and three across". It then counted the first row IN THE DOCUMENT, which is not
+// always the grid the cursor is in. Walked at 390x760, every screen:
+//
+//     screen    gridCols said   really across   down moved by
+//     dex             3               3               3
+//     box             2               2               2
+//     deck            3               3               3
+//     shop            2               2               2
+//     swap            1               3               1     <-
+//
+// The swap screen shows the card coming in ABOVE the deck you choose from, in a
+// row of its own: cells sat 1 / 3 / 3 / 3 / 2 down the panel, the first row was
+// that lone card, and up and down moved one card at a time through a grid three
+// across — on the one screen `screenLocked` will not let you leave.
+section('the cursor moves by the grid it is in');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+
+  // The counting, as a value.
+  eq(g.colsFrom([]), 1, 'nothing to count is one column');
+  eq(g.colsFrom([10]), 1, 'and so is a single cell');
+  eq(g.colsFrom([10, 10, 10]), 3, 'three cells on one row are three columns');
+  eq(g.colsFrom([10, 10, 10, 60, 60, 60]), 3, 'and the rows below do not add to it');
+  eq(g.colsFrom([10, 60, 110]), 1, 'a column of cells is one across');
+  ok(g.colsFrom([10, 10, 60]) >= 1, 'and it is never zero');
+
+  // The claim, by difference, on the swap screen's actual shape: a lone card at
+  // 76, then eleven cells laid out 3 across at 252 / 408 / 564 / 720. Counting
+  // from the document gives the wrong answer; counting from the cursor's own
+  // row gives the right one.
+  const document_order = [76, 252, 252, 252, 408, 408, 408, 564, 564, 564, 720, 720];
+  const cursor_row = document_order.slice(1);
+  eq(g.colsFrom(document_order), 1, 'counting from the top of the panel finds the incoming card alone');
+  eq(g.colsFrom(cursor_row), 3, 'counting from the grid the cursor is in finds three across');
+
+  // Wiring: gridCols scopes to the selection's own container when that
+  // container has cells, and falls back to the panel when there is no cursor.
+  const body = SRC.slice(SRC.indexOf('function gridCols(s) {'), SRC.indexOf('function screenInput()'));
+  ok(body.includes("const cur = els.screen.querySelector('.sel');"), 'gridCols asks where the cursor is');
+  ok(/scope = cur && cur\.parentElement && cur\.parentElement\.querySelector\(SEL\)\s*\?\s*cur\.parentElement : els\.screen/.test(body),
+    'and counts that container, falling back to the panel when there is none');
+  ok(body.includes('colsFrom('), 'and spends the value rather than counting inline');
+  // The selector still names every grid a cursor can be in — read out of the
+  // code, so a grid added tomorrow is either in it or visibly missing.
+  const sel = (body.match(/const SEL = '([^']+)'/) || [])[1] || '';
+  for (const cls of ['.dexcell', '.cardrow > .cardel', '.items > .item']) {
+    ok(sel.includes(cls), `the selector still names ${cls}`);
+  }
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
