@@ -8388,6 +8388,66 @@ test('a tyre mark says what the car was doing', () => {
     onIce.a + ' on ice)');
 });
 
+/* `carDamage` opens with "Damage lands on the bodywork, never on the glass",
+   and the constant under it — `CAB = CARL * 0.2`, the guard a dent has to clear
+   — is exactly where the windscreen STARTS. Dents sit on an ellipse of radius
+   `CARL * 0.34`, so the far end of that ellipse is the far end of the glass,
+   and three of the first nine landed square on it. */
+test('a dent lands on the bodywork, never on the glass', () => {
+  const api = boot({ w: 1280, h: 720, store: ALL_CARS });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.ang = 0; api.car.z = 0;
+  api.car.roll = 0; api.car.plowT = 0; api.car.gore = 0; api.camSnap();
+
+  const PIT = 'rgba(26,14,12,.38)', GLASS = '#4b6a9c';
+  let checked = 0;
+  for (const c of api.CARS){
+    assert(api.selectCar(c.id), 'should be able to pick ' + c.id);
+    api.car.dents = 9;
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawCar());
+
+    /* The windscreen's own rect, read out of the frame rather than written
+       down here — if the glass moves, this test moves with it. */
+    const glass = rec.polys.find(q => q.style === GLASS && !q.stroked);
+    assert(glass, c.id + ' should have a windscreen');
+
+    /* A pit is three lobes evenly spaced 120° round its centre, so the three
+       average back to exactly where the dent is. */
+    const lobes = rec.all.filter(e => e[0] === 'arc' && e[4] === PIT);
+    assert(lobes.length === 27, c.id + ': nine dents of three lobes, got ' + lobes.length);
+    for (let i = 0; i < 9; i++){
+      const t = lobes.slice(i * 3, i * 3 + 3);
+      const x = t.reduce((s, e) => s + e[1], 0) / 3;
+      const y = t.reduce((s, e) => s + e[2], 0) / 3;
+      assert(!(x > glass.x0 && x < glass.x1 && y > glass.y0 && y < glass.y1),
+        c.id + ' dent ' + i + ' is on the windscreen: (' + x.toFixed(1) + ',' +
+        y.toFixed(1) + ') inside ' + [glass.x0, glass.y0, glass.x1, glass.y1]
+          .map(v => v.toFixed(1)).join(','));
+      checked++;
+    }
+  }
+  assert(checked === api.CARS.length * 9, 'every car, every dent: ' + checked);
+
+  /* And they have not all been shoved off the car to satisfy that: a dent has
+     to be ON the bodywork. */
+  api.selectCar('hatch');
+  api.car.dents = 9;
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawCar());
+  const d = api.getDims();
+  const lobes = rec.all.filter(e => e[0] === 'arc' && e[4] === PIT);
+  for (const e of lobes)
+    assert(Math.abs(e[1]) <= d.l / 2 && Math.abs(e[2]) <= d.w / 2 + 1,
+      'a dent slid off the car: (' + e[1].toFixed(1) + ',' + e[2].toFixed(1) + ')');
+  const ys = lobes.map(e => Math.abs(e[2]));
+  assert(Math.max(...ys) - Math.min(...ys) > d.w * 0.15,
+    'the dents should still scatter, not line up on the flanks');
+  console.log('    (dents: ' + checked + ' placed clear of the glass on ' +
+    api.CARS.length + ' cars)');
+});
+
 /* Fifth object in this run of passes with two drawings that had drifted apart,
    after the pram, the hat, the driver and the plough pickup — and the only one
    you see for half a second at a time, which is why it lasted. The underside
