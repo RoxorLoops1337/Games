@@ -377,6 +377,65 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+76. **Asking all ten screens at once instead of aiming a camera** (pass 165).
+    164 found a real fault by measuring the DOM after the pixels had lied, so
+    165 stopped aiming: a **survey** — `tools/emberkin/survey.mjs`, alongside
+    `shot.mjs` — that opens ten screens at a desktop and a phone size and asks
+    every visible element one question. *Is your text wider than the box you are
+    drawn in, with nothing above you clipping it?* **1901 elements, two faults,
+    neither of which any shot in the library had shown.**
+
+    - **A dex cell's type chips.** `.types` is a flex row and had **no wrap rule
+      at all**, so the longest dual — VERDANT + GLOOM — laid its second chip
+      **8px past a 96px cell**, over the creature beside it. Now it wraps: a
+      chip is a word, it may move to the next line, it may not be halved, and it
+      may never be read as belonging to the neighbour.
+    - **The Prism chest's odds, 13px over — one row, at one width.** Not a
+      responsive breakpoint: Prism is the dearest chest, so `1620gems` is the
+      widest price, so its description column is the narrowest of the four, and
+      only there does the line run out. The rule said `white-space:nowrap` on
+      the WHOLE line. That is half a claim stated as a whole one — it correctly
+      forbids breaking "45%" from "epic" and *also* forbids the break between
+      "45% epic" and "20% legendary", which is the break you wanted. **The
+      nowrap belongs on the item, not the line**, and the separator is glued to
+      the item before it with `&nbsp;` so a wrapped line opens with a number
+      rather than a stray dot.
+
+    **The general shape: a row of separable items needs two rules, and one of
+    them is easy to forget.** Free to break BETWEEN items, forbidden to break
+    INSIDE one. Both faults were that pair with a half missing — the dex row had
+    neither, the chest row had only the second.
+
+    **Four errors in the instrument before it found anything**, which is the
+    real content of this entry:
+    1. Setup named an item that does not exist (`emberroot`) and an export that
+       is not exported (`EK.openMainMenu`). Both threw silently into a
+       `(setup failed)` row I nearly read as a clean screen.
+    2. I "tightened" the detector to require the element's **bounding rect** to
+       escape its card. It then walked 1902 elements and reported **clean with a
+       known fault in place**. *Overflowing text does not extend an element's
+       rect* — the box stays at its containing width and the glyphs paint
+       outside it. `scrollWidth` vs `clientWidth` is the only detector that sees
+       this, and `getBoundingClientRect` — the instrument 75 trusted over the
+       pixels — is blind to it.
+    3. Walking ancestors for a clipping parent disqualified **everything**:
+       `#screen` is `overflow:auto`, so every element in the game has a clipping
+       ancestor. The walk has to STOP AT THE CARD; what matters is whether the
+       text is caught before it reaches its neighbours, not before it reaches
+       the window.
+    4. Measuring the odds against the price, `row.querySelector('.tally, b, .cost')`
+       returned the chest NAME. **`querySelector` uses document order, not
+       selector order** — a comma list is not a priority list.
+
+    Twice in that sequence the instrument told me the game was clean. **A survey
+    that reports nothing has two explanations and only one of them is good**, so
+    it prints its coverage (`1900 elements walked`) and it is proved by
+    reintroducing a known fault and watching it bite — the same proof a test
+    gets. It also now skips elements with no text: the chest's metal strap is
+    `left:-2px; right:-2px` because a strap that stops at the box is not a
+    strap, and a survey that reports two known-benign rows every run teaches you
+    to skip its output.
+
 75. **I wrote a fix for a fault that was not there** (pass 164). Finishing 74's
     question — the nickname in the OTHER places `dispName` lands. Four sites,
     three clean, one real. And the interesting part is the one I got wrong.
