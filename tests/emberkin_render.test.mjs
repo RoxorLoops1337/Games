@@ -6,7 +6,7 @@
 // plays the opening beat-by-beat through the same input the player uses.
 //
 // Run: node tests/emberkin_render.test.mjs
-import { loadGame, mkCtx, withDeck, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, withDeck, autoFight, ok, eq, done, section, GAME } from './emberkin_lib.mjs';
 
 const EK = loadGame();
 const calls = [];
@@ -305,7 +305,14 @@ section('the touch layer is wired up in the markup');
 // The drag/scroll affordances live in CSS and pointer handlers the stub DOM
 // cannot exercise. Assert they are present so a refactor cannot quietly drop them.
 const { readFileSync } = await import('node:fs');
-const SRC = readFileSync(new URL('../emberkin/index.html', import.meta.url), 'utf8');
+// The SAME file loadGame ran.
+//
+// This used to read a hardcoded path while loadGame honoured EK_GAME, so under
+// a mutation sweep the driven checks saw the mutant and all 135 source checks
+// saw the original — every one of them invisible to the sweep, which had been
+// under-reporting since the day it was built. A suite that reads the game twice
+// has to read the same game twice.
+const SRC = readFileSync(GAME, 'utf8');
 for (const id of ['pad', 'stick', 'knob', 'btns', 'fsbtn']) {
   ok(SRC.includes(`id="${id}"`), `#${id} exists in the markup`);
 }
@@ -4085,6 +4092,51 @@ section('every beat that can be pressed past still can');
   // …and the gotcha, which is inline in the ladder rather than a step of its own.
   ok(/G\.gotcha\.t > 2 \|\| justPressed\('a'\) \|\| justPressed\('b'\)/.test(SRC),
     'and the gotcha answers one too');
+}
+
+// The suite used to read the game TWICE. `loadGame` honours EK_GAME so a
+// mutation sweep can point it at a mutant; the 135 source checks read a
+// hardcoded path. So under every mutant the driven checks saw the mutation and
+// every source check saw the original — all of them structurally invisible, and
+// one whole section came back "0 killed" while the same mutation run by hand
+// plainly killed a check in it. 105 of 1427 checks were killed by the mutant
+// set before, 108 after; the count matters less than the fact that the sweep's
+// loudest output was wrong.
+section('the suite reads the game it runs');
+{
+  // By difference, and about the FILE rather than any one check: point the
+  // loader at a copy with a known change in it, and the source the suite reads
+  // has to contain that change. Nothing here reads the working tree.
+  const { readFileSync: rf, writeFileSync: wf, mkdtempSync } = await import('node:fs');
+  const { join: pjoin } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(pjoin(tmpdir(), 'ek-same-'));
+  const twin = pjoin(dir, 'twin.html');
+  const MARK = 'EK_SAME_FILE_MARKER_187';
+  wf(twin, rf(GAME, 'utf8').replace('<script>', `<script>\n// ${MARK}\n`));
+
+  ok(SRC.length > 100000, `the suite has the source (${SRC.length} bytes)`);
+  ok(!SRC.includes(MARK), 'and it does not contain the marker by accident');
+
+  const twinSrc = rf(twin, 'utf8');
+  ok(twinSrc.includes(MARK), 'the twin does contain it');
+
+  // The claim: SRC comes from GAME, whatever GAME is. Read the same way the
+  // suite reads it, from the same handle.
+  eq(rf(GAME, 'utf8').length, SRC.length, 'SRC is the file GAME names, byte for byte');
+  ok(GAME.endsWith('index.html') || GAME === process.env.EK_GAME,
+    `and GAME is a real path (${String(GAME).split('/').slice(-2).join('/')})`);
+
+  // …and the loader uses the same one. Driven: a game loaded from GAME must
+  // agree with the source the suite is asserting against.
+  const g = loadGame({});
+  ok(typeof g.playCue === 'function', 'the loader loaded something');
+  const fromSrc = /const BATTLE_OUT = ([\d.]+);/.exec(SRC);
+  ok(fromSrc, 'the source names a constant this suite can check against the loaded game');
+  if (fromSrc) {
+    eq(g.BATTLE_OUT, Number(fromSrc[1]),
+      'and the loaded game agrees with the source the suite read');
+  }
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.
