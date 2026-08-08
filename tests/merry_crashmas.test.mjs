@@ -6888,6 +6888,110 @@ test('no prop draws past the shape the car can hit', () => {
   assert(fills >= 3, 'only ' + fills + ' props fill their collider — the art has shrunk');
 });
 
+/* The biggest thing in the market at r150, worth 2,500, and the only prop with
+   a goal that names it — "Wreck the carousel" — so its wreck is the payoff for
+   an objective, not just debris. Screenshotting it beside the live one is how
+   this pass found three things at once. */
+const AWNINGS = (api) => [api.getTheme().awning, api.getTheme().awning2];
+test('a wrecked carousel is a collapse, not a pinwheel', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.setT(2.2);
+  const live = propArt(api, 'carousel', false, (o) => { o.seed = 0.42; });
+  const dead = propArt(api, 'carousel', true, (o) => { o.seed = 0.42; });
+  const r = dead.o.r;
+
+  /* 1. The poles. Barley-sugar poles are the one thing that says fairground
+        ride rather than striped tent, and the wreck had none of them — three
+        horses lying loose in the snow with nothing to say what they came off,
+        which is the same defect the snowman's carrot and the present's paper
+        were fixed for. */
+  const POLE = '#c9a24a';
+  assert(live.has(POLE), 'the live ride should have its poles');
+  assert(dead.has(POLE), 'a thrown horse should take its pole with it');
+
+  /* 2. And the pole has to be VISIBLE. Laid down the horse's own long axis it
+        is a pole you cannot see: the 17-long body goes over the top of it and
+        two pixels show at each end. Every pole end must stand clear of every
+        horse it could be under. */
+  const HORSE = ['#f6f2ea', '#e0c9a4'];
+  const bodies = dead.rec.shapes.filter(s => HORSE.includes(s.style) && s.r > 12);
+  assert(bodies.length === 3, 'three horses off the ring, got ' + bodies.length);
+  const ends = dead.rec.all.filter(e => (e[0] === 'm' || e[0] === 'l') && e[3] === POLE);
+  assert(ends.length === 6, 'three poles of two ends, got ' + ends.length);
+  /* Against the body's edge, not its centre. A horse is a 17-by-8 ellipse, so
+     "20px from the middle" is 12px clear across the waist and 3px clear along
+     the spine — measuring from the centre passes a pole that is still buried,
+     which is exactly what it did on the first draft of this test. */
+  // sqrt((u/A)^2 + (v/B)^2) in the body's own frame: 1 on the edge, 2 twice out
+  const edge = (h, dx, dy) => {
+    const c = Math.cos(h.rot || 0), s = Math.sin(h.rot || 0);
+    return Math.hypot((dx * c + dy * s) / h.r, (-dx * s + dy * c) / h.ry);
+  };
+  let clearest = 1e9;
+  for (const e of ends){
+    for (const h of bodies){
+      const dx = e[1] - h.x, dy = e[2] - h.y;
+      if (Math.hypot(dx, dy) > 60) continue;          // a different horse
+      clearest = Math.min(clearest, edge(h, dx, dy));
+    }
+  }
+  assert(clearest > 1.9, 'a pole end is buried in its horse: it stands ' +
+    clearest.toFixed(2) + '× the body\'s own radius in that direction out from ' +
+    'the middle, and a pole laid along the spine gets about 1.5');
+
+  /* 3. The fallen segments must not still meet at the hub. Every one of them
+        used to come to a clean point at dead centre, so the wreck described an
+        intact apex and read as a pinwheel rather than as a roof that had come
+        down. Each one slides off the hub it was nailed to. */
+  const cols = AWNINGS(api);
+  const apexes = dead.rec.all.filter(e => e[0] === 'm' && cols.includes(String(e[4])));
+  assert(apexes.length >= 5, 'five fallen segments, got ' + apexes.length);
+  for (const p of apexes){
+    assert(Math.hypot(p[1], p[2]) > r * 0.08,
+      'a fallen segment still points at the hub: ' +
+      Math.hypot(p[1], p[2]).toFixed(1) + ' from centre on r' + r);
+  }
+  // and they have not all slid the same way, which would be one shape moved
+  const spread = new Set(apexes.map(p => Math.atan2(p[2], p[1]).toFixed(2)));
+  assert(spread.size >= 4, 'the segments all slid the same way: ' + spread.size);
+
+  /* 4. The shadow. A standing canopy is held up high and throws a hard shadow
+        clear of itself; the collapsed one was casting that same shadow, at the
+        same offset and the same alpha, which is most of why the wreck still
+        read as an intact ride seen from further off. */
+  const shad = (rec) => {
+    const s = rec.shapes.filter(x => /^rgba\(8,16,32/.test(String(x.style)));
+    const al = (x) => +/,\s*([\d.]+)\)$/.exec(x.style)[1];
+    return { ry: Math.max(...s.map(x => x.ry)), a: Math.max(...s.map(al)),
+      y: Math.max(...s.map(x => x.y)) };
+  };
+  const sl = shad(live.rec), sd = shad(dead.rec);
+  assert(sd.ry < sl.ry * 0.8,
+    'the wreck lies flat, so its shadow is shallower: ' + sd.ry.toFixed(1) +
+    ' vs the standing ride\'s ' + sl.ry.toFixed(1));
+  assert(sd.a < sl.a * 0.7,
+    'and paler: ' + sd.a.toFixed(3) + ' vs ' + sl.a.toFixed(3));
+  assert(sd.y < sl.y * 0.5,
+    'and thrown less far, because there is nothing left standing up to throw ' +
+    'it: ' + sd.y.toFixed(1) + ' vs ' + sl.y.toFixed(1));
+
+  // none of it touches the simulation stream
+  api.reseed(9931);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(9931);
+  for (let i = 0; i < 24; i++){ dead.o.seed = i / 24; api.drawProp(dead.o); }
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the wrecked carousel moved the simulation stream');
+
+  console.log('    (carousel wreck: ' + dead.rec.fills + ' fills, pole ends ' +
+    clearest.toFixed(2) + '× clear of a horse, segments ' +
+    (Math.min(...apexes.map(p => Math.hypot(p[1], p[2]))) / r).toFixed(2) + '–' +
+    (Math.max(...apexes.map(p => Math.hypot(p[1], p[2]))) / r).toFixed(2) +
+    'r off the hub, shadow ' + sl.ry.toFixed(0) + '->' + sd.ry.toFixed(0) + ' deep)');
+});
+
 test('a wrecked snowman is still a snowman', () => {
   const api = boot({ count: true, w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
@@ -8539,7 +8643,16 @@ test('the carousel has a ride on it', () => {
     ' strokes running, ' + wrecked.fills + ' / ' + wrecked.strokes + ' wrecked)');
   assert(live.strokes >= 6, 'six horses need six poles, got ' + live.strokes + ' strokes');
   assert(live.fills > wrecked.fills, 'a wrecked carousel is a simpler drawing');
-  assert(!wrecked.strokes, 'and it has no poles left standing');
+  /* This used to assert `!wrecked.strokes` — "and it has no poles left
+     standing" — which is how three horses lying in the snow with nothing to
+     say what they had come off got signed off as correct. A thrown horse takes
+     its pole with it, so the wreck has poles; what it does not have is poles
+     still standing up, which is one batched stroke rather than six.
+     See 'a wrecked carousel is a collapse, not a pinwheel'. */
+  assert(wrecked.strokes === 1,
+    'the wreck should carry one batched pass of snapped poles, got ' + wrecked.strokes);
+  assert(wrecked.strokes < live.strokes,
+    'but nothing left standing: ' + wrecked.strokes + ' vs ' + live.strokes);
   // it turns: two clocks apart put the horses somewhere else
   const at = (t) => { api.setT(t); api._resetCounts(); api.drawProp(c); return api._counts; };
   c.dead = false;

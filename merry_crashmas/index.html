@@ -4881,7 +4881,14 @@ function drawProp(o){
     }
     case 'carousel': {
       ctx.save(); ctx.translate(o.x, o.y);
-      shadow(0, o.r * 0.35, o.r * 0.95, o.r * 0.4, 0.3);
+      /* A standing canopy is held up high, so its shadow is thrown well clear
+         of it and reads hard. A collapsed one is lying in the snow, and it was
+         casting the *standing* ride's shadow — the same offset, the same
+         alpha — which is a large part of why the wreck still read as an
+         intact ride seen from further away. Flat on the ground now: barely
+         offset, wider, and much paler. */
+      if (o.dead) shadow(0, o.r * 0.1, o.r * 0.86, o.r * 0.26, 0.16);
+      else shadow(0, o.r * 0.35, o.r * 0.95, o.r * 0.4, 0.3);
       if (o.dead){
         /* Two concentric discs — a brown one and a translucent red one. The
            carousel is the biggest thing in the market at r150 and worth 2,500;
@@ -4892,12 +4899,19 @@ function drawProp(o){
            after the snowman, the present and the tree. */
         ctx.rotate(o.rot || 0);
         const a0 = o.seed * 6.283;
-        // the canopy, caved in: five segments left, each at its own reach
+        /* The canopy, caved in: five segments left, each at its own reach —
+           and each slid off the hub it used to be nailed to. They all used to
+           come to a clean point at dead centre, so the wreck still described an
+           intact hub and the whole thing read as a pinwheel rather than as
+           something that had come down. A collapsed roof does not keep its
+           apex. */
         for (let i = 0; i < 5; i++){
           const b = a0 + i * 1.27, k = 0.5 + (i % 3) * 0.16;
+          const slide = o.r * (0.1 + (i % 2) * 0.055);
+          const ox = Math.cos(b + 0.31) * slide, oy = Math.sin(b + 0.31) * slide;
           ctx.fillStyle = i % 2 ? TH.awning : TH.awning2;
-          ctx.beginPath(); ctx.moveTo(0, 0);
-          ctx.arc(0, 0, o.r * k, b, b + 0.62); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(ox, oy);
+          ctx.arc(ox, oy, o.r * k, b, b + 0.62); ctx.closePath(); ctx.fill();
         }
         ctx.fillStyle = 'rgba(9,16,32,.28)';           // the hollow underneath
         ctx.beginPath();
@@ -4909,7 +4923,25 @@ function drawProp(o){
         ctx.fillStyle = '#ffd34d';                     // its finial, come off
         circle(o.r * 0.66 * Math.cos(a0 + 1.1), o.r * 0.66 * Math.sin(a0 + 1.1) + o.r * 0.1,
           o.r * 0.07); ctx.fill();
-        // and the horses, thrown clear of the ring
+        /* And the horses, thrown clear of the ring — each still on the piece of
+           pole it was mounted on. The barley-sugar poles are the one thing that
+           says fairground ride rather than striped tent, and the wreck had none
+           of them: three horses lying loose in the snow with nothing to say
+           what they had come off. A thrown horse takes its pole with it. */
+        ctx.strokeStyle = '#c9a24a'; ctx.lineWidth = 4; ctx.beginPath();
+        for (let i = 0; i < 3; i++){
+          const a = a0 + 2 + i * 2.2, d = o.r * (0.72 + (i % 2) * 0.18);
+          const hx = Math.cos(a) * d, hy = Math.sin(a) * d;
+          /* Across the horse, not along it. A pole laid down the body's own
+             long axis is a pole you cannot see: the 17-long ellipse goes over
+             the top of it and all that shows is a couple of pixels at each
+             end. Near-perpendicular, it crosses the 8-deep waist and stands
+             well clear on both sides. */
+          const pa = a + 1.2 + (i % 2 ? 1.9 : -1.9);
+          ctx.moveTo(hx - Math.cos(pa) * 20, hy - Math.sin(pa) * 20);
+          ctx.lineTo(hx + Math.cos(pa) * 24, hy + Math.sin(pa) * 24);
+        }
+        ctx.stroke();
         for (let i = 0; i < 3; i++){
           const a = a0 + 2 + i * 2.2, d = o.r * (0.72 + (i % 2) * 0.18);
           const hx = Math.cos(a) * d, hy = Math.sin(a) * d;

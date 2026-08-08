@@ -796,6 +796,43 @@ edit this block to name the next one.
       for being unfalsifiable: a shoulders-aspect check that could not fail
       while both shoulder dimensions were already pinned.
 
+- [x] The carousel you are told to wreck looks wrecked. It is the biggest thing
+      in the market at r150, worth 2,500, and the only prop with a goal that
+      names it — so its wreck is the payoff for an objective, not just debris.
+      A wreck pass had already been done on it, and screenshotting it beside the
+      live one anyway turned up three things. **It cast the standing ride's
+      shadow**: the `shadow()` call sat above the `if (o.dead)` branch, so a
+      collapsed canopy threw the same hard, high, far-offset shadow as one held
+      up on a pole, which is most of why the wreck still read as an intact ride
+      seen from further off. **The horses had lost their poles** — the
+      barley-sugar poles are the one thing that says fairground ride rather
+      than striped tent, and the wreck had three horses lying loose in the snow
+      with nothing to say what they had come off, the same defect the snowman's
+      carrot and the present's paper were fixed for. And **the fallen segments
+      still met at a clean apex at dead centre**, so the wreck described an
+      intact hub and read as a pinwheel rather than as a roof that had come
+      down; each one slides off the hub it was nailed to now.
+  - The old assertion said `and it has no poles left standing`, which is
+      exactly how the missing poles got signed off — second pass in a row where
+      the test that blessed the defect had to be inverted with a pointer to the
+      new one. It now pins one batched stroke pass (snapped poles lying with the
+      horses) rather than none.
+  - Also worth writing down: **my first version of the pole-visibility
+      assertion passed the broken variant.** It measured a pole end's distance
+      from the horse's *centre*, and a horse is a 17-by-8 ellipse — 20px out is
+      12px clear across the waist and 3px clear along the spine. It measures
+      against the body's own edge in that direction now (1 on the boundary,
+      2.40 as shipped, 1.46 for a pole laid along the spine). The same shape as
+      the collider sweep's early measurement bug: an easy radius stood in for
+      the geometry that mattered.
+  - One line of investigation abandoned on the evidence: the collider sweep
+      only ever looks at *live* props, so I extended it to wrecks expecting the
+      usual find. Wrecks run to 164% of the collider (bigtree, glühwein,
+      snowman) — deliberately, because debris scatters and a dead prop is not
+      collidable at all, so nothing about it promises a hit. The bound that
+      would fit is the snowman test's ad-hoc 2.2r, and nothing in the kit comes
+      near it, so the sweep would have been a test that cannot fail. Not added.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
