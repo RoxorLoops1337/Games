@@ -77,7 +77,7 @@ const EXPOSE = `__out.api = {
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
-  carLitDir, drawCar, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
+  carLitDir, drawCar, plowReach, PLOW_PAD, PLOW_T, PLOW_GORE, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   windNow, WIND_STREAK, drawSnow, seedSnow,
@@ -7377,6 +7377,90 @@ function damaged(api, dents, gore, ang){
     lip: shp.filter(a => /255,247,232/.test(String(a[a.length - 1]))),
     blood: shp.filter(a => /126,14,10|168,26,20/.test(String(a[a.length - 1]))) };
 }
+
+/* One of the two things you can pick up, on screen for its whole eight
+   seconds, and it was a flat white trapezoid and a red bar: bolted to nothing,
+   with no back to it, still white after going through a crowd — and drawn 10%
+   longer than the distance it actually hits from. */
+test('the plough is a blade that ends where it hits', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.ang = 0; api.car.z = 0; api.car.roll = 1;
+  api.camSnap();
+  const paint = (plowT, bloody) => {
+    api.car.plowT = plowT; api.car.bloody = bloody;
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawCar());
+    return rec;
+  };
+  const d = api.getDims();
+  const reach = api.plowReach(), wing = d.w / 2 + api.PLOW_PAD;
+  assert(reach === d.l / 2 + api.PLOW_PAD + api.getCar().plow,
+    'plowReach should be the collider’s own number');
+
+  const on = paint(5, 0), off = paint(0, 0);
+  const blade = (rec) => rec.all.filter(e =>
+    (e[0] === 'm' || e[0] === 'l' || e[0] === 'q') &&
+    (e[4] === '#dfe8f6' || e[4] === '#c9cfd8' || e[4] === '#8d97a8'));
+  assert(blade(on).length > 0, 'a fitted plough should draw a blade');
+  assert(blade(off).length === 0, 'no plough, no blade');
+
+  /* The promise it makes must be the one the physics keeps, and this goes
+     first because it is the one the old art broke: it reached CARL*0.72, 4.7
+     units past where a hit actually lands. */
+  for (const e of blade(on)){
+    assert(e[1] <= reach + 0.001,
+      'the blade reaches ' + e[1].toFixed(1) + ' where the plough hits at ' + reach);
+    assert(Math.abs(e[2]) <= wing + 0.001,
+      'a wing reaches ' + Math.abs(e[2]).toFixed(1) + ' where the plough hits at ' + wing);
+  }
+  assert(blade(on).length > 8,
+    'a blade is more than a four-corner cut-out, got ' + blade(on).length + ' points');
+  const far = Math.max(...blade(on).map(e => e[1]));
+  const wide = Math.max(...blade(on).map(e => Math.abs(e[2])));
+  assert(far > reach - 4, 'and it should fill that reach, stopping at ' + far.toFixed(1));
+  assert(wide > d.w / 2, 'a plough is wider than the car, got ' + wide.toFixed(1) +
+    ' against a half-width of ' + d.w / 2);
+
+  /* A band, not a filled wedge: it comes back along a second curve, which is
+     what gives it a back edge and a thickness. The trapezoid had neither. */
+  const face = on.all.filter(e => e[0] === 'q' && e[4] === '#dfe8f6');
+  assert(face.length >= 4, 'the blade should curve out and back, got ' + face.length + ' curves');
+
+  // and it carries what it has been through
+  const clean = paint(5, 0), gory = paint(5, 1), half = paint(5, 0.4);
+  const red = (rec) => rec.order.filter(c => /^rgba\(150,20,16/.test(String(c)));
+  assert(red(clean).length === 0, 'a clean plough is clean');
+  assert(red(gory).length === 1, 'a bloodied one is smeared, got ' + red(gory).length);
+  const alpha = (rec) => +/rgba\(150,20,16,([\d.]+)\)/.exec(red(rec)[0])[1];
+  assert(alpha(gory) > alpha(half),
+    'the smear should follow car.bloody: ' + alpha(gory) + ' vs ' + alpha(half));
+  const smears = gory.all.filter(e => e[0] === 'arc' && e[4] === red(gory)[0]);
+  assert(smears.length === api.PLOW_GORE,
+    api.PLOW_GORE + ' smears expected, got ' + smears.length);
+  for (const sm of smears)
+    assert(sm[1] <= reach + 0.001 && Math.abs(sm[2]) <= wing + 0.001,
+      'a smear landed off the blade at ' + sm[1].toFixed(1) + ',' + sm[2].toFixed(1));
+
+  /* And the collider is really the same number: someone standing at the very
+     end of the blade is hit, and one standing a hair beyond it is not. */
+  api.car.plowT = 5;
+  assert(api.inCar(api.car.x + reach - 1, api.car.y, 0, 0), 'the blade tip should hit');
+  assert(!api.inCar(api.car.x + reach + 2, api.car.y, 0, 0), 'and nothing past it');
+  api.car.plowT = 0;
+  assert(!api.inCar(api.car.x + reach - 1, api.car.y, 0, 0),
+    'with no plough fitted that reach is gone');
+
+  api.reseed(4711);
+  const cleanRnd = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(4711);
+  for (let i = 0; i < 30; i++) paint(5, i / 30);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(cleanRnd),
+    'drawing the plough moved the simulation stream');
+  console.log('    (plough: reach ' + reach + ', wings ' + wing + ', ' +
+    gory.fills + ' fills bloodied)');
+});
 
 test('a battered car looks battered, in four fills not sixteen', () => {
   const api = boot({ count: true, w: 1280, h: 720 });
