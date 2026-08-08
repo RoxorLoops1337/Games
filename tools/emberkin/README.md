@@ -377,6 +377,50 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+87. **The one cut every player sees first was the one cut with no transition**
+    (pass 176). The opening, photographed end to end for the first time — the
+    title is DOM, so a film cannot see it, and every pass until now had looked
+    at beats in isolation.
+
+        title → click → 120ms later: the study, mid-sentence.
+        fade 0, wipe 0, at every sample.
+
+    A door in this game goes through black at `.3`. Waking up after a loss goes
+    through black at `.5`. **The most careful transition in the file, skipped at
+    the one cut every player sees first.** It opens through `OPEN_FADE = .45`
+    now — longer than a door because there is nothing behind it, no longer than
+    waking up because you are not meant to have lost anything.
+
+    Timed from inside the page rather than from screenshots (the first attempt
+    read the fade as finishing in ~150ms, which was screenshot latency, not the
+    game):
+
+        world fully lit at   464ms
+        Rowan speaks at      609ms
+
+    **And the panels came free.** `screenCovered()` is true while a fade runs,
+    and the class it drives already takes the dialogue box out of the way — 173's
+    work, three passes old, doing the job without being asked. Without it,
+    opening through black would have shown Elder Rowan talking over an empty
+    screen, which is worse than the cut.
+
+    **Then the suite caught me, correctly, with the wrong kind of net.**
+    Reformatting `startNew` from one line to a function broke:
+
+        ✗ and New journey really does destroy it — this is not a cosmetic ordering
+
+    …which was a regex over `function startNew() { show(els.title, false);
+    wipeSave()` — **the physical line**. The claim was as true as ever; only the
+    layout moved. Rewritten to assert it behaviourally: save, start a new
+    journey, look for the save. **Rule 68 arriving from the other direction — I
+    have spent six passes saying a net should name the claim, and here was one
+    of mine that named a line.**
+
+    A note on the instrument: the first attempt built a contact sheet by
+    embedding full-page screenshots as base64 in HTML, and it rendered the
+    base64 as text. Not worth debugging — individual frames read fine, and a
+    strip is a convenience, not the evidence.
+
 86. **The ambush happened to the trainer and not to you** (pass 175). The only
     "somebody noticed you" beat in the game, never filmed. `ALERT` is spot .55 +
     walk .55 + land .25 = 1.35s: the frame closes to two 22px bars, the trainer's
