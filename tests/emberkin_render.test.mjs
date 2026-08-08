@@ -1234,6 +1234,114 @@ section('a beat that owns the screen is abandoned when the ground moves under it
   ok(!!g.G.warp, 'and the door you are walking through is not');
 }
 
+section('the plaque waits for the light');
+{
+  // Timed through a real warp: the curtain shuts over 0.17s, the map swaps at
+  // 0.183s, `G.fade` opens the far side over 0.300s — and PLACE_IN is 0.300s
+  // starting at that same instant. ALL of the ease that drawPlace's comment
+  // describes ("it eases on the way in so it arrives rather than snaps") was
+  // spent underneath the fade, and the world appeared with the name already
+  // fully in place.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.enterMap('hollowbrook', 12, 10, 'down');
+  g.G.place = null;
+  const w = (g.G.map.warps || [])[0];
+  ok(!!w, 'hollowbrook has a door to walk through');
+  g.doWarp(w);
+
+  let easeInDark = 0, easeInLight = 0, sawFull = false, cleared = -1, frames = 0;
+  let prev = null;
+  for (let n = 0; n < 400; n++) {
+    const p = g.G.place;
+    const covered = (g.G.fade > 0) || !!g.G.warp;
+    // Only frames where the clock ACTUALLY MOVED count as ease being spent —
+    // a plaque held at t=0 behind the curtain is not spending anything, and
+    // counting its held frames as "under black" was the first version's error.
+    if (p && prev != null && p.t > prev && p.t <= g.PLACE_IN) {
+      if (covered) easeInDark++; else easeInLight++;
+    }
+    if (p && p.t > g.PLACE_IN && p.t < g.PLACE_IN + g.PLACE_HOLD) sawFull = true;
+    if (!p && prev != null && cleared < 0) cleared = n;
+    prev = p ? p.t : null;
+    g.step(1 / 60); g.draw(); frames++;
+  }
+  ok(frames > 300, `the warp was driven frame by frame (${frames} frames)`);
+  ok(easeInLight > 10, `the plaque's entrance is spent in the light (${easeInLight} frames)`);
+  eq(easeInDark, 0, 'and none of it behind the curtain');
+
+  // Waiting is not starving — two claims, netted separately, per 170. A plaque
+  // whose clock is gated on the fade must still arrive and still leave.
+  ok(sawFull, 'it still arrives at full');
+  ok(cleared > 0, `and still leaves (cleared at frame ${cleared})`);
+}
+
+section('a beat is not shown while the screen is covered');
+{
+  // The plaque was the first case; the toast was the second, found by shooting
+  // the wipe at peak cover and seeing the one thing left on screen. Both are
+  // the same rule — a beat whose display time runs behind a curtain has not
+  // been shown, it has been consumed — so the condition has a name and three
+  // callers: the plaque's clock, the toast's clock, and the class that takes
+  // the battle panels out of the wipe.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.enterMap('route_one', 9, 10, 'down');
+
+  const was = { fade: g.G.fade, warp: g.G.warp, wipe: g.G.wipe };
+  g.G.fade = 0; g.G.warp = null; g.G.wipe = 0;
+  eq(g.screenCovered(), false, 'an open screen is not covered');
+  g.G.fade = .2; ok(g.screenCovered(), 'a fade covers it'); g.G.fade = 0;
+  g.G.warp = { t: .1, to: {} }; ok(g.screenCovered(), 'a door covers it'); g.G.warp = null;
+  g.G.wipe = .2; ok(g.screenCovered(), 'the battle bars cover it'); g.G.wipe = 0;
+  Object.assign(g.G, was);
+
+  // The toast, through a real wipe. `startBattle` sets G.wipe, and the sighting
+  // toast fires in the same breath — measured, it sat at 0.99 opacity over a
+  // picture that was 97% black, spending its whole life behind the bars.
+  const g2 = loadGame({});
+  g2.setCtx(mkCtx());
+  g2.newGame(); g2.takeStarter('cindercub'); g2.G.dialogue = null;
+  g2.enterMap('route_one', 9, 10, 'down');
+  for (let n = 0; n < 200 && (g2.G.place || g2.G.toastT > 0); n++) g2.step(1 / 60);
+  const roll = Math.random;
+  Math.random = () => .999;
+  try { g2.startBattle({ foe: g2.mkMon('dewdrip', 6), wild: true }); }
+  finally { Math.random = roll; }
+  g2.G.battleMsg = null;
+  g2.G.toast = 'x'; g2.G.toastT = 2.4;                 // DIRTIED: a toast to spend
+  const full = g2.G.toastT;
+  let spentCovered = 0, spentOpen = 0, prev = g2.G.toastT;
+  for (let n = 0; n < 400 && g2.G.toastT > 0; n++) {
+    g2.step(1 / 60); g2.draw();
+    // Sampled AFTER the step, because that is the value the toast's own tick
+    // used: `step` decays the wipe and then reaches the toast, so on the frame
+    // the bars finish the screen is already open. Sampling before counted that
+    // frame as covered and reported a one-frame leak that was not there.
+    const covered = g2.screenCovered();
+    if (g2.G.toastT < prev) { if (covered) spentCovered++; else spentOpen++; }
+    prev = g2.G.toastT;
+  }
+  eq(spentCovered, 0, 'none of the toast is spent behind the bars');
+  ok(spentOpen > 60, `and all of it in the open (${spentOpen} frames of ${full}s)`);
+  // The game lets it go a hair past zero rather than clamping, and the string
+  // is cleared on that frame — so the claim is that it ran out, not that it
+  // landed on a round number.
+  ok((g2.G.toastT || 0) <= 0 && !g2.G.toast,
+    `and it still runs out — waiting is not starving (${(g2.G.toastT || 0).toFixed(2)})`);
+
+  // …and the panels. A canvas wipe cannot fade a DOM panel, so every one of
+  // them has to be named. Netted as a count against the elements the battle
+  // actually shows, so a panel added later has somewhere to fail.
+  const rule = SRC.match(/body\.wiping[^{]*\{[^}]*\}/);
+  ok(rule, 'the wipe takes the panels with it');
+  for (const id of ['hudFoe', 'hudMine', 'intent', 'battlebar', 'acts', 'piles', 'energy', 'dialogue', 'toast']) {
+    ok(rule[0].includes('#' + id), `#${id} goes with the wipe`);
+  }
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
