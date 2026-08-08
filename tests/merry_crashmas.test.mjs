@@ -75,7 +75,7 @@ const EXPOSE = `__out.api = {
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
   TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
-  drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
+  drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS,
   carLitDir, drawCar, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
@@ -5030,10 +5030,88 @@ test('a tree never draws past the circle you can actually hit', () => {
   const api = boot({ w: 1280, h: 720 });
   assert(api.TREE_SPIKE > 0.02, 'the tiers should actually be spiked, got ' + api.TREE_SPIKE);
   const peak = api.TREE_TIER * (1 + api.TREE_SPIKE);
-  console.log('    (outermost tier reaches ' + (peak * 100).toFixed(1) + '% of the collider)');
-  assert(peak <= 1,
-    'the outermost tier reaches ' + peak.toFixed(4) + ' of r, past the collider');
-  assert(peak > 0.9, 'and it should not be a shrunken disc either: ' + peak.toFixed(4));
+  /* The snow load rides on top of the needles, so it — not the tier — is what
+     the silhouette ends in. Measuring only the green would have let the snow
+     out past the collider by 11%, which is exactly what the first version of
+     it did. */
+  const snowPeak = peak + api.TREE_TIER * api.TREE_SNOW;
+  console.log('    (tree reaches ' + (peak * 100).toFixed(1) + '% of the collider in needles, ' +
+    (snowPeak * 100).toFixed(1) + '% with its snow)');
+  assert(snowPeak <= 1,
+    'the snow reaches ' + snowPeak.toFixed(4) + ' of r, past the collider');
+  assert(snowPeak > 0.9, 'and it should not be a shrunken disc either: ' + snowPeak.toFixed(4));
+  assert(peak < snowPeak, 'the needles should stop short of the snow on them');
+
+  // and the drawing agrees with the arithmetic
+  api.startCampaign(); api.beginLevel();
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawTreeTop(0, 0, 100, false, 0, 0.31));
+  const far = Math.max(...rec.all.filter(e => e[0] === 'm' || e[0] === 'l')
+    .map(e => Math.hypot(e[1], e[2])));
+  assert(far <= 100.001, 'a tree drew ' + far.toFixed(1) + ' out from a collider of 100');
+});
+
+/* Every conifer in the game — 209 across the campaign plus the town tree in
+   each market — stood bare in a market whose ground, roofs and snowmen are all
+   snow. */
+test('snow settles on a conifer, on the side the light comes from', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const th = api.getTheme();
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawTreeTop(0, 0, 100, false, 0, 0.31));
+
+  const pts = (col) => rec.all.filter(e =>
+    (e[0] === 'm' || e[0] === 'l') && e[4] === col);
+  const snow = pts(api.TREE_SNOW_C);
+  const tiers = th.tree.map(c => pts(c)).filter(a => a.length);
+  assert(tiers.length >= 4, 'a conifer is four tiers, found ' + tiers.length);
+  assert(snow.length === tiers.reduce((n, a) => n + a.length, 0),
+    'every tier should carry snow: ' + snow.length + ' snow points for ' +
+    tiers.reduce((n, a) => n + a.length, 0) + ' needle points');
+
+  /* Under each tier, not over it. Over it buries the tree in white — which is
+     what it did the first time, and the screenshot is the only place it shows. */
+  const seq = rec.order.filter(c => c === api.TREE_SNOW_C || th.tree.indexOf(c) >= 0);
+  for (let i = 0; i < 4; i++)
+    assert(seq[i * 2] === api.TREE_SNOW_C && th.tree.indexOf(seq[i * 2 + 1]) >= 0,
+      'tier ' + i + ' should be snow then needles, got ' + seq[i * 2] + ' / ' + seq[i * 2 + 1]);
+
+  // pushed towards the light, and only towards the light
+  const mid = (a) => [a.reduce((n, e) => n + e[1], 0) / a.length,
+                      a.reduce((n, e) => n + e[2], 0) / a.length];
+  const [sx, sy] = mid(snow), [tx, ty] = mid(tiers.flat());
+  const ox = sx - tx, oy = sy - ty;
+  const len = Math.hypot(ox, oy);
+  assert(len > 2, 'the snow should sit off-centre, offset only ' + len.toFixed(2));
+  const sun = Math.hypot(api.SUN_DX, api.SUN_DY);
+  const dot = (ox * -api.SUN_DX + oy * -api.SUN_DY) / (len * sun);
+  assert(dot > 0.999,
+    'the snow should ride towards the light, off by ' +
+    (Math.acos(Math.min(1, dot)) * 57.3).toFixed(1) + '°');
+
+  // the felled tree keeps its load, under the greens
+  const dead = carRec();
+  api.withCtx(dead, () => api.drawTreeTop(0, 0, 100, true, 0.4, 0.31));
+  const dseq = dead.order.filter(c => c === api.TREE_SNOW_C || th.tree.indexOf(c) >= 0);
+  assert(dseq[0] === api.TREE_SNOW_C,
+    'a felled tree should still be carrying snow, under its greens');
+  assert(dead.all.some(e => e[4] === api.TREE_SNOW_C), 'and actually draw it');
+
+  // spikeRing without an offset is exactly what it always was
+  const a = carRec(), b = carRec();
+  api.withCtx(a, () => api.spikeRing(40, 9, 0.055, 1.2));
+  api.withCtx(b, () => api.spikeRing(40, 9, 0.055, 1.2, 0, 0));
+  assert(JSON.stringify(a.all) === JSON.stringify(b.all),
+    'adding an offset changed the un-offset ring');
+
+  // none of it reaches the simulation
+  api.reseed(8080);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(8080);
+  for (let i = 0; i < 30; i++) api.drawTreeTop(0, 0, 60, i % 2 === 0, 0.3, i / 30);
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'snowing the trees moved the simulation stream');
 });
 
 test('a tree costs a flat handful of fills however many baubles it has', () => {
@@ -5045,10 +5123,21 @@ test('a tree costs a flat handful of fills however many baubles it has', () => {
   const fills = api._counts.fill || 0;
   console.log('    (one tree: ' + fills + ' fills)');
   assert(fills >= 12, 'a tree needs tiers, baubles and a star, got ' + fills);
+  /* Four tiers, each with its snow load under it, a lit side, seven baubles,
+     one batched highlight pass, a star and its glow. The cap moved from 18
+     when the snow went on; what it is really guarding is below. */
+  assert(fills <= 22, 'a tree should stay a handful of fills, got ' + fills);
   /* Seven baubles used to mean seven highlight fills on top of seven bauble
-     fills, on every tree in a market that holds fifteen of them. The
-     highlights are one path now. */
-  assert(fills <= 18, 'the ornaments should be batched, got ' + fills + ' fills');
+     fills, on every tree in a market that holds fifteen of them. That is the
+     claim a total cannot make on its own: the highlights are one path. */
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawTreeTop(0, 0, 56, false, 0, 0.3));
+  const hi = rec.order.filter(c => c === 'rgba(255,255,255,.55)');
+  const baubles = rec.all.filter(e => e[0] === 'arc' &&
+    ['#ffd34d', '#e0483c', '#7ec8ff'].indexOf(String(e[4])) >= 0);
+  assert(baubles.length >= 7, 'seven baubles expected, got ' + baubles.length);
+  assert(hi.length === 1,
+    baubles.length + ' baubles should share one highlight pass, got ' + hi.length);
   // a felled tree is a cheaper drawing than a standing one
   api._resetCounts();
   api.drawTreeTop(2000, 1100, 56, true, 0.6, 0.3);
