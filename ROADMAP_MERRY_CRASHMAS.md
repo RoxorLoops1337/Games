@@ -725,6 +725,24 @@ edit this block to name the next one.
       hood. Screenshotting the three side by side is the only way this shows —
       which is why it lasted a whole pass.
 
+- [x] The hat that comes off is the hat they were wearing. Third pass in a row
+      on the same shape of defect — one object, several drawings, drifted apart
+      — and this one was a hardcode at both ends: the knocked-off hat was one
+      red at the spawn and a slightly different red at the draw, so whichever
+      of the five `HATS` a shopper had on, the hat that flew off was red. Its
+      bobble also trailed behind the crown like a collar, which is the exact
+      fault the *worn* hat had a comment about having fixed. `hatOf(p)` is the
+      one source now, read by the middle tier, the fine tier and the spawn, and
+      the fx draws `f.col` with the bobble on the crown. The suite greps the
+      source for both dead literals, so re-hardcoding one is caught rather than
+      just being caught by eye.
+  - **Known and deliberately not fixed:** Santa's drawn hat is unconditional
+      but the fx only spawns on `p.hat`, which is `rnd() < 0.72` — so roughly
+      one Santa in four wears a hat that never comes off. Fixing it means four
+      more `rr()` calls inside `killPerson` for those Santas, which renumbers
+      every roll after it and rescores all twenty-one markets. Same reasoning
+      as the discarded `ri(0,3)` kept in the bag drop.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

@@ -2281,7 +2281,7 @@ function killPerson(p, vx, vy, cause){
   }
   if (p.hat){
     addFx({ type:'hat', x: p.x, y: p.y, vx: (vx || 0) * 0.35 + rr(-60, 60), vy: (vy || 0) * 0.35 + rr(-90, 30),
-      ttl: 1.1, size: 11, col:'#e33', rot: rr(0, 6.28), spin: rr(-10, 10) });
+      ttl: 1.1, size: 11, col: hatOf(p), rot: rr(0, 6.28), spin: rr(-10, 10) });
   }
   /* The balloon is let go rather than deleted. A child's balloon simply
      vanished the frame they were hit, which is the same thing the smashed
@@ -3796,6 +3796,14 @@ const COATS = ['#e05143', '#3f86c4', '#41a066', '#9a5cbe', '#e08a2e', '#6b7a94',
 const ELDER_COATS = ['#6b6f7e', '#7a6a5e', '#5f6b7a', '#79697a'];
 const KID_COATS = ['#ff8a3d', '#3fc4d8', '#ffcf3d', '#8ee06a'];
 const HATS = ['#e0483c', '#2f8a52', '#e8b53a', '#f2efe6', '#3f86c4'];
+/* What colour hat someone has on. One function, because the hat that comes off
+   used to be one red at the spawn and a slightly different red at the draw —
+   two hardcodes for one thing, so whichever of the five a shopper was wearing,
+   the hat that flew off was red. The suite greps for those two literals, so
+   they are described here rather than quoted. Santa's is his own red and is
+   deliberately not in the shopper set. */
+const SANTA_HAT = '#d8382c';
+const hatOf = (p) => p.kind === 'santa' ? SANTA_HAT : HATS[p.hatCol % HATS.length];
 /* What a shopper is carrying, and what they drop. Muted on purpose: an earlier
    palette was lifted straight off COATS and HATS, so a bag on the ground read
    as another shopper lying down. One list, so the bag in the hand and the bag
@@ -5490,7 +5498,7 @@ function drawPerson(p){
       ctx.fillStyle = '#f6f2ea';
       circle(p.r * 1.78, p.r * 0.16, p.r * 0.15); ctx.fill();
     } else if (p.hat){
-      ctx.fillStyle = HATS[p.hatCol % HATS.length];
+      ctx.fillStyle = hatOf(p);
       circle(p.r * 1.3, p.r * 0.18, p.r * 0.34); ctx.fill();
     }
     ctx.strokeStyle = '#2a1a16'; ctx.lineWidth = 2;
@@ -5682,7 +5690,7 @@ function drawPerson(p){
     ctx.fillStyle = '#f3efe6';                     // the beard, below the chin
     ctx.beginPath();
     ctx.ellipse(0, 0, p.r * 0.38, p.r * 0.22, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#d8382c';                     // the hat, on the crown
+    ctx.fillStyle = SANTA_HAT;                     // the hat, on the crown
     circle(0, -p.r * 0.6, p.r * 0.4); ctx.fill();
     ctx.fillStyle = '#f6f2ea';                     // its fur band
     ctx.beginPath();
@@ -5693,7 +5701,7 @@ function drawPerson(p){
        head with the bobble on top of it — not, as this drew, a flat disc with
        a white dot trailing behind it like a collar. The lit side comes from
        the scene's one light direction, the brim shadow from the back. */
-    const hc = HATS[p.hatCol % HATS.length];
+    const hc = hatOf(p);
     ctx.fillStyle = hc;
     circle(0, -p.r * 0.24, p.r * 0.5); ctx.fill();
     if (fine){
@@ -6519,9 +6527,15 @@ function drawFx(over){
       ctx.quadraticCurveTo(f.x + Math.sin(f.rot * 3) * r, f.y + r * 2.2, f.x, f.y + r * 3.2);
       ctx.stroke();
     } else if (f.type === 'hat'){
+      /* The same hat that was on their head a frame ago: their colour, and the
+         bobble on top of the crown rather than trailing behind it like a
+         collar — which is the exact fault the worn one had fixed and this one
+         kept, because they were two drawings of one object. */
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
-      ctx.fillStyle = '#d34036'; circle(0, 0, f.size); ctx.fill();
-      ctx.fillStyle = '#f6f2ea'; circle(f.size * 0.5, -f.size * 0.6, f.size * 0.4); ctx.fill();
+      ctx.fillStyle = f.col; circle(0, 0, f.size); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.20)';
+      circle(-f.size * 0.32, -f.size * 0.26, f.size * 0.52); ctx.fill();
+      ctx.fillStyle = '#f6f2ea'; circle(0, 0, f.size * 0.32); ctx.fill();
       ctx.restore();
     } else if (f.type === 'star'){
       ctx.fillStyle = f.col;
