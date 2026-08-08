@@ -114,6 +114,11 @@ const MUTANTS = [
   { name: 'wide: the bag stops being shelved', aims: ['the screens have a shape'],
     find: 'function shelve(', to: 'function shelve(keys) { return [[\'All\', keys]]; }\nfunction shelveOld(' },
 
+  { name: 'phone: the list never follows the cursor', aims: ['the list follows the cursor'],
+    find: '  if (sel.top < box.scrollTop) return Math.max(0, sel.top);', to: '  return box.scrollTop;' },
+  { name: 'phone: the list shifts under an in-view selection', aims: ['the list follows the cursor'],
+    find: '  if (sel.top < box.scrollTop) return Math.max(0, sel.top);\n  const bottom', to: '  return Math.max(0, sel.top);\n  const bottom' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
