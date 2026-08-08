@@ -377,6 +377,49 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+57. **The line said what it was for, and did half of it** (pass 146). The cast
+    sweep's method, pointed at a screen instead of a script: shoot the battle in
+    four states — fresh, nearly dead, out of energy, endgame — and read them
+    side by side rather than admiring each one.
+
+    The second frame is the finding. Nine HP out of sixty-three, burning, and
+    the foe telegraphing `about 30`. The player is dead next turn and the screen
+    says so nowhere. It reads in exactly the same colour, in exactly the same
+    place, as it does at full health — while `9/63` sits on the other side of
+    the arena for the player to hold in their head.
+
+    And the chip was already doing arithmetic. It subtracts guard and shield to
+    print what LANDS beside what is swung, and colours that green or amber. Its
+    own comment says why it exists:
+
+        the whole reason that line exists is to answer
+        "can I take this, or do I need to block?"
+
+    It answers the first half. "How much lands" has no meaning without "how much
+    is left", and both numbers were already on screen. So the chip finishes the
+    sentence now: at 9 against 30 it reads `· enough to finish you` and the
+    FRAME goes red and pulses.
+
+    The frame, not the words, because `#intent b` was already `--hp-bad` — the
+    move's name is red every turn of the game. A warning written in more red
+    reads as more chip. When a colour is already spent on ordinary state, it
+    cannot also be the alarm.
+
+    The comparison is against what LANDS, not what is swung, which is what makes
+    blocking answer the warning — put up enough shield and it goes away. A net
+    that read the raw number would have passed every other check and quietly
+    broken that.
+
+    Two things looked at and deliberately left. The foe's bar carries no number
+    while yours does; that asymmetry is the genre's, and this game answers it
+    with the telegraph rather than with a number, which is the deck-builder's
+    answer and a coherent one. And a kin at 14% looks identical to one at full —
+    only the bar and a chip change. That is an art question, not a correctness
+    one, and it is the owner's call.
+
+    **When a comment says what a line is for, read the line against the comment.
+    This one had been telling anybody who looked that it was half-finished.**
+
 56. **The line was never wrong. He was** (pass 145). A closing sweep of the
     dialogue seam: dump what all seventeen npcs say at four points in the story
     — fresh, mid-route, post-Warden, post-ending — and read the four columns
