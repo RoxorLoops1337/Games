@@ -895,6 +895,84 @@ section('the wait before a catch resolves has something tightening inside it');
   ok(seen.has('wobble'), `through its beats (${[...seen].join(', ')})`);
 }
 
+section('an evolution winds up rather than jumping about');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+
+  // The wheel's spin is an ANGULAR VELOCITY and it has to be integrated. The
+  // draw used to rotate by `G.t * (.35 + heat * 2.6)` — a product of time and a
+  // rate that changes, which is not the angle a thing turning at that rate
+  // would be at. Measured across a whole evolution that snapped backwards at
+  // 425 rad/s at the burst and reversed a second time in plain view during the
+  // settle: three sign flips where the intent was one wind-up and a release.
+  const mag = ['hold', 'build'].flatMap((p) =>
+    [0, .25, .5, .75, 1].map((k) => Math.abs(g.evoSpin(p, k, false))));
+  ok(mag.every((v, i) => i === 0 || v >= mag[i - 1] - 1e-9),
+    `the light gathers speed all the way in (${mag[0].toFixed(2)} → ${mag[mag.length - 1].toFixed(2)} rad/s)`);
+  ok(g.evoSpin('settle', 1, true) !== 0 && Math.abs(g.evoSpin('settle', 1, true)) < Math.abs(g.evoSpin('build', 1, true)),
+    'and lets it go again afterwards');
+
+  // Drive the whole beat and watch the ACCUMULATED angle. A frame may only turn
+  // the wheel by as much as the fastest legal rate allows — this is the net
+  // that the old expression fails by two orders of magnitude, and it cannot be
+  // stated about the rate alone, only about the angle over time.
+  const m = g.mkMon('cindercub', 15);
+  g.G.party = [m]; m.lvl = 16; g.refresh(m);
+  g.runEvolution(m);
+  const a = g.G.evoAnim;
+  ok(!!a, 'an evolution is running');
+  const top = Math.max(...['hold', 'build', 'burst', 'settle', 'quiet'].flatMap((p) =>
+    [0, .5, 1].map((k) => Math.abs(g.evoSpin(p, k, false)))));
+  const dt = 1 / 30;
+  let prev = a.spin, worst = 0, flips = 0, lastDir = 0, frames = 0;
+  for (let i = 0; i < 300 && g.evoPhase(); i++) {
+    g.step(dt); g.draw();
+    if (!g.evoPhase()) break;
+    const d = a.spin - prev;
+    worst = Math.max(worst, Math.abs(d) / dt);
+    const dir = Math.sign(d);
+    if (dir && lastDir && dir !== lastDir) flips++;
+    if (dir) lastDir = dir;
+    prev = a.spin; frames++;
+  }
+  ok(frames > 60, `the beat was driven frame by frame (${frames} frames)`);
+  ok(worst <= top + 1e-6,
+    `and no frame turns the wheel faster than the light can (${worst.toFixed(1)} rad/s, ceiling ${top.toFixed(1)})`);
+  eq(flips, 1, 'it changes direction once, when the creature does');
+}
+
+section('a plaque does not draw over the thing that has taken the screen');
+{
+  // The rule was already written at the call site — "a plaque has no business
+  // sitting on top of a catch or a wipe" — and then it named one screen-taker.
+  // An evolution replaces the world exactly as a battle does.
+  //
+  // Netted by DIFFERENCE rather than by reading the guard: hold the evolution
+  // perfectly still, draw one frame with a plaque raised and one without, and
+  // count what reached the canvas. If the plaque is suppressed the two frames
+  // are the same picture. A source-level net here would name the guard; this
+  // names the claim.
+  const frame = (withPlace) => {
+    const g = loadGame({});
+    const log = [];
+    g.setCtx(mkCtx(log));
+    g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+    g.enterMap('route_one', 9, 10, 'down');
+    const m = g.mkMon('cindercub', 15);
+    g.G.party = [m]; m.lvl = 16; g.refresh(m);
+    g.runEvolution(m);
+    g.G.place = withPlace ? { name: 'Route One', t: .4 } : null;
+    g.draw();                       // one frame, nothing stepped
+    return log.length;
+  };
+  const bare = frame(false), plaqued = frame(true);
+  eq(plaqued, bare,
+    `the same picture with a plaque raised and without (${plaqued} vs ${bare} draw calls)`);
+  ok(bare > 0, 'and the frame drew something at all');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
