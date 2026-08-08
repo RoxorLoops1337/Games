@@ -2414,3 +2414,57 @@ desktop one. That is the correct answer and not an obvious one.
     with the claim it was pretending to make: the haze must come after the last
     transform in the arena, which is the stands, so the ground the kin stand ON
     is lit too. Seven planted faults, all seven bite.
+
+89. **A lifetime written for every speck of air, computed every frame, and
+    thrown away on the next line** (pass 178). Took job (d) — measure the eight
+    MAPS the way 177 measured the eight arenas — and the world came back clean:
+    every map has its own AIR entry, every outdoor map its own WEATHER and WIND,
+    frame luminance spread 44.57 and hue spread 296 degrees across the eight.
+    Eight places, not one. The finding was three levels down from the question.
+
+    First the dials, neutralised one at a time, as mean absolute pixel change:
+
+        grade 6.46   vig 3.50   tint 4.88   motes 0.033   mc 0.009   drift 0.068
+
+    which reads as *half the weather table is decoration nobody can see*. It is
+    not. **A mean over 53,248 pixels is the wrong statistic for 28 specks.**
+    Counted where they land instead: 16-35 pixels lit per frame, changing 70-81
+    of 255 at those pixels, peaking at 152. Perfectly visible. Nearly "fixed"
+    something that was not broken.
+
+    What WAS broken sat four lines into `drawMotes`:
+
+        const life = 6 + fx * 5;
+        ...
+        void life;
+
+    A per-mote lifetime, six to eleven seconds, computed for every speck on
+    every frame and explicitly discarded. Without it the position wrapped modulo
+    the frame, so a speck running off one edge reappeared at the other **at
+    whatever brightness it was**. Measured over 30s at 60fps on all eight maps,
+    counting only arrivals with nothing lit within 2px of them last frame:
+
+        baseline   mean brightness at birth 102.9   100% arrived visible   peak 182
+        life spent mean brightness at birth   1.0     0% arrived visible   peak   2
+
+    `life` is spent now: a speck is born from nothing at the seed the lattice
+    gave it, drifts, and is gone to nothing, and there is no wrap left to pop
+    at. Cost: about a quarter fewer lit pixels per frame, because a speck now
+    spends part of its life dim — which is what a fade is.
+
+    **Two instruments wrong before one was right.** The first metric was
+    edge-brightness over middle-brightness, which went from 0.955 to 1.225 —
+    *worse* — because removing the wrap stopped scrambling positions, so `fy`
+    started predicting both a speck's row and its brightness. The second counted
+    every dark-to-lit pixel, which is 72% "births" for the trivial reason that a
+    drifting 1px speck lights a new pixel every step: **that measures motion,
+    not popping.** Only the third — arrivals with nothing lit within 2px last
+    frame — measures the thing.
+
+    **And the sentence again.** The wiring net counted drawn rects against
+    specks with `a > 0`, at an arbitrary moment. `sin(k*PI)` is exactly zero on
+    a set of measure zero, so both sides were always 28 and deleting the guard
+    changed nothing — 177's lesson, one pass later, in a new disguise. The
+    guard has a real threshold now (below `1/255` the fill changes nothing) and
+    the net SEARCHES for a moment when it fires. Five planted faults, all five
+    bite, including putting `void life` back.

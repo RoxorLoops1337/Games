@@ -11327,27 +11327,51 @@ const AIR_DEFAULT = { tint: [255, 220, 180], grade: .14, vig: .42, motes: 14, mc
  * clock and wrapping. No allocation, no particle list, and the same frame every
  * time for a given t — which the render suite needs and which costs nothing.
  */
+/**
+ * Where one speck is and how bright, as a value.
+ *
+ * Alpha is the other thing the headless canvas cannot see — it records the
+ * rectangle and not the colour — so a mote is computed out here and drawMotes
+ * only spends it.
+ *
+ * A mote used to wrap: its position was taken modulo the frame, so when it ran
+ * off one edge it reappeared at the other AT WHATEVER BRIGHTNESS IT WAS. Its
+ * lifetime was already written on the line above — `life`, six to eleven
+ * seconds — and then thrown away with `void life`. Measured, a speck at the
+ * frame edge came out 0.955x as bright as one in the middle: it popped.
+ *
+ * So `life` is spent now. A mote is born from nothing, drifts, and is gone to
+ * nothing, and there is no wrap left to pop at — a speck that reaches the edge
+ * has already faded out. `fy` offsets the clock so the field never blinks
+ * together, and the drift is centred on the seed so mid-life is where the
+ * lattice put it.
+ */
+const moteAt = (i, t, air) => {
+  const h = Math.sin(i * 12.9898) * 43758.5453;
+  const fx = h - Math.floor(h);
+  const h2 = Math.sin(i * 78.233) * 22578.145;
+  const fy = h2 - Math.floor(h2);
+  const life = 6 + fx * 5;
+  const age = (t + fy * life) % life;
+  const fade = Math.sin(age / life * Math.PI);
+  // Breathing, out of phase, so the field never pulses as one.
+  const breath = (.34 + .40 * (.5 + .5 * Math.sin(t * 1.6 + i * 2.1))) * (.55 + .45 * fy);
+  return {
+    x: Math.round(fx * VIEW_W + age * air.drift[0]),
+    y: Math.round(fy * VIEW_H + age * air.drift[1]),
+    a: fade * breath, sz: fx > .82 ? 2 : 1, life, age,
+  };
+};
+
 function drawMotes(g, air, t) {
   const n = air.motes | 0;
   if (!n) return;
-  const [dx, dy] = air.drift;
   g.save();
   for (let i = 0; i < n; i++) {
-    // Cheap hash so the specks are scattered rather than gridded.
-    const h = Math.sin(i * 12.9898) * 43758.5453;
-    const fx = h - Math.floor(h);
-    const h2 = Math.sin(i * 78.233) * 22578.145;
-    const fy = h2 - Math.floor(h2);
-    const life = 6 + fx * 5;
-    const x = (fx * VIEW_W + t * dx) % (VIEW_W + 8);
-    const y = (fy * VIEW_H + t * dy) % (VIEW_H + 8);
-    // Breathing, out of phase, so the field never pulses as one.
-    const a = (.34 + .40 * (.5 + .5 * Math.sin(t * 1.6 + i * 2.1))) * (.55 + .45 * fy);
-    g.fillStyle = `rgba(${air.mc[0]},${air.mc[1]},${air.mc[2]},${a.toFixed(3)})`;
-    const sz = fx > .82 ? 2 : 1;
-    g.fillRect(Math.round((x + VIEW_W + 8) % (VIEW_W + 8)) - 4,
-      Math.round((y + VIEW_H + 8) % (VIEW_H + 8)) - 4, sz, sz);
-    void life;
+    const m = moteAt(i, t, air);
+    if (m.a < 1 / 255) continue;   // below an 8-bit step the fill changes nothing
+    g.fillStyle = `rgba(${air.mc[0]},${air.mc[1]},${air.mc[2]},${m.a.toFixed(3)})`;
+    g.fillRect(m.x, m.y, m.sz, m.sz);
   }
   g.restore();
 }
@@ -12122,7 +12146,7 @@ if (typeof window !== 'undefined') {
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,
     newGame, boot, say, openScreen, closeScreen, screenLocked, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
-    GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
+    GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather, AIR, AIR_DEFAULT, drawAir, drawMotes, moteAt,
     entryFx, pushPop, drawPops, drawCrit, POP_LIFE, WIND_UP, RECOIL, CRIT_BURST,
     renderHand, fanStyle, playSelected, doEndTurn, submitLog, moveCardText, moveDamage, moveDamageNeutral, cardHTML,
     talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
