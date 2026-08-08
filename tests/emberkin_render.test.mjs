@@ -3440,4 +3440,91 @@ section('a pull that costs you a card says which card');
   ok(/\.item \.info small\.swapped\{/.test(SRC), 'which is styled apart from the description');
 }
 
+// 179 found `G.screen.prev` written by openScreen and read by nothing. Driven
+// rather than read: every row of the pause menu — Kin, Dex, Bag, Box, Deck —
+// recorded prev='menu' and then dropped you into the world when you pressed
+// back, so looking at two of them meant opening the menu twice. Meanwhile the
+// profile screen, opened with an explicit `back: 'party'`, returned properly:
+// the rule was written and applied to exactly one case.
+section('back out of a menu row goes back to the menu');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const tap = (k) => { g.pressKey(k); g.frame(.016); g.releaseKey(k); g.frame(.016); };
+  const fresh = () => {
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 8), g.mkMon('pyrelynx', 9)];
+    g.G.bag = { salve: 2, orb: 3 };
+    g.G.box = [g.mkMon('brookite', 5)];
+  };
+
+  // The rows are read OUT of the menu the game builds, not listed here — a row
+  // added or renamed must not quietly fall outside this net.
+  fresh();
+  tap('b');
+  ok(g.G.menu && g.G.mode === 'menu', 'the pause menu opens');
+  const rows = g.G.menu.rows.map((r) => r.label);
+  const opens = [];
+  for (let row = 0; row < rows.length; row++) {
+    fresh();
+    tap('b');
+    for (let i = 0; i < row; i++) tap('down');
+    eq(g.G.menu.i, row, `the cursor walks to ${rows[row]}`);
+    tap('a');
+    if (!g.G.screen) continue;                       // Sound, Save, Close, Fullscreen
+    opens.push(rows[row]);
+    eq(g.G.screen.prev, 'menu', `${rows[row]} remembers it came from the menu`);
+    eq(g.G.screen.prevRow, row, 'and which row of it');
+    tap('b');
+    ok(!g.G.screen, `${rows[row]} closes`);
+    ok(!!g.G.menu, `and puts the menu back (${rows[row]})`);
+    eq(g.G.mode, 'menu', 'in menu mode, not out in the grass');
+    eq(g.G.menu.i, row, `with the cursor still on ${rows[row]}`);
+    // …and one more back is the way out, or the menu is a trap.
+    tap('b');
+    ok(!g.G.menu && g.G.mode === 'world', `and a second back leaves (${rows[row]})`);
+  }
+  ok(opens.length >= 5, `every row that opens a screen was walked (${opens.join(', ')})`);
+
+  // Two screens in one visit — the whole point of the change.
+  fresh();
+  tap('b');
+  const seen = [];
+  for (const row of [0, 2]) {
+    while (g.G.menu.i > row) tap('up');
+    while (g.G.menu.i < row) tap('down');
+    tap('a');
+    if (g.G.screen) seen.push(g.G.screen.kind);
+    tap('b');
+  }
+  eq(seen.length, 2, `two screens visited without reopening the menu (${seen.join(', ')})`);
+  ok(!!g.G.menu, 'and the menu is still up at the end of it');
+
+  // Nothing else moved. A screen opened from the world still leaves to the
+  // world, and one opened in a fight still leaves to the fight.
+  fresh();
+  g.openScreen('party');
+  eq(g.G.screen.prev, 'world', 'a screen opened from the world remembers the world');
+  g.closeScreen();
+  eq(g.G.mode, 'world', 'and goes back to it');
+  ok(!g.G.menu, 'without conjuring a menu that was never open');
+
+  fresh();
+  g.startBattle({ foe: g.mkMon('kindlark', 8), wild: true });
+  g.openScreen('bag');
+  eq(g.G.screen.prev, 'battle', 'a bag opened in a fight remembers the fight');
+  g.closeScreen();
+  eq(g.G.mode, 'battle', 'and goes back to it');
+
+  // The path that already worked still works: a profile named its own way back
+  // before this pass and must not have been overtaken by prev.
+  fresh();
+  g.openScreen('party');
+  g.openScreen('profile', { mon: g.G.party[0], back: 'party' });
+  g.closeScreen();
+  ok(g.G.screen && g.G.screen.kind === 'party', 'a profile still returns to the list it names');
+}
+
 done('emberkin_render');

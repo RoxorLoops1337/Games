@@ -2521,3 +2521,42 @@ desktop one. That is the correct answer and not an obvious one.
     none of them — **you lose a card per pull and are never told which.** The
     shelf says it now, in gold, under each card it gave you. Five planted
     faults, all five bite.
+
+91. **The menu remembered where you came from and then threw you in the grass**
+    (pass 180). Took job (f): the four dead values 179 confirmed and left. The
+    most suggestive was `G.screen.prev` — `openScreen` writes the mode a screen
+    was opened FROM and `closeScreen` never reads it, reconstructing the mode
+    as `G.battle ? 'battle' : 'world'` instead.
+
+    Driven through the real input ladder rather than read:
+
+        row    prev recorded   mode after back   menu after back
+        Kin    menu            world             gone
+        Dex    menu            world             gone
+        Bag    menu            world             gone
+        Box    menu            world             gone
+        Deck   menu            world             gone
+
+    Every row of the pause menu dropped you into the grass. **Checking your Bag
+    and then your Deck meant opening the menu twice.** And the rule was already
+    written for exactly one case: a profile opened with `back: 'party'` returns
+    to the party list, because that one call site names its own way back.
+
+    `prev` is spent now, and the menu row with it — `openScreen` takes both
+    BEFORE `closeMenu()` throws the menu away, which is the whole subtlety:
+    capture them one line later and the row is always 0. Coming back is quiet,
+    because closing a screen has already played its own note.
+
+        Kin   -> back -> menu, cursor on Kin   -> back -> world
+        Deck  -> back -> menu, cursor on Deck  -> back -> world
+        party -> bag -> deck, all in one visit
+
+    Netted with the rows READ OUT of the menu the game builds, so a row added or
+    renamed cannot fall outside it. Six planted faults, all six bite — including
+    capturing `prev` one line too late, and reopening the menu in cases that
+    never had one.
+
+    **Left standing, and named here rather than quietly cut:** `b.foeHeals`,
+    `b.maxAdd` and the battle log's `sM`/`sF` are still written and still read
+    by nothing. They cost the player nothing, so cutting them is weight, not a
+    fix, and this pass measured one fault and fixed that one.
