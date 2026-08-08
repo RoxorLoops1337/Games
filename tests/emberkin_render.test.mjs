@@ -1389,6 +1389,56 @@ section('a beat is finished before whatever it starts begins');
   }
 }
 
+section('being called out happens to you as well as to them');
+{
+  // Filmed, the ambush was a beat that happened entirely to the trainer: they
+  // jolt (the marker goes white and double size), they walk over, they get a
+  // cue. The one thing on screen that is YOU turned to face them and then stood
+  // perfectly still for the whole 1.35s.
+  //
+  // The recoil it now uses was already half built. `p.bump` was set when you
+  // walked into a wall, decayed every frame, and NOTHING READ IT — a timer that
+  // drove nothing, in a file where every other one drives a picture.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.enterMap('hollowbrook', 9, 5, 'right');
+  g.G.place = null; g.G.flags.gotStarter = 1;
+
+  // The offset is an ARC: nothing at either end of the bump's life, most in the
+  // middle. A bump that never advances therefore draws nothing whichever end it
+  // is stuck at, which is exactly how the first attempt moved the player zero
+  // pixels for a second and a third of a second.
+  const p = { dir: 'right', bump: g.BUMP_T };
+  eq(g.bumpOffset(p).join(','), '0,0', 'a recoil at full has not moved yet');
+  p.bump = g.BUMP_T * .5;
+  const mid = g.bumpOffset(p);
+  ok(mid[0] !== 0, `and mid-way it has (${mid.join(',')})`);
+  ok(mid[0] < 0, 'away from the way you are facing');
+  p.bump = 0;
+  eq(g.bumpOffset(p).join(','), '0,0', 'and it comes back');
+  eq(g.bumpOffset({ dir: 'up', bump: g.BUMP_T * .5 })[1] > 0, true, 'it knows which way you face');
+
+  // Being spotted sets it…
+  ok(g.trainerSight(), 'a trainer spots the player at 9,5');
+  eq(g.G.player.bump, g.BUMP_T, 'and you flinch');
+  ok(!!g.G.alert, 'and the ambush owns the screen');
+
+  // …and it plays out WHILE THE AMBUSH RUNS. This is the whole finding: the
+  // decay used to live below the input ladder, and an ambush returns before it,
+  // so the value sat frozen at full for the entire beat and the player moved
+  // zero pixels. Driven, not reasoned — the source looked plausible.
+  let moved = 0, frames = 0;
+  while (g.G.alert && frames < 200) {
+    const [ox, oy] = g.bumpOffset(g.G.player);
+    if (ox || oy) moved++;
+    g.step(1 / 60); g.draw(); frames++;
+  }
+  ok(frames > 60, `the ambush was driven frame by frame (${frames} frames)`);
+  ok(moved > 5, `and the recoil played out inside it (${moved} frames of movement)`);
+  eq(g.G.player.bump, 0, 'and it is spent by the time the beat ends');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.

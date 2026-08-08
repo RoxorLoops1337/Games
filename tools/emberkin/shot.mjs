@@ -1019,6 +1019,25 @@ const SCENES = {
   // this films the whole of it from zero. The `wipe` scene below is a LOSS —
   // it fights a Lv45 Bramblor and waits 4500ms for the blackout — and cannot
   // film this one.
+  // Being spotted: the look, the walk, the pause. ALERT is spot .55 + walk .55
+  // + land .25 = 1.35s, and it is the only "somebody noticed you" beat in the
+  // game. Never filmed until 175.
+  //
+  // Wick stands at (12,5) in Hollowbrook facing LEFT, and SIGHT is 4 tiles, so
+  // standing at (9,5) puts the player in his line. `trainerSight()` is what
+  // walking into it calls; calling it directly is the same entry point.
+  spotted: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world';
+      EK.enterMap('hollowbrook', 9, 5, 'right');
+      EK.G.place = null;
+      EK.G.flags.gotStarter = 1;
+      if (!EK.trainerSight()) throw new Error('nobody spotted the player at 9,5');
+    },
+  },
   wipein: {
     w: 760, h: 900,
     go: (EK) => {
