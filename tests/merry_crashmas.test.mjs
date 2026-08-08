@@ -79,7 +79,7 @@ const EXPOSE = `__out.api = {
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS, FW_TRAIL,
-  carLitDir, drawCar, plowReach, PLOW_PAD, PLOW_T, PLOW_GORE, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
+  carLitDir, drawCar, plowReach, plowBlade, PLOW_PAD, PLOW_T, PLOW_GORE, paintCarThumb, withCtx, carBars, carProgress, CAR_STATS, THUMB_W, THUMB_H, carShadow,
   finale, nextLevel, toMenu, drawPickup, drawPickupGlow, pickupCol, PICKUP_RGB,
   wires, buildWires, drawWires, drawWireBulbs, wireSag, WIRE_MIN, WIRE_MAX, WIRE_DY, WIRE_COLS,
   windNow, WIND_STREAK, drawSnow, seedSnow,
@@ -8086,6 +8086,97 @@ function damaged(api, dents, gore, ang){
    seconds, and it was a flat white trapezoid and a red bar: bolted to nothing,
    with no back to it, still white after going through a crowd — and drawn 10%
    longer than the distance it actually hits from. */
+/* One object, two drawings, drifted apart — fourth in this run of passes after
+   the pram, the hat and the driver. The car's plough was rebuilt into a curved
+   band with a steel cutting edge and a lit lip; the pickup that gives it to you
+   was left as what the car used to be, a flat white trapezoid with a red bar.
+   The thing you drive over promised something the thing you got was not. */
+test('the plough you pick up is the plough you get', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2600; api.car.y = 1100; api.car.ang = 0; api.car.z = 0; api.camSnap();
+  api.setT(2);
+
+  const worn = carRec();
+  api.car.plowT = 5; api.car.bloody = 0;
+  api.withCtx(worn, () => api.drawCar());
+  const held = carRec();
+  api.withCtx(held, () => api.drawPickup({ kind: 'plow', x: 0, y: 0, bob: 0, taken: false }));
+
+  const FACE = '#dfe8f6', STEEL = '#8d97a8', LIP = 'rgba(255,252,244,.5)';
+  for (const [tag, rec] of [['the car', worn], ['the pickup', held]]){
+    const cols = new Set(rec.order.map(String));
+    for (const [c, what] of [[FACE, 'the blade face'], [STEEL, 'its cutting edge'],
+                             [LIP, 'the lip that catches the light']])
+      assert(cols.has(c), tag + ' is missing ' + what);
+  }
+  /* Not just the same colours — the same curve. The bow is a fixed fraction of
+     the blade's own THICKNESS, not of its length: the pickup is deliberately
+     stubbier than the car's (bolted on, two thirds of the depth is behind the
+     bumper and only the front edge shows), so measuring the bow against length
+     compares two different things and reports a difference that is not one.
+     The band's thickness is readable off the path — the face passes through
+     (tip, 0) on the way out and (tip - th, 0) on the way back. */
+  const bow = (rec) => {
+    const q = rec.ctrls.filter(e => e.style === FACE);
+    assert(q.length >= 4, 'the face should curve out and back, got ' + q.length);
+    const nose = q.filter(e => Math.abs(e.y) < 0.01).map(e => e.x).sort((a, b) => b - a);
+    assert(nose.length >= 2, 'the face should cross the centreline twice');
+    const th = nose[0] - nose[1];
+    return { th, bow: (nose[0] - Math.max(...q.map(e => e.cx))) / th };
+  };
+  const bw = bow(worn), bh = bow(held);
+  assert(Math.abs(bw.bow - bh.bow) < 0.01,
+    'the two blades bow differently for their thickness: ' + bw.bow.toFixed(3) +
+    ' on the car (th ' + bw.th.toFixed(1) + ') against ' + bh.bow.toFixed(3) +
+    ' on the ground (th ' + bh.th.toFixed(1) + ')');
+
+  /* And the pickup is wider than it is long, which is what a plough is and
+     what the trapezoid was not. */
+  const pts = held.all.filter(e => (e[0] === 'm' || e[0] === 'l' || e[0] === 'q') &&
+    [FACE, STEEL, LIP].indexOf(String(e[4])) >= 0);
+  const span = (i) => Math.max(...pts.map(e => e[i])) - Math.min(...pts.map(e => e[i]));
+  assert(span(2) > span(1), 'the pickup blade should be wider than it is long: ' +
+    span(1).toFixed(0) + ' by ' + span(2).toFixed(0));
+
+  /* The one colour only the old trapezoid ever used is gone from the source, so
+     re-hardcoding it is caught rather than left to the eye. Its second colour
+     is not in this list: `#eef5ff` is also the snow puff the car throws up, so
+     grepping for it would be asserting something that is not true. */
+  const src = fs.readFileSync(HTML, 'utf8');
+  assert(src.indexOf('#9fb4cd') < 0,
+    'the flat trapezoid\'s own grey is still in the file');
+
+  console.log('    (plough: bow ' + bw.bow.toFixed(3) + ' at th ' + bw.th.toFixed(0) +
+    ' worn / ' + bh.bow.toFixed(3) + ' at th ' + bh.th.toFixed(0) + ' held, pickup ' +
+    span(1).toFixed(0) + ' long by ' + span(2).toFixed(0) + ' wide)');
+});
+
+/* The blade is one shape at any size, which is the whole reason the car and
+   the pickup can share it. Doubling every input has to double every point. */
+test('a blade drawn twice the size is twice the blade', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  const shot = (k) => {
+    const rec = carRec();
+    api.withCtx(rec, () => api.plowBlade(20 * k, 14 * k, -6 * k, 9 * k, 0));
+    return rec.all.filter(e => e[0] === 'm' || e[0] === 'l' || e[0] === 'q')
+      .map(e => [e[1], e[2]]);
+  };
+  const one = shot(1), two = shot(2);
+  assert(one.length > 8 && one.length === two.length,
+    'the same path either way: ' + one.length + ' vs ' + two.length);
+  let worst = 0;
+  for (let i = 0; i < one.length; i++){
+    worst = Math.max(worst, Math.abs(two[i][0] - one[i][0] * 2),
+                            Math.abs(two[i][1] - one[i][1] * 2));
+  }
+  assert(worst < 0.001, 'the silhouette changes with size, off by ' + worst.toFixed(3));
+  console.log('    (blade: ' + one.length + ' points, scale-exact to ' +
+    worst.toFixed(4) + ')');
+});
+
 test('the plough is a blade that ends where it hits', () => {
   const api = boot({ w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();

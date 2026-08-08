@@ -928,6 +928,36 @@ edit this block to name the next one.
       with it: `the light sprites are baked once` counts the bakery, so it went
       from `4 + kinds` to `5 + kinds` with the reason written next to it.
 
+- [x] The plough you pick up is the plough you get. **Fourth object in this run
+      of passes with two drawings that had drifted apart**, after the pram, the
+      hat and the driver — and this one was left behind by a pass of my own. A
+      few passes ago the car's plough was rebuilt from a flat white trapezoid
+      and a red bar into a curved band with a steel cutting edge and a lit lip.
+      The **pickup** that gives it to you was never touched, so the thing you
+      drive over stayed the exact art the car had stopped wearing: you were
+      promised a trapezoid and given a blade. `plowBlade(tip, wing, bx, th,
+      bloody)` is the one definition now, every offset a multiple of the
+      blade's own thickness, so the same silhouette comes out at any size — at
+      `th = PLOW_T` it reproduces the car's blade to the pixel, which is the
+      point: the car does not move, the pickup comes to meet it.
+  - The pickup's blade is deliberately **stubbier for its span** than the
+      car's, and that is not a cheat: bolted on, two thirds of the depth sits
+      over the bumper and all you see is the front edge, so a band that matched
+      the car's proportions read as a piece of wire lying in the snow. It got
+      two mounting arms and a hitch as well — that is what says "this comes off
+      a vehicle" rather than "this is a snowdrift".
+  - **My first version of the shared-curve assertion was wrong and said so
+      loudly.** It measured the bow as a fraction of the blade's *length*,
+      which compares two deliberately different proportions and reported a
+      difference that was not one (0.102 against 0.148). The bow scales with
+      *thickness*, so that is what it measures now — and both come out at 0.444
+      on the nose. Fourth pass running with a measurement note; the pattern is
+      always the same, an easy number standing in for the one that matters.
+  - Also caught by the source-grep: only **one** of the trapezoid's two colours
+      was dead. `#eef5ff` is still the snow puff the car throws up, so grepping
+      for it would have been asserting something untrue. Only `#9fb4cd` is
+      pinned.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
