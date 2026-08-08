@@ -599,6 +599,21 @@ edit this block to name the next one.
       `addProp` is measuring the fixture, since `addProp` rolls its own seed.
       2802 → 2914 fills at the worst frame against a 3400 budget.
 
+- [x] Snow settles on the trees. Every conifer in the game — 209 across the
+      campaign plus the town tree in each market — stood bare in a market whose
+      ground, roofs and snowmen are all snow, the one prop family that ignored
+      the weather. Each tier now carries a load: the same spiked ring shifted
+      towards the light, drawn *under* the tier so what shows is a crescent
+      along the branches rather than a halo round them (drawing it over buries
+      the tree in white, which is what the first attempt did and only the
+      screenshot showed). The felled crown keeps its load too. The catch worth
+      recording: the crescent is part of the silhouette, and the collider is a
+      circle of exactly `r` — the first version reached 1.11r, promising a hit
+      the physics will not give. `TREE_TIER` came in from 0.945 to 0.87 so the
+      snow, not the needles, is what ends the silhouette; the tree is the same
+      size on screen and now ends in white. 2914 → 2982 fills at the worst
+      frame against a 3400 budget.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

@@ -4624,6 +4624,14 @@ function drawTreeTop(x, y, r, dead, rot, seed){
       ctx.lineTo(x0, w0 * 0.5);
       ctx.closePath();
     };
+    /* Snow still on it where it fell. Same trick as the standing tiers: the
+       load goes down first, shifted towards the light, and the crown covers
+       all but the edge — a tree that lost its snow the moment it went over
+       would be the only thing in the market that did. */
+    ctx.save(); ctx.translate(-r * 0.09 * SUN_DX / SUN_LEN, -r * 0.09 * SUN_DY / SUN_LEN);
+    ctx.fillStyle = TREE_SNOW_C;
+    wedge(1, r * 0.6); ctx.fill();
+    ctx.restore();
     ctx.fillStyle = TH.tree[0];
     wedge(1, r * 0.6); ctx.fill();
     ctx.fillStyle = TH.tree[2];
@@ -4646,6 +4654,13 @@ function drawTreeTop(x, y, r, dead, rot, seed){
                  [0.46, TH.tree[2], 10], [0.24, TH.tree[3], 8]];
   for (let t = 0; t < rings.length; t++){
     const [k, col, lobes] = rings[t];
+    /* The snow that settled on this tier goes down first, pushed towards the
+       light, and the tier itself covers all but the edge of it — that is what
+       leaves a crescent along the branches rather than a halo round them.
+       Drawing it after instead buries the tree in white. */
+    ctx.fillStyle = TREE_SNOW_C;
+    treeSnow(r * k * TREE_TIER, lobes, seed * 6.28 + t * 0.7);
+    ctx.fill();
     ctx.fillStyle = col;
     // shallow, and pulled in far enough that even the points of the outermost
     // tier stay inside r: the collider is a circle of exactly r, and a
@@ -4685,20 +4700,39 @@ function drawTreeTop(x, y, r, dead, rot, seed){
 
 /* Tier scale and spike depth, kept as constants because their product is what
    has to stay under 1 — see the assertion in the suite. */
-const TREE_TIER = 0.945, TREE_SPIKE = 0.055;
+/* The tiers are pulled in far enough that the snow load on top of them, not
+   the needles, is what reaches the collider — the silhouette is the same size
+   as before, it just ends in white instead of green. A silhouette that reaches
+   past the collider promises a hit the physics will not give you, and the
+   collider is a circle of exactly r. */
+const TREE_TIER = 0.87, TREE_SPIKE = 0.055;
 
 /* A closed path of `lobes` points alternating between r*(1+d) and r*(1-d).
    One fill either way — the cost is in the path, which nothing budgets. */
-function spikeRing(r, lobes, d, rot){
+function spikeRing(r, lobes, d, rot, ox, oy){
   ctx.beginPath();
-  const n = lobes * 2;
+  const n = lobes * 2, cx = ox || 0, cy = oy || 0;
   for (let i = 0; i < n; i++){
     const a = rot + (i / n) * 6.283;
     const rr2 = r * (i % 2 ? 1 - d : 1 + d);
-    const x = Math.cos(a) * rr2, y = Math.sin(a) * rr2;
+    const x = cx + Math.cos(a) * rr2, y = cy + Math.sin(a) * rr2;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.closePath();
+}
+
+/* Snow on the branches. Every conifer in the game — 209 of them across the
+   campaign, plus the town tree in each market — stood bare in a market whose
+   ground, roofs and snowmen are all snow. It is drawn as one ring per tier,
+   the same spiked ring shifted towards the light: the next tier in covers its
+   middle, so what is left is a crescent of settled snow along the outer edge
+   of the tier below it, which is what a snow-laden conifer looks like from
+   above. SUN_DX/SUN_DY normalised, so it moves if the light ever does. */
+const TREE_SNOW = 0.08, TREE_SNOW_C = 'rgba(226,238,255,.82)';
+const SUN_LEN = Math.hypot(SUN_DX, SUN_DY);
+function treeSnow(rr, lobes, rot){
+  const s = rr * TREE_SNOW;
+  spikeRing(rr, lobes, TREE_SPIKE, rot, -s * SUN_DX / SUN_LEN, -s * SUN_DY / SUN_LEN);
 }
 
 function drawProp(o){
