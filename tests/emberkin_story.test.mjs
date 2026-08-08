@@ -395,13 +395,26 @@ section('the aim order agrees with the gates the map actually sets');
   const g = loadGame({});
   const npcs = new Map();
   for (const map of Object.values(g.MAPS)) for (const n of map.npcs || []) if (n.id) npcs.set(n.id, n);
-  for (const [id, who, where, gate] of g.AIM_ORDER) {
+  // The `where` column is gone. It was a third hand-written copy of a fact the
+  // map owns, and this net only ever asked that it "said something" — which it
+  // did, wrongly: "in Route One". Asked of the map now, so it cannot drift and
+  // cannot be ungrammatical without the map itself being.
+  for (const [id, who, gate] of g.AIM_ORDER) {
     const npc = npcs.get(id);
     ok(!!npc, `${id} is a trainer that exists on a map`);
     if (!npc) continue;
     eq(npc.name, who, `${id} is named the same in the aim as on the map`);
     eq(gate || null, npc.requires || null, `${id}'s gate matches the map: aim says ${gate || 'none'}`);
-    ok(/./.test(where), `${id} says where it is`);
+    // The place is the map the trainer actually stands on, said the map's way.
+    const home = Object.values(g.MAPS).find((m) => (m.npcs || []).some((n) => n.id === id));
+    eq(g.aimPlace(id), home.at || `in ${home.name}`, `${id}'s place comes off the map it stands on`);
+    ok(/^(in|on|out on|up in|down on|at) /.test(g.aimPlace(id)),
+      `and reads as a place in a sentence — "${g.aimPlace(id)}"`);
+  }
+  // Every map a trainer stands on has to say how it is spoken of.
+  for (const [mid, m] of Object.entries(g.MAPS)) {
+    if (!(m.npcs || []).some((n) => n.trainer)) continue;
+    ok(!!m.at, `${mid} says how to name it inside a sentence ("${m.at}")`);
   }
   const listed = new Set(g.AIM_ORDER.map(([id]) => id));
   for (const id of npcs.keys()) {
