@@ -693,6 +693,57 @@ for (const b of blockers) {
   ok(!b.after, `${b.name} carries no after-line, because nobody could ever read it`);
 }
 EK.G.flags = {};
+
+// And the other side of that, which is the claim rather than the exception.
+//
+// Read the nine trainers' dialogue together and they all have a voice: Dorn
+// guards a stretch, Ivo lives in the trees, Mio got everything out of that
+// water. Six of the nine then said one shared sentence — "Good match. Go on." —
+// for the rest of the game. The one who legitimately says nothing says nothing
+// because he is NOT THERE, and that is a fact npcActive already knows, so this
+// asks it rather than naming him.
+section('a trainer you beat still has something to say');
+{
+  const trainers = Object.values(MAPS).flatMap((m) => m.npcs || []).filter((n) => n.trainer);
+  ok(trainers.length >= 9, `there are trainers to ask (${trainers.length})`);
+  // Every gate open, every trainer beaten. npcActive gates on `requires` as
+  // well as `block`, and setting one flag at a time quietly skipped the two
+  // later Wicks — a loop that tests six of nine and says so only in a number.
+  const done = { gotStarter: 1, beatVespyr: 1 };
+  trainers.forEach((t) => { done[t.id] = 1; });
+  let stayed = 0;
+  for (const n of trainers) {
+    EK.G.flags = { ...done };
+    if (!EK.npcActive(n)) continue;              // he left; the loop above owns that case
+    stayed++;
+    const after = typeof n.after === 'function' ? n.after() : n.after;
+    ok(Array.isArray(after) && after.length > 0,
+      `${n.name} has a line for after the fight`);
+    ok(!(after || []).join(' ').includes('Good match'),
+      `${n.name} does not fall back to the sentence everybody shared`);
+  }
+  ok(stayed >= 8, `and most of them are still standing there (${stayed})`);
+  EK.G.flags = {};
+}
+
+// Pell counts the dex out loud, and a count inside a sentence is how Old Tam's
+// boast collided with the tally at six ("Six kinds in the book. I managed six").
+// A test that asserted "Pell mentions the count" would not have seen it. This
+// reads every count she can be given.
+section('nobody says the same number twice');
+{
+  const pell = MAPS.route_one.npcs.find((n) => n.id === 't_pell');
+  const WORDS = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/gi;
+  for (let n = 0; n <= DEX_ORDER.length; n++) {
+    EK.newGame();
+    EK.G.flags = { gotStarter: 1, t_pell: 1 };
+    DEX_ORDER.slice(0, n).forEach((id) => EK.catchMon(id));
+    const said = (typeof pell.after === 'function' ? pell.after() : pell.after).join(' ');
+    const nums = (said.match(WORDS) || []).map((w) => w.toLowerCase());
+    eq(new Set(nums).size, nums.length, `at ${n} caught, Pell does not repeat a number`);
+  }
+  EK.newGame(); EK.G.flags = {};
+}
 // Prerequisites: the rival must not challenge before Rowan hands out a starter.
 EK.enterMap('hollowbrook', wick1.x - 1, wick1.y, 'right');
 EK.G.alert = null;
