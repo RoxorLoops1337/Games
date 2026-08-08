@@ -433,6 +433,13 @@
   }
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
+  /* The chip floats over everything, so anything that LEADS a screen has to
+     leave its corner alone. Every screen used to open with an <h2>, which is
+     short and sits to the left of it; the box now opens with a full-width
+     detail panel, and that panel drew straight through the only way off the
+     screen. Reserve the corner rather than moving the chip — the chip being in
+     the same place on every screen is the point of it. */
+  #screen > .kindetail{ margin-top:20px; }
   /* In the portrait phone layout the stage is top-aligned at 4% of the window,
      so the panel's top-right corner lands underneath #fsbtn — fixed at right:8
      top:8, 34px square. The two were drawn on top of each other, which is only
@@ -9705,6 +9712,22 @@ function renderScreen() {
     // here to find out. Photographing the box for the first time is what showed
     // it; a full party had always been what got looked at in a test.
     const slot = () => '<div class="card panel slot"><span>empty</span></div>';
+    // What the kin under the cursor can actually DO, before either grid.
+    //
+    // This screen is where you decide who to bring, and it was the one screen
+    // that could not answer the question that decision turns on: the party
+    // screen puts a stat block beside its list, the dex puts a detail pane
+    // under its grid, and the box had neither — so "what does this one know"
+    // meant withdrawing it, opening the party screen, and putting it back.
+    //
+    // Tried under the grids first, the way the dex does it. The dex's grid is
+    // nineteen cells and fits; this one is a party plus a box that runs to
+    // thirty-odd cards, so the pane landed below every one of them and off the
+    // bottom of the screen. It was there and it was invisible — which is worse
+    // than absent, because a test can see it. Above, it is the first thing on
+    // the screen and it moves with the cursor.
+    const under = G.party.concat(G.box)[s.i];
+    if (under) html += statBlock(under);
     html += `<h2>${kinHeading()}</h2><div class="cards slim">`
       + G.party.map((m, i) => monCard(m, i)).join('')
       + Array.from({ length: Math.max(0, PARTY_MAX - G.party.length) }, slot).join('') + '</div>';
