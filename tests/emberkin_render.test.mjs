@@ -1190,8 +1190,15 @@ section('the box is at least as dense as the party above it');
   // The level and the types must stay separable units. Written as one string
   // with a separator, a dual type wrapped and left the separator stranded at
   // the end of the line.
-  ok(/<small class="meta"><span>Lv\$\{m\.lvl\}<\/span><span>/.test(boxScreen),
-    'the level and types are two spans, not one string with a dot in it');
+  //
+  // This used to name the markup — `<small class="meta"><span>Lv…` — and the
+  // markup changed when the box stopped saying a type differently from every
+  // other screen. The CLAIM did not: the level is still its own element beside
+  // the chips rather than glued to them, which is what stops a separator being
+  // left hanging. Assert the claim, not the spelling.
+  ok(/\$\{kinSub\(m\)\}/.test(boxScreen), 'the box card takes its line from the one that writes it');
+  ok(/<span class="lv">Lv\$\{m\.lvl\}<\/span>/.test(SRC.slice(SRC.indexOf('const kinSub'), SRC.indexOf('const kinSub') + 400)),
+    'the level and types are separate elements, not one string with a dot in it');
   ok(!/Lv\$\{m\.lvl\} · /.test(boxScreen), 'and no separator can be left hanging at a line end');
 }
 
@@ -1285,6 +1292,54 @@ section('a screen that will not close does not offer a way out');
   ok(/if \(screenLocked\(s\)\) return;\n  playCue\('back'\);/.test(SRC),
     'and the refusal comes before the back sound, not after it');
   ok(!/html = '';/.test(SRC), 'with no second mechanism left to disagree with the first');
+}
+
+// Two screens list kin, and they described the same creature two different
+// ways. The party row drew type CHIPS and a status chip; the box row printed
+// "Lv26 Verdant/Gloom" in plain grey text with no status on it at all — and the
+// box is the screen you stand in to decide who to bring, so a kin carrying BURN
+// looked exactly like a healthy one in the one place where that is the whole
+// question. One function writes that line now.
+section('a kin is described the same way wherever it is listed');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.G.dialogue = null;
+
+  const m = g.mkMon('frillamb', 30);          // dual type, so both chips must appear
+  const line = g.kinSub(m);
+  ok(/class="kinsub"/.test(line), 'the list line has one class of its own');
+  ok(/Lv30/.test(line), 'it carries the level');
+  for (const t of m.types) {
+    ok(new RegExp(`>${t}<`).test(line), `and ${t} as a chip, not as text`);
+  }
+  ok(!new RegExp(m.types.join('/')).test(line), 'never as a slash-joined sentence');
+  ok(!/class="tp st"/.test(line), 'a healthy kin wears no status chip');
+
+  // The half the box dropped entirely.
+  const sick = g.mkMon('gargolem', 30);
+  sick.status = 'burn';
+  ok(/class="tp st"/.test(g.kinSub(sick)), 'a kin with a status on it says so');
+  ok(new RegExp(g.STATUS.burn.tag).test(g.kinSub(sick)), 'by the tag the rest of the game uses');
+
+  // Source: both list rows go through it, and nothing else in a row spells a
+  // type out. The ONE remaining `types.join('/')` is the forced-switch prompt,
+  // which is a SENTENCE about the foe out there — "Bramblor is out there —
+  // Lv25 Verdant/Gloom" — and chips inside prose read as a rash. That is the
+  // property that exempts it: it is not a list row.
+  eq((SRC.match(/kinSub\(m\)/g) || []).length, 2, 'the party row and the box card both ask for it');
+  eq((SRC.match(/types\.join\('\/'\)/g) || []).length, 1, 'and one sentence is left spelling a type out');
+  ok(/is out there — Lv\$\{foe\.lvl\} \$\{foe\.types\.join\('\/'\)\}/.test(SRC),
+    'and that one is the prompt, where prose is right');
+  ok(!/small class="meta"/.test(SRC), 'the box row no longer has a second way of saying it');
+
+  // The layout rule the chips forced. They are wider than the text they
+  // replaced, so left to flow the level sat inline on a short name and on its
+  // own line on a long one — three bar heights in one row of three cards, two
+  // of them the same species. The level takes a whole line always.
+  ok(/\.card \.info \.kinsub \.lv\{ flex-basis:100%/.test(SRC),
+    'in the narrow card the level takes a line of its own, so every card is one shape');
 }
 
 // The hand at phone size. `renderHand` returns early when headless, so as with

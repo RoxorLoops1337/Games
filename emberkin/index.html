@@ -450,16 +450,20 @@
      fix rather than putting the box first — `monCard` indexes party 0..n-1
      then box n+i, and the help text at the bottom describes that order. */
   .cards.slim{ grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); }
-  /* The level and the types are two units, not one sentence. Written as
-     "Lv26 · Verdant/Gloom" they were one string, and at slim width there is
-     about 86px beside a 40px sprite, so a dual type wrapped — leaving the
-     separator stranded at the end of the line ("Lv26 ·") and making that card
-     a line taller than its single-typed neighbours, which left every row that
-     mixed them visibly ragged. Two nowrap spans in a flex break between
-     themselves instead. The gap does the separating, so nothing can be left
-     hanging at the end of a line. */
-  .card .info small.meta{ display:flex; flex-wrap:wrap; column-gap:.55em; }
-  .card .info small.meta > span{ white-space:nowrap; }
+  /* The kin line in a NARROW card, which is where it has to be composed rather
+     than left to wrap. There is about 86px beside a 40px sprite here. Written
+     as one string, "Lv26 · Verdant/Gloom" wrapped and left the separator
+     stranded ("Lv26 ·"); written as chips — the way every other screen says a
+     type — they are wider still, and letting them flow was worse than either:
+     the level sat inline on a SHORT name and on its own line on a long one, so
+     one row of three cards had three different bar heights, two of them the
+     same species at different levels.
+     So the level takes a whole line always and the chips share the next one.
+     Every card in the grid is the same shape whatever is on it, and a layout
+     that depended on how long a name happened to be is gone. */
+  .card .info .kinsub{ column-gap:.25em; row-gap:.2em; }
+  .card .info .kinsub .lv{ flex-basis:100%; font-size:.58em; }
+  .card .info .kinsub .tp{ font-size:.52em; letter-spacing:.5px; padding:1px 4px; }
   /* An empty party slot: the frame without the card. Dashed, unlit and quiet
      enough that six of them never compete with the one kin you do have. */
   .cards .slot{ display:flex; align-items:center; justify-content:center;
@@ -560,8 +564,11 @@
   .kinrow canvas{ image-rendering:pixelated; flex:0 0 auto; width:44px; height:44px; }
   .kinrow .info{ flex:1; min-width:0; }
   .kinrow .info b{ display:block; font-size:.82em; }
-  .kinrow .sub{ display:flex; gap:.25em; align-items:center; margin:.2em 0 .25em; flex-wrap:wrap; }
-  .kinrow .lv{ font-size:.62em; color:var(--gold); font-weight:700; letter-spacing:.5px; }
+  /* One class, because one function writes it — see kinSub(). The party row and
+     the box card both list kin and used to style that line separately, which is
+     how they came to say a type two different ways. */
+  .kinsub{ display:flex; gap:.25em; align-items:center; margin:.2em 0 .25em; flex-wrap:wrap; }
+  .kinsub .lv{ font-size:.62em; color:var(--gold); font-weight:700; letter-spacing:.5px; }
   .kinrow .bar{ height:4px; border-radius:2px; background:#0d0812; overflow:hidden; }
   .kinrow .bar > i{ display:block; height:100%; }
   .kinrow .hpn{ font-size:.72em; color:var(--dim); font-variant-numeric:tabular-nums; }
@@ -9503,6 +9510,20 @@ const STATUS_TINT = { burn: '#ff8a2b', shock: '#ffe14d', snare: '#63c14a', chill
 const statusChip = (st) => `<span class="tp st" style="background:${STATUS_TINT[st] || '#8f7aa8'}">${STATUS[st].tag}</span>`;
 
 /**
+ * How a kin is described in a LIST, in one place.
+ *
+ * The party screen and the box screen both list kin, and they described the
+ * same creature two different ways: the party row drew type chips and a status
+ * chip, the box row printed `Lv26 Verdant/Gloom` in plain grey text with no
+ * status on it at all. Same fact, two idioms — and the one that dropped
+ * information is the screen you stand in to decide who to bring. A kin with
+ * BURN on it looked exactly like a healthy one, in the one place where that is
+ * the whole question.
+ */
+const kinSub = (m) => `<div class="kinsub"><span class="lv">Lv${m.lvl}</span>`
+  + `${typeChips(m.types)}${m.status ? statusChip(m.status) : ''}</div>`;
+
+/**
  * A kin's page: portrait, stats and moves.
  *
  * Numbers alone make you do arithmetic to answer "is this one fast?". A bar
@@ -9610,7 +9631,7 @@ function renderScreen() {
       return `<div class="kinrow panel ${i === s.i ? 'sel' : ''} ${m.hp <= 0 ? 'down' : ''}" data-i="${i}">
         <canvas width="40" height="40" data-mon="${m.species}"></canvas>
         <div class="info"><b>${dispName(m)}</b>
-        <div class="sub"><span class="lv">Lv${m.lvl}</span>${typeChips(m.types)}${m.status ? statusChip(m.status) : ''}</div>
+        ${kinSub(m)}
         <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div></div>
         <div class="hpn">${m.hp}<small>/${m.max}</small></div></div>`;
     }).join('') + '</div>';
@@ -9657,7 +9678,7 @@ function renderScreen() {
       const f = m.hp / m.max;
       return `<div class="card panel ${i === s.i ? 'sel' : ''}" data-i="${i}" ${i === s.pick ? 'style="box-shadow:0 0 0 2px var(--xp)"' : ''}>
         <canvas width="40" height="40" data-mon="${m.species}"></canvas>
-        <div class="info"><b>${dispName(m)}</b><small class="meta"><span>Lv${m.lvl}</span><span>${m.types.join('/')}</span></small>
+        <div class="info"><b>${dispName(m)}</b>${kinSub(m)}
         <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div></div></div>`;
     };
     // The empty slots are drawn. A party of one used to be a single card with
@@ -11510,7 +11531,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips,
+    ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
