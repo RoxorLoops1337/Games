@@ -377,6 +377,74 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+80. **The screen kept promising a swing from a creature lying on its side**
+    (pass 169). Filmed the kill, and the brief's question — are the foe's death
+    and your victory two beats or one mush? — came back **two beats, cleanly
+    separated**, with numbers: the `faint` plays at 1.97s, the fall runs 0.55s,
+    and the flourish starts at 3.52s. Nothing to fix there.
+
+    What the measurement found instead was a **falsehood on screen for a second
+    and a half**. The intent chip — "Foe: Mist Spray · hits 9" — is a promise
+    about a NEXT TURN, and it went on saying it over a foe that had fallen and
+    faded, right up until the flourish hid the panels.
+
+    **The film could not have found this and neither could the eye.** A film
+    grabs the canvas; the chip is DOM. It took probing the DOM on a timer
+    through the same driven kill — the 167 move, applied to the moment rather
+    than to a layout.
+
+    - **Gated on the PICTURE, not the state.** The outcome is settled the
+      instant the card resolves, about two seconds before the creature is seen
+      to fall. Clearing on `foe.hp` or `b.over` would take the foe's intent off
+      the screen while it is still standing there mid-exchange. Same reason the
+      bar follows `dispF`.
+    - **Knowing the answer is no use if nothing asks.** The chip lives in
+      `renderHand`, which runs when the PLAYBACK ends — a second and a half
+      after the fall — so the first fix changed the condition and the screen
+      did not change at all. It is redrawn at the faint now, and redrawing the
+      chip alone rather than the whole hand, because rebuilding the row
+      mid-playback would reset the cards' transitions under a running beat.
+    - **Two ways a foe stops being able to act, and they had to be found
+      separately.** It falls, or an orb takes it — and the second is not a
+      variant of the first, because the creature is alive and about to be
+      yours. Measured through a successful catch, the chip promised
+      "Foe: Rip Curl · hits 7-8" from the suck all the way to the click. That
+      is 168's lesson (*a rule applied to one of its cases*) arriving one pass
+      later, in my own fix.
+    - And `foeAfield` is deliberately **not** `inOrb`, which the draw already
+      has: `inOrb` asks "should I skip the normal sprite draw" and excludes the
+      suck, where the creature is still drawn, shrinking. Two conditions that
+      overlap are still two questions — the same trap 167 hit from the other
+      side.
+
+    **The net that could not say anything.** The first version tested
+    `foeAfield` and counted the redraw sites, and *not the wiring between them*.
+    Reverting the gate — putting `const it = b.intent` straight back — broke the
+    game and **nothing failed**, because `renderIntent` returns early when
+    headless and the DOM stub hands back a fresh element each call, so no suite
+    could ever read the chip. Extracting `intentLine(b)` as a **value** made the
+    break bite on the first try: *a fallen foe says nothing (got "Foe: <b>Mist
+    Spray</b> · hits 9", want "")*. **If a break does not bite, the net is not a
+    net — and "I planted a fault and nothing happened" is a result about the
+    test, never about the code.**
+
+    **And the scene walked into a trap the ledger already records.** `playCard`
+    BUILDS a log and returns it; `submitLog` plays it back, and the fall is set
+    by a `faint` entry during that playback. Calling `playCard` alone left the
+    foe on 0 HP with `downF` never set and the flourish starting 0.02s after the
+    hit — a timeline I nearly wrote up as a finding. Entry 78 records this exact
+    trap for `doAction` in the catching scene, one scene earlier. Two smaller
+    ones in the same setup: **the deck is shuffled**, so pinning the damage roll
+    alone still dealt a different hand each run and pinning had to cover
+    `startBattle`; and `cardText` is a DECK-card function that reads
+    `CARDS[id].txt`, so asking it for a kin card's text throws — the game
+    branches on `src === 'kin'` at every live call site, and I checked all three
+    before believing it was mine.
+
+    One thing measured and left alone: the second between the fall finishing and
+    the flourish starting is **not dead air**. The DOM is showing "Cindercub
+    gained 53 EXP." and the XP bar is filling. The measurement stopped a fix.
+
 79. **A wind-up that never wound up** (pass 168). The evolution, filmed. And the
     thing worth carrying out of this one is that **the eye could not have called
     it** — the fault was in the arithmetic of a rotation, and it took a number.
