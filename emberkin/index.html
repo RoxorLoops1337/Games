@@ -6115,11 +6115,22 @@ function startBattle(opt) {
   // The very first hand is dealt as the battle opens.
   startPlayerTurn(opener);
   if (opener.length) G.battle.log = opener;
-  // One-time nudge, the first time a wild kin shows up with orbs in the bag.
-  if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
-    G.flags.taughtCatch = 1;
+  // The controls, the first time there is a hand to use them on.
+  //
+  // These three lines were all gated on `opt.wild` — and the first fight in the
+  // game is the RIVAL, on the only road out of town. So the one place that
+  // teaches the hand properly, naming the actual keys and the actual button,
+  // could not fire until after the fight a new player has already had to win,
+  // which is why Rowan was reciting the same rule in the study beforehand to
+  // somebody holding no cards. Taught here, they arrive with a hand on screen.
+  if (!G.flags.taughtHand) {
+    G.flags.taughtHand = 1;
     lines.push('Five cards, three energy. Left and right pick one, up plays it — or press its number, or just tap it.');
     lines.push('When you have spent what you can, end the turn: E, or the button under the hand.');
+  }
+  // The orb stays where it was: it needs something catchable to be about.
+  if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
+    G.flags.taughtCatch = 1;
     lines.push('Knock it down first, then reach for an orb — Bag, then the orb. A hurt kin holds.');
   }
   battleSay(lines, () => renderHand());
@@ -9942,7 +9953,6 @@ function screenSelect() {
             `${DEX[id].name}. Of course.`,
             'Five orbs, three salves, and a deck. Ten cards — half of them nothing special.',
             'Your kin brings its own moves to the fight. The deck is what you bring.',
-            'Each turn you get three energy and five cards. Spend it however you like, then end the turn and take what comes.',
             'Vane keeps the chest shop and takes gems, not shards. Win fights, buy chests, thicken the deck.',
             // Five lines of rules and not one of them said why. The menu carries
             // the running answer; this is the one that gets said out loud, and

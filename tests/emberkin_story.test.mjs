@@ -9,7 +9,7 @@
 //
 // Run: node tests/emberkin_story.test.mjs
 import { readFileSync } from 'node:fs';
-import { loadGame, mkCtx, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
+import { loadGame, mkCtx, withDeck, autoFight, ok, eq, done, section } from './emberkin_lib.mjs';
 const SRC = readFileSync(new URL('../emberkin/index.html', import.meta.url), 'utf8');
 
 const EK = loadGame({});
@@ -769,6 +769,52 @@ section('the shop notices what you can afford');
   ok(/cover a Prism/.test(said('Vane', (g) => { g.G.gems = 5000; })), 'and notices when you can cover the top of it');
   // The floor comes off CHESTS rather than repeating a price.
   ok(/Math\.min\(\.\.\.CHEST_IDS/.test(SRC), 'reading the cheapest chest off the prices themselves');
+}
+
+// The first sixty seconds, driven beat by beat and counted rather than admired.
+// Title to out-of-the-study was seventeen presses, eight of them a lecture — and
+// one of those eight taught the hand to somebody holding no cards, because the
+// place that teaches it properly was gated on `opt.wild` and the FIRST FIGHT IN
+// THE GAME IS THE RIVAL.
+section('the hand is taught where there is a hand');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+
+  // The rival is a trainer, on the only road out of town, before any grass.
+  const wick = g.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+  ok(!!wick && !!wick.trainer, 'the first fight in the game is a trainer, not a wild kin');
+
+  g.newGame(); g.G.dialogue = null;
+  g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.startBattle({ foe: g.mkMon('dewdrip', 5), wild: false, npc: wick, team: [['dewdrip', 5]] });
+  const first = g.G.battleMsg.lines.join(' ');
+  ok(/Five cards, three energy/.test(first), 'a trainer fight teaches the hand');
+  ok(/end the turn/.test(first), 'and how to end the turn');
+  ok(!/reach for an orb/.test(first), 'and says nothing about orbs, there being nothing to catch');
+  eq(g.G.flags.taughtHand, 1, 'and records that it has');
+
+  // Once only.
+  g.G.battle = null; g.G.battleMsg = null;
+  g.startBattle({ foe: g.mkMon('zaplet', 4), wild: true });
+  const wild = g.G.battleMsg.lines.join(' ');
+  ok(!/Five cards, three energy/.test(wild), 'it is not taught twice');
+  ok(/reach for an orb/.test(wild), 'and the orb lesson waits for something catchable');
+
+  // The orb line still needs orbs to be about.
+  const h = withDeck(loadGame({}));
+  h.setCtx(mkCtx());
+  h.newGame(); h.G.dialogue = null; h.takeStarter('cindercub'); h.G.dialogue = null;
+  h.G.bag = {};
+  h.startBattle({ foe: h.mkMon('zaplet', 4), wild: true });
+  ok(!/reach for an orb/.test(h.G.battleMsg.lines.join(' ')), 'with an empty bag it is not mentioned');
+  ok(/Five cards, three energy/.test(h.G.battleMsg.lines.join(' ')), 'but the hand still is');
+
+  // And the study stops saying what the fight now says better, with the keys.
+  ok(!/Each turn you get three energy and five cards/.test(SRC),
+    'Rowan no longer recites the rule to somebody holding no cards');
+  ok(/if \(!G\.flags\.taughtHand\)/.test(SRC), 'the hand lesson is gated on having been taught, not on the fight being wild');
+  ok(/opt\.wild && !G\.flags\.taughtCatch/.test(SRC), 'and the orb lesson is still gated on wild');
 }
 
 done('emberkin_story');
