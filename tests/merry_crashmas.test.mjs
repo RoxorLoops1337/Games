@@ -69,7 +69,7 @@ const EXPOSE = `__out.api = {
   audioInit, engineStart, engineSet, engineStop, sndSquish, sndWail, sndThud, sndLand,
   wailSlot, noise, toggleMute, stepFx, hitProp, goalMarkers, drawEdgeMarkers, sndLaunch,
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
-  EDGE_PILL, TRACK_ICE, TRACK_MAX, SURE_LOSS,
+  EDGE_PILL, TRACK_ICE, TRACK_MAX, SURE_LOSS, BANNER_PITCH_CAP,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
   reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
@@ -8386,6 +8386,62 @@ test('a tyre mark says what the car was doing', () => {
   console.log('    (tyre mark: ' + straight.w.toFixed(1) + 'px at ' + straight.a +
     ' rolling, ' + sideways.w.toFixed(1) + 'px at ' + sideways.a + ' scrubbing, ' +
     onIce.a + ' on ice)');
+});
+
+/* Content, and the guard that makes adding more of it safe. Six shouts is one
+   per nitro for six runs and then it repeats inside a market; the banner ladder
+   stopped at a 22 chain, which a full-power run down the last market goes past.
+   Both lists are the kind of thing that gets appended to without measuring, so
+   this pins what a new line has to fit inside. */
+test('a shout fits its bubble and a banner fits its ribbon', () => {
+  /* At the narrowest frame the game will ever draw. `fit()` turns a portrait
+     phone a quarter turn, so VW is always the long side — 480 is below any
+     real device and leaves the check some room to be a check. */
+  const api = boot({ w: 480, h: 320 });
+  assert(api.SHOUTS.length >= 12, 'the driver should have more than six lines, got ' +
+    api.SHOUTS.length);
+  assert(new Set(api.SHOUTS).size === api.SHOUTS.length, 'and no repeats');
+  const view = api.getView();
+  /* drawShout's own arithmetic: the plate is the measured text plus 36, and it
+     is clamped to the frame — but the text is centred inside the plate, so a
+     line too long to fit prints out through both ends rather than wrapping. */
+  const fs = view.w < 560 ? 22 : 28;
+  let widest = 0;
+  for (const s of api.SHOUTS){
+    const w = textW(s, fs) + 36;
+    widest = Math.max(widest, w);
+    assert(w <= view.w - 44,
+      '"' + s + '" is ' + w.toFixed(0) + 'px in a ' + (view.w - 44) + 'px bubble');
+  }
+
+  const rungs = api.COMBO_BANNERS;
+  assert(rungs.length >= 8, 'the ladder should reach past a 22 chain, got ' + rungs.length);
+  for (let i = 1; i < rungs.length; i++)
+    assert(rungs[i][0] > rungs[i - 1][0],
+      'the ladder should climb: ' + rungs[i - 1][0] + ' then ' + rungs[i][0]);
+  assert(new Set(rungs.map(r => r[1])).size === rungs.length, 'and no two say the same thing');
+
+  /* The chime climbs in rungs of four and stops at BANNER_PITCH_CAP. A ladder
+     that runs past that has top rungs which sound identical — which is exactly
+     what the old cap of 6 did to everything from a 24 chain up. */
+  const top = rungs[rungs.length - 1][0];
+  assert(top / 4 <= api.BANNER_PITCH_CAP,
+    'the top rung is a ' + top + ' chain but the chime stops climbing at ' +
+    (api.BANNER_PITCH_CAP * 4) + ' — the last banners would sound the same');
+
+  // and every rung actually fires off the uncapped chain count, not the multiplier
+  api.startCampaign(); api.beginLevel();
+  for (const [n, text] of rungs){
+    api.G.combo = n - 1; api.G.banner = null;
+    api.bumpCombo();
+    assert(api.G.banner && api.G.banner.text === text,
+      'a chain of ' + n + ' should say ' + text + ', got ' +
+      (api.G.banner && api.G.banner.text));
+  }
+  assert(api.G.mult <= api.C.MAX_MULT, 'the multiplier still caps at MAX_MULT');
+  console.log('    (' + api.SHOUTS.length + ' shouts, widest ' + widest.toFixed(0) +
+    'px in ' + (view.w - 44) + '; ' + rungs.length + ' banner rungs to a ' + top +
+    ' chain)');
 });
 
 /* `drawAim`'s comment says the predicted line is "always DOTS dots, however
