@@ -1181,6 +1181,42 @@ const SCENES = {
       }
     },
   },
+  // Rowan in the state that used to be wrong. Her one piece of navigation was
+  // gated on dexCount(2) >= 8, so somebody who had already stood on the
+  // mountain was still being sent "Crown Hollow, past the Warden" — past a man
+  // who is not on the map any more.
+  rowanback: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.DEX_ORDER.slice(0, 9).forEach((id) => EK.catchMon(id));
+      EK.G.flags.t_hale = 1;
+      EK.G.been.crown_hollow = 1;
+      const rowan = EK.MAPS.lab.npcs[0];
+      EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world'; EK.G.dialogue = null;
+      EK.talkTo(rowan);
+      if (/past the Warden/.test(EK.G.dialogue.lines.join(' '))) {
+        throw new Error('Rowan is still sending you past a man who has left');
+      }
+    },
+  },
+  // Vane names a price ladder and had never checked which rung you are on.
+  vaneprism: {
+    w: 900, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.gotcha = null; EK.G.screen = null;
+      EK.G.gems = 5000;
+      const vane = EK.MAPS.shop.npcs.find((n) => n.name === 'Vane');
+      EK.enterMap('shop', vane.x, vane.y + 1, 'up');
+      EK.G.place = null; EK.G.mode = 'world'; EK.G.dialogue = null;
+      EK.talkTo(vane);
+    },
+  },
   reward: {
     w: 760, h: 760,
     go: (EK) => {

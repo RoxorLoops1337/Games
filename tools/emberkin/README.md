@@ -377,6 +377,50 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+55. **The gate was on a proxy, and the net took three goes to say why** (pass
+    144). Elder Rowan is the character the whole game says is paying attention,
+    and she had one piece of navigation: *"Crown Hollow, past the Warden."* It
+    was gated on `dexCount(2) >= 8` — a PROXY for "far enough along", when the
+    game has the actual fact one flag away. Wrong in both directions at once:
+    somebody who had beaten the Warden with a thin dex was never told the path
+    had opened, and somebody who had already stood on the mountain was still
+    being sent past a man who is not on the map any more.
+
+    Then the mirror question, generalised rather than repeated: *once a blocking
+    npc steps off the path, is anybody ELSE still sending you past them?* That
+    swept up a second instance I had not read — Wick's Emberwood parting line,
+    *"The Warden will not let either of us up. Not yet."*, said for the whole
+    rest of the game including on the walk back down.
+
+    The net for it took three formulations, and the two failures are the entry:
+
+    1. Reading `talkLines` and `after` off the fields **cannot see Rowan at
+       all** — she is a `script` npc and her words never touch either. It found
+       Wick, reported the sweep clean, and would have shipped as a net for a
+       fault it structurally could not observe. Drive `talkTo` and read
+       `G.dialogue`: that covers script, lines, after and the trainer fallback
+       in one shape.
+    2. "Nobody may NAME a departed blocker" is the wrong claim. *"Hale stepped
+       aside for you"* names him, and is the fix rather than the bug.
+    3. And the sweep state was too late: with every flag set Rowan gives the
+       ENDING speech, so her mid-game branch never ran. A sweep needs to happen
+       at the point in the story the fault lives at.
+
+    What is actually wrong is a line that does not MOVE. If somebody mentions
+    the blocker while the blocker is in the way, they must say something
+    different once he has stepped off it. One check, both instances caught,
+    nothing named.
+
+    Also this pass: Bell and Vane, who both talk about money and had never
+    looked at yours. Vane names a price ladder — *"Silver is a nibble, Prism is
+    a mortgage, everything between is a decision"* — without ever checking which
+    rung you are on. Bell's orb count is asked of `ITEMS` by kind and Vane's
+    floor comes off `CHESTS`, so neither repeats a list or a price.
+
+    **A gate on a proxy fails in BOTH directions, and only one of them looks
+    like a bug. The silent direction — the player who qualified by the real fact
+    and was never told — leaves no trace at all.**
+
 54. **Nine voices, one shared sentence** (pass 143). The same method as 142,
     pointed at the dialogue 142 did not touch: dump the nine trainers' intro,
     lose, win and `after` in one go and read them together.
