@@ -86,7 +86,7 @@ const EXPOSE = `__out.api = {
   slingPosts, slingBand, drawSling, POST_X, POST_Y, aimCar,
   paintMarketThumb, paintShutTile, SHUT_SLATS, mkLane, mkRand, MK_W, MK_H, THEMES,
   drawSpills, drawSpillHeat, spillPath, SPILL_HOT,
-  drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, drawHut,
+  drawSpilledStock, WRECK_SPILL, WRECK_ITEMS, GLUH_CUPS, drawHut,
   drawCounter, goodsN, goodsX,
   bannerBox, bannerFont, bannerLayout, bannerRibbon,
   paintGore, gorePath, goreCore, bloodLayer, BLOOD_A, BLOOD_SCALE,
@@ -6107,6 +6107,109 @@ function propArt(api, kind, dead, tweak){
   for (const r of rec.rects) cols.add(String(r.style));
   return { o, rec, cols, has: (c) => cols.has(c) };
 }
+
+/* Fifteen of these stand in a market and the live one was four concentric
+   circles — a brown disc, a red disc, a pulsing orange disc and a gold ring.
+   The odd part is that the *wreck* already knew what it was: a copper pot on a
+   trestle, with wine in it and cups that had been on the counter. */
+test('the glühwein stand is a pot on a trestle, not a pink plate', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  api.setT(2.2);
+  const live = propArt(api, 'gluh', false);
+  const r = live.o.r;
+
+  // the pieces the wreck says it is made of
+  for (const [col, what] of [['#5c4430', 'a trestle under it'],
+                             ['#7a5a3c', 'a lit side on the copper'],
+                             ['#8b2f22', 'wine in it'],
+                             ['#8d7a5c', 'a ladle standing in it'],
+                             ['#e8ded0', 'cups on the rim']]){
+    assert(live.has(col), 'a live stand should have ' + what + ' (' + col + ')');
+  }
+  assert(live.rec.shapes.some(s => s.stroked && s.style === '#c9a24a'), 'and its gold rim');
+
+  // the trestle reaches past the pot on every side, or it is not holding it up
+  const legs = live.rec.all.filter(e => e[0] === 'rect' && e[5] === '#5c4430');
+  assert(legs.length === 2, 'the trestle is two crossed planks, got ' + legs.length);
+  for (const l of legs){
+    const long = Math.max(l[3], l[4]);
+    assert(long > r * 2.1, 'a plank only ' + long.toFixed(0) + ' across a pot of r' + r);
+  }
+
+  /* Four mugs, spread round the rim rather than rolled independently — four
+     random angles clump, and two mugs on top of each other read as one odd
+     blob. Three passes at the same centres: a dark rim so they read off the
+     copper, the cup, and what is in it. */
+  // not the pot itself: the wine in it is the same red as the wine in the mugs
+  const ring = (col) => live.rec.all.filter(e =>
+    e[0] === 'arc' && e[4] === col && Math.hypot(e[1], e[2]) > 1);
+  const rim = ring('#3a2c22'), cup = ring('#e8ded0'), wine = ring('#8b2f22');
+  assert(cup.length === api.GLUH_CUPS,
+    api.GLUH_CUPS + ' mugs expected, got ' + cup.length);
+  assert(rim.length === cup.length && wine.length === cup.length,
+    'every mug gets all three passes: ' + rim.length + '/' + cup.length + '/' + wine.length);
+  for (let i = 0; i < cup.length; i++){
+    assert(Math.abs(rim[i][1] - cup[i][1]) < 0.01 && Math.abs(rim[i][2] - cup[i][2]) < 0.01,
+      'mug ' + i + ' is not stacked on its own rim');
+    assert(rim[i][3] > cup[i][3] && cup[i][3] > wine[i][3],
+      'a mug should be rim > cup > wine, got ' +
+      [rim[i][3], cup[i][3], wine[i][3]].join(' '));
+  }
+  const angs = cup.map(e => Math.atan2(e[2] / 0.66, e[1])).sort((a, b) => a - b);
+  let worst = 6.283;
+  for (let i = 0; i < angs.length; i++){
+    const d = i ? angs[i] - angs[i - 1] : angs[0] + 6.283 - angs[angs.length - 1];
+    worst = Math.min(worst, d);
+  }
+  assert(worst > 6.283 / api.GLUH_CUPS - 0.01,
+    'the mugs should be evenly spread, closest pair ' + worst.toFixed(2) +
+    ' rad apart for ' + api.GLUH_CUPS);
+  for (const e of cup)
+    assert(Math.abs(Math.hypot(e[1], e[2] / 0.66) - r * 0.82) < 0.5,
+      'a mug is off the rim at ' + Math.hypot(e[1], e[2] / 0.66).toFixed(1));
+
+  // what it carries is what the wreck throws across the snow
+  const dead = propArt(api, 'gluh', true);
+  assert(dead.has('#8b2f22'), 'the wreck should still spill its cups');
+  assert(!dead.rec.all.some(e => e[0] === 'rect' && e[5] === '#7a5a3c'),
+    'a wrecked pot has no lit copper wall left standing');
+
+  /* Steam on a rolling phase, not a particle system: a stand that has been
+     steaming for six markets must not have six markets of puffs behind it. */
+  const cost = () => {
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawProp(live.o));
+    return rec.fills;
+  };
+  /* Sampled across a stretch of time rather than at one instant: a puff that
+     has faded out is legitimately not drawn, so a single frame proves nothing.
+     The window's cheapest and dearest frames are what must not move. */
+  const window = (t0) => {
+    const seen = [];
+    for (let i = 0; i < 150; i++){ api.setT(t0 + i / 60); seen.push(cost()); }
+    return [Math.min(...seen), Math.max(...seen)];
+  };
+  const early = window(0.4), late = window(600.4);
+  assert(early[0] === late[0] && early[1] === late[1],
+    'ten seconds of steam changed the frame cost: ' + early.join('-') +
+    ' then ' + late.join('-'));
+  assert(early[1] - early[0] <= 3, 'the plume is three puffs, spread ' +
+    (early[1] - early[0]));
+  const first = early[1];
+  console.log('    (glühwein stand: ' + first + ' fills live, ' + (() => {
+    const rec = carRec(); api.withCtx(rec, () => api.drawProp(dead.o)); return rec.fills;
+  })() + ' wrecked)');
+
+  // and none of it reaches the simulation
+  api.reseed(5150);
+  const clean = [api.rnd(), api.rnd(), api.rnd()];
+  api.reseed(5150);
+  for (let i = 0; i < 30; i++){ api.setT(i * 0.2); api.drawProp(live.o); api.drawProp(dead.o); }
+  assert(JSON.stringify([api.rnd(), api.rnd(), api.rnd()]) === JSON.stringify(clean),
+    'drawing the stands moved the simulation stream');
+});
 
 test('a wrecked snowman is still a snowman', () => {
   const api = boot({ count: true, w: 1280, h: 720 });
