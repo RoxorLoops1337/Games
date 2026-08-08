@@ -1389,6 +1389,94 @@ section('a beat is finished before whatever it starts begins');
   }
 }
 
+section('being called out happens to you as well as to them');
+{
+  // Filmed, the ambush was a beat that happened entirely to the trainer: they
+  // jolt (the marker goes white and double size), they walk over, they get a
+  // cue. The one thing on screen that is YOU turned to face them and then stood
+  // perfectly still for the whole 1.35s.
+  //
+  // The recoil it now uses was already half built. `p.bump` was set when you
+  // walked into a wall, decayed every frame, and NOTHING READ IT — a timer that
+  // drove nothing, in a file where every other one drives a picture.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.enterMap('hollowbrook', 9, 5, 'right');
+  g.G.place = null; g.G.flags.gotStarter = 1;
+
+  // The offset is an ARC: nothing at either end of the bump's life, most in the
+  // middle. A bump that never advances therefore draws nothing whichever end it
+  // is stuck at, which is exactly how the first attempt moved the player zero
+  // pixels for a second and a third of a second.
+  const p = { dir: 'right', bump: g.BUMP_T };
+  eq(g.bumpOffset(p).join(','), '0,0', 'a recoil at full has not moved yet');
+  p.bump = g.BUMP_T * .5;
+  const mid = g.bumpOffset(p);
+  ok(mid[0] !== 0, `and mid-way it has (${mid.join(',')})`);
+  ok(mid[0] < 0, 'away from the way you are facing');
+  p.bump = 0;
+  eq(g.bumpOffset(p).join(','), '0,0', 'and it comes back');
+  eq(g.bumpOffset({ dir: 'up', bump: g.BUMP_T * .5 })[1] > 0, true, 'it knows which way you face');
+
+  // Being spotted sets it…
+  ok(g.trainerSight(), 'a trainer spots the player at 9,5');
+  eq(g.G.player.bump, g.BUMP_T, 'and you flinch');
+  ok(!!g.G.alert, 'and the ambush owns the screen');
+
+  // …and it plays out WHILE THE AMBUSH RUNS. This is the whole finding: the
+  // decay used to live below the input ladder, and an ambush returns before it,
+  // so the value sat frozen at full for the entire beat and the player moved
+  // zero pixels. Driven, not reasoned — the source looked plausible.
+  let moved = 0, frames = 0;
+  while (g.G.alert && frames < 200) {
+    const [ox, oy] = g.bumpOffset(g.G.player);
+    if (ox || oy) moved++;
+    g.step(1 / 60); g.draw(); frames++;
+  }
+  ok(frames > 60, `the ambush was driven frame by frame (${frames} frames)`);
+  ok(moved > 5, `and the recoil played out inside it (${moved} frames of movement)`);
+  eq(g.G.player.bump, 0, 'and it is spent by the time the beat ends');
+}
+
+section('the game opens the way it changes any other scene');
+{
+  // Photographed end to end for the first time: the title was replaced by the
+  // study 120ms after the click, mid-sentence, with `fade` and `wipe` both zero
+  // at every sample. A door goes through black at .3 and waking up after a loss
+  // at .5 — the most careful transition in the file, skipped at the one cut
+  // every player sees first.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  ok(g.OPEN_FADE > 0, `the opening has a length (${g.OPEN_FADE}s)`);
+
+  g.startNew();
+  eq(g.G.fade, g.OPEN_FADE, 'and starting a journey goes through it');
+  ok(g.screenCovered(), 'so the screen is covered while the world comes up');
+
+  // Waiting is not starving (170): a cover that never lifts is worse than no
+  // cover. Driven, not reasoned.
+  let frames = 0;
+  while (g.G.fade > 0 && frames < 300) { g.step(1 / 60); g.draw(); frames++; }
+  eq(g.G.fade, 0, 'and the world does arrive');
+  ok(frames > 10 && frames < 120,
+    `taking about as long as it says (${frames} frames for ${g.OPEN_FADE}s)`);
+  ok(!g.screenCovered(), 'and the screen is its own again');
+
+  // …and the same for picking up a save, which is the other way in. The rule
+  // this pass is about is a rule applied to SOME of its cases; netting one door
+  // and not the other is how that happens.
+  const g2 = loadGame({});
+  g2.setCtx(mkCtx());
+  g2.startNew();
+  for (let n = 0; n < 300 && g2.G.fade > 0; n++) g2.step(1 / 60);
+  g2.saveGame();
+  const g3 = loadGame(g2.__store || {});
+  g3.setCtx(mkCtx());
+  g3.startCont();
+  eq(g3.G.fade, g3.OPEN_FADE, 'and so does picking one up again');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
@@ -2102,8 +2190,13 @@ section('the title leads with the run you already have');
   // A is already the safe one. This is the fact the layout was contradicting.
   ok(/\(hasSave\(\) \? startCont : startNew\)\(\)/.test(SRC),
     'pressing A on the title continues when there is a run to continue');
-  ok(/function startNew\(\) \{ show\(els\.title, false\); wipeSave\(\)/.test(SRC),
-    'and New journey really does destroy it — this is not a cosmetic ordering');
+  // Netted as the CLAIM, not the line. This assertion used to be a regex over
+  // `function startNew() { show(els.title, false); wipeSave()` — one physical
+  // line — and reformatting startNew to open through a fade broke it while the
+  // claim stayed exactly as true. Rule 68, caught by the suite doing its job.
+  ok(g.hasSave(), 'a run exists to be destroyed');
+  g.startNew();
+  ok(!g.hasSave(), 'and New journey really does destroy it — this is not a cosmetic ordering');
 
   // One flag drives the button AND the order, so the screen cannot reveal
   // Continue while still leading with the button that wipes the save.

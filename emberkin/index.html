@@ -5139,7 +5139,7 @@ function tryMove(dir) {
     if (!passable(G.map, nx, ny + 1, ny)) return false;
     p.hop = true; ny += 1;
   } else if (!passable(G.map, nx, ny, p.y)) {
-    p.bump = .12;
+    p.bump = BUMP_T;
     return false;
   }
   p.x = nx; p.y = ny;
@@ -5379,6 +5379,32 @@ function blackoutCover() {
 }
 
 const SIGHT = 4;                       // how far down their own line a trainer looks
+/** How long the player's recoil lasts. Named because two things set it now. */
+const BUMP_T = .18;
+
+/**
+ * The player's recoil, as an offset. A value rather than four lines inside the
+ * draw, because the draw is not observable from a suite and a net written
+ * against the picture could not tell whether the recoil was wired to anything.
+ *
+ * The shape is an arc: nothing at either end of the bump's life, most in the
+ * middle. So a bump that never ADVANCES draws nothing at all, whichever end it
+ * is stuck at — which is what made the first version of this move the player
+ * zero pixels for the whole ambush. The decay lived below the input ladder and
+ * an ambush returns before it, so the value sat at full for 1.35s.
+ *
+ * (An earlier draft of this comment said the trick was reading the decay rather
+ * than the value. It is not: `sin((1-k)π)` and `sin(kπ)` are the same curve,
+ * and swapping them changes nothing. The claim was checked by making the swap
+ * and watching the suite stay green — a break that does not bite is worth as
+ * much pointed at your own prose as at the code.)
+ */
+function bumpOffset(p) {
+  if (!p || !(p.bump > 0)) return [0, 0];
+  const k = Math.sin(clamp(1 - p.bump / BUMP_T, 0, 1) * Math.PI);
+  const [dx, dy] = DIRS[p.dir] || [0, 1];
+  return [Math.round(-dx * k * 3), Math.round(-dy * k * 3)];
+}
 /** The three beats of being caught out: the look, the walk, and the pause. */
 const ALERT = { spot: .55, walk: .55, land: .25 };
 
@@ -5449,6 +5475,8 @@ function trainerSight() {
         // tile before you is p minus that step, not p plus it. Adding it walked
         // them through you and left them addressing your back: filming the
         // ambush showed the player above the trainer by the time it landed.
+        // …and you flinch. The beat had no reaction from the player at all.
+        p.bump = BUMP_T;
         const stop = { x: p.x - dx, y: p.y - dy };
         G.alert = { npc: n, t: 0, i: 0, from: { x: n.x, y: n.y }, stop,
           beats: [['spot', ALERT.spot], ['walk', ALERT.walk], ['land', ALERT.land]] };
@@ -5507,7 +5535,6 @@ function faceNpc(npc, p) {
 
 function updateWorld(dt) {
   const p = G.player;
-  if (p.bump > 0) p.bump = Math.max(0, p.bump - dt);
 
   if (p.moveT > 0) {
     p.moveT -= dt;
@@ -5729,7 +5756,19 @@ function drawWorld(g) {
   const p = G.player;
   ents.push({ y: p.py, draw: () => {
     const hop = p.hop ? Math.sin(clamp(1 - p.moveT / (STEP_TIME * 1.6), 0, 1) * Math.PI) * 7 : 0;
-    const sx = Math.round(p.px * TILE - cam.x), sy = Math.round(p.py * TILE - cam.y - 6 - hop);
+    // `p.bump` was set when you walked into a wall and decayed every frame, and
+    // NOTHING READ IT — a timer that drove nothing, in a file where every other
+    // one drives a picture. It is the recoil the player never had, already half
+    // built: a shove back along the way you were facing, out and back over its
+    // own life.
+    //
+    // Filmed, being spotted was a beat that happened entirely to the trainer —
+    // they jolt, they walk, they get a cue — while the one thing on screen that
+    // is YOU turned to face them and stood perfectly still for the whole 1.35s.
+    // Being called out is a recoil, so it sets the same field. One nudge, two
+    // meanings, and both of them were already meant to be there.
+    const [bx, by] = bumpOffset(p);
+    const sx = Math.round(p.px * TILE - cam.x) + bx, sy = Math.round(p.py * TILE - cam.y - 6 - hop) + by;
     castShadow(g, sx, sy + hop, hop ? .55 : 1);
     drawPlayer(g, p.dir, p.step, sx, sy, p.moveT > 0);
   } });
@@ -11483,6 +11522,14 @@ function step(dt) {
   G.t += dt; G.dt = dt; G.playtime += dt;
   if (G.fade > 0) G.fade = Math.max(0, G.fade - dt);
   if (G.wipe > 0) G.wipe = Math.max(0, G.wipe - dt);
+  // The player's recoil decays HERE, above the ladder, and not with the rest of
+  // the world's movement below it. It is drawn on every world frame — including
+  // the frames a beat owns, because the ambush draws you standing there — and
+  // the ladder returns before the world update for exactly those beats. Set at
+  // the moment you are spotted, it sat frozen at full for the whole 1.35s and
+  // moved the player ZERO PIXELS, because the recoil is drawn from how far the
+  // value has DECAYED. Measured that way; it looked plausible in the source.
+  if (G.player.bump > 0) G.player.bump = Math.max(0, G.player.bump - dt);
   // The panels are DOM and the bars are canvas, so nothing about the wipe
   // reaches them unless it is said here.
   if (!HEADLESS) document.body.classList.toggle('wiping', screenCovered());
@@ -11601,11 +11648,34 @@ function newGame() {
  * two DOM buttons — so on a phone, where the round controls are the only thing
  * you can press, the title did not respond to either of them. See `step`.
  */
-function startNew() { show(els.title, false); wipeSave(); newGame(); playCue('world'); }
+/**
+ * How long the world takes to come up under the title. A door goes through
+ * black at .3 and waking up after a loss at .5, and this is the only cut in the
+ * game that had NEITHER: photographed end to end, the title was replaced by the
+ * study 120ms after the click, mid-sentence, with `fade` and `wipe` both zero
+ * at every sample. The most careful transition in the file, skipped at the one
+ * cut every player sees first.
+ *
+ * Between the two: longer than a door because there is nothing behind it, no
+ * longer than waking up because you are not meant to have lost anything.
+ *
+ * The panels come with it for free — `screenCovered()` is true while a fade
+ * runs, and the class it drives already takes the dialogue box out of the way
+ * (173). Without that, opening through black would have shown Elder Rowan
+ * talking over an empty screen, which is worse than the cut.
+ */
+const OPEN_FADE = .45;
+
+function startNew() {
+  show(els.title, false); wipeSave(); newGame();
+  G.fade = OPEN_FADE;
+  playCue('world');
+}
 function startCont() {
   show(els.title, false);
   if (!loadGame()) newGame();
   else { G.mode = 'world'; updateCam(); }
+  G.fade = OPEN_FADE;
   // A save picked up in the Emberwood should not open on the town's tune.
   playCue(placeTrack(G.mapId));
 }
@@ -12009,7 +12079,7 @@ if (typeof window !== 'undefined') {
     renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
-    alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
+    alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,

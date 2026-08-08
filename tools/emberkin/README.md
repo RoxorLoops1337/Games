@@ -377,6 +377,91 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+87. **The one cut every player sees first was the one cut with no transition**
+    (pass 176). The opening, photographed end to end for the first time — the
+    title is DOM, so a film cannot see it, and every pass until now had looked
+    at beats in isolation.
+
+        title → click → 120ms later: the study, mid-sentence.
+        fade 0, wipe 0, at every sample.
+
+    A door in this game goes through black at `.3`. Waking up after a loss goes
+    through black at `.5`. **The most careful transition in the file, skipped at
+    the one cut every player sees first.** It opens through `OPEN_FADE = .45`
+    now — longer than a door because there is nothing behind it, no longer than
+    waking up because you are not meant to have lost anything.
+
+    Timed from inside the page rather than from screenshots (the first attempt
+    read the fade as finishing in ~150ms, which was screenshot latency, not the
+    game):
+
+        world fully lit at   464ms
+        Rowan speaks at      609ms
+
+    **And the panels came free.** `screenCovered()` is true while a fade runs,
+    and the class it drives already takes the dialogue box out of the way — 173's
+    work, three passes old, doing the job without being asked. Without it,
+    opening through black would have shown Elder Rowan talking over an empty
+    screen, which is worse than the cut.
+
+    **Then the suite caught me, correctly, with the wrong kind of net.**
+    Reformatting `startNew` from one line to a function broke:
+
+        ✗ and New journey really does destroy it — this is not a cosmetic ordering
+
+    …which was a regex over `function startNew() { show(els.title, false);
+    wipeSave()` — **the physical line**. The claim was as true as ever; only the
+    layout moved. Rewritten to assert it behaviourally: save, start a new
+    journey, look for the save. **Rule 68 arriving from the other direction — I
+    have spent six passes saying a net should name the claim, and here was one
+    of mine that named a line.**
+
+    A note on the instrument: the first attempt built a contact sheet by
+    embedding full-page screenshots as base64 in HTML, and it rendered the
+    base64 as text. Not worth debugging — individual frames read fine, and a
+    strip is a convenience, not the evidence.
+
+86. **The ambush happened to the trainer and not to you** (pass 175). The only
+    "somebody noticed you" beat in the game, never filmed. `ALERT` is spot .55 +
+    walk .55 + land .25 = 1.35s: the frame closes to two 22px bars, the trainer's
+    marker goes white and double size with a fast bob, he walks over, the bars
+    retract.
+
+    **All of it happens to him.** He jolts, he walks, he gets a cue. The one
+    thing on screen that is YOU turns to face him — `p.dir` is set — and then
+    stands perfectly still for the whole one and a third seconds.
+
+    **And the reaction was already half built and dead.** `p.bump` is set when
+    you walk into a wall and decayed every frame, and **nothing read it**: a
+    timer that drove nothing, in a file where every other one drives a picture.
+    Two hits in the whole file, set and decay. So the recoil the player never
+    had was already paid for. It draws now, and being called out sets the same
+    field — one nudge, two meanings, both already meant to be there.
+
+    **Then the fix drew nothing, and only a measurement said so.** The recoil is
+    an arc — nothing at either end of the bump's life, most in the middle — and
+    the decay lived BELOW the input ladder. An ambush returns before it. So the
+    value sat frozen at full for the entire 1.35s and the player moved **zero
+    pixels**, while the source read perfectly plausibly. Measured by differencing
+    the frame with the bump against the frame without:
+
+        before   0 pixels, every frame of the beat
+        after    0 → 170 → 253 → 170 → 0 over .18s
+
+    The decay moved up beside `G.fade` and `G.wipe`. **A display value whose
+    driver sits below the beat that owns the frame is a display value that does
+    not exist** — the inverse of 173's rule, and it is the same shape: something
+    visible, gated behind something that is not running.
+
+    **And then a break that did not bite caught my own prose.** The comment I
+    wrote said the trick was reading how far the bump had DECAYED rather than
+    reading the value. Swapped it deliberately to prove the net — and the suite
+    stayed green, because `sin((1-k)π)` and `sin(kπ)` are the same curve. **The
+    claim was false and I had just written it into the source.** Corrected, with
+    the correction stated. *A break that does not bite is worth as much pointed
+    at your own comment as at the code* — 171 said a comment claiming a fix is a
+    testable assertion; this is that, one week later, in my own hand.
+
 85. **Two guarantees holding each other up, one of them unnetted** (pass 174).
     173's rule as a sweep: **27 clocks** enumerated from every `+= dt` and
     `-= dt` in the file, and each asked whether it can run while
