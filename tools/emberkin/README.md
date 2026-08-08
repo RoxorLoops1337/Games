@@ -377,6 +377,47 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+85. **Two guarantees holding each other up, one of them unnetted** (pass 174).
+    173's rule as a sweep: **27 clocks** enumerated from every `+= dt` and
+    `-= dt` in the file, and each asked whether it can run while
+    `screenCovered()` is true.
+
+    **Driven live, two covers.** A wipe into a fight (14 clocks running) and a
+    door (3). Exactly two advanced under cover, and both are right:
+
+    - `b.entry`, on 17 covered frames — because the game already gates it more
+      precisely than `screenCovered()` can: `if (G.wipe <= WIPE_T * .5)`. The
+      creatures slide in **as the bars retract**, which is the reveal.
+      **`screenCovered()` is a blunt predicate** — a wipe is only fully opaque
+      at its midpoint — and the one place that needed the finer distinction
+      already had it.
+    - `G.warp.t`, on 10 — a cover's own clock must run or the cover never ends.
+
+    **Forced, every one of them fails.** Setting each display beat live under
+    each cover, all eight advance behind it. That proves nothing on its own:
+    the question is reachability, and every one of those combinations is
+    unreachable for two reasons that hold each other up.
+
+        1. every display beat BLOCKS THE INPUT LADDER while it runs, so nothing
+           that starts a cover can happen while one is live — netted in 172; and
+        2. each beat NULLS ITSELF before running the callback that starts the
+           next thing: `G.rustle = null; r.go();` — and `r.go()` is what calls
+           `startBattle`, which raises the bars.
+
+    **The first was netted. The second was not** — and it is one line's ordering
+    inside each of three step functions. Reverse it anywhere and the beat's
+    remaining time burns behind a wipe or a fade with nothing to catch it.
+    Netted now, proved by reversing each of the three:
+
+        ✗ rustle is already finished when what it starts begins (got true, want false)
+
+    **A sweep that reports clean because nothing was running is not a clean
+    sweep.** The first version of this one watched a real wipe and a real door
+    and saw 14 and 3 clocks — most of the game's beats were simply not live, and
+    it would have reported clean about them by never asking. Forcing each one
+    live is what turned "no findings" into "no findings, and here is why they
+    cannot happen".
+
 84. **A beat spent behind a curtain has not been shown, it has been consumed**
     (pass 173). Two transitions that had scenes and had never been interrogated:
     the door, and the wipe into a fight. Both looked fine on film. Both were

@@ -1342,6 +1342,53 @@ section('a beat is not shown while the screen is covered');
   }
 }
 
+section('a beat is finished before whatever it starts begins');
+{
+  // 173 established the rule: a beat spent behind a curtain has not been shown,
+  // it has been consumed. Sweeping every clock against `screenCovered()` and
+  // FORCING each one live under each cover, every display beat advances behind
+  // it — and every one of those combinations is unreachable, for two reasons
+  // that hold each other up:
+  //
+  //   1. every display beat blocks the input ladder while it runs (netted in
+  //      172), so nothing that starts a cover can happen while one is live; and
+  //   2. each beat NULLS ITSELF before running the callback that starts the
+  //      next thing — `G.rustle = null; r.go();`, and `r.go()` is what calls
+  //      `startBattle`, which raises the bars.
+  //
+  // The first is netted. The second was not, and it is one line's ordering in
+  // each of five step functions: reverse it anywhere and the beat's remaining
+  // time burns behind a wipe or a fade with nothing to catch it.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  g.enterMap('route_one', 9, 10, 'down');
+
+  // Read the beats out of the ladder rather than listing them here, so one
+  // added later is covered without anyone remembering (172's rule).
+  const ladder = SRC.slice(SRC.indexOf('function step(dt)'));
+  const gated = [...new Set(
+    [...ladder.matchAll(/\n\s*if \(G\.(\w+)\s*&&[^)]*Step\(dt\)\)/g)].map((m) => m[1]))];
+  ok(gated.length >= 7, `the ladder was parsed (${gated.length}: ${gated.join(', ')})`);
+
+  // Only the ones that carry a callback can start anything, and those are the
+  // ones this is about.
+  const carriers = ['rustle', 'mend', 'blackout'].filter((f) => gated.includes(f));
+  eq(carriers.length, 3, `three ladder beats carry a callback (${carriers.join(', ')})`);
+
+  for (const f of carriers) {
+    let stillSet = null;
+    g.G.fade = 0; g.G.wipe = 0; g.G.warp = null;
+    g.G[f] = { t: 0, x: 9, y: 10, go: () => { stillSet = !!g.G[f]; } };
+    // DIRTIED and then run to completion — a net that never reaches the
+    // callback proves nothing about what the callback sees.
+    for (let n = 0; n < 400 && stillSet === null; n++) { g.step(1 / 60); g.draw(); }
+    ok(stillSet !== null, `${f}'s callback ran`);
+    eq(stillSet, false, `${f} is already finished when what it starts begins`);
+    g.G[f] = null;
+  }
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.
