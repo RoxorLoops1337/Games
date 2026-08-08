@@ -9433,13 +9433,30 @@ function screenEntry(kind) {
   void els.screen.offsetWidth;              // restart the animation
   els.screen.classList.add(cls);
 }
+/**
+ * Which screens refuse to close, in one place.
+ *
+ * This list lived twice and the copies disagreed. `renderScreen` puts an
+ * "X — back" chip in the corner of every screen and three branches blanked it
+ * by rewriting `html` — but the forced party screen locks on `opt.force`
+ * rather than on its kind, so it kept the chip. Your kin is down, the game is
+ * demanding a replacement, and the corner offers a way out that is not there.
+ * On a phone that chip is the ONLY thing that closes a screen.
+ *
+ * `reward` is in here too. It was never in `closeScreen`'s list, only in
+ * `renderScreen`'s — and closing a reward screen drops `s.opt.done`, which is
+ * `settle`: the evolution that was waiting on the win, and the save.
+ */
+const screenLocked = (s) => !!s && (s.kind === 'starter' || s.kind === 'swap'
+  || s.kind === 'reward' || (s.kind === 'party' && !!s.opt.force));
+
 function closeScreen() {
   const s = G.screen;
   if (!s) return;
+  // The refusal comes BEFORE the sound. This played the back blip and then
+  // returned, so a locked screen made the noise of closing and stayed put.
+  if (screenLocked(s)) return;
   playCue('back');
-  if (s.opt.force && s.kind === 'party') return;         // must pick a replacement
-  if (s.kind === 'starter') return;                      // and one of these must be chosen
-  if (s.kind === 'swap') return;                         // something has to come out
   if (s.kind === 'profile') {
     commitNick(s);                                       // never lose what was typed
     if (s.opt.fresh) { screenSelect(); return; }          // a fresh catch has one way out
@@ -9579,8 +9596,10 @@ function renderScreen() {
   const s = G.screen, el = els.screen;
   // On a phone this is the only thing in the corner that closes a screen, so it
   // is relabelled rather than hidden — but it stops naming a key that is not
-  // there. On a keyboard it still reads "X — back".
-  let html = `<div class="back">${isTouch() ? backName() : `${backName()} — back`}</div>`;
+  // there. On a keyboard it still reads "X — back". And on a screen that will
+  // not close it is not drawn at all, off the same predicate the refusal uses.
+  let html = screenLocked(s) ? ''
+    : `<div class="back">${isTouch() ? backName() : `${backName()} — back`}</div>`;
   if (s.kind === 'party') {
     // Roster on the left, whoever is picked on the right. A row of equal cards
     // has no hierarchy: there is nothing on it saying which one you are looking
@@ -9672,7 +9691,6 @@ function renderScreen() {
     // The first choice in the game, and it used to be a three-line menu. It is
     // three cards now, laid out the way the reward screen is, because that is
     // the shape this game uses for "pick one of these and live with it".
-    html = '';                                  // no way back out but choosing
     html += `<h2>Choose your kin</h2>`;
     // The count is in the sentence. On a phone the row is two cards wide and
     // the third is below the fold — and two cards that fill the row read as the
@@ -9698,7 +9716,6 @@ function renderScreen() {
     }).join('') + '</div>';
   } else if (s.kind === 'swap') {
     const coming = ownedCard(s.opt.newCard);
-    html = '';                                  // something has to come out
     html += `<h2>What comes out?</h2>`;
     html += `<p class="lede">A deck holds ${DECK_MAX}. ${coming ? CARDS[coming.id].name : 'The new card'} is going in — pick the one it replaces.</p>`;
     if (coming) {
@@ -9718,7 +9735,6 @@ function renderScreen() {
           + ((n) => n > 1 ? ` · ${n} in deck` : ' · your only one')(
             s.list.filter((o) => o.id === c.id).length) })).join('') + '</div>';
   } else if (s.kind === 'reward') {
-    html = '';                                  // no way back out but choosing
     html += `<h2>Take a card</h2>`;
     // The deck's vocabulary, glossed where it appears.
     //
@@ -11501,7 +11517,7 @@ if (typeof window !== 'undefined') {
     aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
     intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,
-    newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
+    newGame, boot, say, openScreen, closeScreen, screenLocked, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather,
     entryFx, pushPop, drawPops, drawCrit, POP_LIFE, WIND_UP, RECOIL, CRIT_BURST,

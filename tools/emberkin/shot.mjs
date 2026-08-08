@@ -458,16 +458,52 @@ const SCENES = {
     },
   },
   // The three payoff screens, each held at the frame worth looking at.
+  // This scene used to hand-build `G.evoAnim` — beat 2, its own durations, and
+  // `swapped: false`. That is a state the game cannot produce: `evoStep` flips
+  // `swapped` on the way INTO the burst, so every picture ever taken of the
+  // evolution showed the OLD creature inside a white-out that exists to reveal
+  // the new one, and `res` stayed null so the scene could never reach its own
+  // last line. Nobody had photographed the real thing.
+  //
+  // Driven now: a win that tips a Cindercub over Lv16, the way a player gets
+  // here. FILM THIS ONE — the light wheel turns and accelerates across the
+  // beats, and a still of it looks painted on.
   evolve: {
     w: 760, h: 760,
     go: (EK) => {
       EK.G.dialogue = null; EK.G.screen = null;
       EK.takeStarter('cindercub');
-      EK.G.dialogue = null; EK.G.mode = 'world';
-      const m = EK.G.party[0];
-      EK.G.evoAnim = { mon: m, from: m.species, to: EK.DEX[m.species].evo[0],
-        beats: [['hold', .5], ['build', .9], ['burst', .5], ['settle', .6], ['quiet', .7]],
-        i: 2, t: .22, swapped: false, res: null };
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.mapId = 'route_one';
+      EK.G.party = [EK.mkMon('cindercub', 15)];
+      EK.G.party[0].xp = EK.xpFor(16) - 1;      // the win is the sixteenth level
+      EK.STARTER_DECK.forEach(EK.grantCard);
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 3), wild: true });
+      EK.G.wipe = 0; EK.G.battleMsg = null;
+      EK.B().foe.hp = 1;
+      // Ending the turn is not attacking. The first film of this ran a beat
+      // loop of nothing but endTurn against a foe on 1 HP and recorded twelve
+      // frames of the Cindercub being chewed on — the fight never resolved,
+      // because the player's swing comes out of a CARD. Play one, then end.
+      const beat = () => {
+        const cur = EK.B();
+        if (cur && !cur.over && !cur.log) {
+          const i = cur.hand.findIndex((c) => EK.cardCost(c) <= cur.energy);
+          if (i >= 0) EK.playCard(i); else EK.submitLog(EK.endTurn());
+        }
+        // The card offer stands between the win and the evolution: `settle` is
+        // the reward screen's `done`, so the scene has to answer it to get
+        // there. A film that stopped at "WON +1 gem" was stopping one screen
+        // short of its own subject. Decline it — "No thanks" is the last row,
+        // and TAKING a card with a full deck opens the swap screen behind it
+        // and stalls the film there instead.
+        if (EK.G.screen && EK.G.screen.kind === 'reward') {
+          EK.G.screen.i = Math.max(0, (EK.G.screen.list || []).length - 1);
+          EK.screenSelect();
+        }
+        const d = EK.G.dialogue || EK.liveBattleMsg();
+        if (d) { d.hold = 0; EK.advanceDialogue(); }
+      };
+      for (let t = 60; t <= 9000; t += 120) setTimeout(beat, t);
     },
   },
   // The throw itself, end to end: out of the hand, the suck, the fall, three
@@ -808,21 +844,34 @@ const SCENES = {
       EK.STARTER_DECK.forEach(EK.grantCard);
       EK.startBattle({ foe: EK.mkMon('dewdrip', 3), wild: true });
       EK.G.wipe = 0; EK.G.battleMsg = null;
-      // A real win, driven properly. Two earlier attempts filmed fights that
-      // never finished: a Lv3 Dewdrip still has 64 HP under the wild multiplier
-      // and survives one swing, and the beat loop's "not while a log is
-      // playing" guard then skipped most of its windows. The foe's HP CAN be
-      // set directly — only the player's kin going down is decided inside the
-      // damage path — so one ended turn wins, the XP lands, and the level fires
-      // in among the win lines, which is where it has to be judged.
+      // A real win. Two earlier attempts filmed fights that never finished: a
+      // Lv3 Dewdrip still has 64 HP under the wild multiplier and survives one
+      // swing, and the beat loop's "not while a log is playing" guard then
+      // skipped most of its windows. The foe's HP CAN be set directly — only
+      // the player's kin going down is decided inside the damage path.
+      //
+      // And a third: this comment used to end "so one ended turn wins", which
+      // was never true. ENDING THE TURN IS NOT ATTACKING — the player's swing
+      // comes out of a card, so a loop of nothing but endTurn stands there
+      // while a foe on 1 HP chews on you. The film was six frames of two
+      // creatures doing nothing and the comment said the fix was in.
       EK.B().foe.hp = 1;
       const beat = () => {
         const cur = EK.B();
-        if (cur && !cur.over && !cur.log) EK.submitLog(EK.endTurn());
+        if (cur && !cur.over && !cur.log) {
+          const i = cur.hand.findIndex((c) => EK.cardCost(c) <= cur.energy);
+          if (i >= 0) EK.playCard(i); else EK.submitLog(EK.endTurn());
+        }
+        // The win lines are played back through the LOG, not through
+        // `battleMsg` — an attempt to hold this scene on "grew to level 25" by
+        // reading `d.lines[d.i]` never matched anything, because that dialogue
+        // is not where the log's text lives. Film it at a tight interval
+        // instead; the level line is in among the win lines, which is where it
+        // has to be judged anyway.
         const d = EK.G.dialogue || EK.liveBattleMsg();
         if (d) { d.hold = 0; EK.advanceDialogue(); }
       };
-      for (let t = 100; t <= 3000; t += 160) setTimeout(beat, t);
+      for (let t = 60; t <= 4000; t += 120) setTimeout(beat, t);
     },
   },
   // The foot of a long screen in the overlay layout, scrolled all the way down.
