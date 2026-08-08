@@ -656,6 +656,23 @@ edit this block to name the next one.
       number a new piece of art with no LOD on it moves, and a flat total let
       it hide behind the wider shot for six passes.
 
+- [x] The snow plough is a blade that ends where it hits. One of the two things
+      you can pick up, on screen for its whole eight seconds, and it was a flat
+      white trapezoid and a red bar: bolted to nothing, with no back to it,
+      still white after going through a crowd — on the front of a car that had
+      already been given panel shading, a glass glint and brake lights. It is a
+      curved band now, wide and shallow the way a plough is, sweeping back past
+      the front wheels, with a steel scraping edge, a lit lip, and the blood it
+      has collected off the same `car.bloody` the tyre tracks already read.
+      The correctness half: the old art reached `CARL*0.72` and the pickup only
+      lets you hit `CARL/2 + 12`, so the blade drew a promise 10% longer than
+      the physics keeps. `plowReach()` is now the one expression `inCar` and the
+      drawing share, and the suite checks it from both ends — no drawn point
+      past it, and a person at the tip is hit while one just beyond is not.
+      Note for the next pass: `emberkin_cards` went red once during this pass
+      on "the arriving swing is the weaker one (622 vs 608)" and passed five
+      times out of five when run alone. It is a randomised suite; not ours.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
