@@ -7414,6 +7414,7 @@ function goalMarkers(){
   return out;
 }
 
+const EDGE_PILL = 17;             // the plate a marker's label sits on
 function drawEdgeMarkers(marks){
   if (!marks.length) return;
   screenTransform();
@@ -7438,10 +7439,19 @@ function drawEdgeMarkers(marks){
     ctx.textAlign = 'center';
     const label = m.tag + ' ' + d;
     // measured, not guessed: "CAROUSEL 2820" ran off a 390px-wide phone
-    const half = (ctx.measureText ? ctx.measureText(label).width : label.length * 7) / 2 + 6;
+    const half = (ctx.measureText ? ctx.measureText(label).width : label.length * 7) / 2 + 9;
     const tx = clamp(cx, half, VW - half), ty = clamp(cy + (cy < VH / 2 ? 30 : -22), 26, VH - 12);
-    ctx.fillStyle = 'rgba(8,14,26,.75)';
-    ctx.fillText(label, tx + 1, ty + 1);
+    /* On a plate, in the HUD's own materials. This was the one piece of text in
+       the whole game printed straight onto the market: red SANTA over red
+       awnings and red presents, carrying a one-pixel dark copy behind it and
+       nothing else. The score, the goals, CARS LEFT, the shout, the hint at the
+       bottom — every other word you read sits on a dark rounded plate, and this
+       is the one that says where the most valuable target in the market is. */
+    ctx.fillStyle = 'rgba(7,12,24,.84)';
+    roundRect(tx - half, ty - 12.5, half * 2, EDGE_PILL, EDGE_PILL / 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(150,190,240,.24)'; ctx.lineWidth = 1;
+    roundRect(tx - half + 0.5, ty - 12, half * 2 - 1, EDGE_PILL - 1, EDGE_PILL / 2);
+    ctx.stroke();
     ctx.fillStyle = m.col;
     ctx.fillText(label, tx, ty);
     ctx.textAlign = 'left';

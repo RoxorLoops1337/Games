@@ -983,6 +983,31 @@ edit this block to name the next one.
       have shipped looking fine and disappeared on three markets. A
       single-theme check would have passed it.
 
+- [x] An edge marker's label sits on a plate, like every other word in the
+      game. Screenshotted the aim frame with all three landmark goals live —
+      the screen you look at before every launch — and the SANTA marker was
+      **the one piece of text in the whole game printed straight onto the
+      market**: red type over red awnings and red presents, carrying a
+      one-pixel dark copy behind it and nothing else. The score, the checklist,
+      CARS LEFT, the driver's shout and the hint along the bottom all sit on a
+      dark rounded plate; the odd one out was the line that tells you where the
+      most valuable target in the market is. It gets a pill in the HUD's own
+      materials now, and the label's own measured width already sets the clamp
+      that keeps it inside the frame, so the plate inherits that for free.
+  - Two things checked and left alone rather than "improved". The marker set
+      looked incomplete at first — only tree, carousel, Santa and the jump on
+      your line get one, four of thirteen goals — but every other goal names
+      either a count (stalls, combo, score) or a kind of person spread through
+      the whole crowd, and the nitro goal is satisfied by the charge you start
+      each run with. There is nothing left to point at. And the labels' `SANTA
+      3380` distance reads in world pixels, which is a unit the player has no
+      feel for; there is no better one to hand and a bar or a dot would say
+      less, so it stays.
+  - The plate-inside-the-frame assertion sweeps all five ways a marker can
+      leave the frame, not just the right edge where I happened to see it.
+      Dropping the clamp puts the plate at x 1202–1290 in a 1280-wide view,
+      which is what that assertion catches.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
