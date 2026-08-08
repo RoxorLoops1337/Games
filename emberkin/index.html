@@ -767,7 +767,28 @@
      plate sits exactly over where the orb rests. Not hidden — a fight whose
      state you cannot read is a different kind of wrong — and back at full by
      the time it clicks. */
-  #hudFoe, #hudMine, #acts, #intent, #piles, #energy{ transition:opacity .3s ease; }
+  #hudFoe, #hudMine, #acts, #intent, #piles, #energy, #battlebar,
+  #dialogue, #toast{ transition:opacity .3s ease; }
+  /* The bars slide in to hide a transition, and hid the world and nothing else.
+     Measured: every battle panel is up at full strength ONE FRAME into the
+     wipe — 0.53s of the 0.55s — so both HUDs, the intent chip, the whole card
+     row and the action buttons sat over the closing bars and the map you were
+     still walking on. A film could not show it; a film grabs the canvas and the
+     panels are DOM, which is the same reason the fight's intent chip outlived
+     its foe unnoticed until 169.
+     They arrive with the arena instead. The .3s ease above means they come up
+     as the bars retract rather than snapping in behind them.
+
+     `#dialogue` is in the list and was not on the first attempt — six panels
+     named and the seventh missed, which is the fault this project has now found
+     in its own work four passes running. Shot at peak cover, it was the only
+     thing left on the screen: the fight's opening line and the aimed card's
+     text, floating over the closing bars. Whatever it says at that moment
+     belongs either to the fight nobody has been shown yet or to the world being
+     wiped away. */
+  body.wiping #hudFoe, body.wiping #hudMine, body.wiping #acts,
+  body.wiping #intent, body.wiping #piles, body.wiping #energy,
+  body.wiping #battlebar, body.wiping #dialogue, body.wiping #toast{ opacity:0; }
   body.hushing #hudFoe, body.hushing #hudMine, body.hushing #acts,
   body.hushing #intent, body.hushing #piles, body.hushing #energy{ opacity:.18; }
   /* The hand cannot hold four rules-text blocks at this size: at 30% of a
@@ -6621,6 +6642,8 @@ function orbStep(dt) {
  * copies that will disagree. Neither the throw nor the resolution is hushed:
  * the arc has to be visible arriving and the answer has to be visible landing.
  */
+const screenCovered = () => (G.fade > 0) || !!G.warp || G.wipe > 0;
+
 const orbHush = (p) => p === 'fall' || p === 'wobble' || p === 'gap';
 
 /**
@@ -11460,15 +11483,46 @@ function step(dt) {
   G.t += dt; G.dt = dt; G.playtime += dt;
   if (G.fade > 0) G.fade = Math.max(0, G.fade - dt);
   if (G.wipe > 0) G.wipe = Math.max(0, G.wipe - dt);
+  // The panels are DOM and the bars are canvas, so nothing about the wipe
+  // reaches them unless it is said here.
+  if (!HEADLESS) document.body.classList.toggle('wiping', screenCovered());
   // Ages here with the other passive overlays rather than inside a mode branch,
   // for the reason spelled out below about message holds: a timer that only
   // ticks while one branch is running is a timer that can stick for ever.
+  // Whether the screen is under something opaque enough that nothing else is
+  // being seen: a door's curtain, the fade that opens the far side of it, or
+  // the bars of a battle wipe. Named because three things ask it — the plaque's
+  // clock, the toast's clock, and the class that takes the battle panels out of
+  // the wipe — and three copies of a condition are three copies that drift.
+  //
+  // The two clocks are here for the same reason and were found one after the
+  // other: a beat whose display time is spent behind a curtain has not been
+  // shown, it has been consumed.
+  //
+  // A plaque nobody can see is not being shown. `enterMap` raises it while the
+  // door is still shut, so its clock was running behind black: measured on a
+  // warp, the map swaps at 0.183s, `G.fade` opens the far side over 0.300s, and
+  // PLACE_IN is 0.300s starting at that same instant. ALL of the ease that
+  // drawPlace's comment describes — "it eases on the way in so it arrives
+  // rather than snaps" — happened underneath the fade, and the world appeared
+  // with the name already fully in place.
+  //
+  // The clock waits for the light rather than the raise being delayed, because
+  // that self-corrects for every entrance — a warp's .3, the loss handler's .5,
+  // and the paths with no fade at all — instead of naming one of them. `G.fade`
+  // decays unconditionally two lines down, so this cannot stall; that the
+  // plaque still arrives is netted separately, because "wait for X" and "X
+  // still happens" are two claims.
   if (G.place) {
-    G.place.t += dt;
+    if (!screenCovered()) G.place.t += dt;
     if (G.place.t > PLACE_IN + PLACE_HOLD + PLACE_OUT) G.place = null;
   }
   if (G.toastT > 0) {
-    G.toastT -= dt;
+    // Same rule as the plaque above. The toast that says "Dewdrip — new to the
+    // dex" fires as a fight begins, so its whole life ran under the wipe's
+    // bars: shot at peak cover it was the only thing left on the screen, and
+    // measured, it was at 0.99 opacity over a picture that was 97% black.
+    if (!screenCovered()) G.toastT -= dt;
     // The string goes when the toast does. A message that outlives its own
     // display reads as current to anything that asks G rather than the screen.
     if (G.toastT <= 0) { G.toast = ''; if (!HEADLESS) els.toast.classList.remove('on'); }
@@ -11952,7 +12006,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    renderIntent, intentLine, foeAfield, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
+    renderIntent, intentLine, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, takeStarter, STARTERS, TYPE_ORDER,
