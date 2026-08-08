@@ -1177,6 +1177,63 @@ section('when a level lands, nothing else is still shoving the sprite it draws a
   }
 }
 
+section('a beat that owns the screen is abandoned when the ground moves under it');
+{
+  // `enterMap` clears seven beats under a comment making two claims: that every
+  // beat owning the screen is abandoned when the map changes, and that every one
+  // of them blocks input while it runs. Both are testable, and 171 showed what a
+  // comment claiming a fix is worth on its own.
+  //
+  // The list of beats is READ OUT OF THE LADDER rather than written here, so a
+  // beat added to `step` and forgotten in `enterMap` fails this without anyone
+  // remembering to update a test. That is the whole point: the last three
+  // passes each found a rule applied to some of its cases.
+  const ladder = SRC.slice(SRC.indexOf('function step(dt)'));
+  // `if (G.x && xStep(dt)) return;` — the ladder writes `return;`, not
+  // `return true;`, which the first version of this pattern required and so
+  // found two of nine. A parser that silently under-reads is the same fault as
+  // a net that cannot fail: it agrees with you.
+  const parsed = [...new Set(
+    [...ladder.matchAll(/\n\s*if \(G\.(\w+)\s*&&[^)]*Step\(dt\)\)/g)].map((m) => m[1]))];
+  // `gotcha` gates the frame from an inline block rather than a `…Step(dt)`
+  // call, so the pattern above cannot see it. Named here, with the reason,
+  // rather than silently missing from a list that claims to be complete.
+  const gate = [...new Set([...parsed, 'gotcha'])];
+  ok(gate.length >= 8, `the ladder was parsed (${gate.length} beats: ${gate.join(', ')})`);
+  for (const f of ['warp', 'evoAnim', 'alert', 'rustle', 'mend', 'blackout', 'chestOpen', 'flourish', 'gotcha']) {
+    ok(gate.includes(f), `${f} gates the frame`);
+  }
+
+  // …and now the behavioural half, DRIVEN FROM THE PARSED LIST. The first
+  // version of this section hardcoded the beats and then claimed in its own
+  // comment that a beat added to `step` and forgotten in `enterMap` would fail
+  // it — which was not true, and is the exact fault this pass went looking for.
+  // Every field the ladder gates on is set, the ground is moved, and each is
+  // looked at.
+  //
+  // DIRTIED FIRST — a net run against a game where these were already null
+  // cannot fail, which is 171's lesson written into the setup.
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.newGame(); g.takeStarter('cindercub'); g.G.dialogue = null;
+  const stub = () => ({ t: 0, go: () => {}, done: null, beats: [['x', 1]], i: 0,
+    gems: 1, name: 'x', species: 'cindercub', where: 'x',
+    mon: g.G.party[0], from: 'cindercub', to: 'pyrelynx', spin: 0, swapped: false, res: null });
+  const owned = gate.filter((f) => f !== 'warp');       // the exception, below
+  for (const f of owned) g.G[f] = stub();
+  eq(owned.filter((f) => g.G[f]).length, owned.length,
+    `all ${owned.length} screen-owning beats were running before the ground moved`);
+  g.enterMap('route_one', 9, 10, 'down');
+  for (const f of owned) eq(g.G[f], null, `${f} was abandoned`);
+
+  // `warp` is the documented exception, and it has to stay one: `warpStep` is
+  // what calls `enterMap`, so clearing it there would cancel the door you are
+  // walking through. Netted as the exception rather than left as prose.
+  g.G.warp = { to: { to: 'route_one', tx: 9, ty: 10 }, t: .1 };
+  g.enterMap('route_one', 9, 10, 'down');
+  ok(!!g.G.warp, 'and the door you are walking through is not');
+}
+
 section('weather belongs to the place');
 // Every outdoor map has weather, and it is a property of the map rather than
 // of a clock — Stillmere is always wet, Emberwood is always misty.

@@ -4878,7 +4878,7 @@ function enterMap(id, x, y, dir) {
   // Emberwood, the biggest change of scene in the game, happened in silence.
   //
   // This is deliberately NOT one of the beats above: it owns nothing, blocks no
-  // input, and is not in the `update` early-return ladder. You keep walking and
+  // input, and is not in the `step` early-return ladder. You keep walking and
   // it slides away behind you. Interiors stay quiet, and `placeSeen` only moves
   // when something is actually announced, so ducking into the study and back
   // out does not re-announce Hollowbrook — while coming back outside somewhere
