@@ -88,6 +88,41 @@ const MUTANTS = [
     find: "  if (bi > 0 && a.i < bi && (justPressed('a') || justPressed('b'))) {", to: '  if (false) {' },
   { name: 'skip: the flourish stops answering', aims: ['every beat that can be pressed past still can'],
     find: "  if (f.t < FLOURISH_T && !justPressed('a') && !justPressed('b')) return true;", to: '  if (f.t < FLOURISH_T) return true;' },
+  // ---- pass 188: aimed at the OLDEST sections, none of which had ever had a
+  // mutant pointed at them. 75 of ~88 sections were unswept, and a 0 from this
+  // tool only started meaning something once 187 made source checks visible.
+  { name: 'wide: two maps lit the same way', aims: ['every map is lit as its own place'],
+    find: "  lab:         { tint: [150, 190, 255], grade: .20, vig: .56, motes: 12,  mc: [190, 220, 255], drift: [2, -5] },",
+    to:   "  lab:         { tint: [255, 208, 140], grade: .17, vig: .46, motes: 16, mc: [255, 226, 170], drift: [-4, -7] }," },
+  { name: 'wide: a place loses its weather', aims: ['weather belongs to the place'],
+    find: "  route_one: 'motes',", to: '' },
+  { name: 'wide: a theme loses its lead', aims: ['every theme is shaped like something musicTick can play'],
+    find: '  route: {                        // Route One: open, bright, walking pace',
+    to:   '  route: { lead: [], bpm: 116, order: [0], bass: [0] }, routeOld: {' },
+  { name: 'wide: the hand is a row, not a fan', aims: ['the hand is a fan, not a row'],
+    find: 'function fanStyle(i, n, selected) {', to: 'function fanStyle(i, n, selected) { return \'\';' },
+  { name: 'wide: a card face says nothing', aims: ['a card face carries everything you need to read it'],
+    find: 'function cardHTML(c, opt = {}) {', to: 'function cardHTML(c, opt = {}) { if (c) return \'<div></div>\';' },
+  { name: 'wide: a count never pluralises', aims: ['a count and its noun agree'],
+    find: 'const countOf = (n, one, many) => `${n} ${n === 1 ? one : (many || one + \'s\')}`;',
+    to:   'const countOf = (n, one, many) => `${n} ${one}`;' },
+  { name: 'wide: the stats block goes blank', aims: ['the box shows what the kin under the cursor can do'],
+    find: 'function statBlock(m) {\n  if (!m) return \'\';', to: 'function statBlock(m) {\n  return \'\';' },
+  // Aimed at `shelve`, which is what that section actually tests. The first
+  // version broke `screenList` — a different function the section never calls —
+  // and reported 0 killed, which reads exactly like a section that cannot fail.
+  { name: 'wide: the bag stops being shelved', aims: ['the screens have a shape'],
+    find: 'function shelve(', to: 'function shelve(keys) { return [[\'All\', keys]]; }\nfunction shelveOld(' },
+
+  // A mutant only a SOURCE check can see, and one the game does not feel: the
+  // stub DOM never looks up #pad, so nothing driven changes. It exists because
+  // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
+  // source nets read a hardcoded path — so all 135 source checks were invisible
+  // to every mutant, and a whole section came back 0 killed while the same
+  // mutation by hand plainly killed a check in it. If this one stops biting,
+  // the two reads have drifted apart again.
+  { name: 'PLANTED SOURCE: the markup only a source net can see', aims: [], sourceOnly: true,
+    find: 'id="pad"', to: 'id="padXX"' },
   // A mutant that is MEANT to bring the suite down, so the crash detector has a
   // live case. Without it that detector is unexercised — and it is the one that
   // found pass 182's fault, where 90 unrun checks read back as 90 survivors.
@@ -163,6 +198,7 @@ const baseKeys = keyOf(base);
 const killed = new Set();
 const ran = new Set();      // keys seen in at least one mutant run
 const crashed = new Set();
+const killedBy = new Map();   // mutant name -> how many checks it killed
 const missed = [];
 
 for (const m of MUTANTS) {
@@ -182,6 +218,7 @@ for (const m of MUTANTS) {
   // exactly what a crash looked like. It reported a section of mine as a
   // sentence on that basis. Deleting the pause menu's return threw at
   // `g.G.menu.i` and cost 90 checks.
+  killedBy.set(m.name, n);
   const short = base.length - rows.length;
   const ended = ENDED.test(out);
   if (!m.crashes && ended) rows.forEach((r, idx) => ran.add(keys[idx]));
@@ -222,6 +259,23 @@ base.forEach((r, i) => {
   }
   console.log('\nthe plant holds: the real check died, the sentence survived.');
   // …and the crash detector, which is the half that found this pass's fault.
+  // …and the source-only plant, which proves the suite is reading the same game
+  // it is running.
+  const plants = MUTANTS.filter((x) => x.sourceOnly);
+  if (!plants.length) {
+    console.error('there is no source-only plant — this sweep can no longer tell whether the\n' +
+      '  suite is reading the same file it runs, which is how 187 found 135 blind checks');
+    process.exit(1);
+  }
+  for (const m of plants) {
+    if (!killedBy.get(m.name)) {
+      console.error(`the source-only plant killed nothing: ${m.name}\n` +
+        '  the suite is reading a different file from the one it runs — every source check is blind');
+      process.exit(1);
+    }
+  }
+  console.log(`the source plant holds: a text-only change is seen (${plants.length} of them).`);
+
   const wantCrash = MUTANTS.filter((m) => m.crashes).map((m) => m.name);
   const missedCrash = wantCrash.filter((n) => !crashed.has(n));
   if (missedCrash.length) {
