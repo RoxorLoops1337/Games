@@ -9,6 +9,8 @@
 // Run: node tests/emberkin.test.mjs
 import { loadGame, mkCtx, autoFight, withDeck, ok, eq, done, section } from './emberkin_lib.mjs';
 
+import { readFileSync } from 'node:fs';
+const SRC = readFileSync(new URL('../emberkin/index.html', import.meta.url), 'utf8');
 const EK = withDeck(loadGame());
 const { DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART } = EK;
 
@@ -137,7 +139,41 @@ eq(b0.energy, 3, 'and three energy');
 ok(b0.hand.concat(b0.draw, b0.disc).some((c) => c.src === 'kin'), 'the kin shuffles its own moves in');
 eq(b0.draw.length + b0.hand.length + b0.disc.length,
    EK.deckCards().length + G.party[0].moves.length, 'every card is somewhere in the piles');
-ok(!!b0.intent && !!b0.intent.name, 'the foe telegraphs what it will do');
+// "Telegraphs what it will do" — and the assertion only checked that a name
+// existed. A placeholder standing in for the claim the whole chip rests on:
+// two passes built a lethal warning and an in-fight bag header on top of this
+// number, and nothing anywhere asked whether the telegraph tells the truth.
+ok(!!b0.intent && !!b0.intent.name, 'the foe telegraphs something');
+ok(!!b0.intent.id, 'and names a specific move, not just a label');
+ok(!!MOVES[b0.intent.id], `which is a real move (${b0.intent.id})`);
+// The claim that matters: the foe uses the move it announced. `foeChoose` has
+// noise in it, so a second call at swing time could pick differently — the
+// answer is that the swing reads b.intent.id first, and this is what holds it.
+ok(/const id = \(b\.intent && b\.intent\.id\) \|\| foeChoose\(/.test(SRC),
+  'and the swing uses the move it telegraphed rather than choosing again');
+{
+  // Driven as well as read: whatever it says, that is what comes out.
+  const t = withDeck(loadGame({}));
+  t.setCtx(mkCtx());
+  t.newGame(); t.G.dialogue = null; t.takeStarter('cindercub'); t.G.dialogue = null;
+  let checked = 0;
+  for (let i = 0; i < 12; i++) {
+    t.G.party = [t.mkMon('pyrelynx', 22)];
+    t.G.battle = null;
+    t.startBattle({ foe: t.mkMon(t.DEX_ORDER[i % t.DEX_ORDER.length], 20), wild: i % 2 === 0 });
+    const tb = t.B();
+    t.readIntent();
+    const told = tb.intent && tb.intent.id;
+    if (!told) continue;
+    const log = t.endTurn() || [];
+    const used = log.find((e) => e.fx === 'use' && e.side === 'foe');
+    if (!used) continue;
+    checked++;
+    ok(used.t.includes(MOVES[told].name),
+      `it swung with what it announced — said ${MOVES[told].name}, log says "${used.t}"`);
+  }
+  ok(checked > 0, `and that was actually driven (${checked} swings)`);
+}
 const affordable = b0.hand.findIndex((c) => EK.cardCost(c) <= b0.energy);
 const energyBefore = b0.energy;
 const costPaid = EK.cardCost(b0.hand[affordable]);
