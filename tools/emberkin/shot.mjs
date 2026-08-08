@@ -1015,6 +1015,40 @@ const SCENES = {
   },
   // Going down. Driven through a real loss so the beat runs the way it does in
   // play: the last kin falls, the two lines, the dark closing, the Wayhouse.
+  // The bars into a fight. WIPE_T is .55s and G.wipe is set by startBattle, so
+  // this films the whole of it from zero. The `wipe` scene below is a LOSS —
+  // it fights a Lv45 Bramblor and waits 4500ms for the blackout — and cannot
+  // film this one.
+  wipein: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.enterMap('route_one', 9, 10, 'down');
+      EK.G.place = null;
+      const roll = Math.random;
+      Math.random = () => .999;
+      EK.startBattle({ foe: EK.mkMon('dewdrip', 6), wild: true });
+      Math.random = roll;
+      EK.G.battleMsg = null;
+    },
+  },
+  // A door closing and opening again. WARP_SHUT is .17s of curtain, then
+  // enterMap and G.fade = .3 on the far side — so the whole beat is about half
+  // a second and the film has to be fine-grained to catch it.
+  door: {
+    w: 760, h: 900,
+    go: (EK) => {
+      EK.G.dialogue = null; EK.G.screen = null;
+      EK.takeStarter('cindercub');
+      EK.G.dialogue = null; EK.G.mode = 'world'; EK.enterMap('hollowbrook', 12, 10, 'down');
+      EK.G.place = null;
+      // Walk into the first door this map has, the way a player reaches one.
+      const w = (EK.G.map.warps || [])[0];
+      if (!w) throw new Error('no warp on hollowbrook to walk through');
+      EK.doWarp(w);
+    },
+  },
   wipe: {
     w: 300, h: 260,
     wait: 4500,
