@@ -2850,3 +2850,41 @@ desktop one. That is the correct answer and not an obvious one.
     `every beat that can be pressed past still can` as 0 killed, while the same
     mutation run by hand demonstrably kills a check in that section. The
     section-scoring is wrong for that case. Named rather than papered over.
+
+98. **The suite was reading a different file from the one it ran** (pass 187).
+    Chased the false zero named in 97. `tools/emberkin/tautology.mjs` scored
+    `every beat that can be pressed past still can` as 0 killed, while the same
+    mutation by hand plainly killed a check in it.
+
+    The cause is one line. `loadGame` honours `EK_GAME` so the sweep can point
+    it at a mutant; the suite's `SRC` — which **135 checks** read — was a
+    hardcoded path. So under every mutant the driven checks saw the mutation and
+    every source check saw the original. Structurally invisible, since the day
+    the sweep was built.
+
+        the same mutant, before   1427 rows parsed, 1 failure
+        the same mutant, after    1427 rows parsed, 2 failures
+        the whole set, before     105 of 1427 killed by 25 mutations
+        the whole set, after      108 of 1427
+
+    **Three checks.** The honest number is small, because most of these mutants
+    change behaviour rather than text — and the count is not the point. The
+    point is that the sweep's loudest possible output, "not one of them died",
+    was wrong for a section that was perfectly nettable.
+
+    So the sweep carries a third self-proof beside the planted sentence and the
+    planted crash: a **PLANTED SOURCE** mutant, a text-only change to `id="pad"`
+    that the stub DOM never looks up, so nothing driven can feel it. Only a
+    source check can. If it stops biting, the two reads have drifted apart
+    again, and the sweep refuses to report — as it does if the plant is deleted
+    at all. Both guards verified to exit 1.
+
+    Netted in the suite too, by difference and about the FILE rather than any
+    one check: `SRC` must be `GAME` byte for byte, and the loaded game must
+    agree with the source the suite is asserting against. Reverting the one line
+    fails it directly ("SRC is the file GAME names, byte for byte — got 583509,
+    want 583551"); pointing it at another game entirely fires ten failures;
+    editing the game correctly stays quiet, because both reads move together.
+
+    **A rule this project already had, applied to itself:** read the list out of
+    the code. The suite was reading the code out of the wrong file.
