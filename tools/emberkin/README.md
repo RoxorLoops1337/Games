@@ -2797,3 +2797,56 @@ desktop one. That is the correct answer and not an obvious one.
     on the thing under test.
 
     Five planted faults, all five bite. Two sweep mutants aim here.
+
+97. **The one long beat you could not press past** (pass 186). Job (q): every
+    beat that takes the screen has to hand it back. Driven through their real
+    entry points, all nine do, and none is starved by a cover — that half came
+    back clean. What did not was which ones answer a key:
+
+        beat          left alone   pressing A   skips?
+        warp            12 fr        12 fr        NO    0.19s, a curtain
+        evoAnim        282 fr       282 fr        NO    4.45s
+        alert           87 fr        87 fr        NO    a trainer walking up
+        rustle          26 fr        26 fr        NO
+        mend            73 fr        73 fr        NO
+        blackout        67 fr        67 fr        NO
+        chestOpen      101 fr        45 fr        yes
+        flourish        86 fr         1 fr        yes
+        gotcha         126 fr         1 fr        yes
+
+    The ladder's own comment says *"any key skips the tail of it — nobody should
+    have to sit through a flourish twice"*. That mercy went to the 1.4s flourish,
+    the 1.6s chest and the 2s gotcha, and not to the **4.45s evolution** — three
+    times the next-longest beat, and the only one that can fire twice in a row,
+    because its own ending looks for another evolution and starts it.
+
+    Fixed the way the CHEST states the rule, in the chest's own words: *the thing
+    you paid for should never be the part that gets cut.* A press skips AHEAD to
+    the burst, never past it. 282 frames -> 131, and the 131 that remain are
+    burst + settle + quiet.
+
+    **A pre-existing net said the opposite, and it was right about something
+    else.** `ok(evoPhase() === 'hold' || 'build')` after a mash, under a comment
+    saying "the one moment the genre is built around used to run at the speed you
+    mashed A". Measured:
+
+        left alone   burst at frame 151, ends at 282 — the change takes 131
+        mashing A    burst at frame   0, ends at 131 — the change takes 131
+
+    The moment is untouchable either way; only the run-up can be cut. That net
+    was testing a PROXY for its own claim, so the claim is netted now instead —
+    a mash must not shorten the change by a frame — and the earlier finding is
+    preserved rather than overruled.
+
+    **And two of my own reporting errors.** A planted break "killed nothing"
+    because the anchor omitted a trailing comment — the mutation MISSED (184's
+    lesson). Then the corrected break showed no failures because the suite
+    CRASHED, and I was grepping for failures: `step()` is raw where `frame()`
+    has a try/catch, so a throw inside a beat takes the whole suite down. The
+    drive is wrapped now and the break produces four failures instead of
+    silence.
+
+    **Known limitation, not fixed here:** the sweep scores
+    `every beat that can be pressed past still can` as 0 killed, while the same
+    mutation run by hand demonstrably kills a check in that section. The
+    section-scoring is wrong for that case. Named rather than papered over.

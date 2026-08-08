@@ -9695,6 +9695,23 @@ function evoStep(dt) {
   const a = G.evoAnim;
   if (!a) return false;
   a.t += dt;
+  // A press skips ahead to the change itself, and never past it.
+  //
+  // The ladder above says "any key skips the tail of it — nobody should have to
+  // sit through a flourish twice", and that mercy went to the 1.4s flourish, the
+  // 1.6s chest and the 2s gotcha. Measured, this is 4.45s — the longest beat in
+  // the game, three times the next one, and the only beat that can fire twice in
+  // a row, because its own ending checks for another evolution and starts it.
+  // It was the one long beat with no way past.
+  //
+  // Skipping AHEAD rather than OUT is the chest's rule, in the chest's own
+  // words: the thing you paid for should never be the part that gets cut. The
+  // wind-up goes; the creature changing in front of you does not.
+  const bi = a.beats.findIndex((x) => x[0] === 'burst');
+  if (bi > 0 && a.i < bi && (justPressed('a') || justPressed('b'))) {
+    a.i = bi - 1;
+    a.t = a.beats[bi - 1][1];         // finish the beat before it, on this tick
+  }
   const beat = a.beats[a.i];
   // The wheel's angle accumulates here, where dt is. Nothing that turns should
   // be drawn from absolute time multiplied by a rate that moves.

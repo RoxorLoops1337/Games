@@ -1556,17 +1556,50 @@ eq(swapAt, 'burst', 'and the shape changes under the white-out, never in the ope
 eq(evo.G.party[0].species, 'pyrelynx', 'the kin really evolved');
 eq(evo.G.evoAnim, null, 'the scene handed the screen back');
 eq(evo.G.mode, 'dialogue', 'and the name arrives after it, not during');
-// It is not driven by the buttons any more — that was the old bug: the one
-// moment the genre is built around used to run at the speed you mashed A.
-const evo2 = loadGame({});
-evo2.setCtx(mkCtx());
-evo2.G.party = [evo2.mkMon('cindercub', 20)];
-evo2.runEvolution(evo2.G.party[0]);
-for (let i = 0; i < 12; i++) {
-  evo2.pressKey('a'); evo2.step(.02); evo2.releaseKey('a'); evo2.fired.clear();
-}
-ok(evo2.G.evoAnim, 'mashing A does not skip it');
-ok(evo2.evoPhase() === 'hold' || evo2.evoPhase() === 'build', `it is still early (${evo2.evoPhase()})`);
+// It is not driven by the buttons — that was the old bug: the one moment the
+// genre is built around used to run at the speed you mashed A.
+//
+// This used to check the PROXY: after a mash the phase had to still be 'hold'
+// or 'build'. Pass 186 gave a press the power to skip the WIND-UP, and the
+// proxy went red while the claim above it stayed true. Measured, mashing or
+// not:
+//
+//     left alone   burst at frame 151, ends at 282 — the change takes 131
+//     mashing A    burst at frame   0, ends at 131 — the change takes 131
+//
+// The moment is untouchable either way; only the 2.4s run-up before it can be
+// cut. So the claim is netted instead of the proxy: a mash must not shorten the
+// change by a single frame.
+const evoRun = (mash) => {
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  g.G.party = [g.mkMon('cindercub', 20)];
+  g.runEvolution(g.G.party[0]);
+  let n = 0, burstAt = null, threw = null;
+  // step() is raw where frame() has a try/catch, so a beat that throws takes the
+  // whole suite down instead of failing one check. Caught here and reported.
+  try {
+    while (n < 1500 && g.G.evoAnim) {
+      if (mash) g.pressKey('a');
+      g.step(.016);
+      if (mash) { g.releaseKey('a'); g.fired.clear(); }
+      if (g.evoPhase() === 'burst' && burstAt === null) burstAt = n;
+      n++;
+    }
+  } catch (e) { threw = String(e && e.message || e); }
+  // Read through a guard: a break that leaves the party empty threw here and
+  // took every check behind it off the board, which reads as "the break did not
+  // bite" (182). A break has to produce a failure, not silence.
+  return { end: n, burstAt, threw, change: burstAt === null ? null : n - burstAt,
+    species: (g.G.party[0] || {}).species || '(no kin left)' };
+};
+const evoSlow = evoRun(false), evoMash = evoRun(true);
+ok(!evoSlow.threw && !evoMash.threw, `the evolution runs without throwing (${evoSlow.threw || evoMash.threw || 'clean'})`);
+ok(evoSlow.burstAt !== null && evoMash.burstAt !== null, 'the change happens either way');
+eq(evoMash.change, evoSlow.change,
+  `mashing A does not shorten the change itself (${evoMash.change} frames either way)`);
+eq(evoMash.species, 'pyrelynx', 'and the kin still really evolves');
+ok(evoMash.end < evoSlow.end, `only the run-up can be cut (${evoSlow.end} frames -> ${evoMash.end})`);
 
 section('the ground makes a sound');
 // A footstep says what you are walking on. Every walkable tile has a cue, and
@@ -3953,6 +3986,105 @@ section('a beat that changes your numbers says which ones');
   // pixels — an eleven-letter nickname at level 99 with all four moving.
   const worst = `Bartholomew grew to level 99! ${g.gainLine({ max: 0, atk: 0, def: 0, spd: 0 }, { max: 12, atk: 9, def: 6, spd: 12 })}.`;
   ok(worst.length <= 64, `the longest line this can produce is ${worst.length} chars`);
+}
+
+// Every beat that takes the screen hands it back, and none of them starves
+// under a cover — that came back clean. What did not was WHICH ones you can
+// press past. The ladder's own comment says "any key skips the tail of it —
+// nobody should have to sit through a flourish twice":
+//
+//     beat          left alone   pressing A   skips?
+//     warp            12 fr        12 fr        NO      0.19s, a curtain
+//     evoAnim        282 fr       282 fr        NO      4.45s
+//     alert           87 fr        87 fr        NO      a trainer walking up
+//     rustle          26 fr        26 fr        NO
+//     mend            73 fr        73 fr        NO
+//     blackout        67 fr        67 fr        NO
+//     chestOpen      101 fr        45 fr        yes
+//     flourish        86 fr         1 fr        yes
+//     gotcha         126 fr         1 fr        yes
+//
+// The mercy went to the 1.4s flourish, the 1.6s chest and the 2s gotcha, and
+// not to the 4.45s evolution — three times the next-longest beat, and the only
+// one that can fire twice in a row, because its own ending looks for another
+// evolution and starts it.
+section('the longest beat in the game can be pressed past');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const run = (press) => {
+    g.newGame();
+    g.takeStarter('cindercub');
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null; g.G.mode = 'world';
+    g.G.party = [g.mkMon('cindercub', 20)];
+    const evo = g.checkEvolve();
+    if (!evo) return null;
+    g.runEvolution(evo);
+    let ms = 0, n = 0, said = null, sawBurst = false, swappedAt = null;
+    while (n < 1500 && (g.G.evoAnim || g.G.dialogue)) {
+      if (g.G.dialogue) { said = said || g.G.dialogue.lines[0]; g.G.dialogue.hold = 0; g.advanceDialogue(); continue; }
+      if (press) g.pressKey('a');
+      ms += 16; g.frame(ms);
+      if (press) g.releaseKey('a');
+      if (g.evoPhase() === 'burst') sawBurst = true;
+      if (g.G.evoAnim && g.G.evoAnim.swapped && swappedAt === null) swappedAt = n;
+      n++;
+    }
+    return { n, sawBurst, swappedAt, said, species: g.G.party[0].species, done: !g.G.evoAnim };
+  };
+
+  const slow = run(false);
+  ok(slow, 'a kin was ready to evolve');
+  const fast = run(true);
+
+  // By difference: pressing must shorten it.
+  ok(fast.n < slow.n * .9, `a press shortens it (${slow.n} frames -> ${fast.n})`);
+  ok(fast.n > 1, 'but does not end it on the spot');
+
+  // …and never past the change. This is the chest's rule in the chest's words:
+  // the thing you paid for should never be the part that gets cut.
+  ok(fast.sawBurst, 'the burst is still on screen after a skip');
+  eq(fast.species, 'pyrelynx', 'and the creature really changed');
+  eq(slow.species, 'pyrelynx', 'as it does when left alone');
+  ok(fast.swappedAt !== null && fast.swappedAt < slow.swappedAt,
+    `the change arrives sooner, not later (frame ${fast.swappedAt} vs ${slow.swappedAt})`);
+
+  // What is left after a skip is the change itself, not a stub: burst + settle
+  // + quiet, which is EVO's own arithmetic rather than a number typed here.
+  const tail = (g.EVO.burst + g.EVO.settle + g.EVO.quiet) / .016;
+  ok(fast.n >= tail * .8, `and the whole change still plays (${fast.n} frames, tail is ~${Math.round(tail)})`);
+
+  // The thing behind the beat still happens — a skip must not cost the sentence.
+  ok(/became/.test(String(fast.said)), `it still says what happened (${fast.said})`);
+  ok(/\+\d+ HP/.test(String(fast.said)), 'and still names the numbers');
+  ok(fast.done, 'and it hands the screen back');
+}
+
+// The rule applied to ALL its cases, not just the one this pass fixed. Read out
+// of the ladder in step() rather than listed here, so a beat added tomorrow is
+// asked the same question.
+section('every beat that can be pressed past still can');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  const ladder = [...new Set((SRC.match(/if \(G\.(\w+)[^\n]*?Step\(dt\)\) return;/g) || [])
+    .map((m) => m.replace(/if \(G\.|\s.*$/g, '')))];
+  ok(ladder.length >= 8, `the ladder owns ${ladder.length} beats: ${ladder.join(', ')}`);
+  ok(ladder.includes('evoAnim'), 'and the evolution is one of them');
+  ok(ladder.includes('flourish') && ladder.includes('chestOpen'), 'as are the flourish and the chest');
+
+  // Each skippable beat's step must read a press. Asked of the FUNCTION, so a
+  // step that stops reading input fails here whatever its clock does.
+  for (const fn of ['flourishStep', 'chestStep', 'evoStep']) {
+    const at = SRC.indexOf(`function ${fn}(dt) {`);
+    const body = at < 0 ? '' : SRC.slice(at, SRC.indexOf('\n}', at) + 2);
+    ok(body.length > 40, `found ${fn}`);
+    ok(/justPressed\('a'\)/.test(body) && /justPressed\('b'\)/.test(body),
+      `${fn} answers a press`);
+  }
+  // …and the gotcha, which is inline in the ladder rather than a step of its own.
+  ok(/G\.gotcha\.t > 2 \|\| justPressed\('a'\) \|\| justPressed\('b'\)/.test(SRC),
+    'and the gotcha answers one too');
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.

@@ -84,6 +84,10 @@ const MUTANTS = [
     find: "    const d = (after[k] || 0) - (before[k] || 0);\n    if (d) parts.push", to: "    const d = 0;\n    if (d) parts.push" },
   { name: 'said: zeroes named too', aims: ['a beat that changes your numbers says which ones'],
     find: "    if (d) parts.push(`${d > 0 ? '+' : ''}${d} ${label}`);", to: "    parts.push(`${d > 0 ? '+' : ''}${d} ${label}`);" },
+  { name: 'skip: the evolution cannot be pressed past', aims: ['the longest beat in the game can be pressed past'],
+    find: "  if (bi > 0 && a.i < bi && (justPressed('a') || justPressed('b'))) {", to: '  if (false) {' },
+  { name: 'skip: the flourish stops answering', aims: ['every beat that can be pressed past still can'],
+    find: "  if (f.t < FLOURISH_T && !justPressed('a') && !justPressed('b')) return true;", to: '  if (f.t < FLOURISH_T) return true;' },
   // A mutant that is MEANT to bring the suite down, so the crash detector has a
   // live case. Without it that detector is unexercised — and it is the one that
   // found pass 182's fault, where 90 unrun checks read back as 90 survivors.
