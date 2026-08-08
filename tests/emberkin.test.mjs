@@ -144,6 +144,31 @@ eq(b0.draw.length + b0.hand.length + b0.disc.length,
 // two passes built a lethal warning and an in-fight bag header on top of this
 // number, and nothing anywhere asked whether the telegraph tells the truth.
 ok(!!b0.intent && !!b0.intent.name, 'the foe telegraphs something');
+// And the number is the one the swing will actually use. The estimate was
+// `damageOf(...) + foeEdge` while the swing multiplied that whole thing by the
+// wild damper or the trainer ramp — so the chip named a figure the foe was
+// never going to deal. Measured with the roll frozen and crits off, it dealt
+// more than told in 42 swings of 59, median 1.11x. Two passes had built a
+// lethal warning and the bag's incoming figure on that number.
+ok(/foeSwingMul\(b, raw\.eff\)/.test(SRC), 'the telegraph scales its estimate the way the swing does');
+ok(/function foeSwingMul/.test(SRC), 'off one shared function, so the two cannot disagree');
+{
+  // The multiplier itself, both branches, since it decides the whole number.
+  const t = withDeck(loadGame({}));
+  t.newGame(); t.G.dialogue = null; t.takeStarter('cindercub'); t.G.dialogue = null;
+  t.G.party = [t.mkMon('pyrelynx', 22)];
+  t.startBattle({ foe: t.mkMon('bramblor', 20), wild: true });
+  const wb = t.B();
+  eq(t.foeSwingMul(wb, 1), EK.WILD_DMG_MUL, 'a wild kin swings at the wild damper');
+  ok(t.foeSwingMul(wb, .5) > EK.WILD_DMG_MUL,
+    'and the damper only half applies against a resistance, as the swing does');
+  t.G.battle = null;
+  t.startBattle({ foe: t.mkMon('bramblor', 20), wild: false, npc: { id: 'x', name: 'Somebody' } });
+  const tb = t.B();
+  eq(t.foeSwingMul(tb, 1), EK.trainerDmg(20), 'a trainer swings at the trainer ramp');
+  ok(t.foeSwingMul(tb, 1) !== t.foeSwingMul(wb, 1),
+    'and the two are different numbers, which is why omitting it was not a constant error');
+}
 ok(!!b0.intent.id, 'and names a specific move, not just a label');
 ok(!!MOVES[b0.intent.id], `which is a real move (${b0.intent.id})`);
 // The claim that matters: the foe uses the move it announced. `foeChoose` has
