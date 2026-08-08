@@ -743,6 +743,23 @@ edit this block to name the next one.
       every roll after it and rescores all twenty-one markets. Same reasoning
       as the discarded `ri(0,3)` kept in the bag drop.
 
+- [x] A rocket burns down behind itself instead of towing a matchstick. Found
+      by finally looking at the finale, which nothing had ever screenshotted:
+      twenty-one markets flattened, fireworks going up over the wreckage, and
+      every rocket trail was a round-capped stroke of constant width and
+      constant alpha — a matchstick with a bright dot on one end and a *hard
+      rounded cap at the back*, where a rocket is supposed to be thinning into
+      nothing. It is two tapered wedges now, full width at the head and a point
+      at the tail, the inner one shorter and brighter, so the trail reads as
+      burning down rather than as a drawn line. Same fix serves every barrel
+      crate, not just the finale. Two notes: the finale's SHOPPERS/WRECKED read
+      zero in my first probe and I nearly filed it as a bug — it was the
+      fixture setting `G.kills` rather than `G.totalKills`, and the real wiring
+      is correct, which is what checking rather than assuming is for. And the
+      "fireworks are drawn by the light pass" test counts pieces per rocket, so
+      it went from `n * 3` to `n * 4` and had to be updated with a pointer to
+      why.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
