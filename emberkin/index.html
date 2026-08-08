@@ -9190,17 +9190,34 @@ function entryFx(b, e) {
     // Clearing the flash rather than quietening the ring is the right way round:
     // the hit has already been read (its number is on screen), and what has not
     // been read yet is that you levelled.
-    b.flashM = 0; b.lungeM = 0; b.recoilM = 0;
-    // And the crit burst, if it was on your side. It draws at cx 72 — exactly
-    // where the level ring goes — and was missed when the other three were
-    // cleared, which is the third time a fix here has reached most of what it
-    // claimed to rather than all of it.
+    // `windM` belongs in this list on exactly the grounds the burst below was
+    // added on: `mx` is `72 - … - shake - wind(windM) + lunge − recoil`, so the
+    // wind-up displaces the very sprite the ring is drawn around, in the same
+    // units as the two beside it. Swept for and measured rather than assumed —
+    // driven through two shapes of levelling fight it is 0 at the frame the
+    // level lands, because a 'use' entry clears it when the swing fires. Latent,
+    // like the burst, and in the list for the same reason: three of the four
+    // ways this sprite can be shoved were named and one was not.
+    b.flashM = 0; b.lungeM = 0; b.recoilM = 0; b.windM = 0;
+    // And the bursts on your side. Both of them, which took a net to find:
+    // there are TWO fields, `b.burst` (every landed hit, drawn by drawBurst)
+    // and `b.crit` (the crit ring, drawn by drawCrit at cx 72 — exactly where
+    // the level ring goes). The comment that used to sit here said the crit
+    // burst had been added to this list, and the line under it cleared
+    // `b.burst`. **The fix named the wrong field**, so the one thing it was
+    // written to clear was the one thing it never cleared — and it said
+    // otherwise in prose, which is worse than saying nothing.
+    //
+    // Found by netting the CLAIM (nothing is still running under the level)
+    // instead of the line, and by shoving the sprite every way it can be shoved
+    // right up to the moment the level lands. A net that checks a battle where
+    // these were all zero anyway cannot fail.
     //
     // Stated as defence, not as a symptom: BURST_T is 0.26s and a level lands
-    // after the win lines, so the two very probably never overlap in play. What
-    // is certain is that they are drawn in the same place and one of them was
-    // not being cleared, and completing the set costs nothing.
+    // after the win lines, so they very probably never overlap in play. What is
+    // certain is that they are drawn in the same place.
     if (b.burst && b.burst.side === 'mine') b.burst = null;
+    if (b.crit && b.crit.side === 'mine') b.crit = null;
   }
   if (e.fx === 'hit') {
     if (e.side === 'mine') b.flashM = .8; else b.flashF = .8;

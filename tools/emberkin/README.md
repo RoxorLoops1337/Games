@@ -377,6 +377,68 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+82. **A fix that named the wrong field, and said otherwise in prose** (pass 171).
+    Sent to hunt the shape that had paid off three passes running — *a rule
+    written down and applied to one of its cases*. The sweep came back mostly
+    clean, and then found something worse than what it was looking for.
+
+    **The sweep, with counts.** Draw-order guards: the place plaque is the only
+    canvas layer drawn between the world and the screen-takers, and it now names
+    both cases (168). Everything after it — flourish, gotcha, chest, blackout,
+    fade, warp, wipe — is drawn later and therefore covers it by construction.
+    Panel hiding: three battle-exit paths (win, run, lose) × eight panels,
+    **measured, all clean**; the apparent asymmetry between the three
+    `show(…, false)` sites is cosmetic, because `battleBar(on)` hides `#intent`
+    as well as `#battlebar`, so all three hide the same effective set. The mend
+    is clean on all five questions and sequential with its own dialogue.
+
+    **Then the real one.** `mx` is
+    `72 − shake − wind(windM) + lunge(lungeM) − recoil(recoilM)`: four ways the
+    player's sprite can be displaced, and the level's clear-list named three.
+    Adding `windM` is a one-token defensive change — measured, it is 0 at the
+    frame the level lands in both shapes of levelling fight.
+
+    But writing the net as *the claim* rather than *the line* — assert every
+    beat that draws on or shoves this sprite is zero — turned up a fifth thing:
+
+        ✗ crit is not still running under the level (got 1, want 0)
+
+    **There are two burst fields.** `b.burst` is every landed hit; `b.crit` is
+    the crit ring, drawn at cx 72, exactly where the level ring goes. The
+    comment at that site said the crit burst had been added to the clear-list —
+    calling it *"the third time a fix here has reached most of what it claimed
+    rather than all of it"* — and the line under it cleared `b.burst`. **The fix
+    named the wrong field, so the one thing it was written to clear was the one
+    thing it never cleared, and it asserted the opposite in prose.** A comment
+    that is wrong is worse than no comment: it is the thing a reader trusts
+    instead of checking.
+
+    **And the net only worked because it dirtied the sprite first.** The section
+    shoves the sprite every way it can be shoved right up to the level landing.
+    Deleting the entire clear-list AND the dirtying together leaves the suite
+    **green at 1126** — that is the demonstration, run deliberately. A net that
+    checks a battle where the values were zero anyway cannot fail.
+
+    **The measurement lesson, which nearly cost two false fixes.** An additive
+    beat's measured brightness depends on the backdrop it lands on *and* the
+    moment it is posed at:
+
+        the same level ring, posed at battle start   22.12   (backdrop 63.5)
+        …at the moment it actually plays              4.52   (backdrop 93.6)
+        the hit flash, posed at frame zero            0.00   (creatures sliding in)
+        …once the arena has settled                  +1.62   (2208 px changed)
+
+    Both of the wrong numbers were TRUE, about pictures the player never sees. I
+    doubted pass 170's tuning on the strength of the first, measured level and
+    flourish **at the same instant against the same backdrop**, and got 4.52
+    against 4.48 — 170's parity holds. **Measure a beat where it happens, and
+    measure what it is competing with in the same frame.**
+
+    Finally, an own goal worth writing down: mid break-and-restore I restored
+    `index.html` from a scratchpad copy and reached for `git checkout` on the
+    test file — which discarded the uncommitted section I had just written.
+    Restore uncommitted work the same way you saved it.
+
 81. **The most repeated good thing in the game was ten times quieter than the
     thing that follows it** (pass 170). The level-up, filmed and then measured
     twice — once for timing, once for light — and both numbers said the same
