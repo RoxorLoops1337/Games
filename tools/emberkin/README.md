@@ -377,6 +377,36 @@ and the family is more useful than the individual entry.
     balance change made on it would have been the loudest wrong thing this
     project has done.
 
+73. **"It cost you 1 shards." — the same sentence, one pass later** (pass 162).
+    Swept every computed number the game prints beside a noun, by the method
+    that worked last time: compute the expression over a range and READ THE
+    SENTENCE. Three faults, two clean with nameable reasons, and one of the
+    three was in the line I had rewritten the pass before.
+    - **The win flourish already got it right on the canvas** — `+1 gem`,
+      `+2 gems` — and the TOAST for the same win, fired in the same moment two
+      inches away, said `+1 gems`. One number, one event, two places,
+      disagreeing. The private copy of the rule was the tell.
+    - **`1 gems short.`** on the chest screen.
+    - **`It cost you 1 shards.`** for anybody holding four to seven shards.
+      Pass 72 rewrote that exact sentence for ZERO and walked straight past ONE.
+      **Fixing a degenerate value is not the same as fixing degenerate values.**
+      A `countOf(n, one, many)` now stands between every count and its noun.
+    - **Clean, and why:** `Collection — N spare` works at any count because
+      "spare" is an adjective; `Nobody left to beat. N kin still unfound.`
+      cannot reach zero, because the ternary above it takes the other branch
+      when nothing is left, and `kin` is invariant in this game's usage anyway.
+      Trainer prizes are 240–3000 and can never be one — but they go through the
+      helper regardless, because an invariant that holds by accident is a
+      landmine and the helper costs nothing.
+
+    **And the net that had to be rewritten was mine.** Pass 72's assertion named
+    the MARKUP — ``It cost you ${lost} shards.`` — so it failed the moment the
+    line improved. That is rule 68 exactly, written down in pass 157 and then
+    broken by me in 161. **Writing a rule down protects the code you write while
+    you are thinking about it and nothing after that** (which is entry 64's
+    lesson, arriving for the third time). The assertion now names the claim: a
+    real charge still states its amount.
+
 72. **"It cost you 0 shards."** (pass 161). Generalising 70's blind spot —
     what else does the game show only to somebody who has been here before? —
     across the states no scene had ever produced. **Most came back clean, and
