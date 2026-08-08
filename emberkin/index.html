@@ -4285,8 +4285,16 @@ const MAPS = {
           // One idea, and he opens with it every time — which is the only way
           // you will ever see it, in a fight this short.
           plan: ['sharpen', 'swing'],
-          lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
-        after: ['I am going north. Try to keep up.'] },
+          // "I am going north" moved here from `after`, because he then did not
+          // go. The Emberwood Wick appears the instant this fight is won, so
+          // from that moment there were two of him — one on the mountain road
+          // and one still in town promising to set off. Reading the whole cast
+          // at four points in the story is what showed it: at the very end he
+          // was in three places at once, the last of them saying he was about
+          // to leave. The line was never wrong. He was.
+          lose: ['Fine. First one is free.', 'I am going north. Try to keep up.'],
+          win: ['Told you. It was just there.'] },
+        leaves: 't_wick1' },
     ],
     signs: { '2,7': 'HOLLOWBROOK — where the valley narrows and the kin come down to drink.',
              '18,15': 'Rowan\'s Study, north end. Knock loudly. She is always mid-thought.' },
@@ -4513,7 +4521,12 @@ const MAPS = {
           : G.flags.t_hale
             ? ['Hale let you through? He would not even look at me.',
               'Go on, then. I will find my own way up.']
-            : ['The Warden will not let either of us up. Not yet.']) },
+            : ['The Warden will not let either of us up. Not yet.']) ,
+        // And then he goes, at the exact moment the summit Wick appears —
+        // `t_wick3` requires `beatVespyr`, so this is the one flag that puts one
+        // of him in the wood and the other on the mountain at once. His own
+        // line says "I will be up there"; this is him being up there.
+        leaves: 'beatVespyr' },
       { x: 15, y: 6, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Coll', id: 't_coll',
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
@@ -4662,7 +4675,12 @@ const tileAt = (map, x, y) => (x < 0 || y < 0 || y >= map.rows.length || x >= ma
  *
  * `G.flags` is saved and is rebuilt per run, so reading it fixes both at once.
  */
-const npcActive = (n) => !(n.block && G.flags[n.id]) && (!n.requires || !!G.flags[n.requires]);
+// `leaves` is the general form of what `block` does to an npc's presence: gone
+// once some flag is set. `block` uses the npc's OWN id and also means "stands in
+// a path", which is why both exist — Wick is not in anybody's way, he simply
+// stops being in town.
+const npcActive = (n) => !(n.block && G.flags[n.id]) && !(n.leaves && G.flags[n.leaves])
+  && (!n.requires || !!G.flags[n.requires]);
 
 function npcAt(map, x, y) {
   return (map.npcs || []).find((n) => n.x === x && n.y === y && npcActive(n)) || null;
