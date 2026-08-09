@@ -51,13 +51,13 @@ const EXPOSE = `__out.api = {
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
   draw, drawHUD, drawAim, drawSling, previewPath, drawShout, nitroRect, popText, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
-  SHOUTS, SHOUT_TIME, SLING_RECOIL, LAUNCH_PUNCH, LAUNCH_PUNCH_T, CAR_MIN_PX, MIN_FILL, CAM_OVERSHOOT,
+  SHOUTS, SHOUT_TIME, SLING_RECOIL, aimZoom, CAR_MIN_PX, MIN_FILL, CAM_OVERSHOOT,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
        SCARE_R, FLEE_SPD, BOOST_KICK, PLOW_TIME, PERSON_PTS, SANTA_PTS,
        GRAV_Z, RAMP_MIN, RAMP_KICK, RAMP_MAX_VZ, LAND_R, FLIP_PTS, AIR_PTS, GORE_MAX, DEBRIS_MAX,
-       REC_HZ, REC_WINDOW, REC_KEEP, REC_RADIUS, REPLAY_SPEED, REPLAY_MIN_WORTH },
+       REC_HZ, REC_WINDOW, REC_KEEP, REC_RADIUS, REPLAY_SPEED, REPLAY_MIN_WORTH, DRIVE_MAX },
   getT: () => T, setT: (v) => { T = v; },
   getFlash: () => flash, getHitstop: () => hitstop,
   _clearFeel: () => { hitstop = 0; flash = 0; shake.t = 0; shake.a = 0; },
@@ -3480,36 +3480,68 @@ test('a quiet run gets no replay, a busy one does', () => {
   assert(runWith(6), 'six in two seconds is');
 });
 
-test('the run summary sits at the top, not across the wreckage', () => {
+/* The plate moved into the rail and its contents did not: `×7.5` and the
+   combo meter kept printing at `VW / 2`, so the market had a number floating
+   over it and the corner had an empty box. Nothing in the suite noticed,
+   because everything read comboRect() — the plate — and nothing read where the
+   words actually landed. */
+test('what the combo plate says is printed on the combo plate', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive'; api.G.combo = 14; api.G.mult = 7.5; api.G.comboT = 1;
+  const rec = carRec();
+  api.withCtx(rec, () => api.drawHUD());
+  const R = api.comboRect();
+  const mine = rec.texts.filter(t => /^×|IN A ROW$/.test(t.s));
+  assert(mine.length === 2, 'the plate says a multiplier and a count, got ' +
+    JSON.stringify(rec.texts.map(t => t.s)));
+  for (const t of mine){
+    assert(t.x >= R.x && t.x <= R.x + R.w && t.y >= R.y && t.y <= R.y + R.h,
+      '"' + t.s + '" is printed at ' + t.x.toFixed(0) + ',' + t.y.toFixed(0) +
+      ' and the plate is ' + R.x.toFixed(0) + ',' + R.y.toFixed(0) +
+      ' ' + R.w + 'x' + R.h);
+  }
+  // and so is the timer bar under them
+  const bars = rec.polys.filter(q => q.style === '#8effb0' || q.style === '#ff6b5e');
+  assert(bars.length >= 1, 'the plate should carry its own timer bar');
+  for (const b of bars)
+    assert(b.x0 >= R.x && b.x1 <= R.x + R.w && b.y1 <= R.y + R.h,
+      'the meter runs ' + b.x0.toFixed(0) + '..' + b.x1.toFixed(0) + ' off its plate');
+  console.log('    (combo plate at ' + R.x + ',' + R.y + ' carries its own text)');
+});
+
+test('the banner stays in the rail, not across the wreckage', () => {
   const api = boot({ w: 1280, h: 720, count: true });
   api.startLevel(0); api.beginLevel();
   api.G.banner = { text: '9 DOWN · 3 WRECKED · 4,200', t: 1.2 };
   api.draw();
   /* This used to assert `0.115 * 720 < 0.18 * 720` — two constants, so drawHUD
      could put the receipt at VH * 0.9 and it would still pass. It reads the
-     layout the banner actually uses now. */
+     layout the banner actually uses now.
+
+     And it used to be a rule about *height*: stay in the top strip. That was
+     the wrong axis. The camera keeps the car near the middle of the frame and
+     the trail of smashed stalls runs back from it, so the middle of the
+     picture is the thing you are trying to watch — at any height. Both banners
+     live in the left rail now, and what they must not do is reach into that
+     middle column. */
   const receipt = api.bannerLayout(textW('9 DOWN · 3 WRECKED · 4,200', 30), true, 1);
   const shout = api.bannerLayout(textW('MARKET MAYHEM', 30), false, 1);
   const sr = api.hudScoreRect();
-  assert(receipt.y + receipt.h / 2 < 720 * 0.30,
-    'the receipt should stay in the top strip, got ' + receipt.y.toFixed(0));
-  assert(receipt.y - receipt.h / 2 > sr.y + sr.h - 200,
-    'but below the score plate, not printed through it');
-  /* Both of them are captions, and a caption that covers the thing it is
-     captioning is not one. This used to assert `shout.y > receipt.y` — which
-     was satisfied by the loud banner sitting at VH * 0.30, i.e. 216px down a
-     720 frame, which is exactly the band the car and the wreck it has just
-     made are in. "YULE LOG" landed square on the stall it named. */
-  const BAND = 720 * 0.25;
-  assert(shout.y + shout.h / 2 < BAND, 'the loud banner reaches ' +
-    (shout.y + shout.h / 2).toFixed(0) + 'px down, into the action band at ' + BAND);
-  assert(receipt.y + receipt.h / 2 < BAND, 'and so does the quiet one, at ' +
-    (receipt.y + receipt.h / 2).toFixed(0));
-  assert(shout.y - shout.h / 2 > 0, 'and inside the frame');
+  for (const [name, L] of [['receipt', receipt], ['shout', shout]]){
+    assert(L.y - L.h / 2 >= sr.y + sr.h,
+      'the ' + name + ' is printed through the score plate');
+    assert(L.x + L.w / 2 < 1280 * 0.30, 'the ' + name + ' reaches ' +
+      (L.x + L.w / 2).toFixed(0) + 'px across, into the middle of the picture');
+    assert(L.x - L.w / 2 > 0 && L.y + L.h / 2 < 720, 'and the ' + name + ' is inside the frame');
+  }
+  // the tails have to fit too — the ribbon is wider than its plate
+  assert(shout.x - shout.w / 2 - 26 >= 0, 'the ribbon tail hangs off the left edge');
 
   api.G.banner = { text: 'MARKET MAYHEM', t: 1.2 };
-  api.draw();                                  // the loud one still renders centre
+  api.draw();                                  // the loud one still renders
 });
+
 
 /* ---------------------------------------------------------- destruction --- */
 
@@ -3934,6 +3966,12 @@ test('the camera keeps the car in frame and the road ahead visible', () => {
   let worstPct = 0, worstAhead = 1e9;
   for (let i = 0; i < 600 && api.G.phase === 'drive'; i++){
     api.update(1 / 60);
+    /* The loop tests the phase before stepping, so the frame the run ends on
+       was being measured under the settle camera — which has no road-ahead
+       leash, because the car has stopped and there is nothing coming. That
+       frame is not what this rule is about, and it only ever passed because
+       the drive zoom used to be tight enough to hide it. */
+    if (api.G.phase !== 'drive') break;
     const sx = (api.car.x - api.cam.x) * api.cam.s + 1280 / 2;
     worstPct = Math.max(worstPct, sx / 1280);
     worstAhead = Math.min(worstAhead, 1280 - sx);
@@ -4004,13 +4042,35 @@ test('each market pulls the far fence in behind its last stall', () => {
   assert(api.bounds.x1 > far, 'the fence sits behind the last stall');
 });
 
-test('the view zooms out with speed', () => {
-  const api = boot();
-  api.startCampaign(); api.beginLevel();
-  drive(api, 100, 0, 2000, 1100);
-  const slow = api.camTarget().z;
-  drive(api, 1600, 0, 2000, 1100);
-  assert(api.camTarget().z > slow, 'faster means wider');
+/* This used to assert the opposite — `faster means wider`, off a z of
+   `880 + sp * 0.24`. Which meant the picture crept in every time the car
+   slowed and back out every time it accelerated, all run long. A camera that
+   moves while you are steering is a camera you are fighting: the drive view is
+   fixed for the whole run now, and the replay is the only zoom in the game. */
+test('the view does not move while you are driving it', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  for (const lv of [0, 6, 14, 20]){
+    api.startLevel(lv); api.beginLevel();
+    const zs = [];
+    for (const sp of [0, 200, 700, 1300, 1900]){
+      drive(api, sp, 0, 2000, 1100);
+      zs.push(api.camTarget().z);
+    }
+    const lo = Math.min(...zs), hi = Math.max(...zs);
+    assert(hi - lo < 0.001, 'market ' + (lv + 1) + ': the zoom moves with speed, ' +
+      lo.toFixed(0) + ' to ' + hi.toFixed(0));
+  }
+  /* …and it is the aim view, or as close to it as the draw budget allows: the
+     picture you pick your line across should be the picture you drive. */
+  api.startLevel(0); api.beginLevel(); api.camSnap();
+  const aim = api.aimZoom();
+  drive(api, 900, 0, 2000, 1100);
+  assert(Math.abs(api.camTarget().z - Math.min(aim, api.C.DRIVE_MAX)) < 0.001,
+    'the drive view should be the aim view capped at DRIVE_MAX, got ' +
+    api.camTarget().z.toFixed(0) + ' against ' + aim.toFixed(0));
+  console.log('    (drive zoom: fixed, aim ' + aim.toFixed(0) + ' -> drive ' +
+    api.camTarget().z.toFixed(0) + ')');
 });
 
 /* --------------------------------------------------------------- draw --- */
@@ -7295,6 +7355,17 @@ test('a barrel lid is staves and banked snow, not a biscuit', () => {
   const api = boot({ w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
   api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100; api.camSnap();
+  /* At the replay zoom, which is the tier this art is drawn at. It used to
+     lean on whatever camSnap gave the drive phase, and that worked only while
+     the drive view was tight: fixing the drive zoom at 1320 for the owner's
+     "no zoom during gameplay" put a 27-unit barrel at propQ 14.7 against a
+     fine tier of 16, and the staves stopped being drawn. That is a real trade
+     — barrel seams are a replay detail now, not a driving one — and putting
+     them back costs 120 fills against 87 of headroom. So the test says which
+     camera it is talking about instead of pretending the drive one still is. */
+  api.cam.tz = 470; api.cam.s = api.camScale(470);
+  assert(api.propQ({ kind: 'barrel', r: 27 }) > api.PROP_FINE.barrel,
+    'the replay camera should reach the barrel\'s fine tier');
 
   // a plain barrel, not a fireworks crate
   let live = null;
@@ -8453,7 +8524,7 @@ function carRec(){
     poly.x1 = Math.max(poly.x1, x); poly.y1 = Math.max(poly.y1, y);
   };
   const base = {
-    shapes, order, rects, all, styles, polys, ctrls, images: [], fills: 0,
+    shapes, order, rects, all, styles, polys, ctrls, images: [], texts: [], fills: 0,
     // raw path points too, so a jointed limb can be told from a straight one
     // both styles, because a path may be on its way to a fill or to a stroke
     moveTo(x, y){ pt(x, y); all.push(['m', x, y, line, fill]); },
@@ -8503,6 +8574,10 @@ function carRec(){
       if (poly) polys.push(Object.assign({}, poly, { style: line, lw, stroked: true }));
       if (pending){ shapes.push(Object.assign({}, pending, { style: line, lw, stroked: true })); pending = null; }
     },
+    // where a word was printed, not just that it was — the combo plate moved
+    // into the rail while its number stayed centred on the old VW / 2 and no
+    // assertion in the suite noticed
+    fillText(str, x, y){ base.texts.push({ s: String(str), x, y, style: fill }); },
     measureText: (s) => ({ width: textW(String(s), fontPx(base.font)) }),
     /* Gradients stringify to their stops, so a fill can be told apart from the
        flat colour it replaced — the recorder used to return undefined here and
@@ -9556,7 +9631,8 @@ test('the HUD does not cover the market you are driving through', () => {
       { n: 'cars', x: ca.x, y: ca.y, w: ca.w, h: ca.h },
       { n: 'nitro', x: ni.x, y: ni.y, w: ni.w, h: ni.h },
       { n: 'combo', x: co.x, y: co.y, w: co.w, h: co.h },
-      { n: 'banner', x: w / 2 - L.w / 2, y: L.y - L.h / 2, w: L.w, h: L.h },
+      // from the layout, not from a second copy of where it used to be centred
+      { n: 'banner', x: L.x - L.w / 2, y: L.y - L.h / 2, w: L.w, h: L.h },
       { n: 'shout', x: w - S.w - 22, y: h - S.h - (w < 560 ? 128 : 74), w: S.w, h: S.h },
     ];
     for (const r of rects){
@@ -9578,20 +9654,22 @@ test('the HUD does not cover the market you are driving through', () => {
       w + 'x' + h + ': the transient text alone covers ' +
       (share(['combo', 'banner', 'shout']) * 100).toFixed(1) + '%');
 
-    /* The band the car and the wreck it just made are in. Nothing transient
-       may reach into it — the banner used to sit at VH * 0.30, dead centre of
-       it, and the combo plate was 86 tall on top of that.
+    /* The middle of the picture. The camera keeps the car near the centre of
+       the frame and the trail of smashed stalls runs back from it, so this
+       column is what you are actually trying to watch — at any height. This
+       was a rule about *height* last pass (stay in the top strip), which the
+       banner satisfied while sitting directly over the wreck. Wrong axis.
 
-       Checked only where it can be met: on a landscape phone the top row is
-       already score-panel-to-car-counter and the combo has nowhere to go but
-       under the goals. That is a real constraint rather than something this
-       rule should pretend away, so the phone case is left to the overlap and
-       budget rules above. */
-    for (const r of h >= 600 ? rects : []){
-      if (r.n === 'score' || r.n === 'shout') continue;
-      assert(r.y + r.h <= h * 0.25 + 1, w + 'x' + h + ': the ' + r.n +
-        ' plate reaches ' + (r.y + r.h).toFixed(0) + 'px down, past the top strip at ' +
-        (h * 0.25).toFixed(0));
+       The transients only. The score plate and the car counter are pinned to
+       the frame's corners and cannot drift anywhere; their size is what the
+       area budget above is for, and on a landscape phone the goal text makes
+       the score plate 43% of the width whatever this rule would like. What
+       the owner reported was text that *appears* over the action. */
+    for (const r of rects.filter(q => ['combo', 'banner', 'shout'].includes(q.n))){
+      assert(r.x + r.w <= w * 0.30 + 1 || r.x >= w * 0.72 - 1,
+        w + 'x' + h + ': the ' + r.n + ' plate spans ' + r.x.toFixed(0) + '..' +
+        (r.x + r.w).toFixed(0) + ', into the middle column ' +
+        (w * 0.30).toFixed(0) + '..' + (w * 0.72).toFixed(0));
     }
     // and none of them lands on another
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++){

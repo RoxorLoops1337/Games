@@ -526,15 +526,13 @@ const MAX_PULL = 430;                         // world units of sling travel
 const MIN_POWER = 0.16;
 const MAX_LAUNCH = 1900;                      // world px/s at full pull
 const SLING_RECOIL = 0.25;                    // seconds the band keeps snapping after release
-/* The release punch. It used to be `cam.tz = min(cam.tz, 1150)` — an
+/* There is no release punch any more. It was `cam.tz = min(cam.tz, 1150)` — an
    assignment, on the frame you let go, from the aim zoom of 2300 straight to
-   1150. That is a 1.93x jump in the size of the world in a single frame, with
-   nothing between the two pictures: you let go of the band and the market you
-   had just spent ten seconds reading was replaced. It is a fraction the drive
-   zoom dips by, easing out over LAUNCH_PUNCH_T, and the camera's own lerp
-   carries it — so the punch is something the picture does, not something that
-   happens to it. */
-const LAUNCH_PUNCH = 0.09, LAUNCH_PUNCH_T = 0.34;
+   1150, a 1.93x jump in the size of the world in one frame. That became a
+   fraction the drive zoom dipped by, easing out; and then the drive zoom
+   stopped moving at all, which leaves nothing for a punch to dip. The release
+   still flashes, hit-stops, shakes and snaps the band — it just does not take
+   the camera with it. */
 const FRICTION = 0.36;                        // exponential decay per second
 const DRAG = 52;                              // flat decel, px/s²
 const ICE_FRICTION = 0.09;
@@ -989,7 +987,6 @@ const G = {
   sling: null,            // {t, ux, uy, len} — the band still snapping after a release
   goalPops: [],           // goals ticked mid-run, announced once the car has stopped
   banner: null,           // {text, t}
-  punchT: 0,              // seconds left of the release zoom punch
   bannerAt: 0,
   runKills: 0, runWrecks: 0, runScore: 0, idleT: 0, idleScore: 0,
 };
@@ -2012,7 +2009,6 @@ function launch(px, py){
   puff(ANCHOR.x, ANCHOR.y, 14, '#f4f9ff', 260);
   hitstop = Math.max(hitstop, 0.04);
   flash = Math.max(flash, 0.25);
-  G.punchT = LAUNCH_PUNCH_T;
   setTxt('hint', 'SPACE / TAP — NITRO');
   return true;
 }
@@ -2385,7 +2381,6 @@ function stepCombo(dt){
     if (G.comboT <= 0) breakCombo();
   }
   if (G.banner){ G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
-  if (G.punchT > 0) G.punchT = Math.max(0, G.punchT - dt);
 }
 
 /* ---------- crowd ---------- */
@@ -3723,6 +3718,16 @@ function endReplay(){
 }
 
 /* ---------- camera ---------- */
+/* The zoom that frames this market: it stretches to fit the far fence, clamped
+   so market 1 does not pull back into sky. Its own function because the drive
+   camera uses it too — the picture you aim with and the picture you drive
+   through are the same picture, and two copies of this formula is exactly how
+   they would stop being. */
+function aimZoom(){
+  const want = (bounds.x1 + 240 - (ANCHOR.x - MAX_PULL - 120)) / Math.max(1.6, VW / VH);
+  return clamp(want, 1500, 2300);
+}
+
 function camTarget(){
   if (G.phase === 'replay'){
     // close in on the car, biased toward where the bodies are
@@ -3747,8 +3752,7 @@ function camTarget(){
        fit the far fence, clamped so market 1 does not pull back into sky, and
        the sling sits a fixed 150 screen px from the left edge whatever the
        zoom turns out to be. */
-    const want = (bounds.x1 + 240 - (ANCHOR.x - MAX_PULL - 120)) / Math.max(1.6, VW / VH);
-    const z = clamp(want, 1500, 2300);
+    const z = aimZoom();
     const sc = camScale(z);
     // the anchor sits a full pull plus a margin in from the left edge, so the
     // car is still on screen at 100% however far the zoom has stretched
@@ -3767,21 +3771,30 @@ function camTarget(){
      1300 ceiling); on a 390-high frame it holds the drive zoom at 860 instead
      of stretching to 1300, which is road ahead traded for being able to see
      what you are driving. */
-  const zCap = CARL * VH / CAR_MIN_PX;      // VH is CSS px, and so is CAR_MIN_PX
-  /* How wide the drive view is. It used to run 880 to 1300, against an aim
-     view of 1500 to 2300 — so the market you picked your line across was
-     between 1.8x and 2.6x bigger the moment you were driving through it, and
-     at the low end a stall was a fifth of the screen. Widened to 1020-1320,
-     which is 1.74x the aim view at speed rather than 2.6x, and still leaves
-     the car 40px long on a 720-high frame — over CAR_MIN_PX, and the zCap
-     below still holds the line on a phone. The ceiling is where it is because
-     the draw budget is: a frame costs props times detail, and 1440 put 236
-     props on camera for 3,864 fills against a hard ceiling of 3,700. 1360 came
-     in at 3,699 — one fill of margin is not a margin. */
-  const z = Math.min(clamp(1020 + sp * 0.22, 1020, 1320), Math.max(600, zCap));
-  // …and the release punch dips it, easing out, rather than teleporting to it
-  const punch = 1 - LAUNCH_PUNCH * clamp(G.punchT / LAUNCH_PUNCH_T, 0, 1);
-  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead, z: z * punch };
+  const zCap = CARL * camK() / CAR_MIN_PX;  // camK is CSS px, and so is CAR_MIN_PX
+  /* One zoom for the whole run, and it is the one you aimed with.
+
+     It used to be a function of speed — `clamp(880 + sp * 0.24, 880, 1300)`,
+     later 1020-1320 — so the picture crept in every time the car slowed and
+     back out every time it accelerated, on top of a punch on release. A camera
+     that moves while you are steering is a camera you are fighting, and the
+     owner's note was blunt: it should not zoom during gameplay, only in the
+     replay.
+
+     So the drive view *is* the aim view, pulled in only as far as the car-size
+     floor demands. On a desktop that floor mostly does not bind and there is
+     no zoom at all between picking your line and driving it; on a phone it
+     still pulls in, because 23 CSS px of car with a 7px shopper under it is
+     not a thing you can steer. The replay is now the only camera move in the
+     game.
+
+     DRIVE_MAX is the third floor and it is the draw budget's: a frame costs
+     props times detail, and driving at the full aim zoom of 2300 put 258 props
+     on camera for 4,226 fills against a hard ceiling of 3,700. So on the
+     biggest markets there is still one settling pull-in at launch — bounded,
+     eased, and then still for the rest of the run. */
+  return { x: car.x + car.vx * lead, y: car.y + car.vy * lead,
+    z: Math.min(aimZoom(), DRIVE_MAX, Math.max(600, zCap)) };
 }
 
 /* How far past the fence the camera may look. Hard-clamping to the fence meant
@@ -3793,15 +3806,26 @@ const CAM_OVERSHOOT = 0.55;
 /* How small the car is allowed to get, in CSS pixels, and how far the width
    term may shrink the picture below what the frame's height would give. */
 const CAR_MIN_PX = 34, MIN_FILL = 0.6;
+/* The widest the drive camera may sit, whatever the market would like. Set by
+   the draw budget rather than by taste: at the full aim zoom of 2300 a driving
+   frame put 258 props on camera for 4,226 fills against a hard ceiling of
+   3,700, and 1609 came in at 3,772 — still over. */
+const DRIVE_MAX = 1320;
 
 /* One place for "how many screen pixels is a world unit at this z". camTarget
    frames the aim view by placing the sling a fixed distance in from the left
    edge, which means it has to know the scale camApply is going to use — it had
    its own copy of the formula, and the moment MIN_FILL entered one and not the
    other a full pull went off the left edge of a tall window. */
-function camScale(z){
-  return Math.max(VH / z * MIN_FILL, Math.min(VH / z, VW / (z * 1.6)));
-}
+/* Screen pixels per world unit is always this over z — the frame's own term,
+   with z factored out. Worth having on its own because "how far can I zoom out
+   before the car is under CAR_MIN_PX" needs to invert camScale, and the answer
+   was being worked out as `CARL * VH / CAR_MIN_PX`. That assumes the scale is
+   VH/z, which it is not whenever the width term binds: on an 820x1180 tablet
+   the true scale is 40% of that, and the cap let the car reach 29px against a
+   floor of 34. */
+function camK(){ return Math.max(VH * MIN_FILL, Math.min(VH, VW / 1.6)); }
+function camScale(z){ return camK() / z; }
 
 function camApply(t, k){
   cam.tz = lerp(cam.tz, t.z, k);
@@ -6705,7 +6729,10 @@ function drawCar(){
 function shoutRect(tw){
   const narrow = hudTight();
   const fs = narrow ? 18 : 22, h = narrow ? 38 : 42;
-  const max = Math.min(VW - 44, VW * 0.46);
+  /* Narrow enough to stay out of the middle column once it is docked 22px in
+     from the right edge — the bubble used to be allowed 46% of the width,
+     which put its left edge back over the market on a landscape phone. */
+  const max = Math.max(150, VW * 0.28 - 22);
   const want = tw + 30;
   return { fs, h, w: Math.min(want, max), fit: Math.min(1, max / want), max };
 }
@@ -7909,25 +7936,28 @@ function bannerFont(receipt){
    can be checked against real text widths at real viewport sizes rather than
    whatever a headless stub reports for measureText. */
 function bannerLayout(tw, receipt, k){
-  const narrow = hudTight();
   const fs = bannerFont(receipt);
   const s = 1 + (1 - clamp(k, 0, 1)) * 0.25;
-  const box = bannerBox(tw, fs, (VW - 48) / s);
+  /* Sized to the rail, not to the frame. A ribbon allowed the full width used
+     to be a ribbon that took it: "9 DOWN · 3 WRECKED · 4,200" ran most of the
+     way across the picture. `fit` shrinks the type instead of letting the
+     plate grow. */
+  const rail = Math.min(HUD_RAIL_W, VW - 48);
+  const box = bannerBox(tw, fs, rail / s);
   const w = box.w * box.fit * s, h = box.h * box.fit * s;
-  /* Clear of the panels it shares the frame with: the combo plate for a shout,
-     and — only when the ribbon is wide enough to reach it — the score panel.
-     In portrait the combo plate has already dropped under the goals, so this
-     follows it down. */
-  const r = hudScoreRect();
-  const overPanel = w / 2 > VW / 2 - (r.x + r.w) ? r.y + r.h + h / 2 + 10 : 0;
-  /* It used to sit at VH * 0.30 — 216px down a 720 frame, which is the band the
-     car and the wreck it just made are in. "YULE LOG" landed square on top of
-     the stall it named. It stacks under whatever is already at the top middle
-     now (the combo plate, or nothing) rather than reaching down for the middle
-     of the picture: the banner is a caption, and the thing it captions is what
-     you want to be looking at. */
-  const y = Math.max(overPanel, receipt ? VH * 0.115 : topStackBottom() + h / 2 + 12);
-  return { fs, s, box, w, h, y };
+  /* Down the left rail, under whatever is already there. It used to sit at
+     VH * 0.30 — 216px down a 720 frame — and then, briefly, centred at the top:
+     both of them are over the wreck, because the camera keeps the car near the
+     middle and the trail of smashed stalls runs back from it. "YULE LOG"
+     landed square on the stall it named. A caption that covers the thing it
+     captions is not one. */
+  /* bannerRibbon works in unscaled box units and the whole thing is then
+     scaled by s * fit, so the tail on screen is bigger than one measured off
+     the final height — reserve what actually gets drawn or the left tail hangs
+     off the edge of the frame on the pop frames, where s is 1.25. */
+  const tail = Math.min(26, box.h * 0.6) * s * box.fit;
+  return { fs, s, box, w, h, tail, x: railX() + tail + w / 2,
+    y: topStackBottom() + h / 2 + 10 };
 }
 
 function bannerRibbon(w, h, warm){
@@ -8008,15 +8038,25 @@ function goalRowY(i){
    56px — a plate a fifth of the frame wide, parked dead centre-top, on top of
    the market you are steering through. The number is the thing you read; the
    plate around it was mostly air. */
+/* Everything transient hangs off the bottom of the score plate, in one rail
+   down the left edge. It used to be centred at the top of the frame — which
+   is directly over the wreck you have just made, because the camera keeps the
+   car near the middle and the trail of smashed stalls runs back from it. The
+   owner's note: the combo text is in the middle of the screen and you cannot
+   see what is happening. A corner is a thing you glance at; the middle of the
+   picture is the thing you are playing. */
+const HUD_RAIL_W = 240;
+function railX(){ return hudScoreRect().x; }
 function comboRect(){
-  const narrow = hudTight();
+  const r = hudScoreRect();
   const w = Math.min(158, VW - 28);
-  return { x: VW / 2 - w / 2, y: narrow ? 150 : 14, w, h: 54 };
+  return { x: r.x, y: r.y + r.h + 8, w, h: 54 };
 }
-/* The bottom of whatever is already stacked at the top middle, which is what
-   the banner has to clear. */
+/* The bottom of whatever is already down the rail, which is what the banner
+   has to clear. */
 function topStackBottom(){
-  return G.combo >= 2 ? comboRect().y + comboRect().h : (hudTight() ? 150 : 14);
+  const r = hudScoreRect();
+  return G.combo >= 2 ? comboRect().y + comboRect().h : r.y + r.h;
 }
 
 function drawHUD(){
@@ -8104,7 +8144,11 @@ function drawHUD(){
     const t = clamp(G.comboT / COMBO_WIN, 0, 1);
     // on a phone the top row is already full: score panel left, cars right.
     // The combo drops below the goals rather than straddling both of them.
-    const R = comboRect(), cx = VW / 2;
+    /* The plate's own centre. This read `VW / 2` — a second copy of where the
+       plate used to be — so moving the plate into the rail left the number and
+       the meter printed in the middle of the market with an empty box in the
+       corner. */
+    const R = comboRect(), cx = R.x + R.w / 2;
     hudPlate(R.x, R.y, R.w, R.h);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
@@ -8140,7 +8184,7 @@ function drawHUD(){
     const m = ctx.measureText ? ctx.measureText(G.banner.text) : null;
     const tw = (m && m.width) ? m.width : G.banner.text.length * fs * 0.58;
     const L = bannerLayout(tw, receipt, k);
-    ctx.translate(VW / 2, L.y);
+    ctx.translate(L.x, L.y);
     ctx.rotate(Math.sin(T * 9) * 0.03);
     ctx.scale(L.s * L.box.fit, L.s * L.box.fit);
     bannerRibbon(L.box.w, L.box.h, receipt);
