@@ -1308,6 +1308,56 @@ edit this block to name the next one.
       *drawn at a zoom that cannot see them*; symmetric `lay` → *bob should change
       how the body lies*.
 
+- [x] **The owner played it again**: "the combos and so on appear in the middle
+      over the screen and we can't see what happens", and "it shouldn't zoom in
+      during the gameplay, only in the replay". Both were things the previous
+      pass had *moved* rather than solved.
+  - **The zoom no longer moves while you drive.** It was still a function of
+      speed (`clamp(1020 + sp * 0.22, …)`), so the picture crept in every time
+      the car slowed and back out every time it accelerated — all run long, on
+      top of a release punch. It is one value for the whole run now: the aim
+      zoom, capped. The replay is the only camera move left in the game, and
+      the punch is gone entirely (the release still flashes, hit-stops, shakes
+      and snaps the band).
+  - **The cap is the draw budget's, and it is the honest limit here.** Driving
+      at the full aim zoom of 2300 put 258 props on camera for **4,226 fills**
+      against a hard ceiling of 3,700; 1609 → 3,772; 1460 → 3,922 at launch
+      speed; 1380 → 3,721. **1320 is the widest that fits.** So on the biggest
+      markets there is still one settling pull-in at launch (2300 → 1320 over
+      ~6 frames) and on small ones there is none at all. Recorded rather than
+      papered over: going wider needs LOD work, not a constant.
+  - **A real bug fell out of it.** `zCap` — "how far can I zoom out before the
+      car is under CAR_MIN_PX" — was `CARL * VH / CAR_MIN_PX`, which inverts a
+      scale of `VH / z`. That is not the scale whenever the width term binds:
+      on an 820x1180 tablet the true scale is 40% lower and the cap let the car
+      reach **29px against a floor of 34**. `camScale` is now `camK() / z` and
+      the cap inverts that.
+  - **The whole HUD is one left rail.** Last pass moved the combo plate and the
+      banner to the *top* of the frame and called it out of the way. It was
+      not: the camera keeps the car near the middle and the trail of smashed
+      stalls runs back from it, so top-centre is directly over the wreck. The
+      rule was on the wrong axis. Everything transient now hangs off the bottom
+      of the score plate down the left edge, and the test asks the question
+      that matters — **no transient plate may enter the middle column**
+      (0.30–0.72 of the width). The shout bubble was allowed 46% of the width
+      and had to come down to fit the same rule.
+  - **And the plate moved without its contents.** `×7.5` and the combo meter
+      kept printing at `VW / 2`: an empty box in the corner and a number
+      floating over the market. **The suite passed both before and after the
+      fix** — everything read `comboRect()`, the plate, and nothing read where
+      the words landed. `carRec` records `fillText` positions now, and the new
+      assertion is that what the plate says is printed on the plate.
+  - Two more tests had to change because they asserted the old behaviour rather
+      than a property: `the view zooms out with speed` ("faster means wider")
+      became `the view does not move while you are driving it`, and the
+      road-ahead test was measuring one frame past the end of the drive — it
+      only ever passed because the old zoom was tight enough to hide it.
+  - One trade recorded: a 27-unit barrel at the fixed drive zoom sits at propQ
+      14.7 against a fine tier of 16, so **stave seams are a replay detail
+      now**, not a driving one. Putting them back costs 120 fills against 87 of
+      headroom. The test says which camera it is talking about instead of
+      leaning on whatever the drive phase happened to give it.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
