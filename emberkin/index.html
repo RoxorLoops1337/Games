@@ -485,6 +485,23 @@
     touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
   }
   #screen h2{ margin:2px 0 10px; font-size:1em; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
+  /* A screen you cannot leave has to keep saying what it is asking.
+     `scrollFor` puts the window where the cursor is, and on the swap screen —
+     the one screen `screenLocked` refuses to close — that pushed the question
+     off the TOP of the panel: measured at 390x760, "What comes out?" sat at
+     -66 and its lede at -46, both outside the box, while the deck you are
+     choosing from filled it. Pinned, the question stays and the cards scroll
+     under it. The negative margins bleed the cover across the panel's own
+     12px padding so nothing shows through at the edges. */
+  #screen .shead{ position:sticky; top:-12px; z-index:3; margin:0 -12px; padding:12px 12px 1px;
+    background:linear-gradient(180deg,#1a1222 76%,#1a122200); }
+  /* The offset is the panel's own top padding, negated, so the pinned block
+     sits flush against the glass — at top:0 it stuck 24px down and the cards
+     scrolled through the gap above it. `body.touch` pads by 24, so it takes
+     the matching pair and keeps the text the same distance from the edge. */
+  body.touch #screen .shead{ top:-24px; padding-top:24px; }
+  #screen .shead h2{ margin-top:0; }
+  #screen .shead .lede{ margin-bottom:.55em; }
   #screen .back{ position:absolute; right:12px; top:10px; font-size:.78em; color:var(--dim); cursor:pointer; }
   /* The chip floats over everything, so anything that LEADS a screen has to
      leave its corner alone. Every screen used to open with an <h2>, which is
@@ -10333,9 +10350,13 @@ function habitat(id) {
  * the window is, this says where the window goes. It moves the least it can — a
  * selection already in view does not shift the list under your thumb.
  */
-const scrollFor = (sel, box) => {
+const scrollFor = (sel, box, pad = 0) => {
   if (!sel || !box || !(box.height > 0)) return (box && box.scrollTop) || 0;
-  if (sel.top < box.scrollTop) return Math.max(0, sel.top);
+  // `pad` is a cover pinned to the top of the panel — a sticky `.shead`. The
+  // top of the window is no longer the top of what you can SEE, so scrolling a
+  // selection to `sel.top` would park it behind the very sentence the cover
+  // exists to keep showing. Everything below is measured from under it.
+  if (sel.top - pad < box.scrollTop) return Math.max(0, sel.top - pad);
   const bottom = sel.top + (sel.height || 0);
   if (bottom > box.scrollTop + box.height) return Math.max(0, bottom - box.height);
   return box.scrollTop;
@@ -10505,8 +10526,11 @@ function renderScreen() {
     }).join('') + '</div>';
   } else if (s.kind === 'swap') {
     const coming = ownedCard(s.opt.newCard);
-    html += `<h2>What comes out?</h2>`;
-    html += `<p class="lede">A deck holds ${DECK_MAX}. ${coming ? CARDS[coming.id].name : 'The new card'} is going in — pick the one it replaces.</p>`;
+    // Pinned, because this screen will not close and the cursor lives below the
+    // question. See `.shead` — and `scrollFor`, which is told how tall this is
+    // so the card it scrolls to does not land underneath it.
+    html += `<div class="shead"><h2>What comes out?</h2>`;
+    html += `<p class="lede">A deck holds ${DECK_MAX}. ${coming ? CARDS[coming.id].name : 'The new card'} is going in — pick the one it replaces.</p></div>`;
     if (coming) {
       html += `<div class="cardrow">` + cardHTML({ src: 'deck', u: coming.u, id: coming.id, bg: 0 },
         { cls: 'big', note: 'coming in' }) + '</div>';
@@ -10713,8 +10737,10 @@ function renderScreen() {
   // element under the cursor does not exist until the markup does.
   const cur = el.querySelector('.sel');
   if (cur) {
+    const head = el.querySelector('.shead');
     el.scrollTop = scrollFor({ top: cur.offsetTop, height: cur.offsetHeight },
-      { scrollTop: el.scrollTop, height: el.clientHeight });
+      { scrollTop: el.scrollTop, height: el.clientHeight },
+      head ? head.offsetHeight : 0);
   }
 }
 

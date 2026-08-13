@@ -4234,7 +4234,7 @@ section('the list follows the cursor');
     'renderScreen puts the window where the cursor is');
   // Counted, not guessed: the definition is an arrow (`const scrollFor =`), so
   // there is exactly ONE `scrollFor(` call in the file — the call site.
-  ok(/const scrollFor = \(sel, box\) =>/.test(SRC), 'the value is defined once');
+  ok(/const scrollFor = \(sel, box, pad = 0\) =>/.test(SRC), 'the value is defined once');
   eq((SRC.match(/scrollFor\(/g) || []).length, 1,
     'and spent in one place — every screen goes through renderScreen');
   // After the markup: the element under the cursor does not exist before it.
@@ -4243,6 +4243,88 @@ section('the list follows the cursor');
   ok(body.includes('scrollFor('), 'the call is inside renderScreen');
   ok(body.indexOf('el.innerHTML = html;') < body.indexOf('scrollFor('),
     'and after the markup, or there is nothing under the cursor to find');
+}
+
+// Every sentence the screens write, measured against the panel a player is
+// actually looking at on a phone. Fifty of them across sixteen raisings at
+// 390x760; eleven were outside the box. The worst two were not merely below the
+// fold — they were scrolled off the TOP, by the game's own hand:
+//
+//   swap   "What comes out?"                          top -66   OFF THE TOP
+//   swap   "A deck holds 12 … pick the one it replaces"  top -46   OFF THE TOP
+//   box    "Pick on a boxed kin withdraws it · …"      top 1003  below the fold
+//   dex    the habitat line under a 19-cell grid       top 985   below the fold
+//   deck   "Everything you own is in the deck."        top 725   below the fold
+//   starter  the third kin's dex line                  top 419   below the fold
+//
+// `scrollFor` puts the window where the cursor is, and on `swap` the cursor
+// lives below the question — so opening the screen scrolled the question away.
+// And `swap` is the one screen `screenLocked` refuses to close: the sentence
+// telling you what you were choosing, on the screen you could not leave.
+//
+// The rest are below the fold on screens that scroll and close, and the cursor
+// walks to them; they are recorded rather than fixed.
+section('the question stays on a screen that will not close');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+  const box = (scrollTop, height) => ({ scrollTop, height });
+
+  // A cover pinned to the top means the top of the window is no longer the top
+  // of what you can see. Everything is measured from UNDER it.
+  eq(g.scrollFor({ top: 200, height: 50 }, box(300, 310), 60), 140,
+    'a selection above the window stops a cover-height short, not at its own top');
+  eq(g.scrollFor({ top: 200, height: 50 }, box(300, 310), 0), 200,
+    'and with no cover it goes to its own top, as it always did');
+  eq(g.scrollFor({ top: 30, height: 50 }, box(300, 310), 60), 0,
+    'the padding never scrolls the list above itself');
+  // Downward is untouched: the bottom edge is still the bottom edge.
+  eq(g.scrollFor({ top: 400, height: 100 }, box(0, 310), 60),
+    g.scrollFor({ top: 400, height: 100 }, box(0, 310)),
+    'a selection below the fold is unaffected by a cover at the top');
+  // A selection already sitting under the cover counts as out of view.
+  eq(g.scrollFor({ top: 320, height: 50 }, box(300, 310), 60), 260,
+    'one parked behind the cover is pulled out from under it');
+  eq(g.scrollFor({ top: 380, height: 50 }, box(300, 310), 60), 300,
+    'and one clear of it is left alone');
+
+  // By difference, walking a cursor UP through rows with a cover overhead — the
+  // measurement that mattered. Without the pad, 72px of the selected card sat
+  // behind the pinned question at 390x760; with it, 0.
+  {
+    // The cover is the first thing in the document, so the rows START below it
+    // — modelling them from 0 would put a row where the block itself sits and
+    // report a fault at the top of every list. The band it hides is always
+    // [scrollTop, scrollTop + HEAD], because a block pinned to the top travels
+    // with the scroll; what changes is whether `scrollFor` was told about it.
+    const ROW = 150, N = 8, H = 310, HEAD = 72;
+    const row = (i) => ({ top: HEAD + i * ROW, height: ROW });
+    const walk = (pad) => {
+      let top = row(N - 1).top, worst = 0;
+      for (let i = N - 1; i >= 0; i--) {
+        const sel = row(i);
+        top = g.scrollFor(sel, box(top, H), pad);
+        worst = Math.max(worst, Math.max(0, (top + HEAD) - sel.top));
+      }
+      return worst;
+    };
+    eq(walk(HEAD), 0, `walking ${N} rows up under a ${HEAD}px cover never parks the selection behind it`);
+    ok(walk(0) > 0, `and without the pad it does (${walk(0)}px hidden), so the pad is load-bearing`);
+  }
+
+  // Wiring: the call site measures the cover rather than assuming one.
+  ok(SRC.includes("const head = el.querySelector('.shead');"), 'renderScreen looks for a pinned head');
+  ok(SRC.includes('head ? head.offsetHeight : 0);'), 'and passes its real height, or nothing when there is none');
+  // The markup and the rule that pins it.
+  const swap = SRC.slice(SRC.indexOf("} else if (s.kind === 'swap') {"));
+  ok(swap.indexOf('<div class="shead"><h2>What comes out?</h2>') > -1, 'the swap screen wraps its question');
+  ok(swap.indexOf('pick the one it replaces.</p></div>') > -1, '…and its lede, in the same block');
+  ok(swap.indexOf('</div>') < swap.indexOf('cardrow'), 'the block closes before the cards it must stay above');
+  ok(/#screen \.shead\{ position:sticky; top:-12px;/.test(SRC), 'the block is pinned to the panel');
+  ok(/body\.touch #screen \.shead\{ top:-24px; padding-top:24px; \}/.test(SRC),
+    'and flush on a phone, where the panel pads by 24 — at top:0 it stuck 24px down and cards ran through the gap');
+  // It is the LOCKED screen that got this, which is the whole reason.
+  ok(/screenLocked/.test(SRC), 'and the screen it was given to is the one that will not close');
 }
 
 // gridCols counts a row off the RENDERED grid, and its own comment records that

@@ -115,9 +115,9 @@ const MUTANTS = [
     find: 'function shelve(', to: 'function shelve(keys) { return [[\'All\', keys]]; }\nfunction shelveOld(' },
 
   { name: 'phone: the list never follows the cursor', aims: ['the list follows the cursor'],
-    find: '  if (sel.top < box.scrollTop) return Math.max(0, sel.top);', to: '  return box.scrollTop;' },
+    find: '  if (sel.top - pad < box.scrollTop) return Math.max(0, sel.top - pad);', to: '  return box.scrollTop;' },
   { name: 'phone: the list shifts under an in-view selection', aims: ['the list follows the cursor'],
-    find: '  if (sel.top < box.scrollTop) return Math.max(0, sel.top);\n  const bottom', to: '  return Math.max(0, sel.top);\n  const bottom' },
+    find: '  if (sel.top - pad < box.scrollTop) return Math.max(0, sel.top - pad);\n  const bottom', to: '  return Math.max(0, sel.top - pad);\n  const bottom' },
 
   { name: 'grid: counts the document, not the cursor row', aims: ['the cursor moves by the grid it is in'],
     find: "  const scope = cur && cur.parentElement && cur.parentElement.querySelector(SEL)\n    ? cur.parentElement : els.screen;",
@@ -145,6 +145,13 @@ const MUTANTS = [
   { name: 'cost: the party screen never names the price', aims: ['the screen that takes something says what it costs'],
     find: '    } else if (G.battle && B() && B().foe && B().foe.hp > 0 && !B().over) {',
     to: '    } else if (false) {' },
+
+  { name: 'fold: scrollFor forgets the cover above it', aims: ['the question stays on a screen that will not close'],
+    find: '  if (sel.top - pad < box.scrollTop) return Math.max(0, sel.top - pad);',
+    to: '  if (sel.top < box.scrollTop) return Math.max(0, sel.top);' },
+  { name: 'fold: the pinned question comes unpinned', aims: ['the question stays on a screen that will not close'],
+    find: '  #screen .shead{ position:sticky; top:-12px;',
+    to: '  #screen .shead{ position:static; top:-12px;' },
 
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
