@@ -166,7 +166,16 @@ section('the loop stays upright');
     }
   } catch (e) { thrown = e.message; }
   eq(thrown, null, 'four hundred frames of a fight resolving itself never throw');
-  ok(G.screen !== 'battle' || G.battle.over, 'and a fight nobody plays does eventually end');
+  ok(G.screen !== 'battle' || G.battle.turn > 6, 'and the turns actually turn while it draws');
+
+  // The same fight without the animation budget: a player who does nothing at
+  // all must still reach an ending rather than sitting in a stalled board.
+  withRun(FF, 'hearth', 31);
+  FF.enterNode(G, 0);
+  let turns = 0;
+  while (G.screen === 'battle' && !G.battle.over && turns++ < 300) { FF.passTurn(G); FF.drainAll(); }
+  ok(G.battle.over, 'a fight nobody plays does eventually end');
+  eq(G.battle.won, false, 'badly');
 }
 
 done('frostfell-render');

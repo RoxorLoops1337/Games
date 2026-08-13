@@ -236,19 +236,19 @@ const def = (o) => { CARDS[o.id] = o; return o; };
 
 /* leaders ---------------------------------------------------------------- */
 def({ id: 'bramblewick', name: 'Bramblewick', type: 'unit', leader: true, tribe: 'hearth',
-  hp: 26, atk: 4, cnt: 3, rare: 0,
+  hp: 32, atk: 4, cnt: 3, rare: 0,
   art: A('#e8873a', '#ffd9a8', { shape: 'tall', ears: 'round', mouth: 'grin', acc: 'lantern', accCol: '#ffd166', pat: 'none' }),
   kw: {}, text: 'When it triggers, hands another warden Spice 1.',
   hooks: { trigger: (g, u) => { const t = pick(allies(g, u).filter((x) => x !== u)); if (t) addStatus(g, t, 'spice', 1); } } });
 
 def({ id: 'vesper', name: 'Vesper Kaal', type: 'unit', leader: true, tribe: 'frost',
-  hp: 24, atk: 3, cnt: 2, rare: 0,
+  hp: 30, atk: 3, cnt: 2, rare: 0,
   art: A('#7fc2ef', '#dff0ff', { shape: 'tall', ears: 'horns', mouth: 'flat', acc: 'cloak', accCol: '#2b5f96' }),
   kw: {}, text: 'Her hits leave Frost 1.',
   hooks: { hit: (g, u, tgt) => addStatus(g, tgt, 'frost', 1) } });
 
 def({ id: 'gundy', name: 'Gundy Bolt', type: 'unit', leader: true, tribe: 'scrap',
-  hp: 28, atk: 3, cnt: 3, rare: 0,
+  hp: 34, atk: 3, cnt: 3, rare: 0,
   art: A('#c9b28a', '#f0dfba', { shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'helm', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback. Starts every fight with Shell 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 3) } });
@@ -602,35 +602,38 @@ function freeSlots(g, side) {
   return out;
 }
 
-/* Everything a swing has to know about who is standing where. */
+/* Everything a swing has to know about who is standing where.
+
+   A unit looks down its OWN lane first. If that lane is empty it reaches
+   across to the other one rather than idling — which is what stops two lines
+   that can no longer see each other from standing there until the sun comes
+   back. Lane position still decides who gets hit first, and that is where the
+   tactics live. */
+function enemyLine(g, u, laneOverride) {
+  const s = other(u.side);
+  const home = laneOverride !== undefined ? laneOverride : u.lane;
+  const order = [home];
+  for (let i = 0; i < LANES; i++) if (i !== home) order.push(i);
+  for (const l of order) {
+    const line = laneOf(g, s, l);
+    if (line.length) return line;
+  }
+  return [];
+}
 function frontTarget(g, u) {
-  const line = laneOf(g, other(u.side), u.lane);
+  const line = enemyLine(g, u);
   return line[0] || null;
 }
 function targetFor(g, u, laneOverride) {
-  const s = other(u.side);
-  let lane = laneOverride !== undefined ? laneOverride : u.lane;
-  const line = () => laneOf(g, s, lane);
-  if (u.kw.aimless && laneOverride === undefined) {
-    // Aimless picks a random body in its own lane; if that lane is clear it
-    // wanders to one that is not, which keeps it from idling all fight.
-    let l = line();
-    if (!l.length) {
-      const busy = [];
-      for (let i = 0; i < LANES; i++) if (laneOf(g, s, i).length) busy.push(i);
-      if (busy.length) lane = pick(busy);
-      l = line();
-    }
-    return l.length ? pick(l) : null;
-  }
-  const l = line();
-  if (!l.length) return null;
+  const line = enemyLine(g, u, laneOverride);
+  if (!line.length) return null;
+  if (u.kw.aimless) return pick(line);
   // Soak is a taunt: whatever the attacker would rather hit, the soaker is in
   // the way. It is the only thing that overrides Longshot.
-  const soaker = l.find((x) => x.kw.soak);
+  const soaker = line.find((x) => x.kw.soak);
   if (soaker) return soaker;
-  if (u.kw.longshot) return l[l.length - 1];
-  return l[0];
+  if (u.kw.longshot) return line[line.length - 1];
+  return line[0];
 }
 function laneTargets(g, u, lane) { return laneOf(g, other(u.side), lane); }
 function neighbours(g, u) {
@@ -753,6 +756,9 @@ function die(g, u, killer) {
    played — it happens because it triggered. */
 function triggerUnit(g, u) {
   if (!u || !u.alive) return;
+  // Nothing in front of it? It goes looking. Clearing a lane buys you a turn
+  // of quiet, not a foe that stands there for the rest of the fight.
+  if (!laneOf(g, other(u.side), u.lane).length && shuffleToward(g, u)) return;
   const times = 1 + (u.kw.frenzy || 0);
   for (let i = 0; i < times; i++) {
     if (!u.alive || g.battle.over) break;
@@ -780,6 +786,24 @@ function attackOnce(g, u) {
     // Smackback answers a landed hit with half the defender's own attack.
     if (t.alive && t.kw.smack && dmg > 0) hurt(g, u, Math.max(1, Math.floor(t.atk / 2)), t);
   }
+}
+
+/* Walk into the lane where the fighting is, if there is a slot going. Costs
+   the trigger — a unit that repositions does not also swing. */
+function shuffleToward(g, u) {
+  const s = other(u.side);
+  let want = -1;
+  for (let l = 0; l < LANES; l++) if (l !== u.lane && laneOf(g, s, l).length) { want = l; break; }
+  if (want < 0) return false;
+  for (let c = 0; c < COLS; c++) {
+    if (slotFree(g, u.side, want, c)) {
+      u.lane = want; u.col = c; u.moveT = 1;
+      fx.pop(u, 'MOVES', C.snowDim);
+      sfx('move');
+      return true;
+    }
+  }
+  return false;
 }
 
 /* Every counter movement in the game goes through here. A counter driven to
@@ -834,6 +858,14 @@ function resolveTurn(g) {
     checkOver(g);
   });
 
+  beat(0.12, () => {
+    if (b.over) return;
+    if (b.waves && b.waves.length) {
+      b.waveCnt--;
+      if (b.waveCnt <= 0) deployWave(g);
+    }
+  });
+
   beat(0.1, () => {
     b.busy = false;
     if (b.over) return;
@@ -881,7 +913,12 @@ function checkOver(g) {
   if (!b || b.over) return;
   const leader = b.units.find((u) => u.side === 'p' && u.leader);
   if (leader && !leader.alive) { b.over = true; b.won = false; beat(0.6, () => endBattle(g, false)); return; }
-  if (!enemyUnits(g).length) { b.over = true; b.won = true; beat(0.7, () => endBattle(g, true)); }
+  if (enemyUnits(g).length) return;
+  // A cleared board with a wave still coming is not a win — it walks straight
+  // on, which is what stops the fight going quiet.
+  if (b.waves && b.waves.length) { beat(0.35, () => deployWave(g)); return; }
+  b.over = true; b.won = true;
+  beat(0.7, () => endBattle(g, true));
 }
 
 /* -------------------------------------------------------------- the hand -- */
@@ -960,34 +997,98 @@ function summon(g, foeId, count) {
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
-  return 1 + run.step * 0.045 + run.zone * 0.12;
+  return 1 + run.step * 0.035 + run.zone * 0.10;
 }
 
+/* An encounter is a list of WAVES. The first walks on at the bell; the rest
+   arrive on their own counter, or early if the player rings for them —
+   which is a real choice, because a wave pulled onto a board you have already
+   set up dies faster than one that arrives while you are rebuilding. */
+const WAVE_GAP = 5;
+
+function foePool(zone) {
+  const tiers = zone.tiers;
+  const pool = Object.values(FOES).filter((f) => !f.boss && tiers.indexOf(f.tier) >= 0);
+  if (pool.length) return pool;
+  return Object.values(FOES).filter((f) => !f.boss && f.tier <= Math.max.apply(null, tiers));
+}
+function frontFirstSpots() {
+  const spots = [];
+  for (let c = 0; c < COLS; c++) for (let l = 0; l < LANES; l++) spots.push({ lane: l, col: c });
+  return spots;
+}
 function buildEncounter(g, kind) {
   const run = g.run;
-  const zone = ZONES[run.zone];
-  const out = [];
+  const zone = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
   const scale = foeScale(run) * (kind === 'elite' ? 1.25 : 1);
+  const src = foePool(zone);
+  const waves = [];
+
   if (kind === 'boss') {
-    out.push({ id: zone.boss, lane: 0, col: 2, scale: 1 });
     const guard = Object.values(FOES).filter((f) => !f.boss && f.tier <= zone.tiers[2]);
-    out.push({ id: pick(guard).id, lane: 0, col: 0, scale });
-    out.push({ id: pick(guard).id, lane: 1, col: 0, scale });
-    if (run.zone >= 1) out.push({ id: pick(guard).id, lane: 1, col: 1, scale });
-  } else {
-    const tiers = zone.tiers;
-    const pool = Object.values(FOES).filter((f) => !f.boss && tiers.indexOf(f.tier) >= 0);
-    const alt = Object.values(FOES).filter((f) => !f.boss && f.tier <= Math.max.apply(null, tiers));
-    const src = pool.length ? pool : alt;
-    const n = kind === 'elite' ? rrange(3, 4) : rrange(2, 3) + (run.step > 3 ? 1 : 0);
-    // Fill from the front so a fight always presents a wall before a backline.
-    const spots = [];
-    for (let c = 0; c < COLS; c++) for (let l = 0; l < LANES; l++) spots.push({ lane: l, col: c });
-    for (let i = 0; i < Math.min(n, spots.length); i++) {
-      out.push({ id: pick(src).id, lane: spots[i].lane, col: spots[i].col, scale });
-    }
+    waves.push([
+      { id: zone.boss, lane: 0, col: 2, scale: 1 },
+      { id: pick(guard).id, lane: 0, col: 0, scale },
+      { id: pick(guard).id, lane: 1, col: 0, scale },
+    ]);
+    waves.push([{ id: pick(guard).id, lane: 0, col: 1, scale }]);
+    if (run.zone > 0) waves.push([{ id: pick(guard).id, lane: 1, col: 1, scale }]);
+    return waves;
   }
-  return out;
+
+  // One wave of reinforcements, two for a pack. A fight is meant to be won
+  // and then survived, not outlasted.
+  // The first two skirmishes of a run are deliberately gentle: a caravan that
+  // has not drawn its second warden yet cannot answer a wave.
+  const opening = run.zone === 0 && run.step < 2;
+  const first = opening ? 2 : kind === 'elite' ? 3 : 2 + (run.step > 3 ? 1 : 0);
+  const spots = frontFirstSpots();
+  waves.push(spots.slice(0, first).map((s) => ({ id: pick(src).id, lane: s.lane, col: s.col, scale })));
+  const later = opening ? (run.step === 0 ? 0 : 1) : 1;
+  for (let w = 0; w < later; w++) {
+    const n = kind === 'elite' ? 2 : 1 + (run.step > 4 ? 1 : 0);
+    waves.push(new Array(n).fill(0).map(() => ({ id: pick(src).id, scale })));
+  }
+  return waves;
+}
+
+/* Bring the next wave on. Anything without a named slot takes whatever is
+   free, front first; if the board is packed the wave waits a turn. */
+function deployWave(g) {
+  const b = g.battle;
+  if (!b || !b.waves || !b.waves.length) return false;
+  const wave = b.waves[0];
+  const placed = [];
+  for (const e of wave) {
+    let lane = e.lane, col = e.col;
+    if (lane === undefined || !slotFree(g, 'e', lane, col)) {
+      const free = freeSlots(g, 'e').sort((a, x) => a.col - x.col || a.lane - x.lane);
+      if (!free.length) break;
+      lane = free[0].lane; col = free[0].col;
+    }
+    const u = mkUnit(mkFoeCard(e.id, e.scale), 'e', lane, col);
+    u.born = 0.0001;
+    b.units.push(u);
+    const fd = FOES[e.id];
+    if (fd.hooks && fd.hooks.deploy) fd.hooks.deploy(g, u);
+    fx.thump(u);
+    placed.push(u);
+  }
+  if (!placed.length) return false;
+  b.waves.shift();
+  b.waveCnt = WAVE_GAP;
+  b.waveNo = (b.waveNo || 1) + 1;
+  if (b.units.length && b.turn > 0) { fx.shake(6); fx.flash('#ffb0b0', 0.18); sfx('die'); fx.toast('WAVE ' + b.waveNo, '#ff9a3c'); }
+  return true;
+}
+
+/* Pull the next wave in early. Free, and often the strongest play on the
+   board — a wave that lands on your terms is half a wave. */
+function ringWave(g) {
+  const b = g.battle;
+  if (!b || b.over || b.busy || !b.waves || !b.waves.length) return false;
+  sfx('bell');
+  return deployWave(g);
 }
 
 function startBattle(g, kind) {
@@ -1009,16 +1110,15 @@ function startBattle(g, kind) {
   if (ld.hooks && ld.hooks.deploy) ld.hooks.deploy(g, lead);
   for (const [k, n] of run.leader.bonusDeploy) addStatus(g, lead, k, n);
 
-  for (const e of buildEncounter(g, kind)) {
-    const u = mkUnit(mkFoeCard(e.id, e.scale), 'e', e.lane, e.col);
-    u.born = 0.0001;
-    b.units.push(u);
-    const fd = FOES[e.id];
-    if (fd.hooks && fd.hooks.deploy) fd.hooks.deploy(g, u);
-  }
+  b.waves = buildEncounter(g, kind);
+  b.waveNo = 0;
+  b.waveCnt = WAVE_GAP;
+  deployWave(g);
 
   b.draw = shuffle(run.deck.filter((c) => !c.leader).slice());
   for (let i = 0; i < handSize(g); i++) if (!drawToHand(g)) break;
+  fx.toast(kind === 'boss' ? 'THE BEAST' : kind === 'elite' ? 'A PACK' : 'SKIRMISH',
+    kind === 'boss' ? '#ff9a3c' : kind === 'elite' ? '#ff8b7a' : '#9fe0ff');
   g.screen = 'battle';
   drainAll();
   return b;
@@ -1047,7 +1147,7 @@ function endBattle(g, won) {
   }
   if (!won) { g.screen = 'gameover'; G.meta.runs++; saveMeta(); saveRun(null); return; }
 
-  run.gold += g.battle.kind === 'boss' ? 45 : g.battle.kind === 'elite' ? 30 : 18;
+  run.gold += g.battle.kind === 'boss' ? 55 : g.battle.kind === 'elite' ? 34 : 22;
   g.ui.reward = rollReward(g, g.battle.kind);
   g.screen = 'reward';
   sfx('win');
@@ -2281,6 +2381,21 @@ function drawBattle(c, t) {
 
   if (b.busy) txt(c, 'RESOLVING…', MID, 96, 16, '#9fc0e4', 'center', 't');
   else txt(c, 'TURN ' + (b.turn + 1) + '  ·  one action', MID, 96, 16, '#9fc0e4', 'center', 't');
+
+  // the wave clock, over the far side of the table
+  if (b.waves && b.waves.length) {
+    const wx = MID + 176, wy = 54, ww = 300, wh = 46;
+    const soon = b.waveCnt <= 1;
+    panel(c, wx, wy, ww, wh, 12, 'rgba(58,26,40,.88)', soon ? '#ff9a3c' : '#7a4a5e');
+    c.save();
+    if (soon) { c.shadowColor = '#ff9a3c'; c.shadowBlur = 14 + Math.sin(t * 7) * 6; }
+    c.beginPath(); c.arc(wx + 28, wy + wh / 2, 15, 0, TAU);
+    inked(c, soon ? '#ff9a3c' : '#c98a9e', 3, C.ink);
+    c.restore();
+    txt(c, String(b.waveCnt), wx + 28, wy + wh / 2 + 1, 19, '#2a1524', 'center', 'd', 0);
+    txt(c, 'UNTIL THE NEXT WAVE', wx + 58, wy + wh / 2, 13, '#f0cbd8', 'left', 't');
+    button(c, 'wave', wx + ww - 92, wy + 7, 84, 32, 'CALL', '#8f4a5f', b.busy, true);
+  }
 }
 
 function drawHand(c, t) {
@@ -2439,34 +2554,64 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   lines.forEach((ln, i) => txt(c, ln, x + w / 2, y + h - 40 + i * 14, 12, '#3a3020', 'center', 't', 0));
 }
 
+/* Tap anything and the game explains it — the card, every keyword on it, every
+   status riding it, and what its charms did. Nothing in here is a mystery you
+   have to look up. */
 function drawInspect(c, t) {
-  const card = UI.inspect;
-  if (!card) return;
+  const subject = UI.inspect;
+  if (!subject) return;
+  const unit = subject.side ? subject : null;
+  const card = unit ? unit.card : subject;
+  if (!card) { UI.inspect = null; return; }
   c.save(); c.fillStyle = 'rgba(6,10,20,.86)'; c.fillRect(0, 0, VW, VH); c.restore();
   const w = 232, h = 310;
-  drawCard(c, card, MID - w - 30, VH / 2 - h / 2, w, h, { t });
-  // keyword glossary for whatever is on this card
-  const keys = Object.keys(card.kw || {}).filter((k) => KEYWORD[k]);
-  let y = VH / 2 - h / 2 + 10;
-  txt(c, card.name.toUpperCase(), MID + 40, y, 30, '#eaf6ff', 'left', 'd');
-  y += 40;
-  if (card.type === 'unit') {
-    txt(c, 'health ' + card.hp + '   attack ' + card.atk + '   counter ' + card.cnt, MID + 40, y, 17, '#9fc0e4', 'left', 't');
-    y += 32;
+  drawCard(c, card, MID - w - 40, VH / 2 - h / 2, w, h, { t });
+
+  const x = MID + 20;
+  let y = 120;
+  txt(c, (unit ? unit.name : card.name).toUpperCase(), x, y, 32, '#eaf6ff', 'left', 'd');
+  y += 44;
+  if (unit) {
+    txt(c, 'health ' + unit.hp + '/' + unit.maxHp + '    attack ' + unit.atk +
+      '    counter ' + unit.cnt + '/' + unit.cntMax, x, y, 17, '#9fc0e4', 'left', 't');
+    y += 26;
+    txt(c, unit.side === 'p' ? 'ticks after every foe on the board' : 'ticks before any warden', x, y, 14, '#7e97b8', 'left', 't');
+    y += 30;
+  } else if (card.type === 'unit') {
+    txt(c, 'health ' + card.hp + '    attack ' + card.atk + '    counter ' + card.cnt, x, y, 17, '#9fc0e4', 'left', 't');
+    y += 34;
   }
+  if (card.text) {
+    wrapText(c, card.text, 15, 420).forEach((ln) => { txt(c, ln, x, y, 15, '#dcebff', 'left', 't'); y += 20; });
+    y += 12;
+  }
+  const keys = Object.keys((unit ? unit.kw : card.kw) || {}).filter((k) => KEYWORD[k] && (unit ? unit.kw[k] : card.kw[k]));
   for (const k of keys) {
-    txt(c, KEYWORD[k].name.toUpperCase(), MID + 40, y, 18, '#ffd166', 'left', 'd');
-    y += 22;
-    wrapText(c, KEYWORD[k].text, 14, 380).forEach((ln) => { txt(c, ln, MID + 40, y, 14, '#c8dcf4', 'left', 't'); y += 18; });
+    txt(c, KEYWORD[k].name.toUpperCase(), x, y, 18, '#ffd166', 'left', 'd');
+    y += 21;
+    wrapText(c, KEYWORD[k].text, 14, 430).forEach((ln) => { txt(c, ln, x, y, 14, '#c8dcf4', 'left', 't'); y += 17; });
     y += 8;
+  }
+  if (unit) {
+    for (const k of STATUS_ORDER) {
+      const n = unit.st[k] || 0;
+      if (!n) continue;
+      c.beginPath(); rr(c, x, y - 9, 20, 20, 5);
+      inked(c, STATUS[k].col, 2, C.ink);
+      txt(c, String(n), x + 10, y + 1, 15, '#12203a', 'center', 'd', 0);
+      txt(c, STATUS[k].name.toUpperCase(), x + 28, y, 15, STATUS[k].col, 'left', 'd');
+      y += 20;
+      wrapText(c, STATUS[k].text, 13, 400).forEach((ln) => { txt(c, ln, x + 28, y, 13, '#c8dcf4', 'left', 't'); y += 16; });
+      y += 6;
+    }
   }
   for (const id of (card.charms || [])) {
     const chm = CHARMS[id] || SCARS[id];
     if (!chm) continue;
-    txt(c, chm.name.toUpperCase() + ' — ' + chm.text, MID + 40, y, 14, chm.col, 'left', 't');
+    txt(c, chm.name.toUpperCase() + ' — ' + chm.text, x, y, 14, chm.col, 'left', 't');
     y += 20;
   }
-  button(c, 'inspectClose', MID + 40, VH - 120, 160, 46, 'CLOSE', '#40527a');
+  button(c, 'inspectClose', x, VH - 92, 180, 48, 'CLOSE', '#40527a');
 }
 
 function drawDeckView(c, t) {
@@ -2600,6 +2745,7 @@ function press(id, data) {
     case 'continue': if (!loadRun(g)) newRun(g, 'hearth'); return;
     case 'node': enterNode(g, data); return;
     case 'bell': ringBell(g); return;
+    case 'wave': ringWave(g); return;
     case 'pass': passTurn(g); return;
     case 'order': UI.order = !UI.order; return;
     case 'menu': UI.deck = true; return;
@@ -2709,6 +2855,7 @@ function onDown(x, y) {
     UI.drag = { unit: h.data, x, y, sx: x, sy: y, moved: false };
     return;
   }
+  if (h.id === 'unit') { UI.inspect = h.data; return; }   // a foe answers questions too
   press(h.id, h.data);
 }
 
@@ -2727,7 +2874,8 @@ function onUp(x, y) {
   if (!d) return;
   const h = hitAt(x, y);
   if (!d.moved) {
-    if (d.card) UI.inspect = d.card;
+    // A tap is a question, not a move: it opens the thing you touched.
+    UI.inspect = d.card || d.unit || null;
     return;
   }
   if (d.card) {
@@ -2938,7 +3086,7 @@ window.FF = {
   targetFor, frontTarget, laneTargets, neighbours,
   addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter,
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
-  startBattle, endBattle, checkOver, summon, buildEncounter, foeScale,
+  startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),

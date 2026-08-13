@@ -36,10 +36,13 @@ section('board and targeting');
   ok(FF.neighbours(G, front).indexOf(back) < 0, 'two slots back is not');
   ok(FF.neighbours(G, front).indexOf(other) >= 0, 'the slot across the lane is');
 
-  // an empty lane means the swing finds nobody at all
+  // a lane that empties does not park a warden for the rest of the fight:
+  // it reaches across, and only a completely clear table leaves it idle
   const lonely = place(FF, 'p', 'snowpup', 1, 1);
   b.units = b.units.filter((u) => u.side === 'p' || u.lane === 0);
-  eq(FF.targetFor(G, lonely), null, 'a warden facing an empty lane has no target');
+  eq(FF.targetFor(G, lonely), front, 'a warden whose own lane is clear reaches across');
+  b.units = b.units.filter((u) => u.side === 'p');
+  eq(FF.targetFor(G, lonely), null, 'with the table clear there is nothing to hit');
 }
 
 /* ------------------------------------------------------- resolution order */
@@ -237,7 +240,7 @@ section('keywords');
   eq(leech.hp, 6, 'leech heals for exactly what it dealt');
   const walled = place(FF, 'p', 'snowpup', 0, 2, { unit: { atk: 3, hp: 5, maxHp: 20 } });
   walled.kw.leech = 1;
-  FF.G.battle.units = FF.G.battle.units.filter((u) => u.side === 'p' || u.lane !== 0);
+  FF.G.battle.units = FF.G.battle.units.filter((u) => u.side === 'p');
   FF.triggerUnit(G, walled);
   eq(walled.hp, 5, 'and heals nothing when there was nobody to hit');
 }
@@ -333,8 +336,10 @@ section('the run');
   eq(G.screen, 'battle', 'the first node is a fight');
   ok(G.battle.units.some((u) => u.side === 'e'), 'with somebody in it');
   eq(G.battle.hand.length, FF.handSize(G), 'and a full hand');
+  eq(G.battle.waves.length, 0, 'the very first skirmish arrives all at once');
 
   // win it by fiat and check the reward flow
+  G.battle.waves = [];
   G.battle.units.filter((u) => u.side === 'e').forEach((u) => { u.hp = 0; u.alive = false; });
   FF.checkOver(G);
   FF.drainAll();
@@ -431,15 +436,48 @@ section('shape of the difficulty');
   for (let z = 0; z < FF.ZONES.length; z++) {
     run.zone = z; run.step = 2;
     for (const kind of ['fight', 'elite', 'boss']) {
-      const enc = FF.buildEncounter(G, kind);
-      ok(enc.length > 0, `zone ${z} can field a ${kind}`);
-      ok(enc.every((e) => FF.FOES[e.id]), `zone ${z} ${kind} only fields real foes`);
+      const waves = FF.buildEncounter(G, kind);
+      ok(waves.length > 1, `zone ${z} sends a ${kind} in more than one wave`);
+      ok(waves[0].length > 0, `zone ${z} ${kind} opens with somebody on the board`);
+      ok(waves.every((w) => w.every((e) => FF.FOES[e.id])), `zone ${z} ${kind} only fields real foes`);
       const seen = {};
       let dupes = 0;
-      for (const e of enc) { const k = e.lane + ',' + e.col; if (seen[k]) dupes++; seen[k] = 1; }
+      for (const e of waves[0]) { const k = e.lane + ',' + e.col; if (seen[k]) dupes++; seen[k] = 1; }
       eq(dupes, 0, `zone ${z} ${kind} never stacks two foes in one slot`);
     }
   }
+}
+
+/* ------------------------------------------------------------------ waves */
+section('waves');
+{
+  withRun(FF, 'hearth', 60006);
+  G.run.step = 3;                      // past the gentle opening
+  const b = FF.startBattle(G, 'fight');
+  const first = FF.enemyUnits(G).length;
+  ok(first > 0, 'the first wave is standing there at the bell');
+  ok(b.waves.length > 0, 'and more are queued');
+  eq(b.waveCnt, FF.WAVE_GAP, 'with a counter on them');
+
+  const queued = b.waves.length;
+  ok(FF.ringWave(G), 'the next wave can be called in early');
+  eq(b.waves.length, queued - 1, 'which takes it off the queue');
+  ok(FF.enemyUnits(G).length > first, 'and puts bodies on the board');
+  eq(b.waveCnt, FF.WAVE_GAP, 'the clock resets behind it');
+
+  // clearing the board while a wave is pending is not a win
+  b.units.filter((u) => u.side === 'e').forEach((u) => { u.alive = false; });
+  FF.checkOver(G);
+  FF.drainAll();
+  if (b.waves.length) {
+    eq(b.over, false, 'a cleared board with a wave to come is not a win');
+    ok(FF.enemyUnits(G).length > 0, 'the wave walks straight on instead');
+  }
+  b.waves = [];
+  b.units.filter((u) => u.side === 'e').forEach((u) => { u.alive = false; });
+  FF.checkOver(G);
+  eq(b.over, true, 'and with nothing left to come, it is a win');
+  eq(b.won, true, 'a real one');
 }
 
 done('frostfell');
