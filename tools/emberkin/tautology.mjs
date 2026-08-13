@@ -285,6 +285,23 @@ const MUTANTS = [
     find: "  if (combo) said = said.replace(`Combo +${combo}.`, 'It follows through.');",
     to: "  if (combo) said = said.replace('Combo +10.', 'It follows through.');" },
 
+  { name: 'log: the heal line claims a heal again', aims: ['the log says what happened, and only when it happened'],
+    find: "    snap(log, b.mine.hp > was ? `${dispName(b.mine)} recovers.` : `${dispName(b.mine)} is already whole.`, 'heal', 'mine');",
+    to: "    snap(log, `${dispName(b.mine)} recovers.`, 'heal', 'mine');" },
+  { name: 'log: the shield line says the leftover, not the absorbed', aims: ['the log says what happened, and only when it happened'],
+    find: "    if (absorbed > 0) snap(log, `Shield absorbs ${absorbed}.`, 'block', 'mine');",
+    to: "    if (absorbed > 0) snap(log, `Shield absorbs ${dmg}.`, 'block', 'mine');" },
+  { name: 'log: a buff line says the delta, not the total', aims: ['the log says what happened, and only when it happened'],
+    find: "  if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `Every attack now hits for +${b.mods.atk}.`, 'buff', 'mine'); }",
+    to: "  if (amt('atk')) { b.mods.atk += amt('atk'); snap(log, `Every attack now hits for +${amt('atk')}.`, 'buff', 'mine'); }" },
+  // Aimed at the LIVE thorns site. The other copy sits behind `PLAN_CHIP > 0`
+  // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
+  // so a mutant there kills nothing because it cannot run, not because the
+  // check is a sentence. Checked by hand before choosing this one.
+  { name: 'log: thorns bite harder than they say', aims: ['the log says what happened, and only when it happened'],
+    find: '  if (b.mods.thorns && b.mine.hp < hpBefore && b.foe.hp > 0) {\n    b.foe.hp = clamp(b.foe.hp - b.mods.thorns, 0, b.foe.max);',
+    to: '  if (b.mods.thorns && b.mine.hp < hpBefore && b.foe.hp > 0) {\n    b.foe.hp = clamp(b.foe.hp - b.mods.thorns * 2, 0, b.foe.max);' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

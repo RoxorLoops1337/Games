@@ -3994,3 +3994,72 @@ desktop one. That is the correct answer and not an obvious one.
     biggest loop is 68 real plays, not a table walk. Every mutant anchor
     re-audited — 84 anchors, none orphaned, none ambiguous. Render suite
     6216 -> 6417 checks.
+
+119. **Three things in this game heal. Two of them said so honestly**
+    (pass 208).
+    **The first instrument was wrong, and that is the more useful half of this
+    entry.** Scraping a fight's log and comparing each entry's snapshot to the
+    PREVIOUS entry's found 156 disagreements in two shapes. Every one was mine:
+    entries are snapped into a log array that a LATER call returns, so two
+    consecutive entries are not necessarily consecutive in time, and a
+    "Cindercub took 25." sitting after "Shield absorbs 8." was being measured
+    against stale HP. A wall of near-identical results, which is the driver
+    every time it has happened in this loop.
+
+    Driven directly instead — call the resolver, read the state either side of
+    it — and `hurtMine` is exact in all 48 combinations of damage, shield,
+    guard and pierce: the number in the sentence is the HP that moved, the
+    shield line is the shield that was spent, the return value is what it took,
+    and a pierced hit only mentions the bank when there is one.
+
+        amount 40, shield 8, guard 3   "Shield absorbs 8." "took 29."   hp -29
+        amount 40, shield 50, pierced  "not where the hit lands" "took 37."
+
+    What was not exact was a heal. Three things heal, and two already reported
+    what happened: a kin's own Mend says *"is already whole"* when it landed on
+    nothing, and a Salve from the bag refuses outright in the same words. The
+    deck was the third voice and had never been told:
+
+        snack    at full HP   healed 0   said "Cindercub recovers."
+        dewdrop  at full HP   healed 0   said "Cindercub recovers."
+        vigor    at full HP   healed 0   said "Cindercub recovers."  (+6 max)
+
+    The four cards that also raise max HP were the subtle half. `b.mine.hp +=
+    add` carries HP up with the raise, so they LOOKED like they had healed —
+    the +6 on a full-HP Vigor is the raise, not the heal, and the raise has its
+    own line which was already honest. So the fault was on all SIX healing
+    cards, not the two whose only job is healing. It now says what the two
+    older voices say, in their words.
+
+    **A planted fault that did not bite, and why that was the right verdict.**
+    Thorns are written twice. One copy sits behind `if (b.wild && PLAN_CHIP >
+    0)` with `const PLAN_CHIP = 0` — statically unreachable, a deliberately
+    guarded pass-35 experiment the comment beside it documents. A mutant there
+    kills nothing because it cannot run, not because the check is a sentence.
+    Recorded, not fixed: removing the block would delete the record of that
+    experiment, and the guard is explicit. The sweep mutant is aimed at the
+    live site, which bites.
+
+    **A second driver error, caught by the same rule.** The thorns check
+    restarted the fight each round, and a foe's first beat is a telegraph
+    rather than a swing — so it never took damage, so thorns never fired, and
+    the check reported 0 fires forty times running. Turns are taken inside ONE
+    fight now, both sides topped back up so the clamp is never what makes the
+    numbers agree.
+
+    Four planted faults, all four bitten BY HAND once aimed at live code: the
+    heal line claiming a heal again (7 failures), the shield line naming the
+    leftover instead of the absorbed (16), a buff line naming the delta instead
+    of the running total (1), thorns biting twice as hard as they say (3). The
+    sweep then reported 7 / 16 / 1 / 3 — the same four numbers, third pass
+    running that the two instruments have agreed to the check. Suite run three
+    times for stability at 6651 each time; the sibling emberkin suites run
+    immediately rather than 50 minutes into the check.
+
+    Four sweep mutants aimed at the new section, which reports **27 of 234
+    killed — 12%**. Low, and for a plain reason: 144 of those 234 are the
+    48-combination damage grid, and most rows are cases these four mutants
+    cannot reach — a mutant to the shield line cannot kill a row with no
+    shield in it, and nothing here touches guard or pierce. Every mutant anchor
+    re-audited — 88 anchors, none orphaned, none ambiguous. Render suite
+    6417 -> 6651 checks.
