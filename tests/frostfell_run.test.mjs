@@ -17,6 +17,12 @@ const G = FF.G;
    and both are the game's problem rather than the bot's. */
 const PLAYED = {};
 const OFFERED = {};
+/* What the caravan was actually HOLDING when the run ended, counted off the
+   deck rather than hooked into takeCard — which, like buy() and triggerUnit()
+   before it, is called internally and never through the export. Three wrappers
+   in three rounds have quietly measured nothing; the rule is now to read state
+   rather than to intercept calls. */
+const CARRIED = {};
 const realPlay = FF.playCard;
 FF.playCard = function (g, idx, spot) {
   const card = g.battle && g.battle.hand[idx];
@@ -38,6 +44,15 @@ FF.takeCard = function (g, id) {
    Counted where the pilot decides rather than where the game charges: half the
    counter is bought by pressing a button that opens a chooser, so wrapping the
    exported buy() sees three wares out of nine and calls the other six dead. */
+/* WHICH FOE GETS THE MOST TURNS.
+
+   The late-zone death table names what landed the killing blow, which is not
+   the same question as which foe is doing the most work. A counter-1 foe takes
+   five turns for a counter-5 foe's one, and in the front row it takes ten — so
+   "who killed the leader" and "who was swinging" can be different animals
+   entirely, and only one of them is a balance problem. */
+const TRIGGERS = {};
+
 const SOLD = {};
 const sale = (kind, did) => { if (did) SOLD[kind] = (SOLD[kind] || 0) + 1; return did; };
 
@@ -185,6 +200,35 @@ function carefulItem(card) {
       const best = mine.slice().sort((a, z) => z.atk - a.atk)[0];
       return { t: best, worth: best && best.cnt > 1 ? 3 : 0 };
     }
+    /* EVERY ALLY-TARGETED CARD USED TO BE SCORED AS IF IT WERE A HEAL.
+
+       Ranked by plays per copy CARRIED — which is the number about the card,
+       rather than raw plays, which is a number about how often the pool offers
+       it — the bottom of the table was Thorn Oil at 2.75 and Patch Kit at 2.99
+       against a top of eleven. Neither is a heal.
+
+       Thorns is retaliation: it wants whatever is about to be HIT, which is a
+       soaker or the front of a lane with something swinging into it, and has
+       nothing to do with who is most wounded. Shell is damage prevented, which
+       the scoring counted as nothing at all. Both were unplayable by a pilot
+       that could only ask "who is hurt?". */
+    const incoming = (x) => theirs.reduce((n, f) => {
+      if (f.cnt > 2) return n;                       // not swinging soon
+      const t2 = FF.targetFor(G, f);
+      return t2 && t2.uid === x.uid ? n + f.atk : n;
+    }, 0);
+    if (/thorns/i.test(d.text || '')) {
+      const best = mine.slice().sort((a, z) => incoming(z) - incoming(a))[0];
+      const hit = best ? incoming(best) : 0;
+      return { t: best, worth: hit >= 3 ? 2 + hit * 0.4 : 0 };
+    }
+    if (/shell/i.test(d.text || '')) {
+      // worth the mending on somebody hurt, plus the blow it turns aside
+      const soon = mine.slice().sort((a, z) =>
+        (incoming(z) + (1 - z.hp / z.maxHp) * 4) - (incoming(a) + (1 - a.hp / a.maxHp) * 4))[0];
+      const val = soon ? incoming(soon) * 0.5 + (1 - soon.hp / soon.maxHp) * 4 : 0;
+      return { t: soon, worth: val >= 2 ? val : 0 };
+    }
     return { t: hurtOne, worth: wounded > 0.35 ? 3 : 0 };
   }
   // gear aimed at a foe: spend it where it kills something the line would not
@@ -245,6 +289,16 @@ const HABITS = [
 
 function carefulTurn() {
   if (G.battle && !G.battle.over) {
+    /* Read off the board rather than hooked into the engine: triggerUnit is
+       called internally, so wrapping the export sees none of it. This counts
+       each living foe's SHARE of a turn — its tick rate over its counter — and
+       the damage that share is worth, which is the question anyway. */
+    for (const u of FF.enemyUnits(G)) {
+      const rate = (u.col === 0 ? 2 : 1) / Math.max(1, u.cntMax);
+      const t = TRIGGERS[u.def] || (TRIGGERS[u.def] = { fires: 0, dmg: 0 });
+      t.fires += rate;
+      t.dmg += rate * u.atk;
+    }
     const free = FF.freeSlots(G, 'p').length;
     if (free) ROOM.spare++; else ROOM.packed++;
     ROOM.free[Math.min(6, free)] = (ROOM.free[Math.min(6, free)] || 0) + 1;
@@ -408,6 +462,14 @@ function cardWorth(id) {
     s += (d.atk || 0) / Math.max(1, d.cnt || 1) * 3 + (d.hp || 0) * 0.25;
     if (bodies < 5) s += 4;                        // a caravan short of bodies needs bodies
     if (d.tribe && d.tribe === G.run.tribe) s += 1.5;
+    /* A TAUNT WAS WORTH +6 HERE FOR ONE MEASUREMENT, on the reasoning that Soak
+       had just become the only answer to Aimless. It went back out again. With
+       the pilot chasing a soaker, Mitewing's share of late deaths fell from 33%
+       to 25% — and the top rung fell from 37 to 30 with it, which is the more
+       important number. A taunt does not prevent damage, it CONCENTRATES it:
+       one warden takes everything instead of the line spreading it out and the
+       room rule mending all of it. Making Soak beat Aimless is a fairness fix,
+       not a power one, and the pilot is not told to go looking for it. */
   } else {
     s += 5;                                        // gear is a turn that does something
     if (d.target === 'none') s += 1;
@@ -593,6 +655,7 @@ function playRun(tribe, seed, mode, tweak) {
       stat.endPower = FF.caravanPower(G.run); stat.fought = G.run.fights || 0;
       stat.endGold = G.run.gold; stat.walked = G.run.zone * FF.TRAIL_STEPS + G.run.step;
       stat.cards = G.run.deck.length; stat.temp = FF.tempered(G.run); stat.meals = G.run.meals || 0;
+      for (const c of G.run.deck) CARRIED[c.def] = (CARRIED[c.def] || 0) + 1;
       break;
     }
     // Where a run ends is as much the measure as whether it ends: a game whose
@@ -603,6 +666,7 @@ function playRun(tribe, seed, mode, tweak) {
         stat.endPower = FF.caravanPower(G.run); stat.fought = G.run.fights || 0;
         stat.endGold = G.run.gold; stat.walked = G.run.zone * FF.TRAIL_STEPS + G.run.step;
         stat.cards = G.run.deck.length; stat.temp = FF.tempered(G.run); stat.meals = G.run.meals || 0;
+        for (const c of G.run.deck) CARRIED[c.def] = (CARRIED[c.def] || 0) + 1;
       }
       // The run already remembers the blow that took the leader, by name. What
       // it never did was count them: one death is an anecdote, two hundred is
@@ -1274,6 +1338,20 @@ section('the same deck, two pilots');
    it never looked — and the counter had two wares in the second category for
    nineteen iterations. The sigil and the scar are now on the pilot's list, so
    this table finally reads as evidence about the SHOP. */
+section('how many turns each foe gets');
+{
+  const rows = Object.entries(TRIGGERS).map(([id, t]) => ({ id, t, f: FF.FOES[id] }))
+    .filter((r) => r.f).sort((a, z) => z.t.dmg - a.t.dmg);
+  const all = rows.reduce((n, r) => n + r.t.dmg, 0) || 1;
+  const top = rows.length ? rows[0].t.dmg : 1;
+  console.log('    by share of the damage the fell actually swings:');
+  for (const r of rows.slice(0, 8)) {
+    console.log(`    ${r.f.name.padEnd(14)}${'█'.repeat(Math.round((r.t.dmg / top) * 22)).padEnd(23)}` +
+      `${String(Math.round((r.t.dmg / all) * 100) + '%').padStart(4)}  counter ${r.f.cnt}` +
+      `${r.f.kw && r.f.kw.aimless ? ' · aimless — no wall stops it' : ''}`);
+  }
+}
+
 section('every ware is worth buying');
 {
   const WARES = [
@@ -1304,7 +1382,31 @@ section('every card is worth playing');
   const top = Object.entries(PLAYED).sort((a, b) => b[1] - a[1]).slice(0, 3);
   console.log(`    played ${Object.keys(PLAYED).length}/${all.length} cards · ` +
     `most: ${top.map(([k, v]) => k + ' ' + v).join(', ')}`);
-  if (rare.length) console.log(`    least: ${rare.map((c) => c.id + ' ' + PLAYED[c.id]).join(', ')}`);
+  if (rare.length) {
+    /* AND WHY they are least, which the count alone cannot say. A card at the
+       bottom of this table is there for one of three reasons and only one of
+       them is the card's fault: it is rarely offered, it is offered and rarely
+       taken, or it is taken and then never finds a moment. The ware table
+       learned this lesson last round about the shop; the same question had
+       never been asked of the deck. */
+    console.log('    least by raw plays: ' + rare.map((c) => c.id).join(', ') +
+      ' — but raw plays is a table about the pool, not the cards:');
+    /* Raw plays is a table about the POOL, not about the cards: the three at
+       the bottom of it turned out to be carried into a deck about sixty times
+       against the top three's nine hundred, because the top three are starter
+       cards that are in every deck from the first step. Divide it out. What is
+       left is a number about the card — how often a caravan that HAS one finds
+       a moment for it — and it is the only one of the two worth acting on. */
+    const per = (id) => (CARRIED[id] ? PLAYED[id] / CARRIED[id] : 0);
+    const seen = all.filter((c) => (CARRIED[c.id] || 0) >= 20)
+      .sort((a, b) => per(a.id) - per(b.id));
+    const line = (c) => console.log(`      ${c.id.padEnd(14)} ${per(c.id).toFixed(2).padStart(6)} plays per copy carried` +
+      ` · ${String(PLAYED[c.id] || 0).padStart(5)} plays across ${String(CARRIED[c.id]).padStart(5)} copies`);
+    console.log('    the five that find the fewest moments:');
+    for (const c of seen.slice(0, 5)) line(c);
+    console.log('    and the five that find the most:');
+    for (const c of seen.slice(-5).reverse()) line(c);
+  }
   if (never.length) console.log(`    never played: ${never.map((c) => c.id).join(', ')}`);
 
   /* Two different failures wear the same face here, and only one of them is a

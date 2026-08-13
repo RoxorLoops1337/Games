@@ -1780,6 +1780,66 @@ section('the fell answers the caravan');
   ok(FFa.foeScale(broke) > 0, 'and the trail is still a trail');
 }
 
+section('the fire holds, once');
+{
+  const FFh = loadGame({});
+  bareBattle(FFh, 'hearth', 602);
+  const G4 = FFh.G;
+  G4.run.course = 'hearth';
+  const a = place(FFh, 'p', 'snowpup', 0, 0, {});
+  const b2 = place(FFh, 'p', 'snowpup', 1, 0, {});
+  /* Hearth's rules have been damage (worth nothing) and double warmth (worth
+     far too much, because warmth scales with the line). This one is bounded by
+     construction: whatever it is worth, it is worth it exactly once. */
+  FFh.die(G4, a, null);
+  eq(a.alive, true, 'the first warden that should have fallen stays standing');
+  eq(a.hp, 1, 'on one health');
+  FFh.die(G4, b2, null);
+  eq(b2.alive, false, 'and the second one falls');
+
+  // and it does not follow the caravan into the next fight
+  bareBattle(FFh, 'hearth', 603);
+  G4.run.course = 'hearth';
+  const c2 = place(FFh, 'p', 'snowpup', 0, 0, {});
+  FFh.die(FFh.G, c2, null);
+  eq(c2.alive, true, 'a new fight gets its own');
+
+  // a caravan on any other road does not get it at all
+  const FFi = loadGame({});
+  bareBattle(FFi, 'hearth', 604);
+  FFi.G.run.course = 'frost';
+  const d2 = place(FFi, 'p', 'snowpup', 0, 0, {});
+  FFi.die(FFi.G, d2, null);
+  eq(d2.alive, false, 'and only the hearth road has a fire to hold');
+}
+
+section('a taunt beats everything');
+{
+  const FFt = loadGame({});
+  bareBattle(FFt, 'hearth', 601);
+  const G3 = FFt.G;
+  G3.battle.units = G3.battle.units.filter((u) => u.side === 'p' && u.leader);
+  /* Mitewing has sat in the top two of the late-zone death table for five
+     rounds on a counter of 1 and four health, and the reason was targeting:
+     Aimless used to outrank Soak, so the six wardens in the pool that carry a
+     taunt could do nothing at all about the fastest thing on the table. */
+  const wall = place(FFt, 'p', 'snowpup', 1, 2, {});
+  wall.kw.soak = 1;
+  place(FFt, 'p', 'snowpup', 1, 0, {});
+  place(FFt, 'p', 'snowpup', 1, 1, {});
+  const moth = place(FFt, 'e', 'mitewing', 1, 0, {});
+  ok(!!moth.kw.aimless, 'the moth is aimless');
+  let onWall = 0;
+  for (let i = 0; i < 40; i++) if (FFt.targetFor(G3, moth) === wall) onWall++;
+  eq(onWall, 40, 'and a soaker takes every one of its swings, from the back row');
+
+  // with nothing soaking it goes back to picking whoever it likes
+  wall.kw.soak = 0;
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) { const t = FFt.targetFor(G3, moth); if (t) seen.add(t.uid); }
+  ok(seen.size > 1, 'and with no taunt up it is aimless again');
+}
+
 section('one gap is not room');
 {
   const FFr = loadGame({});

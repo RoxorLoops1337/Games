@@ -601,21 +601,23 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓███    7%
-+ the fight         ░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓██████████   22%
-+ the trader        ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓████████████████   34%
-+ steering the pool ░▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█████████████████   37%
+careless            ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓███     7%
++ the fight         ░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████    17%
++ the trader        ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓████████████████    33%
++ steering the pool ░▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████████    34%
 ```
 
-**Thirty points for playing well: fifteen from the fight, twelve from the
-trader, three from steering the pool.**
+**Twenty-seven points for playing well: ten from the fight, sixteen from the
+trader, one from steering the pool.**
 
-**The fight is the biggest rung on the ladder for the first time**, which is
-what the section below said it should be and was not. It went from +8 to +15 in
-one round, and the change that did it was not aimed at the ladder at all — it
-was [making the room rule a
-decision](#the-rule-the-board-is-built-around-was-not-a-decision). A rung is the
-sum of the questions the fight asks; the fight was short one question.
+A round earlier the same ladder read 22 / 34 / 37 with the fight at +15 — the
+biggest rung for the first time, off the back of [making the room rule a
+decision](#the-rule-the-board-is-built-around-was-not-a-decision). It reads +10
+now. Nothing was done to the fight in between, so **the honest reading is that
+the fight/trader split is not stable at 210 runs a rung** and neither number
+should be quoted to the point. What has been stable for three rounds is the
+shape: the careless floor near 7, the ceiling in the middle thirties, and
+somewhere between twenty-five and thirty points separating them.
 
 **The careless floor, and what it costs.** Last round it read 7%, one under the
 floor, and named scars as the likely cause without testing it. Tested: the same
@@ -666,17 +668,50 @@ It worked, and the size of it is worth being plain about:
 
 | | before | after |
 |---|---|---|
-| keeping a slot in reserve | **+0** (±1.5, n=750) | **+2** (±1.5, n=750) → **+8** (±2.8, n=210) |
-| a body held back, per deployment | 19% | 34% |
-| turns spent at two free slots | 17% | 31% |
+| keeping a slot in reserve | **+0** (±1.5, n=750) | **+2** (±1.5, n=750) |
+| a body held back, per deployment | 19% | 32% |
+| turns spent at two free slots | 17% | 25% |
 | the fight rung | +8 | **+15** |
 
-The two "after" readings of the habit were taken hours apart against a game that
-changed in between, and they do not overlap: **the sign is settled and the
-magnitude is not.** What is not in doubt is the second and third rows — the
-pilot changed its behaviour sharply, hugging the new threshold, which is what a
-live question looks like from the outside — and the fourth, which is the whole
-point. The fight rung nearly doubled, and it is now the biggest on the ladder.
+**The habit is worth +2, and the +8 that the consolidated table once reported is
+not quoted here.** Two readings disagreed — +8 at 210 runs an arm, +2 at 750 —
+and they did not overlap, so the bigger one was measured again on its own
+against the game as it now stands. It came back +2 a second time. A number that
+survives two independent runs at the tighter band beats one that appeared once
+at the looser one, and the small answer is the true one.
+
+Which leaves an honest loose end: **the habit is worth +2 and the rung it sits
+in went up by seven.** Those are not the same quantity — a rung is the whole
+fight played well against the whole fight played badly, and the room change
+alters the shape of every turn, not just the moments when the pilot declines a
+play. But the gap is not explained, and it is written down rather than papered
+over. The second and third rows are what is not in doubt: the pilot changed its
+behaviour sharply, hugging the new threshold, which is what a live question
+looks like from the outside.
+
+### And it is a decision for one side of the table only
+
+The room rule is symmetric — it has always applied to the foes too — but the two
+sides do not meet it equally often:
+
+```
+free slots, player line:  0:4%  1:6%  2:25%  3:22%  4:24%  5:18%     ≤2 on 35% of turns
+free slots, foes' line:   0:2%  1:5%  2: 9%  3:22%  4:36%  5:26%     ≤2 on 16% of turns
+```
+
+**This is intentional, and the reason is worth stating rather than fixing.** A
+rule that prices a decision can only be a decision for the side that makes
+decisions. The caravan is six wardens a player assembles and chooses to commit;
+the fell arrives in waves and chooses nothing. Applied to the foes the same rule
+is not a decision at all — it is weather, and it should be, because it is the
+same winter for everybody and only one side of the table can do anything about
+it.
+
+The foes are not untouched by their own board being full, either: the **gather**
+scheme needs a free slot on their side to put the new body in, so a packed fell
+line already denies itself. That interaction pulls the same rope from the other
+end, and it is the one that gives the player a reason to *stop* clearing the
+enemy back row.
 
 ### Which rung should matter, and a note on what this instrument cannot see
 
@@ -763,6 +798,93 @@ at two different nodes. What the table is for is the bottom: **a ware at zero is
 now a failing check**, so a dead button cannot sit on that counter for another
 nineteen iterations.
 
+### Every card is worth playing — and the table that said otherwise
+
+Three cards sat at the bottom of the usage table for four rounds through two
+rebalances: lanternmoth, patchkit, thornoil. Given the ware table's lesson —
+that "nobody bought it" is three findings wearing one face — the same question
+went to the deck, and **the table was measuring the wrong thing.**
+
+Raw plays is a number about the *pool*, not about the card. The three at the
+bottom were carried into a finished deck about sixty times each; the three at
+the top, nine hundred — because the top three are **starter cards**, in every
+deck from the first step of every run. Divide it out and what is left is a
+number about the card: how often a caravan that *has* one finds a moment for it.
+
+On that measure the bottom was **thornoil 2.75 and patchkit 2.99** against a top
+of eleven — and **lanternmoth was fine all along**, at 4.81, low on the raw
+table only because it is a rare-2 card the pool rarely offers. One of the three
+named cards was never a problem.
+
+The other two were a blind spot in the pilot rather than in the cards. Every
+ally-targeted item was scored as though it were a heal — aimed at whoever was
+most wounded, and worth nothing if nobody was. **Thorns is retaliation**: it
+wants whatever is about to be *hit*, which is a soaker or the front of a lane
+with something swinging into it, and has nothing to do with who is hurt.
+**Shell is damage prevented**, which the scoring counted as zero. Taught both:
+
+| | before | after |
+|---|---|---|
+| thornoil | 2.75 | **off the bottom five entirely** |
+| patchkit | 2.99 | 3.63 |
+
+Thorn Oil was an instrument artefact. Patch Kit moved and is still low. The
+bottom of the fair table is now a different five — galewisp, lastlight,
+snowhare, hookline, patchkit — which is what happens when a measurement stops
+being wrong, and **none of them is chased this round**: a table that has just
+changed shape is not evidence about its own new bottom.
+
+### The most lethal thing in the game has four health
+
+Mitewing has been in the top two of the late-zone death table for five rounds.
+It is a **tier-1 trash mob**: four health, two attack, the weakest foe in the
+bestiary. Counting what each foe contributes to the damage the fell actually
+swings — its tick rate over its counter, times its attack — explains it:
+
+```
+Mitewing     ██████████████████████  9%   counter 1 · aimless — no wall stops it
+Glutton      ██████████████████████  9%   counter 5
+Frostwyrm    █████████████████████   9%   counter 5
+Rime Knight  ██████████████████      8%   counter 4
+```
+
+**Its counter is 1.** It takes five turns for a Frostwyrm's one, and ten in the
+front row, so a trash mob swings as much in total as the biggest monsters in the
+game. That part is fine — it is what makes it frightening rather than trivial.
+
+What was not fine is that **Aimless outranked Soak** in the targeting order. So
+every answer the game spends its first hint teaching — the front of a lane takes
+the hits, put a wall up, move somebody out of the way — was *inert* against the
+foe doing the most damage in the game. Six wardens in the pool carry a taunt and
+none of them could do anything about it. The only answer was to kill it, and its
+mother whistles for more.
+
+So Mitewing's numbers are untouched and **a taunt now beats everything**, Aimless
+included. That is one line of targeting order, and it makes the keyword that was
+"beats Longshot" into the answer to the fastest thing on the table.
+
+**And then the answer turned out to cost more than the problem.** Six cards in
+fifty-three carry Soak and no leader starts with one, so a pilot that does not
+go looking will never hold one — the Kettle Titan's lesson, in a second place.
+So the pilot was told to go looking, and both numbers were measured:
+
+| | Mitewing's share of late deaths | the top rung |
+|---|---|---|
+| pilot chases a taunt | 25% | 30% |
+| pilot does not | 33% | **34%** |
+
+**A taunt does not prevent damage; it concentrates it.** One warden takes
+everything instead of the line spreading it out and the room rule mending all of
+it. Drafting toward a soaker moved Mitewing eight points down the death table
+and cost four points of win rate doing it.
+
+So the targeting order ships and the drafting advice does not. What was fixed is
+**fairness** — the game's first hint teaches you to put a wall up, and now that
+works on everything — not power. Mitewing is still a third of the late-zone
+death table, and the honest verdict is that it is a good fight that most decks
+have no answer to, rather than a tax. Putting a taunt in a starting deck is a
+thing to try; it is not a thing to claim.
+
 ### Does walking past a fight pay
 
 The transcripts found a winning line the ladder could not see: **eight fights in
@@ -780,8 +902,9 @@ walks past what it can███████████████        30%  
                                              13.4 cards · 2.5 tempered · 3.1 meals · 43 unspent
 ```
 
-It read **+13 for dodging** two rounds ago. It reads **−6** now, and the second
-line under each bar is why the first fix did not work and the second one did.
+It read **+13 for dodging** three rounds ago. It reads **−5** now, and the
+second line under each bar is why the first fix did not work and the second one
+did.
 
 *First attempt:* tax the difficulty curve — a caravan that had not been fighting
 loses its discount for being thin. It measured as **nothing**, and the reason is
@@ -874,30 +997,33 @@ stands**, at 300 runs an arm:
 
 ```
 IN THE FIGHT (±2.8)                    ON THE REWARD SCREEN (±2.6)
-    +9  denying schemes                   +7  declaring a course at all
-    +8  keeping a slot in reserve          0  buying a fresh offer
-    +6  holding gear until it earns        0  tempering instead of taking
-    +6  filling the front of both lanes    0  picking what the deck lacks
-     0  repositioning (removed)           -5  walking on when it wants nothing
+    +6  denying schemes                   +7  declaring a course at all
+     0  keeping a slot in reserve          0  buying a fresh offer
+     0  repositioning (removed)            0  tempering instead of taking
+    -2  holding gear until it earns        0  picking what the deck lacks
+    -3  filling the front of both lanes   -5  walking on when it wants nothing
      0  calling waves early (removed)
 ```
 
-**Four habits, all clear of the band, spread across three points — the
-healthiest this table has ever read.** For most of its life it has been one
-habit worth something and the rest inside the noise; scheme denial alone was
-worth +14 two rounds ago.
+**This table is not a ranking, and pretending otherwise has cost four rounds.**
+A round ago the same six habits at the same sample read +9 / +8 / +6 / +6 with
+nothing between them; nothing was done to any of them in between and they now
+read +6 / 0 / 0 / −2 / −3. Six numbers each carrying ±2.8, re-rolled every
+round, will produce a different podium every time.
 
-The one that moved is **keeping a slot in reserve, 0 → +8**, which is [the room
-rule becoming a decision](#the-rule-the-board-is-built-around-was-not-a-decision).
-Two readings disagree about how much: this table says +8 at 210 runs an arm, and
-an isolated 750-run read of the same habit taken earlier the same session said
-+2 at a band of ±1.5. They do not overlap, and the honest summary is that **the
-sign is settled and the magnitude is not** — somewhere between "just readable"
-and "second-biggest habit in the fight". A single-habit run against the game as
-it now stands is the first thing to do next round.
+The only figures on this page that have survived being asked twice are the ones
+measured **one habit at a time at 750 runs an arm**, where the band is ±1.5:
 
-And the economy: **penniless 25%, as it ships 37%, a bottomless purse 57% —
-money is worth twelve points.** It had read four when the only things to spend on
+| | |
+|---|---|
+| keeping a slot in reserve | **+2**, measured twice, two rounds apart |
+| denying schemes | positive in every reading ever taken, magnitude unsettled |
+
+`FF_HABIT=<key>` exists for exactly this. The consolidated table stays because
+it is cheap and it catches signs; it is no longer read for order.
+
+And the economy: **penniless 30%, as it ships 34%, a bottomless purse 54% —
+money is worth four points.** It had read four when the only things to spend on
 were one-a-visit; a meal gave the purse a bottom and the number went up, which
 is what a working economy looks like.
 
@@ -1012,11 +1138,41 @@ Cold is now level with declaring nothing, and the whole field spans six points �
 which is the standard this file has been claiming and, at this sample, finally
 meeting.
 
-**Reported and not acted on: Hearth reads 35 against 40 for declaring nothing.**
-Being *worse* than declaring no course at all is a plainer failure than Cold's,
-and it is two and a half standard deviations, so it is not noise. It is not
-fixed here because two speculative course changes measured once between them
-tell you nothing about either. It is the next round's first job.
+### Hearth: five attempts, and a finding about the game instead
+
+Hearth read 34 against 40 for declaring no course at all — worse than not
+declaring, and the last course still failing. The brief said to check the pool
+lean before the rule, because Scrap's problem had turned out to be neither of
+the things it looked like. The pool is **13 hearth cards against 14 frost and 13
+scrap**: the lean is level. So it was the rule, and the rule was damage — Spice
+on deploy plus Spice every other turn, about one extra point per trigger, in a
+game whose fight ablation prices denying a scheme and keeping room far above
+hitting harder.
+
+Five versions, each measured at 450 runs an arm against a 36% baseline:
+
+| Hearth's rule | |
+|---|---|
+| Spice on deploy, Spice every other turn (as it was) | 34% |
+| once a fight, the first warden that would fall stays standing | 34% |
+| **warmth 2** — a line with room is warmed twice over | **52%** |
+| warmth 2, every other turn only | 50% |
+| warmth 2, only on a line keeping three slots clear | 53% |
+| warmth 2, only on the leader | 53% |
+
+**There is no setting between +0 and +17**, and that is a finding about the game
+rather than about this course. **Regen is a threshold good.** Any amount of
+warmth-2 tops the line back up, so halving how often it happens costs two
+points; making the player pay a permanent body for it costs *nothing*, because
+sustain outbids bodies; and putting it on the leader alone is worth as much as
+putting it on all six, because the leader is the thing whose death ends the run.
+
+So Hearth ships with the bounded rule — once a fight, the first warden that
+would fall stays standing — and **the gap is reported rather than forced**. It
+reads 34 against 36, two points, inside the ±2.2 band. The reason that gap
+closed is not this course: **the baseline came down from 40 to 36 this round.**
+Shipping a 53% outlier to close a two-point deficit would have been the worst
+trade in the file.
 
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
