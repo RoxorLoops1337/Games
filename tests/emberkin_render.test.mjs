@@ -6597,6 +6597,158 @@ section('the log says what happened, and only when it happened');
     'the way a kin healing itself always has');
 }
 
+// Does the foe's telegraph match what the foe then does?
+//
+// The plan beats were exact and are pinned below: the number the chip shows is
+// the edge, the guard or the pierce the beat actually moves. The damage range
+// was exact too, in the sense its own comment claims — every swing that came in
+// over the shown ceiling was a crit, and the comment beside `intentLethal` says
+// in as many words that a crit is deliberately not counted.
+//
+// What disagreed was the shield. An `aim` beat sets `foePierce`, and a pierced
+// hit goes past the bank — `hurtMine` has always known that, and the beat's own
+// line says it out loud on the same screen: "takes aim. A shield will not be in
+// the way." `intentThrough` deducted the shield anyway. Driven over 36
+// combinations of damage, guard, shield and pierce, twelve disagreed, and all
+// twelve were pierced:
+//
+//     raw 30, guard 0, shield 40, aimed   chip said "0-0 through"
+//                                         the swing took 30
+//     at 25 HP that same turn             the alarm said false
+//                                         the kin died
+//
+// The alarm exists to answer "can I take this, or do I need to block?". It was
+// answering it with the block already spent.
+section('the chip promises the hit that is actually coming');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { PLANS } = g;
+
+  const fight = (wild = true, lvl = 30) => {
+    g.G.party = [g.mkMon('cindercub', lvl + 4)];
+    g.G.might = 0;
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('mothrix', lvl), wild });
+    const b = g.B();
+    b.energy = 99;
+    return b;
+  };
+
+  // ---- what the chip says is through is what the hit takes ---------------
+  let rows = 0, pierced = 0;
+  for (const raw of [3, 12, 30]) {
+    for (const def of [0, 4]) {
+      for (const shield of [0, 10, 40]) {
+        for (const pierce of [0, 1]) {
+          const b = fight();
+          b.mods.def = def; b.shield = shield; b.foePierce = pierce;
+          b.mine.hp = b.mine.max;
+          b.intent = { id: null, name: 'x', dmg: raw, hi: raw, kind: 'attack' };
+          const t = g.intentThrough(b, b.intent);
+          ok(!!t, 'an attack intent has a through-reading');
+          if (!t) continue;
+          const hp0 = b.mine.hp;
+          g.hurtMine([], raw, null, 'foe', false);
+          const lost = hp0 - b.mine.hp;
+          eq(t.hi, lost, `${raw} raw, ${def} guard, ${shield} shield${pierce ? ', aimed' : ''}: chip says ${t.hi} through, the hit took ${lost}`);
+          rows++;
+          if (pierce) pierced++;
+        }
+      }
+    }
+  }
+  eq(rows, 36, '36 combinations of damage, guard, shield and pierce');
+  eq(pierced, 18, '…half of them against a foe that has aimed');
+  // Guard is NOT bypassed — only the bank is. Stated on its own so a fix that
+  // threw both away would not pass.
+  {
+    const b = fight();
+    b.mods.def = 4; b.shield = 40; b.foePierce = 1; b.mine.hp = b.mine.max;
+    b.intent = { id: null, name: 'x', dmg: 30, hi: 30, kind: 'attack' };
+    eq(g.intentThrough(b, b.intent).hi, 26, 'a pierced hit still meets your guard, just not your bank');
+  }
+
+  // ---- the alarm fires on exactly the turns that kill --------------------
+  for (const pierce of [0, 1]) {
+    for (const hp of [25, 60]) {
+      const b = fight();
+      b.shield = 40; b.mods.def = 0; b.foePierce = pierce; b.mine.hp = hp;
+      b.intent = { id: null, name: 'x', dmg: 30, hi: 30, kind: 'attack' };
+      const said = g.intentLethal(b, b.intent);
+      g.hurtMine([], 30, null, 'foe', false);
+      eq(said, b.mine.hp <= 0,
+        `at ${hp} HP behind 40 shield${pierce ? ' against an aimed swing' : ''}: the alarm said ${said}`);
+    }
+  }
+
+  // ---- pierce is live at the moment the chip is read ---------------------
+  // Not assumed from the code: the beat happens on the foe's turn and the chip
+  // is read on yours, so the two are driven in order.
+  {
+    const b = fight();
+    b.plan = { steps: ['aim', 'swing'], i: 0 };
+    b.mine.hp = b.mine.max; b.intent = null;
+    const first = g.readIntent();
+    eq(first && first.kind, 'plan', 'the foe telegraphs a plan beat');
+    eq(first && first.step, 'aim', '…and it is the aim');
+    eq(b.foePierce, 0, 'nothing is pierced yet while it is only announced');
+    g.endTurn();
+    eq(b.foePierce, 1, 'and after the beat lands, the next hit will pierce');
+  }
+
+  // ---- every plan beat moves the state it names -------------------------
+  {
+    const b = fight(false);
+    b.plan = { steps: ['sharpen', 'brace', 'aim'], i: 0 };
+    const seen = new Set();
+    for (let turn = 0; turn < 12 && seen.size < 3; turn++) {
+      b.mine.hp = b.mine.max; b.foe.hp = b.foe.max; b.intent = null;
+      const it = g.readIntent();
+      if (!it || it.kind !== 'plan') { g.endTurn(); continue; }
+      const p = PLANS[it.step];
+      const e0 = b.foeEdge, s0 = b.foeShield, pi0 = b.foePierce;
+      g.endTurn();
+      if (p.edge) eq(b.foeEdge - e0, it.n, `${it.step} said +${it.n} and moved the foe's edge by that`);
+      if (p.shield) eq(b.foeShield - s0, it.n, `${it.step} said ${it.n} guard and banked that`);
+      if (p.pierce) eq(b.foePierce - pi0, 1, `${it.step} said a shield will not help, and set the pierce`);
+      seen.add(it.step);
+    }
+    eq(seen.size, 3, 'all three plan beats driven');
+  }
+
+  // ---- the range: anything over the ceiling is a crit, which is the
+  //      documented choice, not an accident ------------------------------
+  {
+    const b = fight(false, 26);
+    b.mods.def = 0; b.shield = 0;
+    let swings = 0, over = 0, overAndCrit = 0;
+    for (let turn = 0; turn < 250; turn++) {
+      b.mine.hp = b.mine.max; b.foe.hp = b.foe.max;
+      b.mods.def = 0; b.shield = 0; b.foeEdge = 0; b.cornered = 0; b.plan = null; b.intent = null;
+      const it = g.readIntent();
+      if (!it || it.kind !== 'attack' || !it.dmg) continue;
+      const hp0 = b.mine.hp;
+      const log = g.endTurn() || [];
+      const lost = hp0 - b.mine.hp;
+      if (lost <= 0) continue;
+      swings++;
+      if (lost <= it.hi) continue;
+      over++;
+      if (log.some((e) => /critical hit/i.test(e.t))) overAndCrit++;
+    }
+    ok(swings > 20, `${swings} foe swings driven against their own telegraph`);
+    eq(over, overAndCrit, `every one of the ${over} swings that beat the ceiling was a crit`);
+    ok(SRC.includes('and neither is a crit — the chip warns about the swing it is'),
+      'and the code says that is the intent');
+  }
+
+  // Pinned by shape.
+  ok(SRC.includes('const bank = b.foePierce ? 0 : (b.shield || 0);'),
+    'the chip stops counting a bank the next hit will ignore');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

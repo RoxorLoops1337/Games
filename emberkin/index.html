@@ -9174,7 +9174,15 @@ function fanStyle(i, n, selected) {
  */
 function intentThrough(b, it) {
   if (!b || !it || it.kind !== 'attack') return null;
-  const cut = (d) => Math.max(0, Math.max(d > 0 ? 1 : 0, d - (b.mods.def || 0)) - (b.shield || 0));
+  // A pierced hit goes past the bank. `hurtMine` has always known that, and the
+  // aim beat says it out loud on the very same screen — "takes aim. A shield
+  // will not be in the way." — while this line went on deducting the shield
+  // anyway. Banked 40 against a 30 swing read "0 through", and the alarm below,
+  // which exists to answer "can I take this, or do I need to block?", stayed
+  // silent on a turn that took the kin to zero. Guard still counts: hurtMine
+  // subtracts `mods.def` first and only the SHIELD is bypassed.
+  const bank = b.foePierce ? 0 : (b.shield || 0);
+  const cut = (d) => Math.max(0, Math.max(d > 0 ? 1 : 0, d - (b.mods.def || 0)) - bank);
   return { lo: cut(it.dmg), hi: cut(it.hi != null ? it.hi : it.dmg) };
 }
 /**
