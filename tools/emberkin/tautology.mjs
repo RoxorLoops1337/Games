@@ -298,6 +298,22 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  // Anchored on doAction's preceding line: endTurn and doAction now have
+  // IDENTICAL tails, which is the whole point of the pass, so the tail alone
+  // matches twice.
+  { name: 'turn: doAction throws the whole hand away again', aims: ['a retained card stays whichever way the turn ended'],
+    find: "this will hurt.`, 'buff', 'foe');\n  }\n\n  dropHand(log);",
+    to: "this will hurt.`, 'buff', 'foe');\n  }\n\n  b.disc.push(...b.hand);\n  b.hand = [];" },
+  { name: 'turn: every card is treated as retained', aims: ['a retained card stays whichever way the turn ended'],
+    find: "  const kept = b.hand.filter((c) => c.src !== 'kin' && CARDS[c.id] && CARDS[c.id].retain);",
+    to: "  const kept = b.hand.filter((c) => c.src !== 'kin');" },
+  { name: 'turn: the shield stops being for one round', aims: ['a retained card stays whichever way the turn ended'],
+    find: '  b.shield = 0;                                   // shield is for one round only',
+    to: '  // shield is for one round only' },
+  { name: 'turn: swungTurn never resets', aims: ['a retained card stays whichever way the turn ended'],
+    find: '  b.swungTurn = 0;                                // one attack a turn, no more',
+    to: '  // one attack a turn, no more' },
+
   { name: 'switch: the called-back foe leaves its telegraph behind', aims: ['when the foe on the field changes, the telegraph changes with it'],
     find: '  // still said 36 while the player decided whether to block.\n  readIntent();\n}',
     to: '}' },

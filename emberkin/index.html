@@ -7898,17 +7898,38 @@ function afterFoe(log) {
 }
 
 /** End the player's turn: hand goes to the discard, then the foe swings. */
+/**
+ * The hand at the end of a turn — whichever of the four ways the turn ended.
+ *
+ * A retained card stays in your hand across the turn. It is the difference
+ * between a heal you must spend now and a heal you are holding, which is a
+ * decision every single turn rather than one.
+ *
+ * This was written out inside endTurn and nowhere else, so it was true of ONE
+ * of the four ways a turn ends. Pressing end-turn kept your Hunker; using an
+ * item, switching kin and failing to flee each threw it in the discard without
+ * a word — and doAction's own comment says those actions "cost the rest of your
+ * turn, exactly as it did before", while the card says, in as many words,
+ * "stays in your hand at the end of the turn". Twelve of sixteen combinations
+ * disagreed with the card. One expression of the rule now, read by both.
+ *
+ * `CARDS[c.id] &&` because a save can hold a card whose definition has gone —
+ * the same case cardCost guards against. It costs nothing and stops the end of
+ * a turn throwing.
+ */
+function dropHand(log) {
+  const b = B();
+  const kept = b.hand.filter((c) => c.src !== 'kin' && CARDS[c.id] && CARDS[c.id].retain);
+  b.disc.push(...b.hand.filter((c) => !kept.includes(c)));
+  b.hand = kept;
+  if (kept.length) snap(log, `${kept.length === 1 ? cardName(kept[0]) + ' stays' : kept.length + ' cards stay'} in your hand.`, 'buff', 'mine');
+}
+
 function endTurn() {
   const b = B();
   const log = [];
   if (b.phase !== 'player' || b.over) return log;
-  // A retained card stays in your hand across the turn. It is the difference
-  // between a heal you must spend now and a heal you are holding — which is a
-  // decision every single turn rather than one.
-  const kept = b.hand.filter((c) => c.src !== 'kin' && CARDS[c.id].retain);
-  b.disc.push(...b.hand.filter((c) => !kept.includes(c)));
-  b.hand = kept;
-  if (kept.length) snap(log, `${kept.length === 1 ? cardName(kept[0]) + ' stays' : kept.length + ' cards stay'} in your hand.`, 'buff', 'mine');
+  dropHand(log);
   foeTurn(log);
   afterFoe(log);
   return log;
@@ -7953,8 +7974,7 @@ function doAction(action) {
     if (b.foeEdge > 0) snap(log, `${dispName(b.foe)} is already coming — this will hurt.`, 'buff', 'foe');
   }
 
-  b.disc.push(...b.hand);
-  b.hand = [];
+  dropHand(log);
   foeTurn(log);
   afterFoe(log);
   return log;

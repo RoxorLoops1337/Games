@@ -6889,16 +6889,21 @@ section('when the foe on the field changes, the telegraph changes with it');
     const a = b.mine, c = g.G.party[1];
     const aMax0 = a.max, cMax0 = c.max;
     // doAction runs the foe's turn, which can drop the kin that just arrived —
-    // and a dead kin plays no cards, so the bill would go unmeasured about one
-    // run in three. The scenario here is the booking, not the surviving: both
-    // sides are put back on their feet before each play.
+    // and a dead kin plays no cards, so the bill went unmeasured about one run
+    // in three. Topping HP back up was not enough: a fight that ENDS clears
+    // G.battle, and then B() is null and playCard does nothing at all, silently.
+    // The scenario here is the booking, not the surviving, so the foe is made
+    // something a level-40 kin cannot lose to and the battle is re-checked.
+    b.foe = g.mkMon('sproutle', 2);
+    b.roster = null;
     const steady = () => {
       b.over = null;
       b.energy = 99;
       for (const m of g.G.party) m.hp = m.max;
-      b.foe.hp = b.foe.max;
+      b.foe = g.mkMon('sproutle', 2);
       b.foeEdge = 0;
     };
+    ok(!!g.B(), 'the fight is live before the bill is measured');
     const play = (id) => {
       steady();
       const o = g.grantCard(id);
@@ -6924,6 +6929,138 @@ section('when the foe on the field changes, the telegraph changes with it');
   // rather than the call.
   eq((SRC.match(/^\s*readIntent\(\);$/gm) || []).length, 4,
     'the telegraph is re-read at the turn boundary and at every door the foe leaves by');
+}
+
+// What resets each turn, what carries, and is every field in the right list?
+//
+// Built by marking every numeric field on the battle at 7 and taking one full
+// turn. Three reset — playedTurn, swungTurn, shield — `energy` is recomputed
+// from BASE_ENERGY plus any power, `turn` increments, and everything else
+// carries, which is what the card text says it should: "this battle" mods carry,
+// "next attack" edge is spent by the swing that uses it, `settling` is consumed
+// by the first swing whenever it comes.
+//
+// One thing was in the wrong list, and it was not a field — it was a rule
+// written in one place and true in one place. `endTurn` keeps retained cards;
+// `doAction` discarded the whole hand. Those are the other three ways a turn
+// ends, and doAction's own comment says they "cost the rest of your turn,
+// exactly as it did before":
+//
+//     hunker   ended the turn   HAND        ironhide  ended the turn   HAND
+//     hunker   used an item     discard     ironhide  used an item     discard
+//     hunker   switched kin     discard     ironhide  switched kin     discard
+//     hunker   tried to flee    discard     ironhide  tried to flee    discard
+//
+// Twelve of sixteen combinations disagreed with a card that says, in as many
+// words, "stays in your hand at the end of the turn".
+section('a retained card stays whichever way the turn ended');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { CARDS, CARD_IDS } = g;
+
+  const fight = () => {
+    g.G.party = [g.mkMon('cindercub', 40), g.mkMon('dewdrip', 40)];
+    g.G.might = 0;
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('mothrix', 24), wild: true });
+    const b = g.B();
+    b.energy = 99;
+    for (const m of g.G.party) m.hp = m.max;
+    return b;
+  };
+  // A clean hand with exactly one card of interest in it.
+  const holding = (id) => {
+    const b = fight();
+    b.hand = b.hand.filter((c) => c.src === 'kin');
+    const o = g.grantCard(id);
+    const card = { src: 'deck', u: o.u, id, bg: 0 };
+    b.hand.push(card);
+    return { b, card };
+  };
+  const where = (b, c) => (b.hand.includes(c) ? 'hand' : b.disc.includes(c) ? 'discard'
+    : b.draw.includes(c) ? 'draw' : b.exh.includes(c) ? 'exhaust' : 'gone');
+  // All four ways a turn ends. `item` takes a party INDEX, not a creature —
+  // passing the creature throws inside useItemInBattle.
+  const ENDINGS = [
+    ['ending the turn', () => g.endTurn()],
+    ['using an item', (b) => { g.G.bag = { salve: 1 }; b.mine.hp = 1; g.doAction({ kind: 'item', id: 'salve' }); }],
+    ['switching kin', () => g.doAction({ kind: 'switch', idx: 1 })],
+    ['failing to flee', (b) => { b.mine.status = 'snare'; g.doAction({ kind: 'flee' }); }],
+  ];
+
+  const retainers = CARD_IDS.filter((id) => CARDS[id].retain);
+  eq(retainers.length, 4, 'four cards say Retain');
+  let combos = 0;
+  for (const id of retainers) {
+    for (const [how, act] of ENDINGS) {
+      const { b, card } = holding(id);
+      act(b);
+      eq(where(b, card), 'hand', `${id} is still in hand after ${how}`);
+      combos++;
+    }
+  }
+  eq(combos, 16, 'every Retain card driven through every way a turn ends');
+
+  // The control, and it is the half that matters: a card that does NOT say
+  // Retain must still be discarded by all four. Without this, a fix that kept
+  // the whole hand would pass everything above.
+  for (const id of ['guard', 'focus', 'snack']) {
+    ok(!CARDS[id].retain, `${id} does not say Retain`);
+    for (const [how, act] of ENDINGS) {
+      const { b, card } = holding(id);
+      act(b);
+      eq(where(b, card), 'discard', `${id} goes to the discard after ${how}`);
+    }
+  }
+
+  // …and the gloss the game shows for the word is the promise being kept.
+  ok(SRC.includes("['retain', 'Retain', 'stays in your hand at the end of the turn']"),
+    'the screen glosses Retain as staying at the end of the turn');
+
+  // ---- the two lists, marked and driven ---------------------------------
+  {
+    const b = fight();
+    b.mine.hp = b.mine.max; b.foe.hp = b.foe.max;
+    const MARK = 7;
+    const watch = ['playedTurn', 'swungTurn', 'shield', 'cornered', 'escapes', 'foeSwaps',
+      'foeEdge', 'foeShield', 'foePierce', 'maxAdd', 'teamIdx'];
+    for (const k of watch) b[k] = MARK;
+    for (const k of ['atk', 'def', 'thorns', 'edge', 'hits']) b.mods[k] = MARK;
+    b.mods.mul = MARK;
+    b.powers.energy = MARK;
+    const turnWas = b.turn;
+    g.endTurn();
+    // Resets, because a turn is over.
+    for (const k of ['playedTurn', 'swungTurn', 'shield']) {
+      eq(b[k], 0, `${k} resets when the turn does`);
+    }
+    eq(b.turn, turnWas + 1, 'and the turn counter moves on');
+    // Carries, because they are about the battle rather than the turn.
+    for (const k of ['cornered', 'escapes', 'foeSwaps', 'maxAdd', 'teamIdx']) {
+      eq(b[k], MARK, `${k} is about the fight, and survives the turn`);
+    }
+    for (const k of ['atk', 'def', 'thorns']) {
+      eq(b.mods[k], MARK, `a "this battle" ${k} bonus survives the turn`);
+    }
+    eq(b.mods.mul, MARK, '…as does a rest-of-battle multiplier');
+    eq(b.powers.energy, MARK, '…and a power');
+    // BASE_ENERGY is not on the export surface, so it is read off the source
+    // rather than typed in here — a number copied into a test is the same
+    // hand-copy this loop keeps finding in the game.
+    const base = +(SRC.match(/const BASE_ENERGY = (\d+)/) || [])[1];
+    ok(base > 0, `BASE_ENERGY is ${base}, read off the game rather than assumed`);
+    eq(b.energy, base + MARK, `energy comes back as ${base} plus the power (${b.energy})`);
+  }
+
+  // Pinned by shape: one expression of the rule, read by both doors.
+  eq((SRC.match(/dropHand\(log\);/g) || []).length, 2,
+    'both ways a turn ends drop the hand through the same function');
+  ok(SRC.includes("const kept = b.hand.filter((c) => c.src !== 'kin' && CARDS[c.id] && CARDS[c.id].retain);"),
+    'and that function is the only place the rule is written');
+  ok(!SRC.includes('  b.disc.push(...b.hand);\n  b.hand = [];'),
+    'nothing throws the whole hand away any more');
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.
