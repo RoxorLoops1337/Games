@@ -3246,3 +3246,63 @@ desktop one. That is the correct answer and not an obvious one.
     and both were repointed at the current line. A mutant is a claim about the
     code, and it rots the moment the code moves under it; nothing in the suites
     would ever have gone red.
+
+106. **The scroll affordance nobody had ever sampled a pixel of** (pass 195).
+    The panel has said "there is more below" since the deck first overflowed —
+    two `local` covers that scroll WITH the content and two marks pinned to the
+    frame, the covers listed OVER the marks, so a mark shows at an edge with
+    content beyond it and is hidden at an edge you have reached. Sound in
+    structure, written down in its own comment, and never once measured.
+
+    Measured at 390x760 with the content and the scroll position held still and
+    the ONLY difference being whether the pinned layers paint (luminance out of
+    255, the mark against the same pixel without it):
+
+        screen    content/panel   more below   at the end       after
+        box          1158/310         2.43        1.00      18.83 / 3.39
+        dex          1016/310         3.21        1.00      23.42 / 3.39
+        deck          761/310         0.98        1.02       7.03 / 4.20
+        swap          902/310         0.92        0.46       6.63 / 1.90
+        starter       501/310         3.14        0.54      22.52 / 1.82
+        reward/profile/chests (fit)   0.51-1.02             3.55-4.20
+
+    Every scrolling screen sat within ~2 luminance of a screen that CANNOT
+    scroll, and on `deck` the mark was fainter when there was more below than
+    when there was not. The cause is not the mechanism, it is the colour: the
+    marks were black, and `#screen` runs to `#0d0913` at the bottom. Darkening a
+    colour of luminance 10 by 60% removes six luminance. There was nothing left
+    to take.
+
+    The marks are now the panel's own edge colour, `#4a3560` — lighter, which is
+    the only direction available on a near-black surface. Same layers, same
+    order, same sizes, same attachments; only the ink changed. Paired
+    before/after through one instrument, above.
+
+    The suite cannot render CSS, so it reads the declaration out of the file and
+    checks the property the pixels were about: five layers, covers listed before
+    marks, each cover deeper than the mark it hides, each mark fading to
+    transparent, and — the net that would have failed for this game's whole life
+    — each mark LIGHTER than the panel end it is drawn on, with more than 30
+    luminance of headroom.
+
+    **Recorded, not fixed.** The top edge still carries no information: ~1.8
+    luminance whether scrolled or not, on screens that scroll and screens that
+    do not, even with the lighter ink. And the bottom mark is a BACKGROUND, so
+    it only shows where the content above it is transparent — which is why `box`
+    and `dex` and `starter` move by 15-21 and the dense card grids of `deck` and
+    `swap` move by 3-5. Making it show through content means drawing it in the
+    foreground, which is a different change.
+
+    **Three instrument faults in one pass, all mine.** (1) The first version
+    injected its own hard-coded background string and therefore measured its own
+    constant — editing the game's CSS changed not one number. Read the subject,
+    not a copy. (2) The metric was a signed DROP, because the mark had always
+    been a shadow; a mark that LIGHTENS read as zero and the script cheerfully
+    reported that the fix did nothing. (3) The suite anchored on `#screen{`,
+    which matches `body.touch #screen{ padding-top:24px; }` hundreds of lines
+    earlier, and duly parsed 26 "layers" out of a rule belonging to something
+    else. Each one produced a confident, wrong table before it was caught.
+
+    Four planted faults, all four bite; two sweep mutants aimed at the new
+    section. Every mutant anchor in the sweep re-audited against the file after
+    the CSS moved — none orphaned.
