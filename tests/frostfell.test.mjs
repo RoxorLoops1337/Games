@@ -1739,4 +1739,81 @@ section('every new rule has a voice');
   }
 }
 
+/* ------------------------------------------------- iteration 15 additions -- */
+section('the fell answers the caravan');
+{
+  const FFa = loadGame({});
+  const lean = FFa.newRun(FFa.G, 'hearth', 301);
+  const leanScale = FFa.foeScale(lean);
+  eq(Math.abs(FFa.fellAnswer(lean)) < 0.3, true, 'a caravan sets out near the middle of the curve');
+
+  // pile strength into the same caravan at the same step and the winter answers
+  for (let i = 0; i < 8; i++) lean.deck.push(FFa.mkCard('bellowsbear'));
+  for (const c of lean.deck.slice(0, FFa.TEMPER_CAP)) FFa.temperCard(FFa.G, c);
+  const fatScale = FFa.foeScale(lean);
+  ok(fatScale > leanScale, 'a caravan that has been built up meets a harder winter');
+  ok(FFa.fellAnswer(lean) <= 0.6, 'and never one it could not have seen coming');
+
+  // and a caravan that has fallen apart is never given a free run
+  const broke = FFa.newRun(FFa.G, 'frost', 302);
+  broke.deck = [];
+  ok(FFa.fellAnswer(broke) >= -0.25, 'the floor holds');
+  ok(FFa.foeScale(broke) > 0, 'and the trail is still a trail');
+}
+
+section('seals to chase');
+{
+  const store = {};
+  const FFb = loadGame(store);
+  eq(FFb.FEATS.length >= 6, true, 'there is a list of them');
+  ok(FFb.FEATS.every((f) => f.id && f.name && f.text && typeof f.got === 'function'),
+    'each one is named, described and checkable');
+  ok(FFb.FEATS.every((f) => f.text.length <= 90), 'and each one says what it wants in a breath');
+
+  const run = FFb.newRun(FFb.G, 'hearth', 303);
+  eq(FFb.featEarned('first'), false, 'nothing is earned before a crossing');
+  const fresh = FFb.checkFeats(run);
+  ok(fresh.indexOf('first') >= 0, 'crossing earns the first one');
+  eq(FFb.featEarned('first'), true, 'and it is remembered');
+  eq(FFb.checkFeats(run).indexOf('first'), -1, 'and only counted once');
+
+  // the harder ones read the run rather than the fact of finishing
+  const run2 = FFb.newRun(FFb.G, 'frost', 304);
+  run2.everFell = 1;
+  eq(FFb.FEATS.find((f) => f.id === 'whole').got(run2), false, 'a caravan that lost somebody has not kept everybody');
+  run2.everFell = 0;
+  eq(FFb.FEATS.find((f) => f.id === 'whole').got(run2), true, 'and one that did not, has');
+  run2.everBought = 1;
+  eq(FFb.FEATS.find((f) => f.id === 'pauper').got(run2), false, 'a purse that opened is not an empty one');
+
+  // they survive a reload, which is the whole point of a thing to chase
+  FFb.saveMeta();
+  const FFc = loadGame(store);
+  FFc.loadMeta();
+  eq(FFc.featEarned('first'), true, 'a seal outlives the run that earned it');
+}
+
+section('a course is a choice, not a favourite');
+{
+  const FFd = loadGame({});
+  // every course carries a rule, and no course carries only a lean
+  for (const co of FFd.COURSES) {
+    const rules = ['deploy', 'arrive', 'freeItem', 'crowdproof', 'recycle', 'warmth']
+      .filter((k) => co[k]).length;
+    ok(rules >= 1, co.short + ' changes a rule as well as the pool');
+  }
+  // and the one that was running away with it now lands on the front only
+  const cold = FFd.COURSES.find((co) => co.id === 'frost');
+  const FFe = loadGame({});
+  bareBattle(FFe, 'frost', 305);
+  const b = FFe.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  const front = place(FFe, 'e', 'snapfrost', 0, 0, {});
+  const back = place(FFe, 'e', 'snapfrost', 0, 2, {});
+  cold.arrive(FFe.G, front);
+  cold.arrive(FFe.G, back);
+  eq(FFe.stat(front, 'frost'), 1, 'the front of a wave arrives cold');
+  eq(FFe.stat(back, 'frost'), 0, 'the rest of it does not');
+}
+
 done('frostfell');

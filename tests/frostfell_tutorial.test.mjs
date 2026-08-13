@@ -45,10 +45,16 @@ section('the hints');
   eq(idOf(), 'action', 'it clears once it has had its moment');
 
   // the order toggle
-  while (idOf() && idOf() !== 'order' && G.tut.i < FF.TUTORIAL.length) {
-    if (idOf() === 'action') { FF.passTurn(G); FF.drainAll(); }
+  /* Play on until the order hint comes up. This used to pass a turn only while
+     the 'action' hint was showing, which quietly assumed no later hint would
+     ever want the clock to move — the moment one did, the harness span for
+     ever. A player takes turns the whole way through; so does this. */
+  let guard = 0;
+  while (idOf() && idOf() !== 'order' && G.tut.i < FF.TUTORIAL.length && guard++ < 60) {
+    if (!G.battle.over) { FF.passTurn(G); FF.drainAll(); }
     settle();
   }
+  ok(guard < 60, 'the guide reaches the order hint by playing the fight');
   eq(idOf(), 'order', 'then it points at the resolution order');
   settle();
   FF.UI.order = true;

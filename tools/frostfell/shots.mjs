@@ -231,8 +231,12 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await settle(page, 90);
   await shot(page, '23-boss-settled', 'the same fight once the banner clears');
 
-  // and the end of a run
-  await page.evaluate(() => { window.FF.G.screen = 'victory'; });
+  // and the end of a run, with a couple of seals struck on the way in
+  await page.evaluate(() => {
+    const FF = window.FF;
+    FF.G.run.freshFeats = FF.checkFeats(FF.G.run).slice(0, 2);
+    FF.G.screen = 'victory';
+  });
   await settle(page, 40);
   await shot(page, '24-victory', 'what the caravan did');
 

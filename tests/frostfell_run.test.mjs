@@ -225,7 +225,7 @@ function carefulItem(card) {
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
-  ['reposition', 'moving wounded and the leader'],
+  ['reposition', 'keeping the leader at the back'],
   ['holdGear', 'holding gear until it earns the turn'],
   ['keepSlot', 'keeping a slot in reserve'],
   ['wave', 'calling waves onto a set board'],
@@ -262,15 +262,19 @@ function carefulTurn() {
     if (u.leader && u.col < 2) {
       // the leader belongs at the back, always
       for (let col = 2; col > u.col; col--) if (FF.slotFree(G, 'p', u.lane, col)) { FF.moveUnit(G, u, u.lane, col); break; }
-    } else if (!u.leader && u.col === 0 && u.hp <= u.maxHp * 0.35) {
-      // pull a warden that is about to fall out of the front line
-      for (let col = 2; col > 0; col--) if (FF.slotFree(G, 'p', u.lane, col)) { FF.moveUnit(G, u, u.lane, col); break; }
-    } else if (!u.leader && u.col > 0 && u.cnt > 1 && u.atk > 0 && u.hp > u.maxHp * 0.6) {
-      /* And the other half of the same judgement, which only exists now that
-         the front burns two a turn: something healthy and still winding up is
-         worth walking forward to get it swinging sooner. */
-      if (FF.slotFree(G, 'p', u.lane, 0)) FF.moveUnit(G, u, u.lane, 0);
     }
+    /* AND THAT IS ALL THE REPOSITIONING THE PILOT DOES.
+
+       Shuffling wardens about after they are down priced at or below zero for
+       three rounds and survived two rewrites — first as a rule about health
+       (pull whoever is hurt), then as a rule about the clock (a long wait is
+       wasted at the front). Both measured −1 to −3, inside the noise either
+       way. The verdict is in and it is not a decision: WHERE A BODY GOES DOWN
+       is the question the geometry asks, and it is asked once, at deployment.
+       The free move after that is a convenience — for stepping out of a lunge,
+       which the scheme-denial habit already covers, and for tidying up. Keeping
+       a habit in the pilot that the instrument says is worth nothing would be
+       dressing the measurement rather than reading it. */
   }
 
   // what the best piece of gear would be worth right now
@@ -480,6 +484,11 @@ function playRun(tribe, seed, mode, tweak) {
       if (careful) carefulTurn(); else botTurn();
       stat.turns++;
       if (G.battle.turn > 160) return Object.assign(stat, { stuck: true });
+    } else if (G.run && G.run.lockDeck && (G.screen === 'reward' || G.screen === 'shop')) {
+      // a locked run takes nothing and buys nothing: the deck it set out with
+      // is the deck it fights the whole trail with
+      if (G.screen === 'shop') FF.press('leaveShop');
+      else FF.press('rewardSkip');
     } else if (G.screen === 'reward') {
       const r = G.ui.reward;
       if (r.cards.length && !r.taken && drafts) draftTurn(r);
@@ -825,6 +834,64 @@ section('which parts of playing well are worth anything');
   }
   console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
   ok(true, 'the ablation is a report, not a gate');
+}
+
+/* --------------------------------------------- how much skill can carry --- */
+/* "A run is decided mostly by the deck it is holding" was last round's honest
+   finding and it is also, put another way, a design choice. This arm measures
+   the size of it: the SAME deck, locked for the whole trail, played by both
+   pilots. Nothing is drafted, bought or burned, so every point of difference
+   between the two rows is the fight and only the fight — and the difference
+   between a weak deck played well and a strong one played badly is how much of
+   a deck gap skill can actually close. */
+section('the same deck, two pilots');
+{
+  const N = Number(process.env.FF_RUNS || 8);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  /* Both decks have to be able to finish the trail or the arm measures nothing
+     but zeroes — a starter deck with no rewards at all wins about none of the
+     time whoever is holding it. So both get the bodies a mid-run caravan would
+     have, and the strong one gets the gear, the beast-cards and the tempering a
+     well-shopped run arrives with. */
+  const BASE = ['snowpup', 'cinderpup', 'snowpup', 'wayfarer', 'icepick', 'stew'];
+  const EXTRA = ['bellowsbear', 'cairn', 'avalanche', 'gearshield', 'hush', 'lastlight'];
+  const lock = (strong) => (run) => {
+    run.lockDeck = true;
+    /* A locked run cannot visit a trader or take a camp's mending, so without
+       this the arm measures a war of attrition rather than a series of fights:
+       damage carries between them and nothing ever puts it back. Every locked
+       caravan mends the same amount, so it stays a controlled comparison. */
+    run.mend = 8;
+    for (const id of BASE) if (FF.CARDS[id]) run.deck.push(FF.mkCard(id));
+    if (!strong) return;
+    for (const id of EXTRA) if (FF.CARDS[id]) run.deck.push(FF.mkCard(id));
+    for (const c of run.deck.slice(0, FF.TEMPER_CAP)) FF.temperCard(G, c);
+  };
+  const arm = (mode, strong) => {
+    let wins = 0, runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) {
+        const st = playRun(tribe, 1000 + i * 37, mode, lock(strong));
+        runs++;
+        if (st.won) wins++;
+      }
+    }
+    return Math.round((wins / Math.max(1, runs)) * 100);
+  };
+  const weakBad = arm('careless', false), weakGood = arm('tactics', false);
+  const strongBad = arm('careless', true), strongGood = arm('tactics', true);
+  const band = Math.round(100 * Math.sqrt(0.25 * 0.75 / Math.max(1, tribes.length * N)));
+  const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
+  console.log(`    ${'weak deck, played badly'.padEnd(26)}${bar2(weakBad)} ${String(weakBad + '%').padStart(4)}`);
+  console.log(`    ${'weak deck, played well'.padEnd(26)}${bar2(weakGood)} ${String(weakGood + '%').padStart(4)}`);
+  console.log(`    ${'strong deck, played badly'.padEnd(26)}${bar2(strongBad)} ${String(strongBad + '%').padStart(4)}`);
+  console.log(`    ${'strong deck, played well'.padEnd(26)}${bar2(strongGood)} ${String(strongGood + '%').padStart(4)}`);
+  const deckGap = strongBad - weakBad;
+  const skillGap = weakGood - weakBad;
+  console.log(`    → the deck is worth ${deckGap} points, the fight ${skillGap} — ` +
+    `skill closes ${deckGap > 0 ? Math.round(100 * skillGap / deckGap) : 0}% of a deck gap ` +
+    `(±${band} is one standard deviation)`);
+  ok(weakGood >= weakBad - band, 'playing the fight well is never a liability');
 }
 
 section('every card is worth playing');
