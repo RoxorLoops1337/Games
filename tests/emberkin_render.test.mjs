@@ -6256,6 +6256,176 @@ section('every price the game speaks is read off the table it is a price in');
     'Vane still finds the cheapest chest on his');
 }
 
+// Is every number the game speaks read off the thing it describes?
+//
+// Pass 206 caught one hand-copy — Bell repeating a Salve's price from memory.
+// This is the general sweep, and the deck is where it bit. `combo` and `chain`
+// are the same mechanic: a bonus that switches on the moment you have played
+// anything this turn. `cardCost` has always read the live turn for chain, so a
+// Soulfang really does fall from 2 energy to 1 in your hand while you watch.
+// The VALUE never moved. Driven, before anything was changed:
+//
+//     shieldwall   nothing played yet   "Gain 14 shield."   applied +14
+//     shieldwall   one card played      "Gain 14 shield."   applied +24
+//     whetstone    one card played      "Every attack +3"   applied +6
+//     berserk      one card played      "Every attack +6"   applied +11
+//
+// Same rule, shown two different ways, in the same hand. The value is live now,
+// and the clause that promised the bonus stops promising it twice — replaced
+// off `c.combo` rather than matched by hand, landing on the words the battle
+// log already prints when that card resolves.
+section('the number on a card is the number playing it hands over');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { CARDS, CARD_IDS } = g;
+
+  // Where a card's value lands, by the `vt` that names it. Every vt in the
+  // table is covered — a new one must be added here or the eq below fails.
+  const TARGETS = {
+    edge: (b) => b.mods.edge, atk: (b) => b.mods.atk, def: (b) => b.mods.def,
+    shield: (b) => b.shield, heal: (b) => b.mine.hp, maxhp: (b) => b.mine.max,
+    might: () => g.G.might || 0, energy: (b) => b.energy, draw: (b) => b.hand.length,
+    none: () => 0,
+  };
+  const vts = [...new Set(CARD_IDS.map((id) => CARDS[id].vt))];
+  eq(vts.filter((v) => !TARGETS[v]).join(' '), '', `every vt a card uses has somewhere to land (${vts.length} of them)`);
+
+  const fight = () => {
+    g.G.party = [g.mkMon('cindercub', 30)];
+    g.G.might = 0;
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('pebblet', 30), wild: true });
+    const b = g.B();
+    b.energy = 99;
+    b.mine.hp = Math.max(1, b.mine.max - 40);     // room for a heal to show
+    return b;
+  };
+  // Put a card in hand without disturbing the turn, and return its instance.
+  const inHand = (b, id) => {
+    const owned = g.grantCard(id);
+    const card = { src: 'deck', u: owned.u, id, bg: 0 };
+    b.hand.push(card);
+    return { card, inst: { id, plus: owned.plus || 0, bg: 0 } };
+  };
+  const numberIn = (s) => { const m = s.match(/\d+/); return m ? +m[0] : null; };
+
+  // ---- what it says is what it does, every card, both turn states ---------
+  let checked = 0;
+  for (const id of CARD_IDS) {
+    const c = CARDS[id];
+    if (c.kind === 'power' || c.vt === 'none') continue;    // no headline number to land
+    for (const already of [0, 1]) {
+      const b = fight();
+      if (already) { const t = inHand(b, 'quickstep'); g.playCard(b.hand.indexOf(t.card)); }
+      const { card, inst } = inHand(b, id);
+      const shown = numberIn(g.cardText(inst));
+      const read = TARGETS[c.vt];
+      const before = read(b);
+      g.playCard(b.hand.indexOf(card));
+      const after = read(b);
+      // draw is the one that spends the card itself out of the hand.
+      const applied = c.vt === 'draw' ? after - before + 1 : after - before;
+      ok(shown !== null, `${id} shows a number`);
+      eq(applied, shown, `${id} with ${already} played: it says ${shown} and hands over ${applied}`);
+      checked++;
+    }
+  }
+  ok(checked >= 50, `${checked} card-and-turn-state pairs driven`);
+
+  // ---- the combo clause, live and not ------------------------------------
+  const comboCards = CARD_IDS.filter((id) => CARDS[id].combo);
+  eq(comboCards.length, 3, 'three cards carry a combo');
+  for (const id of comboCards) {
+    const c = CARDS[id];
+    {
+      const b = fight();
+      const { inst } = inHand(b, id);
+      const t = g.cardText(inst);
+      ok(t.includes(`Combo +${c.combo}.`), `${id} offers its combo before you have played anything`);
+      eq(numberIn(t), g.cardValue(inst), '…and shows its base number');
+    }
+    {
+      const b = fight();
+      const q = inHand(b, 'quickstep'); g.playCard(b.hand.indexOf(q.card));
+      const { inst } = inHand(b, id);
+      const t = g.cardText(inst);
+      ok(!t.includes(`Combo +${c.combo}.`), `${id} stops offering the combo once it is already counted`);
+      ok(t.includes('It follows through.'), '…and says so in the words the log uses');
+      eq(numberIn(t), g.cardValue(inst) + c.combo, `…with the combo in the number (${g.cardValue(inst) + c.combo})`);
+    }
+  }
+  // Out of a fight there is no turn, so the plain promise stands.
+  {
+    g.G.battle = null;
+    for (const id of comboCards) {
+      const owned = g.grantCard(id);
+      const t = g.cardText({ id, plus: owned.plus || 0, bg: 0 });
+      ok(t.includes(`Combo +${CARDS[id].combo}.`), `${id} on the deck screen still offers its combo`);
+    }
+  }
+
+  // ---- and the half that was already right: chain, in the cost ------------
+  const chainCards = CARD_IDS.filter((id) => CARDS[id].chain);
+  ok(chainCards.length >= 4, `${chainCards.length} cards carry a chain`);
+  for (const id of chainCards) {
+    const c = CARDS[id];
+    const b = fight();
+    for (let played = 0; played <= 3; played++) {
+      const { card } = inHand(b, id);
+      eq(g.cardCost(card), Math.max(0, c.cost - c.chain * played),
+        `${id} costs ${Math.max(0, c.cost - c.chain * played)} with ${played} played`);
+      b.hand.pop();
+      const q = inHand(b, 'quickstep'); g.playCard(b.hand.indexOf(q.card));
+    }
+  }
+
+  // ---- every number a card's SENTENCE states is a number its FIELDS hold --
+  // Thirty-three of them across the table, every one a hand-copy of the card's
+  // own data. None had drifted; a drift is now caught the day it is written.
+  let copies = 0;
+  for (const id of CARD_IDS) {
+    const c = CARDS[id];
+    const fx = c.fx || {};
+    const claims = [];
+    if (fx.heal) claims.push(['heal', fx.heal]);
+    if (fx.def) claims.push(['take N less', fx.def]);
+    if (fx.thorns) claims.push(['attackers take N', fx.thorns]);
+    if (fx.energy) claims.push(['gain N energy', fx.energy]);
+    if (fx.draw) claims.push(['draw N', fx.draw]);
+    if (fx.atk) claims.push(['every attack +N', fx.atk]);
+    if (fx.st) claims.push([`${fx.st[0]} chance`, Math.round(fx.st[1] * 100)]);
+    if (c.combo) claims.push(['combo', c.combo]);
+    if (c.kill) claims.push(['on kill +N', c.kill]);
+    if (c.grow) claims.push(['permanently +N', c.grow]);
+    if (c.bgrow) claims.push(['+N more each play', c.bgrow]);
+    // The base value goes in through {v}, so take it out before reading the rest.
+    const rest = c.txt.replace('{v}', '#');
+    const nums = (rest.match(/\d+/g) || []).map(Number);
+    for (const [what, want] of claims) {
+      // A 100% chance is said as a word ("also snares"), not a number.
+      if (want === 100) continue;
+      ok(nums.includes(want), `${id} says its ${what} is ${want}, which is what the card's field holds`);
+      copies++;
+    }
+    // Nothing in the sentence that no field of the card produces, bar the
+    // handful of prose numbers the fields genuinely do not carry.
+    const made = new Set(claims.map(([, n]) => n));
+    for (const n of nums) {
+      if (made.has(n)) continue;
+      ok(['dragonheart'].includes(id), `${id} says ${n}, and that is a number one of its fields holds`);
+    }
+  }
+  ok(copies >= 28, `${copies} numbers a card states about itself, every one checked against the field`);
+
+  // Pinned by shape.
+  ok(SRC.includes("const combo = c.combo && bat && (bat.playedTurn || 0) > 0 ? c.combo : 0;"),
+    'the card reads the live turn the way cardCost does');
+  ok(SRC.includes("if (combo) said = said.replace(`Combo +${combo}.`, 'It follows through.');"),
+    'and the clause it replaces is built off the card, not matched by hand');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

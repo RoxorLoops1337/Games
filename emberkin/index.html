@@ -4205,9 +4205,22 @@ function growCard(owned, amount) {
  */
 const cardText = (inst) => {
   const c = CARDS[inst.id];
-  const said = c.txt.replace('{v}', cardValue(inst));
-  const st = (c.fx || {}).st;
   const bat = B();
+  // The other half of the same idea, and it had only ever been done once.
+  // `combo` and `chain` are the same mechanic — a bonus that switches on the
+  // moment you have played anything this turn — and cardCost has always read
+  // the live turn for chain, so a Soulfang really does drop from 2 to 1 in your
+  // hand while you watch. The value never moved. A Shieldwall sitting beside it
+  // said "Gain 14 shield" and handed over 24; Whetstone said +3 and gave 6.
+  // Same rule, shown two different ways, in the same hand.
+  const combo = c.combo && bat && (bat.playedTurn || 0) > 0 ? c.combo : 0;
+  let said = c.txt.replace('{v}', cardValue(inst) + combo);
+  // …and the clause that promised it stops promising it a second time. Built
+  // off c.combo rather than matched by hand, so a card whose combo changes
+  // keeps agreeing with itself — and it lands on the words the battle log
+  // already uses when the same card resolves.
+  if (combo) said = said.replace(`Combo +${combo}.`, 'It follows through.');
+  const st = (c.fx || {}).st;
   const there = bat && bat.foe;
   return st && there && there.types.includes(IMMUNE_TO[st[0]] || '')
     ? `${said} It shrugs that off.` : said;
