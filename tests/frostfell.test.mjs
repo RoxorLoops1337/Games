@@ -640,7 +640,7 @@ section('the newer mechanics');
   bareBattle(FF);
   const b3 = G.battle;
   dummy(FF);
-  const keep = FF.mkCard('keepsake');
+  const keep = FF.mkCard('grudge');
   b3.hand = [keep];
   eq(keep.held || 0, 0, 'a fresh card has waited for nothing');
   FF.passTurn(G); FF.drainAll();
@@ -648,13 +648,12 @@ section('the newer mechanics');
   eq(keep.held, 2, 'two turns in hand is two points');
   for (let i = 0; i < 9; i++) { FF.passTurn(G); FF.drainAll(); }
   eq(keep.held, FF.HOARD_CAP, 'and it stops climbing at the cap');
-  const before = FF.CARDS.keepsake.atk;
-  const rate = FF.CARDS.keepsake.kw.hoard;      // hoard is a rating, not a flag
-  eq(rate, 2, 'the keepsake banks two a turn');
-  const u = FF.mkUnit(keep, 'p', 1, 1);
-  eq(u.atk, before + FF.HOARD_CAP * rate, 'what it hoarded is on the board with it');
+  const rate = FF.CARDS.grudge.kw.hoard;        // hoard is a rating, not a flag
+  eq(rate, 1, 'an old grudge banks one a turn');
+  eq(FF.hoardOf(keep), FF.HOARD_CAP * rate, 'what it hoarded goes with it');
   b3.hand = [keep];
-  FF.playCard(G, 0, { lane: 1, col: 1 });
+  dummy(FF);
+  FF.playCard(G, 0, FF.enemyUnits(G)[0]);      // gear now, so it is thrown rather than set down
   eq(keep.held, 0, 'and playing it spends the hoard');
 
   // gear hoards too
@@ -764,9 +763,13 @@ section('the collection');
   const items = FF2.collectionItems();
   const ids = items.map((i) => i.id);
   let missing = [];
-  for (const c of Object.values(FF2.CARDS)) if (ids.indexOf(c.id) < 0) missing.push(c.id);
+  // …every card the player can ever OWN, that is. A Handful of Snow belongs to
+  // one room, cannot be drafted, bought or kept, and listing it made the tally
+  // read 58 of 68 for a collection nobody could ever complete.
+  for (const c of Object.values(FF2.CARDS)) if (!c.noPool && ids.indexOf(c.id) < 0) missing.push(c.id);
   for (const id of Object.keys(FF2.CHARMS)) if (ids.indexOf(id) < 0) missing.push(id);
-  eq(missing.join(','), '', 'every card and charm in the game has a place in the collection');
+  eq(missing.join(','), '', 'every card and charm the player can own has a place in the collection');
+  eq(ids.indexOf('snowhandful'), -1, 'and the one that belongs to a room is not on the shelf');
   eq(ids.length, new Set(ids).size, 'and none of them is listed twice');
   ok(items.filter((i) => i.kind === 'leader').length >= 4, 'there are four leaders to find');
 
@@ -1654,11 +1657,8 @@ section('a bell she alone has');
 section('hoard is a rating now');
 {
   const FFf = loadGame({});
-  eq(FFf.CARDS.keepsake.kw.hoard, 2, 'a keepsake banks two a turn');
-  eq(FFf.CARDS.grudge.kw.hoard, 1, 'an old grudge banks one');
-  const k = FFf.mkCard('keepsake');
-  k.held = 3;
-  eq(FFf.hoardOf(k), 6, 'three turns held is six points on a keepsake');
+  eq(FFf.CARDS.grudge.kw.hoard, 1, 'an old grudge banks one a turn');
+  eq(FFf.CARDS.keepsake, undefined, 'and the keepsake is gone — four rounds at the bottom, two buffs');
   const g2 = FFf.mkCard('grudge');
   g2.held = 3;
   eq(FFf.hoardOf(g2), 3, 'and three on a grudge');
@@ -1715,13 +1715,26 @@ section('intent survives a fast front row');
   ok(!!back.plot, 'until it is one turn out');
 }
 
-section('a keepsake worth waiting for');
+section('a body with a reason to stand at the front');
 {
   const FFc = loadGame({});
-  const d = FFc.CARDS.keepsake;
-  eq(d.kw.hoard, 2, 'it still banks two a turn');
-  ok(d.hp >= 10, 'and it now has the health to survive arriving');
-  ok(d.cnt <= 2, 'and the counter to cash in before the fight is over');
+  const d = FFc.CARDS.bulwark;
+  ok(!!d, 'the keepsake is replaced rather than buffed a third time');
+  eq(d.kw.vanguard, 1, 'and what replaces it is built around the front column');
+
+  // Vanguard is Frenzy that only happens where it is dangerous to stand
+  bareBattle(FFc, 'hearth', 501);
+  const b = FFc.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  const foe = place(FFc, 'e', 'snapfrost', 0, 0, { unit: { hp: 400, maxHp: 400, atk: 0, cnt: 99, cntMax: 99 } });
+  const back = place(FFc, 'p', 'bulwark', 0, 2, { unit: { atk: 3 } });
+  const h0 = foe.hp;
+  FFc.triggerUnit(FFc.G, back);
+  eq(h0 - foe.hp, 3, 'behind the line it swings once');
+  FFc.moveUnit(FFc.G, back, 0, 0);
+  const h1 = foe.hp;
+  FFc.triggerUnit(FFc.G, back);
+  eq(h1 - foe.hp, 6, 'and in the front column it swings twice');
 }
 
 section('every new rule has a voice');
