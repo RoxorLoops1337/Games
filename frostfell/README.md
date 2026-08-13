@@ -123,12 +123,17 @@ because every balance decision in the game came out of one of them:
 - **Shove** puts what it hits a slot further back. **Crush** hits harder for
   every other body in the target's lane, so a stacked line is a liability.
   **Hoard** grows while a card waits unplayed in your hand.
-- **The line needs room.** At the end of every turn a side with a slot to spare
-  passes warmth down the whole line — Regen 1 on everybody — and a side packed
-  into all six slots has nowhere to fall back to, so the cold gets into
-  somebody. It is one rule with two faces, and it is what makes "should I put
-  this down?" a question instead of a reflex. The board says which face you are
-  on, under your own side of the table.
+- **The line needs room, and one gap is not room.** At the end of every turn:
+
+  | | |
+  |---|---|
+  | **two or more free slots** | the line can rotate — warmth down all of it, Regen 1 on everybody |
+  | **exactly one free slot** | cramped: no warmth, but no cold either |
+  | **none free** | nowhere to fall back to, and the cold gets into somebody |
+
+  It is what makes "should I put this down?" a question instead of a reflex, and
+  the line under your own side of the table says which of the three you are on.
+  The bar used to be one gap, and [that was the problem](#the-rule-the-board-is-built-around-was-not-a-decision).
 - **Schemes.** A counter says *when*; a scheme says *what*, one turn early, in
   words on the table. A foe that lunges names the warden **and the slot it is
   standing in** — move them and it hits empty snow and loses its whole turn,
@@ -197,6 +202,32 @@ opening in the shots and reading the hints in order as a new player:
    than skipping: it waits, silently, until there is red text on the table, and
    speaks the moment there is. It is the only hint in the list that does; every
    other one describes something permanently true of the fight.
+
+Holding took three more goes than it should have, and each failure is worth
+keeping because each is a different way to get a waiting rule wrong:
+
+- **The clock was in the wrong unit.** Seconds are not shared between a player
+  thinking for thirty of them and a screenshot tool stepping the same fight in
+  four hundred milliseconds — so the thing being photographed was not the thing
+  being played, and the shot walk never once caught the hint firing. The budget
+  is **turns taken** now, counted across fights, which both of them experience
+  the same way.
+- **It deadlocked on its own completion.** `when` wanted red text on the table
+  and `done` wanted that red text resolved, so after the scheme fires both are
+  false at once and the hint held forever. Seven identical screenshots in a row
+  before it was spotted. It remembers having had its moment now.
+- **It waited for the wrong thing.** The first `done` wanted a *denial*
+  specifically, and a player who has not learned the rule yet is not going to
+  deny anything — a hint that teaches denial cannot require denial to go away.
+  It clears when the scheme resolves, landed or denied: either way the player
+  has watched the whole cycle, which is the thing being taught.
+
+**Does it teach denial now, or merely mention it?** Read in order, at 1280x720,
+it teaches: the hint arrives with `LUNGE AT SNOWPUP` in red under Chillfang and
+the target line drawn across the table to Snowpup, Snowpup is standing in the
+front column, and there is a free slot behind it to slide into. The rule, the
+instance, the named victim and the answer are all on the screen at once, and
+moving is free. That is a lesson. It was a sentence.
 
 **The ladder cannot show any of this**, and it would be dishonest to imply
 otherwise — see [which rung should
@@ -570,22 +601,82 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓███     7%
-+ the fight         ░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓███████    15%
-+ the trader        ░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█████████████    28%
-+ steering the pool ░▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████████    34%
+careless            ░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓███    7%
++ the fight         ░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓██████████   22%
++ the trader        ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓████████████████   34%
++ steering the pool ░▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█████████████████   37%
 ```
 
-**Twenty-seven points for playing well: eight from the fight, thirteen from the
-trader, six from steering the pool.**
+**Thirty points for playing well: fifteen from the fight, twelve from the
+trader, three from steering the pool.**
 
-The careless pilot reads **7%**, one under the floor it has been held at for
-three rounds. It is half a standard deviation and it is not chased — chasing
-exactly this number is the mistake this file has recorded twice — but the likely
-cause is nameable rather than mysterious: [scars](#scars-and-tending-them) are
-new, they compound over a run, and their three escapes (rest, mend, pay her) are
-all things a careless pilot never does. That is the price of giving a dead ware
-a reason, stated rather than buried.
+**The fight is the biggest rung on the ladder for the first time**, which is
+what the section below said it should be and was not. It went from +8 to +15 in
+one round, and the change that did it was not aimed at the ladder at all — it
+was [making the room rule a
+decision](#the-rule-the-board-is-built-around-was-not-a-decision). A rung is the
+sum of the questions the fight asks; the fight was short one question.
+
+**The careless floor, and what it costs.** Last round it read 7%, one under the
+floor, and named scars as the likely cause without testing it. Tested: the same
+210 runs an arm with every scar stripped as it is handed out, and the careless
+pilot reads **8%**. So the guess was right this time — scars compound over a run
+and their three escapes (rest, mend, pay her) are all things a careless pilot
+never does.
+
+**That is a price worth paying, and here is the reasoning rather than the
+verdict.** A point of careless win rate buys a rule that turns a dead button on
+the trader's counter into a service, makes Hurt a warning with something behind
+it, and gives resting a reason to exist. The pilot losing that point is a bot
+that never rests, never mends and never visits the trader — a human who does any
+one of those three does not pay it at all. It stays, and the floor is stated at
+what it actually is rather than rounded up.
+
+### The rule the board is built around was not a decision
+
+Last round, "keeping a slot in reserve" fell from +5 to 0 and the note said it
+was on the edge of readable and would get its own turned-up run. It got one:
+**750 runs an arm, band ±1.5, and the answer was exactly +0.** A measured zero,
+not a noisy one — the room rule, the rule the whole board is built around, was
+worth nothing to the pilot.
+
+The instinct is to reach for the rule's numbers. That would have been wrong,
+because a habit reads zero two ways — doing it is worth nothing, or the moment
+to do it never comes — and nothing on the instrument could tell them apart. So
+two counters went in, and they answered it in one line:
+
+```
+free slots on the player line, by share of turns:  0:3%  1:17%  2:17%  3:22%  4:24%  5:18%
+```
+
+**The line stood on a fully packed board for three per cent of turns.** Warmth
+was on for the other ninety-seven. A rule whose penalty side fires three times
+in a hundred is not a decision; it is a passive heal with a footnote, and the
+habit of avoiding the penalty is worth nothing because there is nothing to
+avoid.
+
+So the bar moved from one gap to two, and the middle became [its own
+state](#the-rules-briefly): cramped, no warmth, no cold. That takes the live
+question from three per cent of turns to twenty *without making the game
+harsher* — the state that was silently free is now merely neutral — and it puts
+a cost on the body you put down on a board of four, which is where most fights
+actually happen.
+
+It worked, and the size of it is worth being plain about:
+
+| | before | after |
+|---|---|---|
+| keeping a slot in reserve | **+0** (±1.5, n=750) | **+2** (±1.5, n=750) → **+8** (±2.8, n=210) |
+| a body held back, per deployment | 19% | 34% |
+| turns spent at two free slots | 17% | 31% |
+| the fight rung | +8 | **+15** |
+
+The two "after" readings of the habit were taken hours apart against a game that
+changed in between, and they do not overlap: **the sign is settled and the
+magnitude is not.** What is not in doubt is the second and third rows — the
+pilot changed its behaviour sharply, hugging the new threshold, which is what a
+live question looks like from the outside — and the fourth, which is the whole
+point. The fight rung nearly doubled, and it is now the biggest on the ladder.
 
 ### Which rung should matter, and a note on what this instrument cannot see
 
@@ -603,12 +694,19 @@ same means the thing a player spends ninety per cent of the run doing is worth
 the same as a button pressed once. That is the imbalance worth naming, and it is
 a different complaint from "the total is too small" — the total is fine.
 
-It is not fixed this round, and saying why is worth more than a gesture at it
-now. The fight's three surviving habits price at +5, +4 and +4 while the rung
-itself is +9, which means **they overlap**: a pilot that denies a scheme has
-usually also kept the slot that let it move. Making the fight matter more means
-finding a decision that is *not* already implied by the other three — not
-turning the existing ones up.
+**And it was fixed the round after.** The diagnosis above was that the fight's
+habits overlapped and the answer was to find a decision the others did not
+already imply — not to turn the existing ones up. That is what happened, and it
+came from the opposite direction: not by inventing a decision, but by finding
+that [one the game already had was not being
+asked](#the-rule-the-board-is-built-around-was-not-a-decision). The room rule
+was live on three per cent of turns. It is live on twenty now, and **the fight
+rung went from +8 to +15 — the biggest on the ladder for the first time.**
+
+The general lesson is worth more than the fix: before adding a decision, check
+whether the ones already written down are being *reached*. A rule with a
+condition nobody meets is indistinguishable from a rule that is not there, and
+it will not show up as a missing feature — it shows up as a habit worth zero.
 
 **And a limit of the instrument, which came up trying to answer a different
 question.** The careless rung is a bot that ignores the guide completely. So
@@ -682,9 +780,8 @@ walks past what it can███████████████        30%  
                                              13.4 cards · 2.5 tempered · 3.1 meals · 43 unspent
 ```
 
-It read **+13 for dodging** two rounds ago. It reads **−10** now — the strongest
-reading this arm has given — and the second line under each bar is why the first
-fix did not work and the second one did.
+It read **+13 for dodging** two rounds ago. It reads **−6** now, and the second
+line under each bar is why the first fix did not work and the second one did.
 
 *First attempt:* tax the difficulty curve — a caravan that had not been fighting
 loses its discount for being thin. It measured as **nothing**, and the reason is
@@ -777,29 +874,30 @@ stands**, at 300 runs an arm:
 
 ```
 IN THE FIGHT (±2.8)                    ON THE REWARD SCREEN (±2.6)
-   +10  denying schemes                   +7  declaring a course at all
-    +5  holding gear until it earns        0  buying a fresh offer
-    +1  filling the front of both lanes    0  tempering instead of taking
-     0  keeping a slot in reserve          0  picking what the deck lacks
+    +9  denying schemes                   +7  declaring a course at all
+    +8  keeping a slot in reserve          0  buying a fresh offer
+    +6  holding gear until it earns        0  tempering instead of taking
+    +6  filling the front of both lanes    0  picking what the deck lacks
      0  repositioning (removed)           -5  walking on when it wants nothing
      0  calling waves early (removed)
 ```
 
-**Scheme denial went from +4 back to +10, and for once the cause is known rather
-than guessed at.** Every opening fight now contains a schemer, put there so the
-[guide could teach denial](#what-the-guide-was-not-teaching); there is simply
-more denying to do, so doing it is worth more. That is a change made for a
-teaching reason showing up as a balance number, which is the right way round.
+**Four habits, all clear of the band, spread across three points — the
+healthiest this table has ever read.** For most of its life it has been one
+habit worth something and the rest inside the noise; scheme denial alone was
+worth +14 two rounds ago.
 
-**And keeping a slot in reserve dropped from +5 to 0 in the same round**, which
-is not explained and is not being explained away. It is 1.8 standard deviations,
-so it is on the edge of readable, and the two candidates — scars punishing a
-packed line harder, or the extra schemer changing what a spare slot is *for* —
-pull in opposite directions. It gets its own turned-up run before anything is
-done about it.
+The one that moved is **keeping a slot in reserve, 0 → +8**, which is [the room
+rule becoming a decision](#the-rule-the-board-is-built-around-was-not-a-decision).
+Two readings disagree about how much: this table says +8 at 210 runs an arm, and
+an isolated 750-run read of the same habit taken earlier the same session said
++2 at a band of ±1.5. They do not overlap, and the honest summary is that **the
+sign is settled and the magnitude is not** — somewhere between "just readable"
+and "second-biggest habit in the fight". A single-habit run against the game as
+it now stands is the first thing to do next round.
 
-And the economy: **penniless 28%, as it ships 34%, a bottomless purse 56% —
-money is worth six points.** It had read four when the only things to spend on
+And the economy: **penniless 25%, as it ships 37%, a bottomless purse 57% —
+money is worth twelve points.** It had read four when the only things to spend on
 were one-a-visit; a meal gave the purse a bottom and the number went up, which
 is what a working economy looks like.
 
@@ -872,18 +970,53 @@ a warden that goes down comes back patched rather than Hurt**, and never scars.
 
 Re-measured at 600 runs an arm: **none 36%, Cold 43%, Bodies 38%, Gear 38%,
 Scrap 35%, Hearth 33%.** Scrap is fixed — up five points and inside the field.
+(It holds: at 450 an arm a round later, with the room rule and Cold both changed
+underneath it, Scrap reads 36 against a 40 baseline.)
 
-**And Cold is the new outlier at 43%, seven clear of the next.** It is reported
-rather than tuned, and the reason is worth stating because the restraint is not
-the same as last round's. Cold did not change; the game did. The scar rule
-rewards *not taking damage*, and Cold is the damage-prevention course — the
-front of every wave arrives frozen, so it never swings, so nothing gets hurt
-twice. That is almost certainly the interaction, and tuning a course against a
-game that moved three times in the same session is how a number gets chased for
-four rounds. It is the first thing to check next round, on its own.
-(Cold has been here before: it read 41% against 22% in iteration 15 and was cut
-back from wave-wide frost to the front of the wave. The precedent for what to do
-about it already exists.)
+**Cold, settled — and the guess was wrong.** Last round left Cold at 43% with a
+written hypothesis: the new scar rule rewards not taking damage, and Cold is the
+damage-prevention course. That was testable, so it got tested — the same pilots
+on the same seeds with every scar stripped the moment it is handed out, at 450
+runs an arm:
+
+| | none | hearth | cold | scrap | bodies | gear |
+|---|---|---|---|---|---|---|
+| scars on | 40 | 35 | **44** | 36 | 36 | 39 |
+| scars off | 37 | 35 | **42** | 36 | 35 | 39 |
+
+Cold's lead does not move. **Scars are not the mechanism**, and writing the
+guess down is what made it cheap to find that out.
+
+What it actually is, is a rule this round made more valuable somewhere else.
+**Frost skips a trigger, and a foe that does not trigger does not fire the
+scheme it committed to** — so Cold is automatic scheme denial, on the front of
+every wave, for free. Scheme denial is the most valuable habit in the fight, and
+it is worth *more* than it was, because every opening now carries a schemer. A
+course that hands you the best habit in the game without asking is not a choice.
+
+So Cold is cut a second time — iteration 15 took it from wave-wide to the front
+of a wave; this takes it to the front of the **first** wave. The thing walking
+at you when the bell rings arrives cold; the reinforcements do not. Re-measured
+at 450 runs an arm:
+
+```
+none    ████████████████████  40%
+cold    █████████████████████ 41%     (was 44)
+gear    ████████████████████  39%
+scrap   ██████████████████    36%
+bodies  ██████████████████    36%
+hearth  ██████████████████    35%
+```
+
+Cold is now level with declaring nothing, and the whole field spans six points —
+which is the standard this file has been claiming and, at this sample, finally
+meeting.
+
+**Reported and not acted on: Hearth reads 35 against 40 for declaring nothing.**
+Being *worse* than declaring no course at all is a plainer failure than Cold's,
+and it is two and a half standard deviations, so it is not noise. It is not
+fixed here because two speculative course changes measured once between them
+tell you nothing about either. It is the next round's first job.
 
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,

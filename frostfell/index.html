@@ -1175,13 +1175,42 @@ function addStatus(g, u, key, n, quiet) {
     if (u.hooks.chilled) u.hooks.chilled(g, u);
   }
 }
-/* Whether a side still has somewhere to fall back to. Normally that is a free
-   slot; a caravan travelling under A Full Line keeps its warmth on a thinner
-   board, which is the whole point of declaring for bodies. */
+/* Whether a side still has somewhere to fall back to.
+
+   ONE GAP IS NOT ROOM, AND THIS IS THE ROUND THAT LEARNED IT.
+
+   The room rule is the rule the whole board is built around — a side with a
+   slot to spare warms its line, a packed side takes the cold — and "keeping a
+   slot in reserve" priced at exactly +0 for the pilot at 750 runs an arm, band
+   ±1.5. A measured zero, not a noisy one. The reason was not that the rule is
+   weak. It was that the question is almost never asked: across fifty thousand
+   deployments the line stood on a FULLY packed board for three per cent of
+   turns. Warmth was on for the other ninety-seven. A rule with a penalty side
+   that fires three times in a hundred is not a decision, it is a passive heal
+   with a footnote.
+
+   So the bar moves from one gap to two, and the middle becomes its own state:
+
+     two or more free   the line can rotate, and warmth gets round all of it
+     exactly one free   cramped — no warmth, but no cold either
+     none free          nowhere to fall back to, and the cold finds somebody
+
+   Free slots run 3% / 17% / 17% / 22% / 24% / 18% for none through five, so
+   this takes the live question from three per cent of turns to twenty, and it
+   does it without making the game harsher: the state that was silently free is
+   now merely neutral. Putting a body down costs something on a board of four,
+   which is where most fights actually happen. */
+const ROOM_NEEDED = 2;
 function hasRoom(g, side) {
-  if (freeSlots(g, side).length > 0) return true;
+  if (freeSlots(g, side).length >= ROOM_NEEDED) return true;
   const co = side === 'p' ? courseOf(g.run) : null;
   return !!(co && co.crowdproof);
+}
+/* And the cold only gets in when there is nowhere at all to go. */
+function isPacked(g, side) {
+  if (freeSlots(g, side).length > 0) return false;
+  const co = side === 'p' ? courseOf(g.run) : null;
+  return !(co && co.crowdproof);
 }
 const stat = (u, key) => u.st[key] || 0;
 function spend(u, key, n) {
@@ -1526,7 +1555,7 @@ function resolveTurn(g) {
         if (co2 && co2.keen && b.turn % (co2.keenEvery || 1) === 0) {
           for (const u of line) addStatus(g, u, 'spice', co2.keen, true);
         }
-      } else {
+      } else if (isPacked(g, side) && b.turn <= DEEP_FREEZE) {
         const victim = pick(line.filter((u) => !u.leader).concat(line));
         if (victim) {
           addStatus(g, victim, 'frost', 1);
@@ -2372,9 +2401,27 @@ const COURSES = [
      course's rule put together. It now lands on the front of the wave only,
      which is where it reads best anyway: the thing walking straight at you
      arrives cold. */
+  /* AND CUT BACK A SECOND TIME, FOR A REASON THAT ONLY BECAME TRUE THIS ROUND.
+
+     Cold read 44% against 40% for declaring no course at all, five clear of the
+     next course. Last round guessed the cause was the new scar rule — Cold
+     prevents damage, scars punish taking it — and wrote the guess down. The
+     control says the guess was WRONG: with every scar stripped the moment it is
+     handed out, Cold reads 42 against 37, the same lead. Scars are not it.
+
+     What is it is a rule this round made more valuable somewhere else. Frost
+     skips a trigger, and a foe that does not trigger does not fire the scheme
+     it committed to — so Cold is automatic scheme denial, on the front of every
+     wave, for free. Scheme denial is the most valuable habit in the fight (+10,
+     and up from +4 because every opening now carries a schemer). A course that
+     hands you the best habit in the game without asking is not a choice.
+
+     So it lands on the opening wave only. The thing walking straight at you at
+     the bell arrives cold; the reinforcements do not. */
   { id: 'frost', name: 'THE DEEP COLD', short: 'COLD', col: '#8fe3ff',
-    text: 'Frost cards on every table, and the front of every wave walks in already carrying Frost 1.',
-    match: (c) => c.tribe === 'frost', arrive: (g, u) => { if (u.col === 0) addStatus(g, u, 'frost', 1); } },
+    text: 'Frost cards on every table, and the front of the first wave walks in already carrying Frost 1.',
+    match: (c) => c.tribe === 'frost',
+    arrive: (g, u) => { if (u.col === 0 && (g.battle.waveNo || 1) <= 1) addStatus(g, u, 'frost', 1); } },
   /* SCRAP WAS GEAR, MINUS A RULE.
 
      Turned up to 600 runs an arm, Scrap read 30% and Gear 37% against a 34%
@@ -5190,12 +5237,16 @@ function drawBattle(c, t) {
     // A column label was tried here and cut: the ×2 on the counter of whatever
     // is standing there says it where it matters, and the band above the board
     // belongs to whatever banner is up.
-    const room = hasRoom(g, side);
+    // Three states now, and the middle one has to read as a warning rather
+    // than as either of the other two, because it is the new decision: the
+    // board is still safe, but it has stopped paying.
+    const room = hasRoom(g, side), packed = isPacked(g, side);
     if (sideUnits(g, side).length) {
       c.save();
       c.globalAlpha = room ? 0.6 : 0.95;
-      txt(c, room ? 'ROOM TO FALL BACK' : 'NO ROOM — THE COLD GETS IN',
-        x0 + wid / 2, boardB + 15, 11.5, room ? '#8fe0a0' : '#8fe3ff', 'center', 't');
+      txt(c, room ? 'ROOM TO FALL BACK' : packed ? 'NO ROOM — THE COLD GETS IN' : 'CRAMPED — NO WARMTH',
+        x0 + wid / 2, boardB + 15, 11.5,
+        room ? '#8fe0a0' : packed ? '#8fe3ff' : '#ffd166', 'center', 't');
       c.restore();
     }
   }
@@ -6056,11 +6107,18 @@ const TUTORIAL = [
      hand you the tools and a hint you cannot clear is a hint you resent. */
   { id: 'scheme', text: 'Red text under a foe is what it does NEXT turn. Kill it, freeze it, or take away what it needs, and it wastes the turn.',
     hold: true,
+    /* Shown while there is red text on the table and cleared when that red text
+       RESOLVES — denied or landed, either way the player has now watched the
+       whole cycle, which is the thing being taught. Waiting for a denial
+       specifically was the first version and it left the hint up for seven
+       screenshots in a row: a player who has not learned the rule yet is not
+       going to deny anything, so the hint that teaches denial cannot require
+       denial to go away. */
     when: (g) => g.battle.units.some((u) => u.side === 'e' && u.alive && u.plot),
-    done: (g) => (g.battle.denied || 0) > 0 || g.battle.turn >= 12 },
-  { id: 'room', text: 'Keep one slot empty and the whole line mends every turn. Fill all six and the cold gets into somebody.',
+    done: (g) => !g.battle.units.some((u) => u.side === 'e' && u.alive && u.plot) },
+  { id: 'room', text: 'Keep TWO slots empty and the whole line mends every turn. One is cramped — no warmth. None at all and the cold gets in.',
     when: (g) => playerUnits(g).length >= 2,
-    done: (g) => freeSlots(g, 'p').length > 0 && g.battle.turn >= 3 },
+    done: (g) => freeSlots(g, 'p').length >= ROOM_NEEDED && g.battle.turn >= 3 },
   { id: 'order', text: 'Tap ORDER to number the board. Every foe resolves before every warden, front of the table first.',
     done: () => UI.order },
   { id: 'inspect', text: 'Tap anything — a card, a warden, a foe — and the game tells you exactly what it does.',
@@ -6071,11 +6129,10 @@ const TUTORIAL = [
     when: (g) => g.battle.waves && g.battle.waves.length, done: (g) => (g.battle.waveNo || 1) >= 2 },
 ];
 
-/* How long a held hint waits for its moment before giving up on it, in seconds
-   of fight. Deliberately generous — a schemer commits to something every two or
-   three turns, so at any human pace this is never reached; what it is for is
-   the fight where the schemer died in the first exchange. */
-const HOLD_GIVEUP = 45;
+/* How many turns a held hint waits for its moment before giving up on it.
+   Generous: a schemer commits to something every two or three turns, so this is
+   only reached by a fight where the schemer died in the first exchange. */
+const HOLD_GIVEUP = 12;
 function tutStep(g, dt) {
   const t = g.tut;
   if (!t || t.over) return;
@@ -6096,19 +6153,37 @@ function tutStep(g, dt) {
        with the log already reading "Chillfang lunges at Bramblewick for 6" —
        the rule explained immediately after the player lost to it. */
     if (h.when && !h.when(g)) {
-      /* …but not forever. A fight that never lays one — because the schemer
-         died first, or the fight ended — has to let the guide move on, or a
-         held hint becomes a stuck one. The clock is time spent waiting rather
-         than turns elapsed, because waiting can span two fights and a turn
-         count starts over at the bell. */
-      if (h.hold && (t.holdT || 0) < HOLD_GIVEUP) {
-        t.holdT = (t.holdT || 0) + dt;
+      /* Once it HAS had its moment, stop asking. This hint's `when` wants red
+         text on the table and its `done` wants that red text resolved, so after
+         the scheme fires both are false at once — and a hint that holds on a
+         condition its own completion destroys is a hint that holds forever.
+         That deadlock cost seven identical screenshots before it was spotted. */
+      if (h.hold && t.shown) break;
+      /* …and not forever the first time either. A fight that never lays one —
+         because the schemer died in the opening exchange — has to let the guide
+         move on, or a held hint becomes a stuck one.
+
+         The budget is TURNS TAKEN, not seconds waited. Seconds were the first
+         attempt and they are the wrong unit for the same reason frames would
+         be: they are not shared between the people who experience this. A
+         player thinking for thirty seconds and a screenshot tool stepping the
+         same fight in four hundred milliseconds have to get the same number of
+         chances at seeing it, or the thing that gets photographed is not the
+         thing that gets played. Counted across fights, because waiting can
+         outlast one and a battle's own turn count starts over at the bell. */
+      if (h.hold && (t.holdN || 0) < HOLD_GIVEUP) {
+        if (t.holdTurn !== g.battle.turn || t.holdBattle !== g.battle) {
+          t.holdN = (t.holdN || 0) + 1;
+          t.holdTurn = g.battle.turn;
+          t.holdBattle = g.battle;
+        }
         t.hold = true;
         return;
       }
-      t.i++; t.t = 0; t.holdT = 0; continue;
+      t.i++; t.t = 0; t.holdN = 0; t.shown = false; continue;
     }
-    t.holdT = 0;
+    t.holdN = 0;
+    t.shown = true;
     break;
   }
   if (t.i >= TUTORIAL.length) { finishTutorial(g); return; }
@@ -6116,6 +6191,7 @@ function tutStep(g, dt) {
   if (t.t > TUT_DWELL && h.done(g)) {
     t.i++;
     t.t = 0;
+    t.shown = false;
     t.flash = 1;
     sfx('page');
     if (t.i >= TUTORIAL.length) finishTutorial(g);
@@ -6170,7 +6246,7 @@ const HELP_PAGES = ['THE FIGHT', 'THE BOARD', 'STATUSES', 'KEYWORDS'];
    expected to answer rather than merely obey. */
 const HELP_BOARD = [
   ['The line needs room', '#8fe0a0',
-   'At the end of every turn, a side with a spare slot passes warmth down the whole line: Regen 1 on everybody. A side packed into all six slots has nowhere to fall back to, and the cold gets into one of them: Frost 1, and that one loses its next trigger. Your side of the table says which of the two you are on.'],
+   'At the end of every turn, a side with TWO free slots passes warmth down the whole line: Regen 1 on everybody. A side down to one free slot is cramped — no warmth, but no cold either. A side packed into all six has nowhere to fall back to, and the cold gets into one of them: Frost 1, and that one loses its next trigger. The line under your board says which of the three you are on.'],
   ['Room is not free', '#8fe0a0',
    'So the last slot is a real decision. A body on the board is a body on the board — but it costs the whole line its mending, and it costs you the room to step out of the way of something.'],
   ['Foes scheme', '#ff9aa5',
@@ -7688,6 +7764,7 @@ window.FF = {
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
+  hasRoom, isPacked, ROOM_NEEDED,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,

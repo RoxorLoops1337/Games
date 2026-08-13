@@ -232,6 +232,7 @@ function carefulItem(card) {
    than guess at what to add, this switches each of the careful pilot's fight
    habits off one at a time and re-runs the sweep: whatever the pilot can stop
    doing without losing win rate was never a decision in the first place. */
+const ROOM = { plays: 0, declined: 0, packed: 0, spare: 0, free: [], efree: [] };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
@@ -243,6 +244,17 @@ const HABITS = [
 ];
 
 function carefulTurn() {
+  if (G.battle && !G.battle.over) {
+    const free = FF.freeSlots(G, 'p').length;
+    if (free) ROOM.spare++; else ROOM.packed++;
+    ROOM.free[Math.min(6, free)] = (ROOM.free[Math.min(6, free)] || 0) + 1;
+    /* AND THE OTHER SIDE OF THE TABLE, which the first cut of this forgot to
+       look at. The room rule is symmetric — it has always applied to the foes
+       too — so moving the bar from one gap to two changes the fight for
+       whichever line is fuller, and it is not the player's. */
+    const ef = FF.freeSlots(G, 'e').length;
+    ROOM.efree[Math.min(6, ef)] = (ROOM.efree[Math.min(6, ef)] || 0) + 1;
+  }
   const b = G.battle;
 
   /* Read what the foes have said they will do, and take it away — all of it
@@ -336,9 +348,19 @@ function carefulTurn() {
   ready.sort((a, z) => (banked(z) * (z.c.held || 0)) - (banked(a) * (a.c.held || 0)));
   const ui = ready.length ? ready[0].i : (units.length && standing < 3 ? units[0].i : -1);
   if (ui >= 0) {
-    const last = FF.freeSlots(G, 'p').length <= 1;
+    // the decision point moved with the rule: with ROOM_NEEDED free slots, one
+    // more body is the one that costs the line its warmth
+    const last = FF.freeSlots(G, 'p').length <= FF.ROOM_NEEDED;
     const thin = FF.playerUnits(G).length <= 2;
     const pressed = FF.enemyUnits(G).reduce((n, f) => n + (f.cnt <= 1 ? f.atk : 0), 0) >= 6;
+    /* HOW OFTEN THE QUESTION IS EVEN ASKED.
+
+       "Keeping a slot in reserve" priced at exactly +0 at 750 runs an arm, band
+       ±1.5 — a measured zero rather than a noisy one. But a habit can read zero
+       two ways: because doing it is worth nothing, or because the moment to do
+       it never comes. These two counters tell them apart, and nothing else can. */
+    ROOM.plays++;
+    if (last && !thin && !pressed) ROOM.declined++;
     if (!SKILL.keepSlot || !last || thin || pressed) {
       /* And "place bodies where they will be hit" priced at minus four against
          simply filling the nearest free slot, across two rewrites of the
@@ -524,6 +546,26 @@ function settleChoosers() {
    is nearest; `tactics` plays the fight well but still drafts off the left of
    the reward screen; `careful` does both. Splitting them is what turned an
    unreadable zero into an answer: see the note over draftPick. */
+/* SCARS OFF, AS A CONTROL.
+
+   Last round gave the scar rule a reason to exist and named it as the likely
+   cause of two things — the careless pilot losing a point and Cold running away
+   with the course table — without testing either. This is the test: the same
+   pilots on the same seeds, with every scar wiped the moment it is handed out,
+   so the only difference between the two samples is that one rule.
+
+   Done here rather than behind a flag in the game, because a difficulty knob
+   that exists only for the instrument is a knob that eventually ships. */
+const NO_SCARS = !!process.env.FF_NOSCARS;
+function stripScars(run) {
+  if (!run) return;
+  for (const c of run.deck.concat([run.leader])) {
+    if (!c.charms.some((id) => FF.SCARS[id])) continue;
+    c.charms = c.charms.filter((id) => !FF.SCARS[id]);
+    FF.rebuildCard(c);
+  }
+}
+
 function playRun(tribe, seed, mode, tweak) {
   // A cumulative ladder: each pilot is the one above it plus one more thing it
   // knows how to do, so the difference between two rows is that one thing.
@@ -545,6 +587,7 @@ function playRun(tribe, seed, mode, tweak) {
         .map(([k, v]) => k + ' ' + v).join('+') + (G.UI && G.UI.choose ? ' chooser-open' : '');
     }
     stat.screens[G.screen] = (stat.screens[G.screen] || 0) + 1;
+    if (NO_SCARS) stripScars(G.run);
     if (G.screen === 'victory') {
       stat.won = true;
       stat.endPower = FF.caravanPower(G.run); stat.fought = G.run.fights || 0;
@@ -1054,8 +1097,13 @@ section('does walking past a fight pay');
   /* The bar. Dodging may be survivable — a run that ducks two hard packs and
      scrapes home is a story — but it may not be the BETTER line, because a
      trail that pays you to avoid it is a trail nobody has a reason to walk. */
-  ok(dodge.pct <= seek.pct + Number(band),
-    `walking past fights is not the winning line (${dodge.pct}% dodging vs ${seek.pct}% fighting)`);
+  /* Two standard deviations, not one — the same confidence every other claim in
+     this suite is stated at. At the sample `npm run check` runs (24 an arm, band
+     ±9.7) a one-sigma gate fails about one run in six on noise alone, which is a
+     gate that cries wolf rather than one that catches a regression. At the real
+     sample the tolerance is six points and dodging reads −6, so it still bites. */
+  ok(dodge.pct <= seek.pct + Number(band) * 2,
+    `walking past fights is not the winning line (${dodge.pct}% dodging vs ${seek.pct}% fighting, band ±${band})`);
   /* And the part a win rate cannot show, stated as what is actually true rather
      than as what was hoped for. A dodger does NOT arrive thin: everything it
      walks towards instead of a fight — a camp, a rest, a cache — builds a
@@ -1083,6 +1131,12 @@ section('which parts of playing well are worth anything');
      only thing running. */
   const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || 8);
   if (process.env.FF_ABLATE) console.log(`    (turned up: ${3 * N} runs an arm)`);
+  /* FF_HABIT names ONE habit and prices only that one, which is what it takes
+     to get a single number's band under two points inside a session. Ablating
+     all six at a sample that tight costs six times as much and answers five
+     questions nobody asked. */
+  const ONLY = process.env.FF_HABIT || '';
+  if (ONLY) console.log(`    (only "${ONLY}", ${3 * N} runs an arm)`);
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep3 = () => {
     let wins = 0, runs = 0;
@@ -1096,6 +1150,7 @@ section('which parts of playing well are worth anything');
   console.log(`    the fight, played well:  ${all}%`);
   const rows = [];
   for (const [key, label] of HABITS) {
+    if (ONLY && key !== ONLY) continue;
     SKILL[key] = false;
     const without = sweep3();
     SKILL[key] = true;
@@ -1108,6 +1163,18 @@ section('which parts of playing well are worth anything');
     console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
   }
   console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
+  {
+    const tot = ROOM.free.reduce((n, v) => n + (v || 0), 0) || 1;
+    console.log('    free slots on the player line, by share of turns: ' +
+      ROOM.free.map((v, i) => i + ':' + Math.round(((v || 0) / tot) * 100) + '%').join(' '));
+    const et = ROOM.efree.reduce((n, v) => n + (v || 0), 0) || 1;
+    console.log('    free slots on the foes\' line:                    ' +
+      ROOM.efree.map((v, i) => i + ':' + Math.round(((v || 0) / et) * 100) + '%').join(' '));
+  }
+  console.log(`    the room rule, in practice: the line stood on a packed board for ` +
+    `${Math.round((ROOM.packed / Math.max(1, ROOM.packed + ROOM.spare)) * 100)}% of turns · ` +
+    `a body was held back on ${ROOM.declined} of ${ROOM.plays} deployments ` +
+    `(${Math.round((ROOM.declined / Math.max(1, ROOM.plays)) * 100)}%)`);
   ok(true, 'the ablation is a report, not a gate');
 }
 
