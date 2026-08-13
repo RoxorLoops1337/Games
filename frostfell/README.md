@@ -224,14 +224,32 @@ hit, a wall, mending, and a lean deck. The worst of them is named in a sentence
 on the trail, on the reward screen and at the trader, so nobody has to lose a
 run to find out what was missing.
 
-### The trader
+### Tempering, and where to find it
 
-Five services, and the important one is **temper**: +2 attack and +3 health on a
-card of your choice, and the deck stays exactly the size it was. That matters
-more than it sounds. Money that can only buy *cards* measured **worse than no
-money at all**, because every purchase was one more card between the caravan
-and the card it wanted. Money that can buy strength without size is worth about
-eleven points of win rate.
+**Temper** puts +2 attack and +3 health on a card of your choice and leaves the
+deck exactly the size it was. It is the strongest thing in the run, and it lives
+in **three places at three prices**:
+
+- **the trader** takes scrip for it, once a visit
+- **a camp** will work the fire instead of mending anybody that night
+- **a reward screen** will do it in place of the card you were going to take
+
+A caravan can carry **four tempered cards** and no more — the fire only does so
+much. The cap is what makes three doors a question of *when* and *what it costs*
+rather than simply four times the power; without it a competent pilot went
+straight to a 67% win rate.
+
+This started as one service at one node, and that was a single point of failure
+wearing a decision's coat: miss the shop on a map of nine and lose the run. It
+was worth fourteen points of win rate on its own. Spread across three doors it
+is worth two, and being penniless is survivable — which is the fix, and the cost
+of the fix, stated together.
+
+Buying a card at the trader also **lets you leave one on the counter**. Without
+that, a purchase was a trap for three iterations running: a penniless caravan
+beat a well-funded one by nine points, because every card bought was one more
+card between the deck and the card it wanted. A sale that trades up instead of
+bulking out is the version that was always intended.
 
 ## Beasts
 
@@ -239,6 +257,15 @@ Each one turns over at half health, once, and fights differently afterwards.
 Mother Glacier calves and comes apart into shardlings, the White Stag stops
 circling and starts running, the Hollow King's crown cracks, the Weeper stops
 weeping, the Kettle Titan's boiler goes, and the Last Winter deepens.
+
+**The Kettle Titan** is the one the probe has an opinion about. It stokes: every
+trigger it gains an attack and keeps it, and attached to Barrage that made the
+fight a timer rather than a fight — it was landing three of every five deaths in
+the last zone, the same way every time, whatever the player did. The stoking now
+stops at +6, the number is drawn on the beast as **HEAT**, and **frost vents the
+boiler** and takes all of it back at once. A beast that gets stronger every turn
+is frightening; a beast that gets stronger every turn and cannot be answered is
+a difficulty setting.
 
 ## Endings
 
@@ -276,25 +303,33 @@ thing and nothing else:
 At **210 runs a rung** (`FF_RUNS=70`, about two and a half minutes):
 
 ```
-careless:            36/210 won (17%) · 143/71  reached zone 2/3 · died 67/72/35 by zone
-+ the fight:         50/210 won (24%) · 170/108 reached zone 2/3 · died 40/62/58 by zone
-+ the trader:        79/210 won (38%) · 178/123 reached zone 2/3 · died 32/55/44 by zone
-+ steering the pool: 78/210 won (37%) · 189/133 reached zone 2/3 · died 21/56/55 by zone
+careless:            20/210 won (10%) · 124/55  reached zone 2/3 · died 86/69/35 by zone
++ the fight:         46/210 won (22%) · 160/91  reached zone 2/3 · died 50/69/45 by zone
++ the trader:        62/210 won (30%) · 173/115 reached zone 2/3 · died 37/58/53 by zone
++ steering the pool: 93/210 won (44%) · 195/154 reached zone 2/3 · died 15/41/61 by zone
 ```
 
-**Twenty points for playing well: seven from the fight, fourteen from the
-trader, none from steering the pool.** And the economy, measured the same way:
-penniless 28%, as it ships 37%, bottomless purse 41% — money is worth nine
-points. Each course, handed over rather than declared, against a 36% baseline
-with no course at all: Hearth 40%, Cold 40%, Bodies 37%, Scrap 36%, Gear 35%.
+**Thirty-four points for playing well: twelve from the fight, eight from the
+trader, fourteen from steering the pool.** The economy, measured the same way:
+penniless 44%, as it ships 44%, bottomless purse 48%. Each course, handed over
+rather than declared, against a 42% baseline with none: Cold 53%, Hearth 48%,
+Bodies 47%, Scrap 44%, Gear 43%.
+
+The suite also prints **what ends a good run in the last zone**, aggregated by
+name across every death — the run always remembered the blow that took the
+leader, it just never counted them. One death is an anecdote; two hundred is a
+design note, and it was: one beast was landing three late deaths in five.
 
 Three things worth saying plainly about that table.
 
-**The trader is where the run is decided**, and it only became so this round.
-Before temper existed, money bought cards, cards made the deck bigger, and a
-bigger deck drew worse — an unlimited purse measured *worse* than an empty one.
-A bottomless purse is still not the best row, and should not be: spending badly
-has to cost you, or the shop is a tax on patience rather than a decision.
+**The gap is no longer concentrated in one node.** For one iteration the trader
+was worth fourteen points on its own, which reads as a working economy and is
+actually a single point of failure: one shop node on a map of nine deciding the
+run. Tempering now lives at a camp and on the reward screen as well, so a broke
+caravan still has roads to strength — and the price of that is that money is
+worth about nothing on its own. Both halves of that are the same fix, and the
+suite is held to the *total* gap rather than to any one rung, because the rungs
+move whenever the doors do.
 
 **Steering the pool measures at nothing**, and that is the honest headline. No
 course at all wins 36%; the five courses land between 35% and 40%, against a
