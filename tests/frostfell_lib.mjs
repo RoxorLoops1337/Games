@@ -92,6 +92,11 @@ export function place(FF, side, defId, lane, col, patch) {
   Object.assign(card, patch && patch.card ? patch.card : {});
   const u = FF.mkUnit(card, side, lane, col);
   Object.assign(u, patch && patch.unit ? patch.unit : {});
+  // A suite that hands a unit more health than it can hold is describing a
+  // state the game never produces — and anything that heals will clamp it
+  // straight back down, which reads as mystery damage. Raise the ceiling to
+  // match whatever the fixture asked for.
+  if (u.hp > u.maxHp) u.maxHp = u.hp;
   FF.G.battle.units.push(u);
   return u;
 }

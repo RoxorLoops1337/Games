@@ -88,10 +88,13 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await shot(page, '02-help-fight', 'rulebook: the fight');
   await page.evaluate(() => window.FF.press('helpPage', 1));
   await settle(page, 4);
-  await shot(page, '03-help-status', 'rulebook: statuses');
+  await shot(page, '03-help-board', 'rulebook: room and schemes');
   await page.evaluate(() => window.FF.press('helpPage', 2));
   await settle(page, 4);
-  await shot(page, '04-help-keyword', 'rulebook: keywords');
+  await shot(page, '04-help-status', 'rulebook: statuses');
+  await page.evaluate(() => window.FF.press('helpPage', 3));
+  await settle(page, 4);
+  await shot(page, '04b-help-keyword', 'rulebook: keywords');
   await page.evaluate(() => window.FF.press('helpClose'));
 
   // the collection

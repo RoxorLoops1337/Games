@@ -156,6 +156,13 @@ function carefulItem(card) {
       else if (/HAUL/.test(x.tag)) control += 1;
     }
     if (card.def === 'hush') control += 2;      // frost AND weak on one target
+    // breaking a scheme is worth what the scheme was going to cost, and only
+    // one card in the deck breaks one outright — the rest can merely delay it
+    if (f.plot) {
+      const cost = f.plot.id === 'mark' ? f.atk * 1.2 : 3;
+      if (card.def === 'coldread') control += cost;
+      else if (p.some((x) => /FROST/.test(x.tag || ''))) control += cost * 0.4;
+    }
     const score = kills * 7 + dmg * 0.4 + control + soon - waste * 2;
     if (score > bestScore) { bestScore = score; best = f; }
   }
@@ -163,6 +170,28 @@ function carefulItem(card) {
 }
 function carefulTurn() {
   const b = G.battle;
+
+  /* Read what the foes have said they will do, and take it away — all of it
+     with free moves, so a pilot that looks at the board pays nothing for it.
+     A pilot that does not look eats a double lunge and a frozen lane. */
+  for (const f of FF.enemyUnits(G)) {
+    const p = f.plot;
+    if (!p) continue;
+    if (p.id === 'mark') {
+      const t = FF.playerUnits(G).find((x) => x.uid === p.uid);
+      if (!t || t.lane !== p.lane || t.col !== p.col) continue;
+      // vacate the named slot and leave it empty — a swap only feeds it a
+      // different body
+      const spot = FF.freeSlots(G, 'p')[0];
+      if (spot) FF.moveUnit(G, t, spot.lane, spot.col);
+    } else if (p.id === 'chill') {
+      const caught = FF.playerUnits(G).filter((x) => x.lane === p.lane);
+      const room = FF.freeSlots(G, 'p').filter((s) => s.lane !== p.lane);
+      if (caught.length && caught.length <= room.length) {
+        caught.forEach((t, i) => FF.moveUnit(G, t, room[i].lane, room[i].col));
+      }
+    }
+  }
 
   // free actions first: nothing about them costs a turn
   for (const u of FF.playerUnits(G)) {
@@ -188,10 +217,20 @@ function carefulTurn() {
   // careless bot never makes, because it always reaches for a warden first
   if (bestI >= 0 && bestW >= 6 && FF.playCard(G, bestI, bestT)) return;
 
+  /* Filling the last slot costs the whole line its warmth and hands somebody
+     frostbite, and it takes away the room to step out of a lunge. A pilot
+     that reads the board keeps one slot back unless the body is worth more
+     than the room — which it is when the line is thin or something big is
+     about to land. */
   const ui = b.hand.findIndex((c) => c.type === 'unit');
   if (ui >= 0) {
-    const slot = carefulSlot(b.hand[ui]);
-    if (slot && FF.playCard(G, ui, slot)) return;
+    const last = FF.freeSlots(G, 'p').length <= 1;
+    const thin = FF.playerUnits(G).length <= 2;
+    const pressed = FF.enemyUnits(G).reduce((n, f) => n + (f.cnt <= 1 ? f.atk : 0), 0) >= 6;
+    if (!last || thin || pressed) {
+      const slot = carefulSlot(b.hand[ui]);
+      if (slot && FF.playCard(G, ui, slot)) return;
+    }
   }
   if (bestI >= 0 && FF.playCard(G, bestI, bestT)) return;
 
@@ -202,6 +241,35 @@ function carefulTurn() {
 
   if (b.bell >= FF.BELL_CHARGE || !b.hand.length) { FF.ringBell(G); return; }
   FF.passTurn(G);
+}
+
+/* Building the caravan, rather than taking whatever is on the left.
+
+   This exists to answer a question the win rates raised and could not settle:
+   the careful pilot survives the first zone far more often than the careless
+   one and still wins no more runs, which points at the DRAFT deciding the run
+   rather than the fight. Give the careful pilot a real opinion about which of
+   the three cards to take, and if the gap opens, that was the cause. */
+function draftPick(ids) {
+  const deck = G.run.deck;
+  const bodies = deck.filter((cd) => cd.type === 'unit').length;
+  let bestI = 0, bestS = -1e9;
+  ids.forEach((id, i) => {
+    const d = FF.CARDS[id];
+    if (!d) return;
+    let s = (d.rare || 1) * 2;
+    if (d.type === 'unit') {
+      // what a body is worth is damage per turn plus what it can survive
+      s += (d.atk || 0) / Math.max(1, d.cnt || 1) * 3 + (d.hp || 0) * 0.25;
+      if (bodies < 5) s += 4;                      // a caravan short of bodies needs bodies
+      if (d.tribe && d.tribe === G.run.tribe) s += 1.5;
+    } else {
+      s += 5;                                      // gear is a turn that does something
+      if (d.target === 'none') s += 1;
+    }
+    if (s > bestS) { bestS = s; bestI = i; }
+  });
+  return bestI;
 }
 
 /* Some choices open a chooser, and a couple of them open a second one behind
@@ -216,14 +284,22 @@ function settleChoosers() {
   FF.UI.choose = null;
 }
 
-function playRun(tribe, seed, careful) {
+/* Three pilots, not two. `careless` takes what is leftmost and swings at what
+   is nearest; `tactics` plays the fight well but still drafts off the left of
+   the reward screen; `careful` does both. Splitting them is what turned an
+   unreadable zero into an answer: see the note over draftPick. */
+function playRun(tribe, seed, mode) {
+  const careful = mode !== 'careless';
+  const drafts = mode === 'careful';
   FF.newRun(G, tribe, seed);
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
   let guard = 0;
   while (guard++ < 3000) {
     stat.screens[G.screen] = (stat.screens[G.screen] || 0) + 1;
     if (G.screen === 'victory') { stat.won = true; break; }
-    if (G.screen === 'gameover') break;
+    // Where a run ends is as much the measure as whether it ends: a game whose
+    // deaths all pile up in one zone has one wall in it, not three.
+    if (G.screen === 'gameover') { stat.diedZone = G.run ? G.run.zone : 0; break; }
     stat.zone = Math.max(stat.zone, G.run ? G.run.zone : 0);
     if (G.screen === 'trail') {
       const step = G.run.trail[G.run.step];
@@ -236,7 +312,7 @@ function playRun(tribe, seed, careful) {
       if (G.battle.turn > 160) return Object.assign(stat, { stuck: true });
     } else if (G.screen === 'reward') {
       const r = G.ui.reward;
-      if (r.cards.length && !r.taken) FF.press('reward', 0);
+      if (r.cards.length && !r.taken) FF.press('reward', drafts ? draftPick(r.cards) : 0);
       else if (r.charms.length && !r.charmTaken) { FF.press('rewardCharm', 0); settleChoosers(); }
       else if (r.bells && r.bells.length && !r.bellTaken) FF.press('rewardBell', 0);
       else FF.press('rewardSkip');
@@ -285,18 +361,20 @@ section('whole runs, start to finish');
   // is noise, and pretending otherwise would be worse than not measuring.
   const N = Number(process.env.FF_RUNS || 8);
   const tribes = ['hearth', 'frost', 'scrap'];
-  const sweep = (careful) => {
+  const sweep = (mode) => {
     let thrown = null;
-    const out = { wins: 0, stuck: 0, reachedTwo: 0, turns: 0, battles: 0, runs: 0 };
+    const out = { wins: 0, stuck: 0, reachedTwo: 0, reachedThree: 0, turns: 0, battles: 0, runs: 0, died: [0, 0, 0] };
     for (const tribe of tribes) {
       for (let i = 0; i < N; i++) {
         let s;
-        try { s = playRun(tribe, 1000 + i * 37, careful); }
+        try { s = playRun(tribe, 1000 + i * 37, mode); }
         catch (e) { thrown = tribe + '/' + i + ': ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e); break; }
         out.runs++;
         if (s.won) out.wins++;
         if (s.stuck) out.stuck++;
         if (s.zone >= 1) out.reachedTwo++;
+        if (s.zone >= 2) out.reachedThree++;
+        if (!s.won && s.diedZone !== undefined) out.died[Math.min(2, s.diedZone)]++;
         out.turns += s.turns;
         out.battles += s.battles;
       }
@@ -306,21 +384,25 @@ section('whole runs, start to finish');
     return out;
   };
 
-  const careless = sweep(false);
-  const careful = sweep(true);
+  const careless = sweep('careless');
+  const tactics = sweep('tactics');
+  const careful = sweep('careful');
   eq(careless.thrown, null, 'no careless run throws');
+  eq(tactics.thrown, null, 'no tactics-only run throws');
   eq(careful.thrown, null, 'no careful run throws');
   eq(careless.runs, tribes.length * N, 'every careless run finished one way or the other');
   eq(careful.runs, tribes.length * N, 'and so did every careful one');
-  eq(careless.stuck + careful.stuck, 0, 'no fight goes round forever');
+  eq(careless.stuck + tactics.stuck + careful.stuck, 0, 'no fight goes round forever');
   ok(careless.battles > careless.runs, 'runs contain more than one fight');
 
   const pct = (o) => Math.round((o.wins / Math.max(1, o.runs)) * 100);
-  console.log(`    careless: ${careless.wins}/${careless.runs} won (${pct(careless)}%) · ` +
-    `${careless.reachedTwo} reached zone 2 · ${(careless.turns / Math.max(1, careless.battles)).toFixed(1)} turns/fight`);
-  console.log(`    careful:  ${careful.wins}/${careful.runs} won (${pct(careful)}%) · ` +
-    `${careful.reachedTwo} reached zone 2 · ${(careful.turns / Math.max(1, careful.battles)).toFixed(1)} turns/fight`);
-  console.log(`    the gap:  ${pct(careful) - pct(careless)} points of win rate for playing well`);
+  const line = (o) => `${o.wins}/${o.runs} won (${pct(o)}%) · ${o.reachedTwo}/${o.reachedThree} reached zone 2/3 · ` +
+    `died ${o.died.join('/')} by zone · ${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns/fight`;
+  console.log(`    careless:      ${line(careless)}`);
+  console.log(`    fight only:    ${line(tactics)}`);
+  console.log(`    fight + draft: ${line(careful)}`);
+  console.log(`    the gap:  ${pct(careful) - pct(careless)} points for playing well — ` +
+    `${pct(tactics) - pct(careless)} of it from the fight, ${pct(careful) - pct(tactics)} from the draft`);
 
   // Neither end may collapse: a walkover for the careless pilot means nothing
   // in the game asks anything, and a careful pilot who never wins means the

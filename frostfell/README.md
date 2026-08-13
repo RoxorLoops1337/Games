@@ -54,6 +54,20 @@ anything hanging off the stage, and anything hiding under a notch.
 - **Shove** puts what it hits a slot further back. **Crush** hits harder for
   every other body in the target's lane, so a stacked line is a liability.
   **Hoard** grows while a card waits unplayed in your hand.
+- **The line needs room.** At the end of every turn a side with a slot to spare
+  passes warmth down the whole line — Regen 1 on everybody — and a side packed
+  into all six slots has nowhere to fall back to, so the cold gets into
+  somebody. It is one rule with two faces, and it is what makes "should I put
+  this down?" a question instead of a reflex. The board says which face you are
+  on, under your own side of the table.
+- **Schemes.** A counter says *when*; a scheme says *what*, one turn early, in
+  words on the table. A foe that lunges names the warden **and the slot it is
+  standing in** — move them and it hits empty snow and loses its whole turn,
+  leave somebody else there and that body takes an ordinary blow instead of a
+  double one. One that calls the pack needs a free slot on its own side to put
+  the new body in. One that breathes on a lane needs a warden still in that
+  lane. Every scheme can be taken away, and every way of taking it away is
+  free: moving is not your action for the turn.
 
 ## Beyond one run
 
@@ -91,12 +105,15 @@ still for a moment opens it to read instead of costing you the drag.
 
 ## Reading a fight
 
-Anything one tick from going off draws a line to what it will hit, and the
-single unit that resolves first wears a NEXT tag — faint by default, bright
+Anything one tick from going off draws a line to what it will hit — at the
+warden it has *named*, if it named one — and the single unit that resolves
+first wears a NEXT tag — faint by default, bright
 while ORDER is held open. Dragging a piece of gear writes what it would do on
 the things it would do it to, with a cross over anything the hit would kill;
 the numbers come from the same table the card text does, so the preview and the
-effect cannot disagree. A short account of the last few things that happened
+effect cannot disagree. A foe that has committed to a scheme flies a ribbon
+saying so, in the band outside its own lane, until it fires or somebody takes
+it away. A short account of the last few things that happened
 runs down the left. The deck and the used pile are stacks you can tap and read
 — sorted by name, because the draw order is not yours to see.
 
@@ -199,19 +216,38 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 The suites run headless against the real functions through `window.FF` — there
 is no second implementation of the rules to drift from.
 
-`frostfell_run` is the balance instrument, and it plays every run twice: once
-with a careless pilot that deploys whatever is leftmost and throws gear at the
-nearest thing, and once with a careful one that repositions, pulls a wounded
-warden out of the front line, spends gear only when the gear earns the turn,
-rings for a wave while its own board is set, and does not waste gear on
-something the line was already going to kill first.
+`frostfell_run` is the balance instrument, and it plays every run three times,
+by three pilots:
 
-**The gap between their win rates is the number that says whether playing well
-is worth anything.** It runs about four to eight points, and the honest caveat
-is that at the suite's eight seeds a tribe the whole spread is two or three
-runs wide — which is noise. `FF_RUNS=25 node tests/frostfell_run.test.mjs`
-turns the same instrument up to seventy-five runs a pilot when the question is
-"is this gap real" rather than "does this still run".
+- **careless** — deploys whatever is leftmost, throws gear at the nearest
+  thing, takes the leftmost card off every reward screen.
+- **fight only** — plays the board properly: repositions, denies every scheme
+  it can read, pulls a wounded warden out of the front line, keeps a slot in
+  reserve, spends gear only when the gear earns the turn, rings for a wave
+  while its own board is set. Still drafts off the left of the reward screen.
+- **fight + draft** — all of that, plus an actual opinion about which of the
+  three cards to take.
+
+**The gaps between their win rates are the numbers that say what the game is
+asking of the player**, and the split is the finding. At seventy-five runs a
+pilot (`FF_RUNS=25 node tests/frostfell_run.test.mjs`):
+
+```
+careless:      16/75 won (21%) · 50/30 reached zone 2/3 · died 25/20/14 by zone
+fight only:    16/75 won (21%) · 65/39 reached zone 2/3 · died 10/26/23 by zone
+fight + draft: 27/75 won (36%) · 65/43 reached zone 2/3 · died 10/22/16 by zone
+```
+
+Playing the fight well is worth **fifteen fewer first-zone deaths and zero
+points of win rate**. Drafting well is worth **fifteen points**. Tactics buy
+survival; the deck buys the run. That is not the shape anybody set out to
+build, and it is the honest reading of the instrument: by the last zone the
+fight is a check on what you drafted, and no amount of board play rescues a
+caravan that took the leftmost card six times.
+
+Eight seeds a tribe is the default, and at eight the whole spread is two or
+three runs wide — noise. The skill-ordering assertion is only enforced at
+`FF_RUNS>=20` for exactly that reason.
 
 It also reports which cards actually get played. A card that is carried around
 a whole run and never found a moment is the card's fault, and the suite fails

@@ -116,6 +116,24 @@ section('overlays');
   ok(!!FF.UI.choose, 'a chooser opens');
   frame(2); drew('the chooser draws');
   FF.UI.choose = null;
+
+  /* A board with intent on it: the ribbons hang outside the slabs, in a band
+     nothing else uses, and every scheme in the game must be able to write its
+     own sentence there without the draw falling over. */
+  bareBattle(FF, 'frost', 41);
+  G.battle.units = G.battle.units.filter((u) => u.leader);
+  dummy(FF);
+  place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 20 } });
+  place(FF, 'p', 'snowpup', 1, 0, { unit: { hp: 20 } });
+  const schemers = [['frostwolf', 0, 1], ['drift', 1, 1], ['packmother', 0, 2]];
+  for (const [id, lane, col] of schemers) {
+    const f = place(FF, 'e', id, lane, col, { unit: { cnt: 2, cntMax: 2 } });
+    FF.layPlot(G, f);
+    ok(!!f.plot, id + ' commits to something');
+  }
+  G.screen = 'battle';
+  frame(3); drew('a board with three schemes on it draws');
+  eq(Object.keys(FF.SCHEMES).length, 3, 'and every scheme in the game was on it');
 }
 
 /* ------------------------------------------------------------ the whole cast */

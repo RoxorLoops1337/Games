@@ -493,6 +493,22 @@ def({ id: 'hookline', name: 'Hook Line', type: 'item', tribe: 'scrap', rare: 2, 
     for (let i = 0; i < COLS; i++) if (!shoveUnit(g, back, -1)) break;
   } });
 
+/* The one card in the deck that asks you to wait for it. Frost 1 is never a
+   wasted turn, so it is not a dead draw — but held for the turn a foe commits
+   to something, it takes the scheme, the swing and six health at once. Its
+   text says what it is for; the board says when. */
+def({ id: 'coldread', name: 'Cold Read', type: 'item', tribe: null, rare: 2, target: 'enemy',
+  art: { kind: 'eye', col: '#8fffc4' }, text: 'Frost 1. If it is scheming, break the scheme and deal 6.',
+  effect: (g, t) => {
+    addStatus(g, t, 'frost', 1);
+    if (!t.plot) return;
+    const p = t.plot;
+    t.plot = null;
+    hurt(g, t, 6, null);
+    fx.pop(t, 'READ', '#8fffc4');
+    logLine(g, 'cold read: ' + p.label.toLowerCase() + ' — broken', '#8fffc4');
+  } });
+
 def({ id: 'avalanche', name: 'Avalanche', type: 'item', tribe: 'frost', rare: 3, target: 'enemy',
   art: { kind: 'burst', col: '#cfe4ff' }, text: 'Deal 3 to every foe in that lane, and 2 more for each of them past the first.',
   effect: (g, t) => {
@@ -527,6 +543,7 @@ const PREVIEW = {
   tinderjar:  (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'EMBER 2' })),
   coldsnap:   (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'FROST 1' })),
   hush:       (g, t) => [{ u: t, dmg: 0, tag: 'FROST 3' }],
+  coldread:   (g, t) => [{ u: t, dmg: t && t.plot ? 6 : 0, tag: t && t.plot ? 'BREAK THE SCHEME' : 'FROST 1' }],
   hookline:   (g, t) => laneOf(g, 'e', t.lane).map((f) => ({ u: f, dmg: 0, tag: 'HAUL' })),
   stew:       (g, t) => [{ u: t, dmg: -6, tag: 'MEND 6' }],
   patchkit:   (g, t) => [{ u: t, dmg: -3, tag: 'SHELL 3' }],
@@ -605,6 +622,68 @@ const SCARS = {
   dulled:  { id: 'dulled',  name: 'Dulled',  col: '#7f8db0', text: '-1 attack.',     apply: (c) => { c.atk = Math.max(0, c.atk - 1); } },
 };
 
+/* -- what a foe means to do next ------------------------------------------ */
+/* A counter says WHEN something happens. A scheme says WHAT, a turn before it
+   lands, in words on the table — and every one of them can be taken off the
+   foe by somebody who reads it and moves first. That is the difference
+   between a fight you watch resolve and a fight you play.
+     `lay` runs the moment the foe is one tick out, and freezes the details it
+   is committing to. `fire` runs when the counter lands and returns false if
+   the player has since made it impossible; a scheme marked `solo` IS the
+   foe's swing, so denying one costs the foe its whole turn. */
+const SCHEMES = {
+  /* It picks a warden, by name, and the slot that warden is standing in.
+     Deny it by moving them — moving is free, but it wants a slot to move
+     into, so this rule and the room rule pull on the same rope. */
+  mark: {
+    id: 'mark', col: '#ff9aa5', solo: true,
+    lay: (g, u) => {
+      const t = targetFor(g, u);
+      return t ? { uid: t.uid, lane: t.lane, col: t.col, label: 'LUNGE AT ' + t.name.toUpperCase() } : null;
+    },
+    fire: (g, u, p) => {
+      // It committed to a warden AND to the slot that warden was standing in.
+      // Still there: the full lunge. Somebody else standing there: an ordinary
+      // blow, because a body is a body. Nobody there at all: empty snow.
+      const t = units(g).find((x) => x.uid === p.uid && x.alive);
+      const held = t && t.lane === p.lane && t.col === p.col;
+      const standing = held ? t : unitAt(g, other(u.side), p.lane, p.col);
+      if (!standing) return false;
+      fx.lunge(u, standing);
+      sfx('swing');
+      const dealt = hurt(g, standing, (held ? u.atk * 2 : u.atk) + stat(u, 'spice'), u);
+      logLine(g, u.name + (held ? ' lunges at ' : ' finds ') + standing.name + ' for ' + dealt, '#ffb0b0');
+      return true;
+    },
+  },
+  /* One more body on their side of the table. Deny it by leaving them no slot
+     to put it in — which means not clearing their back line this turn, and is
+     the one moment in the game where killing something is the wrong play. */
+  gather: {
+    id: 'gather', col: '#ffd166',
+    lay: (g, u) => ({ label: 'CALL THE PACK' , call: u.call || 'mitewing' }),
+    fire: (g, u, p) => {
+      if (!freeSlots(g, u.side).length) return false;
+      summon(g, p.call, 1);
+      logLine(g, u.name + ' calls the pack', '#ffd166');
+      return true;
+    },
+  },
+  /* A whole lane iced at once. Deny it by emptying the lane it named — two
+     free moves, or one if you were only holding it with one warden. */
+  chill: {
+    id: 'chill', col: '#8fe3ff',
+    lay: (g, u) => ({ lane: u.lane, label: 'BREATHE ON THE ' + (u.lane === 0 ? 'TOP' : 'LOWER') + ' LANE' }),
+    fire: (g, u, p) => {
+      const line = laneOf(g, other(u.side), p.lane);
+      if (!line.length) return false;
+      for (const t of line) addStatus(g, t, 'frost', 1);
+      logLine(g, u.name + ' breathes across the lane', '#8fe3ff');
+      return true;
+    },
+  },
+};
+
 /* -- the bestiary --------------------------------------------------------- */
 const FOES = {};
 const foe = (o) => { o.foe = true; o.type = 'unit'; FOES[o.id] = o; return o; };
@@ -616,10 +695,10 @@ foe({ id: 'iciclebat', name: 'Icicle Bat', hp: 5, atk: 2, cnt: 1, tier: 1,
   kw: { aimless: 1 }, text: 'Aimless.' });
 foe({ id: 'drift', name: 'Drift', hp: 12, atk: 2, cnt: 3, tier: 1,
   art: A('#cfe4f5', '#ffffff', { stance:'root',tail:'none',mark:'none', skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', evil: 1 }),
-  kw: { soak: 1 }, text: 'Soak.' });
+  kw: { soak: 1 }, scheme: 'chill', text: 'Soak. It takes a breath a turn before it lets it out.' });
 foe({ id: 'frostwolf', name: 'Frostwolf', hp: 11, atk: 4, cnt: 3, tier: 2,
   art: A('#7fa8c8', '#d8ecff', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#40607f', evil: 1 }),
-  kw: {}, text: 'Its bite leaves Frost 1.',
+  kw: {}, scheme: 'mark', text: 'Its bite leaves Frost 1. It picks its warden a turn ahead.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'frost', 1) } });
 foe({ id: 'shardling', name: 'Shardling', hp: 6, atk: 3, cnt: 2, tier: 2,
   art: A('#a8d8ff', '#eaf7ff', { stance:'float',tail:'none',mark:'icicles', skin:'ice',idle:'shiver', shape: 'small', ears: 'shard', mouth: 'none', eyes: 'slit', evil: 1 }),
@@ -633,14 +712,14 @@ foe({ id: 'wailer', name: 'Wailer', hp: 9, atk: 2, cnt: 2, tier: 2,
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
 foe({ id: 'glutton', name: 'Glutton', hp: 20, atk: 5, cnt: 5, tier: 3,
   art: A('#7f7f9f', '#c8c8e0', { stance:'squat',tail:'stub',mark:'freckles', skin:'fur',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'trap', eyes: 'big', evil: 1 }),
-  kw: { barrage: 1 }, text: 'Barrage.' });
+  kw: { barrage: 1 }, scheme: 'mark', text: 'Barrage. It picks its warden a turn ahead.' });
 foe({ id: 'rimeknight', name: 'Rime Knight', hp: 18, atk: 5, cnt: 4, tier: 3,
   art: A('#8fa8c8', '#dfeaff', { stance:'stand',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'sway',acc:'plating',accCol:'#bcdcf4', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Shell 5.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 5) } });
 foe({ id: 'stormcaller', name: 'Stormcaller', hp: 14, atk: 3, cnt: 3, tier: 3,
   art: A('#a8b8e8', '#dfe8ff', { stance:'stand',tail:'plume',mark:'monocle',arms:'long', skin:'ice',idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', acc: 'staff', accCol: '#6f8fd0', evil: 1 }),
-  kw: { longshot: 1 }, text: 'When it triggers, Slow 1 on a warden.',
+  kw: { longshot: 1 }, scheme: 'chill', text: 'Longshot. When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 
 foe({ id: 'mitewing', name: 'Mitewing', hp: 4, atk: 2, cnt: 1, tier: 1,
@@ -648,20 +727,21 @@ foe({ id: 'mitewing', name: 'Mitewing', hp: 4, atk: 2, cnt: 1, tier: 1,
   kw: { aimless: 1 }, text: 'Aimless.' });
 foe({ id: 'snowlump', name: 'Snowlump', hp: 15, atk: 1, cnt: 4, tier: 1,
   art: A('#e0ecf8', '#ffffff', { stance:'root',tail:'none',mark:'icicles', skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
-  kw: { soak: 1 }, text: 'Soak.' });
+  kw: { soak: 1 }, scheme: 'chill', text: 'Soak. It takes a breath a turn before it lets it out.' });
 foe({ id: 'hoarcrow', name: 'Hoarcrow', hp: 8, atk: 3, cnt: 2, tier: 2,
   art: A('#5f6a80', '#a8b4c8', { stance:'stand',tail:'none',mark:'scar',arms:'stub', idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot.' });
 foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
   art: A('#6f96b8', '#cfe4f5', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
-  kw: {}, text: 'Its bite leaves Weak 1.',
+  kw: {}, scheme: 'mark', text: 'Its bite leaves Weak 1. It picks its warden a turn ahead.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
 foe({ id: 'bruiser', name: 'Bruiser', hp: 13, atk: 3, cnt: 3, tier: 2,
   art: A('#7a8296', '#c4ccd8', { stance:'squat',tail:'stub',mark:'brand', skin:'fur',idle:'paw', shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
   kw: { shove: 1 }, text: 'Shove. It puts your line where it wants it.' });
 foe({ id: 'packmother', name: 'Packmother', hp: 18, atk: 3, cnt: 4, tier: 3,
   art: A('#6f7f9f', '#cdd8ec', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'breathe', shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
-  kw: { crush: 2 }, text: 'Crush 2. It hits a crowded lane hardest.' });
+  kw: { crush: 2 }, scheme: 'gather', call: 'mitewing',
+  text: 'Crush 2. It hits a crowded lane hardest, and it whistles for more.' });
 
 foe({ id: 'frostwyrm', name: 'Frostwyrm', hp: 22, atk: 6, cnt: 5, tier: 3,
   art: A('#7fb0d8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
@@ -678,7 +758,8 @@ foe({ id: 'mothergla', name: 'Mother Glacier', hp: 46, atk: 5, cnt: 4, tier: 4, 
   phase: { name: 'SHE CALVES', text: 'the ice comes off her in pieces',
     apply: (g, u) => { u.kw.frenzy = (u.kw.frenzy || 0) + 1; summon(g, 'shardling', 2); } },
   art: A('#9fd8ff', '#ffffff', { stance:'root',tail:'none',mark:'icicles', skin:'ice',idle:'breathe',acc:'plating',accCol:'#dff0ff', shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
-  kw: { barrage: 1, soak: 1 }, text: 'Barrage. Soak. When it triggers, Frost 1 on a warden.',
+  kw: { barrage: 1, soak: 1 }, scheme: 'gather', call: 'shardling',
+  text: 'Barrage. Soak. When it triggers, Frost 1 on a warden, and she whistles for the ice.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'frost', 1); } } });
 foe({ id: 'hollowking', name: 'The Hollow King', hp: 78, atk: 7, cnt: 4, tier: 5, boss: true,
   phase: { name: 'THE CROWN CRACKS', text: 'what is under it does not need the crown',
@@ -697,7 +778,8 @@ foe({ id: 'whitestag', name: 'The White Stag', hp: 42, atk: 5, cnt: 3, tier: 4, 
   phase: { name: 'IT BOLTS', text: 'it stops circling and starts running',
     apply: (g, u) => { u.cntMax = Math.max(1, u.cntMax - 1); u.cnt = 1; addStatus(g, u, 'swift', 2); } },
   art: A('#e8f2ff', '#ffffff', { stance:'quad',tail:'plume',mark:'tuft', skin:'fur',idle:'sway', shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
-  kw: { aimless: 1, frenzy: 1 }, text: 'Aimless. Frenzy 1. When it triggers, Slow 1 on a warden.',
+  kw: { aimless: 1, frenzy: 1 }, scheme: 'mark',
+  text: 'Aimless. Frenzy 1. It chooses where it is going a turn before it goes.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 foe({ id: 'weeper', name: 'The Weeper', hp: 70, atk: 5, cnt: 3, tier: 5, boss: true,
   phase: { name: 'IT STOPS WEEPING', text: 'and starts taking it out on the line',
@@ -865,6 +947,7 @@ function mkUnit(card, side, lane, col) {
     atk: Math.max(0, Math.round(card.atk * inj)) + (card.kw && card.kw.hoard ? Math.min(HOARD_CAP, card.held || 0) : 0),
     cntMax: card.cnt, cnt: card.cnt,
     st: {}, kw: Object.assign({}, card.kw), hooks: (d && d.hooks) || {},
+    scheme: (d && d.scheme) || null, call: (d && d.call) || null, plot: null,
     art: card.art, leader: !!card.leader, boss: !!(d && d.boss),
     alive: true,
     // presentation only
@@ -982,11 +1065,14 @@ function clearBeats() { Q.items.length = 0; Q.wait = 0; }
 const beatsBusy = () => Q.items.length > 0 || Q.wait > 0;
 
 /* ------------------------------------------------------------- statuses -- */
-function addStatus(g, u, key, n) {
+function addStatus(g, u, key, n, quiet) {
   if (!u || !u.alive || !n) return;
   u.st[key] = (u.st[key] || 0) + n;
   if (u.st[key] <= 0) delete u.st[key];
-  fx.pop(u, cap(STATUS[key] ? STATUS[key].name : key) + ' ' + n, STATUS[key] ? STATUS[key].col : C.snow);
+  // `quiet` is for what happens to everybody every turn. A floater over each of
+  // six units, every turn of the fight, buries the board under its own caption
+  // — the pip on the slab and the label over the table already say it.
+  if (!quiet) fx.pop(u, cap(STATUS[key] ? STATUS[key].name : key) + ' ' + n, STATUS[key] ? STATUS[key].col : C.snow);
   if (key === 'frost') {
     // Glacierling and friends listen for a foe going cold.
     for (const a of sideUnits(g, u.side === 'p' ? 'e' : 'p')) if (a.hooks.frosted) a.hooks.frosted(g, a, u);
@@ -1119,8 +1205,39 @@ function logLine(g, text, col) {
 /* A trigger is the whole event: the card's ability fires AND it swings, and
    Frenzy repeats the pair. Nothing on a card ever happens because it was
    played — it happens because it triggered. */
+/* Commit a foe to something specific, now, so the board can say it out loud
+   before it happens. Only foes scheme — the player's intent is whatever they
+   are about to do with their hand. */
+function layPlot(g, u) {
+  if (!u || !u.alive || u.side !== 'e' || u.plot || !u.scheme) return;
+  const sc = SCHEMES[u.scheme];
+  if (!sc) return;
+  const p = sc.lay(g, u);
+  if (!p) return;
+  p.id = sc.id;
+  u.plot = p;
+  u.plotT = 1;
+}
+
 function triggerUnit(g, u) {
   if (!u || !u.alive) return;
+  /* A scheme comes due before anything else the unit does, and it is checked
+     against the board as it stands now, not as it stood when the scheme was
+     laid. Everything the player did in between is the point. */
+  const plot = u.plot;
+  u.plot = null;
+  if (plot) {
+    const sc = SCHEMES[plot.id];
+    const fired = sc && sc.fire(g, u, plot);
+    if (!fired) {
+      fx.pop(u, 'DENIED', '#8fffc4');
+      fx.burst(u, '#8fffc4', 10);
+      logLine(g, plot.label.toLowerCase() + ' — denied', '#8fffc4');
+    }
+    // A scheme that IS the swing spends the whole trigger either way: read it
+    // and take it away, and the foe has thrown its turn at empty snow.
+    if (sc && sc.solo) { spend(u, 'spice'); spend(u, 'weak'); return; }
+  }
   // Nothing in front of it? It goes looking. Clearing a lane buys you a turn
   // of quiet, not a foe that stands there for the rest of the fight.
   if (!laneOf(g, other(u.side), u.lane).length && shuffleToward(g, u)) return;
@@ -1206,6 +1323,9 @@ function tickCounter(g, u, n, natural) {
   if (natural && stat(u, 'slow') > 0) { spend(u, 'slow', 1); fx.pop(u, 'SLOW', STATUS.slow.col); return false; }
   u.cnt = Math.max(0, u.cnt - ticks);
   u.tick = 0.75;
+  // One tick out is where intent belongs: far enough ahead to answer, close
+  // enough that the answer is this turn's action rather than a vague worry.
+  if (u.cnt === 1) layPlot(g, u);
   if (u.cnt > 0) return false;
   u.cnt = u.cntMax;
   u.tick = 1;
@@ -1236,6 +1356,31 @@ function resolveTurn(g) {
   // Anything still in hand at the end of the turn has waited another turn.
   beat(0.01, () => {
     for (const c of b.hand) if (c.kw && c.kw.hoard) c.held = Math.min(HOARD_CAP, (c.held || 0) + 1);
+  });
+
+  /* THE LINE NEEDS ROOM.
+
+     One rule with two faces, and the reason a board is not simply "deploy
+     everything you draw". A side with a slot to spare can rotate, and warmth
+     gets round the whole line; a side packed into every slot has nowhere to
+     fall back to, and the cold finds somebody. It makes the question "should I
+     put this down?" a question, which is what the fight was missing. */
+  beat(0.16, () => {
+    if (b.over) return;
+    for (const side of ['p', 'e']) {
+      const line = sideUnits(g, side);
+      if (!line.length) continue;
+      const room = freeSlots(g, side).length > 0;
+      if (room) {
+        for (const u of line) addStatus(g, u, 'regen', 1, true);
+      } else {
+        const victim = pick(line.filter((u) => !u.leader).concat(line));
+        if (victim) {
+          addStatus(g, victim, 'frost', 1);
+          if (side === 'p') logLine(g, 'no room to fall back — the cold gets into ' + victim.name, '#8fe3ff');
+        }
+      }
+    }
   });
 
   /* End of turn: burns bite, mending mends, both fade. */
@@ -3291,7 +3436,11 @@ const RARE_COL = { 1: '#8fa6c4', 2: '#6fd8ff', 3: '#ffd166' };
 function statPip(c, x, y, r, col, val, icon) {
   c.beginPath(); c.arc(x, y, r, 0, TAU);
   inked(c, col, 3, C.ink);
-  txt(c, String(val), x, y + 1, r * 1.5, '#12203a', 'center', 'd', 0);
+  // A two-digit health at the one-digit size hangs off the rim and reads as a
+  // letter. Shrink the number to fit the circle instead of the other way round.
+  const n = String(val);
+  const sz = r * (n.length >= 3 ? 0.95 : n.length === 2 ? 1.16 : 1.5);
+  txt(c, n, x, y + 1, sz, '#12203a', 'center', 'd', 0);
 }
 /* Statuses run left to right along the slab's own strip. Four fit; a fifth is
    counted rather than drawn, because a unit you cannot see is worse than a
@@ -3714,6 +3863,18 @@ function drawItemIcon(c, art, x, y, s, t) {
     c.restore();
     c.beginPath(); rr(c, -s * 0.2, -s * 0.28, s * 0.4, s * 0.56, s * 0.1);
     inked(c, col, lw, C.ink);
+  } else if (kind === 'eye') {
+    // an open eye, because the card is about seeing it coming
+    c.beginPath();
+    c.moveTo(-s * 0.46, 0);
+    c.quadraticCurveTo(0, -s * 0.4, s * 0.46, 0);
+    c.quadraticCurveTo(0, s * 0.4, -s * 0.46, 0);
+    c.closePath();
+    inked(c, '#f4fbff', lw, C.ink);
+    c.beginPath(); c.arc(0, 0, s * 0.17, 0, TAU);
+    inked(c, col, lw * 0.8, C.ink);
+    c.beginPath(); c.arc(-s * 0.05, -s * 0.05, s * 0.05, 0, TAU);
+    c.fillStyle = '#ffffff'; c.fill();
   }
   c.restore();
 }
@@ -4211,9 +4372,21 @@ function drawBattle(c, t) {
       }
     }
     c.restore();
-    // which end of the table this is
-    txt(c, side === 'p' ? 'YOUR SIDE' : 'THEIR SIDE', x0 + wid / 2, boardB + 13, 11,
-      side === 'p' ? '#7fa8d8' : '#c98a9e', 'center', 't');
+    /* Which end of the table this is, and whether it has room to rotate — the
+       one rule that prices every deployment, said on the same line as the
+       label it belongs to. On its own line above the board it fought with
+       whatever banner was up; down here nothing else ever sits. */
+    const room = freeSlots(g, side).length > 0;
+    const has = sideUnits(g, side).length > 0;
+    const who = side === 'p' ? 'YOUR SIDE' : 'THEIR SIDE';
+    txt(c, who, x0 + wid / 2, boardB + 13, 11, side === 'p' ? '#7fa8d8' : '#c98a9e', 'center', 't');
+    if (has) {
+      c.save();
+      c.globalAlpha = room ? 0.65 : 0.95;
+      txt(c, room ? 'ROOM TO FALL BACK' : 'NO ROOM — THE COLD GETS IN',
+        x0 + wid / 2, boardB + 27, 11, room ? '#8fe0a0' : '#8fe3ff', 'center', 't');
+      c.restore();
+    }
   }
 
   // the lane divider, so two lanes read as two lanes at a glance
@@ -4284,7 +4457,10 @@ function drawBattle(c, t) {
   for (const u of units(g)) {
     if (!u.alive || u.cnt > 1) continue;
     if (stat(u, 'frost') > 0 || stat(u, 'slow') > 0) continue;
-    const tgt = targetFor(g, u);
+    // A foe that has named somebody points at the somebody, not at whatever
+    // its ordinary targeting would find.
+    const named = u.plot && u.plot.uid ? units(g).find((x) => x.uid === u.plot.uid && x.alive) : null;
+    const tgt = named || targetFor(g, u);
     if (!tgt) continue;
     const mine = u.side === 'p';
     c.save();
@@ -4308,6 +4484,35 @@ function drawBattle(c, t) {
     c.closePath();
     c.fillStyle = mine ? '#9fe0ff' : '#ff9aa5';
     c.fill();
+    c.restore();
+  }
+
+  /* Intent, in words, on the outward side of the lane — above the top row and
+     below the bottom one, which is the only band on the table that belongs to
+     nothing else. A foe that means to do something specific says so here, and
+     goes on saying it for as long as it still means to. */
+  for (const u of units(g)) {
+    if (!u.alive || !u.plot) continue;
+    const sc = SCHEMES[u.plot.id];
+    const col = (sc && sc.col) || '#ff9aa5';
+    const label = u.plot.label;
+    const sp = slotPos(u.side, u.lane, u.col);
+    const ry = u.lane === 0 ? sp.y - SLOT_H / 2 - 19 : sp.y + SLOT_H / 2 + 2;
+    const rw = Math.min(SLOT_W + 34, 30 + label.length * 6.2);
+    const rx = sp.x - rw / 2;
+    c.save();
+    c.globalAlpha = 0.86 + Math.sin(t * 5 + u.bob) * 0.14;
+    panel(c, rx, ry, rw, 17, 6, '#1a1020', col);
+    txt(c, label, sp.x, ry + 8.5, 10, col, 'center', 'm');
+    c.restore();
+    // a nick in the ribbon pointing at the creature that means it
+    c.save();
+    c.fillStyle = col;
+    c.beginPath();
+    const ny = u.lane === 0 ? ry + 17 : ry;
+    const dir = u.lane === 0 ? 1 : -1;
+    c.moveTo(sp.x - 6, ny); c.lineTo(sp.x + 6, ny); c.lineTo(sp.x, ny + dir * 6);
+    c.closePath(); c.fill();
     c.restore();
   }
 
@@ -4565,7 +4770,12 @@ function drawHand(c, t) {
     c.globalAlpha = 0.3; c.fillStyle = '#000';
     c.beginPath(); c.ellipse(d.x, d.y + CARD_H * 0.34, CARD_W * 0.42, 14, 0, 0, TAU); c.fill();
     c.restore();
-    drawCard(c, d.card, d.x - CARD_W / 2, d.y - CARD_H / 2 - 26, CARD_W, CARD_H,
+    /* The held card rides ABOVE the pointer, clear of it, not centred on it:
+       on a phone the pointer is a thumb, and a card centred under the thumb
+       covers both the thumb and the thing being aimed at. Clamped so it never
+       climbs off the top of the stage. */
+    const cy = Math.max(CARD_H * 0.58 + 8, d.y - CARD_H * 0.62);
+    drawCard(c, d.card, d.x - CARD_W / 2, cy - CARD_H / 2, CARD_W, CARD_H,
       { t, scale: 1.12, rot: Math.sin(t * 5) * 0.025 });
   }
 }
@@ -4970,7 +5180,22 @@ function drawTutorial(c, t) {
 
 /* ---------------------------------------------------------------- help --- */
 
-const HELP_PAGES = ['THE FIGHT', 'STATUSES', 'KEYWORDS'];
+const HELP_PAGES = ['THE FIGHT', 'THE BOARD', 'STATUSES', 'KEYWORDS'];
+/* The two rules that make a turn a decision rather than a routine. They get a
+   page of their own because they are the only rules in the game the player is
+   expected to answer rather than merely obey. */
+const HELP_BOARD = [
+  ['The line needs room', '#8fe0a0',
+   'At the end of every turn, a side with a spare slot passes warmth down the whole line: Regen 1 on everybody. A side packed into all six slots has nowhere to fall back to, and the cold gets into one of them: Frost 1, and that one loses its next trigger. Your side of the table says which of the two you are on.'],
+  ['Room is not free', '#8fe0a0',
+   'So the last slot is a real decision. A body on the board is a body on the board — but it costs the whole line its mending, and it costs you the room to step out of the way of something.'],
+  ['Foes scheme', '#ff9aa5',
+   'A counter tells you when. A scheme tells you what, one turn early, on a ribbon beside the creature. It is not a warning you sit through: every one of them can be taken away, and taking it away costs you nothing, because sliding a warden is free.'],
+  ['Reading a lunge', '#ff9aa5',
+   'LUNGE AT names a warden and the slot it is standing in, and lands for double. Move that warden and leave the slot empty and the blow finds nothing — the foe throws its whole turn away. Put somebody else there instead and they take an ordinary hit, not a double one.'],
+  ['Reading the rest', '#ff9aa5',
+   'CALL THE PACK needs a free slot on their side to put the new body in — the one moment where killing something is the wrong play. BREATHE ON A LANE needs a warden still standing in that lane. Cold Read breaks any of them outright.'],
+];
 const HELP_RULES = [
   ['The board', 'Two lanes deep, three columns a side. Column one is the front. A swing hits the front-most foe in the attacker\'s own lane; if that lane is clear it reaches across, and a foe with nothing in front of it walks into the lane where the fighting is.'],
   ['One action', 'Play a card, ring the bell, or pass — then the turn resolves. There is no mana. Sliding a warden between slots is free, and so is calling in a wave.'],
@@ -4999,6 +5224,13 @@ function drawHelp(c, t) {
       wrapText(c, r[1], 13.5, 520).slice(0, 5).forEach((ln, k) => txt(c, ln, x, y + 24 + k * 17, 13.5, '#c8dcf4', 'left', 't'));
     });
   } else if (page === 1) {
+    HELP_BOARD.forEach((r, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const x = 90 + col * 560, y = 158 + row * 150;
+      txt(c, r[0].toUpperCase(), x, y, 19, r[1], 'left', 'd');
+      wrapText(c, r[2], 13.5, 520).slice(0, 6).forEach((ln, k) => txt(c, ln, x, y + 24 + k * 17, 13.5, '#c8dcf4', 'left', 't'));
+    });
+  } else if (page === 2) {
     STATUS_ORDER.forEach((k, i) => {
       const col = i % 2, row = Math.floor(i / 2);
       const x = 110 + col * 560, y = 160 + row * 96;
@@ -6032,6 +6264,7 @@ window.FF = {
   targetFor, frontTarget, laneTargets, neighbours,
   addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter, shoveUnit, HOARD_CAP,
   PREVIEW, previewOf, logLine,
+  SCHEMES, layPlot,
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
@@ -6044,7 +6277,7 @@ window.FF = {
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal,
   drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   MUSIC, musicTick, setMute, moodFor, AUD,
-  TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES,
+  TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },
 };
 

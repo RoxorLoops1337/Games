@@ -97,18 +97,22 @@ section('statuses');
   eq(a.cnt, 1, 'its counter does not move either');
   eq(FF.stat(a, 'frost'), 1, 'one frost is spent per skipped tick');
 
-  // ember and regen bite at the end of the turn and halve
+  /* Ember and regen bite at the end of the turn and halve.
+
+     Note the extra point in both numbers: a side with a slot to spare ends
+     every turn with Regen 1 on everybody (see 'the line needs room'), so an
+     end-of-turn tally on a half-empty board includes it. */
   const e2 = place(FF, 'e', 'snapfrost', 1, 0, { unit: { hp: 30, atk: 0, cnt: 9 } });
   FF.addStatus(G, e2, 'ember', 4);
   FF.resolveTurn(G);
-  eq(e2.hp, 26, 'ember burns for its value at the end of the turn');
+  eq(e2.hp, 27, 'ember burns for its value at the end of the turn, less the room regen');
   eq(FF.stat(e2, 'ember'), 2, 'then halves');
 
   const h = place(FF, 'p', 'snowpup', 1, 1, { unit: { hp: 2, maxHp: 9, cnt: 9 } });
   FF.addStatus(G, h, 'regen', 3);
   FF.resolveTurn(G);
-  eq(h.hp, 5, 'regen mends at the end of the turn');
-  eq(FF.stat(h, 'regen'), 1, 'and halves too');
+  eq(h.hp, 6, 'regen mends at the end of the turn, room regen included');
+  eq(FF.stat(h, 'regen'), 2, 'and halves too');
 }
 
 /* ------------------------------------------------------------- the clock -- */
@@ -311,7 +315,7 @@ section('gear');
   dummy(FF);
   b.hand = [FF.mkCard('icepick')];
   FF.playCard(G, 0, foe);
-  eq(foe.hp, 26, 'Icepick bites for four');
+  eq(foe.hp, 27, 'Icepick bites for four, less the point the room gives back');
   // the turn the play spends is what melts the frost off again, so the
   // status itself is checked without a turn passing over it
   FF.CARDS.icepick.effect(G, foe);
@@ -660,7 +664,7 @@ section('the newer mechanics');
   const victim = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 40, atk: 0 } });
   G.battle.hand = [gr];
   FF.playCard(G, 0, victim);
-  eq(victim.hp, 34, 'Old Grudge remembers exactly how long it waited');
+  eq(victim.hp, 35, 'Old Grudge remembers exactly how long it waited');
 }
 
 /* ---------------------------------------------------------- hauling ------ */
@@ -685,7 +689,7 @@ section('hauling a line about');
   const one = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 60, atk: 0 } });
   b2.hand = [FF.mkCard('avalanche')];
   FF.playCard(G, 0, one);
-  eq(one.hp, 57, 'one foe in the lane takes three');
+  eq(one.hp, 58, 'one foe in the lane takes three');
 
   bareBattle(FF);
   const b4 = G.battle;
@@ -695,8 +699,8 @@ section('hauling a line about');
   const x2 = place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 60, atk: 0 } });
   b4.hand = [FF.mkCard('avalanche')];
   FF.playCard(G, 0, x1);
-  eq(x1.hp, 55, 'two in the lane and it lands for five');
-  eq(x2.hp, 55, 'on both of them');
+  eq(x1.hp, 56, 'two in the lane and it lands for five');
+  eq(x2.hp, 56, 'on both of them');
 }
 
 /* --------------------------------------------------------- the ladder ---- */
@@ -891,21 +895,24 @@ section('what the gear says it will do');
   const t1 = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 40, atk: 0 } });
   const t2 = place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 40, atk: 0 } });
 
-  // the preview and the effect must agree, or the prediction is a lie
+  // The preview and the effect must agree, or the prediction is a lie. What the
+  // card promises is what the *card* does, so fire the effect on its own rather
+  // than through playCard — a whole turn also brings counters, statuses and the
+  // room rule's regen, and folding those into the sum stops measuring the card.
+  const fire = (card, spot) => FF.CARDS[card.def].effect(G, spot, card);
+
   const pick2 = FF.mkCard('icepick');
   const pre = FF.previewOf(G, pick2, t1);
   eq(pre.length, 1, 'an icepick preview names one target');
   const before = t1.hp;
-  b.hand = [pick2];
-  FF.playCard(G, 0, t1);
+  fire(pick2, t1);
   eq(before - t1.hp, pre[0].dmg, 'and the number it promised is the number it dealt');
 
   const av = FF.mkCard('avalanche');
   const pre2 = FF.previewOf(G, av, t1);
   eq(pre2.length, 2, 'an avalanche preview covers the whole lane');
   const h1 = t1.hp, h2 = t2.hp;
-  b.hand = [av];
-  FF.playCard(G, 0, t1);
+  fire(av, t1);
   eq(h1 - t1.hp, pre2[0].dmg, 'front of the lane matches');
   eq(h2 - t2.hp, pre2[1].dmg, 'and so does the back');
 
@@ -1210,6 +1217,118 @@ section('taking it before it swings');
   const cl = G.run.clean;
   FF.hurt(G, boss, 99, killer);
   eq(G.run.clean, cl, 'and a beast is never one');
+}
+
+/* ----------------------------------------------------------- schemes ----- */
+section('what a foe means to do next');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+
+  // A scheme is laid one tick out, and it names something specific.
+  const wolf = place(FF, 'e', 'frostwolf', 0, 0, { unit: { cnt: 2, cntMax: 2, atk: 4 } });
+  const ward = place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 40, atk: 0 } });
+  eq(wolf.plot, null, 'two ticks out it has not committed to anything');
+  FF.tickCounter(G, wolf, 1, true);
+  ok(!!wolf.plot, 'one tick out it has');
+  eq(wolf.plot.uid, ward.uid, 'and it has named the warden it means to reach');
+  ok(/LUNGE AT/.test(wolf.plot.label), 'in words the board can print');
+
+  // Left alone it lands, and it lands for double.
+  const hp0 = ward.hp;
+  FF.tickCounter(G, wolf, 1, true);
+  eq(hp0 - ward.hp, 8, 'unanswered, a lunge lands for double the attack');
+  eq(wolf.plot, null, 'and the scheme is spent');
+
+  // Answered by vacating the slot it named, it hits nothing at all.
+  wolf.cnt = 2;
+  FF.tickCounter(G, wolf, 1, true);
+  eq(wolf.plot.uid, ward.uid, 'it names the same warden again');
+  FF.moveUnit(G, ward, 1, 1);
+  const hp1 = ward.hp;
+  FF.tickCounter(G, wolf, 1, true);
+  eq(ward.hp, hp1, 'a warden that moved is not where the lunge was aimed');
+  eq(wolf.plot, null, 'and the foe has spent its whole turn on empty snow');
+
+  // Swapping somebody else into that slot is not a denial — it is a body
+  // taking the blow, at ordinary weight rather than double.
+  wolf.cnt = 2;
+  FF.moveUnit(G, ward, 0, 0);
+  FF.tickCounter(G, wolf, 1, true);
+  const shield = place(FF, 'p', 'snowpup', 1, 1, { unit: { hp: 40, atk: 0 } });
+  FF.moveUnit(G, ward, 1, 1);          // swaps the two of them
+  eq(shield.col, 0, 'the stand-in ends up in the named slot');
+  const sh0 = shield.hp, wd0 = ward.hp;
+  FF.tickCounter(G, wolf, 1, true);
+  eq(wd0 - ward.hp, 0, 'the named warden is out of it');
+  eq(sh0 - shield.hp, 4, 'and whoever took its place takes an ordinary hit');
+
+  // A scheme that calls for help is denied by leaving no slot to fill.
+  bareBattle(FF);
+  G.battle.units = G.battle.units.filter((u) => u.leader);
+  place(FF, 'p', 'snowpup', 1, 0, { unit: { hp: 60, atk: 0 } });
+  const mother = place(FF, 'e', 'packmother', 0, 0, { unit: { cnt: 2, cntMax: 2, atk: 0 } });
+  FF.tickCounter(G, mother, 1, true);
+  eq(mother.plot.id, 'gather', 'the packmother whistles for the pack');
+  const n0 = FF.enemyUnits(G).length;
+  FF.tickCounter(G, mother, 1, true);
+  eq(FF.enemyUnits(G).length, n0 + 1, 'and with room on the table one more arrives');
+
+  // fill their side, and the same scheme has nowhere to put anybody
+  mother.cnt = 2;
+  FF.tickCounter(G, mother, 1, true);
+  for (let l = 0; l < 2; l++) for (let col2 = 0; col2 < 3; col2++) {
+    if (!FF.unitAt(G, 'e', l, col2)) place(FF, 'e', 'snapfrost', l, col2, { unit: { atk: 0, cnt: 9, cntMax: 9 } });
+  }
+  const n1 = FF.enemyUnits(G).length;
+  FF.tickCounter(G, mother, 1, true);
+  eq(FF.enemyUnits(G).length, n1, 'a full table denies it');
+
+  // A breath across a lane is denied by emptying the lane.
+  bareBattle(FF);
+  G.battle.units = G.battle.units.filter((u) => u.leader);
+  dummy(FF);
+  const drift = place(FF, 'e', 'drift', 0, 0, { unit: { cnt: 2, cntMax: 2, atk: 0 } });
+  const cold = place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 40, atk: 0 } });
+  FF.tickCounter(G, drift, 1, true);
+  eq(drift.plot.id, 'chill', 'the drift takes a breath');
+  FF.tickCounter(G, drift, 1, true);
+  eq(FF.stat(cold, 'frost'), 1, 'and lets it out across the lane it named');
+
+  drift.cnt = 2;
+  FF.tickCounter(G, drift, 1, true);
+  FF.moveUnit(G, cold, 1, 0);
+  cold.st.frost = 0;
+  FF.tickCounter(G, drift, 1, true);
+  eq(FF.stat(cold, 'frost'), 0, 'an empty lane is a breath wasted');
+}
+
+section('a card that waits for its moment');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+  const wolf = place(FF, 'e', 'frostwolf', 0, 0, { unit: { hp: 40, cnt: 2, cntMax: 2 } });
+  place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 40, atk: 0 } });
+
+  // played early it is a small chill and nothing else
+  const read = FF.mkCard('coldread');
+  const pre0 = FF.previewOf(G, read, wolf);
+  eq(pre0[0].dmg, 0, 'against a foe with nothing planned it promises no damage');
+  eq(pre0[0].tag, 'FROST 1', 'only the chill');
+
+  // held for the turn the foe commits, it is worth six and a whole scheme
+  FF.tickCounter(G, wolf, 1, true);
+  ok(!!wolf.plot, 'the foe has now committed');
+  const pre1 = FF.previewOf(G, read, wolf);
+  eq(pre1[0].dmg, 6, 'and now the same card promises six');
+  const hp0 = wolf.hp;
+  FF.CARDS.coldread.effect(G, wolf, read);
+  eq(hp0 - wolf.hp, 6, 'which is what it deals');
+  eq(wolf.plot, null, 'and the scheme is gone with it');
 }
 
 done('frostfell');
