@@ -4116,3 +4116,56 @@ desktop one. That is the correct answer and not an obvious one.
     none of the four can reach. Every mutant anchor re-audited — 92 anchors,
     none orphaned, none ambiguous. Suite run three times for stability at 6742
     each. Render suite 6651 -> 6742 checks.
+
+121. **Two doors out of a fight, and only one of them told the player who had
+    walked in** (pass 210).
+    Most of switching was already exact, and is pinned rather than assumed:
+    every mod, the shield and both kin's stages clear; the leaving kin keeps its
+    own HP and its own burn; its move cards leave every pile and the arriving
+    kin's arrive; the departing FOE's sharpen, guard, aim and cornering all go
+    with it while you get the mid-change edge; and the max-HP bill is booked per
+    kin and paid in full — in, out and in again leaves both exactly where they
+    started.
+
+    One thing did not cross. A trainer's kin leaves by two doors.
+    `resolveFoeDown` — the faint — calls `readIntent()` in BOTH its branches.
+    `foeSwap` — the trainer choosing to call one back — called it in neither:
+
+        Mothrix leaves promising   "Night Maw"      36 coming
+        Pebblet arrives with       "Granite Fang"   74 coming
+        the chip still said        "Night Maw"      36
+
+    Sixty of sixty driven swaps left the chip naming a move the kin now standing
+    there does not know, carrying the departed kin's number — and that number is
+    what the player reads to decide whether to block. One line, mirroring the
+    door that was already right.
+
+    **Two instrument faults of mine, both caught by the rules rather than by
+    luck.** The 60-of-60 loop compared the PRE-swap move id, so it could never
+    move: it read 60/60 before the fix and 60/60 after it. Corrected to ask
+    whether the chip NOW on screen describes the kin NOW on the field, it moves
+    60 -> 0 with the fix and back to 60 without — an instrument that does not
+    move when the thing it measures moves is measuring its own constant, for
+    the third time in this loop. And the source pin counted `readIntent();`
+    with its leading two spaces, which measured the LAYOUT rather than the call
+    and missed the two nested deeper inside `resolveFoeDown`; counted properly
+    there are four.
+
+    **A flake caught by the run-it-three-times rule.** `doAction` runs the foe's
+    turn, which can drop the kin that just arrived — and a dead kin plays no
+    cards, so the max-HP block failed about one run in three. The scenario there
+    is the booking, not the surviving; both sides are put back on their feet
+    first. Stable across five runs since.
+
+    Five planted faults, all five bitten by hand: foeSwap not re-reading the
+    telegraph (3 failures), the departing foe keeping its sharpen and aim (2),
+    your mods surviving the switch (5), the max-HP bill never paid (3), the old
+    kin's cards left in the draw pile (1) — with a NO-OP control edit that
+    correctly passed, so the harness is not simply failing on any change. The
+    sweep then reported 3 / 2 / 5 / 3 / 1, the same five numbers.
+
+    Five sweep mutants aimed at the new section, which reports **15 of 43
+    killed — 35%**. The survivors are the setup checks either side of each
+    door ("there is a telegraph before the foe faints") which no mutation here
+    can reach. Every mutant anchor re-audited — 97 anchors, none orphaned, none
+    ambiguous. Render suite 6742 -> 6785 checks.
