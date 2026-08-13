@@ -394,11 +394,17 @@ def({ id: 'snowpup', name: 'Snowpup', type: 'unit', tribe: null, hp: 6, atk: 2, 
   art: A('#e8f2ff', '#ffffff', { stance:'quad',tail:'brush',mark:'freckles', skin:'fur',idle:'paw', shape: 'blob', ears: 'round', mouth: 'smile' }),
   kw: {}, text: 'Plain and willing.' });
 
+/* A five-health two-attack Longshot was a worse Hoarcrow and nothing else, and
+   the usage table said so for four rounds running. It is a lamp now: it hits
+   from the back and it keeps the line warm while it does. */
 def({ id: 'lanternmoth', name: 'Lanternmoth', type: 'unit', tribe: null, hp: 5, atk: 2, cnt: 2, rare: 2,
   art: A('#d9c58f', '#fff3cf', { stance:'float',tail:'plume',mark:'ember', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffe9b0' }),
-  kw: { longshot: 1 }, text: 'Longshot.' });
+  kw: { longshot: 1 }, text: 'Longshot. When it triggers, mend 2 on every warden.',
+  hooks: { trigger: (g, u) => sideUnits(g, u.side).forEach((a2) => heal(g, a2, 2)) } });
 
-def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3, cnt: 3, rare: 2,
+/* A counter of three meant it grew twice in a fight and then the fight was
+   over. At two it is a body that is worth protecting. */
+def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3, cnt: 2, rare: 2,
   art: A('#a89c86', '#e4dccc', { stance:'stand',tail:'none',mark:'leaf',arms:'long', idle:'sway',acc:'satchel',accCol:'#8a6a3f', shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
   kw: {}, text: 'Every time it triggers, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
@@ -407,9 +413,12 @@ def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt
   art: A('#9a9689', '#ded9c8', { stance:'root',tail:'none',mark:'brand', idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', pat: 'shards', patCol: '#6d6a5c' }),
   kw: { crush: 2 }, text: 'Crush 2. The tighter they pack a lane, the harder it lands.' });
 
+/* Hoard on a body asks you to hold a card you want on the board, which is a
+   trade nobody took. Hoard 2 makes waiting worth something: four turns in hand
+   and it walks on as the hardest thing you own. */
 def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 7, atk: 2, cnt: 3, rare: 2,
   art: A('#c9a6ff', '#eee0ff', { stance:'float',tail:'whip',mark:'tuft', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
-  kw: { hoard: 1 }, text: 'Hoard. Every turn it waits in your hand it comes out one point angrier.' });
+  kw: { hoard: 2 }, text: 'Hoard 2. Every turn it waits in your hand it comes out two points angrier.' });
 
 def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
   art: A('#b0a48c', '#e8ddc4', { stance:'stand',tail:'stub',mark:'bandage',arms:'long', skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
@@ -530,11 +539,29 @@ def({ id: 'avalanche', name: 'Avalanche', type: 'item', tribe: 'frost', rare: 3,
 def({ id: 'grudge', name: 'Old Grudge', type: 'item', tribe: null, rare: 2, target: 'enemy',
   art: { kind: 'pick', col: '#c9a6ff' }, kw: { hoard: 1 },
   text: 'Hoard. Deal 3, and one more for every turn it sat in your hand.',
-  effect: (g, t, card) => hurt(g, t, 3 + Math.min(HOARD_CAP, (card && card.held) || 0), null) });
+  effect: (g, t, card) => hurt(g, t, 3 + hoardOf(card), null) });
 
 def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, target: 'ally',
   art: { kind: 'lantern', col: '#ffd166' }, text: 'Heal 10 and clear every ill.',
   effect: (g, t) => { heal(g, t, 10); ['frost', 'ember', 'weak', 'slow'].forEach((s) => { t.st[s] = 0; }); } });
+
+/* THE ONE CARD YOU CANNOT DRAFT.
+
+   The Kettle Titan's whole answer is frost, and the probe found the answer was
+   simply not in the player's hand: across fifty-six fights with the beast, some
+   frost gear was in hand on 23% of turns — and for a caravan that never drafted
+   a frost card, on none of them. A counter that most players cannot reach is
+   not counterplay, it is a rule they read once and then lose to.
+
+   So the room provides it. This is dealt into the deck at the start of that
+   fight and nowhere else, it goes back into the deck every time it is used, and
+   it costs the turn — which is exactly the trade the fight is about: spend a
+   turn cooling the boiler, or spend it swinging and let the heat climb. */
+def({ id: 'snowhandful', name: 'A Handful of Snow', type: 'item', tribe: null, rare: 1, target: 'enemy',
+  noPool: true, recycles: true,
+  art: { kind: 'burst', col: '#dff0ff' },
+  text: 'Frost 2 on a foe. Scooped off the floor of this room — it goes back into the deck.',
+  effect: (g, t) => addStatus(g, t, 'frost', 2) });
 
 /* What a piece of gear would do to what you are pointing it at. This is the
    one place that knows, so the card text, the tooltip and the drag preview can
@@ -543,12 +570,13 @@ const PREVIEW = {
   icepick:    (g, t) => [{ u: t, dmg: 4, tag: 'FROST 1' }],
   blastcap:   (g, t) => [{ u: t, dmg: 6 }].concat(neighbours(g, t).map((n) => ({ u: n, dmg: 3 }))),
   snowbomb:   (g, t) => laneOf(g, 'e', t.lane).map((f) => ({ u: f, dmg: 3, tag: 'FROST 1' })),
+  snowhandful: (g, t) => [{ u: t, dmg: 0, tag: 'FROST 2' }],
   avalanche:  (g, t) => {
     const l = laneOf(g, 'e', t.lane);
     const d = 3 + Math.max(0, l.length - 1) * 2;
     return l.map((f) => ({ u: f, dmg: d }));
   },
-  grudge:     (g, t, card) => [{ u: t, dmg: 3 + Math.min(HOARD_CAP, (card && card.held) || 0) }],
+  grudge:     (g, t, card) => [{ u: t, dmg: 3 + hoardOf(card) }],
   emberflask: (g, t) => [{ u: t, dmg: 0, tag: 'EMBER 4' }],
   tinderjar:  (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: u.plot ? 'EMBER 6' : 'EMBER 3' })),
   coldsnap:   (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'FROST 1' })),
@@ -624,6 +652,10 @@ const EXTRAS = {
                apply: (c) => { c.atk += 2; c.hp += 3; } },
 };
 const chOf = (id) => CHARMS[id] || SCARS[id] || EXTRAS[id];
+/* What a hoarding card has actually banked. Hoard is a RATING now, not a flag:
+   Keepsake banks two a turn where Old Grudge banks one. */
+const hoardOf = (card) => (card && card.kw && card.kw.hoard
+  ? card.kw.hoard * Math.min(HOARD_CAP, card.held || 0) : 0);
 
 /* Scars are charms with a bite — a warden that faints picks one up. */
 const SCARS = {
@@ -778,12 +810,20 @@ foe({ id: 'hollowking', name: 'The Hollow King', hp: 78, atk: 7, cnt: 4, tier: 5
   art: A('#6f6f8f', '#c0c0d8', { stance:'stand',tail:'plume',mark:'patch',arms:'long', idle:'breathe', shape: 'boss', ears: 'antler', mouth: 'trap', eyes: 'slit', acc: 'crown', accCol: '#ffd166', evil: 1 }),
   kw: { longshot: 1, smack: 1 }, text: 'Longshot. Smackback. When it triggers, it calls a Shardling.',
   hooks: { trigger: (g, u) => summon(g, 'shardling', 1) } });
-foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 92, atk: 8, cnt: 5, tier: 6, boss: true,
+/* It carried the biggest stat line in the game AND Barrage AND Smackback AND
+   an attack that climbed every trigger. With the answer to the last of those
+   now guaranteed in hand it STILL landed twelve of twenty-two late deaths, so
+   the reachability of the counter was never the whole story: three compounding
+   punishments on a 92-health beast is simply too much for the slot. Smackback
+   is the one that had to go — it punished the player for the only thing that
+   ends the fight — and the line now sits alongside the zone's other beast
+   rather than above it. */
+foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 84, atk: 7, cnt: 5, tier: 6, boss: true,
   phase: { name: 'THE BOILER GOES', text: 'everything in the room is on fire now',
     apply: (g, u) => { u.cntMax = Math.max(2, u.cntMax - 2); foes(g, u).forEach((f) => addStatus(g, f, 'ember', 3)); } },
   art: A('#b0a080', '#e8dcc0', { stance:'squat',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'breathe', shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
-  kw: { barrage: 1, smack: 1 },
-  text: 'Barrage. Smackback. Every trigger it stokes: +1 attack, up to +6, and it keeps it. Frost vents the boiler and takes all of it back at once.',
+  kw: { barrage: 1 },
+  text: 'Barrage. Every trigger it stokes: +1 attack, up to +6, and it keeps it. Frost vents the boiler and takes all of it back at once.',
   /* It was landing 60% of every death in the last zone, and it was doing it
      the same way every time: unbounded attack growth attached to Barrage, so
      the fight was a timer rather than a fight. The growth stays — it is what
@@ -978,7 +1018,8 @@ function mkUnit(card, side, lane, col) {
   return {
     uid: nextUid(), card, def: card.def, name: card.name, side, lane, col,
     maxHp, hp: Math.max(1, maxHp - (card.dmg || 0)),
-    atk: Math.max(0, Math.round(card.atk * inj)) + (card.kw && card.kw.hoard ? Math.min(HOARD_CAP, card.held || 0) : 0),
+    atk: Math.max(0, Math.round(card.atk * inj)) +
+      (card.kw && card.kw.hoard ? card.kw.hoard * Math.min(HOARD_CAP, card.held || 0) : 0),
     cntMax: card.cnt, cnt: card.cnt,
     st: {}, kw: Object.assign({}, card.kw), hooks: (d && d.hooks) || {},
     scheme: (d && d.scheme) || null, call: (d && d.call) || null, plot: null,
@@ -1414,11 +1455,7 @@ function resolveTurn(g) {
     for (const side of ['p', 'e']) {
       const line = sideUnits(g, side);
       if (!line.length) continue;
-      /* And warmth does not last for ever. Two fights in seventy-five ran past
-         a hundred and sixty turns with both lines mending as fast as they were
-         hit — a stalemate the player cannot break and the game will not end.
-         After thirty turns the fire is out and it is attrition from there. */
-      const room = hasRoom(g, side) && b.turn <= 30;
+      const room = hasRoom(g, side) && b.turn <= DEEP_FREEZE;
       if (room) {
         /* Warmth is one, for everybody, always.
 
@@ -1439,6 +1476,26 @@ function resolveTurn(g) {
         }
       }
     }
+  });
+
+  /* THE COLD CLOSES IN.
+
+     A fight that cannot end is worse than a fight that is lost. Two of them
+     showed up when both lines could mend as fast as they were hit, and seven
+     more the moment a warden could mend the whole line every trigger — and no
+     amount of per-card tuning fixes a class of bug that any future healing card
+     will reopen. So the world ends it: past thirty turns the warmth stops, and
+     from there the frost takes a little more out of everything on the table
+     every five turns, both sides alike, until somebody falls. */
+  beat(0.14, () => {
+    if (b.over || b.turn <= DEEP_FREEZE) return;
+    const bite = 1 + Math.floor((b.turn - DEEP_FREEZE) / 5);
+    if (b.turn === DEEP_FREEZE + 1) {
+      fx.toast('THE COLD CLOSES IN', '#8fe3ff');
+      logLine(g, 'the fire is out — the cold is taking the room', '#8fe3ff');
+    }
+    for (const u of units(g).slice()) hurt(g, u, bite, null);
+    checkOver(g);
   });
 
   /* End of turn: burns bite, mending mends, both fade. */
@@ -1644,7 +1701,10 @@ function playCard(g, idx, spot) {
   fx.fly(card, card.hx, card.hy);
   // A Heavy Pack: gear comes back round rather than being used up, which is
   // what makes a small gear deck worth building instead of merely surviving.
-  if (co && co.recycle && card.type === 'item') b.draw.push(card);
+  // and it comes straight back to the hand, so the choice is on the table every
+  // turn: cool the boiler, or swing and let the heat climb
+  if (d.recycles) b.hand.push(card);
+  else if (co && co.recycle && card.type === 'item') b.draw.push(card);
   else b.discard.push(card);
   checkOver(g);
   if (!b.over && !free) resolveTurn(g);
@@ -1689,6 +1749,8 @@ const eliteMod = (b) => (b && b.mod ? ELITE_MODS.find((m) => m.id === b.mod) : n
    arrive on their own counter, or early if the player rings for them —
    which is a real choice, because a wave pulled onto a board you have already
    set up dies faster than one that arrives while you are rebuilding. */
+/* The turn past which the fire is out and the frost starts taking the room. */
+const DEEP_FREEZE = 30;
 const WAVE_GAP = 5;
 const waveGap = (g) => Math.max(2, WAVE_GAP + ((g.run && g.run.waveBonus) || 0));
 
@@ -1842,6 +1904,13 @@ function startBattle(g, kind) {
   }
   b.draw = shuffle(run.deck.filter((c) => !c.leader && !c.sigil).slice());
   for (let i = 0; i < handSize(g); i++) if (!drawToHand(g)) break;
+  /* Some rooms come with something in them. Only one so far, and it is in the
+     HAND rather than the deck: shuffled in it turned up on four turns in ten,
+     which is not an answer a player can count on, it is one they can hope for. */
+  if (b.units.some((u) => u.side === 'e' && u.def === 'kettletitan') ||
+      (b.waves || []).some((w) => w.some((e) => e.id === 'kettletitan'))) {
+    b.hand.push(mkCard('snowhandful'));
+  }
   const em0 = eliteMod(b);
   b.banner = { text: kind === 'boss' ? 'THE BEAST' : kind === 'elite' ? 'A PACK' : 'SKIRMISH',
     sub: em0 ? em0.name + ' — ' + em0.text : ZONES[clamp(run.zone, 0, ZONES.length - 1)].name, t: 0,
@@ -2041,7 +2110,7 @@ const redealPrice = (run) => 18 + 14 * (run.redeals || 0);
 
 function cardPool(run) {
   return Object.values(CARDS).filter((c) =>
-    !c.leader && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
+    !c.leader && !c.noPool && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
 }
 const charmPool = () => Object.keys(CHARMS).filter(found);
 /* What the caravan is already doing, in numbers a weighting can read. */
@@ -2230,7 +2299,16 @@ function rollShop(g) {
     // the only thing that makes the caravan stronger without making the deck
     // bigger — which the probe says is the difference between money that
     // matters and money that buys you a worse draw.
-    temper: { price: p(32), sold: false } };
+    temper: { price: p(32), sold: false },
+    /* AND THE ONE THING ONLY SHE HAS.
+       Tempering now lives at a camp and on a reward screen too, and the moment
+       it did, money stopped being worth anything at all: penniless and
+       well-funded measured the same. A currency that changes nothing is a
+       currency to cut or to re-point, and this is the re-pointing — a bell,
+       the run-wide upgrade that otherwise only falls out of a dead beast. She
+       has one. It is expensive. Nowhere else on the map sells one. */
+    bell: { id: pick(Object.keys(BELLS).filter((k) => (run.bells || []).indexOf(k) < 0)),
+            price: p(96), sold: false } };
 }
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
@@ -2275,6 +2353,17 @@ function buy(g, kind, idx, arg) {
     s.heal.sold = true;
     run.deck.concat([run.leader]).forEach((c) => { c.dmg = 0; });
     sfx('heal'); return true;
+  }
+  if (kind === 'bell') {
+    const bl = s.bell && BELLS[s.bell.id];
+    if (!bl || s.bell.sold || !takeGold(s.bell.price)) return false;
+    bl.apply(run);
+    run.bells = (run.bells || []).concat([bl.id]);
+    s.bell.sold = true;
+    sfx('get');
+    fx.toast(bl.name.toUpperCase(), bl.col);
+    run.log.push('The trader had a bell, and it was bought.');
+    return true;
   }
   if (kind === 'temper') {
     const card = run.deck.concat([run.leader]).find((c) => c.uid === arg);
@@ -4648,19 +4737,18 @@ function drawBattle(c, t) {
       }
     }
     c.restore();
-    /* Which end of the table this is, and whether it has room to rotate — the
-       one rule that prices every deployment, said on the same line as the
-       label it belongs to. On its own line above the board it fought with
-       whatever banner was up; down here nothing else ever sits. */
+    /* Whether this side has room to rotate — the one rule that prices every
+       deployment. YOUR SIDE / THEIR SIDE used to sit on the line above it and
+       has been cut: after twelve rounds of accumulation it was labelling
+       something the board already says four other ways — the slab colours, the
+       crown, the divide down the middle, and the fact that the hand is at the
+       bottom of the screen. The line it was using is better spent on a rule. */
     const room = hasRoom(g, side);
-    const has = sideUnits(g, side).length > 0;
-    const who = side === 'p' ? 'YOUR SIDE' : 'THEIR SIDE';
-    txt(c, who, x0 + wid / 2, boardB + 13, 11, side === 'p' ? '#7fa8d8' : '#c98a9e', 'center', 't');
-    if (has) {
+    if (sideUnits(g, side).length) {
       c.save();
-      c.globalAlpha = room ? 0.65 : 0.95;
+      c.globalAlpha = room ? 0.6 : 0.95;
       txt(c, room ? 'ROOM TO FALL BACK' : 'NO ROOM — THE COLD GETS IN',
-        x0 + wid / 2, boardB + 27, 11, room ? '#8fe0a0' : '#8fe3ff', 'center', 't');
+        x0 + wid / 2, boardB + 15, 11.5, room ? '#8fe0a0' : '#8fe3ff', 'center', 't');
       c.restore();
     }
   }
@@ -5759,7 +5847,7 @@ function drawShop(c, t) {
   txt(c, 'she takes scrip, and she does not haggle', MID, 112, 15, '#a8c8ea', 'center', 't');
 
   // the stall: cards on the left of the counter, charms on the right
-  const cw = 152, chh = 212, gap = 18, cy = 164;
+  const cw = 152, chh = 212, gap = 18, cy = 200;
   const priceY = cy + chh + 10;
   const leftW = s.cards.length * cw + (s.cards.length - 1) * gap;
   const rightW = s.charms.length * cw + (s.charms.length - 1) * gap;
@@ -5771,8 +5859,9 @@ function drawShop(c, t) {
     c.restore();
   };
   stall(lx, leftW); stall(rx, rightW);
-  txt(c, 'WARES', lx + leftW / 2, cy - 30, 13, '#9fb6d6', 'center', 't');
-  txt(c, 'CHARMS', rx + rightW / 2, cy - 30, 13, '#9fb6d6', 'center', 't');
+  // WARES / CHARMS were labels for two shelves that could not be mistaken for
+  // one another — cards on one, pendants on the other — and the bell now needs
+  // the line they were sitting on. Cut.
 
   const tag = (x, price, sold) => {
     const afford = g.run.gold >= price;
@@ -5795,7 +5884,23 @@ function drawShop(c, t) {
     if (!it.sold) hit('buyCharm', x, cy, cw, chh + 44, i);
   });
 
-  const by = 452, sw = 210, sg = 12, srow = sw * 5 + sg * 4, sx = MID - srow / 2;
+  // the bell she has, on a shelf of its own above the stalls
+  if (s.bell && BELLS[s.bell.id]) {
+    const bl = BELLS[s.bell.id];
+    const bwid = 420, bx0 = MID - bwid / 2, by0 = 128;
+    const afford = g.run.gold >= s.bell.price && !s.bell.sold;
+    c.save();
+    if (s.bell.sold) c.globalAlpha = 0.35;
+    panel(c, bx0, by0, bwid, 50, 12, '#1d2c49', bl.col);
+    txt(c, bl.name.toUpperCase().replace('BELL OF ', 'A BELL OF '), bx0 + 14, by0 + 17, 15, bl.col, 'left', 'd');
+    txt(c, bl.text, bx0 + 14, by0 + 30, 12, '#c8dcf4', 'left', 't');
+    panel(c, bx0 + bwid - 72, by0 + 10, 58, 30, 9, afford ? '#3f8f5f' : '#5a3a3a', C.ink);
+    txt(c, s.bell.sold ? '—' : String(s.bell.price), bx0 + bwid - 43, by0 + 26, 16, '#ffe6a8', 'center', 'd');
+    c.restore();
+    if (!s.bell.sold) hit('buyBell', bx0, by0, bwid, 50);
+  }
+
+  const by = 484, sw = 210, sg = 12, srow = sw * 5 + sg * 4, sx = MID - srow / 2;
   const btn = (i, id, label, col, dis) => button(c, id, sx + i * (sw + sg), by, sw, 54, label, col, dis);
   btn(0, 'buyHeal', s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
   btn(1, 'buyTemper', s.temper && s.temper.sold ? 'TEMPERED' : 'TEMPER — ' + (s.temper ? s.temper.price : 32),
@@ -5806,10 +5911,10 @@ function drawShop(c, t) {
     !s.burn || s.burn.sold || g.run.deck.length < 3);
   txt(c, 'temper: +2 attack, +3 health, and the deck stays the size it was · ' +
     'a sigil deploys that warden before the first bell',
-    MID, by + 70, 13, '#7e97b8', 'center', 't');
+    MID, by + 66, 13, '#7e97b8', 'center', 't');
   const need = caravanNeeds(g.run);
   txt(c, need ? 'the caravan is short of ' + need.name.toLowerCase() + ' — ' + need.why
-    : 'the caravan wants for nothing', MID, by + 94, 13, need ? '#ffd166' : '#7de08f', 'center', 't');
+    : 'the caravan wants for nothing', MID, by + 88, 13, need ? '#ffd166' : '#7de08f', 'center', 't');
   button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
 }
 
@@ -6246,6 +6351,7 @@ function press(id, data) {
       return;
     }
     case 'buyHeal': buy(g, 'heal'); return;
+    case 'buyBell': { buy(g, 'bell'); return; }
     case 'buyTemper': {
       const s2 = g.ui.shop;
       if (!s2 || !s2.temper || s2.temper.sold || g.run.gold < s2.temper.price) return;
@@ -6702,7 +6808,7 @@ window.FF = {
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
   saveRun, loadRun, saveMeta, loadMeta, store,
-  handSize, pilePos, flyers, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
+  handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal,
   drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,

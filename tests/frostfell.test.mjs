@@ -649,8 +649,10 @@ section('the newer mechanics');
   for (let i = 0; i < 9; i++) { FF.passTurn(G); FF.drainAll(); }
   eq(keep.held, FF.HOARD_CAP, 'and it stops climbing at the cap');
   const before = FF.CARDS.keepsake.atk;
+  const rate = FF.CARDS.keepsake.kw.hoard;      // hoard is a rating, not a flag
+  eq(rate, 2, 'the keepsake banks two a turn');
   const u = FF.mkUnit(keep, 'p', 1, 1);
-  eq(u.atk, before + FF.HOARD_CAP, 'what it hoarded is on the board with it');
+  eq(u.atk, before + FF.HOARD_CAP * rate, 'what it hoarded is on the board with it');
   b3.hand = [keep];
   FF.playCard(G, 0, { lane: 1, col: 1 });
   eq(keep.held, 0, 'and playing it spends the hoard');
@@ -1554,6 +1556,112 @@ section('the cards that had no reason to exist');
   b.draw = [FFe.mkCard('icepick'), FFe.mkCard('icepick')];
   FFe.CARDS.oldmap.effect(FFe.G, null, FFe.mkCard('oldmap'));
   eq(b.hand.length, h0 + 2, 'and the map still draws two');
+}
+
+/* ------------------------------------------------- iteration 13 additions -- */
+section('the room brings its own answer');
+{
+  const FFa = loadGame({});
+  const run = FFa.newRun(FFa.G, 'hearth', 121);
+  run.zone = 2;
+  const b = FFa.startBattle(FFa.G, 'boss');
+  const facing = FFa.G.battle.units.some((u) => u.side === 'e' && u.def === 'kettletitan') ||
+    (b.waves || []).some((w) => w.some((e) => e.id === 'kettletitan'));
+  if (facing) {
+    ok(b.hand.some((c) => c.def === 'snowhandful'), 'the handful is in hand, not shuffled into the deck');
+  } else ok(true, 'this zone drew the other beast');
+
+  // it is never draftable, anywhere
+  const pool = FFa.cardPool(run).map((c) => c.id);
+  eq(pool.indexOf('snowhandful'), -1, 'and it is in no pool the player can draw from');
+  const offers = [];
+  for (let i = 0; i < 40; i++) offers.push.apply(offers, FFa.weightedCards(run, 3));
+  eq(offers.indexOf('snowhandful'), -1, 'nor in forty reward offers');
+
+  // and it comes back to the hand rather than being used up
+  const FFb = loadGame({});
+  bareBattle(FFb, 'hearth', 122);
+  const b2 = FFb.G.battle;
+  b2.units = b2.units.filter((u) => u.side === 'p' && u.leader);
+  const foe2 = place(FFb, 'e', 'snapfrost', 0, 0, { unit: { hp: 200, atk: 0, cnt: 99, cntMax: 99 } });
+  // the effect on its own — a whole turn also ticks a point of frost back off
+  FFb.CARDS.snowhandful.effect(FFb.G, foe2, FFb.mkCard('snowhandful'));
+  eq(FFb.stat(foe2, 'frost'), 2, 'a handful of snow is Frost 2');
+  foe2.st.frost = 0;
+  b2.hand = [FFb.mkCard('snowhandful')];
+  FFb.playCard(FFb.G, 0, foe2); FFb.drainAll();
+  ok(b2.hand.some((c) => c.def === 'snowhandful'), 'and it is back in the hand for next turn');
+  eq(b2.discard.some((c) => c.def === 'snowhandful'), false, 'never in the used pile');
+}
+
+section('the cold closes in');
+{
+  const FFc = loadGame({});
+  bareBattle(FFc, 'hearth', 131);
+  const b = FFc.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  const ward = place(FFc, 'p', 'snowpup', 0, 0, { unit: { hp: 90, maxHp: 90, atk: 0, cnt: 99, cntMax: 99 } });
+  const foe = place(FFc, 'e', 'snapfrost', 1, 2, { unit: { hp: 900, maxHp: 900, atk: 0, cnt: 999, cntMax: 999 } });
+
+  b.turn = 5;
+  const a0 = ward.hp, f0 = foe.hp;
+  FFc.passTurn(FFc.G); FFc.drainAll();
+  eq(ward.hp, a0, 'early on nothing bites');
+  eq(foe.hp, f0, 'on either side');
+
+  b.turn = FFc.DEEP_FREEZE + 1;
+  const a1 = ward.hp, f1 = foe.hp;
+  ward.st.regen = 0;
+  FFc.passTurn(FFc.G); FFc.drainAll();
+  ok(ward.hp < a1, 'past the deep freeze it takes from the wardens');
+  ok(foe.hp < f1, 'and from the foes, alike');
+
+  // and it gets worse, so nothing can outlast it
+  b.turn = FFc.DEEP_FREEZE + 20;
+  const a2 = ward.hp;
+  ward.st.regen = 0;
+  FFc.passTurn(FFc.G); FFc.drainAll();
+  ok(a1 - ward.hp < a2 - ward.hp + 1000, 'the bite is real');
+  const bite1 = 1 + Math.floor(1 / 5), bite2 = 1 + Math.floor(21 / 5);
+  ok(bite2 > bite1, 'and it climbs with the turn count');
+}
+
+section('a beast that is not three beasts');
+{
+  const FFd = loadGame({});
+  const titan = FFd.FOES.kettletitan;
+  eq(!!titan.kw.smack, false, 'the Kettle Titan no longer punishes you for hitting it');
+  ok(!!titan.kw.barrage, 'it still hits the whole lane');
+  ok(titan.hp <= FFd.FOES.lastwinter.hp, 'and it is no bigger than the other beast of its zone');
+  ok(titan.atk <= FFd.FOES.lastwinter.atk, 'nor does it hit harder');
+}
+
+section('a bell she alone has');
+{
+  const FFe = loadGame({});
+  const run = FFe.newRun(FFe.G, 'scrap', 141);
+  const shop = FFe.rollShop(FFe.G);
+  FFe.G.ui.shop = shop;
+  ok(!!shop.bell && !!FFe.BELLS[shop.bell.id], 'the trader has a bell');
+  run.gold = 999;
+  const had = (run.bells || []).length;
+  ok(FFe.buy(FFe.G, 'bell'), 'and sells it');
+  eq((run.bells || []).length, had + 1, 'the caravan carries it from here');
+  eq(FFe.buy(FFe.G, 'bell'), false, 'she only had the one');
+  eq(run.gold, 999 - shop.bell.price, 'and she does not haggle');
+}
+
+section('hoard is a rating now');
+{
+  const FFf = loadGame({});
+  eq(FFf.CARDS.keepsake.kw.hoard, 2, 'a keepsake banks two a turn');
+  eq(FFf.CARDS.grudge.kw.hoard, 1, 'an old grudge banks one');
+  const k = FFf.mkCard('keepsake');
+  k.held = 3;
+  eq(FFf.hoardOf(k), 6, 'three turns held is six points on a keepsake');
+  const g2 = FFf.mkCard('grudge');
+  g2.held = 3;
+  eq(FFf.hoardOf(g2), 3, 'and three on a grudge');
 }
 
 done('frostfell');

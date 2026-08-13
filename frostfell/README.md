@@ -43,6 +43,11 @@ anything hanging off the stage, and anything hiding under a notch.
   between fights; camps and the trader mend it.
 - **Combos.** Kills inside one turn are counted together and paid for. Clearing
   a board in a single action is the play the whole game points at.
+- **The cold closes in.** Past thirty turns the warmth stops and the frost
+  starts taking a little more out of everything on the table every five turns,
+  both sides alike. A fight that cannot end is worse than a fight that is lost,
+  and per-card tuning does not fix a class of bug that the next healing card
+  reopens — so the world ends it.
 - **Charms** bolt permanently onto a card. **Sigils** put that warden on the
   board before the first bell. **Bells** are run-wide and chosen after a beast
   falls — an extra card each hand, a slower wave clock, a fatter purse.
@@ -227,8 +232,7 @@ run to find out what was missing.
 ### Tempering, and where to find it
 
 **Temper** puts +2 attack and +3 health on a card of your choice and leaves the
-deck exactly the size it was. It is the strongest thing in the run, and it lives
-in **three places at three prices**:
+deck exactly the size it was. It lives in **three places at three prices**:
 
 - **the trader** takes scrip for it, once a visit
 - **a camp** will work the fire instead of mending anybody that night
@@ -245,6 +249,14 @@ was worth fourteen points of win rate on its own. Spread across three doors it
 is worth two, and being penniless is survivable — which is the fix, and the cost
 of the fix, stated together.
 
+**And the trader has one thing nobody else sells: a bell.** The run-wide
+upgrades otherwise only fall out of a dead beast — one more card every fight, a
+slower wave clock, a fatter purse — and she has one, expensively. That exists
+because the moment tempering spread to three doors, money stopped being worth
+anything at all: penniless and well-funded measured identically. A currency that
+changes nothing is a currency to cut or to re-point, and this is the re-pointing.
+It put scrip back to five points of win rate.
+
 Buying a card at the trader also **lets you leave one on the counter**. Without
 that, a purchase was a trap for three iterations running: a penniless caravan
 beat a well-funded one by nine points, because every card bought was one more
@@ -258,14 +270,36 @@ Mother Glacier calves and comes apart into shardlings, the White Stag stops
 circling and starts running, the Hollow King's crown cracks, the Weeper stops
 weeping, the Kettle Titan's boiler goes, and the Last Winter deepens.
 
-**The Kettle Titan** is the one the probe has an opinion about. It stokes: every
-trigger it gains an attack and keeps it, and attached to Barrage that made the
-fight a timer rather than a fight — it was landing three of every five deaths in
-the last zone, the same way every time, whatever the player did. The stoking now
-stops at +6, the number is drawn on the beast as **HEAT**, and **frost vents the
-boiler** and takes all of it back at once. A beast that gets stronger every turn
-is frightening; a beast that gets stronger every turn and cannot be answered is
-a difficulty setting.
+**The Kettle Titan** is the one the probe has an opinion about, and the whole
+argument is worth keeping because it took three passes and two of them were
+wrong.
+
+It stokes: every trigger it gains an attack and keeps it, and attached to
+Barrage that made the fight a timer rather than a fight. It was landing **three
+of every five deaths in the last zone**, the same way every time.
+
+*First pass:* cap the stoking at +6, draw the number on the beast as **HEAT**,
+and make **frost vent the boiler** and take all of it back at once. Counterplay,
+bounded and visible. It moved the death count by almost nothing.
+
+*Second pass — measure why.* The probe counted what a caravan actually held
+while facing it: **some frost gear in hand on 23% of turns**, and for a caravan
+that never drafted a frost card, on none of them. A counter most players cannot
+reach is not counterplay; it is a rule they read once and then lose to. So the
+room provides it: **A Handful of Snow** is dealt into the hand at the start of
+that fight and nowhere else, goes straight back to the hand every time it is
+used, and costs the turn — which is the trade the fight is about. Frost in hand
+went to 99%, the card became the second most played in the game, and the death
+count *still* did not move.
+
+*Third pass — so it was never only the answer.* By elimination: the beast was
+too big for its slot. It carried the largest stat line in the game **and**
+Barrage **and** Smackback **and** the climbing attack. Smackback is gone — it
+punished the player for the only thing that ends the fight — and 92/8 came down
+to 84/7, level with the other beast of that zone.
+
+It went from **36 of 61 late deaths to 6 of 54**, and the top of that list is an
+ordinary foe again.
 
 ## Endings
 
@@ -303,17 +337,17 @@ thing and nothing else:
 At **210 runs a rung** (`FF_RUNS=70`, about two and a half minutes):
 
 ```
-careless:            20/210 won (10%) · 124/55  reached zone 2/3 · died 86/69/35 by zone
-+ the fight:         46/210 won (22%) · 160/91  reached zone 2/3 · died 50/69/45 by zone
-+ the trader:        62/210 won (30%) · 173/115 reached zone 2/3 · died 37/58/53 by zone
-+ steering the pool: 93/210 won (44%) · 195/154 reached zone 2/3 · died 15/41/61 by zone
+careless:            22/210 won (10%) · 125/48  reached zone 2/3 · died 85/77/26 by zone
++ the fight:         33/210 won (16%) · 156/78  reached zone 2/3 · died 54/78/45 by zone
++ the trader:        73/210 won (35%) · 169/110 reached zone 2/3 · died 41/59/37 by zone
++ steering the pool: 100/210 won (48%) · 197/154 reached zone 2/3 · died 13/43/54 by zone
 ```
 
-**Thirty-four points for playing well: twelve from the fight, eight from the
-trader, fourteen from steering the pool.** The economy, measured the same way:
-penniless 44%, as it ships 44%, bottomless purse 48%. Each course, handed over
-rather than declared, against a 42% baseline with none: Cold 53%, Hearth 48%,
-Bodies 47%, Scrap 44%, Gear 43%.
+**Thirty-eight points for playing well: six from the fight, nineteen from the
+trader, thirteen from steering the pool.** The economy, measured the same way:
+penniless 43%, as it ships 48%, bottomless purse 50%. Each course, handed over
+rather than declared, against a 42% baseline with none: Cold 54%, Hearth 52%,
+Scrap 46%, Bodies 45%, Gear 45%.
 
 The suite also prints **what ends a good run in the last zone**, aggregated by
 name across every death — the run always remembered the blow that took the
