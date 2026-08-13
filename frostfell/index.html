@@ -672,28 +672,42 @@ foe({ id: 'icewarden', name: 'Icewarden', hp: 16, atk: 4, cnt: 3, tier: 3,
   hooks: { deploy: (g, u) => addStatus(g, u, 'thorns', 3) } });
 
 /* bosses ----------------------------------------------------------------- */
+/* A beast that only had more health would be the same fight for longer. Each
+   one turns over halfway down and fights differently after. */
 foe({ id: 'mothergla', name: 'Mother Glacier', hp: 46, atk: 5, cnt: 4, tier: 4, boss: true,
+  phase: { name: 'SHE CALVES', text: 'the ice comes off her in pieces',
+    apply: (g, u) => { u.kw.frenzy = (u.kw.frenzy || 0) + 1; summon(g, 'shardling', 2); } },
   art: A('#9fd8ff', '#ffffff', { stance:'root',tail:'none',mark:'icicles', skin:'ice',idle:'breathe',acc:'plating',accCol:'#dff0ff', shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
   kw: { barrage: 1, soak: 1 }, text: 'Barrage. Soak. When it triggers, Frost 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'frost', 1); } } });
 foe({ id: 'hollowking', name: 'The Hollow King', hp: 78, atk: 7, cnt: 4, tier: 5, boss: true,
+  phase: { name: 'THE CROWN CRACKS', text: 'what is under it does not need the crown',
+    apply: (g, u) => { u.kw.barrage = 1; u.atk += 2; foes(g, u).forEach((f) => addStatus(g, f, 'frost', 1)); } },
   art: A('#6f6f8f', '#c0c0d8', { stance:'stand',tail:'plume',mark:'patch',arms:'long', idle:'breathe', shape: 'boss', ears: 'antler', mouth: 'trap', eyes: 'slit', acc: 'crown', accCol: '#ffd166', evil: 1 }),
   kw: { longshot: 1, smack: 1 }, text: 'Longshot. Smackback. When it triggers, it calls a Shardling.',
   hooks: { trigger: (g, u) => summon(g, 'shardling', 1) } });
 foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 92, atk: 8, cnt: 5, tier: 6, boss: true,
+  phase: { name: 'THE BOILER GOES', text: 'everything in the room is on fire now',
+    apply: (g, u) => { u.cntMax = Math.max(2, u.cntMax - 2); foes(g, u).forEach((f) => addStatus(g, f, 'ember', 3)); } },
   art: A('#b0a080', '#e8dcc0', { stance:'squat',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'breathe', shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
   kw: { barrage: 1, smack: 1 }, text: 'Barrage. Smackback. Every trigger, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
 foe({ id: 'whitestag', name: 'The White Stag', hp: 42, atk: 5, cnt: 3, tier: 4, boss: true,
+  phase: { name: 'IT BOLTS', text: 'it stops circling and starts running',
+    apply: (g, u) => { u.cntMax = Math.max(1, u.cntMax - 1); u.cnt = 1; addStatus(g, u, 'swift', 2); } },
   art: A('#e8f2ff', '#ffffff', { stance:'quad',tail:'plume',mark:'tuft', skin:'fur',idle:'sway', shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
   kw: { aimless: 1, frenzy: 1 }, text: 'Aimless. Frenzy 1. When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 foe({ id: 'weeper', name: 'The Weeper', hp: 70, atk: 5, cnt: 3, tier: 5, boss: true,
+  phase: { name: 'IT STOPS WEEPING', text: 'and starts taking it out on the line',
+    apply: (g, u) => { u.kw.longshot = 0; u.kw.barrage = 1; addStatus(g, u, 'shell', 8); } },
   art: A('#8f7fb8', '#d8ccf0', { stance:'float',tail:'none',mark:'bandage',arms:'long', idle:'sway', shape: 'boss', ears: 'none', mouth: 'wide', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot. When it triggers, Weak 1 and Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) { addStatus(g, t, 'weak', 1); addStatus(g, t, 'slow', 1); } } } });
 foe({ id: 'lastwinter', name: 'The Last Winter', hp: 88, atk: 7, cnt: 4, tier: 6, boss: true,
+  phase: { name: 'THE COLD DEEPENS', text: 'every counter on your side grinds',
+    apply: (g, u) => { u.kw.frenzy = 1; foes(g, u).forEach((f) => addStatus(g, f, 'slow', 2)); } },
   art: A('#c8d8f0', '#ffffff', { stance:'stand',tail:'none',mark:'icicles',arms:'long', skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'big', acc: 'crown', accCol: '#cfe4ff', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, Frost 1 on every warden.',
   hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 1)) } });
@@ -1018,6 +1032,20 @@ function hurt(g, u, amount, src) {
   }
   const th = stat(u, 'thorns');
   if (th > 0 && src && src.alive && src !== u) hurt(g, src, th, null);
+  // a beast turns over at half health, once, and fights differently after
+  if (u.alive && u.boss && !u.phased && u.hp > 0 && u.hp <= u.maxHp / 2) {
+    const d2 = FOES[u.def];
+    if (d2 && d2.phase) {
+      u.phased = true;
+      d2.phase.apply(g, u);
+      fx.toast(d2.phase.name, '#ff9a3c');
+      fx.flash('#ffb0b0', 0.3);
+      fx.shake(12);
+      logLine(g, d2.phase.name.toLowerCase() + ' — ' + d2.phase.text, '#ff9a3c');
+      sfx('wave');
+      if (g.battle) g.battle.banner = { text: d2.phase.name, sub: d2.phase.text, t: 0, col: '#ff9a3c' };
+    }
+  }
   if (u.hp <= 0) die(g, u, src);
   return dmg;
 }
@@ -1739,16 +1767,45 @@ function cardPool(run) {
     !c.leader && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
 }
 const charmPool = () => Object.keys(CHARMS).filter(found);
+/* What the caravan is already doing, in numbers a weighting can read. */
+function deckLeanings(run) {
+  const tribes = {}, kws = {};
+  for (const c of run.deck.concat([run.leader])) {
+    const d = CARDS[c.def];
+    if (!d) continue;
+    if (d.tribe) tribes[d.tribe] = (tribes[d.tribe] || 0) + 1;
+    for (const k of Object.keys(c.kw || {})) if (c.kw[k]) kws[k] = (kws[k] || 0) + 1;
+    // what a card's text leaves behind counts as a leaning too
+    for (const st of STATUS_ORDER) if ((d.text || '').toLowerCase().indexOf(st) >= 0) kws[st] = (kws[st] || 0) + 1;
+  }
+  return { tribes, kws, size: run.deck.length };
+}
+
+/* An offer that ignores the deck is three random cards; one that reads it is a
+   direction you can steer. Rarity still sets the floor — a lean never turns a
+   rare into a common — but a caravan already built around Frost will be shown
+   Frost, and the thing it is short of. */
 function weightedCards(run, n) {
   const pool = cardPool(run);
+  const lean = deckLeanings(run);
+  const units = run.deck.filter((c) => c.type === 'unit').length;
+  const wantUnits = units < Math.max(3, Math.round(run.deck.length * 0.45));
   const bag = [];
   for (const c of pool) {
-    const w = c.rare === 1 ? 5 : c.rare === 2 ? 3 : 1;
-    for (let i = 0; i < w; i++) bag.push(c.id);
+    let w = c.rare === 1 ? 5 : c.rare === 2 ? 3 : 1;
+    if (c.tribe && lean.tribes[c.tribe]) w += Math.min(4, lean.tribes[c.tribe]);
+    for (const k of Object.keys(c.kw || {})) if (lean.kws[k]) w += 1;
+    for (const st of STATUS_ORDER) {
+      if (lean.kws[st] && (c.text || '').toLowerCase().indexOf(st) >= 0) w += 2;
+    }
+    // and it will not let a caravan starve for bodies or drown in them
+    if (c.type === 'unit') w += wantUnits ? 3 : -2;
+    else w += wantUnits ? -1 : 2;
+    for (let i = 0; i < Math.max(1, w); i++) bag.push(c.id);
   }
   const out = [];
   let guard = 0;
-  while (out.length < n && guard++ < 200) {
+  while (out.length < n && guard++ < 400) {
     const id = pick(bag);
     if (out.indexOf(id) < 0) out.push(id);
   }
@@ -1786,7 +1843,7 @@ function rollShop(g) {
   const cards = weightedCards(run, 3).map((id) => ({ id, price: p(PRICE[CARDS[id].rare] || 25), sold: false }));
   const charms = sample(charmPool(), 2).map((id) => ({ id, price: p(PRICE[CHARMS[id].rare] + 8), sold: false }));
   return { cards, charms, heal: { price: p(20), sold: false }, scar: { price: p(30), sold: false },
-    sigil: { price: p(58), sold: false } };
+    sigil: { price: p(58), sold: false }, burn: { price: p(26), sold: false } };
 }
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
@@ -5049,6 +5106,17 @@ function drawReward(c, t) {
       if (!r.bellTaken) hit('rewardBell', x, 428, w2, 132, i);
     });
   }
+  /* A reward is not only "take one of three". The same pick can thin the deck
+     or copy something already in it, which is where a build actually comes
+     from. */
+  if (!r.taken && r.cards.length) {
+    const bw4 = 210, gap4 = 16;
+    const total4 = bw4 * 2 + gap4;
+    button(c, 'rewardCopy', MID - total4 / 2, VH - 122, bw4, 46, 'COPY A CARD', '#5f4a8f', G.run.deck.length < 1, true);
+    button(c, 'rewardBurn', MID - total4 / 2 + bw4 + gap4, VH - 122, bw4, 46, 'BURN A CARD', '#8f4a4a', G.run.deck.length < 3, true);
+    txt(c, 'instead of taking one — a smaller deck draws what it needs',
+      MID, VH - 82, 12.5, '#7e97b8', 'center', 't');
+  }
   button(c, 'rewardSkip', MID - 90, VH - 60, 180, 46, r.taken ? 'ONWARD' : 'SKIP', r.taken ? '#3f8f5f' : '#40527a');
 }
 
@@ -5100,8 +5168,11 @@ function drawShop(c, t) {
   button(c, 'buyHeal', MID - 480, by, 250, 54, s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
   button(c, 'buyScar', MID - 210, by, 250, 54, s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
   button(c, 'buySigil', MID + 60, by, 250, 54, s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
-  txt(c, 'a sigil puts that warden on the board before the first bell, every fight',
-    MID - 85, by + 72, 13, '#7e97b8', 'center', 't');
+  button(c, 'buyBurn', MID + 330, by, 250, 54,
+    (s.burn && s.burn.sold) ? 'BURNED' : 'BURN A CARD — ' + (s.burn ? s.burn.price : 26), '#8f4a4a',
+    !s.burn || s.burn.sold || g.run.deck.length < 3);
+  txt(c, 'a sigil deploys that warden before the first bell · a burned card never comes back around',
+    MID, by + 72, 13, '#7e97b8', 'center', 't');
   button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
 }
 
@@ -5379,6 +5450,39 @@ function press(id, data) {
       });
       return;
     }
+    case 'rewardCopy': {
+      const r = g.ui.reward;
+      if (r.taken || !g.run.deck.length) return;
+      openChooser('COPY WHICH CARD?', g.run.deck.map((cd) => ({ card: cd })), (i) => {
+        const src = g.run.deck[i];
+        const copy = mkCard(src.def);
+        copy.charms = src.charms.slice();
+        copy.blessed = src.blessed;
+        rebuildCard(copy);
+        g.run.deck.push(copy);
+        g.run.taken = (g.run.taken || 0) + 1;
+        UI.choose = null;
+        sfx('get');
+        fx.toast('A SECOND ' + src.name.toUpperCase(), '#c9a6ff');
+        r.taken = true;
+        if (!r.charms.length && !(r.bells && r.bells.length)) advance(g);
+      }, { cancel: 'NEVER MIND' });
+      return;
+    }
+    case 'rewardBurn': {
+      const r = g.ui.reward;
+      if (r.taken || g.run.deck.length < 3) return;
+      openChooser('BURN WHICH CARD?', g.run.deck.map((cd) => ({ card: cd })), (i) => {
+        const gone = g.run.deck.splice(i, 1)[0];
+        UI.choose = null;
+        sfx('get');
+        fx.toast(gone.name.toUpperCase() + ' LEFT BEHIND', '#ff9aa5');
+        g.run.log.push(gone.name + ' was left behind to lighten the deck.');
+        r.taken = true;
+        if (!r.charms.length && !(r.bells && r.bells.length)) advance(g);
+      }, { cancel: 'NEVER MIND' });
+      return;
+    }
     case 'rewardSkip': advance(g); return;
     case 'rewardBell': {
       const r = g.ui.reward;
@@ -5421,6 +5525,19 @@ function press(id, data) {
       const o = ev.opts[data];
       if (o.can && !o.can(g)) return;
       o.go(g);
+      return;
+    }
+    case 'buyBurn': {
+      const s2 = g.ui.shop;
+      if (!s2 || !s2.burn || s2.burn.sold || g.run.gold < s2.burn.price || g.run.deck.length < 3) return;
+      openChooser('BURN WHICH CARD?', g.run.deck.map((cd) => ({ card: cd })), (i) => {
+        const gone = g.run.deck.splice(i, 1)[0];
+        g.run.gold -= s2.burn.price;
+        s2.burn.sold = true;
+        UI.choose = null;
+        sfx('get');
+        fx.toast(gone.name.toUpperCase() + ' LEFT BEHIND', '#ff9aa5');
+      }, { cancel: 'NEVER MIND' });
       return;
     }
     case 'buySigil': {
@@ -5860,7 +5977,7 @@ window.FF = {
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
-  UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed,
+  UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed, deckLeanings, weightedCards,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
   saveRun, loadRun, saveMeta, loadMeta, store,
