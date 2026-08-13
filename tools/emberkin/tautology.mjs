@@ -221,6 +221,16 @@ const MUTANTS = [
     find: "    say(beat.length ? b.npc.name : '',",
     to: "    say(''," },
 
+  { name: 'world: Crown Hollow goes mute again', aims: ['every place names itself, and every sign can be read from the ground'],
+    find: "    signs: { '10,10': 'CROWN HOLLOW. Down: Emberwood. The shrine is at the top. Whatever sits on it was here first.' },",
+    to: '    signs: {},' },
+  { name: 'world: a sign is read off the tile you stand on', aims: ['every place names itself, and every sign can be read from the ground'],
+    find: "  const sign = (G.map.signs || {})[tx + ',' + ty];",
+    to: "  const sign = (G.map.signs || {})[p.x + ',' + p.y];" },
+  { name: 'world: the board stops being a board', aims: ['every place names itself, and every sign can be read from the ground'],
+    find: "      '##......==S.......##',",
+    to: "      '##......==........##'," },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

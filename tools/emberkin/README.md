@@ -3648,3 +3648,53 @@ desktop one. That is the correct answer and not an obvious one.
     Four planted faults, all four bite; two sweep mutants aimed at the new
     section, which reports 20 of 81 killed; every mutant anchor re-audited —
     none orphaned. Render suite 2169 -> 2250 checks.
+
+114. **The map the whole game points at had nothing written on it** (pass 203).
+    A sweep of all eight maps — every tile kind, every warp, every sign, every
+    door, every patch of grass — found the world's structure sound and its
+    voice missing in exactly one place:
+
+        tile art        every kind used is drawn, every drawn kind is used
+        signs           0 mute sign tiles, 0 sign texts sitting on a non-sign
+        warps           23, all landing on ground you can stand on
+        doors           0 opening onto nothing
+        grass           all four routes' grass agrees with their enc table
+
+        route_one       "ROUTE ONE. North: Emberwood. East: Stillmere Shore…"
+        emberwood       "EMBERWOOD. Roots move. Paths do not…"
+        stillmere       "STILLMERE SHORE. Do not swim after dusk…"
+        crown_hollow    — no signs. No 'S' tile anywhere in the map.
+
+    Crown Hollow is the hardest grass in the game (five kin at L20–24), the
+    shrine, the legendary, and the last rival fight. It was the one outdoor
+    route that never said its own name, never said which way was down, and
+    never mentioned the thing sitting at the top of it. It has a board now,
+    one step right of where you come up out of Emberwood: *"CROWN HOLLOW.
+    Down: Emberwood. The shrine is at the top. Whatever sits on it was here
+    first."* Nearest sign to an arrival tile in the game — 1 step; Route One's
+    is 11 from town, Emberwood's 6.
+
+    The property is not "Crown Hollow has a sign". It is that every place you
+    walk through in the open names itself, and every board in the game is
+    readable from ground you can stand on — driven through the real
+    `interact()` from every standable side of all six signs — 19 approaches,
+    each one checked to speak that exact text.
+
+    **Recorded, not fixed** (with their map ids, as the brief asked):
+    `emberwood` has 4 ledge tiles and no sign explaining that ledges are
+    one-way — but `route_one`, which you always cross first, does say it, so
+    the rule is taught before it is used. `hollowbrook`, `route_one`,
+    `emberwood` and `stillmere` all have warps whose destination is never
+    named on any board (town → route_one, emberwood → both its exits, and
+    every interior back to town). Interiors have no boards at all, which is
+    correct — you can see the whole room.
+
+    **One suite fault, mine.** The Crown-Hollow-by-name block indexed
+    `Object.keys(ch.signs)[0]` unguarded, so the fault that deletes the sign
+    CRASHED the run at that line instead of failing five checks and carrying
+    on. A check that takes the suite down with it is not a check. Guarded.
+
+    Two planted faults, both bite (the sign removed: 6 clean failures; the sign
+    key transposed to `ty,tx`: 32). Three sweep mutants aimed at the new
+    section; every mutant anchor re-audited — 68 anchors, none orphaned, none
+    ambiguous. Render suite 2250 -> 2323 checks.
