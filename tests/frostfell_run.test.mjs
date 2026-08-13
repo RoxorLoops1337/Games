@@ -380,8 +380,12 @@ function cardWorth(id) {
     s += 5;                                        // gear is a turn that does something
     if (d.target === 'none') s += 1;
   }
-  // and whatever the caravan is furthest short of is worth more than its stats
-  const need = FF.caravanNeeds(G.run);
+  /* Weighting the pick by what the caravan is short of priced at +1, inside the
+     band. The read stays on the trail, the reward screen and the trader —
+     telling a PLAYER what their deck lacks is worth doing whether or not a
+     scoring rule can use it — but the pilot no longer pretends it is a
+     tiebreaker it can measure. */
+  const need = (DRAFT.read && false) ? FF.caravanNeeds(G.run) : null;
   if (need) {
     if (need.k === 'bodies' && d.type === 'unit') s += 5;
     if (need.k === 'wall' && (d.hp || 0) >= 10) s += 5;
@@ -407,13 +411,32 @@ function draftPick(ids) {
    The probe measures each of the five directly below, so if a different one
    were better the numbers would say so. */
 const courseWanted = () => G.run.tribe;
+/* THE SAME TREATMENT FOR THE REWARD SCREEN.
+
+   Steering the pool collapsed to one point the moment the courses were levelled,
+   which either means its levers were never worth much or that one of them was
+   carrying the rest. The fight ablation found three habits actively costing
+   points; there is no reason to assume this rung is cleaner. */
+const DRAFT = { redeal: true, temper: true, pass: true, read: true, course: true };
+const DRAFT_HABITS = [
+  ['redeal', 'buying a fresh offer'],
+  ['temper', 'tempering instead of taking'],
+  ['pass', 'walking on when the caravan wants nothing'],
+  ['read', 'picking what the caravan is short of'],
+  ['course', 'declaring a course at all'],
+];
+
 function draftTurn(r) {
   const run = G.run;
   const i = draftPick(r.cards);
   const worth = cardWorth(r.cards[i]);
   // an offer worth less than the price of a fresh one
   const rd = FF.redealPrice(run);
-  if (worth < 9 && run.gold >= rd + 20 && (run.redeals || 0) < 3) { FF.press('rewardRedeal'); return; }
+  /* Buying a fresh offer priced at +1 against a band of 2.2 — the scrip is
+     worth more in the trader's hands than in a redeal, and the pool is good
+     enough that three cards you dislike are rarely three cards you cannot use.
+     The button stays in the game; the pilot stops reaching for it. */
+  if (false && DRAFT.redeal && worth < 9 && run.gold >= rd + 20 && (run.redeals || 0) < 3) { FF.press('rewardRedeal'); return; }
   /* Whether to take a card is a question about the DECK, not about the card.
      Keying it on how good the offer looked made the pilot measurably worse the
      moment offers improved — better cards, more of them taken, a fatter deck,
@@ -422,13 +445,24 @@ function draftTurn(r) {
   const need = FF.caravanNeeds(run);
   /* A caravan that is not short of anything wants its cards harder, not more
      of them — and the reward screen will now trade the whole offer for that. */
-  if (!need && run.deck.length >= 9 && FF.temperable(run).length) {
+  /* And tempering instead of taking flipped from +5 to MINUS EIGHT the moment
+     the temper cap came down from four to three. That is not noise, it is the
+     two changes interacting: with only three tempers in a whole run, spending a
+     reward on one is spending a card to move a number you were going to reach
+     at the trader anyway. Out of the pilot; still on the screen, where a player
+     who has not been to a trader in three steps should absolutely reach for it. */
+  if (false && DRAFT.temper && !need && run.deck.length >= 9 && FF.temperable(run).length) {
     FF.press('rewardTemper');
     pickBiggest();
     return;
   }
-  if (!need && run.deck.length >= 11) { FF.press('rewardSkip'); return; }
-  if (run.deck.length >= 15 && worth < 14) { FF.press('rewardSkip'); return; }
+  /* And WALKING ON priced at minus four — the worst habit on this screen. It
+     was put in two rounds ago on the reasoning that a fat deck draws badly, and
+     that reasoning is sound; what was wrong was doing it for scrip rather than
+     for the deck. Tempering already covers the "I want strength, not breadth"
+     case and pays five points for it, so passing is now only for a deck that is
+     genuinely too fat to draw. */
+  if (DRAFT.pass && run.deck.length >= 15 && worth < 14) { FF.press('rewardSkip'); return; }
   FF.press('reward', i);
 }
 
@@ -475,7 +509,7 @@ function playRun(tribe, seed, mode, tweak) {
   FF.newRun(G, tribe, seed);
   // A pilot that steers the pool declares a course at the leader screen, the
   // way a player does — before anything is known except which leader it took.
-  if (mode === 'careful') G.run.course = courseWanted();
+  if (mode === 'careful' && DRAFT.course) G.run.course = courseWanted();
   if (tweak) tweak(G.run);
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
   let lastShop = null;
@@ -798,13 +832,32 @@ section('does money change anything');
   console.log(`    → money is worth ${normal.pct - broke.pct} points of win rate`);
   /* And the course on its own, handed over rather than bought — so the lever
      is measured apart from whether the pilot knows when to pull it. */
-  const noCourse = sweep2((run) => { run.course = null; });
-  const byCourse = FF.COURSES.map((co) => ({ co, r: sweep2((run) => { run.course = co.id; }) }));
+  /* FF_COURSE turns just this comparison up. The five courses were called level
+     at 210 runs an arm and the numbers moved ten points between samples, which
+     at a band of three means the levelling was as likely luck as design — the
+     same mistake the fight ablation was making for four rounds. */
+  const CN = Number(process.env.FF_COURSE || 0);
+  const sweepC = CN ? (tweak) => {
+    let wins = 0, runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < CN; i++) {
+        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
+        runs++;
+        if (st.won) wins++;
+      }
+    }
+    return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+  } : sweep2;
+  if (CN) console.log(`    (courses turned up: ${3 * CN} runs an arm)`);
+  const noCourse = sweepC((run) => { run.course = null; });
+  const byCourse = FF.COURSES.map((co) => ({ co, r: sweepC((run) => { run.course = co.id; }) }));
   console.log('');
   console.log(`    ${'no course'.padEnd(19)}${bar(noCourse.pct)} ${String(noCourse.pct + '%').padStart(4)}`);
   for (const { co, r } of byCourse) {
     console.log(`    ${co.short.toLowerCase().padEnd(19)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}`);
   }
+  const cband = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, 3 * (CN || N)))).toFixed(1);
+  console.log(`    (±${cband} is one standard deviation on the course rows)`);
   const bestCourse = byCourse.reduce((a, z) => (z.r.pct > a.r.pct ? z : a));
   const worstCourse = byCourse.reduce((a, z) => (z.r.pct < a.r.pct ? z : a));
   ok(bestCourse.r.pct >= noCourse.pct - band, 'declaring a course is never worse than declaring none');
@@ -878,6 +931,38 @@ section('which parts of playing well are worth anything');
    between the two rows is the fight and only the fight — and the difference
    between a weak deck played well and a strong one played badly is how much of
    a deck gap skill can actually close. */
+section('which reward-screen decisions are worth anything');
+{
+  const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || 8);
+  if (process.env.FF_ABLATE) console.log(`    (turned up: ${3 * N} runs an arm)`);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const sweep4 = () => {
+    let wins = 0, runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) { const st = playRun(tribe, 1000 + i * 37, 'careful'); runs++; if (st.won) wins++; }
+    }
+    return Math.round((wins / Math.max(1, runs)) * 100);
+  };
+  const all = sweep4();
+  const band = (100 * Math.sqrt(0.3 * 0.7 / Math.max(1, tribes.length * N))).toFixed(1);
+  console.log(`    the reward screen, played well:  ${all}%`);
+  const rows = [];
+  for (const [key, label] of DRAFT_HABITS) {
+    DRAFT[key] = false;
+    const without = sweep4();
+    DRAFT[key] = true;
+    rows.push({ label, cost: all - without });
+  }
+  rows.sort((a, z) => z.cost - a.cost);
+  for (const r of rows) {
+    const n = r.cost;
+    const bar = n > 0 ? '█'.repeat(Math.min(20, Math.round(n / 2))) : '';
+    console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
+  }
+  console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
+  ok(true, 'the reward ablation is a report, not a gate');
+}
+
 section('the same deck, two pilots');
 {
   const N = Number(process.env.FF_RUNS || 8);

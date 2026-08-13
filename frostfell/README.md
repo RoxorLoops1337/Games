@@ -476,6 +476,51 @@ rounds these numbers were read at a sample where the band was wider than the
 effect**, and three habits that were costing the pilot points survived because
 of it.
 
+### And the same for the reward screen
+
+`FF_ABLATE` prices that rung's habits too, and it needed to: steering the pool
+had collapsed to a single point, and the reason turned out not to be the
+courses.
+
+```
+before, at 450 runs an arm:        after the cull:
+    +8  declaring a course             +8  declaring a course
+    +5  tempering instead of taking     0  buying a fresh offer
+    +1  buying a fresh offer            0  tempering instead of taking
+    +1  picking what the deck lacks     0  walking on when it wants nothing
+    -4  walking on when it wants none   0  picking what the deck lacks
+```
+
+**Declaring a course is worth eight points and nothing else on that screen is
+worth anything** — the levelling did not make the courses irrelevant, it made
+them equal, which is what levelling is for.
+
+What was dragging the rung down was *walking on*, put in two rounds ago on the
+sound reasoning that a fat deck draws badly. The reasoning was right and the
+trigger was wrong: it passed for scrip rather than for the deck.
+
+**And tempering instead of taking flipped from +5 to −8 inside one round**, which
+is the most useful thing this instrument has shown: the temper cap came down from
+four to three in the same round, and with only three tempers in a whole run,
+spending a reward on one is spending a card to move a number the trader was going
+to move anyway. Habits are not independent, and a number measured before a rule
+changed is not a number about the game as it stands.
+
+Redealing, tempering and the caravan read all stay in the *game* — a redeal is an
+option worth having, tempering off a reward screen is right for a caravan three
+steps from a trader, and telling a player what their deck lacks is worth doing
+whether or not a scoring rule can use it. The pilot no longer pretends any of
+them is a rule it can measure.
+
+### And the courses, settled
+
+`FF_COURSE=150` turns that comparison up on its own, the way `FF_ABLATE` does the
+habits. At **450 runs an arm** (band ±2.2), against a 35% baseline with no course
+at all: Bodies 43%, Hearth 42%, Cold 42%, Gear 41%, Scrap 38%. Four of the five
+sit inside two standard deviations of each other and all five beat declaring
+nothing. **They are genuinely level, not luck** — which the ten-point swings at
+the smaller sample could not have told you either way.
+
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
 and "placing bodies where they will be hit" **nine points worse than filling the

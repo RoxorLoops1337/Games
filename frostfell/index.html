@@ -217,6 +217,7 @@ const KEYWORD = {
   longshot: { name: 'Longshot',  text: 'Reaches past the front and hits the back slot.' },
   barrage:  { name: 'Barrage',   text: 'Hits every foe in its lane.' },
   smack:    { name: 'Smackback', text: 'Hits back when it is hit.' },
+  vanguard: { name: 'Vanguard',  text: 'Swings twice while it stands in the front column.' },
   frenzy:   { name: 'Frenzy',    text: 'Swings one extra time per point.' },
   leech:    { name: 'Leech',     text: 'Heals itself for the damage it deals.' },
   explode:  { name: 'Blast',     text: 'Bursts for its value on every neighbour when it falls.' },
@@ -416,14 +417,17 @@ def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt
 /* Hoard on a body asks you to hold a card you want on the board, which is a
    trade nobody took. Hoard 2 makes waiting worth something: four turns in hand
    and it walks on as the hardest thing you own. */
-/* Second buff, and this time it is the body rather than the rating. With the
-   pilot taught to hold a hoarder it STILL came last, which is the answer the
-   brief asked for: it is the card. Seven health on a three counter meant it
-   arrived late and died before it swung, so the waiting bought nothing. Ten
-   health on a two counter is a body worth waiting for. */
-def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 10, atk: 2, cnt: 2, rare: 2,
-  art: A('#c9a6ff', '#eee0ff', { stance:'float',tail:'whip',mark:'tuft', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
-  kw: { hoard: 2 }, text: 'Hoard 2. Every turn it waits in your hand it comes out two points angrier.' });
+/* KEEPSAKE IS GONE, after four rounds at the bottom of the usage table and two
+   buffs — first the rating, then the body. Hoard on a WARDEN asks you to hold a
+   card you want on the board, and no amount of tuning makes that a trade worth
+   taking: the card was not weak, it was pointed the wrong way. Hoard stays on
+   Old Grudge, where waiting costs nothing.
+
+   What replaces it is a body with a reason to exist, and the reason is the rule
+   the game most needed a card to teach: the front column. */
+def({ id: 'bulwark', name: 'Bulwark', type: 'unit', tribe: null, hp: 13, atk: 3, cnt: 3, rare: 2,
+  art: A('#9fb8d8', '#e4ecf8', { stance:'stand',tail:'stub',mark:'brand',arms:'stub', skin:'metal',idle:'sway',acc:'plating',accCol:'#cfe0f0', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'shield', accCol: '#7f96b8' }),
+  kw: { vanguard: 1 }, text: 'Vanguard. It swings twice while it stands in the front column.' });
 
 def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
   art: A('#b0a48c', '#e8ddc4', { stance:'stand',tail:'stub',mark:'bandage',arms:'long', skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
@@ -1337,7 +1341,8 @@ function triggerUnit(g, u) {
   // Nothing in front of it? It goes looking. Clearing a lane buys you a turn
   // of quiet, not a foe that stands there for the rest of the fight.
   if (!laneOf(g, other(u.side), u.lane).length && shuffleToward(g, u)) return;
-  const times = 1 + (u.kw.frenzy || 0);
+  // Vanguard is Frenzy that only happens where it is dangerous to stand.
+  const times = 1 + (u.kw.frenzy || 0) + (u.kw.vanguard && u.col === 0 ? u.kw.vanguard : 0);
   for (let i = 0; i < times; i++) {
     if (!u.alive || g.battle.over) break;
     if (u.hooks.trigger) u.hooks.trigger(g, u);
@@ -1836,9 +1841,17 @@ const eliteMod = (b) => (b && b.mod ? ELITE_MODS.find((m) => m.id === b.mod) : n
    which is a real choice, because a wave pulled onto a board you have already
    set up dies faster than one that arrives while you are rebuilding. */
 /* The turn past which the fire is out and the frost starts taking the room. */
-const DEEP_FREEZE = 30;
+const DEEP_FREEZE = 26;
 const WAVE_GAP = 5;
-const waveGap = (g) => Math.max(2, WAVE_GAP + ((g.run && g.run.waveBonus) || 0));
+/* THE LAST ZONE DOES NOT WAIT.
+
+   Waves arrive a turn sooner on Hollow Peak. The ceiling wanted bringing down
+   and foeScale was off the table, so this is the rule-shaped version: it costs
+   a strong caravan the thing a strong caravan relies on — the turn or two of
+   quiet between waves in which it rebuilds — without making any single foe
+   harder to kill, and it leaves the first two zones exactly as they were. */
+const waveGap = (g) => Math.max(2, WAVE_GAP + ((g.run && g.run.waveBonus) || 0)
+  - ((g.run && g.run.zone >= ZONES.length - 1) ? 1 : 0));
 
 /* Locked in per run so a reload does not reroll the beast you were beaten by. */
 function zoneBoss(g, zi) {
@@ -2361,7 +2374,12 @@ function takeCard(g, id) {
    is simply four times the power, and it measured that way: a competent pilot
    went to a 67% win rate the moment the doors opened. The cap makes the doors
    a question of WHEN and WHAT IT COSTS rather than how many you can find. */
-const TEMPER_CAP = 4;
+/* Three, not four. The top rung sat at 42% against a careless 10%, and the
+   ceiling wanted bringing down without touching the difficulty curve — this is
+   the number a well-played run is actually built on, and it is printed on the
+   trail where the player can see it. One fewer tempered card is the whole
+   difference between a caravan that is strong and one that is finished. */
+const TEMPER_CAP = 3;
 const tempered = (run) => run.deck.concat([run.leader]).filter((c) => c.charms.indexOf('blessed') >= 0).length;
 function temperable(run) {
   if (tempered(run) >= TEMPER_CAP) return [];
@@ -2526,6 +2544,17 @@ function campChoose(g, what, arg) {
 
 /* A rest stop hands out one small, permanent kindness. Nothing here is a
    trade — that is what the events are for. */
+/* Each of these was drawn as the same generic star, on a screen whose whole job
+   is to make one small kindness feel like a choice between three. They are what
+   they say they are now. */
+const BLESS_ART = {
+  kettle: { kind: 'kettle', col: '#8fe0a0' },
+  purse:  { kind: 'purse',  col: '#ffd166' },
+  grind:  { kind: 'stone',  col: '#cfd8e8' },
+  ward:   { kind: 'shield', col: '#7fb2e8' },
+  quick:  { kind: 'rope',   col: '#8fffc4' },
+  hands:  { kind: 'pack',   col: '#c9a6ff' },
+};
 const BLESSINGS = [
   { id: 'kettle', name: 'A HOT KETTLE', sub: 'mend 8 on every warden',
     go: (g) => { g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 8); }); advance(g); } },
@@ -4780,6 +4809,8 @@ function drawLeaderPick(c, t) {
 /* -------------------------------------------------- the collection ------- */
 
 function collectionItems() {
+  // A Handful of Snow belongs to one room and can never be drafted, bought or
+  // kept — it is not a thing to collect, and listing it made the tally lie.
   const out = [];
   for (const c of Object.values(CARDS)) {
     if (c.leader) out.push({ id: c.id, kind: 'leader', name: c.name });
@@ -4788,7 +4819,7 @@ function collectionItems() {
     if (!c.leader && c.type === 'unit') out.push({ id: c.id, kind: 'unit', name: c.name });
   }
   for (const c of Object.values(CARDS)) {
-    if (c.type === 'item') out.push({ id: c.id, kind: 'item', name: c.name });
+    if (c.type === 'item' && !c.noPool) out.push({ id: c.id, kind: 'item', name: c.name });
   }
   for (const id of Object.keys(CHARMS)) out.push({ id, kind: 'charm', name: CHARMS[id].name });
   return out;
@@ -6177,6 +6208,94 @@ function drawCamp(c, t) {
   });
 }
 
+/* WHAT THE PLACE LOOKS LIKE.
+
+   Every event was three boxes of text on an empty hillside — the flattest
+   screen in the game, on the beat that is meant to be its most story-like. Each
+   one is drawn now, out of the same primitives everything else uses, so a stop
+   on the road looks like a stop on the road. */
+function drawEventArt(c, id, x, y, t) {
+  c.save();
+  c.translate(x, y);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const glow = (col, r, a) => {
+    c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = a;
+    const gg = c.createRadialGradient(0, 0, 0, 0, 0, r);
+    gg.addColorStop(0, col); gg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = gg; c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fill(); c.restore();
+  };
+  if (id === 'shrine') {
+    glow('#ffd166', 120, 0.28 + Math.sin(t * 1.4) * 0.06);
+    // a standing stone, leaning, with snow on its shoulder and a bowl at its foot
+    c.beginPath();
+    c.moveTo(-26, 46); c.lineTo(-19, -52); c.lineTo(10, -62); c.lineTo(28, 46);
+    c.closePath(); inked(c, '#6c7590', 3, C.ink);
+    c.beginPath(); c.moveTo(-19, -52); c.quadraticCurveTo(-4, -68, 10, -62);
+    c.lineTo(6, -50); c.quadraticCurveTo(-6, -56, -17, -44); c.closePath();
+    inked(c, '#eaf2ff', 2, C.ink);
+    c.beginPath(); c.arc(2, 6, 9, 0, TAU); inked(c, '#ffd166', 2.4, C.ink);
+    c.beginPath(); c.ellipse(0, 50, 46, 9, 0, 0, TAU);
+    c.fillStyle = 'rgba(232,242,255,.5)'; c.fill();
+  } else if (id === 'caravan') {
+    // a stopped cart, one wheel down, snow gathering on the canvas
+    c.beginPath(); rr(c, -54, -34, 108, 50, 10); inked(c, '#d8e4f6', 3, C.ink);
+    c.beginPath(); c.moveTo(-54, -34); c.quadraticCurveTo(0, -62, 54, -34);
+    c.lineTo(54, -26); c.quadraticCurveTo(0, -52, -54, -26); c.closePath();
+    inked(c, '#eaf2ff', 2, C.ink);
+    c.beginPath(); rr(c, -58, 14, 116, 12, 5); inked(c, '#8a6a3f', 3, C.ink);
+    c.beginPath(); c.arc(-32, 36, 16, 0, TAU); inked(c, '#6f5a3a', 3, C.ink);
+    c.save(); c.rotate(0.5);
+    c.beginPath(); c.arc(40, 22, 16, 0, TAU); inked(c, '#5a4830', 3, C.ink);
+    c.restore();
+  } else if (id === 'spring') {
+    // steam off warm rock
+    for (let i = 0; i < 4; i++) {
+      const ph = t * 0.8 + i * 1.5, up = ((ph % 3) / 3);
+      c.save(); c.globalAlpha = 0.5 * (1 - up);
+      c.beginPath(); c.arc(-30 + i * 20 + Math.sin(ph * 2) * 8, 20 - up * 92, 13 + up * 16, 0, TAU);
+      c.fillStyle = '#eaf6ff'; c.fill(); c.restore();
+    }
+    glow('#8fe3ff', 96, 0.2);
+    c.beginPath();
+    c.moveTo(-62, 46); c.quadraticCurveTo(-40, 16, -8, 22);
+    c.quadraticCurveTo(30, 10, 62, 46); c.closePath();
+    inked(c, '#5d6a86', 3, C.ink);
+    c.beginPath(); c.ellipse(0, 34, 30, 9, 0, 0, TAU); inked(c, '#7fd8e8', 2.4, C.ink);
+  } else if (id === 'bell') {
+    // a bell hung in a dead tree, swinging a little
+    c.strokeStyle = '#4a4030'; c.lineWidth = 8;
+    c.beginPath(); c.moveTo(-46, 58); c.lineTo(-30, -30); c.lineTo(-6, -54); c.stroke();
+    c.lineWidth = 5;
+    c.beginPath(); c.moveTo(-30, -30); c.lineTo(-58, -50); c.stroke();
+    c.beginPath(); c.moveTo(-14, -44); c.lineTo(34, -50); c.stroke();
+    c.save();
+    c.translate(24, -50); c.rotate(Math.sin(t * 1.6) * 0.14);
+    c.beginPath();
+    c.moveTo(-20, 34); c.quadraticCurveTo(-18, -6, 0, -12);
+    c.quadraticCurveTo(18, -6, 20, 34); c.closePath();
+    inked(c, '#ffd166', 3, C.ink);
+    c.beginPath(); c.arc(0, 38, 5, 0, TAU); inked(c, '#c9a24a', 2, C.ink);
+    c.restore();
+  } else {
+    // somebody else's fire
+    glow('#ff9a3c', 130, 0.3 + Math.sin(t * 3) * 0.07);
+    for (let i = 0; i < 3; i++) {
+      const s2 = 1 - i * 0.24, ph = t * 5 + i * 1.7;
+      c.beginPath();
+      c.moveTo(0, 34 * s2);
+      c.quadraticCurveTo(38 * s2 + Math.sin(ph) * 6, -6 * s2, 0, -58 * s2 + Math.sin(ph) * 8);
+      c.quadraticCurveTo(-38 * s2 - Math.sin(ph) * 6, -6 * s2, 0, 34 * s2);
+      c.fillStyle = ['#ff6a2c', '#ff9a3c', '#ffd166'][i];
+      c.globalAlpha = 0.92; c.fill();
+    }
+    c.globalAlpha = 1;
+    c.strokeStyle = '#5a4830'; c.lineWidth = 7; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-38, 44); c.lineTo(30, 30); c.stroke();
+    c.beginPath(); c.moveTo(-30, 30); c.lineTo(38, 44); c.stroke();
+  }
+  c.restore();
+}
+
 function drawEvent(c, t) {
   const g = G, ev = g.ui.event && g.ui.event.def;
   drawBackdrop(c, g.run.zone, t);
@@ -6186,11 +6305,20 @@ function drawEvent(c, t) {
   const lines = wrapText(c, ev.text, 17, 860);
   lines.forEach((ln, i) => txt(c, ln, MID, 142 + i * 24, 17, '#bcd4f0', 'center', 't'));
 
+  c.save();
+  c.globalAlpha = 0.35; c.fillStyle = '#0d1830';
+  c.beginPath(); c.ellipse(MID, 306, 96, 17, 0, 0, TAU); c.fill();
+  c.restore();
+  c.save();
+  c.translate(MID, 244); c.scale(1.35, 1.35);
+  drawEventArt(c, ev.id, 0, 0, t);
+  c.restore();
+
   const n = ev.opts.length;
   const w = 320, gap = 24;
   const total = n * w + (n - 1) * gap;
   ev.opts.forEach((o, i) => {
-    const x = MID - total / 2 + i * (w + gap), y = 300;
+    const x = MID - total / 2 + i * (w + gap), y = 356;
     const able = !o.can || o.can(g);
     const hovered = UI.hover && UI.hover.id === 'eventOpt' && UI.hover.data === i;
     panel(c, x, y - (hovered && able ? 6 : 0), w, 150, 14, able ? '#1d2c49' : '#2a3145', able ? '#7fb2e8' : '#4a5570');
@@ -6200,6 +6328,61 @@ function drawEvent(c, t) {
       txt(c, ln, x + w / 2, y + 104 + k * 18 - (hovered && able ? 6 : 0), 14, able ? '#9fc0e4' : '#67718a', 'center', 't'));
     if (able) hit('eventOpt', x, y, w, 150, i);
   });
+}
+
+/* One small drawing per kindness, out of the same primitives as everything
+   else: a kettle, a purse, a whetstone, a coat, a rope, a pack. */
+function drawBlessIcon(c, art, t) {
+  const col = art.col;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  if (art.kind === 'kettle') {
+    c.beginPath(); rr(c, -22, -6, 44, 30, 10); inked(c, col, 3, C.ink);
+    c.beginPath(); c.moveTo(-22, 2); c.quadraticCurveTo(-36, 6, -30, 18); c.stroke();
+    c.beginPath(); c.moveTo(22, 0); c.quadraticCurveTo(34, -2, 32, 10); c.stroke();
+    c.beginPath(); c.moveTo(-10, -6); c.quadraticCurveTo(0, -18, 10, -6); c.stroke();
+    for (let i = 0; i < 2; i++) {
+      c.save(); c.globalAlpha = 0.55;
+      c.beginPath(); c.arc(-4 + i * 10, -22 - Math.sin(t * 2 + i) * 6, 5, 0, TAU);
+      c.fillStyle = '#eaf6ff'; c.fill(); c.restore();
+    }
+  } else if (art.kind === 'purse') {
+    c.beginPath();
+    c.moveTo(-20, -8); c.quadraticCurveTo(-26, 26, 0, 28);
+    c.quadraticCurveTo(26, 26, 20, -8); c.closePath();
+    inked(c, col, 3, C.ink);
+    c.beginPath(); c.moveTo(-20, -8); c.quadraticCurveTo(0, -22, 20, -8); c.stroke();
+    c.beginPath(); c.arc(0, 8, 6, 0, TAU); inked(c, '#c9a24a', 2, C.ink);
+  } else if (art.kind === 'stone') {
+    c.beginPath(); rr(c, -26, -10, 52, 22, 9); inked(c, col, 3, C.ink);
+    c.strokeStyle = '#9fb0c8'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(-16, -2); c.lineTo(16, -2); c.stroke();
+    c.save(); c.rotate(-0.5);
+    c.beginPath(); c.moveTo(-4, -26); c.lineTo(4, -26); c.lineTo(2, 4); c.lineTo(-2, 4);
+    c.closePath(); inked(c, '#e8eef8', 2, C.ink); c.restore();
+  } else if (art.kind === 'shield') {
+    c.beginPath();
+    c.moveTo(0, -28); c.lineTo(24, -16);
+    c.quadraticCurveTo(22, 20, 0, 30);
+    c.quadraticCurveTo(-22, 20, -24, -16); c.closePath();
+    inked(c, col, 3, C.ink);
+    c.strokeStyle = '#dfeaff'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(0, -18); c.lineTo(0, 18); c.stroke();
+  } else if (art.kind === 'rope') {
+    c.strokeStyle = col; c.lineWidth = 5;
+    c.beginPath();
+    for (let i = 0; i <= 14; i++) {
+      const yy = -26 + (i / 14) * 52, xx = Math.sin(i * 0.85) * 13;
+      i ? c.lineTo(xx, yy) : c.moveTo(xx, yy);
+    }
+    c.stroke();
+    c.beginPath(); c.arc(Math.sin(0) * 13, -26, 4, 0, TAU); c.fillStyle = col; c.fill();
+  } else {
+    // a pack: a bundle with a strap
+    c.beginPath(); rr(c, -22, -18, 44, 44, 12); inked(c, col, 3, C.ink);
+    c.strokeStyle = C.ink; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(-22, -2); c.lineTo(22, -2); c.stroke();
+    c.beginPath(); c.moveTo(-8, -18); c.quadraticCurveTo(0, -32, 8, -18); c.stroke();
+  }
 }
 
 function drawRest(c, t) {
@@ -6217,19 +6400,15 @@ function drawRest(c, t) {
     const x = MID - total / 2 + i * (w + gap), y = 236;
     const hovered = UI.hover && UI.hover.id === 'restPick' && UI.hover.data === i;
     panel(c, x, y - (hovered ? 6 : 0), w, 210, 16, '#1d2c49', '#8fe0d0');
+    const art = BLESS_ART[bl.id] || { kind: 'stone', col: '#8fe0d0' };
     c.save();
     c.translate(x + w / 2, y + 76 - (hovered ? 6 : 0));
     const pulse = 1 + Math.sin(t * 2 + i) * 0.05;
     c.scale(pulse, pulse);
-    c.globalAlpha = 0.5; c.fillStyle = '#8fe0d0';
-    c.beginPath(); c.arc(0, 0, 34, 0, TAU); c.fill();
+    c.globalAlpha = 0.35; c.fillStyle = art.col;
+    c.beginPath(); c.arc(0, 0, 36, 0, TAU); c.fill();
     c.globalAlpha = 1;
-    c.beginPath();
-    c.moveTo(0, -26); c.lineTo(9, -8); c.lineTo(28, -6); c.lineTo(14, 8);
-    c.lineTo(18, 27); c.lineTo(0, 17); c.lineTo(-18, 27); c.lineTo(-14, 8);
-    c.lineTo(-28, -6); c.lineTo(-9, -8);
-    c.closePath();
-    inked(c, '#d8fff4', 3, C.ink);
+    drawBlessIcon(c, art, t + i);
     c.restore();
     wrapText(c, bl.name, 22, w - 40).forEach((ln, k) =>
       txt(c, ln, x + w / 2, y + 140 + k * 24 - (hovered ? 6 : 0), 22, '#eaf6ff', 'center', 'd'));
@@ -6247,19 +6426,16 @@ function drawShrine(c, t) {
   wrapText(c, 'Old stone, warm to the hand in weather that should not allow it. Leave one card of your caravan on the step overnight and it will be given back better than it was.', 17, 820)
     .forEach((ln, i) => txt(c, ln, MID, 140 + i * 24, 17, '#bcd4f0', 'center', 't'));
 
-  // the stone itself
+  /* The stone itself — the same one the roadside shrine event draws, at twice
+     the size. It was a flat pentagon on a flat disc, which is a shame for the
+     one place in the game described as warm to the hand. */
   c.save();
-  c.translate(MID, 330);
-  const glow = 0.4 + Math.sin(t * 1.6) * 0.16;
-  c.globalAlpha = glow; c.fillStyle = '#ffd166';
-  c.beginPath(); c.arc(0, 0, 74, 0, TAU); c.fill();
-  c.globalAlpha = 1;
-  c.beginPath();
-  c.moveTo(0, -66); c.lineTo(44, -14); c.lineTo(26, 54); c.lineTo(-26, 54); c.lineTo(-44, -14);
-  c.closePath();
-  inked(c, '#c9bda0', 4, C.ink);
-  c.beginPath(); c.arc(0, 2, 15, 0, TAU);
-  inked(c, '#ffd166', 3, C.ink);
+  c.globalAlpha = 0.35; c.fillStyle = '#0d1830';
+  c.beginPath(); c.ellipse(MID, 388, 92, 16, 0, 0, TAU); c.fill();
+  c.restore();
+  c.save();
+  c.translate(MID, 330); c.scale(1.7, 1.7);
+  drawEventArt(c, 'shrine', 0, 0, t);
   c.restore();
 
   button(c, 'shrineGive', MID - 300, 452, 280, 62, 'LEAVE A CARD', '#8f7f3f');
