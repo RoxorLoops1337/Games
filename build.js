@@ -65,6 +65,7 @@ const STATIC_PATHS = [
   'flipper_crawl',
   'duck_fishing',
   'emberkin',
+  'frostfell',
   'birds_and_beasts',
   'joske_de_flosser',
   'donut_patrol',
