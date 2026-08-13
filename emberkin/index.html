@@ -4178,7 +4178,29 @@ function growCard(owned, amount) {
   return owned.plus - before;
 }
 
-const cardText = (inst) => CARDS[inst.id].txt.replace('{v}', cardValue(inst));
+/**
+ * What a card says, with its live value in it — and with its rider qualified
+ * against the thing you are looking at.
+ *
+ * Pass 200 taught the KIN move card that a creature cannot take the status its
+ * own element deals. The deck is a second voice and it was not told. Four cards
+ * promise one — Kindle and Ember Oil burn, Rootbind and Venom Coat snare — and
+ * driven eighty times each into a foe that shrugs it off, they landed it zero
+ * times while the text went on offering it. Venom Coat and Ember Oil are the
+ * expensive half of that: powers, bought for the rest of a battle in which they
+ * can do nothing at all.
+ *
+ * Out of a fight there is nobody to be immune, so the plain promise stands.
+ */
+const cardText = (inst) => {
+  const c = CARDS[inst.id];
+  const said = c.txt.replace('{v}', cardValue(inst));
+  const st = (c.fx || {}).st;
+  const bat = B();
+  const there = bat && bat.foe;
+  return st && there && there.types.includes(IMMUNE_TO[st[0]] || '')
+    ? `${said} It shrugs that off.` : said;
+};
 
 /** Cards are owned as individual copies, because each one grows on its own. */
 function mkCard(id) {
