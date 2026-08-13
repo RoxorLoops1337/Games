@@ -35,6 +35,25 @@ the markup, the CSS, the fonts and the whole game.
 - **Hurt.** A warden that falls comes back with half its attack and half its
   health, and shakes it off by seeing a whole fight through. Damage carries
   between fights; camps and the trader mend it.
+- **Combos.** Kills inside one turn are counted together and paid for. Clearing
+  a board in a single action is the play the whole game points at.
+- **Charms** bolt permanently onto a card. **Sigils** put that warden on the
+  board before the first bell. **Bells** are run-wide and chosen after a beast
+  falls — an extra card each hand, a slower wave clock, a fatter purse.
+- **Events** are forks in the road: a shrine, a stopped caravan, a hot spring,
+  a bell in a dead tree, somebody else's fire. Every option is a real trade.
+
+## Teaching, sound, and feel
+
+A first run comes with hints that watch rather than block — each waits for the
+player to do the thing it names, stays up long enough to read even when the
+action that clears it has already happened, and the whole sequence goes away
+with one tap. HOW TO PLAY is a three-page rulebook covering the fight, every
+status and every keyword; it is on the title screen and behind `?` in a fight.
+
+The score is a step sequencer, not a loop: three voices over sixteen steps with
+the root, scale and tempo chosen by where you are — and it runs on its own
+randomness, because a run has to play the same way twice.
 
 ## Layout of the source
 
@@ -65,7 +84,7 @@ node tools/frostfont/build.mjs --specimen  # write fonts.html
 ## Tests
 
 ```
-npm run test:frostfell    # rules, render, and a bot that plays whole runs
+npm run test:frostfell    # rules, render, teaching, and a bot that plays whole runs
 npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 ```
 

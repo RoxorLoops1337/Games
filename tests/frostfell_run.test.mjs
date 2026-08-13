@@ -47,6 +47,18 @@ function botTurn() {
   FF.passTurn(G);
 }
 
+/* Some choices open a chooser, and a couple of them open a second one behind
+   the first. The bot always takes the leftmost option until the stack clears. */
+function settleChoosers() {
+  let guard = 0;
+  while (FF.UI.choose && guard++ < 6) {
+    const cb = FF.UI.choose.onPick;
+    cb(0);
+    if (guard > 3) FF.UI.choose = null;   // a chooser that will not close is a bug, not a loop
+  }
+  FF.UI.choose = null;
+}
+
 function playRun(tribe, seed) {
   FF.newRun(G, tribe, seed);
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
@@ -68,10 +80,15 @@ function playRun(tribe, seed) {
     } else if (G.screen === 'reward') {
       const r = G.ui.reward;
       if (r.cards.length && !r.taken) FF.press('reward', 0);
-      else if (r.charms.length && !r.charmTaken) {
-        FF.press('rewardCharm', 0);
-        if (FF.UI.choose) { FF.UI.choose.onPick(0); FF.UI.choose = null; }
-      } else FF.press('rewardSkip');
+      else if (r.charms.length && !r.charmTaken) { FF.press('rewardCharm', 0); settleChoosers(); }
+      else if (r.bells && r.bells.length && !r.bellTaken) FF.press('rewardBell', 0);
+      else FF.press('rewardSkip');
+    } else if (G.screen === 'event') {
+      const ev = G.ui.event.def;
+      let pickIdx = ev.opts.length - 1;
+      for (let k = 0; k < ev.opts.length; k++) { const o = ev.opts[k]; if (!o.can || o.can(G)) { pickIdx = k; break; } }
+      FF.press('eventOpt', pickIdx);
+      settleChoosers();
     } else if (G.screen === 'shop') {
       const s = G.ui.shop;
       let bought = false;
