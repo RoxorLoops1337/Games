@@ -316,6 +316,30 @@ def({ id: 'warmroot', name: 'Warmroot', type: 'unit', tribe: 'hearth', hp: 14, a
    So Soak stays scarce, on purpose, and it is written down here so the next
    round does not read the same table and build the same card. Content that
    substitutes for the geometry is not content. */
+/* AND A THIRD VANGUARD CARD WAS BUILT AND CUT, WHICH MAKES THE RULE.
+
+   Vanguard was the one thing built last round that measured positive, so this
+   round built more of it: a cheap body that gains an attack every time it
+   triggers in the front row, capped at +4 after the uncapped version proved
+   the point twice as loudly.
+
+   Out of the pool it went, because it is the same finding as the taunt cards
+   and the hand-targeting scheme, and three times is a rule:
+
+     A MECHANIC THAT REWARDS LEAVING THE BOARD ALONE BELONGS TO THE PLAYER WHO
+     NEVER MOVES ANYTHING.
+
+   Vanguard pays for standing in the front. A careful pilot moves bodies in and
+   out of the front every turn and collects some of it; a careless pilot parks
+   a warden there on turn one and never touches it again, and collects ALL of
+   it. Measured: with this card in the pool the careless rung went 6% to 10%
+   and the fight rung went +11 to +7; with it out, both returned exactly.
+
+   The mechanics this game is good at all demand a RESPONSE — a scheme you have
+   one turn to answer, a room rule that prices every deployment, a front row
+   that trades safety for tempo. The ones that reward a settled board reward
+   the player who was going to settle anyway. */
+
 /* Vanguard — swings twice while it stands in the front column — is the one
    keyword that pays a player for using the geometry the whole board is built
    on, and it was on a single card. */
@@ -784,6 +808,26 @@ const SCHEMES = {
       return true;
     },
   },
+  /* A FOURTH WAS BUILT AND CUT, AND THIS IS WHY.
+
+     Every scheme here is answered on the BOARD — move the named warden, leave
+     them no slot, empty the lane — three ways of saying "reposition". A fourth
+     was written to be answered from the HAND: it took the piece of gear you
+     were saving, so the only denial was to spend that gear now, worse than you
+     wanted to. On paper it couples the only two fight habits that price above
+     zero, holding gear and denying schemes.
+
+     Measured, it made the game EASIER, and the reason is structural rather than
+     a matter of tuning. The careless pilot's hand is always empty — it dumps
+     every card the turn it draws it — so a foe that spends a telegraph reaching
+     for the hand is reaching into a pocket with nothing in it, and it read as
+     four free points of win rate for the worst pilot in the game. Meanwhile the
+     pilot that DOES hold gear is the one being taxed.
+
+     ANY SCHEME THAT TARGETS THE HAND IS A GIFT TO A PLAYER WHO DOES NOT USE IT.
+     The board is the only shared surface: everybody has one, so everybody can
+     be threatened on it. Kept here as a note rather than as a card, so the next
+     round does not write it again. */
 };
 
 /* -- the bestiary --------------------------------------------------------- */
@@ -838,6 +882,9 @@ foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
   art: A('#6f96b8', '#cfe4f5', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
   kw: {}, scheme: 'mark', text: 'Its bite leaves Weak 1. It picks its warden a turn ahead.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
+/* The first thing in the bestiary that reaches for your hand rather than your
+   board, at tier 2 so a caravan meets it while there is still time to learn
+   what the answer is. */
 foe({ id: 'bruiser', name: 'Bruiser', hp: 13, atk: 3, cnt: 3, tier: 2,
   art: A('#7a8296', '#c4ccd8', { stance:'squat',tail:'stub',mark:'brand', skin:'fur',idle:'paw', shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
   kw: { shove: 1 }, text: 'Shove. It puts your line where it wants it.' });
@@ -2678,13 +2725,30 @@ const READS = [
 /* The biggest number a piece of gear puts on one target, read out of the same
    preview table the card text comes from — so this cannot drift from what the
    card actually does. */
+/* AND DAMAGE THAT ARRIVES LATE IS STILL DAMAGE.
+
+   Running the careless transcript across all four leaders turned up one that is
+   not like the others: Hearth is told it is SHORT OF A HARD HIT on the first
+   step of a first run, and the other three are told they want for nothing. It
+   is not short of one. Its hard hit is Ember Flask — four points of burn, the
+   most damage any starting card in the game does to one target — and this
+   function only counted the number in the `dmg` column, so a card whose whole
+   output is a status read as zero.
+
+   That is the game giving a specific leader wrong advice from the first screen
+   of somebody's first run, which is worse than a balance problem. Ember and
+   Spice are damage on a delay; they are counted as what they are worth. */
 function hitOf(card) {
   const f = PREVIEW[card.def];
   if (!f) return 0;
   try {
     const fake = { uid: -1, side: 'e', lane: 0, col: 0, alive: true, hp: 99, maxHp: 99, atk: 3, cnt: 2, st: {}, kw: {} };
-    return (f({ battle: { units: [fake] } }, fake, card) || [])
-      .reduce((n, x) => Math.max(n, x.dmg || 0), 0);
+    return (f({ battle: { units: [fake] } }, fake, card) || []).reduce((n, x) => {
+      let v = x.dmg || 0;
+      const m = x.tag && x.tag.match(/(EMBER|SPICE)\s*(\d+)/);
+      if (m && x.u && x.u.side === 'e') v += Number(m[2]);
+      return Math.max(n, v);
+    }, 0);
   } catch (e) { return 0; }
 }
 function caravanRead(run) {
@@ -5076,16 +5140,41 @@ function setMute(m) {
    touch is always exactly what they can see. */
 let hits = [];
 const hit = (id, x, y, w, h, data) => { hits.push({ id, x, y, w, h, data }); };
+/* WHAT A THUMB NEEDS, IN THE UNITS A THUMB WORKS IN.
+
+   The render suite has checked touch targets since iteration 6 and it checked
+   them in STAGE units — but the stage is 1280 wide and an iPhone SE is 667 CSS
+   pixels across, so everything on screen is half the size the check thought it
+   was. Photographed on real phones for the first time this round, seven
+   controls came in under the 44-pixel minimum both platform guidelines ask for,
+   and PASS — the button pressed every single turn — was TWENTY-FOUR PIXELS TALL.
+
+   Rather than making the art chunky, the small controls get a forgiving second
+   pass: an exact hit always wins, and only when nothing at all was hit does the
+   nearest small control within a thumb's slop take it. That cannot steal a
+   touch from anything, because anything it could steal from would have matched
+   exactly first. Draw small, touch big. */
+const TOUCH_MIN = 85;    // stage units that come out near 44 CSS px on a phone
+const TOUCH_SLOP = 30;   // and how far outside a small one a thumb may land
 function hitAt(x, y) {
   for (let i = hits.length - 1; i >= 0; i--) {
     const h = hits[i];
     if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h;
   }
-  return null;
+  let best = null, bestD = 1e9;
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const h = hits[i];
+    if (Math.min(h.w, h.h) >= TOUCH_MIN) continue;
+    const nx = clamp(x, h.x, h.x + h.w), ny = clamp(y, h.y, h.y + h.h);
+    const d = Math.hypot(x - nx, y - ny);
+    if (d <= TOUCH_SLOP && d < bestD) { bestD = d; best = h; }
+  }
+  return best;
 }
 
 const UI = {
   sealNote: null,    // the feat the player just tapped on the title screen
+  collectPage: 0,    // the collection pages when a screen is too short for it
   drag: null,        // {card, idx, x, y, moved} or {unit,…}
   hover: null,
   inspect: null,     // a card blown up with its keywords spelled out
@@ -5274,26 +5363,57 @@ function collectionItems() {
 
 function drawCollection(c, t) {
   drawBackdrop(c, 1, t);
-  const items = collectionItems();
+  let items = collectionItems();
   const shown = items.filter((i) => found(i.id)).length;
   txt(c, 'THE COLLECTION', MID, 50, 34, '#eaf6ff', 'center', 'd');
   txt(c, shown + ' of ' + items.length + ' found   ·   ' + statOf('kills') + ' foes felled   ·   best turn: ' +
     statOf('bestCombo') + '   ·   clean zones: ' + statOf('flawless'), MID, 84, 14, '#9fc0e4', 'center', 't');
 
   // fit the grid to the stage rather than assuming a 16:9 one
-  const gap = 6, availW = VW - SAFE * 2, availH = VH - 190;
-  let tw = 88, th = 96;
+  const gap = 6, availW = VW - SAFE * 2, availH = VH - 200;
+  /* 88 stage units came out at 34 CSS pixels across on the narrowest phone the
+     game runs on, which is a browse screen you cannot reliably tap. The tiles
+     start at whichever is bigger: a comfortable desktop size, or whatever this
+     device needs to give a thumb its forty pixels. */
+  const TW_MIN0 = () => Math.max(88, Math.ceil(40 / Math.max(0.2, CSS_PER_UNIT)));
+  let tw = Math.max(112, TW_MIN0()), th = 96;
   let perRow = Math.max(6, Math.floor((availW + gap) / (tw + gap)));
   let rows = Math.ceil(items.length / perRow);
-  while (rows * (th + 22) > availH && th > 58) {
-    th -= 6; tw -= 6;
+  /* Shrinking width and height in lockstep put the tiles at 34 CSS pixels
+     across on the narrowest phone this runs on — a browse screen you cannot
+     reliably tap. Height can keep giving; width stops at what a thumb needs,
+     and the grid answers by fitting more of them across instead. */
+  // 40 CSS pixels is the floor, whatever that is in stage units on this device
+  const TW_MIN = Math.max(88, Math.ceil(40 / Math.max(0.2, CSS_PER_UNIT)));
+  const TH_MIN = Math.max(58, Math.ceil(40 / Math.max(0.2, CSS_PER_UNIT)) - 26);
+  while (rows * (th + 30) > availH && th - 6 >= TH_MIN) {
+    th -= 6;
+    if (tw - 6 >= TW_MIN) tw -= 6;
     perRow = Math.max(6, Math.floor((availW + gap) / (tw + gap)));
     rows = Math.ceil(items.length / perRow);
+  }
+  /* AND WHEN IT STILL WILL NOT FIT, IT TURNS A PAGE.
+
+     A Galaxy Fold's cover screen is 280 CSS pixels tall. Fifty-odd tiles big
+     enough for a thumb do not go on it at any tile size, and the answer to that
+     is not smaller tiles — it is fewer of them at once. Every other stage shows
+     the whole collection in one page and never sees this. */
+  const fitRows = Math.max(1, Math.floor(availH / (th + 30)));
+  const perPage = fitRows * perRow;
+  const pages = Math.ceil(items.length / perPage);
+  UI.collectPage = clamp(UI.collectPage || 0, 0, pages - 1);
+  const all = items;
+  if (pages > 1) {
+    items = all.slice(UI.collectPage * perPage, (UI.collectPage + 1) * perPage);
+    // its own line, above BACK — the two used to sit on top of each other
+    button(c, 'collectPrev', MID - 168, VH - 118, 76, 50, '‹', '#40527a', UI.collectPage === 0);
+    txt(c, (UI.collectPage + 1) + ' / ' + pages, MID, VH - 88, 16, '#a8c8ea', 'center', 'd');
+    button(c, 'collectNext', MID + 92, VH - 118, 76, 50, '›', '#40527a', UI.collectPage >= pages - 1);
   }
   const totalW = perRow * tw + (perRow - 1) * gap;
   items.forEach((it, i) => {
     const col = i % perRow, row = Math.floor(i / perRow);
-    const x = MID - totalW / 2 + col * (tw + gap), y = 112 + row * (th + 22);
+    const x = MID - totalW / 2 + col * (tw + gap), y = 112 + row * (th + 30);
     const have = found(it.id);
     const hovered = UI.hover && UI.hover.id === 'collect' && UI.hover.data === i;
     panel(c, x, y - (hovered ? 4 : 0), tw, th, 10, have ? '#22304d' : '#161d2e', have ? '#3f5a86' : '#2a3346');
@@ -5330,7 +5450,7 @@ function drawCollection(c, t) {
     if (!have) txt(c, '?', x + tw / 2, y + th * 0.46, 34, '#5a6a86', 'center', 'd');
     const nm = fitText(c, it.name.toUpperCase(), tw + 2, 10.5, 6.5, 't');
     txt(c, it.name.toUpperCase(), x + tw / 2, y + th + 10, nm, have ? '#c8dcf4' : '#5a6a86', 'center', 't');
-    hit('collect', x, y, tw, th + 18, i);
+    hit('collect', x, y, tw, th + 26, all.indexOf(it));   // the name under it is part of the target
   });
 
   if (UI.lockNote) {
@@ -5914,7 +6034,11 @@ function drawTrail(c, t) {
       c.globalAlpha = nowStep ? 1 : doneStep ? 0.3 : 0.6;
       txt(c, lbl, p.x, p.y + r + 17, nowStep ? 14 : 12, nowStep ? '#eaf6ff' : '#a8c0dc', 'center', 't');
       c.restore();
-      if (nowStep) hit('node', p.x - r - 14, p.y - r - 14, r * 2 + 28, r * 2 + 28, i);
+      /* The pad round a road node was 14 either side, which came out at 39 CSS
+         pixels on the narrowest phone the game runs on — one short of the forty
+         a thumb wants, on the only control that picks where the run goes next.
+         The nodes are far enough apart to afford twice that. */
+      if (nowStep) hit('node', p.x - r - 26, p.y - r - 26, r * 2 + 52, r * 2 + 52, i);
     });
   }
 
@@ -7332,6 +7456,8 @@ function press(id, data) {
       }, { cancel: 'NEVER MIND' });
       return;
     }
+    case 'collectPrev': UI.collectPage = Math.max(0, (UI.collectPage || 0) - 1); return;
+    case 'collectNext': UI.collectPage = (UI.collectPage || 0) + 1; return;
     case 'shrineWalk': advance(g); return;
     case 'eventOpt': {
       const ev = g.ui.event && g.ui.event.def;
@@ -7757,9 +7883,18 @@ function render() {
   }
 }
 
+/* HOW BIG A STAGE UNIT ACTUALLY IS, IN THE HAND.
+
+   The stage is 720 tall whatever it is drawn on, which is what lets every
+   screen be laid out in one coordinate system — and it is also why seventeen
+   rounds of touch-target checks measured the wrong thing. A control 88 units
+   across is 88 CSS pixels on a laptop and 34 on a phone. Anything that needs to
+   know what a THUMB will meet has to read this, not the units. */
+let CSS_PER_UNIT = 1;
 function setStageWidth(w, h) {
   VW = clamp(Math.round(VH * (w / Math.max(1, h))), VW_MIN, VW_MAX);
   MID = VW / 2;
+  CSS_PER_UNIT = Math.min(w / VW, h / VH);
 }
 function resize() {
   if (!canvas) return;
@@ -7973,7 +8108,7 @@ window.FF = {
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
-  press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal,
+  press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
   drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,

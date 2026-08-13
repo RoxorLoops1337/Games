@@ -594,6 +594,43 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 The suites run headless against the real functions through `window.FF` — there
 is no second implementation of the rules to drift from.
 
+### Nobody had played it on a phone
+
+Twenty-three rounds of shots were taken at 1280x720 and 2400x1080 in a desktop
+Chromium — a game built landscape-first for a thumb, never once photographed on
+anything shaped like a phone or driven by anything shaped like a finger.
+`shots.mjs --phone iphone-se|iphone-14|pixel-7|galaxy-fold` uses a real device's
+landscape viewport, its pixel ratio and touch emulation.
+
+**The touch-target check had been measuring the wrong units since iteration 6.**
+It asked `hh.w < 40` in STAGE units — but the stage is up to 1760 across and an
+iPhone SE is 667 CSS pixels, so everything on screen is about half the size the
+check believed. Measured properly, seven controls came in under the 44 pixels
+both platform guidelines ask for:
+
+```
+help  23x23      mute  23x23      order 54x23      menu 55x23
+pass  75x24      deck  33x46      discard 33x46          (iPhone SE, CSS px)
+```
+
+**PASS was twenty-four pixels tall.** It is the button pressed every single
+turn.
+
+Three fixes, none of which makes the art chunkier:
+
+- **Draw small, touch big.** Small controls get a forgiving second pass in
+  `hitAt`: an exact hit always wins, and only when nothing at all was hit does
+  the nearest small control within a thumb's slop take it. It cannot steal a
+  touch, because anything it could steal from would have matched exactly first.
+- **The check is in CSS pixels now**, converted through the same scale the
+  browser uses, and the shape list includes three real handsets. The game also
+  knows its own `CSS_PER_UNIT`, so a layout that needs to know what a thumb will
+  meet can ask.
+- **The collection pages** when a screen is too short for it. A Galaxy Fold
+  cover display is 280 pixels tall; sixty-eight tiles big enough for a thumb do
+  not go on it at any tile size, and the answer to that is fewer of them at
+  once rather than smaller ones.
+
 ### The probe was half particle effects
 
 `npm run check` is the tool this project runs every round, and in twenty-two
@@ -650,6 +687,13 @@ careless            ░░░░░░░░░░░░▒▒▒▒▒▒▒▒
 
 **Thirty points for playing well: eleven from the fight, thirteen from the
 trader, six from steering the pool.**
+
+**And the default sample is 90 runs an arm now, not 24.** Gating the particle
+systems bought the room for it: the whole suite runs in 24 seconds at a band of
+±5.0, against 26.7 seconds at ±9.7 before. Every number an ordinary `npm run
+check` prints — including the two it gates on — is one it can stand behind.
+Settling a single habit still wants `FF_ABLATE`; a gate that fails now means
+something.
 
 A round earlier the same ladder read 22 / 34 / 37 with the fight at +15 — the
 biggest rung for the first time, off the back of [making the room rule a
@@ -839,6 +883,71 @@ at two different nodes. What the table is for is the bottom: **a ware at zero is
 now a failing check**, so a dead button cannot sit on that counter for another
 nineteen iterations.
 
+### One habit is worth anything — is the board fake?
+
+The settled table says denying schemes is +7 and every other fight habit is
+inside the band, which reads as *nineteen of twenty decisions in a fight price
+at zero*. That would be a damning thing for a board game to be true of, so it
+was worth asking properly — and ablation could not answer it, because removing
+one habit leaves the pilot every other way of coping.
+
+**Removing them all at once had never been run.** It is one line and it settles
+the question:
+
+| | |
+|---|---|
+| the fight, played well | **18%** |
+| the fight, every habit switched off | **8%** |
+
+**The set is worth ten points, and the individual readings roughly sum to it**
+(+7, +2, +2, +1). So the decisions are not fake and they are not hiding behind
+each other either. They are simply *unequal*: denying schemes is seventy per
+cent of everything the fight is worth, and the other three are real but small —
+each about one standard deviation, which is exactly why they read as zero when
+asked one at a time.
+
+That is a fair description of the game to have in writing: **the fight is one
+big decision with three small ones around it.**
+
+### Three more things built, and the rule they add up to
+
+The brief said build to what measured *positive*. Vanguard had, so the round
+built a third Vanguard card; schemes had, so it built a fourth scheme and two
+foes to carry it. All of it came out again, and this time the three failures
+line up into something more useful than any of the cards would have been.
+
+| built | measured |
+|---|---|
+| **a scheme answered from the hand** — it takes the gear you were saving | careless **6% → 10%**, fight rung **+11 → +1** |
+| **Pikewife** — a Vanguard body that gains attack while it holds the front | careless **6% → 10%**, fight rung **+11 → +7** |
+
+The scheme first. On paper it couples the only two habits that price above
+zero: hold gear, and deny schemes. Measured, it made the game *easier*, and the
+reason is structural rather than a matter of tuning — **the careless pilot's
+hand is always empty.** It dumps every card the turn it draws it, so a foe that
+spends a telegraph reaching into that hand is reaching into an empty pocket,
+while the pilot that *does* hold gear is the one being taxed. (Teaching the
+pilot to spend gear when a theft is telegraphed recovered the rung from +1 to
++5 — worth knowing, because it means the scheme was also unanswerable as
+shipped, which is the fourth time this project has added a threat whose answer
+nobody could express.)
+
+Then Pikewife, which pays for *standing* in the front row. A careful pilot moves
+bodies in and out of the front every turn and collects some of it; a careless
+pilot parks a warden there on turn one and never touches it again, and collects
+all of it.
+
+Together with last round's taunt cards, that is three:
+
+> **A mechanic that rewards leaving the board alone, or that targets a resource
+> the weak player does not use, belongs to the weak player.**
+
+The mechanics this game is good at all demand a *response* — a scheme you have
+one turn to answer, a room rule that prices every deployment, a front row that
+trades safety for tempo. The ones that reward a settled board reward the player
+who was going to settle anyway. Both cards are gone; the rule is in
+`index.html` beside the pool so the next round does not write them again.
+
 ### Building to a measured gap, and what the gap turned out to be
 
 Four rounds had gone by without a new card, so this one built to the clearest
@@ -968,6 +1077,21 @@ works on everything — not power. Mitewing is still a third of the late-zone
 death table, and the honest verdict is that it is a good fight that most decks
 have no answer to, rather than a tax. Putting a taunt in a starting deck is a
 thing to try; it is not a thing to claim.
+
+### The one leader that started you behind
+
+`--careless` across all four leaders turned up one that is not like the others:
+**Hearth was told it was SHORT OF A HARD HIT on the first step of a first run**,
+and the other three were told they wanted for nothing.
+
+It was not short of one. Its hard hit is Ember Flask — four points of burn, the
+most damage any starting card does to one target — and `hitOf` only counted the
+number in the damage column, so a card whose whole output is a status read as
+zero. **Damage on a delay is still damage**, and it is counted now.
+
+That is worse than a balance problem: it is the game giving one leader in four
+wrong advice on the first screen of somebody's first run. There is a check that
+every leader sets out wanting for nothing.
 
 ### Watching the pilot that loses
 

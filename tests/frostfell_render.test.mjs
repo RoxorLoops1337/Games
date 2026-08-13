@@ -147,15 +147,19 @@ section('overlays');
   dummy(FF);
   place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 20 } });
   place(FF, 'p', 'snowpup', 1, 0, { unit: { hp: 20 } });
+  /* One foe per scheme, so the check is that every KIND of telegraph draws —
+     and it grows with the game rather than being pinned to a count. */
   const schemers = [['frostwolf', 0, 1], ['drift', 1, 1], ['packmother', 0, 2]];
+  const laid = new Set();
   for (const [id, lane, col] of schemers) {
     const f = place(FF, 'e', id, lane, col, { unit: { cnt: 2, cntMax: 2 } });
     FF.layPlot(G, f);
     ok(!!f.plot, id + ' commits to something');
+    if (f.plot) laid.add(FF.FOES[id].scheme);
   }
   G.screen = 'battle';
-  frame(3); drew('a board with three schemes on it draws');
-  eq(Object.keys(FF.SCHEMES).length, 3, 'and every scheme in the game was on it');
+  frame(3); drew('a board with every kind of telegraph on it draws');
+  eq(laid.size, Object.keys(FF.SCHEMES).length, 'and every scheme in the game was on it');
 }
 
 /* ------------------------------------------------------------ the whole cast */
@@ -283,7 +287,12 @@ section('the shape of a phone');
   // 16:9, 19.5:9 and 20:9 are the three landscape shapes that matter. Every
   // one of them has to place its furniture inside the safe inset, keep every
   // touch target thumb-sized, and never push anything off the stage.
-  const shapes = [[1280, 720], [1560, 720], [1600, 720], [2400, 1080], [1024, 768]];
+  /* …and three shapes that are actual phones, held sideways, which is what this
+     game was built for and what nothing had ever been tested at. The desktop
+     sizes above all sit near 1:1 with the stage; a real handset is about half
+     that, which is exactly why the touch check never caught anything. */
+  const shapes = [[1280, 720], [1560, 720], [1600, 720], [2400, 1080], [1024, 768],
+    [667, 375], [844, 390], [653, 280]];
   for (const [w, h] of shapes) {
     FF.setStageWidth(w, h);
     const D = FF.dims();
@@ -299,9 +308,24 @@ section('the shape of a phone');
       else if (scr === 'rest') G.ui.rest = { offer: FF.BLESSINGS.slice(0, 3).map((x) => x.id) };
       G.screen = scr;
       frame(scr === 'battle' ? 22 : 2);
+      /* THE UNITS A THUMB WORKS IN.
+
+         This checked `hh.w < 40` for seventeen rounds, in STAGE units — but the
+         stage is up to 1760 wide and the phone it is drawn on is 667 CSS pixels
+         across, so every target is about half the size this check believed.
+         Photographed on real devices for the first time in iteration 24, seven
+         controls came in under the 44 CSS pixels both platform guidelines ask
+         for, and PASS was twenty-four pixels tall.
+
+         The threshold is in CSS pixels now, converted through the same scale
+         the browser uses. Small controls get a forgiving second pass in hitAt,
+         so what counts is the effective target rather than the drawn one. */
+      const cssPerStage = Math.min(w / D.VW, h / D.VH);
+      const reach = (hh) => Math.min(hh.w, hh.h) < FF.TOUCH_MIN ? FF.TOUCH_SLOP * 2 : 0;
       let small = [], off = [], edge = [];
       for (const hh of FF.hits()) {
-        if (hh.w < 40 || hh.h < 40) small.push(hh.id + ' ' + Math.round(hh.w) + 'x' + Math.round(hh.h));
+        const cw = (hh.w + reach(hh)) * cssPerStage, ch = (hh.h + reach(hh)) * cssPerStage;
+        if (cw < 40 || ch < 40) small.push(hh.id + ' ' + Math.round(cw) + 'x' + Math.round(ch) + 'css');
         if (hh.x < -2 || hh.x + hh.w > D.VW + 2 || hh.y + hh.h > D.VH + 2) off.push(hh.id);
         // a notch eats the outer inset in landscape, so nothing tappable lives there
         if (hh.x + hh.w < 8 || hh.x > D.VW - 8) edge.push(hh.id);

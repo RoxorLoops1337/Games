@@ -1841,6 +1841,29 @@ section('what is drawn cannot change what happens');
   eq(play(true), play(false), 'a fight plays out identically with and without a canvas');
 }
 
+section('every leader sets out on the same footing');
+{
+  const FFl = loadGame({});
+  /* Running the careless transcript across all four leaders found one that is
+     not like the others: Hearth was told it was SHORT OF A HARD HIT on the
+     first step of a first run and the other three were told they wanted for
+     nothing. It was not short of one — its hard hit is four points of Ember,
+     and the read only counted the damage column. A first run is somebody's
+     first impression of the game and it should not open by telling one leader
+     in four that they are already behind. */
+  const bad = [];
+  for (const t of Object.keys(FFl.STARTERS)) {
+    const run = FFl.newRun(FFl.G, t, 909);
+    const short = FFl.caravanRead(run).filter((r) => !r.ok);
+    if (short.length) bad.push(t + ' short of ' + short.map((r) => r.name).join('+'));
+  }
+  eq(bad.join(', '), '', 'no leader is told it is behind before it has done anything');
+
+  // and the reason it used to be: damage on a delay counted as no damage at all
+  ok(FFl.hitOf({ def: 'emberflask' }) >= 4, 'four points of burn is four points of hit');
+  ok(FFl.hitOf({ def: 'icepick' }) >= 4, 'and so is four points of ice');
+}
+
 section('a taunt beats everything');
 {
   const FFt = loadGame({});
