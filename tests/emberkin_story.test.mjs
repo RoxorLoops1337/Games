@@ -769,7 +769,16 @@ section('the shop notices what you can afford');
 
   ok(/no credit/.test(said('Bell', (g) => { g.G.money = 5000; })), 'Bell always states the rule');
   ok(/not got a single orb/.test(said('Bell', (g) => { g.G.bag = {}; })), 'and says when you have no orbs');
-  ok(/short for a salve/.test(said('Bell', (g) => { g.G.money = 10; })), 'and when you cannot afford one');
+  // Restated: her floor comes off ITEMS now rather than naming the Salve, so
+  // the claim is that she says the gap and the thing, not that she says the
+  // word "salve". Which item that is belongs to the shelf, not to this check —
+  // it is driven against a moving shelf in the render suite.
+  {
+    const h = said('Bell', (g) => { g.G.money = 10; });
+    const floor = Object.keys(g.ITEMS).reduce((a, b) => (g.ITEMS[b].cost < g.ITEMS[a].cost ? b : a));
+    ok(h.includes(`${g.ITEMS[floor].cost - 10} short of a ${g.ITEMS[floor].name}`),
+      `and when you cannot afford one, by exactly how much — "${g.ITEMS[floor].cost - 10} short of a ${g.ITEMS[floor].name}"`);
+  }
   // The orb list is asked of ITEMS, not written out — a fourth orb must count.
   ok(!/bloomorb.*gleamorb.*prismorb/s.test(SRC.slice(SRC.indexOf("name: 'Bell'"), SRC.indexOf("name: 'Vane'"))),
     'and she counts orbs by kind rather than by a list of three names');

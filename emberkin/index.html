@@ -4663,8 +4663,15 @@ const MAPS = {
             .reduce((n, id) => n + (G.bag[id] || 0), 0);
           if (!orbs) return [rule,
             'You have not got a single orb on you. Whatever you meet out there, all you can do is hit it.'];
-          if (G.money < ITEMS.salve.cost) return [rule,
-            'And you are short for a salve. I am not going to make a thing of it.'];
+          // …and then the very next line hand-copied one. The floor now comes
+          // off ITEMS and names whatever is actually cheapest, the way Vane's
+          // comes off CHESTS four tiles away — he says how much you are short
+          // and which rung you are under, and she asserted "a salve" and the
+          // salve's price. Put anything on her shelf below a Salve and she was
+          // naming the wrong thing and refusing over the wrong number.
+          const floor = Object.keys(ITEMS).reduce((a, b) => (ITEMS[b].cost < ITEMS[a].cost ? b : a));
+          if (G.money < ITEMS[floor].cost) return [rule,
+            `And you are ${ITEMS[floor].cost - G.money} short of a ${ITEMS[floor].name}, and that is the cheapest thing I have. I am not going to make a thing of it.`];
           return [rule];
         } },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_elder', name: 'Vane', chests: true,
