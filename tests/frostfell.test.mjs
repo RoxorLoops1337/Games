@@ -480,4 +480,122 @@ section('waves');
   eq(b.won, true, 'a real one');
 }
 
+
+/* ---------------------------------------------------------------- combos */
+section('kill combos');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+  const a = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 1 } });
+  const c2 = place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 1 } });
+  const c3 = place(FF, 'e', 'snapfrost', 1, 0, { unit: { hp: 1 } });
+  FF.hurt(G, a, 9, null);
+  eq(FF.payCombo(G), 0, 'one kill is not a combo');
+  const gold = G.run.gold;
+  FF.hurt(G, c2, 9, null);
+  FF.hurt(G, c3, 9, null);
+  const paid = FF.payCombo(G);
+  ok(paid > 0, 'two in one turn pays');
+  eq(G.run.gold, gold + paid, 'straight into the purse');
+  eq(b.combo, 0, 'and the tally resets behind it');
+}
+
+/* ----------------------------------------------------------------- bells */
+section('bells');
+{
+  const run = withRun(FF, 'hearth', 606);
+  eq(run.bells.length, 0, 'a run starts with no bells');
+  const hand0 = FF.handSize(G);
+  FF.BELLS.hands.apply(run);
+  eq(FF.handSize(G), hand0 + 1, 'the Bell of Hands deals one more card');
+
+  const hp0 = run.leader.hp;
+  FF.BELLS.heart.apply(run);
+  eq(run.leader.hp, hp0 + 8, 'the Bell of Heart is worn by the leader');
+  FF.rebuildCard(run.leader);
+  eq(run.leader.hp, hp0 + 8, 'and survives a rebuild without doubling');
+
+  FF.BELLS.time.apply(run);
+  eq(FF.waveGap(G), FF.WAVE_GAP + 1, 'the Bell of Time slows the waves');
+  FF.BELLS.charge.apply(run);
+  const b2 = FF.startBattle(G, 'fight');
+  eq(b2.bell, FF.BELL_CHARGE, 'the Bell of Charge opens every fight charged');
+
+  // a boss pays in bells rather than charms
+  const r = FF.rollReward(G, 'boss');
+  eq(r.bells.length, 3, 'a beast offers three bells');
+  eq(r.charms.length, 0, 'and no charms');
+  const rr = FF.rollReward(G, 'elite');
+  eq(rr.charms.length, 2, 'a pack offers charms instead');
+}
+
+/* ---------------------------------------------------------------- sigils */
+section('sigils');
+{
+  const run = withRun(FF, 'frost', 707);
+  const marked = run.deck.find((c) => c.type === 'unit');
+  marked.sigil = true;
+  const b = FF.startBattle(G, 'fight');
+  ok(FF.playerUnits(G).some((u) => u.card === marked), 'a sigil puts that warden on the board before the bell');
+  eq(b.draw.indexOf(marked), -1, 'and takes it out of the deck');
+  eq(b.hand.indexOf(marked), -1, 'so it is never drawn twice');
+}
+
+/* --------------------------------------------------------------- events */
+section('events');
+{
+  ok(FF.EVENTS.length >= 4, 'there are events to run into');
+  let bad = [];
+  for (const ev of FF.EVENTS) {
+    if (!ev.title || !ev.text) bad.push(ev.id + ':copy');
+    if (!ev.opts || ev.opts.length < 2) bad.push(ev.id + ':opts');
+    for (const o of ev.opts || []) {
+      if (!o.label || typeof o.go !== 'function') bad.push(ev.id + ':' + (o.label || '?'));
+    }
+  }
+  eq(bad.join(','), '', 'every event has copy and at least two real choices');
+
+  // every option resolves to somewhere the player can act — no dead ends
+  for (const ev of FF.EVENTS) {
+    for (let i = 0; i < ev.opts.length; i++) {
+      const run = withRun(FF, 'hearth', 1000 + i);
+      run.gold = 200;
+      G.ui.event = { def: ev };
+      G.screen = 'event';
+      const step = run.step;
+      FF.press('eventOpt', i);
+      let guard = 0;
+      while (FF.UI.choose && guard++ < 6) { const cb = FF.UI.choose.onPick; cb(0); }
+      FF.UI.choose = null;
+      const ok2 = G.screen === 'trail' || G.screen === 'reward' || G.screen === 'battle' || run.step > step;
+      ok(ok2, ev.id + ' option ' + (i + 1) + ' leads somewhere');
+    }
+  }
+
+  // a trail can actually contain one
+  let seen = false;
+  for (let i = 0; i < 30 && !seen; i++) {
+    FF.seed(i * 31 + 7);
+    seen = FF.genTrail(0).some((step) => step.some((n) => n.kind === 'event'));
+  }
+  ok(seen, 'the trail offers events');
+}
+
+/* ------------------------------------------------------------ the beasts */
+section('a zone draws its beast');
+{
+  const run = withRun(FF, 'hearth', 4);
+  const first = FF.zoneBoss(G, 0);
+  eq(FF.zoneBoss(G, 0), first, 'a run picks its beast once and keeps it');
+  ok(FF.ZONES[0].bosses.indexOf(first) >= 0, 'from that zone\'s own list');
+  let seenTwo = {};
+  for (let i = 0; i < 24; i++) {
+    withRun(FF, 'hearth', i * 977 + 3);
+    seenTwo[FF.zoneBoss(G, 0)] = 1;
+  }
+  ok(Object.keys(seenTwo).length > 1, 'and different runs meet different beasts');
+}
+
 done('frostfell');

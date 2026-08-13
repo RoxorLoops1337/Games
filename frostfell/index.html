@@ -347,6 +347,37 @@ def({ id: 'ratchet', name: 'Ratchet', type: 'unit', tribe: 'scrap', hp: 10, atk:
   kw: {}, text: 'When a warden falls, it gains 2 attack.',
   hooks: { allyDeath: (g, u) => { u.atk += 2; } } });
 
+def({ id: 'emberwick', name: 'Emberwick', type: 'unit', tribe: 'hearth', hp: 6, atk: 3, cnt: 2, rare: 2,
+  art: A('#ffb35c', '#fff0cf', { shape: 'small', ears: 'pointy', mouth: 'flat', eyes: 'big', pat: 'tips', patCol: '#e06a1c' }),
+  kw: {}, text: 'When it triggers, Ember 1 on every foe.',
+  hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'ember', 1)) } });
+
+def({ id: 'bellowsbear', name: 'Bellowsbear', type: 'unit', tribe: 'hearth', hp: 15, atk: 4, cnt: 4, rare: 3,
+  art: A('#c4702e', '#ffcf9a', { shape: 'boss', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ffd166' }),
+  kw: { soak: 1 }, text: 'Soak. When it triggers, it mends itself 3.',
+  hooks: { trigger: (g, u) => heal(g, u, 3) } });
+
+/* frostborn, later ------------------------------------------------------- */
+def({ id: 'icewright', name: 'Icewright', type: 'unit', tribe: 'frost', hp: 8, atk: 2, cnt: 3, rare: 2,
+  art: A('#8fc8e8', '#e8f7ff', { shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
+  kw: {}, text: 'When it triggers, Shell 3 on the warden in front of it.',
+  hooks: { trigger: (g, u) => { const l = laneOf(g, u.side, u.lane).filter((x) => x !== u && x.col < u.col); const t = l[0] || allies(g, u).find((x) => x !== u); if (t) addStatus(g, t, 'shell', 3); } } });
+
+def({ id: 'snowhare', name: 'Snowhare', type: 'unit', tribe: 'frost', hp: 5, atk: 2, cnt: 1, rare: 1,
+  art: A('#f0f8ff', '#ffffff', { shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big' }),
+  kw: {}, text: 'Deploys with Swift 1 — it swings almost at once.',
+  hooks: { deploy: (g, u) => addStatus(g, u, 'swift', 1) } });
+
+/* scrapjaw, later -------------------------------------------------------- */
+def({ id: 'boltfinch', name: 'Boltfinch', type: 'unit', tribe: 'scrap', hp: 4, atk: 2, cnt: 2, rare: 1,
+  art: A('#8fa2bd', '#dce6f2', { shape: 'small', ears: 'none', mouth: 'beak', wings: '#6d7a8f' }),
+  kw: { longshot: 1 }, text: 'Longshot. On deploy, ticks a warden\'s counter down 1.',
+  hooks: { deploy: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => a.cnt - b.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
+
+def({ id: 'junkpile', name: 'Junkpile', type: 'unit', tribe: 'scrap', hp: 13, atk: 0, cnt: 3, rare: 2,
+  art: A('#8f8a7a', '#d8d2bc', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'gear', accCol: '#b8a071' }),
+  kw: { soak: 1, explode: 4 }, text: 'Soak. Blast 4. Never swings.' });
+
 /* neutral ---------------------------------------------------------------- */
 def({ id: 'snowpup', name: 'Snowpup', type: 'unit', tribe: null, hp: 6, atk: 2, cnt: 2, rare: 1,
   art: A('#e8f2ff', '#ffffff', { shape: 'blob', ears: 'round', mouth: 'smile' }),
@@ -355,6 +386,11 @@ def({ id: 'snowpup', name: 'Snowpup', type: 'unit', tribe: null, hp: 6, atk: 2, 
 def({ id: 'lanternmoth', name: 'Lanternmoth', type: 'unit', tribe: null, hp: 5, atk: 2, cnt: 2, rare: 2,
   art: A('#d9c58f', '#fff3cf', { shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffe9b0' }),
   kw: { longshot: 1 }, text: 'Longshot.' });
+
+def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3, cnt: 3, rare: 2,
+  art: A('#a89c86', '#e4dccc', { shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
+  kw: {}, text: 'Every time it triggers, it gains 1 attack.',
+  hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
 def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3, cnt: 3, rare: 2,
   art: A('#8fb08f', '#d8ebd6', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
@@ -405,6 +441,26 @@ def({ id: 'hush', name: 'Hush', type: 'item', tribe: 'frost', rare: 3, target: '
   art: { kind: 'burst', col: '#a98cff' }, text: 'Frost 3 and Weak 2 on a foe.',
   effect: (g, t) => { addStatus(g, t, 'frost', 3); addStatus(g, t, 'weak', 2); } });
 
+def({ id: 'pryrod', name: 'Pry Rod', type: 'item', tribe: null, rare: 1, target: 'ally',
+  art: { kind: 'pick', col: '#ffd166' }, text: 'Tick a warden\'s counter down 2. At zero it triggers on the spot.',
+  effect: (g, t) => tickCounter(g, t, 2, false) });
+
+def({ id: 'patchkit', name: 'Patch Kit', type: 'item', tribe: 'scrap', rare: 1, target: 'ally',
+  art: { kind: 'shield', col: '#8fe0a0' }, text: 'Heal 3 and Shell 3.',
+  effect: (g, t) => { heal(g, t, 3); addStatus(g, t, 'shell', 3); } });
+
+def({ id: 'tinderjar', name: 'Tinder Jar', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
+  art: { kind: 'flask', col: '#ff6a2c' }, text: 'Ember 2 on every foe.',
+  effect: (g) => enemyUnits(g).forEach((u) => addStatus(g, u, 'ember', 2)) });
+
+def({ id: 'oldmap', name: 'Old Map', type: 'item', tribe: null, rare: 2, target: 'none',
+  art: { kind: 'stone', col: '#e8d9b4' }, text: 'Draw two cards.',
+  effect: (g) => { drawToHand(g); drawToHand(g); } });
+
+def({ id: 'snowbomb', name: 'Snowbomb', type: 'item', tribe: 'frost', rare: 2, target: 'enemy',
+  art: { kind: 'bomb', col: '#8fe3ff' }, text: 'Deal 3 and Frost 1 to every foe in a lane.',
+  effect: (g, t) => { for (const f of laneOf(g, 'e', t.lane).slice()) { hurt(g, f, 3, null); addStatus(g, f, 'frost', 1); } } });
+
 def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, target: 'ally',
   art: { kind: 'lantern', col: '#ffd166' }, text: 'Heal 10 and clear every ill.',
   effect: (g, t) => { heal(g, t, 10); ['frost', 'ember', 'weak', 'slow'].forEach((s) => { t.st[s] = 0; }); } });
@@ -433,6 +489,30 @@ charm({ id: 'barragecharm', name: 'Barrage Charm', rare: 3, col: '#ff9a3c', text
   apply: (c) => { c.kw = Object.assign({}, c.kw, { barrage: 1 }); } });
 charm({ id: 'bountycharm', name: 'Bounty Charm', rare: 1, col: '#ffd166', text: 'Deploys with Bounty 3.',
   apply: (c) => { c.bonusDeploy = (c.bonusDeploy || []).concat([['bounty', 3]]); } });
+
+/* Bells are run-wide: one is chosen after each beast falls, and it changes how
+   the rest of the trek is played rather than what any one card does. */
+const BELLS = {
+  hands:  { id: 'hands',  name: 'Bell of Hands',   col: '#6fd8ff', text: 'Draw one more card every fight.',
+            apply: (run) => { run.bonusHand = (run.bonusHand || 0) + 1; } },
+  charge: { id: 'charge', name: 'Bell of Charge',  col: '#ffd166', text: 'Every fight starts with the redraw bell charged.',
+            apply: (run) => { run.bellCharged = true; } },
+  heart:  { id: 'heart',  name: 'Bell of Heart',   col: '#ff8b7a', text: 'Your leader gains 8 health.',
+            apply: (run) => { run.leader.charms.push('heartbell'); rebuildCard(run.leader); } },
+  time:   { id: 'time',   name: 'Bell of Time',    col: '#8fffc4', text: 'Waves take one more turn to arrive.',
+            apply: (run) => { run.waveBonus = (run.waveBonus || 0) + 1; } },
+  purse:  { id: 'purse',  name: 'Bell of Purse',   col: '#ffe6a8', text: 'Fights pay half again as much scrip.',
+            apply: (run) => { run.purse = (run.purse || 1) + 0.5; } },
+  mend:   { id: 'mend',   name: 'Bell of Mending', col: '#8fe0a0', text: 'Every warden mends 3 after every fight.',
+            apply: (run) => { run.mend = (run.mend || 0) + 3; } },
+};
+
+/* Fittings a card can wear that the player never picks off a shelf. */
+const EXTRAS = {
+  heartbell: { id: 'heartbell', name: 'Heart Bell', col: '#ff8b7a', text: '+8 health, rung for at a boss.',
+               apply: (c) => { c.hp += 8; } },
+};
+const chOf = (id) => CHARMS[id] || SCARS[id] || EXTRAS[id];
 
 /* Scars are charms with a bite — a warden that faints picks one up. */
 const SCARS = {
@@ -479,8 +559,29 @@ foe({ id: 'stormcaller', name: 'Stormcaller', hp: 14, atk: 3, cnt: 3, tier: 3,
   kw: { longshot: 1 }, text: 'When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 
+foe({ id: 'mitewing', name: 'Mitewing', hp: 4, atk: 2, cnt: 1, tier: 1,
+  art: A('#b0b0d8', '#e0e0ff', { shape: 'small', ears: 'antenna', mouth: 'none', wings: '#8080a8', evil: 1 }),
+  kw: { aimless: 1 }, text: 'Aimless.' });
+foe({ id: 'snowlump', name: 'Snowlump', hp: 15, atk: 1, cnt: 4, tier: 1,
+  art: A('#e0ecf8', '#ffffff', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
+  kw: { soak: 1 }, text: 'Soak.' });
+foe({ id: 'hoarcrow', name: 'Hoarcrow', hp: 8, atk: 3, cnt: 2, tier: 2,
+  art: A('#5f6a80', '#a8b4c8', { shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
+  kw: { longshot: 1 }, text: 'Longshot.' });
+foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
+  art: A('#6f96b8', '#cfe4f5', { shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
+  kw: {}, text: 'Its bite leaves Weak 1.',
+  hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
+foe({ id: 'frostwyrm', name: 'Frostwyrm', hp: 22, atk: 6, cnt: 5, tier: 3,
+  art: A('#7fb0d8', '#dff0ff', { shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
+  kw: { barrage: 1 }, text: 'Barrage.' });
+foe({ id: 'icewarden', name: 'Icewarden', hp: 16, atk: 4, cnt: 3, tier: 3,
+  art: A('#9fb0c8', '#e0eaf8', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
+  kw: { soak: 1 }, text: 'Soak. Deploys with Thorns 3.',
+  hooks: { deploy: (g, u) => addStatus(g, u, 'thorns', 3) } });
+
 /* bosses ----------------------------------------------------------------- */
-foe({ id: 'mothergla', name: 'Mother Glacier', hp: 60, atk: 6, cnt: 4, tier: 4, boss: true,
+foe({ id: 'mothergla', name: 'Mother Glacier', hp: 54, atk: 5, cnt: 4, tier: 4, boss: true,
   art: A('#9fd8ff', '#ffffff', { shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
   kw: { barrage: 1, soak: 1 }, text: 'Barrage. Soak. When it triggers, Frost 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'frost', 1); } } });
@@ -493,11 +594,24 @@ foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 92, atk: 8, cnt: 5, tier:
   kw: { barrage: 1, smack: 1 }, text: 'Barrage. Smackback. Every trigger, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
+foe({ id: 'whitestag', name: 'The White Stag', hp: 48, atk: 5, cnt: 3, tier: 4, boss: true,
+  art: A('#e8f2ff', '#ffffff', { shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
+  kw: { aimless: 1, frenzy: 1 }, text: 'Aimless. Frenzy 1. When it triggers, Slow 1 on a warden.',
+  hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
+foe({ id: 'weeper', name: 'The Weeper', hp: 70, atk: 5, cnt: 3, tier: 5, boss: true,
+  art: A('#8f7fb8', '#d8ccf0', { shape: 'boss', ears: 'none', mouth: 'wide', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a', evil: 1 }),
+  kw: { longshot: 1 }, text: 'Longshot. When it triggers, Weak 1 and Slow 1 on a warden.',
+  hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) { addStatus(g, t, 'weak', 1); addStatus(g, t, 'slow', 1); } } } });
+foe({ id: 'lastwinter', name: 'The Last Winter', hp: 88, atk: 7, cnt: 4, tier: 6, boss: true,
+  art: A('#c8d8f0', '#ffffff', { shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'big', acc: 'crown', accCol: '#cfe4ff', evil: 1 }),
+  kw: { soak: 1 }, text: 'Soak. When it triggers, Frost 1 on every warden.',
+  hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 1)) } });
+
 /* Zones the trail runs through. See section 7 for how a trail is cut. */
 const ZONES = [
-  { id: 'whitewood', name: 'The Whitewood', boss: 'mothergla', tiers: [1, 1, 2], sky: ['#1d3a64', '#0e1c36'], ground: '#e8f2ff', tint: '#2b8fd0' },
-  { id: 'shelf',     name: 'The Long Shelf', boss: 'hollowking', tiers: [2, 2, 3], sky: ['#2a2f5e', '#12132c'], ground: '#dfe4f8', tint: '#7a6fd0' },
-  { id: 'hollow',    name: 'Hollow Peak',    boss: 'kettletitan', tiers: [3, 3, 3], sky: ['#3a2340', '#160f22'], ground: '#efe0e8', tint: '#c05a8a' },
+  { id: 'whitewood', name: 'The Whitewood', boss: 'mothergla', bosses: ['mothergla', 'whitestag'], tiers: [1, 1, 2], sky: ['#1d3a64', '#0e1c36'], ground: '#e8f2ff', tint: '#2b8fd0' },
+  { id: 'shelf',     name: 'The Long Shelf', boss: 'hollowking', bosses: ['hollowking', 'weeper'], tiers: [2, 2, 3], sky: ['#2a2f5e', '#12132c'], ground: '#dfe4f8', tint: '#7a6fd0' },
+  { id: 'hollow',    name: 'Hollow Peak',    boss: 'kettletitan', bosses: ['kettletitan', 'lastwinter'], tiers: [3, 3, 3], sky: ['#3a2340', '#160f22'], ground: '#efe0e8', tint: '#c05a8a' },
 ];
 
 /* ============================================ 5. run + battle state ======= */
@@ -517,7 +631,8 @@ const G = {
   run: null,
   battle: null,
   ui: {},               // transient per-screen scratch (reward picks, shop stock…)
-  meta: { runs: 0, wins: 0, best: 0, unlocked: ['hearth', 'frost'], seen: {} },
+  hitStop: 0,
+  meta: { runs: 0, wins: 0, best: 0, unlocked: ['hearth', 'frost'], seen: {}, mute: false, taught: false },
 };
 
 let UID = 1;
@@ -549,7 +664,7 @@ function rebuildCard(card) {
   card.bonusDeploy = [];
   if (d.type === 'unit') { card.hp = d.hp; card.atk = d.atk; card.cnt = d.cnt; }
   for (const id of card.charms) {
-    const ch = CHARMS[id] || SCARS[id];
+    const ch = chOf(id);
     if (ch) ch.apply(card);
   }
   if (card.hp !== undefined) card.dmg = Math.min(card.dmg, card.hp - 1);
@@ -719,6 +834,7 @@ function hurt(g, u, amount, src) {
     fx.pop(u, '-' + dmg, C.blood);
     fx.burst(u, C.blood, 10);
     fx.shake(Math.min(9, 2 + dmg * 0.5));
+    if (dmg >= 6) G.hitStop = Math.min(0.12, 0.03 + dmg * 0.008);
     sfx('hit');
   }
   const th = stat(u, 'thorns');
@@ -741,6 +857,9 @@ function die(g, u, killer) {
   fx.shake(7);
   const b = stat(u, 'bounty');
   if (b > 0 && u.side === 'e' && g.run) { g.run.gold += b; fx.pop(u, '+' + b + ' scrip', C.gold); }
+  // Kills inside one turn are counted together: clearing a board in a single
+  // action is the play the whole game is pointed at, and it should pay.
+  if (u.side === 'e' && g.battle) g.battle.combo = (g.battle.combo || 0) + 1;
   if (u.kw.explode) neighbours(g, u).concat(foes(g, u).filter((f) => f.lane === u.lane)).forEach((n2) => hurt(g, n2, u.kw.explode, null));
   if (u.hooks.death) u.hooks.death(g, u, killer);
   for (const a of allies(g, u)) if (a.hooks.allyDeath) a.hooks.allyDeath(g, a, u);
@@ -838,6 +957,7 @@ function resolveTurn(g) {
   b.busy = true;
   b.turn++;
   fx.bell();
+  payCombo(g);
 
   for (const u of turnOrder(g)) {
     beat(0.13, () => {
@@ -872,6 +992,23 @@ function resolveTurn(g) {
     if (b.bell < BELL_CHARGE) b.bell++;
     if (!b.hand.length && b.bell < BELL_CHARGE) b.bell = BELL_CHARGE;  // never softlock an empty hand
   });
+}
+
+/* Settle up whatever the last action killed. Two in one turn is a combo, and
+   it climbs from there. */
+function payCombo(g) {
+  const b = g.battle;
+  const n = b.combo || 0;
+  b.combo = 0;
+  if (n < 2 || !g.run) return 0;
+  const paid = n * 4 + (n >= 4 ? 12 : 0);
+  g.run.gold += paid;
+  b.bestCombo = Math.max(b.bestCombo || 0, n);
+  fx.toast(n + ' IN ONE TURN   +' + paid, n >= 4 ? '#ff9a3c' : C.gold);
+  fx.flash('#ffd9a0', 0.2 + n * 0.03);
+  fx.shake(4 + n);
+  sfx('combo');
+  return paid;
 }
 
 /* The redraw bell: throws the hand away and deals a fresh one. Free once it
@@ -914,6 +1051,7 @@ function checkOver(g) {
   const leader = b.units.find((u) => u.side === 'p' && u.leader);
   if (leader && !leader.alive) { b.over = true; b.won = false; beat(0.6, () => endBattle(g, false)); return; }
   if (enemyUnits(g).length) return;
+  payCombo(g);
   // A cleared board with a wave still coming is not a win — it walks straight
   // on, which is what stops the fight going quiet.
   if (b.waves && b.waves.length) { beat(0.35, () => deployWave(g)); return; }
@@ -1005,6 +1143,18 @@ function foeScale(run) {
    which is a real choice, because a wave pulled onto a board you have already
    set up dies faster than one that arrives while you are rebuilding. */
 const WAVE_GAP = 5;
+const waveGap = (g) => WAVE_GAP + ((g.run && g.run.waveBonus) || 0);
+
+/* Locked in per run so a reload does not reroll the beast you were beaten by. */
+function zoneBoss(g, zi) {
+  const zone = ZONES[clamp(zi, 0, ZONES.length - 1)];
+  const list = zone.bosses || [zone.boss];
+  const run = g.run;
+  if (!run) return list[0];
+  run.bosses = run.bosses || {};
+  if (!run.bosses[zi]) run.bosses[zi] = list[Math.floor(mulberry((run.seed + zi * 7717) >>> 0)() * list.length)] || list[0];
+  return run.bosses[zi];
+}
 
 function foePool(zone) {
   const tiers = zone.tiers;
@@ -1026,8 +1176,11 @@ function buildEncounter(g, kind) {
 
   if (kind === 'boss') {
     const guard = Object.values(FOES).filter((f) => !f.boss && f.tier <= zone.tiers[2]);
+    // Which beast waits at the end of a zone is drawn per run, so the trail is
+    // not the same trail twice.
+    const bossId = zoneBoss(g, run.zone);
     waves.push([
-      { id: zone.boss, lane: 0, col: 2, scale: 1 },
+      { id: bossId, lane: 0, col: 2, scale: 1 },
       { id: pick(guard).id, lane: 0, col: 0, scale },
       { id: pick(guard).id, lane: 1, col: 0, scale },
     ]);
@@ -1076,7 +1229,7 @@ function deployWave(g) {
   }
   if (!placed.length) return false;
   b.waves.shift();
-  b.waveCnt = WAVE_GAP;
+  b.waveCnt = waveGap(g);
   b.waveNo = (b.waveNo || 1) + 1;
   if (b.units.length && b.turn > 0) { fx.shake(6); fx.flash('#ffb0b0', 0.18); sfx('die'); fx.toast('WAVE ' + b.waveNo, '#ff9a3c'); }
   return true;
@@ -1112,13 +1265,27 @@ function startBattle(g, kind) {
 
   b.waves = buildEncounter(g, kind);
   b.waveNo = 0;
-  b.waveCnt = WAVE_GAP;
+  b.waveCnt = waveGap(g);
   deployWave(g);
 
-  b.draw = shuffle(run.deck.filter((c) => !c.leader).slice());
+  // Sigil-marked wardens are already standing when the bell rings; they never
+  // sit in the deck waiting to be drawn.
+  for (const card of run.deck) {
+    if (!card.sigil || card.type !== 'unit') continue;
+    const free = freeSlots(g, 'p').sort((a, x) => a.col - x.col || a.lane - x.lane);
+    if (!free.length) break;
+    const u = mkUnit(card, 'p', free[0].lane, free[0].col);
+    u.born = 0.0001;
+    b.units.push(u);
+    for (const [k, n] of card.bonusDeploy) addStatus(g, u, k, n);
+    const cd = CARDS[card.def];
+    if (cd.hooks && cd.hooks.deploy) cd.hooks.deploy(g, u);
+  }
+  b.draw = shuffle(run.deck.filter((c) => !c.leader && !c.sigil).slice());
   for (let i = 0; i < handSize(g); i++) if (!drawToHand(g)) break;
-  fx.toast(kind === 'boss' ? 'THE BEAST' : kind === 'elite' ? 'A PACK' : 'SKIRMISH',
-    kind === 'boss' ? '#ff9a3c' : kind === 'elite' ? '#ff8b7a' : '#9fe0ff');
+  b.banner = { text: kind === 'boss' ? 'THE BEAST' : kind === 'elite' ? 'A PACK' : 'SKIRMISH',
+    sub: ZONES[clamp(run.zone, 0, ZONES.length - 1)].name, t: 0,
+    col: kind === 'boss' ? '#ff9a3c' : kind === 'elite' ? '#ff8b7a' : '#9fe0ff' };
   g.screen = 'battle';
   drainAll();
   return b;
@@ -1146,8 +1313,10 @@ function endBattle(g, won) {
     }
   }
   if (!won) { g.screen = 'gameover'; G.meta.runs++; saveMeta(); saveRun(null); return; }
+  if (g.battle.bestCombo >= 3) run.log.push('A ' + g.battle.bestCombo + '-kill turn.');
+  if (run.mend) run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - run.mend); });
 
-  run.gold += g.battle.kind === 'boss' ? 55 : g.battle.kind === 'elite' ? 34 : 22;
+  run.gold += Math.round((g.battle.kind === 'boss' ? 55 : g.battle.kind === 'elite' ? 34 : 22) * (run.purse || 1));
   g.ui.reward = rollReward(g, g.battle.kind);
   g.screen = 'reward';
   sfx('win');
@@ -1166,7 +1335,7 @@ function genTrail(zoneIdx) {
   const steps = [];
   steps.push([{ kind: 'fight' }]);
   const pools = [
-    ['fight', 'camp'], ['fight', 'shop'], ['elite', 'fight'],
+    ['fight', 'event'], ['fight', 'shop'], ['elite', 'event'],
     ['camp', 'cache'], ['fight', 'elite'],
   ];
   for (const p of pools) {
@@ -1185,12 +1354,14 @@ function newRun(g, tribeId, seed) {
   const run = {
     seed: sd, tribe: tribeId, zone: 0, step: 0, gold: 25, bonusRedraw: 0,
     deck: [], leader: mkCard(s.leader), trail: genTrail(0), log: [], path: [],
-    kills: 0, node: null,
+    kills: 0, node: null, bells: [], bonusHand: 0, bellCharged: false, waveBonus: 0,
+    purse: 1, mend: 0, bosses: {},
   };
   for (const id of s.deck) run.deck.push(mkCard(id));
   g.run = run;
   g.battle = null;
   g.screen = 'trail';
+  g.tut = G.meta.taught ? null : { i: 0, t: 0, over: false };
   G.meta.runs++;
   saveMeta();
   saveRun(run);
@@ -1214,6 +1385,9 @@ function enterNode(g, choiceIdx) {
   } else if (node.kind === 'camp') {
     g.ui.camp = { done: false };
     g.screen = 'camp';
+  } else if (node.kind === 'event') {
+    g.ui.event = { def: EVENTS[Math.floor(rnd() * EVENTS.length)] };
+    g.screen = 'event';
   } else if (node.kind === 'cache') {
     run.gold += 20;
     g.ui.reward = { cards: [], charms: sample(Object.keys(CHARMS), 3), gold: 20, kind: 'cache' };
@@ -1270,8 +1444,10 @@ function weightedCards(run, n) {
 }
 function rollReward(g, kind) {
   const run = g.run;
-  const r = { kind, cards: weightedCards(run, 3), charms: [], gold: 0 };
-  if (kind === 'elite' || kind === 'boss') r.charms = sample(Object.keys(CHARMS), kind === 'boss' ? 3 : 2);
+  const r = { kind, cards: weightedCards(run, 3), charms: [], bells: [], gold: 0 };
+  // A beast pays in bells — the upgrades that change the rest of the trek.
+  if (kind === 'boss') r.bells = sample(Object.keys(BELLS), 3);
+  else if (kind === 'elite') r.charms = sample(Object.keys(CHARMS), 2);
   return r;
 }
 function takeCard(g, id) {
@@ -1294,7 +1470,8 @@ function rollShop(g) {
   const run = g.run;
   const cards = weightedCards(run, 3).map((id) => ({ id, price: PRICE[CARDS[id].rare] || 25, sold: false }));
   const charms = sample(Object.keys(CHARMS), 2).map((id) => ({ id, price: PRICE[CHARMS[id].rare] + 8, sold: false }));
-  return { cards, charms, heal: { price: 20, sold: false }, scar: { price: 30, sold: false } };
+  return { cards, charms, heal: { price: 20, sold: false }, scar: { price: 30, sold: false },
+    sigil: { price: 58, sold: false } };
 }
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
@@ -1354,6 +1531,99 @@ function campChoose(g, what, arg) {
   return true;
 }
 
+/* -------------------------------------------------------------- events --- */
+
+/* Small forks in the road. Each one is a real trade — nothing here is free,
+   and nothing is a trap you could not read beforehand. */
+const EVENTS = [
+  { id: 'shrine', title: 'A SHRINE UNDER THE ICE',
+    text: 'Somebody knelt here once. The offering bowl is still full of snow, and something in the dark below it is still listening.',
+    opts: [
+      { label: 'Leave an offering', sub: '15 scrip, take a charm', can: (g) => g.run.gold >= 15,
+        go: (g) => { g.run.gold -= 15; offerCharms(g, 3); } },
+      { label: 'Prise the bowl loose', sub: '30 scrip, a warden is hurt',
+        go: (g) => { g.run.gold += 30; hurtSomebody(g); advance(g); } },
+      { label: 'Kneel and walk on', sub: 'mend 4 on everyone',
+        go: (g) => { g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 4); }); advance(g); } },
+    ] },
+  { id: 'caravan', title: 'A CARAVAN THAT STOPPED',
+    text: 'Six sleds in a neat line, snowed to the axles. Whoever unpacked them was in no hurry, and never finished.',
+    opts: [
+      { label: 'Take what is useful', sub: 'choose one of three cards',
+        go: (g) => { g.ui.reward = { kind: 'event', cards: weightedCards(g.run, 3), charms: [], bells: [], gold: 0 }; g.screen = 'reward'; } },
+      { label: 'Strip it for scrip', sub: '40 scrip',
+        go: (g) => { g.run.gold += 40; advance(g); } },
+      { label: 'Leave them their sleds', sub: 'mend 6 on everyone',
+        go: (g) => { g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 6); }); advance(g); } },
+    ] },
+  { id: 'spring', title: 'STEAM OFF THE ROCK',
+    text: 'A hot spring, black and clear, breathing in the middle of a white plain. It is warm enough to hurt.',
+    opts: [
+      { label: 'Everybody in', sub: 'mend every warden fully',
+        go: (g) => { g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = 0; c.injured = false; }); advance(g); } },
+      { label: 'Boil the pack down', sub: 'burn a card, take a charm',
+        go: (g) => {
+          openChooser('BURN WHICH CARD?', g.run.deck.map((cd) => ({ card: cd })), (i) => {
+            g.run.deck.splice(i, 1);
+            UI.choose = null;
+            offerCharms(g, 3);
+          }, { cancel: 'NEVER MIND' });
+        } },
+      { label: 'Fill every flask', sub: '25 scrip',
+        go: (g) => { g.run.gold += 25; advance(g); } },
+    ] },
+  { id: 'bell', title: 'A BELL IN A DEAD TREE',
+    text: 'Rope long rotted, the bell itself untouched by any of it. It rings once when you lift it, and the snow comes off the branches for a hundred yards.',
+    opts: [
+      { label: 'Cut it down and carry it', sub: 'take one of two bells',
+        go: (g) => { g.ui.reward = { kind: 'event', cards: [], charms: [], bells: sample(Object.keys(BELLS), 2), gold: 0, taken: true }; g.screen = 'reward'; } },
+      { label: 'Ring it properly', sub: 'a fight, and 45 scrip for it',
+        go: (g) => { g.run.eventPay = 45; startBattle(g, 'elite'); } },
+      { label: 'Let it hang', sub: '',
+        go: (g) => advance(g) },
+    ] },
+  { id: 'stranger', title: 'SOMEBODY ELSE\'S FIRE',
+    text: 'A stranger with frost in her eyebrows, feeding a fire she clearly cannot spare. She looks at your caravan the way a quartermaster looks at a list.',
+    opts: [
+      { label: 'Trade her a warden', sub: 'give one card, mark another with a sigil',
+        can: (g) => g.run.deck.length > 2,
+        go: (g) => {
+          openChooser('GIVE HER WHICH WARDEN?', g.run.deck.map((cd) => ({ card: cd })), (i) => {
+            g.run.deck.splice(i, 1);
+            UI.choose = null;
+            offerSigil(g);
+          }, { cancel: 'NEVER MIND' });
+        } },
+      { label: 'Feed her fire', sub: '20 scrip, mend everyone 5',
+        can: (g) => g.run.gold >= 20,
+        go: (g) => { g.run.gold -= 20; g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 5); }); advance(g); } },
+      { label: 'Share the road instead', sub: 'choose one of three cards',
+        go: (g) => { g.ui.reward = { kind: 'event', cards: weightedCards(g.run, 3), charms: [], bells: [], gold: 0 }; g.screen = 'reward'; } },
+    ] },
+];
+
+function hurtSomebody(g) {
+  const pool = g.run.deck.filter((c) => c.type === 'unit' && !c.injured);
+  const c = pick(pool.length ? pool : g.run.deck);
+  if (c) { c.injured = true; g.run.log.push(c.name + ' was hurt prising it loose.'); }
+}
+function offerCharms(g, n) {
+  const three = sample(Object.keys(CHARMS), n);
+  openChooser('WHICH CHARM?', three.map((cid) => ({ charm: cid })), (i) => {
+    pickTargetForCharm(g, three[i], () => advance(g));
+  }, { cancel: 'NEVER MIND' });
+}
+function offerSigil(g) {
+  const all = g.run.deck.filter((c) => c.type === 'unit' && !c.sigil);
+  if (!all.length) { advance(g); return; }
+  openChooser('MARK WHICH WARDEN WITH A SIGIL?', all.map((cd) => ({ card: cd })), (i) => {
+    all[i].sigil = true;
+    UI.choose = null;
+    sfx('get');
+    advance(g);
+  }, { cancel: 'NEVER MIND' });
+}
+
 /* --------------------------------------------------------------- saving -- */
 const SAVE_RUN = 'ff_run_v1';
 const SAVE_META = 'ff_meta_v1';
@@ -1362,10 +1632,11 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0 }; }
+function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0, i: !!c.injured, s: !!c.sigil }; }
 function desCard(o) {
   const c = mkCard(o.d);
   c.uid = o.u; c.charms = (o.c || []).slice(); c.dmg = o.g || 0;
+  c.injured = !!o.i; c.sigil = !!o.s;
   rebuildCard(c);
   UID = Math.max(UID, c.uid + 1);
   return c;
@@ -1376,6 +1647,8 @@ function saveRun(run) {
     v: 1, seed: run.seed, tribe: run.tribe, zone: run.zone, step: run.step, gold: run.gold,
     br: run.bonusRedraw, leader: serCard(run.leader), deck: run.deck.map(serCard),
     trail: run.trail, path: run.path, log: run.log.slice(-8),
+    bells: run.bells || [], bh: run.bonusHand || 0, bc: !!run.bellCharged, wb: run.waveBonus || 0,
+    purse: run.purse || 1, mend: run.mend || 0, bosses: run.bosses || {},
   }));
 }
 function loadRun(g) {
@@ -1388,6 +1661,8 @@ function loadRun(g) {
       seed: o.seed, tribe: o.tribe, zone: o.zone, step: o.step, gold: o.gold, bonusRedraw: o.br || 0,
       leader: desCard(o.leader), deck: (o.deck || []).map(desCard), trail: o.trail, path: o.path || [],
       log: o.log || [], kills: 0, node: null,
+      bells: o.bells || [], bonusHand: o.bh || 0, bellCharged: !!o.bc, waveBonus: o.wb || 0,
+      purse: o.purse || 1, mend: o.mend || 0, bosses: o.bosses || {},
     };
     RNG = mulberry((run.seed + run.step * 7919 + run.zone * 104729) >>> 0);
     g.run = run;
@@ -2004,6 +2279,23 @@ function drawUnit(c, u, t) {
 
   drawStatus(c, u, x + 5, y + 5, 20);
 
+  // charms hang off the bottom corner and swing a little as the unit breathes
+  const worn = (u.card && u.card.charms) || [];
+  for (let i = 0; i < worn.length; i++) {
+    const chm = chOf(worn[i]);
+    if (!chm) continue;
+    const sway = Math.sin(t * 2.2 + u.bob + i) * 0.22;
+    const ax = x + 16 + i * 15, ay = y + h - 2;
+    c.save();
+    c.translate(ax, ay);
+    c.rotate(sway);
+    c.strokeStyle = C.ink; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(0, -6); c.lineTo(0, 7); c.stroke();
+    c.beginPath(); c.arc(0, 12, 5.5, 0, TAU);
+    inked(c, chm.col, 2, C.ink);
+    c.restore();
+  }
+
   if (u.leader) {
     c.beginPath();
     c.moveTo(u.px - 16, y - 4); c.lineTo(u.px - 16, y - 16); c.lineTo(u.px - 6, y - 9);
@@ -2059,7 +2351,7 @@ function drawCard(c, card, x, y, w, h, o) {
   }
   if (card.charms.length) {
     for (let i = 0; i < card.charms.length; i++) {
-      const ch = CHARMS[card.charms[i]] || SCARS[card.charms[i]];
+      const ch = chOf(card.charms[i]);
       c.beginPath(); c.arc(w - 10, 42 + i * 17, 7, 0, TAU);
       inked(c, ch ? ch.col : '#fff', 2, C.ink);
     }
@@ -2216,8 +2508,111 @@ function sfx(name) {
     case 'win':   [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.24, 'triangle', 0.14, f, i * 0.09)); break;
     case 'lose':  [440, 370, 294, 220].forEach((f, i) => tone(f, 0.3, 'sawtooth', 0.12, f * 0.9, i * 0.12)); break;
     case 'tap':   tone(900, 0.05, 'square', 0.07, 1200); break;
+    case 'combo': [784, 988, 1319].forEach((f, i) => tone(f, 0.18, 'square', 0.13, f * 1.5, i * 0.055)); break;
+    case 'wave':  tone(160, 0.5, 'sawtooth', 0.16, 90); noise(0.4, 0.12, 0); break;
+    case 'page':  tone(520, 0.07, 'triangle', 0.08, 700); break;
     default: break;
   }
+}
+
+/* --------------------------------------------------------------- score --- */
+
+/* A step sequencer rather than a loop: three voices over sixteen steps, with
+   the root, the scale and the tempo picked by where you are. It reads none of
+   the game's randomness — a run has to play the same twice, and a melody that
+   consumed the seed would quietly poison that. */
+const SCALE = {
+  whitewood: [0, 3, 5, 7, 10],        // minor pentatonic — open, cold, hopeful
+  shelf:     [0, 2, 3, 7, 8],         // a flattened sixth: the ground gets thin
+  hollow:    [0, 1, 5, 6, 10],        // phrygian shards for the last climb
+};
+const MOOD = {
+  title: { root: 110.0, scale: 'whitewood', beat: 0.46, lead: 0.5, drums: 0, pad: 1 },
+  trail: { root: 110.0, scale: 'whitewood', beat: 0.44, lead: 0.42, drums: 0, pad: 1 },
+  fight: { root: 98.0,  scale: 'shelf',     beat: 0.34, lead: 0.6,  drums: 1, pad: 1 },
+  boss:  { root: 87.31, scale: 'hollow',    beat: 0.27, lead: 0.8,  drums: 2, pad: 1 },
+  camp:  { root: 130.8, scale: 'whitewood', beat: 0.56, lead: 0.3,  drums: 0, pad: 1 },
+};
+const MUSIC_GAIN = 0.42;
+const MUSIC = { on: true, mood: 'title', step: 0, timer: 0, notes: 0, bars: 0, swell: 0, seed: 12345 };
+
+// The score's own randomness, so the game's stays untouched.
+function mrnd() {
+  MUSIC.seed = (MUSIC.seed * 1664525 + 1013904223) >>> 0;
+  return MUSIC.seed / 4294967296;
+}
+const semitone = (root, n) => root * Math.pow(2, n / 12);
+
+function moodFor(g) {
+  if (g.screen === 'battle' && g.battle) return g.battle.kind === 'boss' ? 'boss' : 'fight';
+  if (g.screen === 'camp') return 'camp';
+  if (g.screen === 'title' || g.screen === 'gameover' || g.screen === 'victory') return 'title';
+  return 'trail';
+}
+function zoneKey(g) {
+  const z = g.run ? clamp(g.run.zone, 0, ZONES.length - 1) : 0;
+  return ZONES[z].id;
+}
+
+/* One voice, so the mixer is in one place and a mute is a mute. */
+function mtNote(freq, dur, type, vol, slide) {
+  MUSIC.notes++;
+  tone(freq, dur, type, (vol === undefined ? 0.1 : vol) * MUSIC_GAIN, slide);
+}
+
+function musicTick(g, dt) {
+  if (!MUSIC.on) return;
+  const mood = moodFor(g);
+  if (mood !== MUSIC.mood) {
+    MUSIC.mood = mood;
+    MUSIC.step = 0;
+    MUSIC.timer = 0;
+    MUSIC.bars = 0;
+  }
+  const M = MOOD[mood];
+  // The zone recolours whatever the mood set: same tune, colder key.
+  const zk = zoneKey(g);
+  const scale = SCALE[zk] || SCALE[M.scale];
+  const drop = zk === 'shelf' ? -2 : zk === 'hollow' ? -4 : 0;
+  const root = semitone(M.root, drop);
+
+  MUSIC.timer -= dt;
+  if (MUSIC.timer > 0) return;
+  MUSIC.timer += M.beat / 4;                 // sixteenths
+  const s = MUSIC.step;
+  MUSIC.step = (s + 1) % 16;
+  if (MUSIC.step === 0) MUSIC.bars++;
+
+  // bass: root and fifth, on the pulse
+  if (s === 0 || s === 6 || s === 10) mtNote(root / 2, M.beat * 0.9, 'triangle', 0.22);
+  if (s === 8) mtNote(semitone(root / 2, 7), M.beat * 0.7, 'triangle', 0.18);
+
+  // pad: one long chord tone per bar, an octave up, so the cold has a floor
+  if (M.pad && s === 0) {
+    mtNote(root * 2, M.beat * 3.4, 'sine', 0.07);
+    mtNote(semitone(root * 2, scale[2]), M.beat * 3.2, 'sine', 0.05);
+  }
+
+  // lead: sparse, and it leans on the scale rather than wandering
+  if (mrnd() < M.lead * 0.34) {
+    const n = scale[Math.floor(mrnd() * scale.length)] + (mrnd() < 0.3 ? 12 : 0);
+    mtNote(semitone(root * 2, n), M.beat * (mrnd() < 0.25 ? 1.4 : 0.55), 'square', 0.06);
+  }
+
+  // drums: only once there is something to be afraid of
+  if (M.drums) {
+    if (s % 4 === 0) noise(0.07, 0.05 * M.drums, 0);
+    if (s === 4 || s === 12) noise(0.12, 0.05 * M.drums, 1800);
+    if (M.drums > 1 && s === 14) noise(0.09, 0.05, 2600);
+  }
+}
+
+function setMute(m) {
+  G.meta.mute = !!m;
+  AUD.on = !m;
+  MUSIC.on = !m;
+  saveMeta();
+  if (!m) sfx('tap');
 }
 
 /* ------------------------------------------------------------- screens --- */
@@ -2235,12 +2630,14 @@ function hitAt(x, y) {
 }
 
 const UI = {
-  drag: null,        // {card, idx, x, y, ox, oy, moved} or {unit,…}
+  drag: null,        // {card, idx, x, y, moved} or {unit,…}
   hover: null,
   inspect: null,     // a card blown up with its keywords spelled out
   order: false,      // attack-order preview
   choose: null,      // {title, items, onPick, cancel}
-  menu: false,
+  deck: false,       // the caravan, laid out
+  help: null,        // page index of the rulebook, or null
+  holdT: 0,          // how long the finger has been down in one place
 };
 
 function button(c, id, x, y, w, h, label, col, dis, small) {
@@ -2286,6 +2683,8 @@ function drawTitle(c, t) {
     txt(c, locked ? 'reach the second zone to unlock' : ld.name, x + bw2 / 2, y + 170, 13, '#b9cde8', 'center', 't');
     if (!locked) hit('tribe', x, y, bw2, 190, tb);
   });
+  button(c, 'help', 28, VH - 74, 210, 48, 'HOW TO PLAY', '#40527a');
+  button(c, 'mute', VW - 128, VH - 74, 100, 48, G.meta.mute ? 'SOUND ✕' : 'SOUND ♪', '#40527a', false, true);
   txt(c, 'runs ' + G.meta.runs + '   ·   wins ' + G.meta.wins, MID, VH - 28, 14, '#7e97b8', 'center', 't');
 }
 
@@ -2377,7 +2776,27 @@ function drawBattle(c, t) {
   hit('bell', bx - 60, by - 40, 120, 120);
 
   button(c, 'pass', VW - 178, VH - 66, 120, 44, 'PASS', '#40527a', b.busy, true);
-  button(c, 'order', 22, 22 + 40, 96, 34, UI.order ? 'ORDER ✓' : 'ORDER', '#40527a', false, true);
+  button(c, 'order', 22, 62, 96, 34, UI.order ? 'ORDER ✓' : 'ORDER', '#40527a', false, true);
+  button(c, 'help', 124, 62, 44, 34, '?', '#40527a', false, true);
+  button(c, 'mute', 174, 62, 44, 34, G.meta.mute ? '✕' : '♪', '#40527a', false, true);
+
+  if (b.banner && b.banner.t < 2.1) {
+    const k = b.banner.t += 1 / 60;
+    const slide = k < 0.35 ? easeOut(k / 0.35) : k > 1.7 ? 1 - easeIn((k - 1.7) / 0.4) : 1;
+    c.save();
+    c.globalAlpha = clamp(slide, 0, 1);
+    c.translate(MID + (1 - slide) * 220, 250);
+    c.fillStyle = 'rgba(10,18,34,.86)';
+    c.beginPath();
+    c.moveTo(-VW / 2, -46); c.lineTo(VW / 2, -46); c.lineTo(VW / 2, 46); c.lineTo(-VW / 2, 46);
+    c.closePath(); c.fill();
+    c.strokeStyle = b.banner.col; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(-VW / 2, -46); c.lineTo(VW / 2, -46);
+    c.moveTo(-VW / 2, 46); c.lineTo(VW / 2, 46); c.stroke();
+    txt(c, b.banner.text, 0, -8, 52, b.banner.col, 'center', 'd');
+    txt(c, b.banner.sub.toUpperCase(), 0, 28, 15, '#9fc0e4', 'center', 't');
+    c.restore();
+  }
 
   if (b.busy) txt(c, 'RESOLVING…', MID, 96, 16, '#9fc0e4', 'center', 't');
   else txt(c, 'TURN ' + (b.turn + 1) + '  ·  one action', MID, 96, 16, '#9fc0e4', 'center', 't');
@@ -2402,23 +2821,35 @@ function drawHand(c, t) {
   const b = G.battle;
   const n = b.hand.length;
   if (!n) return;
+  // The hand is a fan, not a row: cards lean out from the middle and sit a
+  // little lower at the ends, which is what makes six cards readable at once
+  // on a phone without shrinking any of them.
   const spread = Math.min(CARD_W + 8, (VW - 420) / Math.max(1, n));
   const total = (n - 1) * spread;
   for (let i = 0; i < n; i++) {
     const card = b.hand[i];
-    const dragging = UI.drag && UI.drag.idx === i;
-    if (dragging) continue;
+    if (UI.drag && UI.drag.card === card) continue;
+    const off = i - (n - 1) / 2;
     const x = MID - total / 2 + i * spread - CARD_W / 2;
     const hovered = UI.hover && UI.hover.id === 'hand' && UI.hover.data === i;
-    const lift = hovered ? 30 : 0;
-    const y = HAND_Y - CARD_H / 2 - lift + Math.sin(t * 1.6 + i) * 2;
+    const lift = hovered ? 34 : 0;
+    const arc = n > 1 ? Math.abs(off) * Math.abs(off) * 2.2 : 0;
+    const y = HAND_Y - CARD_H / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
     card.handT = Math.min(1, (card.handT || 0) + 0.06);
-    drawCard(c, card, x, y, CARD_W, CARD_H, { t, scale: hovered ? 1.06 : 1 });
+    drawCard(c, card, x, y, CARD_W, CARD_H, {
+      t, scale: hovered ? 1.07 : 1, rot: hovered ? 0 : off * 0.035,
+    });
     hit('hand', x, y, CARD_W, CARD_H, i);
   }
   if (UI.drag && UI.drag.card) {
     const d = UI.drag;
-    drawCard(c, d.card, d.x - CARD_W / 2, d.y - CARD_H / 2 - 20, CARD_W, CARD_H, { t, scale: 1.1, rot: Math.sin(t * 6) * 0.02 });
+    // a shadow on the table under the held card, so it reads as lifted
+    c.save();
+    c.globalAlpha = 0.3; c.fillStyle = '#000';
+    c.beginPath(); c.ellipse(d.x, d.y + CARD_H * 0.34, CARD_W * 0.42, 14, 0, 0, TAU); c.fill();
+    c.restore();
+    drawCard(c, d.card, d.x - CARD_W / 2, d.y - CARD_H / 2 - 26, CARD_W, CARD_H,
+      { t, scale: 1.12, rot: Math.sin(t * 5) * 0.025 });
   }
 }
 
@@ -2462,8 +2893,8 @@ function drawTrail(c, t) {
   drawHud(c, t);
   if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 40, 15, '#9fb6d6', 'center', 't');
 }
-const nodeCol = (k) => ({ fight: '#7fb2e8', elite: '#e08a8a', boss: '#ff9a3c', shop: '#ffd166', camp: '#8fe0a0', cache: '#c9a6ff' }[k] || '#fff');
-const nodeName = (k) => ({ fight: 'skirmish', elite: 'pack', boss: 'the beast', shop: 'trader', camp: 'camp', cache: 'cache' }[k] || k);
+const nodeCol = (k) => ({ fight: '#7fb2e8', elite: '#e08a8a', boss: '#ff9a3c', shop: '#ffd166', camp: '#8fe0a0', cache: '#c9a6ff', event: '#f0a6d0' }[k] || '#fff');
+const nodeName = (k) => ({ fight: 'skirmish', elite: 'pack', boss: 'the beast', shop: 'trader', camp: 'camp', cache: 'cache', event: 'a stop' }[k] || k);
 function drawNodeIcon(c, kind, x, y, s, t) {
   c.save(); c.translate(x, y); c.lineJoin = 'round';
   c.strokeStyle = C.ink; c.lineWidth = Math.max(2.5, s * 0.14); c.lineCap = 'round';
@@ -2485,6 +2916,10 @@ function drawNodeIcon(c, kind, x, y, s, t) {
   } else if (kind === 'cache') {
     c.beginPath(); rr(c, -s * 0.42, -s * 0.24, s * 0.84, s * 0.6, 5); c.stroke();
     c.beginPath(); c.moveTo(0, -s * 0.24); c.lineTo(0, s * 0.36); c.stroke();
+  } else if (kind === 'event') {
+    c.beginPath(); c.arc(0, -s * 0.1, s * 0.3, -2.4, 0.9); c.stroke();
+    c.beginPath(); c.moveTo(s * 0.06, s * 0.12); c.lineTo(s * 0.06, s * 0.24); c.stroke();
+    c.beginPath(); c.arc(s * 0.06, s * 0.44, s * 0.05, 0, TAU); c.fillStyle = C.ink; c.fill();
   }
   c.restore();
 }
@@ -2532,7 +2967,7 @@ function drawChooser(c, t) {
 }
 
 function drawCharmCard(c, charmId, x, y, w, h, t) {
-  const ch = CHARMS[charmId] || SCARS[charmId];
+  const ch = chOf(charmId) || BELLS[charmId];
   panel(c, x, y, w, h, 13, '#f3e9d6', ch.col);
   c.beginPath(); rr(c, 5, 5, 0, 0, 0);
   txt(c, ch.name.toUpperCase(), x + w / 2, y + 22, 15, '#22160c', 'center', 't', 'rgba(255,255,255,.5)');
@@ -2552,6 +2987,141 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   c.restore();
   const lines = wrapText(c, ch.text, 12, w - 18);
   lines.forEach((ln, i) => txt(c, ln, x + w / 2, y + h - 40 + i * 14, 12, '#3a3020', 'center', 't', 0));
+}
+
+/* ------------------------------------------------------------- teaching -- */
+
+/* Hints that watch rather than block. Each one waits for the player to do the
+   thing it names; nothing is gated, nothing is modal, and the whole sequence
+   can be thrown away with one tap. `when` is availability — a hint about waves
+   is not shown in a fight that has none. */
+/* A hint stays up long enough to be read even when the action that clears it
+   has already happened — deploying a warden also spends the turn, so without
+   this the counter hint would flash past in half a second. */
+const TUT_DWELL = 2.0;
+const TUTORIAL = [
+  { id: 'deploy', text: 'Drag a warden onto a slot. The front of a lane takes the hits.',
+    done: (g) => playerUnits(g).length > 1 },
+  { id: 'counter', text: 'Counters drop by one each turn. At zero a card triggers: its ability AND its swing, then it resets.',
+    done: (g) => g.battle.turn >= 1 },
+  { id: 'action', text: 'One action a turn — a card, the bell, or a pass. Sliding a warden already on the board is free.',
+    done: (g) => g.battle.turn >= 2 },
+  { id: 'order', text: 'Tap ORDER to number the board. Every foe resolves before every warden, front of the table first.',
+    done: () => UI.order },
+  { id: 'inspect', text: 'Tap anything — a card, a warden, a foe — and the game tells you exactly what it does.',
+    done: () => !!UI.inspect },
+  { id: 'bell', text: 'The bell throws your hand away for a fresh one. It costs the turn until it charges, then it is free.',
+    done: (g) => !!g.battle.rang },
+  { id: 'wave', text: 'More are coming. CALL pulls the next wave in while your board is set, instead of while you are rebuilding.',
+    when: (g) => g.battle.waves && g.battle.waves.length, done: (g) => (g.battle.waveNo || 1) >= 2 },
+];
+
+function tutStep(g, dt) {
+  const t = g.tut;
+  if (!t || t.over) return;
+  if (g.screen !== 'battle' || !g.battle) return;
+  t.t += dt;
+  // skip anything that does not apply to the fight in front of us
+  let guard = 0;
+  while (t.i < TUTORIAL.length && guard++ < 12) {
+    const h = TUTORIAL[t.i];
+    if (h.when && !h.when(g)) { t.i++; t.t = 0; continue; }
+    break;
+  }
+  if (t.i >= TUTORIAL.length) { finishTutorial(g); return; }
+  const h = TUTORIAL[t.i];
+  if (t.t > TUT_DWELL && h.done(g)) {
+    t.i++;
+    t.t = 0;
+    t.flash = 1;
+    sfx('page');
+    if (t.i >= TUTORIAL.length) finishTutorial(g);
+  }
+}
+function finishTutorial(g) {
+  if (!g.tut || g.tut.over) return;
+  g.tut.over = true;
+  G.meta.taught = true;
+  saveMeta();
+  fx.toast('YOU HAVE THE RUN OF IT', C.gold);
+}
+
+function drawTutorial(c, t) {
+  const tut = G.tut;
+  if (!tut || tut.over || G.screen !== 'battle') return;
+  const h = TUTORIAL[tut.i];
+  if (!h) return;
+  const w = 620, x = MID - w / 2, y = VH - 232;
+  const pop = clamp(tut.t * 4, 0, 1);
+  c.save();
+  c.globalAlpha = 0.35 + 0.65 * pop;
+  panel(c, x, y, w, 62, 14, 'rgba(12,22,40,.92)', '#ffd166');
+  const lines = wrapText(c, h.text, 15, w - 130);
+  lines.slice(0, 2).forEach((ln, i) => txt(c, ln, x + 58, y + (lines.length > 1 ? 22 : 31) + i * 19, 15, '#eaf6ff', 'left', 't'));
+  // a little lantern to mark it as guidance rather than a warning
+  c.save();
+  c.translate(x + 32, y + 31 + Math.sin(t * 2.4) * 2);
+  c.globalAlpha = 0.55; c.fillStyle = C.gold;
+  c.beginPath(); c.arc(0, 0, 15, 0, TAU); c.fill();
+  c.globalAlpha = 1;
+  c.beginPath(); rr(c, -6, -9, 12, 18, 3);
+  inked(c, C.gold, 2.5, C.ink);
+  c.restore();
+  txt(c, (tut.i + 1) + '/' + TUTORIAL.length, x + w - 66, y + 31, 13, '#9fb6d6', 'center', 't');
+  c.restore();
+  hit('tutSkip', x + w - 34, y + 12, 26, 38);
+  txt(c, '✕', x + w - 21, y + 31, 17, '#7e97b8', 'center', 't');
+}
+
+/* ---------------------------------------------------------------- help --- */
+
+const HELP_PAGES = ['THE FIGHT', 'STATUSES', 'KEYWORDS'];
+const HELP_RULES = [
+  ['The board', 'Two lanes deep, three columns a side. Column one is the front. A swing hits the front-most foe in the attacker\'s own lane; if that lane is clear it reaches across, and a foe with nothing in front of it walks into the lane where the fighting is.'],
+  ['One action', 'Play a card, ring the bell, or pass — then the turn resolves. There is no mana. Sliding a warden between slots is free, and so is calling in a wave.'],
+  ['Counters', 'Everything counts down one per turn and triggers at zero: ability and swing together, then the counter resets. A counter pushed to zero by a card fires immediately — that is where the combos are.'],
+  ['Order', 'Every foe resolves before every warden. Inside a side: front of the table first, top lane before bottom. Tap ORDER to see the exact numbers before you commit.'],
+  ['The bell', 'Throws your hand away and deals a fresh one. It costs your turn until it has charged for four turns, and then it is free.'],
+  ['Waves', 'Fights arrive in pieces. The clock over the far side counts down to the next one; CALL brings it early, on your terms.'],
+  ['Hurt', 'A warden that falls comes back at half attack and half health, and shakes it off by seeing a whole fight through. Damage carries between fights — camps and the trader mend it.'],
+];
+
+function drawHelp(c, t) {
+  const page = UI.help | 0;
+  c.save(); c.fillStyle = 'rgba(6,10,20,.92)'; c.fillRect(0, 0, VW, VH); c.restore();
+  txt(c, 'FROSTFELL', MID, 52, 34, '#eaf6ff', 'center', 'd');
+  HELP_PAGES.forEach((p, i) => {
+    const w = 190, x = MID - (HELP_PAGES.length * (w + 12)) / 2 + i * (w + 12) + 6;
+    button(c, 'helpPage', x, 82, w, 40, p, i === page ? '#3f8f5f' : '#40527a', false, true);
+    hits[hits.length - 1].data = i;
+  });
+
+  if (page === 0) {
+    HELP_RULES.forEach((r, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const x = 90 + col * 560, y = 154 + row * 122;
+      txt(c, r[0].toUpperCase(), x, y, 19, '#ffd166', 'left', 'd');
+      wrapText(c, r[1], 13.5, 520).slice(0, 5).forEach((ln, k) => txt(c, ln, x, y + 24 + k * 17, 13.5, '#c8dcf4', 'left', 't'));
+    });
+  } else if (page === 1) {
+    STATUS_ORDER.forEach((k, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const x = 110 + col * 560, y = 160 + row * 96;
+      c.beginPath(); rr(c, x, y - 14, 30, 30, 7);
+      inked(c, STATUS[k].col, 2.5, C.ink);
+      txt(c, 'N', x + 15, y + 2, 18, '#12203a', 'center', 'd', 0);
+      txt(c, STATUS[k].name.toUpperCase(), x + 42, y - 4, 19, STATUS[k].col, 'left', 'd');
+      wrapText(c, STATUS[k].text, 13.5, 470).forEach((ln, j) => txt(c, ln, x + 42, y + 18 + j * 17, 13.5, '#c8dcf4', 'left', 't'));
+    });
+  } else {
+    Object.keys(KEYWORD).forEach((k, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const x = 110 + col * 560, y = 168 + row * 100;
+      txt(c, KEYWORD[k].name.toUpperCase(), x, y, 20, '#ffd166', 'left', 'd');
+      wrapText(c, KEYWORD[k].text, 14, 490).forEach((ln, j) => txt(c, ln, x, y + 24 + j * 18, 14, '#c8dcf4', 'left', 't'));
+    });
+  }
+  button(c, 'helpClose', MID - 100, VH - 72, 200, 50, 'BACK', '#40527a');
 }
 
 /* Tap anything and the game explains it — the card, every keyword on it, every
@@ -2606,7 +3176,7 @@ function drawInspect(c, t) {
     }
   }
   for (const id of (card.charms || [])) {
-    const chm = CHARMS[id] || SCARS[id];
+    const chm = chOf(id);
     if (!chm) continue;
     txt(c, chm.name.toUpperCase() + ' — ' + chm.text, x, y, 14, chm.col, 'left', 't');
     y += 20;
@@ -2651,13 +3221,42 @@ function drawReward(c, t) {
     hit('reward', x, y, cw, chh, i);
   });
   if (r.charms.length) {
-    txt(c, 'and a charm', MID, 410, 16, '#a8c8ea', 'center', 't');
+    txt(c, r.charmTaken ? 'charm taken' : 'and a charm', MID, 410, 16, '#a8c8ea', 'center', 't');
     const w2 = 120, g3 = 18;
     const tw = r.charms.length * w2 + (r.charms.length - 1) * g3;
     r.charms.forEach((cid, i) => {
       const x = MID - tw / 2 + i * (w2 + g3);
+      c.save();
+      if (r.charmTaken) c.globalAlpha = 0.3;
       drawCharmCard(c, cid, x, 436, w2, 156, t);
-      hit('rewardCharm', x, 436, w2, 156, i);
+      c.restore();
+      if (!r.charmTaken) hit('rewardCharm', x, 436, w2, 156, i);
+    });
+  }
+  if (r.bells && r.bells.length) {
+    txt(c, r.bellTaken ? 'bell rung' : 'and a bell for the road', MID, 404, 16, '#a8c8ea', 'center', 't');
+    const w2 = 210, g3 = 22;
+    const tw = r.bells.length * w2 + (r.bells.length - 1) * g3;
+    r.bells.forEach((bid, i) => {
+      const bl = BELLS[bid];
+      const x = MID - tw / 2 + i * (w2 + g3);
+      const hovered = UI.hover && UI.hover.id === 'rewardBell' && UI.hover.data === i;
+      c.save();
+      if (r.bellTaken) c.globalAlpha = 0.3;
+      panel(c, x, 428 - (hovered ? 6 : 0), w2, 132, 14, '#1d2c49', bl.col);
+      // a little bell, since every one of these is literally one
+      c.save();
+      c.translate(x + w2 / 2, 470 - (hovered ? 6 : 0));
+      c.beginPath();
+      c.moveTo(-17, 15); c.quadraticCurveTo(-15, -14, 0, -17);
+      c.quadraticCurveTo(15, -14, 17, 15); c.closePath();
+      inked(c, bl.col, 2.5, C.ink);
+      c.restore();
+      txt(c, bl.name.toUpperCase().replace('BELL OF ', ''), x + w2 / 2, 508 - (hovered ? 6 : 0), 18, bl.col, 'center', 'd');
+      wrapText(c, bl.text, 12.5, w2 - 22).forEach((ln, k) =>
+        txt(c, ln, x + w2 / 2, 528 + k * 15 - (hovered ? 6 : 0), 12.5, '#c8dcf4', 'center', 't'));
+      c.restore();
+      if (!r.bellTaken) hit('rewardBell', x, 428, w2, 132, i);
     });
   }
   button(c, 'rewardSkip', MID - 90, VH - 60, 180, 46, r.taken ? 'ONWARD' : 'SKIP', r.taken ? '#3f8f5f' : '#40527a');
@@ -2689,8 +3288,10 @@ function drawShop(c, t) {
     txt(c, it.sold ? '—' : String(it.price), x + cw / 2, 351, 17, '#ffe6a8', 'center', 'd');
     if (!it.sold) hit('buyCharm', x, 150, cw, chh + 40, i);
   });
-  button(c, 'buyHeal', MID - 320, 430, 260, 54, s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
-  button(c, 'buyScar', MID + 60, 430, 260, 54, s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
+  button(c, 'buyHeal', MID - 480, 430, 250, 54, s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
+  button(c, 'buyScar', MID - 210, 430, 250, 54, s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
+  button(c, 'buySigil', MID + 60, 430, 250, 54, s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
+  txt(c, 'a sigil puts that warden on the board before the first bell', MID - 85, 500, 13, '#7e97b8', 'center', 't');
   button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
 }
 
@@ -2727,12 +3328,63 @@ function drawCamp(c, t) {
   });
 }
 
+function drawEvent(c, t) {
+  const g = G, ev = g.ui.event && g.ui.event.def;
+  drawBackdrop(c, g.run.zone, t);
+  drawHud(c, t);
+  if (!ev) return;
+  txt(c, ev.title, MID, 92, 36, '#eaf6ff', 'center', 'd');
+  const lines = wrapText(c, ev.text, 17, 860);
+  lines.forEach((ln, i) => txt(c, ln, MID, 142 + i * 24, 17, '#bcd4f0', 'center', 't'));
+
+  const n = ev.opts.length;
+  const w = 320, gap = 24;
+  const total = n * w + (n - 1) * gap;
+  ev.opts.forEach((o, i) => {
+    const x = MID - total / 2 + i * (w + gap), y = 300;
+    const able = !o.can || o.can(g);
+    const hovered = UI.hover && UI.hover.id === 'eventOpt' && UI.hover.data === i;
+    panel(c, x, y - (hovered && able ? 6 : 0), w, 150, 14, able ? '#1d2c49' : '#2a3145', able ? '#7fb2e8' : '#4a5570');
+    wrapText(c, o.label, 21, w - 34).forEach((ln, k) =>
+      txt(c, ln, x + w / 2, y + 46 + k * 24 - (hovered && able ? 6 : 0), 21, able ? '#eaf6ff' : '#7a86a0', 'center', 'd'));
+    if (o.sub) wrapText(c, o.sub, 14, w - 34).forEach((ln, k) =>
+      txt(c, ln, x + w / 2, y + 104 + k * 18 - (hovered && able ? 6 : 0), 14, able ? '#9fc0e4' : '#67718a', 'center', 't'));
+    if (able) hit('eventOpt', x, y, w, 150, i);
+  });
+}
+
 function drawEnd(c, t, won) {
   drawBackdrop(c, won ? 2 : 0, t);
-  txt(c, won ? 'THE FELL IS CROSSED' : 'THE COLD TAKES YOU', MID, 220, 54, won ? '#ffe6a8' : '#c8dcf4', 'center', 'd');
+  if (won) {
+    // a slow wheel of light behind the words
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.translate(MID, 210);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU + t * 0.18;
+      c.save(); c.rotate(a);
+      c.globalAlpha = 0.09 + 0.05 * Math.sin(t * 1.6 + i);
+      c.fillStyle = '#ffd166';
+      c.beginPath(); c.moveTo(0, 0); c.lineTo(-40, -640); c.lineTo(40, -640); c.closePath(); c.fill();
+      c.restore();
+    }
+    c.restore();
+  } else {
+    c.save(); c.fillStyle = 'rgba(6,12,24,.45)'; c.fillRect(0, 0, VW, VH); c.restore();
+  }
+  const bob = Math.sin(t * 1.2) * 4;
+  txt(c, won ? 'THE FELL IS CROSSED' : 'THE COLD TAKES YOU', MID, 206 + bob, 56, won ? '#ffe6a8' : '#c8dcf4', 'center', 'd');
   txt(c, won ? 'the caravan makes the far shore, and the winter lets go' : 'the caravan halts where it stands',
-    MID, 280, 18, '#9fc0e4', 'center', 't');
-  button(c, 'endHome', MID - 140, 380, 280, 60, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
+    MID, 262 + bob, 18, '#9fc0e4', 'center', 't');
+
+  const m = G.meta;
+  const stats = [['RUNS', m.runs], ['CROSSINGS', m.wins], ['FURTHEST ZONE', (m.best || 0) + 1]];
+  stats.forEach((sx, i) => {
+    const x = MID - 300 + i * 300;
+    txt(c, String(sx[1]), x, 340, 40, '#eaf6ff', 'center', 'd');
+    txt(c, sx[0], x, 376, 13, '#7e97b8', 'center', 't');
+  });
+  button(c, 'endHome', MID - 140, 424, 280, 60, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
 }
 
 /* ================================================== 10. input ============ */
@@ -2749,6 +3401,11 @@ function press(id, data) {
     case 'pass': passTurn(g); return;
     case 'order': UI.order = !UI.order; return;
     case 'menu': UI.deck = true; return;
+    case 'help': UI.help = 0; return;
+    case 'helpPage': UI.help = data; return;
+    case 'helpClose': UI.help = null; return;
+    case 'mute': setMute(!G.meta.mute); return;
+    case 'tutSkip': if (G.tut) finishTutorial(g); return;
     case 'deckClose': UI.deck = false; return;
     case 'deckcard': UI.inspect = data; return;
     case 'inspectClose': UI.inspect = null; return;
@@ -2772,6 +3429,41 @@ function press(id, data) {
       return;
     }
     case 'rewardSkip': advance(g); return;
+    case 'rewardBell': {
+      const r = g.ui.reward;
+      if (r.bellTaken) return;
+      const bl = BELLS[r.bells[data]];
+      if (!bl) return;
+      bl.apply(g.run);
+      g.run.bells = (g.run.bells || []).concat([bl.id]);
+      r.bellTaken = true;
+      sfx('get');
+      fx.toast(bl.name.toUpperCase(), bl.col);
+      if (r.taken || !r.cards.length) advance(g);
+      return;
+    }
+    case 'eventOpt': {
+      const ev = g.ui.event && g.ui.event.def;
+      if (!ev || !ev.opts[data]) return;
+      const o = ev.opts[data];
+      if (o.can && !o.can(g)) return;
+      o.go(g);
+      return;
+    }
+    case 'buySigil': {
+      const s2 = g.ui.shop;
+      if (!s2 || s2.sigil.sold || g.run.gold < s2.sigil.price) return;
+      const all = g.run.deck.filter((cd) => cd.type === 'unit' && !cd.sigil);
+      if (!all.length) return;
+      openChooser('MARK WHICH WARDEN WITH A SIGIL?', all.map((cd) => ({ card: cd })), (i) => {
+        all[i].sigil = true;
+        g.run.gold -= s2.sigil.price;
+        s2.sigil.sold = true;
+        UI.choose = null;
+        sfx('get');
+      }, { cancel: 'NEVER MIND' });
+      return;
+    }
     case 'buyCard': buy(g, 'card', data); return;
     case 'buyCharm': {
       const it = g.ui.shop.charms[data];
@@ -2818,7 +3510,7 @@ function press(id, data) {
 /* Two-step: pick the charm, then pick who wears it. */
 function pickTargetForCharm(g, charmId, after, chargeLater) {
   const all = [g.run.leader].concat(g.run.deck.filter((cd) => cd.type === 'unit'));
-  openChooser('GIVE ' + (CHARMS[charmId] || SCARS[charmId]).name.toUpperCase() + ' TO WHOM?',
+  openChooser('GIVE ' + chOf(charmId).name.toUpperCase() + ' TO WHOM?',
     all.map((cd) => ({ card: cd })), (i) => {
       UI.lastCharmUid = all[i].uid;
       attachCharm(all[i], CHARMS[charmId]);
@@ -2833,6 +3525,10 @@ function onDown(x, y) {
   UI.pointer = { x, y };
   const h = hitAt(x, y);
   UI.hover = h;
+  if (UI.help !== null && UI.help !== undefined) {
+    if (h && (h.id === 'helpPage' || h.id === 'helpClose')) press(h.id, h.data);
+    return;
+  }
   if (UI.inspect) { if (h && h.id === 'inspectClose') press(h.id); else UI.inspect = null; return; }
   if (UI.choose) {
     if (!h) return;
@@ -2924,6 +3620,16 @@ function layoutUnits(dt) {
 }
 
 function update(dt) {
+  musicTick(G, dt);
+  // Hit-stop: a big hit freezes the whole board for a breath. Everything
+  // still draws, the clock just refuses to move, which is what makes the hit
+  // land in the hand rather than only on the health bar.
+  if (G.hitStop > 0) {
+    G.hitStop -= dt;
+    G.t += dt * 0.15;
+    stepFx(dt * 0.2);
+    return;
+  }
   G.t += dt;
   stepFx(dt);
   if (Q.wait > 0) Q.wait -= dt;
@@ -2934,6 +3640,18 @@ function update(dt) {
     Q.wait += it.d || 0;
   }
   layoutUnits(dt);
+  tutStep(G, dt);
+  // Hold a card still for a moment and it opens, so reading one never costs
+  // you the drag you were halfway through.
+  if (UI.drag && !UI.drag.moved) {
+    UI.holdT += dt;
+    if (UI.holdT > 0.42) {
+      UI.inspect = UI.drag.card || UI.drag.unit || null;
+      UI.drag = null;
+      UI.holdT = 0;
+      sfx('page');
+    }
+  } else UI.holdT = 0;
 }
 
 function drawFx(c) {
@@ -2977,12 +3695,15 @@ function render() {
     case 'reward': drawReward(c, t); break;
     case 'shop': drawShop(c, t); break;
     case 'camp': drawCamp(c, t); break;
+    case 'event': drawEvent(c, t); break;
     case 'gameover': drawEnd(c, t, false); break;
     case 'victory': drawEnd(c, t, true); break;
     default: drawTitle(c, t); break;
   }
   drawFx(c);
+  if (G.screen === 'battle' && G.tut) drawTutorial(c, t);
   if (UI.choose) drawChooser(c, t);
+  if (UI.help !== null && UI.help !== undefined) drawHelp(c, t);
   if (UI.deck && G.run) drawDeckView(c, t);
   if (UI.inspect) drawInspect(c, t);
   c.restore();
@@ -3072,6 +3793,7 @@ function loadMeta() {
     const o = JSON.parse(raw);
     if (o && typeof o === 'object') G.meta = Object.assign(G.meta, o);
     if (!Array.isArray(G.meta.unlocked) || !G.meta.unlocked.length) G.meta.unlocked = ['hearth', 'frost'];
+    AUD.on = MUSIC.on = !G.meta.mute;
   } catch (e) {}
 }
 function saveMeta() { store.set(SAVE_META, JSON.stringify(G.meta)); }
@@ -3088,11 +3810,14 @@ window.FF = {
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
+  BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits,
   drawCreature, drawBackdrop, drawItemIcon,
+  MUSIC, musicTick, setMute, moodFor, AUD,
+  TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES,
   setCtx: (c) => { ctx = c; initSnow(); },
 };
 

@@ -42,9 +42,23 @@ section('every screen draws');
   G.ui.shop = FF.rollShop(G);
   G.screen = 'shop';
   frame(2); drew('the shop draws');
+  ok(FF.hits().some((h) => h.id === 'buySigil'), 'and sells a sigil');
+
+  G.ui.event = { def: FF.EVENTS[0] };
+  G.screen = 'event';
+  frame(2); drew('an event draws');
+  ok(FF.hits().filter((h) => h.id === 'eventOpt').length >= 2, 'with its choices touchable');
 
   G.screen = 'camp';
   frame(2); drew('camp draws');
+
+  // a warden wearing charms and standing under a banner: the busiest unit
+  withRun(FF, 'scrap', 9);
+  FF.attachCharm(G.run.deck[0], FF.CHARMS.keencharm);
+  FF.attachCharm(G.run.deck[0], FF.CHARMS.shellcharm);
+  G.run.deck[0].sigil = true;
+  FF.startBattle(G, 'boss');
+  frame(8); drew('a boss opening — banner, sigil-deployed warden, charms and all');
 
   G.screen = 'gameover';
   frame(2); drew('the loss screen draws');
