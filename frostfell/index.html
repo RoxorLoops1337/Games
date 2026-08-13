@@ -1819,7 +1819,12 @@ const POWER_BASE = 6.5;
    ways: a caravan that has fallen apart is never given a free run, and one that
    has been built into a wall never faces something unplayable. */
 function fellAnswer(run) {
-  return clamp((caravanPower(run) - POWER_BASE) / POWER_BASE, -0.25, 0.6);
+  /* The ceiling, once more, and this is the honest shape of it: a caravan that
+     has been built up meets a winter that has been building too. The top of the
+     clamp is what a finished caravan runs into, so that is the end that moves —
+     the floor stays where it is, because a run that has fallen apart should
+     still be playable rather than merely long. */
+  return clamp((caravanPower(run) - POWER_BASE) / POWER_BASE, -0.25, 0.95);
 }
 
 /* A pack is never just a bigger skirmish: it hunts a particular way, and the
@@ -2314,9 +2319,14 @@ const READS = [
   { k: 'wall', name: 'A WALL', why: 'take a body that can hold the front',
     got: (run) => run.deck.reduce((n, c) => Math.max(n, c.type === 'unit' ? c.hp : 0), 0),
     want: (z) => 8 + z * 4 },
+  /* Playing a whole run by hand — one transcript, twenty-one steps — showed
+     this line reading "short of mending" on EVERY step of a crossing. The
+     Frostborn set out with no healing card, never drew one, and won anyway, so
+     the game's most prominent piece of advice was both unchanging and wrong.
+     A first zone does not need a mender; by the second it does. */
   { k: 'mend', name: 'MENDING', why: 'take something that heals',
     got: (run) => run.deck.filter((c) => /heal|mend|regen/i.test(CARDS[c.def] ? CARDS[c.def].text : '')).length,
-    want: () => 1 },
+    want: (z) => (z >= 1 ? 1 : 0) },
   { k: 'lean', name: 'A LEAN DECK', why: 'burn something — a small deck draws what it needs',
     got: (run) => Math.max(0, 15 - run.deck.length),
     want: () => 2 },
@@ -2659,7 +2669,7 @@ function offerCharms(g, n) {
   const three = sample(charmPool(), n);
   openChooser('WHICH CHARM?', three.map((cid) => ({ charm: cid })), (i) => {
     pickTargetForCharm(g, three[i], () => advance(g));
-  }, { cancel: 'NEVER MIND' });
+  }, { cancel: 'NEVER MIND', then: () => advance(g) });
 }
 function offerSigil(g) {
   const all = g.run.deck.filter((c) => c.type === 'unit' && !c.sigil);
@@ -2669,7 +2679,7 @@ function offerSigil(g) {
     UI.choose = null;
     sfx('get');
     advance(g);
-  }, { cancel: 'NEVER MIND' });
+  }, { cancel: 'NEVER MIND', then: () => advance(g) });
 }
 
 /* --------------------------------------------------------------- saving -- */
@@ -6843,7 +6853,17 @@ function press(id, data) {
         { cancel: 'BACK', sub: id === 'deckPile' ? 'in no particular order — the deck keeps its secrets' : '' });
       return;
     }
-    case 'chooseCancel': UI.choose = null; return;
+    /* Backing out of a chooser closes it — but some choosers are the SECOND
+       half of a trade whose first half has already happened. Walking away from
+       "mark which warden with a sigil" after handing the stranger a card leaves
+       you a card down and nothing to show for it, on an event screen you can
+       press again. A chooser that carries `then` runs it on the way out. */
+    case 'chooseCancel': {
+      const th = UI.choose && UI.choose.then;
+      UI.choose = null;
+      if (th) th();
+      return;
+    }
     default: return;
   }
 }
