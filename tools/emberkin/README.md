@@ -3181,3 +3181,68 @@ desktop one. That is the correct answer and not an obvious one.
 
     Four planted faults, all four bite; two sweep mutants aimed at the new
     section, which reports 7 of 35 killed.
+
+105. **A sentence in the DOM is not a sentence on the screen** (pass 194).
+    Pass 193 shipped a line that rendered below the fold and had to be moved
+    before it counted. That is a seam, not an incident, so it was taken
+    deliberately: every `<p>`, `h2` and `h3` the screens build, harvested out of
+    the code, raised in a real page at 390x760 with pointer:coarse, and measured
+    against the panel's visible box at the scroll position the game itself
+    leaves the screen in.
+
+    Fifty sentences across sixteen raisings. **Eleven were outside the box**, and
+    the worst two were not below the fold at all — they were off the TOP:
+
+        screen   sentence                                    top    panel
+        swap     "What comes out?"                            -66   OFF THE TOP
+        swap     "A deck holds 12 … pick the one it replaces" -46   OFF THE TOP
+        box      "Pick on a boxed kin withdraws it · …"      1003   below the fold
+        dex      the habitat line under a 19-cell grid        985   below the fold
+        deck     "Everything you own is in the deck."         725   below the fold
+        dex      the creature blurb                           948   below the fold
+        deck     "Collection — 0 spare"                       691   below the fold
+        box      "Box — 9"                                    446   below the fold
+        starter  the third kin's dex line                     419   below the fold
+        shop     "In a fight"                                 311   below the fold
+
+    `scrollFor` — pass 189's fix, which puts the window where the cursor is —
+    was the hand that did it. On `swap` the cursor lives below the question, so
+    opening the screen scrolled the question away: measured `scrollTop` 92 with
+    the heading at -66. And `swap` is the ONE screen `screenLocked` refuses to
+    close. The sentence telling you what you were choosing, gone, on the screen
+    you are not allowed to leave. Pass 189 fixed being unable to see the CARDS
+    on this screen; nobody then asked where the question had gone.
+
+    Fixed by pinning the question rather than moving it: swap's `h2` and lede go
+    in a `.shead` that is `position:sticky`, so the deck scrolls under a block
+    that keeps saying what the screen is asking. After: both sentences at 24 and
+    44, inside a 310px panel.
+
+    **And the cover immediately created the fault it was covering.** A block
+    pinned to the top means the top of the window is no longer the top of what
+    you can SEE, so `scrollFor` scrolling a card to `sel.top` parked it behind
+    the very sentence the block exists to show — measured on a patched copy,
+    **72px of the selected card hidden** on seven of eleven cards. `scrollFor`
+    now takes a `pad`, and `renderScreen` measures the pinned block rather than
+    assuming one. After: 0px behind, 0px outside, for every card in the list, on
+    the phone and on a desktop viewport.
+
+    Two offsets, because the panel's own padding differs: `top:-12px`, and
+    `-24px` under `body.touch` where `#screen` pads by 24. At `top:0` the block
+    stuck 24px down from the glass and cards scrolled through the gap above it —
+    visible in the photograph, not in any number.
+
+    The other nine sentences are below the fold on screens that scroll and
+    close, where the cursor walks to them. Recorded, not fixed: one change,
+    measured.
+
+    Four planted faults, all four bite; two sweep mutants aimed at the new
+    section, which reports 5 of 16 killed.
+
+    **The sweep caught something the suite could not.** Changing `scrollFor`'s
+    signature silently orphaned pass 189's two mutants — they still named the
+    old one-argument line, which no longer exists, so they were testing nothing.
+    The sweep refuses to be quiet about that ("its anchor is not in the file")
+    and both were repointed at the current line. A mutant is a claim about the
+    code, and it rots the moment the code moves under it; nothing in the suites
+    would ever have gone red.
