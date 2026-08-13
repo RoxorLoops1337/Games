@@ -10482,18 +10482,27 @@ function habitat(id) {
     const row = ((map.enc && map.enc.table) || []).find((e) => e[0] === id);
     if (row) where.push(`${map.name} (Lv${row[1]}–${row[2]})`);
   }
-  if (where.length) return 'Found in ' + where.join(' · ');
+  // Everything true about where a kin comes from, not the first true thing.
+  // These were four returns, and they are not alternatives: SIX kin are wild
+  // AND something you can evolve, and all three starters are wild as well. So
+  // the dex sent you to Crown Hollow — the last map in the game, Lv20–24 — for
+  // a Pyrelynx you could have made out of the Cindercub already in your party
+  // at level 16, and the line about Rowan handing one out could not be printed
+  // about anything at all. The knowledge was in the function; only the first
+  // sentence of it ever got out.
+  const said = [];
+  if (where.length) said.push('Found in ' + where.join(' · ') + '.');
   // The one that does not live on a table. Read off the same map field the walk
   // reads, so the screen and the world cannot disagree about where it is.
   const shrine = Object.values(MAPS).find((m) => m.legend && m.legend.id === id);
-  if (shrine) return `Waits in ${shrine.legend.where}.`;
+  if (shrine) said.push(`Waits in ${shrine.legend.where}.`);
   const from = DEX_ORDER.find((p) => DEX[p].evo && DEX[p].evo[0] === id);
-  if (from) return `Evolves from ${DEX[from].name} at level ${DEX[from].evo[1]}.`;
-  if (STARTERS.includes(id)) return 'A kin Elder Rowan hands out.';
+  if (from) said.push(`Evolves from ${DEX[from].name} at level ${DEX[from].evo[1]}.`);
+  if (STARTERS.includes(id)) said.push('One of the three Elder Rowan hands out.');
   // Kept, but nothing in DEX_ORDER may reach it — the suite asserts that. This
-  // line is what a nineteenth kin added with no home would say, and the whole
-  // point of this pass is that it said it about the best one in the game.
-  return 'Not found in the wild. Not anywhere, really.';
+  // line is what a twentieth kin added with no home would say, and the whole
+  // point of an earlier pass is that it said it about the best one in the game.
+  return said.join(' ') || 'Not found in the wild. Not anywhere, really.';
 }
 
 /**
