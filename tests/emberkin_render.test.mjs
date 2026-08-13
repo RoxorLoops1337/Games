@@ -4852,6 +4852,89 @@ section('a screen that scrolls says so, visibly');
   ok(px(layers[1]) >= px(layers[3]), `and the bottom cover (${px(layers[1])}px) than its mark (${px(layers[3])}px)`);
 }
 
+// Is anything this game draws actually legible?
+//
+// 319 text nodes across fourteen raisings at 390x760, each measured against the
+// ground it ACTUALLY landed on — the ink from the computed style, the ground
+// from the pixels of the same frame with every glyph turned transparent. Most
+// of the quiet things are quiet on purpose: an unseen dex slot is a ghost at
+// 1.13, a shelf row you cannot afford is dimmed to 2.40 because the dimming IS
+// the refusal, the max-HP denominator sits at 3.98 under the number that moves.
+//
+// One was not a choice. `.pickcard .matchup span` was written for the two
+// LABELS — "strong into", "soft against" — but `typeChips` emits spans too, so
+// the rule repainted the chips themselves, and beat `.tp`'s own ink on
+// specificity. On the one irreversible choice in the game, the block naming
+// what your starter is strong and soft against read:
+//
+//   Verdant  1.08:1     Tide  1.17:1     Ember  1.28:1
+//   Spark    1.47:1     Stone 1.72:1 / 1.84:1
+//
+// …in dim grey on saturated type colour, at 3.7px, because `.matchup` is .58em
+// and `.tp` is another .58em inside it. A third of the card's own text, in ink
+// that is not there. After: every one at its own `.tp` ink, 6.38px, the size of
+// the label introducing it.
+section('a type chip is legible on its own colour');
+{
+  const g = loadGame({});
+  g.setCtx(mkCtx());
+
+  // WCAG, computed from the game's own palette rather than a copy of it.
+  const lin = (c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+  const rl = ([r, gg, b]) => 0.2126 * lin(r) + 0.7152 * lin(gg) + 0.0722 * lin(b);
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const ratio = (a, b) => { const [x, y] = [rl(a), rl(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+
+  // The chip's ink, read out of the one rule that sets it.
+  const tp = SRC.match(/\n\s*\.tp\{[^}]*\}/);
+  ok(tp, 'the chip rule is in the file');
+  const ink = (tp[0].match(/color:(#[0-9a-f]{6})/i) || [])[1];
+  ok(ink, `the chip names its own ink (${ink})`);
+
+  // …and it has to work on every ground the game puts it on. Wild included: it
+  // is a move type and reaches a chip through the battle log.
+  //
+  // GLOOM IS A KNOWN SHORTFALL, recorded rather than papered over. This net was
+  // written expecting the palette to pass and it did not: #7a5fc4 gives the
+  // chip 3.89:1, under the 4.5 a body-sized glyph wants. It is the only one,
+  // and moving it is a palette decision that reaches every Gloom-tinted card
+  // and sprite accent in the game — a different change from this one. So the
+  // bar stays at 4.5 for the other seven and Gloom is pinned at what it
+  // measures today: if it gets worse, or if any other type falls, this fails.
+  const KNOWN = { Gloom: 3.89 };
+  const types = Object.entries(g.TYPES);
+  eq(types.length, 8, 'eight type colours to be legible on');
+  let worst = [Infinity, ''];
+  for (const [name, bg] of types) {
+    const r = ratio(hex(ink), hex(bg));
+    if (KNOWN[name]) {
+      ok(r >= KNOWN[name] - 0.01, `${name} (${bg}) is the known shortfall, still ${r.toFixed(2)}:1 and no worse`);
+      ok(r < 4.5, `…and still short of 4.5, or this exception should go`);
+      continue;
+    }
+    ok(r >= 4.5, `${name} (${bg}) reads at ${r.toFixed(2)}:1`);
+    if (r < worst[0]) worst = [r, name];
+  }
+  ok(worst[0] >= 4.5, `and the worst ground that is meant to pass is ${worst[1]} at ${worst[0].toFixed(2)}:1`);
+
+  // The rule that used to steal it. `:not(.tp)` is the whole fix: the labels
+  // keep their dim, the chips keep theirs.
+  ok(SRC.includes('.pickcard .matchup span:not(.tp){ color:var(--dim);'),
+    'the matchup labels are dimmed without repainting the chips beside them');
+  ok(!/\.pickcard \.matchup span\{/.test(SRC), 'and the rule that captured both is gone');
+  // …and the size, which compounded because both rules use the same .58em.
+  ok(SRC.includes('.pickcard .matchup .tp{ font-size:1em; }'),
+    'a chip in the matchup is the size of the label introducing it, not .58 of it');
+  const mu = SRC.match(/\.pickcard \.matchup\{[^}]*\}/);
+  ok(mu && /font-size:\.58em/.test(mu[0]), 'the block itself is still the quieter .58em');
+
+  // By difference: without the reset, the chip would inherit the block's .58em
+  // ON TOP of its own — which is how 11px of card became 3.7px of chip.
+  const base = 11, block = 0.58, chip = 0.58;
+  ok(base * block * chip < 4, `nested, a chip would be ${(base * block * chip).toFixed(1)}px`);
+  ok(base * block >= 6, `reset, it is ${(base * block).toFixed(1)}px — the label's own size`);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

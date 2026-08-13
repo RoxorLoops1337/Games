@@ -160,6 +160,13 @@ const MUTANTS = [
     find: '      linear-gradient(0deg,#0d0913 42%, #0d091300) bottom / 100% 26px local no-repeat,',
     to: '      linear-gradient(0deg,#0d0913 42%, #0d091300) bottom / 100% 12px local no-repeat,' },
 
+  { name: 'chip: the matchup labels repaint the chips again', aims: ['a type chip is legible on its own colour'],
+    find: '  .pickcard .matchup span:not(.tp){ color:var(--dim);',
+    to: '  .pickcard .matchup span{ color:var(--dim);' },
+  { name: 'chip: the chip ink stops being dark', aims: ['a type chip is legible on its own colour'],
+    find: 'border-radius:3px; color:#120d18; font-weight:700; }',
+    to: 'border-radius:3px; color:#6b6270; font-weight:700; }' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

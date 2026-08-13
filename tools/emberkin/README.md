@@ -3306,3 +3306,55 @@ desktop one. That is the correct answer and not an obvious one.
     Four planted faults, all four bite; two sweep mutants aimed at the new
     section. Every mutant anchor in the sweep re-audited against the file after
     the CSS moved — none orphaned.
+
+107. **A rule written for the labels was repainting the chips** (pass 196).
+    First pass with pixels at the whole panel rather than its edges: 319 text
+    nodes across fourteen raisings at 390x760, each measured against the ground
+    it ACTUALLY landed on — ink from the computed style, ground from the pixels
+    of the same frame with every glyph turned transparent, then WCAG.
+
+    Most of the quiet things are quiet on purpose and are recorded, not fixed:
+
+        1.13  dex      an unseen slot's "?"          a ghost, which is the point
+        2.23  reward   the skip card's glyph
+        2.40  shop     a row you cannot afford       the dimming IS the refusal (192)
+        2.58  dex      the blank type chip "-"
+        2.62  dex      the slot numbers
+        3.32  shop     a price you cannot meet
+        3.98  party    the "/45" under the HP that moves
+
+    One was not a choice. `.pickcard .matchup span` was written for the two
+    LABELS — "strong into", "soft against" — but `typeChips` emits spans too, so
+    the rule repainted the CHIPS and beat `.tp`'s own ink on specificity. On the
+    one irreversible choice in the game, the block naming what your starter is
+    strong and soft against read:
+
+        Verdant 1.08:1   Tide 1.17:1   Ember 1.28:1   Spark 1.47:1   Stone 1.84:1
+
+    …dim grey on saturated type colour. And the size compounded the same way:
+    `.matchup` is .58em and `.tp` is another .58em inside it, so the chips came
+    out at **3.7px** against 6.38px labels — a third of the card's own text, in
+    ink that is not there. `:not(.tp)` on the label rule and a `font-size:1em`
+    reset on the chip: every one now at its own ink, 6.38px, the size of the
+    words introducing it. Below-3:1 across the whole sweep fell from 25 to 18.
+
+    **The net then found a second case on its own.** Written expecting the
+    palette to pass, it computes the chip's ink against every one of the eight
+    type colours and reported `Gloom #7a5fc4` at **3.89:1** — the only ground
+    that fails, and one no screen in the sweep happened to raise. Moving it is a
+    palette decision reaching every Gloom-tinted card and sprite accent, so the
+    bar stays at 4.5 for the other seven and Gloom is PINNED at what it measures
+    today: the section fails if Gloom gets worse, and also fails if it ever
+    passes, so the exception cannot outlive the problem.
+
+    **The instrument lied twice before it was believed.** (1) Chromium resolves
+    `color-mix()` to `color(srgb r g b)` with values in 0..1, not 0..255;
+    reading those as 8-bit turned every card pip into near-black and invented a
+    1.08 contrast on twelve rows that were perfectly fine. (2) `opacity` is not
+    in the colour at all — it applies to the element and every ancestor — so the
+    ink a player sees is the product of the lot, and the first run had none of
+    it. Both were caught by interrogating one element in the page and finding
+    the number disagreed with the CSS.
+
+    Four planted faults, all four bite; two sweep mutants aimed at the new
+    section; every mutant anchor re-audited — none orphaned.

@@ -632,8 +632,19 @@
     font-size:.58em; }
   .pickcard .matchup > div{ display:flex; align-items:center; gap:.3em; justify-content:center;
     flex-wrap:wrap; }
-  .pickcard .matchup span{ color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
+  /* `:not(.tp)`, because this rule was written for the two LABELS — "strong
+     into", "soft against" — and `typeChips` emits spans as well. It was
+     therefore repainting the chips themselves: measured at 390x760, dim grey
+     ink on a saturated type ground reads 1.08:1 for Verdant, 1.17 Tide, 1.28
+     Ember, 1.47 Spark, 1.84 Stone. The chip already knows its own ink (`.tp`
+     sets #120d18 for exactly this ground) and only lost it to specificity. */
+  .pickcard .matchup span:not(.tp){ color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
   .pickcard .matchup i{ color:var(--dim); }
+  /* …and the size compounded the same way: `.matchup` is .58em and `.tp` is
+     another .58em inside it, so the chips came out at 3.7px against 6.38px
+     labels — a third of the card's own text. They are the SUBJECT of the two
+     lines, so they are at least the size of the words introducing them. */
+  .pickcard .matchup .tp{ font-size:1em; }
   .pickcard .ptake{ height:1.2em; margin-top:.5em; font-size:.66em; color:var(--gold); font-weight:700; }
   .pickcard.sel{ transform:translateY(-5%) scale(1.03);
     box-shadow:0 0 0 .16em var(--gold), 0 .5em .5em rgba(0,0,0,.5); }
