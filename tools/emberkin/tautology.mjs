@@ -214,6 +214,13 @@ const MUTANTS = [
     find: "  const said = c.txt.replace('{v}', cardValue(inst));",
     to: '  const said = c.txt;' },
 
+  { name: 'trainer: the winners go silent again', aims: ['a trainer who beats you gets to say so'],
+    find: '    const beat = b.npc && b.npc.trainer.win ? b.npc.trainer.win : [];',
+    to: '    const beat = [];' },
+  { name: 'trainer: the line is spoken by nobody', aims: ['a trainer who beats you gets to say so'],
+    find: "    say(beat.length ? b.npc.name : '',",
+    to: "    say(''," },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
