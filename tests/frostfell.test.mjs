@@ -1183,4 +1183,33 @@ section('copying and burning');
   eq(G.ui.shop.burn.sold, true, 'once');
 }
 
+
+/* ---------------------------------------------------------- clean kills -- */
+section('taking it before it swings');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+  const killer = place(FF, 'p', 'snowpup', 0, 1, { unit: { atk: 9 } });
+  const soon = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 3, cnt: 1 } });
+  const later = place(FF, 'e', 'snapfrost', 1, 0, { unit: { hp: 3, cnt: 4 } });
+  const gold0 = G.run.gold;
+  FF.hurt(G, later, 9, killer);
+  eq(G.run.clean || 0, 0, 'a kill on something that was not about to swing is not a clean one');
+  FF.hurt(G, soon, 9, killer);
+  eq(G.run.clean, 1, 'taking one down on the turn it would have swung is');
+
+  // it is a record, not a reward: both payoffs tried here lifted a careless
+  // pilot as much as a careful one, which makes them difficulty settings
+  eq(G.run.gold, gold0, 'a clean kill pays no scrip');
+  eq(FF.stat(killer, 'swift'), 0, 'and no tempo either');
+
+  // a beast is never one, whatever its counter says
+  const boss = place(FF, 'e', 'mothergla', 0, 2, { unit: { hp: 2, cnt: 1 } });
+  const cl = G.run.clean;
+  FF.hurt(G, boss, 99, killer);
+  eq(G.run.clean, cl, 'and a beast is never one');
+}
+
 done('frostfell');
