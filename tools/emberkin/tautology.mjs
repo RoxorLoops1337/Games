@@ -257,6 +257,19 @@ const MUTANTS = [
     find: '    atk: statAt(sp.base[1], lvl), def: statAt(sp.base[2], lvl), spd: statAt(sp.base[3], lvl),',
     to: '    atk: statAt(sp.base[2], lvl), def: statAt(sp.base[2], lvl), spd: statAt(sp.base[3], lvl),' },
 
+  { name: 'shop: Bell hand-copies the salve again', aims: ['every price the game speaks is read off the table it is a price in'],
+    find: '          const floor = Object.keys(ITEMS).reduce((a, b) => (ITEMS[b].cost < ITEMS[a].cost ? b : a));',
+    to: "          const floor = 'salve';" },
+  { name: 'shop: Bell calls the dearest thing her floor', aims: ['every price the game speaks is read off the table it is a price in'],
+    find: '(a, b) => (ITEMS[b].cost < ITEMS[a].cost ? b : a)',
+    to: '(a, b) => (ITEMS[b].cost > ITEMS[a].cost ? b : a)' },
+  { name: 'shop: a row dies one shard early', aims: ['every price the game speaks is read off the table it is a price in'],
+    find: "  if (kind === 'shop') return G.money < it.cost;",
+    to: "  if (kind === 'shop') return G.money <= it.cost;" },
+  { name: 'shop: Vane hand-copies his floor too', aims: ['every price the game speaks is read off the table it is a price in'],
+    find: '          const floor = Math.min(...CHEST_IDS.map((k) => CHESTS[k].cost));',
+    to: '          const floor = 60;' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

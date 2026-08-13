@@ -3857,3 +3857,75 @@ desktop one. That is the correct answer and not an obvious one.
     text, or where it spawns. Every mutant anchor re-audited — 76 anchors, none
     orphaned, none ambiguous. Render suite 2730 -> 6102 checks; the companion
     emberkin suite still green at 4482.
+
+117. **Two shopkeepers four tiles apart, one reading the price off the table
+    and one repeating it from memory** (pass 206).
+    The economy first, because it had never been counted. Shards have exactly
+    ONE source — `G.money +=` appears once in the file, it is a beaten
+    trainer's prize, and a beaten trainer never fights again — so the purse is
+    finite and knowable:
+
+        start                                              500
+        Wick +300  Pell +240  Dorn +300  Ivo +620  Wick +900
+        Coll +700  Mio +760  Hale +1800  Wick +3000
+        every shard the game will ever hand out            9120
+
+    Against that, the shelf. All seven items are stocked (nothing in ITEMS goes
+    unsold, nothing is sold that is not an item) and every one is affordable
+    inside the campaign: Salve, Great Salve and Bloom Orb from the start,
+    Gleam Orb and Elixir after the first trainer, Emberroot after the second,
+    Prism Orb after the third.
+
+        per 100 shards   bloomorb 0.50x   gleamorb 0.28x   prismorb 0.22x
+                         salve 20.0 HP    greatsalve 18.0 HP
+
+    **An instrument error of mine, recorded because it was a big one.** The
+    first bill said catching one of every catchable kin costs 7480 of 9120 —
+    82% of the game's money — and that was wrong. `evolveMon` calls `catchMon`,
+    and the dex goal is `dexCount(2)`, CAUGHT. So evolving writes the new form
+    down for free and the bill is the TEN base forms, not sixteen: about 4660
+    shards of Bloom Orbs at 1 HP with a status, leaving ~4460, or twenty-nine
+    Salves, for the whole run. Reasoned instead of driven, and it turned a
+    comfortable economy into a crisis that was not there. Driven after:
+    evolve a Cindercub, read `G.dex.pyrelynx` — 2.
+
+    What did NOT follow its table was a sentence. Bell counts your orbs off
+    ITEMS under a comment saying a hand-copy "would stop counting the day a
+    fourth orb is added" — and the very next line hand-copied
+    `ITEMS.salve.cost` AND the word "salve":
+
+        was: And you are short for a salve.
+        now: And you are 50 short of a Salve, and that is the cheapest thing
+             I have.
+
+    Filmed against a shelf that moves: drop a Bloom Orb to 40 and she says
+    *40 short of a Bloom Orb*; push the Salve to 999 and she follows; she goes
+    quiet at exactly the floor and not a shard before. Vane, four tiles away,
+    has taken his floor off CHESTS all along and says how much you are short —
+    the two of them were standing in the same room disagreeing about how to
+    know a price.
+
+    **Recorded, not fixed** (with their item ids): `gleamorb` and `prismorb`
+    are worse value per shard than `bloomorb` for all sixteen catchable kin,
+    including `vespyr` — they buy fewer THROWS, not cheaper catches, which
+    matters only for the legendary and its 25-step gap. `revive` at 900 competes
+    with blacking out, which heals the party free and costs 25% of the purse —
+    worth it only once the purse passes 3600, which is the seventh trainer.
+    Both are price changes and need a paired measurement.
+
+    Four planted faults, all four bite by hand before the sweep was believed:
+    Bell hand-copying the salve again (7 failures), Bell calling the dearest
+    thing her floor (17), the shop row dying one shard early (8), a trainer
+    prize halved (1). The sweep then reported 7 / 17 / 8 for those same three,
+    to the check — the first time since the trace flush was fixed that the two
+    instruments have been read side by side, and they agree — plus 5 for a
+    fourth mutant that makes Vane hand-copy his floor as well.
+
+    Four sweep mutants aimed at the new section, which reports **44 of 114
+    killed**. That is 39%, the densest ratio in several passes, and worth
+    stating WHY after two entries explaining low ones: this section is small
+    and made almost entirely of driven behaviour, with no thousand-row data
+    walk to dilute it. The survivors are the handful of checks about where the
+    shopkeepers stand and what the trainers pay, which none of the four
+    mutations can reach. Every mutant anchor re-audited — 80 anchors, none
+    orphaned, none ambiguous. Render suite 6102 -> 6216 checks.

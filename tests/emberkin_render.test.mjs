@@ -6098,6 +6098,164 @@ section('the dex says every way there is to get a kin, not the first one');
     'and the line is every clause that is true, with the old sentence left for a kin with no home at all');
 }
 
+// Can the player afford what the game wants them to use?
+//
+// The economy itself is sound, and is pinned below rather than assumed. Shards
+// come from exactly one place — nine trainers, each beatable once — so the
+// purse is finite and knowable: 500 + 9 prizes = 9120, every shard the game
+// will ever hand out. Against that, the dex. evolveMon calls catchMon, so the
+// bill is the ten base forms and not nineteen: about 4660 shards of Bloom Orbs
+// at 1 HP with a status on it, leaving roughly 4460 — twenty-nine Salves — for
+// everything else in the run. All seven items are stocked and every one is
+// affordable inside the campaign order.
+//
+// What did not follow its table was a sentence. Bell reads her orb list off
+// ITEMS, under a comment saying a hand-copy "would stop counting the day a
+// fourth orb is added" — and the very next line hand-copied `ITEMS.salve.cost`
+// AND the word "salve". Put anything on her shelf below a Salve and she named
+// the wrong thing and refused over the wrong number. Vane, four tiles away,
+// takes his floor off CHESTS and says exactly how much you are short.
+//
+// The property: every price this game speaks is read off the table it is a
+// price in.
+section('every price the game speaks is read off the table it is a price in');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { ITEMS, MAPS, CHESTS, CHEST_IDS, AIM_ORDER } = g;
+  const bell = MAPS.shop.npcs.find((n) => n.shop);
+  const vane = MAPS.shop.npcs.find((n) => n.chests);
+  ok(!!bell && !!vane, 'both shopkeepers are on the shop floor');
+  const said = (n) => (n ? g.talkLines(n).join(' ') : '');
+
+  // ---- Bell's floor follows ITEMS ---------------------------------------
+  const cheapest = () => Object.keys(ITEMS).reduce((a, b) => (ITEMS[b].cost < ITEMS[a].cost ? b : a));
+  g.G.bag = { bloomorb: 1 };            // so the no-orb line is not the one talking
+  {
+    const floor = ITEMS[cheapest()].cost;
+    for (const money of [0, 1, Math.floor(floor / 2), floor - 1]) {
+      g.G.money = money;
+      const h = said(bell);
+      ok(h.includes(`${floor - money} short`), `at ${money} shards she says exactly ${floor - money} short`);
+      ok(h.includes(ITEMS[cheapest()].name), `…and names the ${ITEMS[cheapest()].name}`);
+    }
+    for (const money of [floor, floor + 1, 5000]) {
+      g.G.money = money;
+      ok(!/short of a/.test(said(bell)), `at ${money} shards, with the floor at ${floor}, she does not say you are short`);
+    }
+  }
+  // Make each item in turn the cheapest thing on the shelf. She must name that
+  // one — this is the check the old hand-copy could not pass.
+  for (const id of Object.keys(ITEMS)) {
+    const was = ITEMS[id].cost;
+    ITEMS[id].cost = 7;
+    g.G.money = 0;
+    const h = said(bell);
+    eq(cheapest(), id, `with ${id} at 7 shards it is the cheapest thing on the shelf`);
+    ok(h.includes(`7 short of a ${ITEMS[id].name}`), `…and Bell says: 7 short of a ${ITEMS[id].name}`);
+    ITEMS[id].cost = was;
+  }
+  eq(cheapest(), 'salve', 'and the shelf is put back the way it was, with the Salve cheapest at 150');
+  eq(ITEMS.salve.cost, 150, '…at its real price');
+
+  // ---- Vane's floor follows CHESTS, which it already did -----------------
+  for (const id of CHEST_IDS) {
+    const was = CHESTS[id].cost;
+    CHESTS[id].cost = 3;
+    g.G.gems = 0;
+    ok(said(vane).includes('3 short of the smallest one'), `with ${id} at 3 gems, Vane is 3 short`);
+    CHESTS[id].cost = was;
+  }
+  eq(Math.min(...CHEST_IDS.map((k) => CHESTS[k].cost)), 60, 'and the chest ladder is put back, Silver cheapest at 60');
+
+  // ---- the row you cannot press and the row that is dimmed agree ---------
+  // The pass-199 shape, in the shop: two separate expressions of one rule.
+  const stock = g.screenList({ kind: 'shop' });
+  eq(stock.slice().sort().join(' '), Object.keys(ITEMS).slice().sort().join(' '),
+    'the shop stocks every item there is, and nothing that is not one');
+  for (const id of stock) {
+    for (const money of [0, ITEMS[id].cost - 1, ITEMS[id].cost, ITEMS[id].cost + 1]) {
+      g.G.money = money;
+      eq(g.rowDead('shop', id), money < ITEMS[id].cost,
+        `${id} at ${ITEMS[id].cost}: with ${money} shards the row is ${money < ITEMS[id].cost ? 'dead' : 'live'}`);
+    }
+  }
+  ok(SRC.includes("if (G.money < it.cost) { setToast('Not enough shards.'); return; }"),
+    'and pressing it refuses off the same number the row reads');
+  // When nothing at all can be bought, the shelf says where shards come from.
+  g.G.money = 0;
+  eq(g.shelfNote('shop', stock, false), 'Nothing here you can afford yet. Shards come off beaten trainers.',
+    'a shelf with nothing affordable on it says so, and says where shards come from');
+  g.G.money = 5000;
+  eq(g.shelfNote('shop', stock, false), '', 'and says nothing when you can afford something');
+
+  // ---- the purse is finite, and it is enough -----------------------------
+  // Shards have exactly one source. If a second ever appears this count moves.
+  eq((SRC.match(/G\.money \+=/g) || []).length, 1, 'there is exactly one place shards are paid');
+  ok(SRC.includes('G.money += b.npc.trainer.prize;'), '…and it is a beaten trainer');
+  ok(SRC.includes('if (npc.trainer && !G.flags[npc.id]) {'), 'and a trainer you have beaten does not fight again');
+
+  const trainers = [];
+  for (const [, m] of Object.entries(MAPS)) for (const n of m.npcs || []) if (n.trainer) trainers.push(n);
+  const order = AIM_ORDER.map(([id]) => trainers.find((t) => t.id === id)).filter(Boolean);
+  eq(order.length, AIM_ORDER.length, 'every trainer in the campaign order is findable on a map');
+  let purse = 500;
+  const firstAffordable = {};
+  for (const id of Object.keys(ITEMS)) if (purse >= ITEMS[id].cost) firstAffordable[id] = 'the start';
+  for (const t of order) {
+    ok(t.trainer.prize > 0, `${t.name} pays ${t.trainer.prize}`);
+    purse += t.trainer.prize;
+    for (const id of Object.keys(ITEMS)) if (!firstAffordable[id] && purse >= ITEMS[id].cost) firstAffordable[id] = t.name;
+  }
+  eq(purse, 9120, 'every shard the game will ever hand out');
+  for (const id of Object.keys(ITEMS)) {
+    ok(!!firstAffordable[id], `${ITEMS[id].name} at ${ITEMS[id].cost} is affordable by ${firstAffordable[id] || 'NEVER'}`);
+  }
+
+  // ---- and the dex, which is what the shards are really for --------------
+  // evolveMon calls catchMon, so only the base forms need an orb.
+  {
+    g.G.dex = {};
+    g.G.party = [g.mkMon('cindercub', 16)];
+    const due = g.checkEvolve();
+    ok(!!due, 'a Cindercub at 16 is due to evolve');
+    if (due) g.evolveMon(due);
+    eq(g.G.dex.pyrelynx, 2, 'and evolving writes the new form down, so it needs no orb of its own');
+  }
+  const bases = g.DEX_ORDER.filter((id) => !g.DEX_ORDER.some((p) => g.DEX[p].evo && g.DEX[p].evo[0] === id));
+  eq(bases.length, 10, 'ten kin are not the far end of an evolution, so ten is the real bill');
+  let bill = 0;
+  for (const id of bases) {
+    // Where it spawns, and what one costs there at 1 HP with a status on it.
+    let lvl = null;
+    for (const [, m] of Object.entries(MAPS)) {
+      const row = ((m.enc && m.enc.table) || []).find((e) => e[0] === id);
+      if (row) lvl = Math.min(lvl === null ? row[1] : lvl, row[1]);
+      if (m.legend && m.legend.id === id) lvl = lvl === null ? m.legend.lvl : lvl;
+    }
+    ok(lvl !== null, `${id} can be met somewhere, so it can be caught`);
+    if (lvl === null) continue;
+    const foe = g.mkMon(id, lvl);
+    foe.hp = 1; foe.status = 'shock';
+    const p = g.captureChance(foe, ITEMS.bloomorb.mul);
+    ok(p > 0, `${id} at L${lvl} on one HP is catchable with the cheapest orb (${(p * 100).toFixed(0)}%)`);
+    if (p > 0) bill += (1 / p) * ITEMS.bloomorb.cost;
+  }
+  ok(bill < purse, `writing all nineteen down costs about ${Math.round(bill)} shards, of ${purse}`);
+  ok(purse - bill > ITEMS.greatsalve.cost * 5,
+    `…leaving ${Math.round(purse - bill)}, which is more than five Great Salves`);
+
+  // Pinned by shape, because a property about "reads off the table" is happy
+  // the moment the number goes back to being typed in.
+  ok(SRC.includes('const floor = Object.keys(ITEMS).reduce((a, b) => (ITEMS[b].cost < ITEMS[a].cost ? b : a));'),
+    'Bell finds the cheapest thing on her own shelf');
+  ok(!SRC.includes('if (G.money < ITEMS.salve.cost) return [rule,'),
+    'and no longer asserts which item that is');
+  ok(SRC.includes('const floor = Math.min(...CHEST_IDS.map((k) => CHESTS[k].cost));'),
+    'Vane still finds the cheapest chest on his');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
