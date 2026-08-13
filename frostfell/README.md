@@ -202,7 +202,18 @@ is no second implementation of the rules to drift from.
 `frostfell_run` is the balance instrument, and it plays every run twice: once
 with a careless pilot that deploys whatever is leftmost and throws gear at the
 nearest thing, and once with a careful one that repositions, pulls a wounded
-warden out of the front line, holds gear until it kills, and rings for a wave
-while its own board is set. **The gap between their win rates is the number
-that says whether playing well is worth anything** — currently 8% against 17%,
-so it is worth about nine points of win rate.
+warden out of the front line, spends gear only when the gear earns the turn,
+rings for a wave while its own board is set, and does not waste gear on
+something the line was already going to kill first.
+
+**The gap between their win rates is the number that says whether playing well
+is worth anything.** It runs about four to eight points, and the honest caveat
+is that at the suite's eight seeds a tribe the whole spread is two or three
+runs wide — which is noise. `FF_RUNS=25 node tests/frostfell_run.test.mjs`
+turns the same instrument up to seventy-five runs a pilot when the question is
+"is this gap real" rather than "does this still run".
+
+It also reports which cards actually get played. A card that is carried around
+a whole run and never found a moment is the card's fault, and the suite fails
+on it; a card that never gets *acquired* is a weighting matter, and it prints
+that separately.

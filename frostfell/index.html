@@ -1039,8 +1039,12 @@ function hurt(g, u, amount, src) {
       u.phased = true;
       d2.phase.apply(g, u);
       fx.toast(d2.phase.name, '#ff9a3c');
-      fx.flash('#ffb0b0', 0.3);
-      fx.shake(12);
+      fx.flash('#ffb0b0', 0.34);
+      fx.shake(14);
+      fx.burst(u, '#ff9a3c', 26, 'shard');
+      fx.ring(u.px, u.py, '#ffd166', 30);
+      u.sq = 1.5;
+      G.hitStop = 0.16;
       logLine(g, d2.phase.name.toLowerCase() + ' — ' + d2.phase.text, '#ff9a3c');
       sfx('wave');
       if (g.battle) g.battle.banner = { text: d2.phase.name, sub: d2.phase.text, t: 0, col: '#ff9a3c' };
@@ -1064,6 +1068,21 @@ function die(g, u, killer) {
   logLine(g, u.name + ' falls', u.side === 'p' ? '#ff9aa5' : '#ffe6a8');
   const b = stat(u, 'bounty');
   if (b > 0 && u.side === 'e' && g.run) { g.run.gold += b; fx.pop(u, '+' + b + ' scrip', C.gold); }
+  /* A CLEAN KILL: taken down on the turn it was about to swing. It is counted
+     and shown at the end of a run, and it is deliberately worth nothing else.
+
+     Two payoffs were tried and both were removed. Scrip lifted the careless
+     pilot's win rate by eight points and the careful pilot's by one, because
+     gold compounds and a bounty on something that happens by accident is just
+     an income raise. Paying in tempo instead — Swift on whoever landed it —
+     did the same thing more quietly: both pilots ended level at 13%. A reward
+     that a careless player collects at the same rate as a careful one is not a
+     reward for skill, it is a difficulty setting, and this game already has
+     those on the leader screen. */
+  if (u.side === 'e' && g.run && u.cnt <= 1 && !u.boss) {
+    g.run.clean = (g.run.clean || 0) + 1;
+    fx.ring(u.px, u.py, '#8fffc4', 18);
+  }
   // Kills inside one turn are counted together: clearing a board in a single
   // action is the play the whole game is pointed at, and it should pay.
   if (u.side === 'e' && g.battle) {
@@ -1674,7 +1693,7 @@ function newRun(g, tribeId, seed, winters) {
   const run = {
     seed: sd, tribe: tribeId, zone: 0, step: 0, gold: 25, bonusRedraw: 0,
     deck: [], leader: mkCard(s.leader), trail: genTrail(0), log: [], path: [],
-    kills: 0, fights: 0, taken: 0, bestTurn: 0, node: null,
+    kills: 0, fights: 0, taken: 0, bestTurn: 0, clean: 0, node: null,
     bells: [], bonusHand: 0, bellCharged: false, waveBonus: 0,
     purse: 1, mend: 0, bosses: {},
   };
@@ -3340,6 +3359,44 @@ function drawUnit(c, u, t) {
     t, ph: u.bob, sq: u.sq, blink: u.blink, flip: u.side === 'e',
   });
   c.restore();
+
+  /* A beast that has turned over wears it: the light behind it goes hot, a
+     crack runs down the art, and the slab edge stops being the colour it was.
+     A banner you might have blinked past is not enough for the moment the
+     fight changes. */
+  if (u.phased) {
+    c.save();
+    rr(c, x + 7, iy, iw, ih, 10);
+    c.clip();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = 0.16 + Math.sin(t * 2.4 + u.bob) * 0.06;
+    c.fillStyle = '#ff7a2c';
+    c.fillRect(x + 7, iy, iw, ih);
+    c.restore();
+    // the crack itself, jagged and fixed to this unit rather than jittering
+    c.save();
+    rr(c, x + 7, iy, iw, ih, 10);
+    c.clip();
+    const seed2 = (u.uid % 7) - 3;
+    c.strokeStyle = 'rgba(255,140,60,.85)'; c.lineWidth = 2.4;
+    c.beginPath();
+    c.moveTo(x + 7 + iw * 0.32 + seed2 * 3, iy);
+    c.lineTo(x + 7 + iw * 0.52 + seed2, iy + ih * 0.3);
+    c.lineTo(x + 7 + iw * 0.36, iy + ih * 0.52);
+    c.lineTo(x + 7 + iw * 0.62 - seed2, iy + ih * 0.78);
+    c.lineTo(x + 7 + iw * 0.48, iy + ih);
+    c.stroke();
+    c.strokeStyle = 'rgba(255,230,168,.55)'; c.lineWidth = 1;
+    c.stroke();
+    c.restore();
+    // and a glow around the whole slab
+    c.save();
+    c.globalAlpha = 0.5 + Math.sin(t * 3) * 0.18;
+    c.strokeStyle = '#ff9a3c'; c.lineWidth = 3;
+    rr(c, x - 2, y - 2, w + 4, h + 4, 16);
+    c.stroke();
+    c.restore();
+  }
 
   if (u.flash > 0) {
     c.save(); c.globalAlpha = u.flash * 0.7; c.globalCompositeOperation = 'lighter';
@@ -5365,6 +5422,7 @@ function drawEnd(c, t, won) {
     ['FIGHTS WON', run.fights || 0],
     ['FOES FELLED', run.kills || 0],
     ['BEST TURN', (run.bestTurn || 0) + ' in one'],
+    ['CLEAN KILLS', run.clean || 0],
     ['CARAVAN', run.deck.length + ' cards'],
     ['BELLS RUNG', (run.bells || []).length],
     ['SCRIP LEFT', run.gold],
