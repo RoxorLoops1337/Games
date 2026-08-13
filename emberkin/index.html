@@ -7636,8 +7636,16 @@ function playCard(i) {
   }
   if (fx.healFull) { b.mine.hp = b.mine.max; snap(log, `${dispName(b.mine)} is whole again.`, 'heal', 'mine'); }
   if (amt('heal')) {
+    // The third voice that heals, and the only one that was not reporting what
+    // happened. A kin's own Mend already says "is already whole" when it landed
+    // on nothing, and a Salve from the bag refuses outright with the same
+    // sentence — while Snack and Dewdrop, whose whole job is healing, said
+    // "recovers" at full HP and moved no HP at all. The cards that also raise
+    // max HP were never wrong here, because the raise lands first and leaves
+    // room; these two have nothing to leave room with.
+    const was = b.mine.hp;
     b.mine.hp = clamp(b.mine.hp + amt('heal'), 0, b.mine.max);
-    snap(log, `${dispName(b.mine)} recovers.`, 'heal', 'mine');
+    snap(log, b.mine.hp > was ? `${dispName(b.mine)} recovers.` : `${dispName(b.mine)} is already whole.`, 'heal', 'mine');
   }
   if (fx.selfdmg) hurtMine(log, fx.selfdmg, `${dispName(b.mine)} pays ${fx.selfdmg} HP for it.`);
   if (amt('energy')) {

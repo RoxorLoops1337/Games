@@ -6426,6 +6426,177 @@ section('the number on a card is the number playing it hands over');
     'and the clause it replaces is built off the card, not matched by hand');
 }
 
+// Does every sentence the battle log prints match what actually happened?
+//
+// A note on how this is driven, because the first attempt was wrong. Scraping a
+// fight's log and comparing each entry's snapshot to the PREVIOUS entry's found
+// 156 disagreements in two shapes — and every one was the instrument. Entries
+// are snapped into a log array that a later call returns, so two consecutive
+// entries are not necessarily consecutive in time, and a "took 25" line sitting
+// after a "Shield absorbs 8" line was being measured against a stale HP. Driven
+// directly instead: call the resolver, read the state either side of it.
+// hurtMine turned out exact in all 48 combinations of damage, shield, guard and
+// pierce — the number in the sentence is the HP that moved, every time.
+//
+// What was not exact was a heal. Three things in this game heal, and two of them
+// already report what happened: a kin's own Mend says "is already whole" when it
+// landed on nothing, and a Salve from the bag refuses outright with the same
+// sentence. The deck was the third voice and had never been told — every healing
+// card said "recovers" at full HP:
+//
+//     snack    at full HP   healed 0   said "Cindercub recovers."
+//     dewdrop  at full HP   healed 0   said "Cindercub recovers."
+//     vigor    at full HP   healed 0   said "Cindercub recovers."   (+6 max)
+//
+// The four that also raise max HP were the subtle half: the raise carries HP up
+// with it, so they looked like they had healed. They had not; the raise has its
+// own line, and it was already telling the truth.
+section('the log says what happened, and only when it happened');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { CARDS, CARD_IDS } = g;
+
+  const fight = (lvl = 30) => {
+    g.G.party = [g.mkMon('cindercub', lvl)];
+    g.G.might = 0;
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('mothrix', lvl), wild: true });
+    const b = g.B();
+    b.energy = 99;
+    return b;
+  };
+  const lineOf = (log, re) => (log || []).map((e) => e.t).find((t) => re.test(t)) || '';
+  const numIn = (s) => { const m = s.match(/(\d+)/); return m ? +m[1] : null; };
+
+  // ---- damage: the number said is the HP that moved ----------------------
+  // Every combination of amount, shield, guard and pierce, driven straight
+  // through hurtMine so no log ordering is involved.
+  let grid = 0;
+  for (const amount of [1, 5, 20, 40]) {
+    for (const shield of [0, 8, 50]) {
+      for (const def of [0, 3]) {
+        for (const pierce of [0, 1]) {
+          const b = fight();
+          b.shield = shield; b.mods.def = def; b.foePierce = pierce;
+          b.mine.hp = b.mine.max;
+          const hp0 = b.mine.hp, sh0 = b.shield;
+          const log = [];
+          const ret = g.hurtMine(log, amount, null, 'foe', false);
+          const moved = hp0 - b.mine.hp, shMoved = sh0 - b.shield;
+          const took = lineOf(log, / took \d+\./);
+          const absorb = lineOf(log, /Shield absorbs \d+\./);
+          eq(took ? numIn(took) : 0, moved,
+            `${amount} through shield ${shield} guard ${def}${pierce ? ' pierced' : ''}: it says ${took ? numIn(took) : 0} and ${moved} HP moved`);
+          eq(absorb ? numIn(absorb) : 0, shMoved, '…and the shield line matches the shield spent');
+          eq(ret, moved, '…and what it returns is what it took');
+          // Pierce leaves the bank alone, and only says so when there is one.
+          if (pierce && shield > 0) ok(/shield is not where the hit lands/.test(log.map((e) => e.t).join(' ')), '…a pierced hit says the bank is not where it landed');
+          if (pierce && shield === 0) ok(!/shield is not where/.test(log.map((e) => e.t).join(' ')), '…and says nothing about a bank you have not got');
+          grid++;
+        }
+      }
+    }
+  }
+  eq(grid, 48, '48 combinations of damage, shield, guard and pierce');
+
+  // ---- healing: the line fires only when HP actually moved ---------------
+  const healers = CARD_IDS.filter((id) => (CARDS[id].fx || {}).heal || CARDS[id].vt === 'heal');
+  ok(healers.length >= 6, `${healers.length} cards heal`);
+  for (const id of healers) {
+    for (const [label, frac] of [['hurt', .5], ['full', 1]]) {
+      const b = fight();
+      b.mine.hp = Math.round(b.mine.max * frac);
+      const owned = g.grantCard(id);
+      b.hand.push({ src: 'deck', u: owned.u, id, bg: 0 });
+      const max0 = b.mine.max, hp0 = b.mine.hp;
+      const log = g.playCard(b.hand.length - 1) || [];
+      const raise = b.mine.max - max0;
+      // A max-HP raise carries HP up with it; the heal is what is left over.
+      const healed = (b.mine.hp - hp0) - raise;
+      const line = lineOf(log, /recovers|already whole/);
+      ok(!!line, `${id} at ${label} HP says something about healing`);
+      eq(/recovers/.test(line), healed > 0,
+        `${id} at ${label} HP healed ${healed} and said "${line}"`);
+      // …and the raise, which was always honest, still is.
+      if (raise) {
+        const up = lineOf(log, /max HP is up \d+\./);
+        eq(numIn(up), raise, `${id} raised max HP by ${raise} and said so`);
+      }
+    }
+  }
+
+  // ---- the two voices the deck now agrees with ---------------------------
+  {
+    const b = fight();
+    b.mine.hp = b.mine.max;
+    const log = [];
+    g.useMove(log, 'mine', 'mend');
+    ok(/is already whole\./.test(log.map((e) => e.t).join(' ')),
+      'a kin healing itself at full HP says it is already whole');
+    g.G.bag = { salve: 1 };
+    const gate = g.battleItemUse('salve', b.mine);
+    eq(gate.ok, false, 'and a Salve from the bag refuses at full HP');
+    eq(gate.why, `${g.dispName(b.mine)} is already whole.`, '…in the same words');
+  }
+
+  // ---- buff lines report the running total, and it is the mod ------------
+  for (const [id, read, re] of [
+    ['guard', (b) => b.shield, /Shield up to (\d+)\./],
+    ['focus', (b) => b.mods.atk, /Every attack now hits for \+(\d+)\./],
+    ['hunker', (b) => b.mods.def, /Every hit will land (\d+) lighter\./],
+    ['edge', (b) => b.mods.edge, /The next attack will hit for \+(\d+)\./],
+  ]) {
+    const b = fight();
+    // Play it twice: a running total must climb, a delta would not.
+    let last = null;
+    for (const round of [1, 2]) {
+      const owned = g.grantCard(id);
+      b.hand.push({ src: 'deck', u: owned.u, id, bg: 0 });
+      const log = g.playCard(b.hand.length - 1) || [];
+      const line = lineOf(log, re);
+      ok(!!line, `${id} says what it did (round ${round})`);
+      eq(numIn(line), read(b), `…and the number is the total now standing (${read(b)})`);
+      if (round === 2) ok(read(b) > last, '…which climbed when it was played again');
+      last = read(b);
+    }
+  }
+
+  // ---- thorns: the bite it says is the HP the foe lost --------------------
+  // Fired from the foe's turn, so the turn is driven until it happens rather
+  // than assumed. The foe is kept far from death so the clamp is never what
+  // makes the numbers agree.
+  {
+    // The foe's first beat is a telegraph, not a swing, so restarting the fight
+    // each round only ever produces that one beat — a wall of identical results
+    // is the driver, not the game. Turns are taken inside ONE fight instead,
+    // with both sides topped back up so nothing dies and the clamp is never
+    // what makes the numbers agree.
+    let fired = 0;
+    const b = fight(24);
+    for (let turn = 0; turn < 30 && fired < 3; turn++) {
+      b.mods.thorns = 4;
+      b.mine.hp = b.mine.max;
+      b.foe.hp = b.foe.max;
+      const hp0 = b.foe.hp;
+      const log = g.endTurn() || [];
+      const line = lineOf(log, /Thorns bite back for \d+\./);
+      if (!line) continue;
+      fired++;
+      eq(numIn(line), 4, 'the bite it names is the thorns standing');
+      eq(hp0 - b.foe.hp, 4, '…and that is what the foe lost');
+    }
+    ok(fired > 0, `thorns fired ${fired} times across driven turns`);
+  }
+
+  // Pinned by shape.
+  ok(SRC.includes('snap(log, b.mine.hp > was ? `${dispName(b.mine)} recovers.` : `${dispName(b.mine)} is already whole.`, \'heal\', \'mine\');'),
+    'the deck reports the heal it actually did');
+  ok(SRC.includes("snap(log, attacker.hp > before ? `${who} settled and recovered.` : `${who} is already whole.`, 'heal', atkSide);"),
+    'the way a kin healing itself always has');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
