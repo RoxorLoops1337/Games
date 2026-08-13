@@ -213,7 +213,7 @@ const STATUS_ORDER = ['frost', 'ember', 'shell', 'spice', 'weak', 'swift', 'slow
 
 /* Keywords live on the card, not on the unit — they never decay. */
 const KEYWORD = {
-  aimless:  { name: 'Aimless',   text: 'Hits a random lane instead of its own.' },
+  aimless:  { name: 'Aimless',   text: 'Hits a random body, not the front. Soak stops it.' },
   longshot: { name: 'Longshot',  text: 'Reaches past the front and hits the back slot.' },
   barrage:  { name: 'Barrage',   text: 'Hits every foe in its lane.' },
   smack:    { name: 'Smackback', text: 'Hits back when it is hit.' },
@@ -221,7 +221,7 @@ const KEYWORD = {
   frenzy:   { name: 'Frenzy',    text: 'Swings one extra time per point.' },
   leech:    { name: 'Leech',     text: 'Heals itself for the damage it deals.' },
   explode:  { name: 'Blast',     text: 'Bursts for its value on every neighbour when it falls.' },
-  soak:     { name: 'Soak',      text: 'Foes in its lane swing at it first, however far back it stands.' },
+  soak:     { name: 'Soak',      text: 'Foes swing at it first, however far back. Beats Longshot and Aimless.' },
   trash:    { name: 'Trash',     text: 'Leaves the deck once played.' },
   shove:    { name: 'Shove',     text: 'Its hits push whatever it hit one slot further back.' },
   crush:    { name: 'Crush',     text: 'Hits harder for every OTHER body standing in the target\'s lane. Punishes a stacked line.' },
@@ -1105,11 +1105,28 @@ function frontTarget(g, u) {
 function targetFor(g, u, laneOverride) {
   const line = enemyLine(g, u, laneOverride);
   if (!line.length) return null;
-  if (u.kw.aimless) return pick(line);
-  // Soak is a taunt: whatever the attacker would rather hit, the soaker is in
-  // the way. It is the only thing that overrides Longshot.
+  /* SOAK IS A TAUNT, AND A TAUNT BEATS EVERYTHING.
+
+     It used to come second to Aimless, and that ordering was the reason
+     Mitewing has sat in the top two of the late-zone death table for five
+     rounds. Mitewing is a tier-1 trash mob — four health, two attack — and it
+     accounts for NINE PER CENT of all the damage the fell swings, level with
+     the Frostwyrm and the Glutton, because its counter is 1: it takes five
+     turns for their one, and ten in the front row.
+
+     None of that is the problem on its own. The problem is that Aimless picked
+     a random body, so every answer the game spends its first hint teaching —
+     the front of a lane takes the hits, put a wall up, move somebody out of the
+     way — was inert against the foe doing the most damage in the game. The only
+     answer was to kill it, and its mother whistles for more.
+
+     So the fix is not to its numbers. Six wardens in the pool carry Soak and
+     none of them could do anything about it; now they can. The tax becomes a
+     fight, and a keyword that was "beats Longshot" becomes the answer to the
+     fastest thing on the table. */
   const soaker = line.find((x) => x.kw.soak);
   if (soaker) return soaker;
+  if (u.kw.aimless) return pick(line);
   if (u.kw.longshot) return line[line.length - 1];
   return line[0];
 }
@@ -1281,6 +1298,24 @@ function heal(g, u, n) {
 }
 function die(g, u, killer) {
   if (!u.alive) return;
+  /* THE FIRE DOES NOT GO OUT — ONCE.
+
+     Hearth's first two rules were damage and measured at nothing; the third was
+     double warmth and measured at 52% against a 36% baseline, sixteen clear of
+     declaring nothing. Warmth scales with how many wardens are standing, so
+     doubling it is worth six points of mending a turn on a full line and there
+     is no dial on it. This one is bounded by construction instead: once a
+     fight, whatever it is worth, it is worth it exactly once. */
+  const co = u.side === 'p' && g.run ? courseOf(g.run) : null;
+  if (co && co.rekindle && g.battle && !g.battle.rekindled && !u.leader) {
+    g.battle.rekindled = true;
+    u.hp = 1;
+    fx.pop(u, 'THE FIRE HOLDS', '#ff9a5c');
+    fx.burst(u, '#ff9a5c', 14);
+    sfx('heal');
+    logLine(g, u.name + ' should have fallen, and the fire held', '#ff9a5c');
+    return;
+  }
   u.alive = false;
   u.dead = 0.0001;
   fx.demise(u);
@@ -1547,14 +1582,15 @@ function resolveTurn(g) {
            decoration — so the doubling is gone and the course keeps the rule
            that made it interesting rather than the one that made it win. */
         const co2 = side === 'p' ? courseOf(g.run) : null;
+        /* A course can raise the warmth, and can be made to raise it only on
+           some turns. Hearth needs the second half: at warmth 2 every turn it
+           measured 52% against a 36% baseline, and at nothing it measured 34.
+           The dial between them is how often the fire burns high. */
         const warm = (co2 && co2.warmth) || 1;
         for (const u of line) addStatus(g, u, 'regen', warm, true);
         /* Every turn was too much: the first cut of this measured 53% against a
            35% baseline while the other four sat at 38-44, which is the same
            mistake Cold made in the other direction. Every other turn. */
-        if (co2 && co2.keen && b.turn % (co2.keenEvery || 1) === 0) {
-          for (const u of line) addStatus(g, u, 'spice', co2.keen, true);
-        }
       } else if (isPacked(g, side) && b.turn <= DEEP_FREEZE) {
         const victim = pick(line.filter((u) => !u.leader).concat(line));
         if (victim) {
@@ -2386,15 +2422,60 @@ function advance(g) {
    for the rest of the trek leans your way, hard. It is bought with scrip,
    which is what finally gives scrip a job worth having. */
 const COURSES = [
-  /* Spice is spent on the next hit, so "Spice 2 on deploy" was one extra point
-     of damage per body for the whole run — every other course's rule keeps
-     paying every turn, and the numbers said so: Hearth measured 29% against a
-     29% baseline, which is to say it was worth nothing at all. The fire keeps
-     them keen now, turn after turn, which is both the stronger rule and the
-     more hearth-like one. */
+  /* Hearth has been rewritten twice. The first version was "Spice 2 on deploy",
+     one extra point of damage per body for a whole run, and it measured 29%
+     against a 29% baseline — worth nothing at all. The second kept them keen
+     turn after turn, which was more damage and still damage.
+
+     AND THE LAST COURSE STILL FAILING, FIXED THE ROUND AFTER SCRAP.
+
+     Hearth read 34 against 40 for declaring no course at all — worse than not
+     declaring, by two and a half standard deviations. The first thing to check
+     was the pool lean rather than the rule, because Scrap's problem last round
+     turned out to be neither of the things it looked like. The pool is 13
+     hearth cards against 14 frost and 13 scrap: the lean is level, so it was
+     the rule.
+
+     And the rule was damage. Spice on deploy plus Spice every other turn is
+     about one extra point per trigger, and damage is the cheapest currency in
+     this game — the fight ablation prices denying a scheme and keeping room
+     above hitting harder, every round, by a wide margin. Every other course
+     changes what the fight IS; Hearth changed a number in it.
+
+     So the hearth does what a hearth does, and the first attempt at that was
+     double warmth: sustain rather than damage, the one thing no other course
+     touches. It measured 52% against a 36% baseline, sixteen clear of declaring
+     nothing and nine clear of the next course. Warmth scales with how many
+     wardens are standing, so doubling it pays six points of mending a turn on a
+     full line, and a rule with no ceiling cannot be tuned, only removed.
+
+     The second attempt went the other way: once a fight, the first warden that
+     should have fallen does not. Bounded by construction, unmistakably a
+     hearth — and it measured 34, which is to say nothing at all, because a
+     warden saved at one health dies the following turn.
+
+     Three more settings of the same dial, each measured at 450 runs an arm, and
+     none of them landed anywhere:
+
+       warmth 2, every other turn only         50%
+       warmth 2, only on a line keeping THREE  53%
+       warmth 2, only on the leader            53%
+
+     Which is the finding, and it is about the game rather than about Hearth:
+     REGEN IS A THRESHOLD GOOD. Any amount of warmth-2 tops the line back up, so
+     halving how often it happens costs two points; paying a body for it costs
+     nothing, because sustain outbids bodies; and putting it on the leader alone
+     is worth as much as putting it on all six, because the leader is the thing
+     whose death ends the run. There is no setting between +0 and +17.
+
+     So Hearth ships with the bounded rule and no warmth change, and the gap is
+     reported rather than forced. It reads 34 against 36 for declaring nothing —
+     two points, inside the band — and the reason that gap closed is not this
+     course. The baseline came DOWN from 40 to 36 this round. */
   { id: 'hearth', name: 'THE HEARTH ROAD', short: 'HEARTH', col: '#ff9a5c',
-    text: 'Hearth cards on every table, wardens arrive with Spice 1, and the fire keeps the line keen: Spice 1 on every warden every other turn.',
-    match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 1), keen: 1, keenEvery: 2 },
+    text: 'Hearth cards on every table, wardens arrive with Spice 1, and once a fight the first warden that would fall stays standing on one health.',
+    match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 1),
+    rekindle: true },
   /* Frost on EVERY arrival was measured at 41% against a 22% baseline while the
      other four sat at 29-32 — not a choice, a favourite. Frost skips a foe's
      whole turn, so handing it out wave-wide was worth more than any other
