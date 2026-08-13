@@ -4169,3 +4169,65 @@ desktop one. That is the correct answer and not an obvious one.
     door ("there is a telegraph before the foe faints") which no mutation here
     can reach. Every mutant anchor re-audited — 97 anchors, none orphaned, none
     ambiguous. Render suite 6742 -> 6785 checks.
+
+122. **A rule written in one place was true in one place** (pass 211).
+    The two lists first, built by marking every numeric field on the battle at 7
+    and taking one full turn rather than reading the code:
+
+        RESET   playedTurn  swungTurn  shield
+        MOVED   turn (+1)   energy (recomputed: BASE_ENERGY + powers.energy)
+        CARRY   cornered escapes foeSwaps foeEdge foeShield foePierce maxAdd
+                teamIdx settling foeSettling  and every mods.* and powers.*
+
+    That is what the cards say it should be. "Every attack +N THIS BATTLE"
+    carries; "next attack" edge is spent by the swing that uses it; `settling`
+    is consumed by the first swing whenever it comes, which is what "the turn it
+    arrives" means for a kin that does not swing that turn.
+
+    What was in the wrong list was not a field. It was a rule written in one
+    place and therefore true in one place. `endTurn` keeps retained cards;
+    `doAction` discarded the whole hand — and those are the other three ways a
+    turn ends, under a comment that says they "cost the rest of your turn,
+    exactly as it did before":
+
+        hunker   ended the turn   HAND      ironhide  ended the turn   HAND
+        hunker   used an item     discard   ironhide  used an item     discard
+        hunker   switched kin     discard   ironhide  switched kin     discard
+        hunker   tried to flee    discard   ironhide  tried to flee    discard
+
+    Twelve of sixteen combinations disagreed with a card that says, in as many
+    words, "stays in your hand at the end of the turn" — and the reward screen
+    glosses the keyword with that exact sentence. One `dropHand()` now, read by
+    both doors, with a `CARDS[c.id] &&` guard so a save holding a card whose
+    definition has gone cannot throw at the end of a turn (the case `cardCost`
+    already guards). Sixteen of sixteen stay.
+
+    **The control is the half that matters.** A card that does NOT say Retain
+    must still be discarded by all four endings — without that check, a "fix"
+    that kept the whole hand would pass every claim above. Driven: guard, focus
+    and snack still go to the discard, every way.
+
+    **A flake I had only half-fixed in pass 210, which failed here on the
+    UNMUTATED file.** Topping HP back up was not enough: a fight that ENDS
+    clears `G.battle`, and then `B()` is null and `playCard` does nothing at
+    all, silently — so the max-HP scenario measured nothing and said so as a
+    failure. The foe in that block is now something a level-40 kin cannot lose
+    to, and the battle is re-checked before the bill is read. Twelve clean runs.
+
+    **A source anchor that matched twice, which was itself the evidence.**
+    `dropHand(log); foeTurn(log); afterFoe(log);` is now the tail of BOTH
+    endTurn and doAction — identical, which is the point of the pass — so the
+    mutant had to be anchored on doAction's preceding line.
+
+    Four planted faults, all four bitten by hand: doAction discarding the hand
+    again (14 failures), every card treated as retained (13), the shield no
+    longer for one round (1), swungTurn never resetting (13) — plus a NO-OP
+    comment edit that correctly passed. The sweep then reported 14 / 13 / 1 /
+    13, the same four numbers.
+
+    Four sweep mutants aimed at the new section, which reports **29 of 53
+    killed — 55%**, the densest the sweep has produced. Dense because the
+    section is almost entirely driven behaviour over a small surface: sixteen
+    real turn-endings and twelve control endings, with only the table-shape
+    checks out of reach. Every mutant anchor re-audited — 101 anchors, none
+    orphaned, none ambiguous. Render suite 6785 -> 6839 checks.
