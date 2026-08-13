@@ -7527,6 +7527,142 @@ section('a faint resolves once, whoever notices it');
     'and there are still four callers, plus the definition, to be right about');
 }
 
+// Is every control live exactly when it should be?
+//
+// The modes themselves are tidy: a dialogue takes A and B and nothing else, the
+// title takes A and B, a screen takes the cursor and Pick/Back, and directions
+// do nothing in a dialogue. What was not tidy was what the two round buttons on
+// a phone SAY they do.
+//
+// Four beats sit above the mode router in `step` and answer a press by skipping
+// their tail — an evolution, a chest opening, a flourish, a catch. While one of
+// them owns the screen there is exactly one thing the buttons do, which is the
+// dialogue case, and `btnLabels`' own comment already argues it: "the way a
+// dialogue makes both buttons Next rather than leaving one dead". The labels
+// did not know:
+//
+//     a catch beat      said  Play / Menu      did  press past it
+//     a flourish        said  Play / Menu      did  press past it
+//     an evolution      said  Play / Menu      did  press past it
+//     a chest opening   said  Pick / Back      did  press past it
+//
+// The timed beats — warp, alert, rustle, mend, blackout — are deliberately left
+// out: they answer nothing, and naming a button for an action it will not take
+// is the same fault in the other direction.
+section('the two buttons say what they will do, in every state');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  const BEATS = ['warp', 'evoAnim', 'alert', 'rustle', 'mend', 'blackout', 'chestOpen', 'flourish', 'gotcha'];
+  const clear = () => {
+    for (const k of BEATS) g.G[k] = null;
+    g.G.dialogue = null; g.G.screen = null; g.G.menu = null;
+  };
+
+  // ---- the ordinary modes, unchanged --------------------------------------
+  // These are the inverse control: if a fix labelled EVERYTHING "Skip" it would
+  // pass every beat check below and fail here.
+  for (const [mode, want] of [
+    ['world', 'Talk/Menu'], ['battle', 'Play/Menu'], ['dialogue', 'Next/Next'],
+    ['menu', 'Pick/Back'], ['screen', 'Pick/Back'],
+  ]) {
+    clear();
+    g.G.mode = mode;
+    eq(g.btnLabels().join('/'), want, `in ${mode} the buttons read ${want}`);
+  }
+  {
+    clear(); g.G.mode = 'title';
+    eq(g.btnLabels().join('/'), 'Start/Start', 'the title with no save offers the one thing twice');
+    g.saveGame();
+    eq(g.btnLabels().join('/'), 'Continue/New', '…and with a save, one each');
+    g.wipeSave();
+  }
+  {
+    clear(); g.G.mode = 'world';
+    g.openScreen('reward', { list: [] });
+    eq(g.btnLabels().join('/'), 'Take/Skip', 'a reward screen still names its own two choices');
+  }
+
+  // ---- a beat that answers a press names what it does ---------------------
+  let beats = 0;
+  for (const [name, make] of [
+    ['a catch', () => ({ t: 0, done: () => {} })],
+    ['a flourish', () => ({ t: 0, gems: 2, done: () => {} })],
+    ['an evolution', () => ({ t: 0, i: 0, beats: [] })],
+    ['a chest opening', () => ({ t: 0 })],
+  ]) {
+    const key = { 'a catch': 'gotcha', 'a flourish': 'flourish', 'an evolution': 'evoAnim', 'a chest opening': 'chestOpen' }[name];
+    clear();
+    g.G.mode = 'battle';
+    g.G[key] = make();
+    eq(g.btnLabels().join('/'), 'Skip/Skip', `${name} names both buttons for the one thing they do`);
+    beats++;
+  }
+  eq(beats, 4, 'four beats own the screen and answer a press');
+  // …and it is the beat that decides, not the mode underneath: the same beat
+  // over a screen reads the same as over a battle.
+  {
+    clear();
+    g.G.mode = 'screen';
+    g.openScreen('bag', {});
+    eq(g.btnLabels().join('/'), 'Pick/Back', 'a bag on its own reads Pick/Back');
+    g.G.chestOpen = { t: 0 };
+    eq(g.btnLabels().join('/'), 'Skip/Skip', '…and the same bag under a chest opening reads Skip/Skip');
+  }
+
+  // ---- and the label is true: the press really does skip ------------------
+  // `ran` is declared BEFORE the beat is built: writing the closures in the
+  // for-of header put them outside the loop body's scope, and the callback hit
+  // the temporal dead zone the moment step() ran it — a check that crashes the
+  // suite is not a check.
+  for (const key of ['gotcha', 'flourish']) {
+    let ran = 0;
+    clear();
+    g.G.mode = 'battle';
+    g.G[key] = key === 'gotcha'
+      ? { t: 0, done: () => { ran++; } }
+      : { t: 0, gems: 2, done: () => { ran++; } };
+    eq(g.btnLabels()[0], 'Skip', `${key} says Skip`);
+    g.tapKey('a');
+    g.step(0.016);
+    eq(!!g.G[key], false, `…and pressing it does skip ${key}`);
+    eq(ran, 1, '…running what was waiting behind it');
+  }
+
+  // ---- the timed beats, recorded rather than renamed ----------------------
+  // They answer nothing, so they are NOT in the pressable list. Stated so the
+  // day one of them learns to take a press, this says where to look.
+  {
+    clear();
+    g.G.mode = 'world';
+    for (const k of ['rustle', 'mend', 'blackout']) {
+      clear();
+      g.G.mode = 'world';
+      g.G[k] = { t: 0 };
+      eq(g.btnLabels().join('/'), 'Talk/Menu', `${k} answers no press, so it does not claim to`);
+    }
+  }
+
+  // ---- directions do nothing where they should do nothing -----------------
+  {
+    clear();
+    g.G.mode = 'world';
+    g.say('X', ['one', 'two'], () => {});
+    const where = `${g.G.player.x},${g.G.player.y}`;
+    for (const k of ['up', 'down', 'left', 'right']) { g.tapKey(k); g.step(0.016); }
+    eq(`${g.G.player.x},${g.G.player.y}`, where, 'you cannot walk out of a dialogue');
+    ok(g.G.dialogue, '…and the dialogue is still up');
+  }
+
+  // Pinned by shape.
+  ok(SRC.includes('const pressableBeat = () => !!(G.evoAnim || G.chestOpen || G.flourish || G.gotcha);'),
+    'the beats that answer a press are named once');
+  ok(SRC.includes("  if (pressableBeat()) return ['Skip', 'Skip'];"),
+    'and the labels ask before naming the mode underneath');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
