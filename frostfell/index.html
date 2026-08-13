@@ -1004,6 +1004,7 @@ function hurt(g, u, amount, src) {
     u.flash = 1; u.hitT = 1; u.sq = 1;
     // knocked back along the line the hit came from
     if (src) {
+      u.lastHitBy = { name: src.name, art: src.art, def: src.def, boss: !!src.boss };
       const dx = (u.px || 0) - (src.px || 0), dy = (u.py || 0) - (src.py || 0);
       const L = Math.hypot(dx, dy) || 1;
       u.recX = dx / L; u.recY = dy / L;
@@ -1281,7 +1282,12 @@ function checkOver(g) {
   const b = g.battle;
   if (!b || b.over) return;
   const leader = b.units.find((u) => u.side === 'p' && u.leader);
-  if (leader && !leader.alive) { b.over = true; b.won = false; beat(0.6, () => endBattle(g, false)); return; }
+  if (leader && !leader.alive) {
+    b.over = true; b.won = false;
+    if (g.run) g.run.killedBy = leader.lastHitBy || g.run.killedBy || null;
+    beat(0.6, () => endBattle(g, false));
+    return;
+  }
   if (enemyUnits(g).length) return;
   payCombo(g);
   // A cleared board with a wave still coming is not a win — it walks straight
@@ -1985,7 +1991,7 @@ function saveRun(run) {
     trail: run.trail, path: run.path, log: run.log.slice(-8),
     bells: run.bells || [], bh: run.bonusHand || 0, bc: !!run.bellCharged, wb: run.waveBonus || 0,
     purse: run.purse || 1, mend: run.mend || 0, bosses: run.bosses || {},
-    winters: run.winters || [], wpts: run.winterPts || 0, prices: run.prices || 1,
+    winters: run.winters || [], wpts: run.winterPts || 0, prices: run.prices || 1, killedBy: run.killedBy || null,
     campMul: run.campMul || 1, extraFoe: run.extraFoe || 0, bellSlow: run.bellSlow || 0,
     foeMul: run.foeMul || 1, fell: run.fellThisZone || 0,
   }));
@@ -2002,7 +2008,7 @@ function loadRun(g) {
       log: o.log || [], kills: 0, node: null,
       bells: o.bells || [], bonusHand: o.bh || 0, bellCharged: !!o.bc, waveBonus: o.wb || 0,
       purse: o.purse || 1, mend: o.mend || 0, bosses: o.bosses || {},
-      winters: o.winters || [], winterPts: o.wpts || 0, prices: o.prices || 1,
+      winters: o.winters || [], winterPts: o.wpts || 0, prices: o.prices || 1, killedBy: o.killedBy || null,
       campMul: o.campMul || 1, extraFoe: o.extraFoe || 0, bellSlow: o.bellSlow || 0,
       foeMul: o.foeMul || 1, fellThisZone: o.fell || 0,
     };
@@ -2571,13 +2577,22 @@ function drawCreature(c, art, x, y, s, o) {
     inked(c, art.belly, lw, C.ink);
   }
 
-  /* ---------------------------------------------------------------- face --- */
+  /* ---------------------------------------------------------------- face ---
+
+     Two eyes the same size in the same place on sixty-six animals is what made
+     the cast read as one drawing. Size, spacing and lids all move — some of it
+     chosen per creature, the rest derived from a stable hash of the recipe so
+     that no two faces land on the same numbers by accident. */
+  const fh = ((art.body || '').charCodeAt(1) || 3) * 7 + ((art.mouth || 'x').charCodeAt(0) || 5) * 13
+    + ((art.mark || 'n').charCodeAt(0) || 2) * 3;
+  const gapMul = art.eyeGap || (0.86 + ((fh % 5) * 0.09));
+  const sizeMul = art.eyeSize || (0.88 + ((fh >> 2) % 5) * 0.07);
   const eyeY = faceY - faceH * (headed ? 0.04 : 0.06);
-  const eyeDx = faceW * 0.15;
+  const eyeDx = faceW * 0.15 * gapMul;
   const blinkPhase = ((t * 0.6 + (o.blink || 0)) % 4.4);
   const blink = blinkPhase < 0.12 ? 1 - Math.abs(blinkPhase - 0.06) / 0.06 : 0;
   const eyeStyle = art.eyes || 'dot';
-  const er = s * (eyeStyle === 'big' ? 0.12 : eyeStyle === 'slit' ? 0.095 : 0.08);
+  const er = s * (eyeStyle === 'big' ? 0.12 : eyeStyle === 'slit' ? 0.095 : 0.08) * sizeMul;
   for (const d of [-1, 1]) {
     const ex = d * eyeDx;
     if (art.mark === 'patch' && d < 0) continue;                 // one eye is covered
@@ -2603,6 +2618,41 @@ function drawCreature(c, art, x, y, s, o) {
     }
   }
 
+  /* brows and lids: the whole difference between cute and cute-and-hungry */
+  const brow = art.brow || (art.evil ? 'angry' : (art.mouth === 'flat' ? 'flat' : (shape === 'wisp' ? 'worried' : 'none')));
+  if (brow !== 'none' && eyeStyle !== 'slit') {
+    c.save();
+    c.strokeStyle = art.evil ? '#5a1020' : C.ink;
+    c.lineWidth = lw * (art.evil ? 1.2 : 0.95);
+    c.lineCap = 'round';
+    for (const d of [-1, 1]) {
+      if (art.mark === 'patch' && d < 0) continue;
+      const bx4 = d * eyeDx, by4 = eyeY - er * 1.5;
+      c.beginPath();
+      if (brow === 'angry') { c.moveTo(bx4 - d * er * 0.9, by4 - er * 0.35); c.lineTo(bx4 + d * er * 0.9, by4 + er * 0.42); }
+      else if (brow === 'worried') { c.moveTo(bx4 - d * er * 0.9, by4 + er * 0.4); c.lineTo(bx4 + d * er * 0.9, by4 - er * 0.3); }
+      else { c.moveTo(bx4 - d * er * 0.85, by4); c.lineTo(bx4 + d * er * 0.85, by4); }
+      c.stroke();
+    }
+    c.restore();
+  }
+  // a heavy lid sits over the top of the eye and takes the innocence out of it
+  const lid = art.lid || (art.evil && eyeStyle !== 'slit' ? (fh % 2 ? 'heavy' : 'none') : 'none');
+  if (lid !== 'none') {
+    c.save();
+    c.fillStyle = art.body;
+    c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
+    for (const d of [-1, 1]) {
+      if (art.mark === 'patch' && d < 0) continue;
+      c.beginPath();
+      c.arc(d * eyeDx, eyeY, er * 1.02, Math.PI, TAU);
+      c.lineTo(d * eyeDx + er, eyeY - er * (lid === 'sleepy' ? 0.1 : 0.35));
+      c.lineTo(d * eyeDx - er, eyeY - er * (lid === 'sleepy' ? 0.1 : 0.35));
+      c.closePath(); c.fill(); c.stroke();
+    }
+    c.restore();
+  }
+
   const my = faceY + faceH * (headed ? 0.2 : 0.16);
   const mouth = art.mouth || 'smile';
   c.strokeStyle = C.ink; c.lineWidth = lw * 0.9;
@@ -2613,6 +2663,13 @@ function drawCreature(c, art, x, y, s, o) {
     c.fillStyle = '#4a1c2a'; c.fill(); c.stroke();
   } else if (mouth === 'flat') {
     c.beginPath(); c.moveTo(-s * 0.07, my); c.lineTo(s * 0.07, my); c.stroke();
+    if (art.evil) {
+      // a tooth showing over a closed mouth: menacing without being a snarl
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.moveTo(s * 0.03, my); c.lineTo(s * 0.055, my); c.lineTo(s * 0.042, my + s * 0.045);
+      c.closePath(); c.fill();
+    }
   } else if (mouth === 'fang') {
     c.beginPath(); c.arc(0, my - s * 0.04, s * 0.10, 0.2, Math.PI - 0.2);
     c.fillStyle = '#4a1c2a'; c.fill(); c.stroke();
@@ -2968,6 +3025,103 @@ function drawSkyline(c, z, t) {
   }
 }
 
+/* The near layer: whatever is close enough to the camera to have edges. Each
+   zone gets its own, drawn over the ground rather than into the ridge line, so
+   the three places do not read as one place in three tints. */
+function drawNearScenery(c, z, t) {
+  c.save();
+  if (z.id === 'whitewood') {
+    // conifers at the edges of frame, snow on the branches, out of the way of
+    // everything the player has to read in the middle
+    const trees = [[SAFE + 20, 1.0], [SAFE + 128, 0.72], [VW - SAFE - 40, 1.06], [VW - SAFE - 150, 0.66]];
+    for (const [tx, sc] of trees) {
+      const h = 250 * sc, base = 600 + 20 * sc;
+      c.save();
+      c.translate(tx, base);
+      c.rotate(Math.sin(t * 0.4 + tx) * 0.006);
+      c.fillStyle = '#0f2036';
+      c.fillRect(-7 * sc, -30 * sc, 14 * sc, 34 * sc);
+      for (let k = 0; k < 4; k++) {
+        const kh = h * (1 - k * 0.19), kw = 62 * sc * (1 + k * 0.3);
+        c.beginPath();
+        c.moveTo(0, -kh);
+        c.lineTo(kw, -kh * 0.4 + k * 16 * sc);
+        c.lineTo(-kw, -kh * 0.4 + k * 16 * sc);
+        c.closePath();
+        c.fillStyle = k % 2 ? '#12253d' : '#152b46';
+        c.fill();
+        // the snow that settles on top of each tier
+        c.beginPath();
+        c.moveTo(0, -kh);
+        c.lineTo(kw * 0.5, -kh * 0.7 + k * 8 * sc);
+        c.lineTo(-kw * 0.5, -kh * 0.7 + k * 8 * sc);
+        c.closePath();
+        c.fillStyle = 'rgba(226,240,255,.5)';
+        c.fill();
+      }
+      c.restore();
+    }
+  } else if (z.id === 'shelf') {
+    // broken plates with black water between them
+    c.fillStyle = '#08121f';
+    c.fillRect(0, 560, VW, VH - 560);
+    const plates = [[-40, 560, 380, 1], [330, 592, 300, 0.9], [610, 566, 420, 1.05], [980, 600, 360, 0.86]];
+    for (const [px, py, pw, sc] of plates) {
+      const bobY = Math.sin(t * 0.5 + px * 0.01) * 3;
+      c.save();
+      c.translate(px, py + bobY);
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(pw * 0.06, -18 * sc);
+      c.lineTo(pw * 0.9, -14 * sc);
+      c.lineTo(pw, 6);
+      c.lineTo(pw * 0.84, 150);
+      c.lineTo(pw * 0.1, 150);
+      c.closePath();
+      c.fillStyle = '#dfe4f8'; c.fill();
+      c.beginPath();
+      c.moveTo(pw * 0.06, -18 * sc); c.lineTo(pw * 0.9, -14 * sc); c.lineTo(pw, 6); c.lineTo(0, 0);
+      c.closePath();
+      c.fillStyle = '#b9c8e8'; c.fill();
+      c.restore();
+      // the water's edge catching what light there is
+      c.save();
+      c.globalAlpha = 0.35; c.strokeStyle = '#6fd8ff'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(px, py + bobY); c.lineTo(px + pw, py + 6 + bobY); c.stroke();
+      c.restore();
+    }
+  } else {
+    // a jagged skyline with one lit thing on it, a long way off
+    c.save();
+    c.globalAlpha = 0.55;
+    c.fillStyle = '#1a1226';
+    c.beginPath();
+    c.moveTo(0, VH);
+    c.lineTo(0, 500);
+    const peaks = [[60, 430], [140, 505], [230, 380], [330, 470], [430, 440], [560, 505], [700, 415],
+      [820, 486], [940, 360], [1050, 470], [1160, 430], [1280, 500]];
+    for (const [px, py] of peaks) c.lineTo(px * (VW / 1280), py);
+    c.lineTo(VW, VH);
+    c.closePath();
+    c.fill();
+    c.restore();
+    // the light: a watchfire on the far peak, still burning
+    const lx = 940 * (VW / 1280), ly = 352;
+    const flick = 0.6 + Math.sin(t * 5.3) * 0.2 + Math.sin(t * 11) * 0.1;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = 0.5 * flick;
+    const gl = c.createRadialGradient(lx, ly, 0, lx, ly, 90);
+    gl.addColorStop(0, '#ffb85c'); gl.addColorStop(1, 'rgba(255,184,92,0)');
+    c.fillStyle = gl;
+    c.beginPath(); c.arc(lx, ly, 90, 0, TAU); c.fill();
+    c.restore();
+    c.beginPath(); c.arc(lx, ly, 4 + flick * 2, 0, TAU);
+    c.fillStyle = '#ffe6a8'; c.fill();
+  }
+  c.restore();
+}
+
 function drawBackdrop(c, zone, t) {
   const z = ZONES[clamp(zone || 0, 0, ZONES.length - 1)];
   const g2 = c.createLinearGradient(0, 0, 0, VH);
@@ -3017,13 +3171,35 @@ function drawBackdrop(c, zone, t) {
   for (let x = 0; x <= VW; x += 48) c.lineTo(x, 500 + Math.sin(x * 0.006) * 14);
   c.lineTo(VW, VH); c.lineTo(0, VH); c.closePath(); c.fill();
 
+  drawNearScenery(c, z, t);
+
+  /* Weather, which is the fastest way to say where you are without a label:
+     the Whitewood drifts, the Shelf is scoured by wind, the Peak rains ash. */
   if (snowflakes) {
-    c.save(); c.fillStyle = 'rgba(255,255,255,.75)';
+    const kind = z.id === 'whitewood' ? 'snow' : z.id === 'shelf' ? 'wind' : 'ash';
+    c.save();
     for (const f of snowflakes) {
-      f.y += f.s * 0.016; f.x += Math.sin(t * 0.7 + f.d) * 0.5;
-      if (f.y > VH + 4) { f.y = -4; f.x = rnd() * VW; }
-      c.globalAlpha = 0.25 + (f.r / 3.6) * 0.6;
-      c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.fill();
+      if (kind === 'wind') {
+        f.x += 3.2 + f.s * 0.03;
+        f.y += Math.sin(t * 0.9 + f.d) * 0.4;
+        if (f.x > VW + 40) { f.x = -40; f.y = rnd() * VH; }
+        c.globalAlpha = 0.1 + (f.r / 3.6) * 0.3;
+        c.strokeStyle = '#dff0ff'; c.lineWidth = f.r * 0.7;
+        c.beginPath(); c.moveTo(f.x, f.y); c.lineTo(f.x - 26 - f.s * 0.4, f.y + 1.5); c.stroke();
+      } else if (kind === 'ash') {
+        f.y += f.s * 0.009;
+        f.x += Math.sin(t * 1.3 + f.d) * 0.9;
+        if (f.y > VH + 4) { f.y = -4; f.x = rnd() * VW; }
+        c.globalAlpha = 0.18 + (f.r / 3.6) * 0.4;
+        c.fillStyle = f.r > 2.2 ? '#ffb066' : '#8b8496';
+        c.beginPath(); c.arc(f.x, f.y, f.r * 0.8, 0, TAU); c.fill();
+      } else {
+        f.y += f.s * 0.016; f.x += Math.sin(t * 0.7 + f.d) * 0.5;
+        if (f.y > VH + 4) { f.y = -4; f.x = rnd() * VW; }
+        c.globalAlpha = 0.25 + (f.r / 3.6) * 0.6;
+        c.fillStyle = 'rgba(255,255,255,.85)';
+        c.beginPath(); c.arc(f.x, f.y, f.r, 0, TAU); c.fill();
+      }
     }
     c.restore();
   }
@@ -3292,9 +3468,9 @@ function drawCard(c, card, x, y, w, h, o) {
   const th = h - ty - (isUnit ? 26 * S : 8 * S);
   c.beginPath(); rr(c, 7 * S, ty, aw, th, 8 * S);
   inked(c, '#fffaf0', 1.8 * S, 'rgba(30,40,60,.35)');
-  const maxLines = Math.max(2, Math.floor((th - 5 * S) / (11 * S)));
+  const maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
   const fit = fitLines(c, card.text || '', aw - 12 * S, maxLines, 11.5 * S, 7.5 * S);
-  const lh = fit.size * 1.16;
+  const lh = fit.size * 1.1;
   const top = ty + th / 2 - (fit.lines.length - 1) * lh / 2;
   fit.lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#3a3020', 'center', 't', 0));
 
@@ -4221,43 +4397,52 @@ function drawHand(c, t) {
   const n = b.hand.length;
   if (!n) return;
   // The hand is a fan, not a row: cards lean out from the middle and sit a
-  // little lower at the ends, which is what makes six cards readable at once
-  // on a phone without shrinking any of them.
-  const spread = Math.min(CARD_W + 8, (VW - 420) / Math.max(1, n));
+  // little lower at the ends. On a narrow stage the whole fan shrinks rather
+  // than overlapping into an unreadable pile — the piles on the left and the
+  // bell on the right are what set the room it has.
+  const room = VW - (SAFE + 120) * 2;
+  let cw2 = CARD_W, chh2 = CARD_H;
+  let spread = Math.min(cw2 + 8, room / Math.max(1, n));
+  if (spread < cw2 * 0.82) {
+    const k2 = clamp((room / Math.max(1, n)) / (cw2 * 0.82), 0.72, 1);
+    cw2 = Math.round(CARD_W * k2);
+    chh2 = Math.round(CARD_H * k2);
+    spread = Math.min(cw2 + 6, room / Math.max(1, n));
+  }
   const total = (n - 1) * spread;
   for (let i = 0; i < n; i++) {
     const card = b.hand[i];
     if (UI.drag && UI.drag.card === card) continue;
     const off = i - (n - 1) / 2;
-    const x = MID - total / 2 + i * spread - CARD_W / 2;
+    const x = MID - total / 2 + i * spread - cw2 / 2;
     const picked = UI.picked === card;
     const hovered = picked || (UI.hover && UI.hover.id === 'hand' && UI.hover.data === i);
     const lift = picked ? 52 : hovered ? 34 : 0;
     const arc = n > 1 ? Math.min(14, Math.abs(off) * Math.abs(off) * 2.2) : 0;
-    const y = HAND_Y - CARD_H / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
+    const y = HAND_Y + (CARD_H - chh2) / 2 - chh2 / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
     card.handT = Math.min(1, (card.handT || 0) + 0.06);
     // deal: the card travels out of the deck pile and settles into the fan
     card.dealT = Math.min(1, (card.dealT === undefined ? 1 : card.dealT) + 0.075);
     const dk = easeOut(card.dealT);
     const from = pilePos('draw');
-    const dx = lerp(from.x - CARD_W / 2, x, dk);
-    const dy = lerp(from.y - CARD_H / 2, y, dk);
+    const dx = lerp(from.x - cw2 / 2, x, dk);
+    const dy = lerp(from.y - chh2 / 2, y, dk);
     card.hx = dx; card.hy = dy;
     if (picked) {
       c.save();
       c.shadowColor = '#ffe08a'; c.shadowBlur = 22;
-      rr(c, dx + 2, dy + 2, CARD_W - 4, CARD_H - 4, 13);
+      rr(c, dx + 2, dy + 2, cw2 - 4, chh2 - 4, 13);
       c.fillStyle = '#ffe08a'; c.globalAlpha = 0.5; c.fill();
       c.restore();
     }
-    drawCard(c, card, dx, dy, CARD_W, CARD_H, {
+    drawCard(c, card, dx, dy, cw2, chh2, {
       t, scale: (hovered ? 1.07 : 1) * (0.6 + 0.4 * dk),
       rot: lerp(-0.7, hovered ? 0 : off * 0.035, dk),
       alpha: 0.4 + 0.6 * dk,
     });
-    if (picked) txt(c, 'TAP A SLOT', dx + CARD_W / 2, dy - 14, 13, '#ffe08a', 'center', 'd');
+    if (picked) txt(c, 'TAP A SLOT', dx + cw2 / 2, dy - 14, 13, '#ffe08a', 'center', 'd');
     // not grabbable until it has actually landed in the fan
-    if (card.dealT > 0.6) hit('hand', x, y, CARD_W, CARD_H, i);
+    if (card.dealT > 0.6) hit('hand', x, y, cw2, chh2, i);
   }
   if (UI.drag && UI.drag.card) {
     const d = UI.drag;
@@ -5062,10 +5247,45 @@ function drawEnd(c, t, won) {
   } else {
     c.save(); c.fillStyle = 'rgba(6,12,24,.45)'; c.fillRect(0, 0, VW, VH); c.restore();
   }
+  const run0 = G.run;
   const bob = Math.sin(t * 1.2) * 4;
-  txt(c, won ? 'THE FELL IS CROSSED' : 'THE COLD TAKES YOU', MID, 206 + bob, 56, won ? '#ffe6a8' : '#c8dcf4', 'center', 'd');
+  txt(c, won ? 'THE FELL IS CROSSED' : 'THE COLD TAKES YOU', MID, 150 + bob, 52, won ? '#ffe6a8' : '#c8dcf4', 'center', 'd');
   txt(c, won ? 'the caravan makes the far shore, and the winter lets go' : 'the caravan halts where it stands',
-    MID, 262 + bob, 18, '#9fc0e4', 'center', 't');
+    MID, 196 + bob, 17, '#9fc0e4', 'center', 't');
+
+  if (!won && run0) {
+    // who actually did it, drawn, because 'you died' is not an account
+    const k = run0.killedBy;
+    txt(c, k ? 'WHAT STOPPED YOU' : 'THE COLD ITSELF', MID, 234, 13, '#7e97b8', 'center', 't');
+    if (k) {
+      c.save();
+      c.globalAlpha = 0.5; c.fillStyle = '#0d1830';
+      c.beginPath(); c.ellipse(MID, 320, 54, 12, 0, 0, TAU); c.fill();
+      c.restore();
+      drawCreature(c, k.art, MID, 300, k.boss ? 118 : 96, { t, ph: 2, flip: true });
+      txt(c, k.name.toUpperCase(), MID, 344, 24, '#ffb0b8', 'center', 'd');
+    }
+  } else if (won && run0) {
+    // the caravan that made it, every card of it
+    txt(c, 'THE CARAVAN THAT MADE IT', MID, 232, 13, '#7e97b8', 'center', 't');
+    const all = [run0.leader].concat(run0.deck);
+    const per = Math.min(all.length, Math.max(6, Math.floor((VW - SAFE * 2) / 84)));
+    const cw3 = 74, chh3 = 104, gap3 = 8;
+    const rows = Math.ceil(all.length / per);
+    all.forEach((card, i) => {
+      const row = Math.floor(i / per), col = i % per;
+      const inRow = Math.min(per, all.length - row * per);
+      const tw3 = inRow * cw3 + (inRow - 1) * gap3;
+      const x = MID - tw3 / 2 + col * (cw3 + gap3);
+      const y = 252 + row * (chh3 + 8) - (rows - 1) * 6;
+      c.save();
+      c.translate(x + cw3 / 2, y + chh3 / 2);
+      c.rotate(Math.sin(i * 2.1) * 0.03);
+      c.translate(-cw3 / 2, -chh3 / 2);
+      drawCard(c, card, 0, 0, cw3, chh3, { t });
+      c.restore();
+    });
+  }
 
   // what this caravan actually did, before it is forgotten
   const run = G.run;
@@ -5080,19 +5300,20 @@ function drawEnd(c, t, won) {
     ['WINTER', run.winterPts || 0],
   ] : [['RUNS', G.meta.runs], ['CROSSINGS', G.meta.wins], ['FURTHEST', (G.meta.best || 0) + 1]];
 
-  const perRow = 4, cw = 220, chh = 74;
+  const perRow = 8, cw = Math.min(150, (VW - SAFE * 2) / 8), chh = 56;
+  const statTop = won ? VH - 176 : 396;
   cells.forEach((cell, i) => {
     const col = i % perRow, row = Math.floor(i / perRow);
     const inRow = Math.min(perRow, cells.length - row * perRow);
     const x = MID - (inRow * cw) / 2 + col * cw + cw / 2;
-    const y = 322 + row * chh;
-    txt(c, String(cell[1]), x, y, 30, '#eaf6ff', 'center', 'd');
-    txt(c, cell[0], x, y + 26, 12, '#7e97b8', 'center', 't');
+    const y = statTop + row * chh;
+    txt(c, String(cell[1]), x, y, 24, '#eaf6ff', 'center', 'd');
+    txt(c, cell[0], x, y + 22, 11, '#7e97b8', 'center', 't');
   });
   if (run && run.log.length) {
-    txt(c, run.log[run.log.length - 1], MID, 300, 14, '#9fb6d6', 'center', 't');
+    txt(c, run.log[run.log.length - 1], MID, statTop - 30, 14, '#9fb6d6', 'center', 't');
   }
-  button(c, 'endHome', MID - 140, VH - 96, 280, 60, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
+  button(c, 'endHome', MID - 140, VH - 74, 280, 56, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
 }
 
 /* ================================================== 10. input ============ */

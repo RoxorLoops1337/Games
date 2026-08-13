@@ -124,6 +124,16 @@ lit coal on the chest, a fringe of icicles, a bandage, a monocle, a leaf. The
 rules suite refuses to let two creatures share a whole row of that table, which
 is what stops the cast being one drawing in sixty-six colours.
 
+Faces move too. Eye size and spacing come from a stable hash of the recipe, so
+no two land on the same numbers by accident, and brows and lids are derived
+from what a creature is: a foe gets an angry brow, a heavy lid, and a tooth
+showing over a closed mouth. Cute, and still hungry.
+
+Each zone owns its foreground and its weather — conifers with snow on the
+branches in the Whitewood, broken plates over black water on the Long Shelf, a
+jagged skyline with one watchfire still burning at Hollow Peak — under drifting
+snow, a scouring wind, and falling ash respectively.
+
 ## The typefaces
 
 Two families, cut from source in `tools/frostfont/` and embedded as WOFF:
@@ -153,6 +163,12 @@ each. The headless suites prove the game does not throw; only this tells you
 that two labels overlap or that a colour has vanished into the backdrop. It
 drives the game through `window.FF`, the same handle the suites use, so the
 walk cannot drift out of step with the rules.
+
+## Endings
+
+A defeat draws what actually stopped you — the run remembers the blow that took
+the leader, by name and well enough to draw the thing again. A crossing lays
+out the caravan that made it, every card of it.
 
 ## Tests
 
