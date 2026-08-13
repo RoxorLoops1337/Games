@@ -3670,6 +3670,17 @@ function loadGame() {
   G.chestsOpened = blob.chests || 0;
   G.might = blob.might || 0;                 // permanent damage, earned card by card
   if (!G.cards.length) { STARTER_DECK.forEach(grantCard); }
+  // …and the same repair for the partial loss, which was the one going unmade.
+  // Both lines above are lossy on purpose: a card id this build no longer knows
+  // is dropped, and then every deck slot pointing at one is dropped with it. So
+  // the total loss was caught — own nothing, get the starter deck — and losing
+  // half was not: you came back owning five cards with a deck of five. That is
+  // a deck the editor refuses to build (it will not let you drop below
+  // DECK_MIN) and cannot repair, because there is nothing left to add. Fill
+  // from what you still own first, then from the starter deck, and only as far
+  // as the floor — the run keeps every card that survived.
+  for (const c of G.cards) { if (G.deck.length >= DECK_MIN) break; if (!G.deck.includes(c.u)) G.deck.push(c.u); }
+  for (let i = 0; G.deck.length < DECK_MIN; i++) grantCard(STARTER_DECK[i % STARTER_DECK.length]);
   // A save written before anyone was keeping track loads with an empty `been`,
   // and enterMap below immediately marks wherever that run is standing. So the
   // worst an old save costs is a signpost or two offered again to somebody who
