@@ -23,6 +23,11 @@ anything hanging off the stage, and anything hiding under a notch.
   attacker's own lane**; if that lane is clear it reaches across, and a unit
   with nothing in front of it will walk into the lane where the fighting is
   rather than stand there.
+- **The front row runs double.** Counters tick down twice as fast in column 0,
+  on both sides of the table, and anything standing there wears a `×2` beside
+  its counter. Put your slow heavy hitter forward and it swings sooner and gets
+  hit for it; keep the fragile one back and it is safe and late. Moving is free,
+  so this is a question you answer every turn rather than once at deployment.
 - **One action per turn.** Play a card, ring the redraw bell, or pass. There is
   no mana — the turn *is* the cost. Moving a warden already on the board is
   free, and so is calling in the next wave early.
@@ -101,6 +106,13 @@ status and every keyword; it is on the title screen and behind `?` in a fight.
 The score is a step sequencer, not a loop: three voices over sixteen steps with
 the root, scale and tempo chosen by where you are — and it runs on its own
 randomness, because a run has to play the same way twice.
+
+Every rule the game grew after the sound did now has a voice of its own: a foe
+drawing breath as it commits to a scheme, the inverted answer when the scheme is
+denied, the long hiss of a boiler venting, four falling notes when the fire goes
+out and the cold takes the room, two hammer blows and a ring at the anvil, a
+bought bell, and a dry handful of snow. A rule you cannot hear is a rule you
+learn twice as slowly.
 
 ## Playing it with a thumb
 
@@ -336,18 +348,47 @@ thing and nothing else:
 
 At **210 runs a rung** (`FF_RUNS=70`, about two and a half minutes):
 
+The instrument draws its own results now. Each row is one pilot and the bar is
+**where its runs ended** — how many fell in the first zone, the second, the
+third, and how many crossed:
+
 ```
-careless:            22/210 won (10%) · 125/48  reached zone 2/3 · died 85/77/26 by zone
-+ the fight:         33/210 won (16%) · 156/78  reached zone 2/3 · died 54/78/45 by zone
-+ the trader:        73/210 won (35%) · 169/110 reached zone 2/3 · died 41/59/37 by zone
-+ steering the pool: 100/210 won (48%) · 197/154 reached zone 2/3 · died 13/43/54 by zone
+                    zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
+careless            ░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓████    8%
++ the fight         ░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓█████   12%
++ the trader        ░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓████████   18%
++ steering the pool ░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓█████████████████   37%
 ```
 
-**Thirty-eight points for playing well: six from the fight, nineteen from the
-trader, thirteen from steering the pool.** The economy, measured the same way:
-penniless 43%, as it ships 48%, bottomless purse 50%. Each course, handed over
-rather than declared, against a 42% baseline with none: Cold 54%, Hearth 52%,
-Scrap 46%, Bodies 45%, Gear 45%.
+**Twenty-nine points for playing well: four from the fight, six from the trader,
+nineteen from steering the pool.** The economy, measured the same way: penniless
+32%, as it ships 37%, bottomless purse 39%. Each course, handed over rather than
+declared, against a 22% baseline with none: Cold 41%, Hearth 32%, Scrap 32%,
+Bodies 29%, Gear 29%.
+
+### Which parts of playing well are worth anything
+
+A second instrument switches each of the careful pilot's fight habits off one at
+a time and re-runs the sweep. Whatever the pilot can stop doing without losing
+win rate was never a decision:
+
+```
+the fight, played well:  13%
+    +6  ███                  holding gear until it earns the turn
+    +4  ██                   denying schemes
+    +4  ██                   keeping a slot in reserve
+    +3  ██                   placing bodies where they will be hit
+    +1  █                    calling waves onto a set board
+    -2                       moving wounded and the leader
+```
+
+This is the reason the front row runs double. Before that rule the same table
+read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
+and "placing bodies where they will be hit" **nine points worse than filling the
+nearest free slot**. That is what a board with no geometry looks like: swings go
+to the front of a lane and stragglers walk toward the fighting, so six slots
+behave like two. Depth now costs and pays, and five of the six habits price
+above the noise floor.
 
 The suite also prints **what ends a good run in the last zone**, aggregated by
 name across every death — the run always remembered the blow that took the
@@ -355,6 +396,13 @@ leader, it just never counted them. One death is an anecdote; two hundred is a
 design note, and it was: one beast was landing three late deaths in five.
 
 Three things worth saying plainly about that table.
+
+**The fight rung is still small — four points — and that is now an honest
+number rather than a broken one.** In-fight play is made of six real decisions
+instead of one habit plus one active mistake, and the ablation above prices each
+of them; but a run's outcome is still dominated by the deck it is holding, so
+skilled play inside a fight moves fewer points than the reward screen does.
+Saying otherwise would need a different game, not a different bot.
 
 **The gap is no longer concentrated in one node.** For one iteration the trader
 was worth fourteen points on its own, which reads as a working economy and is

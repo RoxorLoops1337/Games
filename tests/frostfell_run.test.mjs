@@ -98,14 +98,25 @@ function soakerFirst(card) {
   const d = FF.CARDS[card.def];
   return !!(d && d.kw && (d.kw.soak || d.hp >= 10));
 }
+/* WHERE A BODY GOES, now that the front row burns two counters a turn.
+
+   The old version of this put walls at the front and everything else behind,
+   and the ablation priced it at NINE POINTS WORSE than filling the nearest
+   free slot — a board with no geometry cannot be played well, only fussed
+   over. With depth costing and paying, the question is worth asking properly:
+   the front is for whatever wants to swing sooner and can take the answer, the
+   back is for whatever is slow to come round or too soft to stand there. */
 function carefulSlot(card) {
-  // wall first, then the lane that is about to be hit, then anywhere
-  const wall = soakerFirst(card);
+  const d = FF.CARDS[card.def] || {};
+  const hp = d.hp || 0, atk = d.atk || 0, cnt = d.cnt || 1;
+  // worth putting at the front: hits hard for its counter, and can survive a turn there
+  const forward = (atk / Math.max(1, cnt)) >= 1.2 && hp >= 8;
   const lanes = [0, 1].sort((a, z) => threatOf(z) - threatOf(a));
+  const cols = forward ? [0, 1, 2] : [2, 1, 0];
   for (const lane of lanes) {
-    const cols = wall ? [0, 1, 2] : [1, 2, 0];
     for (const col of cols) if (FF.slotFree(G, 'p', lane, col)) return { lane, col };
   }
+  for (const lane of lanes) for (const col of [0, 1, 2]) if (FF.slotFree(G, 'p', lane, col)) return { lane, col };
   return null;
 }
 function threatOf(lane) {
@@ -205,13 +216,29 @@ function carefulItem(card) {
   }
   return { t: best, worth: bestScore };
 }
+/* WHICH PARTS OF PLAYING WELL ARE WORTH ANYTHING.
+
+   The fight has been the weakest rung of the ladder for four rounds. Rather
+   than guess at what to add, this switches each of the careful pilot's fight
+   habits off one at a time and re-runs the sweep: whatever the pilot can stop
+   doing without losing win rate was never a decision in the first place. */
+const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
+const HABITS = [
+  ['deny', 'denying schemes'],
+  ['reposition', 'moving wounded and the leader'],
+  ['holdGear', 'holding gear until it earns the turn'],
+  ['keepSlot', 'keeping a slot in reserve'],
+  ['wave', 'calling waves onto a set board'],
+  ['place', 'placing bodies where they will be hit'],
+];
+
 function carefulTurn() {
   const b = G.battle;
 
   /* Read what the foes have said they will do, and take it away — all of it
      with free moves, so a pilot that looks at the board pays nothing for it.
      A pilot that does not look eats a double lunge and a frozen lane. */
-  for (const f of FF.enemyUnits(G)) {
+  if (SKILL.deny) for (const f of FF.enemyUnits(G)) {
     const p = f.plot;
     if (!p) continue;
     if (p.id === 'mark') {
@@ -231,13 +258,18 @@ function carefulTurn() {
   }
 
   // free actions first: nothing about them costs a turn
-  for (const u of FF.playerUnits(G)) {
+  if (SKILL.reposition) for (const u of FF.playerUnits(G)) {
     if (u.leader && u.col < 2) {
       // the leader belongs at the back, always
       for (let col = 2; col > u.col; col--) if (FF.slotFree(G, 'p', u.lane, col)) { FF.moveUnit(G, u, u.lane, col); break; }
-    } else if (!u.leader && u.col === 0 && u.hp <= u.maxHp * 0.3) {
+    } else if (!u.leader && u.col === 0 && u.hp <= u.maxHp * 0.35) {
       // pull a warden that is about to fall out of the front line
       for (let col = 2; col > 0; col--) if (FF.slotFree(G, 'p', u.lane, col)) { FF.moveUnit(G, u, u.lane, col); break; }
+    } else if (!u.leader && u.col > 0 && u.cnt > 1 && u.atk > 0 && u.hp > u.maxHp * 0.6) {
+      /* And the other half of the same judgement, which only exists now that
+         the front burns two a turn: something healthy and still winding up is
+         worth walking forward to get it swinging sooner. */
+      if (FF.slotFree(G, 'p', u.lane, 0)) FF.moveUnit(G, u, u.lane, 0);
     }
   }
 
@@ -252,6 +284,7 @@ function carefulTurn() {
 
   // a kill this turn beats a body next turn — that is the single judgement the
   // careless bot never makes, because it always reaches for a warden first
+  if (!SKILL.holdGear && bestI >= 0 && FF.playCard(G, bestI, bestT)) return;
   if (bestI >= 0 && bestW >= 6 && FF.playCard(G, bestI, bestT)) return;
 
   /* Filling the last slot costs the whole line its warmth and hands somebody
@@ -259,20 +292,34 @@ function carefulTurn() {
      that reads the board keeps one slot back unless the body is worth more
      than the room — which it is when the line is thin or something big is
      about to land. */
-  const ui = b.hand.findIndex((c) => c.type === 'unit');
+  /* WHICH BODY, AND WHETHER TO WAIT.
+
+     A hoarding card is worth more every turn it stays in hand, and the pilot
+     used to deploy whatever unit came first — which meant Keepsake sat at the
+     bottom of the usage table and the excuse was that the instrument could not
+     test it. Now it can: hold a hoarder while the board can spare it, and put
+     it down the moment it is capped or the line actually needs a body. */
+  const units = b.hand.map((c, i) => ({ c, i })).filter((x) => x.c.type === 'unit');
+  const banked = (x) => (x.c.kw && x.c.kw.hoard ? x.c.kw.hoard : 0);
+  const standing = FF.playerUnits(G).length;
+  const worthWaiting = (x) => banked(x) > 0 && (x.c.held || 0) < FF.HOARD_CAP && standing >= 3;
+  const ready = units.filter((x) => !worthWaiting(x));
+  // deploy the fattest hoard first when several are ready, else anything
+  ready.sort((a, z) => (banked(z) * (z.c.held || 0)) - (banked(a) * (a.c.held || 0)));
+  const ui = ready.length ? ready[0].i : (units.length && standing < 3 ? units[0].i : -1);
   if (ui >= 0) {
     const last = FF.freeSlots(G, 'p').length <= 1;
     const thin = FF.playerUnits(G).length <= 2;
     const pressed = FF.enemyUnits(G).reduce((n, f) => n + (f.cnt <= 1 ? f.atk : 0), 0) >= 6;
-    if (!last || thin || pressed) {
-      const slot = carefulSlot(b.hand[ui]);
+    if (!SKILL.keepSlot || !last || thin || pressed) {
+      const slot = SKILL.place ? carefulSlot(b.hand[ui]) : bestSlot();
       if (slot && FF.playCard(G, ui, slot)) return;
     }
   }
   if (bestI >= 0 && FF.playCard(G, bestI, bestT)) return;
 
   // a wave called onto a set board is half a wave
-  if (b.waves && b.waves.length && FF.enemyUnits(G).length <= 1 && FF.playerUnits(G).length >= 3) {
+  if (SKILL.wave && b.waves && b.waves.length && FF.enemyUnits(G).length <= 1 && FF.playerUnits(G).length >= 3) {
     if (FF.ringWave(G)) return;
   }
 
@@ -587,15 +634,41 @@ section('whole runs, start to finish');
   }
 
   const pct = (o) => Math.round((o.wins / Math.max(1, o.runs)) * 100);
-  const line = (o) => `${o.wins}/${o.runs} won (${pct(o)}%) · ${o.reachedTwo}/${o.reachedThree} reached zone 2/3 · ` +
-    `died ${o.died.join('/')} by zone · ${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns/fight`;
-  console.log(`    careless:           ${line(careless)}`);
-  console.log(`    + the fight:        ${line(tactics)}`);
-  console.log(`    + the trader:       ${line(trader)}`);
-  console.log(`    + steering the pool:${line(careful)}`);
-  console.log(`    the gap:  ${pct(careful) - pct(careless)} points for playing well — ` +
-    `${pct(tactics) - pct(careless)} from the fight, ${pct(trader) - pct(tactics)} from the trader, ` +
-    `${pct(careful) - pct(trader)} from steering the pool`);
+
+  /* THE SHAPE OF A RUN, drawn rather than tabulated.
+
+     Each row is one pilot, and the bar is where its runs ENDED: how many fell
+     in the first zone, the second, the third, and how many crossed. Read left
+     to right it is the trail itself, and the block that grows as you go down
+     the rows is the whole point of the instrument. */
+    const glyph = { 0: '░', 1: '▒', 2: '▓', win: '█' };
+  const shape = (o) => {
+    const wide = 48;
+    const cells = [o.died[0], o.died[1], o.died[2], o.wins];
+    const keys = [0, 1, 2, 'win'];
+    let out = '';
+    cells.forEach((n, i) => { out += glyph[keys[i]].repeat(Math.round(wide * n / Math.max(1, o.runs))); });
+    return out.padEnd(wide).slice(0, wide);
+  };
+  const rows = [['careless', careless], ['+ the fight', tactics],
+    ['+ the trader', trader], ['+ steering the pool', careful]];
+  console.log('');
+  console.log(`    ${''.padEnd(20)}${'zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █'.padEnd(48)}  won`);
+  for (const [name, o] of rows) {
+    console.log(`    ${name.padEnd(20)}${shape(o)}  ${String(pct(o) + '%').padStart(4)}`);
+  }
+  console.log('');
+  const rung = (a, z) => {
+    const d = pct(z) - pct(a);
+    return `${d >= 0 ? '+' : ''}${d}`.padStart(4);
+  };
+  console.log(`    what each thing is worth:  the fight ${rung(careless, tactics)}   ` +
+    `the trader ${rung(tactics, trader)}   steering the pool ${rung(trader, careful)}   ` +
+    `= ${pct(careful) - pct(careless)} points, all told`);
+  for (const [name, o] of rows) {
+    console.log(`    ${name.padEnd(20)}${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns a fight · ` +
+      `${o.reachedTwo}/${o.runs} saw the second zone, ${o.reachedThree} the third`);
+  }
 
   /* What is actually killing a competent pilot in the last zone. A zone that
      kills is a difficulty setting; a zone where the same three things kill
@@ -606,8 +679,15 @@ section('whole runs, start to finish');
   }
   const lastZone = Object.entries(careful.killers).sort((a, z) => z[1] - a[1]);
   const totalLate = lastZone.reduce((n, [, v]) => n + v, 0);
-  console.log(`    what ends a good run in the last zone (${totalLate} deaths): ` +
-    (lastZone.slice(0, 3).map(([k, v]) => `${k} ${v}`).join(', ') || 'nothing — nobody died there'));
+  console.log('');
+  if (!totalLate) console.log('    what ends a good run in the last zone: nothing — nobody died there');
+  else {
+    console.log(`    what ends a good run in the last zone (${totalLate} deaths):`);
+    for (const [k, v] of lastZone.slice(0, 5)) {
+      console.log(`      ${String(Math.round(100 * v / totalLate) + '%').padStart(4)}  ` +
+        `${'█'.repeat(Math.round(24 * v / totalLate)).padEnd(24)} ${k} (${v})`);
+    }
+  }
 
   // Neither end may collapse: a walkover for the careless pilot means nothing
   // in the game asks anything, and a careful pilot who never wins means the
@@ -674,17 +754,19 @@ section('does money change anything');
   const band = Math.round(100 * Math.sqrt(0.35 * 0.65 / Math.max(1, normal.runs)));
   const broke = sweep2((run) => { run.gold = 0; run.prices = 40; });
   const rich = sweep2((run) => { run.gold = 400; run.prices = 0.02; });
-  console.log(`    penniless:      ${broke.wins}/${broke.runs} won (${broke.pct}%)`);
-  console.log(`    as it ships:    ${normal.wins}/${normal.runs} won (${normal.pct}%)`);
-  console.log(`    bottomless purse: ${rich.wins}/${rich.runs} won (${rich.pct}%)`);
-  console.log(`    money is worth ${normal.pct - broke.pct} points of win rate`);
+  const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
+  console.log(`    ${'penniless'.padEnd(19)}${bar(broke.pct)} ${String(broke.pct + '%').padStart(4)}`);
+  console.log(`    ${'as it ships'.padEnd(19)}${bar(normal.pct)} ${String(normal.pct + '%').padStart(4)}`);
+  console.log(`    ${'a bottomless purse'.padEnd(19)}${bar(rich.pct)} ${String(rich.pct + '%').padStart(4)}`);
+  console.log(`    → money is worth ${normal.pct - broke.pct} points of win rate`);
   /* And the course on its own, handed over rather than bought — so the lever
      is measured apart from whether the pilot knows when to pull it. */
   const noCourse = sweep2((run) => { run.course = null; });
   const byCourse = FF.COURSES.map((co) => ({ co, r: sweep2((run) => { run.course = co.id; }) }));
-  console.log(`    no course:      ${noCourse.wins}/${noCourse.runs} won (${noCourse.pct}%)`);
+  console.log('');
+  console.log(`    ${'no course'.padEnd(19)}${bar(noCourse.pct)} ${String(noCourse.pct + '%').padStart(4)}`);
   for (const { co, r } of byCourse) {
-    console.log(`    ${(co.short + ':').padEnd(16)}${r.wins}/${r.runs} won (${r.pct}%)`);
+    console.log(`    ${co.short.toLowerCase().padEnd(19)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}`);
   }
   const bestCourse = byCourse.reduce((a, z) => (z.r.pct > a.r.pct ? z : a));
   const worstCourse = byCourse.reduce((a, z) => (z.r.pct < a.r.pct ? z : a));
@@ -711,6 +793,38 @@ section('does money change anything');
      A bottomless purse is still not the best row, and should not be — spending
      badly has to cost you, or the shop is a tax on patience. */
   ok(true, `money is worth ${normal.pct - broke.pct} points, band ±${band} — reported, not gated`);
+}
+
+/* -------------------------------------------------- what the fight is for -- */
+section('which parts of playing well are worth anything');
+{
+  const N = Number(process.env.FF_RUNS || 8);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const sweep3 = () => {
+    let wins = 0, runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) { const st = playRun(tribe, 1000 + i * 37, 'tactics'); runs++; if (st.won) wins++; }
+    }
+    return Math.round((wins / Math.max(1, runs)) * 100);
+  };
+  const all = sweep3();
+  const band = Math.round(100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * N)));
+  console.log(`    the fight, played well:  ${all}%`);
+  const rows = [];
+  for (const [key, label] of HABITS) {
+    SKILL[key] = false;
+    const without = sweep3();
+    SKILL[key] = true;
+    rows.push({ label, cost: all - without });
+  }
+  rows.sort((a, z) => z.cost - a.cost);
+  for (const r of rows) {
+    const n = r.cost;
+    const bar = n > 0 ? '█'.repeat(Math.min(20, Math.round(n / 2))) : '';
+    console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
+  }
+  console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
+  ok(true, 'the ablation is a report, not a gate');
 }
 
 section('every card is worth playing');
