@@ -211,8 +211,10 @@ const MUTANTS = [
     find: '    ? `${said} It shrugs that off.` : said;',
     to: '    ? said : said;' },
   { name: 'deck: the card stops substituting its value', aims: ['a deck card does not promise a status the foe shrugs off'],
-    find: "  const said = c.txt.replace('{v}', cardValue(inst));",
-    to: '  const said = c.txt;' },
+    // Re-anchored: pass 207 made this line live, so the old anchor went stale.
+    // The mutation is the same one — the card stops putting its value in.
+    find: "  let said = c.txt.replace('{v}', cardValue(inst) + combo);",
+    to: '  let said = c.txt;' },
 
   { name: 'trainer: the winners go silent again', aims: ['a trainer who beats you gets to say so'],
     find: '    const beat = b.npc && b.npc.trainer.win ? b.npc.trainer.win : [];',
@@ -269,6 +271,19 @@ const MUTANTS = [
   { name: 'shop: Vane hand-copies his floor too', aims: ['every price the game speaks is read off the table it is a price in'],
     find: '          const floor = Math.min(...CHEST_IDS.map((k) => CHESTS[k].cost));',
     to: '          const floor = 60;' },
+
+  { name: 'card: the value stops being live again', aims: ['the number on a card is the number playing it hands over'],
+    find: '  const combo = c.combo && bat && (bat.playedTurn || 0) > 0 ? c.combo : 0;',
+    to: '  const combo = 0;' },
+  { name: 'card: the cost stops being live', aims: ['the number on a card is the number playing it hands over'],
+    find: '  const chain = def.chain && b ? def.chain * (b.playedTurn || 0) : 0;',
+    to: '  const chain = 0;' },
+  { name: 'card: a field and its sentence drift apart', aims: ['the number on a card is the number playing it hands over'],
+    find: "vt: 'shield', fx: { thorns: 4 },",
+    to: "vt: 'shield', fx: { thorns: 6 }," },
+  { name: 'card: the combo clause is matched by hand', aims: ['the number on a card is the number playing it hands over'],
+    find: "  if (combo) said = said.replace(`Combo +${combo}.`, 'It follows through.');",
+    to: "  if (combo) said = said.replace('Combo +10.', 'It follows through.');" },
 
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because

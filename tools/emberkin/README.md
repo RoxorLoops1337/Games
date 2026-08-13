@@ -3929,3 +3929,68 @@ desktop one. That is the correct answer and not an obvious one.
     shopkeepers stand and what the trainers pay, which none of the four
     mutations can reach. Every mutant anchor re-audited — 80 anchors, none
     orphaned, none ambiguous. Render suite 6102 -> 6216 checks.
+
+118. **The cost on a card moved while you watched. The value did not**
+    (pass 207).
+    Pass 206 caught one hand-copy. This is the general sweep: every user-facing
+    string in the file against every table that owns a number or a name.
+
+        102  spoken strings containing a digit
+         52  spoken strings containing a name that lives in a table
+         33  numbers hand-copied from a card's own fields into its own
+             sentence, across 38 cards — none of them drifted
+
+    Most of the name-copies are flavour where naming a thing by hand is
+    correct: a dex entry about Tsunaga says "Tsunaga", a sign says EMBERWOOD,
+    Rowan names Warden Hale as the gate on the mountain. Recorded, not fixed,
+    with their strings: the page's own meta description hand-copies the kin
+    count ("battle 19 hand-drawn creatures") and sits outside the script where
+    DEX_ORDER cannot reach it; the Chain gloss on the reward screen says
+    "costs 1 less for every card you have already played this turn" as ONE
+    shared sentence for every chain card, which is right only while every
+    chain card has `chain: 1`.
+
+    Where it bit was the deck. `combo` and `chain` are the same mechanic — a
+    bonus that switches on the moment you have played anything this turn — and
+    `cardCost` has always read the live turn for chain, so a Soulfang really
+    does fall from 2 energy to 1 in your hand while you watch. The value never
+    moved. Driven, before anything was changed:
+
+        shieldwall   nothing played yet   "Gain 14 shield."   applied +14
+        shieldwall   one card played      "Gain 14 shield."   applied +24
+        whetstone    one card played      "Every attack +3"   applied  +6
+        berserk      one card played      "Every attack +6"   applied +11
+
+    Same rule, shown two different ways, in the same hand. The value is live
+    now, and the clause that promised the bonus stops promising it twice —
+    replaced off `c.combo` rather than matched by hand, so a card whose combo
+    changes keeps agreeing with itself, and landing on *"It follows through."*,
+    which is what the battle log already prints when that card resolves. Out of
+    a fight there is no turn, so the deck screen's plain promise stands.
+
+    The property is not "Shieldwall says 24". It is that **the number on a card
+    is the number playing it hands over** — every card with a headline value,
+    in both turn states, driven through playCard and read off wherever its `vt`
+    lands. Sixty-eight card-and-turn-state pairs. Every `vt` in the table has a
+    place to land or the section fails.
+
+    **An orphaned anchor, caught by the audit and not by luck.** This change
+    rewrote the line pass 201's mutant was pinned to
+    (`const said = c.txt.replace('{v}', cardValue(inst));`), which would have
+    left the sweep silently blind on that mutation. Re-anchored to the new
+    line, same mutation — and it now reports 122 killed, because the new
+    section drives cardText hard.
+
+    Four planted faults, all four bitten BY HAND before the sweep was believed:
+    the value un-lived (13 failures), the cost un-lived (12), a field drifting
+    from its sentence (2), the clause matched by hand (5). The sweep then
+    reported 13 / 12 / 2 / 5 — the same four numbers, again. The other three
+    emberkin suites were run at this point rather than 50 minutes into the
+    check, which is where pass 206's red came from; all green.
+
+    Four sweep mutants aimed at the new section, which reports **95 of 201
+    killed — 47%**, the densest ratio the sweep has produced. It is dense for
+    the same reason pass 206's was: the section is all driven behaviour and its
+    biggest loop is 68 real plays, not a table walk. Every mutant anchor
+    re-audited — 84 anchors, none orphaned, none ambiguous. Render suite
+    6216 -> 6417 checks.
