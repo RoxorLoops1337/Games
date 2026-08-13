@@ -90,7 +90,10 @@ section('the hints');
 
   settle();
   FF.ringBell(G); FF.drainAll();
-  tick();
+  /* A settle rather than a tick: ringing the bell throws the hand away and
+     deals a fresh one, and the frames that animation eats are frames the guide
+     does not step in. Three of them used to be enough by luck. */
+  settle();
   ok(idOf() === 'wave' || G.tut.over, 'ringing the bell reaches the last hint');
 
   // the opening skirmish has no waves, so that hint must skip rather than stick
@@ -137,6 +140,82 @@ section('the hints are all reachable');
   }
   eq(bad.join(','), '', 'every hint is named, short, and knows when it is finished');
   ok(FF.TUTORIAL.length >= 5, 'and there are enough of them to cover the game');
+
+  /* AND THE TWO THAT PAY MOST ARE AMONG THEM.
+
+     The fight ablation has priced every habit a pilot can have for six rounds.
+     The two that survive every round are keeping a slot in reserve and denying
+     schemes — and for the first nineteen of those rounds the guide taught the
+     first and had not one word about the second. A hint list that omits the
+     most valuable thing in the game is not a guide, it is a tour. */
+  const ids = FF.TUTORIAL.map((h) => h.id);
+  ok(ids.indexOf('room') >= 0, 'the guide teaches keeping a slot in reserve');
+  ok(ids.indexOf('scheme') >= 0, 'and denying a scheme');
+
+  /* And the opening has to CONTAIN the thing the hint points at. Sampled across
+     forty openings it used to contain a schemer in seventeen, so most new
+     players met the rule for the first time in the second zone, having lost to
+     it once already. */
+  let withPlot = 0;
+  for (let s = 0; s < 24; s++) {
+    FF.newRun(FF.G, s % 2 ? 'frost' : 'hearth', 700 + s);
+    FF.startBattle(FF.G, 'fight');
+    if (FF.G.battle.units.some((u) => u.side === 'e' && u.scheme)) withPlot++;
+  }
+  eq(withPlot, 24, 'and every opening fight has something with a plan in it');
+}
+
+section('the guide teaches denial by making it happen');
+{
+  const FF = loadGame({});
+  const G = FF.G;
+  FF.newRun(G, 'hearth', 909);
+  FF.startBattle(G, 'fight');
+  const plotter = G.battle.units.find((u) => u.side === 'e' && u.scheme);
+  ok(!!plotter, 'the opening has a schemer');
+  FF.layPlot(G, plotter);
+  ok(!!plotter.plot, 'and it puts its plan on the table a turn out');
+  eq(G.battle.denied || 0, 0, 'nothing denied yet');
+
+  /* Take away what the plan needed and the whole trigger is wasted — which is
+     the thing the hint claims, checked against the rules rather than the text.
+     Every scheme in the game lays against the board as it stood a turn ago and
+     fires against the board as it stands now, so emptying the player's side is
+     a denial whichever scheme this opening happened to roll. */
+  for (const u of G.battle.units) if (u.side === 'p') u.alive = false;
+  FF.triggerUnit(G, plotter);
+  ok((G.battle.denied || 0) >= 1, 'a plan that no longer has what it needed is denied');
+  eq(plotter.plot, null, 'and the plan is spent either way');
+}
+
+section('the hint about red text waits until there is red text');
+{
+  const FF = loadGame({});
+  const G = FF.G;
+  FF.setCtx(mkCtx(null));
+  withRun(FF, 'hearth', 4343);
+  FF.enterNode(G, 0);
+  const step = (n) => { for (let i = 0; i < n; i++) FF.update(1 / 30); };
+  // put the guide on the scheme hint directly: what is under test is the
+  // holding, not the walk that gets there, and the walk has its own section
+  G.tut.i = FF.TUTORIAL.findIndex((h) => h.id === 'scheme');
+  G.tut.t = 0;
+  ok(G.tut.i >= 0, 'the guide has a scheme hint');
+
+  /* Clear every plan off the table and the hint holds rather than talking about
+     red text that is not there. This is the whole fix: it used to land on turn
+     five of the opening with the log already reading that the player had been
+     lunged at. */
+  for (const u of G.battle.units) u.plot = null;
+  step(4);
+  eq(G.tut.hold, true, 'with nothing on the table it waits');
+  eq((FF.TUTORIAL[G.tut.i] || {}).id, 'scheme', 'and does not skip past itself');
+
+  const foe = G.battle.units.find((u) => u.side === 'e' && u.alive && u.scheme);
+  ok(!!foe, 'the opening still has a schemer in it');
+  FF.layPlot(G, foe);
+  step(4);
+  eq(G.tut.hold, false, 'and the moment one commits, it speaks up');
 }
 
 /* ------------------------------------------------------------- rulebook -- */

@@ -31,6 +31,16 @@ FF.takeCard = function (g, id) {
   return realTake(g, id);
 };
 
+/* And what the counter actually sells. A ware nobody buys in a whole run is
+   furniture: it wants a reason or it wants cutting, and the only way to tell
+   those apart is to know whether the pilot passed it over or never looked.
+
+   Counted where the pilot decides rather than where the game charges: half the
+   counter is bought by pressing a button that opens a chooser, so wrapping the
+   exported buy() sees three wares out of nine and calls the other six dead. */
+const SOLD = {};
+const sale = (kind, did) => { if (did) SOLD[kind] = (SOLD[kind] || 0) + 1; return did; };
+
 /* --------------------------------------------------- the beast, watched --- */
 /* Last round's fix gave the Kettle Titan a bounded, visible, reversible heat
    and the death count barely moved. Two explanations fit that: the answer is
@@ -433,8 +443,10 @@ function draftTurn(r) {
      caravan stronger without making the deck bigger — so a pilot that has the
      price in hand takes it every time before it decides anything else. */
   if (run.gold >= FF.mealPrice(run) && FF.feedable(run).length) {
+    const m0 = run.meals || 0;
     FF.press('rewardMeal');
     pickBiggest();
+    sale('meal', (run.meals || 0) > m0);
     return;
   }
   const i = draftPick(r.cards);
@@ -604,27 +616,72 @@ function playRun(tribe, seed, mode, tweak) {
          free" measured WORSE than penniless, because every purchase was one
          more card between the caravan and the card it wanted. */
       // a bell is the biggest thing money can buy and the only thing she alone has
-      if (shops && s.bell && !s.bell.sold && G.run.gold >= s.bell.price) { FF.buy(G, 'bell'); bought = true; }
+      if (shops && s.bell && !s.bell.sold && G.run.gold >= s.bell.price) {
+        sale('bell', FF.buy(G, 'bell')); bought = true;
+      }
       if (!bought && shops && !s.heal.sold && G.run.gold >= s.heal.price &&
-          G.run.deck.some((cd) => cd.dmg > 0 || cd.injured)) { FF.buy(G, 'heal'); bought = true; }
+          G.run.deck.some((cd) => cd.dmg > 0 || cd.injured)) {
+        sale('heal', FF.buy(G, 'heal')); bought = true;
+      }
       if (!bought && shops && s.temper && !s.temper.sold && G.run.gold >= s.temper.price &&
           FF.temperable(G.run).length) {
+        const t0 = FF.tempered(G.run);
         FF.press('buyTemper');
         pickBiggest();
+        sale('temper', FF.tempered(G.run) > t0);
         bought = true;
       }
       if (!bought && shops && s.burn && !s.burn.sold && G.run.gold >= s.burn.price && G.run.deck.length > 10) {
+        const n0 = G.run.deck.length;
         FF.press('buyBurn');
         settleChoosers();
+        sale('burn', G.run.deck.length < n0);
         bought = true;
+      }
+      /* A SIGIL, which the pilot had never once looked at. It marks a warden to
+         stand before the bell and takes it out of the draw pile — a free
+         deployment every fight for the rest of the run AND a thinner deck, from
+         one purchase. The pilot not buying it was never evidence about the
+         ware; it was evidence about the pilot. */
+      if (!bought && shops && s.sigil && !s.sigil.sold && G.run.gold >= s.sigil.price &&
+          G.run.deck.some((cd) => cd.type === 'unit' && !cd.sigil)) {
+        const g0 = G.run.deck.filter((cd) => cd.sigil).length;
+        FF.press('buySigil');
+        pickBiggest();
+        sale('sigil', G.run.deck.filter((cd) => cd.sigil).length > g0);
+        bought = true;
+      }
+      /* A CHARM, the other ware the pilot had never looked at. It is the only
+         thing on the counter that makes an existing card better in a way a
+         meal cannot — a counter off, an attack on — and it adds no card. */
+      if (!bought && shops) {
+        for (let i = 0; i < s.charms.length; i++) {
+          if (s.charms[i].sold || G.run.gold < s.charms[i].price) continue;
+          const best = G.run.deck.concat([G.run.leader])
+            .filter((cd) => cd.type === 'unit')
+            .sort((a, z) => (z.hp + z.atk * 2) - (a.hp + a.atk * 2))[0];
+          if (!best) break;
+          sale('charm', FF.buy(G, 'charm', i, best.uid));
+          settleChoosers();
+          bought = true; break;
+        }
+      }
+      /* And tending a hurt, which is only ever worth anything when something in
+         the caravan is actually carrying a scar. */
+      if (!bought && shops && s.scar && !s.scar.sold && G.run.gold >= s.scar.price) {
+        const scarred = G.run.deck.concat([G.run.leader])
+          .find((cd) => cd.charms.some((id) => FF.SCARS[id]));
+        if (scarred) { sale('scar', FF.buy(G, 'scar', 0, scarred.uid)); bought = true; }
       }
       /* And then she feeds whoever is biggest, for as long as the purse holds.
          Four transcripts walked out of a shop with a full purse because there
          was nothing left on the counter that did not add a card; a meal is the
          thing that was missing, so a pilot who spends well now spends it all. */
       if (!bought && shops && G.run.gold >= FF.mealPrice(G.run) && FF.feedable(G.run).length) {
+        const m0 = G.run.meals || 0;
         FF.press('buyMeal');
         pickBiggest();
+        sale('meal', (G.run.meals || 0) > m0);
         bought = true;
       }
       // only then a card, and only if the caravan is actually short of one
@@ -632,7 +689,7 @@ function playRun(tribe, seed, mode, tweak) {
       for (let i = 0; !bought && i < s.cards.length; i++) {
         if (s.cards[i].sold || G.run.gold < s.cards[i].price) continue;
         if (shops && !wants && G.run.deck.length >= 12) continue;
-        FF.buy(G, 'card', i);
+        sale('card', FF.buy(G, 'card', i));
         // the sale comes with a trade-in: leave the weakest thing behind
         if (shops && FF.UI.choose) {
           const items = FF.UI.choose.items;
@@ -648,12 +705,15 @@ function playRun(tribe, seed, mode, tweak) {
         settleChoosers();
         bought = true; break;
       }
-      if (!bought && !s.heal.sold && G.run.gold >= s.heal.price) { FF.buy(G, 'heal'); bought = true; }
+      if (!bought && !s.heal.sold && G.run.gold >= s.heal.price) {
+        sale('heal', FF.buy(G, 'heal')); bought = true;
+      }
       /* A press that changes nothing is how a shop becomes an infinite loop —
          it already has been, twice. If a visit thinks it bought something but
          the counter looks exactly as it did, walk out. */
       const fingerprint = JSON.stringify([G.run.gold, s.cards.map((cc) => cc.sold), s.heal.sold,
-        s.temper && s.temper.sold, s.burn && s.burn.sold, G.run.deck.length, G.run.meals || 0]);
+        s.temper && s.temper.sold, s.burn && s.burn.sold, G.run.deck.length, G.run.meals || 0,
+        s.sigil && s.sigil.sold, s.scar && s.scar.sold, s.charms.map((cc) => cc.sold)]);
       if (!bought || fingerprint === lastShop) FF.press('leaveShop');
       lastShop = fingerprint;
     } else if (G.screen === 'camp') {
@@ -1139,6 +1199,33 @@ section('the same deck, two pilots');
     `skill closes ${deckGap > 0 ? Math.round(100 * skillGap / deckGap) : 0}% of a deck gap ` +
     `(±${band} is one standard deviation)`);
   ok(weakGood >= weakBad - band, 'playing the fight well is never a liability');
+}
+
+/* ----------------------------------------------------- and every ware --- */
+/* A ware nobody buys in a whole run is furniture. But "the pilot never bought
+   it" is two different findings wearing one face — it passed the ware over, or
+   it never looked — and the counter had two wares in the second category for
+   nineteen iterations. The sigil and the scar are now on the pilot's list, so
+   this table finally reads as evidence about the SHOP. */
+section('every ware is worth buying');
+{
+  const WARES = [
+    ['meal', 'a hot meal'], ['temper', 'temper'], ['bell', 'a bell'], ['heal', 'mend all'],
+    ['card', 'a card'], ['sigil', 'a sigil'], ['burn', 'burn a card'], ['scar', 'tend a hurt'],
+    ['charm', 'a charm'],
+  ];
+  const rows = WARES.map(([k, name]) => ({ k, name, n: SOLD[k] || 0 })).sort((a, z) => z.n - a.n);
+  const top = rows[0].n || 1;
+  for (const r of rows) {
+    console.log(`    ${r.name.padEnd(14)}${'█'.repeat(Math.round((r.n / top) * 26)).padEnd(27)}${r.n}`);
+  }
+  const dead = rows.filter((r) => !r.n);
+  if (dead.length) console.log(`    never bought: ${dead.map((r) => r.name).join(', ')}`);
+  /* The bar is deliberately weak: a ware may be situational (tending a hurt is
+     worth nothing to a caravan carrying no scars) without being furniture. What
+     it may not be is unreachable — bought zero times across hundreds of runs by
+     a pilot that is looking for it. */
+  ok(!dead.length, `every ware on the counter gets bought (${dead.map((r) => r.name).join(', ') || 'none dead'})`);
 }
 
 section('every card is worth playing');

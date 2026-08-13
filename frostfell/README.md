@@ -48,6 +48,7 @@ because every balance decision in the game came out of one of them:
 [the ladder](#the-ladder), [the same deck two pilots](#the-same-deck-two-pilots),
 [which habits are worth anything](#which-parts-of-playing-well-are-worth-anything),
 [does walking past a fight pay](#does-walking-past-a-fight-pay),
+[every ware is worth buying](#every-ware-is-worth-buying),
 [what four transcripts had in common](#what-four-runs-had-in-common).
 
 ---
@@ -167,6 +168,42 @@ player to do the thing it names, stays up long enough to read even when the
 action that clears it has already happened, and the whole sequence goes away
 with one tap. HOW TO PLAY is a three-page rulebook covering the fight, every
 status and every keyword; it is on the title screen and behind `?` in a fight.
+
+### What the guide was not teaching
+
+The fight ablation has priced every habit a pilot can have for six rounds. Two
+survive every round: **keeping a slot in reserve** and **denying schemes**. The
+guide taught the first and had **not one word** about the second — nine hints
+about deploying, counters, the front row, the room rule, the bell and the waves,
+and nothing at all about the one line of red text a foe puts on the table a turn
+before it does something to you. A hint list that omits the most valuable thing
+in the game is not a guide, it is a tour.
+
+Fixing it took three things, and two of them were only visible by walking the
+opening in the shots and reading the hints in order as a new player:
+
+1. **The hint.** It names an action and clears when the action lands, like every
+   other hint that works: kill it, freeze it, or take away what it needs.
+2. **Something to point at.** Sampled across forty openings, only **seventeen**
+   contained a foe with a scheme anywhere in them — so more than half of all new
+   players met the rule for the first time in the second zone, having already
+   lost to it once. The very first fight of a run now always contains something
+   with a plan in it.
+3. **A moment to point at it.** The first version landed on turn five of the
+   opening with the log already reading *"Chillfang lunges at Bramblewick for
+   6"* — the rule explained immediately after the player lost to it, pointing at
+   red text that was no longer on screen. A scheme exists for exactly one turn,
+   between the foe committing and the foe doing, so this hint **holds** rather
+   than skipping: it waits, silently, until there is red text on the table, and
+   speaks the moment there is. It is the only hint in the list that does; every
+   other one describes something permanently true of the fight.
+
+**The ladder cannot show any of this**, and it would be dishonest to imply
+otherwise — see [which rung should
+matter](#which-rung-should-matter-and-a-note-on-what-this-instrument-cannot-see).
+What it did show is a consequence of point 2: with a schemer guaranteed in every
+opening, **denying schemes went from +4 to +10** on the habit table, because
+there is now more of it to do.
 
 The score is a step sequencer, not a loop: three voices over sixteen steps with
 the root, scale and tempo chosen by where you are — and it runs on its own
@@ -299,6 +336,34 @@ The three fixes are [the line, not the deck](#the-rules-briefly), [a hot
 meal](#a-hot-meal), and [what follows you](#the-rules-briefly) — each measured
 below.
 
+### And what it feels like to walk it
+
+Numbers do not say whether a rule reads as pressure or as a tax, so here is a
+run played start to finish under all three, written down while playing it.
+
+**The arc is legible now, and it was not before.** The fell's answer opens at
+−33% and closes to +2% by the second beast, and you can watch it move step by
+step: −33, −25, −18, −12, −7, +1, +2. That is the caravan catching up to the
+trail, and it reads as progress rather than as a difficulty knob — which is why
+that number is [now on the trail screen](#the-rules-briefly) instead of only in
+a debug tool. It was the clearest picture of a run's shape in the game and the
+player could not see it.
+
+**The trader is a proper stop.** Zone one: tempered, mended, *walked out with
+seventeen scrip*. Zone two: a bell, a temper, a mend, a meal, walked out with
+fifty-four and the next meal priced at sixty. Both times the **purse** ran out,
+not the counter. That is what a working economy feels like from the inside, and
+it is one round old.
+
+**What follows you reads as pressure, but it arrives late and quietly.** A
+competent player who only ducks the obviously-right forks — the shop when rich,
+the rest when hurt — accumulates about eight against a free six, so the warning
+appears in the second zone at 10% and is small enough to ignore right up until
+the run is nearly over. That is arguably exactly right: the rule is aimed at the
+player who ducks *systematically*, and [the probe says it costs that player ten
+points](#does-walking-past-a-fight-pay). But it is worth being honest that a
+player who is not dodging on purpose will barely meet it.
+
 ## Looking at it
 
 ```
@@ -374,6 +439,24 @@ wearing a decision's coat: miss the shop on a map of nine and lose the run. It
 was worth fourteen points of win rate on its own. Spread across three doors it
 is worth two, and being penniless is survivable — which is the fix, and the cost
 of the fix, stated together.
+
+### Scars, and tending them
+
+A warden that falls comes back **Hurt** — half its attack and half its health
+until it sees a fight through. One that falls **while it is already Hurt** keeps
+something: a **scar**, one of three, permanent until somebody takes it off. Two
+is as many as one warden can carry.
+
+The scar table has been in the file since the first week — three scars, applied
+by `rebuildCard`, removable at the trader for thirty scrip — and **nothing in
+the game ever handed one out**. "TEND A HURT — 30" was a button that could not
+do anything, sitting on the counter for nineteen iterations. What found it was
+[the ware table](#every-ware-is-worth-buying): a pilot that was actually trying
+to buy everything on the counter bought that one zero times.
+
+So this is the missing half rather than a new system. Hurt is the warning; a
+scar is what happens if you send it straight back out anyway. It makes resting a
+decision, and it is escapable three ways — rest it, mend it, or pay her.
 
 ### A hot meal
 
@@ -487,14 +570,52 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓████    8%
-+ the fight         ░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████   17%
-+ the trader        ░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████   25%
-+ steering the pool ░░▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓██████████████   30%
+careless            ░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓███     7%
++ the fight         ░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓███████    15%
++ the trader        ░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█████████████    28%
++ steering the pool ░▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████████    34%
 ```
 
-**Twenty-two points for playing well: nine from the fight, eight from the
-trader, five from steering the pool.**
+**Twenty-seven points for playing well: eight from the fight, thirteen from the
+trader, six from steering the pool.**
+
+The careless pilot reads **7%**, one under the floor it has been held at for
+three rounds. It is half a standard deviation and it is not chased — chasing
+exactly this number is the mistake this file has recorded twice — but the likely
+cause is nameable rather than mysterious: [scars](#scars-and-tending-them) are
+new, they compound over a run, and their three escapes (rest, mend, pay her) are
+all things a careless pilot never does. That is the price of giving a dead ware
+a reason, stated rather than buried.
+
+### Which rung should matter, and a note on what this instrument cannot see
+
+Three rungs within four points of each other is the flattest this ladder has
+read, and the question it raises — *should one of them be the thing that
+matters?* — has an answer, so here it is in writing.
+
+**The fight should be the rung that matters most, and it is not.** The reason is
+not that flat is wrong; it is that the three rungs are not three things a player
+*learns*, they are three things a player *does*, and they cost wildly different
+amounts of attention. The fight rung is fifteen or twenty decisions a fight
+across a dozen fights. The trader rung is three shop visits. The steering rung
+is one button at the leader screen and a redeal or two. Pricing all three the
+same means the thing a player spends ninety per cent of the run doing is worth
+the same as a button pressed once. That is the imbalance worth naming, and it is
+a different complaint from "the total is too small" — the total is fine.
+
+It is not fixed this round, and saying why is worth more than a gesture at it
+now. The fight's three surviving habits price at +5, +4 and +4 while the rung
+itself is +9, which means **they overlap**: a pilot that denies a scheme has
+usually also kept the slot that let it move. Making the fight matter more means
+finding a decision that is *not* already implied by the other three — not
+turning the existing ones up.
+
+**And a limit of the instrument, which came up trying to answer a different
+question.** The careless rung is a bot that ignores the guide completely. So
+when the guide gets better — as it did this round, gaining a hint for the single
+most valuable habit in the game — **the ladder cannot show it**. The careless
+pilot is a floor on *difficulty*, not a proxy for a new player. Any claim that
+better teaching moved that number would be false, and none is made below.
 
 The ceiling came from 42% to 30% and the careless pilot held at 8, which was the
 round's hardest ask because the two pull against each other: **every win a
@@ -506,6 +627,43 @@ thing again more subtly. What separates them is [the
 margin](#the-rules-briefly): only the part of the reading past +0.10 is bitten,
 and it is bitten hard. The careless caravan reads under the margin and never
 feels it — measured at two very different bite settings, it sat at 8% in both.
+
+### Every ware is worth buying
+
+The counter has nine things on it. The probe now buys all nine, and the table of
+what it bought is the instrument — because a ware nobody buys in a whole run is
+furniture, and until this round nobody had asked.
+
+Asking turned up three different answers wearing one face:
+
+- **The pilot was not looking.** It had never once pressed the sigil or a charm
+  in nineteen iterations. That is not evidence about the ware, it is evidence
+  about the pilot — and a sigil is a free deployment every fight for the rest of
+  the run *and* a thinner draw pile, which is not a ware anybody should be
+  passing over. Both are on its list now, and both get bought.
+- **The ware was genuinely dead.** [Tending a hurt](#scars-and-tending-them)
+  could not be bought because nothing in the game had ever handed out a scar.
+- **The counting was wrong.** Half the counter is bought by pressing a button
+  that opens a chooser rather than by calling `buy` directly, so a wrapper round
+  the exported function saw three wares out of nine and called the other six
+  dead. Counted where the pilot decides instead.
+
+```
+a hot meal    ██████████████████████████  2855
+a card        ██████████                  1090
+mend all      ██████                       696
+temper        ████                         409
+burn a card   ██                           202
+a bell        █                            134
+a charm       █                            123
+a sigil       █                             59
+tend a hurt   ·                             23
+```
+
+The meal dominating is by design — it is the sink, and it is the only ware sold
+at two different nodes. What the table is for is the bottom: **a ware at zero is
+now a failing check**, so a dead button cannot sit on that counter for another
+nineteen iterations.
 
 ### Does walking past a fight pay
 
@@ -524,9 +682,9 @@ walks past what it can███████████████        30%  
                                              13.4 cards · 2.5 tempered · 3.1 meals · 43 unspent
 ```
 
-It read **+13 for dodging** before this round. It reads **−5** now, and the
-second line under each bar is why the first fix did not work and the second one
-did.
+It read **+13 for dodging** two rounds ago. It reads **−10** now — the strongest
+reading this arm has given — and the second line under each bar is why the first
+fix did not work and the second one did.
 
 *First attempt:* tax the difficulty curve — a caravan that had not been fighting
 loses its discount for being thin. It measured as **nothing**, and the reason is
@@ -619,23 +777,29 @@ stands**, at 300 runs an arm:
 
 ```
 IN THE FIGHT (±2.8)                    ON THE REWARD SCREEN (±2.6)
-    +5  keeping a slot in reserve        +7  declaring a course at all
-    +4  denying schemes                    0  buying a fresh offer
-    +4  holding gear until it earns        0  tempering instead of taking
-    -1  filling the front of both lanes    0  picking what the deck lacks
+   +10  denying schemes                   +7  declaring a course at all
+    +5  holding gear until it earns        0  buying a fresh offer
+    +1  filling the front of both lanes    0  tempering instead of taking
+     0  keeping a slot in reserve          0  picking what the deck lacks
      0  repositioning (removed)           -5  walking on when it wants nothing
      0  calling waves early (removed)
 ```
 
-**Scheme denial is not carrying the fight rung, and this is the third reading in
-a row that says so a different way.** It read +14 two rounds ago and +10 last
-round; against the current game it is +4, level with holding gear and behind
-keeping a slot. The habit did not change — the game did, twice, and each time
-the number came down. The spread across the top three is now inside two standard
-deviations of each other, which is the healthiest this table has read.
+**Scheme denial went from +4 back to +10, and for once the cause is known rather
+than guessed at.** Every opening fight now contains a schemer, put there so the
+[guide could teach denial](#what-the-guide-was-not-teaching); there is simply
+more denying to do, so doing it is worth more. That is a change made for a
+teaching reason showing up as a balance number, which is the right way round.
 
-And the economy: **penniless 23%, as it ships 30%, a bottomless purse 35% —
-money is worth seven points.** It had read four when the only things to spend on
+**And keeping a slot in reserve dropped from +5 to 0 in the same round**, which
+is not explained and is not being explained away. It is 1.8 standard deviations,
+so it is on the edge of readable, and the two candidates — scars punishing a
+packed line harder, or the extra schemer changing what a spare slot is *for* —
+pull in opposite directions. It gets its own turned-up run before anything is
+done about it.
+
+And the economy: **penniless 28%, as it ships 34%, a bottomless purse 56% —
+money is worth six points.** It had read four when the only things to spend on
 were one-a-visit; a meal gave the purse a bottom and the number went up, which
 is what a working economy looks like.
 
@@ -643,7 +807,7 @@ The bottomless-purse arm is the reason meals have a **cap of twelve**. Handed
 free money and prices at a fiftieth, the pilot ate its way to **93%** — money
 buying a run outright rather than paying for one. The cap sits far above where
 real play lands (5.4 meals an average crossing) and exists purely so the
-degenerate case has a floor to hit; it took that arm to 35%.
+degenerate case has a floor to hit; it took that arm from 93% to 56%.
 
 ### And the same for the reward screen
 
@@ -690,12 +854,36 @@ sit inside two standard deviations of each other and all five beat declaring
 nothing. **They are genuinely level, not luck** — which the ten-point swings at
 the smaller sample could not have told you either way.
 
-That reading is from before this round's changes, and this round moved the trail
-under it. At the suite's ordinary 210 runs an arm the same table now reads Gear
-38%, Cold 35%, none 33%, Hearth 33%, Bodies 32%, **Scrap 25%** — four of them
-still level, and Scrap eight points off the field, which is over two standard
-deviations. That is a lead worth turning `FF_COURSE` up on, not a finding worth
-acting on at this sample; it is on the list rather than in the game.
+**Scrap, settled.** Last round's table read Scrap at 25% at the ordinary sample
+and it was flagged rather than acted on. Turned up to 600 runs an arm (band
+±1.9) it read **30% against a 34% baseline for declaring no course at all** — so
+the 25% was noise, but a real finding was underneath it, and it was sitting in
+plain text:
+
+> **scrap** — "The first gear you use each fight does not cost the turn."
+> **gear** — "gear you use goes back into the deck, **and the first one each fight is free**."
+
+One course's whole rule was a strict subset of another's. Of course it measured
+worse than nothing. The free gear is now Scrap's alone and recycling is Gear's
+alone — tempo against value, which is an actual choice — and Scrap gets a second
+rule that no other course could have: it is the tribe that patches things back
+together, and the game just grew a thing to be patched, so **on the Scrap Trail
+a warden that goes down comes back patched rather than Hurt**, and never scars.
+
+Re-measured at 600 runs an arm: **none 36%, Cold 43%, Bodies 38%, Gear 38%,
+Scrap 35%, Hearth 33%.** Scrap is fixed — up five points and inside the field.
+
+**And Cold is the new outlier at 43%, seven clear of the next.** It is reported
+rather than tuned, and the reason is worth stating because the restraint is not
+the same as last round's. Cold did not change; the game did. The scar rule
+rewards *not taking damage*, and Cold is the damage-prevention course — the
+front of every wave arrives frozen, so it never swings, so nothing gets hurt
+twice. That is almost certainly the interaction, and tuning a course against a
+game that moved three times in the same session is how a number gets chased for
+four rounds. It is the first thing to check next round, on its own.
+(Cold has been here before: it read 41% against 22% in iteration 15 and was cut
+back from wave-wide frost to the front of the wave. The precedent for what to do
+about it already exists.)
 
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
