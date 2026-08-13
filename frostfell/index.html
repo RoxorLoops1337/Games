@@ -667,6 +667,10 @@ const hoardOf = (card) => (card && card.kw && card.kw.hoard
   ? card.kw.hoard * Math.min(HOARD_CAP, card.held || 0) : 0);
 
 /* Scars are charms with a bite — a warden that faints picks one up. */
+/* How many a single warden can carry. Two is a card worth mending or leaving
+   behind; unbounded is a card that quietly becomes unplayable while the player
+   is looking somewhere else. */
+const SCAR_CAP = 2;
 const SCARS = {
   cracked: { id: 'cracked', name: 'Cracked', col: '#7f8db0', text: '-2 max health.', apply: (c) => { c.hp = Math.max(1, c.hp - 2); } },
   stiff:   { id: 'stiff',   name: 'Stiff',   col: '#7f8db0', text: '+1 counter.',    apply: (c) => { c.cnt += 1; } },
@@ -1339,6 +1343,7 @@ function triggerUnit(g, u) {
       fx.burst(u, '#8fffc4', 10);
       sfx('denied');
       logLine(g, plot.label.toLowerCase() + ' — denied', '#8fffc4');
+      g.battle.denied = (g.battle.denied || 0) + 1;
     }
     // A scheme that IS the swing spends the whole trigger either way: read it
     // and take it away, and the foe has thrown its turn at empty snow.
@@ -2021,7 +2026,20 @@ function buildEncounter(g, kind) {
   const opening = run.zone === 0 && run.step < 2;
   const first = (opening ? 2 : kind === 'elite' ? 2 + (run.zone > 0 ? 1 : 0) : 2 + (run.step > 3 ? 1 : 0)) + (run.extraFoe || 0);
   const spots = frontFirstSpots();
-  waves.push(spots.slice(0, first).map((s) => ({ id: pick(src).id, lane: s.lane, col: s.col, scale })));
+  const openers = spots.slice(0, first).map((s) => ({ id: pick(src).id, lane: s.lane, col: s.col, scale }));
+  /* AND THE VERY FIRST FIGHT ALWAYS HAS SOMETHING WITH A PLAN IN IT.
+
+     Denying schemes is the most valuable habit in the fight — it has been at or
+     near the top of the ablation for four rounds — and the guide now has a hint
+     that teaches it. Which is worth nothing if the hint has nothing to point
+     at: sampled across forty openings, only seventeen contained a foe with a
+     scheme anywhere in them, so more than half of all new players met the rule
+     for the first time in the second zone, having already lost to it once. */
+  if (run.zone === 0 && run.step === 0 && !openers.some((e) => FOES[e.id] && FOES[e.id].scheme)) {
+    const plotters = src.filter((f) => f.scheme);
+    if (plotters.length) openers[openers.length - 1].id = pick(plotters).id;
+  }
+  waves.push(openers);
   const later = opening ? (run.step === 0 ? 0 : 1) : 1;   // one wave of reinforcements, always
   for (let w = 0; w < later; w++) {
     const n = kind === 'elite' ? 2 : 1 + (run.step > 4 ? 1 : 0);
@@ -2143,14 +2161,39 @@ function endBattle(g, won) {
     if (u.side !== 'p' || !u.card) continue;
     if (u.alive) u.card.dmg = Math.max(0, u.maxHp - u.hp);
   }
-  // A warden that fell is Hurt — half its attack and half its health until it
-  // sees a fight through. One that came home standing shakes it off.
+  /* A warden that fell is Hurt — half its attack and half its health until it
+     sees a fight through. One that came home standing shakes it off.
+
+     AND ONE THAT FELL WHILE IT WAS ALREADY HURT KEEPS SOMETHING.
+
+     The scar table has been in this file since the first week: three of them,
+     applied by rebuildCard, removable at the trader for thirty scrip. Nothing
+     in the game has ever handed one out. "TEND A HURT" was a button that could
+     not do anything, on the counter for nineteen iterations, and the ware table
+     found it by asking a pilot that was actually looking to buy it.
+
+     This is the missing half rather than a new system: Hurt is the warning and
+     a scar is what happens if you keep sending it back out anyway. It makes
+     resting a decision, it gives the trader's thirtieth-scrip service a job,
+     and it is escapable in three different ways — rest it, mend it, or pay her
+     to take the scar off. */
+  const patched = (courseOf(run) || {}).patched;
   for (const c of run.deck.concat([run.leader])) {
     if (c.fainted) {
+      const again = c.injured && !patched;
       c.fainted = false;
       c.dmg = 0;
-      c.injured = true;
-      run.log.push(c.name + ' was hurt.');
+      c.injured = !patched;
+      if (patched) { run.log.push(c.name + ' went down, and was put back together.'); continue; }
+      if (again && c.charms.filter((id) => SCARS[id]).length < SCAR_CAP) {
+        const scar = SCARS[pick(Object.keys(SCARS))];
+        c.charms.push(scar.id);
+        rebuildCard(c);
+        run.log.push(c.name + ' went down hurt, and came back ' + scar.name.toLowerCase() + '.');
+        fx.toast(c.name.toUpperCase() + ' IS ' + scar.name.toUpperCase(), '#9aa8c4');
+      } else {
+        run.log.push(c.name + ' was hurt.');
+      }
     } else if (won && c.injured) {
       c.injured = false;
       run.log.push(c.name + ' recovered.');
@@ -2332,16 +2375,29 @@ const COURSES = [
   { id: 'frost', name: 'THE DEEP COLD', short: 'COLD', col: '#8fe3ff',
     text: 'Frost cards on every table, and the front of every wave walks in already carrying Frost 1.',
     match: (c) => c.tribe === 'frost', arrive: (g, u) => { if (u.col === 0) addStatus(g, u, 'frost', 1); } },
+  /* SCRAP WAS GEAR, MINUS A RULE.
+
+     Turned up to 600 runs an arm, Scrap read 30% and Gear 37% against a 34%
+     baseline for declaring no course at all — and the reason was sitting in
+     plain text: Scrap's entire rule was "the first gear each fight is free",
+     and Gear had that rule AND gear going back into the deck. One course was a
+     strict subset of another, so of course it measured worse than nothing.
+
+     So the free gear is Scrap's alone and recycling is Gear's alone — tempo
+     against value, which is a choice — and Scrap gets a second rule of its own.
+     It is the tribe that patches things back together, and the game just grew a
+     thing to be patched: the scar a warden takes when it falls while already
+     hurt. On the Scrap Trail it never does. */
   { id: 'scrap', name: 'THE SCRAP TRAIL', short: 'SCRAP', col: '#c9b28a',
-    text: 'Scrap cards on every table. The first gear you use each fight does not cost the turn.',
-    match: (c) => c.tribe === 'scrap', freeItem: true },
+    text: 'Scrap cards on every table, the first gear you use each fight does not cost the turn, and a warden that goes down comes back patched rather than hurt.',
+    match: (c) => c.tribe === 'scrap', freeItem: true, patched: true },
   { id: 'line', name: 'A FULL LINE', short: 'BODIES', col: '#7de08f',
     text: 'Wardens on every table, a packed board never costs your line its warmth, and every warden you set down arrives with Shell 2.',
     match: (c) => c.type === 'unit', crowdproof: true, deploy: (g, u) => addStatus(g, u, 'shell', 2) },
   /* And the two that sat at the bottom get the other half of the levelling. */
   { id: 'pack', name: 'A HEAVY PACK', short: 'GEAR', col: '#c9a6ff',
-    text: 'Gear on every table, gear you use goes back into the deck, and the first one each fight is free.',
-    match: (c) => c.type === 'item', recycle: true, freeItem: true },
+    text: 'Gear on every table, and every piece of gear you use goes back into the deck instead of the discard.',
+    match: (c) => c.type === 'item', recycle: true },
 ];
 const courseOf = (run) => (run && run.course ? COURSES.find((x) => x.id === run.course) : null);
 /* Priced so that a course is roughly two cards' worth of scrip, and a redeal
@@ -5657,13 +5713,30 @@ function drawTrail(c, t) {
   const rd = caravanRead(run);
   // Low and to the left, under the road rather than across it: the trail's
   // first stone and the caravan itself both live in the top-left corner.
-  const pw = 232, ph = 60 + rd.length * 22, px = SAFE + 6, py = VH - 246;
+  const pw = 232, ph = 74 + rd.length * 22, px = SAFE + 6, py = VH - 260;
   panel(c, px, py, pw, ph, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
   txt(c, 'THE CARAVAN', px + 14, py + 18, 15, '#a8c8ea', 'left', 'd');
   const crs = courseOf(run);
   if (crs) txt(c, crs.name, px + pw - 14, py + 18, 11, crs.col, 'right', 'd');
-  txt(c, 'TEMPERED ' + tempered(run) + '/' + TEMPER_CAP, px + pw - 14, py + ph - 19, 10.5,
+  txt(c, 'TEMPERED ' + tempered(run) + '/' + TEMPER_CAP, px + pw - 14, py + ph - 15, 10.5,
     tempered(run) >= TEMPER_CAP ? '#7e97b8' : C.gold, 'right', 't');
+  /* AND WHAT THE FELL MADE OF IT.
+
+     "The fell answers the caravan" has been the spine of the difficulty curve
+     for five iterations and the player has never been able to see it — the
+     checklist above is a proxy for what the caravan WANTS, not for what the
+     trail made of what it has. Playing a run start to finish, the reading goes
+     from a third under the bar to a little over it, and watching that number
+     close is the clearest picture of progress in the game. It was in a debug
+     tool. It belongs on the screen. */
+  {
+    const ans = Math.round(fellAnswer(run) * 100);
+    const cold = ans <= -5, hot = ans >= 5;
+    const col = cold ? '#8fe0a0' : hot ? '#ff9aa5' : '#ffd166';
+    txt(c, cold ? 'THE FELL HOLDS BACK' : hot ? 'THE FELL HAS RISEN' : 'LEVEL WITH THE FELL',
+      px + 14, py + ph - 31, 10.5, col, 'left', 't');
+    txt(c, (ans > 0 ? '+' : '') + ans + '%', px + pw - 14, py + ph - 31, 11, col, 'right', 'd');
+  }
   rd.forEach((r, i) => {
     const yy = py + 44 + i * 22;
     txt(c, r.ok ? '✓' : '!', px + 16, yy, 14, r.ok ? '#7de08f' : '#ffd166', 'center', 'd');
@@ -5968,6 +6041,23 @@ const TUTORIAL = [
     // …with a way out, because the warden it asks for can die in the front row
     // it just asked you to put them in
     done: (g) => playerUnits(g).some((u) => u.col === 0 && !u.leader) || g.battle.turn >= 6 },
+  /* THE HABIT THE GUIDE NEVER MENTIONED.
+
+     Denying schemes has been at or near the top of the fight ablation for four
+     rounds — the single most valuable thing a player can learn to do in a
+     fight — and reading the guide in order, as a new player, it is not in here
+     at all. Nine hints about deploying, counters, the front row, the room rule,
+     the bell and the waves, and nothing whatsoever about the one line of red
+     text a foe puts on the table a turn before it does something to you.
+
+     So it is a hint, and like every other hint that works it names an ACTION
+     and clears when the action lands: kill it, freeze it, or take away whatever
+     the scheme needed. The way out is a turn count, because the fight may not
+     hand you the tools and a hint you cannot clear is a hint you resent. */
+  { id: 'scheme', text: 'Red text under a foe is what it does NEXT turn. Kill it, freeze it, or take away what it needs, and it wastes the turn.',
+    hold: true,
+    when: (g) => g.battle.units.some((u) => u.side === 'e' && u.alive && u.plot),
+    done: (g) => (g.battle.denied || 0) > 0 || g.battle.turn >= 12 },
   { id: 'room', text: 'Keep one slot empty and the whole line mends every turn. Fill all six and the cold gets into somebody.',
     when: (g) => playerUnits(g).length >= 2,
     done: (g) => freeSlots(g, 'p').length > 0 && g.battle.turn >= 3 },
@@ -5981,6 +6071,11 @@ const TUTORIAL = [
     when: (g) => g.battle.waves && g.battle.waves.length, done: (g) => (g.battle.waveNo || 1) >= 2 },
 ];
 
+/* How long a held hint waits for its moment before giving up on it, in seconds
+   of fight. Deliberately generous — a schemer commits to something every two or
+   three turns, so at any human pace this is never reached; what it is for is
+   the fight where the schemer died in the first exchange. */
+const HOLD_GIVEUP = 45;
 function tutStep(g, dt) {
   const t = g.tut;
   if (!t || t.over) return;
@@ -5988,9 +6083,32 @@ function tutStep(g, dt) {
   t.t += dt;
   // skip anything that does not apply to the fight in front of us
   let guard = 0;
+  t.hold = false;
   while (t.i < TUTORIAL.length && guard++ < 12) {
     const h = TUTORIAL[t.i];
-    if (h.when && !h.when(g)) { t.i++; t.t = 0; continue; }
+    /* A HELD hint waits for its moment instead of being skipped past it.
+       Everything else in this list describes something permanently true of the
+       fight — there are waves or there are not — so "does not apply, move on"
+       is right for them. A scheme is not like that: it exists for one turn,
+       between the foe committing to it and the foe doing it, and a hint about
+       red text that arrives when there is no red text on the table teaches
+       nobody anything. Walking the opening in the shots, it landed on turn 5
+       with the log already reading "Chillfang lunges at Bramblewick for 6" —
+       the rule explained immediately after the player lost to it. */
+    if (h.when && !h.when(g)) {
+      /* …but not forever. A fight that never lays one — because the schemer
+         died first, or the fight ended — has to let the guide move on, or a
+         held hint becomes a stuck one. The clock is time spent waiting rather
+         than turns elapsed, because waiting can span two fights and a turn
+         count starts over at the bell. */
+      if (h.hold && (t.holdT || 0) < HOLD_GIVEUP) {
+        t.holdT = (t.holdT || 0) + dt;
+        t.hold = true;
+        return;
+      }
+      t.i++; t.t = 0; t.holdT = 0; continue;
+    }
+    t.holdT = 0;
     break;
   }
   if (t.i >= TUTORIAL.length) { finishTutorial(g); return; }
@@ -6013,7 +6131,7 @@ function finishTutorial(g) {
 
 function drawTutorial(c, t) {
   const tut = G.tut;
-  if (!tut || tut.over || G.screen !== 'battle') return;
+  if (!tut || tut.over || tut.hold || G.screen !== 'battle') return;
   const h = TUTORIAL[tut.i];
   if (!h) return;
   // pinned to the top, in whatever gap the HUD and the wave clock leave it
@@ -7569,7 +7687,7 @@ window.FF = {
   UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed, deckLeanings, weightedCards,
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
-  temperable, temperCard, openTemper, tempered, TEMPER_CAP,
+  temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
