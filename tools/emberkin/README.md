@@ -4063,3 +4063,56 @@ desktop one. That is the correct answer and not an obvious one.
     shield in it, and nothing here touches guard or pierce. Every mutant anchor
     re-audited — 88 anchors, none orphaned, none ambiguous. Render suite
     6417 -> 6651 checks.
+
+120. **The alarm that answers "do I need to block?" was answering it with the
+    block already spent** (pass 209).
+    Most of the telegraph was exact, and is pinned rather than assumed. Every
+    plan beat delivers the number it shows:
+
+        sharpen  shows +28   moves the foe's edge by 28
+        brace    shows 44    banks 44 guard
+        aim      shows "a shield will not help"   sets the pierce
+
+    So does the damage range, in the sense its own comment claims. Of 94 driven
+    trainer swings, 10 came in over the shown ceiling and ALL TEN were crits —
+    and the comment beside `intentLethal` says in as many words that a crit is
+    deliberately not counted, because "the chip warns about the swing it is
+    showing you". Measured, recorded, not changed: that is a documented choice,
+    not an accident, and the section now asserts the shape of it (everything
+    over the ceiling is a crit) rather than the absence of overruns.
+
+    What disagreed was the shield. An `aim` beat sets `foePierce`, a pierced hit
+    goes past the bank — `hurtMine` has always known that — and the beat's own
+    line says it out loud on the same screen: *"takes aim. A shield will not be
+    in the way."* `intentThrough` deducted the shield anyway. Driven over 36
+    combinations of damage, guard, shield and pierce, twelve disagreed, and all
+    twelve were pierced:
+
+        raw 30, guard 0, shield 40, aimed   chip said "0-0 through"
+                                            the swing took 30
+        at 25 HP on that turn               the alarm said false
+                                            the kin died
+
+    The alarm exists to answer "can I take this, or do I need to block?". It was
+    answering with the block already spent, in the one situation the game had
+    gone out of its way to warn about. The chip stops counting a bank the next
+    hit will ignore; guard still comes off, because `hurtMine` subtracts
+    `mods.def` first and only the SHIELD is bypassed. Re-driven: 0 of 36
+    disagree, and the alarm now fires on exactly the turns that kill.
+
+    `foePierce` being live when the chip is read is DRIVEN rather than read off
+    the code — the beat lands on the foe's turn and the chip is drawn on yours,
+    so the two are stepped in order and both states checked.
+
+    Five planted faults, all five bitten by hand: the bank counted again (15
+    failures), the bank never counted (16), guard forgotten (19), the alarm
+    reading the bottom of the range instead of the top (3), the aim beat
+    announcing a pierce it never sets (2). Three of those also killed checks in
+    an OLDER section — `intentThrough` was already covered there, but never with
+    a pierce in play, which is exactly how this one survived.
+
+    Four sweep mutants aimed at the new section, which reports **30 of 91
+    killed — 33%**. The survivors are the plan-beat and range checks, which
+    none of the four can reach. Every mutant anchor re-audited — 92 anchors,
+    none orphaned, none ambiguous. Suite run three times for stability at 6742
+    each. Render suite 6651 -> 6742 checks.

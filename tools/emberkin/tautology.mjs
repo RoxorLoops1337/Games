@@ -298,6 +298,19 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  { name: 'chip: the bank a pierce ignores is counted again', aims: ['the chip promises the hit that is actually coming'],
+    find: '  const bank = b.foePierce ? 0 : (b.shield || 0);',
+    to: '  const bank = (b.shield || 0);' },
+  { name: 'chip: the bank stops counting at all', aims: ['the chip promises the hit that is actually coming'],
+    find: '  const bank = b.foePierce ? 0 : (b.shield || 0);\n  const cut =',
+    to: '  const bank = 0;\n  const cut =' },
+  { name: 'chip: the alarm reads the bottom of the range', aims: ['the chip promises the hit that is actually coming'],
+    find: '  return through.hi >= b.mine.hp;',
+    to: '  return through.lo >= b.mine.hp;' },
+  { name: 'chip: the aim beat announces a pierce it never sets', aims: ['the chip promises the hit that is actually coming'],
+    find: "    if (p.pierce) { b.foePierce = 1; snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }",
+    to: "    if (p.pierce) { snap(log, `${dispName(b.foe)} ${p.line(n)}`, 'buff', 'foe'); }" },
+
   { name: 'log: thorns bite harder than they say', aims: ['the log says what happened, and only when it happened'],
     find: '  if (b.mods.thorns && b.mine.hp < hpBefore && b.foe.hp > 0) {\n    b.foe.hp = clamp(b.foe.hp - b.mods.thorns, 0, b.foe.max);',
     to: '  if (b.mods.thorns && b.mine.hp < hpBefore && b.foe.hp > 0) {\n    b.foe.hp = clamp(b.foe.hp - b.mods.thorns * 2, 0, b.foe.max);' },
