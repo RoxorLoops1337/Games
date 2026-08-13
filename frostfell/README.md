@@ -48,6 +48,9 @@ anything hanging off the stage, and anything hiding under a notch.
   falls — an extra card each hand, a slower wave clock, a fatter purse.
 - **Events** are forks in the road: a shrine, a stopped caravan, a hot spring,
   a bell in a dead tree, somebody else's fire. Every option is a real trade.
+- **Rest stops** hand out one small permanent kindness; **shrines** take a card
+  overnight and give it back better; **packs** hunt a named way — in the dark
+  behind Shell, at a run, in the briar, starving, or in relays.
 - **Shove** puts what it hits a slot further back. **Crush** hits harder for
   every other body in the target's lane, so a stacked line is a liability.
   **Hoard** grows while a card waits unplayed in your hand.
@@ -78,6 +81,17 @@ The score is a step sequencer, not a loop: three voices over sixteen steps with
 the root, scale and tempo chosen by where you are — and it runs on its own
 randomness, because a run has to play the same way twice.
 
+## Reading a fight
+
+Anything one tick from going off draws a line to what it will hit, and the
+single unit that resolves first wears a NEXT tag — faint by default, bright
+while ORDER is held open. Dragging a piece of gear writes what it would do on
+the things it would do it to, with a cross over anything the hit would kill;
+the numbers come from the same table the card text does, so the preview and the
+effect cannot disagree. A short account of the last few things that happened
+runs down the left. The deck and the used pile are stacks you can tap and read
+— sorted by name, because the draw order is not yours to see.
+
 ## Layout of the source
 
 `index.html` is one script in twelve numbered sections — utilities, palette,
@@ -85,9 +99,13 @@ statuses, card data, state, the battle engine, the run layer, juice, rendering,
 input, audio, boot. The section index sits at the top of the script.
 
 Nothing is loaded from disk. Every creature in the game is drawn by one
-procedural renderer (`drawCreature`) from a recipe — silhouette, ears, mouth,
-markings, props — so the whole cast comes out of the same sketchbook and scales
-to any screen without a single image file.
+procedural renderer (`drawCreature`) from a recipe — silhouette, surface, ears,
+mouth, markings, props, and an idle — so the whole cast comes out of the same
+sketchbook and scales to any screen without a single image file. Fur grows
+tufts along its underside, ice takes flat facets, metal gets one specular band
+and a row of rivets. A creature paws the ground, shivers, sways, hovers or
+breathes depending on what it is, and it comes apart on death the same way:
+ice shatters, metal falls over, fur goes up in a puff.
 
 ## The typefaces
 

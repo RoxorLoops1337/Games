@@ -52,6 +52,34 @@ section('every screen draws');
   G.screen = 'camp';
   frame(2); drew('camp draws');
 
+  G.ui.rest = { offer: FF.BLESSINGS.slice(0, 3).map((x) => x.id) };
+  G.screen = 'rest';
+  frame(2); drew('a rest stop draws');
+  eq(FF.hits().filter((h) => h.id === 'restPick').length, 3, 'with three blessings to take');
+
+  G.screen = 'shrine';
+  frame(2); drew('the shrine draws');
+  ok(FF.hits().some((h) => h.id === 'shrineGive'), 'and offers the step');
+
+  // a fight in mid-swing: telegraphs, next-up marker, log lines and a drag preview
+  withRun(FF, 'frost', 12);
+  FF.enterNode(G, 0);
+  frame(24);
+  FF.playerUnits(G).forEach((u) => { u.cnt = 1; });
+  FF.enemyUnits(G).forEach((u) => { u.cnt = 1; });
+  FF.logLine(G, 'something happened', '#fff');
+  const itemIdx = G.battle.hand.findIndex((cd) => cd.type === 'item');
+  if (itemIdx >= 0) {
+    const hh = FF.hits().find((h) => h.id === 'hand' && h.data === itemIdx);
+    if (hh) {
+      FF.onDown(hh.x + 10, hh.y + 10);
+      const target = FF.hits().find((h) => h.id === 'unit');
+      FF.onMove(target.x + 40, target.y + 40);
+      frame(2); drew('a battle mid-drag draws its telegraphs, marker, log and prediction');
+      FF.onUp(-500, -500);
+    }
+  }
+
   // a warden wearing charms and standing under a banner: the busiest unit
   withRun(FF, 'scrap', 9);
   FF.attachCharm(G.run.deck[0], FF.CHARMS.keencharm);
@@ -132,8 +160,10 @@ section('what you can see is what you can touch');
   withRun(FF, 'hearth', 5);
   FF.enterNode(G, 0);
   frame(2);
+  ok(!FF.hits().some((h) => h.id === 'hand'), 'a card still dealing cannot be grabbed');
+  frame(20);
   const hits = FF.hits();
-  ok(hits.some((h) => h.id === 'hand'), 'the hand is touchable');
+  ok(hits.some((h) => h.id === 'hand'), 'once it lands in the fan it is touchable');
   ok(hits.some((h) => h.id === 'bell'), 'the bell is touchable');
   ok(hits.some((h) => h.id === 'slot'), 'empty slots are drop targets');
   ok(hits.some((h) => h.id === 'unit'), 'units are touchable');
@@ -179,15 +209,16 @@ section('the shape of a phone');
     const D = FF.dims();
     ok(D.VW >= 1180 && D.VW <= 1760, `${w}x${h}: the stage stays inside its bounds (${D.VW})`);
 
-    for (const scr of ['title', 'trail', 'battle', 'shop', 'camp', 'event', 'reward', 'leader', 'collection', 'victory']) {
+    for (const scr of ['title', 'trail', 'battle', 'shop', 'camp', 'event', 'rest', 'shrine', 'reward', 'leader', 'collection', 'victory']) {
       withRun(FF, 'hearth', 3);
       if (scr === 'battle') FF.enterNode(G, 0);
       else if (scr === 'shop') G.ui.shop = FF.rollShop(G);
       else if (scr === 'event') G.ui.event = { def: FF.EVENTS[1] };
       else if (scr === 'reward') G.ui.reward = FF.rollReward(G, 'boss');
       else if (scr === 'leader') G.ui.pick = { tribe: 'frost', winters: ['keen'] };
+      else if (scr === 'rest') G.ui.rest = { offer: FF.BLESSINGS.slice(0, 3).map((x) => x.id) };
       G.screen = scr;
-      frame(2);
+      frame(scr === 'battle' ? 22 : 2);
       let small = [], off = [], edge = [];
       for (const hh of FF.hits()) {
         if (hh.w < 40 || hh.h < 40) small.push(hh.id + ' ' + Math.round(hh.w) + 'x' + Math.round(hh.h));

@@ -794,4 +794,163 @@ section('the hardest winter carried');
   eq(G2.meta.winter.frost, 5, 'a kinder crossing does not overwrite a harder one');
 }
 
+
+/* -------------------------------------------------------- packs that hunt */
+section('elite modifiers');
+{
+  const run = withRun(FF, 'hearth', 8080);
+  run.zone = 1; run.step = 3;
+  const b = FF.startBattle(G, 'elite');
+  ok(!!b.mod, 'a pack always hunts some particular way');
+  const em = FF.eliteMod(b);
+  ok(!!em && !!em.name && !!em.text, 'and the way it hunts has a name and a line of copy');
+  ok(b.banner.sub.indexOf(em.name) >= 0, 'which the banner says before the first bell');
+
+  // whatever it is, it is on the foes that arrived
+  if (em.each) {
+    const marked = FF.enemyUnits(G).filter((u) => Object.keys(u.st).length > 0);
+    ok(marked.length > 0, em.id + ' actually marks the pack');
+  }
+
+  // a starving pack feeds itself on its own losses
+  const run2 = withRun(FF, 'hearth', 9);
+  run2.zone = 1;
+  const b2 = FF.startBattle(G, 'elite');
+  b2.mod = 'starved';
+  const foesNow = FF.enemyUnits(G);
+  if (foesNow.length > 1) {
+    const before = foesNow.reduce((n, u) => n + u.atk, 0);
+    FF.hurt(G, foesNow[0], 999, null);
+    const after = FF.enemyUnits(G).reduce((n, u) => n + u.atk, 0);
+    ok(after > before - foesNow[0].atk, 'one of the survivors is fed by a fallen packmate');
+  }
+
+  // and a pack pays better than a skirmish
+  const r3 = withRun(FF, 'hearth', 5150);
+  r3.zone = 1;
+  FF.startBattle(G, 'elite');
+  G.battle.mod = 'dark';
+  G.battle.units.filter((u) => u.side === 'e').forEach((u) => { u.alive = false; });
+  G.battle.waves = [];
+  const goldBefore = r3.gold;
+  FF.endBattle(G, true);
+  ok(r3.gold - goldBefore > 34, 'a modified pack pays a premium');
+}
+
+/* ------------------------------------------------------------- rest stop */
+section('rest stops and shrines');
+{
+  ok(FF.BLESSINGS.length >= 5, 'there are blessings to be had');
+  for (let i = 0; i < FF.BLESSINGS.length; i++) {
+    const run = withRun(FF, 'frost', 400 + i);
+    G.ui.rest = { offer: [FF.BLESSINGS[i].id] };
+    G.screen = 'rest';
+    const step = run.step;
+    FF.press('restPick', 0);
+    let guard = 0;
+    while (FF.UI.choose && guard++ < 4) { const cb = FF.UI.choose.onPick; cb(0); }
+    FF.UI.choose = null;
+    ok(G.screen === 'trail' || run.step > step, FF.BLESSINGS[i].id + ' resolves and sends you on');
+  }
+
+  // the shrine gives a card back better than it was
+  const run = withRun(FF, 'hearth', 77);
+  G.screen = 'shrine';
+  const target = run.deck[0];
+  const atk0 = target.atk, hp0 = target.hp;
+  FF.press('shrineGive');
+  ok(!!FF.UI.choose, 'it asks which card');
+  FF.UI.choose.onPick(run.deck.indexOf(target));
+  FF.UI.choose = null;
+  eq(target.atk, atk0 + 2, 'blessed means two more attack');
+  eq(target.hp, hp0 + 3, 'and three more health');
+  FF.rebuildCard(target);
+  eq(target.atk, atk0 + 2, 'and it survives a rebuild');
+
+  // through a save, too
+  const store = {};
+  const FF2 = loadGame(store);
+  const r2 = FF2.newRun(FF2.G, 'hearth', 5);
+  r2.deck[0].charms.push('blessed');
+  r2.deck[0].blessed = true;
+  FF2.rebuildCard(r2.deck[0]);
+  FF2.saveRun(r2);
+  const FF3 = loadGame(store);
+  const back = FF3.loadRun(FF3.G);
+  eq(back.deck[0].blessed, true, 'a blessing survives a reload');
+  eq(back.deck[0].atk, r2.deck[0].atk, 'with the stats it earned');
+}
+
+/* ------------------------------------------------------------- previews -- */
+section('what the gear says it will do');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+  const t1 = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 40, atk: 0 } });
+  const t2 = place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 40, atk: 0 } });
+
+  // the preview and the effect must agree, or the prediction is a lie
+  const pick2 = FF.mkCard('icepick');
+  const pre = FF.previewOf(G, pick2, t1);
+  eq(pre.length, 1, 'an icepick preview names one target');
+  const before = t1.hp;
+  b.hand = [pick2];
+  FF.playCard(G, 0, t1);
+  eq(before - t1.hp, pre[0].dmg, 'and the number it promised is the number it dealt');
+
+  const av = FF.mkCard('avalanche');
+  const pre2 = FF.previewOf(G, av, t1);
+  eq(pre2.length, 2, 'an avalanche preview covers the whole lane');
+  const h1 = t1.hp, h2 = t2.hp;
+  b.hand = [av];
+  FF.playCard(G, 0, t1);
+  eq(h1 - t1.hp, pre2[0].dmg, 'front of the lane matches');
+  eq(h2 - t2.hp, pre2[1].dmg, 'and so does the back');
+
+  // every piece of gear either previews or is honestly silent
+  let missing = [];
+  for (const c of Object.values(FF.CARDS)) {
+    if (c.type !== 'item') continue;
+    if (!FF.PREVIEW[c.id]) missing.push(c.id);
+  }
+  eq(missing.join(','), '', 'every piece of gear knows what to promise');
+}
+
+/* ----------------------------------------------------------------- log --- */
+section('the account of the turn');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+  b.log = [];
+  const a = place(FF, 'p', 'snowpup', 0, 0, { unit: { atk: 3 } });
+  const v = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 2, atk: 0 } });
+  FF.triggerUnit(G, a);
+  ok(b.log.length >= 2, 'a hit and a death both get a line');
+  ok(b.log.some((l) => l.text.indexOf('falls') >= 0), 'and the death says so');
+  for (let i = 0; i < 20; i++) FF.logLine(G, 'line ' + i);
+  ok(b.log.length <= 6, 'the account stays short enough to read');
+}
+
+/* --------------------------------------------------------------- piles --- */
+section('reading the piles');
+{
+  withRun(FF, 'frost', 606);
+  FF.startBattle(G, 'fight');
+  const b = G.battle;
+  b.draw = [FF.mkCard('snowpup'), FF.mkCard('cinderpup'), FF.mkCard('rimefox')];
+  FF.press('deckPile');
+  ok(!!FF.UI.choose, 'the deck can be read');
+  const names = FF.UI.choose.items.map((i) => i.card.name);
+  eq(names.join(','), names.slice().sort().join(','), 'in an order that gives nothing away');
+  FF.UI.choose = null;
+
+  b.discard = [];
+  FF.press('discardPile');
+  eq(FF.UI.choose, null, 'an empty pile has nothing to show');
+}
+
 done('frostfell');

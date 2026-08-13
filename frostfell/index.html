@@ -242,181 +242,181 @@ const def = (o) => { CARDS[o.id] = o; return o; };
 /* leaders ---------------------------------------------------------------- */
 def({ id: 'bramblewick', name: 'Bramblewick', type: 'unit', leader: true, tribe: 'hearth',
   hp: 32, atk: 4, cnt: 3, rare: 0,
-  art: A('#e8873a', '#ffd9a8', { shape: 'tall', ears: 'round', mouth: 'grin', acc: 'lantern', accCol: '#ffd166', pat: 'none' }),
+  art: A('#e8873a', '#ffd9a8', { skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'grin', acc: 'lantern', accCol: '#ffd166', pat: 'none' }),
   kw: {}, text: 'When it triggers, hands another warden Spice 1.',
   hooks: { trigger: (g, u) => { const t = pick(allies(g, u).filter((x) => x !== u)); if (t) addStatus(g, t, 'spice', 1); } } });
 
 def({ id: 'vesper', name: 'Vesper Kaal', type: 'unit', leader: true, tribe: 'frost',
   hp: 30, atk: 3, cnt: 2, rare: 0,
-  art: A('#7fc2ef', '#dff0ff', { shape: 'tall', ears: 'horns', mouth: 'flat', acc: 'cloak', accCol: '#2b5f96' }),
+  art: A('#7fc2ef', '#dff0ff', { skin:'ice',idle:'sway', shape: 'tall', ears: 'horns', mouth: 'flat', acc: 'cloak', accCol: '#2b5f96' }),
   kw: {}, text: 'Her hits leave Frost 1.',
   hooks: { hit: (g, u, tgt) => addStatus(g, tgt, 'frost', 1) } });
 
 def({ id: 'gundy', name: 'Gundy Bolt', type: 'unit', leader: true, tribe: 'scrap',
   hp: 34, atk: 3, cnt: 3, rare: 0,
-  art: A('#c9b28a', '#f0dfba', { shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'helm', accCol: '#8fa2bd' }),
+  art: A('#c9b28a', '#f0dfba', { skin:'metal',idle:'twitch', shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'helm', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback. Starts every fight with Shell 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 3) } });
 
 def({ id: 'stranger', name: 'The Stranger', type: 'unit', leader: true, tribe: 'wyrd',
   hp: 28, atk: 4, cnt: 3, rare: 0,
-  art: A('#8f7fb0', '#ddd0f0', { shape: 'tall', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a' }),
+  art: A('#8f7fb0', '#ddd0f0', { idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a' }),
   kw: {}, text: 'When she triggers, she takes the counter off whichever warden is slowest.',
   hooks: { trigger: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => b.cnt - a.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
 
 /* hearthkin -------------------------------------------------------------- */
 def({ id: 'cinderpup', name: 'Cinderpup', type: 'unit', tribe: 'hearth', hp: 7, atk: 3, cnt: 2, rare: 1,
-  art: A('#f2913c', '#ffdcae', { shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'spots', patCol: '#d1691f' }),
+  art: A('#f2913c', '#ffdcae', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'spots', patCol: '#d1691f' }),
   kw: {}, text: 'Its bite leaves Ember 2.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'ember', 2) } });
 
 def({ id: 'kettlebeak', name: 'Kettlebeak', type: 'unit', tribe: 'hearth', hp: 9, atk: 2, cnt: 3, rare: 1,
-  art: A('#e2c46a', '#fff0c0', { shape: 'round', ears: 'none', mouth: 'beak', acc: 'kettle', accCol: '#9aa7bd' }),
+  art: A('#e2c46a', '#fff0c0', { idle:'twitch', shape: 'round', ears: 'none', mouth: 'beak', acc: 'kettle', accCol: '#9aa7bd' }),
   kw: {}, text: 'On deploy, heals every warden 2.',
   hooks: { deploy: (g, u) => allies(g, u).forEach((a) => heal(g, a, 2)) } });
 
 def({ id: 'tindercub', name: 'Tindercub', type: 'unit', tribe: 'hearth', hp: 11, atk: 4, cnt: 3, rare: 2,
-  art: A('#d9702e', '#ffcf9a', { shape: 'squat', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ff5566' }),
+  art: A('#d9702e', '#ffcf9a', { skin:'fur',idle:'paw', shape: 'squat', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ff5566' }),
   kw: { frenzy: 1 }, text: 'Frenzy 1.' });
 
 def({ id: 'sootling', name: 'Sootling', type: 'unit', tribe: 'hearth', hp: 5, atk: 2, cnt: 1, rare: 1,
-  art: A('#6b5a63', '#c8b2b8', { shape: 'small', ears: 'pointy', mouth: 'flat', pat: 'none' }),
+  art: A('#6b5a63', '#c8b2b8', { skin:'fur',idle:'shiver', shape: 'small', ears: 'pointy', mouth: 'flat', pat: 'none' }),
   kw: { aimless: 1 }, text: 'Aimless. When it falls, gives its killer Ember 3.',
   hooks: { death: (g, u, killer) => { if (killer) addStatus(g, killer, 'ember', 3); } } });
 
 def({ id: 'hearthmoth', name: 'Hearthmoth', type: 'unit', tribe: 'hearth', hp: 6, atk: 2, cnt: 2, rare: 2,
-  art: A('#f0b45c', '#ffe7bd', { shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffd9a0' }),
+  art: A('#f0b45c', '#ffe7bd', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffd9a0' }),
   kw: { longshot: 1 }, text: 'Longshot. When it triggers, heals the worst-off warden 2.',
   hooks: { trigger: (g, u) => { const l = allies(g, u).slice().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (l) heal(g, l, 2); } } });
 
 def({ id: 'warmroot', name: 'Warmroot', type: 'unit', tribe: 'hearth', hp: 14, atk: 2, cnt: 4, rare: 2,
-  art: A('#8a6a3f', '#d9bb86', { shape: 'tall', ears: 'antler', mouth: 'flat', accCol: '#6fd08c' }),
+  art: A('#8a6a3f', '#d9bb86', { idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', accCol: '#6fd08c' }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, every other warden gains Regen 1.',
   hooks: { trigger: (g, u) => allies(g, u).forEach((a) => { if (a !== u) addStatus(g, a, 'regen', 1); }) } });
 
 def({ id: 'flarehound', name: 'Flarehound', type: 'unit', tribe: 'hearth', hp: 8, atk: 5, cnt: 3, rare: 3,
-  art: A('#ff7a2f', '#ffd0a0', { shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#a83b12' }),
+  art: A('#ff7a2f', '#ffd0a0', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#a83b12' }),
   kw: { barrage: 1 }, text: 'Barrage. Its hits leave Ember 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'ember', 1) } });
 
 /* frostborn -------------------------------------------------------------- */
 def({ id: 'rimefox', name: 'Rimefox', type: 'unit', tribe: 'frost', hp: 7, atk: 3, cnt: 2, rare: 1,
-  art: A('#bfe4ff', '#ffffff', { shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'tips', patCol: '#5aa8d8' }),
+  art: A('#bfe4ff', '#ffffff', { skin:'fur',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'tips', patCol: '#5aa8d8' }),
   kw: {}, text: 'Its bite leaves Frost 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'frost', 1) } });
 
 def({ id: 'chillfin', name: 'Chillfin', type: 'unit', tribe: 'frost', hp: 10, atk: 2, cnt: 3, rare: 1,
-  art: A('#6fb6e0', '#cdeeff', { shape: 'round', ears: 'fin', mouth: 'flat', pat: 'none' }),
+  art: A('#6fb6e0', '#cdeeff', { skin:'ice',idle:'sway', shape: 'round', ears: 'fin', mouth: 'flat', pat: 'none' }),
   kw: {}, text: 'On deploy, Frost 2 on the foe opposite.',
   hooks: { deploy: (g, u) => { const t = frontTarget(g, u); if (t) addStatus(g, t, 'frost', 2); } } });
 
 def({ id: 'hoarfrog', name: 'Hoarfrog', type: 'unit', tribe: 'frost', hp: 12, atk: 2, cnt: 3, rare: 2,
-  art: A('#7fd0b0', '#dff7ea', { shape: 'squat', ears: 'none', mouth: 'wide', eyes: 'big' }),
+  art: A('#7fd0b0', '#dff7ea', { idle:'twitch', shape: 'squat', ears: 'none', mouth: 'wide', eyes: 'big' }),
   kw: { soak: 1 }, text: 'Soak. Gains Shell 2 when it triggers.',
   hooks: { trigger: (g, u) => addStatus(g, u, 'shell', 2) } });
 
 def({ id: 'glacierling', name: 'Glacierling', type: 'unit', tribe: 'frost', hp: 9, atk: 3, cnt: 3, rare: 2,
-  art: A('#9fd8ff', '#eaf7ff', { shape: 'tall', ears: 'shard', mouth: 'flat', pat: 'shards', patCol: '#5aa8d8' }),
+  art: A('#9fd8ff', '#eaf7ff', { skin:'ice',idle:'shiver', shape: 'tall', ears: 'shard', mouth: 'flat', pat: 'shards', patCol: '#5aa8d8' }),
   kw: {}, text: 'Whenever a foe is Frosted, it gains 1 attack.',
   hooks: { frosted: (g, u) => { u.atk += 1; } } });
 
 def({ id: 'snowbeard', name: 'Snowbeard', type: 'unit', tribe: 'frost', hp: 16, atk: 3, cnt: 4, rare: 3,
-  art: A('#8fa8c8', '#e8f2ff', { shape: 'tall', ears: 'round', mouth: 'beard', acc: 'helm', accCol: '#5f7fa8' }),
+  art: A('#8fa8c8', '#e8f2ff', { skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'beard', acc: 'helm', accCol: '#5f7fa8' }),
   kw: { smack: 1, soak: 1 }, text: 'Soak. Smackback.' });
 
 def({ id: 'frostmite', name: 'Frostmite', type: 'unit', tribe: 'frost', hp: 4, atk: 1, cnt: 1, rare: 1,
-  art: A('#cfeaff', '#ffffff', { shape: 'small', ears: 'antenna', mouth: 'flat', eyes: 'big' }),
+  art: A('#cfeaff', '#ffffff', { skin:'ice',idle:'shiver', shape: 'small', ears: 'antenna', mouth: 'flat', eyes: 'big' }),
   kw: {}, text: 'When it falls, Frost 2 on every foe.',
   hooks: { death: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 2)) } });
 
 def({ id: 'galewisp', name: 'Galewisp', type: 'unit', tribe: 'frost', hp: 6, atk: 2, cnt: 2, rare: 3,
-  art: A('#cdf1ff', '#ffffff', { shape: 'wisp', ears: 'none', mouth: 'none', eyes: 'slit' }),
+  art: A('#cdf1ff', '#ffffff', { idle:'hover', shape: 'wisp', ears: 'none', mouth: 'none', eyes: 'slit' }),
   kw: { longshot: 1, aimless: 1 }, text: 'Longshot. Aimless. Its hits leave Slow 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'slow', 1) } });
 
 /* scrapjaw --------------------------------------------------------------- */
 def({ id: 'clunkbot', name: 'Clunkbot', type: 'unit', tribe: 'scrap', hp: 8, atk: 0, cnt: 2, rare: 1,
-  art: A('#a9b6c9', '#dce6f2', { shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'gear', accCol: '#c9b28a' }),
+  art: A('#a9b6c9', '#dce6f2', { skin:'metal',idle:'twitch', shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'gear', accCol: '#c9b28a' }),
   kw: { explode: 5 }, text: 'Blast 5. Never swings.' });
 
 def({ id: 'springjaw', name: 'Springjaw', type: 'unit', tribe: 'scrap', hp: 9, atk: 4, cnt: 3, rare: 2,
-  art: A('#b8a071', '#e8d9b4', { shape: 'blob', ears: 'none', mouth: 'trap', acc: 'gear', accCol: '#8fa2bd' }),
+  art: A('#b8a071', '#e8d9b4', { skin:'metal',idle:'paw', shape: 'blob', ears: 'none', mouth: 'trap', acc: 'gear', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback.' });
 
 def({ id: 'bellhammer', name: 'Bellhammer', type: 'unit', tribe: 'scrap', hp: 13, atk: 5, cnt: 4, rare: 3,
-  art: A('#9aa7bd', '#d6e0ee', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'hammer', accCol: '#c9b28a' }),
+  art: A('#9aa7bd', '#d6e0ee', { skin:'metal',idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'hammer', accCol: '#c9b28a' }),
   kw: {}, text: 'On deploy, every warden ticks one counter.',
   hooks: { deploy: (g, u) => allies(g, u).forEach((a) => { if (a !== u) a.cnt = Math.max(0, a.cnt - 1); }) } });
 
 def({ id: 'scrapcrow', name: 'Scrapcrow', type: 'unit', tribe: 'scrap', hp: 6, atk: 2, cnt: 2, rare: 1,
-  art: A('#6d6a78', '#b6b1c4', { shape: 'tall', ears: 'none', mouth: 'beak', wings: '#4d4a58' }),
+  art: A('#6d6a78', '#b6b1c4', { idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#4d4a58' }),
   kw: { aimless: 1 }, text: 'Aimless. When it falls, pays 3 scrip.',
   hooks: { death: (g, u) => { g.run.gold += 3; } } });
 
 def({ id: 'ratchet', name: 'Ratchet', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
-  art: A('#c9b28a', '#f0dfba', { shape: 'round', ears: 'none', mouth: 'grin', acc: 'gear', accCol: '#8fa2bd' }),
+  art: A('#c9b28a', '#f0dfba', { skin:'metal',idle:'twitch', shape: 'round', ears: 'none', mouth: 'grin', acc: 'gear', accCol: '#8fa2bd' }),
   kw: {}, text: 'When a warden falls, it gains 2 attack.',
   hooks: { allyDeath: (g, u) => { u.atk += 2; } } });
 
 def({ id: 'emberwick', name: 'Emberwick', type: 'unit', tribe: 'hearth', hp: 6, atk: 3, cnt: 2, rare: 2,
-  art: A('#ffb35c', '#fff0cf', { shape: 'small', ears: 'pointy', mouth: 'flat', eyes: 'big', pat: 'tips', patCol: '#e06a1c' }),
+  art: A('#ffb35c', '#fff0cf', { skin:'fur',idle:'shiver', shape: 'small', ears: 'pointy', mouth: 'flat', eyes: 'big', pat: 'tips', patCol: '#e06a1c' }),
   kw: {}, text: 'When it triggers, Ember 1 on every foe.',
   hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'ember', 1)) } });
 
 def({ id: 'bellowsbear', name: 'Bellowsbear', type: 'unit', tribe: 'hearth', hp: 15, atk: 4, cnt: 4, rare: 3,
-  art: A('#c4702e', '#ffcf9a', { shape: 'boss', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ffd166' }),
+  art: A('#c4702e', '#ffcf9a', { skin:'fur',idle:'breathe',acc:'bellcollar',accCol:'#8a4a3f', shape: 'boss', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ffd166' }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, it mends itself 3.',
   hooks: { trigger: (g, u) => heal(g, u, 3) } });
 
 /* frostborn, later ------------------------------------------------------- */
 def({ id: 'icewright', name: 'Icewright', type: 'unit', tribe: 'frost', hp: 8, atk: 2, cnt: 3, rare: 2,
-  art: A('#8fc8e8', '#e8f7ff', { shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
+  art: A('#8fc8e8', '#e8f7ff', { skin:'ice',idle:'twitch',acc:'goggles',accCol:'#5f7fa8', shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
   kw: {}, text: 'When it triggers, Shell 3 on the warden in front of it.',
   hooks: { trigger: (g, u) => { const l = laneOf(g, u.side, u.lane).filter((x) => x !== u && x.col < u.col); const t = l[0] || allies(g, u).find((x) => x !== u); if (t) addStatus(g, t, 'shell', 3); } } });
 
 def({ id: 'snowhare', name: 'Snowhare', type: 'unit', tribe: 'frost', hp: 5, atk: 2, cnt: 1, rare: 1,
-  art: A('#f0f8ff', '#ffffff', { shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big' }),
+  art: A('#f0f8ff', '#ffffff', { skin:'fur',idle:'twitch', shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big' }),
   kw: {}, text: 'Deploys with Swift 1 — it swings almost at once.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'swift', 1) } });
 
 /* scrapjaw, later -------------------------------------------------------- */
 def({ id: 'boltfinch', name: 'Boltfinch', type: 'unit', tribe: 'scrap', hp: 4, atk: 2, cnt: 2, rare: 1,
-  art: A('#8fa2bd', '#dce6f2', { shape: 'small', ears: 'none', mouth: 'beak', wings: '#6d7a8f' }),
+  art: A('#8fa2bd', '#dce6f2', { skin:'metal',idle:'hover', shape: 'small', ears: 'none', mouth: 'beak', wings: '#6d7a8f' }),
   kw: { longshot: 1 }, text: 'Longshot. On deploy, ticks a warden\'s counter down 1.',
   hooks: { deploy: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => a.cnt - b.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
 
 def({ id: 'junkpile', name: 'Junkpile', type: 'unit', tribe: 'scrap', hp: 13, atk: 0, cnt: 3, rare: 2,
-  art: A('#8f8a7a', '#d8d2bc', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'gear', accCol: '#b8a071' }),
+  art: A('#8f8a7a', '#d8d2bc', { skin:'metal',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'gear', accCol: '#b8a071' }),
   kw: { soak: 1, explode: 4 }, text: 'Soak. Blast 4. Never swings.' });
 
 /* neutral ---------------------------------------------------------------- */
 def({ id: 'snowpup', name: 'Snowpup', type: 'unit', tribe: null, hp: 6, atk: 2, cnt: 2, rare: 1,
-  art: A('#e8f2ff', '#ffffff', { shape: 'blob', ears: 'round', mouth: 'smile' }),
+  art: A('#e8f2ff', '#ffffff', { skin:'fur',idle:'paw', shape: 'blob', ears: 'round', mouth: 'smile' }),
   kw: {}, text: 'Plain and willing.' });
 
 def({ id: 'lanternmoth', name: 'Lanternmoth', type: 'unit', tribe: null, hp: 5, atk: 2, cnt: 2, rare: 2,
-  art: A('#d9c58f', '#fff3cf', { shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffe9b0' }),
+  art: A('#d9c58f', '#fff3cf', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffe9b0' }),
   kw: { longshot: 1 }, text: 'Longshot.' });
 
 def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3, cnt: 3, rare: 2,
-  art: A('#a89c86', '#e4dccc', { shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
+  art: A('#a89c86', '#e4dccc', { idle:'sway',acc:'satchel',accCol:'#8a6a3f', shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
   kw: {}, text: 'Every time it triggers, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
 def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt: 3, rare: 2,
-  art: A('#9a9689', '#ded9c8', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', pat: 'shards', patCol: '#6d6a5c' }),
+  art: A('#9a9689', '#ded9c8', { idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', pat: 'shards', patCol: '#6d6a5c' }),
   kw: { crush: 2 }, text: 'Crush 2. The tighter they pack a lane, the harder it lands.' });
 
 def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 7, atk: 2, cnt: 3, rare: 2,
-  art: A('#c9a6ff', '#eee0ff', { shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
+  art: A('#c9a6ff', '#eee0ff', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
   kw: { hoard: 1 }, text: 'Hoard. Every turn it waits in your hand it comes out one point angrier.' });
 
 def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
-  art: A('#b0a48c', '#e8ddc4', { shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
+  art: A('#b0a48c', '#e8ddc4', { skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
   kw: { shove: 1 }, text: 'Shove. What it hits ends up a slot further back.' });
 
 def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3, cnt: 3, rare: 2,
-  art: A('#8fb08f', '#d8ebd6', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
+  art: A('#8fb08f', '#d8ebd6', { idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
   kw: { longshot: 1, soak: 1 }, text: 'Longshot. Soak.' });
 
 /* -- gear (one-shot cards) ------------------------------------------------ */
@@ -510,6 +510,43 @@ def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, t
   art: { kind: 'lantern', col: '#ffd166' }, text: 'Heal 10 and clear every ill.',
   effect: (g, t) => { heal(g, t, 10); ['frost', 'ember', 'weak', 'slow'].forEach((s) => { t.st[s] = 0; }); } });
 
+/* What a piece of gear would do to what you are pointing it at. This is the
+   one place that knows, so the card text, the tooltip and the drag preview can
+   never disagree about it. */
+const PREVIEW = {
+  icepick:    (g, t) => [{ u: t, dmg: 4, tag: 'FROST 1' }],
+  blastcap:   (g, t) => [{ u: t, dmg: 6 }].concat(neighbours(g, t).map((n) => ({ u: n, dmg: 3 }))),
+  snowbomb:   (g, t) => laneOf(g, 'e', t.lane).map((f) => ({ u: f, dmg: 3, tag: 'FROST 1' })),
+  avalanche:  (g, t) => {
+    const l = laneOf(g, 'e', t.lane);
+    const d = 3 + Math.max(0, l.length - 1) * 2;
+    return l.map((f) => ({ u: f, dmg: d }));
+  },
+  grudge:     (g, t, card) => [{ u: t, dmg: 3 + Math.min(HOARD_CAP, (card && card.held) || 0) }],
+  emberflask: (g, t) => [{ u: t, dmg: 0, tag: 'EMBER 4' }],
+  tinderjar:  (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'EMBER 2' })),
+  coldsnap:   (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'FROST 1' })),
+  hush:       (g, t) => [{ u: t, dmg: 0, tag: 'FROST 3' }],
+  hookline:   (g, t) => laneOf(g, 'e', t.lane).map((f) => ({ u: f, dmg: 0, tag: 'HAUL' })),
+  stew:       (g, t) => [{ u: t, dmg: -6, tag: 'MEND 6' }],
+  patchkit:   (g, t) => [{ u: t, dmg: -3, tag: 'SHELL 3' }],
+  lastlight:  (g, t) => [{ u: t, dmg: -10, tag: 'CLEANSE' }],
+  whetstone:  (g, t) => [{ u: t, dmg: 0, tag: 'SPICE 3' }],
+  gearshield: (g, t) => [{ u: t, dmg: 0, tag: 'SHELL 5' }],
+  thornoil:   (g, t) => [{ u: t, dmg: 0, tag: 'THORNS 3' }],
+  bellrope:   (g, t) => [{ u: t, dmg: 0, tag: 'SWIFT 2' }],
+  pryrod:     (g, t) => [{ u: t, dmg: 0, tag: 'COUNTER -2' }],
+  kindling:   (g) => playerUnits(g).map((u) => ({ u, dmg: 0, tag: 'SPICE 1' })),
+  oldmap:     () => [],
+};
+function previewOf(g, card, spot) {
+  const f = PREVIEW[card && card.def];
+  if (!f) return [];
+  const tg = CARDS[card.def].target;
+  if (tg !== 'none' && (!spot || !spot.uid || !spot.alive)) return [];
+  try { return f(g, spot, card) || []; } catch (e) { return []; }
+}
+
 /* -- charms (permanent, attach to a warden between fights) ---------------- */
 const CHARMS = {};
 const charm = (o) => { CHARMS[o.id] = o; o.type = 'charm'; return o; };
@@ -556,6 +593,8 @@ const BELLS = {
 const EXTRAS = {
   heartbell: { id: 'heartbell', name: 'Heart Bell', col: '#ff8b7a', text: '+8 health, rung for at a boss.',
                apply: (c) => { c.hp += 8; } },
+  blessed:   { id: 'blessed', name: 'Blessed', col: '#ffd166', text: 'Left better than it was found: +2 attack, +3 health.',
+               apply: (c) => { c.atk += 2; c.hp += 3; } },
 };
 const chOf = (id) => CHARMS[id] || SCARS[id] || EXTRAS[id];
 
@@ -571,91 +610,91 @@ const FOES = {};
 const foe = (o) => { o.foe = true; o.type = 'unit'; FOES[o.id] = o; return o; };
 
 foe({ id: 'snapfrost', name: 'Snapfrost', hp: 8, atk: 3, cnt: 2, tier: 1,
-  art: A('#8fc6e8', '#dff0ff', { shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }), kw: {}, text: '' });
+  art: A('#8fc6e8', '#dff0ff', { skin:'ice',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }), kw: {}, text: '' });
 foe({ id: 'iciclebat', name: 'Icicle Bat', hp: 5, atk: 2, cnt: 1, tier: 1,
-  art: A('#9f9fd8', '#dcdcff', { shape: 'small', ears: 'pointy', mouth: 'fang', wings: '#6f6fa8', evil: 1 }),
+  art: A('#9f9fd8', '#dcdcff', { idle:'hover', shape: 'small', ears: 'pointy', mouth: 'fang', wings: '#6f6fa8', evil: 1 }),
   kw: { aimless: 1 }, text: 'Aimless.' });
 foe({ id: 'drift', name: 'Drift', hp: 12, atk: 2, cnt: 3, tier: 1,
-  art: A('#cfe4f5', '#ffffff', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', evil: 1 }),
+  art: A('#cfe4f5', '#ffffff', { skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak.' });
 foe({ id: 'frostwolf', name: 'Frostwolf', hp: 11, atk: 4, cnt: 3, tier: 2,
-  art: A('#7fa8c8', '#d8ecff', { shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#40607f', evil: 1 }),
+  art: A('#7fa8c8', '#d8ecff', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#40607f', evil: 1 }),
   kw: {}, text: 'Its bite leaves Frost 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'frost', 1) } });
 foe({ id: 'shardling', name: 'Shardling', hp: 6, atk: 3, cnt: 2, tier: 2,
-  art: A('#a8d8ff', '#eaf7ff', { shape: 'small', ears: 'shard', mouth: 'none', eyes: 'slit', evil: 1 }),
+  art: A('#a8d8ff', '#eaf7ff', { skin:'ice',idle:'shiver', shape: 'small', ears: 'shard', mouth: 'none', eyes: 'slit', evil: 1 }),
   kw: { explode: 4 }, text: 'Blast 4.' });
 foe({ id: 'hailhorn', name: 'Hailhorn', hp: 16, atk: 4, cnt: 4, tier: 2,
-  art: A('#6f8fb0', '#cfe0f0', { shape: 'tall', ears: 'horns', mouth: 'wide', evil: 1 }),
+  art: A('#6f8fb0', '#cfe0f0', { skin:'fur',idle:'sway', shape: 'tall', ears: 'horns', mouth: 'wide', evil: 1 }),
   kw: { smack: 1 }, text: 'Smackback.' });
 foe({ id: 'wailer', name: 'Wailer', hp: 9, atk: 2, cnt: 2, tier: 2,
-  art: A('#b8a8d8', '#e8dcff', { shape: 'wisp', ears: 'none', mouth: 'wide', eyes: 'slit', evil: 1 }),
+  art: A('#b8a8d8', '#e8dcff', { idle:'hover', shape: 'wisp', ears: 'none', mouth: 'wide', eyes: 'slit', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot. Its hits leave Weak 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
 foe({ id: 'glutton', name: 'Glutton', hp: 20, atk: 5, cnt: 5, tier: 3,
-  art: A('#7f7f9f', '#c8c8e0', { shape: 'squat', ears: 'none', mouth: 'trap', eyes: 'big', evil: 1 }),
+  art: A('#7f7f9f', '#c8c8e0', { skin:'fur',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'trap', eyes: 'big', evil: 1 }),
   kw: { barrage: 1 }, text: 'Barrage.' });
 foe({ id: 'rimeknight', name: 'Rime Knight', hp: 18, atk: 5, cnt: 4, tier: 3,
-  art: A('#8fa8c8', '#dfeaff', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
+  art: A('#8fa8c8', '#dfeaff', { skin:'metal',idle:'sway',acc:'plating',accCol:'#bcdcf4', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Shell 5.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 5) } });
 foe({ id: 'stormcaller', name: 'Stormcaller', hp: 14, atk: 3, cnt: 3, tier: 3,
-  art: A('#a8b8e8', '#dfe8ff', { shape: 'tall', ears: 'antler', mouth: 'flat', acc: 'staff', accCol: '#6f8fd0', evil: 1 }),
+  art: A('#a8b8e8', '#dfe8ff', { skin:'ice',idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', acc: 'staff', accCol: '#6f8fd0', evil: 1 }),
   kw: { longshot: 1 }, text: 'When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 
 foe({ id: 'mitewing', name: 'Mitewing', hp: 4, atk: 2, cnt: 1, tier: 1,
-  art: A('#b0b0d8', '#e0e0ff', { shape: 'small', ears: 'antenna', mouth: 'none', wings: '#8080a8', evil: 1 }),
+  art: A('#b0b0d8', '#e0e0ff', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'none', wings: '#8080a8', evil: 1 }),
   kw: { aimless: 1 }, text: 'Aimless.' });
 foe({ id: 'snowlump', name: 'Snowlump', hp: 15, atk: 1, cnt: 4, tier: 1,
-  art: A('#e0ecf8', '#ffffff', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
+  art: A('#e0ecf8', '#ffffff', { skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak.' });
 foe({ id: 'hoarcrow', name: 'Hoarcrow', hp: 8, atk: 3, cnt: 2, tier: 2,
-  art: A('#5f6a80', '#a8b4c8', { shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
+  art: A('#5f6a80', '#a8b4c8', { idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot.' });
 foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
-  art: A('#6f96b8', '#cfe4f5', { shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
+  art: A('#6f96b8', '#cfe4f5', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
   kw: {}, text: 'Its bite leaves Weak 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
 foe({ id: 'bruiser', name: 'Bruiser', hp: 13, atk: 3, cnt: 3, tier: 2,
-  art: A('#7a8296', '#c4ccd8', { shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
+  art: A('#7a8296', '#c4ccd8', { skin:'fur',idle:'paw', shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
   kw: { shove: 1 }, text: 'Shove. It puts your line where it wants it.' });
 foe({ id: 'packmother', name: 'Packmother', hp: 18, atk: 3, cnt: 4, tier: 3,
-  art: A('#6f7f9f', '#cdd8ec', { shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
+  art: A('#6f7f9f', '#cdd8ec', { skin:'fur',idle:'breathe', shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
   kw: { crush: 2 }, text: 'Crush 2. It hits a crowded lane hardest.' });
 
 foe({ id: 'frostwyrm', name: 'Frostwyrm', hp: 22, atk: 6, cnt: 5, tier: 3,
-  art: A('#7fb0d8', '#dff0ff', { shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
+  art: A('#7fb0d8', '#dff0ff', { skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
   kw: { barrage: 1 }, text: 'Barrage.' });
 foe({ id: 'icewarden', name: 'Icewarden', hp: 16, atk: 4, cnt: 3, tier: 3,
-  art: A('#9fb0c8', '#e0eaf8', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
+  art: A('#9fb0c8', '#e0eaf8', { skin:'metal',idle:'sway',acc:'plating',accCol:'#cfe4ff', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Thorns 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'thorns', 3) } });
 
 /* bosses ----------------------------------------------------------------- */
-foe({ id: 'mothergla', name: 'Mother Glacier', hp: 54, atk: 5, cnt: 4, tier: 4, boss: true,
-  art: A('#9fd8ff', '#ffffff', { shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
+foe({ id: 'mothergla', name: 'Mother Glacier', hp: 46, atk: 5, cnt: 4, tier: 4, boss: true,
+  art: A('#9fd8ff', '#ffffff', { skin:'ice',idle:'breathe',acc:'plating',accCol:'#dff0ff', shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
   kw: { barrage: 1, soak: 1 }, text: 'Barrage. Soak. When it triggers, Frost 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'frost', 1); } } });
 foe({ id: 'hollowking', name: 'The Hollow King', hp: 78, atk: 7, cnt: 4, tier: 5, boss: true,
-  art: A('#6f6f8f', '#c0c0d8', { shape: 'boss', ears: 'antler', mouth: 'trap', eyes: 'slit', acc: 'crown', accCol: '#ffd166', evil: 1 }),
+  art: A('#6f6f8f', '#c0c0d8', { idle:'breathe', shape: 'boss', ears: 'antler', mouth: 'trap', eyes: 'slit', acc: 'crown', accCol: '#ffd166', evil: 1 }),
   kw: { longshot: 1, smack: 1 }, text: 'Longshot. Smackback. When it triggers, it calls a Shardling.',
   hooks: { trigger: (g, u) => summon(g, 'shardling', 1) } });
 foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 92, atk: 8, cnt: 5, tier: 6, boss: true,
-  art: A('#b0a080', '#e8dcc0', { shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
+  art: A('#b0a080', '#e8dcc0', { skin:'metal',idle:'breathe', shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
   kw: { barrage: 1, smack: 1 }, text: 'Barrage. Smackback. Every trigger, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
-foe({ id: 'whitestag', name: 'The White Stag', hp: 48, atk: 5, cnt: 3, tier: 4, boss: true,
-  art: A('#e8f2ff', '#ffffff', { shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
+foe({ id: 'whitestag', name: 'The White Stag', hp: 42, atk: 5, cnt: 3, tier: 4, boss: true,
+  art: A('#e8f2ff', '#ffffff', { skin:'fur',idle:'sway', shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
   kw: { aimless: 1, frenzy: 1 }, text: 'Aimless. Frenzy 1. When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 foe({ id: 'weeper', name: 'The Weeper', hp: 70, atk: 5, cnt: 3, tier: 5, boss: true,
-  art: A('#8f7fb8', '#d8ccf0', { shape: 'boss', ears: 'none', mouth: 'wide', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a', evil: 1 }),
+  art: A('#8f7fb8', '#d8ccf0', { idle:'sway', shape: 'boss', ears: 'none', mouth: 'wide', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot. When it triggers, Weak 1 and Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) { addStatus(g, t, 'weak', 1); addStatus(g, t, 'slow', 1); } } } });
 foe({ id: 'lastwinter', name: 'The Last Winter', hp: 88, atk: 7, cnt: 4, tier: 6, boss: true,
-  art: A('#c8d8f0', '#ffffff', { shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'big', acc: 'crown', accCol: '#cfe4ff', evil: 1 }),
+  art: A('#c8d8f0', '#ffffff', { skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'big', acc: 'crown', accCol: '#cfe4ff', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, Frost 1 on every warden.',
   hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 1)) } });
 
@@ -985,13 +1024,18 @@ function die(g, u, killer) {
   u.alive = false;
   u.dead = 0.0001;
   sfx('die');
-  fx.burst(u, u.side === 'p' ? C.snowDim : '#c9d6ea', 22);
-  fx.shake(7);
+  fx.demise(u);
+  logLine(g, u.name + ' falls', u.side === 'p' ? '#ff9aa5' : '#ffe6a8');
   const b = stat(u, 'bounty');
   if (b > 0 && u.side === 'e' && g.run) { g.run.gold += b; fx.pop(u, '+' + b + ' scrip', C.gold); }
   // Kills inside one turn are counted together: clearing a board in a single
   // action is the play the whole game is pointed at, and it should pay.
   if (u.side === 'e' && g.battle) {
+    // a starving pack eats its own losses
+    if (g.battle.mod === 'starved') {
+      const fed = pick(sideUnits(g, 'e').filter((f) => f !== u));
+      if (fed) { fed.atk += 1; fx.pop(fed, '+1 ATTACK', '#ff8b7a'); }
+    }
     g.battle.combo = (g.battle.combo || 0) + 1;
     bumpStat('kills', 1);
     if (g.run) g.run.kills = (g.run.kills || 0) + 1;
@@ -1003,6 +1047,16 @@ function die(g, u, killer) {
   if (killer && killer.alive && killer.hooks.kill) killer.hooks.kill(g, killer, u);
   if (u.side === 'p' && u.card && !u.card.foe) u.card.fainted = true;
   checkOver(g);
+}
+
+/* A short account of what just happened, because a turn resolves faster than
+   a player can watch six counters at once. */
+function logLine(g, text, col) {
+  const b = g.battle;
+  if (!b) return;
+  b.log = b.log || [];
+  b.log.push({ text, col: col || '#c8dcf4', t: 0 });
+  if (b.log.length > 6) b.log.shift();
 }
 
 /* ------------------------------------------------------------- triggering -- */
@@ -1040,6 +1094,7 @@ function attackOnce(g, u) {
   for (const t of targets.slice()) {
     if (!t.alive) continue;
     const dealt = hurt(g, t, dmg, u);
+    logLine(g, u.name + ' hits ' + t.name + ' for ' + dealt, u.side === 'p' ? '#9fe0ff' : '#ffb0b0');
     if (u.kw.leech && dealt > 0) heal(g, u, dealt);
     if (u.alive && u.hooks.hit) u.hooks.hit(g, u, t);
     if (u.kw.shove && t.alive && dealt > 0) shoveUnit(g, t, 1);
@@ -1169,6 +1224,7 @@ function payCombo(g) {
   g.run.bestTurn = Math.max(g.run.bestTurn || 0, n);
   checkUnlocks(g);
   fx.toast(n + ' IN ONE TURN   +' + paid, n >= 4 ? '#ff9a3c' : C.gold);
+  logLine(g, n + ' in one turn, +' + paid + ' scrip', C.gold);
   fx.flash('#ffd9a0', 0.2 + n * 0.03);
   fx.shake(4 + n);
   sfx('combo');
@@ -1182,7 +1238,11 @@ function ringBell(g) {
   if (!b || b.over || b.busy) return false;
   const free = b.bell >= bellNeed(g);
   sfx('bell');
-  while (b.hand.length) b.discard.push(b.hand.pop());
+  while (b.hand.length) {
+    const c = b.hand.pop();
+    fx.fly(c, c.hx, c.hy);
+    b.discard.push(c);
+  }
   for (let i = 0; i < handSize(g); i++) if (!drawToHand(g)) break;
   b.bell = 0;
   b.rang = 1;
@@ -1237,6 +1297,7 @@ function drawToHand(g) {
   const c = b.draw.shift();
   c.handT = 0;
   c.held = 0;
+  c.dealT = 0;              // it flies out of the deck rather than appearing
   b.hand.push(c);
   return c;
 }
@@ -1278,6 +1339,7 @@ function playCard(g, idx, spot) {
     d.effect(g, spot, card);
   }
   card.held = 0;
+  fx.fly(card, card.hx, card.hy);
   b.discard.push(card);
   checkOver(g);
   if (!b.over) resolveTurn(g);
@@ -1301,8 +1363,22 @@ function summon(g, foeId, count) {
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
-  return (1 + run.step * 0.035 + run.zone * 0.10) * (run.foeMul || 1);
+  return (1 + run.step * 0.030 + run.zone * 0.09) * (run.foeMul || 1);
 }
+
+/* A pack is never just a bigger skirmish: it hunts a particular way, and the
+   banner says which before the first bell. */
+const ELITE_MODS = [
+  { id: 'dark',    name: 'HUNTS IN THE DARK', text: 'every foe arrives behind Shell 2',
+    each: (g, u) => addStatus(g, u, 'shell', 2) },
+  { id: 'quick',   name: 'HUNTS AT A RUN',    text: 'every foe arrives with Swift 1',
+    each: (g, u) => addStatus(g, u, 'swift', 1) },
+  { id: 'thorned', name: 'HUNTS IN THE BRIAR', text: 'every foe arrives with Thorns 2',
+    each: (g, u) => addStatus(g, u, 'thorns', 2) },
+  { id: 'starved', name: 'HUNTS STARVING',    text: 'each one that falls feeds another' },
+  { id: 'endless', name: 'HUNTS IN RELAYS',   text: 'one more wave than you were expecting' },
+];
+const eliteMod = (b) => (b && b.mod ? ELITE_MODS.find((m) => m.id === b.mod) : null);
 
 /* An encounter is a list of WAVES. The first walks on at the bell; the rest
    arrive on their own counter, or early if the player rings for them —
@@ -1336,7 +1412,7 @@ function frontFirstSpots() {
 function buildEncounter(g, kind) {
   const run = g.run;
   const zone = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
-  const scale = foeScale(run) * (kind === 'elite' ? 1.25 : 1);
+  const scale = foeScale(run) * (kind === 'elite' ? 1.15 : 1);
   const src = foePool(zone);
   const waves = [];
 
@@ -1345,11 +1421,13 @@ function buildEncounter(g, kind) {
     // Which beast waits at the end of a zone is drawn per run, so the trail is
     // not the same trail twice.
     const bossId = zoneBoss(g, run.zone);
-    waves.push([
-      { id: bossId, lane: 0, col: 2, scale: 1 },
+    // The first beast comes with one bodyguard; the later ones bring the pack.
+    const first2 = [
+      { id: bossId, lane: 0, col: 2, scale: 1 + run.zone * 0.05 },
       { id: pick(guard).id, lane: 0, col: 0, scale },
-      { id: pick(guard).id, lane: 1, col: 0, scale },
-    ]);
+    ];
+    if (run.zone > 0) first2.push({ id: pick(guard).id, lane: 1, col: 0, scale });
+    waves.push(first2);
     waves.push([{ id: pick(guard).id, lane: 0, col: 1, scale }]);
     if (run.zone > 0) waves.push([{ id: pick(guard).id, lane: 1, col: 1, scale }]);
     return waves;
@@ -1360,10 +1438,10 @@ function buildEncounter(g, kind) {
   // The first two skirmishes of a run are deliberately gentle: a caravan that
   // has not drawn its second warden yet cannot answer a wave.
   const opening = run.zone === 0 && run.step < 2;
-  const first = (opening ? 2 : kind === 'elite' ? 3 : 2 + (run.step > 3 ? 1 : 0)) + (run.extraFoe || 0);
+  const first = (opening ? 2 : kind === 'elite' ? 2 + (run.zone > 0 ? 1 : 0) : 2 + (run.step > 3 ? 1 : 0)) + (run.extraFoe || 0);
   const spots = frontFirstSpots();
   waves.push(spots.slice(0, first).map((s) => ({ id: pick(src).id, lane: s.lane, col: s.col, scale })));
-  const later = opening ? (run.step === 0 ? 0 : 1) : 1;
+  const later = opening ? (run.step === 0 ? 0 : 1) : 1;   // one wave of reinforcements, always
   for (let w = 0; w < later; w++) {
     const n = kind === 'elite' ? 2 : 1 + (run.step > 4 ? 1 : 0);
     waves.push(new Array(n).fill(0).map(() => ({ id: pick(src).id, scale })));
@@ -1390,6 +1468,8 @@ function deployWave(g) {
     b.units.push(u);
     const fd = FOES[e.id];
     if (fd.hooks && fd.hooks.deploy) fd.hooks.deploy(g, u);
+    const em = eliteMod(b);
+    if (em && em.each) em.each(g, u);
     fx.thump(u);
     placed.push(u);
   }
@@ -1397,7 +1477,11 @@ function deployWave(g) {
   b.waves.shift();
   b.waveCnt = waveGap(g);
   b.waveNo = (b.waveNo || 1) + 1;
-  if (b.units.length && b.turn > 0) { fx.shake(6); fx.flash('#ffb0b0', 0.18); sfx('die'); fx.toast('WAVE ' + b.waveNo, '#ff9a3c'); }
+  if (b.units.length && b.turn > 0) {
+    fx.shake(6); fx.flash('#ffb0b0', 0.18); sfx('wave');
+    fx.toast('WAVE ' + b.waveNo, '#ff9a3c');
+    logLine(g, 'wave ' + b.waveNo + ' arrives', '#ff9a3c');
+  }
   return true;
 }
 
@@ -1429,7 +1513,9 @@ function startBattle(g, kind) {
   if (ld.hooks && ld.hooks.deploy) ld.hooks.deploy(g, lead);
   for (const [k, n] of run.leader.bonusDeploy) addStatus(g, lead, k, n);
 
+  if (kind === 'elite') b.mod = pick(ELITE_MODS).id;
   b.waves = buildEncounter(g, kind);
+  if (b.mod === 'endless') b.waves.push([{ id: pick(foePool(ZONES[clamp(run.zone, 0, ZONES.length - 1)])).id, scale: foeScale(run) }]);
   b.waveNo = 0;
   b.waveCnt = waveGap(g);
   deployWave(g);
@@ -1449,8 +1535,9 @@ function startBattle(g, kind) {
   }
   b.draw = shuffle(run.deck.filter((c) => !c.leader && !c.sigil).slice());
   for (let i = 0; i < handSize(g); i++) if (!drawToHand(g)) break;
+  const em0 = eliteMod(b);
   b.banner = { text: kind === 'boss' ? 'THE BEAST' : kind === 'elite' ? 'A PACK' : 'SKIRMISH',
-    sub: ZONES[clamp(run.zone, 0, ZONES.length - 1)].name, t: 0,
+    sub: em0 ? em0.name + ' — ' + em0.text : ZONES[clamp(run.zone, 0, ZONES.length - 1)].name, t: 0,
     col: kind === 'boss' ? '#ff9a3c' : kind === 'elite' ? '#ff8b7a' : '#9fe0ff' };
   g.screen = 'battle';
   drainAll();
@@ -1480,10 +1567,14 @@ function endBattle(g, won) {
   }
   if (!won) { g.screen = 'gameover'; G.meta.runs++; saveMeta(); saveRun(null); return; }
   if (g.battle.bestCombo >= 3) run.log.push('A ' + g.battle.bestCombo + '-kill turn.');
-  if (run.mend) run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - run.mend); });
+  // A beast down is a night's rest: the caravan patches itself up before the
+  // next zone, which is what stops attrition alone from ending runs.
+  const mend = (run.mend || 0) + (g.battle.kind === 'boss' ? 5 : 0);
+  if (mend) run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - mend); });
 
   run.fights = (run.fights || 0) + 1;
-  run.gold += Math.round((g.battle.kind === 'boss' ? 55 : g.battle.kind === 'elite' ? 34 : 22) * (run.purse || 1));
+  run.gold += Math.round((g.battle.kind === 'boss' ? 55 : g.battle.kind === 'elite' ? 34 : 22) *
+    (run.purse || 1) * (g.battle.mod ? 1.4 : 1));
   g.ui.reward = rollReward(g, g.battle.kind);
   g.screen = 'reward';
   sfx('win');
@@ -1503,8 +1594,8 @@ function genTrail(zoneIdx) {
   const steps = [];
   steps.push([{ kind: 'fight' }]);
   const pools = [
-    ['fight', 'event'], ['fight', 'shop'], ['elite', 'event'],
-    ['camp', 'cache'], ['fight', 'elite'],
+    ['fight', 'event'], ['fight', 'shop'], ['elite', 'rest'],
+    ['camp', 'cache'], ['fight', zoneIdx > 0 ? 'shrine' : 'elite'],
   ];
   for (const p of pools) {
     const a = p[0], b2 = p[1];
@@ -1560,6 +1651,12 @@ function enterNode(g, choiceIdx) {
   } else if (node.kind === 'camp') {
     g.ui.camp = { done: false };
     g.screen = 'camp';
+  } else if (node.kind === 'rest') {
+    g.ui.rest = { offer: sample(BLESSINGS.map((x) => x.id), 3) };
+    g.screen = 'rest';
+  } else if (node.kind === 'shrine') {
+    g.ui.shrine = {};
+    g.screen = 'shrine';
   } else if (node.kind === 'event') {
     g.ui.event = { def: EVENTS[Math.floor(rnd() * EVENTS.length)] };
     g.screen = 'event';
@@ -1717,6 +1814,32 @@ function campChoose(g, what, arg) {
   return true;
 }
 
+/* A rest stop hands out one small, permanent kindness. Nothing here is a
+   trade — that is what the events are for. */
+const BLESSINGS = [
+  { id: 'kettle', name: 'A HOT KETTLE', sub: 'mend 8 on every warden',
+    go: (g) => { g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 8); }); advance(g); } },
+  { id: 'purse',  name: 'A FOUND PURSE', sub: '30 scrip',
+    go: (g) => { g.run.gold += 30; advance(g); } },
+  { id: 'grind',  name: 'A WHETSTONE HOUR', sub: 'one warden keeps +2 attack',
+    go: (g) => pickWarden(g, 'SHARPEN WHOM?', (cd) => { cd.charms.push('keencharm'); rebuildCard(cd); }) },
+  { id: 'ward',   name: 'A STITCHED COAT', sub: 'one warden keeps +4 health',
+    go: (g) => pickWarden(g, 'PAD WHOM OUT?', (cd) => { cd.charms.push('stoutcharm'); rebuildCard(cd); }) },
+  { id: 'quick',  name: 'A SHORTER ROPE', sub: 'one warden keeps -1 counter',
+    go: (g) => pickWarden(g, 'HURRY WHOM ALONG?', (cd) => { cd.charms.push('swiftcharm'); rebuildCard(cd); }) },
+  { id: 'hands',  name: 'A WIDER PACK', sub: 'one more card in hand, for good',
+    go: (g) => { g.run.bonusHand = (g.run.bonusHand || 0) + 1; advance(g); } },
+];
+function pickWarden(g, title, fn) {
+  const all = [g.run.leader].concat(g.run.deck.filter((c) => c.type === 'unit'));
+  openChooser(title, all.map((cd) => ({ card: cd })), (i) => {
+    fn(all[i]);
+    UI.choose = null;
+    sfx('get');
+    advance(g);
+  }, { cancel: 'NEVER MIND' });
+}
+
 /* -------------------------------------------------------------- events --- */
 
 /* Small forks in the road. Each one is a real trade — nothing here is free,
@@ -1818,11 +1941,11 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0, i: !!c.injured, s: !!c.sigil }; }
+function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0, i: !!c.injured, s: !!c.sigil, b: !!c.blessed }; }
 function desCard(o) {
   const c = mkCard(o.d);
   c.uid = o.u; c.charms = (o.c || []).slice(); c.dmg = o.g || 0;
-  c.injured = !!o.i; c.sigil = !!o.s;
+  c.injured = !!o.i; c.sigil = !!o.s; c.blessed = !!o.b;
   rebuildCard(c);
   UID = Math.max(UID, c.uid + 1);
   return c;
@@ -1870,9 +1993,22 @@ function loadRun(g) {
 const parts = [];
 const floats = [];
 const rings = [];
+const flyers = [];   // cards on their way to the discard pile
 const shakeState = { mag: 0, t: 0 };
 const flashState = { a: 0, col: '#ffffff' };
 let snowflakes = null;
+
+/* What a body does when it stops. Ice comes apart, metal falls over, fur goes
+   up in a puff — one fade for everybody was the last thing in here that looked
+   like placeholder. */
+function deathKind(art) {
+  if (!art) return 'fall';
+  if (art.skin === 'ice' || art.ears === 'shard') return 'shatter';
+  if (art.skin === 'metal') return 'clank';
+  if (art.skin === 'fur') return 'puff';
+  if (art.shape === 'wisp' || art.wings) return 'scatter';
+  return 'fall';
+}
 
 const fx = {
   pop(u, text, col) {
@@ -1883,16 +2019,45 @@ const fx = {
   toast(text, col) {
     floats.push({ x: 640, y: 250, vy: -18, life: 1.6, t: 0, text: String(text), col: col || C.gold, sz: 34 });
   },
-  burst(u, col, n) {
+  burst(u, col, n, kind) {
     if (!u) return;
     for (let i = 0; i < (n || 10); i++) {
       const a = rnd() * TAU, s = 40 + rnd() * 190;
       parts.push({ x: u.px || 0, y: u.py || 0, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40,
-        life: 0.4 + rnd() * 0.5, t: 0, col, r: 2 + rnd() * 4, g: 420 });
+        life: 0.4 + rnd() * 0.5, t: 0, col, r: 2 + rnd() * 4, g: 420,
+        sh: kind || 'dot', spin: rnd() * TAU, vs: (rnd() - 0.5) * 12 });
     }
     if (parts.length > 400) parts.splice(0, parts.length - 400);
   },
+  /* A death worth watching: the debris matches what the thing was made of. */
+  demise(u) {
+    const k = deathKind(u.art);
+    u.deathKind = k;
+    if (k === 'shatter') {
+      fx.burst(u, '#dff0ff', 26, 'shard');
+      fx.ring(u.px, u.py, '#bfe4ff', 20);
+      fx.shake(8);
+    } else if (k === 'clank') {
+      fx.burst(u, '#9aa7bd', 16, 'bolt');
+      fx.burst(u, '#4a5570', 8, 'dot');
+      fx.shake(9);
+    } else if (k === 'puff') {
+      fx.burst(u, u.art && u.art.body ? u.art.body : '#e8f2ff', 22, 'puff');
+      fx.shake(5);
+    } else if (k === 'scatter') {
+      fx.burst(u, '#cdf1ff', 24, 'dot');
+    } else {
+      fx.burst(u, u.side === 'p' ? C.snowDim : '#c9d6ea', 20, 'dot');
+      fx.shake(6);
+    }
+  },
   ring(x, y, col, r) { rings.push({ x, y, r0: r || 18, col, life: 0.42, t: 0 }); },
+  /* A played card does not vanish — it flies to the pile it went to. */
+  fly(card, x0, y0) {
+    if (!card) return;
+    flyers.push({ card, x0, y0, t: 0, life: 0.42, rot: (rnd() - 0.5) * 1.2 });
+    if (flyers.length > 12) flyers.shift();
+  },
   shake(m) { shakeState.mag = Math.min(18, shakeState.mag + m); },
   flash(col, a) { flashState.col = col || '#ffffff'; flashState.a = Math.max(flashState.a, a === undefined ? 0.35 : a); },
   bell() { fx.flash('#bfe8ff', 0.16); fx.shake(3); },
@@ -1926,6 +2091,10 @@ function stepFx(dt) {
     r.t += dt;
     if (r.t >= r.life) rings.splice(i, 1);
   }
+  for (let i = flyers.length - 1; i >= 0; i--) {
+    flyers[i].t += dt;
+    if (flyers[i].t >= flyers[i].life) flyers.splice(i, 1);
+  }
   shakeState.mag *= Math.pow(0.0016, dt);
   if (shakeState.mag < 0.05) shakeState.mag = 0;
   shakeState.t += dt * 46;
@@ -1946,6 +2115,8 @@ const SAFE = 34;
 const SLOT_W = 118, SLOT_H = 140, SLOT_GAP = 12;
 const LANE_Y = [212, 364];
 const HAND_Y = 620, CARD_W = 126, CARD_H = 168;
+
+const pilePos = (which) => ({ x: SAFE + 54, y: which === 'draw' ? VH - 188 : VH - 74 });
 
 function slotPos(side, lane, col) {
   const step = SLOT_W + SLOT_GAP;
@@ -2028,7 +2199,21 @@ function wrapText(c, s, size, maxW) {
 function drawCreature(c, art, x, y, s, o) {
   o = o || {};
   const t = o.t || 0;
-  const breathe = Math.sin(t * 1.7 + (o.ph || 0)) * 0.02;
+  const ph = o.ph || 0;
+  // Idle personality: the same silhouette reads as a different animal
+  // depending only on how it holds still.
+  const idle = art.idle || 'bob';
+  let breathe = Math.sin(t * 1.7 + ph) * 0.02;
+  let lean = 0, hop = 0, jitter = 0, paw = 0;
+  if (idle === 'breathe') breathe = Math.sin(t * 0.9 + ph) * 0.055;          // slow, huge — bosses
+  else if (idle === 'shiver') { jitter = Math.sin(t * 26 + ph) * s * 0.008; breathe *= 0.4; }
+  else if (idle === 'sway') lean = Math.sin(t * 1.1 + ph) * 0.05;
+  else if (idle === 'hover') { hop = Math.sin(t * 2.3 + ph) * s * 0.045; breathe *= 0.5; }
+  else if (idle === 'paw') {
+    // a long wait, then two quick scrapes of a forefoot
+    const cyc = (t * 0.6 + ph * 0.13) % 1;
+    paw = cyc > 0.82 ? Math.sin((cyc - 0.82) / 0.18 * Math.PI * 2) : 0;
+  } else if (idle === 'twitch') breathe += (((t * 0.7 + ph) % 3) < 0.09 ? 0.03 : 0);
   const sq = o.sq || 0;
   const sx = (1 + breathe + sq * 0.22) * (o.flip ? -1 : 1);
   const sy = 1 - breathe - sq * 0.26;
@@ -2041,7 +2226,8 @@ function drawCreature(c, art, x, y, s, o) {
   const lw = Math.max(2.5, s * 0.055);
 
   c.save();
-  c.translate(x, y);
+  c.translate(x + jitter, y - hop);
+  c.rotate(lean);
   c.scale(sx, sy);
   c.lineJoin = 'round'; c.lineCap = 'round';
 
@@ -2134,6 +2320,59 @@ function drawCreature(c, art, x, y, s, o) {
     blob(c, 0, cy, bw, bh, 0.03, t * 0.6 + (o.ph || 0));
   }
   inked(c, art.body, lw, C.ink);
+
+  /* ---- what it is made of ---- */
+  const skin = art.skin || 'smooth';
+  if (skin === 'fur') {
+    // tufts around the lower silhouette: soft, and it catches the light badly
+    c.save();
+    c.fillStyle = art.body;
+    c.strokeStyle = C.ink; c.lineWidth = lw * 0.55;
+    for (let i = 0; i < 11; i++) {
+      const a = Math.PI * (0.08 + (i / 10) * 0.84);
+      const px = Math.cos(a) * bw * 0.5, py = cy + Math.sin(a) * bh * 0.5;
+      const l = s * (0.05 + ((i * 7) % 4) * 0.012);
+      c.beginPath();
+      c.moveTo(px, py);
+      c.lineTo(px + Math.cos(a - 0.22) * l, py + Math.sin(a - 0.22) * l);
+      c.lineTo(px + Math.cos(a + 0.2) * l * 0.7, py + Math.sin(a + 0.2) * l * 0.7);
+      c.closePath(); c.fill(); c.stroke();
+    }
+    c.restore();
+  } else if (skin === 'ice') {
+    // flat facets, the way a cut block of river ice takes the sun
+    c.save();
+    rr(c, -bw * 0.5, cy - bh * 0.5, bw, bh, bw * 0.4);
+    c.clip();
+    c.globalAlpha = 0.5; c.fillStyle = '#ffffff';
+    for (let i = 0; i < 4; i++) {
+      const px = -bw * 0.36 + i * bw * 0.24, py = cy - bh * 0.3 + (i % 2) * bh * 0.3;
+      c.beginPath();
+      c.moveTo(px, py); c.lineTo(px + s * 0.11, py - s * 0.05); c.lineTo(px + s * 0.07, py + s * 0.13);
+      c.closePath(); c.fill();
+    }
+    c.globalAlpha = 0.28; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.7;
+    c.beginPath();
+    c.moveTo(-bw * 0.28, cy + bh * 0.3); c.lineTo(bw * 0.02, cy - bh * 0.12); c.lineTo(bw * 0.3, cy + bh * 0.2);
+    c.stroke();
+    c.restore();
+  } else if (skin === 'metal') {
+    // one specular band and a row of rivets, which is all a plate ever needs
+    c.save();
+    rr(c, -bw * 0.5, cy - bh * 0.5, bw, bh, bw * 0.4);
+    c.clip();
+    const gm = c.createLinearGradient(-bw * 0.4, cy - bh * 0.4, bw * 0.3, cy + bh * 0.4);
+    gm.addColorStop(0, 'rgba(255,255,255,.42)');
+    gm.addColorStop(0.4, 'rgba(255,255,255,.06)');
+    gm.addColorStop(1, 'rgba(0,0,0,.22)');
+    c.fillStyle = gm;
+    c.fillRect(-bw * 0.5, cy - bh * 0.5, bw, bh);
+    c.fillStyle = 'rgba(20,30,50,.55)';
+    for (let i = 0; i < 4; i++) {
+      c.beginPath(); c.arc(-bw * 0.3 + i * bw * 0.2, cy + bh * 0.3, s * 0.022, 0, TAU); c.fill();
+    }
+    c.restore();
+  }
 
   // belly / face plate
   c.save();
@@ -2246,6 +2485,19 @@ function drawCreature(c, art, x, y, s, o) {
     inked(c, '#eef5ff', lw * 0.9, C.ink);
   }
 
+  if (paw) {
+    c.save();
+    c.translate(bw * 0.26, bh * 0.42);
+    c.rotate(paw * 0.5);
+    c.beginPath(); c.ellipse(0, 0, bw * 0.11, bh * 0.07, 0, 0, TAU);
+    inked(c, art.body, lw * 0.8, C.ink);
+    c.restore();
+    // the snow it kicks up
+    c.save(); c.globalAlpha = Math.abs(paw) * 0.4; c.fillStyle = '#ffffff';
+    c.beginPath(); c.ellipse(bw * 0.4, bh * 0.5, bw * 0.1, bh * 0.04, 0, 0, TAU); c.fill();
+    c.restore();
+  }
+
   /* ---- props ---- */
   const acc = art.acc || 'none';
   if (acc === 'scarf') {
@@ -2324,6 +2576,57 @@ function drawCreature(c, art, x, y, s, o) {
       c.beginPath(); c.arc(hx - bw * 0.04, cy - bh * 0.52, s * 0.11, 0, TAU);
       inked(c, art.accCol || '#6f8fd0', lw * 0.8, C.ink);
     }
+  } else if (acc === 'satchel') {
+    c.save();
+    c.strokeStyle = art.accCol || '#8a6a3f'; c.lineWidth = lw * 1.1;
+    c.beginPath();
+    c.moveTo(-bw * 0.24, cy - bh * 0.22); c.lineTo(bw * 0.2, cy + bh * 0.16); c.stroke();
+    c.beginPath(); rr(c, bw * 0.12, cy + bh * 0.1, bw * 0.28, bh * 0.24, 4);
+    inked(c, art.accCol || '#8a6a3f', lw * 0.9, C.ink);
+    c.beginPath(); rr(c, bw * 0.12, cy + bh * 0.1, bw * 0.28, bh * 0.08, 3);
+    inked(c, '#c9b28a', lw * 0.7, C.ink);
+    c.restore();
+  } else if (acc === 'bellcollar') {
+    c.beginPath();
+    rr(c, -bw * 0.3, cy + bh * 0.02, bw * 0.6, bh * 0.1, bh * 0.05);
+    inked(c, art.accCol || '#8a4a3f', lw * 0.9, C.ink);
+    const swing = Math.sin(t * 3.1 + ph) * 0.5;
+    c.save();
+    c.translate(0, cy + bh * 0.12);
+    c.rotate(swing * 0.3);
+    c.beginPath();
+    c.moveTo(-s * 0.05, 0);
+    c.quadraticCurveTo(-s * 0.045, s * 0.07, 0, s * 0.085);
+    c.quadraticCurveTo(s * 0.045, s * 0.07, s * 0.05, 0);
+    c.closePath();
+    inked(c, C.gold, lw * 0.8, C.ink);
+    c.restore();
+  } else if (acc === 'plating') {
+    // cracked ice plates strapped over the shoulders
+    c.save();
+    for (const d of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(d * bw * 0.14, cy - bh * 0.3);
+      c.lineTo(d * bw * 0.46, cy - bh * 0.16);
+      c.lineTo(d * bw * 0.4, cy + bh * 0.12);
+      c.lineTo(d * bw * 0.12, cy + bh * 0.02);
+      c.closePath();
+      inked(c, art.accCol || '#bcdcf4', lw * 0.9, C.ink);
+      c.strokeStyle = 'rgba(20,30,50,.5)'; c.lineWidth = lw * 0.5;
+      c.beginPath();
+      c.moveTo(d * bw * 0.2, cy - bh * 0.22); c.lineTo(d * bw * 0.34, cy - bh * 0.02);
+      c.lineTo(d * bw * 0.26, cy + bh * 0.06); c.stroke();
+    }
+    c.restore();
+  } else if (acc === 'goggles') {
+    c.save();
+    c.beginPath(); rr(c, -bw * 0.34, cy - bh * 0.26, bw * 0.68, bh * 0.1, 4);
+    inked(c, art.accCol || '#8a6a3f', lw * 0.8, C.ink);
+    for (const d of [-1, 1]) {
+      c.beginPath(); c.arc(d * bw * 0.16, cy - bh * 0.21, s * 0.07, 0, TAU);
+      inked(c, '#8fe3ff', lw * 0.8, C.ink);
+    }
+    c.restore();
   } else if (acc === 'cloak') {
     c.beginPath();
     c.moveTo(-bw * 0.42, cy - bh * 0.10);
@@ -2499,9 +2802,14 @@ function drawUnit(c, u, t) {
   c.save();
   if (dying) {
     const k = clamp(u.dead / 0.55, 0, 1);
+    const kind = u.deathKind || deathKind(u.art);
     c.globalAlpha = 1 - k;
-    c.translate(u.px, u.py + k * 26);
-    c.rotate(k * 0.5);
+    c.translate(u.px, u.py);
+    if (kind === 'shatter') { c.scale(1 + k * 0.22, 1 - k * 0.1); c.rotate((k - 0.5) * 0.12); }
+    else if (kind === 'clank') { c.rotate(k * 1.35); c.translate(0, k * 34); }
+    else if (kind === 'puff') { c.scale(1 + k * 0.3, 1 + k * 0.3); c.translate(0, -k * 26); }
+    else if (kind === 'scatter') { c.scale(1 - k * 0.4, 1 + k * 0.5); c.translate(0, -k * 40); }
+    else { c.rotate(k * 0.5); c.translate(0, k * 26); }
     c.translate(-u.px, -u.py);
   }
   const tribeCol = u.side === 'p' ? (u.leader ? C.gold : '#7fb2e8') : '#d08a8a';
@@ -2619,6 +2927,19 @@ function drawCard(c, card, x, y, w, h, o) {
     statPip(c, w / 2, h - 15, 13, '#ffd166', card.cnt);
     const mh = card.injured ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
     statPip(c, w - 16, h - 15, 13, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
+  }
+  if (card.blessed || card.charms.indexOf('blessed') >= 0) {
+    c.save();
+    c.translate(w - 20, h - 44);
+    c.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * TAU - Math.PI / 2, r = k % 2 ? 4 : 9;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      k ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath();
+    inked(c, C.gold, 2, C.ink);
+    c.restore();
   }
   if (card.charms.length) {
     for (let i = 0; i < card.charms.length; i++) {
@@ -3147,6 +3468,49 @@ function drawBattle(c, t) {
     }
   }
 
+  /* Telegraphs: anything one tick from going off draws a line to what it will
+     hit. Faint by default, bright while the order is being read. */
+  for (const u of units(g)) {
+    if (!u.alive || u.cnt > 1) continue;
+    if (stat(u, 'frost') > 0 || stat(u, 'slow') > 0) continue;
+    const tgt = targetFor(g, u);
+    if (!tgt) continue;
+    const mine = u.side === 'p';
+    c.save();
+    c.globalAlpha = UI.order ? 0.75 : 0.3;
+    c.strokeStyle = mine ? '#9fe0ff' : '#ff9aa5';
+    c.lineWidth = UI.order ? 3 : 2;
+    c.setLineDash([7, 9]);
+    c.lineDashOffset = -(t * 34) % 16;
+    const x1 = u.px + (mine ? SLOT_W * 0.4 : -SLOT_W * 0.4), y1 = u.py;
+    const x2 = tgt.px + (mine ? -SLOT_W * 0.4 : SLOT_W * 0.4), y2 = tgt.py;
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 - 26, x2, y2);
+    c.stroke();
+    c.setLineDash([]);
+    const a = Math.atan2(y2 - (y1 + y2) / 2 + 26, x2 - (x1 + x2) / 2);
+    c.beginPath();
+    c.moveTo(x2, y2);
+    c.lineTo(x2 - Math.cos(a - 0.4) * 13, y2 - Math.sin(a - 0.4) * 13);
+    c.lineTo(x2 - Math.cos(a + 0.4) * 13, y2 - Math.sin(a + 0.4) * 13);
+    c.closePath();
+    c.fillStyle = mine ? '#9fe0ff' : '#ff9aa5';
+    c.fill();
+    c.restore();
+  }
+
+  // whoever is actually first out of the gate next turn
+  const nextUp = turnOrder(g).find((u) => u.alive && u.cnt <= 1 && !stat(u, 'frost') && !stat(u, 'slow'));
+  if (nextUp) {
+    const y = nextUp.py - SLOT_H / 2 - 12;
+    c.save();
+    c.globalAlpha = 0.85 + Math.sin(t * 6) * 0.15;
+    panel(c, nextUp.px - 30, y - 12, 60, 22, 7, nextUp.side === 'p' ? '#2f5d8f' : '#8f3f4f', C.ink);
+    txt(c, 'NEXT', nextUp.px, y, 12, '#ffffff', 'center', 't');
+    c.restore();
+  }
+
   // attack order preview
   if (UI.order) {
     const ord = turnOrder(g);
@@ -3157,12 +3521,92 @@ function drawBattle(c, t) {
     });
   }
 
+  /* What the held card would do, written on the things it would do it to. */
+  if (UI.drag && UI.drag.card && UI.drag.card.type === 'item') {
+    const overHit = hitAt(UI.drag.x, UI.drag.y);
+    const overUnit = overHit && overHit.id === 'unit' ? overHit.data : null;
+    const tg = CARDS[UI.drag.card.def].target;
+    const spot = tg === 'none' ? null : overUnit;
+    if (tg === 'none' || (overUnit && canPlay(g, UI.drag.card, overUnit))) {
+      for (const p of previewOf(g, UI.drag.card, spot)) {
+        if (!p.u || !p.u.alive) continue;
+        const lethal = p.dmg > 0 && p.dmg >= p.u.hp + stat(p.u, 'shell');
+        const px = p.u.px, py = p.u.py - SLOT_H / 2 - 6;
+        c.save();
+        c.globalAlpha = 0.95;
+        const label = p.dmg > 0 ? '-' + p.dmg : p.dmg < 0 ? '+' + (-p.dmg) : (p.tag || '·');
+        const w = Math.max(46, label.length * 11 + 18);
+        panel(c, px - w / 2, py - 18, w, 26, 8, lethal ? '#8f2f3f' : p.dmg < 0 ? '#2f6f4f' : '#243a5e',
+          lethal ? '#ff9aa5' : C.ink);
+        txt(c, label, px, py - 4, 15, lethal ? '#ffd8dc' : '#eaf6ff', 'center', 'd');
+        c.restore();
+        c.save();
+        c.globalAlpha = 0.5 + Math.sin(t * 8) * 0.2;
+        c.strokeStyle = lethal ? '#ff5566' : '#8fe3ff';
+        c.lineWidth = 3;
+        rr(c, p.u.px - SLOT_W / 2, p.u.py - SLOT_H / 2, SLOT_W, SLOT_H, 14);
+        c.stroke();
+        c.restore();
+        if (lethal) txt(c, '✕', p.u.px, p.u.py, 46, 'rgba(255,120,140,.75)', 'center', 'd');
+      }
+    }
+  }
+
   drawHand(c, t);
   drawHud(c, t);
 
+  // what just happened, in six lines or fewer
+  if (b.log && b.log.length) {
+    for (let i = 0; i < b.log.length; i++) {
+      const L = b.log[i];
+      L.t += 1 / 60;
+      const age = clamp(1 - (L.t - 2.4) / 1.2, 0, 1);
+      if (age <= 0) continue;
+      c.save();
+      c.globalAlpha = age * (0.45 + 0.55 * (i / Math.max(1, b.log.length - 1)));
+      txt(c, L.text, SAFE, 132 + i * 19, 13, L.col, 'left', 't');
+      c.restore();
+    }
+    while (b.log.length && b.log[0].t > 3.8) b.log.shift();
+  }
+
   // piles
-  txt(c, 'DECK ' + b.draw.length, SAFE + 52, VH - 152, 14, '#9fb6d6', 'center', 't');
-  txt(c, 'USED ' + b.discard.length, SAFE + 52, VH - 130, 14, '#7e97b8', 'center', 't');
+  // the two piles, as actual stacks of card backs you can tap and read
+  for (const which of ['draw', 'discard']) {
+    const list = which === 'draw' ? b.draw : b.discard;
+    const p = pilePos(which);
+    const deep = Math.min(4, Math.ceil(list.length / 4));
+    for (let i = deep; i >= 0; i--) {
+      const off = i * 2.5;
+      c.save();
+      c.globalAlpha = list.length ? 1 : 0.35;
+      panel(c, p.x - 30 - off, p.y - 40 + off, 60, 80, 8,
+        which === 'draw' ? '#24406b' : '#2c2438', which === 'draw' ? '#4f79b0' : '#6a5478');
+      if (i === 0) {
+        c.save();
+        c.globalAlpha = 0.5;
+        c.strokeStyle = '#8fb6e8'; c.lineWidth = 2;
+        c.beginPath(); c.arc(p.x, p.y - 6, 13, 0, TAU); c.stroke();
+        c.restore();
+      }
+      c.restore();
+    }
+    txt(c, String(list.length), p.x, p.y - 4, 22, '#eaf6ff', 'center', 'd');
+    txt(c, which === 'draw' ? 'DECK' : 'USED', p.x, p.y + 26, 11, '#9fb6d6', 'center', 't');
+    hit(which === 'draw' ? 'deckPile' : 'discardPile', p.x - 32, p.y - 44, 64, 88);
+  }
+
+  // cards on their way to the pile
+  for (const f of flyers) {
+    const k = easeIn(f.t / f.life);
+    const to = pilePos('discard');
+    const x = lerp(f.x0 === undefined ? MID : f.x0, to.x - CARD_W * 0.24, k);
+    const y = lerp(f.y0 === undefined ? HAND_Y : f.y0, to.y - CARD_H * 0.24, k);
+    c.save();
+    c.globalAlpha = 1 - k * 0.75;
+    drawCard(c, f.card, x, y, CARD_W, CARD_H, { t, scale: 1 - k * 0.55, rot: f.rot * k });
+    c.restore();
+  }
 
   // the bell
   const charged = b.bell >= BELL_CHARGE;
@@ -3242,10 +3686,20 @@ function drawHand(c, t) {
     const arc = n > 1 ? Math.min(14, Math.abs(off) * Math.abs(off) * 2.2) : 0;
     const y = HAND_Y - CARD_H / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
     card.handT = Math.min(1, (card.handT || 0) + 0.06);
-    drawCard(c, card, x, y, CARD_W, CARD_H, {
-      t, scale: hovered ? 1.07 : 1, rot: hovered ? 0 : off * 0.035,
+    // deal: the card travels out of the deck pile and settles into the fan
+    card.dealT = Math.min(1, (card.dealT === undefined ? 1 : card.dealT) + 0.075);
+    const dk = easeOut(card.dealT);
+    const from = pilePos('draw');
+    const dx = lerp(from.x - CARD_W / 2, x, dk);
+    const dy = lerp(from.y - CARD_H / 2, y, dk);
+    card.hx = dx; card.hy = dy;
+    drawCard(c, card, dx, dy, CARD_W, CARD_H, {
+      t, scale: (hovered ? 1.07 : 1) * (0.6 + 0.4 * dk),
+      rot: lerp(-0.7, hovered ? 0 : off * 0.035, dk),
+      alpha: 0.4 + 0.6 * dk,
     });
-    hit('hand', x, y, CARD_W, CARD_H, i);
+    // not grabbable until it has actually landed in the fan
+    if (card.dealT > 0.6) hit('hand', x, y, CARD_W, CARD_H, i);
   }
   if (UI.drag && UI.drag.card) {
     const d = UI.drag;
@@ -3346,8 +3800,8 @@ function drawTrail(c, t) {
   if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 40, 15, '#9fb6d6', 'center', 't');
   if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - 40, VH - 40, 14, '#ffd166', 'right', 't');
 }
-const nodeCol = (k) => ({ fight: '#7fb2e8', elite: '#e08a8a', boss: '#ff9a3c', shop: '#ffd166', camp: '#8fe0a0', cache: '#c9a6ff', event: '#f0a6d0' }[k] || '#fff');
-const nodeName = (k) => ({ fight: 'skirmish', elite: 'pack', boss: 'the beast', shop: 'trader', camp: 'camp', cache: 'cache', event: 'a stop' }[k] || k);
+const nodeCol = (k) => ({ fight: '#7fb2e8', elite: '#e08a8a', boss: '#ff9a3c', shop: '#ffd166', camp: '#8fe0a0', cache: '#c9a6ff', event: '#f0a6d0', rest: '#8fe0d0', shrine: '#ffe6a8' }[k] || '#fff');
+const nodeName = (k) => ({ fight: 'skirmish', elite: 'pack', boss: 'the beast', shop: 'trader', camp: 'camp', cache: 'cache', event: 'a stop', rest: 'rest stop', shrine: 'shrine' }[k] || k);
 function drawNodeIcon(c, kind, x, y, s, t) {
   c.save(); c.translate(x, y); c.lineJoin = 'round';
   c.strokeStyle = C.ink; c.lineWidth = Math.max(2.5, s * 0.14); c.lineCap = 'round';
@@ -3369,6 +3823,16 @@ function drawNodeIcon(c, kind, x, y, s, t) {
   } else if (kind === 'cache') {
     c.beginPath(); rr(c, -s * 0.42, -s * 0.24, s * 0.84, s * 0.6, 5); c.stroke();
     c.beginPath(); c.moveTo(0, -s * 0.24); c.lineTo(0, s * 0.36); c.stroke();
+  } else if (kind === 'rest') {
+    c.beginPath(); c.arc(0, s * 0.05, s * 0.36, Math.PI, 0); c.stroke();
+    c.beginPath(); c.moveTo(-s * 0.44, s * 0.05); c.lineTo(s * 0.44, s * 0.05); c.stroke();
+    c.beginPath(); c.moveTo(-s * 0.1, -s * 0.5); c.quadraticCurveTo(s * 0.12, -s * 0.3, -s * 0.1, -s * 0.12); c.stroke();
+  } else if (kind === 'shrine') {
+    c.beginPath();
+    c.moveTo(0, -s * 0.5); c.lineTo(s * 0.34, -s * 0.1); c.lineTo(s * 0.2, s * 0.42);
+    c.lineTo(-s * 0.2, s * 0.42); c.lineTo(-s * 0.34, -s * 0.1);
+    c.closePath(); c.stroke();
+    c.beginPath(); c.arc(0, s * 0.02, s * 0.12, 0, TAU); c.fillStyle = C.ink; c.fill();
   } else if (kind === 'event') {
     c.beginPath(); c.arc(0, -s * 0.1, s * 0.3, -2.4, 0.9); c.stroke();
     c.beginPath(); c.moveTo(s * 0.06, s * 0.12); c.lineTo(s * 0.06, s * 0.24); c.stroke();
@@ -3806,6 +4270,71 @@ function drawEvent(c, t) {
   });
 }
 
+function drawRest(c, t) {
+  const g = G;
+  drawBackdrop(c, g.run.zone, t);
+  drawHud(c, t);
+  txt(c, 'A REST STOP', MID, 96, 38, '#eaf6ff', 'center', 'd');
+  txt(c, 'somebody left the fire banked and a note under a stone', MID, 134, 15, '#a8c8ea', 'center', 't');
+  const offer = (g.ui.rest && g.ui.rest.offer) || [];
+  const w = 300, gap = 30;
+  const total = offer.length * w + (offer.length - 1) * gap;
+  offer.forEach((bid, i) => {
+    const bl = BLESSINGS.find((x) => x.id === bid);
+    if (!bl) return;
+    const x = MID - total / 2 + i * (w + gap), y = 236;
+    const hovered = UI.hover && UI.hover.id === 'restPick' && UI.hover.data === i;
+    panel(c, x, y - (hovered ? 6 : 0), w, 210, 16, '#1d2c49', '#8fe0d0');
+    c.save();
+    c.translate(x + w / 2, y + 76 - (hovered ? 6 : 0));
+    const pulse = 1 + Math.sin(t * 2 + i) * 0.05;
+    c.scale(pulse, pulse);
+    c.globalAlpha = 0.5; c.fillStyle = '#8fe0d0';
+    c.beginPath(); c.arc(0, 0, 34, 0, TAU); c.fill();
+    c.globalAlpha = 1;
+    c.beginPath();
+    c.moveTo(0, -26); c.lineTo(9, -8); c.lineTo(28, -6); c.lineTo(14, 8);
+    c.lineTo(18, 27); c.lineTo(0, 17); c.lineTo(-18, 27); c.lineTo(-14, 8);
+    c.lineTo(-28, -6); c.lineTo(-9, -8);
+    c.closePath();
+    inked(c, '#d8fff4', 3, C.ink);
+    c.restore();
+    wrapText(c, bl.name, 22, w - 40).forEach((ln, k) =>
+      txt(c, ln, x + w / 2, y + 140 + k * 24 - (hovered ? 6 : 0), 22, '#eaf6ff', 'center', 'd'));
+    wrapText(c, bl.sub, 14, w - 40).forEach((ln, k) =>
+      txt(c, ln, x + w / 2, y + 176 + k * 17 - (hovered ? 6 : 0), 14, '#9fc0e4', 'center', 't'));
+    hit('restPick', x, y, w, 210, i);
+  });
+}
+
+function drawShrine(c, t) {
+  const g = G;
+  drawBackdrop(c, g.run.zone, t);
+  drawHud(c, t);
+  txt(c, 'A SHRINE THAT ANSWERS', MID, 92, 36, '#ffe6a8', 'center', 'd');
+  wrapText(c, 'Old stone, warm to the hand in weather that should not allow it. Leave one card of your caravan on the step overnight and it will be given back better than it was.', 17, 820)
+    .forEach((ln, i) => txt(c, ln, MID, 140 + i * 24, 17, '#bcd4f0', 'center', 't'));
+
+  // the stone itself
+  c.save();
+  c.translate(MID, 330);
+  const glow = 0.4 + Math.sin(t * 1.6) * 0.16;
+  c.globalAlpha = glow; c.fillStyle = '#ffd166';
+  c.beginPath(); c.arc(0, 0, 74, 0, TAU); c.fill();
+  c.globalAlpha = 1;
+  c.beginPath();
+  c.moveTo(0, -66); c.lineTo(44, -14); c.lineTo(26, 54); c.lineTo(-26, 54); c.lineTo(-44, -14);
+  c.closePath();
+  inked(c, '#c9bda0', 4, C.ink);
+  c.beginPath(); c.arc(0, 2, 15, 0, TAU);
+  inked(c, '#ffd166', 3, C.ink);
+  c.restore();
+
+  button(c, 'shrineGive', MID - 300, 452, 280, 62, 'LEAVE A CARD', '#8f7f3f');
+  button(c, 'shrineWalk', MID + 20, 452, 280, 62, 'WALK ON', '#40527a');
+  txt(c, 'the blessed card keeps +2 attack and +3 health for the rest of the run', MID, 536, 13, '#7e97b8', 'center', 't');
+}
+
 function drawEnd(c, t, won) {
   drawBackdrop(c, won ? 2 : 0, t);
   if (won) {
@@ -3935,6 +4464,28 @@ function press(id, data) {
       if (r.taken || !r.cards.length) advance(g);
       return;
     }
+    case 'restPick': {
+      const bid = (g.ui.rest.offer || [])[data];
+      const bl = BLESSINGS.find((x) => x.id === bid);
+      if (bl) { sfx('get'); bl.go(g); }
+      return;
+    }
+    case 'shrineGive': {
+      const all = g.run.deck.filter((cd) => cd.charms.indexOf('blessed') < 0);
+      if (!all.length) { advance(g); return; }
+      openChooser('LEAVE WHICH CARD ON THE STEP?', all.map((cd) => ({ card: cd })), (i) => {
+        all[i].charms.push('blessed');
+        all[i].blessed = true;
+        rebuildCard(all[i]);
+        UI.choose = null;
+        sfx('get');
+        fx.toast(all[i].name.toUpperCase() + ' COMES BACK BLESSED', C.gold);
+        g.run.log.push(all[i].name + ' was left at the shrine, and came back better.');
+        advance(g);
+      }, { cancel: 'NEVER MIND' });
+      return;
+    }
+    case 'shrineWalk': advance(g); return;
     case 'eventOpt': {
       const ev = g.ui.event && g.ui.event.def;
       if (!ev || !ev.opts[data]) return;
@@ -3993,6 +4544,18 @@ function press(id, data) {
       openChooser('WHICH CHARM?', three.map((cid) => ({ charm: cid })), (i) => {
         pickTargetForCharm(g, three[i], () => { g.ui.camp.done = false; campChoose(g, 'charm', { charm: three[i], uid: UI.lastCharmUid }); });
       }, { cancel: 'NEVER MIND' });
+      return;
+    }
+    case 'deckPile':
+    case 'discardPile': {
+      const b = g.battle;
+      if (!b) return;
+      const list = (id === 'deckPile' ? b.draw : b.discard).slice()
+        .sort((a, z) => a.name.localeCompare(z.name));     // never reveal the order
+      if (!list.length) { fx.toast(id === 'deckPile' ? 'THE DECK IS EMPTY' : 'NOTHING USED YET', '#9fb6d6'); return; }
+      openChooser(id === 'deckPile' ? 'STILL TO COME' : 'ALREADY SPENT',
+        list.map((cd) => ({ card: cd })), (i) => { UI.inspect = list[i]; UI.choose = null; },
+        { cancel: 'BACK', sub: id === 'deckPile' ? 'in no particular order — the deck keeps its secrets' : '' });
       return;
     }
     case 'chooseCancel': UI.choose = null; return;
@@ -4159,7 +4722,27 @@ function drawFx(c) {
     const k = p.t / p.life;
     c.globalAlpha = 1 - k;
     c.fillStyle = p.col;
-    c.beginPath(); c.arc(p.x, p.y, p.r * (1 - k * 0.5), 0, TAU); c.fill();
+    const r = p.r * (1 - k * 0.5);
+    if (p.sh === 'shard') {
+      c.save();
+      c.translate(p.x, p.y);
+      c.rotate((p.spin || 0) + k * (p.vs || 0));
+      c.beginPath();
+      c.moveTo(0, -r * 2.2); c.lineTo(r, r); c.lineTo(-r * 0.8, r * 1.4);
+      c.closePath(); c.fill();
+      c.restore();
+    } else if (p.sh === 'bolt') {
+      c.save();
+      c.translate(p.x, p.y);
+      c.rotate((p.spin || 0) + k * (p.vs || 0));
+      c.fillRect(-r * 1.6, -r * 0.5, r * 3.2, r);
+      c.restore();
+    } else if (p.sh === 'puff') {
+      c.globalAlpha = (1 - k) * 0.55;
+      c.beginPath(); c.arc(p.x, p.y, r * (1 + k * 1.6), 0, TAU); c.fill();
+    } else {
+      c.beginPath(); c.arc(p.x, p.y, r, 0, TAU); c.fill();
+    }
   }
   c.globalAlpha = 1;
   for (const f of floats) {
@@ -4191,6 +4774,8 @@ function render() {
     case 'shop': drawShop(c, t); break;
     case 'camp': drawCamp(c, t); break;
     case 'event': drawEvent(c, t); break;
+    case 'rest': drawRest(c, t); break;
+    case 'shrine': drawShrine(c, t); break;
     case 'gameover': drawEnd(c, t, false); break;
     case 'victory': drawEnd(c, t, true); break;
     default: drawTitle(c, t); break;
@@ -4311,16 +4896,18 @@ window.FF = {
   units, playerUnits, enemyUnits, unitAt, slotFree, freeSlots, laneOf, turnOrder,
   targetFor, frontTarget, laneTargets, neighbours,
   addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter, shoveUnit, HOARD_CAP,
+  PREVIEW, previewOf, logLine,
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
   UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
+  ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
   saveRun, loadRun, saveMeta, loadMeta, store,
-  handSize, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
+  handSize, pilePos, flyers, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits,
-  drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection,
+  drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   MUSIC, musicTick, setMute, moodFor, AUD,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES,
   setCtx: (c) => { ctx = c; initSnow(); },
