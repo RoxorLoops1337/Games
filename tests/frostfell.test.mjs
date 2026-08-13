@@ -1758,7 +1758,13 @@ section('the fell answers the caravan');
   const FFa = loadGame({});
   const lean = FFa.newRun(FFa.G, 'hearth', 301);
   const leanScale = FFa.foeScale(lean);
-  eq(Math.abs(FFa.fellAnswer(lean)) < 0.3, true, 'a caravan sets out near the middle of the curve');
+  /* A run no longer sets out level with the trail — it sets out UNDER it and
+     grows into it, which is what measuring the line the caravan can field
+     instead of averaging its whole deck bought. The opening is where the floor
+     does its work; the reading goes positive only once something has been
+     built. */
+  ok(FFa.fellAnswer(lean) < 0, 'a caravan sets out under the bar the trail holds it to');
+  ok(FFa.fellAnswer(lean) >= -0.34, 'and no further under it than the floor allows');
 
   // pile strength into the same caravan at the same step and the winter answers
   for (let i = 0; i < 8; i++) lean.deck.push(FFa.mkCard('bellowsbear'));
@@ -1770,8 +1776,122 @@ section('the fell answers the caravan');
   // and a caravan that has fallen apart is never given a free run
   const broke = FFa.newRun(FFa.G, 'frost', 302);
   broke.deck = [];
-  ok(FFa.fellAnswer(broke) >= -0.25, 'the floor holds');
+  ok(FFa.fellAnswer(broke) >= -0.35, 'the floor holds');
   ok(FFa.foeScale(broke) > 0, 'and the trail is still a trail');
+}
+
+section('a caravan that grows');
+{
+  const FFg = loadGame({});
+  const run = FFg.newRun(FFg.G, 'hearth', 401);
+  const start = FFg.caravanPower(run);
+  /* The reading this replaced was an average over the whole deck, which cannot
+     grow: a good card drafted is divided by one more card drafted. Four
+     transcripts watched it sit between 5.4 and 6.7 while the deck went from
+     eight cards to twenty-one. */
+  const before = FFg.caravanPower(run);
+  for (let i = 0; i < 6; i++) run.deck.push(FFg.mkCard('snowpup'));   // six weak ones
+  ok(FFg.caravanPower(run) >= before - 0.01, 'a fat deck of weak cards never reads as a weaker caravan');
+  run.deck.push(FFg.mkCard('bellowsbear'));                          // and one good one
+  ok(FFg.caravanPower(run) > before, 'and one good card read as a stronger one');
+  ok(FFg.caravanPower(run) > start, 'so a caravan that drafts well grows');
+
+  // the line is six, and only the best six are read
+  const run2 = FFg.newRun(FFg.G, 'frost', 402);
+  const p0 = FFg.caravanPower(run2);
+  for (let i = 0; i < 20; i++) run2.deck.push(FFg.mkCard('snowpup'));
+  ok(FFg.caravanPower(run2) >= p0, 'twenty spare cards never make the line worse');
+
+  // and the deep fell holds the same line to a lower bar
+  ok(FFg.DEEP_BASE < FFg.POWER_BASE, 'the last zone reads the caravan against a lower bar');
+  const run3 = FFg.newRun(FFg.G, 'scrap', 403);
+  for (let i = 0; i < 6; i++) run3.deck.push(FFg.mkCard('bellowsbear'));
+  run3.zone = 1; run3.step = 3;
+  const mid = FFg.fellAnswer(run3);
+  run3.zone = 2;
+  ok(FFg.fellAnswer(run3) > mid, 'so a built caravan is asked more of in the last zone than in the second');
+}
+
+section('what you walk away from');
+{
+  const FFf = loadGame({});
+  const run = FFf.newRun(FFf.G, 'hearth', 404);
+  run.step = 3; run.zone = 1;
+  const quiet = FFf.foeScale(run);
+  eq(FFf.following(run), 0, 'nothing is following a caravan that has just set out');
+
+  /* Ducking one bad pack is a decision and stays free; ducking everything is a
+     choice to arrive with a pack at your back. */
+  run.followed = FFf.FOLLOW_FREE;
+  eq(FFf.following(run), 0, 'and a few declined fights are forgiven');
+  eq(FFf.foeScale(run), quiet, 'so the trail is unchanged');
+
+  run.followed += 3;
+  eq(FFf.following(run), 3, 'past that they are counted');
+  ok(FFf.foeScale(run) > quiet, 'and every fight from there is bigger');
+
+  /* And it is a distance, not a headcount: fighting is the only thing that puts
+     a step back between you, and it never puts back as much as ducking takes. */
+  ok(FFf.FOLLOW_NEAR > 1, 'walking past a fight lets them close further than a won fight opens up');
+
+  // and the count is kept by the trail itself, not by the caller
+  /* And the first zone is a grace: the counter accrues, it is simply not read. */
+  const z0 = FFf.newRun(FFf.G, 'hearth', 409);
+  z0.followed = FFf.FOLLOW_FREE + 10;
+  eq(FFf.following(z0), 0, 'nothing has picked up your trail in the first zone');
+  z0.zone = 1;
+  ok(FFf.following(z0) > 0, 'and it is read from the second');
+
+  const run2 = FFf.newRun(FFf.G, 'frost', 405);
+  run2.trail[run2.step] = [{ kind: 'rest' }, { kind: 'fight' }];
+  FFf.enterNode(FFf.G, 0);
+  eq(run2.followed, FFf.FOLLOW_NEAR, 'walking past a fight is noticed');
+  const run3 = FFf.newRun(FFf.G, 'frost', 406);
+  run3.trail[run3.step] = [{ kind: 'rest' }, { kind: 'camp' }];
+  FFf.enterNode(FFf.G, 0);
+  eq(run3.followed || 0, 0, 'a fork with no fight on it is not a fight walked past');
+}
+
+section('the counter never runs dry');
+{
+  const FFm = loadGame({});
+  const run = FFm.newRun(FFm.G, 'hearth', 407);
+  /* Four transcripts walked out of a trader holding between 138 and 328 scrip.
+     Not a pricing problem and not a payout problem — she ran out of things
+     worth buying, because the bell is one per shop, tempering is capped for the
+     whole run, and everything else on the counter adds a card. */
+  const first = FFm.mealPrice(run);
+  eq(first, FFm.MEAL_BASE, 'the first meal is the cheap one');
+  const deckWas = run.deck.length;
+  const who = FFm.feedable(run)[0];
+  const atk0 = who.atk, hp0 = who.hp;
+  run.gold = 1000;
+  FFm.G.ui.shop = FFm.rollShop(FFm.G);
+  ok(FFm.buy(FFm.G, 'meal', 0, who.uid), 'she will feed whoever you point at');
+  eq(who.atk, atk0 + 1, 'and it comes back with an attack');
+  eq(who.hp, hp0 + 2, 'and some health');
+  ok(FFm.mealPrice(run) > first, 'and the next one costs more');
+  eq(run.deck.length, deckWas, 'and the deck is the size it was');
+
+  // as many as the purse holds, and the price is what stops you
+  let n = 1;
+  while (run.gold >= FFm.mealPrice(run) && n < 40) { FFm.buy(FFm.G, 'meal', 0, who.uid); n++; }
+  ok(n > 3 && n <= FFm.MEAL_CAP, `a thousand scrip buys ${n} meals, not one and not forty`);
+  ok(run.gold < FFm.mealPrice(run) || run.meals >= FFm.MEAL_CAP,
+    'and the purse is what runs out, not the counter');
+
+  // and it survives being put down and picked up again
+  const run2 = FFm.newRun(FFm.G, 'frost', 408);
+  run2.gold = 500;
+  const fed = FFm.feedable(run2)[0];
+  FFm.G.ui.shop = FFm.rollShop(FFm.G);
+  FFm.buy(FFm.G, 'meal', 0, fed.uid);
+  const fedAtk = fed.atk;
+  FFm.saveRun(run2);
+  const back = FFm.loadRun(FFm.G);
+  eq(back.meals, 1, 'a reloaded run remembers what it has eaten');
+  eq(back.deck.concat([back.leader]).find((c) => c.uid === fed.uid).atk, fedAtk,
+    'and the card it fed is still fed');
 }
 
 section('seals to chase');

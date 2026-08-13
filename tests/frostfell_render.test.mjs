@@ -44,11 +44,33 @@ section('every screen draws');
   ok(FF.hits().some((h) => h.id === 'rewardCopy'), 'a pick can be spent copying instead');
   ok(FF.hits().some((h) => h.id === 'rewardBurn'), 'or burning');
 
+  // and the meal, which is the only ware sold on both screens
+  G.run.gold = 400;
+  frame(2);
+  ok(FF.hits().some((h) => h.id === 'rewardMeal'), 'or feeding somebody out of what the fight paid');
+
   G.ui.shop = FF.rollShop(G);
   G.screen = 'shop';
   frame(2); drew('the shop draws');
   ok(FF.hits().some((h) => h.id === 'buySigil'), 'and sells a sigil');
   ok(FF.hits().some((h) => h.id === 'buyBurn'), 'and will burn a card for you');
+  ok(FF.hits().some((h) => h.id === 'buyMeal'), 'and a hot meal, as many as the purse holds');
+  {
+    // six buttons across the counter now: the row still has to fit the stage
+    const D = FF.dims();
+    const row = FF.hits().filter((h) => /^buy(Heal|Temper|Scar|Sigil|Burn|Meal)$/.test(h.id));
+    eq(row.length, 6, 'all six wares are reachable');
+    for (const h of row) ok(h.x >= 0 && h.x + h.w <= D.VW, 'the counter fits the stage at ' + h.id);
+  }
+
+  // the trail says what is behind you, at the fork rather than at the fight
+  G.screen = 'trail';
+  G.run.followed = 0;
+  frame(2);
+  const quiet = FF.hits().length;
+  G.run.followed = FF.FOLLOW_FREE + 6;
+  frame(2); drew('a trail with something behind it draws');
+  ok(FF.hits().length >= quiet, 'and the warning costs no touchable thing');
 
   G.ui.event = { def: FF.EVENTS[0] };
   G.screen = 'event';
