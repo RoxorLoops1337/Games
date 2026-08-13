@@ -1504,6 +1504,12 @@ function resolveTurn(g) {
         const co2 = side === 'p' ? courseOf(g.run) : null;
         const warm = (co2 && co2.warmth) || 1;
         for (const u of line) addStatus(g, u, 'regen', warm, true);
+        /* Every turn was too much: the first cut of this measured 53% against a
+           35% baseline while the other four sat at 38-44, which is the same
+           mistake Cold made in the other direction. Every other turn. */
+        if (co2 && co2.keen && b.turn % (co2.keenEvery || 1) === 0) {
+          for (const u of line) addStatus(g, u, 'spice', co2.keen, true);
+        }
       } else {
         const victim = pick(line.filter((u) => !u.leader).concat(line));
         if (victim) {
@@ -1859,7 +1865,13 @@ function frontFirstSpots() {
 function buildEncounter(g, kind) {
   const run = g.run;
   const zone = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
-  const scale = foeScale(run) * (kind === 'elite' ? 1.15 : 1);
+  /* The first two skirmishes were already thinned to two foes and no
+     reinforcements, and walking the guide in order showed that was not enough:
+     by the sixth hint the player's only warden was dead and the leader was
+     alone, in the fight the game teaches with. Count was never the problem —
+     strength was. */
+  const opening0 = run.zone === 0 && run.step < 2 ? (run.step === 0 ? 0.68 : 0.84) : 1;
+  const scale = foeScale(run) * (kind === 'elite' ? 1.15 : 1) * opening0;
   const src = foePool(zone);
   const waves = [];
 
@@ -2129,6 +2141,10 @@ function enterNode(g, choiceIdx) {
 /* Called when whatever the node was is finished with. */
 function advance(g) {
   const run = g.run;
+  for (const f of breakSeals(run)) {
+    fx.toast(f.name + ' — LOST', '#8fa2bd');
+    run.log.push(f.name.toLowerCase() + ' is out of reach now.');
+  }
   run.step++;
   if (run.step >= run.trail.length) {
     run.zone++;
@@ -2167,9 +2183,15 @@ function advance(g) {
    for the rest of the trek leans your way, hard. It is bought with scrip,
    which is what finally gives scrip a job worth having. */
 const COURSES = [
+  /* Spice is spent on the next hit, so "Spice 2 on deploy" was one extra point
+     of damage per body for the whole run — every other course's rule keeps
+     paying every turn, and the numbers said so: Hearth measured 29% against a
+     29% baseline, which is to say it was worth nothing at all. The fire keeps
+     them keen now, turn after turn, which is both the stronger rule and the
+     more hearth-like one. */
   { id: 'hearth', name: 'THE HEARTH ROAD', short: 'HEARTH', col: '#ff9a5c',
-    text: 'Hearth cards on every table, and every warden you set down arrives with Spice 2.',
-    match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 2) },
+    text: 'Hearth cards on every table, wardens arrive with Spice 1, and the fire keeps the line keen: Spice 1 on every warden every other turn.',
+    match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 1), keen: 1, keenEvery: 2 },
   /* Frost on EVERY arrival was measured at 41% against a 22% baseline while the
      other four sat at 29-32 — not a choice, a favourite. Frost skips a foe's
      whole turn, so handing it out wave-wide was worth more than any other
@@ -5448,6 +5470,27 @@ function drawTrail(c, t) {
   txt(c, need ? need.why : 'ready for what is ahead', px + pw / 2, py + ph + 10, 12,
     need ? '#ffd166' : '#7de08f', 'center', 't');
 
+  /* STILL IN REACH — the seals this run can still take, and how far it has to
+     carry them. A thing to chase is only a thing to play for while you can see
+     it slipping. */
+  const live = liveFeats(run);
+  const left = run.trail.length - run.step + (ZONES.length - 1 - run.zone) * run.trail.length;
+  if (live.length) {
+    const lw = 232, lx2 = VW - SAFE - lw - 6, ly = py;
+    const lh = 40 + live.length * 20;
+    panel(c, lx2, ly, lw, lh, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
+    txt(c, 'STILL IN REACH', lx2 + 14, ly + 18, 15, '#a8c8ea', 'left', 'd');
+    txt(c, left + ' steps', lx2 + lw - 14, ly + 18, 11, '#7e97b8', 'right', 'd');
+    live.slice(0, 8).forEach((f, i) => {
+      const yy = ly + 40 + i * 20;
+      c.save();
+      c.beginPath(); c.arc(lx2 + 20, yy, 5, 0, TAU);
+      inked(c, f.col, 1.8, C.ink);
+      c.restore();
+      txt(c, f.name, lx2 + 32, yy - 6, 11.5, f.col, 'left', 't');
+    });
+  }
+
   drawHud(c, t);
   if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 44, 15, '#9fb6d6', 'center', 't');
   if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - SAFE, VH - 44, 14, '#ffd166', 'right', 't');
@@ -5686,12 +5729,20 @@ const TUTORIAL = [
     done: (g) => g.battle.turn >= 1 },
   { id: 'action', text: 'One action a turn — a card, the bell, or a pass. Sliding a warden already on the board is free.',
     done: (g) => g.battle.turn >= 2 },
-  /* The two rules a first run used to have to lose to learn. Both are recent,
-     both decide fights, and neither is guessable from the board alone. */
-  { id: 'front', text: 'The front column burns TWO counters a turn, on both sides — anything there wears a ×2. Swing sooner, or stand back and stay whole.',
-    done: (g) => playerUnits(g).some((u) => u.col === 0) || g.battle.turn >= 4 },
-  { id: 'room', text: 'Leave one slot open and the whole line mends every turn. Fill all six and the cold gets into somebody.',
-    done: (g) => g.battle.turn >= 5 },
+  /* The two rules a first run used to have to lose to learn.
+
+     Both shipped as statements — here is a rule — with nothing to clear them
+     but a turn count, and walking the guide in order showed exactly what that
+     looks like: the same hint sitting there for three turns while the player
+     waits it out. Every other hint in this list names an ACTION and clears on
+     it, so these do too. */
+  { id: 'front', text: 'Slide a warden into the front column. Counters run twice as fast there, on both sides — anything standing there wears a ×2.',
+    // …with a way out, because the warden it asks for can die in the front row
+    // it just asked you to put them in
+    done: (g) => playerUnits(g).some((u) => u.col === 0 && !u.leader) || g.battle.turn >= 6 },
+  { id: 'room', text: 'Keep one slot empty and the whole line mends every turn. Fill all six and the cold gets into somebody.',
+    when: (g) => playerUnits(g).length >= 2,
+    done: (g) => freeSlots(g, 'p').length > 0 && g.battle.turn >= 3 },
   { id: 'order', text: 'Tap ORDER to number the board. Every foe resolves before every warden, front of the table first.',
     done: () => UI.order },
   { id: 'inspect', text: 'Tap anything — a card, a warden, a foe — and the game tells you exactly what it does.',
@@ -6994,6 +7045,51 @@ const FEATS = [
     got: () => ['hearth', 'frost', 'scrap'].every((t) => (G.meta.crossed || {})[t]) },
 ];
 const featEarned = (id) => !!(G.meta.feats && G.meta.feats[id]);
+
+/* WHICH SEALS ARE STILL ALIVE IN THIS RUN.
+
+   A seal on the title screen is a thing to chase; a seal you are three steps
+   from losing is a thing to PLAY FOR, and the game was not saying so. These are
+   the ones that a run can still earn — not yet held, and not yet broken — so
+   the trail can show them while they are still winnable, and show them going
+   out the moment they do. `alive` is deliberately the negative of what breaks
+   them rather than a re-check of `got`: a crossing feat is not "true yet" at
+   step three, it is simply still possible. */
+const FEAT_ALIVE = {
+  first: () => true,
+  whole: (run) => !run.everFell,
+  lean: (run) => run.deck.length <= 8,
+  course: (run) => !run.courseChanged,
+  pauper: (run) => !run.everBought,
+  winter: (run) => (run.winterPts || 0) >= 5,
+  beasts: () => true,
+  thrice: () => true,
+};
+function liveFeats(run) {
+  if (!run) return [];
+  return FEATS.filter((f) => {
+    if (featEarned(f.id)) return false;
+    const fn = FEAT_ALIVE[f.id];
+    try { return fn ? !!fn(run) : true; } catch (e) { return false; }
+  });
+}
+/* And the ones this run has already thrown away, so losing one is a moment
+   rather than a silence. Checked each step; `run.lostSeals` remembers which
+   have already been announced. */
+function breakSeals(run) {
+  if (!run) return [];
+  run.lostSeals = run.lostSeals || {};
+  const gone = [];
+  for (const f of FEATS) {
+    if (featEarned(f.id) || run.lostSeals[f.id]) continue;
+    const fn = FEAT_ALIVE[f.id];
+    if (!fn) continue;
+    let alive = true;
+    try { alive = !!fn(run); } catch (e) { alive = true; }
+    if (!alive) { run.lostSeals[f.id] = 1; gone.push(f); }
+  }
+  return gone;
+}
 /* Called on a crossing. Returns the ids earned THIS time, so the end screen can
    say which ones were new rather than listing everything again. */
 function checkFeats(run) {
@@ -7049,7 +7145,7 @@ window.FF = {
   temperable, temperCard, openTemper, tempered, TEMPER_CAP,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
-  FEATS, featEarned, checkFeats,
+  FEATS, featEarned, checkFeats, liveFeats, breakSeals, FEAT_ALIVE,
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,

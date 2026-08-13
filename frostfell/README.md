@@ -16,6 +16,40 @@ edge is placed against a safe inset so a notch never eats it, and the render
 suite checks every screen at five device shapes for touch targets under 40px,
 anything hanging off the stage, and anything hiding under a notch.
 
+---
+
+## Where things are
+
+Sixteen iterations in, this file is both the reference and the design record.
+The reference comes first; the reasoning is kept below it, because a rule you
+cannot find quickly is a rule nobody reads.
+
+**The rules, in order of how often you need them**
+
+| | |
+|---|---|
+| [The rules, briefly](#the-rules-briefly) | the board, the turn, counters, waves, the front row, the room rule |
+| [Building a deck](#building-a-deck) | rewards, the course, the caravan read, tempering, the trader |
+| [Beyond one run](#beyond-one-run) | the collection, winters, the Stranger |
+| [Something to chase](#something-to-chase) | seals |
+| [Beasts](#beasts) | what each one does when it turns over |
+
+**The code**
+
+| | |
+|---|---|
+| [Layout of the source](#layout-of-the-source) | twelve numbered sections, one file, no assets |
+| [The typefaces](#the-typefaces) | Frostcut and Frostwork, cut from source |
+| [Tests](#tests) | four suites, and what each one is for |
+| [Looking at it](#looking-at-it) | the Playwright shot walk |
+
+**The instruments, and what they have found.** These are the reasoning, kept
+because every balance decision in the game came out of one of them:
+[the ladder](#the-ladder), [the same deck two pilots](#the-same-deck-two-pilots),
+[which habits are worth anything](#which-parts-of-playing-well-are-worth-anything).
+
+---
+
 ## The rules, briefly
 
 - **The board** is two lanes deep, three columns a side. Column 0 is the front,
@@ -344,6 +378,8 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 The suites run headless against the real functions through `window.FF` — there
 is no second implementation of the rules to drift from.
 
+### The ladder
+
 `frostfell_run` is the balance instrument, and it plays every run four times,
 by a **cumulative ladder** of pilots — each one is the pilot above it plus one
 more thing it knows how to do, so the difference between two rows is that one
@@ -369,17 +405,18 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓████     9%
-+ the fight         ░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓█████████   20%
-+ the trader        ░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓████████████   25%
-+ steering the pool ░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓████████████████   34%
+careless            ░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓████   10%
++ the fight         ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓████████████   26%
++ the trader        ░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓█████████████████    36%
++ steering the pool ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓████████████████████   42%
 ```
 
-**Twenty-five points for playing well: eleven from the fight, five from the
-trader, nine from steering the pool** — the fight is the biggest single rung for
-the first time. The economy: penniless 30%, as it ships 34%, bottomless purse
-33%. Each course against a 29% baseline with none: Cold 41%, Bodies 41%, Gear
-36%, Scrap 34%, Hearth 29%.
+**Thirty points for playing well: fourteen from the fight, fifteen from the
+trader, one from steering the pool.** The economy: penniless 35%, as it ships
+40%, bottomless purse 40%. Each course against a 32% baseline with none: Cold
+45%, Hearth 43%, Bodies 42%, Gear 40%, Scrap 39% — all five ahead of declaring
+nothing, and all five within six points of each other, which is the first round
+they have been.
 
 ### The same deck, two pilots
 
@@ -387,13 +424,14 @@ A locked arm: the identical deck for the whole trail, nothing drafted, bought or
 burned, so every point between the rows is the fight and only the fight.
 
 ```
-weak deck, played badly   ███                              6%
-weak deck, played well    ████                             8%
-strong deck, played badly ██████                          11%
+weak deck, played badly   ██                               4%
+weak deck, played well    ███████                         13%
+strong deck, played badly █████                           10%
 strong deck, played well  █████████                       18%
 ```
 
-**Skill closes about 40% of a deck gap.** The first version of this arm measured
+**Skill now closes more than a whole deck gap** — a weak deck played well (13%)
+beats a strong one played badly (10%). The first version of this arm measured
 *zero for every combination* — a caravan that does not grow cannot cross the
 trail at all, whoever is holding it, so there was never a gap for skill to
 close. That is what the fell answering the caravan is for.
@@ -404,22 +442,39 @@ A second instrument switches each of the careful pilot's fight habits off one at
 a time and re-runs the sweep. Whatever the pilot can stop doing without losing
 win rate was never a decision:
 
+`FF_ABLATE=150` turns this section up on its own — the habits sit two to seven
+points apart and the suite's usual band is five, which is exactly why the same
+habit read +3 one round and −2 the next. Run at 450 runs an arm, the verdict was
+blunt: **three of the six habits were actively hurting the pilot.**
+
 ```
-the fight, played well:  20%
-    +7  ████                 holding gear until it earns the turn
-    +6  ███                  keeping a slot in reserve
-    +1  █                    denying schemes
-    -1                       keeping the leader at the back
-    -2                       calling waves onto a set board
-    -2                       placing bodies where they will be hit
+before, at 450 runs an arm:        after the cull, at 210:
+    +5  denying schemes                +9  denying schemes
+    +2  holding gear                   +2  holding gear
+    +0  keeping a slot                 +2  keeping a slot
+    -3  calling waves early             0  repositioning at all (removed)
+    -4  placing bodies "where hit"     -1  filling the front of both lanes
+    -7  keeping the leader at the back -5  calling waves early (removed)
 ```
 
-**Repositioning is out of the pilot, and that is a verdict rather than a tidy-up.**
-Shuffling wardens about after they are down priced at or below zero for three
-rounds and survived two rewrites — first as a rule about health, then as a rule
-about the clock. Both measured inside the noise. Where a body goes down is the
-question the geometry asks, and it is asked once, at deployment; the free move
-after that is a convenience. Removing it made the fight pilot *better*.
+Cutting the three negatives took the fight pilot from **17% to 26%**.
+
+- **Keeping the leader at the back** — in from the first round, priced at −7. The
+  leader is usually the strongest thing the caravan owns and the front row burns
+  two counters a turn; a leader kept out of reach is a leader that never swings.
+- **Placing bodies "where they will be hit"** — priced at −4 against simply
+  filling the nearest free slot, across two rewrites of the heuristic.
+- **Calling waves early** — priced at −3, then measured again in both directions
+  at 210 runs an arm and cost five points each time.
+- **Repositioning** has now been measured in both directions too — pull the
+  wounded back, walk the healthy forward — and neither is a decision. The pilot
+  does none. Where a body goes down is the question the geometry asks, and it is
+  asked once, at deployment.
+
+The lesson worth keeping is about the instrument, not the game: **for four
+rounds these numbers were read at a sample where the band was wider than the
+effect**, and three habits that were costing the pilot points survived because
+of it.
 
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,

@@ -1816,4 +1816,70 @@ section('a course is a choice, not a favourite');
   eq(FFe.stat(back, 'frost'), 0, 'the rest of it does not');
 }
 
+/* ------------------------------------------------- iteration 16 additions -- */
+section('a seal you can still lose');
+{
+  const FFa = loadGame({});
+  const run = FFa.newRun(FFa.G, 'hearth', 401);
+  const live0 = FFa.liveFeats(run).map((f) => f.id);
+  ok(live0.indexOf('whole') >= 0, 'a fresh caravan can still cross with everybody');
+  ok(live0.indexOf('pauper') >= 0, 'and still cross without opening the purse');
+
+  // and the moment one is thrown away, the run knows
+  run.everFell = 1;
+  eq(FFa.liveFeats(run).map((f) => f.id).indexOf('whole'), -1, 'losing a warden takes that one off the table');
+  const gone = FFa.breakSeals(run);
+  eq(gone.length >= 1, true, 'and it is announced');
+  ok(gone.some((f) => f.id === 'whole'), 'by name');
+  eq(FFa.breakSeals(run).length, 0, 'once, not every step');
+
+  // an earned seal is not still "in reach" — it is held
+  FFa.G.meta.feats = { pauper: true };
+  eq(FFa.liveFeats(run).map((f) => f.id).indexOf('pauper'), -1, 'a seal already held is not one to chase');
+
+  // every seal that can be lost has a way of saying so
+  for (const f of FFa.FEATS) {
+    ok(typeof FFa.FEAT_ALIVE[f.id] === 'function', f.id + ' knows whether it is still possible');
+  }
+}
+
+section('the guide asks rather than tells');
+{
+  const FFb = loadGame({});
+  /* Two hints shipped as statements with nothing but a turn count to clear
+     them, and walking the guide in order showed the same hint sitting there for
+     three turns. Every hint names something to do. */
+  for (const h of FFb.TUTORIAL) {
+    ok(typeof h.done === 'function', h.id + ' knows when it is finished');
+    ok(h.text.length <= 130, h.id + ' says it in a breath');
+  }
+  const front = FFb.TUTORIAL.find((h) => h.id === 'front');
+  ok(/slide|drag|tap|keep|ring/i.test(front.text), 'the front-row hint asks for an action');
+
+  // and it clears on the action, not on a clock
+  withRun(FFb, 'hearth', 402);
+  FFb.enterNode(FFb.G, 0);
+  const b = FFb.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  place(FFb, 'p', 'snowpup', 1, 2, {});
+  eq(front.done(FFb.G), false, 'nobody is in the front column yet');
+  const u = FFb.playerUnits(FFb.G).find((x) => !x.leader);
+  FFb.moveUnit(FFb.G, u, 1, 0);
+  eq(front.done(FFb.G), true, 'and sliding one there clears it at once');
+}
+
+section('the first fight is a lesson, not a wall');
+{
+  const FFc = loadGame({});
+  const run = FFc.newRun(FFc.G, 'hearth', 403);
+  run.step = 0;
+  const opening = FFc.buildEncounter(FFc.G, 'fight');
+  eq(opening.length, 1, 'the first skirmish has no reinforcements');
+  ok(opening[0].length <= 2, 'and no more than two foes');
+  const openScale = opening[0][0].scale;
+  run.step = 4;
+  const later = FFc.buildEncounter(FFc.G, 'fight');
+  ok(later[0][0].scale > openScale, 'and they are weaker than what comes later, not just fewer');
+}
+
 done('frostfell');

@@ -49,12 +49,33 @@ section('the hints');
      the 'action' hint was showing, which quietly assumed no later hint would
      ever want the clock to move — the moment one did, the harness span for
      ever. A player takes turns the whole way through; so does this. */
+  /* Play on until the order hint comes up — through the end of a fight if it
+     takes that long. The opening skirmish is deliberately gentle now, so a
+     guided player can finish it before the guide finishes them; the guide
+     carries into the next fight, and so does this. */
+  const nextFight = () => {
+    for (let k = 0; k < 8 && G.screen !== 'battle'; k++) {
+      if (G.screen === 'reward') FF.press('rewardSkip');
+      else if (G.screen === 'trail') FF.enterNode(G, 0);
+      else if (G.screen === 'shop') FF.press('leaveShop');
+      else if (G.screen === 'camp') FF.press('campRest');
+      else FF.advance(G);
+      FF.drainAll();
+      while (FF.UI.choose) { FF.UI.choose.onPick(0); FF.UI.choose = null; }
+    }
+  };
   let guard = 0;
-  while (idOf() && idOf() !== 'order' && G.tut.i < FF.TUTORIAL.length && guard++ < 60) {
-    if (!G.battle.over) { FF.passTurn(G); FF.drainAll(); }
+  while (idOf() && idOf() !== 'order' && G.tut.i < FF.TUTORIAL.length && guard++ < 80) {
+    if (G.screen !== 'battle' || G.battle.over) { nextFight(); settle(); continue; }
+    // do what the hint asks, then play on — which is what a player does
+    if (idOf() === 'front') {
+      const u = FF.playerUnits(G).find((x) => !x.leader && x.col > 0);
+      if (u && FF.slotFree(G, 'p', u.lane, 0)) FF.moveUnit(G, u, u.lane, 0);
+    }
+    FF.passTurn(G); FF.drainAll();
     settle();
   }
-  ok(guard < 60, 'the guide reaches the order hint by playing the fight');
+  ok(guard < 80, 'the guide reaches the order hint by playing the fight');
   eq(idOf(), 'order', 'then it points at the resolution order');
   settle();
   FF.UI.order = true;
