@@ -3414,3 +3414,50 @@ desktop one. That is the correct answer and not an obvious one.
     third mutant now collapses it to reading `defTypes[0]` alone; under it the
     reachable set drops to 0.5, 1, 2 and every dual-typed creature loses its
     extreme matchup, so the enumeration is load-bearing rather than decorative.
+
+109. **Twenty-eight moves can miss and no voice said so** (pass 198).
+    The whole `MOVES` table, three readings each: what the table declares, what
+    `moveCardText` tells the player, and what the resolver does when the move is
+    actually used. Fifty-six moves, not the handful a driven fight turns up.
+
+    The resolver and the table agree everywhere. Every fx key in the table —
+    `drain, foe, heal, pri, recoil, self, st` — is applied, and every one of
+    them was already spoken by the card. Driven for real: recoil takes HP, a
+    heal heals, a self buff moves the stage the table names, a foe debuff moves
+    theirs. The only rows that came back "promised but not seen" were chance
+    riders that had not rolled, which is the instrument's own caveat and not a
+    finding.
+
+    What was not spoken is not an fx at all. **`acc` sits beside `pow` and
+    `pp`**, `resolve` rolls a hundred against it, and 28 of the 56 moves can
+    miss:
+
+        1 in 5   Maelstrom, Thunderclap, Eclipse Fang, Landslide
+        15%      Magma Charge, Pyre Burst, Breaker, Thorn Maul, Bloom Burst,
+                 Volt Crash, Ruin Maw, Quake Step, Starfall
+        10%      Root Snare, Boulder Drop, Lull
+        5%       twelve more
+
+    The four that whiff hardest are the four biggest hits in the game. The card
+    was making its most expensive promise with the one number that qualifies it
+    left out. `moveCardText` now says it, in the voice already there:
+
+        Magma Charge — Ember · deal 19-22, 85% to land, costs you HP
+
+    Placed after what the move IS and before what landing DOES, because it
+    qualifies the damage. A move with `acc: 0` is skipped by the roll entirely —
+    the ten pure status moves — and one at 100 cannot miss, so both stay silent:
+    an unqualified promise is the right reading when the promise is unqualified.
+
+    **A planted fault did not bite, for the second pass running, and this time
+    the cause was a rule already written down.** Disabling the accuracy roll
+    outright left every check green, because the source net matched a literal
+    copy of the roll sitting inside a doc comment — one I had written in this
+    same pass, three lines above the fix. "A doc comment containing a literal
+    call can create a fake call site for a harvester" has been in the rules
+    since 184; it is not enough to know it. The comment no longer quotes the
+    line, and the net COUNTS the occurrence instead of finding one.
+
+    Four planted faults, all four bite; two sweep mutants aimed at the new
+    section, which reports 31 of 76 killed; every mutant anchor re-audited —
+    none orphaned. Render suite 1747 -> 1823 checks.
