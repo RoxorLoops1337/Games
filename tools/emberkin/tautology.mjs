@@ -207,6 +207,13 @@ const MUTANTS = [
     find: '      const d = Math.max(1, Math.floor(mon.max / 16));',
     to: '      const d = Math.max(1, Math.floor(mon.max / 32));' },
 
+  { name: 'deck: the card goes back to promising a wasted rider', aims: ['a deck card does not promise a status the foe shrugs off'],
+    find: '    ? `${said} It shrugs that off.` : said;',
+    to: '    ? said : said;' },
+  { name: 'deck: the card stops substituting its value', aims: ['a deck card does not promise a status the foe shrugs off'],
+    find: "  const said = c.txt.replace('{v}', cardValue(inst));",
+    to: '  const said = c.txt;' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

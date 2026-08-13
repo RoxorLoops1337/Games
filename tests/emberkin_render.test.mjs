@@ -5460,8 +5460,152 @@ section('a card does not promise a status the thing in front of you cannot take'
   // The wording is built where the rider is, not bolted on somewhere else.
   ok(SRC.includes('bits.push(safe ? `it shrugs off ${fx.st[0]}` : `may ${fx.st[0]}`);'),
     'one line decides which promise the card makes');
-  eq((SRC.match(/IMMUNE_TO\[/g) || []).length, 3,
-    'the rule is read in three places — the resolver, the deck riders, and the card');
+  // Four now: pass 201 found the DECK card was a second voice with the same
+  // gap and taught it the rule too. Counted rather than found, so a new reader
+  // has to be acknowledged here rather than appearing quietly.
+  eq((SRC.match(/IMMUNE_TO\[/g) || []).length, 4,
+    'the rule is read in four places — the resolver, the deck riders, the move card and the deck card');
+}
+
+// Does every card do what its text says?
+//
+// Thirty-eight cards, three readings each — the table, the text `cardText`
+// builds, and what `playCard` applies. Driven into a real fight, every one of
+// the thirty-eight changes something measurable, every text renders with its
+// value substituted and no brace left standing, and every card that GROWS
+// prints a value that grows with it (the five whose text carries no number —
+// Venom Coat, Ember Oil, Second Wind, Twin Strike, Overkill — have no growth to
+// show, so there is nothing hidden).
+//
+// The fault was one voice along from pass 200. That pass taught the KIN move
+// card that a creature cannot take the status its own element deals; the DECK
+// is a second voice and nobody told it. Four cards promise a status, and driven
+// eighty times each into a foe that shrugs it off they landed it zero times
+// while the text went on offering it:
+//
+//   Kindle      50% to burn     into Cindercub   0/80
+//   Rootbind    50% to snare    into Sproutle    0/80
+//   Venom Coat  always snares   into Sproutle    0/80
+//   Ember Oil   60% to burn     into Cindercub   0/80
+//
+// The last two are the expensive half: powers, bought for the rest of a battle
+// in which they can do nothing at all.
+section('a deck card does not promise a status the foe shrugs off');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  const ids = Object.keys(g.CARDS);
+  eq(ids.length, 38, 'every card in the table is in scope');
+
+  // The four that carry a rider, harvested rather than listed from memory.
+  const riders = ids.filter((id) => (g.CARDS[id].fx || {}).st);
+  eq(riders.join(','), 'kindle,rootbind,venomcoat,emberoil', 'these are the cards that promise a status');
+
+  const fight = (foeId) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('gargolem', 40)];
+    g.G.cards = []; g.G.deck = [];
+    g.startBattle({ foe: g.mkMon(foeId, 25), wild: true });
+    const b = g.B();
+    b.energy = 9;
+    b.phase = 'player';
+    return b;
+  };
+  const play = (b, id) => {
+    const card = g.mkCard(id);
+    g.G.cards.push(card);
+    b.hand = [{ src: 'deck', u: card.u, id, bg: 0 }];
+    // `playCard(i)` takes the hand index alone and makes its own log.
+    g.playCard(0);
+    return card;
+  };
+
+  // THE WHOLE DOMAIN: every rider card against every creature in the dex.
+  let pairs = 0, shrugged = 0;
+  for (const id of riders) {
+    const st = g.CARDS[id].fx.st[0];
+    for (const foeId of g.DEX_ORDER) {
+      const b = fight(foeId);
+      const safe = g.DEX[foeId].types.includes(g.IMMUNE_TO[st]);
+      const said = g.cardText({ id, plus: 0, bg: 0 });
+      pairs++;
+      if (safe) {
+        shrugged++;
+        ok(said.endsWith(' It shrugs that off.'), `${g.CARDS[id].name} vs ${g.DEX[foeId].name}: the card says it is wasted`);
+      } else {
+        ok(!said.includes('shrugs'), `${g.CARDS[id].name} vs ${g.DEX[foeId].name}: the promise stands`);
+      }
+      // …and the value is still in there either way.
+      ok(!/\{|\}/.test(said), '…with nothing left unsubstituted');
+    }
+  }
+  eq(pairs, 76, 'four rider cards against nineteen creatures');
+  eq(shrugged, 16, 'sixteen of those pairings are wasted');
+
+  // Pinned separately from the wording: the rider really does fail to land.
+  for (const id of riders) {
+    const st = g.CARDS[id].fx.st[0];
+    const victim = g.DEX_ORDER.find((d) => g.DEX[d].types.includes(g.IMMUNE_TO[st]));
+    let landed = 0;
+    for (let i = 0; i < 40; i++) {
+      const b = fight(victim);
+      play(b, id);
+      b.mine.moves = [{ id: 'cinder', pp: 9, max: 9 }];
+      g.useMove([], 'mine', 'cinder');
+      if (b.foe.status === st) landed++;
+    }
+    eq(landed, 0, `${g.CARDS[id].name} lands no ${st} on ${g.DEX[victim].name} in forty tries`);
+    // …and does land it on somebody who can take it, or the zero above proves
+    // only that the card is broken.
+    let on = 0;
+    for (let i = 0; i < 40; i++) {
+      const b = fight('pebblet');
+      play(b, id);
+      b.mine.moves = [{ id: 'cinder', pp: 9, max: 9 }];
+      g.useMove([], 'mine', 'cinder');
+      if (b.foe.status === st) on++;
+    }
+    ok(on > 0, `while ${g.CARDS[id].name} does land ${st} on Pebblet (${on}/40)`);
+  }
+
+  // Out of a fight the plain promise stands.
+  g.G.battle = null;
+  eq(g.cardText({ id: 'kindle', plus: 0, bg: 0 }), 'Next attack +3 and 50% to burn.',
+    'on a footpath a card makes its plain promise');
+
+  // Every card still acts, and every text still renders — the two things the
+  // sweep found already true, kept true.
+  {
+    let inert = 0, braced = 0;
+    const snap = (b) => JSON.stringify([b.mods, b.shield, b.energy, b.hand.length,
+      b.mine.hp, b.mine.max, b.foe.hp, b.powers, g.G.might, b.draw.length, b.disc.length]);
+    for (const id of ids) {
+      const b = fight('pebblet');
+      b.mine.hp = Math.floor(b.mine.max * 0.6);
+      const before = snap(b);
+      play(b, id);
+      if (before === snap(b)) inert++;
+      if (/\{|\}/.test(g.cardText({ id, plus: 0, bg: 0 }))) braced++;
+    }
+    eq(inert, 0, 'all thirty-eight cards change something when played');
+    eq(braced, 0, 'and all thirty-eight texts render with nothing left in braces');
+  }
+
+  // A card that grows shows a value that grows with it.
+  for (const id of ids) {
+    const c = g.CARDS[id];
+    if (!(c.grow || c.bgrow)) continue;
+    ok(/\{v\}/.test(c.txt), `${c.name} grows, so its text carries a value`);
+    ok(g.cardText({ id, plus: 1, bg: 0 }) !== g.cardText({ id, plus: 0, bg: 0 }),
+      `…and the text moves when it does`);
+  }
+
+  // One reading of the rule, in a voice that did not have it before.
+  ok(SRC.includes('? `${said} It shrugs that off.` : said;'), 'the deck card qualifies its rider');
+  eq((SRC.match(/IMMUNE_TO\[/g) || []).length, 4,
+    'the immunity is read in four places — the resolver, the deck riders, the move card and the deck card');
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.

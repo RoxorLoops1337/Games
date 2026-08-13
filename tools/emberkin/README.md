@@ -3553,3 +3553,52 @@ desktop one. That is the correct answer and not an obvious one.
     Four planted faults, all four bite; three sweep mutants aimed at the new
     section, which reports 40 of 118 killed; every mutant anchor re-audited —
     none orphaned. Render suite 1863 -> 1982 checks.
+
+112. **The deck was a second voice nobody had told** (pass 201).
+    Thirty-eight cards, three readings each — the table, the text `cardText`
+    builds, and what `playCard` applies. Driven into a real fight, all
+    thirty-eight change something measurable, all thirty-eight texts render with
+    their value substituted and no brace left standing, and every card that
+    GROWS prints a value that grows with it. The five whose text carries no
+    number — Venom Coat, Ember Oil, Second Wind, Twin Strike, Overkill — have no
+    growth to show, so nothing is hidden behind them.
+
+    The fault was one voice along from the last pass. 200 taught the KIN move
+    card that a creature cannot take the status its own element deals; the DECK
+    is a separate voice built by a separate function and nobody told it. Four
+    cards promise a status, and driven eighty times each into a foe that shrugs
+    it off they landed it **zero** times while the text went on offering it:
+
+        Kindle      50% to burn     into Cindercub   0/80
+        Rootbind    50% to snare    into Sproutle    0/80
+        Venom Coat  always snares   into Sproutle    0/80
+        Ember Oil   60% to burn     into Cindercub   0/80
+
+    The last two are the expensive half: POWERS, paid for once and meant to last
+    the rest of a battle — bought, in these matchups, for a fight in which they
+    can do nothing at all.
+
+    `cardText` now qualifies the promise the way the move card does: "Next
+    attack +3 and 50% to burn. **It shrugs that off.**" Sixteen of the 76
+    card/creature pairings say it; the other sixty read exactly as before, and
+    out of a fight there is nobody to be immune so the plain promise stands.
+
+    **Pass 200's own count check went red, and was right to.** It asserted the
+    immunity was read in three places; there are four now. Counted rather than
+    found, which is what made a new reader announce itself instead of arriving
+    quietly.
+
+    **And the driver lied first, exactly as it did in 198.** `playCard(i)` takes
+    the hand index alone and makes its own log; passing a log first played
+    nothing, and the sweep reported all thirty-eight cards changing NOTHING —
+    a wall of identical results, which is a signature error wearing the costume
+    of a finding. Second time this loop has been taught that; it is in the rules
+    twice now.
+
+    Four planted faults, all four bite — though the second had to be re-chosen:
+    the first attempt mutated a `|| ''` fallback that can never fire, which is
+    a dead branch rather than a fault, and proved nothing either way.
+
+    Two sweep mutants aimed at the new section, which reports 67 of 187 killed;
+    every mutant anchor re-audited — none orphaned. Render suite 1982 -> 2169
+    checks.
