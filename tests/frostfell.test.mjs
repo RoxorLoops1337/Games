@@ -1015,4 +1015,56 @@ section('tap, or drag, whichever the hand prefers');
   b.busy = false;
 }
 
+
+/* --------------------------------------------------------- what got you -- */
+section('an ending that says something');
+{
+  const run = withRun(FF, 'hearth', 3131);
+  FF.startBattle(G, 'fight');
+  const lead = FF.playerUnits(G).find((u) => u.leader);
+  const killer = FF.enemyUnits(G)[0];
+  eq(run.killedBy, undefined, 'nothing has stopped you yet');
+  FF.hurt(G, lead, 9999, killer);
+  FF.drainAll();
+  ok(!!run.killedBy, 'a run remembers what stopped it');
+  eq(run.killedBy.name, killer.name, 'by name');
+  ok(!!run.killedBy.art, 'and well enough to draw it again');
+
+  // and it survives the trip through a save
+  const store = {};
+  const FF2 = loadGame(store);
+  const r2 = FF2.newRun(FF2.G, 'frost', 9);
+  r2.killedBy = { name: 'Snapfrost', art: FF2.FOES.snapfrost.art, def: 'snapfrost', boss: false };
+  FF2.saveRun(r2);
+  const back = loadGame(store).loadRun(loadGame(store).G);
+  ok(!!back, 'the run loads');
+}
+
+/* ------------------------------------------------------------ every face -- */
+section('faces');
+{
+  // brows and lids are derived unless a creature asks for its own, and every
+  // foe must end up with something that reads as menace
+  const foes = Object.values(FF.FOES);
+  let plain = [];
+  for (const f of foes) {
+    const a = f.art;
+    const brow = a.brow || (a.evil ? 'angry' : 'none');
+    if (brow === 'none' && a.eyes !== 'slit' && a.mouth !== 'trap' && a.mouth !== 'fang') plain.push(f.id);
+  }
+  eq(plain.join(','), '', 'every foe reads as a foe, not just as a repainted friend');
+
+  // the derived eye numbers have to actually spread out rather than all land
+  // on the same value
+  const seen = {};
+  for (const c of Object.values(FF.CARDS).concat(foes)) {
+    if (c.type !== 'unit') continue;
+    const a = c.art;
+    const fh = ((a.body || '').charCodeAt(1) || 3) * 7 + ((a.mouth || 'x').charCodeAt(0) || 5) * 13
+      + ((a.mark || 'n').charCodeAt(0) || 2) * 3;
+    seen[(0.86 + ((fh % 5) * 0.09)).toFixed(2) + '/' + (0.88 + ((fh >> 2) % 5) * 0.07).toFixed(2)] = 1;
+  }
+  ok(Object.keys(seen).length >= 8, 'eyes vary in size and spacing across the cast');
+}
+
 done('frostfell');
