@@ -4568,9 +4568,16 @@ section('a shelf where nothing can be taken says so');
     g.G.bag = { salve: 2, bloomorb: 1 };
     g.G.party[0].hp = 1;
     eq(g.shelfNote('bag', bag(g), false), '', 'one usable row and the shelf says nothing');
-    eq(g.shelfNote('bag', bag(g), true), '', 'and in a fight it says nothing either');
-    ok(!g.rowDead('bag', 'bloomorb', true), 'because in a fight nothing on the shelf is refused');
-    ok(g.rowDead('bag', 'bloomorb', false), 'while on the path an orb is');
+    // …and in a fight, which now needs an actual fight to be in. These two read
+    // `inFight` with no battle up — a state the game cannot reach — and passed
+    // because in a fight nothing was EVER dimmed, which was pass 199's finding.
+    // The claim survives; the setup was standing in for it.
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('pebblet', 16), wild: true });
+    g.B().mine.hp = 1;
+    eq(g.shelfNote('bag', bag(g), true), '', 'and in a wild fight it says nothing either');
+    ok(!g.rowDead('bag', 'bloomorb', true), 'because an orb against a wild kin is a real offer');
+    ok(g.rowDead('bag', 'bloomorb', false), 'while on the path an orb is refused');
   }
   // The shop, off the same helper.
   {
@@ -5150,6 +5157,183 @@ section('a move card says whether it lands');
   {
     const r = drive('dreadgaze');
     eq(r.after.fs.atk, r.before.fs.atk - 2, 'and a foe debuff moves theirs');
+  }
+}
+
+// Does every item do what its shelf row says?
+//
+// Seven items, three code paths — the row, `useItemInBattle`, and the field
+// path in `screenSelect`. The blurbs are exact, checked against a kin with more
+// than 90 HP missing so the clamp cannot flatter them: Salve gives 30, Great
+// Salve 90, Emberroot half of max. Both paths give the same number.
+//
+// The shelf was the thing that lied, and only in a fight. `rowDead` returned
+// false for EVERY row the moment a battle was up, so the bag drew seven live
+// rows while the resolver held refusals nobody could see:
+//
+//   trainer fight   three orbs drawn live, no odds beside them, and each press
+//                   answered "Stealing another trainer's kin? No."
+//   whole kin       a salve drawn live, press answered "already whole"
+//   standing kin    an Emberroot drawn live, press answered "does not need that"
+//
+// The footpath has had one reading of this since 192 (`fieldItemUse`); the
+// fight had none. `battleItemUse` is that reading, and both the row and the
+// resolver ask it.
+section('a bag row in a fight refuses before you press it');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+  const ids = Object.keys(g.ITEMS);
+  eq(ids.length, 7, 'seven items in the table');
+
+  // THE PROPERTY, over every row in every battle state that changes an answer:
+  // a row is dimmed exactly when the press would be refused.
+  let pairs = 0, disagree = 0;
+  for (const wild of [true, false]) {
+    for (const state of ['whole', 'hurt', 'down']) {
+      g.G.battle = null;
+      g.G.party = [g.mkMon('cindercub', 20), g.mkMon('pyrelynx', 20)];
+      g.G.bag = Object.fromEntries(ids.map((k) => [k, 5]));
+      g.startBattle({ foe: g.mkMon('pebblet', 20), wild });
+      const b = g.B();
+      const set = () => { b.mine.hp = state === 'down' ? 0 : state === 'hurt' ? 1 : b.mine.max; };
+      set();
+      for (const k of ids) {
+        const dead = g.rowDead('bag', k, true);
+        const had = g.G.bag[k];
+        const refused = !g.useItemInBattle([], k, null);
+        g.G.bag[k] = had;            // put the shelf back for the next row
+        set();
+        pairs++;
+        if (dead !== refused) {
+          disagree++;
+          ok(false, `${k} in a ${wild ? 'wild' : 'trainer'} fight against a ${state} kin: row ${dead ? 'dead' : 'live'}, press ${refused ? 'refused' : 'allowed'}`);
+        }
+      }
+    }
+  }
+  eq(pairs, 42, 'every row in every battle state was driven');
+  eq(disagree, 0, 'and the row agrees with the press in all of them');
+
+  // The case that started it, named on its own so it cannot quietly come back.
+  {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('cindercub', 20)];
+    g.G.bag = Object.fromEntries(ids.map((k) => [k, 5]));
+    g.startBattle({ foe: g.mkMon('pebblet', 20), wild: false });
+    const orbs = ids.filter((k) => g.ITEMS[k].kind === 'orb');
+    eq(orbs.length, 3, 'three orbs');
+    for (const k of orbs) ok(g.rowDead('bag', k, true), `${k} is dimmed against a trainer`);
+    // …and live again the moment the fight is one you could catch in.
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('pebblet', 20), wild: true });
+    for (const k of orbs) ok(!g.rowDead('bag', k, true), `${k} is live against a wild kin`);
+  }
+
+  // …and the refusals themselves, PINNED. The property above compares the row
+  // against the press, and both now read the same gate — so a gate that stops
+  // refusing something keeps them in perfect agreement and the check stays
+  // green. A planted fault proved exactly that: dropping the revive guard bit
+  // nothing. Consistency is not correctness; these name the answers.
+  {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('cindercub', 20)];
+    g.G.bag = Object.fromEntries(ids.map((k) => [k, 5]));
+    g.startBattle({ foe: g.mkMon('pebblet', 20), wild: true });
+    const b = g.B();
+    const gate = (k) => g.battleItemUse(k, b.mine);
+
+    b.mine.hp = b.mine.max;
+    ok(!gate('salve').ok, 'a salve on a whole kin is refused');
+    ok(/already whole/.test(gate('salve').why), '…and says why');
+    ok(!gate('revive').ok, 'an Emberroot on a standing kin is refused');
+    ok(/does not need that/.test(gate('revive').why), '…and says why');
+
+    b.mine.hp = 0;
+    ok(!gate('salve').ok, 'a salve on a kin that is out cold is refused');
+    ok(/out cold/.test(gate('salve').why), '…and says why');
+    ok(gate('revive').ok, 'and an Emberroot on it is not');
+
+    b.mine.hp = 1;
+    ok(gate('salve').ok, 'a salve on a hurt kin is offered');
+    ok(gate('elixir').ok, 'and the elixir is always offered in a fight');
+
+    g.G.bag = {};
+    ok(!gate('salve').ok, 'an item you do not have is refused');
+    ok(/none of those/.test(gate('salve').why), '…and says why');
+  }
+
+  // The shelf's own line, in a fight, in the fight's words. This branch could
+  // not be reached at all until the fight learned to dim a row.
+  {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('cindercub', 20)];
+    g.G.bag = { bloomorb: 1, salve: 1 };
+    g.startBattle({ foe: g.mkMon('pebblet', 20), wild: false });
+    g.B().mine.hp = g.B().mine.max;
+    const list = g.shelve(Object.keys(g.G.bag)).flatMap(([, keys]) => keys);
+    ok(list.every((k) => g.rowDead('bag', k, true)), 'an orb and a full kin against a trainer: every row dead');
+    const note = g.shelfNote('bag', list, true);
+    eq(note, 'Nothing in the bag will help here.', 'and the shelf says so in the fight\'s own words');
+    ok(!/out on the path/.test(note), 'not the footpath\'s, which is where it was standing');
+  }
+  // …and a shelf where every row agrees on ONE reason, which is where the two
+  // voices actually say different things: three orbs against a trainer are all
+  // refused for the same reason in a fight, and for a different same reason on
+  // a footpath. The note has to be the fight's.
+  {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('cindercub', 20)];
+    g.G.bag = { bloomorb: 1, gleamorb: 1, prismorb: 1 };
+    g.startBattle({ foe: g.mkMon('pebblet', 20), wild: false });
+    const list = g.shelve(Object.keys(g.G.bag)).flatMap(([, keys]) => keys);
+    eq(list.length, 3, 'three orbs on the shelf');
+    ok(list.every((k) => g.rowDead('bag', k, true)), 'all three dead against a trainer');
+    eq(g.shelfNote('bag', list, true), 'Stealing another trainer\'s kin? No.',
+      'the shelf speaks the refusal the fight would give');
+    eq(g.shelfNote('bag', list, false), 'Save those for the wild.',
+      'and the footpath still speaks its own');
+  }
+
+  // One reading: the resolver asks the gate rather than keeping its own copy.
+  // COUNTED. Three call sites: the row, the resolver, and the shelf's own note
+  // — which had to learn the fight's refusals too once the shelf could go
+  // wholly dead in one. The definition reads `function battleItemUse(id,` and
+  // is counted here as well, so the total is four.
+  eq((SRC.match(/battleItemUse\(/g) || []).length, 4, 'the gate is defined once and asked in three places');
+  ok(SRC.includes('const gate = battleItemUse(id, target);'), 'the resolver asks it');
+  ok(SRC.includes("if (inFight) return !battleItemUse(k, null).ok;"), 'and the row asks it');
+  ok(!/if \(inFight\) return false;/.test(SRC), 'the blanket "nothing is ever dead in a fight" is gone');
+  // The refusals live in the gate now, not duplicated in the resolver body.
+  {
+    const fn = SRC.slice(SRC.indexOf('function useItemInBattle('));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    ok(!/is already whole/.test(body), 'the resolver no longer carries its own copy of a refusal');
+    ok(!/does not need that/.test(body), '…nor of the other one');
+  }
+
+  // The blurbs are exact — measured against a kin big enough that the clamp
+  // cannot make a small number look like the promised one.
+  {
+    g.G.battle = null;
+    const big = g.mkMon('gargolem', 60);
+    g.G.party = [big];
+    g.G.bag = { salve: 5, greatsalve: 5, revive: 5 };
+    g.startBattle({ foe: g.mkMon('pebblet', 20), wild: true });
+    const b = g.B();
+    b.mine = big;
+    ok(big.max > 120, `a kin with ${big.max} max HP, so 90 fits inside the gap`);
+    for (const [k, want] of [['salve', 30], ['greatsalve', 90]]) {
+      b.mine.hp = 1;
+      g.useItemInBattle([], k, 0);
+      eq(b.mine.hp - 1, want, `${g.ITEMS[k].name} restores the ${want} its row promises`);
+      ok(g.ITEMS[k].desc.includes(String(want)), `…and its row says ${want}`);
+    }
+    b.mine.hp = 0;
+    g.useItemInBattle([], 'revive', 0);
+    eq(b.mine.hp, Math.floor(b.mine.max / 2), 'Emberroot wakes a kin at half, as its row says');
   }
 }
 

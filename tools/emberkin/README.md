@@ -3461,3 +3461,50 @@ desktop one. That is the correct answer and not an obvious one.
     Four planted faults, all four bite; two sweep mutants aimed at the new
     section, which reports 31 of 76 killed; every mutant anchor re-audited —
     none orphaned. Render suite 1747 -> 1823 checks.
+
+110. **The shelf could not dim a row in a fight** (pass 199).
+    Seven items, three code paths — the row, `useItemInBattle`, and the field
+    path in `screenSelect`. The blurbs are exact, checked against a kin with
+    more than 90 HP missing so the clamp could not flatter them: Salve gives 30,
+    Great Salve 90, Emberroot half of max, and both paths give the same number.
+    (The first reading said 48 and 24, which was the clamp against a level-20
+    starter and not a lie — worth the second measurement to find out.)
+
+    The shelf was the thing that lied, and only in a fight. `rowDead` returned
+    FALSE for every row the moment a battle was up, so the bag drew seven live
+    rows while the resolver held refusals nobody could see:
+
+        trainer fight   three orbs live, no odds beside them, nothing said, and
+                        each press answered "Stealing another trainer's kin? No."
+        whole kin       a salve live, press answered "already whole"
+        standing kin    an Emberroot live, press answered "does not need that"
+
+    The footpath has had one reading of this since 192 — `fieldItemUse`, which
+    the row and the button both ask. The fight had none. `battleItemUse(id,
+    target)` is that reading, and the row, the resolver and the shelf's own note
+    all ask it. Measured after: 42 row/press pairs across six battle states, 0
+    disagreements; three orbs dim against a trainer and light up against a wild
+    kin.
+
+    **The fix was a new surface twice over.** Once the shelf could go wholly
+    dead mid-battle, `shelfNote` — which until then could only be reached on a
+    footpath — started telling a player stood in an arena that nothing here was
+    any use "out on the path". It reads the fight's refusals in a fight now, and
+    says "Nothing in the bag will help here." when they disagree with each other.
+
+    And pass 192's own net went red: it drove `shelfNote(..., true)` with no
+    battle up, a state the game cannot reach, and passed only because nothing
+    was ever dimmed in a fight. The claim was still true; the setup was standing
+    in for it. It starts a real fight now.
+
+    **A planted fault did not bite, for the third pass running, and this one was
+    structural.** The property compares the ROW against the PRESS — and both now
+    read the same gate, so a gate that stops refusing something keeps them in
+    perfect agreement and the check stays green. Dropping the revive guard bit
+    nothing at all. Consistency is not correctness: the refusals are pinned by
+    name now, and so is the note's wording in the one case where the two voices
+    give different single answers.
+
+    Five planted faults, all five bite; three sweep mutants aimed at the new
+    section; every mutant anchor re-audited — none orphaned. Render suite
+    1823 -> 1863 checks.

@@ -3945,7 +3945,10 @@ function rowDead(kind, k, inFight) {
   const it = ITEMS[k];
   if (!it) return true;
   if (kind === 'shop') return G.money < it.cost;
-  if (inFight) return false;
+  // In a fight the shelf used to dim nothing at all, which drew every row live
+  // even when the resolver would answer the press with a refusal. Both sides
+  // now read the same gate, exactly as the footpath has since 192.
+  if (inFight) return !battleItemUse(k, null).ok;
   return !fieldItemUse(k).ok;
 }
 /**
@@ -3972,8 +3975,15 @@ function shelfNote(kind, list, inFight) {
   if (!list.length) return kind === 'shop' ? 'The shelves are bare.' : 'Empty. Even the lint.';
   if (!list.every((k) => rowDead(kind, k, inFight))) return '';
   if (kind === 'shop') return 'Nothing here you can afford yet. Shards come off beaten trainers.';
-  const whys = [...new Set(list.map((k) => fieldItemUse(k).why))];
-  return whys.length === 1 ? whys[0] : 'Nothing in here is any use out on the path.';
+  // Whose refusals to read. Until the fight learned to dim a row this branch
+  // could only ever be reached on a footpath, so it asked the footpath — and
+  // the moment the shelf could go wholly dead mid-battle it started telling a
+  // player stood in an arena that nothing here was any use "out on the path".
+  // A fix is a new surface.
+  const why = (k) => (inFight ? battleItemUse(k, null) : fieldItemUse(k)).why;
+  const whys = [...new Set(list.map(why))];
+  if (whys.length === 1) return whys[0];
+  return inFight ? 'Nothing in the bag will help here.' : 'Nothing in here is any use out on the path.';
 }
 
 /** Items in shelf order: grouped, and in the order they are listed above. */
@@ -7874,25 +7884,58 @@ function doAction(action) {
   return log;
 }
 
+/**
+ * Whether one bag row would refuse you IN A FIGHT, in one place.
+ *
+ * The field has had `fieldItemUse` since the day the footpath learned to say
+ * why: the row draws its dimmed frame from it and `screenSelect` toasts the
+ * same sentence, so the row cannot promise something the button then refuses.
+ * In a fight there was no such reading at all — `rowDead` simply returned false
+ * for every row the moment a battle was up, so the shelf drew seven live rows
+ * and the refusals lived only inside the resolver, spoken after the press.
+ *
+ * Measured: opening the bag against a TRAINER draws three orbs undimmed, with
+ * no odds beside them and nothing said, and each one answers a press with
+ * "Stealing another trainer's kin? No." — bag unchanged, turn unspent. The same
+ * shape 192 found on the footpath, one layer in.
+ *
+ * `useItemInBattle` now asks this and speaks its answer, so there is one
+ * reading and the row and the button cannot drift apart.
+ */
+function battleItemUse(id, target) {
+  const b = B();
+  const it = ITEMS[id];
+  if (!it || !(G.bag[id] > 0)) return { ok: false, why: 'You have none of those.' };
+  if (it.kind === 'orb') {
+    return b && b.wild ? { ok: true, why: '' }
+      : { ok: false, why: 'Stealing another trainer\'s kin? No.' };
+  }
+  const t = target || (b && b.mine);
+  if (!t) return { ok: false, why: 'Nobody to use it on.' };
+  if (it.kind === 'heal') {
+    if (t.hp <= 0) return { ok: false, why: `${dispName(t)} is out cold — that will not help.` };
+    if (t.hp >= t.max) return { ok: false, why: `${dispName(t)} is already whole.` };
+  }
+  if (it.kind === 'revive' && t.hp > 0) return { ok: false, why: `${dispName(t)} does not need that.` };
+  return { ok: true, why: '' };
+}
+
 function useItemInBattle(log, id, targetIdx) {
   const b = B();
   const it = ITEMS[id];
-  if (!it || !(G.bag[id] > 0)) { snap(log, 'You have none of those.'); return false; }
+  const target = it && it.kind !== 'orb' ? (targetIdx != null ? G.party[targetIdx] : b.mine) : null;
+  const gate = battleItemUse(id, target);
+  if (!gate.ok) { snap(log, gate.why); return false; }
   if (it.kind === 'orb') {
-    if (!b.wild) { snap(log, 'Stealing another trainer\'s kin? No.'); return false; }
     G.bag[id]--;
     tryCatch(log, id);
     return true;
   }
-  const target = targetIdx != null ? G.party[targetIdx] : b.mine;
   if (it.kind === 'heal') {
-    if (target.hp <= 0) { snap(log, `${dispName(target)} is out cold — that will not help.`); return false; }
-    if (target.hp >= target.max) { snap(log, `${dispName(target)} is already whole.`); return false; }
     G.bag[id]--;
     target.hp = clamp(target.hp + it.amt, 0, target.max);
     snap(log, `${dispName(target)} recovered.`, 'heal', 'mine');
   } else if (it.kind === 'revive') {
-    if (target.hp > 0) { snap(log, `${dispName(target)} does not need that.`); return false; }
     G.bag[id]--;
     target.hp = Math.floor(target.max / 2);
     snap(log, `${dispName(target)} opens its eyes.`, 'heal', 'mine');
@@ -12523,7 +12566,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, GRASSY, tryMove, onArrive, interact, talkLines, trainerSight, rustleStep, RUSTLE_T, gridCols, colsFrom, mendStep, MEND_T, blackoutStep, blackoutCover, BLACKOUT_T, LVL_T,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle, drawArena, groundHaze, GROUND_HAZE, SKY_WASH, HORIZON,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount, dexNew, dexTally,
-    renderIntent, intentLine, rowDead, shelfNote, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
+    renderIntent, intentLine, rowDead, shelfNote, battleItemUse, useItemInBattle, foeAfield, screenCovered, ITEM_ART, ITEM_GROUP, shelve, fieldItemUse, screenList, statBlock, statusChip, typeChips, kinSub, kinHeading, partyTally, PARTY_MAX,
     btnLabels, pickName, backName, isTouch, tapKey, screenCue, scrollFor,
     doWarp, warpStep, WARP_SHUT, evoStep, evoPhase, evoHeat, evoSpin, runEvolution, drawEvolution, EVO, STEP_CUE, stepCue,
     alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
