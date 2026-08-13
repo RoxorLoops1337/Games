@@ -131,6 +131,11 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await settle(page, 40);
   await shot(page, '10-battle-deployed', 'a warden on the board, mid-resolution');
 
+  // the hint that is up on turn one, as a first-time player meets it
+  await page.evaluate(() => { window.FF.UI.tut = 0; window.FF.G.meta.taught = false; });
+  await settle(page, 20);
+  await shot(page, '09b-first-hint', 'what a first run is told, before anything else');
+
   // a few turns in: telegraphs, counters, a log
   await page.evaluate(() => {
     const FF = window.FF, G = FF.G;

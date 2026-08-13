@@ -31,6 +31,23 @@ FF.takeCard = function (g, id) {
   return realTake(g, id);
 };
 
+/* --------------------------------------------------- the beast, watched --- */
+/* Last round's fix gave the Kettle Titan a bounded, visible, reversible heat
+   and the death count barely moved. Two explanations fit that: the answer is
+   unreachable (a caravan facing it does not hold frost), or the beast is
+   simply too big for where it stands. These counters tell them apart. */
+const TITAN = { fights: 0, turnsWithFrost: 0, turns: 0, vents: 0, heatAtDeath: [], lost: 0 };
+const FROSTERS = Object.values(FF.CARDS)
+  .filter((c) => c.type === 'item' && /frost/i.test(c.text || '')).map((c) => c.id);
+function watchTitan() {
+  const b = G.battle;
+  if (!b || b.over) return;
+  const titan = FF.enemyUnits(G).find((u) => u.def === 'kettletitan');
+  if (!titan) return;
+  TITAN.turns++;
+  if (b.hand.some((c) => FROSTERS.indexOf(c.def) >= 0)) TITAN.turnsWithFrost++;
+}
+
 /* ------------------------------------------------------------- the pilot -- */
 function bestSlot() {
   // Hold the front of both lanes first, then fill in behind.
@@ -409,6 +426,10 @@ function playRun(tribe, seed, mode, tweak) {
     } else if (G.screen === 'battle') {
       if (G.battle.turn === 0) stat.battles++;
       if (G.battle.over) { FF.drainAll(); continue; }
+      if (G.battle.units.some((u) => u.def === 'kettletitan' && u.alive)) {
+        if (!stat.sawTitan) { stat.sawTitan = true; TITAN.fights++; }
+        watchTitan();
+      }
       if (careful) carefulTurn(); else botTurn();
       stat.turns++;
       if (G.battle.turn > 160) return Object.assign(stat, { stuck: true });
@@ -432,7 +453,9 @@ function playRun(tribe, seed, mode, tweak) {
          is not a style preference: with money buying only cards, "everything
          free" measured WORSE than penniless, because every purchase was one
          more card between the caravan and the card it wanted. */
-      if (shops && !s.heal.sold && G.run.gold >= s.heal.price &&
+      // a bell is the biggest thing money can buy and the only thing she alone has
+      if (shops && s.bell && !s.bell.sold && G.run.gold >= s.bell.price) { FF.buy(G, 'bell'); bought = true; }
+      if (!bought && shops && !s.heal.sold && G.run.gold >= s.heal.price &&
           G.run.deck.some((cd) => cd.dmg > 0 || cd.injured)) { FF.buy(G, 'heal'); bought = true; }
       if (!bought && shops && s.temper && !s.temper.sold && G.run.gold >= s.temper.price &&
           FF.temperable(G.run).length) {
@@ -577,6 +600,10 @@ section('whole runs, start to finish');
   /* What is actually killing a competent pilot in the last zone. A zone that
      kills is a difficulty setting; a zone where the same three things kill
      every time is a design problem, and telling them apart needs the names. */
+  if (TITAN.fights) {
+    console.log(`    the Kettle Titan: ${TITAN.fights} fights · ` +
+      `frost in hand on ${Math.round(100 * TITAN.turnsWithFrost / Math.max(1, TITAN.turns))}% of turns facing it`);
+  }
   const lastZone = Object.entries(careful.killers).sort((a, z) => z[1] - a[1]);
   const totalLate = lastZone.reduce((n, [, v]) => n + v, 0);
   console.log(`    what ends a good run in the last zone (${totalLate} deaths): ` +
