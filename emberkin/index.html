@@ -9805,7 +9805,18 @@ function finishBattle() {
       ? ['You got away.', 'The light closes behind you. It will be up here again.']
       : ['You got away.'], done);
   } else if (over === 'lose') {
-    say('', ['Everything you have is down.', 'You carry them back to the Wayhouse on instinct.'], () => {
+    // …and whoever just beat you gets to say so.
+    //
+    // Every one of the nine trainers carries a line for winning — "Thorns win
+    // again.", "Not yet. Come back when they trust you." — and nothing read the
+    // field. Their LOSING lines have always been spoken, at the moment you beat
+    // them; the other half of every one of those conversations was written and
+    // discarded. You lost, the screen went black, and Sable talked to you about
+    // shards. Here, while they are still on the arena and it is still their
+    // moment, is the only place it can land.
+    const beat = b.npc && b.npc.trainer.win ? b.npc.trainer.win : [];
+    say(beat.length ? b.npc.name : '',
+      beat.concat(['Everything you have is down.', 'You carry them back to the Wayhouse on instinct.']), () => {
       // The dark closes over the arena first, and the room comes up out of it.
       playCue('blackout');
       G.blackout = { t: 0, go: () => {

@@ -3602,3 +3602,49 @@ desktop one. That is the correct answer and not an obvious one.
     Two sweep mutants aimed at the new section, which reports 67 of 187 killed;
     every mutant anchor re-audited — none orphaned. Render suite 1982 -> 2169
     checks.
+
+113. **Nine lines nobody could ever hear** (pass 202).
+    The powers surface turned out to be one field — `b.powers.energy`, set only
+    by a power-kind card's energy rider — so there was no relic table to sweep
+    and the trainers were taken instead, as the brief allowed. Nine of them, and
+    most of it is honest:
+
+        the prize      paid and named, all nine ("You collected 620 shards.")
+        the team       the fight builds exactly what the table declares
+        the plan tell  sharpen/brace/aim announce a number and apply THAT
+                       number — measured at levels 5, 16 and 30: 7/22/31 edge,
+                       10/35/47 shield, and aim's pierce every time
+        the rematch    after a LOSS the flag is unset, so they can be fought
+                       again; after a win it is set and nothing offers one
+
+    What was not spoken was half of every conversation. Each trainer carries a
+    line for BEATING you and **nothing in the file read the field**:
+
+        Wick             "Told you. It was just there."
+        Forager Pell     "Told you the grass teaches you things."
+        Hiker Dorn       "Ha! Stretch defended."
+        Bramble Kid Ivo  "Told you. Ask them."
+        Wick             "Still me. Go and train."
+        Ranger Coll      "Thorns win again."
+        Warden Hale      "Not yet. Come back when they trust you."
+        Tide-hand Mio    "The water keeps it, then."
+        Wick             "Ha! Not today."
+
+    Their LOSING lines have always been spoken, at the moment you beat them.
+    The other half was written and discarded: you lost, the screen went black,
+    and Sable talked to you about shards. The line lands now where they are
+    still on the arena and it is still their moment — before "Everything you
+    have is down." and attributed to them by name. A wild kin is not a somebody,
+    so a wild loss reads exactly as it did, two lines and no speaker.
+
+    **Two instrument faults, both mine, both caught by interrogating one thing.**
+    `trainerTeam` returns the raw declared pairs rather than built creatures, so
+    reading `.species` and `.lvl` off them printed a column of `undefined` that
+    looked like nine disagreements. And the first loss driver read `G.dialogue`
+    left over from `newGame` — three trainers all "saying" Elder Rowan's opening
+    line, which is a wall of identical results and therefore a driver error, not
+    a finding. Third time this loop has been taught that shape.
+
+    Four planted faults, all four bite; two sweep mutants aimed at the new
+    section, which reports 20 of 81 killed; every mutant anchor re-audited —
+    none orphaned. Render suite 2169 -> 2250 checks.

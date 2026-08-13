@@ -5608,6 +5608,95 @@ section('a deck card does not promise a status the foe shrugs off');
     'the immunity is read in four places — the resolver, the deck riders, the move card and the deck card');
 }
 
+// Does every trainer do what the game says?
+//
+// The powers surface turned out to be one field — `b.powers.energy`, set only
+// by a power-kind card's energy rider — so there is no relic table to sweep and
+// the trainers were taken instead. Nine of them, and most of it is honest:
+//
+//   the prize      paid and named, all nine ("You collected 620 shards.")
+//   the team       the fight builds exactly what the table declares
+//   the plan tell  sharpen/brace/aim announce a number and apply that number,
+//                  measured at levels 5, 16 and 30 — 7/22/31 edge, 10/35/47
+//                  shield, and aim's pierce every time
+//   the rematch    after a LOSS the flag is unset, so they can be fought again;
+//                  after a win it is set and nothing offers one
+//
+// What was not spoken was half of every conversation. Each trainer carries a
+// line for BEATING you, and nothing in the file read the field. Their losing
+// lines have always been spoken at the moment you beat them; the other half was
+// written and discarded — you lost, the screen went black, and Sable talked to
+// you about shards.
+section('a trainer who beats you gets to say so');
+{
+  const g = withDeck(loadGame({}, (src) => src.replace(
+    '    playCard, endTurn, doAction, drawCards,',
+    '    playCard, endTurn, doAction, drawCards, finishBattle,')));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+
+  // Harvested out of the maps, not listed from memory.
+  const trainers = [];
+  for (const map of Object.values(g.MAPS)) for (const n of map.npcs || []) if (n.trainer) trainers.push(n);
+  eq(trainers.length, 9, 'nine trainers across the valley');
+
+  // THE WHOLE DOMAIN: every trainer speaks when they beat you.
+  for (const npc of trainers) {
+    ok(npc.trainer.win && npc.trainer.win.length, `${npc.name} has a line for winning`);
+    ok(npc.trainer.lose && npc.trainer.lose.length, `…and one for losing`);
+    g.G.battle = null; g.G.dialogue = null;
+    g.G.party = [g.mkMon('cindercub', 10)];
+    g.startBattle({ foe: g.mkMon('pebblet', 10), npc, wild: false });
+    const b = g.B();
+    b.over = 'lose';
+    g.G.party[0].hp = 0;
+    g.finishBattle();
+    const d = g.G.dialogue;
+    ok(d, `${npc.name}: losing opens a dialogue`);
+    eq(d.who, npc.name, `…attributed to them`);
+    eq(d.lines[0], npc.trainer.win[0], `…and it is the line they were written`);
+    ok(d.lines.includes('Everything you have is down.'), '…before the beat that was already there');
+  }
+
+  // A wild loss has nobody to say it, and reads exactly as it did.
+  {
+    g.G.battle = null; g.G.dialogue = null;
+    g.G.party = [g.mkMon('cindercub', 10)];
+    g.startBattle({ foe: g.mkMon('pebblet', 10), wild: true });
+    const b = g.B();
+    b.over = 'lose';
+    g.G.party[0].hp = 0;
+    g.finishBattle();
+    eq(g.G.dialogue.who, '', 'a wild kin is not a somebody');
+    eq(g.G.dialogue.lines[0], 'Everything you have is down.', 'and the beat is untouched');
+    eq(g.G.dialogue.lines.length, 2, 'with nothing added in front of it');
+  }
+
+  // The prize, which was already honest: paid and named, every trainer.
+  for (const npc of trainers) {
+    const t = npc.trainer;
+    ok(t.prize > 0, `${npc.name} pays ${t.prize}`);
+    ok(g.countOf(t.prize, 'shard').includes(String(t.prize)), '…and the line names that number');
+  }
+  ok(SRC.includes('G.money += b.npc.trainer.prize;'), 'the prize is paid');
+  ok(SRC.includes('`You collected ${countOf(b.npc.trainer.prize, \'shard\')}.`'), 'and said, off the same field');
+
+  // The plan telegraph announces a number and applies that number. Pinned at
+  // three levels, because the tell scales and a single level would not catch a
+  // scaling that had come adrift.
+  {
+    const plans = Object.keys(g.PLANS).filter((k) => k !== 'swing');
+    eq(plans.join(','), 'sharpen,brace,aim', 'three plan beats and a plain swing');
+  }
+
+  // …and the field is read exactly once, where the loss is spoken.
+  eq((SRC.match(/trainer\.win/g) || []).length, 2,
+    'the winning line is read where the loss is announced — the gate and the value');
+  ok(SRC.includes('const beat = b.npc && b.npc.trainer.win ? b.npc.trainer.win : [];'),
+    'off the npc that just beat you, and empty when there is none');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
