@@ -7736,6 +7736,15 @@ function foeSwap(log, idx) {
   // would land a beat before the player is told anything came out at all.
   if (fresh) snap(log, dexNew(next.name), 'dex', 'foe');
   snap(log, `Caught mid-change — your next attack will land harder.`, 'buff', 'mine');
+  // The same last line `resolveFoeDown` has in both of its branches, and the
+  // only door out of a fight that did not have it. When a trainer's kin FAINTS
+  // the telegraph is re-read for whoever comes out; when the trainer CHOOSES to
+  // call one back it was not, so the chip went on naming the move the kin that
+  // left had lined up — in sixty of sixty driven swaps a move the new one does
+  // not even know, with the old one's number on it. Mothrix leaves promising
+  // Night Maw for 36, Pebblet arrives with Granite Fang for 74, and the chip
+  // still said 36 while the player decided whether to block.
+  readIntent();
 }
 
 /** The foe is down: award XP and gems, or send out the next of a trainer's team. */

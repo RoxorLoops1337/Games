@@ -298,6 +298,22 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  { name: 'switch: the called-back foe leaves its telegraph behind', aims: ['when the foe on the field changes, the telegraph changes with it'],
+    find: '  // still said 36 while the player decided whether to block.\n  readIntent();\n}',
+    to: '}' },
+  { name: 'switch: the departing foe keeps its sharpen and its aim', aims: ['when the foe on the field changes, the telegraph changes with it'],
+    find: '  b.foeShield = 0; b.foeEdge = 0; b.foePierce = 0; b.cornered = 0; b.chipping = 0;',
+    to: '  b.foeShield = 0; b.cornered = 0; b.chipping = 0;' },
+  { name: 'switch: your mods survive the switch', aims: ['when the foe on the field changes, the telegraph changes with it'],
+    find: '  b.mods = freshMods();\n  b.maxAdd = 0;',
+    to: '  b.mods.edge = 0;\n  b.maxAdd = 0;' },
+  { name: 'switch: the max-HP bill is never paid', aims: ['when the foe on the field changes, the telegraph changes with it'],
+    find: '    mon.max = Math.max(1, mon.max - add);',
+    to: '    mon.max = Math.max(1, mon.max);' },
+  { name: 'switch: the old kin keeps its cards in the draw pile', aims: ['when the foe on the field changes, the telegraph changes with it'],
+    find: '  b.draw = strip(b.draw); b.hand = strip(b.hand); b.disc = strip(b.disc);',
+    to: '  b.hand = strip(b.hand); b.disc = strip(b.disc);' },
+
   { name: 'chip: the bank a pierce ignores is counted again', aims: ['the chip promises the hit that is actually coming'],
     find: '  const bank = b.foePierce ? 0 : (b.shield || 0);',
     to: '  const bank = (b.shield || 0);' },

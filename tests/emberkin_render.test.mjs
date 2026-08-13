@@ -6749,6 +6749,183 @@ section('the chip promises the hit that is actually coming');
     'the chip stops counting a bank the next hit will ignore');
 }
 
+// Does anything survive a switch that should not, or die in one that should not?
+//
+// Most of it was already right and is pinned below: every mod, the shield and
+// both kin's stages are cleared, the leaving kin keeps its own HP and its own
+// status, its move cards leave every pile and the arriving kin's arrive, and
+// the max-HP bill is booked per kin and paid in full on the way out — in, out
+// and in again leaves both of them exactly where they started.
+//
+// One thing did not cross. There are two doors a trainer's kin leaves by, and
+// only one of them re-read the telegraph. `resolveFoeDown` calls `readIntent()`
+// in BOTH its branches; `foeSwap` — the trainer choosing to call one back —
+// called it in neither:
+//
+//     Mothrix leaves promising  "Night Maw"     36 coming
+//     Pebblet arrives with      "Granite Fang"  74 coming
+//     the chip still said       "Night Maw"     36
+//
+// In sixty of sixty driven swaps the chip named a move the kin now standing
+// there does not know, with the departed kin's number on it — and that number
+// is what the player reads to decide whether to block.
+section('when the foe on the field changes, the telegraph changes with it');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  const fight = () => {
+    g.G.party = [g.mkMon('cindercub', 30), g.mkMon('dewdrip', 30), g.mkMon('zaplet', 30)];
+    g.G.might = 0;
+    g.G.battle = null;
+    g.startBattle({
+      foe: g.mkMon('mothrix', 28), wild: false,
+      team: [['mothrix', 28], ['pebblet', 28], ['zaplet', 28]],
+      npc: { name: 'Tester', trainer: { team: [['mothrix', 28], ['pebblet', 28], ['zaplet', 28]], prize: 100 } },
+    });
+    const b = g.B();
+    b.energy = 99;
+    return b;
+  };
+  const knows = (foe, id) => !id || foe.moves.some((m) => m.id === id);
+
+  // ---- both doors out, and the chip that has to follow -------------------
+  for (const [door, leave] of [
+    ['faints', (b) => { b.foe.hp = 0; g.resolveFoeDown([]); }],
+    ['is called back', (b) => { b.turn = 5; b.foeSwapT = 0; b.foeSwaps = 0; g.foeSwap([], 1); }],
+  ]) {
+    const b = fight();
+    b.intent = null;
+    const before = g.readIntent();
+    ok(!!before, `there is a telegraph before the foe ${door}`);
+    const wasFoe = b.foe;
+    leave(b);
+    ok(b.foe !== wasFoe, `the foe changed when it ${door}`);
+    const after = b.intent;
+    ok(!!after, `there is still a telegraph after it ${door}`);
+    if (!after) continue;
+    ok(knows(b.foe, after.id),
+      `after it ${door}, the chip names "${after.name}", which ${b.foe.species} actually knows`);
+    ok(after.kind !== 'attack' || after.dmg > 0, '…and a number to go with it');
+  }
+  // Driven repeatedly, because one swap proves one swap.
+  {
+    let missed = 0, runs = 0;
+    for (let i = 0; i < 40; i++) {
+      const b = fight();
+      b.turn = 5; b.foeSwapT = 0; b.foeSwaps = 0;
+      b.intent = null;
+      g.readIntent();
+      g.foeSwap([], 1 + (i % 2));
+      runs++;
+      // The question is whether the chip NOW on screen describes the kin NOW on
+      // the field — not whether the new kin knows the OLD move, which it never
+      // will and which measures nothing.
+      if (b.intent && !knows(b.foe, b.intent.id)) missed++;
+    }
+    eq(runs, 40, 'forty voluntary swaps driven');
+    eq(missed, 0, 'none of them left the chip promising a move the new kin has not got');
+  }
+  // …and the foe's own carried state goes with the kin that carried it.
+  {
+    const b = fight();
+    b.turn = 5; b.foeSwapT = 0; b.foeSwaps = 0;
+    b.foeEdge = 9; b.foeShield = 12; b.foePierce = 1; b.cornered = 2;
+    b.foe.stages = { atk: 2, def: 1, spd: -1 };
+    const left = b.foe;
+    const myEdge = b.mods.edge;
+    g.foeSwap([], 1);
+    eq(b.foeEdge, 0, 'the sharpen the last one banked does not follow it out');
+    eq(b.foeShield, 0, '…nor its guard');
+    eq(b.foePierce, 0, '…nor its aim');
+    eq(b.cornered, 0, '…nor how cornered it was');
+    eq(JSON.stringify(b.foe.stages), '{"atk":0,"def":0,"spd":0}', 'and the arriving kin starts level');
+    eq(JSON.stringify(left.stages), '{"atk":0,"def":0,"spd":0}', '…as does the one that left');
+    ok(b.mods.edge > myEdge, 'while you get the edge for catching them mid-change');
+  }
+
+  // ---- your switch: what must not cross, and what must ------------------
+  {
+    const b = fight();
+    b.mods.edge = 12; b.mods.atk = 7; b.mods.def = 3; b.mods.thorns = 4;
+    b.mods.hits = 1; b.mods.mul = 2;
+    b.shield = 25;
+    b.mine.status = 'burn';
+    b.mine.stages = { atk: 2, def: -1, spd: 1 };
+    const leaving = b.mine, hpWas = leaving.hp;
+    g.doAction({ kind: 'switch', idx: 1 });
+    ok(b.mine !== leaving, 'the switch happened');
+    for (const [k, v] of [['edge', 0], ['atk', 0], ['def', 0], ['thorns', 0], ['hits', 0]]) {
+      eq(b.mods[k] || 0, v, `${k} does not follow you in`);
+    }
+    eq(b.mods.mul || 1, 1, 'nor does a damage multiplier');
+    eq(b.shield, 0, 'nor a banked shield');
+    eq(JSON.stringify(b.mine.stages), '{"atk":0,"def":0,"spd":0}', 'and the arriving kin starts level');
+    eq(JSON.stringify(leaving.stages), '{"atk":0,"def":0,"spd":0}', '…as does the one that left');
+    // …and what belongs to the creature stays with the creature.
+    eq(leaving.status, 'burn', 'the burn stays on the kin that is burning');
+    eq(leaving.hp, hpWas, '…which comes off the field with the HP it had');
+  }
+
+  // ---- the kin's own cards go in and out with it ------------------------
+  {
+    const b = fight();
+    const leaving = b.mine;
+    const mine = new Set(leaving.moves.map((m) => m.id));
+    const piles = () => [...b.draw, ...b.hand, ...b.disc, ...b.exh].filter((c) => c.src === 'kin');
+    ok(piles().length > 0, 'the kin on the field has its moves in the piles');
+    ok(piles().every((c) => mine.has(c.id)), '…and only its own');
+    g.doAction({ kind: 'switch', idx: 1 });
+    const now = new Set(b.mine.moves.map((m) => m.id));
+    ok(piles().length > 0, 'the kin that arrived has its moves in the piles');
+    ok(piles().every((c) => now.has(c.id)),
+      '…and not one card belonging to the kin that left');
+  }
+
+  // ---- the max-HP bill, in and out and in again -------------------------
+  {
+    const b = fight();
+    const a = b.mine, c = g.G.party[1];
+    const aMax0 = a.max, cMax0 = c.max;
+    // doAction runs the foe's turn, which can drop the kin that just arrived —
+    // and a dead kin plays no cards, so the bill would go unmeasured about one
+    // run in three. The scenario here is the booking, not the surviving: both
+    // sides are put back on their feet before each play.
+    const steady = () => {
+      b.over = null;
+      b.energy = 99;
+      for (const m of g.G.party) m.hp = m.max;
+      b.foe.hp = b.foe.max;
+      b.foeEdge = 0;
+    };
+    const play = (id) => {
+      steady();
+      const o = g.grantCard(id);
+      b.hand.push({ src: 'deck', u: o.u, id, bg: 0 });
+      g.playCard(b.hand.length - 1);
+    };
+    play('vigor'); play('vigor');
+    ok(a.max > aMax0, `two Vigors raised A's max to ${a.max}`);
+    eq([...(b.maxAdds || [])].length, 1, '…booked against exactly one kin');
+    g.doAction({ kind: 'switch', idx: 1 });
+    eq(a.max, aMax0, 'and A pays the whole bill on the way out');
+    ok(a.hp <= a.max, '…without being left above its own ceiling');
+    play('vigor');
+    ok(c.max > cMax0, `B raised its own max to ${c.max}`);
+    g.doAction({ kind: 'switch', idx: 0 });
+    eq(a.max, aMax0, 'A comes back the size it always was');
+    eq(c.max, cMax0, 'and B pays its own bill, not A\'s');
+  }
+
+  // Pinned by shape: the line foeSwap was missing, and the three it joins.
+  // Counted without regard to indentation — the two inside resolveFoeDown sit
+  // in nested branches, and pinning the leading spaces measured the layout
+  // rather than the call.
+  eq((SRC.match(/^\s*readIntent\(\);$/gm) || []).length, 4,
+    'the telegraph is re-read at the turn boundary and at every door the foe leaves by');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
