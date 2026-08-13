@@ -416,7 +416,12 @@ def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt
 /* Hoard on a body asks you to hold a card you want on the board, which is a
    trade nobody took. Hoard 2 makes waiting worth something: four turns in hand
    and it walks on as the hardest thing you own. */
-def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 7, atk: 2, cnt: 3, rare: 2,
+/* Second buff, and this time it is the body rather than the rating. With the
+   pilot taught to hold a hoarder it STILL came last, which is the answer the
+   brief asked for: it is the card. Seven health on a three counter meant it
+   arrived late and died before it swung, so the waiting bought nothing. Ten
+   health on a two counter is a body worth waiting for. */
+def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 10, atk: 2, cnt: 2, rare: 2,
   art: A('#c9a6ff', '#eee0ff', { stance:'float',tail:'whip',mark:'tuft', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
   kw: { hoard: 2 }, text: 'Hoard 2. Every turn it waits in your hand it comes out two points angrier.' });
 
@@ -560,8 +565,8 @@ def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, t
 def({ id: 'snowhandful', name: 'A Handful of Snow', type: 'item', tribe: null, rare: 1, target: 'enemy',
   noPool: true, recycles: true,
   art: { kind: 'burst', col: '#dff0ff' },
-  text: 'Frost 2 on a foe. Scooped off the floor of this room — it goes back into the deck.',
-  effect: (g, t) => addStatus(g, t, 'frost', 2) });
+  text: 'Frost 2 on a foe. Scooped off the floor of this room — it comes straight back to your hand.',
+  effect: (g, t) => { sfx('snow'); addStatus(g, t, 'frost', 2); } });
 
 /* What a piece of gear would do to what you are pointing it at. This is the
    one place that knows, so the card text, the tooltip and the drag preview can
@@ -843,6 +848,7 @@ foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 84, atk: 7, cnt: 5, tier:
       u.atk = Math.max(1, u.atk - u.heat);
       fx.pop(u, 'THE BOILER VENTS  -' + u.heat, '#8fe3ff');
       fx.burst(u, '#dff0ff', 22);
+      sfx('vent');
       logLine(g, 'the cold gets into the boiler — ' + u.name + ' loses ' + u.heat + ' attack', '#8fe3ff');
       u.heat = 0;
     },
@@ -1302,6 +1308,7 @@ function layPlot(g, u) {
   p.id = sc.id;
   u.plot = p;
   u.plotT = 1;
+  sfx('scheme');
 }
 
 function triggerUnit(g, u) {
@@ -1317,6 +1324,7 @@ function triggerUnit(g, u) {
     if (!fired) {
       fx.pop(u, 'DENIED', '#8fffc4');
       fx.burst(u, '#8fffc4', 10);
+      sfx('denied');
       logLine(g, plot.label.toLowerCase() + ' — denied', '#8fffc4');
     }
     // A scheme that IS the swing spends the whole trigger either way: read it
@@ -1404,18 +1412,43 @@ function tickCounter(g, u, n, natural) {
     return false;
   }
   let ticks = n;
+  /* THE FRONT IS WHERE IT IS HAPPENING.
+
+     Counters run down twice as fast in column one, on both sides of the table.
+
+     Before this, an ablation of the careful pilot's fight habits priced every
+     one of them: denying schemes was worth five points, keeping a slot one, and
+     placement, gear timing and wave timing were worth nothing at all — the
+     "careful" placement was actually NINE POINTS WORSE than filling the nearest
+     free slot. That is what a board with no geometry looks like. Swings go to
+     the front of a lane, stragglers walk toward the fighting, and so six slots
+     behave like two.
+
+     Depth now costs and pays: put your slow heavy hitter forward and it swings
+     sooner and gets hit for it; keep the fragile one back and it is safe and
+     late. Every deployment is that question, and so is every free move — which
+     is the one action in the game that does not cost the turn. */
+  if (natural) ticks += tickRate(u) - 1;
   if (natural) ticks += spend(u, 'swift');
   if (natural && stat(u, 'slow') > 0) { spend(u, 'slow', 1); fx.pop(u, 'SLOW', STATUS.slow.col); return false; }
   u.cnt = Math.max(0, u.cnt - ticks);
   u.tick = 0.75;
-  // One tick out is where intent belongs: far enough ahead to answer, close
-  // enough that the answer is this turn's action rather than a vague worry.
-  if (u.cnt === 1) layPlot(g, u);
+  maybeLay(g, u);
   if (u.cnt > 0) return false;
   u.cnt = u.cntMax;
   u.tick = 1;
   triggerUnit(g, u);
+  maybeLay(g, u);              // and it starts telling you about the next one
   return true;
+}
+/* One tick out is where intent belongs: far enough ahead to answer, close
+   enough that the answer is this turn's action rather than a vague worry.
+   "One tick" means one TURN, not one point — a foe in the front row burns two a
+   turn, so a two-counter foe standing there never sits on exactly 1 and would
+   otherwise never telegraph anything at all. */
+const tickRate = (u) => (u.col === 0 ? 2 : 1);
+function maybeLay(g, u) {
+  if (u.alive && u.cnt > 0 && u.cnt <= tickRate(u)) layPlot(g, u);
 }
 
 /* ------------------------------------------------------- the turn ------- */
@@ -1493,6 +1526,9 @@ function resolveTurn(g) {
     if (b.turn === DEEP_FREEZE + 1) {
       fx.toast('THE COLD CLOSES IN', '#8fe3ff');
       logLine(g, 'the fire is out — the cold is taking the room', '#8fe3ff');
+      sfx('freeze');
+      fx.flash('#cfe4ff', 0.3);
+      fx.shake(7);
     }
     for (const u of units(g).slice()) hurt(g, u, bite, null);
     checkOver(g);
@@ -1728,7 +1764,11 @@ function summon(g, foeId, count) {
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
-  return (1 + run.step * 0.046 + run.zone * 0.175) * (run.foeMul || 1);
+  /* Eased back to where it was two iterations ago. The front row burning two
+     counters a turn is a difficulty that comes out of a decision — stand there
+     and swing sooner, or stand back and be late — so the flat multiplier that
+     was covering for a board with no geometry is no longer needed. */
+  return (1 + run.step * 0.042 + run.zone * 0.16) * (run.foeMul || 1);
 }
 
 /* A pack is never just a bigger skirmish: it hunts a particular way, and the
@@ -1837,6 +1877,7 @@ function deployWave(g) {
     if (fd.hooks && fd.hooks.deploy) fd.hooks.deploy(g, u);
     const co2 = courseOf(g.run);
     if (co2 && co2.arrive) co2.arrive(g, u);
+    maybeLay(g, u);            // it walks on already telling you what it means
     const em = eliteMod(b);
     if (em && em.each) em.each(g, u);
     fx.thump(u);
@@ -2261,7 +2302,7 @@ function temperCard(g, card) {
   card.charms.push('blessed');
   card.blessed = true;
   rebuildCard(card);
-  sfx('get');
+  sfx('temper');
   fx.toast(card.name.toUpperCase() + ' COMES BACK HARDER', C.gold);
   return true;
 }
@@ -2334,6 +2375,7 @@ function buy(g, kind, idx, arg) {
         const j = run.deck.findIndex((c) => c.uid === others[i].uid);
         if (j >= 0) {
           const gone = run.deck.splice(j, 1)[0];
+          sfx('burn');
           fx.toast(gone.name.toUpperCase() + ' LEFT ON THE COUNTER', '#ff9aa5');
           run.log.push(gone.name + ' was left on the trader\'s counter.');
         }
@@ -2360,7 +2402,7 @@ function buy(g, kind, idx, arg) {
     bl.apply(run);
     run.bells = (run.bells || []).concat([bl.id]);
     s.bell.sold = true;
-    sfx('get');
+    sfx('bellbuy');
     fx.toast(bl.name.toUpperCase(), bl.col);
     run.log.push('The trader had a bell, and it was bought.');
     return true;
@@ -3893,6 +3935,18 @@ function drawUnit(c, u, t) {
     c.restore();
   }
 
+  /* The front row burns two counters a turn, which is the most important thing
+     on the board and would otherwise be invisible. It is said twice: here, next
+     to the counter of whoever is standing in it, and once under the column. */
+  if (u.col === 0 && u.alive) {
+    const cx2 = x + w - 40, cy2 = y + 16;
+    c.save();
+    c.globalAlpha = 0.95;
+    panel(c, cx2 - 15, cy2 - 9, 30, 19, 6, '#3d2a12', '#ffb347');
+    txt(c, '×2', cx2, cy2 + 1, 12.5, '#ffd166', 'center', 'd', 0);
+    c.restore();
+  }
+
   if (u.flash > 0) {
     c.save(); c.globalAlpha = u.flash * 0.7; c.globalCompositeOperation = 'lighter';
     rr(c, x + 7, iy, iw, ih, 10); c.fillStyle = '#ff9aa5'; c.fill();
@@ -4255,7 +4309,7 @@ function tone(freq, dur, type, vol, slide, delay) {
   o.connect(g2); g2.connect(AUD.master);
   o.start(t0); o.stop(t0 + dur + 0.03);
 }
-function noise(dur, vol, hp) {
+function noise(dur, vol, hp, delay) {
   if (!AUD.ctx || !AUD.on) return;
   const n = Math.floor(AUD.ctx.sampleRate * dur);
   const buf = AUD.ctx.createBuffer(1, n, AUD.ctx.sampleRate);
@@ -4269,7 +4323,7 @@ function noise(dur, vol, hp) {
   const g2 = AUD.ctx.createGain();
   g2.gain.value = vol === undefined ? 0.16 : vol;
   s.connect(f); f.connect(g2); g2.connect(AUD.master);
-  s.start();
+  s.start(AUD.ctx.currentTime + (delay || 0));
 }
 /* What a thing is made of is what it sounds like — the same three surfaces the
    renderer draws are the three the mixer hears. `arg` is the material for a
@@ -4331,6 +4385,33 @@ function sfx(name, arg) {
     case 'combo': [784, 988, 1319].forEach((f, i) => tone(f, 0.18, 'square', 0.13, f * 1.5, i * 0.055)); break;
     case 'wave':  tone(160, 0.5, 'sawtooth', 0.16, 90); noise(0.4, 0.12, 0); break;
     case 'page':  tone(520, 0.07, 'triangle', 0.08, 700); break;
+
+    /* Everything below arrived after the sound did, and went out silent for
+       ten iterations. A rule the player cannot hear is a rule they learn twice
+       as slowly, and the schemes in particular are all about noticing. */
+
+    // a foe commits: two low notes, like something drawing breath
+    case 'scheme': tone(196, 0.16, 'sawtooth', 0.09, 165); tone(147, 0.22, 'sine', 0.08, 124, 0.07); break;
+    // and the same shape inverted when it comes to nothing
+    case 'denied': tone(392, 0.1, 'triangle', 0.11, 523); tone(523, 0.16, 'triangle', 0.09, 784, 0.05);
+                   noise(0.08, 0.07, 4200); break;
+    // the boiler letting go: a long hiss under a falling tone
+    case 'vent':   noise(0.55, 0.16, 1400); tone(880, 0.5, 'sine', 0.12, 180);
+                   tone(1320, 0.34, 'triangle', 0.06, 300, 0.04); break;
+    // the cold closing in, once, when the fire goes out
+    case 'freeze': [330, 262, 208, 165].forEach((f, i) => tone(f, 0.5, 'sine', 0.1, f * 0.8, i * 0.1));
+                   noise(0.7, 0.09, 700); break;
+    // the anvil: two hammer blows and a ring
+    case 'temper': tone(180, 0.12, 'square', 0.16, 120); noise(0.1, 0.13, 2200);
+                   tone(180, 0.12, 'square', 0.14, 120, 0.13); noise(0.1, 0.11, 2200, 0.13);
+                   tone(1046, 0.5, 'sine', 0.09, 1568, 0.26); break;
+    // a bell bought is a bell rung, low and long
+    case 'bellbuy': [523, 784, 1047].forEach((f, i) => tone(f, 0.7, 'sine', 0.13, f, i * 0.13));
+                    tone(131, 0.9, 'sine', 0.1, 131); break;
+    // a handful of snow: soft, dry, close
+    case 'snow':   noise(0.16, 0.13, 5200); tone(1760, 0.1, 'sine', 0.05, 2400); break;
+    // a card left behind
+    case 'burn':   noise(0.3, 0.13, 900); tone(240, 0.26, 'sawtooth', 0.09, 90); break;
     default: break;
   }
 }
@@ -4743,6 +4824,9 @@ function drawBattle(c, t) {
        something the board already says four other ways — the slab colours, the
        crown, the divide down the middle, and the fact that the hand is at the
        bottom of the screen. The line it was using is better spent on a rule. */
+    // A column label was tried here and cut: the ×2 on the counter of whatever
+    // is standing there says it where it matters, and the band above the board
+    // belongs to whatever banner is up.
     const room = hasRoom(g, side);
     if (sideUnits(g, side).length) {
       c.save();
@@ -5614,6 +5698,7 @@ const HELP_BOARD = [
 ];
 const HELP_RULES = [
   ['The board', 'Two lanes deep, three columns a side. Column one is the front. A swing hits the front-most foe in the attacker\'s own lane; if that lane is clear it reaches across, and a foe with nothing in front of it walks into the lane where the fighting is.'],
+  ['The front row', 'Counters run down TWICE as fast in the front column, on both sides of the table. Stand something forward and it swings sooner and gets hit for it; keep it back and it is safe and late. Sliding a warden between slots is free, so this is a question you get to answer every single turn.'],
   ['One action', 'Play a card, ring the bell, or pass — then the turn resolves. There is no mana. Sliding a warden between slots is free, and so is calling in a wave.'],
   ['Counters', 'Everything counts down one per turn and triggers at zero: ability and swing together, then the counter resets. A counter pushed to zero by a card fires immediately — that is where the combos are.'],
   ['Order', 'Every foe resolves before every warden. Inside a side: front of the table first, top lane before bottom. Tap ORDER to see the exact numbers before you commit.'],
@@ -6798,7 +6883,7 @@ window.FF = {
   targetFor, frontTarget, laneTargets, neighbours,
   addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter, shoveUnit, HOARD_CAP,
   PREVIEW, previewOf, logLine,
-  SCHEMES, layPlot,
+  SCHEMES, layPlot, maybeLay, tickRate,
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
@@ -6812,7 +6897,7 @@ window.FF = {
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal,
   drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
-  MUSIC, musicTick, setMute, moodFor, AUD,
+  MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },
 };

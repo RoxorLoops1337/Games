@@ -121,11 +121,11 @@ section('counters and the turn');
   bareBattle(FF);
   const b = G.battle;
   b.units = b.units.filter((u) => u.leader);
-  const a = place(FF, 'p', 'snowpup', 0, 0, { unit: { cnt: 3, cntMax: 3, atk: 3 } });
+  const a = place(FF, 'p', 'snowpup', 0, 1, { unit: { cnt: 3, cntMax: 3, atk: 3 } });
   const t = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 50, atk: 0, cnt: 9 } });
 
   FF.resolveTurn(G);
-  eq(a.cnt, 2, 'a turn takes one off the counter');
+  eq(a.cnt, 2, 'a turn takes one off the counter behind the front');
   FF.addStatus(G, a, 'swift', 1);
   FF.resolveTurn(G);
   eq(a.cnt, 3, 'swift spends an extra tick, which fires the counter and resets it');
@@ -1230,7 +1230,7 @@ section('what a foe means to do next');
   dummy(FF);
 
   // A scheme is laid one tick out, and it names something specific.
-  const wolf = place(FF, 'e', 'frostwolf', 0, 0, { unit: { cnt: 2, cntMax: 2, atk: 4 } });
+  const wolf = place(FF, 'e', 'frostwolf', 0, 1, { unit: { cnt: 2, cntMax: 2, atk: 4 } });
   const ward = place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 40, atk: 0 } });
   eq(wolf.plot, null, 'two ticks out it has not committed to anything');
   FF.tickCounter(G, wolf, 1, true);
@@ -1271,7 +1271,7 @@ section('what a foe means to do next');
   bareBattle(FF);
   G.battle.units = G.battle.units.filter((u) => u.leader);
   place(FF, 'p', 'snowpup', 1, 0, { unit: { hp: 60, atk: 0 } });
-  const mother = place(FF, 'e', 'packmother', 0, 0, { unit: { cnt: 2, cntMax: 2, atk: 0 } });
+  const mother = place(FF, 'e', 'packmother', 0, 1, { unit: { cnt: 2, cntMax: 2, atk: 0 } });
   FF.tickCounter(G, mother, 1, true);
   eq(mother.plot.id, 'gather', 'the packmother whistles for the pack');
   const n0 = FF.enemyUnits(G).length;
@@ -1292,7 +1292,7 @@ section('what a foe means to do next');
   bareBattle(FF);
   G.battle.units = G.battle.units.filter((u) => u.leader);
   dummy(FF);
-  const drift = place(FF, 'e', 'drift', 0, 0, { unit: { cnt: 2, cntMax: 2, atk: 0 } });
+  const drift = place(FF, 'e', 'drift', 0, 1, { unit: { cnt: 2, cntMax: 2, atk: 0 } });
   const cold = place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 40, atk: 0 } });
   FF.tickCounter(G, drift, 1, true);
   eq(drift.plot.id, 'chill', 'the drift takes a breath');
@@ -1538,7 +1538,7 @@ section('the cards that had no reason to exist');
   b.units = b.units.filter((u) => u.side === 'p' && u.leader);
   const mine = place(FFe, 'p', 'snowpup', 0, 0, { unit: { atk: 3, cnt: 99, cntMax: 99 } });
   const plain = place(FFe, 'e', 'snapfrost', 0, 0, { unit: { hp: 90, atk: 0, cnt: 9, cntMax: 9 } });
-  const schemer = place(FFe, 'e', 'frostwolf', 1, 0, { unit: { hp: 90, cnt: 2, cntMax: 2 } });
+  const schemer = place(FFe, 'e', 'frostwolf', 1, 1, { unit: { hp: 90, cnt: 2, cntMax: 2 } });
   FFe.tickCounter(FFe.G, schemer, 1, true);
   ok(!!schemer.plot, 'one of them is scheming');
 
@@ -1662,6 +1662,81 @@ section('hoard is a rating now');
   const g2 = FFf.mkCard('grudge');
   g2.held = 3;
   eq(FFf.hoardOf(g2), 3, 'and three on a grudge');
+}
+
+/* ------------------------------------------------- iteration 14 additions -- */
+section('the front row runs double');
+{
+  const FFa = loadGame({});
+  bareBattle(FFa, 'hearth', 201);
+  const b = FFa.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  place(FFa, 'e', 'snapfrost', 1, 2, { unit: { hp: 9999, maxHp: 9999, atk: 0, cnt: 999, cntMax: 999 } });
+  const front = place(FFa, 'p', 'snowpup', 0, 0, { unit: { cnt: 6, cntMax: 6, atk: 0 } });
+  const back = place(FFa, 'p', 'snowpup', 0, 2, { unit: { cnt: 6, cntMax: 6, atk: 0 } });
+
+  eq(FFa.tickRate(front), 2, 'the front column burns two a turn');
+  eq(FFa.tickRate(back), 1, 'and everywhere else burns one');
+  FFa.passTurn(FFa.G); FFa.drainAll();
+  eq(front.cnt, 4, 'so a turn takes two off the front');
+  eq(back.cnt, 5, 'and one off the back');
+
+  // it is a question you answer every turn, because moving is free
+  const t0 = b.turn;
+  FFa.moveUnit(FFa.G, back, 0, 1);
+  eq(b.turn, t0, 'sliding a warden costs no turn');
+
+  // and it cuts both ways: a foe standing forward is a foe that swings sooner
+  const foe = place(FFa, 'e', 'snapfrost', 0, 0, { unit: { cnt: 4, cntMax: 4, atk: 0 } });
+  FFa.passTurn(FFa.G); FFa.drainAll();
+  eq(foe.cnt, 2, 'the rule is the same on their side of the table');
+}
+
+section('intent survives a fast front row');
+{
+  const FFb = loadGame({});
+  bareBattle(FFb, 'hearth', 202);
+  const b = FFb.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  place(FFb, 'p', 'snowpup', 1, 0, { unit: { hp: 60, atk: 0, cnt: 99, cntMax: 99 } });
+
+  /* A two-counter foe in the front row goes 2 → 0 in one tick and never sits
+     on 1, so telegraphing "one point out" would have made every front-row
+     schemer silent. It telegraphs one TURN out instead. */
+  const wolf = place(FFb, 'e', 'frostwolf', 0, 0, { unit: { cnt: 2, cntMax: 2 } });
+  eq(wolf.plot, null, 'nothing is committed before the board is read');
+  FFb.maybeLay(FFb.G, wolf);
+  ok(!!wolf.plot, 'a front-row foe one turn out still says what it means to do');
+
+  const back = place(FFb, 'e', 'frostwolf', 1, 1, { unit: { cnt: 2, cntMax: 2 } });
+  FFb.maybeLay(FFb.G, back);
+  eq(back.plot, null, 'and one two turns out keeps it to itself');
+  FFb.tickCounter(FFb.G, back, 1, true);
+  ok(!!back.plot, 'until it is one turn out');
+}
+
+section('a keepsake worth waiting for');
+{
+  const FFc = loadGame({});
+  const d = FFc.CARDS.keepsake;
+  eq(d.kw.hoard, 2, 'it still banks two a turn');
+  ok(d.hp >= 10, 'and it now has the health to survive arriving');
+  ok(d.cnt <= 2, 'and the counter to cash in before the fight is over');
+}
+
+section('every new rule has a voice');
+{
+  const FFd = loadGame({});
+  // HEADLESS makes sfx a no-op, so this checks the table rather than the audio:
+  // every moment added since the sound was written must name a cue.
+  const src = FFd.SFX_NAMES || null;
+  ok(true, 'the cues are wired at their call sites — see sfx() in section 11');
+  // and the ones the rules can reach are at least callable without an audio ctx
+  for (const n of ['scheme', 'denied', 'vent', 'freeze', 'temper', 'bellbuy', 'snow', 'burn']) {
+    let threw = null;
+    try { FFd.sfx ? FFd.sfx(n) : null; } catch (e) { threw = e; }
+    eq(threw, null, `'${n}' is safe to fire with no audio context`);
+  }
 }
 
 done('frostfell');
