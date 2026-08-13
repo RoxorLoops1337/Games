@@ -298,6 +298,19 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  { name: 'rule: the path heals a kin that is out cold again', aims: ['the fight and the path answer the same question the same way'],
+    find: "  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp > 0 && m.hp < m.max)) || G.party[0];",
+    to: "  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp < m.max)) || G.party[0];" },
+  { name: 'rule: the path stops asking whether you own it', aims: ['the fight and the path answer the same question the same way'],
+    find: "  if (!(G.bag[id] > 0)) return { ok: false, why: 'You have none of those.', target: null };",
+    to: '  if (false) return { ok: false, why: \'You have none of those.\', target: null };' },
+  { name: 'rule: the refusal stops naming the reviver off the table', aims: ['the fight and the path answer the same question the same way'],
+    find: "      const rev = Object.keys(ITEMS).find((k) => ITEMS[k].kind === 'revive');",
+    to: '      const rev = null;' },
+  { name: 'rule: a whole party can still be salved', aims: ['the fight and the path answer the same question the same way'],
+    find: "    if (target.hp >= target.max) return { ok: false, why: 'Nobody needs that.', target: null };",
+    to: "    if (false) return { ok: false, why: 'Nobody needs that.', target: null };" },
+
   // Anchored on doAction's preceding line: endTurn and doAction now have
   // IDENTICAL tails, which is the whole point of the pass, so the tail alone
   // matches twice.

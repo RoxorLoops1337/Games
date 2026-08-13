@@ -7063,6 +7063,166 @@ section('a retained card stays whichever way the turn ended');
     'nothing throws the whole hand away any more');
 }
 
+// Is every rule written in exactly one place, and true at every call site?
+//
+// The same shape three passes running, so this one went looking for it. Items
+// have two gates — `battleItemUse` for a fight, `fieldItemUse` for the path —
+// and driven across every item against every state a kin can be in, they
+// disagreed twice:
+//
+//   salve on a kin that is out cold
+//       in a fight   refuse  "Cindercub is out cold — that will not help."
+//       on the path  ALLOW   0 -> 30 HP
+//   any item, with an empty bag
+//       in a fight   refuse  "You have none of those."
+//       on the path  ALLOW
+//
+// The first is the consequential one: a 150-shard Salve did what Emberroot
+// exists for, at 900, and Emberroot only gives half a bar. The picker asked for
+// `hp < max`, which a fainted kin satisfies by accident — there is no comment
+// arguing for it, unlike the crit ceiling in pass 209, and the fight states the
+// rule out loud. The second is the structural one: the ownership guard lived in
+// the LIST that builds the rows rather than in the rule, so anything reading
+// the rule directly got a yes for an item that is not in the bag.
+section('the fight and the path answer the same question the same way');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { ITEMS } = g;
+
+  const stock = () => { g.G.bag = Object.fromEntries(Object.keys(ITEMS).map((k) => [k, 5])); };
+  const party = (hps) => {
+    g.G.party = hps.map((h, i) => {
+      const m = g.mkMon(['cindercub', 'dewdrip', 'zaplet'][i], 30);
+      m.hp = h === 'full' ? m.max : h;
+      return m;
+    });
+    return g.G.party;
+  };
+  const inFight = () => {
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('mothrix', 24), wild: true });
+    const b = g.B();
+    b.mine = g.G.party[0];
+    return b;
+  };
+
+  // ---- the two gates, every item, every state ---------------------------
+  // They are allowed to differ on WHERE a thing may be used — an orb is for the
+  // wild, an elixir is for a fight — and must agree on everything else.
+  const PLACE = { orb: 'fight only', draw: 'fight only' };
+  let compared = 0;
+  for (const id of Object.keys(ITEMS)) {
+    const kind = ITEMS[id].kind;
+    for (const hp of ['full', 20, 0]) {
+      stock(); party([hp, 'full']);
+      inFight();
+      const bg = g.battleItemUse(id, g.G.party[0]);
+      g.G.battle = null;
+      stock(); party([hp, 'full']);
+      const fg = g.fieldItemUse(id);
+      compared++;
+      if (PLACE[kind]) {
+        // Place rules: the fight allows it, the path says where it belongs.
+        ok(bg.ok, `${id} is usable in a fight`);
+        eq(fg.ok, false, `${id} is not usable on the path (${fg.why})`);
+        continue;
+      }
+      eq(fg.ok, bg.ok,
+        `${id} on a kin at ${hp === 'full' ? 'full HP' : hp + ' HP'}: fight says ${bg.ok ? 'yes' : 'no'}, path says ${fg.ok ? 'yes' : 'no'}`);
+      if (!bg.ok && !fg.ok) {
+        ok(fg.why.length > 0, `…and the path gives a reason ("${fg.why}")`);
+        ok(bg.why.length > 0, '…as does the fight');
+      }
+    }
+  }
+  ok(compared >= 21, `${compared} item-and-state pairs put side by side`);
+
+  // ---- the ownership question, asked by both ----------------------------
+  for (const id of Object.keys(ITEMS)) {
+    g.G.bag = {};
+    party([20, 'full']);
+    inFight();
+    const bg = g.battleItemUse(id, g.G.party[0]);
+    g.G.battle = null;
+    party([20, 'full']);
+    const fg = g.fieldItemUse(id);
+    eq(bg.ok, false, `${id} cannot be used in a fight when you have none`);
+    eq(fg.ok, false, `${id} cannot be used on the path when you have none`);
+    eq(fg.why, 'You have none of those.', '…and the path says so in the fight\'s words');
+  }
+
+  // ---- the controls, which are what make the claim mean anything ---------
+  // Without these a "fix" that refused every heal everywhere would pass above.
+  {
+    stock();
+    party([20, 'full']);
+    const u = g.fieldItemUse('salve');
+    ok(u.ok, 'a Salve still works on a hurt kin');
+    eq(u.target && u.target.species, 'cindercub', '…on the hurt one');
+  }
+  {
+    stock();
+    party([0, 20]);
+    const u = g.fieldItemUse('salve');
+    ok(u.ok, 'and with the first kin down and the second hurt, a Salve is still usable');
+    eq(u.target && u.target.species, 'dewdrip',
+      '…on the one it can actually help, rather than being spent on the one that is out');
+  }
+  {
+    stock();
+    party([0, 'full']);
+    const u = g.fieldItemUse('revive');
+    ok(u.ok, 'and the reviver still reaches a kin that is down');
+    eq(u.target && u.target.hp, 0, '…the one that is down');
+  }
+  {
+    stock();
+    party(['full', 'full']);
+    eq(g.fieldItemUse('salve').ok, false, 'a whole party needs no Salve');
+    eq(g.fieldItemUse('revive').ok, false, '…and nobody is down');
+  }
+
+  // ---- and the refusal names the reviver off the table ------------------
+  {
+    stock();
+    party([0, 'full']);
+    const u = g.fieldItemUse('salve');
+    const rev = Object.keys(ITEMS).find((k) => ITEMS[k].kind === 'revive');
+    ok(!!rev, 'there is an item whose kind is revive');
+    ok(u.why.includes(ITEMS[rev].name),
+      `the refusal names ${ITEMS[rev].name}, read off ITEMS rather than typed in`);
+    // Move the name and the sentence must move with it.
+    const was = ITEMS[rev].name;
+    ITEMS[rev].name = 'Thistlewake';
+    party([0, 'full']);
+    ok(g.fieldItemUse('salve').why.includes('Thistlewake'), '…and it follows the table when the table moves');
+    ITEMS[rev].name = was;
+    eq(ITEMS[rev].name, 'Emberroot', 'and the table is put back');
+  }
+
+  // ---- the bag never offers what you have none of, however it emptied ----
+  // The orb branch of useItemInBattle spends and returns before the line that
+  // forgets an empty stack, so a zero-valued key can linger. Nothing reads
+  // presence as ownership — the list filters on the value — and that is the
+  // invariant worth holding, so it is the one checked.
+  {
+    g.G.bag = { bloomorb: 0, salve: 2 };
+    const listed = g.screenList({ kind: 'bag' });
+    ok(!listed.includes('bloomorb'), 'a stack that has run out is not on the shelf');
+    ok(listed.includes('salve'), '…and one that has not, is');
+    party([20, 'full']);
+    eq(g.fieldItemUse('bloomorb').ok, false, 'and an empty stack cannot be used');
+  }
+
+  // Pinned by shape.
+  ok(SRC.includes("  if (!(G.bag[id] > 0)) return { ok: false, why: 'You have none of those.', target: null };"),
+    'the path asks whether you own it');
+  ok(SRC.includes("const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp > 0 && m.hp < m.max)) || G.party[0];"),
+    'and a heal looks for a kin that is hurt rather than one that is gone');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

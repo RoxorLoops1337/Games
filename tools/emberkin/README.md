@@ -4231,3 +4231,65 @@ desktop one. That is the correct answer and not an obvious one.
     real turn-endings and twelve control endings, with only the table-shape
     checks out of reach. Every mutant anchor re-audited — 101 anchors, none
     orphaned, none ambiguous. Render suite 6785 -> 6839 checks.
+
+123. **Two gates for one question, and they answered it differently**
+    (pass 212). Three passes running had found the same shape, so this one went
+    looking for it directly. Items have two gates — `battleItemUse` for a fight,
+    `fieldItemUse` for the path. Driven across every item against every state a
+    kin can be in, they disagreed twice:
+
+        salve on a kin that is out cold
+            in a fight   refuse  "Cindercub is out cold — that will not help."
+            on the path  ALLOW   0 -> 30 HP
+        any item, with an empty bag
+            in a fight   refuse  "You have none of those."
+            on the path  ALLOW
+
+    The first is the consequential one. A 150-shard Salve did what Emberroot
+    exists for at 900, and Emberroot only gives half a bar — so the cheap item
+    was strictly the better reviver, on the path, all along. The picker asked
+    for `hp < max`, which a fainted kin satisfies by accident; there is no
+    comment arguing for it, unlike the crit ceiling in pass 209, and the fight
+    states the rule out loud.
+
+    The second is the structural one, and it is exactly the shape named: the
+    ownership guard lived in the LIST that builds the rows, not in the rule. The
+    row you press is filtered to what you own, so nothing reached it — but
+    anything reading the rule directly got a yes for an item that is not in the
+    bag. A filter applied when building a list and not when reading it.
+
+    **The controls are what make the claim mean anything.** A "fix" that refused
+    every heal everywhere would have passed every check above. Driven: a Salve
+    still works on a hurt kin; with the first kin down and the second hurt it
+    now goes to the SECOND — the one it can help — rather than being spent on
+    the one that is out; the reviver still reaches a kin that is down; a whole
+    party still needs neither.
+
+    The refusal names the reviver off ITEMS BY KIND rather than by hand —
+    rename it to Thistlewake at runtime and the sentence follows. That is pass
+    206's lesson applied on the way in instead of found two passes later.
+
+    **Recorded, not fixed** (with both sites): `useItemInBattle`'s orb branch
+    spends `G.bag[id]--` and RETURNS before the `if (G.bag[id] <= 0) delete`
+    line at the end of the same function, so a zero-valued key can linger in the
+    bag and into the save. The same two-line rule is also written out by hand at
+    the field-item call site. Nothing reads presence as ownership — the list
+    filters on the value — so the invariant worth holding is "the bag never
+    offers what you have none of, however it emptied", and that is what the
+    section checks rather than the wart itself.
+
+    Four planted faults, all four bitten by hand: the path healing a kin that is
+    out cold again (3 failures), the path not asking whether you own it (10),
+    the refusal no longer naming the reviver off the table (2), a whole party
+    still salvable (5) — plus a NO-OP comment edit that correctly passed. The
+    last of those also killed checks in pass 199's older shelf-note section,
+    which covers the same function from a different angle. The sweep then
+    reported 3 / 10 / 2 / 5, the same four numbers.
+
+    Four sweep mutants aimed at the new section, which reports **17 of 84
+    killed — 20%**. Low for a plain reason: over half the section is the
+    item-by-state grid, and three of its four items are orbs and the elixir,
+    whose answers are about WHERE a thing may be used — no mutation to a heal's
+    target picker or an ownership guard can reach a single one of those rows.
+    Every mutant anchor re-audited — 105 anchors, none orphaned, none
+    ambiguous. Five clean runs. Render suite 6839 -> 6923 checks.

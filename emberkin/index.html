@@ -3936,11 +3936,30 @@ const GROUP_ORDER = ['Orbs', 'Salves', 'In a fight'];
 function fieldItemUse(id) {
   const it = ITEMS[id];
   if (!it) return { ok: false, why: 'Nothing to use.', target: null };
+  // The same first question the fight asks. It was never asked here at all —
+  // the row you press is built from a list already filtered to what you own, so
+  // the guard lived in the list rather than in the rule, and anything that
+  // called this function without going through that list got a yes for an item
+  // that is not in the bag.
+  if (!(G.bag[id] > 0)) return { ok: false, why: 'You have none of those.', target: null };
   if (it.kind === 'orb') return { ok: false, why: 'Save those for the wild.', target: null };
   if (it.kind === 'draw') return { ok: false, why: 'Save that for a battle.', target: null };
-  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp < m.max)) || G.party[0];
+  // …and the same second question. A heal cannot touch a kin that is out cold:
+  // the fight says so in as many words — "is out cold — that will not help" —
+  // and the path did not, because the picker asked for `hp < max`, which a
+  // fainted kin satisfies by accident. So a Salve took one from 0 to 30 on the
+  // path, for 150 shards, while the item that exists for exactly that costs 900
+  // and gives half a bar. Named off ITEMS by kind rather than by hand, so a
+  // renamed or re-priced reviver keeps the sentence true.
+  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp > 0 && m.hp < m.max)) || G.party[0];
   if (!target) return { ok: false, why: 'Nobody to use it on.', target: null };
-  if (it.kind === 'heal' && target.hp >= target.max) return { ok: false, why: 'Nobody needs that.', target: null };
+  if (it.kind === 'heal') {
+    if (target.hp <= 0) {
+      const rev = Object.keys(ITEMS).find((k) => ITEMS[k].kind === 'revive');
+      return { ok: false, why: `The ones that are down need ${rev ? ITEMS[rev].name : 'something stronger'}.`, target: null };
+    }
+    if (target.hp >= target.max) return { ok: false, why: 'Nobody needs that.', target: null };
+  }
   if (it.kind === 'revive' && target.hp > 0) return { ok: false, why: 'Nobody is down.', target: null };
   return { ok: true, why: '', target };
 }
