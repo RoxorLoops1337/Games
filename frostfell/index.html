@@ -456,9 +456,13 @@ def({ id: 'thornoil', name: 'Thorn Oil', type: 'item', tribe: null, rare: 2, tar
   art: { kind: 'flask', col: '#d6a6ff' }, text: 'Thorns 3.',
   effect: (g, t) => addStatus(g, t, 'thorns', 3) });
 
+/* Spice 1 across the line was a whole turn spent on about three damage, and
+   the usage table said so every round: nobody ever played it. Two is a turn
+   worth taking when there is a line to spend it on, and nothing when there is
+   not — which is the shape a board-wide card should have. */
 def({ id: 'kindling', name: 'Kindling', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
-  art: { kind: 'burst', col: '#ff9a3c' }, text: 'Spice 1 on every warden.',
-  effect: (g) => playerUnits(g).forEach((u) => addStatus(g, u, 'spice', 1)) });
+  art: { kind: 'burst', col: '#ff9a3c' }, text: 'Spice 2 on every warden.',
+  effect: (g) => playerUnits(g).forEach((u) => addStatus(g, u, 'spice', 2)) });
 
 def({ id: 'hush', name: 'Hush', type: 'item', tribe: 'frost', rare: 3, target: 'enemy',
   art: { kind: 'burst', col: '#a98cff' }, text: 'Frost 3 and Weak 2 on a foe.',
@@ -472,12 +476,18 @@ def({ id: 'patchkit', name: 'Patch Kit', type: 'item', tribe: 'scrap', rare: 1, 
   art: { kind: 'shield', col: '#8fe0a0' }, text: 'Heal 3 and Shell 3.',
   effect: (g, t) => { heal(g, t, 3); addStatus(g, t, 'shell', 3); } });
 
+/* And this one now has a moment rather than a number: it burns everything,
+   and it burns whatever has committed to a scheme twice as badly. */
 def({ id: 'tinderjar', name: 'Tinder Jar', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
-  art: { kind: 'flask', col: '#ff6a2c' }, text: 'Ember 2 on every foe.',
-  effect: (g) => enemyUnits(g).forEach((u) => addStatus(g, u, 'ember', 2)) });
+  art: { kind: 'flask', col: '#ff6a2c' }, text: 'Ember 3 on every foe, and 3 more on anything that is scheming.',
+  effect: (g) => enemyUnits(g).forEach((u) => addStatus(g, u, 'ember', u.plot ? 6 : 3)) });
 
-def({ id: 'oldmap', name: 'Old Map', type: 'item', tribe: null, rare: 2, target: 'none',
-  art: { kind: 'stone', col: '#e8d9b4' }, text: 'Draw two cards.',
+/* Two cards for a whole turn is a losing trade and always was — the pilot
+   never once picked it up. Two cards for NO turn is a different card: it is
+   the only free action in the deck, and it makes a hand that has nothing in it
+   into a hand that might. */
+def({ id: 'oldmap', name: 'Old Map', type: 'item', tribe: null, rare: 2, target: 'none', freeAction: true,
+  art: { kind: 'stone', col: '#e8d9b4' }, text: 'Draw two cards. This does not cost the turn — once a turn.',
   effect: (g) => { drawToHand(g); drawToHand(g); } });
 
 def({ id: 'snowbomb', name: 'Snowbomb', type: 'item', tribe: 'frost', rare: 2, target: 'enemy',
@@ -540,7 +550,7 @@ const PREVIEW = {
   },
   grudge:     (g, t, card) => [{ u: t, dmg: 3 + Math.min(HOARD_CAP, (card && card.held) || 0) }],
   emberflask: (g, t) => [{ u: t, dmg: 0, tag: 'EMBER 4' }],
-  tinderjar:  (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'EMBER 2' })),
+  tinderjar:  (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: u.plot ? 'EMBER 6' : 'EMBER 3' })),
   coldsnap:   (g) => enemyUnits(g).map((u) => ({ u, dmg: 0, tag: 'FROST 1' })),
   hush:       (g, t) => [{ u: t, dmg: 0, tag: 'FROST 3' }],
   coldread:   (g, t) => [{ u: t, dmg: t && t.plot ? 6 : 0, tag: t && t.plot ? 'BREAK THE SCHEME' : 'FROST 1' }],
@@ -553,7 +563,7 @@ const PREVIEW = {
   thornoil:   (g, t) => [{ u: t, dmg: 0, tag: 'THORNS 3' }],
   bellrope:   (g, t) => [{ u: t, dmg: 0, tag: 'SWIFT 2' }],
   pryrod:     (g, t) => [{ u: t, dmg: 0, tag: 'COUNTER -2' }],
-  kindling:   (g) => playerUnits(g).map((u) => ({ u, dmg: 0, tag: 'SPICE 1' })),
+  kindling:   (g) => playerUnits(g).map((u) => ({ u, dmg: 0, tag: 'SPICE 2' })),
   oldmap:     () => [],
 };
 function previewOf(g, card, spot) {
@@ -686,6 +696,7 @@ const SCHEMES = {
 
 /* -- the bestiary --------------------------------------------------------- */
 const FOES = {};
+const HEAT_CAP = 6;
 const foe = (o) => { o.foe = true; o.type = 'unit'; FOES[o.id] = o; return o; };
 
 foe({ id: 'snapfrost', name: 'Snapfrost', hp: 8, atk: 3, cnt: 2, tier: 1,
@@ -771,8 +782,31 @@ foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 92, atk: 8, cnt: 5, tier:
   phase: { name: 'THE BOILER GOES', text: 'everything in the room is on fire now',
     apply: (g, u) => { u.cntMax = Math.max(2, u.cntMax - 2); foes(g, u).forEach((f) => addStatus(g, f, 'ember', 3)); } },
   art: A('#b0a080', '#e8dcc0', { stance:'squat',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'breathe', shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
-  kw: { barrage: 1, smack: 1 }, text: 'Barrage. Smackback. Every trigger, it gains 1 attack.',
-  hooks: { trigger: (g, u) => { u.atk += 1; } } });
+  kw: { barrage: 1, smack: 1 },
+  text: 'Barrage. Smackback. Every trigger it stokes: +1 attack, up to +6, and it keeps it. Frost vents the boiler and takes all of it back at once.',
+  /* It was landing 60% of every death in the last zone, and it was doing it
+     the same way every time: unbounded attack growth attached to Barrage, so
+     the fight was a timer rather than a fight. The growth stays — it is what
+     makes the beast frightening — but it is now something the player can undo
+     with a status they already carry cards for. */
+  hooks: {
+    /* Stoking is capped. Venting is the fast answer and the interesting one,
+       but a beast whose attack climbs without a ceiling is a timer even for a
+       player who never finds a frost card, and it was landing three fights in
+       five in the last zone on that alone. */
+    trigger: (g, u) => {
+      if ((u.heat || 0) >= HEAT_CAP) return;
+      u.atk += 1; u.heat = (u.heat || 0) + 1;
+    },
+    chilled: (g, u) => {
+      if (!u.heat) return;
+      u.atk = Math.max(1, u.atk - u.heat);
+      fx.pop(u, 'THE BOILER VENTS  -' + u.heat, '#8fe3ff');
+      fx.burst(u, '#dff0ff', 22);
+      logLine(g, 'the cold gets into the boiler — ' + u.name + ' loses ' + u.heat + ' attack', '#8fe3ff');
+      u.heat = 0;
+    },
+  } });
 
 foe({ id: 'whitestag', name: 'The White Stag', hp: 42, atk: 5, cnt: 3, tier: 4, boss: true,
   phase: { name: 'IT BOLTS', text: 'it stops circling and starts running',
@@ -1076,6 +1110,8 @@ function addStatus(g, u, key, n, quiet) {
   if (key === 'frost') {
     // Glacierling and friends listen for a foe going cold.
     for (const a of sideUnits(g, u.side === 'p' ? 'e' : 'p')) if (a.hooks.frosted) a.hooks.frosted(g, a, u);
+    // and some things answer for their own chill
+    if (u.hooks.chilled) u.hooks.chilled(g, u);
   }
 }
 /* Whether a side still has somewhere to fall back to. Normally that is a free
@@ -1378,7 +1414,11 @@ function resolveTurn(g) {
     for (const side of ['p', 'e']) {
       const line = sideUnits(g, side);
       if (!line.length) continue;
-      const room = hasRoom(g, side);
+      /* And warmth does not last for ever. Two fights in seventy-five ran past
+         a hundred and sixty turns with both lines mending as fast as they were
+         hit — a stalemate the player cannot break and the game will not end.
+         After thirty turns the fire is out and it is attrition from there. */
+      const room = hasRoom(g, side) && b.turn <= 30;
       if (room) {
         /* Warmth is one, for everybody, always.
 
@@ -1423,6 +1463,7 @@ function resolveTurn(g) {
 
   beat(0.1, () => {
     b.busy = false;
+    b.freeThisTurn = false;
     if (b.over) return;
     if (b.bell < bellNeed(g)) b.bell++;
     if (!b.hand.length && b.bell < bellNeed(g)) b.bell = bellNeed(g);  // never softlock an empty hand
@@ -1585,7 +1626,19 @@ function playCard(g, idx, spot) {
     d.effect(g, spot, card);
     // The Scrap Trail: the first thing you reach into the pack for each fight
     // is on the house, which is a whole extra action in the turn that matters.
-    if (co && co.freeItem && !b.usedFree) { free = true; b.usedFree = true; fx.toast('OFF THE PACK — FREE', co.col); }
+    /* ONE FREE PLAY A TURN, whatever grants it.
+
+       Without the bound this is an infinite loop rather than a nice card: Old
+       Map does not cost the turn and draws two, and under A Heavy Pack it goes
+       back into the deck afterwards, so it comes round and round for ever. The
+       probe found it as eleven runs in twenty-four that ended with no victory
+       and no death — which is why a run that reaches neither is now an
+       assertion and not a note. */
+    if (!b.freeThisTurn) {
+      if (d.freeAction) { free = true; }
+      else if (co && co.freeItem && !b.usedFree) { free = true; b.usedFree = true; fx.toast('OFF THE PACK — FREE', co.col); }
+      if (free) b.freeThisTurn = true;
+    }
   }
   card.held = 0;
   fx.fly(card, card.hx, card.hy);
@@ -1615,7 +1668,7 @@ function summon(g, foeId, count) {
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
-  return (1 + run.step * 0.030 + run.zone * 0.09) * (run.foeMul || 1);
+  return (1 + run.step * 0.046 + run.zone * 0.175) * (run.foeMul || 1);
 }
 
 /* A pack is never just a bigger skirmish: it hunts a particular way, and the
@@ -2117,6 +2170,43 @@ function takeCard(g, id) {
   g.run.taken = (g.run.taken || 0) + 1;
   sfx('get');
 }
+/* Making one card harder, in the one way that does not make the deck bigger.
+   It lives in three places on purpose: the trader takes scrip for it, a reward
+   screen takes the card you would have taken instead, and a camp takes the
+   night's mending. The shop was doing all of this on its own and a map has
+   only one of those on it — miss the trader, lose the run, which is a single
+   point of failure wearing a decision's coat. */
+/* The fire only does so much. Three doors onto tempering is the point — miss
+   the trader and the road still has answers — but three doors with no ceiling
+   is simply four times the power, and it measured that way: a competent pilot
+   went to a 67% win rate the moment the doors opened. The cap makes the doors
+   a question of WHEN and WHAT IT COSTS rather than how many you can find. */
+const TEMPER_CAP = 4;
+const tempered = (run) => run.deck.concat([run.leader]).filter((c) => c.charms.indexOf('blessed') >= 0).length;
+function temperable(run) {
+  if (tempered(run) >= TEMPER_CAP) return [];
+  return run.deck.concat([run.leader]).filter((c) => c.charms.indexOf('blessed') < 0);
+}
+function temperCard(g, card) {
+  if (!card || card.charms.indexOf('blessed') >= 0) return false;
+  card.charms.push('blessed');
+  card.blessed = true;
+  rebuildCard(card);
+  sfx('get');
+  fx.toast(card.name.toUpperCase() + ' COMES BACK HARDER', C.gold);
+  return true;
+}
+function openTemper(g, title, sub, after) {
+  const cands = temperable(g.run);
+  if (!cands.length) return false;
+  openChooser(title, cands.map((cd) => ({ card: cd })), (i) => {
+    if (temperCard(g, cands[i])) g.run.log.push(cands[i].name + ' was tempered.');
+    UI.choose = null;
+    if (after) after();
+  }, { cancel: 'NEVER MIND', sub });
+  return true;
+}
+
 function takeCharm(g, charmId, cardUid) {
   const card = g.run.deck.concat([g.run.leader]).find((c) => c.uid === cardUid);
   const ch = CHARMS[charmId];
@@ -2149,7 +2239,30 @@ function buy(g, kind, idx, arg) {
   if (kind === 'card') {
     const it = s.cards[idx];
     if (!it || it.sold || !takeGold(it.price)) return false;
-    it.sold = true; takeCard(g, it.id); return true;
+    it.sold = true;
+    takeCard(g, it.id);
+    /* AND SHE TAKES ONE OFF YOUR HANDS.
+
+       Buying a card measured as a trap for three iterations running — a
+       penniless caravan beat a well-funded one by nine points, because every
+       purchase was one more card between the deck and the card it wanted. A
+       sale that lets you leave one behind is deck-neutral: you are trading up
+       rather than bulking out, which is what buying a card was always supposed
+       to feel like. Declining is allowed; it is just rarely right. */
+    if (run.deck.length > 3) {
+      const bought = run.deck[run.deck.length - 1];
+      const others = run.deck.filter((c) => c.uid !== bought.uid);
+      openChooser('AND SHE WILL TAKE ONE OFF YOUR HANDS', others.map((cd) => ({ card: cd })), (i) => {
+        const j = run.deck.findIndex((c) => c.uid === others[i].uid);
+        if (j >= 0) {
+          const gone = run.deck.splice(j, 1)[0];
+          fx.toast(gone.name.toUpperCase() + ' LEFT ON THE COUNTER', '#ff9aa5');
+          run.log.push(gone.name + ' was left on the trader\'s counter.');
+        }
+        UI.choose = null;
+      }, { cancel: 'KEEP THEM ALL', sub: 'part of the sale — a deck that stays the same size draws what it needs' });
+    }
+    return true;
   }
   if (kind === 'charm') {
     const it = s.charms[idx];
@@ -2166,12 +2279,10 @@ function buy(g, kind, idx, arg) {
   if (kind === 'temper') {
     const card = run.deck.concat([run.leader]).find((c) => c.uid === arg);
     if (!card || s.temper.sold || card.charms.indexOf('blessed') >= 0) return false;
+    if (tempered(run) >= TEMPER_CAP) return false;
     if (!takeGold(s.temper.price)) return false;
-    card.charms.push('blessed');
-    card.blessed = true;
-    rebuildCard(card);
+    if (!temperCard(g, card)) { run.gold += s.temper.price; return false; }
     s.temper.sold = true;
-    sfx('get');
     return true;
   }
   if (kind === 'scar') {
@@ -4652,6 +4763,22 @@ function drawBattle(c, t) {
     c.restore();
   }
 
+  /* Heat, on the beast that is accumulating it. The whole answer to the Kettle
+     Titan is "the number is going up, take it back off" — which is no answer
+     at all unless the number is on the table. */
+  for (const u of units(g)) {
+    if (!u.alive || !u.heat) continue;
+    const sp = slotPos(u.side, u.lane, u.col);
+    const hx = sp.x + SLOT_W / 2 - 6, hy = sp.y - SLOT_H / 2 - 6;
+    c.save();
+    c.globalAlpha = 0.92;
+    c.beginPath(); c.arc(hx, hy, 15, 0, TAU);
+    inked(c, '#ff7a2c', 2.5, C.ink);
+    txt(c, '+' + u.heat, hx, hy + 1, 15, '#2a1206', 'center', 'd', 0);
+    txt(c, 'HEAT', hx, hy - 26, 10, '#ff9a5c', 'center', 'd');
+    c.restore();
+  }
+
   /* Intent, in words, on the outward side of the lane — above the top row and
      below the bottom one, which is the only band on the table that belongs to
      nothing else. A foe that means to do something specific says so here, and
@@ -5051,11 +5178,13 @@ function drawTrail(c, t) {
   const rd = caravanRead(run);
   // Low and to the left, under the road rather than across it: the trail's
   // first stone and the caravan itself both live in the top-left corner.
-  const pw = 232, ph = 44 + rd.length * 22, px = SAFE + 6, py = VH - 230;
+  const pw = 232, ph = 60 + rd.length * 22, px = SAFE + 6, py = VH - 246;
   panel(c, px, py, pw, ph, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
   txt(c, 'THE CARAVAN', px + 14, py + 18, 15, '#a8c8ea', 'left', 'd');
   const crs = courseOf(run);
   if (crs) txt(c, crs.name, px + pw - 14, py + 18, 11, crs.col, 'right', 'd');
+  txt(c, 'TEMPERED ' + tempered(run) + '/' + TEMPER_CAP, px + pw - 14, py + ph - 19, 10.5,
+    tempered(run) >= TEMPER_CAP ? '#7e97b8' : C.gold, 'right', 't');
   rd.forEach((r, i) => {
     const yy = py + 44 + i * 22;
     txt(c, r.ok ? '✓' : '!', px + 16, yy, 14, r.ok ? '#7de08f' : '#ffd166', 'center', 'd');
@@ -5063,7 +5192,7 @@ function drawTrail(c, t) {
     txt(c, r.got + ' / ' + r.want, px + pw - 14, yy - 6, 12.5, r.ok ? '#7de08f' : '#ffd166', 'right', 't');
   });
   const need = caravanNeeds(run);
-  txt(c, need ? need.why : 'ready for what is ahead', px + pw / 2, py + ph + 8, 12,
+  txt(c, need ? need.why : 'ready for what is ahead', px + pw / 2, py + ph + 10, 12,
     need ? '#ffd166' : '#7de08f', 'center', 't');
 
   drawHud(c, t);
@@ -5601,15 +5730,16 @@ function drawReward(c, t) {
      from. */
   if (!r.taken && r.cards.length) {
     const run = G.run;
-    const bw4 = 168, gap4 = 12;
-    const total4 = bw4 * 4 + gap4 * 3;
+    const bw4 = 158, gap4 = 10;
+    const total4 = bw4 * 5 + gap4 * 4;
     const bx = MID - total4 / 2;
     const rd = redealPrice(run);
     button(c, 'rewardCopy', bx, VH - 128, bw4, 44, 'COPY A CARD', '#5f4a8f', run.deck.length < 1, true);
-    button(c, 'rewardBurn', bx + bw4 + gap4, VH - 128, bw4, 44, 'BURN A CARD', '#8f4a4a', run.deck.length < 3, true);
-    button(c, 'rewardRedeal', bx + (bw4 + gap4) * 2, VH - 128, bw4, 44, 'REDEAL  ' + rd, '#3f6f8f', run.gold < rd, true);
-    button(c, 'rewardCourse', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44,
-      (run.course ? 'CHANGE COURSE  ' : 'SET A COURSE  ') + COURSE_PRICE, '#8f7a3f', run.gold < COURSE_PRICE, true);
+    button(c, 'rewardTemper', bx + bw4 + gap4, VH - 128, bw4, 44, 'TEMPER A CARD', '#8f7a3f', !temperable(run).length, true);
+    button(c, 'rewardBurn', bx + (bw4 + gap4) * 2, VH - 128, bw4, 44, 'BURN A CARD', '#8f4a4a', run.deck.length < 3, true);
+    button(c, 'rewardRedeal', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44, 'REDEAL  ' + rd, '#3f6f8f', run.gold < rd, true);
+    button(c, 'rewardCourse', bx + (bw4 + gap4) * 4, VH - 128, bw4, 44,
+      (run.course ? 'CHANGE COURSE  ' : 'COURSE  ') + COURSE_PRICE, '#6f5f3f', run.gold < COURSE_PRICE, true);
     // The one line that says what this caravan is actually short of, right
     // where the decision is being made.
     const need = caravanNeeds(run);
@@ -5669,7 +5799,7 @@ function drawShop(c, t) {
   const btn = (i, id, label, col, dis) => button(c, id, sx + i * (sw + sg), by, sw, 54, label, col, dis);
   btn(0, 'buyHeal', s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
   btn(1, 'buyTemper', s.temper && s.temper.sold ? 'TEMPERED' : 'TEMPER — ' + (s.temper ? s.temper.price : 32),
-    '#8f7a3f', !s.temper || s.temper.sold);
+    '#8f7a3f', !s.temper || s.temper.sold || !temperable(g.run).length);
   btn(2, 'buyScar', s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
   btn(3, 'buySigil', s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
   btn(4, 'buyBurn', (s.burn && s.burn.sold) ? 'BURNED' : 'BURN A CARD — ' + (s.burn ? s.burn.price : 26), '#8f4a4a',
@@ -5704,15 +5834,18 @@ function drawCamp(c, t) {
   c.restore();
   const opts = [
     { id: 'campRest', label: 'REST', sub: 'mend every warden 6' },
+    { id: 'campTemper', label: 'WORK THE FIRE', sub: 'temper a card, and nobody mends' },
     { id: 'campToss', label: 'LIGHTEN THE PACK', sub: 'burn a card from the deck' },
     { id: 'campCharm', label: 'WHITTLE A CHARM', sub: 'attach one of three charms' },
   ];
+  const ow = 258, og = 18, otot = opts.length * ow + (opts.length - 1) * og;
   opts.forEach((o, i) => {
-    const x = MID - 480 + i * 330;
-    panel(c, x, 420, 300, 110, 14, '#1d2c49', '#7fb2e8');
-    txt(c, o.label, x + 150, 456, 22, '#eaf6ff', 'center', 'd');
-    txt(c, o.sub, x + 150, 492, 14, '#9fc0e4', 'center', 't');
-    hit(o.id, x, 420, 300, 110);
+    const x = MID - otot / 2 + i * (ow + og);
+    panel(c, x, 420, ow, 110, 14, '#1d2c49', '#7fb2e8');
+    txt(c, o.label, x + ow / 2, 456, 20, '#eaf6ff', 'center', 'd');
+    wrapText(c, o.sub, 13.5, ow - 24).forEach((ln, k) =>
+      txt(c, ln, x + ow / 2, 486 + k * 17, 13.5, '#9fc0e4', 'center', 't'));
+    hit(o.id, x, 420, ow, 110);
   });
 }
 
@@ -6116,15 +6249,35 @@ function press(id, data) {
     case 'buyTemper': {
       const s2 = g.ui.shop;
       if (!s2 || !s2.temper || s2.temper.sold || g.run.gold < s2.temper.price) return;
-      const cands = g.run.deck.concat([g.run.leader]).filter((cd) => cd.charms.indexOf('blessed') < 0);
+      const cands = temperable(g.run);
       if (!cands.length) return;
       openChooser('TEMPER WHICH CARD?', cands.map((cd) => ({ card: cd })), (i) => {
-        if (buy(g, 'temper', 0, cands[i].uid)) {
-          fx.toast(cands[i].name.toUpperCase() + ' COMES BACK HARDER', C.gold);
-          g.run.log.push(cands[i].name + ' was tempered at the trader.');
-        }
+        if (buy(g, 'temper', 0, cands[i].uid)) g.run.log.push(cands[i].name + ' was tempered at the trader.');
         UI.choose = null;
       }, { cancel: 'NEVER MIND', sub: '+2 attack and +3 health, and the deck stays the size it was' });
+      return;
+    }
+    /* Depth instead of breadth: give up the card you were going to take, and
+       one you already carry comes back harder. Costs no scrip and no node —
+       only the card, which is exactly the trade the reward screen was short
+       of. */
+    case 'rewardTemper': {
+      const r = g.ui.reward;
+      if (r.taken || !r.cards.length) return;
+      openTemper(g, 'TEMPER WHICH CARD INSTEAD?',
+        '+2 attack and +3 health — and you walk away from all ' + r.cards.length, () => {
+          r.taken = true;
+          if (!r.charms.length && !(r.bells && r.bells.length)) advance(g);
+        });
+      return;
+    }
+    case 'campTemper': {
+      if (g.ui.camp && g.ui.camp.done) return;
+      openTemper(g, 'TEMPER WHICH CARD BY THE FIRE?',
+        '+2 attack and +3 health — and nobody mends tonight', () => {
+          g.ui.camp.done = true;
+          advance(g);
+        });
       return;
     }
     case 'buyScar': {
@@ -6545,6 +6698,7 @@ window.FF = {
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
   UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed, deckLeanings, weightedCards,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
+  temperable, temperCard, openTemper, tempered, TEMPER_CAP,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
   saveRun, loadRun, saveMeta, loadMeta, store,

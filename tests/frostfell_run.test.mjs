@@ -118,7 +118,25 @@ function carefulItem(card) {
   const d = FF.CARDS[card.def];
   const pre = FF.previewOf(G, card, null);
   const mine = FF.playerUnits(G), theirs = FF.enemyUnits(G);
-  if (d.target === 'none') return { t: null, worth: pre.length ? 2 : 0 };
+  // A card that does not cost the turn is close to free — but only worth
+  // reaching for while there is room in the hand for what it draws.
+  if (d.freeAction) return { t: null, worth: G.battle.hand.length < FF.HAND ? 99 : 0 };
+  if (d.target === 'none') {
+    /* Board-wide gear was scored at a flat 2 whatever it did, which put every
+       one of them under the threshold and kept them off the table for good.
+       Score it by what it actually lands, across everything it lands on. */
+    let v = 0;
+    for (const x of pre) {
+      v += Math.max(0, x.dmg || 0) * 0.4;
+      if (!x.tag) continue;
+      const n = Number((x.tag.match(/\d+/) || [1])[0]);
+      if (/EMBER/.test(x.tag)) v += n * 0.9;
+      else if (/FROST/.test(x.tag)) v += x.u.cnt <= 2 ? x.u.atk * 0.7 : 1;
+      else if (/SPICE/.test(x.tag)) v += n * 0.8;
+      else v += 1;
+    }
+    return { t: null, worth: v };
+  }
   if (d.target === 'ally') {
     // mending is worth spending only on something actually hurt
     const hurtOne = mine.slice().sort((a, z) => (a.hp / a.maxHp) - (z.hp / z.maxHp))[0];
@@ -151,6 +169,8 @@ function carefulItem(card) {
     let control = 0;
     for (const x of p) {
       if (!x.tag || x.u.side !== 'e') continue;
+      // a beast that vents when chilled is worth chilling for the heat alone
+      if (/FROST/.test(x.tag) && x.u.heat) control += x.u.heat * 1.6;
       if (/FROST/.test(x.tag) && x.u.cnt <= 2) control += x.u.atk * 0.7;
       else if (/EMBER/.test(x.tag)) control += 2;
       else if (/HAUL/.test(x.tag)) control += 1;
@@ -304,9 +324,34 @@ function draftTurn(r) {
      a worse draw. A caravan that is not short of anything and is already
      twelve cards deep walks on and keeps the scrip. */
   const need = FF.caravanNeeds(run);
+  /* A caravan that is not short of anything wants its cards harder, not more
+     of them — and the reward screen will now trade the whole offer for that. */
+  if (!need && run.deck.length >= 9 && FF.temperable(run).length) {
+    FF.press('rewardTemper');
+    pickBiggest();
+    return;
+  }
   if (!need && run.deck.length >= 11) { FF.press('rewardSkip'); return; }
   if (run.deck.length >= 15 && worth < 14) { FF.press('rewardSkip'); return; }
   FF.press('reward', i);
+}
+
+/* Answer an open chooser with the card most worth making harder: whatever is
+   already carrying the line. Used wherever tempering is on offer, which as of
+   this round is three different screens. */
+function pickBiggest() {
+  if (!FF.UI.choose) return false;
+  const items = FF.UI.choose.items;
+  let bi = 0, bs = -1;
+  items.forEach((it, i) => {
+    const cd = it.card;
+    const sc = cd && cd.type === 'unit' ? cd.hp + cd.atk * 2 : 0;
+    if (sc > bs) { bs = sc; bi = i; }
+  });
+  FF.UI.choose.onPick(bi);
+  FF.UI.choose = null;
+  settleChoosers();
+  return true;
 }
 
 /* Some choices open a chooser, and a couple of them open a second one behind
@@ -337,13 +382,26 @@ function playRun(tribe, seed, mode, tweak) {
   if (mode === 'careful') G.run.course = courseWanted();
   if (tweak) tweak(G.run);
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
+  let lastShop = null;
   let guard = 0;
   while (guard++ < 3000) {
+    if (guard >= 3000) {
+      stat.ranOut = true;
+      stat.spunOn = Object.entries(stat.screens).sort((a, z) => z[1] - a[1]).slice(0, 2)
+        .map(([k, v]) => k + ' ' + v).join('+') + (G.UI && G.UI.choose ? ' chooser-open' : '');
+    }
     stat.screens[G.screen] = (stat.screens[G.screen] || 0) + 1;
     if (G.screen === 'victory') { stat.won = true; break; }
     // Where a run ends is as much the measure as whether it ends: a game whose
     // deaths all pile up in one zone has one wall in it, not three.
-    if (G.screen === 'gameover') { stat.diedZone = G.run ? G.run.zone : 0; break; }
+    if (G.screen === 'gameover') {
+      stat.diedZone = G.run ? G.run.zone : 0;
+      // The run already remembers the blow that took the leader, by name. What
+      // it never did was count them: one death is an anecdote, two hundred is
+      // a design note.
+      stat.killedBy = (G.run && G.run.killedBy && G.run.killedBy.name) || 'the cold';
+      break;
+    }
     stat.zone = Math.max(stat.zone, G.run ? G.run.zone : 0);
     if (G.screen === 'trail') {
       const step = G.run.trail[G.run.step];
@@ -376,20 +434,10 @@ function playRun(tribe, seed, mode, tweak) {
          more card between the caravan and the card it wanted. */
       if (shops && !s.heal.sold && G.run.gold >= s.heal.price &&
           G.run.deck.some((cd) => cd.dmg > 0 || cd.injured)) { FF.buy(G, 'heal'); bought = true; }
-      if (!bought && shops && s.temper && !s.temper.sold && G.run.gold >= s.temper.price) {
+      if (!bought && shops && s.temper && !s.temper.sold && G.run.gold >= s.temper.price &&
+          FF.temperable(G.run).length) {
         FF.press('buyTemper');
-        // temper the biggest body: a card that is already carrying the line
-        if (FF.UI.choose) {
-          const items = FF.UI.choose.items;
-          let bi = 0, bs = -1;
-          items.forEach((it, i) => {
-            const cd = it.card;
-            const sc = (cd.type === 'unit' ? cd.hp + cd.atk * 2 : 0);
-            if (sc > bs) { bs = sc; bi = i; }
-          });
-          FF.UI.choose.onPick(bi);
-          FF.UI.choose = null;
-        }
+        pickBiggest();
         bought = true;
       }
       if (!bought && shops && s.burn && !s.burn.sold && G.run.gold >= s.burn.price && G.run.deck.length > 10) {
@@ -402,12 +450,38 @@ function playRun(tribe, seed, mode, tweak) {
       for (let i = 0; !bought && i < s.cards.length; i++) {
         if (s.cards[i].sold || G.run.gold < s.cards[i].price) continue;
         if (shops && !wants && G.run.deck.length >= 12) continue;
-        FF.buy(G, 'card', i); bought = true; break;
+        FF.buy(G, 'card', i);
+        // the sale comes with a trade-in: leave the weakest thing behind
+        if (shops && FF.UI.choose) {
+          const items = FF.UI.choose.items;
+          let wi = 0, ws = 1e9;
+          items.forEach((it, k) => {
+            const cd = it.card;
+            const sc = cd.type === 'unit' ? cd.hp + cd.atk * 2 : 12 + (cd.rare || 1) * 3;
+            if (sc < ws) { ws = sc; wi = k; }
+          });
+          FF.UI.choose.onPick(wi);
+          FF.UI.choose = null;
+        }
+        settleChoosers();
+        bought = true; break;
       }
       if (!bought && !s.heal.sold && G.run.gold >= s.heal.price) { FF.buy(G, 'heal'); bought = true; }
-      if (!bought) FF.press('leaveShop');
+      /* A press that changes nothing is how a shop becomes an infinite loop —
+         it already has been, twice. If a visit thinks it bought something but
+         the counter looks exactly as it did, walk out. */
+      const fingerprint = JSON.stringify([G.run.gold, s.cards.map((cc) => cc.sold), s.heal.sold,
+        s.temper && s.temper.sold, s.burn && s.burn.sold, G.run.deck.length]);
+      if (!bought || fingerprint === lastShop) FF.press('leaveShop');
+      lastShop = fingerprint;
     } else if (G.screen === 'camp') {
-      FF.press('campRest');
+      /* A camp is a choice now, not a button. Mending matters when somebody is
+         hurt; when nobody is, the fire is better spent on the anvil. */
+      const hurtSome = G.run.deck.concat([G.run.leader]).some((cd) => cd.dmg > 2 || cd.injured);
+      if (shops && !hurtSome && FF.temperable(G.run).length) {
+        FF.press('campTemper');
+        pickBiggest();
+      } else FF.press('campRest');
     } else if (G.screen === 'rest') {
       FF.press('restPick', 0);
       settleChoosers();
@@ -415,6 +489,7 @@ function playRun(tribe, seed, mode, tweak) {
       FF.press('shrineGive');
       settleChoosers();
     } else {
+      stat.lostAt = G.screen;
       break;
     }
   }
@@ -433,7 +508,8 @@ section('whole runs, start to finish');
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep = (mode, tweak) => {
     let thrown = null;
-    const out = { wins: 0, stuck: 0, reachedTwo: 0, reachedThree: 0, turns: 0, battles: 0, runs: 0, died: [0, 0, 0] };
+    const out = { wins: 0, stuck: 0, reachedTwo: 0, reachedThree: 0, turns: 0, battles: 0, runs: 0,
+      died: [0, 0, 0], killers: {}, vanished: 0, vanishedAt: {} };
     for (const tribe of tribes) {
       for (let i = 0; i < N; i++) {
         let s;
@@ -444,7 +520,15 @@ section('whole runs, start to finish');
         if (s.stuck) out.stuck++;
         if (s.zone >= 1) out.reachedTwo++;
         if (s.zone >= 2) out.reachedThree++;
-        if (!s.won && s.diedZone !== undefined) out.died[Math.min(2, s.diedZone)]++;
+        if (!s.won && s.diedZone === undefined && !s.stuck) {
+          out.vanished++;
+          const where = s.ranOut ? 'ran out of turns on ' + s.spunOn : (s.lostAt || 'unknown');
+          out.vanishedAt[where] = (out.vanishedAt[where] || 0) + 1;
+        }
+        if (!s.won && s.diedZone !== undefined) {
+          out.died[Math.min(2, s.diedZone)]++;
+          if (s.diedZone >= 2) out.killers[s.killedBy] = (out.killers[s.killedBy] || 0) + 1;
+        }
         out.turns += s.turns;
         out.battles += s.battles;
       }
@@ -467,6 +551,18 @@ section('whole runs, start to finish');
   eq(careless.stuck + tactics.stuck + trader.stuck + careful.stuck, 0, 'no fight goes round forever');
   ok(careless.battles > careless.runs, 'runs contain more than one fight');
 
+  /* A run that ends without a victory AND without a death did not end — the
+     bot fell out of its own loop, and every number above it is a lie by that
+     much. This has bitten three times now (unhandled screens twice, and a
+     turn budget the third), so it is an assertion rather than a note. */
+  for (const [nm, o] of [['careless', careless], ['fight', tactics], ['trader', trader], ['careful', careful]]) {
+    if (o.vanished) {
+      console.log(`    ! ${nm}: ${o.vanished} runs ended without a victory or a death — ` +
+        Object.entries(o.vanishedAt).map(([k, v]) => `${k} ${v}`).join(', '));
+    }
+    eq(o.vanished, 0, `every ${nm} run reaches an ending`);
+  }
+
   const pct = (o) => Math.round((o.wins / Math.max(1, o.runs)) * 100);
   const line = (o) => `${o.wins}/${o.runs} won (${pct(o)}%) · ${o.reachedTwo}/${o.reachedThree} reached zone 2/3 · ` +
     `died ${o.died.join('/')} by zone · ${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns/fight`;
@@ -477,6 +573,14 @@ section('whole runs, start to finish');
   console.log(`    the gap:  ${pct(careful) - pct(careless)} points for playing well — ` +
     `${pct(tactics) - pct(careless)} from the fight, ${pct(trader) - pct(tactics)} from the trader, ` +
     `${pct(careful) - pct(trader)} from steering the pool`);
+
+  /* What is actually killing a competent pilot in the last zone. A zone that
+     kills is a difficulty setting; a zone where the same three things kill
+     every time is a design problem, and telling them apart needs the names. */
+  const lastZone = Object.entries(careful.killers).sort((a, z) => z[1] - a[1]);
+  const totalLate = lastZone.reduce((n, [, v]) => n + v, 0);
+  console.log(`    what ends a good run in the last zone (${totalLate} deaths): ` +
+    (lastZone.slice(0, 3).map(([k, v]) => `${k} ${v}`).join(', ') || 'nothing — nobody died there'));
 
   // Neither end may collapse: a walkover for the careless pilot means nothing
   // in the game asks anything, and a careful pilot who never wins means the
@@ -491,6 +595,17 @@ section('whole runs, start to finish');
   if (N >= 20) {
     ok(careful.wins >= careless.wins, 'playing well is never worse than playing badly');
     ok(careful.reachedTwo >= careless.reachedTwo, 'and it gets further along the trail');
+    /* What is held to a bar is the WHOLE gap, not any one rung of it.
+
+       An earlier version of this line demanded the trader be worth six points
+       on its own, and that expectation is exactly what this round set out to
+       break: when tempering lived only at the trader it was worth fourteen
+       points, and that is not a healthy economy, it is a single node on a map
+       of nine deciding the run. With the same strength reachable at a camp and
+       on the reward screen, being penniless is survivable and the trader's own
+       rung is small. The rungs move between iterations; the total is the thing
+       that must not collapse. */
+    ok(pct(careful) - pct(careless) >= 12, 'playing well, all told, is worth a good deal');
   } else {
     ok(true, `skill ordering not checked at ${N} seeds a tribe — too few to mean anything`);
   }
@@ -557,13 +672,18 @@ section('does money change anything');
   console.log(`    (±${band} points is one standard deviation at ${normal.runs} runs an arm — ` +
     `anything inside that band is noise, not a finding)`);
   ok(normal.pct >= broke.pct - band * 2, 'money is never a liability');
-  /* The bar the economy has to clear. A trader you can ignore is a screen the
-     player walks past, and a screen the player walks past should not exist.
-     Note that a bottomless purse is NOT the best row here, and should not be:
-     if unlimited money beat a normal one by a mile the shop would be a tax on
-     patience rather than a decision — spending it badly has to cost you. */
-  if (N >= 50) ok(normal.pct - broke.pct >= 8, 'and the trader is worth stopping at');
-  else ok(true, `economy gap not held to a bar at ${N} seeds a tribe — the band is ±${band}`);
+  /* This gap USED to be the bar, and it deliberately is not any more.
+
+     When the trader was the only door onto tempering, being penniless cost
+     eleven points — which reads as a working economy and is actually a single
+     point of failure: miss the one shop node on a map of nine and the run is
+     gone. Tempering now lives at a camp and on the reward screen too, so a
+     broke caravan still has roads to strength and the number is small on
+     purpose. What has to stay big is the LADDER rung: a pilot who spends well
+     still has to beat one who does not, and that is checked up in the sweep.
+     A bottomless purse is still not the best row, and should not be — spending
+     badly has to cost you, or the shop is a tax on patience. */
+  ok(true, `money is worth ${normal.pct - broke.pct} points, band ±${band} — reported, not gated`);
 }
 
 section('every card is worth playing');

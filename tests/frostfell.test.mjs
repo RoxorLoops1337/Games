@@ -1446,4 +1446,114 @@ section('scrip that buys something');
   ok(FF6.redealPrice(run6) > p1, 'and the next one costs more');
 }
 
+/* ------------------------------------------------- iteration 12 additions -- */
+section('the boiler, and how to vent it');
+{
+  const FFa = loadGame({});
+  bareBattle(FFa, 'frost', 91);
+  const b = FFa.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  place(FFa, 'p', 'snowpup', 1, 0, { unit: { hp: 60, atk: 0, cnt: 99, cntMax: 99 } });
+  const titan = place(FFa, 'e', 'kettletitan', 0, 0, { unit: { cnt: 1, cntMax: 4 } });
+  const atk0 = titan.atk;
+
+  FFa.triggerUnit(FFa.G, titan);
+  FFa.triggerUnit(FFa.G, titan);
+  eq(titan.atk, atk0 + 2, 'every trigger stokes it');
+  eq(titan.heat, 2, 'and the heat is counted, not hidden');
+
+  FFa.addStatus(FFa.G, titan, 'frost', 1);
+  eq(titan.atk, atk0, 'frost vents the boiler and takes all of it back');
+  eq(titan.heat, 0, 'down to nothing');
+  FFa.triggerUnit(FFa.G, titan);
+  eq(titan.heat, 1, 'and it starts stoking again from cold');
+
+  // it can never be vented below a swing
+  const small = place(FFa, 'e', 'kettletitan', 1, 1, { unit: { atk: 2 } });
+  small.heat = 50;
+  FFa.addStatus(FFa.G, small, 'frost', 1);
+  ok(small.atk >= 1, 'a vented beast still swings for something');
+}
+
+section('the fire only does so much');
+{
+  const FFb = loadGame({});
+  const run = FFb.newRun(FFb.G, 'hearth', 44);
+  eq(FFb.tempered(run), 0, 'a caravan sets out untempered');
+  ok(FFb.temperable(run).length > 0, 'and anything in it can be tempered');
+  for (let i = 0; i < FFb.TEMPER_CAP; i++) {
+    const c = FFb.temperable(run)[0];
+    ok(!!c, 'there is something left to temper (' + i + ')');
+    FFb.temperCard(FFb.G, c);
+  }
+  eq(FFb.tempered(run), FFb.TEMPER_CAP, 'four is what the fire does');
+  eq(FFb.temperable(run).length, 0, 'and after that it offers nothing');
+  eq(FFb.temperCard(FFb.G, run.deck.find((c) => c.charms.indexOf('blessed') < 0)) !== false, true,
+    'the raw call still works — the cap lives in what the screens offer');
+}
+
+section('one free play a turn');
+{
+  const FFc = loadGame({});
+  bareBattle(FFc, 'scrap', 77);
+  FFc.G.run.course = 'pack';                 // gear recycles into the deck
+  const b = FFc.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  place(FFc, 'e', 'snapfrost', 0, 0, { unit: { hp: 300, atk: 0, cnt: 99, cntMax: 99 } });
+  b.hand = [FFc.mkCard('oldmap'), FFc.mkCard('oldmap')];
+  b.draw = [FFc.mkCard('icepick'), FFc.mkCard('icepick'), FFc.mkCard('icepick'), FFc.mkCard('icepick')];
+  const t0 = b.turn;
+  FFc.playCard(FFc.G, 0, null); FFc.drainAll();
+  eq(b.turn, t0, 'the first map is free');
+  const i2 = b.hand.findIndex((c) => c.def === 'oldmap');
+  ok(i2 >= 0, 'the second is still in hand');
+  FFc.playCard(FFc.G, i2, null); FFc.drainAll();
+  eq(b.turn, t0 + 1, 'and the second costs the turn — otherwise the deck loops for ever');
+}
+
+section('warmth does not last for ever');
+{
+  const FFd = loadGame({});
+  bareBattle(FFd, 'hearth', 88);
+  const b = FFd.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  const ward = place(FFd, 'p', 'snowpup', 0, 0, { unit: { atk: 0, cnt: 99, cntMax: 99 } });
+  place(FFd, 'e', 'snapfrost', 1, 2, { unit: { hp: 9999, maxHp: 9999, atk: 0, cnt: 999, cntMax: 999 } });
+  b.turn = 5;
+  FFd.passTurn(FFd.G); FFd.drainAll();
+  ok(FFd.stat(ward, 'regen') > 0 || ward.hp === ward.maxHp, 'early on the line keeps its warmth');
+  b.turn = 40;
+  ward.st.regen = 0;
+  FFd.passTurn(FFd.G); FFd.drainAll();
+  eq(FFd.stat(ward, 'regen'), 0, 'and after thirty turns the fire is out');
+}
+
+section('the cards that had no reason to exist');
+{
+  const FFe = loadGame({});
+  bareBattle(FFe, 'hearth', 99);
+  const b = FFe.G.battle;
+  b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  const mine = place(FFe, 'p', 'snowpup', 0, 0, { unit: { atk: 3, cnt: 99, cntMax: 99 } });
+  const plain = place(FFe, 'e', 'snapfrost', 0, 0, { unit: { hp: 90, atk: 0, cnt: 9, cntMax: 9 } });
+  const schemer = place(FFe, 'e', 'frostwolf', 1, 0, { unit: { hp: 90, cnt: 2, cntMax: 2 } });
+  FFe.tickCounter(FFe.G, schemer, 1, true);
+  ok(!!schemer.plot, 'one of them is scheming');
+
+  FFe.CARDS.tinderjar.effect(FFe.G, null, FFe.mkCard('tinderjar'));
+  eq(FFe.stat(plain, 'ember'), 3, 'the jar burns everything');
+  eq(FFe.stat(schemer, 'ember'), 6, 'and burns a schemer twice as badly');
+  const pre = FFe.previewOf(FFe.G, FFe.mkCard('tinderjar'), null);
+  ok(pre.some((x) => x.tag === 'EMBER 6'), 'and the preview says so before you commit');
+
+  FFe.CARDS.kindling.effect(FFe.G, null, FFe.mkCard('kindling'));
+  eq(FFe.stat(mine, 'spice'), 2, 'kindling is worth a turn now');
+
+  b.hand = [];                       // a full hand cannot be drawn into
+  const h0 = b.hand.length;
+  b.draw = [FFe.mkCard('icepick'), FFe.mkCard('icepick')];
+  FFe.CARDS.oldmap.effect(FFe.G, null, FFe.mkCard('oldmap'));
+  eq(b.hand.length, h0 + 2, 'and the map still draws two');
+}
+
 done('frostfell');
