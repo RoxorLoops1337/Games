@@ -234,6 +234,35 @@ node tools/frostfont/build.mjs --check     # fail if the embed is stale
 node tools/frostfont/build.mjs --specimen  # write fonts.html
 ```
 
+## Playing it
+
+```
+node tools/frostfell/playthrough.mjs        # → /tmp/ff-play
+```
+
+One run, start to finish, in a real browser, taking a note at every decision and
+a screenshot at every beat that matters. The probe measures the game across
+hundreds of runs and prints numbers; this is the opposite, and after seventeen
+rounds of tuning against a probe the thing nobody had was a **transcript**.
+
+It earned its keep on the first run. Three things no amount of measuring had
+shown:
+
+- **"short of mending" on every one of twenty-one steps — of a crossing.** The
+  Frostborn set out with no healing card, never drew one, and won anyway. The
+  game's most prominent piece of advice was unchanging *and* wrong. Mending is
+  asked for from the second zone now, not the first.
+- **The trader is a one-purchase stop.** "Nothing affordable, walked out —
+  fifteen scrip" three visits running. After one thing there is never enough for
+  a second.
+- **Eight fights in twenty-one steps, and the run crossed.** Taking every
+  shop, camp, rest, shrine and event on offer and fighting only when forced is a
+  winning line. The trail scales to the caravan, so a caravan that avoids fights
+  meets a winter that has not grown either — which is the rule from iteration
+  fifteen working exactly as written and not at all as intended.
+
+The third is the next round's work.
+
 ## Looking at it
 
 ```
@@ -475,6 +504,33 @@ The lesson worth keeping is about the instrument, not the game: **for four
 rounds these numbers were read at a sample where the band was wider than the
 effect**, and three habits that were costing the pilot points survived because
 of it.
+
+### One table, one game
+
+Every habit number above had been measured against a game that has since moved —
+tempering flipped +5 to −8 in one round because the temper cap changed
+underneath it. So all of it is run **together, once, against the game as it
+stands**, at 300 runs an arm:
+
+```
+IN THE FIGHT (±2.3)                    ON THE REWARD SCREEN (±2.6)
+   +10  denying schemes                   +7  declaring a course at all
+    +9  holding gear until it earns         0  buying a fresh offer
+    +7  filling the front of both lanes     0  tempering instead of taking
+    +3  keeping a slot in reserve           0  picking what the deck lacks
+     0  repositioning (removed)            -5  walking on when it wants nothing
+     0  calling waves early (removed)
+```
+
+**Scheme denial is not carrying the fight rung.** It read +14 a round ago,
+which looked like the same shape of problem the trader had at +14 three rounds
+before that; measured against the current game alongside everything else it is
++10 against +9 and +7. The spread is healthy and the earlier reading was a
+number about a game that no longer existed.
+
+And the economy, turned up the same way at 300 runs an arm: **penniless 34%, as
+it ships 38%, a bottomless purse 36% — money is worth four points.** It had read
+eight in one run and one in the next; this is the settled figure.
 
 ### And the same for the reward screen
 

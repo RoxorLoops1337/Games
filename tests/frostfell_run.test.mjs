@@ -462,7 +462,10 @@ function draftTurn(r) {
      for the deck. Tempering already covers the "I want strength, not breadth"
      case and pays five points for it, so passing is now only for a deck that is
      genuinely too fat to draw. */
-  if (DRAFT.pass && run.deck.length >= 15 && worth < 14) { FF.press('rewardSkip'); return; }
+  /* The other half of the same habit, missed the first time and still priced at
+     minus five: even a fifteen-card deck is better off taking a card than
+     walking past one. Passing is a button on the screen, not a plan. */
+  if (false && DRAFT.pass && run.deck.length >= 15 && worth < 14) { FF.press('rewardSkip'); return; }
   FF.press('reward', i);
 }
 
@@ -816,15 +819,32 @@ section('does money change anything');
     }
     return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
   };
-  const normal = sweep2(null);
+  /* FF_MONEY turns the economy arm up on its own, the way FF_ABLATE does the
+     habits and FF_COURSE does the courses. It read eight points in one run and
+     one in the next at 210 runs an arm, which is the same "band wider than the
+     effect" mistake in a third place. */
+  const MN = Number(process.env.FF_MONEY || 0);
+  const sweepM = MN ? (tweak) => {
+    let wins = 0, runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < MN; i++) {
+        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
+        runs++;
+        if (st.won) wins++;
+      }
+    }
+    return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+  } : sweep2;
+  if (MN) console.log(`    (money turned up: ${3 * MN} runs an arm)`);
+  const normal = sweepM(null);
   /* Every number in this section is a proportion out of the same handful of
      runs, so it carries a band: one standard deviation, in points, computed up
      front and printed below, so nobody reads a four-point difference as a
      finding. Several of this iteration's dead ends were exactly that mistake
      made twice. */
-  const band = Math.round(100 * Math.sqrt(0.35 * 0.65 / Math.max(1, normal.runs)));
-  const broke = sweep2((run) => { run.gold = 0; run.prices = 40; });
-  const rich = sweep2((run) => { run.gold = 400; run.prices = 0.02; });
+  const band = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, normal.runs))).toFixed(1);
+  const broke = sweepM((run) => { run.gold = 0; run.prices = 40; });
+  const rich = sweepM((run) => { run.gold = 400; run.prices = 0.02; });
   const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
   console.log(`    ${'penniless'.padEnd(19)}${bar(broke.pct)} ${String(broke.pct + '%').padStart(4)}`);
   console.log(`    ${'as it ships'.padEnd(19)}${bar(normal.pct)} ${String(normal.pct + '%').padStart(4)}`);
