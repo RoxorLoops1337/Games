@@ -197,6 +197,16 @@ const MUTANTS = [
     find: '  const why = (k) => (inFight ? battleItemUse(k, null) : fieldItemUse(k)).why;',
     to: '  const why = (k) => fieldItemUse(k).why;' },
 
+  { name: 'status: the card promises what the foe cannot take', aims: ['a card does not promise a status the thing in front of you cannot take'],
+    find: '    bits.push(safe ? `it shrugs off ${fx.st[0]}` : `may ${fx.st[0]}`);',
+    to: '    bits.push(`may ${fx.st[0]}`);' },
+  { name: 'status: the resolver stops honouring the immunity', aims: ['a card does not promise a status the thing in front of you cannot take'],
+    find: "    if (!defender.status && chance(p) && !defender.types.includes(IMMUNE_TO[st] || '')) {",
+    to: '    if (!defender.status && chance(p)) {' },
+  { name: 'status: the burn tick halves', aims: ['a card does not promise a status the thing in front of you cannot take'],
+    find: '      const d = Math.max(1, Math.floor(mon.max / 16));',
+    to: '      const d = Math.max(1, Math.floor(mon.max / 32));' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
