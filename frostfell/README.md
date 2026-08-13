@@ -51,6 +51,8 @@ anything hanging off the stage, and anything hiding under a notch.
 - **Rest stops** hand out one small permanent kindness; **shrines** take a card
   overnight and give it back better; **packs** hunt a named way — in the dark
   behind Shell, at a run, in the briar, starving, or in relays.
+- **The course** is declared at the leader screen and travels the whole trek:
+  a fourth card on every table, and a rule to go by. See below.
 - **Shove** puts what it hits a slot further back. **Crush** hits harder for
   every other body in the target's lane, so a stacked line is a liability.
   **Hoard** grows while a card waits unplayed in your hand.
@@ -183,15 +185,53 @@ walk cannot drift out of step with the rules.
 
 ## Building a deck
 
-Every reward can be spent three ways: take one of the three cards, **copy**
-something already in the caravan (charms and all), or **burn** something out of
-it. A smaller deck draws what it needs, so thinning is a real play rather than
-a punishment. The trader will burn a card for money too.
+Every reward can be spent five ways: take a card, **copy** something already in
+the caravan (charms and all), **burn** something out of it, **redeal** the whole
+offer for scrip, or **pass** — which pays you scrip for walking on. A smaller
+deck draws what it needs, so thinning is a real play rather than a punishment,
+and a caravan that already has what it needs has a reason to say no.
 
-The three cards on offer are not random: the pool reads what the deck already
-holds — its tribe, its keywords, the statuses its text keeps mentioning — and
-leans that way, while making sure a caravan short of bodies is shown bodies.
-Rarity still sets the floor; a lean never turns a rare into a common.
+The cards on offer are not random: the pool reads what the deck already holds —
+its tribe, its keywords, the statuses its text keeps mentioning — and leans that
+way, while making sure a caravan short of bodies is shown bodies. Rarity still
+sets the floor; a lean never turns a rare into a common.
+
+### The course
+
+Before a single card is drawn, at the leader screen, the caravan declares a
+**course** — one of five, free, and it costs you the other four. A course does
+two things: it puts a **fourth card on every table** for the rest of the trek,
+always one going your way, and it hands you a rule to travel by.
+
+| | the extra card | the rule |
+|---|---|---|
+| **The Hearth Road** | hearth | every warden you set down arrives with Spice 2 |
+| **The Deep Cold** | frost | every wave walks in already carrying Frost 1 |
+| **The Scrap Trail** | scrap | the first gear you use each fight does not cost the turn |
+| **A Full Line** | wardens | a full board never costs your line its warmth, and the warmth is doubled |
+| **A Heavy Pack** | gear | gear you use goes back into the deck instead of the used pile |
+
+The course can be changed later at any reward screen for scrip, which is the
+one way a run pivots once it has seen its own hand.
+
+### What the caravan is short of
+
+The last zone is a check on the deck rather than on the play. That is measured,
+not felt — see the probe below — so rather than hide it the game says so out
+loud. **THE CARAVAN** on the trail screen lists five things a deck needs by the
+time it gets there, each with what it has against what it wants: bodies, a hard
+hit, a wall, mending, and a lean deck. The worst of them is named in a sentence
+on the trail, on the reward screen and at the trader, so nobody has to lose a
+run to find out what was missing.
+
+### The trader
+
+Five services, and the important one is **temper**: +2 attack and +3 health on a
+card of your choice, and the deck stays exactly the size it was. That matters
+more than it sounds. Money that can only buy *cards* measured **worse than no
+money at all**, because every purchase was one more card between the caravan
+and the card it wanted. Money that can buy strength without size is worth about
+eleven points of win rate.
 
 ## Beasts
 
@@ -216,38 +256,71 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 The suites run headless against the real functions through `window.FF` — there
 is no second implementation of the rules to drift from.
 
-`frostfell_run` is the balance instrument, and it plays every run three times,
-by three pilots:
+`frostfell_run` is the balance instrument, and it plays every run four times,
+by a **cumulative ladder** of pilots — each one is the pilot above it plus one
+more thing it knows how to do, so the difference between two rows is that one
+thing and nothing else:
 
 - **careless** — deploys whatever is leftmost, throws gear at the nearest
-  thing, takes the leftmost card off every reward screen.
-- **fight only** — plays the board properly: repositions, denies every scheme
-  it can read, pulls a wounded warden out of the front line, keeps a slot in
-  reserve, spends gear only when the gear earns the turn, rings for a wave
-  while its own board is set. Still drafts off the left of the reward screen.
-- **fight + draft** — all of that, plus an actual opinion about which of the
-  three cards to take.
+  thing, takes the leftmost card off every reward screen, buys the first thing
+  it can afford.
+- **+ the fight** — repositions, denies every scheme it can read, pulls a
+  wounded warden out of the front line, keeps a slot in reserve, spends gear
+  only when the gear earns the turn, rings for a wave while its own board is
+  set.
+- **+ the trader** — mends, tempers, burns to stay lean, and buys a card only
+  when the caravan is actually short of one.
+- **+ steering the pool** — declares a course, redeals an offer that is not
+  worth its price, and passes on offers a full caravan does not need.
 
-**The gaps between their win rates are the numbers that say what the game is
-asking of the player**, and the split is the finding. At seventy-five runs a
-pilot (`FF_RUNS=25 node tests/frostfell_run.test.mjs`):
+At **210 runs a rung** (`FF_RUNS=70`, about two and a half minutes):
 
 ```
-careless:      16/75 won (21%) · 50/30 reached zone 2/3 · died 25/20/14 by zone
-fight only:    16/75 won (21%) · 65/39 reached zone 2/3 · died 10/26/23 by zone
-fight + draft: 27/75 won (36%) · 65/43 reached zone 2/3 · died 10/22/16 by zone
+careless:            36/210 won (17%) · 143/71  reached zone 2/3 · died 67/72/35 by zone
++ the fight:         50/210 won (24%) · 170/108 reached zone 2/3 · died 40/62/58 by zone
++ the trader:        79/210 won (38%) · 178/123 reached zone 2/3 · died 32/55/44 by zone
++ steering the pool: 78/210 won (37%) · 189/133 reached zone 2/3 · died 21/56/55 by zone
 ```
 
-Playing the fight well is worth **fifteen fewer first-zone deaths and zero
-points of win rate**. Drafting well is worth **fifteen points**. Tactics buy
-survival; the deck buys the run. That is not the shape anybody set out to
-build, and it is the honest reading of the instrument: by the last zone the
-fight is a check on what you drafted, and no amount of board play rescues a
-caravan that took the leftmost card six times.
+**Twenty points for playing well: seven from the fight, fourteen from the
+trader, none from steering the pool.** And the economy, measured the same way:
+penniless 28%, as it ships 37%, bottomless purse 41% — money is worth nine
+points. Each course, handed over rather than declared, against a 36% baseline
+with no course at all: Hearth 40%, Cold 40%, Bodies 37%, Scrap 36%, Gear 35%.
 
-Eight seeds a tribe is the default, and at eight the whole spread is two or
-three runs wide — noise. The skill-ordering assertion is only enforced at
-`FF_RUNS>=20` for exactly that reason.
+Three things worth saying plainly about that table.
+
+**The trader is where the run is decided**, and it only became so this round.
+Before temper existed, money bought cards, cards made the deck bigger, and a
+bigger deck drew worse — an unlimited purse measured *worse* than an empty one.
+A bottomless purse is still not the best row, and should not be: spending badly
+has to cost you, or the shop is a tax on patience rather than a decision.
+
+**Steering the pool measures at nothing**, and that is the honest headline. No
+course at all wins 36%; the five courses land between 35% and 40%, against a
+standard deviation of three. The pool's own leaning was already a good steer,
+and a blunter one laid over the top does not beat it.
+
+Getting there took three shapes, two of which were worse than no course at all:
+weighting the whole pool six-to-one drowned out the safety net that shows a
+body-starved caravan bodies, and guaranteeing one slot in three was the same
+fault, smaller. The shipped shape adds a *fourth* card, so it cannot make an
+offer worse — it buys agency and a rule to travel by, not wins.
+
+The rules attached to the courses are a different story, and the probe earned
+its keep on one of them. **A Full Line** shipped internally paying its warmth
+double on top of never freezing a packed board, and measured **73%**. Gated
+behind a board of five or more it still measured **61%**. A course at those
+numbers is not a choice a player makes — it is the answer, and the other four
+become decoration. The doubling is gone; the course kept the rule that made it
+interesting rather than the one that made it win, and the suite now fails if any
+course runs more than twenty points clear of the field.
+
+**Every number here carries a band**, printed with the results: one standard
+deviation in points at whatever sample was run. At the default eight seeds a
+tribe that band is ±10, which is wider than most of the differences on the
+table — so the suite reports at eight and only holds the game to a bar at fifty
+or more.
 
 It also reports which cards actually get played. A card that is carried around
 a whole run and never found a moment is the card's fault, and the suite fails

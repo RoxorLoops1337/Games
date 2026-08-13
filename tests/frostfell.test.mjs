@@ -1331,4 +1331,119 @@ section('a card that waits for its moment');
   eq(wolf.plot, null, 'and the scheme is gone with it');
 }
 
+/* -------------------------------------------------- courses and the read -- */
+section('the course a caravan declares');
+{
+  const FF2 = loadGame({});
+  const G2 = FF2.G;
+  // it is declared for free at the leader screen, before anything is known
+  FF2.press('tribe', 'frost');
+  eq(G2.ui.pick.course, 'frost', 'the leader you pick sets the course you start on');
+  FF2.press('courseToggle', 'pack');
+  eq(G2.ui.pick.course, 'pack', 'and any of the five can be declared instead');
+  FF2.press('startRun');
+  eq(G2.run.course, 'pack', 'the run sets out on it');
+  eq(G2.run.gold, 25, 'and it cost nothing but the other four');
+
+  // it widens the offer rather than narrowing it
+  const plain = FF2.newRun(FF2.G, 'frost', 900);
+  const r1 = FF2.rollReward(FF2.G, 'fight');
+  eq(r1.cards.length, 3, 'without a course a reward shows three');
+  plain.course = 'pack';
+  const r2 = FF2.rollReward(FF2.G, 'fight');
+  eq(r2.cards.length, 4, 'with one it shows four');
+  ok(r2.cards.some((id) => FF2.CARDS[id].type === 'item'), 'and one of them is always on the course');
+
+  // every course carries a rule, not only a lean
+  const ruled = FF2.COURSES.filter((co) => co.deploy || co.arrive || co.freeItem || co.crowdproof || co.recycle);
+  eq(ruled.length, FF2.COURSES.length, 'every course changes a rule as well as the pool');
+
+  // A FULL LINE: a packed board keeps its warmth instead of taking the cold
+  const FF3 = loadGame({});
+  bareBattle(FF3, 'hearth', 12);
+  FF3.G.run.course = 'line';
+  const b3 = FF3.G.battle;
+  b3.units = b3.units.filter((u) => u.side === 'p' && u.leader);
+  place(FF3, 'e', 'snapfrost', 1, 2, { unit: { hp: 9999, maxHp: 9999, atk: 0, cnt: 999, cntMax: 999 } });
+  for (let l = 0; l < 2; l++) for (let col = 0; col < 3; col++) {
+    if (!FF3.unitAt(FF3.G, 'p', l, col)) place(FF3, 'p', 'snowpup', l, col, { unit: { atk: 0, cnt: 99, cntMax: 99 } });
+  }
+  eq(FF3.freeSlots(FF3.G, 'p').length, 0, 'the board is packed');
+  FF3.passTurn(FF3.G); FF3.drainAll();
+  const chilled = FF3.playerUnits(FF3.G).filter((u) => FF3.stat(u, 'frost') > 0).length;
+  eq(chilled, 0, 'and under A Full Line nobody takes the cold for it');
+
+  // THE SCRAP TRAIL: the first gear each fight does not cost the turn
+  const FF4 = loadGame({});
+  bareBattle(FF4, 'hearth', 13);
+  FF4.G.run.course = 'scrap';
+  const b4 = FF4.G.battle;
+  b4.units = b4.units.filter((u) => u.side === 'p' && u.leader);
+  const foe4 = place(FF4, 'e', 'snapfrost', 0, 0, { unit: { hp: 90, atk: 0, cnt: 99, cntMax: 99 } });
+  b4.hand = [FF4.mkCard('icepick'), FF4.mkCard('icepick')];
+  const t0 = b4.turn;
+  FF4.playCard(FF4.G, 0, foe4); FF4.drainAll();
+  eq(b4.turn, t0, 'the first piece of gear is off the pack');
+  FF4.playCard(FF4.G, 0, foe4); FF4.drainAll();
+  eq(b4.turn, t0 + 1, 'the second costs the turn like anything else');
+}
+
+section('what the caravan is short of');
+{
+  const FF5 = loadGame({});
+  const run5 = FF5.newRun(FF5.G, 'hearth', 55);
+  const read = FF5.caravanRead(run5);
+  eq(read.length, 5, 'five things a caravan is checked for');
+  ok(read.every((r) => typeof r.got === 'number' && typeof r.want === 'number'),
+    'each one is a number it has against a number it needs');
+
+  // the check gets harder as the trail does — that is the whole point of it
+  const early = FF5.caravanRead(run5).find((r) => r.k === 'bodies').want;
+  run5.zone = 2;
+  const late = FF5.caravanRead(run5).find((r) => r.k === 'bodies').want;
+  ok(late > early, 'and it asks for more of them by the last zone');
+
+  // a caravan with nothing in it is short of nearly everything, and says so
+  run5.deck = [];
+  const bare = FF5.caravanRead(run5).filter((r) => !r.ok);
+  ok(bare.length >= 3, 'an empty caravan fails most of the checks');
+  ok(!!FF5.caravanNeeds(run5), 'and the game will name the worst of them');
+  ok(FF5.caravanNeeds(run5).why.length > 4, 'in words that say what to do about it');
+}
+
+section('scrip that buys something');
+{
+  const FF6 = loadGame({});
+  const run6 = FF6.newRun(FF6.G, 'scrap', 61);
+  const shop = FF6.rollShop(FF6.G);
+  FF6.G.ui.shop = shop;
+  ok(!!shop.temper, 'the trader will temper a card');
+  run6.gold = 999;
+  const card6 = run6.deck[0];
+  const atk0 = card6.atk, hp0 = card6.hp, size0 = run6.deck.length;
+  ok(FF6.buy(FF6.G, 'temper', 0, card6.uid), 'and takes the scrip for it');
+  ok(card6.atk > atk0 && card6.hp > hp0, 'the card comes back harder');
+  eq(run6.deck.length, size0, 'and the deck is exactly the size it was');
+  eq(FF6.buy(FF6.G, 'temper', 0, run6.deck[1].uid), false, 'once a visit');
+
+  // walking past an offer pays, so a built caravan has a reason to say no
+  const g6 = FF6.G;
+  g6.ui.reward = FF6.rollReward(g6, 'fight');
+  g6.screen = 'reward';
+  const gold0 = run6.gold;
+  FF6.press('rewardSkip');
+  eq(run6.gold, gold0 + FF6.PASS_PAY, 'and passing on all of them pays scrip');
+  eq(run6.passed, 1, 'the caravan remembers it walked on');
+
+  // a redeal costs, and costs more each time
+  const g7 = FF6.G;
+  g7.ui.reward = FF6.rollReward(g7, 'fight');
+  g7.screen = 'reward';
+  const p1 = FF6.redealPrice(run6);
+  run6.gold = 999;
+  FF6.press('rewardRedeal');
+  eq(run6.gold, 999 - p1, 'a fresh three costs what it says');
+  ok(FF6.redealPrice(run6) > p1, 'and the next one costs more');
+}
+
 done('frostfell');

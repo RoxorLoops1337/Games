@@ -250,26 +250,63 @@ function carefulTurn() {
    one and still wins no more runs, which points at the DRAFT deciding the run
    rather than the fight. Give the careful pilot a real opinion about which of
    the three cards to take, and if the gap opens, that was the cause. */
+function cardWorth(id) {
+  const d = FF.CARDS[id];
+  if (!d) return 0;
+  const bodies = G.run.deck.filter((cd) => cd.type === 'unit').length;
+  let s = (d.rare || 1) * 2;
+  if (d.type === 'unit') {
+    // what a body is worth is damage per turn plus what it can survive
+    s += (d.atk || 0) / Math.max(1, d.cnt || 1) * 3 + (d.hp || 0) * 0.25;
+    if (bodies < 5) s += 4;                        // a caravan short of bodies needs bodies
+    if (d.tribe && d.tribe === G.run.tribe) s += 1.5;
+  } else {
+    s += 5;                                        // gear is a turn that does something
+    if (d.target === 'none') s += 1;
+  }
+  // and whatever the caravan is furthest short of is worth more than its stats
+  const need = FF.caravanNeeds(G.run);
+  if (need) {
+    if (need.k === 'bodies' && d.type === 'unit') s += 5;
+    if (need.k === 'wall' && (d.hp || 0) >= 10) s += 5;
+    if (need.k === 'punch' && Math.max(d.atk || 0, FF.hitOf({ def: d.id })) >= 5) s += 4;
+    if (need.k === 'mend' && /heal|mend|regen/i.test(d.text || '')) s += 5;
+  }
+  return s;
+}
 function draftPick(ids) {
-  const deck = G.run.deck;
-  const bodies = deck.filter((cd) => cd.type === 'unit').length;
   let bestI = 0, bestS = -1e9;
-  ids.forEach((id, i) => {
-    const d = FF.CARDS[id];
-    if (!d) return;
-    let s = (d.rare || 1) * 2;
-    if (d.type === 'unit') {
-      // what a body is worth is damage per turn plus what it can survive
-      s += (d.atk || 0) / Math.max(1, d.cnt || 1) * 3 + (d.hp || 0) * 0.25;
-      if (bodies < 5) s += 4;                      // a caravan short of bodies needs bodies
-      if (d.tribe && d.tribe === G.run.tribe) s += 1.5;
-    } else {
-      s += 5;                                      // gear is a turn that does something
-      if (d.target === 'none') s += 1;
-    }
-    if (s > bestS) { bestS = s; bestI = i; }
-  });
+  ids.forEach((id, i) => { const s = cardWorth(id); if (s > bestS) { bestS = s; bestI = i; } });
   return bestI;
+}
+
+/* Spending scrip on the offer itself, which is the lever the last round of
+   measurement said actually decides a run. In order: set a course while the
+   trek is young enough for it to pay off; buy a fresh three when the three on
+   the table are worth less than the redeal costs; take the best card; walk on
+   and pocket the scrip when the caravan already has what it needs. */
+/* The course is declared before a card is drawn, so a pilot with an opinion
+   has exactly one thing to go on: the leader it chose. Backing the tribe it
+   already starts with is the obvious read, and it is the one this pilot takes.
+   The probe measures each of the five directly below, so if a different one
+   were better the numbers would say so. */
+const courseWanted = () => G.run.tribe;
+function draftTurn(r) {
+  const run = G.run;
+  const i = draftPick(r.cards);
+  const worth = cardWorth(r.cards[i]);
+  // an offer worth less than the price of a fresh one
+  const rd = FF.redealPrice(run);
+  if (worth < 9 && run.gold >= rd + 20 && (run.redeals || 0) < 3) { FF.press('rewardRedeal'); return; }
+  /* Whether to take a card is a question about the DECK, not about the card.
+     Keying it on how good the offer looked made the pilot measurably worse the
+     moment offers improved — better cards, more of them taken, a fatter deck,
+     a worse draw. A caravan that is not short of anything and is already
+     twelve cards deep walks on and keeps the scrip. */
+  const need = FF.caravanNeeds(run);
+  if (!need && run.deck.length >= 11) { FF.press('rewardSkip'); return; }
+  if (run.deck.length >= 15 && worth < 14) { FF.press('rewardSkip'); return; }
+  FF.press('reward', i);
 }
 
 /* Some choices open a chooser, and a couple of them open a second one behind
@@ -288,10 +325,17 @@ function settleChoosers() {
    is nearest; `tactics` plays the fight well but still drafts off the left of
    the reward screen; `careful` does both. Splitting them is what turned an
    unreadable zero into an answer: see the note over draftPick. */
-function playRun(tribe, seed, mode) {
-  const careful = mode !== 'careless';
-  const drafts = mode === 'careful';
+function playRun(tribe, seed, mode, tweak) {
+  // A cumulative ladder: each pilot is the one above it plus one more thing it
+  // knows how to do, so the difference between two rows is that one thing.
+  const careful = mode !== 'careless';                       // plays the fight
+  const shops = mode === 'trader' || mode === 'careful';     // spends well
+  const drafts = mode === 'careful';                         // steers the offers
   FF.newRun(G, tribe, seed);
+  // A pilot that steers the pool declares a course at the leader screen, the
+  // way a player does — before anything is known except which leader it took.
+  if (mode === 'careful') G.run.course = courseWanted();
+  if (tweak) tweak(G.run);
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
   let guard = 0;
   while (guard++ < 3000) {
@@ -312,7 +356,8 @@ function playRun(tribe, seed, mode) {
       if (G.battle.turn > 160) return Object.assign(stat, { stuck: true });
     } else if (G.screen === 'reward') {
       const r = G.ui.reward;
-      if (r.cards.length && !r.taken) FF.press('reward', drafts ? draftPick(r.cards) : 0);
+      if (r.cards.length && !r.taken && drafts) draftTurn(r);
+      else if (r.cards.length && !r.taken) FF.press('reward', 0);
       else if (r.charms.length && !r.charmTaken) { FF.press('rewardCharm', 0); settleChoosers(); }
       else if (r.bells && r.bells.length && !r.bellTaken) FF.press('rewardBell', 0);
       else FF.press('rewardSkip');
@@ -325,15 +370,40 @@ function playRun(tribe, seed, mode) {
     } else if (G.screen === 'shop') {
       const s = G.ui.shop;
       let bought = false;
-      // a careful shopper mends first and thins the deck when it can afford to
-      if (careful && !s.heal.sold && G.run.gold >= s.heal.price &&
+      /* A careful shopper spends on what does not make the deck bigger. That
+         is not a style preference: with money buying only cards, "everything
+         free" measured WORSE than penniless, because every purchase was one
+         more card between the caravan and the card it wanted. */
+      if (shops && !s.heal.sold && G.run.gold >= s.heal.price &&
           G.run.deck.some((cd) => cd.dmg > 0 || cd.injured)) { FF.buy(G, 'heal'); bought = true; }
-      if (!bought && careful && s.burn && !s.burn.sold && G.run.gold >= s.burn.price + 30 && G.run.deck.length > 8) {
+      if (!bought && shops && s.temper && !s.temper.sold && G.run.gold >= s.temper.price) {
+        FF.press('buyTemper');
+        // temper the biggest body: a card that is already carrying the line
+        if (FF.UI.choose) {
+          const items = FF.UI.choose.items;
+          let bi = 0, bs = -1;
+          items.forEach((it, i) => {
+            const cd = it.card;
+            const sc = (cd.type === 'unit' ? cd.hp + cd.atk * 2 : 0);
+            if (sc > bs) { bs = sc; bi = i; }
+          });
+          FF.UI.choose.onPick(bi);
+          FF.UI.choose = null;
+        }
+        bought = true;
+      }
+      if (!bought && shops && s.burn && !s.burn.sold && G.run.gold >= s.burn.price && G.run.deck.length > 10) {
         FF.press('buyBurn');
         settleChoosers();
         bought = true;
       }
-      for (let i = 0; !bought && i < s.cards.length; i++) if (!s.cards[i].sold && G.run.gold >= s.cards[i].price) { FF.buy(G, 'card', i); bought = true; break; }
+      // only then a card, and only if the caravan is actually short of one
+      const wants = FF.caravanNeeds(G.run);
+      for (let i = 0; !bought && i < s.cards.length; i++) {
+        if (s.cards[i].sold || G.run.gold < s.cards[i].price) continue;
+        if (shops && !wants && G.run.deck.length >= 12) continue;
+        FF.buy(G, 'card', i); bought = true; break;
+      }
       if (!bought && !s.heal.sold && G.run.gold >= s.heal.price) { FF.buy(G, 'heal'); bought = true; }
       if (!bought) FF.press('leaveShop');
     } else if (G.screen === 'camp') {
@@ -361,13 +431,13 @@ section('whole runs, start to finish');
   // is noise, and pretending otherwise would be worse than not measuring.
   const N = Number(process.env.FF_RUNS || 8);
   const tribes = ['hearth', 'frost', 'scrap'];
-  const sweep = (mode) => {
+  const sweep = (mode, tweak) => {
     let thrown = null;
     const out = { wins: 0, stuck: 0, reachedTwo: 0, reachedThree: 0, turns: 0, battles: 0, runs: 0, died: [0, 0, 0] };
     for (const tribe of tribes) {
       for (let i = 0; i < N; i++) {
         let s;
-        try { s = playRun(tribe, 1000 + i * 37, mode); }
+        try { s = playRun(tribe, 1000 + i * 37, mode, tweak); }
         catch (e) { thrown = tribe + '/' + i + ': ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e); break; }
         out.runs++;
         if (s.won) out.wins++;
@@ -386,23 +456,27 @@ section('whole runs, start to finish');
 
   const careless = sweep('careless');
   const tactics = sweep('tactics');
+  const trader = sweep('trader');
   const careful = sweep('careful');
   eq(careless.thrown, null, 'no careless run throws');
   eq(tactics.thrown, null, 'no tactics-only run throws');
+  eq(trader.thrown, null, 'no trader run throws');
   eq(careful.thrown, null, 'no careful run throws');
   eq(careless.runs, tribes.length * N, 'every careless run finished one way or the other');
   eq(careful.runs, tribes.length * N, 'and so did every careful one');
-  eq(careless.stuck + tactics.stuck + careful.stuck, 0, 'no fight goes round forever');
+  eq(careless.stuck + tactics.stuck + trader.stuck + careful.stuck, 0, 'no fight goes round forever');
   ok(careless.battles > careless.runs, 'runs contain more than one fight');
 
   const pct = (o) => Math.round((o.wins / Math.max(1, o.runs)) * 100);
   const line = (o) => `${o.wins}/${o.runs} won (${pct(o)}%) · ${o.reachedTwo}/${o.reachedThree} reached zone 2/3 · ` +
     `died ${o.died.join('/')} by zone · ${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns/fight`;
-  console.log(`    careless:      ${line(careless)}`);
-  console.log(`    fight only:    ${line(tactics)}`);
-  console.log(`    fight + draft: ${line(careful)}`);
+  console.log(`    careless:           ${line(careless)}`);
+  console.log(`    + the fight:        ${line(tactics)}`);
+  console.log(`    + the trader:       ${line(trader)}`);
+  console.log(`    + steering the pool:${line(careful)}`);
   console.log(`    the gap:  ${pct(careful) - pct(careless)} points for playing well — ` +
-    `${pct(tactics) - pct(careless)} of it from the fight, ${pct(careful) - pct(tactics)} from the draft`);
+    `${pct(tactics) - pct(careless)} from the fight, ${pct(trader) - pct(tactics)} from the trader, ` +
+    `${pct(careful) - pct(trader)} from steering the pool`);
 
   // Neither end may collapse: a walkover for the careless pilot means nothing
   // in the game asks anything, and a careful pilot who never wins means the
@@ -425,6 +499,73 @@ section('whole runs, start to finish');
 }
 
 /* ------------------------------------------------------ cards in practice -- */
+/* ------------------------------------------------------------- economy --- */
+/* Does money do anything?
+
+   A resource that does not change the outcome is decoration, and the honest
+   way to find out is to take it away and to give away far too much of it, and
+   see whether the run notices. `prices` is the multiplier winters already use,
+   so this is the game's own lever rather than a new one: at 0.02 everything in
+   every shop is free, at 40 nothing is ever affordable. If those two runs land
+   on the same win rate, the trader is scenery. */
+section('does money change anything');
+{
+  const N = Number(process.env.FF_RUNS || 8);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const sweep2 = (tweak) => {
+    let wins = 0, runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) {
+        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
+        runs++;
+        if (st.won) wins++;
+      }
+    }
+    return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+  };
+  const normal = sweep2(null);
+  /* Every number in this section is a proportion out of the same handful of
+     runs, so it carries a band: one standard deviation, in points, computed up
+     front and printed below, so nobody reads a four-point difference as a
+     finding. Several of this iteration's dead ends were exactly that mistake
+     made twice. */
+  const band = Math.round(100 * Math.sqrt(0.35 * 0.65 / Math.max(1, normal.runs)));
+  const broke = sweep2((run) => { run.gold = 0; run.prices = 40; });
+  const rich = sweep2((run) => { run.gold = 400; run.prices = 0.02; });
+  console.log(`    penniless:      ${broke.wins}/${broke.runs} won (${broke.pct}%)`);
+  console.log(`    as it ships:    ${normal.wins}/${normal.runs} won (${normal.pct}%)`);
+  console.log(`    bottomless purse: ${rich.wins}/${rich.runs} won (${rich.pct}%)`);
+  console.log(`    money is worth ${normal.pct - broke.pct} points of win rate`);
+  /* And the course on its own, handed over rather than bought — so the lever
+     is measured apart from whether the pilot knows when to pull it. */
+  const noCourse = sweep2((run) => { run.course = null; });
+  const byCourse = FF.COURSES.map((co) => ({ co, r: sweep2((run) => { run.course = co.id; }) }));
+  console.log(`    no course:      ${noCourse.wins}/${noCourse.runs} won (${noCourse.pct}%)`);
+  for (const { co, r } of byCourse) {
+    console.log(`    ${(co.short + ':').padEnd(16)}${r.wins}/${r.runs} won (${r.pct}%)`);
+  }
+  const bestCourse = byCourse.reduce((a, z) => (z.r.pct > a.r.pct ? z : a));
+  const worstCourse = byCourse.reduce((a, z) => (z.r.pct < a.r.pct ? z : a));
+  ok(bestCourse.r.pct >= noCourse.pct - band, 'declaring a course is never worse than declaring none');
+  /* And no course may run away with the game. One of them shipped for about
+     ten minutes paying its warmth unconditionally and measured 73% against a
+     36% baseline — which is not a choice a player makes, it is the answer, and
+     the other four become decoration. Twenty points clear of the field is the
+     line; a course that crosses it wants tuning, not shipping. */
+  ok(bestCourse.r.pct - worstCourse.r.pct <= 20 + band * 2,
+    `no course runs away with the run (${bestCourse.co.short} ${bestCourse.r.pct}% vs ${worstCourse.co.short} ${worstCourse.r.pct}%)`);
+  console.log(`    (±${band} points is one standard deviation at ${normal.runs} runs an arm — ` +
+    `anything inside that band is noise, not a finding)`);
+  ok(normal.pct >= broke.pct - band * 2, 'money is never a liability');
+  /* The bar the economy has to clear. A trader you can ignore is a screen the
+     player walks past, and a screen the player walks past should not exist.
+     Note that a bottomless purse is NOT the best row here, and should not be:
+     if unlimited money beat a normal one by a mile the shop would be a tax on
+     patience rather than a decision — spending it badly has to cost you. */
+  if (N >= 50) ok(normal.pct - broke.pct >= 8, 'and the trader is worth stopping at');
+  else ok(true, `economy gap not held to a bar at ${N} seeds a tribe — the band is ±${band}`);
+}
+
 section('every card is worth playing');
 {
   const all = Object.values(FF.CARDS).filter((c) => !c.leader);

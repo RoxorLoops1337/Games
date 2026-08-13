@@ -108,8 +108,9 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await settle(page, 20);
   await shot(page, '06-leader', 'leader, starting deck, winters');
   await page.evaluate(() => window.FF.press('winterToggle', 'keen'));
+  await page.evaluate(() => window.FF.press('courseToggle', 'pack'));
   await settle(page, 6);
-  await shot(page, '07-leader-winter', 'a winter chosen');
+  await shot(page, '07-leader-winter', 'a winter and a course chosen');
 
   // out on the trail
   await page.evaluate(() => window.FF.press('startRun'));
@@ -183,6 +184,12 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   });
   await settle(page, 40);
   await shot(page, '15-reward', 'the pick after a fight');
+
+  // the course chooser, opened off the reward screen
+  await page.evaluate(() => { window.FF.G.run.gold = 400; window.FF.press('rewardCourse'); });
+  await settle(page, 8);
+  await shot(page, '15b-course', 'changing the course mid-trek');
+  await page.evaluate(() => { window.FF.UI.choose = null; });
 
   // and back to the road, one step on
   await page.evaluate(() => window.FF.press('reward', 0));

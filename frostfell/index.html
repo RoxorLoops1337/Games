@@ -1078,6 +1078,14 @@ function addStatus(g, u, key, n, quiet) {
     for (const a of sideUnits(g, u.side === 'p' ? 'e' : 'p')) if (a.hooks.frosted) a.hooks.frosted(g, a, u);
   }
 }
+/* Whether a side still has somewhere to fall back to. Normally that is a free
+   slot; a caravan travelling under A Full Line keeps its warmth on a thinner
+   board, which is the whole point of declaring for bodies. */
+function hasRoom(g, side) {
+  if (freeSlots(g, side).length > 0) return true;
+  const co = side === 'p' ? courseOf(g.run) : null;
+  return !!(co && co.crowdproof);
+}
 const stat = (u, key) => u.st[key] || 0;
 function spend(u, key, n) {
   if (!u.st[key]) return 0;
@@ -1370,9 +1378,19 @@ function resolveTurn(g) {
     for (const side of ['p', 'e']) {
       const line = sideUnits(g, side);
       if (!line.length) continue;
-      const room = freeSlots(g, side).length > 0;
+      const room = hasRoom(g, side);
       if (room) {
-        for (const u of line) addStatus(g, u, 'regen', 1, true);
+        /* Warmth is one, for everybody, always.
+
+           A Full Line was tried paying double on top of its crowdproofing and
+           measured a 73% win rate against a 36% baseline; gated behind a board
+           of five or more it still measured 61%. A course at those numbers is
+           not a choice a player makes, it is the answer and the other four are
+           decoration — so the doubling is gone and the course keeps the rule
+           that made it interesting rather than the one that made it win. */
+        const co2 = side === 'p' ? courseOf(g.run) : null;
+        const warm = (co2 && co2.warmth) || 1;
+        for (const u of line) addStatus(g, u, 'regen', warm, true);
       } else {
         const victim = pick(line.filter((u) => !u.leader).concat(line));
         if (victim) {
@@ -1550,6 +1568,8 @@ function playCard(g, idx, spot) {
   if (!card || !canPlay(g, card, spot)) return false;
   b.hand.splice(idx, 1);
   const d = CARDS[card.def];
+  const co = courseOf(g.run);
+  let free = false;
   if (card.type === 'unit') {
     const u = mkUnit(card, 'p', spot.lane, spot.col);
     u.born = 0.0001;
@@ -1558,16 +1578,23 @@ function playCard(g, idx, spot) {
     fx.thump(u);
     for (const [k, n] of card.bonusDeploy) addStatus(g, u, k, n);
     if (d.hooks && d.hooks.deploy) d.hooks.deploy(g, u);
+    if (co && co.deploy) co.deploy(g, u);
   } else {
     sfx('item');
     if (spot && spot.uid) fx.burst(spot, (d.art && d.art.col) || C.snow, 14);
     d.effect(g, spot, card);
+    // The Scrap Trail: the first thing you reach into the pack for each fight
+    // is on the house, which is a whole extra action in the turn that matters.
+    if (co && co.freeItem && !b.usedFree) { free = true; b.usedFree = true; fx.toast('OFF THE PACK — FREE', co.col); }
   }
   card.held = 0;
   fx.fly(card, card.hx, card.hy);
-  b.discard.push(card);
+  // A Heavy Pack: gear comes back round rather than being used up, which is
+  // what makes a small gear deck worth building instead of merely surviving.
+  if (co && co.recycle && card.type === 'item') b.draw.push(card);
+  else b.discard.push(card);
   checkOver(g);
-  if (!b.over) resolveTurn(g);
+  if (!b.over && !free) resolveTurn(g);
   return true;
 }
 
@@ -1693,6 +1720,8 @@ function deployWave(g) {
     b.units.push(u);
     const fd = FOES[e.id];
     if (fd.hooks && fd.hooks.deploy) fd.hooks.deploy(g, u);
+    const co2 = courseOf(g.run);
+    if (co2 && co2.arrive) co2.arrive(g, u);
     const em = eliteMod(b);
     if (em && em.each) em.each(g, u);
     fx.thump(u);
@@ -1830,13 +1859,14 @@ function genTrail(zoneIdx) {
   return steps;
 }
 
-function newRun(g, tribeId, seed, winters) {
+function newRun(g, tribeId, seed, winters, course) {
   const sd = (seed === undefined ? Math.floor(Math.random() * 1e9) : seed) >>> 0;
   RNG = mulberry(sd || 1);
   UID = 1;
   const s = STARTERS[tribeId] || STARTERS.hearth;
   const run = {
     seed: sd, tribe: tribeId, zone: 0, step: 0, gold: 25, bonusRedraw: 0,
+    course: course || null, redeals: 0, passed: 0,
     deck: [], leader: mkCard(s.leader), trail: genTrail(0), log: [], path: [],
     kills: 0, fights: 0, taken: 0, bestTurn: 0, clean: 0, node: null,
     bells: [], bonusHand: 0, bellCharged: false, waveBonus: 0,
@@ -1926,6 +1956,36 @@ function advance(g) {
 }
 
 /* ------------------------------------------------------------- rewards --- */
+/* -- the course ----------------------------------------------------------- */
+/* Three cards and take the best of them is a lottery, and it was the single
+   biggest thing deciding a run — which meant a bad three was a bad run and the
+   player never got a say. A course is the say: pay for it once and every offer
+   for the rest of the trek leans your way, hard. It is bought with scrip,
+   which is what finally gives scrip a job worth having. */
+const COURSES = [
+  { id: 'hearth', name: 'THE HEARTH ROAD', short: 'HEARTH', col: '#ff9a5c',
+    text: 'Hearth cards on every table, and every warden you set down arrives with Spice 2.',
+    match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 2) },
+  { id: 'frost', name: 'THE DEEP COLD', short: 'COLD', col: '#8fe3ff',
+    text: 'Frost cards on every table, and every wave walks in already carrying Frost 1.',
+    match: (c) => c.tribe === 'frost', arrive: (g, u) => addStatus(g, u, 'frost', 1) },
+  { id: 'scrap', name: 'THE SCRAP TRAIL', short: 'SCRAP', col: '#c9b28a',
+    text: 'Scrap cards on every table. The first gear you use each fight does not cost the turn.',
+    match: (c) => c.tribe === 'scrap', freeItem: true },
+  { id: 'line', name: 'A FULL LINE', short: 'BODIES', col: '#7de08f',
+    text: 'Wardens on every table, and a packed board never costs your line its warmth.',
+    match: (c) => c.type === 'unit', crowdproof: true },
+  { id: 'pack', name: 'A HEAVY PACK', short: 'GEAR', col: '#c9a6ff',
+    text: 'Gear on every table, and gear you use goes back into the deck instead of the used pile.',
+    match: (c) => c.type === 'item', recycle: true },
+];
+const courseOf = (run) => (run && run.course ? COURSES.find((x) => x.id === run.course) : null);
+/* Priced so that a course is roughly two cards' worth of scrip, and a redeal
+   climbs so it is a rescue rather than a slot machine. */
+const COURSE_PRICE = 55;
+const PASS_PAY = 20;
+const redealPrice = (run) => 18 + 14 * (run.redeals || 0);
+
 function cardPool(run) {
   return Object.values(CARDS).filter((c) =>
     !c.leader && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
@@ -1949,9 +2009,10 @@ function deckLeanings(run) {
    direction you can steer. Rarity still sets the floor — a lean never turns a
    rare into a common — but a caravan already built around Frost will be shown
    Frost, and the thing it is short of. */
-function weightedCards(run, n) {
+function weightedCards(run, n, courseSlot) {
   const pool = cardPool(run);
   const lean = deckLeanings(run);
+  const course = courseOf(run);
   const units = run.deck.filter((c) => c.type === 'unit').length;
   const wantUnits = units < Math.max(3, Math.round(run.deck.length * 0.45));
   const bag = [];
@@ -1965,9 +2026,25 @@ function weightedCards(run, n) {
     // and it will not let a caravan starve for bodies or drown in them
     if (c.type === 'unit') w += wantUnits ? 3 : -2;
     else w += wantUnits ? -1 : 2;
-    for (let i = 0; i < Math.max(1, w); i++) bag.push(c.id);
+    w = Math.max(1, w);
+    for (let i = 0; i < w; i++) bag.push(c.id);
   }
   const out = [];
+  /* A course ADDS a card to the offer; it never replaces one.
+
+     Two other shapes were tried and measured, and both were worse than having
+     no course at all. Weighting the whole pool six-to-one drowned out its own
+     safety net — the one that makes sure a caravan short of bodies is shown
+     bodies — so a player who had paid for a direction got starved of what
+     they needed. Guaranteeing one of the three was the same fault, smaller:
+     the pool already leans toward what the deck is doing, and spending one of
+     three slots on a blunter lean is a downgrade. So the course buys a fourth
+     card instead. It cannot make an offer worse, which is the least a thing
+     you paid scrip for should manage. */
+  if (courseSlot && course) {
+    const mine = bag.filter((id) => course.match(CARDS[id]));
+    if (mine.length) out.push(pick(mine));
+  }
   let guard = 0;
   while (out.length < n && guard++ < 400) {
     const id = pick(bag);
@@ -1975,9 +2052,60 @@ function weightedCards(run, n) {
   }
   return out;
 }
+/* -- what the caravan is short of ----------------------------------------- */
+/* The last zone is a check on the deck, not on the play — the probe says so
+   plainly, and rather than pretend otherwise the game now says so too. This is
+   that check, run early and out loud: five things a caravan needs by the time
+   it gets there, each with the number it has and the number it wants. Nothing
+   here is a secret the player has to lose a run to learn. */
+const READS = [
+  { k: 'bodies', name: 'BODIES', why: 'take a warden',
+    got: (run) => run.deck.filter((c) => c.type === 'unit').length,
+    want: (z) => 4 + z },
+  { k: 'punch', name: 'A HARD HIT', why: 'take something that hits for five',
+    got: (run) => run.deck.reduce((n, c) => Math.max(n, c.type === 'unit' ? c.atk : hitOf(c)), 0),
+    want: (z) => 4 + z * 2 },
+  { k: 'wall', name: 'A WALL', why: 'take a body that can hold the front',
+    got: (run) => run.deck.reduce((n, c) => Math.max(n, c.type === 'unit' ? c.hp : 0), 0),
+    want: (z) => 8 + z * 4 },
+  { k: 'mend', name: 'MENDING', why: 'take something that heals',
+    got: (run) => run.deck.filter((c) => /heal|mend|regen/i.test(CARDS[c.def] ? CARDS[c.def].text : '')).length,
+    want: () => 1 },
+  { k: 'lean', name: 'A LEAN DECK', why: 'burn something — a small deck draws what it needs',
+    got: (run) => Math.max(0, 15 - run.deck.length),
+    want: () => 2 },
+];
+/* The biggest number a piece of gear puts on one target, read out of the same
+   preview table the card text comes from — so this cannot drift from what the
+   card actually does. */
+function hitOf(card) {
+  const f = PREVIEW[card.def];
+  if (!f) return 0;
+  try {
+    const fake = { uid: -1, side: 'e', lane: 0, col: 0, alive: true, hp: 99, maxHp: 99, atk: 3, cnt: 2, st: {}, kw: {} };
+    return (f({ battle: { units: [fake] } }, fake, card) || [])
+      .reduce((n, x) => Math.max(n, x.dmg || 0), 0);
+  } catch (e) { return 0; }
+}
+function caravanRead(run) {
+  const z = run.zone;
+  return READS.map((r) => {
+    const got = r.got(run), want = r.want(z);
+    return { k: r.k, name: r.name, why: r.why, got, want, ok: got >= want };
+  });
+}
+/* The single most useful sentence: what the caravan is furthest short of. */
+function caravanNeeds(run) {
+  const short = caravanRead(run).filter((r) => !r.ok)
+    .sort((a, b) => (a.got / a.want) - (b.got / b.want));
+  return short.length ? short[0] : null;
+}
+
 function rollReward(g, kind) {
   const run = g.run;
-  const r = { kind, cards: weightedCards(run, 3), charms: [], bells: [], gold: 0 };
+  // A course pays for itself in width: four cards on the table instead of
+  // three, and the extra one is always going your way.
+  const r = { kind, cards: weightedCards(run, run.course ? 4 : 3, true), charms: [], bells: [], gold: 0 };
   // A beast pays in bells — the upgrades that change the rest of the trek.
   if (kind === 'boss') r.bells = sample(Object.keys(BELLS), 3);
   else if (kind === 'elite') r.charms = sample(charmPool(), 2);
@@ -2007,7 +2135,12 @@ function rollShop(g) {
   const cards = weightedCards(run, 3).map((id) => ({ id, price: p(PRICE[CARDS[id].rare] || 25), sold: false }));
   const charms = sample(charmPool(), 2).map((id) => ({ id, price: p(PRICE[CHARMS[id].rare] + 8), sold: false }));
   return { cards, charms, heal: { price: p(20), sold: false }, scar: { price: p(30), sold: false },
-    sigil: { price: p(58), sold: false }, burn: { price: p(26), sold: false } };
+    sigil: { price: p(58), sold: false }, burn: { price: p(26), sold: false },
+    // Everything else on the counter either adds a card or mends one. This is
+    // the only thing that makes the caravan stronger without making the deck
+    // bigger — which the probe says is the difference between money that
+    // matters and money that buys you a worse draw.
+    temper: { price: p(32), sold: false } };
 }
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
@@ -2029,6 +2162,17 @@ function buy(g, kind, idx, arg) {
     s.heal.sold = true;
     run.deck.concat([run.leader]).forEach((c) => { c.dmg = 0; });
     sfx('heal'); return true;
+  }
+  if (kind === 'temper') {
+    const card = run.deck.concat([run.leader]).find((c) => c.uid === arg);
+    if (!card || s.temper.sold || card.charms.indexOf('blessed') >= 0) return false;
+    if (!takeGold(s.temper.price)) return false;
+    card.charms.push('blessed');
+    card.blessed = true;
+    rebuildCard(card);
+    s.temper.sold = true;
+    sfx('get');
+    return true;
   }
   if (kind === 'scar') {
     const card = run.deck.concat([run.leader]).find((c) => c.uid === arg);
@@ -2113,7 +2257,7 @@ const EVENTS = [
     text: 'Six sleds in a neat line, snowed to the axles. Whoever unpacked them was in no hurry, and never finished.',
     opts: [
       { label: 'Take what is useful', sub: 'choose one of three cards',
-        go: (g) => { g.ui.reward = { kind: 'event', cards: weightedCards(g.run, 3), charms: [], bells: [], gold: 0 }; g.screen = 'reward'; } },
+        go: (g) => { g.ui.reward = { kind: 'event', cards: weightedCards(g.run, g.run.course ? 4 : 3, true), charms: [], bells: [], gold: 0 }; g.screen = 'reward'; } },
       { label: 'Strip it for scrip', sub: '40 scrip',
         go: (g) => { g.run.gold += 40; advance(g); } },
       { label: 'Leave them their sleds', sub: 'mend 6 on everyone',
@@ -2161,7 +2305,7 @@ const EVENTS = [
         can: (g) => g.run.gold >= 20,
         go: (g) => { g.run.gold -= 20; g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 5); }); advance(g); } },
       { label: 'Share the road instead', sub: 'choose one of three cards',
-        go: (g) => { g.ui.reward = { kind: 'event', cards: weightedCards(g.run, 3), charms: [], bells: [], gold: 0 }; g.screen = 'reward'; } },
+        go: (g) => { g.ui.reward = { kind: 'event', cards: weightedCards(g.run, g.run.course ? 4 : 3, true), charms: [], bells: [], gold: 0 }; g.screen = 'reward'; } },
     ] },
 ];
 
@@ -2212,6 +2356,7 @@ function saveRun(run) {
     trail: run.trail, path: run.path, log: run.log.slice(-8),
     bells: run.bells || [], bh: run.bonusHand || 0, bc: !!run.bellCharged, wb: run.waveBonus || 0,
     purse: run.purse || 1, mend: run.mend || 0, bosses: run.bosses || {},
+    course: run.course || null, redeals: run.redeals || 0, passed: run.passed || 0,
     winters: run.winters || [], wpts: run.winterPts || 0, prices: run.prices || 1, killedBy: run.killedBy || null,
     campMul: run.campMul || 1, extraFoe: run.extraFoe || 0, bellSlow: run.bellSlow || 0,
     foeMul: run.foeMul || 1, fell: run.fellThisZone || 0,
@@ -2229,6 +2374,7 @@ function loadRun(g) {
       log: o.log || [], kills: 0, node: null,
       bells: o.bells || [], bonusHand: o.bh || 0, bellCharged: !!o.bc, waveBonus: o.wb || 0,
       purse: o.purse || 1, mend: o.mend || 0, bosses: o.bosses || {},
+      course: o.course || null, redeals: o.redeals || 0, passed: o.passed || 0,
       winters: o.winters || [], winterPts: o.wpts || 0, prices: o.prices || 1, killedBy: o.killedBy || null,
       campMul: o.campMul || 1, extraFoe: o.extraFoe || 0, bellSlow: o.bellSlow || 0,
       foeMul: o.foeMul || 1, fellThisZone: o.fell || 0,
@@ -4198,13 +4344,32 @@ function drawLeaderPick(c, t) {
   const best = G.meta.winter[tb] || 0;
   txt(c, best ? 'hardest winter crossed: ' + best : 'never crossed the fell', lx, 534, 13, '#7e97b8', 'center', 't');
 
+  /* THE COURSE — declared here, before a single card is drawn, and it is the
+     one thing about the run the player settles rather than discovers. It costs
+     nothing: what it costs is the other four. */
+  const cy2 = 508, cwid = 400, cx0 = SAFE + 372;
+  txt(c, 'AND THE COURSE IT DECLARES', cx0 + cwid / 2, 488, 14, '#9fc0e4', 'center', 't');
+  const bw5 = (cwid - 4 * 6) / 5;
+  COURSES.forEach((co, i) => {
+    const on = pick2.course === co.id;
+    const x = cx0 + i * (bw5 + 6);
+    panel(c, x, cy2, bw5, 44, 9, on ? '#2a3a52' : '#16223a', on ? co.col : '#3a4b6b');
+    txt(c, co.short, x + bw5 / 2, cy2 + 22, 13, on ? co.col : '#8fa6c4', 'center', 'd');
+    hit('courseToggle', x, cy2, bw5, 44, co.id);
+  });
+  const chosen = COURSES.find((co) => co.id === pick2.course) || COURSES[0];
+  wrapText(c, chosen.text, 12.5, cwid).slice(0, 2).forEach((ln, i) =>
+    txt(c, ln, cx0 + cwid / 2, cy2 + 60 + i * 16, 12.5, chosen.col, 'center', 't'));
+
   // what she sets out with
   const deckX = SAFE + 372;
   txt(c, 'THE CARAVAN SETS OUT WITH', deckX + 196, 138, 15, '#9fc0e4', 'center', 't');
+  // Two rows of the starting deck, sized so the course row below them has a
+  // clear band of its own rather than sitting on the cards' bottom edge.
   S.deck.forEach((id, i) => {
     const col = i % 4, row = Math.floor(i / 4);
-    const x = deckX + col * 100, y = 160 + row * 176;
-    drawCard(c, mkCard(id), x, y, 92, 164, { t, scale: 0.98 });
+    const x = deckX + col * 100, y = 158 + row * 160;
+    drawCard(c, mkCard(id), x, y, 92, 150, { t, scale: 0.98 });
   });
 
   // the winter you choose to walk into
@@ -4376,7 +4541,7 @@ function drawBattle(c, t) {
        one rule that prices every deployment, said on the same line as the
        label it belongs to. On its own line above the board it fought with
        whatever banner was up; down here nothing else ever sits. */
-    const room = freeSlots(g, side).length > 0;
+    const room = hasRoom(g, side);
     const has = sideUnits(g, side).length > 0;
     const who = side === 'p' ? 'YOUR SIDE' : 'THEIR SIDE';
     txt(c, who, x0 + wid / 2, boardB + 13, 11, side === 'p' ? '#7fa8d8' : '#c98a9e', 'center', 't');
@@ -4880,6 +5045,27 @@ function drawTrail(c, t) {
   c.restore();
   drawCreature(c, CARDS[run.leader.def].art, hereX, hereY + 6 + bob, 66, { t, ph: 3 });
 
+  /* THE CARAVAN, read out loud. The last zone is a check on the deck, and the
+     honest answer to that is not to hide the checklist: five things it wants
+     by the time it gets there, each with what it has against what it needs. */
+  const rd = caravanRead(run);
+  // Low and to the left, under the road rather than across it: the trail's
+  // first stone and the caravan itself both live in the top-left corner.
+  const pw = 232, ph = 44 + rd.length * 22, px = SAFE + 6, py = VH - 230;
+  panel(c, px, py, pw, ph, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
+  txt(c, 'THE CARAVAN', px + 14, py + 18, 15, '#a8c8ea', 'left', 'd');
+  const crs = courseOf(run);
+  if (crs) txt(c, crs.name, px + pw - 14, py + 18, 11, crs.col, 'right', 'd');
+  rd.forEach((r, i) => {
+    const yy = py + 44 + i * 22;
+    txt(c, r.ok ? '✓' : '!', px + 16, yy, 14, r.ok ? '#7de08f' : '#ffd166', 'center', 'd');
+    txt(c, r.name, px + 30, yy - 6, 12.5, r.ok ? '#c8dcf4' : '#eaf6ff', 'left', 't');
+    txt(c, r.got + ' / ' + r.want, px + pw - 14, yy - 6, 12.5, r.ok ? '#7de08f' : '#ffd166', 'right', 't');
+  });
+  const need = caravanNeeds(run);
+  txt(c, need ? need.why : 'ready for what is ahead', px + pw / 2, py + ph + 8, 12,
+    need ? '#ffd166' : '#7de08f', 'center', 't');
+
   drawHud(c, t);
   if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 44, 15, '#9fb6d6', 'center', 't');
   if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - SAFE, VH - 44, 14, '#ffd166', 'right', 't');
@@ -5024,7 +5210,20 @@ function drawChooser(c, t) {
     const hovered = UI.hover && UI.hover.id === 'choose' && UI.hover.data === i;
     if (it.card) drawCard(c, it.card, x, y - (hovered ? 8 : 0), cw, chh, { t, scale: hovered ? 1.04 : 1 });
     else if (it.charm) drawCharmCard(c, it.charm, x, y - (hovered ? 8 : 0), cw, chh, t);
-    else {
+    else if (it.label && it.label.indexOf('\n') >= 0) {
+      // a heading and its small print — a choice that needs explaining
+      const [head, body] = it.label.split('\n');
+      const col = it.col || '#7fb2e8';
+      c.save();
+      if (it.dim) c.globalAlpha = 0.4;
+      panel(c, x, y - (hovered && !it.dim ? 8 : 0), cw, chh, 13, '#1d2c49', col);
+      const hl = wrapText(c, head, 16, cw - 18);
+      hl.forEach((ln, k) => txt(c, ln, x + cw / 2, y + 22 + k * 19 - (hovered && !it.dim ? 8 : 0), 16, col, 'center', 'd'));
+      wrapText(c, body, 12.5, cw - 20).forEach((ln, k) =>
+        txt(c, ln, x + cw / 2, y + 30 + hl.length * 19 + k * 15 - (hovered && !it.dim ? 8 : 0), 12.5, '#c8dcf4', 'center', 't'));
+      if (it.dim) txt(c, 'HELD', x + cw / 2, y + chh - 26, 15, '#8fa2bd', 'center', 'd');
+      c.restore();
+    } else {
       panel(c, x, y, cw, chh, 13, '#1d2c49', '#7fb2e8');
       const lines = wrapText(c, it.label || '', 15, cw - 20);
       lines.forEach((ln, k) => txt(c, ln, x + cw / 2, y + chh / 2 - (lines.length - 1) * 10 + k * 20, 15, '#eaf6ff', 'center', 't'));
@@ -5335,12 +5534,14 @@ function drawReward(c, t) {
   drawHud(c, t);
   const boss = r.kind === 'boss';
   txt(c, boss ? 'THE BEAST FALLS' : r.kind === 'cache' ? 'A CACHE IN THE SNOW' : 'THE ROAD IS CLEAR', MID, 84, 40, '#eaf6ff', 'center', 'd');
+  const crs = courseOf(g.run);
   txt(c, r.cards.length ? 'take one card for the caravan' : 'take one charm', MID, 126, 16, '#a8c8ea', 'center', 't');
+  if (crs && r.cards.length) txt(c, 'holding to ' + crs.name.toLowerCase(), MID, 146, 13, crs.col, 'center', 't');
 
   const items = r.cards.map((id) => ({ card: mkCard(id), id }));
-  const cw = 176, chh = 246, gap = 30;
+  const cw = items.length > 3 ? 152 : 176, chh = items.length > 3 ? 214 : 246, gap = items.length > 3 ? 22 : 30;
   const totalW = items.length * cw + (items.length - 1) * gap;
-  const y = 162;
+  const y = 178;
   if (items.length) {
     c.save();
     c.globalAlpha = 0.3;
@@ -5399,14 +5600,25 @@ function drawReward(c, t) {
      or copy something already in it, which is where a build actually comes
      from. */
   if (!r.taken && r.cards.length) {
-    const bw4 = 210, gap4 = 16;
-    const total4 = bw4 * 2 + gap4;
-    button(c, 'rewardCopy', MID - total4 / 2, VH - 122, bw4, 46, 'COPY A CARD', '#5f4a8f', G.run.deck.length < 1, true);
-    button(c, 'rewardBurn', MID - total4 / 2 + bw4 + gap4, VH - 122, bw4, 46, 'BURN A CARD', '#8f4a4a', G.run.deck.length < 3, true);
-    txt(c, 'instead of taking one — a smaller deck draws what it needs',
-      MID, VH - 82, 12.5, '#7e97b8', 'center', 't');
+    const run = G.run;
+    const bw4 = 168, gap4 = 12;
+    const total4 = bw4 * 4 + gap4 * 3;
+    const bx = MID - total4 / 2;
+    const rd = redealPrice(run);
+    button(c, 'rewardCopy', bx, VH - 128, bw4, 44, 'COPY A CARD', '#5f4a8f', run.deck.length < 1, true);
+    button(c, 'rewardBurn', bx + bw4 + gap4, VH - 128, bw4, 44, 'BURN A CARD', '#8f4a4a', run.deck.length < 3, true);
+    button(c, 'rewardRedeal', bx + (bw4 + gap4) * 2, VH - 128, bw4, 44, 'REDEAL  ' + rd, '#3f6f8f', run.gold < rd, true);
+    button(c, 'rewardCourse', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44,
+      (run.course ? 'CHANGE COURSE  ' : 'SET A COURSE  ') + COURSE_PRICE, '#8f7a3f', run.gold < COURSE_PRICE, true);
+    // The one line that says what this caravan is actually short of, right
+    // where the decision is being made.
+    const need = caravanNeeds(run);
+    txt(c, need ? need.name.toLowerCase() + ': it has ' + need.got + ', it wants ' + need.want + ' — ' + need.why
+      : 'the caravan wants for nothing — pass and keep the scrip',
+      MID, VH - 76, 13, need ? '#ffd166' : '#7de08f', 'center', 't');
   }
-  button(c, 'rewardSkip', MID - 90, VH - 60, 180, 46, r.taken ? 'ONWARD' : 'SKIP', r.taken ? '#3f8f5f' : '#40527a');
+  button(c, 'rewardSkip', MID - 110, VH - 58, 220, 44,
+    r.taken ? 'ONWARD' : 'PASS  +' + PASS_PAY, r.taken ? '#3f8f5f' : '#40527a');
 }
 
 function drawShop(c, t) {
@@ -5414,10 +5626,10 @@ function drawShop(c, t) {
   drawBackdrop(c, g.run.zone, t);
   drawHud(c, t);
   txt(c, 'THE TRADER', MID, 80, 38, '#eaf6ff', 'center', 'd');
-  txt(c, 'she takes scrip, and she does not haggle', MID, 116, 15, '#a8c8ea', 'center', 't');
+  txt(c, 'she takes scrip, and she does not haggle', MID, 112, 15, '#a8c8ea', 'center', 't');
 
   // the stall: cards on the left of the counter, charms on the right
-  const cw = 152, chh = 212, gap = 18, cy = 152;
+  const cw = 152, chh = 212, gap = 18, cy = 164;
   const priceY = cy + chh + 10;
   const leftW = s.cards.length * cw + (s.cards.length - 1) * gap;
   const rightW = s.charms.length * cw + (s.charms.length - 1) * gap;
@@ -5429,8 +5641,8 @@ function drawShop(c, t) {
     c.restore();
   };
   stall(lx, leftW); stall(rx, rightW);
-  txt(c, 'WARES', lx + leftW / 2, cy - 34, 13, '#9fb6d6', 'center', 't');
-  txt(c, 'CHARMS', rx + rightW / 2, cy - 34, 13, '#9fb6d6', 'center', 't');
+  txt(c, 'WARES', lx + leftW / 2, cy - 30, 13, '#9fb6d6', 'center', 't');
+  txt(c, 'CHARMS', rx + rightW / 2, cy - 30, 13, '#9fb6d6', 'center', 't');
 
   const tag = (x, price, sold) => {
     const afford = g.run.gold >= price;
@@ -5453,15 +5665,21 @@ function drawShop(c, t) {
     if (!it.sold) hit('buyCharm', x, cy, cw, chh + 44, i);
   });
 
-  const by = 452;
-  button(c, 'buyHeal', MID - 480, by, 250, 54, s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
-  button(c, 'buyScar', MID - 210, by, 250, 54, s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
-  button(c, 'buySigil', MID + 60, by, 250, 54, s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
-  button(c, 'buyBurn', MID + 330, by, 250, 54,
-    (s.burn && s.burn.sold) ? 'BURNED' : 'BURN A CARD — ' + (s.burn ? s.burn.price : 26), '#8f4a4a',
+  const by = 452, sw = 210, sg = 12, srow = sw * 5 + sg * 4, sx = MID - srow / 2;
+  const btn = (i, id, label, col, dis) => button(c, id, sx + i * (sw + sg), by, sw, 54, label, col, dis);
+  btn(0, 'buyHeal', s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
+  btn(1, 'buyTemper', s.temper && s.temper.sold ? 'TEMPERED' : 'TEMPER — ' + (s.temper ? s.temper.price : 32),
+    '#8f7a3f', !s.temper || s.temper.sold);
+  btn(2, 'buyScar', s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
+  btn(3, 'buySigil', s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
+  btn(4, 'buyBurn', (s.burn && s.burn.sold) ? 'BURNED' : 'BURN A CARD — ' + (s.burn ? s.burn.price : 26), '#8f4a4a',
     !s.burn || s.burn.sold || g.run.deck.length < 3);
-  txt(c, 'a sigil deploys that warden before the first bell · a burned card never comes back around',
-    MID, by + 72, 13, '#7e97b8', 'center', 't');
+  txt(c, 'temper: +2 attack, +3 health, and the deck stays the size it was · ' +
+    'a sigil deploys that warden before the first bell',
+    MID, by + 70, 13, '#7e97b8', 'center', 't');
+  const need = caravanNeeds(g.run);
+  txt(c, need ? 'the caravan is short of ' + need.name.toLowerCase() + ' — ' + need.why
+    : 'the caravan wants for nothing', MID, by + 94, 13, need ? '#ffd166' : '#7de08f', 'center', 't');
   button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
 }
 
@@ -5683,14 +5901,15 @@ function press(id, data) {
   const g = G;
   sfx('tap');
   switch (id) {
-    case 'tribe': g.ui.pick = { tribe: data, winters: [] }; g.screen = 'leader'; return;
+    case 'tribe': g.ui.pick = { tribe: data, winters: [], course: data }; g.screen = 'leader'; return;
+    case 'courseToggle': { if (g.ui.pick) g.ui.pick.course = data; sfx('tap'); return; }
     case 'winterToggle': {
       const w = g.ui.pick.winters;
       const i = w.indexOf(data);
       if (i >= 0) w.splice(i, 1); else w.push(data);
       return;
     }
-    case 'startRun': newRun(g, g.ui.pick.tribe, undefined, g.ui.pick.winters); return;
+    case 'startRun': newRun(g, g.ui.pick.tribe, undefined, g.ui.pick.winters, g.ui.pick.course); return;
     case 'backTitle': g.screen = 'title'; return;
     case 'collection': g.screen = 'collection'; UI.lockNote = null; return;
     case 'collectClose': g.screen = 'title'; UI.lockNote = null; return;
@@ -5773,7 +5992,49 @@ function press(id, data) {
       }, { cancel: 'NEVER MIND' });
       return;
     }
-    case 'rewardSkip': advance(g); return;
+    /* Three cards you do not want used to be three cards you did not want.
+       Now the offer can be bought again, or bent for the rest of the trek —
+       and saying no to all three pays, so a caravan that is already built has
+       a reason to walk on and save for the course. */
+    case 'rewardRedeal': {
+      const r = g.ui.reward, run = g.run;
+      const price = redealPrice(run);
+      if (r.taken || !r.cards.length || run.gold < price) return;
+      run.gold -= price;
+      run.redeals = (run.redeals || 0) + 1;
+      r.cards = weightedCards(run, run.course ? 4 : 3, true);
+      sfx('get');
+      fx.toast('DEALT AGAIN  -' + price, '#6fd8ff');
+      return;
+    }
+    case 'rewardCourse': {
+      const r = g.ui.reward, run = g.run;
+      if (r.taken || !r.cards.length || run.gold < COURSE_PRICE) return;
+      openChooser('WHICH WAY DOES THE CARAVAN GO?', COURSES.map((co) => ({
+        label: co.name + '\n' + co.text, col: co.col, dim: co.id === run.course,
+      })), (i) => {
+        const co = COURSES[i];
+        if (!co || co.id === run.course || run.gold < COURSE_PRICE) { UI.choose = null; return; }
+        run.gold -= COURSE_PRICE;
+        run.course = co.id;
+        r.cards = weightedCards(run, 4, true);
+        UI.choose = null;
+        sfx('get');
+        fx.toast(co.name, co.col);
+        run.log.push('The caravan set its course: ' + co.name.toLowerCase() + '.');
+      }, { cancel: 'NEVER MIND', sub: 'a fourth card on every table from here, and a rule to travel by — ' + COURSE_PRICE + ' scrip' });
+      return;
+    }
+    case 'rewardSkip': {
+      const r = g.ui.reward;
+      if (!r.taken && r.cards.length) {
+        g.run.gold += PASS_PAY;
+        g.run.passed = (g.run.passed || 0) + 1;
+        fx.toast('WALKED ON  +' + PASS_PAY, C.gold);
+      }
+      advance(g);
+      return;
+    }
     case 'rewardBell': {
       const r = g.ui.reward;
       if (r.bellTaken) return;
@@ -5852,6 +6113,20 @@ function press(id, data) {
       return;
     }
     case 'buyHeal': buy(g, 'heal'); return;
+    case 'buyTemper': {
+      const s2 = g.ui.shop;
+      if (!s2 || !s2.temper || s2.temper.sold || g.run.gold < s2.temper.price) return;
+      const cands = g.run.deck.concat([g.run.leader]).filter((cd) => cd.charms.indexOf('blessed') < 0);
+      if (!cands.length) return;
+      openChooser('TEMPER WHICH CARD?', cands.map((cd) => ({ card: cd })), (i) => {
+        if (buy(g, 'temper', 0, cands[i].uid)) {
+          fx.toast(cands[i].name.toUpperCase() + ' COMES BACK HARDER', C.gold);
+          g.run.log.push(cands[i].name + ' was tempered at the trader.');
+        }
+        UI.choose = null;
+      }, { cancel: 'NEVER MIND', sub: '+2 attack and +3 health, and the deck stays the size it was' });
+      return;
+    }
     case 'buyScar': {
       const hurtOnes = g.run.deck.concat([g.run.leader]).filter((cd) => cd.injured || cd.dmg > 0);
       if (!hurtOnes.length || g.ui.shop.scar.sold || g.run.gold < g.ui.shop.scar.price) return;
@@ -6269,6 +6544,7 @@ window.FF = {
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
   UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed, deckLeanings, weightedCards,
+  COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
   saveRun, loadRun, saveMeta, loadMeta, store,
