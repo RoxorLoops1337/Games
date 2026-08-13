@@ -308,10 +308,19 @@ section('the loop stays upright');
   eq(thrown, null, 'four hundred frames of a fight resolving itself never throw');
   ok(G.screen !== 'battle' || G.battle.turn > 6, 'and the turns actually turn while it draws');
 
-  // The same fight without the animation budget: a player who does nothing at
-  // all must still reach an ending rather than sitting in a stalled board.
+  /* The same fight without the animation budget: a player who does nothing at
+     all must still reach an ending rather than sitting in a stalled board — and
+     doing nothing must not be a way to win.
+
+     Not the FIRST fight, though. The opening two skirmishes are deliberately
+     weak now — walking the guide in order showed a new player's only warden
+     dead by the sixth hint, in the fight the game teaches with — so a leader
+     left alone can and should see them off. Step four is where the trail starts
+     asking. */
   withRun(FF, 'hearth', 31);
-  FF.enterNode(G, 0);
+  G.run.step = 4;                     // …and the node at step four may be a shop
+  FF.startBattle(G, 'fight');
+  G.screen = 'battle';
   let turns = 0;
   while (G.screen === 'battle' && !G.battle.over && turns++ < 300) { FF.passTurn(G); FF.drainAll(); }
   ok(G.battle.over, 'a fight nobody plays does eventually end');

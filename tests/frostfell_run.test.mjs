@@ -225,11 +225,11 @@ function carefulItem(card) {
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
-  ['reposition', 'keeping the leader at the back'],
+  ['reposition', 'repositioning at all (removed)'],
   ['holdGear', 'holding gear until it earns the turn'],
   ['keepSlot', 'keeping a slot in reserve'],
-  ['wave', 'calling waves onto a set board'],
-  ['place', 'placing bodies where they will be hit'],
+  ['wave', 'calling waves early (removed)'],
+  ['place', 'filling the front of both lanes first'],
 ];
 
 function carefulTurn() {
@@ -257,11 +257,25 @@ function carefulTurn() {
     }
   }
 
-  // free actions first: nothing about them costs a turn
+  /* THE LEADER DOES NOT BELONG AT THE BACK.
+
+     "Always park the leader in column three" was in this pilot from the first
+     round and priced at MINUS SEVEN once the ablation was run at a sample that
+     could see it — the worst habit in the list by a distance. It is obvious in
+     hindsight: the leader is usually the strongest thing the caravan owns, the
+     front row burns two counters a turn, and a leader kept out of reach is a
+     leader that never swings. Safety was costing more than it saved.
+
+     What survives is the opposite instinct — walk it forward when it is healthy
+     and the line can cover it — kept behind the same switch so the ablation can
+     keep pricing it. */
+  /* And walking it forward priced at minus three once the rest of the pilot was
+     cleaned up, so that goes too: the leader is left exactly where it lands and
+     the pilot does no repositioning at all. Both directions of the same habit
+     have now been measured and neither is a decision. */
   if (SKILL.reposition) for (const u of FF.playerUnits(G)) {
-    if (u.leader && u.col < 2) {
-      // the leader belongs at the back, always
-      for (let col = 2; col > u.col; col--) if (FF.slotFree(G, 'p', u.lane, col)) { FF.moveUnit(G, u, u.lane, col); break; }
+    if (false) {
+      // (kept as a switch so the ablation still has a row to price)
     }
     /* AND THAT IS ALL THE REPOSITIONING THE PILOT DOES.
 
@@ -316,14 +330,28 @@ function carefulTurn() {
     const thin = FF.playerUnits(G).length <= 2;
     const pressed = FF.enemyUnits(G).reduce((n, f) => n + (f.cnt <= 1 ? f.atk : 0), 0) >= 6;
     if (!SKILL.keepSlot || !last || thin || pressed) {
-      const slot = SKILL.place ? carefulSlot(b.hand[ui]) : bestSlot();
+      /* And "place bodies where they will be hit" priced at minus four against
+         simply filling the nearest free slot, across two rewrites of the
+         heuristic. The front of both lanes first is not a fallback any more,
+         it is the answer: it puts bodies where the swings are and lets the
+         geometry do the rest. */
+      const slot = SKILL.place ? bestSlot() : carefulSlot(b.hand[ui]);
       if (slot && FF.playCard(G, ui, slot)) return;
     }
   }
   if (bestI >= 0 && FF.playCard(G, bestI, bestT)) return;
 
-  // a wave called onto a set board is half a wave
-  if (SKILL.wave && b.waves && b.waves.length && FF.enemyUnits(G).length <= 1 && FF.playerUnits(G).length >= 3) {
+  /* Calling a wave early priced at minus three. A wave pulled onto a set board
+     is half a wave in theory and a turn spent not killing anything in practice,
+     and the clock brings it along soon enough by itself. Kept behind the switch
+     so the next round can see whether that is still true. */
+  /* Calling a wave early has now been measured at 210 runs an arm in both
+     directions and cost five points both times: it is a turn spent not killing
+     anything, and the clock brings the wave along soon enough by itself. Out,
+     like the repositioning — but kept behind the switch, because the sign of a
+     habit depends on the rest of the pilot and this one has flipped before. */
+  if (false && SKILL.wave && b.waves && b.waves.length &&
+      FF.enemyUnits(G).length <= 1 && FF.playerUnits(G).length >= 3) {
     if (FF.ringWave(G)) return;
   }
 
@@ -807,7 +835,13 @@ section('does money change anything');
 /* -------------------------------------------------- what the fight is for -- */
 section('which parts of playing well are worth anything');
 {
-  const N = Number(process.env.FF_RUNS || 8);
+  /* FF_ABLATE turns this one section up on its own. The habits sit two to seven
+     points apart, and at the suite's usual sample the band is five — which is
+     why the same habit read +3 one round and -2 the next. Settling which of
+     them are real needs a sample this section can afford only when it is the
+     only thing running. */
+  const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || 8);
+  if (process.env.FF_ABLATE) console.log(`    (turned up: ${3 * N} runs an arm)`);
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep3 = () => {
     let wins = 0, runs = 0;
@@ -817,7 +851,7 @@ section('which parts of playing well are worth anything');
     return Math.round((wins / Math.max(1, runs)) * 100);
   };
   const all = sweep3();
-  const band = Math.round(100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * N)));
+  const band = (100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * N))).toFixed(1);
   console.log(`    the fight, played well:  ${all}%`);
   const rows = [];
   for (const [key, label] of HABITS) {

@@ -122,6 +122,44 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await settle(page, 45);
   await shot(page, '09-battle-open', 'the opening hand, dealt');
 
+  /* THE GUIDE, IN ORDER, as a first-time player meets it. Each hint is cleared
+     by doing the thing it names, so this walks the opening the way a new player
+     walks it rather than photographing one frame of it. */
+  await page.evaluate(() => { window.FF.G.meta.taught = false; });
+  for (let k = 0; k < 8; k++) {
+    const info = await page.evaluate(() => {
+      const FF = window.FF, G = FF.G;
+      // the guide carries on into the next fight; the walk stops with this one
+      if (!G.tut || G.tut.over || G.screen !== 'battle' || G.battle.over) return null;
+      const h = FF.TUTORIAL[G.tut.i];
+      return h ? { id: h.id, text: h.text } : null;
+    });
+    if (!info) break;
+    await settle(page, 24);
+    await shot(page, '09h' + k + '-hint-' + info.id, info.text.slice(0, 64));
+    // do the thing the hint asks for, so the next one comes up
+    await page.evaluate(() => {
+      const FF = window.FF, G = FF.G;
+      const h = FF.TUTORIAL[G.tut.i];
+      if (!h) return;
+      if (h.id === 'deploy') {
+        const i = G.battle.hand.findIndex((c) => c.type === 'unit');
+        if (i >= 0) FF.playCard(G, i, { lane: 1, col: 0 });
+      } else if (h.id === 'order') FF.UI.order = true;
+      else if (h.id === 'inspect') { FF.UI.inspect = G.run.deck[0]; }
+      else if (h.id === 'bell') { FF.UI.inspect = null; FF.ringBell(G); }
+      else if (h.id === 'front') {
+        const u = FF.playerUnits(G).find((x) => !x.leader && x.col > 0);
+        if (u && FF.slotFree(G, 'p', u.lane, 0)) FF.moveUnit(G, u, u.lane, 0);
+        else FF.passTurn(G);
+      } else { FF.passTurn(G); }
+      FF.drainAll();
+    });
+    await settle(page, 6);
+  }
+  await page.evaluate(() => { window.FF.UI.order = false; window.FF.UI.inspect = null; });
+
+
   // play a warden, then let the turn resolve
   await page.evaluate(() => {
     const FF = window.FF, G = FF.G;
@@ -131,10 +169,6 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await settle(page, 40);
   await shot(page, '10-battle-deployed', 'a warden on the board, mid-resolution');
 
-  // the hint that is up on turn one, as a first-time player meets it
-  await page.evaluate(() => { window.FF.UI.tut = 0; window.FF.G.meta.taught = false; });
-  await settle(page, 20);
-  await shot(page, '09b-first-hint', 'what a first run is told, before anything else');
 
   // a few turns in: telegraphs, counters, a log
   await page.evaluate(() => {
