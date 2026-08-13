@@ -1272,7 +1272,10 @@ function die(g, u, killer) {
     bumpStat('kills', 1);
     if (g.run) g.run.kills = (g.run.kills || 0) + 1;
   }
-  if (u.side === 'p' && !u.leader && g.run) g.run.fellThisZone = (g.run.fellThisZone || 0) + 1;
+  if (u.side === 'p' && !u.leader && g.run) {
+    g.run.fellThisZone = (g.run.fellThisZone || 0) + 1;
+    g.run.everFell = 1;                 // and the whole trek remembers it
+  }
   if (u.kw.explode) neighbours(g, u).concat(foes(g, u).filter((f) => f.lane === u.lane)).forEach((n2) => hurt(g, n2, u.kw.explode, null));
   if (u.hooks.death) u.hooks.death(g, u, killer);
   for (const a of allies(g, u)) if (a.hooks.allyDeath) a.hooks.allyDeath(g, a, u);
@@ -1625,6 +1628,13 @@ function moveUnit(g, u, lane, col) {
 function checkOver(g) {
   const b = g.battle;
   if (!b || b.over) return;
+  // a beast that has fallen is remembered by name, for the bestiary feat
+  for (const u of b.units) {
+    if (u.boss && !u.alive && u.side === 'e') {
+      G.meta.felled = G.meta.felled || {};
+      G.meta.felled[u.def] = true;
+    }
+  }
   const leader = b.units.find((u) => u.side === 'p' && u.leader);
   if (leader && !leader.alive) {
     b.over = true; b.won = false;
@@ -1764,11 +1774,41 @@ function summon(g, foeId, count) {
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
-  /* Eased back to where it was two iterations ago. The front row burning two
-     counters a turn is a difficulty that comes out of a decision — stand there
-     and swing sooner, or stand back and be late — so the flat multiplier that
-     was covering for a board with no geometry is no longer needed. */
-  return (1 + run.step * 0.042 + run.zone * 0.16) * (run.foeMul || 1);
+  /* THE FELL ANSWERS THE CARAVAN.
+
+     A locked-deck arm on the probe — the same deck, played by both pilots, no
+     drafting, no shopping — measured a win rate of about ZERO for every
+     combination, weak or strong, careless or careful. That is a stronger
+     statement than "the deck matters more than the fight": a caravan that does
+     not GROW cannot cross the trail at all, whoever is holding it, so there was
+     never a gap for skill to close.
+
+     So the trail rises to meet the caravan. Part of the curve is the road —
+     step and zone, as before — and part of it is how much the caravan is
+     carrying. A lean line meets a lean winter and a fat one meets a hard
+     winter, which means building a deck still pays (the fights it wins are
+     bigger) but stops being the whole of whether the run is winnable. The
+     coefficient is deliberately partial: it absorbs about half of a deck
+     advantage, not all of it. */
+  const road = 1 + run.step * 0.034 + run.zone * 0.125;
+  return road * (1 + fellAnswer(run) * 0.5) * (run.foeMul || 1);
+}
+
+/* What the caravan is carrying, as a number the trail can read: attack and
+   health per card, so a thin deck of strong cards and a fat deck of weak ones
+   land in the same place. Zero at the strength a run sets out with. */
+function caravanPower(run) {
+  const cards = run.deck.concat([run.leader]).filter((c) => c.type === 'unit' || c.atk > 0);
+  if (!cards.length) return 0;
+  const per = cards.reduce((n, c) => n + c.atk + c.hp * 0.25, 0) / cards.length;
+  return per;
+}
+const POWER_BASE = 6.5;
+/* How much harder the winter is for this caravan, as a fraction. Clamped both
+   ways: a caravan that has fallen apart is never given a free run, and one that
+   has been built into a wall never faces something unplayable. */
+function fellAnswer(run) {
+  return clamp((caravanPower(run) - POWER_BASE) / POWER_BASE, -0.25, 0.6);
 }
 
 /* A pack is never just a bigger skirmish: it hunts a particular way, and the
@@ -2095,6 +2135,7 @@ function advance(g) {
     if (run.zone >= ZONES.length) {
       G.meta.wins++;
       bumpStat('wins', 1);
+      run.freshFeats = checkFeats(run);
       G.meta.winter[run.tribe] = Math.max(G.meta.winter[run.tribe] || 0, run.winterPts || 0);
       if (!run.fellThisZone) bumpStat('flawless', 1);
       checkUnlocks(g);
@@ -2129,18 +2170,25 @@ const COURSES = [
   { id: 'hearth', name: 'THE HEARTH ROAD', short: 'HEARTH', col: '#ff9a5c',
     text: 'Hearth cards on every table, and every warden you set down arrives with Spice 2.',
     match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 2) },
+  /* Frost on EVERY arrival was measured at 41% against a 22% baseline while the
+     other four sat at 29-32 — not a choice, a favourite. Frost skips a foe's
+     whole turn, so handing it out wave-wide was worth more than any other
+     course's rule put together. It now lands on the front of the wave only,
+     which is where it reads best anyway: the thing walking straight at you
+     arrives cold. */
   { id: 'frost', name: 'THE DEEP COLD', short: 'COLD', col: '#8fe3ff',
-    text: 'Frost cards on every table, and every wave walks in already carrying Frost 1.',
-    match: (c) => c.tribe === 'frost', arrive: (g, u) => addStatus(g, u, 'frost', 1) },
+    text: 'Frost cards on every table, and the front of every wave walks in already carrying Frost 1.',
+    match: (c) => c.tribe === 'frost', arrive: (g, u) => { if (u.col === 0) addStatus(g, u, 'frost', 1); } },
   { id: 'scrap', name: 'THE SCRAP TRAIL', short: 'SCRAP', col: '#c9b28a',
     text: 'Scrap cards on every table. The first gear you use each fight does not cost the turn.',
     match: (c) => c.tribe === 'scrap', freeItem: true },
   { id: 'line', name: 'A FULL LINE', short: 'BODIES', col: '#7de08f',
-    text: 'Wardens on every table, and a packed board never costs your line its warmth.',
-    match: (c) => c.type === 'unit', crowdproof: true },
+    text: 'Wardens on every table, a packed board never costs your line its warmth, and every warden you set down arrives with Shell 2.',
+    match: (c) => c.type === 'unit', crowdproof: true, deploy: (g, u) => addStatus(g, u, 'shell', 2) },
+  /* And the two that sat at the bottom get the other half of the levelling. */
   { id: 'pack', name: 'A HEAVY PACK', short: 'GEAR', col: '#c9a6ff',
-    text: 'Gear on every table, and gear you use goes back into the deck instead of the used pile.',
-    match: (c) => c.type === 'item', recycle: true },
+    text: 'Gear on every table, gear you use goes back into the deck, and the first one each fight is free.',
+    match: (c) => c.type === 'item', recycle: true, freeItem: true },
 ];
 const courseOf = (run) => (run && run.course ? COURSES.find((x) => x.id === run.course) : null);
 /* Priced so that a course is roughly two cards' worth of scrip, and a redeal
@@ -2354,7 +2402,7 @@ function rollShop(g) {
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
   if (!s) return false;
-  const takeGold = (n) => { if (run.gold < n) return false; run.gold -= n; return true; };
+  const takeGold = (n) => { if (run.gold < n) return false; run.gold -= n; run.everBought = 1; return true; };
   if (kind === 'card') {
     const it = s.cards[idx];
     if (!it || it.sold || !takeGold(it.price)) return false;
@@ -4539,6 +4587,7 @@ function hitAt(x, y) {
 }
 
 const UI = {
+  sealNote: null,    // the feat the player just tapped on the title screen
   drag: null,        // {card, idx, x, y, moved} or {unit,…}
   hover: null,
   inspect: null,     // a card blown up with its keywords spelled out
@@ -4600,6 +4649,38 @@ function drawTitle(c, t) {
     if (!locked && bw3) txt(c, 'winter ' + bw3, x + bw2 / 2, y + 200, 12, '#ffd166', 'center', 't');
     if (!locked) hit('tribe', x, y, bw2, 190, tb);
   });
+  /* THE SEALS, on the title screen, because a thing to chase has to be visible
+     from the place you decide whether to set out again. Earned ones are lit and
+     named; the rest sit dark with what they want written under them. */
+  const sy = y + 216;
+  const got = FEATS.filter((f) => featEarned(f.id)).length;
+  txt(c, 'SEALS  ' + got + '/' + FEATS.length, MID, sy, 13, got ? '#ffd166' : '#7e97b8', 'center', 't');
+  const sgap = 54, stot = (FEATS.length - 1) * sgap;
+  FEATS.forEach((f, i) => {
+    const x = MID - stot / 2 + i * sgap, cy2 = sy + 44;
+    const on = featEarned(f.id);
+    c.save();
+    if (on) { c.shadowColor = f.col; c.shadowBlur = 10 + Math.sin(t * 2 + i) * 4; }
+    c.globalAlpha = on ? 1 : 0.3;
+    // a struck seal: six sides, and a mark inside it once it is earned
+    c.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a2 = (k / 6) * TAU - Math.PI / 2;
+      const px2 = x + Math.cos(a2) * 19, py2 = cy2 + Math.sin(a2) * 19;
+      k ? c.lineTo(px2, py2) : c.moveTo(px2, py2);
+    }
+    c.closePath();
+    inked(c, on ? f.col : '#25314a', 2.5, C.ink);
+    if (on) {
+      c.beginPath(); c.arc(x, cy2, 6.5, 0, TAU);
+      c.fillStyle = '#12203a'; c.fill();
+    }
+    c.restore();
+    hit('seal', x - 26, cy2 - 26, 52, 52, f.id);
+  });
+  txt(c, UI.sealNote || 'tap a seal to read what it asks', MID, sy + 74, 13,
+    UI.sealNote ? '#ffe6a8' : '#6c82a2', 'center', 't');
+
   button(c, 'help', SAFE, VH - 74, 210, 48, 'HOW TO PLAY', '#40527a');
   button(c, 'collection', SAFE + 222, VH - 74, 190, 48, 'COLLECTION', '#40527a');
   button(c, 'mute', VW - SAFE - 116, VH - 74, 116, 48, G.meta.mute ? 'SOUND ✕' : 'SOUND ♪', '#40527a', false, true);
@@ -5605,6 +5686,12 @@ const TUTORIAL = [
     done: (g) => g.battle.turn >= 1 },
   { id: 'action', text: 'One action a turn — a card, the bell, or a pass. Sliding a warden already on the board is free.',
     done: (g) => g.battle.turn >= 2 },
+  /* The two rules a first run used to have to lose to learn. Both are recent,
+     both decide fights, and neither is guessable from the board alone. */
+  { id: 'front', text: 'The front column burns TWO counters a turn, on both sides — anything there wears a ×2. Swing sooner, or stand back and stay whole.',
+    done: (g) => playerUnits(g).some((u) => u.col === 0) || g.battle.turn >= 4 },
+  { id: 'room', text: 'Leave one slot open and the whole line mends every turn. Fill all six and the cold gets into somebody.',
+    done: (g) => g.battle.turn >= 5 },
   { id: 'order', text: 'Tap ORDER to number the board. Every foe resolves before every warden, front of the table first.',
     done: () => UI.order },
   { id: 'inspect', text: 'Tap anything — a card, a warden, a foe — and the game tells you exactly what it does.',
@@ -6167,8 +6254,18 @@ function drawEnd(c, t, won) {
       txt(c, k.name.toUpperCase(), MID, 344, 24, '#ffb0b8', 'center', 'd');
     }
   } else if (won && run0) {
-    // the caravan that made it, every card of it
-    txt(c, 'THE CARAVAN THAT MADE IT', MID, 232, 13, '#7e97b8', 'center', 't');
+    /* Anything the crossing earned, named, before the caravan is shown. A
+       crossing that earns nothing new says so — that is the hook. */
+    const fresh = (run0.freshFeats || []).map((id) => FEATS.find((f) => f.id === id)).filter(Boolean);
+    const shown = fresh.slice(0, 3);
+    if (shown.length) {
+      txt(c, shown.length > 1 ? 'SEALS EARNED' : 'A SEAL EARNED', MID, 222, 13, '#7e97b8', 'center', 't');
+      shown.forEach((f, i) => txt(c, f.name, MID, 242 + i * 21, 18, f.col, 'center', 'd'));
+    }
+    // the caravan that made it, every card of it — pushed down by whatever the
+    // crossing earned, so the seals never land on the cards
+    const drop = shown.length ? 20 + shown.length * 21 : 0;
+    txt(c, 'THE CARAVAN THAT MADE IT', MID, 232 + drop, 13, '#7e97b8', 'center', 't');
     const all = [run0.leader].concat(run0.deck);
     const per = Math.min(all.length, Math.max(6, Math.floor((VW - SAFE * 2) / 84)));
     const cw3 = 74, chh3 = 104, gap3 = 8;
@@ -6178,7 +6275,7 @@ function drawEnd(c, t, won) {
       const inRow = Math.min(per, all.length - row * per);
       const tw3 = inRow * cw3 + (inRow - 1) * gap3;
       const x = MID - tw3 / 2 + col * (cw3 + gap3);
-      const y = 252 + row * (chh3 + 8) - (rows - 1) * 6;
+      const y = 252 + drop + row * (chh3 + 8) - (rows - 1) * 6;
       c.save();
       c.translate(x + cw3 / 2, y + chh3 / 2);
       c.rotate(Math.sin(i * 2.1) * 0.03);
@@ -6234,7 +6331,12 @@ function press(id, data) {
     }
     case 'startRun': newRun(g, g.ui.pick.tribe, undefined, g.ui.pick.winters, g.ui.pick.course); return;
     case 'backTitle': g.screen = 'title'; return;
-    case 'collection': g.screen = 'collection'; UI.lockNote = null; return;
+    case 'seal': {
+      const f = FEATS.find((x) => x.id === data);
+      if (f) { UI.sealNote = f.name + ' — ' + f.text; sfx('tap'); }
+      return;
+    }
+    case 'collection': g.screen = 'collection'; UI.lockNote = null; UI.sealNote = null; return;
     case 'collectClose': g.screen = 'title'; UI.lockNote = null; return;
     case 'collect': {
       const it = collectionItems()[data];
@@ -6339,6 +6441,7 @@ function press(id, data) {
         const co = COURSES[i];
         if (!co || co.id === run.course || run.gold < COURSE_PRICE) { UI.choose = null; return; }
         run.gold -= COURSE_PRICE;
+        run.courseChanged = 1;
         run.course = co.id;
         r.cards = weightedCards(run, 4, true);
         UI.choose = null;
@@ -6857,6 +6960,56 @@ function lockLandscape() {
   } catch (e) {}
 }
 
+/* -- feats ---------------------------------------------------------------- */
+/* The game had rules, instruments and a difficulty ladder and nothing at all to
+   CHASE. Winters are a dial the player sets; these are the opposite — named
+   things the fell asks of you, each one a way to cross that is harder or
+   stranger than the last, and each one a seal the caravan carries afterwards.
+   They cost nothing and change no rule: they are a reason to set out again. */
+const FEATS = [
+  { id: 'first',   name: 'THE FIRST CROSSING', col: '#7de08f',
+    text: 'Cross the fell.',
+    got: (run) => true },
+  { id: 'whole',   name: 'NOBODY LEFT BEHIND', col: '#8fe0a0',
+    text: 'Cross without a single warden falling.',
+    got: (run) => !run.everFell },
+  { id: 'lean',    name: 'TRAVELLING LIGHT', col: '#6fd8ff',
+    text: 'Cross carrying eight cards or fewer.',
+    got: (run) => run.deck.length <= 8 },
+  { id: 'course',  name: 'HELD THE COURSE', col: '#c9a6ff',
+    text: 'Cross without ever changing the course you declared.',
+    got: (run) => !run.courseChanged },
+  { id: 'pauper',  name: 'THE EMPTY PURSE', col: '#ffd166',
+    text: 'Cross having never bought a thing from the trader.',
+    got: (run) => !run.everBought },
+  { id: 'winter',  name: 'THE LONG WINTER', col: '#8fe3ff',
+    text: 'Cross carrying a winter of five or more.',
+    got: (run) => (run.winterPts || 0) >= 5 },
+  { id: 'beasts',  name: 'THE WHOLE BESTIARY', col: '#ff9a3c',
+    text: 'Fell every beast in the game, across any number of runs.',
+    got: () => Object.keys(FOES).filter((k) => FOES[k].boss)
+      .every((k) => (G.meta.felled || {})[k]) },
+  { id: 'thrice',  name: 'THREE ROADS HOME', col: '#ffe6a8',
+    text: 'Cross once with each of the three tribes.',
+    got: () => ['hearth', 'frost', 'scrap'].every((t) => (G.meta.crossed || {})[t]) },
+];
+const featEarned = (id) => !!(G.meta.feats && G.meta.feats[id]);
+/* Called on a crossing. Returns the ids earned THIS time, so the end screen can
+   say which ones were new rather than listing everything again. */
+function checkFeats(run) {
+  G.meta.feats = G.meta.feats || {};
+  G.meta.crossed = G.meta.crossed || {};
+  G.meta.crossed[run.tribe] = true;
+  const fresh = [];
+  for (const f of FEATS) {
+    if (G.meta.feats[f.id]) continue;
+    let ok2 = false;
+    try { ok2 = !!f.got(run); } catch (e) { ok2 = false; }
+    if (ok2) { G.meta.feats[f.id] = true; fresh.push(f.id); }
+  }
+  return fresh;
+}
+
 function loadMeta() {
   const raw = store.get(SAVE_META);
   if (!raw) return;
@@ -6867,6 +7020,9 @@ function loadMeta() {
     G.meta.found = G.meta.found || {};
     G.meta.winter = G.meta.winter || {};
     G.meta.stats = Object.assign({ kills: 0, bestCombo: 0, flawless: 0, wins: 0, zones: 0 }, G.meta.stats || {});
+    G.meta.feats = G.meta.feats || {};
+    G.meta.crossed = G.meta.crossed || {};
+    G.meta.felled = G.meta.felled || {};
     AUD.on = MUSIC.on = !G.meta.mute;
   } catch (e) {}
 }
@@ -6888,10 +7044,12 @@ window.FF = {
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
   UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed, deckLeanings, weightedCards,
+  caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
+  FEATS, featEarned, checkFeats,
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,

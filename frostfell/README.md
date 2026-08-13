@@ -23,6 +23,12 @@ anything hanging off the stage, and anything hiding under a notch.
   attacker's own lane**; if that lane is clear it reaches across, and a unit
   with nothing in front of it will walk into the lane where the fighting is
   rather than stand there.
+- **The fell answers the caravan.** Part of the difficulty curve is the road —
+  which step, which zone — and part of it is what the caravan is carrying. A
+  lean line meets a lean winter and a built-up one meets a hard winter. It
+  absorbs about half of a deck advantage, deliberately not all of it: building
+  a deck still pays, because the fights it wins are bigger, but it stops being
+  the whole of whether a run is winnable.
 - **The front row runs double.** Counters tick down twice as fast in column 0,
   on both sides of the table, and anything standing there wears a `×2` beside
   its counter. Put your slow heavy hitter forward and it swings sooner and gets
@@ -80,6 +86,15 @@ anything hanging off the stage, and anything hiding under a notch.
   the new body in. One that breathes on a lane needs a warden still in that
   lane. Every scheme can be taken away, and every way of taking it away is
   free: moving is not your action for the turn.
+
+## Something to chase
+
+**Seals** are eight named ways to cross, struck on the title screen and lit as
+they are earned: cross at all, cross without losing a warden, cross carrying
+eight cards or fewer, hold the course you declared, cross having never bought a
+thing, cross under a winter of five, fell every beast in the game, cross once
+with each tribe. They cost nothing and change no rule — they are a reason to set
+out again, and a crossing that earns nothing new says so.
 
 ## Beyond one run
 
@@ -354,17 +369,34 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓████    8%
-+ the fight         ░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓█████   12%
-+ the trader        ░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓████████   18%
-+ steering the pool ░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓█████████████████   37%
+careless            ░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓████     9%
++ the fight         ░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓█████████   20%
++ the trader        ░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓████████████   25%
++ steering the pool ░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓████████████████   34%
 ```
 
-**Twenty-nine points for playing well: four from the fight, six from the trader,
-nineteen from steering the pool.** The economy, measured the same way: penniless
-32%, as it ships 37%, bottomless purse 39%. Each course, handed over rather than
-declared, against a 22% baseline with none: Cold 41%, Hearth 32%, Scrap 32%,
-Bodies 29%, Gear 29%.
+**Twenty-five points for playing well: eleven from the fight, five from the
+trader, nine from steering the pool** — the fight is the biggest single rung for
+the first time. The economy: penniless 30%, as it ships 34%, bottomless purse
+33%. Each course against a 29% baseline with none: Cold 41%, Bodies 41%, Gear
+36%, Scrap 34%, Hearth 29%.
+
+### The same deck, two pilots
+
+A locked arm: the identical deck for the whole trail, nothing drafted, bought or
+burned, so every point between the rows is the fight and only the fight.
+
+```
+weak deck, played badly   ███                              6%
+weak deck, played well    ████                             8%
+strong deck, played badly ██████                          11%
+strong deck, played well  █████████                       18%
+```
+
+**Skill closes about 40% of a deck gap.** The first version of this arm measured
+*zero for every combination* — a caravan that does not grow cannot cross the
+trail at all, whoever is holding it, so there was never a gap for skill to
+close. That is what the fell answering the caravan is for.
 
 ### Which parts of playing well are worth anything
 
@@ -373,14 +405,21 @@ a time and re-runs the sweep. Whatever the pilot can stop doing without losing
 win rate was never a decision:
 
 ```
-the fight, played well:  13%
-    +6  ███                  holding gear until it earns the turn
-    +4  ██                   denying schemes
-    +4  ██                   keeping a slot in reserve
-    +3  ██                   placing bodies where they will be hit
-    +1  █                    calling waves onto a set board
-    -2                       moving wounded and the leader
+the fight, played well:  20%
+    +7  ████                 holding gear until it earns the turn
+    +6  ███                  keeping a slot in reserve
+    +1  █                    denying schemes
+    -1                       keeping the leader at the back
+    -2                       calling waves onto a set board
+    -2                       placing bodies where they will be hit
 ```
+
+**Repositioning is out of the pilot, and that is a verdict rather than a tidy-up.**
+Shuffling wardens about after they are down priced at or below zero for three
+rounds and survived two rewrites — first as a rule about health, then as a rule
+about the clock. Both measured inside the noise. Where a body goes down is the
+question the geometry asks, and it is asked once, at deployment; the free move
+after that is a convenience. Removing it made the fight pilot *better*.
 
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
