@@ -9060,8 +9060,23 @@ function renderHUD() {
 /* ---- the hand ---------------------------------------------------------- */
 /** The two touch buttons say what they do right now, not "A" and "B". */
 /** What the two buttons are called right now, for whatever they are driving. */
+/**
+ * The beats that own the screen AND answer a press. Each of these sits above
+ * the mode router in `step` and takes 'a' or 'b' to skip its tail, so while one
+ * is running there is exactly one thing the two buttons do — which is the
+ * dialogue case, and the comment below already argues it. The labels did not
+ * know: a phone read "Play"/"Menu" over a catch, a flourish and an evolution,
+ * and "Pick"/"Back" over a chest opening, for buttons that did neither.
+ *
+ * The timed beats — warp, alert, rustle, mend, blackout — are deliberately NOT
+ * here: they answer nothing, and naming a button for an action it will not take
+ * is the fault this is fixing, in the other direction.
+ */
+const pressableBeat = () => !!(G.evoAnim || G.chestOpen || G.flourish || G.gotcha);
+
 function btnLabels() {
   const m = G.mode;
+  if (pressableBeat()) return ['Skip', 'Skip'];
   const reward = m === 'screen' && G.screen && G.screen.kind === 'reward';
   return reward ? ['Take', 'Skip']                   // nothing behind it to go back to
     // The title had no case here, so it fell through to the world's defaults

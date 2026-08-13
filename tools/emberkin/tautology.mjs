@@ -298,6 +298,19 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  { name: 'input: the labels name the mode underneath again', aims: ['the two buttons say what they will do, in every state'],
+    find: "  if (pressableBeat()) return ['Skip', 'Skip'];\n",
+    to: '' },
+  { name: 'input: everything is labelled Skip', aims: ['the two buttons say what they will do, in every state'],
+    find: 'const pressableBeat = () => !!(G.evoAnim || G.chestOpen || G.flourish || G.gotcha);',
+    to: 'const pressableBeat = () => true;' },
+  { name: 'input: the timed beats claim to answer a press', aims: ['the two buttons say what they will do, in every state'],
+    find: 'const pressableBeat = () => !!(G.evoAnim || G.chestOpen || G.flourish || G.gotcha);\n',
+    to: 'const pressableBeat = () => !!(G.evoAnim || G.chestOpen || G.flourish || G.gotcha || G.rustle || G.mend);\n' },
+  { name: 'input: one button is named for what it will not do', aims: ['the two buttons say what they will do, in every state'],
+    find: "  if (pressableBeat()) return ['Skip', 'Skip'];",
+    to: "  if (pressableBeat()) return ['Skip', 'Back'];" },
+
   { name: 'twice: the faint stops guarding itself', aims: ['a faint resolves once, whoever notices it'],
     find: '  if (b.over || b.foe.hp > 0) return;\n',
     to: '' },

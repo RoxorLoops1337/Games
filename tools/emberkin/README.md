@@ -4422,3 +4422,63 @@ desktop one. That is the correct answer and not an obvious one.
     — none of which a guard mutant can reach, by construction. Every mutant
     anchor re-audited — 111 anchors, none orphaned, none ambiguous. Five clean
     runs. Render suite 7149 -> 7174 checks.
+
+126. **Four beats own the screen, and the buttons were labelled for the mode
+    underneath** (pass 215).
+    The modes themselves are tidy, and are pinned now rather than assumed: a
+    dialogue takes A and B and nothing else and you cannot walk out of one; the
+    title takes both buttons; a screen takes the cursor and Pick/Back; a reward
+    screen names its own two choices.
+
+    What was not tidy was what the two round buttons on a phone SAY. Four beats
+    sit above the mode router in `step` and answer a press by skipping their
+    tail — an evolution, a chest opening, a flourish, a catch — so while one owns
+    the screen there is exactly one thing the buttons do. That is the dialogue
+    case, and `btnLabels`' own comment already argues it: *"the way a dialogue
+    makes both buttons Next rather than leaving one dead."* The labels did not
+    know:
+
+        a catch beat      said  Play / Menu      did  press past it
+        a flourish        said  Play / Menu      did  press past it
+        an evolution      said  Play / Menu      did  press past it
+        a chest opening   said  Pick / Back      did  press past it
+
+    `pressableBeat()` names the four once and the labels ask before naming the
+    mode underneath. It is the BEAT that decides, not the mode: a bag under a
+    chest opening reads Skip/Skip while the same bag on its own reads Pick/Back.
+    And the label is TRUE rather than merely different — pressing A during a
+    catch and during a flourish really does end the beat and run what was
+    waiting behind it.
+
+    **Deliberately left out**, and asserted so: the timed beats — warp, alert,
+    rustle, mend, blackout — answer nothing. Naming a button for an action it
+    will not take is the same fault in the other direction, and a mutant that
+    adds `rustle` and `mend` to the pressable list fails three checks.
+
+    **The paired control.** With no beat live, all eight mode readings —
+    world, battle, dialogue, menu, screen, title with and without a save, and
+    the reward screen — are IDENTICAL before and after. The suite keeps that
+    control, and it is what the "everything is labelled Skip" mutant proves: 19
+    kills, several of them in OLDER sections that had already pinned Pick/Back
+    and Take/Skip.
+
+    **A crash of my own, caught by my own rule.** The two beat closures were
+    written in a `for...of` header, so `ran` sat in the temporal dead zone when
+    `step()` invoked the callback and the suite DIED rather than failed. A check
+    that crashes the suite is not a check; restructured so the counter exists
+    before the closure that writes it.
+
+    Four planted faults, all four bitten by hand: the labels naming the mode
+    underneath again (8 failures), everything labelled Skip (19), the timed
+    beats claiming to answer a press (3), one of the two buttons named for
+    something it will not do (6) — plus a NO-OP comment edit that correctly
+    passed. The sweep then reported 8 / 19 / 3 / 6, the same four numbers.
+
+    Four sweep mutants aimed at the new section, which reports **23 of 28
+    killed — 82%**, the densest the sweep has produced. Dense for the plainest
+    possible reason: the section is small, every check in it is a driven label
+    or a driven press, and the four mutants between them touch every branch of
+    the one function it is about. The five survivors are the shape checks
+    ("four beats own the screen and answer a press") that no relabelling can
+    reach. Every mutant anchor re-audited — 115 anchors, none orphaned, none
+    ambiguous. Five clean runs. Render suite 7174 -> 7202 checks.
