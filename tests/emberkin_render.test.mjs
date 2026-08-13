@@ -4744,6 +4744,114 @@ section('the screen that takes something says what it costs');
   ]) ok(body.includes(needle), what);
 }
 
+// Does a screen that scrolls tell you there is more?
+//
+// The machinery has been in the CSS since the deck first overflowed and nobody
+// had ever sampled a pixel of it: two `local` covers that scroll WITH the
+// content and two marks pinned to the frame, the covers listed OVER the marks,
+// so a mark shows at an edge with content beyond it and is covered at an edge
+// you have reached. Sound in structure. Measured at 390x760 — same content,
+// same scroll position, the only difference being whether the pinned layers
+// paint — it delivered almost nothing, because the marks were BLACK on a panel
+// whose bottom is already #0d0913:
+//
+//   screen   more below   at the end      after
+//   box          2.43        1.00      18.83 / 3.39
+//   dex          3.21        1.00      23.42 / 3.39
+//   deck         0.98        1.02       7.03 / 4.20   <- was INVERTED
+//   swap         0.92        0.46       6.63 / 1.90
+//   starter      3.14        0.54      22.52 / 1.82
+//   (cannot scroll: 0.51-1.02 before, 3.55-4.20 after — the floor, correctly)
+//
+// Out of 255. On `deck` the mark was FAINTER when there was more below than
+// when there was not, and every screen sat within ~2 lum of a screen that
+// cannot scroll at all. Black on near-black has nowhere to go: darkening a
+// colour of luminance 10 by 60% removes six luminance and no eye reads it.
+//
+// So the marks are the panel's own edge colour instead, which is the only
+// direction available on a near-black surface — lighter, not darker.
+//
+// This is CSS, which a headless suite cannot render. What it CAN do is read the
+// declaration out of the file and check the property the numbers are about:
+// each mark must be lighter than the base it is drawn on, or it cannot be seen
+// at all. That is the net that would have failed for the whole of this game's
+// life until now.
+section('a screen that scrolls says so, visibly');
+{
+  // Split on top-level commas — the layers are full of parenthesised colours.
+  const split = (v) => {
+    const out = []; let d = 0, cur = '';
+    for (const ch of v) {
+      if (ch === '(') d++; if (ch === ')') d--;
+      if (ch === ',' && d === 0) { out.push(cur.trim()); cur = ''; } else cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  };
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const rgb = (s) => {
+    const hex = s.match(/#([0-9a-f]{6})/i);
+    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16));
+    const fn = s.match(/rgba?\(([^)]*)\)/i);
+    return fn ? fn[1].split(',').slice(0, 3).map((n) => +n.trim()) : null;
+  };
+
+  // The declaration only — up to its own semicolon, counting parentheses, or a
+  // slice to the next `;` swallows every rule after it (the first attempt read
+  // 26 "layers" that way).
+  // …and anchored on the rule's own first line, not on `#screen{` — which
+  // matches `body.touch #screen{ padding-top:24px; }` hundreds of lines earlier
+  // and reads a background belonging to something else entirely.
+  const at = SRC.indexOf('position:absolute; inset:0; z-index:9; padding:12px; overflow:auto;');
+  ok(at > -1, 'the panel rule is where this thinks it is');
+  const decl = SRC.slice(at, SRC.indexOf('backdrop-filter:blur(3px)', at));
+  const from = decl.indexOf('background:') + 'background:'.length;
+  let end = from, depth = 0;
+  while (end < decl.length && !(decl[end] === ';' && depth === 0)) {
+    if (decl[end] === '(') depth++;
+    if (decl[end] === ')') depth--;
+    end++;
+  }
+  const bg = decl.slice(from, end);
+  const layers = split(bg).filter(Boolean);
+  eq(layers.length, 5, 'five background layers: two covers, two marks, and the panel itself');
+
+  // Order is the whole mechanism: the covers must be listed BEFORE the marks,
+  // because an earlier layer paints over a later one — that is what makes a
+  // mark disappear at an edge you have reached.
+  ok(/local/.test(layers[0]) && /local/.test(layers[1]), 'the two covers scroll with the content');
+  ok(/scroll/.test(layers[2]) && /scroll/.test(layers[3]), 'and the two marks are pinned to the frame');
+  ok(layers.findIndex((l) => /local/.test(l)) < layers.findIndex((l) => /scroll no-repeat/.test(l)),
+    'the covers are painted over the marks, which is what hides a mark at an edge you have reached');
+  ok(!/local|scroll no-repeat/.test(layers[4]), 'and the panel itself is underneath everything');
+
+  // The property the pixels were about. `#screen` runs from #1a1222 at the top
+  // to #0d0913 at the bottom, so each mark is judged against the end it is
+  // drawn on — a mark no lighter than its own ground cannot be seen.
+  const base = layers[4].match(/#[0-9a-f]{6}/gi);
+  eq(base.length, 2, 'the panel is a gradient with two ends');
+  const [topBase, botBase] = base.map((h) => lum(rgb(h)));
+  const topMark = lum(rgb(layers[2]));
+  const botMark = lum(rgb(layers[3]));
+  ok(topMark > topBase, `the top mark is lighter than the panel's top (${topMark.toFixed(1)} vs ${topBase.toFixed(1)})`);
+  ok(botMark > botBase, `the bottom mark is lighter than the panel's bottom (${botMark.toFixed(1)} vs ${botBase.toFixed(1)})`);
+  // By difference, and the number that matters: how far the mark can move the
+  // pixel it sits on. Black on #0d0913 could move it by six; this moves it by
+  // more than thirty, which is what turned 0.98 into 7.03 and 3.21 into 23.42.
+  ok(botMark - botBase > 30, `and by enough to be seen (${(botMark - botBase).toFixed(1)} luminance of headroom)`);
+  ok(topMark - topBase > 30, `at both ends (${(topMark - topBase).toFixed(1)})`);
+  // The marks must still be TRANSPARENT at their far end, or they are bands
+  // rather than edges.
+  for (const [i, which] of [[2, 'top'], [3, 'bottom']]) {
+    ok(/,\s*rgba\([^)]*,\s*0\)/.test(layers[i]), `the ${which} mark fades to nothing away from the edge`);
+  }
+  // Geometry unchanged: the covers are deeper than the marks, so a mark is
+  // fully hidden when its cover arrives.
+  const px = (l) => +(l.match(/100% (\d+)px/) || [0, 0])[1];
+  ok(px(layers[0]) >= px(layers[2]), `the top cover (${px(layers[0])}px) is deeper than the mark it hides (${px(layers[2])}px)`);
+  ok(px(layers[1]) >= px(layers[3]), `and the bottom cover (${px(layers[1])}px) than its mark (${px(layers[3])}px)`);
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

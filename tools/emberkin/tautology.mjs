@@ -153,6 +153,13 @@ const MUTANTS = [
     find: '  #screen .shead{ position:sticky; top:-12px;',
     to: '  #screen .shead{ position:static; top:-12px;' },
 
+  { name: 'edge: the scroll mark goes black on near-black again', aims: ['a screen that scrolls says so, visibly'],
+    find: '      linear-gradient(0deg, rgba(74,53,96,.9), rgba(74,53,96,0)) bottom / 100% 22px scroll no-repeat,',
+    to: '      linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0)) bottom / 100% 22px scroll no-repeat,' },
+  { name: 'edge: the cover no longer hides its mark', aims: ['a screen that scrolls says so, visibly'],
+    find: '      linear-gradient(0deg,#0d0913 42%, #0d091300) bottom / 100% 26px local no-repeat,',
+    to: '      linear-gradient(0deg,#0d0913 42%, #0d091300) bottom / 100% 12px local no-repeat,' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
