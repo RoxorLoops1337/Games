@@ -618,6 +618,19 @@ function settleChoosers() {
 
    Done here rather than behind a flag in the game, because a difficulty knob
    that exists only for the instrument is a knob that eventually ships. */
+/* SPENDING THE SPEED.
+
+   Gating the particle systems on having a canvas took this suite from 26.7s to
+   9.4s, and for one round nothing was done with the headroom. The default
+   sample was eight runs a tribe — twenty-four an arm, a band of ±9.7 — which
+   meant every number the suite printed on an ordinary `npm run check` was one
+   it could not stand behind, including the two it GATES on.
+
+   Thirty is where it lands: ninety runs an arm, a band of ±5.0, and the whole
+   suite in 24 seconds — 3.75x the sample in LESS wall time than the old suite
+   took at ±9.7. It is still not enough to settle a habit, which is what
+   FF_ABLATE is for; it is enough that a gate which fails means something. */
+const DEFAULT_N = 30;
 const NO_SCARS = !!process.env.FF_NOSCARS;
 function stripScars(run) {
   if (!run) return;
@@ -853,7 +866,7 @@ section('whole runs, start to finish');
   // instrument up when the question is 'is this gap real' rather than 'does
   // this still run' — at N=8 the whole spread is two or three runs wide, which
   // is noise, and pretending otherwise would be worse than not measuring.
-  const N = Number(process.env.FF_RUNS || 8);
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep = (mode, tweak) => {
     let thrown = null;
@@ -1011,7 +1024,7 @@ section('whole runs, start to finish');
    on the same win rate, the trader is scenery. */
 section('does money change anything');
 {
-  const N = Number(process.env.FF_RUNS || 8);
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep2 = (tweak) => {
     let wins = 0, runs = 0;
@@ -1124,7 +1137,7 @@ section('does money change anything');
    thing. If dodging is even level, the game is asking to be dodged. */
 section('does walking past a fight pay');
 {
-  const N = Number(process.env.FF_RUNS || 8);
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
   const arm = (tweak) => {
     let wins = 0, runs = 0, power = 0, fought = 0, walked = 0, seen = 0;
@@ -1193,7 +1206,7 @@ section('which parts of playing well are worth anything');
      why the same habit read +3 one round and -2 the next. Settling which of
      them are real needs a sample this section can afford only when it is the
      only thing running. */
-  const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || 8);
+  const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || DEFAULT_N);
   if (process.env.FF_ABLATE) console.log(`    (turned up: ${3 * N} runs an arm)`);
   /* FF_HABIT names ONE habit and prices only that one, which is what it takes
      to get a single number's band under two points inside a session. Ablating
@@ -1212,6 +1225,24 @@ section('which parts of playing well are worth anything');
   const all = sweep3();
   const band = (100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * N))).toFixed(1);
   console.log(`    the fight, played well:  ${all}%`);
+  /* ARE THE OTHER DECISIONS FAKE, OR IS ONE-AT-A-TIME THE WRONG QUESTION?
+
+     The settled table says denying schemes is worth +7 and every other fight
+     habit is inside the band — which reads as "nineteen of twenty decisions in
+     a fight price at zero", and that would be a damning thing for a board game
+     to be true of.
+
+     But ablation removes ONE habit and leaves the pilot every other way of
+     coping. If the habits overlap — if a pilot that cannot keep a slot back
+     simply denies a scheme instead, and one that cannot hold gear spends it on
+     the same target a turn earlier — then each reads zero on its own while the
+     SET of them is worth a great deal. Removing them all at once is the only
+     way to tell those two stories apart, and it had never been run. */
+  const before = Object.assign({}, SKILL);
+  for (const [key] of HABITS) SKILL[key] = false;
+  const none = sweep3();
+  Object.assign(SKILL, before);
+  console.log(`    the fight, with every habit switched off:  ${none}%  (${all - none} points for the set)`);
   const rows = [];
   for (const [key, label] of HABITS) {
     if (ONLY && key !== ONLY) continue;
@@ -1270,7 +1301,7 @@ section('which parts of playing well are worth anything');
    a deck gap skill can actually close. */
 section('which reward-screen decisions are worth anything');
 {
-  const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || 8);
+  const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || DEFAULT_N);
   if (process.env.FF_ABLATE) console.log(`    (turned up: ${3 * N} runs an arm)`);
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep4 = () => {
@@ -1311,7 +1342,7 @@ section('which reward-screen decisions are worth anything');
 
 section('the same deck, two pilots');
 {
-  const N = Number(process.env.FF_RUNS || 8);
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
   /* Both decks have to be able to finish the trail or the arm measures nothing
      but zeroes — a starter deck with no rewards at all wins about none of the

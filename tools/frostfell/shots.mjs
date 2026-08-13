@@ -31,7 +31,23 @@ const arg = (name, dflt) => {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
 };
 const OUT = arg('out', '/tmp/frostfell-shots');
-const [W, H] = arg('size', '1280x720').split('x').map(Number);
+/* REAL PHONES, NOT JUST SMALL WINDOWS.
+
+   Twenty-three rounds of shots were taken at 1280x720 and 2400x1080 in a
+   desktop Chromium — a game built landscape-first for a thumb, never once
+   photographed on anything shaped like a phone or driven by anything shaped
+   like a finger. `--phone <name>` uses a real device's landscape viewport,
+   its pixel ratio and touch emulation. */
+const PHONES = {
+  'iphone-se':   { w: 667,  h: 375,  dpr: 2, name: 'iPhone SE, landscape' },
+  'iphone-14':   { w: 844,  h: 390,  dpr: 3, name: 'iPhone 14, landscape' },
+  'pixel-7':     { w: 892,  h: 412,  dpr: 2.6, name: 'Pixel 7, landscape' },
+  'galaxy-fold': { w: 653,  h: 280,  dpr: 3, name: 'Galaxy Fold cover, landscape' },
+};
+const PHONE = arg('phone', '');
+const dev = PHONE ? PHONES[PHONE] : null;
+if (PHONE && !dev) { console.error('unknown phone: ' + PHONE + ' — have ' + Object.keys(PHONES).join(', ')); process.exit(1); }
+const [W, H] = dev ? [dev.w, dev.h] : arg('size', '1280x720').split('x').map(Number);
 
 /* Find the preinstalled Chromium rather than downloading one. */
 function findChromium() {
@@ -67,7 +83,12 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
 (async () => {
   const exe = findChromium();
   const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox', '--mute-audio'] });
-  const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({
+    viewport: { width: W, height: H },
+    deviceScaleFactor: dev ? dev.dpr : 1,
+    hasTouch: !!dev, isMobile: !!dev,
+  });
+  if (dev) console.log(`  (${dev.name} — ${W}x${H} at ${dev.dpr}x, touch on)`);
   page.on('pageerror', (e) => { console.error('  ! page error:', e.message); process.exitCode = 1; });
   page.on('console', (m) => { if (m.type() === 'error') console.error('  ! console:', m.text()); });
 
