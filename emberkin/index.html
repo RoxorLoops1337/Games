@@ -9277,11 +9277,34 @@ function moveDamage(id) {
  * 7 or 8 and never once 9. A tilde promises the middle and this was the
  * ceiling — the one figure on the screen it could not have been.
  */
-const EFF_MARK = {
-  '2': { tag: 'STRONG', cls: 'eff-good' },
-  '0.5': { tag: 'RESISTED', cls: 'eff-bad' },
-  '0': { tag: 'NOTHING', cls: 'eff-none' },
-};
+/**
+ * The mark on a move card, by BAND rather than by exact value.
+ *
+ * This was a lookup keyed on the multiplier's own string — '2', '0.5', '0' —
+ * which is every value a SINGLE-typed defender can produce and not every value
+ * the game can. `effect` multiplies across the defender's types, so a second
+ * type turns the chart's entries into products: driven over the whole domain,
+ * the reachable set is 0.25, 0.5, 1, 2 and 4. Two of those five had no key, so
+ * the card fell silent at exactly the two matchups worth telegraphing — a
+ * quadruple hit and a doubly-resisted one — on 19 of 288 attacker/defender
+ * combinations, against five of the nineteen creatures in the dex:
+ *
+ *   Magmane    Ember/Stone     silent to Ember and Tide
+ *   Kindlark   Ember/Spark     silent to Stone
+ *   Lanterneel Tide/Gloom      silent to Spark
+ *   Bramblor   Verdant/Gloom   silent to Verdant
+ *   Frillamb   Verdant/Tide    silent to Tide and Stone
+ *
+ * The words are the ones already here. `effWord` — the line the log prints on
+ * the same swing — has always banded rather than matched, and says "brutally
+ * effective" for 2 and 4 alike; this now agrees with it instead of saying
+ * nothing. Neutral stays unmarked, because a mark on everything marks nothing.
+ */
+const effMark = (e) => (
+  e === 0 ? { tag: 'NOTHING', cls: 'eff-none' }
+    : e > 1 ? { tag: 'STRONG', cls: 'eff-good' }
+      : e < 1 ? { tag: 'RESISTED', cls: 'eff-bad' }
+        : null);
 function moveVersusFoe(mon, id) {
   const b = B();
   const mv = MOVES[id];
@@ -10316,7 +10339,7 @@ function statBlock(m) {
       // to send into a specific creature and the matchup is the whole decision.
       // `damageOf` takes any attacker, so the real answer was one call away.
       const vs = mv.pow ? (moveVersusFoe(m, slot.id) || moveDamageNeutral(m, slot.id)) : null;
-      const mark = vs && vs.eff !== undefined ? EFF_MARK[String(vs.eff)] : null;
+      const mark = vs && vs.eff !== undefined ? effMark(vs.eff) : null;
       return `<div class="${mark ? `movecard ${mark.cls}` : 'movecard'}" style="--tint:${TYPES[mv.type]}">
         <div class="mtop"><b>${mv.name}</b><span class="cost">${moveCost(slot.id)}</span></div>
         <div class="mbody">${vs ? `${rangeText(vs.lo, vs.hi)} dmg${mark ? ` <b class="eff">${mark.tag}</b>` : ''}` : 'status'}
@@ -12488,7 +12511,7 @@ if (typeof window !== 'undefined') {
     alertStep, alertClose, ALERT, BUMP_T, bumpOffset, OPEN_FADE, startNew, startCont, takeStarter, STARTERS, TYPE_ORDER,
     aimPlace,
     winFlourish, flourishStep, drawFlourish, FLOURISH_T, BATTLE_OUT, backToWorld, playCue, KO_FALL, battleTrack, faintCue, hitCue, placeTrack, MAP_TRACK, THEMES,
-    intentThrough, intentLethal, moveVersusFoe, EFF_MARK, rangeText,
+    intentThrough, intentLethal, moveVersusFoe, effMark, rangeText,
     newGame, boot, say, openScreen, closeScreen, screenLocked, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     layoutFor, stickDir, toggleFullscreen, VIEW_W, VIEW_H,
     GRADE, gradeFor, worldLight, drawTitleArt, WEATHER, WIND, weather, AIR, AIR_DEFAULT, drawAir, drawMotes, moteAt,
