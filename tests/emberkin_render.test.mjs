@@ -7378,6 +7378,155 @@ section('a path that bails out leaves nothing behind it');
     'with no hand-written copy of it left');
 }
 
+// Can the game be entered twice?
+//
+// Most of it holds. A screen opened over a screen remembers the first in its
+// `prev` chain; closing three times from nothing does not throw; advancing a
+// dialogue five times past its last line runs `done` once and no more; a
+// battle started over a battle replaces it and leaves the game playable.
+//
+// Two things strand a callback, and one of them pays out again. `say` over a
+// live dialogue drops the first one's `done` silently — the game already knows
+// dialogues can nest, because `say` guards `prevMode` against exactly that —
+// but every reachable `say` runs from input or from another dialogue's `done`,
+// which fires after the first is cleared, so it is recorded rather than fixed.
+//
+// `resolveFoeDown` was the one with stakes. "A faint resolves once" was true at
+// ONE of its four call sites — the `!b.over` in afterFoe — and true at the other
+// three only by luck of their shape: playCard guards on the TRANSITION
+// (`before > 0`), and both thorns sites `return` the instant they call. Called
+// twice by hand it paid the XP twice:
+//
+//     resolveFoeDown once   xp +159   gems +0   over='win'
+//     resolveFoeDown twice  xp +159   again
+//
+// The rule belongs to the faint, not to whoever noticed it.
+section('a faint resolves once, whoever notices it');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  const wildFight = (lvl = 18) => {
+    g.G.party = [g.mkMon('cindercub', 20)];
+    g.G.gems = 0;
+    g.G.battle = null;
+    g.startBattle({ foe: g.mkMon('mothrix', lvl), wild: true });
+    return g.B();
+  };
+  const teamFight = () => {
+    g.G.party = [g.mkMon('cindercub', 30)];
+    g.G.gems = 0;
+    g.G.battle = null;
+    g.startBattle({
+      foe: g.mkMon('mothrix', 20), wild: false,
+      team: [['mothrix', 20], ['pebblet', 20]],
+      npc: { id: 't_test', name: 'Tester', trainer: { team: [['mothrix', 20], ['pebblet', 20]], prize: 300 } },
+    });
+    return g.B();
+  };
+
+  // ---- the first call pays, the second pays nothing ---------------------
+  {
+    const b = wildFight();
+    b.foe.hp = 0;
+    const xp0 = g.G.party[0].xp, gem0 = g.G.gems;
+    g.resolveFoeDown([]);
+    const xp1 = g.G.party[0].xp, gem1 = g.G.gems;
+    ok(xp1 > xp0, `the faint pays its XP once (+${xp1 - xp0})`);
+    eq(b.over, 'win', '…and the last of them ends the fight');
+    g.resolveFoeDown([]);
+    eq(g.G.party[0].xp, xp1, 'a second resolution pays no XP');
+    eq(g.G.gems, gem1, '…and no gems');
+  }
+  // …and mid-team, where `over` is NOT set, so the guard has to be the other
+  // half of the condition: the kin standing there now is a new one, on its feet.
+  {
+    const b = teamFight();
+    b.foe.hp = 0;
+    const first = b.foe;
+    const xp0 = g.G.party[0].xp;
+    g.resolveFoeDown([]);
+    const xp1 = g.G.party[0].xp;
+    ok(xp1 > xp0, `a mid-team faint pays its XP (+${xp1 - xp0})`);
+    ok(b.foe !== first, '…and the next of the team steps in');
+    eq(b.over, null, '…with the fight still running, so `over` cannot be the guard');
+    const wasFoe = b.foe;
+    g.resolveFoeDown([]);
+    eq(g.G.party[0].xp, xp1, 'a second resolution pays nothing');
+    eq(b.foe, wasFoe, '…and does not send out a third for one faint');
+  }
+  // The inverse control: the guard must NOT block a real, separate faint.
+  // Without this, `return` at the top of the function would pass everything.
+  {
+    const b = teamFight();
+    b.foe.hp = 0;
+    const xp0 = g.G.party[0].xp;
+    g.resolveFoeDown([]);
+    const mid = g.G.party[0].xp;
+    ok(mid > xp0, 'the first of the team pays');
+    b.foe.hp = 0;                       // the SECOND one now goes down, for real
+    g.resolveFoeDown([]);
+    ok(g.G.party[0].xp > mid, `and the second pays too (+${g.G.party[0].xp - mid})`);
+    eq(b.over, 'win', '…and that one ends it');
+  }
+  // Every call site guards on the transition, so the guard is never what makes
+  // a normal fight work — pinned by driving a whole fight the ordinary way.
+  {
+    // Driven with the lib's bot, not a hand-rolled loop: a naive
+    // "play the first affordable card" spins for ever once the kin has swung,
+    // because its move card is still in hand and still affordable, and playCard
+    // just refuses it. The scenario has to actually reach endTurn.
+    wildFight(6);
+    const resolved = autoFight(g, 200);
+    ok(resolved, 'an ordinary fight still resolves');
+    ok(['win', 'lose', 'switch', 'fled'].includes(g.B() ? g.B().over : 'win'),
+      `…to an ending (${g.B() ? g.B().over : 'gone'})`);
+  }
+
+  // ---- the re-entrancy that holds, pinned so it keeps holding -----------
+  {
+    g.G.screen = null;
+    g.openScreen('bag', {});
+    g.openScreen('dex', {});
+    ok(g.G.screen && g.G.screen.prev, 'a screen opened over a screen remembers the one beneath');
+    let threw = '';
+    try { g.closeScreen(); g.closeScreen(); g.closeScreen(); } catch (e) { threw = e.message; }
+    eq(threw, '', 'and closing more times than were opened does not throw');
+    eq(g.G.screen, null, '…leaving no screen behind');
+  }
+  {
+    let ran = 0;
+    g.G.dialogue = null; g.G.mode = 'world';
+    g.say('A', ['only'], () => { ran++; });
+    g.G.dialogue.hold = 0;
+    g.advanceDialogue();
+    eq(ran, 1, 'a dialogue read to its end runs its callback once');
+    for (let i = 0; i < 5; i++) g.advanceDialogue();
+    eq(ran, 1, '…and advancing past the end five more times does not run it again');
+    eq(g.G.mode, 'world', '…and hands the mode back');
+  }
+  {
+    // Nested say: the mode guard holds even though the callback does not.
+    g.G.dialogue = null; g.G.mode = 'world';
+    g.say('A', ['one', 'two'], () => {});
+    g.say('B', ['three'], () => {});
+    ok(g.G.dialogue && g.G.dialogue.who === 'B', 'a second say replaces the first');
+    g.G.dialogue.hold = 0;
+    g.advanceDialogue();
+    eq(g.G.mode, 'world', 'and the mode comes back to the world, not to "dialogue"');
+    ok(SRC.includes("G.prevMode = G.mode === 'dialogue' ? G.prevMode : G.mode;"),
+      'which is the guard say already carries for exactly this');
+  }
+
+  // Pinned by shape.
+  ok(SRC.includes('  if (b.over || b.foe.hp > 0) return;'),
+    'the faint guards itself, rather than trusting four callers to');
+  // Five matches: the four call sites plus the function's own signature.
+  eq((SRC.match(/resolveFoeDown\(log\)/g) || []).length, 5,
+    'and there are still four callers, plus the definition, to be right about');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

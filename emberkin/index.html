@@ -7785,6 +7785,17 @@ function foeSwap(log, idx) {
 /** The foe is down: award XP and gems, or send out the next of a trainer's team. */
 function resolveFoeDown(log) {
   const b = B();
+  // A faint resolves once. This was true at ONE of the four call sites — the
+  // `!b.over` in afterFoe — and true at the other three only by luck of their
+  // shape: playCard guards on the TRANSITION (`before > 0`), and both thorns
+  // sites `return` the instant they call. Driven twice by hand it paid the XP
+  // twice over and, mid-team, would have sent out a second kin for one faint.
+  // The rule belongs to the faint, not to whoever noticed it: after a final one
+  // the battle is over, and after a mid-team one the kin standing there is a
+  // new one with its HP up — so both are already on the object, and neither is
+  // true on a first, legitimate call, where the caller has just watched this
+  // foe reach zero.
+  if (b.over || b.foe.hp > 0) return;
   snap(log, `${b.wild ? 'Wild ' : 'Foe '}${dispName(b.foe)} is down!`, 'faint', 'foe');
   if (b.mine.hp > 0) grantXP(log, b.mine, b.foe);
   // Beating something puts a little back. A measured run walked to the Wayhouse
