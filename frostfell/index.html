@@ -1006,7 +1006,7 @@ function hurt(g, u, amount, src) {
     fx.burst(u, C.blood, 10);
     fx.shake(Math.min(9, 2 + dmg * 0.5));
     if (dmg >= 6) G.hitStop = Math.min(0.12, 0.03 + dmg * 0.008);
-    sfx('hit');
+    sfx('hit', { mat: (u.art && u.art.skin) || 'smooth', heavy: dmg >= 6 });
   }
   const th = stat(u, 'thorns');
   if (th > 0 && src && src.alive && src !== u) hurt(g, src, th, null);
@@ -1023,8 +1023,8 @@ function die(g, u, killer) {
   if (!u.alive) return;
   u.alive = false;
   u.dead = 0.0001;
-  sfx('die');
   fx.demise(u);
+  sfx('die', u.deathKind);
   logLine(g, u.name + ' falls', u.side === 'p' ? '#ff9aa5' : '#ffe6a8');
   const b = stat(u, 'bounty');
   if (b > 0 && u.side === 'e' && g.run) { g.run.gold += b; fx.pop(u, '+' + b + ' scrip', C.gold); }
@@ -2113,8 +2113,8 @@ let MID = 640;
 const VW_MIN = 1180, VW_MAX = 1760;
 const SAFE = 34;
 const SLOT_W = 118, SLOT_H = 140, SLOT_GAP = 12;
-const LANE_Y = [212, 364];
-const HAND_Y = 620, CARD_W = 126, CARD_H = 168;
+const LANE_Y = [214, 366];
+const HAND_Y = 612, CARD_W = 126, CARD_H = 168;
 
 const pilePos = (which) => ({ x: SAFE + 54, y: which === 'draw' ? VH - 188 : VH - 74 });
 
@@ -2781,17 +2781,19 @@ function statPip(c, x, y, r, col, val, icon) {
   inked(c, col, 3, C.ink);
   txt(c, String(val), x, y + 1, r * 1.5, '#12203a', 'center', 'd', 0);
 }
+/* Statuses run left to right along the slab's own strip. Four fit; a fifth is
+   counted rather than drawn, because a unit you cannot see is worse than a
+   status you cannot read. */
 function drawStatus(c, u, x, y, sz) {
-  let i = 0;
-  for (const k of STATUS_ORDER) {
-    const n = u.st[k] || 0;
-    if (!n) continue;
-    const px = x + (i % 3) * (sz + 3), py = y + Math.floor(i / 3) * (sz + 3);
-    c.beginPath(); rr(c, px, py, sz, sz, 4);
+  const on = STATUS_ORDER.filter((k) => u.st[k]);
+  const room = 4;
+  on.slice(0, room).forEach((k, i) => {
+    const px = x + i * (sz + 3);
+    c.beginPath(); rr(c, px, y, sz, sz, 4);
     inked(c, STATUS[k].col, 2, C.ink);
-    txt(c, String(n), px + sz / 2, py + sz / 2 + 1, sz * 0.78, '#12203a', 'center', 'd', 0);
-    i++;
-  }
+    txt(c, String(u.st[k]), px + sz / 2, y + sz / 2 + 1, sz * 0.78, '#12203a', 'center', 'd', 0);
+  });
+  if (on.length > room) txt(c, '+' + (on.length - room), x + room * (sz + 3) + 6, y + sz / 2, 12, '#cfe4ff', 'left', 't');
 }
 
 /* A unit standing on the board: a small slab with the creature on it. */
@@ -2814,32 +2816,46 @@ function drawUnit(c, u, t) {
   }
   const tribeCol = u.side === 'p' ? (u.leader ? C.gold : '#7fb2e8') : '#d08a8a';
   panel(c, x, y, w, h, 14, u.side === 'p' ? '#1d2c49' : '#3a2436', tribeCol);
+
+  // a strip along the top that belongs to the statuses alone, so nothing ever
+  // gets written across a creature's face
+  const stripH = 22;
+  c.beginPath(); rr(c, x + 6, y + 5, w - 12, stripH, 7);
+  c.fillStyle = u.side === 'p' ? 'rgba(10,18,34,.55)' : 'rgba(32,10,20,.55)';
+  c.fill();
+
   // inner art window
-  const iw = w - 14, ih = h - 40;
+  const iw = w - 14, ih = h - 48 - stripH;
+  const iy = y + 5 + stripH + 3;
   c.save();
-  rr(c, x + 7, y + 7, iw, ih, 10);
+  rr(c, x + 7, iy, iw, ih, 10);
   c.clip();
-  const gg = c.createLinearGradient(0, y, 0, y + ih);
+  const gg = c.createLinearGradient(0, iy, 0, iy + ih);
   gg.addColorStop(0, u.side === 'p' ? '#31507f' : '#5c3450');
   gg.addColorStop(1, u.side === 'p' ? '#16233c' : '#2a1524');
-  c.fillStyle = gg; c.fillRect(x + 7, y + 7, iw, ih);
-  drawCreature(c, u.art, u.px, y + ih * 0.62, ih * 0.86, {
+  c.fillStyle = gg; c.fillRect(x + 7, iy, iw, ih);
+  c.save();
+  c.globalAlpha = 0.2; c.fillStyle = '#000';
+  c.beginPath(); c.ellipse(u.px, iy + ih * 0.9, iw * 0.34, ih * 0.09, 0, 0, TAU); c.fill();
+  c.restore();
+  drawCreature(c, u.art, u.px, iy + ih * 0.70, ih * 0.92, {
     t, ph: u.bob, sq: u.sq, blink: u.blink, flip: u.side === 'e',
   });
   c.restore();
 
   if (u.flash > 0) {
     c.save(); c.globalAlpha = u.flash * 0.7; c.globalCompositeOperation = 'lighter';
-    rr(c, x + 7, y + 7, iw, ih, 10); c.fillStyle = '#ff9aa5'; c.fill();
+    rr(c, x + 7, iy, iw, ih, 10); c.fillStyle = '#ff9aa5'; c.fill();
     c.restore();
   }
 
-  // name strip
-  txt(c, u.name.toUpperCase(), u.px, y + h - 24, 13, u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't');
+  // name strip — shrunk to fit rather than run off the slab
+  const nSize = fitText(c, u.name.toUpperCase(), w - 26, 12.5, 7.5, 't');
+  txt(c, u.name.toUpperCase(), u.px, y + h - 30, nSize, u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't');
 
   // stats
-  if (u.atk > 0 || u.leader) statPip(c, x + 14, y + h - 12, 13, '#ff8b7a', u.atk + stat(u, 'spice'));
-  statPip(c, x + w - 14, y + h - 12, 13, '#7de08f', u.hp);
+  if (u.atk > 0 || u.leader) statPip(c, x + 14, y + h - 13, 12, '#ff8b7a', u.atk + stat(u, 'spice'));
+  statPip(c, x + w - 14, y + h - 13, 12, '#7de08f', u.hp);
   // counter
   const ready = u.cnt <= 1;
   c.save();
@@ -2849,7 +2865,7 @@ function drawUnit(c, u, t) {
   c.restore();
   txt(c, String(u.cnt), x + w - 13, y + 14, 20, '#12203a', 'center', 'd', 0);
 
-  drawStatus(c, u, x + 5, y + 5, 20);
+  drawStatus(c, u, x + 9, y + 6, 20);
 
   // charms hang off the bottom corner and swing a little as the unit breathes
   const worn = (u.card && u.card.charms) || [];
@@ -2878,11 +2894,43 @@ function drawUnit(c, u, t) {
   c.restore();
 }
 
-/* A card in hand: the full face, with rules text. */
+/* Shrink a label until it fits the width it has been given. A name that runs
+   off its own banner is the fastest way to make a card look unfinished. */
+function fitText(c, str, maxW, start, min, face) {
+  let size = start;
+  const f = face === 'd' ? "'Frostcut','Trebuchet MS',sans-serif" : "'Frostwork','Trebuchet MS',sans-serif";
+  while (size > min) {
+    c.font = (face === 'd' ? '' : '600 ') + size + 'px ' + f;
+    if (c.measureText(str).width <= maxW) break;
+    size -= 0.5;
+  }
+  return size;
+}
+/* Same idea for a paragraph: drop a point of size until the whole thing fits
+   in the lines available. */
+function fitLines(c, str, maxW, maxLines, start, min) {
+  let size = start;
+  let lines = wrapText(c, str, size, maxW);
+  while (lines.length > maxLines && size > min) {
+    size -= 0.6;
+    lines = wrapText(c, str, size, maxW);
+  }
+  return { size, lines: lines.slice(0, maxLines) };
+}
+
+const RARE_NAME = { 1: 'common', 2: 'uncommon', 3: 'rare' };
+
+/* A card in hand: the full face. Three frames — warden, gear, charm — each
+   with its own shape, so a glance at the silhouette tells you what kind of
+   thing you are holding before you have read a word of it. */
 function drawCard(c, card, x, y, w, h, o) {
   o = o || {};
   const d = CARDS[card.def];
   const isUnit = card.type === 'unit';
+  const rare = card.rare || 1;
+  const edge = RARE_COL[rare] || '#8fa6c4';
+  const tribeCol = card.tribe ? TRIBES[card.tribe].col : '#b9c8dc';
+  const S = w / 126;                       // every measurement is card-relative
   c.save();
   if (o.alpha !== undefined) c.globalAlpha = o.alpha;
   c.translate(x + w / 2, y + h / 2);
@@ -2890,71 +2938,137 @@ function drawCard(c, card, x, y, w, h, o) {
   if (o.scale) c.scale(o.scale, o.scale);
   c.translate(-w / 2, -h / 2);
 
-  panel(c, 0, 0, w, h, 13, '#f3e9d6', RARE_COL[card.rare] || '#8fa6c4');
-  // header
-  c.beginPath(); rr(c, 5, 5, w - 10, 26, 8);
-  inked(c, card.tribe ? TRIBES[card.tribe].col : '#b9c8dc', 2, C.ink);
-  txt(c, card.name.toUpperCase(), w / 2, 18, Math.min(15, 190 / Math.max(7, card.name.length) * 1.05 + 6), '#22160c', 'center', 't', 'rgba(255,255,255,.55)');
+  // a rare card carries its own light
+  if (rare >= 3) {
+    c.save();
+    c.shadowColor = edge; c.shadowBlur = 18;
+    rr(c, 3, 3, w - 6, h - 6, 13 * S);
+    c.fillStyle = edge; c.globalAlpha = 0.5; c.fill();
+    c.restore();
+  }
+  panel(c, 0, 0, w, h, 13 * S, '#f3e9d6', edge);
+  // an inner keyline: two rules apart is what stops a flat fill reading as a box
+  rr(c, 4 * S, 4 * S, w - 8 * S, h - 8 * S, 10 * S);
+  c.lineWidth = 1.5; c.strokeStyle = 'rgba(60,48,32,.28)'; c.stroke();
 
-  // art
-  const aw = w - 14, ah = h * 0.40;
+  /* ---------------- the name banner, shaped by type ---------------- */
+  const bh = 25 * S;
+  c.beginPath();
+  if (isUnit) {
+    rr(c, 6 * S, 6 * S, w - 12 * S, bh, 8 * S);
+  } else if (card.type === 'charm') {
+    rr(c, 6 * S, 6 * S, w - 12 * S, bh, bh / 2);
+  } else {
+    // gear wears a cut-corner tag
+    const k = 7 * S;
+    c.moveTo(6 * S + k, 6 * S);
+    c.lineTo(w - 6 * S, 6 * S);
+    c.lineTo(w - 6 * S, 6 * S + bh);
+    c.lineTo(6 * S + k, 6 * S + bh);
+    c.lineTo(6 * S, 6 * S + bh / 2);
+    c.closePath();
+  }
+  inked(c, tribeCol, 2 * S, C.ink);
+  const nameSize = fitText(c, card.name.toUpperCase(), w - 26 * S, 15 * S, 8 * S, 't');
+  txt(c, card.name.toUpperCase(), w / 2, 6 * S + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.5)');
+
+  /* ---------------- the art window, filled rather than floated -------- */
+  const ax = 7 * S, ay = 34 * S;
+  const aw = w - 14 * S;
+  const ah = isUnit ? h * 0.38 : h * 0.36;
   c.save();
-  rr(c, 7, 34, aw, ah, 9); c.clip();
-  const gg = c.createLinearGradient(0, 34, 0, 34 + ah);
-  gg.addColorStop(0, '#cfe4f8'); gg.addColorStop(1, '#9fb8d8');
-  c.fillStyle = gg; c.fillRect(7, 34, aw, ah);
-  if (isUnit) drawCreature(c, card.art, w / 2, 34 + ah * 0.66, ah * 0.92, { t: o.t || 0, ph: card.uid, blink: card.uid });
-  else drawItemIcon(c, d.art, w / 2, 34 + ah * 0.5, ah * 0.62, o.t || 0);
+  rr(c, ax, ay, aw, ah, 9 * S);
+  c.clip();
+  const gg = c.createLinearGradient(0, ay, 0, ay + ah);
+  const wash = card.tribe ? TRIBES[card.tribe].col2 : '#d6e6f8';
+  gg.addColorStop(0, wash);
+  gg.addColorStop(1, '#8fabcc');
+  c.fillStyle = gg;
+  c.fillRect(ax, ay, aw, ah);
+  // ground shadow inside the frame, so the subject stands on something
+  c.save();
+  c.globalAlpha = 0.16; c.fillStyle = '#0d1830';
+  c.beginPath(); c.ellipse(w / 2, ay + ah * 0.9, aw * 0.36, ah * 0.1, 0, 0, TAU); c.fill();
   c.restore();
-  rr(c, 7, 34, aw, ah, 9); c.lineWidth = 2.5; c.strokeStyle = C.ink; c.stroke();
+  if (isUnit) drawCreature(c, card.art, w / 2, ay + ah * 0.70, ah * 0.94, { t: o.t || 0, ph: card.uid, blink: card.uid });
+  else if (card.type === 'charm') drawItemIcon(c, { kind: 'burst', col: edge }, w / 2, ay + ah * 0.5, ah * 0.8, o.t || 0);
+  else drawItemIcon(c, d.art, w / 2, ay + ah * 0.5, ah * 0.86, o.t || 0);
+  c.restore();
+  rr(c, ax, ay, aw, ah, 9 * S);
+  c.lineWidth = 2.5 * S; c.strokeStyle = C.ink; c.stroke();
+
+  /* ---------------- rarity, as pips on the frame ---------------- */
+  for (let i = 0; i < rare; i++) {
+    c.beginPath();
+    c.arc(w - 12 * S, ay + ah - 10 * S - i * 11 * S, 3.6 * S, 0, TAU);
+    inked(c, edge, 1.6 * S, C.ink);
+  }
 
   // what a hoarded card has put on since it was drawn
   if (card.kw && card.kw.hoard && card.held) {
-    c.beginPath(); c.arc(20, 48, 14, 0, TAU);
-    inked(c, '#c9a6ff', 2.5, C.ink);
-    txt(c, '+' + card.held, 20, 49, 16, '#241a3a', 'center', 'd', 0);
+    c.beginPath(); c.arc(16 * S, ay + 14 * S, 12 * S, 0, TAU);
+    inked(c, '#c9a6ff', 2.5 * S, C.ink);
+    txt(c, '+' + card.held, 16 * S, ay + 15 * S, 15 * S, '#241a3a', 'center', 'd', 0);
   }
 
-  // text box
-  const ty = 34 + ah + 6;
-  c.beginPath(); rr(c, 7, ty, aw, h - ty - (isUnit ? 30 : 9), 8);
-  inked(c, '#fffaf0', 2, 'rgba(30,40,60,.35)');
-  const lines = wrapText(c, card.text || '', 11.5, aw - 12);
-  lines.slice(0, 4).forEach((ln, i) => txt(c, ln, w / 2, ty + 12 + i * 13, 11.5, '#3a3020', 'center', 't', 0));
+  /* ---------------- rules text, sized to fit rather than clipped ------ */
+  const ty = ay + ah + 5 * S;
+  const th = h - ty - (isUnit ? 26 * S : 8 * S);
+  c.beginPath(); rr(c, 7 * S, ty, aw, th, 8 * S);
+  inked(c, '#fffaf0', 1.8 * S, 'rgba(30,40,60,.35)');
+  const maxLines = Math.max(2, Math.floor((th - 5 * S) / (11 * S)));
+  const fit = fitLines(c, card.text || '', aw - 12 * S, maxLines, 11.5 * S, 7.5 * S);
+  const lh = fit.size * 1.16;
+  const top = ty + th / 2 - (fit.lines.length - 1) * lh / 2;
+  fit.lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#3a3020', 'center', 't', 0));
 
+  /* ---------------- the stat plinth ---------------- */
   if (isUnit) {
-    statPip(c, 16, h - 15, 13, '#ff8b7a', card.injured ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
-    statPip(c, w / 2, h - 15, 13, '#ffd166', card.cnt);
-    const mh = card.injured ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
-    statPip(c, w - 16, h - 15, 13, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
+    c.beginPath(); rr(c, 8 * S, h - 26 * S, w - 16 * S, 20 * S, 7 * S);
+    c.fillStyle = 'rgba(40,32,20,.10)'; c.fill();
+    const inj = card.injured;
+    statPip(c, 16 * S, h - 15 * S, 12.5 * S, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
+    statPip(c, w / 2, h - 15 * S, 12.5 * S, '#ffd166', card.cnt);
+    const mh = inj ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
+    statPip(c, w - 16 * S, h - 15 * S, 12.5 * S, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
   }
+
+  /* ---------------- what it is wearing ---------------- */
   if (card.blessed || card.charms.indexOf('blessed') >= 0) {
     c.save();
-    c.translate(w - 20, h - 44);
+    c.translate(14 * S, h - 40 * S);
     c.beginPath();
     for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * TAU - Math.PI / 2, r = k % 2 ? 4 : 9;
+      const a = (k / 10) * TAU - Math.PI / 2, r = (k % 2 ? 4 : 9) * S;
       const px = Math.cos(a) * r, py = Math.sin(a) * r;
       k ? c.lineTo(px, py) : c.moveTo(px, py);
     }
     c.closePath();
-    inked(c, C.gold, 2, C.ink);
+    inked(c, C.gold, 2 * S, C.ink);
     c.restore();
   }
-  if (card.charms.length) {
-    for (let i = 0; i < card.charms.length; i++) {
-      const ch = chOf(card.charms[i]);
-      c.beginPath(); c.arc(w - 10, 42 + i * 17, 7, 0, TAU);
-      inked(c, ch ? ch.col : '#fff', 2, C.ink);
-    }
+  let worn = 0;
+  for (const id of card.charms) {
+    if (id === 'blessed') continue;
+    const ch = chOf(id);
+    if (!ch) continue;
+    c.beginPath(); c.arc(w - 11 * S, 40 * S + worn * 15 * S, 6 * S, 0, TAU);
+    inked(c, ch.col, 1.8 * S, C.ink);
+    worn++;
+  }
+  if (card.sigil) {
+    c.beginPath();
+    c.moveTo(w / 2 - 9 * S, 34 * S); c.lineTo(w / 2 + 9 * S, 34 * S); c.lineTo(w / 2, 44 * S);
+    c.closePath();
+    inked(c, '#c9a6ff', 1.8 * S, C.ink);
   }
   if (card.injured) {
     c.save();
     c.globalAlpha = 0.9;
-    c.beginPath(); rr(c, 7, 34, aw, ah, 9);
-    c.fillStyle = 'rgba(120,20,40,.22)'; c.fill();
+    c.beginPath(); rr(c, ax, ay, aw, ah, 9 * S);
+    c.fillStyle = 'rgba(120,20,40,.24)'; c.fill();
     c.restore();
-    txt(c, 'HURT', w / 2, 34 + ah - 12, 15, '#ff9aa5', 'center', 'd');
+    txt(c, 'HURT', w / 2, ay + ah - 11 * S, 14 * S, '#ff9aa5', 'center', 'd');
   }
   c.restore();
 }
@@ -3084,12 +3198,53 @@ function noise(dur, vol, hp) {
   s.connect(f); f.connect(g2); g2.connect(AUD.master);
   s.start();
 }
-function sfx(name) {
+/* What a thing is made of is what it sounds like — the same three surfaces the
+   renderer draws are the three the mixer hears. `arg` is the material for a
+   hit or a death, and how hard it landed. */
+function sfx(name, arg) {
   if (HEADLESS || !AUD.ctx) return;
+  const mat = typeof arg === 'string' ? arg : (arg && arg.mat) || 'smooth';
+  const heavy = arg && arg.heavy;
   switch (name) {
-    case 'hit':   noise(0.16, 0.22, 0); tone(180, 0.1, 'square', 0.1, 70); break;
+    case 'hit': {
+      // every hit gets a body: a low thump under whatever the surface does
+      tone(heavy ? 62 : 78, heavy ? 0.2 : 0.13, 'sine', heavy ? 0.3 : 0.2, 40);
+      if (mat === 'ice') {
+        noise(0.13, 0.2, 3200);
+        tone(1760, 0.12, 'triangle', 0.11, 620);
+        tone(2340, 0.09, 'sine', 0.07, 900, 0.02);
+      } else if (mat === 'metal') {
+        noise(0.1, 0.14, 1800);
+        tone(430, 0.34, 'square', 0.12, 300);
+        tone(651, 0.3, 'square', 0.08, 470, 0.01);   // a beating second partial
+      } else if (mat === 'fur') {
+        noise(0.17, 0.2, 0);
+        tone(150, 0.14, 'triangle', 0.13, 80);
+      } else {
+        noise(0.15, 0.2, 0);
+        tone(180, 0.1, 'square', 0.1, 70);
+      }
+      if (heavy) noise(0.26, 0.13, 0);
+      break;
+    }
     case 'swing': noise(0.09, 0.1, 2600); break;
-    case 'die':   tone(300, 0.34, 'sawtooth', 0.12, 60); noise(0.3, 0.14, 0); break;
+    case 'die': {
+      if (mat === 'shatter') {
+        [1568, 1245, 988, 740].forEach((f, i) => tone(f, 0.22, 'triangle', 0.1, f * 0.5, i * 0.045));
+        noise(0.34, 0.16, 2600);
+      } else if (mat === 'clank') {
+        tone(320, 0.5, 'square', 0.14, 90);
+        tone(214, 0.55, 'sawtooth', 0.1, 70, 0.03);
+        noise(0.4, 0.16, 900);
+      } else if (mat === 'puff') {
+        noise(0.42, 0.2, 0);
+        tone(220, 0.3, 'sine', 0.09, 90);
+      } else {
+        tone(300, 0.34, 'sawtooth', 0.12, 60);
+        noise(0.3, 0.14, 0);
+      }
+      break;
+    }
     case 'heal':  tone(520, 0.16, 'sine', 0.14, 880); tone(780, 0.2, 'sine', 0.09, 1180, 0.06); break;
     case 'place': tone(220, 0.1, 'triangle', 0.16, 330); noise(0.08, 0.1, 900); break;
     case 'item':  tone(680, 0.14, 'triangle', 0.13, 420); break;
@@ -3178,6 +3333,14 @@ function musicTick(g, dt) {
   // bass: root and fifth, on the pulse
   if (s === 0 || s === 6 || s === 10) mtNote(root / 2, M.beat * 0.9, 'triangle', 0.22);
   if (s === 8) mtNote(semitone(root / 2, 7), M.beat * 0.7, 'triangle', 0.18);
+
+  // a beast puts a drone under everything: two octaves down, a whole bar long,
+  // with a fifth leaning against it every other bar so it never sits still
+  if (mood === 'boss') {
+    if (s === 0) mtNote(root / 4, M.beat * 4.4, 'sawtooth', 0.14);
+    if (s === 0 && MUSIC.bars % 2 === 1) mtNote(semitone(root / 4, 7), M.beat * 4.2, 'sawtooth', 0.08);
+    if (s === 12) mtNote(semitone(root / 4, 1), M.beat * 1.6, 'sine', 0.09);
+  }
 
   // pad: one long chord tone per bar, an octave up, so the cold has a floor
   if (M.pad && s === 0) {
@@ -3383,25 +3546,34 @@ function drawCollection(c, t) {
     if (!have) c.globalAlpha = 0.22;
     const def = CARDS[it.id];
     if (it.kind === 'charm') {
+      // the same cut stone the charm card wears, so the two read as one thing
       const ch = CHARMS[it.id];
       c.save(); c.translate(x + tw / 2, y + th * 0.44);
+      const r = th * 0.2;
       c.beginPath();
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * TAU - Math.PI / 2, r = k % 2 ? 12 : 22;
-        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * TAU - Math.PI / 8;
+        const px = Math.cos(a) * r, py = Math.sin(a) * r * 1.12;
         k ? c.lineTo(px, py) : c.moveTo(px, py);
       }
       c.closePath();
       inked(c, ch.col, 2.5, C.ink);
+      c.save();
+      c.globalAlpha = 0.5; c.fillStyle = '#fff';
+      c.beginPath();
+      c.moveTo(-r * 0.45, -r * 0.5); c.lineTo(r * 0.1, -r * 0.72); c.lineTo(-r * 0.1, -r * 0.1);
+      c.closePath(); c.fill();
+      c.restore();
       c.restore();
     } else if (it.kind === 'item') {
-      drawItemIcon(c, def.art, x + tw / 2, y + th * 0.44, th * 0.48, t);
+      drawItemIcon(c, def.art, x + tw / 2, y + th * 0.44, th * 0.46, t);
     } else {
-      drawCreature(c, def.art, x + tw / 2, y + th * 0.62, th * 0.65, { t, ph: i * 0.7, blink: i });
+      drawCreature(c, def.art, x + tw / 2, y + th * 0.60, th * 0.58, { t, ph: i * 0.7, blink: i });
     }
     c.restore();
     if (!have) txt(c, '?', x + tw / 2, y + th * 0.46, 34, '#5a6a86', 'center', 'd');
-    txt(c, it.name.toUpperCase(), x + tw / 2, y + th + 10, 10.5, have ? '#c8dcf4' : '#5a6a86', 'center', 't');
+    const nm = fitText(c, it.name.toUpperCase(), tw + 2, 10.5, 6.5, 't');
+    txt(c, it.name.toUpperCase(), x + tw / 2, y + th + 10, nm, have ? '#c8dcf4' : '#5a6a86', 'center', 't');
     hit('collect', x, y, tw, th + 18, i);
   });
 
@@ -3430,6 +3602,62 @@ function drawHud(c, t) {
 function drawBattle(c, t) {
   const g = G, b = g.battle;
   drawBackdrop(c, g.run ? g.run.zone : 0, t);
+
+  /* The table. Two surfaces, told apart by more than colour: yours is planked
+     and lit from above, theirs is cracked ice under a darker sky. */
+  const step = SLOT_W + SLOT_GAP;
+  const boardT = LANE_Y[0] - SLOT_H / 2 - 22, boardB = LANE_Y[1] + SLOT_H / 2 + 22;
+  for (const side of ['p', 'e']) {
+    const x0 = side === 'p' ? MID - 46 - COLS * step - 12 : MID + 46;
+    const wid = COLS * step + 12;
+    c.save();
+    c.globalAlpha = 0.5;
+    rr(c, x0, boardT, wid, boardB - boardT, 20);
+    const gg2 = c.createLinearGradient(0, boardT, 0, boardB);
+    if (side === 'p') { gg2.addColorStop(0, '#22406b'); gg2.addColorStop(1, '#152742'); }
+    else { gg2.addColorStop(0, '#4a2a3c'); gg2.addColorStop(1, '#251522'); }
+    c.fillStyle = gg2; c.fill();
+    c.restore();
+    c.save();
+    c.globalAlpha = 0.45;
+    rr(c, x0, boardT, wid, boardB - boardT, 20);
+    c.lineWidth = 3; c.strokeStyle = side === 'p' ? '#5b87c4' : '#a05a72'; c.stroke();
+    c.clip();
+    if (side === 'p') {
+      // planks
+      c.globalAlpha = 0.18; c.strokeStyle = '#9fc0e4'; c.lineWidth = 2;
+      for (let i = 1; i < COLS; i++) {
+        const px = x0 + i * step;
+        c.beginPath(); c.moveTo(px, boardT); c.lineTo(px, boardB); c.stroke();
+      }
+    } else {
+      // cracks
+      c.globalAlpha = 0.22; c.strokeStyle = '#e8b0c0'; c.lineWidth = 2;
+      for (let i = 0; i < 5; i++) {
+        const px = x0 + 24 + i * (wid / 5);
+        c.beginPath();
+        c.moveTo(px, boardT);
+        c.lineTo(px + 22, boardT + (boardB - boardT) * 0.42);
+        c.lineTo(px - 10, boardB);
+        c.stroke();
+      }
+    }
+    c.restore();
+    // which end of the table this is
+    txt(c, side === 'p' ? 'YOUR SIDE' : 'THEIR SIDE', x0 + wid / 2, boardB + 13, 11,
+      side === 'p' ? '#7fa8d8' : '#c98a9e', 'center', 't');
+  }
+
+  // the lane divider, so two lanes read as two lanes at a glance
+  c.save();
+  c.globalAlpha = 0.28;
+  c.strokeStyle = '#cfe4ff'; c.lineWidth = 2; c.setLineDash([16, 12]);
+  const laneMid = (LANE_Y[0] + LANE_Y[1]) / 2;
+  c.beginPath();
+  c.moveTo(MID - 46 - COLS * step - 12, laneMid); c.lineTo(MID - 46, laneMid);
+  c.moveTo(MID + 46, laneMid); c.lineTo(MID + 46 + COLS * step + 12, laneMid);
+  c.stroke();
+  c.restore();
 
   // slots
   for (const side of ['p', 'e']) {
@@ -3515,9 +3743,10 @@ function drawBattle(c, t) {
   if (UI.order) {
     const ord = turnOrder(g);
     ord.forEach((u, i) => {
-      c.beginPath(); c.arc(u.px - SLOT_W / 2 + 12, u.py + SLOT_H / 2 - 44, 13, 0, TAU);
+      const bx2 = u.px - SLOT_W / 2 - 2, by2 = u.py - SLOT_H / 2 + 34;
+      c.beginPath(); c.arc(bx2, by2, 14, 0, TAU);
       inked(c, '#0f1a2e', 2.5, '#8fe3ff');
-      txt(c, String(i + 1), u.px - SLOT_W / 2 + 12, u.py + SLOT_H / 2 - 43, 16, '#8fe3ff', 'center', 'd', 0);
+      txt(c, String(i + 1), bx2, by2 + 1, 16, '#8fe3ff', 'center', 'd', 0);
     });
   }
 
@@ -3555,19 +3784,19 @@ function drawBattle(c, t) {
   drawHand(c, t);
   drawHud(c, t);
 
-  // what just happened, in six lines or fewer
+  // what just happened, on the band between the table and your hand
   if (b.log && b.log.length) {
-    for (let i = 0; i < b.log.length; i++) {
-      const L = b.log[i];
-      L.t += 1 / 60;
-      const age = clamp(1 - (L.t - 2.4) / 1.2, 0, 1);
-      if (age <= 0) continue;
+    const show = b.log.slice(-2);
+    for (const L of b.log) L.t += 1 / 60;
+    show.forEach((L, i) => {
+      const age = clamp(1 - (L.t - 2.2) / 1.2, 0, 1);
+      if (age <= 0) return;
       c.save();
-      c.globalAlpha = age * (0.45 + 0.55 * (i / Math.max(1, b.log.length - 1)));
-      txt(c, L.text, SAFE, 132 + i * 19, 13, L.col, 'left', 't');
+      c.globalAlpha = age * (i === show.length - 1 ? 1 : 0.5);
+      txt(c, L.text, MID, 472 + i * 19, 13.5, L.col, 'center', 't');
       c.restore();
-    }
-    while (b.log.length && b.log[0].t > 3.8) b.log.shift();
+    });
+    while (b.log.length && b.log[0].t > 3.6) b.log.shift();
   }
 
   // piles
@@ -3626,9 +3855,9 @@ function drawBattle(c, t) {
   hit('bell', bx - 60, by - 40, 120, 120);
 
   button(c, 'pass', VW - SAFE - 144, VH - 68, 144, 46, 'PASS', '#40527a', b.busy, true);
-  button(c, 'order', SAFE, 58, 104, 44, UI.order ? 'ORDER ✓' : 'ORDER', '#40527a', false, true);
-  button(c, 'help', SAFE + 112, 58, 44, 44, '?', '#40527a', false, true);
-  button(c, 'mute', SAFE + 164, 58, 44, 44, G.meta.mute ? '✕' : '♪', '#40527a', false, true);
+  button(c, 'order', SAFE, 78, 104, 44, UI.order ? 'ORDER ✓' : 'ORDER', '#40527a', false, true);
+  button(c, 'help', SAFE + 112, 78, 44, 44, '?', '#40527a', false, true);
+  button(c, 'mute', SAFE + 164, 78, 44, 44, G.meta.mute ? '✕' : '♪', '#40527a', false, true);
 
   if (b.banner && b.banner.t < 2.1) {
     const k = b.banner.t += 1 / 60;
@@ -3648,8 +3877,8 @@ function drawBattle(c, t) {
     c.restore();
   }
 
-  if (b.busy) txt(c, 'RESOLVING…', MID, 96, 16, '#9fc0e4', 'center', 't');
-  else txt(c, 'TURN ' + (b.turn + 1) + '  ·  one action', MID, 96, 16, '#9fc0e4', 'center', 't');
+  txt(c, b.busy ? 'RESOLVING…' : 'TURN ' + (b.turn + 1) + '  ·  one action',
+    SAFE + 232, 60, 13, b.busy ? '#ffd166' : '#9fc0e4', 'center', 't');
 
   // the wave clock, over the far side of the table
   if (b.waves && b.waves.length) {
@@ -3718,37 +3947,49 @@ function drawHand(c, t) {
    as a journey rather than as a progress bar. */
 function trailPoint(run, step, branch, branches) {
   const steps = run.trail.length;
-  const x0 = 140, x1 = VW - 150;
+  const x0 = SAFE + 110, x1 = VW - SAFE - 110;
   const x = x0 + (x1 - x0) * (steps === 1 ? 0.5 : step / (steps - 1));
-  const wander = Math.sin(step * 1.27 + run.seed % 7) * 46;
-  const spread = branches > 1 ? (branch - (branches - 1) / 2) * 116 : 0;
-  return { x, y: 306 + wander + spread };
+  const wander = Math.sin(step * 1.27 + run.seed % 7) * 52;
+  const spread = branches > 1 ? (branch - (branches - 1) / 2) * 150 : 0;
+  return { x, y: 330 + wander + spread };
 }
 
 function drawTrail(c, t) {
   const g = G, run = g.run;
   drawBackdrop(c, run.zone, t);
   const z = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
-  txt(c, z.name.toUpperCase(), MID, 84, 40, '#eaf6ff', 'center', 'd');
-  txt(c, 'pick your road', MID, 122, 16, '#a8c8ea', 'center', 't');
+  txt(c, z.name.toUpperCase(), MID, 78, 38, '#eaf6ff', 'center', 'd');
+  txt(c, 'pick your road', MID, 114, 15, '#a8c8ea', 'center', 't');
 
-  // the road itself: a broad packed-snow band under a dashed track
+  /* The road: a packed band with a dashed track down the middle, passing
+     through the step the caravan actually took wherever it has already been. */
   const pts = [];
   for (let s2 = 0; s2 < run.trail.length; s2++) {
     const nodes = run.trail[s2];
-    pts.push(trailPoint(run, s2, (nodes.length - 1) / 2, 1));
+    let branch = (nodes.length - 1) / 2, count = 1;
+    if (s2 < run.step && nodes.length > 1) {
+      const took = nodes.findIndex((n) => n.kind === run.path[s2]);
+      if (took >= 0) { branch = took; count = nodes.length; }
+    }
+    pts.push(trailPoint(run, s2, branch, count));
   }
-  c.save();
-  c.lineCap = 'round'; c.lineJoin = 'round';
-  c.strokeStyle = 'rgba(255,255,255,.13)'; c.lineWidth = 34;
-  c.beginPath();
-  pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
-  c.stroke();
-  c.strokeStyle = 'rgba(190,220,255,.5)'; c.lineWidth = 4; c.setLineDash([3, 17]);
-  c.beginPath();
-  pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
-  c.stroke();
-  c.restore();
+  const road = (width, style, dash) => {
+    c.save();
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.strokeStyle = style; c.lineWidth = width;
+    if (dash) c.setLineDash(dash);
+    c.beginPath();
+    pts.forEach((p, i) => {
+      if (!i) { c.moveTo(p.x, p.y); return; }
+      const q = pts[i - 1];
+      c.bezierCurveTo(q.x + 50, q.y, p.x - 50, p.y, p.x, p.y);
+    });
+    c.stroke();
+    c.restore();
+  };
+  road(40, 'rgba(12,24,44,.35)');
+  road(32, 'rgba(232,242,255,.22)');
+  road(4, 'rgba(190,220,255,.55)', [3, 16]);
 
   for (let s2 = 0; s2 < run.trail.length; s2++) {
     const nodes = run.trail[s2];
@@ -3757,86 +3998,167 @@ function drawTrail(c, t) {
     nodes.forEach((nd, i) => {
       const p = trailPoint(run, s2, i, nodes.length);
       const boss = nd.kind === 'boss';
-      const r = (nowStep ? 34 : 24) * (boss ? 1.3 : 1);
+      const r = (nowStep ? 36 : 26) * (boss ? 1.35 : 1);
       const chosen = doneStep && run.path[s2] === nd.kind;
-      // a short spur off the main road out to a branch
-      if (nodes.length > 1) {
+      if (nodes.length > 1 && !doneStep) {
         const mid = trailPoint(run, s2, (nodes.length - 1) / 2, 1);
         c.save();
-        c.globalAlpha = nowStep ? 0.5 : 0.22;
+        c.globalAlpha = nowStep ? 0.45 : 0.18;
         c.strokeStyle = '#cfe4ff'; c.lineWidth = 3; c.setLineDash([4, 8]);
         c.beginPath(); c.moveTo(mid.x, mid.y); c.lineTo(p.x, p.y); c.stroke();
         c.restore();
       }
       c.save();
-      c.globalAlpha = doneStep ? (chosen ? 0.7 : 0.16) : nowStep ? 1 : 0.5;
-      if (nowStep) { c.shadowColor = '#ffd166'; c.shadowBlur = 16 + Math.sin(t * 4 + i) * 6; }
+      c.globalAlpha = doneStep ? (chosen ? 0.65 : 0.14) : nowStep ? 1 : 0.62;
+      if (nowStep) { c.shadowColor = '#ffd166'; c.shadowBlur = 18 + Math.sin(t * 4 + i) * 7; }
+      // a stone marker rather than a bare circle
+      c.beginPath(); c.arc(p.x, p.y + 4, r, 0, TAU);
+      c.fillStyle = 'rgba(10,18,34,.55)'; c.fill();
       c.beginPath(); c.arc(p.x, p.y, r, 0, TAU);
       inked(c, nodeCol(nd.kind), 3.5, C.ink);
       c.restore();
-      drawNodeIcon(c, nd.kind, p.x, p.y, r * 0.9, t);
-      if (nowStep) {
-        txt(c, nodeName(nd.kind).toUpperCase(), p.x, p.y + r + 20, 14, '#eaf6ff', 'center', 't');
-        hit('node', p.x - r - 12, p.y - r - 12, r * 2 + 24, r * 2 + 24, i);
-      } else if (doneStep && chosen) {
-        // footprints where the caravan has already been
-        c.save(); c.globalAlpha = 0.4; c.fillStyle = '#0d1830';
-        for (let k = 0; k < 2; k++) {
-          c.beginPath();
-          c.ellipse(p.x - 8 + k * 16, p.y + r + 12 + k * 7, 4, 6, 0.3, 0, TAU);
-          c.fill();
-        }
-        c.restore();
-      }
+      c.save();
+      c.globalAlpha = doneStep ? (chosen ? 0.7 : 0.16) : 1;
+      drawNodeIcon(c, nd.kind, p.x, p.y, r * 0.86, t);
+      c.restore();
+      // every node says what it is, not only the one you are standing at
+      const lbl = nodeName(nd.kind).toUpperCase();
+      c.save();
+      c.globalAlpha = nowStep ? 1 : doneStep ? 0.3 : 0.6;
+      txt(c, lbl, p.x, p.y + r + 17, nowStep ? 14 : 12, nowStep ? '#eaf6ff' : '#a8c0dc', 'center', 't');
+      c.restore();
+      if (nowStep) hit('node', p.x - r - 14, p.y - r - 14, r * 2 + 28, r * 2 + 28, i);
     });
   }
 
-  // the caravan, standing at the step it has reached
-  const here = trailPoint(run, Math.max(0, run.step - 0.5), 0, 1);
+  // the caravan itself, standing on the road at the step it has reached
+  const from = pts[Math.max(0, run.step - 1)], to = pts[run.step] || pts[pts.length - 1];
+  const hereX = run.step === 0 ? to.x - 96 : lerp(from.x, to.x, 0.55);
+  const hereY = run.step === 0 ? to.y : lerp(from.y, to.y, 0.55);
   const bob = Math.sin(t * 2) * 3;
-  drawCreature(c, CARDS[run.leader.def].art, here.x - 54, here.y - 42 + bob, 62, { t, ph: 3 });
+  c.save();
+  c.globalAlpha = 0.3; c.fillStyle = '#0d1830';
+  c.beginPath(); c.ellipse(hereX, hereY + 22, 26, 7, 0, 0, TAU); c.fill();
+  c.restore();
+  drawCreature(c, CARDS[run.leader.def].art, hereX, hereY + 6 + bob, 66, { t, ph: 3 });
 
   drawHud(c, t);
-  if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 40, 15, '#9fb6d6', 'center', 't');
-  if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - 40, VH - 40, 14, '#ffd166', 'right', 't');
+  if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 44, 15, '#9fb6d6', 'center', 't');
+  if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - SAFE, VH - 44, 14, '#ffd166', 'right', 't');
 }
 const nodeCol = (k) => ({ fight: '#7fb2e8', elite: '#e08a8a', boss: '#ff9a3c', shop: '#ffd166', camp: '#8fe0a0', cache: '#c9a6ff', event: '#f0a6d0', rest: '#8fe0d0', shrine: '#ffe6a8' }[k] || '#fff');
 const nodeName = (k) => ({ fight: 'skirmish', elite: 'pack', boss: 'the beast', shop: 'trader', camp: 'camp', cache: 'cache', event: 'a stop', rest: 'rest stop', shrine: 'shrine' }[k] || k);
 function drawNodeIcon(c, kind, x, y, s, t) {
-  c.save(); c.translate(x, y); c.lineJoin = 'round';
-  c.strokeStyle = C.ink; c.lineWidth = Math.max(2.5, s * 0.14); c.lineCap = 'round';
-  if (kind === 'fight' || kind === 'elite' || kind === 'boss') {
-    c.beginPath(); c.moveTo(-s * 0.4, s * 0.4); c.lineTo(s * 0.35, -s * 0.35); c.stroke();
-    c.beginPath(); c.moveTo(s * 0.4, s * 0.4); c.lineTo(-s * 0.35, -s * 0.35); c.stroke();
-    if (kind !== 'fight') { c.beginPath(); c.arc(0, 0, s * 0.16, 0, TAU); c.fillStyle = C.ink; c.fill(); }
+  c.save(); c.translate(x, y); c.lineJoin = 'round'; c.lineCap = 'round';
+  c.strokeStyle = C.ink; c.lineWidth = Math.max(2.5, s * 0.13);
+  const ink = (fill) => inked(c, fill, Math.max(2, s * 0.12), C.ink);
+  if (kind === 'fight' || kind === 'elite') {
+    // crossed blades, with hilts, so it reads as swords and not as an X
+    for (const d of [-1, 1]) {
+      c.save();
+      c.rotate(d * 0.72);
+      c.beginPath();
+      c.moveTo(-s * 0.09, -s * 0.62); c.lineTo(s * 0.09, -s * 0.62);
+      c.lineTo(s * 0.07, s * 0.18); c.lineTo(-s * 0.07, s * 0.18);
+      c.closePath();
+      ink('#dfe9f8');
+      c.beginPath(); rr(c, -s * 0.2, s * 0.18, s * 0.4, s * 0.11, 3);
+      ink('#9a7a4a');
+      c.beginPath(); rr(c, -s * 0.07, s * 0.29, s * 0.14, s * 0.28, 3);
+      ink('#6a4a2a');
+      c.restore();
+    }
+    if (kind === 'elite') {
+      c.beginPath(); c.arc(0, -s * 0.06, s * 0.17, 0, TAU);
+      ink('#ff9aa5');
+    }
+  } else if (kind === 'boss') {
+    // a horned skull: the one node you should be able to spot from anywhere
+    c.beginPath(); c.ellipse(0, s * 0.06, s * 0.42, s * 0.4, 0, 0, TAU);
+    ink('#f0e6d8');
+    for (const d of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(d * s * 0.32, -s * 0.18);
+      c.quadraticCurveTo(d * s * 0.78, -s * 0.42, d * s * 0.6, -s * 0.78);
+      c.quadraticCurveTo(d * s * 0.5, -s * 0.4, d * s * 0.2, -s * 0.3);
+      c.closePath();
+      ink('#e2d6c0');
+    }
+    c.fillStyle = C.ink;
+    for (const d of [-1, 1]) {
+      c.beginPath(); c.ellipse(d * s * 0.15, s * 0.02, s * 0.1, s * 0.13, 0, 0, TAU); c.fill();
+    }
+    c.beginPath(); c.moveTo(0, s * 0.16); c.lineTo(s * 0.07, s * 0.3); c.lineTo(-s * 0.07, s * 0.3);
+    c.closePath(); c.fill();
   } else if (kind === 'shop') {
-    c.beginPath(); rr(c, -s * 0.42, -s * 0.2, s * 0.84, s * 0.55, 4); c.stroke();
-    c.beginPath(); c.moveTo(-s * 0.5, -s * 0.2); c.lineTo(0, -s * 0.55); c.lineTo(s * 0.5, -s * 0.2); c.stroke();
+    // a stall with a striped awning
+    c.beginPath(); rr(c, -s * 0.44, -s * 0.06, s * 0.88, s * 0.56, 4);
+    ink('#c9a06a');
+    c.save();
+    rr(c, -s * 0.54, -s * 0.34, s * 1.08, s * 0.3, 4);
+    c.clip();
+    c.fillStyle = '#f0f4fa'; c.fillRect(-s * 0.54, -s * 0.34, s * 1.08, s * 0.3);
+    c.fillStyle = '#e0605a';
+    for (let i = 0; i < 4; i++) c.fillRect(-s * 0.54 + i * s * 0.28, -s * 0.34, s * 0.14, s * 0.3);
+    c.restore();
+    c.beginPath(); rr(c, -s * 0.54, -s * 0.34, s * 1.08, s * 0.3, 4);
+    c.lineWidth = Math.max(2, s * 0.12); c.strokeStyle = C.ink; c.stroke();
   } else if (kind === 'camp') {
-    c.beginPath(); c.moveTo(-s * 0.42, s * 0.34); c.lineTo(s * 0.42, -s * 0.2); c.stroke();
-    c.beginPath(); c.moveTo(s * 0.42, s * 0.34); c.lineTo(-s * 0.42, -s * 0.2); c.stroke();
+    // a tent, with a fire beside it
     c.beginPath();
-    c.moveTo(0, -s * 0.5);
-    c.quadraticCurveTo(s * 0.3, -s * 0.1, 0, s * 0.16);
-    c.quadraticCurveTo(-s * 0.3, -s * 0.1, 0, -s * 0.5);
-    c.fillStyle = '#ff9a3c'; c.fill(); c.stroke();
+    c.moveTo(0, -s * 0.5); c.lineTo(s * 0.42, s * 0.34); c.lineTo(-s * 0.42, s * 0.34);
+    c.closePath();
+    ink('#7f9a6a');
+    c.beginPath();
+    c.moveTo(0, -s * 0.5); c.lineTo(s * 0.12, s * 0.34); c.lineTo(-s * 0.12, s * 0.34);
+    c.closePath();
+    ink('#3c4a38');
   } else if (kind === 'cache') {
-    c.beginPath(); rr(c, -s * 0.42, -s * 0.24, s * 0.84, s * 0.6, 5); c.stroke();
-    c.beginPath(); c.moveTo(0, -s * 0.24); c.lineTo(0, s * 0.36); c.stroke();
+    // a chest with a clasp
+    c.beginPath(); rr(c, -s * 0.44, -s * 0.06, s * 0.88, s * 0.44, 4);
+    ink('#a9834f');
+    c.beginPath(); c.arc(0, -s * 0.06, s * 0.44, Math.PI, 0);
+    c.closePath();
+    ink('#c9a06a');
+    c.beginPath(); rr(c, -s * 0.09, -s * 0.16, s * 0.18, s * 0.24, 3);
+    ink(C.gold);
   } else if (kind === 'rest') {
-    c.beginPath(); c.arc(0, s * 0.05, s * 0.36, Math.PI, 0); c.stroke();
-    c.beginPath(); c.moveTo(-s * 0.44, s * 0.05); c.lineTo(s * 0.44, s * 0.05); c.stroke();
-    c.beginPath(); c.moveTo(-s * 0.1, -s * 0.5); c.quadraticCurveTo(s * 0.12, -s * 0.3, -s * 0.1, -s * 0.12); c.stroke();
+    // a bedroll under a lantern
+    c.beginPath(); rr(c, -s * 0.46, s * 0.08, s * 0.92, s * 0.26, s * 0.13);
+    ink('#8fe0d0');
+    c.beginPath(); c.arc(-s * 0.26, s * 0.21, s * 0.13, 0, TAU);
+    ink('#e8f6ff');
+    c.beginPath(); c.moveTo(s * 0.3, s * 0.06); c.lineTo(s * 0.3, -s * 0.42); c.stroke();
+    c.beginPath(); c.arc(s * 0.3, -s * 0.5, s * 0.13, 0, TAU);
+    ink(C.gold);
   } else if (kind === 'shrine') {
+    // a standing stone with a lit hollow
     c.beginPath();
-    c.moveTo(0, -s * 0.5); c.lineTo(s * 0.34, -s * 0.1); c.lineTo(s * 0.2, s * 0.42);
-    c.lineTo(-s * 0.2, s * 0.42); c.lineTo(-s * 0.34, -s * 0.1);
-    c.closePath(); c.stroke();
-    c.beginPath(); c.arc(0, s * 0.02, s * 0.12, 0, TAU); c.fillStyle = C.ink; c.fill();
+    c.moveTo(0, -s * 0.56); c.lineTo(s * 0.38, -s * 0.1); c.lineTo(s * 0.24, s * 0.44);
+    c.lineTo(-s * 0.24, s * 0.44); c.lineTo(-s * 0.38, -s * 0.1);
+    c.closePath();
+    ink('#cfc4a8');
+    c.save();
+    c.globalAlpha = 0.6 + Math.sin(t * 2.6) * 0.2;
+    c.beginPath(); c.arc(0, s * 0.02, s * 0.16, 0, TAU);
+    c.fillStyle = C.gold; c.fill();
+    c.restore();
+    c.beginPath(); c.arc(0, s * 0.02, s * 0.16, 0, TAU);
+    c.lineWidth = Math.max(2, s * 0.1); c.strokeStyle = C.ink; c.stroke();
   } else if (kind === 'event') {
-    c.beginPath(); c.arc(0, -s * 0.1, s * 0.3, -2.4, 0.9); c.stroke();
-    c.beginPath(); c.moveTo(s * 0.06, s * 0.12); c.lineTo(s * 0.06, s * 0.24); c.stroke();
-    c.beginPath(); c.arc(s * 0.06, s * 0.44, s * 0.05, 0, TAU); c.fillStyle = C.ink; c.fill();
+    // a signpost pointing two ways
+    c.beginPath(); rr(c, -s * 0.07, -s * 0.5, s * 0.14, s * 0.98, 3);
+    ink('#a9834f');
+    c.beginPath();
+    c.moveTo(-s * 0.05, -s * 0.44); c.lineTo(s * 0.44, -s * 0.44);
+    c.lineTo(s * 0.56, -s * 0.3); c.lineTo(s * 0.44, -s * 0.16); c.lineTo(-s * 0.05, -s * 0.16);
+    c.closePath();
+    ink('#f0a6d0');
+    c.beginPath();
+    c.moveTo(s * 0.05, -s * 0.08); c.lineTo(-s * 0.44, -s * 0.08);
+    c.lineTo(-s * 0.56, s * 0.06); c.lineTo(-s * 0.44, s * 0.2); c.lineTo(s * 0.05, s * 0.2);
+    c.closePath();
+    ink('#d086b0');
   }
   c.restore();
 }
@@ -3883,27 +4205,49 @@ function drawChooser(c, t) {
   if (ch.cancel) button(c, 'chooseCancel', MID - 90, VH - 74, 180, 48, ch.cancel, '#40527a');
 }
 
+/* A charm is a pendant, not a card: a hanging loop, a cut stone, and the one
+   line of text that says what wearing it does. */
 function drawCharmCard(c, charmId, x, y, w, h, t) {
   const ch = chOf(charmId) || BELLS[charmId];
-  panel(c, x, y, w, h, 13, '#f3e9d6', ch.col);
-  c.beginPath(); rr(c, 5, 5, 0, 0, 0);
-  txt(c, ch.name.toUpperCase(), x + w / 2, y + 22, 15, '#22160c', 'center', 't', 'rgba(255,255,255,.5)');
+  const S = w / 126;
+  panel(c, x, y, w, h, 13 * S, '#f3e9d6', ch.col);
+  rr(c, x + 4 * S, y + 4 * S, w - 8 * S, h - 8 * S, 10 * S);
+  c.lineWidth = 1.5; c.strokeStyle = 'rgba(60,48,32,.28)'; c.stroke();
+
+  const nameSize = fitText(c, ch.name.toUpperCase(), w - 24 * S, 14 * S, 8 * S, 't');
+  c.beginPath(); rr(c, x + 6 * S, y + 6 * S, w - 12 * S, 24 * S, 12 * S);
+  inked(c, ch.col, 2 * S, C.ink);
+  txt(c, ch.name.toUpperCase(), x + w / 2, y + 18 * S, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.5)');
+
+  const cx = x + w / 2, cy = y + h * 0.46;
+  const r = Math.min(w, h) * 0.19;
+  // the loop it hangs from
+  c.beginPath(); c.arc(cx, cy - r * 1.35, r * 0.34, 0, TAU);
+  c.lineWidth = 3 * S; c.strokeStyle = '#c9b28a'; c.stroke();
+  // the stone: a cut octagon with a highlight, breathing gently
   c.save();
-  c.translate(x + w / 2, y + h * 0.45);
-  const pulse = 1 + Math.sin(t * 2.4) * 0.05;
+  c.translate(cx, cy);
+  const pulse = 1 + Math.sin(t * 2.2 + w) * 0.045;
   c.scale(pulse, pulse);
   c.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU - Math.PI / 2;
-    const r = i % 2 ? w * 0.14 : w * 0.26;
-    const px = Math.cos(a) * r, py = Math.sin(a) * r;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU - Math.PI / 8;
+    const px = Math.cos(a) * r, py = Math.sin(a) * r * 1.12;
     i ? c.lineTo(px, py) : c.moveTo(px, py);
   }
   c.closePath();
-  inked(c, ch.col, 3, C.ink);
+  inked(c, ch.col, 3 * S, C.ink);
+  c.save();
+  c.globalAlpha = 0.55; c.fillStyle = '#ffffff';
+  c.beginPath();
+  c.moveTo(-r * 0.45, -r * 0.5); c.lineTo(r * 0.1, -r * 0.72); c.lineTo(-r * 0.1, -r * 0.1);
+  c.closePath(); c.fill();
   c.restore();
-  const lines = wrapText(c, ch.text, 12, w - 18);
-  lines.forEach((ln, i) => txt(c, ln, x + w / 2, y + h - 40 + i * 14, 12, '#3a3020', 'center', 't', 0));
+  c.restore();
+
+  const fit = fitLines(c, ch.text, w - 18 * S, 3, 12 * S, 8 * S);
+  fit.lines.forEach((ln, i) =>
+    txt(c, ln, x + w / 2, y + h - 34 * S + i * fit.size * 1.2, fit.size, '#3a3020', 'center', 't', 0));
 }
 
 /* ------------------------------------------------------------- teaching -- */
@@ -3968,13 +4312,19 @@ function drawTutorial(c, t) {
   if (!tut || tut.over || G.screen !== 'battle') return;
   const h = TUTORIAL[tut.i];
   if (!h) return;
-  const w = 620, x = MID - w / 2, y = VH - 232;
+  // pinned to the top, in whatever gap the HUD and the wave clock leave it
+  const b = G.battle;
+  const right = (b.waves && b.waves.length) ? Math.min(MID + 176, VW - SAFE - 300) - 14 : VW - SAFE - 300;
+  const left = SAFE + 360;
+  const w = clamp(right - left, 320, 660);
+  const x = left + Math.max(0, (right - left - w) / 2), y = 50;
   const pop = clamp(tut.t * 4, 0, 1);
   c.save();
   c.globalAlpha = 0.35 + 0.65 * pop;
   panel(c, x, y, w, 62, 14, 'rgba(12,22,40,.92)', '#ffd166');
-  const lines = wrapText(c, h.text, 15, w - 130);
-  lines.slice(0, 2).forEach((ln, i) => txt(c, ln, x + 58, y + (lines.length > 1 ? 22 : 31) + i * 19, 15, '#eaf6ff', 'left', 't'));
+  const fit = fitLines(c, h.text, w - 150, 2, 14.5, 9.5);
+  fit.lines.forEach((ln, i) =>
+    txt(c, ln, x + 58, y + (fit.lines.length > 1 ? 22 : 31) + i * (fit.size + 4), fit.size, '#eaf6ff', 'left', 't'));
   // a little lantern to mark it as guidance rather than a warning
   c.save();
   c.translate(x + 32, y + 31 + Math.sin(t * 2.4) * 2);
@@ -4128,26 +4478,35 @@ function drawReward(c, t) {
   txt(c, r.cards.length ? 'take one card for the caravan' : 'take one charm', MID, 126, 16, '#a8c8ea', 'center', 't');
 
   const items = r.cards.map((id) => ({ card: mkCard(id), id }));
-  const cw = 150, chh = 200, gap = 22;
+  const cw = 176, chh = 246, gap = 30;
   const totalW = items.length * cw + (items.length - 1) * gap;
+  const y = 162;
+  if (items.length) {
+    c.save();
+    c.globalAlpha = 0.3;
+    panel(c, MID - totalW / 2 - 26, y - 24, totalW + 52, chh + 48, 18, '#101a2e', '#3a4b6b');
+    c.restore();
+  }
   items.forEach((it, i) => {
     const x = MID - totalW / 2 + i * (cw + gap);
-    const y = 170;
     const hovered = UI.hover && UI.hover.id === 'reward' && UI.hover.data === i;
-    drawCard(c, it.card, x, y - (hovered ? 10 : 0), cw, chh, { t, scale: hovered ? 1.05 : 1 });
-    hit('reward', x, y, cw, chh, i);
+    c.save();
+    if (r.taken) c.globalAlpha = 0.32;
+    drawCard(c, it.card, x, y - (hovered && !r.taken ? 12 : 0), cw, chh, { t, scale: hovered && !r.taken ? 1.05 : 1 });
+    c.restore();
+    if (!r.taken) hit('reward', x, y, cw, chh, i);
   });
   if (r.charms.length) {
-    txt(c, r.charmTaken ? 'charm taken' : 'and a charm', MID, 410, 16, '#a8c8ea', 'center', 't');
+    txt(c, r.charmTaken ? 'charm taken' : 'and a charm', MID, 434, 16, '#a8c8ea', 'center', 't');
     const w2 = 120, g3 = 18;
     const tw = r.charms.length * w2 + (r.charms.length - 1) * g3;
     r.charms.forEach((cid, i) => {
       const x = MID - tw / 2 + i * (w2 + g3);
       c.save();
       if (r.charmTaken) c.globalAlpha = 0.3;
-      drawCharmCard(c, cid, x, 436, w2, 156, t);
+      drawCharmCard(c, cid, x, 452, w2, 160, t);
       c.restore();
-      if (!r.charmTaken) hit('rewardCharm', x, 436, w2, 156, i);
+      if (!r.charmTaken) hit('rewardCharm', x, 452, w2, 160, i);
     });
   }
   if (r.bells && r.bells.length) {
@@ -4186,29 +4545,49 @@ function drawShop(c, t) {
   txt(c, 'THE TRADER', MID, 80, 38, '#eaf6ff', 'center', 'd');
   txt(c, 'she takes scrip, and she does not haggle', MID, 116, 15, '#a8c8ea', 'center', 't');
 
-  const cw = 132, chh = 178, gap = 18;
-  const total = s.cards.length * cw + (s.cards.length - 1) * gap;
+  // the stall: cards on the left of the counter, charms on the right
+  const cw = 152, chh = 212, gap = 18, cy = 152;
+  const priceY = cy + chh + 10;
+  const leftW = s.cards.length * cw + (s.cards.length - 1) * gap;
+  const rightW = s.charms.length * cw + (s.charms.length - 1) * gap;
+  const lx = MID - 40 - leftW, rx = MID + 40;
+  const stall = (x0, wid) => {
+    c.save();
+    c.globalAlpha = 0.32;
+    panel(c, x0 - 16, cy - 22, wid + 32, chh + 76, 16, '#101a2e', '#3a4b6b');
+    c.restore();
+  };
+  stall(lx, leftW); stall(rx, rightW);
+  txt(c, 'WARES', lx + leftW / 2, cy - 34, 13, '#9fb6d6', 'center', 't');
+  txt(c, 'CHARMS', rx + rightW / 2, cy - 34, 13, '#9fb6d6', 'center', 't');
+
+  const tag = (x, price, sold) => {
+    const afford = g.run.gold >= price;
+    panel(c, x - 34, priceY, 68, 32, 9, sold ? '#3b4560' : afford ? '#3f8f5f' : '#5a3a3a', C.ink);
+    txt(c, sold ? '—' : String(price), x, priceY + 16, 18, sold ? '#8fa2bd' : '#ffe6a8', 'center', 'd');
+  };
   s.cards.forEach((it, i) => {
-    const x = MID - total / 2 - 190 + i * (cw + gap);
-    const card = mkCard(it.id);
-    drawCard(c, card, x, 150, cw, chh, { t, alpha: it.sold ? 0.35 : 1 });
-    const afford = g.run.gold >= it.price;
-    panel(c, x + cw / 2 - 32, 336, 64, 30, 9, it.sold ? '#3b4560' : afford ? '#3f8f5f' : '#5a3a3a', C.ink);
-    txt(c, it.sold ? '—' : String(it.price), x + cw / 2, 351, 17, '#ffe6a8', 'center', 'd');
-    if (!it.sold) hit('buyCard', x, 150, cw, chh + 40, i);
+    const x = lx + i * (cw + gap);
+    drawCard(c, mkCard(it.id), x, cy, cw, chh, { t, alpha: it.sold ? 0.35 : 1 });
+    tag(x + cw / 2, it.price, it.sold);
+    if (!it.sold) hit('buyCard', x, cy, cw, chh + 44, i);
   });
   s.charms.forEach((it, i) => {
-    const x = MID + 240 + i * (cw + gap) - 60;
-    drawCharmCard(c, it.id, x, 150, cw, chh, t);
-    const afford = g.run.gold >= it.price;
-    panel(c, x + cw / 2 - 32, 336, 64, 30, 9, it.sold ? '#3b4560' : afford ? '#3f8f5f' : '#5a3a3a', C.ink);
-    txt(c, it.sold ? '—' : String(it.price), x + cw / 2, 351, 17, '#ffe6a8', 'center', 'd');
-    if (!it.sold) hit('buyCharm', x, 150, cw, chh + 40, i);
+    const x = rx + i * (cw + gap);
+    c.save();
+    if (it.sold) c.globalAlpha = 0.35;
+    drawCharmCard(c, it.id, x, cy, cw, chh, t);
+    c.restore();
+    tag(x + cw / 2, it.price, it.sold);
+    if (!it.sold) hit('buyCharm', x, cy, cw, chh + 44, i);
   });
-  button(c, 'buyHeal', MID - 480, 430, 250, 54, s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
-  button(c, 'buyScar', MID - 210, 430, 250, 54, s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
-  button(c, 'buySigil', MID + 60, 430, 250, 54, s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
-  txt(c, 'a sigil puts that warden on the board before the first bell', MID - 85, 500, 13, '#7e97b8', 'center', 't');
+
+  const by = 452;
+  button(c, 'buyHeal', MID - 480, by, 250, 54, s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
+  button(c, 'buyScar', MID - 210, by, 250, 54, s.scar.sold ? 'TENDED' : 'TEND A HURT — ' + s.scar.price, '#8f5f3f', s.scar.sold);
+  button(c, 'buySigil', MID + 60, by, 250, 54, s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
+  txt(c, 'a sigil puts that warden on the board before the first bell, every fight',
+    MID - 85, by + 72, 13, '#7e97b8', 'center', 't');
   button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
 }
 
@@ -4675,8 +5054,15 @@ function layoutUnits(dt) {
   }
 }
 
+let lastScreen = null;
 function update(dt) {
   musicTick(G, dt);
+  // Leaving a screen takes its debris with it: damage numbers from the last
+  // fight were still drifting over the reward cards.
+  if (G.screen !== lastScreen) {
+    if (lastScreen !== null) { parts.length = 0; floats.length = 0; flyers.length = 0; rings.length = 0; }
+    lastScreen = G.screen;
+  }
   // Hit-stop: a big hit freezes the whole board for a breath. Everything
   // still draws, the clock just refuses to move, which is what makes the hit
   // land in the hand rather than only on the health bar.

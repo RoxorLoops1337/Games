@@ -122,6 +122,21 @@ node tools/frostfont/build.mjs --check     # fail if the embed is stale
 node tools/frostfont/build.mjs --specimen  # write fonts.html
 ```
 
+## Looking at it
+
+```
+node tools/frostfell/shots.mjs                  # → /tmp/frostfell-shots
+node tools/frostfell/shots.mjs --size 2400x1080 # a taller phone
+```
+
+Opens the real file in the preinstalled Chromium, walks the route a player
+walks — boot, title, rulebook, collection, leader, trail, a whole first fight,
+reward, shop, camp, rest, shrine, event, a beast, the end — and leaves a PNG of
+each. The headless suites prove the game does not throw; only this tells you
+that two labels overlap or that a colour has vanished into the backdrop. It
+drives the game through `window.FF`, the same handle the suites use, so the
+walk cannot drift out of step with the rules.
+
 ## Tests
 
 ```
