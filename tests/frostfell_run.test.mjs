@@ -97,6 +97,12 @@ function playRun(tribe, seed) {
       if (!bought) FF.press('leaveShop');
     } else if (G.screen === 'camp') {
       FF.press('campRest');
+    } else if (G.screen === 'rest') {
+      FF.press('restPick', 0);
+      settleChoosers();
+    } else if (G.screen === 'shrine') {
+      FF.press('shrineGive');
+      settleChoosers();
     } else {
       break;
     }
