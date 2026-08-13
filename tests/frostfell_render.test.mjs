@@ -39,10 +39,16 @@ section('every screen draws');
   G.screen = 'reward';
   frame(2); drew('the reward screen draws, charms and all');
 
+  G.ui.reward = FF.rollReward(G, 'fight');
+  frame(2);
+  ok(FF.hits().some((h) => h.id === 'rewardCopy'), 'a pick can be spent copying instead');
+  ok(FF.hits().some((h) => h.id === 'rewardBurn'), 'or burning');
+
   G.ui.shop = FF.rollShop(G);
   G.screen = 'shop';
   frame(2); drew('the shop draws');
   ok(FF.hits().some((h) => h.id === 'buySigil'), 'and sells a sigil');
+  ok(FF.hits().some((h) => h.id === 'buyBurn'), 'and will burn a card for you');
 
   G.ui.event = { def: FF.EVENTS[0] };
   G.screen = 'event';

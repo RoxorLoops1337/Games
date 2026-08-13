@@ -1067,4 +1067,120 @@ section('faces');
   ok(Object.keys(seen).length >= 8, 'eyes vary in size and spacing across the cast');
 }
 
+
+/* ------------------------------------------------------------- a beast --- */
+section('a beast turns over');
+{
+  const run = withRun(FF, 'hearth', 2222);
+  run.zone = 0; run.step = 6;
+  FF.startBattle(G, 'boss');
+  const boss = FF.enemyUnits(G).find((u) => u.boss);
+  ok(!!boss, 'a boss fight has a beast in it');
+  const d = FF.FOES[boss.def];
+  ok(!!d.phase && !!d.phase.name && typeof d.phase.apply === 'function', 'and the beast has a second phase');
+  eq(!!boss.phased, false, 'which has not happened yet');
+
+  const before = JSON.stringify([boss.kw, boss.cntMax, boss.atk]);
+  FF.hurt(G, boss, Math.ceil(boss.maxHp / 2) + 1, null);
+  FF.drainAll();
+  ok(boss.alive, 'half its health does not finish it');
+  eq(boss.phased, true, 'but it does turn it over');
+  ok(JSON.stringify([boss.kw, boss.cntMax, boss.atk]) !== before || FF.enemyUnits(G).length > 1,
+    'and the fight is materially different afterwards');
+
+  // it only ever happens once
+  FF.hurt(G, boss, 1, null);
+  FF.drainAll();
+  eq(boss.phased, true, 'a beast turns over once, not on every hit');
+
+  // every beast in the game has one
+  let missing = [];
+  for (const f of Object.values(FF.FOES)) {
+    if (!f.boss) continue;
+    if (!f.phase || !f.phase.name || !f.phase.text) missing.push(f.id);
+  }
+  eq(missing.join(','), '', 'every beast has a second phase with something to say');
+}
+
+/* --------------------------------------------------------- steering it --- */
+section('a deck you can steer');
+{
+  const run = withRun(FF, 'frost', 12345);
+  const lean = FF.deckLeanings(run);
+  ok(lean.tribes.frost > 0, 'the leanings see what tribe the caravan is');
+
+  // an offer to a Frostborn deck leans Frostborn more often than not
+  let frostSeen = 0, total = 0;
+  for (let i = 0; i < 40; i++) {
+    FF.seed(9000 + i);
+    for (const id of FF.weightedCards(run, 3)) {
+      total++;
+      if (FF.CARDS[id].tribe === 'frost') frostSeen++;
+    }
+  }
+  ok(frostSeen / total > 0.2, 'and the offers answer it');
+
+  // a deck starved of bodies gets shown bodies
+  const thin = withRun(FF, 'frost', 777);
+  thin.deck = thin.deck.filter((c) => c.type === 'item');
+  let units = 0, n = 0;
+  for (let i = 0; i < 40; i++) {
+    FF.seed(4000 + i);
+    for (const id of FF.weightedCards(thin, 3)) { n++; if (FF.CARDS[id].type === 'unit') units++; }
+  }
+  ok(units / n > 0.5, 'a caravan short of wardens is offered wardens');
+}
+
+/* ----------------------------------------------------- copying, burning -- */
+section('copying and burning');
+{
+  const run = withRun(FF, 'hearth', 4);
+  G.ui.reward = FF.rollReward(G, 'fight');
+  G.screen = 'reward';
+  const n0 = run.deck.length;
+  const target = run.deck[0];
+  FF.press('rewardCopy');
+  ok(!!FF.UI.choose, 'copying asks which card');
+  FF.UI.choose.onPick(0);
+  FF.UI.choose = null;
+  eq(run.deck.length, n0 + 1, 'and a second one joins the caravan');
+  eq(run.deck[run.deck.length - 1].def, target.def, 'exactly the card that was pointed at');
+
+  // charms travel with the copy, because otherwise copying a built card is a trap
+  const run2 = withRun(FF, 'hearth', 5);
+  FF.attachCharm(run2.deck[0], FF.CHARMS.keencharm);
+  G.ui.reward = FF.rollReward(G, 'fight');
+  G.screen = 'reward';
+  FF.press('rewardCopy');
+  FF.UI.choose.onPick(0);
+  FF.UI.choose = null;
+  const copy = run2.deck[run2.deck.length - 1];
+  eq(copy.charms[0], 'keencharm', 'a copy comes with what the original was wearing');
+  eq(copy.atk, run2.deck[0].atk, 'and the stats that came with it');
+
+  // burning
+  const run3 = withRun(FF, 'frost', 6);
+  G.ui.reward = FF.rollReward(G, 'fight');
+  G.screen = 'reward';
+  const before = run3.deck.length;
+  const gone = run3.deck[0];
+  FF.press('rewardBurn');
+  FF.UI.choose.onPick(0);
+  FF.UI.choose = null;
+  eq(run3.deck.length, before - 1, 'burning takes a card out for good');
+  ok(run3.deck.indexOf(gone) < 0, 'that exact card');
+
+  // and the trader will do it for money
+  const run4 = withRun(FF, 'scrap', 7);
+  run4.gold = 300;
+  G.ui.shop = FF.rollShop(G);
+  ok(!!G.ui.shop.burn && G.ui.shop.burn.price > 0, 'the trader charges to burn one');
+  const n4 = run4.deck.length;
+  FF.press('buyBurn');
+  FF.UI.choose.onPick(0);
+  FF.UI.choose = null;
+  eq(run4.deck.length, n4 - 1, 'and does it');
+  eq(G.ui.shop.burn.sold, true, 'once');
+}
+
 done('frostfell');

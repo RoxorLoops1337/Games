@@ -164,6 +164,25 @@ that two labels overlap or that a colour has vanished into the backdrop. It
 drives the game through `window.FF`, the same handle the suites use, so the
 walk cannot drift out of step with the rules.
 
+## Building a deck
+
+Every reward can be spent three ways: take one of the three cards, **copy**
+something already in the caravan (charms and all), or **burn** something out of
+it. A smaller deck draws what it needs, so thinning is a real play rather than
+a punishment. The trader will burn a card for money too.
+
+The three cards on offer are not random: the pool reads what the deck already
+holds — its tribe, its keywords, the statuses its text keeps mentioning — and
+leans that way, while making sure a caravan short of bodies is shown bodies.
+Rarity still sets the floor; a lean never turns a rare into a common.
+
+## Beasts
+
+Each one turns over at half health, once, and fights differently afterwards.
+Mother Glacier calves and comes apart into shardlings, the White Stag stops
+circling and starts running, the Hollow King's crown cracks, the Weeper stops
+weeping, the Kettle Titan's boiler goes, and the Last Winter deepens.
+
 ## Endings
 
 A defeat draws what actually stopped you — the run remembers the blow that took
@@ -178,5 +197,12 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 ```
 
 The suites run headless against the real functions through `window.FF` — there
-is no second implementation of the rules to drift from. `frostfell_run` is also
-the balance instrument: it prints wins, zones reached and turns per fight.
+is no second implementation of the rules to drift from.
+
+`frostfell_run` is the balance instrument, and it plays every run twice: once
+with a careless pilot that deploys whatever is leftmost and throws gear at the
+nearest thing, and once with a careful one that repositions, pulls a wounded
+warden out of the front line, holds gear until it kills, and rings for a wave
+while its own board is set. **The gap between their win rates is the number
+that says whether playing well is worth anything** — currently 8% against 17%,
+so it is worth about nine points of win rate.
