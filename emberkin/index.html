@@ -9230,6 +9230,24 @@ function moveCardText(id) {
     bits.push(d ? `${m.type} · deal ${d.lo === d.hi ? d.lo : `${d.lo}-${d.hi}`}${d.hits > 1 ? ` ×${d.hits}` : ''}`
                 : `${m.type} · power ${m.pow}`);
   } else bits.push(`${m.type} · status`);
+  // Whether it lands at all, which no voice in the game had ever said.
+  //
+  // `resolve` rolls a hundred against it and prints a miss when the roll wins
+  // (the line itself is deliberately not quoted here — a literal in a comment
+  // is a second match for anything grepping the source, and a net that counted
+  // this one duly passed while the real roll was disabled). Swept over the
+  // whole table, 28 of the 56 moves can miss: Maelstrom,
+  // Thunderclap, Eclipse Fang and Landslide one time in FIVE, nine more at 15%,
+  // three at 10%, twelve at 5%. The four that whiff hardest are the four
+  // biggest hits in the game, so the card was offering its most expensive
+  // promise with the one number that qualifies it left out. Every fx rider was
+  // already spoken here; accuracy is not an fx, it sits beside `pow` and `pp`,
+  // and nothing read it.
+  //
+  // A move with `acc: 0` is skipped by the roll entirely — the ten pure status
+  // moves — and one at 100 cannot miss either, so both stay silent: an
+  // unqualified promise is the right reading when the promise is unqualified.
+  if (m.acc > 0 && m.acc < 100) bits.push(`${m.acc}% to land`);
   const fx = m.fx || {};
   if (fx.st) bits.push(`may ${fx.st[0]}`);
   if (fx.heal) bits.push('heals');

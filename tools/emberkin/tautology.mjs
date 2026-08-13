@@ -180,6 +180,13 @@ const MUTANTS = [
     find: '  defTypes.reduce((m, t) => m * ((CHART[moveType] || {})[t] ?? 1), 1);',
     to: '  ((CHART[moveType] || {})[defTypes[0]] ?? 1);' },
 
+  { name: 'move: the card stops saying whether it lands', aims: ['a move card says whether it lands'],
+    find: '  if (m.acc > 0 && m.acc < 100) bits.push(`${m.acc}% to land`);',
+    to: '  if (m.acc > 0 && m.acc < 60) bits.push(`${m.acc}% to land`);' },
+  { name: 'move: nothing can miss any more', aims: ['a move card says whether it lands'],
+    find: "  if (m.acc && rnd(100) >= m.acc) { snap(log, `${who}'s attack missed!`, 'miss', atkSide); return; }",
+    to: "  if (false) { snap(log, `${who}'s attack missed!`, 'miss', atkSide); return; }" },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

@@ -5050,6 +5050,109 @@ section('every multiplier the game can produce has a word for it');
   }
 }
 
+// Does every move do what its card says — for every move in the game, not the
+// handful that turn up in a driven fight?
+//
+// Three readings, over all 56: what the TABLE declares, what `moveCardText`
+// tells the player, and what the resolver does when the move is actually used.
+// The resolver and the table agree everywhere — every fx key in the table is
+// applied, and every one of them was already spoken.
+//
+// What was not spoken is not an fx at all. `acc` sits beside `pow` and `pp`,
+// `resolve` rolls it, and 28 of the 56 moves can miss:
+//
+//   1 in 5   Maelstrom, Thunderclap, Eclipse Fang, Landslide
+//   15%      Magma Charge, Pyre Burst, Breaker, Thorn Maul, Bloom Burst,
+//            Volt Crash, Ruin Maw, Quake Step, Starfall
+//   10%      Root Snare, Boulder Drop, Lull
+//   5%       twelve more
+//
+// The four that whiff hardest are the four biggest hits in the game.
+section('a move card says whether it lands');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  const ids = Object.keys(g.MOVES);
+  eq(ids.length, 56, 'every move in the table is in scope');
+
+  // THE WHOLE DOMAIN. Three states, and each one has a rule.
+  let missable = 0, certain = 0, statusy = 0;
+  for (const id of ids) {
+    const m = g.MOVES[id];
+    const said = g.moveCardText(id);
+    if (m.acc > 0 && m.acc < 100) {
+      missable++;
+      ok(said.includes(`${m.acc}% to land`), `${m.name} can miss (${m.acc}) and says so`);
+    } else {
+      if (m.acc === 0) statusy++; else certain++;
+      ok(!/% to land/.test(said), `${m.name} cannot miss, so it makes an unqualified promise`);
+    }
+  }
+  eq(missable, 28, 'twenty-eight moves can miss');
+  eq(statusy, 10, 'ten are skipped by the roll entirely (acc 0)');
+  eq(missable + certain + statusy, 56, 'and the three states account for every move');
+
+  // The number shown is the number rolled: `resolve` compares against `m.acc`.
+  // COUNTED, not merely found: the first writing of this check matched a
+  // literal inside a doc comment two hundred lines away, so disabling the real
+  // roll left it green. One occurrence, and it is the code.
+  eq((SRC.match(/if \(m\.acc && rnd\(100\) >= m\.acc\)/g) || []).length, 1,
+    'the resolver rolls the accuracy the card prints, in exactly one place');
+  ok(SRC.includes('if (m.acc > 0 && m.acc < 100) bits.push(`${m.acc}% to land`);'),
+    'and the card prints the accuracy the resolver rolls — one field, both voices');
+
+  // It qualifies the damage, so it is said before the riders qualify anything else.
+  {
+    const said = g.moveCardText('rootsnare');
+    ok(said.indexOf('% to land') < said.indexOf('may snare'), 'the chance of landing comes before what landing does');
+    ok(said.indexOf('status') < said.indexOf('% to land'), '…and after what the move is');
+  }
+
+  // Every fx key the table uses is spoken by the card. Computed over the table
+  // rather than listed from memory, so a new rider cannot arrive unspoken.
+  {
+    const keys = new Set();
+    for (const id of ids) for (const k of Object.keys(g.MOVES[id].fx || {})) keys.add(k);
+    eq([...keys].sort().join(','), 'drain,foe,heal,pri,recoil,self,st', 'these are the riders in the table');
+    for (const k of keys) ok(SRC.includes(`if (fx.${k})`), `the card knows how to say fx.${k}`);
+  }
+
+  // …and the resolver applies what the table declares, driven for real. A
+  // rider that is a CHANCE is forced by taking the certain ones — the four
+  // categories below are the ones that always fire when the move connects.
+  const drive = (id, setup) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('cindercub', 30)];
+    g.startBattle({ foe: g.mkMon('pebblet', 30), wild: true });
+    const b = g.B();
+    b.mine.hp = Math.floor(b.mine.max * 0.5);
+    if (setup) setup(b);
+    const before = { mine: b.mine.hp, foe: b.foe.hp, ms: { ...b.mine.stages }, fs: { ...b.foe.stages } };
+    // `useMove(log, atkSide, moveId)` takes a SIDE and reads the pair off the
+    // battle — passing the two creatures throws on every move in the table.
+    g.useMove([], 'mine', id);
+    return { b, before, after: { mine: b.mine.hp, foe: b.foe.hp, ms: { ...b.mine.stages }, fs: { ...b.foe.stages } } };
+  };
+  {
+    const r = drive('magmacharge');
+    if (r.after.foe < r.before.foe) ok(r.after.mine < r.before.mine, 'recoil costs the attacker HP, as the card says');
+  }
+  {
+    const r = drive('mend');
+    ok(r.after.mine > r.before.mine, 'a heal heals, as the card says');
+  }
+  {
+    const r = drive('shellup');
+    eq(r.after.ms.def, r.before.ms.def + 2, 'a self buff moves the stage the table names');
+  }
+  {
+    const r = drive('dreadgaze');
+    eq(r.after.fs.atk, r.before.fs.atk - 2, 'and a foe debuff moves theirs');
+  }
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always
