@@ -187,6 +187,16 @@ const MUTANTS = [
     find: "  if (m.acc && rnd(100) >= m.acc) { snap(log, `${who}'s attack missed!`, 'miss', atkSide); return; }",
     to: "  if (false) { snap(log, `${who}'s attack missed!`, 'miss', atkSide); return; }" },
 
+  { name: 'bag: a fight stops dimming anything again', aims: ['a bag row in a fight refuses before you press it'],
+    find: '  if (inFight) return !battleItemUse(k, null).ok;',
+    to: '  if (inFight) return false;' },
+  { name: 'bag: an orb is offered against a trainer', aims: ['a bag row in a fight refuses before you press it'],
+    find: "    return b && b.wild ? { ok: true, why: '' }",
+    to: "    return true ? { ok: true, why: '' }" },
+  { name: 'bag: the shelf note speaks the footpath mid-fight', aims: ['a bag row in a fight refuses before you press it'],
+    find: '  const why = (k) => (inFight ? battleItemUse(k, null) : fieldItemUse(k)).why;',
+    to: '  const why = (k) => fieldItemUse(k).why;' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
