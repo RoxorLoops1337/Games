@@ -4293,3 +4293,66 @@ desktop one. That is the correct answer and not an obvious one.
     target picker or an ownership guard can reach a single one of those rows.
     Every mutant anchor re-audited — 105 anchors, none orphaned, none
     ambiguous. Five clean runs. Render suite 6839 -> 6923 checks.
+
+124. **The rule said "it must not take the game down", and three readers took
+    the game down** (pass 213).
+    The refusals came back clean, which is worth stating plainly. Eight early
+    paths — a card you cannot afford, a second swing in one turn, a switch to an
+    empty slot, to the kin already out, to one that is down, an item you have
+    none of, a Salve at full HP, running from a trainer — each taken TWICE with
+    the whole battle diffed either side. Not one moved a counter, spent a card,
+    or cost a turn. `playCard`'s manual undo (splice the card back in at its own
+    index, refund the energy) puts back exactly what it took, both halves.
+
+    The `forEach` angle was clean too: one `return` inside one callback, in
+    `foeBench`, and it is a deliberate skip.
+
+    The guards were not symmetrical. `cardCost` states the rule where it first
+    mattered — *"a save can hold a card whose definition has gone, an id renamed
+    between builds; it must not take the game down, it just costs nothing"* —
+    and it was honoured in four places and missing in three:
+
+        cardCost   0        cardValue  THREW reading 'v'
+        cardName   "?"      cardText   THREW reading 'combo'
+        cardRarity common   growCap    THREW reading 'v'
+
+    …and those three are what DRAWS the card sitting in your hand. One `cardDef`
+    now, so the rule has one expression, and the four hand-written guards route
+    through it rather than each keeping its own copy.
+
+    **The paired control.** Every card that EXISTS was read through the old file
+    and the new one — cost, name, value, text, growCap, at two growth levels —
+    **76 readings, 0 different**. So the change touches only the case that used
+    to throw. The suite carries the same control forward: 38 real cards must
+    read as themselves, which is what stops a "fix" that made everything the
+    stand-in. That mutant kills 351 checks; without the control it would kill
+    almost none.
+
+    **Two of my own errors, caught rather than assumed.** The "card you cannot
+    afford" scenario picked the first deck card in hand, which was `quickstep`
+    at cost 0 — still affordable at zero energy, so it produced no refusal at
+    all and the check was quietly measuring a card being PLAYED. It now names a
+    card the energy cannot cover. And the source pin asserted `cardDef(` appears
+    7 times; counted, it is 6 — growCap twice, then cardValue, cardText,
+    cardName, cardRarity. Second pass running that a re-grep expectation was
+    wrong rather than the code.
+
+    **Recorded, not fixed** (with the function): `movesAt` and `moveCost` still
+    throw on a species or move id that is not there. Those take authored ids off
+    DEX and MOVES rather than player data, and no comment claims otherwise —
+    unlike the card rule, which argues for itself. `mkMon` already returns null
+    for a bad species rather than building something broken, and that is
+    asserted so the day this changes, the section says where to look.
+
+    Four planted faults, all four bitten by hand: the guard removed (9
+    failures), every card reading as the stand-in (351), the refused swing
+    keeping the card it took (2), keeping the energy it charged (2) — plus a
+    NO-OP comment edit that correctly passed. The sweep then reported
+    9 / 351 / 2 / 2, the same four numbers.
+
+    Four sweep mutants aimed at the new section, which reports **163 of 226
+    killed — 72%**, by a wide margin the densest the sweep has produced. Dense
+    because nearly every check in it is driven behaviour over a small surface
+    and one mutant (the stand-in) is visible to all 38 real-card readings at
+    once. Every mutant anchor re-audited — 109 anchors, none orphaned, none
+    ambiguous. Five clean runs. Render suite 6923 -> 7149 checks.

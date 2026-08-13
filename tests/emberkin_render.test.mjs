@@ -7223,6 +7223,161 @@ section('the fight and the path answer the same question the same way');
     'and a heal looks for a kin that is hurt rather than one that is gone');
 }
 
+// When a path bails out early, what did it already do?
+//
+// The refusals came back clean. Eight of them — a card you cannot afford, a
+// second swing, a switch to an empty slot, to the kin already out, to one that
+// is down, an item you have none of, a Salve at full HP, running from a trainer
+// — each taken TWICE with the whole battle diffed either side, and not one of
+// them moved a counter, spent a card, or cost a turn. `playCard`'s manual undo
+// (splice the card back, refund the energy) puts back exactly what it took.
+//
+// The guards were not symmetrical. `cardCost` states the rule where it first
+// mattered — "a save can hold a card whose definition has gone, an id renamed
+// between builds; it must not take the game down, it just costs nothing" — and
+// it was honoured in four places and missing in three. Driven with that exact
+// input:
+//
+//     cardCost   0        cardValue  THREW reading 'v'
+//     cardName   "?"      cardText   THREW reading 'combo'
+//     cardRarity common   growCap    THREW reading 'v'
+//
+// …and those three are what DRAWS the card sitting in your hand. One `cardDef`
+// now, so the rule has one expression. Every existing card reads identically
+// before and after — 76 readings, 0 different — so this only changes the case
+// that used to throw.
+section('a path that bails out leaves nothing behind it');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { CARD_IDS, CARDS } = g;
+
+  const fight = (wild = true) => {
+    g.G.party = [g.mkMon('cindercub', 30), g.mkMon('dewdrip', 30)];
+    g.G.might = 0;
+    g.G.battle = null;
+    g.startBattle({
+      foe: g.mkMon('mothrix', 24), wild,
+      team: wild ? null : [['mothrix', 24]],
+      npc: wild ? null : { name: 'T', trainer: { team: [['mothrix', 24]], prize: 10 } },
+    });
+    const b = g.B();
+    for (const m of g.G.party) m.hp = m.max;
+    return b;
+  };
+  // Everything a refusal could plausibly disturb.
+  const state = (b) => JSON.stringify({
+    hand: b.hand.map((c) => c.id), draw: b.draw.length, disc: b.disc.length, exh: b.exh.length,
+    energy: b.energy, played: b.playedTurn, swung: b.swungTurn, shield: b.shield,
+    turn: b.turn, escapes: b.escapes, over: b.over, mineHp: b.mine.hp, foeHp: b.foe.hp,
+    mods: b.mods, bag: g.G.bag, party: g.G.party.map((m) => `${m.species}:${m.hp}`),
+  });
+
+  const REFUSALS = [
+    // A card that costs NOTHING is still affordable at zero energy, so picking
+    // the first deck card in hand produced no refusal at all — it just played.
+    // The scenario has to name a card the energy cannot cover.
+    ['a card you cannot afford', true,
+      (bt) => { bt.energy = 0; }, (bt) => g.playCard(bt.hand.findIndex((c) => c.src !== 'kin' && g.cardCost(c) > 0))],
+    ['a second swing in one turn', true, (b) => { b.energy = 99; b.swungTurn = 1; }, (b) => g.playCard(b.hand.findIndex((c) => c.src === 'kin'))],
+    ['a switch to an empty slot', true, () => {}, () => g.doAction({ kind: 'switch', idx: 5 })],
+    ['a switch to the kin already out', true, () => {}, () => g.doAction({ kind: 'switch', idx: 0 })],
+    ['a switch to a kin that is down', true, () => { g.G.party[1].hp = 0; }, () => g.doAction({ kind: 'switch', idx: 1 })],
+    ['an item you have none of', true, () => { g.G.bag = {}; }, () => g.doAction({ kind: 'item', id: 'salve' })],
+    ['a Salve at full HP', true, () => { g.G.bag = { salve: 2 }; }, () => g.doAction({ kind: 'item', id: 'salve' })],
+    ['running from a trainer', false, () => {}, () => g.doAction({ kind: 'run' })],
+  ];
+  for (const [label, wild, setup, act] of REFUSALS) {
+    const b = fight(wild);
+    setup(b);
+    const before = state(b);
+    act(b);
+    eq(state(b), before, `${label}: refused, and nothing moved`);
+    act(b);
+    eq(state(b), before, `${label}: refused twice, and still nothing moved`);
+  }
+
+  // …and the inverse control: the SAME actions, when they are allowed, DO move
+  // something. Without this, a game that refused everything would pass above.
+  {
+    const b = fight();
+    b.energy = 99;
+    const before = state(b);
+    const i = b.hand.findIndex((c) => c.src !== 'kin');
+    ok(i >= 0, 'there is a card in hand to play');
+    g.playCard(i);
+    ok(state(b) !== before, 'a card that CAN be played changes the battle');
+  }
+  {
+    const b = fight();
+    g.G.bag = { salve: 2 };
+    b.mine.hp = 1;
+    const hp = b.mine.hp, had = g.G.bag.salve;
+    g.doAction({ kind: 'item', id: 'salve' });
+    ok(b.mine.hp > hp, 'a Salve that CAN be used heals');
+    eq(g.G.bag.salve, had - 1, '…and is spent');
+  }
+
+  // ---- the guard that was written once and honoured four times -----------
+  {
+    const ghost = { src: 'deck', u: 999, id: 'a_card_this_build_never_had', bg: 0 };
+    const inst = { id: ghost.id, plus: 0, bg: 0 };
+    fight();
+    const safely = (label, fn) => {
+      let threw = '';
+      let out;
+      try { out = fn(); } catch (e) { threw = e.message; }
+      eq(threw, '', `${label} does not take the game down on a card that is not in this build`);
+      return out;
+    };
+    eq(safely('cardCost', () => g.cardCost(ghost)), 0, '…it costs nothing');
+    eq(safely('cardName', () => g.cardName(ghost)), '?', '…it is named "?"');
+    eq(safely('cardValue', () => g.cardValue(inst)), 0, '…it is worth nothing');
+    eq(safely('growCap', () => g.growCap(ghost.id)), 0, '…and it cannot grow');
+    const t = safely('cardText', () => g.cardText(inst));
+    ok(typeof t === 'string' && t.length > 0, `…and it says something ("${t}")`);
+  }
+  // The control that makes that mean anything: a card that DOES exist must read
+  // as itself, not as the stand-in.
+  {
+    fight();
+    let real = 0;
+    for (const id of CARD_IDS) {
+      const inst = { id, plus: 0, bg: 0 };
+      const card = { src: 'deck', u: 1, id, bg: 0 };
+      eq(g.cardName(card), CARDS[id].name, `${id} still reads its own name`);
+      eq(g.cardCost(card), CARDS[id].cost, '…its own cost');
+      eq(g.cardValue(inst), CARDS[id].v, '…its own value');
+      ok(!g.cardText(inst).includes('not in this build'), '…and its own text');
+      ok(g.growCap(id) > 0, '…with a ceiling above zero');
+      real++;
+    }
+    eq(real, CARD_IDS.length, `all ${real} real cards read as themselves`);
+  }
+
+  // ---- recorded, not fixed: the same input against the other tables ------
+  // A species id that is not there is already guarded where it matters —
+  // mkMon returns null rather than building a broken creature. movesAt and
+  // moveCost still throw on one; those take authored ids off DEX and MOVES,
+  // never player data, and no comment claims otherwise. Stated so the day that
+  // changes, this says where to look.
+  eq(g.mkMon('not_a_kin', 5), null, 'a species that is not there builds nothing rather than something broken');
+  {
+    let threw = '';
+    try { g.movesAt('not_a_kin', 5); } catch (e) { threw = 'threw'; }
+    eq(threw, 'threw', 'while movesAt still throws on one — recorded, and authored data only');
+  }
+
+  // Pinned by shape.
+  ok(SRC.includes('const cardDef = (id) => CARDS[id] || CARD_GONE;'),
+    'the missing-card rule has one expression');
+  eq((SRC.match(/cardDef\(/g) || []).length, 6,
+    'and every card reader goes through it — growCap twice, cardValue, cardText, cardName, cardRarity');
+  ok(!SRC.includes("(CARDS[card.id] || { name: '?' }).name"),
+    'with no hand-written copy of it left');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

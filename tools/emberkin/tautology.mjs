@@ -298,6 +298,19 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  { name: 'early: the missing-card guard goes away again', aims: ['a path that bails out leaves nothing behind it'],
+    find: 'const cardDef = (id) => CARDS[id] || CARD_GONE;',
+    to: 'const cardDef = (id) => CARDS[id];' },
+  { name: 'early: every card reads as the stand-in', aims: ['a path that bails out leaves nothing behind it'],
+    find: 'const cardDef = (id) => CARDS[id] || CARD_GONE;\n',
+    to: 'const cardDef = (id) => CARD_GONE;\n' },
+  { name: 'early: the refused swing keeps the card it took', aims: ['a path that bails out leaves nothing behind it'],
+    find: '    if (b.swungTurn) { b.hand.splice(i, 0, card); b.energy += cost; snap(log,',
+    to: '    if (b.swungTurn) { b.energy += cost; snap(log,' },
+  { name: 'early: the refused swing keeps the energy it charged', aims: ['a path that bails out leaves nothing behind it'],
+    find: '    if (b.swungTurn) { b.hand.splice(i, 0, card); b.energy += cost; snap(log, `${dispName(b.mine)}',
+    to: '    if (b.swungTurn) { b.hand.splice(i, 0, card); snap(log, `${dispName(b.mine)}' },
+
   { name: 'rule: the path heals a kin that is out cold again', aims: ['the fight and the path answer the same question the same way'],
     find: "  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp > 0 && m.hp < m.max)) || G.party[0];",
     to: "  const target = G.party.find((m) => (it.kind === 'revive' ? m.hp <= 0 : m.hp < m.max)) || G.party[0];" },

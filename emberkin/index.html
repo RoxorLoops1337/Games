@@ -4189,14 +4189,30 @@ const CARD_IDS = Object.keys(CARDS);
  * generous — several times the card's own value — but it exists, because a
  * card that grows forever eventually plays the game for you.
  */
-const growCap = (id) => Math.round(CARDS[id].v * (CARDS[id].capMul || 4));
+/**
+ * A card definition, or a harmless stand-in for one that is not in this build.
+ *
+ * `cardCost` states the rule where it first mattered — "a save can hold a card
+ * whose definition has gone, an id renamed between builds; it must not take the
+ * game down, it just costs nothing" — and it was honoured in four places
+ * (cardCost, cardName, cardRarity, dropHand) and not in three. Driven with that
+ * exact input, cardValue, cardText and growCap each threw, and those three are
+ * what DRAWS the card sitting in your hand. Written once here, so the rule has
+ * one expression and every reader gets the same answers the guards already gave
+ * by hand: no cost, no value, the name '?', common rarity.
+ */
+const CARD_GONE = { name: '?', r: 'common', cost: 0, kind: 'skill', v: 0, vt: 'none',
+  txt: 'This card is not in this build.' };
+const cardDef = (id) => CARDS[id] || CARD_GONE;
+
+const growCap = (id) => Math.round(cardDef(id).v * (cardDef(id).capMul || 4));
 
 /** The ceiling on run-long might. See the note where G.might is added to. */
 const MIGHT_CAP = 150;
 
 /** The live value of a card: its base, its permanent growth, its battle growth. */
 const cardValue = (inst) => {
-  const c = CARDS[inst.id];
+  const c = cardDef(inst.id);
   return Math.max(0, c.v + (inst.plus || 0) + (inst.bg || 0));
 };
 
@@ -4223,7 +4239,7 @@ function growCard(owned, amount) {
  * Out of a fight there is nobody to be immune, so the plain promise stands.
  */
 const cardText = (inst) => {
-  const c = CARDS[inst.id];
+  const c = cardDef(inst.id);
   const bat = B();
   // The other half of the same idea, and it had only ever been done once.
   // `combo` and `chain` are the same mechanic — a bonus that switches on the
@@ -7349,8 +7365,8 @@ const cardCost = (card) => {
   const chain = def.chain && b ? def.chain * (b.playedTurn || 0) : 0;
   return Math.max(0, def.cost - chain);
 };
-const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : (CARDS[card.id] || { name: '?' }).name;
-const cardRarity = (card) => card.src === 'kin' ? 'kin' : (CARDS[card.id] || { r: 'common' }).r;
+const cardName = (card) => card.src === 'kin' ? MOVES[card.id].name : cardDef(card.id).name;
+const cardRarity = (card) => card.src === 'kin' ? 'kin' : cardDef(card.id).r;
 
 function shuffleInto(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
