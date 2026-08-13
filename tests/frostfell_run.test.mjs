@@ -1221,12 +1221,30 @@ section('which parts of playing well are worth anything');
     rows.push({ label, cost: all - without });
   }
   rows.sort((a, z) => z.cost - a.cost);
-  for (const r of rows) {
-    const n = r.cost;
-    const bar = n > 0 ? '█'.repeat(Math.min(20, Math.round(n / 2))) : '';
-    console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
+  /* A TABLE NOBODY MAY READ IS WORSE THAN NO TABLE.
+
+     This ranking was printed every run for six rounds and read as a podium, and
+     it was never one: at the suite's usual sample each row carries ±2.8, so six
+     numbers re-rolled every round produce a different order every time. The
+     same six habits read +9/+8/+6/+6 one round and +6/0/0/-2/-3 the next with
+     nothing changed between them.
+
+     So it prints only when it can be trusted. Under a two-point band it is a
+     table; over one it is a single honest sentence and an instruction for
+     getting the real thing. The probe is three times faster than it was, so
+     the real thing is now affordable. */
+  const READABLE = 2.0;
+  if (Number(band) <= READABLE) {
+    for (const r of rows) {
+      const n = r.cost;
+      const bar = n > 0 ? '█'.repeat(Math.min(20, Math.round(n / 2))) : '';
+      console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
+    }
+    console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
+  } else {
+    console.log(`      (no table: ±${band} a row at this sample, and a ranking inside its own band is noise.`);
+    console.log(`       FF_ABLATE=${Math.ceil(400 / tribes.length)} for all of them, or FF_HABIT=<key> FF_ABLATE=250 for one)`);
   }
-  console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
   {
     const tot = ROOM.free.reduce((n, v) => n + (v || 0), 0) || 1;
     console.log('    free slots on the player line, by share of turns: ' +
@@ -1273,12 +1291,21 @@ section('which reward-screen decisions are worth anything');
     rows.push({ label, cost: all - without });
   }
   rows.sort((a, z) => z.cost - a.cost);
-  for (const r of rows) {
-    const n = r.cost;
-    const bar = n > 0 ? '█'.repeat(Math.min(20, Math.round(n / 2))) : '';
-    console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
+  // The same rule as the fight table above: it prints when it can be trusted
+  // and says so plainly when it cannot.
+
+  const READABLE = 2.0;
+  if (Number(band) <= READABLE) {
+    for (const r of rows) {
+      const n = r.cost;
+      const bar = n > 0 ? '█'.repeat(Math.min(20, Math.round(n / 2))) : '';
+      console.log(`      ${String(n >= 0 ? '+' + n : n).padStart(4)}  ${bar.padEnd(20)} ${r.label}`);
+    }
+    console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
+  } else {
+    console.log(`      (no table: ±${band} a row at this sample, and a ranking inside its own band is noise.`);
+    console.log(`       FF_ABLATE=${Math.ceil(400 / tribes.length)} for all of them, or FF_HABIT=<key> FF_ABLATE=250 for one)`);
   }
-  console.log(`      (±${band} is one standard deviation — a habit inside that band is not a decision)`);
   ok(true, 'the reward ablation is a report, not a gate');
 }
 

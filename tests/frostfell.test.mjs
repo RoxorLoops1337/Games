@@ -5,7 +5,7 @@
 // model of it.
 //
 // Run: node tests/frostfell.test.mjs
-import { loadGame, withRun, place, bareBattle, dummy, ok, eq, done, section } from './frostfell_lib.mjs';
+import { loadGame, mkCtx, withRun, place, bareBattle, dummy, ok, eq, done, section } from './frostfell_lib.mjs';
 
 const FF = loadGame();
 const G = FF.G;
@@ -1811,6 +1811,34 @@ section('the fire holds, once');
   const d2 = place(FFi, 'p', 'snowpup', 0, 0, {});
   FFi.die(FFi.G, d2, null);
   eq(d2.alive, false, 'and only the hearth road has a fire to hold');
+}
+
+section('what is drawn cannot change what happens');
+{
+  /* Forty per cent of the balance probe's running time was fx.pop and fx.burst
+     building particles for a run with no screen. They are gated on having a
+     canvas now, which is only safe if the rules never read them — section 8
+     says they do not, and this proves it: the same seed, played the same way,
+     with and without something to draw on. */
+  const play = (withCtx) => {
+    const FFp = loadGame({});
+    if (withCtx) FFp.setCtx(mkCtx(null));
+    const run = FFp.newRun(FFp.G, 'hearth', 4321);
+    FFp.enterNode(FFp.G, 0);
+    for (let i = 0; i < 40 && FFp.G.screen === 'battle' && !FFp.G.battle.over; i++) {
+      const j = FFp.G.battle.hand.findIndex((c) => c.type === 'unit');
+      const free = FFp.freeSlots(FFp.G, 'p');
+      if (j >= 0 && free.length) FFp.playCard(FFp.G, j, free[0]);
+      else FFp.passTurn(FFp.G);
+      FFp.drainAll();
+    }
+    const b = FFp.G.battle;
+    return JSON.stringify({
+      over: b.over, turn: b.turn, gold: run.gold,
+      units: b.units.map((u) => [u.def, u.side, u.lane, u.col, u.hp, u.alive, u.cnt]),
+    });
+  };
+  eq(play(true), play(false), 'a fight plays out identically with and without a canvas');
 }
 
 section('a taunt beats everything');
