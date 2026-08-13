@@ -1780,6 +1780,51 @@ section('the fell answers the caravan');
   ok(FFa.foeScale(broke) > 0, 'and the trail is still a trail');
 }
 
+section('one gap is not room');
+{
+  const FFr = loadGame({});
+  const run = FFr.newRun(FFr.G, 'hearth', 501);
+  FFr.startBattle(FFr.G, 'fight');
+  const G2 = FFr.G;
+  /* Three states, not two. The rule the whole board is built around had a
+     penalty side that fired on 3% of turns and a reward side that fired on the
+     other 97 — which is not a decision, it is a passive heal. */
+  // leave exactly `gaps` free slots on the player line
+  const leave = (gaps) => {
+    for (const u of G2.battle.units.filter((x) => x.side === 'p' && !x.leader)) u.alive = false;
+    let spots = FFr.freeSlots(G2, 'p').slice();
+    while (spots.length > gaps) {
+      const s2 = spots.shift();
+      G2.battle.units.push(FFr.mkUnit(FFr.mkCard('snowpup'), 'p', s2.lane, s2.col));
+      spots = FFr.freeSlots(G2, 'p').slice();
+    }
+  };
+  leave(3);
+  ok(FFr.freeSlots(G2, 'p').length >= FFr.ROOM_NEEDED, 'three gaps is room');
+  eq(FFr.hasRoom(G2, 'p'), true, 'and the line is warmed');
+  eq(FFr.isPacked(G2, 'p'), false, 'and not frozen');
+
+  leave(2);
+  eq(FFr.freeSlots(G2, 'p').length, 2, 'two gaps');
+  eq(FFr.hasRoom(G2, 'p'), true, 'is still room');
+
+  leave(1);
+  eq(FFr.freeSlots(G2, 'p').length, 1, 'one gap');
+  eq(FFr.hasRoom(G2, 'p'), false, 'is not room — the line stops being warmed');
+  eq(FFr.isPacked(G2, 'p'), false, 'but the cold does not get in either');
+
+  leave(0);
+  eq(FFr.freeSlots(G2, 'p').length, 0, 'no gap at all');
+  eq(FFr.hasRoom(G2, 'p'), false, 'is not room');
+  eq(FFr.isPacked(G2, 'p'), true, 'and the cold gets in');
+
+  /* A Full Line still buys its way out of both, which is the whole point of
+     declaring for bodies. */
+  G2.run.course = 'line';
+  eq(FFr.hasRoom(G2, 'p'), true, 'a caravan travelling for bodies keeps its warmth on a packed board');
+  eq(FFr.isPacked(G2, 'p'), false, 'and never takes the cold for it');
+}
+
 section('a caravan that grows');
 {
   const FFg = loadGame({});
@@ -1935,18 +1980,28 @@ section('a course is a choice, not a favourite');
       .filter((k) => co[k]).length;
     ok(rules >= 1, co.short + ' changes a rule as well as the pool');
   }
-  // and the one that was running away with it now lands on the front only
+  /* And the one that was running away with it, cut twice: to the front of a
+     wave in iteration 15, and now to the front of the FIRST wave only. Frost
+     skips a trigger and a foe that does not trigger does not fire the scheme it
+     committed to, so this rule was quietly handing out the most valuable habit
+     in the fight — on every wave, for free. */
   const cold = FFd.COURSES.find((co) => co.id === 'frost');
   const FFe = loadGame({});
   bareBattle(FFe, 'frost', 305);
   const b = FFe.G.battle;
   b.units = b.units.filter((u) => u.side === 'p' && u.leader);
+  b.waveNo = 1;
   const front = place(FFe, 'e', 'snapfrost', 0, 0, {});
   const back = place(FFe, 'e', 'snapfrost', 0, 2, {});
   cold.arrive(FFe.G, front);
   cold.arrive(FFe.G, back);
-  eq(FFe.stat(front, 'frost'), 1, 'the front of a wave arrives cold');
+  eq(FFe.stat(front, 'frost'), 1, 'the front of the opening wave arrives cold');
   eq(FFe.stat(back, 'frost'), 0, 'the rest of it does not');
+
+  b.waveNo = 2;
+  const later = place(FFe, 'e', 'snapfrost', 1, 0, {});
+  cold.arrive(FFe.G, later);
+  eq(FFe.stat(later, 'frost'), 0, 'and the reinforcements walk in warm');
 }
 
 /* ------------------------------------------------- iteration 16 additions -- */

@@ -126,15 +126,58 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
      by doing the thing it names, so this walks the opening the way a new player
      walks it rather than photographing one frame of it. */
   await page.evaluate(() => { window.FF.G.meta.taught = false; });
-  for (let k = 0; k < 8; k++) {
+  for (let k = 0; k < 12; k++) {
     const info = await page.evaluate(() => {
       const FF = window.FF, G = FF.G;
-      // the guide carries on into the next fight; the walk stops with this one
-      if (!G.tut || G.tut.over || G.screen !== 'battle' || G.battle.over) return null;
+      if (!G.tut || G.tut.over) return null;
+      /* THE GUIDE CARRIES ON INTO THE NEXT FIGHT, AND SO DOES THIS.
+
+         It used to stop with the opening, which was fine while every hint could
+         be cleared inside one skirmish. The scheme hint cannot: it waits for a
+         foe to commit to a plan, and an opening that ends in four turns may not
+         give it one. Stopping there photographed nine hints and silently missed
+         the tenth — the most valuable one in the list. */
+      let guard = 0;
+      while ((G.screen !== 'battle' || G.battle.over) && guard++ < 40) {
+        if (G.screen === 'reward') FF.press('rewardSkip');
+        else if (G.screen === 'trail') FF.enterNode(G, 0);
+        else if (G.screen === 'shop') FF.press('leaveShop');
+        else if (G.screen === 'camp') FF.press('campRest');
+        else if (G.screen === 'gameover' || G.screen === 'victory') return null;
+        else FF.advance(G);
+        FF.drainAll();
+        for (let n = 0; n < 6 && FF.UI.choose; n++) FF.UI.choose.onPick(0);
+        FF.UI.choose = null;
+      }
+      if (G.screen !== 'battle' || G.battle.over) return null;
       const h = FF.TUTORIAL[G.tut.i];
-      return h ? { id: h.id, text: h.text } : null;
+      return h ? { id: h.id, text: h.text, hold: !!G.tut.hold } : null;
     });
     if (!info) break;
+    /* A HELD hint has nothing on screen yet — it is waiting for the thing it
+       describes to be true. Photographing it while held produces a picture of
+       the fight with no hint in it, filed under the hint's name, which is worse
+       than not taking it: it says the hint does not appear when in fact it had
+       not appeared YET. So pass turns until it speaks, the way a player does. */
+    if (info.hold) {
+      const spoke = await page.evaluate(() => {
+        const FF = window.FF, G = FF.G;
+        for (let n = 0; n < 14; n++) {
+          if (!G.tut.hold) return true;
+          if (G.screen !== 'battle' || G.battle.over) return false;
+          // play on rather than only passing — a player waiting for a foe to
+          // commit is still fighting, and a board with nothing on it loses
+          const i = G.battle.hand.findIndex((c) => c.type === 'unit');
+          const free = FF.freeSlots(G, 'p');
+          if (i >= 0 && free.length) FF.playCard(G, i, free[0]);
+          else FF.passTurn(G);
+          FF.drainAll(); FF.update(1 / 30);
+        }
+        return !G.tut.hold;
+      });
+      await settle(page, 12);
+      if (!spoke) continue;
+    }
     await settle(page, 24);
     await shot(page, '09h' + k + '-hint-' + info.id, info.text.slice(0, 64));
     // do the thing the hint asks for, so the next one comes up
