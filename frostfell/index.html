@@ -180,6 +180,7 @@ const TRIBES = {
   hearth: { name: 'Hearthkin',  col: '#ff9a3c', col2: '#ffd08a', blurb: 'Ember, warmth, and a stubborn refusal to freeze.' },
   frost:  { name: 'Frostborn',  col: '#6fd8ff', col2: '#cdf1ff', blurb: 'Hold the line. Let the cold do the work.' },
   scrap:  { name: 'Scrapjaw',   col: '#c9b28a', col2: '#f0dfba', blurb: 'Bolts, bells and things that go off.' },
+  wyrd:   { name: 'Wyrdling',   col: '#c9a6ff', col2: '#e8dcff', blurb: 'Takes a little from every road she has walked.' },
 };
 
 /* ============================================= 3. statuses and keywords === */
@@ -221,7 +222,11 @@ const KEYWORD = {
   explode:  { name: 'Blast',     text: 'Bursts for its value on every neighbour when it falls.' },
   soak:     { name: 'Soak',      text: 'Foes in its lane swing at it first, however far back it stands.' },
   trash:    { name: 'Trash',     text: 'Leaves the deck once played.' },
+  shove:    { name: 'Shove',     text: 'Its hits push whatever it hit one slot further back.' },
+  crush:    { name: 'Crush',     text: 'Hits harder for every OTHER body standing in the target\'s lane. Punishes a stacked line.' },
+  hoard:    { name: 'Hoard',     text: 'Grows while it waits in your hand — one point per turn it goes unplayed, up to four.' },
 };
+const HOARD_CAP = 4;
 
 /* ============================================ 4. cards and the bestiary === */
 
@@ -252,6 +257,12 @@ def({ id: 'gundy', name: 'Gundy Bolt', type: 'unit', leader: true, tribe: 'scrap
   art: A('#c9b28a', '#f0dfba', { shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'helm', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback. Starts every fight with Shell 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 3) } });
+
+def({ id: 'stranger', name: 'The Stranger', type: 'unit', leader: true, tribe: 'wyrd',
+  hp: 28, atk: 4, cnt: 3, rare: 0,
+  art: A('#8f7fb0', '#ddd0f0', { shape: 'tall', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a' }),
+  kw: {}, text: 'When she triggers, she takes the counter off whichever warden is slowest.',
+  hooks: { trigger: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => b.cnt - a.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
 
 /* hearthkin -------------------------------------------------------------- */
 def({ id: 'cinderpup', name: 'Cinderpup', type: 'unit', tribe: 'hearth', hp: 7, atk: 3, cnt: 2, rare: 1,
@@ -392,6 +403,18 @@ def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3
   kw: {}, text: 'Every time it triggers, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
+def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt: 3, rare: 2,
+  art: A('#9a9689', '#ded9c8', { shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', pat: 'shards', patCol: '#6d6a5c' }),
+  kw: { crush: 2 }, text: 'Crush 2. The tighter they pack a lane, the harder it lands.' });
+
+def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 7, atk: 2, cnt: 3, rare: 2,
+  art: A('#c9a6ff', '#eee0ff', { shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
+  kw: { hoard: 1 }, text: 'Hoard. Every turn it waits in your hand it comes out one point angrier.' });
+
+def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
+  art: A('#b0a48c', '#e8ddc4', { shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
+  kw: { shove: 1 }, text: 'Shove. What it hits ends up a slot further back.' });
+
 def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3, cnt: 3, rare: 2,
   art: A('#8fb08f', '#d8ebd6', { shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
   kw: { longshot: 1, soak: 1 }, text: 'Longshot. Soak.' });
@@ -403,7 +426,7 @@ def({ id: 'emberflask', name: 'Ember Flask', type: 'item', tribe: 'hearth', rare
 
 def({ id: 'icepick', name: 'Icepick', type: 'item', tribe: 'frost', rare: 1, target: 'enemy',
   art: { kind: 'pick', col: '#8fe3ff' }, text: 'Deal 4 and leave Frost 1.',
-  effect: (g, t, g2, src) => { hurt(g, t, 4, null); addStatus(g, t, 'frost', 1); } });
+  effect: (g, t) => { hurt(g, t, 4, null); addStatus(g, t, 'frost', 1); } });
 
 def({ id: 'stew', name: 'Bone Stew', type: 'item', tribe: 'hearth', rare: 1, target: 'ally',
   art: { kind: 'bowl', col: '#ffd166' }, text: 'Heal 6 and give Regen 1.',
@@ -460,6 +483,28 @@ def({ id: 'oldmap', name: 'Old Map', type: 'item', tribe: null, rare: 2, target:
 def({ id: 'snowbomb', name: 'Snowbomb', type: 'item', tribe: 'frost', rare: 2, target: 'enemy',
   art: { kind: 'bomb', col: '#8fe3ff' }, text: 'Deal 3 and Frost 1 to every foe in a lane.',
   effect: (g, t) => { for (const f of laneOf(g, 'e', t.lane).slice()) { hurt(g, f, 3, null); addStatus(g, f, 'frost', 1); } } });
+
+def({ id: 'hookline', name: 'Hook Line', type: 'item', tribe: 'scrap', rare: 2, target: 'enemy',
+  art: { kind: 'rope', col: '#c9b28a' }, text: 'Haul the back-most foe in that lane to the front of it.',
+  effect: (g, t) => {
+    const line = laneOf(g, 'e', t.lane);
+    const back = line[line.length - 1];
+    if (!back) return;
+    for (let i = 0; i < COLS; i++) if (!shoveUnit(g, back, -1)) break;
+  } });
+
+def({ id: 'avalanche', name: 'Avalanche', type: 'item', tribe: 'frost', rare: 3, target: 'enemy',
+  art: { kind: 'burst', col: '#cfe4ff' }, text: 'Deal 3 to every foe in that lane, and 2 more for each of them past the first.',
+  effect: (g, t) => {
+    const line = laneOf(g, 'e', t.lane).slice();
+    const dmg = 3 + Math.max(0, line.length - 1) * 2;
+    for (const f of line) hurt(g, f, dmg, null);
+  } });
+
+def({ id: 'grudge', name: 'Old Grudge', type: 'item', tribe: null, rare: 2, target: 'enemy',
+  art: { kind: 'pick', col: '#c9a6ff' }, kw: { hoard: 1 },
+  text: 'Hoard. Deal 3, and one more for every turn it sat in your hand.',
+  effect: (g, t, card) => hurt(g, t, 3 + Math.min(HOARD_CAP, (card && card.held) || 0), null) });
 
 def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, target: 'ally',
   art: { kind: 'lantern', col: '#ffd166' }, text: 'Heal 10 and clear every ill.',
@@ -572,6 +617,13 @@ foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
   art: A('#6f96b8', '#cfe4f5', { shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
   kw: {}, text: 'Its bite leaves Weak 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
+foe({ id: 'bruiser', name: 'Bruiser', hp: 13, atk: 3, cnt: 3, tier: 2,
+  art: A('#7a8296', '#c4ccd8', { shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
+  kw: { shove: 1 }, text: 'Shove. It puts your line where it wants it.' });
+foe({ id: 'packmother', name: 'Packmother', hp: 18, atk: 3, cnt: 4, tier: 3,
+  art: A('#6f7f9f', '#cdd8ec', { shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
+  kw: { crush: 2 }, text: 'Crush 2. It hits a crowded lane hardest.' });
+
 foe({ id: 'frostwyrm', name: 'Frostwyrm', hp: 22, atk: 6, cnt: 5, tier: 3,
   art: A('#7fb0d8', '#dff0ff', { shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
   kw: { barrage: 1 }, text: 'Barrage.' });
@@ -614,6 +666,82 @@ const ZONES = [
   { id: 'hollow',    name: 'Hollow Peak',    boss: 'kettletitan', bosses: ['kettletitan', 'lastwinter'], tiers: [3, 3, 3], sky: ['#3a2340', '#160f22'], ground: '#efe0e8', tint: '#c05a8a' },
 ];
 
+/* ------------------------------------------------------------- unlocks --- */
+
+/* What a player earns by playing rather than by paying. Every line is a thing
+   you can see coming: the collection screen states the requirement, and the
+   counter it reads is one the game already keeps. */
+const UNLOCKS = [
+  { id: 'flarehound',   kind: 'card',   stat: 'kills',     n: 60,  text: 'Fell 60 foes.' },
+  { id: 'galewisp',     kind: 'card',   stat: 'kills',     n: 120, text: 'Fell 120 foes.' },
+  { id: 'bellhammer',   kind: 'card',   stat: 'kills',     n: 200, text: 'Fell 200 foes.' },
+  { id: 'blastcap',     kind: 'card',   stat: 'bestCombo', n: 3,   text: 'Take three foes in one turn.' },
+  { id: 'hush',         kind: 'card',   stat: 'bestCombo', n: 4,   text: 'Take four foes in one turn.' },
+  { id: 'snowbeard',    kind: 'card',   stat: 'flawless',  n: 1,   text: 'Clear a zone without losing a warden.' },
+  { id: 'lastlight',    kind: 'card',   stat: 'wins',      n: 1,   text: 'Cross the fell once.' },
+  { id: 'frenzycharm',  kind: 'charm',  stat: 'bestCombo', n: 3,   text: 'Take three foes in one turn.' },
+  { id: 'leechcharm',   kind: 'charm',  stat: 'kills',     n: 90,  text: 'Fell 90 foes.' },
+  { id: 'barragecharm', kind: 'charm',  stat: 'flawless',  n: 2,   text: 'Clear two zones without losing a warden.' },
+  { id: 'scrap',        kind: 'tribe',  stat: 'zones',     n: 1,   text: 'Reach the second zone.' },
+  { id: 'wyrd',         kind: 'tribe',  stat: 'flawless',  n: 1,   text: 'Clear a zone without losing a warden.' },
+];
+/* The optional difficulty. Each one is a single sentence and a price in
+   points; the highest total a tribe has ever carried across the fell is
+   remembered next to that tribe's name. */
+const WINTERS = [
+  { id: 'thick',   name: 'Thick Snow',    pts: 1, text: 'Waves arrive a turn sooner.',
+    apply: (run) => { run.waveBonus = (run.waveBonus || 0) - 1; } },
+  { id: 'lean',    name: 'Lean Purse',    pts: 1, text: 'The trader charges a third more.',
+    apply: (run) => { run.prices = 1.34; } },
+  { id: 'rations', name: 'Short Rations', pts: 1, text: 'Camps mend half as much.',
+    apply: (run) => { run.campMul = 0.5; } },
+  { id: 'weary',   name: 'Weary Leader',  pts: 2, text: 'Your leader sets out already hurt.',
+    apply: (run) => { run.leader.dmg = Math.floor(run.leader.hp * 0.3); } },
+  { id: 'crowded', name: 'Crowded Roads', pts: 2, text: 'Every fight opens with one more foe.',
+    apply: (run) => { run.extraFoe = (run.extraFoe || 0) + 1; } },
+  { id: 'silent',  name: 'Silent Bells',  pts: 2, text: 'The redraw bell takes two more turns to charge.',
+    apply: (run) => { run.bellSlow = (run.bellSlow || 0) + 2; } },
+  { id: 'keen',    name: 'Keen Beasts',   pts: 3, text: 'Every foe is a fifth stronger.',
+    apply: (run) => { run.foeMul = (run.foeMul || 1) * 1.2; } },
+];
+const winterPts = (ids) => (ids || []).reduce((n, id) => {
+  const w = WINTERS.find((x) => x.id === id);
+  return n + (w ? w.pts : 0);
+}, 0);
+
+const LOCKED = {};
+for (const u of UNLOCKS) LOCKED[u.id] = u;
+
+const found = (id) => !LOCKED[id] || !!(G.meta.found && G.meta.found[id]);
+const statOf = (k) => (G.meta.stats && G.meta.stats[k]) || 0;
+
+/* Called wherever a counter moves. Anything that has come due is announced
+   once and remembered. */
+function checkUnlocks(g) {
+  const out = [];
+  for (const u of UNLOCKS) {
+    if (found(u.id)) continue;
+    if (statOf(u.stat) < u.n) continue;
+    G.meta.found[u.id] = true;
+    if (u.kind === 'tribe' && G.meta.unlocked.indexOf(u.id) < 0) G.meta.unlocked.push(u.id);
+    out.push(u);
+  }
+  if (out.length) {
+    saveMeta();
+    for (const u of out) {
+      const name = u.kind === 'tribe' ? TRIBES[u.id].name : (CARDS[u.id] || CHARMS[u.id] || {}).name || u.id;
+      fx.toast(name.toUpperCase() + ' UNLOCKED', C.gold);
+      sfx('get');
+    }
+  }
+  return out;
+}
+function bumpStat(k, v, mode) {
+  G.meta.stats = G.meta.stats || {};
+  const cur = G.meta.stats[k] || 0;
+  G.meta.stats[k] = mode === 'max' ? Math.max(cur, v) : cur + v;
+}
+
 /* ============================================ 5. run + battle state ======= */
 
 /* The board is two LANES deep three columns. Column 0 is the front — the side
@@ -624,6 +752,7 @@ const LANES = 2;
 const COLS = 3;
 const HAND = 6;
 const BELL_CHARGE = 4;   // turns without ringing before a free redraw
+const bellNeed = (g) => BELL_CHARGE + ((g.run && g.run.bellSlow) || 0);
 
 const G = {
   screen: 'title',
@@ -632,7 +761,9 @@ const G = {
   battle: null,
   ui: {},               // transient per-screen scratch (reward picks, shop stock…)
   hitStop: 0,
-  meta: { runs: 0, wins: 0, best: 0, unlocked: ['hearth', 'frost'], seen: {}, mute: false, taught: false },
+  meta: { runs: 0, wins: 0, best: 0, unlocked: ['hearth', 'frost'], found: {},
+    stats: { kills: 0, bestCombo: 0, flawless: 0, wins: 0, zones: 0 },
+    winter: {}, mute: false, taught: false },
 };
 
 let UID = 1;
@@ -678,7 +809,8 @@ function mkUnit(card, side, lane, col) {
   return {
     uid: nextUid(), card, def: card.def, name: card.name, side, lane, col,
     maxHp, hp: Math.max(1, maxHp - (card.dmg || 0)),
-    atk: Math.max(0, Math.round(card.atk * inj)), cntMax: card.cnt, cnt: card.cnt,
+    atk: Math.max(0, Math.round(card.atk * inj)) + (card.kw && card.kw.hoard ? Math.min(HOARD_CAP, card.held || 0) : 0),
+    cntMax: card.cnt, cnt: card.cnt,
     st: {}, kw: Object.assign({}, card.kw), hooks: (d && d.hooks) || {},
     art: card.art, leader: !!card.leader, boss: !!(d && d.boss),
     alive: true,
@@ -859,7 +991,12 @@ function die(g, u, killer) {
   if (b > 0 && u.side === 'e' && g.run) { g.run.gold += b; fx.pop(u, '+' + b + ' scrip', C.gold); }
   // Kills inside one turn are counted together: clearing a board in a single
   // action is the play the whole game is pointed at, and it should pay.
-  if (u.side === 'e' && g.battle) g.battle.combo = (g.battle.combo || 0) + 1;
+  if (u.side === 'e' && g.battle) {
+    g.battle.combo = (g.battle.combo || 0) + 1;
+    bumpStat('kills', 1);
+    if (g.run) g.run.kills = (g.run.kills || 0) + 1;
+  }
+  if (u.side === 'p' && !u.leader && g.run) g.run.fellThisZone = (g.run.fellThisZone || 0) + 1;
   if (u.kw.explode) neighbours(g, u).concat(foes(g, u).filter((f) => f.lane === u.lane)).forEach((n2) => hurt(g, n2, u.kw.explode, null));
   if (u.hooks.death) u.hooks.death(g, u, killer);
   for (const a of allies(g, u)) if (a.hooks.allyDeath) a.hooks.allyDeath(g, a, u);
@@ -894,6 +1031,9 @@ function attackOnce(g, u) {
   if (!primary) { fx.pop(u, 'no target', C.snowDim); return; }
   const targets = u.kw.barrage ? laneTargets(g, u, primary.lane) : [primary];
   let dmg = u.atk + stat(u, 'spice');
+  // Crush reads the line it is swinging into: the more of them are stacked up
+  // in that lane, the harder every one of them is hit.
+  if (u.kw.crush) dmg += u.kw.crush * Math.max(0, laneTargets(g, u, primary.lane).length - 1);
   if (stat(u, 'weak') > 0) dmg = Math.floor(dmg / 2);
   fx.lunge(u, primary);
   sfx('swing');
@@ -902,9 +1042,25 @@ function attackOnce(g, u) {
     const dealt = hurt(g, t, dmg, u);
     if (u.kw.leech && dealt > 0) heal(g, u, dealt);
     if (u.alive && u.hooks.hit) u.hooks.hit(g, u, t);
+    if (u.kw.shove && t.alive && dealt > 0) shoveUnit(g, t, 1);
     // Smackback answers a landed hit with half the defender's own attack.
     if (t.alive && t.kw.smack && dmg > 0) hurt(g, u, Math.max(1, Math.floor(t.atk / 2)), t);
   }
+}
+
+/* Push somebody along their own lane. If the slot behind is taken the two of
+   them trade places instead, so a shove is never simply refused. */
+function shoveUnit(g, u, dir) {
+  if (!u || !u.alive) return false;
+  const nc = clamp(u.col + dir, 0, COLS - 1);
+  if (nc === u.col) return false;
+  const there = unitAt(g, u.side, u.lane, nc);
+  if (there) { there.col = u.col; there.moveT = 1; }
+  u.col = nc;
+  u.moveT = 1;
+  fx.pop(u, dir > 0 ? 'SHOVED' : 'HAULED', C.snowDim);
+  sfx('move');
+  return true;
 }
 
 /* Walk into the lane where the fighting is, if there is a slot going. Costs
@@ -966,6 +1122,11 @@ function resolveTurn(g) {
     });
   }
 
+  // Anything still in hand at the end of the turn has waited another turn.
+  beat(0.01, () => {
+    for (const c of b.hand) if (c.kw && c.kw.hoard) c.held = Math.min(HOARD_CAP, (c.held || 0) + 1);
+  });
+
   /* End of turn: burns bite, mending mends, both fade. */
   beat(0.18, () => {
     if (b.over) return;
@@ -989,8 +1150,8 @@ function resolveTurn(g) {
   beat(0.1, () => {
     b.busy = false;
     if (b.over) return;
-    if (b.bell < BELL_CHARGE) b.bell++;
-    if (!b.hand.length && b.bell < BELL_CHARGE) b.bell = BELL_CHARGE;  // never softlock an empty hand
+    if (b.bell < bellNeed(g)) b.bell++;
+    if (!b.hand.length && b.bell < bellNeed(g)) b.bell = bellNeed(g);  // never softlock an empty hand
   });
 }
 
@@ -1004,6 +1165,9 @@ function payCombo(g) {
   const paid = n * 4 + (n >= 4 ? 12 : 0);
   g.run.gold += paid;
   b.bestCombo = Math.max(b.bestCombo || 0, n);
+  bumpStat('bestCombo', n, 'max');
+  g.run.bestTurn = Math.max(g.run.bestTurn || 0, n);
+  checkUnlocks(g);
   fx.toast(n + ' IN ONE TURN   +' + paid, n >= 4 ? '#ff9a3c' : C.gold);
   fx.flash('#ffd9a0', 0.2 + n * 0.03);
   fx.shake(4 + n);
@@ -1016,7 +1180,7 @@ function payCombo(g) {
 function ringBell(g) {
   const b = g.battle;
   if (!b || b.over || b.busy) return false;
-  const free = b.bell >= BELL_CHARGE;
+  const free = b.bell >= bellNeed(g);
   sfx('bell');
   while (b.hand.length) b.discard.push(b.hand.pop());
   for (let i = 0; i < handSize(g); i++) if (!drawToHand(g)) break;
@@ -1072,6 +1236,7 @@ function drawToHand(g) {
   }
   const c = b.draw.shift();
   c.handT = 0;
+  c.held = 0;
   b.hand.push(c);
   return c;
 }
@@ -1110,8 +1275,9 @@ function playCard(g, idx, spot) {
   } else {
     sfx('item');
     if (spot && spot.uid) fx.burst(spot, (d.art && d.art.col) || C.snow, 14);
-    d.effect(g, spot, g, null);
+    d.effect(g, spot, card);
   }
+  card.held = 0;
   b.discard.push(card);
   checkOver(g);
   if (!b.over) resolveTurn(g);
@@ -1135,7 +1301,7 @@ function summon(g, foeId, count) {
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
-  return 1 + run.step * 0.035 + run.zone * 0.10;
+  return (1 + run.step * 0.035 + run.zone * 0.10) * (run.foeMul || 1);
 }
 
 /* An encounter is a list of WAVES. The first walks on at the bell; the rest
@@ -1143,7 +1309,7 @@ function foeScale(run) {
    which is a real choice, because a wave pulled onto a board you have already
    set up dies faster than one that arrives while you are rebuilding. */
 const WAVE_GAP = 5;
-const waveGap = (g) => WAVE_GAP + ((g.run && g.run.waveBonus) || 0);
+const waveGap = (g) => Math.max(2, WAVE_GAP + ((g.run && g.run.waveBonus) || 0));
 
 /* Locked in per run so a reload does not reroll the beast you were beaten by. */
 function zoneBoss(g, zi) {
@@ -1194,7 +1360,7 @@ function buildEncounter(g, kind) {
   // The first two skirmishes of a run are deliberately gentle: a caravan that
   // has not drawn its second warden yet cannot answer a wave.
   const opening = run.zone === 0 && run.step < 2;
-  const first = opening ? 2 : kind === 'elite' ? 3 : 2 + (run.step > 3 ? 1 : 0);
+  const first = (opening ? 2 : kind === 'elite' ? 3 : 2 + (run.step > 3 ? 1 : 0)) + (run.extraFoe || 0);
   const spots = frontFirstSpots();
   waves.push(spots.slice(0, first).map((s) => ({ id: pick(src).id, lane: s.lane, col: s.col, scale })));
   const later = opening ? (run.step === 0 ? 0 : 1) : 1;
@@ -1249,7 +1415,7 @@ function startBattle(g, kind) {
   clearBeats();
   const b = {
     kind: kind || 'fight', turn: 0, units: [], hand: [], draw: [], discard: [],
-    bell: run.bellCharged ? BELL_CHARGE : 0, over: false, won: false, busy: false, t: 0,
+    bell: run.bellCharged ? bellNeed(g) : 0, over: false, won: false, busy: false, t: 0,
     order: [],
   };
   g.battle = b;
@@ -1316,6 +1482,7 @@ function endBattle(g, won) {
   if (g.battle.bestCombo >= 3) run.log.push('A ' + g.battle.bestCombo + '-kill turn.');
   if (run.mend) run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - run.mend); });
 
+  run.fights = (run.fights || 0) + 1;
   run.gold += Math.round((g.battle.kind === 'boss' ? 55 : g.battle.kind === 'elite' ? 34 : 22) * (run.purse || 1));
   g.ui.reward = rollReward(g, g.battle.kind);
   g.screen = 'reward';
@@ -1329,6 +1496,7 @@ const STARTERS = {
   hearth: { leader: 'bramblewick', deck: ['cinderpup', 'cinderpup', 'kettlebeak', 'snowpup', 'emberflask', 'emberflask', 'stew', 'whetstone'] },
   frost:  { leader: 'vesper',      deck: ['rimefox', 'rimefox', 'chillfin', 'snowpup', 'icepick', 'icepick', 'gearshield', 'whetstone'] },
   scrap:  { leader: 'gundy',       deck: ['clunkbot', 'springjaw', 'scrapcrow', 'snowpup', 'blastcap', 'gearshield', 'bellrope', 'whetstone'] },
+  wyrd:   { leader: 'stranger',    deck: ['rimefox', 'cinderpup', 'ratchet', 'snowpup', 'pryrod', 'whetstone', 'stew', 'icepick'] },
 };
 
 function genTrail(zoneIdx) {
@@ -1346,7 +1514,7 @@ function genTrail(zoneIdx) {
   return steps;
 }
 
-function newRun(g, tribeId, seed) {
+function newRun(g, tribeId, seed, winters) {
   const sd = (seed === undefined ? Math.floor(Math.random() * 1e9) : seed) >>> 0;
   RNG = mulberry(sd || 1);
   UID = 1;
@@ -1354,10 +1522,17 @@ function newRun(g, tribeId, seed) {
   const run = {
     seed: sd, tribe: tribeId, zone: 0, step: 0, gold: 25, bonusRedraw: 0,
     deck: [], leader: mkCard(s.leader), trail: genTrail(0), log: [], path: [],
-    kills: 0, node: null, bells: [], bonusHand: 0, bellCharged: false, waveBonus: 0,
+    kills: 0, fights: 0, taken: 0, bestTurn: 0, node: null,
+    bells: [], bonusHand: 0, bellCharged: false, waveBonus: 0,
     purse: 1, mend: 0, bosses: {},
   };
   for (const id of s.deck) run.deck.push(mkCard(id));
+  run.winters = (winters || []).slice();
+  run.winterPts = winterPts(run.winters);
+  for (const id of run.winters) {
+    const w = WINTERS.find((x) => x.id === id);
+    if (w) w.apply(run);
+  }
   g.run = run;
   g.battle = null;
   g.screen = 'trail';
@@ -1390,7 +1565,7 @@ function enterNode(g, choiceIdx) {
     g.screen = 'event';
   } else if (node.kind === 'cache') {
     run.gold += 20;
-    g.ui.reward = { cards: [], charms: sample(Object.keys(CHARMS), 3), gold: 20, kind: 'cache' };
+    g.ui.reward = { cards: [], charms: sample(charmPool(), 3), gold: 20, kind: 'cache' };
     g.screen = 'reward';
   }
   saveRun(run);
@@ -1404,16 +1579,21 @@ function advance(g) {
     run.zone++;
     if (run.zone >= ZONES.length) {
       G.meta.wins++;
+      bumpStat('wins', 1);
+      G.meta.winter[run.tribe] = Math.max(G.meta.winter[run.tribe] || 0, run.winterPts || 0);
+      if (!run.fellThisZone) bumpStat('flawless', 1);
+      checkUnlocks(g);
       G.meta.best = Math.max(G.meta.best, 3);
       saveMeta(); saveRun(null);
       g.screen = 'victory';
       return;
     }
-    if (run.zone === 1 && G.meta.unlocked.indexOf('scrap') < 0) {
-      G.meta.unlocked.push('scrap');
-      g.ui.unlockToast = { t: 0, text: 'SCRAPJAW TRIBE UNLOCKED' };
-    }
+    // a zone crossed without losing anybody is the hardest thing to earn here
+    if (!run.fellThisZone) { bumpStat('flawless', 1); run.log.push('A zone crossed with everybody standing.'); }
+    run.fellThisZone = 0;
+    bumpStat('zones', run.zone, 'max');
     G.meta.best = Math.max(G.meta.best, run.zone);
+    checkUnlocks(g);
     run.step = 0;
     run.trail = genTrail(run.zone);
     saveMeta();
@@ -1425,8 +1605,10 @@ function advance(g) {
 
 /* ------------------------------------------------------------- rewards --- */
 function cardPool(run) {
-  return Object.values(CARDS).filter((c) => !c.leader && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
+  return Object.values(CARDS).filter((c) =>
+    !c.leader && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
 }
+const charmPool = () => Object.keys(CHARMS).filter(found);
 function weightedCards(run, n) {
   const pool = cardPool(run);
   const bag = [];
@@ -1447,12 +1629,13 @@ function rollReward(g, kind) {
   const r = { kind, cards: weightedCards(run, 3), charms: [], bells: [], gold: 0 };
   // A beast pays in bells — the upgrades that change the rest of the trek.
   if (kind === 'boss') r.bells = sample(Object.keys(BELLS), 3);
-  else if (kind === 'elite') r.charms = sample(Object.keys(CHARMS), 2);
+  else if (kind === 'elite') r.charms = sample(charmPool(), 2);
   return r;
 }
 function takeCard(g, id) {
   if (!id) return;
   g.run.deck.push(mkCard(id));
+  g.run.taken = (g.run.taken || 0) + 1;
   sfx('get');
 }
 function takeCharm(g, charmId, cardUid) {
@@ -1468,10 +1651,12 @@ function takeCharm(g, charmId, cardUid) {
 const PRICE = { 1: 22, 2: 34, 3: 48 };
 function rollShop(g) {
   const run = g.run;
-  const cards = weightedCards(run, 3).map((id) => ({ id, price: PRICE[CARDS[id].rare] || 25, sold: false }));
-  const charms = sample(Object.keys(CHARMS), 2).map((id) => ({ id, price: PRICE[CHARMS[id].rare] + 8, sold: false }));
-  return { cards, charms, heal: { price: 20, sold: false }, scar: { price: 30, sold: false },
-    sigil: { price: 58, sold: false } };
+  const mul = run.prices || 1;
+  const p = (n) => Math.round(n * mul);
+  const cards = weightedCards(run, 3).map((id) => ({ id, price: p(PRICE[CARDS[id].rare] || 25), sold: false }));
+  const charms = sample(charmPool(), 2).map((id) => ({ id, price: p(PRICE[CHARMS[id].rare] + 8), sold: false }));
+  return { cards, charms, heal: { price: p(20), sold: false }, scar: { price: p(30), sold: false },
+    sigil: { price: p(58), sold: false } };
 }
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
@@ -1512,7 +1697,8 @@ function campChoose(g, what, arg) {
   const run = g.run;
   if (g.ui.camp && g.ui.camp.done) return false;
   if (what === 'rest') {
-    run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - 6); });
+    const mend = Math.max(1, Math.round(6 * (run.campMul || 1)));
+    run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - mend); });
     sfx('heal');
   } else if (what === 'charm') {
     const ch = CHARMS[arg && arg.charm];
@@ -1608,7 +1794,7 @@ function hurtSomebody(g) {
   if (c) { c.injured = true; g.run.log.push(c.name + ' was hurt prising it loose.'); }
 }
 function offerCharms(g, n) {
-  const three = sample(Object.keys(CHARMS), n);
+  const three = sample(charmPool(), n);
   openChooser('WHICH CHARM?', three.map((cid) => ({ charm: cid })), (i) => {
     pickTargetForCharm(g, three[i], () => advance(g));
   }, { cancel: 'NEVER MIND' });
@@ -1649,6 +1835,9 @@ function saveRun(run) {
     trail: run.trail, path: run.path, log: run.log.slice(-8),
     bells: run.bells || [], bh: run.bonusHand || 0, bc: !!run.bellCharged, wb: run.waveBonus || 0,
     purse: run.purse || 1, mend: run.mend || 0, bosses: run.bosses || {},
+    winters: run.winters || [], wpts: run.winterPts || 0, prices: run.prices || 1,
+    campMul: run.campMul || 1, extraFoe: run.extraFoe || 0, bellSlow: run.bellSlow || 0,
+    foeMul: run.foeMul || 1, fell: run.fellThisZone || 0,
   }));
 }
 function loadRun(g) {
@@ -1663,6 +1852,9 @@ function loadRun(g) {
       log: o.log || [], kills: 0, node: null,
       bells: o.bells || [], bonusHand: o.bh || 0, bellCharged: !!o.bc, waveBonus: o.wb || 0,
       purse: o.purse || 1, mend: o.mend || 0, bosses: o.bosses || {},
+      winters: o.winters || [], winterPts: o.wpts || 0, prices: o.prices || 1,
+      campMul: o.campMul || 1, extraFoe: o.extraFoe || 0, bellSlow: o.bellSlow || 0,
+      foeMul: o.foeMul || 1, fellThisZone: o.fell || 0,
     };
     RNG = mulberry((run.seed + run.step * 7919 + run.zone * 104729) >>> 0);
     g.run = run;
@@ -1742,11 +1934,18 @@ function stepFx(dt) {
 
 /* ================================================ 9. rendering =========== */
 
-const VW = 1280, VH = 720;
-const MID = 640;
+/* The stage is 720 tall, always. Its WIDTH follows the device: a 16:9 phone
+   gets 1280, a 20:9 phone gets the extra width instead of two black bars, and
+   anything wider than 1760 is letterboxed rather than stretched. Everything
+   that touches an edge is placed against SAFE so a notch never eats it. */
+const VH = 720;
+let VW = 1280;
+let MID = 640;
+const VW_MIN = 1180, VW_MAX = 1760;
+const SAFE = 34;
 const SLOT_W = 118, SLOT_H = 140, SLOT_GAP = 12;
 const LANE_Y = [212, 364];
-const HAND_Y = 632, CARD_W = 126, CARD_H = 168;
+const HAND_Y = 620, CARD_W = 126, CARD_H = 168;
 
 function slotPos(side, lane, col) {
   const step = SLOT_W + SLOT_GAP;
@@ -2144,6 +2343,68 @@ function initSnow() {
     snowflakes.push({ x: rnd() * VW, y: rnd() * VH, r: 1 + rnd() * 2.6, s: 12 + rnd() * 34, d: rnd() * TAU });
   }
 }
+/* Silhouettes that say which country this is before a single word does. Three
+   depths, each drifting at its own rate, all drawn from the same two or three
+   shapes so a zone reads as one place. */
+function drawSkyline(c, z, t) {
+  const depths = [
+    { y: 452, s: 0.55, a: 0.16, sp: 5 },
+    { y: 478, s: 0.78, a: 0.24, sp: 11 },
+    { y: 500, s: 1.0,  a: 0.34, sp: 19 },
+  ];
+  for (let d = 0; d < depths.length; d++) {
+    const L = depths[d];
+    const off = -((t * L.sp) % 260);
+    c.save();
+    c.globalAlpha = L.a;
+    c.fillStyle = d === 2 ? '#0d1830' : d === 1 ? '#16233c' : '#1e3150';
+    if (z.id === 'whitewood') {
+      for (let i = -1; i < 10; i++) {
+        const x = off + i * 260 + (d * 70);
+        const h = (90 + ((i * 37) % 46)) * L.s;
+        const w = 34 * L.s;
+        c.beginPath();
+        for (let k = 0; k < 3; k++) {
+          const kh = h * (1 - k * 0.26), kw = w * (1 + k * 0.42);
+          c.moveTo(x, L.y - kh);
+          c.lineTo(x + kw, L.y - kh * 0.42 + k * 6);
+          c.lineTo(x - kw, L.y - kh * 0.42 + k * 6);
+        }
+        c.closePath(); c.fill();
+        c.fillRect(x - 4 * L.s, L.y - 12, 8 * L.s, 14);
+      }
+    } else if (z.id === 'shelf') {
+      for (let i = -1; i < 8; i++) {
+        const x = off + i * 300 + d * 90;
+        const w = (150 + ((i * 53) % 90)) * L.s, h = (70 + ((i * 29) % 50)) * L.s;
+        c.beginPath();
+        c.moveTo(x, L.y);
+        c.lineTo(x + w * 0.12, L.y - h);
+        c.lineTo(x + w * 0.86, L.y - h * 0.82);
+        c.lineTo(x + w, L.y);
+        c.closePath(); c.fill();
+        // the crack down the middle of a shelf that is about to stop being one
+        c.save(); c.globalAlpha = L.a * 0.5; c.fillStyle = '#050a14';
+        c.fillRect(x + w * 0.48, L.y - h * 0.8, 3 * L.s, h * 0.8);
+        c.restore();
+      }
+    } else {
+      for (let i = -1; i < 6; i++) {
+        const x = off + i * 380 + d * 120;
+        const w = (200 + ((i * 61) % 120)) * L.s, h = (180 + ((i * 43) % 90)) * L.s;
+        c.beginPath();
+        c.moveTo(x - w / 2, L.y);
+        c.lineTo(x - w * 0.14, L.y - h);
+        c.lineTo(x + w * 0.06, L.y - h * 0.78);
+        c.lineTo(x + w * 0.3, L.y - h * 1.05);
+        c.lineTo(x + w / 2, L.y);
+        c.closePath(); c.fill();
+      }
+    }
+    c.restore();
+  }
+}
+
 function drawBackdrop(c, zone, t) {
   const z = ZONES[clamp(zone || 0, 0, ZONES.length - 1)];
   const g2 = c.createLinearGradient(0, 0, 0, VH);
@@ -2180,6 +2441,9 @@ function drawBackdrop(c, zone, t) {
     c.fillStyle = ['rgba(255,255,255,.06)', 'rgba(255,255,255,.10)', 'rgba(255,255,255,.15)'][layer];
     c.fill();
   }
+
+  // the shape of this particular country, in three depths
+  drawSkyline(c, z, t);
 
   // ground
   const gg = c.createLinearGradient(0, 470, 0, VH);
@@ -2335,6 +2599,13 @@ function drawCard(c, card, x, y, w, h, o) {
   else drawItemIcon(c, d.art, w / 2, 34 + ah * 0.5, ah * 0.62, o.t || 0);
   c.restore();
   rr(c, 7, 34, aw, ah, 9); c.lineWidth = 2.5; c.strokeStyle = C.ink; c.stroke();
+
+  // what a hoarded card has put on since it was drawn
+  if (card.kw && card.kw.hoard && card.held) {
+    c.beginPath(); c.arc(20, 48, 14, 0, TAU);
+    inked(c, '#c9a6ff', 2.5, C.ink);
+    txt(c, '+' + card.held, 20, 49, 16, '#241a3a', 'center', 'd', 0);
+  }
 
   // text box
   const ty = 34 + ah + 6;
@@ -2666,8 +2937,9 @@ function drawTitle(c, t) {
   if (saved) { button(c, 'continue', MID - 150, y, 300, 56, 'CONTINUE TREK', '#3f8f5f'); y += 70; }
   txt(c, 'CHOOSE A LEADER', MID, y + 6, 16, '#9fc0e4', 'center', 't');
   y += 34;
-  const tribes = ['hearth', 'frost', 'scrap'];
-  const bw2 = 260, gap = 24;
+  const tribes = Object.keys(TRIBES);
+  const gap = 20;
+  const bw2 = Math.min(252, Math.floor((VW - SAFE * 2 - gap * (tribes.length - 1)) / tribes.length));
   const total = tribes.length * bw2 + (tribes.length - 1) * gap;
   tribes.forEach((tb, i) => {
     const x = MID - total / 2 + i * (bw2 + gap);
@@ -2679,28 +2951,159 @@ function drawTitle(c, t) {
     c.globalAlpha = locked ? 0.35 : 1;
     drawCreature(c, ld.art, x + bw2 / 2, y + 96, 104, { t, ph: i * 2 });
     c.restore();
-    txt(c, T.name.toUpperCase(), x + bw2 / 2, y + 146, 22, locked ? '#7a86a0' : T.col, 'center', 'd');
-    txt(c, locked ? 'reach the second zone to unlock' : ld.name, x + bw2 / 2, y + 170, 13, '#b9cde8', 'center', 't');
+    txt(c, T.name.toUpperCase(), x + bw2 / 2, y + 146, 20, locked ? '#7a86a0' : T.col, 'center', 'd');
+    const need = LOCKED[tb];
+    const sub = locked ? (need ? need.text : 'not yet found') : ld.name;
+    wrapText(c, sub, 12.5, bw2 - 20).slice(0, 2).forEach((ln, k) =>
+      txt(c, ln, x + bw2 / 2, y + 168 + k * 15, 12.5, '#b9cde8', 'center', 't'));
+    const bw3 = G.meta.winter[tb] || 0;
+    if (!locked && bw3) txt(c, 'winter ' + bw3, x + bw2 / 2, y + 200, 12, '#ffd166', 'center', 't');
     if (!locked) hit('tribe', x, y, bw2, 190, tb);
   });
-  button(c, 'help', 28, VH - 74, 210, 48, 'HOW TO PLAY', '#40527a');
-  button(c, 'mute', VW - 128, VH - 74, 100, 48, G.meta.mute ? 'SOUND ✕' : 'SOUND ♪', '#40527a', false, true);
+  button(c, 'help', SAFE, VH - 74, 210, 48, 'HOW TO PLAY', '#40527a');
+  button(c, 'collection', SAFE + 222, VH - 74, 190, 48, 'COLLECTION', '#40527a');
+  button(c, 'mute', VW - SAFE - 116, VH - 74, 116, 48, G.meta.mute ? 'SOUND ✕' : 'SOUND ♪', '#40527a', false, true);
   txt(c, 'runs ' + G.meta.runs + '   ·   wins ' + G.meta.wins, MID, VH - 28, 14, '#7e97b8', 'center', 't');
+}
+
+/* ------------------------------------------------- choosing a leader ----- */
+
+function drawLeaderPick(c, t) {
+  const pick2 = G.ui.pick;
+  drawBackdrop(c, 0, t);
+  const tb = pick2.tribe, T = TRIBES[tb], S = STARTERS[tb], ld = CARDS[S.leader];
+  txt(c, T.name.toUpperCase(), MID, 54, 38, T.col, 'center', 'd');
+  txt(c, T.blurb, MID, 92, 15, '#a8c8ea', 'center', 't');
+
+  // the leader, life size
+  panel(c, SAFE + 6, 120, 350, 440, 16, '#1d2c49', T.col);
+  const lx = SAFE + 181;
+  drawCreature(c, ld.art, lx, 300, 190, { t, ph: 1.4 });
+  txt(c, ld.name.toUpperCase(), lx, 396, 26, '#eaf6ff', 'center', 'd');
+  txt(c, 'health ' + ld.hp + '    attack ' + ld.atk + '    counter ' + ld.cnt, lx, 428, 14, '#9fc0e4', 'center', 't');
+  wrapText(c, ld.text, 14, 300).forEach((ln, i) => txt(c, ln, lx, 456 + i * 19, 14, '#c8dcf4', 'center', 't'));
+  const best = G.meta.winter[tb] || 0;
+  txt(c, best ? 'hardest winter crossed: ' + best : 'never crossed the fell', lx, 534, 13, '#7e97b8', 'center', 't');
+
+  // what she sets out with
+  const deckX = SAFE + 372;
+  txt(c, 'THE CARAVAN SETS OUT WITH', deckX + 196, 138, 15, '#9fc0e4', 'center', 't');
+  S.deck.forEach((id, i) => {
+    const col = i % 4, row = Math.floor(i / 4);
+    const x = deckX + col * 100, y = 160 + row * 176;
+    drawCard(c, mkCard(id), x, y, 92, 164, { t, scale: 0.98 });
+  });
+
+  // the winter you choose to walk into
+  const wx = Math.max(840, VW - 480), ww = VW - wx - SAFE;
+  txt(c, 'HOW HARD A WINTER', wx + ww / 2, 138, 15, '#9fc0e4', 'center', 't');
+  WINTERS.forEach((w, i) => {
+    const on = pick2.winters.indexOf(w.id) >= 0;
+    const y = 158 + i * 50;
+    panel(c, wx, y, ww, 44, 10, on ? '#4a3a2a' : '#1d2c49', on ? '#ffd166' : '#3a4b6b');
+    txt(c, w.name.toUpperCase(), wx + 14, y + 15, 15, on ? '#ffd166' : '#c8dcf4', 'left', 'd');
+    txt(c, w.text, wx + 14, y + 32, 12, on ? '#e8d0a8' : '#8fa6c4', 'left', 't');
+    c.beginPath(); c.arc(wx + ww - 24, y + 22, 13, 0, TAU);
+    inked(c, on ? '#ffd166' : '#2a3856', 2.5, C.ink);
+    txt(c, '+' + w.pts, wx + ww - 24, y + 23, 14, on ? '#2a1c08' : '#8fa6c4', 'center', 'd', 0);
+    hit('winterToggle', wx, y, ww, 44, w.id);
+  });
+  const pts = winterPts(pick2.winters);
+  txt(c, pts ? 'WINTER ' + pts : 'A KIND WINTER', wx + ww / 2, 520, 20, pts ? '#ffd166' : '#9fc0e4', 'center', 'd');
+
+  button(c, 'backTitle', SAFE, VH - 78, 200, 52, 'BACK', '#40527a');
+  button(c, 'startRun', MID - 130, VH - 82, 260, 60, 'SET OUT', '#3f8f5f');
+}
+
+/* -------------------------------------------------- the collection ------- */
+
+function collectionItems() {
+  const out = [];
+  for (const c of Object.values(CARDS)) {
+    if (c.leader) out.push({ id: c.id, kind: 'leader', name: c.name });
+  }
+  for (const c of Object.values(CARDS)) {
+    if (!c.leader && c.type === 'unit') out.push({ id: c.id, kind: 'unit', name: c.name });
+  }
+  for (const c of Object.values(CARDS)) {
+    if (c.type === 'item') out.push({ id: c.id, kind: 'item', name: c.name });
+  }
+  for (const id of Object.keys(CHARMS)) out.push({ id, kind: 'charm', name: CHARMS[id].name });
+  return out;
+}
+
+function drawCollection(c, t) {
+  drawBackdrop(c, 1, t);
+  const items = collectionItems();
+  const shown = items.filter((i) => found(i.id)).length;
+  txt(c, 'THE COLLECTION', MID, 50, 34, '#eaf6ff', 'center', 'd');
+  txt(c, shown + ' of ' + items.length + ' found   ·   ' + statOf('kills') + ' foes felled   ·   best turn: ' +
+    statOf('bestCombo') + '   ·   clean zones: ' + statOf('flawless'), MID, 84, 14, '#9fc0e4', 'center', 't');
+
+  // fit the grid to the stage rather than assuming a 16:9 one
+  const gap = 6, availW = VW - SAFE * 2, availH = VH - 190;
+  let tw = 88, th = 96;
+  let perRow = Math.max(6, Math.floor((availW + gap) / (tw + gap)));
+  let rows = Math.ceil(items.length / perRow);
+  while (rows * (th + 22) > availH && th > 58) {
+    th -= 6; tw -= 6;
+    perRow = Math.max(6, Math.floor((availW + gap) / (tw + gap)));
+    rows = Math.ceil(items.length / perRow);
+  }
+  const totalW = perRow * tw + (perRow - 1) * gap;
+  items.forEach((it, i) => {
+    const col = i % perRow, row = Math.floor(i / perRow);
+    const x = MID - totalW / 2 + col * (tw + gap), y = 112 + row * (th + 22);
+    const have = found(it.id);
+    const hovered = UI.hover && UI.hover.id === 'collect' && UI.hover.data === i;
+    panel(c, x, y - (hovered ? 4 : 0), tw, th, 10, have ? '#22304d' : '#161d2e', have ? '#3f5a86' : '#2a3346');
+    c.save();
+    c.translate(0, hovered ? -4 : 0);
+    if (!have) c.globalAlpha = 0.22;
+    const def = CARDS[it.id];
+    if (it.kind === 'charm') {
+      const ch = CHARMS[it.id];
+      c.save(); c.translate(x + tw / 2, y + th * 0.44);
+      c.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU - Math.PI / 2, r = k % 2 ? 12 : 22;
+        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+        k ? c.lineTo(px, py) : c.moveTo(px, py);
+      }
+      c.closePath();
+      inked(c, ch.col, 2.5, C.ink);
+      c.restore();
+    } else if (it.kind === 'item') {
+      drawItemIcon(c, def.art, x + tw / 2, y + th * 0.44, th * 0.48, t);
+    } else {
+      drawCreature(c, def.art, x + tw / 2, y + th * 0.62, th * 0.65, { t, ph: i * 0.7, blink: i });
+    }
+    c.restore();
+    if (!have) txt(c, '?', x + tw / 2, y + th * 0.46, 34, '#5a6a86', 'center', 'd');
+    txt(c, it.name.toUpperCase(), x + tw / 2, y + th + 10, 10.5, have ? '#c8dcf4' : '#5a6a86', 'center', 't');
+    hit('collect', x, y, tw, th + 18, i);
+  });
+
+  if (UI.lockNote) {
+    panel(c, MID - 260, VH - 108, 520, 46, 12, 'rgba(12,22,40,.95)', '#ffd166');
+    txt(c, UI.lockNote, MID, VH - 85, 15, '#ffe6a8', 'center', 't');
+  }
+  button(c, 'collectClose', MID - 100, VH - 56, 200, 46, 'BACK', '#40527a');
 }
 
 function drawHud(c, t) {
   const run = G.run;
   if (!run) return;
   const z = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
-  panel(c, 0, -14, 360, 58, 14, 'rgba(16,26,46,.85)', '#2b3d5f');
-  txt(c, z.name.toUpperCase(), 22, 22, 18, z.tint === '#2b8fd0' ? '#9fe0ff' : '#e0c8ff', 'left', 'd');
-  txt(c, 'STEP ' + (run.step + 1) + '/' + run.trail.length, 250, 23, 13, '#9fb6d6', 'center', 't');
+  panel(c, SAFE - 20, -14, 366, 58, 14, 'rgba(16,26,46,.85)', '#2b3d5f');
+  txt(c, z.name.toUpperCase(), SAFE, 22, 18, z.tint === '#2b8fd0' ? '#9fe0ff' : '#e0c8ff', 'left', 'd');
+  txt(c, 'STEP ' + (run.step + 1) + '/' + run.trail.length, SAFE + 230, 23, 13, '#9fb6d6', 'center', 't');
 
-  panel(c, VW - 220, -14, 240, 58, 14, 'rgba(16,26,46,.85)', '#2b3d5f');
-  c.beginPath(); c.arc(VW - 190, 18, 13, 0, TAU);
+  panel(c, VW - SAFE - 254, -14, 274, 58, 14, 'rgba(16,26,46,.85)', '#2b3d5f');
+  c.beginPath(); c.arc(VW - SAFE - 224, 18, 13, 0, TAU);
   inked(c, C.gold, 3, C.ink);
-  txt(c, String(run.gold), VW - 168, 20, 20, '#ffe6a8', 'left', 'd');
-  button(c, 'menu', VW - 92, 4, 76, 34, 'DECK', '#40527a', false, true);
+  txt(c, String(run.gold), VW - SAFE - 202, 20, 20, '#ffe6a8', 'left', 'd');
+  button(c, 'menu', VW - SAFE - 106, 2, 106, 44, 'DECK', '#40527a', false, true);
 }
 
 function drawBattle(c, t) {
@@ -2738,7 +3141,10 @@ function drawBattle(c, t) {
   const list = b.units.slice().sort((a, x) => (a.py - x.py) || (a.col - x.col));
   for (const u of list) {
     drawUnit(c, u, t);
-    if (u.alive) hit('unit', u.px - SLOT_W / 2, u.py - SLOT_H / 2, SLOT_W, SLOT_H, u);
+    if (u.alive) {
+      const sp = slotPos(u.side, u.lane, u.col);
+      hit('unit', sp.x - SLOT_W / 2, sp.y - SLOT_H / 2, SLOT_W, SLOT_H, u);
+    }
   }
 
   // attack order preview
@@ -2755,12 +3161,12 @@ function drawBattle(c, t) {
   drawHud(c, t);
 
   // piles
-  txt(c, 'DECK ' + b.draw.length, 84, VH - 152, 14, '#9fb6d6', 'center', 't');
-  txt(c, 'USED ' + b.discard.length, 84, VH - 130, 14, '#7e97b8', 'center', 't');
+  txt(c, 'DECK ' + b.draw.length, SAFE + 52, VH - 152, 14, '#9fb6d6', 'center', 't');
+  txt(c, 'USED ' + b.discard.length, SAFE + 52, VH - 130, 14, '#7e97b8', 'center', 't');
 
   // the bell
   const charged = b.bell >= BELL_CHARGE;
-  const bx = VW - 118, by = VH - 176;
+  const bx = VW - SAFE - 84, by = VH - 176;
   c.save();
   if (charged) { c.shadowColor = '#ffd166'; c.shadowBlur = 22 + Math.sin(t * 5) * 8; }
   c.beginPath();
@@ -2775,10 +3181,10 @@ function drawBattle(c, t) {
   txt(c, charged ? 'FREE REDRAW' : 'REDRAW (' + b.bell + '/' + BELL_CHARGE + ')', bx, by + 66, 13, charged ? '#ffe6a8' : '#9fb6d6', 'center', 't');
   hit('bell', bx - 60, by - 40, 120, 120);
 
-  button(c, 'pass', VW - 178, VH - 66, 120, 44, 'PASS', '#40527a', b.busy, true);
-  button(c, 'order', 22, 62, 96, 34, UI.order ? 'ORDER ✓' : 'ORDER', '#40527a', false, true);
-  button(c, 'help', 124, 62, 44, 34, '?', '#40527a', false, true);
-  button(c, 'mute', 174, 62, 44, 34, G.meta.mute ? '✕' : '♪', '#40527a', false, true);
+  button(c, 'pass', VW - SAFE - 144, VH - 68, 144, 46, 'PASS', '#40527a', b.busy, true);
+  button(c, 'order', SAFE, 58, 104, 44, UI.order ? 'ORDER ✓' : 'ORDER', '#40527a', false, true);
+  button(c, 'help', SAFE + 112, 58, 44, 44, '?', '#40527a', false, true);
+  button(c, 'mute', SAFE + 164, 58, 44, 44, G.meta.mute ? '✕' : '♪', '#40527a', false, true);
 
   if (b.banner && b.banner.t < 2.1) {
     const k = b.banner.t += 1 / 60;
@@ -2803,7 +3209,7 @@ function drawBattle(c, t) {
 
   // the wave clock, over the far side of the table
   if (b.waves && b.waves.length) {
-    const wx = MID + 176, wy = 54, ww = 300, wh = 46;
+    const wx = Math.min(MID + 176, VW - SAFE - 300), wy = 54, ww = 300, wh = 46;
     const soon = b.waveCnt <= 1;
     panel(c, wx, wy, ww, wh, 12, 'rgba(58,26,40,.88)', soon ? '#ff9a3c' : '#7a4a5e');
     c.save();
@@ -2833,7 +3239,7 @@ function drawHand(c, t) {
     const x = MID - total / 2 + i * spread - CARD_W / 2;
     const hovered = UI.hover && UI.hover.id === 'hand' && UI.hover.data === i;
     const lift = hovered ? 34 : 0;
-    const arc = n > 1 ? Math.abs(off) * Math.abs(off) * 2.2 : 0;
+    const arc = n > 1 ? Math.min(14, Math.abs(off) * Math.abs(off) * 2.2) : 0;
     const y = HAND_Y - CARD_H / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
     card.handT = Math.min(1, (card.handT || 0) + 0.06);
     drawCard(c, card, x, y, CARD_W, CARD_H, {
@@ -2854,44 +3260,91 @@ function drawHand(c, t) {
 }
 
 /* --------------------------------------------------------------- trail --- */
+/* Where a step sits on the map. The road wanders, so the same seven steps read
+   as a journey rather than as a progress bar. */
+function trailPoint(run, step, branch, branches) {
+  const steps = run.trail.length;
+  const x0 = 140, x1 = VW - 150;
+  const x = x0 + (x1 - x0) * (steps === 1 ? 0.5 : step / (steps - 1));
+  const wander = Math.sin(step * 1.27 + run.seed % 7) * 46;
+  const spread = branches > 1 ? (branch - (branches - 1) / 2) * 116 : 0;
+  return { x, y: 306 + wander + spread };
+}
+
 function drawTrail(c, t) {
   const g = G, run = g.run;
   drawBackdrop(c, run.zone, t);
   const z = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
-  txt(c, z.name.toUpperCase(), MID, 92, 40, '#eaf6ff', 'center', 'd');
-  txt(c, 'pick your road', MID, 130, 16, '#a8c8ea', 'center', 't');
+  txt(c, z.name.toUpperCase(), MID, 84, 40, '#eaf6ff', 'center', 'd');
+  txt(c, 'pick your road', MID, 122, 16, '#a8c8ea', 'center', 't');
 
-  const steps = run.trail.length;
-  const x0 = 150, x1 = VW - 150;
+  // the road itself: a broad packed-snow band under a dashed track
+  const pts = [];
+  for (let s2 = 0; s2 < run.trail.length; s2++) {
+    const nodes = run.trail[s2];
+    pts.push(trailPoint(run, s2, (nodes.length - 1) / 2, 1));
+  }
   c.save();
-  c.strokeStyle = 'rgba(255,255,255,.28)'; c.lineWidth = 6; c.setLineDash([2, 14]); c.lineCap = 'round';
-  c.beginPath(); c.moveTo(x0, 300); c.lineTo(x1, 300); c.stroke();
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = 'rgba(255,255,255,.13)'; c.lineWidth = 34;
+  c.beginPath();
+  pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+  c.stroke();
+  c.strokeStyle = 'rgba(190,220,255,.5)'; c.lineWidth = 4; c.setLineDash([3, 17]);
+  c.beginPath();
+  pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+  c.stroke();
   c.restore();
 
-  for (let s = 0; s < steps; s++) {
-    const x = x0 + (x1 - x0) * (steps === 1 ? 0.5 : s / (steps - 1));
-    const nodes = run.trail[s];
-    const doneStep = s < run.step;
-    const nowStep = s === run.step;
+  for (let s2 = 0; s2 < run.trail.length; s2++) {
+    const nodes = run.trail[s2];
+    const doneStep = s2 < run.step;
+    const nowStep = s2 === run.step;
     nodes.forEach((nd, i) => {
-      const y = nodes.length === 1 ? 300 : 250 + i * 100;
-      const r = nowStep ? 34 : 24;
-      const chosen = doneStep && run.path[s] === nd.kind;
+      const p = trailPoint(run, s2, i, nodes.length);
+      const boss = nd.kind === 'boss';
+      const r = (nowStep ? 34 : 24) * (boss ? 1.3 : 1);
+      const chosen = doneStep && run.path[s2] === nd.kind;
+      // a short spur off the main road out to a branch
+      if (nodes.length > 1) {
+        const mid = trailPoint(run, s2, (nodes.length - 1) / 2, 1);
+        c.save();
+        c.globalAlpha = nowStep ? 0.5 : 0.22;
+        c.strokeStyle = '#cfe4ff'; c.lineWidth = 3; c.setLineDash([4, 8]);
+        c.beginPath(); c.moveTo(mid.x, mid.y); c.lineTo(p.x, p.y); c.stroke();
+        c.restore();
+      }
       c.save();
-      c.globalAlpha = doneStep ? (chosen ? 0.75 : 0.2) : nowStep ? 1 : 0.55;
+      c.globalAlpha = doneStep ? (chosen ? 0.7 : 0.16) : nowStep ? 1 : 0.5;
       if (nowStep) { c.shadowColor = '#ffd166'; c.shadowBlur = 16 + Math.sin(t * 4 + i) * 6; }
-      c.beginPath(); c.arc(x, y, r, 0, TAU);
+      c.beginPath(); c.arc(p.x, p.y, r, 0, TAU);
       inked(c, nodeCol(nd.kind), 3.5, C.ink);
       c.restore();
-      drawNodeIcon(c, nd.kind, x, y, r * 0.9, t);
+      drawNodeIcon(c, nd.kind, p.x, p.y, r * 0.9, t);
       if (nowStep) {
-        txt(c, nodeName(nd.kind).toUpperCase(), x, y + r + 18, 14, '#eaf6ff', 'center', 't');
-        hit('node', x - r - 8, y - r - 8, r * 2 + 16, r * 2 + 16, i);
+        txt(c, nodeName(nd.kind).toUpperCase(), p.x, p.y + r + 20, 14, '#eaf6ff', 'center', 't');
+        hit('node', p.x - r - 12, p.y - r - 12, r * 2 + 24, r * 2 + 24, i);
+      } else if (doneStep && chosen) {
+        // footprints where the caravan has already been
+        c.save(); c.globalAlpha = 0.4; c.fillStyle = '#0d1830';
+        for (let k = 0; k < 2; k++) {
+          c.beginPath();
+          c.ellipse(p.x - 8 + k * 16, p.y + r + 12 + k * 7, 4, 6, 0.3, 0, TAU);
+          c.fill();
+        }
+        c.restore();
       }
     });
   }
+
+  // the caravan, standing at the step it has reached
+  const here = trailPoint(run, Math.max(0, run.step - 0.5), 0, 1);
+  const bob = Math.sin(t * 2) * 3;
+  drawCreature(c, CARDS[run.leader.def].art, here.x - 54, here.y - 42 + bob, 62, { t, ph: 3 });
+
   drawHud(c, t);
   if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 40, 15, '#9fb6d6', 'center', 't');
+  if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - 40, VH - 40, 14, '#ffd166', 'right', 't');
 }
 const nodeCol = (k) => ({ fight: '#7fb2e8', elite: '#e08a8a', boss: '#ff9a3c', shop: '#ffd166', camp: '#8fe0a0', cache: '#c9a6ff', event: '#f0a6d0' }[k] || '#fff');
 const nodeName = (k) => ({ fight: 'skirmish', elite: 'pack', boss: 'the beast', shop: 'trader', camp: 'camp', cache: 'cache', event: 'a stop' }[k] || k);
@@ -3069,8 +3522,8 @@ function drawTutorial(c, t) {
   c.restore();
   txt(c, (tut.i + 1) + '/' + TUTORIAL.length, x + w - 66, y + 31, 13, '#9fb6d6', 'center', 't');
   c.restore();
-  hit('tutSkip', x + w - 34, y + 12, 26, 38);
-  txt(c, '✕', x + w - 21, y + 31, 17, '#7e97b8', 'center', 't');
+  hit('tutSkip', x + w - 50, y + 9, 44, 44);
+  txt(c, '✕', x + w - 28, y + 31, 17, '#7e97b8', 'center', 't');
 }
 
 /* ---------------------------------------------------------------- help --- */
@@ -3377,14 +3830,32 @@ function drawEnd(c, t, won) {
   txt(c, won ? 'the caravan makes the far shore, and the winter lets go' : 'the caravan halts where it stands',
     MID, 262 + bob, 18, '#9fc0e4', 'center', 't');
 
-  const m = G.meta;
-  const stats = [['RUNS', m.runs], ['CROSSINGS', m.wins], ['FURTHEST ZONE', (m.best || 0) + 1]];
-  stats.forEach((sx, i) => {
-    const x = MID - 300 + i * 300;
-    txt(c, String(sx[1]), x, 340, 40, '#eaf6ff', 'center', 'd');
-    txt(c, sx[0], x, 376, 13, '#7e97b8', 'center', 't');
+  // what this caravan actually did, before it is forgotten
+  const run = G.run;
+  const cells = run ? [
+    ['ZONES', (won ? ZONES.length : run.zone + 1) + ' / ' + ZONES.length],
+    ['FIGHTS WON', run.fights || 0],
+    ['FOES FELLED', run.kills || 0],
+    ['BEST TURN', (run.bestTurn || 0) + ' in one'],
+    ['CARAVAN', run.deck.length + ' cards'],
+    ['BELLS RUNG', (run.bells || []).length],
+    ['SCRIP LEFT', run.gold],
+    ['WINTER', run.winterPts || 0],
+  ] : [['RUNS', G.meta.runs], ['CROSSINGS', G.meta.wins], ['FURTHEST', (G.meta.best || 0) + 1]];
+
+  const perRow = 4, cw = 220, chh = 74;
+  cells.forEach((cell, i) => {
+    const col = i % perRow, row = Math.floor(i / perRow);
+    const inRow = Math.min(perRow, cells.length - row * perRow);
+    const x = MID - (inRow * cw) / 2 + col * cw + cw / 2;
+    const y = 322 + row * chh;
+    txt(c, String(cell[1]), x, y, 30, '#eaf6ff', 'center', 'd');
+    txt(c, cell[0], x, y + 26, 12, '#7e97b8', 'center', 't');
   });
-  button(c, 'endHome', MID - 140, 424, 280, 60, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
+  if (run && run.log.length) {
+    txt(c, run.log[run.log.length - 1], MID, 300, 14, '#9fb6d6', 'center', 't');
+  }
+  button(c, 'endHome', MID - 140, VH - 96, 280, 60, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
 }
 
 /* ================================================== 10. input ============ */
@@ -3393,7 +3864,29 @@ function press(id, data) {
   const g = G;
   sfx('tap');
   switch (id) {
-    case 'tribe': newRun(g, data); return;
+    case 'tribe': g.ui.pick = { tribe: data, winters: [] }; g.screen = 'leader'; return;
+    case 'winterToggle': {
+      const w = g.ui.pick.winters;
+      const i = w.indexOf(data);
+      if (i >= 0) w.splice(i, 1); else w.push(data);
+      return;
+    }
+    case 'startRun': newRun(g, g.ui.pick.tribe, undefined, g.ui.pick.winters); return;
+    case 'backTitle': g.screen = 'title'; return;
+    case 'collection': g.screen = 'collection'; UI.lockNote = null; return;
+    case 'collectClose': g.screen = 'title'; UI.lockNote = null; return;
+    case 'collect': {
+      const it = collectionItems()[data];
+      if (!it) return;
+      if (!found(it.id)) {
+        const u = LOCKED[it.id];
+        UI.lockNote = u ? u.text + '   (' + statOf(u.stat) + ' / ' + u.n + ')' : 'Not found yet.';
+        return;
+      }
+      UI.lockNote = null;
+      if (CARDS[it.id]) UI.inspect = mkCard(it.id);
+      return;
+    }
     case 'continue': if (!loadRun(g)) newRun(g, 'hearth'); return;
     case 'node': enterNode(g, data); return;
     case 'bell': ringBell(g); return;
@@ -3496,7 +3989,7 @@ function press(id, data) {
       return;
     }
     case 'campCharm': {
-      const three = sample(Object.keys(CHARMS), 3);
+      const three = sample(charmPool(), 3);
       openChooser('WHICH CHARM?', three.map((cid) => ({ charm: cid })), (i) => {
         pickTargetForCharm(g, three[i], () => { g.ui.camp.done = false; campChoose(g, 'charm', { charm: three[i], uid: UI.lastCharmUid }); });
       }, { cancel: 'NEVER MIND' });
@@ -3690,6 +4183,8 @@ function render() {
   }
   switch (G.screen) {
     case 'title': drawTitle(c, t); break;
+    case 'leader': drawLeaderPick(c, t); break;
+    case 'collection': drawCollection(c, t); break;
     case 'trail': drawTrail(c, t); break;
     case 'battle': drawBattle(c, t); break;
     case 'reward': drawReward(c, t); break;
@@ -3716,10 +4211,15 @@ function render() {
   }
 }
 
+function setStageWidth(w, h) {
+  VW = clamp(Math.round(VH * (w / Math.max(1, h))), VW_MIN, VW_MAX);
+  MID = VW / 2;
+}
 function resize() {
   if (!canvas) return;
   const w = window.innerWidth, h = window.innerHeight;
   document.body.classList.toggle('portrait', h > w * 1.02);
+  setStageWidth(w, h);
   const scale = Math.min(w / VW, h / VH);
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
   canvas.width = Math.round(VW * DPR);
@@ -3793,6 +4293,9 @@ function loadMeta() {
     const o = JSON.parse(raw);
     if (o && typeof o === 'object') G.meta = Object.assign(G.meta, o);
     if (!Array.isArray(G.meta.unlocked) || !G.meta.unlocked.length) G.meta.unlocked = ['hearth', 'frost'];
+    G.meta.found = G.meta.found || {};
+    G.meta.winter = G.meta.winter || {};
+    G.meta.stats = Object.assign({ kills: 0, bestCombo: 0, flawless: 0, wins: 0, zones: 0 }, G.meta.stats || {});
     AUD.on = MUSIC.on = !G.meta.mute;
   } catch (e) {}
 }
@@ -3802,20 +4305,22 @@ function saveMeta() { store.set(SAVE_META, JSON.stringify(G.meta)); }
 /* The suites drive the real functions through this, never a re-implementation. */
 window.FF = {
   G, C, CARDS, CHARMS, SCARS, FOES, ZONES, TRIBES, STATUS, STATUS_ORDER, KEYWORD, STARTERS,
-  LANES, COLS, HAND, BELL_CHARGE, VW, VH, UI,
+  LANES, COLS, HAND, BELL_CHARGE, VW, VH, UI, SAFE,
+  dims: () => ({ VW, VH, MID, SAFE }), setStageWidth,
   mkCard, mkUnit, mkFoeCard, rebuildCard, attachCharm,
   units, playerUnits, enemyUnits, unitAt, slotFree, freeSlots, laneOf, turnOrder,
   targetFor, frontTarget, laneTargets, neighbours,
-  addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter,
+  addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter, shoveUnit, HOARD_CAP,
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
+  UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits,
-  drawCreature, drawBackdrop, drawItemIcon,
+  drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection,
   MUSIC, musicTick, setMute, moodFor, AUD,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES,
   setCtx: (c) => { ctx = c; initSnow(); },

@@ -10,6 +10,12 @@ Typeface specimen: https://games-71g.pages.dev/frostfell/fonts.html
 Landscape only, built for a phone held sideways. One file — `index.html` carries
 the markup, the CSS, the fonts and the whole game.
 
+The stage is 720 tall, always; its width follows the device, so a 20:9 phone
+gets the extra width rather than two black bars. Everything that touches an
+edge is placed against a safe inset so a notch never eats it, and the render
+suite checks every screen at five device shapes for touch targets under 40px,
+anything hanging off the stage, and anything hiding under a notch.
+
 ## The rules, briefly
 
 - **The board** is two lanes deep, three columns a side. Column 0 is the front,
@@ -42,6 +48,23 @@ the markup, the CSS, the fonts and the whole game.
   falls — an extra card each hand, a slower wave clock, a fatter purse.
 - **Events** are forks in the road: a shrine, a stopped caravan, a hot spring,
   a bell in a dead tree, somebody else's fire. Every option is a real trade.
+- **Shove** puts what it hits a slot further back. **Crush** hits harder for
+  every other body in the target's lane, so a stacked line is a liability.
+  **Hoard** grows while a card waits unplayed in your hand.
+
+## Beyond one run
+
+- **The collection** on the title screen lists every warden, every piece of
+  gear, every charm and all four leaders. What is still locked says exactly
+  what it wants and how far along you are — the counters are ones the game
+  already keeps: foes felled, best single turn, zones crossed without losing
+  anybody.
+- **Winters** are the optional difficulty. Each is one sentence and a price in
+  points — thicker snow brings waves a turn sooner, a lean purse costs a third
+  more, a weary leader sets out hurt — and the hardest total a tribe has ever
+  carried across the fell is remembered next to its name.
+- **The Stranger** is the fourth leader, earned by crossing a zone without
+  losing a warden.
 
 ## Teaching, sound, and feel
 
