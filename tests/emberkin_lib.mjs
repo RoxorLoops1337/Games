@@ -153,7 +153,16 @@ export const near = (a, b, tol, label) => ok(Math.abs(a - b) <= tol, `${label} (
 export function done(name) {
   if (fails.length) {
     console.error(`\n${name}: ${fails.length} FAILED, ${pass} passed`);
-    process.exit(1);
+    // NOT process.exit(1). Writes to a pipe are asynchronous, and exiting
+    // throws away whatever is still queued. Under EK_TRACE this suite prints a
+    // line per check, and every FAILING run — which is every mutant run the
+    // sweep makes — was losing about half of them: 6102 checks reported in the
+    // summary, 3444 trace lines actually delivered. The sweep scored three
+    // mutants that demonstrably bite as "killed nothing", and then refused to
+    // trust its own plant, which is the only reason it was caught. Setting the
+    // code lets node drain stdout and still exit 1.
+    process.exitCode = 1;
+    return;
   }
   console.log(`${name}: ${pass} checks passed`);
 }

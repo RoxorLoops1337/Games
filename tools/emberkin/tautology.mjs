@@ -244,6 +244,19 @@ const MUTANTS = [
     find: 'G.money = blob.money ?? 500;',
     to: 'G.money = blob.money;' },
 
+  { name: 'dex: the habitat line stops after its first sentence', aims: ['the dex says every way there is to get a kin, not the first one'],
+    find: "  if (where.length) said.push('Found in ' + where.join(' · ') + '.');",
+    to: "  if (where.length) return 'Found in ' + where.join(' · ') + '.';" },
+  { name: 'dex: the starters stop being told they are starters', aims: ['the dex says every way there is to get a kin, not the first one'],
+    find: "  if (STARTERS.includes(id)) said.push('One of the three Elder Rowan hands out.');",
+    to: '' },
+  { name: 'dex: a kin keeps the first four moves it ever learns', aims: ['the dex says every way there is to get a kin, not the first one'],
+    find: '  return uniq.slice(-4).map((m) => ({ id: m, pp: MOVES[m].pp, max: MOVES[m].pp }));',
+    to: '  return uniq.slice(0, 4).map((m) => ({ id: m, pp: MOVES[m].pp, max: MOVES[m].pp }));' },
+  { name: 'dex: a built kin reads the wrong base stat', aims: ['the dex says every way there is to get a kin, not the first one'],
+    find: '    atk: statAt(sp.base[1], lvl), def: statAt(sp.base[2], lvl), spd: statAt(sp.base[3], lvl),',
+    to: '    atk: statAt(sp.base[2], lvl), def: statAt(sp.base[2], lvl), spd: statAt(sp.base[3], lvl),' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

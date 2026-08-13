@@ -5933,6 +5933,171 @@ section('a save never loads into a game you could not have been playing');
     '…then from the starter deck, and only as far as the floor');
 }
 
+// Does the dex tell the truth about every kin in it?
+//
+// Swept whole: every entry's types, base stats, learn list and evolution target
+// against the live game, every kin's reachability, and every level a kin can be
+// met at against what movesAt actually hands it. All of that was already exact
+// — nothing points at a move or a kin that does not exist, no kin is
+// unreachable, no level leaves a kin with nothing that deals damage, and no
+// move is listed and then never holdable.
+//
+// The habitat LINE was not. It was four returns, and they are not alternatives:
+// six kin are wild AND something you can evolve, and all three starters are
+// wild as well. So the dex sent you to Crown Hollow — the last map in the game,
+// Lv20–24 — for a Pyrelynx you could have made out of the Cindercub already in
+// your party at level 16; and the clause about Rowan handing one out could not
+// be printed about anything at all, because every kin it applies to matched the
+// wild branch first. The knowledge was in the function. Only its first sentence
+// ever got out.
+section('the dex says every way there is to get a kin, not the first one');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  const { DEX, DEX_ORDER, MOVES, MAPS, TYPES } = g;
+  eq(DEX_ORDER.length, 19, 'nineteen kin in the valley');
+
+  // ---- the entry points only at things that exist ------------------------
+  for (const id of DEX_ORDER) {
+    const d = DEX[id];
+    ok(!!d, `${id} has an entry`);
+    if (!d) continue;
+    ok(d.types.length > 0 && d.types.every((t) => !!TYPES[t]), `${id} is ${d.types.join('/')}, all real types`);
+    eq(d.base.length, 4, `${id} has four base stats`);
+    ok(d.base.every((n) => Number.isFinite(n) && n > 0), '…all of them numbers above zero');
+    ok(!!(d.dex || '').trim(), `${id} has something written about it`);
+    for (const [lv, mv] of d.learn) {
+      ok(!!MOVES[mv], `${id} learns ${mv}, which is a move`);
+      ok(lv >= 1, `…at level ${lv}`);
+    }
+    if (d.evo) {
+      ok(!!DEX[d.evo[0]], `${id} evolves into ${d.evo[0]}, which is a kin`);
+      ok(d.evo[1] > 1, `…at level ${d.evo[1]}`);
+    }
+  }
+
+  // ---- what it says about where it comes from ----------------------------
+  // The claim: EVERY true route is in the line, and nothing untrue is.
+  let evoNamed = 0, starterNamed = 0;
+  for (const id of DEX_ORDER) {
+    const h = g.habitat(id);
+    ok(h.length > 10, `${id} has a habitat line`);
+    ok(!/Not anywhere, really/.test(h), `${id} has somewhere it can be found`);
+
+    const wild = Object.entries(MAPS).filter(([, m]) => ((m.enc && m.enc.table) || []).some((e) => e[0] === id));
+    const shrine = Object.values(MAPS).find((m) => m.legend && m.legend.id === id);
+    const from = DEX_ORDER.find((p) => DEX[p].evo && DEX[p].evo[0] === id);
+    const starter = g.STARTERS.includes(id);
+
+    // Every map it actually spawns on is named, with the band off that map.
+    for (const [, m] of wild) {
+      const row = m.enc.table.find((e) => e[0] === id);
+      ok(h.includes(`${m.name} (Lv${row[1]}–${row[2]})`), `${id} names ${m.name} and the band it spawns at`);
+    }
+    if (shrine) ok(h.includes(shrine.legend.where), `${id} names the ground it haunts`);
+    // …and the routes that used to be swallowed by the wild branch.
+    if (from) {
+      ok(h.includes(`Evolves from ${DEX[from].name} at level ${DEX[from].evo[1]}`),
+        `${id} says you can evolve a ${DEX[from].name} at ${DEX[from].evo[1]}${wild.length ? ' — and it is wild too' : ''}`);
+      evoNamed++;
+    }
+    if (starter) { ok(/Elder Rowan/.test(h), `${id} says Rowan hands one out`); starterNamed++; }
+    // Nothing untrue: a kin nothing evolves into must not claim an evolution,
+    // and a kin Rowan does not hand out must not say she does.
+    if (!from) ok(!/Evolves from/.test(h), `${id} does not invent a pre-evolution`);
+    if (!starter) ok(!/Elder Rowan/.test(h), `${id} does not claim to be a starter`);
+    if (!wild.length) ok(!/Found in/.test(h), `${id} does not claim a wild spot it has not got`);
+  }
+  eq(evoNamed, 9, 'nine kin are something you can evolve into, and all nine say so');
+  eq(starterNamed, 3, 'three are handed out, and all three say so');
+  // The specific ones the old shape could not reach, pinned by name: wild AND
+  // an evolution. Six of the nine — the three the old code did reach were the
+  // pure evolutions, which is why nobody noticed.
+  for (const [id, pre, at] of [['pyrelynx', 'Cindercub', 16], ['brookite', 'Dewdrip', 16], ['thornip', 'Sproutle', 16],
+    ['voltyx', 'Zaplet', 18], ['gargolem', 'Pebblet', 20], ['nocthorn', 'Mothrix', 22]]) {
+    const h = g.habitat(id);
+    ok(/^Found in /.test(h), `${id} still leads with where it spawns`);
+    ok(h.includes(`Evolves from ${pre} at level ${at}`), `…and goes on to say: evolve a ${pre} at ${at}`);
+  }
+
+  // ---- every kin can actually be got hold of -----------------------------
+  const reach = Object.fromEntries(DEX_ORDER.map((id) => [id, []]));
+  for (const [, m] of Object.entries(MAPS)) {
+    for (const e of (m.enc && m.enc.table) || []) if (reach[e[0]]) reach[e[0]].push('wild');
+    if (m.legend && reach[m.legend.id]) reach[m.legend.id].push('shrine');
+    for (const n of m.npcs || []) for (const t of (n.trainer && n.trainer.team) || []) if (reach[t[0]]) reach[t[0]].push('trainer');
+  }
+  for (const id of DEX_ORDER) {
+    if (DEX[id].evo && reach[DEX[id].evo[0]]) reach[DEX[id].evo[0]].push('evolution');
+    if (g.STARTERS.includes(id)) reach[id].push('starter');
+  }
+  for (const id of DEX_ORDER) ok(reach[id].length > 0, `${id} is something the game can actually produce (${reach[id].join('/')})`);
+
+  // ---- what a kin holds, at every level it can be met at ------------------
+  // movesAt keeps only the LAST FOUR learned by that level, so a move can be
+  // listed and shoved out of reach for ever, and a kin can arrive unable to hit
+  // anything. Neither happens — walked rather than assumed.
+  let levels = 0;
+  for (const id of DEX_ORDER) {
+    const d = DEX[id];
+    const top = Math.max(60, ...d.learn.map((e) => e[0]));
+    for (let lv = 1; lv <= top; lv++) {
+      const held = g.movesAt(id, lv);
+      levels++;
+      if (held.length !== 4 && lv > 4) ok(held.length > 0, `${id} at ${lv} holds something`);
+      ok(held.length <= 4, `${id} at ${lv} holds no more than four`);
+      ok(held.some((m) => (MOVES[m.id].pow || 0) > 0), `${id} at ${lv} can hit something`);
+    }
+    // Nothing is listed and then never holdable.
+    for (const [lv, mv] of d.learn) {
+      let ever = false;
+      for (let l = lv; l <= top && !ever; l++) if (g.movesAt(id, l).some((m) => m.id === mv)) ever = true;
+      ok(ever, `${id}'s ${mv} at ${lv} is a move it can actually hold`);
+    }
+  }
+  ok(levels > 1000, `${levels} kin-levels walked`);
+
+  // ---- the built creature agrees with its entry --------------------------
+  for (const id of DEX_ORDER) {
+    const d = DEX[id];
+    const m = g.mkMon(id, 50);
+    ok(!!m, `${id} builds`);
+    if (!m) continue;
+    eq(m.max, g.hpAt(d.base[0], 50), `${id}'s HP comes off its base`);
+    eq(m.atk, g.statAt(d.base[1], 50), '…and its attack');
+    eq(m.def, g.statAt(d.base[2], 50), '…and its defence');
+    eq(m.spd, g.statAt(d.base[3], 50), '…and its speed');
+    eq(m.types.join(','), d.types.join(','), `${id} is built the type its entry says`);
+    eq(m.name, d.name, `${id} is built with the name its entry says`);
+  }
+
+  // ---- the evolution the entry promises is the one that happens ----------
+  for (const id of DEX_ORDER) {
+    const d = DEX[id];
+    if (!d.evo) continue;
+    const [to, at] = d.evo;
+    g.G.party = [g.mkMon(id, at - 1)];
+    ok(!g.checkEvolve(), `${id} does not evolve at ${at - 1}`);
+    g.G.party = [g.mkMon(id, at)];
+    const due = g.checkEvolve();
+    ok(!!due, `${id} evolves at ${at}`);
+    if (!due) continue;
+    const out = g.evolveMon(due);
+    eq(due.species, to, `…into ${to}, which is what the entry says`);
+    eq(out && out.newName, DEX[to].name, `…and it is announced as ${DEX[to].name}`);
+    ok(due.moves.length <= 4, '…still holding no more than four moves');
+    ok(due.max === g.hpAt(DEX[to].base[0], at), '…with the new form\'s HP');
+  }
+
+  // Pinned by shape: a property about "says everything" is happy the moment
+  // the clauses go back to being returns.
+  ok(SRC.includes("if (where.length) said.push('Found in ' + where.join(' · ') + '.');"),
+    'the wild spots are a clause, not a return');
+  ok(SRC.includes("return said.join(' ') || 'Not found in the wild. Not anywhere, really.';"),
+    'and the line is every clause that is true, with the old sentence left for a kin with no home at all');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

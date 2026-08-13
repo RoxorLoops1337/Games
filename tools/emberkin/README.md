@@ -3773,3 +3773,87 @@ desktop one. That is the correct answer and not an obvious one.
 
     (Pass 203's entry omitted its sweep number: it was 43 of 73 killed, 68
     anchors, 0 orphaned.)
+
+116. **The dex knew six more ways to get a kin than it ever said** (pass 205).
+    The encyclopaedia swept whole, all nineteen kin, every axis at once. Almost
+    all of it was already exact and is now pinned rather than assumed:
+
+        entries        no entry points at a move, a type or a kin that does
+                       not exist; every base row is four numbers above zero
+        built form     HP, attack, defence, speed, types and name all come
+                       off the kin's own base row, checked at L50
+        evolution      every evo fires at the level the entry claims and NOT
+                       one level earlier, into the species it names, holding
+                       no more than four moves, with the new form's HP
+        reachability   0 of 19 unreachable; 17 obtainable without evolving
+        moves          1,140 kin-levels walked. No level leaves a kin holding
+                       more than four, holding none, or unable to deal damage,
+                       and no move is listed in a learn table and then shoved
+                       permanently out of reach by movesAt's last-four rule
+
+    The habitat LINE was the disagreement. It was four returns, and they are
+    not alternatives:
+
+        pyrelynx   was: Found in Crown Hollow (Lv20–24)
+                   now: Found in Crown Hollow (Lv20–24). Evolves from
+                        Cindercub at level 16.
+        cindercub  was: Found in Emberwood (Lv8–12)
+                   now: Found in Emberwood (Lv8–12). One of the three Elder
+                        Rowan hands out.
+
+    SIX kin are wild AND something you can evolve — pyrelynx, brookite,
+    thornip, voltyx, gargolem, nocthorn — and all three starters are wild as
+    well. So the dex sent you to Crown Hollow, the last map in the game, for a
+    Pyrelynx you could have made out of the Cindercub already in your party at
+    level 16; and the clause about Rowan handing one out could not be printed
+    about anything at all, because every kin it applies to matched the wild
+    branch first. The three the old shape DID reach are the pure evolutions —
+    magmane, tsunaga, bramblor — which is why nobody noticed.
+
+    The knowledge was in the function. Only its first sentence ever got out.
+    It now says every clause that is true, in the order a player needs them,
+    and the old "Not found in the wild. Not anywhere, really." is left for a
+    twentieth kin added with no home at all — which nothing in DEX_ORDER
+    reaches, and the suite still says so.
+
+    **Recorded, not fixed** (with their kin ids): an evolved kin keeps the four
+    moves it walked in with, so `magmane` never holds `granitefang` and
+    `bramblor` never holds `thornmaul` or `shadenibble` — their new type's
+    signature move, listed at level 1 and only ever reachable on a WILD one.
+    That is how evolution is supposed to work in this genre and changing it is
+    a balance change, which this pass may not make without a paired
+    measurement. `gargolem`'s `shalecut` is the same shape.
+
+    **The instrument was losing evidence, and this pass is how it surfaced.**
+    `done()` ended a failing run with `process.exit(1)`. Writes to a pipe are
+    asynchronous, and exiting throws away whatever is still queued — so under
+    `EK_TRACE` the suite printed a summary saying 6102 checks and delivered
+    **3444 trace lines**. Baseline runs PASS, so they drained and were complete;
+    every MUTANT run fails, so every mutant run was cut at the same place. The
+    result: three mutants I had already watched bite by hand — 16, 39 and 19
+    failures — came back `KILLED NOTHING`, 73 mutants carried a "fewer checks
+    ran" note, and the sweep's own planted self-proof failed:
+    *the sweep failed its own plant: 0 died, survivors []*. That refusal is the
+    only reason any of it was noticed.
+
+    `process.exitCode = 1` instead, so node drains stdout and still exits 1.
+    Verified: 3444 -> 6102 rows delivered on a failing run, exit code still 1,
+    a passing run still 0. Re-run, the sweep reports 16 / 3 / 39 / 19 for the
+    four dex mutants — exactly the hand-measured numbers — the "fewer checks"
+    notes fall from 73 to 3, and the crash detector holds again.
+
+    This was invisible only because the suite had never been large enough to
+    outrun the pipe mid-run. It follows that per-section numbers for sections
+    LATE in the file may have been understated in earlier passes. Those cannot
+    be re-verified from here and are not restated; from this pass on the sweep
+    delivers every row it counts.
+
+    Three planted faults, all three bite: the habitat line back to a return
+    (16 failures), `movesAt` keeping the first four instead of the last (39),
+    a built kin reading the wrong base stat (19). Four sweep mutants aimed at
+    the new section, which reports **74 of 3372 killed**. That ratio is low and
+    should read as low: 3372 checks are mostly the 1,140-level move walk, and
+    none of the four mutants can reach a check about a kin's types, its dex
+    text, or where it spawns. Every mutant anchor re-audited — 76 anchors, none
+    orphaned, none ambiguous. Render suite 2730 -> 6102 checks; the companion
+    emberkin suite still green at 4482.
