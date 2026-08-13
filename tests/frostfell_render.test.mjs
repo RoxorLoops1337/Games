@@ -186,14 +186,48 @@ section('what you can see is what you can touch');
     eq(FF.playerUnits(G).length, before + 1, 'dragging a warden from hand to a slot deploys it');
   }
 
-  // a tap without a drag inspects instead of playing
+  // a tap picks the card up rather than playing it, and the next tap on a slot
+  // puts it down — the whole point being that a phone need not drag at all
   frame(1);
   const h2 = FF.hits().find((h) => h.id === 'hand');
   if (h2) {
     FF.onDown(h2.x + 10, h2.y + 10);
     FF.onUp(h2.x + 11, h2.y + 11);
-    ok(!!FF.UI.inspect, 'a tap opens the card instead of playing it');
+    ok(!!FF.UI.picked, 'a tap takes the card into your hand');
+    frame(1);
+    const before = FF.playerUnits(G).length;
+    const slot2 = FF.hits().find((h) => h.id === 'slot');
+    const isUnit = FF.UI.picked.type === 'unit';
+    FF.onDown(slot2.x + 40, slot2.y + 40);
+    if (isUnit) {
+      eq(FF.playerUnits(G).length, before + 1, 'and a tap on a slot plays it there');
+      eq(FF.UI.picked, null, 'putting the card down clears the choice');
+    }
+    FF.UI.picked = null;
+  }
+
+  // holding it still opens it instead
+  frame(2);
+  const h3 = FF.hits().find((h) => h.id === 'hand');
+  if (h3) {
+    FF.onDown(h3.x + 10, h3.y + 10);
+    for (let i = 0; i < 40; i++) FF.update(1 / 60);
+    ok(!!FF.UI.inspect, 'holding a card open reads it');
     FF.UI.inspect = null;
+    FF.onUp(h3.x + 10, h3.y + 10);
+  }
+
+  // an illegal drop says why rather than doing nothing
+  frame(1);
+  const hItem = FF.hits().find((h) => h.id === 'hand' && G.battle.hand[h.data] &&
+    G.battle.hand[h.data].type === 'item' && FF.CARDS[G.battle.hand[h.data].def].target === 'enemy');
+  if (hItem) {
+    const mine = FF.hits().find((h) => h.id === 'unit' && h.data.side === 'p');
+    FF.onDown(hItem.x + 10, hItem.y + 10);
+    FF.onMove(mine.x + 40, mine.y + 40);
+    FF.onUp(mine.x + 40, mine.y + 40);
+    ok(!!FF.UI.refuse && FF.UI.refuse.text.length > 0, 'a refused drop explains itself');
+    FF.UI.refuse = null;
   }
 }
 

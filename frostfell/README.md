@@ -81,6 +81,14 @@ The score is a step sequencer, not a loop: three voices over sixteen steps with
 the root, scale and tempo chosen by where you are — and it runs on its own
 randomness, because a run has to play the same way twice.
 
+## Playing it with a thumb
+
+Drag a card to a slot, or tap it once to pick it up and tap where it goes —
+either works, which matters on a phone. A held card lights the exact slot it
+would land in and paints a ghost of itself standing there. A drop that would
+not work says why in a sentence rather than silently refusing. Holding a card
+still for a moment opens it to read instead of costing you the drag.
+
 ## Reading a fight
 
 Anything one tick from going off draws a line to what it will hit, and the
@@ -99,13 +107,22 @@ statuses, card data, state, the battle engine, the run layer, juice, rendering,
 input, audio, boot. The section index sits at the top of the script.
 
 Nothing is loaded from disk. Every creature in the game is drawn by one
-procedural renderer (`drawCreature`) from a recipe — silhouette, surface, ears,
-mouth, markings, props, and an idle — so the whole cast comes out of the same
+procedural renderer (`drawCreature`) from a recipe — silhouette, surface,
+stance, tail, ears, mouth, markings, props, a distinguishing mark, and an idle — so the whole cast comes out of the same
 sketchbook and scales to any screen without a single image file. Fur grows
 tufts along its underside, ice takes flat facets, metal gets one specular band
 and a row of rivets. A creature paws the ground, shivers, sways, hovers or
 breathes depending on what it is, and it comes apart on death the same way:
 ice shatters, metal falls over, fur goes up in a puff.
+
+The taller silhouettes carry a head that is genuinely separate from the body,
+with a neck between them; the small round ones keep the fused bean the cast is
+built on. Everything that touches down has legs and feet, four of them if it
+walks on four; tails are brushes, whips, plumes, fins or stubs; and every
+creature carries one distinguishing mark — a scar, an eyepatch, freckles, a
+lit coal on the chest, a fringe of icicles, a bandage, a monocle, a leaf. The
+rules suite refuses to let two creatures share a whole row of that table, which
+is what stops the cast being one drawing in sixty-six colours.
 
 ## The typefaces
 

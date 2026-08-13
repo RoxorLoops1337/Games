@@ -242,181 +242,181 @@ const def = (o) => { CARDS[o.id] = o; return o; };
 /* leaders ---------------------------------------------------------------- */
 def({ id: 'bramblewick', name: 'Bramblewick', type: 'unit', leader: true, tribe: 'hearth',
   hp: 32, atk: 4, cnt: 3, rare: 0,
-  art: A('#e8873a', '#ffd9a8', { skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'grin', acc: 'lantern', accCol: '#ffd166', pat: 'none' }),
+  art: A('#e8873a', '#ffd9a8', { stance:'stand',tail:'none',mark:'ember',arms:'long', skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'grin', acc: 'lantern', accCol: '#ffd166', pat: 'none' }),
   kw: {}, text: 'When it triggers, hands another warden Spice 1.',
   hooks: { trigger: (g, u) => { const t = pick(allies(g, u).filter((x) => x !== u)); if (t) addStatus(g, t, 'spice', 1); } } });
 
 def({ id: 'vesper', name: 'Vesper Kaal', type: 'unit', leader: true, tribe: 'frost',
   hp: 30, atk: 3, cnt: 2, rare: 0,
-  art: A('#7fc2ef', '#dff0ff', { skin:'ice',idle:'sway', shape: 'tall', ears: 'horns', mouth: 'flat', acc: 'cloak', accCol: '#2b5f96' }),
+  art: A('#7fc2ef', '#dff0ff', { stance:'stand',tail:'plume',mark:'icicles',arms:'stub', skin:'ice',idle:'sway', shape: 'tall', ears: 'horns', mouth: 'flat', acc: 'cloak', accCol: '#2b5f96' }),
   kw: {}, text: 'Her hits leave Frost 1.',
   hooks: { hit: (g, u, tgt) => addStatus(g, tgt, 'frost', 1) } });
 
 def({ id: 'gundy', name: 'Gundy Bolt', type: 'unit', leader: true, tribe: 'scrap',
   hp: 34, atk: 3, cnt: 3, rare: 0,
-  art: A('#c9b28a', '#f0dfba', { skin:'metal',idle:'twitch', shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'helm', accCol: '#8fa2bd' }),
+  art: A('#c9b28a', '#f0dfba', { stance:'squat',tail:'stub',mark:'brand',arms:'stub', skin:'metal',idle:'twitch', shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'helm', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback. Starts every fight with Shell 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 3) } });
 
 def({ id: 'stranger', name: 'The Stranger', type: 'unit', leader: true, tribe: 'wyrd',
   hp: 28, atk: 4, cnt: 3, rare: 0,
-  art: A('#8f7fb0', '#ddd0f0', { idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a' }),
+  art: A('#8f7fb0', '#ddd0f0', { stance:'stand',tail:'whip',mark:'patch',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a' }),
   kw: {}, text: 'When she triggers, she takes the counter off whichever warden is slowest.',
   hooks: { trigger: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => b.cnt - a.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
 
 /* hearthkin -------------------------------------------------------------- */
 def({ id: 'cinderpup', name: 'Cinderpup', type: 'unit', tribe: 'hearth', hp: 7, atk: 3, cnt: 2, rare: 1,
-  art: A('#f2913c', '#ffdcae', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'spots', patCol: '#d1691f' }),
+  art: A('#f2913c', '#ffdcae', { stance:'quad',tail:'brush',mark:'freckles', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'spots', patCol: '#d1691f' }),
   kw: {}, text: 'Its bite leaves Ember 2.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'ember', 2) } });
 
 def({ id: 'kettlebeak', name: 'Kettlebeak', type: 'unit', tribe: 'hearth', hp: 9, atk: 2, cnt: 3, rare: 1,
-  art: A('#e2c46a', '#fff0c0', { idle:'twitch', shape: 'round', ears: 'none', mouth: 'beak', acc: 'kettle', accCol: '#9aa7bd' }),
+  art: A('#e2c46a', '#fff0c0', { stance:'stand',tail:'plume',mark:'monocle', idle:'twitch', shape: 'round', ears: 'none', mouth: 'beak', acc: 'kettle', accCol: '#9aa7bd' }),
   kw: {}, text: 'On deploy, heals every warden 2.',
   hooks: { deploy: (g, u) => allies(g, u).forEach((a) => heal(g, a, 2)) } });
 
 def({ id: 'tindercub', name: 'Tindercub', type: 'unit', tribe: 'hearth', hp: 11, atk: 4, cnt: 3, rare: 2,
-  art: A('#d9702e', '#ffcf9a', { skin:'fur',idle:'paw', shape: 'squat', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ff5566' }),
+  art: A('#d9702e', '#ffcf9a', { stance:'quad',tail:'stub',mark:'scar', skin:'fur',idle:'paw', shape: 'squat', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ff5566' }),
   kw: { frenzy: 1 }, text: 'Frenzy 1.' });
 
 def({ id: 'sootling', name: 'Sootling', type: 'unit', tribe: 'hearth', hp: 5, atk: 2, cnt: 1, rare: 1,
-  art: A('#6b5a63', '#c8b2b8', { skin:'fur',idle:'shiver', shape: 'small', ears: 'pointy', mouth: 'flat', pat: 'none' }),
+  art: A('#6b5a63', '#c8b2b8', { stance:'quad',tail:'whip',mark:'none', skin:'fur',idle:'shiver', shape: 'small', ears: 'pointy', mouth: 'flat', pat: 'none' }),
   kw: { aimless: 1 }, text: 'Aimless. When it falls, gives its killer Ember 3.',
   hooks: { death: (g, u, killer) => { if (killer) addStatus(g, killer, 'ember', 3); } } });
 
 def({ id: 'hearthmoth', name: 'Hearthmoth', type: 'unit', tribe: 'hearth', hp: 6, atk: 2, cnt: 2, rare: 2,
-  art: A('#f0b45c', '#ffe7bd', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffd9a0' }),
+  art: A('#f0b45c', '#ffe7bd', { stance:'float',tail:'plume',mark:'tuft', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffd9a0' }),
   kw: { longshot: 1 }, text: 'Longshot. When it triggers, heals the worst-off warden 2.',
   hooks: { trigger: (g, u) => { const l = allies(g, u).slice().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (l) heal(g, l, 2); } } });
 
 def({ id: 'warmroot', name: 'Warmroot', type: 'unit', tribe: 'hearth', hp: 14, atk: 2, cnt: 4, rare: 2,
-  art: A('#8a6a3f', '#d9bb86', { idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', accCol: '#6fd08c' }),
+  art: A('#8a6a3f', '#d9bb86', { stance:'root',tail:'none',mark:'leaf',arms:'long', idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', accCol: '#6fd08c' }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, every other warden gains Regen 1.',
   hooks: { trigger: (g, u) => allies(g, u).forEach((a) => { if (a !== u) addStatus(g, a, 'regen', 1); }) } });
 
 def({ id: 'flarehound', name: 'Flarehound', type: 'unit', tribe: 'hearth', hp: 8, atk: 5, cnt: 3, rare: 3,
-  art: A('#ff7a2f', '#ffd0a0', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#a83b12' }),
+  art: A('#ff7a2f', '#ffd0a0', { stance:'quad',tail:'brush',mark:'brand', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#a83b12' }),
   kw: { barrage: 1 }, text: 'Barrage. Its hits leave Ember 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'ember', 1) } });
 
 /* frostborn -------------------------------------------------------------- */
 def({ id: 'rimefox', name: 'Rimefox', type: 'unit', tribe: 'frost', hp: 7, atk: 3, cnt: 2, rare: 1,
-  art: A('#bfe4ff', '#ffffff', { skin:'fur',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'tips', patCol: '#5aa8d8' }),
+  art: A('#bfe4ff', '#ffffff', { stance:'quad',tail:'brush',mark:'tuft', skin:'fur',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'tips', patCol: '#5aa8d8' }),
   kw: {}, text: 'Its bite leaves Frost 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'frost', 1) } });
 
 def({ id: 'chillfin', name: 'Chillfin', type: 'unit', tribe: 'frost', hp: 10, atk: 2, cnt: 3, rare: 1,
-  art: A('#6fb6e0', '#cdeeff', { skin:'ice',idle:'sway', shape: 'round', ears: 'fin', mouth: 'flat', pat: 'none' }),
+  art: A('#6fb6e0', '#cdeeff', { stance:'squat',tail:'fin',mark:'freckles', skin:'ice',idle:'sway', shape: 'round', ears: 'fin', mouth: 'flat', pat: 'none' }),
   kw: {}, text: 'On deploy, Frost 2 on the foe opposite.',
   hooks: { deploy: (g, u) => { const t = frontTarget(g, u); if (t) addStatus(g, t, 'frost', 2); } } });
 
 def({ id: 'hoarfrog', name: 'Hoarfrog', type: 'unit', tribe: 'frost', hp: 12, atk: 2, cnt: 3, rare: 2,
-  art: A('#7fd0b0', '#dff7ea', { idle:'twitch', shape: 'squat', ears: 'none', mouth: 'wide', eyes: 'big' }),
+  art: A('#7fd0b0', '#dff7ea', { stance:'squat',tail:'none',mark:'monocle', idle:'twitch', shape: 'squat', ears: 'none', mouth: 'wide', eyes: 'big' }),
   kw: { soak: 1 }, text: 'Soak. Gains Shell 2 when it triggers.',
   hooks: { trigger: (g, u) => addStatus(g, u, 'shell', 2) } });
 
 def({ id: 'glacierling', name: 'Glacierling', type: 'unit', tribe: 'frost', hp: 9, atk: 3, cnt: 3, rare: 2,
-  art: A('#9fd8ff', '#eaf7ff', { skin:'ice',idle:'shiver', shape: 'tall', ears: 'shard', mouth: 'flat', pat: 'shards', patCol: '#5aa8d8' }),
+  art: A('#9fd8ff', '#eaf7ff', { stance:'stand',tail:'none',mark:'icicles',arms:'stub', skin:'ice',idle:'shiver', shape: 'tall', ears: 'shard', mouth: 'flat', pat: 'shards', patCol: '#5aa8d8' }),
   kw: {}, text: 'Whenever a foe is Frosted, it gains 1 attack.',
   hooks: { frosted: (g, u) => { u.atk += 1; } } });
 
 def({ id: 'snowbeard', name: 'Snowbeard', type: 'unit', tribe: 'frost', hp: 16, atk: 3, cnt: 4, rare: 3,
-  art: A('#8fa8c8', '#e8f2ff', { skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'beard', acc: 'helm', accCol: '#5f7fa8' }),
+  art: A('#8fa8c8', '#e8f2ff', { stance:'stand',tail:'none',mark:'tuft', skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'beard', acc: 'helm', accCol: '#5f7fa8' }),
   kw: { smack: 1, soak: 1 }, text: 'Soak. Smackback.' });
 
 def({ id: 'frostmite', name: 'Frostmite', type: 'unit', tribe: 'frost', hp: 4, atk: 1, cnt: 1, rare: 1,
-  art: A('#cfeaff', '#ffffff', { skin:'ice',idle:'shiver', shape: 'small', ears: 'antenna', mouth: 'flat', eyes: 'big' }),
+  art: A('#cfeaff', '#ffffff', { stance:'quad',tail:'whip',mark:'none', skin:'ice',idle:'shiver', shape: 'small', ears: 'antenna', mouth: 'flat', eyes: 'big' }),
   kw: {}, text: 'When it falls, Frost 2 on every foe.',
   hooks: { death: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 2)) } });
 
 def({ id: 'galewisp', name: 'Galewisp', type: 'unit', tribe: 'frost', hp: 6, atk: 2, cnt: 2, rare: 3,
-  art: A('#cdf1ff', '#ffffff', { idle:'hover', shape: 'wisp', ears: 'none', mouth: 'none', eyes: 'slit' }),
+  art: A('#cdf1ff', '#ffffff', { stance:'float',tail:'plume',mark:'none', idle:'hover', shape: 'wisp', ears: 'none', mouth: 'none', eyes: 'slit' }),
   kw: { longshot: 1, aimless: 1 }, text: 'Longshot. Aimless. Its hits leave Slow 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'slow', 1) } });
 
 /* scrapjaw --------------------------------------------------------------- */
 def({ id: 'clunkbot', name: 'Clunkbot', type: 'unit', tribe: 'scrap', hp: 8, atk: 0, cnt: 2, rare: 1,
-  art: A('#a9b6c9', '#dce6f2', { skin:'metal',idle:'twitch', shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'gear', accCol: '#c9b28a' }),
+  art: A('#a9b6c9', '#dce6f2', { stance:'squat',tail:'none',mark:'brand', skin:'metal',idle:'twitch', shape: 'squat', ears: 'none', mouth: 'bolt', acc: 'gear', accCol: '#c9b28a' }),
   kw: { explode: 5 }, text: 'Blast 5. Never swings.' });
 
 def({ id: 'springjaw', name: 'Springjaw', type: 'unit', tribe: 'scrap', hp: 9, atk: 4, cnt: 3, rare: 2,
-  art: A('#b8a071', '#e8d9b4', { skin:'metal',idle:'paw', shape: 'blob', ears: 'none', mouth: 'trap', acc: 'gear', accCol: '#8fa2bd' }),
+  art: A('#b8a071', '#e8d9b4', { stance:'quad',tail:'whip',mark:'scar', skin:'metal',idle:'paw', shape: 'blob', ears: 'none', mouth: 'trap', acc: 'gear', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback.' });
 
 def({ id: 'bellhammer', name: 'Bellhammer', type: 'unit', tribe: 'scrap', hp: 13, atk: 5, cnt: 4, rare: 3,
-  art: A('#9aa7bd', '#d6e0ee', { skin:'metal',idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'hammer', accCol: '#c9b28a' }),
+  art: A('#9aa7bd', '#d6e0ee', { stance:'stand',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'hammer', accCol: '#c9b28a' }),
   kw: {}, text: 'On deploy, every warden ticks one counter.',
   hooks: { deploy: (g, u) => allies(g, u).forEach((a) => { if (a !== u) a.cnt = Math.max(0, a.cnt - 1); }) } });
 
 def({ id: 'scrapcrow', name: 'Scrapcrow', type: 'unit', tribe: 'scrap', hp: 6, atk: 2, cnt: 2, rare: 1,
-  art: A('#6d6a78', '#b6b1c4', { idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#4d4a58' }),
+  art: A('#6d6a78', '#b6b1c4', { stance:'stand',tail:'plume',mark:'patch',arms:'stub', idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#4d4a58' }),
   kw: { aimless: 1 }, text: 'Aimless. When it falls, pays 3 scrip.',
   hooks: { death: (g, u) => { g.run.gold += 3; } } });
 
 def({ id: 'ratchet', name: 'Ratchet', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
-  art: A('#c9b28a', '#f0dfba', { skin:'metal',idle:'twitch', shape: 'round', ears: 'none', mouth: 'grin', acc: 'gear', accCol: '#8fa2bd' }),
+  art: A('#c9b28a', '#f0dfba', { stance:'squat',tail:'stub',mark:'monocle', skin:'metal',idle:'twitch', shape: 'round', ears: 'none', mouth: 'grin', acc: 'gear', accCol: '#8fa2bd' }),
   kw: {}, text: 'When a warden falls, it gains 2 attack.',
   hooks: { allyDeath: (g, u) => { u.atk += 2; } } });
 
 def({ id: 'emberwick', name: 'Emberwick', type: 'unit', tribe: 'hearth', hp: 6, atk: 3, cnt: 2, rare: 2,
-  art: A('#ffb35c', '#fff0cf', { skin:'fur',idle:'shiver', shape: 'small', ears: 'pointy', mouth: 'flat', eyes: 'big', pat: 'tips', patCol: '#e06a1c' }),
+  art: A('#ffb35c', '#fff0cf', { stance:'float',tail:'none',mark:'ember', skin:'fur',idle:'shiver', shape: 'small', ears: 'pointy', mouth: 'flat', eyes: 'big', pat: 'tips', patCol: '#e06a1c' }),
   kw: {}, text: 'When it triggers, Ember 1 on every foe.',
   hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'ember', 1)) } });
 
 def({ id: 'bellowsbear', name: 'Bellowsbear', type: 'unit', tribe: 'hearth', hp: 15, atk: 4, cnt: 4, rare: 3,
-  art: A('#c4702e', '#ffcf9a', { skin:'fur',idle:'breathe',acc:'bellcollar',accCol:'#8a4a3f', shape: 'boss', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ffd166' }),
+  art: A('#c4702e', '#ffcf9a', { stance:'stand',tail:'stub',mark:'bandage',arms:'long', skin:'fur',idle:'breathe',acc:'bellcollar',accCol:'#8a4a3f', shape: 'boss', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ffd166' }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, it mends itself 3.',
   hooks: { trigger: (g, u) => heal(g, u, 3) } });
 
 /* frostborn, later ------------------------------------------------------- */
 def({ id: 'icewright', name: 'Icewright', type: 'unit', tribe: 'frost', hp: 8, atk: 2, cnt: 3, rare: 2,
-  art: A('#8fc8e8', '#e8f7ff', { skin:'ice',idle:'twitch',acc:'goggles',accCol:'#5f7fa8', shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
+  art: A('#8fc8e8', '#e8f7ff', { stance:'stand',tail:'stub',mark:'brand', skin:'ice',idle:'twitch',acc:'goggles',accCol:'#5f7fa8', shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
   kw: {}, text: 'When it triggers, Shell 3 on the warden in front of it.',
   hooks: { trigger: (g, u) => { const l = laneOf(g, u.side, u.lane).filter((x) => x !== u && x.col < u.col); const t = l[0] || allies(g, u).find((x) => x !== u); if (t) addStatus(g, t, 'shell', 3); } } });
 
 def({ id: 'snowhare', name: 'Snowhare', type: 'unit', tribe: 'frost', hp: 5, atk: 2, cnt: 1, rare: 1,
-  art: A('#f0f8ff', '#ffffff', { skin:'fur',idle:'twitch', shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big' }),
+  art: A('#f0f8ff', '#ffffff', { stance:'quad',tail:'stub',mark:'freckles', skin:'fur',idle:'twitch', shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big' }),
   kw: {}, text: 'Deploys with Swift 1 — it swings almost at once.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'swift', 1) } });
 
 /* scrapjaw, later -------------------------------------------------------- */
 def({ id: 'boltfinch', name: 'Boltfinch', type: 'unit', tribe: 'scrap', hp: 4, atk: 2, cnt: 2, rare: 1,
-  art: A('#8fa2bd', '#dce6f2', { skin:'metal',idle:'hover', shape: 'small', ears: 'none', mouth: 'beak', wings: '#6d7a8f' }),
+  art: A('#8fa2bd', '#dce6f2', { stance:'float',tail:'plume',mark:'none', skin:'metal',idle:'hover', shape: 'small', ears: 'none', mouth: 'beak', wings: '#6d7a8f' }),
   kw: { longshot: 1 }, text: 'Longshot. On deploy, ticks a warden\'s counter down 1.',
   hooks: { deploy: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => a.cnt - b.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
 
 def({ id: 'junkpile', name: 'Junkpile', type: 'unit', tribe: 'scrap', hp: 13, atk: 0, cnt: 3, rare: 2,
-  art: A('#8f8a7a', '#d8d2bc', { skin:'metal',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'gear', accCol: '#b8a071' }),
+  art: A('#8f8a7a', '#d8d2bc', { stance:'root',tail:'none',mark:'icicles', skin:'metal',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'gear', accCol: '#b8a071' }),
   kw: { soak: 1, explode: 4 }, text: 'Soak. Blast 4. Never swings.' });
 
 /* neutral ---------------------------------------------------------------- */
 def({ id: 'snowpup', name: 'Snowpup', type: 'unit', tribe: null, hp: 6, atk: 2, cnt: 2, rare: 1,
-  art: A('#e8f2ff', '#ffffff', { skin:'fur',idle:'paw', shape: 'blob', ears: 'round', mouth: 'smile' }),
+  art: A('#e8f2ff', '#ffffff', { stance:'quad',tail:'brush',mark:'freckles', skin:'fur',idle:'paw', shape: 'blob', ears: 'round', mouth: 'smile' }),
   kw: {}, text: 'Plain and willing.' });
 
 def({ id: 'lanternmoth', name: 'Lanternmoth', type: 'unit', tribe: null, hp: 5, atk: 2, cnt: 2, rare: 2,
-  art: A('#d9c58f', '#fff3cf', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffe9b0' }),
+  art: A('#d9c58f', '#fff3cf', { stance:'float',tail:'plume',mark:'ember', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'flat', wings: '#ffe9b0' }),
   kw: { longshot: 1 }, text: 'Longshot.' });
 
 def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3, cnt: 3, rare: 2,
-  art: A('#a89c86', '#e4dccc', { idle:'sway',acc:'satchel',accCol:'#8a6a3f', shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
+  art: A('#a89c86', '#e4dccc', { stance:'stand',tail:'none',mark:'leaf',arms:'long', idle:'sway',acc:'satchel',accCol:'#8a6a3f', shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
   kw: {}, text: 'Every time it triggers, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
 def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt: 3, rare: 2,
-  art: A('#9a9689', '#ded9c8', { idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', pat: 'shards', patCol: '#6d6a5c' }),
+  art: A('#9a9689', '#ded9c8', { stance:'root',tail:'none',mark:'brand', idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', pat: 'shards', patCol: '#6d6a5c' }),
   kw: { crush: 2 }, text: 'Crush 2. The tighter they pack a lane, the harder it lands.' });
 
 def({ id: 'keepsake', name: 'Keepsake', type: 'unit', tribe: null, hp: 7, atk: 2, cnt: 3, rare: 2,
-  art: A('#c9a6ff', '#eee0ff', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
+  art: A('#c9a6ff', '#eee0ff', { stance:'float',tail:'whip',mark:'tuft', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'smile', eyes: 'big' }),
   kw: { hoard: 1 }, text: 'Hoard. Every turn it waits in your hand it comes out one point angrier.' });
 
 def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
-  art: A('#b0a48c', '#e8ddc4', { skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
+  art: A('#b0a48c', '#e8ddc4', { stance:'stand',tail:'stub',mark:'bandage',arms:'long', skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'hammer', accCol: '#8fa2bd' }),
   kw: { shove: 1 }, text: 'Shove. What it hits ends up a slot further back.' });
 
 def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3, cnt: 3, rare: 2,
-  art: A('#8fb08f', '#d8ebd6', { idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
+  art: A('#8fb08f', '#d8ebd6', { stance:'stand',tail:'none',mark:'scar',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
   kw: { longshot: 1, soak: 1 }, text: 'Longshot. Soak.' });
 
 /* -- gear (one-shot cards) ------------------------------------------------ */
@@ -610,91 +610,91 @@ const FOES = {};
 const foe = (o) => { o.foe = true; o.type = 'unit'; FOES[o.id] = o; return o; };
 
 foe({ id: 'snapfrost', name: 'Snapfrost', hp: 8, atk: 3, cnt: 2, tier: 1,
-  art: A('#8fc6e8', '#dff0ff', { skin:'ice',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }), kw: {}, text: '' });
+  art: A('#8fc6e8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }), kw: {}, text: '' });
 foe({ id: 'iciclebat', name: 'Icicle Bat', hp: 5, atk: 2, cnt: 1, tier: 1,
-  art: A('#9f9fd8', '#dcdcff', { idle:'hover', shape: 'small', ears: 'pointy', mouth: 'fang', wings: '#6f6fa8', evil: 1 }),
+  art: A('#9f9fd8', '#dcdcff', { stance:'float',tail:'none',mark:'patch', idle:'hover', shape: 'small', ears: 'pointy', mouth: 'fang', wings: '#6f6fa8', evil: 1 }),
   kw: { aimless: 1 }, text: 'Aimless.' });
 foe({ id: 'drift', name: 'Drift', hp: 12, atk: 2, cnt: 3, tier: 1,
-  art: A('#cfe4f5', '#ffffff', { skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', evil: 1 }),
+  art: A('#cfe4f5', '#ffffff', { stance:'root',tail:'none',mark:'none', skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak.' });
 foe({ id: 'frostwolf', name: 'Frostwolf', hp: 11, atk: 4, cnt: 3, tier: 2,
-  art: A('#7fa8c8', '#d8ecff', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#40607f', evil: 1 }),
+  art: A('#7fa8c8', '#d8ecff', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#40607f', evil: 1 }),
   kw: {}, text: 'Its bite leaves Frost 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'frost', 1) } });
 foe({ id: 'shardling', name: 'Shardling', hp: 6, atk: 3, cnt: 2, tier: 2,
-  art: A('#a8d8ff', '#eaf7ff', { skin:'ice',idle:'shiver', shape: 'small', ears: 'shard', mouth: 'none', eyes: 'slit', evil: 1 }),
+  art: A('#a8d8ff', '#eaf7ff', { stance:'float',tail:'none',mark:'icicles', skin:'ice',idle:'shiver', shape: 'small', ears: 'shard', mouth: 'none', eyes: 'slit', evil: 1 }),
   kw: { explode: 4 }, text: 'Blast 4.' });
 foe({ id: 'hailhorn', name: 'Hailhorn', hp: 16, atk: 4, cnt: 4, tier: 2,
-  art: A('#6f8fb0', '#cfe0f0', { skin:'fur',idle:'sway', shape: 'tall', ears: 'horns', mouth: 'wide', evil: 1 }),
+  art: A('#6f8fb0', '#cfe0f0', { stance:'stand',tail:'stub',mark:'scar',arms:'stub', skin:'fur',idle:'sway', shape: 'tall', ears: 'horns', mouth: 'wide', evil: 1 }),
   kw: { smack: 1 }, text: 'Smackback.' });
 foe({ id: 'wailer', name: 'Wailer', hp: 9, atk: 2, cnt: 2, tier: 2,
-  art: A('#b8a8d8', '#e8dcff', { idle:'hover', shape: 'wisp', ears: 'none', mouth: 'wide', eyes: 'slit', evil: 1 }),
+  art: A('#b8a8d8', '#e8dcff', { stance:'float',tail:'plume',mark:'patch', idle:'hover', shape: 'wisp', ears: 'none', mouth: 'wide', eyes: 'slit', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot. Its hits leave Weak 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
 foe({ id: 'glutton', name: 'Glutton', hp: 20, atk: 5, cnt: 5, tier: 3,
-  art: A('#7f7f9f', '#c8c8e0', { skin:'fur',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'trap', eyes: 'big', evil: 1 }),
+  art: A('#7f7f9f', '#c8c8e0', { stance:'squat',tail:'stub',mark:'freckles', skin:'fur',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'trap', eyes: 'big', evil: 1 }),
   kw: { barrage: 1 }, text: 'Barrage.' });
 foe({ id: 'rimeknight', name: 'Rime Knight', hp: 18, atk: 5, cnt: 4, tier: 3,
-  art: A('#8fa8c8', '#dfeaff', { skin:'metal',idle:'sway',acc:'plating',accCol:'#bcdcf4', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
+  art: A('#8fa8c8', '#dfeaff', { stance:'stand',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'sway',acc:'plating',accCol:'#bcdcf4', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Shell 5.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 5) } });
 foe({ id: 'stormcaller', name: 'Stormcaller', hp: 14, atk: 3, cnt: 3, tier: 3,
-  art: A('#a8b8e8', '#dfe8ff', { skin:'ice',idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', acc: 'staff', accCol: '#6f8fd0', evil: 1 }),
+  art: A('#a8b8e8', '#dfe8ff', { stance:'stand',tail:'plume',mark:'monocle',arms:'long', skin:'ice',idle:'sway', shape: 'tall', ears: 'antler', mouth: 'flat', acc: 'staff', accCol: '#6f8fd0', evil: 1 }),
   kw: { longshot: 1 }, text: 'When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 
 foe({ id: 'mitewing', name: 'Mitewing', hp: 4, atk: 2, cnt: 1, tier: 1,
-  art: A('#b0b0d8', '#e0e0ff', { idle:'hover', shape: 'small', ears: 'antenna', mouth: 'none', wings: '#8080a8', evil: 1 }),
+  art: A('#b0b0d8', '#e0e0ff', { stance:'float',tail:'whip',mark:'none', idle:'hover', shape: 'small', ears: 'antenna', mouth: 'none', wings: '#8080a8', evil: 1 }),
   kw: { aimless: 1 }, text: 'Aimless.' });
 foe({ id: 'snowlump', name: 'Snowlump', hp: 15, atk: 1, cnt: 4, tier: 1,
-  art: A('#e0ecf8', '#ffffff', { skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
+  art: A('#e0ecf8', '#ffffff', { stance:'root',tail:'none',mark:'icicles', skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak.' });
 foe({ id: 'hoarcrow', name: 'Hoarcrow', hp: 8, atk: 3, cnt: 2, tier: 2,
-  art: A('#5f6a80', '#a8b4c8', { idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
+  art: A('#5f6a80', '#a8b4c8', { stance:'stand',tail:'none',mark:'scar',arms:'stub', idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot.' });
 foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
-  art: A('#6f96b8', '#cfe4f5', { skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
+  art: A('#6f96b8', '#cfe4f5', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
   kw: {}, text: 'Its bite leaves Weak 1.',
   hooks: { hit: (g, u, t) => addStatus(g, t, 'weak', 1) } });
 foe({ id: 'bruiser', name: 'Bruiser', hp: 13, atk: 3, cnt: 3, tier: 2,
-  art: A('#7a8296', '#c4ccd8', { skin:'fur',idle:'paw', shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
+  art: A('#7a8296', '#c4ccd8', { stance:'squat',tail:'stub',mark:'brand', skin:'fur',idle:'paw', shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
   kw: { shove: 1 }, text: 'Shove. It puts your line where it wants it.' });
 foe({ id: 'packmother', name: 'Packmother', hp: 18, atk: 3, cnt: 4, tier: 3,
-  art: A('#6f7f9f', '#cdd8ec', { skin:'fur',idle:'breathe', shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
+  art: A('#6f7f9f', '#cdd8ec', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'breathe', shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
   kw: { crush: 2 }, text: 'Crush 2. It hits a crowded lane hardest.' });
 
 foe({ id: 'frostwyrm', name: 'Frostwyrm', hp: 22, atk: 6, cnt: 5, tier: 3,
-  art: A('#7fb0d8', '#dff0ff', { skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
+  art: A('#7fb0d8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
   kw: { barrage: 1 }, text: 'Barrage.' });
 foe({ id: 'icewarden', name: 'Icewarden', hp: 16, atk: 4, cnt: 3, tier: 3,
-  art: A('#9fb0c8', '#e0eaf8', { skin:'metal',idle:'sway',acc:'plating',accCol:'#cfe4ff', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
+  art: A('#9fb0c8', '#e0eaf8', { stance:'stand',tail:'none',mark:'bandage',arms:'long', skin:'metal',idle:'sway',acc:'plating',accCol:'#cfe4ff', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Thorns 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'thorns', 3) } });
 
 /* bosses ----------------------------------------------------------------- */
 foe({ id: 'mothergla', name: 'Mother Glacier', hp: 46, atk: 5, cnt: 4, tier: 4, boss: true,
-  art: A('#9fd8ff', '#ffffff', { skin:'ice',idle:'breathe',acc:'plating',accCol:'#dff0ff', shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
+  art: A('#9fd8ff', '#ffffff', { stance:'root',tail:'none',mark:'icicles', skin:'ice',idle:'breathe',acc:'plating',accCol:'#dff0ff', shape: 'boss', ears: 'shard', mouth: 'wide', eyes: 'big', evil: 1 }),
   kw: { barrage: 1, soak: 1 }, text: 'Barrage. Soak. When it triggers, Frost 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'frost', 1); } } });
 foe({ id: 'hollowking', name: 'The Hollow King', hp: 78, atk: 7, cnt: 4, tier: 5, boss: true,
-  art: A('#6f6f8f', '#c0c0d8', { idle:'breathe', shape: 'boss', ears: 'antler', mouth: 'trap', eyes: 'slit', acc: 'crown', accCol: '#ffd166', evil: 1 }),
+  art: A('#6f6f8f', '#c0c0d8', { stance:'stand',tail:'plume',mark:'patch',arms:'long', idle:'breathe', shape: 'boss', ears: 'antler', mouth: 'trap', eyes: 'slit', acc: 'crown', accCol: '#ffd166', evil: 1 }),
   kw: { longshot: 1, smack: 1 }, text: 'Longshot. Smackback. When it triggers, it calls a Shardling.',
   hooks: { trigger: (g, u) => summon(g, 'shardling', 1) } });
 foe({ id: 'kettletitan', name: 'The Kettle Titan', hp: 92, atk: 8, cnt: 5, tier: 6, boss: true,
-  art: A('#b0a080', '#e8dcc0', { skin:'metal',idle:'breathe', shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
+  art: A('#b0a080', '#e8dcc0', { stance:'squat',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'breathe', shape: 'boss', ears: 'none', mouth: 'bolt', acc: 'kettle', accCol: '#8fa2bd', evil: 1 }),
   kw: { barrage: 1, smack: 1 }, text: 'Barrage. Smackback. Every trigger, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
 foe({ id: 'whitestag', name: 'The White Stag', hp: 42, atk: 5, cnt: 3, tier: 4, boss: true,
-  art: A('#e8f2ff', '#ffffff', { skin:'fur',idle:'sway', shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
+  art: A('#e8f2ff', '#ffffff', { stance:'quad',tail:'plume',mark:'tuft', skin:'fur',idle:'sway', shape: 'boss', ears: 'antler', mouth: 'flat', eyes: 'slit', evil: 1 }),
   kw: { aimless: 1, frenzy: 1 }, text: 'Aimless. Frenzy 1. When it triggers, Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) addStatus(g, t, 'slow', 1); } } });
 foe({ id: 'weeper', name: 'The Weeper', hp: 70, atk: 5, cnt: 3, tier: 5, boss: true,
-  art: A('#8f7fb8', '#d8ccf0', { idle:'sway', shape: 'boss', ears: 'none', mouth: 'wide', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a', evil: 1 }),
+  art: A('#8f7fb8', '#d8ccf0', { stance:'float',tail:'none',mark:'bandage',arms:'long', idle:'sway', shape: 'boss', ears: 'none', mouth: 'wide', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a', evil: 1 }),
   kw: { longshot: 1 }, text: 'Longshot. When it triggers, Weak 1 and Slow 1 on a warden.',
   hooks: { trigger: (g, u) => { const t = pick(foes(g, u)); if (t) { addStatus(g, t, 'weak', 1); addStatus(g, t, 'slow', 1); } } } });
 foe({ id: 'lastwinter', name: 'The Last Winter', hp: 88, atk: 7, cnt: 4, tier: 6, boss: true,
-  art: A('#c8d8f0', '#ffffff', { skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'big', acc: 'crown', accCol: '#cfe4ff', evil: 1 }),
+  art: A('#c8d8f0', '#ffffff', { stance:'stand',tail:'none',mark:'icicles',arms:'long', skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'big', acc: 'crown', accCol: '#cfe4ff', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, Frost 1 on every warden.',
   hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 1)) } });
 
@@ -1002,6 +1002,13 @@ function hurt(g, u, amount, src) {
   if (dmg > 0) {
     u.hp -= dmg;
     u.flash = 1; u.hitT = 1; u.sq = 1;
+    // knocked back along the line the hit came from
+    if (src) {
+      const dx = (u.px || 0) - (src.px || 0), dy = (u.py || 0) - (src.py || 0);
+      const L = Math.hypot(dx, dy) || 1;
+      u.recX = dx / L; u.recY = dy / L;
+    } else { u.recX = 0; u.recY = -1; }
+    u.recoil = 1;
     fx.pop(u, '-' + dmg, C.blood);
     fx.burst(u, C.blood, 10);
     fx.shake(Math.min(9, 2 + dmg * 0.5));
@@ -1150,6 +1157,7 @@ function tickCounter(g, u, n, natural) {
   if (natural) ticks += spend(u, 'swift');
   if (natural && stat(u, 'slow') > 0) { spend(u, 'slow', 1); fx.pop(u, 'SLOW', STATUS.slow.col); return false; }
   u.cnt = Math.max(0, u.cnt - ticks);
+  u.tick = 0.75;
   if (u.cnt > 0) return false;
   u.cnt = u.cntMax;
   u.tick = 1;
@@ -1317,6 +1325,25 @@ function canPlay(g, card, spot) {
   if (tg === 'ally') return spot.side === 'p';
   if (tg === 'enemy') return spot.side === 'e';
   return true;
+}
+
+/* Why a card cannot go where the finger is pointing. A refusal that says
+   nothing reads as a bug; this is the sentence the board says back. */
+function refusal(g, card, spot) {
+  const b = g.battle;
+  if (!b || b.over) return 'the fight is over';
+  if (b.busy) return 'wait for the turn to finish';
+  if (card.type === 'unit') {
+    if (!spot || spot.lane === undefined) return 'drop a warden on an empty slot';
+    if (!slotFree(g, 'p', spot.lane, spot.col)) return 'that slot is taken';
+    return '';
+  }
+  const tg = CARDS[card.def].target;
+  if (tg === 'none') return '';
+  if (!spot || !spot.uid || !spot.alive) return 'this one needs a target';
+  if (tg === 'ally' && spot.side !== 'p') return 'that is for your own side';
+  if (tg === 'enemy' && spot.side !== 'e') return 'that is meant for a foe';
+  return '';
 }
 
 function playCard(g, idx, spot) {
@@ -2055,7 +2082,7 @@ const fx = {
   /* A played card does not vanish — it flies to the pile it went to. */
   fly(card, x0, y0) {
     if (!card) return;
-    flyers.push({ card, x0, y0, t: 0, life: 0.42, rot: (rnd() - 0.5) * 1.2 });
+    flyers.push({ card, x0, y0, t: 0, life: 0.5, rot: (rnd() - 0.5) * 0.9 });
     if (flyers.length > 12) flyers.shift();
   },
   shake(m) { shakeState.mag = Math.min(18, shakeState.mag + m); },
@@ -2196,34 +2223,65 @@ function wrapText(c, s, size, maxW) {
 /* One function draws every creature in the game. A recipe picks the
    silhouette and the trimmings; the seed and the clock do the rest, so two
    Rimefoxes on the board are never breathing in step. */
+/* ---------------------------------------------------------------- anatomy --
+
+   Every creature in the game comes out of this one function. A recipe picks a
+   silhouette, a surface, a stance, a tail and one distinguishing mark; the
+   seed and the clock do the rest. The rule that keeps sixty-six of them apart
+   is that no two share a full row of that table — Cinderpup and Emberwick are
+   the same colour family and the same size, and they are still not the same
+   drawing, because one stands on four legs with a brush tail and the other
+   floats with a lit ember on its chest.
+
+   The taller silhouettes get a head that is genuinely separate from the body,
+   with a neck between them; the small round ones keep the fused bean, which is
+   what the cast is built on.
+   ------------------------------------------------------------------------- */
+
+const SHAPE_DIM = {
+  blob:  [1.02, 0.80], round: [0.94, 0.88], tall: [0.74, 0.96], squat: [1.14, 0.70],
+  small: [0.72, 0.62], wisp:  [0.78, 0.94], boss:  [1.20, 1.02],
+};
+const HEADED = { tall: 1, boss: 1 };
+
 function drawCreature(c, art, x, y, s, o) {
   o = o || {};
   const t = o.t || 0;
   const ph = o.ph || 0;
-  // Idle personality: the same silhouette reads as a different animal
-  // depending only on how it holds still.
+  const shape = art.shape || 'blob';
   const idle = art.idle || 'bob';
+
   let breathe = Math.sin(t * 1.7 + ph) * 0.02;
   let lean = 0, hop = 0, jitter = 0, paw = 0;
-  if (idle === 'breathe') breathe = Math.sin(t * 0.9 + ph) * 0.055;          // slow, huge — bosses
+  if (idle === 'breathe') breathe = Math.sin(t * 0.9 + ph) * 0.055;
   else if (idle === 'shiver') { jitter = Math.sin(t * 26 + ph) * s * 0.008; breathe *= 0.4; }
   else if (idle === 'sway') lean = Math.sin(t * 1.1 + ph) * 0.05;
   else if (idle === 'hover') { hop = Math.sin(t * 2.3 + ph) * s * 0.045; breathe *= 0.5; }
   else if (idle === 'paw') {
-    // a long wait, then two quick scrapes of a forefoot
     const cyc = (t * 0.6 + ph * 0.13) % 1;
     paw = cyc > 0.82 ? Math.sin((cyc - 0.82) / 0.18 * Math.PI * 2) : 0;
   } else if (idle === 'twitch') breathe += (((t * 0.7 + ph) % 3) < 0.09 ? 0.03 : 0);
+
   const sq = o.sq || 0;
   const sx = (1 + breathe + sq * 0.22) * (o.flip ? -1 : 1);
   const sy = 1 - breathe - sq * 0.26;
-  const shape = art.shape || 'blob';
-  const dim = {
-    blob:  [1.02, 0.86], round: [0.94, 0.94], tall: [0.80, 1.06], squat: [1.14, 0.74],
-    small: [0.72, 0.68], wisp:  [0.78, 1.00], boss:  [1.24, 1.10],
-  }[shape] || [1, 0.9];
+  const dim = SHAPE_DIM[shape] || [1, 0.86];
   const bw = s * dim[0], bh = s * dim[1];
   const lw = Math.max(2.5, s * 0.055);
+  const headed = !!HEADED[shape];
+  const stance = art.stance || (headed ? 'stand' : 'quad');
+  const floaty = stance === 'float' || shape === 'wisp' || idle === 'hover';
+
+  // where the body sits, and where the face goes
+  const cy = headed ? -bh * 0.02 : -bh * 0.06;
+  const bodyY = headed ? cy + bh * 0.24 : cy;
+  const bodyW = headed ? bw * 0.86 : bw;
+  const bodyH = headed ? bh * 0.62 : bh;
+  const headR = bw * 0.44;
+  const faceY = headed ? cy - bh * 0.34 : cy - bh * 0.02;
+  const faceW = headed ? headR * 2 : bw;
+  const faceH = headed ? headR * 2 : bh;
+  const footY = bodyY + bodyH * 0.46;
 
   c.save();
   c.translate(x + jitter, y - hop);
@@ -2231,106 +2289,152 @@ function drawCreature(c, art, x, y, s, o) {
   c.scale(sx, sy);
   c.lineJoin = 'round'; c.lineCap = 'round';
 
-  // ground shadow
+  // ground shadow — smaller and softer for anything that does not touch down
   c.save();
-  c.globalAlpha = 0.28;
+  c.globalAlpha = floaty ? 0.16 : 0.28;
   c.fillStyle = '#000';
-  c.beginPath(); c.ellipse(0, bh * 0.52, bw * 0.42, bh * 0.09, 0, 0, TAU); c.fill();
+  c.beginPath();
+  c.ellipse(0, footY + s * 0.1, bw * (floaty ? 0.3 : 0.42), bh * 0.08, 0, 0, TAU);
+  c.fill();
   c.restore();
 
-  const cy = -bh * 0.06;
+  const dark = art.patCol || 'rgba(20,30,50,.35)';
 
-  /* ---- behind-body furniture: wings, ears, horns, props ---- */
+  /* ---------------------------------------------------------------- tail -- */
+  const tail = art.tail || 'none';
+  if (tail !== 'none') {
+    const wag = Math.sin(t * 2.4 + ph) * 0.24 + (paw ? paw * 0.3 : 0);
+    c.save();
+    c.translate(-bw * 0.36, bodyY + bodyH * 0.24);
+    c.rotate(-0.35 + wag);
+    if (tail === 'brush') {
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.quadraticCurveTo(-bw * 0.24, -bh * 0.04, -bw * 0.3, -bh * 0.2);
+      c.quadraticCurveTo(-bw * 0.1, -bh * 0.12, 0, bh * 0.09);
+      c.closePath();
+      inked(c, art.body, lw * 0.9, C.ink);
+      // a paler flash at the tip, the way a brush tail actually reads
+      c.save();
+      c.globalAlpha = 0.8;
+      c.beginPath();
+      c.moveTo(-bw * 0.19, -bh * 0.11);
+      c.quadraticCurveTo(-bw * 0.3, -bh * 0.14, -bw * 0.3, -bh * 0.2);
+      c.quadraticCurveTo(-bw * 0.22, -bh * 0.16, -bw * 0.15, -bh * 0.06);
+      c.closePath();
+      c.fillStyle = art.belly; c.fill();
+      c.restore();
+    } else if (tail === 'whip') {
+      c.strokeStyle = C.ink; c.lineWidth = lw * 1.5;
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.quadraticCurveTo(-bw * 0.34, bh * 0.06, -bw * 0.44, -bh * 0.22);
+      c.stroke();
+      c.strokeStyle = art.body; c.lineWidth = lw * 0.7;
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.quadraticCurveTo(-bw * 0.34, bh * 0.06, -bw * 0.44, -bh * 0.22);
+      c.stroke();
+    } else if (tail === 'stub') {
+      c.beginPath(); c.ellipse(-bw * 0.05, 0, bw * 0.09, bh * 0.1, 0, 0, TAU);
+      inked(c, art.belly, lw * 0.8, C.ink);
+    } else if (tail === 'plume') {
+      for (let i = 0; i < 3; i++) {
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.quadraticCurveTo(-bw * 0.18, -bh * (0.05 + i * 0.07), -bw * 0.28, -bh * (0.1 + i * 0.1));
+        c.strokeStyle = C.ink; c.lineWidth = lw * 1.5; c.stroke();
+        c.strokeStyle = i % 2 ? art.belly : art.body;
+        c.lineWidth = lw * 0.8; c.stroke();
+      }
+    } else if (tail === 'fin') {
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.lineTo(-bw * 0.26, -bh * 0.2);
+      c.lineTo(-bw * 0.22, bh * 0.12);
+      c.closePath();
+      inked(c, art.belly, lw * 0.9, C.ink);
+    }
+    c.restore();
+  }
+
+  /* ---------------------------------------------------------------- wings -- */
   if (art.wings) {
     for (const d of [-1, 1]) {
       c.save();
-      c.translate(d * bw * 0.36, cy - bh * 0.06);
-      c.rotate(d * (0.5 + Math.sin(t * 6 + (o.ph || 0)) * 0.22));
-      blob(c, 0, 0, bw * 0.62, bh * 0.44, 0.06, 1.2);
+      c.translate(d * bw * 0.34, bodyY - bodyH * 0.1);
+      c.rotate(d * (0.5 + Math.sin(t * 6 + ph) * 0.24));
+      blob(c, 0, 0, bw * 0.6, bh * 0.42, 0.06, 1.2);
       inked(c, art.wings, lw, C.ink);
       c.restore();
     }
   }
-  const ears = art.ears || 'round';
-  const earTop = cy - bh * 0.34;
-  if (ears === 'pointy' || ears === 'shard') {
-    for (const d of [-1, 1]) {
-      c.beginPath();
-      c.moveTo(d * bw * 0.30, earTop + bh * 0.10);
-      c.lineTo(d * bw * (ears === 'shard' ? 0.30 : 0.40), earTop - bh * (ears === 'shard' ? 0.42 : 0.30));
-      c.lineTo(d * bw * 0.06, earTop - bh * 0.02);
-      c.closePath();
-      inked(c, art.patCol && art.pat === 'tips' ? art.patCol : art.body, lw, C.ink);
+
+  /* ---------------------------------------------------------------- legs --- */
+  if (!floaty && stance !== 'root') {
+    const gait = Math.sin(t * 1.9 + ph) * 0.1;
+    const legL = bh * (stance === 'squat' ? 0.1 : 0.2);
+    const legW = bw * (stance === 'squat' ? 0.15 : 0.11);
+    const pairs = stance === 'quad' ? [[-0.3, -1], [0.3, -1], [-0.22, 1], [0.34, 1]] : [[-0.22, 1], [0.22, 1]];
+    for (let i = 0; i < pairs.length; i++) {
+      const [ox, front] = pairs[i];
+      const swing = gait * (i % 2 ? -1 : 1) + (paw && i === pairs.length - 1 ? paw * 0.5 : 0);
+      c.save();
+      c.globalAlpha = front < 0 ? 0.75 : 1;             // the far pair sits back
+      c.translate(ox * bw, footY - legL * 0.3);
+      c.rotate(swing);
+      c.beginPath(); rr(c, -legW / 2, 0, legW, legL, legW * 0.45);
+      inked(c, front < 0 ? dark : art.body, lw * 0.9, C.ink);
+      // a foot, so it stands on something rather than tapering away
+      c.beginPath(); c.ellipse(0, legL, legW * 0.72, legL * 0.3 + lw, 0, 0, TAU);
+      inked(c, front < 0 ? dark : art.belly, lw * 0.8, C.ink);
+      c.restore();
     }
-  } else if (ears === 'round') {
-    for (const d of [-1, 1]) {
-      c.beginPath(); c.ellipse(d * bw * 0.31, earTop - bh * 0.02, bw * 0.16, bh * 0.17, 0, 0, TAU);
-      inked(c, art.body, lw, C.ink);
-    }
-  } else if (ears === 'horns') {
-    for (const d of [-1, 1]) {
-      c.beginPath();
-      c.moveTo(d * bw * 0.24, earTop + bh * 0.06);
-      c.quadraticCurveTo(d * bw * 0.52, earTop - bh * 0.14, d * bw * 0.40, earTop - bh * 0.40);
-      c.quadraticCurveTo(d * bw * 0.30, earTop - bh * 0.14, d * bw * 0.10, earTop + bh * 0.04);
-      c.closePath();
-      inked(c, '#e7dfd0', lw, C.ink);
-    }
-  } else if (ears === 'antler') {
-    for (const d of [-1, 1]) {
-      c.strokeStyle = '#cdbfa4'; c.lineWidth = lw * 1.3;
-      c.beginPath();
-      c.moveTo(d * bw * 0.18, earTop + bh * 0.04);
-      c.lineTo(d * bw * 0.30, earTop - bh * 0.34);
-      c.moveTo(d * bw * 0.26, earTop - bh * 0.14);
-      c.lineTo(d * bw * 0.46, earTop - bh * 0.24);
-      c.stroke();
-    }
-  } else if (ears === 'antenna') {
-    for (const d of [-1, 1]) {
-      c.strokeStyle = C.ink; c.lineWidth = lw * 0.8;
-      c.beginPath();
-      c.moveTo(d * bw * 0.10, earTop + bh * 0.06);
-      c.quadraticCurveTo(d * bw * 0.30, earTop - bh * 0.30, d * bw * 0.36, earTop - bh * 0.40);
-      c.stroke();
-      c.beginPath(); c.arc(d * bw * 0.36, earTop - bh * 0.42, s * 0.05, 0, TAU);
-      inked(c, art.belly, lw * 0.8, C.ink);
-    }
-  } else if (ears === 'fin') {
-    c.beginPath();
-    c.moveTo(-bw * 0.06, earTop - bh * 0.02);
-    c.quadraticCurveTo(0, earTop - bh * 0.44, bw * 0.16, earTop - bh * 0.04);
-    c.closePath();
-    inked(c, art.belly, lw, C.ink);
   }
 
-  /* ---- body ---- */
+  /* ---------------------------------------------------------------- body --- */
   if (shape === 'wisp') {
     c.beginPath();
-    c.moveTo(-bw * 0.42, cy + bh * 0.10);
-    c.quadraticCurveTo(-bw * 0.5, cy - bh * 0.55, 0, cy - bh * 0.52);
-    c.quadraticCurveTo(bw * 0.5, cy - bh * 0.55, bw * 0.42, cy + bh * 0.10);
+    c.moveTo(-bw * 0.42, bodyY + bh * 0.10);
+    c.quadraticCurveTo(-bw * 0.5, bodyY - bh * 0.55, 0, bodyY - bh * 0.52);
+    c.quadraticCurveTo(bw * 0.5, bodyY - bh * 0.55, bw * 0.42, bodyY + bh * 0.10);
     for (let i = 0; i <= 4; i++) {
       const px = bw * 0.42 - (i / 4) * bw * 0.84;
-      const py = cy + bh * 0.10 + Math.sin(t * 3 + i * 1.6) * bh * 0.06 + (i % 2 ? bh * 0.14 : 0);
+      const py = bodyY + bh * 0.10 + Math.sin(t * 3 + i * 1.6) * bh * 0.06 + (i % 2 ? bh * 0.14 : 0);
       c.lineTo(px, py);
     }
     c.closePath();
   } else {
-    blob(c, 0, cy, bw, bh, 0.03, t * 0.6 + (o.ph || 0));
+    blob(c, 0, bodyY, bodyW, bodyH, 0.03, t * 0.6 + ph);
   }
   inked(c, art.body, lw, C.ink);
 
-  /* ---- what it is made of ---- */
+  /* ---------------------------------------------------------------- arms --- */
+  const arms = art.arms || (headed ? 'stub' : 'none');
+  if (arms !== 'none') {
+    const swing2 = Math.sin(t * 1.6 + ph + 1) * 0.14;
+    for (const d of [-1, 1]) {
+      c.save();
+      c.translate(d * bodyW * 0.44, bodyY - bodyH * 0.06);
+      c.rotate(d * (0.35 + swing2));
+      const aL = bh * (arms === 'long' ? 0.3 : 0.17);
+      c.beginPath(); rr(c, -bw * 0.055, 0, bw * 0.11, aL, bw * 0.05);
+      inked(c, art.body, lw * 0.85, C.ink);
+      c.beginPath(); c.arc(0, aL, bw * 0.075, 0, TAU);
+      inked(c, art.belly, lw * 0.8, C.ink);
+      c.restore();
+    }
+  }
+
+  /* ------------------------------------------------------------- surface --- */
   const skin = art.skin || 'smooth';
   if (skin === 'fur') {
-    // tufts around the lower silhouette: soft, and it catches the light badly
     c.save();
     c.fillStyle = art.body;
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.55;
     for (let i = 0; i < 11; i++) {
       const a = Math.PI * (0.08 + (i / 10) * 0.84);
-      const px = Math.cos(a) * bw * 0.5, py = cy + Math.sin(a) * bh * 0.5;
+      const px = Math.cos(a) * bodyW * 0.5, py = bodyY + Math.sin(a) * bodyH * 0.5;
       const l = s * (0.05 + ((i * 7) % 4) * 0.012);
       c.beginPath();
       c.moveTo(px, py);
@@ -2340,79 +2444,143 @@ function drawCreature(c, art, x, y, s, o) {
     }
     c.restore();
   } else if (skin === 'ice') {
-    // flat facets, the way a cut block of river ice takes the sun
     c.save();
-    rr(c, -bw * 0.5, cy - bh * 0.5, bw, bh, bw * 0.4);
+    rr(c, -bodyW * 0.5, bodyY - bodyH * 0.5, bodyW, bodyH, bodyW * 0.4);
     c.clip();
     c.globalAlpha = 0.5; c.fillStyle = '#ffffff';
     for (let i = 0; i < 4; i++) {
-      const px = -bw * 0.36 + i * bw * 0.24, py = cy - bh * 0.3 + (i % 2) * bh * 0.3;
+      const px = -bodyW * 0.36 + i * bodyW * 0.24, py = bodyY - bodyH * 0.3 + (i % 2) * bodyH * 0.3;
       c.beginPath();
       c.moveTo(px, py); c.lineTo(px + s * 0.11, py - s * 0.05); c.lineTo(px + s * 0.07, py + s * 0.13);
       c.closePath(); c.fill();
     }
-    c.globalAlpha = 0.28; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.7;
-    c.beginPath();
-    c.moveTo(-bw * 0.28, cy + bh * 0.3); c.lineTo(bw * 0.02, cy - bh * 0.12); c.lineTo(bw * 0.3, cy + bh * 0.2);
-    c.stroke();
     c.restore();
   } else if (skin === 'metal') {
-    // one specular band and a row of rivets, which is all a plate ever needs
     c.save();
-    rr(c, -bw * 0.5, cy - bh * 0.5, bw, bh, bw * 0.4);
+    rr(c, -bodyW * 0.5, bodyY - bodyH * 0.5, bodyW, bodyH, bodyW * 0.4);
     c.clip();
-    const gm = c.createLinearGradient(-bw * 0.4, cy - bh * 0.4, bw * 0.3, cy + bh * 0.4);
+    const gm = c.createLinearGradient(-bodyW * 0.4, bodyY - bodyH * 0.4, bodyW * 0.3, bodyY + bodyH * 0.4);
     gm.addColorStop(0, 'rgba(255,255,255,.42)');
     gm.addColorStop(0.4, 'rgba(255,255,255,.06)');
     gm.addColorStop(1, 'rgba(0,0,0,.22)');
     c.fillStyle = gm;
-    c.fillRect(-bw * 0.5, cy - bh * 0.5, bw, bh);
+    c.fillRect(-bodyW * 0.5, bodyY - bodyH * 0.5, bodyW, bodyH);
     c.fillStyle = 'rgba(20,30,50,.55)';
     for (let i = 0; i < 4; i++) {
-      c.beginPath(); c.arc(-bw * 0.3 + i * bw * 0.2, cy + bh * 0.3, s * 0.022, 0, TAU); c.fill();
+      c.beginPath(); c.arc(-bodyW * 0.3 + i * bodyW * 0.2, bodyY + bodyH * 0.3, s * 0.022, 0, TAU); c.fill();
     }
     c.restore();
   }
 
-  // belly / face plate
+  // belly plate, on the body rather than over the face
   c.save();
-  c.beginPath(); c.ellipse(0, cy + bh * 0.10, bw * 0.34, bh * 0.32, 0, 0, TAU);
+  c.beginPath();
+  c.ellipse(0, bodyY + bodyH * (headed ? 0.06 : 0.12), bodyW * 0.32, bodyH * 0.3, 0, 0, TAU);
   c.fillStyle = art.belly; c.globalAlpha = 0.95; c.fill();
   c.restore();
 
-  /* ---- markings ---- */
+  /* -------------------------------------------------------------- markings -- */
   if (art.pat === 'spots') {
     c.fillStyle = art.patCol || '#00000022';
     for (let i = 0; i < 3; i++) {
       c.beginPath();
-      c.ellipse(-bw * 0.30 + i * bw * 0.13, cy - bh * 0.20 + (i % 2) * bh * 0.10, s * 0.045, s * 0.038, 0, 0, TAU);
+      c.ellipse(-bodyW * 0.28 + i * bodyW * 0.12, bodyY - bodyH * 0.16 + (i % 2) * bodyH * 0.1,
+        s * 0.04, s * 0.034, 0, 0, TAU);
       c.fill();
     }
   } else if (art.pat === 'stripes') {
-    c.strokeStyle = art.patCol || '#00000033'; c.lineWidth = lw * 0.9; c.lineCap = 'round';
+    c.strokeStyle = art.patCol || '#00000033'; c.lineWidth = lw * 0.9;
     for (let i = 0; i < 3; i++) {
       c.beginPath();
-      c.arc(0, cy, bw * (0.30 + i * 0.06), -1.9, -1.2);
+      c.arc(0, bodyY, bodyW * (0.28 + i * 0.06), -1.9, -1.2);
       c.stroke();
     }
   } else if (art.pat === 'shards') {
     c.fillStyle = art.patCol || '#ffffff55';
     for (let i = 0; i < 3; i++) {
-      const px = -bw * 0.26 + i * bw * 0.26, py = cy - bh * 0.34;
-      c.beginPath(); c.moveTo(px, py); c.lineTo(px + s * 0.05, py - s * 0.16); c.lineTo(px + s * 0.10, py);
+      const px = -bodyW * 0.24 + i * bodyW * 0.24, py = bodyY - bodyH * 0.3;
+      c.beginPath(); c.moveTo(px, py); c.lineTo(px + s * 0.05, py - s * 0.14); c.lineTo(px + s * 0.1, py);
       c.closePath(); c.fill();
     }
   }
 
-  /* ---- face ---- */
-  const eyeY = cy - bh * 0.08;
-  const eyeDx = bw * 0.15;
+  /* ---------------------------------------------------------------- head --- */
+  if (headed) {
+    // a neck, so the head is joined rather than balanced
+    c.beginPath(); rr(c, -bw * 0.12, cy - bh * 0.22, bw * 0.24, bh * 0.2, bw * 0.08);
+    inked(c, art.body, lw * 0.9, C.ink);
+    c.beginPath(); c.arc(0, faceY, headR, 0, TAU);
+    inked(c, art.body, lw, C.ink);
+    c.save();
+    c.beginPath(); c.ellipse(0, faceY + headR * 0.22, headR * 0.66, headR * 0.6, 0, 0, TAU);
+    c.fillStyle = art.belly; c.globalAlpha = 0.9; c.fill();
+    c.restore();
+  }
+
+  /* ---------------------------------------------------------------- ears --- */
+  const ears = art.ears || 'round';
+  const earTop = faceY - faceH * (headed ? 0.42 : 0.28);
+  if (ears === 'pointy' || ears === 'shard') {
+    for (const d of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(d * faceW * 0.30, earTop + faceH * 0.10);
+      c.lineTo(d * faceW * (ears === 'shard' ? 0.30 : 0.40), earTop - faceH * (ears === 'shard' ? 0.42 : 0.3));
+      c.lineTo(d * faceW * 0.06, earTop - faceH * 0.02);
+      c.closePath();
+      inked(c, art.patCol && art.pat === 'tips' ? art.patCol : art.body, lw, C.ink);
+    }
+  } else if (ears === 'round') {
+    for (const d of [-1, 1]) {
+      c.beginPath(); c.ellipse(d * faceW * 0.31, earTop - faceH * 0.02, faceW * 0.16, faceH * 0.17, 0, 0, TAU);
+      inked(c, art.body, lw, C.ink);
+    }
+  } else if (ears === 'horns') {
+    for (const d of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(d * faceW * 0.24, earTop + faceH * 0.06);
+      c.quadraticCurveTo(d * faceW * 0.52, earTop - faceH * 0.14, d * faceW * 0.40, earTop - faceH * 0.40);
+      c.quadraticCurveTo(d * faceW * 0.30, earTop - faceH * 0.14, d * faceW * 0.10, earTop + faceH * 0.04);
+      c.closePath();
+      inked(c, '#e7dfd0', lw, C.ink);
+    }
+  } else if (ears === 'antler') {
+    for (const d of [-1, 1]) {
+      c.strokeStyle = '#cdbfa4'; c.lineWidth = lw * 1.3;
+      c.beginPath();
+      c.moveTo(d * faceW * 0.18, earTop + faceH * 0.04);
+      c.lineTo(d * faceW * 0.30, earTop - faceH * 0.34);
+      c.moveTo(d * faceW * 0.26, earTop - faceH * 0.14);
+      c.lineTo(d * faceW * 0.46, earTop - faceH * 0.24);
+      c.stroke();
+    }
+  } else if (ears === 'antenna') {
+    for (const d of [-1, 1]) {
+      c.strokeStyle = C.ink; c.lineWidth = lw * 0.8;
+      c.beginPath();
+      c.moveTo(d * faceW * 0.10, earTop + faceH * 0.06);
+      c.quadraticCurveTo(d * faceW * 0.30, earTop - faceH * 0.30, d * faceW * 0.36, earTop - faceH * 0.40);
+      c.stroke();
+      c.beginPath(); c.arc(d * faceW * 0.36, earTop - faceH * 0.42, s * 0.05, 0, TAU);
+      inked(c, art.belly, lw * 0.8, C.ink);
+    }
+  } else if (ears === 'fin') {
+    c.beginPath();
+    c.moveTo(-faceW * 0.06, earTop - faceH * 0.02);
+    c.quadraticCurveTo(0, earTop - faceH * 0.44, faceW * 0.16, earTop - faceH * 0.04);
+    c.closePath();
+    inked(c, art.belly, lw, C.ink);
+  }
+
+  /* ---------------------------------------------------------------- face --- */
+  const eyeY = faceY - faceH * (headed ? 0.04 : 0.06);
+  const eyeDx = faceW * 0.15;
   const blinkPhase = ((t * 0.6 + (o.blink || 0)) % 4.4);
   const blink = blinkPhase < 0.12 ? 1 - Math.abs(blinkPhase - 0.06) / 0.06 : 0;
   const eyeStyle = art.eyes || 'dot';
-  const er = s * (eyeStyle === 'big' ? 0.13 : eyeStyle === 'slit' ? 0.10 : 0.085);
+  const er = s * (eyeStyle === 'big' ? 0.12 : eyeStyle === 'slit' ? 0.095 : 0.08);
   for (const d of [-1, 1]) {
     const ex = d * eyeDx;
+    if (art.mark === 'patch' && d < 0) continue;                 // one eye is covered
     if (eyeStyle === 'slit') {
       c.save();
       c.strokeStyle = art.evil ? '#ff8a8a' : C.ink;
@@ -2435,9 +2603,9 @@ function drawCreature(c, art, x, y, s, o) {
     }
   }
 
-  const my = cy + bh * 0.14;
+  const my = faceY + faceH * (headed ? 0.2 : 0.16);
   const mouth = art.mouth || 'smile';
-  c.strokeStyle = C.ink; c.lineWidth = lw * 0.9; c.lineCap = 'round';
+  c.strokeStyle = C.ink; c.lineWidth = lw * 0.9;
   if (mouth === 'smile') {
     c.beginPath(); c.arc(0, my - s * 0.03, s * 0.09, 0.3, Math.PI - 0.3); c.stroke();
   } else if (mouth === 'grin') {
@@ -2455,7 +2623,7 @@ function drawCreature(c, art, x, y, s, o) {
       c.closePath(); c.fill();
     }
   } else if (mouth === 'wide' || mouth === 'trap') {
-    c.beginPath(); c.ellipse(0, my + s * 0.01, s * 0.15, s * 0.10, 0, 0, TAU);
+    c.beginPath(); c.ellipse(0, my + s * 0.01, s * 0.15, s * 0.1, 0, 0, TAU);
     inked(c, '#3a1020', lw * 0.9, C.ink);
     if (mouth === 'trap') {
       c.fillStyle = '#fff';
@@ -2479,81 +2647,180 @@ function drawCreature(c, art, x, y, s, o) {
     c.stroke();
   } else if (mouth === 'beard') {
     c.beginPath();
-    c.moveTo(-bw * 0.20, my - s * 0.04);
-    c.quadraticCurveTo(0, my + bh * 0.30, bw * 0.20, my - s * 0.04);
+    c.moveTo(-faceW * 0.2, my - s * 0.04);
+    c.quadraticCurveTo(0, my + faceH * 0.34, faceW * 0.2, my - s * 0.04);
     c.closePath();
     inked(c, '#eef5ff', lw * 0.9, C.ink);
   }
 
-  if (paw) {
+  /* ---------------------------------------------------------------- props -- */
+  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed);
+
+  /* --------------------------------------------------------------- the mark */
+  const mark = art.mark || 'none';
+  if (mark !== 'none') {
     c.save();
-    c.translate(bw * 0.26, bh * 0.42);
-    c.rotate(paw * 0.5);
-    c.beginPath(); c.ellipse(0, 0, bw * 0.11, bh * 0.07, 0, 0, TAU);
-    inked(c, art.body, lw * 0.8, C.ink);
-    c.restore();
-    // the snow it kicks up
-    c.save(); c.globalAlpha = Math.abs(paw) * 0.4; c.fillStyle = '#ffffff';
-    c.beginPath(); c.ellipse(bw * 0.4, bh * 0.5, bw * 0.1, bh * 0.04, 0, 0, TAU); c.fill();
+    if (mark === 'scar') {
+      c.strokeStyle = '#c96a72'; c.lineWidth = lw * 0.7;
+      c.beginPath();
+      c.moveTo(faceW * 0.2, eyeY - faceH * 0.16); c.lineTo(faceW * 0.3, eyeY + faceH * 0.1);
+      c.stroke();
+      for (let i = -1; i <= 1; i += 2) {
+        c.beginPath();
+        c.moveTo(faceW * 0.2 + i * s * 0.03, eyeY - faceH * 0.06 + i * s * 0.02);
+        c.lineTo(faceW * 0.28 + i * s * 0.03, eyeY - faceH * 0.02 + i * s * 0.02);
+        c.stroke();
+      }
+    } else if (mark === 'patch') {
+      c.strokeStyle = C.ink; c.lineWidth = lw * 0.8;
+      c.beginPath();
+      c.moveTo(-faceW * 0.34, eyeY - faceH * 0.14); c.lineTo(faceW * 0.28, eyeY - faceH * 0.2);
+      c.stroke();
+      c.beginPath(); c.ellipse(-eyeDx, eyeY, er * 1.25, er * 1.1, 0, 0, TAU);
+      inked(c, '#2a3346', lw * 0.8, C.ink);
+    } else if (mark === 'freckles') {
+      c.fillStyle = dark;
+      for (let i = 0; i < 6; i++) {
+        const d = i < 3 ? -1 : 1;
+        c.beginPath();
+        c.arc(d * (faceW * 0.22 + (i % 3) * s * 0.035), my - faceH * 0.02 + ((i % 3) - 1) * s * 0.025, s * 0.014, 0, TAU);
+        c.fill();
+      }
+    } else if (mark === 'tuft') {
+      c.beginPath();
+      c.moveTo(-s * 0.05, faceY - faceH * (headed ? 0.44 : 0.3));
+      c.quadraticCurveTo(s * 0.02, faceY - faceH * (headed ? 0.72 : 0.52), s * 0.09, faceY - faceH * (headed ? 0.42 : 0.28));
+      c.closePath();
+      inked(c, art.belly, lw * 0.8, C.ink);
+    } else if (mark === 'ember') {
+      // a small lit coal carried on the chest, licking upward
+      const ey2 = bodyY + bodyH * 0.06;
+      const pulse = 0.5 + Math.sin(t * 3 + ph) * 0.3;
+      c.save();
+      c.globalAlpha = pulse * 0.45; c.fillStyle = '#ff9a3c';
+      c.beginPath(); c.arc(0, ey2, s * 0.1, 0, TAU); c.fill();
+      c.restore();
+      for (let i = 0; i < 2; i++) {
+        const k = 1 - i * 0.4, wob = Math.sin(t * 6 + ph + i) * s * 0.008;
+        c.beginPath();
+        c.moveTo(0, ey2 + s * 0.05 * k);
+        c.quadraticCurveTo(s * 0.045 * k, ey2, wob, ey2 - s * 0.07 * k);
+        c.quadraticCurveTo(-s * 0.045 * k, ey2, 0, ey2 + s * 0.05 * k);
+        c.closePath();
+        c.fillStyle = i ? '#ffe6a8' : '#ff9a3c';
+        c.fill();
+        if (!i) { c.lineWidth = lw * 0.5; c.strokeStyle = C.ink; c.stroke(); }
+      }
+    } else if (mark === 'icicles') {
+      c.fillStyle = '#dff0ff';
+      for (let i = -2; i <= 2; i++) {
+        const px = i * bodyW * 0.16;
+        c.beginPath();
+        c.moveTo(px - s * 0.022, bodyY + bodyH * 0.36);
+        c.lineTo(px + s * 0.022, bodyY + bodyH * 0.36);
+        c.lineTo(px, bodyY + bodyH * 0.36 + s * (0.05 + (i % 2 ? 0.03 : 0)));
+        c.closePath(); c.fill();
+      }
+    } else if (mark === 'bandage') {
+      c.save();
+      c.translate(0, faceY + faceH * 0.02);
+      c.rotate(-0.2);
+      c.beginPath(); rr(c, -faceW * 0.4, -s * 0.03, faceW * 0.8, s * 0.06, s * 0.02);
+      inked(c, '#f0ead8', lw * 0.6, C.ink);
+      c.restore();
+    } else if (mark === 'monocle') {
+      c.beginPath(); c.arc(eyeDx, eyeY, er * 1.5, 0, TAU);
+      c.strokeStyle = C.gold; c.lineWidth = lw * 0.7; c.stroke();
+      c.beginPath();
+      c.moveTo(eyeDx + er * 1.4, eyeY + er); c.lineTo(eyeDx + er * 2, eyeY + er * 2.4);
+      c.stroke();
+    } else if (mark === 'leaf') {
+      c.save();
+      c.translate(s * 0.06, faceY - faceH * (headed ? 0.46 : 0.32));
+      c.rotate(0.4 + Math.sin(t * 1.5 + ph) * 0.1);
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.quadraticCurveTo(s * 0.09, -s * 0.05, s * 0.14, s * 0.01);
+      c.quadraticCurveTo(s * 0.08, s * 0.06, 0, 0);
+      inked(c, '#6fd08c', lw * 0.6, C.ink);
+      c.restore();
+    } else if (mark === 'brand') {
+      c.strokeStyle = dark; c.lineWidth = lw * 0.8;
+      c.beginPath();
+      c.arc(bodyW * 0.2, bodyY + bodyH * 0.08, s * 0.06, 0, TAU);
+      c.moveTo(bodyW * 0.2 - s * 0.06, bodyY + bodyH * 0.08);
+      c.lineTo(bodyW * 0.2 + s * 0.06, bodyY + bodyH * 0.08);
+      c.stroke();
+    }
     c.restore();
   }
 
-  /* ---- props ---- */
+  c.restore();
+}
+
+/* Props are drawn last of all and hang off the finished body. */
+function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed) {
   const acc = art.acc || 'none';
+  if (acc === 'none') return;
   if (acc === 'scarf') {
     c.beginPath();
-    rr(c, -bw * 0.32, cy + bh * 0.02, bw * 0.64, bh * 0.13, bh * 0.06);
+    rr(c, -faceW * 0.32, faceY + faceH * 0.34, faceW * 0.64, faceH * 0.14, faceH * 0.07);
     inked(c, art.accCol || '#ff5566', lw * 0.9, C.ink);
     c.beginPath();
-    rr(c, bw * 0.16, cy + bh * 0.08, bw * 0.14, bh * 0.30, bh * 0.05);
+    rr(c, faceW * 0.16, faceY + faceH * 0.4, faceW * 0.14, faceH * 0.34, faceH * 0.05);
     inked(c, art.accCol || '#ff5566', lw * 0.9, C.ink);
   } else if (acc === 'helm') {
-    c.beginPath(); c.arc(0, cy - bh * 0.22, bw * 0.36, Math.PI, TAU);
+    c.beginPath(); c.arc(0, faceY - faceH * 0.1, faceW * 0.38, Math.PI, TAU);
     c.closePath();
     inked(c, art.accCol || '#8fa2bd', lw, C.ink);
-    c.beginPath(); rr(c, -bw * 0.38, cy - bh * 0.24, bw * 0.76, bh * 0.08, 4);
+    c.beginPath(); rr(c, -faceW * 0.4, faceY - faceH * 0.13, faceW * 0.8, faceH * 0.09, 4);
     inked(c, art.accCol || '#8fa2bd', lw * 0.8, C.ink);
   } else if (acc === 'crown') {
+    const ty = faceY - faceH * 0.4;
     c.beginPath();
-    c.moveTo(-bw * 0.26, cy - bh * 0.30);
-    c.lineTo(-bw * 0.26, cy - bh * 0.50); c.lineTo(-bw * 0.10, cy - bh * 0.38);
-    c.lineTo(0, cy - bh * 0.56); c.lineTo(bw * 0.10, cy - bh * 0.38);
-    c.lineTo(bw * 0.26, cy - bh * 0.50); c.lineTo(bw * 0.26, cy - bh * 0.30);
+    c.moveTo(-faceW * 0.28, ty);
+    c.lineTo(-faceW * 0.28, ty - faceH * 0.2); c.lineTo(-faceW * 0.11, ty - faceH * 0.08);
+    c.lineTo(0, ty - faceH * 0.26); c.lineTo(faceW * 0.11, ty - faceH * 0.08);
+    c.lineTo(faceW * 0.28, ty - faceH * 0.2); c.lineTo(faceW * 0.28, ty);
     c.closePath();
     inked(c, art.accCol || C.gold, lw, C.ink);
   } else if (acc === 'lantern') {
-    const lx = bw * 0.44, ly = cy + bh * 0.10 + Math.sin(t * 2.2) * bh * 0.03;
+    const lx = bw * 0.46, ly = bodyY + Math.sin(t * 2.2) * bh * 0.03;
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
-    c.beginPath(); c.moveTo(bw * 0.24, cy - bh * 0.06); c.lineTo(lx, ly - s * 0.10); c.stroke();
+    c.beginPath(); c.moveTo(bw * 0.26, bodyY - bodyH * 0.16); c.lineTo(lx, ly - s * 0.1); c.stroke();
     c.save();
-    c.globalAlpha = 0.5; c.fillStyle = art.accCol || C.gold;
-    c.beginPath(); c.arc(lx, ly, s * 0.20, 0, TAU); c.fill();
+    c.globalAlpha = 0.45; c.fillStyle = art.accCol || C.gold;
+    c.beginPath(); c.arc(lx, ly, s * 0.2, 0, TAU); c.fill();
     c.restore();
-    c.beginPath(); rr(c, lx - s * 0.07, ly - s * 0.09, s * 0.14, s * 0.18, s * 0.03);
+    c.beginPath();
+    c.moveTo(lx - s * 0.07, ly - s * 0.09); c.lineTo(lx + s * 0.07, ly - s * 0.09);
+    c.lineTo(lx + s * 0.05, ly + s * 0.09); c.lineTo(lx - s * 0.05, ly + s * 0.09);
+    c.closePath();
     inked(c, art.accCol || C.gold, lw * 0.8, C.ink);
+    c.beginPath(); c.moveTo(lx - s * 0.07, ly - s * 0.09); c.lineTo(lx + s * 0.07, ly - s * 0.09);
+    c.strokeStyle = C.ink; c.lineWidth = lw * 0.8; c.stroke();
   } else if (acc === 'kettle') {
-    c.beginPath(); rr(c, -bw * 0.20, cy - bh * 0.52, bw * 0.40, bh * 0.22, bh * 0.05);
+    c.beginPath(); rr(c, -faceW * 0.2, faceY - faceH * 0.68, faceW * 0.4, faceH * 0.24, faceH * 0.05);
     inked(c, art.accCol || '#9aa7bd', lw * 0.9, C.ink);
-    c.beginPath(); c.moveTo(bw * 0.18, cy - bh * 0.46); c.lineTo(bw * 0.34, cy - bh * 0.52);
+    c.beginPath(); c.moveTo(faceW * 0.18, faceY - faceH * 0.6); c.lineTo(faceW * 0.34, faceY - faceH * 0.68);
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.9; c.stroke();
-    // steam
     c.save(); c.globalAlpha = 0.5; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.7;
     for (let i = 0; i < 2; i++) {
+      const ph2 = t * 1.6 + i;
+      const sx2 = -faceW * 0.04 + i * faceW * 0.1;
       c.beginPath();
-      const ph = t * 1.6 + i;
-      c.moveTo(-bw * 0.04 + i * bw * 0.10, cy - bh * 0.54);
-      c.quadraticCurveTo(-bw * 0.04 + i * bw * 0.10 + Math.sin(ph) * s * 0.06, cy - bh * 0.66,
-                         -bw * 0.04 + i * bw * 0.10, cy - bh * 0.78);
+      c.moveTo(sx2, faceY - faceH * 0.7);
+      c.quadraticCurveTo(sx2 + Math.sin(ph2) * s * 0.06, faceY - faceH * 0.86, sx2, faceY - faceH * 1.0);
       c.stroke();
     }
     c.restore();
   } else if (acc === 'gear') {
-    const gx = -bw * 0.40, gy = cy - bh * 0.10;
+    const gx = -bw * 0.42, gy = bodyY - bodyH * 0.1;
     c.save(); c.translate(gx, gy); c.rotate(t * 0.9);
     c.fillStyle = art.accCol || '#8fa2bd';
     for (let i = 0; i < 6; i++) {
       c.save(); c.rotate((i / 6) * TAU);
-      c.beginPath(); rr(c, -s * 0.035, -s * 0.20, s * 0.07, s * 0.10, 2); c.fill();
+      c.beginPath(); rr(c, -s * 0.035, -s * 0.2, s * 0.07, s * 0.1, 2); c.fill();
       c.restore();
     }
     c.beginPath(); c.arc(0, 0, s * 0.14, 0, TAU);
@@ -2561,38 +2828,43 @@ function drawCreature(c, art, x, y, s, o) {
     c.beginPath(); c.arc(0, 0, s * 0.05, 0, TAU); c.fillStyle = C.ink; c.fill();
     c.restore();
   } else if (acc === 'hammer' || acc === 'pike' || acc === 'staff') {
-    const hx = bw * 0.40;
-    c.strokeStyle = '#8a6a3f'; c.lineWidth = lw * 1.4; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(hx, cy + bh * 0.34); c.lineTo(hx - bw * 0.04, cy - bh * 0.44); c.stroke();
+    const hx = bw * 0.42;
+    c.strokeStyle = '#8a6a3f'; c.lineWidth = lw * 1.4;
+    c.beginPath(); c.moveTo(hx, bodyY + bodyH * 0.5); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.4); c.stroke();
     if (acc === 'hammer') {
-      c.beginPath(); rr(c, hx - bw * 0.20, cy - bh * 0.60, bw * 0.34, bh * 0.20, 4);
+      c.beginPath(); rr(c, hx - bw * 0.2, faceY - faceH * 0.6, bw * 0.34, bh * 0.16, 4);
       inked(c, art.accCol || '#9aa7bd', lw * 0.9, C.ink);
     } else if (acc === 'pike') {
       c.beginPath();
-      c.moveTo(hx - bw * 0.10, cy - bh * 0.44); c.lineTo(hx - bw * 0.04, cy - bh * 0.70);
-      c.lineTo(hx + bw * 0.02, cy - bh * 0.44); c.closePath();
+      c.moveTo(hx - bw * 0.1, faceY - faceH * 0.4); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.76);
+      c.lineTo(hx + bw * 0.02, faceY - faceH * 0.4); c.closePath();
       inked(c, art.accCol || '#cfd8e8', lw * 0.8, C.ink);
     } else {
-      c.beginPath(); c.arc(hx - bw * 0.04, cy - bh * 0.52, s * 0.11, 0, TAU);
+      c.beginPath(); c.arc(hx - bw * 0.04, faceY - faceH * 0.5, s * 0.11, 0, TAU);
       inked(c, art.accCol || '#6f8fd0', lw * 0.8, C.ink);
     }
+  } else if (acc === 'cloak') {
+    c.beginPath();
+    c.moveTo(-bw * 0.44, bodyY - bodyH * 0.34);
+    c.quadraticCurveTo(-bw * 0.58, bodyY + bodyH * 0.6, -bw * 0.08, bodyY + bodyH * 0.56);
+    c.lineTo(-bw * 0.16, bodyY - bodyH * 0.4);
+    c.closePath();
+    inked(c, art.accCol || '#2b5f96', lw * 0.9, C.ink);
   } else if (acc === 'satchel') {
     c.save();
     c.strokeStyle = art.accCol || '#8a6a3f'; c.lineWidth = lw * 1.1;
     c.beginPath();
-    c.moveTo(-bw * 0.24, cy - bh * 0.22); c.lineTo(bw * 0.2, cy + bh * 0.16); c.stroke();
-    c.beginPath(); rr(c, bw * 0.12, cy + bh * 0.1, bw * 0.28, bh * 0.24, 4);
+    c.moveTo(-bw * 0.24, bodyY - bodyH * 0.36); c.lineTo(bw * 0.2, bodyY + bodyH * 0.12); c.stroke();
+    c.beginPath(); rr(c, bw * 0.12, bodyY + bodyH * 0.06, bw * 0.28, bh * 0.2, 4);
     inked(c, art.accCol || '#8a6a3f', lw * 0.9, C.ink);
-    c.beginPath(); rr(c, bw * 0.12, cy + bh * 0.1, bw * 0.28, bh * 0.08, 3);
-    inked(c, '#c9b28a', lw * 0.7, C.ink);
     c.restore();
   } else if (acc === 'bellcollar') {
     c.beginPath();
-    rr(c, -bw * 0.3, cy + bh * 0.02, bw * 0.6, bh * 0.1, bh * 0.05);
+    rr(c, -faceW * 0.3, faceY + faceH * 0.36, faceW * 0.6, faceH * 0.1, faceH * 0.05);
     inked(c, art.accCol || '#8a4a3f', lw * 0.9, C.ink);
     const swing = Math.sin(t * 3.1 + ph) * 0.5;
     c.save();
-    c.translate(0, cy + bh * 0.12);
+    c.translate(0, faceY + faceH * 0.46);
     c.rotate(swing * 0.3);
     c.beginPath();
     c.moveTo(-s * 0.05, 0);
@@ -2602,41 +2874,29 @@ function drawCreature(c, art, x, y, s, o) {
     inked(c, C.gold, lw * 0.8, C.ink);
     c.restore();
   } else if (acc === 'plating') {
-    // cracked ice plates strapped over the shoulders
-    c.save();
     for (const d of [-1, 1]) {
       c.beginPath();
-      c.moveTo(d * bw * 0.14, cy - bh * 0.3);
-      c.lineTo(d * bw * 0.46, cy - bh * 0.16);
-      c.lineTo(d * bw * 0.4, cy + bh * 0.12);
-      c.lineTo(d * bw * 0.12, cy + bh * 0.02);
+      c.moveTo(d * bw * 0.14, bodyY - bodyH * 0.42);
+      c.lineTo(d * bw * 0.46, bodyY - bodyH * 0.22);
+      c.lineTo(d * bw * 0.4, bodyY + bodyH * 0.18);
+      c.lineTo(d * bw * 0.12, bodyY + bodyH * 0.02);
       c.closePath();
       inked(c, art.accCol || '#bcdcf4', lw * 0.9, C.ink);
       c.strokeStyle = 'rgba(20,30,50,.5)'; c.lineWidth = lw * 0.5;
       c.beginPath();
-      c.moveTo(d * bw * 0.2, cy - bh * 0.22); c.lineTo(d * bw * 0.34, cy - bh * 0.02);
-      c.lineTo(d * bw * 0.26, cy + bh * 0.06); c.stroke();
+      c.moveTo(d * bw * 0.2, bodyY - bodyH * 0.3); c.lineTo(d * bw * 0.34, bodyY - bodyH * 0.02);
+      c.lineTo(d * bw * 0.26, bodyY + bodyH * 0.08); c.stroke();
     }
-    c.restore();
   } else if (acc === 'goggles') {
     c.save();
-    c.beginPath(); rr(c, -bw * 0.34, cy - bh * 0.26, bw * 0.68, bh * 0.1, 4);
+    c.beginPath(); rr(c, -faceW * 0.36, faceY - faceH * 0.34, faceW * 0.72, faceH * 0.12, 4);
     inked(c, art.accCol || '#8a6a3f', lw * 0.8, C.ink);
     for (const d of [-1, 1]) {
-      c.beginPath(); c.arc(d * bw * 0.16, cy - bh * 0.21, s * 0.07, 0, TAU);
+      c.beginPath(); c.arc(d * faceW * 0.17, faceY - faceH * 0.28, s * 0.07, 0, TAU);
       inked(c, '#8fe3ff', lw * 0.8, C.ink);
     }
     c.restore();
-  } else if (acc === 'cloak') {
-    c.beginPath();
-    c.moveTo(-bw * 0.42, cy - bh * 0.10);
-    c.quadraticCurveTo(-bw * 0.56, cy + bh * 0.46, -bw * 0.10, cy + bh * 0.48);
-    c.lineTo(-bw * 0.16, cy - bh * 0.16);
-    c.closePath();
-    inked(c, art.accCol || '#2b5f96', lw * 0.9, C.ink);
   }
-
-  c.restore();
 }
 
 /* ------------------------------------------------------------- backdrop -- */
@@ -2814,6 +3074,11 @@ function drawUnit(c, u, t) {
     else { c.rotate(k * 0.5); c.translate(0, k * 26); }
     c.translate(-u.px, -u.py);
   }
+  if (u.tilt) {
+    c.translate(u.px, u.py);
+    c.rotate(u.tilt);
+    c.translate(-u.px, -u.py);
+  }
   const tribeCol = u.side === 'p' ? (u.leader ? C.gold : '#7fb2e8') : '#d08a8a';
   panel(c, x, y, w, h, 14, u.side === 'p' ? '#1d2c49' : '#3a2436', tribeCol);
 
@@ -2856,14 +3121,25 @@ function drawUnit(c, u, t) {
   // stats
   if (u.atk > 0 || u.leader) statPip(c, x + 14, y + h - 13, 12, '#ff8b7a', u.atk + stat(u, 'spice'));
   statPip(c, x + w - 14, y + h - 13, 12, '#7de08f', u.hp);
-  // counter
+  // the counter: it drops with a physical knock rather than swapping numbers
   const ready = u.cnt <= 1;
+  const kick = u.tick || 0;
   c.save();
-  if (ready) { c.shadowColor = '#ffd166'; c.shadowBlur = 14; }
-  c.beginPath(); c.arc(x + w - 13, y + 13, 15, 0, TAU);
-  inked(c, ready ? '#ffd166' : '#cfe0f5', 3, C.ink);
+  c.translate(x + w - 13, y + 13 + kick * 5);
+  const cs = 1 + kick * 0.35;
+  c.scale(cs, cs * (1 - kick * 0.15));
+  if (ready) { c.shadowColor = '#ffd166'; c.shadowBlur = 14 + (ready ? Math.sin(t * 6) * 4 : 0); }
+  c.beginPath(); c.arc(0, 0, 15, 0, TAU);
+  inked(c, kick > 0.4 ? '#ffffff' : ready ? '#ffd166' : '#cfe0f5', 3, C.ink);
+  txt(c, String(u.cnt), 0, 1, 20, '#12203a', 'center', 'd', 0);
   c.restore();
-  txt(c, String(u.cnt), x + w - 13, y + 14, 20, '#12203a', 'center', 'd', 0);
+  if (kick > 0.05) {
+    c.save();
+    c.globalAlpha = kick * 0.8;
+    c.strokeStyle = '#ffd166'; c.lineWidth = 2.5;
+    c.beginPath(); c.arc(x + w - 13, y + 13, 15 + (1 - kick) * 16, 0, TAU); c.stroke();
+    c.restore();
+  }
 
   drawStatus(c, u, x + 9, y + 6, 20);
 
@@ -3391,6 +3667,8 @@ const UI = {
   order: false,      // attack-order preview
   choose: null,      // {title, items, onPick, cancel}
   deck: false,       // the caravan, laid out
+  picked: null,      // a card chosen by tapping, waiting for a slot
+  refuse: null,      // the note that says why a drop would not work
   help: null,        // page index of the rulebook, or null
   holdT: 0,          // how long the finger has been down in one place
 };
@@ -3462,7 +3740,7 @@ function drawLeaderPick(c, t) {
   // the leader, life size
   panel(c, SAFE + 6, 120, 350, 440, 16, '#1d2c49', T.col);
   const lx = SAFE + 181;
-  drawCreature(c, ld.art, lx, 300, 190, { t, ph: 1.4 });
+  drawCreature(c, ld.art, lx, 286, 164, { t, ph: 1.4 });
   txt(c, ld.name.toUpperCase(), lx, 396, 26, '#eaf6ff', 'center', 'd');
   txt(c, 'health ' + ld.hp + '    attack ' + ld.atk + '    counter ' + ld.cnt, lx, 428, 14, '#9fc0e4', 'center', 't');
   wrapText(c, ld.text, 14, 300).forEach((ln, i) => txt(c, ln, lx, 456 + i * 19, 14, '#c8dcf4', 'center', 't'));
@@ -3568,7 +3846,7 @@ function drawCollection(c, t) {
     } else if (it.kind === 'item') {
       drawItemIcon(c, def.art, x + tw / 2, y + th * 0.44, th * 0.46, t);
     } else {
-      drawCreature(c, def.art, x + tw / 2, y + th * 0.60, th * 0.58, { t, ph: i * 0.7, blink: i });
+      drawCreature(c, def.art, x + tw / 2, y + th * 0.56, th * 0.52, { t, ph: i * 0.7, blink: i });
     }
     c.restore();
     if (!have) txt(c, '?', x + tw / 2, y + th * 0.46, 34, '#5a6a86', 'center', 'd');
@@ -3664,17 +3942,32 @@ function drawBattle(c, t) {
     for (let l = 0; l < LANES; l++) for (let col = 0; col < COLS; col++) {
       const p = slotPos(side, l, col);
       const free = slotFree(g, side, l, col);
-      const dragUnitCard = UI.drag && UI.drag.card && UI.drag.card.type === 'unit';
+      const held = (UI.drag && UI.drag.card) || UI.picked;
+      const dragUnitCard = held && held.type === 'unit';
       const dropOk = side === 'p' && free && (dragUnitCard || (UI.drag && UI.drag.unit));
+      // the one slot it would land in right now, called out from the rest
+      const pointer = UI.drag ? { x: UI.drag.x, y: UI.drag.y } : UI.pointer;
+      const over = dropOk && pointer && hitAt(pointer.x, pointer.y);
+      const snap = over && over.id === 'slot' && over.data.lane === l && over.data.col === col;
       c.save();
       c.globalAlpha = free ? (dropOk ? 0.85 : 0.30) : 0.12;
       rr(c, p.x - SLOT_W / 2, p.y - SLOT_H / 2, SLOT_W, SLOT_H, 14);
       c.setLineDash(dropOk ? [] : [8, 8]);
-      c.lineWidth = dropOk ? 4 : 2.5;
+      c.lineWidth = snap ? 6 : dropOk ? 4 : 2.5;
       c.strokeStyle = dropOk ? '#ffe08a' : (side === 'p' ? '#a8c8ea' : '#e8a8a8');
       c.stroke();
-      if (dropOk) { c.globalAlpha = 0.16; c.fillStyle = '#ffe08a'; c.fill(); }
+      if (dropOk) { c.globalAlpha = snap ? 0.3 : 0.16; c.fillStyle = '#ffe08a'; c.fill(); }
       c.restore();
+      if (snap) {
+        // a ghost of the card, standing where it would stand
+        c.save();
+        c.globalAlpha = 0.5 + Math.sin(t * 8) * 0.12;
+        c.translate(p.x, p.y);
+        c.scale(1 + Math.sin(t * 8) * 0.02, 1 + Math.sin(t * 8) * 0.02);
+        drawCreature(c, held.art, 0, 12, SLOT_H * 0.6, { t, ph: 2 });
+        c.restore();
+        txt(c, 'HERE', p.x, p.y - SLOT_H / 2 + 14, 13, '#ffe08a', 'center', 'd');
+      }
       if (side === 'p' && free) hit('slot', p.x - SLOT_W / 2, p.y - SLOT_H / 2, SLOT_W, SLOT_H, { lane: l, col });
     }
   }
@@ -3731,11 +4024,19 @@ function drawBattle(c, t) {
   // whoever is actually first out of the gate next turn
   const nextUp = turnOrder(g).find((u) => u.alive && u.cnt <= 1 && !stat(u, 'frost') && !stat(u, 'slow'));
   if (nextUp) {
-    const y = nextUp.py - SLOT_H / 2 - 12;
+    // on the outer edge, where it cannot be mistaken for the slab above it
+    const out = nextUp.side === 'p' ? -1 : 1;
+    const bx3 = nextUp.px + out * (SLOT_W / 2 + 30);
     c.save();
-    c.globalAlpha = 0.85 + Math.sin(t * 6) * 0.15;
-    panel(c, nextUp.px - 30, y - 12, 60, 22, 7, nextUp.side === 'p' ? '#2f5d8f' : '#8f3f4f', C.ink);
-    txt(c, 'NEXT', nextUp.px, y, 12, '#ffffff', 'center', 't');
+    c.globalAlpha = 0.9 + Math.sin(t * 6) * 0.1;
+    panel(c, bx3 - 30, nextUp.py - 13, 60, 26, 8, nextUp.side === 'p' ? '#2f5d8f' : '#8f3f4f', C.ink);
+    txt(c, 'NEXT', bx3, nextUp.py, 12, '#ffffff', 'center', 't');
+    c.beginPath();
+    c.moveTo(bx3 - out * 30, nextUp.py - 7);
+    c.lineTo(bx3 - out * 40, nextUp.py);
+    c.lineTo(bx3 - out * 30, nextUp.py + 7);
+    c.closePath();
+    c.fillStyle = nextUp.side === 'p' ? '#2f5d8f' : '#8f3f4f'; c.fill();
     c.restore();
   }
 
@@ -3784,6 +4085,23 @@ function drawBattle(c, t) {
   drawHand(c, t);
   drawHud(c, t);
 
+  // why that would not have worked
+  if (UI.refuse) {
+    UI.refuse.t += 1 / 60;
+    if (UI.refuse.t > 1.7) UI.refuse = null;
+    else {
+      const k = clamp(1 - (UI.refuse.t - 1.2) / 0.5, 0, 1);
+      const w2 = Math.max(200, UI.refuse.text.length * 8 + 30);
+      const rx = clamp(UI.refuse.x - w2 / 2, SAFE, VW - SAFE - w2);
+      const ry = clamp(UI.refuse.y - 64, 120, VH - 120);
+      c.save();
+      c.globalAlpha = k;
+      panel(c, rx, ry, w2, 38, 10, 'rgba(70,26,34,.94)', '#ff9aa5');
+      txt(c, UI.refuse.text, rx + w2 / 2, ry + 20, 14, '#ffd8dc', 'center', 't');
+      c.restore();
+    }
+  }
+
   // what just happened, on the band between the table and your hand
   if (b.log && b.log.length) {
     const show = b.log.slice(-2);
@@ -3827,13 +4145,15 @@ function drawBattle(c, t) {
 
   // cards on their way to the pile
   for (const f of flyers) {
-    const k = easeIn(f.t / f.life);
+    const k = f.t / f.life;
     const to = pilePos('discard');
-    const x = lerp(f.x0 === undefined ? MID : f.x0, to.x - CARD_W * 0.24, k);
-    const y = lerp(f.y0 === undefined ? HAND_Y : f.y0, to.y - CARD_H * 0.24, k);
+    const x0 = f.x0 === undefined ? MID : f.x0, y0 = f.y0 === undefined ? HAND_Y : f.y0;
+    // thrown: it leaves fast, arcs up over the table, and drops onto the pile
+    const x = lerp(x0, to.x - CARD_W * 0.24, easeOut(k));
+    const y = lerp(y0, to.y - CARD_H * 0.24, easeIn(k)) - Math.sin(k * Math.PI) * 90;
     c.save();
-    c.globalAlpha = 1 - k * 0.75;
-    drawCard(c, f.card, x, y, CARD_W, CARD_H, { t, scale: 1 - k * 0.55, rot: f.rot * k });
+    c.globalAlpha = 1 - k * 0.7;
+    drawCard(c, f.card, x, y, CARD_W, CARD_H, { t, scale: 1 - k * 0.5, rot: f.rot * 4 * k });
     c.restore();
   }
 
@@ -3910,8 +4230,9 @@ function drawHand(c, t) {
     if (UI.drag && UI.drag.card === card) continue;
     const off = i - (n - 1) / 2;
     const x = MID - total / 2 + i * spread - CARD_W / 2;
-    const hovered = UI.hover && UI.hover.id === 'hand' && UI.hover.data === i;
-    const lift = hovered ? 34 : 0;
+    const picked = UI.picked === card;
+    const hovered = picked || (UI.hover && UI.hover.id === 'hand' && UI.hover.data === i);
+    const lift = picked ? 52 : hovered ? 34 : 0;
     const arc = n > 1 ? Math.min(14, Math.abs(off) * Math.abs(off) * 2.2) : 0;
     const y = HAND_Y - CARD_H / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
     card.handT = Math.min(1, (card.handT || 0) + 0.06);
@@ -3922,11 +4243,19 @@ function drawHand(c, t) {
     const dx = lerp(from.x - CARD_W / 2, x, dk);
     const dy = lerp(from.y - CARD_H / 2, y, dk);
     card.hx = dx; card.hy = dy;
+    if (picked) {
+      c.save();
+      c.shadowColor = '#ffe08a'; c.shadowBlur = 22;
+      rr(c, dx + 2, dy + 2, CARD_W - 4, CARD_H - 4, 13);
+      c.fillStyle = '#ffe08a'; c.globalAlpha = 0.5; c.fill();
+      c.restore();
+    }
     drawCard(c, card, dx, dy, CARD_W, CARD_H, {
       t, scale: (hovered ? 1.07 : 1) * (0.6 + 0.4 * dk),
       rot: lerp(-0.7, hovered ? 0 : off * 0.035, dk),
       alpha: 0.4 + 0.6 * dk,
     });
+    if (picked) txt(c, 'TAP A SLOT', dx + CARD_W / 2, dy - 14, 13, '#ffe08a', 'center', 'd');
     // not grabbable until it has actually landed in the fan
     if (card.dealT > 0.6) hit('hand', x, y, CARD_W, CARD_H, i);
   }
@@ -4979,7 +5308,21 @@ function onDown(x, y) {
   if (!h) return;
   if (h.id === 'hand') {
     const card = g.battle.hand[h.data];
+    // a card already picked up by tapping is put back down by tapping it again
+    if (UI.picked === card) { UI.picked = null; sfx('tap'); return; }
     UI.drag = { card, idx: h.data, x, y, sx: x, sy: y, moved: false };
+    return;
+  }
+  // tap-tap: with a card chosen, the next tap on a slot or a unit plays it
+  if (UI.picked) {
+    const card = UI.picked;
+    const idx = g.battle.hand.indexOf(card);
+    if (idx < 0) { UI.picked = null; return; }
+    const spot = h.id === 'slot' ? h.data : h.id === 'unit' ? h.data : null;
+    const why = refusal(g, card, spot);
+    if (why) { UI.refuse = { text: why, t: 0, x, y }; sfx('tap'); return; }
+    UI.picked = null;
+    playCard(g, idx, CARDS[card.def].target === 'none' && card.type !== 'unit' ? null : spot);
     return;
   }
   if (h.id === 'unit' && h.data.side === 'p' && g.battle && !g.battle.busy) {
@@ -5005,21 +5348,21 @@ function onUp(x, y) {
   if (!d) return;
   const h = hitAt(x, y);
   if (!d.moved) {
-    // A tap is a question, not a move: it opens the thing you touched.
-    UI.inspect = d.card || d.unit || null;
+    // A tap on a card takes it into your hand ready to place; a tap on a unit
+    // asks what it is.
+    if (d.card) { UI.picked = d.card; sfx('tap'); }
+    else UI.inspect = d.unit || null;
     return;
   }
   if (d.card) {
     const idx = g.battle.hand.indexOf(d.card);
     if (idx < 0) return;
-    if (d.card.type === 'unit') {
-      if (h && h.id === 'slot') playCard(g, idx, h.data);
-      else sfx('tap');
-    } else {
-      const tg = CARDS[d.card.def].target;
-      if (tg === 'none') playCard(g, idx, null);
-      else if (h && h.id === 'unit') playCard(g, idx, h.data);
-    }
+    const tg = CARDS[d.card.def].target;
+    const spot = h && h.id === 'slot' ? h.data : h && h.id === 'unit' ? h.data : null;
+    if (d.card.type !== 'unit' && tg === 'none') { playCard(g, idx, null); return; }
+    const why = refusal(g, d.card, spot);
+    if (why) { UI.refuse = { text: why, t: 0, x, y }; sfx('tap'); return; }
+    playCard(g, idx, spot);
   } else if (d.unit) {
     if (h && h.id === 'slot') moveUnit(g, d.unit, h.data.lane, h.data.col);
     else if (h && h.id === 'unit' && h.data.side === 'p') moveUnit(g, d.unit, h.data.lane, h.data.col);
@@ -5039,11 +5382,21 @@ function layoutUnits(dt) {
     u.px += (p.x - u.px) * k;
     u.py += (p.y - u.py) * k;
     if (u.lungeT > 0) {
-      u.lungeT = Math.max(0, u.lungeT - dt * 5.5);
-      const a = Math.sin((1 - u.lungeT) * Math.PI) * 26;
+      u.lungeT = Math.max(0, u.lungeT - dt * 4.2);
+      // wind up, then throw: the first fifth of the move goes backwards, which
+      // is the whole difference between a lunge and a teleport
+      const k = 1 - u.lungeT;
+      const a = k < 0.28 ? -easeOut(k / 0.28) * 13 : Math.sin(((k - 0.28) / 0.72) * Math.PI) * 34;
       u.px += u.lungeX * a; u.py += u.lungeY * a;
+      u.tilt = -a * 0.004;
+    } else u.tilt = (u.tilt || 0) * 0.86;
+    if (u.recoil > 0) {
+      u.recoil = Math.max(0, u.recoil - dt * 4.5);
+      const r = easeOut(u.recoil) * 16;
+      u.px += (u.recX || 0) * r; u.py += (u.recY || 0) * r;
     }
     u.sq *= Math.pow(0.02, dt);
+    u.tick = Math.max(0, (u.tick || 0) - dt * 3.2);
     u.flash = Math.max(0, u.flash - dt * 3.4);
     if (u.hitT > 0) u.hitT = Math.max(0, u.hitT - dt * 3);
     if (u.born) u.born += dt;
@@ -5292,7 +5645,7 @@ window.FF = {
   saveRun, loadRun, saveMeta, loadMeta, store,
   handSize, pilePos, flyers, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
-  press, onDown, onMove, onUp, hitAt, hits: () => hits,
+  press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal,
   drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   MUSIC, musicTick, setMute, moodFor, AUD,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES,
