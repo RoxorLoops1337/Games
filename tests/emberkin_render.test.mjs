@@ -5697,6 +5697,87 @@ section('a trainer who beats you gets to say so');
     'off the npc that just beat you, and empty when there is none');
 }
 
+// Does the world itself say what it is?
+//
+// A sweep of every map found the structure sound — no mute sign tiles, no sign
+// text sitting on a tile that is not a sign, twenty-three warps all landing on
+// ground you can stand on, no door opening onto nothing, grass and encounter
+// tables agreeing on all four routes. One thing did not agree: Crown Hollow,
+// the map with the hardest grass in the game, the shrine and the one kin the
+// whole run points at, had no sign tile at all. Every other outdoor route in
+// the valley names itself on a board. The place that most needed to say what
+// it was, said nothing.
+//
+// The property is not "Crown Hollow has a sign". It is: every place a player
+// walks through names itself, and every board in the game can actually be read
+// from ground a player can stand on — driven through the real interact().
+section('every place names itself, and every sign can be read from the ground');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  const maps = Object.entries(g.MAPS);
+  const outdoors = maps.filter(([, m]) => m.kind === 'route' || m.kind === 'town');
+  eq(outdoors.length, 5, 'five places you walk through in the open');
+
+  // 1. Each of them says its own name on one of its boards.
+  for (const [id, m] of outdoors) {
+    const texts = Object.values(m.signs || {});
+    ok(texts.length > 0, `${id} has something written in it`);
+    ok(texts.some((t) => t.toLowerCase().includes(m.name.toLowerCase())),
+      `…and one of its boards says "${m.name}" out loud`);
+  }
+
+  // 2. Every board in the game — including the two indoors have none of — is
+  //    readable: it stands on a sign tile, there is ground beside it, and the
+  //    real interact() from that ground speaks that exact text.
+  let read = 0;
+  for (const [id, m] of maps) {
+    for (const [key, text] of Object.entries(m.signs || {})) {
+      const [sx, sy] = key.split(',').map(Number);
+      eq((m.rows[sy] || '')[sx], 'S', `${id} ${key} is a sign tile`);
+      ok(text.trim().length > 0, '…with something written on it');
+
+      // Somewhere to stand, and the way you would be facing from there.
+      const spots = [[sx - 1, sy, 'right'], [sx + 1, sy, 'left'], [sx, sy - 1, 'down'], [sx, sy + 1, 'up']]
+        .filter(([x, y]) => {
+          const t = (m.rows[y] || '')[x];
+          return t !== undefined && t !== 'L' && !g.SOLID.has(t) && !g.npcAt(m, x, y);
+        });
+      ok(spots.length > 0, `…and there is ground beside it to read it from`);
+
+      for (const [x, y, dir] of spots) {
+        g.G.dialogue = null;
+        g.enterMap(id, x, y, dir);
+        ok(g.interact(), `standing ${x},${y} facing ${dir}, pressing A does something`);
+        eq(g.G.dialogue && g.G.dialogue.lines[0], text, '…and what it says is what is written there');
+        read++;
+      }
+    }
+  }
+  ok(read >= 10, `${read} ways of walking up to a board, every one of them speaking`);
+
+  // 3. Crown Hollow by name, because a property about "every place" is happy
+  //    the moment a place stops existing, and this is the place that was mute.
+  {
+    const ch = g.MAPS.crown_hollow;
+    const board = Object.values(ch.signs || {})[0];
+    ok(board, 'Crown Hollow has a board now');
+    ok(/emberwood/i.test(board), '…that says which way is down');
+    ok(/shrine/i.test(board), '…and that the shrine is what is up here');
+    // It stands where you arrive, not somewhere you might never walk.
+    const lands = [];
+    for (const [, o] of maps) for (const w of o.warps || []) if (w.to === 'crown_hollow') lands.push([w.tx, w.ty]);
+    eq(lands.length, 2, 'two tiles you can arrive on, coming up out of Emberwood');
+    // Guarded, not assumed: a missing board must read as a failed check here,
+    // not as a crash that takes the rest of the suite down with it.
+    const [bx, by] = (Object.keys(ch.signs || {})[0] || '').split(',').map(Number);
+    const near = Math.min(...lands.map(([lx, ly]) => Math.max(Math.abs(bx - lx), Math.abs(by - ly))));
+    ok(near <= 2, `and it is ${near} step${near === 1 ? '' : 's'} from where you walk in`);
+  }
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

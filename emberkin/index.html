@@ -4898,10 +4898,16 @@ const MAPS = {
       '##..,,,,,,,,,,....##',
       '##...o,,,,,,......##',
       '##.....===........##',
-      '##......==........##',
+      '##......==S.......##',
       '########==##########',
     ],
     warps: [{ x: 8, y: 11, to: 'emberwood', tx: 8, ty: 1 }, { x: 9, y: 11, to: 'emberwood', tx: 9, ty: 1 }],
+    // Every other outdoor route in the valley names itself on a board at the
+    // way in — Route One, Emberwood, Stillmere. Crown Hollow, which holds the
+    // hardest grass, the shrine and the one kin the whole game points at, had
+    // no sign tile at all: the map that most needed to say what it was, said
+    // nothing. It stands one step right of where you arrive from Emberwood.
+    signs: { '10,10': 'CROWN HOLLOW. Down: Emberwood. The shrine is at the top. Whatever sits on it was here first.' },
     npcs: [
       { x: 9, y: 9, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick3', requires: 'beatVespyr',
         lines: ['You got it. Of course you did.', 'I have been up here three days waiting to lose to you properly. Go on.'],
