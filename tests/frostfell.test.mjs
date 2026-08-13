@@ -953,4 +953,66 @@ section('reading the piles');
   eq(FF.UI.choose, null, 'an empty pile has nothing to show');
 }
 
+
+/* ------------------------------------------------------------- anatomy --- */
+section('no two creatures are the same drawing');
+{
+  // A recipe is a row of a table. If two creatures share every column they are
+  // the same picture in two colours, which is exactly what this cast used to be.
+  const all = Object.values(FF.CARDS).filter((c) => c.type === 'unit')
+    .concat(Object.values(FF.FOES));
+  const key = (a) => [a.shape, a.stance, a.tail, a.mark, a.ears, a.mouth, a.acc, a.eyes, a.skin, a.wings ? 'w' : '-'].join('/');
+  const seen = {};
+  const clashes = [];
+  for (const c of all) {
+    const k = key(c.art);
+    if (seen[k]) clashes.push(seen[k] + '=' + c.id);
+    seen[k] = c.id;
+  }
+  eq(clashes.join(','), '', 'every creature differs from every other in more than colour');
+
+  // and every one of them actually fills in the new columns
+  let bare = [];
+  for (const c of all) {
+    if (!c.art.stance) bare.push(c.id + ':stance');
+    if (!c.art.tail) bare.push(c.id + ':tail');
+    if (!c.art.mark) bare.push(c.id + ':mark');
+    if (!c.art.idle) bare.push(c.id + ':idle');
+  }
+  eq(bare.join(','), '', 'every creature has a stance, a tail, a mark and an idle');
+
+  // the variety is spread rather than piled on one value
+  const spread = (f) => new Set(all.map((c) => c.art[f])).size;
+  ok(spread('stance') >= 4, 'stances vary across the cast');
+  ok(spread('tail') >= 5, 'so do tails');
+  ok(spread('mark') >= 8, 'and the distinguishing marks most of all');
+}
+
+/* ------------------------------------------------------- picking things -- */
+section('tap, or drag, whichever the hand prefers');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  dummy(FF);
+  const card = FF.mkCard('snowpup');
+  b.hand = [card];
+  eq(FF.refusal(G, card, { lane: 1, col: 0 }), '', 'an empty slot takes a warden');
+  ok(FF.refusal(G, card, null).length > 0, 'nowhere in particular does not');
+  FF.playCard(G, 0, { lane: 1, col: 0 });
+
+  const card2 = FF.mkCard('snowpup');
+  b.hand = [card2];
+  ok(FF.refusal(G, card2, { lane: 1, col: 0 }).indexOf('taken') >= 0, 'and an occupied one says so');
+
+  const gear = FF.mkCard('emberflask');
+  b.hand = [gear];
+  const mine = FF.playerUnits(G)[0];
+  ok(FF.refusal(G, gear, mine).length > 0, 'gear meant for foes refuses a warden');
+  ok(FF.refusal(G, gear, FF.enemyUnits(G)[0]) === '', 'and accepts a foe');
+
+  b.busy = true;
+  ok(FF.refusal(G, gear, FF.enemyUnits(G)[0]).indexOf('wait') >= 0, 'nothing is played mid-resolution');
+  b.busy = false;
+}
+
 done('frostfell');
