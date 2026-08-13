@@ -5143,8 +5143,14 @@ section('a move card says whether it lands');
     return { b, before, after: { mine: b.mine.hp, foe: b.foe.hp, ms: { ...b.mine.stages }, fs: { ...b.foe.stages } } };
   };
   {
-    const r = drive('magmacharge');
-    if (r.after.foe < r.before.foe) ok(r.after.mine < r.before.mine, 'recoil costs the attacker HP, as the card says');
+    // Driven until it CONNECTS. Magma Charge lands 85 times in 100, and the
+    // first writing of this check simply skipped itself on a miss — the suite
+    // quietly reported one check fewer, which is the shape of a check that
+    // never ran rather than one that survived.
+    let r = null;
+    for (let i = 0; i < 40 && !(r && r.after.foe < r.before.foe); i++) r = drive('magmacharge');
+    ok(r.after.foe < r.before.foe, 'Magma Charge connects inside forty swings');
+    ok(r.after.mine < r.before.mine, 'and the recoil costs the attacker HP, as the card says');
   }
   {
     const r = drive('mend');
@@ -5335,6 +5341,127 @@ section('a bag row in a fight refuses before you press it');
     g.useItemInBattle([], 'revive', 0);
     eq(b.mine.hp, Math.floor(b.mine.max / 2), 'Emberroot wakes a kin at half, as its row says');
   }
+}
+
+// Does every status do what the game says it does?
+//
+// Four statuses, three readings each — the table, the words a player can ever
+// read, and the tick. The tick is honest: burn takes max/16 a turn and .85 off
+// atk, chill halves spd and costs a card, shock costs an energy and jolts one
+// swing in four, snare takes max/16 and holds you in the fight.
+//
+// The words were not. A creature cannot take the status its own element deals,
+// and NOTHING said so:
+//
+//   burn   Ember    Cindercub, Pyrelynx, Magmane, Kindlark
+//   shock  Spark    Kindlark, Zaplet, Voltyx
+//   snare  Verdant  Sproutle, Thornip, Bramblor, Frillamb
+//   chill  Tide     Dewdrip, Brookite, Tsunaga, Lanterneel, Frillamb
+//
+// 16 of 76 status/creature pairs can never land. Driven a hundred times each,
+// four such moves landed nothing and the log gave a reason zero times out of
+// four hundred — while the card went on promising "may burn".
+section('a card does not promise a status the thing in front of you cannot take');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+  g.takeStarter('cindercub');
+
+  // The rule, pinned by name rather than read back out of itself.
+  eq(g.IMMUNE_TO.burn, 'Ember', 'Ember does not burn');
+  eq(g.IMMUNE_TO.shock, 'Spark', 'Spark does not shock');
+  eq(g.IMMUNE_TO.chill, 'Tide', 'Tide does not chill');
+  eq(g.IMMUNE_TO.snare, 'Verdant', 'Verdant does not snare');
+  eq(Object.keys(g.IMMUNE_TO).sort().join(','), Object.keys(g.STATUS).sort().join(','),
+    'and every status in the table has an element that shrugs it off');
+
+  const fight = (foeId) => {
+    g.G.battle = null;
+    g.G.party = [g.mkMon('gargolem', 40)];
+    g.startBattle({ foe: g.mkMon(foeId, 20), wild: true });
+    return g.B();
+  };
+  // A move that carries each rider, harvested rather than named from memory.
+  const carrier = {};
+  for (const st of Object.keys(g.STATUS)) {
+    carrier[st] = Object.keys(g.MOVES).find((m) => (g.MOVES[m].fx || {}).st && g.MOVES[m].fx.st[0] === st);
+    ok(carrier[st], `something in the move table can ${st}`);
+  }
+
+  // THE WHOLE DOMAIN: every status against every creature in the dex.
+  let pairs = 0, immune = 0;
+  for (const st of Object.keys(g.STATUS)) {
+    for (const id of g.DEX_ORDER) {
+      const b = fight(id);
+      const shrugs = g.DEX[id].types.includes(g.IMMUNE_TO[st]);
+      const said = g.moveCardText(carrier[st]);
+      pairs++;
+      if (shrugs) {
+        immune++;
+        ok(said.includes(`it shrugs off ${st}`), `${g.DEX[id].name} shrugs off ${st}, and the card says so`);
+        ok(!said.includes(`may ${st}`), `…and does not still promise it`);
+      } else {
+        ok(said.includes(`may ${st}`), `${g.DEX[id].name} can be ${st}, and the card offers it`);
+      }
+    }
+  }
+  eq(pairs, 76, 'four statuses against nineteen creatures');
+  eq(immune, 16, 'sixteen of which can never land');
+
+  // …and the resolver agrees, driven rather than assumed. Pinned separately
+  // from the wording: two voices agreeing is not the same as either being right.
+  for (const st of Object.keys(g.STATUS)) {
+    const victim = g.DEX_ORDER.find((id) => g.DEX[id].types.includes(g.IMMUNE_TO[st]));
+    let landed = 0;
+    for (let i = 0; i < 60; i++) {
+      const b = fight(victim);
+      b.mine.moves = [{ id: carrier[st], pp: 9, max: 9 }];
+      g.useMove([], 'mine', carrier[st]);
+      if (b.foe.status === st) landed++;
+    }
+    eq(landed, 0, `sixty swings of ${g.MOVES[carrier[st]].name} at ${g.DEX[victim].name} land no ${st}`);
+    // …and the same move on somebody who is NOT immune can land it, or the
+    // check above proves only that the move is broken.
+    let ok60 = 0;
+    for (let i = 0; i < 60; i++) {
+      const b = fight('pebblet');
+      b.mine.moves = [{ id: carrier[st], pp: 9, max: 9 }];
+      g.useMove([], 'mine', carrier[st]);
+      if (b.foe.status === st) ok60++;
+    }
+    ok(ok60 > 0, `while ${g.MOVES[carrier[st]].name} does land ${st} on Pebblet (${ok60}/60)`);
+  }
+
+  // Out of a fight there is nobody to be immune, so it reads as it always did.
+  g.G.battle = null;
+  ok(g.moveCardText('ember').includes('may burn'), 'on a footpath the card makes its plain promise');
+
+  // The tick, measured rather than read.
+  {
+    const m = g.mkMon('gargolem', 40);
+    const plain = { atk: g.effStat(m, 'atk'), spd: g.effStat(m, 'spd') };
+    m.status = 'burn';
+    ok(g.effStat(m, 'atk') < plain.atk, `burn takes atk down (${plain.atk} -> ${g.effStat(m, 'atk')})`);
+    m.status = 'chill';
+    eq(g.effStat(m, 'spd'), Math.floor(plain.spd * 0.5), 'chill halves spd');
+    m.status = '';
+    const b = fight('pebblet');
+    b.mine.status = 'burn';
+    const before = b.mine.hp;
+    g.endOfTurn([]);
+    eq(before - b.mine.hp, Math.max(1, Math.floor(b.mine.max / 16)), 'burn takes max/16 a turn');
+    b.mine.status = 'snare';
+    const before2 = b.mine.hp;
+    g.endOfTurn([]);
+    eq(before2 - b.mine.hp, Math.max(1, Math.floor(b.mine.max / 16)), 'and so do the roots');
+  }
+
+  // The wording is built where the rider is, not bolted on somewhere else.
+  ok(SRC.includes('bits.push(safe ? `it shrugs off ${fx.st[0]}` : `may ${fx.st[0]}`);'),
+    'one line decides which promise the card makes');
+  eq((SRC.match(/IMMUNE_TO\[/g) || []).length, 3,
+    'the rule is read in three places — the resolver, the deck riders, and the card');
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.

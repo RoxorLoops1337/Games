@@ -9292,7 +9292,23 @@ function moveCardText(id) {
   // unqualified promise is the right reading when the promise is unqualified.
   if (m.acc > 0 && m.acc < 100) bits.push(`${m.acc}% to land`);
   const fx = m.fx || {};
-  if (fx.st) bits.push(`may ${fx.st[0]}`);
+  // …and whether the rider can land on the thing you are looking at.
+  //
+  // A creature cannot take the status its own element deals: Ember does not
+  // burn, Spark does not shock, Tide does not chill, Verdant does not snare.
+  // Swept over the dex that is 16 of 76 status/creature pairs which can never
+  // land, and driven a hundred times each, four such moves landed nothing and
+  // the log said why zero times out of four hundred. The card went on
+  // promising "may burn" while the game quietly voided it — the promise cost
+  // real energy and a real card every time it was believed.
+  //
+  // Out of a fight there is nobody to be immune, so it reads as it always did.
+  if (fx.st) {
+    const bat = B();
+    const there = bat && bat.foe;
+    const safe = there && there.types.includes(IMMUNE_TO[fx.st[0]] || '');
+    bits.push(safe ? `it shrugs off ${fx.st[0]}` : `may ${fx.st[0]}`);
+  }
   if (fx.heal) bits.push('heals');
   if (fx.drain) bits.push('drains');
   if (fx.recoil) bits.push('costs you HP');

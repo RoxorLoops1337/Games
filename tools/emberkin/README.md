@@ -3508,3 +3508,48 @@ desktop one. That is the correct answer and not an obvious one.
     Five planted faults, all five bite; three sweep mutants aimed at the new
     section; every mutant anchor re-audited — none orphaned. Render suite
     1823 -> 1863 checks.
+
+111. **The card kept promising a status the thing in front of you could not take** (pass 200).
+    Four statuses, three readings each — the table, the words a player can ever
+    read, and the tick. The tick is honest, measured rather than read: burn
+    takes `max/16` a turn and .85 off atk, chill halves spd and costs a card,
+    shock costs an energy and jolts one swing in four, snare takes `max/16` and
+    holds you in the fight.
+
+    The words were not. A creature cannot take the status its own element deals,
+    and nothing anywhere said so:
+
+        burn   Ember    Cindercub, Pyrelynx, Magmane, Kindlark
+        shock  Spark    Kindlark, Zaplet, Voltyx
+        snare  Verdant  Sproutle, Thornip, Bramblor, Frillamb
+        chill  Tide     Dewdrip, Brookite, Tsunaga, Lanterneel, Frillamb
+
+    **16 of 76 status/creature pairs can never land.** Driven a hundred times
+    each, four such moves landed nothing — and the log gave a reason **zero
+    times out of four hundred**, while the card went on offering "may burn". The
+    promise cost real energy and a real card every time it was believed.
+
+    The card now reads the thing in front of it: `may burn` becomes `it shrugs
+    off burn` when the foe's element is the one that shrugs it off. Kindlark,
+    which is Ember/Spark, shrugs off both. Out of a fight there is nobody to be
+    immune, so the plain promise reads as it always did. This is 198's shape —
+    an exact rule the game held and no voice spoke — one table along.
+
+    **Recorded, not fixed.** A status never lifts: twelve turns burned is still
+    burned, and it survives the end of the fight (`status` is still set on the
+    party member afterwards, so a burn carries into the next one). Nothing in
+    the game clears it. Changing that is a balance change and wants a paired
+    measurement, so it is named here rather than done. Also noted: burn's atk
+    multiplier measures .84 rather than .85 on a 75-atk kin, which is
+    `Math.floor` and not a disagreement.
+
+    **A check that had been quietly skipping itself.** The suite's own count
+    moved between 1981 and 1980 across runs. Pass 198 had written the recoil
+    check as "if the move connected, assert the recoil" — and Magma Charge
+    lands 85 times in 100, so one run in seven simply did not run it. A check
+    that never ran is not a check that survived; it is driven until it connects
+    now, and the count is stable.
+
+    Four planted faults, all four bite; three sweep mutants aimed at the new
+    section, which reports 40 of 118 killed; every mutant anchor re-audited —
+    none orphaned. Render suite 1863 -> 1982 checks.
