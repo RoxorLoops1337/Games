@@ -1017,6 +1017,12 @@ function rebuildCard(card) {
     const ch = chOf(id);
     if (ch) ch.apply(card);
   }
+  // What the trader fed it. Kept off the charm list on purpose: meals stack,
+  // and a card wearing six identical pendants would read as a bug.
+  if (card.type === 'unit') {
+    if (card.bonusAtk) card.atk += card.bonusAtk;
+    if (card.bonusHp) card.hp += card.bonusHp;
+  }
   if (card.hp !== undefined) card.dmg = Math.min(card.dmg, card.hp - 1);
 }
 
@@ -1782,6 +1788,8 @@ function summon(g, foeId, count) {
 }
 
 /* ------------------------------------------------------- starting a fight -- */
+/* Steps in a zone: an opening fight, five forks, and the beast. */
+const TRAIL_STEPS = 7;
 function foeScale(run) {
   // Enemies grow with the trail, gently: the deck should outpace them if the
   // player picks well, and fall behind if they do not.
@@ -1801,20 +1809,70 @@ function foeScale(run) {
      bigger) but stops being the whole of whether the run is winnable. The
      coefficient is deliberately partial: it absorbs about half of a deck
      advantage, not all of it. */
-  const road = 1 + run.step * 0.034 + run.zone * 0.125;
-  return road * (1 + fellAnswer(run) * 0.5) * (run.foeMul || 1);
+  /* AND THE LAST ZONE ASKS MORE OF A CARAVAN THAT HAS SOMETHING TO ASK OF.
+
+     The first attempt at this was a flat term on the road in the deep fell, and
+     it did bring the ceiling down — from 41 to 37 — but it took the careless
+     pilot from 8 points to 6 on the way, because every win a careless run has
+     is a last-zone win, so a flat last-zone tax lands on exactly the runs that
+     floor was protecting.
+
+     So the deep fell asks more of the caravan rather than more of everybody. It
+     reads what the line is carrying harder than the zones before it — but only
+     upward, and only past a MARGIN. Reading the whole answer harder was the
+     second attempt and it made the same mistake in a subtler place: a caravan
+     that had merely scraped over the bar got treated like one built into a
+     wall, and the careless pilot went from ten points to six again. Only the
+     part of the reading past the margin is bitten, and it is bitten hard, so
+     the curve is a hockey stick rather than a slope: a middling caravan meets
+     the last zone it always did, and a finished one meets a winter that has
+     been finishing too. */
+  const road = 1 + run.step * 0.034 + run.zone * 0.125 + (run.zone >= 2 ? 0.05 : 0)
+    + following(run) * FOLLOW_STEP;
+  const answer = fellAnswer(run);
+  const extra = run.zone >= 2 ? Math.max(0, answer - DEEP_MARGIN) * DEEP_BITE : 0;
+  return road * (1 + answer * 0.5 + extra) * (run.foeMul || 1);
 }
 
-/* What the caravan is carrying, as a number the trail can read: attack and
-   health per card, so a thin deck of strong cards and a fat deck of weak ones
-   land in the same place. Zero at the strength a run sets out with. */
+/* What the caravan is carrying, as a number the trail can read.
+
+   This used to be the average over the whole deck, and four transcripts said
+   plainly that it was the wrong number: across twenty-one steps, three of them
+   ending at the beast, the reading never left 5.4–6.7 while the deck went from
+   eight cards to twenty-one. An average cannot grow — every good card drafted
+   is divided by one more card drafted — so the trail was answering a caravan
+   that, as far as the arithmetic was concerned, never got any stronger. Worse
+   than flat: it read BELOW the base for most of every run, so the trail spent
+   the whole trip quietly discounting itself.
+
+   The board fields six. So read the six the caravan would actually put down —
+   its best line, leader included — and let the rest of the deck be what it is.
+   That number climbs when a good card is drafted, climbs when one is tempered,
+   and does not fall when a bad card is picked up. It is a caravan that grows. */
+const LINE_SLOTS = 6;
 function caravanPower(run) {
   const cards = run.deck.concat([run.leader]).filter((c) => c.type === 'unit' || c.atk > 0);
   if (!cards.length) return 0;
-  const per = cards.reduce((n, c) => n + c.atk + c.hp * 0.25, 0) / cards.length;
-  return per;
+  const worth = cards.map((c) => c.atk + c.hp * 0.25).sort((a, b) => b - a);
+  /* Divided by the SLOTS, not by how many are there to fill them. Every leader
+     sets out with five bodies for six places, and dividing by what you have
+     meant the sixth body a caravan ever drafted made it read WEAKER — a good
+     average of five spoiled by a sixth that was merely fine. An empty slot on
+     the board is a weakness, so it is one here too. */
+  return worth.slice(0, LINE_SLOTS).reduce((n, w) => n + w, 0) / LINE_SLOTS;
 }
-const POWER_BASE = 6.5;
+/* Where the trail expects a caravan to be by the time it matters. A starting
+   line reads 5.4–5.9, so a run sets out under the base and inside the mercy —
+   the reading only goes positive once the caravan has genuinely been built,
+   which is the point of measuring the line rather than averaging the deck. */
+const POWER_BASE = 8.0;
+/* And the bar the DEEP fell holds the same line to. It is lower on purpose: a
+   caravan that reads level with the trail through two zones reads over it in
+   the third, so the last zone is where being built starts to cost. */
+const DEEP_BASE = 7.4;
+/* How far over that bar a caravan must read before the deep fell starts asking
+   more of it than the zones before did, and how steeply it then asks. */
+const DEEP_MARGIN = 0.10, DEEP_BITE = 2.0;
 /* How much harder the winter is for this caravan, as a fraction. Clamped both
    ways: a caravan that has fallen apart is never given a free run, and one that
    has been built into a wall never faces something unplayable. */
@@ -1824,8 +1882,54 @@ function fellAnswer(run) {
      clamp is what a finished caravan runs into, so that is the end that moves —
      the floor stays where it is, because a run that has fallen apart should
      still be playable rather than merely long. */
-  return clamp((caravanPower(run) - POWER_BASE) / POWER_BASE, -0.25, 0.95);
+  const base = (run.zone || 0) >= 2 ? DEEP_BASE : POWER_BASE;
+  /* The floor is deeper than it was, and it is the one lever in the game that
+     touches ONLY caravans that never got built — a caravan reading over the bar
+     never reaches it. Everything else this round asked more of the trail, and
+     the pilot with no answer to any of it was the one paying for all of it. */
+  return clamp((caravanPower(run) - base) / base, -0.33, 0.95);
 }
+
+/* ------------------------------------------------------ what follows you -- */
+/* WALKING PAST A FIGHT USED TO BE FREE, AND IT WAS THE BEST LINE IN THE GAME.
+
+   Two pilots, identical in every way except what they do at a fork with a
+   fight on one side of it: the one that took every fight won 25% of the time,
+   the one that walked past whatever it could won 38%. Thirteen points for
+   declining to play. And the reason is not subtle — a fight costs health and
+   risks the run and pays one card, while a camp, a rest, a cache and a shop
+   cost nothing at all. The trail was a corridor of free rooms with optional
+   danger in it.
+
+   The first attempt at this taxed the difficulty curve instead: a caravan that
+   had not been fighting lost its discount for being thin. It measured as
+   nothing, for a reason worth writing down — the dodger's caravan was not thin.
+   It arrived at 8.2 against the fighter's 7.4, because everything it walked
+   towards INSTEAD of a fight also makes a caravan stronger. A rule aimed at
+   weak caravans cannot catch a strong one.
+
+   So: what you walk away from walks after you. It is counted, it is shown on
+   the trail before the fork rather than after it, and a few are forgiven —
+   ducking one bad pack when the line is hurt is a decision, and should stay
+   one. Ducking everything is a choice to arrive at the beast with a pack at
+   your back. */
+/* It is a distance rather than a headcount, and it does not decay. Letting a
+   won fight put a step back sounded right and measured as a gift to exactly the
+   wrong pilot: the one that ducks everything still fights the forced openings
+   and the beasts, which was enough to shake the whole thing off — the dodge
+   went straight back to level. What it was supposed to protect, the pilot who
+   skips a fork by accident rather than by plan, turned out not to need it: that
+   pilot reads the same seven points with the rule biting and without it. */
+const FOLLOW_NEAR = 2;     // how much closer a fight walked past lets them get
+const FOLLOW_FREE = 6;     // and how close they may get before it costs anything
+const FOLLOW_STEP = 0.05;  // then what each step past that adds to the road
+/* And nothing has picked up your trail in the first zone. That is a grace for
+   the opening rather than a rule with a reason — the careless pilot skips forks
+   by accident, dies in zone one more than anywhere else, and was paying for a
+   rule written about a pilot who ducks fights on purpose. The counter still
+   accrues; it simply is not read until the caravan is past the first beast. */
+const following = (run) =>
+  ((run.zone || 0) < 1 ? 0 : Math.max(0, (run.followed || 0) - FOLLOW_FREE));
 
 /* A pack is never just a bigger skirmish: it hunts a particular way, and the
    banner says which before the first bell. */
@@ -2131,6 +2235,15 @@ function enterNode(g, choiceIdx) {
   const node = step[clamp(choiceIdx, 0, step.length - 1)];
   run.node = node.kind;
   run.path.push(node.kind);
+  // A fork that had a fight on it, taken the other way, is a pack left behind.
+  const isFight = (n) => n.kind === 'fight' || n.kind === 'elite' || n.kind === 'boss';
+  if (step.length > 1 && step.some(isFight) && !isFight(node)) {
+    run.followed = (run.followed || 0) + FOLLOW_NEAR;
+    if (following(run) > 0) {
+      fx.toast('SOMETHING IS FOLLOWING', '#ff9aa5');
+      run.log.push('A pack was left behind, and did not stay behind.');
+    }
+  }
   if (node.kind === 'fight' || node.kind === 'elite' || node.kind === 'boss') {
     startBattle(g, node.kind);
   } else if (node.kind === 'shop') {
@@ -2449,9 +2562,39 @@ function rollShop(g) {
     bell: { id: pick(Object.keys(BELLS).filter((k) => (run.bells || []).indexOf(k) < 0)),
             price: p(96), sold: false } };
 }
+
+/* ---------------------------------------------------------- a hot meal --- */
+/* THE COUNTER USED TO RUN DRY.
+
+   Four transcripts, four different leaders, and the same line in every one:
+   "NOTHING AFFORDABLE" at the trader while the purse still held between 138
+   and 328 scrip. That is not a pricing problem and it is not a payout problem —
+   the caravan could afford everything she had. She simply ran out of things
+   worth buying. The bell is one per shop. Tempering is capped at three for the
+   whole run. Everything else on the counter is a card, and buying cards is a
+   trade the probe has priced as a mild loss for three iterations. A well-run
+   caravan cleared her out by the second zone and then carried a fat purse to
+   the beast, where scrip does nothing at all.
+
+   So there is one thing she will sell you as many times as you can pay for it,
+   and the price goes up every time. It is small — smaller than a temper — and
+   it adds no card, which is the whole point: it turns a dead purse into
+   caravan power on a curve that decides for itself when to stop. */
+const MEAL_BASE = 34, MEAL_STEP = 26;
+/* The rising price is what stops a normal run — an average crossing eats five
+   and a half meals and the purse gives out. It is not what stops an ABNORMAL
+   one: handed a bottomless purse and prices at a fiftieth, the probe ate its way
+   to a 93% win rate, which is money buying a run outright rather than paying
+   for one. So there is a ceiling as well as a curve, set far above where real
+   play ever reaches, purely so the degenerate case has a floor to hit. */
+const MEAL_CAP = 12;
+const mealPrice = (run) => Math.round((MEAL_BASE + MEAL_STEP * (run.meals || 0)) * (run.prices || 1));
+const feedable = (run) =>
+  ((run.meals || 0) >= MEAL_CAP ? [] : run.deck.concat([run.leader]).filter((c) => c.type === 'unit'));
 function buy(g, kind, idx, arg) {
   const s = g.ui.shop, run = g.run;
-  if (!s) return false;
+  // A meal is the one ware sold away from the counter, so it may not require one.
+  if (!s && kind !== 'meal') return false;
   const takeGold = (n) => { if (run.gold < n) return false; run.gold -= n; run.everBought = 1; return true; };
   if (kind === 'card') {
     const it = s.cards[idx];
@@ -2512,6 +2655,20 @@ function buy(g, kind, idx, arg) {
     if (!takeGold(s.temper.price)) return false;
     if (!temperCard(g, card)) { run.gold += s.temper.price; return false; }
     s.temper.sold = true;
+    return true;
+  }
+  if (kind === 'meal') {
+    const card = feedable(run).find((c) => c.uid === arg);
+    if (!card) return false;
+    const cost = mealPrice(run);
+    if (!takeGold(cost)) return false;
+    card.bonusAtk = (card.bonusAtk || 0) + 1;
+    card.bonusHp = (card.bonusHp || 0) + 2;
+    rebuildCard(card);
+    run.meals = (run.meals || 0) + 1;
+    sfx('heal');
+    fx.toast(card.name.toUpperCase() + ' EATS WELL', '#ffb45c');
+    run.log.push(card.name + ' was fed at the trader.');
     return true;
   }
   if (kind === 'scar') {
@@ -2690,11 +2847,13 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0, i: !!c.injured, s: !!c.sigil, b: !!c.blessed }; }
+function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0, i: !!c.injured, s: !!c.sigil, b: !!c.blessed,
+  ba: c.bonusAtk || 0, bp: c.bonusHp || 0 }; }
 function desCard(o) {
   const c = mkCard(o.d);
   c.uid = o.u; c.charms = (o.c || []).slice(); c.dmg = o.g || 0;
   c.injured = !!o.i; c.sigil = !!o.s; c.blessed = !!o.b;
+  c.bonusAtk = o.ba || 0; c.bonusHp = o.bp || 0;
   rebuildCard(c);
   UID = Math.max(UID, c.uid + 1);
   return c;
@@ -2711,6 +2870,9 @@ function saveRun(run) {
     winters: run.winters || [], wpts: run.winterPts || 0, prices: run.prices || 1, killedBy: run.killedBy || null,
     campMul: run.campMul || 1, extraFoe: run.extraFoe || 0, bellSlow: run.bellSlow || 0,
     foeMul: run.foeMul || 1, fell: run.fellThisZone || 0,
+    // The trail reads both of these now: meals price the counter, fights price
+    // the trail's mercy. A reloaded run that forgot them would be a different run.
+    meals: run.meals || 0, fought: run.fights || 0, foll: run.followed || 0,
   }));
 }
 function loadRun(g) {
@@ -2729,6 +2891,7 @@ function loadRun(g) {
       winters: o.winters || [], winterPts: o.wpts || 0, prices: o.prices || 1, killedBy: o.killedBy || null,
       campMul: o.campMul || 1, extraFoe: o.extraFoe || 0, bellSlow: o.bellSlow || 0,
       foeMul: o.foeMul || 1, fellThisZone: o.fell || 0,
+      meals: o.meals || 0, fights: o.fought || 0, followed: o.foll || 0,
     };
     RNG = mulberry((run.seed + run.step * 7919 + run.zone * 104729) >>> 0);
     g.run = run;
@@ -5532,6 +5695,30 @@ function drawTrail(c, t) {
     });
   }
 
+  /* WHAT IS FOLLOWING — shown at the fork, not at the fight, because it is a
+     warning about the choice you are about to make and useless afterwards. It
+     sits under the zone's name, above the road, because it is a fact about the
+     road rather than about the caravan — and because everywhere lower on this
+     screen already belongs to something. */
+  const foll = following(run);
+  if (foll > 0) {
+    const fw = 268, fx0 = MID - fw / 2, fy0 = 128;
+    const pulse = 0.55 + Math.sin(t * 2.4) * 0.2;
+    panel(c, fx0, fy0, fw, 46, 12, 'rgba(48,16,22,.82)', '#8f4a4a');
+    c.save();
+    c.globalAlpha = pulse;
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.arc(fx0 + 26, fy0 + 23, 4 + i * 4.5, -0.9, 0.9);
+      c.strokeStyle = '#ff9aa5'; c.lineWidth = 2; c.stroke();
+    }
+    c.restore();
+    txt(c, foll >= FOLLOW_FREE ? 'THEY ARE CLOSE NOW' : 'SOMETHING IS FOLLOWING',
+      fx0 + 48, fy0 + 17, 14, '#ff9aa5', 'left', 'd');
+    txt(c, 'every fight from here is ' + Math.round(foll * FOLLOW_STEP * 100) + '% bigger',
+      fx0 + 48, fy0 + 33, 11.5, '#e8b8bf', 'left', 't');
+  }
+
   drawHud(c, t);
   if (run.log.length) txt(c, run.log[run.log.length - 1], MID, VH - 44, 15, '#9fb6d6', 'center', 't');
   if (run.winterPts) txt(c, 'WINTER ' + run.winterPts, VW - SAFE, VH - 44, 14, '#ffd166', 'right', 't');
@@ -6082,16 +6269,33 @@ function drawReward(c, t) {
      from. */
   if (!r.taken && r.cards.length) {
     const run = G.run;
-    const bw4 = 158, gap4 = 10;
-    const total4 = bw4 * 5 + gap4 * 4;
+    const bw4 = 134, gap4 = 9;
+    const total4 = bw4 * 6 + gap4 * 5;
     const bx = MID - total4 / 2;
     const rd = redealPrice(run);
     button(c, 'rewardCopy', bx, VH - 128, bw4, 44, 'COPY A CARD', '#5f4a8f', run.deck.length < 1, true);
     button(c, 'rewardTemper', bx + bw4 + gap4, VH - 128, bw4, 44, 'TEMPER A CARD', '#8f7a3f', !temperable(run).length, true);
     button(c, 'rewardBurn', bx + (bw4 + gap4) * 2, VH - 128, bw4, 44, 'BURN A CARD', '#8f4a4a', run.deck.length < 3, true);
-    button(c, 'rewardRedeal', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44, 'REDEAL  ' + rd, '#3f6f8f', run.gold < rd, true);
-    button(c, 'rewardCourse', bx + (bw4 + gap4) * 4, VH - 128, bw4, 44,
-      (run.course ? 'CHANGE COURSE  ' : 'COURSE  ') + COURSE_PRICE, '#6f5f3f', run.gold < COURSE_PRICE, true);
+    /* AND THE THING THE PURSE IS FOR, WHERE THE PURSE IS ACTUALLY FILLED.
+
+       Two pilots, same skill, and the one who took every fight arrived at the
+       beast holding twenty-one cards, no temper at all and FIVE HUNDRED AND
+       TWENTY-SEVEN unspent scrip. The one who ducked fights arrived with
+       thirteen cards, three tempers and fifty scrip left. That is the whole
+       story of both problems in one line: the trader shares her fork with a
+       fight, so a caravan that fights cannot spend, and a fight only ever paid
+       in cards — which make a deck bigger, not a caravan stronger. Fighting was
+       not paying too little. It was paying in the wrong currency and then
+       hiding the exchange behind the node you gave up to fight.
+
+       So a meal is sold here too, at the same rising price, out of the scrip
+       the fight just paid. */
+    const mp = mealPrice(run);
+    button(c, 'rewardMeal', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44, 'A HOT MEAL  ' + mp, '#8f6a3f',
+      run.gold < mp || !feedable(run).length, true);
+    button(c, 'rewardRedeal', bx + (bw4 + gap4) * 4, VH - 128, bw4, 44, 'REDEAL  ' + rd, '#3f6f8f', run.gold < rd, true);
+    button(c, 'rewardCourse', bx + (bw4 + gap4) * 5, VH - 128, bw4, 44,
+      (run.course ? 'SWAP COURSE  ' : 'COURSE  ') + COURSE_PRICE, '#6f5f3f', run.gold < COURSE_PRICE, true);
     // The one line that says what this caravan is actually short of, right
     // where the decision is being made.
     const need = caravanNeeds(run);
@@ -6164,7 +6368,7 @@ function drawShop(c, t) {
     if (!s.bell.sold) hit('buyBell', bx0, by0, bwid, 50);
   }
 
-  const by = 484, sw = 210, sg = 12, srow = sw * 5 + sg * 4, sx = MID - srow / 2;
+  const by = 484, sw = 170, sg = 10, srow = sw * 6 + sg * 5, sx = MID - srow / 2;
   const btn = (i, id, label, col, dis) => button(c, id, sx + i * (sw + sg), by, sw, 54, label, col, dis);
   btn(0, 'buyHeal', s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
   btn(1, 'buyTemper', s.temper && s.temper.sold ? 'TEMPERED' : 'TEMPER — ' + (s.temper ? s.temper.price : 32),
@@ -6173,8 +6377,10 @@ function drawShop(c, t) {
   btn(3, 'buySigil', s.sigil.sold ? 'MARKED' : 'A SIGIL — ' + s.sigil.price, '#5f4a8f', s.sigil.sold);
   btn(4, 'buyBurn', (s.burn && s.burn.sold) ? 'BURNED' : 'BURN A CARD — ' + (s.burn ? s.burn.price : 26), '#8f4a4a',
     !s.burn || s.burn.sold || g.run.deck.length < 3);
+  btn(5, 'buyMeal', 'A HOT MEAL — ' + mealPrice(g.run), '#8f6a3f',
+    g.run.gold < mealPrice(g.run) || !feedable(g.run).length);
   txt(c, 'temper: +2 attack, +3 health, and the deck stays the size it was · ' +
-    'a sigil deploys that warden before the first bell',
+    'a meal: +1 and +2, as many as you can pay for, dearer every time',
     MID, by + 66, 13, '#7e97b8', 'center', 't');
   const need = caravanNeeds(g.run);
   txt(c, need ? 'the caravan is short of ' + need.name.toLowerCase() + ' — ' + need.why
@@ -6788,6 +6994,31 @@ function press(id, data) {
       }, { cancel: 'NEVER MIND', sub: '+2 attack and +3 health, and the deck stays the size it was' });
       return;
     }
+    /* The same meal, bought out of what the fight just paid. It does not spend
+       the reward — you still take a card afterwards — because the point is that
+       scrip earned in a fight has somewhere to go without giving up a fight to
+       reach a shop. */
+    case 'rewardMeal': {
+      const r2 = g.ui.reward;
+      if (!r2 || r2.taken || g.run.gold < mealPrice(g.run)) return;
+      const cands2 = feedable(g.run);
+      if (!cands2.length) return;
+      openChooser('WHO EATS?', cands2.map((cd) => ({ card: cd })),
+        (i) => { buy(g, 'meal', 0, cands2[i].uid); UI.choose = null; },
+        { cancel: 'NEVER MIND', sub: '+1 attack and +2 health — and you still take a card' });
+      return;
+    }
+    case 'buyMeal': {
+      if (!g.ui.shop || g.run.gold < mealPrice(g.run)) return;
+      const cands = feedable(g.run);
+      if (!cands.length) return;
+      openChooser('WHO EATS?', cands.map((cd) => ({ card: cd })),
+        (i) => { buy(g, 'meal', 0, cands[i].uid); UI.choose = null; },
+        { cancel: 'NEVER MIND',
+          sub: '+1 attack and +2 health · the next meal costs ' +
+            Math.round((MEAL_BASE + MEAL_STEP * ((g.run.meals || 0) + 1)) * (g.run.prices || 1)) });
+      return;
+    }
     /* Depth instead of breadth: give up the card you were going to take, and
        one you already carry comes back harder. Costs no scrip and no node —
        only the card, which is exactly the trade the reward screen was short
@@ -7339,6 +7570,8 @@ window.FF = {
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP,
+  mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
+  following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
   ELITE_MODS, eliteMod, BLESSINGS, pickWarden,
   FEATS, featEarned, checkFeats, liveFeats, breakSeals, FEAT_ALIVE,

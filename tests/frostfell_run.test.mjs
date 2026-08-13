@@ -428,6 +428,15 @@ const DRAFT_HABITS = [
 
 function draftTurn(r) {
   const run = G.run;
+  /* Eat first. A meal is bought out of the scrip the fight just paid, it costs
+     no card and no node, and it is the only thing on this screen that makes the
+     caravan stronger without making the deck bigger — so a pilot that has the
+     price in hand takes it every time before it decides anything else. */
+  if (run.gold >= FF.mealPrice(run) && FF.feedable(run).length) {
+    FF.press('rewardMeal');
+    pickBiggest();
+    return;
+  }
   const i = draftPick(r.cards);
   const worth = cardWorth(r.cards[i]);
   // an offer worth less than the price of a fresh one
@@ -524,11 +533,22 @@ function playRun(tribe, seed, mode, tweak) {
         .map(([k, v]) => k + ' ' + v).join('+') + (G.UI && G.UI.choose ? ' chooser-open' : '');
     }
     stat.screens[G.screen] = (stat.screens[G.screen] || 0) + 1;
-    if (G.screen === 'victory') { stat.won = true; break; }
+    if (G.screen === 'victory') {
+      stat.won = true;
+      stat.endPower = FF.caravanPower(G.run); stat.fought = G.run.fights || 0;
+      stat.endGold = G.run.gold; stat.walked = G.run.zone * FF.TRAIL_STEPS + G.run.step;
+      stat.cards = G.run.deck.length; stat.temp = FF.tempered(G.run); stat.meals = G.run.meals || 0;
+      break;
+    }
     // Where a run ends is as much the measure as whether it ends: a game whose
     // deaths all pile up in one zone has one wall in it, not three.
     if (G.screen === 'gameover') {
       stat.diedZone = G.run ? G.run.zone : 0;
+      if (G.run) {
+        stat.endPower = FF.caravanPower(G.run); stat.fought = G.run.fights || 0;
+        stat.endGold = G.run.gold; stat.walked = G.run.zone * FF.TRAIL_STEPS + G.run.step;
+        stat.cards = G.run.deck.length; stat.temp = FF.tempered(G.run); stat.meals = G.run.meals || 0;
+      }
       // The run already remembers the blow that took the leader, by name. What
       // it never did was count them: one death is an anecdote, two hundred is
       // a design note.
@@ -538,7 +558,16 @@ function playRun(tribe, seed, mode, tweak) {
     stat.zone = Math.max(stat.zone, G.run ? G.run.zone : 0);
     if (G.screen === 'trail') {
       const step = G.run.trail[G.run.step];
-      FF.enterNode(G, step.length > 1 ? (seed + G.run.step) % step.length : 0);
+      let idx = step.length > 1 ? (seed + G.run.step) % step.length : 0;
+      /* Two arms that differ in one thing only: what they do at a fork that has
+         a fight on one side of it. Everything else about the pilot is the same,
+         so the gap between them is the price of walking past a fight. */
+      if (step.length > 1 && (G.run.dodge || G.run.seek)) {
+        const fighty = (n) => n.kind === 'fight' || n.kind === 'elite' || n.kind === 'boss';
+        const want = step.findIndex((n) => (G.run.dodge ? !fighty(n) : fighty(n)));
+        if (want >= 0) idx = want;
+      }
+      FF.enterNode(G, idx);
     } else if (G.screen === 'battle') {
       if (G.battle.turn === 0) stat.battles++;
       if (G.battle.over) { FF.drainAll(); continue; }
@@ -589,6 +618,15 @@ function playRun(tribe, seed, mode, tweak) {
         settleChoosers();
         bought = true;
       }
+      /* And then she feeds whoever is biggest, for as long as the purse holds.
+         Four transcripts walked out of a shop with a full purse because there
+         was nothing left on the counter that did not add a card; a meal is the
+         thing that was missing, so a pilot who spends well now spends it all. */
+      if (!bought && shops && G.run.gold >= FF.mealPrice(G.run) && FF.feedable(G.run).length) {
+        FF.press('buyMeal');
+        pickBiggest();
+        bought = true;
+      }
       // only then a card, and only if the caravan is actually short of one
       const wants = FF.caravanNeeds(G.run);
       for (let i = 0; !bought && i < s.cards.length; i++) {
@@ -615,7 +653,7 @@ function playRun(tribe, seed, mode, tweak) {
          it already has been, twice. If a visit thinks it bought something but
          the counter looks exactly as it did, walk out. */
       const fingerprint = JSON.stringify([G.run.gold, s.cards.map((cc) => cc.sold), s.heal.sold,
-        s.temper && s.temper.sold, s.burn && s.burn.sold, G.run.deck.length]);
+        s.temper && s.temper.sold, s.burn && s.burn.sold, G.run.deck.length, G.run.meals || 0]);
       if (!bought || fingerprint === lastShop) FF.press('leaveShop');
       lastShop = fingerprint;
     } else if (G.screen === 'camp') {
@@ -903,6 +941,76 @@ section('does money change anything');
      A bottomless purse is still not the best row, and should not be — spending
      badly has to cost you, or the shop is a tax on patience. */
   ok(true, `money is worth ${normal.pct - broke.pct} points, band ±${band} — reported, not gated`);
+}
+
+/* ------------------------------------------- and what walking past one is -- */
+/* THE ONE THING A TRANSCRIPT FOUND THAT NO RUNG EVER DID.
+
+   A run crossed all three zones having fought eight of twenty-one steps. Not a
+   lucky one — a competent one, taking the safe fork every time it was offered.
+   That is a winning line the ladder above cannot see, because every rung on it
+   fights whatever the trail happens to put in front of it; none of them chooses
+   to walk away.
+
+   So here are two pilots identical in every respect except what they do at a
+   fork with a fight on one side of it. One takes the fight, one takes the other
+   thing. If dodging is even level, the game is asking to be dodged. */
+section('does walking past a fight pay');
+{
+  const N = Number(process.env.FF_RUNS || 8);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const arm = (tweak) => {
+    let wins = 0, runs = 0, power = 0, fought = 0, walked = 0, seen = 0;
+    let cards = 0, temp = 0, meals = 0, gold = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) {
+        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
+        runs++;
+        if (st.won) wins++;
+        if (st.endPower !== undefined) {
+          power += st.endPower; fought += st.fought; walked += st.walked; seen++;
+          cards += st.cards; temp += st.temp; meals += st.meals; gold += st.endGold;
+        }
+      }
+    }
+    return { pct: Math.round((wins / Math.max(1, runs)) * 100), runs,
+      power: power / Math.max(1, seen), share: fought / Math.max(1, walked),
+      cards: cards / Math.max(1, seen), temp: temp / Math.max(1, seen),
+      meals: meals / Math.max(1, seen), gold: gold / Math.max(1, seen) };
+  };
+  const seek = arm((run) => { run.seek = true; });
+  const dodge = arm((run) => { run.dodge = true; });
+  const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
+  const band = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, seek.runs))).toFixed(1);
+  const row = (label, a) => {
+    console.log(`    ${label.padEnd(22)}${bar2(a.pct)} ${String(a.pct + '%').padStart(4)}` +
+      `   fought ${Math.round(a.share * 100)}% of steps, arrived at ${a.power.toFixed(1)}`);
+    console.log(`    ${''.padEnd(22)}${''.padEnd(30)}      ` +
+      `${a.cards.toFixed(1)} cards · ${a.temp.toFixed(1)} tempered · ${a.meals.toFixed(1)} meals · ${Math.round(a.gold)} unspent`);
+  };
+  row('takes every fight', seek);
+  row('walks past what it can', dodge);
+  console.log(`    → walking past a fight is worth ${dodge.pct - seek.pct} points (±${band} is one standard deviation)`);
+  /* The bar. Dodging may be survivable — a run that ducks two hard packs and
+     scrapes home is a story — but it may not be the BETTER line, because a
+     trail that pays you to avoid it is a trail nobody has a reason to walk. */
+  ok(dodge.pct <= seek.pct + Number(band),
+    `walking past fights is not the winning line (${dodge.pct}% dodging vs ${seek.pct}% fighting)`);
+  /* And the part a win rate cannot show, stated as what is actually true rather
+     than as what was hoped for. A dodger does NOT arrive thin: everything it
+     walks towards instead of a fight — a camp, a rest, a cache — builds a
+     caravan too, and it arrives holding a leaner, better-tempered line than the
+     pilot who fought everything. What it does not get to do is arrive AHEAD.
+     The bar is that fighting buys at least as much caravan as ducking does; if
+     ducking ever bought more, no amount of difficulty tax would make fighting
+     the honest line, it would only make the game longer. */
+  ok(dodge.power <= seek.power + 0.4,
+    `ducking fights does not build a better caravan (${dodge.power.toFixed(1)} against ${seek.power.toFixed(1)})`);
+  /* And the finding underneath both of the above, kept as a check because it is
+     the thing that was actually broken: a fighting caravan must be able to
+     SPEND what fighting pays it. It ended a run holding 527 scrip when the only
+     counter in the game shared a fork with the fights it was winning. */
+  ok(seek.gold < 200, `a caravan that fights can spend what it earns (${Math.round(seek.gold)} left over)`);
 }
 
 /* -------------------------------------------------- what the fight is for -- */

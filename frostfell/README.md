@@ -20,7 +20,7 @@ anything hanging off the stage, and anything hiding under a notch.
 
 ## Where things are
 
-Sixteen iterations in, this file is both the reference and the design record.
+Nineteen iterations in, this file is both the reference and the design record.
 The reference comes first; the reasoning is kept below it, because a rule you
 cannot find quickly is a rule nobody reads.
 
@@ -46,7 +46,9 @@ cannot find quickly is a rule nobody reads.
 **The instruments, and what they have found.** These are the reasoning, kept
 because every balance decision in the game came out of one of them:
 [the ladder](#the-ladder), [the same deck two pilots](#the-same-deck-two-pilots),
-[which habits are worth anything](#which-parts-of-playing-well-are-worth-anything).
+[which habits are worth anything](#which-parts-of-playing-well-are-worth-anything),
+[does walking past a fight pay](#does-walking-past-a-fight-pay),
+[what four transcripts had in common](#what-four-runs-had-in-common).
 
 ---
 
@@ -62,7 +64,21 @@ because every balance decision in the game came out of one of them:
   lean line meets a lean winter and a built-up one meets a hard winter. It
   absorbs about half of a deck advantage, deliberately not all of it: building
   a deck still pays, because the fights it wins are bigger, but it stops being
-  the whole of whether a run is winnable.
+  the whole of whether a run is winnable. What it reads is **the best six cards
+  you hold** — the line the board can actually field, leader included — divided
+  by the six slots, so an empty slot counts as the weakness it is. A run sets
+  out well under the bar and grows into it.
+- **The last zone asks more of a caravan that has more.** The deep fell holds
+  the same line to a lower bar, and the part of the reading past a margin is
+  bitten harder than it would be in the zones before. A caravan that scraped
+  over meets the last zone it always did; one built into a wall meets a winter
+  built to match.
+- **What you walk away from walks after you.** Take the quiet fork at a junction
+  that had a fight on it and whatever was there closes two steps. The first six
+  are free, nothing picks up your trail in the first zone at all, and it never
+  decays — so ducking one bad pack when the line is hurt stays a decision, and
+  ducking every fight on the trail is a choice to arrive at the beast with a
+  pack at your back. The trail says so, at the fork, before you pick.
 - **The front row runs double.** Counters tick down twice as fast in column 0,
   on both sides of the table, and anything standing there wears a `×2` beside
   its counter. Put your slow heavy hitter forward and it swings sooner and gets
@@ -237,7 +253,8 @@ node tools/frostfont/build.mjs --specimen  # write fonts.html
 ## Playing it
 
 ```
-node tools/frostfell/playthrough.mjs        # → /tmp/ff-play
+node tools/frostfell/playthrough.mjs                       # → /tmp/ff-play
+node tools/frostfell/playthrough.mjs --tribe scrap --course pack --out DIR
 ```
 
 One run, start to finish, in a real browser, taking a note at every decision and
@@ -245,23 +262,42 @@ a screenshot at every beat that matters. The probe measures the game across
 hundreds of runs and prints numbers; this is the opposite, and after seventeen
 rounds of tuning against a probe the thing nobody had was a **transcript**.
 
-It earned its keep on the first run. Three things no amount of measuring had
-shown:
+**It has an opinion.** It used to take option zero everywhere, which made it a
+transcript of a passive player rather than a competent one — and a passive
+player's complaints are not the game's problems. It now plays like somebody who
+has read the rules: it ranks the fork by what the caravan is short of, denies
+schemes and keeps a slot in reserve in the fight (the four habits the ablation
+says pay), buys bell → temper → mend → meals until the purse gives out, and
+scores rewards against the caravan read. The passive pilot fought 38% of its
+steps; this one fights 52–75%.
 
-- **"short of mending" on every one of twenty-one steps — of a crossing.** The
-  Frostborn set out with no healing card, never drew one, and won anyway. The
-  game's most prominent piece of advice was unchanging *and* wrong. Mending is
-  asked for from the second zone now, not the first.
-- **The trader is a one-purchase stop.** "Nothing affordable, walked out —
-  fifteen scrip" three visits running. After one thing there is never enough for
-  a second.
-- **Eight fights in twenty-one steps, and the run crossed.** Taking every
-  shop, camp, rest, shrine and event on offer and fighting only when forced is a
-  winning line. The trail scales to the caravan, so a caravan that avoids fights
-  meets a winter that has not grown either — which is the rule from iteration
-  fifteen working exactly as written and not at all as intended.
+### What four runs had in common
 
-The third is the next round's work.
+Four leaders, four courses, one transcript each. The brief's point stands: one
+run is an anecdote. All four agreed on three things, and all three became work.
+
+| | before | after this round |
+|---|---|---|
+| caravan power over 21 steps | flat, 5.4 → 6.7 | grows, 4.9 → 8.0–9.3 |
+| scrip left at the end | 138–328 | 21–106 |
+| "nothing affordable" at the trader | every visit, 2–3 a run | never — the purse runs out, not the counter |
+
+- **The caravan never grew.** Every run read between 5.4 and 6.7 from the first
+  step to the last while the deck went from eight cards to twenty-one. It was an
+  average over the whole deck, and an average cannot grow: every good card
+  drafted is divided by one more card drafted. So the trail, which scales to
+  what the caravan is carrying, spent every run answering a caravan that had not
+  moved — and quietly discounting itself, because the reading sat *below* the
+  bar for most of every trip.
+- **The purse was never empty.** Every run walked out of two or three shops
+  holding enough to buy anything on the counter. Not a pricing problem and not a
+  payout problem: she had run out of things worth buying.
+- **Fighting was optional.** All four crossed most of the trail without needing
+  to take a fight they were offered a way around.
+
+The three fixes are [the line, not the deck](#the-rules-briefly), [a hot
+meal](#a-hot-meal), and [what follows you](#the-rules-briefly) — each measured
+below.
 
 ## Looking at it
 
@@ -328,9 +364,9 @@ deck exactly the size it was. It lives in **three places at three prices**:
 - **a camp** will work the fire instead of mending anybody that night
 - **a reward screen** will do it in place of the card you were going to take
 
-A caravan can carry **four tempered cards** and no more — the fire only does so
+A caravan can carry **three tempered cards** and no more — the fire only does so
 much. The cap is what makes three doors a question of *when* and *what it costs*
-rather than simply four times the power; without it a competent pilot went
+rather than simply three times the power; without it a competent pilot went
 straight to a 67% win rate.
 
 This started as one service at one node, and that was a single point of failure
@@ -338,6 +374,23 @@ wearing a decision's coat: miss the shop on a map of nine and lose the run. It
 was worth fourteen points of win rate on its own. Spread across three doors it
 is worth two, and being penniless is survivable — which is the fix, and the cost
 of the fix, stated together.
+
+### A hot meal
+
+**+1 attack and +2 health** on a card, no card added, **as many as you can pay
+for** — 34 scrip, then 60, then 86, and so on up. Sold at the trader *and* on
+the reward screen, so scrip earned in a fight has somewhere to go without giving
+up a fight to reach a shop. There is a ceiling of twelve for a whole run, set
+far above where real play lands (an average crossing eats five and a half and
+then the purse gives out); it exists so that a caravan handed absurd money
+cannot simply buy the run.
+
+This is the answer to *"the trader is a one-purchase stop — is it the prices or
+the payouts?"*, and it was neither. Four transcripts walked out of her stall
+holding between 138 and 328 scrip: she was affordable, and she had run out of
+things worth buying. The bell is one a visit, tempering is capped for the run,
+and everything else on her counter adds a card. The counter needed a bottom, not
+a discount.
 
 **And the trader has one thing nobody else sells: a bell.** The run-wide
 upgrades otherwise only fall out of a dead beast — one more card every fight, a
@@ -434,18 +487,70 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓████   10%
-+ the fight         ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓████████████   26%
-+ the trader        ░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓█████████████████    36%
-+ steering the pool ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓████████████████████   42%
+careless            ░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓████    8%
++ the fight         ░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████   17%
++ the trader        ░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████   25%
++ steering the pool ░░▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓██████████████   30%
 ```
 
-**Thirty points for playing well: fourteen from the fight, fifteen from the
-trader, one from steering the pool.** The economy: penniless 35%, as it ships
-40%, bottomless purse 40%. Each course against a 32% baseline with none: Cold
-45%, Hearth 43%, Bodies 42%, Gear 40%, Scrap 39% — all five ahead of declaring
-nothing, and all five within six points of each other, which is the first round
-they have been.
+**Twenty-two points for playing well: nine from the fight, eight from the
+trader, five from steering the pool.**
+
+The ceiling came from 42% to 30% and the careless pilot held at 8, which was the
+round's hardest ask because the two pull against each other: **every win a
+careless run has is a last-zone win**, so anything that makes the last zone
+harder for everybody lands on exactly the runs the floor protects. Two attempts
+proved it — a flat term on the deep road took the ceiling 41 → 37 and the floor
+8 → 6; reading the whole caravan answer harder in the deep fell did the same
+thing again more subtly. What separates them is [the
+margin](#the-rules-briefly): only the part of the reading past +0.10 is bitten,
+and it is bitten hard. The careless caravan reads under the margin and never
+feels it — measured at two very different bite settings, it sat at 8% in both.
+
+### Does walking past a fight pay
+
+The transcripts found a winning line the ladder could not see: **eight fights in
+twenty-one steps, and the run crossed.** Every rung above fights whatever the
+trail happens to put in front of it — none of them *chooses* to walk away — so
+no amount of turning the ladder up would ever have shown it.
+
+So: two pilots, identical in every respect except what they do at a fork with a
+fight on one side of it.
+
+```
+takes every fight     ██████████████████     35%   fought 75% of steps, arrived at 8.9
+                                             23.0 cards · 0.1 tempered · 5.4 meals · 91 unspent
+walks past what it can███████████████        30%   fought 28% of steps, arrived at 8.5
+                                             13.4 cards · 2.5 tempered · 3.1 meals · 43 unspent
+```
+
+It read **+13 for dodging** before this round. It reads **−5** now, and the
+second line under each bar is why the first fix did not work and the second one
+did.
+
+*First attempt:* tax the difficulty curve — a caravan that had not been fighting
+loses its discount for being thin. It measured as **nothing**, and the reason is
+the whole lesson: **the dodger's caravan was not thin.** It arrived at 8.2
+against the fighter's 7.4. Everything it walks *towards* instead of a fight — a
+camp, a rest, a cache, a shop — builds a caravan too. A rule aimed at weak
+caravans cannot catch a strong one.
+
+*What the second line actually said:* the fighter arrived holding twenty-three
+cards, **no temper at all**, and **527 unspent scrip**. The dodger arrived with
+thirteen cards, three tempers and fifty. The trail was making the player choose
+between fighting and *spending*, and spending is where a caravan concentrates —
+a fight paid in cards, which make a deck bigger rather than a caravan stronger,
+and hid the exchange behind the node you gave up to fight.
+
+So the fix was two things and neither of them was a difficulty knob:
+
+- **A meal is sold on the reward screen too**, out of the scrip the fight just
+  paid. Unspent scrip went 527 → 91 and the fighter now eats 5.4 meals a run.
+- **[What you walk away from walks after you](#the-rules-briefly)** — because
+  once fighting paid properly, ducking still had to cost something.
+
+Fighting is the better line now, and it is better because it *pays* better, not
+because ducking was made painful. The difficulty term is the smaller half.
 
 ### The same deck, two pilots
 
@@ -513,24 +618,32 @@ underneath it. So all of it is run **together, once, against the game as it
 stands**, at 300 runs an arm:
 
 ```
-IN THE FIGHT (±2.3)                    ON THE REWARD SCREEN (±2.6)
-   +10  denying schemes                   +7  declaring a course at all
-    +9  holding gear until it earns         0  buying a fresh offer
-    +7  filling the front of both lanes     0  tempering instead of taking
-    +3  keeping a slot in reserve           0  picking what the deck lacks
-     0  repositioning (removed)            -5  walking on when it wants nothing
+IN THE FIGHT (±2.8)                    ON THE REWARD SCREEN (±2.6)
+    +5  keeping a slot in reserve        +7  declaring a course at all
+    +4  denying schemes                    0  buying a fresh offer
+    +4  holding gear until it earns        0  tempering instead of taking
+    -1  filling the front of both lanes    0  picking what the deck lacks
+     0  repositioning (removed)           -5  walking on when it wants nothing
      0  calling waves early (removed)
 ```
 
-**Scheme denial is not carrying the fight rung.** It read +14 a round ago,
-which looked like the same shape of problem the trader had at +14 three rounds
-before that; measured against the current game alongside everything else it is
-+10 against +9 and +7. The spread is healthy and the earlier reading was a
-number about a game that no longer existed.
+**Scheme denial is not carrying the fight rung, and this is the third reading in
+a row that says so a different way.** It read +14 two rounds ago and +10 last
+round; against the current game it is +4, level with holding gear and behind
+keeping a slot. The habit did not change — the game did, twice, and each time
+the number came down. The spread across the top three is now inside two standard
+deviations of each other, which is the healthiest this table has read.
 
-And the economy, turned up the same way at 300 runs an arm: **penniless 34%, as
-it ships 38%, a bottomless purse 36% — money is worth four points.** It had read
-eight in one run and one in the next; this is the settled figure.
+And the economy: **penniless 23%, as it ships 30%, a bottomless purse 35% —
+money is worth seven points.** It had read four when the only things to spend on
+were one-a-visit; a meal gave the purse a bottom and the number went up, which
+is what a working economy looks like.
+
+The bottomless-purse arm is the reason meals have a **cap of twelve**. Handed
+free money and prices at a fiftieth, the pilot ate its way to **93%** — money
+buying a run outright rather than paying for one. The cap sits far above where
+real play lands (5.4 meals an average crossing) and exists purely so the
+degenerate case has a floor to hit; it took that arm to 35%.
 
 ### And the same for the reward screen
 
@@ -576,6 +689,13 @@ at all: Bodies 43%, Hearth 42%, Cold 42%, Gear 41%, Scrap 38%. Four of the five
 sit inside two standard deviations of each other and all five beat declaring
 nothing. **They are genuinely level, not luck** — which the ten-point swings at
 the smaller sample could not have told you either way.
+
+That reading is from before this round's changes, and this round moved the trail
+under it. At the suite's ordinary 210 runs an arm the same table now reads Gear
+38%, Cold 35%, none 33%, Hearth 33%, Bodies 32%, **Scrap 25%** — four of them
+still level, and Scrap eight points off the field, which is over two standard
+deviations. That is a lead worth turning `FF_COURSE` up on, not a finding worth
+acting on at this sample; it is on the list rather than in the game.
 
 This is the reason the front row runs double. Before that rule the same table
 read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
