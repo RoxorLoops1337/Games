@@ -4356,3 +4356,69 @@ desktop one. That is the correct answer and not an obvious one.
     and one mutant (the stand-in) is visible to all 38 real-card readings at
     once. Every mutant anchor re-audited — 109 anchors, none orphaned, none
     ambiguous. Five clean runs. Render suite 6923 -> 7149 checks.
+
+125. **The rule for resolving a faint lived in its four callers** (pass 214).
+    Most re-entrancy holds, and is pinned now rather than assumed: a screen
+    opened over a screen remembers the one beneath in its `prev` chain; closing
+    three times from nothing does not throw; advancing a dialogue five times
+    past its last line runs `done` once and no more; a battle started over a
+    battle replaces it and leaves the game playable.
+
+    `resolveFoeDown` was the one with stakes. "A faint resolves once" was true
+    at ONE of its four call sites — the `!b.over` in `afterFoe` — and true at
+    the other three only by luck of their shape: `playCard` guards on the
+    TRANSITION (`before > 0`), and both thorns sites `return` the instant they
+    call. Driven twice by hand:
+
+        resolveFoeDown once   xp +159   gems +0   over='win'
+        resolveFoeDown twice  xp +159   again
+
+    Mid-team, where `over` is not set, a second call would also have sent out
+    another kin for one faint. The guard belongs to the faint rather than to
+    whoever noticed it: after a final one the battle is over, after a mid-team
+    one the kin standing there is a NEW one with its HP up, and neither is true
+    on a legitimate first call, where the caller has just watched this foe reach
+    zero.
+
+    **The paired control.** Sixty seeded fights — same RNG seed per fight, wild
+    and trainer alternating — driven through the old file and the new: **0
+    different** in outcome, turn count, party XP/HP or gems. The guard is a
+    no-op in real play and changes only the double call.
+
+    **A planted fault that correctly did NOT bite, and what that means.**
+    Removing `afterFoe`'s own `!b.over` now kills nothing, because the function
+    guards itself — the caller's guard has become redundant, which is the point
+    of moving it. Removing BOTH still fails three checks, so the rule is held;
+    it is just no longer held there. A mutation that cannot change behaviour is
+    not evidence about a check, so it was left out of the sweep rather than
+    reported as a zero.
+
+    **A mutant of mine, tried and removed.** Making `resolveFoeDown` return
+    unconditionally breaks every battle, so the suite CRASHES and its kills are
+    not evidence — and it would have added a permanent known crash to the
+    detector's report, which is the one signal that has to stay clean. Dropped;
+    the crash line is back to the two pre-existing real ones.
+
+    **Recorded, not fixed** (with the field): `say` over a live dialogue drops
+    the first one's `done` silently, and `winFlourish` over a live flourish does
+    the same. The game already knows dialogues can nest — `say` guards
+    `prevMode` against exactly that — but every reachable `say` runs from input
+    or from another dialogue's `done`, which fires AFTER the first is cleared,
+    so nothing today can reach the strand.
+
+    **Two more instrument errors of mine.** A hand-rolled "play the first
+    affordable card" loop spun eighty times without ending, because the kin's
+    move card stays in hand and stays affordable after it has swung and
+    `playCard` simply refuses it — the loop never reached `endTurn` and the
+    check was measuring nothing. Replaced with the lib's own bot. And the source
+    pin counted `resolveFoeDown(log)` as four; it is five, because the
+    function's own signature matches the same pattern. THIRD pass running that a
+    count expectation was wrong rather than the code.
+
+    Two sweep mutants aimed at the new section, which reports **5 of 25 killed
+    — 20%**. Low, and for a stated reason: twenty of those twenty-five checks
+    are the re-entrancy-holds pins (screens, dialogue advance, the nested-say
+    mode guard) and the inverse control that a real SECOND faint must still pay
+    — none of which a guard mutant can reach, by construction. Every mutant
+    anchor re-audited — 111 anchors, none orphaned, none ambiguous. Five clean
+    runs. Render suite 7149 -> 7174 checks.

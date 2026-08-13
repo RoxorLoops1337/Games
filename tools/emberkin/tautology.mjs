@@ -298,6 +298,24 @@ const MUTANTS = [
   // with PLAN_CHIP = 0 — statically unreachable, a guarded pass-35 experiment —
   // so a mutant there kills nothing because it cannot run, not because the
   // check is a sentence. Checked by hand before choosing this one.
+  { name: 'twice: the faint stops guarding itself', aims: ['a faint resolves once, whoever notices it'],
+    find: '  if (b.over || b.foe.hp > 0) return;\n',
+    to: '' },
+  // A mutant that makes resolveFoeDown return unconditionally was tried and
+  // removed: it breaks every battle, so the suite CRASHES and its kills are not
+  // evidence — and it would add a permanent known crash to the detector's
+  // report, which is the one signal that has to stay clean. The two below fail
+  // cleanly and say the same thing.
+  { name: 'twice: only the final faint is guarded', aims: ['a faint resolves once, whoever notices it'],
+    find: '  if (b.over || b.foe.hp > 0) return;\n  snap(log, `${b.wild',
+    to: '  if (b.over) return;\n  snap(log, `${b.wild' },
+  // NOT aimed here: removing afterFoe's own `!b.over` now kills nothing,
+  // because the function guards itself — the caller's guard has become
+  // redundant, which is the point. Removing BOTH still fails 3 checks, so the
+  // rule is held; it is just no longer held there. A mutant that cannot change
+  // behaviour is not evidence about a check, so it is left out rather than
+  // reported as a zero.
+
   { name: 'early: the missing-card guard goes away again', aims: ['a path that bails out leaves nothing behind it'],
     find: 'const cardDef = (id) => CARDS[id] || CARD_GONE;',
     to: 'const cardDef = (id) => CARDS[id];' },
