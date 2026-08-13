@@ -3131,9 +3131,9 @@ section('the switch screen knows who you are choosing against');
   eq(b2.eff, 2, 'and Ember doubles');
   ok(a.hi < g.moveDamageNeutral(wet, swing(wet)).hi,
     `the real number is lower than the neutral one (${a.hi} vs ${g.moveDamageNeutral(wet, swing(wet)).hi})`);
-  eq(g.EFF_MARK[String(a.eff)].tag, 'RESISTED', 'and it is labelled');
-  eq(g.EFF_MARK[String(b2.eff)].tag, 'STRONG', 'both ways');
-  ok(!g.EFF_MARK['1'], 'a neutral hit is not labelled at all — a mark on everything marks nothing');
+  eq(g.effMark(a.eff).tag, 'RESISTED', 'and it is labelled');
+  eq(g.effMark(b2.eff).tag, 'STRONG', 'both ways');
+  ok(!g.effMark(1), 'a neutral hit is not labelled at all — a mark on everything marks nothing');
 
   // And the number folds in what the SWING folds in. `moveDamage` has always
   // applied attackBonus(); this did not, so with an edge banked the switch
@@ -3177,7 +3177,7 @@ section('the switch screen knows who you are choosing against');
   ok(!/~\$\{dmg\} dmg/.test(SRC), 'no tilde is left standing in front of a ceiling');
 
   // A move that cannot land at all reads as nothing rather than as 1.
-  eq(g.EFF_MARK['0'].tag, 'NOTHING', 'an immune matchup has its own mark');
+  eq(g.effMark(0).tag, 'NOTHING', 'an immune matchup has its own mark');
 
   // Source nets: renderScreen returns early when HEADLESS, so the prompt and
   // the marks have to be asserted here.
@@ -4933,6 +4933,121 @@ section('a type chip is legible on its own colour');
   const base = 11, block = 0.58, chip = 0.58;
   ok(base * block * chip < 4, `nested, a chip would be ${(base * block * chip).toFixed(1)}px`);
   ok(base * block >= 6, `reset, it is ${(base * block).toFixed(1)}px — the label's own size`);
+}
+
+// Does the game tell the truth about type, everywhere it speaks about it?
+//
+// `CHART[attacker][defender]` over eight types is 64 ordered pairs — and a
+// defender can carry TWO, which is where the chart's entries stop being values
+// and start being products. Driven over the whole domain rather than through
+// whatever fights happened to be played:
+//
+//   effect()     agrees with the chart on all 64 pairs
+//   resistedBy   agrees on all 361 creature pairings
+//   the mark     was keyed on the multiplier's own STRING — '2', '0.5', '0' —
+//                which is every value a SINGLE type can produce and not every
+//                value the game can. Reachable: 0.25, 0.5, 1, 2, 4.
+//
+// So the card fell silent at the two matchups most worth telegraphing, a
+// quadruple hit and a doubly-resisted one: 19 of 288 attacker/defender
+// combinations, against five of the nineteen creatures in the dex. It is a
+// band now, in the words already here.
+section('every multiplier the game can produce has a word for it');
+{
+  const g = withDeck(loadGame({}));
+  g.setCtx(mkCtx());
+  g.newGame();
+
+  const T = Object.keys(g.TYPES);
+  const chart = (a, d) => (g.CHART[a] || {})[d] ?? 1;
+
+  // The number every other voice is derived from, over all 64 ordered pairs.
+  let pairs = 0;
+  for (const a of T) {
+    for (const d of T) {
+      eq(g.effect(a, [d]), chart(a, d), `${a} into ${d} is the chart's own entry`);
+      pairs++;
+    }
+  }
+  eq(pairs, 64, 'all sixty-four ordered pairs were driven');
+
+  // THE WHOLE DOMAIN, not the instances anyone thought to visit: single types
+  // and every unordered pair of them, which is what a dual-typed creature is.
+  const twos = [];
+  for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) twos.push([T[i], T[j]]);
+  const reachable = new Set();
+  for (const a of T) {
+    for (const d of T) reachable.add(g.effect(a, [d]));
+    for (const p of twos) reachable.add(g.effect(a, p));
+  }
+  const vals = [...reachable].sort((x, y) => x - y);
+  eq(vals.join(','), '0.25,0.5,1,2,4', 'the reachable multipliers are these five');
+
+  // …and every one of them either has a word or is deliberately silent.
+  for (const v of vals) {
+    const m = g.effMark(v);
+    if (v === 1) { ok(!m, 'a neutral hit stays unmarked — a mark on everything marks nothing'); continue; }
+    ok(m && m.tag, `${v}x has a word (${m && m.tag})`);
+    ok(m.cls === (v > 1 ? 'eff-good' : 'eff-bad'), `…and ${v}x is coloured for its direction (${m.cls})`);
+  }
+  // Banded, not matched: the value BETWEEN two written-down ones is answered.
+  eq(g.effMark(4).tag, g.effMark(2).tag, 'a quadruple reads like a double, as the log has always said');
+  eq(g.effMark(0.25).tag, g.effMark(0.5).tag, 'and a double resist like a single');
+  eq(g.effMark(3).tag, 'STRONG', 'a multiplier nobody wrote down is still answered');
+  eq(g.effMark(0.125).tag, 'RESISTED', 'in both directions');
+  eq(g.effMark(0).tag, 'NOTHING', 'and nothing at all keeps its own word');
+  // …and its own colour. This was missed on the first writing: the colour loop
+  // above only walks the REACHABLE values, and 0 is not one of them — nothing
+  // in `CHART` is an immunity — so a planted fault that painted NOTHING as a
+  // good hit sailed through. An unreachable branch still needs its net.
+  eq(g.effMark(0).cls, 'eff-none', 'coloured as its own thing, not as a hit');
+  ok(!vals.includes(0), 'no matchup in the chart is an immunity today, so that branch is held in reserve');
+
+  // By difference, and the number that made this a finding: not one
+  // attacker/defender combination in the game is left without a word.
+  let silent = 0, total = 0;
+  for (const a of T) {
+    for (const d of [...T.map((t) => [t]), ...twos]) {
+      const v = g.effect(a, d);
+      total++;
+      if (v !== 1 && !g.effMark(v)) silent++;
+    }
+  }
+  eq(total, 288, 'every attacker against every single and dual defender');
+  eq(silent, 0, 'and none of them is silent (it was 19)');
+
+  // The creatures that made it reachable — this is not a hypothetical domain.
+  const duals = g.DEX_ORDER.filter((id) => g.DEX[id].types.length > 1);
+  eq(duals.length, 5, 'five creatures in the dex carry two types');
+  for (const id of duals) {
+    const ts = g.DEX[id].types;
+    const hot = T.filter((a) => { const v = g.effect(a, ts); return v === 4 || v === 0.25; });
+    ok(hot.length > 0, `${g.DEX[id].name} (${ts.join('/')}) has an extreme matchup at all`);
+    for (const a of hot) ok(g.effMark(g.effect(a, ts)), `…and ${a} into it is marked`);
+  }
+
+  // The consumer reads the band, and the old table is gone.
+  ok(SRC.includes('const mark = vs && vs.eff !== undefined ? effMark(vs.eff) : null;'),
+    'the move card asks the band');
+  ok(!/EFF_MARK/.test(SRC), 'and the exact-key table it used to ask is gone');
+
+  // RECORDED, NOT FIXED — the starter screen harvests `types[0]` only, so on a
+  // dual-typed kin it names what beats the first type and drops the second:
+  // Kindlark (Ember/Spark) would read "soft against Tide, Stone" where the
+  // truth is Stone alone. Unreachable today — all three starters are single
+  // typed — so it is pinned rather than fixed, and this fails the day a
+  // dual-typed kin is added to STARTERS, which is when it would start lying.
+  for (const id of g.STARTERS) {
+    eq(g.DEX[id].types.length, 1,
+      `${g.DEX[id].name} is single-typed, which is what keeps the matchup block honest`);
+  }
+  {
+    const k = g.DEX.kindlark;
+    const said = g.TYPE_ORDER.filter((t) => chart(t, k.types[0]) > 1);
+    const truth = g.TYPE_ORDER.filter((t) => g.effect(t, k.types) > 1);
+    ok(said.length !== truth.length,
+      `the types[0] harvest still disagrees on a dual kin ([${said}] vs [${truth}]) — recorded, unreachable`);
+  }
 }
 
 // KEEP THIS SECTION. It is deliberately half-broken.

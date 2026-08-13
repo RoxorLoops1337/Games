@@ -3358,3 +3358,59 @@ desktop one. That is the correct answer and not an obvious one.
 
     Four planted faults, all four bite; two sweep mutants aimed at the new
     section; every mutant anchor re-audited — none orphaned.
+
+108. **The mark was keyed on the value, not the band** (pass 197).
+    The type chart is the spine of this game and its colours had just been
+    measured; its BEHAVIOUR had only ever been checked through whatever fights
+    happened to be driven. So every voice that speaks about `CHART` was driven
+    over the whole domain instead — all 64 ordered pairs, and every unordered
+    pair of types as well, because a defender can carry two and that is where
+    the chart's entries stop being values and become products.
+
+        effect()      agrees with the chart on all 64 pairs
+        resistedBy    agrees on all 361 creature pairings
+        effWord       bands, and has always banded
+        the card mark KEYED ON THE STRING: '2', '0.5', '0'
+
+    Those three keys are every value a SINGLE-typed defender can produce. The
+    reachable set is **0.25, 0.5, 1, 2, 4** — so two of the five had no key and
+    the card fell silent at exactly the two matchups worth telegraphing, a
+    quadruple hit and a doubly-resisted one. **19 of 288 attacker/defender
+    combinations**, against five of the nineteen creatures in the dex:
+
+        Magmane     Ember/Stone     silent to Ember and Tide
+        Kindlark    Ember/Spark     silent to Stone
+        Lanterneel  Tide/Gloom      silent to Spark
+        Bramblor    Verdant/Gloom   silent to Verdant
+        Frillamb    Verdant/Tide    silent to Tide and Stone
+
+    `effMark(e)` is a band now, in the words already here — `effWord`, the line
+    the log prints on the same swing, has always said "brutally effective" for 2
+    and 4 alike, and the card now agrees with it instead of saying nothing.
+    Neutral stays unmarked. After: 0 of 288 silent.
+
+    **Recorded, not fixed.** The starter screen harvests `CHART[d.types[0]]` and
+    its mirror, so on a dual-typed kin it names what beats the FIRST type and
+    drops the second — Kindlark (Ember/Spark) would read "soft against Tide,
+    Stone" where the truth is Stone alone. Unreachable today: all three of
+    `STARTERS` are single-typed. Pinned rather than fixed, from both sides —
+    the suite asserts each starter is single-typed AND that the harvest still
+    disagrees on a dual kin, so it fails the day a dual-typed starter is added,
+    which is the day it would start lying.
+
+    **A planted fault did not bite, and that was the finding inside the
+    finding.** Painting NOTHING-at-all as a good hit sailed through, because the
+    colour loop walks the REACHABLE multipliers and 0 is not one of them —
+    nothing in `CHART` is an immunity, so the branch is held in reserve. An
+    unreachable branch still needs its net; it has one now, and the fault bites.
+
+    Four planted faults, all four bite; every mutant anchor re-audited — none
+    orphaned. Render suite 1644 -> 1747 checks.
+
+    **And the sweep's own number was worth reading rather than quoting.** With
+    two mutants aimed at the section it reported **2 of 103 killed** — which
+    looks like a weak section and is really a gap in the mutant set: 64 of those
+    103 are the pair enumeration, and nothing in the set touched `effect`. A
+    third mutant now collapses it to reading `defTypes[0]` alone; under it the
+    reachable set drops to 0.5, 1, 2 and every dual-typed creature loses its
+    extreme matchup, so the enumeration is load-bearing rather than decorative.

@@ -167,6 +167,19 @@ const MUTANTS = [
     find: 'border-radius:3px; color:#120d18; font-weight:700; }',
     to: 'border-radius:3px; color:#6b6270; font-weight:700; }' },
 
+  { name: 'type: the mark exact-matches a double again', aims: ['every multiplier the game can produce has a word for it'],
+    find: "    : e > 1 ? { tag: 'STRONG', cls: 'eff-good' }",
+    to: "    : e === 2 ? { tag: 'STRONG', cls: 'eff-good' }" },
+  { name: 'type: the mark exact-matches a single resist again', aims: ['every multiplier the game can produce has a word for it'],
+    find: "      : e < 1 ? { tag: 'RESISTED', cls: 'eff-bad' }",
+    to: "      : e === 0.5 ? { tag: 'RESISTED', cls: 'eff-bad' }" },
+  // …and one aimed at `effect` itself, because without it the 64-pair
+  // enumeration above is unproven: the section reported 2 of 103 killed, and
+  // the 64 were simply out of reach of every mutant in the set.
+  { name: 'type: effect stops multiplying across the second type', aims: ['every multiplier the game can produce has a word for it'],
+    find: '  defTypes.reduce((m, t) => m * ((CHART[moveType] || {})[t] ?? 1), 1);',
+    to: '  ((CHART[moveType] || {})[defTypes[0]] ?? 1);' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the
