@@ -5778,6 +5778,161 @@ section('every place names itself, and every sign can be read from the ground');
   }
 }
 
+// Does the game remember exactly what it promises to remember?
+//
+// The save is the one domain with no table behind it: a hand-written blob and a
+// hand-written reader, and nothing had ever walked the two side by side. Every
+// field written is read (bar `v`, the version stamp, which nothing consults);
+// every field read is written; a deep run crosses two independent game
+// instances and comes back identical in twenty of twenty-one fields, the
+// twenty-first being `playtime`, which saveGame rounds on purpose.
+//
+// The disagreement was in the repair. Both card lines are lossy by design — a
+// card id this build no longer knows is dropped, and every deck slot pointing
+// at one is dropped with it. The TOTAL loss was caught: own nothing, get the
+// starter deck. The PARTIAL loss was not: retire five of ten and you came back
+// owning five cards with a deck of five, under DECK_MIN — a deck the editor
+// refuses to build (it will not let you drop below the floor) and cannot
+// repair, because there is nothing left to add.
+//
+// The property is not "the deck is six". It is that a save NEVER loads into a
+// game the player could not have been playing.
+section('a save never loads into a game you could not have been playing');
+{
+  // The two lists, off the source, so a field added to one and forgotten in the
+  // other is caught the day it is written.
+  const blob = SRC.slice(SRC.indexOf('  const blob = {'), SRC.indexOf('  try { localStorage.setItem(SAVE_KEY'));
+  const written = [...new Set([...blob.matchAll(/(?:^|[{,]\s*)([A-Za-z_]\w*)\s*:/g)].map((m) => m[1]))];
+  const loadSrc = SRC.slice(SRC.indexOf('function loadGame()'), SRC.indexOf('function wipeSave()'));
+  const readF = [...new Set([...loadSrc.matchAll(/blob\.([A-Za-z_]\w*)/g)].map((m) => m[1]))];
+  ok(written.length >= 22, `the save carries ${written.length} fields`);
+  eq(readF.filter((k) => !written.includes(k)).join(' '), '',
+    'nothing is read out of the blob that is not put into it');
+  eq(written.filter((k) => !readF.includes(k)).join(' '), 'v',
+    'and the only field written and never read is the version stamp');
+
+  // The packed creature has its own two lists.
+  const pack = SRC.slice(SRC.indexOf('  const packMon ='), SRC.indexOf('  const blob = {'));
+  const mw = [...new Set([...pack.matchAll(/([a-z]+):\s*m\./g)].map((m) => m[1]))];
+  const unp = loadSrc.slice(loadSrc.indexOf('  const unpack ='), loadSrc.indexOf('  G.party ='));
+  const mr = [...new Set([...unp.matchAll(/p\.([a-z]+)/g)].map((m) => m[1]))];
+  eq(mw.slice().sort().join(''), mr.slice().sort().join(''),
+    `a packed creature writes exactly what unpack reads (${mw.length} fields)`);
+
+  // ---- the round trip, across two independent games ----------------------
+  const store = {};
+  const A = withDeck(loadGame(store));
+  A.setCtx(mkCtx());
+  A.newGame();
+  const G = A.G;
+  G.party = [A.mkMon('cindercub', 14), A.mkMon('dewdrip', 12), A.mkMon('zaplet', 9)];
+  G.party[0].nick = 'Ashling'; G.party[0].hp = 7; G.party[0].status = 'burn';
+  G.party[0].xp = 133; G.party[0].moves[0].pp = 2;
+  G.party[1].status = 'freeze';
+  G.box = [A.mkMon('pebblet', 5), A.mkMon('mothrix', 6)];
+  G.bag = { potion: 3, orb: 7 };
+  G.money = 4321; G.gems = 19;
+  for (const id of ['cindercub', 'dewdrip', 'zaplet']) A.seeMon(id);
+  A.catchMon('cindercub');
+  G.flags = { beatVespyr: 1, heardEnding: 1 };
+  G.been = { hollowbrook: 1, route_one: 1 };
+  G.cards[0].plus = 3; G.cards[0].plays = 41; G.cards[0].kills = 9;
+  G.might = 6; G.chestsOpened = 5;
+  G.steps = 2847; G.playtime = 1234.6; G.wins = 22; G.caught = 11;
+  A.enterMap('crown_hollow', 9, 10, 'up');
+
+  const snap = (E) => ({
+    map: E.G.mapId, x: E.G.player.x, y: E.G.player.y, dir: E.G.player.dir,
+    party: E.G.party.map((m) => [m.species, m.lvl, m.hp, m.max, m.xp, m.nick, m.status,
+      m.moves.map((v) => `${v.id}:${v.pp}/${v.max}`).join(',')]),
+    box: E.G.box.map((m) => [m.species, m.lvl, m.hp]),
+    bag: { ...E.G.bag }, money: E.G.money, gems: E.G.gems,
+    dex: { ...E.G.dex }, been: { ...E.G.been }, flags: { ...E.G.flags },
+    cards: E.G.cards.map((c) => [c.u, c.id, c.plus, c.plays, c.kills]),
+    deck: [...E.G.deck], uid: E.G.nextUid, chests: E.G.chestsOpened, might: E.G.might,
+    steps: E.G.steps, wins: E.G.wins, caught: E.G.caught,
+  });
+  const before = snap(A);
+  ok(A.saveGame(), 'the run saves');
+
+  const B = loadGame(store);
+  B.setCtx(mkCtx());
+  ok(B.loadGame(), 'and a game that has never seen it loads it');
+  const after = snap(B);
+  for (const k of Object.keys(before)) {
+    eq(JSON.stringify(after[k]), JSON.stringify(before[k]), `${k} came back exactly as it went in`);
+  }
+  // The one field that is lossy, and by how much: saveGame rounds it.
+  eq(B.G.playtime, 1235, 'playtime is the one field rounded on the way out');
+
+  // ---- every field missing, one at a time --------------------------------
+  // An old save is a save with a field that did not exist yet, and `v: 2` says
+  // there was a v1. Whatever is absent, the game must land somewhere legal.
+  const base = JSON.parse(store.emberkin_save_v1);
+  const keys = Object.keys(base);
+  ok(keys.length >= 22, `${keys.length} fields to knock out one at a time`);
+  for (const k of keys) {
+    const cut = { ...base }; delete cut[k];
+    const D = loadGame({ emberkin_save_v1: JSON.stringify(cut) });
+    D.setCtx(mkCtx());
+    let got = null, threw = '';
+    try { got = D.loadGame(); } catch (e) { threw = e.message; }
+    eq(threw, '', `a save with no ${k} does not throw`);
+    if (k === 'party') { eq(got, false, 'a save with no party refuses to load, which is the point of the return value'); continue; }
+    eq(got, true, `a save with no ${k} loads`);
+    const g = D.G;
+    ok(g.party.length > 0, `…with kin (${g.party.length})`);
+    ok(g.deck.length >= D.DECK_MIN, `…and a deck it would let you build (${g.deck.length}/${D.DECK_MIN})`);
+    ok(g.deck.length <= D.DECK_MAX, `…and not more than it would let you build (${g.deck.length}/${D.DECK_MAX})`);
+    ok(g.deck.every((u) => g.cards.some((c) => c.u === u)), '…every slot pointing at a card you own');
+    eq(new Set(g.cards.map((c) => c.u)).size, g.cards.length, '…and no two cards sharing a uid');
+    // The reader's default IS the behaviour when a field is absent, and no
+    // check had ever asked whether any of them is a sensible one.
+    ok(Number.isFinite(g.money) && g.money >= 0, `…money is a number (${g.money})`);
+    ok(Number.isFinite(g.gems) && g.gems >= 0, `…gems is a number (${g.gems})`);
+    ok([g.steps, g.playtime, g.wins, g.caught, g.might, g.chestsOpened, g.nextUid].every(Number.isFinite),
+      '…and every counter is a number, not undefined');
+    ok(g.bag && typeof g.bag === 'object', '…there is a bag');
+    ok(!!D.MAPS[g.mapId], `…and you are standing on a real map (${g.mapId || 'nowhere'})`);
+    ok(D.passable(g.map, g.player.x, g.player.y, g.player.y), '…on a tile you could be standing on');
+  }
+
+  // ---- the reachable version: card ids this build no longer knows ---------
+  // Not hypothetical — it is what the two filters above are FOR. Retire cards
+  // at every depth and the deck must still be one you could have built.
+  for (const keep of [10, 6, 5, 2, 1, 0]) {
+    const cut = JSON.parse(store.emberkin_save_v1);
+    cut.cards = cut.cards.map((c, i) => (i < keep ? c : [c[0], 'a_card_this_build_never_had', c[2], c[3], c[4]]));
+    const survivors = cut.cards.slice(0, keep).map((c) => [c[0], c[1], c[2]]);
+    const E = loadGame({ emberkin_save_v1: JSON.stringify(cut) });
+    E.setCtx(mkCtx());
+    ok(E.loadGame(), `${keep} of ten card ids still known: it loads`);
+    const g = E.G;
+    ok(g.deck.length >= E.DECK_MIN, `…with a legal deck (${g.deck.length}/${E.DECK_MIN})`);
+    ok(g.deck.every((u) => g.cards.some((c) => c.u === u)), '…pointing only at cards you own');
+    eq(new Set(g.cards.map((c) => c.u)).size, g.cards.length, '…no two cards sharing a uid');
+    // Nothing that survived is thrown away to make room, and it keeps its growth.
+    for (const [u, id, plus] of survivors) {
+      const c = g.cards.find((q) => q.u === u);
+      ok(!!c, `the card you still have at uid ${u} is still yours`);
+      eq(c && c.id, id, '…the same card');
+      eq(c && c.plus, plus || 0, `…with the ${plus || 0} it grew`);
+    }
+    // A first fight is dealable on the other side.
+    g.party[0].hp = g.party[0].max;
+    E.startBattle({ foe: E.mkMon('pebblet', 5), wild: true });
+    const b = E.B();
+    ok(b && b.hand.length > 0, `…and the first hand off that deck has ${b ? b.hand.length : 0} cards in it`);
+  }
+
+  // Pinned by shape, because a property about "always legal" is happy the
+  // moment the repair is deleted and the floor comes down with it.
+  ok(SRC.includes('for (const c of G.cards) { if (G.deck.length >= DECK_MIN) break; if (!G.deck.includes(c.u)) G.deck.push(c.u); }'),
+    'the repair fills from what you still own first');
+  ok(SRC.includes('for (let i = 0; G.deck.length < DECK_MIN; i++) grantCard(STARTER_DECK[i % STARTER_DECK.length]);'),
+    '…then from the starter deck, and only as far as the floor');
+}
+
 // KEEP THIS SECTION. It is deliberately half-broken.
 //
 // The first check below is a SENTENCE: an index returned by findIndex is always

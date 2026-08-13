@@ -231,6 +231,19 @@ const MUTANTS = [
     find: "      '##......==S.......##',",
     to: "      '##......==........##'," },
 
+  { name: 'save: the deck repair goes away again', aims: ['a save never loads into a game you could not have been playing'],
+    find: '  for (let i = 0; G.deck.length < DECK_MIN; i++) grantCard(STARTER_DECK[i % STARTER_DECK.length]);',
+    to: '' },
+  { name: 'save: the repair throws away what survived', aims: ['a save never loads into a game you could not have been playing'],
+    find: '  for (const c of G.cards) { if (G.deck.length >= DECK_MIN) break; if (!G.deck.includes(c.u)) G.deck.push(c.u); }',
+    to: '  G.deck = [];' },
+  { name: 'save: a nickname stops being written', aims: ['a save never loads into a game you could not have been playing'],
+    find: "nm: m.nick || ''",
+    to: "nm: ''" },
+  { name: 'save: money forgets its default', aims: ['a save never loads into a game you could not have been playing'],
+    find: 'G.money = blob.money ?? 500;',
+    to: 'G.money = blob.money;' },
+
   // A mutant only a SOURCE check can see, and one the game does not feel: the
   // stub DOM never looks up #pad, so nothing driven changes. It exists because
   // the suite used to read the game TWICE — loadGame honoured EK_GAME and the

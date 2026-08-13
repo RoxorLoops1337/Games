@@ -3698,3 +3698,78 @@ desktop one. That is the correct answer and not an obvious one.
     key transposed to `ty,tx`: 32). Three sweep mutants aimed at the new
     section; every mutant anchor re-audited — 68 anchors, none orphaned, none
     ambiguous. Render suite 2250 -> 2323 checks.
+
+115. **The game repairs a deck you have lost entirely, and not one you have
+    lost most of** (pass 204).
+    The save is the one domain with no table behind it — a hand-written blob
+    and a hand-written reader — and nothing had ever walked the two side by
+    side. Harvested off the source, they agree almost exactly:
+
+        written (22)   v map x y dir party box bag money gems dex been flags
+                       cards deck uid chests might steps playtime wins caught
+        read    (21)   all of the above except v
+        read, never written    none
+        written, never read    v — the version stamp, which nothing consults
+
+        a packed creature writes  s l hp xp mv nm st
+        and unpack reads          all seven
+
+    Then driven rather than read: a run with something in every corner of it —
+    nicknames, a burn and a freeze, spent PP, partial XP, box, bag, dex, flags,
+    a card grown +3 with 41 plays, `might`, the counters, standing on Crown
+    Hollow — saved by one game instance and loaded by a **second, independent
+    one**, because a single instance cannot show a field written and never read:
+    the live value would still be sitting there. Twenty of twenty-one fields
+    came back byte-identical. The twenty-first is `playtime`, which `saveGame`
+    rounds on the way out (1234.6 -> 1235), on purpose.
+
+    The disagreement was in the repair. Both card lines are lossy by design — a
+    card id this build no longer knows is dropped, and then every deck slot
+    pointing at one is dropped with it:
+
+        card ids still known    owned   deck
+                 10               10     10
+                  6                6      6
+                  5                5      5   <- under DECK_MIN
+                  2                2      2   <- under DECK_MIN
+                  0               10     10   <- rescued
+
+    The TOTAL loss was caught: `if (!G.cards.length) STARTER_DECK.forEach(...)`.
+    The PARTIAL loss was not. Five and two are decks the editor refuses to
+    build — it will not let you drop below `DECK_MIN` — and cannot repair,
+    because there is nothing left to add. The game would hand you a deck it
+    would not let you make, in the one situation where you could not fix it.
+
+    A reader default, not a format change: fill from what you still own first,
+    then from the starter deck, and only as far as the floor. Every depth now
+    loads at exactly six; survivors keep their uid, their card id and their +3;
+    every slot points at a card you own; no two cards share a uid; the first
+    hand deals.
+
+    **Recorded, not fixed** (with their field names): `v` is written every save
+    and read by nothing — dead weight, but removing a written field IS a format
+    change and the brief forbade it. `playtime` is rounded on save, losing under
+    a second. A save with no `party` returns false, which is the point of the
+    return value, not a fault.
+
+    The property tested is not "the deck is six". It is that **a save never
+    loads into a game you could not have been playing** — every one of the 22
+    fields knocked out in turn, and at every depth of card retirement, checked
+    for a real map, a standable tile, kin, a legal deck, unique uids, and every
+    counter a number rather than `undefined`.
+
+    Five planted faults, all five bite: the repair removed (6 failures), the
+    repair discarding instead of filling (4), `packMon` dropping the nickname
+    (2 — caught independently by the static field list AND the live round trip),
+    and `money`/`gems` losing their `?? default` (1 each, `undefined`).
+    Four sweep mutants aimed at the new section, which reports **11 of 407
+    killed** — 4 for the repair removed, 4 for the repair discarding survivors,
+    2 for the nickname, 1 for money's default. That ratio is low and is meant
+    to be read as low: 407 checks is mostly the 22-field knockout matrix, and a
+    mutant that breaks the card repair can only show up in the few rows where
+    the deck goes short. `map came back exactly as it went in` is not out of
+    reach of every mutant — only of these four. Every mutant anchor re-audited:
+    72 anchors, none orphaned, none ambiguous. Render suite 2323 -> 2730 checks.
+
+    (Pass 203's entry omitted its sweep number: it was 43 of 73 killed, 68
+    anchors, 0 orphaned.)
