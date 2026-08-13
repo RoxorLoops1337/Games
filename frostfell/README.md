@@ -564,6 +564,26 @@ A defeat draws what actually stopped you — the run remembers the blow that too
 the leader, by name and well enough to draw the thing again. A crossing lays
 out the caravan that made it, every card of it.
 
+## The probe was half particle effects
+
+`npm run check` runs twelve suites and the frostfell probe is most of it. It is
+the tool this project uses every round and it had never been profiled. Forty per
+cent of its samples were `fx.pop` and `fx.burst` — building floating text and
+particle objects, sixty and four hundred at a time, for runs with no screen
+attached — plus the garbage collection all that allocation causes.
+
+They are gated on having a canvas now. Not on a test flag: a browser always has
+one, so this cannot change what a player sees, and the render suite sets one
+before it drives `draw()` so the effects are still exercised where it matters.
+The rules never read those arrays — section 8 of the source says presentation is
+presentation — and there is now a check that proves it, by playing the same seed
+to the same board state with and without something to draw on.
+
+**26.7s → 9.4s at the default sample.** That is what made [a properly sampled
+ablation](#which-parts-of-playing-well-are-worth-anything) affordable in the
+same session, which is the point: the cheaper the instrument, the more often the
+numbers can be settled instead of guessed.
+
 ## Tests
 
 ```
@@ -573,6 +593,27 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 
 The suites run headless against the real functions through `window.FF` — there
 is no second implementation of the rules to drift from.
+
+### The probe was half particle effects
+
+`npm run check` is the tool this project runs every round, and in twenty-two
+rounds nobody had ever profiled it. Forty per cent of its samples were
+`fx.pop` and `fx.burst` — building floating text and particle objects, sixty and
+four hundred at a time, for runs with no screen attached — plus the garbage
+collection all that allocation causes.
+
+They are gated on having a canvas now. The gate is `ctx` rather than a test
+flag, which matters: a browser always has one, so this cannot change what a
+player sees, and the render suite sets one before it drives `draw()` so the
+effects are still exercised where they are real. It is only safe because the
+rules never read those arrays — section 8 says so, and there is now a check that
+proves it by playing the same seed with and without something to draw on and
+comparing the board.
+
+**26.7s → 9.4s at the default sample.** Everything downstream of that got
+cheaper: the habit ablation that used to be unaffordable at a readable sample
+[now runs in about a minute](#which-parts-of-playing-well-are-worth-anything),
+which is the difference between guessing at a ranking and settling one.
 
 ### The ladder
 
@@ -601,14 +642,14 @@ third, and how many crossed:
 
 ```
                     zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓███     7%
-+ the fight         ░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████    17%
-+ the trader        ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓████████████████    33%
-+ steering the pool ░▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████████    34%
+careless            ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓███     6%
++ the fight         ░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓████████    17%
++ the trader        ░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓██████████████    30%
++ steering the pool ▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█████████████████     36%
 ```
 
-**Twenty-seven points for playing well: ten from the fight, sixteen from the
-trader, one from steering the pool.**
+**Thirty points for playing well: eleven from the fight, thirteen from the
+trader, six from steering the pool.**
 
 A round earlier the same ladder read 22 / 34 / 37 with the fight at +15 — the
 biggest rung for the first time, off the back of [making the room rule a
@@ -798,6 +839,49 @@ at two different nodes. What the table is for is the bottom: **a ware at zero is
 now a failing check**, so a dead button cannot sit on that counter for another
 nineteen iterations.
 
+### Building to a measured gap, and what the gap turned out to be
+
+Four rounds had gone by without a new card, so this one built to the clearest
+number on the board: **Soak is six cards in fifty-three**, it is the only answer
+to Aimless, every card that has it is a *unit*, and A Heavy Pack matches items
+only — so a caravan travelling for gear cannot draft the answer at all.
+
+Three things were built for that gap. All three were measured, and all three
+were cut:
+
+| built | measured |
+|---|---|
+| **Braceboard** — gear that hands out Soak for the fight | ceiling **34 → 29** |
+| **Ward Charm** — a charm that hands out Soak for the run | (same run) |
+| **Boilerplate** — a 15-health scrap unit that natively soaks | careless 7 → 11, **the fight rung +15 → +4** |
+
+The first two are the previous round's finding arriving again: *a taunt does not
+prevent damage, it concentrates it.* Handing Soak out as a card is that mistake
+in a form the player cannot decline.
+
+The third is worse and more interesting. A sturdy self-taunting wall makes the
+game markedly easier for a bad player and *harder* for a good one, because it
+does not reward positioning — **it replaces it**. Every question the board asks
+about where a body stands has one answer while that card is on the table, and
+the fight rung — the whole measure of playing the fight well — fell by eleven
+points.
+
+**So Soak stays scarce on purpose**, and the reasoning is written into
+`index.html` beside the pool so the next round does not read the same table and
+build the same card. A gear caravan's answer to a fast thing is to kill it
+quickly, which is what twenty-one items are for. Content that substitutes for
+the geometry is not content.
+
+What shipped is what rewards the geometry instead:
+
+- **Emberward** — a hearth unit with **Vanguard**, the keyword that pays a
+  player for using the front row, and which sat on exactly one card in the whole
+  pool before this.
+- **A Wall of Old Shields** — the sixth event, and the first new one since the
+  fifth. Twenty boards driven into the ice, none of them facing the road: take
+  one, break the line up for scrip, or add a board of your own and the caravan
+  mends whole. It has its own drawn art like the other five.
+
 ### Every card is worth playing — and the table that said otherwise
 
 Three cards sat at the bottom of the usage table for four rounds through two
@@ -884,6 +968,40 @@ works on everything — not power. Mitewing is still a third of the late-zone
 death table, and the honest verdict is that it is a good fight that most decks
 have no answer to, rather than a tax. Putting a taunt in a starting deck is a
 thing to try; it is not a thing to claim.
+
+### Watching the pilot that loses
+
+The careless rung has read 7% for five rounds and nobody had ever watched it
+play. `playthrough.mjs --careless` plays the way that rung plays — leftmost card
+into the leftmost slot, gear at the nearest thing, first option on every screen —
+and writes down every turn of it. The opening of a fight, verbatim:
+
+```
+turn 0: set down Kettlebeak
+turn 1: set down Snowpup
+turn 2: set down Cinderpup
+turn 3: used Ember Flask
+```
+
+**It fills the board by turn three, every fight.** Five bodies and the leader in
+six slots, which under [the room rule](#the-rules-briefly) is cramped: no
+warmth, every turn, for the rest of the fight. It throws gear at whatever is
+nearest whether or not that kills anything. It never reads a scheme.
+
+**Is 7% a fair floor for someone learning?** Yes, and the transcript is what
+settles it: *every mistake it makes is one the guide names out loud.* There is a
+hint for keeping two slots clear, a hint for the red text under a foe, a hint
+for one action a turn, a hint for the front row. The careless pilot is not a
+new player — it is a player who has ignored all nine hints. Seven per cent for
+that is generous.
+
+The one thing worth noting is where the difficulty actually bites. **The room
+rule turned the most natural beginner reflex — play everything you draw — from a
+mild inefficiency into the costliest habit in the game.** That is the rule
+working as designed, and the feedback is not hidden: the line under your own
+side of the board reads `CRAMPED — NO WARMTH` in amber every turn it is true,
+not once in a hint that scrolls away. A player who never reads a word of the
+guide still has that sentence in front of them for the whole fight.
 
 ### Does walking past a fight pay
 
@@ -995,32 +1113,32 @@ tempering flipped +5 to −8 in one round because the temper cap changed
 underneath it. So all of it is run **together, once, against the game as it
 stands**, at 300 runs an arm:
 
+**The suite no longer prints this table unless it can be trusted.** For six
+rounds it was printed every run and read as a podium, and it was never one: at
+the usual sample each row carries ±2.8, so six numbers re-rolled every round
+produce a different order every time — +9 / +8 / +6 / +6 one round, +6 / 0 / 0 /
+−2 / −3 the next, with nothing changed between them. Under a two-point band it
+prints; over one it prints a sentence saying so and how to get the real thing. A
+table the design record says not to trust is worse than no table.
+
+Here is the real thing, at **420 runs an arm, band ±2.0** — affordable now that
+[the probe is three times faster](#the-probe-was-half-particle-effects):
+
 ```
-IN THE FIGHT (±2.8)                    ON THE REWARD SCREEN (±2.6)
-    +6  denying schemes                   +7  declaring a course at all
-     0  keeping a slot in reserve          0  buying a fresh offer
-     0  repositioning (removed)            0  tempering instead of taking
-    -2  holding gear until it earns        0  picking what the deck lacks
-    -3  filling the front of both lanes   -5  walking on when it wants nothing
-     0  calling waves early (removed)
+IN THE FIGHT (±2.0)
+    +7  ████                 denying schemes
+    +1  █                    keeping a slot in reserve
+     0                       holding gear until it earns the turn
+     0                       filling the front of both lanes first
+     0                       repositioning (removed)
+     0                       calling waves early (removed)
 ```
 
-**This table is not a ranking, and pretending otherwise has cost four rounds.**
-A round ago the same six habits at the same sample read +9 / +8 / +6 / +6 with
-nothing between them; nothing was done to any of them in between and they now
-read +6 / 0 / 0 / −2 / −3. Six numbers each carrying ±2.8, re-rolled every
-round, will produce a different podium every time.
-
-The only figures on this page that have survived being asked twice are the ones
-measured **one habit at a time at 750 runs an arm**, where the band is ±1.5:
-
-| | |
-|---|---|
-| keeping a slot in reserve | **+2**, measured twice, two rounds apart |
-| denying schemes | positive in every reading ever taken, magnitude unsettled |
-
-`FF_HABIT=<key>` exists for exactly this. The consolidated table stays because
-it is cheap and it catches signs; it is no longer read for order.
+**One habit in the fight is worth anything, and it is denying schemes.**
+Everything else is inside the band. That is a starker picture than any podium
+the noisy table ever drew, and it is the first version of this table that has
+been asked at a sample it can answer at. Keeping a slot reads +1 here against +2
+on two earlier single-habit runs — consistent, and small.
 
 And the economy: **penniless 30%, as it ships 34%, a bottomless purse 54% —
 money is worth four points.** It had read four when the only things to spend on

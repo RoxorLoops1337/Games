@@ -30,6 +30,10 @@ const TRIBE = arg('tribe', 'frost');
 const COURSE = arg('course', 'frost');
 const OUT = arg('out', '/tmp/ff-play');
 const QUIET = process.argv.indexOf('--quiet') >= 0;
+/* --careless plays the way the probe's bottom rung plays: leftmost card into the
+   leftmost slot, gear at the nearest thing, no reading of schemes and no slot
+   kept back. That rung has read 7% for five rounds and nobody had watched it. */
+const CARELESS = process.argv.indexOf('--careless') >= 0;
 
 function findChromium() {
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
@@ -183,7 +187,8 @@ const tally = { fights: 0, skipped: 0, nodes: 0, brokeAt: 0, earned: 0, spent: 0
         if (b.bell >= FF.bellNeed(G)) { FF.ringBell(G); return 'rang the bell'; }
         FF.passTurn(G);
         return 'passed';
-      });
+      }, CARELESS);
+      if (st.turn <= 4) note(`  turn ${st.turn}: ${acted}`);
       if (st.turn === 1) { await snap('fight-z' + (st.zone + 1)); note(`  fight opens (zone ${st.zone + 1}) — ${acted}`); }
       await page.evaluate(() => window.FF.drainAll());
       await settle(page, 3);

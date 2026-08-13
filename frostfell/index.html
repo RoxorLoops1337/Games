@@ -295,6 +295,35 @@ def({ id: 'warmroot', name: 'Warmroot', type: 'unit', tribe: 'hearth', hp: 14, a
   kw: { soak: 1 }, text: 'Soak. When it triggers, every other warden gains Regen 1.',
   hooks: { trigger: (g, u) => allies(g, u).forEach((a) => { if (a !== u) addStatus(g, a, 'regen', 1); }) } });
 
+/* AND THE THIRD TIME THE SAME LESSON, WHICH IS WHEN IT WENT IN THE FILE.
+
+   Soak is scarce — six cards in fifty-three — and this round set out to fix
+   that, because scarcity of the only answer to the game's most damaging foe
+   looked like a gap. Three things were built for it and all three were cut,
+   each after being measured:
+
+     a gear item that hands out Soak     ceiling 34 → 29
+     a charm that hands out Soak         (same run)
+     a scrap unit that natively soaks    careless 7 → 11, the FIGHT RUNG +15 → +4
+
+   The first two are last round's finding arriving again: a taunt does not
+   prevent damage, it concentrates it. The third is worse and more interesting.
+   A sturdy self-taunting wall makes the game markedly easier for a bad player
+   and slightly harder for a good one, because it does not reward positioning —
+   IT REPLACES IT. Every question the board asks about where a body stands has
+   one answer while that card is on the table.
+
+   So Soak stays scarce, on purpose, and it is written down here so the next
+   round does not read the same table and build the same card. Content that
+   substitutes for the geometry is not content. */
+/* Vanguard — swings twice while it stands in the front column — is the one
+   keyword that pays a player for using the geometry the whole board is built
+   on, and it was on a single card. */
+def({ id: 'emberward', name: 'Emberward', type: 'unit', tribe: 'hearth', hp: 11, atk: 3, cnt: 3, rare: 2,
+  art: A('#e08a4f', '#ffd8b0', { stance:'stand',tail:'stub',mark:'brand',arms:'long', skin:'fur',idle:'paw', shape: 'tall', ears: 'horns', mouth: 'grin', acc: 'staff', accCol: '#c05f2f' }),
+  kw: { vanguard: 1 }, text: 'Vanguard. Its hits leave Ember 1.',
+  hooks: { hit: (g, u, t) => addStatus(g, t, 'ember', 1) } });
+
 def({ id: 'flarehound', name: 'Flarehound', type: 'unit', tribe: 'hearth', hp: 8, atk: 5, cnt: 3, rare: 3,
   art: A('#ff7a2f', '#ffd0a0', { stance:'quad',tail:'brush',mark:'brand', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#a83b12' }),
   kw: { barrage: 1 }, text: 'Barrage. Its hits leave Ember 1.',
@@ -454,6 +483,24 @@ def({ id: 'coldsnap', name: 'Coldsnap', type: 'item', tribe: 'frost', rare: 2, t
   art: { kind: 'burst', col: '#6fd8ff' }, text: 'Frost 1 on every foe.',
   effect: (g) => enemyUnits(g).forEach((u) => addStatus(g, u, 'frost', 1)) });
 
+/* THE HOLE A GEAR CARAVAN COULD NOT DRAFT OUT OF, AND WHY IT STAYS OPEN.
+
+   Soak is the only answer to Aimless, every card that has it is a UNIT, and A
+   Heavy Pack matches items only — so a caravan travelling for gear cannot draft
+   the answer at all. The obvious fix was a piece of gear that hands out Soak,
+   and it was built: Braceboard, one fight's worth of taunt and some shell.
+
+   It measured as a trap, and it should have been predicted. The round before
+   had already found that A TAUNT DOES NOT PREVENT DAMAGE, IT CONCENTRATES IT —
+   pointing the pilot at soakers cost four points of win rate then. Handing out
+   Soak as a card is the same mistake in a form the player cannot decline: with
+   Braceboard and a Soak charm in the pool the ceiling fell from 34 to 29, and
+   taking them back out put it at 33.
+
+   So the gap stays open on purpose, and the answer for a gear caravan is not a
+   taunt. It is to kill the fast thing quickly, which twenty-one items are for.
+   A keyword that is right for a sturdy body and wrong for everything else does
+   not want to be portable. */
 def({ id: 'whetstone', name: 'Whetstone', type: 'item', tribe: null, rare: 1, target: 'ally',
   art: { kind: 'stone', col: '#cfd8e8' }, text: 'Spice 3.',
   effect: (g, t) => addStatus(g, t, 'spice', 3) });
@@ -2981,6 +3028,35 @@ const EVENTS = [
       { label: 'Let it hang', sub: '',
         go: (g) => advance(g) },
     ] },
+  /* A sixth stop, and the first new one since the fifth. It is about the thing
+     this round is about — somebody standing in front — and every option on it
+     is a way of answering Aimless or a reason not to bother. */
+  { id: 'shields', title: 'A WALL OF OLD SHIELDS',
+    text: 'Somebody stood here. Twenty boards driven into the ice in a line, frozen edge to edge, and not one of them facing the road.',
+    opts: [
+      { label: 'Prise a board loose', sub: 'take a Gear Shield',
+        go: (g) => { takeCard(g, 'gearshield'); advance(g); } },
+      { label: 'Break the line up', sub: '45 scrip',
+        go: (g) => { g.run.gold += 45; advance(g); } },
+      { label: 'Add one of your own', sub: 'give a card, mend everyone whole',
+        can: (g) => g.run.deck.length > 3,
+        go: (g) => {
+          const all = g.run.deck.slice();
+          openChooser('WHICH BOARD DO YOU DRIVE IN?', all.map((cd) => ({ card: cd })), (i) => {
+            const j = g.run.deck.findIndex((c) => c.uid === all[i].uid);
+            if (j >= 0) {
+              const gone = g.run.deck.splice(j, 1)[0];
+              g.run.log.push(gone.name + ' was left standing in the line.');
+              fx.toast(gone.name.toUpperCase() + ' STANDS WITH THEM', '#8fa8c8');
+            }
+            g.run.deck.concat([g.run.leader]).forEach((c) => { c.dmg = 0; c.injured = false; });
+            UI.choose = null;
+            sfx('get');
+            advance(g);
+          }, { cancel: 'NEVER MIND', then: () => advance(g),
+               sub: 'the line mends whole — a wall you can spare a board for' });
+        } },
+    ] },
   { id: 'stranger', title: 'SOMEBODY ELSE\'S FIRE',
     text: 'A stranger with frost in her eyebrows, feeding a fire she clearly cannot spare. She looks at your caravan the way a quartermaster looks at a list.',
     opts: [
@@ -3108,17 +3184,31 @@ function deathKind(art) {
   return 'fall';
 }
 
+/* NOTHING TO DRAW ON, NOTHING TO DRAW.
+
+   Profiling the balance probe — the tool this project runs every round, twelve
+   suites and several minutes of it — found that FORTY PER CENT of its samples
+   were fx.pop and fx.burst, plus the garbage collection they cause. Building
+   floating text and particle objects, sixty and four hundred at a time, for a
+   run with no screen attached to it.
+
+   The gate is `ctx`, not a test flag: a browser always has one, so this cannot
+   change what a player sees, and the render suite sets one before it drives
+   draw() so the effects are still exercised where it matters. What it removes
+   is work done for nobody. Rules must never read these arrays — they are
+   presentation, and section 8 says so — which is what makes this safe. */
 const fx = {
   pop(u, text, col) {
-    if (!u) return;
+    if (!u || !ctx) return;
     floats.push({ x: u.px || 0, y: (u.py || 0) - 30, vy: -46, life: 1.0, t: 0, text: String(text), col: col || C.snow, sz: 22 });
     if (floats.length > 60) floats.shift();
   },
   toast(text, col) {
+    if (!ctx) return;
     floats.push({ x: 640, y: 250, vy: -18, life: 1.6, t: 0, text: String(text), col: col || C.gold, sz: 34 });
   },
   burst(u, col, n, kind) {
-    if (!u) return;
+    if (!u || !ctx) return;
     for (let i = 0; i < (n || 10); i++) {
       const a = rnd() * TAU, s = 40 + rnd() * 190;
       parts.push({ x: u.px || 0, y: u.py || 0, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40,
@@ -3149,7 +3239,7 @@ const fx = {
       fx.shake(6);
     }
   },
-  ring(x, y, col, r) { rings.push({ x, y, r0: r || 18, col, life: 0.42, t: 0 }); },
+  ring(x, y, col, r) { if (!ctx) return; rings.push({ x, y, r0: r || 18, col, life: 0.42, t: 0 }); },
   /* A played card does not vanish — it flies to the pile it went to. */
   fly(card, x0, y0) {
     if (!card) return;
@@ -6767,6 +6857,35 @@ function drawEventArt(c, id, x, y, t) {
     inked(c, '#ffd166', 3, C.ink);
     c.beginPath(); c.arc(0, 38, 5, 0, TAU); inked(c, '#c9a24a', 2, C.ink);
     c.restore();
+  } else if (id === 'shields') {
+    /* A line of boards driven into the ice, edge to edge, none of them facing
+       the road — the whole point of the stop is that somebody stood the wrong
+       way round on purpose, so the line reads as a wall seen from behind. */
+    glow('#8fa8c8', 110, 0.16 + Math.sin(t * 1.1) * 0.04);
+    const board = (bx, h, lean, col) => {
+      c.save();
+      c.translate(bx, 46);
+      c.rotate(lean);
+      c.beginPath();
+      c.moveTo(-13, 0); c.lineTo(-11, -h); c.quadraticCurveTo(0, -h - 12, 11, -h);
+      c.lineTo(13, 0); c.closePath();
+      inked(c, col, 2.6, C.ink);
+      // a boss and two rivets, so it reads as a shield rather than a plank
+      c.beginPath(); c.arc(0, -h * 0.55, 5, 0, TAU); inked(c, '#cfd8e8', 2, C.ink);
+      c.beginPath(); c.arc(-6, -h * 0.2, 1.8, 0, TAU); c.fillStyle = C.ink; c.fill();
+      c.beginPath(); c.arc(6, -h * 0.2, 1.8, 0, TAU); c.fill();
+      c.restore();
+    };
+    const cols = ['#6f7f96', '#8a7a62', '#7d8fa8', '#95866c', '#67788f'];
+    for (let i = 0; i < 5; i++) {
+      const bx = -56 + i * 28;
+      board(bx, 62 + ((i * 7) % 13), ((i % 3) - 1) * 0.07, cols[i]);
+    }
+    // snow banked along the foot of the line
+    c.beginPath();
+    c.moveTo(-84, 48); c.quadraticCurveTo(-20, 36, 20, 44);
+    c.quadraticCurveTo(58, 50, 86, 42); c.lineTo(86, 56); c.lineTo(-84, 56); c.closePath();
+    inked(c, '#eaf2ff', 2, C.ink);
   } else {
     // somebody else's fire
     glow('#ff9a3c', 130, 0.3 + Math.sin(t * 3) * 0.07);
