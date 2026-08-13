@@ -137,8 +137,9 @@ section('what you can see is what you can touch');
   ok(hits.some((h) => h.id === 'bell'), 'the bell is touchable');
   ok(hits.some((h) => h.id === 'slot'), 'empty slots are drop targets');
   ok(hits.some((h) => h.id === 'unit'), 'units are touchable');
+  const D = FF.dims();
   for (const h of hits) {
-    ok(h.x >= -40 && h.y >= -40 && h.x + h.w <= FF.VW + 40 && h.y + h.h <= FF.VH + 40,
+    ok(h.x >= -40 && h.y >= -40 && h.x + h.w <= D.VW + 40 && h.y + h.h <= D.VH + 40,
       'hit region ' + h.id + ' sits on the screen');
   }
 
@@ -164,6 +165,42 @@ section('what you can see is what you can touch');
     ok(!!FF.UI.inspect, 'a tap opens the card instead of playing it');
     FF.UI.inspect = null;
   }
+}
+
+/* ------------------------------------------------------------- on a phone -- */
+section('the shape of a phone');
+{
+  // 16:9, 19.5:9 and 20:9 are the three landscape shapes that matter. Every
+  // one of them has to place its furniture inside the safe inset, keep every
+  // touch target thumb-sized, and never push anything off the stage.
+  const shapes = [[1280, 720], [1560, 720], [1600, 720], [2400, 1080], [1024, 768]];
+  for (const [w, h] of shapes) {
+    FF.setStageWidth(w, h);
+    const D = FF.dims();
+    ok(D.VW >= 1180 && D.VW <= 1760, `${w}x${h}: the stage stays inside its bounds (${D.VW})`);
+
+    for (const scr of ['title', 'trail', 'battle', 'shop', 'camp', 'event', 'reward', 'leader', 'collection', 'victory']) {
+      withRun(FF, 'hearth', 3);
+      if (scr === 'battle') FF.enterNode(G, 0);
+      else if (scr === 'shop') G.ui.shop = FF.rollShop(G);
+      else if (scr === 'event') G.ui.event = { def: FF.EVENTS[1] };
+      else if (scr === 'reward') G.ui.reward = FF.rollReward(G, 'boss');
+      else if (scr === 'leader') G.ui.pick = { tribe: 'frost', winters: ['keen'] };
+      G.screen = scr;
+      frame(2);
+      let small = [], off = [], edge = [];
+      for (const hh of FF.hits()) {
+        if (hh.w < 40 || hh.h < 40) small.push(hh.id + ' ' + Math.round(hh.w) + 'x' + Math.round(hh.h));
+        if (hh.x < -2 || hh.x + hh.w > D.VW + 2 || hh.y + hh.h > D.VH + 2) off.push(hh.id);
+        // a notch eats the outer inset in landscape, so nothing tappable lives there
+        if (hh.x + hh.w < 8 || hh.x > D.VW - 8) edge.push(hh.id);
+      }
+      eq(small.join(','), '', `${w}x${h} ${scr}: every touch target is thumb-sized`);
+      eq(off.join(','), '', `${w}x${h} ${scr}: nothing tappable hangs off the stage`);
+      eq(edge.join(','), '', `${w}x${h} ${scr}: nothing tappable hides under a notch`);
+    }
+  }
+  FF.setStageWidth(1280, 720);
 }
 
 /* -------------------------------------------------------- long animation -- */

@@ -598,4 +598,200 @@ section('a zone draws its beast');
   ok(Object.keys(seenTwo).length > 1, 'and different runs meet different beasts');
 }
 
+
+/* ------------------------------------------------- shove, crush, hoard --- */
+section('the newer mechanics');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+
+  // SHOVE: what it hits ends up further back, swapping with whoever was there
+  const pusher = place(FF, 'p', 'shoveler', 0, 0, { unit: { atk: 1 } });
+  const front = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 40, atk: 0 } });
+  const behind = place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 40, atk: 0 } });
+  FF.triggerUnit(G, pusher);
+  eq(front.col, 1, 'a shoved foe ends up a slot further back');
+  eq(behind.col, 0, 'and whoever was there takes its place');
+
+  // a shove at the back of the lane has nowhere to go
+  const stuck = place(FF, 'e', 'snapfrost', 1, 2, { unit: { hp: 40, atk: 0 } });
+  eq(FF.shoveUnit(G, stuck, 1), false, 'nothing is shoved off the back of the table');
+
+  // CRUSH: the tighter the lane, the harder it lands
+  bareBattle(FF);
+  G.battle.units = G.battle.units.filter((u) => u.leader);
+  dummy(FF);
+  const crusher = place(FF, 'p', 'cairn', 0, 0, { unit: { atk: 3 } });
+  const a1 = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 60, atk: 0 } });
+  FF.attackOnce(G, crusher);
+  eq(a1.hp, 57, 'against one foe crush adds nothing');
+  place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 60, atk: 0 } });
+  place(FF, 'e', 'snapfrost', 0, 2, { unit: { hp: 60, atk: 0 } });
+  FF.attackOnce(G, crusher);
+  eq(a1.hp, 50, 'against three it lands for four more');
+
+  // HOARD: a card that waits in hand comes out angrier
+  bareBattle(FF);
+  const b3 = G.battle;
+  dummy(FF);
+  const keep = FF.mkCard('keepsake');
+  b3.hand = [keep];
+  eq(keep.held || 0, 0, 'a fresh card has waited for nothing');
+  FF.passTurn(G); FF.drainAll();
+  FF.passTurn(G); FF.drainAll();
+  eq(keep.held, 2, 'two turns in hand is two points');
+  for (let i = 0; i < 9; i++) { FF.passTurn(G); FF.drainAll(); }
+  eq(keep.held, FF.HOARD_CAP, 'and it stops climbing at the cap');
+  const before = FF.CARDS.keepsake.atk;
+  const u = FF.mkUnit(keep, 'p', 1, 1);
+  eq(u.atk, before + FF.HOARD_CAP, 'what it hoarded is on the board with it');
+  b3.hand = [keep];
+  FF.playCard(G, 0, { lane: 1, col: 1 });
+  eq(keep.held, 0, 'and playing it spends the hoard');
+
+  // gear hoards too
+  const gr = FF.mkCard('grudge');
+  gr.held = 3;
+  bareBattle(FF);
+  G.battle.units = G.battle.units.filter((u2) => u2.leader);
+  dummy(FF);
+  const victim = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 40, atk: 0 } });
+  G.battle.hand = [gr];
+  FF.playCard(G, 0, victim);
+  eq(victim.hp, 34, 'Old Grudge remembers exactly how long it waited');
+}
+
+/* ---------------------------------------------------------- hauling ------ */
+section('hauling a line about');
+{
+  bareBattle(FF);
+  const b = G.battle;
+  b.units = b.units.filter((u) => u.leader);
+  dummy(FF);
+  const f0 = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 40, atk: 0 } });
+  const f2 = place(FF, 'e', 'snapfrost', 0, 2, { unit: { hp: 40, atk: 0 } });
+  b.hand = [FF.mkCard('hookline')];
+  FF.playCard(G, 0, f0);
+  eq(f2.col, 0, 'the hook drags the back of the lane to the front');
+  ok(f0.col > 0, 'and whoever was in front is now behind it');
+
+  // avalanche scales with how many are packed in
+  bareBattle(FF);
+  const b2 = G.battle;
+  b2.units = b2.units.filter((u) => u.leader);
+  dummy(FF);
+  const one = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 60, atk: 0 } });
+  b2.hand = [FF.mkCard('avalanche')];
+  FF.playCard(G, 0, one);
+  eq(one.hp, 57, 'one foe in the lane takes three');
+
+  bareBattle(FF);
+  const b4 = G.battle;
+  b4.units = b4.units.filter((u) => u.leader);
+  dummy(FF);
+  const x1 = place(FF, 'e', 'snapfrost', 0, 0, { unit: { hp: 60, atk: 0 } });
+  const x2 = place(FF, 'e', 'snapfrost', 0, 1, { unit: { hp: 60, atk: 0 } });
+  b4.hand = [FF.mkCard('avalanche')];
+  FF.playCard(G, 0, x1);
+  eq(x1.hp, 55, 'two in the lane and it lands for five');
+  eq(x2.hp, 55, 'on both of them');
+}
+
+/* --------------------------------------------------------- the ladder ---- */
+section('unlocks and winters');
+{
+  const store = {};
+  const FF2 = loadGame(store);
+  const G2 = FF2.G;
+  eq(FF2.found('flarehound'), false, 'the best cards start locked');
+  eq(FF2.found('snowpup'), true, 'the plain ones do not');
+  const pool = FF2.cardPool({ tribe: 'hearth' });
+  eq(pool.some((c) => c.id === 'flarehound'), false, 'and a locked card is never offered');
+
+  FF2.bumpStat('kills', 60);
+  const got = FF2.checkUnlocks(G2);
+  ok(got.some((u) => u.id === 'flarehound'), 'felling sixty foes opens one');
+  eq(FF2.found('flarehound'), true, 'permanently');
+  ok(!!store.ff_meta_v1, 'and it is written down');
+  eq(FF2.checkUnlocks(G2).length, 0, 'an unlock only lands once');
+
+  const FF3 = loadGame(store);
+  FF3.loadMeta();
+  eq(FF3.found('flarehound'), true, 'a reload remembers what was found');
+
+  // every unlock names a counter the game actually keeps
+  const keys = ['kills', 'bestCombo', 'flawless', 'wins', 'zones'];
+  let bad = [];
+  for (const u of FF2.UNLOCKS) {
+    if (keys.indexOf(u.stat) < 0) bad.push(u.id + ':' + u.stat);
+    if (!u.text || u.n <= 0) bad.push(u.id + ':copy');
+    if (!CARDS_HAS(FF2, u)) bad.push(u.id + ':nothing');
+  }
+  eq(bad.join(','), '', 'every unlock is real, earnable and explained');
+
+  // winters cost points and actually bite
+  const plain = FF2.newRun(G2, 'hearth', 11, []);
+  const gapPlain = FF2.waveGap(G2);
+  const hard = FF2.newRun(G2, 'hearth', 11, ['thick', 'keen', 'weary']);
+  eq(hard.winterPts, 1 + 3 + 2, 'the points add up');
+  ok(FF2.waveGap(G2) < gapPlain, 'thick snow brings the waves in sooner');
+  ok(FF2.foeScale(hard) > FF2.foeScale(plain), 'keen beasts hit harder');
+  ok(hard.leader.dmg > 0, 'a weary leader sets out hurt');
+  const shop = FF2.rollShop(G2);
+  FF2.newRun(G2, 'hearth', 11, ['lean']);
+  const dear = FF2.rollShop(G2);
+  ok(dear.heal.price > shop.heal.price, 'a lean purse pays more for the same mending');
+}
+function CARDS_HAS(FF2, u) {
+  if (u.kind === 'tribe') return !!FF2.TRIBES[u.id];
+  if (u.kind === 'charm') return !!FF2.CHARMS[u.id];
+  return !!FF2.CARDS[u.id];
+}
+
+
+/* ---------------------------------------------------------- collection -- */
+section('the collection');
+{
+  const FF2 = loadGame({});
+  const items = FF2.collectionItems();
+  const ids = items.map((i) => i.id);
+  let missing = [];
+  for (const c of Object.values(FF2.CARDS)) if (ids.indexOf(c.id) < 0) missing.push(c.id);
+  for (const id of Object.keys(FF2.CHARMS)) if (ids.indexOf(id) < 0) missing.push(id);
+  eq(missing.join(','), '', 'every card and charm in the game has a place in the collection');
+  eq(ids.length, new Set(ids).size, 'and none of them is listed twice');
+  ok(items.filter((i) => i.kind === 'leader').length >= 4, 'there are four leaders to find');
+
+  // a locked entry states what it wants, in the numbers the game keeps
+  const lockedOnes = items.filter((i) => !FF2.found(i.id));
+  ok(lockedOnes.length > 0, 'a new player has things left to find');
+  for (const it of lockedOnes) {
+    const u = FF2.UNLOCKS.find((x) => x.id === it.id);
+    ok(!!u && !!u.text, it.id + ' says how it is earned');
+  }
+}
+
+/* ------------------------------------------------------ winter memory --- */
+section('the hardest winter carried');
+{
+  const store = {};
+  const FF2 = loadGame(store);
+  const G2 = FF2.G;
+  const run = FF2.newRun(G2, 'frost', 2, ['keen', 'weary']);
+  eq(run.winterPts, 5, 'the winter is priced up front');
+  run.zone = FF2.ZONES.length - 1;
+  run.step = run.trail.length - 1;
+  FF2.advance(G2);
+  eq(G2.screen, 'victory', 'crossing the last zone ends the run');
+  eq(G2.meta.winter.frost, 5, 'and the tribe remembers the winter it carried');
+
+  const easy = FF2.newRun(G2, 'frost', 3, ['lean']);
+  easy.zone = FF2.ZONES.length - 1;
+  easy.step = easy.trail.length - 1;
+  FF2.advance(G2);
+  eq(G2.meta.winter.frost, 5, 'a kinder crossing does not overwrite a harder one');
+}
+
 done('frostfell');
