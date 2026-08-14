@@ -2275,7 +2275,7 @@ function playCard(g, idx, spot) {
     fx.thump(u);
     for (const [k, n] of card.bonusDeploy) addStatus(g, u, k, n);
     if (d.hooks && d.hooks.deploy) d.hooks.deploy(g, u);
-    if (co && co.deploy) co.deploy(g, u);
+    if (co && co.deploy) co.deploy(g, u, co);
   } else {
     sfx('item');
     if (spot && spot.uid) fx.burst(spot, (d.art && d.art.col) || C.snow, 14);
@@ -2292,7 +2292,7 @@ function playCard(g, idx, spot) {
        assertion and not a note. */
     if (!b.freeThisTurn) {
       if (d.freeAction) { free = true; }
-      else if (co && co.freeItem && !b.usedFree) { free = true; b.usedFree = true; fx.toast('OFF THE PACK — FREE', co.col); }
+      else if (co && co.freeItem && (b.usedFree || 0) < (co.freeN || 1)) { free = true; b.usedFree = (b.usedFree || 0) + 1; fx.toast('OFF THE PACK — FREE', co.col); }
       if (free) b.freeThisTurn = true;
     }
   }
@@ -3134,12 +3134,65 @@ const COURSES = [
      It is the tribe that patches things back together, and the game just grew a
      thing to be patched: the scar a warden takes when it falls while already
      hurt. On the Scrap Trail it never does. */
+  /* AND THE MAGNITUDE SWEEP THAT WORKED TWICE DOES NOT WORK HERE, which is the
+     point of running it.
+
+     Hearth's null was an amount and so was Bodies'. Scrap's is not. At 450 runs
+     an arm against 40% for declaring no course at all:
+
+         1 free (shipped)  40%      3 free    39%
+         2 free            40%      ALL free  45%
+
+     Spread 6 on a family-of-4 bar of ±8.9. **Flat.** Making every piece of gear
+     in every fight cost nothing is the most this rule can possibly be worth and
+     it buys five points, 1.4σ — so the amount is not what is wrong with this
+     course and no further rewrite of the amount will fix it.
+
+     What that leaves is the rule's SHAPE, and there is a reading in the fight
+     ablation that fits: the pilot's gear-before-body threshold measured FLAT
+     end to end at 450 runs a bar. If when you spend gear does not matter, a
+     course whose rule is "spend gear sooner" cannot matter either, however much
+     of it you are given. Scrap's free action is a tempo rule on an axis this
+     board does not price. Do not sweep it again; change what it pays in. */
   { id: 'scrap', name: 'THE SCRAP TRAIL', short: 'SCRAP', col: '#c9b28a',
-    text: 'Scrap cards on every table, the first gear you use each fight does not cost the turn, and a warden that goes down comes back patched rather than hurt.',
-    match: (c) => c.tribe === 'scrap', freeItem: true, patched: true },
+    get text() {
+      return 'Scrap cards on every table, the first ' + (this.freeN > 1 ? this.freeN + ' pieces of gear you use each fight do' : 'gear you use each fight does') +
+        ' not cost the turn, and a warden that goes down comes back patched rather than hurt.';
+    },
+    match: (c) => c.tribe === 'scrap', freeItem: true, freeN: 1, patched: true },
+  /* THE TWO MAGNITUDES THAT USED TO BE LITERALS.
+
+     Hearth's five-round null turned out to be magnitude — the rule was right
+     and the amount was too small — and the only reason it took five rounds is
+     that no test could vary the amount without editing the game. A literal `2`
+     inside a closure is a dial nobody can turn. Both remaining courses that sit
+     at the courseless baseline carry their magnitude as a NAMED FIELD now, so a
+     sweep can move it, and the text is generated from the field rather than
+     restating it. Cheaper than a probe knob and it cannot drift out of sync
+     with what the course actually does. */
+  /* AND BODIES HAD A DIAL, WHICH IS THE SECOND ONE THIS METHOD HAS FOUND.
+
+     Swept at 450 runs an arm against 40% for declaring no course at all:
+
+         Shell 2 (shipped)  41%      Shell 6  47%
+         Shell 4            44%      Shell 9  52%
+
+     Spread 11 on a family-of-4 bar of ±8.9 — the dial is REAL, and unlike
+     Hearth's it does not saturate: every two points of Shell buys about three
+     and a half points of win rate straight through the range measured.
+
+     A real monotone dial licenses "the amount matters"; it does not pick a
+     setting, and pretending a measurement chose one would be dressing a design
+     decision as a finding. Shell 6 is the design choice: it puts Bodies at 47%,
+     level with Gear and above Cold, which turns three-courses-piled-on-the-
+     baseline into a field with a spread. Shell 9 measures better and ties
+     Hearth for top, and creating a second favourite is the thing Cold was cut
+     back twice for. */
   { id: 'line', name: 'A FULL LINE', short: 'BODIES', col: '#7de08f',
-    text: 'Wardens on every table, a packed board never costs your line its warmth, and every warden you set down arrives with Shell 2.',
-    match: (c) => c.type === 'unit', crowdproof: true, deploy: (g, u) => addStatus(g, u, 'shell', 2) },
+    shellN: 6,
+    get text() { return 'Wardens on every table, a packed board never costs your line its warmth, and every warden you set down arrives with Shell ' + this.shellN + '.'; },
+    match: (c) => c.type === 'unit', crowdproof: true,
+    deploy: (g, u, co) => addStatus(g, u, 'shell', co.shellN) },
   /* And the two that sat at the bottom get the other half of the levelling. */
   { id: 'pack', name: 'A HEAVY PACK', short: 'GEAR', col: '#c9a6ff',
     text: 'Gear on every table, and every piece of gear you use goes back into the deck instead of the discard.',
@@ -8622,8 +8675,26 @@ function drawEnd(c, t, won) {
     const inRow = Math.min(perRow, cells.length - row * perRow);
     const x = MID - (inRow * cw) / 2 + col * cw + cw / 2;
     const y = statTop + row * chh;
-    txt(c, String(cell[1]), x, y, 24, '#eaf6ff', 'center', 'd');
-    txt(c, cell[0], x, y + 22, 11, '#7e97b8', 'center', 't');
+    /* FIT THE LABEL TO ITS CELL, which it never did.
+    
+       These are drawn at 11 units and the legibility floor lifts them to 23 on
+       a fold's cover display — where "FIGHTS WON" and "FOES FELLED" sit in
+       adjacent 150-unit cells and end up touching, reading as one word. The
+       overlap assertion does not catch it because the headless stub models a
+       glyph's advance as `length * size * 0.5`, which is narrower than the real
+       typeface: by the stub's arithmetic there is a comfortable gap and by
+       Chromium's there is none. An approximate width model is fine for finding
+       gross collisions and cannot adjudicate a gutter.
+    
+       So the layout stops assuming and measures: each label is fitted to its
+       cell less a gutter, and ellipsised if the floor will not let it shrink
+       that far. Same rule as a card's name band — when the box cannot carry a
+       readable string, the string gives. */
+    const gut = cw - 14;
+    const vs = fitText(c, String(cell[1]), gut, 24, 12, 'd');
+    txt(c, String(cell[1]), x, y, vs, '#eaf6ff', 'center', 'd');
+    const ls = fitText(c, cell[0], gut, 11, 8, 't');
+    txt(c, ellipsize(c, cell[0], ls, gut), x, y + 22, ls, '#7e97b8', 'center', 't');
   });
   if (run && run.log.length) {
     /* ABOVE the plate, not four units inside its top edge. At statTop-30 the

@@ -37,13 +37,37 @@ const OUT = arg('out', '/tmp/frostfell-shots');
    desktop Chromium — a game built landscape-first for a thumb, never once
    photographed on anything shaped like a phone or driven by anything shaped
    like a finger. `--phone <name>` uses a real device's landscape viewport,
-   its pixel ratio and touch emulation. */
-const PHONES = {
-  'iphone-se':   { w: 667,  h: 375,  dpr: 2, name: 'iPhone SE, landscape' },
-  'iphone-14':   { w: 844,  h: 390,  dpr: 3, name: 'iPhone 14, landscape' },
-  'pixel-7':     { w: 892,  h: 412,  dpr: 2.6, name: 'Pixel 7, landscape' },
-  'galaxy-fold': { w: 653,  h: 280,  dpr: 3, name: 'Galaxy Fold cover, landscape' },
-};
+   its pixel ratio and touch emulation.
+
+   AND THE LIST IS NOT KEPT HERE ANY MORE. The render suite swept eight shapes
+   while the walk photographed three, so the stub was checking sizes no human
+   had ever seen — which is exactly how a live defect sat on the victory screen
+   at 653x280 until an assertion tripped over it. Both read
+   `tools/frostfell/shapes.mjs` now, and `--all` walks every one of them. */
+const { PHONES, SHAPES } = await import('./shapes.mjs');
+/* `--all` WALKS EVERY SHAPE IN THE LIST, one child process each.
+
+   The walk is one long linear script over module-level W/H/OUT, so looping it
+   in-process would mean threading state through 250 lines of screen-by-screen
+   choreography for no gain. Re-running itself per shape is the same coverage,
+   keeps each walk's page errors attributable to one shape, and cannot leak
+   state between them. Output goes to <out>/<w>x<h>/ so two shapes never
+   overwrite each other — which the single-dir default did, and is why a stale
+   phone shot was read as a fresh one this round. */
+if (process.argv.includes('--all')) {
+  const { spawnSync } = await import('node:child_process');
+  let bad = 0;
+  for (const sh of SHAPES) {
+    const where = join(OUT, sh.w + 'x' + sh.h);
+    const args = [process.argv[1], '--out', where].concat(
+      sh.phone ? ['--phone', sh.phone] : ['--size', sh.w + 'x' + sh.h]);
+    console.log(`\n=== ${sh.name} (${sh.w}x${sh.h})`);
+    const r = spawnSync(process.execPath, args, { stdio: 'inherit' });
+    if (r.status !== 0) { bad++; console.error(`  ! ${sh.name} exited ${r.status}`); }
+  }
+  console.log(`\n${SHAPES.length} shapes walked into ${OUT}${bad ? `, ${bad} FAILED` : ''}`);
+  process.exit(bad ? 1 : 0);
+}
 const PHONE = arg('phone', '');
 const dev = PHONE ? PHONES[PHONE] : null;
 if (PHONE && !dev) { console.error('unknown phone: ' + PHONE + ' — have ' + Object.keys(PHONES).join(', ')); process.exit(1); }
