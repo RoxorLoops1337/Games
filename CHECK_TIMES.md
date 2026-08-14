@@ -1,5 +1,12 @@
 # What `npm run check` costs, and where
 
+> **Run it yourself: `npm run check:times`** — it times every suite and names any
+> that has run away from the rest (over 20x the median suite). `--ci` makes it
+> exit non-zero. The numbers below are one reading from 2026-08-14; the script is
+> the durable half, because a file of timings is stale the day after it is taken
+> and nobody making a suite slow goes looking for it.
+
+
 Measured 2026-08-14 on the CI-sized box (4 cores), each suite timed on its own,
 cold, via `npm run test:<name>`. Total **531.9s — just under nine minutes** across
 39 suites.

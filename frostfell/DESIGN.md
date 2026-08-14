@@ -189,6 +189,110 @@ The honest statement is that steering has never been resolved, and settling it
 needs about **4x this sample** — which is now affordable, since the probe is
 pooled.
 
+### FINDING — the winning hands are the weak ones, and that is the rubber band
+
+`topic: dealt-hands`
+
+Best dealt hand **40%**, worst **26%** — a 14-point spread, the largest effect
+measured in this game, larger than the fight rung and larger than the trader. The
+decks are dealt by seed so nobody chose them, which makes "what do the good ones
+have in common" answerable. Eight hands of six cards, sorted by win rate:
+
+```
+top half vs bottom half
+  bodies    3.5  vs  4.3      ← the better hands have FEWER
+  hp        8.5  vs  9.4      ← and lower
+  atk       1.8  vs  2.9      ← and much lower
+  counter   2.5  vs  2.6        (no difference)
+  keywords  2.5  vs  2.5        (no difference)
+```
+
+**The weak-looking hands win.** Not a card, not a tribe, not a curve, not more
+bodies — the top half is the half with less of everything, and the clearest
+signal is attack: **1.8 against 2.9**, a 60% difference in the wrong direction.
+
+**The cause is `fellAnswer`, and it is doing more than it says it does.** The
+trail scales to what the caravan is carrying — `foeScale` reads the deck and
+raises the fell to meet it, and the comment at that site says the coefficient
+"absorbs about half of a deck advantage, not all of it". The measurement says it
+absorbs all of it and then reverses: starting strong is worth **−12 points**.
+
+**It is not the deep-fell bite.** `DEEP_BITE = 2.0` is the largest coefficient in
+the difficulty function and applies in zone 3, where 68% of deaths happen, so it
+was the obvious suspect. Halved to 1.0 the composition split is **unchanged** —
+bodies 3.5 vs 4.3, atk 1.8 vs 2.9, identical. The ladder read 31 points against
+27, which is inside the ±5.5 band. So the reversal comes from the always-on
+`answer * 0.5` term, not from the deep bite.
+
+**Nothing is shipped for this**, and that is a decision rather than an omission: a
+game where a stronger deck is worth less is either a bug or a genre — this one
+was built on "the fell answers the caravan" and the answer is working, just
+harder than its own comment claims. Turning it down is a design choice about
+whether building a deck should pay, and it wants to be made deliberately rather
+than as a coefficient nudge at the end of a round.
+
+### FINDING — the courses are not indistinguishable; the baseline was
+
+`topic: courses`
+
+For a dozen rounds this table said no course beats another. It was asking the
+wrong comparison. Every course was measured against **declaring nothing** — a
+middling baseline where the gaps are about 4 points against a bar of ±4.9, so
+nothing clears and the honest-looking conclusion is "they are all the same".
+
+Nobody chooses between "cold" and "no course". The leader screen offers five and
+asks which. **Best against worst**, at 840 runs an arm:
+
+```
+cold 46%  ·  hearth 38%      8 points on a difference band of ±2.5  =  3.1σ
+family of two bar   2.24σ    CLEARS
+family of six bar   2.64σ    CLEARS
+```
+
+**Cold is better than hearth and it clears even the six-question bar.** The null
+was an artefact of what it was compared against, and the arm prints both
+comparisons now.
+
+This is the same lesson as the locked-deck arm one entry down, in a smaller
+costume: **the comparison you set up decides what you are able to see**, and a
+baseline chosen for convenience is a choice about the answer.
+
+**And the older half of this entry, which still stands.** The worry the table was
+built for was that a narrow course starves the board — declare for one thing and
+you cannot answer a named wave. It does not: the narrowest pool answers a
+telegraph **77%** of the time against **78%** for declaring nothing, and every
+course stands 3.0–3.4 bodies. A course narrows what you are offered and does not
+narrow what you can field.
+
+### FINDING — the Frostwyrm is the wall of the deep fell, on purpose
+
+`topic: frostwyrm`
+
+One ordinary foe kills **24%** of real runs — a quarter of every death in the
+game, and more than any beast. Its stat line, against the other five tier-3 foes:
+
+| | hp | atk | cnt | keyword |
+|---|---|---|---|---|
+| **Frostwyrm** | **22** | **6** | 5 | **barrage** |
+| Glutton | 20 | 5 | 5 | soak |
+| Rime Knight | 18 | 5 | 4 | longshot |
+| Packmother | 18 | 3 | 4 | crush 2 |
+| Icewarden | 16 | 4 | 3 | soak |
+| Stormcaller | 14 | 3 | 3 | longshot |
+
+**It is the largest body in the ordinary pool on both axes and the only one that
+pairs top attack with Barrage** — six damage to every warden in its lane, so a
+stacked line takes eighteen. Six tier-3 foes and 68% of deaths in zone 3 puts a
+uniform foe at about 11% of all deaths; the Frostwyrm is at **24%, 2.2x its
+share.**
+
+**Not a bug, and the check is that it is legible.** Barrage is announced, the
+lane is visible, and the counter of 5 is the slowest in the tier — it is a thing
+you can see coming and answer by not stacking a lane. A wall that kills twice its
+share while telegraphing how is the shape a last zone is supposed to have. What
+would make it a bug is if it killed at that rate on a counter of 2, or without a
+keyword to read; it does neither.
+
 ### FINDING — the locked-deck arm was measuring the cage
 
 `topic: trail`
@@ -938,35 +1042,6 @@ the file's conclusions were not resting on a broken band. It is worth having
 established with numbers rather than assumed in either direction — and worth
 noticing that denial, the one finding this whole project rests on, clears its
 own bar by four tenths of a point.
-
-### FINDING — courses do not starve the board
-
-`topic: courses`
-
-The front-slot-only telegraph paid a courseless run +8 and every course nothing.
-The suspicion that raised was structural and older than the telegraph: a course
-narrows what you draw, so perhaps it narrows the pool below what the board's
-geometry needs. Measured directly — on every turn a wave has named a lane,
-whether that lane is held, and whether the pilot *could* hold it (a creature in
-hand and a free slot in the lane). 450 runs an arm, about 6,000 live telegraphs
-each:
-
-```
-              held   could   bodies standing
-bodies         84%     96%        3.4
-scrap          84%     93%        3.4
-hearth         82%     94%        3.2
-cold           82%     94%        3.2
-no course      78%     92%        3.0
-gear           76%     91%        2.9
-```
-
-**Declaring nothing is second-worst.** Every course answers a named wave more
-than nine times in ten and the two that lean on bodies answer *more* often than
-an open pool, so a supply explanation for the +8 is dead. The +8 was real at 2.4σ
-and now has no explanation, which is where it is left: the version that produced
-it does not ship, and inventing a second story for a number measured on rejected
-code is the move this round spent its time undoing.
 
 ### FINDING — the quiet road
 
