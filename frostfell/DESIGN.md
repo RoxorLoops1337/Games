@@ -88,51 +88,6 @@ Everything below came out of the probe or the shot walk and is kept because it
 changes what you would do next. Dead ends are named as such, so nobody drives
 down one twice.
 
-### FINDING — which entries the unlock bug actually reached, counted rather than waved at
-
-`topic: unlock-audit`
-
-Last round found that unlocks accumulated across runs, so early arms played a
-smaller card pool than late ones, and one table got "not comparable" written next
-to it. There are **38** entries. The right question is which of them the bug could
-physically reach, and that is not a judgement call — it is a curve.
-
-Reconstructing the pre-fix behaviour (clear `G.meta.found`, then play the
-careless arm and watch it refill):
-
-```
-after   1 careless run  :  3/12 unlocked
-after   4 runs          :  6/12
-after  16 runs          :  8/12
-after  79 runs          :  9/12
-after 128 runs          : 12/12   ← saturated, and it never moves again
-```
-
-**The pool stops changing after 128 runs of one process.** Every section of the
-probe runs in file order, and the ladder is the first: at `FF_RUNS=70` it plays
-840 runs before section two begins, at the default `FF_RUNS=30` it plays 360. So
-**every arm outside the ladder started at run 361 or later and was measured on a
-fully saturated pool.**
-
-**1 of 38 entries was affected, and it is the ladder** — already rewritten, and
-re-measured on the fixed footing. The reach of the bug *inside* the ladder is
-also exact: at `FF_RUNS=70` runs 1–128 of the careless arm's 210 (61% of it) and
-nothing else; at `FF_RUNS=30` the whole careless arm plus the first 38 runs of
-the fight arm. That is why the careless rung moved most when it was fixed (7% →
-10%) and the trader and steering rungs barely moved at all.
-
-One entry still **cites** ladder rungs rather than measuring its own
-([the fight is one decision](#finding--the-fight-is-one-decision-and-some-decoration)).
-It survives: it is about effects of 13–18 points against a rung the fix moved by
-1–2. A second one — "the trader's rung never fell" — has been **cut**, because
-the whole argument it was having turned out to be inside the rung's own band.
-
-**The generalisable part is the shape of the check, not the answer.** A bug in
-accumulated state has a reach that can be measured — how many runs until it stops
-mattering — and once you have that number, "which findings are affected" is
-arithmetic over the section order rather than a re-run of everything. Re-running
-all 38 would have cost hours and found one.
-
 ### FINDING — where a run is actually decided, and it is not the deck
 
 `topic: variance`
@@ -258,6 +213,31 @@ and with holding gear being the only non-denial habit to price above zero — bu
 consistency is not a mechanism, and the mechanism is untested. Two guesses have
 now died here; the third will be a measurement or it will not be written down.
 
+**THE THIRD ATTEMPT WAS A MEASUREMENT, AS PROMISED, AND IT LANDS.** The pilot's
+plays are recorded per run now, so the question "do gear-heavy hands do something
+different with a turn" has an answer rather than a story:
+
+```
+per RUN   (confounded — winners live longer)   gear 67.7 vs 57.8 · wardens 62.2 vs 61.8 · turns 168 vs 157
+per TURN  (the one that answers it)            gear 0.403 vs 0.368 · wardens 0.371 vs 0.394
+```
+
+**It is a substitution, not more activity.** Total actions a turn are 0.774
+against 0.762 — the same. The winning hands spend **more of their turns on gear
+and fewer on bodies**: 9.5% more gear plays per turn, 6% fewer deployments.
+
+The per-run figure is shown next to it deliberately, because on its own it says
+"winners play 17% more gear" and that is mostly just winners living 11 turns
+longer. Two explanations died here on guesses; this one is a count, and the
+confound it could have hidden behind is printed rather than quietly divided out.
+
+**What it is not:** proof of cause. These decks differ in composition by
+construction, so "they play more gear" partly restates "they were dealt more
+gear". It is a description of how the winning hands are played, and it is
+consistent with the two largest things in the file — the trader rung is +19 and
+gear is most of what money buys, and holding gear is the only habit besides
+denial ever to price above zero.
+
 ### FINDING — Cold wins because it is the only course that takes a turn
 
 `topic: course-why`
@@ -312,6 +292,35 @@ is worth what a resource is worth: nothing.** The currency was never the whole
 story; the timing is. The next attempt at this course moves *when* its rule fires,
 not what it pays in — and reverted rather than shipped, on the standing rule that
 a mechanic measuring zero is not free.
+
+**AND THE TIMING THEORY IS DEAD TOO. Five rewrites, five zeros.** The last round
+concluded it was not the currency but the timing — Cold's Frost lands on turn one
+and everything Hearth tries lands late. Clean test: take Hearth's existing save
+and move it to the START of the fight, same currency, different moment (the first
+warden deployed each fight arrives with Shell 6, a pre-paid save). At 840 an arm:
+
+```
+hearth, save at the moment of death   38%
+hearth, save moved to turn one        38%      ← fifth rewrite, fifth zero
+cold                                  46%
+```
+
+The full record on this one course:
+
+| what Hearth was given | result |
+|---|---|
+| Spice 2 on deploy | nothing |
+| Spice kept up turn after turn | nothing |
+| a body saved, at the moment of death | nothing |
+| a foe's turn taken, at the moment of death | nothing |
+| a body saved, moved to turn one | nothing |
+
+**Neither the currency nor the timing explains it.** What is left is the shape
+nobody has tried: every Hearth rule is bounded to ONCE A FIGHT, and Cold's Frost
+lands on **the whole front of the first wave** — several foes, scaling with the
+wave, every fight. The surviving hypothesis is magnitude, and it is stated
+without a test attached because five have now been spent on this course and the
+sixth wants to be worth it.
 
 ### FINDING — the courses are not indistinguishable; the baseline was
 
@@ -529,6 +538,33 @@ documentation.** Three live questions each have a named next measurement:
 finding is worth having when it changes what a number means — the unlock bug
 changed every ladder in the file. It is not worth having when it only changes how
 fast the number arrives. Five rounds is enough time in the workshop.
+
+**THE RULE APPLIED BACKWARDS, which is the point of writing one.** Every method
+entry was re-read against it — did this change what a number MEANS, or only how
+fast it arrived?
+
+| entry | verdict |
+|---|---|
+| the unlock bug | **means** — invalidated every ladder in the file |
+| the ladder's own band | **means** — every single-point claim, retired |
+| points vs odds (scale) | **means** — one table's conclusion reversed |
+| a band is measured, not derived | **means** — every band quoted here |
+| an arm can only license what it can see | **means** — a card change reverted |
+| the deck share was mine | **means** — 4.8% became 1.6% |
+| nulls the ladder cannot support | **means** — three of them then settled |
+| read state, don't intercept calls | **means** — three wrappers measured nothing |
+| the instrument's limits | **means** — it can price a teaching change after all |
+| contrast, and the sweep rule | **means** — both found defects nobody could see |
+| **the probe is 22% faster** | **SPEED ONLY — cut** |
+
+**One of thirteen was speed.** The parallelism entry recorded a real 82s → 64s and
+changed no number's meaning; the bug that work turned up is kept (it invalidated
+every ladder) and the speed is not. The audit entry folded into it, because two
+entries about one bug is what rule 2 exists to stop.
+
+That is a better ratio than the flow suggested — the method work has mostly been
+worth it. What the flow says instead is that **five rounds of it in a row is too
+many**, whatever each one was worth on its own.
 
 ### FINDING — the ladder, and which of its numbers is the one being defended
 
@@ -792,6 +828,29 @@ the source settles without a run: the purse arm has always used `mode: 'careful'
 — real runs, drafting and shopping — and the lesson arm's careless pilot *is* its
 subject rather than its cage, since the question is what a beginner gains from
 being told.
+
+**AND "DRIFT" WAS THE WRONG WORD — it moved in two steps and the arms file says
+exactly when.** Every turned-up reading is stamped, so the set's history is a
+lookup rather than a guess:
+
+```
+iter 33   19 points, denial +7
+iter 34   17
+iter 35   17
+iter 36   14        ← Frostmite promoted common → rare
+iter 37   12, denial +15   ← five aura cards added, the promotion reverted
+```
+
+**Both steps are card-pool changes, not instrument changes.** And the second one
+is the interesting half: denial alone became worth **more than the whole set**
+(+15 against 12), which is the signature of habits that stopped adding and
+started substituting.
+
+**Why nobody noticed a five-point move:** the ablation's per-habit table refuses
+to print at the default sample — its band is ±3.0 and a ranking inside its own
+band is noise, which is correct — but the SET total is printed every run and is
+simply not something anybody was reading. The number was never hidden. It was
+never looked at.
 
 ### RULE — the scale matters across baselines, not against one
 
@@ -1411,74 +1470,6 @@ alters, then say where in the arm that thing appears.** If the honest answer is
 "it doesn't", the arm is silent on the change however loud the number is.
 
 
-### FINDING — where the probe's minute goes, measured after guessing wrong three times
-
-`topic: parallelism`
-
-**`FF_TIME=1` prints a per-section table, and it should have existed three rounds
-ago.** "Where does the time go" was reasoned about three times and answered wrong
-three times — once blaming three sweeps that are switched off by default. The
-measurement took ten minutes to build and settled it immediately:
-
-```
-before pooling            after
-  23.8s  playing well      15.3s
-  21.3s  money             12.6s
-  12.4s  reward screen      7.9s
-   5.1s  the ladder         4.9s   (pooled the round before)
-  ---------------------------------
-  82s total                64s total
-```
-
-**The three slowest sections were 70% of the probe and none of them was pooled.**
-They are pooled now: fourteen arms of the fight ablation go out in one call, the
-money section's three, the reward screen's seven, the courses' six. The whole
-probe is **22% faster** and inline-vs-pooled output stays byte-identical, which is
-the standing check.
-
-What made the ablations poolable is **per-job config**: each arm sets a SKILL or
-DRAFT flag before it plays, and the flag travels *with* the job rather than being
-toggled globally. Without that, batching them is impossible and the alternative —
-draining the pool once per arm — is slower than not pooling.
-
-**AND FROSTFELL IS NO LONGER THE OUTLIER, SO THIS STOPS HERE.** `npm run check`
-timed per suite, 39 of them:
-
-```
-247.8s  blacksite     ← 46% of the whole check
- 89.8s  crashmas
- 54.0s  frostfell     ← 10%, third
- 48.9s  ironbridge
- 33.2s  dungeon
---------
-531.9s  total
-```
-
-blacksite alone is **4.6x** frostfell. Frostfell was the slowest thing in the
-check when the pooling work started and it is now a tenth of it, so further
-optimisation here is misplaced effort — and the other suites are not this
-project's to touch. **The optimisation is done.**
-
-**The parallelism itself, and its ceiling.** The pilot lives in
-`tests/frostfell_pilot.mjs`, tweaks are serialisable descriptors, and workers are
-reused. Measured on one arm, wall clock including startup:
-
-```
-FF_JOBS=1   9.1s      FF_JOBS=3   5.7s
-FF_JOBS=2   5.3s      FF_JOBS=4   7.0s
-```
-
-It peaks at half the cores; `JOBS` defaults from that table. An earlier estimate
-of 2.6x came from timing three separate probe *processes*, which measures how the
-OS interleaves three programs.
-
-**The rule for whether two arms may share a pool call** is not whether they read
-pilot state — that is solved, the counters come home — but **whether anything
-mutates that state between them.** The duck arm's `seek` and `dodge` share a call;
-`sore` gets its own, because three `DUCKS` counters are zeroed between them and a
-batched call would absorb all three arms' forks before the reset could run. A
-reset between arms is a barrier.
-
 ### FINDING — the bug the pooling work actually found
 
 `topic: unlock-bug`
@@ -1511,4 +1502,21 @@ forks the duck arm counted, and concatenated `ROOM.free` — a histogram — int
 caught by diffing the whole probe's output inline against pooled, which is now the
 standing check: `FF_JOBS=1` and the default must produce **byte-identical output**,
 and they do at `FF_RUNS=70`.
+
+**AND ITS REACH IS A CURVE, WHICH IS WHY THE AUDIT WAS ARITHMETIC RATHER THAN A
+RE-RUN.** Reconstructing the pre-fix behaviour — clear `G.meta.found`, play the
+careless arm, watch it refill:
+
+```
+after   1 run :  3/12 unlocked        after  79 runs :  9/12
+after   4 runs:  6/12                 after 128 runs : 12/12  ← and never moves again
+after  16 runs:  8/12
+```
+
+**The pool stops changing after 128 runs of one process.** Sections run in file
+order and the ladder is first — 840 runs at `FF_RUNS=70` — so every arm outside
+the ladder started at run 361 or later, on a saturated pool. **1 of 38 entries was
+affected.** Re-running all 38 would have cost hours and found one. A bug in
+accumulated state has a measurable reach, and once you have that number, "which
+findings are affected" is arithmetic over the section order.
 

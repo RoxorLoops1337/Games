@@ -43,8 +43,14 @@ const realPlay = FF.playCard;
 FF.playCard = function (g, idx, spot) {
   const card = g.battle && g.battle.hand[idx];
   const def = card && card.def;
+  const kind = card && card.type;
   const okPlay = realPlay(g, idx, spot);
   if (okPlay && def) PLAYED[def] = (PLAYED[def] || 0) + 1;
+  /* PER RUN as well, because the question "why do gear-heavy hands win" cannot
+     be answered by a global tally — it needs the count attributed to the run
+     that produced it. Two explanations for that 14-point spread have already
+     died on guesses; this one is a count. */
+  if (okPlay) { if (kind === 'item') RUNGEAR.items++; else RUNGEAR.units++; }
   return okPlay;
 };
 const realTake = FF.takeCard;
@@ -450,6 +456,9 @@ function carefulTurn() {
        produced it, and one running mean is the whole cost. */
     RUNROOM.turns++; RUNROOM.free += free;
     if (FF.hasRoom(G, 'p')) RUNROOM.warm++;
+    // and whether there was anything to DO with the turn other than deploy
+    RUNGEAR.turns++;
+    if (G.battle && G.battle.hand.some((c) => c.type === 'item')) RUNGEAR.held++;
     /* AND THE OTHER SIDE OF THE TABLE, which the first cut of this forgot to
        look at. The room rule is symmetric — it has always applied to the foes
        too — so moving the bar from one gap to two changes the fight for
@@ -843,6 +852,7 @@ const MEND = { on: false, by: {}, hurt: 0, last: null, where: 'start' };
    it is deliberately NOT one of the merged COUNTERS, because it is per-run
    state rather than an accumulating total. */
 const RUNROOM = { turns: 0, free: 0, warm: 0 };
+const RUNGEAR = { items: 0, units: 0, turns: 0, held: 0 };
 const wounds = () => (G.run ? G.run.deck.concat([G.run.leader])
   .filter((c) => c.type === 'unit').reduce((n, c) => n + (c.dmg || 0), 0) : 0);
 
@@ -878,6 +888,7 @@ function playRun(tribe, seed, mode, tweak) {
   applyTweak(G.run, tweak);
   MEND.last = null; MEND.where = 'start';
   RUNROOM.turns = 0; RUNROOM.free = 0; RUNROOM.warm = 0;
+  RUNGEAR.items = 0; RUNGEAR.units = 0; RUNGEAR.turns = 0; RUNGEAR.held = 0;
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
   let lastShop = null;
   let guard = 0;
@@ -1233,6 +1244,9 @@ function playRun(tribe, seed, mode, tweak) {
   stat.guard = guard;
   stat.freeAvg = RUNROOM.turns ? RUNROOM.free / RUNROOM.turns : 0;
   stat.warmShare = RUNROOM.turns ? RUNROOM.warm / RUNROOM.turns : 0;
+  stat.gearPlayed = RUNGEAR.items;
+  stat.unitsPlayed = RUNGEAR.units;
+  stat.gearHeldShare = RUNGEAR.turns ? RUNGEAR.held / RUNGEAR.turns : 0;
   return stat;
 }
 
