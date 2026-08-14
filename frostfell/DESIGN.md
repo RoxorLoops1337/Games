@@ -212,6 +212,78 @@ mechanism rather than a number: it is the second telegraph, it is shaped like th
 first, and neither of the things that sank the earlier cuts — a stronger fell, a
 punished specialist — survived into the shipped one.
 
+### FINDING — no card in the game is load-bearing
+
+Fifty-eight cards had been priced by one table — *every card is played* — which
+is a statement about the POOL and has never said anything about a card.
+`FF_CARDS` takes one out of the offer and plays whole trails without it, all 57
+draftable cards, 630 runs an arm:
+
+```
+baseline                                        40%
+±2.1 on a removal · family bar 3.33σ = ±6.9
+the run misses most:  snowbomb −5.7 · hookline −3.8 · patchkit −3.0
+does best without:    flarehound +5.1 · bellowsbear +4.6 · bellhammer +4.4
+```
+
+**Nothing clears, either way. 44 of 57 sit inside a single standard deviation of
+the baseline.**
+
+The bar is the interesting part. At a naive 2σ (±4.2) this table has **five
+"findings"** — snowbomb and hookline as load-bearing, flarehound, bellowsbear
+and bellhammer as liabilities — and that is precisely what a 5% error rate
+produces when you run it 57 times. The bar here is the FAMILY one: Bonferroni,
+3.33σ, the per-test threshold that keeps the chance of *any* false positive at
+5% across the whole table. Nothing survives it.
+
+So the deck is a pool and not a puzzle with a key. No card is a trap and none is
+a must-take, which is the healthiest thing a 57-card pool can be — and it is now
+measured rather than asserted from "every card is played".
+
+One limit, stated rather than discovered later: a card removed from the OFFER can
+still arrive in a starting deck, so this prices **draftability**. A card that
+only ever comes free with a leader reads as zero here whatever it is worth.
+
+### FINDING — denial, settled
+
+Every conclusion in this file rests on one number and last round it cleared its
+own bar by **four tenths of a point** — +7 against a 2σ of 6.6 at 180 runs an
+arm. That is not a foundation, it is a coincidence waiting to be re-rolled, and
+it was written down as an aside.
+
+Run alone and deep (`FF_HABIT=deny FF_ABLATE=250`, **750 runs an arm**):
+
+```
+knowing nothing                8%
+denying schemes and nothing else   18%     +10 of the 16 the whole set is worth
+band ±1.6 · 2σ = ±3.2 · the reading is 6.3σ
+```
+
+**It survives, with 6.8 points of daylight instead of 0.4.** The next best habit
+at the same depth is holding gear at +2, inside the band. Six rounds of building
+on denial were building on something real; the four tenths were a small-sample
+artefact of the arm, not a property of the finding.
+
+### RULE — what a beginner should meet, and whether they do
+
+The careless floor drifted **5% → 9% across three rounds** and nobody decided
+that: it moved while other things were being changed. A floor is a design
+choice, so here is the choice, stated in the numbers that describe an
+EXPERIENCE rather than an outcome:
+
+| | target | now |
+|---|---|---|
+| sees the second zone | ≥ 75% — the game has to show what it is | **81%** (170/210) |
+| sees the third | 15–35% — often enough to be a place, rare enough to be a prize | **25%** (52/210) |
+| crosses | under 12% — a crossing is earned, not stumbled into | **9%** |
+
+**At target on all three.** And the drift is smaller than the win rate made it
+look: at the 5% floor a careless run saw the second zone 163 times in 210 and
+the third 50 times; at 9% it is 170 and 52. **A beginner's run goes exactly as
+far as it used to** — 3% further into the second zone, 1% into the third — and
+simply finishes the last one slightly more often. The four points of win rate
+are the tail of the distribution moving, not the shape of it.
+
 ### FINDING — the telegraph is feedback, not a decision
 
 `FF_NOWAVE` said the wave telegraph is worth about nothing: floor +1, fight +1,
@@ -468,15 +540,15 @@ independent arms and the arms share seeds; see
 
 ### RULE — what a good card looks like
 
-Written down before the cards were, after two rounds of building cards, measuring
-them and cutting five of six. In full above `const CARDS`; in short, **a good
-card makes the player choose between two things they want, on the board,
-differently each turn.** Four tests: it asks a question answered differently on
-different turns, the question is asked on the board, it costs something the
-player wanted, and it does not answer a question the board already asks. If you
-cannot say what it costs, it is not finished. The round that wrote it built three
-cards against it and all three shipped — the first content round in three that
-did not cut most of what it made.
+Written down before the cards were, after 2 rounds of building cards, measuring
+them and cutting **5 of 6**. In full above `const CARDS`; in short, **a good card
+makes the player choose between two things they want, on the board, differently
+each turn.** Four tests: it asks a question answered differently on different
+turns, the question is asked on the board, it costs something the player wanted,
+and it does not answer a question the board already asks. If you cannot say what
+it costs, it is not finished. The round that wrote it built **3 cards against it
+and shipped 3** — the first content round in 3 that did not cut most of what it
+made.
 
 ### FINDING — schemes are most of what the fight is worth
 
@@ -544,6 +616,45 @@ scrap. The rule was: Regen is a **threshold good**. Healing that does not outrun
 the incoming does nothing at all, and healing that does outrun it makes the
 warden unkillable — there is no middle, so every tuning pass either did nothing
 or broke it. A fact about the game's damage, not about Hearth.
+
+### FINDING — six screens nobody had opened, and what was wrong with them
+
+The shot walk takes 35 screens and about 6 of them had ever been looked at. Six
+more, at 2400x1080. Every one had something a person would notice and no suite
+could:
+
+- **The statuses help page drew the letter "N" in all 10 pips.** Every status
+  has carried an `icon` field since the first week and *nothing had ever read
+  it* — the board draws the value in the pip, which is right mid-fight, so the
+  one screen whose job is teaching you what a Frost is showed ten identical
+  N's. It has 10 marks now: a flake, a flame, a shield, a spark, a chevron down
+  and up, an hourglass, a cross, a spiked ring, a coin.
+- **The shrine's snow cap was painted over its own blurb** — the art was pinned
+  at a constant y and drawn AFTER the text, so a 2-line blurb ran into a stone
+  that reaches 62 units above its centre. The art is placed off the bottom of
+  the text now and drawn first, so the words win whatever happens.
+- **The help page let the game read through it.** A `.92` scrim over a lit
+  leader screen still showed CHOOSE A LEADER and three tribe names behind the
+  status list. `.97`.
+- **The boss is drawn at exactly the size of an ordinary foe.** The Hollow King
+  has 82 health beside a Chillfang's 12 and occupies the same slab, with the
+  same frame, at the same scale. Nothing on the board says a beast is a beast.
+  *Not fixed — it is a slab-layout change, not a paint job.*
+- **The rest stop promises a fire and a stone and draws neither.** Its subtitle
+  is *somebody left the fire banked and a note under a stone*; the screen is 3
+  buttons on empty snow, and on a 20:9 stage they sit in the middle third with
+  the bottom half empty. The camp got logs and a fire-glow 2 rounds ago; this
+  screen got nothing. *Not fixed.*
+- **The victory screen is beige.** A rotating starburst of dusty pink and khaki
+  wedges over hard-edged grey polygons, in a game that is blue everywhere else,
+  with 10 cards squeezed to ~95 units each so none of their text is readable,
+  and a stat row reporting `0 in one · 0 clean kills` on a *win*. *Not fixed.*
+
+Two smaller ones: the ORDER overlay hangs its resolution numbers half outside
+the left edge of each slab, in circles the same size and colour as the counter
+badge — a slab in ORDER shows 3 numbers in near-identical pips. And the
+collection's last row of 7 tiles is left-aligned under 4 rows of 16, which reads
+as unfinished.
 
 ### FINDING — the shot walk is still the only thing that sees
 

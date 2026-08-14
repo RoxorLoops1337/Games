@@ -743,6 +743,16 @@ function settleChoosers() {
    suite in 24 seconds — 3.75x the sample in LESS wall time than the old suite
    took at ±9.7. It is still not enough to settle a habit, which is what
    FF_ABLATE is for; it is enough that a gate which fails means something. */
+/* An error function, because the card arm needs a normal tail to work out what
+   a family-wise bar actually is and Math does not carry one. Abramowitz &
+   Stegun 7.1.26 — five figures, which is four more than a threshold needs. */
+function erf(x) {
+  const sgn = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return sgn * y;
+}
 const DEFAULT_N = 30;
 const NO_SCARS = !!process.env.FF_NOSCARS;
 function stripScars(run) {
@@ -782,6 +792,7 @@ const STANDING = [
   ['FF_PAIR=holdGear+keepSlot', 'and the one pair worth settling, four times as deep'],
   ['FF_NOWAVE=1', 'the ladder with the wave telegraph off, same build, same seeds'],
   ['FF_NOSCARS=1', 'the ladder with the scar rule switched off'],
+  ['FF_CARDS=40', 'every card priced by taking it out of the offer'],
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
 ];
 /* FF_HABIT and FF_CONTRAST are deliberately NOT here, and that is the answer to
@@ -1722,6 +1733,93 @@ section('does walking past a fight pay');
 }
 
 /* -------------------------------------------------- what the fight is for -- */
+/* ------------------------------------------------- what a card is worth -- */
+section('which cards the win rate would miss');
+{
+  /* FIFTY-EIGHT CARDS, PRICED ONLY BY "EVERY CARD IS PLAYED".
+
+     That table is about the POOL — it says the offer is not dead weight — and it
+     has never said anything about a card. This one does: take one card out of
+     the offer, play whole trails without it, and see what the win rate does. It
+     is the biggest untouched surface in the game and the probe has been audited
+     three rounds running instead of pointed at it.
+
+     TWO THINGS MAKE THIS HARDER THAN IT LOOKS, and both are handled rather than
+     hoped past.
+
+     The first is MULTIPLICITY. Fifty-eight comparisons at a two-sigma bar will
+     throw up two or three "findings" from noise alone — that is what a 5% error
+     rate MEANS when you run it fifty-eight times. So the bar here is the family
+     one: Bonferroni, the per-test threshold that keeps the chance of ANY false
+     positive at the same 5%. It is a much higher bar and it is the honest one.
+
+     The second is that a card removed from the OFFER may still arrive in a
+     starting deck, which dilutes its removal. The arm is about draftability and
+     says so; a card that only ever comes free with a leader will read as zero
+     here whatever it is worth. */
+  const KN = Number(process.env.FF_CARDS || 0);
+  if (KN) {
+    const tribes = ['hearth', 'frost', 'scrap'];
+    const sweepK = () => {
+      let wins = 0, runs = 0;
+      for (const tribe of tribes) {
+        for (let i = 0; i < KN; i++) {
+          const st = playRun(tribe, 1000 + i * 37, 'careful'); runs++; if (st.won) wins++;
+        }
+      }
+      return (wins / Math.max(1, runs)) * 100;
+    };
+    const ids = Object.values(FF.CARDS)
+      .filter((c) => !c.leader && !c.noPool).map((c) => c.id).sort();
+    const n = tribes.length * KN;
+    FF.POOL_BAN.clear();
+    const base = sweepK();
+    const rows = [];
+    for (const id of ids) {
+      FF.POOL_BAN.clear(); FF.POOL_BAN.add(id);
+      rows.push({ id, pct: sweepK() });
+    }
+    FF.POOL_BAN.clear();
+    const band = BAND.gap(0.35, n);
+    /* Bonferroni: the two-sided per-test z that holds the FAMILY error at 5%
+       across every card tested. At fifty-eight cards that is about 3.0 sigma
+       rather than 2.0, which is the price of asking fifty-eight questions. */
+    const z = (() => {
+      const pf = 0.05 / (2 * Math.max(1, ids.length));
+      // Beasley-Springer-Moro is overkill; a bisection on the normal tail is not
+      let lo = 0, hi = 6;
+      const tail = (x) => 0.5 * (1 - erf(x / Math.SQRT2));
+      for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (tail(mid) > pf) lo = mid; else hi = mid; }
+      return (lo + hi) / 2;
+    })();
+    rows.sort((a2, b2) => a2.pct - b2.pct);
+    console.log(`    ${n} runs an arm, ${ids.length} cards, baseline ${base.toFixed(0)}%`);
+    console.log(`    (±${band.toFixed(1)} on a removal; the family bar for ${ids.length} tests is ` +
+      `${z.toFixed(2)}σ = ±${(z * band).toFixed(1)}, not 2σ = ±${(2 * band).toFixed(1)})`);
+    const missed = rows.filter((r) => base - r.pct >= z * band);
+    const spare = rows.filter((r) => r.pct - base >= z * band);
+    const show = (r) => `${r.id.padEnd(14)}${String(r.pct.toFixed(0) + '%').padStart(5)}  ` +
+      `${(r.pct - base >= 0 ? '+' : '') + (r.pct - base).toFixed(1)}`;
+    console.log('    the five the run misses most when it cannot be drafted:');
+    for (const r of rows.slice(0, 5)) console.log('      ' + show(r));
+    console.log('    and the five it does best without:');
+    for (const r of rows.slice(-5).reverse()) console.log('      ' + show(r));
+    console.log(`    → ${missed.length} card${missed.length === 1 ? '' : 's'} clear the family bar as LOAD-BEARING` +
+      (missed.length ? ': ' + missed.map((r) => r.id).join(', ') : '') +
+      `; ${spare.length} clear it as a LIABILITY` + (spare.length ? ': ' + spare.map((r) => r.id).join(', ') : ''));
+    const inside = rows.filter((r) => Math.abs(r.pct - base) < band).length;
+    console.log(`    ${inside} of ${ids.length} sit inside a single standard deviation of the baseline`);
+    ARMS.stamp('FF_CARDS=40', missed.length || spare.length
+      ? `${missed.length} load-bearing, ${spare.length} liability at the ${z.toFixed(2)}σ family bar`
+      : `no card of ${ids.length} clears the ${z.toFixed(2)}σ family bar either way; ` +
+        `widest miss ${rows[0].id} ${(rows[0].pct - base).toFixed(1)}`, n);
+    ok(rows.length === ids.length, 'every card in the pool was priced');
+  } else {
+    console.log('    (FF_CARDS=40 prices every card by taking it out of the offer)');
+    ok(true, 'the card arm is an arm, not a gate');
+  }
+}
+
 /* --------------------------------------------- is a neutral mechanic kept -- */
 section('what the wave telegraph actually does to a turn');
 {
@@ -2252,7 +2350,7 @@ section('the arms that are not run by default');
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
-  ok(STANDING.length >= 9, 'and all nine of them are');
+  ok(STANDING.length >= 10, 'and all ten of them are');
 }
 
 /* ------------------------------------------------- can a lesson be priced -- *//* ------------------------------------------------- can a lesson be priced -- */
