@@ -308,6 +308,7 @@ section('the shape of a phone');
       else if (scr === 'rest') G.ui.rest = { offer: FF.BLESSINGS.slice(0, 3).map((x) => x.id) };
       G.screen = scr;
       frame(scr === 'battle' ? 22 : 2);
+      log.length = 0; FF.render();   // exactly one frame's draws, not twenty-two overlaid
       /* THE UNITS A THUMB WORKS IN.
 
          This checked `hh.w < 40` for seventeen rounds, in STAGE units — but the
@@ -330,6 +331,59 @@ section('the shape of a phone');
         // a notch eats the outer inset in landscape, so nothing tappable lives there
         if (hh.x + hh.w < 8 || hh.x > D.VW - 8) edge.push(hh.id);
       }
+      /* THE TEXT NOBODY WAS CHECKING.
+
+         The touch check above was rewritten in CSS pixels and found seven
+         controls too small to hit. Nothing did the same for TYPE, and the
+         phone walk in iteration 25 found the worse half of the same bug: help
+         text cut off mid-sentence, card rules stacked on top of each other,
+         paired labels overlapping. A text floor fixed the size and then broke
+         the layout, because every line step in the file was a hardcoded number
+         chosen for the size the text USED to be.
+
+         Two assertions, both in CSS pixels, on every screen and every shape:
+         nothing is drawn below the floor, and no two lines in the same column
+         are closer together than the taller of them. The second one is what
+         catches a step that stopped growing with its text. */
+      const texts = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim())
+        .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
+      const tiny = texts.filter((e) => e.size * cssPerStage < FF.TEXT_MIN_CSS - 0.5)
+        .map((e) => JSON.stringify(e.s).slice(0, 18) + '@' + Math.round(e.size * cssPerStage));
+      eq([...new Set(tiny)].join(','), '', `${w}x${h} ${scr}: no text below the readable floor`);
+
+      // a run of lines is a column: same alignment, same x, sorted down the page
+      const cols = new Map();
+      for (const e of texts) {
+        const key = e.align + ':' + Math.round(e.x);
+        if (!cols.has(key)) cols.set(key, []);
+        cols.get(key).push(e);
+      }
+      const stacked = [];
+      for (const run of cols.values()) {
+        run.sort((a, b) => a.y - b.y);
+        for (let i = 1; i < run.length; i++) {
+          const a = run[i - 1], b = run[i], gap = b.y - a.y, need = Math.max(a.size, b.size);
+          /* Only consecutive lines of the SAME size and real length: that is a
+             wrapped paragraph, where the step is a number in the source and can
+             fall behind the text it is stepping. A heading over a caption, or a
+             stat pip under a card, is a different size or a single glyph — those
+             are laid out deliberately and are not what this is looking for. */
+          if (Math.abs(a.size - b.size) > 0.6 || a.s.length < 3 || b.s.length < 3) continue;
+          if (gap > 0.5 && gap < need * 0.78) {
+            stacked.push(JSON.stringify(a.s).slice(0, 16) + '/' + JSON.stringify(b.s).slice(0, 16) +
+              ' ' + Math.round(gap) + '<' + Math.round(need));
+          }
+        }
+      }
+      /* The supported floor is a phone held sideways — 375 CSS pixels tall on
+         an iPhone SE, 390 on a 14. The 653x280 shape in this list is a folding
+         phone's COVER display, and at 280 the text floor is 23 stage units:
+         the winter list on the leader screen genuinely cannot hold seven rows
+         of a name and a description at that size. Touch targets are still
+         checked there; type is not, and the README says so. */
+      if (h >= 360) eq([...new Set(stacked)].join(' | '), '', `${w}x${h} ${scr}: no two lines drawn on top of each other`);
+      log.length = 0;
+
       eq(small.join(','), '', `${w}x${h} ${scr}: every touch target is thumb-sized`);
       eq(off.join(','), '', `${w}x${h} ${scr}: nothing tappable hangs off the stage`);
       eq(edge.join(','), '', `${w}x${h} ${scr}: nothing tappable hides under a notch`);

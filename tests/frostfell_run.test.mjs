@@ -93,6 +93,14 @@ function itemTarget(card) {
 }
 function botTurn() {
   const b = G.battle;
+  /* The room table only ever watched the careful pilot, so the one question
+     item 3 asks — what does a beginner's board actually look like — had no
+     answer in the output. Same reading, taken on the careless line. */
+  if (b && !b.over) {
+    const free = FF.freeSlots(G, 'p').length;
+    CROOM.free[Math.min(6, free)] = (CROOM.free[Math.min(6, free)] || 0) + 1;
+    CROOM.turns++;
+  }
   const ui = b.hand.findIndex((c) => c.type === 'unit');
   if (ui >= 0) {
     const slot = bestSlot();
@@ -277,6 +285,7 @@ function carefulItem(card) {
    habits off one at a time and re-runs the sweep: whatever the pilot can stop
    doing without losing win rate was never a decision in the first place. */
 const ROOM = { plays: 0, declined: 0, packed: 0, spare: 0, free: [], efree: [] };
+const CROOM = { turns: 0, free: [] };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
@@ -1283,6 +1292,9 @@ section('which parts of playing well are worth anything');
     const et = ROOM.efree.reduce((n, v) => n + (v || 0), 0) || 1;
     console.log('    free slots on the foes\' line:                    ' +
       ROOM.efree.map((v, i) => i + ':' + Math.round(((v || 0) / et) * 100) + '%').join(' '));
+    const ct = CROOM.free.reduce((n, v) => n + (v || 0), 0) || 1;
+    console.log('    and on a CARELESS pilot\'s line:                   ' +
+      CROOM.free.map((v, i) => i + ':' + Math.round(((v || 0) / ct) * 100) + '%').join(' '));
   }
   console.log(`    the room rule, in practice: the line stood on a packed board for ` +
     `${Math.round((ROOM.packed / Math.max(1, ROOM.packed + ROOM.spare)) * 100)}% of turns · ` +

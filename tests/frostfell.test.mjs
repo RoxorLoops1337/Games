@@ -1864,6 +1864,94 @@ section('every leader sets out on the same footing');
   ok(FFl.hitOf({ def: 'icepick' }) >= 4, 'and so is four points of ice');
 }
 
+/* ------------------------------------------------- teaching, not tuning -- */
+section('the lesson a beginner gets and a good player never sees');
+{
+  /* Careless has sat between 6% and 13% for five rounds and every attempt to
+     move it has been a number. The probe cannot price a teaching change — its
+     careless pilot is blind, not slow, so anything that makes a decision
+     easier measures exactly zero on it. What CAN be checked is that the
+     lesson fires when somebody misses a scheme, stops the moment they deny
+     one, and never fires at all past the first zone. */
+  withRun(FF, 'hearth', 77);
+  const g = FF.G;
+  eq(g.run.zone, 0, 'the caravan starts in the first zone');
+
+  const lines = () => (g.battle.log || []).filter((l) => /would have|landed —/.test(l.text || l)).length;
+  bareBattle(FF, 'hearth', 77);
+  place(FF, 'p', 'snowpup', 0, 0);
+  const foe = place(FF, 'e', 'chillfang', 0, 1);
+  const before = lines();
+  FF.layPlot(g, foe);
+  ok(!!foe.plot, 'the foe commits to something');
+  FF.triggerUnit(g, foe);
+  ok(lines() > before, 'a scheme that lands in the first zone says what would have stopped it');
+
+  // …and it gives up after two, so it is a lesson rather than a nag
+  for (let i = 0; i < 6; i++) { FF.layPlot(g, foe); FF.triggerUnit(g, foe); }
+  ok(lines() - before <= 2, 'it says it at most twice, so it is a lesson and not a nag');
+
+  // one denial and it is done for the rest of the run
+  g.run.taught = 0; g.run.everDenied = 1;
+  const held = lines();
+  FF.layPlot(g, foe); FF.triggerUnit(g, foe);
+  eq(lines(), held, 'a player who has denied one is never told again');
+
+  // and never at all outside the first zone
+  g.run.everDenied = 0; g.run.taught = 0; g.run.zone = 1;
+  const late = lines();
+  FF.layPlot(g, foe); FF.triggerUnit(g, foe);
+  eq(lines(), late, 'the lesson belongs to the first zone and stays there');
+}
+
+section('cards that charge for themselves');
+{
+  const FFc = loadGame({});
+  bareBattle(FFc, 'frost', 801);
+  const G6 = FFc.G;
+  /* Three cards built against the four tests written at the top of the pool,
+     after two rounds of building first and measuring afterwards cut five
+     things. What each has to do is change its answer as the board changes. */
+
+  // CAIRNWARDEN — worth what the lane in front of it is holding
+  const cw = place(FFc, 'p', 'cairnwarden', 0, 0, {});
+  eq(FFc.CARDS.cairnwarden.hooks.swing(G6, cw), 0, 'facing an empty lane it hits for nothing');
+  const f1 = place(FFc, 'e', 'snapfrost', 0, 0, {});
+  eq(FFc.CARDS.cairnwarden.hooks.swing(G6, cw), 1, 'one foe in the lane, one point');
+  const f2 = place(FFc, 'e', 'snapfrost', 0, 1, {});
+  eq(FFc.CARDS.cairnwarden.hooks.swing(G6, cw), 2, 'two of them, two');
+  f2.alive = false;
+  eq(FFc.CARDS.cairnwarden.hooks.swing(G6, cw), 1, 'and killing one costs it — which is the point');
+
+  // SLEETRUNNER — worth more on a turn it has already moved
+  const sr = place(FFc, 'p', 'sleetrunner', 1, 2, {});
+  eq(FFc.CARDS.sleetrunner.hooks.swing(G6, sr), 0, 'standing still it is an ordinary body');
+  FFc.moveUnit(G6, sr, 1, 1);
+  eq(FFc.CARDS.sleetrunner.hooks.swing(G6, sr), 3, 'and it pays for the move it just made');
+  G6.battle.turn += 1;
+  eq(FFc.CARDS.sleetrunner.hooks.swing(G6, sr), 0, 'once only, on the turn it moved');
+
+  // and the swing hook has to reach the actual damage, not just the preview
+  const before = f1.hp;
+  FFc.attackOnce(G6, cw);
+  ok(f1.hp < before, 'a card whose whole attack is a hook still hits');
+
+  // BANKED EMBERS — a bet placed before a denial, paid after it
+  const hurt = place(FFc, 'p', 'snowpup', 1, 0, {});
+  hurt.hp = 2;
+  FFc.CARDS.bankedembers.effect(G6);
+  eq(G6.battle.banked, 1, 'the embers are banked');
+  const plotter = G6.battle.units.find((u) => u.side === 'e' && u.alive && u.scheme);
+  if (plotter) {
+    FFc.layPlot(G6, plotter);
+    for (const u of G6.battle.units) if (u.side === 'p') u.alive = false;
+    hurt.alive = true;
+    FFc.triggerUnit(G6, plotter);
+    eq(G6.battle.banked, 0, 'and they are spent on the denial');
+    ok(hurt.hp > 2, 'mending the line when it lands');
+  }
+}
+
 section('a taunt beats everything');
 {
   const FFt = loadGame({});

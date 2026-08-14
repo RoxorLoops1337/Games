@@ -179,10 +179,21 @@ section('the guide teaches denial by making it happen');
 
   /* Take away what the plan needed and the whole trigger is wasted — which is
      the thing the hint claims, checked against the rules rather than the text.
-     Every scheme in the game lays against the board as it stood a turn ago and
-     fires against the board as it stands now, so emptying the player's side is
-     a denial whichever scheme this opening happened to roll. */
-  for (const u of G.battle.units) if (u.side === 'p') u.alive = false;
+     Every scheme lays against the board as it stood a turn ago and fires
+     against the board as it stands now; WHAT each one needs is different, and
+     this used to assume emptying the player's side denied all of them. It does
+     not: `gather` wants a free slot on the FOE's side, so once a schemer
+     carrying it could open a fight, this test started denying nothing and
+     saying so. Take away the thing this particular plan needs. */
+  if (plotter.scheme === 'gather') {
+    while (FF.freeSlots(G, 'e').length) {
+      const sl = FF.freeSlots(G, 'e')[0];
+      place(FF, 'e', 'mitewing', sl.lane, sl.col);
+    }
+    eq(FF.freeSlots(G, 'e').length, 0, 'their line has nowhere to put a new body');
+  } else {
+    for (const u of G.battle.units) if (u.side === 'p') u.alive = false;
+  }
   FF.triggerUnit(G, plotter);
   ok((G.battle.denied || 0) >= 1, 'a plan that no longer has what it needed is denied');
   eq(plotter.plot, null, 'and the plan is spent either way');

@@ -237,6 +237,44 @@ const HOARD_CAP = 4;
 const A = (body, belly, o) => Object.assign({ body, belly, shape: 'blob', ears: 'round', eyes: 'dot', mouth: 'smile', acc: 'none' }, o || {});
 
 /* -- wardens (units you play) --------------------------------------------- */
+/* ========================= WHAT A GOOD CARD LOOKS LIKE =====================
+
+   Written down BEFORE the next one is built, because two rounds of building
+   first and measuring afterwards shipped one card and one event and cut five
+   things. Every one of those five failed for a reason that was knowable in
+   advance, and the reasons turned out to be the same reason four times. So:
+   four tests, derived from every measurement this project has taken. A card
+   that fails one of them does not get built.
+
+   1. IT ASKS A QUESTION THAT IS ANSWERED DIFFERENTLY ON DIFFERENT TURNS.
+      If the right play is the same every time, it is not a decision, it is a
+      stat with extra words. Vanguard-that-grows-while-parked failed here: the
+      answer was always "leave it".
+
+   2. THE QUESTION IS ASKED ON THE BOARD.
+      The board is the only surface both sides share and both pilots read. A
+      threat aimed at the hand, the purse or the deck can be ignored for free by
+      whoever does not use that resource — and the pilot who uses none of them
+      is the pilot who is already losing. The hand-targeting scheme failed here
+      and it read as four free points for the worst pilot in the game.
+
+   3. IT COSTS SOMETHING THE PLAYER WANTED.
+      A benefit that accrues without a decision accrues fastest to whoever does
+      nothing, which is the definition of the weak player. The best things in
+      this game all charge for themselves: the front row trades safety for
+      tempo, the room rule charges a body for warmth, holding gear charges a
+      turn of tempo for a better turn later.
+
+   4. IT MUST NOT ANSWER A QUESTION THE BOARD ALREADY ASKS.
+      Adding a card that makes positioning irrelevant does not add a decision,
+      it deletes several. Every Soak-granting card failed here: a taunt does not
+      prevent damage, it concentrates it, and it replaces the question "where
+      does this body stand" with one answer for the whole fight.
+
+   The shortest form, which is what to hold in your head: A GOOD CARD MAKES THE
+   PLAYER CHOOSE BETWEEN TWO THINGS THEY WANT, ON THE BOARD, DIFFERENTLY EACH
+   TURN. If you cannot say what it costs, it is not finished.
+   ========================================================================= */
 const CARDS = {};
 const def = (o) => { CARDS[o.id] = o; return o; };
 
@@ -525,6 +563,45 @@ def({ id: 'coldsnap', name: 'Coldsnap', type: 'item', tribe: 'frost', rare: 2, t
    taunt. It is to kill the fast thing quickly, which twenty-one items are for.
    A keyword that is right for a sturdy body and wrong for everything else does
    not want to be portable. */
+/* ---- three built against the four tests, each naming its own cost -------- */
+
+/* CAIRNWARDEN. Its attack is how many foes stand in the lane it faces.
+   1 · the answer changes every turn — the lane empties and fills constantly.
+   2 · entirely on the board, and it reads the FOES' half of it.
+   3 · the cost is sharp and permanent: every foe you kill in that lane makes
+       it weaker, so it argues with the thing you most want to do.
+   4 · it adds a question about which lane to clear rather than removing one. */
+def({ id: 'cairnwarden', name: 'Cairnwarden', type: 'unit', tribe: null, hp: 13, atk: 0, cnt: 3, rare: 2,
+  art: A('#93a2b8', '#dbe4f0', { stance:'root',tail:'none',mark:'icicles',arms:'stub', skin:'stone',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot' }),
+  kw: {}, text: 'It hits for every foe standing in its lane.',
+  hooks: { swing: (g, u) => laneOf(g, u.side === 'p' ? 'e' : 'p', u.lane).length } });
+
+/* SLEETRUNNER. It hits harder on any turn it has already moved.
+   1 · asked every single turn, and the answer depends on where the fight is.
+   2 · on the board.
+   3 · the cost is the sharpest in the game: moving is free, but you only get
+       so many useful moves, and DENYING A SCHEME is what the other ones are
+       for. This card competes directly with the best habit in the fight for
+       the same resource.
+   4 · it rewards using the geometry rather than replacing it — the exact
+       inverse of the card cut last round for paying you to stand still. */
+def({ id: 'sleetrunner', name: 'Sleetrunner', type: 'unit', tribe: 'frost', hp: 8, atk: 2, cnt: 2, rare: 2,
+  art: A('#8fd0e8', '#dff4ff', { stance:'quad',tail:'whip',mark:'none', skin:'ice',idle:'twitch', shape: 'small', ears: 'pointy', mouth: 'fang', pat: 'stripes', patCol: '#4f9fc8' }),
+  kw: {}, text: 'Hits for 3 more on a turn it has already moved.',
+  hooks: { swing: (g, u) => (u.movedTurn === g.battle.turn ? 3 : 0) } });
+
+/* BANKED EMBERS. Gear that turns a denial into warmth for the whole line.
+   1 · when to spend it changes with what the foes have committed to.
+   2 · on the board, and it reads the thing the game most wants you to do.
+   3 · the cost is a turn, spent BEFORE you know whether you will manage the
+       denial — it is a bet on your own next move, not a reward for it.
+   4 · it makes an existing decision pay differently, which is what item two of
+       the brief asked for, rather than adding a new one to compete with it. */
+def({ id: 'bankedembers', name: 'Banked Embers', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
+  art: { kind: 'flask', col: '#ff9a5c' },
+  text: 'Until your next turn, denying a scheme mends the whole line 4.',
+  effect: (g) => { g.battle.banked = (g.battle.banked || 0) + 1; } });
+
 def({ id: 'whetstone', name: 'Whetstone', type: 'item', tribe: null, rare: 1, target: 'ally',
   art: { kind: 'stone', col: '#cfd8e8' }, text: 'Spice 3.',
   effect: (g, t) => addStatus(g, t, 'spice', 3) });
@@ -672,6 +749,7 @@ const PREVIEW = {
   bellrope:   (g, t) => [{ u: t, dmg: 0, tag: 'SWIFT 2' }],
   pryrod:     (g, t) => [{ u: t, dmg: 0, tag: 'COUNTER -2' }],
   kindling:   (g) => playerUnits(g).map((u) => ({ u, dmg: 0, tag: 'SPICE 2' })),
+  bankedembers: (g) => playerUnits(g).map((u) => ({ u, dmg: 0, tag: 'IF DENIED · MEND 4' })),
   oldmap:     () => [],
 };
 function previewOf(g, card, spot) {
@@ -763,6 +841,7 @@ const SCHEMES = {
      into, so this rule and the room rule pull on the same rope. */
   mark: {
     id: 'mark', col: '#ff9aa5', solo: true,
+    missed: 'sliding them to another slot would have cost you nothing',
     lay: (g, u) => {
       const t = targetFor(g, u);
       return t ? { uid: t.uid, lane: t.lane, col: t.col, label: 'LUNGE AT ' + t.name.toUpperCase() } : null;
@@ -785,8 +864,22 @@ const SCHEMES = {
   /* One more body on their side of the table. Deny it by leaving them no slot
      to put it in — which means not clearing their back line this turn, and is
      the one moment in the game where killing something is the wrong play. */
+  /* SOLO, AS OF THIS ROUND, and that is what makes spreading schemes safe.
+
+     A non-solo scheme is an extra effect ON TOP of the foe's swing, so putting
+     more of them into the bestiary is simply a buff to the fell — measured, it
+     took zone-two arrivals from 156 runs in 210 down to 127 and the careless
+     floor from 6% to 4%. A solo one IS the foe's turn: it whistles instead of
+     swinging, which makes the scheme a choice the fell made rather than a bonus
+     it collected, and makes denying it worth the foe's whole turn.
+
+     Which is also the answer to "denial that pays differently depending on how
+     you did it": deny a gather by leaving them no slot and they have thrown the
+     turn away entirely; deny a chill by emptying the lane and you have only
+     stopped the extra. */
   gather: {
-    id: 'gather', col: '#ffd166',
+    id: 'gather', col: '#ffd166', solo: true,
+    missed: 'leaving them no free slot would have thrown their whole turn away',
     lay: (g, u) => ({ label: 'CALL THE PACK' , call: u.call || 'mitewing' }),
     fire: (g, u, p) => {
       if (!freeSlots(g, u.side).length) return false;
@@ -799,6 +892,7 @@ const SCHEMES = {
      free moves, or one if you were only holding it with one warden. */
   chill: {
     id: 'chill', col: '#8fe3ff',
+    missed: 'emptying that lane would have stopped it',
     lay: (g, u) => ({ lane: u.lane, label: 'BREATHE ON THE ' + (u.lane === 0 ? 'TOP' : 'LOWER') + ' LANE' }),
     fire: (g, u, p) => {
       const line = laneOf(g, other(u.side), p.lane);
@@ -835,6 +929,12 @@ const FOES = {};
 const HEAT_CAP = 6;
 const foe = (o) => { o.foe = true; o.type = 'unit'; FOES[o.id] = o; return o; };
 
+/* A tier-1 schemer was added here and taken out again the same round. It
+   whistled up another of ITSELF, which is not a decision but a timer: zone-one
+   survival fell from 156 runs in 210 to 113 and the careless floor went 6% to
+   4%. The first zone is where somebody learns what a telegraph even is, and it
+   already has two foes carrying one. The spread belongs in the tiers that were
+   short of it, not in the one that teaches. */
 foe({ id: 'snapfrost', name: 'Snapfrost', hp: 8, atk: 3, cnt: 2, tier: 1,
   art: A('#8fc6e8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }), kw: {}, text: '' });
 foe({ id: 'iciclebat', name: 'Icicle Bat', hp: 5, atk: 2, cnt: 1, tier: 1,
@@ -875,9 +975,16 @@ foe({ id: 'mitewing', name: 'Mitewing', hp: 4, atk: 2, cnt: 1, tier: 1,
 foe({ id: 'snowlump', name: 'Snowlump', hp: 15, atk: 1, cnt: 4, tier: 1,
   art: A('#e0ecf8', '#ffffff', { stance:'root',tail:'none',mark:'icicles', skin:'ice',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'dot', evil: 1 }),
   kw: { soak: 1 }, scheme: 'chill', text: 'Soak. It takes a breath a turn before it lets it out.' });
+/* SCHEME DENIAL IS SEVENTY PER CENT OF WHAT THE FIGHT IS WORTH, and it came up
+   on thirty-nine per cent of foes — with `gather` on exactly ONE creature in
+   the whole bestiary. A game balanced on one mechanic should at least ask it
+   often. Rather than inventing a fourth kind (the last attempt targeted the
+   hand and measured as a gift to the worst pilot), the three that work are
+   spread across more of the bestiary and into tiers that were short of them. */
 foe({ id: 'hoarcrow', name: 'Hoarcrow', hp: 8, atk: 3, cnt: 2, tier: 2,
   art: A('#5f6a80', '#a8b4c8', { stance:'stand',tail:'none',mark:'scar',arms:'stub', idle:'hover', shape: 'tall', ears: 'none', mouth: 'beak', wings: '#3f4a60', evil: 1 }),
-  kw: { longshot: 1 }, text: 'Longshot.' });
+  kw: { longshot: 1 }, scheme: 'gather', call: 'iciclebat',
+  text: 'Longshot. It calls the flock down.' });
 foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
   art: A('#6f96b8', '#cfe4f5', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'paw', shape: 'blob', ears: 'pointy', mouth: 'trap', evil: 1 }),
   kw: {}, scheme: 'mark', text: 'Its bite leaves Weak 1. It picks its warden a turn ahead.',
@@ -887,7 +994,8 @@ foe({ id: 'chillfang', name: 'Chillfang', hp: 10, atk: 4, cnt: 3, tier: 2,
    what the answer is. */
 foe({ id: 'bruiser', name: 'Bruiser', hp: 13, atk: 3, cnt: 3, tier: 2,
   art: A('#7a8296', '#c4ccd8', { stance:'squat',tail:'stub',mark:'brand', skin:'fur',idle:'paw', shape: 'squat', ears: 'horns', mouth: 'grin', evil: 1 }),
-  kw: { shove: 1 }, text: 'Shove. It puts your line where it wants it.' });
+  kw: { shove: 1 }, scheme: 'mark',
+  text: 'Shove. It puts your line where it wants it, and it picks first.' });
 foe({ id: 'packmother', name: 'Packmother', hp: 18, atk: 3, cnt: 4, tier: 3,
   art: A('#6f7f9f', '#cdd8ec', { stance:'quad',tail:'brush',mark:'scar', skin:'fur',idle:'breathe', shape: 'boss', ears: 'pointy', mouth: 'fang', evil: 1 }),
   kw: { crush: 2 }, scheme: 'gather', call: 'mitewing',
@@ -1496,12 +1604,42 @@ function triggerUnit(g, u) {
   if (plot) {
     const sc = SCHEMES[plot.id];
     const fired = sc && sc.fire(g, u, plot);
+    /* THE LESSON A BEGINNER NEVER GETS.
+
+       Denying schemes is the one habit the ablation has ever priced above
+       noise, and the guide's hint for it clears the moment the red text
+       resolves — denied OR landed. So a player who does not yet know the text
+       is answerable watches it land, watches the hint disappear, and learns
+       that red text is weather.
+
+       This is the other half. A scheme that lands while the caravan is still
+       in the first zone, and has never once been denied, says what would have
+       taken it away — naming the action, for that scheme, on that turn. It
+       fires at most twice in a run and never at all for somebody who denies
+       one, which is the whole point: it cannot help a player who already
+       knows. It is not a card and it is not priced against the card rule; the
+       one test of that rule it has to pass is the fourth, and it does — it
+       fires only AFTER the question has been failed, so it never answers a
+       question the board is still asking. */
+    if (fired && sc.missed && g.run && g.run.zone === 0 && !(g.run.everDenied) &&
+        (g.run.taught = (g.run.taught || 0) + 1) <= 2) {
+      fx.toast('YOU COULD HAVE STOPPED THAT', sc.col);
+      logLine(g, plot.label.toLowerCase() + ' landed — ' + sc.missed, sc.col);
+    }
     if (!fired) {
       fx.pop(u, 'DENIED', '#8fffc4');
       fx.burst(u, '#8fffc4', 10);
       sfx('denied');
       logLine(g, plot.label.toLowerCase() + ' — denied', '#8fffc4');
       g.battle.denied = (g.battle.denied || 0) + 1;
+      if (g.run) g.run.everDenied = 1;   // one denial and the lesson stops
+      /* Banked Embers: a bet placed before the denial, paid after it. */
+      if (g.battle.banked > 0) {
+        g.battle.banked--;
+        for (const a of sideUnits(g, 'p')) heal(g, a, 4);
+        fx.toast('THE EMBERS CATCH', '#ff9a5c');
+        logLine(g, 'the banked embers catch and the line warms', '#ff9a5c');
+      }
     }
     // A scheme that IS the swing spends the whole trigger either way: read it
     // and take it away, and the foe has thrown its turn at empty snow.
@@ -1526,7 +1664,10 @@ function attackOnce(g, u) {
   const primary = targetFor(g, u);
   if (!primary) { fx.pop(u, 'no target', C.snowDim); return; }
   const targets = u.kw.barrage ? laneTargets(g, u, primary.lane) : [primary];
-  let dmg = u.atk + stat(u, 'spice');
+  /* A swing hook reads the board AT THE MOMENT OF THE SWING rather than at
+     deployment, which is what lets a card's worth change from turn to turn —
+     the first of the four tests a card has to pass. */
+  let dmg = u.atk + stat(u, 'spice') + (u.hooks.swing ? u.hooks.swing(g, u) : 0);
   // Crush reads the line it is swinging into: the more of them are stacked up
   // in that lane, the harder every one of them is hit.
   if (u.kw.crush) dmg += u.kw.crush * Math.max(0, laneTargets(g, u, primary.lane).length - 1);
@@ -1800,8 +1941,10 @@ function moveUnit(g, u, lane, col) {
   if (!b || b.over || b.busy || !u || !u.alive || u.side !== 'p') return false;
   if (u.lane === lane && u.col === col) return false;
   const at = unitAt(g, 'p', lane, col);
-  if (at) { at.lane = u.lane; at.col = u.col; at.moveT = 1; }   // swap places
-  u.lane = lane; u.col = col; u.moveT = 1;
+  // remembered so a card can ask "have you moved this turn?", which is the only
+  // way to charge for the free move that scheme denial also wants
+  if (at) { at.lane = u.lane; at.col = u.col; at.moveT = 1; at.movedTurn = b.turn; }   // swap places
+  u.lane = lane; u.col = col; u.moveT = 1; u.movedTurn = b.turn;
   sfx('move');
   return true;
 }
@@ -3416,7 +3559,22 @@ function blob(c, x, y, w, h, wob, ph) {
   }
   c.closePath();
 }
+/* NOTHING SMALLER THAN A PERSON CAN READ.
+
+   Walking the phone shots screen by screen: the caravan checklist on the trail
+   is drawn at 12.5 stage units, the tempered counter and the fell's answer at
+   10.5, the seals at 11.5 — which on an iPhone SE, where a stage unit is about
+   half a CSS pixel, comes out at SIX AND A HALF PIXELS. Most of the
+   informational text in a game built for a phone was unreadable on one.
+
+   Every size passed through here is floored at what the device can actually
+   show. On a desktop the scale is about 1 and nothing changes at all; on a
+   handset the small print grows to meet the screen and the layouts around it
+   were already built to give text room to breathe. It is one line, in the one
+   place every string in the game goes through. */
+const TEXT_MIN_CSS = 9;
 function txt(c, s, x, y, size, col, align, face, outline) {
+  size = Math.max(size, TEXT_MIN_CSS / Math.max(0.2, CSS_PER_UNIT));
   c.font = (face === 'd' ? '' : '600 ') + size + 'px ' + (face === 'd' ? "'Frostcut','Trebuchet MS',sans-serif" : "'Frostwork','Trebuchet MS',sans-serif");
   c.textAlign = align || 'center';
   c.textBaseline = 'middle';
@@ -3429,7 +3587,29 @@ function txt(c, s, x, y, size, col, align, face, outline) {
   c.fillStyle = col || C.snow;
   c.fillText(s, x, y);
 }
+/* Wrapped at the size it will actually be DRAWN at. The text floor lifts small
+   type on a phone, and a wrap computed for the requested size and rendered at
+   the floored one overflows its box — which is exactly what card text did the
+   first time the floor went in. */
+const textSize = (n) => Math.max(n, TEXT_MIN_CSS / Math.max(0.2, CSS_PER_UNIT));
+/* A line step has to grow with the text or the floor stacks glyphs on top of
+   each other. Every hardcoded step in this file goes through here: on a big
+   screen the floor is inert and the step is exactly what it always was; on a
+   phone the step opens up to whatever the floored glyph actually needs. */
+const lineH = (size, step) => Math.max(step, textSize(size) * 1.12);
+/* Cut a line down until it and an ellipsis fit, so a truncation reads as one
+   rather than as a sentence that stops mid-word. */
+function ellipsize(c, s, size, maxW, force) {
+  size = textSize(size);
+  c.font = '600 ' + size + "px 'Frostwork','Trebuchet MS',sans-serif";
+  if (!force && c.measureText(s).width <= maxW) return s;
+  if (force && c.measureText(s + '\u2026').width <= maxW) return s.replace(/[ ,.;:]+$/, '') + '\u2026';
+  let out = s;
+  while (out.length > 1 && c.measureText(out + '\u2026').width > maxW) out = out.slice(0, -1);
+  return out.replace(/[ ,.;:]+$/, '') + '\u2026';
+}
 function wrapText(c, s, size, maxW) {
+  size = textSize(size);
   c.font = '600 ' + size + "px 'Frostwork','Trebuchet MS',sans-serif";
   const words = String(s).split(' ');
   const lines = [];
@@ -4622,7 +4802,9 @@ function drawUnit(c, u, t) {
 /* Shrink a label until it fits the width it has been given. A name that runs
    off its own banner is the fastest way to make a card look unfinished. */
 function fitText(c, str, maxW, start, min, face) {
-  let size = start;
+  // it cannot usefully shrink below what the device can render legibly
+  min = Math.max(min, textSize(0));
+  let size = Math.max(start, min);
   const f = face === 'd' ? "'Frostcut','Trebuchet MS',sans-serif" : "'Frostwork','Trebuchet MS',sans-serif";
   while (size > min) {
     c.font = (face === 'd' ? '' : '600 ') + size + 'px ' + f;
@@ -4630,6 +4812,15 @@ function fitText(c, str, maxW, start, min, face) {
     size -= 0.5;
   }
   return size;
+}
+/* Keep the first n lines and end the last one in an ellipsis, so a paragraph
+   that genuinely does not fit reads as "there is more here" rather than as a
+   sentence that stops mid-word. */
+function cutLines(c, lines, n, size, maxW) {
+  if (lines.length <= n) return lines;
+  const out = lines.slice(0, Math.max(1, n));
+  out[out.length - 1] = ellipsize(c, out[out.length - 1], size, maxW, true);
+  return out;
 }
 /* Same idea for a paragraph: drop a point of size until the whole thing fits
    in the lines available. */
@@ -4640,7 +4831,13 @@ function fitLines(c, str, maxW, maxLines, start, min) {
     size -= 0.6;
     lines = wrapText(c, str, size, maxW);
   }
-  return { size, lines: lines.slice(0, maxLines) };
+  /* On a phone the text floor can be larger than anything this loop is allowed
+     to shrink to, so the paragraph genuinely does not fit and the old code cut
+     it mid-word. Report the size the text will actually be DRAWN at — callers
+     space their lines off it — and end a cut line in an ellipsis so the card
+     face says "there is more here" instead of trailing off. */
+  size = textSize(size);
+  return { size, lines, cut: (n) => cutLines(c, lines, n, size, maxW) };
 }
 
 const RARE_NAME = { 1: 'common', 2: 'uncommon', 3: 'rare' };
@@ -4743,9 +4940,14 @@ function drawCard(c, card, x, y, w, h, o) {
   inked(c, '#fffaf0', 1.8 * S, 'rgba(30,40,60,.35)');
   const maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
   const fit = fitLines(c, card.text || '', aw - 12 * S, maxLines, 11.5 * S, 7.5 * S);
+  /* The shrink loop cannot go below the text floor, so on a phone the paragraph
+     can still be taller than the box. Measure what the box actually holds at
+     the size the text will be DRAWN at, and cut to that — the card face is a
+     glance, and the full rules are one tap away in the inspect panel. */
   const lh = fit.size * 1.1;
-  const top = ty + th / 2 - (fit.lines.length - 1) * lh / 2;
-  fit.lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#3a3020', 'center', 't', 0));
+  const lines = fit.cut(Math.max(1, Math.floor((th - 2 * S) / lh)));
+  const top = ty + th / 2 - (lines.length - 1) * lh / 2;
+  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#3a3020', 'center', 't', 0));
 
   /* ---------------- the stat plinth ---------------- */
   if (isUnit) {
@@ -5231,7 +5433,7 @@ function drawTitle(c, t) {
     const need = LOCKED[tb];
     const sub = locked ? (need ? need.text : 'not yet found') : ld.name;
     wrapText(c, sub, 12.5, bw2 - 20).slice(0, 2).forEach((ln, k) =>
-      txt(c, ln, x + bw2 / 2, y + 168 + k * 15, 12.5, '#b9cde8', 'center', 't'));
+      txt(c, ln, x + bw2 / 2, y + 168 + k * lineH(12.5, 15), 12.5, '#b9cde8', 'center', 't'));
     const bw3 = G.meta.winter[tb] || 0;
     if (!locked && bw3) txt(c, 'winter ' + bw3, x + bw2 / 2, y + 200, 12, '#ffd166', 'center', 't');
     if (!locked) hit('tribe', x, y, bw2, 190, tb);
@@ -5239,7 +5441,11 @@ function drawTitle(c, t) {
   /* THE SEALS, on the title screen, because a thing to chase has to be visible
      from the place you decide whether to set out again. Earned ones are lit and
      named; the rest sit dark with what they want written under them. */
-  const sy = y + 216;
+  /* A saved run adds a CONTINUE button above, which pushed this whole block
+     down until the note under the seals sat on top of the run counter in the
+     footer — two lines two units apart, on every return visit, at every size.
+     Nothing saw it for twenty-five rounds because nothing checked. */
+  const sy = Math.min(y + 216, VH - 170);
   const got = FEATS.filter((f) => featEarned(f.id)).length;
   txt(c, 'SEALS  ' + got + '/' + FEATS.length, MID, sy, 13, got ? '#ffd166' : '#7e97b8', 'center', 't');
   const sgap = 54, stot = (FEATS.length - 1) * sgap;
@@ -5289,7 +5495,7 @@ function drawLeaderPick(c, t) {
   drawCreature(c, ld.art, lx, 286, 164, { t, ph: 1.4 });
   txt(c, ld.name.toUpperCase(), lx, 396, 26, '#eaf6ff', 'center', 'd');
   txt(c, 'health ' + ld.hp + '    attack ' + ld.atk + '    counter ' + ld.cnt, lx, 428, 14, '#9fc0e4', 'center', 't');
-  wrapText(c, ld.text, 14, 300).forEach((ln, i) => txt(c, ln, lx, 456 + i * 19, 14, '#c8dcf4', 'center', 't'));
+  wrapText(c, ld.text, 14, 300).forEach((ln, i) => txt(c, ln, lx, 456 + i * lineH(14, 19), 14, '#c8dcf4', 'center', 't'));
   const best = G.meta.winter[tb] || 0;
   txt(c, best ? 'hardest winter crossed: ' + best : 'never crossed the fell', lx, 534, 13, '#7e97b8', 'center', 't');
 
@@ -5308,7 +5514,7 @@ function drawLeaderPick(c, t) {
   });
   const chosen = COURSES.find((co) => co.id === pick2.course) || COURSES[0];
   wrapText(c, chosen.text, 12.5, cwid).slice(0, 2).forEach((ln, i) =>
-    txt(c, ln, cx0 + cwid / 2, cy2 + 60 + i * 16, 12.5, chosen.col, 'center', 't'));
+    txt(c, ln, cx0 + cwid / 2, cy2 + 60 + i * lineH(12.5, 16), 12.5, chosen.col, 'center', 't'));
 
   // what she sets out with
   const deckX = SAFE + 372;
@@ -6059,11 +6265,14 @@ function drawTrail(c, t) {
   const rd = caravanRead(run);
   // Low and to the left, under the road rather than across it: the trail's
   // first stone and the caravan itself both live in the top-left corner.
-  const pw = 232, ph = 74 + rd.length * 22, px = SAFE + 6, py = VH - 260;
+  const pw = 232, ph = 88 + rd.length * 22, px = SAFE + 6, py = VH - 274;
   panel(c, px, py, pw, ph, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
+  /* Two labels sharing a line is fine at 15 stage units and broken at the size
+     a phone needs, so the second one drops below the first. Every pair like
+     this in the game got the same treatment once the text floor went in. */
   txt(c, 'THE CARAVAN', px + 14, py + 18, 15, '#a8c8ea', 'left', 'd');
   const crs = courseOf(run);
-  if (crs) txt(c, crs.name, px + pw - 14, py + 18, 11, crs.col, 'right', 'd');
+  if (crs) txt(c, crs.name, px + pw - 14, py + 34, 11, crs.col, 'right', 'd');
   txt(c, 'TEMPERED ' + tempered(run) + '/' + TEMPER_CAP, px + pw - 14, py + ph - 15, 10.5,
     tempered(run) >= TEMPER_CAP ? '#7e97b8' : C.gold, 'right', 't');
   /* AND WHAT THE FELL MADE OF IT.
@@ -6079,12 +6288,11 @@ function drawTrail(c, t) {
     const ans = Math.round(fellAnswer(run) * 100);
     const cold = ans <= -5, hot = ans >= 5;
     const col = cold ? '#8fe0a0' : hot ? '#ff9aa5' : '#ffd166';
-    txt(c, cold ? 'THE FELL HOLDS BACK' : hot ? 'THE FELL HAS RISEN' : 'LEVEL WITH THE FELL',
-      px + 14, py + ph - 31, 10.5, col, 'left', 't');
-    txt(c, (ans > 0 ? '+' : '') + ans + '%', px + pw - 14, py + ph - 31, 11, col, 'right', 'd');
+    txt(c, (cold ? 'THE FELL HOLDS BACK ' : hot ? 'THE FELL HAS RISEN ' : 'LEVEL WITH THE FELL ') +
+      (ans > 0 ? '+' : '') + ans + '%', px + 14, py + ph - 31, 10.5, col, 'left', 't');
   }
   rd.forEach((r, i) => {
-    const yy = py + 44 + i * 22;
+    const yy = py + 58 + i * 22;
     txt(c, r.ok ? '✓' : '!', px + 16, yy, 14, r.ok ? '#7de08f' : '#ffd166', 'center', 'd');
     txt(c, r.name, px + 30, yy - 6, 12.5, r.ok ? '#c8dcf4' : '#eaf6ff', 'left', 't');
     txt(c, r.got + ' / ' + r.want, px + pw - 14, yy - 6, 12.5, r.ok ? '#7de08f' : '#ffd166', 'right', 't');
@@ -6100,12 +6308,12 @@ function drawTrail(c, t) {
   const left = run.trail.length - run.step + (ZONES.length - 1 - run.zone) * run.trail.length;
   if (live.length) {
     const lw = 232, lx2 = VW - SAFE - lw - 6, ly = py;
-    const lh = 40 + live.length * 20;
+    const lh = 54 + live.length * 20;
     panel(c, lx2, ly, lw, lh, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
     txt(c, 'STILL IN REACH', lx2 + 14, ly + 18, 15, '#a8c8ea', 'left', 'd');
-    txt(c, left + ' steps', lx2 + lw - 14, ly + 18, 11, '#7e97b8', 'right', 'd');
+    txt(c, left + ' steps', lx2 + lw - 14, ly + 34, 11, '#7e97b8', 'right', 'd');
     live.slice(0, 8).forEach((f, i) => {
-      const yy = ly + 40 + i * 20;
+      const yy = ly + 54 + i * 20;
       c.save();
       c.beginPath(); c.arc(lx2 + 20, yy, 5, 0, TAU);
       inked(c, f.col, 1.8, C.ink);
@@ -6290,15 +6498,15 @@ function drawChooser(c, t) {
       if (it.dim) c.globalAlpha = 0.4;
       panel(c, x, y - (hovered && !it.dim ? 8 : 0), cw, chh, 13, '#1d2c49', col);
       const hl = wrapText(c, head, 16, cw - 18);
-      hl.forEach((ln, k) => txt(c, ln, x + cw / 2, y + 22 + k * 19 - (hovered && !it.dim ? 8 : 0), 16, col, 'center', 'd'));
+      hl.forEach((ln, k) => txt(c, ln, x + cw / 2, y + 22 + k * lineH(16, 19) - (hovered && !it.dim ? 8 : 0), 16, col, 'center', 'd'));
       wrapText(c, body, 12.5, cw - 20).forEach((ln, k) =>
-        txt(c, ln, x + cw / 2, y + 30 + hl.length * 19 + k * 15 - (hovered && !it.dim ? 8 : 0), 12.5, '#c8dcf4', 'center', 't'));
+        txt(c, ln, x + cw / 2, y + 30 + hl.length * lineH(16, 19) + k * lineH(12.5, 15) - (hovered && !it.dim ? 8 : 0), 12.5, '#c8dcf4', 'center', 't'));
       if (it.dim) txt(c, 'HELD', x + cw / 2, y + chh - 26, 15, '#8fa2bd', 'center', 'd');
       c.restore();
     } else {
       panel(c, x, y, cw, chh, 13, '#1d2c49', '#7fb2e8');
       const lines = wrapText(c, it.label || '', 15, cw - 20);
-      lines.forEach((ln, k) => txt(c, ln, x + cw / 2, y + chh / 2 - (lines.length - 1) * 10 + k * 20, 15, '#eaf6ff', 'center', 't'));
+      lines.forEach((ln, k) => txt(c, ln, x + cw / 2, y + chh / 2 - (lines.length - 1) * lineH(15, 20) / 2 + k * lineH(15, 20), 15, '#eaf6ff', 'center', 't'));
     }
     if (it.price !== undefined) {
       const afford = G.run && G.run.gold >= it.price;
@@ -6355,7 +6563,7 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   c.restore();
 
   const fit = fitLines(c, ch.text, w - 18 * S, 3, 12 * S, 8 * S);
-  fit.lines.forEach((ln, i) =>
+  fit.cut(3).forEach((ln, i) =>
     txt(c, ln, x + w / 2, y + h - 34 * S + i * fit.size * 1.2, fit.size, '#3a3020', 'center', 't', 0));
 }
 
@@ -6516,8 +6724,9 @@ function drawTutorial(c, t) {
   c.globalAlpha = 0.35 + 0.65 * pop;
   panel(c, x, y, w, 62, 14, 'rgba(12,22,40,.92)', '#ffd166');
   const fit = fitLines(c, h.text, w - 150, 2, 14.5, 9.5);
-  fit.lines.forEach((ln, i) =>
-    txt(c, ln, x + 58, y + (fit.lines.length > 1 ? 22 : 31) + i * (fit.size + 4), fit.size, '#eaf6ff', 'left', 't'));
+  const hl = fit.cut(2);
+  hl.forEach((ln, i) =>
+    txt(c, ln, x + 58, y + (hl.length > 1 ? 22 : 31) + i * (fit.size + 4), fit.size, '#eaf6ff', 'left', 't'));
   // a little lantern to mark it as guidance rather than a warning
   c.save();
   c.translate(x + 32, y + 31 + Math.sin(t * 2.4) * 2);
@@ -6562,6 +6771,49 @@ const HELP_RULES = [
   ['Hurt', 'A warden that falls comes back at half attack and half health, and shakes it off by seeing a whole fight through. Damage carries between fights — camps and the trader mend it.'],
 ];
 
+/* The help pages used to be a fixed grid: a hardcoded row pitch, a hardcoded
+   line step, and a hard slice at five or six lines. That was fine at 720 units
+   tall on a desktop and a lie on a phone, where the text floor makes every line
+   taller, every paragraph longer, and the slice cut the rules off mid-sentence.
+   Nothing about the fell is worth reading if the sentence explaining it stops
+   at "and that one loses its next trigger. The".
+
+   So the entries are measured and flowed instead. Two columns when they fit,
+   one wide column when they do not — a wide stage with few tall lines is
+   exactly the shape a phone gives you — and a second sheet with arrows when
+   even that runs out. Nothing is ever cut. */
+function helpFlow(c, entries, o) {
+  const lh = lineH(o.size, o.step), hh = lineH(19, 26), gut = 44;
+  const top = 150, bot = VH - 92;
+  let best = null;
+  for (const cols of [2, 1]) {
+    const cw = (VW - 180 - (cols - 1) * gut) / cols;
+    const pages = [];
+    let pg = [], col = 0, yy = top;
+    for (const e of entries) {
+      const lines = wrapText(c, e.body, o.size, cw - (o.ind || 0));
+      const h = hh + lines.length * lh + 18;
+      if (yy + h > bot && yy > top) {
+        if (col + 1 < cols) { col++; yy = top; }
+        else { pages.push(pg); pg = []; col = 0; yy = top; }
+      }
+      pg.push({ e, lines, x: 90 + col * (cw + gut), y: yy });
+      yy += h;
+    }
+    if (pg.length) pages.push(pg);
+    if (!best || pages.length < best.pages.length) best = { cols, cw, pages, lh, hh };
+    if (best.pages.length === 1) break;
+  }
+  return best;
+}
+
+const HELP_ENTRY = {
+  0: () => HELP_RULES.map((r) => ({ head: r[0], col: '#ffd166', body: r[1] })),
+  1: () => HELP_BOARD.map((r) => ({ head: r[0], col: r[1], body: r[2] })),
+  2: () => STATUS_ORDER.map((k) => ({ head: STATUS[k].name, col: STATUS[k].col, body: STATUS[k].text, pip: 1 })),
+  3: () => Object.keys(KEYWORD).map((k) => ({ head: KEYWORD[k].name, col: '#ffd166', body: KEYWORD[k].text })),
+};
+
 function drawHelp(c, t) {
   const page = UI.help | 0;
   c.save(); c.fillStyle = 'rgba(6,10,20,.92)'; c.fillRect(0, 0, VW, VH); c.restore();
@@ -6572,37 +6824,27 @@ function drawHelp(c, t) {
     hits[hits.length - 1].data = i;
   });
 
-  if (page === 0) {
-    HELP_RULES.forEach((r, i) => {
-      const col = i % 2, row = Math.floor(i / 2);
-      const x = 90 + col * 560, y = 154 + row * 122;
-      txt(c, r[0].toUpperCase(), x, y, 19, '#ffd166', 'left', 'd');
-      wrapText(c, r[1], 13.5, 520).slice(0, 5).forEach((ln, k) => txt(c, ln, x, y + 24 + k * 17, 13.5, '#c8dcf4', 'left', 't'));
-    });
-  } else if (page === 1) {
-    HELP_BOARD.forEach((r, i) => {
-      const col = i % 2, row = Math.floor(i / 2);
-      const x = 90 + col * 560, y = 158 + row * 150;
-      txt(c, r[0].toUpperCase(), x, y, 19, r[1], 'left', 'd');
-      wrapText(c, r[2], 13.5, 520).slice(0, 6).forEach((ln, k) => txt(c, ln, x, y + 24 + k * 17, 13.5, '#c8dcf4', 'left', 't'));
-    });
-  } else if (page === 2) {
-    STATUS_ORDER.forEach((k, i) => {
-      const col = i % 2, row = Math.floor(i / 2);
-      const x = 110 + col * 560, y = 160 + row * 96;
-      c.beginPath(); rr(c, x, y - 14, 30, 30, 7);
-      inked(c, STATUS[k].col, 2.5, C.ink);
-      txt(c, 'N', x + 15, y + 2, 18, '#12203a', 'center', 'd', 0);
-      txt(c, STATUS[k].name.toUpperCase(), x + 42, y - 4, 19, STATUS[k].col, 'left', 'd');
-      wrapText(c, STATUS[k].text, 13.5, 470).forEach((ln, j) => txt(c, ln, x + 42, y + 18 + j * 17, 13.5, '#c8dcf4', 'left', 't'));
-    });
-  } else {
-    Object.keys(KEYWORD).forEach((k, i) => {
-      const col = i % 2, row = Math.floor(i / 2);
-      const x = 110 + col * 560, y = 168 + row * 100;
-      txt(c, KEYWORD[k].name.toUpperCase(), x, y, 20, '#ffd166', 'left', 'd');
-      wrapText(c, KEYWORD[k].text, 14, 490).forEach((ln, j) => txt(c, ln, x, y + 24 + j * 18, 14, '#c8dcf4', 'left', 't'));
-    });
+  const entries = (HELP_ENTRY[page] || HELP_ENTRY[0])();
+  const flow = helpFlow(c, entries, { size: 13.5, step: 17, ind: page === 2 ? 42 : 0 });
+  const sheet = Math.min(UI.helpSheet | 0, flow.pages.length - 1);
+  flow.pages[sheet].forEach((b) => {
+    const ind = page === 2 ? 42 : 0;
+    if (b.e.pip) {
+      c.beginPath(); rr(c, b.x, b.y - 16, 30, 30, 7);
+      inked(c, b.e.col, 2.5, C.ink);
+      txt(c, 'N', b.x + 15, b.y, 18, '#12203a', 'center', 'd', 0);
+    }
+    txt(c, b.e.head.toUpperCase(), b.x + ind, b.y - 2, 19, b.e.col, 'left', 'd');
+    b.lines.forEach((ln, k) =>
+      txt(c, ln, b.x + ind, b.y + flow.hh - 4 + k * flow.lh, 13.5, '#c8dcf4', 'left', 't'));
+  });
+
+  if (flow.pages.length > 1) {
+    button(c, 'helpSheet', MID - 190, VH - 72, 60, 50, '\u2039', '#40527a');
+    hits[hits.length - 1].data = -1;
+    txt(c, (sheet + 1) + ' / ' + flow.pages.length, MID + 190, VH - 47, 15, '#9fc0e4', 'center', 't');
+    button(c, 'helpSheet', MID + 130, VH - 72, 60, 50, '\u203a', '#40527a');
+    hits[hits.length - 1].data = 1;
   }
   button(c, 'helpClose', MID - 100, VH - 72, 200, 50, 'BACK', '#40527a');
 }
@@ -6635,14 +6877,14 @@ function drawInspect(c, t) {
     y += 34;
   }
   if (card.text) {
-    wrapText(c, card.text, 15, 420).forEach((ln) => { txt(c, ln, x, y, 15, '#dcebff', 'left', 't'); y += 20; });
+    wrapText(c, card.text, 15, 420).forEach((ln) => { txt(c, ln, x, y, 15, '#dcebff', 'left', 't'); y += lineH(15, 20); });
     y += 12;
   }
   const keys = Object.keys((unit ? unit.kw : card.kw) || {}).filter((k) => KEYWORD[k] && (unit ? unit.kw[k] : card.kw[k]));
   for (const k of keys) {
     txt(c, KEYWORD[k].name.toUpperCase(), x, y, 18, '#ffd166', 'left', 'd');
     y += 21;
-    wrapText(c, KEYWORD[k].text, 14, 430).forEach((ln) => { txt(c, ln, x, y, 14, '#c8dcf4', 'left', 't'); y += 17; });
+    wrapText(c, KEYWORD[k].text, 14, 430).forEach((ln) => { txt(c, ln, x, y, 14, '#c8dcf4', 'left', 't'); y += lineH(14, 17); });
     y += 8;
   }
   if (unit) {
@@ -6654,7 +6896,7 @@ function drawInspect(c, t) {
       txt(c, String(n), x + 10, y + 1, 15, '#12203a', 'center', 'd', 0);
       txt(c, STATUS[k].name.toUpperCase(), x + 28, y, 15, STATUS[k].col, 'left', 'd');
       y += 20;
-      wrapText(c, STATUS[k].text, 13, 400).forEach((ln) => { txt(c, ln, x + 28, y, 13, '#c8dcf4', 'left', 't'); y += 16; });
+      wrapText(c, STATUS[k].text, 13, 400).forEach((ln) => { txt(c, ln, x + 28, y, 13, '#c8dcf4', 'left', 't'); y += lineH(13, 16); });
       y += 6;
     }
   }
@@ -6748,7 +6990,7 @@ function drawReward(c, t) {
       c.restore();
       txt(c, bl.name.toUpperCase().replace('BELL OF ', ''), x + w2 / 2, 508 - (hovered ? 6 : 0), 18, bl.col, 'center', 'd');
       wrapText(c, bl.text, 12.5, w2 - 22).forEach((ln, k) =>
-        txt(c, ln, x + w2 / 2, 528 + k * 15 - (hovered ? 6 : 0), 12.5, '#c8dcf4', 'center', 't'));
+        txt(c, ln, x + w2 / 2, 528 + k * lineH(12.5, 15) - (hovered ? 6 : 0), 12.5, '#c8dcf4', 'center', 't'));
       c.restore();
       if (!r.bellTaken) hit('rewardBell', x, 428, w2, 132, i);
     });
@@ -6780,11 +7022,11 @@ function drawReward(c, t) {
        So a meal is sold here too, at the same rising price, out of the scrip
        the fight just paid. */
     const mp = mealPrice(run);
-    button(c, 'rewardMeal', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44, 'A HOT MEAL  ' + mp, '#8f6a3f',
+    button(c, 'rewardMeal', bx + (bw4 + gap4) * 3, VH - 128, bw4, 44, 'A MEAL  ' + mp, '#8f6a3f',
       run.gold < mp || !feedable(run).length, true);
     button(c, 'rewardRedeal', bx + (bw4 + gap4) * 4, VH - 128, bw4, 44, 'REDEAL  ' + rd, '#3f6f8f', run.gold < rd, true);
     button(c, 'rewardCourse', bx + (bw4 + gap4) * 5, VH - 128, bw4, 44,
-      (run.course ? 'SWAP COURSE  ' : 'COURSE  ') + COURSE_PRICE, '#6f5f3f', run.gold < COURSE_PRICE, true);
+      'COURSE  ' + COURSE_PRICE, '#6f5f3f', run.gold < COURSE_PRICE, true);
     // The one line that says what this caravan is actually short of, right
     // where the decision is being made.
     const need = caravanNeeds(run);
@@ -6850,7 +7092,7 @@ function drawShop(c, t) {
     if (s.bell.sold) c.globalAlpha = 0.35;
     panel(c, bx0, by0, bwid, 50, 12, '#1d2c49', bl.col);
     txt(c, bl.name.toUpperCase().replace('BELL OF ', 'A BELL OF '), bx0 + 14, by0 + 17, 15, bl.col, 'left', 'd');
-    txt(c, bl.text, bx0 + 14, by0 + 30, 12, '#c8dcf4', 'left', 't');
+    txt(c, bl.text, bx0 + 14, by0 + 17 + lineH(15, 13), 12, '#c8dcf4', 'left', 't');
     panel(c, bx0 + bwid - 72, by0 + 10, 58, 30, 9, afford ? '#3f8f5f' : '#5a3a3a', C.ink);
     txt(c, s.bell.sold ? '—' : String(s.bell.price), bx0 + bwid - 43, by0 + 26, 16, '#ffe6a8', 'center', 'd');
     c.restore();
@@ -6908,7 +7150,7 @@ function drawCamp(c, t) {
     panel(c, x, 420, ow, 110, 14, '#1d2c49', '#7fb2e8');
     txt(c, o.label, x + ow / 2, 456, 20, '#eaf6ff', 'center', 'd');
     wrapText(c, o.sub, 13.5, ow - 24).forEach((ln, k) =>
-      txt(c, ln, x + ow / 2, 486 + k * 17, 13.5, '#9fc0e4', 'center', 't'));
+      txt(c, ln, x + ow / 2, 486 + k * lineH(13.5, 17), 13.5, '#9fc0e4', 'center', 't'));
     hit(o.id, x, 420, ow, 110);
   });
 }
@@ -7037,7 +7279,7 @@ function drawEvent(c, t) {
   if (!ev) return;
   txt(c, ev.title, MID, 92, 36, '#eaf6ff', 'center', 'd');
   const lines = wrapText(c, ev.text, 17, 860);
-  lines.forEach((ln, i) => txt(c, ln, MID, 142 + i * 24, 17, '#bcd4f0', 'center', 't'));
+  lines.forEach((ln, i) => txt(c, ln, MID, 142 + i * lineH(17, 24), 17, '#bcd4f0', 'center', 't'));
 
   c.save();
   c.globalAlpha = 0.35; c.fillStyle = '#0d1830';
@@ -7057,9 +7299,9 @@ function drawEvent(c, t) {
     const hovered = UI.hover && UI.hover.id === 'eventOpt' && UI.hover.data === i;
     panel(c, x, y - (hovered && able ? 6 : 0), w, 150, 14, able ? '#1d2c49' : '#2a3145', able ? '#7fb2e8' : '#4a5570');
     wrapText(c, o.label, 21, w - 34).forEach((ln, k) =>
-      txt(c, ln, x + w / 2, y + 46 + k * 24 - (hovered && able ? 6 : 0), 21, able ? '#eaf6ff' : '#7a86a0', 'center', 'd'));
+      txt(c, ln, x + w / 2, y + 46 + k * lineH(21, 24) - (hovered && able ? 6 : 0), 21, able ? '#eaf6ff' : '#7a86a0', 'center', 'd'));
     if (o.sub) wrapText(c, o.sub, 14, w - 34).forEach((ln, k) =>
-      txt(c, ln, x + w / 2, y + 104 + k * 18 - (hovered && able ? 6 : 0), 14, able ? '#9fc0e4' : '#67718a', 'center', 't'));
+      txt(c, ln, x + w / 2, y + 104 + k * lineH(14, 18) - (hovered && able ? 6 : 0), 14, able ? '#9fc0e4' : '#67718a', 'center', 't'));
     if (able) hit('eventOpt', x, y, w, 150, i);
   });
 }
@@ -7145,9 +7387,9 @@ function drawRest(c, t) {
     drawBlessIcon(c, art, t + i);
     c.restore();
     wrapText(c, bl.name, 22, w - 40).forEach((ln, k) =>
-      txt(c, ln, x + w / 2, y + 140 + k * 24 - (hovered ? 6 : 0), 22, '#eaf6ff', 'center', 'd'));
+      txt(c, ln, x + w / 2, y + 140 + k * lineH(22, 24) - (hovered ? 6 : 0), 22, '#eaf6ff', 'center', 'd'));
     wrapText(c, bl.sub, 14, w - 40).forEach((ln, k) =>
-      txt(c, ln, x + w / 2, y + 176 + k * 17 - (hovered ? 6 : 0), 14, '#9fc0e4', 'center', 't'));
+      txt(c, ln, x + w / 2, y + 176 + k * lineH(14, 17) - (hovered ? 6 : 0), 14, '#9fc0e4', 'center', 't'));
     hit('restPick', x, y, w, 210, i);
   });
 }
@@ -7158,7 +7400,7 @@ function drawShrine(c, t) {
   drawHud(c, t);
   txt(c, 'A SHRINE THAT ANSWERS', MID, 92, 36, '#ffe6a8', 'center', 'd');
   wrapText(c, 'Old stone, warm to the hand in weather that should not allow it. Leave one card of your caravan on the step overnight and it will be given back better than it was.', 17, 820)
-    .forEach((ln, i) => txt(c, ln, MID, 140 + i * 24, 17, '#bcd4f0', 'center', 't'));
+    .forEach((ln, i) => txt(c, ln, MID, 140 + i * lineH(17, 24), 17, '#bcd4f0', 'center', 't'));
 
   /* The stone itself — the same one the roadside shrine event draws, at twice
      the size. It was a flat pentagon on a flat disc, which is a shame for the
@@ -7318,8 +7560,9 @@ function press(id, data) {
     case 'pass': passTurn(g); return;
     case 'order': UI.order = !UI.order; return;
     case 'menu': UI.deck = true; return;
-    case 'help': UI.help = 0; return;
-    case 'helpPage': UI.help = data; return;
+    case 'help': UI.help = 0; UI.helpSheet = 0; return;
+    case 'helpPage': UI.help = data; UI.helpSheet = 0; return;
+    case 'helpSheet': UI.helpSheet = Math.max(0, (UI.helpSheet | 0) + data); return;
     case 'helpClose': UI.help = null; return;
     case 'mute': setMute(!G.meta.mute); return;
     case 'tutSkip': if (G.tut) finishTutorial(g); return;
@@ -7638,7 +7881,7 @@ function onDown(x, y) {
   const h = hitAt(x, y);
   UI.hover = h;
   if (UI.help !== null && UI.help !== undefined) {
-    if (h && (h.id === 'helpPage' || h.id === 'helpClose')) press(h.id, h.data);
+    if (h && (h.id === 'helpPage' || h.id === 'helpClose' || h.id === 'helpSheet')) press(h.id, h.data);
     return;
   }
   if (UI.inspect) { if (h && h.id === 'inspectClose') press(h.id); else UI.inspect = null; return; }
@@ -8090,6 +8333,7 @@ window.FF = {
   units, playerUnits, enemyUnits, unitAt, slotFree, freeSlots, laneOf, turnOrder,
   targetFor, frontTarget, laneTargets, neighbours,
   addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter, shoveUnit, HOARD_CAP,
+  layPlot,
   PREVIEW, previewOf, logLine,
   SCHEMES, layPlot, maybeLay, tickRate,
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
