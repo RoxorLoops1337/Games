@@ -1114,6 +1114,16 @@ section('which parts of playing well are worth anything');
      all six at a sample that tight costs six times as much and answers five
      questions nobody asked. */
   const ONLY = process.env.FF_HABIT || '';
+  /* THE PILOT THIS ARM PRICES HABITS FOR, and it is a cage by default.
+     `tactics` plays the fight and nothing else — no shopping, no drafting — so
+     every habit here has been priced for a pilot that never buys a charm or
+     steers an offer. That is a defensible control (it isolates the fight) and it
+     is also exactly the shape of cage that made the trail finding evaporate one
+     round ago. FF_REAL=1 runs the same ablation on a `careful` pilot, which is
+     the game. Both are printed rather than one replacing the other, because if
+     they agree the control was fine and if they disagree that IS the finding. */
+  const ABL_MODE = process.env.FF_REAL ? 'careful' : 'tactics';
+  if (process.env.FF_REAL) console.log('    (FF_REAL: the habits priced on a pilot that also shops and drafts)');
   if (ONLY) console.log(`    (only "${ONLY}", ${3 * N} runs an arm)`);
   const tribes = ['hearth', 'frost', 'scrap'];
   const sweep3 = () => {
@@ -1135,7 +1145,7 @@ section('which parts of playing well are worth anything');
      after each, which is slower than not pooling at all. */
   const sweep3Many = async (skillSets) => {
     const answers = await runJobs(skillSets.flatMap((skill) =>
-      tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37, mode: 'tactics',
+      tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37, mode: ABL_MODE,
         config: { skill: Object.assign({}, SKILL, skill), draft: Object.assign({}, DRAFT) } }))));
     return skillSets.map((_, k) => {
       const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
@@ -1511,7 +1521,7 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
@@ -1993,6 +2003,24 @@ section('where a run is actually decided');
     const half = Math.floor(rows.length / 2);
     const top = rows.slice(0, half), bot = rows.slice(-half);
     const avg = (xs, k) => xs.reduce((n, r) => n + r[k], 0) / Math.max(1, xs.length);
+    /* THE TEST THE ROOM-RULE EXPLANATION RESTS ON, and it was named a round
+       before it was run. If fewer bodies wins BECAUSE fewer bodies keeps slots
+       free, the winning decks must stand on emptier boards and be warmed more
+       often. If they are not, the explanation is wrong however good it sounds. */
+    const roomOf = (d) => {
+      const st = [];
+      for (let p = 0; p < PERMS; p++) st.push(...answers[d * PERMS + p].stats);
+      const seen = st.filter((x) => x.freeAvg !== undefined);
+      return {
+        free: seen.reduce((n, x) => n + x.freeAvg, 0) / Math.max(1, seen.length),
+        warm: seen.reduce((n, x) => n + x.warmShare, 0) / Math.max(1, seen.length),
+      };
+    };
+    const withRoom = rows.map((r) => Object.assign({}, r, roomOf(r.d)));
+    const topR = withRoom.slice(0, half), botR = withRoom.slice(-half);
+    console.log(`      DO THE WINNERS STAND ON EMPTIER BOARDS?  ` +
+      `free slots a turn ${avg(topR, 'free').toFixed(2)} vs ${avg(botR, 'free').toFixed(2)} · ` +
+      `warmed on ${(avg(topR, 'warm') * 100).toFixed(0)}% of turns vs ${(avg(botR, 'warm') * 100).toFixed(0)}%`);
     console.log(`      top half vs bottom half:  bodies ${avg(top, 'bodies').toFixed(1)} vs ${avg(bot, 'bodies').toFixed(1)} · ` +
       `hp ${avg(top, 'hp').toFixed(1)} vs ${avg(bot, 'hp').toFixed(1)} · ` +
       `atk ${avg(top, 'atk').toFixed(1)} vs ${avg(bot, 'atk').toFixed(1)} · ` +

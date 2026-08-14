@@ -1706,6 +1706,25 @@ function die(g, u, killer) {
   if (co && co.rekindle && g.battle && !g.battle.rekindled && !u.leader) {
     g.battle.rekindled = true;
     u.hp = 1;
+    /* HEARTH'S FOURTH REWRITE, AND ITS FOURTH ZERO. The first three were
+       resources — Spice on deploy, Spice kept up, a body saved — and the theory
+       was that this is why they failed: Cold is 8 points clear and the only
+       thing it does that nobody else does is take a foe's TURN.
+
+       So the fourth was a turn: the warden that should have fallen stays up AND
+       whatever felled it is Frozen 1. Measured at 840 runs an arm, Hearth read
+       **38%** — the same 38% it read without it, against Cold's 46%.
+
+       Which sharpens the hypothesis instead of confirming it. "Tempo beats
+       resources" is not enough: Cold's Frost lands on the FRONT OF THE FIRST
+       WAVE, turn one of every fight, before anything has happened. Everything
+       Hearth has tried lands late — a body saved after it was nearly lost, a
+       foe frozen after it already killed. **A turn taken at the end of a fight
+       is worth about what a resource is worth: nothing.** The next attempt at
+       this course has to move the timing, not the currency.
+
+       Reverted rather than shipped, on the rule this file keeps: a mechanic that
+       measures zero is not free. */
     fx.pop(u, 'THE FIRE HOLDS', '#ff9a5c');
     fx.burst(u, '#ff9a5c', 14);
     sfx('heal');

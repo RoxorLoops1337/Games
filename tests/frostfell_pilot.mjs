@@ -444,6 +444,12 @@ function carefulTurn() {
     const free = FF.freeSlots(G, 'p').length;
     if (free) ROOM.spare++; else ROOM.packed++;
     ROOM.free[Math.min(6, free)] = (ROOM.free[Math.min(6, free)] || 0) + 1;
+    /* PER RUN as well as globally, because the global histogram cannot answer
+       the question the room-rule finding rests on: do the decks that WIN stand
+       on emptier boards? That needs the number attributed to the run that
+       produced it, and one running mean is the whole cost. */
+    RUNROOM.turns++; RUNROOM.free += free;
+    if (FF.hasRoom(G, 'p')) RUNROOM.warm++;
     /* AND THE OTHER SIDE OF THE TABLE, which the first cut of this forgot to
        look at. The room rule is symmetric — it has always applied to the foes
        too — so moving the bar from one gap to two changes the fight for
@@ -833,6 +839,10 @@ function stripScars(run) {
 }
 
 const MEND = { on: false, by: {}, hurt: 0, last: null, where: 'start' };
+/* Reset at the top of every run and folded into that run's stat at the bottom;
+   it is deliberately NOT one of the merged COUNTERS, because it is per-run
+   state rather than an accumulating total. */
+const RUNROOM = { turns: 0, free: 0, warm: 0 };
 const wounds = () => (G.run ? G.run.deck.concat([G.run.leader])
   .filter((c) => c.type === 'unit').reduce((n, c) => n + (c.dmg || 0), 0) : 0);
 
@@ -867,6 +877,7 @@ function playRun(tribe, seed, mode, tweak) {
   if (mode === 'careful' && DRAFT.course) G.run.course = courseWanted();
   applyTweak(G.run, tweak);
   MEND.last = null; MEND.where = 'start';
+  RUNROOM.turns = 0; RUNROOM.free = 0; RUNROOM.warm = 0;
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
   let lastShop = null;
   let guard = 0;
@@ -1220,6 +1231,8 @@ function playRun(tribe, seed, mode, tweak) {
     }
   }
   stat.guard = guard;
+  stat.freeAvg = RUNROOM.turns ? RUNROOM.free / RUNROOM.turns : 0;
+  stat.warmShare = RUNROOM.turns ? RUNROOM.warm / RUNROOM.turns : 0;
   return stat;
 }
 
