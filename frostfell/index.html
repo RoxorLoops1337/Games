@@ -276,7 +276,18 @@ const A = (body, belly, o) => Object.assign({ body, belly, shape: 'blob', ears: 
    TURN. If you cannot say what it costs, it is not finished.
    ========================================================================= */
 const CARDS = {};
-const def = (o) => { CARDS[o.id] = o; return o; };
+/* A SECOND def() FOR THE SAME ID USED TO WIN SILENTLY, and it cost a card.
+
+   Five new cards went in above the gear block; one of them was named
+   cairnwarden, which already existed a hundred lines further down. The later
+   def overwrote the earlier one, the new card vanished from the game entirely,
+   and the whole suite went green — 602 checks, because every one of them
+   happened to be testing the survivor. A collision that deletes content and
+   passes every test is the worst shape a bug can have, so it is a throw now. */
+const def = (o) => {
+  if (CARDS[o.id]) throw new Error('two cards claim the id ' + o.id);
+  CARDS[o.id] = o; return o;
+};
 
 /* leaders ---------------------------------------------------------------- */
 def({ id: 'bramblewick', name: 'Bramblewick', type: 'unit', leader: true, tribe: 'hearth',
@@ -416,14 +427,25 @@ def({ id: 'snowbeard', name: 'Snowbeard', type: 'unit', tribe: 'frost', hp: 16, 
   art: A('#8fa8c8', '#e8f2ff', { stance:'stand',tail:'none',mark:'tuft', skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'beard', acc: 'helm', accCol: '#5f7fa8' }),
   kw: { smack: 1, soak: 1 }, text: 'Soak. Smackback.' });
 
-/* RARITY MEASURED RATHER THAN ASSIGNED, once. Handed to a locked six-card deck
-   Frostmite trebles its odds of crossing — 3.02x at 4.3 sigma, the best card in
-   the game and the only one besides Avalanche to clear the family bar over 57
-   tests. It was a COMMON, which means the draft weighting showed it five times
-   as often as the rares it beats. Promoted. Nothing else in the table clears
-   that bar, and re-tiering 57 cards on sub-bar evidence would be fitting noise
-   — see DESIGN.md for what sample would license the rest. */
-def({ id: 'frostmite', name: 'Frostmite', type: 'unit', tribe: 'frost', hp: 4, atk: 1, cnt: 1, rare: 3,
+/* PROMOTED ON ONE MEASUREMENT AND DEMOTED AGAIN ON A BETTER ONE. Read both.
+
+   Handed to a locked six-card deck Frostmite trebles its odds of crossing —
+   3.02x at 4.3 sigma, the best card in the game and the only one besides
+   Avalanche to clear the family bar over 57 tests. It was a common, so it was
+   promoted to rare on the reasoning that a common worth 3.5x is a bug.
+
+   That reasoning was wrong, and the ladder said so at the same seeds and the
+   same sample: rare 7/21/37/37, common 9/26/39/38. Four rungs, all down, off a
+   one-character change. The locked deck that measured the 3.02x HANDS the card
+   over, so rarity does nothing inside it — worth was measured in the one
+   context where the dial being turned has no effect. In a real draft the dial
+   is pure frequency, and thinning the strongest early common out of a beginner
+   hand costs the careless pilot two points and the fight rung five.
+
+   So a strong common is not an imbalance here, it is the floor holding itself
+   up. rare: 1 stands, and the rule is in DESIGN.md: a worth measured in a
+   locked deck cannot license a frequency change. */
+def({ id: 'frostmite', name: 'Frostmite', type: 'unit', tribe: 'frost', hp: 4, atk: 1, cnt: 1, rare: 1,
   art: A('#cfeaff', '#ffffff', { stance:'quad',tail:'whip',mark:'none', skin:'ice',idle:'shiver', shape: 'small', ears: 'antenna', mouth: 'flat', eyes: 'big' }),
   kw: {}, text: 'When it falls, Frost 2 on every foe.',
   hooks: { death: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 2)) } });
@@ -534,6 +556,104 @@ def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, at
 def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3, cnt: 3, rare: 2,
   art: A('#8fb08f', '#d8ebd6', { stance:'stand',tail:'none',mark:'scar',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
   kw: { longshot: 1, soak: 1 }, text: 'Longshot. Soak.' });
+
+/* -- the five that rewrite a rule ----------------------------------------- */
+/* Fifty-six of fifty-seven cards measured indistinguishable from the pool
+   median. These five exist to answer that, and NOT by carrying bigger numbers:
+   every one of them is at or below the stat line of an ordinary card of its
+   tier, and every one of them hangs a rewrite of a global rule off a body that
+   can be killed. See the aura note in section 5 for the shape, and each card's
+   comment for what it charges — because a card whose cost you cannot state
+   fails doctrine test 3 and should not have been built. */
+
+def({ id: 'coldbearer', name: 'Coldbearer', type: 'unit', tribe: 'hearth', hp: 14, atk: 1, cnt: 4, rare: 3,
+  art: A('#9c8f7a', '#ded3bd', { stance:'squat',tail:'none',mark:'patch', skin:'metal',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'lantern', accCol: '#ffd166' }),
+  aura: { coldsink: 1 },
+  kw: {}, text: 'While it stands, a packed line still warms — and it takes the Frost 2 for all of them.' });
+
+def({ id: 'backdrift', name: 'Backdrift', type: 'unit', tribe: 'frost', hp: 9, atk: 2, cnt: 3, rare: 3,
+  art: A('#a8c6e8', '#eaf4ff', { stance:'float',tail:'plume',mark:'none', skin:'ice',idle:'hover', shape: 'wisp', ears: 'antenna', mouth: 'none', eyes: 'big' }),
+  aura: { invert: 1 },
+  kw: {}, text: 'While it stands, the BACK column burns two counters a turn and the front burns one — both sides.' });
+
+/* Its Spice is banked when it SWINGS, not when it gains, so the question is on
+   the board every turn: spend the spice on a kill now, or hold it through one
+   more counter and keep it for the rest of the run. Falling empties the bank,
+   which is what stops the answer from always being "park it at the back". */
+def({ id: 'grudgehorn', name: 'Grudgehorn', type: 'unit', tribe: 'scrap', hp: 11, atk: 1, cnt: 3, rare: 3,
+  art: A('#8a7f96', '#d6cfe0', { stance:'quad',tail:'whip',mark:'scar', skin:'metal',idle:'twitch', shape: 'blob', ears: 'antler', mouth: 'trap', acc: 'helm', accCol: '#c9b28a' }),
+  kw: {}, text: 'Whatever Spice it holds when it swings, it keeps for the rest of the run. If it falls, the hoard is lost.',
+  hooks: {
+    deploy: (g, u) => { if (u.card.kept) addStatus(g, u, 'spice', u.card.kept); },
+    trigger: (g, u) => {
+      const held = stat(u, 'spice');
+      if (held > (u.card.kept || 0)) { u.card.kept = held; fx.pop(u, 'KEPT ' + held, STATUS.spice.col); }
+    },
+    death: (g, u) => { u.card.kept = 0; },
+  } });
+
+/* HELD BACK FROM THE OFFER, AND THE NUMBER IS WHY.
+
+   Dawnpiper and Trailmarshal are built, tested and correct. They are also the
+   two of the five whose rule only pays if the player PLANS for it — protect a
+   glass body; keep a slot empty — and measured at FF_RUNS=70 that is not free:
+
+     57 cards, before this round      9 / 26 / 39 / 38   ladder 30
+     + all five new cards             7 / 20 / 37 / 34   ladder 27
+     + only the three passive ones    7 / 19 / 38 / 37   ladder 30
+
+   The three always-on rules cost the ladder NOTHING. These two cost three
+   points, and raising their stat lines first (Dawnpiper 4→7 hp, Trailmarshal
+   10/2→13/4) moved the reading by nothing at all, so it is not that they are
+   weak bodies. The mechanism is this round's own lesson about rarity: a rare
+   that a pilot cannot use still occupies a rare slot in a steered offer, and
+   displaces one that pays.
+
+   The probe's pilot never plans, so it cannot see the upside — but "my
+   instrument cannot see the good half" is not evidence the good half exists,
+   and shipping a measured three-point regression on that reasoning would be
+   shipping on faith. They stay out of the offer until the pilot can express the
+   two habits, at which point this flag comes off and the arm is re-run. The
+   card, the aura, the hooks and the suite coverage are all still here. */
+def({ noPool: true, id: 'dawnpiper', name: 'Dawnpiper', type: 'unit', tribe: 'hearth', hp: 7, atk: 1, cnt: 3, rare: 3,
+  art: A('#ffd9a8', '#fff2dc', { stance:'stand',tail:'none',mark:'tuft',arms:'long', idle:'sway', shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big', acc: 'staff', accCol: '#c9b28a' }),
+  aura: { firstlight: 1 },
+  kw: {}, text: 'While it stands, your wardens tick before the foes.' });
+/* 7 health and not 4. Glass is the right cost for the largest rule in the game
+   and 4 was not glass, it was paper: 0 wins in 60 locked runs, the body dead
+   before the rule paid for itself once. Still the flimsiest thing in the pool. */
+
+/* The only card in the game that puts a body down without spending the turn,
+   and it charges for it in the currency the room rule already made expensive:
+   it does nothing at all unless you have kept a slot empty for it.
+
+   STATTED UP AFTER THE FIRST MEASUREMENT. At 10/2/4 it won 0 of 60 locked runs,
+   because the probe's pilot fills every slot it can and so the rule never fired
+   once. A rule the player has to plan for is fine; a card that is DEAD to a
+   player who does not plan is not, because the rule is then the only thing it
+   is, and it crowds a rare slot for everyone who has not had the idea yet. It
+   is an ordinary scrap body now, and the rule is the upside. */
+def({ noPool: true, id: 'trailmarshal', name: 'Trailmarshal', type: 'unit', tribe: 'scrap', hp: 13, atk: 4, cnt: 4, rare: 3,
+  art: A('#b8996b', '#e8d9b4', { stance:'stand',tail:'stub',mark:'brand',arms:'long', skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'satchel', accCol: '#ff9a3c' }),
+  kw: {}, text: 'When it triggers, the next warden in your deck marches out free — if a slot is open for it.',
+  hooks: {
+    trigger: (g, u) => {
+      const b = g.battle;
+      const slot = freeSlots(g, 'p')[0];
+      if (!slot || !b.draw.length) return;
+      const i = b.draw.findIndex((c) => c.type === 'unit');
+      if (i < 0) return;
+      const card = b.draw.splice(i, 1)[0];
+      const nu = mkUnit(card, 'p', slot.lane, slot.col);
+      nu.born = 0.0001;
+      b.units.push(nu);
+      for (const [k, n] of card.bonusDeploy) addStatus(g, nu, k, n);
+      const d2 = CARDS[card.def];
+      if (d2 && d2.hooks && d2.hooks.deploy) d2.hooks.deploy(g, nu);
+      fx.thump(nu);
+      logLine(g, card.name + ' marches out', '#8fffc4');
+    },
+  } });
 
 /* -- gear (one-shot cards) ------------------------------------------------ */
 def({ id: 'emberflask', name: 'Ember Flask', type: 'item', tribe: 'hearth', rare: 1, target: 'enemy',
@@ -1330,6 +1450,34 @@ const laneHeldBy = (g, lane) => units(g).find((u) => u.side === 'p' && u.lane ==
 const WAVE_TELL = { on: true };   // the probe's only way to compare like with like
 const laneOf = (g, side, lane) => units(g).filter((u) => u.side === side && u.lane === lane).sort((a, b) => a.col - b.col);
 const other = (side) => (side === 'p' ? 'e' : 'p');
+
+/* ------------------------------------------------------------- auras ----- */
+/* A RULE THAT LIVES ON THE BOARD RATHER THAN ON THE BODY CARRYING IT.
+
+   Fifty-seven cards were priced one at a time and fifty-six of them were
+   indistinguishable from the pool median. That is not a tiering problem, it is
+   a shape problem: every card in the pool was built out of stats, keywords and
+   per-unit hooks, and all three of those are local. A card whose whole effect
+   lands on one body cannot change how the OTHER five are played, so nothing you
+   pick up changes how you play.
+
+   An aura is the missing shape. It hangs a rewrite of a global rule off a
+   living body, which means it charges for itself in the only currency this game
+   has — a slot, and the risk of losing the rule when the body falls. There are
+   deliberately only five, one per rule the engine actually has: the room rule,
+   the column clock, turn order, run-scoped memory and deploying from the deck.
+   Each is read at exactly one site, and each site names the card in a comment,
+   because an aura that is read in two places is a rule nobody can hold in their
+   head. */
+function auraOn(g, side, key) {
+  if (!g.battle) return null;
+  for (const u of g.battle.units) {
+    if (!u.alive || u.side !== side) continue;
+    const d = CARDS[u.def] || FOES[u.def];
+    if (d && d.aura && d.aura[key]) return u;
+  }
+  return null;
+}
 /* ONE PASS OVER THE UNITS, NOT SIX. This asked `slotFree` for each of the six
    slots and each of those built a filtered copy of the unit list and searched
    it — six list copies and six scans to answer a question one scan answers. It
@@ -1413,8 +1561,13 @@ function neighbours(g, u) {
    ticks before every warden, and inside a side the front of the table goes
    first, top lane before bottom. */
 function turnOrder(g) {
+  /* AURA — Dawnpiper. Foes tick first, always, and that one line is why the
+     front row is a gamble rather than a free double. Standing it on its head is
+     the largest thing a single body can do to this game, so the body is glass:
+     4 hp, and the rule leaves with it. */
+  const first = auraOn(g, 'p', 'firstlight') ? 'p' : 'e';
   return units(g).slice().sort((a, b) => {
-    if (a.side !== b.side) return a.side === 'e' ? -1 : 1;
+    if (a.side !== b.side) return a.side === first ? -1 : 1;
     if (a.col !== b.col) return a.col - b.col;
     return a.lane - b.lane;
   });
@@ -1499,12 +1652,24 @@ const LESSON = { times: 1, zone: 0 };
 const ROOM_NEEDED = 2;
 function hasRoom(g, side) {
   if (freeSlots(g, side).length >= ROOM_NEEDED) return true;
+  /* AURA — Coldbearer. It does not delete the room rule, which would delete
+     the decision with it (doctrine test 4). It PRICES it: the line warms off a
+     packed board and the Coldbearer eats the cold that would have gone into
+     it, two Frost a turn, forever. So a swarm is buyable now, and what it costs
+     is one of the six bodies standing there doing nothing but freezing. */
+  if (auraOn(g, side, 'coldsink')) return true;
   const co = side === 'p' ? courseOf(g.run) : null;
   return !!(co && co.crowdproof);
 }
 /* And the cold only gets in when there is nowhere at all to go. */
 function isPacked(g, side) {
   if (freeSlots(g, side).length > 0) return false;
+  /* AURA — Coldbearer, and it has to be answered HERE as well as in hasRoom.
+     The upkeep reads the two as an if/else so patching hasRoom alone produced
+     the right behaviour, but this is the one the board banner reads: the run
+     suite would have been green while the fight told the player the cold was
+     getting in and then quietly warmed the line. */
+  if (auraOn(g, side, 'coldsink')) return false;
   const co = side === 'p' ? courseOf(g.run) : null;
   return !(co && co.crowdproof);
 }
@@ -1823,7 +1988,7 @@ function tickCounter(g, u, n, natural) {
      sooner and gets hit for it; keep the fragile one back and it is safe and
      late. Every deployment is that question, and so is every free move — which
      is the one action in the game that does not cost the turn. */
-  if (natural) ticks += tickRate(u) - 1;
+  if (natural) ticks += tickRate(u, g) - 1;
   if (natural) ticks += spend(u, 'swift');
   if (natural && stat(u, 'slow') > 0) { spend(u, 'slow', 1); fx.pop(u, 'SLOW', STATUS.slow.col); return false; }
   u.cnt = Math.max(0, u.cnt - ticks);
@@ -1841,9 +2006,17 @@ function tickCounter(g, u, n, natural) {
    "One tick" means one TURN, not one point — a foe in the front row burns two a
    turn, so a two-counter foe standing there never sits on exactly 1 and would
    otherwise never telegraph anything at all. */
-const tickRate = (u) => (u.col === 0 ? 2 : 1);
+/* AURA — Backdrift inverts this, and inverting it re-prices all six slots at
+   once: the safe column becomes the fast one and the exposed column becomes the
+   slow one. Note it is read for BOTH sides off the unit's own side, so standing
+   Backdrift also re-prices the foes' board — which is the cost, and it is a
+   real one against a front-loaded wave. */
+const tickRate = (u, g) => {
+  const flip = auraOn(g || G, u.side, 'invert');
+  return (u.col === 0) === !flip ? 2 : 1;
+};
 function maybeLay(g, u) {
-  if (u.alive && u.cnt > 0 && u.cnt <= tickRate(u)) layPlot(g, u);
+  if (u.alive && u.cnt > 0 && u.cnt <= tickRate(u, g)) layPlot(g, u);
 }
 
 /* ------------------------------------------------------- the turn ------- */
@@ -1900,6 +2073,15 @@ function resolveTurn(g) {
            The dial between them is how often the fire burns high. */
         const warm = (co2 && co2.warmth) || 1;
         for (const u of line) addStatus(g, u, 'regen', warm, true);
+        /* AURA — Coldbearer pays here. The warmth above only reached this side
+           because it is standing, so the cold that a packed line would have put
+           somewhere goes into it instead, and it goes in doubled. It is charged
+           only when the board is genuinely full: with a slot to spare the rule
+           was never in question and the Coldbearer is an ordinary body. */
+        if (!freeSlots(g, side).length) {
+          const sink = auraOn(g, side, 'coldsink');
+          if (sink) addStatus(g, sink, 'frost', 2);
+        }
         if (side === 'p' && g.run) g.run.everRoom = 1;   // it has felt the warmth; the lesson is done
         /* Every turn was too much: the first cut of this measured 53% against a
            35% baseline while the other four sat at 38-44, which is the same
@@ -8219,17 +8401,25 @@ function drawDusk(c, t) {
   c.fillStyle = glow; c.fillRect(0, 0, VW, VH);
   c.restore();
 
-  // a wall of weather across the middle distance, three ridges deep
+  /* A wall of weather across the middle distance, three ridges deep.
+
+     THE STEP HAS TO LAND ON VW AND IT DID NOT. `x += 60` from 0 stops at the
+     last multiple of 60 below VW, and the `lineTo(VW, VH)` that followed then
+     dropped straight down from there — a hard vertical seam through all three
+     ridges, 40 units in from the right edge at VW=1600. Invisible at 1280
+     (a multiple of 60 lands at 1260, close enough to the edge to read as the
+     frame) and glaring at 2400x1080, which is exactly why the walk is run at
+     three sizes. It sweeps past both edges now and never lands on them. */
   const ridges = [[0.62, '#0e1730', 1.0], [0.70, '#131e3c', 0.7], [0.78, '#1a2748', 0.45]];
   ridges.forEach(([f, col, sp], k) => {
     c.beginPath();
-    c.moveTo(0, VH);
-    c.lineTo(0, VH * f);
-    for (let x = 0; x <= VW; x += 60) {
+    c.moveTo(-60, VH);
+    c.lineTo(-60, VH * f);
+    for (let x = -60; x <= VW + 60; x += 60) {
       c.lineTo(x, VH * f + Math.sin(x * 0.004 + k * 2.1 + t * 0.02 * sp) * 26
         + Math.sin(x * 0.011 + k) * 11);
     }
-    c.lineTo(VW, VH); c.closePath();
+    c.lineTo(VW + 60, VH); c.closePath();
     c.fillStyle = col; c.fill();
   });
 
@@ -8248,12 +8438,26 @@ function drawDusk(c, t) {
 
   // snow, driving rather than drifting
   c.save();
-  for (let i = 0; i < 90; i++) {
-    const sx = (((i * 191) % 1000) / 1000 * (VW + 200) + t * (26 + (i % 5) * 9)) % (VW + 200) - 100;
-    const sy = ((i * 271) % 1000) / 1000 * VH + ((t * (40 + (i % 7) * 14)) % VH);
-    c.globalAlpha = 0.10 + 0.16 * ((i % 4) / 4);
-    c.strokeStyle = '#c8d8f0'; c.lineWidth = 1.4;
-    c.beginPath(); c.moveTo(sx, sy % VH); c.lineTo(sx - 7, (sy % VH) + 13); c.stroke();
+  /* NINETY IDENTICAL DASHES IS NOT SNOW, IT IS A SCRATCHED LENS, and that is
+     what the first cut of this looked like at all three sizes: one length, one
+     weight, one of four alphas, evenly scattered.
+
+     Depth is the whole fix, and the important half is that ONE number drives
+     all five properties. A streak that is long and dim, or thin and fast, reads
+     as noise however carefully each property was randomised on its own — near
+     flakes have to be long AND bright AND thick AND fast together, because that
+     is the only thing the eye is actually reading. */
+  for (let i = 0; i < 120; i++) {
+    const near = ((i * 37) % 100) / 100;              // 0 far … 1 near
+    const drift = 22 + near * 46;
+    const fall = 34 + near * 96;
+    const sx = (((i * 191) % 1000) / 1000 * (VW + 200) + t * drift) % (VW + 200) - 100;
+    const sy = (((i * 271) % 1000) / 1000 * VH + t * fall) % VH;
+    const len = 6 + near * 17;
+    c.globalAlpha = 0.05 + 0.22 * near;
+    c.strokeStyle = '#c8d8f0'; c.lineWidth = 0.7 + near * 1.5;
+    c.beginPath(); c.moveTo(sx, sy);
+    c.lineTo(sx - len * 0.5, sy + len); c.stroke();
   }
   c.restore();
 }
@@ -8263,6 +8467,7 @@ function drawEnd(c, t, won) {
   else drawDusk(c, t);
   const run0 = G.run;
   const bob = Math.sin(t * 1.2) * 4;
+  let endFloor = 0;      // the lowest thing the portrait drew, for the plate below it
   txt(c, won ? 'THE FELL IS CROSSED' : 'THE COLD TAKES YOU', MID, 150 + bob, 52, won ? '#ffe6a8' : '#c8dcf4', 'center', 'd');
   txt(c, won ? 'the caravan makes the far shore, and the winter lets go' : 'the caravan halts where it stands',
     MID, 196 + bob, 17, '#9fc0e4', 'center', 't');
@@ -8281,18 +8486,33 @@ function drawEnd(c, t, won) {
        the subtitle. The block is laid out off a stated top edge instead. */
     const kh = k ? (k.boss ? 104 : 88) : 0;
     const ky = 254 + kh * 1.25;
+    /* THE THIRD MEASUREMENT OF THE SAME ANCHOR, and this one came off a
+       screenshot with a ruler on it rather than off a guess.
+
+       `drawCreature(x, y, h)` draws a body about 2.2h tall anchored near its
+       MIDDLE — an 88-unit Frostwyrm spans roughly ky−110 to ky+88. So the two
+       previous numbers were both wrong in the same direction: +30 put the name
+       on the belly, +78 put it across the feet (visible in every shot of this
+       screen at every size), and the shadow at ky+0.20h was drawn inside the
+       creature where nothing could see it. Both are hung off `feet` now, which
+       is a thing the drawing actually has, and the stat plate is pushed off the
+       same number instead of a constant that happened to clear a Frostwyrm. */
+    const feet = ky + kh;
     if (k) {
       c.save();
       c.globalAlpha = 0.5; c.fillStyle = '#0d1830';
-      c.beginPath(); c.ellipse(MID, ky + kh * 0.20, 54, 12, 0, 0, TAU); c.fill();
+      c.beginPath(); c.ellipse(MID, feet + 4, 54, 12, 0, 0, TAU); c.fill();
       c.restore();
       drawCreature(c, k.art, MID, ky, kh, { t, ph: 2, flip: true });
     }
     txt(c, k ? 'WHAT STOPPED YOU' : 'THE COLD ITSELF', MID, 232, 13, '#7e97b8', 'center', 't');
-    /* +78 and not +30: `drawCreature`'s anchor sits low in the body rather
-       than at the feet, so a name hung 30 units under it lands on the belly.
-       Measured off a shot rather than guessed a second time. */
-    if (k) txt(c, k.name.toUpperCase(), MID, ky + 78, 24, '#ffb0b8', 'center', 'd');
+    if (k) txt(c, k.name.toUpperCase(), MID, feet + 34, 24, '#ffb0b8', 'center', 'd');
+    /* The name's own block, not the name's anchor: 24-unit display text hung at
+       feet+34 reaches to about feet+64, and the log line the plate draws 30
+       above itself has to start below THAT. Two rounds running, this screen has
+       put one string on top of another because a lower element was pinned to a
+       constant while an upper one moved. */
+    endFloor = k ? feet + 64 : 300;
   } else if (won && run0) {
     /* Anything the crossing earned, named, before the caravan is shown. A
        crossing that earns nothing new says so — that is the hook. */
@@ -8349,8 +8569,16 @@ function drawEnd(c, t, won) {
   const cells = all9 ? all9.filter((r) => r[2] || !won).map((r) => [r[0], r[1]])
     : [['RUNS', G.meta.runs], ['CROSSINGS', G.meta.wins], ['FURTHEST', (G.meta.best || 0) + 1]];
 
-  const perRow = Math.min(8, Math.max(3, cells.length)), cw = Math.min(150, (VW - SAFE * 2) / 8), chh = 56;
-  const statTop = won ? VH - 176 : 540;   // clear of the portrait AND its name
+  /* EIGHT WAS A CONSTANT AND THERE ARE NINE STATS ON A LOSS, so the ninth wrapped
+     onto a row of its own and sat centred under the other eight looking like a
+     layout accident — which is what it was. A defeat shows every cell including
+     the zeroes (that is the point: it is an account of what stopped you), so the
+     row has to be able to hold nine. It can: even at the narrowest stage the
+     game ever builds, VW=1180, nine cells of 122 fit inside the safe area with
+     room over. The width comes off the count now instead of off an 8. */
+  const perRow = Math.min(cells.length, Math.max(3, Math.floor((VW - SAFE * 2) / 122)));
+  const cw = Math.min(150, (VW - SAFE * 2) / perRow), chh = 56;
+  const statTop = won ? VH - 176 : Math.max(540, endFloor + 52);   // clear of the portrait, its name AND the log line above the plate
   /* THE SKY IS BRIGHT NOW, so the stat row needs a ground. The contrast check
      caught it the moment the dawn went in: pale numbers over the sun disc read
      1.0:1, white on cream. A soft dark plate under the row is the fix and it is
@@ -8382,7 +8610,12 @@ function drawEnd(c, t, won) {
     txt(c, cell[0], x, y + 22, 11, '#7e97b8', 'center', 't');
   });
   if (run && run.log.length) {
-    txt(c, run.log[run.log.length - 1], MID, statTop - 30, 14, '#9fb6d6', 'center', 't');
+    /* ABOVE the plate, not four units inside its top edge. At statTop-30 the
+       line sat on the rounded border with the plate's corner radius cutting
+       through its descenders on both end screens — legible, and obviously
+       nobody's intent. It gets its own air now, and statTop is derived off the
+       same 52 so the loss screen cannot close the gap again. */
+    txt(c, run.log[run.log.length - 1], MID, statTop - 52, 14, '#9fb6d6', 'center', 't');
   }
   button(c, 'endHome', MID - 140, VH - 74, 280, 56, 'ANOTHER TREK', won ? '#3f8f5f' : '#40527a');
 }
@@ -9228,7 +9461,7 @@ window.FF = {
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
-  hasRoom, isPacked, ROOM_NEEDED, LESSON,
+  hasRoom, isPacked, ROOM_NEEDED, LESSON, auraOn,
   deployWave, laneHeldBy, WAVE_TELL, POOL_BAN,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
