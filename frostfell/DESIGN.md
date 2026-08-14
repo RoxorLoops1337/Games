@@ -189,51 +189,75 @@ The honest statement is that steering has never been resolved, and settling it
 needs about **4x this sample** — which is now affordable, since the probe is
 pooled.
 
-### FINDING — the trail is the lever, and it is the BOSS, not the fights
+### FINDING — the locked-deck arm was measuring the cage
 
 `topic: trail`
 
-The trail decides **32.5%** of how far a locked run gets and the deck **4.4%** —
-six times the lever, and untouched in forty rounds. So one concrete change was
-made to what a zone puts in front of you, and it is the wrong one, which is the
-useful part.
-
-**What was built and reverted.** Every foe in an encounter is `pick(src)`, an
-independent uniform draw from the zone's tiers, so a three-foe fight can roll
-three of the heaviest bodies in the pool or three of the lightest and nothing
-notices. Encounters were drawn to a strength BUDGET instead — same mean, variance
-held inside 18%:
+Two rounds of this file said **"the trail is the biggest lever in the game, six
+times the deck"**, and built on it. Every number behind that sentence came from a
+caravan that cannot draft, shop or temper — a deliberately crippled run that
+crosses 2% of the time. Run on REAL runs, which cross 32%, almost nothing about
+it survives.
 
 ```
-budget off    trail 32.6% of the zone-reached variance
-budget on     trail 32.5%
+                                   locked        LIVE (real runs)
+crossing rate                        2%            32%
+zones reached, average              1.28           2.10
+the TRAIL (won/lost variance)        7.7%          29.5%
+the DECK                             0.5%           0.9%
+the MATCHUP                         29.8%          21.7%
+deaths in zone 2                      73%            33%
+deaths in zone 3                      26%            67%
+top killer                    The Weeper 19%   Frostwyrm 24%
+The Weeper's share of deaths         19.4%          4.7%
 ```
 
-**Nothing. Not a small effect — nothing.** Which rules out the whole class, and
-that is worth more than a change that moved 2 points would have been.
+**The wall moves from zone 2 to zone 3, and the top killer stops being a beast at
+all.** On a locked deck the two Long Shelf bosses are 37% of every death; on a
+real run the Frostwyrm — an ordinary foe — kills more than any beast, and the
+Weeper falls by four times.
 
-**Where it actually is.** Fixing the boss per zone instead of drawing it:
+**And the variance share was the wrong statistic to reason with.** The deck
+explains 0.9% of the variance on real runs, which sounds like "the deck barely
+matters" and is how this file has been reading it. But the same arm reports **best
+starting deck 40% against worst 26%** — a **14-point spread in win rate**, larger
+than any single rung of the skill ladder. Both are true: a share of variance
+answers "how much of the spread does this factor account for, given how much the
+others vary", and an effect size answers "how much does changing this change your
+odds". **The deck is a 14-point lever that happens to sit next to a trail that
+varies more.** Three rounds of "cards do not matter" rested on conflating the two.
 
-```
-boss drawn per run   trail 32.5%
-boss fixed per zone  trail 13.9%
-```
+What survives: **the trail is still the largest single factor** (29.5% against the
+deck's 0.9% of variance), and **the draw order is still worth nothing** (0.0% in
+both arms, best draw order 33% against worst 32%). What does not survive is every
+specific claim about *where* the trail's influence sits.
 
-**Over half the trail's influence is which beast waits at the end of a zone.**
-One draw per zone, against the hundreds of foe draws inside it — and the reason
-is leverage rather than count: a zone's boss is the gate, so its identity decides
-whether the zone is passed at all, while an ordinary fight is one of seven.
+### DEAD ENDS — boss normalisation, built and reverted in one round
 
-The comparison is honest about its confound: fixing the boss to a single member
-of the list also moved the mean (1.31 zones to 1.05), because that member is not
-the average beast. The *variance* effect is far too large to be that — a mean
-shift cannot halve a factor's share — but the clean version of this experiment
-draws the boss and then scales it toward a common strength, which is the change
-to make and is not made here.
+`topic: boss-norm`
 
-The code is reverted rather than shipped, on this file's own rule: **a mechanic
-that measures zero on the thing it was built for is not free** — it is a rule
-every future change has to reason around. Same verdict as `SKILL.shelter`.
+The locked arm said fixing the boss per zone took the trail from 32.5% to 13.9%,
+so "over half the trail is which beast you drew" and the fix was to draw the beast
+for flavour and scale its difficulty toward the zone's average. It was built.
+Three measurements killed it:
+
+1. **The strengths were already equal.** The normalisation factors came out at
+   0.98/1.03, 0.93/1.08 and 1.02/0.98 — the two beasts in a zone differ by under
+   **8%** on total stats. There was no numeric gap to close.
+2. **And so were the kill rates.** Across 2,592 locked runs the two Long Shelf
+   beasts kill **19.4%** and **17.3%** of all runs. A coin flip between two
+   equally lethal things is not a difficulty roll.
+3. **And the finding itself was an artefact of the cage** — see above. On real
+   runs the Weeper is 4.7% of deaths, not 19.4%.
+
+Measured anyway before reverting: with normalisation on the trail read **31.6%**
+against **32.5%** off. Nothing, exactly as the factors predicted.
+
+**The transferable part is not about bosses.** It is that a finding measured on a
+locked deck is a finding about locked decks, and this one was carried for three
+rounds and had a mechanic built on it before anybody ran it on the real game. The
+locked arm is not wrong — it answers "what decides a run when the deck cannot
+change", which is a real question — it is just not the game.
 
 ### FINDING — the deck share was mine, not the game's
 
@@ -281,33 +305,38 @@ encounters, not of deck strength — which is a design statement, and the thing 
 change if you want cards to matter is how much a single pairing decides, not how
 good the cards are.
 
-### FINDING — three entries state nulls this instrument cannot support
+### FINDING — the three unsupported nulls, spent and settled
 
 `topic: null-audit`
 
-The ladder's own spread is **±2.8, so 2σ is ±5.5**. A null result on it therefore
-does not mean "no effect" — it means **"no effect larger than 6 points"**, and the
-difference matters for every entry whose headline is a null.
+The ladder's 2σ is ±5.5, so a null on it means **"no effect larger than 6
+points"** — and three entries rested on one. Settling each was costed at 4x the
+sample, about four minutes now the probe is pooled, and had never been spent.
+Twelve minutes. Spent:
 
-Audited across what is left after the cut, **3 entries** rest on one:
+| entry | at 210/arm | at 840/arm | verdict |
+|---|---|---|---|
+| **courses** | five within 2σ | 38–46% against 42%, family bar ±4.9, **0 of 6 clear** | null CONFIRMED |
+| **the lesson's dose** | 18/18/18/18 | all doses **18%**, band **±1.1** | null CONFIRMED, tightly |
+| **the telegraph** | worth "roughly nothing" | ladder **28 points with it, 28 without** | null CONFIRMED, exactly |
 
-| entry | claims | what the instrument can actually say |
-|---|---|---|
-| [courses](#finding--courses-do-not-starve-the-board) | no course runs away with the run | none of the five differs by more than 6 points |
-| [the telegraph](#finding--the-telegraph-is-feedback-not-a-decision) | it is feedback, not a decision | it is worth less than 6 points |
-| [the lesson's dose](#finding--the-dose-of-a-lesson-is-irrelevant-the-subject-is-everything) | 18/18/18/18, dose is irrelevant | four doses within 6 points of each other |
+**All three hold, and two of them are now much stronger claims than they were.**
+The lesson's dose is not "within 6 points" any more, it is within **2** — once,
+twice and every-zone are the same number at a band of ±1.1. The telegraph is not
+"worth roughly nothing", it is worth **nothing measurable**: 11/22/38/39 with the
+telegraph on and 11/22/38/39 with it off, rung for rung, over 840 runs an arm.
 
-None of the three is wrong. All three would read exactly the same if the true
-effect were **five points**, which for a game whose whole skill ladder is 27
-points is not nothing. Settling any of them needs **4x the sample** — about 840
-runs an arm, roughly four minutes each now that the probe is pooled, which is
-affordable and has simply never been spent.
+The courses are the interesting one. **The null is confirmed and the spread is
+still 8 points wide** — cold 46%, hearth 38% — which the family bar of ±4.9 does
+not let anyone call. Confirming a null is not the same as showing the thing is
+flat; it means no course clears the bar for *being named the best*, which at six
+simultaneous questions is a high bar. A seventh round at 4x again would resolve
+it and nobody has asked the question that badly.
 
-Everything else in the file rests either on an effect above 6 points (denial +10,
-the purse −17/+26, being told +11, the fight set 17–18) or on a different
-instrument entirely — the card tables use a family bar over hundreds of runs and
-the mending and contrast tables are proportions over tens of thousands of turns.
-**The 6-point rule is a rule about the ladder, not about the file.**
+**The general point, which is worth more than the three results:** "the
+instrument cannot support this" is a statement with a price tag on it, and the
+price was four minutes each. A file that says "unresolved" and does not spend the
+four minutes is choosing not to know.
 
 ### FINDING — the ladder, and which of its numbers is the one being defended
 
