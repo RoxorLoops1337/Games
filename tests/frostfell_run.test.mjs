@@ -48,6 +48,7 @@ const STANDING = [
   ['FF_NOWAVE=1', 'the ladder with the wave telegraph off, same build, same seeds'],
   ['FF_NOSCARS=1', 'the ladder with the scar rule switched off'],
   ['FF_CARDS=40', 'every card priced by taking it out of the offer'],
+  ['FF_GIVE=a,b,c', 'a NAMED handful of cards priced deep, so the family bar is 3 tests and not 60'],
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
 ];
 /* FF_HABIT and FF_CONTRAST are deliberately NOT here, and that is the answer to
@@ -574,18 +575,15 @@ section('does walking past a fight pay');
 {
   const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
-  const arm = (tweak) => {
+  const tally = (stats) => {
     let wins = 0, runs = 0, power = 0, fought = 0, walked = 0, seen = 0;
     let cards = 0, temp = 0, meals = 0, gold = 0;
-    for (const tribe of tribes) {
-      for (let i = 0; i < N; i++) {
-        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
-        runs++;
-        if (st.won) wins++;
-        if (st.endPower !== undefined) {
-          power += st.endPower; fought += st.fought; walked += st.walked; seen++;
-          cards += st.cards; temp += st.temp; meals += st.meals; gold += st.endGold;
-        }
+    for (const st of stats) {
+      runs++;
+      if (st.won) wins++;
+      if (st.endPower !== undefined) {
+        power += st.endPower; fought += st.fought; walked += st.walked; seen++;
+        cards += st.cards; temp += st.temp; meals += st.meals; gold += st.endGold;
       }
     }
     return { pct: Math.round((wins / Math.max(1, runs)) * 100), runs,
@@ -593,10 +591,19 @@ section('does walking past a fight pay');
       cards: cards / Math.max(1, seen), temp: temp / Math.max(1, seen),
       meals: meals / Math.max(1, seen), gold: gold / Math.max(1, seen) };
   };
-  const seek = arm({ set: { seek: true } });
-  const dodge = arm({ set: { dodge: true } });
+  const duckJobs = (tweak) => tribes.map((tribe) =>
+    ({ tribes: [tribe], n: N, base: 1000, step: 37, mode: 'careful', tweak, stats: true }));
+  /* seek and dodge go out together — six jobs, one pool. `sore` cannot join
+     them: the three DUCKS counters are zeroed between, and a batched call would
+     absorb all three arms' forks before the reset could run. Reading counters
+     back is exactly the thing that decides whether arms can share a call. */
+  const [seekA, dodgeA] = await Promise.resolve(runJobs(duckJobs({ set: { seek: true } })
+    .concat(duckJobs({ set: { dodge: true } }))))
+    .then((r) => [tally(r.slice(0, tribes.length).flatMap((x) => x.stats)),
+      tally(r.slice(tribes.length).flatMap((x) => x.stats))]);
+  const seek = seekA, dodge = dodgeA;
   DUCKS.forks = 0; DUCKS.taken = 0; DUCKS.wound = 0;
-  const sore = arm({ set: { duckHurt: true } });
+  const sore = tally((await runJobs(duckJobs({ set: { duckHurt: true } }))).flatMap((x) => x.stats));
   const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
   const band = BAND.gap(0.35, seek.runs).toFixed(1);
   const row = (label, a) => {
@@ -678,8 +685,25 @@ section('which cards the win rate would miss');
       }
       return (wins / Math.max(1, runs)) * 100;
     };
-    const ids = Object.values(FF.CARDS)
-      .filter((c) => !c.leader && !c.noPool).map((c) => c.id).sort();
+    /* FF_GIVE NAMES THE CARDS, AND IT EXISTS BECAUSE A FAMILY BAR IS A TAX ON
+       ASKING SIXTY QUESTIONS.
+
+       Pricing all 60 cards holds the family error at 5% by demanding 3.34σ per
+       test, which at any sample this project can afford means NOTHING clears and
+       the honest report is "the sample is too small" — a sentence this file has
+       now written three times. That is the cost of a fishing trip, and it is the
+       right cost when the question really is "is any card load-bearing".
+
+       When the question is specific — "did the three aura cards work" — the fish
+       are named in advance, the family is 3 tests instead of 60, and the bar
+       falls from 3.34σ to about 2.4σ. Same runs, an answerable question. Give it
+       a control group of ordinary cards or the comparison is against a floor
+       rather than against the pool. */
+    const NAMED = (process.env.FF_GIVE || '').split(',').map((x) => x.trim()).filter(Boolean);
+    const ids = NAMED.length ? NAMED.filter((id) => FF.CARDS[id])
+      : Object.values(FF.CARDS)
+        .filter((c) => !c.leader && !c.noPool).map((c) => c.id).sort();
+    if (NAMED.length) console.log(`    (FF_GIVE: ${ids.length} named cards, so the family bar is for ${ids.length} tests, not 60)`);
     const n = tribes.length * KN;
     FF.POOL_BAN.clear();
     const base = sweepK();
@@ -1513,19 +1537,19 @@ section('the same deck, two pilots');
     give: strong ? BASE.concat(EXTRA) : BASE,
     temper: !!strong,
   });
-  const arm = (mode, strong) => {
-    let wins = 0, runs = 0;
-    for (const tribe of tribes) {
-      for (let i = 0; i < N; i++) {
-        const st = playRun(tribe, 1000 + i * 37, mode, lock(strong));
-        runs++;
-        if (st.won) wins++;
-      }
-    }
-    return Math.round((wins / Math.max(1, runs)) * 100);
+  /* Four arms x three tribes in ONE call. Nothing here reads a pilot counter —
+     it is four win rates — so the only requirement is that the four arms go out
+     together rather than draining the pool four times. */
+  const COMBOS = [['careless', false], ['tactics', false], ['careless', true], ['tactics', true]];
+  const lockAnswers = await runJobs(COMBOS.flatMap(([mode, strong]) =>
+    tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37, mode, tweak: lock(strong) }))));
+  const pctAt = (ci) => {
+    const part = lockAnswers.slice(ci * tribes.length, (ci + 1) * tribes.length);
+    const w = part.reduce((a2, x) => a2 + x.wins, 0), r = part.reduce((a2, x) => a2 + x.runs, 0);
+    return Math.round((w / Math.max(1, r)) * 100);
   };
-  const weakBad = arm('careless', false), weakGood = arm('tactics', false);
-  const strongBad = arm('careless', true), strongGood = arm('tactics', true);
+  const weakBad = pctAt(0), weakGood = pctAt(1);
+  const strongBad = pctAt(2), strongGood = pctAt(3);
   const band = Math.round(100 * Math.sqrt(0.25 * 0.75 / Math.max(1, tribes.length * N)));
   const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
   console.log(`    ${'weak deck, played badly'.padEnd(26)}${bar2(weakBad)} ${String(weakBad + '%').padStart(4)}`);

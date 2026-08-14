@@ -90,7 +90,7 @@ function watchTitan() {
 }
 
 /* ------------------------------------------------------------- the pilot -- */
-function bestSlot(card) {
+function bestSlot() {
   /* READ THE TELEGRAPH FIRST.
 
      A wave names its lane a turn before it arrives, and anyone standing in that
@@ -112,49 +112,25 @@ function bestSlot(card) {
     }
     return null;
   };
-  /* SHELTER — the second of the two habits the aura cards needed, and the
-     pilot had neither.
+  /* SHELTER IS GONE, AND BOTH ITS NUMBERS ARE KEPT — that is the whole value.
 
-     `plain()` walks columns front-first, so every body this pilot deploys goes
-     to the most exposed slot on the board. That is right for a heavy: the front
-     column ticks twice and a fat body wants the extra swings. It is exactly
-     wrong for a fragile one, and the whole point of a card like the Dawnpiper
-     is that it is fragile ON PURPOSE — a 7-health body carrying a rule that
-     leaves with it. Sent to the front it dies before the rule pays once, which
-     is precisely what the standing-start arm measured: 0 wins in 60.
+     The habit was "keep a fragile body out of the front column", built so the
+     aura cards would have a pilot that could use them. Measured twice:
 
-     "Protect the glass body" is therefore a real habit and it is one line: a
-     body that would not survive the biggest swing on the board goes to the BACK
-     column instead of the front. Behind its own switch like every other habit,
-     so it can be priced. */
-  const sheltered = (card) => {
-    if (!SKILL.shelter || !card) return null;
-    /* NARROWED, AFTER THE WIDE VERSION COST SEVEN POINTS.
+       any body that cannot survive the biggest swing   −7 at the fight rung
+                                                        (12/13/36/36 vs 12/20/40/39)
+       aura-carriers only                                0, firing 95 times in 360 runs
 
-       The first cut sheltered ANY body that could not survive the biggest swing
-       on the board, and priced at 12/13/36/36 against 12/20/40/39 — the fight
-       rung fell from +8 to +1. That is the same answer this file already has
-       twice over: the front column ticks twice, swings go to the front of a
-       lane, and a pilot that keeps bodies out of the fighting is a pilot doing
-       less fighting. "Careful placement" has now cost points three times.
+     Neither version is worth a row in the ablation table. A habit that prices at
+     zero is not free: it is a switch every future pilot change has to reason
+     around, and it stays in the table forever implying somebody should care.
 
-       What the habit is actually FOR is one body: the one carrying a rule that
-       leaves the board with it. Losing an ordinary 6-health warden costs a
-       warden; losing the Dawnpiper costs the whole side its turn order. So the
-       habit is about auras, not about health, and it fires on maybe one
-       deployment in fifty instead of one in four. */
-    const d = FF.CARDS[card.def];
-    if (!d || !d.aura) return null;
-    const hp = Math.max(1, card.hp || 0);
-    const biggest = FF.enemyUnits(G).reduce((n, f) => Math.max(n, f.atk || 0), 0);
-    if (hp > biggest) return null;                  // it can take a hit; front is fine
-    for (let col = FF.COLS - 1; col >= 1; col--) {
-      for (let lane = 0; lane < FF.LANES; lane++) {
-        if (FF.slotFree(G, 'p', lane, col)) { ROOM.sheltered = (ROOM.sheltered || 0) + 1; return { lane, col }; }
-      }
-    }
-    return null;
-  };
+     The wide reading is the one worth remembering, because it is the THIRD time
+     careful placement has cost this pilot points. The front column ticks twice,
+     swings go to the front of a lane, and a pilot that keeps bodies out of the
+     fighting is a pilot doing less fighting. That is not a quirk of one
+     heuristic any more, it is what this board is. */
+
   if (b && b.waveLane !== undefined && !FF.laneHeldBy(G, b.waveLane)) {
     for (let col = 0; col < FF.COLS; col++) {
       if (FF.slotFree(G, 'p', b.waveLane, col)) {
@@ -168,11 +144,6 @@ function bestSlot(card) {
     }
   }
   if (TELL.on && b && b.waveLane !== undefined) TELL.live++;
-  // A body that cannot survive one swing goes behind the line, not in front of
-  // it. Answering the telegraph still wins — a wave arriving is worse than a
-  // fragile body taking a hit.
-  const safe = sheltered(card);
-  if (safe) return safe;
   // Then hold the front of both lanes, then fill in behind.
   for (let col = 0; col < FF.COLS; col++) {
     for (let lane = 0; lane < FF.LANES; lane++) {
@@ -424,13 +395,12 @@ const CROOM = { turns: 0, free: [] };
 const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
 const LANE = { on: false, by: {} };
 const TELL = { on: false, live: 0, moved: 0, held: 0, fights: 0, turns: 0, allTurns: 0, lastB: null, lastHeld: 0 };
-const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true, shelter: true };
+const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
   ['reposition', 'repositioning at all (removed)'],
   ['holdGear', 'holding gear until it earns the turn'],
   ['keepSlot', 'keeping a slot in reserve'],
-  ['shelter', 'keeping a fragile body out of the front'],
   ['wave', 'calling waves early (removed)'],
   ['place', 'filling the front of both lanes first'],
 ];
@@ -598,7 +568,7 @@ function carefulTurn() {
          heuristic. The front of both lanes first is not a fallback any more,
          it is the answer: it puts bodies where the swings are and lets the
          geometry do the rest. */
-      const slot = SKILL.place ? bestSlot(b.hand[ui]) : carefulSlot(b.hand[ui]);
+      const slot = SKILL.place ? bestSlot() : carefulSlot(b.hand[ui]);
       if (slot && FF.playCard(G, ui, slot)) return;
     }
   }
