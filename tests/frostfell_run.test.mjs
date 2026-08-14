@@ -624,6 +624,28 @@ section('does money change anything');
   /* THE SAME BAR FOR THE COURSES, for the same reason: six arms is a family of
      six (2.39σ), and "which course is best" has been read off this table by eye
      since it was written. */
+  /* THE COMPARISON A PLAYER ACTUALLY FACES, which this table has never printed.
+
+     Every course was measured against DECLARING NOTHING, and against that
+     middling baseline no course clears — the gaps are about 4 points and the bar
+     is ±4.9. But nobody chooses between "cold" and "no course"; the leader
+     screen offers five courses and asks which. Best against worst is a different
+     comparison and it is not close: at 840 runs an arm cold reads 46% and hearth
+     38%, an 8-point gap on a difference band of ±2.5 — **3.1σ, which clears even
+     the six-question bar.**
+
+     So "the courses are indistinguishable" was an artefact of the baseline, and
+     it stood for a dozen rounds. The table prints both now. */
+  {
+    const sorted2 = byCourse.slice().sort((a2, z2) => z2.r.pct - a2.r.pct);
+    const hi = sorted2[0], lo = sorted2[sorted2.length - 1];
+    const bdiff = BAND.gap(hi.r.pct / 100, hi.r.runs) * Math.SQRT2;
+    const sig = Math.abs(hi.r.pct - lo.r.pct) / Math.max(0.1, bdiff);
+    console.log(`    and BEST AGAINST WORST, which is the choice on the leader screen: ` +
+      `${hi.co.short} ${hi.r.pct}% vs ${lo.co.short} ${lo.r.pct}% — ` +
+      `${hi.r.pct - lo.r.pct} points at ${sig.toFixed(1)}σ on a ±${bdiff.toFixed(1)} band ` +
+      `(bar for 2 is ${familyZ(2).toFixed(2)}σ: ${sig >= familyZ(2) ? 'CLEARS' : 'does not clear'})`);
+  }
   {
     const zc = familyZ(byCourse.length + 1);
     const bc = BAND.gap(noCourse.pct / 100, noCourse.runs);
@@ -1931,6 +1953,52 @@ section('where a run is actually decided');
   console.log(`      the three-way remainder           ${pct(ss3way).padStart(6)}`);
   console.log(`      best deck ${(Math.max(...deckMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...deckMeans) * 100).toFixed(0)}% · ` +
     `best draw order ${(Math.max(...permMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...permMeans) * 100).toFixed(0)}%`);
+
+  /* WHICH HANDS, AND WHAT THE GOOD ONES HAVE IN COMMON.
+
+     "Best dealt deck 40%, worst 26%" is the largest effect measured in this game
+     — larger than the fight rung and larger than the trader — and for a round it
+     was reported as a spread with no names attached. The decks are dealt by seed
+     so nobody chose them, which is exactly what makes the question answerable:
+     sort them by win rate and look at what the top half is made of.
+
+     Four things are worth counting and all four are cheap: how many BODIES (a
+     deck of gear cannot hold a board), the average counter (a CURVE — fast
+     bodies act sooner), how many cards carry a KEYWORD, and whether the deck
+     leans to one tribe. */
+  {
+    const rows = DECKS.map((ids, d) => {
+      const defs = ids.map((id) => FF.CARDS[id]).filter(Boolean);
+      const units = defs.filter((c) => c.type === 'unit');
+      const kw = defs.filter((c) => c.kw && Object.keys(c.kw).length).length;
+      const tribes2 = {};
+      for (const c of defs) if (c.tribe) tribes2[c.tribe] = (tribes2[c.tribe] || 0) + 1;
+      const lean = Object.entries(tribes2).sort((a2, z2) => z2[1] - a2[1])[0];
+      return {
+        d, pct: deckMeans[d] * 100,
+        bodies: units.length,
+        hp: units.reduce((n, c) => n + (c.hp || 0), 0) / Math.max(1, units.length),
+        atk: units.reduce((n, c) => n + (c.atk || 0), 0) / Math.max(1, units.length),
+        cnt: units.reduce((n, c) => n + (c.cnt || 0), 0) / Math.max(1, units.length),
+        kw, lean: lean ? lean[0] + ' ' + lean[1] : 'none',
+        ids,
+      };
+    }).sort((a2, z2) => z2.pct - a2.pct);
+    console.log('    WHICH HANDS WON, and what the good ones are made of:');
+    for (const r of rows) {
+      console.log(`      ${(r.pct.toFixed(0) + '%').padStart(4)}  ${String(r.bodies).padStart(1)} bodies · ` +
+        `hp ${r.hp.toFixed(1)} atk ${r.atk.toFixed(1)} cnt ${r.cnt.toFixed(1)} · ` +
+        `${r.kw} with a keyword · ${r.lean.padEnd(9)} ${r.ids.join(' ')}`);
+    }
+    const half = Math.floor(rows.length / 2);
+    const top = rows.slice(0, half), bot = rows.slice(-half);
+    const avg = (xs, k) => xs.reduce((n, r) => n + r[k], 0) / Math.max(1, xs.length);
+    console.log(`      top half vs bottom half:  bodies ${avg(top, 'bodies').toFixed(1)} vs ${avg(bot, 'bodies').toFixed(1)} · ` +
+      `hp ${avg(top, 'hp').toFixed(1)} vs ${avg(bot, 'hp').toFixed(1)} · ` +
+      `atk ${avg(top, 'atk').toFixed(1)} vs ${avg(bot, 'atk').toFixed(1)} · ` +
+      `counter ${avg(top, 'cnt').toFixed(1)} vs ${avg(bot, 'cnt').toFixed(1)} · ` +
+      `keywords ${avg(top, 'kw').toFixed(1)} vs ${avg(bot, 'kw').toFixed(1)}`);
+  }
 
   /* WHAT A MATCHUP ACTUALLY IS — the biggest term in the table, and for one round
      it got a single sentence while `killedBy` and `diedZone` sat unread on every

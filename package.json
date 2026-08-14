@@ -46,7 +46,8 @@
     "test:pusherrender": "node tests/coin_pusher_render.test.mjs",
     "test:frostfell": "node tests/frostfell.test.mjs && node tests/frostfell_render.test.mjs && node tests/frostfell_tutorial.test.mjs && node tests/frostfell_run.test.mjs",
     "test:choir": "node tests/world_choir_games.test.mjs",
-    "test:choirimport": "node tests/choir_import.test.mjs"
+    "test:choirimport": "node tests/choir_import.test.mjs",
+    "check:times": "node tools/check-times.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
