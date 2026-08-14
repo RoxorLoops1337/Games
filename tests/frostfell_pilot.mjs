@@ -1004,7 +1004,7 @@ function playRun(tribe, seed, mode, tweak) {
       /* Two arms that differ in one thing only: what they do at a fork that has
          a fight on one side of it. Everything else about the pilot is the same,
          so the gap between them is the price of walking past a fight. */
-      if (step.length > 1 && (G.run.dodge || G.run.seek || G.run.duckHurt)) {
+      if (step.length > 1 && (G.run.dodge || G.run.seek || G.run.duckHurt || G.run.route)) {
         const fighty = (n) => n.kind === 'fight' || n.kind === 'elite' || n.kind === 'boss';
         /* A THIRD ARM, because the first two cannot price a situational choice.
 
@@ -1054,6 +1054,39 @@ function playRun(tribe, seed, mode, tweak) {
             DUCKS.wound += wounded / pool;
             if (want >= 0 && QUIET[step[want].kind]) DUCKS.taken++;
           }
+        } else if (G.run.route) {
+          /* IS THE FORK A DECISION, OR A TRAP WITH A SIGNPOST?
+
+             Making "takes every fight" a ladder rung priced it at +9 over a
+             pilot that picks an arbitrary fork — and the dodge arm has known
+             for rounds that walking past costs −8 and ducking-when-hurt −6. If
+             every strategy anybody has tried is worse than taking everything,
+             the trail screen is asking a question with one right answer, which
+             is furniture with a signpost on it. Two arms cannot establish that;
+             three CONDITIONAL strategies against unconditional seek can, and
+             each is a heuristic a real player would actually hold:
+
+               elite   take ordinary fights, walk past the packs and beasts —
+                       the classic "know which one to skip"
+               early   take everything in the first zone and bank it, coast the
+                       third — front-load the reward while the foes are cheap
+               rich    take the fight unless a trader is opposite and the purse
+                       can use it — spend what you have before it stops mattering
+
+             If none of them beats seek, the fork is not a choice, and that is a
+             design finding the ladder made visible rather than a pilot bug. */
+          const hard = (n) => n.kind === 'elite' || n.kind === 'boss';
+          if (G.run.route === 'elite') {
+            want = step.findIndex((n) => fighty(n) && !hard(n));
+            if (want < 0) want = step.findIndex((n) => !hard(n));
+          } else if (G.run.route === 'early') {
+            want = G.run.zone <= 0 ? step.findIndex(fighty) : step.findIndex((n) => !fighty(n));
+          } else {
+            const flush = G.run.gold >= 60;
+            want = flush ? step.findIndex((n) => n.kind === 'shop') : -1;
+            if (want < 0) want = step.findIndex(fighty);
+          }
+          if (want < 0) want = step.findIndex(fighty);
         } else {
           want = step.findIndex((n) => (G.run.dodge ? !fighty(n) : fighty(n)));
         }

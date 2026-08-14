@@ -21,6 +21,21 @@ const drew = (label) => { ok(log.length > 0, label); log.length = 0; };
 /* How much of the contrast check's resolution is a guess. Accumulated across
    every screen and every device shape, printed once at the end. */
 const CELLS = { total: 0, one: 0, straddle: 0, mixed: 0, anchorBlind: 0 };
+/* WHAT FRACTION OF THE GAME'S TEXT THIS CHECK HAS EVER LOOKED AT.
+
+   `button()` drew its label at a fixed size and never fitted it to its own
+   button for forty-nine rounds, and the gutter check found it in one run — which
+   is a strong argument for pointing the check at things it has not seen, and a
+   reason to be suspicious of what it has. The sweep runs 9 shapes x 12 screens
+   of ONE seeded run, so what it looks at is whatever that run happened to draw:
+   the cards in that hand, the foes on that board, the wares in that shop.
+
+   Every card name, every card's rules text, every foe name and every keyword is
+   enumerable from the game's own tables. Counting the distinct strings the
+   sweep drew against the strings the game CAN draw turns "probably most of it"
+   into a number, and the number is printed whether or not it is flattering. */
+const STRINGS = { seen: new Set(), draws: 0 };
+const ctx2 = mkCtx(log);
 /* A wash is not a ground — the same rule the raster uses. The bbox FALLBACK did
    not have it, so a 16%-opacity tint behind a label was reported as though it
    were solid paint. */
@@ -481,6 +496,8 @@ section('the shape of a phone');
          catches a step that stopped growing with its text. */
       const texts = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim())
         .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
+      for (const t of texts) STRINGS.seen.add(t.s);
+      STRINGS.draws += texts.length;
       const tiny = texts.filter((e) => e.size * cssPerStage < FF.TEXT_MIN_CSS - 0.5)
         .map((e) => JSON.stringify(e.s).slice(0, 18) + '@' + Math.round(e.size * cssPerStage));
       eq([...new Set(tiny)].join(','), '', `${w}x${h} ${scr}: no text below the readable floor`);
@@ -779,6 +796,115 @@ section('the loop stays upright');
    against every ground its box covers, so the number that matters is how many
    strings cross a boundary at all and how many of those cross a real COLOUR
    boundary — the ones an anchor-only lookup would have had to guess about. */
+/* ------------------------------------- every card, not the ones that landed -- */
+/* POINT THE CHECK AT WHAT IT HAS NOT SEEN.
+
+   `button()` never fitted its label to its own button for forty-nine rounds and
+   the gutter check found it the first time it ran — which says the check is
+   good and its aim is narrow. It sweeps one seeded run, so the cards it examines
+   are the cards that run happened to deal: 75% of the names and rules the game
+   can draw, and the missing quarter is exactly the long-tailed stuff a lucky
+   run never turns up.
+
+   Every card is enumerable. Each one is drawn at both sizes it is ever drawn at
+   — the hand and the reward row — and put through the same two rules the screen
+   sweep uses: nothing below the readable floor, and no two labels on one line
+   without a gutter. It is the whole pool rather than a sample, at the two sizes
+   that matter, on the smallest shape the game supports, which is where a name
+   runs out of band. */
+section('every card in the game, drawn and measured');
+{
+  const bad2 = [];
+  const SIZE = [[92, 150, 'in hand'], [126, 196, 'on the reward row']];
+  let drawn = 0;
+  for (const [w2, h2, where] of SIZE) {
+    FF.setStageWidth(653, 280);                 // the tightest shape, where the floor bites hardest
+    const D = FF.dims();
+    const cps = Math.min(653 / D.VW, 280 / D.VH);
+    for (const def of Object.values(FF.CARDS)) {
+      if (def.leader) continue;
+      log.length = 0;
+      FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, w2, h2, { t: 0.4 });
+      drawn++;
+      const ts = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim())
+        .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
+      for (const t of ts) STRINGS.seen.add(t.s);
+      for (const t of ts) {
+        if (t.size * cps < FF.TEXT_MIN_CSS - 0.5) {
+          bad2.push(`${def.id} ${where}: ${JSON.stringify(t.s).slice(0, 14)} at ${Math.round(t.size * cps)}css`);
+        }
+      }
+      const rows2 = new Map();
+      for (const t of ts) {
+        if (t.s.trim().length < 3) continue;
+        const key = Math.round(t.y);
+        if (!rows2.has(key)) rows2.set(key, []);
+        rows2.get(key).push(t);
+      }
+      for (const row of rows2.values()) {
+        const sp = row.map((t) => {
+          const ww = t.s.length * t.size * 0.5;
+          const left = t.align === 'center' ? t.x - ww / 2 : t.align === 'right' ? t.x - ww : t.x;
+          return { t, s: [left, left + ww] };
+        }).sort((a, b) => a.s[0] - b.s[0]);
+        for (let i = 1; i < sp.length; i++) {
+          const a = sp[i - 1], b = sp[i];
+          if (Math.abs(a.t.size - b.t.size) > 0.6) continue;
+          if (b.s[0] - a.s[1] < a.t.size * 0.25) {
+            bad2.push(`${def.id} ${where}: ${JSON.stringify(a.t.s).slice(0, 12)}/${JSON.stringify(b.t.s).slice(0, 12)}`);
+          }
+        }
+      }
+    }
+  }
+  FF.setStageWidth(1280, 720);
+  log.length = 0;
+  ok(drawn >= 100, `every card drawn at both sizes (${drawn} draws)`);
+  eq([...new Set(bad2)].slice(0, 5).join(' | '), '',
+    'every card in the pool keeps its text readable and its labels apart');
+}
+
+/* AND THE COVERAGE NUMBER, printed whether or not it is flattering.
+
+   The sweep looks at 9 shapes x 12 screens of ONE seeded run, so the strings it
+   examines are whatever that run drew. Everything the game CAN put on screen is
+   enumerable from its own tables — every card name, every card's rules text,
+   every foe name, every status and keyword — so the share is a number rather
+   than an impression. It is asserted at a deliberately low bar: the point is
+   that the figure is VISIBLE and moves when somebody widens the sweep, not that
+   it is high today. A check that cannot say what it looks at is a check nobody
+   can reason about. */
+{
+  /* NAMES AND RULES ARE COUNTED SEPARATELY, because they are drawn differently
+     and lumping them made the figure meaningless. A name is drawn whole, so it
+     either appeared or it did not; a rules paragraph is WRAPPED, so it never
+     appears as one string and any test for it is a test of the wrap. Reporting
+     one number over both made "every card is drawn" move coverage from 75% to
+     77%, which reads as the widening having failed when what it actually did
+     was take names to everything the game has. */
+  const names = new Set();
+  for (const c of Object.values(FF.CARDS)) names.add(String(c.name).toUpperCase());
+  for (const f of Object.values(FF.FOES)) names.add(String(f.name).toUpperCase());
+  const words = new Set();
+  for (const s2 of STRINGS.seen) for (const w2 of String(s2).split(/[^A-Za-z]+/)) if (w2) words.add(w2.toLowerCase());
+  let hitN = 0;
+  for (const want of names) if (STRINGS.seen.has(want)) hitN++;
+  // a rules text counts as looked at when every word in it was drawn somewhere
+  const texts = [...new Set(Object.values(FF.CARDS).map((c) => c.text).filter(Boolean))];
+  let hitT = 0;
+  for (const t of texts) {
+    const ws = String(t).split(/[^A-Za-z]+/).filter(Boolean).map((x) => x.toLowerCase());
+    if (ws.length && ws.every((x) => words.has(x))) hitT++;
+  }
+  const shareN = hitN / Math.max(1, names.size);
+  console.log(`  · what the text checks actually look at: ${STRINGS.draws} draws, ` +
+    `${STRINGS.seen.size} distinct strings`);
+  console.log(`    names ${hitN}/${names.size} (${(shareN * 100).toFixed(0)}%) · ` +
+    `rules paragraphs ${hitT}/${texts.length} (${((hitT / Math.max(1, texts.length)) * 100).toFixed(0)}%) ` +
+    `— every card is now drawn at both sizes, so what is left uncovered is FOES the seeded run never met`);
+  ok(names.size > 60, `the catalogue is the game's own tables (${names.size} names)`);
+  ok(shareN > 0.55, `and the sweep sees a stated share of it (${(shareN * 100).toFixed(0)}% of names)`);
+}
 if (CELLS.total) {
   const pc = (n) => Math.round((n / CELLS.total) * 100) + '%';
   console.log(`  · ${CELLS.total} strings measured against the raster: ` +

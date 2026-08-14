@@ -22,9 +22,40 @@ import {
 /* A tiny on-disk record of what each turned-up arm last said, so the summary
    the default check prints is a measurement rather than a comment. */
 const ARMS_FILE = new URL('./.frostfell-arms.json', import.meta.url);
+/* WHICH GAME A READING IS ABOUT, which a sample size cannot say.
+
+   A stamp recorded what an arm said and how deep it ran, and nothing about WHEN
+   — so `FF_CARDS` sat in the summary for two rounds quoting `coldbearer` and
+   `backdrift` as the widest and best cards in the pool, months after both were
+   cut. A guard now catches that particular shape, but only because card ids are
+   the one part of a reading that can be validated; every NUMBER in every stamp
+   has the same problem and nothing can check those.
+
+   A date would answer "how old" and that is the wrong question — an arm run
+   before a round that changed nothing it measures is not stale, and one run
+   before a round that rewrote a course is, on the same day. What matters is
+   whether the reading is about THIS GAME, so the stamp carries a fingerprint of
+   the two files an arm actually measures: the game and the pilot. Same
+   fingerprint, the reading still describes what is there; different, and the
+   table says so in the summary instead of waiting for somebody to remember.
+
+   It is deliberately coarse. Any edit to either file invalidates every reading,
+   including edits that could not possibly matter — a comment, a colour. That
+   over-reports and it is the right direction: a reading wrongly flagged costs a
+   re-run, and a reading wrongly trusted costs a round of building on it. */
+const BUILD = (() => {
+  let h = 0x811c9dc5;
+  for (const f of ['../frostfell/index.html', './frostfell_pilot.mjs']) {
+    let src = '';
+    try { src = readFileSync(new URL(f, import.meta.url), 'utf8'); } catch { src = f; }
+    for (let i = 0; i < src.length; i++) { h ^= src.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  }
+  return h.toString(36);
+})();
 const ARMS = {
   all: (() => { try { return JSON.parse(readFileSync(ARMS_FILE, 'utf8')); } catch { return {}; } })(),
   read(knob) { return this.all[knob] || null; },
+  fresh(rec) { return !!rec && rec.build === BUILD; },
   /* Read-modify-write, because two arms turned up at once will otherwise
      clobber each other: both load the file at import and the second to finish
      wins. Found by running FF_LESSON and FF_MONEY in parallel and getting one
@@ -33,7 +64,7 @@ const ARMS = {
     let disk = {};
     try { disk = JSON.parse(readFileSync(ARMS_FILE, 'utf8')); } catch { disk = {}; }
     Object.assign(this.all, disk);
-    this.all[knob] = { said, sample };
+    this.all[knob] = { said, sample, build: BUILD };
     this.save();
   },
   save() { try { writeFileSync(ARMS_FILE, JSON.stringify(this.all, null, 1) + '\n'); } catch { /* read-only tree */ } },
@@ -56,6 +87,8 @@ const STANDING = [
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
   ['FF_BUILT=200', 'gear-heavy against body-heavy decks, built on purpose rather than sorted on outcome'],
+  ['FF_ROUTE=1', 'five routing strategies against taking every fight — is the fork a decision at all'],
+  ['FF_LIVEBUILT=1', 'and the same twelve decks as starting hands in real runs — does the lean survive the draft'],
   ['FF_DIAL=150', 'the two flat courses swept by magnitude — a dial or decoration'],
   ['FF_GEARBAR=1', 'the pilot\'s gear-before-body bar swept — is the gear finding the deck or the pilot'],
 ];
@@ -837,9 +870,20 @@ section('gear against bodies, dealt on purpose');
      showed exactly why: every body-heavy deck read 0.0%, which is a real signal
      and an unusable one, because a floor cannot say how far below it something
      is. Both responses are collected and both are tested. */
+  /* LOCKED IS NOT THE GAME, and this arm named that limit in the same breath as
+     its own finding: "a real caravan drafts, and whether a starting lean
+     survives twenty cards of drafting is untouched". A locked six-card deck is
+     the cleanest possible contrast and it is also a caravan that cannot draft,
+     shop or temper — so +2.7 points there may be a fact about a game nobody
+     plays. FF_LIVEBUILT runs the same twelve built decks as STARTING hands in
+     real runs. If the lean survives, the finding generalises; if it washes out,
+     the honest statement is that composition decides a locked deck and the
+     draft decides a real one. */
+  const LIVE = !!process.env.FF_LIVEBUILT;
+  if (LIVE) console.log('    (FF_LIVEBUILT: the built decks are STARTING hands in real runs, and they grow)');
   const jobs = built.flatMap((b) => tribes.map((tribe) => ({
-    tribes: [tribe], n: each, base: 1000, step: 37, mode: 'tactics', stats: true,
-    tweak: { set: { lockDeck: true, mend: 8 }, give: b.ids },
+    tribes: [tribe], n: each, base: 1000, step: 37, mode: LIVE ? 'careful' : 'tactics', stats: true,
+    tweak: LIVE ? { give: b.ids } : { set: { lockDeck: true, mend: 8 }, give: b.ids },
   })));
   const answers = await runJobs(jobs);
   const rows = built.map((b, k) => {
@@ -902,7 +946,7 @@ section('gear against bodies, dealt on purpose');
   const perDeck = rows.map((r) => `${r.kind[0]}${r.pct.toFixed(0)}/${r.zones.toFixed(1)}`).join(' ');
   console.log(`    (deck by deck as won%/zones, g=gear b=body: ${perDeck})`);
   if (N) {
-    ARMS.stamp('FF_BUILT=200', `gear-heavy ${gearPct.toFixed(1)}% vs body-heavy ${bodyPct.toFixed(1)}% ` +
+    ARMS.stamp(LIVE ? 'FF_LIVEBUILT=1' : 'FF_BUILT=200', `${LIVE ? 'LIVE ' : ''}gear-heavy ${gearPct.toFixed(1)}% vs body-heavy ${bodyPct.toFixed(1)}% ` +
       `(${gap >= 0 ? '+' : ''}${gap.toFixed(1)} points, p=${pv.toFixed(3)}); on depth ` +
       `${zGear.toFixed(2)} vs ${zBody.toFixed(2)} zones (${zGap >= 0 ? '+' : ''}${zGap.toFixed(2)}, p=${zp.toFixed(3)}) ` +
       `over ${combos.length} relabellings`, tribes.length * each * SIDE);
@@ -954,7 +998,14 @@ section('do the two flat courses have a dial');
        would be paying 1,350 runs a round to re-learn the same null, so the
        course's own definition records both readings and this arm sweeps the one
        dial that is live. */
-    { k: 'scrap   as it ships', course: 'scrap', dial: null, ships: true },
+    /* SCRAP'S THIRD RULE, on the axis the working courses use — thorns on every
+       arrival, so it lands turn one, fires every fight and scales with the
+       line. Its two dead axes (how much free gear, how big an opening hand)
+       are recorded in the course's own definition and are not re-swept. */
+    { k: 'scrap   +0 thorns', course: 'scrap', dial: { 'scrap.thornN': 0 }, ships: true },
+    { k: 'scrap   +1 thorns', course: 'scrap', dial: { 'scrap.thornN': 1 } },
+    { k: 'scrap   +2 thorns', course: 'scrap', dial: { 'scrap.thornN': 2 } },
+    { k: 'scrap   +4 thorns', course: 'scrap', dial: { 'scrap.thornN': 4 } },
   ];
   if (N) console.log(`    (dials turned up: ${3 * N} runs an arm)`);
   const answers = await runJobs(ARMSD.flatMap((a) =>
@@ -985,10 +1036,7 @@ section('do the two flat courses have a dial');
   const verdicts = [];
   for (const co of ['line', 'scrap']) {
     const mine = rows.filter((r) => r.course === co);
-    if (mine.length < 2) { const only = mine[0];
-      console.log(`    → SCRAP: ${only.pct}% against ${rows[0].pct}% for none — swept flat on two axes ` +
-        `(free gear span 6, opening hand span 3, bar ±${(familyZ(4) * BAND.gap(rows[0].pct / 100, rows[0].runs) * Math.SQRT2).toFixed(1)}); ` +
-        'its problem is not magnitude'); continue; }
+
     const hi = mine.reduce((a, z) => (z.pct > a.pct ? z : a));
     const lo = mine.reduce((a, z) => (z.pct < a.pct ? z : a));
     const ship = mine.find((r) => r.ships);
@@ -1029,7 +1077,7 @@ section('do the two flat courses have a dial');
    thing. If dodging is even level, the game is asking to be dodged. */
 section('does walking past a fight pay');
 {
-  const N = Number(process.env.FF_RUNS || DEFAULT_N);
+  const N = Number(process.env.FF_ROUTE || process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
   const tally = (stats) => {
     let wins = 0, runs = 0, power = 0, fought = 0, walked = 0, seen = 0;
@@ -1071,12 +1119,47 @@ section('does walking past a fight pay');
   row('takes every fight', seek);
   row('walks past what it can', dodge);
   row('ducks to a quiet stop when hurt', sore);
+  /* THREE CONDITIONAL STRATEGIES AGAINST THE UNCONDITIONAL ONE. Two arms said
+     "dodging is worse"; they could not say whether ANY strategy beats taking
+     everything, which is the question the fifth rung raised and did not ask. */
+  const ROUTES = [['skips the packs and beasts', 'elite'],
+    ['banks zone one, coasts zone three', 'early'],
+    ['spends a full purse before fighting', 'rich']];
+  const routed = [];
+  for (const [label, key] of ROUTES) {
+    const r = tally((await runJobs(duckJobs({ set: { route: key } }))).flatMap((x) => x.stats));
+    routed.push({ label, r });
+    row(label, r);
+  }
   console.log(`    ${''.padEnd(22)}${''.padEnd(30)}      ` +
     `took the quiet road at ${DUCKS.taken} of ${DUCKS.forks} forks that offered it ` +
     `(${Math.round((DUCKS.taken / Math.max(1, DUCKS.forks)) * 100)}%), ` +
     `the line ${Math.round((DUCKS.wound / Math.max(1, DUCKS.forks)) * 100)}% wounded at those forks`);
   console.log(`    → walking past a fight is worth ${dodge.pct - seek.pct} points; ` +
     `ducking to a camp only when hurt is worth ${sore.pct - seek.pct} (±${band} is one standard deviation)`);
+  {
+    /* THE VERDICT ON THE FORK ITSELF. Five strategies against seek; the bar is
+       the family of five rather than a single comparison, because "does ANY of
+       these beat it" is five questions asked at once and answering it at 2σ is
+       how a table of five produces a winner out of noise. */
+    const all5 = [{ label: 'walks past what it can', r: dodge },
+      { label: 'ducks when hurt', r: sore }].concat(routed);
+    const bestAlt = all5.reduce((a, z) => (z.r.pct > a.r.pct ? z : a));
+    const zf = familyZ(all5.length);
+    const bf = BAND.gap(seek.pct / 100, seek.runs) * Math.SQRT2;
+    const lead = bestAlt.r.pct - seek.pct;
+    console.log(`    → AND IS THE FORK A DECISION? best of ${all5.length} alternatives is ` +
+      `"${bestAlt.label}" at ${bestAlt.r.pct}% against ${seek.pct}% for taking everything ` +
+      `(${lead >= 0 ? '+' : ''}${lead}, family bar ${zf.toFixed(2)}σ = ±${(zf * bf).toFixed(1)})`);
+    console.log(`      ${lead >= zf * bf
+      ? 'something beats taking every fight — the fork IS a decision'
+      : 'nothing beats taking every fight: the trail screen asks a question with one right answer'}`);
+    if (process.env.FF_ROUTE) {
+      ARMS.stamp('FF_ROUTE=1', `taking everything ${seek.pct}%; best of ${all5.length} alternatives ` +
+        `"${bestAlt.label}" ${bestAlt.r.pct}% (${lead >= 0 ? '+' : ''}${lead}, bar ±${(zf * bf).toFixed(1)}) — ` +
+        `${lead >= zf * bf ? 'the fork is a decision' : 'the fork has one right answer'}`, seek.runs);
+    }
+  }
   /* The bar. Dodging may be survivable — a run that ducks two hard packs and
      scrapes home is a story — but it may not be the BETTER line, because a
      trail that pays you to avoid it is a trail nobody has a reason to walk. */
@@ -1907,11 +1990,14 @@ section('the arms that are not run by default');
     const rec = ARMS.read(knob);
     rows.push([knob, what, rec]);
   }
-  console.log('  · arms that do not run by default');
+  const stale = rows.filter(([, , rec]) => rec && !ARMS.fresh(rec)).length;
+  const never = rows.filter(([, , rec]) => !rec).length;
+  console.log(`  · arms that do not run by default — build ${BUILD}: ` +
+    `${rows.length - stale - never} current, ${stale} taken on an older build, ${never} never run`);
   for (const [knob, what, rec] of rows) {
     console.log(`    ${knob.padEnd(26)} ${what}`);
     console.log(`    ${''.padEnd(26)} → ` + (rec
-      ? `${rec.said}   (at ${rec.sample} an arm)`
+      ? `${rec.said}   (at ${rec.sample} an arm${ARMS.fresh(rec) ? '' : ', ON AN OLDER BUILD — re-run before quoting'})`
       : 'no reading recorded — run it'));
   }
   /* Every knob in the file that GATES A SECTION is an arm and has to be listed
