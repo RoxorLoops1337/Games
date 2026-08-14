@@ -943,6 +943,14 @@ each dearer than the last, and charms won elsewhere are not counted.
 
 `topic: instrument-limits`
 
+**And the rule that outlived the entry it was written in.** Six instruments in
+six rounds measured nothing, and the one failure worth carrying forward is that
+**wrapping an export sees nothing**: `FF.buy`, `FF.takeCard` and `FF.triggerUnit`
+are exports and the game calls the module-scoped versions internally, so three
+separate arms hooked functions the game never calls and reported clean zeroes.
+*Read the state* — the deck, the board's counters, the price at the decision
+point — rather than intercepting the call that is supposed to change it.
+
 **It can price a teaching change after all**, and one round said it could not:
 the claim was that the careless pilot is blind rather than slow. That is a claim
 about the instrument and it was testable — a pilot identical to the careless one
@@ -1561,31 +1569,6 @@ beast's night's rest coming out — moved the ledger 92% → 87% and the fight-e
 share 65% → 63%, and moved the *win rate* not at all. **The clearest evidence
 that this ledger and the ladder measure different things.**
 
-### FINDING — read state, don't intercept calls
-
-`topic: probe-wrappers`
-
-Six instruments in six rounds measured nothing, and they failed in four ways
-worth knowing before you build a seventh.
-
-**Wrapping an export sees nothing.** `FF.buy`, `FF.takeCard` and `FF.triggerUnit`
-are exports; the game calls the module-scoped versions internally. Read the state
-instead — the deck, the board's counters, the price at the decision point.
-
-**A stub that drops state lies quietly.** `save`/`restore` carried the transform
-and not the style, so one faded draw silenced the contrast check for the rest of
-the frame: 96% of the text unexamined, and it reported clean.
-
-**A perfectly instrumented table can answer a different question.** "Nobody buys
-this ware" was three findings wearing one face — bad, unaffordable, never taught
-to want. "Nobody plays this card" was a table about the *pool*: per copy carried,
-the three cards at the bottom for four rounds were mid-table. And the touch check
-measured stage units rather than CSS pixels for seventeen rounds.
-
-**A band can be derived correctly and still be wrong.** Every band here assumed
-independent arms and the arms share seeds; see
-[a band is measured](#rule--a-band-is-measured-and-it-applies-to-every-number-here).
-
 ### RULE — what a good card looks like
 
 `topic: card-doctrine`
@@ -1755,6 +1738,61 @@ bug for forty-nine rounds. It fits now.
 **The generalisable half: an instrument's approximations decide which bugs it can
 have an opinion about.** The width model was accurate enough for paragraphs and
 useless for gutters, and nothing said so until a defect landed exactly there.
+
+### FINDING — every surface was flat, and one direction of light fixed the lot
+
+`topic: depth`
+
+The cards and buttons were called out as looking cheap, and the diagnosis is not
+a matter of taste: **every surface in the game was a flat fill with a stroke
+round it.** The frame, the name band, the picture, the rules and the stat pips
+were all painted at the same value with hairlines between them, so a card had
+one plane and the eye had nothing to order it by — it read as a diagram of a
+card. Buttons were a rounded rectangle with a white band across the top half,
+which is the shape a web page used in 2005.
+
+The fix is not more colours. Almost all of a card's legibility in a game that
+looks expensive comes from being **several plates at different depths, lit from
+one direction** — a raised frame catches light on its top edge and loses it on
+the bottom; a window cut through that frame does the exact opposite. Canvas has
+no inner shadow, so two helpers do it by clipping the shape and laying gradients
+along its edges:
+
+```
+inset(...)   shadow along the top and left, a lip of light along the bottom  — a hole
+bevel(...)   light along the top, shadow along the bottom                    — a plate
+```
+
+**Four planes on a card** where there was one: a dark frame with its own
+thickness, an ice-white face sunk into it, the picture cut through the face, and
+a rules well recessed below. Buttons got a dark seat, a body brighter at the top
+than the bottom, a rim, and a pressed state that inverts the bevel — which needed
+`UI.down`, because the interface had no state saying which control was under the
+finger. The stat pips became cast pieces: a gradient down the face, a rim light,
+a specular pin, a contact shadow.
+
+**And `panel()` was the multiplier.** Every tray, bar and box in the game goes
+through it — **33 call sites** — and it drew a flat fill for fifty rounds. Once
+the cards and buttons were lit, the panels were the only surfaces that were not,
+and a lit object on an unlit tray reads as a sticker on a sheet of paper. One
+change to one function lit the whole interface, with the fall computed off each
+caller's own colour so no palette drifted.
+
+**Two things this got wrong before it got right, both worth keeping.**
+
+*A rules well sized to its own text is worse than a fixed one.* It seemed
+obviously right — why draw a box bigger than what is in it — and it gave a
+one-line gear card a small recess floating with a hand's width of dead face
+under it, so four cards in a row had their panels at four different heights and
+the row lost its baseline. **A row of cards is read as a row**; the same box in
+the same place on every card is the point.
+
+*And measuring in the wrong font truncates strings that fit.* `ellipsize`
+hardcoded Frostwork; buttons are set in Frostcut, which is condensed —
+**0.578 against 0.655 per uppercase glyph, about 12% narrower** — so the moment
+button labels went through it, `BACK TO THE ROAD` was cut to `BACK TO THE RO…`
+on a button it fitted comfortably. A truncation is a claim about the string;
+measuring in the wrong face makes it a lie about the box.
 
 ### FINDING — contrast, the third thing nobody was checking
 

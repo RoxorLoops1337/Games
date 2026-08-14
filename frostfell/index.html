@@ -4041,16 +4041,113 @@ function rr(c, x, y, w, h, r) {
   c.arcTo(x, y, x + w, y, k);
   c.closePath();
 }
+/* ====================== DEPTH, WHICH THE UI DID NOT HAVE ==================
+   Everything in this game was drawn as a flat fill with a stroke round it, and
+   at card size that reads as a diagram: the frame, the name band, the picture
+   and the rules all sit on the same plane, so the eye has nothing to order them
+   by. Real card art gets its hierarchy almost entirely from how light falls on
+   a stack of physical plates — a raised frame catches light on its top edge and
+   loses it on the bottom, a window cut into that frame does the exact opposite.
+
+   Canvas has no inner shadow, so both of these clip the shape and lay gradients
+   along its edges. Two helpers, used everywhere a plate is raised or a hole is
+   cut, so the whole interface is lit from one direction instead of each surface
+   inventing its own. */
+/** Blend two hex colours. A plate's bottom stop is its own colour walked
+ *  toward the night, so every tribe gets the same fall of light without nine
+ *  hand-picked shadow colours drifting apart. */
+function mix(a, b, t) {
+  const p = (h) => { const n = parseInt(String(h).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
+  const q = (u, v) => Math.round(u + (v - u) * t);
+  return 'rgb(' + q(r1, r2) + ',' + q(g1, g2) + ',' + q(b1, b2) + ')';
+}
+/** A hex colour at an alpha, for a gradient stop that has to stay in a card's
+ *  own hue rather than washing it toward white. */
+function mixA(hex, a) {
+  const n = parseInt(String(hex).slice(1), 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+const LIGHT = 'rgba(255,255,255,';
+const DARK = 'rgba(9,16,32,';
+
+/** A hole: shadow along the top and left, a lip of light along the bottom. */
+function inset(c, x, y, w, h, r, d, strength) {
+  const k = strength === undefined ? 1 : strength;
+  c.save();
+  rr(c, x, y, w, h, r);
+  c.clip();
+  let g = c.createLinearGradient(0, y, 0, y + d * 2.2);
+  g.addColorStop(0, DARK + (0.42 * k) + ')');
+  g.addColorStop(1, DARK + '0)');
+  c.fillStyle = g; c.fillRect(x, y, w, d * 2.2);
+  g = c.createLinearGradient(x, 0, x + d * 1.6, 0);
+  g.addColorStop(0, DARK + (0.26 * k) + ')');
+  g.addColorStop(1, DARK + '0)');
+  c.fillStyle = g; c.fillRect(x, y, d * 1.6, h);
+  g = c.createLinearGradient(0, y + h - d * 1.4, 0, y + h);
+  g.addColorStop(0, LIGHT + '0)');
+  g.addColorStop(1, LIGHT + (0.5 * k) + ')');
+  c.fillStyle = g; c.fillRect(x, y + h - d * 1.4, w, d * 1.4);
+  c.restore();
+}
+
+/** A raised plate: light along the top, shadow along the bottom. */
+function bevel(c, x, y, w, h, r, d, strength) {
+  const k = strength === undefined ? 1 : strength;
+  c.save();
+  rr(c, x, y, w, h, r);
+  c.clip();
+  let g = c.createLinearGradient(0, y, 0, y + d * 1.5);
+  g.addColorStop(0, LIGHT + (0.42 * k) + ')');
+  g.addColorStop(1, LIGHT + '0)');
+  c.fillStyle = g; c.fillRect(x, y, w, d * 1.5);
+  g = c.createLinearGradient(0, y + h - d * 2, 0, y + h);
+  g.addColorStop(0, DARK + '0)');
+  g.addColorStop(1, DARK + (0.34 * k) + ')');
+  c.fillStyle = g; c.fillRect(x, y + h - d * 2, w, d * 2);
+  c.restore();
+}
+
+/** A specular pin — the small bright spot that makes a bead read as glass. */
+function spec(c, x, y, r, a) {
+  const g = c.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, LIGHT + (a === undefined ? 0.85 : a) + ')');
+  g.addColorStop(1, LIGHT + '0)');
+  c.fillStyle = g;
+  c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+}
+
 function inked(c, fill, lw, stroke) {
   if (fill) { c.fillStyle = fill; c.fill(); }
   if (lw) { c.lineWidth = lw; c.strokeStyle = stroke || C.ink; c.lineJoin = 'round'; c.stroke(); }
 }
+/* EVERY TRAY, BAR AND BOX IN THE GAME GOES THROUGH HERE — 33 call sites — and
+   for fifty rounds it drew a flat fill with a stroke round it. Once the cards
+   had a bevel and the buttons had a bevel, the panels were the only surfaces
+   left that did not catch the light, and a lit object on an unlit tray reads as
+   a sticker on a sheet of paper.
+
+   The same treatment, in one place: a slight fall down the fill so a panel has
+   a top and a bottom, a light rim along its top edge and a shadow along its
+   bottom. It costs nothing at any call site — every one of them already passes
+   a colour, and the fall is computed off that colour rather than added to each
+   caller by hand, so no palette drifts. */
 function panel(c, x, y, w, h, r, fill, edge) {
+  const base = fill || C.card;
   c.save();
-  c.shadowColor = 'rgba(0,0,0,.5)'; c.shadowBlur = 18; c.shadowOffsetY = 8;
+  c.shadowColor = 'rgba(4,9,20,.5)'; c.shadowBlur = 18; c.shadowOffsetY = 8;
   rr(c, x, y, w, h, r);
-  c.fillStyle = fill || C.card; c.fill();
+  if (typeof base === 'string' && base.charAt(0) === '#') {
+    const g = c.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, mix(base, '#ffffff', 0.13));
+    g.addColorStop(0.55, base);
+    g.addColorStop(1, mix(base, '#070d1c', 0.22));
+    c.fillStyle = g;
+  } else c.fillStyle = base;
+  c.fill();
   c.restore();
+  bevel(c, x, y, w, h, r, Math.min(3, h * 0.12), 0.8);
   rr(c, x, y, w, h, r);
   c.lineWidth = 3; c.strokeStyle = edge || C.ink; c.stroke();
 }
@@ -4108,9 +4205,19 @@ const textSize = (n) => Math.max(n, TEXT_MIN_CSS / Math.max(0.2, CSS_PER_UNIT));
 const lineH = (size, step) => Math.max(step, textSize(size) * 1.12);
 /* Cut a line down until it and an ellipsis fit, so a truncation reads as one
    rather than as a sentence that stops mid-word. */
-function ellipsize(c, s, size, maxW, force) {
+/* AND IT HAS TO MEASURE IN THE FACE IT WILL BE DRAWN IN.
+
+   This hardcoded Frostwork, and the moment button labels started going through
+   it the shop truncated `BACK TO THE ROAD` to `BACK TO THE RO…` on a button it
+   fitted comfortably. Buttons are set in Frostcut, which is a condensed cut —
+   0.578 to Frostwork's 0.655 per uppercase glyph, about 12% narrower — so every
+   button label was measured against a font 12% too wide and cut to fit a box it
+   was already inside. A truncation is a lie about the string; measuring in the
+   wrong font is a lie about the box. */
+function ellipsize(c, s, size, maxW, force, face) {
   size = textSize(size);
-  c.font = '600 ' + size + "px 'Frostwork','Trebuchet MS',sans-serif";
+  c.font = (face === 'd' ? '' : '600 ') + size + 'px ' +
+    (face === 'd' ? "'Frostcut','Trebuchet MS',sans-serif" : "'Frostwork','Trebuchet MS',sans-serif");
   if (!force && c.measureText(s).width <= maxW) return s;
   if (force && c.measureText(s + '\u2026').width <= maxW) return s.replace(/[ ,.;:]+$/, '') + '\u2026';
   let out = s;
@@ -5484,7 +5591,29 @@ function statBadge(c, kind, x, y, r, col, val) {
   } else {                                    // the clock
     c.arc(x, y, r, 0, TAU);
   }
-  inked(c, col, Math.max(2, r * 0.24), C.ink);
+  /* A BADGE IS A CAST PIECE, not a coloured silhouette. The shapes were right —
+     a shard, a disc, a shield are distinguishable in the corner of your eye —
+     and they were filled flat, so three of them in a row read as printed icons.
+     A gradient down the face, a rim light along the top of the path, a specular
+     pin where the light hits, and a shadow under the whole thing: the same four
+     things every other surface on the card got, at badge scale. */
+  c.save();
+  c.shadowColor = 'rgba(4,9,20,.55)'; c.shadowBlur = r * 0.5; c.shadowOffsetY = r * 0.22;
+  const g = c.createLinearGradient(0, y - r, 0, y + r);
+  g.addColorStop(0, mix(col, '#ffffff', 0.45));
+  g.addColorStop(0.5, col);
+  g.addColorStop(1, mix(col, '#221a10', 0.30));
+  c.fillStyle = g; c.fill();
+  c.restore();
+  c.lineWidth = Math.max(2, r * 0.24); c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
+  c.save();
+  c.clip();
+  const lip = c.createLinearGradient(0, y - r, 0, y - r * 0.25);
+  lip.addColorStop(0, LIGHT + '0.62)');
+  lip.addColorStop(1, LIGHT + '0)');
+  c.fillStyle = lip; c.fillRect(x - r, y - r, r * 2, r * 0.8);
+  spec(c, x - r * 0.34, y - r * 0.40, r * 0.42, 0.75);
+  c.restore();
   const n = String(val);
   const sz = r * (n.length >= 3 ? 0.92 : n.length === 2 ? 1.12 : 1.42);
   txt(c, n, x, y + r * 0.06, sz, '#12203a', 'center', 'd', 0);
@@ -5519,32 +5648,72 @@ function drawCard(c, card, x, y, w, h, o) {
     c.restore();
   }
 
-  /* ---------------- the body ----------------
-     COLD, NOT CREAM. The card used to be parchment (#f3e9d6) in a game painted
-     entirely in night blues, so a hand of them read as a stack of receipts laid
-     on snow. It is an ice-white now with a blue cast and a vertical fall, which
-     belongs to the palette and still gives black rules text its contrast. */
+  /* ---------------- the card is a FRAME with a face set into it ----------
+     It used to be one pale slab: body, band, window and rules all painted at
+     the same value with hairlines between them, which is why a hand of them
+     read as a wireframe. A card is a physical object and almost all of its
+     legibility comes from being several PLATES at different depths — a dark
+     frame you can see the thickness of, a light face sunk into it, a picture
+     cut through the face, and a well below that holding the rules.
+
+     So: a directional contact shadow, then the frame, then the face inset into
+     the frame. Nothing here is a new colour — it is the same palette lit from
+     one direction instead of drawn flat. */
   c.save();
-  c.shadowColor = 'rgba(0,0,0,.5)'; c.shadowBlur = 18 * S; c.shadowOffsetY = 7 * S;
+  c.shadowColor = 'rgba(4,9,20,.55)'; c.shadowBlur = 20 * S; c.shadowOffsetY = 9 * S;
   rr(c, 0, 0, w, h, 12 * S);
-  const body = c.createLinearGradient(0, 0, 0, h);
-  body.addColorStop(0, '#f2f8ff');
-  body.addColorStop(0.55, '#e3edfb');
-  body.addColorStop(1, '#c8dbf1');
+  const frameG = c.createLinearGradient(0, 0, 0, h);
+  frameG.addColorStop(0, '#3d5176');
+  frameG.addColorStop(0.5, '#26405f');
+  frameG.addColorStop(1, '#16263e');
+  c.fillStyle = frameG; c.fill();
+  c.restore();
+  // the frame's own thickness catches the light on its top edge
+  bevel(c, 0, 0, w, h, 12 * S, 3.2 * S, 1.1);
+  /* AND A RARE CARD'S FRAME IS MADE OF SOMETHING ELSE. Rarity was two dots and
+     a slightly different hairline — which is to say it was invisible, and the
+     one thing a card game has to communicate before you have read a word is
+     "this one is worth stopping for". A foil sweep across the frame does it
+     without a single new shape: the same frame, in a material that catches the
+     light along a diagonal. */
+  if (rare >= 2) {
+    c.save();
+    rr(c, 0, 0, w, h, 12 * S);
+    c.clip();
+    const foil = c.createLinearGradient(0, h * 0.15, w, h * 0.85);
+    foil.addColorStop(0, 'rgba(255,255,255,0)');
+    foil.addColorStop(0.35, mixA(edge, rare >= 3 ? 0.55 : 0.32));
+    foil.addColorStop(0.52, 'rgba(255,255,255,' + (rare >= 3 ? 0.42 : 0.24) + ')');
+    foil.addColorStop(0.7, mixA(edge, rare >= 3 ? 0.40 : 0.22));
+    foil.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = foil; c.fillRect(0, 0, w, h);
+    c.restore();
+  }
+
+  /* THE FACE, sunk into the frame. The inset is what sells it — without the
+     shadow along the top edge the face is a sticker laid on a dark rectangle. */
+  const fi = 4.5 * S;
+  c.save();
+  rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
+  const body = c.createLinearGradient(0, fi, 0, h - fi);
+  body.addColorStop(0, '#f6fbff');
+  body.addColorStop(0.5, '#e6effc');
+  body.addColorStop(1, '#c4d8f2');
   c.fillStyle = body; c.fill();
   c.restore();
+  inset(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S, 2.6 * S, 0.85);
   /* A sheen across the corner. Flat vector cards read as diagrams; one soft
      diagonal is the cheapest thing that makes them read as objects held at an
      angle to a light. */
   c.save();
-  rr(c, 0, 0, w, h, 12 * S);
+  rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
   c.clip();
   const sheen = c.createLinearGradient(0, 0, w * 0.85, h * 0.75);
-  sheen.addColorStop(0, 'rgba(255,255,255,.55)');
-  sheen.addColorStop(0.35, 'rgba(255,255,255,.10)');
-  sheen.addColorStop(0.6, 'rgba(120,150,190,.10)');
-  sheen.addColorStop(1, 'rgba(90,120,165,.22)');
-  c.fillStyle = sheen; c.fillRect(0, 0, w, h);
+  sheen.addColorStop(0, 'rgba(255,255,255,.42)');
+  sheen.addColorStop(0.35, 'rgba(255,255,255,.08)');
+  sheen.addColorStop(0.6, 'rgba(120,150,190,.08)');
+  sheen.addColorStop(1, 'rgba(78,108,155,.20)');
+  c.fillStyle = sheen; c.fillRect(fi, fi, w - fi * 2, h - fi * 2);
   c.restore();
 
   /* ---------------- the name band, part of the frame ----------------
@@ -5553,29 +5722,45 @@ function drawCard(c, card, x, y, w, h, o) {
      than a card. Now it is a band that runs the full width under the frame, so
      the card is TWO shapes (the card, the window) instead of four stacked
      rectangles that all look alike. */
-  const bh = 26 * S;
+  /* AND IT IS A PLATE NOW, not a strip of flat colour. Two stops became three
+     with the light one at the top where the light is, a bevel so it has a
+     thickness, and a shadow cast onto the face below it — which is the thing
+     that stops it reading as a printed label and starts it reading as a piece
+     of the frame. */
+  const bh = 27 * S;
+  const by0 = fi;
   c.save();
-  rr(c, 0, 0, w, h, 12 * S);
+  rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
   c.clip();
-  const bg = c.createLinearGradient(0, 0, 0, bh);
+  const bg = c.createLinearGradient(0, by0, 0, by0 + bh);
   bg.addColorStop(0, tribeLit);
-  bg.addColorStop(1, tribeCol);
+  bg.addColorStop(0.45, tribeCol);
+  bg.addColorStop(1, mix(tribeCol, '#14203a', 0.28));
   c.fillStyle = bg;
-  c.fillRect(0, 0, w, bh);
+  c.fillRect(fi, by0, w - fi * 2, bh);
+  // the band's own light and the shadow it throws down the face
+  let bandG = c.createLinearGradient(0, by0, 0, by0 + 3 * S);
+  bandG.addColorStop(0, LIGHT + '0.55)');
+  bandG.addColorStop(1, LIGHT + '0)');
+  c.fillStyle = bandG; c.fillRect(fi, by0, w - fi * 2, 3 * S);
+  bandG = c.createLinearGradient(0, by0 + bh, 0, by0 + bh + 7 * S);
+  bandG.addColorStop(0, DARK + '0.30)');
+  bandG.addColorStop(1, DARK + '0)');
+  c.fillStyle = bandG; c.fillRect(fi, by0 + bh, w - fi * 2, 7 * S);
   // gear wears a notch out of its band, so a type is legible without reading
   if (!isUnit && card.type !== 'charm') {
     c.beginPath();
-    c.moveTo(0, bh); c.lineTo(10 * S, bh - 6 * S); c.lineTo(20 * S, bh);
+    c.moveTo(fi, by0 + bh); c.lineTo(fi + 10 * S, by0 + bh - 6 * S); c.lineTo(fi + 20 * S, by0 + bh);
     c.closePath();
-    c.fillStyle = 'rgba(16,26,46,.30)'; c.fill();
+    c.fillStyle = 'rgba(16,26,46,.34)'; c.fill();
   }
   /* A LIGHT rule, not a dark one. The first cut put a dark hairline under the
      band and the contrast check caught it on hand cards: the name is floored to
      the readable minimum there, so at that size the glyph band reaches the
      line, and dark ink over a dark rule is 1.0:1. A division on a light body
      reads just as well as a highlight, and cannot be a hazard. */
-  c.fillStyle = 'rgba(255,255,255,.5)';
-  c.fillRect(0, bh - 1.6 * S, w, 1.6 * S);
+  c.fillStyle = 'rgba(255,255,255,.55)';
+  c.fillRect(fi, by0 + bh - 1.6 * S, w - fi * 2, 1.6 * S);
   c.restore();
   /* THE FLOOR BEATS THE FIT, AND SOMETHING HAS TO GIVE.
 
@@ -5590,18 +5775,25 @@ function drawCard(c, card, x, y, w, h, o) {
      string is the thing that gives. An ellipsis inside the band reads as "this
      name is longer than the card"; a name bleeding over the card next to it
      reads as a broken renderer. */
+  /* AND THE NAME MAKES ROOM FOR THE GEMS. They live at the band's left end and
+     the name is centred in the whole band, so on a rare card with a long name
+     the two ran through each other — `◇ANKED EMBERS`. The gems take their strip
+     and the name centres in what is left, which is why the rail is measured
+     here rather than guessed at. */
+  const gemRail = rare >= 2 ? (rare - 1) * 9.5 * S + 6 * S : 0;
   const nm = card.name.toUpperCase();
-  const nameW = w - 18 * S;
+  const nameW = w - 18 * S - gemRail;
   const nameSize = fitText(c, nm, nameW, 15 * S, 8 * S, 't');
-  txt(c, ellipsize(c, nm, nameSize, nameW), w / 2, bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+  txt(c, ellipsize(c, nm, nameSize, nameW), fi + gemRail + (w - fi * 2 - gemRail) / 2,
+    by0 + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
 
   /* ---------------- the art window ----------------
      It was a flat two-stop wash with a grey ellipse floating in it. A window
      wants somewhere to BE: a sky, a horizon, a light behind the subject and a
      shadow at the top of the frame. Four cheap gradients and the portrait reads
      as a place rather than a passport photo. */
-  const ax = 7 * S, ay = bh + 6 * S;
-  const aw = w - 14 * S;
+  const ax = fi + 4 * S, ay = by0 + bh + 6 * S;
+  const aw = w - (fi + 4 * S) * 2;
   /* A unit's window shrank the rules line to one truncated clause at hand
      size, which is the one place the text has to be readable. Gear can afford
      a bigger picture because its rules are shorter. */
@@ -5614,10 +5806,16 @@ function drawCard(c, card, x, y, w, h, o) {
      card, with the cast — every one of them drawn in dark outline — swimming in
      it. A card is a daylight object. Pale sky, snow, and the tribe's colour as
      the light. */
+  /* A DEEPER SKY AT THE TOP. Three stops that ran pale-to-paler gave the window
+     no vertical order, so the subject had nothing to sit against and the whole
+     card read as one value. Starting the sky a good deal darker puts the light
+     where the light is — low, behind the ridge — which is also where the game's
+     backdrop puts it, so a card in hand belongs to the scene behind it. */
   const sky = c.createLinearGradient(0, ay, 0, ay + ah);
-  sky.addColorStop(0, '#bcd8f4');
-  sky.addColorStop(0.55, '#dceaf9');
-  sky.addColorStop(1, '#f2f8ff');
+  sky.addColorStop(0, '#8fb4dc');
+  sky.addColorStop(0.42, '#c3daf3');
+  sky.addColorStop(0.75, '#e4eefb');
+  sky.addColorStop(1, '#f6fbff');
   c.fillStyle = sky; c.fillRect(ax, ay, aw, ah);
   // a light behind the subject, in the tribe's colour
   const halo = c.createRadialGradient(w / 2, ay + ah * 0.58, 2, w / 2, ay + ah * 0.58, aw * 0.66);
@@ -5656,20 +5854,50 @@ function drawCard(c, card, x, y, w, h, o) {
   if (isUnit) drawCreature(c, card.art, w / 2, ay + ah * 0.79, ah * 0.94, { t: o.t || 0, ph: card.uid, blink: card.uid });
   else if (card.type === 'charm') drawItemIcon(c, { kind: 'burst', col: edge }, w / 2, ay + ah * 0.52, ah * 0.78, o.t || 0);
   else drawItemIcon(c, d.art, w / 2, ay + ah * 0.52, ah * 0.84, o.t || 0);
-  // the frame casts inward, so the window has a depth rather than a border
-  const inner = c.createLinearGradient(0, ay, 0, ay + ah * 0.3);
-  inner.addColorStop(0, 'rgba(8,14,28,.28)');
-  inner.addColorStop(1, 'rgba(8,14,28,0)');
-  c.fillStyle = inner; c.fillRect(ax, ay, aw, ah * 0.3);
   c.restore();
+  /* THE WINDOW IS A HOLE, AND IT USED TO BE A BOX. One dark stroke around a
+     pale wash puts the picture on the same plane as everything else. A hole has
+     a shadow cast onto its top and left by the face it is cut through, and a
+     lip of light along the bottom where the far edge catches it — and then a
+     rim, so the cut has a thickness. */
+  inset(c, ax, ay, aw, ah, 8 * S, 3.2 * S, 1.15);
   rr(c, ax, ay, aw, ah, 8 * S);
-  c.lineWidth = 2.5 * S; c.strokeStyle = C.ink; c.stroke();
+  c.lineWidth = 2.6 * S; c.strokeStyle = 'rgba(20,34,58,.92)'; c.stroke();
+  rr(c, ax - 1.4 * S, ay - 1.4 * S, aw + 2.8 * S, ah + 2.8 * S, 9.4 * S);
+  c.lineWidth = 1.2 * S; c.strokeStyle = LIGHT + '0.42)'; c.stroke();
 
-  /* ---------------- rarity, as pips on the frame ---------------- */
-  for (let i = 0; i < rare; i++) {
-    c.beginPath();
-    c.arc(w - 13 * S, ay + ah - 10 * S - i * 11 * S, 3.6 * S, 0, TAU);
-    inked(c, edge, 1.6 * S, C.ink);
+  /* ---------------- rarity, as gems set into the frame ----------------
+     It was two small flat circles floating on the window's right edge, at the
+     one value that made them read as dust on the lens rather than as
+     information. They are set into the FRAME now, on the left rail where
+     nothing else lives, cut as facets with a light on top — a gem reads as a
+     gem at four pixels, which a flat dot never does, and being on the frame
+     rather than the face means they belong to the card's furniture. */
+  /* IN THE BAND, not on the frame rail. The rail is four units wide and a gem
+     set into it hung half off the card's edge, which read as a rendering fault
+     rather than as rarity. The band has height to spare at its left end, where
+     a centred name never reaches, and a gem cut against the tribe's colour is
+     legible at hand size — which two flat dots on the window's edge never
+     were. */
+  if (rare >= 2) {
+    for (let i = 0; i < rare - 1; i++) {
+      const gy = by0 + bh / 2, gr = 4 * S;
+      const gx = fi + 8 * S + i * 9.5 * S;
+      c.save();
+      c.beginPath();
+      c.moveTo(gx, gy - gr);
+      c.lineTo(gx + gr * 0.85, gy);
+      c.lineTo(gx, gy + gr);
+      c.lineTo(gx - gr * 0.85, gy);
+      c.closePath();
+      const gg = c.createLinearGradient(0, gy - gr, 0, gy + gr);
+      gg.addColorStop(0, mix(edge, '#ffffff', 0.65));
+      gg.addColorStop(0.5, edge);
+      gg.addColorStop(1, mix(edge, '#0d1830', 0.45));
+      c.fillStyle = gg; c.fill();
+      c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(8,14,28,.8)'; c.stroke();
+      c.restore();
+    }
   }
 
   // what a hoarded card has put on since it was drawn
@@ -5693,9 +5921,16 @@ function drawCard(c, card, x, y, w, h, o) {
   const tagRoom = 31 * S;
   let showTag = !isUnit;
   let th = h - ty - (isUnit ? 27 * S : tagRoom);
-  c.beginPath();
-  c.moveTo(14 * S, ty - 2 * S); c.lineTo(w - 14 * S, ty - 2 * S);
-  c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(24,40,68,.22)'; c.stroke();
+  /* THE RULES SIT IN A WELL, and they used to sit on nothing.
+
+     A hairline over a paragraph is a diagram's way of saying "section". The
+     bottom third of the card was bare face, so the text floated and the card
+     had no weight below its picture — which is why a hand of them looked
+     top-heavy. A shallow recess, cut the same way the window is, gives the
+     rules somewhere to live and gives the card its third plane. Shallower than
+     the window on purpose: the picture has to stay the deepest thing on the
+     face or the eye goes to the text first. */
+
   let maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
   let fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
   /* THE TEXT OUTRANKS THE TAG. On a phone the rules are floored to the readable
@@ -5716,7 +5951,33 @@ function drawCard(c, card, x, y, w, h, o) {
      glance, and the full rules are one tap away in the inspect panel. */
   const lh = fit.size * 1.12;
   const lines = fit.cut(Math.max(1, Math.floor((th - 2 * S) / lh)));
-  const top = ty + th / 2 - (lines.length - 1) * lh / 2;
+  /* THE WELL IS A FIXED PANEL AND THE TEXT IS CENTRED IN IT.
+
+     Sizing the recess to its paragraph was the second attempt and it was worse
+     than it sounds: a one-line gear card got a small well floating in the
+     middle of the lower third with a hand's width of dead face under it, so
+     four cards in a row had their rules panels at four different heights and
+     the row lost its baseline. Every card game with a rules box gives it the
+     same box on every card, for exactly this reason — a row of cards is read as
+     a row, and the eye wants the same thing in the same place.
+
+     So the panel runs from under the picture to just above the footer, the same
+     on every card of a kind, and the text is centred inside it. The footer is
+     the badges on a warden and the type plate on gear, which is what makes the
+     two kinds line up at the bottom instead of only at the top. */
+  const wy = ty - 3 * S;
+  const wh2 = (isUnit ? h - 27 * S : h - 19 * S) - wy;
+  const top = wy + wh2 / 2 - (lines.length - 1) * lh / 2;
+  c.save();
+  rr(c, ax, wy, aw, wh2, 6 * S);
+  const wellG = c.createLinearGradient(0, wy, 0, wy + wh2);
+  wellG.addColorStop(0, '#d1e0f5');
+  wellG.addColorStop(1, '#eaf3fd');
+  c.fillStyle = wellG; c.fill();
+  c.restore();
+  inset(c, ax, wy, aw, wh2, 6 * S, 2.4 * S, 0.8);
+  rr(c, ax, wy, aw, wh2, 6 * S);
+  c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(28,48,80,.28)'; c.stroke();
   lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#1d2f4d', 'center', 't', 0));
 
   /* ---------------- the frame, drawn last so nothing crosses it ---------- */
@@ -5745,12 +6006,28 @@ function drawCard(c, card, x, y, w, h, o) {
        the rules text is floored to the readable minimum, which can fill a card
        this size on its own; a decorative tag that lands on a rule is worse than
        no tag at all. So it is drawn only if the text block actually clears it. */
+    /* AND THE TAG IS A PLATE SET INTO THE FRAME, not a grey pill on the face.
+       It was the deadest thing on the card — a translucent wash with a
+       translucent outline, floating in the pale area under the rules, saying a
+       word the notch in the name band already says. On the bottom rail it costs
+       the face nothing and gives the card a footer, which is the thing that
+       made a row of gear next to a row of wardens read as a broken line. */
+    /* Measured against the WELL, not the last line of text. The well is drawn
+       round the paragraph with its own padding, so a tag cleared by the text
+       could still land on the well's bottom edge — which is what made the plate
+       appear on two cards of four and vanish on the others. */
     const tag = card.type === 'charm' ? 'CHARM' : 'GEAR';
-    const textBottom = top + (lines.length - 1) * lh + lh * 0.6;
-    if (showTag && h - 17 * S > textBottom + 3 * S) {
-      c.beginPath(); rr(c, w / 2 - 24 * S, h - 17 * S, 48 * S, 13 * S, 6.5 * S);
-      inked(c, 'rgba(24,40,68,.16)', 1.2 * S, 'rgba(24,40,68,.28)');
-      txt(c, tag, w / 2, h - 10.5 * S, 9 * S, '#3a5378', 'center', 't', 0);
+    if (showTag) {
+      const tw = 52 * S, tx0 = w / 2 - tw / 2, ty0 = h - fi - 11 * S;
+      c.save();
+      rr(c, tx0, ty0, tw, 12 * S, 5 * S);
+      const tg = c.createLinearGradient(0, ty0, 0, ty0 + 12 * S);
+      tg.addColorStop(0, '#38507a');
+      tg.addColorStop(1, '#1c2c48');
+      c.fillStyle = tg; c.fill();
+      c.restore();
+      bevel(c, tx0, ty0, tw, 12 * S, 5 * S, 1.6 * S, 0.9);
+      txt(c, tag, w / 2, ty0 + 6.2 * S, 8.6 * S, '#cfe0f6', 'center', 't', 0);
     }
   }
 
@@ -6183,15 +6460,50 @@ const UI = {
   holdT: 0,          // how long the finger has been down in one place
 };
 
+/* A BUTTON IS A KEY YOU PRESS, and this one was a flat rectangle with a white
+   band across the top half — the shape a web page used in 2005, and the reason
+   a row of them read as a toolbar rather than as controls.
+
+   What makes a key look pressable is entirely about edges: a dark seat it sits
+   in, a body that is brighter at the top than the bottom because it faces the
+   light, a bright rim along its top edge and a shadow along its bottom, and a
+   contact shadow underneath that shortens when you press it. All five are here
+   and all five are the same one-directional light the cards use, so the whole
+   screen is lit from one place. Hover raises it and warms the rim; the pressed
+   state inverts the bevel, which is the only cue that reads instantly. */
 function button(c, id, x, y, w, h, label, col, dis, small) {
   const hv = UI.hover && UI.hover.id === id;
+  const down = !dis && UI.down && UI.down.id === id;
   c.save();
-  c.translate(0, hv && !dis ? 1 : 0);
-  panel(c, x, y, w, h, 12, dis ? '#3b4560' : (col || '#2f5d8f'), dis ? '#5a6480' : '#0f1a2e');
+  c.translate(0, down ? 2 : 0);
+  const base = dis ? '#3b4560' : (col || '#2f5d8f');
+  const r = 12;
+  // the seat: a dark socket the key sits in, so the body has somewhere to be
+  c.save();
+  c.shadowColor = 'rgba(4,9,20,.5)';
+  c.shadowBlur = (down ? 5 : 13);
+  c.shadowOffsetY = (down ? 2 : 6);
+  rr(c, x, y, w, h, r);
+  c.fillStyle = '#0f1a2e'; c.fill();
+  c.restore();
+  // the body, brighter at the top because that is where the light is
+  const bx = x + 1.5, bw2 = w - 3, byy = y + 1.5, bh2 = h - 4;
+  c.save();
+  rr(c, bx, byy, bw2, bh2, r - 1.5);
+  const bodyG = c.createLinearGradient(0, byy, 0, byy + bh2);
+  bodyG.addColorStop(0, mix(base, '#ffffff', dis ? 0.16 : (hv ? 0.42 : 0.30)));
+  bodyG.addColorStop(0.5, dis ? base : mix(base, '#ffffff', hv ? 0.10 : 0.02));
+  bodyG.addColorStop(1, mix(base, '#0b1428', 0.34));
+  c.fillStyle = bodyG; c.fill();
+  c.restore();
+  if (down) inset(c, bx, byy, bw2, bh2, r - 1.5, 3, 1);
+  else bevel(c, bx, byy, bw2, bh2, r - 1.5, 3, dis ? 0.5 : 1.15);
   if (!dis) {
-    c.save(); c.globalAlpha = 0.22;
-    rr(c, x + 4, y + 3, w - 8, h * 0.42, 9); c.fillStyle = '#ffffff'; c.fill();
-    c.restore();
+    // and the rim, which is what separates a key from a painted rectangle
+    rr(c, x + 0.75, y + 0.75, w - 1.5, h - 2.5, r - 0.75);
+    c.lineWidth = 1.2;
+    c.strokeStyle = hv ? LIGHT + '0.55)' : LIGHT + '0.26)';
+    c.stroke();
   }
   /* A BUTTON THAT DOES NOT FIT ITS OWN LABEL, which every button in the game
      was until the gutter check went in.
@@ -6209,7 +6521,7 @@ function button(c, id, x, y, w, h, label, col, dis, small) {
      it always did. */
   const cap = w - 18;
   const ls2 = fitText(c, label, cap, small ? 15 : 19, 9, 'd');
-  txt(c, ellipsize(c, label, ls2, cap), x + w / 2, y + h / 2 + 1, ls2,
+  txt(c, ellipsize(c, label, ls2, cap, false, 'd'), x + w / 2, y + h / 2 + 1, ls2,
     dis ? '#8b97b0' : '#ffffff', 'center', 'd');
   c.restore();
   if (!dis) hit(id, x, y, w, h);
@@ -9138,6 +9450,11 @@ function onDown(x, y) {
   UI.pointer = { x, y };
   const h = hitAt(x, y);
   UI.hover = h;
+  /* WHICH CONTROL IS UNDER THE FINGER RIGHT NOW. A button with a bevel can show
+     that it is being pressed by inverting it, which is the one depth cue that
+     reads instantly and the interface had no state to draw it from. Cleared on
+     up and on leave, so a control cannot be left looking held. */
+  UI.down = h;
   if (UI.help !== null && UI.help !== undefined) {
     if (h && (h.id === 'helpPage' || h.id === 'helpClose' || h.id === 'helpSheet')) press(h.id, h.data);
     return;
@@ -9194,6 +9511,7 @@ function onMove(x, y) {
 function onUp(x, y) {
   const g = G, d = UI.drag;
   UI.drag = null;
+  UI.down = null;                       // nothing is held once the finger lifts
   if (!d) return;
   const h = hitAt(x, y);
   if (!d.moved) {
