@@ -647,6 +647,12 @@ worth teaching has to pay on its own, and almost none do.**
 
 ### Is one-at-a-time the wrong question? No.
 
+Settled at 180 runs an arm and unchanged since: **denial alone is worth 18 of
+the 20 the whole set is worth**, keeping a slot back is +2, and everything else
+is zero. This has now been attacked from both directions and from the mending
+ledger, and the answer has not moved: the fight is one decision and some
+decoration.
+
 The fight ablation had said the same thing for six rounds — denial clears the
 band, nothing else does — and that reads as "nineteen of twenty decisions are
 fake". But removing one habit leaves the pilot every other way of coping, and
@@ -731,10 +737,39 @@ fighter's nought and more power (9.3 against 8.9) off fewer fights. It takes the
 quiet road at 37% of the forks that offer it and loses eight points doing it —
 a decision priced wrong rather than a rule nobody plays around.
 
-The structural finding underneath is the one to act on next: **damage is not a
-pressure in this game**, so nothing paid in mending will ever matter. And the
-blessings the shrine hands out, which ARE scarce, still do not pay for the cards
-and scrip a fight would have given.
+The structural finding underneath it is the next section.
+
+### Where the mending actually comes from
+
+"Damage is not a pressure in this game" was a closing sentence, and four
+suspects were named without anybody counting them. Counted, the way the charms
+were: read the caravan's wound total on every pass of the run loop and attribute
+each change to the transition it happened on.
+
+**92% of every point of damage the caravan takes gets mended** (9,176 taken,
+8,400 mended across 210 runs), and:
+
+```
+a fight ENDING (the fallen come back whole)   65%
+camp                                          16%
+shop (mend-all)                               14%
+rest / event                                   4%
+warmth                                         0%
+```
+
+The list was wrong. It is not camps and it is not meals and **warmth does not
+register at all** — the single biggest entry is a warden falling, because a
+fallen warden's damage is wiped to nought before it comes back Hurt. Two thirds
+of the "mending" in this game is not healing; it is a knockout being undone,
+which is a different mechanic wearing mending's clothes.
+
+**Two obvious levers were tried and neither works.** Making a fallen warden come
+back missing 35% of its health took the *fight's* rung from +16 to +9 — it
+punishes a careful pilot, who fields more bodies for longer, harder than a
+careless one that was dying anyway — and moved the wound fraction from 8% to
+10%, which is nothing. Raising warmth to 2 was worth seven points to the whole
+ladder and most of them to the **trader's** rung: a global buff, not a reason to
+keep a slot back. Neither shipped.
 
 ### Read state, don't intercept calls
 
@@ -852,6 +887,35 @@ outrun the incoming does nothing at all, and healing that does outrun it makes
 the warden unkillable — there is no middle, so every tuning pass either did
 nothing or broke it. That is a fact about how the game's damage works, not about
 Hearth, and it applies to anything that mends.
+
+### And the shot walk is still the only thing that sees
+
+Three assertions over eight shapes is 667 checks and none of them has ever found
+what a person finds by looking. The clipped collection names, the collided trail
+labels, the dim question mark — all three came from opening a PNG. So three
+screens nobody had ever examined at 2400x1080 were opened, and all three were
+wrong:
+
+- **The shrine** drew both buttons on top of the stone's foot and its shadow (the
+  stone is scaled 1.7× from y=330 and reaches past 520; the buttons sat at 452),
+  with the explainer line at 536 half-swallowed by the snow bank. The row moved
+  below the shadow and the explainer above the buttons.
+- **The camp** was a single flame hanging in empty air with no pit, no logs and
+  no glow — on the one screen whose subtitle is *one quiet hour before the road*,
+  and in a game where every other light is additive. It has logs and a fire-glow
+  now.
+- **The rest stop** has no fault to fix and one to record: on a 20:9 stage the
+  three cards cluster in the middle third and the bottom half is empty snow. The
+  screen is laid out for 16:9 and merely survives being stretched.
+
+**And it found a limit in the contrast check.** Moving the shrine's explainer
+clear of the buttons put it on the snow bank, which is nearly white. The check
+passes it — the glyphs are outlined, and an outline is what it measures for
+outlined text — but edge definition is not figure-ground, and pale blue on snow
+still reads badly. The rule is right for dark grounds, which is almost all of
+this game, and blind to a light one. The fix here was a dark pill behind the
+line; the general fix is to measure outlined text against BOTH its outline and
+its ground and take the worse, which is the next round's business.
 
 ### And a third thing nobody was checking
 
