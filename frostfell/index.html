@@ -1317,6 +1317,9 @@ const allies = (g, u) => sideUnits(g, u.side);
 const foes = (g, u) => sideUnits(g, u.side === 'p' ? 'e' : 'p');
 const unitAt = (g, side, lane, col) => units(g).find((u) => u.side === side && u.lane === lane && u.col === col) || null;
 const slotFree = (g, side, lane, col) => !unitAt(g, side, lane, col);
+/* A named wave is held by anyone standing anywhere in the lane, not only at the
+   front — see the note in deployWave for why the front-only version was wrong. */
+const laneHeldBy = (g, lane) => units(g).find((u) => u.side === 'p' && u.lane === lane) || null;
 const laneOf = (g, side, lane) => units(g).filter((u) => u.side === side && u.lane === lane).sort((a, b) => a.col - b.col);
 const other = (side) => (side === 'p' ? 'e' : 'p');
 function freeSlots(g, side) {
@@ -1949,6 +1952,27 @@ function resolveTurn(g) {
     if (b.over) return;
     if (b.waves && b.waves.length) {
       b.waveCnt--;
+      /* THE SECOND TELEGRAPH.
+
+         Six rounds of measurement said the fight is one decision, and the
+         reason turned out to be structural: a scheme is the only thing on the
+         table whose outcome depends on what you do in the window between it
+         being announced and it happening. Everything else is arithmetic.
+
+         So the wave gets a window too. One turn out it commits to a LANE and
+         says so, and the lane is not decoration — a wave that finds a warden
+         holding the front of the lane it named has to come in BEHIND, at the
+         back column, where it is slow and reachable. Find it empty and it walks
+         straight into the front, swinging on the fast clock.
+
+         That is the same shape as a scheme: announced, answerable, and free to
+         answer if you were already looking. Whether it makes placement a
+         decision is what the additive table is for. */
+      if (b.waveCnt === 1 && b.waves.length) {
+        b.waveLane = Math.floor(rnd() * LANES);
+        fx.toast('A WAVE COMES TO THE ' + (b.waveLane === 0 ? 'TOP' : 'LOWER') + ' LANE', '#ff9a3c');
+        logLine(g, 'something is coming to the ' + (b.waveLane === 0 ? 'top' : 'lower') + ' lane', '#ff9a3c');
+      }
       if (b.waveCnt <= 0) deployWave(g);
     }
   });
@@ -2431,8 +2455,38 @@ function deployWave(g) {
   if (!b || !b.waves || !b.waves.length) return false;
   const wave = b.waves[0];
   const placed = [];
+  /* Where the announced lane lands, and what meeting it is worth.
+
+     ANYONE STANDING IN THE NAMED LANE HOLDS IT — front, middle or back. The
+     first cut asked for the front slot specifically, and that read as a tax on
+     a narrow pool rather than a decision: it was worth +8 to a run carrying no
+     course at all and nothing to any of the five courses, because a course
+     narrows what you draw and the front slot is the one every other card also
+     wants. Widening it to the whole lane put the courses back above the open
+     pool and cost the fight rung three points of the twenty-four.
+
+     The other rejected cut let the wave in BEHIND the holder instead of turning
+     it away, and it measured a disaster: the ladder fell from 34 points to 23
+     and placement went from +1 to −1, because a wave committed to one lane
+     concentrates the fell where a wave spread across free slots did not. Adding
+     a mechanic to the foes' side buffs the foes — the same lesson a non-solo
+     scheme taught two rounds ago.
+
+     What makes a scheme worth denying is that the scheme IS the foe's turn. So
+     a held lane does the same: the wave does not arrive at all, it waits. */
+  const named = b.waveLane;
+  const met = named !== undefined && laneHeldBy(g, named);
+  if (met) {
+    b.waveCnt = 1;
+    b.waveLane = undefined;
+    fx.toast('THE LANE WAS HELD', '#8fffc4');
+    logLine(g, 'the wave found the lane held, and waited', '#8fffc4');
+    b.laneHeld = (b.laneHeld || 0) + 1;
+    return false;
+  }
   for (const e of wave) {
     let lane = e.lane, col = e.col;
+    if (named !== undefined && e.lane === undefined) { lane = named; col = 0; }
     if (lane === undefined || !slotFree(g, 'e', lane, col)) {
       const free = freeSlots(g, 'e').sort((a, x) => a.col - x.col || a.lane - x.lane);
       if (!free.length) break;
@@ -2452,6 +2506,7 @@ function deployWave(g) {
     placed.push(u);
   }
   if (!placed.length) return false;
+  b.waveLane = undefined;
   b.waves.shift();
   b.waveCnt = waveGap(g);
   b.waveNo = (b.waveNo || 1) + 1;
@@ -6269,7 +6324,17 @@ function drawBattle(c, t) {
     inked(c, soon ? '#ff9a3c' : '#c98a9e', 3, C.ink);
     c.restore();
     txt(c, String(b.waveCnt), wx + 28, wy + wh / 2 + 1, 19, '#2a1524', 'center', 'd', 0);
-    txt(c, 'UNTIL THE NEXT WAVE', wx + 58, wy + wh / 2, 13, '#f0cbd8', 'left', 't');
+    // once it has named a lane, the clock says which one — see the telegraph note
+    txt(c, b.waveLane === undefined ? 'UNTIL THE NEXT WAVE'
+      : 'TO THE ' + (b.waveLane === 0 ? 'TOP' : 'LOWER') + ' LANE',
+      wx + 58, wy + wh / 2 - (b.waveLane === undefined ? 0 : 8), 13,
+      b.waveLane === undefined ? '#f0cbd8' : '#ff9a3c', 'left', 't');
+    if (b.waveLane !== undefined) {
+      const holder = laneHeldBy(G, b.waveLane);
+      txt(c, holder ? 'the lane is held — it waits' : 'stand in the lane and it waits',
+        wx + 58, wy + wh / 2 + 10, 11.5,
+        holder ? '#8fffc4' : '#f0cbd8', 'left', 't');
+    }
     button(c, 'wave', wx + ww - 92, wy + 7, 84, 32, 'CALL', '#8f4a5f', b.busy, true);
   }
 }
@@ -8599,6 +8664,7 @@ window.FF = {
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
   hasRoom, isPacked, ROOM_NEEDED, LESSON,
+  deployWave, laneHeldBy,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,

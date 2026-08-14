@@ -1934,6 +1934,48 @@ section('walking past a fight buys the one thing a fight cannot give');
   eq(g.run.quiet, 0, 'and it is spent, not a standing bonus');
 }
 
+/* ------------------------------------------------- the second telegraph -- */
+section('a wave names its lane, and a held lane makes it wait');
+{
+  /* Six rounds said the fight is one decision because a scheme is the only
+     thing with a window between announcement and execution. This is the second
+     one, shaped the same way on purpose: answering it takes the wave's turn
+     away rather than merely repositioning it. Driven at deployWave rather than
+     through the turn clock — what is under test is the rule, not the timer. */
+  withRun(FF, 'hearth', 91);
+  const g = FF.G;
+  const b = FF.startBattle(g, 'fight');
+  b.units = [];
+  b.over = false; b.busy = false;
+
+  // a named lane that is HELD: the wave waits, and is still on the stack
+  b.waves = [[{ id: 'snapfrost' }]];
+  b.waveLane = 0;
+  const pup = place(FF, 'p', 'snowpup', 0, 0);
+  const before = FF.enemyUnits(g).length, waves0 = b.waves.length;
+  eq(FF.deployWave(g), false, 'a held lane turns the wave away');
+  eq(b.waves.length, waves0, 'and the wave is still waiting, not spent');
+  eq(FF.enemyUnits(g).length, before, 'nothing arrived');
+  ok((b.laneHeld || 0) > 0, 'and the board counts it');
+
+  /* ANYWHERE in the lane holds it, not only the front. The front-only version
+     priced as a tax on a narrow pool: +8 to a run carrying no course at all and
+     nothing to any of the five, because a course narrows what you draw and the
+     front slot is the one every other card also wants. */
+  pup.col = 2;
+  b.waveLane = 0;
+  ok(FF.laneHeldBy(g, 0), 'a body in the back of the lane still holds it');
+  eq(FF.deployWave(g), false, 'and the wave still waits');
+  eq(FF.enemyUnits(g).length, before, 'with nothing arrived');
+
+  // the same wave, into the other lane, lands
+  b.waveLane = 1;
+  ok(!FF.laneHeldBy(g, 1), 'the other lane is empty');
+  ok(FF.deployWave(g), 'an empty lane lets it land');
+  ok(FF.enemyUnits(g).length > before, 'and something arrived');
+  ok(FF.enemyUnits(g).some((u) => u.lane === 1), 'in the lane it named');
+}
+
 /* ------------------------------------------------- teaching, not tuning -- */
 section('the lesson a beginner gets and a good player never sees');
 {
