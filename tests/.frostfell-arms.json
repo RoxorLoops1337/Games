@@ -1,6 +1,6 @@
 {
  "FF_ABLATE=60": {
-  "said": "denying schemes +15 of the 12; next best holding gear until it earns the turn +4",
+  "said": "denying schemes +8 of the 17; next best filling the front of both lanes first +1",
   "sample": 210
  },
  "FF_LESSON=1": {
@@ -20,12 +20,12 @@
   "sample": 840
  },
  "FF_COURSE=150": {
-  "said": "cold 46% is the best of five, hearth 38% the worst, against 42% for none (±1.8)",
-  "sample": 840
+  "said": "hearth 52% is the best of five, scrap 40% the worst, against 40% for none (±2.6)",
+  "sample": 420
  },
  "FF_PAIRS=70": {
-  "said": "best is denying schemes + keeping a slot in reserve at +1.8, against ±4.1 derived but ±5.9 MEASURED — shared seeds make the real band 0.7x narrower than the printed one",
-  "sample": 852
+  "said": "best is denying schemes + repositioning at all at +0.0, against ±10.7 derived but ±7.4 MEASURED — shared seeds make the real band 1.5x narrower than the printed one",
+  "sample": 135
  },
  "FF_PAIR=holdGear+keepSlot": {
   "said": "best is holding gear until it earns the turn + keeping a slot in reserve at +2.0, against ±5.8 derived but ±3.1 MEASURED — shared seeds make the real band 1.9x narrower than the printed one",
@@ -52,7 +52,11 @@
   "sample": 210
  },
  "FF_VARIANCE=36": {
-  "said": "won/lost: trail 13.9%, deck 1.6%, draw 0.0%, matchup 27.9% · zones: trail 27.5%, deck 4.4%",
+  "said": "won/lost: trail 16.1%, deck 1.3%, draw 0.0%, matchup 23.8% · zones: trail 36.0%, deck 4.1%",
   "sample": 864
+ },
+ "FF_GEARBAR=1": {
+  "said": "gear worth 4+ first 45% is the best of 5, +5 on the shipped bar of 6 (40%), family bar ±9.2",
+  "sample": 450
  }
 }

@@ -315,12 +315,34 @@ The full record on this one course:
 | a foe's turn taken, at the moment of death | nothing |
 | a body saved, moved to turn one | nothing |
 
-**Neither the currency nor the timing explains it.** What is left is the shape
-nobody has tried: every Hearth rule is bounded to ONCE A FIGHT, and Cold's Frost
-lands on **the whole front of the first wave** — several foes, scaling with the
-wave, every fight. The surviving hypothesis is magnitude, and it is stated
-without a test attached because five have now been spent on this course and the
-sixth wants to be worth it.
+**Neither the currency nor the timing explains it — it was MAGNITUDE, and the
+sixth attempt is the first that lands.** Five rewrites had asked *what* Hearth
+pays in and *when* it pays; none had asked *how much*. Every Hearth rule was
+bounded to ONCE A FIGHT while Cold's Frost lands on the whole front of the first
+wave. The claim standing in this entry for four rounds — "regen is a threshold
+good, there is no setting between +0 and +17" — is **false**. There is a dial and
+it was never turned. At 420 runs an arm, against Hearth's 38%:
+
+```
++1 regen to the ONE most-hurt warden a turn      52%      ← SHIPPED
++1 regen to the two most hurt                    51%
++1 regen to the whole line                       58%
+```
+
+**The first warden buys +14 of the available +20.** The curve is steeply
+diminishing and the second point of it is worth nothing at all (52 → 51 is inside
+±5). So the smallest setting that works is what ships: `emberline`, one extra
+point of regen on the single most-hurt warden each upkeep. Hearth goes 38% → 52%
+and the course table inverts — Hearth is now the *best* of the five and Cold, at
+45%, is second.
+
+Shipping the +17 version would have been the same mistake Cold made when Frost
+landed on every arrival: 58% against a 40% courseless baseline is not a choice,
+it is the answer. **The dial existed the whole time; five rounds were spent
+looking for a different mechanism because "it measures zero" was read as "this
+kind of thing measures zero" rather than "this amount of it does".** That is the
+transferable half: a null on a magnitude-bearing mechanic is a null *at that
+magnitude*, and none of the five previous tests varied one.
 
 ### FINDING — the courses are not indistinguishable; the baseline was
 
@@ -332,17 +354,29 @@ middling baseline where the gaps are about 4 points against a bar of ±4.9, so
 nothing clears and the honest-looking conclusion is "they are all the same".
 
 Nobody chooses between "cold" and "no course". The leader screen offers five and
-asks which. **Best against worst**, at 840 runs an arm:
+asks which. **Best against worst**, at 450 runs an arm on the shipped build:
 
 ```
-cold 46%  ·  hearth 38%      8 points on a difference band of ±2.5  =  3.1σ
-family of two bar   2.24σ    CLEARS
-family of six bar   2.64σ    CLEARS
+no course 40%  ·  hearth 52%  ·  gear 47%  ·  cold 45%  ·  scrap 40%  ·  bodies 40%
+
+hearth 52%  vs  bodies 40%    12 points on a difference band of ±3.8  =  3.2σ
+family of two bar   2.24σ     CLEARS
 ```
 
-**Cold is better than hearth and it clears even the six-question bar.** The null
-was an artefact of what it was compared against, and the arm prints both
-comparisons now.
+**The spread is real and it clears the bar.** The null was an artefact of what
+the courses were compared against, and the arm prints both comparisons now.
+
+**And the RANKING inside it has moved once, which matters more than the spread.**
+For a dozen rounds this table read `cold 46% · hearth 38%` and one entry up drew
+a whole theory of tempo from it. Hearth's magnitude fix (see *course-why*) put
+Hearth on top at 52% and left the spread almost unchanged at 12 points. So the
+finding that survives is **not** "cold is the strong one" — that was a fact about
+one under-tuned course, and it was read as a fact about the game for four rounds.
+What survives is the shape: **five courses, one of them roughly 12 points clear
+of the floor, and three of them piled at the courseless baseline of 40%.** Scrap
+and Bodies pay 0 points over declaring nothing. They are the next magnitude
+question, and the answer to them is now known to be a dial rather than a
+mechanism.
 
 This is the same lesson as the locked-deck arm one entry down, in a smaller
 costume: **the comparison you set up decides what you are able to see**, and a
@@ -473,6 +507,52 @@ encounters, not of deck strength — which is a design statement, and the thing 
 change if you want cards to matter is how much a single pairing decides, not how
 good the cards are.
 
+### FINDING — gear-heavy hands win by 14 and the pilot's gear dial is flat
+
+`topic: gear`
+
+The variance arm's surviving explanation, after two dead ones, was gear: the top
+half of dealt decks carries **2.5 pieces of gear against 1.7**, and — the part
+that made it a candidate rather than a coincidence — it plays more gear **per
+turn**, not merely more per run. Two things fit that, and for two rounds the file
+printed both and tested neither:
+
+* the **deck** is better — gear beats bodies, and this is about what you carry;
+* the **pilot** is worse — it deploys a warden whenever it can and only jumps the
+  queue with gear worth 6 or more, so a gear-heavy hand forces good play on it by
+  removing the bodies it would otherwise waste turns on.
+
+The second was untestable only because `holdGear` is a **switch**, and off means
+"gear always first" — one end of a dial rather than the dial. `GEAR.bar` is the
+dial. Swept end to end on the decks the pilot already draws, 450 runs a bar:
+
+```
+gear always first (2.5)   44%        gear worth 8+ first    42%
+gear worth 4+ first       45%        gear never first (99)  43%
+gear worth 6+ first       40%   ← what ships
+                    spread 5 points · family-of-5 bar ±9.2
+```
+
+**Flat, end to end.** Playing every piece of gear the moment it is drawable and
+never playing one before a body are **within 2 points of each other**, and the
+whole range is inside its own family band. So the second explanation is dead:
+no setting of the pilot's gear preference buys a point, and the 14 points cannot
+be about how much gear the pilot chooses to play.
+
+**The shallow run said the opposite and that is the reusable half.** At 72 runs a
+bar the same five read `43/46/47/46/39` with the shipped bar on top and a clean
+story about a well-tuned pilot; at 450 they read `44/45/40/42/43` with the
+shipped bar at the bottom. **The ranking inverted completely between samples**
+while the spread stayed inside the band both times — which is exactly what a flat
+dial looks like, and exactly what a ranking read off a small sample will hide.
+The arm is gated on the **spread**, not on where the shipped value ranks, because
+a ranking inside its own band is noise no matter how satisfying its shape.
+
+What remains open: the 14 points are about the deck, or about something the pilot
+has no dial for at all. Given that the matchup term is 27% and the deck's own main
+effect is 1.6%, "gear-heavy decks beat particular trails" is the live candidate,
+and it needs a matchup-split rather than another pilot knob.
+
 ### FINDING — the three unsupported nulls, spent and settled
 
 `topic: null-audit`
@@ -575,10 +655,14 @@ the gap between two rows is that one thing. `FF_RUNS=70`, 210 runs an arm:
 
 | pilot | | worth |
 |---|---|---|
-| careless | takes the leftmost card, swings at the nearest thing | 10% |
-| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 19% (**+9**) |
-| + the trader | spends well | 37% (**+18**) |
-| + steering the pool | drafts to a course | 38% (+1) |
+| careless | takes the leftmost card, swings at the nearest thing | 8% |
+| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 26% (**+18**) |
+| + the trader | spends well | 39% (**+13**) |
+| + steering the pool | drafts to a course | 41% (+2) |
+
+**33 points, and the six-point jump from 27 came from taking three cards out**,
+not from anything added to a pilot — see [auras](#finding--the-prescription-for-a-flat-pool-was-an-aura-and-it-did-not-work).
+That is the largest single move the ladder has made, and it was made by deletion.
 
 **Every reading before this round is on a different footing and is not
 comparable.** Unlocks used to accumulate across runs, so the four arms each
@@ -716,7 +800,12 @@ looked like it moved it**, at 210 an arm:
                             set   denial alone   floor
 before the telegraph        +17     17 of 17       7%
 after                       +17      8 of 17       9%
+after cutting the auras     +17     15 of 17       9%
 ```
+
+The set fell to **+12** for two rounds in between and that was written off as
+drift. It was not drift: three aura cards were in the pool, and taking them out
+put it back to +17. See [auras](#finding--the-prescription-for-a-flat-pool-was-an-aura-and-it-did-not-work).
 
 That was reported as three standard deviations and it is not. On the
 [measured band](#rule--a-band-is-measured-and-it-applies-to-every-number-here) a
@@ -736,6 +825,17 @@ gear + keeping a slot back at **+6.2**, 1.1σ. Run four times as deep
 (`FF_PAIR=holdGear+keepSlot`, 750 an arm) it reads **+2.0**. The standout
 evaporated, exactly as keeping a slot back went +5 → +2 and the beast's rest went
 +19 → +15. Three for three for the rule this suite adopted last round.
+
+**And the sign on placement is the third measurement of one thing.** "Shelter any
+body that cannot survive the biggest swing" priced at **−7** at the fight rung;
+"always park the leader in column three" at **−7**; "place bodies where they will
+be hit" beat filling the nearest free slot by **+4**. Three separate heuristics,
+all of them forms of keeping bodies out of the fighting, all of them negative.
+The front column ticks twice and swings land on the front of a lane, so a pilot
+that protects its wardens is a pilot doing less fighting. That is not a quirk of
+one heuristic; **it is what this board is**, and the two cards built to exploit
+the opposite (Dawnpiper, Trailmarshal) were deleted after reading 25 points
+against 28 with the habits they needed switched on.
 
 The cumulative ladder, best single first from a pilot that knows nothing (9%):
 
@@ -930,50 +1030,43 @@ sample widens every tail. The honest comparison against a control group at three
 times the depth shrinks 5.95x to **1.49x, 1.1σ**.
 
 **So: stop building auras.** Two of the five were already cut for costing the
-ladder three points; the surviving three are ordinary cards with interesting
+ladder three points; the surviving three were ordinary cards with interesting
 text, which is worth something to a player and nothing to the pool's flatness.
 The flat pool is still flat and the explanation is not "the cards were too local".
 
-The three stay in — at `FF_RUNS=70` they read careless **10%** against 8% without
-them and 28 points against 30, so they raise the beginner's floor by two and cost
-the total two — but nothing here licenses five more.
+**And the three are now CUT, because they were never costed and they were not
+free.** For two rounds this entry ended "the three stay in — they raise the
+beginner's floor by two and cost the total two". That price was read off a
+sample that could not support it. Removed, at `FF_RUNS=70`:
+
+```
+                       ladder                      fight set
+with the three auras   8 / 26 / 39 / 38  = 27       12 points
+without them           8 / 26 / 39 / 41  = 33       17 points
+```
+
+**They cost the ladder six points and the fight set five.** The entry that said
+"two" was wrong by three on one number and by five on the other, and the set's
+fall from 19 to 12 — traced across two card-pool changes and written off as
+drift for a round — is these three cards. Drift is what an unmeasured change is
+called by whoever did not measure it.
+
+Why they cost anything is not mysterious in hindsight: all three hang a global
+rule off a body, and the pilot's habits are all about *bodies*. Coldbearer paid
+the line's warmth unconditionally, which quietly deleted the room rule — the
+single decision the fight set is mostly made of. **A card that removes a decision
+does not read as weak, it reads as flat, and it takes the ladder down with it.**
+
+The `auraOn` primitive went with them, and with it the four sites that read it
+(`hasRoom`, `isPacked`, `tickRate`, the upkeep coldsink). The rule stands:
+**a mechanic that measures zero is not free** — and neither is one that was never
+measured at all.
 
 One thing found while building them, worth more than the cards: `def()` let a
 second card claim an id and **win silently**. One of the five was named
 `cairnwarden`, which already existed 100 lines down — the later definition
 overwrote it, the new card vanished from the game entirely, and the suite went
 green at 602 checks because every one happened to test the survivor. It throws now.
-
-### DEAD ENDS — the two cards and the habit built to rescue them
-
-`topic: shelter`
-
-**Dawnpiper** (your wardens tick before the foes) and **Trailmarshal** (a body onto
-the board without spending the turn) were the two most interesting rules of the
-five and both are deleted. They were held out of the offer for one round on the
-argument that the probe's pilot could not express the habits they need. That
-argument was then tested: with the habits on they were drafted and played **50 and
-156 times across 360 runs** and the ladder read **25 points against 28** without
-them. Not blind-spotted — just worse.
-
-**`SKILL.shelter`, the habit built to rescue Dawnpiper, is deleted too, and both
-its numbers are the point:**
-
-```
-shelter any body that cannot survive the biggest swing   −7 at the fight rung
-                                                          (12/13/36/36 vs 12/20/40/39)
-shelter aura-carriers only                                 0, firing 95 times in 360 runs
-```
-
-Neither version earns a row in the ablation table. A habit that prices at zero is
-not free — it is a switch every future pilot change has to reason around, implying
-forever that somebody should care.
-
-The wide number is the one to remember: **that is the third time "careful
-placement" has cost this pilot points.** The front column ticks twice, swings go
-to the front of a lane, and a pilot that keeps bodies out of the fighting is a
-pilot doing less fighting. That is no longer a quirk of one heuristic; it is what
-this board is.
 
 ### FINDING — no card in the game is load-bearing
 
@@ -1045,6 +1138,38 @@ band ±1.6 · 2σ = ±3.2 · the reading is 6.3σ
 at the same depth is holding gear at +2, inside the band. Six rounds of building
 on denial were building on something real; the four tenths were a small-sample
 artefact of the arm, not a property of the finding.
+
+**AND IT IS NOW WORTH MORE THAN THE WHOLE SET, which is an arithmetic problem
+nobody had done.** Denial alone reads **+15** and the set of six reads **+17**.
+Since the six are not additive that is not literally "the other five sum to +2",
+but it does bound them: whatever the other five contribute on top of denial, it
+is about two points, and three of them price negative on their own. The habit
+table is not five small positives and one large one. It is **one habit and five
+passengers**, and two of the passengers (repositioning, calling waves early) are
+already dead switches kept only so the ablation has a row.
+
+**So the pairs were run against denial specifically** (`FF_PAIRS=45`), each as
+`pair - none - (a - none) - (b - none)`, band on an interaction ±5.4:
+
+```
+deny + holdGear      −5.9        deny + reposition   +0.0   (dead switch)
+deny + keepSlot      −5.9        deny + waves        +0.0   (dead switch)
+deny + place         −4.4
+```
+
+**Every live pairing with denial is NEGATIVE, and unanimously so.** No single one
+clears 2σ — the largest is 1.1σ — but three independent draws landing on the same
+side is itself information the individual bands do not carry. The reading that
+fits: denial buys a foe's wasted turn, and the other habits spend the pilot's
+turn arranging the board to survive turns denial has already deleted. They are
+not additive because they are partly **substitutes**, and a set totalling less
+than its best member is what a set of substitutes looks like.
+
+This does not license deleting them — a substitute is worth something on the
+turns denial is not available, and there is no denial to do on a board with no
+schemes on it. It does license the reverse of what four rounds assumed: the fight
+rung is not "six habits worth +17 together". It is **denial, worth +15, with five
+habits that mostly get in its way.**
 
 ### RULE — a band is measured, and it applies to every number here
 
@@ -1291,6 +1416,31 @@ different step. Make the arithmetic unreachable instead.
 
 Touch found seven controls too small; type got a floor and found five
 collisions. Nothing had ever asked whether the text could be **seen**.
+
+**And the type check was only half a check for twenty rounds, which the phone
+walk found this round.** The stacking check compares consecutive lines in a
+COLUMN and catches a line step that stopped growing with its text. The other
+axis was never checked, and that is where the floor's remaining damage was: on
+the leader screen at 844x390 the floor lifted every preview card's name past
+what `fitText` could shrink it to — a preview card is 92 stage units wide and
+the floor is about 17 — so four names were drawn straight through each other and
+`CINDERPUP CINDERPUP KETTLEBEAK` read as one word across three cards. **Every
+one of them passed the floor check and the stacking check**, because each was
+individually legible and no two shared a column.
+
+The same rule turned ninety degrees — two strings on one baseline may not
+overlap — is **96 new assertions** and it fires on the leader screen at
+653x280 and, unprompted, on the **victory screen**, which the shot walk had
+never shown at that shape. Two live defects, one of them invisible to the eye
+that was looking.
+
+The lesson underneath is about `fitText` and belongs next to it: **it returns a
+size, and a size is not a promise that it fits.** It shrinks until the string
+fits or until it hits the legibility floor, and on a handset the floor wins
+often. Every caller that boxes text has to decide what gives when the box cannot
+carry a readable string — here the string does, through `ellipsize`. A name
+truncated inside its band reads as "this name is longer than the card"; a name
+bleeding over the card beside it reads as a broken renderer.
 
 The first pass found exactly one thing, which was suspiciously few — and it was.
 The stub's `save`/`restore` carried the transform and not the *style*, so one

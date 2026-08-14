@@ -557,60 +557,35 @@ def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3
   art: A('#8fb08f', '#d8ebd6', { stance:'stand',tail:'none',mark:'scar',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
   kw: { longshot: 1, soak: 1 }, text: 'Longshot. Soak.' });
 
-/* -- the five that rewrite a rule ----------------------------------------- */
-/* Fifty-six of fifty-seven cards measured indistinguishable from the pool
-   median. These five exist to answer that, and NOT by carrying bigger numbers:
-   every one of them is at or below the stat line of an ordinary card of its
-   tier, and every one of them hangs a rewrite of a global rule off a body that
-   can be killed. See the aura note in section 5 for the shape, and each card's
-   comment for what it charges — because a card whose cost you cannot state
-   fails doctrine test 3 and should not have been built. */
+/* CUT — THE THREE AURA CARDS, AND THIS IS WHAT THEY COST.
 
-def({ id: 'coldbearer', name: 'Coldbearer', type: 'unit', tribe: 'hearth', hp: 14, atk: 1, cnt: 4, rare: 3,
-  art: A('#9c8f7a', '#ded3bd', { stance:'squat',tail:'none',mark:'patch', skin:'metal',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'lantern', accCol: '#ffd166' }),
-  aura: { coldsink: 1 },
-  kw: {}, text: 'While it stands, a packed line still warms — and it takes the Frost 2 for all of them.' });
+   Five cards were built to fix a flat pool by hanging a global rule off a living
+   body: the room rule, the column clock, run-scoped memory, turn order, and
+   deploying from the deck. Two were deleted a few rounds ago for needing a plan
+   the pilot could not make. These three — Coldbearer, Backdrift, Grudgehorn —
+   shipped, and against a named control group of three ordinary wardens at 360
+   runs an arm they measured 1.49x, 0.92x and 0.61x against the controls' 1.16x,
+   1.00x and 0.76x. Best and worst of the six were both auras. They do not
+   differentiate.
 
-def({ id: 'backdrift', name: 'Backdrift', type: 'unit', tribe: 'frost', hp: 9, atk: 2, cnt: 3, rare: 3,
-  art: A('#a8c6e8', '#eaf4ff', { stance:'float',tail:'plume',mark:'none', skin:'ice',idle:'hover', shape: 'wisp', ears: 'antenna', mouth: 'none', eyes: 'big' }),
-  aura: { invert: 1 },
-  kw: {}, text: 'While it stands, the BACK column burns two counters a turn and the front burns one — both sides.' });
+   That would be a reason to leave them in — an ordinary card with interesting
+   text is not a problem. The measurement that removes them is what they cost:
 
-/* Its Spice is banked when it SWINGS, not when it gains, so the question is on
-   the board every turn: spend the spice on a kill now, or hold it through one
-   more counter and keep it for the rest of the run. Falling empties the bank,
-   which is what stops the answer from always being "park it at the back". */
-def({ id: 'grudgehorn', name: 'Grudgehorn', type: 'unit', tribe: 'scrap', hp: 11, atk: 1, cnt: 3, rare: 3,
-  art: A('#8a7f96', '#d6cfe0', { stance:'quad',tail:'whip',mark:'scar', skin:'metal',idle:'twitch', shape: 'blob', ears: 'antler', mouth: 'trap', acc: 'helm', accCol: '#c9b28a' }),
-  kw: {}, text: 'Whatever Spice it holds when it swings, it keeps for the rest of the run. If it falls, the hoard is lost.',
-  hooks: {
-    deploy: (g, u) => { if (u.card.kept) addStatus(g, u, 'spice', u.card.kept); },
-    trigger: (g, u) => {
-      const held = stat(u, 'spice');
-      if (held > (u.card.kept || 0)) { u.card.kept = held; fx.pop(u, 'KEPT ' + held, STATUS.spice.col); }
-    },
-    death: (g, u) => { u.card.kept = 0; },
-  } });
+     with the three          ladder 27 points · the fight set 12
+     without them            ladder 30 points · the fight set 17
 
-/* CUT. Dawnpiper (turn order) and Trailmarshal (deploy from the deck) were the
-   two most interesting rules of the five and they are gone, because the round
-   that was supposed to rescue them measured them instead.
+   THREE POINTS OF LADDER AND FIVE OF THE SET. And the set's fall from 17 to 12
+   had been traced through the arms file to the exact round these went in, with
+   the cause recorded as unknown. This is the cause.
 
-   The case for keeping them was that the probe's pilot could not express the
-   habits they need — protect the glass body, keep a slot open — so the arm was
-   blind to their upside. Both habits were then taught: `SKILL.shelter` keeps an
-   aura-carrier out of the front column and `SKILL.keepSlot` already held a slot
-   back. With those on, at FF_RUNS=70, the cards were drafted and played — 50
-   and 156 times across 360 runs, and the shelter fired 95 times — and the
-   ladder read 9/22/37/34 for 25 points against 30 without them.
+   The mechanism is the one this file already knows: they are rares, so they
+   occupy rare slots in a steered offer and displace cards that pay. A card that
+   does not differentiate is not free when the offer is a fixed number of slots.
 
-   So the excuse was tested and did not hold: they are played, they are not
-   blind-spotted, and they cost three to five points. A card that needs a plan
-   AND does not pay once the plan is taught is not an unlucky card, it is a bad
-   one. The always-on three (Coldbearer, Backdrift, Grudgehorn) stay; these two
-   are deleted rather than shelved, because a second round of `noPool` would be
-   a way of not deciding. The shapes are recorded in DESIGN.md if anyone wants
-   to build them again on a different chassis. */
+   The aura idea is not retried. Three rounds went into it — five cards built,
+   two cut for needing a plan, three cut for costing the ladder — and the reading
+   underneath never moved: the pool is flat because cards are not the axis this
+   game turns on. */
 
 /* -- gear (one-shot cards) ------------------------------------------------ */
 def({ id: 'emberflask', name: 'Ember Flask', type: 'item', tribe: 'hearth', rare: 1, target: 'enemy',
@@ -1408,33 +1383,6 @@ const WAVE_TELL = { on: true };   // the probe's only way to compare like with l
 const laneOf = (g, side, lane) => units(g).filter((u) => u.side === side && u.lane === lane).sort((a, b) => a.col - b.col);
 const other = (side) => (side === 'p' ? 'e' : 'p');
 
-/* ------------------------------------------------------------- auras ----- */
-/* A RULE THAT LIVES ON THE BOARD RATHER THAN ON THE BODY CARRYING IT.
-
-   Fifty-seven cards were priced one at a time and fifty-six of them were
-   indistinguishable from the pool median. That is not a tiering problem, it is
-   a shape problem: every card in the pool was built out of stats, keywords and
-   per-unit hooks, and all three of those are local. A card whose whole effect
-   lands on one body cannot change how the OTHER five are played, so nothing you
-   pick up changes how you play.
-
-   An aura is the missing shape. It hangs a rewrite of a global rule off a
-   living body, which means it charges for itself in the only currency this game
-   has — a slot, and the risk of losing the rule when the body falls. There are
-   deliberately only five, one per rule the engine actually has: the room rule,
-   the column clock, turn order, run-scoped memory and deploying from the deck.
-   Each is read at exactly one site, and each site names the card in a comment,
-   because an aura that is read in two places is a rule nobody can hold in their
-   head. */
-function auraOn(g, side, key) {
-  if (!g.battle) return null;
-  for (const u of g.battle.units) {
-    if (!u.alive || u.side !== side) continue;
-    const d = CARDS[u.def] || FOES[u.def];
-    if (d && d.aura && d.aura[key]) return u;
-  }
-  return null;
-}
 /* ONE PASS OVER THE UNITS, NOT SIX. This asked `slotFree` for each of the six
    slots and each of those built a filtered copy of the unit list and searched
    it — six list copies and six scans to answer a question one scan answers. It
@@ -1604,24 +1552,12 @@ const LESSON = { times: 1, zone: 0 };
 const ROOM_NEEDED = 2;
 function hasRoom(g, side) {
   if (freeSlots(g, side).length >= ROOM_NEEDED) return true;
-  /* AURA — Coldbearer. It does not delete the room rule, which would delete
-     the decision with it (doctrine test 4). It PRICES it: the line warms off a
-     packed board and the Coldbearer eats the cold that would have gone into
-     it, two Frost a turn, forever. So a swarm is buyable now, and what it costs
-     is one of the six bodies standing there doing nothing but freezing. */
-  if (auraOn(g, side, 'coldsink')) return true;
   const co = side === 'p' ? courseOf(g.run) : null;
   return !!(co && co.crowdproof);
 }
 /* And the cold only gets in when there is nowhere at all to go. */
 function isPacked(g, side) {
   if (freeSlots(g, side).length > 0) return false;
-  /* AURA — Coldbearer, and it has to be answered HERE as well as in hasRoom.
-     The upkeep reads the two as an if/else so patching hasRoom alone produced
-     the right behaviour, but this is the one the board banner reads: the run
-     suite would have been green while the fight told the player the cold was
-     getting in and then quietly warmed the line. */
-  if (auraOn(g, side, 'coldsink')) return false;
   const co = side === 'p' ? courseOf(g.run) : null;
   return !(co && co.crowdproof);
 }
@@ -1959,7 +1895,7 @@ function tickCounter(g, u, n, natural) {
      sooner and gets hit for it; keep the fragile one back and it is safe and
      late. Every deployment is that question, and so is every free move — which
      is the one action in the game that does not cost the turn. */
-  if (natural) ticks += tickRate(u, g) - 1;
+  if (natural) ticks += tickRate(u) - 1;
   if (natural) ticks += spend(u, 'swift');
   if (natural && stat(u, 'slow') > 0) { spend(u, 'slow', 1); fx.pop(u, 'SLOW', STATUS.slow.col); return false; }
   u.cnt = Math.max(0, u.cnt - ticks);
@@ -1977,17 +1913,9 @@ function tickCounter(g, u, n, natural) {
    "One tick" means one TURN, not one point — a foe in the front row burns two a
    turn, so a two-counter foe standing there never sits on exactly 1 and would
    otherwise never telegraph anything at all. */
-/* AURA — Backdrift inverts this, and inverting it re-prices all six slots at
-   once: the safe column becomes the fast one and the exposed column becomes the
-   slow one. Note it is read for BOTH sides off the unit's own side, so standing
-   Backdrift also re-prices the foes' board — which is the cost, and it is a
-   real one against a front-loaded wave. */
-const tickRate = (u, g) => {
-  const flip = auraOn(g || G, u.side, 'invert');
-  return (u.col === 0) === !flip ? 2 : 1;
-};
+const tickRate = (u) => (u.col === 0 ? 2 : 1);
 function maybeLay(g, u) {
-  if (u.alive && u.cnt > 0 && u.cnt <= tickRate(u, g)) layPlot(g, u);
+  if (u.alive && u.cnt > 0 && u.cnt <= tickRate(u)) layPlot(g, u);
 }
 
 /* ------------------------------------------------------- the turn ------- */
@@ -2044,14 +1972,38 @@ function resolveTurn(g) {
            The dial between them is how often the fire burns high. */
         const warm = (co2 && co2.warmth) || 1;
         for (const u of line) addStatus(g, u, 'regen', warm, true);
-        /* AURA — Coldbearer pays here. The warmth above only reached this side
-           because it is standing, so the cold that a packed line would have put
-           somewhere goes into it instead, and it goes in doubled. It is charged
-           only when the board is genuinely full: with a slot to spare the rule
-           was never in question and the Coldbearer is an ordinary body. */
-        if (!freeSlots(g, side).length) {
-          const sink = auraOn(g, side, 'coldsink');
-          if (sink) addStatus(g, sink, 'frost', 2);
+        /* THE HEARTH ROAD, SIXTH ATTEMPT AND THE FIRST THAT LANDS — and it lands
+           because the file's own oldest unfinished claim turned out to be wrong.
+
+           Hearth had been rewritten five times, every one measuring zero: Spice
+           on deploy, Spice kept up, a body saved at the moment of death, a foe's
+           turn taken at that moment, the same body saved on turn one instead.
+           Currency did not explain it and timing did not explain it. What was
+           left was MAGNITUDE — every one of those is bounded to once a fight,
+           while Cold's Frost hits the whole front of the first wave, every fight.
+
+           And the note that had been blocking this said warmth has no dial:
+           "regen is a threshold good — there is no setting between +0 and +17",
+           measured from warmth 2 on the whole line. That is false. Three points
+           on the dial, 420 runs an arm, against Hearth's 38%:
+
+             +1 regen to the ONE most-hurt warden a turn    52%
+             +1 to the two most hurt                        51%
+             +1 to the whole line                           58%
+
+           There IS a dial and it is steeply diminishing: the first warden buys
+           +14 of the +20, and the other five buy +6 between them. Which is what
+           a threshold good looks like when you finally sample below the
+           threshold — the old claim was right about the shape and wrong that
+           nothing lives underneath it.
+
+           So Hearth gets the smallest setting that works. One warden, the one
+           that needs it, every turn: unbounded like Cold's rule and small enough
+           that it lands at 52% against Cold's 48 rather than running away. */
+        if (co2 && co2.emberline) {
+          const hurt = line.filter((u) => u.hp < u.maxHp)
+            .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+          if (hurt) addStatus(g, hurt, 'regen', 1, true);
         }
         if (side === 'p' && g.run) g.run.everRoom = 1;   // it has felt the warmth; the lesson is done
         /* Every turn was too much: the first cut of this measured 53% against a
@@ -3139,9 +3091,9 @@ const COURSES = [
      two points, inside the band — and the reason that gap closed is not this
      course. The baseline came DOWN from 40 to 36 this round. */
   { id: 'hearth', name: 'THE HEARTH ROAD', short: 'HEARTH', col: '#ff9a5c',
-    text: 'Hearth cards on every table, wardens arrive with Spice 1, and once a fight the first warden that would fall stays standing on one health.',
+    text: 'Hearth cards on every table, wardens arrive with Spice 1, the fire mends whoever needs it most each turn, and once a fight the first warden that would fall stays standing on one health.',
     match: (c) => c.tribe === 'hearth', deploy: (g, u) => addStatus(g, u, 'spice', 1),
-    rekindle: true },
+    rekindle: true, emberline: true },
   /* Frost on EVERY arrival was measured at 41% against a 22% baseline while the
      other four sat at 29-32 — not a choice, a favourite. Frost skips a foe's
      whole turn, so handing it out wave-wide was worth more than any other
@@ -5549,8 +5501,23 @@ function drawCard(c, card, x, y, w, h, o) {
   c.fillStyle = 'rgba(255,255,255,.5)';
   c.fillRect(0, bh - 1.6 * S, w, 1.6 * S);
   c.restore();
-  const nameSize = fitText(c, card.name.toUpperCase(), w - 18 * S, 15 * S, 8 * S, 't');
-  txt(c, card.name.toUpperCase(), w / 2, bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+  /* THE FLOOR BEATS THE FIT, AND SOMETHING HAS TO GIVE.
+
+     `fitText` shrinks a name until it fits the band — but it cannot shrink past
+     the legibility floor, and on a handset the floor is about 17 stage units
+     where a preview card is 92 wide. So on the leader screen every name was
+     returned at the floor and drawn straight over its neighbours: CINDERPUP
+     CINDERPUP KETTLEBEAK ran together as one word across three cards.
+     `fitText` returning a size is not a promise that the size fits.
+
+     When the box cannot carry the string at a size a person can read, the
+     string is the thing that gives. An ellipsis inside the band reads as "this
+     name is longer than the card"; a name bleeding over the card next to it
+     reads as a broken renderer. */
+  const nm = card.name.toUpperCase();
+  const nameW = w - 18 * S;
+  const nameSize = fitText(c, nm, nameW, 15 * S, 8 * S, 't');
+  txt(c, ellipsize(c, nm, nameSize, nameW), w / 2, bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
 
   /* ---------------- the art window ----------------
      It was a flat two-stop wash with a grey ellipse floating in it. A window
@@ -6263,9 +6230,24 @@ function drawLeaderPick(c, t) {
     txt(c, co.short, x + bw5 / 2, cy2 + 22, 13, on ? co.col : '#8fa6c4', 'center', 'd');
     hit('courseToggle', x, cy2, bw5, 44, co.id);
   });
+  /* AND THE SAME FLOOR AGAIN, one screen up, wearing a different face.
+
+     `.slice(0, 2)` was a line budget picked by eye at desktop size. The floor
+     lifts this text on a handset, which makes it wrap to three lines — so the
+     third was dropped and the course you were about to declare explained itself
+     as "...goes back into the deck instead of". Not truncated: cut mid-sentence,
+     with no sign anything was missing.
+
+     The budget follows the text now: as many lines as fit between the course
+     row and the SET OUT button, and `cutLines` ends the last one in an ellipsis
+     if even that is not enough. A fixed line count under a floating text size is
+     the same defect as a fixed box under one. */
   const chosen = COURSES.find((co) => co.id === pick2.course) || COURSES[0];
-  wrapText(c, chosen.text, 12.5, cwid).slice(0, 2).forEach((ln, i) =>
-    txt(c, ln, cx0 + cwid / 2, cy2 + 60 + i * lineH(12.5, 16), 12.5, chosen.col, 'center', 't'));
+  const cStep = lineH(12.5, 16);
+  const cTop = cy2 + 60;
+  const cRoom = Math.max(1, Math.floor(((VH - 92) - cTop) / cStep));
+  cutLines(c, wrapText(c, chosen.text, 12.5, cwid), cRoom, 12.5, cwid).forEach((ln, i) =>
+    txt(c, ln, cx0 + cwid / 2, cTop + i * cStep, 12.5, chosen.col, 'center', 't'));
 
   // what she sets out with
   const deckX = SAFE + 372;
@@ -9495,7 +9477,7 @@ window.FF = {
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
-  hasRoom, isPacked, ROOM_NEEDED, LESSON, auraOn,
+  hasRoom, isPacked, ROOM_NEEDED, LESSON,
   deployWave, laneHeldBy, WAVE_TELL, POOL_BAN,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
