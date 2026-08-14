@@ -607,14 +607,23 @@ the gap between two rows is that one thing:
 | + the trader | spends well | 41% (**+20**) |
 | + steering the pool | drafts to a course | 40% (−1) |
 
-Thirty-four points from bottom to top, the widest this has read — and a
-correction to something written down three rounds ago. The commitment then was
-that **the fight** should be the rung that matters. It is worth +15, the most it
-has ever been, and it is still not the biggest: the trader is +20, and money
-alone (penniless to bottomless) is worth ten points against four a few rounds
-ago. The fight got better and the economy got wider at the same time. Either
-narrow the economy or withdraw the commitment; do not write it down a third time
-without doing one of them.
+**The commitment is withdrawn, and here is what was done first.** For three
+rounds this file said the fight *should* be the rung that matters, and for three
+rounds the trader was bigger. Rather than write it a fourth time, the round that
+had to choose went looking for where the money actually goes — and then tried to
+cut it.
+
+The looking worked. The cutting mostly did not, and both are below under
+[what the purse buys](#what-a-bottomless-purse-is-buying). What is left is a
+statement of what this game is rather than what it was supposed to be: **the
+fight is the rung that carries the skill and the trader is the rung that carries
+the run.** The fight is what separates a player from themselves — it is the only
+place a habit has ever priced above the band, and it is worth more every round.
+The trader is what separates a good run from a bad one, because money buys
+permanent power and permanent power compounds across three zones. Those are two
+different questions and the game answers both. It does not need them to be the
+same size, and the one attempt to force it cost ten points of win rate across
+every rung including the beginner's.
 
 **Steering the pool prices at roughly nothing and that is not the courses'
 fault** — measured on its own at 450 runs an arm, all five courses beat
@@ -622,24 +631,94 @@ declaring nothing and sit inside two standard deviations of each other. They are
 level. What prices at zero is the *drafting*, because a pilot that takes the
 best card on offer is already doing most of what steering can do.
 
+### What a bottomless purse is buying
+
+The gap between "as it ships" and "a bottomless purse" had been printed for
+rounds with nobody asking which ware it was. Asking is one arm: give a rich
+pilot everything except one thing at a time, and whatever it cannot do without
+is where the money goes.
+
+```
+no charm    44%   −17 of the 21        no temper  64%   no cost
+no meal     61%   no cost              no sigil   64%   no cost
+no heal     61%   no cost              no card    65%   no cost
+no bell     62%   no cost              no burn    61%   no cost
+```
+
+**Seventeen of twenty-one points were charms**, because nothing stopped a rich
+pilot buying every one in every shop and hanging them all on whichever warden
+was already biggest. Not the meal, which these notes had been blaming for
+rounds; not tempering; not cards.
+
+Two things were then tried, and the failures are worth more than the fix:
+
+**A cap of two charms a warden — built, measured, thrown away.** It narrowed
+the economy exactly as designed: the trader's rung fell from +20 to +10. It
+also took **ten points off every rung**, including halving the careless floor,
+because charms were never the rich pilot's lever alone — they were a large
+share of everybody's power, and a cap takes a slice out of all of it. Making
+each remaining charm stronger to compensate did not bring it back. A narrowing
+that is really a nerf is not a narrowing.
+
+**A rising price — no effect, and it could not have had one.** The bottomless
+arm is *defined* as "prices do not matter", so it cannot see a price by
+construction. That arm measures what money can BUY, not what it costs. Only a
+limit on quantity moves it.
+
+What shipped is the quantity limit at its narrowest useful point: the trader
+carries **three charms in a whole run** and then has none, and each one costs
+more than the last. The shipped ladder is unchanged to within noise; the
+bottomless arm drops five points. Charms won at rewards, caches and camps are
+not counted — the fell gives away as many as it likes.
+
+Eighteen points of the gap remain. They are not one ware; they are the fact
+that money buys permanent power and permanent power compounds across three
+zones. Cutting further means cutting what a normal purse buys too, which was
+tried and measured and cost the whole game.
+
 ### What the instrument cannot see
 
-Two limits, both learned the hard way, both worth knowing before you trust a
-number out of this thing.
+**It can price a teaching change after all** — and last round said it could not.
+The claim was that the careless pilot is blind rather than slow, so nothing that
+makes a decision easier to notice could move it. That is a claim about the
+instrument, and it was testable: a pilot identical to the careless one except
+that it starts denying schemes once the game has TOLD it about one, against a
+control that is never told and one that always knew.
 
-**It cannot price a teaching change.** The careless pilot is blind, not slow: it
-does not deny schemes because it never looks, so anything that makes the
-decision *easier to notice* measures exactly zero on it. Five rounds of trying
-to move "careless 6%" by tuning follow from reading that floor as a difficulty
-number when it is a mechanical one. A change aimed at what a beginner *learns*
-has to be argued for, not measured — say so when you ship one.
+```
+never told   6%
+told once   11%
+always knew 12%
+```
+
+**Being told carries five of the six points knowing is worth.** The limit was
+real for the pilot as it was built, not for the instrument — careless was the
+wrong floor because it could not be taught, not because teaching cannot be
+measured. A teachable pilot is the right floor and it exists now.
 
 **It cannot see a choice its pilots do not make.** Every rung fights whatever
 the trail puts in front of it; none of them walks away. A separate arm had to be
-built to find out that walking past fights you can win **costs sixteen points** —
-you arrive at the last zone with the same power and half the cards, and it has
-got worse as the trader's rung has got wider, because the fights are where the
-scrip comes from.
+built to find out what walking past a fight costs.
+
+### The quiet road
+
+That arm read **−16 points**, which does not describe a decision. A fork where
+one side is always wrong is furniture with a signpost on it — and the game had
+a rule that *punished* ducking (what you walk away from walks after you, and
+the trail says so before the fork) and nothing at all that paid for it.
+
+So the quiet road pays in the one thing a fight can never give. **A camp
+reached by walking past a fight mends the whole line instead of six.** It is
+worth everything when the caravan is hurt and nothing at all when it is not,
+which is the shape a decision has, and it is still paid for — in the card, in
+the scrip, and in the pack getting two steps closer. It is spent when used: a
+standing bonus would just be a different constant.
+
+**The dodge arm still reads −16, and that is the instrument, not the rule.** A
+pilot that walks past everything it can never arrives at the fork hurt and never
+gets to want the mend. Pricing a situational choice needs a pilot that makes it
+situationally, which this one is not. Ducking everything should still lose;
+ducking the pack that would finish you should not.
 
 ### Read state, don't intercept calls
 
@@ -761,10 +840,46 @@ the warden unkillable — there is no middle, so every tuning pass either did
 nothing or broke it. That is a fact about how the game's damage works, not about
 Hearth, and it applies to anything that mends.
 
+### And a third thing nobody was checking
+
+Touch was rewritten in CSS pixels and found seven controls too small to hit.
+Type got a floor and a stacking rule and found five collisions. Nothing had ever
+asked whether the text could be **seen**, which is a strange gap in a game
+painted in dim blues on darker blues.
+
+The canvas stub records the colour every shape was filled in *and its bounding
+box*, so each line of text is paired with the shape actually underneath it
+rather than with whatever happened to be drawn most recently. The ratio is real
+WCAG: 4.5:1 for body text, 3:1 for large. Things deliberately faded — a sold-out
+ware, a locked leader — are drawn under a `globalAlpha` and are exempt.
+
+It found the collection's undiscovered-tile `?`: a dim grey drawn straight onto
+the creature silhouette behind it, which is whatever colour that beast happens
+to be — **2.1:1 against a Hearth orange**, on every screen shape at once. It has
+its own dark disc now.
+
+Walking the same shots turned up the other half by eye: every tile name in the
+collection was clipping into its neighbour, because `fitText` shrank them to fit
+and the text floor pushed them straight back up. The floor wins — that is what
+it is for — so the names are cut to the tile with an ellipsis and the whole
+thing is one tap away.
+
+### Nothing is half-tested now
+
+The 653x280 shape in the render suite is a folding phone's *cover* display, and
+the type check used to skip it with a note: at 280 tall the floor is 23 stage
+units and the leader screen could not hold seven winters as a name over a
+description in a fixed 44-unit row. Excluding a shape with a documented reason
+is the right move once and a habit twice, so the row measures its own contents
+instead, the list flows from the header, and the WINTER total sits under the
+last row rather than at a fixed offset. **Every shape in the list is now checked
+for everything it is in the list for.**
+
 ### Smaller things, settled
 
-- **Money is worth ten points**, penniless to bottomless, and rising. This is
-  the number to watch: it was four two rounds ago.
+- **Money is worth about sixteen points**, penniless to bottomless. Still the
+  widest single lever in the game, and now understood rather than just measured
+  — see below.
 - **A hot meal** is the ware everyone buys, at every price step. It is doing the
   trader's job and that is allowed.
 - **Every card is played** in a full sweep, all 58 of them.

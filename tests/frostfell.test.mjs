@@ -1864,6 +1864,56 @@ section('every leader sets out on the same footing');
   ok(FFl.hitOf({ def: 'icepick' }) >= 4, 'and so is four points of ice');
 }
 
+/* ------------------------------------------- the purse pays for charms --- */
+section('a charm bought is a charm dearer');
+{
+  /* Charms were seventeen of the twenty-one points a bottomless purse was
+     worth. The tax goes on the purse, not the charm: one won at a reward is
+     exactly as strong as it ever was. */
+  withRun(FF, 'hearth', 21);
+  const g = FF.G;
+  eq(FF.charmMul(g.run), 1, 'the first one is full price');
+  g.run.charmsBought = 1;
+  ok(FF.charmMul(g.run) > 1, 'and the second is dearer');
+  g.run.charmsBought = 4;
+  ok(FF.charmMul(g.run) > FF.charmMul({ charmsBought: 1 }), 'and it keeps climbing');
+
+  // the counter reads the run, so two shops in a row do not reset it
+  g.run.charmsBought = 2;
+  const s1 = FF.rollShop(g);
+  g.run.charmsBought = 0;
+  const s2 = FF.rollShop(g);
+  ok(s1.charms[0].price > s2.charms[0].price ||
+     FF.CHARMS[s1.charms[0].id].rare !== FF.CHARMS[s2.charms[0].id].rare,
+    'a shop reached with charms already bought asks more for them');
+}
+
+/* -------------------------------------------------------- the quiet road -- */
+section('walking past a fight buys the one thing a fight cannot give');
+{
+  /* Walking past a fight measured at sixteen points, which made the fork a trap
+     rather than a decision. The quiet road pays in rest — everything when the
+     line is hurt, nothing when it is not. */
+  withRun(FF, 'hearth', 34);
+  const g = FF.G;
+  const hurt = g.run.deck.filter((c) => c.type === 'unit').slice(0, 2);
+  ok(hurt.length >= 2, 'the caravan has bodies to hurt');
+  hurt.forEach((c) => { c.dmg = 20; });
+
+  g.run.quiet = 0;
+  g.ui.camp = { done: false };
+  FF.campChoose(g, 'rest');
+  const ordinary = hurt.map((c) => c.dmg);
+  ok(ordinary.every((d) => d > 0), 'an ordinary camp mends some of it, not all');
+
+  hurt.forEach((c) => { c.dmg = 20; });
+  g.run.quiet = 1;
+  g.ui.camp = { done: false };
+  FF.campChoose(g, 'rest');
+  ok(hurt.every((c) => c.dmg === 0), 'the quiet road mends the whole line');
+  eq(g.run.quiet, 0, 'and it is spent, not a standing bonus');
+}
+
 /* ------------------------------------------------- teaching, not tuning -- */
 section('the lesson a beginner gets and a good player never sees');
 {

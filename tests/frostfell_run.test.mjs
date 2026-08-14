@@ -91,8 +91,27 @@ function itemTarget(card) {
   if (d.target === 'enemy') return theirs.slice().sort((a, b) => a.cnt - b.cnt || b.atk - a.atk)[0] || null;
   return theirs[0] || mine[0] || null;
 }
+/* CAN A LESSON BE MEASURED AT ALL?
+
+   Last round shipped a teaching change — a scheme that lands in the first zone
+   says what would have taken it away — and reported it unmeasured, on the
+   grounds that the careless pilot is BLIND rather than slow: it does not deny
+   schemes because it never looks, so nothing that makes the decision easier to
+   notice can move it. That is a claim about the instrument, and a claim about
+   an instrument is testable.
+
+   So: a pilot that plays exactly as carelessly as the careless one, except
+   that once the game has TOLD it about a scheme — `run.taught`, set by the
+   lesson itself, in the game, not here — it starts taking them away. Against
+   two controls: one that is never told, and one that always knew. If the
+   middle row sits on the bottom one, the limit is real and now proven rather
+   than asserted. If it climbs toward the top one, careless has been the wrong
+   floor for five rounds and this is the right one. */
+const TAUGHT = { on: false, always: false };
+
 function botTurn() {
   const b = G.battle;
+  if (TAUGHT.on && b && !b.over && (TAUGHT.always || (G.run && (G.run.taught | 0) > 0))) denySchemes();
   /* The room table only ever watched the careful pilot, so the one question
      item 3 asks — what does a beginner's board actually look like — had no
      answer in the output. Same reading, taken on the careless line. */
@@ -296,6 +315,30 @@ const HABITS = [
   ['place', 'filling the front of both lanes first'],
 ];
 
+/* Taking away what a foe has committed to, with free moves only. Lifted out of
+   the careful pilot so a pilot that has been TAUGHT can do this one thing and
+   nothing else — which is the only way to price a lesson. */
+function denySchemes() {
+  for (const f of FF.enemyUnits(G)) {
+    const p = f.plot;
+    if (!p) continue;
+    if (p.id === 'mark') {
+      const t = FF.playerUnits(G).find((x) => x.uid === p.uid);
+      if (!t || t.lane !== p.lane || t.col !== p.col) continue;
+      // vacate the named slot and leave it empty — a swap only feeds it a
+      // different body
+      const spot = FF.freeSlots(G, 'p')[0];
+      if (spot) FF.moveUnit(G, t, spot.lane, spot.col);
+    } else if (p.id === 'chill') {
+      const caught = FF.playerUnits(G).filter((x) => x.lane === p.lane);
+      const room = FF.freeSlots(G, 'p').filter((s) => s.lane !== p.lane);
+      if (caught.length && caught.length <= room.length) {
+        caught.forEach((t, i) => FF.moveUnit(G, t, room[i].lane, room[i].col));
+      }
+    }
+  }
+}
+
 function carefulTurn() {
   if (G.battle && !G.battle.over) {
     /* Read off the board rather than hooked into the engine: triggerUnit is
@@ -323,24 +366,7 @@ function carefulTurn() {
   /* Read what the foes have said they will do, and take it away — all of it
      with free moves, so a pilot that looks at the board pays nothing for it.
      A pilot that does not look eats a double lunge and a frozen lane. */
-  if (SKILL.deny) for (const f of FF.enemyUnits(G)) {
-    const p = f.plot;
-    if (!p) continue;
-    if (p.id === 'mark') {
-      const t = FF.playerUnits(G).find((x) => x.uid === p.uid);
-      if (!t || t.lane !== p.lane || t.col !== p.col) continue;
-      // vacate the named slot and leave it empty — a swap only feeds it a
-      // different body
-      const spot = FF.freeSlots(G, 'p')[0];
-      if (spot) FF.moveUnit(G, t, spot.lane, spot.col);
-    } else if (p.id === 'chill') {
-      const caught = FF.playerUnits(G).filter((x) => x.lane === p.lane);
-      const room = FF.freeSlots(G, 'p').filter((s) => s.lane !== p.lane);
-      if (caught.length && caught.length <= room.length) {
-        caught.forEach((t, i) => FF.moveUnit(G, t, room[i].lane, room[i].col));
-      }
-    }
-  }
+  if (SKILL.deny) denySchemes();
 
   /* THE LEADER DOES NOT BELONG AT THE BACK.
 
@@ -728,7 +754,31 @@ function playRun(tribe, seed, mode, tweak) {
       const r = G.ui.reward;
       if (r.cards.length && !r.taken && drafts) draftTurn(r);
       else if (r.cards.length && !r.taken) FF.press('reward', 0);
-      else if (r.charms.length && !r.charmTaken) { FF.press('rewardCharm', 0); settleChoosers(); }
+      else if (r.charms.length && !r.charmTaken) {
+        /* WHICH WARDEN GETS IT.
+
+           This used to fall through to settleChoosers, which picks the first
+           name on the list every time — the leader. That was harmless while a
+           warden could wear any number and became the whole story the moment
+           two was the limit: every charm after the second landed on a leader
+           who had no room and simply threw one away. The pilot was measuring
+           a cap by refusing to spread, which is not what a player does.
+
+           So: the biggest warden that still has a place. */
+        FF.press('rewardCharm', 0);
+        if (FF.UI.choose) {
+          const items = FF.UI.choose.items;
+          let bi = 0, bs = -1;
+          items.forEach((it, k) => {
+            const cd = it.card;
+            if (!cd) return;
+            const sc = cd.hp + cd.atk * 2;
+            if (sc > bs) { bs = sc; bi = k; }
+          });
+          FF.UI.choose.onPick(bi);
+        }
+        settleChoosers();
+      }
       else if (r.bells && r.bells.length && !r.bellTaken) FF.press('rewardBell', 0);
       else FF.press('rewardSkip');
     } else if (G.screen === 'event') {
@@ -740,19 +790,27 @@ function playRun(tribe, seed, mode, tweak) {
     } else if (G.screen === 'shop') {
       const s = G.ui.shop;
       let bought = false;
+      /* WHERE THE PURSE ACTUALLY GOES.
+
+         A bottomless purse wins 61% against 38% as it ships, and until now the
+         only thing measured was that the gap exists. `run.noBuy` takes ONE
+         thing off the counter for a rich pilot, so the twenty-three points can
+         be split by what bought them instead of guessed at. It is a property of
+         the PILOT, not the game — nothing in index.html knows about it. */
+      const can = (w) => !(G.run.noBuy && G.run.noBuy[w]);
       /* A careful shopper spends on what does not make the deck bigger. That
          is not a style preference: with money buying only cards, "everything
          free" measured WORSE than penniless, because every purchase was one
          more card between the caravan and the card it wanted. */
       // a bell is the biggest thing money can buy and the only thing she alone has
-      if (shops && s.bell && !s.bell.sold && G.run.gold >= s.bell.price) {
+      if (shops && can('bell') && s.bell && !s.bell.sold && G.run.gold >= s.bell.price) {
         sale('bell', FF.buy(G, 'bell')); bought = true;
       }
-      if (!bought && shops && !s.heal.sold && G.run.gold >= s.heal.price &&
+      if (!bought && shops && can('heal') && !s.heal.sold && G.run.gold >= s.heal.price &&
           G.run.deck.some((cd) => cd.dmg > 0 || cd.injured)) {
         sale('heal', FF.buy(G, 'heal')); bought = true;
       }
-      if (!bought && shops && s.temper && !s.temper.sold && G.run.gold >= s.temper.price &&
+      if (!bought && shops && can('temper') && s.temper && !s.temper.sold && G.run.gold >= s.temper.price &&
           FF.temperable(G.run).length) {
         const t0 = FF.tempered(G.run);
         FF.press('buyTemper');
@@ -760,7 +818,7 @@ function playRun(tribe, seed, mode, tweak) {
         sale('temper', FF.tempered(G.run) > t0);
         bought = true;
       }
-      if (!bought && shops && s.burn && !s.burn.sold && G.run.gold >= s.burn.price && G.run.deck.length > 10) {
+      if (!bought && shops && can('burn') && s.burn && !s.burn.sold && G.run.gold >= s.burn.price && G.run.deck.length > 10) {
         const n0 = G.run.deck.length;
         FF.press('buyBurn');
         settleChoosers();
@@ -772,7 +830,7 @@ function playRun(tribe, seed, mode, tweak) {
          deployment every fight for the rest of the run AND a thinner deck, from
          one purchase. The pilot not buying it was never evidence about the
          ware; it was evidence about the pilot. */
-      if (!bought && shops && s.sigil && !s.sigil.sold && G.run.gold >= s.sigil.price &&
+      if (!bought && shops && can('sigil') && s.sigil && !s.sigil.sold && G.run.gold >= s.sigil.price &&
           G.run.deck.some((cd) => cd.type === 'unit' && !cd.sigil)) {
         const g0 = G.run.deck.filter((cd) => cd.sigil).length;
         FF.press('buySigil');
@@ -783,7 +841,7 @@ function playRun(tribe, seed, mode, tweak) {
       /* A CHARM, the other ware the pilot had never looked at. It is the only
          thing on the counter that makes an existing card better in a way a
          meal cannot — a counter off, an attack on — and it adds no card. */
-      if (!bought && shops) {
+      if (!bought && shops && can('charm')) {
         for (let i = 0; i < s.charms.length; i++) {
           if (s.charms[i].sold || G.run.gold < s.charms[i].price) continue;
           const best = G.run.deck.concat([G.run.leader])
@@ -806,7 +864,7 @@ function playRun(tribe, seed, mode, tweak) {
          Four transcripts walked out of a shop with a full purse because there
          was nothing left on the counter that did not add a card; a meal is the
          thing that was missing, so a pilot who spends well now spends it all. */
-      if (!bought && shops && G.run.gold >= FF.mealPrice(G.run) && FF.feedable(G.run).length) {
+      if (!bought && shops && can('meal') && G.run.gold >= FF.mealPrice(G.run) && FF.feedable(G.run).length) {
         const m0 = G.run.meals || 0;
         FF.press('buyMeal');
         pickBiggest();
@@ -815,7 +873,7 @@ function playRun(tribe, seed, mode, tweak) {
       }
       // only then a card, and only if the caravan is actually short of one
       const wants = FF.caravanNeeds(G.run);
-      for (let i = 0; !bought && i < s.cards.length; i++) {
+      for (let i = 0; !bought && can('card') && i < s.cards.length; i++) {
         if (s.cards[i].sold || G.run.gold < s.cards[i].price) continue;
         if (shops && !wants && G.run.deck.length >= 12) continue;
         sale('card', FF.buy(G, 'card', i));
@@ -1077,6 +1135,23 @@ section('does money change anything');
   console.log(`    ${'as it ships'.padEnd(19)}${bar(normal.pct)} ${String(normal.pct + '%').padStart(4)}`);
   console.log(`    ${'a bottomless purse'.padEnd(19)}${bar(rich.pct)} ${String(rich.pct + '%').padStart(4)}`);
   console.log(`    → money is worth ${normal.pct - broke.pct} points of win rate`);
+  /* AND WHAT THE PURSE BOUGHT. The gap between "as it ships" and "bottomless"
+     has been printed for rounds without anyone asking which ware it is. Give a
+     rich pilot everything except one thing at a time: whatever it cannot do
+     without is where the money goes. */
+  if (MN) {
+    const rows = [];
+    for (const w of ['meal', 'bell', 'temper', 'charm', 'card', 'heal', 'sigil', 'burn']) {
+      const arm = sweepM((run) => { run.gold = 400; run.prices = 0.02; run.noBuy = { [w]: 1 }; });
+      rows.push([w, arm.pct, rich.pct - arm.pct]);
+    }
+    rows.sort((a2, z) => z[2] - a2[2]);
+    console.log('    what a bottomless purse is actually buying (rich, minus one ware):');
+    for (const [w, pct, drop] of rows) {
+      console.log(`      no ${w.padEnd(8)} ${bar(pct)} ${String(pct + '%').padStart(4)}  ` +
+        (drop > 0 ? `−${drop} of the ${rich.pct - normal.pct}` : 'no cost'));
+    }
+  }
   /* And the course on its own, handed over rather than bought — so the lever
      is measured apart from whether the pilot knows when to pull it. */
   /* FF_COURSE turns just this comparison up. The five courses were called level
@@ -1301,6 +1376,46 @@ section('which parts of playing well are worth anything');
     `a body was held back on ${ROOM.declined} of ${ROOM.plays} deployments ` +
     `(${Math.round((ROOM.declined / Math.max(1, ROOM.plays)) * 100)}%)`);
   ok(true, 'the ablation is a report, not a gate');
+}
+
+/* ------------------------------------------------- can a lesson be priced -- */
+section('what being told is worth');
+{
+  /* Three pilots, identical but for what they know about red text. The middle
+     one is the game as it ships: it learns only when the lesson fires, which
+     is in the first zone, on a run that has never denied a scheme, twice. */
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
+  const sweepT = (on, always) => {
+    TAUGHT.on = on; TAUGHT.always = always;
+    let wins = 0, runs = 0, reached = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) {
+        const st = playRun(tribe, 5000 + i * 41, 'careless');
+        runs++;
+        if (st.won) wins++;
+        if (st.zone >= 1) reached++;
+      }
+    }
+    TAUGHT.on = false; TAUGHT.always = false;
+    return { pct: Math.round((wins / Math.max(1, runs)) * 100), reached, runs };
+  };
+  const blind = sweepT(false, false);
+  const told = sweepT(true, false);
+  const knowing = sweepT(true, true);
+  const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(24);
+  const band = (100 * Math.sqrt(0.1 * 0.9 / Math.max(1, blind.runs))).toFixed(1);
+  console.log('  · what being told is worth');
+  console.log(`    never told   ${bar(blind.pct)} ${String(blind.pct + '%').padStart(4)}   ` +
+    `${blind.reached}/${blind.runs} saw the second zone`);
+  console.log(`    told once    ${bar(told.pct)} ${String(told.pct + '%').padStart(4)}   ` +
+    `${told.reached}/${told.runs}`);
+  console.log(`    always knew  ${bar(knowing.pct)} ${String(knowing.pct + '%').padStart(4)}   ` +
+    `${knowing.reached}/${knowing.runs}`);
+  console.log(`    → knowing is worth ${knowing.pct - blind.pct} points; being told carries ` +
+    `${told.pct - blind.pct} of them (±${band} is one standard deviation)`);
+  ok(knowing.pct >= blind.pct - 5, 'knowing how to deny a scheme is not a handicap');
+  ok(true, 'what being told is worth is a report, not a gate');
 }
 
 /* --------------------------------------------- how much skill can carry --- */

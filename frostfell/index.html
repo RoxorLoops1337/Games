@@ -764,6 +764,14 @@ function previewOf(g, card, spot) {
 const CHARMS = {};
 const charm = (o) => { CHARMS[o.id] = o; o.type = 'charm'; return o; };
 
+/* TWO PLACES, AND EACH ONE WORTH MORE.
+
+   Capping charms at two a warden did exactly what it was aimed at — the
+   trader's rung fell from +20 to +10, which is the economy narrowing — and it
+   also took five points off every rung including the careless one, because
+   charms were quietly a large share of everybody's power and the cap took a
+   slice out of all of it. A narrowing that is really a nerf is not what was
+   asked for. So the flat ones pay more per place. */
 charm({ id: 'stoutcharm', name: 'Stout Charm', rare: 1, col: '#6fd08c', text: '+4 max health.',
   apply: (c) => { c.hp += 4; } });
 charm({ id: 'keencharm', name: 'Keen Charm', rare: 1, col: '#ff5566', text: '+2 attack.',
@@ -810,6 +818,41 @@ const EXTRAS = {
                apply: (c) => { c.atk += 2; c.hp += 3; } },
 };
 const chOf = (id) => CHARMS[id] || SCARS[id] || EXTRAS[id];
+/* WHAT THE PURSE IS ACTUALLY BUYING, AND THE DEAD END BEFORE THIS.
+
+   The first measurement to ask where money goes gave one answer: a bottomless
+   purse won 61% against 38% as it ships, and taking CHARMS off the counter —
+   and nothing else — dropped it to 44%. Seventeen of twenty-one points were one
+   ware, because a rich pilot bought every charm in every shop.
+
+   The obvious fix was a cap: two places on a warden, pick which one comes off.
+   It was built, measured, and thrown away, and the measurement is the reason.
+   At 120 runs an arm it did narrow the economy exactly as intended — the
+   trader's rung fell from +20 to +10 — and it took TEN POINTS off the whole
+   game and half the careless floor with it, because charms were never the rich
+   pilot's lever alone. They were a large share of everybody's power, and
+   capping them took a slice out of all of it. Making each remaining charm
+   stronger to compensate did not bring it back.
+
+   So the tax goes on the PURSE and not on the charm. Each one bought from the
+   trader costs more than the last, the way a meal already does, and a charm won
+   at a reward or found at a camp is untouched. A pilot who finds four charms is
+   exactly as strong as before; a pilot who tries to buy eight pays for it. */
+const CHARM_STEP = 0.55;    // each charm bought this run makes the next dearer
+const charmMul = (run) => 1 + CHARM_STEP * (run.charmsBought || 0);
+/* AND A PRICE ALONE COULD NOT DO IT, WHICH IS WORTH KNOWING.
+
+   Escalating the price measured as exactly nothing against the bottomless
+   purse, and it had to: that arm is defined as "prices do not matter", so it
+   cannot see a price. The arm measures what money can BUY, not what it costs,
+   and the only thing that narrows it is a limit on how much there is.
+
+   So the trader carries three charms in a run and then has none. A pilot
+   buying one or two — which is what a pilot with an ordinary purse does —
+   never meets this. A pilot buying ten does. The rising price is still there
+   for everyone in between, and charms won at rewards, caches and camps are not
+   counted against the stock at all: the fell gives away as many as it likes. */
+const CHARM_STOCK = 3;
 /* What a hoarding card has actually banked. Hoard is a RATING now, not a flag:
    Keepsake banks two a turn where Old Grudge banks one. */
 const hoardOf = (card) => (card && card.kw && card.kw.hoard
@@ -2584,12 +2627,26 @@ function enterNode(g, choiceIdx) {
   const isFight = (n) => n.kind === 'fight' || n.kind === 'elite' || n.kind === 'boss';
   if (step.length > 1 && step.some(isFight) && !isFight(node)) {
     run.followed = (run.followed || 0) + FOLLOW_NEAR;
+    /* THE QUIET ROAD.
+
+       Walking past a fight measured at SIXTEEN POINTS of win rate, which makes
+       the fork a trap with a signpost rather than a decision — one side of it
+       was always wrong. The follow rule punishes ducking and nothing had ever
+       paid for it, so every reason to take the quiet road was a reason not to.
+
+       So the quiet road gives the one thing a fight can never give: rest. A
+       camp taken INSTEAD of a fight mends the whole line rather than six. That
+       is worth everything when the caravan is hurt and nothing at all when it
+       is not, which is the shape a decision has — and it is still paid for,
+       in the card, the scrip, and the pack getting two steps closer. */
+    run.quiet = 1;
     if (following(run) > 0) {
       fx.toast('SOMETHING IS FOLLOWING', '#ff9aa5');
       run.log.push('A pack was left behind, and did not stay behind.');
     }
   }
   if (node.kind === 'fight' || node.kind === 'elite' || node.kind === 'boss') {
+    run.quiet = 0;
     startBattle(g, node.kind);
   } else if (node.kind === 'shop') {
     g.ui.shop = rollShop(g);
@@ -2982,7 +3039,10 @@ function rollShop(g) {
   const mul = run.prices || 1;
   const p = (n) => Math.round(n * mul);
   const cards = weightedCards(run, 3).map((id) => ({ id, price: p(PRICE[CARDS[id].rare] || 25), sold: false }));
-  const charms = sample(charmPool(), 2).map((id) => ({ id, price: p(PRICE[CHARMS[id].rare] + 8), sold: false }));
+  // dearer each time, and the trader only ever has three in a whole run
+  const left = Math.max(0, CHARM_STOCK - (run.charmsBought || 0));
+  const charms = sample(charmPool(), Math.min(2, left))
+    .map((id) => ({ id, price: Math.round(p(PRICE[CHARMS[id].rare] + 8) * charmMul(run)), sold: false }));
   return { cards, charms, heal: { price: p(20), sold: false }, scar: { price: p(30), sold: false },
     sigil: { price: p(58), sold: false }, burn: { price: p(26), sold: false },
     // Everything else on the counter either adds a card or mends one. This is
@@ -3067,7 +3127,11 @@ function buy(g, kind, idx, arg) {
     const it = s.charms[idx];
     if (!it || it.sold || run.gold < it.price) return false;
     if (!takeCharm(g, it.id, arg)) return false;
-    run.gold -= it.price; it.sold = true; return true;
+    run.gold -= it.price; it.sold = true;
+    run.charmsBought = (run.charmsBought || 0) + 1;
+    // and the one still on the counter goes up with it
+    for (const other2 of s.charms) if (!other2.sold) other2.price = Math.round(other2.price * (1 + CHARM_STEP / 2));
+    return true;
   }
   if (kind === 'heal') {
     if (s.heal.sold || !takeGold(s.heal.price)) return false;
@@ -3127,8 +3191,11 @@ function campChoose(g, what, arg) {
   const run = g.run;
   if (g.ui.camp && g.ui.camp.done) return false;
   if (what === 'rest') {
-    const mend = Math.max(1, Math.round(6 * (run.campMul || 1)));
+    // the quiet road: a camp reached by walking past a fight mends everything
+    const mend = run.quiet ? 999 : Math.max(1, Math.round(6 * (run.campMul || 1)));
     run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - mend); });
+    if (run.quiet) run.log.push('The quiet road: the whole line slept, and woke whole.');
+    run.quiet = 0;
     sfx('heal');
   } else if (what === 'charm') {
     const ch = CHARMS[arg && arg.charm];
@@ -3166,11 +3233,11 @@ const BLESSINGS = [
   { id: 'purse',  name: 'A FOUND PURSE', sub: '30 scrip',
     go: (g) => { g.run.gold += 30; advance(g); } },
   { id: 'grind',  name: 'A WHETSTONE HOUR', sub: 'one warden keeps +2 attack',
-    go: (g) => pickWarden(g, 'SHARPEN WHOM?', (cd) => { cd.charms.push('keencharm'); rebuildCard(cd); }) },
+    go: (g) => pickWarden(g, 'SHARPEN WHOM?', (cd) => { takeCharm(g, 'keencharm', cd.uid); }) },
   { id: 'ward',   name: 'A STITCHED COAT', sub: 'one warden keeps +4 health',
-    go: (g) => pickWarden(g, 'PAD WHOM OUT?', (cd) => { cd.charms.push('stoutcharm'); rebuildCard(cd); }) },
+    go: (g) => pickWarden(g, 'PAD WHOM OUT?', (cd) => { takeCharm(g, 'stoutcharm', cd.uid); }) },
   { id: 'quick',  name: 'A SHORTER ROPE', sub: 'one warden keeps -1 counter',
-    go: (g) => pickWarden(g, 'HURRY WHOM ALONG?', (cd) => { cd.charms.push('swiftcharm'); rebuildCard(cd); }) },
+    go: (g) => pickWarden(g, 'HURRY WHOM ALONG?', (cd) => { takeCharm(g, 'swiftcharm', cd.uid); }) },
   { id: 'hands',  name: 'A WIDER PACK', sub: 'one more card in hand, for good',
     go: (g) => { g.run.bonusHand = (g.run.bonusHand || 0) + 1; advance(g); } },
 ];
@@ -5530,19 +5597,34 @@ function drawLeaderPick(c, t) {
   // the winter you choose to walk into
   const wx = Math.max(840, VW - 480), ww = VW - wx - SAFE;
   txt(c, 'HOW HARD A WINTER', wx + ww / 2, 138, 15, '#9fc0e4', 'center', 't');
+  /* THE ROW HEIGHT FOLLOWS THE TEXT.
+
+     A winter is a name over a line of what it does, and both were placed with
+     fixed offsets inside a fixed 44-unit row. That is fine at 720 units tall
+     and impossible at 280, where the text floor makes a line 23 units high and
+     two of them plus padding do not fit in 44 — the type check had to be
+     switched off for that shape, with a note, which is the correct move once
+     and a habit twice. So the row is as tall as its own contents, the list
+     starts under the header and the WINTER total sits under the last row
+     rather than at a fixed 520. Nothing is excluded from the type check now. */
+  const nameStep = lineH(15, 17);
+  const rowH = Math.max(44, nameStep + textSize(12) + 14);
+  const wtop = 158;
   WINTERS.forEach((w, i) => {
     const on = pick2.winters.indexOf(w.id) >= 0;
-    const y = 158 + i * 50;
-    panel(c, wx, y, ww, 44, 10, on ? '#4a3a2a' : '#1d2c49', on ? '#ffd166' : '#3a4b6b');
-    txt(c, w.name.toUpperCase(), wx + 14, y + 15, 15, on ? '#ffd166' : '#c8dcf4', 'left', 'd');
-    txt(c, w.text, wx + 14, y + 32, 12, on ? '#e8d0a8' : '#8fa6c4', 'left', 't');
-    c.beginPath(); c.arc(wx + ww - 24, y + 22, 13, 0, TAU);
+    const y = wtop + i * (rowH + 6);
+    panel(c, wx, y, ww, rowH, 10, on ? '#4a3a2a' : '#1d2c49', on ? '#ffd166' : '#3a4b6b');
+    txt(c, w.name.toUpperCase(), wx + 14, y + nameStep * 0.6 + 3, 15, on ? '#ffd166' : '#c8dcf4', 'left', 'd');
+    txt(c, ellipsize(c, w.text, 12, ww - 60), wx + 14, y + nameStep * 0.6 + 3 + nameStep, 12,
+      on ? '#e8d0a8' : '#a8bcd8', 'left', 't');
+    c.beginPath(); c.arc(wx + ww - 24, y + rowH / 2, 13, 0, TAU);
     inked(c, on ? '#ffd166' : '#2a3856', 2.5, C.ink);
-    txt(c, '+' + w.pts, wx + ww - 24, y + 23, 14, on ? '#2a1c08' : '#8fa6c4', 'center', 'd', 0);
-    hit('winterToggle', wx, y, ww, 44, w.id);
+    txt(c, '+' + w.pts, wx + ww - 24, y + rowH / 2 + 1, 14, on ? '#2a1c08' : '#c8dcf4', 'center', 'd', 0);
+    hit('winterToggle', wx, y, ww, rowH, w.id);
   });
   const pts = winterPts(pick2.winters);
-  txt(c, pts ? 'WINTER ' + pts : 'A KIND WINTER', wx + ww / 2, 520, 20, pts ? '#ffd166' : '#9fc0e4', 'center', 'd');
+  const ptsY = Math.min(VH - 104, wtop + WINTERS.length * (rowH + 6) + 22);
+  txt(c, pts ? 'WINTER ' + pts : 'A KIND WINTER', wx + ww / 2, ptsY, 20, pts ? '#ffd166' : '#9fc0e4', 'center', 'd');
 
   button(c, 'backTitle', SAFE, VH - 78, 200, 52, 'BACK', '#40527a');
   button(c, 'startRun', MID - 130, VH - 82, 260, 60, 'SET OUT', '#3f8f5f');
@@ -5653,9 +5735,23 @@ function drawCollection(c, t) {
       drawCreature(c, def.art, x + tw / 2, y + th * 0.56, th * 0.52, { t, ph: i * 0.7, blink: i });
     }
     c.restore();
-    if (!have) txt(c, '?', x + tw / 2, y + th * 0.46, 34, '#5a6a86', 'center', 'd');
+    /* The '?' over an undiscovered tile used to be a dim grey drawn straight
+       onto the silhouette, and the silhouette is whatever colour that creature
+       is — 2.1:1 against a Hearth orange, which the contrast check found on
+       every screen shape at once. It gets its own dark disc to sit on now, so
+       it reads the same over every beast in the game. */
+    if (!have) {
+      c.beginPath(); c.arc(x + tw / 2, y + th * 0.44, 15, 0, TAU);
+      c.fillStyle = 'rgba(10,16,28,.86)'; c.fill();
+      txt(c, '?', x + tw / 2, y + th * 0.46, 34, '#b9cde8', 'center', 'd');
+    }
+    /* And the name under it. `fitText` shrank these to fit the tile and the
+       text floor pushed them straight back up, so on a phone every name in the
+       collection ran into its neighbour. The floor wins — it has to — so the
+       name is cut to the tile instead, and the whole thing is one tap away. */
     const nm = fitText(c, it.name.toUpperCase(), tw + 2, 10.5, 6.5, 't');
-    txt(c, it.name.toUpperCase(), x + tw / 2, y + th + 10, nm, have ? '#c8dcf4' : '#5a6a86', 'center', 't');
+    const label = ellipsize(c, it.name.toUpperCase(), nm, tw + 2);
+    txt(c, label, x + tw / 2, y + th + 10, nm, have ? '#c8dcf4' : '#8fa2bd', 'center', 't');
     hit('collect', x, y, tw, th + 26, all.indexOf(it));   // the name under it is part of the target
   });
 
@@ -7124,7 +7220,8 @@ function drawCamp(c, t) {
   drawBackdrop(c, g.run.zone, t);
   drawHud(c, t);
   txt(c, 'CAMP', MID, 84, 40, '#eaf6ff', 'center', 'd');
-  txt(c, 'one quiet hour before the road', MID, 122, 15, '#a8c8ea', 'center', 't');
+  txt(c, g.run.quiet ? 'you took the quiet road, and the caravan actually slept'
+    : 'one quiet hour before the road', MID, 122, 15, g.run.quiet ? '#8fe0a0' : '#a8c8ea', 'center', 't');
   // fire
   c.save();
   c.translate(MID, 300);
@@ -7139,7 +7236,7 @@ function drawCamp(c, t) {
   }
   c.restore();
   const opts = [
-    { id: 'campRest', label: 'REST', sub: 'mend every warden 6' },
+    { id: 'campRest', label: 'REST', sub: g.run.quiet ? 'the quiet road — mend every warden FULLY' : 'mend every warden 6' },
     { id: 'campTemper', label: 'WORK THE FIRE', sub: 'temper a card, and nobody mends' },
     { id: 'campToss', label: 'LIGHTEN THE PACK', sub: 'burn a card from the deck' },
     { id: 'campCharm', label: 'WHITTLE A CHARM', sub: 'attach one of three charms' },
@@ -8339,6 +8436,7 @@ window.FF = {
   resolveTurn, ringBell, passTurn, moveUnit, canPlay, playCard, drawToHand,
   startBattle, endBattle, checkOver, summon, buildEncounter, foeScale, deployWave, ringWave, WAVE_GAP,
   newRun, genTrail, enterNode, advance, rollReward, takeCard, takeCharm, rollShop, buy, campChoose,
+  charmMul, CHARM_STEP, CHARM_STOCK,
   UNLOCKS, checkUnlocks, bumpStat, found, cardPool, charmPool, WINTERS, winterPts, bellNeed, deckLeanings, weightedCards,
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
