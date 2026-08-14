@@ -281,6 +281,103 @@ section('what you can see is what you can touch');
   }
 }
 
+/* -------------------------------------------- the states nobody photographs -- */
+section('the palette holds in the states the shot walk never reaches');
+{
+  /* The contrast check only ever saw frames the shot walk happens to produce,
+     and a shot walk photographs a game at rest: nothing mid-death, nothing
+     mid-flight, and one creature colour per screen. "The palette holds" was
+     therefore a claim about a dozen frames.
+
+     This drives it over the states that never get photographed — every status
+     on every tribe's colours, a foe dying, a card in flight, a defeat — and
+     asserts the same two things. If it still finds nothing, the palette holds
+     for real. */
+  const shapes = [[1280, 720], [667, 375]];
+  const bad = [];
+  const lum = (col) => {
+    const str = String(col).trim();
+    let rgb = null;
+    const m2 = /^#?([0-9a-f]{6})$/i.exec(str);
+    if (m2) { const n = parseInt(m2[1], 16); rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    else { const m3 = /^rgba?\(([-\d.]+)[ ,]+([-\d.]+)[ ,]+([-\d.]+)/i.exec(str); if (m3) rgb = [+m3[1], +m3[2], +m3[3]]; }
+    if (!rgb) return null;
+    const ch = rgb.map((v) => { const q = v / 255; return q <= 0.03928 ? q / 12.92 : Math.pow((q + 0.055) / 1.055, 2.4); });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  };
+  const ratio = (x, y) => {
+    const l1 = lum(x), l2 = lum(y);
+    if (l1 === null || l2 === null) return null;
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  };
+  const SEEN = { n: 0, p: 0 };
+  const scan = (label, cssPerStage) => {
+    const grounds = [];
+    let stroked = null, lastKey = null, seen = 0, paired = 0;
+    for (const e of log) {
+      if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) grounds.push({ col: e[1], bb: e[3] });
+      else if (e[0] === 'strokeText') { stroked = String(e[1]) === lastKey ? stroked : e[4]; lastKey = String(e[1]); }
+      else if (e[0] === 'fillText' && String(e[1]).trim() && e[7] > 0.9) {
+        seen++;
+        if (e[4] * cssPerStage < FF.TEXT_MIN_CSS - 0.5) {
+          bad.push(`${label}: ${JSON.stringify(String(e[1])).slice(0, 14)} at ${Math.round(e[4] * cssPerStage)}css`);
+        }
+        let g2 = null;
+        for (let i = grounds.length - 1; i >= 0; i--) {
+          const b3 = grounds[i].bb;
+          if (e[2] >= b3[0] && e[2] <= b3[2] && e[3] >= b3[1] && e[3] <= b3[3]) { g2 = grounds[i]; break; }
+        }
+        const ground = (lastKey === String(e[1]) && stroked) ? stroked : (g2 && g2.col);
+        if (!ground) continue;
+        paired++;
+        const r = ratio(e[6], ground);
+        const big = e[4] * cssPerStage >= 18;
+        if (r !== null && r < (big ? 3 : 4.5)) {
+          bad.push(`${label}: ${e[6]} on ${ground} ${r.toFixed(1)}:1 ${JSON.stringify(String(e[1])).slice(0, 14)}`);
+        }
+      }
+    }
+    if (process.env.FF_CONTRAST) console.log(`      ${label}: ${seen} texts, ${paired} on a ground`);
+    SEEN.n += seen; SEEN.p += paired;
+    log.length = 0;
+  };
+
+  for (const [w, h] of shapes) {
+    FF.setStageWidth(w, h);
+    const cps = Math.min(w / FF.dims().VW, h / FF.dims().VH);
+
+    // every status, on every tribe's palette, all at once
+    for (const tribe of ['hearth', 'frost', 'scrap', 'wyrd']) {
+      bareBattle(FF, tribe === 'wyrd' ? 'hearth' : tribe, 11);
+      const mine = place(FF, 'p', 'snowpup', 0, 0);
+      const foe = place(FF, 'e', 'chillfang', 0, 1);
+      for (const st of FF.STATUS_ORDER) { FF.addStatus(G, mine, st, 3); FF.addStatus(G, foe, st, 3); }
+      G.screen = 'battle';
+      frame(2); log.length = 0; FF.render();
+      scan(`${w}x${h} ${tribe} every status`, cps);
+    }
+
+    // a foe mid-death and a card mid-flight: frames a shot walk never lands on
+    bareBattle(FF, 'hearth', 12);
+    const doomedFoe = place(FF, 'e', 'chillfang', 0, 1);
+    place(FF, 'p', 'snowpup', 0, 0);
+    G.screen = 'battle';
+    FF.hurt(G, doomedFoe, 999, null);
+    for (let i = 0; i < 8; i++) { FF.update(1 / 60); log.length = 0; FF.render(); scan(`${w}x${h} a foe dying`, cps); }
+
+    // the defeat screen, which the shot walk only ever reaches as a victory
+    withRun(FF, 'hearth', 13);
+    G.run.dead = true;
+    G.screen = 'victory';
+    frame(2); log.length = 0; FF.render();
+    scan(`${w}x${h} a defeat`, cps);
+  }
+  FF.setStageWidth(1280, 720);
+  ok(SEEN.p > 400, `these states actually draw something (${SEEN.p} of ${SEEN.n} texts on a ground)`);
+  eq([...new Set(bad)].sort().slice(0, 6).join(' | '), '',
+    'the palette holds in mid-death, mid-flight, every status and a defeat');
+}
+
 /* ------------------------------------------------------------- on a phone -- */
 section('the shape of a phone');
 {

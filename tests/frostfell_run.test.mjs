@@ -126,9 +126,20 @@ function botTurn() {
     CROOM.turns++;
   }
   const ui = b.hand.findIndex((c) => c.type === 'unit');
-  // told to keep room: do not fill the last slot unless the line is nearly gone
+  /* WHAT "KEEPING A SLOT BACK" ACTUALLY MEANS, which is why the room lesson
+     measured zero last round.
+
+     This was "do not fill the last slot if two bodies are standing", and the
+     careful pilot's version has always been three tests: not while the line is
+     THIN, and not while something big is about to land. A pilot holding bodies
+     back through a wave it cannot survive is not keeping a slot in reserve, it
+     is losing. Taught the crude rule, the careless pilot gained nothing; the
+     careful pilot playing ONLY this habit gains five points. Same rule, two
+     expressions, and the difference was the whole finding. */
   const lastOne = FF.freeSlots(G, 'p').length <= FF.ROOM_NEEDED;
-  if (ui >= 0 && !(heedRoom && lastOne && FF.playerUnits(G).length >= 2)) {
+  const thinLine = FF.playerUnits(G).length <= 2;
+  const bigSoon = FF.enemyUnits(G).reduce((n, f) => n + (f.cnt <= 1 ? f.atk : 0), 0) >= 6;
+  if (ui >= 0 && !(heedRoom && lastOne && !thinLine && !bigSoon)) {
     const slot = bestSlot();
     if (slot && FF.playCard(G, ui, slot)) return;
   }
@@ -312,6 +323,7 @@ function carefulItem(card) {
    doing without losing win rate was never a decision in the first place. */
 const ROOM = { plays: 0, declined: 0, packed: 0, spare: 0, free: [], efree: [] };
 const CROOM = { turns: 0, free: [] };
+const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
@@ -753,11 +765,39 @@ function playRun(tribe, seed, mode, tweak) {
           const line = G.run.deck.concat([G.run.leader]).filter((cd) => cd.type === 'unit');
           const wounded = line.reduce((n, cd) => n + (cd.dmg || 0), 0);
           const pool = line.reduce((n, cd) => n + (cd.hp || 0), 0) || 1;
-          const sore = wounded / pool > 0.22;
-          want = sore
-            ? step.findIndex((n) => n.kind === 'camp')
-            : step.findIndex(fighty);
+          const sore = wounded / pool > DUCKS.bar;
+          /* The quiet road pays at a camp, a rest stop and a shrine now, not
+             at a camp alone — so the pilot takes any of the three. The first
+             cut of this looked for a camp only and ended up playing the same
+             run as the fighter: same cards, same meals, same arrival power,
+             which is the tell that a pilot is not exercising the choice. */
+          const QUIET = { camp: 1, rest: 1, shrine: 1 };
+          /* AND WHAT A PLAYER WOULD ACTUALLY DUCK FOR.
+
+             Ducking on damage alone almost never fires: the line is SEVEN PER
+             CENT wounded at the forks that offer the choice, because camps,
+             meals, mend-all and the room rule's warmth clear damage faster than
+             it accrues. Mending is not scarce, so a rule paid in mending cannot
+             be a decision.
+
+             What IS scarce is the blessing — three tempered cards a run and no
+             more — so a shrine on the quiet road, which sends back two, is
+             worth ducking for whether or not anybody is hurt. That is the
+             version of the choice a player would actually make. */
+          const canBless = FF.tempered(G.run) < 3;
+          const worthIt = (n) => QUIET[n.kind] && (sore || (n.kind === 'shrine' && canBless));
+          want = step.findIndex(worthIt);
           if (want < 0) want = step.findIndex(fighty);
+          /* The denominator that means something: forks where a fight sits
+             opposite a quiet stop, which is the only place the rule can apply.
+             Counting ALL forks made a 3% look like the rule never fires, when
+             what it actually says is that the caravan is rarely hurt enough at
+             the moment the choice is offered. */
+          if (step.some(fighty) && step.some((n) => QUIET[n.kind])) {
+            DUCKS.forks++;                                   // this arm only
+            DUCKS.wound += wounded / pool;
+            if (want >= 0 && QUIET[step[want].kind]) DUCKS.taken++;
+          }
         } else {
           want = step.findIndex((n) => (G.run.dodge ? !fighty(n) : fighty(n)));
         }
@@ -1305,6 +1345,7 @@ section('does walking past a fight pay');
   };
   const seek = arm((run) => { run.seek = true; });
   const dodge = arm((run) => { run.dodge = true; });
+  DUCKS.forks = 0; DUCKS.taken = 0; DUCKS.wound = 0;
   const sore = arm((run) => { run.duckHurt = true; });
   const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
   const band = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, seek.runs))).toFixed(1);
@@ -1316,7 +1357,11 @@ section('does walking past a fight pay');
   };
   row('takes every fight', seek);
   row('walks past what it can', dodge);
-  row('ducks to a camp when hurt', sore);
+  row('ducks to a quiet stop when hurt', sore);
+  console.log(`    ${''.padEnd(22)}${''.padEnd(30)}      ` +
+    `took the quiet road at ${DUCKS.taken} of ${DUCKS.forks} forks that offered it ` +
+    `(${Math.round((DUCKS.taken / Math.max(1, DUCKS.forks)) * 100)}%), ` +
+    `the line ${Math.round((DUCKS.wound / Math.max(1, DUCKS.forks)) * 100)}% wounded at those forks`);
   console.log(`    → walking past a fight is worth ${dodge.pct - seek.pct} points; ` +
     `ducking to a camp only when hurt is worth ${sore.pct - seek.pct} (±${band} is one standard deviation)`);
   /* The bar. Dodging may be survivable — a run that ducks two hard packs and
@@ -1391,6 +1436,47 @@ section('which parts of playing well are worth anything');
   const none = sweep3();
   Object.assign(SKILL, before);
   console.log(`    the fight, with every habit switched off:  ${none}%  (${all - none} points for the set)`);
+
+  /* AND THE SAME QUESTION FROM THE OTHER END, which is the thing that finally
+     settled the money gap.
+
+     Removing one habit at a time has said the same thing for six rounds: denial
+     clears the band and nothing else does. That reads as "nineteen of twenty
+     decisions are fake" — but the SET is worth nineteen points, and a set worth
+     nineteen made of parts each worth zero is the exact signature of things
+     that SUBSTITUTE for one another. A pilot that cannot keep a slot back
+     denies a scheme instead; one that cannot hold gear spends it a turn early
+     on the same target.
+
+     So: start from the pilot that knows nothing and turn ONE habit on. If each
+     alone recovers a real share of the nineteen, they are all real and the
+     subtractive table was blunt rather than right. */
+  const added = [];
+  for (const [key, label] of HABITS) {
+    for (const [k2] of HABITS) SKILL[k2] = false;
+    SKILL[key] = true;
+    added.push([label, sweep3()]);
+  }
+  Object.assign(SKILL, before);
+  added.sort((a2, z) => z[1] - a2[1]);
+  /* And this table refuses to print inside its own band, the same as the one
+     above it. It nearly cost a round: at the default sample it read "keeping a
+     slot in reserve +5" with a ±2.8 band, that got written down as a finding,
+     and at 180 runs an arm it is +2. A ranking inside its own band is noise
+     wherever it is printed, including here. */
+  const top = added[0];
+  console.log(`    and one at a time, starting from nothing (${none}% knowing none): ` +
+    `${top[0].replace(' (removed)', '')} alone is worth ${top[1] - none} of the ${all - none}`);
+  if (Number(band) > 2.0) {
+    console.log(`      (no table: ±${band} a row at this sample. FF_ABLATE=60 or more for one that means something)`);
+    added.length = 0;
+  }
+  for (const [label, pct] of added) {
+    const d = pct - none;
+    console.log(`      only ${label.replace(' (removed)', '').padEnd(34)}` +
+      '█'.repeat(Math.round(pct / 2)).padEnd(14) + ` ${String(pct + '%').padStart(4)}  ` +
+      (d > 0 ? '+' + d : String(d)) + ' of the ' + (all - none));
+  }
   const rows = [];
   for (const [key, label] of HABITS) {
     if (ONLY && key !== ONLY) continue;
@@ -1440,6 +1526,39 @@ section('which parts of playing well are worth anything');
     `a body was held back on ${ROOM.declined} of ${ROOM.plays} deployments ` +
     `(${Math.round((ROOM.declined / Math.max(1, ROOM.plays)) * 100)}%)`);
   ok(true, 'the ablation is a report, not a gate');
+}
+
+/* --------------------------------------------- the arms nobody remembers -- */
+section('the arms that are not run by default');
+{
+  /* THREE INSTRUMENTS EXIST THAT AN ORDINARY CHECK NEVER RUNS.
+
+     Each was built for one round and then run only when somebody remembered.
+     The obvious fix is to run them every time, and the obvious fix is wrong:
+     every one of them needs 150+ runs an arm to say anything, and at the
+     default sample they print a ranking inside its own band — which this suite
+     already refuses to do everywhere else, for good reason.
+
+     So they stay behind their knobs and this prints instead: what they are,
+     what it costs to run them, and what they said last time, so a number
+     nobody has checked in ten rounds cannot quietly rot into a fact. Update
+     the `said` line when you run one. */
+  const STANDING = [
+    ['FF_ABLATE=60', 'which fight habits are worth anything, added and removed',
+     'denial +18 of the 20 the set is worth; every other habit inside ±3.0'],
+    ['FF_LESSON=1 FF_RUNS=70', 'what a lesson is worth, and at what dose',
+     'being told is +11; dose is irrelevant; the room rule teaches nothing'],
+    ['FF_MONEY=70', 'what a purse buys, removed and added one ware at a time',
+     'charms −17 of 21 removed; bell/meal/charm each individually sufficient'],
+    ['FF_COURSE=150', 'the five courses against declaring nothing',
+     'all five beat no course and sit inside two standard deviations'],
+  ];
+  console.log('  · arms that do not run by default (and what they said last time)');
+  for (const [knob, what, said] of STANDING) {
+    console.log(`    ${knob.padEnd(24)}${what}`);
+    console.log(`    ${''.padEnd(24)}→ ${said}`);
+  }
+  ok(STANDING.every((r) => r[2] && r[2].length > 10), 'every standing arm has a last reading written down');
 }
 
 /* ------------------------------------------------- can a lesson be priced -- */
@@ -1497,6 +1616,8 @@ section('what being told is worth');
       ['told twice',           { on: true, times: 2 }],
       ['told four times',      { on: true, times: 4 }],
       ['told in every zone',   { on: true, times: 2, zone: 9 }],
+      ['the room rule only',   { room: true, times: 1 }],
+      ['both lessons',         { on: true, room: true, times: 1 }],
     ];
     console.log('    what the dose is worth (careless, against ' + blind.pct + '% never told):');
     for (const [name, o] of rows) {

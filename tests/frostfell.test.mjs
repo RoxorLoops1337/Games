@@ -1888,6 +1888,26 @@ section('a charm bought is a charm dearer');
     'a shop reached with charms already bought asks more for them');
 }
 
+/* ------------------------------------------------- the shrine and the cap -- */
+section('the shrine obeys the cap the other two doors obey');
+{
+  /* Three tempered cards a run. The trader checks it and a camp checks it; the
+     shrine never did, which nobody noticed until the quiet road started sending
+     a second card back blessed as well. */
+  withRun(FF, 'hearth', 55);
+  const g = FF.G;
+  const cards = g.run.deck.filter((c) => c.type === 'unit');
+  ok(cards.length >= 3, 'the caravan has cards to bless');
+  for (let i = 0; i < FF.TEMPER_CAP; i++) { cards[i].charms.push('blessed'); FF.rebuildCard(cards[i]); }
+  eq(FF.tempered(g.run), FF.TEMPER_CAP, 'the caravan is at the cap');
+
+  g.ui.shrine = { free: 1 };
+  g.screen = 'shrine';
+  FF.press('shrineGive');
+  eq(FF.tempered(g.run), FF.TEMPER_CAP, 'the shrine refuses once the fire has done its three');
+  ok(!FF.UI.choose, 'and does not open a chooser it cannot honour');
+}
+
 /* -------------------------------------------------------- the quiet road -- */
 section('walking past a fight buys the one thing a fight cannot give');
 {

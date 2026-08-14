@@ -1876,6 +1876,7 @@ function resolveTurn(g) {
            The dial between them is how often the fire burns high. */
         const warm = (co2 && co2.warmth) || 1;
         for (const u of line) addStatus(g, u, 'regen', warm, true);
+        if (side === 'p' && g.run) g.run.everRoom = 1;   // it has felt the warmth; the lesson is done
         /* Every turn was too much: the first cut of this measured 53% against a
            35% baseline while the other four sat at 38-44, which is the same
            mistake Cold made in the other direction. Every other turn. */
@@ -1883,20 +1884,26 @@ function resolveTurn(g) {
         const victim = pick(line.filter((u) => !u.leader).concat(line));
         if (victim) {
           addStatus(g, victim, 'frost', 1);
-          /* A SECOND LESSON WAS BUILT HERE AND MEASURED AT ZERO.
+          /* A SECOND LESSON WAS BUILT HERE TWICE AND MEASURED AT ZERO TWICE,
+             and the second time is the interesting one.
 
-             The scheme lesson is worth eleven points, which made "what else
-             should the game teach?" look like the obvious next question. So the
-             room rule got the same treatment — a line told once, early, after
-             the cold had already got into it — and a pilot that heeds it.
-             At 210 runs an arm it was worth EXACTLY NOTHING, and teaching both
-             was worth the same eleven as teaching one.
+             The first cut measured zero and was blamed on the pilot expressing
+             the habit badly — "do not fill the last slot" rather than the real
+             rule, which is do not fill it unless the line is thin or something
+             big is about to land. That blame was well founded: given the real
+             rule, a careful pilot playing ONLY this habit gains five points, and
+             the subtractive table had been calling it zero for four rounds.
 
-             A lesson is worth what the thing it teaches is worth. Denial has
-             been the only fight habit above the band for six rounds; keeping a
-             slot back has measured +0 for four. Teaching a habit that pays
-             nothing pays nothing, and the guide already has a room hint. So
-             this is a comment rather than a toast. */
+             So the lesson was rebuilt with the right expression and measured
+             again. Still exactly zero.
+
+             The two numbers together are the finding. Keeping a slot back is a
+             real habit and it is worth nothing to a beginner, because it only
+             pays if the REST of your play is good enough to use the warmth.
+             Denial is not like that: a denied scheme is a foe's wasted turn
+             whoever you are, which is why it is worth eleven points to somebody
+             who knows nothing else. A habit worth teaching has to pay on its
+             own, and most do not. */
           if (side === 'p') logLine(g, 'no room to fall back — the cold gets into ' + victim.name, '#8fe3ff');
         }
       }
@@ -2679,10 +2686,28 @@ function enterNode(g, choiceIdx) {
     g.ui.camp = { done: false };
     g.screen = 'camp';
   } else if (node.kind === 'rest') {
-    g.ui.rest = { offer: sample(BLESSINGS.map((x) => x.id), 3) };
+    /* THE QUIET ROAD, WIDENED — see the note at run.quiet.
+
+       It paid at a camp only, and a camp opposite a fight on a step where the
+       caravan happens to be hurt comes up once or twice in a whole crossing.
+       Measured, the pilot that ducks only when hurt arrived with the SAME cards,
+       the same meals and the same power as the one that ducks nothing: it was
+       not exercising the choice at all. A rule that fires once a run is a rule
+       nobody plays around.
+
+       So every quiet place pays in what that place is FOR: the camp in rest,
+       the rest stop in choice, the shrine in the blessing costing nothing. All
+       three are things a fight cannot give, and none of them is scrip or a
+       card, which is what a fight gives. */
+    g.ui.rest = { offer: sample(BLESSINGS.map((x) => x.id), run.quiet ? 4 : 3) };
+    if (run.quiet) run.log.push('The quiet road: more of the road ahead was visible from here.');
+    run.quiet = 0;
     g.screen = 'rest';
   } else if (node.kind === 'shrine') {
-    g.ui.shrine = {};
+    // on the quiet road the stone asks for nothing: the card is not left behind
+    g.ui.shrine = { free: run.quiet ? 1 : 0 };
+    if (run.quiet) run.log.push('The quiet road: the stone was warm, and asked for nothing.');
+    run.quiet = 0;
     g.screen = 'shrine';
   } else if (node.kind === 'event') {
     g.ui.event = { def: EVENTS[Math.floor(rnd() * EVENTS.length)] };
@@ -7806,15 +7831,30 @@ function press(id, data) {
       return;
     }
     case 'shrineGive': {
+      /* The cap is three tempered cards a run and the shrine had never checked
+         it — a door that quietly ignored the rule the other two doors enforce.
+         Found by widening the quiet road, which sends a second card back
+         blessed and would have made the bypass twice as wide. */
+      if (tempered(g.run) >= TEMPER_CAP) {
+        fx.toast('THE FIRE ONLY DOES SO MUCH', '#8fa2bd');
+        advance(g); return;
+      }
       const all = g.run.deck.filter((cd) => cd.charms.indexOf('blessed') < 0);
       if (!all.length) { advance(g); return; }
+      const free = g.ui.shrine && g.ui.shrine.free;
       openChooser('LEAVE WHICH CARD ON THE STEP?', all.map((cd) => ({ card: cd })), (i) => {
         all[i].charms.push('blessed');
         all[i].blessed = true;
         rebuildCard(all[i]);
+        // the quiet road: a second card comes back blessed as well
+        if (free && tempered(g.run) < TEMPER_CAP) {
+          const other2 = all.filter((cd) => cd !== all[i] && cd.charms.indexOf('blessed') < 0)
+            .sort((x, z) => (z.hp + z.atk * 2) - (x.hp + x.atk * 2))[0];
+          if (other2) { other2.charms.push('blessed'); other2.blessed = true; rebuildCard(other2); }
+        }
         UI.choose = null;
         sfx('get');
-        fx.toast(all[i].name.toUpperCase() + ' COMES BACK BLESSED', C.gold);
+        fx.toast(all[i].name.toUpperCase() + (free ? ' AND ANOTHER COME BACK BLESSED' : ' COMES BACK BLESSED'), C.gold);
         g.run.log.push(all[i].name + ' was left at the shrine, and came back better.');
         advance(g);
       }, { cancel: 'NEVER MIND' });
