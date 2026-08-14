@@ -1,0 +1,14 @@
+{
+ "FF_ABLATE=60": {
+  "said": "denying schemes +17 of the 17; next best holding gear until it earns the turn +1",
+  "sample": 210
+ },
+ "FF_LESSON=1": {
+  "said": "being told once is +7; every larger dose reads the same",
+  "sample": 210
+ },
+ "FF_MONEY=70": {
+  "said": "charm is −9 of 20 removed; free meal is +28 given",
+  "sample": 210
+ }
+}

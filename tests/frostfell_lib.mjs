@@ -31,7 +31,7 @@ export function mkCtx(log) {
      about WHERE something landed on the stage needs the transform, so the stub
      keeps one — a 2x3 matrix and a save/restore stack, same as the real thing. */
   let m = [1, 0, 0, 1, 0, 0];
-  let bb = null;
+  let bb = null, circ = null, nSeg = 0;
   const stack = [];
   const mul = (n) => [
     n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3],
@@ -81,15 +81,26 @@ export function mkCtx(log) {
          order alone is wrong — a panel is drawn, then labels somewhere else —
          so the stub keeps a bounding box for the current path and reports it
          when the path is filled. */
-      if (k === 'beginPath') return () => { bb = null; };
-      if (k === 'moveTo' || k === 'lineTo') return (x, y) => grow(x, y);
-      if (k === 'rect') return (x, y, w, h) => { grow(x, y); grow(x + w, y + h); };
-      if (k === 'arc') return (x, y, r) => { grow(x - r, y - r); grow(x + r, y + r); };
-      if (k === 'ellipse') return (x, y, rx, ry) => { grow(x - rx, y - ry); grow(x + rx, y + ry); };
-      if (k === 'quadraticCurveTo') return (_a, _b, x, y) => grow(x, y);
-      if (k === 'bezierCurveTo') return (_a, _b, _c, _d, x, y) => grow(x, y);
+      /* A bounding box is not a shape, and for this game's art the difference
+         matters: a creature's body is one big arc, and the label drawn under
+         its feet falls inside that arc's BOX while sitting on the panel behind
+         it. Three "failures" in the contrast check were exactly that. So a path
+         that is a single arc and nothing else records its centre and radius, and
+         the ground lookup tests the circle rather than the box. */
+      if (k === 'beginPath') return () => { bb = null; circ = null; nSeg = 0; };
+      if (k === 'moveTo' || k === 'lineTo') return (x, y) => { nSeg++; grow(x, y); };
+      if (k === 'rect') return (x, y, w, h) => { nSeg++; grow(x, y); grow(x + w, y + h); };
+      if (k === 'arc') return (x, y, r) => {
+        nSeg++;
+        const p0 = at(x, y);
+        circ = nSeg === 1 ? [p0[0], p0[1], r * zoom()] : null;
+        grow(x - r, y - r); grow(x + r, y + r);
+      };
+      if (k === 'ellipse') return (x, y, rx, ry) => { nSeg++; circ = null; grow(x - rx, y - ry); grow(x + rx, y + ry); };
+      if (k === 'quadraticCurveTo') return (_a, _b, x, y) => { nSeg++; circ = null; grow(x, y); };
+      if (k === 'bezierCurveTo') return (_a, _b, _c, _d, x, y) => { nSeg++; circ = null; grow(x, y); };
       if (log && k === 'fill') {
-        return () => { log.push(['fill', st.fill, st.alpha, bb && bb.slice()]); };
+        return () => { log.push(['fill', st.fill, st.alpha, bb && bb.slice(), circ && circ.slice()]); };
       }
       if (log && k === 'fillRect') {
         return (x, y, w, h) => {
