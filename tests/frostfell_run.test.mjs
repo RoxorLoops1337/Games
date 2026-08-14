@@ -700,15 +700,20 @@ function stripScars(run) {
    the default check prints is a measurement rather than a comment. */
 const ARMS_FILE = new URL('./.frostfell-arms.json', import.meta.url);
 const ARMS = {
-  all: (() => { try { return JSON.parse(readFileSync(ARMS_FILE, 'utf8')); } catch { return { seq: 0 }; } })(),
-  bump() { this.all.seq = (this.all.seq || 0) + 1; this.save(); },
+  all: (() => { try { return JSON.parse(readFileSync(ARMS_FILE, 'utf8')); } catch { return {}; } })(),
   read(knob) { return this.all[knob] || null; },
-  age(rec) { return Math.max(0, (this.all.seq || 0) - (rec.seq || 0)); },
+  /* Read-modify-write, because two arms turned up at once will otherwise
+     clobber each other: both load the file at import and the second to finish
+     wins. Found by running FF_LESSON and FF_MONEY in parallel and getting one
+     reading out of two. */
   stamp(knob, said, sample) {
-    this.all[knob] = { said, sample, seq: this.all.seq || 0 };
+    let disk = {};
+    try { disk = JSON.parse(readFileSync(ARMS_FILE, 'utf8')); } catch { disk = {}; }
+    Object.assign(this.all, disk);
+    this.all[knob] = { said, sample };
     this.save();
   },
-  save() { try { writeFileSync(ARMS_FILE, JSON.stringify(this.all, null, 1)); } catch { /* read-only tree */ } },
+  save() { try { writeFileSync(ARMS_FILE, JSON.stringify(this.all, null, 1) + '\n'); } catch { /* read-only tree */ } },
 };
 const STANDING = [
   ['FF_ABLATE=60', 'which fight habits are worth anything, added and removed'],
@@ -1629,10 +1634,15 @@ section('the arms that are not run by default');
      one "said last time". That is a comment with extra steps: nothing enforced
      it and it would have been wrong within three rounds.
 
-     So the readings are STAMPED. An arm that runs writes its headline and the
-     sample it ran at to a file beside the suite; the default check reads the
-     file back and prints how long ago each was taken, in runs of the suite. A
-     reading nobody has refreshed says so itself. */
+     So the readings are STAMPED: an arm that runs writes its headline and the
+     sample it ran at to `.frostfell-arms.json`, and the default check reads it
+     back. That file is COMMITTED, which is the whole point — a reading that
+     lived only on the machine that took it starts blank in a fresh clone, which
+     is exactly the rot it was meant to stop.
+
+     There is no age counter. One was tried, incrementing on every check, and it
+     churned the file on every run for a number nobody needed: git already knows
+     when a reading last changed, and knows it better. */
   const rows = [];
   for (const [knob, what] of STANDING) {
     const rec = ARMS.read(knob);
@@ -1642,11 +1652,10 @@ section('the arms that are not run by default');
   for (const [knob, what, rec] of rows) {
     console.log(`    ${knob.padEnd(24)}${what}`);
     console.log(`    ${''.padEnd(24)}→ ` + (rec
-      ? `${rec.said}   (at ${rec.sample} an arm, ${ARMS.age(rec)} checks ago)`
-      : 'never run on this machine — run it'));
+      ? `${rec.said}   (at ${rec.sample} an arm)`
+      : 'no reading recorded — run it'));
   }
   ok(STANDING.length >= 4, 'every arm that needs a knob is listed');
-  ARMS.bump();   // one more check has gone by; every stored reading is a check older
 }
 
 /* ------------------------------------------------- can a lesson be priced -- *//* ------------------------------------------------- can a lesson be priced -- */

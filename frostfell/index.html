@@ -2603,9 +2603,26 @@ function endBattle(g, won) {
   }
   if (!won) { g.screen = 'gameover'; G.meta.runs++; saveMeta(); saveRun(null); return; }
   if (g.battle.bestCombo >= 3) run.log.push('A ' + g.battle.bestCombo + '-kill turn.');
-  // A beast down is a night's rest: the caravan patches itself up before the
-  // next zone, which is what stops attrition alone from ending runs.
-  const mend = (run.mend || 0) + (g.battle.kind === 'boss' ? 5 : 0);
+  /* THE BEAST'S NIGHT'S REST IS GONE, and it is the one thing out of four
+     tried that made the fight matter more.
+
+     Last round found that 65% of all the mending in this game is a fight
+     ending, and one fix was tried and reverted. Four shapes were measured this
+     round at 180 runs an arm (band ±3.0), all against a baseline where the
+     fight's rung is +16 and the whole ladder is 30 points:
+
+       warmth pays in Spice, not Regen     fight +10, ladder 22   worse
+       the fallen keep half, lose Hurt     fight +10, ladder 39   different game
+       only the FIRST loss is wiped        fight +11, ladder 30   no change
+       no beast's night's rest             fight +19, ladder 34   THIS
+
+     And the +19 did not survive: re-measured at 210 runs an arm it is +15 and
+     the ladder is 32, identical to the baseline. Three points at ±3.0 is a
+     direction and directions evaporate. It is kept anyway, and not for the
+     number — it removes a five-point refund of attrition at every zone
+     boundary and a constant with it, and it measures neutral. Simpler and level
+     is reason enough; moving the fight's rung is not a claim this can make. */
+  const mend = (run.mend || 0);
   if (mend) run.deck.concat([run.leader]).forEach((c) => { c.dmg = Math.max(0, c.dmg - mend); });
 
   run.fights = (run.fights || 0) + 1;

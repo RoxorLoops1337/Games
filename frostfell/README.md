@@ -500,6 +500,12 @@ is no second implementation of the rules to drift from.
 | `frostfell_tutorial.test.mjs` | the guided run, beat by beat |
 | `frostfell_run.test.mjs` | the balance probe: bots that play whole runs |
 
+**`tests/.frostfell-arms.json` is committed**, and that is the point: an arm
+that runs stamps its headline and sample there, and a reading that lived only on
+the machine that took it starts blank in a fresh clone — exactly the rot it was
+built to stop. There is no age counter; one was tried and it churned the file on
+every check for a number git already knows better.
+
 `FF_RUNS=n` sets the sample. Everything else is an arm you turn up on its own:
 `FF_ABLATE`, `FF_HABIT`, `FF_COURSE`, `FF_MONEY`, `FF_LESSON`, `FF_NOSCARS`.
 `FF_CONTRAST=1` prints how much text the contrast check actually paired.
@@ -647,11 +653,26 @@ worth teaching has to pay on its own, and almost none do.**
 
 ### Is one-at-a-time the wrong question? No.
 
-Settled at 180 runs an arm and unchanged since: **denial alone is worth 18 of
-the 20 the whole set is worth**, keeping a slot back is +2, and everything else
-is zero. This has now been attacked from both directions and from the mending
-ledger, and the answer has not moved: the fight is one decision and some
-decoration.
+Settled at 180 runs an arm: **denial alone is worth 18 of the 20 the whole set
+is worth**, keeping a slot back is +2, and everything else is zero.
+
+**And a round was spent trying to change it rather than confirm it.** The
+intervention believed in was this: keeping a slot back pays in warmth, warmth is
+Regen, and the mending ledger proves Regen is a currency this game refunds — so
+warmth was made to pay in **Spice** instead, which is damage, which is the thing
+the game actually values. It made the fight *worse* (+16 → +10) and keeping a
+slot back went from +2 to −1. Across all six shapes above, the best any second
+habit ever reached was **placement at +4** under the fallen-keep-half variant —
+1.3 standard deviations, inside the band.
+
+**Why the board resists, as far as this can tell.** A scheme is the only thing
+on the table whose outcome depends on what you do in the window between it being
+announced and it happening. Everything else — where a body stands, when gear is
+spent, whether a slot is free — is arithmetic the pilot can compensate for
+elsewhere on the same turn. Denial is not worth eighteen points because denial is
+strong; it is worth eighteen points because it is the only *event*. A second
+habit that clears the band probably needs a second telegraph, not a better
+payout, and that is a bigger change than a round.
 
 The fight ablation had said the same thing for six rounds — denial clears the
 band, nothing else does — and that reads as "nineteen of twenty decisions are
@@ -746,16 +767,20 @@ suspects were named without anybody counting them. Counted, the way the charms
 were: read the caravan's wound total on every pass of the run loop and attribute
 each change to the transition it happened on.
 
-**92% of every point of damage the caravan takes gets mended** (9,176 taken,
-8,400 mended across 210 runs), and:
+**88% of every point of damage the caravan takes gets mended**, and:
 
 ```
-a fight ENDING (the fallen come back whole)   65%
-camp                                          16%
-shop (mend-all)                               14%
-rest / event                                   4%
+a fight ENDING (the fallen come back whole)   60%
+camp                                          18%
+shop (mend-all)                               17%
+rest / event                                   5%
 warmth                                         0%
 ```
+
+(It was 92% and 65% before the beast's night's rest came out — that change is
+worth four points of the ledger even though it is worth nothing on the ladder,
+which is the clearest evidence that this ledger and the win rate are measuring
+different things.)
 
 The list was wrong. It is not camps and it is not meals and **warmth does not
 register at all** — the single biggest entry is a warden falling, because a
@@ -763,13 +788,29 @@ fallen warden's damage is wiped to nought before it comes back Hurt. Two thirds
 of the "mending" in this game is not healing; it is a knockout being undone,
 which is a different mechanic wearing mending's clothes.
 
-**Two obvious levers were tried and neither works.** Making a fallen warden come
-back missing 35% of its health took the *fight's* rung from +16 to +9 — it
-punishes a careful pilot, who fields more bodies for longer, harder than a
-careless one that was dying anyway — and moved the wound fraction from 8% to
-10%, which is nothing. Raising warmth to 2 was worth seven points to the whole
-ladder and most of them to the **trader's** rung: a global buff, not a reason to
-keep a slot back. Neither shipped.
+**Six shapes have now been measured against it.** All at 180 runs an arm
+(band ±3.0), against a baseline of fight +16 and a 30-point ladder:
+
+```
+a fallen warden comes back missing 35%   fight  +9   worse
+warmth 2 instead of 1                    fight +17   a global buff, ladder 37
+warmth pays in Spice, not Regen          fight +10   worse, ladder 22
+the fallen keep half and lose Hurt       fight +10   ladder 39 — a different game
+only the FIRST loss of a fight is wiped  fight +11   no change
+no beast's night's rest                  fight +19   ladder 34   ← shipped
+```
+
+**And the +19 did not survive the bigger sample.** Re-measured at 210 runs an
+arm it reads +15 and the ladder reads 32 — identical to the baseline, which is
+the same trap as last round's keeping-a-slot-at-+5: three points at ±3.0 is a
+direction, and directions evaporate. It is kept anyway, and the reason is not
+the number: it removes a five-point refund of attrition at every zone boundary
+and a constant with it, and it measures neutral. **Simpler and level is a good
+enough reason to keep a change. Moving the fight's rung is not a claim this can
+make.**
+
+The two that make the ladder *bigger* both do it by making the trader and the
+draft matter more, which is the opposite of what was wanted.
 
 ### Read state, don't intercept calls
 
@@ -908,14 +949,41 @@ wrong:
   three cards cluster in the middle third and the bottom half is empty snow. The
   screen is laid out for 16:9 and merely survives being stretched.
 
-**And it found a limit in the contrast check.** Moving the shrine's explainer
-clear of the buttons put it on the snow bank, which is nearly white. The check
-passes it — the glyphs are outlined, and an outline is what it measures for
-outlined text — but edge definition is not figure-ground, and pale blue on snow
-still reads badly. The rule is right for dark grounds, which is almost all of
-this game, and blind to a light one. The fix here was a dark pill behind the
-line; the general fix is to measure outlined text against BOTH its outline and
-its ground and take the worse, which is the next round's business.
+### Which screens actually use the width
+
+That last point raised the obvious question — is the stage-width system
+decoration? — so every screen was walked at 2400x1080. It is not:
+
+| uses it | ignores it |
+|---|---|
+| the battle (board and hand both span) | the title |
+| the trail (road edge to edge, a panel in each corner) | camp, rest stop, shrine, event |
+| the collection (twelve tiles across) | the ending |
+| the leader screen (three columns) | |
+| victory (the stat row spans) | |
+| the trader and the reward screen (ware row spans) | |
+
+Six use it and five ignore it, and the five that ignore it are all the same
+shape: a title, one piece of art, and a centred row of two to four buttons. They
+have three things to say and a 20:9 stage does not give them a fourth. **The
+system is used by the screens that have something to spread and ignored by the
+ones that do not, which is the correct answer rather than a gap** — widening a
+shrine would mean inventing content for it.
+
+**And it found a limit in the contrast check** — an outlined glyph on a nearly
+white snow bank passes, because an outline is what the rule measures for
+outlined text, and edge definition is not figure-ground.
+
+**Taking the worse of outline and ground was then tried, and the instrument
+cannot support it.** The rule is right. Implemented, it flagged three things —
+a leader's name under its portrait, a warden's name on its card — all perfectly
+legible, and all the same artefact: the ground is attributed by which filled
+path's *bounding box* contains the text, and this game draws creatures as
+multi-segment blobs whose boxes reach well past their ink. Single arcs are now
+tested as circles, which is a real improvement and fixes none of these, because
+a blob is not an arc. Doing it properly means the stub has to rasterise, which
+is a larger instrument than the bug justifies. **The rule stays outline-first
+and the reason is now measured rather than assumed.**
 
 ### And a third thing nobody was checking
 

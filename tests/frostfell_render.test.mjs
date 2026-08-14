@@ -310,12 +310,19 @@ section('the palette holds in the states the shot walk never reaches');
     if (l1 === null || l2 === null) return null;
     return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
   };
+  const under = (g4, x, y) => {
+    const b3 = g4.bb;
+    if (!(x >= b3[0] && x <= b3[2] && y >= b3[1] && y <= b3[3])) return false;
+    if (!g4.circ) return true;
+    const dx = x - g4.circ[0], dy = y - g4.circ[1];
+    return dx * dx + dy * dy <= g4.circ[2] * g4.circ[2];
+  };
   const SEEN = { n: 0, p: 0 };
   const scan = (label, cssPerStage) => {
     const grounds = [];
     let stroked = null, lastKey = null, seen = 0, paired = 0;
     for (const e of log) {
-      if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) grounds.push({ col: e[1], bb: e[3] });
+      if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) grounds.push({ col: e[1], bb: e[3], circ: e[4] });
       else if (e[0] === 'strokeText') { stroked = String(e[1]) === lastKey ? stroked : e[4]; lastKey = String(e[1]); }
       else if (e[0] === 'fillText' && String(e[1]).trim() && e[7] > 0.9) {
         seen++;
@@ -488,12 +495,21 @@ section('the shape of a phone');
         if (l1 === null || l2 === null) return null;
         return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
       };
+      /* A single-arc path is tested as the circle it is, not as its box —
+         a creature's body swallows the label under its feet otherwise. */
+      const under = (g4, x, y) => {
+        const b3 = g4.bb;
+        if (!(x >= b3[0] && x <= b3[2] && y >= b3[1] && y <= b3[3])) return false;
+        if (!g4.circ) return true;
+        const dx = x - g4.circ[0], dy = y - g4.circ[1];
+        return dx * dx + dy * dy <= g4.circ[2] * g4.circ[2];
+      };
       const grounds = [];
       const dim = [];
       let unpaired = 0, paired = 0, stroked = null, lastStrokeKey = null;
       for (const e of log) {
         if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) {
-          grounds.push({ col: e[1], bb: e[3] });
+          grounds.push({ col: e[1], bb: e[3], circ: e[4] });
         } else if (e[0] === 'strokeText') {
           stroked = String(e[1]) === lastStrokeKey ? stroked : e[4];
           lastStrokeKey = String(e[1]);
@@ -501,8 +517,7 @@ section('the shape of a phone');
           // the last opaque shape drawn under this point is the ground it sits on
           let g2 = null;
           for (let i = grounds.length - 1; i >= 0; i--) {
-            const b3 = grounds[i].bb;
-            if (e[2] >= b3[0] && e[2] <= b3[2] && e[3] >= b3[1] && e[3] <= b3[3]) { g2 = grounds[i]; break; }
+            if (under(grounds[i], e[2], e[3])) { g2 = grounds[i]; break; }
           }
           /* EVERY GLYPH IN THIS GAME IS OUTLINED, and that changes the
              question. `txt` strokes a dark rounded outline behind the fill
@@ -512,6 +527,32 @@ section('the shape of a phone');
              legible and a naive check called it 2.2:1. For outlined text the
              ground IS the outline. For text drawn with the outline suppressed
              it is whatever was painted underneath. */
+          /* THE WORSE OF THE TWO, which is the third time a check here has
+             been too generous and the third time tightening it found something.
+
+             An outline gives a glyph its edge, so outlined text was measured
+             against its outline and nothing else. That is right for a dark
+             ground and wrong for a bright one: pale blue on a near-white snow
+             bank has perfect edge definition and still reads badly, because
+             edge definition is not figure-ground. Both are now measured and the
+             worse one is the answer. */
+          /* TAKING THE WORSE OF OUTLINE AND GROUND WAS TRIED AND THE
+             INSTRUMENT CANNOT SUPPORT IT.
+
+             The rule is right: an outline gives a glyph its edge, and edge
+             definition is not figure-ground, so pale blue on a near-white snow
+             bank should fail. Implemented, it flagged three things — a leader's
+             name under its portrait, a warden's name on its card — all of which
+             are perfectly legible, and all of which are the same artefact: the
+             ground is attributed by which filled path's BOUNDING BOX contains
+             the text, and this game draws creatures as multi-segment blobs
+             whose boxes reach well past their ink.
+
+             Single arcs are now tested as circles, which is a real improvement
+             and fixes none of these, because a blob is not an arc. Doing it
+             properly means the stub has to rasterise, which is a much bigger
+             instrument than the bug justifies. So the rule stays outline-first
+             and this note stays with it. */
           const outlined = lastStrokeKey === String(e[1]) && stroked;
           const ground = outlined ? stroked : (g2 && g2.col);
           if (!ground) { unpaired++; continue; }
