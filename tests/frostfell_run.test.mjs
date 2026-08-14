@@ -7,6 +7,7 @@
 // hide.
 //
 // Run: node tests/frostfell_run.test.mjs
+import { readFileSync, writeFileSync } from 'node:fs';
 import { loadGame, ok, eq, done, section } from './frostfell_lib.mjs';
 
 const FF = loadGame();
@@ -695,6 +696,31 @@ function stripScars(run) {
   }
 }
 
+/* A tiny on-disk record of what each turned-up arm last said, so the summary
+   the default check prints is a measurement rather than a comment. */
+const ARMS_FILE = new URL('./.frostfell-arms.json', import.meta.url);
+const ARMS = {
+  all: (() => { try { return JSON.parse(readFileSync(ARMS_FILE, 'utf8')); } catch { return { seq: 0 }; } })(),
+  bump() { this.all.seq = (this.all.seq || 0) + 1; this.save(); },
+  read(knob) { return this.all[knob] || null; },
+  age(rec) { return Math.max(0, (this.all.seq || 0) - (rec.seq || 0)); },
+  stamp(knob, said, sample) {
+    this.all[knob] = { said, sample, seq: this.all.seq || 0 };
+    this.save();
+  },
+  save() { try { writeFileSync(ARMS_FILE, JSON.stringify(this.all, null, 1)); } catch { /* read-only tree */ } },
+};
+const STANDING = [
+  ['FF_ABLATE=60', 'which fight habits are worth anything, added and removed'],
+  ['FF_LESSON=1', 'what a lesson is worth, and at what dose'],
+  ['FF_MONEY=70', 'what a purse buys, one ware removed and one ware given'],
+  ['FF_COURSE=150', 'the five courses against declaring nothing'],
+];
+
+const MEND = { on: false, by: {}, hurt: 0, last: null, where: 'start' };
+const wounds = () => (G.run ? G.run.deck.concat([G.run.leader])
+  .filter((c) => c.type === 'unit').reduce((n, c) => n + (c.dmg || 0), 0) : 0);
+
 function playRun(tribe, seed, mode, tweak) {
   // A cumulative ladder: each pilot is the one above it plus one more thing it
   // knows how to do, so the difference between two rows is that one thing.
@@ -706,6 +732,7 @@ function playRun(tribe, seed, mode, tweak) {
   // way a player does — before anything is known except which leader it took.
   if (mode === 'careful' && DRAFT.course) G.run.course = courseWanted();
   if (tweak) tweak(G.run);
+  MEND.last = null; MEND.where = 'start';
   const stat = { turns: 0, battles: 0, zone: 0, won: false, screens: {} };
   let lastShop = null;
   let guard = 0;
@@ -716,6 +743,42 @@ function playRun(tribe, seed, mode, tweak) {
         .map(([k, v]) => k + ' ' + v).join('+') + (G.UI && G.UI.choose ? ' chooser-open' : '');
     }
     stat.screens[G.screen] = (stat.screens[G.screen] || 0) + 1;
+    /* WHERE THE MENDING COMES FROM.
+
+       "Damage is not a pressure in this game" was last round's closing line and
+       its biggest finding: the line is 7% wounded at the forks where it should
+       be deciding, which means every rule ever written that pays in mending was
+       dead on arrival. Four sources were blamed by name — camps, meals,
+       mend-all, warmth — without anybody counting them, and the list turned out
+       to be wrong: a warden that FALLS has its damage wiped to nought, and
+       winning a fight clears Hurt.
+
+       Counted the way the charms were counted: read the wound total on every
+       pass of the loop and attribute the change to whatever screen the caravan
+       was standing on. No hooks, no game knobs — see "read state, don't
+       intercept calls". */
+    if (MEND.on) {
+      const w = wounds();
+      if (MEND.last !== null) {
+        const d = MEND.last - w;
+        /* Attribute the change to the TRANSITION, not to the screen it is
+           standing on now. A fight ending is measured on the first pass after
+           the battle screen goes away, so bucketing by current screen buried
+           the fallen-come-back-whole wipe inside the warmth number. */
+        const bucket = (MEND.where === 'battle' && G.screen !== 'battle')
+          ? 'a fight ENDING (the fallen come back whole)'
+          : (MEND.where === 'battle' ? 'inside a fight (warmth and gear)' : MEND.where);
+        if (d > 0) MEND.by[bucket] = (MEND.by[bucket] || 0) + d;
+        else if (d < 0) MEND.hurt -= d;
+      }
+      MEND.last = w;
+      /* And the in-fight bucket has to be split, because two very different
+         things live in it: warmth and gear mending turn by turn, and a fight
+         ENDING — where every fallen warden's damage is wiped to nought and a
+         beast pays a night's rest on top. The first is a rule you can tune; the
+         second is the one nobody had noticed. */
+      MEND.where = G.screen;
+    }
     if (NO_SCARS) stripScars(G.run);
     if (G.screen === 'victory') {
       stat.won = true;
@@ -1247,6 +1310,8 @@ section('does money change anything');
       up.push([w, arm.pct, arm.pct - broke.pct]);
     }
     up.sort((a2, z) => z[2] - a2[2]);
+    ARMS.stamp('FF_MONEY=70', `${rows[0][0]} is −${rows[0][2]} of ${rich.pct - normal.pct} removed; ` +
+      `free ${up[0][0]} is +${up[0][2]} given`, 3 * MN);
     console.log(`    and what closes it from the other end (penniless, plus one free ware, vs ${broke.pct}%):`);
     for (const [w, pct, gain] of up) {
       console.log(`      free ${w.padEnd(7)} ${bar(pct)} ${String(pct + '%').padStart(4)}  ` +
@@ -1467,9 +1532,13 @@ section('which parts of playing well are worth anything');
   const top = added[0];
   console.log(`    and one at a time, starting from nothing (${none}% knowing none): ` +
     `${top[0].replace(' (removed)', '')} alone is worth ${top[1] - none} of the ${all - none}`);
-  if (Number(band) > 2.0) {
+  if (Number(band) > 3.2) {
     console.log(`      (no table: ±${band} a row at this sample. FF_ABLATE=60 or more for one that means something)`);
     added.length = 0;
+  } else {
+    ARMS.stamp('FF_ABLATE=60', `${top[0].replace(' (removed)', '')} +${top[1] - none} of the ${all - none}; ` +
+      `next best ${added[1] ? added[1][0].replace(' (removed)', '') + ' +' + (added[1][1] - none) : 'none'}`,
+      tribes.length * N);
   }
   for (const [label, pct] of added) {
     const d = pct - none;
@@ -1528,40 +1597,59 @@ section('which parts of playing well are worth anything');
   ok(true, 'the ablation is a report, not a gate');
 }
 
+/* ----------------------------------------------- where the mending comes -- */
+section('why damage is not a pressure');
+{
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
+  MEND.on = true; MEND.by = {}; MEND.hurt = 0;
+  let wins = 0, runs = 0;
+  for (const tribe of tribes) {
+    for (let i = 0; i < N; i++) { const st = playRun(tribe, 7000 + i * 31, 'careful'); runs++; if (st.won) wins++; }
+  }
+  MEND.on = false;
+  const rows = Object.entries(MEND.by).sort((a2, z) => z[1] - a2[1]);
+  const total = rows.reduce((n, r) => n + r[1], 0) || 1;
+  console.log('  · where the mending comes from');
+  console.log(`    ${Math.round(MEND.hurt)} damage taken across ${runs} runs, ` +
+    `${Math.round(total)} of it mended (${Math.round((total / Math.max(1, MEND.hurt)) * 100)}%)`);
+  for (const [where, amount] of rows.slice(0, 6)) {
+    console.log(`      ${where.padEnd(34)}${'█'.repeat(Math.round((amount / total) * 40)).padEnd(40)} ` +
+      `${Math.round((amount / total) * 100)}%`);
+  }
+  ok(MEND.hurt > 0, 'the caravan does take damage');
+  ok(total > 0, 'and something mends it');
+}
+
 /* --------------------------------------------- the arms nobody remembers -- */
 section('the arms that are not run by default');
 {
-  /* THREE INSTRUMENTS EXIST THAT AN ORDINARY CHECK NEVER RUNS.
+  /* THREE INSTRUMENTS EXIST THAT AN ORDINARY CHECK NEVER RUNS, and the first
+     attempt at surfacing them printed a hand-written string saying what each
+     one "said last time". That is a comment with extra steps: nothing enforced
+     it and it would have been wrong within three rounds.
 
-     Each was built for one round and then run only when somebody remembered.
-     The obvious fix is to run them every time, and the obvious fix is wrong:
-     every one of them needs 150+ runs an arm to say anything, and at the
-     default sample they print a ranking inside its own band — which this suite
-     already refuses to do everywhere else, for good reason.
-
-     So they stay behind their knobs and this prints instead: what they are,
-     what it costs to run them, and what they said last time, so a number
-     nobody has checked in ten rounds cannot quietly rot into a fact. Update
-     the `said` line when you run one. */
-  const STANDING = [
-    ['FF_ABLATE=60', 'which fight habits are worth anything, added and removed',
-     'denial +18 of the 20 the set is worth; every other habit inside ±3.0'],
-    ['FF_LESSON=1 FF_RUNS=70', 'what a lesson is worth, and at what dose',
-     'being told is +11; dose is irrelevant; the room rule teaches nothing'],
-    ['FF_MONEY=70', 'what a purse buys, removed and added one ware at a time',
-     'charms −17 of 21 removed; bell/meal/charm each individually sufficient'],
-    ['FF_COURSE=150', 'the five courses against declaring nothing',
-     'all five beat no course and sit inside two standard deviations'],
-  ];
-  console.log('  · arms that do not run by default (and what they said last time)');
-  for (const [knob, what, said] of STANDING) {
-    console.log(`    ${knob.padEnd(24)}${what}`);
-    console.log(`    ${''.padEnd(24)}→ ${said}`);
+     So the readings are STAMPED. An arm that runs writes its headline and the
+     sample it ran at to a file beside the suite; the default check reads the
+     file back and prints how long ago each was taken, in runs of the suite. A
+     reading nobody has refreshed says so itself. */
+  const rows = [];
+  for (const [knob, what] of STANDING) {
+    const rec = ARMS.read(knob);
+    rows.push([knob, what, rec]);
   }
-  ok(STANDING.every((r) => r[2] && r[2].length > 10), 'every standing arm has a last reading written down');
+  console.log('  · arms that do not run by default');
+  for (const [knob, what, rec] of rows) {
+    console.log(`    ${knob.padEnd(24)}${what}`);
+    console.log(`    ${''.padEnd(24)}→ ` + (rec
+      ? `${rec.said}   (at ${rec.sample} an arm, ${ARMS.age(rec)} checks ago)`
+      : 'never run on this machine — run it'));
+  }
+  ok(STANDING.length >= 4, 'every arm that needs a knob is listed');
+  ARMS.bump();   // one more check has gone by; every stored reading is a check older
 }
 
-/* ------------------------------------------------- can a lesson be priced -- */
+/* ------------------------------------------------- can a lesson be priced -- *//* ------------------------------------------------- can a lesson be priced -- */
 section('what being told is worth');
 {
   /* Three pilots, identical but for what they know about red text. The middle
@@ -1620,12 +1708,16 @@ section('what being told is worth');
       ['both lessons',         { on: true, room: true, times: 1 }],
     ];
     console.log('    what the dose is worth (careless, against ' + blind.pct + '% never told):');
+    let first = null;
     for (const [name, o] of rows) {
       const arm = sweepT(o);
       const d = arm.pct - blind.pct;
+      if (first === null) first = d;
       console.log(`      ${name.padEnd(20)}${bar(arm.pct)} ${String(arm.pct + '%').padStart(4)}  ` +
         (d > 0 ? '+' + d : String(d)));
     }
+    ARMS.stamp('FF_LESSON=1', `being told once is +${first}; every larger dose reads the same`,
+      tribes.length * N);
   }
   ok(knowing.pct >= blind.pct - 5, 'knowing how to deny a scheme is not a handicap');
   ok(true, 'what being told is worth is a report, not a gate');

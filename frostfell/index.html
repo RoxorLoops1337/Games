@@ -2558,6 +2558,32 @@ function endBattle(g, won) {
     if (c.fainted) {
       const again = c.injured && !patched;
       c.fainted = false;
+      /* A WARDEN THAT FELL USED TO COME BACK WHOLE, and that one line was two
+         thirds of all the mending in the game.
+
+         Counted properly for the first time: 87% of every point of damage the
+         caravan takes gets mended, and 67% of THAT is a fight ending — the
+         fallen come back at nought damage, plus a beast's night's rest. Camps
+         are 16%, the trader 15%, and warmth does not register at all. Which is
+         why the line is 7% wounded at the forks where it is supposed to be
+         deciding, why every rule ever written that pays in mending was dead on
+         arrival, and why keeping a slot back for warmth has priced at nothing
+         for five rounds: there was nothing for it to save you from.
+
+         MAKING IT COST SOMETHING WAS TRIED AND MEASURED AND IS NOT HERE.
+         A fallen warden coming back missing 35% of its health took the FIGHT's
+         rung from +16 to +9 — it punishes a careful pilot, who fields more
+         bodies for longer, harder than a careless one who was dying anyway —
+         and moved the wound fraction at the forks from 8% to 10%, which is
+         nothing. Raising warmth to 2 instead was worth seven points to the
+         whole ladder and most of them to the TRADER's rung: a global buff, not
+         a reason to keep a slot back.
+
+         So the line still reads `c.dmg = 0` and the finding is that neither
+         obvious lever moves the thing it was aimed at. What the ledger really
+         says is that the biggest single entry is not healing at all — it is
+         wardens being knocked out and returned, which is a different mechanic
+         wearing mending's clothes. */
       c.dmg = 0;
       c.injured = !patched;
       if (patched) { run.log.push(c.name + ' went down, and was put back together.'); continue; }
@@ -7273,7 +7299,34 @@ function drawCamp(c, t) {
     : 'one quiet hour before the road', MID, 122, 15, g.run.quiet ? '#8fe0a0' : '#a8c8ea', 'center', 't');
   // fire
   c.save();
-  c.translate(MID, 300);
+  /* THE FIRE HAD NOTHING UNDER IT AND CAST NO LIGHT.
+
+     Photographed at 2400x1080 for the first time this round: a single flame
+     about ninety units tall, hanging in the middle of an empty screen with no
+     pit, no logs and no glow, on a screen whose subtitle is "one quiet hour
+     before the road". At 16:9 it reads as a campfire; on an ultrawide it reads
+     as a floating orange leaf. Every other light in this game is additive and
+     this one was not lit at all. */
+  c.translate(MID, 318);
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  const glow = c.createRadialGradient(0, -10, 0, 0, -10, 190 + Math.sin(t * 3) * 12);
+  glow.addColorStop(0, 'rgba(255,150,60,.30)');
+  glow.addColorStop(0.5, 'rgba(255,110,40,.10)');
+  glow.addColorStop(1, 'rgba(255,110,40,0)');
+  c.fillStyle = glow;
+  c.beginPath(); c.arc(0, -10, 190 + Math.sin(t * 3) * 12, 0, TAU); c.fill();
+  c.restore();
+  // the logs it is burning, so the flame is standing on something
+  c.save();
+  c.translate(0, 40);
+  for (const [dx, ang] of [[-34, 0.34], [34, -0.34], [0, 0.05]]) {
+    c.save(); c.translate(dx, ang === 0.05 ? -7 : 0); c.rotate(ang);
+    c.beginPath(); rr(c, -40, -8, 80, 16, 8);
+    inked(c, '#6b4a33', 3, C.ink);
+    c.restore();
+  }
+  c.restore();
   for (let i = 0; i < 3; i++) {
     const s2 = 1 - i * 0.22, ph = t * 5 + i * 1.7;
     c.beginPath();
@@ -7286,7 +7339,7 @@ function drawCamp(c, t) {
   c.restore();
   const opts = [
     { id: 'campRest', label: 'REST', sub: g.run.quiet ? 'the quiet road — mend every warden FULLY' : 'mend every warden 6' },
-    { id: 'campTemper', label: 'WORK THE FIRE', sub: 'temper a card, and nobody mends' },
+    { id: 'campTemper', label: 'WORK THE FIRE', sub: 'temper a card, nobody mends' },
     { id: 'campToss', label: 'LIGHTEN THE PACK', sub: 'burn a card from the deck' },
     { id: 'campCharm', label: 'WHITTLE A CHARM', sub: 'attach one of three charms' },
   ];
@@ -7560,9 +7613,32 @@ function drawShrine(c, t) {
   drawEventArt(c, 'shrine', 0, 0, t);
   c.restore();
 
-  button(c, 'shrineGive', MID - 300, 452, 280, 62, 'LEAVE A CARD', '#8f7f3f');
-  button(c, 'shrineWalk', MID + 20, 452, 280, 62, 'WALK ON', '#40527a');
-  txt(c, 'the blessed card keeps +2 attack and +3 health for the rest of the run', MID, 536, 13, '#7e97b8', 'center', 't');
+  /* LOOKED AT ON AN ULTRAWIDE FOR THE FIRST TIME IN TWENTY-NINE ROUNDS.
+
+     The stone is drawn at 1.7x from y=330, so its base and its shadow reach
+     past y=520 — and both buttons sat at 452, on top of the stone's foot, with
+     the explainer at 536 half-swallowed by the snow bank behind it. Nothing
+     checks for a button drawn over the art, and nothing will; this came from
+     looking at the screen, which is still the only thing that catches it.
+
+     The row moves below the shadow and the explainer moves ABOVE the buttons,
+     where the dark band behind the stone backs it instead of the snow. */
+  const sy2 = 566;
+  /* And it needs a ground. Moved above the buttons it landed on the snow bank,
+     which is nearly white — the contrast check passes it because the glyphs are
+     outlined and an outline gives a light glyph its edge, but edge definition
+     is not figure-ground and pale blue on snow still reads badly. A dark pill
+     behind it is the fix; the limitation is written down in the README. */
+  const note = 'the blessed card keeps +2 attack and +3 health for the rest of the run';
+  c.save();
+  c.font = '600 13px "Frostwork","Trebuchet MS",sans-serif';
+  const nw = c.measureText(note).width + 26;
+  c.beginPath(); rr(c, MID - nw / 2, sy2 - 33, nw, 26, 9);
+  c.fillStyle = 'rgba(12,22,40,.72)'; c.fill();
+  c.restore();
+  txt(c, note, MID, sy2 - 20, 13, '#c8dcf4', 'center', 't');
+  button(c, 'shrineGive', MID - 300, sy2, 280, 62, 'LEAVE A CARD', '#8f7f3f');
+  button(c, 'shrineWalk', MID + 20, sy2, 280, 62, 'WALK ON', '#40527a');
 }
 
 function drawEnd(c, t, won) {
